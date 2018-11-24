@@ -1,0 +1,201 @@
+<!-- **********************************************************************
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* Copyright: (C) 2012-2013 Gregor Cramer
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*********************************************************************** -->
+
+INDEX Explorador de partidas
+INDEX Mirar partidas
+TITLE El Explorador de partidas
+
+<p>
+El Explorador de partidas permite seleccionar cualquier partida de una lista
+de partidas abierta. El Explorador está ligado a dicho listado de partidas. No se podrá cerrar
+el listado de partidas, ni cargar otra partida, mientras el Explorador continúe
+abierto.
+</p>
+
+<p>
+El Explorador de partidas muestra dichas partidas en un formato sencillo, es decir, 
+sin anotaciones, comentarios o subvariantes. Está dirigido especialmente a la
+visualización de un Listado de partidas.
+</p>
+
+<NEW>
+<ul>
+  <li><a href="#head">The game header</a></li>
+  <li><a href="#data">The move window</a></li>
+  <li><a href="#admin">Functions and settings</a></li>
+</ul>
+</NEW>
+
+<NEW>
+<h2 id="head">The game header</h2>
+</NEW>
+
+<p>
+<!-- NEW: The original text has changed a bit:
+The game header contains three buttons: the event and both player names.
+While keeping the middle mouse button pressed on any highlighted  button
+an information box will be displayed. Clicking a highlighted player name
+is opening a player card. -->
+El encabezado de la partida contiene tres campos: el Torneo y los Nombres del jugador. 
+Manteniendo apretado el botón central del ratón aparece un cuadro de información. Al
+cliquear sobre el Nombre de un jugador aparece la Ficha de dicho jugador.
+</p>
+
+<NEW>
+<p>
+If the color of the game header is changing from blue to red, this will
+signal an intermediate change of the game in the database. The game can
+be re-loaded to see the actual game (<see/>
+<a href="#ReloadGame">%::browser::mc::ReloadGame%</a> inside
+context-sensitive menu), as long as the source database is still open.
+</p>
+</NEW>
+
+<NEW>
+<h2 id="data">The move window</h2>
+</NEW>
+
+<p>
+Si el puntero del ratón se encuentra fuera de la Ventana de texto (de la partida), pero aún
+dentro del cuadro de diálogo, girando la rueda se pueden oir las sucesivas jugadas.
+</p>
+
+<NEW>
+<p>
+While keeping the middle mouse button pressed on a game move the
+associated board position will be displayed. Holding <key>Shift</key>
+during the click will show only the pawn structure.
+</p>
+
+<h2 id="admin">Functions and settings</h2>
+
+<p>
+The browser is providing the following context-sensitive menu:
+</p>
+
+<dir><img src="images/game-browser-menu.png" /></dir>
+
+<p>
+<menuitem>%::browser::mc::LoadGame%</menuitem>
+Load the actual game into the game editor. The actual game in game editor
+will be replaced with this game, so far the editor isn't locked or the
+game is modified. Otherwise a new pane for this game will be opened in
+editor. This menu item is available as long as the source database is not
+closed.
+</p>
+
+<p id="ReloadGame">
+<menuitem>%::browser::mc::ReloadGame%</menuitem>
+Update the actual game by re-loading. This menu entry is active
+only if the current game is differing from the game in database due
+to an intermediate change. A red coloured game header (normally the
+game header is blue) will signal that the current game is differing
+from the game in database. This menu item is not available as soon
+as the source database is closed.
+</p>
+
+<p>
+<menuitem>%::browser::mc::MergeGame%</menuitem>
+Merge this game into the current open game of the game editor.
+This menu item is not available as soon as the source database is
+closed.
+</p>
+
+<p>
+<menuitem>%::browser::mc::GotoGame(next)%</menuitem>
+Load next game in underlying game list.
+</p>
+
+<p>
+<menuitem>%::browser::mc::GotoGame(prev)%</menuitem>
+Load previous game in underlying game list.
+</p>
+
+<p>
+<menuitem>%::browser::mc::GotoGame(last)%</menuitem>
+Load last game in underlying game list.
+</p>
+
+<p>
+<menuitem>%::browser::mc::GotoGame(first)%</menuitem>
+Load first game in underlying game list.
+</p>
+
+<p>
+<menuitem>%::browser::mc::IncreaseBoardSize%</menuitem>
+Increase the board size, and the dialog size as a consequence.
+</p>
+
+<p>
+<menuitem>%::browser::mc::IncreaseBoardSize%</menuitem>
+Decrease the board size, and the dialog size as a consequence.
+</p>
+
+<p>
+<menuitem>%::browser::mc::MaximizeBoardSize%</menuitem>
+Maximize the board size, and the dialog size as a consequence
+(but no full-screen).
+</p>
+
+<p>
+<menuitem>%::browser::mc::MinimizeBoardSize%</menuitem>
+Minimize the board size, and the dialog size as a consequence.
+</p>
+
+<p>
+<menuitem>%::menu::mc::Fullscreen%</menuitem>
+Use full-screen, this means use the whole screen. This function
+is not available for all screen resolutions.
+</p>
+
+<p>
+<menuitem>%::font::mc::IncreaseFontSize%</menuitem>
+Increase the font for displaying text.
+</p>
+
+<p>
+<menuitem>%::font::mc::DecreaseFontSize%</menuitem>
+Decrease the font for displaying text.
+</p>
+
+<p>
+<menuitem>%::pgn::setup::mc::ParLayout(column-style)%</menuitem>
+Switch column format in move window on/off.
+</p>
+
+<p>
+<menuitem>%::application::pgn::mc::MoveNotation%</menuitem>
+Choose the move notation in associated sub-menu:
+</p>
+
+INCLUDE ../Move-Notation.txt
+
+<p>
+<menuitem>%::pgn::setup::mc::Configure(browser)%</menuitem>
+Opens a dialog which allows an extensive configuration of game display.
+</p>
+
+<p>
+<menuitem>%::help::mc::Help%</menuitem>
+Opens this help page.
+</p>
+</NEW>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html: -->

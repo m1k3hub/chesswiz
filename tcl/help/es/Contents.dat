@@ -1,0 +1,73 @@
+set Contents {
+  {
+     {{{Visión general} {Overview.html}}}
+  }
+  {
+    {{{Generalidades} {Overview.html} {general}}}
+    {{{Formatos de bases de datos} {Database-Formats.html}}}
+    {{{Uso del diálogo Selección de archivos} {File-Selection-Dialog.html}}}
+    {{{Uso de las Barras de herramientas} {Toolbar-Usage.html}}}
+    {{{La base temporal (Clipbase)} {Clipbase.html}}}
+    {{{Cómo definir el explorador de Internet predeterminado} {How-To-Set-Default-Browser.html}}}
+  }
+  {
+    {{{Ventanas de listado en Scidb} {Overview.html} {list-windows}}}
+    {{{Listado de partidas} {Game-List-Window.html}}}
+    {{{Listado de jugadores} {Player-List-Window.html}}}
+    {{{Listado de torneos} {Event-List-Window.html}}}
+    {{{Listado de lugares} {Site-List-Window.html}}}
+    {{{Listado de comentaristas} {Annotator-List-Window.html}}}
+  }
+  {
+    {{{Ventanas y diálogos en Scidb} {Overview.html} {windows-and-dialogs}}}
+    {{{Intercambiador de bases de datos} {Database-Switcher.html}}}
+    {{{Explorador de partidas} {Game-Browser.html}}}
+    {{{Panorámica del Explorador de partidas} {Game-Overview.html}}}
+    {{{Ventana Texto de la partida} {Game-Text-Window.html}}}
+    {{{Historial de la partida} {Game-History-Window.html}}}
+    {{{Tablero} {Board-Window.html}}}
+    {{{Ventana de árbol} {Tree-Window.html}}}
+    {{{Ventana Árbol de partidas} {Tree-Games-Window.html}}}
+    {{{Editor de comentarios} {Comment-Editor-Dialog.html}}}
+    {{{Paleta de marcadores de escaques} {Mark-Palette-Dialog.html}}}
+    {{{Diálogo Editar posición en el tablero} {Board-Setup-Dialog.html}}}
+    {{{Diálogo Disposición de la posición inicial} {Start-Position-Setup-Dialog.html}}}
+    {{{Ventana Tabla cruzada} {Crosstable-Window.html}}}
+    {{{Diálogo Importar partidas PGN} {PGN-Import-Dialog.html}}}
+    {{{Diálogo Exportar base de datos} {Database-Export-Dialog.html}}}
+  }
+  {
+    {{{CQL (Chess Query Language)} {Overview.html} {cql-manual}}}
+    {{{Introduction} {CQL-Index.html}}}
+    {
+      {{{Syntax} {CQL-Syntax.html}}}
+      {{{Piece designators} {CQL-Piece-Designators.html}}}
+      {{{Square designators} {CQL-Square-Designators.html}}}
+      {{{Range specifiers} {CQL-Range-Specifiers.html}}}
+      {{{Pattern matching} {Pattern-Matching.html}}}
+    }
+    {{{Transformations} {CQL-Transformations.html}}}
+    {{{The match list} {CQL-Match-List.html}}}
+    {{{The position list} {CQL-Position-List.html}}}
+    {{{The relation list} {CQL-Relation-List.html}}}
+    {{{Tagging} {CQL-Tagging.html}}}
+    {{{Examples} {CQL-Examples.html}}}
+  }
+  {
+    {{{Información adicional} {Overview.html} {further-information}}}
+    {{{Marcadores de partida} {Game-Flags.html}}}
+    {{{Supported chess variants} {Chess-Variants.html}}}
+    {{{Especificación de Archivos de base de datos (inglés)} {../en/Database-Archive.html}}}
+    {{{Opciones de la línea de comandos} {Command-Line-Options.html}}}
+    {{{Valores de las anotaciones NAG} {NAG-Comments.html}}}
+    {{{Código ECO} {ECO-Code.html}}}
+    {{{Información de contacto} {Contact-Information.html}}}
+    {{{Mapa de ruta del desarrollo} {Development-Roadmap.html}}}
+    {{{Novedades} {Whats-New.html}}}
+    {{{¡Bienvenido a Scidb!} {Welcome.html}}}
+  }
+}
+
+set UnixOnly {
+  How-To-Set-Default-Browser.html
+}

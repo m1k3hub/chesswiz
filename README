@@ -1,0 +1,193 @@
+
+   _/|            __
+  // o\         /    )           ,        /    /
+  || ._)    ----\---------__----------__-/----/__-
+  //__\          \      /   '  /    /   /    /   )
+  )___(     _(____/____(___ __/____(___/____(___/_
+
+
+  *Scidb is a *Chess *Information *Data *Base
+
+=====================================================================
+
+http://scidb.sourceforge.net
+http://sourceforge.net/projects/scidb/
+
+Email-Address of the author:
+gcramer@users.sourceforge.net
+
+=====================================================================
+
+---------------------------------------------------------------------
+How to compile?
+---------------------------------------------------------------------
+Read file INSTALL.
+
+---------------------------------------------------------------------
+Wanted:
+---------------------------------------------------------------------
+Testers are welcome for the preliminary version. Volunteers should
+sign up, so that the testing can be coordinated. Please send a
+message to the author.
+
+How a message can be sent:
+
+   1. A membership in Sourceforge is needed (open
+      <https://sourceforge.net/user/registration?>).
+      The membership is free of charge and duties.
+   2. Open <https://sourceforge.net/u/gcramer/profile/send_message>,
+      you must be logged in.
+
+For additional wanted functionalities feature requests can be entered.
+These requests will partly be a basis of decision-making for further
+development.
+
+How to enter feature requests:
+
+   1. Open <https://sourceforge.net/p/scidb/feature-requests/>.
+   2. Click "Create Ticket", you must be logged in.
+
+These request should consider that Scidb is a pure database application.
+That means the following functionalities are not destined for Scidb:
+
+   - FICS connection
+   - correspondence/Email chess support
+   - automatic game analysis
+   - chess training
+   - playing against external chess programs
+   - other chess program specific tasks
+
+For such functionalities another project is in planning stage:
+<http://sourceforge.net/projects/jessy>. In this way an overloading
+of the database application Scidb will be prevented. Jessy will
+have a connection to the Scidb bases.
+
+Furthermore project help is welcome. The following tasks are open:
+
+   Tcl/Tk
+   ------------------
+
+   - The windows inside the main window should be dockable/undockable.
+     Furthermore the sub-windows should be movable (with drag&drop),
+     currently the positions of the sub-windows are fixed.
+
+   - Writing HTML help pages.
+
+   - Printing PDF documents.
+
+   C++
+   ------------------
+
+   - Windows porting. Although the development is platform independent,
+     Windows does not provide the functions fopencookie() and
+     open_memstream(). Unfortunately the effort will be high. The basis
+     for this task is the library 'newlib' (only the stdio part).
+     More programming effort for the porting shouldn't be neccessary.
+
+   - LaTeX generation with the help of the already existing TeXt library.
+     The TeXt library supports the generation of text documents with
+     TeX like scripts. Realizing this task will test the TeXt library
+     for the first time.
+
+   - HTML generation (see LaTeX generation).
+
+   - The SVG library Anti-Grain (AGG) delivers dissatisfying results for
+     line drawing. The lines are not anti-aliased, but they should be.
+     This part of the library has to be modified/overworked. Apparently
+     the author Maxim Shemanarev abondend the development of this library.
+     A real alternative for this library is not exisiting. The use of
+     Cairo would imply too many dependencies (besides Cairo is deemed to
+     be relatively slow). Furthermore the drawing of gradients,
+     implemented by the author, needs improvements (userSpaceOnUse/
+     objectBoundingBox is not realized).
+
+     For the drawing of pie charts the function arc() is required.
+     This function currently delivers anything but circular arcs, rework of
+     the function is neccessary (requires much know-how!).
+
+   - Reading of ChessBase databases is tested only for ChessBase version 9.
+     ChessBase version 10 supports chess 960 games. For that ChessBase
+     must have extended the format (X-Fen/Shredder-Fen, castling).
+     This has to be tested and to adapted. Currently the decoding
+     of chess 960 games may be faulty (the application may crash).
+
+   - Testing (and appropriate adaptions) of the internal chess program.
+     Some of the move computations, especially in the opening phase,
+     are still dissatisfying.
+   
+---------------------------------------------------------------------
+How did Scidb arise?
+---------------------------------------------------------------------
+In the first time the author tried to re-engineer the existing
+application Scid. The current version of Scid is a bit disliked by
+the author for different reasons. After many weeks of work the author
+noticed that the development of a new application will not take more
+effort than re-engineering.
+
+Scidb makes use of the excellent pioneering feat of Shane Hudson,
+as well it makes use of new and improved development libraries which
+where not available for Shane Hudson. The author likes to provide at
+least the stability and correctness as Shane Hudson did provide --
+and the newer versions do not provide.  Further goals are simplicity,
+user friendliness, convinience, and a beautiful design.
+
+---------------------------------------------------------------------
+Which path does Scidb adopt?
+---------------------------------------------------------------------
+Principally Scidb is adopting the path of Scid; the choosen name
+Scidb is suggesting this. Therefore Scidb will not be a ChessBase
+clone. ChessBase has his advantages, for example the lightning-fast
+opening of huge databases. However this has his own drawbacks,
+(resulting due to the required programming technique), and Scidb
+is avoiding these drawbacks as well as Scid. Which advantages are
+appreciated, and which drawbacks are accepted, is depending on the
+requirements of the particluar user. Because of that no application
+is superior or worse. But Scidb will be different from Scid as
+well, and similarities to ChessBase in certain dialogs are
+unavoidable.
+
+Scidb is solely a chess database, this means Scidb is not suitable
+to play against external chess programs, or to play in the internet.
+For this purpose another project (http://sourceforge.net/projects/jessy)
+is scheduled, that will have an appropriate interface to the the
+Scidb databases, and a similar look and feel. This application is in
+preparation, but will be released not before 2011. Scidb should be
+usable very easy; this includes it will not be overload with
+functionalities. The functions, provided by Scidb, will be user-friendly,
+and should work with highest reliability.
+
+---------------------------------------------------------------------
+Why again Tcl/Tk?
+---------------------------------------------------------------------
+Often improvement suggestions for Scid were demanded, for example
+a migration from Tcl/Tk to other GUI libraries; among them Gtk and
+Qt. The author, who has over 25 years of experience, decided after
+an analysis that Tcl/Tk is one of the best alternatives (for
+non-commercial software development). It does not bring dependencies
+to gigantic libraries, and the refered tools are not as flexible
+and expandable as Tcl/Tk. The possibilities of the text widget
+as well of the canvas widget in Tk is almosst unsurpassable. And the
+tree control (http://tktreectrl.sourceforge.net) for Tk is setting
+new standards.
+
+Furtermore the development cycle with a script language is much
+faster than with C or C++. One example might be the project ChessX
+(http://chessx.sourceforge.net); after year-long development with
+multiple developers this project has not reached the current
+level of Scidb. Most of the development for the preliminary version
+is already done or in the final phase. One drawback of Tcl/Tk is
+the lack of useful extensions. Furthermore the developer team of
+Tcl/Tk is quite unwilling to fix bugs. The author reported many
+bugs, some of them are quite serious, to the team of Tcl/Tk. Many
+of them were simply ignored, or insufficiently explored. Hence the
+author decided to fix the errors himself, as far as it is possible
+within the script language, or he programmed workarounds. One can only
+wait for, that the developer team of Tcl/Tk wishes to have more
+quality in Tcl/Tk. Currently, in the face of this situation, Tcl/Tk
+seems not be attractive for the use in commercial programs.
+
+The screenshots of Scidb (see
+http://scidb.sourceforge.net/screenshots.html) might show that
+Tcl/Tk can keep up with the look & feel.
+
+= vi:set et sw=3 ts=3: =

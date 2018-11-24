@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<!-- Generated from tcl/help/de/CQL-Range-Specifiers.txt -->
+
+<html xmlns='http://www.w3.org/1999/xhtml' xml:lang='en' lang='de'>
+<head>
+  <meta http-equiv="content-type"
+           content="text/html; charset=utf-8" />
+  <meta http-equiv="content-language"
+           content="de" />
+  <meta http-equiv="content-style-type"
+           content="text/css" />
+
+  <meta name="author"
+     content="scidb.sourceforge.net" />
+  <meta name="generator"
+     content="scidb.sourceforge.net" />
+  <meta name="description"
+     content="Scidb - Help Page" />
+
+  <link rel="icon"
+       href="http://scidb.sourceforge.net/favicon.ico"
+       type="image/x-icon" />
+  <link rel="shortcut icon"
+       href="http://scidb.sourceforge.net/favicon.ico" />
+  <link rel="stylesheet"
+       type="text/css"
+      media="screen"
+		 href="../styles/help.css" />
+
+  <title>Scidb - Hilfe: CQL - Bereichsangaben</title>
+</head>
+
+<body>
+
+<div class="title">
+  <h1 class="title">CQL - Bereichsangaben</h1>
+</div>
+
+<p>
+Viele Schlüsselworte erwarten eine optionale Bereichsangabe. Eine
+Bereichsangabe besteht entweder nur aus einer Zahl, der ein
+Vergleichsoperator vorangestellt sein kann, oder aus zwei Zahlen
+(hier ohne vorangestellten Vergleichsoperator), separiert durch
+Leerzeichen.
+</p>
+
+<p>
+Besteht eine Bereichsangabe aus zwei Zahlen, so bezeichnen beide den
+Bereich zwischen diesen Zahlen, einschließlich der beiden Grenzen.
+Ist nur eine Zahl gegeben, so bezeichnen diese den Bereich. Hat
+diese Zahl einen vorangestellten Vergleichsoperator, so wird ein
+Bereich definiert, der in einer Richtung grenzenlos ist:
+</p>
+
+<div class='box'>
+<table>
+  <tr><td><span style='white-space:nowrap;'><code>&gt;</code></span></td>  <td></td> <td>Mehr als</td></tr>
+  <tr><td><span style='white-space:nowrap;'><code>&gt;=</code></span></td> <td></td> <td>Mindestens</td></tr>
+  <tr><td><span style='white-space:nowrap;'><code>&lt;</code></span></td>  <td></td> <td>Weniger als</td></tr>
+  <tr><td><span style='white-space:nowrap;'><code>&lt;=</code></span></td> <td></td> <td>Höchstens</td></tr>
+</table>
+</div>
+
+<p><img src='../images/note.png' alt='note' /> 
+Die Voranstellung eines Vergleichsoperators ist nicht Bestandteil des
+CQL-Standards.
+</p>
+
+<p>
+Weiterhin gibt es zwei spezielle Werte: <span style='white-space:nowrap;'><code>&ndash;</code></span> um einen
+leeren Bereich zu defnieren, sowie <span style='white-space:nowrap;'><code>*</code></span> um einen beliebigen
+Wert (d.h. nach beiden Seiten unbeschränkten Bereich) zu definieren.
+Diese speziellen Werte sind nicht in jeder Abfrage sinnvoll einsetzbar,
+und es hängt von der Abfrage ab, ob sie zulässig sind (bei vielen Abfragen
+in der Partiedatensuche, aber i.A. nicht bei Abfragen in der
+Positionssuche).
+</p>
+
+<p><img src='../images/note.png' alt='note' /> 
+Die speziellen Wertebereiche <span style='white-space:nowrap;'><code>&ndash;</code></span> und <span style='white-space:nowrap;'><code>*</code></span> sind nicht
+Bestandteil des CQL-Standards.
+</p>
+
+<h2>Beispiele</h2>
+
+<p>
+In den folgenden Beispielen werden Wertebereiche für Jahresangaben
+behandelt, um beispielsweise Partien aufzufinden, die in einem
+definierten Jahresbereich liegen sollen.
+</p>
+
+<div class='verb'><code>
+1934
+</code></div>
+
+<p>
+Bezeichnet das Jahr 1934.
+</p>
+
+<div class='verb'><code>
+1934 2000
+</code></div>
+
+<p>
+Bezeichnet die Jahre von 1934 bis 2000 (einschließlich der Grenzen).
+</p>
+
+<div class='verb'><code>
+&gt;=1934
+</code></div>
+
+<p>
+Bezeichnet alle Jahre ab 1934.
+</p>
+
+<div class='verb'><code>
+&lt;1935
+</code></div>
+
+<p>
+Bezeichnet alle Jahre vor 1935.
+</p>
+
+<div class='verb'><code>
+*
+</code></div>
+
+<p>
+Finde alle Partien, die ein (d.h. irgendein beliebiges) Partiedatum besitzen. Dies
+schließt also alle Partien aus, die ohne Partiedatumsangabe sind.
+</p>
+
+<div class='verb'><code>
+&ndash;
+</code></div>
+
+<p>
+Dies findet alle Partien auf, die ohne Partiedatumsangabe sind.
+</p>
+
+</body>
+</html>

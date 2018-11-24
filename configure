@@ -1,0 +1,2420 @@
+#!/bin/sh
+# configure:
+#    Makefile configuration script for Scidb.
+#
+# This program tries to determine system-specific details needed
+# for compiling Scidb (such as the version of Tcl/Tk you have
+# installed, and where to find the Tcl/Tk header and library 
+# files), and creates the file "Makefile.in".
+
+
+# Try to find the best version of Tcl/Tk 8.x that is installed,
+# by searching the PATH directories for tclsh8.5, tclsh85, etc. If no
+# tclsh program with a version number in the file name is found, the
+# default program to execute is just tclsh.
+# The backslashes at the end of these lines are needed: \
+tclsh=tclsh; \
+for tclver in 86 8.6 85 8.5; do \
+    IFS=:; \
+    for dir in $PATH; do \
+        if [ -x $dir/tclsh$tclver ]; \
+            then tclsh=$dir/tclsh$tclver; \
+        fi; \
+    done; \
+done
+
+# Now execute this script using the best tclsh version found:
+# The backslash at the end of this line is needed: \
+exec $tclsh "$0" ${1+"$@"}
+
+set Versions {8.6 8.5}
+set IgnorePatches {8.6b1 8.6b1.1 8.6b2}
+
+
+proc stripDot {version} { return "[string index $version 0][string index $version 2]" }
+
+
+proc findBestTclVersion {} {
+    global env Versions IgnorePatches
+
+    foreach version $Versions {
+        lappend paths                                 \
+            /usr/local/include/tk$version             \
+            /usr/local/include/tcl$version            \
+            /usr/local/include/tk[stripDot $version]  \
+            /usr/local/include/tcl[stripDot $version] \
+            ;
+    }
+    lappend paths              \
+        /usr/local/tk/include  \
+        /usr/local/tcl/include \
+        /usr/local/include     \
+        ;
+    foreach version $Versions {
+        lappend paths                                 \
+            /usr/local/tk$version/generic             \
+            /usr/local/tcl$version/generic            \
+            /usr/local/tk[stripDot $version]/generic  \
+            /usr/local/tcl[stripDot $version]/generic \
+            /usr/include/tk$version                   \
+            /usr/include/tcl$version                  \
+            /usr/include/tk[stripDot $version]        \
+            /usr/include/tcl[stripDot $version]       \
+            ;
+    }
+    lappend paths                \
+        /usr/include             \
+        /usr/X11/include         \
+        /usr/X11R6/include       \
+        /usr/X11R/include        \
+        /usr/local/X11/include   \
+        /usr/local/X11R6/include \
+        /opt/tcltk/include       \
+        /opt/mytcltk/include     \
+        /opt/include             \
+        ;
+
+    set results {}
+    foreach dir $paths {
+        if {[file isdirectory $dir]} {
+            if {[file exists $dir/tk.h]} {
+                set f [open $dir/tk.h r]
+                set tkVersion ""
+                set tkPatchLevel ""
+                while {[gets $f line] >= 0} {
+                    if {[string match {\#*define *TK_VERSION*} $line]} {
+                        set tkVersion [lindex [split $line \"] 1]
+                    } elseif {[string match {\#*define *TK_PATCH_LEVEL*} $line]} {
+                        set tkPatchLevel [lindex [split $line \"] 1]
+                    }
+                    if {[string length $tkVersion] && [string length $tkPatchLevel]} {
+                        if {$tkPatchLevel ni $IgnorePatches} {
+                            if {[lindex $Versions 0] eq $tkVersion} {
+                                close $f
+                                return $tkVersion
+                            } elseif {$tkVersion in $Versions} {
+                                lappend results $tkVersion
+                            }
+                        }
+                    }
+                }
+                close $f
+            }
+        }
+    }
+
+    foreach v1 $Versions {
+        foreach v2 $results {
+            if {$v1 eq $v2} { return $version }
+        }
+    }
+
+    foreach version $Versions {
+        foreach dir $env(PATH) {
+            if {[file exists $dir/tclsh$version]} { return $version }
+            if {[file exists $dir/tclsh[stripDot $version]]} { return $version }
+        }
+    }
+
+    return [lindex $Versions 0]
+}
+
+
+# Default values for Makefile settings:
+
+set suppressInsaneMessage 0
+
+array set configure {
+    prefix          /usr/local
+    exec-prefix     /usr/local
+    program-suffix  {}
+    tcl-shell       {}
+}
+set configure(tcl-version) [findBestTclVersion]
+set configure(gcc-version) ""
+
+array set package {
+    zlib-inc     {}
+    zlib-lib     -lz
+    zziplib-inc  {}
+    zziplib-lib  -lzzip
+    expat-inc    {}
+    expat-lib    -lexpat
+    gdbm-inc     {}
+    gdbm-lib     -lgdbm
+    tcl-inc      {}
+    tcl-lib      {}
+    x-inc        {}
+    x-lib        {}
+    freetype-inc {}
+    fam-lib      {}
+}
+
+array set feature {
+    freedesktop     yes
+    symbols         no
+    fam             no
+    assertions      no
+    sse2            yes
+    gprof-profiling no
+    gcov-coverage   no
+    splash-screen   yes
+    inline-text     yes
+}
+
+array set force {
+    zlib    no
+    zziplib no
+    expat   no
+    gdbm    no
+}
+
+array set environment {
+    AR              ar
+    ARFLAGS         rc
+    CC              gcc
+    CFLAGS          "-Wall"
+    CXXFLAGS        "-Wall"
+    CXX             g++
+    LDFLAGS         ""
+    OPTIMIZE        "-O3 -funit-at-a-time -fomit-frame-pointer"
+    RANLIB          ranlib
+    STRIP           strip
+    SYS_CFLAGS      ""
+    SYS_CXXFLAGS    ""
+    SYS_LDFLAGS     ""
+}
+
+array set compiler {
+    sse2            {}
+    popcnt          {}
+    thread-support  {}
+    no-gzoffset     {}
+}
+
+array set warnings {
+    -Wno-unused-result {}
+}
+
+array set option {
+    EXTRA_CXXFLAGS  {}
+    HAVE_XFT        {}
+    HAVE_FREETYPE   {}
+    HAVE_LIBFAM     {}
+    HAVE_INOTIFY    {}
+    SYS_INOTIFY     {}
+    HAVE_STATVFS    {}
+    ENGINES         {stockfish Sjeng}
+    USE_INLINE_TEXT {}
+}
+
+array set defaults {
+    tcl-inc     -I/usr/include
+    tcl-lib     -ltcl\$(TCL_VERSION)
+    tk-inc      -I/usr/include
+    tk-lib      -ltk\$(TCL_VERSION)
+    x-inc       -I/usr/include
+    x-lib       {-L/usr/X11R6/lib -lX11 -lSM -lICE}
+    xcursor-lib {-L/usr/lib -lXcursor}
+}
+
+array set subdir {
+    zlib    {}
+    zziplib {}
+    expat   {}
+    gdbm    {}
+}
+
+array set distribution {
+    os           ""
+    revision     ""
+    machine      ""
+    distributor  ""
+    version      ""
+}
+
+array set release {
+    annvix          "Annvix"
+    arch            "Arch Linux"
+    arklinux        "Arklinux"
+    aurox           "Aurox Linux"
+    blackcat        "BlackCat"
+    cobalt          "Cobalt"
+    conectiva       "Conectiva"
+    fedora          "Fedora Core"
+    gentoo          "Gentoo Linux"
+    immunix         "Immunix"
+    lfs             "Linux-From-Scratch"
+    linuxppc        "Linux-PPC"
+    lsb             "Ubuntu"
+    mandrake        "Mandrake"
+    mandriva        "Mandriva Linux"
+    mklinux         "MkLinux"
+    nld             "Novell Linux Desktop"
+    pld             "PLD Linux"
+    redhat          "Red Hat"
+    slackware       "Slackware"
+    e-smith         "SME Server"
+    sun             "Sun JDS"
+    SuSE            "SUSE Linux"
+    novell          "SUSE Linux"
+    slax            "Slax"
+    sles            "SUSE Linux ES9"
+    tinysofa        "Tiny Sofa"
+    turbolinux      "TurboLinux"
+    ultrapenguin    "UltraPenguin"
+    UnitedLinux     "UnitedLinux"
+    va              "VA-Linux/RH-VALE"
+    yellowdog       "Yellow Dog"
+    zenwalk         "Zenwalk"
+}
+
+set problematicGCCVersions {4.6 7.1}
+
+set instableTkLibrary ""
+set x11Libraries " -lX11 -lSM -lICE"
+
+set MinGCCVersion "3.4"
+set MinClangVersion "3.1"
+
+
+foreach name [array names environment] {
+    if {[info exists env($name)]} {
+        set environment($name) $env($name)
+    }
+}
+
+
+proc MakeOption {prefix path} {
+    if {[string length $path] == 0 || $path eq "/"} {
+        return ""
+    }
+    if {[string first $path " "] == -1} {
+        return $prefix$path
+    }
+    return $prefix\"$path\"
+}
+
+
+proc Append {var str} {
+    upvar 1 $var s
+
+    if {[info exists s]} {
+        if {[string length $str]} {
+            if {[string length $s] > 0} {
+                uplevel [list append $var " "]
+            }
+        }
+    }
+    uplevel [list append $var $str ]
+}
+
+
+proc DetectDebian {} {
+    variable distribution
+
+    set fd [open /etc/lsb-release r]
+    while {[gets $fd line] >= 0} {
+        set attr ""
+        switch -glob -- $line {
+            DISTRIB_ID=*        { set attr distributor  }
+            DISTRIB_RELEASE=*   { set attr revision     }
+            DISTRIB_CODENAME=*  { set attr version  }
+        }
+        if {[string length $attr]} {
+            set distribution($attr) [string trim [lindex [split $line =] 1]]
+        }
+    }
+    close $fd
+}
+
+
+proc DetectRedHat {file} {
+    variable distribution
+
+    set fd [open $file r]; gets $fd line; close $fd
+    regexp {(.*) release (.*) \((.*)\)} $line _ \
+        distribution(distributor) distribution(revision) distribution(version)
+}
+
+
+proc DetectSuSE {file} {
+    variable distribution
+
+    set fd [open $file r]
+    while {[gets $fd line] >= 0} {
+        if {[string match VERSION* $line]} {
+            set distribution(revision) [string trim [lindex [split $line =] 1]]
+        } elseif {[string length $distribution(distributor)] == 0} {
+            set distribution(distributor) [string trim $line]
+        }
+    }
+    close $fd
+}
+
+
+proc detectUnixDistribution {} {
+    variable distribution
+    variable release
+
+    set distribution(os) [exec uname -s]
+    set distribution(machine) [exec uname -m]
+    set distribution(distributor) ""
+    set distribution(version) ""
+
+    switch $distribution(os) {
+        SunOS {
+            set distribution(os) "Solaris"
+            set distribution(revision) [exec uname -r | sed "s/-.*//"]
+        }
+        AIX {
+            set distribution(revision) [exec oslevel]
+        }
+        HP-UX {
+            set distribution(os) "HP-UX"
+            set distribution(revision) [exec uname -r | sed "s/-.*//"]
+        }
+        OpenBSD - NetBSD - FreeBSD {
+            set distribution(distributor) $distribution(os)
+            set distribution(revision) [exec uname -r | sed "s/-.*//"]
+        }
+        Linux {
+            if {[file readable /etc/os-release]} {
+                set fd [open /etc/os-release r]
+                while {[gets $fd line] >= 0} {
+                    if {[string match {NAME=*} $line] && [regexp {="(.*)"} $line -> distributor]} {
+                        set distribution(distributor) $distributor
+                    } elseif {[string match {VERSION_ID=*} $line] && [regexp {="(.*)"} $line -> revision]} {
+                        set distribution(revision) $revision
+                    } elseif {[string match {VERSION=*} $line] && [regexp {="(.*)"} $line -> name]} {
+                        set distribution(version) $name
+                    }
+                }
+                close $fd
+            }
+            if {[string length $distribution(distributor)] == 0} {
+                if {[file readable /etc/lsb-release]} {
+                    DetectDebian
+                } elseif {[file readable /etc/SuSE-release]} {
+                    DetectSuSE /etc/SuSE-release
+                } elseif {[file readable /etc/UnitedLinux-release]} {
+                    DetectSuSE /etc/UnitedLinux-release
+                } elseif {[file readable /etc/mandrake-release]} {
+                    DetectRedHat /etc/mandrake-release
+                } elseif {[file readable /etc/redhat-release]} {
+                    DetectRedHat /etc/redhat-release
+                } elseif {[file readable /etc/debian_version]} {
+                    set distribution(distributor) "Debian"
+                    set fd [open /etc/debian_version r]; gets $fd line; close $fd
+                    set distribution(revision) $line
+                } elseif {[file readable /etc/slackware-version]} {
+                    if {[file readable /etc/zenwalk-version]} {
+                        set distribution(distributor) "Zenwalk"
+                        set distribution(revision) [exec cat /etc/zenwalk-version]
+                    } elseif {[file readable /etc/slax-version]} {
+                        set distribution(distributor) "Slax"
+                        set distribution(revision) [exec cat /etc/slax-version | cut -d " " -f2]
+                    } else {
+                        set distribution(distributor) [exec cat /etc/slackware-version | cut -d " " -f1]
+                        set distribution(revision) [exec cat /etc/slackware-version | cut -d " " -f2]
+                    }
+                } elseif {[file readable /etc/knoppix_version]} {
+                    set distribution(distributor) "Knoppix"
+                }
+            }
+        }
+    }
+
+    if {[string length $distribution(distributor)] == 0} {
+        if {[file readable /proc/version]} {
+            set id [exec cat /proc/version]
+            if {[regexp {^.*\(.*\) \((.*)\) [^()]+$} $id -> id]} {
+                if {[regexp {^.*\((.*)\)$} $id -> id]} {
+                    set detected 1
+                    if {[regexp {^([^0-9]+)\s+([0-9.-]*)$} $id -> distributor revision]} {
+                        set distribution(distributor) $distributor
+                        set distribution(revision) $revision
+                    } else {
+                        set distribution(distributor) $id
+                    }
+                }
+            }
+        }
+        if {[string length $distribution(distributor)] == 0} {
+            set files [glob -nocomplain -directory /etc -types f *-release]
+            if {[set i [lsearch $files "os-release"]] >= 0} { set files [lreplace $files $i $i] }
+            if {[llength $files] == 1} {
+                variable release
+                set id [string range [file tail [lindex $files 0]] 0 end-8]
+                catch { set distribution(distributor) $release($id) }
+            }
+        }
+    }
+
+    if {[string length $distribution(distributor)] == 0} {
+        set distribution(distributor) "(Unknown - couldn't detect)"
+    }
+}
+
+
+proc hasPTraceProblem {} {
+    return [file exists /proc/sys/kernel/yama/ptrace_scope]
+}
+
+
+proc isKnoppix {} {
+    variable distribution
+    return [string match $distribution(distributor) "Knoppix"]
+}
+
+
+proc isInsaneUnixRelease {} {
+    global insaneRelease
+    variable distribution
+
+    if {![info exists insaneRelease]} {
+        set insaneRelease 0
+        switch -glob -nocase -- $distribution(distributor) {
+            Ubuntu*     { if {$distribution(revision) >= "11.10" } { set insaneRelease 1 } }
+        }
+    }
+ 
+    return $insaneRelease
+}
+
+
+# FindDir:
+#    Returns the first directory in the list "path" that contains a
+#    readable file matching the wildcard pattern "f".
+#    If exp is provided, the directory of the first such file that also
+#    has a line containing the regular expression "exp" is returned. If
+#    none of the found files contains the expression, the first file
+#    found is returned.
+#
+proc FindDir {f path {exp ""}} {
+    set best ""
+
+    foreach dir $path {
+        set p [file join $dir $f]
+        if {![catch {glob $p}]} {
+            if {$best == ""} { set best $dir }
+            if {$exp != ""} {
+                if {[catch {exec grep -c $exp $p}] == 0} {
+                    return $dir
+                } else {
+                    # puts "$p skipped, not right version"
+                }
+            } else {
+                return $dir 
+            }
+        }
+    }
+
+    return $best
+}
+
+
+# findTclTkPathsDarwin:
+#    Set-up paths using frameworks. Since frameworks are quite
+#    different, the UNIX search logic is not sharable:
+proc FindTclTkPathsAqua {} {
+    global configure package tclv
+
+    set frameworkPaths "\
+        [ file nativename ~/Library/Frameworks ] \
+        /Library/Frameworks \
+        /Network/Library/Frameworks \
+        /System/Library/Frameworks \
+    "
+    set fw_path ""
+    # Find the path to the Tcl and Tk frameworks:
+    foreach F $frameworkPaths {
+        set both 1
+        foreach fw {"Tcl" "Tk"} {
+            # Both Tcl.framework and Tk.framework must be present:
+            if {![file exists "$F/$fw.framework/Versions/$tclv"]} {
+                set both 0
+                break
+            }
+        }
+        if {$both == 1} {
+            # $F has both frameworks, continue:
+            set fw_path $F
+            break
+        }
+    }
+    if {$both == 0} {
+        # Couldn't find Tcl and Tk frameworks, keep searching the "unix" way:
+        return 0
+    }
+    if {![info exists configure(tcl-includes)]} {
+        set configure(tcl-includes) $fw_path
+        set package(tcl-inc) "-F$fw_path/Tcl.framework -F$fw_path/Tk.framework"
+    }
+    if {![info exists configure(tcl-libraries)]} {
+        set configure(tcl-libraries) ""
+        set package(tcl-lib) "-framework Tcl"
+    }
+    if {![info exists configure(tk-libraries)]} {
+        set configure(tk-libraries) ""
+        set package(tk-lib) [list $configure(tcl-libraries) -framework Tk]
+    }
+    puts "    Location of Tcl/Tk frameworks: $fw_path"
+    return 1
+}
+
+
+# findTclTkPathsAndMore:
+#    Finds all details of the Tcl/Tk installation.
+#    Returns 1 on success, 0 on failure.
+#
+proc findTclTkPathsAndMore {} {
+    global tclv tclv_nodot configure package tcl_platform bitmode
+
+    if {$tcl_platform(os) eq "Darwin" && [FindTclTkPathsAqua]} {
+        # Frameworks found, stop looking for paths:
+        return 1
+    }
+
+    # IMPORTANT NOTE:
+    # Ubuntu 11.04 (and higher) has severe system bugs: missing link from
+    # libXcursor.so to libXcursor.so.1.0.2, missing link from /usr/lib
+    # to /usr/local/lib/i386-linux-gnu (and /usr/local/lib/x86_64-linux-gnu).
+    # On such insane Unix systems tha application cannot be build in a normal
+    # way.
+
+    # X header path: List of possible locations for X.h
+    set path(x,includes) {
+        /usr/local/include
+        /usr/include
+    }
+
+    # X library path: List of possible locations of X library.
+    set path(x,libraries,local) {
+        /usr/local/lib
+        /usr/local/X11/lib
+        /usr/local/X11R6/lib
+        /usr/local/X/lib
+    }
+    set path(x,libraries,usr) {
+        /usr/lib
+        /usr/X11/lib
+        /usr/X11R6/lib
+        /usr/X/lib
+    }
+    if {8*$tcl_platform(wordSize) == 64} {
+        set path(x,libraries,local) [linsert $path(x,libraries,local) 0 /usr/local/lib64]
+        set path(x,libraries,usr) [linsert $path(x,libraries,usr) 0 /usr/lib64]
+    }
+    # NOTE: All these entries below are required for the corrupted Unix
+    # systems (Ubuntu >= 11.04, and others). Sane Unix systems have
+    # common links (like above).
+    switch [expr {8*$tcl_platform(wordSize)}] {
+        32 { set sysDirs { i386-linux-gnu
+                           i386-gnu
+                           i386-kfreebsd-gnu
+                           hppa-linux-gnu
+                           mips-linux-gnu
+                           ppc-linux-gnu
+                           s390-linux-gnu
+                           sparc-linux-gnu} }
+        64 { set sysDirs { x86_64-linux-gnu
+                           x86_64-gnu
+                           x86_64-kfreebsd-gnu
+                           hppa64-linux-gnu
+                           ia64-linux-gnu
+                           mips64-linux-gnu
+                           ppc64-linux-gnu
+                           s390x-linux-gnu
+                           sparc64-linux-gnu} }
+    }
+    lappend sysDirs                            \
+        alpha-linux-gnu                        \
+        arm-linux-gnueabi arm-linux-gnueabihf  \
+        m68k-linux-gnu                         \
+        mipsel-linux-gnu                       \
+        powerpc-linux-gnu powerpc-linux-gnuspe \
+        sh4-linux-gnu                          \
+        ;
+    foreach dir $sysDirs {
+        lappend path(x,libraries,usr) /usr/lib/$dir
+        lappend path(x,libraries,local) /usr/local/lib/$dir
+    }
+
+    set path(x,libraries) [concat $path(x,libraries,local) $path(x,libraries,usr) /usr/openwin/lib]
+
+    # Tcl/Tk header path: List of possible locations for tcl.h and tk.h
+    lappend path(tcl,includes)                                \
+        /usr/$configure(exec-prefix)/include/tcl${tclv}       \
+        /usr/$configure(exec-prefix)/include/tcl${tclv_nodot} \
+        /usr/$configure(exec-prefix)/include/tk${tclv}        \
+        /usr/$configure(exec-prefix)/include/tk${tclv_nodot}  \
+        /usr/$configure(prefix)/include/tcl${tclv}            \
+        /usr/$configure(prefix)/include/tcl${tclv_nodot}      \
+        /usr/$configure(prefix)/include/tk${tclv}             \
+        /usr/$configure(prefix)/include/tk${tclv_nodot}       \
+        /usr/local/include/tcl${tclv}                         \
+        /usr/local/include/tcl${tclv_nodot}                   \
+        /usr/local/include/tk${tclv}                          \
+        /usr/local/include/tk${tclv_nodot}                    \
+        /usr/local/tcl/include                                \
+        /usr/local/include                                    \
+        /usr/include/tcl${tclv}                               \
+        /usr/include/tcl${tclv_nodot}                         \
+        /usr/include/tk${tclv}                                \
+        /usr/include/tk${tclv_nodot}                          \
+        /usr/include                                          \
+        /usr/X11/include                                      \
+        /usr/X11R6/include                                    \
+        /usr/local/X11/include                                \
+        /opt/tcltk/include                                    \
+        /opt/mytcltk/include                                  \
+        /opt/include                                          \
+        /usr/X11R/include                                     \
+        /usr/$configure(exec-prefix)/tcl${tclv}/generic       \
+        /usr/$configure(exec-prefix)/tcl${tclv_nodot}/generic \
+        /usr/$configure(exec-prefix)/tk${tclv}/generic        \
+        /usr/$configure(exec-prefix)/tk${tclv_nodot}/generic  \
+        /usr/$configure(prefix)/tcl${tclv}/generic            \
+        /usr/$configure(prefix)/tcl${tclv_nodot}/generic      \
+        /usr/$configure(prefix)/tk${tclv}/generic             \
+        /usr/$configure(prefix)/tk${tclv_nodot}/generic       \
+        /usr/local/tcl${tclv}/generic                         \
+        /usr/local/tcl${tclv_nodot}/generic                   \
+        /usr/local/tk${tclv}/generic                          \
+        /usr/local/tk${tclv_nodot}/generic                    \
+        ;
+    set path(tk,includes) $path(tcl,includes)
+
+    # Tcl/Tk library path: List of possible locations of Tcl/Tk library.
+    lappend path(tcl,libraries)                      \
+        $configure(exec-prefix)/lib/tcl${tclv}       \
+        $configure(exec-prefix)/lib/tcl${tclv_nodot} \
+        $configure(exec-prefix)/lib/tk${tclv}        \
+        $configure(exec-prefix)/lib/tk${tclv_nodot}  \
+        $configure(prefix)/lib/tcl${tclv}            \
+        $configure(prefix)/lib/tcl${tclv_nodot}      \
+        $configure(prefix)/lib/tk${tclv}             \
+        $configure(prefix)/lib/tk${tclv_nodot}       \
+        ;
+    foreach dir $sysDirs { lappend path(tcl,libraries) /usr/local/lib/$dir }
+    lappend path(tcl,libraries)   \
+        /usr/local/tcl/lib        \
+        /usr/local/lib64          \
+        /usr/local/lib            \
+        /usr/lib/tcl${tclv}       \
+        /usr/lib/tcl${tclv_nodot} \
+        /usr/lib/tk${tclv}        \
+        /usr/lib/tk${tclv_nodot}  \
+        /usr/lib64                \
+        /usr/lib                  \
+        /usr/X11R6/lib            \
+        /opt/tcltk/lib            \
+        /opt/mytcltk/lib          \
+        /opt/lib                  \
+        ;
+    foreach dir $sysDirs { lappend path(tcl,libraries) /usr/lib/$dir }
+    lappend path(tcl,libraries)         \
+        /usr/local/lib/tcl${tclv}       \
+        /usr/local/lib/tcl${tclv_nodot} \
+        /usr/local/lib/tk${tclv}        \
+        /usr/local/lib/tk${tclv_nodot}  \
+        ;
+
+    # Try to add tcl_library and auto_path values to path(tcl,libraries),
+    # in case the user has a non-standard Tcl/Tk library location:
+
+    if {[info exists ::tcl_library]} {
+        lappend path(tcl,includes) [file join [file dirname [file dirname $::tcl_library]] include]
+        lappend path(tcl,libraries) [file dirname $::tcl_library]
+        lappend path(tcl,libraries) $::tcl_library
+    }
+    if {[info exists ::auto_path]} {
+        foreach name $::auto_path {
+            lappend path(tcl,libraries) $name
+        }
+    }
+    set path(tk,libraries) $path(tcl,libraries)
+
+    set exp(tcl) "TCL_VERSION.*$tclv"
+    set exp(tk)  "TK_VERSION.*$tclv"
+    set exp(x)   ""
+
+    foreach module {tcl tk} {
+        if {[info exists configure($module-includes)]} {
+            set package($module-inc) [MakeOption -I $configure($module-includes)]
+        } else {
+            set file "$module.h"
+            puts -nonewline "    Location of $file: "
+            set configure($module-includes) [FindDir $file $path($module,includes) $exp($module)]
+            if {[string length $configure($module-includes)] == 0} {
+                puts "not found"
+            } else {
+                set package($module-inc) [MakeOption -I $configure($module-includes)]
+                puts $configure($module-includes)
+
+                if {$module eq "tk"} {
+                    # we have to check the patch level; some insane Unix systems like
+                    # Ubuntu 11.10 do provide instable Tk libraries.
+                    if {![catch [list open [file join $configure($module-includes) $module.h]] f]} {
+                        while {[gets $f line] >= 0} {
+                            if {[string match {\#define TK_PATCH_LEVEL*} $line]} {
+                                set pl [lindex [split $line \"] 1]
+                                if {$pl eq "8.5.10"} { set ::instableTkLibrary $pl }
+                                break
+                            }
+                        }
+                        close $f
+                    }
+                }
+            }
+        }
+    }
+
+    foreach module {tcl tk} {
+        if {[info exists configure($module-libraries)]} {
+#           set package($module-lib) [MakeOption -L $configure($module-libraries)]
+            set package($module-lib) [MakeOption -Wl,-rpath= $configure($module-libraries)]
+            Append package($module-lib) " -l${module}${tclv}"
+        } else {
+            set libPaths $path($module,libraries)
+            set configure($module-libraries) [FindDir "lib${module}${tclv}.*" $libPaths]
+            if {[string length $configure($module-libraries)] == 0} {
+                set configure($module-libraries) [FindDir "lib${module}${tclv_nodot}.*" $libPaths]
+                if {[string length $configure($module-libraries)] > 0} {
+                    set package($module-lib) $configure($module-libraries)
+                }
+            } else {
+#               set package($module-lib) [MakeOption -L $configure($module-libraries)]
+                set package($module-lib) [MakeOption -Wl,-rpath= $configure($module-libraries)]
+            }
+            puts -nonewline "    Location of [string toupper $module 0 0] $tclv library: "
+            if {[info exists package($module-lib)]} {
+                append opt " " $package($module-lib)
+                append package($module-lib) " " -l$module\$(TCL_VERSION)
+                puts $configure($module-libraries)
+            } else {
+                puts "not found"
+            }
+        }
+    }
+
+    if {[info exists configure(x-includes)]} {
+        set package(x-inc) [MakeOption -I $configure(x-includes)]
+    } else {
+        set file X11/Xlib.h
+        puts -nonewline "    Location of $file: "
+        set configure(x-includes) [FindDir $file $path(x,includes) $exp($module)]
+        if {[string length $configure(x-includes)] == 0} {
+            puts "not found"
+        } else {
+            set package(x-inc) [MakeOption -I $configure(x-includes)]
+            puts $configure(x-includes)
+            set configure(x-includes) {} ;# not required
+        }
+    }
+
+    if {[info exists configure(x-libraries)]} {
+        set package(x-lib) [MakeOption -L $configure(x-libraries)]
+        append package(x-lib) $::x11Libraries
+    } else {
+        set configure(x-libraries) [FindDir "libX11*" $path(x,libraries)]
+        puts -nonewline "    Location of X11 library: "
+        if {[string length $configure(x-libraries)] == 0} {
+            puts "not found"
+        } else {
+            set package(x-lib) [MakeOption -L $configure(x-libraries)]
+            append package(x-lib) $::x11Libraries
+            puts $configure(x-libraries)
+        }
+    }
+
+    foreach {lib packageName} {Xcursor libxcursor-dev fontconfig libfontconfig1-dev} {
+        set attr [string tolower $lib]
+        if {[info exists configure(${attr}-libraries)]} {
+            set package(${attr}-lib) [MakeOption -L $configure(${attr}-libraries)]
+        } else {
+            set configure(${attr}-libraries) [FindDir "lib${lib}*" $path(x,libraries)]
+            puts -nonewline "    Location of ${lib} library: "
+            if {[string length $configure(${attr}-libraries)] == 0} {
+                puts "not found"
+            } else {
+                # On poor Ubuntu systems we have to check the library paths.
+                if {[file exists $configure(${attr}-libraries)/lib${lib}.so]} {
+                    # this is the normal case
+                    set package(${attr}-lib) [MakeOption -L $configure(${attr}-libraries)]
+                    append package(${attr}-lib) " -l${lib}"
+                    puts $configure(${attr}-libraries)
+                } else {
+                    puts ""
+                    puts "Couldn't find library lib{$lib}.so."
+                    puts "Propably you have to install the package $packageName;"
+                    puts "for example: 'sudo apt-get install $packageName'."
+                    exit 1
+                }
+            }
+        }
+    }
+
+    if {[info exists package(x-inc)]} {
+        set package(xcursor-inc) $package(x-inc)
+    }
+
+    foreach {module} {tcl tk x xcursor} {
+        foreach type {inc lib} {
+            if {![info exists package($module-$type)]} {
+                return 0
+            }
+        }
+    }
+
+    return 1
+}
+
+
+# findFontconfig:
+#    Find the fontconfig path.
+#    Returns 1 on success, 0 on failure.
+#
+proc findFontconfig {} {
+    variable option
+
+    set path {
+        /usr/local/include/fontconfig
+        /usr/include/fontconfig
+    }
+
+    puts -nonewline "    Checking if your system has fontconfig: "
+    set dir [FindDir "fontconfig.h" $path]
+
+    if {[string length $dir]} {
+        set option(HAVE_XFT) "-DHAVE_XFT"
+        puts "yes."
+        set rc 1
+    } else {
+        puts "no."
+        set rc 0
+    }
+
+    return $rc
+}
+
+
+# findFreetype:
+#    Find the freetype2 paths.
+#    Returns 1 on success, 0 on failure.
+#
+proc findFreetype {} {
+    variable option
+    variable package
+
+    set rc 0
+    puts -nonewline "    Checking if your system has freetype2: "
+
+    if {[string length [set cmd [auto_execok pkg-config]]] > 0} {
+        catch {set incl [exec $cmd --cflags freetype2]}
+        set rc [expr {[string length $incl] > 0}]
+    }
+    if {!$rc} {
+        set path {
+            /usr/local/include/freetype2/freetype
+            /usr/local/include/freetype2
+            /usr/include/freetype2/freetype
+            /usr/include/freetype2
+        }
+        set dir [FindDir "ft2build" $path]
+        if {[string length $dir]} {
+            set incl "-I/[file join {*}[lrange [split $dir /] 0 end]]"
+            set rc 1
+        }
+    }
+    if {$rc} {
+        set option(HAVE_FREETYPE) "-DHAVE_FREETYPE"
+        set package(freetype-inc) $incl
+        puts "yes."
+    } else {
+        set option(HAVE_FREETYPE) ""
+        puts "no."
+        set rc 0
+    }
+
+    return $rc
+}
+
+
+# findSMlibHeader:
+#    Find the SM header file.
+#    Returns 1 on success, 0 on failure.
+#
+proc findSMlibHeader {} {
+    variable configure
+
+    set path {
+        /usr/local/include/
+        /usr/include/
+    }
+
+    puts -nonewline "    Checking if your system has X11/SM/SM.h: "
+    set dir [FindDir "X11/SM/SM.h" $path]
+
+    if {[string length $dir]} {
+        puts "yes."
+        return 1
+    } else {
+        puts "no."
+    }
+
+    return 0
+}
+
+
+# checkStatVFS
+#   Check if your system provides the statvfs() function.
+proc checkStatVFS {} {
+    variable option
+
+    if {[file readable /usr/include/sys/statvfs.h]} {
+        set option(HAVE_STATVFS) "-DHAVE_STATVFS=1"
+    }
+}
+
+
+proc Probe {file script} {
+    if {[catch {open $file.sh w} f]} {
+        puts "Severe error: Unable to write file '$file.sh' in current directory."
+        puts "Aborted."
+        exit 1
+    }
+    puts $f $script
+    close $f
+    set err ""
+    catch {exec sh $file.sh} err
+    catch {file delete -force $file.sh}
+    catch {file delete -force $file.c}
+    catch {file delete -force $file}
+    if {[llength $err]} { return 0 }
+    return 1
+}
+
+
+# TestInotify.sh:
+#    Script used to test if the kernel has inotify.
+#
+set TestInotify {#!/bin/sh
+cat <<EOF > testinotify.c
+#include <sys/inotify.h>
+int main()
+{
+    inotify_init1(0);
+    return 0;
+}
+EOF
+
+__CC__ -o testinotify testinotify.c
+if [ -f testinotify ]; then
+    exit 0
+else
+    exit 1
+fi
+}
+
+
+# TestInotify.sh:
+#    Script used to test if syscall supports inotify.
+#
+set TestInotifySys {#!/bin/sh
+cat <<EOF > testinotify.c
+#include "__pwd__/src/sys/sys_inotify.h"
+int main()
+{
+    return inotify_init1(0) == -1 ? 1 : 0;
+}
+EOF
+
+__CC__ -o testinotify testinotify.c
+if [ -f testinotify ]; then
+    exit 0
+else
+    exit 1
+fi
+}
+
+
+# SystemHasInotify:
+#    Determines if the kernel supports inotify.
+#
+proc SystemHasInotify {} {
+    global TestInotify
+    global TestInotifySys
+    global tcl_platform
+    global option
+
+    set testinotify [regsub -all __CC__ $TestInotify [GetGCC]]
+    set testinotify [regsub -all __pwd__ $testinotify [pwd]]
+    flush stdout
+    set result [Probe testinotify $testinotify]
+
+    if {$result} {
+        set option(HAVE_INOTIFY) "-DHAVE_INOTIFY=1"
+    } elseif {$tcl_platform(os) eq "Linux"} {
+        scan $tcl_platform(osVersion) "%d.%d.%d" v1 v2 v3
+        if {$v1 > 2 || ($v1 == 2 && ($v2 > 6 || ($v2 == 6 && $v3 >= 13)))} {
+            set testinotify [regsub -all __CC__ $TestInotifySys [GetGCC]]
+            set testinotify [regsub -all __pwd__ $testinotify [pwd]]
+            flush stdout
+            if {[catch {open testinotify.sh w} f]} { return 0 }
+            puts $f $testinotify
+            close $f
+            if {![catch {exec sh testinotify.sh} err]} { set result 2 }
+            if {$result} {
+                if {[catch { exec ./testinotify } r]} {
+                    set result 0
+                } else {
+                    set option(HAVE_INOTIFY) "-DHAVE_INOTIFY=1"
+                    set option(SYS_INOTIFY) "-DSYS_INOTIFY=1"
+                }
+            }
+
+            catch { file delete -force testinotify.sh }
+            catch { file delete -force testinotify.c }
+            catch { file delete -force testinotify }
+        }
+    }
+ 
+    return $result
+}
+
+
+# checkInotify:
+#    Checks whether the system kernel supports inotify.
+#
+proc checkInotify {} {
+    puts -nonewline "    Checking if your kernel has inotify support: "
+    flush stdout
+    switch [SystemHasInotify] {
+        0 { puts "no" }
+        1 { puts "yes" }
+        2 { puts "yes (via syscall())" }
+    }
+}
+
+
+# TestFAM.sh:
+#    Script used to test if libfam is available.
+#
+set TestFAM {#!/bin/sh
+cat <<EOF > testfam.c
+#include <fam.h>
+int main()
+{
+    FAMConnection conn;
+    FAMOpen(&conn);
+    return 0;
+}
+EOF
+
+__CC__ -o testfam testfam.c __lib__
+if [ -f testfam ]; then
+    exit 0
+else
+    exit 1
+fi
+}
+
+
+# SystemHasFAM:
+#    Determines if libfam is available.
+#
+proc SystemHasFAM {} {
+    global TestFAM package option
+
+    set lib -lfam
+    set testfam [regsub -all __CC__ $TestFAM [GetGCC]]
+    set testfam [regsub -all __pwd__ $testfam [pwd]]
+    set testfam [regsub -all __lib__ $testfam $lib]
+    flush stdout
+    if {[catch {open testfam.sh w} f]} { return 0 }
+    puts $f $testfam
+    close $f
+    set result 0
+    if {![catch {exec sh testfam.sh} err]} { set result 1 }
+
+#   if {$result == 0} {
+#       catch { file delete -force testfam.sh }
+#       catch { file delete -force testfam.c }
+#       catch { file delete -force testfam }
+
+#       # On many system /usr/lib/libfam.so is not exisiting, but /usr/lib/libfam.so.0
+#       set lib [FindDir libfam.so.0 {/usr/lib /usr/local/lib}]
+
+#       if {[string length $lib]} {
+#           set lib $lib/libfam.so.0
+#           set testfam [regsub -all __CC__ $TestFAM [GetGCC]]
+#           set testfam [regsub -all __pwd__ $testfam [pwd]]
+#           set testfam [regsub -all __lib__ $testfam $lib]
+#           flush stdout
+#           if {[catch {open testfam.sh w} f]} { return 0 }
+#           puts $f $testfam
+#           close $f
+#           set result 0
+#           if {![catch {exec sh testfam.sh} err]} { set result 1 }
+#       }
+#   }
+
+    if {$result} {
+        set option(HAVE_LIBFAM) "-DHAVE_LIBFAM=1"
+        set package(fam-lib) $lib
+    }
+
+    catch { file delete -force testfam.sh }
+    catch { file delete -force testfam.c }
+    catch { file delete -force testfam }
+ 
+    return $result
+}
+
+
+# checkFAM:
+#    Checks whether libfam is available.
+#
+proc checkFAM {} {
+    global feature
+
+    if {$feature(fam)} {
+        puts -nonewline "    Checking if your system has libfam: "
+        flush stdout
+        if {[SystemHasFAM]} { puts "yes." } else { puts "no" }
+    }
+}
+
+
+# testzlib_sh:
+#    Script used to test if the system has zlib installed,
+#    and if it is the right version.
+#
+set TestZlib {#!/bin/sh
+cat <<EOF > testzlib.c
+#include <zlib.h>
+int main()
+{
+    z_streamp z;
+    deflateInit(z, 0);
+    (void)crc32_combine(0, 0, 0);
+    return 0;
+}
+EOF
+
+__CC__ -o testzlib testzlib.c __zlib-inc__ __zlib-lib__
+if [ -f testzlib ]; then
+    exit 0
+else
+    exit 1
+fi
+}
+
+
+# testgzoffset:
+#    Script used to test if the installed zlib has
+#    function gzoffset.
+#
+set TestGzOffset {#!/bin/sh
+cat <<EOF > testzlib.c
+#include <zlib.h>
+int main()
+{
+    z_off_t (*f)(gzFile) = gzoffset;
+    return 0;
+}
+EOF
+
+__CC__ -o testzlib testzlib.c __zlib-inc__ __zlib-lib__
+if [ -f testzlib ]; then
+    exit 0
+else
+    exit 1
+fi
+}
+
+
+# SystemHasZlib:
+#    Determines if the system has zlib installed. If not,
+#    the zlib version that comes with Scidb will be used.
+#
+proc SystemHasZlib {} {
+    global TestZlib TestGzOffset package force compiler
+
+    if {$force(zlib)} { return 0 }
+
+    set testZlib [regsub -all __CC__ $TestZlib [GetGCC]]
+    set testZlib [regsub -all __zlib-inc__ $testZlib $package(zlib-inc)]
+    set testZlib [regsub -all __zlib-lib__ $testZlib $package(zlib-lib)]
+    flush stdout
+    if {[catch {open testzlib.sh w} f]} { return 0 }
+    puts $f $testZlib
+    close $f
+    set result 0
+    if {![catch {exec sh testzlib.sh} err]} { set result 1 }
+
+    if {$result} {
+        set testZlib [regsub -all __CC__ $TestGzOffset [GetGCC]]
+        set testZlib [regsub -all __zlib-inc__ $testZlib $package(zlib-inc)]
+        set testZlib [regsub -all __zlib-lib__ $testZlib $package(zlib-lib)]
+        flush stdout
+        if {[catch {open testzlib.sh w} f]} { return 0 }
+        puts $f $testZlib
+        close $f
+        if {[catch {exec sh testzlib.sh} err]} {
+            set compiler(no-gzoffset) -Dgzoffset=gztell
+        }
+    }
+
+    catch { file delete -force testzlib.sh }
+    catch { file delete -force testzlib.c }
+    catch { file delete -force testzlib }
+ 
+    return $result
+}
+
+
+# checkZlib:
+#    Checks whether the system has the zlib compression library installed,
+#    if necessary. 
+#
+proc checkZlib {} {
+    global environment package subdir
+
+    if {[string first "libz." $environment(LDFLAGS)] >= 0} {
+        return
+    }
+    puts -nonewline "    Checking if your system already has zlib installed: "
+    flush stdout
+    if {[SystemHasZlib]} {
+        puts "yes."
+    } else {
+        puts "no.\n      Using bundled library."
+        set subdir(zlib) "util/zlib"
+        set package(zlib-lib) "[pwd]/src/util/zlib/libz.a"
+        set package(zlib-inc) "-I[pwd]/src/util/zlib"
+    }
+}
+
+
+# testzziplib_sh:
+#    Script used to test if the system has zziplib installed.
+#
+set TestZziplib {#!/bin/sh
+cat <<EOF > testzziplib.c
+#include <zzip/zzip.h>
+int main()
+{
+    (void)zzip_error(NULL);
+    return 0;
+}
+EOF
+
+__CC__ -o testzziplib testzziplib.c __zziplib-inc__ __zziplib-lib__
+if [ -f testzziplib ]; then
+    exit 0
+else
+    exit 1
+fi
+}
+
+
+# SystemHasZziplib:
+#    Determines if the system has zziplib installed. If not,
+#    the zziplib version that comes with Scidb will be used.
+#
+proc SystemHasZziplib {} {
+    global TestZziplib package force
+
+    if {$force(zziplib)} { return 0 }
+
+    set testZziplib [regsub -all __CC__ $TestZziplib [GetGCC]]
+    set testZziplib [regsub -all __zziplib-inc__ $testZziplib $package(zziplib-inc)]
+    set testZziplib [regsub -all __zziplib-lib__ $testZziplib $package(zziplib-lib)]
+
+    flush stdout
+    if {[catch {open testzziplib.sh w} f]} { return 0 }
+    puts $f [regsub -all __CC__ $testZziplib [GetGCC]]
+    close $f
+    set result 0
+    if {![catch {exec sh testzziplib.sh} err]} { set result 1 }
+    catch { file delete -force testzziplib.sh }
+    catch { file delete -force testzziplib.c }
+    catch { file delete -force testzziplib }
+    return $result
+}
+
+
+# checkZziplib:
+#    Checks whether the system has the zziplib compression library installed,
+#    if necessary. 
+#
+proc checkZziplib {} {
+    global environment package subdir
+
+    if {[string first "libzzip." $environment(LDFLAGS)] >= 0} {
+        return
+    }
+    puts -nonewline "    Checking if your system already has zziplib installed: "
+    flush stdout
+    if {[SystemHasZziplib]} {
+        puts "yes."
+    } else {
+        puts "no.\n      Using bundled library."
+        set subdir(zziplib) "util/zzip"
+        set package(zziplib-lib) "[pwd]/src/util/zzip/libzzip.a"
+        set package(zziplib-inc) "-I[pwd]/src/util/zzip"
+    }
+}
+
+
+# TestGdbm.sh:
+#    Script used to test if the system has gdbm installed.
+#
+set TestGdbm {#!/bin/sh
+cat <<EOF > testgdbm.c
+#include <gdbm.h>
+int main()
+{
+    char const* s = gdbm_version;
+    char const* t = s;
+    if (*t) ;
+    return 0;
+}
+EOF
+
+__CC__ -o testgdbm testgdbm.c __gdbm-inc__ __gdbm-lib__
+if [ -f testgdbm ]; then
+    exit 0
+else
+    exit 1
+fi
+}
+
+
+# SystemHasGdbm:
+#    Determines if the system has gdbm installed. If not,
+#    the gdbm version that comes with Scidb will be used.
+#
+proc SystemHasGdbm {} {
+    global TestGdbm package
+
+    set testGdbm [regsub -all __CC__ $TestGdbm [GetGCC]]
+    set testGdbm [regsub -all __gdbm-inc__ $testGdbm $package(gdbm-inc)]
+    set testGdbm [regsub -all __gdbm-lib__ $testGdbm $package(gdbm-lib)]
+
+    flush stdout
+    if {[catch {open testgdbm.sh w} f]} { return 0 }
+    puts $f [regsub -all __CC__ $testGdbm [GetGCC]]
+    close $f
+    set result 0
+    if {![catch {exec sh testgdbm.sh} err]} { set result 1 }
+    catch { file delete -force testgdbm.sh }
+    catch { file delete -force testgdbm.c }
+    catch { file delete -force testgdbm }
+    return $result
+}
+
+
+# checGdbm:
+#    Checks whether the system has the gdbm library installed,
+#
+proc checkGdbm {} {
+    global environment subdir package force
+
+    if {$force(expat)} { return 0 }
+
+    if {[string first "libgdbm." $environment(LDFLAGS)] >= 0} {
+        return
+    }
+    puts -nonewline "    Checking if your system already has gdbm installed: "
+    flush stdout
+    if {[SystemHasGdbm]} {
+        puts "yes."
+    } else {
+        puts "no.\n      Using bundled library."
+        set subdir(gdbm) "util/gdbm"
+        set package(gdbm-lib) "[pwd]/src/util/gdbm/libgdbm.a"
+        set package(gdbm-inc) "-I[pwd]/src/util/gdbm"
+    }
+}
+
+
+# TestExpat.sh:
+#    Script used to test if the system has expat installed.
+#
+set TestExpat {#!/bin/sh
+cat <<EOF > testexpat.c
+#include <expat.h>
+int main()
+{
+    XML_Parser p = XML_ParserCreate(NULL);
+    XML_ParserFree(p);
+    return 0;
+}
+EOF
+
+__CC__ -o testexpat testexpat.c __expat-inc__ __expat-lib__
+if [ -f testexpat ]; then
+    exit 0
+else
+    exit 1
+fi
+}
+
+
+# SystemHasExpat:
+#    Determines if the system has expat installed. If not,
+#    the expat version that comes with Scidb will be used.
+#
+proc SystemHasExpat {} {
+    global TestExpat package force
+
+    if {$force(expat)} { return 0 }
+
+    set testExpat [regsub -all __CC__ $TestExpat [GetGCC]]
+    set testExpat [regsub -all __expat-inc__ $testExpat $package(expat-inc)]
+    set testExpat [regsub -all __expat-lib__ $testExpat $package(expat-lib)]
+
+    flush stdout
+    if {[catch {open testexpat.sh w} f]} { return 0 }
+    puts $f [regsub -all __CC__ $testExpat [GetGCC]]
+    close $f
+    set result 0
+    if {![catch {exec sh testexpat.sh} err]} { set result 1 }
+    catch { file delete -force testexpat.sh }
+    catch { file delete -force testexpat.c }
+    catch { file delete -force testexpat }
+    return $result
+}
+
+
+# checExpat:
+#    Checks whether the system has the expat XML library installed,
+#
+proc checkExpat {} {
+    global environment subdir package
+
+    if {[string first "libz." $environment(LDFLAGS)] >= 0} {
+        return
+    }
+    puts -nonewline "    Checking if your system already has expat installed: "
+    flush stdout
+    if {[SystemHasExpat]} {
+        puts "yes."
+    } else {
+        puts "no.\n      Using bundled library."
+        set subdir(expat) "util/expat"
+        set package(expat-lib) "[pwd]/src/util/expat/libexpat.a"
+        set package(expat-inc) "-I[pwd]/src/util/expat"
+    }
+}
+
+
+# TestGCC.sh:
+#    Script used to test if the system has gcc installed.
+#
+set TestGCC {#!/bin/sh
+cat <<EOF > testgcc.c
+int main() { return 0; }
+EOF
+
+__CC__ -o testgcc testgcc.c
+if [ -f testgcc ]; then
+    exit 0
+else
+    exit 1
+fi
+}
+
+
+# TestPOPCNT.sh:
+#    Script used to test if gcc supports _mm_popcnt_u64 instruction
+#
+set TestPOPCNT {#!/bin/sh
+cat <<EOF > testpopcnt.c
+#ifdef __i386__
+#include <nmmintrin.h>
+int main() { return 0; }
+EOF
+
+__CC__ -o testpopcnt.c testpopcnt.c -msse4.2
+if [ -f testpopcnt.c ]; then
+    exit 0
+else
+    exit 1
+fi
+}
+
+
+# TestSSE2.sh:
+#    Script used to test if gcc supports SSE2 (required for jpeg library).
+#
+set TestSSE2 {#!/bin/sh
+cat <<EOF > testsse2.c
+int main() { return 0; }
+EOF
+
+__CC__ -o testsse2 testsse2.c -msse2
+if [ -f testsse2 ]; then
+    exit 0
+else
+    exit 1
+fi
+}
+
+
+# TestSyncBuiltin.sh:
+#    Script used to test if the kernel supports the __sync builtin functions.
+#
+#   On some system the compiler is newer than the libc library. In this case
+#   it may happen that the __sync_val_compare_and_swap symbol is not contained
+#   in libc, but required for linking the application. In this case we forbid
+#   the usage of __sync_val_compare_and_swap().
+#
+set TestSyncBuiltin {#!/bin/sh
+cat <<EOF > testsyncbuiltin.c
+int main()
+{
+    int v;
+    __sync_val_compare_and_swap(&v, v, v);
+    return 0;
+}
+EOF
+
+__CC__ -o testsyncbuiltin testsyncbuiltin.c
+if [ -f testsyncbuiltin ]; then
+    exit 0
+else
+    exit 1
+fi
+}
+
+
+# TestCompilerFlag.sh:
+#    Script used to test which options the compiler supports.
+#
+set TestCompilerFlag {#!/bin/sh
+cat <<EOF > testcompilerflag.c
+int main() { return 0; }
+EOF
+
+__CC__ -g %FLAG% -o testcompilerflag testcompilerflag.c
+if [ -f testcompilerflag ]; then
+    exit 0
+else
+    exit 1
+fi
+}
+
+
+# checkClang
+#    Checks whether clang/clang++ is installed.
+proc checkClang {cc} {
+    global TestGCC TestSSE2 TestSyncBuiltin
+    variable environment
+    variable option
+    variable compiler
+    variable feature
+
+    if {$cc eq "CC"} { set clang clang } else { set clang clang++ }
+    puts -nonewline "    Checking if your system has $clang installed: "
+    flush stdout
+    set found [Probe testgcc [regsub -all __CC__ $TestGCC $environment($cc)]]
+    set version ""
+    if {!$found} {
+        puts "no,\n    '$environment($cc): command not found'"
+    } else {
+        set identifier ""
+        catch {exec $clang --version} identifier
+        if {![regexp {[0-9]+\.[0-9]+} $identifier version]} {
+            puts "yes,\n    but existing $clang version is too old."
+            set version ""
+        } elseif {[string compare $version $::MinClangVersion] == -1} {
+            puts "yes,\n    but existing $clang version $version is too old."
+            puts "\n    The required version is $::MinClangVersion and higher."
+            set version ""
+        } else {
+            puts "yes (version $version)."
+        }
+    }
+    if {[string length $version] > 0 && $cc eq "CXX"} {
+        set option(EXTRA_CXXFLAGS) "-std=c++0x"
+        if {$feature(sse2)} {
+            puts -nonewline "    Checking if your compiler supports SSE2: "
+            flush stdout
+            if {[Probe testsse2 [regsub -all __CC__ $TestSSE2 $environment($cc)]]} {
+                # sse2 is not working with clang
+                set compiler(sse2) -mno-sse2
+                puts "yes."
+            } else {
+                puts "no."
+            }
+            flush stdout
+        } else {
+            # sse2 is not working with clang, and must be disabled
+            set compiler(sse2) -mno-sse2
+        }
+        Append option(EXTRA_CFLAGS) -Wno-gnu
+        Append option(EXTRA_CFLAGS) -Wno-invalid-source-encoding
+        Append option(EXTRA_CXXFLAGS) -fexceptions
+        Append option(EXTRA_CXXFLAGS) -Wno-mismatched-tags
+        Append option(EXTRA_CXXFLAGS) -Wno-gnu
+        Append option(EXTRA_CXXFLAGS) -Wno-invalid-source-encoding
+        set environment(CC) clang
+        set environment(CXX) clang++
+    }
+    return $version
+}
+
+
+proc GetGCC {{cc "CC"}} {
+    global environment
+
+    if {$cc eq "CC"} { set flags SYS_CFLAGS } else { set flags SYS_CXXFLAGS }
+    append gcc $environment($cc) " " $environment($flags) " " $environment(SYS_LDFLAGS)
+    return $gcc
+}
+
+
+proc ProbeGCC {script cc {subst {}}} {
+    global $script
+
+    set exe [string tolower $script]
+    set probe [regsub -all __CC__ [set $script] [GetGCC $cc]]
+    if {[llength $subst]} {
+        set probe [regsub -all [lindex $subst 0] $probe [lindex $subst 1]]
+    }
+    return [Probe $exe $probe]
+}
+
+
+# checkGCC:
+#    Checks whether gcc/g++ is installed.
+proc checkGCC {cc} {
+    global tcl_platform
+    global environment configure compiler warnings feature option problematicGCCVersions
+
+    if {$configure(gcc-version) eq "clang"} { return [checkClang $cc] }
+
+    if {$cc eq "CC"} { set gcc gcc } else { set gcc g++ }
+    puts -nonewline "    Checking if your system has $gcc installed: "
+    flush stdout
+    set found 1
+    if {[string length $configure(gcc-version)]} {
+        set environment($cc) $gcc-$configure(gcc-version)
+        if {![ProbeGCC TestGCC $cc]} {
+            puts "\n"
+            puts "The given compiler version $configure(gcc-version) is not working."
+            exit 1
+        }
+    } else {
+        set found [ProbeGCC TestGCC $cc]
+    }
+    set version ""
+    if {!$found} {
+        puts "no,\n    '$environment($cc): command not found'"
+    } else {
+        set identifier ""
+        catch {exec $environment($cc) --version} identifier
+        if {![regexp {[0-9]+\.[0-9]+} $identifier version]} {
+            puts "yes,\n    but existing $gcc version is too old."
+            set version ""
+        } elseif {[string compare $version $::MinGCCVersion] >= 0} {
+            puts "yes (version $version)."
+        } else {
+            puts "yes,\n    but existing $gcc version $version is too old."
+            puts "\n    The required version is $::MinGCCVersion and higher."
+            set version ""
+        }
+    }
+    if {$version in $problematicGCCVersions} {
+        puts ""
+        puts "I found a GCC compiler with version $version, but due to some problems with"
+        puts "this compiler version it cannot be used. Please use another GCC compiler"
+        puts "version; for example: \"./configure --gcc-version=4.8\". Possibly you have"
+        puts "to install another compiler beforehand: \"sudo apt-get install g++-4.8\"."
+        puts ""
+        exit 1
+    }
+    if {[string length $version] > 0 && $cc eq "CXX"} {
+        if {[string compare $version "4.3"] >= 0} {
+            # Check for c++11 before usinf c++0x
+            set option(EXTRA_CXXFLAGS) "-std=c++0x"
+        }
+        if {$feature(sse2)} {
+            ## Will be enabled later ------------------------------------------
+            # puts -nonewline "    Checking if your compiler supports POPCNT: "
+            # if {8*$tcl_platform(wordSize) == 64} {
+            #     flush stdout
+            #     if {[ProbeGCC TestPOPCNT $cc]} {
+            #         set compiler(sse2) -msse4
+            #         set compiler(popcnt) -DUSE_POPCNT
+            #     }
+            # }
+            # if {[llength $compiler(popcnt)] == 0} { puts "no." } else { puts "yes." }
+            if {[llength $compiler(sse2)] == 0} {
+                puts -nonewline "    Checking if your compiler supports SSE2: "
+                flush stdout
+                if {[ProbeGCC TestSSE2 $cc]} {
+                    set compiler(sse2) -msse2
+                    puts "yes."
+                } else {
+                    puts "no"
+                }
+            }
+        }
+        puts -nonewline "    Checking if your kernel supports __sync_* builtin functions: "
+        flush stdout
+        if {[ProbeGCC TestSyncBuiltin $cc]} {
+            puts "yes."
+        } else {
+            set compiler(thread-support) -DDONT_USE_SYNC_BUILTIN
+            puts "no."
+        }
+        # We check silently which options the compiler supports.
+        #
+        # Don't use "var-tracking*", compile time is too long.
+        #
+        # We use "Wno-cpp" to suppress this stupid "Attempt to use
+        # kernel headers from user space" warning (the inventor
+        # of this warning has no serious experience in software
+        # development).
+        foreach opt {-fno-stack-protector -Wno-cpp} {
+            if {[ProbeGCC TestCompilerFlag $cc [list %FLAG% $opt]]} {
+                set compiler($opt) $opt
+            }
+        }
+        foreach opt {-Wno-unused-result} {
+            if {[ProbeGCC TestCompilerFlag $cc [list %FLAG% $opt]]} {
+                set warnings($opt) $opt
+            }
+        }
+    }
+    return $version
+}
+
+
+proc checkEngines {path} {
+    global engines
+
+    set list {}
+
+    foreach e $engines {
+#       set exe [file join $path [lindex $e 0]]
+#       if {[file exists $exe]} {
+#           puts "    Engine $exe already exists (skipped)"
+#       } else {
+            lappend list [lindex $e 1]
+#       }
+    }
+
+    return $list
+}
+
+
+# TestFontConfig.sh:
+#    Script used to test the fontconfig version
+#    (because version 3.8 is corrupt).
+#
+set TestFontConfig {#!/bin/sh
+cat <<EOF > testfontconfig.c
+#include <stdio.h>
+extern int FcGetVersion();
+int main()
+{
+    printf("%d", FcGetVersion());
+    return 0;
+}
+EOF
+
+__CC__ -o testfontconfig testfontconfig.c -L__LIB__ -lfontconfig
+if [ -f testfontconfig ]; then
+    exit 0
+else
+    exit 1
+fi
+}
+
+
+proc dontUsePtrace {} {
+    set result "1"
+    catch { set result [exec cat /proc/sys/kernel/yama/ptrace_scope] }
+    if {$result eq "1"} { return yes }
+    return no
+}
+
+
+proc checkFontConfig {} {
+    global TestFontConfig configure
+
+    puts -nonewline "    Checking your fontconfig version: "
+    set testfontconfig [regsub -all __CC__ $TestFontConfig [GetGCC]]
+    set testfontconfig [regsub -all __LIB__ $testfontconfig $configure(fontconfig-libraries)]
+    flush stdout
+    if {[catch {open testfontconfig.sh w} f]} { return 0 }
+    puts $f $testfontconfig
+    close $f
+    set result 0
+    if {![catch {exec sh testfontconfig.sh} err]} { set result 1 }
+
+    if {![file exists testfontconfig]} {
+        puts "\n"
+        puts "Cannot install Scidb because library fontconfig"
+        puts "cannot be found."
+        set result 0
+    } else {
+        set version 0
+        if {[catch {exec ./testfontconfig} version err]} {
+            puts $err
+            set result 0
+        }
+
+        if {$result} {
+            puts "[expr {$version/10000}].[expr {($version % 10000)/100}]"
+
+            if {$version == 30800} {
+                puts ""
+                puts "Your system has fontconfig version 3.8 installed, this library version is"
+                puts "broken, Scidb is not working with this version. Please upgrade to library"
+                puts "version 3.9 or higher before installing Scidb."
+                set result 0
+            }
+        }
+    }
+
+    catch { file delete -force testfontconfig.sh }
+    catch { file delete -force testfontconfig.c }
+    catch { file delete -force testfontconfig }
+
+    return $result
+}
+
+
+# writeMakefile:
+#    Creates the Makefile.in using Makefile.conf and the configured settings.
+#
+proc writeMakefile {success} {
+    global option defaults environment package compiler warnings
+    global feature configure subdir tcl_platform engines bitmode
+
+    set extra_c_flags "-pipe -Wno-format-security"
+    foreach opt [array names compiler -*] {
+        if {[string length $compiler($opt)]} {
+            Append extra_c_flags $compiler($opt)
+        }
+    }
+
+    set option(NO_UNUSED_RESULT) $warnings(-Wno-unused-result)
+
+    Append option(EXTRA_CXXFLAGS) $extra_c_flags
+    Append option(EXTRA_CFLAGS) $extra_c_flags
+
+    if {[string length $compiler(sse2)]} {
+        Append environment(CXXFLAGS) $compiler(sse2)
+    }
+
+    if {[string length $compiler(no-gzoffset)]} {
+        Append option(EXTRA_CXXFLAGS) $compiler(no-gzoffset)
+    }
+
+    if {[string length $compiler(popcnt)]} {
+        Append option(EXTRA_CXXFLAGS) $compiler(popcnt)
+    }
+
+    foreach name [array names defaults] {
+        if {![info exists option($name)]} {
+            set option([string toupper $name]) $defaults($name)
+        }
+    }
+
+    foreach arr {environment package compiler} {
+        foreach name [array names $arr] {
+            set option([string toupper $name]) [set ${arr}($name)]
+        }
+    }
+
+    foreach name [array names subdir] {
+        if {[string length $subdir($name)]} {
+            Append option(SUBDIRS) $subdir($name)
+        }
+    }
+
+    if {[info exists configure(destdir)]} {
+        set feature(freedesktop) no
+    }
+
+    if { $feature(symbols)} {
+        Append option(C_DEBUG) "-g"
+        set option(CXX_DEBUG) $option(C_DEBUG)
+    }
+    if {!$feature(assertions)}      { Append option(C_DEBUG) "-DNDEBUG" }
+    if {!$feature(assertions)}      { Append option(CXX_DEBUG) "-DNREQ" }
+    if { $feature(gprof-profiling)} { Append option(PROFILING) "-pg" }
+    if { $feature(gcov-coverage)}   { Append option(PROFILING) "-coverage" }
+#   if {$feature(splash-screen)}    { set option(SPLASH) "yes" }
+#   if {!$feature(splash-screen)}   { set option(SPLASH) "no" }
+    if { $feature(inline-text)}     { set option(USE_INLINE_TEXT) "-DUSE_INLINE_TEXT=1" }
+
+    set option(FREEDESKTOP) $feature(freedesktop)
+    set option(TCL_VERSION) $configure(tcl-version)
+    set option(TCL_SHELL) $configure(tcl-shell)
+    set option(SUFFIX) $configure(program-suffix)
+
+    set basedir ""
+    if {[info exists configure(destdir)]} {
+        set basedir $configure(destdir)/
+    }
+
+    foreach {name sdir} {bin bin lib lib engines games man man data share} {
+        if {[info exists configure(${name}dir)]} {
+            set dir $configure(${name}dir)
+        } elseif {$name in {man data}} {
+            set dir $configure(prefix)/$sdir
+        } else {
+            set dir $configure(exec-prefix)/$sdir
+        }
+        set option([string toupper $name]DIR) [file normalize $basedir$dir]
+        if {$name eq "data"} {
+            set tail scidb$configure(program-suffix)
+            set option(SHAREDIR) [file join $option(DATADIR) $tail]
+            set option(DATADIR) [file join $dir $tail]
+        }
+    }
+
+    if {[info exists configure(destdir)]} {
+        set option(XDGDIR) $configure(prefix)
+    }
+
+    if {[info exists configure(fontdir)]} {
+        set dir [file normalize $configure(fontdir)
+    } elseif {$tcl_platform(os) eq "Darwin"} {
+        set dir /Library/Fonts/
+    } else {
+        if {   [string length $basedir] == 0
+            && [string match {/usr/local*} $configure(prefix)]
+            && [file isdirectory /usr/local/share/fonts]
+            && [llength [auto_execok fedora_release]] == 0} {
+            # don't use /usr/local/ on Fedora systems
+            set prefix /usr/local
+        } else {
+            set prefix /usr
+        }
+        if {[string length $basedir] == 0 && ![file isdirectory $prefix/share/fonts]} {
+            set dir "~/.fonts"
+        } else {
+            set dir $prefix/share/fonts/truetype/Scidb
+        }
+    }
+    set option(FONTDIR) [file normalize $basedir$dir]
+
+    foreach name [array names option] {
+        set s [string map {- _} $name]
+        if {$s ne $name} {
+            set option($s) $option($name)
+            unset option($name)
+        }
+    }
+
+    if {[catch {set from [open "Makefile.conf" r]}]} {
+       puts "Error opening file for reading: Makefile.conf"
+       exit 1
+    }
+
+    if {[catch {set to [open "Makefile.in" w]}]} {
+       puts "Error opening file for writing: Makefile.in"
+       exit 1
+    }
+
+    while {[gets $from line] >= 0} {
+        if {[string index $line 0] ne "!"} {
+            set first [string first "@" $line]
+            while {$first >= 0} {
+                set last [string first "@" $line [expr {$first + 1}]]
+                if {$last >= 0} {
+                    set sub  [string range $line [expr {$first + 1}] [expr {$last - 1}]]
+                    set pre  [string range $line 0 [expr $first - 1]]
+                    set post [string range $line [expr $last + 1] end]
+                    set line $pre
+
+                    if {[info exists option($sub)]} {
+                        append line $option($sub)
+                    }
+                    append line $post
+                }
+                set first [string first "@" $line]
+            }
+            puts $to $line
+        }
+    }
+
+    close $from
+    close $to
+
+    # Summary info
+    if {$success} {
+        puts "Makefile.in configured for your system was written."
+        puts -nonewline "Now just type \""
+        if {[file readable tcl/tkscidb$configure(program-suffix)]} {
+            puts -nonewline "make clean; "
+        }
+        puts "make\" to compile Scidb."
+    } else {
+        puts "Not all settings could be determined!"
+        puts "The default Makefile.in was written."
+        puts "You will need to edit it before you can compile Scidb."
+
+        if {![info exists option(TCL_INCLUDE)] || ![info exists option(TK_INCLUDE)]} {
+            puts ""
+            puts "Possibly you have to install Tcl/Tk. On Ubuntu/Debian/Mint systems use:"
+            puts "  sudo apt-get install tcl${configure(tcl-version)}"
+            puts "  sudo apt-get install tk${configure(tk-version)}"
+        }
+    }
+}
+
+
+# usage:
+#     Explains the usage of this script, then exits
+#
+proc usage {rc} {
+    global configure feature environment env
+
+    puts "Usage: ./configure \[OPTION\]... \[VAR=VALUE\]..."
+    puts ""
+    puts "To assign environment variables (e.g., CC, CFLAGS...), specify them as"
+    puts "VAR=VALUE.  See below for descriptions of some of the useful variables."
+    puts ""
+    puts "Defaults for the options are specified in brackets."
+    puts ""
+    puts "Configuration:"
+    puts "  -h, --help                display this help and exit"
+    puts "  -n, --no-create           do not create output files"
+    puts ""
+    puts "Installation directories:"
+    puts "  --prefix=PREFIX           install architecture-independent files in PREFIX"
+    puts "                            \[$configure(prefix)\]"
+    puts "  --exec-prefix=EPREFIX     install architecture-dependent files in EPREFIX"
+    puts "                            \[$configure(exec-prefix)\]"
+    puts ""
+    puts "By default, \`make install' will install all the files in"
+    puts "\`$configure(prefix)/bin', \`$configure(prefix)/lib' etc.  You can specify"
+    puts "an installation prefix other than \`/usr/local' using \`--prefix',"
+    puts "for instance \`--prefix=$env(HOME)'."
+    puts ""
+    puts "For better control, use the options below."
+    puts ""
+    puts "Fine tuning of the installation directories:"
+    puts "  --bindir=DIR               user executables \[EPREFIX/bin\]"
+    puts "  --enginesdir=DIR           engines (executables) \[EPREFIX/games\]"
+    puts "  --datadir=DIR              read-only architecture-independent data \[PREFIX/share\]"
+    puts "  --libdir=DIR               object code libraries \[EPREFIX/lib\]"
+    puts "  --mandir=DIR               man documentation \[PREFIX/man\]"
+    puts "  --fontdir=DIR              truetype fonts \[PREFIX/share/fonts\]"
+    puts ""
+    puts "Fine tuning of the installation directory (see INSTALL):"
+    puts "  --destdir=DIR              installation directory for packaging"
+    puts ""
+    puts "Program names:"
+    puts "  --program-suffix=SUFFIX    append SUFFIX to installed program names"
+    puts ""
+    puts "Tcl/Tk features:"
+    puts "  --tcl-version=VER          Tcl/Tk version \[$configure(tcl-version)\]"
+    puts "  --tcl-includes=DIR         Tcl include files are in DIR"
+    puts "  --tcl-libraries=DIR        Tcl library files are in DIR"
+    puts "  --tk-includes=DIR          Tk include files are in DIR"
+    puts "  --tk-libraries=DIR         Tk library files are in DIR"
+    puts ""
+    puts "X features:"
+    puts "  --x-includes=DIR           X include files are in DIR"
+    puts "  --x-libraries=DIR          X library files are in DIR"
+    puts "  --xcursor-libraries=DIR    Xcursor library files are in DIR"
+    puts "  --fontconfig-libraries=DIR fontconfig library files are in DIR"
+    puts ""
+    puts "GNU compiler features:"
+    if {[llength $configure(gcc-version)]} {
+    puts "  --gcc-version=VER          GNU compiler version \[$configure(gcc-version)\]"
+    } else {
+    puts "  --gcc-version=VER          GNU compiler version"
+    }
+    puts "                             you may use 'clang' instead for the clang compiler"
+    puts ""
+    puts "Packages:"
+    puts "  --with-zlib-inc=DIR        path to Zlib compression library headers"
+    puts "  --with-zlib-lib=DIR        link options for Zlib compression library"
+    puts "  --with-zziplib-inc=DIR     path to Zziplib zip library headers"
+    puts "  --with-zziplib-lib=DIR     link options for Zziplib zip library"
+    puts "  --with-expat-inc=DIR       path to Expat XML Parser headers"
+    puts "  --with-expat-lib=DIR       link options for Expat XML Parser library"
+    puts ""
+    puts "  --force-bundled-zlib       \[default=no\]"
+    puts "  --force-bundled-zziplib    \[default=no\]"
+    puts "  --force-bundled-expat      \[default=no\]"
+    puts "  --force-bundled-gdbm       \[default=no\]"
+    puts ""
+    puts "Optional Features:"
+    puts "  --disable-FEATURE          do not include FEATURE (same as --enable-FEATURE=no)"
+    puts "  --enable-FEATURE\[=ARG\]     include FEATURE \[ARG=yes\]"
+    puts "  --enable-freedesktop       install freedesktop.org files (mime types and desktop"
+    puts "                             file) \[default=$feature(freedesktop)\]"
+    puts "  --enable-fam               build with FAM support \[default=$feature(fam)\]"
+    puts "  --enable-symbols           build with debugging symbols \[default=$feature(symbols)\]"
+    puts "  --enable-assertions        build with assertions (slows down the program)"
+    puts "                             \[default=$feature(assertions)\]"
+    puts "  --enable-sse2              enable sse2 support (fast JPEG decompression)"
+    puts "                             \[default=$feature(sse2)\]"
+    puts "  --enable-gprof-profiling   enable gprof profiling (slows down the program)"
+    puts "                             \[default=$feature(gprof-profiling)\]"
+    puts "  --enable-gcov-coverage     enable coverage (slows down the program)"
+    puts "                             \[default=$feature(gcov-coverage)\]"
+#   puts "  --enable-splash-screen    enable (or disable) the splash screen \[default=$feature(splash-screen)\]"
+    puts "  --enable-inline-text      enable inline text widget (revised implementation) \[default=$feature(inline-text)\]"
+    puts ""
+    puts "Additional Options:"
+    puts "  --suppress-insane-message  suppress the message about an insane distribution"
+    puts "                             (not recommended)"
+    puts ""
+    puts "Some influential environment variables:"
+    puts "  AR           AR for the host \[$environment(AR)\]"
+    puts "  ARFLAGS      Flags for AR \[$environment(ARFLAGS)\]"
+    puts "  CC           C compiler command \[$environment(CC)\]"
+    puts "  CFLAGS       C compiler flags \[$environment(CFLAGS)\]"
+    puts "  CXX          C++ compiler command \[$environment(CXX)\]"
+    puts "  CXXFLAGS     C++ compiler flags \[$environment(CXXFLAGS)\]"
+    puts "  LDFLAGS      linker flags, e.g. -L<lib dir> if you have libraries in a"
+    puts "               nonstandard directory <lib dir>"
+    puts "  OPTIMIZE     C/C++ optimization flags \[$environment(OPTIMIZE)\]"
+    puts "  RANLIB       RANLIB for the host \[$environment(RANLIB)\]"
+    puts "  STRIP        STRIP for the host \[$environment(STRIP)\]"
+    puts "  SYS_CFLAGS   system specific C compiler flags"
+    puts "  SYS_CXXFLAGS system specific C++ compiler flags"
+    puts "  SYS_LDFLAGS  system specific linker flags"
+    puts ""
+    puts "Use these variables to override the choices made by \`configure' or to help"
+    puts "it to find libraries and programs with nonstandard names/locations."
+    exit $rc
+}
+
+##############################################################################
+
+# XXX for BETA version
+set environment(OPTIMIZE) ""
+set feature(sse2) no ;# newer compiler versions are buggy
+set feature(symbols) yes
+set feature(assertions) yes
+set configure(program-suffix) "-beta"
+
+if {[lsearch $argv -h] >= 0 || [lsearch $argv --help] >= 0} { usage 0 }
+
+puts "configure: Makefile configuration program for Scidb"
+
+# Parse command-line arguments:
+foreach arg $argv {
+    set arg1 {}
+    lassign [split $arg =] arg0 arg1
+    if {[string match --enable-* $arg0]} {
+        if {[string length $arg1] == 0} { set arg1 yes }
+        set feature([string range $arg0 9 end]) $arg1
+    } elseif {[string match --disable-* $arg0]} {
+        if {[string length $arg1] == 0} {
+            set arg1 no
+        } elseif {[string match y* $arg1]} {
+            set arg1 no
+        } else {
+            set arg1 yes
+        }
+        set feature([string range $arg0 10 end]) $arg1
+    } elseif {$arg0 eq "--suppress-insane-message"} {
+        set suppressInsaneMessage 1
+    } else {
+        if {[string length $arg1] == 0} {
+            puts "Invalid argument: $arg\n"
+            exit 1
+        }
+        if {[string match --with-* $arg0]} {
+            set package([string range $arg0 7 end]) $arg1
+        } elseif {[string match --force-bundled-* $arg0]} {
+            set force([string range $arg0 16 end]) $arg1
+        } elseif {[info exists environment($arg0)]} {
+            set environment($arg0) $arg1
+        } elseif {[string match --* $arg0]} {
+            set configure([string range $arg0 2 end]) $arg1
+        } else {
+            puts "Invalid argument: $arg\n"
+            exit 1
+        }
+    }
+    unset -nocomplain arg1
+}
+set configure(tk-version) $configure(tcl-version)
+
+if {$configure(gcc-version) in $problematicGCCVersions} {
+    puts ""
+    puts "Due to some problems in gcc-${configure(gcc-version)} this compiler version"
+    puts "will not be supported. Please use another compiler version (read INSTALL)."
+    exit 1
+}
+
+if {[file readable "Makefile.in"]} {
+    puts "Renaming \"Makefile.in\" to \"Makefile.in.bak\""
+    catch { file rename -force "Makefile.in" "Makefile.in.bak" }
+}
+
+set tclv $configure(tcl-version)
+set tclv_nodot [expr round($tclv*10)]
+
+puts "    Tcl/Tk version: $tclv"
+puts "    Your operating system is: $tcl_platform(os) $tcl_platform(osVersion)"
+
+detectUnixDistribution
+if {[string length $distribution(distributor)]} {
+    puts "                 Distributor: $distribution(distributor)"
+}
+if {[string length $distribution(revision)]} {
+    puts "                    Revision: $distribution(revision)"
+}
+if {[string length $distribution(version)]} {
+    puts "                     Version: $distribution(version)"
+}
+
+set configure(tcl-shell) [auto_execok tclsh$tclv]
+if {[string length $configure(tcl-shell)] == 0} {
+    foreach v $Versions {
+        set configure(tcl-shell) [auto_execok tclsh$v]
+        if {[string length $configure(tcl-shell)]} { break }
+    }
+    if {[string length $configure(tcl-shell)] == 0} {
+        set configure(tcl-shell) [info nameofexecutable]
+    }
+    if {[string length $configure(tcl-shell)] == 0} {
+        puts "Cannot find any Tcl shell"
+        exit 1
+    }
+}
+
+set gxxVer ""
+set gccVer [checkGCC CC]
+if {[string length $gccVer]} { set gxxVer [checkGCC CXX] }
+
+if {[string length $gxxVer]} {
+    if {$gccVer ne $gxxVer} {
+        puts "Compiler version mismatch. Please configure CC and GXX with same versions,"
+        puts "or set option --gcc-version properly."
+        exit 1
+    }
+
+    set success [findTclTkPathsAndMore]
+
+    if {![checkFontConfig]} { exit 1 }
+
+    if {![findSMlibHeader]} {
+        puts ""
+        puts "Development files for SM library not found, this is especially a problem"
+        puts "on Ubuntu systems. Please install the development package for libsm."
+        puts "On Ubuntu use: sudo apt-get install libsm-dev"
+        exit 1
+    }
+
+    if {$::tcl_platform(platform) eq "unix"} {
+        if {![findFontconfig]} {
+            puts ""
+            puts "Development files for fontconfig not found, this is especially a problem on"
+            puts "Ubuntu systems. Please install the development package for libfontconfig."
+            puts "On Ubuntu use: sudo apt-get install libfontconfig1-dev"
+            exit 1
+        }
+
+        findFreetype
+    }
+
+    checkInotify
+    checkFAM
+    checkStatVFS
+    checkZlib
+    checkZziplib
+    checkExpat
+    checkGdbm
+
+    # We will always use the broken linker hack, the newer versions
+    # of the GNU linker are all broken (problems with the initialization
+    # of static objects).
+    Append option(EXTRA_CXXFLAGS) "-DBROKEN_LINKER_HACK=1"
+
+    # For a short period we will migrate automatically old layout coordinates
+    # (absolute height) to new layout coordinates (relative height).
+    Append option(EXTRA_CXXFLAGS) "-DTWM_MIGRATE_LAYOUT=1"
+
+    if {[dontUsePtrace]} {
+        # What a shame, some systems do not allow the debugging of own processes.
+        Append option(EXTRA_CXXFLAGS) "-DDONT_USE_GDB"
+
+        puts ""
+        puts "IMPORTANT NOTE:"
+        puts "-------------------------------------------------------------------------------"
+        puts "On this insane system debugging of own processes is not allowed due to the"
+        puts "kernel hardening paranoia. You might change this behaviour, see"
+        puts "<http://sourceforge.net/p/scidb/mailman/message/28418675/>, and then configure"
+        puts "again, otherwise you will not see useful error messages in case of internal"
+        puts "errors."
+    }
+
+    # For any reason the method with the frame addresses is crashing with newer compilers
+    Append option(EXTRA_CXXFLAGS) "-DDONT_USE_FRAME_ADDR"
+
+    if {[lsearch $argv -n] == -1 && [lsearch $argv --no-create] == -1} {
+        writeMakefile $success
+    }
+
+    if {[llength $instableTkLibrary]} {
+        # it seems that we build on an insane Unix system (like Ubuntu Oneiric)
+        puts ""
+        puts "IMPORTANT NOTE:"
+        puts "-------------------------------------------------------------------------------"
+        puts "You're about to run Scidb on an insane distribution. Scidb may crash with the"
+        puts "pre-installed Tk library $instableTkLibrary. It is highly recommended to install"
+        puts "a stable Tk version (8.6.0, 8.5.11, or 8.5.6) before building Scidb. Read INSTALL"
+        puts "for instructions how to use alternative library versions."
+    }
+
+    if {[info exists configure(destdir)]} {
+        set suppressInsaneMessage 1
+
+        if {[hasPTraceProblem] && "-DDONT_USE_GDB" ni $option(EXTRA_CXXFLAGS)} {
+            Append option(EXTRA_CXXFLAGS) "-DDONT_USE_GDB"
+        }
+    }
+
+    if {!$suppressInsaneMessage && [isInsaneUnixRelease]} {
+        # it seems that we build on an insane Unix system
+        # (like Ubuntu Oneiric, and higher versions)
+        puts ""
+        puts "IMPORTANT NOTE:"
+        puts "-------------------------------------------------------------------------------"
+        puts "The distributed Tk library may be broken, it is possible that some windows of"
+        puts "the application will freeze. In this case you have to use a self-compiled Tk"
+        puts "library if you want to avoid this problem (read INSTALL)."
+        puts ""
+        puts "It is highly recommended to build Scidb on a working Unix system. This system"
+        puts "is broken and distorted due to the \"kernel hardening\" paranoia, which assumes"
+        puts "that every software is an attacker. But Scidb is definitively not an attacker"
+        puts "and requires a sane system."
+    }
+
+    if {[isKnoppix]} {
+        puts ""
+        puts "IMPORTANT NOTE:"
+        puts "-------------------------------------------------------------------------------"
+        puts "Knoppix is a Live Linux system and not suitable for Tcl/Tk applications."
+        puts "Scidb will run, but it is very slow under Knoppix, and you will get some"
+        puts "nasty Tk errors. It is recommended to install a different Linux distribution"
+        puts "if you want to work with Scidb."
+    }
+
+    exit 0
+}
+
+exit 1
+
+# vi:set ts=4 sw=4 et filetype=tcl:

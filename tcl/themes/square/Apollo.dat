@@ -1,0 +1,32 @@
+::board::addStyle square {
+  borderline,color         {#1f033b}
+  borderline,gap           {0}
+  borderline,opacity       {0x50}
+  borderline,width         {0.006666666666666667}
+  dark,rotation            {0}
+  dark,solid               {#70a070}
+  dark,texture             {misc apollo-dark.png}
+  dark,x1                  {0}
+  dark,x2                  {150}
+  dark,y1                  {0}
+  dark,y2                  {150}
+  hilite,selected          {#7b9616}
+  hilite,suggested         {#940000}
+  hint,background-color    {}
+  hint,background-coords   {#000000}
+  hint,background-rotation	{0}
+  hint,background-tile     {misc patterncooler-16.png}
+  hint,border-color        {#4c4463}
+  hint,border-coords       {#ffffff}
+  hint,border-rotation     {0}
+  hint,border-tile         {}
+  identifier               {Apollo|1243715687066|yellow.color|gregor}
+  lite,rotation            {0}
+  lite,solid               {#e0d070}
+  lite,texture             {misc apollo-lite.png}
+  lite,x1                  {0}
+  lite,x2                  {150}
+  lite,y1                  {0}
+  lite,y2                  {150}
+  version                  {1.0}
+}

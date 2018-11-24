@@ -1,0 +1,272 @@
+<!-- **********************************************************************
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* Copyright: (C) 2011-2013 Gregor Cramer
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*********************************************************************** -->
+
+INDEX Formati Database
+INDEX Formati File
+INDEX Archivio Database#Archivio-Database
+INDEX Archivio#Archivio-Database
+TITLE Formati Database
+
+<p>
+Scidb supporta i seguenti formati:
+</p>
+
+<ul>
+  <li>
+    <img src="../images/ft-scidb.png" />
+    <a href="#Scidb">Scidb</a>
+  </li>
+  <li>
+    <img src="../images/ft-scid.png" />
+    <a href="#Scid">Scid</a>
+  </li>
+  <li>
+    <img src="../images/ft-chessbase.png" />
+    <a href="#ChessBase">ChessBase</a>
+  </li>
+  <li>
+    <img src="../images/ft-pgn.png" />
+    <a href="#PGN">PGN</a>
+  </li>
+  <li>
+    <img src="../images/ft-archive.png" />
+    <a href="#Database-Archive">Archivio Database</a>
+  </li>
+</ul>
+
+<h2 id="Scidb">
+<img src="../images/ft-scidb.png" />
+Scidb (<abbr>.sci</abbr>)
+</h2>
+
+Questo è il formato proprio di Scidb. L'uso di questo formato è fortemente raccomandato, dato che le funzioni di Scidb sono pienamente supportate solo in questo formato e fornirà un'ottima velocità nell'uso.
+
+<p>
+Solo il formato Scidb (e il formato PGN) possono contenere partite di diverse varianti degli scacchi
+(<see/> <a href="Chess-Variants.html">Varianti degli scacchi supportate</a>).
+Un database può contenere solo una variante degli scacchi (la <a href="Clipbase.html">Clipbase</a>
+è un'eccezione).
+</p>
+
+<p>
+Inoltre questo formato posizioni di
+<a href="http://it.wikipedia.org/wiki/Scacchi960">%::mc::VariantName(Chess960)%</a>,
+e
+<a href="http://de.wikipedia.org/wiki/Shuffle_Chess">%::mc::VariantName(Shuffle)%</a> in tutte le varianti degli scacchi.
+</p>
+
+<p>
+I database Scidb sono sempre codificati con il set caratteri <nobr>UTF-8</nobr>. Per questo
+i database possono essere usati senza complicazioni su tutti i sistemi e con tutte
+le localizzazioni.
+</p>
+
+<p>
+Un database nel formato Scidb è diviso in diversi file:
+</p>
+
+<box>
+  <table style="margin-top: 0.5em; margin-bottom: 0.5em;">
+    <tr valign="top">
+      <td nowrap="nowrap"><kbd>.sci</kbd></td><td>=&nbsp;</td>
+      <td>Informazioni partita</td>
+    </tr>
+    <tr valign="top">
+      <td nowrap="nowrap"><kbd>.scg</kbd></td><td>=&nbsp;</td>
+      <td>Mosse, commenti, annotazioni, informazioni sulla mossa e tag PGN</td>
+    </tr>
+    <tr valign="top">
+      <td nowrap="nowrap"><kbd>.scn</kbd></td><td>=&nbsp;</td>
+      <td>Informazioni su Giocatore/Evento/Sito/Commentatore</td>
+    </tr>
+  </table>
+</box>
+
+<h2 id="Scid">
+<img src="../images/ft-scid.png" />
+Scid (<abbr>.si4</abbr>, <abbr>.si3</abbr>)
+</h2>
+
+Questo è il formato database di Scid e data la sua ampia distribuzione è supportato sia in lettura sia in scrittura. Usando questo formato non sarà possibile usare tutte le funzioni disponibili in Scidb.
+
+<annotation>
+I database di Scidb saranno aperti in modalità di sola lettura.
+</annotation>
+
+<p>
+In alcuni casi l'utente deve scegliere la codifica appropriata nell'aprire il
+database, per assicurare una corretta visualizzazione dei nomi e di altro testo.
+I database più recenti potrebbero avere codifica <nobr>UTF-8</nobr>, database più
+vecchi potrebbero essere scritti con  il set di caratteri <nobr>Latin-1</nobr>
+(ISO-<nobr>8859-1</nobr>), il formato Scid non fornisce informazioni sulla codifica
+utilizzata. In alcuni casi tuttavia l'identificazione automatica del set caratteri dovrebbe
+avere successo.
+</p>
+
+<p>
+Questo formato ricorda per struttura il formato Scidb:
+</p>
+
+<box>
+  <table style="margin-top: 0.5em; margin-bottom: 0.5em;">
+    <tr valign="top">
+      <td nowrap="nowrap"><kbd>.si4</kbd></td><td>=&nbsp;</td>
+      <td>Dati partita</td>
+    </tr>
+    <tr valign="top">
+      <td nowrap="nowrap"><kbd>.sg4</kbd></td><td>=&nbsp;</td>
+      <td>Mosse, commenti, annotazioni e tag PGN</td>
+    </tr>
+    <tr valign="top">
+      <td nowrap="nowrap"><kbd>.sn4</kbd></td><td>=&nbsp;</td>
+      <td>Dati relativi a Giocatore/Evento/Luogo/Turno</td>
+    </tr>
+    <tr valign="top">
+      <td nowrap="nowrap"><kbd>.ssc</kbd></td><td>=&nbsp;</td>
+      <td>Dati di ordinamento</td>
+    </tr>
+  </table>
+</box>
+
+<note>I file con estensione <code>.sso</code> (Scid Search Option File),
+<code>.sor</code> (Scid Repertoire File), e <code>.stm</code>
+(Scid Tree Mask File) non appartengono esplicitamente al database
+e non saranno considerati da Scidb.
+Allo stesso modo ogni lista di partite salvate (suffisso <code>.txt</code>) non sarà considerata.</note>
+
+<h2 id="ChessBase">
+<img src="../images/ft-chessbase.png" />
+ChessBase (<abbr>.cbh</abbr>, <abbr>.cbf</abbr>)
+</h2>
+
+L'azienda <a href="http://www.chessbase.de">ChessBase</a> mantiene questo formato segreto,
+per questo solo la lettura è supportata. Non tutti i dati della partita possono essere
+letti correttamente, con alcune partite apparirà il messaggio che comunica la non riuscita
+dell'operazione di decodifica.
+
+<annotation>
+I database ChessBase non possono essere usati come databases di riferimento.
+</annotation>
+
+<p>
+Generalmente, questo database ha codifica con set caratteri CP1252
+(o CP850 con vecchi formati), ma in alcuni casi una selezione manuale del
+set caratteri durante l'apertura del database può essere necessaria, per assicurare
+una corretta visualizzazione dei nomi e di altro testo.
+</p>
+
+<p>
+Il formato database di ChessBase è diviso in diversi file separati, quelli più importanti sono:
+</p>
+
+<box>
+  <table style="margin-top: 0.5em; margin-bottom: 0.5em;">
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbh </kbd></td><td>=&nbsp;</td><td>Dati partita</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbg </kbd></td><td>=&nbsp;</td><td>Mosse e varianti</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cba </kbd></td><td>=&nbsp;</td><td>Commenti e annotazioni</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbs </kbd></td><td>=&nbsp;</td><td>Indice delle fonti</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbp </kbd></td><td>=&nbsp;</td><td>Indice giocatori</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbc </kbd></td><td>=&nbsp;</td><td>Indice commentatori</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbt </kbd></td><td>=&nbsp;</td><td>Indice tornei</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbe </kbd></td><td>=&nbsp;</td><td>Indice squadre</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbj </kbd></td><td>=&nbsp;</td><td>Informazioni squadra</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cko </kbd></td><td>=&nbsp;</td><td>Opening keys</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cpo </kbd></td><td>=&nbsp;</td><td>Opening keys</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.ini </kbd></td><td>=&nbsp;</td><td>File di inizializzazione per il database</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.html</kbd></td><td>=&nbsp;</td><td>Documento HTML</td></tr>
+  </table>
+</box>
+
+<p>
+Un database nel vecchio formato consiste di quattro file:
+</p>
+
+<box>
+  <table style="margin-top: 0.5em; margin-bottom: 0.5em;">
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbf</kbd></td><td>=&nbsp;</td><td>Dati partita e mosse</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbi</kbd></td><td>=&nbsp;</td><td>Indice</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cko</kbd></td><td>=&nbsp;</td><td>Chiavi di apertura</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cpo</kbd></td><td>=&nbsp;</td><td>Chiavi di apertura</td></tr>
+  </table>
+</box>
+
+<h2 id="PGN">
+<img src="../images/ft-pgn.png" />
+<abbr>PGN</abbr> (<abbr>.pgn</abbr>, <abbr>.pgn.gz</abbr>, <abbr>.zip</abbr>)
+</h2>
+
+Il formato <abbr>PGN</abbr> (Portable Game Notation) è uno standard comune per lo
+scambio di partite di scacchi.
+<NEW><!-- Old content
+L'apertura di un file <abbr>PGN</abbr> è permessa in sola lettura.
+--> <!-- New content: -->
+Opening a <abbr>PGN</abbr> file will be done in reading mode, but it is
+possible to set it writeable if the file has writing permission.
+</NEW>
+Se si hanno grandi collezioni di partite in questo formato si consiglia di
+convertirle nel formato di Scidb.
+
+<p>
+Secondo lo
+<a href="http://www.saremba.de/chessgml/standards/pgn/pgn-complete.htm">standard PGN</a>
+un file PGN ha codifica <nobr>Latin-1</nobr> (ISO-<nobr>8859-1</nobr>).
+Ma se un file PGN comincia con un marcatore <nobr>UTF-8</nobr>
+(<nobr>UTF-8</nobr>-BOM: byte sequence EF BB BF) ci si aspetterà un encoding <nobr>UTF-8</nobr>
+(in osservanza a <a href="http://www.unicode.org/faq/utf_bom.html#BOM">Unicode FAQ</a>).
+<NEW>
+If the application is detecting an Unicode string when reading the file before a
+string with a different encoding (except ASCII) was recognized, then also Unicode
+encoding for the whole file will be expected, but only if not an explicit encoding
+is chosen when opening the file.
+</NEW>
+</p>
+
+<p>
+Solo le seguenti varianti saranno accettate se si stanno leggendo partite da FICS:
+</p>
+
+INCLUDE ../FICS-Variants.txt
+
+<p>
+Per le specifiche complete su questo formato visitare
+<a href="http://www.saremba.de/chessgml/standards/pgn/pgn-complete.htm">
+Standard: Portable Game Notation Specification and Implementation Guide</a>.
+</p>
+
+<h2 id="Database-Archive">
+<img src="../images/ft-archive.png" />
+Archivio Database (<abbr>.scv</abbr>)
+</h2>
+
+<p>
+L'archivio database di Scidb è basato su un formato archivio indipendente,
+e contiene uno (o più) database nella forma archiviata. Questo facilita
+il trasferimento di database su internet, perché si tratta di un singolo file
+invece di molti. Questo archivio database non è limitato a uno specifico formato database.
+</p>
+
+<p>
+Una dettagliata descrizione di questo formato è alla pagina
+<!-- NOTE for translators: only German and English specification will be available -->
+<!-- This means: do not translate next line -->
+<a href="../en/Database-Archive.html">Specification of database archive</a>.
+</p>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html: -->

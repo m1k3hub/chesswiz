@@ -1,0 +1,101 @@
+<!-- **********************************************************************
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* Copyright: (C) 2012-2013 Gregor Cramer
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*********************************************************************** -->
+
+TITLE Bienvenido a la Ayuda de Scidb
+
+<h2 id="general">Generalidades</h2>
+
+<ul class="index">
+  <li><a href="Database-Formats.html">Formatos de bases de datos</a></li>
+  <li><a href="File-Selection-Dialog.html">Uso del diálogo Selección de archivos</a></li>
+  <li><a href="Toolbar-Usage.html">Uso de las Barras de herramientas</a></li>
+  <li><a href="Clipbase.html">La base temporal (Clipbase)</a></li>
+  <li><a href="How-To-Set-Default-Browser.html">Cómo definir el explorador de Internet predeterminado</a></li>
+</ul>
+
+<h2 id="list-windows">Ventanas de listado en Scidb</h2>
+
+<ul class="index">
+  <li><a href="Game-List-Window.html">Listado de partidas</a></li>
+  <li><a href="Player-List-Window.html">Listado de jugadores</a></li>
+  <li><a href="Event-List-Window.html">Listado de torneos</a></li>
+  <li><a href="Site-List-Window.html">Listado de lugares</a></li>
+  <li><a href="Annotator-List-Window.html">Listado de comentaristas</a></li>
+</ul>
+
+<h2 id="windows-and-dialogs">Ventanas y diálogos en Scidb</h2>
+
+<ul class="index">
+  <li><a href="Database-Switcher.html">Intercambiador de bases de datos</a></li>
+  <li><a href="Game-Browser.html">Explorador de partidas</a></li>
+  <li><a href="Game-Overview.html">Panorámica del Explorador de partidas</a></li>
+  <li><a href="Game-Text-Window.html">Ventana Texto de la partida</a></li>
+  <li><a href="Game-History-Window.html">Historial de la partida</a></li>
+  <li><a href="Board-Window.html">Tablero</a></li>
+  <li><a href="Tree-Window.html">Ventana de árbol</a></li>
+  <li><a href="Tree-Games-Window.html">Ventana Árbol de partidas</a></li>
+  <li><a href="Comment-Editor-Dialog.html">Editor de comentarios</a></li>
+  <li><a href="Mark-Palette-Dialog.html">Paleta de marcadores de escaques</a></li>
+  <li><a href="Board-Setup-Dialog.html">Diálogo Editar posición en el tablero</a></li>
+  <li><a href="Start-Position-Setup-Dialog.html">Diálogo Disposición de la posición inicial</a></li>
+  <li><a href="Crosstable-Window.html">Ventana Tabla cruzada</a></li>
+  <li><a href="PGN-Import-Dialog.html">Diálogo Importar partidas PGN</a></li>
+  <li><a href="Database-Export-Dialog.html">Diálogo Exportar base de datos</a></li>
+</ul>
+
+<NEW>
+<h2 id="cql-manual">CQL (Chess Query Language)</h2>
+
+<ul class="index">
+  <li><a href="CQL-Index.html">Introduction</a></li>
+  <li><a href="CQL-Syntax.html">Syntax</a>
+    <ul class="index">
+      <li><a href="CQL-Piece-Designators.html">Piece designators</a></li>
+      <li><a href="CQL-Square-Designators.html">Square designators</a></li>
+      <li><a href="CQL-Range-Specifiers.html">Range specifiers</a></li>
+      <li><a href="Pattern-Matching.html">Pattern matching</a></li>
+    </ul>
+  </li>
+  <li><a href="CQL-Transformations.html">Transformations</a></li>
+  <li><a href="CQL-Match-List.html">The match list</a></li>
+  <li><a href="CQL-Position-List.html">The position list</a></li>
+  <li><a href="CQL-Relation-List.html">The relation list</a></li>
+  <li><a href="CQL-Tagging.html">Tagging</a></li>
+  <li><a href="CQL-Examples.html">Examples</a></li>
+</ul>
+</NEW>
+
+<h2 id="further-information">Información adicional</h2>
+
+<ul class="index">
+  <li><a href="Game-Flags.html">Marcadores de partida</a></li>
+  <!--<li><a href="Chess-Variants.html">Supported chess variants</a></li>-->
+  <!-- NOTE for translators: this page is only available in English (do not remove this note) -->
+  <li><a href="../en/Database-Archive.html">Especificación de Archivos de base de datos (ingl�s)</a></li>
+  <li><a href="Command-Line-Options.html">Opciones de la línea de comandos</a></li>
+  <li><a href="NAG-Comments.html">Valores de las anotaciones NAG</a></li>
+  <li><a href="ECO-Code.html">Código ECO</a></li>
+  <li><a href="Contact-Information.html">Información de contacto</a></li>
+  <li><a href="Development-Roadmap.html">Mapa de ruta del desarrollo</a></li>
+  <li><a href="Whats-New.html">Novedades</a></li>
+  <li><a href="Welcome.html">¡Bienvenido a Scidb!</a></li>
+</ul>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html: -->

@@ -1,0 +1,67 @@
+<!-- **********************************************************************
+* Author : $Author$
+* Version: $Revision$
+* Date   : $Date$
+* Url    : $URL$
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* Copyright: (C) 2012-2013 Gregor Cramer
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*********************************************************************** -->
+
+TITLE Üdvözöljük a Scidb-ben!
+
+<p>
+Ez egy előzetes verzió tesztelés és ismerkedés céljaira. Az első teljes verzió egy kellően hosszú tesztelési időszak után kerül kiadásra. Kérlek legyél tekintettel az alábbiakra, miközben a Scidb-vel ismerkedsz:
+</p>
+
+<ol>
+  <li class="space">
+    Ez a verzió sok, hibakereséshez használt információval dolgozik, ami lelassíthatja a működést.
+  </li>
+
+<!--
+  <li class="space">
+    A Scid adatbázisok (.si3/.si4) megnyitása egy összetett emulációs folyamat segítségével történik, ami még nincs teljeskörüen tesztelve.    
+	  <annotation>
+    Mindezek miatt egyenlőre ne szerkeszd a már meglévő Scid adatbázisaidat a programmal!
+    </annotation>
+    Scid adatbázisok megnyitása alapértelmezetten írásvédett módban történik, így a fentiek nem jelentenek veszélyt az adatbázisra.
+  </li>
+-->
+
+  <li class="space">
+    Az aktuális Scidb formátum (.sci) legkésőbb az első teljes verzió megjelenésekor véglesedik (Ami az 1.0-ás verzió lesz. A jelenlegi verziószám 0.94). Mindazonáltal a jelenlegi formátum már teljes értékű és a későbbi változatások csupán új funkciók hozzáadására korlátozódnak.
+  </li>
+
+  <li class="space">
+    A .cbh ChessBase formátum támogatása még nem teljes körű. A Fischer sakk (Sakk960) játszmák megnyitása még nem támogatott.
+  </li>
+
+  <li class="space">
+    Időről időre újabb teszt verziók kerülnek kiadásra.
+  </li>
+</ol>
+
+<p><!-- NEW: replace 'three years' with 'four years' -->
+Jó szórakozást kívánunk a Scidb használatához, melynek fejlesztése immáron kilenc éve tart!
+</p>
+
+<h2>Links</h2>
+
+<dir>
+  <li><a href="Whats-New.html">What's new?</a></li>
+  <li><a href="Development-Roadmap.html">Development roadmap</a></li>
+</dir>
+
+<!-- END -->
+END
+
+# vi:set ts=2 sw=2 et filetype=html:

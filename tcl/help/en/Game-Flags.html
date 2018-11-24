@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<!-- Generated from tcl/help/en/Game-Flags.txt -->
+
+<html xmlns='http://www.w3.org/1999/xhtml' xml:lang='en' lang='en'>
+<head>
+  <meta http-equiv="content-type"
+           content="text/html; charset=utf-8" />
+  <meta http-equiv="content-language"
+           content="en" />
+  <meta http-equiv="content-style-type"
+           content="text/css" />
+
+  <meta name="author"
+     content="scidb.sourceforge.net" />
+  <meta name="generator"
+     content="scidb.sourceforge.net" />
+  <meta name="description"
+     content="Scidb - Help Page" />
+
+  <link rel="icon"
+       href="http://scidb.sourceforge.net/favicon.ico"
+       type="image/x-icon" />
+  <link rel="shortcut icon"
+       href="http://scidb.sourceforge.net/favicon.ico" />
+  <link rel="stylesheet"
+       type="text/css"
+      media="screen"
+		 href="../styles/help.css" />
+
+  <title>Scidb - Help: Game markers</title>
+</head>
+
+<body>
+
+<div class="title">
+  <h1 class="title">Game markers</h1>
+</div>
+
+<p>
+A <em>marker</em> is an indicator of some chess characteristic that can be turned
+on or off for each game in the database. There are 21 user-settable markers that
+markers that one may set for each game. These markers will be used used mainly as
+part of complex searches in the database, or for game list filter purposes. Since all
+the user-settable markers have no significance, you can use them for any purpose that
+suits your needs.
+</p>
+
+<p>
+The markers and their symbols in detail:
+</p>
+
+<div class='box'>
+<dl>
+  <dt><img src="../images/gameflag-White-Opening.png" alt=""     />&emsp;White Opening</dt>
+  <dt><img src="../images/gameflag-Black-Opening.png" alt=""     />&emsp;Black Opening</dt>
+  <dt><img src="../images/gameflag-Middle-Game.png" alt=""       />&emsp;Middle Game</dt>
+  <dt><img src="../images/gameflag-End-Game.png" alt=""          />&emsp;End Game</dt>
+  <dt><img src="../images/gameflag-Novelty.png" alt=""           />&emsp;Novelty</dt>
+  <dt><img src="../images/gameflag-Pawn-Structure.png" alt=""    />&emsp;Pawn Structure</dt>
+  <dt><img src="../images/gameflag-Tactics.png" alt=""           />&emsp;Tactics</dt>
+  <dt><img src="../images/gameflag-King-Side.png" alt=""         />&emsp;King Side</dt>
+  <dt><img src="../images/gameflag-Queen-Side.png" alt=""        />&emsp;Queen Side</dt>
+  <dt><img src="../images/gameflag-Brilliancy.png" alt=""        />&emsp;Brilliancy</dt>
+  <dt><img src="../images/gameflag-Blunder.png" alt=""           />&emsp;Blunder</dt>
+  <dt><img src="../images/gameflag-User.png" alt=""              />&emsp;User</dt>
+  <dt><img src="../images/gameflag-Best-Game.png" alt=""         />&emsp;Best Game</dt>
+  <dt><img src="../images/gameflag-Decided-Tournament.png" alt=""/>&emsp;Decided Tournament</dt>
+  <dt><img src="../images/gameflag-Model-Game.png" alt=""        />&emsp;Model Game</dt>
+  <dt><img src="../images/gameflag-Strategy.png" alt=""          />&emsp;Strategy</dt>
+  <dt><img src="../images/gameflag-With-Attack.png" alt=""       />&emsp;Attack</dt>
+  <dt><img src="../images/gameflag-Sacrifice.png" alt=""         />&emsp;Sacrifice</dt>
+  <dt><img src="../images/gameflag-Defense.png" alt=""           />&emsp;Defense</dt>
+  <dt><img src="../images/gameflag-Material.png" alt=""          />&emsp;Material</dt>
+  <dt><img src="../images/gameflag-Piece-Play.png" alt=""        />&emsp;Piece Play</dt>
+  <dt><img src="../images/gameflag-Illegal-Move.png" alt=""      />&emsp;Illegal Move</dt>
+  <dt><img src="../images/gameflag-Invalid-Move.png" alt=""      />&emsp;Invalid Move</dt>
+</dl>
+</div>
+
+<p>
+The last two markers are not user-settable, they will be set automatically if a
+game contains illegal castlings or even other illegal moves (for example the king
+is moving into check) within the main line. If a game is marked with both only
+the marker <em>Illegal Move</em> will be displayed.
+</p>
+
+<p>
+There are also special markers which are not user-settable, the deletion
+marker, the changed marker, and the newly added marker. A game marked with the
+deletion marker will be removed when next the database is compacted
+(&#x21d2; <a href="Database-Switcher.html#Compact">Database switcher:
+Compact</a>). This marker will be retained
+after closing the database. The changes marker means that this game has been
+changed (and saved), and the newly added marker is denoting a newly added game.
+Both markers will be lost as soon as the database is closed.
+</p>
+
+<p>
+When editing games from Scid databases (.si4) Scidb is supporting the six special
+user defined markers (1..6). But it is recommended not to use these markers, because
+unsolvable problems will ocurr when copying games to other databases; even the
+application Scid cannot solve these problems.
+</p>
+
+<p>
+When reading ChessBase databases both markers
+<em>Strategical Blunder</em> and
+<em>Tactical Blunder</em>
+will be mapped to the common marker <em>Blunder</em>.
+Scidb does not distinguish between these two characteristics.
+</p>
+
+</body>
+</html>

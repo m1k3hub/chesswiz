@@ -1,0 +1,271 @@
+% ======================================================================
+% Author : $Author$
+% Version: $Revision: 145 $
+% Date   : $Date: 2011-12-01 08:54:52 +0100 (Thu, 01 Dec 2011) $
+% Url    : $URL$
+% ======================================================================
+
+% ======================================================================
+%    _/|            __
+%   // o\         /    )           ,        /    /
+%   || ._)    ----\---------__----------__-/----/__-
+%   //__\          \      /   '  /    /   /    /   )
+%   )___(     _(____/____(___ __/____(___/____(___/_
+% ======================================================================
+
+% ======================================================================
+% Copyright: (C) 2011-2013 Gregor Cramer
+% ======================================================================
+
+% ======================================================================
+% This program is free software; you can redistribute it and/or modify
+% it under the terms of the GNU General Public License as published by
+% the Free Software Foundation; either version 2 of the License, or
+% (at your option) any later version.
+% ======================================================================
+
+\input\common
+
+%%% check variables %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\def\check-optional-token#tok#dflt{%
+	\ifx#tok\undefined
+		\message{WARNING: Token \string#tok is not defined (default is \string#dflt)}%
+		\let#tok#dflt%
+	\fi
+}
+\def\check-mandatory-token#tok{%
+	\ifx#tok\undefined
+		\errorcontextlines\0
+		\errmessage{ERROR: Token \string#tok is not defined}%
+	\fi
+}
+
+\check-optional-token\ShowRating\1
+%\check-optional-token\ShowTiebreaks\1
+%\check-optional-token\ShowPerformance\1
+%\check-optional-token\ShowWinDrawLoss\0
+%\check-optional-token\ShowChange\1
+\check-optional-token\ShowCountry\1
+\check-optional-token\UsePyramid\0
+\check-optional-token\CellSpacing\1
+\check-optional-token\CellPadding\3
+
+\check-mandatory-token\FormatDate
+\check-mandatory-token\DecimalPoint
+\check-mandatory-token\Linespace
+\check-mandatory-token\CharWidth
+\check-mandatory-token\Lang
+\check-mandatory-token\Title
+
+\check-mandatory-token\Players
+\check-mandatory-token\AverageRating
+\check-mandatory-token\Category
+\check-mandatory-token\Games
+\check-mandatory-token\Game
+\check-mandatory-token\Header
+\check-mandatory-token\Results
+
+%%% layout %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\let\result-width\CharWidth
+\div\result-width\2
+\add\result-width\CharWidth
+
+%%% helpers %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\def\width#1{\let@n\CharWidth\mul@n#1@n}
+
+\def\let-digits#1#2{%
+	\ifgreater#2\0 \xlet@n\log10#2\add@n\1 \else \let@n\0 \fi
+	\let#1@n
+}
+
+%%% preparations %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\xlet\Players\lfront\Players
+\xlet\nplayers\llength\Players
+
+%%% HTML tags %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\def\begin-table#border#padding#spacing#width{%
+	<table border="#border" cellpadding="#padding" cellspacing="#spacing" %
+	\unless\if#width\0 width="#width\%"\fi
+	>\cr
+	\incr\indent
+}
+
+\def\end-table{\decr\indent</table>\cr}
+
+%%% preparations %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\def\prepare-players{%
+	\let\count-countries\0
+	\foreach \entry \Players {%
+		\lassign\entry{\country\unused\elo\score\ngames\performance\change\tiebreaks}%
+		\unless\ifempty\country \incr\count-countries \fi
+	}%
+	\if\count-countries\0 \let\ShowCountry\0 \fi
+	\let\ndigits-progress\0
+	\foreach \row \Results {%
+		\foreach \pairing \row {%
+			\for \j \0 \2 {%
+				\lassign\lindex\pairing\j{\unused\progress}
+				\div\progress\2 \let-digits\n\progress \max\ndigits-progress\n
+			}%
+		}%
+	}%
+}
+
+%%% output header %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\lassign\Header{\unused\event\site\country\startDate\endDate\avgElo\category\numGames\results}
+\ifx\length\event\1\let\event\empty\fi
+\ifx\length\site\1\let\site\empty\fi
+
+\xhtml-head\Lang\Title{crosstable.css}%
+<body>\cr
+<p><nobr>\cr
+<big>
+<span recv="event" style="color: blue;">\event</span>
+\let\comma\empty
+\unless\ifempty\site\ \site\def\comma{, }\fi
+\unless\ifempty\country\ <img src="\country"/>\let\comma\empty\fi
+\unless\ifempty\startDate
+	\edef\startDate{\FormatDate\startDate}
+	\edef\endDate{\FormatDate\endDate}
+	\expandafter\if\length\endDate\8
+		\cr\startDate
+		\unless\ifx\startDate\endDate
+			\ \endash\ \endDate
+		\fi
+	\else
+		\comma\ \startDate
+	\fi
+\fi
+</big>\cr
+\unless\if\avgElo\0
+</nobr></p><p>\cr
+\AverageRating: \avgElo
+\unless\if\category\0
+\ (\Category\ \category)
+\fi\fi\cr
+</p>\cr\cr
+
+%%% output table %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\def\print-player#index#rank#progress{%
+	\lassign\lindex\Players#rank{\country\name}%
+	\begin-row
+	\if\ShowCountry\1
+		\def\col-width{21}
+		\begin-col-end{\unless\ifempty\country <img src="\country">\fi}%
+	\fi
+	\def\col-rank{\increment#rank}%
+	\def\col-recv{#index-#rank}%
+	\def\col-mark{#index-#rank}%
+	\def\col-send{%
+		\let\delim\empty
+		\for \k \0 \n {%
+			\delim
+			\unless\if#index\k
+				\k-\rank
+				\let\delim:%
+			\fi
+		}
+	}
+	\begin-col-end\name
+	\begin-col-end\thick-space
+	\let\points\progress \div\points\2
+	\let\frac\progress \mod\frac\2 \mul\frac\5
+	\def\col-width{\width\ndigits-progress}%
+	\def\col-align{right}%
+	\begin-col-end{<b>\points</b>}%
+	\let\col-width\CharWidth
+	\begin-col-end{<b>\DecimalPoint\frac</b>}%
+	\end-row
+}
+
+\def\print-results#results{%
+	\begin-row
+	\if\ShowCountry\1
+		\begin-col-end\empty
+	\fi
+	\begin-col
+	\begin-table\0\0\0\0
+	\begin-row
+	\foreach \data #results {%
+		\lassign\data{\result\col-game}
+		\ifcase\result
+			\when \2 \let\result\1
+			\when \1 \def\result{\fraction-one-half}%
+		\fi
+		\def\col-align{center}%
+		\let\col-width\result-width
+		\let\col-recv\col-game
+		\begin-col-end{<font color="blue">\result</font>}%
+	}%
+	\end-row
+	\end-table
+	\end-col
+	\begin-col-end\empty
+	\end-row
+}
+
+\prepare-players
+\xlet\n\llength\Results
+\begin-table\0\CellPadding\0\0
+\begin-row
+\for \i \0 \n {%
+	\if\UsePyramid\1
+		\def\col-valign{center}%
+		\let\index\n \sub\index\i \sub\index\1
+	\else
+		\def\col-valign{top}%
+		\let\index\i
+	\fi
+	\xlet\row\lindex\Results\index
+	\begin-col
+	\begin-table\0\CellPadding\0\100
+	\let\first\1
+	\foreach \pairing \row {%
+		\let\first\0
+		\begin-row
+		\begin-col
+		\begin-table\1\CellPadding\CellSpacing\100
+		\begin-row
+		\begin-col
+		\begin-table\0\0\0\100
+		\lassign\lindex\pairing\0{\rank\progress}%
+		\print-player\index\rank\progress
+		\lassign\lindex\pairing\1{\rank\progress}%
+		\print-player\index\rank\progress
+		\expandafter\print-results\lindex\pairing\2
+		\end-table
+		\end-col
+		\end-row
+		\end-table
+		\end-col
+		\end-row
+	}%
+	\end-table
+	\end-col
+}
+\end-row
+\end-table
+
+%%% output footer %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\cr
+<p>\cr
+\lassign\results{\white\black\draw\lost}%
+\numGames\ \if\numGames\1\Game\else\Games\fi
+\ (+\white\thick-space\ =\draw\thick-space\ \minus\black)\cr
+</p>\cr
+</body>
+\xhtml-foot
+
+%%% end of file %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bye
+
+% vi:set ts=3 sw=3 filetype=tex:

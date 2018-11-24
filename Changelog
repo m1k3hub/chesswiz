@@ -1,0 +1,1968 @@
+[September 2018] =============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1524)
+------------------------------------------------------------------------------
+* Problem with glitches after destroying shadowed windows finally solved.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1522)
+------------------------------------------------------------------------------
+* New menu entry (and shortcut) in game/event/site table: opening URL if given
+in site.
+* Fix in chess variant support: Scid databases (.si3/4) may contain
+Three-check chess, and now it will be detected with the help of tag "Variant"
+whether a game belongs to Three-check. This supports correct displaying in
+game (notation) editor, and proper import into Three-check databases
+(.sci).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1520)
+------------------------------------------------------------------------------
+* The following themes are removed: Antique, Magnetic, Mayan Marble, Motif,
+Phoenix, Staidly, and Stone Floor. Also some unused piece and square styles
+are removed.
+* Some themes changed, especially contour of some pieces sets removed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1519)
+------------------------------------------------------------------------------
+* Layout now includes toolbar layout.
+* Layout now supports fullscreen mode.
+* Some themes changed, especially contour of some pieces sets removed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1517)
+------------------------------------------------------------------------------
+* Important fix in shadow.tcl, glitches have been gone.
+* Important fix in tooltip.tcl, now double click is properly working when
+tooltip is visible.
+* Important enhancement in TWM, now inside paned windows list widgets will
+be aligned.
+* panedwindow.tcl overworked:
+- option -state disabled is properly working
+- option -gridsize added
+* Layout manager enhanced.
+* Border of themes Elegant, and Military changed.
+
+[August 2018] ================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1510)
+------------------------------------------------------------------------------
+* New theme "Elegant".
+
+[July 2018] ==================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1502)
+------------------------------------------------------------------------------
+* New pane "ECO table" on board tab.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1500)
+------------------------------------------------------------------------------
+* Additional "result" field in opening tree.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1498)
+------------------------------------------------------------------------------
+* Improved layout management:
+- all Database tabs are configurable
+- includes table (list) layout
+- differentiating between chess variants
+- fixed layout computation
+
+[June 2018] ==================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1497)
+------------------------------------------------------------------------------
+* Handling of table options overworked, now should work properly.
+* Layout computation fixed, now it seems to be 100% correct.
+* All tabs (games, player, events, sites, annotators, positions) have
+configurable layouts (TWM), it's possible to link with a specific board
+layout.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1493)
+------------------------------------------------------------------------------
+* Scidb now allows to create PGN archives.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1490)
+------------------------------------------------------------------------------
+* New theme "scidblue", taken from project Scid, but slightly modified, the
+spinbox is unsatisfying.
+
+[Mai 2018] ===================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1485)
+------------------------------------------------------------------------------
+* New feature: increasing/decreasing all font sizes with Ctrl-Shift-plus/
+Ctrl-Shift-minus, this is especially useful for visually impaired people.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1479)
+------------------------------------------------------------------------------
+* Modified version of http.tcl added, this should fix the problem with
+timeouts if Internet is slow.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1476)
+------------------------------------------------------------------------------
+* Fix in treectrl, double-buffer mode ITEM is not working properly, so we will
+use WINDOW as a work-around.
+
+[April 2018] =================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1474)
+------------------------------------------------------------------------------
+* Fix of rewdraw problem in tktreectrl.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1470)
+------------------------------------------------------------------------------
+* Upgrade to Tcl/Tk 8.6.8.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1468)
+------------------------------------------------------------------------------
+* Comment editor overworked, upgrade to revised text widget.
+
+[December 2017] ==============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1459)
+------------------------------------------------------------------------------
+* Fivefold move repetition detection implemented according to new FIDE rule.
+
+[October 2017] ===============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1438)
+------------------------------------------------------------------------------
+* Upgrade of stockfish, now is supporting "King of the Hill".
+
+[August 2017] ================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1433)
+------------------------------------------------------------------------------
+* Upgrade of Sjeng version.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1416)
+------------------------------------------------------------------------------
+* Engine support: commit limit now is adjustable.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1399)
+------------------------------------------------------------------------------
+* PGN reader: accept unquoted tag values.
+* PGN writer: don't write double quotes inside tag values.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1396)
+------------------------------------------------------------------------------
+* PGN support implemented in cdb2sci.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1395)
+------------------------------------------------------------------------------
+* Engine support improved.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1383)
+------------------------------------------------------------------------------
+* Engine now supports mode "Opponent view".
+* Now it is possible to detect Windows engines, provided that Wine is
+installed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1383)
+------------------------------------------------------------------------------
+* New tab: Start Positions.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1382)
+------------------------------------------------------------------------------
+* Search box implemented and integrated.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1372)
+------------------------------------------------------------------------------
+* Error handling when decoding games overworked.
+* Now Scidb can convert MegaBase 2017 successfully.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1363)
+------------------------------------------------------------------------------
+* Tip-of-the-Day dialog integrated.
+
+[Juli 2017] ==================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1339)
+------------------------------------------------------------------------------
+* New game table column "move list", showing the mnoves of the games.
+
+* New notation styles:
+Computer Algebraic Notation
+German Short Algebraic Notation
+Minimal Algebraic Notation (Informator style)
+Reversible Algebraic Notation
+Smith Notation
+Spanish Descriptive Notation
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1295)
+------------------------------------------------------------------------------
+* Scidb now supports tiled window management.
+
+[Juni 2017] ==================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1253)
+------------------------------------------------------------------------------
+* New variation enter mode <F5>.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1250)
+------------------------------------------------------------------------------
+* Improvement of Sjeng: the SEE now will take the value of promoted pieces
+into account (Crazyhouse, Bughouse).
+* Improvement of Sjeng: support of variant Chessgi.
+* Improvement of Sjeng: support of variant Loop-Chess.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1243)
+------------------------------------------------------------------------------
+* Sjeng engine now supports promoted pieces in FEN.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1238)
+------------------------------------------------------------------------------
+* New options in board setup dialog: "Show Piece Shadow", and "Show Piece
+Contour".
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1208)
+------------------------------------------------------------------------------
+* Crazyhouse support: mark promoted pieces (optional).
+
+[Mai 2017] ===================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1184)
+------------------------------------------------------------------------------
+* Variant Three-check will show the number of given checks if material values
+or side-to-move is activated.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1180)
+------------------------------------------------------------------------------
+* Board configuration supports option "Small Letters" for coordinates.
+
+[April 2017] =================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1139)
+------------------------------------------------------------------------------
+* Overwork of game editor control, now it works only with the revised text
+widget implementation.
+
+[September 2016] =============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1098)
+------------------------------------------------------------------------------
+* Integration of TkText (revised Tk text widget -
+<http://scidb.sourceforge.net/tk/revised-text-widget.html>).
+
+[November 2015] ==============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1080)
+------------------------------------------------------------------------------
+* Many, many bug-fixes, the most important:
+- Language support in game editor.
+- Fixes in game editor layout algorithm.
+- Fix in game bar when selecting games with a lost game view.
+
+* New feature: language support when exporting a single game.
+
+* Some adaptions in game editor for revised tk text widget.
+
+[August 2015] ================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1075)
+------------------------------------------------------------------------------
+* New feature: optionally show annotation glyph on board background
+(a suggestion from Pietro).
+
+[March 2015] =================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1035)
+------------------------------------------------------------------------------
+* Info tab moved into top notebook (a suggestion from Steve).
+
+* Bad castling rights in FEN from PGN games will be fixed automatically.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1028)
+------------------------------------------------------------------------------
+* Info tab integrated.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1027)
+------------------------------------------------------------------------------
+* Mouse wheel behaviour in table widget fixed.
+
+[Feburary 2015] ==============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1026)
+------------------------------------------------------------------------------
+* Fix of new bug in CBH decoder.
+
+* Additional tournament type Simultan in tournament dialog.
+
+* Some fixes in HTML widget (C++).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1020)
+------------------------------------------------------------------------------
+* Fixes and improvements in piece renderer.
+
+* Enhancement in square rendering.
+
+* New piece sets: Aquarium, Bookup, Chess7, ChessCube, Celtic, Fritz, Habsburg,
+Military, Old Style, Segoe, and Zurich.
+
+* Piece set "Standard" replaced by another version, the previous one has
+deficiencies.
+
+* New themes: Burnt, Fritz, Kitsch, Navajo, Marmorate, Melamine, and Military.
+
+* Theme "Virtual" re-designed and renamed to "Virtual - Brown".
+
+* Theme "Virtual - Colored" renamed to "Virtual - Blue".
+
+* Themes "Marble - Brown" and "Marble - Red": piece set Merida replaced by
+Habsburg.
+
+* Theme Blackjack: piece set Usual replaced by Segoe.
+
+* Some piece sets fine adjusted.
+
+[November 2014] ==============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1014)
+------------------------------------------------------------------------------
+* Drag & Drop implemented in board setup.
+
+[August 2014] ================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1003)
+------------------------------------------------------------------------------
+* Fix of severe bug when parsing the namebase of Scid databases.
+
+* HTML widget: window update reworked, the original update algorithm didn't work
+properly with large documents (X11 has some 16 bit limits).
+
+[Mai 2014] ===================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #1001)
+------------------------------------------------------------------------------
+* Fix of severe bug in engine support (UCI buttons not triggered anymore at
+startup: bug report #80).
+
+[October 2013] ===============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #985)
+------------------------------------------------------------------------------
+* Drawing of color cube shifted to C++ side.
+
+* Board pane: sliding pane for sub-variation traversal implemented (default,
+optional).
+
+* Board pane: now the user might use arrows for sub-variation traversal
+(optional).
+
+* Implementation of polyglot books on C++ side (extensions for chess variants
+not compatible to XBoard due to issues in the XBoard implementation).
+
+* Important fix in tk::menu implementation.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #976)
+------------------------------------------------------------------------------
+* Help dialog now is using full-justification (optional).
+
+* PGN parser: some optimizations, tweaks, and important fixes.
+
+* CBH decoder: some tweaks.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #975)
+------------------------------------------------------------------------------
+* Game editor: Show diagram of hovered move while pressing Alt-key; but not
+before initiated with key-press "s".
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #973)
+------------------------------------------------------------------------------
+* Font selection implemented in crosstable dialog.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #969)
+------------------------------------------------------------------------------
+* New board themes: "Virtual - Colored" and "Creepy".
+
+* Font selection implemented in help dialog.
+
+* Game editor: Show diagram of hovered move while pressing Alt-key.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #961)
+------------------------------------------------------------------------------
+* Novelty in PGN parser: now parser will switch automatically to UTF-8 if
+user encoding is 'auto' and first non-ascii string is UTF-8 encoded.
+
+* Novelty in PGN parser: now parser detects parenthesized symbols like '(!)'.
+
+* Problem with character set encoding fixed while opening PGN files.
+
+* Novelty in game editor: Pressing alt-key while moving the mouse cursor
+will show the board for active move. If shift-key is pressed, only the
+pawn structure will be shown.
+
+[September 2013] =============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #943)
+------------------------------------------------------------------------------
+* Some preparations for the built if packages; especially for archlinux
+(thanks to Guido).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #928)
+------------------------------------------------------------------------------
+* Stockfish upgrade to version 4
+(snapshot 457ac26de5e2925c87bdc0169478d138074c50f8).
+
+[August 2013] ================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #925)
+------------------------------------------------------------------------------
+* Merge dialog implemented.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #924)
+------------------------------------------------------------------------------
+* Italian translation update, it's complete now.
+
+* Color scheme implementation re-worked.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #921)
+------------------------------------------------------------------------------
+* Color chemes introduced: ordinary displays and high quality displays.
+
+* Support for build of packages: some make files changed, some files
+added.
+
+[Juli 2013] ==================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #911)
+------------------------------------------------------------------------------
+* Compressed PGN files (.pgn.gz) are now writeable, too.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #911)
+------------------------------------------------------------------------------
+* Compressed PGN files (.pgn.gz) are now writeable, too.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #905)
+------------------------------------------------------------------------------
+* Feature request #25 implemented: write support of PGN files.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #893)
+------------------------------------------------------------------------------
+* freedesktop.org requirements implemented: associate file types with icons,
+associate file tyoes with Scidb, add desktop menu entry.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #887)
+------------------------------------------------------------------------------
+* Runtime a bit improved: replacement of __builtin_popcount with a quite
+faster implementation.
+
+* Stockfish a bit improved: replacement of popcount with a faster
+implementation (twice as fast on 32 bit systems).
+
+* Custom menu check/radio-buttons implemented (as default).
+
+[Juni 2013] ==================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #861)
+------------------------------------------------------------------------------
+* File selection dialog: handling with trash fully implemented.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #851)
+------------------------------------------------------------------------------
+* Toolbar now has drop-down buttons.
+
+* PGN setup for export options now is a separate dialog.
+
+* Drag&Drop in file selection box completed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #844)
+------------------------------------------------------------------------------
+* Language dependent sorting implemented.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #835)
+------------------------------------------------------------------------------
+* New themes added: "Blackjack" and "Country Style" (thanks to José Carlos
+Martins for the latter theme).
+
+* Some themes sligtly modified.
+
+* Some textures added.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #834)
+------------------------------------------------------------------------------
+* Some themes a bit re-worked.
+* Some new tiles added.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #833)
+------------------------------------------------------------------------------
+* New feature in board setup: now the background tile and border tile can be
+rotated.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #832)
+------------------------------------------------------------------------------
+* Severe error in block file class fixed.
+
+* Slow down in game editor eliminated.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #831)
+------------------------------------------------------------------------------
+* configure script: test for POPCNT instruction (_mm_popcnt_u64), available
+only on 64 bit machines and modern x86 processors.
+
+* Severe bug in .sci consumer fixed (a long time undetected).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #818)
+------------------------------------------------------------------------------
+* Upgrade of stockfish to version 3 (Date: June 01, 2013,
+Hash: 2a98042c21fa2f3f5630c41a16b91539d7da3b87).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #813)
+------------------------------------------------------------------------------
+* Fix in ChessBase deocder: indeed the problem is in ChessBase, some games are
+containing inconsistent data about the information on sub-variations.
+Unfortunately this fix will slow down the converter significantly.
+
+[Mai 2013] ===================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #813)
+------------------------------------------------------------------------------
+* Session management implemented: display a warning/error message if a
+shutdown (logout) is invoked while a write operation is still in progress. The
+user may cancel the shutdown, or abort the write operation (if possible).
+
+* util::place re-worked: now the placement of the windows is regarding the
+size of the work-area, and the extents of the window manager frame.
+
+* Popup of message dialogs will now be done on the desktop of the application.
+This means that a switch to the desktop of the application will be done
+automatically as soon as a message popup occurs. This behaviour will be
+implemented for other dialog popups, too.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #804)
+------------------------------------------------------------------------------
+* Copy game to clipboard (CLIPBOARD + PRIMARY) implemented. The current PGN
+options of the export dialog will be used.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #799)
+------------------------------------------------------------------------------
+* Now game header will be really left aligned.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #798)
+------------------------------------------------------------------------------
+* New feature in tree window: optionally show next game move with bold font.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #782)
+------------------------------------------------------------------------------
+* Comment editor overworked.
+
+* C++ iterators overworked in mini-stl.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #774)
+------------------------------------------------------------------------------
+* Game editor now detects and displays Smileys (optional).
+
+* Comment editor is showing Smileys (optional).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #771)
+------------------------------------------------------------------------------
+* Thread class reimplemented.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #769)
+------------------------------------------------------------------------------
+* Export of current game implemented.
+
+* Bug in si4 decoder fixed.
+
+* CQL manual translated to German.
+
+[April 2013] =================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #737)
+------------------------------------------------------------------------------
+* Bug in comment class fixed (appending and merging).
+
+* Resizable fonts in help dialog.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #727)
+------------------------------------------------------------------------------
+* CQL manual (English) completed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #721)
+------------------------------------------------------------------------------
+* Help dialog now has an separate index for CQL keywords.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #695)
+------------------------------------------------------------------------------
+* Library curl removed,
+
+[March 2013] =================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #673)
+------------------------------------------------------------------------------
+* Original piece values in Sjeng restored (using -DORIGINAL in Makefile).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #672)
+------------------------------------------------------------------------------
+* Crafty removed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #668)
+------------------------------------------------------------------------------
+* Merge of games implemented including move transpositions (optional).
+
+* Configure script fixed: now search of Xcursor library is regarding word size
+of machine.
+
+[February 2013] ==============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #661)
+------------------------------------------------------------------------------
+* ChessBase allows invalid e.p. squares, we will ignore the e.p. rights
+silently in such cases.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #661)
+------------------------------------------------------------------------------
+* Severe bug in class BlockFile fixed.
+
+* Modified the .scg file structure a bit: now time tables will be used for all
+types of move info starting with first ply.
+
+* Configure script changed: now inotify with syscall interface will be used if
+Linux kernel is >= 2.6.13.
+
+* Added "Copy this game to clipbase", "Paste last Clipbase game", and
+"Paste game" to game bar.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #656)
+------------------------------------------------------------------------------
+* CBF decoder enhanced; now tested with more than 1860 databases. Our decoder
+now can decode games which even ChessBase (cb3.exe) cannot decode correctly;
+one example is game #288 from
+<ftp://ftp.pitt.edu/group/student-activities/chess/PGN/Players/kburg-pg.zip>.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #648)
+------------------------------------------------------------------------------
+* CBF decoder integrated (and tested).
+
+* New .sci database version 0.94:
+1) fixes in ZH coding
+2) NAG's moved from move section to data section
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #647)
+------------------------------------------------------------------------------
+* New database format version 0.94
+- some corrections in ZH encoding
+- NAG's moved to data section
+
+* Comment editor revised.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #643)
+------------------------------------------------------------------------------
+* Database maintenance: stripping move information implemented.
+
+* Database maintenance: stripping PGN tags implemented.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #637)
+------------------------------------------------------------------------------
+* Memory bug in compaction algorithm fixed.
+
+* Import of PGN game now is working properly with variants.
+
+* Stockfish: Bug in ThreeCheck implementation fixed.
+
+[January 2013] ===============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #617)
+------------------------------------------------------------------------------
+* Player dictionary implementation (almost) finished.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #609)
+------------------------------------------------------------------------------
+* Player dictionary implemented (app::PlayerDictionary).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #602)
+------------------------------------------------------------------------------
+* Time tables implemented. Advantages: 1) needs less size (Scid needs 3x more
+space) 2) position search is faster.
+
+[December 2012] ==============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #597)
+------------------------------------------------------------------------------
+* Implementation of variant Three-Check (Stockfish) adjusted.  Now the engine
+requires testing.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #596)
+------------------------------------------------------------------------------
+* Variant Three-Check implemented in Stockfish engine (first version).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #593)
+------------------------------------------------------------------------------
+* Invalid access to memory in Stockfish fixed. Now it seems that Stockfish is
+really stable.
+
+* Engine dictionary implemented.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #585)
+------------------------------------------------------------------------------
+* Broken linker hack again - another workaround. I decided to switch this hack
+on per default. All newer versions of the GNU linker are broken.
+
+* Game editor now shows some special annotation for the following states:
+- "3x" if threefold repetition is detected (this will be flagged only one
+  time)
+- "50" if the fifty move rule is reached (every time the count is 50)
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #577)
+------------------------------------------------------------------------------
+* Analysis window: "Add move", "Add variation" and "Add all variations"
+implemented.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #574)
+------------------------------------------------------------------------------
+* Tournament table: print table to file.
+
+* Scidb is now supporting chess variants: Crazyhouse, Three-Check, Suicide,
+Giveaway, and Losers. Note that the opening tree is not yet working with
+variants.
+
+* New piece sets: "Free Staunton" and "Virtual".
+
+* New board themes: "Staunton" and "Virtual".
+
+[November 2012] ==============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #568)
+------------------------------------------------------------------------------
+* Bug in Elo performance table fixed (thanks to Steve for testing).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #544)
+------------------------------------------------------------------------------
+* Update of theme styles:
+- renamed Blue -> Ocean (theme)
+- renamed Blue Mono -> Blue Theme (theme)
+- renamed Glassy & Red -> Kunterbunt (theme)
+- renamed Marble -> Marble - Brown (theme)
+- renamed Marmor -> Marble - Red (theme)
+- renamed Mayan -> Mayan - Marble (theme)
+- renamed Mayan (2) -> Mayan - Wood (theme)
+- replaced Phoenix (theme)
+- renamed Wood -> Motif (theme)
+- removed Stony Glass (theme)
+- renamed Blue -> Ocean (square)
+- renamed Blue Mono -> Blue Theme (square)
+- renamed Marble Classic -> Marble Red (square)
+- renamed Marble Red -> Marble Brown (square)
+- removed Yellow (piece)
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #542)
+------------------------------------------------------------------------------
+* New theme "Blue Mono" added.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #531)
+------------------------------------------------------------------------------
+* Tournament table opened for a game: if the event of this game does not have
+an event date only games with date +/- 3 months will be considered.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #525)
+------------------------------------------------------------------------------
+* Invalid access to memory in Stockfish fixed. Now it seems that Stockfish is
+stable.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #517)
+------------------------------------------------------------------------------
+* Menu which informs about updates added.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #514)
+------------------------------------------------------------------------------
+* Font handling fixed in case of missing truetype fonts.
+
+* Engine support fixed: do not analyze illegal positions, some engines will
+crash.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #511)
+------------------------------------------------------------------------------
+* Bug in namebase fixed. Unfortunately this requires a database upgrade. This
+means that the planned public preview version will be postponed after the
+implementation of variants is finished.
+
+[Oktober 2012] ===============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #464)
+------------------------------------------------------------------------------
+* Severe bug with [namespace code ...] handling in Tcl 8.6 fixed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #450)
+------------------------------------------------------------------------------
+* New theme "Arena" designed (it's the "Light Blue" theme of Arena).
+
+* New feature in editor: unusual NAG's will be displayed as text (optional).
+
+* Update of Stockfish engine.
+
+* Engine Sjeng added.
+
+* Board tab: new buttons for "load next game", "load previous game", "load
+first game", and "load last game".
+
+* New database types: "Antichess" (for Suicide, etc.), "PGN file", "Player
+Collection" with female icon, and "Bughouse" (may include Crazyhouse).
+
+* Some icons replaced for database types: "Player Collection", "Training",
+"Tournament", "IM Games", and "GM Games".
+
+* Opening tree window: new menu item "Load first game with this continuation"
+added.
+
+* Huge performance problem while opening ChessBase database solved.
+
+* Engine configuration dialog finished.
+
+[September 2012] =============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #439)
+------------------------------------------------------------------------------
+* Makefile of stockfish engine fixed.
+
+* Stockfish engine: std::auto_ptr replaced with mstl::auto_ptr. In newer GNU
+stl versions auto_ptr (and shared_ptr) has a severe error: it is requiring
+runtime type information.
+1. This is a conflict to optimizations with -fno-rtti.
+2. It's a runtime performance lack.
+3. The clang compiler is not compiling with this conflict.
+4. The GNU compiler is silenty ignoring this problem.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #436)
+------------------------------------------------------------------------------
+* Support for XBoard/WinBoard protocol integrated.
+
+* Probing of new chess engines enhanced. In case of XBoard protocol Scidb will
+probe for "analyze" mode, even if the engine does not inform about this
+feature.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #434)
+------------------------------------------------------------------------------
+* Small fix in Stockfish engine, probably the engine will work now.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #433)
+------------------------------------------------------------------------------
+* Work around implemented for a severe bug in library tkhtml (look for
+FIX_EVENT_HANDLING).
+
+* Signal handling implemented in sys::Process. Now all unexpected terminations
+of the sub-process will be caught.
+
+* Update of Stockfish with newest version, but without luck - Stockfish is
+crashing constantly.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #427)
+------------------------------------------------------------------------------
+* Asynchronous read revision withdrawn.
+
+* Drag operation in file selection dialog finished.
+
+* Severe bug while writing .si4 namebase data fixed.
+
+* Import/Export of games revised.
+
+* Import of databases implemented.
+
+* Threading problem in u_block_file.cpp fixxed.
+
+* Setup dialog for engines finished.
+
+* Bug in update-scidb-player-photos fixed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #422)
+------------------------------------------------------------------------------
+* Asynchronous read revised.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #420)
+------------------------------------------------------------------------------
+* Spanish translation files updated.
+
+* mstl: new list implementation "m_list.h", the old file is renamed to
+"m_pvector.h".
+
+* Move input: pressing middle mouse button (or fullstop key) is showing
+alternative move suggestion.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #419)
+------------------------------------------------------------------------------
+* Toolbars enhanced: scrolling implemented.
+
+* Drag&Drop support in file selection dialog completed (except drag icon).
+
+* configure script: check for broken fontconfig version 3.8.
+
+* Setup dialog for engines implemented.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #417)
+------------------------------------------------------------------------------
+* Spanish help files added (thanks to Carlos Fernando Gonzales who returned to
+Scidb).
+
+[August 2012] ================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #409)
+------------------------------------------------------------------------------
+* Drag support implemented, but not yet used.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #408)
+------------------------------------------------------------------------------
+* inotify is not yet working and currently disabled.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #407)
+------------------------------------------------------------------------------
+* File drop in file selection box implemented.
+
+* Support for file monitoring implemented (inotify + libfam).
+
+* File selection dialog now has file monitoring.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #390)
+------------------------------------------------------------------------------
+* Internet installation/update of player photo files implemented.
+
+[July 2012] ==================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #385)
+------------------------------------------------------------------------------
+* Color dialog revised.
+
+* Setup dialog for game browser/editor implemented.
+
+* Swedish translation updated.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #381)
+------------------------------------------------------------------------------
+* Problem with double-clicking in treectrl widget solved.
+
+* libcurl added
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #379)
+------------------------------------------------------------------------------
+* Some icons for the event list newly designed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #376)
+------------------------------------------------------------------------------
+* Problem with trailing spaces in namebase data fixed (appears in Scid and in
+ChessBase).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #374)
+------------------------------------------------------------------------------
+* New database tab: list of sites.
+
+[June 2012] ==================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #371)
+------------------------------------------------------------------------------
+* Spanish translation update (thanks to Juan Carlos Vásquez).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #361)
+------------------------------------------------------------------------------
+* Notation style English (Descriptive) now available.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #360)
+------------------------------------------------------------------------------
+* configure script overworked.
+
+* Makefile has new target: check-build. This target gives a message whether
+the eco file is loadable.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #358)
+------------------------------------------------------------------------------
+* Some fixes for the clang compiler.
+
+* Notation styles Algebraic (normal, short, and long), Correspondence, and
+Telegraphic now available.
+
+* New help page for Game Browser.
+
+* Game browser now has an optional column style.
+
+* The minimal gcc compiler version is 3.4 again (was a mistake).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #356)
+------------------------------------------------------------------------------
+* agg library: font support (freetype) added. But this has a price, the
+minimal gcc compiler version now is 4.1 (was 3.4 before). The configure script
+is updated for freetype support.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #354)
+------------------------------------------------------------------------------
+* Mouse wheel bindings implemented (thanks to Steve for his suggestion).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #348)
+------------------------------------------------------------------------------
+* Piece set for material bar overworked.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #347)
+------------------------------------------------------------------------------
+* On "modern" Linux distributions the linker is not working properly. The
+static object initialization has wrong order. Therefore I've included
+BROKEN_LINKER_HACK permamently.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #343)
+------------------------------------------------------------------------------
+* HTML widget: K&R style converted to ANSI style.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #334)
+------------------------------------------------------------------------------
+* HTML widget: double buffering overworked. This is the first really working
+version. It's a hard thing to implement such a critical task in a third party
+library.
+
+* HTML widget: support for table attribute 'fixed-layout' implemented.
+
+* First version of a player card implemented (left mouse click on a player
+name, or via context sensitive menu).
+
+* Crosstable: optionally show win/draw/loss sub-totals.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #333)
+------------------------------------------------------------------------------
+* Spanish translation re-activated: Juan Carlos Vásquez is (probably) doing
+the translation.
+
+[Mai 2012] ===================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #327)
+------------------------------------------------------------------------------
+* Compacting databases integrated.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #325)
+------------------------------------------------------------------------------
+* Show pawn structure if shift key is held down when popup board diagram.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #324)
+------------------------------------------------------------------------------
+* Spanish translation removed; Benigno Hernandez did never respond.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #322)
+------------------------------------------------------------------------------
+* Installation of ChessBase fonts integrated.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #320)
+------------------------------------------------------------------------------
+* HTML widget (C++): double buffering fixed.
+
+* HTML widget (Tcl): centering mode a bit reworked.
+
+* New help pages: File selection box, overview browser.
+
+* Controls to main window added for full-screen mode: close, restore,
+minimize.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #318)
+------------------------------------------------------------------------------
+* Option -nocase added to "<treectrl> item sort itemDesc ?option ...?".
+
+* cdb2sci added. This executable is converting any Scidb database to .sci
+format.
+
+* New option -fixedwidth added to html widget (C++).
+
+* Html (Tcl) widget reworked. The widget it not using the scrolled frame
+anymore. This change is saving resources in a highly significant way.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #316)
+------------------------------------------------------------------------------
+* Color map support in tk_ogl.cpp removed.
+
+* Bug in player dictionary fixed.
+
+* Compiler flag "__WIN32__" preferred over "WIN32".
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #315)
+------------------------------------------------------------------------------
+* Swedish translation for Rybka Aquarium support added (thanks to Lars).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #312)
+------------------------------------------------------------------------------
+* Automatic detection of character set while encoding si3/si4/cbh games. An
+info message will be displayed if the detected charset differs from the charset
+of the database.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #311)
+------------------------------------------------------------------------------
+* Game browser: Full-screen mode implemented.
+
+* HTML widget: attempt to fix box drawing (grep DONT_FIX_BOX_DRAWING).
+
+* HTML widget: first attempt to fix line breaking (function fixLineBreak()).
+
+* sci_encoder.cpp: writing tags fixed (missing nul byte in some cases).
+
+* sci_decoder.cpp: preliminary fix for missing nul bytes (grep SCI_TAGS_FIX).
+
+* Severe bug in namebase fixed. Compiler flag SCI_NAMEBASE_FIX will be used
+temporary until a new database version is established.
+
+[April 2012] =================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #310)
+------------------------------------------------------------------------------
+* Rating files updated: ELO, DWZ, ECF, ICCF.
+
+* Missing titles added: CILM = Corres. Lady IM (ICCF), CLGM = Corr. Lady GM
+(ICCF). Possibly this requires a new database version, but the current version
+is a beta version only, it's only a minor problem. The new database version
+will come at least with the first alpha release.
+
+* Bug in load function fixed: Scidb will load DWZ, ECF, and ICCF again.
+
+* Bug in configure script shuld be fixed: now version 8.5 will be preferred
+over 8.6, if exisiting.
+
+* Archiving fixed: new version is archving directories.
+
+* File selection box fixed: now will work properly with non-KDE systems.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #306)
+------------------------------------------------------------------------------
+* Bug in PGN parser fixed (thanks to Steve).
+
+* Swedish language file updated (thanks to Lars).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #301)
+------------------------------------------------------------------------------
+* Save/replace dialog tweaked: the user may select the fields which will be
+taken from the match list.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #300)
+------------------------------------------------------------------------------
+* Patch of TkGrabState() tweaked. Now this function really takes the full
+widget hierarchy into account. I've sent this patch to the (usually
+non-interested) Tk team.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #298)
+------------------------------------------------------------------------------
+* Drag'n'Drop handling a bit reworked.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #298)
+------------------------------------------------------------------------------
+* Handling of PGN game import fixed.
+
+* Severe errors while saving a game fixed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #296)
+------------------------------------------------------------------------------
+* Fix of the Tk function TkGrabState(). The fixed version is taking the tree
+hierarchy into account, I think this was the intended behavior. I've reported
+this to the Tk team (bug item #3517803).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #294)
+------------------------------------------------------------------------------
+* File selection box finished.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #290)
+------------------------------------------------------------------------------
+* tk_fixes.cpp added which is fixing the Tk function TkPointerEvent(). Without
+this fix the result is a frozen screen if the help dialog is used from the
+file selection box. This bug is reported to the Tk team (bug item #3517228.)
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #290)
+------------------------------------------------------------------------------
+* Progress bar now shows the current action.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #286)
+------------------------------------------------------------------------------
+* Drag&Drop: selectionGet() of windows version overworked.
+
+* archive.tcl now has error checking.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #283)
+------------------------------------------------------------------------------
+* Database switcher: creation of Scidb archives added.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #282)
+------------------------------------------------------------------------------
+* File selection box: Button 2 now shows further information about the file.
+
+* Database window: opening Scidb archives implemented.
+
+* remote: opening of postponed databases fixed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #282)
+------------------------------------------------------------------------------
+* archive.tcl added.
+
+* Problem with integrated expat library fixed.
+
+* PGN reader is parsing preceding description (if any).
+
+* Problem in TkDND_XDND.c fixed (GNOME support of dnd).
+
+[March 2012] =================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #274)
+------------------------------------------------------------------------------
+* Drag&Drop works now with GNOME (was quite difficult). Only one bug remains:
+if the user restarts the window manager no more drop events will be received.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #272)
+------------------------------------------------------------------------------
+* tk_selection.cpp fixed.
+
++ Fix of header layout in game-bar.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #271)
+------------------------------------------------------------------------------
+* Swedish language support added.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #270)
+------------------------------------------------------------------------------
+* Database switcher receives drop events, it is tested with Dolphin/Konqueror.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #269)
+------------------------------------------------------------------------------
+* Database window: implementation of docking/undocking completed.
+
+* TkDND 2.2 added to project.
+
+* configure: Linux Mint >= 12 added as an insane Linux release (derived from
+Ubuntu).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #268)
+------------------------------------------------------------------------------
+* Board: move input reworked, especially the case if move suggestion is
+disabled.
+
+* Some corrections in the man pages.
+
+* Tree search: experimental tree search reader removed, there is no
+significant speed improvement.
+
+* Database window: all tabs are dockable/undockable now.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #267)
+------------------------------------------------------------------------------
+* Translation file "svenka.tcl" added.
+
+* Implementation of tk_notebook.cpp started.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #266)
+------------------------------------------------------------------------------
+* Tree search: experimental tree search reader implemented (use with
+-DUSE_SEPARATE_SEARCH_READER).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #264)
+------------------------------------------------------------------------------
+* Bug in tkmenu.tcl fixed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #263)
+------------------------------------------------------------------------------
+* Experimental USE_TWO_BYTE_DECODING removed. A two byte decoding is slowing
+down the position search time by factor 2.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #261)
+------------------------------------------------------------------------------
+* Experimental: (simple) two byte move decoding implemented (use compiler flag
+USE_TWO_BYTE_DECODING).
+
+* Fix in tkmenu.tcl.
+
+[Ferbruary 2012] =============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #260)
+------------------------------------------------------------------------------
+* Fix in tkmenu.tcl: first version of left placement didn't work, but this
+second version is working fine.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #258)
+------------------------------------------------------------------------------
+* Main menu bar eliminated: these main menu bars are archaic. A single main
+menu button is integrated into the top tab bar.
+
+* Export dialog: "Tags" tab added to "Scidb" mode.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #257)
+------------------------------------------------------------------------------
+* Fix in tkmenu.tcl: submenus will be placed left if not enough room on right
+side is available.
+
+* cbh2sci.cpp: Ubuntu initialization fix.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #256)
+------------------------------------------------------------------------------
+* Bug in file seldction dialog fixed: "file copy" is copying links, therefore
+we are resolving links before copying.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #252)
+------------------------------------------------------------------------------
+* Bug in hyphenation parser fixed.
+
+* HTML library: segfault fixed.
+
+* zlib: Update to version 1.2.5; some superfluous files removed.
+
+* Help: Description of database archive added.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #251)
+------------------------------------------------------------------------------
+* Bug item #3489592 fixed.
+
+* Square style "Marble-Black&White.dat" changed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #250)
+------------------------------------------------------------------------------
+* Second public preview version.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #248)
+------------------------------------------------------------------------------
+* HTML widget: zero width spaces implemented.
+
+* HTML widget: "text-align: justify" implemented.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #228)
+------------------------------------------------------------------------------
+* html::Hyphenate, util::Hyphenator: bugs fixed.
+
+* HTML library: support for latin ligatures implemented.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #226)
+------------------------------------------------------------------------------
+* Hyphenation library src/util/libhyphenate added.
+
+* Help dialog: hyphenation added.
+
+* HTML library: support of soft hyphens implemented.
+
+[January 2012] ===============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #204)
+------------------------------------------------------------------------------
+* File selection box: severe bug fixed.
+
+* File selection box: duplicate/rename re-worked.
+
+* si3_encoder.cpp: severe bug fixed concerning extra tags.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #203)
+------------------------------------------------------------------------------
+* Main menu: "Open Recent" menu item added.
+
+* Hungarian translation file updated.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #198)
+------------------------------------------------------------------------------
+* Drop shadows implemented for Tooltip, ComboboxPopdown, and Menu.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #196)
+------------------------------------------------------------------------------
+* PGN editor: some enhancements.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #192)
+------------------------------------------------------------------------------
+* HTML widget: selection handling impemented.
+
+* Game browser/Overview problems with closing/opening databases fixed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #189)
+------------------------------------------------------------------------------
+* Configfure/Resize problem in scrolledframe.tcl solved.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #188)
+------------------------------------------------------------------------------
+* Info box a bit re-designed.
+
+* Font "Final Frontier" added (this is the logo font).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #184)
+------------------------------------------------------------------------------
+* Problem with non-ascii file names solved.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #177)
+------------------------------------------------------------------------------
+* File selection dialog: some bug fixes.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #176)
+------------------------------------------------------------------------------
+* File selection dialog: 'Duplicate File' operation implemented.
+
+* Configure/resize problems in Html widget solved.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #168)
+------------------------------------------------------------------------------
+* Help dialog implemented.
+* Some help files written.
+
+[December 2011] ==============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #164)
+------------------------------------------------------------------------------
+* Game/Event/Player/Annotator list: Mouse wheel bindings.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #161)
+------------------------------------------------------------------------------
+* The current status about Debian Wheezy/Ubuntu Oneric:
+On Debian Wheezy the workaround is working, on Ubuntu Oneric not. This means
+that the hack is required only for Ubuntu Oneric. In both cases it's a problem
+with the linker. The GNU team has changed the linker concept (the .ctors
+section is gone), and this linker is not working properly.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #160)
+------------------------------------------------------------------------------
+* Static object initialization is not working at all on Debian Wheezy/Ubuntu
+Oneric. This means that the GNU compiler is not properly working on these
+systems. Therefore I rolled back to the special hack (calling the constructors
+by hand).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #158)
+------------------------------------------------------------------------------
+* Finally I've found a proper work-around for this Debian Wheezy/Ubuntu
+Oneiric problem with uninitialized static objects (hopefully; needs testing).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #155)
+------------------------------------------------------------------------------
+* There is no proper fix for the Debian Wheezy/Ubuntu 11.10 problem. I've
+implemented a hack only for these insane systems (not yet tested).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #152)
+------------------------------------------------------------------------------
+* Segmentation fault (hopefully) on Ubuntu 11.10/Debian Wheezy fixed. It is
+a serious problem with static object initialization (on system side).
+
+* Some implementation for LaTeX print/export.
+
+* Configure script and make files tweaked.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #149)
+------------------------------------------------------------------------------
+* Export dialog overworked, especially for TeX export.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #148)
+------------------------------------------------------------------------------
+* Bug item #3349601 finally fixed.
+
+[November 2011] ==============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #147)
+------------------------------------------------------------------------------
+* Bug item #3349601 fixed (hopefully).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #145)
+------------------------------------------------------------------------------
+* Comment editor: undo/redo implemented.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #142)
+------------------------------------------------------------------------------
+* tk_busy prepared for Tk version 8.6.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #140)
+------------------------------------------------------------------------------
+* -state implemented in tktreectrl; a required, and useful option.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #137)
+------------------------------------------------------------------------------
+* PDF export: libharu enhanced, now we can handle UTF-8 fonts.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #136)
+------------------------------------------------------------------------------
+* sci_consumer.cpp: severe bug in writing sci format fixed (move section).
+
+* sci_encoder.cpp: severe bug in writing sci format fixed (tag section).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #132)
+------------------------------------------------------------------------------
+* Elo added in game info of PGN editor.
+
+* Problem with hard links solved. It is not allowed to open a database twice
+- the application may crash - and to open an already loaded database will be
+denied. To accomplish this the detection of hard links is required.
+
+* Bug in browser and overview related to game loading fixed.
+
+* Hopefully a problem with initialization order of static objects solved.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #131)
+------------------------------------------------------------------------------
+* libharu: upgraded to version 2.3 (libharu.org).
+
+* libharu: HPDF_GetTTFontDef() implemented.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #130)
+------------------------------------------------------------------------------
+* Upgrading of databases tweaked.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #129)
+------------------------------------------------------------------------------
+* Some tweaks in file selection box.
+
+* Bug with opening of read-only databases fixed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #128)
+------------------------------------------------------------------------------
+* Severe bug in save/replace dialog fixed. This bug is related to the speed up
+changes in rev. #96.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #127)
+------------------------------------------------------------------------------
+* Some bugs related to charset detection fixed.
+
+* Bug in file selection box fixed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #126)
+------------------------------------------------------------------------------
+* cbh2si4 tweaked.
+
+* Some bugs related to charset detection fixed.
+
+* Severe bug in si3 encoding fixed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #103)
+------------------------------------------------------------------------------
+* Photo files (.spf, .spi, .spa) eliminated, now every photo is a single file.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #102)
+------------------------------------------------------------------------------
+* Crash immediately after startup fixed, which occurred only on some systems.
+
+* cbh2si4 improved. The user may optionally determine the exported tags,
+because this affects position search time (size of the game file).
+
+* Sub-project universalchardet added (character set detector from
+Mozilla/Firefox).
+
+* Load database: auto-detection of character set implemented.
+
+* Import PGN game: auto-detection of character set implemented.
+* Import PGN game: auto-detection of figurine set implemented.
+
+[October 2011] ===============================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #101)
+------------------------------------------------------------------------------
+* Bug with re-opening the file selection box fixed.
+
+* Bug in namebase fixed (error case: encoding of .si4 namebase fails, which
+may result in id's higher than the number of entries).
+
+* Function forceValidUtf8() fixed.
+
+* Problem in configure script fixed.
+
+[September/October 2011] =====================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #96)
+------------------------------------------------------------------------------
+* Severe bug in block file buffer fixed. This means that storing of games in
+databases should work now.
+
+* Second speed improvement of the Html widget: double buffering implemented.
+But this feature needs testing.
+
+* Third improvement of the Html widget: memory allocator implemented in
+libTeXt.
+
+* Game history implemented.
+
+* Reading CBH database fixed (problem with namebases).
+
+* Correction of character encoding handling.
+
+* Correction of PGN view box ("see" method).
+
+* Implementation of modernized menues finished. Probably this feature will
+be optionally usable in a later version.
+
+* Severe bug in position tree building fixed (Chess 960 search algorithm
+reimplemented).  This fix has required a change of the .sci database format
+(index data only). Ths version of the database format has increased to 0.92.
+The database upgrade at opening time of the database is enabled (but an
+upgrade is not mandatory although the old format is causing errors).
+
+* Problem with castling in FRC positions fixed.
+
+* Problem with generation of castling moves in internal engine fixed.
+
+* Undo/redo problems in PGN editor fixed.
+
+* Additional ports needed to locate the architecture dependent libX11.so libs
+added to configure script.
+
+* Animation of castling moves fixed.
+
+* Current game now will be highlighted if in trial mode.
+
+* Storing/retrieving move information (analysis information, players clock,
+elapsed game/move time, time information, evaluation information, etc...)
+is prepared. This change requires an update of the Scidb database.
+
+* Speed up of save/replace dialog (popup time).
+
+* Magic file corrected, will now show a string like "Scidb index, version
+0.92, 14820 game(s)"
+
+* Bug in configure script fixed: "./configure --tcl-version=8.6" should work
+now.
+
+* Tournament table enhanced: new version includes additional tie-breaks
+"Games won with Black", "Particular Result", "Traditional Scoring"; new
+scoring system "Bilbao" (three points for a win).
+
+* Export to .si3/si4: Additional tab for selection of the exported tags. This
+is necessary to limit the database size, which affects the search time of the
+opening tree.
+
+* Problem with game loading fixed.
+
+* Bug in annotation window fixed; all buttons will be disabled if no game is
+open.
+
+* Formating error in PGN window fixed (db_edit_node.cpp:pushParagraph()).
+
+* Change database icon dialog improved.
+
+* Comment editor improved.
+
+* New function in PGN editor: copy/move comments from one language code to
+another language code.
+
+[August 2011] ================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #94)
+------------------------------------------------------------------------------
+* Severe error with marks in si3::Consumer and si3::Encoder fixed.
+
+* Severe errors in overview.tcl and browser.tcl fixed.
+
+* On Fedora systems the truetype fonts will be installed in /usr (not
+/usr/local).
+
+* Database upgrade implemented (not yet used).
+
+* Focus problem in tree game list solved.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #92)
+------------------------------------------------------------------------------
+* Bug item #3381510 fixed.
+* Bug item #3381580 fixed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #91)
+------------------------------------------------------------------------------
+* m_types.h updated: g++ versions < 4.6 are not really ready for C++0x
+standard (previous patch failed).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #90)
+------------------------------------------------------------------------------
+* m_types.h updated: g++ versions < 4.6 are not really ready for C++0x
+standard.
+
+[July 2011] ==================================================================
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #89)
+------------------------------------------------------------------------------
+* First speed improvement of the Html widget (highlighting). The slowness
+seems to be a general problem if a large window is involved, but this needs
+further investigation.
+
+* Comment parsing and tokenizing fixed.
+
+* Update problem with game header fixed.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #87)
+------------------------------------------------------------------------------
+* Event info popup implemented (ButtonPress-2).
+
+* Problem with fullscreen mode fixed (bug item #3369168).
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #86)
+------------------------------------------------------------------------------
+* Upgrade to C++0x standard.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #81)
+------------------------------------------------------------------------------
+* Invalid date entries in .si3/4 bases will be refused now.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #80)
+------------------------------------------------------------------------------
+* Busy cursor stuff reimplemention refined.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #79)
+------------------------------------------------------------------------------
+* Busy cursor stuff reimplemented.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #77)
+------------------------------------------------------------------------------
+* Bug with bottom space underneath board (hopefully) fixed (bug item #3349601)
+
+* Engines added (MicroMax and TogaII-1.3.1).
+
+* tkmenu.tcl changed: modernized menu behavior, but only available under
+windoze (modernized does not mean "better").
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #76)
+------------------------------------------------------------------------------
+* configure script changed, hopefully it will now detect versions >= 4.5 of
+the gnu compiler.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #71)
+------------------------------------------------------------------------------
+* Correction of variation folding: a folded variation does not show comments
+anymore.
+
+* Eco translation from Fernando integrated. Both translation now are macRoman
+encoded.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #70)
+------------------------------------------------------------------------------
+* startHtmlElement() fixed (game recovery should be correct now).
+
+* Game header of recovered games ok now.
+
+* Problem with black castling on main board fixed (bug item #3356896).
+
+* The configure script will now add -fno-stack-protector option if supported;
+Ubuntu 11.04 has stack protection on per default, but I dont want this; makes
+the program slower and is satisfying only the paranoid people.
+
+------------------------------------------------------------------------------
+Scidb 1.0 BETA (rev. #69)
+------------------------------------------------------------------------------
+* Game list: Shift-Double-Button-1 will switch to the board tab after loading
+the game (see feature request #3349617).
+
+* web::open reimplemented, see bug item #3349635.
+
+* Scidb is now remembering the icon size (already fixed in rev. #68).
+
+* PGN reader will warn about failed encoding only once.
+
+* Encoding problems with PGN files fixed (default encoding is ISO8859-1).
+
+* Checksum computation fixed: the game bar should not load anymore an already
+open game.
+
+* <Shift-Double-Button-1> bound to game list on database tab: switch to the
+main board when loading a game.

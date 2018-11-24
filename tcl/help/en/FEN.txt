@@ -1,0 +1,110 @@
+<!-- ======================================================================
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+======================================================================= -->
+
+<!-- ======================================================================
+* Copyright: (C) 2013 Gregor Cramer
+======================================================================= -->
+
+<!-- ======================================================================
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+======================================================================= -->
+
+INDEX FEN (Forsyth-Edwards Notation)
+INDEX X-FEN (Extended Forsyth-Edwards Notation)
+INDEX Shredder FEN
+
+TITLE FEN (Forsyth-Edwards Notation)
+
+<p>
+Forsyth-Edwards Notation (FEN) &ndash; or X-FEN in extended form &ndash;
+is a standard notation for describing a particular board position of a
+chess game. The purpose of FEN is to provide all the necessary information
+to restart a game from a particular position. In fact this notation has
+one weakness: it is not describing how many times the described position
+was repeated.  A detailed description is available online:
+</p>
+
+<!-- Note for translators: please replace with local Wikipedia link. -->
+<ul>
+  <li><a href="http://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation">
+        ForsythEdwards Notation - Wikipedia</a></li>
+  <li><a href="http://en.wikipedia.org/wiki/X-FEN">X-FEN - Wikipedia</a></li>
+</ul>
+
+<p>
+Also, it should be noted that Scidb can handle the Shredder FEN.
+</p>
+
+<p>
+For other <a href="Chess-Variants.html">chess variants</a> Scidb is using some
+required extensions:
+</p>
+
+<ul>
+  <li><a href="#DropChess">%::mc::VariantName(DropChess)%</a></li>
+  <li><a href="#ThreeCheck">%::mc::VariantName(ThreeCheck)%</a></li>
+</ul>
+
+<h2 id="DropChess">%::mc::VariantName(DropChess)%</h2>
+
+<p>
+Scidb is using an extended FEN (X-FEN, or Shredder FEN) for %::mc::VariantName(DropChess)%,
+derived from BPGN standard (<see/>
+<a href="http://bughousedb.com/Lieven_BPGN_Standard.txt">
+BPGN - Bughouse Portable Game Notation</a>).
+The pieces in holding will be added at the end of first field; for
+example:
+</p>
+
+<example>
+r2q1rk1/ppp2ppp/5p2/b7/8/P1NPB2b/1PP1QP1P/R3R1K1/NNPPbnp b - - 0 16
+</example>
+
+<p>
+<code>NNPPbnp</code> is describing that the white player has two
+knights, and two pawns in holding; and the black player has one
+bishop, one knight, and one pawn in holding.
+</p>
+
+<p>
+For pieces resulted from a pawn promotion the character tilde is
+tagging this piece. Example:
+</p>
+
+<example>
+rkn2Q~N1/pppq4/5P2/8/1P1P1n2/5B1P/PPPN1PpP/R3K1R1/RBBBPPq b Q - 0 43
+</example>
+
+<p>
+The white queen (<code>Q~</code>) was originated from a pawn
+promotion.
+</p>
+
+<h2 id="ThreeCheck">%::mc::VariantName(ThreeCheck)%</h2>
+
+<p>
+For this chess variant an additional field will be appended to the FEN
+(X-FEN, or Shredder FEN) for a description of the given checks.
+Example:
+</p>
+
+<example>
+rnb1k1nr/pppp1ppp/8/4p3/3PP2q/2N5/PP3PPP/R1BQKBNR w KQkq - 1 5 +0+2
+</example>
+
+<p>
+<code>+0+2</code> means:
+the white player does not gave check at all to black, and the black
+player gave check to white king exactly two times.
+</p>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html fileencoding=latin1: -->

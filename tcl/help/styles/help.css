@@ -1,0 +1,266 @@
+/**************************************************************************
+ * Author : $Author$
+ * Version: $Revision: 161 $
+ * Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+ * Url    : $URL$
+ **************************************************************************/
+
+/**************************************************************************
+ *
+ *    _/|            __
+ *   // o\         /    )           ,        /    /
+ *   || ._)    ----\---------__----------__-/----/__-
+ *   //__\          \      /   '  /    /   /    /   )
+ *   )___(     _(____/____(___ __/____(___/____(___/_
+ **************************************************************************/
+
+/**************************************************************************
+ * Copyright: (C) 2011-2013 Gregor Cramer
+ **************************************************************************/
+
+/**************************************************************************
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ **************************************************************************/
+
+/*html { font-family: Abel, Arial, 'Bitstream Vera Sans', 'DejaVu Sans', Verdana, 'Lucida Grande', 'Lucida Sans', Helvetica; }*/
+
+body { text-align: left; }
+
+h1 { font-size: 140%; background-color: #dce4e5; } /* #e5eeff */
+h2 { font-size: 140%; background-color: #dce4e5; }
+h3 { font-size: 110%; background-color: #dce4e5; }
+h4 { background-color: #dce4e5; }
+
+h1.title { text-align: center; background-color: #6495ed; }
+
+ul.index { margin: 5px; }
+
+span.normal {
+	font-weight: normal;
+	font-style: normal;
+}
+
+span.chess {
+	font-family: 'Scidb Chess Traveller';
+	font-weight: normal;
+	font-style: normal;
+	font-size: 90%;
+}
+
+span.piece {
+	font-family: 'Scidb Chess Traveller';
+	font-weight: normal;
+	font-style: normal;
+	font-size: 90%;
+}
+
+span.cql {
+	font-weight: normal;
+	font-style: normal;
+	font-size: 110%;
+}
+
+span.awesome {
+	font-family: 'FontAwesome';
+	font-weight: normal;
+	font-style: normal;
+	font-size: 80%;
+}
+
+div.title {
+  color:					white;
+  background:			#6495ed;
+  border:				1px solid #6495ed;
+  margin-top:			0.5em;
+  margin-bottom:		1.5em;
+}
+
+div.box {
+/*	color:				black; */
+/*	background:			#dce4e5;*/
+/*	background:			#dde6ef;*/
+/*	background:			#ffffe0;*/
+	background:			#f5f5f5;
+	border:				1px solid black;
+	border-radius:		0.5em;
+	margin-top:			1em;
+	margin-bottom:		1em;
+	margin-left:		1em;
+	margin-right:		1em;
+	padding-top:		0em;
+	padding-bottom:	0em;
+	padding-left:		1em;
+	padding-right:		1em;
+}
+
+div.example {
+	text-align:			left;
+	white-space:		nowrap;
+	padding-left:		1em;
+}
+
+div.verb {
+	background:			#f5f5f5;
+	border:				1px solid black;
+	border-radius:		0.5em;
+	margin-top:			1em;
+	margin-bottom:		1em;
+	margin-left:		1em;
+	margin-right:		1em;
+	padding-top:		0.25em;
+	padding-bottom:	0.25em;
+	padding-left:		1em;
+	padding-right:		1em;
+}
+
+div.dir {
+	margin-left: 	1em;
+	margin-right:	1em;
+}
+
+div.annotation {
+/*	color:				black; */
+	background:			#eedd82;
+	border:				1px solid black;
+	border-radius:		0.5em;
+	margin-top:			1em;
+	margin-bottom:		1em;
+	margin-left:		1em;
+	margin-right:		1em;
+	padding-top:		1em;
+	padding-bottom:	1em;
+	padding-left:		1em;
+	padding-right:		1em;
+}
+
+span.NEW {
+	color: #005400;
+}
+
+span.comment {
+	color: #006400;
+}
+
+span.keyword {
+	color: #8b0000;
+}
+
+table.box {
+	padding-top: 		0.5em;
+	padding-bottom:	0.5em;
+}
+
+table.standard {
+/*	background:			#dce4e5;*/
+/*	background:			#dde6ef;*/
+/*	background:			#ffffe0;*/
+	background:			#f5f5f5;
+}
+
+table.stripes {
+	border:			1px solid gray;
+}
+
+tr.stripes {
+	background: #d3e4e5;
+}
+
+td.standard {
+	padding-top:		0.5em;
+	padding-bottom:	0.5em;
+	padding-left:		0.5em;
+	padding-right:		0.5em;
+}
+
+td.standard-justification {
+	padding-top:		0.5em;
+	padding-bottom:	0.5em;
+	padding-left:		0.5em;
+	padding-right:		0.5em;
+}
+
+td.l {
+	padding-left:	0.2em;
+	padding-right:	0.5em;
+}
+
+td.m {
+	padding-left:	0.5em;
+	padding-right:	0.5em;
+}
+
+td.r {
+	padding-left:	0.5em;
+	padding-right:	0.2em;
+}
+
+td.t {
+	padding-left:		0.5em;
+	padding-right:		0.5em;
+	border-top-width:	1px;
+	border-top-style:	solid;
+	border-top-color:	#999999;
+}
+
+kbd.key {
+	font-size:			smaller;
+	border-width:		0.2em;
+	border-style:		solid;
+	border-color:		#dddddd #bbbbbb #bbbbbb #dddddd;
+	padding:				0 0.15em;
+	background:			#eeeeee;
+	white-space:		nowrap;
+}
+
+span.button {
+	font-size:			smaller;
+	border-width:		0.2em;
+	border-style:		solid;
+	border-color:		#dddddd #bbbbbb #bbbbbb #dddddd;
+	padding:				0 0.25em;
+	background:			#eeeeee;
+	white-space:		nowrap;
+}
+
+/*
+kbd.key {
+	font-size:		smaller;
+	border-width:	1px 2px 2px 1px;
+	border-style:	solid;
+	border-color:	#edd #baa #baa #eed;
+	padding:			0px 1px 0px 1px;
+	background:		#faf6f6;
+	color:			#000;
+	white-space:	nowrap;
+}
+
+span.button {
+	font-size:		smaller;
+	border-width:	1px 2px 2px 1px;
+	border-style:	solid;
+	border-color:	#edd #baa #baa #eed;
+	padding:			0px 1px 0px 1px;
+	background:		#faf6f6;
+	color:			#000;
+	white-space:	nowrap;
+}*/
+
+.menuitem {
+/*	color:         	black; */
+	background:    	#c4d0f4;
+}
+
+li.space {
+	margin-top:		0.5em;
+	margin-bottom:	0.5em;
+}
+
+a:link    { text-decoration: none; }
+a:visited { text-decoration: none; }
+a:hover   { text-decoration: underline; }
+a:active  { text-decoration: underline; }
+
+/* vi:set ts=3 sw=3: */

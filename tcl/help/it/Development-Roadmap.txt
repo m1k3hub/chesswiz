@@ -1,0 +1,61 @@
+<!-- **********************************************************************
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* Copyright: (C) 2012-2013 Gregor Cramer
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*********************************************************************** -->
+
+TITLE Piano di Sviluppo
+
+<h2>Funzioni per le prossime release</h2>
+
+<ul>
+  <li>Download/upload/update/caricamento databases da internet</li>
+  <li>Supporto di documenti allegati al database. La ragione principale è che
+      i database Chessbase hanno documenti allegati.</li>
+  <li>Funzioni di Ricerca: cerca per testata, posizione etc.</li>
+  <li>Funzioni di Filtro: filtro partita, giocatore</li>
+  <li>Layout flessibile per le finestre</li>
+  <li>Supporto della variante</li>
+  <li>Supporto delle varianti nell'alberto delle aperure</li>
+  <li>Generazione documenti: esportazione in LaTeX</li>
+  <li>Supporto per il sistema operativo Windows</li>
+  <li>Inserimento mosse tramite tastiera</li>
+  <li>Foto Scacchiera</li>
+</ul>
+
+<h2>Funzioni per il lontano futuro</h2>
+
+<ul>
+  <li>Rilevamento partite doppie</li>
+  <li>Interfaccia dizionario giocatori</li>
+  <li>Generazione documenti: esportazione in PDF e HTML</li>
+  <li>Interfaccia per controllare l'ortografia dei giocatori</li>
+  <li>Finestra del "Consiglio del Giorno"</li>
+  <li>Generazione di report di apertura</li>
+  <li>Uso di tavole dei finali</li>
+  <li>Scacchiera 3D</li>
+</ul>
+
+<h2>Si cercano volontari per...</h2>
+
+<ul>
+  <li>Aumentare le lingue supportate</li>
+  <li>Aumentare i temi della scacchiera</li>
+  <li>Scrivere le pagine di aiuto</li>
+</ul>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html: -->

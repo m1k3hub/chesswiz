@@ -1,0 +1,77 @@
+<!-- **********************************************************************
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* Copyright: (C) 2012-2013 Gregor Cramer
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*********************************************************************** -->
+
+INDEX Markierungen (Partie-Flags)
+INDEX Partiemarkierungen
+TITLE Partiemarkierungen
+
+<p>
+Eine <em>Markierung</em> ("Flag") ist ein Kennzeichen irgendeiner Charakteristik, die
+für jede Partie der Datenbank ein- oder ausgeschaltet werden kann. Es gibt 21 vom
+Benutzer einstellbare Markierungen, die direkt in jede Partie gesetzt werden können.
+Diese Markierungen dienen vornehmlich zum Suchen von Partiedaten, oder zum Filtern
+von Partienliste. Diese Markierungen haben ansonsten keine weitere Bedeutung und
+können deshalb vom Benutzer frei verwendet werden.
+</p>
+
+<p>
+Die Markierungen und ihre Symbole im einzelnen:
+</p>
+
+INCLUDE ../Game-Flags.txt
+
+<p>
+Die beiden letzten Markierungen können nicht vom Benutzer eingestellt werden,
+sie werden automatisch gesetzt wenn eine Partie ungültige Rochaden oder sogar
+andere ungültige Züge (zum Beispiel der König zieht ins Schach) in der
+Hauptvariante enthält. Sind beide Markeriungen in einer Partie enthalten
+so wird nur die Markierung für <em>%::gametable::mc::GameFlags(I)%</em> angezeigt.
+</p>
+
+<p>
+Es gibt noch weitere besondere, nicht vom Benutzer einstellbare Markierungen,
+die Löschmarkierung, die Änderungsmarkierung, und die Hinzugefügt-Markierung.
+Eine Partie mit einer Löschmarkierung ist zur Löschung vorgemerkt worden, und
+die Partie wird erst entfernt, wenn die Datenbank komprimiert wird (<see/>
+<a href="Database-Switcher.html#Compact">Datenbankumschalter:
+%::application::database::mc::FileCompact%</a>). Diese Markierung bleibt nach
+dem Schliessen der Datenbank erhalten. Eine Änderungsmarkierung bedeutet, daß
+diese Partie verändert (und gespeichert) wurde, und eine Hinzugefügt-Markierung
+zeigt an, daß diese Partie neu hinzugefügt wurde. Diese beiden Markierungen gehen
+verloren, sobald die Datenbank geschlossen wird.
+</p>
+
+<p>
+Beim Bearbeiten von Partien in einer Scid-Datenbank
+(<acronym>.si4</acronym>) werden zudem die sechs speziellen Benutzermarkierungen
+(1..6) unterstützt. Es wird jedoch von einer Verwendung dieser Markierungen abgeraten,
+es kommt zu nicht lösbaren Problemen beim Kopieren von Partien in eine andere Datenbank;
+auch die Applikation Scid kann diese Probleme nicht lösen.
+</p>
+
+<p>
+Bei der Umwandlung von ChessBase-Datenbanken werden beide Markierungen
+<em>%::gametable::mc::GameFlags(s)%</em> und
+<em>%::gametable::mc::GameFlags(t)%</em> auf die gemeinsame
+Markierung <em>%::gametable::mc::GameFlags(?)%</em> abgebildet, Scidb
+unterscheidet nicht zwischen diesen beiden Typen.
+</p>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html fileencoding=latin1: -->
