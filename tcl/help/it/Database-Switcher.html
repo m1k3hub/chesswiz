@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<!-- Generated from tcl/help/it/Database-Switcher.txt -->
+
+<html xmlns='http://www.w3.org/1999/xhtml' xml:lang='en' lang='it'>
+<head>
+  <meta http-equiv="content-type"
+           content="text/html; charset=utf-8" />
+  <meta http-equiv="content-language"
+           content="it" />
+  <meta http-equiv="content-style-type"
+           content="text/css" />
+
+  <meta name="author"
+     content="scidb.sourceforge.net" />
+  <meta name="generator"
+     content="scidb.sourceforge.net" />
+  <meta name="description"
+     content="Scidb - Help Page" />
+
+  <link rel="icon"
+       href="http://scidb.sourceforge.net/favicon.ico"
+       type="image/x-icon" />
+  <link rel="shortcut icon"
+       href="http://scidb.sourceforge.net/favicon.ico" />
+  <link rel="stylesheet"
+       type="text/css"
+      media="screen"
+		 href="../styles/help.css" />
+
+  <title>Scidb - Aiuto: Il Selezionatore di Database</title>
+</head>
+
+<body>
+
+<div class="title">
+  <h1 class="title">Il Selezionatore di Database</h1>
+</div>
+
+<ul style='list-style-type: none'><li><img src="images/database-switcher.png" alt=""/></li></ul>
+
+<p>
+Il selezionatore permette di cambiare facilmente tra più database.
+Il database attivo sarà evidenziato con uno sfondo giallo.
+Tutti i database che non appartengono alla
+<a href="Chess-Variants.html">variante di scacchi</a> del database attivo sono
+disabilitati (sfondo bianco).
+</p>
+
+<p>
+Premendo il tasto centrale del mouse (o la rotella) apparirà una finestra informativa.
+</p>
+
+<p>
+Fuinzionalità del selezionatore di Database:
+</p>
+
+<ul>
+  <li><a href="#Administration">Amministrazione</a></li>
+  <li><a href="#Maintenance">Manutenzione</a></li>
+  <li><a href="#DND">Trascinamento (Drag &amp; Drop)</a></li>
+</ul>
+
+<h3 id="Administration">Amministrazione</h3>
+
+<p>
+Per l'amministrazione del database è disponibile un menu contestuale:
+</p>
+
+<ul style='list-style-type: none'><li><img src="images/database-switcher-menu.png" alt=""/></li></ul>
+
+<p>
+<span class='menuitem'>Proprietà</span>
+Apre una finestra che mostra diverse informazioni sul database.
+</p>
+
+<p>
+<span class='menuitem'>Esporta</span>
+Apre un'interfaccia per <a href="Database-Export-Dialog.html">l'esporazione del database</a>
+in altri formati database o documenti.
+<br/><img src='../images/note.png' alt='note' /> Se il database contiene diverse
+<a href="Chess-Variants.html">varianti di scacchi</a> (solo possibile nel caso
+di un <a href="Clipbase.html">Clipbase</a> o file PGN) solo le partite
+relative alla variante attiva saranno esportate.
+</p>
+
+<p>
+<span class='menuitem'>Importa Database</span>
+I database da importare saranno selezionati con la
+<a href="File-Selection-Dialog.html">interfaccia di selezione del file</a>.
+Tutte le partite saranno aggiunte alla fine del database. È possibile
+selezionare più database allo stesso tempo.
+</p>
+
+<p>
+<span class='menuitem'>Importa file PGN</span>
+Apre la <a href="File-Selection-Dialog.html">interfaccia di selezione file</a> per la selezione di file <abbr>PGN</abbr> per l'importazione. È possibile scegliere diversi file <abbr>PGN</abbr> simultaneamente. Le partite saranno aggiunte alla fine del database.
+</p>
+
+<p>
+<span class='menuitem'>Manutenzione</span>
+Questo sotto-menu fornisce funzionalità per il mantenimento dei database
+(&#x21d2; <a href="#Maintenance">Manutenzione</a>).
+</p>
+
+<p>
+<span class='menuitem'>Crea Archivio</span>
+Crea un <a href="Database-Formats.html#Database-Archive">archivio database</a>.
+La <a href="File-Selection-Dialog.html">finestra di selezione file</a>
+si aprirà per permettere la selezione del name dell'archivio.
+</p>
+
+<p>
+<span class='menuitem'>Chiudi</span>
+Il database selezionato sarà chiuso. Se ci sono cambiamenti nelle partite non ancora salvati, un avviso apparirà prima che il databse sia chiuso.
+<br/><img src='../images/note.png' alt='note' /> Chiudere il <a href="Clipbase.html">Clipbase</a> non è possibile.
+</p>
+
+<p>
+<span class='menuitem'>Sola Lettura</span>
+Imposta il database per la sola lettura o scrittura.
+<span class='NEW'><!-- Replace old content:
+Questa possibilità è disponibile solo per database nei formati Scidb e Scid (<abbr>.sci</abbr>, <abbr>.si4</abbr>, <abbr>.si3</abbr>).
+<br/><img src='../images/note.png' alt='note' /> File <abbr>PGN</abbr> e Chessbase sono sempre in sola-lettura.
+--><!-- with new content: -->
+This is possibly only for Scidb and Scid databases
+(<abbr>.sci</abbr>, <abbr>.si4</abbr>, <abbr>.si3</abbr>),
+and PGN archives (<abbr>.pgn</abbr>, <abbr>.pgn.gz</abbr>).
+<br/><img src='../images/note.png' alt='note' /> ChessBase databases and Zip archives (<abbr>.zip</abbr>)
+are always read-only.
+</span>
+<br/><img src='../images/note.png' alt='note' /> Il <a href="Clipbase.html">Clipbase</a> non può essere impostato per la sola lettura.
+</p>
+
+<p>
+<span class='menuitem'>Apri Database</span>
+Apre un altro database.
+</p>
+
+<p>
+<span class='menuitem'>Apri Recente</span>
+Apre un database dallo storico dei database aperti.
+</p>
+
+<p>
+<span class='menuitem'>Nuovo Database</span>
+Crea un nuovo database. Solo database in formato Scidb o Scid (<abbr>.sci</abbr>, <abbr>.si4</abbr>, <abbr>.si3</abbr>) possono essere creati.
+Se il database contiene partite di una
+<a href="Chess-Variants.html">variante eterodossa degli scacchi</a>, per favore
+usa il prossimo elemento nel menu.
+</p>
+
+<p>
+<span class='menuitem'>Nuovo Database</span>
+Crea un nuovo database di qualsiasi
+<a href="Chess-Variants.html">variante eterodossa degli scacchi</a>. Solo
+database con formato Scidb possono essere creati in questo caso.
+</p>
+
+<p>
+<span class='menuitem'>Grandezza simbolo</span>
+Seleziona la grandezza del simbolo per l'icona del database.
+</p>
+
+<p>
+<span class='menuitem'>Aiuto per il Selezionatore di Database</span>
+Apri la finestra di aiuto riguardante il selezionatore di database.
+</p>
+
+<ul style='list-style-type: none'><li><img src="images/clipbase-menu.png" alt="" id="Empty-Clipbase"/></li></ul>
+
+<span class='menuitem'>
+Svuota Clipbase</span>
+<br/><img src='../images/note.png' alt='note' /> Questa funzione sarà disponibile solo per il
+<a href="Clipbase.html">Clipbase</a>.
+
+<h3 id="Maintenance">Manutenzione</h3>
+
+<p>
+Questo sotto-menu fornisce funzionalità di manutenzione del database.
+</p>
+
+<ul style='list-style-type: none'><li><img src="images/database-switcher-menu-maintenance.png" alt=""/></li></ul>
+
+<p>
+<span class='menuitem'>Cambia Icona</span>
+Seleziona un'icona per il database.
+<br/><img src='../images/note.png' alt='note' /> Questo non è possibile per il <a href="Clipbase.html">Clipbase</a>.
+</p>
+
+<p>
+<span class='menuitem'>Modifica Descrizione</span>
+Crea o cambia la descrizione per questo database.
+<br/><img src='../images/note.png' alt='note' /> Questo non è possibile per il <a href="Clipbase.html">Clipbase</a>.
+</p>
+
+<p>
+<span class='menuitem'>Rimuovi Informazioni Mossa</span>
+Rimuovi un'informazione mossa selezionata (per esempio
+"Tempo per mossa utilizzato") dal database.
+Questo è utile, ad esempio, per rimuovere informazioni non desiderate (qui
+"Tempo utilizzato in millisecondi") dopo l'importazione di partite da FICS.
+</p>
+
+<p>
+<span class='menuitem'>Rimuovi Tag PGN</span>
+Questa funzionalità scansiona il database per ulteriori tag PGN (come "WhiteTeam").
+Quindi, si possono rimuovere questi ulteriori tag dal database. Rimuovendo tag non desiderati accelerarerà la ricerca per posizione, ma non prima della compressione (&#x21d2; <a href="#Compact">Compresso</a>)
+del database.
+</p>
+
+<p id="Compact">
+<span class='menuitem'>Compresso</span>
+Comprime questo database, questo significa che tutte le partite segnate come da eliminare saranno eliminate fisicamente. Non si può tornare indietro. Questo elemento menu è disabilitato se non ci sono partite segnate per l'eliminazione.
+</p>
+
+<h3 id="DND">Trascinamento (Drag &amp; Drop)</h3>
+
+<p>
+Il database può essere aperto con il trascinamento di una lista URI. Se una lista URI (lista di file)
+&ndash; o di un singolo file &ndash; sarà portato su un selezionatore di database,
+uno sfondo colorato sarà indicherà che il trascinamento di questo elemento è possibile.
+In questo modo potrai parire i database con l'aiuto di un gestore file esterno.
+</p>
+
+<p>
+La lista di file può anche essere trascinata nell'area del database. In questo caso le partite saranno copiate nel database di destinazione.
+</p>
+
+<p>
+Per copiare tutte le partite
+<span class='NEW'><!-- Replace old content:
+(o una <a href="Chess-Variants.html">variante degli scacchi</a>)
+--><!-- with new content: -->
+(optional for only one <a href="Chess-Variants.html">chess variant</a>)
+</span>
+da un database all'altro, trascina le partite tenendo premuto il tasto sinistro
+del mouse e lascia le partite nell'area di destinazione. È richiesto che il
+database di destinazione abbia permessi di scrittura e non disabilitato. Questo
+è un modo importanto per gestire e copiare partite tra database.
+</p>
+
+</body>
+</html>

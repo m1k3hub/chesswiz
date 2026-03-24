@@ -1,0 +1,42 @@
+How to translate the help files
+-------------------------------------------------------------------------------
+
+1. Create the required sub-directory, for example "es" for Spanish translation.
+   Note: "es" is an ISO 639-1 code; use a ISO 639-2 code if 639-1 is inadequate
+   for your language.
+
+2. Change into the created sub-directory, e.g. "tcl/lang/es/".
+
+3. Copy some required files into your sub-directory
+      > cp ../en/Makefile .
+      > cp ../en/Overview.txt .
+      > cp ../en/Welcome.txt .
+      > cp ../en/Whats-New.txt .
+      > cp ../en/Development-Roadmap.txt .
+   and do the translation (not the Makefile of course).
+
+4. Copy the wanted .txt file from "../en/", for example
+      > cp ../en/Clipbase.txt .
+   and do your translation.
+   Note that only the *.txt should be translated, not the *.html files!
+
+5. Generate the .html file(s) with:
+      > make
+
+6. If you like to see the results in Scidb you have to distribute the files.
+   Change back to the "tcl/" directory and type
+      > make build-help
+      > sudo make install-help
+
+7. Add new files with the command
+      > svn add NewFile.*
+   in sub-directory tcl/lang/es/.
+   This is a local change, it's not a commit to the repository.
+
+8. Commit your changes to the repository. Change to the sub-directory
+   tcl/lang/es/ and type
+        > svn commit -m "Any senseful log message"
+   The svn manual advices that the log message given with -m shouldn't be
+   empty.
+
+# vi:set ts=3 sw=3 et:

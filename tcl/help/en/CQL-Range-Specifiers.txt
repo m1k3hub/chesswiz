@@ -1,0 +1,122 @@
+<!-- ======================================================================
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+======================================================================= -->
+
+<!-- ======================================================================
+* Copyright: (C) 2013 Gregor Cramer
+======================================================================= -->
+
+<!-- ======================================================================
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+======================================================================= -->
+
+INDEX Range specifiers (CQL)
+TITLE CQL - Range specifiers
+
+<p>
+Many keyword options are followed by optional range specifiers. A range
+specifier either consists of a single integer, optionally prefixed by a
+comparative operator, or two integers (without comparative operators)
+separated by whitespace.
+</p>
+
+<p>
+In case of two integers the range between the integers (inclusive this
+values) will denote the specified range. If only one value is given
+this denotes the range. If this single integer is prefixed by a comparative
+operator, a range will be specified which is open at one boundary:
+</p>
+
+<box>
+<table>
+  <tr><td><expr>&gt;</expr></td>  <td></td> <td>More than</td></tr>
+  <tr><td><expr>&gt;=</expr></td> <td></td> <td>At least</td></tr>
+  <tr><td><expr>&lt;</expr></td>  <td></td> <td>Less than</td></tr>
+  <tr><td><expr>&lt;=</expr></td> <td></td> <td>At most</td></tr>
+</table>
+</box>
+
+<note>
+The form with preceding comparative operator is not part of the CQL standard.
+</note>
+
+<p>
+Furthermore there are two special values defined: <expr>&ndash;</expr> is
+defining an empty range, and <expr>*</expr> is defining an arbitrary
+value (this means a range which is unlimited at both boundaries).
+But these special values are nor applicable in every query, it depends
+on the query whether it is permitted to use it (in most cases when
+searching for game information, but in general not when searching for
+positions).
+</p>
+
+<note>
+The special ranges <expr>&ndash;</expr> and <expr>*</expr> are not part of
+the CQL standard.
+</note>
+
+<h2>Examples</h2>
+
+<p>
+In following examples ranges will be used for year specifications,
+e.g. to find games within a certain year range.
+</p>
+
+<verb>
+1934
+</verb>
+
+<p>
+Denotes the year 1934.
+</p>
+
+<verb>
+1934 2000
+</verb>
+
+<p>
+Denotes the years between 1934 and 2000 inclusive.
+</p>
+
+<verb>
+&gt;=1934
+</verb>
+
+<p>
+Denotes all the years after 1933.
+</p>
+
+<verb>
+&lt;1935
+</verb>
+
+<p>
+Denotes all the years before 1935.
+</p>
+
+<verb>
+*
+</verb>
+
+<p>
+Find all games having any game date, this is excluding games not having
+a game date.
+</p>
+
+<verb>
+&ndash;
+</verb>
+
+<p>
+Find all games not having a game date.
+</p>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html: -->

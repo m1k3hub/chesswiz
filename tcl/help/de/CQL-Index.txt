@@ -1,0 +1,118 @@
+<!-- ======================================================================
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+======================================================================= -->
+
+<!-- ======================================================================
+* Copyright: (C) 2013 Gregor Cramer
+======================================================================= -->
+
+<!-- ======================================================================
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+======================================================================= -->
+
+INDEX CQL Einführung
+INDEX Chess Query Language
+INDEX Schachdatenbanksprache
+
+TITLE Chess Query Language (Schachdatenbanksprache)
+
+<p>
+Chess Query Language (CQL) wurde entwickelt um Rechercheuren, Autoren und
+Spielern die Suche nach Partien, Problemen und Studien, die zu speziellen
+Themen passen, zu erlauben (<see/>
+<a href="http://web.archive.org/web/20160303173407/http://www.rbnn.com/cql/">CQL Manual</a>).
+</p>
+
+<p>
+Scidb benutzt <nobr>CQL-S</nobr> 1.0, ein erweitertes CQL, als Basis für alle
+Suchfunktionen. <nobr>CQL-S</nobr> wurde sehr reichhaltig erweitert, um den
+Ansprüchen moderner Schachdatenbanken zu genügen. <nobr>CQL-S</nobr> ist eine
+abwärtskompatible Erweiterung, alle Standard-CQL-Skripte sollten auch in
+Scidb anwendbar sein.
+</p>
+
+<p>
+Einige Teile dieses Handbuchs wurden der Seite
+<a href="http://web.archive.org/web/20160303173407/http://www.rbnn.com/cql/">CQL Manual</a> entnommen.
+</p>
+
+<ul>
+  <li><a href="#fundamentals">Grundlagen</a></li>
+  <li><a href="#technichal">Technische Beschreibungen</a></li>
+  <li><a href="#file">CQL-Dateien</a></li>
+</ul>
+
+<h2 id="fundamentals">Grundlagen</h2>
+
+<p>
+Alle Suchfunktionen in Scidb basieren auf <nobr>CQL-S</nobr>. Zur Formulierung
+von CQL-Abfragen stellt der CQL-Editor eine komfortable, übersichtliche und leicht
+bedienbare Benutzeroberfläche zur Verfügung. Um <nobr>CQL-S</nobr> anwenden
+zu können werden keine Kenntnisse der technischen CQL-Beschreibungen vorausgesetzt.
+Es ist auch nicht notwendig die Skriptsprache zu verstehen, nur die sehr
+engagierten Anwender werden sich direkt mit den CQL-Skripten befassen.
+Lediglich die folgenden relativ kurzen Einführungen sind zum Verständnis von
+CQL unabdingbar:
+</p>
+
+<ul>
+  <li><a href="CQL-Piece-Designators.html">Figurenbezeichner</a></li>
+  <li><a href="CQL-Square-Designators.html">Felderbezeichner</a></li>
+  <li><a href="CQL-Range-Specifiers.html">Bereichsangaben</a></li>
+  <li><a href="CQL-Percentage-Specifiers.html">Prozentuale Bereiche</a></li>
+  <li><a href="Pattern-Matching.html">Suchmusterabgleich (Pattern-Matching)</a></li>
+</ul>
+
+<p>
+Aber auch für weniger technisch Interessierte ist es aufschlussreich,
+zumindest einmal in die Dokumente
+<a href="CQL-Match-List.html">Die Suchliste</a>,
+<a href="CQL-Relation-List.html">Die Positionsliste</a> und
+<a href="CQL-Examples.html">Beispiele</a>
+hineinzuschauen, um so einen Überblick über die Mächtigkeit von
+<nobr>CQL-S</nobr> zu erhalten. Selbst die komplexesten Suchabfragen sind
+tatsächlich möglich.
+</p>
+
+<h2 id="technichal">Technische Beschreibungen</h2>
+
+<p>
+Für einen vertieftes Verständnis von <nobr>CQL-S</nobr> dienen die
+technischen Beschreibungen, die zugleich Grundlage sind, um ein CQL-Skript
+verstehen und evt. auch schreiben zu können. Auch um sehr komplexe Suchabfragen
+gestalten zu können ist ein vertieftes Verständnis notwendig.
+</p>
+
+<annotation>
+Die technische Beschreibung ist keine Voraussetzung, um die
+Suchfunktionen in Scidb verwenden zu können.
+</annotation>
+
+<ul class="index">
+  <li><a href="CQL-Technical-Description.html">Technische Beschreibungen &ndash; Übersicht</a></li>
+</ul>
+
+<h2 id="file">CQL-Dateien</h2>
+
+<p>
+Scidb schreibt <nobr>CQL-S</nobr>-Skripte mit der Dateiendung <expr>.cqls</expr>.
+Entspricht eine CQL-Abfrage noch dem CQL-Standard (was meistens der Fall sein dürfte),
+dann kann dieses <nobr>CQL-S</nobr>-Skript jederzeit auch als CQL-Datei mit der
+Dateiendung <expr>.cql</expr> exportiert werden. Scidb kann alle
+<expr>.cql</expr>-Skripte, die mit anderen Programmen erstellt wurden, importieren.
+</p>
+
+<p>
+Für eine genaue Beschreibung des Dateiformats siehe
+<a href="CQL-File-Format.html">Dateiformat</a>.
+</p>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html fileencoding=latin1: -->

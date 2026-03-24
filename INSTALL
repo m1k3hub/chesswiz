@@ -1,0 +1,171 @@
+
+   _/|            __
+  // o\         /    )           ,        /    /
+  || ._)    ----\---------__----------__-/----/__-
+  //__\          \      /   '  /    /   /    /   )
+  )___(     _(____/____(___ __/____(___/____(___/_
+
+                       How To Compile
+
+===============================================================================
+UNIX
+===============================================================================
+Probably you have to install some required packages:
+
+1. Tcl/Tk package
+
+   On Debian/Ubuntu/Mint use:
+      > sudo apt-get install tcl8.6
+      > sudo apt-get install tk8.6
+
+2. Freetype development package
+   (normally available, but especially missing under Ubuntu)
+
+   On Debian/Ubuntu/Mint use:
+      > sudo apt-get install libfreetype6-dev
+
+3. SM library development package
+   (normally available, but especially missing under Ubuntu)
+
+   On Debian/Ubuntu/Mint use:
+      > sudo apt-get install libsm-dev
+
+4. Xcursor development package
+   (normally available, but especially missing under Ubuntu)
+
+   On Debian/Ubuntu/Mint use:
+      > sudo apt-get install libxcursor-dev
+
+5. fontconfig development package
+   (normally available, but especially missing under Ubuntu)
+
+   On Debian/Ubuntu/Mint use:
+      > sudo apt-get install libfontconfig1-dev
+
+6. libgdbm development package
+   (normally available, but especially missing under Ubuntu)
+
+   On Debian/Ubuntu/Mint use:
+      > sudo apt-get install libgdbm-dev
+
+A normal unix installation is made in three steps (after you've unpacked
+the source archive):
+
+   ./configure
+   make
+   make install
+
+You probably need to be root when doing the last command. An alternative is
+to use the "sudo" command for the installation:
+
+   sudo make install
+
+Get a full listing of all available configure options by invoking it like:
+
+   ./configure --help
+
+If you want to install scidb in a different file hierarchy than /usr/local,
+you need to specify that already when running configure:
+
+   ./configure --prefix=/path/to/scidb/tree --exec-prefix=/path/to/scidb/tree
+
+If you happen to have write permission in that directory, you can do "make
+install" without being root. An example of this would be to make a local
+install in your own home directory:
+
+   ./configure --prefix=$HOME --exec-prefix=$HOME
+   make
+   make install
+
+The configure script always tries to find a working Tcl/Tk library unless
+explicitly told not to. If you have Tcl/Tk installed in the default search
+path for your compiler/linker, you don't need to do anything special. If
+you have Tcl/Tk somewhere else (for example, $HOME/mytcltk), you can run
+configure like:
+
+   PATH=$PATH:$HOME/mytcltk/bin \
+   ./configure --tcl-includes$HOME=$HOME/mytcltk/include \
+               --tk-includes=$HOME/include \
+               --tcl-libraries=$HOME/mytcltk/lib \
+               --tk-libraries=$HOME/mytcltk/lib
+
+Note that the PATH variable has to contain the path of the Tcl shell (for
+example '$HOME/mytcltk/bin' which contains tclsh8.5), otherwise the Tcl shell
+will not be found.
+
+Not every GCC compiler version is properly working. The minimum compiler
+version is 3.4, and version 4.6 is excluded because of a compiler bug. It may
+be required to install a proper compiler. For example you decided to use
+version 4.4: on Debian/Ubuntu/Mint use
+
+   sudo apt-get install gcc-4.4
+   sudo apt-get install g++-4.4
+   ./configure --gcc-version=4.4
+
+Alternatively the clang compiler may be used. The minimal clang version which
+can be used is 3.1. The newer version 3.3 is also working, but it's not yet
+sure that this version is linking properly. If you want to use clang tell it
+to the configure script in this way:
+
+   ./configure --gcc-version=clang
+
+On Debian/Ubuntu/Mint system the usage of newer compilers is a bit problematic,
+because Debian has changed some system paths. It may be neccessary to tell
+the configure script the required paths, for example:
+
+   ./configure \
+      --gcc-version=4.7 \
+      SYS_CFLAGS="-I/usr/include/i386-linux-gnu" \
+      SYS_CXXFLAGS="-I/usr/include/i386-linux-gnu" \
+      SYS_LDFLAGS="-B/usr/lib/i386-linux-gnu"
+
+Exchange "i386-linux-gnu" with the system specific part of your architecture.
+It's of course a bad idea from Debian that the user has to know the system
+paths, but the configure script may give you a hint. If you invoke this script
+(./configure) look at the output, it shows a line like this:
+
+   Location of X11 library: /usr/lib/i386-linux-gnu
+
+The latter part of the path (in this example "i386-linux-gnu") is your system
+specific part.
+
+Ubuntu 14.04 has changed the directory structure of freetype, and this is
+definitely a bug, because the new path structure violates the standard. So
+you have to create a symlink as a workaround:
+
+    sudo ln -s /usr/include/freetype2/config /usr/include/freetype2/freetype/config
+
+-------------------------------------------------------------------------------
+Important notes for the build of packages
+-------------------------------------------------------------------------------
+For the build of packages in a temporary directory some fine tuning parameters
+should be used, for example:
+
+   ./configure \
+      --prefix=/usr \
+      --exec-prefix=/usr \
+      --enginesdir=/usr/bin \
+      --destdir=$pkgdir
+
+In this example the installation will be done in $pkgdir/usr, but the
+destination directory for the package is determined as /usr. Without
+parameter --enginesdir the installation of the engines will be done in
+directory $pkgdir/usr/games.
+
+Without the --destdir parameter the configure script would choose the path
+/usr/share/fonts/truetype/Scidb for the installation of the truetype fonts,
+because in a normal user installation this is the desired directory, but
+in the example above $pkgdir/usr/share/fonts/truetype/Scidb will be used
+instead.
+
+IMPORTANT NOTE:
+With parameter --destdir the setup of the truetype fonts and the
+freedesktop.org stuff will be skipped. This means that the packager has to
+integrate the scripts postinstall-pak, postremove-pak, and preremove-pak.
+But before integration of these scripts the paths used inside the scripts
+has to be adjusted.
+
+IMPORTANT NOTE:
+Without setup of the truetype fonts Scidb will not run properly.
+
+= vi:set et sw=3 ts=3: =

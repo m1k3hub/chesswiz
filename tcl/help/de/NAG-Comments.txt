@@ -1,0 +1,100 @@
+<!-- ======================================================================
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+======================================================================= -->
+
+<!-- ======================================================================
+* Copyright: (C) 2012-2013 Gregor Cramer
+======================================================================= -->
+
+<!-- ======================================================================
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+======================================================================= -->
+
+INDEX NAG-Kommentarwerte
+INDEX Numerisches Anmerkungszeichen
+TITLE NAG-Kommentarwerte
+
+<annotation>
+<acronym>NAG</acronym> = Numeric Annotation Glyph = "numerisches Anmerkungszeichen"
+</annotation>
+
+<p>
+Im
+<a href="http://www.saremba.de/chessgml/standards/pgn/pgn-complete.htm">
+PGN-Standard</a> sind folgende <acronym>NAG</acronym>-Werte definiert:
+</p>
+
+<box>
+  <p>Infix-Kommentierungen:</p>
+
+  <ol start="1">
+    <li>%::annotation::mc::Nag(ENUM(1..6))%</li>
+  </ol>
+</box>
+
+<box>
+  <p>Suffix-Kommentierungen:</p>
+
+  <ol start="7">
+    <li>%::annotation::mc::Nag(ENUM(7..139))%</li>
+  </ol>
+</box>
+
+<p>
+Weitere vorgeschlagene <acronym>NAG</acronym>-Werte sind: 
+</p>
+
+<box>
+  <p>Prefix-Kommentierungen:</p>
+
+  <ol start="140">
+    <li>%::annotation::mc::Nag(ENUM(140..145))%</li>
+  </ol>
+</box>
+
+<box>
+  <p>Suffix-Kommentierungen:</p>
+
+  <ol start="146">
+    <li>%::annotation::mc::Nag(ENUM(146..154))%</li>
+  </ol>
+</box>
+
+<p>
+Scidb definiert einige weitere <acronym>NAG</acronym>-Werte:
+</p>
+
+<box>
+  <p>Suffix-Kommentierungen:</p>
+
+  <ol start="155">
+    <li>%::annotation::mc::Nag(ENUM(155..172))%</li>
+  </ol>
+</box>
+
+<p>
+Um Kommentare in Partien aus ChessBase-Dateien zu unterstützen sind noch
+weitere <acronym>NAG</acronym>-Werte vonnöten:
+</p>
+
+<box>
+  <ol start="173">
+    <li>%::annotation::mc::Nag(ENUM(173..184))%</li>
+  </ol>
+</box>
+
+<p>
+Scid und ChessPad defnieren noch weitere <acronym>NAG</acronym>-Werte (&gt; 190). Diese werden
+jedoch beim Importieren bzw. Konvertieren automatisch auf die Scidb-spezifischen
+<acronym>NAG</acronym>-Werte abgebildet.
+</p>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html fileencoding=latin1: -->

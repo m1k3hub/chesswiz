@@ -1,0 +1,14 @@
+fontdir=/usr/share/fonts/truetype/Scidb
+xdgdir=/usr/share/scidb-beta/freedesktop.org
+if [ -d /usr/local/share/scidb-beta/freedesktop.org ]; then
+	xdgdir=/usr/local/share/scidb-beta/freedesktop.org
+	if [ -d /usr/local/share/fonts/truetype/Scidb ]; then
+		# On Fedora /usr/local/share/fonts/truetype/ cannot be used
+		fontdir=/usr/local/share/fonts/truetype/Scidb
+	fi
+fi
+fc-cache -f $fontdir
+cd $xdgdir
+chmod 0555 update-mimeapps.list.tcl
+make -f Makefile install-mime
+make -f Makefile install-desktop-menu

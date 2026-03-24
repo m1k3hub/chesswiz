@@ -1,0 +1,168 @@
+<!-- **********************************************************************
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* Copyright: (C) 2012-2013 Gregor Cramer
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*********************************************************************** -->
+
+TITLE Novedades
+
+<NEW>
+<h3>
+Fifth public preview version
+</h3>
+
+<ul style="padding: 5px;">
+  <li class="space">Comprehensive possiblities for adding/merging analysis results into the game.</li>
+  <li class="space">Evaluation edges in analysis window now adjustable.</li>
+  <li class="space">New mode "Opponents view" in analysis window.</li>
+  <li class="space">Support of Windows chess engines, provided that Wine (Windows Emulator) is installed.</li>
+  <li class="space">New tab "Start positions"</li>
+  <li class="space">Specialized search boxes for lists.</li>
+  <li class="space">Tip-of-the-Day-Dialog</li>
+  <li class="space">Additional notation styles: "Computer Algebraic Notation", "German Short Algebraic Notation", "Minimal Algebraic Notation" (Informator style), "Reversible Algebraic Notation", "Smith Notation", and "Spanish Descriptive Notation".</li>
+  <li class="space">Additional column "Move List" in game lists.</li>
+  <li class="space">The panes on board tab now are freely configurable, in size and position (Drag&amp;Dop).</li>
+  <li class="space">The layouts of the board tab are loadable and storable.</li>
+  <li class="space">New variation enter mode  &lt;F5&gt;.</li>
+  <li class="space">Engine Sjeng-scidb: promoted pieces will have a larger piece value (Drop-chess).</li>
+  <li class="space">Engine Sjeng-scidb now supports promoted pieces in FEN (Drop-chess).</li>
+  <li class="space">New board options: "Show Piece Shadow", and "Show Piece Contour".</li>
+  <li class="space">Drop-chess: promoted pieces on board will be marked (optional).</li>
+  <li class="space">Display the number of checks beneath the board in chess variant Three-check.</li>
+  <li class="space">Small letters for coordinates on board (optional).</li>
+  <li class="space">Revised Tk Text Widget integrated, all the performance problems with long lines are gone.</li>
+  <li class="space">Revised game editor control, now loading of games will have optiomal performance.</li>
+  <li class="space">"Drag&amp;Dop" in position setup possible.</li>
+  <li class="space">Floating sub-variation pane in board pand available (optional).</li>
+  <li class="space">The sub-variation arrows on board now are selectable (optional).</li>
+  <li class="space">Language selection when exporting single games.</li>
+  <li class="space">Optionally show annotation glyph on board background.</li>
+  <li class="space">Bad castling rights in FEN will be fixed automatically when importing PGN games.</li>
+  <li class="space">Info tab showing news integrated.</li>
+  <li class="space">Additional tournament type "Simultan" in tournament dialog.</li>
+  <li class="space">Improvements in piece renderer.</li>
+  <li class="space">New piece sets:  Aquarium, Bookup, Chess7, ChessCube, Celtic, Fritz, Habsburg, Military, Old Style, Segoe, and Zurich.</li>
+  <li class="space">Piece set "Standard" replaced by another version, the previous one has deficiencies.</li>
+  <li class="space">New board themes: Burnt, Fritz, Kitsch, Navajo, Marmorate, Melamine und Military.</li>
+  <li class="space">Board theme "Virtual" overworked and renamed into "Virtual - Brown".</li>
+  <li class="space">Board theme "Virtual - Colored" renamed into "Virtual - Blue".</li>
+  <li class="space">Board themes "Marble - Brown" and "Marble - Red": piece set "Merida" replaced with "Habsburg".</li>
+  <li class="space">Board theme "Blackjack": piece set "Usual" replaced with "Segoe".</li>
+  <li class="space">Adjustment of some piece sets.</li>
+</ul>
+
+<h3>
+Fourth public preview version
+</h3>
+
+<ul style="padding: 5px;">
+  <li class="space">Installation problems with Ubuntu fixed (Ubuntu is quite unfriendly to self-installed software packages)</li>
+  <li class="space">PGN archives now can be modified and saved (.pgn and .pgn.gz)</li>
+  <li class="space">Important fixes in ChessBase decoder</li>
+  <li class="space">Color scheme for ordinary displays as default added, until now the color scheme was designed for high quality display</li>
+  <li class="space">File selection dialog is finished, especially Drag &amp; Drop</li>
+  <li class="space">Merge dialog extended: now any number of games can be merged with the help of a preview display</li>
+  <li class="space">PGN setup for export options now is a separate dialog; this is important for PGN export, which is available in different menues</li>
+  <li class="space">Language dependent sorting implemented</li>
+  <li class="space">New themes added: "Blackjack" and "Country Style" (thanks to José Carlos Martins)</li>
+  <li class="space">Problem with slow down in game editor eliminated</li>
+  <li class="space">Upgrade of engine Stockfish to version 4</li>
+  <li class="space">Session management implemented: now Scidb will intervene if the user is doing a session shutdown while Scidb is writing/updating a database</li>
+  <li class="space">Copy game to clipboard implemented</li>
+  <li class="space">Export of current game implemented (for example to PGN file)</li>
+  <li class="space">New option in tree window: show next game move with bold font</li>
+  <li class="space">Comment editor overworked</li>
+  <li class="space">Game editor now detects and displays Smileys (optional)</li>
+  <li class="space">Help dialog: CQL help pages completed</li>
+  <li class="space">freedesktop.org requirements implemented:
+    <ul>
+      <li class="space">Desktop menu entry for Scidb will be installed</li>
+      <li class="space">Opening databases with a file manager is possible</li>
+    </ul>
+  </li>
+  <li class="space">Custom menu check/radio-buttons implemented (as default)</li>
+  <li class="space">Toolbar now has drop-down buttons</li>
+</ul>
+
+<h3>
+Third public preview version
+</h3>
+</NEW>
+
+<ul style="padding: 5px;">
+  <NEW>
+  <li class="space">Support of chess variants: Crazyhouse, Antichess (Suicide, Giveaway, Losers), and Three-Check</li>
+  </NEW>
+  <li class="space">Más páginas de ayuda</li>
+  <li class="space">Ventana de análisis: lanza motores ajedrecísticos externos</li>
+<NEW>
+  <li class="space">Setup-Dialog for the installation of chess engines</li>
+</NEW>
+  <li class="space">Ingreso de jugadas: apretar el botón central del ratón (o la tecla espaciador) sugiere
+      jugadas alternativas</li>
+  <li class="space">Nueva pestaña de base de datos: Listado de lugares</li>
+  <li class="space">Modo pantalla completa retocado</li>
+  <li class="space">Se agregó la herramienta de línea de comandos cdb2sci para la conversión de bases de datos al  
+      formato Scidb (.sci)</li>
+  <li class="space">Widget HTML rediseñado: ahorra recursos de un modo muy significativo</li>
+  <li class="space">Localización al idioma sueco integrada (gracias a Lars Ekman)</li>
+  <li class="space">Traducción al idioma español reactivada (gracias a Juan Carlos Vásquez)</li>
+  <li class="space">Se agregaron páginas de ayuda en idioma español (gracias a Carlos Fernando González)</li>
+  <NEW>
+  <li class="space">HTML file export of tournament table</li>
+  <li class="space">New piece sets: "Free Staunton", and "Virtual"</li>
+  <li class="space">New board themes: "Blue Theme", "Staunton", and "Virtual"</li>
+  </NEW>
+  <li class="space">Detección automática de grupo de caracteres al codificar partidas (para si3/si4/cbh)</li>
+  <li class="space">Explorador de partidas: integración del modo de pantalla completa, y también aumentar/minimizar tablero</li>
+  <li class="space">Diálogo de selección de archivos mejorado</li>
+  <li class="space">Diálogo de Guardar/Reemplazar partida mejorado</li>
+<NEW>
+  <li class="space">Merge of games including move transpositions (optional)</li>
+  <li class="space">Old ChessBase format (.cbf) is now supported as well</li>
+</NEW>
+  <li class="space">Implementación de las Fichas de los jugadores</li>
+  <li class="space">Integración de la opción Archivar bases de datos</li>
+  <li class="space">Diálogo de seteo para el Explorador/editor de partidas</li>
+  <li class="space">Implementación de Arrastrar&amp;Soltar en el diálogo Selección de archivos</li>
+<NEW>
+  <li class="space">Engine dictionary implemented</li>
+  <li class="space">Player dictionary implemented (with sort and filter functionality)</li>
+  <li class="space">Drag&amp;Drop in file selection dialog implemented</li>
+  <li class="space">Drag&amp;Drop in database switcher implemented: in this way games can be copied between databases</li>
+</NEW>
+  <li class="space">Ventana Base de datos: acoplado/desacoplado integrado de la lista de pestañas</li>
+  <li class="space">Entrada de jugadas con el ratón revisada (si se inhabilitan las sugerencias de jugada)</li>
+  <li class="space">Se retiró la Barra de menúes: en su lugar existe un simple menú principal; esto es mas moderno y la disposición se mejorará progresivamente</li>
+  <li class="space">Integración de la opción Compactar base de datos (sólo .sci)</li>
+  <li class="space">Integración de la opción Instalación/actualización de los archivos de fotos de los jugadores a través de Internet</li>
+  <li class="space">Integración de la opción Instalación de fuentes ChessBase</li>
+  <li class="space">Tabla de torneos: exhibición opcional de ganadas/tablas/perdidas</li>
+  <li class="space">Soporte de la rueda del ratón para todas las listas y el tablero</li>
+  <li class="space">Notación de jugadas algebraica (normal, corta y larga), Inglesa, por Correspondencia y Telegráfica disponibles</li>
+<NEW>
+  <li class="space">Game editor has a new optional feature: show NAG comment instead of NAG symbol if the annotation is more unusual</li>
+  <li class="space">Now it is possible to import databases without to open beforehand</li>
+  <li class="space">Performance problem when opening ChessBase databases solved</li>
+  <li class="space">Export of tournament tables to HTML file</li>
+  <li class="space">Severe problem with Tcl version 8.6 solved</li>
+</NEW>
+  <li class="space">Rediseño de algunos íconos</li>
+</ul>
+
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html: -->

@@ -1,0 +1,369 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<!-- Generated from tcl/help/it/Database-Formats.txt -->
+
+<html xmlns='http://www.w3.org/1999/xhtml' xml:lang='en' lang='it'>
+<head>
+  <meta http-equiv="content-type"
+           content="text/html; charset=utf-8" />
+  <meta http-equiv="content-language"
+           content="it" />
+  <meta http-equiv="content-style-type"
+           content="text/css" />
+
+  <meta name="author"
+     content="scidb.sourceforge.net" />
+  <meta name="generator"
+     content="scidb.sourceforge.net" />
+  <meta name="description"
+     content="Scidb - Help Page" />
+
+  <link rel="icon"
+       href="http://scidb.sourceforge.net/favicon.ico"
+       type="image/x-icon" />
+  <link rel="shortcut icon"
+       href="http://scidb.sourceforge.net/favicon.ico" />
+  <link rel="stylesheet"
+       type="text/css"
+      media="screen"
+		 href="../styles/help.css" />
+
+  <title>Scidb - Aiuto: Formati Database</title>
+</head>
+
+<body>
+
+<div class="title">
+  <h1 class="title">Formati Database</h1>
+</div>
+
+<p>
+Scidb supporta i seguenti formati:
+</p>
+
+<ul>
+  <li>
+    <img src="../images/ft-scidb.png" alt="" />
+    <a href="#Scidb">Scidb</a>
+  </li>
+  <li>
+    <img src="../images/ft-scid.png" alt="" />
+    <a href="#Scid">Scid</a>
+  </li>
+  <li>
+    <img src="../images/ft-chessbase.png" alt="" />
+    <a href="#ChessBase">ChessBase</a>
+  </li>
+  <li>
+    <img src="../images/ft-pgn.png" alt="" />
+    <a href="#PGN">PGN</a>
+  </li>
+  <li>
+    <img src="../images/ft-archive.png" alt="" />
+    <a href="#Database-Archive">Archivio Database</a>
+  </li>
+</ul>
+
+<h2 id="Scidb">
+<img src="../images/ft-scidb.png" alt="" />
+Scidb (<abbr>.sci</abbr>)
+</h2>
+
+Questo è il formato proprio di Scidb. L'uso di questo formato è fortemente raccomandato, dato che le funzioni di Scidb sono pienamente supportate solo in questo formato e fornirà un'ottima velocità nell'uso.
+
+<p>
+Solo il formato Scidb (e il formato PGN) possono contenere partite di diverse varianti degli scacchi
+(&#x21d2; <a href="Chess-Variants.html">Varianti degli scacchi supportate</a>).
+Un database può contenere solo una variante degli scacchi (la <a href="Clipbase.html">Clipbase</a>
+è un'eccezione).
+</p>
+
+<p>
+Inoltre questo formato posizioni di
+<a href="http://it.wikipedia.org/wiki/Scacchi960" target="blank_">Scacchi 960&nbsp;<span class="awesome">&#xf08e;</span></a>,
+e
+<a href="http://de.wikipedia.org/wiki/Shuffle_Chess" target="blank_">Scacchi Shuffle&nbsp;<span class="awesome">&#xf08e;</span></a> in tutte le varianti degli scacchi.
+</p>
+
+<p>
+I database Scidb sono sempre codificati con il set caratteri <span style='white-space:nowrap;'>UTF-8</span>. Per questo
+i database possono essere usati senza complicazioni su tutti i sistemi e con tutte
+le localizzazioni.
+</p>
+
+<p>
+Un database nel formato Scidb è diviso in diversi file:
+</p>
+
+<div class='box'>
+  <table style="margin-top: 0.5em; margin-bottom: 0.5em;">
+    <tr valign="top">
+      <td nowrap="nowrap"><kbd>.sci</kbd></td><td>=&nbsp;</td>
+      <td>Informazioni partita</td>
+    </tr>
+    <tr valign="top">
+      <td nowrap="nowrap"><kbd>.scg</kbd></td><td>=&nbsp;</td>
+      <td>Mosse, commenti, annotazioni, informazioni sulla mossa e tag PGN</td>
+    </tr>
+    <tr valign="top">
+      <td nowrap="nowrap"><kbd>.scn</kbd></td><td>=&nbsp;</td>
+      <td>Informazioni su Giocatore/Evento/Sito/Commentatore</td>
+    </tr>
+  </table>
+</div>
+
+<h2 id="Scid">
+<img src="../images/ft-scid.png" alt="" />
+Scid (<abbr>.si4</abbr>, <abbr>.si3</abbr>)
+</h2>
+
+Questo è il formato database di Scid e data la sua ampia distribuzione è supportato sia in lettura sia in scrittura. Usando questo formato non sarà possibile usare tutte le funzioni disponibili in Scidb.
+
+<div class='annotation'><img src='../images/annotation.png' style='float:left; margin:0 1em 0 0' alt='annotation' />
+I database di Scidb saranno aperti in modalità di sola lettura.
+</div>
+
+<p>
+In alcuni casi l'utente deve scegliere la codifica appropriata nell'aprire il
+database, per assicurare una corretta visualizzazione dei nomi e di altro testo.
+I database più recenti potrebbero avere codifica <span style='white-space:nowrap;'>UTF-8</span>, database più
+vecchi potrebbero essere scritti con  il set di caratteri <span style='white-space:nowrap;'>Latin-1</span>
+(ISO-<span style='white-space:nowrap;'>8859-1</span>), il formato Scid non fornisce informazioni sulla codifica
+utilizzata. In alcuni casi tuttavia l'identificazione automatica del set caratteri dovrebbe
+avere successo.
+</p>
+
+<p>
+Questo formato ricorda per struttura il formato Scidb:
+</p>
+
+<div class='box'>
+  <table style="margin-top: 0.5em; margin-bottom: 0.5em;">
+    <tr valign="top">
+      <td nowrap="nowrap"><kbd>.si4</kbd></td><td>=&nbsp;</td>
+      <td>Dati partita</td>
+    </tr>
+    <tr valign="top">
+      <td nowrap="nowrap"><kbd>.sg4</kbd></td><td>=&nbsp;</td>
+      <td>Mosse, commenti, annotazioni e tag PGN</td>
+    </tr>
+    <tr valign="top">
+      <td nowrap="nowrap"><kbd>.sn4</kbd></td><td>=&nbsp;</td>
+      <td>Dati relativi a Giocatore/Evento/Luogo/Turno</td>
+    </tr>
+    <tr valign="top">
+      <td nowrap="nowrap"><kbd>.ssc</kbd></td><td>=&nbsp;</td>
+      <td>Dati di ordinamento</td>
+    </tr>
+  </table>
+</div>
+
+<p><img src='../images/note.png' alt='note' /> I file con estensione <code>.sso</code> (Scid Search Option File),
+<code>.sor</code> (Scid Repertoire File), e <code>.stm</code>
+(Scid Tree Mask File) non appartengono esplicitamente al database
+e non saranno considerati da Scidb.
+Allo stesso modo ogni lista di partite salvate (suffisso <code>.txt</code>) non sarà considerata.</p>
+
+<h2 id="ChessBase">
+<img src="../images/ft-chessbase.png" alt="" />
+ChessBase (<abbr>.cbh</abbr>, <abbr>.cbf</abbr>)
+</h2>
+
+L'azienda <a href="http://www.chessbase.de" target="blank_">ChessBase&nbsp;<span class="awesome">&#xf08e;</span></a> mantiene questo formato segreto,
+per questo solo la lettura è supportata. Non tutti i dati della partita possono essere
+letti correttamente, con alcune partite apparirà il messaggio che comunica la non riuscita
+dell'operazione di decodifica.
+
+<div class='annotation'><img src='../images/annotation.png' style='float:left; margin:0 1em 0 0' alt='annotation' />
+I database ChessBase non possono essere usati come databases di riferimento.
+</div>
+
+<p>
+Generalmente, questo database ha codifica con set caratteri CP1252
+(o CP850 con vecchi formati), ma in alcuni casi una selezione manuale del
+set caratteri durante l'apertura del database può essere necessaria, per assicurare
+una corretta visualizzazione dei nomi e di altro testo.
+</p>
+
+<p>
+Il formato database di ChessBase è diviso in diversi file separati, quelli più importanti sono:
+</p>
+
+<div class='box'>
+  <table style="margin-top: 0.5em; margin-bottom: 0.5em;">
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbh </kbd></td><td>=&nbsp;</td><td>Dati partita</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbg </kbd></td><td>=&nbsp;</td><td>Mosse e varianti</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cba </kbd></td><td>=&nbsp;</td><td>Commenti e annotazioni</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbs </kbd></td><td>=&nbsp;</td><td>Indice delle fonti</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbp </kbd></td><td>=&nbsp;</td><td>Indice giocatori</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbc </kbd></td><td>=&nbsp;</td><td>Indice commentatori</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbt </kbd></td><td>=&nbsp;</td><td>Indice tornei</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbe </kbd></td><td>=&nbsp;</td><td>Indice squadre</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbj </kbd></td><td>=&nbsp;</td><td>Informazioni squadra</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cko </kbd></td><td>=&nbsp;</td><td>Opening keys</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cpo </kbd></td><td>=&nbsp;</td><td>Opening keys</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.ini </kbd></td><td>=&nbsp;</td><td>File di inizializzazione per il database</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.html</kbd></td><td>=&nbsp;</td><td>Documento HTML</td></tr>
+  </table>
+</div>
+
+<p>
+Un database nel vecchio formato consiste di quattro file:
+</p>
+
+<div class='box'>
+  <table style="margin-top: 0.5em; margin-bottom: 0.5em;">
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbf</kbd></td><td>=&nbsp;</td><td>Dati partita e mosse</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cbi</kbd></td><td>=&nbsp;</td><td>Indice</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cko</kbd></td><td>=&nbsp;</td><td>Chiavi di apertura</td></tr>
+    <tr valign="top"><td nowrap="nowrap"><kbd>.cpo</kbd></td><td>=&nbsp;</td><td>Chiavi di apertura</td></tr>
+  </table>
+</div>
+
+<h2 id="PGN">
+<img src="../images/ft-pgn.png" alt="" />
+<abbr>PGN</abbr> (<abbr>.pgn</abbr>, <abbr>.pgn.gz</abbr>, <abbr>.zip</abbr>)
+</h2>
+
+Il formato <abbr>PGN</abbr> (Portable Game Notation) è uno standard comune per lo
+scambio di partite di scacchi.
+<span class='NEW'><!-- Old content
+L'apertura di un file <abbr>PGN</abbr> è permessa in sola lettura.
+--> <!-- New content: -->
+Opening a <abbr>PGN</abbr> file will be done in reading mode, but it is
+possible to set it writeable if the file has writing permission.
+</span>
+Se si hanno grandi collezioni di partite in questo formato si consiglia di
+convertirle nel formato di Scidb.
+
+<p>
+Secondo lo
+<a href="http://www.saremba.de/chessgml/standards/pgn/pgn-complete.htm" target="blank_">standard PGN&nbsp;<span class="awesome">&#xf08e;</span></a>
+un file PGN ha codifica <span style='white-space:nowrap;'>Latin-1</span> (ISO-<span style='white-space:nowrap;'>8859-1</span>).
+Ma se un file PGN comincia con un marcatore <span style='white-space:nowrap;'>UTF-8</span>
+(<span style='white-space:nowrap;'>UTF-8</span>-BOM: byte sequence EF BB BF) ci si aspetterà un encoding <span style='white-space:nowrap;'>UTF-8</span>
+(in osservanza a <a href="http://www.unicode.org/faq/utf_bom.html#BOM" target="blank_">Unicode FAQ&nbsp;<span class="awesome">&#xf08e;</span></a>).
+<span class='NEW'>
+If the application is detecting an Unicode string when reading the file before a
+string with a different encoding (except ASCII) was recognized, then also Unicode
+encoding for the whole file will be expected, but only if not an explicit encoding
+is chosen when opening the file.
+</span>
+</p>
+
+<p>
+Solo le seguenti varianti saranno accettate se si stanno leggendo partite da FICS:
+</p>
+
+<div class='box'>
+  <table style="margin-top: 0.5em; margin-bottom: 0.5em;">
+    <tr>
+      <td>wild/2 </td>
+      <td>&#x2001;</td>
+      <td>misc/bishops-only</td>
+      <td>&#x2001;</td>
+      <td>crazyhouse</td>
+    </tr>
+    <tr>
+      <td>wild/5</td>
+      <td>&#x2001;</td>
+      <td>misc/knights-only</td>
+      <td>&#x2001;</td>
+      <td>endings/kbbk</td>
+    </tr>
+    <tr>
+      <td>wild/7</td>
+      <td>&#x2001;</td>
+      <td>misc/little-game</td>
+      <td>&#x2001;</td>
+      <td>endings/kbnk</td>
+    </tr>
+    <tr>
+      <td>wild/8 </td>
+      <td>&#x2001;</td>
+      <td>misc/no-queens</td>
+      <td>&#x2001;</td>
+      <td>losers</td>
+    </tr>
+    <tr>
+      <td>wild/17</td>
+      <td>&#x2001;</td>
+      <td>misc/pawns-only</td>
+      <td>&#x2001;</td>
+      <td>odds/*</td>
+    </tr>
+    <tr>
+      <td>wild/19</td>
+      <td>&#x2001;</td>
+      <td>misc/pyramid</td>
+      <td>&#x2001;</td>
+      <td>pawns/little-game</td>
+    </tr>
+    <tr>
+      <td>wild/22</td>
+      <td>&#x2001;</td>
+      <td>misc/queen-rooks</td>
+      <td>&#x2001;</td>
+      <td>pawns/pawns-only</td>
+    </tr>
+    <tr>
+      <td>wild/23</td>
+      <td>&#x2001;</td>
+      <td>misc/queens-only</td>
+      <td>&#x2001;</td>
+      <td>pawns/wild-five</td>
+    </tr>
+    <tr>
+      <td>wild/25</td>
+      <td>&#x2001;</td>
+      <td>misc/rooks-only</td>
+      <td>&#x2001;</td>
+      <td>suicide</td>
+    </tr>
+    <tr>
+      <td>wild/26</td>
+      <td>&#x2001;</td>
+      <td>misc/runaway</td>
+      <td>&#x2001;</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>wild/fr</td>
+      <td>&#x2001;</td>
+      <td></td>
+      <td>&#x2001;</td>
+      <td></td>
+    </tr>
+  </table>
+</div>
+
+<p>
+Per le specifiche complete su questo formato visitare
+<a href="http://www.saremba.de/chessgml/standards/pgn/pgn-complete.htm">
+Standard: Portable Game Notation Specification and Implementation Guide&nbsp;<span class="awesome">&#xf08e;</span></a>.
+</p>
+
+<h2 id="Database-Archive">
+<img src="../images/ft-archive.png" alt="" />
+Archivio Database (<abbr>.scv</abbr>)
+</h2>
+
+<p>
+L'archivio database di Scidb è basato su un formato archivio indipendente,
+e contiene uno (o più) database nella forma archiviata. Questo facilita
+il trasferimento di database su internet, perché si tratta di un singolo file
+invece di molti. Questo archivio database non è limitato a uno specifico formato database.
+</p>
+
+<p>
+Una dettagliata descrizione di questo formato è alla pagina
+<!-- NOTE for translators: only German and English specification will be available -->
+<!-- This means: do not translate next line -->
+<a href="../en/Database-Archive.html">Specification of database archive</a>.
+</p>
+
+</body>
+</html>

@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<!-- Generated from tcl/help/de/Game-Flags.txt -->
+
+<html xmlns='http://www.w3.org/1999/xhtml' xml:lang='en' lang='de'>
+<head>
+  <meta http-equiv="content-type"
+           content="text/html; charset=utf-8" />
+  <meta http-equiv="content-language"
+           content="de" />
+  <meta http-equiv="content-style-type"
+           content="text/css" />
+
+  <meta name="author"
+     content="scidb.sourceforge.net" />
+  <meta name="generator"
+     content="scidb.sourceforge.net" />
+  <meta name="description"
+     content="Scidb - Help Page" />
+
+  <link rel="icon"
+       href="http://scidb.sourceforge.net/favicon.ico"
+       type="image/x-icon" />
+  <link rel="shortcut icon"
+       href="http://scidb.sourceforge.net/favicon.ico" />
+  <link rel="stylesheet"
+       type="text/css"
+      media="screen"
+		 href="../styles/help.css" />
+
+  <title>Scidb - Hilfe: Partiemarkierungen</title>
+</head>
+
+<body>
+
+<div class="title">
+  <h1 class="title">Partiemarkierungen</h1>
+</div>
+
+<p>
+Eine <em>Markierung</em> ("Flag") ist ein Kennzeichen irgendeiner Charakteristik, die
+für jede Partie der Datenbank ein- oder ausgeschaltet werden kann. Es gibt 21 vom
+Benutzer einstellbare Markierungen, die direkt in jede Partie gesetzt werden können.
+Diese Markierungen dienen vornehmlich zum Suchen von Partiedaten, oder zum Filtern
+von Partienliste. Diese Markierungen haben ansonsten keine weitere Bedeutung und
+können deshalb vom Benutzer frei verwendet werden.
+</p>
+
+<p>
+Die Markierungen und ihre Symbole im einzelnen:
+</p>
+
+<div class='box'>
+<dl>
+  <dt><img src="../images/gameflag-White-Opening.png" alt=""     />&emsp;Weiße Eröffnung</dt>
+  <dt><img src="../images/gameflag-Black-Opening.png" alt=""     />&emsp;Schwarze Eröffnung</dt>
+  <dt><img src="../images/gameflag-Middle-Game.png" alt=""       />&emsp;Mittelspiel</dt>
+  <dt><img src="../images/gameflag-End-Game.png" alt=""          />&emsp;Endspiel</dt>
+  <dt><img src="../images/gameflag-Novelty.png" alt=""           />&emsp;Neuerung</dt>
+  <dt><img src="../images/gameflag-Pawn-Structure.png" alt=""    />&emsp;Bauernstruktur</dt>
+  <dt><img src="../images/gameflag-Tactics.png" alt=""           />&emsp;Taktik</dt>
+  <dt><img src="../images/gameflag-King-Side.png" alt=""         />&emsp;Königsseite</dt>
+  <dt><img src="../images/gameflag-Queen-Side.png" alt=""        />&emsp;Damenseite</dt>
+  <dt><img src="../images/gameflag-Brilliancy.png" alt=""        />&emsp;Brillianz</dt>
+  <dt><img src="../images/gameflag-Blunder.png" alt=""           />&emsp;Schnitzer</dt>
+  <dt><img src="../images/gameflag-User.png" alt=""              />&emsp;User</dt>
+  <dt><img src="../images/gameflag-Best-Game.png" alt=""         />&emsp;Beste Partie</dt>
+  <dt><img src="../images/gameflag-Decided-Tournament.png" alt=""/>&emsp;Entscheidungsturnier</dt>
+  <dt><img src="../images/gameflag-Model-Game.png" alt=""        />&emsp;Modellpartie</dt>
+  <dt><img src="../images/gameflag-Strategy.png" alt=""          />&emsp;Strategie</dt>
+  <dt><img src="../images/gameflag-With-Attack.png" alt=""       />&emsp;Angriff</dt>
+  <dt><img src="../images/gameflag-Sacrifice.png" alt=""         />&emsp;Opferspiel</dt>
+  <dt><img src="../images/gameflag-Defense.png" alt=""           />&emsp;Verteidigung</dt>
+  <dt><img src="../images/gameflag-Material.png" alt=""          />&emsp;Material</dt>
+  <dt><img src="../images/gameflag-Piece-Play.png" alt=""        />&emsp;Figurenspiel</dt>
+  <dt><img src="../images/gameflag-Illegal-Move.png" alt=""      />&emsp;Regelwidriger Zug</dt>
+  <dt><img src="../images/gameflag-Invalid-Move.png" alt=""      />&emsp;Ungültiger Zug</dt>
+</dl>
+</div>
+
+<p>
+Die beiden letzten Markierungen können nicht vom Benutzer eingestellt werden,
+sie werden automatisch gesetzt wenn eine Partie ungültige Rochaden oder sogar
+andere ungültige Züge (zum Beispiel der König zieht ins Schach) in der
+Hauptvariante enthält. Sind beide Markeriungen in einer Partie enthalten
+so wird nur die Markierung für <em>Regelwidriger Zug</em> angezeigt.
+</p>
+
+<p>
+Es gibt noch weitere besondere, nicht vom Benutzer einstellbare Markierungen,
+die Löschmarkierung, die Änderungsmarkierung, und die Hinzugefügt-Markierung.
+Eine Partie mit einer Löschmarkierung ist zur Löschung vorgemerkt worden, und
+die Partie wird erst entfernt, wenn die Datenbank komprimiert wird (&#x21d2;
+<a href="Database-Switcher.html#Compact">Datenbankumschalter:
+Kompaktieren</a>). Diese Markierung bleibt nach
+dem Schliessen der Datenbank erhalten. Eine Änderungsmarkierung bedeutet, daß
+diese Partie verändert (und gespeichert) wurde, und eine Hinzugefügt-Markierung
+zeigt an, daß diese Partie neu hinzugefügt wurde. Diese beiden Markierungen gehen
+verloren, sobald die Datenbank geschlossen wird.
+</p>
+
+<p>
+Beim Bearbeiten von Partien in einer Scid-Datenbank
+(<acronym>.si4</acronym>) werden zudem die sechs speziellen Benutzermarkierungen
+(1..6) unterstützt. Es wird jedoch von einer Verwendung dieser Markierungen abgeraten,
+es kommt zu nicht lösbaren Problemen beim Kopieren von Partien in eine andere Datenbank;
+auch die Applikation Scid kann diese Probleme nicht lösen.
+</p>
+
+<p>
+Bei der Umwandlung von ChessBase-Datenbanken werden beide Markierungen
+<em>Strategische Schnitzer</em> und
+<em>Taktische Schnitzer</em> auf die gemeinsame
+Markierung <em>Schnitzer</em> abgebildet, Scidb
+unterscheidet nicht zwischen diesen beiden Typen.
+</p>
+
+</body>
+</html>

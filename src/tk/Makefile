@@ -1,0 +1,553 @@
+# ======================================================================
+# Makefile for Scidb for Unix operating systems
+# ======================================================================
+
+# ======================================================================
+#    _/|            __
+#   // o\         /    )           ,        /    /
+#   || ._)    ----\---------__----------__-/----/__-
+#   //__\          \      /   '  /    /   /    /   )
+#   )___(     _(____/____(___ __/____(___/____(___/_
+# ======================================================================
+
+include ../../Makefile.in
+
+.SUFFIXES: .cpp
+.PRECIOUS:
+
+INCL_PRE		=  -I. -I../mstl -I../sys -I../util -I../util/zlib -I../tcl -Isvg -Isvg/agg -Ijpeg
+INCL_POST	= -Itcl$(TCL_VERSION) -Itk$(TCL_VERSION)
+INCLUDE		= $(INCL_PRE) $(INCL_POST)
+ALL_INCLUDE	= $(INCL_PRE) $(TCL_INCLUDE) $(TK_INCLUDE) $(X_INCLUDE) $(INCL_POST)
+CFLAGS		+= $(OPTIMIZE) $(PROFILING) $(C_DEBUG) $(SYS_CFLAGS)
+CXXFLAGS		+= $(OPTIMIZE) $(PROFILING) $(CXX_DEBUG) $(SYS_CXXFLAGS) $(USE_INLINE_TEXT)
+
+SRC_CXX = \
+	tk_base.cpp \
+	tk_busy.cpp \
+	tk_clock.cpp \
+	tk_fixes.cpp \
+	tk_image.cpp \
+	tk_init.cpp \
+	tk_jpeg.cpp \
+	tk_misc.cpp \
+	tk_multiwindow.cpp \
+	tk_notebook.cpp \
+	tk_panedwindow.cpp \
+	tk_png.cpp \
+	tk_selection.cpp \
+	tk_session_manager.cpp \
+	tk_twm.cpp \
+	tk_window_manager.cpp \
+	tk_x11.cpp \
+	tk_xcursor.cpp \
+
+SRC	= $(SRC_CXX)
+OBJS	= $(SRC_CXX:.cpp=.o)
+LIB	= libtk
+
+all: $(LIB).a
+
+clean:
+	@echo "Clean `pwd`"
+	@rm -f $(LIB).a $(OBJS) Makefile.bak
+
+depend:
+	makedepend -fMakefile -Y -- $(INCLUDE) -- -w1 $(SRC) 2>/dev/null
+	@if [ -h Makefile.bak ]; then \
+		cp Makefile Makefile.bak; \
+		mv Makefile.bak Makefile; \
+	fi
+
+$(LIB).a: $(OBJS)
+	@echo "Building $(LIB).a"
+	@$(AR) $(ARFLAGS) $(LIB).a $(OBJS)
+	@$(RANLIB) $(LIB).a
+
+.cpp.o:
+	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(CXXFLAGS:  = )]"
+	@$(CXX) -c $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(ALL_INCLUDE) $<
+
+# vi:set ts=3 sw=3:
+# DO NOT DELETE THIS LINE -- make depend depends on it.
+
+tk_base.o: tk_base.h
+tk_base.o: tk_base.ipp
+tk_base.o: ../tcl/tcl_base.h
+tk_base.o: ../tcl/tcl_base.ipp
+tk_base.o: ../mstl/m_carray.h
+tk_base.o: ../mstl/m_types.h
+tk_base.o: ../mstl/m_type_traits.h
+tk_base.o: ../mstl/m_type_traits.ipp
+tk_base.o: ../mstl/m_pointer_iterator.h
+tk_base.o: ../mstl/m_pointer_iterator.ipp
+tk_base.o: ../mstl/m_iterator.h
+tk_base.o: ../mstl/m_iterator.ipp
+tk_base.o: ../mstl/m_carray.ipp
+tk_base.o: ../mstl/m_utility.h
+tk_base.o: ../mstl/m_utility.ipp
+tk_base.o: ../mstl/m_limits.h
+tk_base.o: ../mstl/m_bit_functions.h
+tk_base.o: ../mstl/m_bit_functions.ipp
+tk_base.o: ../mstl/m_uint128_t.h
+tk_base.o: ../mstl/m_uint128.h
+tk_base.o: ../mstl/m_assert.h
+tk_base.o: ../mstl/m_exception.h
+tk_base.o: ../mstl/m_backtrace.h
+tk_base.o: ../mstl/m_exception.ipp
+tk_base.o: ../mstl/m_algorithm.h
+tk_base.o: ../mstl/m_algobase.h
+tk_base.o: ../mstl/m_algobase.ipp
+tk_base.o: ../mstl/m_algorithm.ipp
+tk_base.o: ../mstl/m_string.h
+tk_base.o: ../mstl/m_string.ipp
+tk_base.o: ../tcl/tcl_exception.h
+tk_base.o: ../util/u_exception.h
+tk_base.o: tk8.6/tkInt.h
+tk_base.o: tk8.6/tkPort.h
+tk_base.o: tk8.6/tkUnixPort.h
+tk_base.o: tk8.6/tkIntDecls.h
+tk_busy.o: tk_init.h
+tk_busy.o: ../tcl/tcl_base.h
+tk_busy.o: ../tcl/tcl_base.ipp
+tk_busy.o: ../mstl/m_carray.h
+tk_busy.o: ../mstl/m_types.h
+tk_busy.o: ../mstl/m_type_traits.h
+tk_busy.o: ../mstl/m_type_traits.ipp
+tk_busy.o: ../mstl/m_pointer_iterator.h
+tk_busy.o: ../mstl/m_pointer_iterator.ipp
+tk_busy.o: ../mstl/m_iterator.h
+tk_busy.o: ../mstl/m_iterator.ipp
+tk_busy.o: ../mstl/m_carray.ipp
+tk_busy.o: ../mstl/m_utility.h
+tk_busy.o: ../mstl/m_utility.ipp
+tk_busy.o: ../mstl/m_limits.h
+tk_busy.o: ../mstl/m_bit_functions.h
+tk_busy.o: ../mstl/m_bit_functions.ipp
+tk_busy.o: ../mstl/m_uint128_t.h
+tk_busy.o: ../mstl/m_uint128.h
+tk_busy.o: ../mstl/m_assert.h
+tk_busy.o: ../mstl/m_exception.h
+tk_busy.o: ../mstl/m_backtrace.h
+tk_busy.o: ../mstl/m_exception.ipp
+tk_busy.o: ../mstl/m_algorithm.h
+tk_busy.o: ../mstl/m_algobase.h
+tk_busy.o: ../mstl/m_algobase.ipp
+tk_busy.o: ../mstl/m_algorithm.ipp
+tk_busy.o: ../mstl/m_string.h
+tk_busy.o: ../mstl/m_string.ipp
+tk_busy.o: tk8.6/tkInt.h
+tk_busy.o: tk8.6/tkPort.h
+tk_busy.o: tk8.6/tkUnixPort.h
+tk_busy.o: tk8.6/tkIntDecls.h
+tk_clock.o: tk_init.h
+tk_clock.o: ../tcl/tcl_base.h
+tk_clock.o: ../tcl/tcl_base.ipp
+tk_clock.o: ../mstl/m_carray.h
+tk_clock.o: ../mstl/m_types.h
+tk_clock.o: ../mstl/m_type_traits.h
+tk_clock.o: ../mstl/m_type_traits.ipp
+tk_clock.o: ../mstl/m_pointer_iterator.h
+tk_clock.o: ../mstl/m_pointer_iterator.ipp
+tk_clock.o: ../mstl/m_iterator.h
+tk_clock.o: ../mstl/m_iterator.ipp
+tk_clock.o: ../mstl/m_carray.ipp
+tk_clock.o: ../mstl/m_utility.h
+tk_clock.o: ../mstl/m_utility.ipp
+tk_clock.o: ../mstl/m_limits.h
+tk_clock.o: ../mstl/m_bit_functions.h
+tk_clock.o: ../mstl/m_bit_functions.ipp
+tk_clock.o: ../mstl/m_uint128_t.h
+tk_clock.o: ../mstl/m_uint128.h
+tk_clock.o: ../mstl/m_assert.h
+tk_clock.o: ../mstl/m_exception.h
+tk_clock.o: ../mstl/m_backtrace.h
+tk_clock.o: ../mstl/m_exception.ipp
+tk_clock.o: ../mstl/m_algorithm.h
+tk_clock.o: ../mstl/m_algobase.h
+tk_clock.o: ../mstl/m_algobase.ipp
+tk_clock.o: ../mstl/m_algorithm.ipp
+tk_clock.o: ../mstl/m_string.h
+tk_clock.o: ../mstl/m_string.ipp
+tk_clock.o: svg/agg/agg_path_storage.h
+tk_clock.o: svg/agg/agg_math.h
+tk_clock.o: svg/agg/agg_basics.h
+tk_clock.o: svg/agg/agg_config.h
+tk_clock.o: svg/agg/agg_array.h
+tk_clock.o: svg/agg/agg_bezier_arc.h
+tk_clock.o: svg/agg/agg_conv_transform.h
+tk_clock.o: svg/agg/agg_trans_affine.h
+tk_clock.o: svg/agg/agg_color_rgba.h
+tk_clock.o: svg/agg/agg_pixfmt_rgba.h
+tk_clock.o: svg/agg/agg_rendering_buffer.h
+tk_clock.o: svg/agg/agg_ellipse.h
+tk_clock.o: svg/agg/agg_rasterizer_scanline_aa.h
+tk_clock.o: svg/agg/agg_rasterizer_cells_aa.h
+tk_clock.o: svg/agg/agg_rasterizer_sl_clip.h
+tk_clock.o: svg/agg/agg_clip_liang_barsky.h
+tk_clock.o: svg/agg/agg_gamma_functions.h
+tk_clock.o: svg/agg/agg_conv_curve.h
+tk_clock.o: svg/agg/agg_curves.h
+tk_clock.o: svg/agg/agg_conv_stroke.h
+tk_clock.o: svg/agg/agg_vcgen_stroke.h
+tk_clock.o: svg/agg/agg_math_stroke.h
+tk_clock.o: svg/agg/agg_vertex_sequence.h
+tk_clock.o: svg/agg/agg_conv_adaptor_vcgen.h
+tk_clock.o: svg/agg/agg_scanline_u.h
+tk_clock.o: svg/agg/agg_renderer_scanline.h
+tk_clock.o: svg/agg/agg_renderer_base.h
+tk_fixes.o: tk_init.h
+tk_fixes.o: tk8.6/tkInt.h
+tk_fixes.o: tk8.6/tkPort.h
+tk_fixes.o: tk8.6/tkUnixPort.h
+tk_fixes.o: tk8.6/tkIntDecls.h
+tk_image.o: tk_init.h
+tk_image.o: svg/svg_path_renderer.h
+tk_image.o: svg/svg_path_tokenizer.h
+tk_image.o: svg/svg_gradient.h
+tk_image.o: svg/agg/agg_color_rgba.h
+tk_image.o: svg/agg/agg_basics.h
+tk_image.o: svg/agg/agg_config.h
+tk_image.o: svg/agg/agg_trans_affine.h
+tk_image.o: svg/agg/agg_span_gradient.h
+tk_image.o: svg/agg/agg_math.h
+tk_image.o: svg/agg/agg_array.h
+tk_image.o: ../mstl/m_map.h
+tk_image.o: ../mstl/m_vector.h
+tk_image.o: ../mstl/m_types.h
+tk_image.o: ../mstl/m_type_traits.h
+tk_image.o: ../mstl/m_type_traits.ipp
+tk_image.o: ../mstl/m_memblock.h
+tk_image.o: ../mstl/m_memblock.ipp
+tk_image.o: ../mstl/m_utility.h
+tk_image.o: ../mstl/m_utility.ipp
+tk_image.o: ../mstl/m_limits.h
+tk_image.o: ../mstl/m_bit_functions.h
+tk_image.o: ../mstl/m_bit_functions.ipp
+tk_image.o: ../mstl/m_uint128_t.h
+tk_image.o: ../mstl/m_uint128.h
+tk_image.o: ../mstl/m_assert.h
+tk_image.o: ../mstl/m_exception.h
+tk_image.o: ../mstl/m_backtrace.h
+tk_image.o: ../mstl/m_exception.ipp
+tk_image.o: ../mstl/m_pointer_iterator.h
+tk_image.o: ../mstl/m_pointer_iterator.ipp
+tk_image.o: ../mstl/m_iterator.h
+tk_image.o: ../mstl/m_iterator.ipp
+tk_image.o: ../mstl/m_vector.ipp
+tk_image.o: ../mstl/m_uninitialized.h
+tk_image.o: ../mstl/m_uninitialized.ipp
+tk_image.o: ../mstl/m_algobase.h
+tk_image.o: ../mstl/m_algobase.ipp
+tk_image.o: ../mstl/m_construct.h
+tk_image.o: ../mstl/m_construct.ipp
+tk_image.o: ../mstl/m_algorithm.h
+tk_image.o: ../mstl/m_algorithm.ipp
+tk_image.o: ../mstl/m_pair.h
+tk_image.o: ../mstl/m_pair.ipp
+tk_image.o: ../mstl/m_map.ipp
+tk_image.o: ../mstl/m_string.h
+tk_image.o: ../mstl/m_string.ipp
+tk_image.o: svg/agg/agg_path_storage.h
+tk_image.o: svg/agg/agg_bezier_arc.h
+tk_image.o: svg/agg/agg_conv_transform.h
+tk_image.o: svg/agg/agg_conv_stroke.h
+tk_image.o: svg/agg/agg_vcgen_stroke.h
+tk_image.o: svg/agg/agg_math_stroke.h
+tk_image.o: svg/agg/agg_vertex_sequence.h
+tk_image.o: svg/agg/agg_conv_adaptor_vcgen.h
+tk_image.o: svg/agg/agg_conv_contour.h
+tk_image.o: svg/agg/agg_vcgen_contour.h
+tk_image.o: svg/agg/agg_conv_curve.h
+tk_image.o: svg/agg/agg_curves.h
+tk_image.o: svg/agg/agg_bounding_rect.h
+tk_image.o: svg/svg_path_renderer.ipp
+tk_image.o: svg/agg/agg_renderer_scanline.h
+tk_image.o: svg/agg/agg_renderer_base.h
+tk_image.o: svg/agg/agg_rendering_buffer.h
+tk_image.o: svg/agg/agg_rasterizer_scanline_aa.h
+tk_image.o: svg/agg/agg_rasterizer_cells_aa.h
+tk_image.o: svg/agg/agg_rasterizer_sl_clip.h
+tk_image.o: svg/agg/agg_clip_liang_barsky.h
+tk_image.o: svg/agg/agg_gamma_functions.h
+tk_image.o: svg/agg/agg_scanline_p.h
+tk_image.o: svg/agg/agg_span_allocator.h
+tk_image.o: svg/agg/agg_span_interpolator_linear.h
+tk_image.o: svg/agg/agg_dda_line.h
+tk_image.o: svg/svg_parser.h
+tk_image.o: svg/svg_exception.h
+tk_image.o: ../tcl/tcl_base.h
+tk_image.o: ../tcl/tcl_base.ipp
+tk_image.o: ../mstl/m_carray.h
+tk_image.o: ../mstl/m_carray.ipp
+tk_image.o: ../util/u_base.h
+tk_image.o: svg/agg/agg_pixfmt_rgb.h
+tk_image.o: svg/agg/agg_pixfmt_rgba.h
+tk_image.o: svg/agg/agg_image_accessors.h
+tk_image.o: svg/agg/agg_scanline_u.h
+tk_image.o: svg/agg/agg_span_image_filter_rgb.h
+tk_image.o: svg/agg/agg_span_image_filter.h
+tk_image.o: svg/agg/agg_image_filters.h
+tk_image.o: svg/agg/agg_span_image_filter_rgba.h
+tk_image.o: svg/agg/agg_blur.h
+tk_image.o: svg/agg/agg_pixfmt_transposer.h
+tk_init.o: tk_init.h
+tk_init.o: tk_session_manager.h
+tk_init.o: tk8.6/tkInt.h
+tk_init.o: tk8.6/tkPort.h
+tk_init.o: tk8.6/tkUnixPort.h
+tk_init.o: tk8.6/tkIntDecls.h
+tk_jpeg.o: tk_init.h
+tk_jpeg.o: jpeg/jpeg_image.h
+tk_jpeg.o: jpeg/jpeg_scanline.h
+tk_jpeg.o: jpeg/jpeg_reader.h
+tk_jpeg.o: jpeg/jpeg_exception.h
+tk_jpeg.o: ../util/u_base64_decoder.h
+tk_jpeg.o: ../mstl/m_types.h
+tk_jpeg.o: ../util/u_exception.h
+tk_jpeg.o: ../mstl/m_exception.h
+tk_jpeg.o: ../mstl/m_backtrace.h
+tk_jpeg.o: ../mstl/m_exception.ipp
+tk_misc.o: tk_init.h
+tk_misc.o: ../tcl/tcl_base.h
+tk_misc.o: ../tcl/tcl_base.ipp
+tk_misc.o: ../mstl/m_carray.h
+tk_misc.o: ../mstl/m_types.h
+tk_misc.o: ../mstl/m_type_traits.h
+tk_misc.o: ../mstl/m_type_traits.ipp
+tk_misc.o: ../mstl/m_pointer_iterator.h
+tk_misc.o: ../mstl/m_pointer_iterator.ipp
+tk_misc.o: ../mstl/m_iterator.h
+tk_misc.o: ../mstl/m_iterator.ipp
+tk_misc.o: ../mstl/m_carray.ipp
+tk_misc.o: ../mstl/m_utility.h
+tk_misc.o: ../mstl/m_utility.ipp
+tk_misc.o: ../mstl/m_limits.h
+tk_misc.o: ../mstl/m_bit_functions.h
+tk_misc.o: ../mstl/m_bit_functions.ipp
+tk_misc.o: ../mstl/m_uint128_t.h
+tk_misc.o: ../mstl/m_uint128.h
+tk_misc.o: ../mstl/m_assert.h
+tk_misc.o: ../mstl/m_exception.h
+tk_misc.o: ../mstl/m_backtrace.h
+tk_misc.o: ../mstl/m_exception.ipp
+tk_misc.o: ../mstl/m_algorithm.h
+tk_misc.o: ../mstl/m_algobase.h
+tk_misc.o: ../mstl/m_algobase.ipp
+tk_misc.o: ../mstl/m_algorithm.ipp
+tk_misc.o: ../mstl/m_string.h
+tk_misc.o: ../mstl/m_string.ipp
+tk_multiwindow.o: tk_init.h
+tk_multiwindow.o: tk8.6/tkInt.h
+tk_multiwindow.o: tk8.6/tkPort.h
+tk_multiwindow.o: tk8.6/tkUnixPort.h
+tk_multiwindow.o: tk8.6/tkIntDecls.h
+tk_multiwindow.o: ../tcl/tcl_base.h
+tk_multiwindow.o: ../tcl/tcl_base.ipp
+tk_multiwindow.o: ../mstl/m_carray.h
+tk_multiwindow.o: ../mstl/m_types.h
+tk_multiwindow.o: ../mstl/m_type_traits.h
+tk_multiwindow.o: ../mstl/m_type_traits.ipp
+tk_multiwindow.o: ../mstl/m_pointer_iterator.h
+tk_multiwindow.o: ../mstl/m_pointer_iterator.ipp
+tk_multiwindow.o: ../mstl/m_iterator.h
+tk_multiwindow.o: ../mstl/m_iterator.ipp
+tk_multiwindow.o: ../mstl/m_carray.ipp
+tk_multiwindow.o: ../mstl/m_utility.h
+tk_multiwindow.o: ../mstl/m_utility.ipp
+tk_multiwindow.o: ../mstl/m_limits.h
+tk_multiwindow.o: ../mstl/m_bit_functions.h
+tk_multiwindow.o: ../mstl/m_bit_functions.ipp
+tk_multiwindow.o: ../mstl/m_uint128_t.h
+tk_multiwindow.o: ../mstl/m_uint128.h
+tk_multiwindow.o: ../mstl/m_assert.h
+tk_multiwindow.o: ../mstl/m_exception.h
+tk_multiwindow.o: ../mstl/m_backtrace.h
+tk_multiwindow.o: ../mstl/m_exception.ipp
+tk_multiwindow.o: ../mstl/m_algorithm.h
+tk_multiwindow.o: ../mstl/m_algobase.h
+tk_multiwindow.o: ../mstl/m_algobase.ipp
+tk_multiwindow.o: ../mstl/m_algorithm.ipp
+tk_multiwindow.o: ../mstl/m_string.h
+tk_multiwindow.o: ../mstl/m_string.ipp
+tk_notebook.o: tk_init.h
+tk_notebook.o: ../tcl/tcl_base.h
+tk_notebook.o: ../tcl/tcl_base.ipp
+tk_notebook.o: ../mstl/m_carray.h
+tk_notebook.o: ../mstl/m_types.h
+tk_notebook.o: ../mstl/m_type_traits.h
+tk_notebook.o: ../mstl/m_type_traits.ipp
+tk_notebook.o: ../mstl/m_pointer_iterator.h
+tk_notebook.o: ../mstl/m_pointer_iterator.ipp
+tk_notebook.o: ../mstl/m_iterator.h
+tk_notebook.o: ../mstl/m_iterator.ipp
+tk_notebook.o: ../mstl/m_carray.ipp
+tk_notebook.o: ../mstl/m_utility.h
+tk_notebook.o: ../mstl/m_utility.ipp
+tk_notebook.o: ../mstl/m_limits.h
+tk_notebook.o: ../mstl/m_bit_functions.h
+tk_notebook.o: ../mstl/m_bit_functions.ipp
+tk_notebook.o: ../mstl/m_uint128_t.h
+tk_notebook.o: ../mstl/m_uint128.h
+tk_notebook.o: ../mstl/m_assert.h
+tk_notebook.o: ../mstl/m_exception.h
+tk_notebook.o: ../mstl/m_backtrace.h
+tk_notebook.o: ../mstl/m_exception.ipp
+tk_notebook.o: ../mstl/m_algorithm.h
+tk_notebook.o: ../mstl/m_algobase.h
+tk_notebook.o: ../mstl/m_algobase.ipp
+tk_notebook.o: ../mstl/m_algorithm.ipp
+tk_notebook.o: ../mstl/m_string.h
+tk_notebook.o: ../mstl/m_string.ipp
+tk_notebook.o: tk8.6/tkInt.h
+tk_notebook.o: tk8.6/tkPort.h
+tk_notebook.o: tk8.6/tkUnixPort.h
+tk_notebook.o: tk8.6/tkIntDecls.h
+tk_panedwindow.o: tk_init.h
+tk_panedwindow.o: ../tcl/tcl_base.h
+tk_panedwindow.o: ../tcl/tcl_base.ipp
+tk_panedwindow.o: ../mstl/m_carray.h
+tk_panedwindow.o: ../mstl/m_types.h
+tk_panedwindow.o: ../mstl/m_type_traits.h
+tk_panedwindow.o: ../mstl/m_type_traits.ipp
+tk_panedwindow.o: ../mstl/m_pointer_iterator.h
+tk_panedwindow.o: ../mstl/m_pointer_iterator.ipp
+tk_panedwindow.o: ../mstl/m_iterator.h
+tk_panedwindow.o: ../mstl/m_iterator.ipp
+tk_panedwindow.o: ../mstl/m_carray.ipp
+tk_panedwindow.o: ../mstl/m_utility.h
+tk_panedwindow.o: ../mstl/m_utility.ipp
+tk_panedwindow.o: ../mstl/m_limits.h
+tk_panedwindow.o: ../mstl/m_bit_functions.h
+tk_panedwindow.o: ../mstl/m_bit_functions.ipp
+tk_panedwindow.o: ../mstl/m_uint128_t.h
+tk_panedwindow.o: ../mstl/m_uint128.h
+tk_panedwindow.o: ../mstl/m_assert.h
+tk_panedwindow.o: ../mstl/m_exception.h
+tk_panedwindow.o: ../mstl/m_backtrace.h
+tk_panedwindow.o: ../mstl/m_exception.ipp
+tk_panedwindow.o: ../mstl/m_algorithm.h
+tk_panedwindow.o: ../mstl/m_algobase.h
+tk_panedwindow.o: ../mstl/m_algobase.ipp
+tk_panedwindow.o: ../mstl/m_algorithm.ipp
+tk_panedwindow.o: ../mstl/m_string.h
+tk_panedwindow.o: ../mstl/m_string.ipp
+tk_panedwindow.o: tk8.6/tkInt.h
+tk_panedwindow.o: tk8.6/tkPort.h
+tk_panedwindow.o: tk8.6/tkUnixPort.h
+tk_panedwindow.o: tk8.6/tkIntDecls.h
+tk_png.o: ../util/zlib/zlib.h
+tk_png.o: ../util/zlib/zconf.h
+tk_png.o: tk_init.h
+tk_selection.o: tk_init.h
+tk_selection.o: ../mstl/m_assert.h
+tk_selection.o: ../mstl/m_exception.h
+tk_selection.o: ../mstl/m_backtrace.h
+tk_selection.o: ../mstl/m_types.h
+tk_selection.o: ../mstl/m_exception.ipp
+tk_selection.o: ../mstl/m_string.h
+tk_selection.o: ../mstl/m_string.ipp
+tk_selection.o: ../mstl/m_utility.h
+tk_selection.o: ../mstl/m_type_traits.h
+tk_selection.o: ../mstl/m_type_traits.ipp
+tk_selection.o: ../mstl/m_utility.ipp
+tk_selection.o: ../mstl/m_limits.h
+tk_selection.o: ../mstl/m_bit_functions.h
+tk_selection.o: ../mstl/m_bit_functions.ipp
+tk_selection.o: ../mstl/m_uint128_t.h
+tk_selection.o: ../mstl/m_uint128.h
+tk_session_manager.o: tk_session_manager.h
+tk_twm.o: tk_base.h
+tk_twm.o: tk_base.ipp
+tk_twm.o: ../tcl/tcl_base.h
+tk_twm.o: ../tcl/tcl_base.ipp
+tk_twm.o: ../mstl/m_carray.h
+tk_twm.o: ../mstl/m_types.h
+tk_twm.o: ../mstl/m_type_traits.h
+tk_twm.o: ../mstl/m_type_traits.ipp
+tk_twm.o: ../mstl/m_pointer_iterator.h
+tk_twm.o: ../mstl/m_pointer_iterator.ipp
+tk_twm.o: ../mstl/m_iterator.h
+tk_twm.o: ../mstl/m_iterator.ipp
+tk_twm.o: ../mstl/m_carray.ipp
+tk_twm.o: ../mstl/m_utility.h
+tk_twm.o: ../mstl/m_utility.ipp
+tk_twm.o: ../mstl/m_limits.h
+tk_twm.o: ../mstl/m_bit_functions.h
+tk_twm.o: ../mstl/m_bit_functions.ipp
+tk_twm.o: ../mstl/m_uint128_t.h
+tk_twm.o: ../mstl/m_uint128.h
+tk_twm.o: ../mstl/m_assert.h
+tk_twm.o: ../mstl/m_exception.h
+tk_twm.o: ../mstl/m_backtrace.h
+tk_twm.o: ../mstl/m_exception.ipp
+tk_twm.o: ../mstl/m_algorithm.h
+tk_twm.o: ../mstl/m_algobase.h
+tk_twm.o: ../mstl/m_algobase.ipp
+tk_twm.o: ../mstl/m_algorithm.ipp
+tk_twm.o: ../mstl/m_string.h
+tk_twm.o: ../mstl/m_string.ipp
+tk_twm.o: tk_init.h
+tk_twm.o: ../tcl/tcl_exception.h
+tk_twm.o: ../util/u_exception.h
+tk_twm.o: ../mstl/m_vector.h
+tk_twm.o: ../mstl/m_memblock.h
+tk_twm.o: ../mstl/m_memblock.ipp
+tk_twm.o: ../mstl/m_vector.ipp
+tk_twm.o: ../mstl/m_uninitialized.h
+tk_twm.o: ../mstl/m_uninitialized.ipp
+tk_twm.o: ../mstl/m_construct.h
+tk_twm.o: ../mstl/m_construct.ipp
+tk_twm.o: ../mstl/m_map.h
+tk_twm.o: ../mstl/m_pair.h
+tk_twm.o: ../mstl/m_pair.ipp
+tk_twm.o: ../mstl/m_map.ipp
+tk_twm.o: ../mstl/m_list.h
+tk_twm.o: ../mstl/m_list_node.h
+tk_twm.o: ../mstl/m_list_node.ipp
+tk_twm.o: ../mstl/m_list.ipp
+tk_window_manager.o: tk_init.h
+tk_window_manager.o: ../util/u_base.h
+tk_window_manager.o: ../mstl/m_types.h
+tk_window_manager.o: ../mstl/m_stdio.h
+tk_window_manager.o: ../mstl/m_assert.h
+tk_window_manager.o: ../mstl/m_exception.h
+tk_window_manager.o: ../mstl/m_backtrace.h
+tk_window_manager.o: ../mstl/m_exception.ipp
+tk_x11.o: tk_init.h
+tk_x11.o: ../tcl/tcl_base.h
+tk_x11.o: ../tcl/tcl_base.ipp
+tk_x11.o: ../mstl/m_carray.h
+tk_x11.o: ../mstl/m_types.h
+tk_x11.o: ../mstl/m_type_traits.h
+tk_x11.o: ../mstl/m_type_traits.ipp
+tk_x11.o: ../mstl/m_pointer_iterator.h
+tk_x11.o: ../mstl/m_pointer_iterator.ipp
+tk_x11.o: ../mstl/m_iterator.h
+tk_x11.o: ../mstl/m_iterator.ipp
+tk_x11.o: ../mstl/m_carray.ipp
+tk_x11.o: ../mstl/m_utility.h
+tk_x11.o: ../mstl/m_utility.ipp
+tk_x11.o: ../mstl/m_limits.h
+tk_x11.o: ../mstl/m_bit_functions.h
+tk_x11.o: ../mstl/m_bit_functions.ipp
+tk_x11.o: ../mstl/m_uint128_t.h
+tk_x11.o: ../mstl/m_uint128.h
+tk_x11.o: ../mstl/m_assert.h
+tk_x11.o: ../mstl/m_exception.h
+tk_x11.o: ../mstl/m_backtrace.h
+tk_x11.o: ../mstl/m_exception.ipp
+tk_x11.o: ../mstl/m_algorithm.h
+tk_x11.o: ../mstl/m_algobase.h
+tk_x11.o: ../mstl/m_algobase.ipp
+tk_x11.o: ../mstl/m_algorithm.ipp
+tk_x11.o: ../mstl/m_string.h
+tk_x11.o: ../mstl/m_string.ipp
+tk_x11.o: ../mstl/m_sstream.h
+tk_x11.o: ../mstl/m_ostream.h
+tk_x11.o: ../mstl/m_ios.h
+tk_x11.o: ../mstl/m_ios.ipp
+tk_x11.o: ../mstl/m_ostream.ipp
+tk_x11.o: ../mstl/m_istream.h
+tk_x11.o: ../mstl/m_istream.ipp
+tk_xcursor.o: ./X11/Xcursor/Xcursor.h

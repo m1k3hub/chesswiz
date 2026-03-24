@@ -1,0 +1,253 @@
+<!-- ======================================================================
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+======================================================================= -->
+
+<!-- ======================================================================
+* Copyright: (C) 2012-2013 Gregor Cramer
+======================================================================= -->
+
+<!-- ======================================================================
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+======================================================================= -->
+
+INDEX Dateiauswahldialog
+TITLE Der Dateiauswahldialog
+
+<p>
+Der Dateiauswahldialog besteht hauptsächlich aus sechs Bereichen:
+</p>
+
+<ul>
+  <li><a href="#Navigation">Verzeichnisnavigation</a></li>
+  <li><a href="#Bookmarks">Verweise</a></li>
+  <li><a href="#FileList">Dateianzeige</a></li>
+  <li><a href="#FileName">Dateinameneingabe</a></li>
+  <li><a href="#FilesType">Auswahl der Dateitypen</a></li>
+  <li><a href="#Encoding">Auswahl der Enkodierung</a></li>
+</ul>
+
+<p>
+In der Dateianzeige wird Drag &amp; Drop unterstützt:
+</p>
+
+<ul><li><a href="#DND">Drag &amp; Drop</a></li></ul>
+
+<h3 id="Navigation">Verzeichnisnavigation</h3>
+
+<p>
+Diese Leiste zeigt den Pfad des aktuellen Verzeichnissstandorts an, und erlaubt einen schnellen
+Wechsel zu übergeordneten Verzeichnissen, sowie auch zu untergeordneten Verzeichnissen.
+</p>
+
+<dir><img src="images/file-selection-box-navigation-folder.png" /></dir>
+
+<p>
+Die übergeordneten Verzeichnisse werden durch Anklicken der Verzeichnisschaltflächen
+gewählt.
+</p>
+
+<dir><img src="images/file-selection-box-navigation-arrow.png" /></dir>
+
+<p>
+Die untergeordneten Verzeichnisse werden durch Anklicken der zugehörigen
+Pfeilschaltfläche aufgelistet.
+</p>
+
+<h3 id="Bookmarks">Verweise</h3>
+
+<p>
+Hier kann der Benutzer eigene Verweise auf Verzeichnisse anlegen oder auch wieder löschen.
+Hierzu wird das kontextsensitive Menü oder die Funktionsleiste benutzt.
+Durch Halten der mittleren Maustaste auf einem Verweis wird der zugehörige Pfad angezeigt.
+</p>
+
+<p>
+Das kontextsensitive Menü erlaubt das Hinzufügen des aktuellen Verzeichnisses,
+sofern nicht schon mit dem gleichen Namen vorhanden. Weiterhin ist auch das
+Entfernen oder Umbenennen der eigenen Verweise möglich. Eine alternative
+Methode zum Hinzufügen eines Verweises besteht durch Ziehen und Fallenlassen
+(Drag &amp; Drop) eines Verzeichnisses in diesen Bereich.
+</p>
+
+<p>
+Es gibt voreingestellte Verweise, die nicht löschbar sind:
+</p>
+
+<h4><img src="../images/fsbox-favorites.png" /> %::fsbox::mc::Favorites%</h4>
+
+<p>
+Dieser Ordner enthält die meistbesuchten Verzeichnisse.
+</p>
+
+<h4><img src="../images/fsbox-visited.png" /> %::fsbox::mc::LastVisited%</h4>
+
+<p>
+In diesem Ordner sind die zuletzt besuchten Verzeichnisse enthalten.
+</p>
+
+<h4><img src="../images/fsbox-filesystem.png" /> %::fsbox::mc::FileSystem%</h4>
+
+<p>
+Dies ermöglicht die Direktanwahl der Wurzel des Dateisystems.
+</p>
+
+<h4><img src="../images/fsbox-desktop.png" /> %::fsbox::mc::Desktop%</h4>
+
+<p>
+Dieser Ordner listet alle in <url>~/Desktop</url> angelegten Dateiverknüpfungen auf.
+Dies sind normalerweise die Verknüpfungen, die auf der Arbeitsfläche zu sehen
+sind.
+<note/>Dieser Verweis exisitiert nur wenn das Verzeichnis <url>~/Desktop</url>
+vorhanden ist.
+</p>
+
+<h4><img src="../images/fsbox-trash.png" /> %::fsbox::mc::Trash%</h4>
+
+<p>
+Über diesen Verweis werden die Inhalte des Müllkorbs aufgelistet.
+<note/>Dieser Verweis existiert nicht auf allen Systemen.
+</p>
+
+<h4><img src="../images/fsbox-home.png" /> %::fsbox::mc::Home%</h4>
+
+<p>
+Dies ermöglicht eine Direktanwahl des Heimverzeichnisses.
+</p>
+
+<!--
+<h4>Verweisverwaltung</h4>
+
+<p>
+Mit dem kontextsensitiven Menü, oder alternativ mit der Funktionsleiste, sind folgende
+Operationen zur Verweisverwaltung möglich:
+</p>
+
+<h4><img src="../images/fsbox-add.png" /> %::fsbox::mc::AddBookmark%</h4>
+
+<h4><img src="../images/fsbox-minus.png" /> %::fsbox::mc::RemoveBookmark%</h4>
+
+<h4><img src="../images/fsbox-rename.png" /> %::fsbox::mc::RenameBookmark%</h4>
+
+<h3 id="FileList">Dateianzeige</h3>
+-->
+
+<h3 id="FileList">Dateianzeige</h3>
+
+<p>
+Diese Dateiliste ist auf Scidb-Dateien spezialisiert. D.h. das alle Operation immer auf
+allen zu einer Datenbank gehörigen Dateien ausgeführt werden, obwohl nur die führende Datei
+(i.d.R. die Indexdatei) aufgelistet wird. Auf diese Weise braucht sich der Anwender nicht
+um die Einzelheiten der <a href="Database-Formats.html">Datenbankformate</a> zu kümmern.
+</p>
+
+<p>
+Durch Halten der mittleren Maustaste auf einer Datei werden Informationen über diese
+Datei angezeigt, ein Beispiel:
+</p>
+
+<dir><img src="images/file-selection-box-info.png" /></dir>
+
+<p>
+Die Dateioperationen im einzelnen:
+</p>
+
+<h4><img src="../images/fsbox-delete.png" /> %::fsbox::mc::Delete%</h4>
+
+<p>
+Das Entfernen der selektierten Datenbank. Unter KDE/Unix wird sie in den Müllkorb
+verschoben, ansonsten erfolgt eine physikalische Löschung, die nicht rückgängig gemacht
+werden kann. In jedem Fall muß zuvor diese Operation noch einmal in einem
+Dialog bestätigt werden.
+</p>
+
+<h4><img src="../images/fsbox-rename.png" /> %::fsbox::mc::Rename%</h4>
+
+<p>
+Das Umbenennen der selektierten Datenbank. Diese Operation kann mit <key>Esc</key>
+wirkungslos verlassen werden. Es wird überprüft ob der neue Dateiname
+zulässig ist, dabei werden die Besonderheiten aller unterstützten Betriebssysteme
+berücksichtigt, um einen Austausch auch zwischen den unterschiedlichen
+Betriebssystemen zu unterstützen.
+</p>
+
+<h4><img src="../images/fsbox-duplicate.png" /> %::fsbox::mc::Duplicate%</h4>
+
+<p>
+Die selektierte Datenbank wird dupliziert, allerdings erst nach Eingabe des neuen
+Dateinamens. Diese Operation kann mit <key>Esc</key> abgebrochen werden. Es wird
+keine bereits vorhandene Datenbank überschrieben, ein Überschreiben einer bereits
+vorhandenen Datenbank ist also nicht möglich.
+</p>
+
+<h4><img src="../images/fsbox-archive.png" /> %::menu::mc::CreateArchive%</h4>
+
+<p>
+Die aktuell selektierte Datenbank wird archiviert. Der Archivname wird mit
+einem weiteren Dateiauswahldialog ermittelt.
+</p>
+
+<h4><img src="../images/fsbox-newfolder.png" /> %::fsbox::mc::NewFolder%</h4>
+
+<p>
+Ein neues Unterverzeichnis wird angelegt, aber erst nach Eingabe des
+Verzeichnisnamens. Diese Operation kann mit <key>Esc</key> wirkungslos
+verlassen werden. Es ist nicht möglich, einen bereits vorhandenen
+Eintrag zu überschreiben.
+</p>
+
+<h3 id="FileName">Dateinameneingabe</h3>
+
+<p>
+Dieses Feld erlaubt die direkte Eingabe eines Dateinames, optional mit einer
+Dateiendung für das gewünschte Datenbankformat. Ist kein Datenbankformat
+mittels der Dateiendung definiert, wird automatisch ein Standardformat
+gewählt. Dies ist das erste Format, das unter den aktuell selektierten
+Dateitypen aufgezählt wird.
+</p>
+
+<h3 id="FilesType">Auswahl der Dateitypen</h3>
+
+<p>
+Hier kann die Auswahl der Datenbanktypen eingeschränkt werden. Eine Übersicht
+über die Dateiendungen gibt es auf der Seite über die
+<a href="Database-Formats.html">Datenbankformate</a>.
+</p>
+
+<h3 id="Encoding">Auswahl der Enkodierung</h3>
+
+<dir><img src="images/file-selection-box-encoding.png" /></dir>
+
+<p>
+Die Auswahl der passenden Enkodierung hängt vom Datenbankformat ab.
+Weitere Informationen sind auf der Seite über die
+<a href="Database-Formats.html">Datenbankformate</a> zu finden. In den
+meisten Fällen ist jedoch die voreingestellte automatische Erkennung
+ausreichend.
+</p>
+
+<h3 id="DND">Drag &amp; Drop</h3>
+
+<p>
+Die Dateianzeige unterstützt Drag &amp; Drop (Ziehen und Fallenlassen).
+Auf diese Weise können Datenbanken mit Hilfe eines weiteren Dateimanagers
+verschoben (bzw. kopiert oder verlinkt) werden. Zudem können durch diese
+Unterstützung mehrere Datenbanken geöffnet werden, ohne den Dateiauswahldialog
+jeweils erneut zu öffnen; nämlich durch Ziehen der Datenbank in den
+<a href="Database-Switcher.html">Datenbankumschalter</a>.
+</p>
+
+<annotation>
+Alle Drag&amp;Drop-Operationen wirken auf eine gesamte Datenbank, d.h. auf
+alle zu einer Datenbank gehörigen Dateien
+(<see/> <a href="Database-Formats.html">Datenbankformate</a>).
+</annotation>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html fileencoding=latin1: -->

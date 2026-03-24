@@ -1,0 +1,257 @@
+<!-- **********************************************************************
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* Copyright: (C) 2012-2013 Gregor Cramer
+*********************************************************************** -->
+
+<!-- **********************************************************************
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*********************************************************************** -->
+
+INDEX Intercambiador de bases de datos
+<!-- NEW
+INDEX Compress#Compact
+INDEX Compress database#Compact
+INDEX Administrate database#Administration
+-->
+
+TITLE El intercambiador de bases de datos
+
+<dir><img src="images/database-switcher.png"/></dir>
+
+<p>
+El intercambiador de bases de datos provee una navegación fácil entre las bases de datos.
+La base de datos activa se resaltará con un trasfondo amarillo.
+<NEW>
+All databases not belonging to the <a href="Chess-Variants.html">chess variant</a>
+of the active database are disabled (white background).
+</NEW>
+</p>
+
+<p>
+Al apretar el botón del medio del ratón (i.e. la rueda) se mostrará una caja de
+información.
+</p>
+
+<p>
+Funciones del intercambiador de bases de datos:
+</p>
+
+<ul>
+  <li><a href="#Administration">Administración</a></li>
+<NEW>
+  <li><a href="#Maintenance">%::application::database::mc::FileMaintenance%</a></li>
+</NEW>
+  <li><a href="#DND">Arrastrar &amp; Soltar</a></li>
+</ul>
+
+<h3 id="Administration">Administración</h3>
+
+<p>
+Se encuentra disponible un menú contextual para la administración de la base de datos:
+</p>
+
+<dir><img src="images/database-switcher-menu.png"/></dir>
+
+<p>
+<menuitem>%::application::database::mc::Properties%</menuitem>
+Abre una caja que muestra información variada sobre la base de datos.
+</p>
+
+<p>
+<menuitem>%::export::mc::Export%</menuitem>
+Abre el diálogo <a href="Database-Export-Dialog.html">exportar base</a> para exportar la base
+a otros formatos de base de datos o formatos de documento.
+<NEW>
+<note/>If this database contains several
+<a href="Chess-Variants.html">chess variants</a> (only possible
+in case of <a href="Clipbase.html">Clipbase</a> or PGN files) only the games
+of the active chess variant will be exported.
+</NEW>
+</p>
+
+<p>
+<menuitem>%::application::database::mc::FileImport(pgn)%</menuitem>
+Abre <a href="File-Selection-Dialog.html">elegir archivo</a> para
+la selección de archivos <abbr>PGN</abbr> para importar. Es posible seleccionar múltiples
+archivos <abbr>PGN</abbr> simultáneamente. Las partidas se agregarán al final de la base
+de datos.
+</p>
+
+<NEW>
+<p>
+<menuitem>%::application::database::mc::FileImport(db)%</menuitem>
+The databases for import will be selected with the
+<a href="File-Selection-Dialog.html">file selection dialog</a>.
+All games will be appended at the end of the database. You may
+select multiple databases simultaneously.
+</p>
+</NEW>
+
+<NEW>
+<p>
+<menuitem>%::application::database::mc::FileMaintenance%</menuitem>
+This sub-menu provides functionality for the maintenance of databases
+(<see/> <a href="#Maintenance">%::application::database::mc::FileMaintenance%</a>).
+</p>
+</NEW>
+
+<p>
+<menuitem>%::application::database::mc::FileCreate%</menuitem>
+Crea un <a href="Database-Formats.html#Database-Archive">Archivo de bases de datos</a>.
+Se abrirá <a href="File-Selection-Dialog.html">Elegir archivo</a>
+para seleccionar un nombre de archivo.
+</p>
+
+<p>
+<menuitem>%::application::database::mc::FileClose%</menuitem>
+La base de datos seleccionada se cerrará. Si hay partidas cambiadas en la base que aún no 
+se han guardado se mostrará un aviso de seguridad antes de cerrar la base.
+<note/>No es posible cerrar la <a href="Clipbase.html">Base temporal</a>.
+</p>
+
+<p>
+<menuitem>%::database::switcher::mc::ReadOnly%</menuitem>
+Establecer esta base como de sólo-lectura o editable.
+<NEW><!-- Replace old content:
+Esto sólo es posible para las bases Scidb y Scid
+(<abbr>.sci</abbr>, <abbr>.si4</abbr>, <abbr>.si3</abbr>).
+<note/>Los archivos <abbr>PGN</abbr> y las bases ChessBase siempre son de sólo-lectura.
+<note/>La <a href="Clipbase.html">Base temporal</a> no puede establecerse como de sólo-lectura.
+--><!-- with new content: -->
+This is possibly only for Scidb and Scid databases
+(<abbr>.sci</abbr>, <abbr>.si4</abbr>, <abbr>.si3</abbr>),
+and PGN archives (<abbr>.pgn</abbr>, <abbr>.pgn.gz</abbr>).
+<note/>ChessBase databases and Zip archives (<abbr>.zip</abbr>)
+are always read-only.
+</NEW>
+</p>
+
+<p>
+<menuitem>%::application::database::mc::FileOpen%</menuitem>
+Abre otra base de datos.
+</p>
+
+<p>
+<menuitem>%::application::database::mc::FileOpenRecent%</menuitem>
+Abre una base de datos a través del historial de bases de datos.
+</p>
+
+<p>
+<menuitem>%::application::database::mc::FileNew%</menuitem>
+Crea una nueva base de datos. Sólo pueden crearse bases Scidb y Scid
+(<abbr>.sci</abbr>, <abbr>.si4</abbr>, <abbr>.si3</abbr>).
+<NEW>
+If the database should store games of any
+<a href="Chess-Variants.html">chess variant</a> please use the next menu item.
+</NEW>
+</p>
+
+<NEW>
+<p>
+<menuitem>%::application::database::mc::FileNew%</menuitem>
+Create a new database of any <a href="Chess-Variants.html">chess variant</a>.
+Only Scidb databases can be created in this case.
+</p>
+</NEW>
+
+<p>
+<menuitem>%::application::database::mc::SymbolSize%</menuitem>
+Selecciona el tamaño de los símbolos de base de datos.
+</p>
+
+<NEW>
+<p>
+<menuitem>%::application::database::mc::HelpSwitcher%</menuitem>
+Open the help dialog about the database switcher.
+</p>
+</NEW>
+
+<dir><img src="images/clipbase-menu.png" name="Empty-Clipbase"/></dir>
+
+<menuitem>
+%::application::database::mc::EmptyClipbase%</menuitem>
+<note/>Esta entrada de menú sólo se proporcionará para la
+<a href="Clipbase.html">Base temporal</a>.
+
+<NEW>
+<h3 id="Maintenance">%::application::database::mc::FileMaintenance%</h3>
+
+<p>
+This sub-menu provides functionality for the maintenance of databases.
+</p>
+</NEW>
+
+<ul><img src="images/database-switcher-menu-maintenance.png"/></ul>
+
+<p>
+<menuitem>%::application::database::mc::ChangeIcon%</menuitem>
+Selecciona un ícono para esta base.
+<note/>Esto no es posible para la <a href="Clipbase.html">Base temporal</a>.
+</p>
+
+<p>
+<menuitem>%::application::database::mc::EditDescription%</menuitem>
+Crea o cambia la descripción para esta base.
+<note/>Esto no es posible para la <a href="Clipbase.html">Base temporal</a>.
+</p>
+
+<NEW>
+<p>
+<menuitem>%::application::database::mc::FileStripMoveInfo%</menuitem>
+Remove a selection of move information (for example
+"%::application::database::mc::MoveInfo(elapsedMoveTime)%") from database.
+This is useful, for example, to remove subsequently unwanted information (here
+"%::application::database::mc::MoveInfo(elapsedMilliSecs)%") after import
+of FICS games.
+</p>
+
+<p>
+<menuitem>%::application::database::mc::FileStripPGNTags%</menuitem>
+Not yet implemented.
+</p>
+</NEW>
+
+<p id="Compact">
+<menuitem>%::application::database::mc::FileCompact%</menuitem>
+Compactará la base de datos actual; esto significa que todas las partidas
+marcadas para su eliminación se borrarán físicamente y no podrá revertir
+esta acción. Este ítem no está habilitado si la base de datos no contiene
+ninguna partida con un marcador de eliminación.
+</p>
+
+<h3 id="DND">Arrastrar &amp; Soltar</h3>
+
+<p>
+Una base de datos puede abrirse soltando una lista URI. 
+Si se arrastra una lista URI (lista de archivos) &ndash; o un único archivo &ndash; sobre el
+intercambiador de bases de datos, un trasfondo coloreado indicará que es posible soltar dicho ítem. 
+De esta manera usted podrá abrir bases de datos con la ayuda de un administrador de archivos externo.
+</p>
+
+<NEW>
+<p>
+The list of files may also be dropped over a database field. In this case 
+the games will be copied into the destination database.
+</p>
+
+<p>
+To copy all games of one database to another (optional for only one
+<a href="Chess-Variants.html">chess variant</a>), drag the games while holding
+the left mouse button and drop the games into the destination field. It is
+required that the destination database is writeable and not disabled.
+This is an important way to manage and copy games within databases.
+</p>
+</NEW>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html: -->

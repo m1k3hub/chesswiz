@@ -1,0 +1,133 @@
+set Index {
+  { A
+    {
+      {{Administrate database} {Database-Switcher.html} {Administration}}
+      {{Antichess} {Chess-Variants.html} {}}
+      {{Archive} {Database-Formats.html} {Database-Archive}}
+    }
+  }
+  { B
+    {
+      {{Board Setup} {Board-Setup-Dialog.html} {}}
+      {{Browsing games} {Game-Browser.html} {}}
+    }
+  }
+  { C
+    {
+      {{Chess Query Language} {CQL-Index.html} {}}
+      {{Chess variants} {Chess-Variants.html} {}}
+      {{Clipbase} {Clipbase.html} {}}
+      {{Command line options} {Command-Line-Options.html} {}}
+      {{Compact database} {Database-Switcher.html} {Compact}}
+      {{Compound square designators (CQL)} {CQL-Square-Designators.html} {compound}}
+      {{Contact information} {Contact-Information.html} {}}
+      {{CQL Examples} {CQL-Examples.html} {}}
+      {{CQL File format} {CQL-File-Format.html} {}}
+      {{CQL Introduction} {CQL-Index.html} {}}
+      {{CQL Match List} {CQL-Match-List.html} {}}
+      {{CQL Position List} {CQL-Position-List.html} {}}
+      {{CQL Relation List} {CQL-Relation-List.html} {}}
+      {{CQL Syntax} {CQL-Syntax.html} {}}
+      {{CQL Tagging} {CQL-Tagging.html} {}}
+      {{CQL Transformations} {CQL-Transformations.html} {}}
+      {{Crazyhouse} {Chess-Variants.html} {}}
+    }
+  }
+  { D
+    {
+      {{Database archive} {Database-Formats.html} {Database-Archive}}
+      {{Database formats} {Database-Formats.html} {}}
+      {{Database switcher} {Database-Switcher.html} {}}
+      {{Database write protection} {Write-Protect-Database.html} {}}
+    }
+  }
+  { E
+    {
+      {{ECO-Code} {ECO-Code.html} {}}
+      {{Encyclopedia of Chess Openings} {ECO-Code.html} {}}
+    }
+  }
+  { F
+    {
+      {{FEN (Forsyth-Edwards Notation)} {FEN.html} {}}
+      {{File formats} {Database-Formats.html} {}}
+      {{File Selection Dialog} {File-Selection-Dialog.html} {}}
+    }
+  }
+  { G
+    {
+      {{Game Browser} {Game-Browser.html} {}}
+      {{Game markers} {Game-Flags.html} {}}
+      {{Giveaway} {Chess-Variants.html} {}}
+    }
+  }
+  { H
+    {
+      {{Homepage} {Contact-Information.html} {Homepage}}
+    }
+  }
+  { K
+    {
+      {{King-of-the-Hill} {Chess-Variants.html} {}}
+    }
+  }
+  { L
+    {
+      {{Losers} {Chess-Variants.html} {}}
+    }
+  }
+  { M
+    {
+      {{Markers} {Game-Flags.html} {}}
+      {{Match List (CQL)} {CQL-Match-List.html} {}}
+    }
+  }
+  { N
+    {
+      {{NAG annotation values} {NAG-Comments.html} {}}
+      {{Normal Chess} {Chess-Variants.html} {}}
+      {{Numerical annotation glyph} {NAG-Comments.html} {}}
+    }
+  }
+  { P
+    {
+      {{Pattern matching} {Pattern-Matching.html} {}}
+      {{Percentage range specifiers (CQL)} {CQL-Percentage-Specifiers.html} {}}
+      {{Piece designators (CQL)} {CQL-Piece-Designators.html} {}}
+      {{Position List (CQL)} {CQL-Position-List.html} {}}
+    }
+  }
+  { R
+    {
+      {{Range specifiers (CQL)} {CQL-Range-Specifiers.html} {}}
+      {{Relation List (CQL)} {CQL-Relation-List.html} {}}
+    }
+  }
+  { S
+    {
+      {{Shredder FEN} {FEN.html} {}}
+      {{Square designators (CQL)} {CQL-Square-Designators.html} {}}
+      {{Suicide} {Chess-Variants.html} {}}
+    }
+  }
+  { T
+    {
+      {{Tagging (CQL)} {CQL-Tagging.html} {}}
+      {{Three-check Chess} {Chess-Variants.html} {}}
+      {{Toolbars} {Toolbar-Usage.html} {}}
+      {{Transformations (CQL)} {CQL-Transformations.html} {}}
+    }
+  }
+  { W
+    {
+      {{Website} {Contact-Information.html} {Homepage}}
+      {{Write protection of databases} {Write-Protect-Database.html} {}}
+      {{Write protection of PGN archives} {Write-Protect-Database.html} {}}
+    }
+  }
+  { X
+    {
+      {{X-FEN (Extended Forsyth-Edwards Notation)} {FEN.html} {}}
+    }
+  }
+}

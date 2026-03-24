@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<!-- Generated from tcl/help/de/Command-Line-Options.txt -->
+
+<html xmlns='http://www.w3.org/1999/xhtml' xml:lang='en' lang='de'>
+<head>
+  <meta http-equiv="content-type"
+           content="text/html; charset=utf-8" />
+  <meta http-equiv="content-language"
+           content="de" />
+  <meta http-equiv="content-style-type"
+           content="text/css" />
+
+  <meta name="author"
+     content="scidb.sourceforge.net" />
+  <meta name="generator"
+     content="scidb.sourceforge.net" />
+  <meta name="description"
+     content="Scidb - Help Page" />
+
+  <link rel="icon"
+       href="http://scidb.sourceforge.net/favicon.ico"
+       type="image/x-icon" />
+  <link rel="shortcut icon"
+       href="http://scidb.sourceforge.net/favicon.ico" />
+  <link rel="stylesheet"
+       type="text/css"
+      media="screen"
+		 href="../styles/help.css" />
+
+  <title>Scidb - Hilfe: Kommandozeilenoptionen</title>
+</head>
+
+<body>
+
+<div class="title">
+  <h1 class="title">Kommandozeilenoptionen</h1>
+</div>
+
+<p>
+Auf der Kommandozeile stehen folgende Optionen bei Programmstart zur Verfügung:
+</p>
+
+<table class="standard">
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--</code>
+    </td>
+    <td class="standard-justification">
+      Nach dieser Option können nur noch Dateinamen folgen. Dies ermöglicht das Dateinamen
+      mit einem Bindestrich beginnen können und nicht mit einer Option verwechselt werden.
+    </td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--help</code>
+    </td>
+    <td class="standard">Anzeige der Optionsmöglichkeiten (in Englisch) und sofortiges Programmende.</td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--show-board</code>
+    </td>
+    <td class="standard">Zur Brettregisterkarte wechseln sofort nach Programmstart.</td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--re-open</code>
+    </td>
+    <td class="standard-justification">
+      Alle Datenbanken, die beim Schliessen der letzten Sitzung noch offen waren, sofort
+      nach Programmstart laden.
+    </td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--fast-load</code>
+    </td>
+    <td class="standard-justification">
+      Nur die ausschliesslich erforderlichen Dateien nach Programmstart laden. Dies ermöglicht
+      einen deutlich schnelleren Programmstart. Diese Option sollte i.A. nicht benutzt werden,
+      sie dient vornehmlich dem Testen.
+    </td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--first-time</code>
+    </td>
+    <td class="standard-justification">
+      Das Programm wird gestartet wie beim ersten Mal, d.h. die Benutzeroptionen werden
+      zurückgesetzt, die Wiederherstellungsdateien werden gelöscht, und die Standard-Brettthemen
+      werden erneut in das benutzereigene Verzeichnis kopiert, sofern sie nicht modifiziert
+      wurden. Diese Option kann nützlich sein wenn der Programmstart aufgrund eines Fehlers in der
+      Optionendatei fehlschlägt.
+    </td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--elo-only</code>
+    </td>
+    <td class="standard">
+      Keine weiteren Rating-Dateien laden ausser dem ELO-Rating. Dies beschleunigt den
+      Programmstart.
+    </td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--print-recovery-files</code>
+    </td>
+    <td class="standard-justification">
+      Zeige die Wiederherstellungsdateien, die in der letzten Sitzung aufgrund
+      ungespeicherter Partien erzeugt wurden, und terminiere das Programm.
+      Möglicherweise existieren keine und es werden dann auch keine angezeigt.
+    </td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--delete-recovery-files</code>
+    </td>
+    <td class="standard-justification">
+      Die aus der letzten Sitzung existierenden Wiederherstellungsdateien,
+      die ungespeicherte Partien enthalten, löschen und das Prgramm terminieren.
+      Es erfolgt keine physikalische Löschung, mit der Option
+      <span style='white-space:nowrap;'><code>--recover-old</code></span> können sie wiederbenutzt werden.
+    </td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--dont-recover</code>
+    </td>
+    <td class="standard-justification">
+      Das Programm starten ohne Wiederherstellungsdateien, die ungespeicherte
+      Partien enthalten, aus der letzten Sitzung zu laden. Diese Dateien werden
+      nicht physikalisch gelöscht, mit der Option
+      <span style='white-space:nowrap;'><code>--recover-old</code></span> können sie wiederbenutzt werden.
+    </td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--recover-old</code>
+    </td>
+    <td class="standard-justification">
+      Ungespeicherte Partien aus älteren Sitzungen wiederherstellen. Die
+      ungespeicherten Partien aus der letzten Sitzung werden nicht mehr
+      berücksichtigt.
+    </td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--update-player-photos</code>
+    </td>
+    <td class="standard-justification">
+      Spielerphotos updaten bzw. installieren. Danach wird das Programm beendet.
+      <br/><br/>
+      Grundsätzlich wird empfohlen, den Update bzw. die Installation über
+      die grafische Benutzeroberfläche auszuführen.
+      <br/><br/>
+      Unix:
+      Bei einem Aufruf mit Superuser-Berechtigung wird der Update auf dem
+      gemeinsamen Verzeichnis durchgeführt (i.d.R.
+      <code>/usr/</code>&#8203;<code>local/</code>&#8203;<code>share/</code>&#8203;<code>scidb-beta/</code>).
+      Ansonsten erfolgt der Update im Benutzerverzeichnis
+      <code>~/</code><code>.scidb-beta/</code>.
+    </td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--single-process</code>
+    </td>
+    <td class="standard-justification">
+      Erzwingt eine weitere Scidb-Instanz bei Programmstart. Diese Option
+      dient nur dem Testen und sollte nicht verwendet werden.
+    </td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--reset-fonts</code>
+    </td>
+    <td class="standard-justification">
+      Alle Zeichensätze werden auf die Standardgröße zurückgesetzt.
+    </td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>--force-grab</code>
+    </td>
+    <td class="standard-justification">
+      Wird das Programm in einem Debugger gestartet werden Grabs automatisch
+      unterdrückt, denn diese können zum Einfrieren des Bildschirms führen.
+      Mit dieser Option werden die Grabs auch im Debugger zugelassen.
+    </td>
+  </tr>
+</table>
+
+<p>
+Die folgenden Optionen werden von der Tk-Bibliothek erkannt:
+</p>
+
+<table class="standard">
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>-geometry GEOMETRY</code>
+    </td>
+    <td class="standard-justification">
+      Benutze die Geometrieangaben für das Hauptfenster. Beispielsweise hat das
+      Hauptfenster mit der Angabe <span style='white-space:nowrap;'><code>-geometry</code></span>
+      <span style='white-space:nowrap;'><code>600x800+20+10</code></span> die Größe 600x800 und wird an der
+      Bildschirmposition mit den Koordinaten 20,10 positioniert.
+    </td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>-display DISPLAY</code>
+    </td>
+    <td class="standard-justification">
+      Benutze das mit DISPLAY angegebene Display.
+    </td>
+  </tr>
+  <tr>
+    <td class="standard" style="white-space:nowrap;" valign="top">
+        <code>-sync</code>
+    </td>
+    <td class="standard-justification">
+      Benutze den Synchron-Modus für den Display-Server.
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

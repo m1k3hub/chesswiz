@@ -1,0 +1,14 @@
+.svn/
+*.o
+*.a
+*.so
+*.so.*
+*.lo
+*.la
+*.pyc
+*.pyo
+__pycache__/
+*.swp
+*.swo
+*~
+.DS_Store

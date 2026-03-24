@@ -1,0 +1,73 @@
+<!-- ======================================================================
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+======================================================================= -->
+
+<!-- ======================================================================
+* Copyright: (C) 2012-2013 Gregor Cramer
+======================================================================= -->
+
+<!-- ======================================================================
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+======================================================================= -->
+
+INDEX Markers
+INDEX Game markers
+TITLE Game markers
+
+<p>
+A <em>marker</em> is an indicator of some chess characteristic that can be turned
+on or off for each game in the database. There are 21 user-settable markers that
+markers that one may set for each game. These markers will be used used mainly as
+part of complex searches in the database, or for game list filter purposes. Since all
+the user-settable markers have no significance, you can use them for any purpose that
+suits your needs.
+</p>
+
+<p>
+The markers and their symbols in detail:
+</p>
+
+INCLUDE ../Game-Flags.txt
+
+<p>
+The last two markers are not user-settable, they will be set automatically if a
+game contains illegal castlings or even other illegal moves (for example the king
+is moving into check) within the main line. If a game is marked with both only
+the marker <em>%::gametable::mc::GameFlags(I)%</em> will be displayed.
+</p>
+
+<p>
+There are also special markers which are not user-settable, the deletion
+marker, the changed marker, and the newly added marker. A game marked with the
+deletion marker will be removed when next the database is compacted
+(<see/> <a href="Database-Switcher.html#Compact">Database switcher:
+%::application::database::mc::FileCompact%</a>). This marker will be retained
+after closing the database. The changes marker means that this game has been
+changed (and saved), and the newly added marker is denoting a newly added game.
+Both markers will be lost as soon as the database is closed.
+</p>
+
+<p>
+When editing games from Scid databases (.si4) Scidb is supporting the six special
+user defined markers (1..6). But it is recommended not to use these markers, because
+unsolvable problems will ocurr when copying games to other databases; even the
+application Scid cannot solve these problems.
+</p>
+
+<p>
+When reading ChessBase databases both markers
+<em>%::gametable::mc::GameFlags(s)%</em> and
+<em>%::gametable::mc::GameFlags(t)%</em>
+will be mapped to the common marker <em>%::gametable::mc::GameFlags(?)%</em>.
+Scidb does not distinguish between these two characteristics.
+</p>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html: -->

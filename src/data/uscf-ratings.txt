@@ -1,0 +1,103 @@
+####################################################################
+# USCF Rating, December 2012
+####################################################################
+1	Kamsky, Gata (12528459)	NY	USA	2845	
+2	Nakamura, Hikaru (12641216)	MO	USA	2834	
+3	Gareev, Timur (13262157)	TX	USA	2756	
+4	Onischuk, Alexander (12625186)	TX	USA	2747	
+5	Akobian, Varuzhan (12740522)	KS	USA	2701	
+6	Lenderman, Aleksandr (12787646)	NY	USA	2701	
+7	Stripunsky, Alexander (12715435)	NJ	USA	2694	
+8	Robson, Ray (12847250)	FL	USA	2691	
+9	Shankland, Sam (12852765)	CA	USA	2684	
+10	Shabalov, Alexander (12544264)	PA	USA	2682	
+11	Seirawan, Yasser (10509459)	WA	USA	2677	
+12	Kaidanov, Gregory (12543746)	KY	USA	2670	
+13	Ehlvest, Jaan (12514557)	NY	USA	2665	
+14	Hess, Robert L (12749774)	NY	USA	2661	
+15	Christiansen, Larry M (10460921)	MA	USA	2652	
+16	Shulman, Yury (12741541)	IL	USA	2652	
+17	Ivanov, Alexander (12513936)	MA	USA	2639	
+18	Becerra, Julio J (12778049)	FL	USA	2632	
+19	Arnold, Marc Tyler (12770589)	NY	USA	2626	
+20	Ramirez, Alejandro (12688291)	TX	USA	2620	
+21	Alburt, Lev (12078790)	NY	USA	2617	
+22	Sammour-Hasbun, Jorge E (12496662)	RI	USA	2616	
+23	Benjamin, Joel (10102511)	NJ	USA	2610	
+24	Sevillano, Enrico (12650696)	CA	USA	2608	
+25	Kudrin, Sergey (11257585)	CT	USA	2605	
+26	Perelshteyn, Eugene (12627196)	MA	USA	2599	
+27	Ibragimov, Ildar (12576446)	CT	USA	2595	
+28	Dlugy, Maxim (11435629)	NJ	USA	2594	
+29	Goldin, Alexander (12556822)	KY	USA	2594	
+30	Gulko, Boris (12473035)	NJ	USA	2591	
+31	Norowitz, Yaacov (12566496)	NJ	USA	2590	
+32	Finegold, Benjamin P (11264417)	MO	USA	2587	
+33	Yang, Darwin (12945617)	TX	USA	2587	
+34	De Firmian, Nick E (10469007)	CA	USA	2575	
+35	Holt, Conrad (12937909)	KS	USA	2571	
+36	Ludwig, Daniel J (12717400)	TX	USA	2566	
+37	Friedel, Joshua Edward (12593986)	NH	USA	2565	
+38	Gurevich, Dmitry (12212800)	IL	USA	2560	
+39	Shen, Victor C (12809707)	NJ	USA	2553	
+40	Naroditsky, Daniel A (12892910)	CA	USA	2553	
+41	Vigorito, David (12426279)	MA	USA	2547	
+42	Fishbein, Alexander (12077910)	NJ	USA	2546	
+43	Khachiyan, Melikset (12827326)	CA	USA	2545	
+44	Molner, Mackenzie S (12662506)	AZ	USA	2544	
+45	Rohde, Michael A (10047871)	NY	USA	2543	
+46	Hungaski, Robert (12790312)	NY	USA	2542	
+47	Esserman, Marc (20008479)	MA	USA	2542	
+48	Yermolinsky, Alex (12534917)	SD	USA	2541	
+49	Shahade, Greg (20013106)	PA	USA	2538	
+50	Perez, Robert (12913092)	FL	USA	2533	
+51	Zatonskih, Anna (12873912)	NY	USA	2526	
+52	Browne, Walter S (10488192)	CA	USA	2524	
+53	Krush, Irina (12543137)	NY	USA	2521	
+54	Foygel, Igor (12563122)	MA	USA	2521	
+55	Zierk, Steven C (12796611)	MA	USA	2519	
+56	Sagalchik, Gennady (12565070)	NY	USA	2516	
+57	Bryant, John Daniel (12796667)	CA	USA	2510	
+58	Gonzalez, Renier (12843801)	FL	USA	2510	
+59	Smith, Bryan G (12602587)	PA	USA	2507	
+60	Bartell, Thomas (12559979)	PA	USA	2505	
+61	Altounian, Levon (12625289)	AZ	USA	2505	
+62	Enkhbat, Tegshsuren (12723905)	MD	USA	2503	
+63	Ippolito, Dean (12445752)	NJ	USA	2498	
+64	Sarkar, Justin (12561884)	NY	USA	2498	
+65	Nagle, Sean M (12571512)	MN	USA	2498	
+66	Lakdawala, Cyrus F (11486738)	CA	USA	2497	
+67	Fedorowicz, John P (10604737)	NY	USA	2495	
+68	Bartholomew, John David (12718516)	MN	USA	2493	
+69	Bonin, Jay Richard (10098327)	NY	USA	2488	
+70	Ashley, Maurice A (12357030)	NY	USA	2486	
+71	Kiewra, Keaton (12642647)	TX	USA	2486	
+72	Palatnik, Semion (12542096)	MD	USA	2472	
+73	Wang, Philip Xiao (12558771)	CA	USA	2470	
+74	Zilberstein 126, Dmitry (12610669)	CA	USA	2468	
+75	Sharma, Arun (12525113)	CA	USA	2467	
+76	Young, Gregory (12888228)	CA	USA	2467	
+77	Bercys, Salvijus (12909023)	NY	USA	2466	
+78	Balandin, Alex (12596603)	MN	USA	2459	
+79	Rensch, Daniel M (12659833)	AZ	USA	2458	
+80	Sher, Miron (12717615)	NY	USA	2458	
+81	Mulyar, Michael A (12524770)	CO	USA	2457	
+82	Yedidia, Jonathan (10141591)	MA	USA	2454	
+83	Lee, Michael (12858009)	WA	USA	2453	
+84	Sevian, Samuel (13493815)	CA	USA	2451	
+85	Stein, Alan R (12499885)	NY	USA	2449	
+86	Coleman, Teddy (12662799)	NY	USA	2447	
+87	Gulamali, Kazim (12680172)	GA	USA	2447	
+88	Rizzitano, James A (10019656)	MA	USA	2446	
+89	Getz, Alec (12805454)	NY	USA	2443	
+90	Heimann, Mark (12802899)	PA	USA	2441	
+91	Kislik, Erik A (12850976)	CA	USA	2441	
+92	Zelner, Alexander (12400396)	FL	USA	2439	
+93	Braylovskiy, Grigoriy (12588419)	NY	USA	2439	
+	Banawa, Joel (12922625)	AZ	USA	2439	
+	95	Troff, Kayden W (12939342)	UT	USA	2438	
+	96	Kleiman, Jake (12683681)	TN	USA	2436	
+	97	Ostrovskiy, Aleksandr (12881112)	NY	USA	2435	
+		Fernandez, Daniel (20058682)	TX	USA	2435	
+		99	Peters, Jack (10011876)	CA	USA	2434	
+			Xiong, Jeffery (13648621)	TX	USA	2434

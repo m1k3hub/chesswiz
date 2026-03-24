@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<!-- Generated from tcl/help/en/CQL-Piece-Designators.txt -->
+
+<html xmlns='http://www.w3.org/1999/xhtml' xml:lang='en' lang='en'>
+<head>
+  <meta http-equiv="content-type"
+           content="text/html; charset=utf-8" />
+  <meta http-equiv="content-language"
+           content="en" />
+  <meta http-equiv="content-style-type"
+           content="text/css" />
+
+  <meta name="author"
+     content="scidb.sourceforge.net" />
+  <meta name="generator"
+     content="scidb.sourceforge.net" />
+  <meta name="description"
+     content="Scidb - Help Page" />
+
+  <link rel="icon"
+       href="http://scidb.sourceforge.net/favicon.ico"
+       type="image/x-icon" />
+  <link rel="shortcut icon"
+       href="http://scidb.sourceforge.net/favicon.ico" />
+  <link rel="stylesheet"
+       type="text/css"
+      media="screen"
+		 href="../styles/help.css" />
+
+  <title>Scidb - Help: CQL - Piece designators</title>
+</head>
+
+<body>
+
+<div class="title">
+  <h1 class="title">CQL - Piece designators</h1>
+</div>
+
+<p>
+A piece designator is a string that denotes a set of pieces, each of which
+can be on a set of squares. A piece designator comprises a piecetype
+designator followed by a square designator. The piecetype designator denotes
+a set of pieces and the square designator denotes a set of squares. The set
+of pieces may include the "empty square piece" which denotes an empty square.
+</p>
+
+<p>
+A piece designator matches a position if there is a square in the set of
+squares denoted by that piece designator which contains a piece in the set
+of piecetypes denoted by the piece designator.
+</p>
+
+<ul>
+  <li><a href="#examples">Examples of piece designators</a></li>
+  <li><a href="#allowed">Allowed piecetype designators</a></li>
+  <li><a href="#promoted">Promoted pieces</a></li>
+  <li><a href="#tagging">Tagging piecetype designators</a></li>
+</ul>
+
+<h2 id="examples">Examples of piece designators</h2>
+
+<p>
+The piece designator <span style='white-space:nowrap;'><code><span class='piece'>&#x2656;</span>a2</code></span> denotes a white rook on a2. The
+piecetype designator is <span style='white-space:nowrap;'><code><span class='piece'>&#x2656;</span></code></span> and the square designator is
+<span style='white-space:nowrap;'><code>a2</code></span>. It will match any position with a white rook on a2.
+</p>
+
+<p>
+The piece designator <span style='white-space:nowrap;'><code><span class='piece'>&#x265d;</span>c1</code></span> denotes a black bishop on c1. The
+piecetype designator is <span style='white-space:nowrap;'><code><span class='piece'>&#x265d;</span></code></span> and the square designator is
+<span style='white-space:nowrap;'><code>c1</code></span>. It will match any position with a black bishop on c1.
+</p>
+
+<p>
+The piece designator <span style='white-space:nowrap;'><code>[<span class='piece'>&#x2656;</span><span class='piece'>&#x265d;</span>]d1</code></span> denotes either a white rook or a
+black bishop on d1. The piecetype designator is <span style='white-space:nowrap;'><code>[<span class='piece'>&#x2656;</span><span class='piece'>&#x265d;</span>]</code></span> and the
+square designator is <span style='white-space:nowrap;'><code>d1</code></span>. It will match any position that has either
+a white rook or a black bishop on d1.
+</p>
+
+<p>
+The piece designator <span style='white-space:nowrap;'><code>[<span class='piece'>&#x2655;</span><span class='piece'>&#x265c;</span>][d1,h3]</code></span> denotes either a white queen or
+a black rook on either d1 or h3. The piecetype designator is <span style='white-space:nowrap;'><code>[<span class='piece'>&#x2655;</span><span class='piece'>&#x2656;</span>]</code></span>
+and the square designator is <span style='white-space:nowrap;'><code>[d1,h3]</code></span>. It will match any position
+that has either a white queen or a black rook on either d1 or h3. (Of course,
+the position can also have a white queen or black rook on both d1 and h3).
+</p>
+
+<h2 id="allowed">Allowed piecetype designators</h2>
+
+<p>
+These are the allowed piecetype designators:
+</p>
+
+<div class='box'>
+  <p><b>Standard piecetype designators</b></p>
+  <table>
+    <tr><td><span style='white-space:nowrap;'><code><span class='piece'>&#x2654;</span>&emsp;</code></span></td><td>white king</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='piece'>&#x265a;</span>&emsp;</code></span></td><td>black king</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='piece'>&#x2655;</span>&emsp;</code></span></td><td>white queen</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='piece'>&#x265b;</span>&emsp;</code></span></td><td>black queen</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='piece'>&#x2656;</span>&emsp;</code></span></td><td>white rook</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='piece'>&#x265c;</span>&emsp;</code></span></td><td>black rook</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='piece'>&#x2657;</span>&emsp;</code></span></td><td>white bishop</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='piece'>&#x265d;</span>&emsp;</code></span></td><td>black bishop</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='piece'>&#x2658;</span>&emsp;</code></span></td><td>white knight</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='piece'>&#x265e;</span>&emsp;</code></span></td><td>black knight</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='piece'>&#x2659;</span>&emsp;</code></span></td><td>white pawn</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='piece'>&#x265f;</span>&emsp;</code></span></td><td>black pawn</td></tr>
+  </table>
+
+  <p><b>Additional piecetype designators</b></p>
+  <table>
+    <tr><td><span style='white-space:nowrap;'><code>.&emsp;</code></span></td><td>empty square</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='cql' title='Any white piece'>&#x25cb;</span>&emsp;</code></span></td><td>any white piece</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='cql' title='Any black piece'>&#x25cf;</span>&emsp;</code></span></td><td>any black piece</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='cql' title='White major piece'>&#x25b3;</span>&emsp;</code></span></td><td>white major piece</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='cql' title='Black major piece'>&#x25b2;</span>&emsp;</code></span></td><td>black major piece</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='cql' title='White minor piece'>&#x25bd;</span>&emsp;</code></span></td><td>white minor piece</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='cql' title='Black minor piece'>&#x25bc;</span>&emsp;</code></span></td><td>black minor piece</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code><span class='cql' title='Any piece at all'>&#x25d1;</span>&emsp;</code></span></td><td>any piece at all</td></tr>
+    <tr><td><span style='white-space:nowrap;'><code>?&emsp;</code></span></td><td>any piece or an empty square</td></tr>
+   </table>
+   <p></p>
+</div>
+
+<h2 id="promoted">Promoted pieces</h2>
+
+<p>
+Des weiteren gibt es noch eine Kennzeichnung von Figuren, die aus einer Bauernumwandlung
+hervorgingen: <span style='white-space:nowrap;'><code>[<span class='piece'>&#x2655;</span>~<span class='piece'>&#x265b;</span>~]</code></span> kennzeichnet eine weiÃe oder schwarze Dame, die aus
+einer Bauernumwandlung hervorging. Es kann auch explizit spezifiziert werden, daÃ eine
+Figur nicht aus einer Bauerumwandlung hervorging, in diesem Fall wird
+<span style='white-space:nowrap;'><code>[<span class='piece'>&#x2655;</span>~~<span class='piece'>&#x265b;</span>~~]</code></span> verwendet. (Die Kennzeichnung von verwandelten Figuren ist
+insbesondere fÃ¼r die Schachformen Drop Chess und Bughouse Chess
+interessant, aber auch fÃ¼r alle anderen Schachformen verwendbar.)
+</p>
+
+<h3>Beispiele</h3>
+
+<table class="stripes">
+  <tr valign="top" class="stripes">
+    <td class="left"><span style='white-space:nowrap;'><code><span class='cql' title='Any piece at all'>&#x25d1;</span>~</code></span></td>
+     <td class="right">kennzeichnet eine beliebige, aus einer Bauerumwandlung
+        hervorgegangene Figur</td>
+  </tr>
+  <tr valign="top">
+    <td class="left"><span style='white-space:nowrap;'><code>[<span class='piece'>&#x2655;</span>~<span class='piece'>&#x265b;</span>~][a1,h1,a8,h8]</code></span></td>
+     <td class="right">kennzeichnet eine Dame auf einem Eckfeld, die aus einer
+        Bauernumwandlung hervorging,</td>
+  </tr>
+  <tr valign="top" class="stripes">
+    <td class="left"><span style='white-space:nowrap;'><code><span class='cql' title='Any piece at all'>&#x25d1;</span>~~</code></span></td>
+     <td class="right">kennzeichnet eine beliebige Figur, die nicht aus einer
+     Bauernumwandlung hervorgegangen ist</td>
+  </tr>
+  <tr valign="top">
+    <td class="left"><span style='white-space:nowrap;'><code>[<span class='piece'>&#x2655;</span>~~<span class='piece'>&#x265b;</span>~~][a1,h1,a8,h8]</code></span></td>
+     <td class="right">kennzeichnet eine Dame auf einem Eckfeld, die nicht aus einer
+        Bauernumwandlung hervorging,</td>
+  </tr>
+</table>
+
+<h2 id="tagging">Tagging piecetype designators</h2>
+
+<p>
+Anywhere a piecetype designator may occur, a tag name preceded by a
+<span style='white-space:nowrap;'><code>$</code></span> may occur. This piecetype represents the exact piece
+represented by the named tag. For more information, see the section on
+<a href="CQL-Tagging.html">tagging</a>.
+</p>
+
+</body>
+</html>

@@ -1,0 +1,62 @@
+// ======================================================================
+// Author : $Author$
+// Version: $Revision: 1523 $
+// Date   : $Date: 2018-09-17 08:11:58 -0400 (Mon, 17 Sep 2018) $
+// Url    : $URL$
+// ======================================================================
+
+// ======================================================================
+//    _/|            __
+//   // o\         /    )           ,        /    /
+//   || ._)    ----\---------__----------__-/----/__-
+//   //__\          \      /   '  /    /   /    /   )
+//   )___(     _(____/____(___ __/____(___/____(___/_
+// ======================================================================
+
+// ======================================================================
+// Copyright: (C) 2009-2013 Gregor Cramer
+// ======================================================================
+
+// ======================================================================
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+// ======================================================================
+
+#ifndef _tcl_database_included
+#define _tcl_database_included
+
+#include "db_common.h"
+
+#include "m_pair.h"
+
+extern "C" { struct Tcl_Interp; }
+
+namespace db { class Database; }
+namespace db { class GameInfo; }
+namespace db { class NamebasePlayer; }
+namespace db { class TagSet; }
+
+namespace tcl
+{
+	namespace db
+	{
+		typedef mstl::pair< ::db::rating::Type, ::db::rating::Type> Ratings;
+
+		int getGameInfo(
+			::db::Database const& db,
+			unsigned index,
+			Ratings const& ratings,
+			::db::move::Notation notation);
+		int getPlayerStats(::db::Database const& db, ::db::NamebasePlayer const& player);
+		int getTags(::db::TagSet const& tags, bool userSuppliedOnly);
+		int countNumGames(mstl::string const& filename);
+
+		char const* lookupType(::db::type::ID type);
+	}
+}
+
+#endif // _tcl_database_included
+
+// vi:set ts=3 sw=3:

@@ -1,0 +1,32 @@
+::board::addStyle square {
+  borderline,color         {#361209}
+  borderline,gap           {0}
+  borderline,opacity       {0x80}
+  borderline,width         {0.006666666666666667}
+  dark,rotation            {0}
+  dark,solid               {#802b16}
+  dark,texture             {}
+  dark,x1                  {0}
+  dark,x2                  {0}
+  dark,y1                  {0}
+  dark,y2                  {0}
+  hilite,selected          {#2d76ac}
+  hilite,suggested         {Ghost White}
+  hint,background-color    {}
+  hint,background-coords   {#f3ff2b}
+  hint,background-tile     {wood DarkMaple.jpg}
+  hint,background-rotation	0
+  hint,border-color        {}
+  hint,border-coords       {#f3ff2b}
+  hint,border-tile         {wood DarkMaple.jpg}
+  hint,border-rotation   	90
+  identifier               {Brown & Goldenrod|1355495679308|yellow.color|gregor}
+  lite,rotation            {0}
+  lite,solid               {#ffb22e}
+  lite,texture             {}
+  lite,x1                  {0}
+  lite,x2                  {0}
+  lite,y1                  {0}
+  lite,y2                  {0}
+  version                  {1.0}
+}
