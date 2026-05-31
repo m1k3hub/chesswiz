@@ -67,11 +67,12 @@ startRoutine(Thread::Runnable& runnable, mstl::exception*& exception)
 	{
 		fprintf(stderr, "*** exception catched in worker thread ***\n");
 		fprintf(stderr, "%s\n", exc.what());
-		exception = new mstl::exception(exc);
+		exception = new mstl::exception(exc.what());
 	}
 	catch (...)
 	{
 		fprintf(stderr, "*** unhandled exception catched in worker thread ***\n");
+		exception = new mstl::exception("unhandled exception in worker thread");
 	}
 }
 
@@ -515,10 +516,8 @@ struct Thread::Synchonize
 
 		Guard guard(m_lock);
 
-		if (::write(m_fd[1], ::Serialize(threadId).str, sizeof(::Serialize)))
-			; // avoid warning of unused result
-		if (::write(m_fd[1], reinterpret_cast<char*>(&signal), sizeof(int)))
-			; // avoid warning of unused result
+		(void)::write(m_fd[1], ::Serialize(threadId).str, sizeof(::Serialize));
+		(void)::write(m_fd[1], reinterpret_cast<char*>(&signal), sizeof(int));
 	}
 
 	static void
@@ -534,7 +533,9 @@ struct Thread::Synchonize
 		Tcl_Read(sync->m_chan, serialize.str, sizeof(serialize));
 		Tcl_Read(sync->m_chan, reinterpret_cast<char*>(&signal), sizeof(int));
 
-		sync->m_map[serialize.id]->sendSignal(signal);
+		Map::iterator it = sync->m_map.find(serialize.id);
+		if (it != sync->m_map.end() && it->second)
+			it->second->sendSignal(signal);
 	}
 
 	typedef mstl::map<ThreadId,Thread*> Map;
