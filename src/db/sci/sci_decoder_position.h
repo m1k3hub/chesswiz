@@ -82,7 +82,6 @@ private:
 	typedef mstl::stack<Lookup> Stack;
 
 	void setupBoard(Board const& board, db::variant::Type variant);
-	void setupBoard(uint16_t idn, db::variant::Type variant);
 	void reset();
 
 	Stack	m_stack;
