@@ -1123,6 +1123,19 @@ cmdSearch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	unsigned n = *Tcl_GetString(objv[2]) == '-' || isdigit(*Tcl_GetString(objv[2])) ? 0 : 1;
 
+	// With an optional variant present (n == 1) the mandatory filter sits at
+	// objv[5]; the objc >= 5 check above only covers n == 0, so guard the
+	// variant case to avoid reading the NULL objv terminator below.
+	if (objc < int(5 + n))
+	{
+		Tcl_WrongNumArgs(
+			ti,
+			1,
+			objv,
+			"<database> ?<variant>? <view> <operator> <none|events|sites|players> ?<query>?");
+		return TCL_ERROR;
+	}
+
 	char const*		database	= Tcl_GetString(objv[1]);
 	char const*		ops		= Tcl_GetString(objv[3 + n]);
 	variant::Type	variant	= n ? tcl::game::variantFromObj(objv[2]) : variant::Undetermined;
