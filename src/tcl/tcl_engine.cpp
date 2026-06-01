@@ -190,7 +190,7 @@ public:
 			Tcl_IncrRefCount(m_stalemate = Tcl_NewStringObj("stalemate", -1));
 			Tcl_IncrRefCount(m_threechecks = Tcl_NewStringObj("threechecks", -1));
 			Tcl_IncrRefCount(m_losing = Tcl_NewStringObj("losing", -1));
-			Tcl_IncrRefCount(m_check = Tcl_NewStringObj("checl", -1));
+			Tcl_IncrRefCount(m_check = Tcl_NewStringObj("check", -1));
 			Tcl_IncrRefCount(m_over = Tcl_NewStringObj("over", -1));
 			Tcl_IncrRefCount(m_move = Tcl_NewStringObj("move", -1));
 			Tcl_IncrRefCount(m_line = Tcl_NewStringObj("line", -1));
@@ -377,19 +377,6 @@ public:
 		sendInfo(m_time, Tcl_NewListObj(U_NUMBER_OF(objs), objs));
 	}
 
-	void updateTimeInfo() override
-	{
-		Tcl_Obj* objs[6];
-
-		objs[0] = Tcl_NewDoubleObj(time());
-		objs[1] = Tcl_NewIntObj(depth());
-		objs[2] = Tcl_NewIntObj(selectiveDepth());
-		objs[3] = Tcl_NewIntObj(nodes());
-		objs[4] = Tcl_NewIntObj(nps());
-		objs[5] = Tcl_NewIntObj(tbhits());
-
-		sendInfo(m_time, Tcl_NewListObj(U_NUMBER_OF(objs), objs));
-	}
 
 	void updateHashFullInfo() override
 	{
@@ -636,11 +623,22 @@ static int
 cmdLog(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	static cookie_io_functions_t Cookie = { read, write, seek, close };
+	if (objc < 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "open <cmd> <arg> | close | send <message>");
+		return TCL_ERROR;
+	}
 
 	char const* subcmd = stringFromObj(objc, objv, 1);
 
 	if (strcmp(subcmd, "open") == 0)
 	{
+		if (objc != 4)
+		{
+			Tcl_WrongNumArgs(ti, 1, objv, "open <cmd> <arg>");
+			return TCL_ERROR;
+		}
+
 		if (m_log)
 			return error(CmdLog, subcmd, 0, "log is already open");
 
@@ -652,12 +650,24 @@ cmdLog(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	}
 	else if (strcmp(subcmd, "close") == 0)
 	{
+		if (objc != 2)
+		{
+			Tcl_WrongNumArgs(ti, 1, objv, "close");
+			return TCL_ERROR;
+		}
+
 		tcl::app::scidb->setEngineLog(0);
 		delete m_log;
 		m_log = 0;
 	}
 	else if (strcmp(subcmd, "send") == 0)
 	{
+		if (objc != 3)
+		{
+			Tcl_WrongNumArgs(ti, 1, objv, "send <message>");
+			return TCL_ERROR;
+		}
+
 		if (m_log)
 		{
 			mstl::string msg(stringFromObj(objc, objv, 2));
@@ -670,6 +680,10 @@ cmdLog(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			}
 		}
 	}
+	else
+	{
+		return error(CmdLog, nullptr, nullptr, "unknown command '%s'", subcmd);
+	}
 
 	return TCL_OK;
 }
@@ -678,6 +692,12 @@ cmdLog(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdProbe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 4 && objc != 5)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<commands> <directory> <protocol> ?<timeout>?");
+		return TCL_ERROR;
+	}
+
 	Tcl_Obj*		commands		= objectFromObj(objc, objv, 1);
 	char const*	directory	= stringFromObj(objc, objv, 2);
 	char const*	protocol		= stringFromObj(objc, objv, 3);
@@ -695,7 +715,7 @@ cmdProbe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	else if (::toupper(*protocol) == 'W')
 		prot = Engine::WinBoard;
 	else
-		return error(CmdProbe, 0, 0, "unknown protocol '%s'", protocol);
+		return error(CmdStart, 0, 0, "unknown protocol '%s'", protocol);
 
 	if (Tcl_ListObjGetElements(ti, commands, &size, &objs) != TCL_OK)
 		return error(CmdProbe, 0, 0, "list expected");
@@ -732,7 +752,7 @@ cmdProbe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				ProbeEngine::Options const& options = engine.options();
 
 				Tcl_Obj* objs[5];
-				Tcl_Obj* v[mstl::max(unsigned(options.size()), 100u)];
+				mstl::vector<Tcl_Obj*> v(mstl::max(unsigned(options.size()), 100u));
 				unsigned n = 0;
 
 				objs[0] = Tcl_NewStringObj("ok", -1);
@@ -768,7 +788,7 @@ cmdProbe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 					v[n++] = Tcl_NewIntObj(engine.elo());
 				}
 
-				objs[1] = Tcl_NewListObj(n, v);
+				objs[1] = Tcl_NewListObj(n, v.data());
 				n = 0;
 
 				unsigned variants = engine.supportedVariants();
@@ -782,7 +802,7 @@ cmdProbe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				if (variants & variant::Giveaway)			v[n++] = Tcl_NewStringObj("giveaway", -1);
 				if (variants & variant::Bughouse)			v[n++] = Tcl_NewStringObj("bughouse", -1);
 
-				objs[2] = Tcl_NewListObj(n, v);
+				objs[2] = Tcl_NewListObj(n, v.data());
 				n = 0;
 
 				if (engine.hasFeature(::app::Engine::Feature_Analyze))
@@ -865,7 +885,7 @@ cmdProbe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 					v[n++] = Tcl_NewListObj(k, styles);
 				}
 
-				objs[3] = Tcl_NewListObj(n, v);
+				objs[3] = Tcl_NewListObj(n, v.data());
 				n = 0;
 
 				for (ProbeEngine::Options::const_iterator i = options.begin(); i != options.end(); ++i)
@@ -882,7 +902,7 @@ cmdProbe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 					v[n++] = Tcl_NewListObj(U_NUMBER_OF(u), u);
 				}
 
-				objs[4] = Tcl_NewListObj(n, v);
+				objs[4] = Tcl_NewListObj(n, v.data());
 
 				setResult(U_NUMBER_OF(objs), objs);
 				break;
@@ -897,6 +917,14 @@ cmdProbe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdStart(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 8)
+	{
+		Tcl_WrongNumArgs(
+			ti, 1, objv,
+			"<commands> <directory> <protocol> <is-ready-cmd> <signal-cmd> <update-cmd> <client-data>");
+		return TCL_ERROR;
+	}
+
 	Tcl_Obj*		commands		= objectFromObj(objc, objv, 1);
 	char const*	directory	= stringFromObj(objc, objv, 2);
 	char const*	protocol		= stringFromObj(objc, objv, 3);
@@ -936,6 +964,12 @@ cmdStart(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdActivate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 
 	if (tcl::app::scidb->engineExists(id))
@@ -948,6 +982,12 @@ cmdActivate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSetFeatures(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id> <feature-list>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 
 	if (tcl::app::scidb->engineExists(id))
@@ -1046,6 +1086,12 @@ cmdSetFeatures(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSetOptions(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id> <script|options> <value>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 
 	if (tcl::app::scidb->engineExists(id))
@@ -1067,10 +1113,10 @@ cmdSetOptions(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				Tcl_Obj** objs;
 
 				if (Tcl_ListObjGetElements(ti, objectFromObj(objc, objv, 3), &size, &objs) != TCL_OK)
-					return error(CmdActivate, 0, 0, "list obj expected");
+					return error(CmdSetOptions, 0, 0, "list obj expected");
 
 				if ((size % 2) == 1)
-					return error(CmdActivate, 0, 0, "options list must have even size");
+					return error(CmdSetOptions, 0, 0, "options list must have even size");
 
 				for (int i = 0; i < size; i += 2)
 					engine->setOption(Tcl_GetString(objs[i]), Tcl_GetString(objs[i + 1]));
@@ -1089,6 +1135,12 @@ cmdSetOptions(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdStop(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 
 	if (tcl::app::scidb->engineExists(id))
@@ -1101,6 +1153,12 @@ cmdStop(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdAnalyze(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3 && objc != 5)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<start|stop> <engine-id> ?-opponent <bool>?");
+		return TCL_ERROR;
+	}
+
 	char const*	cmd	= stringFromObj(objc, objv, 1);
 	unsigned		id		= unsignedFromObj(objc, objv, 2);
 
@@ -1131,6 +1189,12 @@ cmdAnalyze(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	Tcl_Obj* result = Tcl_NewListObj(0, 0);
 
 	Callback cb(result);
@@ -1143,13 +1207,19 @@ cmdList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdInfo(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-name>");
+		return TCL_ERROR;
+	}
+
 	::db::Player const* player = ::db::Player::findPlayer(stringFromObj(objc, objv, 1));
 
 	if (player)
 	{
 		::db::Player::StringList const& aliases = player->aliases();
 		Tcl_Obj* objs[9];
-		Tcl_Obj* v[aliases.size() + 1];
+		mstl::vector<Tcl_Obj*> v(aliases.size() + 1);
 		Tcl_Obj* f[8];
 
 		v[0] = Tcl_NewStringObj(player->name(), player->name().size());
@@ -1174,7 +1244,7 @@ cmdInfo(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		objs[5] = Tcl_NewBooleanObj(player->supportsWinboardProtocol());
 		objs[6] = Tcl_NewListObj(8, f);
 		objs[7] = Tcl_NewStringObj(player->url(), -1);
-		objs[8] = Tcl_NewListObj(aliases.size() + 1, v);
+		objs[8] = Tcl_NewListObj(aliases.size() + 1, v.data());
 
 		setResult(Tcl_NewListObj(U_NUMBER_OF(objs), objs));
 	}
@@ -1190,6 +1260,12 @@ cmdInfo(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdInvoke(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id> <option-name>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 
 	if (tcl::app::scidb->engineExists(id))
@@ -1202,6 +1278,12 @@ cmdInvoke(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdClearHash(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 
 	if (tcl::app::scidb->engineExists(id))
@@ -1214,6 +1296,12 @@ cmdClearHash(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdCountLines(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 
 	if (tcl::app::scidb->engineExists(id))
@@ -1228,6 +1316,12 @@ cmdCountLines(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdKill(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 
 	if (tcl::app::scidb->engineExists(id))
@@ -1240,9 +1334,18 @@ cmdKill(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdPause(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 
-	if (tcl::app::scidb->engineExists(id))
+	// pause() requires an active engine (M_REQUIRE(isActive())); the engine may
+	// still exist while inactive (not yet connected, or already exited but not
+	// yet removed), so guard against tripping the precondition from the UI.
+	if (tcl::app::scidb->engineExists(id) && tcl::app::scidb->engine(id)->isActive())
 		tcl::app::scidb->engine(id)->pause();
 
 	return TCL_OK;
@@ -1252,9 +1355,16 @@ cmdPause(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdResume(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 
-	if (tcl::app::scidb->engineExists(id))
+	// resume() requires an active engine (M_REQUIRE(isActive())); see cmdPause.
+	if (tcl::app::scidb->engineExists(id) && tcl::app::scidb->engine(id)->isActive())
 		tcl::app::scidb->engine(id)->resume();
 
 	return TCL_OK;
@@ -1264,6 +1374,12 @@ cmdResume(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdOrdering(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id> <keepstable|bestfirst|unordered>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 	char const* ordering = stringFromObj(objc, objv, 2);
 
@@ -1276,6 +1392,7 @@ cmdOrdering(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			case 'k': method = ::app::Engine::KeepStable; break;
 			case 'b': method = ::app::Engine::BestFirst; break;
 			case 'u': method = ::app::Engine::Unordered; break;
+			default: return error(CmdOrdering, 0, 0, "unknown ordering '%s'", ordering);
 		}
 
 		tcl::app::scidb->engine(id)->setOrdering(method);
@@ -1288,6 +1405,12 @@ cmdOrdering(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdMultiPV(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id> <value>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 	unsigned value = unsignedFromObj(objc, objv, 2);
 
@@ -1301,6 +1424,12 @@ cmdMultiPV(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdPriority(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id> <normal|low|high>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 	char const* priority = stringFromObj(objc, objv, 2);
 
@@ -1313,9 +1442,12 @@ cmdPriority(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			case 'n': value = sys::Process::Normal; break;
 			case 'l': value = sys::Process::Idle; break;
 			case 'h': value = sys::Process::High; break;
+			default: return error(CmdPriority, 0, 0, "unknown priority '%s'", priority);
 		}
 
-		if (value != sys::Process::Unknown)
+		// process() requires a live process object (M_REQUIRE(isConnected()));
+		// the engine may exist without one (not yet started / already exited).
+		if (value != sys::Process::Unknown && tcl::app::scidb->engine(id)->isConnected())
 			tcl::app::scidb->engine(id)->process().setPriority(value);
 	}
 
@@ -1326,6 +1458,12 @@ cmdPriority(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdActive(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 
 	if (tcl::app::scidb->engineExists(id))
@@ -1340,6 +1478,12 @@ cmdActive(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdVariant(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 
 	if (tcl::app::scidb->engineExists(id))
@@ -1358,6 +1502,12 @@ cmdVariant(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdEmpty(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id> <line>");
+		return TCL_ERROR;
+	}
+
 	unsigned	id		= unsignedFromObj(objc, objv, 1);
 	unsigned line	= unsignedFromObj(objc, objv, 2);
 
@@ -1373,6 +1523,16 @@ cmdEmpty(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSnapshot(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 2 || objc > 4)
+	{
+		Tcl_WrongNumArgs(
+			ti,
+			1,
+			objv,
+			"<engine-id> ?clear|all|incl|san|comment|var|move|line|seq|merge ?<line>??");
+		return TCL_ERROR;
+	}
+
 	unsigned			id = unsignedFromObj(objc, objv, 1);
 	mstl::string	rc;
 
@@ -1394,10 +1554,16 @@ cmdSnapshot(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 			if (::strcmp(cmd, "clear") == 0)
 			{
+				if (objc != 3)
+					return error(CmdSnapshot, nullptr, nullptr, "wrong # args: should be \"%s <engine-id> clear\"", CmdSnapshot);
+
 				engine->snapshotClear();
 			}
 			else if (::strcmp(cmd, "san") == 0 || ::strcmp(cmd, "comment") == 0)
 			{
+				if (objc != 4)
+					return error(CmdSnapshot, nullptr, nullptr, "wrong # args: should be \"%s <engine-id> %s <line>\"", CmdSnapshot, cmd);
+
 				unsigned line = unsignedFromObj(objc, objv, 3);
 
 				if (engine->snapshotExists(line) && !engine->snapshotLine(line).isEmpty())
@@ -1417,6 +1583,9 @@ cmdSnapshot(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			}
 			else if (::strcmp(cmd, "var") == 0 || ::strcmp(cmd, "move") == 0 || ::strcmp(cmd, "line") == 0)
 			{
+				if (objc != 4)
+					return error(CmdSnapshot, nullptr, nullptr, "wrong # args: should be \"%s <engine-id> %s <line>\"", CmdSnapshot, cmd);
+
 				unsigned line = unsignedFromObj(objc, objv, 3);
 
 				if (engine->snapshotExists(line) && !engine->snapshotLine(line).isEmpty())
@@ -1435,6 +1604,9 @@ cmdSnapshot(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			{
 				if (::strcmp(cmd, "seq") == 0 || ::strcmp(cmd, "merge") == 0)
 				{
+					if (objc != 4)
+						return error(CmdSnapshot, nullptr, nullptr, "wrong # args: should be \"%s <engine-id> %s <line>\"", CmdSnapshot, cmd);
+
 					unsigned line = unsignedFromObj(objc, objv, 3);
 
 					if (engine->snapshotExists(line) && !engine->snapshotLine(line).isEmpty())
@@ -1449,6 +1621,9 @@ cmdSnapshot(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				}
 				else if (::strcmp(cmd, "all") == 0 || ::strcmp(cmd, "incl") == 0)
 				{
+					if (objc != 3)
+						return error(CmdSnapshot, nullptr, nullptr, "wrong # args: should be \"%s <engine-id> %s\"", CmdSnapshot, cmd);
+
 					if (game.isEmpty())
 						return error(CmdSnapshot, nullptr, nullptr, "game is empty");
 
@@ -1508,6 +1683,12 @@ cmdSnapshot(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdBind(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 
 	if (tcl::app::scidb->engineExists(id))
@@ -1523,6 +1704,12 @@ cmdBind(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdBound(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<engine-id>");
+		return TCL_ERROR;
+	}
+
 	unsigned id = unsignedFromObj(objc, objv, 1);
 
 	if (tcl::app::scidb->engineExists(id))

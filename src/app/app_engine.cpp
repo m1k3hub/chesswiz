@@ -54,8 +54,7 @@ using namespace util::misc::file;
 static bool
 checkOrdering(unsigned* map, unsigned n)
 {
-	bool m[n];
-	memset(m, 0, sizeof(bool)*n);
+	mstl::vector<bool> m(n, false);
 
 	for (unsigned i = 0; i < n; ++i)
 	{
@@ -950,7 +949,12 @@ Engine::activate()
 void
 Engine::deactivate()
 {
-	if (m_active)
+	// protocolEnd() talks to the engine (send "quit", stop analysis, etc.),
+	// which requires a live connection. The process may already be gone
+	// (pipe closed/crashed) while m_active is still set because the exited()
+	// callback hasn't been delivered yet; sending in that state trips the
+	// isConnected() precondition. Only run the protocol shutdown when connected.
+	if (m_active && isConnected())
 		m_engine->protocolEnd();
 
 	m_active = false;
@@ -1097,7 +1101,10 @@ Engine::send(mstl::string const& msg)
 		m_buffer.append('\n');
 		m_logStream->write(m_buffer);
 	}
-	m_process->puts(msg);
+	if (m_process->puts(msg) == -1)
+	{
+		m_process->close();
+	}
 }
 
 
@@ -2049,6 +2056,9 @@ bool
 Engine::detectEmail(mstl::string const& str)
 {
 	mstl::string::size_type n = str.find("@");
+
+	if (n == mstl::string::npos)
+		return false;
 
 	char const* s = str.begin();
 	char const* t = s + n;
