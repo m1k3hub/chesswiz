@@ -182,7 +182,7 @@ GameDecoder::decodeComment(MoveNode* node, unsigned length, move::Position posit
 	str.reserve(length + 200);
 
 	unsigned i = 0;
-	while (::isspace(p[i]))
+	while (i < length && ::isspace(p[i]))
 		++i;
 
 	for ( ; i < length; ++i)
@@ -201,7 +201,7 @@ GameDecoder::decodeComment(MoveNode* node, unsigned length, move::Position posit
 			{
 				case 0x0d:
 					str.append(0x0a);
-					if (p[i + 1] == 0x0a)
+					if (i + 1 < length && p[i + 1] == 0x0a)
 						++i;
 					break;
 
@@ -763,11 +763,14 @@ GameDecoder::startDecoding(TagSet* tags)
 
 	if (word & 0x40000000)
 	{
-		unsigned size = m_isChess960 ? 36 : 28;
+		// In CBH format, the start position is always 28 bytes.
+		// The 36-byte format (with chess960 rook data) is not used in practice.
+		unsigned size = 28;
 
 		BitStream bstrm(m_gStrm.data(), size);
 		m_position.setup(bstrm);
 		m_gStrm.skip(size);
+
 
 		if (tags)
 		{
@@ -796,7 +799,7 @@ GameDecoder::doDecoding(uint16_t* moves, unsigned length, Board& startBoard)
 		switch (decodeMove(move, count))
 		{
 			case Token_Move:
-				moves[i++] = move.index();
+				moves[i] = move.index();
 				break;
 
 			case Token_Pop:
@@ -851,7 +854,7 @@ GameDecoder::doDecoding(Consumer& consumer,
 	}
 
 	char buf[32];
-	::sprintf(buf, "%u", m_position.board().plyNumber() - plyNumber);
+	::snprintf(buf, sizeof(buf), "%u", m_position.board().plyNumber() - plyNumber);
 	tags.set(tag::PlyCount, buf);
 
 	consumer.finishMoveSection(result::fromString(tags.value(tag::Result)));

@@ -411,7 +411,7 @@ Sort::selectObjFromSublist(Tcl_Obj *objPtr, Tcl_Obj** currentObj)
 		{
 			char buffer[100];
 
-			::sprintf(buffer, "%d", index);
+			::snprintf(buffer, sizeof(buffer), "%d", index);
 			Tcl_AppendResult(	m_interp,
 									"element ",
 									buffer,

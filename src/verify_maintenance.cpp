@@ -691,6 +691,19 @@ verifyDecodeRoundTrip(mstl::string const& rootname)
 } // namespace
 
 
+// Helper macro: check + labeled failure + cleanup + return.
+// Assumes `filename` and `compactedFilename` are in scope.
+#define CHECK(label, expr) \
+	do { \
+		if (!(expr)) { \
+			::fprintf(stderr, label " failed\n"); \
+			cleanup(filename); \
+			cleanup(compactedFilename); \
+			return 1; \
+		} \
+	} while (0)
+
+
 int
 main(int argc, char** argv)
 {
@@ -711,165 +724,49 @@ main(int argc, char** argv)
 		SilentPgnReader reader(stream);
 		Database created(filename, sys::utf8::Codec::utf8(), storage::OnDisk, variant::Normal);
 
-			unsigned imported = created.importGames(reader, progress);
-			if (reader.errors != 0 || imported != 4)
-		{
-			::fprintf(stderr, "PGN import failed: imported=%u errors=%u\n", imported, reader.errors);
-			cleanup(filename);
-			return 1;
-		}
+		unsigned imported = created.importGames(reader, progress);
+		CHECK("PGN import", reader.errors == 0 && imported == 4);
+		CHECK("Initial maintenance", verifyInitialState(created));
+		CHECK("Material search", verifyMaterialSearch(created));
+		CHECK("Rating search", verifyRatingSearch(created));
+		CHECK("Pattern search", verifyPatternSearch(created));
+		CHECK("Custom-FEN decode round-trip", verifyDecodeRoundTrip(filename));
+		CHECK("Parallel parity", verifyParallelParity(created));
 
-			if (!verifyInitialState(created))
-			{
-				::fprintf(stderr, "Initial maintenance verification failed\n");
-			cleanup(filename);
-			return 1;
-		}
-			if (!verifyMaterialSearch(created))
-			{
-				::fprintf(stderr, "Material search verification failed\n");
-				cleanup(filename);
-				return 1;
-			}
-			if (!verifyRatingSearch(created))
-			{
-				::fprintf(stderr, "Rating search verification failed\n");
-				cleanup(filename);
-				return 1;
-			}
-			if (!verifyPatternSearch(created))
-			{
-				::fprintf(stderr, "Pattern search verification failed\n");
-				cleanup(filename);
-				return 1;
-			}
-			if (!verifyDecodeRoundTrip(filename))
-			{
-				::fprintf(stderr, "Custom-FEN decode round-trip verification failed\n");
-				cleanup(filename);
-				return 1;
-			}
-			if (!verifyParallelParity(created))
-			{
-				::fprintf(stderr, "Parallel parity verification failed\n");
-				cleanup(filename);
-				return 1;
-			}
+		created.deleteGame(1, true);
+		CHECK("Post-delete maintenance", verifyAfterDeletion(created));
+		CHECK("Compaction flag", created.shouldCompact());
 
-			created.deleteGame(1, true);
-			if (!verifyAfterDeletion(created))
-			{
-				::fprintf(stderr, "Post-delete maintenance verification failed\n");
-				cleanup(filename);
-				return 1;
-			}
-			if (!created.shouldCompact())
-			{
-				::fprintf(stderr, "Compaction flag verification failed\n");
-				cleanup(filename);
-				return 1;
-			}
+		Database compacted(compactedFilename, sys::utf8::Codec::utf8(), storage::OnDisk, variant::Normal);
+		created.compact(compacted, progress);
+		compacted.close();
 
-			Database compacted(compactedFilename, sys::utf8::Codec::utf8(), storage::OnDisk, variant::Normal);
-			created.compact(compacted, progress);
-			compacted.close();
+		created.close();
 
-			created.close();
+		Database reopened(filename, sys::utf8::Codec::utf8(), permission::ReadWrite, progress);
+		CHECK("Reopen index header", verifyIndexHeader(filename, 95, 4) && verifyAttributes(filename, 4));
+		CHECK("Reopen verification", verifyAfterDeletion(reopened));
+		CHECK("Reopen material search", verifyMaterialSearch(reopened));
+		CHECK("Reopen rating search", verifyRatingSearch(reopened));
+		CHECK("Reopen pattern search", verifyPatternSearch(reopened));
+		CHECK("Reopen parallel parity", verifyParallelParity(reopened));
+		CHECK("Reopen compaction flag", reopened.shouldCompact());
 
-			Database reopened(filename, sys::utf8::Codec::utf8(), permission::ReadWrite, progress);
-			if (!verifyIndexHeader(filename, 95, 4) || !verifyAttributes(filename, 4))
-			{
-				::fprintf(stderr, "Reopen index header verification failed\n");
-				cleanup(filename);
-				return 1;
-			}
-			if (!verifyAfterDeletion(reopened))
-			{
-			::fprintf(stderr, "Reopen verification failed\n");
-				cleanup(filename);
-				return 1;
-			}
-			if (!verifyMaterialSearch(reopened))
-			{
-				::fprintf(stderr, "Reopen material search verification failed\n");
-				cleanup(filename);
-				return 1;
-			}
-			if (!verifyRatingSearch(reopened))
-			{
-				::fprintf(stderr, "Reopen rating search verification failed\n");
-				cleanup(filename);
-				return 1;
-			}
-			if (!verifyPatternSearch(reopened))
-			{
-				::fprintf(stderr, "Reopen pattern search verification failed\n");
-				cleanup(filename);
-				return 1;
-			}
-			if (!verifyParallelParity(reopened))
-			{
-				::fprintf(stderr, "Reopen parallel parity verification failed\n");
-				cleanup(filename);
-				return 1;
-			}
-			if (!reopened.shouldCompact())
-			{
-				::fprintf(stderr, "Reopen compaction flag verification failed\n");
-				cleanup(filename);
-				return 1;
-			}
+		Database reopenedCompacted(compactedFilename, sys::utf8::Codec::utf8(), permission::ReadWrite, progress);
+		CHECK("Compacted index header",
+		      verifyIndexHeader(compactedFilename, 95, 3) && verifyAttributes(compactedFilename, 3));
+		CHECK("Compacted database", verifyCompactedState(reopenedCompacted));
+		CHECK("Compacted material search", verifyMaterialSearch(reopenedCompacted));
+		CHECK("Compacted rating search", verifyRatingSearch(reopenedCompacted));
+		CHECK("Compacted pattern search", verifyPatternSearch(reopenedCompacted));
+		CHECK("Compacted should not need compaction", !reopenedCompacted.shouldCompact());
 
-			Database reopenedCompacted(compactedFilename, sys::utf8::Codec::utf8(), permission::ReadWrite, progress);
-			if (!verifyIndexHeader(compactedFilename, 95, 3) || !verifyAttributes(compactedFilename, 3))
-			{
-				::fprintf(stderr, "Compacted index header verification failed\n");
-				cleanup(filename);
-				cleanup(compactedFilename);
-				return 1;
-			}
-			if (!verifyCompactedState(reopenedCompacted))
-			{
-				::fprintf(stderr, "Compacted database verification failed\n");
-				cleanup(filename);
-				cleanup(compactedFilename);
-				return 1;
-			}
-			if (!verifyMaterialSearch(reopenedCompacted))
-			{
-				::fprintf(stderr, "Compacted material search verification failed\n");
-				cleanup(filename);
-				cleanup(compactedFilename);
-				return 1;
-			}
-			if (!verifyRatingSearch(reopenedCompacted))
-			{
-				::fprintf(stderr, "Compacted rating search verification failed\n");
-				cleanup(filename);
-				cleanup(compactedFilename);
-				return 1;
-			}
-			if (!verifyPatternSearch(reopenedCompacted))
-			{
-				::fprintf(stderr, "Compacted pattern search verification failed\n");
-				cleanup(filename);
-				cleanup(compactedFilename);
-				return 1;
-			}
-			if (reopenedCompacted.shouldCompact())
-			{
-				::fprintf(stderr, "Compacted database still requests compaction\n");
-				cleanup(filename);
-				cleanup(compactedFilename);
-				return 1;
-			}
-			reopenedCompacted.close();
-
-			reopened.close();
-			cleanup(filename);
-			cleanup(compactedFilename);
-			::puts("maintenance verification passed");
-			return 0;
+		reopenedCompacted.close();
+		reopened.close();
+		cleanup(filename);
+		cleanup(compactedFilename);
+		::puts("maintenance verification passed");
+		return 0;
 	}
 	catch (IOException const& exc)
 	{

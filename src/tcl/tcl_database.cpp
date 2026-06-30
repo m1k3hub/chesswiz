@@ -256,7 +256,7 @@ getNamebaseType(Tcl_Obj* obj, char const* cmd)
 	}
 
 	error(cmd, nullptr, nullptr, "unknown namebase type '%s'", Tcl_GetString(obj));
-	return Namebase::Player;	// never reached
+	return static_cast<Namebase::Type>(-1);
 }
 
 
@@ -929,9 +929,9 @@ flagsToString(unsigned flags, mstl::string& result)
 static int
 cmdAttach(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc != 3)
+	if (objc != 3 && objc != 5)
 	{
-		Tcl_WrongNumArgs(	ti, 1, objv, "<file> <file>");
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <file> ?<progress-cmd> <progress-arg>?");
 		return TCL_ERROR;
 	}
 
@@ -956,7 +956,7 @@ cmdAttach(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdLoad(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc < 4)
+	if (objc < 4 || (objc % 2) != 0)
 	{
 		Tcl_WrongNumArgs(
 			ti,
@@ -977,7 +977,7 @@ cmdLoad(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		else if (::strcmp(arg, "-readonly") == 0)
 			permission = boolFromObj(objc, objv, objc - 1) ? permission::ReadOnly : permission::ReadWrite;
 		else
-			error(CmdLoad, nullptr, nullptr, "unexpected option '%s'", arg);
+			return error(CmdLoad, nullptr, nullptr, "unexpected option '%s'", arg);
 	}
 
 	mstl::string path(Tcl_GetString(objv[1]));
@@ -1017,23 +1017,24 @@ cmdImport(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		"<database> <file> <log> <log-arg> <progress-cmd> <progress-arg> "
 		"?-encoding <string>? ?-illegal <boolean>?";
 
-	if (objc < 7)
+	if (objc < 7 || (objc % 2) == 0)
 	{
 		Tcl_WrongNumArgs(ti, 1, objv, Usage);
 		return TCL_ERROR;
 	}
 
 	mstl::string	encoding		= sys::utf8::Codec::utf8();
-	char const*		option		= stringFromObj(objc, objv, objc - 2);
 	bool				includeIllegalGames = false;
 
-	if (*option == '-')
+	while (objc > 7)
 	{
+		char const* option = stringFromObj(objc, objv, objc - 2);
+
 		if (::strcmp(option, "-encoding") == 0)
 		{
 			encoding = stringFromObj(objc, objv, objc - 1);
 		}
-		if (::strcmp(option, "-illegal") == 0)
+		else if (::strcmp(option, "-illegal") == 0)
 		{
 			includeIllegalGames = boolFromObj(objc, objv, objc - 1);
 		}
@@ -1044,12 +1045,6 @@ cmdImport(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		}
 
 		objc -= 2;
-	}
-
-	if (objc < 7)
-	{
-		Tcl_WrongNumArgs(ti, 1, objv, Usage);
-		return TCL_ERROR;
 	}
 
 	mstl::string	dst(stringFromObj(objc, objv, 1));
@@ -1196,9 +1191,10 @@ static int
 cmdOpen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	static char const* Usage =
-		"<file> <log> <log-arg> <progress-cmd> <progress-arg> ?-description <flag>?";
+		"<file> <log> <log-arg> <progress-cmd> <progress-arg> "
+		"?-encoding <string>? ?-description <flag>?";
 
-	if (objc < 6)
+	if (objc < 6 || (objc % 2) == 1)
 	{
 		Tcl_WrongNumArgs(ti, 1, objv, Usage);
 		return TCL_ERROR;
@@ -1491,6 +1487,9 @@ cmdCount(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		"?<database>?",
 	};
 	enum { Cmd_Games, Cmd_Players, Cmd_Annotators, Cmd_Positions, Cmd_Events, Cmd_Sites, Cmd_Total };
+
+	if (objc < 2 || objc > 4)
+		return usage(::CmdCount, nullptr, nullptr, subcommands, args);
 
 	char const*		base		= 0;
 	variant::Type	variant	= variant::Undetermined;
@@ -1895,6 +1894,17 @@ getPlayerKey(NamebasePlayer const& player)
 
 
 static int
+getPlayerStats(char const* database, variant::Type variant, unsigned index)
+{
+	M_ASSERT(database);
+	M_ASSERT(Scidb->contains(database, variant));
+
+	Database const& base = Scidb->cursor(database, variant).database();
+	return tcl::db::getPlayerStats(base, base.player(index));
+}
+
+
+static int
 getEventKey(NamebaseEvent const& event)
 {
 	Tcl_Obj* objv[EventKey_LAST];
@@ -2036,7 +2046,8 @@ getGameInfo(int index, int view, char const* database, variant::Type variant, un
 			{
 				char acv[100];
 
-				int acvSize = sprintf(	acv,
+				int acvSize = snprintf(acv, sizeof(acv),
+									
 												"%u %u %u",
 												info.countAnnotations(),
 												info.countComments(),
@@ -2108,7 +2119,7 @@ tcl::db::getGameInfo(Database const& db, unsigned index, Ratings const& ratings,
 
 	M_ASSERT(::memset(objv, 0, sizeof(objv)));
 
-	int acvSize = sprintf(	acv,
+	int acvSize = snprintf(acv, sizeof(acv),
 									"%u %u %u",
 									info.countAnnotations(),
 									info.countComments(),
@@ -2495,13 +2506,13 @@ getSiteInfo(int index, int view, char const* database, variant::Type variant)
 
 
 static int
-getAnnotator(int index, int view)
+getAnnotator(int index, int view, char const* database = nullptr, variant::Type variant = variant::Normal)
 {
 	Tcl_Obj* objv[::attribute::annotator::LastColumn];
 
 	M_ASSERT(::memset(objv, 0, sizeof(objv)));
 
-	Cursor const& cursor = Scidb->cursor();
+	Cursor const& cursor = database ? Scidb->cursor(database, variant) : Scidb->cursor();
 
 	if (view >= 0)
 		index = cursor.index(table::Annotators, index, view);
@@ -2519,13 +2530,13 @@ getAnnotator(int index, int view)
 
 
 static int
-getPosition(unsigned index, int view)
+getPosition(unsigned index, int view, char const* database = nullptr, variant::Type variant = variant::Normal)
 {
 	Tcl_Obj* objv[::attribute::position::LastColumn];
 
 	M_ASSERT(memset(objv, 0, sizeof(objv)));
 
-	Cursor const& cursor = Scidb->cursor();
+	Cursor const& cursor = database ? Scidb->cursor(database, variant) : Scidb->cursor();
 
 	if (view >= 0)
 		index = cursor.index(table::Positions, index, view);
@@ -2668,10 +2679,10 @@ getIdn(int index, char const* database, variant::Type variant)
 
 
 static int
-getEco(int index, char const* database)
+getEco(int index, char const* database, variant::Type variant)
 {
-	setResult(Scidb->cursor(database, variant::Normal).database().
-		gameInfo(index).eco(variant::Normal).asShortString());
+	Cursor const& cursor = database ? Scidb->cursor(database, variant) : Scidb->cursor();
+	setResult(cursor.database().gameInfo(index).eco(variant).asShortString());
 	return TCL_OK;
 }
 
@@ -2810,6 +2821,9 @@ cmdFetch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		Cmd_WhitePlayerInfo, Cmd_BlackPlayerInfo, Cmd_WhitePlayerStats, Cmd_BlackPlayerStats,
 	};
 
+	if (objc < 4)
+		return usage(::CmdFetch, nullptr, nullptr, subcommands, args);
+
 	int index = intFromObj(objc, objv, 2);
 	char const* database = stringFromObj(objc, objv, 3);
 	variant::Type variant = tcl::game::variantFromObj(objc, objv, 4);
@@ -2841,7 +2855,7 @@ cmdFetch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 					if (lastArg[0] == '-' && !::isdigit(lastArg[1]))
 					{
 						if (::strcmp(lastArg, "-card") != 0)
-							return error(::CmdGet, nullptr, nullptr, "invalid argument %s", lastArg);
+							return error(::CmdFetch, nullptr, nullptr, "invalid argument %s", lastArg);
 
 						idCard = true;
 					}
@@ -2932,6 +2946,7 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		"customFlags", "gameFlags", "gameNumber", "minYear", "maxYear", "maxUsage", "tags",
 		"checksum", "idn", "eco", "ratingTypes", "lookupPlayer", "lookupEvent", "lookupSite",
 		"lookupPosition", "writable?", "upgrade?", "memoryOnly?", "compact?", "playerKey",
+		"playerStats",
 		"eventKey", "siteKey", "variants", "changed?", "unsaved?", "changes", "usedencoding",
 		nullptr
 	};
@@ -2950,8 +2965,8 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		/* playerInfo		*/ "<index> <view> <database> <variant> ?<which>?",
 		/* eventInfo		*/ "<index> <view> <database> <variant> ?<which>?",
 		/* siteInfo			*/ "<index> <view> <database> <variant> ?<which>?",
-		/* annotator		*/ "<index> <view>?",
-		/* position			*/ "<index> <view>?",
+		/* annotator		*/ "<index> ?<view>? ?<database>? ?<variant>?",
+		/* position			*/ "<index> ?<view>? ?<database>? ?<variant>?",
 		/* gameIndex		*/ "<number> <view> ?<database>? ?<variant>?",
 		/* playerIndex		*/ "<number> ?<view>? ?<database>? ?<variant>?",
 		/* eventIndex		*/ "<number> <view> ?<database>? ?<variant>?",
@@ -2974,7 +2989,7 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		/* tags				*/ "<number> ?<database>? ?<variant>",
 		/* checksum			*/ "<number> ?<database>? ?<variant>?",
 		/* idn				*/ "<number> ?<database>? ?<variant>?",
-		/* eco				*/ "<number> ?<database>?",
+		/* eco				*/ "<number> ?<database>? ?<variant>?",
 		/* ratingTypes		*/ "<number> ?<database>? ?<variant>?",
 		/* lookupPlayer	*/ "<index> ?<view>? ?<database>? ?<variant>?",
 		/* lookupEvent		*/ "<index> ?<view>? ?<database>? ?<variant>?",
@@ -2985,6 +3000,7 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		/* memoryOnly?		*/ "?<database>?",
 		/* compact?			*/ "<database>",
 		/* playerKey		*/ "<database> <variant> (<player-index> | <game-index> <side>)",
+		/* playerStats		*/ "<database> <variant> <player-index>",
 		/* eventKey			*/ "<database> <variant> game|event <event>",
 		/* siteKey			*/ "<database> <variant> game|site <site>",
 		/* variants			*/ "<database>",
@@ -3003,8 +3019,8 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		Cmd_Deleted, Cmd_Open, Cmd_LastChange, Cmd_CustomFlags, Cmd_GameFlags, Cmd_GameNumber,
 		Cmd_MinYear, Cmd_MaxYear, Cmd_MaxUsage, Cmd_Tags, Cmd_Checksum, Cmd_Idn, Cmd_Eco, Cmd_RatingTypes,
 		Cmd_LookupPlayer, Cmd_LookupEvent, Cmd_LookupSite, Cmd_LookupPosition, Cmd_Writable, Cmd_Upgrade,
-		Cmd_MemoryOnly, Cmd_Compact, Cmd_PlayerKey, Cmd_EventKey, Cmd_SiteKey, Cmd_Variants, Cmd_Changed,
-		Cmd_Unsaved, Cmd_Changes, Cmd_UsedEncoding
+		Cmd_MemoryOnly, Cmd_Compact, Cmd_PlayerKey, Cmd_PlayerStats, Cmd_EventKey, Cmd_SiteKey,
+		Cmd_Variants, Cmd_Changed, Cmd_Unsaved, Cmd_Changes, Cmd_UsedEncoding
 	};
 
 	if (objc < 2)
@@ -3063,6 +3079,9 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		case Cmd_GameInfo:
 		{
+			if (objc < 5)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
+
 			Ratings ratings(rating::Any, rating::Any);
 			move::Notation notation = move::SAN;
 			bool haveRatings = false;
@@ -3102,6 +3121,9 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		case Cmd_PlayerInfo:
 		{
+			if (objc < 6)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
+
 			Ratings ratings(rating::Any, rating::Any);
 			organization::ID federation = organization::Fide;
 
@@ -3184,6 +3206,9 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		case Cmd_EventInfo:
 		{
+			if (objc < 6)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
+
 			bool idCard = false;
 
 			if (objc >= 3)
@@ -3218,6 +3243,9 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		case Cmd_SiteInfo:
 		{
+			if (objc < 6)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
+
 			index = unsignedFromObj(objc, objv, 2);
 
 			if (objc > 3)
@@ -3235,10 +3263,16 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		}
 
 		case Cmd_Annotator:
-			return getAnnotator(unsignedFromObj(objc, objv, 2), objc > 3 ? intFromObj(objc, objv, 3) : -1);
+			return getAnnotator(	unsignedFromObj(objc, objv, 2),
+										objc > 3 ? intFromObj(objc, objv, 3) : -1,
+										objc > 4 ? stringFromObj(objc, objv, 4) : nullptr,
+										objc > 5 ? tcl::game::variantFromObj(objc, objv, 5) : variant::Normal);
 
 		case Cmd_Position:
-			return getPosition(unsignedFromObj(objc, objv, 2), objc > 3 ? intFromObj(objc, objv, 3) : -1);
+			return getPosition(	unsignedFromObj(objc, objv, 2),
+										objc > 3 ? intFromObj(objc, objv, 3) : -1,
+										objc > 4 ? stringFromObj(objc, objv, 4) : nullptr,
+										objc > 5 ? tcl::game::variantFromObj(objc, objv, 5) : variant::Normal);
 
 		case Cmd_GameIndex:
 			return getGameIndex(	unsignedFromObj(objc, objv, 2),
@@ -3294,7 +3328,7 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		case Cmd_AnnotatorIndex:
 			return getAnnotatorIndex(	stringFromObj(objc, objv, 2),
 												objc > 3 ? intFromObj(objc, objv, 3) : -1,
-												objc == 5 ? stringFromObj(objc, objv, 4) : 0,
+												objc > 4 ? stringFromObj(objc, objv, 4) : 0,
 												tcl::game::variantFromObj(objc, objv, 5));
 
 		case Cmd_Description:
@@ -3326,10 +3360,14 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			return getWritable(stringFromObj(objc, objv, 2));
 
 		case Cmd_Upgrade:
+			if (objc != 3)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
 			::tcl::setResult(Scidb->cursor(stringFromObj(objc, objv, 2)).database().shouldUpgrade());
 			return TCL_OK;
 
 		case Cmd_Open:
+			if (objc != 3 && objc != 4)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
 			if (objc > 3)
 			{
 				setResult(	Scidb->contains(stringFromObj(objc, objv, 2),
@@ -3411,6 +3449,8 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		}
 
 		case Cmd_GameNumber:
+			if (objc != 5 && objc != 6)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
 			if ((view = intFromObj(objc, objv, objc > 5 ? 5 : 4)) >= 0)
 			{
 				char const*		base		= stringFromObj(objc, objv, 2);
@@ -3431,6 +3471,9 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		case Cmd_MinYear:
 		{
+			if (objc != 3 && objc != 4)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
+
 			char const* base = stringFromObj(objc, objv, 2);
 			variant::Type variant = tcl::game::variantFromObj(objc, objv, 3);
 			setResult(Scidb->cursor(base, variant).database().codec().minYear());
@@ -3439,6 +3482,9 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		case Cmd_MaxYear:
 		{
+			if (objc != 3 && objc != 4)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
+
 			char const* base = stringFromObj(objc, objv, 2);
 			variant::Type variant = tcl::game::variantFromObj(objc, objv, 3);
 			setResult(Scidb->cursor(base, variant).database().codec().maxYear());
@@ -3447,21 +3493,30 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		case Cmd_MaxUsage:
 		{
+			if (objc != 5)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
+
 			char const* base = stringFromObj(objc, objv, 2);
 			variant::Type variant = tcl::game::variantFromObj(objc, objv, 3);
 			Tcl_Obj* namebase = objectFromObj(objc, objv, 4);
 
 			Namebase::Type	type = getNamebaseType(namebase, ::CmdGet);
+			if (int(type) < 0)
+				return TCL_ERROR;
 			setResult(Scidb->cursor(base, variant).database().namebase(type).maxUsage());
 			return TCL_OK;
 		}
 
 		case Cmd_Tags:
+			if (objc < 3)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
 			return getTags(unsignedFromObj(objc, objv, 2),
 								objc > 3 ? stringFromObj(objc, objv, 3) : 0,
 								tcl::game::variantFromObj(objc, objv, 4));
 
 		case Cmd_Checksum:
+			if (objc < 3)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
 			return getChecksum(unsignedFromObj(objc, objv, 2),
 									objc > 3 ? stringFromObj(objc, objv, 3) : 0,
 									tcl::game::variantFromObj(objc, objv, 4));
@@ -3476,8 +3531,9 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		case Cmd_Eco:
 			if (objc < 3 || Tcl_GetIntFromObj(ti, objv[2], &index) != TCL_OK)
 				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
-			// XXX we need variant
-			return getEco(index, objc == 4 ? stringFromObj(objc, objv, 3) : 0);
+			return getEco(index,
+								objc > 3 ? stringFromObj(objc, objv, 3) : 0,
+								tcl::game::variantFromObj(objc, objv, 4));
 
 		case Cmd_RatingTypes:
 			if (objc < 3 || Tcl_GetIntFromObj(ti, objv[2], &index) != TCL_OK)
@@ -3495,6 +3551,9 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		case Cmd_Compact:
 		{
+			if (objc != 3 && objc != 4)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
+
 			char const*		database(stringFromObj(objc, objv, 2));
 			variant::Type	variant(tcl::game::variantFromObj(objc, objv, 3));
 
@@ -3518,6 +3577,17 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				getPlayerKey(base.player(index, color::fromSide(stringFromObj(objc, objv, 5))));
 
 			return TCL_OK;
+		}
+
+		case Cmd_PlayerStats:
+		{
+			if (objc != 5)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
+
+			return getPlayerStats(
+				stringFromObj(objc, objv, 2),
+				tcl::game::variantFromObj(objc, objv, 3),
+				unsignedFromObj(objc, objv, 4));
 		}
 
 		case Cmd_EventKey:
@@ -3551,12 +3621,18 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		}
 
 		case Cmd_Variants:
+			if (objc != 3)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
 			return getVariants(stringFromObj(objc, objv, 2));
 
 		case Cmd_Unsaved:
+			if (objc != 3)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
 			return isUnsaved(stringFromObj(objc, objv, 2));
 
 		case Cmd_Changes:
+			if (objc != 3)
+				return usage(::CmdGet, nullptr, nullptr, subcommands, args);
 			return getChanges(stringFromObj(objc, objv, 2));
 	}
 
@@ -3567,7 +3643,7 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSubscribe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc < 3)
+	if (objc < 3 || objc > 4)
 	{
 		Tcl_WrongNumArgs(
 			ti, 1, objv,
@@ -3641,7 +3717,7 @@ cmdSubscribe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdUnsubscribe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc < 3)
+	if (objc < 3 || objc > 4)
 	{
 		Tcl_WrongNumArgs(
 			ti, 1, objv,
@@ -3771,6 +3847,12 @@ cmdClose(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdClear(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2 && objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> ?<variant>?");
+		return TCL_ERROR;
+	}
+
 	char const*		database	= stringFromObj(objc, objv, 1);
 	variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 2);
 
@@ -4012,8 +4094,10 @@ cmdMatch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	}
 
 	Namebase::Type		type			= getNamebaseType(objv[1], ::CmdMatch);
+	if (int(type) < 0)
+		return TCL_ERROR;
 	char const*			database		= stringFromObj(objc, objv, 2);
-	variant::Type		variant		= tcl::game::variantFromObj(objc, objv, 4);
+	variant::Type		variant		= tcl::game::variantFromObj(objc, objv, 3);
 	unsigned				maximal		= unsignedFromObj(objc, objv, 4);
 	mstl::string		suffix		= stringFromObj(objc, objv, 5);
 	rating::Type		ratingType	= rating::Any;
@@ -4050,7 +4134,7 @@ cmdMatch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			break;
 	}
 
-	Tcl_Obj* result[resultSize];
+	mstl::vector<Tcl_Obj*> result(resultSize);
 
 	for (unsigned i = 0; i < matches.size(); ++i)
 	{
@@ -4140,7 +4224,7 @@ cmdMatch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				objs[n++] = fideID ? Tcl_NewIntObj(player->fideID()) : Tcl_NewListObj(0, 0);
 				objs[n++] = Tcl_NewStringObj(species::toString(player->type()), -1);
 				objs[n++] = Tcl_NewStringObj(sex::toString(player->sex()), -1);
-				objs[n++] = Tcl_NewStringObj(country::toString(player->federation()), -1);;
+				objs[n++] = Tcl_NewStringObj(country::toString(player->federation()), -1);
 				objs[n++] = Tcl_NewStringObj(title::toString(title::best(player->titles())), -1);
 				objs[n++] = Tcl_NewIntObj(player->latestElo());
 
@@ -4170,6 +4254,7 @@ cmdMatch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				result[matches.size() + i] = Tcl_NewListObj(n, objs);
 				M_ASSERT(n <= U_NUMBER_OF(objs));
 			}
+			break;
 
 		case Namebase::Site:
 			for (unsigned i = 0; i < siteMatches.size(); ++i)
@@ -4184,14 +4269,14 @@ cmdMatch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				objs[n++] = Tcl_NewIntObj(0);
 				objs[n++] = Tcl_NewStringObj(site->name(), site->name().size());
 				objs[n++] = Tcl_NewStringObj(ascii, ascii.size());
-				objs[n++] = Tcl_NewStringObj(country::toString(country), -1);;
+				objs[n++] = Tcl_NewStringObj(country::toString(country), -1);
 
 				result[matches.size() + i] = Tcl_NewListObj(n, objs);
 			}
 			break;
 	}
 
-	setResult(resultSize, result);
+	setResult(resultSize, result.data());
 	return TCL_OK;
 }
 
@@ -4355,6 +4440,12 @@ cmdSavePGN(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdUpdate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 5)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <index> <tag-list>");
+		return TCL_ERROR;
+	}
+
 	char const*		database	= stringFromObj(objc, objv, 1);
 	variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 2);
 	unsigned			index		= unsignedFromObj(objc, objv, 3);
@@ -4584,26 +4675,30 @@ tcl::db::getPlayerStats(Database const& database, NamebasePlayer const& player)
 	objs[0] = Tcl_NewListObj(0, 0);
 	for (unsigned i = 0, n = mstl::min(5u, stats.countEcoLines(color::White)); i < n; ++i)
 	{
-		Tcl_Obj* argv[2];
+		Tcl_Obj* argv[3];
 		mstl::string line;
+		mstl::string eco(stats.ecoLine(color::White, i).asShortString());
 
 		ecoTable.getLine(stats.ecoLine(color::White, i)).
 			print(line, variant::Normal, move::SAN, protocol::Scidb, encoding::Utf8);
 		argv[0] = Tcl_NewIntObj(stats.ecoCount(color::White, i));
-		argv[1] = Tcl_NewStringObj(line, line.size());
-		Tcl_ListObjAppendElement(0, objs[0], Tcl_NewListObj(2, argv));
+		argv[1] = Tcl_NewStringObj(eco, eco.size());
+		argv[2] = Tcl_NewStringObj(line, line.size());
+		Tcl_ListObjAppendElement(0, objs[0], Tcl_NewListObj(3, argv));
 	}
 	objs[1] = Tcl_NewListObj(0, 0);
 	for (unsigned i = 0, n = mstl::min(5u, stats.countEcoLines(color::Black)); i < n; ++i)
 	{
-		Tcl_Obj* argv[2];
+		Tcl_Obj* argv[3];
 		mstl::string line;
+		mstl::string eco(stats.ecoLine(color::Black, i).asShortString());
 
 		ecoTable.getLine(stats.ecoLine(color::Black, i)).
 			print(line, variant::Normal, move::SAN, protocol::Scidb, encoding::Utf8);
 		argv[0] = Tcl_NewIntObj(stats.ecoCount(color::Black, i));
-		argv[1] = Tcl_NewStringObj(line, line.size());
-		Tcl_ListObjAppendElement(0, objs[1], Tcl_NewListObj(2, argv));
+		argv[1] = Tcl_NewStringObj(eco, eco.size());
+		argv[2] = Tcl_NewStringObj(line, line.size());
+		Tcl_ListObjAppendElement(0, objs[1], Tcl_NewListObj(3, argv));
 	}
 	objv[6] = Tcl_NewListObj(2, objs);
 

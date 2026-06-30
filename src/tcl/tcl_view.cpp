@@ -34,6 +34,7 @@
 #include "tcl_log.h"
 #include "tcl_obj.h"
 #include "tcl_base.h"
+#include "tcl_search.h"
 
 #include "app_application.h"
 #include "app_cursor.h"
@@ -149,15 +150,9 @@ struct MySubscriber : public Cursor::Subscriber
 
 typedef mstl::ref_counted_ptr<MySubscriber> SubscriberP;
 typedef mstl::map<mstl::string, SubscriberP> SubscriberMap;
-typedef mstl::ref_counted_ptr<Search> SearchP;
 
 static SubscriberMap subscriberMap;
 
-static bool parseMaterialPart(mstl::string const& text, material::si3::Signature& sig, bool white);
-static bool parseMaterialSignature(Tcl_Interp* ti, Tcl_Obj* obj, material::si3::Signature& sig);
-static bool parsePawnRange(Tcl_Interp* ti, Tcl_Obj* obj, unsigned& minValue, unsigned& maxValue);
-static bool parseRatingRange(Tcl_Interp* ti, Tcl_Obj* obj, unsigned& minValue, unsigned& maxValue);
-static mstl::string decodeLiteralPattern(char const* text, bool& exact);
 static mstl::string makeSubscriberKey(mstl::string const& base, variant::Type variant)
 {
 	mstl::string key(base);
@@ -169,651 +164,6 @@ static mstl::string makeSubscriberKey(mstl::string const& base, variant::Type va
 }
 
 } // namespace
-
-
-static SearchP
-buildSearch(Database const& db, Tcl_Interp* ti, Tcl_Obj* query)
-{
-	int objc;
-	Tcl_Obj** objv;
-
-	Tcl_ListObjGetElements(ti, query, &objc, &objv);
-
-	if (objc < 2)
-	{
-		error(CmdSearch, 0, 0, "invalid query");
-		return SearchP();
-	}
-
-	static char const* subcommands[] =
-	{
-		"OR", "AND", "NOT", "REMOVE", "RESET", "NULL",
-		"player", "event", "site", "gameevent", "annotator", "position",
-		"playername", "eventname", "sitename", "annotatorname", "eco",
-		"material", "rating",
-		nullptr
-	};
-	// Must stay parallel to subcommands[]: usage() iterates until the
-	// subcommands terminator and dereferences args[i] for every entry.
-	static char const* args[] =
-	{
-		"<query>+",										// OR
-		"<query>+",										// AND
-		"<query>",										// NOT
-		nullptr,											// REMOVE
-		nullptr,											// RESET
-		nullptr,											// NULL
-		"<index>",										// player
-		"<index>",										// event
-		"<index>",										// site
-		"<index>",										// gameevent
-		"<name>",										// annotator
-		"<idn>",											// position
-		"?white|black|any? <name>",				// playername
-		"<name>",										// eventname
-		"<name>",										// sitename
-		"<name>",										// annotatorname
-		"<eco>",											// eco
-		"?exact|class|pawns? <signature>",		// material
-		"<type> white|black|average|both <range> ?<range>?",	// rating
-		nullptr
-	};
-	enum
-	{
-		Or, And, Not, Remove, Reset, Null, Player, Event, Site, GameEvent, Annotator, Position,
-		PlayerName, EventName, SiteName, AnnotatorName, Eco, Material, Rating
-	};
-
-	SearchP search;
-
-	switch (tcl::uniqueMatchObj(objv[0], subcommands))
-	{
-		case Or:
-		{
-			if (objc < 3)
-			{
-				error(CmdSearch, Tcl_GetString(objv[0]), 0, "at least two queries expected");
-				return search;
-			}
-
-			SearchOpOr* op = new SearchOpOr;
-
-			for (int i = 1; i < objc; ++i)
-			{
-				SearchP item(buildSearch(db, ti, objv[i]));
-				if (!item)
-					return SearchP();
-
-				op->append(item.release());
-			}
-
-			search = op;
-			break;
-		}
-
-		case And:
-		{
-			if (objc < 3)
-			{
-				error(CmdSearch, Tcl_GetString(objv[0]), 0, "at least two queries expected");
-				return search;
-			}
-
-			SearchOpAnd* op = new SearchOpAnd;
-
-			for (int i = 1; i < objc; ++i)
-			{
-				SearchP item(buildSearch(db, ti, objv[i]));
-				if (!item)
-					return SearchP();
-
-				op->append(item.release());
-			}
-
-			search = op;
-			break;
-		}
-
-		case Remove:
-		case Reset:
-		case Null:
-			error(CmdSearch, Tcl_GetString(objv[0]), 0, "query operator not supported in nested queries");
-			return search;
-
-		case Not:
-			if (objc != 2)
-			{
-				error(CmdSearch, "NOT", 0, "invalid query");
-				return search;
-			}
-			search = buildSearch(db, ti, objv[1]);
-			if (!search)
-				return search;
-			search = new SearchOpNot(search);
-			break;
-
-		case Player:
-			if (objc != 2)
-			{
-				error(CmdSearch, "player", 0, "invalid query");
-				return search;
-			}
-			search = new SearchPlayer(&db.player(unsignedFromObj(2, objv, 1)));
-			break;
-
-		case Event:
-			if (objc != 2)
-			{
-				error(CmdSearch, "event", 0, "invalid query");
-				return search;
-			}
-			search = new SearchEvent(&db.event(unsignedFromObj(2, objv, 1)));
-			break;
-
-		case GameEvent:
-		{
-			if (objc != 2)
-			{
-				error(CmdSearch, "gameevent", 0, "invalid query");
-				return search;
-			}
-			GameInfo const& info = db.gameInfo(unsignedFromObj(2, objv, 1));
-			search = new SearchGameEvent(info.eventEntry(), info.date());
-			break;
-		}
-
-		case Site:
-			if (objc != 2)
-			{
-				error(CmdSearch, "event", 0, "invalid query");
-				return search;
-			}
-			search = new SearchSite(&db.site(unsignedFromObj(2, objv, 1)));
-			break;
-
-		case Annotator:
-			if (objc != 2)
-			{
-				error(CmdSearch, "annotator", 0, "invalid query");
-				return search;
-			}
-			search = new SearchAnnotator(Tcl_GetString(objv[1]));
-			break;
-
-		case Position:
-		{
-			if (objc != 2)
-			{
-				error(CmdSearch, "position", 0, "invalid query");
-				return search;
-			}
-			int idn;
-			if (Tcl_GetIntFromObj(ti, objv[1], &idn) != TCL_OK || idn < 0)
-			{
-				error(CmdSearch, "position", 0, "invalid query, positive IDN expected");
-				return search;
-			}
-			search = new SearchPosition(idn);
-			break;
-		}
-
-		case PlayerName:
-		{
-			if (objc != 2 && objc != 3)
-			{
-				error(CmdSearch, "playername", 0, "invalid query");
-				return search;
-			}
-
-			SearchPlayerName::Mode mode = SearchPlayerName::Any;
-			char const* name = 0;
-
-			if (objc == 2)
-			{
-				name = Tcl_GetString(objv[1]);
-			}
-			else
-			{
-				char const* side = Tcl_GetString(objv[1]);
-				if (::strcasecmp(side, "white") == 0)
-					mode = SearchPlayerName::White;
-				else if (::strcasecmp(side, "black") == 0)
-					mode = SearchPlayerName::Black;
-				else if (::strcasecmp(side, "any") == 0)
-					mode = SearchPlayerName::Any;
-				else
-				{
-					error(CmdSearch, "playername", 0, "invalid player side");
-					return search;
-				}
-
-				name = Tcl_GetString(objv[2]);
-			}
-
-			if (*name == '\0')
-			{
-				error(CmdSearch, "playername", 0, "empty player name");
-				return search;
-			}
-
-			bool exact = false;
-			mstl::string decoded = decodeLiteralPattern(name, exact);
-			search = new SearchPlayerName(mode, decoded, exact);
-			break;
-		}
-
-		case EventName:
-			if (objc != 2 || *Tcl_GetString(objv[1]) == '\0')
-			{
-				error(CmdSearch, "eventname", 0, "invalid query");
-				return search;
-			}
-		{
-			bool exact = false;
-			mstl::string decoded = decodeLiteralPattern(Tcl_GetString(objv[1]), exact);
-			search = new SearchEventName(decoded, exact);
-		}
-			break;
-
-		case SiteName:
-			if (objc != 2 || *Tcl_GetString(objv[1]) == '\0')
-			{
-				error(CmdSearch, "sitename", 0, "invalid query");
-				return search;
-			}
-		{
-			bool exact = false;
-			mstl::string decoded = decodeLiteralPattern(Tcl_GetString(objv[1]), exact);
-			search = new SearchSiteName(decoded, exact);
-		}
-			break;
-
-		case AnnotatorName:
-			if (objc != 2 || *Tcl_GetString(objv[1]) == '\0')
-			{
-				error(CmdSearch, "annotatorname", 0, "invalid query");
-				return search;
-			}
-		{
-			bool exact = false;
-			mstl::string decoded = decodeLiteralPattern(Tcl_GetString(objv[1]), exact);
-			search = new SearchAnnotatorName(decoded, exact);
-		}
-			break;
-
-		case Eco:
-			if (objc != 2 || *Tcl_GetString(objv[1]) == '\0')
-			{
-				error(CmdSearch, "eco", 0, "invalid query");
-				return search;
-			}
-			search = new SearchEco(Tcl_GetString(objv[1]), db.variant());
-			break;
-
-		case Material:
-		{
-			if (objc != 2 && objc != 3)
-			{
-				error(CmdSearch, "material", 0, "invalid query");
-				return search;
-			}
-
-			if (objc == 2)
-			{
-				material::si3::Signature signature;
-				if (!parseMaterialSignature(ti, objv[1], signature))
-				{
-					error(CmdSearch, "material", 0, "invalid material signature");
-					return search;
-				}
-
-				search = new SearchMaterial(signature);
-				break;
-			}
-
-			char const* mode = Tcl_GetString(objv[1]);
-
-			if (::strcmp(mode, "exact") == 0)
-			{
-				material::si3::Signature signature;
-				if (!parseMaterialSignature(ti, objv[2], signature))
-				{
-					error(CmdSearch, "material", 0, "invalid material signature");
-					return search;
-				}
-				search = new SearchMaterial(signature);
-			}
-			else if (::strcmp(mode, "class") == 0)
-			{
-				material::si3::Signature signature;
-				if (!parseMaterialSignature(ti, objv[2], signature))
-				{
-					error(CmdSearch, "material", 0, "invalid material signature");
-					return search;
-				}
-				search = new SearchMaterialClass(signature);
-			}
-			else if (::strcmp(mode, "pawns") == 0)
-			{
-				int rangec = 0;
-				Tcl_Obj** rangev = 0;
-				if (Tcl_ListObjGetElements(ti, objv[2], &rangec, &rangev) != TCL_OK || rangec != 2)
-				{
-					error(CmdSearch, "material", 0, "invalid pawn range");
-					return search;
-				}
-
-				unsigned whiteMin, whiteMax, blackMin, blackMax;
-				if (!parsePawnRange(ti, rangev[0], whiteMin, whiteMax)
-					|| !parsePawnRange(ti, rangev[1], blackMin, blackMax))
-				{
-					error(CmdSearch, "material", 0, "invalid pawn range");
-					return search;
-				}
-				search = new SearchMaterialPawns(whiteMin, whiteMax, blackMin, blackMax);
-			}
-			else
-			{
-				error(CmdSearch, "material", 0, "invalid material mode");
-				return search;
-			}
-
-			break;
-		}
-
-		case Rating:
-		{
-			if (objc != 4 && objc != 5)
-			{
-				error(CmdSearch, "rating", 0, "invalid query");
-				return search;
-			}
-
-			rating::Type type = rating::fromString(Tcl_GetString(objv[1]));
-			if (type == rating::Last)
-			{
-				error(CmdSearch, "rating", 0, "invalid rating type");
-				return search;
-			}
-
-			char const* mode = Tcl_GetString(objv[2]);
-			unsigned minA, maxA, minB, maxB;
-
-			if (::strcmp(mode, "white") == 0)
-			{
-				if (!parseRatingRange(ti, objv[3], minA, maxA))
-				{
-					error(CmdSearch, "rating", 0, "invalid rating range");
-					return search;
-				}
-				search = new SearchRating(type, SearchRating::White, minA, maxA);
-			}
-			else if (::strcmp(mode, "black") == 0)
-			{
-				if (!parseRatingRange(ti, objv[3], minA, maxA))
-				{
-					error(CmdSearch, "rating", 0, "invalid rating range");
-					return search;
-				}
-				search = new SearchRating(type, SearchRating::Black, 0, 0, minA, maxA);
-			}
-			else if (::strcmp(mode, "average") == 0)
-			{
-				if (!parseRatingRange(ti, objv[3], minA, maxA))
-				{
-					error(CmdSearch, "rating", 0, "invalid rating range");
-					return search;
-				}
-				search = new SearchRating(type, SearchRating::Average, minA, maxA);
-			}
-			else if (::strcmp(mode, "both") == 0 && objc == 5)
-			{
-				if (!parseRatingRange(ti, objv[3], minA, maxA)
-					|| !parseRatingRange(ti, objv[4], minB, maxB))
-				{
-					error(CmdSearch, "rating", 0, "invalid rating range");
-					return search;
-				}
-				search = new SearchRating(type, SearchRating::Both, minA, maxA, minB, maxB);
-			}
-			else
-			{
-				error(CmdSearch, "rating", 0, "invalid rating mode");
-				return search;
-			}
-
-			break;
-		}
-
-		default:
-			usage(CmdSearch, Tcl_GetString(objv[0]), nullptr, subcommands, args);
-			return search;
-	}
-
-	return search;
-}
-
-
-namespace {
-
-static mstl::string
-decodeLiteralPattern(char const* text, bool& exact)
-{
-	exact = false;
-	if (text == nullptr)
-		return mstl::string();
-
-	if (*text == '=')
-	{
-		exact = true;
-		++text;
-	}
-
-	return mstl::string(text);
-}
-
-
-static bool
-parseMaterialPart(mstl::string const& text, material::si3::Signature& sig, bool white)
-{
-	mstl::string const& queen = piece::utf8::asString(piece::Queen);
-	mstl::string const& rook = piece::utf8::asString(piece::Rook);
-	mstl::string const& bishop = piece::utf8::asString(piece::Bishop);
-	mstl::string const& knight = piece::utf8::asString(piece::Knight);
-	unsigned queens = 0;
-	unsigned rooks = 0;
-	unsigned bishops = 0;
-	unsigned knights = 0;
-	unsigned pawns = 0;
-	bool seenPawns = false;
-
-	for (mstl::string::size_type i = 0; i < text.size(); )
-	{
-		if (i + queen.size() <= text.size() && mstl::string(text, i, queen.size()) == queen)
-		{
-			++queens;
-			i += queen.size();
-		}
-		else if (i + rook.size() <= text.size() && mstl::string(text, i, rook.size()) == rook)
-		{
-			++rooks;
-			i += rook.size();
-		}
-		else if (i + bishop.size() <= text.size() && mstl::string(text, i, bishop.size()) == bishop)
-		{
-			++bishops;
-			i += bishop.size();
-		}
-		else if (i + knight.size() <= text.size() && mstl::string(text, i, knight.size()) == knight)
-		{
-			++knights;
-			i += knight.size();
-		}
-		else
-		{
-			unsigned char c = text[i];
-
-			switch (::tolower(c))
-			{
-				case 'q': ++queens; ++i; break;
-				case 'r': ++rooks; ++i; break;
-				case 'b': ++bishops; ++i; break;
-				case 'n': ++knights; ++i; break;
-
-				default:
-					if (!::isdigit(c))
-						return false;
-
-					seenPawns = true;
-					pawns = 10*pawns + (c - '0');
-					++i;
-					break;
-			}
-		}
-	}
-
-	if (!seenPawns && queens == 0 && rooks == 0 && bishops == 0 && knights == 0)
-		return false;
-	if (queens > 3 || rooks > 3 || bishops > 3 || knights > 3 || pawns > 15)
-		return false;
-
-	if (white)
-	{
-		sig.wq = queens;
-		sig.wr = rooks;
-		sig.wb = bishops;
-		sig.wn = knights;
-		sig.wp = pawns;
-	}
-	else
-	{
-		sig.bq = queens;
-		sig.br = rooks;
-		sig.bb = bishops;
-		sig.bn = knights;
-		sig.bp = pawns;
-	}
-
-	return true;
-}
-
-
-static bool
-parseMaterialSignature(Tcl_Interp* ti, Tcl_Obj* obj, material::si3::Signature& sig)
-{
-	int objc = 0;
-	Tcl_Obj** objv = 0;
-
-	if (Tcl_ListObjGetElements(ti, obj, &objc, &objv) == TCL_OK && objc == 10)
-	{
-		unsigned values[10];
-
-		for (int i = 0; i < objc; ++i)
-		{
-			int value;
-			if (Tcl_GetIntFromObj(ti, objv[i], &value) != TCL_OK || value < 0)
-				return false;
-			values[i] = unsigned(value);
-		}
-
-		if (	values[0] > 3 || values[1] > 3 || values[2] > 3 || values[3] > 3 || values[4] > 15
-			||	values[5] > 3 || values[6] > 3 || values[7] > 3 || values[8] > 3 || values[9] > 15)
-		{
-			return false;
-		}
-
-		sig.wq = values[0];
-		sig.wr = values[1];
-		sig.wb = values[2];
-		sig.wn = values[3];
-		sig.wp = values[4];
-		sig.bq = values[5];
-		sig.br = values[6];
-		sig.bb = values[7];
-		sig.bn = values[8];
-		sig.bp = values[9];
-		return true;
-	}
-
-	mstl::string text(Tcl_GetString(obj));
-	mstl::string::size_type sep = text.find(':');
-
-	if (sep == mstl::string::npos)
-		return false;
-
-	mstl::string white(text, 0, sep);
-	mstl::string black(text, sep + 1);
-
-	return parseMaterialPart(white, sig, true)
-		&& parseMaterialPart(black, sig, false);
-}
-
-
-static bool
-parsePawnRange(Tcl_Interp* ti, Tcl_Obj* obj, unsigned& minValue, unsigned& maxValue)
-{
-	mstl::string text(Tcl_GetString(obj));
-	mstl::string::size_type sep = text.find('-');
-
-	if (sep == mstl::string::npos)
-	{
-		int value;
-		if (Tcl_GetIntFromObj(ti, obj, &value) != TCL_OK || value < 0 || value > 15)
-			return false;
-		minValue = maxValue = unsigned(value);
-		return true;
-	}
-
-	mstl::string lhs(text, 0, sep);
-	mstl::string rhs(text, sep + 1);
-	if (lhs.size() == 0 || rhs.size() == 0)
-		return false;
-
-	int low = ::atoi(lhs.c_str());
-	int high = ::atoi(rhs.c_str());
-
-	if (low < 0 || high < 0 || low > high || high > 15)
-		return false;
-
-	minValue = unsigned(low);
-	maxValue = unsigned(high);
-	return true;
-}
-
-
-static bool
-parseRatingRange(Tcl_Interp* ti, Tcl_Obj* obj, unsigned& minValue, unsigned& maxValue)
-{
-	mstl::string text(Tcl_GetString(obj));
-	mstl::string::size_type sep = text.find('-');
-
-	if (sep == mstl::string::npos)
-	{
-		int value;
-		if (Tcl_GetIntFromObj(ti, obj, &value) != TCL_OK || value < 0 || value > 4000)
-			return false;
-		minValue = maxValue = unsigned(value);
-		return true;
-	}
-
-	mstl::string lhs(text, 0, sep);
-	mstl::string rhs(text, sep + 1);
-	if (lhs.empty() || rhs.empty())
-		return false;
-
-	int low = ::atoi(lhs.c_str());
-	int high = ::atoi(rhs.c_str());
-
-	if (low < 0 || high < 0 || low > high || high > 4000)
-		return false;
-
-	minValue = unsigned(low);
-	maxValue = unsigned(high);
-	return true;
-}
-
-} // namespace
-
 
 bool
 tcl::view::buildTagSet(Tcl_Interp* ti, char const* cmd, Tcl_Obj* allowedTags, ::db::tag::TagSet& tagBits)
@@ -897,11 +247,7 @@ tcl::view::makeLangList(Tcl_Interp* ti,
 static int
 cmdNew(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc != 8 && objc != 9)
-	{
-		Tcl_WrongNumArgs(ti, 1, objv, "<database> ?<variant>? <games> <players> <annotators> <positions> <events> <sites>");
-		return TCL_ERROR;
-	}
+	CHECK_ARGS_RANGE(ti, objc, objv, 8, 9, "<database> ?<variant>? <games> <players> <annotators> <positions> <events> <sites>");
 
 	char const*		base		= stringFromObj(objc, objv, 1);
 	variant::Type	variant	= variant::Undetermined;
@@ -934,11 +280,7 @@ cmdNew(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdClose(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc != 3 && objc != 4)
-	{
-		Tcl_WrongNumArgs(ti, 1, objv, "<database> ?<variant>? <view>");
-		return TCL_ERROR;
-	}
+	CHECK_ARGS_RANGE(ti, objc, objv, 3, 4, "<database> ?<variant>? <view>");
 
 	int view = intFromObj(objc, objv, objc > 3 ? 3 : 2);
 	variant::Type variant = objc > 3 ? tcl::game::variantFromObj(objv[2]) : variant::Undetermined;
@@ -1062,15 +404,7 @@ cmdFind(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	};
 	enum { Cmd_Player, Cmd_Event, Cmd_Site, Cmd_Annotator };
 
-	if (objc != 6 && objc != 7)
-	{
-		Tcl_WrongNumArgs(
-			ti,
-			1,
-			objv,
-			"player|event|site|annotator <database> <variant> <view> <string> ?<start-index>?");
-		return TCL_ERROR;
-	}
+	CHECK_ARGS_RANGE(ti, objc, objv, 6, 7, "player|event|site|annotator <database> <variant> <view> <string> ?<start-index>?");
 
 	int index = tcl::uniqueMatchObj(objv[1], subcommands);
 
@@ -1111,15 +445,7 @@ cmdFind(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSearch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc < 5 || 7 < objc)
-	{
-		Tcl_WrongNumArgs(
-			ti,
-			1,
-			objv,
-			"<database> ?<variant>? <view> <operator> <none|events|sites|players> ?<query>?");
-		return TCL_ERROR;
-	}
+	CHECK_ARGS_RANGE(ti, objc, objv, 5, 7, "<database> ?<variant>? <view> <operator> <none|events|sites|players> ?<query>?");
 
 	unsigned n = *Tcl_GetString(objv[2]) == '-' || isdigit(*Tcl_GetString(objv[2])) ? 0 : 1;
 
@@ -1181,7 +507,7 @@ cmdSearch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	SearchP search;
 
 	if (objc >= int(6 + n))
-		search = buildSearch(cursor.database(), ti, objv[5 + n]);
+		search = tcl::search::buildSearch(cursor.database(), ti, objv[5 + n]);
 
 	if (!search && objc == int(6 + n))
 		return TCL_ERROR;
@@ -1198,30 +524,37 @@ cmdSearch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSetTreeFilter(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc != 4 && objc != 5)
+	// setTreeFilter <database> ?<variant>? <view> -row <n>
+	// setTreeFilter <database> ?<variant>? <view> -identity <string>
+	CHECK_ARGS_RANGE(ti, objc, objv, 6, 7,
+		"<database> ?<variant>? <view> -row <n> | -identity <string>");
+
+	unsigned n = objc == 7 ? 1 : 0;
+	char const* database		= stringFromObj(objc, objv, 1);
+	variant::Type variant		= n ? tcl::game::variantFromObj(objv[2]) : variant::Undetermined;
+	unsigned view				= unsignedFromObj(objc, objv, 2 + n);
+	char const* mode			= stringFromObj(objc, objv, 3 + n);
+	char const* value			= stringFromObj(objc, objv, 4 + n);
+	Cursor& cursor				= scidb->cursor(database, variant);
+
+	if (::strcmp(mode, "-row") == 0)
 	{
-		Tcl_WrongNumArgs(ti, 1, objv, "<database> ?<variant>? <view> <row-or-identity>");
-		return TCL_ERROR;
+		unsigned row = unsignedFromObj(objc, objv, 4 + n);
+
+		if (!scidb->setCurrentTreeRowFilter(cursor, view, row))
+			return error(CmdSetTreeFilter, nullptr, nullptr,
+			             "unable to apply tree row %u to view %u", row, view);
 	}
-
-	unsigned n = objc == 5 ? 1 : 0;
-	char const* database = stringFromObj(objc, objv, 1);
-	variant::Type variant = n ? tcl::game::variantFromObj(objv[2]) : variant::Undetermined;
-	unsigned view = unsignedFromObj(objc, objv, 2 + n);
-	char const* rowOrIdentity = stringFromObj(objc, objv, 3 + n);
-	Cursor& cursor = scidb->cursor(database, variant);
-
-	if (::strchr(rowOrIdentity, '|'))
+	else if (::strcmp(mode, "-identity") == 0)
 	{
-		if (!scidb->setCurrentTreeRowFilter(cursor, view, mstl::string(rowOrIdentity)))
-			return error(CmdSetTreeFilter, nullptr, nullptr, "unable to apply current tree identity '%s' to view %u", rowOrIdentity, view);
+		if (!scidb->setCurrentTreeRowFilter(cursor, view, mstl::string(value)))
+			return error(CmdSetTreeFilter, nullptr, nullptr,
+			             "unable to apply tree identity '%s' to view %u", value, view);
 	}
 	else
 	{
-		unsigned row = unsignedFromObj(objc, objv, 3 + n);
-
-		if (!scidb->setCurrentTreeRowFilter(cursor, view, row))
-			return error(CmdSetTreeFilter, nullptr, nullptr, "unable to apply current tree row %u to view %u", row, view);
+		return error(CmdSetTreeFilter, nullptr, nullptr,
+		             "unknown mode '%s', expected -row or -identity", mode);
 	}
 
 	setResult(true);
@@ -1232,14 +565,9 @@ cmdSetTreeFilter(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdCopy(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc != 10)
-	{
-		Tcl_WrongNumArgs(
-			ti, 1, objv,
-			"<source> <view> <destination> <variant> <tag-set> "
-			"<progress-cmd> <progress-arg> <log-cmd> <log-arg>");
-		return TCL_ERROR;
-	}
+	CHECK_ARGS(ti, objc, objv, 10,
+		"<source> <view> <destination> <variant> <tag-set> "
+		"<progress-cmd> <progress-arg> <log-cmd> <log-arg>");
 
 
 	View::TagBits	tagBits;
@@ -1283,14 +611,9 @@ cmdCopy(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdExport(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc != 15)
-	{
-		Tcl_WrongNumArgs(
-			ti, 1, objv,
-			"<database> <variant> <view> <file> <flags> <mode> <encoding> <exclude-illegal-games-flag> "
-			"<exported-tags> <languages> <progress-cmd> <progress-arg> <log-cmd> <log-arg>");
-		return TCL_ERROR;
-	}
+	CHECK_ARGS(ti, objc, objv, 15,
+		"<database> <variant> <view> <file> <flags> <mode> <encoding> <exclude-illegal-games-flag> "
+		"<exported-tags> <languages> <progress-cmd> <progress-arg> <log-cmd> <log-arg>");
 
 	View::TagBits	tagBits;
 	char const*		database			= stringFromObj(objc, objv, 1);
@@ -1358,15 +681,10 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		mstl::string str;
 	};
 
-	if (objc != 17)
-	{
-		Tcl_WrongNumArgs(
-			ti, 1, objv,
-			"<database> <variant> <view> <file> <search-path> <script-path> <preamble> <flags> "
-			" <options> <nag-map> <languages> <trace> <progress-cmd> <progress-arg> "
-			"<log-cmd> <log-arg>");
-		return TCL_ERROR;
-	}
+	CHECK_ARGS(ti, objc, objv, 17,
+		"<database> <variant> <view> <file> <search-path> <script-path> <preamble> <flags> "
+		" <options> <nag-map> <languages> <trace> <progress-cmd> <progress-arg> "
+		"<log-cmd> <log-arg>");
 
 	char const*		database			= stringFromObj(objc, objv, 1);
 	variant::Type	variant			= tcl::game::variantFromObj(objc, objv, 2);
@@ -1458,11 +776,7 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdMap(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc != 5 && objc != 6)
-	{
-		Tcl_WrongNumArgs(ti, 1, objv, "<player|event|site|game|position> <database> ?<variant>? <view> <index>");
-		return TCL_ERROR;
-	}
+	CHECK_ARGS_RANGE(ti, objc, objv, 5, 6, "<player|event|site|game|position> <database> ?<variant>? <view> <index>");
 
 	char const*		attr		= stringFromObj(objc, objv, 1);
 	char const*		database	= stringFromObj(objc, objv, 2);
@@ -1491,11 +805,7 @@ cmdMap(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSubscribe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc != 4 && objc != 5)
-	{
-		Tcl_WrongNumArgs(ti, 1, objv, "<proc> <database> <variant> ?<arg>?");
-		return TCL_ERROR;
-	}
+	CHECK_ARGS_RANGE(ti, objc, objv, 4, 5, "<proc> <database> <variant> ?<arg>?");
 
 	Tcl_Obj*			proc		= objectFromObj(objc, objv, 1);
 	Tcl_Obj*			base		= objectFromObj(objc, objv, 2);
@@ -1523,11 +833,7 @@ cmdSubscribe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdUnsubscribe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc != 4 && objc != 5)
-	{
-		Tcl_WrongNumArgs(ti, 1, objv, "<proc> <database> <variant> ?<arg>?");
-		return TCL_ERROR;
-	}
+	CHECK_ARGS_RANGE(ti, objc, objv, 4, 5, "<proc> <database> <variant> ?<arg>?");
 
 	Tcl_Obj*			proc		= objectFromObj(objc, objv, 1);
 	Tcl_Obj*			base		= objectFromObj(objc, objv, 2);
@@ -1553,13 +859,7 @@ cmdUnsubscribe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdStrip(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc != 8)
-	{
-		Tcl_WrongNumArgs(
-			ti, 1, objv,
-			"<what> <database> <variant> <view> <attributes> <progress-cmd> <progress-arg> ");
-		return TCL_ERROR;
-	}
+	CHECK_ARGS(ti, objc, objv, 8, "<what> <database> <variant> <view> <attributes> <progress-cmd> <progress-arg> ");
 
 	char const*		what		= stringFromObj(objc, objv, 1);
 	char const*		database	= stringFromObj(objc, objv, 2);
@@ -1633,13 +933,7 @@ cmdEnumTags(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	typedef View::TagMap TagMap;
 
-	if (objc != 6)
-	{
-		Tcl_WrongNumArgs(
-			ti, 1, objv,
-			"<database> <variant> <view> <progress-cmd> <progress-arg> ");
-		return TCL_ERROR;
-	}
+	CHECK_ARGS(ti, objc, objv, 6, "<database> <variant> <view> <progress-cmd> <progress-arg> ");
 
 	char const*		database	= stringFromObj(objc, objv, 1);
 	variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 2);
@@ -1703,5 +997,4 @@ init(Tcl_Interp* ti)
 
 } // namespace view
 } // namespace tcl
-
 // vi:set ts=3 sw=3:

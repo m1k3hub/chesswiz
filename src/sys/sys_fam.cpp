@@ -820,12 +820,14 @@ monitorFAM(mstl::string const& path, Request& req, file::Type type, unsigned sta
 		if (fcntl(fd, F_SETSIG, long(fcntlSignal)) == -1)
 		{
 			error.format("fcntl(F_SETSIG): unexpected error %d\n", errno);
+			close(fd);
 			return false;
 		}
 
 		if (fcntl(fd, F_NOTIFY, events) == -1)
 		{
 			error.format("fcntl(F_NOTIFY): unexpected error %d\n", errno);
+			close(fd);
 			return false;
 		}
 
@@ -906,14 +908,17 @@ FileAlterationMonitor::~FileAlterationMonitor() throw()
 		::Request::MonitorList& mlist = req.m_monitorList;
 
 		::Request::MonitorList::reverse_iterator k = mlist.rbegin();
-		::Request::MonitorList::reverse_iterator e = mlist.rend();
 
-		for ( ; k != e; ++k)
+		while (k != mlist.rend())
 		{
 			if (k->m_fam == this)
 			{
 				::cancelMonitorFAM(req);
-				mlist.erase(k);
+				k = ::Request::MonitorList::reverse_iterator(mlist.erase(k.base()));
+			}
+			else
+			{
+				++k;
 			}
 		}
 

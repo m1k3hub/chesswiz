@@ -159,7 +159,7 @@ Key::addPly(unsigned ply)
 	M_REQUIRE(isVariationId());
 
 	char buf[32];
-	m_id.append(buf, ::sprintf(buf, ".%u", ply));
+	m_id.append(buf, ::snprintf(buf, sizeof(buf), ".%u", ply));
 }
 
 
@@ -172,7 +172,7 @@ Key::exchangePly(unsigned ply)
 	char buf[32];
 
 	unsigned pos = m_id.rfind('.') + 1;
-	m_id.replace(pos, m_id.size() - pos, buf, ::sprintf(buf, "%u", ply));
+	m_id.replace(pos, m_id.size() - pos, buf, ::snprintf(buf, sizeof(buf), "%u", ply));
 }
 
 
@@ -231,7 +231,7 @@ Key::addVariation(unsigned varno)
 	M_REQUIRE(!isVariationId());
 
 	char buf[32];
-	m_id.append(buf, ::sprintf(buf, ".%u", varno));
+	m_id.append(buf, ::snprintf(buf, sizeof(buf), ".%u", varno));
 }
 
 
@@ -245,7 +245,7 @@ Key::exchangeVariation(unsigned varno)
 	char buf[32];
 
 	unsigned pos = m_id.rfind('.')  + 1;
-	m_id.replace(pos, m_id.size() - pos, buf, ::sprintf(buf, "%u", varno));
+	m_id.replace(pos, m_id.size() - pos, buf, ::snprintf(buf, sizeof(buf), "%u", varno));
 }
 
 

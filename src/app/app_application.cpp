@@ -68,6 +68,7 @@
 #include "m_assert.h"
 #include "m_stdio.h"
 
+#include <stdio.h>
 #include <string.h>
 
 using namespace db;
@@ -83,6 +84,24 @@ unsigned const Application::ReservedPosition;
 
 static unsigned undoLevel = 20;
 static unsigned undoCombinePredecessingMoves = 9999;
+
+
+Application::OpeningPrepRow::OpeningPrepRow()
+	:row(0)
+	,frequency(0)
+	,score(0)
+	,draws(0)
+	,averageRating(0)
+	,performance(0)
+	,bestRating(0)
+	,averageYear(0)
+	,lastYear(0)
+	,bestPlayerRating(0)
+	,mostFrequentPlayerFrequency(0)
+	,firstGameIndex(0)
+	,result(4)
+{
+}
 
 
 namespace {
@@ -604,12 +623,12 @@ Application::isScratchGame(unsigned position) const
 bool
 Application::hasTrialMode(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
 
-	return bool(m_gameMap.find(m_currentPosition)->second->data.backup);
+	M_REQUIRE(containsGameAt(position));
+
+	return bool(m_gameMap.find(position)->second->data.backup);
 }
 
 
@@ -717,10 +736,10 @@ Application::findGame(Cursor* cursor, unsigned index, unsigned* position)
 mstl::string const&
 Application::encoding(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	return m_gameMap.find(position)->second->data.encoding;
 }
@@ -905,7 +924,7 @@ Application::closeAllGames(Cursor& cursor)
 {
 	M_REQUIRE(contains(cursor));
 
-	for (GameMap::iterator i = m_gameMap.begin(); i != m_gameMap.end(); ++i)
+	for (GameMap::iterator i = m_gameMap.begin(); i != m_gameMap.end(); )
 	{
 		if (i->second->sink.cursor == &cursor)
 		{
@@ -920,6 +939,10 @@ Application::closeAllGames(Cursor& cursor)
 
 			if (m_currentPosition == position)
 				m_currentPosition = InvalidPosition;
+		}
+		else
+		{
+			++i;
 		}
 	}
 
@@ -938,10 +961,10 @@ Application::gameInfo(unsigned index, unsigned view) const
 GameInfo const&
 Application::gameInfoAt(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	EditGame const& game = *m_gameMap.find(position)->second;
 	return game.sink.cursor->database().gameInfo(game.sink.index);
@@ -951,10 +974,10 @@ Application::gameInfoAt(unsigned position) const
 unsigned
 Application::gameIndex(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	return m_gameMap.find(position)->second->sink.index;
 }
@@ -963,10 +986,10 @@ Application::gameIndex(unsigned position) const
 unsigned
 Application::gameNumber(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	EditGame const& game = *m_gameMap.find(position)->second;
 	return game.sink.cursor->index(table::Games, game.sink.index, 0);
@@ -976,10 +999,10 @@ Application::gameNumber(unsigned position) const
 Cursor&
 Application::getGameCursor(unsigned position)
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	return *m_gameMap.find(position)->second->sink.cursor;
 }
@@ -988,10 +1011,10 @@ Application::getGameCursor(unsigned position)
 Cursor const&
 Application::getGameCursor(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	return *m_gameMap.find(position)->second->sink.cursor;
 }
@@ -1000,10 +1023,10 @@ Application::getGameCursor(unsigned position) const
 unsigned
 Application::sourceIndex(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	return m_gameMap.find(position)->second->link.index;
 }
@@ -1012,10 +1035,10 @@ Application::sourceIndex(unsigned position) const
 Application::checksum_t
 Application::sourceCrcIndex(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	return m_gameMap.find(position)->second->link.crcIndex;
 }
@@ -1024,10 +1047,10 @@ Application::sourceCrcIndex(unsigned position) const
 Application::checksum_t
 Application::sourceCrcMoves(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	return m_gameMap.find(position)->second->link.crcMoves;
 }
@@ -1036,11 +1059,11 @@ Application::sourceCrcMoves(unsigned position) const
 Database const&
 Application::database(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
-	
+
+	M_REQUIRE(containsGameAt(position));
+
 	return m_gameMap.find(position)->second->sink.cursor->database();
 }
 
@@ -1055,10 +1078,10 @@ Application::databaseName(unsigned position) const
 mstl::string const&
 Application::sourceName(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	return m_gameMap.find(position)->second->link.databaseName;
 }
@@ -1067,10 +1090,10 @@ Application::sourceName(unsigned position) const
 variant::Type
 Application::variant(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	return m_gameMap.find(position)->second->sink.cursor->variant();
 }
@@ -1120,10 +1143,10 @@ Application::setReadonly(MultiCursor& cursor, bool flag)
 ::util::crc::checksum_t
 Application::checksumIndex(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	return m_gameMap.find(position)->second->sink.crcIndex;
 }
@@ -1132,10 +1155,10 @@ Application::checksumIndex(unsigned position) const
 ::util::crc::checksum_t
 Application::checksumMoves(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	return m_gameMap.find(position)->second->sink.crcMoves;
 }
@@ -1398,6 +1421,7 @@ Application::recode(Cursor& cursor, mstl::string const& encoding, util::Progress
 		case format::Scid4:
 		case format::ChessBase:
 		case format::ChessBaseDOS:
+		case format::ChessBaseArchive:
 			stopAllThreads(cursor);
 			if (base.namebases().isOriginal())
 				base.recode(encoding, progress);
@@ -1502,10 +1526,10 @@ Application::setupAllLanguages(unsigned position)
 load::State
 Application::loadGame(unsigned position)
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	EditGame const& game = *m_gameMap.find(position)->second;
 	return loadGame(position, *game.sink.cursor, game.sink.index);
@@ -1777,11 +1801,11 @@ Application::writeGame(	unsigned position,
 								unsigned flags,
 								FileMode fmode)
 {
-	M_REQUIRE(containsGameAt(position));
-	M_REQUIRE(format::isPGNArchive(format::fromString(util::misc::file::suffix(filename))));
-
 	if (position == InvalidPosition)
 		position = currentPosition();
+
+	M_REQUIRE(containsGameAt(position));
+	M_REQUIRE(format::isPGNArchive(format::fromString(util::misc::file::suffix(filename))));
 
 	GameP g = m_gameMap.find(position)->second;
 	mstl::string internalName(sys::file::internalName(filename));
@@ -1874,11 +1898,12 @@ void
 Application::switchGame(unsigned position, ReferenceGames updateReferenceGames)
 {
 	M_REQUIRE(position != ReservedPosition);
-	M_REQUIRE(containsGameAt(position));
 
 	if (position == InvalidPosition)
 		position = currentPosition();
-	
+
+	M_REQUIRE(containsGameAt(position));
+
 	if (m_currentPosition == position)
 		return;
 
@@ -1962,10 +1987,10 @@ Application::refreshGames()
 void
 Application::refreshGame(unsigned position, bool immediate)
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	EditGame& game = *m_gameMap.find(position)->second;
 
@@ -1979,10 +2004,10 @@ Application::refreshGame(unsigned position, bool immediate)
 Game&
 Application::game(unsigned position)
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	return *m_gameMap.find(position)->second->data.game;
 }
@@ -1991,10 +2016,10 @@ Application::game(unsigned position)
 Game const&
 Application::game(unsigned position) const
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	return *m_gameMap.find(position)->second->data.game;
 }
@@ -2202,6 +2227,125 @@ Application::finishUpdateTree(tree::Method method,
 	}
 
 	return m_treeAdmin.tree().get();
+}
+
+
+bool
+Application::describeCurrentTreeRow(unsigned row, OpeningPrepRow& out) const
+{
+	Tree const* tree = currentTree();
+
+	if (tree == 0 || row >= tree->size())
+		return false;
+
+	TreeInfo const& info = tree->info(row);
+	mstl::string eco = info.eco().asString();
+
+	out.row = row;
+	out.identity.format(	"%llx|%u|%u|%u|%u|%s",
+								static_cast<unsigned long long>(tree->hash()),
+								unsigned(tree->method()),
+								unsigned(tree->mode()),
+								unsigned(tree->ratingType()),
+								info.move().index(),
+								eco.data());
+	info.move().printSAN(out.move, protocol::Scidb, encoding::Utf8);
+	out.eco = eco;
+	out.frequency = info.frequency();
+	out.score = info.score();
+	out.draws = info.draws();
+	out.averageRating = info.averageRating();
+	out.performance = info.performance(tree->ratingType());
+	out.bestRating = info.bestRating();
+	out.averageYear = info.averageYear();
+	out.lastYear = info.lastYear();
+	out.bestPlayer = info.bestPlayer().name();
+	out.bestPlayerRating = info.bestPlayer().playerHighestRating(tree->ratingType());
+	out.mostFrequentPlayer = info.mostFrequentPlayer().name();
+	out.mostFrequentPlayerFrequency = info.mostFrequentPlayer().frequency();
+#ifdef SUPPORT_TREE_INFO_FILTER
+	if (haveReferenceBase())
+		out.firstGameIndex = info.firstGameIndex(referenceBase().treeView().selector(table::Games));
+	else
+		out.firstGameIndex = info.firstGameIndex();
+#else
+	out.firstGameIndex = info.firstGameIndex();
+#endif
+	out.result.resize(4);
+	out.result[0] = info.result(result::White);
+	out.result[1] = info.result(result::Black);
+	out.result[2] = info.result(result::Draw);
+	out.result[3] = info.result(result::Lost);
+
+	return true;
+}
+
+
+bool
+Application::setCurrentTreeRowFilter(Cursor& cursor, unsigned view, mstl::string const& identity)
+{
+	unsigned long long hash = 0;
+	unsigned method = 0;
+	unsigned mode = 0;
+	unsigned ratingType = 0;
+	unsigned moveIndex = 0;
+	char eco[16] = { 0 };
+	int fields = ::sscanf(identity, "%llx|%u|%u|%u|%u|%15[^|]", &hash, &method, &mode, &ratingType, &moveIndex, eco);
+
+	if (fields == 5)
+	{
+		if (identity.empty() || identity[identity.size() - 1] != '|')
+			return false;
+	}
+	else if (fields != 6)
+		return false;
+
+	Tree const* tree = currentTree();
+
+	if (tree == 0)
+		return false;
+	if (tree->hash() != hash
+		|| unsigned(tree->method()) != method
+		|| unsigned(tree->mode()) != mode
+		|| unsigned(tree->ratingType()) != ratingType)
+		return false;
+
+	for (unsigned row = 0; row < tree->size(); ++row)
+	{
+		TreeInfo const& info = tree->info(row);
+
+		if (info.move().index() == moveIndex && info.eco().asString() == eco)
+			return setCurrentTreeRowFilter(cursor, view, row);
+	}
+
+	return false;
+}
+
+
+bool
+Application::setCurrentTreeRowFilter(Cursor& cursor, unsigned view, unsigned row)
+{
+#ifdef SUPPORT_TREE_INFO_FILTER
+	Tree const* tree = currentTree();
+
+	if (tree == 0)
+		return false;
+	if (!cursor.isViewOpen(view))
+		return false;
+	if (row >= tree->size())
+		return false;
+	if (cursor.database().id() != tree->database().id())
+		return false;
+
+	cursor.view(view).setGameFilter(tree->info(row).filter());
+
+	if (m_subscriber && m_current == &cursor)
+		m_subscriber->updateList(table::Games, m_updateCount++, cursor.name(), cursor.variant(), view);
+
+	return true;
+#else
+	return false;
+#endif
 }
 
 
@@ -2574,11 +2718,11 @@ Application::findUnusedPosition() const
 load::State
 Application::importGame(Producer& producer, unsigned position, bool trialMode)
 {
-	M_REQUIRE(containsGameAt(position));
-	M_REQUIRE(contains(scratchbaseName()));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
+	M_REQUIRE(contains(scratchbaseName()));
 
 	GameP game		= m_gameMap.find(position)->second;
 	GameP myGame	= game;
@@ -2654,7 +2798,7 @@ Application::bindGameToView(unsigned position, int viewId, Update updateMode)
 	M_REQUIRE(containsGameAt(position));
 	M_REQUIRE(viewId == -1 || getGameCursor(position).isViewOpen(viewId));
 
-	m_gameMap.find(position)->second->data.viewId = viewId;;
+	m_gameMap.find(position)->second->data.viewId = viewId;
 
 	if (updateMode == UpdateGameInfo && m_subscriber)
 		m_subscriber->updateGameInfo(position);
@@ -3208,6 +3352,9 @@ Application::updateGameInfo(Cursor const& cursor, Database& database)
 int
 Application::getViewId(unsigned position) const
 {
+	if (position == InvalidPosition)
+		position = currentPosition();
+
 	M_REQUIRE(containsGameAt(position));
 	return m_gameMap.find(position)->second->data.viewId;
 }
@@ -3216,6 +3363,9 @@ Application::getViewId(unsigned position) const
 int
 Application::getNextGameIndex(unsigned position) const
 {
+	if (position == InvalidPosition)
+		position = currentPosition();
+
 	M_REQUIRE(containsGameAt(position));
 
 	EditGame const& game = *m_gameMap.find(position)->second;
@@ -3230,6 +3380,9 @@ Application::getNextGameIndex(unsigned position) const
 int
 Application::getPrevGameIndex(unsigned position) const
 {
+	if (position == InvalidPosition)
+		position = currentPosition();
+
 	M_REQUIRE(containsGameAt(position));
 
 	EditGame const& game = *m_gameMap.find(position)->second;
@@ -3244,6 +3397,9 @@ Application::getPrevGameIndex(unsigned position) const
 int
 Application::getFirstGameIndex(unsigned position) const
 {
+	if (position == InvalidPosition)
+		position = currentPosition();
+
 	M_REQUIRE(containsGameAt(position));
 
 	EditGame const& game = *m_gameMap.find(position)->second;
@@ -3258,6 +3414,9 @@ Application::getFirstGameIndex(unsigned position) const
 int
 Application::getLastGameIndex(unsigned position) const
 {
+	if (position == InvalidPosition)
+		position = currentPosition();
+
 	M_REQUIRE(containsGameAt(position));
 
 	EditGame const& game = *m_gameMap.find(position)->second;
@@ -3272,6 +3431,11 @@ Application::getLastGameIndex(unsigned position) const
 int
 Application::getRandomGameIndex(unsigned position) const
 {
+	if (position == InvalidPosition)
+		position = currentPosition();
+
+	M_REQUIRE(containsGameAt(position));
+
 	EditGame const& game = *m_gameMap.find(position)->second;
 
 	if (game.data.viewId == -1)
@@ -3285,11 +3449,11 @@ void
 Application::duplicateGame(unsigned position, copy::Source source, unsigned destination)
 {
 	M_REQUIRE(destination != InvalidPosition);
-	M_REQUIRE(containsGameAt(position));
-	M_REQUIRE(!containsGameAt(destination));
-
 	if (position == InvalidPosition)
 		position = currentPosition();
+
+	M_REQUIRE(containsGameAt(position));
+	M_REQUIRE(!containsGameAt(destination));
 
 	GameP src = m_gameMap.find(position)->second;
 
@@ -3313,16 +3477,16 @@ Application::duplicateGame(unsigned position, copy::Source source, unsigned dest
 void
 Application::swapGames(unsigned sourcePosition, unsigned destinationPosition)
 {
+	if (sourcePosition == InvalidPosition)
+		sourcePosition = currentPosition();
+	if (destinationPosition == InvalidPosition)
+		destinationPosition = currentPosition();
+
 	M_REQUIRE(containsGameAt(sourcePosition));
 	M_REQUIRE(containsGameAt(destinationPosition));
 
 	if (sourcePosition == destinationPosition)
 		return;
-
-	if (sourcePosition == InvalidPosition)
-		sourcePosition = currentPosition();
-	if (destinationPosition == InvalidPosition)
-		destinationPosition = currentPosition();
 
 	EditGame& src = *m_gameMap.find(sourcePosition)->second;
 	EditGame& dst = *m_gameMap.find(destinationPosition)->second;
@@ -3349,11 +3513,11 @@ Application::swapGames(unsigned sourcePosition, unsigned destinationPosition)
 void
 Application::copyGame(MultiCursor& sink, unsigned position, copy::Source source)
 {
-	M_REQUIRE(containsGameAt(position));
-	M_REQUIRE(source == copy::OriginalSource || game(position).isModified());
-
 	if (position == InvalidPosition)
 		position = currentPosition();
+
+	M_REQUIRE(containsGameAt(position));
+	M_REQUIRE(source == copy::OriginalSource || game(position).isModified());
 
 	GameP			g				= m_gameMap.find(position)->second;
 	Cursor&		destination	= sink.cursor(variant::toMainVariant(g->data.game->variant()));
@@ -3413,11 +3577,11 @@ Application::copyGame(MultiCursor& sink, unsigned position, copy::Source source)
 save::State
 Application::exportGame(unsigned position, mstl::ostream& strm, unsigned flags, copy::Source source)
 {
-	M_REQUIRE(containsGameAt(position));
-	M_REQUIRE(source == copy::OriginalSource || game(position).isModified());
-
 	if (position == InvalidPosition)
 		position = currentPosition();
+
+	M_REQUIRE(containsGameAt(position));
+	M_REQUIRE(source == copy::OriginalSource || game(position).isModified());
 
 	GameP			g		= m_gameMap.find(position)->second;
 	save::State	state	= save::Ok;
@@ -3469,6 +3633,11 @@ Application::exportGame(unsigned position, mstl::ostream& strm, unsigned flags, 
 void
 Application::pasteGame(unsigned from, unsigned to)
 {
+	if (from == InvalidPosition)
+		from = currentPosition();
+	if (to == InvalidPosition)
+		to = currentPosition();
+
 	M_REQUIRE(containsGameAt(from));
 	M_REQUIRE(containsGameAt(to));
 
@@ -3620,10 +3789,10 @@ Application::copyGames(	MultiCursor const& source,
 bool
 Application::verifyGame(unsigned position)
 {
-	M_REQUIRE(containsGameAt(position));
-
 	if (position == InvalidPosition)
 		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	if (!contains(sourceName(position)))
 		return false;

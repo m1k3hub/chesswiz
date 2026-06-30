@@ -1103,7 +1103,9 @@ Engine::send(mstl::string const& msg)
 	}
 	if (m_process->puts(msg) == -1)
 	{
+		log(mstl::string("send failed: broken pipe"));
 		m_process->close();
+		m_active = false;
 	}
 }
 

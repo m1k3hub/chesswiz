@@ -102,7 +102,7 @@ trapChildEvent(int signum)
 						case SIGTERM: signal = "TERM"; break;
 
 						default:
-							sprintf(buf, "%d", int(pid));
+							snprintf(buf, sizeof(buf), "%d", int(pid));
 							signal = buf;
 							break;
 					}
@@ -276,7 +276,7 @@ Process::Process(Command const& command, mstl::string const& directory)
 			TCL_RAISE("too many commands");
 		}
 
-		Tcl_TranslateFileName(::sys::tcl::interp(), command[i], buf[i]);
+		Tcl_TranslateFileName(::sys::tcl::interp(), command[i], buf[n]);
 		argv[i] = buf[n++];
 
 		if (file::access(command[i], file::Executable))

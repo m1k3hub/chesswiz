@@ -522,31 +522,27 @@ TournamentTable::eliminateDuplicates()
 		::qsort(player->clashList.begin(), player->clashList.size(), sizeof(Clash*), ::cmpClashOpponent);
 
 		Player::ClashList& clashList = player->clashList;
-		Player::ClashList::reverse_iterator prev = clashList.rbegin();
 
-		for (Player::ClashList::reverse_iterator i = prev + 1; i != clashList.rend(); ++i)
+		for (unsigned n = clashList.size() - 1; n > 0; --n)
 		{
-			if (match(*i, *prev))
+			if (match(clashList[n], clashList[n - 1]))
 			{
-				if ((*i)->deleted)
+				if (clashList[n]->deleted)
 				{
-					removeOpponentsClash(*i);
-					clashList.erase(i.base());
+					removeOpponentsClash(clashList[n]);
+					clashList.erase(clashList.begin() + n);
 				}
 				else
 				{
-					if ((*prev)->deleted)
+					if (clashList[n - 1]->deleted)
 					{
-						removeOpponentsClash(*prev);
-						clashList.erase(prev.base());
+						removeOpponentsClash(clashList[n - 1]);
+						clashList.erase(clashList.begin() + n - 1);
+						// After erasing n-1, element n shifts to n-1.
+						// The loop's --n will compare the shifted element
+						// with its new predecessor, so no extra adjustment needed.
 					}
-
-					prev = i;
 				}
-			}
-			else
-			{
-				prev = i;
 			}
 		}
 	}
@@ -972,7 +968,8 @@ TournamentTable::sort(	ScoringSystem scoringSystem,
 								Mode mode)
 {
 	unsigned size = m_playerMap.size();
-	Player* playerList[size];
+	mstl::vector<Player*> playerListVec(size);
+	Player** playerList = playerListVec.begin();
 
 	for (unsigned i = 0; i < size; ++i)
 	{
@@ -1029,12 +1026,13 @@ TournamentTable::sort(	ScoringSystem scoringSystem,
 	switch (int(mode))
 	{
 		case Match:
-			{
-				mstl::bitset used(size);
-				Player* players[size];
-				unsigned index = 0;
+				{
+					mstl::bitset used(size);
+					mstl::vector<Player*> playersVec(size);
+					Player** players = playersVec.begin();
+					unsigned index = 0;
 
-				for (unsigned i = 0; i < size; ++i)
+					for (unsigned i = 0; i < size; ++i)
 				{
 					Player* player = playerList[i];
 
@@ -1073,7 +1071,8 @@ TournamentTable::sort(	ScoringSystem scoringSystem,
 			{
 				if (playerList[i]->clashList.size() > 1)
 				{
-					Player* newPlayerList[size];
+					mstl::vector<Player*> newPlayerListVec(size);
+					Player** newPlayerList = newPlayerListVec.begin();
 					newPlayerList[0] = playerList[i];
 
 					for (unsigned k = 0; k < size; ++k)

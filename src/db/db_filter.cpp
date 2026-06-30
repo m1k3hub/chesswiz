@@ -69,6 +69,7 @@ Filter::reset()
 void
 Filter::negate()
 {
+	M_ASSERT(m_count <= m_set.size());
 	m_set.flip();
 	m_count = m_set.size() - m_count;
 	M_ASSERT(checkClassInvariance());

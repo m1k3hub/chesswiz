@@ -39,6 +39,7 @@ SRC_CXX = \
 	tcl_player.cpp \
 	tcl_position.cpp \
 	tcl_progress.cpp \
+	tcl_search.cpp \
 	tcl_sort.cpp \
 	tcl_tree.cpp \
 	tcl_view.cpp \

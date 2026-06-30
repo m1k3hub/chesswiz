@@ -265,7 +265,7 @@ openNewFile(void* cookie, char const* filename, mstl::ios_base::openmode mode)
 			while (zzip::find(dir, fname))
 			{
 				char buf[100];
-				sprintf(buf, "-%d", count++);
+				snprintf(buf, sizeof(buf), "-%d", count++);
 				fname = basename;
 				fname += buf;
 				fname += suffix;
@@ -538,7 +538,10 @@ ZStream::open(char const* filename, Mode mode)
 		m_fp = ::fopencookie(cookie, fmode, ::m_gzip);
 
 		if (!m_fp)
+		{
 			::gzclose(HANDLE);
+			return setstate(failbit);
+		}
 
 		m_size = gzip::readUncompressedSize(strm);
 		m_type = GZip;
@@ -555,7 +558,10 @@ ZStream::open(char const* filename, Mode mode)
 		m_fp = ::fopencookie(cookie, fmode, ::m_zzip);
 
 		if (!m_fp)
+		{
 			zzip_dir_close(ZIP_DIR);
+			return setstate(failbit);
+		}
 
 		m_type = Zip;
 	}

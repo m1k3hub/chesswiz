@@ -1669,7 +1669,7 @@ tag::mapAlphabetic(ID tag)
 material::Count
 material::Count::operator+(Count mat) const
 {
-	Count result = *this;;
+	Count result = *this;
 
 	result.king   += mat.king;
 	result.queen  += mat.queen;
@@ -3671,7 +3671,7 @@ chess960::utf8::position(uint16_t idn, mstl::string& result)
 {
 	mstl::string const& pos = chess960::position(idn);
 
-	for (uint16_t i = 0; i < pos.size(); ++i)
+	for (unsigned i = 0; i < pos.size(); ++i)
 		result += piece::utf8::asString(piece::fromLetter(pos[i]));
 
 	return result;
@@ -3800,7 +3800,7 @@ shuffle::utf8::position(uint16_t idn, mstl::string& result)
 {
 	mstl::string pos = shuffle::position(idn);
 
-	for (uint16_t i = 0; i < pos.size(); ++i)
+	for (unsigned i = 0; i < pos.size(); ++i)
 		result += piece::utf8::asString(piece::fromLetter(pos[i]));
 
 	return result;
@@ -4830,6 +4830,8 @@ format::fromString(mstl::string const& extension)
 			if (extension == "cbh") return ChessBase;
 			if (extension == "cbf") return ChessBaseDOS;
 			if (extension == "CBF") return ChessBaseDOS;
+			if (extension == "cbv") return ChessBaseArchive;
+			if (extension == "CBV") return ChessBaseArchive;
 			break;
 	}
 

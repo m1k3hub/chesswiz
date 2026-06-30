@@ -195,7 +195,7 @@ skipSpace(char* s)
 mstl::string&
 Site::normalize(mstl::string& name)
 {
-	static mstl::string const Exclude(" .-'´`/,()");
+	static mstl::string const Exclude(" .-'ï¿½`/,()");
 
 	name.make_writable();
 
@@ -245,7 +245,7 @@ Site::searchSite(mstl::string const& name)
 int
 Site::findCountry(country::Code country) const
 {
-	for (int index = 0; index < int(m_ascii.size()); ++index)
+	for (unsigned index = 0; index < m_ascii.size(); ++index)
 	{
 		if (m_ascii[index].country == country)
 			return index;

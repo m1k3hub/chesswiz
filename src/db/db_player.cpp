@@ -493,6 +493,7 @@ static mstl::string&
 stripCountryCode(mstl::string& s)
 {
 	M_ASSERT(hasTrailingCountryCode(s));
+	M_ASSERT(s.size() >= 4);
 
 	// strip country following name; e.g. "Mueller, Hans AUT"
 	unsigned size = s.size() - 4;
@@ -1534,7 +1535,7 @@ Player::insertPlayer(mstl::string& name,
 			else
 			{
 				TRACE(::printf("'%s' does not fit region 1, 2, and 4\n", name.c_str()));
-				return 0;;
+				return 0;
 			}
 		}
 		else
@@ -1546,7 +1547,7 @@ Player::insertPlayer(mstl::string& name,
 	if (!sys::utf8::Codec::fitsRegion(name, region))
 	{
 		TRACE(::printf("'%s' does not fit region %u\n", name.c_str(), region));
-		return 0;;
+		return 0;
 	}
 
 	mstl::string ascii;
