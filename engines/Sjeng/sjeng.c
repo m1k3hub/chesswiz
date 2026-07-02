@@ -301,11 +301,10 @@ int main (int argc, char *argv[]) {
 	    
 	    if (book_ply < 40) {
 	      if (!book_ply) {
-		strcpy(opening_history, output);
+		opening_history[0] = '\0';
 	      }
-	      else {
-		strcat(opening_history, output);
-	      }
+	      strncat(opening_history, output,
+		      sizeof(opening_history)-strlen(opening_history)-1);
 	    }
 	    
 	    book_ply++;
@@ -457,11 +456,10 @@ int main (int argc, char *argv[]) {
 	
 	if (book_ply < 40) {
 	  if (!book_ply) {
-	    strcpy(opening_history, input);
+	    opening_history[0] = '\0';
 	  }
-	  else {
-	    strcat(opening_history, input);
-	  }
+	  strncat(opening_history, input,
+		  sizeof(opening_history)-strlen(opening_history)-1);
         }
 	
 	book_ply++;

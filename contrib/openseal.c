@@ -27,6 +27,7 @@
 #include <string.h>
 #include <sys/select.h>
 #include <netinet/in.h>
+#include <unistd.h>
 
 #define BSIZE 1024
 
@@ -34,7 +35,7 @@ char *key="Timestamp (FICS) v1.0 - programmed by Henrik Gram.";
 //char hello[100]="TIMESTAMP|javaboard|Blackdown Java-Linux Team 1.3.1 Linux|";
 char hello[100]="TIMESTAMP|openseal|Running on an operating system|";
 
-int crypt(char *s,int l)
+int seal_crypt(char *s,int l)
 {
 	int n;
 	struct timeval tv;
@@ -74,7 +75,10 @@ int makeconn(char *hostname,int port)
 	address.sin_addr.s_addr=host_address;
 	address.sin_port=htons(port);
 	address.sin_family=AF_INET;
-	if(-1==connect(sockfd,(struct sockaddr*)&address,sizeof(address)));
+	if(-1==connect(sockfd,(struct sockaddr*)&address,sizeof(address))) {
+		perror(NULL);
+		exit(1);
+	}
 	return sockfd;
 }
 
@@ -91,10 +95,10 @@ void sendtofics(int fd, char *buff, int *rd)
 	static int c=0;
 	for(;c<*rd;c++)
 		if(buff[c]=='\n') {
-			char ffub[BSIZE+20];
+			char ffub[BSIZE+32];
 			int k;
 			memcpy(ffub,buff,c);
-			k=crypt(ffub,c);
+			k=seal_crypt(ffub,c);
 			mywrite(fd,ffub,k);
 			for(c++,k=0;c<*rd;c++,k++)
 				buff[k]=buff[c];
@@ -112,7 +116,7 @@ void getfromfics(int fd, char *buff, int *rd)
 			if(*rd<5) break;
 			else {
 				char reply[20]="\x2""9";
-				n=crypt(reply,2);
+				n=seal_crypt(reply,2);
 				mywrite(fd,reply,n);
 				for(n=5;n<*rd;n++)
 					buff[n-5]=buff[n];
@@ -143,7 +147,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	fd=makeconn(hostname,port);
-	n=crypt(hello,strlen(hello));
+	n=seal_crypt(hello,strlen(hello));
 	mywrite(fd,hello,n);
 	for(;;) {
 		fd_set fds;
@@ -172,7 +176,7 @@ int main(int argc, char **argv)
 		if(FD_ISSET(fd,&fds)) {
 			static int rd=0;
 			static char buff[BSIZE];
-			rd+=n=read(fd,buff,BSIZE-rd);
+			rd+=n=read(fd,buff+rd,BSIZE-rd);
 			if(!n) {
 				fprintf(stderr,"Connection closed by ICS\n");
 				exit(0);

@@ -31,7 +31,7 @@
 
 char *key="Timestamp (FICS) v1.0 - programmed by Henrik Gram.";
 
-int decrypt(char *s)
+void decrypt(char *s)
 {
 	int n,offset,l=strlen(s);
 	char *tmp_time,*tmp_end,*num_end;
@@ -43,8 +43,8 @@ int decrypt(char *s)
 	// decode the string
 	strcpy(tmp,s);
 	for(n=0;n<l;n++) {
-		tmp[n]=(tmp[n]+32)^key[(n+offset-0x80)%50];
-		if(!tmp[n]&0x80) goto malformed_message;
+		tmp[n]=(tmp[n]+32)^key[((n+offset-0x80)%50+50)%50];
+		if(!(tmp[n]&0x80)) goto malformed_message;
 		tmp[n]^=0x80;
 	}
 #define SC(A,B) tmp[B]^=tmp[A]^=tmp[B],tmp[A]^=tmp[B]
@@ -61,7 +61,7 @@ int decrypt(char *s)
 	*tmp_end=0;
 	// check that every character in the message is printable
 	for(n=0;tmp[n];n++)
-		if(!tmp[n]>>5) goto malformed_message;
+		if(!(tmp[n]>>5)) goto malformed_message;
 	// check that the timestamp actually is a number
 	strtol(tmp_time,&num_end,10);
 	if(num_end!=tmp_end) goto malformed_message;
