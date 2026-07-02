@@ -126,6 +126,10 @@ SOURCES = \
 	app-information.tcl \
 	app-board.tcl \
 	app-database.tcl \
+	app-database-search.tcl \
+	app-database-openingprep.tcl \
+	app-database-repertoire.tcl \
+	app-database-maintenance.tcl \
 	app-db-icons.tcl \
 	app-db-annotators.tcl \
 	app-db-positions.tcl \
