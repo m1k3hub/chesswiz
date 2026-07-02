@@ -2242,7 +2242,7 @@ Application::describeCurrentTreeRow(unsigned row, OpeningPrepRow& out) const
 	mstl::string eco = info.eco().asString();
 
 	out.row = row;
-	out.identity.format(	"%llx|%u|%u|%u|%u|%s",
+	out.identity.format(	"%llx %u %u %u %u %s",
 								static_cast<unsigned long long>(tree->hash()),
 								unsigned(tree->method()),
 								unsigned(tree->mode()),
@@ -2282,24 +2282,16 @@ Application::describeCurrentTreeRow(unsigned row, OpeningPrepRow& out) const
 
 
 bool
-Application::setCurrentTreeRowFilter(Cursor& cursor, unsigned view, mstl::string const& identity)
+Application::setCurrentTreeRowFilter(
+	Cursor& cursor,
+	unsigned view,
+	uint64_t hash,
+	unsigned method,
+	unsigned mode,
+	unsigned ratingType,
+	unsigned moveIndex,
+	mstl::string const& eco)
 {
-	unsigned long long hash = 0;
-	unsigned method = 0;
-	unsigned mode = 0;
-	unsigned ratingType = 0;
-	unsigned moveIndex = 0;
-	char eco[16] = { 0 };
-	int fields = ::sscanf(identity, "%llx|%u|%u|%u|%u|%15[^|]", &hash, &method, &mode, &ratingType, &moveIndex, eco);
-
-	if (fields == 5)
-	{
-		if (identity.empty() || identity[identity.size() - 1] != '|')
-			return false;
-	}
-	else if (fields != 6)
-		return false;
-
 	Tree const* tree = currentTree();
 
 	if (tree == 0)

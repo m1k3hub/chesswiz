@@ -26,6 +26,8 @@
 
 #include "tcl_view.h"
 
+#include <stdint.h>
+
 #include "tcl_progress.h"
 #include "tcl_application.h"
 #include "tcl_pgn_reader.h"
@@ -547,7 +549,48 @@ cmdSetTreeFilter(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	}
 	else if (::strcmp(mode, "-identity") == 0)
 	{
-		if (!scidb->setCurrentTreeRowFilter(cursor, view, mstl::string(value)))
+		Tcl_Obj* listObj = Tcl_NewStringObj(value, -1);
+		int listObjc = 0;
+		Tcl_Obj** listObjv = 0;
+
+		if (Tcl_ListObjGetElements(ti, listObj, &listObjc, &listObjv) != TCL_OK
+			|| (listObjc != 5 && listObjc != 6))
+		{
+			Tcl_DecrRefCount(listObj);
+			return error(CmdSetTreeFilter, nullptr, nullptr,
+			             "invalid tree identity '%s'", value);
+		}
+
+		Tcl_WideInt hash = 0;
+		int method = 0, treeMode = 0, ratingType = 0, moveIndex = 0;
+
+		if (Tcl_GetWideIntFromObj(ti, listObjv[0], &hash) != TCL_OK
+			|| Tcl_GetIntFromObj(ti, listObjv[1], &method) != TCL_OK
+			|| Tcl_GetIntFromObj(ti, listObjv[2], &treeMode) != TCL_OK
+			|| Tcl_GetIntFromObj(ti, listObjv[3], &ratingType) != TCL_OK
+			|| Tcl_GetIntFromObj(ti, listObjv[4], &moveIndex) != TCL_OK)
+		{
+			Tcl_DecrRefCount(listObj);
+			return error(CmdSetTreeFilter, nullptr, nullptr,
+			             "invalid tree identity '%s'", value);
+		}
+
+		mstl::string eco;
+		if (listObjc == 6)
+			eco = Tcl_GetString(listObjv[5]);
+
+		bool ok = scidb->setCurrentTreeRowFilter(
+			cursor, view,
+			static_cast<uint64_t>(hash),
+			static_cast<unsigned>(method),
+			static_cast<unsigned>(treeMode),
+			static_cast<unsigned>(ratingType),
+			static_cast<unsigned>(moveIndex),
+			eco);
+
+		Tcl_DecrRefCount(listObj);
+
+		if (!ok)
 			return error(CmdSetTreeFilter, nullptr, nullptr,
 			             "unable to apply tree identity '%s' to view %u", value, view);
 	}

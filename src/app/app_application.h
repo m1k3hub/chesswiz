@@ -375,7 +375,15 @@ public:
 
 	db::Tree const* currentTree() const;
 	bool describeCurrentTreeRow(unsigned row, OpeningPrepRow& out) const;
-	bool setCurrentTreeRowFilter(Cursor& cursor, unsigned view, mstl::string const& identity);
+	bool setCurrentTreeRowFilter(
+		Cursor& cursor,
+		unsigned view,
+		uint64_t hash,
+		unsigned method,
+		unsigned mode,
+		unsigned ratingType,
+		unsigned moveIndex,
+		mstl::string const& eco);
 	bool setCurrentTreeRowFilter(Cursor& cursor, unsigned view, unsigned row);
 	bool updateTree(	db::tree::Method method,
 							db::tree::Mode mode,
