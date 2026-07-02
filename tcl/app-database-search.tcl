@@ -119,8 +119,6 @@ set SearchResultsEmpty			"No filtered games available to open in the switcher."
 
 } ;# namespace mc
 
-} ;# namespace mc
-
 proc SearchResultsTempFile {file suffix} {
 	set base [file rootname [file tail $file]]
 	if {![string length $base]} { set base search }
