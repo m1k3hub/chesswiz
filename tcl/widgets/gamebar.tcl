@@ -62,14 +62,6 @@ set CloseGame							"Close Game"
 
 set GameNew								"New Game"
 set AddNewGame							"Add New Game to %s..."
-set AddToRepertoire					"Add Current Game to Repertoire"
-set AddToRepertoireBase				"Add Current Game to %s"
-set AddLineToRepertoire				"Add Current Line to Repertoire"
-set AddLineToRepertoireBase			"Add Current Line to %s"
-set NoRepertoireBases				"No writable opening databases are open."
-set NoRepertoireBasesDetail			"Create or retag a database as Openings, Openings White, or Openings Black, then reopen this menu."
-set NoTemporarySlot					"No temporary game slot is available."
-set NoTemporarySlotDetail			"Release one auxiliary game or browser slot and try again."
 set ReplaceGame						"Replace Game in %s..."
 set ReplaceMoves						"Replace Moves Only in Game..."
 
@@ -761,184 +753,6 @@ proc addDestinationsForSaveToMenu {parent m {discardActualBase 0}} {
 	}
 
 	return [llength $result]
-}
-
-
-proc repertoireBases {{discardActualBase 0} {variant {}}} {
-	variable ::scidb::clipbaseName
-
-	set actual [::scidb::db::get name]
-	if {$variant eq {}} {
-		set variant [::scidb::game::query Variant?]
-	}
-	set result {}
-
-	foreach base [::scidb::tree::list] {
-		if {$discardActualBase && $base eq $actual} { continue }
-		if {[::scidb::db::get readonly? $base]} { continue }
-		if {$variant ni [::scidb::db::get variants $base]} { continue }
-
-		set type [::scidb::db::get type $base]
-		if {$type ni {Openings OpeningsWhite OpeningsBlack}} { continue }
-
-		lappend result $base
-	}
-
-	return [lsort -dictionary $result]
-}
-
-
-proc showNoRepertoireBases {parent} {
-	variable mc
-
-	::dialog::info \
-		-parent $parent \
-		-message $mc::NoRepertoireBases \
-		-detail $mc::NoRepertoireBasesDetail
-}
-
-
-
-proc addRepertoireDestinationsForSaveToMenu {parent m {discardActualBase 0} {variant {}}} {
-	set result [repertoireBases $discardActualBase $variant]
-
-	foreach base $result {
-		$m add command \
-			-label [::util::databaseName $base] \
-			-command [list ::application::pgn::saveGame add $base]
-	}
-
-	if {[llength $result] == 0} {
-		$m add command \
-			-label " $::gamebar::mc::NoRepertoireBases" \
-			-command [namespace code [list showNoRepertoireBases $parent]] \
-			-state normal
-	}
-
-	return [llength $result]
-}
-
-
-proc findTemporaryPosition {} {
-	set first [expr {$::game::MaxPosition + 1}]
-	set last [expr {$first + 15}]
-
-	for {set pos $first} {$pos <= $last} {incr pos} {
-		if {![::scidb::game::query $pos open?]} {
-			return $pos
-		}
-	}
-
-	return -1
-}
-
-
-proc saveCurrentLineToRepertoire {parent base} {
-
-	set position [::scidb::game::current]
-	set temp [findTemporaryPosition]
-
-	if {$temp < 0} {
-		::dialog::info \
-			-parent $parent \
-			-message $mc::NoTemporarySlot \
-			-detail $mc::NoTemporarySlotDetail
-		return
-	}
-
-	set rc [catch {
-		::scidb::tree::freeze 1
-		::scidb::game::duplicate $temp $position modified
-		::scidb::game::switch $temp
-		::scidb::game::strip truncate
-		::application::pgn::saveGame add $base
-	} result options]
-
-	catch {
-		if {[::scidb::game::query $temp open?]} {
-			::scidb::game::release $temp
-		}
-	}
-	catch { ::scidb::game::switch $position }
-	catch { ::scidb::tree::freeze 0 }
-
-	if {$rc} {
-		return -options $options $result
-	}
-}
-
-
-proc addRepertoireLineDestinationsForSaveToMenu {parent m {discardActualBase 0} {variant {}}} {
-	set result [repertoireBases $discardActualBase $variant]
-
-	foreach base $result {
-		$m add command \
-			-label [::util::databaseName $base] \
-			-command [namespace code [list ::widget::busyOperation [list saveCurrentLineToRepertoire $parent $base]]]
-	}
-
-	if {[llength $result] == 0} {
-		$m add command \
-			-label " $::gamebar::mc::NoRepertoireBases" \
-			-command [namespace code [list showNoRepertoireBases $parent]] \
-			-state normal
-	}
-
-	return [llength $result]
-}
-
-
-proc addRepertoireGameEntry {parent m {discardActualBase 0} {variant {}}} {
-	variable mc
-
-	set bases [repertoireBases $discardActualBase $variant]
-
-	if {[llength $bases] == 1} {
-		set base [lindex $bases 0]
-		$m add command \
-			-label " [format $mc::AddToRepertoireBase [::util::databaseName $base]]" \
-			-image $::icon::16x16::saveAs \
-			-compound left \
-			-command [list ::application::pgn::saveGame add $base]
-		return 1
-	}
-
-	menu $m.repertoire
-	addRepertoireDestinationsForSaveToMenu $parent $m.repertoire $discardActualBase $variant
-	$m add cascade \
-		-menu $m.repertoire \
-		-label " $mc::AddToRepertoire" \
-		-image $::icon::16x16::saveAs \
-		-compound left \
-		-state normal
-	return [llength $bases]
-}
-
-
-proc addRepertoireLineEntry {parent m {discardActualBase 0} {variant {}}} {
-	variable mc
-
-	set bases [repertoireBases $discardActualBase $variant]
-
-	if {[llength $bases] == 1} {
-		set base [lindex $bases 0]
-		$m add command \
-			-label " [format $mc::AddLineToRepertoireBase [::util::databaseName $base]]" \
-			-image $::icon::16x16::saveAs \
-			-compound left \
-			-command [namespace code [list ::widget::busyOperation [list saveCurrentLineToRepertoire $parent $base]]]
-		return 1
-	}
-
-	menu $m.repertoireLine
-	addRepertoireLineDestinationsForSaveToMenu $parent $m.repertoireLine $discardActualBase $variant
-	$m add cascade \
-		-menu $m.repertoireLine \
-		-label " $mc::AddLineToRepertoire" \
-		-image $::icon::16x16::saveAs \
-		-compound left \
-		-state normal
-	return [llength $bases]
 }
 
 
@@ -1771,8 +1585,8 @@ proc AddGameMenuEntries {gamebar m addSaveMenu addGameHistory clearHistory remov
 			-state $state \
 			;
 
-		addRepertoireGameEntry $parent $m 0 $currentVariant
-		addRepertoireLineEntry $parent $m 0 $currentVariant
+		::application::database::addRepertoireGameEntry $parent $m 0 $currentVariant
+		::application::database::addRepertoireLineEntry $parent $m 0 $currentVariant
 
 		if {$base ne $scratchbaseName && $sink ne $scratchbaseName} {
 			if {[::scidb::game::query modified?]} { set state normal } else { set state disabled }

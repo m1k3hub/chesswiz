@@ -1826,7 +1826,7 @@ proc PinToRepertoire {tree} {
 	set variant [::scidb::game::query Variant?]
 
 	# Get repertoire databases
-	set bases [::gamebar::repertoireBases 0 $variant]
+	set bases [::application::database::repertoireBases 0 $variant]
 	if {![llength $bases]} {
 		::dialog::info \
 			-message $mc::NoRepertoireBases \

@@ -821,7 +821,7 @@ proc PopulatePrepRepertoires {dlg} {
 	set variant $PrepReportData($dlg,variant)
 	$tree delete [$tree children {}]
 
-	set bases [::gamebar::repertoireBases 0 $variant]
+	set bases [::application::database::repertoireBases 0 $variant]
 	if {![llength $bases]} {
 		$tree insert {} end -values [list $mc::PrepNoRepertoires {} {} {}]
 		return
