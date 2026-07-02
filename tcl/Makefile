@@ -127,6 +127,9 @@ SOURCES = \
 	app-board.tcl \
 	app-database.tcl \
 	app-database-search.tcl \
+	app-database-search-material.tcl \
+	app-database-search-rating.tcl \
+	app-database-search-advanced.tcl \
 	app-database-openingprep.tcl \
 	app-database-repertoire.tcl \
 	app-database-maintenance.tcl \

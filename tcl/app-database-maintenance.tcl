@@ -613,4 +613,4 @@ proc BrowseDuplicateSelection {tv file variant} {
 } ;# namespace database
 } ;# namespace application
 
-// vi:set ts=3 sw=3:
+# vi:set ts=3 sw=3:
