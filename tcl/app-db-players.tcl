@@ -1304,6 +1304,16 @@ proc RefreshPrepReport {dlg} {
 }
 
 
+proc addPrepReportMenuEntry {menu parent base variant playerIndex} {
+	if {$playerIndex < 0} { return }
+
+	$menu add command \
+		-label " $::playertable::mc::ShowPrepReport" \
+		-command [list [namespace current]::OpenPrepReport $parent $base $variant $playerIndex] \
+		;
+}
+
+
 proc OpenPrepReport {parent base variant playerIndex} {
 	variable PrepReportData
 	variable mc

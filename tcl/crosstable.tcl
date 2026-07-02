@@ -1277,11 +1277,12 @@ proc Mouse3Down {dlg nodes} {
 				-label " $::playertable::mc::ShowPlayerCard" \
 				-command [namespace code [list ShowPlayerCard $dlg $rank]] \
 				;
-			if {[llength [info commands ::application::database::player::OpenPrepReport]]} {
-				$m add command \
-					-label " $::playertable::mc::ShowPrepReport" \
-					-command [namespace code [list OpenPrepReport $dlg $rank]] \
-					;
+			if {[llength [info commands ::application::database::player::addPrepReportMenuEntry]]} {
+				set playerIndex [SelectedPlayerIndex $dlg $rank]
+				if {$playerIndex >= 0} {
+					::application::database::player::addPrepReportMenuEntry \
+						$m $dlg $Vars(base) $Vars(variant) $playerIndex
+				}
 			}
 			$m add command \
 				-label " $::application::database::mc::RepertoireOpenInSwitcher" \

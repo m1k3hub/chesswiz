@@ -822,7 +822,7 @@ proc PopupPlayerIndex {key} {
 
 	if {![info exists Vars($key:arguments)]} { return -1 }
 	lassign $Vars($key:arguments) _html id _key base variant _name playerCardArgs
-	if {![llength [info commands ::application::database::player::OpenPrepReport]]} {
+	if {![llength [info commands ::application::database::player::addPrepReportMenuEntry]]} {
 		return -1
 	}
 
@@ -843,10 +843,7 @@ proc PopupMenu {key} {
 	if {$playerIndex >= 0} {
 		set base [lindex $Vars($key:arguments) 3]
 		set variant [lindex $Vars($key:arguments) 4]
-		$m add command \
-			-label " $::playertable::mc::ShowPrepReport" \
-			-command [list ::application::database::player::OpenPrepReport $Vars($key) $base $variant $playerIndex] \
-			;
+		::application::database::player::addPrepReportMenuEntry $m $Vars($key) $base $variant $playerIndex
 		$m add separator
 	}
 

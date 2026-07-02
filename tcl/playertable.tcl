@@ -479,11 +479,9 @@ proc popupMenu {menu base variant info {playerCard {}} {playerIndex {}}} {
 			;
 	}
 
-	if {[string length $playerIndex] && [llength [info commands ::application::database::player::OpenPrepReport]]} {
-		$menu add command \
-			-label " $mc::ShowPrepReport" \
-			-command [list ::application::database::player::OpenPrepReport $parent $base $variant $playerIndex] \
-			;
+	if {[string length $playerIndex]
+		&& [llength [info commands ::application::database::player::addPrepReportMenuEntry]]} {
+		::application::database::player::addPrepReportMenuEntry $menu $parent $base $variant $playerIndex
 	}
 
 	set m [menu $menu.web -tearoff false]
