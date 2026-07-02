@@ -19,28 +19,20 @@ below). All 6 new findings fixed in commit `3e851a3`.
 | Logic / wrong labels | 7 | 7 | 0 |
 | Resource leaks | 2 | 2 | 0 |
 | Integer safety | 5 | 5 | 0 |
-| Code hygiene | 9 | 8 | 1 |
+| Code hygiene | 9 | 9 | 0 |
 | Build config | 1 | 1 | 0 |
 | Contrib & engines (2026-07-02) | 6 | 6 | 0 |
-| **Total** | **38** | **37** | **1** |
+| **Total** | **38** | **38** | **0** |
 
 ---
 
-## Remaining Unfixed Bug
+## Remaining Unfixed Bugs
 
-### VBUG-1: `sprintf` without bounds — `db_writer.cpp:521`
-
-**Severity:** Low (buffer is pre-resized to 32 bytes; max output ~12 chars)
-
-```cpp
-m_moveNumber.resize(32);
-m_moveNumber.resize(::sprintf(m_moveNumber.data(), "%u.", board().moveNumber()));
-```
-
-The `m_moveNumber` string is resized to 32 bytes before `sprintf`, so the
-buffer is sufficient. However, `snprintf` should be used for defense-in-depth.
-
-**Fix:** `::snprintf(m_moveNumber.data(), 32, "%u.", board().moveNumber())`
+None. VBUG-1 (`sprintf` without bounds in `db_writer.cpp:521`, low severity —
+buffer was pre-resized to 32 bytes, max output ~12 chars) was fixed 2026-07-02
+by switching to `::snprintf(m_moveNumber.data(), 32, ...)`. The `%u.` format
+emits at most 11 chars, so the returned length used by the subsequent
+`resize()` is never a truncated count.
 
 ---
 

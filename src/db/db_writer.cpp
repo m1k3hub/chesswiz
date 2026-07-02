@@ -518,7 +518,7 @@ Writer::writeMove(Move const& move,
 	if (m_needMoveNumber)
 	{
 		m_moveNumber.resize(32);
-		m_moveNumber.resize(::sprintf(m_moveNumber.data(), "%u.", board().moveNumber()));
+		m_moveNumber.resize(::snprintf(m_moveNumber.data(), 32, "%u.", board().moveNumber()));
 
 		if (color::isBlack(move.color()))
 			m_moveNumber += "..";
