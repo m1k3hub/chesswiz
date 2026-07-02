@@ -123,7 +123,7 @@ ostream::seek_and_write(size_t pos, unsigned char const* buffer, size_t size)
 	if (size > 0)
 	{
 		flockfile(m_fp);
-		size_t n = fseek(m_fp, pos, SEEK_SET) ? 0 : fwrite_unlocked(buffer, 1, size, m_fp);
+		size_t n = fseeko(m_fp, pos, SEEK_SET) ? 0 : fwrite_unlocked(buffer, 1, size, m_fp);
 		funlockfile(m_fp);
 
 		if (n != size)

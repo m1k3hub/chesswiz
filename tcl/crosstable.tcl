@@ -977,8 +977,61 @@ proc ShowPlayerCard {dlg rank} {
 	variable ${dlg}::Vars
 
 	Tooltip $dlg hide
-	lassign [::scidb::crosstable::get playerId $Vars(tableId) $Vars(viewId) $rank]] gameIndex side
+	lassign [::scidb::crosstable::get playerId $Vars(tableId) $Vars(viewId) $rank] gameIndex side
 	::playercard::show $Vars(base) $Vars(variant) $gameIndex $side
+}
+
+
+proc SelectedPlayerIndex {dlg rank} {
+	variable ${dlg}::Vars
+
+	lassign [::scidb::crosstable::get playerId $Vars(tableId) $Vars(viewId) $rank] gameIndex side
+	set playerKey [::scidb::db::get playerKey $Vars(base) $Vars(variant) $gameIndex $side]
+	return [::scidb::db::find player $Vars(base) $Vars(variant) $playerKey]
+}
+
+
+proc OpenPrepReport {dlg rank} {
+	variable ${dlg}::Vars
+
+	Tooltip $dlg hide
+	set playerIndex [SelectedPlayerIndex $dlg $rank]
+	if {$playerIndex < 0} { return }
+	::application::database::player::OpenPrepReport $dlg $Vars(base) $Vars(variant) $playerIndex
+}
+
+
+proc OpenPlayerGamesInSwitcher {dlg rank} {
+	variable ${dlg}::Vars
+
+	Tooltip $dlg hide
+	set playerIndex [SelectedPlayerIndex $dlg $rank]
+	if {$playerIndex < 0} { return 0 }
+
+	set label [::scidb::crosstable::get playerName $Vars(tableId) $Vars(viewId) $rank]
+	set view [::scidb::view::new $Vars(base) $Vars(variant) unused unused unused unused master slave]
+	::scidb::view::search $Vars(base) $Vars(variant) $view null none [list player $playerIndex]
+	set rc [::application::database::OpenFilteredViewInSwitcher \
+		$dlg $Vars(base) $Vars(variant) $view crosstable-player $label]
+	catch { ::scidb::view::close $Vars(base) $Vars(variant) $view }
+	return $rc
+}
+
+
+proc SavePlayerGamesWorkingSet {dlg rank} {
+	variable ${dlg}::Vars
+
+	Tooltip $dlg hide
+	set playerIndex [SelectedPlayerIndex $dlg $rank]
+	if {$playerIndex < 0} { return 0 }
+
+	set label [::scidb::crosstable::get playerName $Vars(tableId) $Vars(viewId) $rank]
+	set view [::scidb::view::new $Vars(base) $Vars(variant) unused unused unused unused master slave]
+	::scidb::view::search $Vars(base) $Vars(variant) $view null none [list player $playerIndex]
+	set rc [::application::database::SaveFilteredViewAsWorkingSet \
+		$dlg $Vars(base) $Vars(variant) $view crosstable-player $label]
+	catch { ::scidb::view::close $Vars(base) $Vars(variant) $view }
+	return $rc
 }
 
 
@@ -1223,6 +1276,20 @@ proc Mouse3Down {dlg nodes} {
 				-image $::icon::16x16::playercard \
 				-label " $::playertable::mc::ShowPlayerCard" \
 				-command [namespace code [list ShowPlayerCard $dlg $rank]] \
+				;
+			if {[llength [info commands ::application::database::player::OpenPrepReport]]} {
+				$m add command \
+					-label " $::playertable::mc::ShowPrepReport" \
+					-command [namespace code [list OpenPrepReport $dlg $rank]] \
+					;
+			}
+			$m add command \
+				-label " $::application::database::mc::RepertoireOpenInSwitcher" \
+				-command [namespace code [list OpenPlayerGamesInSwitcher $dlg $rank]] \
+				;
+			$m add command \
+				-label " $::application::database::mc::SaveWorkingSet" \
+				-command [namespace code [list SavePlayerGamesWorkingSet $dlg $rank]] \
 				;
 		} else {
 			$m add command \

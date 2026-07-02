@@ -54,8 +54,10 @@
 #include "u_crc.h"
 
 #include "sys_utf8_codec.h"
+#include "sys_info.h"
 #include "sys_time.h"
 #include "sys_file.h"
+#include "sys_thread.h"
 
 #include "m_assert.h"
 #include "m_string.h"
@@ -72,6 +74,103 @@ using namespace util;
 
 
 namespace {
+
+enum { MinParallelPlayerStatsGamesPerWorker = 10000 };
+
+static unsigned
+computePlayerStatsWorkerCount(unsigned nGames)
+{
+	char const* value = ::getenv("SCIDB_MAINTENANCE_THREADS");
+
+	if (value && *value)
+	{
+		long forced = ::strtol(value, 0, 10);
+		if (forced > 0)
+			return unsigned(forced);
+	}
+
+	unsigned processors = sys::info::numberOfProcessors();
+
+	if (processors < 2 || nGames < MinParallelPlayerStatsGamesPerWorker*2)
+		return 1;
+
+	unsigned maxWorkers = nGames/MinParallelPlayerStatsGamesPerWorker;
+	if (maxWorkers == 0)
+		return 1;
+
+	if (processors > maxWorkers)
+		processors = maxWorkers;
+
+	return mstl::max(1u, processors);
+}
+
+
+static void
+accumulatePlayerStats(	PlayerStats& stats,
+								Database const& database,
+								NamebasePlayer const& player,
+								unsigned first,
+								unsigned last)
+{
+	enum { Blank = 1 + color::White + color::Black };
+
+	for (unsigned i = first; i < last; ++i)
+	{
+		GameInfo const& info = database.gameInfo(i);
+		int side = Blank;
+
+		if (info.playerEntry(color::White) == &player)
+			side = color::White;
+		else if (info.playerEntry(color::Black) == &player)
+			side = color::Black;
+
+		if (side != Blank)
+		{
+			color::ID color = color::ID(side);
+			rating::Type ratingType = info.ratingType(color);
+
+			if (ratingType != rating::Elo)
+				stats.addRating(ratingType, info.rating(color));
+
+			stats.addRating(rating::Elo, info.elo(color));
+			stats.addDate(info.date());
+			stats.addScore(color, info.result());
+
+			if (database.variant() == variant::Normal)
+			{
+				// NOTE: in .si4 databases the ECO code may be undefined.
+				if (info.idn() == variant::Standard && info.eco(variant::Normal))
+					stats.addEco(color, info.eco(variant::Normal));
+			}
+		}
+	}
+}
+
+
+struct PlayerStatsWorker
+{
+	PlayerStatsWorker(	Database const& database_,
+							NamebasePlayer const& player_,
+							unsigned first_,
+							unsigned last_)
+		:database(database_)
+		,player(player_)
+		,first(first_)
+		,last(last_)
+	{
+	}
+
+	void operator() ()
+	{
+		accumulatePlayerStats(stats, database, player, first, last);
+	}
+
+	Database const& database;
+	NamebasePlayer const& player;
+	unsigned first;
+	unsigned last;
+	PlayerStats stats;
+};
 
 struct SingleProgress : public util::Progress
 {
@@ -1388,7 +1487,8 @@ Database::exportGame(unsigned index, Database& destination) const
 	M_REQUIRE(destination.isOpen());
 	M_REQUIRE(	destination.format() == format::Scidb
 				|| destination.format() == format::Scid3
-				|| destination.format() == format::Scid4);
+				|| destination.format() == format::Scid4
+				|| destination.format() == format::ChessBase);
 	M_REQUIRE(index < countGames());
 
 	GameInfo const&	info			= m_gameInfoList[index];
@@ -1423,10 +1523,11 @@ Database::copyGames(	Database& destination,
 	M_REQUIRE(!destination.usingAsyncReader());
 	M_REQUIRE(	destination.format() == format::Scidb
 				|| destination.format() == format::Scid3
-				|| destination.format() == format::Scid4);
+				|| destination.format() == format::Scid4
+				|| destination.format() == format::ChessBase);
 	M_REQUIRE(	destination.variant() == variant()
 				|| (destination.variant() == variant::ThreeCheck && isScidFormat(format())));
-	M_REQUIRE(illegalRejected || !isScidFormat(destination.format()));
+	// illegalRejected is optional output — no format-dependent constraint needed
 
 	if (size() == 0)
 		return 0;
@@ -1505,7 +1606,7 @@ Database::exportGames(	Destination& destination,
 	M_REQUIRE(gameFilter.size() == size());
 	M_REQUIRE(	destination.variant() == variant()
 				|| (isScidFormat(format()) && destination.variant() == variant::ThreeCheck));
-	M_REQUIRE(!illegalRejected || !isScidFormat(destination.format()));
+	// illegalRejected is optional output — no format-dependent constraint needed
 
 	enum { MaxWarnings = 40 };
 
@@ -2090,36 +2191,59 @@ Database::emitPlayerCard(TeXt::Receptacle& receptacle, NamebasePlayer const& pla
 void
 Database::playerStatistic(NamebasePlayer const& player, PlayerStats& stats) const
 {
-	enum { Blank = 1 + color::White + color::Black };
+	unsigned nGames = m_gameInfoList.size();
+	unsigned nWorkers = computePlayerStatsWorkerCount(nGames);
 
-	for (unsigned i = 0, n = m_gameInfoList.size(); i < n; ++i)
+	if (nWorkers == 1)
 	{
-		GameInfo const& info = m_gameInfoList[i];
-		int side = Blank;
+		accumulatePlayerStats(stats, *this, player, 0, nGames);
+		stats.finish();
+		return;
+	}
 
-		if (info.playerEntry(color::White) == &player)
-			side = color::White;
-		else if (info.playerEntry(color::Black) == &player)
-			side = color::Black;
+	mstl::vector<PlayerStatsWorker*> workers;
+	mstl::vector<sys::Thread*> threads;
+	unsigned chunkSize = (nGames + nWorkers - 1)/nWorkers;
+	unsigned serialFirst = nGames;
 
-		if (side != Blank)
+	workers.reserve(nWorkers);
+	threads.reserve(nWorkers);
+
+	for (unsigned i = 0; i < nWorkers; ++i)
+	{
+		unsigned first = i*chunkSize;
+		unsigned last = mstl::min(first + chunkSize, nGames);
+
+		if (first >= last)
+			break;
+
+		PlayerStatsWorker* worker = new PlayerStatsWorker(*this, player, first, last);
+		sys::Thread* thread = new sys::Thread;
+
+		workers.push_back(worker);
+		threads.push_back(thread);
+
+		if (!thread->start(sys::Thread::Runnable(&PlayerStatsWorker::operator(), worker)))
 		{
-			color::ID		color			= color::ID(side);
-			rating::Type	ratingType	= info.ratingType(color);
-
-			if (ratingType != rating::Elo)
-				stats.addRating(ratingType, info.rating(color));
-
-			stats.addRating(rating::Elo, info.elo(color));
-			stats.addDate(info.date());
-			stats.addScore(color, info.result());
-if (m_variant == variant::Normal) { // XXX
-			// NOTE: in .si4 databases the ECO code may be undefined
-			if (info.idn() == variant::Standard && info.eco(variant::Normal))
-				stats.addEco(color, info.eco(variant::Normal));
-}
+			delete thread;
+			delete worker;
+			threads.pop_back();
+			workers.pop_back();
+			serialFirst = first;
+			break;
 		}
 	}
+
+	for (unsigned i = 0; i < threads.size(); ++i)
+	{
+		threads[i]->join();
+		stats.merge(workers[i]->stats);
+		delete threads[i];
+		delete workers[i];
+	}
+
+	if (serialFirst < nGames)
+		accumulatePlayerStats(stats, *this, player, serialFirst, nGames);
 
 	stats.finish();
 }

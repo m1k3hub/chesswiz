@@ -79,7 +79,7 @@ public:
 
 	enum Mode { ReadWriteLength, RequireLength };
 
-	static unsigned const MaxFileSize = 1 << 31;	//  2 GB
+	static unsigned const MaxFileSize = 1u << 31;	//  2 GB
 	static unsigned const MaxSpanSize = 1 << 24; // 16 MB
 
 	static unsigned const MaxFileSizeExceeded	= unsigned(-1);

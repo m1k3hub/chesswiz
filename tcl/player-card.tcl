@@ -817,6 +817,20 @@ proc DoNothing {args} {
 }
 
 
+proc PopupPlayerIndex {key} {
+	variable Vars
+
+	if {![info exists Vars($key:arguments)]} { return -1 }
+	lassign $Vars($key:arguments) _html id _key base variant _name playerCardArgs
+	if {![llength [info commands ::application::database::player::OpenPrepReport]]} {
+		return -1
+	}
+
+	set playerIndex [::scidb::db::find player $base $variant $id]
+	return $playerIndex
+}
+
+
 proc PopupMenu {key} {
 	variable Vars
 
@@ -824,6 +838,17 @@ proc PopupMenu {key} {
 	if {[winfo exists $m]} { destroy $m }
 	menu $m -tearoff false
 	catch { wm attributes $m -type popup_menu }
+
+	set playerIndex [PopupPlayerIndex $key]
+	if {$playerIndex >= 0} {
+		set base [lindex $Vars($key:arguments) 3]
+		set variant [lindex $Vars($key:arguments) 4]
+		$m add command \
+			-label " $::playertable::mc::ShowPrepReport" \
+			-command [list ::application::database::player::OpenPrepReport $Vars($key) $base $variant $playerIndex] \
+			;
+		$m add separator
+	}
 
 	set sub [menu $m.debugging]
 	foreach opt {html log} {

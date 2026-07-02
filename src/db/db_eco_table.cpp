@@ -726,11 +726,10 @@ EcoTable::Loader::load()
 		unsigned countChars		= bstrm.uint32();
 
 		m_specimen.m_branchBuffer	= new Branch[countBranches];
-		m_specimen.m_nodeBuffer		= new Node[countNodes];
+		m_specimen.m_nodeBuffer		= new Node[countNodes]();
 		m_specimen.m_nameBuffer		= new char[countChars + countStrings];
 		m_specimen.m_moveBuffer		= new uint16_t[countMoves + countCodes];
 
-		::memset(m_specimen.m_nodeBuffer, 0, sizeof(Node)*countNodes);
 		::memset(m_specimen.m_nameBuffer, 0, countChars + countStrings);
 		::memset(m_specimen.m_moveBuffer, 0, sizeof(uint16_t)*(countMoves + countCodes));
 

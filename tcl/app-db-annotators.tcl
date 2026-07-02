@@ -190,7 +190,9 @@ proc BuildFrame {twm frame uid width height} {
 
 				lappend columns $cid $opts
 			}
-			set table [::scrolledtable::build $frame $columns -id db:annotators:$id:$uid]
+			set table [::scrolledtable::build $frame $columns \
+				-id db:annotators:$id:$uid \
+				-popupcmd [namespace code [list names::PopupMenu $twm]]]
 			::scidb::db::subscribe annotatorList \
 				[list [namespace current]::names::Update $twm] \
 				[list [namespace current]::Close $twm] \
@@ -287,6 +289,11 @@ proc Update2 {id path base variant} {
 		if {[string length $Vars($base:$variant:annotator)]} {
 			set selected [::scidb::db::find annotator $base $variant $Vars($base:$variant:annotator)]
 			if {$selected >= 0} {
+				set row [::scidb::db::get annotatorIndex $Vars($base:$variant:annotator) $view $base $variant]
+				if {$row >= 0} {
+					::scrolledtable::setSelection $Vars(frame:annotator) \
+						[::scrolledtable::indexToRow $Vars(frame:annotator) $row]
+				}
 				[namespace parent]::names::TableSearch $path $base $variant $view
 			} else {
 				[namespace parent]::names::Reset $path $base $variant
@@ -332,6 +339,15 @@ proc UpdateTable {path base variant} {
 				::scrolledtable::update $Vars(frame:annotator) $base $variant $n]]
 			set Vars($base:$variant:after:lastId) [after idle [list \
 				[namespace parent]::games::Update2 $Vars($base:$variant:names:lastId) $path $base $variant]]
+			if {[string length $Vars($base:$variant:annotator)]} {
+				set row [::scidb::db::get annotatorIndex $Vars($base:$variant:annotator) \
+					$Vars($base:$variant:view) $base $variant]
+				if {$row >= 0} {
+					after idle [list ::scrolledtable::setSelection \
+						$Vars(frame:annotator) \
+						[::scrolledtable::indexToRow $Vars(frame:annotator) $row]]
+				}
+			}
 			set Vars($base:$variant:update) 0
 		}
 	}
@@ -373,7 +389,7 @@ proc TableFill {path args} {
 
 	for {set i $first} {$i < $last} {incr i} {
 		set index [expr {$start + $i}]
-		set line [scidb::db::get annotator $index $view]
+		set line [scidb::db::get annotator $index $view $base $variant]
 		set text {}
 		set k -1
 		foreach id $columns {
@@ -399,6 +415,49 @@ proc TableFill {path args} {
 }
 
 
+proc PopupMenu {path menu base variant index column} {
+	variable [namespace parent]::${path}::Vars
+
+	if {$index eq "none" || $index eq "outside"} { return }
+	set view $Vars($base:$variant:view)
+	set annotator [scidb::db::get annotator $index $view $base $variant]
+	set annotatorId [lindex $annotator 0]
+	set label [lindex $annotator 1]
+	if {![string length $label]} {
+		set label [set [namespace parent]::mc::NoAnnotator]
+	}
+
+	$menu add command \
+		-label " $::application::database::mc::RepertoireOpenInSwitcher" \
+		-command [namespace code [list OpenAnnotatorGamesInSwitcher \
+			$path $base $variant $annotatorId $label]] \
+		;
+	$menu add command \
+		-label " $::application::database::mc::SaveWorkingSet" \
+		-command [namespace code [list SaveAnnotatorGamesWorkingSet \
+			$path $base $variant $annotatorId $label]] \
+		;
+}
+
+
+proc OpenAnnotatorGamesInSwitcher {path base variant annotatorId label} {
+	set tempView [::scidb::view::new $base $variant unused unused unused unused master slave]
+	::scidb::view::search $base $variant $tempView null none [list annotator $annotatorId]
+	set rc [::application::database::OpenFilteredViewInSwitcher $path $base $variant $tempView annotator $label]
+	catch { ::scidb::view::close $base $variant $tempView }
+	return $rc
+}
+
+
+proc SaveAnnotatorGamesWorkingSet {path base variant annotatorId label} {
+	set tempView [::scidb::view::new $base $variant unused unused unused unused master slave]
+	::scidb::view::search $base $variant $tempView null none [list annotator $annotatorId]
+	set rc [::application::database::SaveFilteredViewAsWorkingSet $path $base $variant $tempView annotator $label]
+	catch { ::scidb::view::close $base $variant $tempView }
+	return $rc
+}
+
+
 proc TableSelected {path index} {
 	variable [namespace parent]::${path}::Vars
 
@@ -407,7 +466,7 @@ proc TableSelected {path index} {
 	set base [::scrolledtable::base $table]
 	set variant [::scrolledtable::variant $table]
 	set view $Vars($base:$variant:view)
-	set annotator [scidb::db::get annotator $index $view]
+	set annotator [scidb::db::get annotator $index $view $base $variant]
 	set Vars($base:$variant:annotator) [lindex $annotator 0]
 	TableSearch $path $base $variant $view
 	::widget::busyCursor off
@@ -466,8 +525,9 @@ proc SortColumn {path id dir} {
 proc Find {path mode name} {
 	variable ${path}::Vars
 
-	set base [::scidb::db::get name]
-	set variant [::scidb::app::variant]
+	set base [::scrolledtable::base $Vars(frame:annotator)]
+	if {[string length $base] == 0} { return }
+	set variant [::scrolledtable::variant $Vars(frame:annotator)]
 	set view $Vars($base:$variant:view)
 	if {$mode eq "next"} {
 		set lastIndex [::scrolledtable::active $Vars(frame:annotator)]

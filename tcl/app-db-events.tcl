@@ -289,8 +289,12 @@ proc Update2 {id path base variant} {
 		if {[llength $Vars($base:$variant:selected:key)]} {
 			set index [::scidb::db::find event $base $variant $Vars($base:$variant:selected:key)]
 			if {$index >= 0} {
-				set selected [::scidb::db::get lookupEvent $index $view $base $variant]
-				[namespace parent]::event::Search $path $base $variant $view $selected
+				set row [::scidb::db::get lookupEvent $index $view $base $variant]
+				if {$row >= 0} {
+					::eventtable::setSelection $Vars(frame:event) \
+						[::eventtable::indexToRow $Vars(frame:event) $row]
+				}
+				[namespace parent]::event::Search $path $base $variant $view $index
 			} else {
 				[namespace parent]::event::Reset $path $base $variant
 			}
@@ -334,7 +338,7 @@ proc Search {path base variant view {selected -1}} {
 	if {$selected == -1} {
 		set selected [::eventtable::selectedEvent $Vars(frame:event) $base $variant]
 		if {$selected >= 0} {
-			set index [::scidb::db::get eventIndex $selected $view $base $variant]
+			set index $selected
 			set Vars($base:$variant:selected:key) [scidb::db::get eventKey $base $variant event $index]
 		}
 	}
@@ -397,6 +401,11 @@ proc DoUpdate {path base variant} {
 				after idle \
 					[list [namespace parent]::Select $path $base $variant $Vars($base:$variant:select)]
 				set Vars($base:$variant:select) -1
+			} elseif {[llength $Vars($base:$variant:selected:key)]} {
+				set index [::scidb::db::find event $base $variant $Vars($base:$variant:selected:key)]
+				if {$index >= 0} {
+					after idle [list [namespace parent]::Select $path $base $variant $index]
+				}
 			}
 		}
 	}

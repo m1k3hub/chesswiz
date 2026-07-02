@@ -870,17 +870,8 @@ void rinput (char str[], int n, FILE *stream) {
 
 rtime_t rtime (void) {
 
-  /* using ftime(): */
-#if defined(HAVE_FTIME) && defined(HAVE_SYS_TIMEB_H)
-  rtime_t temp;
-  ftime(&temp);
-  return (temp);
-
-  /* -------------------------------------------------- */
-
-  /* gettimeofday replacement by Daniel Clausen */
-#else
-#if defined(HAVE_GETTIMEOFDAY) && defined(HAVE_SYS_TIMEB_H)
+  /* Prefer gettimeofday() when available to avoid deprecated ftime(). */
+#if defined(HAVE_GETTIMEOFDAY)
   rtime_t temp;
   struct timeval tmp;
 
@@ -893,8 +884,14 @@ rtime_t rtime (void) {
   return (temp);
 
 #else
+#if defined(HAVE_FTIME) && defined(HAVE_SYS_TIMEB_H)
+  rtime_t temp;
+  ftime(&temp);
+  return (temp);
+
+#else
   return (time (0));
-#endif  
+#endif
 #endif
 
 }
@@ -950,6 +947,7 @@ void tree_debug (void) {
     rinput (input, STR_BUFF, stdin);
     if ((stream = fopen (input, "w")) == NULL) {
       fprintf (stderr, "Couldn't open file %s\n", input);
+      return;
     }
 
     /* does the user want to output diagrams? */

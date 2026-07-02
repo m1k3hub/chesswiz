@@ -35,6 +35,7 @@
 #include "u_match.h"
 
 #include "m_utility.h"
+#include "m_vector.h"
 
 #include <tcl.h>
 #include <string.h>
@@ -95,7 +96,7 @@ wikiLinkList(Player const* player)
 
 	if (player->wikipediaLinks(wikiLinks))
 	{
-		Tcl_Obj* objs[mstl::mul2(wikiLinks.size())];
+		mstl::vector<Tcl_Obj*> objs(mstl::mul2(wikiLinks.size()));
 		unsigned n = 0;
 
 		Player::AssocList::const_iterator i = wikiLinks.begin();
@@ -109,7 +110,7 @@ wikiLinkList(Player const* player)
 			objs[n++] = Tcl_NewStringObj(assoc.second, -1);
 		}
 
-		return Tcl_NewListObj(n, objs);
+		return Tcl_NewListObj(n, objs.data());
 	}
 
 	return Tcl_NewListObj(0, 0);
@@ -335,12 +336,12 @@ getInfo(	NamebasePlayer const* player,
 
 			if (!aliases.empty())
 			{
-				Tcl_Obj* objs[aliases.size()];
+				mstl::vector<Tcl_Obj*> objs(aliases.size());
 
 				for (unsigned i = 0; i < aliases.size(); ++i)
 					objs[i] = Tcl_NewStringObj(aliases[i], aliases[i].size());
 
-				aliasList = Tcl_NewListObj(aliases.size(), objs);
+				aliasList = Tcl_NewListObj(aliases.size(), objs.data());
 			}
 		}
 
@@ -381,6 +382,12 @@ tcl::player::getInfo(NamebasePlayer const& player,
 static int
 cmdCount(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	setResult(Tcl_NewIntObj(m_dictionary ? m_dictionary->count() : 0));
 	return TCL_OK;
 }
@@ -389,10 +396,19 @@ cmdCount(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdDict(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 2 || objc > 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "open <all|player|engine> | close");
+		return TCL_ERROR;
+	}
+
 	char const* cmd = stringFromObj(objc, objv, 1);
 
 	if (strcmp(cmd, "open") == 0)
 	{
+		if (objc != 3)
+			return error(CmdDict, nullptr, nullptr, "wrong # args: should be \"%s open <all|player|engine>\"", CmdDict);
+
 		if (m_dictionary)
 			return error(CmdDict, nullptr, nullptr, "player dictionary is already open");
 
@@ -417,8 +433,11 @@ cmdDict(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	}
 	else if (strcmp(cmd, "close") == 0)
 	{
+		if (objc != 2)
+			return error(CmdDict, nullptr, nullptr, "wrong # args: should be \"%s close\"", CmdDict);
+
 		if (!m_dictionary)
-			return error(CmdInfo, nullptr, nullptr, "player dictionary is already closed");
+			return error(CmdDict, nullptr, nullptr, "player dictionary is already closed");
 
 		delete m_dictionary;
 		m_dictionary = 0;
@@ -437,6 +456,13 @@ cmdInfo(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	if (!m_dictionary)
 		return error(CmdInfo, nullptr, nullptr, "player dictionary is closed");
+	if (objc < 2)
+	{
+		Tcl_WrongNumArgs(
+			ti, 1, objv,
+			"<index> ?-web bool? ?-ratings {type1 type2}? ?-organization org?");
+		return TCL_ERROR;
+	}
 	
 	tcl::player::Ratings ratings(rating::Elo, rating::DWZ);
 	organization::ID organization = organization::Fide; // organization::Scidb;
@@ -614,7 +640,12 @@ static int
 cmdLetter(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	if (!m_dictionary)
-		return error(CmdInfo, nullptr, nullptr, "player dictionary is closed");
+		return error(CmdLetter, nullptr, nullptr, "player dictionary is closed");
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<letter>");
+		return TCL_ERROR;
+	}
 
 	m_dictionary->filterLetter(toupper(*stringFromObj(objc, objv, 1)));
 	m_dictionary->finishOperation();
@@ -626,14 +657,19 @@ static int
 cmdFilter(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	if (!m_dictionary)
-		return error(CmdInfo, nullptr, nullptr, "player dictionary is closed");
+		return error(CmdFilter, nullptr, nullptr, "player dictionary is closed");
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<operator> <filter-list>");
+		return TCL_ERROR;
+	}
 
 	char const*	opStr		= stringFromObj(objc, objv, 1);
 	Tcl_Obj*		filter	= objectFromObj(objc, objv, 2);
 	int			length;
 
 	if (Tcl_ListObjLength(ti, filter, &length) != TCL_OK || mstl::is_odd(length))
-		return error(CmdInfo, nullptr, nullptr, "list of name/value pairs expected");
+		return error(CmdFilter, nullptr, nullptr, "list of name/value pairs expected");
 
 	::app::PlayerDictionary::Operator op = ::app::PlayerDictionary::Reset;
 
@@ -827,7 +863,12 @@ static int
 cmdSearch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	if (!m_dictionary)
-		return error(CmdInfo, nullptr, nullptr, "player dictionary is closed");
+		return error(CmdSearch, nullptr, nullptr, "player dictionary is closed");
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<pattern> <start-index>");
+		return TCL_ERROR;
+	}
 
 	util::Pattern pattern(stringFromObj(objc, objv, 1));
 	unsigned startIndex(intFromObj(objc, objv, 2) + 1);
@@ -841,7 +882,12 @@ static int
 cmdSort(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	if (!m_dictionary)
-		return error(CmdInfo, nullptr, nullptr, "player dictionary is closed");
+		return error(CmdSort, nullptr, nullptr, "player dictionary is closed");
+	if (objc != 2 && objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<reverse|cancel> | <ascending|descending> <attribute> <rating-type>");
+		return TCL_ERROR;
+	}
 
 	char const* order	= stringFromObj(objc, objv, 1);
 

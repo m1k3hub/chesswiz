@@ -31,6 +31,7 @@
 
 #include "m_list.h"
 #include "m_stdio.h"
+#include "m_ctype.h"
 
 #include <string.h>
 #include <ctype.h>
@@ -38,68 +39,10 @@
 using namespace app;
 using namespace app::uci;
 using namespace db;
+using namespace mstl;
 
 
-inline bool isLan(char const* s)					{ return ::isalpha(s[0]) && ::isdigit(s[1]); }
-
-
-static mstl::string
-toBool(bool value)
-{
-	return value ? "true" : "false";
-}
-
-
-static mstl::string
-toStr(unsigned value)
-{
-	char buf[20];
-	snprintf(buf, sizeof(buf), "%u", value);
-	return buf;
-}
-
-
-// UCI options should be case insensitive
-static bool
-ciEqual(char const* lhs, char const* rhs)
-{
-	return strcasecmp(lhs, rhs) == 0;
-}
-
-
-static char const*
-skipSpaces(char const*s)
-{
-	while (::isspace(*s))
-		++s;
-
-	return s;
-}
-
-
-static char const*
-skipNonSpaces(char const*s)
-{
-	while (*s && !::isspace(*s))
-		++s;
-
-	return s;
-}
-
-
-static char const*
-skipWords(char const* s, unsigned n)
-{
-	while (n--)
-	{
-		while (*s && !::isspace(*s))
-			++s;
-
-		s = skipSpaces(s);
-	}
-
-	return skipSpaces(s);
-}
+inline bool isLan(char const* s)					{ return is_alpha(s[0]) && is_digit(s[1]); }
 
 
 static bool
@@ -144,21 +87,6 @@ subst(mstl::string& str, char c)
 	}
 
 	str.swap(clone);
-}
-
-
-static bool
-isNumeric(char const* s)
-{
-	char const* p = s;
-
-	if (*p == '-' || *p == '+')
-		++p;
-
-	while (isdigit(*p))
-		++p;
-
-	return p > s && *p == '\0';
 }
 
 
@@ -538,7 +466,7 @@ uci::Engine::processMessage(mstl::string const& message)
 
 					if (isChess960Position() != m_isChess960)
 					{
-						send("setoption name UCI_Chess960 value " + ::toBool(isChess960Position()));
+						send(mstl::string("setoption name UCI_Chess960 value ") + to_bool(isChess960Position()));
 						m_isChess960 = isChess960Position();
 					}
 
@@ -558,11 +486,11 @@ uci::Engine::processMessage(mstl::string const& message)
 					m_isAnalyzing = true;
 
 					if (searchMate() > 0)
-						send("go mate " + ::toStr(searchMate()));
+						send("go mate " + string::cast(searchMate()));
 					else if (searchDepth() > 0)
-						send("go depth " + ::toStr(searchDepth()));
+						send("go depth " + string::cast(searchDepth()));
 					else if (searchTime() > 0)
-						send("go time " + ::toStr(searchTime()));
+						send("go time " + string::cast(searchTime()));
 					else
 						send("go infinite");
 
@@ -618,14 +546,14 @@ uci::Engine::processMessage(mstl::string const& message)
 
 				case 'n':
 					if (isAnalyzing() && !m_stopAnalyzeIsPending && ::strncmp(message, "info ", 5) == 0)
-						parseInfo(::skipSpaces(message.c_str() + 5));
+						parseInfo(skip_spaces(message.c_str() + 5));
 					break;
 			}
 			break;
 
 		case 'o':
 			if (::strncmp(message, "option name ", 12) == 0)
-				parseOption(::skipSpaces(message.c_str() + 7));
+				parseOption(skip_spaces(message.c_str() + 7));
 			break;
 
 		case 'b':
@@ -654,7 +582,7 @@ uci::Engine::parseBestMove(char const* msg)
 
 	M_ASSERT(!variant::isZhouse(m_variant)); // because parseLAN() is not working
 
-	char const* s = ::skipSpaces(msg);
+	char const* s = skip_spaces(msg);
 	Move move(currentBoard().parseLAN(s));
 
 	if (move.isLegal())
@@ -665,15 +593,15 @@ uci::Engine::parseBestMove(char const* msg)
 	else if (::strncmp(s, "(none)", 6) != 0)
 	{
 		mstl::string msg("Illegal best move: ");
-		msg.append(s, ::skipNonSpaces(s));
+		msg.append(s, skip_non_spaces(s));
 		error(msg);
 	}
 
-	s = ::skipNonSpaces(s);
+	s = skip_non_spaces(s);
 
 	if (::strncmp(s, "ponder ", 6) == 0)
 	{
-		s = ::skipSpaces(s + 6);
+		s = skip_spaces(s + 6);
 
 		currentBoard().prepareUndo(move);
 		currentBoard().doMove(move, m_variant);
@@ -688,7 +616,7 @@ uci::Engine::parseBestMove(char const* msg)
 		else if (::strncmp(s, "(none)", 6) != 0)
 		{
 			mstl::string msg("Illegal ponder move: ");
-			msg.append(s, ::skipNonSpaces(s));
+			msg.append(s, skip_non_spaces(s));
 			error(msg);
 		}
 	}
@@ -741,7 +669,7 @@ uci::Engine::parseInfo(char const* s)
 						{
 							MoveList moves;
 
-							if (!(s = parseMoveList(::skipWords(s, 1), moves)))
+							if (!(s = parseMoveList(skip_words(s, 1), moves)))
 								return;
 
 							setCurrLine(moves);
@@ -750,7 +678,7 @@ uci::Engine::parseInfo(char const* s)
 						}
 						else*/ if (::strncmp(s, "currmove ", 9) == 0)
 						{
-							if ((currMove = parseCurrentMove(::skipWords(s, 1))))
+							if ((currMove = parseCurrentMove(skip_words(s, 1))))
 								haveCurrMove = true;
 						}
 						else if (::sscanf(s, "currmovenumber %u", &currMoveNumber) == 1)
@@ -800,7 +728,7 @@ uci::Engine::parseInfo(char const* s)
 						{
 							int value;
 
-							s = skipWords(s, 1);
+							s = skip_words(s, 1);
 
 							switch (s[0])
 							{
@@ -872,7 +800,7 @@ uci::Engine::parseInfo(char const* s)
 					Board board(currentBoard());
 					MoveList moves;
 
-					if (!(s = parseMoveList(skipWords(s, 1), board, moves)))
+					if (!(s = parseMoveList(skip_words(s, 1), board, moves)))
 						return;
 
 					varno = setVariation(varno, moves);
@@ -913,7 +841,7 @@ uci::Engine::parseInfo(char const* s)
 				break;
 		}
 
-		s = ::skipWords(s, 2);
+		s = skip_words(s, 2);
 	}
 
 	if (haveHashFull)
@@ -954,7 +882,7 @@ uci::Engine::parseCurrentMove(char const* s)
 		if (!currentBoard().parseMove(s, move, m_variant, move::MustBeUnambiguous))
 		{
 			mstl::string msg("Illegal current move: ");
-			msg.append(s, ::skipNonSpaces(s));
+			msg.append(s, skip_non_spaces(s));
 			error(msg);
 			return Move();
 		}
@@ -986,7 +914,7 @@ uci::Engine::parseMoveList(char const* s, db::Board& board, db::MoveList& moves)
 
 		if (next == 0)
 		{
-			char const* t = ::skipNonSpaces(s);
+			char const* t = skip_non_spaces(s);
 			mstl::string msg("Illegal move in PV: ");
 			msg.append(s, t);
 			if (!moves.isEmpty())
@@ -1013,12 +941,12 @@ uci::Engine::parseMoveList(char const* s, db::Board& board, db::MoveList& moves)
 		board.doMove(move, m_variant);
 		moves.append(move);
 
-		s = ::skipSpaces(next);
+		s = skip_spaces(next);
 
 		if (moves.isFull())
 		{
 			while (::isLan(s))
-				s = ::skipWords(s, 1);
+				s = skip_words(s, 1);
 			log("WARNING: PV is too long (truncated)");
 			return s;
 		}
@@ -1064,22 +992,22 @@ uci::Engine::parseOption(char const* msg)
 		switch (name[4])
 		{
 			case 'A':
-				if (::ciEqual(name, "UCI_AnalyseMode"))
+				if (case_equal(name, "UCI_AnalyseMode"))
 					m_hasAnalyseMode = true;
 				break;
 
 			case 'C':
-				if (::ciEqual(name, "UCI_Chess960"))
+				if (case_equal(name, "UCI_Chess960"))
 					setSupportsChess960Positions();
 				break;
 
 			case 'E':
-				if (::ciEqual(name, "UCI_EngineAbout"))
+				if (case_equal(name, "UCI_EngineAbout"))
 				{
 					if (isProbing())
 						detectUrl(dflt);
 				}
-				else if (::ciEqual(name, "UCI_Elo"))
+				else if (case_equal(name, "UCI_Elo"))
 				{
 					if (type == "spin")
 					{
@@ -1090,23 +1018,23 @@ uci::Engine::parseOption(char const* msg)
 				break;
 
 			case 'L':
-				if (::ciEqual(name, "UCI_LimitStrength"))
+				if (case_equal(name, "UCI_LimitStrength"))
 					addFeature(app::Engine::Feature_Limit_Strength);
 				break;
 
 			case 'S':
-				if (::ciEqual(name, "UCI_ShowCurrLine"))
+				if (case_equal(name, "UCI_ShowCurrLine"))
 					m_hasShowCurrLine = true;
-				else if (::ciEqual(name, "UCI_ShowRefutations"))
+				else if (case_equal(name, "UCI_ShowRefutations"))
 					m_hasShowRefutations = true;
-//				else if (i:ciEqual(name, "UCI_ShredderbasesPath"))
+//				else if (i:case_equal(name, "UCI_ShredderbasesPath"))
 //					; // we do not use
-				else if (::ciEqual(name, "UCI_SetPositionValue"))
+				else if (case_equal(name, "UCI_SetPositionValue"))
 					; // we do not use
 				break;
 
 			case 'V':
-				if (::ciEqual(name, "UCI_Variant"))
+				if (case_equal(name, "UCI_Variant"))
 				{
 					Vars::iterator i = vars.begin();
 					Vars::iterator e = vars.end();
@@ -1152,7 +1080,7 @@ uci::Engine::parseOption(char const* msg)
 	}
 	else if (type == "spin")
 	{
-		if (!::isNumeric(dflt) || !::isNumeric(min) || !::isNumeric(max))
+		if (!is_numeric(dflt) || !is_numeric(min) || !is_numeric(max))
 			return;
 
 		if (id == "multipv")
@@ -1370,11 +1298,11 @@ uci::Engine::sendOptions()
 				break;
 
 			case 'u':
-				if (::ciEqual(opt.name, "UCI_LimitStrength"))
+				if (case_equal(opt.name, "UCI_LimitStrength"))
 					val = limitedStrength() ? "true" : "false";
-				else if (::ciEqual(opt.name, "UCI_ShowCurrLine"))
+				else if (case_equal(opt.name, "UCI_ShowCurrLine"))
 					val = "false";
-				else if (::ciEqual(opt.name, "UCI_ShowRefutations"))
+				else if (case_equal(opt.name, "UCI_ShowRefutations"))
 					val = "false";
 				break;
 		}
@@ -1392,24 +1320,24 @@ uci::Engine::sendOptions()
 	}
 
 	if (hasFeature(app::Engine::Feature_Ponder))
-		send("setoption name Ponder value " + ::toBool(pondering()));
+		send(mstl::string("setoption name Ponder value ") + to_bool(pondering()));
 
 	if (hasFeature(app::Engine::Feature_Multi_PV))
-		send("setoption name MultiPV value " + ::toStr(numVariations()));
+		send("setoption name MultiPV value " + string::cast(numVariations()));
 
 	if (hasFeature(app::Engine::Feature_Hash_Size))
-		send("setoption name Hash value " + ::toStr(hashSize()));
+		send("setoption name Hash value " + string::cast(hashSize()));
 
 	if (hasFeature(app::Engine::Feature_Threads))
 	{
 		if (!m_threads.empty())
 		{
-			send("setoption name " + m_threads + " value " + ::toStr(numThreads()));
+			send("setoption name " + m_threads + " value " + string::cast(numThreads()));
 		}
 		else if (!m_minThreads.empty() && !m_maxThreads.empty())
 		{
-			send("setoption name " + m_minThreads + " value " + ::toStr(numThreads()));
-			send("setoption name " + m_maxThreads + " value " + ::toStr(numThreads()));
+			send("setoption name " + m_minThreads + " value " + string::cast(numThreads()));
+			send("setoption name " + m_maxThreads + " value " + string::cast(numThreads()));
 		}
 	}
 
@@ -1459,14 +1387,14 @@ uci::Engine::invokeOption(mstl::string const& name)
 void
 uci::Engine::sendHashSize()
 {
-	sendOption("Hash", ::toStr(hashSize()));
+	sendOption("Hash", string::cast(hashSize()));
 }
 
 
 void
 uci::Engine::sendNumberOfVariations()
 {
-	sendOption("MultiPV", ::toStr(numVariations()));
+	sendOption("MultiPV", string::cast(numVariations()));
 }
 
 
@@ -1476,7 +1404,7 @@ uci::Engine::sendThreads()
 	if (m_threads.empty() && (m_minThreads.empty() || m_maxThreads.empty()))
 		m_threads.assign("Threads");
 
-	mstl::string num = ::toStr(numThreads());
+	mstl::string num = string::cast(numThreads());
 
 	if (!m_threads.empty())
 	{
@@ -1496,7 +1424,7 @@ uci::Engine::sendSkillLevel()
 	if (m_skillLevel.empty())
 		m_skillLevel.assign("Skill Level");
 
-	sendOption(m_skillLevel, ::toStr(skillLevel()));
+	sendOption(m_skillLevel, string::cast(skillLevel()));
 }
 
 
@@ -1516,9 +1444,9 @@ void
 uci::Engine::sendPondering()
 {
 #if 0
-	sendOption("Ponder", ::toBool(pondering()));
+	sendOption("Ponder", to_bool(pondering()));
 #else
-	send("setoption name Ponder value " + ::toBool(pondering()));
+	send(mstl::string("setoption name Ponder value ") + to_bool(pondering()));
 #endif
 }
 
@@ -1526,7 +1454,7 @@ uci::Engine::sendPondering()
 void
 uci::Engine::sendStrength()
 {
-	sendOption("UCI_Elo", ::toStr(limitedStrength()));
+	sendOption("UCI_Elo", string::cast(limitedStrength()));
 }
 
 

@@ -18,7 +18,7 @@ INCLUDE	= -I. $(ZLIB_INC)
 OPTIMIZE	= -O2 -fomit-frame-pointer
 C_DEBUG	= -DNDEBUG
 DEFINES	= -D_USE_MMAP # -DNOCRYPT -DNOUNCRYPT
-CFLAGS	= $(OPTIMIZE) $(C_DEBUG) $(SYS_CFLAGS) $(DEFINES)
+CFLAGS	= $(OPTIMIZE) $(C_DEBUG) $(SYS_CFLAGS) $(DEFINES) -Wno-old-style-definition
 
 SRC_C = \
 	ioapi.c \

@@ -142,7 +142,7 @@ chunk_allocator<T,Zero>::new_chunk()
 	c.curr = c.base = static_cast<T*>(::malloc(m_chunk_size));
 
 	if (Zero)
-		::memset(c.base, 0, m_chunk_size);
+		::memset(static_cast<void*>(c.base), 0, m_chunk_size);
 
 	return &c;
 }

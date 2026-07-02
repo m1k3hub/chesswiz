@@ -39,11 +39,12 @@ public:
 	using file::is_buffered;
 	using file::is_unbuffered;
 
-	using file::size;
 	using file::bufsize;
 	using file::buffer;
 	using file::mtime;
 	using file::filename;
+
+	virtual int64_t size() const { return file::size(); }
 
 	virtual void open(char const* filename);
 	virtual void open(char const* filename, openmode mode);

@@ -75,7 +75,7 @@ matchSuffix(mstl::string const& str, mstl::string const& suffix)
 	if (str.size() < suffix.size())
 		return false;
 
-	return strcasecmp(str.c_str() + suffix.size() - str.size(), suffix) == 0;
+	return strcasecmp(str.c_str() + str.size() - suffix.size(), suffix) == 0;
 }
 
 
@@ -837,7 +837,7 @@ Reader::getTerminationReason(mstl::string const& value)
 			mstl::string v(value);
 			v.strip('-');
 
-			return termination::fromString(value);
+			return termination::fromString(v);
 		}
 	}
 

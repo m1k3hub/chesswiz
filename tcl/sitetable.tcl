@@ -384,7 +384,6 @@ proc TableSelected {path index} {
 		set variant [::scrolledtable::variant $path]
 		set view [{*}$Vars(viewcmd) $base $variant]
 		set Vars($base:$variant:index) [::scidb::db::get siteIndex $index $view $base $variant]
-		set Vars($base:$variant:index) $index
 		{*}$Vars(selectcmd) $base $variant $view
 		::widget::busyCursor off
 	}
@@ -485,7 +484,11 @@ proc SortColumn {path id dir {rating {}}} {
 	set view [{*}$Vars(viewcmd) $base $variant]
 	set see 0
 	set selection [::scrolledtable::selection $path]
+	set selectedIndex -1
 	if {$selection >= 0 && [::scrolledtable::selectionIsVisible? $path]} { set see 1 }
+	if {$selection >= 0} {
+		set selectedIndex [::scidb::db::get siteIndex $selection $view $base $variant]
+	}
 	switch $dir {
 		reverse {
 			::scidb::db::reverse site $base $variant $view
@@ -499,8 +502,8 @@ proc SortColumn {path id dir {rating {}}} {
 			::scidb::db::sort site $base $variant $columnNo $view -$dir
 		}
 	}
-	if {$selection >= 0} {
-		set selection [::scidb::db::get lookupSite $selection $view $base $variant]
+	if {$selectedIndex >= 0} {
+		set selection [::scidb::db::get lookupSite $selectedIndex $view $base $variant]
 	}
 	::widget::busyCursor off
 	::scrolledtable::updateColumn $path $selection $see
@@ -532,6 +535,32 @@ proc GetSite {path base variant view index} {
 }
 
 
+proc OpenSiteGamesInSwitcher {path base variant view index {menu ""}} {
+	if {[string length $menu]} { ::tk::MenuUnpost $menu }
+
+	set siteIndex [::scidb::db::get siteIndex $index $view $base $variant]
+	set site [GetSite $path $base $variant $view $index]
+	set tempView [::scidb::view::new $base $variant unused unused unused unused master slave]
+	::scidb::view::search $base $variant $tempView null none [list site $siteIndex]
+	set rc [::application::database::OpenFilteredViewInSwitcher $path $base $variant $tempView site $site]
+	catch { ::scidb::view::close $base $variant $tempView }
+	return $rc
+}
+
+
+proc SaveSiteGamesWorkingSet {path base variant view index {menu ""}} {
+	if {[string length $menu]} { ::tk::MenuUnpost $menu }
+
+	set siteIndex [::scidb::db::get siteIndex $index $view $base $variant]
+	set site [GetSite $path $base $variant $view $index]
+	set tempView [::scidb::view::new $base $variant unused unused unused unused master slave]
+	::scidb::view::search $base $variant $tempView null none [list site $siteIndex]
+	set rc [::application::database::SaveFilteredViewAsWorkingSet $path $base $variant $tempView site $site]
+	catch { ::scidb::view::close $base $variant $tempView }
+	return $rc
+}
+
+
 proc PopupMenu {path menu base variant index column} {
 	variable ${path}::Vars
 
@@ -551,6 +580,18 @@ proc PopupMenu {path menu base variant index column} {
 		::bind $menu <Key-$accel> $cmd
 		::bind $menu <Key-[string tolower $accel]> $cmd
 	}
+
+	if {[$menu index end] ne "none"} {
+		$menu add separator
+	}
+	$menu add command \
+		-label " $::application::database::mc::RepertoireOpenInSwitcher" \
+		-command [namespace code [list OpenSiteGamesInSwitcher $path $base $variant $view $index $menu]] \
+		;
+	$menu add command \
+		-label " $::application::database::mc::SaveWorkingSet" \
+		-command [namespace code [list SaveSiteGamesWorkingSet $path $base $variant $view $index $menu]] \
+		;
 }
 
 } ;# namespace sitetable

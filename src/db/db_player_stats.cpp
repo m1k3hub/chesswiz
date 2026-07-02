@@ -104,6 +104,31 @@ PlayerStats::addEco(color::ID color, Eco const& eco)
 
 
 void
+PlayerStats::merge(PlayerStats const& stats)
+{
+	addDate(stats.firstDate());
+	addDate(stats.lastDate());
+
+	for (unsigned i = 0; i < rating::Last; ++i)
+	{
+		addRating(rating::Type(i), stats.m_minRating[i]);
+		addRating(rating::Type(i), stats.m_maxRating[i]);
+	}
+
+	for (unsigned color = 0; color < 2; ++color)
+	{
+		for (unsigned result = 0; result < U_NUMBER_OF(m_score[color]); ++result)
+			m_score[color][result] += stats.m_score[color][result];
+
+		m_countGames[color] += stats.m_countGames[color];
+
+		for (EcoMap::const_iterator it = stats.m_ecoMap[color].begin(); it != stats.m_ecoMap[color].end(); ++it)
+			m_ecoMap[color][it->first] += it->second;
+	}
+}
+
+
+void
 PlayerStats::finish()
 {
 	for (unsigned i = 0; i < 2; ++i)

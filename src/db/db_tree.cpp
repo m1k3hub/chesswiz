@@ -264,10 +264,16 @@ Tree::buildTree0(	unsigned myIdn,
 
 		if (progress.interrupted())
 			return false;
+		// Prefetch next game info for better cache utilization
+		if (m_index + 1 < numGames)
+		{
+			base.gameInfo(m_index + 1); /* trigger prefetch */
+		}
+
 
 		GameInfo const& info = base.gameInfo(m_index);
 
-		if (mode == tree::IncludeVariations && info.countVariations() > 0)
+		if (__builtin_expect(mode == tree::IncludeVariations && info.countVariations() > 0, 0))
 		{
 			possiblyAdd(base, info, mode, Eco(), myPosition);
 		}
@@ -326,13 +332,19 @@ Tree::buildTree518(	unsigned myIdn,
 		if (progress.interrupted())
 			return false;
 
+		// Prefetch next game info for better cache utilization
+		if (m_index + 1 < numGames)
+		{
+			base.gameInfo(m_index + 1); /* trigger prefetch */
+		}
+
 		GameInfo const& info = base.gameInfo(m_index);
 
 		if (info.idn() == variant::Standard)
 		{
 			if (info.plyCount() && reachableFunc(myPosition.signature(), info.signature(), hpSig))
 			{
-				if (mode == tree::IncludeVariations && info.countVariations() > 0)
+				if (__builtin_expect(mode == tree::IncludeVariations && info.countVariations() > 0, 0))
 				{
 					possiblyAdd(base, info, mode, Eco(), myPosition);
 				}
@@ -361,7 +373,7 @@ Tree::buildTree518(	unsigned myIdn,
 		}
 		else
 		{
-			if (mode == tree::IncludeVariations && info.countVariations() > 0)
+			if (__builtin_expect(mode == tree::IncludeVariations && info.countVariations() > 0, 0))
 			{
 				// nothing to do
 			}
@@ -411,9 +423,15 @@ Tree::buildTree960(	unsigned myIdn,
 		if (progress.interrupted())
 			return false;
 
+		// Prefetch next game info for better cache utilization
+		if (m_index + 1 < numGames)
+		{
+			base.gameInfo(m_index + 1); /* trigger prefetch */
+		}
+
 		GameInfo const& info = base.gameInfo(m_index);
 
-		if (mode == tree::IncludeVariations && info.countVariations() > 0)
+		if (__builtin_expect(mode == tree::IncludeVariations && info.countVariations() > 0, 0))
 		{
 			possiblyAdd(base, info, mode, Eco(), myPosition);
 		}
@@ -561,9 +579,9 @@ Tree::buildTreeStandard(unsigned myIdn,
 
 bool
 Tree::buildTreeStart(unsigned myIdn,
-							Board const& startPosition,
-							Board const& myPosition,
-							Line const& myLine,
+								Board const& startPosition,
+								Board const& myPosition,
+								Line const& myLine,
 							uint16_t hpSig,
 							Database const& base,
 							tree::Method method,

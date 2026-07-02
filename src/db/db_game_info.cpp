@@ -141,6 +141,7 @@ GameInfo const GameInfo::m_initializer((Initializer()));
 GameInfo::GameInfo(Initializer const&)
 	:m_event(&g_event)
 	,m_annotator(&g_empty)
+	,m_signature()
 	,m_variationCount(0)
 	,m_annotationCount(0)
 	,m_commentCount(0)
@@ -166,7 +167,6 @@ GameInfo::GameInfo(Initializer const&)
 
 	m_pd[White].value = m_pd[Black].value = 0;
 	m_player[White] = m_player[Black] = &g_player;
-	::memset(&m_signature, 0, sizeof(m_signature));
 }
 
 

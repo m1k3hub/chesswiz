@@ -192,7 +192,9 @@ proc BuildFrame {twm frame uid width height} {
 				lappend columns $cid $opts
 			}
 
-			set table [::scrolledtable::build $frame $columns -id db:positions:$id:$uid]
+			set table [::scrolledtable::build $frame $columns \
+				-id db:positions:$id:$uid \
+				-popupcmd [namespace code [list position::PopupMenu $twm]]]
 			::scrolledtable::configure $frame backRank \
 				-specialfont [list [list $::font::figurine(text:normal) 9812 9823]] \
 				;
@@ -223,7 +225,7 @@ proc ShowBoard {path x y} {
 	set base [::scrolledtable::base $table]
 	set variant [::scrolledtable::variant $table]
 	set view $Vars($base:$variant:view)
-	set idn [lindex [scidb::db::get position $index $view] 0]
+	set idn [lindex [scidb::db::get position $index $view $base $variant] 0]
 
 	activate [winfo parent $path] [::scrolledtable::indexToRow $table $index]
 	::scrolledtable::focus $table
@@ -318,6 +320,11 @@ proc Update2 {id path base variant} {
 		&& $lastChange < $Vars($base:$variant:lastChange)} {
 		set position [::scidb::db::find position $base $variant $Vars($base:$variant:position)]
 		if {$position >= 0} {
+			set row [::scidb::db::get lookupPosition $Vars($base:$variant:position) $view $base $variant]
+			if {$row >= 0} {
+				::scrolledtable::setSelection $Vars(frame:position) \
+					[::scrolledtable::indexToRow $Vars(frame:position) $row]
+			}
 			[namespace parent]::position::TableSearch $path $base $variant $view
 		} else {
 			[namespace parent]::position::Reset $path $base $variant
@@ -342,7 +349,7 @@ proc Reset {path base variant} {
 
 	::gamestable::clear $Vars(frame:games)
 	::scrolledtable::select $Vars(frame:position) none
-	::scrolledtable::activate none
+	::scrolledtable::activate $Vars(frame:position) none
 	set Vars($base:$variant:position) ""
 }
 
@@ -356,6 +363,15 @@ proc UpdateTable {path base variant} {
 			after idle [list ::scrolledtable::update $Vars(frame:position) $base $variant $n]
 			after idle [list [namespace parent]::games::Update2 \
 				$Vars($base:$variant:positions:lastId) $path $base $variant]
+			if {[string is integer -strict $Vars($base:$variant:position)]} {
+				set row [::scidb::db::get lookupPosition $Vars($base:$variant:position) \
+					$Vars($base:$variant:view) $base $variant]
+				if {$row >= 0} {
+					after idle [list ::scrolledtable::setSelection \
+						$Vars(frame:position) \
+						[::scrolledtable::indexToRow $Vars(frame:position) $row]]
+				}
+			}
 			set Vars($base:$variant:update) 0
 		}
 	}
@@ -401,7 +417,7 @@ proc TableFill {path args} {
 
 	for {set i $first} {$i < $last} {incr i} {
 		set index [expr {$start + $i}]
-		set line [scidb::db::get position $index $view]
+		set line [scidb::db::get position $index $view $base $variant]
 		set text {}
 
 		foreach id {position backRank frequency} value $line {
@@ -437,6 +453,49 @@ proc TableFill {path args} {
 }
 
 
+proc PopupMenu {path menu base variant index column} {
+	variable [namespace parent]::${path}::Vars
+
+	if {$index eq "none" || $index eq "outside"} { return }
+	set view $Vars($base:$variant:view)
+	set position [scidb::db::get position $index $view $base $variant]
+	set positionId [lindex $position 0]
+	set label [lindex $position 1]
+	if {![string length $label]} {
+		set label $positionId
+	}
+
+	$menu add command \
+		-label " $::application::database::mc::RepertoireOpenInSwitcher" \
+		-command [namespace code [list OpenPositionGamesInSwitcher \
+			$path $base $variant $positionId $label]] \
+		;
+	$menu add command \
+		-label " $::application::database::mc::SaveWorkingSet" \
+		-command [namespace code [list SavePositionGamesWorkingSet \
+			$path $base $variant $positionId $label]] \
+		;
+}
+
+
+proc OpenPositionGamesInSwitcher {path base variant positionId label} {
+	set tempView [::scidb::view::new $base $variant unused unused unused unused master slave]
+	::scidb::view::search $base $variant $tempView null none [list position $positionId]
+	set rc [::application::database::OpenFilteredViewInSwitcher $path $base $variant $tempView position $label]
+	catch { ::scidb::view::close $base $variant $tempView }
+	return $rc
+}
+
+
+proc SavePositionGamesWorkingSet {path base variant positionId label} {
+	set tempView [::scidb::view::new $base $variant unused unused unused unused master slave]
+	::scidb::view::search $base $variant $tempView null none [list position $positionId]
+	set rc [::application::database::SaveFilteredViewAsWorkingSet $path $base $variant $tempView position $label]
+	catch { ::scidb::view::close $base $variant $tempView }
+	return $rc
+}
+
+
 proc TableSelected {path index} {
 	variable [namespace parent]::${path}::Vars
 
@@ -445,7 +504,7 @@ proc TableSelected {path index} {
 	set base [::scrolledtable::base $table]
 	set variant [::scrolledtable::variant $table]
 	set view $Vars($base:$variant:view)
-	set position [scidb::db::get position $index $view]
+	set position [scidb::db::get position $index $view $base $variant]
 	set Vars($base:$variant:position) [lindex $position 0]
 	TableSearch $path $base $variant $view
 	::widget::busyCursor off
@@ -474,7 +533,12 @@ proc SortColumn {path id dir} {
 	set view $Vars($base:$variant:view)
 	set see 0
 	set selection [::scrolledtable::selection $table]
+	set positionId -1
 	if {$selection >= 0 && [::scrolledtable::selectionIsVisible? $table]} { set see 1 }
+	if {$selection >= 0} {
+		set position [scidb::db::get position $selection $view $base $variant]
+		set positionId [lindex $position 0]
+	}
 	switch $dir {
 		reverse {
 			::scidb::db::reverse position $base $variant $view
@@ -488,8 +552,8 @@ proc SortColumn {path id dir} {
 			::scidb::db::sort position $base $variant $columnNo $view -$dir
 		}
 	}
-	if {$selection >= 0} {
-		set selection [::scidb::db::get lookupPosition $selection $view $base $variant]
+	if {$positionId >= 0} {
+		set selection [::scidb::db::get lookupPosition $positionId $view $base $variant]
 	}
 	::widget::busyCursor off
 	::scrolledtable::updateColumn $table $selection $see

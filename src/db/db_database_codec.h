@@ -36,6 +36,8 @@
 #include "m_string.h"
 #include "m_vector.h"
 
+namespace db { namespace cbv { class Codec; } }
+
 namespace sys
 {
 	namespace utf8 { class Codec; }
@@ -191,6 +193,7 @@ public:
 	save::State exportGame(Consumer& consumer, util::ByteStream& strm, TagSet& tags);
 
 	virtual util::ByteStream getGame(GameInfo const& info);
+	virtual util::ByteStream getGame(GameInfo const& info, ::util::BlockFileReader* reader);
 	save::State addGame(util::ByteStream const& gameData, GameInfo const& info, Allocation allocation);
 	save::State addGame(util::ByteStream& gameData, TagSet const& tags, Consumer& consumer);
 	save::State saveGame(util::ByteStream const& gameData, TagSet const& tags, Provider const& provider);
@@ -305,6 +308,7 @@ protected:
 						unsigned mode = 0);
 
 	static void getGameRecord(GameInfo const& info, util::BlockFileReader& reader, util::ByteStream& src);
+	friend class cbv::Codec;
 
 private:
 

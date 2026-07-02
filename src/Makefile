@@ -17,7 +17,7 @@ include ../Makefile.in
 TK_PROGRAM		= tkscidb$(SUFFIX)
 TCL_PROGRAM		= tclscidb$(SUFFIX)
 
-INCLUDE			= -I. -Imstl -Iutil -Idb -Idb/sci -Idb/si3 -Iutil/universalchardet -Iapp -Itcl -Itk -Isys
+INCLUDE			= -I. -Imstl -Iutil -Idb -Idb/sci -Idb/si3 -Idb/cbv -Iutil/universalchardet -Iapp -Itcl -Itk -Isys
 ALL_INCLUDE		= $(INCLUDE) $(TCL_INCLUDE) $(TK_INCLUDE) $(X_INCLUDE) $(ZLIB_INC)
 ALL_CXXFLAGS	= $(OPTIMIZE) $(PROFILING) $(CXX_DEBUG) $(CXXFLAGS) $(SYS_CXXFLAGS)
 MINIZIP_LIB		= -Lutil/minizip -lminizip
@@ -72,7 +72,6 @@ SRC = \
 	extend_eco.cpp \
 	pawn_progress.cpp \
 	pgn_split_eco.cpp \
-	recover_index.cpp \
 	tkscidb.cpp \
 	tclscidb.cpp \
 
@@ -82,12 +81,24 @@ ALL_TK_LIBS = $(TCL_LIBS) $(TK_LIBS) $(TK_LIBRARY) $(X_LIBRARY)
 
 SUBDIRS = db app mstl sys tcl tk/jpeg tk/svg/agg tk/svg tk/treectrl tk/html tk/text tk/tkdnd tk util util/minizip util/libTeXt util/libharu util/universalchardet util/libhyphenate util/gdbm $(LIB_SUBDIRS)
 
-TARGETS = extend_eco dump_eco code2eco eco2code best_move guess_move pawn_progress cbh2si4 cdb2sci $(TK_PROGRAM) $(TCL_PROGRAM)
+TARGETS = extend_eco dump_eco code2eco eco2code best_move pawn_progress cbh2si4 cdb2sci $(TK_PROGRAM) $(TCL_PROGRAM)
 TARGETS += verify_maintenance
+TARGETS += verify_conversion
+TARGETS += benchmark_conversion
+TARGETS += benchmark_workflows
+TARGETS += verify_cbh_write
+TARGETS += probe_cbh_chess960
+TARGETS += scan_db_chess960
 
 all: check-mtime recursive cbh2si4 cdb2sci $(TK_PROGRAM) $(TCL_PROGRAM)
 tkscidb-only: recursive $(TK_PROGRAM)
 verify-maintenance: recursive verify_maintenance
+verify-conversion: recursive verify_conversion
+verify-cbh-write: recursive verify_cbh_write
+probe-cbh-chess960: recursive probe_cbh_chess960
+scan-db-chess960: recursive scan_db_chess960
+benchmark-conversion: recursive benchmark_conversion
+benchmark-workflows: recursive benchmark_workflows
 
 check-mtime:
 	@if [ -f $(TK_PROGRAM) ]; then                             \
@@ -219,7 +230,7 @@ util/libutil.a:
 	$(MAKE) -C util
 
 util/minizip/libminizip.a:
-	$(MAKE) -C util/libminizip
+	$(MAKE) -C util/minizip
 
 util/zzip/libzzip.a:
 	$(MAKE) -C util/zzip
@@ -230,7 +241,7 @@ util/libharu/libharu.a:
 util/libTeXt/libTeXt.a:
 	$(MAKE) -C util/libTeXt
 
-util/universalchardet/chardet.a:
+util/universalchardet/libchardet.a:
 	$(MAKE) -C util/universalchardet
 
 util/libhyphenate/libhyphenate.a:
@@ -258,9 +269,9 @@ tk/html/libTkhtml3.a:
 	$(MAKE) -C tk/html
 
 tk/text/libTkText.a:
-	$(MAKE) -C tk/html
+	$(MAKE) -C tk/text
 
-db/libapp.a:
+app/libapp.a:
 	$(MAKE) -C app
 
 db/libdb.a:
@@ -314,6 +325,30 @@ recover_index: recover_index.o $(LIBS)
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
 
 verify_maintenance: verify_maintenance.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
+verify_conversion: verify_conversion.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
+verify_cbh_write: verify_cbh_write.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
+probe_cbh_chess960: probe_cbh_chess960.o $(LIBS_BASE)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(LIBS_BASE)
+
+scan_db_chess960: scan_db_chess960.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
+benchmark_conversion: benchmark_conversion.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
+benchmark_workflows: benchmark_workflows.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
 

@@ -44,6 +44,7 @@
 #include "u_nul_string.h"
 
 #include "m_algorithm.h"
+#include "m_ctype.h"
 #include "m_istream.h"
 #include "m_stdio.h"
 
@@ -57,6 +58,7 @@
 using namespace db;
 using namespace db::tag;
 using namespace util;
+using namespace mstl;
 
 enum { None, Piece, Fyle, Rank, Capture, Drop };
 
@@ -252,15 +254,6 @@ skipMoveToken(char const* s)
 	while (CharToType[int(*s)] != None)
 		++s;
 
-	return s;
-}
-
-
-static char const*
-skipSpaces(char const* s)
-{
-	while (isspace(*s))
-		++s;
 	return s;
 }
 
@@ -1641,7 +1634,7 @@ PgnReader::parseFinalComment(mstl::string const& comment)
 				return setTermination(termination::Normal);
 			if (::matchEndOfSentence(s, "was drawn", 9))
 				return setTermination(termination::Normal);
-			if (::matchEndOfSentence(s, "was adjourned", 13));
+			if (::matchEndOfSentence(s, "was adjourned", 13))
 				return setTermination(termination::Unterminated);
 			if (::matchEndOfSentence(s, "was sent for adjudication", 25))
 				return setTermination(termination::Unterminated);
@@ -3513,13 +3506,13 @@ PgnReader::stripDiagram(mstl::string& comment)
 
 	if (s[0] == '#' && (comment.size() == 1 || ::isspace(s[1])))
 	{
-		comment.erase(comment.begin(), ::skipSpaces(s + 1));
+		comment.erase(comment.begin(), skip_spaces(s + 1));
 		m_annotation.add(nag::Diagram);
 		m_hasNote = true;
 	}
 	else if (s[0] == '[' && s[1] == '#' && s[2] == ']')
 	{
-		comment.erase(comment.begin(), ::skipSpaces(s + 3));
+		comment.erase(comment.begin(), skip_spaces(s + 3));
 		m_annotation.add(nag::Diagram);
 		m_hasNote = true;
 	}
@@ -3535,7 +3528,7 @@ PgnReader::stripDiagram(mstl::string& comment)
 		if (!::equal(s, "{#}", 3))
 			return;
 
-		comment.erase(comment.begin(), ::skipSpaces(s + 3));
+		comment.erase(comment.begin(), skip_spaces(s + 3));
 		m_annotation.add(nag::Diagram);
 		m_hasNote = true;
 	}

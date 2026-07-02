@@ -97,6 +97,7 @@ public:
 							unsigned prevOffset,
 							unsigned prevRecordLength) override;
 	util::ByteStream getGame(GameInfo const& info) override;
+	util::ByteStream getGame(GameInfo const& info, ::util::BlockFileReader* reader) override;
 	void save(mstl::string const& rootname, unsigned start, util::Progress& progress) override;
 	void attach(mstl::string const& rootname, util::Progress& progress) override;
 	void update(mstl::string const& rootname);

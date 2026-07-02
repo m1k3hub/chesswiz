@@ -33,6 +33,12 @@ all: Makefile.in check-mtime
 verify-maintenance: Makefile.in check-mtime
 	@$(MAKE) -C src verify-maintenance
 
+verify-conversion: Makefile.in check-mtime
+	@$(MAKE) -C src verify-conversion
+
+benchmark-conversion: Makefile.in check-mtime
+	@$(MAKE) -C src benchmark-conversion
+
 check-mtime:
 	@if [ Makefile.in -ot configure ]; then                    \
 		echo "";                                                \

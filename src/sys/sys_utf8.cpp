@@ -19,6 +19,7 @@
 #include "sys_utf8.h"
 
 #include "m_string.h"
+#include "m_vector.h"
 #include "m_utility.h"
 #include "m_assert.h"
 
@@ -860,15 +861,15 @@ sys::utf8::levenshteinDistance(	mstl::string const& lhs,
 
 	// algorithm from http://en.wikipedia.org/wiki/Levenshtein_distance
 
-	uchar d[lhsSize + 1][rhsSize + 1];
-	uchar c[lhsSize];
-
-	::memset(d, 0, sizeof(uchar)*(lhsSize+ 1)*(rhsSize + 1));
+	unsigned const stride = rhsSize + 1;
+	mstl::vector<uchar> d_buf((lhsSize + 1) * stride, 0);
+	uchar* d = d_buf.begin();
+	mstl::vector<uchar> c(lhsSize);
 
 	for (unsigned i = 0; i <= lhsSize; ++i)
-		d[i][0] = i;
+		d[i * stride] = i;
 	for (unsigned j = 0; j <= rhsSize; ++j)
-		d[0][j] = j;
+		d[j] = j;
 
 	char const* ls = lhs.c_str();
 	char const* rs = rhs.c_str();
@@ -885,13 +886,13 @@ sys::utf8::levenshteinDistance(	mstl::string const& lhs,
 		for (unsigned i = 0; i < lhsSize; ++i)
 		{
 			if (c[i] == b)
-				d[i + 1][j + 1] = d[i][j];
+				d[(i + 1) * stride + (j + 1)] = d[i * stride + j];
 			else
-				d[i + 1][j + 1] = mstl::min(d[i][j + 1] + del, d[i + 1][j] + ins, d[i][j] + sub);
+				d[(i + 1) * stride + (j + 1)] = mstl::min(d[i * stride + (j + 1)] + del, d[(i + 1) * stride + j] + ins, d[i * stride + j] + sub);
 		}
 	}
 
-	return d[lhsSize][rhsSize];
+	return d[lhsSize * stride + rhsSize];
 }
 
 
@@ -912,13 +913,13 @@ sys::utf8::levenshteinDistanceFast(mstl::string const& lhs, mstl::string const& 
 
 	// algorithm from http://en.wikipedia.org/wiki/Levenshtein_distance
 
-	unsigned v0[rhs.size() + 1];
-	unsigned v1[rhs.size() + 1];
+	mstl::vector<unsigned> v0(rhs.size() + 1);
+	mstl::vector<unsigned> v1(rhs.size() + 1);
 
 	for (unsigned i = 0; i <= rhs.size(); ++i)
 		v0[i] = i;
 
-	uchar d[rhsSize];
+	mstl::vector<uchar> d(rhsSize);
 
 	char const* ls = lhs.c_str();
 	char const* rs = rhs.c_str();

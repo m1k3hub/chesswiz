@@ -70,6 +70,7 @@ inline void TreeInfo::setEco(Eco code) { m_eco = code; }
 
 #ifdef SUPPORT_TREE_INFO_FILTER
 inline void TreeInfo::addGame(unsigned index) { m_filter.add(index); }
+inline Filter const& TreeInfo::filter() const { return m_filter; }
 #endif
 
 

@@ -131,7 +131,8 @@ void path_renderer::render(PixFmt& pixf, agg::trans_affine const& mtx, ColorType
 												gradient_mtx,
 												attr.coords,
 												ras.min_x(), ras.max_x(),
-												ras.min_y(), ras.max_y());
+												ras.min_y(), ras.max_y(),
+												m_transform);
 
 				gradient_func_type gradient_func;
 				span_allocator_type span_allocator;

@@ -19,6 +19,18 @@
 TITLE What's new?
 
 <h3>
+Current development snapshot
+</h3>
+
+<ul style="padding: 5px;">
+  <li class="space">Database maintenance now includes duplicate detection, opening statistics, and a consolidated maintenance report for <abbr>.sci</abbr> databases.</li>
+  <li class="space">Material search has been added as a dedicated database workflow.</li>
+  <li class="space">A first player preparation report is available from the players list.</li>
+  <li class="space">Heavy workflows are now treated as <abbr>.sci</abbr>-first workflows: non-<abbr>.sci</abbr> databases can still be opened, but conversion to <abbr>.sci</abbr> is recommended for speed and repeated analysis.</li>
+  <li class="space">The database maintenance menu now offers a direct conversion path to <abbr>.sci</abbr> for non-<abbr>.sci</abbr> databases.</li>
+</ul>
+
+<h3>
 Fifth public preview version
 </h3>
 

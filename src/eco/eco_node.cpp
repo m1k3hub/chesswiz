@@ -138,8 +138,9 @@ return true;
 static
 auto isReversalMove(MoveLine const& line, Move const& move) -> bool
 {
-	for (int i = line.size() - 1; i >= 0; --i)
+	for (unsigned i = line.size(); i > 0; )
 	{
+		--i;
 		Move const& m = line[i];
 
 		if (move.to() == m.from() && move.from() == m.to() && move.moved() == m.moved())
@@ -668,8 +669,9 @@ void Node::computePathMaxima(MoveList& line) const
 	BranchStack stack;
 	maxNode->computePathMaxima(stack);
 
-	for (int i = stack.size() - 1; i >= 0; --i)
+	for (unsigned i = stack.size(); i > 0; )
 	{
+		--i;
 		line.append(stack[i]->move);
 	}
 }

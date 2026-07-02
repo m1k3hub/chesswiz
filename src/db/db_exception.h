@@ -64,6 +64,7 @@ public:
 		Annotation,
 		PgnFile,
 		BookFile,
+		Archive,
 	};
 
 	enum ErrorType

@@ -32,6 +32,7 @@
 // Used files:			.cba .cbc .cbg .cbh .cbp .cbt .cbs .cbe .cbj .ini .html/*
 
 #include "cbh_codec.h"
+#include "cbh_consumer.h"
 #include "cbh_decoder.h"
 #include "cbh_game_decoder.h"
 
@@ -71,6 +72,57 @@ enum { Deleted = -999 };
 
 
 static db::tag::TagSet m_infoTags;
+
+namespace {
+
+uint32_t
+findPlayerRecordIndex(Namebase const& base, NamebasePlayer const* player)
+{
+	if (player == 0)
+		return 0;
+
+	for (unsigned i = 0; i < base.size(); ++i)
+	{
+		if (base.playerAt(i) == player)
+			return i;
+	}
+
+	return 0;
+}
+
+
+uint32_t
+findEventRecordIndex(Namebase const& base, NamebaseEvent const* event)
+{
+	if (event == 0)
+		return 0;
+
+	for (unsigned i = 0; i < base.size(); ++i)
+	{
+		if (base.eventAt(i) == event)
+			return i;
+	}
+
+	return 0;
+}
+
+
+uint32_t
+findAnnotatorRecordIndex(Namebase const& base, NamebaseEntry const* annotator)
+{
+	if (annotator == 0)
+		return 0;
+
+	for (unsigned i = 0; i < base.size(); ++i)
+	{
+		if (base.entryAt(i) == annotator)
+			return i;
+	}
+
+	return 0;
+}
+
+} // namespace
 
 static country::Code NationMap[] =
 {
@@ -467,7 +519,7 @@ Codec::Source::Source(mstl::string const& name, Date const& sourceDate)
 
 
 unsigned Codec::maxGameRecordLength() const	{ return 0x2fffffff - 1; }
-unsigned Codec::maxGameCount() const			{ return (1 << 31)/46; }
+unsigned Codec::maxGameCount() const			{ return (1u << 31)/46u; }
 unsigned Codec::maxGameLength() const			{ return (1 << 16) - 1; }
 unsigned Codec::maxPlayerCount() const			{ return (1 << 24) - 1; }
 unsigned Codec::maxEventCount() const			{ return (1 << 24) - 1; }
@@ -511,6 +563,9 @@ Codec::Codec()
 	,m_illegalPlayer(0)
 	,m_numGames(0)
 	,m_highQuality(false)
+	,m_isWritable(false)
+	,m_nextGameOffset(0)
+	,m_nextAnnotationOffset(0)
 {
 	if (::m_infoTags.none())
 	{
@@ -551,7 +606,7 @@ Codec::~Codec() throw()
 bool
 Codec::isWritable() const
 {
-	return false;
+	return m_isWritable;
 }
 
 
@@ -685,6 +740,10 @@ Codec::close()
 		m_gameStream.close();
 	if (m_annotationStream.is_open())
 		m_annotationStream.close();
+	if (m_indexStream.is_open())
+		m_indexStream.close();
+	if (m_namebaseStream.is_open())
+		m_namebaseStream.close();
 	if (m_teamStream.is_open())
 		m_teamStream.close();
 }
@@ -847,7 +906,7 @@ Codec::readTournamentData(mstl::string const& rootname, util::Progress& progress
 				if (	countryCode == country::Jersey
 					&& (	::strstr(city, "Guernsey") != 0
 						|| ::strstr(city, "Dgernesy") != 0
-						|| ::strstr(city, "Dgèrnésy") != 0	// "Dg�rn�sy"
+						|| ::strstr(city, "Dgèrnésy") != 0	// "Dg�rn�sy"
 						|| ::strstr(city, "Peter Port") != 0))
 				{
 					countryCode = country::Guernsey;
@@ -1248,8 +1307,9 @@ Codec::readTeamData(mstl::string const& rootname, util::Progress& progress)
 			else
 				team->nation = country::Unknown;
 
-			char* p = m_sourceBase.alloc(str.size());
-			::strncpy(p, str, str.size());
+			char* p = m_sourceBase.alloc(str.size() + 1);
+			::memcpy(p, str, str.size());
+			p[str.size()] = '\0';
 			team->title.hook(p, str.size());
 
 			// next 4 bytes: number of games with this team?
@@ -1799,8 +1859,9 @@ Codec::reloadTeamData(mstl::string const& rootname, util::Progress& progress)
 				if (!sys::utf8::validate(name))
 					m_codec->forceValidUtf8(name);
 
-				char* p = m_sourceBase.alloc(name.size());
-				::strncpy(p, name, name.size());
+				char* p = m_sourceBase.alloc(name.size() + 1);
+				::memcpy(p, name, name.size());
+				p[name.size()] = '\0';
 				m_teamBase[i]->title.hook(p, name.size());
 			}
 
@@ -1830,7 +1891,7 @@ Codec::readHeader(mstl::string const& rootname)
 			&& record[2] != 0x24)// CB Light
 		|| record[3] != 0
 		|| record[4] != 0x2e
-		|| record[5] != 0x01)
+		|| record[5] > 0x0a)
 	{
 		IO_RAISE(Index, Open_Failed, "bad magic in '%s'", filename.c_str());
 	}
@@ -2129,7 +2190,7 @@ if (::getenv("SCIDB_GUIDING_TEXT") == 0) return;
 
 	__attribute__((unused)) unsigned tournamentId	= strm.uint24();
 	__attribute__((unused)) unsigned sourceId			= strm.uint24();
-	__attribute__((unused)) unsigned annotatorId		= strm.uint24();;
+	__attribute__((unused)) unsigned annotatorId		= strm.uint24();
 	__attribute__((unused)) unsigned round				= strm.get();
 
 //printf("offset:     %u\n", offset);
@@ -2184,25 +2245,27 @@ if (::getenv("SCIDB_GUIDING_TEXT") == 0) return;
 
 		unsigned numTitles = bstrm.uint16LE();
 
-		char* buf = new char[size];
-		char* mem = buf;
-
+		mstl::vector<char> buf(size);
 		mstl::string str;
 
-		if (m_gameStream.read(buf, size))
+		if (m_gameStream.read(buf.data(), size))
 		{
-			bstrm.setup(buf, size);
+			bstrm.setup(reinterpret_cast<Byte*>(buf.data()), size);
 
 			for (unsigned i = 0; i < numTitles; ++i)
 			{
 				if (bstrm.remaining() <= 4)
+				{
 					return;
+				}
 
 				__attribute__((unused)) unsigned lang		= bstrm.uint16LE();
 				__attribute__((unused)) unsigned length	= bstrm.uint16LE();
 
 				if (length > bstrm.remaining())
+				{
 					return;
+				}
 
 				str.clear();
 				bstrm.get(str, length);
@@ -2237,7 +2300,9 @@ if (::getenv("SCIDB_GUIDING_TEXT") == 0) return;
 				__attribute__((unused)) unsigned length	= bstrm.uint16LE();
 
 				if (length > bstrm.remaining())
+				{
 					return;
+				}
 
 				str.clear();
 				bstrm.get(str, length);
@@ -2256,12 +2321,14 @@ if (::getenv("SCIDB_GUIDING_TEXT") == 0) return;
 				unsigned length = bstrm.uint32LE();
 
 				if (length >= bstrm.remaining())
+				{
 					return;
+				}
 
 				str.clear();
 				bstrm.get(str, length);
 				::replaceNewlines(str);
-printf("id=%u, lang=%u: '%s'\n", id, lang, str.c_str());
+//printf("id=%u, lang=%u: '%s'\n", id, lang, str.c_str());
 				bstrm.get(); // nul byte?
 
 				if (bstrm.remaining() > 9)
@@ -2271,8 +2338,6 @@ printf("id=%u, lang=%u: '%s'\n", id, lang, str.c_str());
 				}
 			}
 		}
-
-		delete [] mem;
 	}
 }
 
@@ -2598,7 +2663,7 @@ Codec::doDecoding(GameData& data, GameInfo& info, unsigned gameIndex, mstl::stri
 
 
 save::State
-Codec::doDecoding(Consumer& consumer, TagSet& tags, GameInfo const& info, unsigned gameIndex)
+Codec::doDecoding(db::Consumer& consumer, TagSet& tags, GameInfo const& info, unsigned gameIndex)
 {
 	Byte buf[2][32768];
 
@@ -2667,7 +2732,7 @@ Codec::getAttributes(mstl::string const& filename,
 			&& record[2] != 0x24)	// CB Light
 		|| record[3] != 0
 		|| record[4] != 0x2e
-		|| record[5] != 0x01)
+		|| record[5] > 0x0a)
 	{
 		return false;
 	}
@@ -2729,6 +2794,913 @@ Codec::getSuffixes(mstl::string const&, StringList& result)
 	result.push_back("rb0");
 	result.push_back("rb1");
 	result.push_back("rb2");
+}
+
+
+save::State
+Codec::addGame(ByteStream& gameData, ByteStream& annotationData, TagSet const& tags, db::Consumer& consumer)
+{
+	// Write annotation data to .cba file if present
+	if (annotationData.size() > 0 && m_annotationStream.is_open())
+	{
+		unsigned annotOffset = m_nextAnnotationOffset;
+		unsigned annotLength = annotationData.size();
+		unsigned totalLength = annotLength + 14;
+		Byte recordHeader[14] = { 0 };
+
+		// The reader expects a 10-byte record prefix followed by a 4-byte
+		// length field that includes the 14-byte wrapper.
+		util::ByteStream::set(recordHeader + 10, uint32_t(totalLength));
+
+		if (!m_annotationStream.write(reinterpret_cast<char const*>(recordHeader), sizeof(recordHeader)))
+			IO_RAISE(Game, Write_Failed, "failed to write annotation header");
+
+		if (!m_annotationStream.write(annotationData.data(), annotLength))
+			IO_RAISE(Game, Write_Failed, "failed to write annotation data");
+
+		// Store annotation offset for index entry
+		// The offset will be linked to the game via m_annotationMap in writeIndexEntry
+		unsigned gameOffset = m_nextGameOffset;
+		m_annotationMap.container().push_back(AnnotationMap::value_type(gameOffset, annotOffset));
+
+		m_nextAnnotationOffset += totalLength;
+	}
+
+	// Delegate to base class addGame for namebase/index handling
+	return DatabaseCodec::addGame(gameData, tags, consumer);
+}
+
+
+void
+Codec::doOpen(mstl::string const& encoding)
+{
+	// Used for creating new databases in memory
+	M_ASSERT(m_codec == 0);
+
+	m_codec = new sys::utf8::Codec(encoding);
+	m_isWritable = true;
+	m_nextGameOffset = 1;
+	m_nextAnnotationOffset = 1;
+}
+
+
+void
+Codec::doOpen(mstl::string const& rootname, mstl::string const& encoding)
+{
+	// Used for creating new databases on disk
+	M_ASSERT(m_codec == 0);
+
+	m_codec = new sys::utf8::Codec(encoding);
+	m_rootname = rootname;
+	m_isWritable = true;
+	m_nextGameOffset = 1;
+	m_nextAnnotationOffset = 1;
+
+	setupForWriting(rootname);
+}
+
+
+void
+Codec::setWritable()
+{
+	m_isWritable = true;
+}
+
+
+void
+Codec::sync()
+{
+	if (m_gameStream.is_open())
+		m_gameStream.flush();
+	if (m_annotationStream.is_open())
+		m_annotationStream.flush();
+	if (m_indexStream.is_open())
+		m_indexStream.flush();
+	if (m_namebaseStream.is_open())
+		m_namebaseStream.flush();
+}
+
+
+void
+Codec::setupForWriting(mstl::string const& rootname)
+{
+	// Open game file for writing
+	mstl::string gameFilename(rootname + ".cbg");
+	m_gameStream.open(gameFilename, mstl::fstream::out | mstl::fstream::binary | mstl::fstream::trunc);
+	if (!m_gameStream)
+		IO_RAISE(Game, Open_Failed, "cannot create game file '%s'", gameFilename.c_str());
+
+	// Open annotation file for writing
+	mstl::string annotFilename(rootname + ".cba");
+	m_annotationStream.open(annotFilename, mstl::fstream::out | mstl::fstream::binary | mstl::fstream::trunc);
+	if (!m_annotationStream)
+		IO_RAISE(Game, Open_Failed, "cannot create annotation file '%s'", annotFilename.c_str());
+
+	// Offset 0 means "no record" in CBH indexes, so reserve byte 0.
+	char const reserved = '\0';
+	if (!m_gameStream.write(&reserved, 1))
+		IO_RAISE(Game, Write_Failed, "cannot initialize game file '%s'", gameFilename.c_str());
+	if (!m_annotationStream.write(&reserved, 1))
+		IO_RAISE(Game, Write_Failed, "cannot initialize annotation file '%s'", annotFilename.c_str());
+
+	// Open index file for writing
+	mstl::string indexFilename(rootname + ".cbh");
+	m_indexStream.open(indexFilename, mstl::fstream::out | mstl::fstream::binary | mstl::fstream::trunc);
+	if (!m_indexStream)
+		IO_RAISE(Index, Open_Failed, "cannot create index file '%s'", indexFilename.c_str());
+
+	// Header will be written by writeIndexData() during save()
+
+	m_nextGameOffset = 1;
+	m_nextAnnotationOffset = 1;
+}
+
+
+unsigned
+Codec::putGame(util::ByteStream const& strm)
+{
+	M_ASSERT(m_isWritable);
+	M_ASSERT(m_gameStream.is_open());
+
+	unsigned offset = m_nextGameOffset;
+	unsigned length = strm.size();
+
+	if (!m_gameStream.write(strm.data(), length))
+		IO_RAISE(Game, Write_Failed, "failed to write game data");
+
+	m_nextGameOffset += length;
+	return offset;
+}
+
+
+unsigned
+Codec::putGame(util::ByteStream const& strm, unsigned prevOffset, unsigned prevRecordLength)
+{
+	// For CBH, we don't reuse space - just append
+	return putGame(strm);
+}
+
+
+util::ByteStream
+Codec::getGame(GameInfo const& info)
+{
+	// Read game data from .cbg file
+	M_ASSERT(m_gameStream.is_open());
+
+	unsigned offset = info.gameOffset();
+	unsigned length = info.gameRecordLength();
+
+	mstl::string buffer;
+	buffer.resize(length);
+
+	if (!m_gameStream.seekg(offset, mstl::fstream::beg))
+		IO_RAISE(Game, Read_Error, "cannot seek to game offset %u", offset);
+
+	if (!m_gameStream.read(buffer.data(), length))
+		IO_RAISE(Game, Read_Error, "cannot read game data");
+
+	return util::ByteStream(reinterpret_cast<Byte*>(const_cast<char*>(buffer.data())), length);
+}
+
+
+util::ByteStream
+Codec::getGame(GameInfo const& info, ::util::BlockFileReader* reader)
+{
+	if (!reader)
+		return getGame(info);
+
+	// CBH uses BlockFileReader for game data in the .cbg file
+	util::ByteStream src;
+	DatabaseCodec::getGameRecord(info, *reader, src);
+	return src;
+}
+
+
+void
+Codec::save(mstl::string const& rootname, unsigned start, util::Progress& progress)
+{
+	M_ASSERT(m_codec && m_codec->hasEncoding());
+
+	if (m_gameStream.is_open() && !(m_gameStream.mode() & mstl::ios_base::out))
+		IO_RAISE(Game, Read_Only, "game file '%s' is read-only", (rootname + ".cbg").c_str());
+
+	// Sort annotation map so that find() works (entries may have been
+	// appended via container().push_back() during addGame)
+	m_annotationMap.qsort();
+
+	// Write namebases
+	writeNamebases(m_namebaseStream, progress);
+
+	// Write index entries
+	writeIndexData(rootname, progress);
+
+	// Write .ini file
+	writeIniData(rootname);
+
+	// Sync all streams
+	sync();
+}
+
+
+void
+Codec::attach(mstl::string const& rootname, util::Progress& progress)
+{
+	M_ASSERT(m_codec && m_codec->hasEncoding());
+
+	m_rootname = rootname;
+	m_isWritable = true;
+	setupForWriting(rootname);
+	save(rootname, 0, progress);
+}
+
+
+void
+Codec::update(mstl::string const& rootname, unsigned index, bool updateNamebase)
+{
+	util::Progress progress;
+	save(rootname, index, progress);
+}
+
+
+void
+Codec::updateHeader(mstl::string const& rootname)
+{
+	// Update the database header (.ini file)
+	writeIniData(rootname);
+}
+
+
+void
+Codec::writeNamebases(mstl::ostream& stream, util::Progress& progress)
+{
+	M_ASSERT(m_codec && m_codec->hasEncoding());
+
+	progress.message("write-namebases");
+
+	// Write player namebase
+	writePlayerData(m_rootname, progress);
+
+	// Write tournament/event namebase
+	writeTournamentData(m_rootname, progress);
+
+	// Write annotator namebase
+	writeAnnotatorData(m_rootname, progress);
+
+	// Write source namebase
+	writeSourceData(m_rootname, progress);
+
+	// Write team data
+	writeTeamData(m_rootname, progress);
+}
+
+
+void
+Codec::writePlayerData(mstl::string const& rootname, util::Progress& progress)
+{
+	static unsigned const RecordSize = 67;
+
+	mstl::string filename(rootname + ".cbp");
+	mstl::fstream strm;
+
+	strm.open(filename, mstl::fstream::out | mstl::fstream::binary | mstl::fstream::trunc);
+	if (!strm)
+		IO_RAISE(Namebase, Open_Failed, "cannot create player file '%s'", filename.c_str());
+
+	Namebase& base = namebase(Namebase::Player);
+	uint32_t nrecs = base.size();
+
+	// Write header (28 bytes)
+	uint32_t hdr[7] = {0};
+	hdr[0] = mstl::bo::swapLE(nrecs);
+	strm.write(reinterpret_cast<char const*>(hdr), sizeof(hdr));
+
+	// No padding needed: 28-byte header < any record size
+
+	// Write player records
+	unsigned char record[RecordSize];
+	for (uint32_t i = 0; i < nrecs; ++i)
+	{
+		::memset(record, 0, RecordSize);
+		ByteStream bstrm(record, RecordSize);
+
+		// Offset to record data (not used in CBH)
+		bstrm << uint32_t(0);
+
+		NamebasePlayer* player = base.playerAt(i);
+		if (player)
+		{
+			// FIDE ID / reserved area in the player record.
+			bstrm.advance(5);
+
+			// Last name (30 bytes, space-padded)
+			mstl::string name = player->name();
+			mstl::string::size_type commaPos = name.find(',');
+			mstl::string lastName = (commaPos != mstl::string::npos) ? name.substr(0, commaPos) : name;
+			lastName.trim();
+			unsigned nameLen = mstl::min(lastName.size(), size_t(30));
+			bstrm.put(reinterpret_cast<Byte const*>(lastName.data()), nameLen);
+			for (unsigned j = nameLen; j < 30; ++j)
+				bstrm.put(Byte(' '));
+
+			// First name (20 bytes, space-padded)
+			mstl::string firstName;
+			if (commaPos != mstl::string::npos)
+			{
+				firstName = name.substr(commaPos + 1);
+				firstName.trim();
+			}
+			nameLen = mstl::min(firstName.size(), size_t(20));
+			bstrm.put(reinterpret_cast<Byte const*>(firstName.data()), nameLen);
+			for (unsigned j = nameLen; j < 20; ++j)
+				bstrm.put(Byte(' '));
+
+			// Extra data (nation code, birthday, etc. - 8 bytes)
+			bstrm.advance(8);
+		}
+
+		strm.write(reinterpret_cast<char const*>(record), RecordSize);
+	}
+
+	strm.close();
+}
+
+
+void
+Codec::writeTournamentData(mstl::string const& rootname, util::Progress& progress)
+{
+	static unsigned const RecordSize = 99;
+
+	mstl::string filename(rootname + ".cbt");
+	mstl::fstream strm;
+
+	strm.open(filename, mstl::fstream::out | mstl::fstream::binary | mstl::fstream::trunc);
+	if (!strm)
+		IO_RAISE(Namebase, Open_Failed, "cannot create tournament file '%s'", filename.c_str());
+
+	Namebase& eventBase = namebase(Namebase::Event);
+	uint32_t nrecs = eventBase.size();
+
+	// Write header (28 bytes)
+	uint32_t hdr[7] = {0};
+	hdr[0] = mstl::bo::swapLE(nrecs);
+	strm.write(reinterpret_cast<char const*>(hdr), sizeof(hdr));
+
+	// No padding needed: 28-byte header < any record size
+
+	// Write tournament records
+	unsigned char record[RecordSize];
+	for (uint32_t i = 0; i < nrecs; ++i)
+	{
+		::memset(record, 0, RecordSize);
+		ByteStream bstrm(record, RecordSize);
+
+		// Offset to record data
+		bstrm << uint32_t(0);
+
+		NamebaseEvent* event = eventBase.eventAt(i);
+		if (event)
+		{
+			// Skip 5 bytes
+			bstrm.advance(5);
+
+			// Event name (40 bytes, space-padded)
+			mstl::string name = event->name();
+			unsigned nameLen = mstl::min(name.size(), size_t(40));
+			bstrm.put(reinterpret_cast<Byte const*>(name.data()), nameLen);
+			for (unsigned j = nameLen; j < 40; ++j)
+				bstrm.put(Byte(' '));
+
+			// Site/city (30 bytes, space-padded)
+			mstl::string site;
+			if (NamebaseSite const* s = event->site())
+			{
+				site = s->name();
+				if (site == "?")
+					site.clear();
+			}
+			unsigned siteLen = mstl::min(site.size(), size_t(30));
+			bstrm.put(reinterpret_cast<Byte const*>(site.data()), siteLen);
+			for (unsigned j = siteLen; j < 30; ++j)
+				bstrm.put(Byte(' '));
+
+			// Date (3 bytes)
+			Date const& date = event->date();
+			// Tournament dates are stored little-endian in CBH (see readTournamentData)
+			unsigned dateValue = (date.year() << 9) | (date.month() << 5) | date.day();
+			bstrm.put(Byte(dateValue));
+			bstrm.put(Byte(dateValue >> 8));
+			bstrm.put(Byte(dateValue >> 16));
+
+			// Byte after date (position buf[3] in readTournamentData, unknown)
+			bstrm.put(Byte(0));
+
+			// Event type + time mode
+			Byte eventType = 0; // Default event type
+			switch (event->timeMode())
+			{
+				case time::Blitz: eventType |= (1 << 5); break;
+				case time::Rapid: eventType |= (2 << 5); break;
+				case time::Corr:  eventType |= (3 << 5); break;
+				default: break;
+			}
+			bstrm.put(eventType);
+
+			// Byte after eventType (position buf[5] in readTournamentData, unknown)
+			bstrm.put(Byte(0));
+
+
+			// Nation code (1 byte) - find from site country
+			Byte nationCode = 0;
+			if (NamebaseSite const* s = event->site())
+			{
+				// Find nation code from country
+				for (unsigned n = 1; n < U_NUMBER_OF(::NationMap); ++n)
+				{
+					if (::NationMap[n] == s->country())
+					{
+						nationCode = n;
+						break;
+					}
+				}
+			}
+			bstrm.put(nationCode);
+
+			// Category (1 byte)
+			TournamentMap::const_iterator t = m_tournamentMap.find(event);
+			Byte category = (t != m_tournamentMap.end()) ? t->second.category : 0;
+			bstrm.put(category);
+
+			// Skip 1 byte
+			bstrm.put(Byte(0));
+
+			// Rounds (1 byte)
+			Byte rounds = (t != m_tournamentMap.end()) ? t->second.rounds : 0;
+			bstrm.put(rounds);
+		}
+
+		strm.write(reinterpret_cast<char const*>(record), RecordSize);
+	}
+
+	strm.close();
+}
+
+
+void
+Codec::writeAnnotatorData(mstl::string const& rootname, util::Progress& progress)
+{
+	static unsigned const RecordSize = 62;
+
+	mstl::string filename(rootname + ".cbc");
+	mstl::fstream strm;
+
+	strm.open(filename, mstl::fstream::out | mstl::fstream::binary | mstl::fstream::trunc);
+	if (!strm)
+		IO_RAISE(Namebase, Open_Failed, "cannot create annotator file '%s'", filename.c_str());
+
+	Namebase& base = namebase(Namebase::Annotator);
+	uint32_t nrecs = base.size();
+
+	// Write header (28 bytes)
+	uint32_t hdr[7] = {0};
+	hdr[0] = mstl::bo::swapLE(nrecs);
+	strm.write(reinterpret_cast<char const*>(hdr), sizeof(hdr));
+
+	// No padding needed: 28-byte header < any record size
+
+	// Write annotator records
+	unsigned char record[RecordSize];
+	for (uint32_t i = 0; i < nrecs; ++i)
+	{
+		::memset(record, 0, RecordSize);
+		ByteStream bstrm(record, RecordSize);
+
+		// Offset to record data
+		bstrm << uint32_t(0);
+
+		NamebaseEntry* annotator = base.entryAt(i);
+		if (annotator)
+		{
+			// Skip 5 bytes
+			bstrm.advance(5);
+
+			// Annotator name (45 bytes, space-padded)
+			mstl::string name = annotator->name();
+			unsigned nameLen = mstl::min(name.size(), size_t(45));
+			bstrm.put(reinterpret_cast<Byte const*>(name.data()), nameLen);
+			for (unsigned j = nameLen; j < 45; ++j)
+				bstrm.put(Byte(' '));
+		}
+
+		strm.write(reinterpret_cast<char const*>(record), RecordSize);
+	}
+
+	strm.close();
+}
+
+
+void
+Codec::writeSourceData(mstl::string const& rootname, util::Progress& progress)
+{
+	static unsigned const RecordSize = 68;
+
+	mstl::string filename(rootname + ".cbs");
+	mstl::fstream strm;
+
+	strm.open(filename, mstl::fstream::out | mstl::fstream::binary | mstl::fstream::trunc);
+	if (!strm)
+		IO_RAISE(Namebase, Open_Failed, "cannot create source file '%s'", filename.c_str());
+
+	uint32_t nrecs = m_sourceBase.size();
+
+	// Write header (28 bytes)
+	uint32_t hdr[7] = {0};
+	hdr[0] = mstl::bo::swapLE(nrecs);
+	strm.write(reinterpret_cast<char const*>(hdr), sizeof(hdr));
+
+	// No padding needed: 28-byte header < any record size
+
+	// Write source records
+	unsigned char record[RecordSize];
+	for (uint32_t i = 0; i < nrecs; ++i)
+	{
+		::memset(record, 0, RecordSize);
+		ByteStream bstrm(record, RecordSize);
+
+		// Offset to record data
+		bstrm << uint32_t(0);
+
+		if (i < m_sourceMap2.size())
+		{
+			// Skip 5 bytes
+			bstrm.advance(5);
+
+			// Source title (25 bytes, space-padded)
+			mstl::string title;
+			if (Source const* src = getSource(i))
+				title = src->name();
+			unsigned titleLen = mstl::min(title.size(), size_t(25));
+			bstrm.put(reinterpret_cast<Byte const*>(title.data()), titleLen);
+			for (unsigned j = titleLen; j < 25; ++j)
+				bstrm.put(Byte(' '));
+
+			// Publisher (20 bytes, space-padded)
+			for (unsigned j = 0; j < 20; ++j)
+				bstrm.put(Byte(' '));
+
+			// Date (3 bytes)
+			bstrm << util::ByteStream::uint24_t(0);
+
+			// Version (1 byte)
+			bstrm.put(Byte(0));
+
+			// Quality flag (1 byte)
+			bstrm.put(m_highQuality ? Byte(1) : Byte(0));
+		}
+
+		strm.write(reinterpret_cast<char const*>(record), RecordSize);
+	}
+
+	strm.close();
+}
+
+
+void
+Codec::writeTeamData(mstl::string const& rootname, util::Progress& progress)
+{
+	static unsigned const RecordSize = 72;
+
+	if (m_teamBase.empty())
+	{
+		::remove((rootname + ".cbe").c_str());
+		::remove((rootname + ".cbj").c_str());
+		return;
+	}
+
+	// Write .cbe file (team data)
+	mstl::string filename(rootname + ".cbe");
+	mstl::fstream strm;
+
+	strm.open(filename, mstl::fstream::out | mstl::fstream::binary | mstl::fstream::trunc);
+	if (!strm)
+		IO_RAISE(Namebase, Open_Failed, "cannot create team file '%s'", filename.c_str());
+
+	uint32_t nrecs = m_teamBase.size();
+
+	// Write header (28 bytes)
+	uint32_t hdr[7] = {0};
+	hdr[0] = mstl::bo::swapLE(nrecs);
+	strm.write(reinterpret_cast<char const*>(hdr), sizeof(hdr));
+
+	// No padding needed: 28-byte header < any record size
+
+	// Write team records
+	unsigned char record[RecordSize];
+	for (uint32_t i = 0; i < nrecs; ++i)
+	{
+		::memset(record, 0, RecordSize);
+		ByteStream bstrm(record, RecordSize);
+
+		// Offset to record data
+		bstrm << uint32_t(0);
+
+		if (i < m_teamBase.size() && m_teamBase[i])
+		{
+			// Skip 5 bytes
+			bstrm.advance(5);
+
+			// Team title (45 bytes, space-padded)
+			mstl::string title = m_teamBase[i]->title;
+			unsigned titleLen = mstl::min(title.size(), size_t(45));
+			bstrm.put(reinterpret_cast<Byte const*>(title.data()), titleLen);
+			for (unsigned j = titleLen; j < 45; ++j)
+				bstrm.put(Byte(' '));
+
+			// Team number (4 bytes, little-endian in CBH format)
+			unsigned teamNumber = 0;
+			bstrm.put(Byte(teamNumber));
+			bstrm.put(Byte(teamNumber >> 8));
+			bstrm.put(Byte(teamNumber >> 16));
+			bstrm.put(Byte(teamNumber >> 24));
+
+			// Year type (1 byte)
+			bstrm.put(Byte(0));
+
+			// Year (2 bytes, little-endian in CBH format)
+			unsigned teamYear = 0;
+			bstrm.put(Byte(teamYear));
+			bstrm.put(Byte(teamYear >> 8));
+
+			// Skip 2 bytes
+			bstrm.advance(2);
+
+			// Nation code (1 byte)
+			Byte nationCode = 0;
+			for (unsigned n = 1; n < U_NUMBER_OF(::NationMap); ++n)
+			{
+				if (::NationMap[n] == m_teamBase[i]->nation)
+				{
+					nationCode = n;
+					break;
+				}
+			}
+			bstrm.put(nationCode);
+		}
+
+		strm.write(reinterpret_cast<char const*>(record), RecordSize);
+	}
+
+	strm.close();
+
+	// Write .cbj file (team index/game linkage)
+	mstl::string filenameJ(rootname + ".cbj");
+	mstl::fstream strmJ;
+
+	strmJ.open(filenameJ, mstl::fstream::out | mstl::fstream::binary | mstl::fstream::trunc);
+	if (!strmJ)
+		IO_RAISE(Namebase, Open_Failed, "cannot create team index file '%s'", filenameJ.c_str());
+
+	// The reader treats the 12-byte header as 4 bytes of remainder plus
+	// fixed-size 8-byte records, so the stored count includes that slot.
+	unsigned numGames = gameInfoList().size();
+	char hdrJ[12] = {0};
+	hdrJ[4] = 8;  // record size
+	*reinterpret_cast<uint32_t*>(hdrJ + 8) = mstl::bo::swapLE(uint32_t(numGames + 1));
+	strmJ.write(hdrJ, sizeof(hdrJ));
+
+	// Write team references for each game
+	for (unsigned i = 0; i < numGames; ++i)
+	{
+		// Each entry is 8 bytes: team ID + unknown
+		unsigned char entry[8] = {0};
+		if (i < m_teamBase.size())
+			entry[0] = static_cast<Byte>(i);
+		strmJ.write(reinterpret_cast<char const*>(entry), sizeof(entry));
+	}
+
+	strmJ.close();
+}
+
+
+void
+Codec::writeIndexData(mstl::string const& rootname, util::Progress& progress)
+{
+	mstl::string filename(rootname + ".cbh");
+	mstl::fstream strm;
+
+	strm.open(filename, mstl::fstream::out | mstl::fstream::binary | mstl::fstream::trunc);
+	if (!strm)
+		IO_RAISE(Index, Open_Failed, "cannot create index file '%s'", filename.c_str());
+
+	progress.message("write-index");
+
+	// Write header (46 bytes)
+	unsigned char header[46];
+	::memset(header, 0, sizeof(header));
+	ByteStream hstrm(header, sizeof(header));
+
+	// Magic bytes for CBH format
+	header[2] = 0x2c;  // CB 9/10/11 format
+	header[4] = 0x2e;
+	header[5] = 0x01;
+
+	// Number of games (stored at offset 6, 4 bytes)
+	GameInfoList& infoList = gameInfoList();
+	uint32_t numGames = infoList.size();
+	hstrm.advance(6);
+	hstrm << uint32_t(numGames + 1);  // CBH stores count + 1
+
+	strm.write(reinterpret_cast<char const*>(header), sizeof(header));
+
+	// Write index entries
+	unsigned char record[46];
+	for (unsigned i = 0; i < numGames; ++i)
+	{
+		::memset(record, 0, sizeof(record));
+		ByteStream bstrm(record, sizeof(record));
+		writeIndexEntry(infoList[i], i, bstrm);
+		strm.write(reinterpret_cast<char const*>(record), sizeof(record));
+	}
+
+	strm.close();
+}
+
+
+void
+Codec::writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& strm)
+{
+	// CBH index entries are 46 bytes
+	// Based on decodeIndex() - reverse the reading process
+
+	// Byte 0: Flags
+	Byte flags = 0;
+	if (info.m_gameFlags & GameInfo::Flag_Deleted)
+		flags |= (1 << 7);
+	strm.put(flags);
+
+	// Bytes 1-4: Game offset in .cbg file
+	strm << uint32_t(info.m_gameOffset);
+
+	// Bytes 5-8: Annotation offset in .cba file (0 if none)
+	uint32_t annotOffset = 0;
+	AnnotationMap::const_iterator it = m_annotationMap.find(info.m_gameOffset);
+	if (it != m_annotationMap.end())
+		annotOffset = it->second;
+	strm << uint32_t(annotOffset);
+
+	// Bytes 9-11: White player ID (24-bit)
+	uint32_t whiteId =
+		findPlayerRecordIndex(namebase(Namebase::Player), info.m_player[color::White]);
+	strm << util::ByteStream::uint24_t(whiteId);
+
+	// Bytes 12-14: Black player ID (24-bit)
+	uint32_t blackId =
+		findPlayerRecordIndex(namebase(Namebase::Player), info.m_player[color::Black]);
+	strm << util::ByteStream::uint24_t(blackId);
+
+	// Bytes 15-17: Event ID (24-bit)
+	uint32_t eventId = findEventRecordIndex(namebase(Namebase::Event), info.m_event);
+	strm << util::ByteStream::uint24_t(eventId);
+
+	// Bytes 18-20: Annotator ID (24-bit)
+	uint32_t annotatorId =
+		findAnnotatorRecordIndex(namebase(Namebase::Annotator), info.m_annotator);
+	strm << util::ByteStream::uint24_t(annotatorId);
+
+	// Source ID (24-bit) - only present when source data exists
+	bool hasSource = !m_sourceMap2.empty();
+	if (hasSource)
+	{
+		uint32_t sourceId = 0;
+		strm << util::ByteStream::uint24_t(sourceId);
+	}
+
+	// Date (year << 9 | month << 5 | day)
+	unsigned dateValue = (Date::decodeYearFrom10Bits(info.m_dateYear) << 9)
+						| (info.m_dateMonth << 5)
+						| info.m_dateDay;
+	strm << util::ByteStream::uint24_t(dateValue);
+
+	// Byte 27: Result (0=Black, 1=Draw, 2=White, 7=Lost/default, else Unknown)
+	Byte resultByte = 0xff;  // Unknown
+	switch (info.m_result)
+	{
+		case result::White: resultByte = 2; break;
+		case result::Draw:  resultByte = 1; break;
+		case result::Black: resultByte = 0; break;
+		case result::Lost:  resultByte = 7; break;
+		default: break;
+	}
+	strm.put(resultByte);
+
+	// Byte 28: Line evaluation (skip)
+	strm.put(Byte(0));
+
+	// Byte 29: Round
+	strm.put(Byte(info.m_round));
+
+	// Byte 30: Sub-round
+	strm.put(Byte(info.m_subround));
+
+	// Bytes 31-32: White ELO
+	strm << uint16_t(info.m_pd[color::White].elo);
+
+	// Bytes 33-34: Black ELO
+	strm << uint16_t(info.m_pd[color::Black].elo);
+
+	// Bytes 35-36: ECO code (CBH stores eco << 7, lower 7 bits are sub-code)
+	strm << uint16_t(info.m_eco << 7);
+
+	// Bytes 37-38: Medals/flags
+	uint16_t medals = 0;
+	if (info.m_gameFlags & GameInfo::Flag_Best_Game)      medals |= (1 << 0);
+	if (info.m_gameFlags & GameInfo::Flag_Decided_Tournament) medals |= (1 << 1);
+	if (info.m_gameFlags & GameInfo::Flag_Model_Game)     medals |= (1 << 2);
+	if (info.m_gameFlags & GameInfo::Flag_Novelty)        medals |= (1 << 3);
+	if (info.m_gameFlags & GameInfo::Flag_Pawn_Structure) medals |= (1 << 4);
+	if (info.m_gameFlags & GameInfo::Flag_Strategy)       medals |= (1 << 5);
+	if (info.m_gameFlags & GameInfo::Flag_Tactics)       medals |= (1 << 6);
+	if (info.m_gameFlags & GameInfo::Flag_With_Attack)    medals |= (1 << 7);
+	if (info.m_gameFlags & GameInfo::Flag_Sacrifice)     medals |= (1 << 8);
+	if (info.m_gameFlags & GameInfo::Flag_Defense)       medals |= (1 << 9);
+	if (info.m_gameFlags & GameInfo::Flag_Material)       medals |= (1 << 10);
+	if (info.m_gameFlags & GameInfo::Flag_Piece_Play)    medals |= (1 << 11);
+	if (info.m_gameFlags & GameInfo::Flag_End_Game)       medals |= (1 << 12);
+	if (info.m_gameFlags & GameInfo::Flag_Blunder)        medals |= (1 << 13) | (1 << 14);
+	if (info.m_gameFlags & GameInfo::Flag_User)           medals |= (1 << 15);
+	strm << medals;
+
+	// Bytes 39-41: Unknown/reserved.
+	strm.advance(3);
+
+	// Byte 42: Flags (position ID, setup, variation count, etc.)
+	Byte flags2 = 0;
+	if (info.m_setup)
+		flags2 |= (1 << 0);
+	if (info.m_variationCount >= 10)
+		flags2 |= (1 << 1);
+	if (info.m_commentCount >= 10)
+		flags2 |= (1 << 2);
+	if (info.m_annotationCount > 0)
+		flags2 |= (1 << 3);
+	strm.put(flags2);
+
+	// Skip 1 byte (unknown)
+	strm.put(Byte(0));
+
+	// More flags
+	Byte flags3 = 0;
+	if (info.m_variationCount >= 15)
+		flags3 |= (2 << 0);
+	if (info.m_commentCount >= 15)
+		flags3 |= (1 << 2);
+	strm.put(flags3);
+
+	// Ply count / 2 (rounded up)
+	unsigned plyCount2 = (info.m_plyCount + 1) / 2;
+	if (plyCount2 > 255) plyCount2 = 255;
+	strm.put(Byte(plyCount2));
+
+	// When source field is absent, record data is 43 bytes;
+	// pad to 46-byte record size
+	if (!hasSource)
+		strm.advance(3);
+}
+
+
+db::Consumer*
+Codec::getConsumer(format::Type srcFormat)
+{
+	return new Consumer(srcFormat, *this, encoding(), Consumer::TagBits(true), true);
+}
+
+
+void
+Codec::writeIniData(mstl::string const& rootname)
+{
+	mstl::string filename(rootname + ".ini");
+	mstl::fstream strm;
+
+	strm.open(filename, mstl::fstream::out | mstl::fstream::trunc);
+	if (!strm)
+		IO_RAISE(Index, Open_Failed, "cannot create ini file '%s'", filename.c_str());
+
+	// Write in CBH .ini format expected by readIniData()
+	strm << "[DescrCBG]\n";
+
+	// Find the inverse type mapping: internal type::ID -> CBH type number
+	unsigned cbhType = 0;
+	for (unsigned i = 0; i < U_NUMBER_OF(::TypeMap); ++i)
+	{
+		if (::TypeMap[i] == type())
+		{
+			cbhType = i;
+			break;
+		}
+	}
+	strm << "Type=" << cbhType << "\n";
+	strm << "Title=" << description().c_str() << "\n";
+
+	strm.close();
 }
 
 // vi:set ts=3 sw=3:

@@ -42,6 +42,7 @@
 #include "nsUniversalDetector.h"
 
 #include "u_crc.h"
+#include "m_vector.h"
 #include "u_html.h"
 #include "u_zstream.h"
 #include "u_emoticons.h"
@@ -930,6 +931,9 @@ Parser::parse()
 static int
 cmdFitsRegion(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+		return error(CmdFitsRegion, 0, 0, "wrong # args: should be \"%s <region> <string>\"", CmdFitsRegion);
+
 	setResult(sys::utf8::Codec::fitsRegion(stringFromObj(objc, objv, 2),
 														unsignedFromObj(objc, objv, 1)));
 	return TCL_OK;
@@ -939,6 +943,9 @@ cmdFitsRegion(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdIsAscii(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdIsAscii, 0, 0, "wrong # args: should be \"%s <string>\"", CmdIsAscii);
+
 	setResult(mstl::string::is_7bit(stringFromObj(objc, objv, 1)));
 	return TCL_OK;
 }
@@ -947,6 +954,9 @@ cmdIsAscii(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdToAscii(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+		return error(CmdToAscii, 0, 0, "wrong # args: should be \"%s <region> <string>\"", CmdToAscii);
+
 	mstl::string buffer;
 	setResult(sys::utf8::Codec::convertToNonDiacritics(unsignedFromObj(objc, objv, 1),
 																		stringFromObj(objc, objv, 2),
@@ -958,6 +968,9 @@ cmdToAscii(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdXmlToList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 2 || ((objc - 2) % 2) != 0)
+		return error(CmdXml, "toList", 0, "wrong # args: should be \"%s toList <xml> ?option value ...?\"", CmdXml);
+
 	// cannot use ::db::i18n::None due to a g++ bug
 	::db::Comment comment(stringFromObj(objc, objv, 1), 0);
 
@@ -997,6 +1010,9 @@ cmdXmlToList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdXmlFromList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 2 || ((objc - 2) % 2) != 0)
+		return error(CmdXml, "fromList", 0, "wrong # args: should be \"%s fromList <list> ?-replacewithspace <string>?\"", CmdXml);
+
 	mstl::string space;
 
 	int offs = 0;
@@ -1022,6 +1038,9 @@ cmdXmlFromList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdXmlTokenize(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdXml, "tokenize", 0, "wrong # args: should be \"%s tokenize <xml>\"", CmdXml);
+
 	char const* str = stringFromObj(objc, objv, 1);
 
 	XML_Parser parser = ::XML_ParserCreate("UTF-8");
@@ -1055,6 +1074,9 @@ cmdXmlTokenize(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdXml(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 2)
+		return error(CmdXml, 0, 0, "wrong # args: should be \"%s <toList|fromList|tokenize> ...\"", CmdXml);
+
 	char const* command = stringFromObj(objc, objv, 1);
 
 	if (strcmp(command, "toList") == 0)
@@ -1073,6 +1095,9 @@ cmdXml(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdCrc32(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdCrc32, 0, 0, "wrong # args: should be \"%s <string>\"", CmdCrc32);
+
 	char const* s = stringFromObj(objc, objv, 1);
 	setResult(int64_t(crc::compute(0, s, ::strlen(s))));
 	return TCL_OK;
@@ -1082,6 +1107,9 @@ cmdCrc32(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdVersion(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdVersion, 0, 0, "wrong # args: should be \"%s\"", CmdVersion);
+
 	setResult(SCIDB_VERSION);
 	return TCL_OK;
 }
@@ -1090,6 +1118,9 @@ cmdVersion(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdRevision(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdRevision, 0, 0, "wrong # args: should be \"%s\"", CmdRevision);
+
 	setResult(SCIDB_REVISION);
 	return TCL_OK;
 }
@@ -1098,6 +1129,9 @@ cmdRevision(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdDebug(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdDebug, 0, 0, "wrong # args: should be \"%s\"", CmdDebug);
+
 	setResult(int(mstl::backtrace::is_debug_mode()));
 	return TCL_OK;
 }
@@ -1106,6 +1140,9 @@ cmdDebug(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdDirEmpty(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdDirEmpty, 0, 0, "wrong # args: should be \"%s <path>\"", CmdDirEmpty);
+
 	setResult(::sys::file::dirIsEmpty(stringFromObj(objc, objv, 1)));
 	return TCL_OK;
 }
@@ -1114,10 +1151,16 @@ cmdDirEmpty(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdLookup(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 3 || objc > 5)
+		return error(CmdLookup, 0, 0, "wrong # args: should be \"%s <player|countryCode|opening> ...\"", CmdLookup);
+
 	char const* which = stringFromObj(objc, objv, 1);
 
 	if (::strcmp(which, "player") == 0)
 	{
+		if (objc != 3 && objc != 5)
+			return error(CmdLookup, "player", 0, "wrong # args: should be \"%s player <fide-id> ?-unicode <bool>?\"", CmdLookup);
+
 		::db::Player const* player = ::db::Player::findFidePlayer(unsignedFromObj(objc, objv, 2));
 		bool unicodeFlag = false;
 
@@ -1138,10 +1181,16 @@ cmdLookup(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	}
 	else if (::strcmp(which, "countryCode") == 0)
 	{
+		if (objc != 3)
+			return error(CmdLookup, "countryCode", 0, "wrong # args: should be \"%s countryCode <country>\"", CmdLookup);
+
 		setResult(::db::country::toString(::db::country::fromString(stringFromObj(objc, objv, 2))));
 	}
 	else if (::strcmp(which, "opening") == 0)
 	{
+		if (objc != 4)
+			return error(CmdLookup, "opening", 0, "wrong # args: should be \"%s opening <eco> <variant>\"", CmdLookup);
+
 		::db::Eco eco(stringFromObj(objc, objv, 2));
 		::db::variant::Type variant = tcl::game::variantFromObj(objectFromObj(objc, objv, 3));
 		::db::EcoTable::Opening const& opening = ::db::EcoTable::specimen(variant).getOpening(eco);
@@ -1155,6 +1204,10 @@ cmdLookup(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			objs[objc] = Tcl_NewStringObj(opening.part[objc], opening.part[objc].size());
 		setResult(objc, objs);
 	}
+	else
+	{
+		return error(CmdLookup, 0, 0, "unknown lookup '%s'", which);
+	}
 
 	return TCL_OK;
 }
@@ -1163,6 +1216,9 @@ cmdLookup(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSize(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdSize, 0, 0, "wrong # args: should be \"%s <database>\"", CmdSize);
+
 	setResult(tcl::db::countNumGames(stringFromObj(objc, objv, 1)));
 	return TCL_OK;
 }
@@ -1171,6 +1227,9 @@ cmdSize(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdAttributes(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdAttributes, 0, 0, "wrong # args: should be \"%s <database>\"", CmdAttributes);
+
 	mstl::string	description;
 	int				numGames;
 	uint32_t			creationTime;
@@ -1206,9 +1265,12 @@ cmdAttributes(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdZipContent(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdZipContent, 0, 0, "wrong # args: should be \"%s <archive>\"", CmdZipContent);
+
 	ZStream::Strings result = ZStream::zipContent(stringFromObj(objc, objv, 1));
 
-	Tcl_Obj* objs[result.size()];
+	mstl::vector<Tcl_Obj*> objs(result.size());
 
 	for (unsigned i = 0; i < result.size(); ++i)
 	{
@@ -1216,7 +1278,7 @@ cmdZipContent(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		objs[i] = Tcl_NewStringObj(file, file.size());
 	}
 
-	setResult(result.size(), objs);
+	setResult(result.size(), objs.data());
 	return TCL_OK;
 }
 
@@ -1224,6 +1286,9 @@ cmdZipContent(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSuffixes(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdSuffixes, 0, 0, "wrong # args: should be \"%s <filename>\"", CmdSuffixes);
+
 	mstl::string filename(stringFromObj(objc, objv, 1));
 	mstl::string extension(::util::misc::file::suffix(filename));
 	::db::DatabaseCodec::StringList result;
@@ -1233,17 +1298,20 @@ cmdSuffixes(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	else
 		::db::DatabaseCodec::getSuffixes(filename, result);
 
-	Tcl_Obj* objs[result.size()];
+	mstl::vector<Tcl_Obj*> objs(result.size());
 
 	for (unsigned i = 0; i < result.size(); ++i)
 	{
 		mstl::string ext(result[i]);
 		if (ext == "gz")
-			ext.assign("pgn.gz");
+		{
+			mstl::string inner(::util::misc::file::suffix(::util::misc::file::rootname(filename)));
+			ext.assign(inner == "bpgn" ? "bpgn.gz" : "pgn.gz");
+		}
 		objs[i] = Tcl_NewStringObj(ext, -1);
 	}
 
-	setResult(result.size(), objs);
+	setResult(result.size(), objs.data());
 	return TCL_OK;
 }
 
@@ -1251,6 +1319,9 @@ cmdSuffixes(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdMapExtension(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdMapExtension, 0, 0, "wrong # args: should be \"%s <extension>\"", CmdMapExtension);
+
 	static char const* Extensions[] = { "sci", "si3", "si4", "cbh", "cbf", "CBF" };
 
 	char const* extension = stringFromObj(objc, objv, 1);
@@ -1281,6 +1352,9 @@ cmdMapExtension(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdExtraTags(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdExtraTags, 0, 0, "wrong # args: should be \"%s <sci|si3>\"", CmdExtraTags);
+
 	bool (*isExtraTagFunc)(::db::tag::ID);
 
 	if (strcmp(stringFromObj(objc, objv, 1), "si3") == 0)
@@ -1307,6 +1381,9 @@ cmdExtraTags(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdEncoding(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdEncoding, 0, 0, "wrong # args: should be \"%s <text>\"", CmdEncoding);
+
 	char const* text = stringFromObj(objc, objv, 1);
 
 	CharsetDetector detector;
@@ -1321,6 +1398,9 @@ cmdEncoding(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdHardLinked(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+		return error(CmdHardLinked, 0, 0, "wrong # args: should be \"%s <lhs> <rhs>\"", CmdHardLinked);
+
 	setResult(::sys::file::isHardLinked(stringFromObj(objc, objv, 1), stringFromObj(objc, objv, 2)));
 	return TCL_OK;
 }
@@ -1450,6 +1530,9 @@ cmdHtmlSearch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdHtmlCache(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error("html cache", 0, 0, "wrong # args: should be \"%s html cache <bool>\"", CmdHtml);
+
 	bool flag = boolFromObj(objc, objv, 1);
 
 	if (flag)
@@ -1464,6 +1547,9 @@ cmdHtmlCache(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const obj
 static int
 cmdHtml(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 2)
+		return error(CmdHtml, 0, 0, "wrong # args: should be \"%s <search|hyphenate|ligatures|cache> ...\"", CmdHtml);
+
 	char const* command = stringFromObj(objc, objv, 1);
 
 	if (strcmp(command, "search") == 0)
@@ -1485,6 +1571,9 @@ cmdHtml(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdUrlEscape(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdUrl, "escape", 0, "wrong # args: should be \"%s url escape <text>\"", CmdUrl);
+
 	typedef sys::utf8::uchar uchar;
 	typedef sys::utf8::uchar byte;
 
@@ -1522,6 +1611,9 @@ cmdUrlEscape(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const obj
 static int
 cmdUrlUnescape(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdUrl, "unescape", 0, "wrong # args: should be \"%s url unescape <text>\"", CmdUrl);
+
 	char const* p = stringFromObj(objc, objv, 1);
 	char const* e = p + ::strlen(p);
 
@@ -1553,6 +1645,9 @@ cmdUrlUnescape(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const o
 static int
 cmdUrl(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 2)
+		return error(CmdUrl, 0, 0, "wrong # args: should be \"%s <escape|unescape> ...\"", CmdUrl);
+
 	char const* command = stringFromObj(objc, objv, 1);
 
 	if (strcmp(command, "escape") == 0)
@@ -1561,13 +1656,16 @@ cmdUrl(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	if (strcmp(command, "unescape") == 0)
 		return cmdUrlUnescape(clientData, ti, objc - 1, objv + 1);
 
-	return error(CmdHtml, 0, 0, "unknown command '%s'", command);
+	return error(CmdUrl, 0, 0, "unknown command '%s'", command);
 }
 
 
 static int
 cmdSetModTime(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+		return error(CmdSetModTime, 0, 0, "wrong # args: should be \"%s <file> <time>\"", CmdSetModTime);
+
 	char const* filename = stringFromObj(objc, objv, 1);
 	long time = longFromObj(objc, objv, 2);
 
@@ -1579,6 +1677,9 @@ cmdSetModTime(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const ob
 static int
 cmdGeometryRequest(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 4)
+		return error(CmdGeometryRequest, 0, 0, "wrong # args: should be \"%s <window> <width> <height>\"", CmdGeometryRequest);
+
 	Tk_Window tkwin = Tk_NameToWindow(ti, stringFromObj(objc, objv, 1), Tk_MainWindow(ti));
 
 	if (!tkwin)
@@ -1593,6 +1694,9 @@ cmdGeometryRequest(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* con
 static int
 cmdMapWindow(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdMapWindow, 0, 0, "wrong # args: should be \"%s <window>\"", CmdMapWindow);
+
 	Tk_Window tkwin = Tk_NameToWindow(ti, stringFromObj(objc, objv, 1), Tk_MainWindow(ti));
 
 	if (!tkwin)
@@ -1606,6 +1710,9 @@ cmdMapWindow(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const obj
 static int
 cmdPredPow2(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdPredPow2, 0, 0, "wrong # args: should be \"%s <value>\"", CmdPredPow2);
+
 	unsigned x = unsignedFromObj(objc, objv, 1);
 
 	if (x >= 2 && mstl::is_not_pow_2(x))
@@ -1619,6 +1726,9 @@ cmdPredPow2(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv
 static int
 cmdSuccPow2(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdSuccPow2, 0, 0, "wrong # args: should be \"%s <value>\"", CmdSuccPow2);
+
 	unsigned x = unsignedFromObj(objc, objv, 1);
 
 	if (x == 0)
@@ -1634,6 +1744,9 @@ cmdSuccPow2(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv
 static int
 cmdNumberOfProcessors(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdNumberOfProcessors, 0, 0, "wrong # args: should be \"%s\"", CmdNumberOfProcessors);
+
 	setResult(::sys::info::numberOfProcessors());
 	return TCL_OK;
 }
@@ -1642,6 +1755,9 @@ cmdNumberOfProcessors(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* 
 static int
 cmdMinYear(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdMinYear, 0, 0, "wrong # args: should be \"%s\"", CmdMinYear);
+
 	setResult(::db::Date::MinYear);
 	return TCL_OK;
 }
@@ -1650,6 +1766,9 @@ cmdMinYear(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[
 static int
 cmdMaxYear(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdMaxYear, 0, 0, "wrong # args: should be \"%s\"", CmdMaxYear);
+
 	setResult(::db::Date::MaxYear);
 	return TCL_OK;
 }
@@ -1658,6 +1777,9 @@ cmdMaxYear(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[
 static int
 cmdMapCodeToNag(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdMapCodeToNag, 0, 0, "wrong # args: should be \"%s <symbol>\"", CmdMapCodeToNag);
+
 	setResult(int(::db::nag::fromSymbol(stringFromObj(objc, objv, 1))));
 	return TCL_OK;
 }
@@ -1666,6 +1788,9 @@ cmdMapCodeToNag(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const 
 static int
 cmdContainsUnicodeChar(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdContainsUnicodeChar, 0, 0, "wrong # args: should be \"%s <text>\"", CmdContainsUnicodeChar);
+
 	char const* s = stringFromObj(objc, objv, 1);
 
 	for ( ; *s; ++s)
@@ -1685,6 +1810,9 @@ cmdContainsUnicodeChar(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj*
 static int
 cmdMemAvail(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdMemAvail, 0, 0, "wrong # args: should be \"%s\"", CmdMemAvail);
+
 	setResult(Tcl_NewWideIntObj(::sys::info::memAvail()));
 	return TCL_OK;
 }
@@ -1693,6 +1821,9 @@ cmdMemAvail(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv
 static int
 cmdMemFree(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdMemFree, 0, 0, "wrong # args: should be \"%s\"", CmdMemFree);
+
 	setResult(Tcl_NewWideIntObj(::sys::info::memFree()));
 	return TCL_OK;
 }
@@ -1701,6 +1832,9 @@ cmdMemFree(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[
 static int
 cmdMemTotal(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdMemTotal, 0, 0, "wrong # args: should be \"%s\"", CmdMemTotal);
+
 	setResult(Tcl_NewWideIntObj(::sys::info::memTotal()));
 	return TCL_OK;
 }
@@ -1709,6 +1843,9 @@ cmdMemTotal(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv
 static int
 cmdEmoticons(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 2 || objc > 3)
+		return error(CmdEmoticons, 0, 0, "wrong # args: should be \"%s <code|parse|list> ?arg?\"", CmdEmoticons);
+
 	static char const* Emoticons[] =
 	{
 		"smile",		"frown",		"neutral",	"grin",
@@ -1724,6 +1861,9 @@ cmdEmoticons(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const obj
 
 	if (::strcmp(stringFromObj(objc, objv, 1), "code") == 0)
 	{
+		if (objc != 3)
+			return error(CmdEmoticons, "code", 0, "wrong # args: should be \"%s emoticons code <emotion>\"", CmdEmoticons);
+
 		int index = ::tcl::uniqueMatchObj(objectFromObj(objc, objv, 2), Emoticons);
 
 		if (index == -1)
@@ -1733,6 +1873,9 @@ cmdEmoticons(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const obj
 	}
 	else if (::strcmp(Tcl_GetString(objv[1]), "parse") == 0)
 	{
+		if (objc != 3)
+			return error(CmdEmoticons, "parse", 0, "wrong # args: should be \"%s emoticons parse <text>\"", CmdEmoticons);
+
 		util::emoticons::Emotion emotion;
 		char const* s = stringFromObj(objc, objv, 2);
 		bool rc = util::emoticons::lookupEmotion(s, s + ::strlen(s), emotion);
@@ -1744,6 +1887,9 @@ cmdEmoticons(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const obj
 	}
 	else if (::strcmp(Tcl_GetString(objv[1]), "list") == 0)
 	{
+		if (objc != 2)
+			return error(CmdEmoticons, "list", 0, "wrong # args: should be \"%s emoticons list\"", CmdEmoticons);
+
 		Tcl_Obj* objs[U_NUMBER_OF(Emoticons) - 1];
 
 		for (unsigned i = 0; i < U_NUMBER_OF(Emoticons) - 1; ++i)
@@ -1763,6 +1909,9 @@ cmdEmoticons(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const obj
 static int
 cmdJulianDay(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdJulianDay, 0, 0, "wrong # args: should be \"%s\"", CmdJulianDay);
+
 	sys::time::Time tm;
 	sys::time::localtime(sys::time::time(), tm);
 	setResult(::db::Date::julianDay(tm.year, tm.month, tm.day));

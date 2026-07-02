@@ -67,7 +67,8 @@ Consumer::Consumer(	format::Type srcFormat,
 	,m_idn(0)
 	,m_gameFlags(0)
 	,m_updateFlags(0)
-	,m_line(m_moveBuffer)
+	,m_moveBuffer()
+	,m_line(&m_moveBuffer[0])
 	,m_encoding(encoding)
 	,m_codec(new sys::utf8::Codec(encoding))
 	,m_consumer(0)
@@ -151,10 +152,10 @@ Consumer::setUsedLanguages(LanguageSet languages)
 
 	if (m_relevantLangs.empty())
 	{
-		while (i < m_wantedLanguages.empty() && m_usedLanguages.find(m_wantedLanguages[i]) == e)
+		while (i < m_wantedLanguages.size() && m_usedLanguages.find(m_wantedLanguages[i]) == e)
 			++i;
 
-		if (i < m_wantedLanguages.empty())
+		if (i < m_wantedLanguages.size())
 		{
 			mstl::string const& lang = m_wantedLanguages[i];
 			m_relevantLangs[lang] = 0;

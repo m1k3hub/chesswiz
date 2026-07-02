@@ -19,6 +19,7 @@
 #include "m_string.h"
 #include "m_utility.h"
 #include "m_memblock.h"
+#include "m_vector.h"
 #include "m_type_traits.h"
 #include "m_bit_functions.h"
 #include "m_ios.h"
@@ -95,7 +96,7 @@ string
 cast(T value, char const* format)
 {
 	char buf[100];
-	sprintf(buf, format, value);
+	snprintf(buf, sizeof(buf), format, value);
 	return buf;
 }
 
@@ -1508,8 +1509,8 @@ string::levenshtein_distance_fast(mstl::string const& s) const
 
 	// algorithm from http://en.wikipedia.org/wiki/Levenshtein_distance
 
-	unsigned v0[s.m_size + 1];
-	unsigned v1[s.m_size + 1];
+	mstl::vector<unsigned> v0(s.m_size + 1);
+	mstl::vector<unsigned> v1(s.m_size + 1);
 
 	for (unsigned i = 0; i <= s.m_size; ++i)
 		v0[i] = i;

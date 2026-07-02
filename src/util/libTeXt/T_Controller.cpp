@@ -251,19 +251,19 @@ Controller::processInput(mstl::istream& inp, mstl::ostream& dst, mstl::ostream* 
 
 				finishProcessing();
 			}
-			catch (Token::BreakExecutionException)
+			catch (Token::BreakExecutionException const&)
 			{
 				errorOccurred = true;
 			}
 		}
 		while (token);
 	}
-	catch (Token::UnexpectedEndOfInputException)
+	catch (Token::UnexpectedEndOfInputException const&)
 	{
 		Messages::printTrace(*m_env, "Unexpected end of input");
 		errorOccurred = true;
 	}
-	catch (Token::EmergencyStopException)
+	catch (Token::EmergencyStopException const&)
 	{
 		Messages::printTrace(*m_env, "Emergency stop");
 		errorOccurred = true;
@@ -296,7 +296,7 @@ Controller::processInput(mstl::istream& inp, mstl::ostream& dst, mstl::ostream* 
 				errorOccurred = true;
 			}
 		}
-		catch (Token::AbortException)
+		catch (Token::AbortException const&)
 		{
 			errorOccurred = true;
 		}

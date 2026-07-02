@@ -59,6 +59,7 @@ public:
 	void addRating(rating::Type type, uint16_t value);
 	void addScore(color::ID color, result::ID result);
 	void addEco(color::ID color, Eco const& eco);
+	void merge(PlayerStats const& stats);
 
 	void finish();
 

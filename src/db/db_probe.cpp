@@ -362,7 +362,7 @@ Probe::Probe(unsigned cacheSize)
 
 Probe::~Probe() throw()
 {
-	delete m_cache;
+	delete [] m_cache;
 }
 
 

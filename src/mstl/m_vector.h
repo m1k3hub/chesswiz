@@ -91,6 +91,7 @@ public:
 	const_reverse_iterator rbegin() const;
 	const_reverse_iterator rend() const;
 
+	pointer data();
 	const_pointer data() const;
 
 	void push_back(const_reference v);

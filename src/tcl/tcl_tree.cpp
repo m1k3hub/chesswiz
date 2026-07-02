@@ -35,12 +35,14 @@
 #include "db_tree.h"
 #include "db_game.h"
 #include "db_database.h"
+#include "db_maintenance.h"
 #include "db_namebase_entry.h"
 #include "db_eco_table.h"
 
 #include "u_piped_progress.h"
 
 #include "m_map.h"
+#include "m_vector.h"
 #include "m_assert.h"
 
 #include <tcl.h>
@@ -52,6 +54,8 @@ using namespace tcl;
 using namespace tcl::app;
 
 
+static char const* CmdDescribe	= "::scidb::tree::describe";
+static char const* CmdFindNovelties = "::scidb::tree::findNovelties";
 static char const* CmdFetch		= "::scidb::tree::fetch";
 static char const* CmdFinish		= "::scidb::tree::finish";
 static char const* CmdFreeze		= "::scidb::tree::freeze";
@@ -66,6 +70,7 @@ static char const* CmdMove			= "::scidb::tree::move";
 static char const* CmdPlayer		= "::scidb::tree::player";
 static char const* CmdPosition	= "::scidb::tree::position";
 static char const* CmdSet			= "::scidb::tree::set";
+static char const* CmdSetViewFilter = "::scidb::tree::setViewFilter";
 static char const* CmdStop			= "::scidb::tree::stop";
 static char const* CmdSwitch		= "::scidb::tree::switch";
 static char const* CmdUpdate		= "::scidb::tree::update";
@@ -187,6 +192,12 @@ tcl::tree::variantToString(variant::Type variant)
 static int
 cmdInit(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<progress-cmd> <progress-arg>");
+		return TCL_ERROR;
+	}
+
 	if (m_progress == 0)
 	{
 		m_progress = new MyPipedProgress(scidb->treeThread(),
@@ -201,13 +212,19 @@ cmdInit(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	Tcl_Obj* list = Tcl_NewListObj(0, 0);
 	setResult(list);
 
 	Application::CursorList cursors;
 	Scidb->enumCursors(cursors, variant::toMainVariant(Scidb->game().variant()));
 
-	Tcl_Obj* objs[cursors.size()];
+	mstl::vector<Tcl_Obj*> objs(cursors.size());
 	objc = 0;
 
 	for (unsigned i = 0; i < cursors.size(); ++i)
@@ -223,7 +240,7 @@ cmdList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		}
 	}
 
-	setResult(objc, objs);
+	setResult(objc, objs.data());
 	return TCL_OK;
 }
 
@@ -231,6 +248,12 @@ cmdList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	if (Scidb->haveReferenceBase())
 		setResult(Scidb->referenceBase().database().name());
 	else
@@ -243,6 +266,12 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdVariant(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	if (Scidb->haveReferenceBase())
 		setResult(tcl::tree::variantToString(Scidb->referenceBase().database().variant()));
 	else
@@ -255,6 +284,12 @@ cmdVariant(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database>");
+		return TCL_ERROR;
+	}
+
 	char const* base = stringFromObj(objc, objv, 1);
 
 	if (*base)
@@ -269,6 +304,12 @@ cmdSet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSwitch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<boolean>");
+		return TCL_ERROR;
+	}
+
 	scidb->setSwitchReferenceBase(boolFromObj(objc, objv, 1));
 	return TCL_OK;
 }
@@ -277,7 +318,14 @@ cmdSwitch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdUpdate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	M_ASSERT(m_progress);
+	if (objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<rating-type> <exact|fast|quick> <include-variations>");
+		return TCL_ERROR;
+	}
+
+	if (m_progress == 0)
+		return error(CmdUpdate, nullptr, nullptr, "tree progress callback is not initialized");
 
 	if (updateTreeIsBlocked())
 	{
@@ -301,6 +349,12 @@ cmdUpdate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdStop(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	scidb->stopUpdateTree();
 	return TCL_OK;
 }
@@ -309,6 +363,19 @@ cmdStop(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdFinish(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 4 || ((objc - 4) % 2) != 0)
+	{
+		Tcl_WrongNumArgs(
+			ti,
+			1,
+			objv,
+			"<rating-type> <exact|fast|quick> <include-variations> ?-sort <column>?");
+		return TCL_ERROR;
+	}
+
+	if (m_progress == 0)
+		return error(CmdFinish, nullptr, nullptr, "tree progress callback is not initialized");
+
 	attribute::tree::ID sortColumn = attribute::tree::LastColumn;
 
 	while (objc > 4)
@@ -336,7 +403,7 @@ cmdFinish(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		}
 		else
 		{
-			return error(CmdFetch, nullptr, nullptr, "unknown option '%s'", option);
+			return error(CmdFinish, nullptr, nullptr, "unknown option '%s'", option);
 		}
 	}
 
@@ -350,7 +417,7 @@ cmdFinish(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		return rc;
 
 	if (sortColumn == attribute::tree::LastColumn)
-		return error(CmdFetch, nullptr, nullptr, "no sort column given");
+		return error(CmdFinish, nullptr, nullptr, "no sort column given");
 
 	Tree const* tree = scidb->finishUpdateTree(method, mode, ratingType, sortColumn);
 
@@ -363,7 +430,7 @@ cmdFinish(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			result = "empty";
 			m_key.clear(); // it doesn't matter
 		}
-		else if (tree->isTreeFor(Scidb->referenceBase().database(), m_key))
+		else if (Scidb->haveReferenceBase() && tree->isTreeFor(Scidb->referenceBase().database(), m_key))
 		{
 			result = "changed";
 		}
@@ -386,6 +453,12 @@ cmdFinish(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdGameIndex(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<row>");
+		return TCL_ERROR;
+	}
+
 	Tree const* tree = Scidb->currentTree();
 	unsigned n = unsignedFromObj(objc, objv, 1);
 
@@ -407,12 +480,18 @@ cmdGameIndex(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdFetch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	Tree const* tree = Scidb->currentTree();
 
 	if (tree && !tree->isEmpty())
 	{
 		unsigned objc = tree->size();
-		Tcl_Obj* objs[objc + 1];
+		mstl::vector<Tcl_Obj*> objs(objc + 1);
 
 		for (unsigned i = 0; i <= objc; ++i)
 		{
@@ -465,7 +544,7 @@ cmdFetch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			objs[i] = Tcl_NewListObj(U_NUMBER_OF(v), v);
 		}
 
-		setResult(objc + 1, objs);
+		setResult(objc + 1, objs.data());
 	}
 	else
 	{
@@ -475,11 +554,101 @@ cmdFetch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	return TCL_OK;
 }
 
+static Tcl_Obj*
+makeOpeningPrepRowObj(Application::OpeningPrepRow const& row)
+{
+	Tcl_Obj* resultObj = Tcl_NewListObj(0, nullptr);
+	Tcl_Obj* rowResult[4] =
+	{
+		Tcl_NewIntObj(row.result[0]),
+		Tcl_NewIntObj(row.result[1]),
+		Tcl_NewIntObj(row.result[2]),
+		Tcl_NewIntObj(row.result[3]),
+	};
+
+	Tcl_Obj* values[] =
+	{
+		Tcl_NewStringObj("row", -1), Tcl_NewIntObj(row.row),
+		Tcl_NewStringObj("identity", -1), Tcl_NewStringObj(row.identity, row.identity.size()),
+		Tcl_NewStringObj("move", -1), Tcl_NewStringObj(row.move, row.move.size()),
+		Tcl_NewStringObj("eco", -1), Tcl_NewStringObj(row.eco, row.eco.size()),
+		Tcl_NewStringObj("frequency", -1), Tcl_NewIntObj(row.frequency),
+		Tcl_NewStringObj("score", -1), Tcl_NewIntObj(row.score),
+		Tcl_NewStringObj("draws", -1), Tcl_NewIntObj(row.draws),
+		Tcl_NewStringObj("averageRating", -1), Tcl_NewIntObj(row.averageRating),
+		Tcl_NewStringObj("performance", -1), Tcl_NewIntObj(row.performance),
+		Tcl_NewStringObj("bestRating", -1), Tcl_NewIntObj(row.bestRating),
+		Tcl_NewStringObj("averageYear", -1), Tcl_NewIntObj(row.averageYear),
+		Tcl_NewStringObj("lastYear", -1), Tcl_NewIntObj(row.lastYear),
+		Tcl_NewStringObj("bestPlayer", -1), Tcl_NewStringObj(row.bestPlayer, row.bestPlayer.size()),
+		Tcl_NewStringObj("bestPlayerRating", -1), Tcl_NewIntObj(row.bestPlayerRating),
+		Tcl_NewStringObj("mostFrequentPlayer", -1), Tcl_NewStringObj(row.mostFrequentPlayer, row.mostFrequentPlayer.size()),
+		Tcl_NewStringObj("mostFrequentPlayerFrequency", -1), Tcl_NewIntObj(row.mostFrequentPlayerFrequency),
+		Tcl_NewStringObj("firstGameIndex", -1), Tcl_NewIntObj(row.firstGameIndex),
+		Tcl_NewStringObj("result", -1), Tcl_NewListObj(4, rowResult),
+	};
+
+	for (unsigned i = 0; i < U_NUMBER_OF(values); ++i)
+		Tcl_ListObjAppendElement(tcl::bits::interp, resultObj, values[i]);
+
+	return resultObj;
+}
+
+
+static int
+cmdDescribe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 1 && objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "?<row>?");
+		return TCL_ERROR;
+	}
+
+	Tree const* tree = Scidb->currentTree();
+
+	if (tree == 0)
+		return error(CmdDescribe, nullptr, nullptr, "no current tree");
+
+	if (objc == 1)
+	{
+		mstl::vector<Tcl_Obj*> rows;
+
+		rows.reserve(tree->size());
+
+		for (unsigned i = 0; i < tree->size(); ++i)
+		{
+			Application::OpeningPrepRow row;
+
+			if (!scidb->describeCurrentTreeRow(i, row))
+				return error(CmdDescribe, nullptr, nullptr, "unable to describe row %u", i);
+
+			rows.push_back(makeOpeningPrepRowObj(row));
+		}
+
+		setResult(rows.size(), rows.data());
+		return TCL_OK;
+	}
+
+	unsigned rowIndex = unsignedFromObj(objc, objv, 1);
+	Application::OpeningPrepRow row;
+
+	if (!scidb->describeCurrentTreeRow(rowIndex, row))
+		return error(CmdDescribe, nullptr, nullptr, "invalid row %u", rowIndex);
+
+	setResult(makeOpeningPrepRowObj(row));
+	return TCL_OK;
+}
 
 
 static int
 cmdFreeze(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<boolean>");
+		return TCL_ERROR;
+	}
+
 	scidb->freezeTree(boolFromObj(objc, objv, 1));
 	return TCL_OK;
 }
@@ -488,6 +657,12 @@ cmdFreeze(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdMove(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<row>");
+		return TCL_ERROR;
+	}
+
 	if (Tree const* tree = Scidb->currentTree())
 	{
 		Game const&		game	= Scidb->game();
@@ -518,6 +693,12 @@ cmdMove(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdPlayer(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<row> <bestPlayer|frequentPlayer> <rating-type>");
+		return TCL_ERROR;
+	}
+
 	if (Tree const* tree = Scidb->currentTree())
 	{
 		unsigned row = unsignedFromObj(objc, objv, 1);
@@ -535,12 +716,12 @@ cmdPlayer(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		else if (::strcmp(which, "frequentPlayer") == 0)
 			player = &info.mostFrequentPlayer();
 		else
-			return error(CmdFetch, nullptr, nullptr, "invalid id %s", stringFromObj(objc, objv, 2));
+			return error(CmdPlayer, nullptr, nullptr, "invalid id %s", stringFromObj(objc, objv, 2));
 
 		rating::Type ratingType = rating::fromString(stringFromObj(objc, objv, 3));
 
 		if (ratingType == rating::Last)
-			return error(	CmdFetch,
+			return error(	CmdPlayer,
 								nullptr,
 								nullptr,
 								"unknown rating type %s",
@@ -561,6 +742,14 @@ cmdPlayer(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdView(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	// Accept optional arguments (ignored) for backward compatibility with
+	// callers that pass $base or $pane $base.
+	if (objc > 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "?base? ?variant?");
+		return TCL_ERROR;
+	}
+
 	setResult((Scidb->haveReferenceBase()) ? int(Scidb->referenceBase().treeViewIdentifier()) : -1);
 	return TCL_OK;
 }
@@ -569,6 +758,12 @@ cmdView(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdPosition(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1 && objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "?<move>?");
+		return TCL_ERROR;
+	}
+
 	if (Tree const* tree = Scidb->currentTree())
 	{
 		char const* move = objc > 1 ? Tcl_GetString(objv[1]) : 0;
@@ -595,8 +790,37 @@ cmdPosition(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 
 static int
+cmdSetViewFilter(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<row> <view>");
+		return TCL_ERROR;
+	}
+
+	if (!Scidb->haveReferenceBase())
+		return error(CmdSetViewFilter, nullptr, nullptr, "no reference base");
+
+	unsigned row = unsignedFromObj(objc, objv, 1);
+	unsigned view = unsignedFromObj(objc, objv, 2);
+
+	if (!scidb->setCurrentTreeRowFilter(scidb->referenceBase(), view, row))
+		return error(CmdSetViewFilter, nullptr, nullptr, "unable to apply current tree row %u to view %u", row, view);
+
+	setResult(true);
+	return TCL_OK;
+}
+
+
+static int
 cmdIsRefBase(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database>");
+		return TCL_ERROR;
+	}
+
 	char const* base = stringFromObj(objc, objv, 1);
 
 	if (!Scidb->haveReferenceBase())
@@ -613,6 +837,12 @@ cmdIsRefBase(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdIsUpToDate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	setResult(Scidb->treeIsUpToDate(m_key));
 	return TCL_OK;
 }
@@ -621,10 +851,95 @@ cmdIsUpToDate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdInvalidate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	tcl::tree::invalidateCache();
 	return TCL_OK;
 }
 
+
+namespace {
+
+static void
+findNoveltyMoves(mstl::vector<unsigned>& novelties,
+					Tree const& tree,
+					Database const& repertoire)
+{
+	db::maintenance::EcoStatsList stats = db::maintenance::computeEcoStats(repertoire, repertoire.variant());
+
+	for (unsigned row = 0; row < tree.size(); ++row)
+	{
+		TreeInfo const& info = tree.info(row);
+		mstl::string eco = info.eco().asShortString();
+
+		if (eco.empty())
+			continue;
+
+		bool found = false;
+		for (unsigned i = 0; i < stats.size(); ++i)
+		{
+			if (stats[i].eco == eco)
+			{
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+		{
+			// This ECO code is not in repertoire - it's a novelty.
+			novelties.push_back(row);
+		}
+	}
+}
+
+} // namespace
+
+static int
+cmdFindNovelties(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<tree-id> <repertoire-db>");
+		return TCL_ERROR;
+	}
+
+	char const* treeId = Tcl_GetString(objv[1]);
+	char const* repertoireDb = Tcl_GetString(objv[2]);
+
+	if (!Scidb->haveReferenceBase() || !Scidb->contains(treeId)
+		|| Scidb->referenceBase().database().name() != treeId)
+	{
+		return error(CmdFindNovelties, nullptr, nullptr, "invalid tree id");
+	}
+
+	if (!Scidb->contains(repertoireDb))
+		return error(CmdFindNovelties, nullptr, nullptr, "invalid repertoire database");
+
+	Tree const* tree = Scidb->currentTree();
+
+	if (!tree)
+		return error(CmdFindNovelties, nullptr, nullptr, "no current tree");
+
+	Database const& repertoire = scidb->cursor(repertoireDb).database();
+
+	mstl::vector<unsigned> novelties;
+	findNoveltyMoves(novelties, *tree, repertoire);
+
+	// Build result list
+	Tcl_Obj* result = Tcl_NewListObj(0, nullptr);
+	for (unsigned i = 0; i < novelties.size(); ++i)
+	{
+		Tcl_ListObjAppendElement(ti, result, Tcl_NewIntObj(novelties[i]));
+	}
+
+	Tcl_SetObjResult(ti, result);
+	return TCL_OK;
+}
 
 namespace tcl {
 namespace tree {
@@ -632,6 +947,7 @@ namespace tree {
 void
 init(Tcl_Interp* ti)
 {
+	createCommand(ti, CmdDescribe,	cmdDescribe);
 	createCommand(ti, CmdFetch,		cmdFetch);
 	createCommand(ti, CmdFinish,		cmdFinish);
 	createCommand(ti, CmdFreeze,		cmdFreeze);
@@ -639,6 +955,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdGet,			cmdGet);
 	createCommand(ti, CmdInit,			cmdInit);
 	createCommand(ti, CmdInvalidate,	cmdInvalidate);
+	createCommand(ti, CmdFindNovelties,	cmdFindNovelties);
 	createCommand(ti, CmdIsRefBase,	cmdIsRefBase);
 	createCommand(ti, CmdIsUpToDate,	cmdIsUpToDate);
 	createCommand(ti, CmdList,			cmdList);
@@ -646,6 +963,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdPlayer,		cmdPlayer);
 	createCommand(ti, CmdPosition,	cmdPosition);
 	createCommand(ti, CmdSet,			cmdSet);
+	createCommand(ti, CmdSetViewFilter,	cmdSetViewFilter);
 	createCommand(ti, CmdStop,			cmdStop);
 	createCommand(ti, CmdSwitch,		cmdSwitch);
 	createCommand(ti, CmdUpdate,		cmdUpdate);

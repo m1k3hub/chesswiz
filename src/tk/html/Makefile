@@ -18,7 +18,7 @@ INCL_PRE		= -I.
 INCL_POST	= -I../tcl$(TCL_VERSION) -I../tk$(TCL_VERSION)
 INCLUDE		= $(INCL_PRE) $(INCL_POST)
 ALL_INCLUDE	= $(INCL_PRE) $(TCL_INCLUDE) $(TK_INCLUDE) $(INCL_POST)
-CFLAGS		+= $(OPTIMIZE) $(PROFILING) $(C_DEBUG) $(SYS_CFLAGS) -DUSE_DOUBLE_BUFFERING
+CFLAGS		+= $(OPTIMIZE) $(PROFILING) $(C_DEBUG) $(SYS_CFLAGS) -DUSE_DOUBLE_BUFFERING -Wno-old-style-definition
 
 ifdef HAVE_XFT
 #CFLAGS += -DUSE_LATIN_LIGATURES
@@ -77,7 +77,7 @@ $(LIB).a: $(OBJS)
 
 #========================================================================
 
-LEMON_CFLAGS = $(CFLAGS) $(SYS_LDFLAGS) -Wno-uninitialized -fno-strict-aliasing
+LEMON_CFLAGS = $(CFLAGS) $(SYS_LDFLAGS) -Wno-uninitialized -fno-strict-aliasing -std=gnu11
 
 htmltokens.h: tokenlist.txt
 	@echo "Building $@"

@@ -103,6 +103,9 @@ UpdateImage(
 	    return;
     }
 
+    if (width <= 0 || height <= 0 || dragImage->pixmap == None)
+	return;
+
     /* Pixmap -> XImage */
     ximage = XGetImage(tree->display, dragImage->pixmap, 0, 0,
 	    (unsigned int)width, (unsigned int)height, AllPlanes, ZPixmap);
@@ -237,6 +240,9 @@ DragImage_UpdateStyleTkImage(
 	if (photoH == NULL)
 	    return;
     }
+
+    if (width <= 0 || height <= 0 || dragImage->pixmap == None)
+	return;
 
     /* Pixmap -> XImage */
     ximage = XGetImage(tree->display, dragImage->pixmap, 0, 0,

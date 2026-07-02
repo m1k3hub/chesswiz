@@ -51,7 +51,7 @@
 
 #include "sys_utf8_codec.h"
 #include "sys_file.h"
-#include "sys_info.h"
+#include "sys_time.h"
 
 #include "m_vector.h"
 #include "m_assert.h"
@@ -74,6 +74,95 @@ map(View::UpdateMode mode)
 
 
 namespace {
+
+static bool
+scidbFilesExist(mstl::string const& filename)
+{
+	mstl::string root(::util::misc::file::rootname(filename));
+
+	return	::sys::file::access(root + ".sci", ::sys::file::Existence)
+			|| ::sys::file::access(root + ".scg", ::sys::file::Existence)
+			|| ::sys::file::access(root + ".scn", ::sys::file::Existence);
+}
+
+
+static mstl::string
+makeTemporaryScidbName(mstl::string const& filename, char const* purpose)
+{
+	mstl::string root(::util::misc::file::rootname(filename));
+	unsigned stamp = unsigned(::sys::time::timestamp());
+
+	for (unsigned attempt = 0;; ++attempt)
+	{
+		mstl::string candidate;
+		candidate.format("%s.%s.%u.%u.sci", root.c_str(), purpose, stamp, attempt);
+
+		if (!scidbFilesExist(candidate))
+			return candidate;
+	}
+}
+
+
+static void
+restoreScidbBackup(mstl::string const& backupName, mstl::string const& filename)
+{
+	if (scidbFilesExist(filename))
+		::db::sci::Codec::remove(filename);
+
+	if (scidbFilesExist(backupName))
+		::db::sci::Codec::rename(backupName, filename);
+}
+
+
+static void
+promoteScidbDatabase(mstl::string const& tempName, mstl::string const& filename)
+{
+	mstl::string backupName;
+	bool hadOriginal = scidbFilesExist(filename);
+
+	if (hadOriginal)
+	{
+		backupName = makeTemporaryScidbName(filename, "export-backup");
+		::db::sci::Codec::rename(filename, backupName);
+	}
+
+	try
+	{
+		if (scidbFilesExist(filename))
+			::db::sci::Codec::remove(filename);
+
+		::db::sci::Codec::rename(tempName, filename);
+
+		if (hadOriginal && scidbFilesExist(backupName))
+			::db::sci::Codec::remove(backupName);
+	}
+	catch (...)
+	{
+		if (hadOriginal)
+			restoreScidbBackup(backupName, filename);
+
+		throw;
+	}
+}
+
+
+struct ScopedScidbCleanup
+{
+	ScopedScidbCleanup(mstl::string const& filename) :m_filename(filename), m_keep(false) {}
+	~ScopedScidbCleanup()
+	{
+		if (!m_keep && scidbFilesExist(m_filename))
+			::db::sci::Codec::remove(m_filename);
+	}
+
+	void dismiss() { m_keep = true; }
+
+private:
+
+	mstl::string m_filename;
+	bool m_keep;
+};
+
 
 struct WriteGuard
 {
@@ -804,13 +893,24 @@ View::exportGames(mstl::string const& filename,
 
 	if (format == format::Scidb)
 	{
-		Database destination(filename,
+		mstl::string outputName(filename);
+		bool useTemporaryTarget = fmode != Append;
+
+		if (useTemporaryTarget)
+			outputName = makeTemporaryScidbName(filename, "export-tmp");
+
+		ScopedScidbCleanup cleanup(outputName);
+
+		if (!useTemporaryTarget)
+			cleanup.dismiss();
+
+		progress.message("write-game");
+		Database destination(outputName,
 									sys::utf8::Codec::utf8(),
 									storage::OnDisk,
 									m_cursor.m_db->variant(),
 									type);
 		destination.setupDescription(description, creationTime);
-		progress.message("write-game");
 
 		WriteGuard guard(m_app, destination);
 
@@ -844,6 +944,12 @@ View::exportGames(mstl::string const& filename,
 		progress.message("write-index");
 		destination.save(progress);
 		destination.close();
+
+		if (useTemporaryTarget)
+		{
+			promoteScidbDatabase(outputName, filename);
+			cleanup.dismiss();
+		}
 	}
 	else if (format::isScidFormat(format))
 	{

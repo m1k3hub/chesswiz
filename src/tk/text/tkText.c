@@ -595,7 +595,7 @@ enum {
     TK_DUMP_INCLUDE_DATABASE_CONFIG = 1 << 28,
     TK_DUMP_INCLUDE_SYSTEM_CONFIG   = 1 << 29,
     TK_DUMP_INCLUDE_DEFAULT_CONFIG  = 1 << 30,
-    TK_DUMP_INCLUDE_SYSTEM_COLORS   = 1 << 31,
+    TK_DUMP_INCLUDE_SYSTEM_COLORS   = 1u << 31,
     TK_DUMP_INSPECT_DFLT            = TK_DUMP_DUMP_ALL,
     TK_DUMP_INSPECT_COMPLETE        = TK_DUMP_INSPECT_DFLT|TK_DUMP_TAG_BINDINGS|TK_DUMP_TEXT_CONFIGS|
     			              TK_DUMP_TAG_CONFIGS|TK_DUMP_INCLUDE_SEL|TK_DUMP_INSERT_MARK|
@@ -5150,7 +5150,7 @@ InsertChars(
      * insertion, since the insertion could invalidate it.
      */
 
-    if (sharedTextPtr->numPeers > sizeof(textPosition)/sizeof(textPosition[0])) {
+    if (sharedTextPtr->numPeers > sizeof(textPosBuf)/sizeof(textPosBuf[0])) {
 	textPosition = malloc(sizeof(textPosition[0])*sharedTextPtr->numPeers);
     } else {
 	textPosition = textPosBuf;

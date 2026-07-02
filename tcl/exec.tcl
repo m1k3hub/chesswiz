@@ -28,7 +28,7 @@
 #! The "\" at the end of the comment line below is necessary! It means
 #! that the "exec" line is a comment to Tcl/Tk, but not to /bin/sh.
 #! The next line restarts using tkscidb: \
-exec "`dirname "$0"`"/tk`basename $0` "$0" ${1+"$@"}
+exec_dir=`dirname "$0"`; exec_base=tk`basename "$0"`; if [ -x "$exec_dir/$exec_base" ]; then exec "$exec_dir/$exec_base" "$0" ${1+"$@"}; else exec "$exec_dir/../src/$exec_base" "$0" ${1+"$@"}; fi
 
 package require Tcl 8.5
 package require Tk  8.5

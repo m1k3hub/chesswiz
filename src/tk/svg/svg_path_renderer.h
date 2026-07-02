@@ -207,7 +207,8 @@ private:
 													agg::trans_affine& gradient_mtx,
 													coordinates const& coords,
 													int min_x, int max_x,
-													int min_y, int max_y);
+													int min_y, int max_y,
+													agg::trans_affine const& user_transform);
 
 	path_attributes& cur_attr();
 	void update_coords(double x, double y) { cur_attr().update_coords(x, y); }

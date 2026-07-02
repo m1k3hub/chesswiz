@@ -35,8 +35,8 @@
 #include "m_vector.h"
 
 namespace sys  { namespace utf8 { class Codec; }; };
-namespace mstl { class fstream; }
-namespace util { class ByteStream; };
+namespace mstl { class fstream; class ofstream; }
+namespace util { class ByteStream; class Progress; };
 
 namespace db {
 
@@ -78,12 +78,27 @@ public:
 					mstl::string const& originalSuffix,
 					mstl::string const& encoding,
 					util::Progress& progress) override;
+	void doOpen(mstl::string const& encoding) override;
+	void doOpen(mstl::string const& rootname, mstl::string const& encoding) override;
 	void reloadNamebases(mstl::string const& rootname,
 								mstl::string const& originalSuffix,
 								util::Progress& progress) override;
 	void reloadDescription(mstl::string const& rootname) override;
 
 	void close() override;
+
+	void save(mstl::string const& rootname, unsigned start, util::Progress& progress) override;
+	unsigned putGame(util::ByteStream const& strm) override;
+	unsigned putGame(util::ByteStream const& strm, unsigned prevOffset, unsigned prevRecordLength) override;
+	void writeNamebases(mstl::ostream& stream, util::Progress& progress) override;
+	void writeIndexData(mstl::string const& rootname, util::Progress& progress);
+	void writePlayerData(mstl::string const& rootname, util::Progress& progress);
+	void writeTournamentData(mstl::string const& rootname, util::Progress& progress);
+	void writeAnnotatorData(mstl::string const& rootname, util::Progress& progress);
+	void writeSourceData(mstl::string const& rootname, util::Progress& progress);
+	void writeTeamData(mstl::string const& rootname, util::Progress& progress);
+	void writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& strm);
+	void writeIniData(mstl::string const& rootname);
 
 	unsigned doDecoding(	::util::BlockFileReader* reader,
 								GameInfo const& info,
@@ -123,10 +138,15 @@ private:
 
 	sys::utf8::Codec*	m_codec;
 	mstl::fstream		m_gameStream;
+	mstl::ofstream		m_gameOutputStream;
+	mstl::ofstream		m_indexOutputStream;
 	mstl::string		m_encoding;
+	mstl::string		m_rootname;
 	unsigned				m_numGames;
+	unsigned				m_nextOffset;
 	RecordLengths		m_recordLengths;
 	Byte					m_buffer[8192];
+	bool					m_isWritable;
 };
 
 } // namespace cbf

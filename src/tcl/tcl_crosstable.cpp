@@ -114,6 +114,12 @@ getTable(char const* cmd, unsigned dbId, unsigned view)
 static int
 cmdMake(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <view>");
+		return TCL_ERROR;
+	}
+
 	char const* database = stringFromObj(objc, objv, 1);
 	variant::Type variant(tcl::game::variantFromObj(objc, objv, 2));
 	unsigned view = unsignedFromObj(objc, objv, 3);
@@ -175,8 +181,14 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			break;
 
 		case Cmd_PlayerName:
-			setResult(table->getPlayer(unsignedFromObj(objc, objv, 4))->name());
+		{
+			unsigned ranking = unsignedFromObj(objc, objv, 4);
+			NamebasePlayer const* player = table->getPlayer(ranking - 1);
+			if (!player)
+				return error(CmdGet, nullptr, nullptr, "invalid ranking number %u", ranking);
+			setResult(player->name());
 			break;
+		}
 
 		case Cmd_PlayerId:
 			{
@@ -219,6 +231,12 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdRelease(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<baseId> <view>");
+		return TCL_ERROR;
+	}
+
 	unsigned databaseId(unsignedFromObj(objc, objv, 1));
 	unsigned view(unsignedFromObj(objc, objv, 2));
 	Key key(databaseId, view);
@@ -236,6 +254,17 @@ cmdRelease(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdEmit(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 11)
+	{
+		Tcl_WrongNumArgs(
+			ti,
+			1,
+			objv,
+			"<baseId> <view> <search-dir> <script> <mode> <order> <knockout-order> "
+			"<scoring-system> <tiebreak-rules> <preamble>");
+		return TCL_ERROR;
+	}
+
 	struct Log : public TeXt::Controller::Log
 	{
 		void error(mstl::string const& msg) { str = msg; }
@@ -245,7 +274,7 @@ cmdEmit(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	unsigned baseId	= unsignedFromObj(objc, objv, 1);
 	unsigned view		= longFromObj(objc, objv, 2);
 
-	TournamentTable* table = getTable(CmdGet, baseId, view);
+	TournamentTable* table = getTable(CmdEmit, baseId, view);
 
 	if (!table)
 		return TCL_ERROR;

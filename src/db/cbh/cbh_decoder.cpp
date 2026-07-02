@@ -468,7 +468,12 @@ Decoder::startDecoding(TagSet* tags)
 
 	if (word & 0x40000000)
 	{
-		unsigned size = m_isChess960 ? 36 : 28;
+		// In CBH format, the start position is always 28 bytes.
+		// The 36-byte format (with chess960 rook data) is not used in practice.
+		// The 0x08000000 bit in newer formats indicates a position with
+		// annotations/correspondence, not chess960.
+		// Chess960 detection should use a separate indicator.
+		unsigned size = 28;
 
 		if (m_gStrm.remaining() < size)
 			throw DecodingFailedException("corrupted data");

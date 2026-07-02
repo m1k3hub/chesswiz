@@ -180,7 +180,7 @@ istream::seek_and_read(uint64_t pos, unsigned char* buf, size_t size)
 	if (size > 0)
 	{
 		flockfile(m_fp);
-		size_t n = fseek(m_fp, pos, SEEK_SET) ? 0 : fread_unlocked(buf, 1, size, m_fp);
+		size_t n = fseeko(m_fp, pos, SEEK_SET) ? 0 : fread_unlocked(buf, 1, size, m_fp);
 		funlockfile(m_fp);
 
 		if (n < size)
@@ -204,7 +204,7 @@ istream::seek_and_read(int64_t pos, seekdir dir, unsigned char* buf, size_t size
 	if (size > 0)
 	{
 		flockfile(m_fp);
-		size_t n = fseek(m_fp, pos, fdir(dir)) ? 0 : fread_unlocked(buf, 1, size, m_fp);
+		size_t n = fseeko(m_fp, pos, fdir(dir)) ? 0 : fread_unlocked(buf, 1, size, m_fp);
 		funlockfile(m_fp);
 
 		if (n < size)

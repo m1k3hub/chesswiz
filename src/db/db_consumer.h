@@ -225,9 +225,9 @@ private:
 	uint16_t				m_idn;
 	uint32_t				m_gameFlags;
 	uint32_t				m_updateFlags;
+	uint16_t				m_moveBuffer[opening::Max_Line_Length];
 	Line					m_line;
 	HomePawns			m_homePawns;
-	uint16_t				m_moveBuffer[opening::Max_Line_Length];
 	mstl::string		m_encoding;
 	sys::utf8::Codec*	m_codec;
 	Consumer*			m_consumer;

@@ -27,7 +27,7 @@
 #! We have to set the library path because sudo does not keep
 #! this path (in general):                          \
 if [ $# -gt 0 ]; then                               \
-	if [ ! -z "$1" }; then                           \
+	if [ ! -z "$1" ]; then                           \
 		export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$1"; \
 	fi;                                              \
 	shift;                                           \

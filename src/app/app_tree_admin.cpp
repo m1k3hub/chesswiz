@@ -53,7 +53,8 @@ struct TreeAdmin::Runnable
 		,m_method(method)
 		,m_mode(mode)
 		,m_ratingType(ratingType)
-		,m_currentLine(m_lineBuf)
+		,m_lineBuf()
+		,m_currentLine(&m_lineBuf[0])
 		,m_hpsig(game.currentLine(m_currentLine))
 		,m_idn(game.idn())
 		,m_startPosition(game.startBoard())
@@ -102,13 +103,13 @@ struct TreeAdmin::Runnable
 	db::tree::Method		m_method;
 	db::tree::Mode			m_mode;
 	db::rating::Type		m_ratingType;
+	uint16_t					m_lineBuf[db::opening::Max_Line_Length];
 	db::Line					m_currentLine;
 	uint16_t					m_hpsig;
 	unsigned					m_idn;
 	db::Board				m_startPosition;
 	db::Board				m_currentPosition;
 	TreeP						m_tree;
-	uint16_t					m_lineBuf[db::opening::Max_Line_Length];
 };
 
 

@@ -103,11 +103,11 @@ Conditional::getFinalToken(Environment& env, VerifyFunc func)
 				return token;
 		}
 	}
-	catch (ElseException)
+	catch (ElseException const&)
 	{
 		return env.getToken(m_fi);
 	}
-	catch (FiException)
+	catch (FiException const&)
 	{
 		return env.getToken(m_else);
 	}

@@ -275,7 +275,11 @@ proc dragCursors {{ext ""}} {
 
 proc estimateNumberOfGames {filename} {
 	set count [NumGames $filename]
-	if {$count > 0 && [string tolower [file extension $filename]] in {.pgn .pgn.gz .bpgn .bpgn.gz .zip}} {
+	set lower [string tolower $filename]
+	if {$count > 0
+			&& ([string match *.pgn.gz $lower]
+				|| [string match *.bpgn.gz $lower]
+				|| [string tolower [file extension $filename]] in {.pgn .bpgn .zip})} {
 		set count [expr {-[RoundNumGames $count]}]
 	}
 	return $count
@@ -655,14 +659,15 @@ proc FormatNumGames {filename count} {
 	if {$count < 0} { return $::mc::Error }
 	set result ""
 	if {$count > 0} {
-		switch [string tolower [file extension $filename]] {
-			.pgn - .pgn.gz - .bpgn - .bpgn.gz - .zip {
-				set count [RoundNumGames $count]
-				append result "~ "
-				if {$count <= 3} { set count 1 }
-			}
-
-			.cbh { append result "\u2264 " }
+		set lower [string tolower $filename]
+		if {[string match *.pgn.gz $lower]
+				|| [string match *.bpgn.gz $lower]
+				|| [string tolower [file extension $filename]] in {.pgn .bpgn .zip}} {
+			set count [RoundNumGames $count]
+			append result "~ "
+			if {$count <= 3} { set count 1 }
+		} elseif {[string tolower [file extension $filename]] eq ".cbh"} {
+			append result "\u2264 "
 		}
 	}
 	append result [::locale::formatNumber $count]
@@ -977,6 +982,9 @@ proc file {args} {
 				set file [lindex $args 1]
 				if {[string match *.pgn.gz $file]} {
 					return [string range $file 0 end-7]
+				}
+				if {[string match *.bpgn.gz $file]} {
+					return [string range $file 0 end-8]
 				}
 			}
 		}

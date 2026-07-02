@@ -34,6 +34,7 @@
 #include "m_string.h"
 #include "m_carray.h"
 #include "m_map.h"
+#include "m_set.h"
 #include "m_limits.h"
 #include "m_list.h"
 #include "m_utility.h"
@@ -690,8 +691,8 @@ template <> int Dimen::dimen<Horz,Abs>() const { return abs.dimen<Horz>(); }
 template <> int Dimen::dimen<Vert,Abs>() const { return abs.dimen<Vert>(); }
 template <> int Dimen::dimen<Horz,Rel>() const { return rel.dimen<Horz>(); }
 template <> int Dimen::dimen<Vert,Rel>() const { return rel.dimen<Vert>(); }
-template <> int Dimen::dimen<Horz,Grd>() const { return grd.dimen<Horz>(); }
-template <> int Dimen::dimen<Vert,Grd>() const { return grd.dimen<Vert>(); }
+template <> __attribute__((unused)) int Dimen::dimen<Horz,Grd>() const { return grd.dimen<Horz>(); }
+template <> __attribute__((unused)) int Dimen::dimen<Vert,Grd>() const { return grd.dimen<Vert>(); }
 
 template <> bool Dimen::reliable<Horz>() const { return r[0]; }
 template <> bool Dimen::reliable<Vert>() const { return r[1]; }
@@ -829,22 +830,22 @@ template <> int Quants::dimen<Vert,Max,Grd>() const		{ return max.grd.dimen<Vert
 
 template <> void Quants::set<Horz,Actual,Abs>(int size)	{ actual.set<Horz>(size, Abs); }
 template <> void Quants::set<Vert,Actual,Abs>(int size)	{ actual.set<Vert>(size, Abs); }
-template <> void Quants::set<Horz,Actual,Rel>(int size)	{ actual.set<Horz>(size, Rel); }
-template <> void Quants::set<Vert,Actual,Rel>(int size)	{ actual.set<Vert>(size, Rel); }
-template <> void Quants::set<Horz,Actual,Grd>(int size)	{ actual.set<Horz>(size, Grd); }
-template <> void Quants::set<Vert,Actual,Grd>(int size)	{ actual.set<Vert>(size, Grd); }
+template <> __attribute__((unused)) void Quants::set<Horz,Actual,Rel>(int size) { actual.set<Horz>(size, Rel); }
+template <> __attribute__((unused)) void Quants::set<Vert,Actual,Rel>(int size) { actual.set<Vert>(size, Rel); }
+template <> __attribute__((unused)) void Quants::set<Horz,Actual,Grd>(int size) { actual.set<Horz>(size, Grd); }
+template <> __attribute__((unused)) void Quants::set<Vert,Actual,Grd>(int size) { actual.set<Vert>(size, Grd); }
 template <> void Quants::set<Horz,Min,Abs>(int size)		{ min.set<Horz>(size, Abs); }
 template <> void Quants::set<Vert,Min,Abs>(int size)		{ min.set<Vert>(size, Abs); }
-template <> void Quants::set<Horz,Min,Rel>(int size)		{ min.set<Horz>(size, Rel); }
-template <> void Quants::set<Vert,Min,Rel>(int size)		{ min.set<Vert>(size, Rel); }
-template <> void Quants::set<Horz,Min,Grd>(int size)		{ min.set<Horz>(size, Grd); }
-template <> void Quants::set<Vert,Min,Grd>(int size)		{ min.set<Vert>(size, Grd); }
+template <> __attribute__((unused)) void Quants::set<Horz,Min,Rel>(int size) { min.set<Horz>(size, Rel); }
+template <> __attribute__((unused)) void Quants::set<Vert,Min,Rel>(int size) { min.set<Vert>(size, Rel); }
+template <> __attribute__((unused)) void Quants::set<Horz,Min,Grd>(int size) { min.set<Horz>(size, Grd); }
+template <> __attribute__((unused)) void Quants::set<Vert,Min,Grd>(int size) { min.set<Vert>(size, Grd); }
 template <> void Quants::set<Horz,Max,Abs>(int size)		{ max.set<Horz>(size, Abs); }
 template <> void Quants::set<Vert,Max,Abs>(int size)		{ max.set<Vert>(size, Abs); }
-template <> void Quants::set<Horz,Max,Rel>(int size)		{ max.set<Horz>(size, Rel); }
-template <> void Quants::set<Vert,Max,Rel>(int size)		{ max.set<Vert>(size, Rel); }
-template <> void Quants::set<Horz,Max,Grd>(int size)		{ max.set<Horz>(size, Grd); }
-template <> void Quants::set<Vert,Max,Grd>(int size)		{ max.set<Vert>(size, Grd); }
+template <> __attribute__((unused)) void Quants::set<Horz,Max,Rel>(int size) { max.set<Horz>(size, Rel); }
+template <> __attribute__((unused)) void Quants::set<Vert,Max,Rel>(int size) { max.set<Vert>(size, Rel); }
+template <> __attribute__((unused)) void Quants::set<Horz,Max,Grd>(int size) { max.set<Horz>(size, Grd); }
+template <> __attribute__((unused)) void Quants::set<Vert,Max,Grd>(int size) { max.set<Vert>(size, Grd); }
 
 template <> void Quants::setup<Horz,Actual>(int size)		{ actual.setup<Horz>(size, Abs); }
 template <> void Quants::setup<Vert,Actual>(int size)		{ actual.setup<Vert>(size, Abs); }
@@ -920,7 +921,7 @@ Quants::setActual(int width, int height)
 }
 
 
-void
+__attribute__((unused)) void
 Quants::zero()
 {
 	actual.zero();
@@ -1557,6 +1558,10 @@ Node::Lookup Node::m_lookup;
 
 } // namespace
 
+// Registry of live Node objects. WindowEventProc checks this before
+// dereferencing clientData, since Tk may dispatch queued events after
+// Tk_DeleteEventHandler has already been called on the handler.
+static mstl::set<Node*> s_liveNodes;
 
 static void
 Perform(ClientData clientData)
@@ -1581,6 +1586,10 @@ Adjust(ClientData clientData)
 static void
 WindowEventProc(ClientData clientData, XEvent* event)
 {
+	// Guard against stale events arriving after Tk_DeleteEventHandler.
+	if (s_liveNodes.find(static_cast<Node*>(clientData)) == s_liveNodes.end())
+		return;
+
 	switch (event->type)
 	{
 		case ConfigureNotify:
@@ -1638,7 +1647,7 @@ bool Node::isReady() const							{ return m_root->m_isReady; }
 bool Node::isHorz() const							{ return m_orientation == Horz; }
 bool Node::isVert() const							{ return m_orientation == Vert; }
 bool Node::amalgamate() const						{ return m_amalgamate; }
-bool Node::needsUpdate() const					{ return m_root->isReady() && testFlags(unsigned(-1)); }
+__attribute__((unused)) bool Node::needsUpdate() const { return m_root->isReady() && testFlags(unsigned(-1)); }
 
 template <> bool Node::hasOrientation<Horz>() const { return isHorz(); }
 template <> bool Node::hasOrientation<Vert>() const { return isVert(); }
@@ -1782,7 +1791,7 @@ Node::finished() const
 }
 
 
-unsigned
+__attribute__((unused)) unsigned
 Node::depth() const
 {
 	Node const* node = this;
@@ -2328,6 +2337,7 @@ Node::Node(Node& parent, Type type, Tcl_Obj* uid)
 {
 	M_ASSERT(type != Root);
 	tcl::incrRef(m_uid);
+	::s_liveNodes.insert(this);
 }
 
 
@@ -2383,6 +2393,7 @@ Node::Node(Tcl_Obj* path, Node const* setup)
 		m_weight = setup->m_weight;
 		tcl::incrRef(m_uid = setup->m_uid);
 	}
+	::s_liveNodes.insert(this);
 }
 
 
@@ -2429,11 +2440,14 @@ Node::Node(Node const& node)
 {
 	tcl::incrRef(m_path);
 	tcl::incrRef(m_uid);
+	::s_liveNodes.insert(this);
 }
 
 
 Node::~Node()
 {
+	::s_liveNodes.erase(this);
+
 	if (!isRoot() && exists())
 		::fprintf(stderr, "window '%s' is not withdrawn\n", id());
 
@@ -4557,8 +4571,9 @@ Node::findDockingNode(Position& position, Node const*& before, Node const* setup
 	structure::Node const* bestNode = nullptr;
 	Node* node = nullptr;
 
-	for (int i = m_root->m_structures.size() - 1; i >= 0; --i)
+	for (unsigned i = m_root->m_structures.size(); i > 0; )
 	{
+		--i;
 		if (!m_root->m_initialStructure || i > 0 || !bestNode)
 		{
 			unsigned count = 0;
@@ -7784,7 +7799,7 @@ Node::perform(Node* toplevel)
 			m_root->clearAllFlags();
 		}
 	}
-	catch (Terminated)
+	catch (Terminated const&)
 	{
 		throw;
 	}

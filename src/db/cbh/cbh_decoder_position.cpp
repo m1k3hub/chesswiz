@@ -181,11 +181,17 @@ Position::doCastling(Byte offs)
 	Pieces&		pieces				= lookup.pieces;
 	Board&		board					= lookup.board;
 	color::ID	sideToMove			= board.sideToMove();
-	bool			isShortCastling	= from < to;	// XXX only works with KxR notation
+	bool			isShortCastling	= offs > 0;
 
-	Byte rank		= sq::rank(to);
-	// TODO: does not work with chess 960
-	Byte rookFrom	= sq::make(isShortCastling ? sq::FyleH : sq::FyleA, rank);
+	Byte rank		= sq::rank(from);
+	Byte rookFrom	= isShortCastling
+							? board.shortCastlingRook(sideToMove)
+							: board.longCastlingRook(sideToMove);
+
+	// Fall back to orthodox rook files if castling metadata is unavailable.
+	if (rookFrom == sq::Null)
+		rookFrom = sq::make(isShortCastling ? sq::FyleH : sq::FyleA, rank);
+
 	Byte rookTo		= sq::make(isShortCastling ? sq::FyleF : sq::FyleD, rank);
 	Byte rookNum	= pieceCount[rookFrom];
 

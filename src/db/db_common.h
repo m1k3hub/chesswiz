@@ -1076,15 +1076,16 @@ namespace format
 {
 	enum Type
 	{
-		Scidb				= 1 << 0,
-		Scid3				= 1 << 1,
-		Scid4				= 1 << 2,
-		ChessBase		= 1 << 3,
-		ChessBaseDOS	= 1 << 4,
-		Pgn				= 1 << 5,
-		LaTeX				= 1 << 6,
+		Scidb					= 1 << 0,
+		Scid3					= 1 << 1,
+		Scid4					= 1 << 2,
+		ChessBase			= 1 << 3,
+		ChessBaseDOS		= 1 << 4,
+		Pgn					= 1 << 5,
+		LaTeX					= 1 << 6,
+		ChessBaseArchive	= 1 << 7,	///< CBV container format
 
-		Invalid			= LaTeX, // makes sense if used for input format
+		Invalid				= LaTeX, // makes sense if used for input format
 	};
 
 	bool isScidFormat(Type type);

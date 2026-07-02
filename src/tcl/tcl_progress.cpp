@@ -47,7 +47,12 @@ static void
 informTermination(ClientData clientData)
 {
 	Tcl_Obj* cmd = static_cast<Tcl_Obj*>(clientData);
-	Tcl_EvalObjEx(interp(), cmd, TCL_EVAL_GLOBAL);
+	int result = Tcl_EvalObjEx(interp(), cmd, TCL_EVAL_GLOBAL);
+	if (result != TCL_OK)
+	{
+		// Log or suppress callback errors to prevent crashes
+		Tcl_BackgroundError(interp());
+	}
 	Tcl_DecrRefCount(cmd);
 }
 
@@ -272,6 +277,9 @@ cmdInterrupt(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	bool		wait		= false;
 	Tcl_Obj*	inform	= 0;
 
+	if (((objc - 1) % 2) != 0)
+		return error(CmdInterrupt, 0, 0, "wrong # args: should be \"%s ?-wait <bool>? ?-inform <obj>?\"", CmdInterrupt);
+
 	for (int i = 1; i < objc; i += 2)
 	{
 		char const* option = stringFromObj(objc, objv, i);
@@ -303,6 +311,12 @@ cmdInterrupt(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdInterruptable(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	setResult(m_currentProgress && m_currentProgress->interruptable());
 	return TCL_OK;
 }

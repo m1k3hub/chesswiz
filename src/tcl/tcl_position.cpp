@@ -142,6 +142,12 @@ pos::dumpFen(mstl::string const& position, variant::Type variant, mstl::string& 
 static int
 cmdGuess(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<square>");
+		return TCL_ERROR;
+	}
+
 	Square square = squareFromObj(objc, objv, 1);
 
 	if (square == sq::Null)
@@ -192,10 +198,16 @@ cmdGuess(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdGuessNext(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<square>");
+		return TCL_ERROR;
+	}
+
 	Square square = squareFromObj(objc, objv, 1);
 
 	if (square == sq::Null)
-		return error(::CmdGuess, nullptr, nullptr, "invalid square %s", Tcl_GetString(objv[1]));
+		return error(::CmdGuessNext, nullptr, nullptr, "invalid square %s", Tcl_GetString(objv[1]));
 
 	if (	m_bestSquareCache[square] == sq::Null
 		|| m_bestSquareCache[square] == sq::Invalid
@@ -239,6 +251,12 @@ cmdGuessNext(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSearchDepth(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<depth>");
+		return TCL_ERROR;
+	}
+
 	m_searchDepth = unsignedFromObj(objc, objv, 1);
 	resetMoveCache();
 	return TCL_OK;
@@ -248,6 +266,12 @@ cmdSearchDepth(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdStm(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	setResult(color::isWhite(Scidb->game().currentBoard().sideToMove()) ? "w" : "b");
 	return TCL_OK;
 }
@@ -256,6 +280,12 @@ cmdStm(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdNextMoves(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	Tcl_Obj* result = Tcl_NewListObj(0, 0);
 
 	Game const&		game	= Scidb->game();
@@ -287,6 +317,12 @@ cmdNextMoves(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdDestination(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	Game const& game = Scidb->game();
 	int dest = -1;
 
@@ -301,6 +337,12 @@ cmdDestination(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdBoard(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	mstl::string result;
 	dumpBoard(Scidb->game().currentBoard(), result);
 	setResult(result);
@@ -311,6 +353,12 @@ cmdBoard(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdChecks(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	Tcl_Obj *objs[2];
 
 	if (variant::isThreeCheck(Scidb->game().variant()))
@@ -331,6 +379,12 @@ cmdChecks(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	setResult(Scidb->game().currentBoard().toFen(Scidb->game().variant()));
 	return TCL_OK;
 }
@@ -339,6 +393,12 @@ cmdFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSetup(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<fen>");
+		return TCL_ERROR;
+	}
+
 	scidb->game().setStartPosition(stringFromObj(objc, objv, 1));
 	return TCL_OK;
 }
@@ -347,6 +407,12 @@ cmdSetup(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdIdn(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	setResult(Scidb->game().currentBoard().computeIdn(Scidb->game().variant()));
 	return TCL_OK;
 }
@@ -355,13 +421,19 @@ cmdIdn(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdValid(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3 && objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<from> <to> ?<drop-piece>?");
+		return TCL_ERROR;
+	}
+
 	Square sq1 = squareFromObj(objc, objv, 1);
 	Square sq2 = squareFromObj(objc, objv, 2);
 
 	piece::Type piece = piece::None;
 
 	if (objc > 3)
-		piece::fromLetter(*stringFromObj(objc, objv, 3));
+		piece = piece::fromLetter(*stringFromObj(objc, objv, 3));
 
 	Game const& game = Scidb->game();
 	Board	board	= game.currentBoard();
@@ -410,6 +482,12 @@ cmdValid(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdLegal(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 4 && objc != 5)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<from> <to> <allow-illegal> ?<drop-piece>?");
+		return TCL_ERROR;
+	}
+
 	Square sq1 = squareFromObj(objc, objv, 1);
 	Square sq2 = squareFromObj(objc, objv, 2);
 
@@ -470,6 +548,12 @@ cmdLegal(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdPromotion(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<from> <to> <allow-illegal>");
+		return TCL_ERROR;
+	}
+
 	Square sq1 = squareFromObj(objc, objv, 1);
 	Square sq2 = squareFromObj(objc, objv, 2);
 
@@ -598,6 +682,12 @@ cmdInHand(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSan(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3 && objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<from> <to> ?<promotion-piece>?");
+		return TCL_ERROR;
+	}
+
 	Square	sq1	= squareFromObj(objc, objv, 1);
 	Square	sq2	= squareFromObj(objc, objv, 2);
 	Byte		promo	= 'q';

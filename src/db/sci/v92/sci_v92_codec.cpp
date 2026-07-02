@@ -629,6 +629,18 @@ Codec::getGame(GameInfo const& info)
 }
 
 
+util::ByteStream
+Codec::getGame(GameInfo const& info, ::util::BlockFileReader* reader)
+{
+	if (!reader)
+		return getGame(info);
+
+	ByteStream src;
+	getGameRecord(info, *reader, src);
+	return src;
+}
+
+
 unsigned
 Codec::putGame(ByteStream const& strm)
 {

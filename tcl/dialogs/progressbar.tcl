@@ -88,12 +88,9 @@ proc open {w args} {
 	if {[string length $parent]} {
 		if {$opts(-transient)} { wm transient $w $parent }
 		wm group $w $parent
-	} else {
-		if {$opts(-transient)} { wm transient $w [winfo toplevel $parent] }
-		wm group $w [winfo toplevel $parent]
 	}
 	wm attributes $w -topmost $opts(-topmost)
-	catch { wm attributes $dlg -type dialog }
+	catch { wm attributes $w -type dialog }
 	
 	tk::label $w.l \
 		-image $hourGlass \

@@ -183,7 +183,7 @@ proc Select {path base variant index} {
 	set position [::scidb::db::get lookupSite $index $Vars($base:$variant:view) $base $variant]
 	::sitetable::see $Vars(frame:site) $position
 	update idletasks
-	set row [::qsitetable::indexToRow $Vars(frame:site) $position]
+	set row [::sitetable::indexToRow $Vars(frame:site) $position]
 	::sitetable::setSelection $Vars(frame:site) $row
 }
 
@@ -254,7 +254,7 @@ proc Reset {path base variant} {
 
 	::eventtable::clear $Vars(frame:event)
 	::sitetable::select $Vars(frame:site) none
-	::sitetable::activate $Vars(frame:event) none
+	::sitetable::activate $Vars(frame:site) none
 	set Vars($base:$variant:selected:key) {}
 }
 
@@ -270,13 +270,13 @@ proc Search {path base variant view {selected -1}} {
 	if {$selected == -1} {
 		set selected [::sitetable::selectedSite $Vars(frame:site) $base $variant]
 		if {$selected >= 0} {
-			set index [::scidb::db::get siteIndex $selected $view $base $variant]
+			set index $selected
 			set Vars($base:$variant:selected:key) [scidb::db::get siteKey $base $variant site $index]
 		}
 	}
 
 	if {$selected >= 0} {
-		if {$index == -1} { set index [::scidb::db::get siteIndex $selected $view $base $variant] }
+		if {$index == -1} { set index $selected }
 		::scidb::view::search $base $variant $view null events [list site $index]
 		::eventtable::scroll $Vars(frame:event) home
 	} else {
@@ -331,6 +331,11 @@ proc DoUpdate {path base variant} {
 				after idle \
 					[list [namespace parent]::Select $path $base $variant $Vars($base:$variant:select)]
 				set Vars($base:$variant:select) -1
+			} elseif {[llength $Vars($base:$variant:selected:key)]} {
+				set index [::scidb::db::find site $base $variant $Vars($base:$variant:selected:key)]
+				if {$index >= 0} {
+					after idle [list [namespace parent]::Select $path $base $variant $index]
+				}
 			}
 		}
 	}

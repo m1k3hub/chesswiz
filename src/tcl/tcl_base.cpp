@@ -955,6 +955,7 @@ GetErrorCode(::db::IOException const& exc)
 		case IOException::Annotation:		file = "Annotation"; break;
 		case IOException::PgnFile:			file = "PGN File"; break;
 		case IOException::BookFile:		file = "Book File"; break;
+		case IOException::Archive:			file = "Archive"; break;
 	}
 
 	switch (exc.errorType())

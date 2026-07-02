@@ -135,12 +135,18 @@ performPow2(Environment& env)
 	Value exp = token->value();
 
 	if (exp < 0)
+	{
 		Messages::errmessage(env, "pow undefined (argument < 0)", Messages::Incorrigible);
+		return;
+	}
 
 	if (size_t(exp) >= (sizeof(Value)*8 - 1))
+	{
 		Messages::errmessage(env, "Arithmetic overflow", Messages::Incorrigible);
+		return;
+	}
 
-	env.putFinalToken(TokenP(new NumberToken(Value(1 << exp)))); // MEMORY
+	env.putFinalToken(TokenP(new NumberToken(Value(1u << exp)))); // MEMORY
 }
 
 

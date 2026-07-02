@@ -116,7 +116,7 @@ public:
 
 public:
 
-	HyphenationNode() { ::memset(sparse_lookup, 0, sizeof(sparse_lookup)); }
+	HyphenationNode() : sparse_lookup() {}
 
 	~HyphenationNode()
 	{

@@ -125,7 +125,7 @@ Scid (<abbr>.si4</abbr>, <abbr>.si3</abbr>)
 
 <p>
 Scid's database format is fully supported because of it's wide adoption.
-But with this format you cannot use the full capability of Scidb.
+But with this format you cannot use the full capability of Scidb. For large databases and repeated analysis, maintenance, or preparation work, it is recommended to convert the database into Scidb's native format (<abbr>.sci</abbr>) and use that as the working copy.
 </p>
 
 <annotation>
@@ -178,7 +178,7 @@ ChessBase (<abbr>.cbh</abbr>, <abbr>.cbf</abbr>)
 </h2>
 
 <p>
-Both formats will be supported; the new format <abbr>.cbh</abbr> and the old format <abbr>.cbf</abbr>.
+Both formats will be supported; the new format <abbr>.cbh</abbr> and the old format <abbr>.cbf</abbr>. For repeated work it is recommended to convert ChessBase databases into Scidb's native format (<abbr>.sci</abbr>) and use that as the working copy.
 </p>
 
 <p>
@@ -243,8 +243,8 @@ The <abbr>PGN</abbr> format (Portable Game Notation) is a common standard for tr
 chess games. Opening a <abbr>PGN</abbr> file will be done in reading mode, but it is
 possible to set it writeable (except Zip archives; <see/>
 <a href="Write-Protect-Database.html">Write protection of databases</a>).
-With larger <abbr>PGN</abbr> game collections it is recommended to convert it into the
-Scidb format.
+With larger <abbr>PGN</abbr> game collections it is recommended to convert them into the
+Scidb format and use the resulting <abbr>.sci</abbr> database as the working copy.
 </p>
 
 <p>

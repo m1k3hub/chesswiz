@@ -83,6 +83,7 @@ static char const* CmdCopy				= "::scidb::game::copy";
 static char const* CmdCount			= "::scidb::game::count";
 static char const* CmdCurrent			= "::scidb::game::current";
 static char const* CmdDump				= "::scidb::game::dump";
+static char const* CmdDuplicate		= "::scidb::game::duplicate";
 static char const* CmdEcoTable		= "::scidb::game::ecotable";
 static char const* CmdExchange		= "::scidb::game::exchange";
 static char const* CmdExecute			= "::scidb::game::execute";
@@ -629,8 +630,9 @@ public:
 
 	void languages(LanguageSet const& languages) override
 	{
-		Tcl_Obj*  objv_1[languages.size()];
-		Tcl_Obj** p(&objv_1[0]);
+		mstl::vector<Tcl_Obj*> objv_1_buf(languages.size());
+		Tcl_Obj** objv_1 = objv_1_buf.begin();
+		Tcl_Obj** p(objv_1);
 
 		for (LanguageSet::const_iterator i = languages.begin(), e = languages.end(); i != e; ++i)
 			*p++ = newObj(i->first);
@@ -1145,7 +1147,7 @@ public:
 		if (m_pgn)
 		{
 			int objc = 2*mergeResults.size();
-			Tcl_Obj* objv[objc];
+			mstl::vector<Tcl_Obj*> objv(objc);
 
 			for (unsigned i = 0; i < mergeResults.size(); ++i)
 			{
@@ -1157,7 +1159,7 @@ public:
 			Tcl_Obj* objv3[1];
 
 			objv2[0] = m_merge;
-			objv2[1] = newObj(objc, objv);
+			objv2[1] = newObj(objc, objv.data());
 			objv3[0] = newObj(objv2);
 
 			invoke(__func__, m_pgn, m_position, newObj(objv3), nullptr);
@@ -1569,6 +1571,9 @@ cmdEcoTable(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdDump(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 5 || objc > 7)
+		return error(CmdDump, nullptr, nullptr, "wrong # args: should be \"%s <database> <variant> <view> <number> ?<fen>? ?<split>?\"", CmdDump);
+
 	char const*		database	= stringFromObj(objc, objv, 1);
 	variant::Type	variant	= ::tcl::game::variantFromObj(objc, objv, 2);
 	int				viewNo	= intFromObj(objc, objv, 3);
@@ -1592,7 +1597,7 @@ cmdDump(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		for (unsigned i = 0; i < positions.size(); ++i)
 			pos::dumpFen(positions[i], variant, positions[i]);
 
-		Tcl_Obj* objv[mstl::mul2(result.size()) + 1];
+		mstl::vector<Tcl_Obj*> objv(mstl::mul2(result.size()) + 1);
 
 		objv[0] = newObj(::stateToInt(state));
 
@@ -1602,7 +1607,7 @@ cmdDump(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			objv[mstl::mul2(i) + 2] = newObj(positions[i]);
 		}
 
-		setResult(mstl::mul2(result.size()) + 1, objv);
+		setResult(mstl::mul2(result.size()) + 1, objv.data());
 	}
 	else
 	{
@@ -1621,6 +1626,9 @@ cmdDump(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdLoad(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 5)
+		return error(::CmdLoad, nullptr, nullptr, "wrong # args: should be \"%s <position> <database> <variant> <number> ?<fen>? ?-view <view>?\"", ::CmdLoad);
+
 	int view = -1;
 
 	while (objc > 2 && *asString(objv[objc - 2]) == '-')
@@ -1634,9 +1642,12 @@ cmdLoad(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		}
 		else
 		{
-			return error(::CmdSubscribe, nullptr, nullptr, "unexpected option '%s'", option);
+			return error(::CmdLoad, nullptr, nullptr, "unexpected option '%s'", option);
 		}
 	}
+
+	if (objc != 5 && objc != 6)
+		return error(::CmdLoad, nullptr, nullptr, "wrong # args: should be \"%s <position> <database> <variant> <number> ?<fen>? ?-view <view>?\"", ::CmdLoad);
 
 	unsigned			position	= unsignedFromObj(objc, objv, 1);
 	char const*		database	= stringFromObj(objc, objv, 2);
@@ -1665,6 +1676,9 @@ cmdLoad(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdReload(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1 && objc != 2)
+		return error(CmdReload, nullptr, nullptr, "wrong # args: should be \"%s ?<position>?\"", CmdReload);
+
 	unsigned position = objc == 1 ? Application::InvalidPosition : intFromObj(objc, objv, 1);
 	setResult(::stateToInt(scidb->loadGame(position)));
 	return TCL_OK;
@@ -1674,6 +1688,9 @@ cmdReload(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdModified(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 2)
+		return error(::CmdModified, nullptr, nullptr, "wrong # args: should be \"%s <position> ?<flag>? ?-irreversible <bool>?\"", ::CmdModified);
+
 	bool flag = true;
 	bool irreversible = false;
 
@@ -1684,10 +1701,13 @@ cmdModified(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		if (equal(option, "-irreversible"))
 			irreversible = boolFromObj(objc, objv, objc - 1);
 		else
-			return error(::CmdSubscribe, nullptr, nullptr, "unexpected option '%s'", option);
+			return error(::CmdModified, nullptr, nullptr, "unexpected option '%s'", option);
 
 		objc -= 2;
 	}
+
+	if (objc != 2 && objc != 3)
+		return error(::CmdModified, nullptr, nullptr, "wrong # args: should be \"%s <position> ?<flag>? ?-irreversible <bool>?\"", ::CmdModified);
 
 	if (objc > 2)
 		flag = boolFromObj(objc, objv, 2);
@@ -1706,6 +1726,9 @@ cmdModified(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdMove(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdMove, nullptr, nullptr, "wrong # args: should be \"%s <san>\"", CmdMove);
+
 	scidb->game().addMove(stringFromObj(objc, objv, 1));
 	return TCL_OK;
 }
@@ -1714,6 +1737,9 @@ cmdMove(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdValid(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdValid, nullptr, nullptr, "wrong # args: should be \"%s <san>\"", CmdValid);
+
 	Game const& game = Scidb->game();
 	mstl::string san(stringFromObj(objc, objv, 1));
 	setResult(bool(game.currentBoard().parseMove(san, game.variant(), move::MustBeUnambiguous)));
@@ -1724,6 +1750,9 @@ cmdValid(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdVariant(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdVariant, nullptr, nullptr, "wrong # args: should be \"%s\"", CmdVariant);
+
 	setResult(::tcl::tree::variantToString(Scidb->game().variant()));
 	return TCL_OK;
 }
@@ -1732,6 +1761,9 @@ cmdVariant(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdNew(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2 && objc != 3)
+		return error(CmdNew, nullptr, nullptr, "wrong # args: should be \"%s <view> ?<variant>?\"", CmdNew);
+
 	unsigned view = unsignedFromObj(objc, objv, 1);
 	::db::variant::Type type = ::db::variant::Normal;
 
@@ -1749,6 +1781,9 @@ cmdNew(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSwitch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdSwitch, nullptr, nullptr, "wrong # args: should be \"%s <position>\"", CmdSwitch);
+
 	unsigned position = intFromObj(objc, objv, 1);
 
 	if (position == Application::InvalidPosition)
@@ -1767,6 +1802,9 @@ cmdSwitch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdRelease(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdRelease, nullptr, nullptr, "wrong # args: should be \"%s <position>\"", CmdRelease);
+
 	unsigned position	= unsignedFromObj(objc, objv, 1);
 	scidb->releaseGame(position);
 	return TCL_OK;
@@ -1776,6 +1814,9 @@ cmdRelease(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSwap(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+		return error(CmdSwap, nullptr, nullptr, "wrong # args: should be \"%s <lhs> <rhs>\"", CmdSwap);
+
 	scidb->swapGames(unsignedFromObj(objc, objv, 1), unsignedFromObj(objc, objv, 2));
 	return TCL_OK;
 }
@@ -1784,6 +1825,9 @@ cmdSwap(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSwapPositions(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+		return error(CmdSwapPositions, nullptr, nullptr, "wrong # args: should be \"%s <lhs> <rhs>\"", CmdSwapPositions);
+
 	scidb->swapGamePositions(unsignedFromObj(objc, objv, 1), unsignedFromObj(objc, objv, 2));
 	return TCL_OK;
 }
@@ -1792,6 +1836,9 @@ cmdSwapPositions(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdInfo(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdInfo, nullptr, nullptr, "wrong # args: should be \"%s <position>\"", CmdInfo);
+
 	unsigned position = intFromObj(objc, objv, 1);
 
 	return tcl::db::getGameInfo(	Scidb->database(position),
@@ -1804,6 +1851,9 @@ cmdInfo(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdLayout(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdLayout, nullptr, nullptr, "wrong # args: should be \"%s <position>\"", CmdLayout);
+
 	unsigned	position	= unsignedFromObj(objc, objv, 1);
 	Game&		game		= scidb->game(position);
 
@@ -1819,6 +1869,9 @@ cmdLayout(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSubscribe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 4 && objc != 5)
+		return error(CmdSubscribe, nullptr, nullptr, "wrong # args: should be \"%s <board|tree|state|pgn|opening> <position> <cmd> ?<mainline-only>?\"", CmdSubscribe);
+
 	char const*		what				= stringFromObj(objc, objv, 1);
 	unsigned			position			= unsignedFromObj(objc, objv, 2);
 	bool				mainlineOnly	= false;
@@ -1852,6 +1905,9 @@ cmdSubscribe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdUnsubscribe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 4)
+		return error(CmdUnsubscribe, nullptr, nullptr, "wrong # args: should be \"%s <board|tree|state|pgn|opening> <position> <cmd>\"", CmdUnsubscribe);
+
 	unsigned	position = unsignedFromObj(objc, objv, 2);
 
 	if (!Scidb->containsGameAt(position))
@@ -1891,23 +1947,32 @@ cmdUnsubscribe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdRefresh(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc > 3)
+		return error(CmdRefresh, nullptr, nullptr, "wrong # args: should be \"%s ?<position>? ?-immediate?\"", CmdRefresh);
+
+	bool immediate = false;
+
+	if (objc >= 2)
+	{
+		char const* option = stringFromObj(objc, objv, objc - 1);
+
+		if (equal(option, "-immediate"))
+		{
+			immediate = true;
+			--objc;
+		}
+	}
+
+	if (objc > 2)
+		return error(CmdRefresh, nullptr, nullptr, "wrong # args: should be \"%s ?<position>? ?-immediate?\"", CmdRefresh);
+
 	unsigned position = objc > 1 ? unsignedFromObj(objc, objv, 1) : Application::InvalidPosition;
+
+	if (position == Application::InvalidPosition)
+		position = Scidb->currentPosition();
 
 	if (Scidb->containsGameAt(position))
 	{
-		bool immediate = false;
-
-		if (objc >= 2)
-		{
-			char const* option = stringFromObj(objc, objv, objc - 1);
-
-			if (equal(option, "-immediate"))
-			{
-				immediate = true;
-				--objc;
-			}
-		}
-
 		scidb->refreshGame(position, immediate);
 	}
 
@@ -1918,6 +1983,9 @@ cmdRefresh(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdTranspose(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdTranspose, nullptr, nullptr, "wrong # args: should be \"%s <force>\"", CmdTranspose);
+
 	bool	force	= boolFromObj(objc, objv, 1);
 	Game&	game	= scidb->game();
 
@@ -1931,6 +1999,9 @@ cmdTranspose(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdGo(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 2)
+		return error(CmdGo, nullptr, nullptr, "wrong # args: should be \"%s ?<position>? <command> ?<arg>?\"", CmdGo);
+
 	unsigned		index		= 1;
 	char const*	firstArg	= stringFromObj(objc, objv, index);
 	unsigned		position	= Application::InvalidPosition;
@@ -1941,6 +2012,23 @@ cmdGo(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	Game& game = scidb->game(position);
 
 	char const*	cmd = stringFromObj(objc, objv, index);
+	bool requiresArg = false;
+
+	switch (cmd[0])
+	{
+		case 'v':
+		case 'k':
+		case 't':
+			requiresArg = true;
+			break;
+
+		case 'p':
+			requiresArg = cmd[1] == 'l' || cmd[1] == 'o';
+			break;
+	}
+
+	if (requiresArg && index + 1 >= unsigned(objc))
+		return error(CmdGo, nullptr, nullptr, "missing argument for command '%s'", cmd);
 
 	switch (cmd[0])
 	{
@@ -2041,6 +2129,9 @@ cmdGo(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdMoveto(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2 && objc != 3)
+		return error(CmdMoveto, nullptr, nullptr, "wrong # args: should be \"%s ?<position>? <key>\"", CmdMoveto);
+
 	unsigned		position	= objc <= 2 ? Application::InvalidPosition : intFromObj(objc, objv, 1);
 	char const*	key		= stringFromObj(objc, objv, objc <= 2 ? 1 : 2);
 
@@ -2139,6 +2230,9 @@ cmdNext(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	if (index == Cmd_Move)
 	{
+		if (objc != 2)
+			return usage(::CmdNext, "move", nullptr, subcommands, args);
+
 		Game& game = scidb->game();
 		setResult(game.atLineEnd() ? mstl::string::empty_string : game.getNextMove(flags));
 	}
@@ -2147,9 +2241,14 @@ cmdNext(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		if (index != Cmd_Keys && index != Cmd_Moves)
 			return usage(::CmdNext, nullptr, nullptr, subcommands, args);
 
+		if (objc > 3)
+			return usage(::CmdNext, index == Cmd_Keys ? "keys" : "moves", nullptr, subcommands, args);
+
 		int position = -1;
 
-		if (objc > 2 && ::isdigit(*asString(objv[2])))
+		char const* positionArg = objc > 2 ? asString(objv[2]) : nullptr;
+
+		if (positionArg && (*positionArg == '-' || ::isdigit(*positionArg)))
 			position = intFromObj(objc, objv, 2);
 
 		Game::StringList result;
@@ -2189,6 +2288,9 @@ cmdNext(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdLevel(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdLevel, nullptr, nullptr, "wrong # args: should be \"%s\"", CmdLevel);
+
 	setResult(Scidb->game().variationLevel());
 	return TCL_OK;
 }
@@ -2197,6 +2299,9 @@ cmdLevel(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdLangSet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2 && objc != 3)
+		return error(CmdLangSet, nullptr, nullptr, "wrong # args: should be \"%s ?<position>? <languages>\"", CmdLangSet);
+
 	int position = objc < 2 ? -1 : intFromObj(objc, objv, 1);
 	Tcl_Obj* languages = objectFromObj(objc, objv, objc < 2 ? 1 : 2);
 
@@ -2261,23 +2366,34 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	switch (index)
 	{
 		case Cmd_Count:
+			if (objc != 2)
+				return usage(::CmdVariation, "count", nullptr, subcommands, args);
 			setResult(game.subVariationCount());
 			break;
 
 		case Cmd_Current:
+			if (objc != 2)
+				return usage(::CmdVariation, "current", nullptr, subcommands, args);
 			setResult(game.variationNumber() + 1);
 			break;
 
 		case Cmd_New:
+			if (objc != 3)
+				return usage(::CmdVariation, "new", nullptr, subcommands, args);
 			setResult(game.addVariation(stringFromObj(objc, objv, 2)));
 			break;
 
 		case Cmd_Remove:
+			if (objc != 3)
+				return usage(::CmdVariation, "remove", nullptr, subcommands, args);
 			game.removeVariation(unsignedFromObj(objc, objv, 2) - 1);
 			break;
 
 		case Cmd_Insert:
 			{
+				if (objc != 3 && objc != 4)
+					return usage(::CmdVariation, "insert", nullptr, subcommands, args);
+
 				Game::Force flag = Game::OnlyIfRemainsConsistent;
 
 				if (equal(stringFromObj(objc, objv, objc - 1), "-force"))
@@ -2289,6 +2405,9 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		case Cmd_Exchange:
 			{
+				if (objc != 4 && objc != 5)
+					return usage(::CmdVariation, "exchange", nullptr, subcommands, args);
+
 				Game::Force flag = Game::OnlyIfRemainsConsistent;
 
 				if (equal(stringFromObj(objc, objv, objc - 1), "-force"))
@@ -2300,18 +2419,26 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			break;
 
 		case Cmd_Promote:
+			if (objc != 3)
+				return usage(::CmdVariation, "promote", nullptr, subcommands, args);
 			game.promoteVariation(unsignedFromObj(objc, objv, 2) - 1);
 			break;
 
 		case Cmd_Mainline:
+			if (objc != 3)
+				return usage(::CmdVariation, "mainline", nullptr, subcommands, args);
 			game.newMainline(stringFromObj(objc, objv, 2));
 			break;
 
 		case Cmd_First:
+			if (objc != 3)
+				return usage(::CmdVariation, "first", nullptr, subcommands, args);
 			game.firstVariation(unsignedFromObj(objc, objv, 2) - 1);
 			break;
 
 		case Cmd_Leave:
+			if (objc != 2)
+				return usage(::CmdVariation, "leave", nullptr, subcommands, args);
 			setResult(game.variationNumber() + 1);
 			game.exitVariation();
 			break;
@@ -2333,19 +2460,24 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			break;
 
 		case Cmd_Folded:
+			if (objc != 3)
+				return usage(::CmdVariation, "folded?", nullptr, subcommands, args);
 			setResult(Scidb->game().isFolded(edit::Key(stringFromObj(objc, objv, 2))));
 			break;
 
 		case Cmd_Unfold:
+			if (objc != 2 && objc != 3)
+				return usage(::CmdVariation, "unfold", nullptr, subcommands, args);
+
 			if (objc > 2)
 			{
 				if (!equal(stringFromObj(objc, objv, 2), "-force"))
 				{
-					error(CmdVariation,
-							nullptr,
-							nullptr,
-							"unexpected option %s",
-							stringFromObj(objc, objv, 2));
+					return error(CmdVariation,
+										nullptr,
+										nullptr,
+										"unexpected option %s",
+										stringFromObj(objc, objv, 2));
 				}
 
 				scidb->game().setFolded(Scidb->game().currentKey(), false);
@@ -2371,7 +2503,62 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdCurrent(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdCurrent, nullptr, nullptr, "wrong # args: should be \"%s\"", CmdCurrent);
+
 	setResult(int(Scidb->currentPosition()));
+	return TCL_OK;
+}
+
+
+static int
+cmdDuplicate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc < 2 || objc > 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<destination> ?<position>? ?<original|modified>?");
+		return TCL_ERROR;
+	}
+
+	unsigned destination = unsignedFromObj(objc, objv, 1);
+	unsigned position = Application::InvalidPosition;
+	copy::Source source = copy::ModifiedVersion;
+
+	if (objc >= 3)
+	{
+		char const* arg = stringFromObj(objc, objv, 2);
+
+		if (::isdigit(arg[0]) || (arg[0] == '-' && ::isdigit(arg[1])))
+		{
+			position = intFromObj(objc, objv, 2);
+		}
+		else if (equal(arg, "original"))
+		{
+			source = copy::OriginalSource;
+		}
+		else if (equal(arg, "modified"))
+		{
+			source = copy::ModifiedVersion;
+		}
+		else
+		{
+			return error(CmdDuplicate, nullptr, nullptr, "unexpected source '%s'", arg);
+		}
+	}
+
+	if (objc >= 4)
+	{
+		char const* arg = stringFromObj(objc, objv, 3);
+
+		if (equal(arg, "original"))
+			source = copy::OriginalSource;
+		else if (equal(arg, "modified"))
+			source = copy::ModifiedVersion;
+		else
+			return error(CmdDuplicate, nullptr, nullptr, "unexpected source '%s'", arg);
+	}
+
+	scidb->duplicateGame(position, source, destination);
 	return TCL_OK;
 }
 
@@ -2379,6 +2566,9 @@ cmdCurrent(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdPly(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdPly, nullptr, nullptr, "wrong # args: should be \"%s\"", CmdPly);
+
 	// NOTE: this call may come too early (before scratch game is created)
 	if (scidb->haveCurrentGame())
 		setResult(scidb->game().currentBoard().plyNumber());
@@ -2410,7 +2600,7 @@ cmdSave(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	tag::ID			brt			= tag::fromName(stringFromObj(objc, objv, 5));
 	Tcl_Obj*			taglist		= objectFromObj(objc, objv, 3);
 	tag::ID			ratings[2]	= { tag::ExtraTag, tag::ExtraTag };
-	tcl::Log			log(objv[4], objv[5]);
+	tcl::Log			log(objv[6], objv[7]);
 
 	if (objc == 10)
 	{
@@ -2475,10 +2665,12 @@ cmdStrip(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			break;
 
 		case Cmd_Comments:
-			if (objc < 3)
+			if (objc == 2)
 				scidb->game().stripComments();
-			else
+			else if (objc == 3)
 				scidb->game().stripComments(stringFromObj(objc, objv, 2));
+			else
+				return error(CmdStrip, "comments", nullptr, "wrong # args: should be \"%s strip comments ?<language>?\"", CmdStrip);
 			break;
 
 		case Cmd_Variations:
@@ -2502,6 +2694,9 @@ cmdStrip(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdReplace(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdReplace, nullptr, nullptr, "wrong # args: should be \"%s <san>\"", CmdReplace);
+
 	scidb->game().replaceVariation(stringFromObj(objc, objv, 1));
 	return TCL_OK;
 }
@@ -2510,6 +2705,9 @@ cmdReplace(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdTrial(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdTrial, nullptr, nullptr, "wrong # args: should be \"%s <san>\"", CmdTrial);
+
 	Game& game = scidb->game();
 
 	game.replaceVariation(stringFromObj(objc, objv, 1));
@@ -2522,6 +2720,9 @@ cmdTrial(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdExchange(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2 && objc != 3)
+		return error(CmdExchange, nullptr, nullptr, "wrong # args: should be \"%s <san> ?-force?\"", CmdExchange);
+
 	char const*	san	= stringFromObj(objc, objv, 1);
 	bool			force	= false;
 
@@ -2550,6 +2751,9 @@ cmdExchange(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdLink(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc > 2)
+		return error(CmdLink, nullptr, nullptr, "wrong # args: should be \"%s ?<position>?\"", CmdLink);
+
 	unsigned position = objc == 1 ? Application::InvalidPosition : intFromObj(objc, objv, 1);
 	Tcl_Obj* objs[5];
 
@@ -2567,6 +2771,9 @@ cmdLink(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSink(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 6)
+		return error(CmdSink, nullptr, nullptr, "wrong # args: should be \"%s <position> <source> <index> <crc-index> <crc-moves>\"", CmdSink);
+
 	typedef ::util::crc::checksum_t checksum_t;
 
 	unsigned		position		= unsignedFromObj(objc, objv, 1);
@@ -2586,6 +2793,9 @@ cmdSink(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSink_(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc > 2)
+		return error(CmdSink_, nullptr, nullptr, "wrong # args: should be \"%s ?<position>?\"", CmdSink_);
+
 	unsigned position = objc == 1 ? Application::InvalidPosition : intFromObj(objc, objv, 1);
 	Tcl_Obj* objs[3];
 
@@ -2601,6 +2811,9 @@ cmdSink_(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 2)
+		return error(CmdQuery, nullptr, nullptr, "wrong # args: should be \"%s ?<position>? <query> ?args...?\"", CmdQuery);
+
 	char const* fst = stringFromObj(objc, objv, 1);
 	char const* cmd;
 
@@ -2648,7 +2861,14 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 					case 'n': // variant?
 						setResult(tcl::tree::variantToString(Scidb->game(pos).variant()));
 						break;
+
+					default:
+						return error(CmdQuery, nullptr, nullptr, "invalid command %s", cmd);
 				}
+			}
+			else
+			{
+				return error(CmdQuery, nullptr, nullptr, "invalid command %s", cmd);
 			}
 			break;
 
@@ -2662,6 +2882,9 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				case 'e':	// termination
 					setResult(termination::toString(Scidb->gameInfoAt(pos).terminationReason()));
 					break;
+
+				default:
+					return error(CmdQuery, nullptr, nullptr, "invalid command %s", cmd);
 			}
 			break;
 
@@ -2675,10 +2898,16 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				case 'v':	// over?
 					setResult(bool(Scidb->game(pos).currentBoard().gameIsOver(Scidb->game().variant())));
 					break;
+
+				default:
+					return error(CmdQuery, nullptr, nullptr, "invalid command %s", cmd);
 			}
 			break;
 
 		case 'p':			// parent
+			if (nextArg >= objc)
+				return error(CmdQuery, nullptr, nullptr, "missing argument for command %s", cmd);
+
 			{
 				edit::Key key(stringFromObj(objc, objv, nextArg));
 				key.removePly();
@@ -2704,6 +2933,9 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 						switch (cmd[2])
 						{
 							case 'm':	// comment
+								if (nextArg >= objc)
+									return error(CmdQuery, nullptr, nullptr, "missing argument for command %s", cmd);
+
 								{
 									char const* which = stringFromObj(objc, objv, nextArg);
 
@@ -2727,6 +2959,9 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 								break;
 
 							case 'u':	// country
+								if (nextArg >= objc)
+									return error(CmdQuery, nullptr, nullptr, "missing argument for command %s", cmd);
+
 								{
 									char const* side = stringFromObj(objc, objv, nextArg);
 									color::ID color = *side == 'w' ? color::White : color::Black;
@@ -2734,6 +2969,9 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 									setResult(country::toString(country));
 									break;
 								}
+
+							default:
+								return error(CmdQuery, nullptr, nullptr, "invalid command %s", cmd);
 						}
 						break;
 
@@ -2795,6 +3033,9 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 							setResult(tcl::tree::variantToString(
 								variant::toMainVariant(Scidb->game(pos).variant())));
 							break;
+
+						default:
+							return error(CmdQuery, nullptr, nullptr, "invalid command %s", cmd);
 					}
 					break;
 
@@ -2839,7 +3080,7 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			switch (cmd[1])
 			{
 				case 'a':	// langSet
-					if (objc >= 4)
+					if (nextArg + 2 < objc)
 					{
 						char const* position(stringFromObj(objc, objv, nextArg));
 						char const* lang(stringFromObj(objc, objv, nextArg + 2));
@@ -2866,6 +3107,9 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				case 'e':	// length
 					setResult(Scidb->game(pos).plyCount());
 					break;
+
+				default:
+					return error(CmdQuery, nullptr, nullptr, "invalid command %s", cmd);
 			}
 			break;
 
@@ -2901,6 +3145,9 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				case 'x': setResult(false); break;																// expansion
 
 				case 'l':	// elo
+					if (nextArg >= objc)
+						return error(CmdQuery, nullptr, nullptr, "missing argument for command %s", cmd);
+
 					{
 						char const* side = stringFromObj(objc, objv, nextArg);
 						color::ID color = *side == 'w' ? color::White : color::Black;
@@ -2917,6 +3164,9 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			break;
 
 		case 'n':	// nextKey?
+			if (nextArg >= objc)
+				return error(CmdQuery, nullptr, nullptr, "missing argument for command %s", cmd);
+
 			setResult(Scidb->game(pos).nextKey(stringFromObj(objc, objv, nextArg)));
 			break;
 
@@ -2930,12 +3180,15 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdCount(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2 && objc != 3)
+		return error(CmdCount, nullptr, nullptr, "wrong # args: should be \"%s ?<position>? <annotations|info|marks|comments|variations|halfmoves|length>\"", CmdCount);
+
 	int pos = objc == 3 ? intFromObj(objc, objv, 1) : Application::InvalidPosition;
 
 	char const*	cmd = stringFromObj(objc, objv, objc == 3 ? 2 : 1);
 
 	if (::strlen(cmd) <= 1)
-		return error(CmdQuery, nullptr, nullptr, "unexpected argument %s", cmd);
+		return error(CmdCount, nullptr, nullptr, "unexpected argument %s", cmd);
 
 	switch (cmd[0])
 	{
@@ -2946,7 +3199,7 @@ cmdCount(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		case 'v': setResult(scidb->game(pos).countVariations()); break;	// variations
 		case 'h': setResult(scidb->game(pos).countHalfMoves()); break;		// halfmoves
 		case 'l': setResult(scidb->game(pos).countLength()); break;			// length
-		default:  return error(CmdQuery, nullptr, nullptr, "invalid command %s", cmd);
+		default:  return error(CmdCount, nullptr, nullptr, "invalid command %s", cmd);
 	}
 
 	return TCL_OK;
@@ -2956,6 +3209,9 @@ cmdCount(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdClear(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdClear, nullptr, nullptr, "wrong # args: should be \"%s <idn|fen>\"", CmdClear);
+
 	variant::Type	variant	= Scidb->game().variant();
 	int				idn		= 0;
 
@@ -2964,7 +3220,7 @@ cmdClear(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	if (Tcl_GetIntFromObj(interp(), objv[1], &idn) == TCL_OK)
 	{
 		if (idn < 1 || 4*960 < idn)
-			error(CmdClear, nullptr, nullptr, "invalid IDN %d", idn);
+			return error(CmdClear, nullptr, nullptr, "invalid IDN %d", idn);
 
 		board.setup(unsigned(idn), variant);
 	}
@@ -2973,7 +3229,7 @@ cmdClear(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		char const* fen = stringFromObj(objc, objv, 1);
 
 		if (!board.setup(fen, variant))
-			error(CmdClear, nullptr, nullptr, "invalid FEN '%s'", fen);
+			return error(CmdClear, nullptr, nullptr, "invalid FEN '%s'", fen);
 	}
 
 	scidb->clearGame(&board);
@@ -2985,6 +3241,9 @@ cmdClear(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdExecute(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2 && objc != 3)
+		return error(CmdExecute, nullptr, nullptr, "wrong # args: should be \"%s <undo|redo> ?<position>?\"", CmdExecute);
+
 	char const*	cmd		= stringFromObj(objc, objv, 1);
 	int			position	= objc < 3 ? -1 : intFromObj(objc, objv, 2);
 
@@ -2993,7 +3252,7 @@ cmdExecute(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	else if (equal(cmd, "redo"))
 		scidb->game(position).redo();
 	else
-		return error(CmdQuery, nullptr, nullptr, "invalid command %s", stringFromObj(objc, objv, 1));
+		return error(CmdExecute, nullptr, nullptr, "invalid command %s", stringFromObj(objc, objv, 1));
 
 	return TCL_OK;
 }
@@ -3002,6 +3261,9 @@ cmdExecute(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdBoard(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1 && objc != 3)
+		return error(CmdBoard, nullptr, nullptr, "wrong # args: should be \"%s ?<position> <key>?\"", CmdBoard);
+
 	Board board;
 
 	if (objc == 1)
@@ -3020,6 +3282,9 @@ cmdBoard(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1 && objc != 2)
+		return error(CmdFen, nullptr, nullptr, "wrong # args: should be \"%s ?<position>?\"", CmdFen);
+
 	int pos = objc == 1 ? Application::InvalidPosition : intFromObj(objc, objv, 1);
 	setResult(Scidb->game(pos).currentBoard().toFen(Scidb->game().variant()));
 	return TCL_OK;
@@ -3029,6 +3294,9 @@ cmdFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdPromoted(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1 && objc != 2 && objc != 3)
+		return error(CmdPromoted, nullptr, nullptr, "wrong # args: should be \"%s ?<position>? ?<key>?\"", CmdPromoted);
+
 	Board board;
 
 	switch (objc)
@@ -3046,6 +3314,9 @@ cmdPromoted(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdMaterial(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdMaterial, nullptr, nullptr, "wrong # args: should be \"%s\"", CmdMaterial);
+
 	Game const& game = Scidb->game();
 
 	material::Count matW = game.currentBoard().materialCount(color::White);
@@ -3069,6 +3340,9 @@ cmdMaterial(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdUndoSetup(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+		return error(CmdUndoSetup, nullptr, nullptr, "wrong # args: should be \"%s <undo-level> <combine-preceding-moves>\"", CmdUndoSetup);
+
 	unsigned undoLevel = unsignedFromObj(objc, objv, 1);
 	unsigned combinePredecessingMoves = unsignedFromObj(objc, objv, 2);
 
@@ -3080,6 +3354,9 @@ cmdUndoSetup(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSetupStyle(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 14)
+		return error(CmdSetupStyle, nullptr, nullptr, "wrong # args: should be \"%s <position> <linebreak-threshold> <mainline-length> <variation-length> <comment-length> <column-style> <notation> <paragraph-spacing> <show-diagram> <show-move-info> <show-emoticon> <show-variation-numbers> <discard-unknown-result>\"", CmdSetupStyle);
+
 	unsigned position = unsignedFromObj(objc, objv, 1);
 
 	if (Scidb->containsGameAt(position))
@@ -3131,6 +3408,9 @@ cmdSetupStyle(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSetupNags(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(::CmdSetupNags, nullptr, nullptr, "wrong # args: should be \"%s <nag-list>\"", ::CmdSetupNags);
+
 	Array elems = getElements(objectFromObj(objc, objv, 1));
 
 	::db::Annotation::unsetUnusualNags();
@@ -3155,6 +3435,9 @@ cmdSetupNags(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdTags(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 1 || objc > 3)
+		return error(::CmdTags, nullptr, nullptr, "wrong # args: should be \"%s ?<position>? ?-userSuppliedOnly <bool>?\"", ::CmdTags);
+
 	int	position				= -1;
 	bool	userSuppliedOnly	= false;
 
@@ -3183,6 +3466,10 @@ cmdTags(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		userSuppliedOnly = boolFromObj(objc, objv, 2);
 	}
+	else if (objc == 2)
+	{
+		return error(::CmdTags, nullptr, nullptr, "wrong # args: should be \"%s ?<position>? ?-userSuppliedOnly <bool>?\"", ::CmdTags);
+	}
 
 	TagSet const& tags = Scidb->game(position).tags();
 	return tcl::db::getTags(tags, userSuppliedOnly);
@@ -3192,6 +3479,9 @@ cmdTags(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdNumber(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1 && objc != 2)
+		return error(CmdNumber, nullptr, nullptr, "wrong # args: should be \"%s ?<position>?\"", CmdNumber);
+
 	setResult(Scidb->gameNumber(objc > 1 ? intFromObj(objc, objv, 1) : -1));
 	return TCL_OK;
 }
@@ -3200,6 +3490,9 @@ cmdNumber(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdIndex(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1 && objc != 2)
+		return error(CmdIndex, nullptr, nullptr, "wrong # args: should be \"%s ?<position>?\"", CmdIndex);
+
 	setResult(Scidb->gameIndex(objc > 1 ? intFromObj(objc, objv, 1) : -1));
 	return TCL_OK;
 }
@@ -3208,6 +3501,9 @@ cmdIndex(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdPush(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdPush, nullptr, nullptr, "wrong # args: should be \"%s\"", CmdPush);
+
 	scidb->startTrialMode();
 	return TCL_OK;
 }
@@ -3216,6 +3512,9 @@ cmdPush(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdPop(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdPop, nullptr, nullptr, "wrong # args: should be \"%s\"", CmdPop);
+
 	scidb->endTrialMode();
 	scidb->refreshGame(Application::InvalidPosition, true);
 	return TCL_OK;
@@ -3256,10 +3555,16 @@ cmdUpdate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	if (index == Cmd_Moves)
 	{
+		if (objc != 2)
+			return usage(::CmdUpdate, "moves", nullptr, subcommands, args);
+
 		scidb->updateMoves();
 	}
 	else
 	{
+		if (objc < 3)
+			return usage(::CmdUpdate, nullptr, nullptr, subcommands, args);
+
 		if (game.currentKey() != stringFromObj(objc, objv, 2))
 		{
 			return error(	::CmdUpdate, nullptr, nullptr,
@@ -3451,9 +3756,9 @@ cmdImport(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	}
 
 	if (database && index == -1)
-		error(CmdImport, nullptr, nullptr, "-database specified, but no -index");
+		return error(CmdImport, nullptr, nullptr, "-database specified, but no -index");
 	if (index >= 0 && !database)
-		error(CmdImport, nullptr, nullptr, "-index specified, but no -database");
+		return error(CmdImport, nullptr, nullptr, "-index specified, but no -database");
 
 	Tcl_Obj* cmd = objc < 5 ? nullptr : objv[3];
 	Tcl_Obj* arg = objc < 5 ? nullptr : objv[4];
@@ -3735,10 +4040,13 @@ cmdToPGN(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		else if (equal(option, "-position"))
 			position = unsignedFromObj(objc, objv, objc - 1);
 		else
-			return error (CmdExport, nullptr, nullptr, "unexpected option '%s'", option);
+			return error (CmdToPGN, nullptr, nullptr, "unexpected option '%s'", option);
 
 		objc -= 2;
 	}
+
+	if (objc != 2)
+		return error(CmdToPGN, nullptr, nullptr, "wrong # args: should be \"%s <original|modified> ?-flags <flags>? ?-position <index>?\"", CmdToPGN);
 
 	char const* arg = stringFromObj(objc, objv, 1);
 	copy::Source source;
@@ -3748,7 +4056,7 @@ cmdToPGN(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	else if (equal(arg, "modified"))
 		source = copy::ModifiedVersion;
 	else
-		return error(CmdCopy, nullptr, nullptr, "unexpected source '%s'", arg);
+		return error(CmdToPGN, nullptr, nullptr, "unexpected source '%s'", arg);
 
 	mstl::ostringstream strm;
 
@@ -3791,6 +4099,8 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	int					significant(-1);
 	char const*			option;
 
+	::memset(nagMap, 0, sizeof(nagMap));
+
 	while (objc > 6 && *(option = stringFromObj(objc, objv, objc - 2)) == '-')
 	{
 		if (equal(option, "-flags"))
@@ -3804,23 +4114,24 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		else if (equal(option, "-nags"))
 		{
 			Tcl_Obj* mapObj = objv[objc - 1];
+			int nobjs = 0;
 
-			if (Tcl_ListObjGetElements(ti, mapObj, &objc, &objs) != TCL_OK)
-				error(CmdExport, 0, 0, "invalid nag map");
+			if (Tcl_ListObjGetElements(ti, mapObj, &nobjs, &objs) != TCL_OK)
+				return error(CmdPrint, 0, 0, "invalid nag map");
 
-			for (int i = 0; i < objc; ++i)
+			for (int i = 0; i < nobjs; ++i)
 			{
 				Tcl_Obj** pair;
 				int nelems;
 
 				if (Tcl_ListObjGetElements(ti, objs[i], &nelems, &pair) != TCL_OK || nelems != 2)
-					error(CmdPrint, 0, 0, "invalid nag map");
+					return error(CmdPrint, 0, 0, "invalid nag map");
 
 				int lhs = intFromObj(2, pair, 0);
 				int rhs = intFromObj(2, pair, 1);
 
 				if (lhs >= nag::Scidb_Last || rhs >= nag::Scidb_Last)
-					error(CmdPrint, 0, 0, "invalid nag map values");
+					return error(CmdPrint, 0, 0, "invalid nag map values");
 
 				nagMap[lhs] = rhs;
 			}
@@ -3841,7 +4152,6 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		objc -= 2;
 	}
-	::memset(nagMap, 0, sizeof(nagMap));
 
 	TeXt::Controller::LogP myLog(new Log);
 	TeXt::Controller controller(searchPath, TeXt::Controller::AbortMode, myLog);
@@ -3882,10 +4192,16 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdCopy(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 2)
+		return error(CmdCopy, nullptr, nullptr, "wrong # args: should be \"%s <comments|game> ...\"", CmdCopy);
+
 	char const* cmd = stringFromObj(objc, objv, 1);
 
 	if (equal(cmd, "comments"))
 	{
+		if (objc != 4 && objc != 6)
+			return error(CmdCopy, "comments", nullptr, "wrong # args: should be \"%s copy comments <src> <dst> ?-strip <bool>?\"", CmdCopy);
+
 		char const* src = stringFromObj(objc, objv, 2);
 		char const* dst = stringFromObj(objc, objv, 3);
 
@@ -3905,6 +4221,9 @@ cmdCopy(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	}
 	else if (equal(cmd, "game"))
 	{
+		if (objc != 5)
+			return error(CmdCopy, "game", nullptr, "wrong # args: should be \"%s copy game <database> <position> <original|modified>\"", CmdCopy);
+
 		char const* database = stringFromObj(objc, objv, 2);
 		char const* arg = stringFromObj(objc, objv, 4);
 		copy::Source source;
@@ -3920,7 +4239,7 @@ cmdCopy(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	}
 	else
 	{
-		return error(CmdView, nullptr, nullptr, "unexpected command '%s'", cmd);
+		return error(CmdCopy, nullptr, nullptr, "unexpected command '%s'", cmd);
 	}
 
 	return TCL_OK;
@@ -3935,7 +4254,7 @@ cmdView(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	if (objc != 3)
 	{
-		Tcl_WrongNumArgs(ti, 1, objv, "<position> action>");
+		Tcl_WrongNumArgs(ti, 1, objv, "<position> <id|next|prev|first|last|random>");
 		return TCL_ERROR;
 	}
 
@@ -3963,6 +4282,9 @@ cmdView(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdPaste(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+		return error(CmdPaste, nullptr, nullptr, "wrong # args: should be \"%s <clipbase|from> <to>\"", CmdPaste);
+
 	char const* arg = stringFromObj(objc, objv, 1);
 
 	if (equal(arg, "clipbase"))
@@ -3984,6 +4306,9 @@ cmdPaste(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdMerge(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 7)
+		return error(CmdMerge, nullptr, nullptr, "wrong # args: should be \"%s <primary> <positions> <initial|current> <ignore|consider> <variation-depth|any> <variation-length|any>\"", CmdMerge);
+
 	Tcl_Obj*		args	= objectFromObj(objc, objv, 2);
 	char const*	pos	= stringFromObj(objc, objv, 3);
 	char const*	trans	= stringFromObj(objc, objv, 4);
@@ -4054,6 +4379,9 @@ cmdMerge(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdVerify(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdVerify, nullptr, nullptr, "wrong # args: should be \"%s <position>\"", CmdVerify);
+
 	setResult(scidb->verifyGame(unsignedFromObj(objc, objv, 1)));
 	return TCL_OK;
 }
@@ -4062,6 +4390,9 @@ cmdVerify(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdLines(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+		return error(CmdLines, nullptr, nullptr, "wrong # args: should be \"%s\"", CmdLines);
+
 	Game const& game = Scidb->game();
 
 	Line line(game.openingLine().moves, mstl::min(game.plyNumber(), game.openingLine().length));
@@ -4088,6 +4419,9 @@ cmdLines(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdCodeToFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+		return error(CmdCodeToFen, nullptr, nullptr, "wrong # args: should be \"%s <eco-code>\"", CmdCodeToFen);
+
 	unsigned code(unsignedFromObj(objc, objv, 1));
 	::db::variant::Type variant(Scidb->game().variant());
 	::db::Line const& line(::db::EcoTable::specimen(variant).getLine(::db::Eco(code)));
@@ -4111,6 +4445,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdCount,			cmdCount);
 	createCommand(ti, CmdCurrent,			cmdCurrent);
 	createCommand(ti, CmdDump,				cmdDump);
+	createCommand(ti, CmdDuplicate,		cmdDuplicate);
 	createCommand(ti, CmdEcoTable,		cmdEcoTable);
 	createCommand(ti, CmdExchange,		cmdExchange);
 	createCommand(ti, CmdExecute,			cmdExecute);

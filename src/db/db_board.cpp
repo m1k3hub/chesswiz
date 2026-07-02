@@ -3052,7 +3052,10 @@ Board::setup(char const* fen, variant::Type variant)
 	clear();
 
 	if (variant::isBughouse(variant))
-		m_holding[White] = m_holding[Black] = m_initialHolding;
+	{
+		m_holding[White] = m_initialHolding;
+		m_holding[Black] = m_initialHolding;
+	}
 
 	for ( ; *p && *p != ' '; ++p)
 	{
@@ -7695,8 +7698,8 @@ Board::initialize()
 	assert(m_queensOnly.m_hash == QueensOnly_Hash);
 	assert(m_noQueens.m_hash == NoQueens_Hash);
 	assert(m_wildFive.m_hash == WildFive_Hash);
-	assert(m_kbnk.m_hash = KBNK_Hash);
-	assert(m_kbbk.m_hash = KBBK_Hash);
+	assert(m_kbnk.m_hash == KBNK_Hash);
+	assert(m_kbbk.m_hash == KBBK_Hash);
 	assert(m_runaway.m_hash == Runaway_Hash);
 	assert(m_queenVsRooks.m_hash == QueenVsRooks_Hash);
 	assert(m_upsideDown.m_hash == UpsideDown_Hash);

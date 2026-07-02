@@ -29,7 +29,7 @@
 namespace db {
 
 inline EcoTable::MoveOrder::MoveOrder() :m_buffer(0) {}
-inline EcoTable::MoveOrder::~MoveOrder() { delete m_buffer; }
+inline EcoTable::MoveOrder::~MoveOrder() { delete [] m_buffer; }
 inline bool EcoTable::MoveOrder::isEmpty() const { return m_buffer == 0; }
 inline Line const& EcoTable::MoveOrder::line() const { return m_line; }
 

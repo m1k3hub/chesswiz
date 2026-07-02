@@ -378,6 +378,7 @@ proc MoveSquare {which x y} {
 	set x1 [expr {$offsX + $tx}]
 	set y1 [expr {$offsY + $ty}]
 	set dx [expr {$style($which,x2) - $style($which,x1)}]
+	set dy [expr {$style($which,y2) - $style($which,y1)}]
 	set iw [image width $texture($which)]
 	set ih [image height $texture($which)]
 
@@ -388,8 +389,8 @@ proc MoveSquare {which x y} {
 	}
 	if {$y1 < 0} {
 		set y1 0
-	} elseif {round($s*$y1) + $dx > $ih} {
-		set y1 [expr {int(round(($ih - $dx)/$s))}]
+	} elseif {round($s*$y1) + $dy > $ih} {
+		set y1 [expr {int(round(($ih - $dy)/$s))}]
 	}
 
 	lassign [RotateOffsets $which 0 $Vars(rotation,$which) $x1 $y1] offsx offsy

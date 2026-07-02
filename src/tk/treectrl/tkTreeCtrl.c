@@ -29,6 +29,18 @@
 #if defined(MAC_TK_COCOA)
 #include <Cocoa/Cocoa.h>
 #endif
+#if !defined(WIN32) && !defined(MAC_OSX_TK)
+#include <X11/Xproto.h>
+
+static int grabXImageErrorOccurred;
+
+static int
+GrabXImageErrorProc(ClientData clientData, XErrorEvent *errEventPtr)
+{
+    grabXImageErrorOccurred = 1;
+    return 0;
+}
+#endif
 
 /*
  * TIP #116 altered Tk_PhotoPutBlock API to add interp arg.
@@ -4269,9 +4281,17 @@ LoupeCmd(
 	CGDisplayShowCursor(kCGDirectMainDisplay);
 	}
 #else
-	ximage = XGetImage(display, rootWindow,
-			grabX, grabY, grabW, grabH, AllPlanes, ZPixmap);
-	if (ximage == NULL) {
+	{
+		Tk_ErrorHandler handler;
+		grabXImageErrorOccurred = 0;
+		handler = Tk_CreateErrorHandler(display, BadMatch, X_GetImage,
+				-1, GrabXImageErrorProc, (ClientData) NULL);
+		ximage = XGetImage(display, rootWindow,
+				grabX, grabY, grabW, grabH, AllPlanes, ZPixmap);
+		XSync(display, False);
+		Tk_DeleteErrorHandler(handler);
+	}
+	if (grabXImageErrorOccurred || ximage == NULL) {
 		FormatResult(interp, "XGetImage() failed");
 		return TCL_ERROR;
 	}

@@ -505,7 +505,8 @@ path_renderer::prepare_linear_gradient(gradient const& linearGradient,
 													agg::trans_affine& gradient_mtx,
 													coordinates const&,
 													int min_x, int max_x,
-													int min_y, int max_y)
+													int min_y, int max_y,
+													agg::trans_affine const& user_transform)
 {
 	enum { NoFlip, FlipX, FlipY, FlipXY };
 
@@ -519,10 +520,36 @@ path_renderer::prepare_linear_gradient(gradient const& linearGradient,
 
 	if (linearGradient.userSpaceOnUse)
 	{
-		// NOTE: This is a hack! userSpaceOnUse/objectBoundingBox isn't really implemented!
-		double tx, ty;
-		gradient_mtx.translation(&tx, &ty);
-		gradient_mtx.translate(-tx, -ty);
+		// For userSpaceOnUse, gradient endpoints are in the element's own user-space
+		// coordinate system. Transform them to screen space, then build the gradient
+		// interpolation matrix directly.
+		double sx1 = linearGradient.x1, sy1 = linearGradient.y1;
+		double sx2 = linearGradient.x2, sy2 = linearGradient.y2;
+
+		// Apply the gradient's own transform (SVG gradientTransform attribute)
+		linearGradient.transform.transform(&sx1, &sy1);
+		linearGradient.transform.transform(&sx2, &sy2);
+
+		// Apply user-to-screen transform
+		user_transform.transform(&sx1, &sy1);
+		user_transform.transform(&sx2, &sy2);
+
+		double sdx  = sx2 - sx1;
+		double sdy  = sy2 - sy1;
+		double slen = ::sqrt(sdx*sdx + sdy*sdy);
+		double span = double(max_x - min_x);
+
+		// Build: gradient_position [0..span] → screen space, then invert.
+		// After inversion: screen pixel → gradient position for the interpolator.
+		if (slen > 1e-10 && span >= 1.0)
+		{
+			gradient_mtx.reset();
+			gradient_mtx.scale(slen / span);
+			gradient_mtx.rotate(::atan2(sdy, sdx));
+			gradient_mtx.translate(sx1, sy1);
+			gradient_mtx.invert();
+		}
+		return;
 	}
 
 	double rot = gradient_mtx.rotation();

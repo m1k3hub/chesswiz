@@ -92,9 +92,34 @@ public:
 	typedef mstl::vector<mstl::string> Languages;
 	typedef db::Comment::LanguageSet LanguageSet;
 	typedef unsigned GameCount[db::variant::NumberOfVariants];
+	typedef mstl::vector<unsigned> IndexList;
 
 	static unsigned const InvalidPosition	= unsigned(-1);
 	static unsigned const ReservedPosition	= unsigned(-2);
+
+	struct OpeningPrepRow
+	{
+		OpeningPrepRow();
+
+		unsigned row;
+		mstl::string identity;
+		mstl::string move;
+		mstl::string eco;
+		unsigned frequency;
+		unsigned score;
+		unsigned draws;
+		unsigned averageRating;
+		int performance;
+		unsigned bestRating;
+		unsigned averageYear;
+		unsigned lastYear;
+		mstl::string bestPlayer;
+		unsigned bestPlayerRating;
+		mstl::string mostFrequentPlayer;
+		unsigned mostFrequentPlayerFrequency;
+		unsigned firstGameIndex;
+		IndexList result;
+	};
 
 	enum Update
 	{
@@ -349,6 +374,9 @@ public:
 	void setSwitchReferenceBase(bool flag);
 
 	db::Tree const* currentTree() const;
+	bool describeCurrentTreeRow(unsigned row, OpeningPrepRow& out) const;
+	bool setCurrentTreeRowFilter(Cursor& cursor, unsigned view, mstl::string const& identity);
+	bool setCurrentTreeRowFilter(Cursor& cursor, unsigned view, unsigned row);
 	bool updateTree(	db::tree::Method method,
 							db::tree::Mode mode,
 							db::rating::Type ratingType,

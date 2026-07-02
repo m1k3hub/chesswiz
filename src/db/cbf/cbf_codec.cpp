@@ -41,6 +41,7 @@
 
 #include "m_vector.h"
 #include "m_utility.h"
+#include "m_fstream.h"
 
 #include <ctype.h>
 #include <stdlib.h>
@@ -180,7 +181,7 @@ unsigned Codec::maxEventCount() const			{ return (1 << 24) - 1; }
 unsigned Codec::maxSiteCount() const			{ return (1 << 24) - 1; }
 unsigned Codec::maxAnnotatorCount() const		{ return (1 << 24) - 1; }
 unsigned Codec::minYear() const					{ return 0; }
-unsigned Codec::maxYear() const					{ return uint16_t(2027); }
+unsigned Codec::maxYear() const					{ return uint16_t(2047); }
 unsigned Codec::maxDescriptionLength() const	{ return 0; }
 mstl::string const& Codec::defaultEncoding() const { return sys::utf8::Codec::dos(); }
 
@@ -196,6 +197,8 @@ Codec::Codec()
 	:m_codec(0)
 	,m_encoding(::sys::utf8::Codec::dos())
 	,m_numGames(0)
+	,m_nextOffset(0)
+	,m_isWritable(false)
 {
 	if (::m_infoTags.none())
 	{
@@ -226,7 +229,7 @@ Codec::~Codec() throw()
 bool
 Codec::isWritable() const
 {
-	return false;
+	return m_isWritable;
 }
 
 
@@ -358,6 +361,10 @@ Codec::close()
 {
 	if (m_gameStream.is_open())
 		m_gameStream.close();
+	if (m_gameOutputStream.is_open())
+		m_gameOutputStream.close();
+	if (m_indexOutputStream.is_open())
+		m_indexOutputStream.close();
 }
 
 
@@ -830,6 +837,172 @@ void
 Codec::reloadDescription(mstl::string const& rootname)
 {
 	// no action
+}
+
+
+// ============================================================================
+// WRITE SUPPORT IMPLEMENTATION
+// ============================================================================
+
+void
+Codec::doOpen(mstl::string const& encoding)
+{
+	setEncoding(encoding);
+	setVariant(variant::Normal);
+	m_isWritable = true;
+}
+
+
+void
+Codec::doOpen(mstl::string const& rootname, mstl::string const& encoding)
+{
+	setEncoding(encoding);
+	setVariant(variant::Normal);
+	m_rootname = rootname;
+	m_isWritable = true;
+	m_nextOffset = 0;
+	m_numGames = 0;
+	m_recordLengths.clear();
+
+	mstl::string gameFilename(rootname + "." + extension());
+	mstl::string indexFilename(rootname + ".cbi");
+
+	// Open game file for writing (create/truncate)
+	m_gameOutputStream.open(sys::file::internalName(gameFilename),
+		mstl::ios_base::out | mstl::ios_base::binary | mstl::ios_base::trunc);
+	if (!m_gameOutputStream)
+		IO_RAISE(Game, Open_Failed, "cannot create game file");
+
+	// Index file is created by writeIndexData() during save()
+}
+
+
+unsigned
+Codec::putGame(util::ByteStream const& strm)
+{
+	unsigned const length = strm.size();
+	unsigned const prevOffset = m_nextOffset;
+
+	if (!m_gameOutputStream.write(strm.data(), length))
+		IO_RAISE(Game, Write_Failed, "failed to write game data");
+
+	m_recordLengths.push_back(length);
+	m_nextOffset += length;
+	m_numGames++;
+
+	return prevOffset;
+}
+
+
+unsigned
+Codec::putGame(util::ByteStream const& strm, unsigned, unsigned)
+{
+	return putGame(strm);
+}
+
+
+void
+Codec::writeIndexEntry(GameInfo const&, unsigned, util::ByteStream&)
+{
+	// CBF index entry format (4 bytes per game):
+	// - 4-byte little-endian offset to game record
+	// This is handled in writeIndexData
+}
+
+
+void
+Codec::writeIndexData(mstl::string const& rootname, util::Progress& progress)
+{
+	mstl::string indexFilename(rootname + ".cbi");
+	mstl::ofstream strm(sys::file::internalName(indexFilename),
+		mstl::ios_base::out | mstl::ios_base::binary | mstl::ios_base::trunc);
+
+	if (!strm)
+		IO_RAISE(Index, Write_Failed, "cannot create index file");
+
+	// Write header: number of games + 1 (little-endian)
+	Byte header[4];
+	header[0] = (m_numGames + 1) & 0xFF;
+	header[1] = ((m_numGames + 1) >> 8) & 0xFF;
+	header[2] = ((m_numGames + 1) >> 16) & 0xFF;
+	header[3] = ((m_numGames + 1) >> 24) & 0xFF;
+	strm.write(reinterpret_cast<char const*>(header), sizeof(header));
+
+	// Write index entries (4 bytes per game)
+	unsigned offset = 0;
+	for (unsigned i = 0; i < m_numGames; ++i)
+	{
+		Byte record[4];
+		unsigned value = offset + i + 2;
+		record[0] = value & 0xFF;
+		record[1] = (value >> 8) & 0xFF;
+		record[2] = (value >> 16) & 0xFF;
+		record[3] = (value >> 24) & 0xFF;
+		strm.write(reinterpret_cast<char const*>(record), sizeof(record));
+		offset += m_recordLengths[i];
+	}
+}
+
+
+void
+Codec::writeNamebases(mstl::ostream&, util::Progress& progress)
+{
+	// CBF stores namebase data inline in each game record
+	// No separate namebase files needed
+	progress.message("write-namebases");
+}
+
+
+void
+Codec::writePlayerData(mstl::string const&, util::Progress&)
+{
+	// Player data is embedded in game records
+}
+
+
+void
+Codec::writeTournamentData(mstl::string const&, util::Progress&)
+{
+	// Tournament data is embedded in game records
+}
+
+
+void
+Codec::writeAnnotatorData(mstl::string const&, util::Progress&)
+{
+	// Annotator data is embedded in game records
+}
+
+
+void
+Codec::writeSourceData(mstl::string const&, util::Progress&)
+{
+	// Source data is embedded in game records
+}
+
+
+void
+Codec::writeTeamData(mstl::string const&, util::Progress&)
+{
+	// Team data is embedded in game records
+}
+
+
+void
+Codec::writeIniData(mstl::string const&)
+{
+	// CBF does not use INI files
+}
+
+
+void
+Codec::save(mstl::string const& rootname, unsigned start, util::Progress& progress)
+{
+	// Write index data
+	writeIndexData(rootname, progress);
+
+	// Namebases are embedded in game records for CBF
+	// Nothing additional to write
 }
 
 // vi:set ts=3 sw=3:

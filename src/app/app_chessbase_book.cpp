@@ -757,8 +757,9 @@ int32_t
 Book::getPageIndex(unsigned hash)
 {
 	uint32_t key = 0;
+	unsigned prevMask = 0;
 
-	for (unsigned mask = 1; key <= m_pageBounds.upper; mask = (mask << 1) + 1)
+	for (unsigned mask = 1; key <= m_pageBounds.upper && mask != prevMask; prevMask = mask, mask = (mask << 1) | 1)
 	{
 		key = (hash & mask) + mask;
 

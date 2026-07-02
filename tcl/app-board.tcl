@@ -1893,7 +1893,7 @@ proc GameSwitched2 {position} {
 	# reset if position is 9 (all games closed)
 
 	set variant [::scidb::game::query $position mainvariant?]
-	set base [lindex [::scidb::game::link?] 0]
+	set base [lindex [::scidb::game::link? $position] 0]
 	set Vars(variant) $variant
 
 	set view [::scidb::game::view $position id]

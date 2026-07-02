@@ -424,7 +424,10 @@ db::Guess::preEvaluateNormal()
 void
 db::Guess::preEvaluate()
 {
-	::memset(m_pawnData = m_pawnTable, 0, sizeof(m_pawnTable));
+	m_pawnData = m_pawnTable;
+
+	for (unsigned i = 0; i < PawnTableSize; ++i)
+		m_pawnTable[i] = PawnHashEntry();
 
 	m_root.m_castle	= m_castle;
 	m_root.m_stm		= m_stm;

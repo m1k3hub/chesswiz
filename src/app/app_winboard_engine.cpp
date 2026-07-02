@@ -34,41 +34,22 @@
 #include "sys_time.h"
 
 #include "m_stdio.h"
+#include "m_ctype.h"
 
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
 
+using namespace mstl;
 using namespace app;
 using namespace app::winboard;
 using namespace db;
 
 
-static mstl::string
-toStr(unsigned value)
-{
-	char buf[20];
-	snprintf(buf, sizeof(buf), "%u", value);
-	return buf;
-}
-
-
-static bool
-isNumeric(char const* s)
-{
-	char const* p = s;
-
-	while (isdigit(*p))
-		++p;
-
-	return p > s && *p == '\0';
-}
-
-
 static char const*
 endOfWord(char const* s)
 {
-	while (*s && !isspace(*s))
+	while (*s && !is_space(*s))
 		++s;
 
 	return s;
@@ -95,53 +76,27 @@ endOfKey(char const* s)
 
 
 static char const*
-skipSpaces(char const* s)
-{
-	while (isspace(*s))
-		++s;
-	return s;
-}
-
-
-static char const*
 skipDots(char const* s)
 {
 	while (*s == '.')
 		++s;
-	return skipSpaces(s);
-}
-
-
-static char const*
-skipWord(char const* s)
-{
-	return skipSpaces(endOfWord(s));
-}
-
-
-static char const*
-skipWords(char const* s, unsigned n)
-{
-	while (n--)
-		s = skipWord(s);
-
-	return s;
+	return skip_spaces(s);
 }
 
 
 static char const*
 skipMoveNumber(char const* s)
 {
-	while (isdigit(*s))
+	while (is_digit(*s))
 	{
 		do
 			++s;
-		while (isdigit(*s));
+		while (is_digit(*s));
 
 		if (*s == '.')
 			++s;
 
-		s = skipSpaces(s);
+		s = skip_spaces(s);
 	}
 
 	return s;
@@ -153,13 +108,13 @@ removeHolding(mstl::string& fen)
 {
 	unsigned count = 0;
 
-	for (char const* s = fen; *s && !::isspace(*s); ++s)
+	for (char const* s = fen; *s && !is_space(*s); ++s)
 	{
 		if (*s == '/' && ++count == 8)
 		{
 			char const* t = s + 1;
 
-			while (*t && !::isspace(*t))
+			while (*t && !is_space(*t))
 				++t;
 
 			fen.erase(s, t);
@@ -302,17 +257,17 @@ winboard::Engine::sendOptions()
 	}
 
 	if (hasFeature(app::Engine::Feature_Hash_Size))
-		send("memory " + ::toStr(hashSize()));
+		send("memory " + string::cast(hashSize()));
 
 	if (hasFeature(app::Engine::Feature_SMP))
-		send("cores " + toStr(numCores()));
+		send("cores " + string::cast(numCores()));
 
 #if 0
 	if (hasFeature(app::Engine::Feature_Ponder))
 		send("setoption name Ponder value false"); // XXX
 
 	if (hasFeature(app::Engine::Feature_Multi_PV))
-		send("setoption name MultiPV value " + toStr(numVariations()));
+		send("setoption name MultiPV value " + string::cast(numVariations()));
 #endif
 
 	if (isAnalyzing)
@@ -335,9 +290,11 @@ winboard::Engine::sendConfiguration(mstl::string const& script)
 		mstl::string::size_type eol = script.find('\n', sol);
 		if (eol == mstl::string::npos)
 			eol = script.size();
-		send(script.substr(sol, eol - sol));
+		mstl::string line = script.substr(sol, eol - sol);
+		if (!line.empty())
+			send(line);
 		sol = eol + 1;
-		if (sol < script.size() && ::isspace(script[sol])) // skip LF on windows
+		if (sol < script.size() && is_space(script[sol])) // skip LF on windows
 			++sol;
 	}
 
@@ -349,14 +306,14 @@ winboard::Engine::sendConfiguration(mstl::string const& script)
 void
 winboard::Engine::sendHashSize()
 {
-	send("memory " + toStr(hashSize()));
+	send("memory " + string::cast(hashSize()));
 }
 
 
 void
 winboard::Engine::sendCores()
 {
-	send("cores " + ::toStr(numCores()));
+	send("cores " + string::cast(numCores()));
 }
 
 
@@ -548,8 +505,11 @@ winboard::Engine::startAnalysis(bool)
 		if (!game->startBoard().isStandardPosition(currentVariant()))
 			setupBoard(game->startBoard());
 
-		for (int i = moves.size() - 1; i >= 0; --i)
+		for (unsigned i = moves.size(); i > 0; )
+		{
+			--i;
 			doMove(moves[i]);
+		}
 
 		if (analysesOpponentsView())
 			doMove(Move::null());
@@ -586,13 +546,13 @@ winboard::Engine::sendStartAnalysis()
 	}
 	else if (searchDepth())
 	{
-		mstl::string depth(::toStr(searchDepth()));
+		mstl::string depth(string::cast(searchDepth()));
 		send("sd " + depth);
 		send("depth " + depth);		// some engines are expecting "depth" instead of "sd"
 	}
 	else if (searchTime())
 	{
-		send("time " + ::toStr((searchTime() + 9)/10));
+		send("time " + string::cast((searchTime() + 9)/10));
 	}
 	else if (hasFeature(app::Engine::Feature_Analyze))
 	{
@@ -857,7 +817,7 @@ winboard::Engine::processMessage(mstl::string const& message)
 		{
 			case 'f':
 				if (::strncmp(msg, "feature ", 8) == 0)
-					return parseFeatures(::skipSpaces(msg + 8));
+					return parseFeatures(skip_spaces(msg + 8));
 				break;
 
 			case 'p':
@@ -871,7 +831,7 @@ winboard::Engine::processMessage(mstl::string const& message)
 
 					if (	m_stopAnalyzeIsPending
 						&& m_pongCount < m_pingCount
-						&& ::atoi(::skipSpaces(msg + 5)) == int(m_pingCount))
+						&& ::atoi(skip_spaces(msg + 5)) == int(m_pingCount))
 					{
 						pongReceived();
 					}
@@ -1197,7 +1157,7 @@ winboard::Engine::parseFeatures(char const* msg)
 								break;
 						}
 
-						val = ::skipSpaces(p + 1);
+						val = skip_spaces(p + 1);
 					}
 					while (*val);
 
@@ -1213,7 +1173,7 @@ winboard::Engine::parseFeatures(char const* msg)
 			send("rejected " + mstl::string(key, sep));
 #endif
 
-		msg = ::skipSpaces(end);
+		msg = skip_spaces(end);
 	}
 }
 
@@ -1278,7 +1238,7 @@ winboard::Engine::parseAnalysis(mstl::string const& msg)
 			break;
 	}
 
-	if (::isdigit(msg[0]))
+	if (::is_digit(msg[0]))
 		parseInfo(msg);
 
 	m_editSent = false;
@@ -1306,13 +1266,13 @@ winboard::Engine::parseInfo(mstl::string const& msg)
 	unsigned unused;
 	float		fscore;
 
-	s = ::skipWord(msg);
+	s = skip_non_spaces(msg);
 
 	if (::sscanf(s, "%d %u %u ", &score, &time, &nodes) == 3)
 	{
 		setTime(m_wholeSeconds ? double(time) : time/100.0);
 		setNodes(nodes);
-		s = ::skipWords(msg, 3);
+		s = skip_words(msg, 3);
 
 		if (!m_wholeSecondsDetected)
 		{
@@ -1332,7 +1292,7 @@ winboard::Engine::parseInfo(mstl::string const& msg)
 	{
 		setTime((hours*60 + minutes)*60 + seconds);
 		score = int(fscore*1000.0 + 0.5);
-		s = ::skipWords(msg, 2);
+		s = skip_words(msg, 2);
 	}
 
 	char const*	illegal(0);
@@ -1356,7 +1316,7 @@ winboard::Engine::parseInfo(mstl::string const& msg)
 				board.doMove(move, currentVariant());
 				moves.append(move);
 				illegal = 0;
-				s = ::skipSpaces(t);
+				s = skip_spaces(t);
 
 				if (moves.isFull())
 				{
@@ -1367,13 +1327,13 @@ winboard::Engine::parseInfo(mstl::string const& msg)
 			else
 			{
 				illegal = s;
-				e = s = ::skipWord(s);
+				e = s = skip_non_spaces(s);
 				break;
 			}
 		}
 		else
 		{
-			s = ::skipWord(s);
+			s = skip_non_spaces(s);
 		}
 	}
 
@@ -1462,7 +1422,7 @@ winboard::Engine::parseCurrentMove(char const* s)
 		|| ::sscanf(s, "%u:%u %u/%u?", &minutes, &seconds, &moveNo, &moveCount) == 4
 		|| ::sscanf(s, "%u:%u:%u %u/%u?", &hours, &minutes, &seconds, &moveNo, &moveCount) == 5)
 	{
-		s = ::skipMoveNumber(::skipWords(s, 3));
+		s = ::skipMoveNumber(skip_words(s, 3));
 
 		Move move;
 		char const* t = currentBoard().parseMove(::skipDots(s), move, currentVariant(), move::MustBeUnambiguous);
@@ -1543,12 +1503,12 @@ winboard::Engine::parseOption(mstl::string const& option)
 	else if (type == "spin" || type == "slider")
 	{
 		// feature option="NAME -spin VALUE MIN MAX"
-		char const* s1 = ::skipSpaces(args.begin());
-		char const* s2 = ::skipWord(s1);
-		char const* s3 = ::skipSpaces(s2);
-		char const* s4 = ::skipWord(s3);
-		char const* s5 = ::skipSpaces(s4);
-		char const* s6 = ::skipWord(s5);
+		char const* s1 = skip_spaces(args.begin());
+		char const* s2 = skip_non_spaces(s1);
+		char const* s3 = skip_spaces(s2);
+		char const* s4 = skip_non_spaces(s3);
+		char const* s5 = skip_spaces(s4);
+		char const* s6 = skip_non_spaces(s5);
 
 		if (s6 != args.end())
 			return;
@@ -1559,7 +1519,7 @@ winboard::Engine::parseOption(mstl::string const& option)
 
 		val.trim(); min.trim(); max.trim();
 
-		if (!::isNumeric(val) || !::isNumeric(min) || !::isNumeric(max))
+		if (!is_numeric(val) || !is_numeric(min) || !is_numeric(max))
 			return;
 
 		if (hasFeature(app::Engine::Feature_SMP) && (name == "Cores" || name == "Threads"))
@@ -1577,7 +1537,7 @@ winboard::Engine::parseOption(mstl::string const& option)
 		mstl::string values;
 		mstl::string dflt;
 
-		char const* s = skipSpaces(args);
+		char const* s = skip_spaces(args);
 
 		while (*s)
 		{
@@ -1608,7 +1568,7 @@ winboard::Engine::parseOption(mstl::string const& option)
 				}
 			}
 
-			s = *t ? skipSpaces(t + 3) : t;
+			s = *t ? skip_spaces(t + 3) : t;
 		}
 
 		if (!dflt.empty() && !values.empty())

@@ -5099,6 +5099,11 @@ SetImageForColumn(
 			return NULL;
 	}
 
+	if (width <= 0 || height <= 0)
+		return NULL;
+	if (Tk_WindowId(tree->tkwin) == None)
+		return NULL;
+
 	td.width = width;
 	td.height = height;
 	td.drawable = Tk_GetPixmap(tree->display, Tk_WindowId(tree->tkwin),

@@ -178,7 +178,7 @@ proc geometry {path args} {
 					lassign [winfo extents $parent] pl pr pt pb
 					set x0 [expr {$x0 - $pl}]
 					set x1 [expr {$x1 + $pr}]
-					set y0 [expr {$y0 - $pr}]
+					set y0 [expr {$y0 - $pt}]
 					set y1 [expr {$y1 + $pb}]
 				}
 			}

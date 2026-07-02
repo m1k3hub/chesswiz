@@ -12,3 +12,6 @@ __pycache__/
 *.swo
 *~
 .DS_Store
+Makefile.in
+Makefile.in.bak
+

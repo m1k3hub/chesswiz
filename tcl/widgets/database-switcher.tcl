@@ -1466,7 +1466,7 @@ proc CopyDatabase {parent src dst variant x y} {
 		::log::error $::import::mc::AbortedDueToInternalError
 		::progress::close
 		::log::close
-		return {*}$opts -rethrow 1 $ngames
+		return {*}$opts -rethrow 1 $rc
 	}
 
 	if {$rc == 1} {

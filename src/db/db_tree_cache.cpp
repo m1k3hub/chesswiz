@@ -145,7 +145,7 @@ TreeCache::clear(tree::Mode mode)
 
 	m_inUse = index;
 	m_lastIndex = 0;
-	m_mostRecentIndex = 0;
+	m_mostRecentIndex = m_inUse == 0 ? CacheSize - 1 : m_inUse - 1;
 }
 
 

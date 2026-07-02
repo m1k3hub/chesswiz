@@ -54,6 +54,8 @@ class TagSet;
 class GameInfo;
 class Date;
 
+namespace cbv { class Codec; }
+
 namespace cbh {
 
 class Codec : public DatabaseCodec, public nsUniversalDetector
@@ -86,6 +88,8 @@ public:
 	mstl::string const& encoding() const override;
 	db::tag::TagSet tagFilter(Section section, TagSet const& tags) const override;
 
+	void doOpen(mstl::string const& encoding) override;
+	void doOpen(mstl::string const& rootname, mstl::string const& encoding) override;
 	void doOpen(mstl::string const& rootname,
 					mstl::string const& originalSuffix,
 					mstl::string const& encoding,
@@ -96,6 +100,7 @@ public:
 								util::Progress& progress) override;
 
 	void close() override;
+	void sync() override;
 
 	unsigned doDecoding(	::util::BlockFileReader* reader,
 								GameInfo const& info,
@@ -104,13 +109,30 @@ public:
 								Board& startBoard,
 								bool useStartBoard) override;
 	void doDecoding(GameData& data, GameInfo& info, unsigned gameIndex, mstl::string*) override;
-	save::State doDecoding(	Consumer& consumer,
+	save::State doDecoding(	db::Consumer& consumer,
 									TagSet& tags,
 									GameInfo const& info,
 									unsigned gameIndex) override;
 
 	void reset() override;
 	void setEncoding(mstl::string const& encoding) override;
+	void setWritable() override;
+
+	void save(mstl::string const& rootname, unsigned start, util::Progress& progress) override;
+	void attach(mstl::string const& rootname, util::Progress& progress) override;
+	void update(mstl::string const& rootname, unsigned index, bool updateNamebase) override;
+	void updateHeader(mstl::string const& rootname) override;
+
+	unsigned putGame(util::ByteStream const& strm) override;
+	unsigned putGame(util::ByteStream const& strm,
+						unsigned prevOffset,
+						unsigned prevRecordLength) override;
+	util::ByteStream getGame(GameInfo const& info) override;
+	util::ByteStream getGame(GameInfo const& info, ::util::BlockFileReader* reader) override;
+
+	void writeNamebases(mstl::ostream& stream, util::Progress& progress) override;
+
+	db::Consumer* getConsumer(format::Type srcFormat) override;
 
 	static bool getAttributes(	mstl::string const& filename,
 										int& numGames,
@@ -128,7 +150,15 @@ public:
 	}
 	__attribute__((packed));
 
+	save::State addGame(util::ByteStream& gameData,
+							util::ByteStream& annotationData,
+							TagSet const& tags,
+							db::Consumer& consumer);
+
 private:
+
+	friend class Consumer;
+	friend class cbv::Codec;
 
 	class Source;
 
@@ -173,6 +203,18 @@ private:
 	void preloadTournamentData(mstl::string const& rootname, util::Progress& progress);
 	void preloadAnnotatorData(mstl::string const& rootname, util::Progress& progress);
 
+	// Write support methods
+	void writePlayerData(mstl::string const& rootname, util::Progress& progress);
+	void writeTournamentData(mstl::string const& rootname, util::Progress& progress);
+	void writeAnnotatorData(mstl::string const& rootname, util::Progress& progress);
+	void writeSourceData(mstl::string const& rootname, util::Progress& progress);
+	void writeTeamData(mstl::string const& rootname, util::Progress& progress);
+	void writeIndexData(mstl::string const& rootname, util::Progress& progress);
+	void writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& strm);
+	void writeIniData(mstl::string const& rootname);
+
+	void setupForWriting(mstl::string const& rootname);
+
 	void addSourceTags(TagSet& tags, unsigned index);
 	void addEventTags(TagSet& tags, GameInfo const& info);
 
@@ -216,6 +258,14 @@ private:
 	bool					m_highQuality;
 	MoveNodeAllocator	m_moveNodeAllocator;
 	sys::Mutex			m_mutex;
+
+	// Write support
+	mstl::string			m_rootname;
+	bool					m_isWritable;
+	unsigned				m_nextGameOffset;
+	unsigned				m_nextAnnotationOffset;
+	mstl::fstream		m_namebaseStream;
+	mstl::fstream		m_indexStream;
 };
 
 } // namespace cbh

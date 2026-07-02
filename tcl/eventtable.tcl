@@ -420,6 +420,39 @@ proc popdownInfo {path} {
 }
 
 
+proc GetEventName {base variant view index} {
+	if {$index == -1} { return "" }
+	set line [::scidb::db::get eventInfo $index $view $base $variant]
+	return [lindex $line 0]
+}
+
+
+proc OpenEventGamesInSwitcher {parent base variant view index {menu ""}} {
+	if {[string length $menu]} { ::tk::MenuUnpost $menu }
+
+	set eventIndex [::scidb::db::get eventIndex $index $view $base $variant]
+	set eventName [GetEventName $base $variant $view $index]
+	set tempView [::scidb::view::new $base $variant unused unused unused unused master slave]
+	::scidb::view::search $base $variant $tempView null none [list event $eventIndex]
+	set rc [::application::database::OpenFilteredViewInSwitcher $parent $base $variant $tempView event $eventName]
+	catch { ::scidb::view::close $base $variant $tempView }
+	return $rc
+}
+
+
+proc SaveEventGamesWorkingSet {parent base variant view index {menu ""}} {
+	if {[string length $menu]} { ::tk::MenuUnpost $menu }
+
+	set eventIndex [::scidb::db::get eventIndex $index $view $base $variant]
+	set eventName [GetEventName $base $variant $view $index]
+	set tempView [::scidb::view::new $base $variant unused unused unused unused master slave]
+	::scidb::view::search $base $variant $tempView null none [list event $eventIndex]
+	set rc [::application::database::SaveFilteredViewAsWorkingSet $parent $base $variant $tempView event $eventName]
+	catch { ::scidb::view::close $base $variant $tempView }
+	return $rc
+}
+
+
 proc popupMenu {parent menu base variant view index source} {
 	set accel $::gamestable::mc::Accel(tourntable)
 	$menu add command \
@@ -448,6 +481,16 @@ proc popupMenu {parent menu base variant view index source} {
 		::bind $menu <Key-$accel> $cmd
 		::bind $menu <Key-[string tolower $accel]> $cmd
 	}
+
+	$menu add separator
+	$menu add command \
+		-label " $::application::database::mc::RepertoireOpenInSwitcher" \
+		-command [namespace code [list OpenEventGamesInSwitcher $parent $base $variant $view $index $menu]] \
+		;
+	$menu add command \
+		-label " $::application::database::mc::SaveWorkingSet" \
+		-command [namespace code [list SaveEventGamesWorkingSet $parent $base $variant $view $index $menu]] \
+		;
 }
 
 
@@ -621,7 +664,11 @@ proc SortColumn {path id dir {rating {}}} {
 	set view [{*}$Vars(viewcmd) $base $variant]
 	set see 0
 	set selection [::scrolledtable::selection $path]
+	set selectedIndex -1
 	if {$selection >= 0 && [::scrolledtable::selectionIsVisible? $path]} { set see 1 }
+	if {$selection >= 0} {
+		set selectedIndex [::scidb::db::get eventIndex $selection $view $base $variant]
+	}
 	switch $dir {
 		reverse {
 			::scidb::db::reverse event $base $variant $view
@@ -635,8 +682,8 @@ proc SortColumn {path id dir {rating {}}} {
 			::scidb::db::sort event $base $variant $columnNo $view -$dir
 		}
 	}
-	if {$selection >= 0} {
-		set selection [::scidb::db::get lookupEvent $selection $view $base $variant]
+	if {$selectedIndex >= 0} {
+		set selection [::scidb::db::get lookupEvent $selectedIndex $view $base $variant]
 	}
 	::widget::busyCursor off
 	::scrolledtable::updateColumn $path $selection $see

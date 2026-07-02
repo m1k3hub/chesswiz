@@ -198,6 +198,12 @@ getFormat(int objc, Tcl_Obj* const* objv, int index)
 static int
 cmdAnalyseFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2 && objc != 5)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<fen> ?<castling> <fyles> <checks>?");
+		return TCL_ERROR;
+	}
+
 	char const* error		= 0;
 	Warnings		warnings;
 
@@ -320,7 +326,8 @@ cmdAnalyseFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		holdingPieceCount = holdingPieceCount - 32;
 	}
 
-	Tcl_Obj* w[warnings.size()];
+	mstl::vector<Tcl_Obj*> w_buf(warnings.size());
+	Tcl_Obj** w = w_buf.begin();
 	for (unsigned i = 0; i < warnings.size(); ++i)
 		w[i] = Tcl_NewStringObj(warnings[i], -1);
 
@@ -348,6 +355,12 @@ cmdAnalyseFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdMakeFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 11)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<board> <stm> <ep> <move-no> <half-moves> <checks-w> <checks-b> <holding> <promoted> <format>");
+		return TCL_ERROR;
+	}
+
 	char const* board			= stringFromObj(objc, objv, 1);
 	char const* stm			= stringFromObj(objc, objv, 2);
 	char const* ep				= stringFromObj(objc, objv, 3);
@@ -410,6 +423,12 @@ cmdMakeFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdIsValidFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<fen>");
+		return TCL_ERROR;
+	}
+
 	// TODO: we need some flags: allowHandicap, allowIllegalPosition (king in check)
 	setResult(Board::isValidFen(stringFromObj(objc, objv, 1), Scidb->game().variant()));
 	return TCL_OK;
@@ -419,6 +438,12 @@ cmdIsValidFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdPositionNumber(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<fen>");
+		return TCL_ERROR;
+	}
+
 	setResult(shuffle::lookup(stringFromObj(objc, objv, 1)));
 	return TCL_OK;
 }
@@ -427,6 +452,12 @@ cmdPositionNumber(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdFenToBoard(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<fen>");
+		return TCL_ERROR;
+	}
+
 	Board board;
 	board.setup(stringFromObj(objc, objv, 1), Scidb->game().variant());
 	setResult(tcl::board::toBoard(board));
@@ -437,6 +468,12 @@ cmdFenToBoard(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdIdnToFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2 && objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<idn> ?<format>?");
+		return TCL_ERROR;
+	}
+
 	unsigned			idn(unsignedFromObj(objc, objv, 1));
 	variant::Type	variant(Scidb->game().variant());
 
@@ -457,6 +494,12 @@ cmdIdnToFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdTransposeFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 2 && objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<fen> ?<format>?");
+		return TCL_ERROR;
+	}
+
 	Board board;
 	variant::Type variant = Scidb->game().variant();
 
@@ -470,6 +513,12 @@ cmdTransposeFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdNormalizeFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3 && objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<fen> <format> ?-clearholding?");
+		return TCL_ERROR;
+	}
+
 	Board board;
 	variant::Type variant = Scidb->game().variant();
 	char const* fen = stringFromObj(objc, objv, 1);
@@ -492,6 +541,12 @@ cmdNormalizeFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdNearest(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<board> <piece>");
+		return TCL_ERROR;
+	}
+
 	char const* board = stringFromObj(objc, objv, 1);
 	char const* piece = stringFromObj(objc, objv, 2);
 

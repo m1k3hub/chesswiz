@@ -1778,7 +1778,7 @@ Environment::perform(TokenP const& token)
 		while (TokenP t = m_impl->getFinalToken(*this, AllowNull))
 			execute(t);
 	}
-	catch (EndOfExecutionProducer::Exception)
+	catch (EndOfExecutionProducer::Exception const&)
 	{
 		m_impl->popProducer();
 	}
@@ -1809,7 +1809,7 @@ Environment::perform(TokenP const& token, mstl::string& result)
 		while (TokenP t = m_impl->getFinalToken(*this, AllowNull))
 			result += t->text();
 	}
-	catch (EndOfExecutionProducer::Exception)
+	catch (EndOfExecutionProducer::Exception const&)
 	{
 		m_consumer = oldConsumer;
 		m_impl->popProducer();

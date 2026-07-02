@@ -45,6 +45,7 @@ set DateOfBirth				"Date of birth"
 set DateOfDeath				"Date of death"
 
 set ShowPlayerCard			"Show Player Card..."
+set ShowPrepReport			"Show Prep Report..."
 
 set F_LastName					"Last Name"
 set F_FirstName				"First Name"
@@ -466,7 +467,7 @@ proc see {path position} {
 }
 
 
-proc popupMenu {menu base variant info {playerCard {}}} {
+proc popupMenu {menu base variant info {playerCard {}} {playerIndex {}}} {
 	set parent [winfo toplevel $menu]
 
 	if {[llength $playerCard]} {
@@ -475,6 +476,13 @@ proc popupMenu {menu base variant info {playerCard {}}} {
 			-image $::icon::16x16::playercard \
 			-label " $mc::ShowPlayerCard" \
 			-command [namespace code [list ::playercard::show $base $variant {*}$playerCard]] \
+			;
+	}
+
+	if {[string length $playerIndex] && [llength [info commands ::application::database::player::OpenPrepReport]]} {
+		$menu add command \
+			-label " $mc::ShowPrepReport" \
+			-command [list ::application::database::player::OpenPrepReport $parent $base $variant $playerIndex] \
 			;
 	}
 
@@ -767,7 +775,11 @@ proc SortColumn {path id dir} {
 	set ratings [list $Options(rating1:type) $Options(rating2:type)]
 	set see 0
 	set selection [::scrolledtable::selection $table]
+	set selectedIndex -1
 	if {$selection >= 0 && [::scrolledtable::selectionIsVisible? $table]} { set see 1 }
+	if {$selection >= 0} {
+		set selectedIndex [::scidb::db::get playerIndex $selection $view $base $variant]
+	}
 	switch $dir {
 		reverse {
 			::scidb::db::reverse player $base $variant $view
@@ -787,8 +799,8 @@ proc SortColumn {path id dir} {
 			::scidb::db::sort player $base $variant $columnNo $view {*}$options -$dir
 		}
 	}
-	if {$selection >= 0} {
-		set selection [::scidb::db::get lookupPlayer $selection $view $base $variant]
+	if {$selectedIndex >= 0} {
+		set selection [::scidb::db::get lookupPlayer $selectedIndex $view $base $variant]
 	}
 	::widget::busyCursor off
 	::scrolledtable::updateColumn $table $selection $see
@@ -842,7 +854,7 @@ proc PopupMenu {table menu base variant index column} {
 	set info  [scidb::db::get playerInfo $index $view $base $variant -info]
 
 	set playerIndex [scidb::db::get playerIndex $index $view $base $variant]
-	popupMenu $menu $base $variant $info $playerIndex
+	popupMenu $menu $base $variant $info $playerIndex $playerIndex
 
 	$menu add separator
 

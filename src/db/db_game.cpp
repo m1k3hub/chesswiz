@@ -860,7 +860,8 @@ Game::Game()
 	,m_threefoldRepetionDetected(false)
 	,m_fivefoldRepetionDetected(false)
 	,m_termination(termination::None)
-	,m_line(m_lineBuf[0])
+	,m_lineBuf()
+	,m_line(&m_lineBuf[0][0])
 	,m_changed(false)
 #ifdef DB_DEBUG_GAME
 	,m_backupNode(0)
@@ -873,7 +874,8 @@ Game::Game(Game const& game)
 	:Provider(format::Scidb)
 	,GameData()
 	,m_editNode(0)
-	,m_line(m_lineBuf[0])
+	,m_lineBuf()
+	,m_line(&m_lineBuf[0][0])
 #ifdef DB_DEBUG_GAME
 	,m_backupNode(0)
 #endif
@@ -4102,8 +4104,9 @@ Game::dumpHistory(mstl::string& result, protocol::ID protocol) const
 
 	result.reserve(result.size() + hist.size()*6);
 
-	for (int i = hist.size() - 1; i >= 0; i--)
+	for (unsigned i = hist.size(); i > 0; )
 	{
+		--i;
 		if (!result.empty())
 			result.append(' ');
 

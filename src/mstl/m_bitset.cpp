@@ -782,9 +782,21 @@ bitset::resize(size_type nbits, bool set)
 		m_bits = 0;
 		m_words = 0;
 	}
-	else if (set && nbits > m_size && bitfield::word_index(m_size))
+	else
 	{
-		m_bits[m_words - 1].set(bitfield::word_index(m_size), bitfield::nbits - 1);
+		if (set && nbits > m_size)
+		{
+			size_type first = count_words(m_size);
+			if (first > 0 && bitfield::word_index(m_size))
+				m_bits[first - 1].set(bitfield::word_index(m_size), bitfield::nbits - 1);
+
+			if (words > first)
+				fill(first, words, 0xff);
+		}
+		for (size_type i = words; i < m_words; ++i)
+			m_bits[i] = 0;
+
+		m_words = words;
 	}
 
 	m_size = nbits;
@@ -954,7 +966,7 @@ bitset::setup(uint32_t const* array, size_type size)
 	M_REQUIRE(array_size() == size);
 	M_REQUIRE(array);
 
-	::memcpy(m_bits, array, size*sizeof(uint32_t));
+	::memcpy(reinterpret_cast<void*>(m_bits), array, size*sizeof(uint32_t));
 }
 
 // vi:set ts=3 sw=3:

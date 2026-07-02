@@ -82,6 +82,20 @@ A pattern is a string which may contain the following special characters:
       </td>
     </tr>
     <tr valign="top">
+      <td class="l"><span style='white-space:nowrap;'><code>{</code></span></td>
+      <td class="r">
+        Like <span style='white-space:nowrap;'><code>(</code></span>, but switching off all special rules
+        concerning blanks.
+      </td>
+    </tr>
+    <tr valign="top">
+      <td class="l"><span style='white-space:nowrap;'><code>)</code></span></td>
+      <td class="r">
+        Like <span style='white-space:nowrap;'><code>)</code></span>, but switching off all special rules
+        concerning blanks.
+      </td>
+    </tr>
+    <tr valign="top">
       <td class="l"><span style='white-space:nowrap;'><code>\x</code></span></td>
       <td class="r">
         Matches the single character x. This provides a way of avoiding
@@ -123,6 +137,12 @@ Second special rule: a parenthetical expression with curly braces
 special rules concerning blanks.
 </p>
 
+<p>
+Furthermore it is not allowed to mix the brace pairs
+<span style='white-space:nowrap;'><code>()</code></span>, and <span style='white-space:nowrap;'><code>{}</code></span>, this means that
+<span style='white-space:nowrap;'><code>"(...}"</code></span> is not a parenthetical expression.
+</p>
+
 <h2 id="examples">Examples</h2>
 
 <div class='verb'><code>
@@ -130,7 +150,7 @@ Polgar, J*
 </code></div>
 
 <p>
-This pattern can match the following strings: <span style='white-space:nowrap;'><code>"Polgar, J"</code></span>,
+This pattern will match the following strings: <span style='white-space:nowrap;'><code>"Polgar, J"</code></span>,
 and <span style='white-space:nowrap;'><code>"Polgar, Judit"</code></span>.
 </p>
 
@@ -139,7 +159,7 @@ A?erba?h
 </code></div>
 
 <p>
-This can match the following names:
+This will match the following names:
 <span style='white-space:nowrap;'><code>"Averbakh"</code></span> (English spelling), and <span style='white-space:nowrap;'><code>"Awerbach"</code></span>
 (German spelling).
 </p>
@@ -149,7 +169,7 @@ Kasparov*
 </code></div>
 
 <p>
-This can match, among others, the following strings:
+This will match, among others, the following strings:
 <span style='white-space:nowrap;'><code>"Kasparov"</code></span>, <span style='white-space:nowrap;'><code>"Kasparova"</code></span>,
 <span style='white-space:nowrap;'><code>"Kasparov, Garry"</code></span>, and <span style='white-space:nowrap;'><code>"Kasparova, Tatiana"</code></span>.
 </p>
@@ -159,7 +179,7 @@ Kasparov*)
 </code></div>
 
 <p>
-This can match the same strings as in the latter case, because all
+This will match the same strings as in the latter case, because all
 these strings are ending with a letter. But a string like
 <span style='white-space:nowrap;'><code>"Kasparov, G."</code></span> cannot match.
 </p>
@@ -169,7 +189,7 @@ these strings are ending with a letter. But a string like
 </code></div>
 
 <p>
-This can match, among others, the strings <span style='white-space:nowrap;'><code>"Kasparov"</code></span>, and
+This will match, among others, the strings <span style='white-space:nowrap;'><code>"Kasparov"</code></span>, and
 <span style='white-space:nowrap;'><code>"Kasparova"</code></span>, but it cannot match <span style='white-space:nowrap;'><code>"Kasparov, Garry"</code></span>,
 or <span style='white-space:nowrap;'><code>"Kasparova, Tatiana"</code></span>. A parenthetical expression is
 excluding the match of blanks and separating characters.
@@ -180,7 +200,7 @@ excluding the match of blanks and separating characters.
 </code></div>
 
 <p>
-This can match, among others, the strings <span style='white-space:nowrap;'><code>"Kasparov"</code></span>, and
+This will match, among others, the strings <span style='white-space:nowrap;'><code>"Kasparov"</code></span>, and
 <span style='white-space:nowrap;'><code>"Kasparov, Garry"</code></span>, but it cannot match <span style='white-space:nowrap;'><code>"Kasparova"</code></span>,
 or <span style='white-space:nowrap;'><code>"Kasparova, Tatiana"</code></span>.
 </p>
@@ -190,7 +210,7 @@ Kasparov*,*
 </code></div>
 
 <p>
-This can match, among others, the strings <span style='white-space:nowrap;'><code>"Kasparov, Garry"</code></span>, and
+This will match, among others, the strings <span style='white-space:nowrap;'><code>"Kasparov, Garry"</code></span>, and
 <span style='white-space:nowrap;'><code>"Kasparova, Tatiana"</code></span>, but it cannot match <span style='white-space:nowrap;'><code>"Kasparov"</code></span>,
 or <span style='white-space:nowrap;'><code>"Kasparova"</code></span>.
 </p>
@@ -251,7 +271,7 @@ because the match is case-sensitive.
 </code></div>
 
 <p>
-This can only match <epxr>"!!"</code></span>. The first character has to be
+This will only match <epxr>"!!"</code></span>. The first character has to be
 protected, otherwise it will be recognized as a switch for case insensitive
 search, and not as the character <span style='white-space:nowrap;'><code>!</code></span>.
 </p>
@@ -261,7 +281,7 @@ search, and not as the character <span style='white-space:nowrap;'><code>!</code
 </code></div>
 
 <p>
-This can match the string <span style='white-space:nowrap;'><code>"Germany (Berlin)"</code></span>, among others.
+This will match the string <span style='white-space:nowrap;'><code>"Germany (Berlin)"</code></span>, among others.
 The characters <span style='white-space:nowrap;'><code>(</code></span>, and <span style='white-space:nowrap;'><code>)</code></span> do not have any special
 meaning, because they are protected by a backslash. This means that the
 string <span style='white-space:nowrap;'><code>"Germany Berlin"</code></span> cannot match.

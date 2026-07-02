@@ -27,11 +27,15 @@
 #ifndef _db_search_included
 #define _db_search_included
 
+#include "db_common.h"
 #include "db_date.h"
+
+#include "u_match.h"
 
 #include "m_string.h"
 #include "m_ref_counter.h"
 #include "m_ref_counted_ptr.h"
+#include "m_vector.h"
 
 namespace db {
 
@@ -53,16 +57,28 @@ class SearchOpAnd : public Search
 {
 public:
 
+	typedef mstl::ref_counted_ptr<Search> SearchP;
+
 	bool match(GameInfo const& info) const override;
 	void append(Search* search);
+
+private:
+
+	mstl::vector<SearchP> m_searches;
 };
 
 class SearchOpOr : public Search
 {
 public:
 
+	typedef mstl::ref_counted_ptr<Search> SearchP;
+
 	bool match(GameInfo const& info) const override;
 	void append(Search* search);
+
+private:
+
+	mstl::vector<SearchP> m_searches;
 };
 
 class SearchOpNot : public Search
@@ -166,24 +182,159 @@ private:
 	uint16_t m_idn;
 };
 
-#if 0
+class SearchPlayerName : public Search
+{
+public:
+
+	enum Mode
+	{
+		White,
+		Black,
+		Any,
+	};
+
+	SearchPlayerName(Mode mode, mstl::string const& name, bool exact = false);
+
+	bool match(GameInfo const& info) const override;
+
+private:
+
+	Mode m_mode;
+	bool m_exact;
+	util::Pattern m_name;
+};
+
+class SearchEventName : public Search
+{
+public:
+
+	SearchEventName(mstl::string const& name, bool exact = false);
+
+	bool match(GameInfo const& info) const override;
+
+private:
+
+	bool m_exact;
+	util::Pattern m_name;
+};
+
+class SearchSiteName : public Search
+{
+public:
+
+	SearchSiteName(mstl::string const& name, bool exact = false);
+
+	bool match(GameInfo const& info) const override;
+
+private:
+
+	bool m_exact;
+	util::Pattern m_name;
+};
+
+class SearchAnnotatorName : public Search
+{
+public:
+
+	SearchAnnotatorName(mstl::string const& name, bool exact = false);
+
+	bool match(GameInfo const& info) const override;
+
+private:
+
+	bool m_exact;
+	util::Pattern m_name;
+};
+
+class SearchEco : public Search
+{
+public:
+
+	SearchEco(mstl::string const& eco, variant::Type variant);
+
+	bool match(GameInfo const& info) const override;
+
+private:
+
+	mstl::string m_eco;
+	variant::Type m_variant;
+};
+
+class SearchMaterial : public Search
+{
+public:
+
+	SearchMaterial(material::si3::Signature signature);
+
+	bool match(GameInfo const& info) const override;
+
+private:
+
+	material::si3::Signature m_signature;
+};
+
+class SearchMaterialClass : public Search
+{
+public:
+
+	SearchMaterialClass(material::si3::Signature signature);
+
+	bool match(GameInfo const& info) const override;
+
+private:
+
+	unsigned m_whiteMajor;
+	unsigned m_whiteMinor;
+	unsigned m_blackMajor;
+	unsigned m_blackMinor;
+};
+
+class SearchMaterialPawns : public Search
+{
+public:
+
+	SearchMaterialPawns(unsigned whiteMin, unsigned whiteMax, unsigned blackMin, unsigned blackMax);
+
+	bool match(GameInfo const& info) const override;
+
+private:
+
+	unsigned m_whiteMin;
+	unsigned m_whiteMax;
+	unsigned m_blackMin;
+	unsigned m_blackMax;
+};
+
 class SearchRating : public Search
 {
 public:
 
-	Search(unsigned minRatingW, unsigned maxRatingW, unsigned minRatingB, unsigned maxRatingB);
+	enum Mode
+	{
+		White,
+		Black,
+		Average,
+		Both,
+	};
 
-	Type type() const;
-	bool match(GameInfo const& info) override;
+	SearchRating(rating::Type type,
+					Mode mode,
+					unsigned minRatingW,
+					unsigned maxRatingW,
+					unsigned minRatingB = 0,
+					unsigned maxRatingB = 0);
+
+	bool match(GameInfo const& info) const override;
 
 private:
 
+	rating::Type m_type;
+	Mode m_mode;
 	unsigned m_minW;
 	unsigned m_maxW;
 	unsigned m_minB;
 	unsigned m_maxB;
 };
-#endif
 
 } // namespace db
 

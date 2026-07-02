@@ -209,17 +209,15 @@ NameList::adjustListSize()
 	if (m_list.size() == m_maxId && count == m_maxId)
 		return;
 
-	List::reverse_iterator e = m_list.rend();
-
 	unsigned id = mstl::bitset::npos;
 
-	for (List::reverse_iterator i = m_list.rbegin(); i != e; ++i)
+	for (int n = m_list.size() - 1; n >= 0; --n)
 	{
-		if ((*i)->entry == 0)
+		if (m_list[n]->entry == 0)
 		{
 			if (m_list.size() > m_maxId)
 			{
-				m_list.erase(i.base());
+				m_list.erase(m_list.begin() + n);
 
 				if (m_list.size() == m_maxId && count == m_maxId)
 					return;
@@ -233,7 +231,7 @@ NameList::adjustListSize()
 
 				M_ASSERT(id != mstl::bitset::npos);
 
-				(*i)->id = id;
+				m_list[n]->id = id;
 				m_usedIdSet.set(id);
 
 				if (++count == m_maxId && m_list.size() == m_maxId)

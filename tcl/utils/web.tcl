@@ -26,9 +26,13 @@ set SaveFile "Save File"
 }
 
 proc isExternalLink {url} {
-	# These regular expressions aren't perfect, but sufficient for our purposes.
-	if {	[regexp {^[a-z]{3,5}://.*\.[a-z]{2,6}$} $url]
-		|| [regexp {^(mailto:)?[a-zA-Z0-9_.+-]+@([a-zA-Z0-9-]+\.)+[a-z]{2,6}$} $url]} {
+	if {[regexp {^(?:https?|ftp)://[^\s]+$} $url]} {
+		return 1
+	}
+	if {[regexp {^mailto:[^\s@]+@([a-zA-Z0-9-]+\.)+[a-z]{2,}$} $url]} {
+		return 1
+	}
+	if {[regexp {^[^\s@]+@([a-zA-Z0-9-]+\.)+[a-z]{2,}$} $url]} {
 		return 1
 	}
 	return 0
@@ -46,14 +50,14 @@ proc open {parent url} {
 
 	switch -- [tk windowingsystem] {
 		"aqua" {
-			catch {exec open $url &}
+			catch {exec open [list $url] &}
 		}
 
 		"win32" {
 			if {$::tcl_platform(os) eq "Windows NT"} {
-				catch {exec $::env(COMSPEC) /c start \"$url\" &}
+				catch {exec $::env(COMSPEC) /c start "" [list $url] &}
 			} else {
-				catch {exec start \"$url\" &}
+				catch {exec start "" [list $url] &}
 			}
 		}
 
@@ -73,7 +77,7 @@ proc open {parent url} {
 					}
 					set url ${prot}${url}
 				}
-				catch { exec $xdgopen "$url" & }
+				catch { exec $xdgopen [list $url] & }
 			} else {
 				if {![info exists DefaultBrowser]} {
 					set DefaultBrowser [FindDefaultBrowser]
@@ -81,9 +85,9 @@ proc open {parent url} {
 				while {[string length $DefaultBrowser]} {
 					if {[info exists Options($DefaultBrowser)]} {
 						set options [string map [list %url% $url] $Options($DefaultBrowser)]
-						if {![catch {exec /bin/sh -c "$DefaultBrowser $options"}]} { break }
+						if {![catch {exec $DefaultBrowser {*}$options &}]} { break }
 					}
-					if {![catch {exec /bin/sh -c "$DefaultBrowser '$url'" &}]} { break }
+					if {![catch {exec $DefaultBrowser [list $url] &}]} { break }
 					lappend Excluded $DefaultBrowser
 					set DefaultBrowser [FindDefaultBrowser]
 				}

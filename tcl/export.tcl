@@ -670,6 +670,7 @@ proc open {parent args} {
 	if {[info exists opts(-title)]} { set Info(title) $opts(-title) }
 	if {[info exists opts(-languages)]} { set Info(languages) $opts(-languages) }
 	if {[info exists opts(-preferred)]} { set Info(preferred) $opts(-preferred) }
+	if {[info exists opts(-type)]} { set Info(type) $opts(-type) }
 	if {[info exists Info(languages)] && ![info exists Info(preferred)]} {
 		set Info(preferred) {}
 	}
@@ -741,6 +742,9 @@ proc open {parent args} {
 						encoding EncodingSetup}
 		set initialfile [file rootname [file tail $Info(base)]]
 		if {$initialfile eq $clipbaseName} { set initialfile $::util::clipbaseName }
+	}
+	if {[info exists Info(type)] && $Info(type) in $Values(Types)} {
+		set Values(Type) $Info(type)
 	}
 
 	set height [llength $Values(Types)]
@@ -3111,7 +3115,6 @@ proc Select {nb index} {
 			set Info(build-style) 1
 			set var $mc::PdfFiles
 			set ext .pdf
-if {[pwd] ne "/home/gregor/development/c++/scidb/tcl"} { ::beta::notYetImplemented $nb pdf }
 		}
 
 		html {
@@ -3129,7 +3132,6 @@ if {[pwd] ne "/home/gregor/development/c++/scidb/tcl"} { ::beta::notYetImplement
 			set Info(build-style) 1
 			set var $mc::HtmlFiles
 			if {$::tcl_platform(platform) eq "windows"} { set ext .htm } else { set ext .html }
-if {[pwd] ne "/home/gregor/development/c++/scidb/tcl"} { ::beta::notYetImplemented $nb html }
 		}
 
 		tex {
@@ -3148,7 +3150,6 @@ if {[pwd] ne "/home/gregor/development/c++/scidb/tcl"} { ::beta::notYetImplement
 			set Info(useCustom) 0
 			set var $mc::TeXFiles
 			set ext {.tex .ltx}
-if {[pwd] ne "/home/gregor/development/c++/scidb/tcl"} { ::beta::notYetImplemented $nb tex }
 		}
 	}
 
@@ -3222,6 +3223,11 @@ proc DoExport {parent dlg file} {
 
 	set useCopyOperation 0
 	set options 0
+	set flags 0
+	set nags {}
+	set searchPath {}
+	set script {}
+	set preamble {}
 
 	if {[info exists Info(languages)]} {
 		set languages {}
@@ -3318,14 +3324,12 @@ proc DoExport {parent dlg file} {
 			}
 		}
 
-		html { return [::beta::notYetImplemented $dlg html] }
-		pdf  { return [::beta::notYetImplemented $dlg pdf] }
+		# HTML/PDF exports share the print pipeline below. Do not hard-disable
+		# them based on checkout location or developer-only gating.
+		html -
+		pdf {}
 	
 		tex {
-# XXX temporary
-if {[pwd] ne "/home/gregor/development/c++/scidb/tcl"} {
-	return [::beta::notYetImplemented $dlg tex]
-}
 			foreach style [array names Styles tex,BasicStyle,*] {
 				if {[llength $Styles($style)] > 1} {
 					lassign $Styles($style) family size weight slant color
@@ -3379,10 +3383,10 @@ if {[pwd] ne "/home/gregor/development/c++/scidb/tcl"} {
 			if {$Values(tex,diagram,hide)} {
 				set options [expr {$options | [Pow2 $Options(diagram_hide)]}]
 			}
-			if {$Values(pdf,diagram,show-movers)} {
+			if {$Values(tex,diagram,show-movers)} {
 				set options [expr {$options | [Pow2 $Options(diagram_show_mover)]}]
 			}
-			if {$Values(pdf,diagram,show-coordinates)} {
+			if {$Values(tex,diagram,show-coordinates)} {
 				set options [expr {$options | [Pow2 $Options(diagram_show_coordinates)]}]
 			}
 			if {$Styles(tex,BasicStyle,GameText,Moves,MainLine,ColumnStyle)} {

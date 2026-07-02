@@ -15,7 +15,7 @@ include ../../Makefile.in
 .SUFFIXES: .cpp
 .PRECIOUS:
 
-INCLUDE	= -I. -Icql -Isci -Isci/v91 -Isci/v92 -Isci/v93 -Isi3 -Icbh -Icbf -I../mstl -I../util -I../util/libTeXt -I../util/libharu -I../util/universalchardet -I../util/expat -I../sys $(ZLIB_INC)
+INCLUDE	= -I. -Icql -Isci -Isci/v91 -Isci/v92 -Isci/v93 -Isi3 -Icbh -Icbf -Icbv -I../mstl -I../util -I../util/libTeXt -I../util/libharu -I../util/universalchardet -I../util/expat -I../sys $(ZLIB_INC)
 CXXFLAGS	+= $(OPTIMIZE) $(PROFILING) $(CXX_DEBUG) $(EXTRA_DEBUG_FLAGS) $(SYS_CXXFLAGS) $(TCL_INCLUDE) -DSCI_NAMEBASE_FIX=1
 
 SRC_CXX = \
@@ -124,9 +124,14 @@ SRC_CXX = \
 	cbf/cbf_codec.cpp \
 	cbf/cbf_decoder.cpp \
 	cbf/cbf_decoder_position.cpp \
+	cbv/cbv_codec.cpp \
 	cbh/cbh_codec.cpp \
 	cbh/cbh_decoder.cpp \
 	cbh/cbh_decoder_position.cpp \
+	cbh/cbh_annotation_encoder.cpp \
+	cbh/cbh_consumer.cpp \
+	cbh/cbh_encoder.cpp \
+	cbh/cbh_encoder_position.cpp \
 	cbh/cbh_game_decoder.cpp \
 
 SRC	= $(SRC_CXX)
@@ -148,13 +153,21 @@ depend:
 
 $(LIB).a: $(OBJS) db_eco_table.o
 	@echo "Building $(LIB).a"
-	@$(AR) $(ARFLAGS) $(LIB).a $(OBJS) db_eco_table.o
-	@$(RANLIB) $(LIB).a
+	@tmp="$(LIB).a.$$$$"; \
+	rm -f "$$tmp"; \
+	$(AR) $(ARFLAGS) "$$tmp" $(OBJS) db_eco_table.o && \
+	$(RANLIB) "$$tmp" && \
+	mv -f "$$tmp" $(LIB).a
+	@rm -f $(LIB).a.$$$$
 
 $(LIB)stubs.a: $(OBJS) db_eco_table_stubs.o
 	@echo "Building $(LIB)stubs.a"
-	@$(AR) $(ARFLAGS) $(LIB)stubs.a $(OBJS) db_eco_table_stubs.o
-	@$(RANLIB) $(LIB)stubs.a
+	@tmp="$(LIB)stubs.a.$$$$"; \
+	rm -f "$$tmp"; \
+	$(AR) $(ARFLAGS) "$$tmp" $(OBJS) db_eco_table_stubs.o && \
+	$(RANLIB) "$$tmp" && \
+	mv -f "$$tmp" $(LIB)stubs.a
+	@rm -f $(LIB)stubs.a.$$$$
 
 db_eco_table_stubs.o: db_eco_table_stubs.cpp
 
@@ -1604,6 +1617,7 @@ db_database_codec.o: ../sys/sys_mutex.ipp
 db_database_codec.o: ../mstl/m_fixed_size_allocator.h
 db_database_codec.o: ../mstl/m_fixed_size_allocator.ipp
 db_database_codec.o: cbf/cbf_codec.h
+db_database_codec.o: cbv/cbv_codec.h
 db_database_codec.o: ../util/u_byte_stream.h
 db_database_codec.o: ../util/u_byte_stream.ipp
 db_database_codec.o: ../util/u_block_file.h
@@ -9159,3 +9173,17 @@ db_eco_table_stubs.o: ../mstl/m_stack.h
 db_eco_table_stubs.o: ../mstl/m_stack.ipp
 db_eco_table_stubs.o: ../mstl/m_chunk_allocator.ipp
 db_eco_table_stubs.o: db_eco_table.ipp
+cbv/cbv_codec.o: cbv/cbv_codec.h
+cbv/cbv_codec.o: cbh/cbh_codec.h
+cbv/cbv_codec.o: db_database_codec.h
+cbv/cbv_codec.o: db_database_content.h
+cbv/cbv_codec.o: db_exception.h
+cbv/cbv_codec.o: db_game_data.h
+cbv/cbv_codec.o: db_common.h
+cbv/cbv_codec.o: ../util/u_misc.h
+cbv/cbv_codec.o: ../util/u_progress.h
+cbv/cbv_codec.o: ../util/u_byte_stream.h
+cbv/cbv_codec.o: ../sys/sys_file.h
+cbv/cbv_codec.o: ../mstl/m_fstream.h
+cbv/cbv_codec.o: ../mstl/m_string.h
+cbv/cbv_codec.o: ../mstl/m_vector.h

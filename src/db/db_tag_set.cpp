@@ -83,11 +83,12 @@ TagSet::operator=(TagSet const& set)
 # include "m_utility.h"
 
 TagSet::TagSet(TagSet&& set)
-	:m_values(mstl::move(set.m_values))
-	,m_extra(mstl::move(set.m_extra))
+	:m_extra(mstl::move(set.m_extra))
 	,m_isUserSupplied(set.m_isUserSupplied)
 	,m_set(mstl::move(set.m_set))
 {
+	for (unsigned i = 0; i < U_NUMBER_OF(m_values); ++i)
+		m_values[i] = mstl::move(set.m_values[i]);
 	::memcpy(m_significance, set.m_significance, sizeof(m_significance));
 }
 

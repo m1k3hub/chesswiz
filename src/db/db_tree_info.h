@@ -95,6 +95,7 @@ public:
 	unsigned firstGameIndex() const;
 #ifdef SUPPORT_TREE_INFO_FILTER
 	unsigned firstGameIndex(Selector const& selector) const;
+	Filter const& filter() const;
 #endif
 
 	Move& move();

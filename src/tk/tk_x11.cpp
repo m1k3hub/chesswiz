@@ -116,6 +116,12 @@ getRegion(char const* subcmd, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 			XUngrabPointer(display, CurrentTime);
 #endif
 
+			if (ximage == NULL)
+			{
+				Tcl_SetObjResult(ti, Tcl_NewBooleanObj(0));
+				return TCL_OK;
+			}
+
 			Tk_PhotoImageBlock block;
 
 			block.pixelSize = ximage->bits_per_pixel/8;
@@ -204,6 +210,15 @@ handleXErrorMessage(Display* dpy, XErrorEvent* event)
 	// for example if the source application is crashing.
 	if (	event->error_code == BadWindow
 		&& (event->request_code == X_SendEvent || event->request_code == X_GetProperty))
+	{
+		return 0;
+	}
+
+	// BadMatch on X_GetImage is common on composited displays where the
+	// compositor does not expose root window content; treat it as a soft
+	// failure so getRegion() can return false instead of crashing.
+	if (	event->error_code == BadMatch
+		&& event->request_code == X_GetImage)
 	{
 		return 0;
 	}

@@ -105,15 +105,24 @@ static MoveListMap m_moveListMap;
 static int
 cmdLoad(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc < 2 || objc > 3)
+		return error(CmdLoad, 0, nullptr, "wrong # args: should be \"%s <done>|<type> ?<path>?\"", CmdLoad);
+
 	char const* type = stringFromObj(objc, objv, 1);
 
 	if (::strcmp(type, "done") == 0)
 	{
+		if (objc != 2)
+			return error(CmdLoad, 0, nullptr, "wrong # args: should be \"%s done\"", CmdLoad);
+
 		db::Player::loadDone();
 		db::Site::loadDone();
 	}
 	else
 	{
+		if (objc != 3)
+			return error(CmdLoad, 0, nullptr, "wrong # args: should be \"%s %s <path>\"", CmdLoad, type);
+
 		char const* path = stringFromObj(objc, objv, 2);
 
 		if (::strcmp(type, "eco") == 0)
@@ -257,12 +266,18 @@ cmdLookup(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	static char const* args[] = { "<country-code>", "<eco-code>", "<player-name>", "<site-name>", 0 };
 	enum { Cmd_CountryCode, Cmd_EcoCode, Cmd_PlayerAlias, Cmd_SiteAlias };
 
+	if (objc < 3 || objc > 4)
+		return usage(::CmdLookup, 0, 0, subcommands, args);
+
 	int index = tcl::uniqueMatchObj(objectFromObj(objc, objv, 1), subcommands);
 
 	switch (index)
 	{
 		case Cmd_CountryCode:
 			{
+				if (objc != 3)
+					return usage(::CmdLookup, "countryCode", nullptr, subcommands, args);
+
 				char const* code = stringFromObj(objc, objv, 2);
 
 				if (::strlen(code) == 3)
@@ -274,6 +289,9 @@ cmdLookup(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		case Cmd_EcoCode:
 			{
+				if (objc != 3)
+					return usage(::CmdLookup, "ecoCode", nullptr, subcommands, args);
+
 				char const* code = stringFromObj(objc, objv, 2);
 				Tcl_Obj* objs[EcoTable::Num_Name_Parts];
 				unsigned objc = 0;
@@ -292,6 +310,9 @@ cmdLookup(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			break;
 
 		case Cmd_PlayerAlias:
+			if (objc != 3)
+				return usage(::CmdLookup, "playerAlias", nullptr, subcommands, args);
+
 			if (Player const* player = Player::findPlayer(stringFromObj(objc, objv, 2)))
 			{
 				Player::StringList const& aliases = player->aliases();
@@ -312,6 +333,9 @@ cmdLookup(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		case Cmd_SiteAlias:
 			{
+				if (objc != 4)
+					return usage(::CmdLookup, "siteAlias", nullptr, subcommands, args);
+
 				if (Site const* site = Site::findSite(stringFromObj(objc, objv, 2)))
 				{
 					country::Code countryCode = country::Unknown;
@@ -409,6 +433,12 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdClose(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	scidb->close();
 	return TCL_OK;
 }
@@ -417,6 +447,12 @@ cmdClose(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdFinalize(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	scidb->finalize();
 	return TCL_OK;
 }
@@ -425,6 +461,12 @@ cmdFinalize(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdInitialized(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	return db::tag::initializeIsOk() ? TCL_OK : TCL_ERROR;
 }
 
@@ -432,6 +474,12 @@ cmdInitialized(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdVariant(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	setResult(tcl::tree::variantToString(Scidb->currentVariant()));
 	return TCL_OK;
 }
@@ -440,6 +488,12 @@ cmdVariant(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdActiveVariants(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "");
+		return TCL_ERROR;
+	}
+
 	Application::Variants variants = Scidb->getAllVariants();
 
 	Tcl_Obj* objs[::db::variant::NumberOfVariants];
@@ -462,6 +516,9 @@ static int
 cmdWriting(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	bool background __attribute__((unused)) = false;
+
+	if (((objc - 1) % 2) != 0)
+		return error(CmdWriting, 0, nullptr, "wrong # args: should be \"%s ?-background <bool>?\"", CmdWriting);
 
 	for (int i = 1; i < objc; i += 2)
 	{
@@ -504,6 +561,9 @@ cmdMoveList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	if (index == Cmd_Open)
 	{
+		if (objc != 4)
+			return usage(::CmdMoveList, "open", nullptr, subcommands, args);
+
 		MyPipedProgress*& progress = m_moveListMap[stringFromObj(objc, objv, 2)];
 		if (progress == 0)
 			progress = new MyPipedProgress(scidb->newMoveListThread(), objectFromObj(objc, objv, 3), id);
@@ -536,6 +596,9 @@ cmdMoveList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		{
 			case Cmd_Retrieve:
 			{
+				if (objc < 10 || ((objc - 10) % 2) != 0)
+					return usage(::CmdMoveList, "retrieve", nullptr, subcommands, args);
+
 				char const*		database	= stringFromObj(objc, objv, 3);
 				variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 4);
 				int				view		= intFromObj(objc, objv, 5);
@@ -578,18 +641,30 @@ cmdMoveList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			}
 
 			case Cmd_Fetch:
+				if (objc != 4)
+					return usage(::CmdMoveList, "fetch", nullptr, subcommands, args);
+
 				setResult(scidb->fetchMoveList(progress->thread(), unsignedFromObj(objc, objv, 3)));
 				break;
 
 			case Cmd_Clear:
+				if (objc != 3)
+					return usage(::CmdMoveList, "clear", nullptr, subcommands, args);
+
 				scidb->clearMoveList(progress->thread());
 				break;
 
 			case Cmd_Open_:
+				if (objc != 3)
+					return usage(::CmdMoveList, "open?", nullptr, subcommands, args);
+
 				setResult(true);
 				break;
 
 			case Cmd_Close:
+				if (objc != 3)
+					return usage(::CmdMoveList, "close", nullptr, subcommands, args);
+
 				scidb->deleteMoveList(progress->thread());
 				m_moveListMap.erase(i);
 				break;

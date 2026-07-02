@@ -336,7 +336,7 @@ static mstl::string const MagicGameFile  ("Scidb.g\0", 8);
 static mstl::string const MagicNamebase  ("Scidb.n\0", 8);
 static mstl::string const Extension("sci");
 
-static uint16_t const FileVersion	= 94;
+static uint16_t const FileVersion	= 95;
 static unsigned const HeaderSize		= 128;
 
 static char const* NamebaseTags[Namebase::Round];
@@ -498,7 +498,7 @@ unsigned Codec::maxEventCount() const			{ return (1u << 24) - 1; }
 unsigned Codec::maxAnnotatorCount() const		{ return (1u << 24) - 1; }
 unsigned Codec::minYear() const					{ return Date::MinYear; }
 unsigned Codec::maxYear() const					{ return Date::MaxYear; }
-unsigned Codec::maxDescriptionLength() const	{ return 107u; }
+unsigned Codec::maxDescriptionLength() const	{ return 106u; }
 mstl::string const& Codec::extension() const	{ return Extension; }
 mstl::string const& Codec::encoding() const	{ return sys::utf8::Codec::utf8(); }
 mstl::string const& Codec::defaultEncoding() const { return sys::utf8::Codec::utf8(); }
@@ -517,8 +517,8 @@ Codec::getBlockFile() const
 unsigned
 Codec::maxGameCount() const
 {
-	static_assert((1u << 24) - 1 <= (1u << 31)/sizeof(IndexEntry), "2 GB exceeded");
-	return (1u << 24) - 1;
+	static_assert((1u << 31)/sizeof(IndexEntry) <= 0xFFFFFFFFu, "index too large for uint32");
+	return 0xFFFFFFFFu;
 }
 
 
@@ -649,6 +649,18 @@ Codec::getGame(GameInfo const& info)
 
 	ByteStream src;
 	getGameRecord(info, m_gameData->reader(), src);
+	return src;
+}
+
+
+util::ByteStream
+Codec::getGame(GameInfo const& info, ::util::BlockFileReader* reader)
+{
+	if (!reader)
+		return getGame(info);
+
+	ByteStream src;
+	getGameRecord(info, *reader, src);
 	return src;
 }
 
@@ -1024,7 +1036,10 @@ Codec::checkFileVersion(mstl::fstream& fstrm, mstl::string const& magic, uint16_
 	ByteStream bstrm(buf, 2);
 	uint16_t version = bstrm.uint16();
 
-	if (version != fileVersion)
+	// Accept any version in the range [94, fileVersion]: the game/namebase files are
+	// not rewritten when the index is upgraded (e.g. v94 → v95), so they may legitimately
+	// carry an older version number even after the index has been saved with the new version.
+	if (version < 94 || version > fileVersion)
 	{
 		if (&fstrm == m_gameStream)
 			IO_RAISE(Game, Unexpected_Version, "unexpected version (%u)", unsigned(version));
@@ -1124,20 +1139,30 @@ Codec::readIndexHeader(mstl::fstream& fstrm, unsigned* retNumGames)
 
 	ByteStream bstrm(header, sizeof(header));
 
-	unsigned version	= bstrm.uint16();
-	unsigned numGames	= bstrm.uint24();
+	unsigned version  = bstrm.uint16();
+	unsigned numGames;
+
+	if (version == ::FileVersion)
+	{
+		numGames = bstrm.uint32(); // 32-bit since v95
+	}
+	else if (version == 94)
+	{
+		numGames = bstrm.uint24(); // legacy 24-bit format; will be upgraded on next save
+	}
+	else if (version < 94)
+	{
+		IO_RAISE(Index, Unexpected_Version, "old format Scidb version (%d)", unsigned(version));
+	}
+	else
+	{
+		IO_RAISE(Index, Unknown_Version, "unknown Scidb version (%u)", unsigned(version));
+	}
+
 	unsigned variant	= bstrm.uint8();
 	unsigned baseType	= bstrm.uint8();
 	unsigned flags		= bstrm.uint8();
 	unsigned created  = bstrm.uint32();
-
-	if (version != ::FileVersion)
-	{
-		if (version < FileVersion)
-			IO_RAISE(Index, Unexpected_Version, "old format Scidb version (%d)", unsigned(version));
-		else
-			IO_RAISE(Index, Unknown_Version, "unknown Scidb version (%u)", unsigned(version));
-	}
 
 	mstl::string description;
 	bstrm.get(description);
@@ -1410,9 +1435,7 @@ Codec::writeIndexHeader(mstl::ostream& strm)
 
 	bstrm.put(::MagicIndexFile, 8);
 	bstrm << uint16_t(FileVersion);						// Scidb version
-	// TODO increase to 32 bit, because for administrative tasks a higher limit may be useful
-	// TODO thus we have to decrease the description length by one byte
-	bstrm << uint24_t(gameInfoList().size());			// number of games
+	bstrm << uint32_t(gameInfoList().size());			// number of games (32-bit since v95)
 	bstrm << uint8_t(variant::toIndex(variant()));	// chess variant in this base
 	bstrm << uint8_t(type());								// base type
 	bstrm << uint8_t(flags);								// flags
@@ -2567,9 +2590,9 @@ Codec::getAttributes(mstl::string const& filename,
 
 	ByteStream bstrm(header, sizeof(header));
 
-#ifndef CODEBLOCKS
 	unsigned fileVersion = bstrm.uint16();
 
+#ifndef CODEBLOCKS
 	switch (fileVersion)
 	{
 		case 91:
@@ -2581,7 +2604,10 @@ Codec::getAttributes(mstl::string const& filename,
 	}
 #endif
 
-	numGames	= bstrm.uint24();
+	if (fileVersion == 95)
+		numGames = (int)bstrm.uint32();
+	else
+		numGames = (int)bstrm.uint24(); // v94: 24-bit game count
 	variant = variant::fromIndex(bstrm.uint8());
 	type = type::ID(bstrm.uint8());
 	bstrm.skip(1);

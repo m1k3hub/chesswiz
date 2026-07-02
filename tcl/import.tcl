@@ -143,6 +143,25 @@ array set Colors {
 variable Variants {Undetermined Normal ThreeCheck Crazyhouse Suicide Giveaway Losers}
 
 
+proc IsPortableGameArchive {file} {
+	set lower [string tolower $file]
+	return [expr {[string match *.pgn.gz $lower]
+		|| [string match *.bpgn.gz $lower]
+		|| [file extension $lower] in {.pgn .bpgn .zip}}]
+}
+
+
+proc ImportFileType {file} {
+	return [expr {[IsPortableGameArchive $file] ? "pgn" : "db"}]
+}
+
+
+proc IsUtf8DatabaseFile {file} {
+	set lower [string tolower [file extension $file]]
+	return [expr {$lower in {.sci .si3 .si4}}]
+}
+
+
 proc import {parent base files msg {encoding {}}} {
 	if {[llength $files] == 0} { return 0 }
 	::remote::busyOperation { Import $parent $base $files $msg $encoding }
@@ -542,55 +561,53 @@ proc Import {parent base files msg encoding} {
 	set logCount 0
 	set numFiles [llength $files]
 
-	foreach file $files {
-		if {[incr logCount] > 1} { ::log::newline }
-		switch [file extension $file] {
-			.pgn - .pgn.gz - .zip { set type pgn }
-			default { set type db }
-		}
-		::log::info "$mc::ImportingFile($type): [file tail $file]"
-		set info "$::mc::File: [file tail $file]"
-		if {$numFiles > 1} { append info " ($logCount/$numFiles)" }
-		set options [list -message $msg -log yes -interrupt yes -information $info]
-		set cmd [list ::scidb::db::import $base $file [namespace current]::Log log]
-		switch [file extension $file] {
-			.sci - .si3 - .si4	{ set encoding utf-8 }
-			default					{ set encoding auto }
-		}
-		# TODO: set flag whether illegal games will be included
-		set illegal 1
+		foreach file $files {
+			if {[incr logCount] > 1} { ::log::newline }
+			set type [ImportFileType $file]
+			::log::info "$mc::ImportingFile($type): [file tail $file]"
+			set info "$::mc::File: [file tail $file]"
+			if {$numFiles > 1} { append info " ($logCount/$numFiles)" }
+			set options [list -message $msg -log yes -interrupt yes -information $info]
+			set cmd [list ::scidb::db::import $base $file [namespace current]::Log log]
+			if {[IsUtf8DatabaseFile $file]} {
+				set encoding utf-8
+			} else {
+				set encoding auto
+			}
+			# TODO: set flag whether illegal games will be included
+			set illegal 1
 
-		set cmd [list ::progress::start $parent $cmd \
-			[list -encoding $encoding -illegal $illegal] $options 0]
-		if {[catch { ::util::catchException $cmd result } rc opts]} {
-			::log::error $mc::AbortedDueToInternalError
-			::progress::close
-			::log::close
-			return {*}$opts -rethrow 1 $rc
-		}
+			set cmd [list ::progress::start $parent $cmd \
+				[list -encoding $encoding -illegal $illegal] $options 0]
+			if {[catch { ::util::catchException $cmd result } rc opts]} {
+				::log::error $mc::AbortedDueToInternalError
+				::progress::close
+				::log::close
+				return {*}$opts -rethrow 1 $rc
+			}
 
-		if {$rc == 1} {
-			::log::error $mc::AbortedDueToIoError
-			::progress::close
-			::log::close
-			set Priv(ok) 0
-			return 0
-		}
+			if {$rc == 1} {
+				::log::error $mc::AbortedDueToIoError
+				::progress::close
+				::log::close
+				set Priv(ok) 0
+				return 0
+			}
 
-		lassign $result total illegal accepted rejected unsupported
+			lassign $result total illegal accepted rejected unsupported
 
-		if {$total < 0} {
-			::log::warning $mc::UserHasInterrupted
-			set total [expr {-$total + 1}]
-			set rc -1
-		}
+			if {$total < 0} {
+				::log::warning $mc::UserHasInterrupted
+				set total [expr {-$total + 1}]
+				set rc -1
+			}
 
-		update idletasks	;# be sure the following will be appended
-		if {$Priv(ok)} {
-			logResult $total $illegal $mc::NoGamesImported \
-				$mc::ImportedGames $accepted $rejected $unsupported
-		}
-		if {$rc == -1} { break }
+			update idletasks	;# be sure the following will be appended
+			if {$Priv(ok)} {
+				logResult $total $illegal $mc::NoGamesImported \
+					$mc::ImportedGames $accepted $rejected $unsupported
+			}
+			if {$rc == -1} { break }
 	}
 
 	set cmd [list ::scidb::db::save $base]

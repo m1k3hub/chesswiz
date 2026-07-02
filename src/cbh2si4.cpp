@@ -62,6 +62,15 @@ using namespace db;
 
 static unsigned rejected = 0;
 
+struct ImportStats
+{
+	ImportStats() :written(0), rejected(0), warnings(0), errors(0) {}
+	unsigned written;
+	unsigned rejected;
+	unsigned warnings;
+	unsigned errors;
+};
+
 static bool newNewline = false;
 
 
@@ -100,6 +109,8 @@ struct Tracer : public util::Progress
 
 struct Log : public db::Log
 {
+	Log() :warningCount(0), errorCount(0) {}
+
 	bool error(save::State code, unsigned gameNumber)
 	{
 		char const* msg = 0;
@@ -120,6 +131,7 @@ struct Log : public db::Log
 		}
 
 		::fflush(stdout);
+		++errorCount;
 		::fprintf(	stderr,
 						"%s: %s (#%u)\n",
 						code == db::save::GameTooLong ? "Warning" : "Error",
@@ -129,8 +141,29 @@ struct Log : public db::Log
 		return code == save::GameTooLong;
 	}
 
-	void warning(Warning code, unsigned gameNumber) {}
+	void warning(Warning code, unsigned gameNumber) { ++warningCount; }
+
+	unsigned warningCount;
+	unsigned errorCount;
 };
+
+
+static void
+printImportSummary(mstl::string const& srcPath,
+						 mstl::string const& dstPath,
+						 mstl::string const& encoding,
+						 ImportStats const& stats)
+{
+	printf("\nSummary: source='%s' format=cbh destination='%s' encoding=%s\n",
+				srcPath.c_str(),
+				dstPath.c_str(),
+				encoding.c_str());
+	printf("written=%u rejected=%u warnings=%u errors=%u\n",
+				stats.written,
+				stats.rejected,
+				stats.warnings,
+				stats.errors);
+}
 
 
 typedef si3::Consumer::TagBits TagBits;
@@ -243,7 +276,7 @@ printEncodingsAndExit(int rc)
 
 		if (!isForbiddenEncoding(*i))
 		{
-			printf(i->c_str());
+			printf("%s", i->c_str());
 
 			if (next != e)
 				printf(", ");
@@ -425,6 +458,7 @@ logIOError(IOException const& exc, unsigned gameNumber = 0)
 		case IOException::Annotation:		file = "annotation"; break;
 		case IOException::PgnFile:			/* cannot happen */ break;
 		case IOException::BookFile:		/* cannot happen */ break;
+		case IOException::Archive:		/* cannot happen */ break;
 	}
 
 	mstl::string msg("Error");
@@ -475,7 +509,7 @@ logIOError(IOException const& exc, unsigned gameNumber = 0)
 
 
 static unsigned
-exportGames(Database& src, Consumer& dst, ::util::Progress& progress)
+exportGames(Database& src, Consumer& dst, ::util::Progress& progress, ::Log& log)
 {
 	unsigned numGames = src.countGames();
 
@@ -485,8 +519,6 @@ exportGames(Database& src, Consumer& dst, ::util::Progress& progress)
 	unsigned reportAfter	= progress.frequency();
 	unsigned count			= 0;
 	unsigned countGames	= 0;
-
-	::Log log;
 
 	for (unsigned i = 0; i < numGames; ++i)
 	{
@@ -651,7 +683,8 @@ main(int argc, char* argv[])
 	if (	cbhPath.size() < 4
 		|| (	strcmp(cbhPath.c_str() + cbhPath.size() - 4, ".cbh") != 0
 			&& strcmp(cbhPath.c_str() + cbhPath.size() - 4, ".cbf") != 0
-			&& strcmp(cbhPath.c_str() + cbhPath.size() - 4, ".CBF") != 0))
+			&& strcmp(cbhPath.c_str() + cbhPath.size() - 4, ".CBF") != 0
+			&& strcmp(cbhPath.c_str() + cbhPath.size() - 4, ".CBH") != 0))
 	{
 		cbhPath.append(".cbh");
 	}
@@ -669,21 +702,21 @@ main(int argc, char* argv[])
 		si4Path.append(sys::file::normalizedName(argv[i]));
 	}
 	else
-	{
-		si4Path.assign(cbhPath);
-		mstl::string::size_type n = si4Path.rfind('/');
-
-		if (n != mstl::string::npos)
-			si4Path.erase(mstl::string::size_type(0), n + 1);
-
-		if (	si4Path.size() < 4
-			|| (	strcmp(si4Path.c_str() + si4Path.size() - 4, ".cbh") == 0
-				&& strcmp(si4Path.c_str() + si4Path.size() - 4, ".cbf") == 0
-				&& strcmp(si4Path.c_str() + si4Path.size() - 4, ".CBF") == 0))
 		{
-			si4Path.erase(si4Path.size() - 4);
+			si4Path.assign(cbhPath);
+			mstl::string::size_type n = si4Path.rfind('/');
+
+			if (n != mstl::string::npos)
+				si4Path.erase(mstl::string::size_type(0), n + 1);
+
+			if (	si4Path.size() >= 4
+				&& (	strcmp(si4Path.c_str() + si4Path.size() - 4, ".cbh") == 0
+					|| strcmp(si4Path.c_str() + si4Path.size() - 4, ".cbf") == 0
+					|| strcmp(si4Path.c_str() + si4Path.size() - 4, ".CBF") == 0))
+			{
+				si4Path.erase(si4Path.size() - 4);
+			}
 		}
-	}
 
 	if (si4Path.empty())
 	{
@@ -720,6 +753,8 @@ main(int argc, char* argv[])
 
 		Database	src(cbhPath, convertfrom, permission::ReadOnly, progress);
 		Database	dst(si4Path, convertto, storage::OnDisk, variant::Normal);
+		::Log log;
+		ImportStats stats;
 		si3::Consumer consumer(	format::Scid4,
 										dynamic_cast<si3::Codec&>(dst.codec()),
 										convertto,
@@ -730,12 +765,17 @@ main(int argc, char* argv[])
 		printf("Convert '%s' to '%s' ", cbhPath.c_str(), si4Path.c_str());
 		fflush(stdout);
 		::newNewline = true;
-		unsigned numGames = exportGames(src, consumer, progress);
+		unsigned numGames = exportGames(src, consumer, progress, log);
+		stats.written = numGames;
+		stats.rejected = rejected;
+		stats.warnings = log.warningCount;
+		stats.errors = log.errorCount;
 		dst.save(progress);
 		printf("\n%u game(s) written.", numGames);
 		if (rejected > 0)
 			printf("\n%u game(s) rejected.", rejected);
 		printf("\n");
+		printImportSummary(cbhPath, si4Path, convertto, stats);
 		fflush(stdout);
 		dst.close();
 		src.close();

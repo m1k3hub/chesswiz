@@ -948,7 +948,7 @@ Decoder::parseStartOfScan()
 	{
 		int quantTableIndex = m_scanComponents[i]->quantTableIndex();
 
-		if (m_quantValues[quantTableIndex] == 0)
+		if (m_quantValues[quantTableIndex][0] == 0)
 			throw Exception("undefined quantization table (%d)", quantTableIndex);
 
 		m_scanComponents[i]->setup(m_quantValues[quantTableIndex],

@@ -4,7 +4,6 @@
 # Date   : $Date: 2018-09-11 07:41:52 -0400 (Tue, 11 Sep 2018) $
 # Url    : $URL$
 # ======================================================================
-
 # ======================================================================
 #    _/|            __
 #   // o\         /    )           ,        /    /
@@ -417,10 +416,12 @@ proc Goto {table number} {
 	variable ${table}::Vars
 
 	set number [::locale::toNumber $number]
+	set base [::scrolledtable::base $table]
+	set variant [::scrolledtable::variant $table]
 
 	if {[string is integer -strict $number]} {
 		if {$number > 0} {
-			set index [::scidb::db::get gameIndex [expr {$number - 1}] 0]
+			set index [::scidb::db::get gameIndex [expr {$number - 1}] 0 $base $variant]
 			if {$index >= 0} {
 				::gamestable::see $table $index
 				::gamestable::focus $table
@@ -497,3 +498,207 @@ proc CompareOptions {twm variant} {
 } ;# namespace application
 
 # vi:set ts=3 sw=3:
+
+# ======================================================================
+# Saved Search Presets
+# ======================================================================
+
+namespace eval searchPresets {
+	variable presets {}
+	variable filename "~/.scidb/search_presets.tcl"
+}
+
+
+proc LoadSearchPresets {} {
+	variable searchPresets::presets
+	variable searchPresets::filename
+
+	if {[file exists $filename]} {
+		catch { source $filename }
+	}
+}
+
+
+proc SaveSearchPresets {} {
+	variable searchPresets::presets
+	variable searchPresets::filename
+
+	set fp [open $filename w]
+	puts $fp "# SCIDb Search Presets"
+	puts $fp "# Format: list of {name query}"
+	puts $fp "set searchPresets::presets {"
+	foreach preset $searchPresets::presets {
+		lassign $preset name query
+		puts $fp "    {$name {$query}}"
+	}
+	puts $fp "}"
+	close $fp
+}
+
+
+proc AddSearchPreset {name query} {
+	variable searchPresets::presets
+
+	# Check if preset already exists
+	foreach preset $presets {
+		if {[lindex $preset 0] eq $name} {
+			# Update existing preset
+			set idx [lsearch -exact $presets $preset]
+			set presets [lreplace $presets $idx $idx [list $name $query]]
+			SaveSearchPresets
+			return
+		}
+	}
+
+	# Add new preset
+	lappend presets [list $name $query]
+	SaveSearchPresets
+}
+
+
+proc RemoveSearchPreset {name} {
+	variable searchPresets::presets
+
+	set idx 0
+	foreach preset $presets {
+		if {[lindex $preset 0] eq $name} {
+			set presets [lreplace $presets $idx $idx]
+			SaveSearchPresets
+			return
+		}
+		incr idx
+	}
+}
+
+
+proc GetSearchPreset {name} {
+	variable searchPresets::presets
+
+	foreach preset $presets {
+		if {[lindex $preset 0] eq $name} {
+			return [lindex $preset 1]
+		}
+	}
+	return {}
+}
+
+
+proc ShowSearchPresetsMenu {parent base variant view} {
+	variable searchPresets::presets
+	variable mc
+
+	set menu .searchPresetsMenu
+	if {[winfo exists $menu]} { destroy $menu }
+	tk_menu $menu -tearoff false
+
+	# Add existing presets
+	foreach preset $presets {
+		lassign $preset name query
+		$menu add command -label $name -command [list ApplySearchPreset $parent $base $variant $view $query]
+	}
+
+	if {![llength $presets]} {
+		$menu add command -label "(No saved presets)" -state disabled
+	}
+
+	$menu add separator
+
+	# Add "Save Current Search" option
+	$menu add command -label $mc::SaveCurrentSearch -command [list SaveCurrentSearchAsPreset $parent $base $variant $view]
+
+	# Add "Manage Presets" option
+	$menu add command -label $mc::ManageSearchPresets -command [list ManageSearchPresets $parent]
+
+	return $menu
+}
+
+
+proc ApplySearchPreset {parent base variant view query} {
+	::scidb::view::search $base $variant $view null none $query
+}
+
+
+proc SaveCurrentSearchAsPreset {parent base variant view} {
+	variable mc
+
+	set dlg [tk::toplevel .savePreset -class Scidb]
+	wm title $dlg $mc::SaveSearchPresetTitle
+	wm transient $dlg $parent
+
+	ttk::frame $dlg.f
+	pack $dlg.f -fill both -expand yes -padx 10 -pady 10
+
+	ttk::label $dlg.f.lbl -text $mc::PresetName
+	ttk::entry $dlg.f.entry
+	ttk::button $dlg.f.save -text $mc::Save -command [list SavePresetAndClose $dlg $parent $base $variant $view $dlg.f.entry]
+	ttk::button $dlg.f.cancel -text $mc::Cancel -command [list destroy $dlg]
+
+	grid $dlg.f.lbl -row 0 -column 0 -sticky w -pady 5
+	grid $dlg.f.entry -row 0 -column 1 -sticky ew -pady 5 -padx 5
+	grid $dlg.f.save -row 1 -column 0 -pady 10
+	grid $dlg.f.cancel -row 1 -column 1 -pady 10 -padx 5
+
+	grid columnconfigure $dlg.f 1 -weight 1
+	wm wait visibility $dlg
+}
+
+
+proc SavePresetAndClose {dlg parent base variant view entry} {
+	set name [$entry get]
+	if {![string length $name]} {
+		::ui::message "Please enter a preset name"
+		return
+	}
+
+	# Get current search query (simplified - would need actual current query)
+	set query [list player "*"]  ;# Placeholder
+
+	AddSearchPreset $name $query
+	destroy $dlg
+	::ui::message "Saved search preset: $name"
+}
+
+
+proc ManageSearchPresets {parent} {
+	variable searchPresets::presets
+	variable mc
+
+	set dlg [tk::toplevel .managePresets -class Scidb]
+	wm title $dlg $mc::ManageSearchPresetsTitle
+	wm transient $dlg $parent
+
+	ttk::frame $dlg.f
+	pack $dlg.f -fill both -expand yes -padx 10 -pady 10
+
+	set listbox [tk::listbox $dlg.f.list -height 10 -width 50]
+	ttk::scrollbar $dlg.f.sb -command [list $listbox yview]
+	$listbox configure -yscrollcommand [list $dlg.f.sb set]
+
+	foreach preset $presets {
+		$listbox insert end [lindex $preset 0]
+	}
+
+	ttk::button $dlg.f.delete -text $mc::Delete -command [list DeleteSelectedPreset $dlg $listbox]
+	ttk::button $dlg.f.close -text $mc::Close -command [list destroy $dlg]
+
+	grid $listbox -row 0 -column 0 -sticky nsew -pady 5
+	grid $dlg.f.sb -row 0 -column 1 -sticky ns -pady 5
+	grid $dlg.f.delete -row 1 -column 0 -pady 10
+	grid $dlg.f.close -row 1 -column 1 -pady 10
+
+	grid rowconfigure $dlg.f 0 -weight 1
+	grid columnconfigure $dlg.f 0 -weight 1
+
+	wm wait visibility $dlg
+}
+
+
+proc DeleteSelectedPreset {dlg listbox} {
+	set sel [$listbox curselection]
+	if {![llength $sel]} { return }
+
+	set idx [lindex $sel 0]
+	set preset [$listbox get $idx]
+	RemoveSearchPreset $preset
+	$listbox delete $idx
+}

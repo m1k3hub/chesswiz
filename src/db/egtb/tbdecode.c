@@ -801,6 +801,18 @@ static int comp_open_file (decode_info **res, FILE *fd, int check_crc)
   return (COMP_ERR_NONE);
 }
 
+static void comp_close_file (decode_info *info)
+{
+  if (info == NULL) return;
+  free (info);
+}
+
+static void comp_free_block (decode_block *block)
+{
+  if (block == NULL) return;
+  free (block);
+}
+
 __attribute__((unused))
 static int comp_tell_blocks (decode_info *info)
 {
@@ -982,6 +994,9 @@ int main (int argc, char *argv[])
   }
   tEnd = clock ();
   dSeconds = (double) (tEnd - tStart) / CLOCKS_PER_SEC;
+  comp_close_file(comp_info);
+  comp_free_block(comp_block);
+  fclose(fp);
   printf ("Total memory allocated: %dKb\n", (cbEGTBCompBytes+1023)/1024);
   printf ("%g seconds, %dMb, %gMb/sec)\n", dSeconds, size/(1024*1024), size/(1024*1024) / dSeconds);
   return 0;

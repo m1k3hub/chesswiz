@@ -51,6 +51,8 @@ cmdZlibCrc(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[
 			Tcl_SetResult(ti, const_cast<char*>("Invalid checksum argument"), TCL_STATIC);
 			return TCL_ERROR;
 		}
+
+		crc = icrc;
 	}
 
 	Tcl_SetObjResult(ti, Tcl_NewWideIntObj(crc32(crc, reinterpret_cast<Bytef const*>(data), len)));

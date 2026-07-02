@@ -63,7 +63,7 @@ public:
 
 	Thread();
 	Thread(ThreadId threadId); // should be used only for main thread
-	~Thread();
+	virtual ~Thread();
 
 	bool isMainThread() const;
 

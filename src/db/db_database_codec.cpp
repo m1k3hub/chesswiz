@@ -37,6 +37,7 @@
 #include "si3_codec.h"
 #include "cbh_codec.h"
 #include "cbf_codec.h"
+#include "cbv_codec.h"
 
 #include "u_byte_stream.h"
 #include "u_block_file.h"
@@ -53,6 +54,7 @@
 #include "m_construct.h"
 #include "m_utility.h"
 #include "m_auto_ptr.h"
+#include "m_vector.h"
 #include "m_assert.h"
 
 #include <string.h>
@@ -338,6 +340,7 @@ DatabaseCodec::makeCodec(mstl::string const& name, Mode mode)
 
 		case format::ChessBase:		return new cbh::Codec;
 		case format::ChessBaseDOS:	return new cbf::Codec;
+		case format::ChessBaseArchive:	return new cbv::Codec;
 		case format::Pgn:				return new sci::Codec;
 		case format::Scidb:			return mode == Existing ? sci::Codec::makeCodec(name) : new sci::Codec;
 		case format::Scid3:			return new si3::Codec;
@@ -377,6 +380,9 @@ DatabaseCodec::getAttributes(	mstl::string const& filename,
 		case format::ChessBaseDOS:
 			return cbf::Codec::getAttributes(filename, numGames, type, description);
 
+		case format::ChessBaseArchive:
+			return cbv::Codec::getAttributes(filename, numGames, type, description);
+
 		case format::Scid3:
 		case format::Scid4:
 			return si3::Codec::getAttributes(filename, numGames, type, description);
@@ -403,6 +409,7 @@ DatabaseCodec::getSuffixes(mstl::string const& filename, StringList& result)
 		case format::Scidb:			sci::Codec::getSuffixes(filename, result); break;
 		case format::ChessBase:		cbh::Codec::getSuffixes(filename, result); break;
 		case format::ChessBaseDOS:	cbf::Codec::getSuffixes(filename, result); break;
+		case format::ChessBaseArchive:	cbv::Codec::getSuffixes(filename, result); break;
 		case format::Scid3:			// fallthru
 		case format::Scid4:			si3::Codec::getSuffixes(filename, result); break;
 		case format::Pgn:				result.push_back(ext); break;
@@ -446,6 +453,14 @@ DatabaseCodec::getGame(GameInfo const&)
 {
 	M_RAISE("should not be used");
 	return ByteStream();
+}
+
+
+util::ByteStream
+DatabaseCodec::getGame(GameInfo const& info, ::util::BlockFileReader* reader)
+{
+	M_ASSERT(reader == 0);
+	return getGame(info);
 }
 
 
@@ -707,7 +722,8 @@ DatabaseCodec::openFile(mstl::fstream& stream,
 		if (!stream)
 			IO_RAISE(Unspecified, Open_Failed, "cannot open file: %s", filename.c_str());
 
-		char buf[magic.size()];
+		mstl::vector<char> buf_vec(magic.size());
+		char* buf = buf_vec.begin();
 
 		if (!stream.read(buf, magic.size()))
 			IO_RAISE(Unspecified, Open_Failed, "unexpected end of file: %s", filename.c_str());
@@ -1112,9 +1128,8 @@ DatabaseCodec::saveGame(ByteStream const& gameData, TagSet const& tags, Provider
 						|| siteEntry == 0
 						|| annotatorEntry == 0;
 
-	if (!failed && format() != format::Scidb)
+	if (!failed && format::isScidFormat(format()))
 	{
-		M_ASSERT(isScidFormat(format()));
 		M_ASSERT(!m_db->m_memoryOnly);
 		M_ASSERT(maxAnnotatorCount == 0);
 
@@ -1153,7 +1168,7 @@ DatabaseCodec::saveGame(ByteStream const& gameData, TagSet const& tags, Provider
 		if (info)
 			info->restore(*m_storedInfo, m_db->m_namebases);
 
-		if (format() != format::Scidb)
+		if (format::isScidFormat(format()))
 		{
 			M_ASSERT(!m_db->m_memoryOnly);
 			static_cast<si3::Codec*>(this)->restoreRoundEntry(index);
@@ -1286,7 +1301,7 @@ DatabaseCodec::addGame(ByteStream const& gameData, GameInfo const& info, Allocat
 
 	save::State state = save::Ok;
 
-	if (!failed && format() != format::Scidb)
+	if (!failed && format::isScidFormat(format()))
 	{
 		M_ASSERT(format() == format::Scid3 || format() == format::Scid4);
 		M_ASSERT(!m_db->m_memoryOnly);
@@ -1303,7 +1318,7 @@ DatabaseCodec::addGame(ByteStream const& gameData, GameInfo const& info, Allocat
 
 	if (failed || int(gameOffset = putGame(gameData)) < 0)
 	{
-		if (format() != format::Scidb)
+		if (format::isScidFormat(format()))
 		{
 			M_ASSERT(!m_db->m_memoryOnly);
 			static_cast<si3::Codec*>(this)->restoreRoundEntry(m_db->infoListSize());
@@ -1414,7 +1429,7 @@ DatabaseCodec::updateCharacteristics(unsigned index, TagSet const& tags)
 
 	save::State state = save::Ok;
 
-	if (!failed && format() != format::Scidb)
+	if (!failed && format::isScidFormat(format()))
 	{
 		M_ASSERT(format() == format::Scid3 || format() == format::Scid4);
 		M_ASSERT(!m_db->m_memoryOnly);
@@ -1435,7 +1450,7 @@ DatabaseCodec::updateCharacteristics(unsigned index, TagSet const& tags)
 	{
 		info.restore(*m_storedInfo, m_db->m_namebases);
 
-		if (format() != format::Scidb)
+		if (format::isScidFormat(format()))
 		{
 			M_ASSERT(!m_db->m_memoryOnly);
 			static_cast<si3::Codec*>(this)->restoreRoundEntry(index);

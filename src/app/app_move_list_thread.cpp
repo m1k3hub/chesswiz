@@ -37,6 +37,7 @@
 #include "sys_lock.h"
 
 #include "m_list.h"
+#include "m_vector.h"
 #include "m_assert.h"
 
 #include <stdio.h>
@@ -174,10 +175,11 @@ struct MoveListThread::Runnable
 					}
 
 					unsigned idx(m_cursor.index(db::table::Games, index, m_view));
-					uint16_t moves[m_length];
-					unsigned length;
-					
-					length = m_database.loadGame(
+				mstl::vector<uint16_t> movesVec(m_length);
+				uint16_t* moves = movesVec.begin();
+				unsigned length;
+				
+				length = m_database.loadGame(
 						m_asyncReader, idx, moves, m_length, startBoard, m_useStartBoard);
 					result.list.push_back();
 
@@ -287,7 +289,7 @@ MoveListThread::retrieve(	Cursor& cursor,
 
 		if (!m_resultList.empty())
 		{
-			for (ResultList::iterator i = m_resultList.begin(); i != m_resultList.end(); ++i)
+			for (ResultList::iterator i = m_resultList.begin(); i != m_resultList.end(); )
 			{
 				if (i->range.intersects(rangeOfGames))
 				{
@@ -298,6 +300,8 @@ MoveListThread::retrieve(	Cursor& cursor,
 				}
 				if (!i->range.intersects(rangeOfView))
 					i = m_resultList.erase(i);
+				else
+					++i;
 			}
 		}
 	}

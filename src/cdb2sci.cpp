@@ -26,7 +26,9 @@
 
 #include "db_eco_table.h"
 #include "db_database.h"
+#include "db_filter.h"
 #include "db_pgn_reader.h"
+#include "db_selector.h"
 #include "db_exception.h"
 #include "db_log.h"
 
@@ -40,6 +42,7 @@
 
 #include "sys_utf8_codec.h"
 #include "sys_file.h"
+#include "sys_time.h"
 
 #include "tcl_base.h"
 
@@ -50,6 +53,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <unistd.h>
 #include <tcl.h>
 
@@ -73,6 +77,25 @@ static bool newNewline = false;
 static mstl::string cdbPath;
 
 
+struct ImportStats
+{
+	ImportStats()
+		:written(0)
+		,rejected(0)
+		,corrupted(0)
+		,warnings(0)
+		,errors(0)
+	{
+	}
+
+	unsigned written;
+	unsigned rejected;
+	unsigned corrupted;
+	unsigned warnings;
+	unsigned errors;
+};
+
+
 namespace tcl { namespace bits { Tcl_Interp* interp; } }
 
 
@@ -86,6 +109,95 @@ newline()
 	}
 	fflush(stdout);
 }
+
+
+static bool
+scidbFilesExist(mstl::string const& filename)
+{
+	mstl::string root(::util::misc::file::rootname(filename));
+
+	return	::sys::file::access(root + ".sci", ::sys::file::Existence)
+			|| ::sys::file::access(root + ".scg", ::sys::file::Existence)
+			|| ::sys::file::access(root + ".scn", ::sys::file::Existence);
+}
+
+
+static mstl::string
+makeTemporaryScidbName(mstl::string const& filename, char const* purpose)
+{
+	mstl::string root(::util::misc::file::rootname(filename));
+	unsigned stamp = unsigned(::sys::time::timestamp());
+
+	for (unsigned attempt = 0;; ++attempt)
+	{
+		mstl::string candidate;
+		candidate.format("%s.%s.%u.%u.sci", root.c_str(), purpose, stamp, attempt);
+
+		if (!scidbFilesExist(candidate))
+			return candidate;
+	}
+}
+
+
+static void
+restoreScidbBackup(mstl::string const& backupName, mstl::string const& filename)
+{
+	if (scidbFilesExist(filename))
+		::db::sci::Codec::remove(filename);
+
+	if (scidbFilesExist(backupName))
+		::db::sci::Codec::rename(backupName, filename);
+}
+
+
+static void
+promoteScidbDatabase(mstl::string const& tempName, mstl::string const& filename)
+{
+	mstl::string backupName;
+	bool hadOriginal = scidbFilesExist(filename);
+
+	if (hadOriginal)
+	{
+		backupName = makeTemporaryScidbName(filename, "convert-backup");
+		::db::sci::Codec::rename(filename, backupName);
+	}
+
+	try
+	{
+		if (scidbFilesExist(filename))
+			::db::sci::Codec::remove(filename);
+
+		::db::sci::Codec::rename(tempName, filename);
+
+		if (hadOriginal && scidbFilesExist(backupName))
+			::db::sci::Codec::remove(backupName);
+	}
+	catch (...)
+	{
+		if (hadOriginal)
+			restoreScidbBackup(backupName, filename);
+
+		throw;
+	}
+}
+
+
+struct ScopedScidbCleanup
+{
+	ScopedScidbCleanup(mstl::string const& filename) :m_filename(filename), m_keep(false) {}
+	~ScopedScidbCleanup()
+	{
+		if (!m_keep && scidbFilesExist(m_filename))
+			::db::sci::Codec::remove(m_filename);
+	}
+
+	void dismiss() { m_keep = true; }
+
+private:
+
+	mstl::string m_filename;
+	bool m_keep;
+};
 
 
 struct TclInterpreter
@@ -102,11 +214,13 @@ public:
 	MyPgnReader(mstl::string const& path, mstl::string const& convertfrom)
 		:PgnReader(	*(m_stream = new util::ZStream(sys::file::internalName(path))),
 						variant::Normal,
-						detectEncoding(path, convertfrom),
+						(m_encoding = detectEncoding(path, convertfrom)),
 						PgnReader::File,
 						PgnReader::Normalize,
 						PgnReader::UseResultTag)
 		,m_tooManyRoundNames(false)
+		,m_warningCount(0)
+		,m_errorCount(0)
 	{
 		if (!*m_stream)
 		{
@@ -115,6 +229,10 @@ public:
 			exit(1);
 		}
 	}
+
+	unsigned warningCount() const { return m_warningCount; }
+	unsigned errorCount() const { return m_errorCount; }
+	mstl::string const& sourceEncoding() const { return m_encoding; }
 
 	~MyPgnReader() throw()
 	{
@@ -141,6 +259,7 @@ public:
 						mstl::string const& info,
 						mstl::string const& item)
 	{
+		++m_warningCount;
 		char const* msg;
 
 		switch (code)
@@ -201,6 +320,7 @@ public:
 					mstl::string const& info,
 					mstl::string const& item)
 	{
+		++m_errorCount;
 		char const* msg;
 
 		switch (code)
@@ -237,6 +357,7 @@ public:
 					unsigned gameNo,
 					::db::variant::Type variant)
 	{
+		++m_errorCount;
 		char const* msg;
 
 		switch (state)
@@ -270,6 +391,9 @@ private:
 
 	util::ZStream* m_stream;
 	bool m_tooManyRoundNames;
+	mstl::string m_encoding;
+	unsigned m_warningCount;
+	unsigned m_errorCount;
 };
 
 
@@ -285,8 +409,17 @@ struct Progress : public util::Progress
 };
 
 
+struct SilentProgress : public util::Progress
+{
+	void update(unsigned) override {}
+	void finish() throw() override {}
+};
+
+
 struct Log : public db::Log
 {
+	Log() :warningCount(0), errorCount(0) {}
+
 	bool error(save::State code, unsigned gameNumber)
 	{
 		char const* msg = 0;
@@ -307,6 +440,7 @@ struct Log : public db::Log
 		}
 
 		::fflush(stdout);
+		++errorCount;
 		::fprintf(	stderr,
 						"%s: %s (#%u) [%s]\n",
 						code == db::save::GameTooLong ? "Warning" : "Error",
@@ -317,8 +451,52 @@ struct Log : public db::Log
 		return code == save::GameTooLong;
 	}
 
-	void warning(Warning code, unsigned gameNumber) {}
+	void warning(Warning code, unsigned gameNumber) { ++warningCount; }
+
+	unsigned warningCount;
+	unsigned errorCount;
 };
+
+
+static char const*
+formatName(format::Type format)
+{
+	switch (format)
+	{
+		case format::Scidb: return "sci";
+		case format::Scid4: return "si4";
+		case format::Scid3: return "si3";
+		case format::ChessBase: return "cbh";
+	case format::ChessBaseArchive: return "cbv";
+		case format::ChessBaseDOS: return "cbf";
+		case format::Pgn: return "pgn";
+		default: return "unknown";
+	}
+}
+
+
+static void
+printImportSummary(	mstl::string const& path,
+							format::Type format,
+							ImportStats const& stats,
+							bool useRange,
+							unsigned startGame,
+							unsigned endGame,
+							mstl::string const* encoding = 0)
+{
+	printf("*** Summary: source='%s' format=%s", path.c_str(), formatName(format));
+	if (encoding)
+		printf(" encoding=%s", encoding->c_str());
+	if (useRange)
+		printf(" range=%u..%u", startGame, endGame);
+	printf("\n");
+	printf("*** written=%u rejected=%u corrupted=%u warnings=%u errors=%u\n",
+				stats.written,
+				stats.rejected,
+				stats.corrupted,
+				stats.warnings,
+				stats.errors);
+}
 
 
 typedef sci::Consumer::TagBits TagBits;
@@ -365,6 +543,9 @@ getFormat(mstl::string& path)
 		else if	(ext == "si3") fmt = format::Scid3;
 		else if	(ext == "sci") fmt = format::Scidb;
 		else if	(ext == "cbh") fmt = format::ChessBase;
+		else if	(ext == "CBH") fmt = format::ChessBase;
+		else if	(ext == "cbv") fmt = format::ChessBaseArchive;
+		else if	(ext == "CBV") fmt = format::ChessBaseArchive;
 		else if	(ext == "cbf") fmt = format::ChessBaseDOS;
 		else if	(ext == "CBF") fmt = format::ChessBaseDOS;
 		else if	(ext == "pgn") fmt = format::Pgn;
@@ -392,6 +573,7 @@ stripSuffix(mstl::string& path)
 			|| strcmp(s, ".si3") == 0
 			|| strcmp(s, ".sci") == 0
 			|| strcmp(s, ".cbh") == 0
+			|| strcmp(s, ".CBH") == 0
 			|| strcmp(s, ".cbf") == 0
 			|| strcmp(s, ".CBF") == 0
 			|| strcmp(s, ".pgn") == 0
@@ -430,6 +612,11 @@ printHelpAndExit(int rc)
 	printf("  --              Only file names after this\n");
 	printf("  --help          Print Help (this message) and exit\n");
 	printf("  --force         Overwrite existing destination files\n");
+	printf("  --count-games   Print the number of games in a single source database and exit\n");
+	printf("  --start-game <n>\n");
+	printf("                  Export only from game number <n> (1-based, database sources only)\n");
+	printf("  --end-game <n>\n");
+	printf("                  Export only through game number <n> (1-based, database sources only)\n");
 	printf("  --convertfrom <encoding>\n");
 	printf("                  The encoding of the source database\n");
 	printf("                  (default is '%s')\n", ::ConvertFrom);
@@ -451,6 +638,28 @@ printHelpAndExit(int rc)
 	printf("                  List all usual tags (includes mandatory tags)\n");
 	printf("\n");
 	exit(rc);
+}
+
+
+static unsigned
+parseUnsigned(char const* s, char const* option)
+{
+	char* end = nullptr;
+	unsigned long value = ::strtoul(s, &end, 10);
+
+	if (!s || !*s || !end || *end != '\0')
+	{
+		fprintf(stderr, "Option '%s' requires a non-negative integer.\n", option);
+		exit(1);
+	}
+
+	if (value > UINT_MAX)
+	{
+		fprintf(stderr, "Option '%s' is too large.\n", option);
+		exit(1);
+	}
+
+	return unsigned(value);
 }
 
 
@@ -481,7 +690,7 @@ printEncodingsAndExit(int rc)
 
 		if (!isForbiddenEncoding(*i))
 		{
-			printf(i->c_str());
+			printf("%s", i->c_str());
 
 			if (next != e)
 				printf(", ");
@@ -663,6 +872,7 @@ logIOError(IOException const& exc, unsigned gameNumber = 0)
 		case IOException::Annotation:		file = "annotation"; break;
 		case IOException::PgnFile:			/* cannot happen */ break;
 		case IOException::BookFile:		/* cannot happen */ break;
+		case IOException::Archive:		/* cannot happen */ break;
 	}
 
 	mstl::string msg("Error");
@@ -709,52 +919,35 @@ logIOError(IOException const& exc, unsigned gameNumber = 0)
 
 
 static unsigned
-exportGames(Database& src, Consumer& dst, ::util::Progress& progress)
+copyDatabaseGames( Database& src,
+						 Database& dst,
+						 TagBits const& tagList,
+						 bool extraTags,
+						 ::util::Progress& progress,
+						 bool useRange,
+						 unsigned startIndex,
+						 unsigned endIndex,
+						 ::Log& log)
 {
-	unsigned numGames = src.countGames();
+	Filter filter(src.countGames());
+	Selector selector;
+	unsigned illegalRejected = 0;
 
-	util::ProgressWatcher watcher(progress, numGames);
-	progress.setFrequency(mstl::min(200u, mstl::max(numGames/1000, 50u)));
-
-	unsigned reportAfter	= progress.frequency();
-	unsigned count			= 0;
-	unsigned countGames	= 0;
-
-	::Log log;
-
-	for (unsigned i = 0; i < numGames; ++i)
+	if (useRange)
 	{
-		if (reportAfter == count)
-		{
-			progress.update(count);
-			reportAfter += progress.frequency();
-			::newNewline = true;
-		}
-		count += 1;
+		filter.reset();
 
-		try
-		{
-			save::State state = src.exportGame(i, dst);
-
-			if (state == save::Ok)
-				++countGames;
-			else if (!log.error(state, i + 1))
-				return countGames;
-		}
-		catch (IOException const& exc)
-		{
-			logIOError(exc, i + 1);
-		}
-		catch (...)
-		{
-			printf("\n");
-			fflush(stdout);
-			fprintf(stderr, "*** Exception catched while decoding game #%u\n", count);
-			throw;
-		}
+		for (unsigned i = startIndex; i <= endIndex; ++i)
+			filter.add(i);
+	}
+	else
+	{
+		filter.set();
 	}
 
-	return countGames;
+	unsigned count = src.copyGames(dst, filter, selector, tagList, extraTags, &illegalRejected, log, progress);
+	rejected += illegalRejected;
+	return count;
 }
 
 
@@ -788,8 +981,14 @@ main(int argc, char* argv[])
 	bool				noTags(false);
 	bool				defaultTags(true);
 	bool				extraTags(false);
+	bool				countGamesOnly(false);
+	bool				haveStartGame(false);
+	bool				haveEndGame(false);
 	mstl::string	givenTags;
 	BaseList			baseList;
+	ImportStats		totalStats;
+	unsigned			startGame(1);
+	unsigned			endGame(0);
 
 	int i = 1;
 
@@ -808,6 +1007,24 @@ main(int argc, char* argv[])
 				printHelpAndExit(1);
 			checkEncoding(argv[i]);
 			convertfrom.assign(argv[i]);
+		}
+		else if (strcmp(argv[i], "--count-games") == 0)
+		{
+			countGamesOnly = true;
+		}
+		else if (strcmp(argv[i], "--start-game") == 0)
+		{
+			if (++i == argc)
+				printHelpAndExit(1);
+			startGame = parseUnsigned(argv[i], "--start-game");
+			haveStartGame = true;
+		}
+		else if (strcmp(argv[i], "--end-game") == 0)
+		{
+			if (++i == argc)
+				printHelpAndExit(1);
+			endGame = parseUnsigned(argv[i], "--end-game");
+			haveEndGame = true;
 		}
 		else if (strcmp(argv[i], "--tags") == 0)
 		{
@@ -865,54 +1082,81 @@ main(int argc, char* argv[])
 	mstl::string sciPath;
 	mstl::string cdbPath;
 
-	for ( ; i < argc - 1; i++)
+	if (countGamesOnly)
 	{
-		mstl::string path(sys::file::normalizedName(argv[i]));
-
-		if (getFormat(path) == format::Invalid)
+		for ( ; i < argc; ++i)
 		{
-			fprintf(stderr, "'%s' is not a Scidb database.\n", path.c_str());
-			exit(1);
-		}
+			mstl::string path(sys::file::normalizedName(argv[i]));
 
-		if (access(sys::file::internalName(path), R_OK) != 0)
-		{
-			fprintf(stderr, "Cannot open file '%s'.\n", path.c_str());
-			exit(1);
-		}
+			if (getFormat(path) == format::Invalid)
+			{
+				fprintf(stderr, "'%s' is not a Scidb database.\n", path.c_str());
+				exit(1);
+			}
 
-		baseList.push_back(path);
+			if (access(sys::file::internalName(path), R_OK) != 0)
+			{
+				fprintf(stderr, "Cannot open file '%s'.\n", path.c_str());
+				exit(1);
+			}
 
-		if (cdbPath.empty())
-			cdbPath = path;
-	}
-
-	if (i == argc - 1)
-	{
-		mstl::string path(sys::file::normalizedName(argv[i]));
-
-		if (getFormat(path) == format::Scidb)
-		{
-			sciPath = path;
-		}
-		else if (getFormat(path) == format::Invalid)
-		{
-			sciPath = path;
-			mstl::string::size_type n = sciPath.rfind('/');
-
-			if (n != mstl::string::npos)
-				sciPath.erase(mstl::string::size_type(0), n + 1);
-
-			stripSuffix(sciPath);
-		}
-		else if (access(sys::file::internalName(path), R_OK) != 0)
-		{
-			fprintf(stderr, "Cannot open file '%s'.\n", path.c_str());
-			exit(1);
-		}
-		else
-		{
 			baseList.push_back(path);
+
+			if (cdbPath.empty())
+				cdbPath = path;
+		}
+	}
+	else
+	{
+		for ( ; i < argc - 1; i++)
+		{
+			mstl::string path(sys::file::normalizedName(argv[i]));
+
+			if (getFormat(path) == format::Invalid)
+			{
+				fprintf(stderr, "'%s' is not a Scidb database.\n", path.c_str());
+				exit(1);
+			}
+
+			if (access(sys::file::internalName(path), R_OK) != 0)
+			{
+				fprintf(stderr, "Cannot open file '%s'.\n", path.c_str());
+				exit(1);
+			}
+
+			baseList.push_back(path);
+
+			if (cdbPath.empty())
+				cdbPath = path;
+		}
+
+		if (i == argc - 1)
+		{
+			mstl::string path(sys::file::normalizedName(argv[i]));
+
+			if (getFormat(path) == format::Scidb)
+			{
+				sciPath = path;
+			}
+			else if (getFormat(path) == format::Invalid)
+			{
+				sciPath = path;
+				mstl::string::size_type n = sciPath.rfind('/');
+
+				if (n != mstl::string::npos)
+					sciPath.erase(mstl::string::size_type(0), n + 1);
+
+				stripSuffix(sciPath);
+			}
+			else if (access(sys::file::internalName(path), R_OK) != 0)
+			{
+				fprintf(stderr, "Cannot open file '%s'.\n", path.c_str());
+				exit(1);
+			}
+			else
+			{
+				baseList.push_back(path);
+			}
 		}
 	}
 
@@ -920,6 +1164,57 @@ main(int argc, char* argv[])
 	{
 		fprintf(stderr, "No input database specified.\n\n");
 		printHelpAndExit(1);
+	}
+
+	if (countGamesOnly)
+	{
+		if (baseList.size() != 1)
+		{
+			fprintf(stderr, "Option '--count-games' requires exactly one source database.\n");
+			exit(1);
+		}
+
+		if (haveStartGame || haveEndGame)
+		{
+			fprintf(stderr, "Options '--start-game' and '--end-game' cannot be combined with '--count-games'.\n");
+			exit(1);
+		}
+
+		format::Type format = getFormat(cdbPath);
+
+		if (format == format::Pgn)
+		{
+			fprintf(stderr, "Option '--count-games' does not support PGN sources.\n");
+			exit(1);
+		}
+
+		try
+		{
+			loadEcoFile();
+			SilentProgress progress;
+			Database src(cdbPath, convertfrom, permission::ReadOnly, progress);
+			printf("%u\n", src.countGames());
+			return 0;
+		}
+		catch (IOException const& exc)
+		{
+			logIOError(exc);
+			exit(1);
+		}
+		catch (mstl::exception const& exc)
+		{
+			fprintf(stderr, "%s\n", exc.what());
+			exit(1);
+		}
+	}
+
+	if (haveStartGame || haveEndGame)
+	{
+		if (baseList.size() != 1)
+		{
+			fprintf(stderr, "Options '--start-game' and '--end-game' require exactly one source database.\n");
+			exit(1);
+		}
 	}
 
 	if (sciPath.empty() && !cdbPath.empty())
@@ -951,7 +1246,9 @@ main(int argc, char* argv[])
 		loadEcoFile();
 
 		Progress	progress;
-		Database	dst(sciPath, sys::utf8::Codec::utf8(), storage::OnDisk, variant::Normal);
+		mstl::string tempSciPath(makeTemporaryScidbName(sciPath, "convert-tmp"));
+		ScopedScidbCleanup cleanup(tempSciPath);
+		Database	dst(tempSciPath, sys::utf8::Codec::utf8(), storage::OnDisk, variant::Normal);
 		TagBits	tagList;
 
 		if (!noTags)
@@ -967,17 +1264,26 @@ main(int argc, char* argv[])
 		for (BaseList::const_iterator i = baseList.begin(); i != baseList.end(); ++i)
 		{
 			cdbPath.assign(*i);
+			rejected = 0;
+			corrupted = 0;
 
 			mstl::string	ext(::util::misc::file::suffix(cdbPath));
 			format::Type	format(getFormat(cdbPath));
 			Database*		src(nullptr);
 			unsigned			numGames;
+			ImportStats	sourceStats;
 
 			::newline();
 			printf("Open '%s' ", cdbPath.c_str());
 			printf("\nAppend to '%s' ", sciPath.c_str());
 			fflush(stdout);
 			::newNewline = true;
+
+			if (format == format::Pgn && (haveStartGame || haveEndGame))
+			{
+				fprintf(stderr, "Options '--start-game' and '--end-game' do not support PGN sources.\n");
+				exit(1);
+			}
 
 			if (format == format::Pgn)
 			{
@@ -989,29 +1295,108 @@ main(int argc, char* argv[])
 
 				for (unsigned i = 0; i < variant::NumberOfVariants; ++i)
 					rejected += reader.rejected(i);
+
+				sourceStats.written = numGames;
+				sourceStats.rejected = rejected;
+				sourceStats.warnings = reader.warningCount();
+				sourceStats.errors = reader.errorCount();
+				printImportSummary(
+					cdbPath,
+					format,
+					sourceStats,
+					false,
+					0,
+					0,
+					&reader.sourceEncoding());
 			}
 			else
 			{
-				sci::Consumer::Codecs codecs(&dynamic_cast<sci::Codec&>(dst.codec()));
+				::Log log;
 				src = new Database(cdbPath, convertfrom, permission::ReadOnly, progress);
-				sci::Consumer consumer(format, codecs, tagList, extraTags);
+				unsigned rejectedBefore = rejected;
+				unsigned corruptedBefore = corrupted;
+				unsigned firstGame = 1;
+				unsigned lastGame = src->countGames();
+
+				if (haveStartGame)
+					firstGame = startGame;
+				if (haveEndGame)
+					lastGame = endGame;
+
+				if (firstGame == 0)
+				{
+					fprintf(stderr, "Option '--start-game' must be at least 1.\n");
+					exit(1);
+				}
+
+				if (lastGame == 0 || lastGame > src->countGames())
+					lastGame = src->countGames();
+
+				if (firstGame > lastGame || firstGame > src->countGames())
+				{
+					fprintf(stderr,
+									"Invalid game range %u..%u for source '%s' with %u games.\n",
+									firstGame,
+									lastGame,
+									cdbPath.c_str(),
+									src->countGames());
+					exit(1);
+				}
+
 				dst.setType(src->type());
-				numGames = exportGames(*src, consumer, progress);
+				numGames = copyDatabaseGames(
+					*src,
+					dst,
+					tagList,
+					extraTags,
+				progress,
+					haveStartGame || haveEndGame,
+					firstGame - 1,
+					lastGame - 1,
+					log);
+
+				sourceStats.written = numGames;
+				sourceStats.rejected = rejected - rejectedBefore;
+				sourceStats.corrupted = corrupted - corruptedBefore;
+				sourceStats.warnings = log.warningCount;
+				sourceStats.errors = log.errorCount;
+				printImportSummary(
+					cdbPath,
+					format,
+					sourceStats,
+					haveStartGame || haveEndGame,
+					firstGame,
+					lastGame);
 			}
 
 			dst.save(progress);
-			printf("\n*** %u game(s) written.", numGames);
-			if (rejected > 0)
-				printf("\n*** %u game(s) rejected.", rejected);
-			if (corrupted > 0)
-				printf("\n*** %u game(s) corrupted.", corrupted);
+			printf("\n*** %u game(s) written.", sourceStats.written);
+			if (sourceStats.rejected > 0)
+				printf("\n*** %u game(s) rejected.", sourceStats.rejected);
+			if (sourceStats.corrupted > 0)
+				printf("\n*** %u game(s) corrupted.", sourceStats.corrupted);
 			printf("\n");
 			fflush(stdout);
-			corrupted = 0;
+			totalStats.written += sourceStats.written;
+			totalStats.rejected += sourceStats.rejected;
+			totalStats.corrupted += sourceStats.corrupted;
+			totalStats.warnings += sourceStats.warnings;
+			totalStats.errors += sourceStats.errors;
 			delete src;
 		}
 
 		dst.close();
+		promoteScidbDatabase(tempSciPath, sciPath);
+		cleanup.dismiss();
+		if (baseList.size() > 1)
+		{
+			printf("*** Overall: written=%u rejected=%u corrupted=%u warnings=%u errors=%u\n",
+					 totalStats.written,
+					 totalStats.rejected,
+					 totalStats.corrupted,
+					 totalStats.warnings,
+					 totalStats.errors);
+		}
 	}
 	catch (IOException const& exc)
 	{

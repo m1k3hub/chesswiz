@@ -36,6 +36,10 @@
 #include <sys/timeb.h>
 #endif
 
+#ifdef HAVE_GETTIMEOFDAY
+#include <sys/time.h>
+#endif
+
 #define NDEBUG 
 #include <assert.h>
 

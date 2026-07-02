@@ -24,6 +24,23 @@ How to compile?
 Read file INSTALL.
 
 ---------------------------------------------------------------------
+What Scidb can do today
+---------------------------------------------------------------------
+Scidb is most useful as a chess database and preparation tool. The
+strongest workflows in the current tree are:
+
+   - browsing and editing games in Scidb databases
+   - database switching, filtered views, and working sets
+   - database maintenance, duplicate detection, and opening statistics
+   - material search and CQL/pattern-based search
+   - player preparation reports from the players list
+   - opponent dossiers with recent games, opening tendencies, and
+     direct pivots into prep reports, switcher views, and working sets
+
+For repeated search, maintenance, and preparation work, Scidb's own
+database format (.sci) is the recommended format.
+
+---------------------------------------------------------------------
 Wanted:
 ---------------------------------------------------------------------
 Testers are welcome for the preliminary version. Volunteers should

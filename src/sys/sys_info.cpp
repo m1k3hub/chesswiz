@@ -27,7 +27,9 @@
 # include <stdlib.h>
 # include <unistd.h>
 # include <sys/types.h>
-# include <sys/sysctl.h>
+# if !defined(__linux__)
+#  include <sys/sysctl.h>
+# endif
 
 #ifdef __hpux
 # include <sys/pstat.h>
@@ -86,6 +88,7 @@ readProcInfo(char const* attr)
 
 	// suppress compiler warningm we do not expect errors
 	size_t n __attribute__((unused)) = ::fread(buf, 1, sizeof(buf), proc);
+	::fclose(proc);
 
 	char const* s = ::strstr(buf, attr);
 
