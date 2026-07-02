@@ -76,10 +76,15 @@ parseRange(Tcl_Interp* ti, Tcl_Obj* obj, unsigned max, unsigned& minValue, unsig
 	if (lhs.empty() || rhs.empty())
 		return false;
 
-	int low = ::atoi(lhs.c_str());
-	int high = ::atoi(rhs.c_str());
+	char* end;
+	long low = ::strtol(lhs.c_str(), &end, 10);
+	if (*end != '\0')
+		return false;
+	long high = ::strtol(rhs.c_str(), &end, 10);
+	if (*end != '\0')
+		return false;
 
-	if (low < 0 || high < 0 || low > high || high > int(max))
+	if (low < 0 || high < 0 || low > high || high > long(max))
 		return false;
 
 	minValue = unsigned(low);
