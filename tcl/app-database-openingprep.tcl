@@ -39,6 +39,57 @@ set ConvertNow						"Convert Now"
 
 array set NonSciWorkflowAdvice {}
 
+proc IsSciWorkingFormat {file} {
+	return [expr {[file extension $file] eq ".sci" || $file eq $::scidb::clipbaseName}]
+}
+
+
+proc ConvertDatabaseToScidb {parent file variant} {
+	set name [::util::databaseName $file]
+	::export::open $parent \
+		-base $file \
+		-variant $variant \
+		-extension [string trimleft [file extension $file] .] \
+		-name $name \
+		-view 0 \
+		-type scidb
+}
+
+
+proc RecommendSciWorkflow {parent file variant featureLabel featureKey} {
+	variable NonSciWorkflowAdvice
+	variable mc
+
+	if {[IsSciWorkingFormat $file]} { return 1 }
+
+	set key "$file:$variant:$featureKey"
+	if {[info exists NonSciWorkflowAdvice($key)]} { return 1 }
+
+	set name [::util::databaseName $file]
+	set reply [::dialog::question \
+		-parent $parent \
+		-title [format $mc::PreferScidbTitle $name] \
+		-message $mc::PreferScidbMessage \
+		-detail [format $mc::PreferScidbDetail $name $featureLabel] \
+		-buttons [list [list convert $mc::ConvertNow] [list continue $mc::ContinueAnyway] cancel] \
+		-default continue]
+
+	switch $reply {
+		convert {
+			ConvertDatabaseToScidb $parent $file $variant
+			return 0
+		}
+		continue {
+			set NonSciWorkflowAdvice($key) 1
+			return 1
+		}
+		default {
+			return 0
+		}
+	}
+}
+
+
 proc OpeningPrepDialogName {file variant} {
 	return .openingprep_[string map {: _ . _ / _} $file]_${variant}
 }
