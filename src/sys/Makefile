@@ -29,6 +29,7 @@ SRC_CXX = \
 	sys_process.cpp \
 	sys_signal.cpp \
 	sys_thread.cpp \
+	sys_thread_group.cpp \
 	sys_time.cpp \
 	sys_timer.cpp \
 	sys_utf8.cpp \

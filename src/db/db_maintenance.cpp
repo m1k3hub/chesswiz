@@ -11,7 +11,7 @@
 #include "sys_info.h"
 #include "sys_lock.h"
 #include "sys_mutex.h"
-#include "sys_thread.h"
+#include "sys_thread_group.h"
 
 #include "u_byte_stream.h"
 #include "u_crc.h"
@@ -297,12 +297,11 @@ findDuplicates(Database& db)
 	else
 	{
 		mstl::vector<DuplicateEntryWorker*> workers;
-		mstl::vector<sys::Thread*> threads;
+		sys::ThreadGroup group;
 		unsigned chunkSize = (nGames + nWorkers - 1)/nWorkers;
 		unsigned serialFirst = nGames;
 
 		workers.reserve(nWorkers);
-		threads.reserve(nWorkers);
 
 		for (unsigned i = 0; i < nWorkers; ++i)
 		{
@@ -313,45 +312,24 @@ findDuplicates(Database& db)
 				break;
 
 			DuplicateEntryWorker* worker = new DuplicateEntryWorker(db, first, last);
-			sys::Thread* thread = new sys::Thread;
-
 			workers.push_back(worker);
-			threads.push_back(thread);
 
-			if (!thread->start(sys::Thread::Runnable(&DuplicateEntryWorker::operator(), worker)))
+			if (!group.start(sys::Thread::Runnable(&DuplicateEntryWorker::operator(), worker)))
 			{
-				delete thread;
-				delete worker;
-				threads.pop_back();
 				workers.pop_back();
+				delete worker;
 				serialFirst = first;
 				break;
 			}
 		}
 
-		bool failed = false;
-		mstl::string failMsg;
+		group.join();
 
-		for (unsigned i = 0; i < threads.size(); ++i)
+		for (unsigned i = 0; i < workers.size(); ++i)
 		{
-			threads[i]->join();
-
-			if (!failed && threads[i]->exception())
-			{
-				failed = true;
-				failMsg = threads[i]->exception()->what();
-			}
-			else if (!failed)
-			{
-				appendDuplicateEntries(entries, workers[i]->entries);
-			}
-
-			delete threads[i];
+			appendDuplicateEntries(entries, workers[i]->entries);
 			delete workers[i];
 		}
-
-		if (failed)
-			M_RAISE("%s", failMsg.c_str());
 
 		if (serialFirst < nGames)
 			collectDuplicateEntries(entries, db, serialFirst, nGames);
@@ -391,11 +369,10 @@ findDuplicates(Database& db)
 	unsigned nGroupWorkers = mstl::min(nWorkers, unsigned(ranges.size()));
 	unsigned chunkSize = (ranges.size() + nGroupWorkers - 1)/nGroupWorkers;
 	mstl::vector<DuplicateGroupWorker*> workers;
-	mstl::vector<sys::Thread*> threads;
 	mstl::vector<::util::BlockFileReader*> readers;
+	sys::ThreadGroup group;
 
 	workers.reserve(nGroupWorkers);
-	threads.reserve(nGroupWorkers);
 	readers.reserve(nGroupWorkers);
 	unsigned serialFirst = ranges.size();
 
@@ -416,17 +393,12 @@ findDuplicates(Database& db)
 
 		readers.push_back(reader);
 		DuplicateGroupWorker* worker = new DuplicateGroupWorker(db, entries, ranges, reader, first, last);
-		sys::Thread* thread = new sys::Thread;
-
 		workers.push_back(worker);
-		threads.push_back(thread);
 
-		if (!thread->start(sys::Thread::Runnable(&DuplicateGroupWorker::operator(), worker)))
+		if (!group.start(sys::Thread::Runnable(&DuplicateGroupWorker::operator(), worker)))
 		{
-			delete thread;
-			delete worker;
-			threads.pop_back();
 			workers.pop_back();
+			delete worker;
 			db.closeAsyncReader(readers.back());
 			readers.pop_back();
 			serialFirst = first;
@@ -434,30 +406,14 @@ findDuplicates(Database& db)
 		}
 	}
 
-	bool failed = false;
-	mstl::string failMsg;
+	group.join();
 
-	for (unsigned i = 0; i < threads.size(); ++i)
+	for (unsigned i = 0; i < workers.size(); ++i)
 	{
-		threads[i]->join();
-
-		if (!failed && threads[i]->exception())
-		{
-			failed = true;
-			failMsg = threads[i]->exception()->what();
-		}
-		else if (!failed)
-		{
-			appendDuplicateGroups(result, workers[i]->groups);
-		}
-
-		delete threads[i];
+		appendDuplicateGroups(result, workers[i]->groups);
 		delete workers[i];
 		db.closeAsyncReader(readers[i]);
 	}
-
-	if (failed)
-		M_RAISE("%s", failMsg.c_str());
 
 	for (unsigned i = serialFirst; i < ranges.size(); ++i)
 		resolveDuplicateRange(result, db, entries, ranges[i].first, ranges[i].second, 0);
@@ -480,12 +436,11 @@ computeEcoStats(Database const& db, variant::Type variant)
 	else
 	{
 		mstl::vector<EcoStatsWorker*> workers;
-		mstl::vector<sys::Thread*> threads;
+		sys::ThreadGroup group;
 		unsigned chunkSize = (nGames + nWorkers - 1)/nWorkers;
 		unsigned serialFirst = nGames;
 
 		workers.reserve(nWorkers);
-		threads.reserve(nWorkers);
 
 		for (unsigned i = 0; i < nWorkers; ++i)
 		{
@@ -496,45 +451,24 @@ computeEcoStats(Database const& db, variant::Type variant)
 				break;
 
 			EcoStatsWorker* worker = new EcoStatsWorker(db, variant, first, last);
-			sys::Thread* thread = new sys::Thread;
-
 			workers.push_back(worker);
-			threads.push_back(thread);
 
-			if (!thread->start(sys::Thread::Runnable(&EcoStatsWorker::operator(), worker)))
+			if (!group.start(sys::Thread::Runnable(&EcoStatsWorker::operator(), worker)))
 			{
-				delete thread;
-				delete worker;
-				threads.pop_back();
 				workers.pop_back();
+				delete worker;
 				serialFirst = first;
 				break;
 			}
 		}
 
-		bool failed = false;
-		mstl::string failMsg;
+		group.join();
 
-		for (unsigned i = 0; i < threads.size(); ++i)
+		for (unsigned i = 0; i < workers.size(); ++i)
 		{
-			threads[i]->join();
-
-			if (!failed && threads[i]->exception())
-			{
-				failed = true;
-				failMsg = threads[i]->exception()->what();
-			}
-			else if (!failed)
-			{
-				mergeEcoStats(stats, workers[i]->stats);
-			}
-
-			delete threads[i];
+			mergeEcoStats(stats, workers[i]->stats);
 			delete workers[i];
 		}
-
-		if (failed)
-			M_RAISE("%s", failMsg.c_str());
 
 		if (serialFirst < nGames)
 			accumulateEcoStats(stats, db, variant, serialFirst, nGames);
