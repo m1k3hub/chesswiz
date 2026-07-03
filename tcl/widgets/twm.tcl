@@ -2920,7 +2920,7 @@ foreach {dir pt} {t n b s l w r e} {
 	::scidb::tk::image recolor black $shape($pt)
 }
 
-} ;# namespace 32x32
+} ;# namespace 24x24
 
 namespace eval 32x32 {
 

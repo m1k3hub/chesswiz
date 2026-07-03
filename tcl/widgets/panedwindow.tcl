@@ -49,10 +49,10 @@ rename tk::panedwindow tk::panedwindow_old
 
 proc panedwindow {args} {
 	if {[llength $args] == 0} {
-		return error -code "wrong # args: should be \"panedwindow pathName ?options?\""
+		return -code error "wrong # args: should be \"panedwindow pathName ?options?\""
 	}
 	if {[winfo exists [lindex $args 0]]} {
-		return error -code "window name \"[lindex $args 0]\" already exists"
+		return -code error "window name \"[lindex $args 0]\" already exists"
 	}
 	return [panedwindow::Build {*}$args]
 }

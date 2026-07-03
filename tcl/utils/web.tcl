@@ -224,7 +224,7 @@ proc SaveData {parent url data args} {
 		-title [set [namespace current]::mc::SaveFile] \
 	]
 	if {[llength $result]} {
-		set fp [open $result wb]
+		set fp [::open $result wb]
 		puts -nonewline $fp $data
 		close $fp
 	}

@@ -73,6 +73,9 @@ set Termination(fivefold)			"Game drawn by fivefold move repetition"
 set Termination(nomating)			"Neither player has mating material"
 set Termination(nocheck)			"Neither player can give check"
 
+set Black						"Black"
+set White						"White"
+
 } ;# namespace mc
 
 
@@ -97,7 +100,7 @@ proc buildText {reason result toMove termination variant} {
 		}
 		default {
 			if {[info exists mc::Termination($termination)]} {
-				return [format $mc::Termination($termination) [set ::mc::[string toupper $toMove 0 0]]]
+				return [format $mc::Termination($termination) [set mc::[string toupper $toMove 0 0]]]
 			}
 		}
 	}

@@ -1029,7 +1029,7 @@ proc ChooseLanguage {parent} {
 	vwait ::mc::langID
 	::ttk::releaseGrab $dlg
 	catch { destroy $dlg }
-	::mc::setLang $mc::langID
+	::mc::setLang $::mc::langID
 	wm protocol $parent WM_DELETE_WINDOW [namespace code shutdown]
 	focus -force .application
 }

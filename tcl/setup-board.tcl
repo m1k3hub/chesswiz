@@ -45,7 +45,7 @@ proc shuffle {variant} {
 	switch $variant {
 		Normal	{ set idn 518 }
 		Chess960	{ set idn [expr {int(rand()*960.0) + 1}] }
-		Symm960	{ set idn [lindex $SFRC [expr {int(rand()*[llength $SFRC]) + 1}]] }
+		Symm960	{ set idn [lindex $SFRC [expr {int(rand()*[llength $SFRC])}]] }
 		Shuffle	{ set idn [expr {int(rand()*2880.0) + 1}] }
 	}
 

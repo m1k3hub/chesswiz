@@ -366,7 +366,6 @@ proc open {parent args} {
 			}
 			country {
 				set tvar ::playertable::mc::T_NativeCountry
-				set ivar ::playertable::mc::I_Federation
 				set fvar ::playertable::mc::F_Federation
 			}
 			rating1 {
@@ -374,7 +373,7 @@ proc open {parent args} {
 				set fvar [namespace current]::mc::F_Rating1
 			}
 			rating2 {
-				set tvar [namespace current]::mc::T_Rating1
+				set tvar [namespace current]::mc::T_Rating2
 				set fvar [namespace current]::mc::F_Rating2
 			}
 			ranking1 - ranking2 {

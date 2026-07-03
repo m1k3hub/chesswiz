@@ -1323,7 +1323,7 @@ proc EmbedUnsavedLayouts {unsaved showVariants w infoFont alertFont} {
 		set tab [::mc::stripAmpersand [set [namespace parent]::mc::Tab($id)]]
 		set l0 [ttk::label $hdr.l0-${id} -font $infoFont  -text "${mc::Tab}: "]
 		set l1 [ttk::label $hdr.l1-${id} -font $alertFont -text $tab]
-		set l2 [ttk::label $hdr.l2-${id} -font $infoFont  -text " \u2212 $mc::Layout: "]
+		set l2 [ttk::label $hdr.l2-${id} -font $infoFont  -text " \u2212 $::mc::Layout: "]
 		set l3 [ttk::label $hdr.l3-${id} -font $alertFont -text $Options($id:layout:name)]
 		pack $l0 $l1 $l2 $l3 -side left
 		if {[string length $description]} {

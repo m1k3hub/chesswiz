@@ -23,15 +23,15 @@ rename html __html_widget
 
 proc html {args} {
 	if {[llength $args] == 0} {
-		return error -code "wrong # args: should be \"html pathName ?options?\""
+		return -code error "wrong # args: should be \"html pathName ?options?\""
 	}
 
 	if {[winfo exists [lindex $args 0]]} {
-		return error -code "window name \"[lindex $args 0]\" already exists"
+		return -code error "window name \"[lindex $args 0]\" already exists"
 	}
 
 	if {[llength $args] % 2 == 0} {
-		return error -code "value for \"[lindex $args end]\" missing"
+		return -code error "value for \"[lindex $args end]\" missing"
 	}
 
 	return [html::Build {*}$args]
@@ -762,7 +762,7 @@ proc WidgetProc {w command args} {
 
 		configure {
 			if {[llength $args] % 2 == 1} {
-				return error -code "value for \"[lindex $args end]\" missing"
+				return -code error "value for \"[lindex $args end]\" missing"
 			}
 			set reparse 0
 			set showhyphens [$w.sub.html cget -showhyphens]

@@ -197,7 +197,7 @@ proc open {parent} {
 			incr index
 		}
 		set y0 [expr {$y1 - $Border}]
-		if {$length % 2 == 0} { set $which [expr {1 - $which}] }
+		if {$length % 2 == 0} { set which [expr {1 - $which}] }
 	}
 
 	grid $top.colors -row 3 -column 1

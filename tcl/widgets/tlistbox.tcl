@@ -22,15 +22,15 @@ package provide tlistbox 1.0
 
 proc tlistbox {args} {
 	if {[llength $args] == 0} {
-		return error -code "wrong # args: should be \"tlistbox pathName ?options?\""
+		return -code error "wrong # args: should be \"tlistbox pathName ?options?\""
 	}
 
 	if {[winfo exists [lindex $args 0]]} {
-		return error -code "window name \"[lindex $args 0]\" already exists"
+		return -code error "window name \"[lindex $args 0]\" already exists"
 	}
 
 	if {[llength $args] % 2 == 0} {
-		return error -code "value for \"[lindex $args end]\" missing"
+		return -code error "value for \"[lindex $args end]\" missing"
 	}
 
 	return [::tlistbox::Build {*}$args]
@@ -977,7 +977,7 @@ proc WidgetProc {w command args} {
 
 		configure {
 			if {[llength $args] % 2 == 1} {
-				return error -code "value for \"[lindex $args end]\" missing"
+				return -code error "value for \"[lindex $args end]\" missing"
 			}
 			array set opts $args
 			set resize 0

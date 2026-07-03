@@ -54,6 +54,8 @@ set F_DSBID						"DSB ID"
 set F_ECFID						"ECF ID"
 set F_ICCFID					"ICCF ID"
 set F_Title						"Title"
+set F_DateOfBirth			"Date of birth"
+set F_DateOfDeath			"Date of death"
 
 set T_Federation				"Federation"
 set T_NativeCountry			"Native Country"
@@ -61,6 +63,8 @@ set T_RatingType				"Rating Type"
 set T_Type						"Type"
 set T_Sex						"Sex"
 set T_PlayerInfo				"Info Flag"
+set T_DateOfBirth			"Date of birth"
+set T_DateOfDeath			"Date of death"
 
 # translation not needed (TODO)
 set F_RatingType				"RT"

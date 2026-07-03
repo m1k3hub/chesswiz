@@ -217,7 +217,7 @@ if {[file readable $TimestampFile]} {
 	close $f
 }
 
-if {[string length locTimestamp] > 0} {
+if {[string length $locTimestamp] > 0} {
 	set url [MakeUrl TIMESTAMP]
 	set retry 1
 	while {$retry > 0} {
@@ -227,6 +227,7 @@ if {[string length locTimestamp] > 0} {
 			error	{ Return httperr [::http::error $token] [MakeFile $url] }
 			timeout {
 				if {[incr retry] > $::MaxRetry} { Return timeout [MakeFile $url] }
+				::http::cleanup $token
 				ResetConnection $url.
 				after [expr {($retry - 1)*$::Wait}] ;# wait a bit
 			}

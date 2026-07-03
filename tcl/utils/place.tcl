@@ -265,7 +265,7 @@ proc position {path args} {
 }
 
 
-proc size {path} {
+proc size {path args} {
 	lassign [geometry $path {*}$args] _ _ w h
 	wm geometry $path "${w}x${h}"
 }

@@ -79,13 +79,6 @@ set Open								"Open"
 set OriginalPath					"Original Path"
 set DateOfDeletion				"Date of Deletion"
 set Readonly						"Readonly"
-
-set FileType(exe)					"Executables"
-set FileType(txt)					"Text files"
-set FileType(bin)					"Binary files"
-set FileType(log)					"Log files"
-set FileType(html)				"HTML files"
-
 }
 
 array set Priv { dialog {} }

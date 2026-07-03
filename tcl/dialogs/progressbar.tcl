@@ -205,7 +205,7 @@ proc interruptable? {w} {
 
 proc interrupted? {w} {
 	variable Priv
-	return ![info exists Priv(interrupted:$w)] || $Priv(interrupted:$w)
+	return [expr {[info exists Priv(interrupted:$w)] && $Priv(interrupted:$w)}]
 }
 
 

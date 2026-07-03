@@ -25,15 +25,15 @@ namespace eval ttk {
 
 proc tcombobox {args} {
 	if {[llength $args] == 0} {
-		return error -code "wrong # args: should be \"tcombobox pathName ?options?\""
+		return -code error "wrong # args: should be \"tcombobox pathName ?options?\""
 	}
 
 	if {[winfo exists [lindex $args 0]]} {
-		return error -code "window name \"[lindex $args 0]\" already exists"
+		return -code error "window name \"[lindex $args 0]\" already exists"
 	}
 
 	if {[llength $args] % 2 == 0} {
-		return error -code "value for \"[lindex $args end]\" missing"
+		return -code error "value for \"[lindex $args end]\" missing"
 	}
 
 	return [tcombobox::Build {*}$args]
