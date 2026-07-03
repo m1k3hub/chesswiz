@@ -37,6 +37,7 @@ set ChooseMountPoint							"Mount point of Windows installation partition"
 set CopyingChessBaseFonts					"Copying ChessBase fonts"
 set CopyFile									"Copy file %s"
 set UpdateFontCache							"Updating font cache"
+set CannotCreateDirectory				"Cannot create directory '%s'."
 
 set ChooseFigurineFont						"Choose figurine font"
 set ChooseSymbolFont							"Choose symbol font"

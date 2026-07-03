@@ -604,8 +604,8 @@ proc dbNew {parent variant} {
 
 	if {[llength $result] == 0} { return 0 }
 	lassign $result base encoding
-	set ext [file extension $base]
-	if {$ext in {.pgn .gz}} { set variant Undetermined }
+	set ext [::util::fileExtension $base]
+	if {$ext in {.pgn .pgn.gz .bpgn .bpgn.gz}} { set variant Undetermined }
 	return [::application::database::newBase $parent $variant $base $encoding]
 }
 
@@ -1044,7 +1044,7 @@ proc GetCompressionMethod {ext} {
 
 
 proc GetCount {file} {
-	switch [string tolower [file extension $file]] {
+	switch [::util::fileExtension $file] {
 		.sci - .si3 - .si4 - .cbh - .cbf - .pgn - .pgn.gz - .bpgn - .bpgn.gz {
 			return [::scidb::misc::size $file]
 		}

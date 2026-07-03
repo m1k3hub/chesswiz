@@ -50,6 +50,10 @@ check-mtime:
 		exit 1;                                                 \
 	fi
 
+check-build:
+	@echo "Running build check..."
+	@$(TCL_SHELL) src/check-build.tcl
+
 depend:
 	@$(MAKE) -C src depend
 	@$(MAKE) -C engines depend

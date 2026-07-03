@@ -26,6 +26,18 @@
 
 ::util::source application
 
+# ======================================================================
+# ::ui::message — lightweight status/notification message
+# Used by analysis, novelty, and search-preset features.
+# Forwards to the log so messages are visible without a modal dialog.
+# ======================================================================
+
+namespace eval ui {
+proc message {text} {
+	::log::info UI $text
+}
+}
+
 namespace eval application {
 namespace eval mc {
 

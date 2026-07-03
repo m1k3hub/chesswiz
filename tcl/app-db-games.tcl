@@ -494,14 +494,20 @@ proc CompareOptions {twm variant} {
 	;
 
 } ;# namespace games
-} ;# namespace database
-} ;# namespace application
 
-# vi:set ts=3 sw=3:
+namespace eval mc {
 
-# ======================================================================
-# Saved Search Presets
-# ======================================================================
+# Search Presets
+set SaveCurrentSearch				"Save Current Search"
+set ManageSearchPresets			"Manage Presets..."
+set SaveSearchPresetTitle		"Save Search Preset"
+set PresetName						"Preset Name:"
+set Save								"Save"
+set Cancel							"Cancel"
+set ManageSearchPresetsTitle	"Manage Search Presets"
+set Delete							"Delete"
+
+} ;# namespace mc
 
 namespace eval searchPresets {
 	variable presets {}
@@ -702,3 +708,8 @@ proc DeleteSelectedPreset {dlg listbox} {
 	RemoveSearchPreset $preset
 	$listbox delete $idx
 }
+
+} ;# namespace database
+} ;# namespace application
+
+# vi:set ts=3 sw=3:

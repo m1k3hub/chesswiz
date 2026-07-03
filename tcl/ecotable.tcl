@@ -296,7 +296,7 @@ proc CurrentSelection {w} {
 	variable ${w}::
 
 	variable eco_
-	set index [::scrolledtable::activeIndex $w.table]
+	set index [::scrolledtable::active $w.table]
 	if {$index >= 0} { set eco_ [lindex $(data) $index 1] } else { set eco_ "" }
 }
 

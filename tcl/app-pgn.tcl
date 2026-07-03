@@ -3240,10 +3240,10 @@ proc LanguageChanged {} {
 
 namespace eval cursor {
 
-switch [tk windowingsystem] {
-	variable collapse
-	variable expand
+variable collapse {}
+variable expand {}
 
+switch [tk windowingsystem] {
 	x11 {
 		if {[::xcursor::supported?]} {
 			set file1 [file join $::scidb::dir::share cursor collapse-16x16.xcur]
@@ -3254,7 +3254,7 @@ switch [tk windowingsystem] {
 					set expand [::xcursor::loadCursor $file2]
 				}
 			} else {
-				::log::info PGN-Editor [format $mc::CannotOpenCursorFiles "$file1 $file2"]
+				::log::info PGN-Editor [format $::application::pgn::mc::CannotOpenCursorFiles "$file1 $file2"]
 			}
 		}
 	}
@@ -3271,7 +3271,7 @@ switch [tk windowingsystem] {
 			set collapse [list @$file1]
 			set expand [list @$file2]
 		} else {
-			::log::info PGN-Editor [format $mc::CannotOpenCursorFiles "$file1 $file2"]
+			::log::info PGN-Editor [format $::application::pgn::mc::CannotOpenCursorFiles "$file1 $file2"]
 		}
 	}
 }

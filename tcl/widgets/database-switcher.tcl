@@ -640,7 +640,7 @@ proc SetType {w id type} {
 
 
 proc GetFileType {file} {
-	switch [set ext [string tolower [file extension $file]]] {
+	switch [set ext [::util::fileExtension $file]] {
 		.zip		{ set ext .pgn }
 		.pgn.gz	{ set ext .pgn }
 		.bpgn.gz	{ set ext .bpgn }
@@ -904,7 +904,7 @@ proc LayoutSwitcher {w args} {
 		if {$state ne "hidden"} {
 			lassign [lindex $Vars(bases) $Vars(map:$id)] _ type file
 			if {[::scidb::db::get writable? $file]} {
-				set ext [string tolower [file extension $file]]
+				set ext [::util::fileExtension $file]
 				if {$ext eq ".pgn" || $ext eq ".pgn.gz" || $ext eq ".zip"} {
 					if {[::scidb::db::get unsaved? $file]} { set sizeState modified }
 				}
@@ -980,7 +980,7 @@ proc HandleDragEvent {w src types x y} {
 		}
 	}
 
-	set ext [file extension $base]
+	set ext [::util::fileExtension $base]
 	if {[string length $ext] == 0} { set ext .sci }
 	set dragCursors [::dialog::fsbox::dragCursors $ext]
 	if {[llength $dragCursors]} {
@@ -1203,7 +1203,7 @@ proc ParseUriFiles {parent files allowedExtensions action} {
 			}
 		}
 
-		if {[file extension $file] in $allowedExtensions} {
+		if {[::util::fileExtension $file] in $allowedExtensions} {
 			if {$file ni $databaseList} { lappend databaseList $file }
 		} elseif {$file ni $rejectList} {
 			if {[string match trash* $uri]} {

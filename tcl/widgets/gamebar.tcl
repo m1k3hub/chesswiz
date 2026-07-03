@@ -831,7 +831,7 @@ proc exportGame {parent {position -1}} {
 		-variant $variant \
 		-index $index \
 		-title $title \
-		-extension [string range [file extension $base] 1 end] \
+		-extension [string range [::util::fileExtension $base] 1 end] \
 		-languages [::scidb::game::query langSet $position] \
 		-preferred [::application::pgn::languages] \
 		;
@@ -1849,7 +1849,7 @@ proc PasteGameFrom {parent from to} {
 
 
 proc ReloadCurrentGame {parent} {
-	set reply [::dialog::question -parent $parent -message $::engine::mc::ThrowAwayChanges]
+	set reply [::dialog::question -parent $parent -message $::application::mc::ThrowAwayAllChanges]
 	if {$reply eq "yes"} { ::scidb::game::reload }
 }
 

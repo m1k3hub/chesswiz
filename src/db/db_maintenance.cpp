@@ -323,13 +323,17 @@ findDuplicates(Database& db)
 			}
 		}
 
-		group.join();
+		mstl::string failMsg1;
+		bool ok1 = group.joinNoThrow(failMsg1);
 
 		for (unsigned i = 0; i < workers.size(); ++i)
 		{
 			appendDuplicateEntries(entries, workers[i]->entries);
 			delete workers[i];
 		}
+
+		if (!ok1)
+			M_RAISE("%s", failMsg1.c_str());
 
 		if (serialFirst < nGames)
 			collectDuplicateEntries(entries, db, serialFirst, nGames);
@@ -406,7 +410,8 @@ findDuplicates(Database& db)
 		}
 	}
 
-	group.join();
+	mstl::string failMsg2;
+	bool ok2 = group.joinNoThrow(failMsg2);
 
 	for (unsigned i = 0; i < workers.size(); ++i)
 	{
@@ -414,6 +419,9 @@ findDuplicates(Database& db)
 		delete workers[i];
 		db.closeAsyncReader(readers[i]);
 	}
+
+	if (!ok2)
+		M_RAISE("%s", failMsg2.c_str());
 
 	for (unsigned i = serialFirst; i < ranges.size(); ++i)
 		resolveDuplicateRange(result, db, entries, ranges[i].first, ranges[i].second, 0);
@@ -462,13 +470,17 @@ computeEcoStats(Database const& db, variant::Type variant)
 			}
 		}
 
-		group.join();
+		mstl::string failMsg3;
+		bool ok3 = group.joinNoThrow(failMsg3);
 
 		for (unsigned i = 0; i < workers.size(); ++i)
 		{
 			mergeEcoStats(stats, workers[i]->stats);
 			delete workers[i];
 		}
+
+		if (!ok3)
+			M_RAISE("%s", failMsg3.c_str());
 
 		if (serialFirst < nGames)
 			accumulateEcoStats(stats, db, variant, serialFirst, nGames);

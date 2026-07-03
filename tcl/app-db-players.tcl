@@ -909,7 +909,7 @@ proc SelectedPrepRepertoire {dlg {warn 1}} {
 	set sel [$tree selection]
 	if {[llength $sel] == 0} {
 		if {$warn} {
-			::dialog::info -parent $dlg -message $::gamebar::mc::NoRepertoireBases
+			::dialog::info -parent $dlg -message $::application::database::mc::NoRepertoireBases
 		}
 		return {}
 	}
@@ -918,7 +918,7 @@ proc SelectedPrepRepertoire {dlg {warn 1}} {
 	if {[string length $base]} { return $base }
 
 	if {$warn} {
-		::dialog::info -parent $dlg -message $::gamebar::mc::NoRepertoireBases
+		::dialog::info -parent $dlg -message $::application::database::mc::NoRepertoireBases
 	}
 	return {}
 }
@@ -965,7 +965,7 @@ proc SelectedPrepRepertoireGap {dlg} {
 	set tree $PrepReportData($dlg,repertoireTree)
 	set sel [$tree selection]
 	if {[llength $sel] == 0} {
-		::dialog::info -parent $dlg -message $::gamebar::mc::NoRepertoireBases
+		::dialog::info -parent $dlg -message $::application::database::mc::NoRepertoireBases
 		return {}
 	}
 
@@ -1571,18 +1571,13 @@ proc AnalyzePrepReportPosition {dlg} {
 	}
 
 	# Start or activate analysis panel
-	if {[::application::analysis::active?]} {
+	if {[::application::analysis::active? 1]} {
 		::application::analysis::restartAnalysis 1
 	} else {
-		::application::analysis::newAnalysisPane 1
+		::application::newAnalysisPane 1
 		::application::analysis::startAnalysis 1
 	}
 }
-} ;# namespace player
-} ;# namespace database
-} ;# namespace application
-
-# vi:set ts=3 sw=3:
 
 # ======================================================================
 # Opponent Dossier - Player Tendency Analysis
@@ -2309,3 +2304,8 @@ proc OpenOpponentDossier {dlg} {
 
 	BuildOpponentDossier $dlg $base $variant $playerIndex
 }
+} ;# namespace player
+} ;# namespace database
+} ;# namespace application
+
+# vi:set ts=3 sw=3:

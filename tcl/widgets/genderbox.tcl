@@ -225,12 +225,12 @@ proc Setup {w} {
 
 	set i 0
 	while {$Male eq $Female} {
-		set Female [string toupper [string index $mc::Female [incr i]]]
+		set Female [string toupper [string index $mc::Gender(f) [incr i]]]
 	}
 
 	set i 0
 	while {$Computer eq $Male || $Computer eq $Female} {
-		set Computer [string toupper [string index $mc::Computer [incr i]]]
+		set Computer [string toupper [string index $mc::Gender(c) [incr i]]]
 	}
 
 	$w.__w__ listinsert { "" "\u2014" } -index 0

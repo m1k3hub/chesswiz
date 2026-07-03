@@ -1686,8 +1686,8 @@ proc PopupMenu {table x y} {
 
 			# Add "Analyze this position" option
 			$m add command \
-				-label " $mc::AnalyzeThisPosition" \
-				-command [namespace code [list AnalyzePosition $table $row]] \
+				-label " $::application::analysis::mc::AnalyzeThisPosition" \
+				-command [list ::application::analysis::AnalyzePosition $table $row] \
 				-image $::icon::16x16::engine \
 				-compound left \
 				;
@@ -1739,7 +1739,7 @@ proc PopupMenu {table x y} {
 		;
 	::theme::configureCheckEntry $m
 	$m add checkbutton \
-		-label " $mc::HighlightNovelties" \
+		-label " $::application::analysis::mc::HighlightNovelties" \
 		-variable [namespace current]::Options(novelty:highlight) \
 		-command [namespace code [list ToggleNoveltyHighlighting $table $Options(repertoire:db)]] \
 		;

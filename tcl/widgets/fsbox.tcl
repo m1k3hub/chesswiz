@@ -113,6 +113,7 @@ set CurrentlyInUse				"This file is currently in use."
 set PermissionDenied				"Permission denied for directory '%s'."
 set CannotOpenUri					"Cannot open the following URI:"
 set InvalidUri						"Drop content is not a valid URI list."
+set CannotOpenTrashFiles			"Cannot open trashed files."
 set UriRejected					"The following files are rejected:"
 set UriRejectedDetail			"Only the listed file types can be handled."
 set CannotOpenRemoteFiles		"Cannot open remote files:"
@@ -2430,7 +2431,7 @@ proc AskFileAction {w old new} {
 	if {[file isdirectory $old]} {
 		set icon $icon::16x16::folder
 	} else {
-		set icon $Vars(fti:[string tolower [file extension $new]])
+		set icon $Vars(fti:[::util::fileExtension $new])
 	}
 
 	set oldTime [file mtime $old]
@@ -3193,7 +3194,7 @@ proc DoHandleDropEvent {w uriFiles} {
 		set extensions {}
 		foreach {uri f} [[namespace parent]::parseUriList $uriFiles] {
 			if {[string length $file] == 0} { set file [file rootname $f] }
-			set ext [file extension $f]
+			set ext [::util::fileExtension $f]
 			if {$ext in $Vars(extensions)} {
 				if {[[namespace parent]::CheckIfInUse $w $f delete]} { return }
 			}
@@ -4350,7 +4351,7 @@ proc ConfigureButtons {w} {
 
 	if {[info exists Vars(button:custom)]} {
 		if {	[llength $Vars(selected:files)] == 1
-			&& [string tolower [file extension $Vars(initialfile)]] in $Vars(customfiletypes)} {
+			&& [::util::fileExtension $Vars(initialfile)] in $Vars(customfiletypes)} {
 			if {$Vars(glob) eq "Files"} {
 				set Vars(state:custom) normal
 			} else {
@@ -5179,7 +5180,7 @@ proc PopupMenu {w x y} {
 			if {	[llength $Vars(customcommand)]
 				&& [llength $Vars(customtooltip)]
 				&& $Vars(state:custom) eq "normal"
-				&& [string tolower [file extension $file]] in $Vars(customfiletypes)} {
+				&& [::util::fileExtension $file] in $Vars(customfiletypes)} {
 				incr count
 				$m add command                                           \
 					-compound left                                        \
@@ -5347,7 +5348,7 @@ proc HandleDragEvent {w src types x y} {
 			set actions {copy move link ask}
 		}
 		set files {}
-		set ext [string tolower [file extension $file]]
+		set ext [::util::fileExtension $file]
 
 		if {[string length $Vars(deletecommand)]} {
 			foreach f [{*}$Vars(deletecommand) $w $file] {

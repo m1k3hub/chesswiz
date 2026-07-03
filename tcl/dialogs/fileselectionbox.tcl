@@ -681,7 +681,7 @@ proc GetNumGames {filename mtime} {
 
 
 proc IsUsed {file} {
-	switch [string tolower [file extension $file]] {
+	switch [::util::fileExtension $file] {
 		.pgn - .pgn.gz - .bpgn - .bpgn.gz - .zip {
 #			if {![::scidb::db::get open? [file normalize $file]]} { return no }
 #			if {![::scidb::db::get readonly? $file]} { return yes }
@@ -750,7 +750,7 @@ proc Inspect {parent {folder ""} {filename ""} {originalPath ""} {deletionDate "
 				tk::label $f.lmodified -text "$::fsbox::mc::Modified:"
 				tk::label $f.tmodified -text $mtime
 			} else {
-				set ext [string tolower [file extension $filename]]
+				set ext [::util::fileExtension $filename]
 				if {![info exists FileType($ext)]} {
 					if {[string length $ext] > 0 || ![file executable $filename]} { return }
 					set ext .exe
@@ -837,7 +837,7 @@ proc Inspect {parent {folder ""} {filename ""} {originalPath ""} {deletionDate "
 							foreach pair $entry {
 								lassign $pair attr value
 								if {$attr eq "FileName"} {
-									switch [string tolower [file extension $value]] {
+									switch [::util::fileExtension $value] {
 										.sci - .si3 - .si4 - .cbh - .cbf - .pgn - .pgn.gz - .bpgn - .bpgn.gz {
 											if {[string length $bases] > 0} { append bases \n }
 											set file [file tail $value]

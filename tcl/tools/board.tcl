@@ -1,5 +1,5 @@
 # \
-exec ../src/tkscidb-beta "$0" ${1+"$@"}
+exec "`dirname "$0"`"/../../src/tkscidb-beta "$0" ${1+"$@"}
 
 option add *Menu.tearOff 0
 option add *Menu.activeBackground #678db2

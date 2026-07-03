@@ -459,7 +459,7 @@ proc addRepertoireDestinationsForSaveToMenu {parent m {discardActualBase 0} {var
 
 	if {[llength $result] == 0} {
 		$m add command \
-			-label " $::gamebar::mc::NoRepertoireBases" \
+			-label " $::application::database::mc::NoRepertoireBases" \
 			-command [namespace code [list showNoRepertoireBases $parent]] \
 			-state normal
 	}
@@ -528,7 +528,7 @@ proc addRepertoireLineDestinationsForSaveToMenu {parent m {discardActualBase 0} 
 
 	if {[llength $result] == 0} {
 		$m add command \
-			-label " $::gamebar::mc::NoRepertoireBases" \
+			-label " $::application::database::mc::NoRepertoireBases" \
 			-command [namespace code [list showNoRepertoireBases $parent]] \
 			-state normal
 	}

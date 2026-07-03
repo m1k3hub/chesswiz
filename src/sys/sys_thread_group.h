@@ -28,6 +28,7 @@
 #define _sys_thread_group_included
 
 #include "sys_thread.h"
+#include "m_string.h"
 
 #include "m_vector.h"
 
@@ -52,6 +53,11 @@ public:
 	// exception is re-thrown as an mstl::exception. All threads are deleted
 	// during join or destruction.
 	void join();
+
+	// Same as join() but never throws. Returns true if all workers succeeded.
+	// On failure, failMsg is set to the first worker's exception message.
+	// Use this when cleanup must run before re-throwing.
+	bool joinNoThrow(mstl::string& failMsg);
 
 	unsigned size() const;
 	bool empty() const;

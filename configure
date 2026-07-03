@@ -973,8 +973,14 @@ proc findSMlibHeader {} {
 proc checkStatVFS {} {
     variable option
 
-    if {[file readable /usr/include/sys/statvfs.h]} {
-        set option(HAVE_STATVFS) "-DHAVE_STATVFS=1"
+    foreach path {
+        /usr/include/sys/statvfs.h
+        /usr/include/x86_64-linux-gnu/sys/statvfs.h
+    } {
+        if {[file readable $path]} {
+            set option(HAVE_STATVFS) "-DHAVE_STATVFS=1"
+            break
+        }
     }
 }
 
@@ -1632,7 +1638,7 @@ proc checkClang {cc} {
         if {![regexp {[0-9]+\.[0-9]+} $identifier version]} {
             puts "yes,\n    but existing $clang version is too old."
             set version ""
-        } elseif {[string compare $version $::MinClangVersion] == -1} {
+        } elseif {[package vcompare $version $::MinClangVersion] == -1} {
             puts "yes,\n    but existing $clang version $version is too old."
             puts "\n    The required version is $::MinClangVersion and higher."
             set version ""
@@ -1722,7 +1728,7 @@ proc checkGCC {cc} {
         if {![regexp {[0-9]+\.[0-9]+} $identifier version]} {
             puts "yes,\n    but existing $gcc version is too old."
             set version ""
-        } elseif {[string compare $version $::MinGCCVersion] >= 0} {
+        } elseif {[package vcompare $version $::MinGCCVersion] >= 0} {
             puts "yes (version $version)."
         } else {
             puts "yes,\n    but existing $gcc version $version is too old."
@@ -1740,7 +1746,7 @@ proc checkGCC {cc} {
         exit 1
     }
     if {[string length $version] > 0 && $cc eq "CXX"} {
-        if {[string compare $version "4.3"] >= 0} {
+        if {[package vcompare $version "4.3"] >= 0} {
             # Check for c++11 before usinf c++0x
             set option(EXTRA_CXXFLAGS) "-std=c++0x"
         }

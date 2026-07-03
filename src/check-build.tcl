@@ -1,11 +1,18 @@
 # check-build.tcl
 
-destroy .
+set scriptDir [file dirname [file normalize [info script]]]
+
+catch { destroy . }
+if {![llength [info commands ::scidb::app::initialized?]]} {
+	puts "FAILED: app layer not loaded (wrong interpreter?)"
+	return
+}
+
 if {[catch {::scidb::app::initialized?} err]} {
 	puts "FAILED"
 	return
 }
-if {[catch {::scidb::app::load eco [file join data eco.bin]} err]} {
+if {[catch {::scidb::app::load eco [file join $scriptDir data eco.bin]} err]} {
 	puts "FAILED"
 	return
 }

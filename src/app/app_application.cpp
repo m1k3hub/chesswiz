@@ -2242,8 +2242,8 @@ Application::describeCurrentTreeRow(unsigned row, OpeningPrepRow& out) const
 	mstl::string eco = info.eco().asString();
 
 	out.row = row;
-	out.identity.format(	"%llx %u %u %u %u %s",
-								static_cast<unsigned long long>(tree->hash()),
+	out.identity.format(	"%lld %u %u %u %u %s",
+								static_cast<long long>(tree->hash()),
 								unsigned(tree->method()),
 								unsigned(tree->mode()),
 								unsigned(tree->ratingType()),

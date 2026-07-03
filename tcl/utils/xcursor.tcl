@@ -91,6 +91,11 @@ proc deleteCursor {cursor} {
 	set Lookup [dict remove $Lookup $cursor]
 }
 
+
+proc supported? {} {
+	return [expr {[llength [info commands LoadFromFile]] > 0}]
+}
+
 } ;# namespace xcursor
 
 # vi:set ts=3 sw=3:

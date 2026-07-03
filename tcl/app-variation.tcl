@@ -588,12 +588,12 @@ proc PopupMenu {table x y} {
 	catch { wm attributes $m -type popup_menu }
 
 	$m add command \
-		-label $mc::StartSearch \
+		-label $::application::tree::mc::StartSearch \
 		-command [namespace code [list StartSearch $table]] \
 		;
 	$m add separator
 	foreach mode {exact fast} {
-		set text [set mc::Use[string toupper $mode 0 0]Mode]
+		set text [set ::application::tree::mc::Use[string toupper $mode 0 0]Mode]
 		$m add radiobutton \
 			-label $text \
 			-variable [namespace current]::Options(search:mode) \
@@ -603,20 +603,20 @@ proc PopupMenu {table x y} {
 	}
 	$m add separator
 	$m add checkbutton \
-		-label $mc::AutomaticSearch \
+		-label $::application::tree::mc::AutomaticSearch \
 		-variable [namespace current]::Options(search:automatic) \
 		;
 	::theme::configureCheckEntry $m
 	$m add separator
 	$m add checkbutton \
-		-label $mc::LockReferenceBase \
+		-label $::application::tree::mc::LockReferenceBase \
 		-variable [namespace current]::Options(base:lock) \
 		;
 	::theme::configureCheckEntry $m
 	$m add separator
 
 	set n [menu $m.switch -tearoff false]
-	$m add cascade -menu $n -label $mc::ChooseReferenceBase
+	$m add cascade -menu $n -label $::application::tree::mc::ChooseReferenceBase
 
 	set list {}
 	foreach base [::scidb::vars::list] {

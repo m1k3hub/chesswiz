@@ -1796,12 +1796,12 @@ proc AnalyzePosition {table row} {
 	}
 
 	# Start or activate analysis panel
-	if {[active?]} {
+	if {[active? 1]} {
 		# Analysis already running, just update position
 		restartAnalysis 1
 	} else {
 		# Start new analysis
-		newAnalysisPane 1
+		::application::newAnalysisPane 1
 		startAnalysis 1
 	}
 }
@@ -1829,8 +1829,8 @@ proc PinToRepertoire {tree} {
 	set bases [::application::database::repertoireBases 0 $variant]
 	if {![llength $bases]} {
 		::dialog::info \
-			-message $mc::NoRepertoireBases \
-			-detail $mc::NoRepertoireBasesDetail
+			-message $::application::database::mc::NoRepertoireBases \
+			-detail $::application::database::mc::NoRepertoireBasesDetail
 		return
 	}
 
@@ -1864,7 +1864,7 @@ proc SaveAnalysisToRepertoire {tree base move eval depth} {
 	}
 
 	# Duplicate current game to temporary position
-	set temp [::gamebar::findTemporaryPosition]
+	set temp [::application::database::findTemporaryPosition]
 	if {$temp < 0} {
 		::ui::message "No temporary position slots available"
 		return
@@ -1898,17 +1898,6 @@ proc SaveAnalysisToRepertoire {tree base move eval depth} {
 		::ui::message "Failed to save analysis: $result"
 	}
 }
-
-
-# Search Presets
-set SaveCurrentSearch				"Save Current Search"
-set ManageSearchPresets			"Manage Presets..."
-set SaveSearchPresetTitle		"Save Search Preset"
-set PresetName						"Preset Name:"
-set Save								"Save"
-set Cancel							"Cancel"
-set ManageSearchPresetsTitle	"Manage Search Presets"
-set Delete							"Delete"
 
 
 # Enhanced Opening Report

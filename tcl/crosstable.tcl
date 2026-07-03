@@ -1388,7 +1388,7 @@ proc BuildMenu {dlg m} {
 			-state $state \
 			;
 		$m add command \
-			-label " [::mc::stripAmpersand $::widget::mc::Next]" \
+			-label " [::mc::stripAmpersand $::widget::mc::Label(next)]" \
 			-command [$dlg.next cget -command] \
 			-image $::icon::16x16::next \
 			-compound left \

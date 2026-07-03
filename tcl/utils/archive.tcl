@@ -168,7 +168,7 @@ proc packFiles {arch baseDir sources progress procCompression
 				}
 
 				incr TotalSize $FileSize
-				set ext [string range [file extension $f] 1 end]
+				set ext [string range [::util::fileExtension $f] 1 end]
 				set Compression [$procCompression $ext]
 				switch $Compression {
 					raw - zlib {}

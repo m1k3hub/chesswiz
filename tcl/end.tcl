@@ -109,7 +109,6 @@ if {[tk windowingsystem] eq "x11"} {
 
 	proc toolbar::x11MakeToolbar {w} { ::x11::makeToolbar $w }
 	proc fsbox::makeFrameless {w} { update idletasks; ::scidb::tk::wm frameless $w }
-	proc tooltip::x11DropShadow {args} { ::x11::dropShadow {*}$args }
 	proc dialog::messagebox::changeDesktop {w type} { ::x11::changeDesktop $w }
 }
 

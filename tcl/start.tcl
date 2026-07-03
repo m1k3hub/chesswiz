@@ -139,7 +139,7 @@ proc update {} {
 			{Glass|1243787890671|yellow.color|gregor}
 			{Goldenrod|1243765848112|yellow.color|gregor}
 			{Gray|1248527850611|yellow.color|gregor}
-			{José|1243683856813|yellow.color|gregor}
+			{JosÃ©|1243683856813|yellow.color|gregor}
 			{Kitsch|1422390619103|purple|gregor}
 			{Kunterbunt|1250851039023|yellow.color|gregor}
 			{Marble - Brown|1243532376507|yellow.color|gregor}
@@ -520,6 +520,16 @@ proc gets {fname args} {
 } ;# namespace file
 
 namespace eval util {
+
+# Return the file extension, correctly handling multi-part suffixes
+# such as .pgn.gz and .bpgn.gz that Tcl's [file extension] reports as .gz.
+proc fileExtension {file} {
+	set lower [string tolower $file]
+	if {[string match *.pgn.gz $lower]} { return .pgn.gz }
+	if {[string match *.bpgn.gz $lower]} { return .bpgn.gz }
+	return [string tolower [::file extension $file]]
+}
+
 namespace eval mc {
 
 set IOErrorOccurred					"I/O Error occurred"
@@ -561,8 +571,12 @@ proc databaseName {base {withExtension 1}} {
 	}
 
 	set name [lindex [file split $base] end]
-	set ext [string tolower [file extension $name]]
-	set name [file rootname $name]
+	set ext [::util::fileExtension $name]
+	if {$ext eq ".pgn.gz" || $ext eq ".bpgn.gz"} {
+		set name [file rootname [file rootname $name]]
+	} else {
+		set name [file rootname $name]
+	}
 
 	if {[string length $name] > 32} {
 		set shortName [string range $name 0 14]

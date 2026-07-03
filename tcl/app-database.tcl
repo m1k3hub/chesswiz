@@ -466,7 +466,6 @@ proc openBase {parent file byUser args} {
 		set ext [string range $ext 1 end]
 	}
 
-	set ext [string tolower $ext]
 
 	if {![file readable $file]} {
 		removeRecentFile $file
@@ -646,7 +645,7 @@ proc newBase {parent variant file {encoding ""}} {
 		return 0
 	}
 	
-	set ext [string tolower [file extension $file]]
+	set ext [::util::fileExtension $file]
 	if {$ext in {.pgn .pgn.gz}} { set type PGNFile } else { set type Unspecific }
 	::widget::busyCursor on
 	::scidb::db::new $file $variant [lookupType $type] {*}$encoding
@@ -823,7 +822,7 @@ proc OpenArchive {parent file byUser args} {
 		foreach pair $entry {
 			lassign $pair attr value
 			if {$attr eq "FileName"} {
-				switch [string tolower [file extension $value]] {
+				switch [::util::fileExtension $value] {
 					.sci - .si3 - .si4 - .cbh - .cbf - .pgn - .pgn.gz - .bpgn - .bpgn.gz {
 						lappend bases $value
 						if {[file exists $value]} { lappend overwrite "\u26ab [file tail $value]" }
@@ -1076,7 +1075,7 @@ proc UpdateAfterSwitch {filename variant} {
 	if {$filename eq $clipbaseName || ![::scidb::db::get writable? $filename]} {
 		set roState disabled
 	} else {
-		switch [string tolower [file extension $filename]] {
+		switch [::util::fileExtension $filename] {
 			.pgn - .pgn.gz	{ set roState [::makeState ![::scidb::db::get unsaved? $filename]] }
 			.sci				{ set roState normal }
 			default			{ set roState disabled }

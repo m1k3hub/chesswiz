@@ -202,10 +202,9 @@ if {$argc >= 1} {
 } else {
 	set http_proxy ""
 }
-set i [string last : $http_proxy]
-if {$i >= 0} {
-	set host [string range $http_proxy 0 [expr {$i - 1}]]
-	set port [string range $http_proxy [expr {$i + 1}] end]
+regsub -nocase {^https?://} $http_proxy {} http_proxy
+set http_proxy [string trimright $http_proxy "/"]
+if {[regexp {^([^:]+):(\d+)$} $http_proxy -> host port]} {
 	if {[string is integer -strict $port]} {
 		::http::config -proxyhost $host -proxyport $port
 	}

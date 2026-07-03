@@ -36,7 +36,8 @@ ThreadGroup::ThreadGroup() {}
 
 ThreadGroup::~ThreadGroup()
 {
-	join();
+	try { join(); }
+	catch (...) { /* swallow — never throw from destructor */ }
 }
 
 
@@ -58,23 +59,24 @@ bool
 ThreadGroup::start(Thread::Runnable const& runnable)
 {
 	Thread* thread = new Thread;
+	m_threads.push_back(thread); // push before start so push_back exception won't leak a running thread
 
 	if (!thread->start(runnable))
 	{
+		m_threads.pop_back();
 		delete thread;
 		return false;
 	}
 
-	m_threads.push_back(thread);
 	return true;
 }
 
 
-void
-ThreadGroup::join()
+bool
+ThreadGroup::joinNoThrow(mstl::string& failMsg)
 {
 	bool failed = false;
-	mstl::string failMsg;
+	failMsg.clear();
 
 	for (unsigned i = 0; i < m_threads.size(); ++i)
 	{
@@ -90,8 +92,16 @@ ThreadGroup::join()
 	}
 
 	m_threads.clear();
+	return !failed;
+}
 
-	if (failed)
+
+void
+ThreadGroup::join()
+{
+	mstl::string failMsg;
+
+	if (!joinNoThrow(failMsg))
 		M_RAISE("%s", failMsg.c_str());
 }
 

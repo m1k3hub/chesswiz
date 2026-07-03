@@ -850,7 +850,7 @@ proc PopupMenu {key} {
 	set sub [menu $m.debugging]
 	foreach opt {html log} {
 		$sub add checkbutton \
-			-label [set mc::Show[string toupper $opt 0 0]] \
+			-label [set ::crosstable::mc::Show[string toupper $opt 0 0]] \
 			-command [namespace code [list ToggleTrace $opt $key]] \
 			-variable [namespace current]::Options(debug:$opt) \
 			;

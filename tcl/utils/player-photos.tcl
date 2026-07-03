@@ -278,12 +278,13 @@ proc checkForUpdate {informProc} {
 return
 
 	if {[catch {package require http 2.7}]} { return 0 }
-	if {[info exists env(http_proxy)]} { set http_proxy $env(http_proxy) } else { set http_proxy "" }
-	set i [string last : $http_proxy]
-	if {$i >= 0} {
-		set host [string range $http_proxy 0 [expr {$i - 1}]]
-		set port [string range $http_proxy [expr {$i + 1}] end]
-		if {[string is integer -strict $port]} { ::http::config -proxyhost $host -proxyport $port }
+	set http_proxy [expr {[info exists env(http_proxy)] ? $env(http_proxy) : ""}]
+	regsub -nocase {^https?://} $http_proxy {} http_proxy
+	set http_proxy [string trimright $http_proxy "/"]
+	if {[regexp {^([^:]+):(\d+)$} $http_proxy -> host port]} {
+		if {[string is integer -strict $port]} {
+			::http::config -proxyhost $host -proxyport $port
+		}
 	}
 	::http::config -urlencoding utf-8
 	catch {
