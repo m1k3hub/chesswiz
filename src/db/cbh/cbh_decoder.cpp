@@ -479,7 +479,7 @@ Decoder::startDecoding(TagSet* tags)
 			throw DecodingFailedException("corrupted data");
 
 		BitStream bstrm(m_gStrm.data(), size);
-		m_position.setup(bstrm);
+		m_position.setup(bstrm, m_isChess960);
 		m_gStrm.skip(size);
 
 		if (tags)

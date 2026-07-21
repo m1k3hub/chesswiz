@@ -2313,8 +2313,8 @@ if (::getenv("SCIDB_GUIDING_TEXT") == 0) return;
 		}
 		else
 		{
-			unsigned lang	= bstrm.get();			// really is language?
-			unsigned id		= bstrm.uint32LE();	// title id?
+			bstrm.get();			// language (unused)
+			bstrm.uint32LE();	// title id (unused)
 
 			while (bstrm.remaining() > 4)
 			{
@@ -2333,8 +2333,8 @@ if (::getenv("SCIDB_GUIDING_TEXT") == 0) return;
 
 				if (bstrm.remaining() > 9)
 				{
-					id = bstrm.uint32();	// title id?
-					lang = bstrm.get();	// really?
+					bstrm.uint32();	// title id (unused)
+					bstrm.get();		// language (unused)
 				}
 			}
 		}

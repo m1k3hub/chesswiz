@@ -768,7 +768,7 @@ GameDecoder::startDecoding(TagSet* tags)
 		unsigned size = 28;
 
 		BitStream bstrm(m_gStrm.data(), size);
-		m_position.setup(bstrm);
+		m_position.setup(bstrm, m_isChess960);
 		m_gStrm.skip(size);
 
 

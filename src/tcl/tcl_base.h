@@ -236,9 +236,6 @@ bool boolFromObj(unsigned objc, Tcl_Obj* const objv[], unsigned index);
 Tcl_Obj* objectFromObj(unsigned objc, Tcl_Obj* const objv[], unsigned index);
 int64_t wideIntFromObj(unsigned objc, Tcl_Obj* const objv[], unsigned index);
 
-} // namespace tcl
-
-
 // Argument-count validation macros. These are macros (not functions) because
 // they use `return TCL_ERROR` to exit the calling Tcl command handler.
 #define CHECK_ARGS(ti, objc, objv, expected, usage) \
@@ -264,6 +261,9 @@ int64_t wideIntFromObj(unsigned objc, Tcl_Obj* const objv[], unsigned index);
 			return TCL_ERROR; \
 		} \
 	} while (0)
+
+} // namespace tcl
+
 
 #include "tcl_base.ipp"
 

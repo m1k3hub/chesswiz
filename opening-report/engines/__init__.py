@@ -1,0 +1,1 @@
+# engines package — UCI engine worker integration for scidb-beta.

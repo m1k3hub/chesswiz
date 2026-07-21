@@ -325,7 +325,7 @@ Position::handleCapture(Pieces& pieces, Count& pieceCount, Byte to, Byte piece)
 
 
 void
-Position::setup(BitStream& strm)
+Position::setup(BitStream& strm, bool isChess960)
 {
 	M_REQUIRE(strm.bitsLeft() >= 224);
 
@@ -410,10 +410,9 @@ Position::setup(BitStream& strm)
 	if (epFyle)
 		board.setEnPassantFyle(sq::Fyle(sq::FyleA + (epFyle - 1)));
 
-	// BUG: ChessBase 10 supports chess 960 very halfhearted. They do not
-	// have a decoding for the castling rooks.
-
-	if (strm.bitsLeft() == 0)
+	// Chess960: do not strip castling rights when king is not on e-file.
+	// Standard chess: fix castling rights when king is not on e1/e8.
+	if (strm.bitsLeft() == 0 && !isChess960)
 		board.fixBadCastlingRights();
 
 	Board::SetupStatus status = board.validate(variant::Normal);

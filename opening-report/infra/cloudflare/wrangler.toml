@@ -1,0 +1,82 @@
+# wrangler.toml — scidb-beta Cloudflare deployment configuration
+#
+# Deploys:
+#   - Pages for the SPA (static React app)
+#   - Workers for API routing and auth
+#   - Durable Objects for workspace sessions and WebSocket connections
+#   - R2 for database files and exports
+#   - Queues for background jobs
+#
+# Usage:
+#   npx wrangler pages deploy dist --project-name scidb-beta
+#   npx wrangler deploy
+#   npx wrangler r2 bucket create scidb-beta-artifacts
+#   npx wrangler queues create scidb-beta-jobs
+
+name = "scidb-beta-api"
+main = "worker.js"
+compatibility_date = "2024-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ---------------------------------------------------------------------------
+# Durable Objects — workspace sessions and WebSocket connections
+# ---------------------------------------------------------------------------
+
+[[durable_objects_bindings]]
+name = "WORKSPACE"
+class_name = "WorkspaceSession"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WorkspaceSession"]
+
+# ---------------------------------------------------------------------------
+# R2 — object storage for database files and exports
+# ---------------------------------------------------------------------------
+
+[[r2_buckets]]
+binding = "ARTIFACTS"
+bucket_name = "scidb-beta-artifacts"
+
+# ---------------------------------------------------------------------------
+# Queues — background job processing
+# ---------------------------------------------------------------------------
+
+[[queues.producers]]
+queue = "scidb-beta-jobs"
+binding = "JOB_QUEUE"
+
+[[queues.consumers]]
+queue = "scidb-beta-jobs"
+max_batch_size = 10
+max_batch_timeout = 5
+dead_letter_queue = "scidb-beta-jobs-dlq"
+
+# ---------------------------------------------------------------------------
+# Environment variables
+# ---------------------------------------------------------------------------
+
+[vars]
+SCIDB_RUNTIME_HOST = "https://scidb-runtime.example.com"  # Container host URL
+SCIDB_API_BASE = "/api"
+
+# ---------------------------------------------------------------------------
+# KV namespace for short-lived session state (fallback to Durable Objects)
+# ---------------------------------------------------------------------------
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "your-kv-namespace-id"
+
+# ---------------------------------------------------------------------------
+# Pages configuration (deployed separately via `wrangler pages deploy`)
+# ---------------------------------------------------------------------------
+
+# The SPA is built with `npm run build` and deployed to Cloudflare Pages.
+# Configure the Pages project in the Cloudflare dashboard or via:
+#   npx wrangler pages project create scidb-beta --production-branch main
+#
+# Build settings (set in dashboard or wrangler.pages.toml):
+#   build_command: npm run build
+#   build_output: dist
+#   root: opening-report

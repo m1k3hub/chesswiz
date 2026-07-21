@@ -47,7 +47,7 @@ public:
 	unsigned variationLevel() const;
 
 	void setup();
-	void setup(util::BitStream& strm);
+	void setup(util::BitStream& strm, bool isChess960 = false);
 
 	void push();
 	void pop();

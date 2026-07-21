@@ -111,6 +111,7 @@ set NoExtraTagsFound					"No tags found for deletion."
 
 set FindDuplicates					"Find Duplicates"
 set EcoStats							"Opening Report"
+set OpeningReport						"Opening Report (ChessBase 26 Style)"
 set SearchByMaterial				"Search by Material"
 set SearchByRating					"Search by Rating"
 set Close							"Close"
@@ -1496,6 +1497,13 @@ proc PopupMenu {parent x y {base ""}} {
 					-command [namespace code [list ShowEcoStats $top $base $Vars(variant)]] \
 					-state $state \
 					;
+				$maint add command \
+					-label " $mc::OpeningReport..." \
+					-image $::icon::16x16::none \
+					-compound left \
+					-command [namespace code [list ShowOpeningReport $top]] \
+					-state $state \
+					;
 				if {$type in {Openings OpeningsWhite OpeningsBlack}} {
 					$maint add command \
 						-label " $mc::RepertoireReport..." \
@@ -2221,6 +2229,11 @@ proc MarkDuplicates {tv file variant} {
 
 proc ShowEcoStats {parent file variant} {
 	OpenOpeningPrepReport $parent $file $variant
+}
+
+
+proc ShowOpeningReport {parent} {
+	::application::tree::openingreport::show $parent
 }
 
 

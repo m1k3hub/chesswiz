@@ -1,0 +1,34 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+httpx2>=2.0
+websockets>=12
+python-multipart>=0.0.9
+pytest>=8
+pytest-asyncio>=0.23
+# Optional: Redis event bus (enable by setting REDIS_URL)
+redis>=5.0
+# Optional: S3 / S3-compatible object storage (enable by setting S3_BUCKET)
+boto3>=1.34
+# PostgreSQL persistence (enable by setting DATABASE_URL)
+sqlalchemy>=2.0
+alembic>=1.13
+# Async driver used by PostgresStore at runtime (SQLAlchemy async engine)
+asyncpg>=0.29
+# Sync driver used by Alembic migrations (env.py rewrites +asyncpg URLs)
+psycopg2-binary>=2.9
+# Test-only: lets the async PostgresStore tests run against SQLite with no
+# PostgreSQL server (tests skip automatically when absent)
+aiosqlite>=0.19
+# Optional: OIDC RS256/JWKS token verification (required in production;
+# enable by setting OIDC_JWKS_URI / OIDC_ISSUER / OIDC_AUDIENCE)
+PyJWT[crypto]>=2.8
+# Optional but recommended: portable RSS monitoring for the engine watchdog
+# (falls back to /proc/<pid>/status on Linux when absent)
+psutil>=5.9
+# Phase 2: observability
+structlog>=24.1
+prometheus-client>=0.20
+# Optional: Sentry error tracking (active only when SENTRY_DSN is set)
+sentry-sdk[fastapi]>=2.0
+# Load testing (used by the nightly CI job; see load/locustfile.py)
+locust>=2.24

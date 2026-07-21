@@ -1901,7 +1901,7 @@ proc SaveAnalysisToRepertoire {tree base move eval depth} {
 
 
 # Enhanced Opening Report
-set EnhancedOpeningReport			"Enhanced Opening Report"
+set EnhancedOpeningReport			"Opening Report"
 set ECOPerformance					"ECO Performance"
 set MoveAnalysis					"Move Analysis"
 set PerformanceTrends				"Performance Trends"

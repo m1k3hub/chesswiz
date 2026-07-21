@@ -222,6 +222,7 @@ Database::Database(Database const& db, mstl::string const& name)
 	try
 	{
 		m_codec->open(this, m_encoding);
+		m_writable = m_codec->isWritable();
 		m_namebases.setModified(true);
 		::sys::file::changed(m_name, m_fileTime);
 	}
@@ -257,8 +258,8 @@ Database::Database(mstl::string const& name, mstl::string const& encoding)
 	m_temporary = true;
 	m_created = sys::time::time();
 	m_readOnly = true;
-	m_writable = m_codec->isWritable();
 	m_initialSize = m_size = m_codec->openProgressive(this, encoding);
+	m_writable = m_codec->isWritable();
 	m_namebases.setModified(true);
 }
 
@@ -311,8 +312,6 @@ Database::Database(	mstl::string const& name,
 		default: M_ASSERT(!"unexpected format");
 	}
 
-	m_writable = m_codec->isWritable();
-
 	try
 	{
 		m_codec->open(this, encoding);
@@ -321,6 +320,8 @@ Database::Database(	mstl::string const& name,
 	{
 		IO_RAISE(Unspecified, Open_Failed, "create failed");
 	}
+
+	m_writable = m_codec->isWritable();
 
 	m_initialSize = m_size = m_gameInfoList.size();
 	m_namebases.setModified(true);
@@ -364,8 +365,6 @@ Database::Database(	mstl::string const& name,
 		DB_RAISE("unknown file format (.%s)", m_suffix.c_str());
 	}
 
-	m_writable = m_codec->isWritable();
-
 	if (m_encoding == sys::utf8::Codec::automatic())
 		m_encoding = m_usedEncoding = m_codec->defaultEncoding();
 
@@ -377,6 +376,8 @@ Database::Database(	mstl::string const& name,
 	{
 		IO_RAISE(Unspecified, Open_Failed, "open failed");
 	}
+
+	m_writable = m_codec->isWritable();
 
 	m_initialSize = m_size = m_gameInfoList.size();
 	setEncodingFailed(m_codec->encodingFailed());

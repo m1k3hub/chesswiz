@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  adapter:
+    build: .
+    ports:
+      - "5001:5001"
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Redis event bus (optional — enables pub/sub across multiple adapter replicas)
+      - REDIS_URL=redis://redis:6379
+      # PostgreSQL persistence (databases, games, users, audit logs)
+      - DATABASE_URL=postgresql://scidb:scidb@postgres:5432/scidb
+      # Local disk storage (S3 env vars not set → falls back to this volume)
+      - DATA_DIR=/app/data
+    volumes:
+      - adapter-data:/app/data
+    depends_on:
+      - redis
+      - postgres
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=scidb
+      - POSTGRES_PASSWORD=scidb
+      - POSTGRES_DB=scidb
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scidb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  adapter-data:
+  redis-data:
+  postgres-data:

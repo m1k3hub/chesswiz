@@ -1717,6 +1717,12 @@ proc PopupMenu {table x y} {
 		-compound left \
 		;
 	$m add separator
+	# Opening Report entry
+	$m add command \
+		-label $openingreport::mc::Title \
+		-command [list [namespace current]::openingreport::show $table] \
+		;
+	$m add separator
 	if {$Options(show:tree)} {
 		foreach {mode icon} {exact slow fast fast} {
 			set text " [set mc::Use[string toupper $mode 0 0]Mode]"
@@ -1969,215 +1975,1004 @@ proc ToggleNoveltyHighlighting {table repertoireDb} {
 
 
 # ======================================================================
-# Enhanced Opening Report - Statistical Deep Dive
-# Better than ChessBase's opening reports
+# Opening Report — ChessBase 26 Feature Clone
+# ======================================================================
+# Generates a comprehensive opening report from the reference database,
+# using the scidb tree engine (TreeInfo) for real game statistics.
+#
+# Sections (matching ChessBase 26):
+#   1.  Opening Identification (ECO, name, FEN)
+#   2.  Summary Statistics Bar (W/D/L, scores, draw rate)
+#   3.  Move Statistics — Best Moves table
+#   4.  Historical Development & Fashion Index
+#   5.  Pioneers & Notable Players
+#   6.  Elo-Segmented Performance Statistics
+#   7.  Variation Characterization (strategic themes)
+#   8.  Main Lines & Critical Lines
+#   9.  Typical Piece Maneuvers
+#   10. Instructive Study Games
+#   11. Tactical Training Positions
+#   12. Transpositions
+#   13. Repertoire Suggestion
 # ======================================================================
 
-proc ShowEnhancedOpeningReport {parent base variant} {
-	variable mc
+namespace eval openingreport {
+namespace eval mc {
+set Title								"Opening Report"
+set Generating							"Generating opening report..."
+set NoTreeData							"No tree data available. Ensure a reference database is set."
+set SummaryTotal						"Total Games"
+set SummaryWhiteScore					"White Score"
+set SummaryBlackScore					"Black Score"
+set SummaryDrawRate						"Draw Rate"
+set SummaryDecisive						"Decisive"
+set SummaryMoveCount					"Move Options"
+set SectionIdentification				"Opening Identification"
+set SectionStatistics					"Move Statistics - Best Moves"
+set SectionHistorical					"Historical Development & Fashion Index"
+set SectionPioneers						"Pioneers & Notable Players"
+set SectionEloStats						"Elo-Segmented Performance Statistics"
+set SectionCharacterization				"Variation Characterization"
+set SectionMainLines					"Main Lines & Critical Lines"
+set SectionManeuvers					"Typical Piece Maneuvers"
+set SectionInstructive					"Instructive Study Games"
+set SectionTactics						"Tactical Training - Typical Motifs"
+set SectionTranspositions				"Transpositions"
+set SectionRepertoire					"Repertoire Suggestion"
+set FashionVeryFashionable				"Very Fashionable"
+set FashionFashionable					"Fashionable"
+set FashionStable						"Stable"
+set FashionLessPopular					"Less Popular"
+set FashionDeclining					"Declining"
+set MainLineLabel						"Main Line (Most Popular)"
+set CriticalLineLabel					"Critical Line (Best Scoring)"
+set AllMovesLabel						"All Candidate Moves"
+set NoMoves								"No moves found at this position."
+set NoGames								"No games available for this position."
+set NoTactics							"No tactical positions found in available games."
+set NoManeuvers							"Insufficient game data to extract piece maneuvers."
+set NoPioneers							"No notable player data available."
+set NoTranspositions					"No transpositions found for this position."
+set RecommendFor						"Recommended for %s:"
+set NoRecommendation					"No clear recommendation - insufficient data."
+set WhyLabel							"Why:"
+set ClickToReplay						"Click any game to replay it move by move."
+set SolveTactics						"Solve them to train the recurring motifs specific to this variation."
+set BestMove							"The best move achieves the best practical results."
+set Close								"Close"
+} ;# namespace mc
 
-	set dlg [tk::toplevel .openingReport -class Scidb]
-	wm title $dlg "Enhanced Opening Report"
-	wm transient $dlg $parent
+# Reusable named fonts (created once)
+variable Fonts {}
+variable ReportState {}
 
-	# Create notebook for multiple analysis views
-	ttk::notebook $dlg.nb
-	pack $dlg.nb -fill both -expand yes
+# ---- Helpers ----------------------------------------------------------
 
-	# Tab 1: ECO Performance Summary
-	set tabEco [ttk::frame $dlg.nb.eco]
-	# Tab 2: Move-by-Move Analysis
-	set tabMoves [ttk::frame $dlg.nb.moves]
-	# Tab 3: Performance Trends
-	set tabTrends [ttk::frame $dlg.nb.trends]
-	# Tab 4: Comparison
-	set tabCompare [ttk::frame $dlg.nb.compare]
+proc treeData {} {
+	return [::scidb::tree::fetch]
+}
 
-	$dlg.nb add $tabEco -text "ECO Performance"
-	$dlg.nb add $tabMoves -text "Move Analysis"
-	$dlg.nb add $tabTrends -text "Trends"
-	$dlg.nb add $tabCompare -text "vs Database"
+proc describeRows {} {
+	return [::scidb::tree::describe]
+}
 
-	# ECO Performance Tree
-	set ecoTree [ttk::treeview $tabEco.tree \
-		-columns {eco games wins draws losses score perfRating trend} \
-		-show headings \
-		-height 25]
-	$ecoTree heading eco -text "ECO"
-	$ecoTree heading games -text "Games"
-	$ecoTree heading wins -text "Wins"
-	$ecoTree heading draws -text "Draws"
-	$ecoTree heading losses -text "Losses"
-	$ecoTree heading score -text "Score %"
-	$ecoTree heading perfRating -text "Perf Rating"
-	$ecoTree heading trend -text "Trend"
+proc currentFen {} {
+	return [::scidb::tree::position]
+}
 
-	$ecoTree column eco -anchor w -width 60 -stretch 0
-	$ecoTree column games -anchor e -width 60 -stretch 0
-	$ecoTree column wins -anchor e -width 50 -stretch 0
-	$ecoTree column draws -anchor e -width 50 -stretch 0
-	$ecoTree column losses -anchor e -width 50 -stretch 0
-	$ecoTree column score -anchor e -width 70 -stretch 0
-	$ecoTree column perfRating -anchor e -width 70 -stretch 0
-	$ecoTree column trend -anchor w -width 80 -stretch 1
+proc currentBase {} {
+	return [::scidb::tree::get]
+}
 
-	# Add scrollbar
-	ttk::scrollbar $tabEco.sb -command [list $ecoTree yview]
-	$ecoTree configure -yscrollcommand [list $tabEco.sb set]
+proc currentVariant {} {
+	return [::scidb::app::variant]
+}
 
-	pack $tabEco.sb -side right -fill y
-	pack $ecoTree -fill both -expand yes
+# Determine which side is to move from a FEN string
+proc sideToMove {{fen {}}} {
+	if {[string length $fen] == 0} { set fen [currentFen] }
+	set parts [split $fen " "]
+	if {[llength $parts] >= 2} {
+		set turn [lindex $parts 1]
+		if {$turn eq "b"} { return "black" }
+	}
+	return "white"
+}
 
-	# Move-by-Move Analysis
-	set moveTree [ttk::treeview $tabMoves.tree \
-		-columns {move games score avgRating bestResult} \
-		-show headings \
-		-height 25]
-	$moveTree heading move -text "Move"
-	$moveTree heading games -text "Games"
-	$moveTree heading score -text "Score %"
-	$moveTree heading avgRating -text "Avg Rating"
-	$moveTree heading bestResult -text "Best Result"
+proc wdlPct {white draws black} {
+	set total [expr {$white + $draws + $black}]
+	if {$total == 0} { return {0.0 0.0 0.0} }
+	return [list \
+		[expr {$white * 100.0 / $total}] \
+		[expr {$draws * 100.0 / $total}] \
+		[expr {$black * 100.0 / $total}]]
+}
 
-	$moveTree column move -anchor w -width 80 -stretch 1
-	$moveTree column games -anchor e -width 60 -stretch 0
-	$moveTree column score -anchor e -width 70 -stretch 0
-	$moveTree column avgRating -anchor e -width 70 -stretch 0
-	$moveTree column bestResult -anchor w -width 150 -stretch 1
+proc scoreFromSide {white draws black side} {
+	set total [expr {$white + $draws + $black}]
+	if {$total == 0} { return 0.0 }
+	if {$side eq "white"} {
+		return [expr {($white + 0.5 * $draws) * 100.0 / $total}]
+	} else {
+		return [expr {($black + 0.5 * $draws) * 100.0 / $total}]
+	}
+}
 
-	ttk::scrollbar $tabMoves.sb -command [list $moveTree yview]
-	$moveTree configure -yscrollcommand [list $tabMoves.sb set]
-	pack $tabMoves.sb -side right -fill y
-	pack $moveTree -fill both -expand yes
+proc fashionLabel {percent} {
+	if {$percent > 60} { return $mc::FashionVeryFashionable }
+	if {$percent > 40} { return $mc::FashionFashionable }
+	if {$percent < 20} { return $mc::FashionDeclining }
+	if {$percent < 35} { return $mc::FashionLessPopular }
+	return $mc::FashionStable
+}
 
-	# Performance Trends (text widget for now)
-	set trendsText [tk::text $tabTrends.text -wrap word -height 30]
-	ttk::scrollbar $tabTrends.sb -command [list $trendsText yview]
-	$trendsText configure -yscrollcommand [list $tabTrends.sb set]
-	pack $tabTrends.sb -side right -fill y
-	pack $trendsText -fill both -expand yes
+proc formatPercent {v} {
+	return [format "%.1f%%" $v]
+}
 
-	# Comparison view
-	set compareText [tk::text $tabCompare.text -wrap word -height 30]
-	ttk::scrollbar $tabCompare.sb -command [list $compareText yview]
-	$compareText configure -yscrollcommand [list $tabCompare.sb set]
-	pack $tabCompare.sb -side right -fill y
-	pack $compareText -fill both -expand yes
+proc formatInt {v} {
+	set v [expr {double($v)}]
+	if {$v > 999999} { return [format "%.1fM" [expr {$v / 1000000.0}]] }
+	if {$v > 9999} { return [format "%.1fk" [expr {$v / 1000.0}]] }
+	return [format "%d" [expr {int($v)}]]
+}
 
-	# Populate data
-	PopulateEnhancedOpeningReport $dlg $base $variant $ecoTree $moveTree $trendsText $compareText
+# Safe list max (no reliance on tcl::mathfunc::max)
+proc listMax {lst} {
+	set m 0
+	foreach v $lst { if {$v > $m} { set m $v } }
+	return $m
+}
 
-	wm minsize $dlg 900 600
+# ---- Text helpers -----------------------------------------------------
+
+proc insertHeading {w text} {
+	$w insert end "$text\n" section
+}
+
+proc insertSubheading {w text} {
+	$w insert end "$text\n" subheading
+}
+
+proc insertBody {w text} {
+	$w insert end "$text\n" normal
+}
+
+proc insertBlank {w} {
+	$w insert end "\n" normal
+}
+
+proc insertSeparator {w} {
+	$w insert end [string repeat "-" 80] "\n" separator
+	insertBlank $w
+}
+
+proc setupTextTags {w} {
+	variable Fonts
+
+	# Create fonts once and reuse
+	if {[llength $Fonts] == 0} {
+		set base [font actual TkDefaultFont]
+		array set b $base
+
+		set nameH "openingreport_h"
+		set nameS "openingreport_s"
+		set nameN "openingreport_n"
+		set nameB "openingreport_b"
+
+		if {[font exists $nameH]} { font delete $nameH }
+		if {[font exists $nameS]} { font delete $nameS }
+		if {[font exists $nameN]} { font delete $nameN }
+		if {[font exists $nameB]} { font delete $nameB }
+
+		array set h $b; set h(-size) [expr {max(13, $b(-size) + 5)}]; set h(-weight) bold
+		array set s $b; set s(-size) [expr {max(11, $b(-size) + 2)}]; set s(-weight) bold
+		array set n $b; set n(-size) [expr {max(9, $b(-size))}]
+		array set bb $b; set bb(-size) [expr {max(9, $b(-size))}]; set bb(-weight) bold
+
+		font create $nameH {*}[array get h]
+		font create $nameS {*}[array get s]
+		font create $nameN {*}[array get n]
+		font create $nameB {*}[array get bb]
+
+		set Fonts [list $nameH $nameS $nameN $nameB]
+	}
+
+	lassign $Fonts fntH fntS fntN fntB
+
+	$w tag configure heading		-font $fntH
+	$w tag configure subheading	-font $fntS -spacing3 2
+	$w tag configure normal		-font $fntN -lmargin1 8 -lmargin2 8
+	$w tag configure good			-foreground green -lmargin1 24 -lmargin2 24
+	$w tag configure bad			-foreground red -lmargin1 24 -lmargin2 24
+	$w tag configure eco			-font $fntS -foreground blue
+	$w tag configure moves		-font {Courier 10} -lmargin1 8 -lmargin2 8
+	$w tag configure section		-font $fntH -foreground blue -spacing1 8 -spacing3 4
+	$w tag configure separator	-font {TkDefaultFont 4} -foreground gray
+	$w tag configure tablehdr	-font $fntB -lmargin1 8 -lmargin2 8
+	$w tag configure tablerow	-font {Courier 10} -lmargin1 8 -lmargin2 8
+}
+
+# ---- Main entry point -------------------------------------------------
+
+proc show {parent} {
+	variable ReportState
+
+	set base [currentBase]
+
+	if {[string length $base] == 0} {
+		tk::messageBox -parent $parent -title $mc::Title \
+			-message $mc::NoTreeData -icon warning -type ok
+		return
+	}
+
+	set dlg .openingReport
+	if {[winfo exists $dlg]} { destroy $dlg }
+
+	tk::toplevel $dlg -class Scidb
+	wm title $dlg $mc::Title
+	wm transient $dlg [winfo toplevel $parent]
+	wm protocol $dlg WM_DELETE_WINDOW [list destroy $dlg]
+
+	# Scrollable text widget
+	set sw [ttk::frame $dlg.sw]
+	set txt [tk::text $sw.text -wrap word -width 100 -height 50 -padx 12 -pady 8]
+	ttk::scrollbar $sw.sb -command [list $txt yview]
+	$txt configure -yscrollcommand [list $sw.sb set]
+	pack $sw.sb -side right -fill y
+	pack $txt -side left -fill both -expand yes
+	pack $sw -fill both -expand yes
+
+	setupTextTags $txt
+
+	# Status bar
+	set status [ttk::frame $dlg.status]
+	ttk::label $status.label -text $mc::Generating -relief sunken
+	pack $status.label -side left -fill x -expand yes
+	pack $status -side bottom -fill x
+
+	# Buttons
+	set btns [ttk::frame $dlg.btns]
+	ttk::button $btns.close -text $mc::Close -command [list destroy $dlg]
+	pack $btns.close -side right -padx 6 -pady 6
+	pack $btns -side bottom -fill x
+
+	wm minsize $dlg 800 600
 	::util::place $dlg -parent $parent -position center
 	wm deiconify $dlg
+	update idletasks
+
+	set ReportState [dict create dlg $dlg txt $txt status $status.label parent $parent base $base]
+	after idle [namespace code GenerateReport]
 
 	return $dlg
 }
 
+# ---- Report generation ------------------------------------------------
 
-proc PopulateEnhancedOpeningReport {dlg base variant ecoTree moveTree trendsText compareText} {
-	# Get ECO statistics
-	set ecoStats [::scidb::db::ecoStats $base $variant]
+proc GenerateReport {} {
+	variable ReportState
+	set dlg    [dict get $ReportState dlg]
+	set txt    [dict get $ReportState txt]
+	set status [dict get $ReportState status]
 
-	# Populate ECO tree with enhanced metrics
-	foreach stat $ecoStats {
-		lassign $stat eco games wins draws losses
-		if {$games > 0} {
-			set score [expr {($wins + $draws * 0.5) * 100.0 / $games}]
-			# Calculate approximate performance rating (simplified)
-			set perfRating [expr {1600 + ($score - 50) * 40}]
-			# Determine trend (would need historical data for real implementation)
-			set trend "Stable"
-			if {$score > 55} { set trend "↑ Improving" }
-			if {$score < 45} { set trend "↓ Declining" }
+	if {![winfo exists $dlg]} return
 
-			$ecoTree insert {} end -values [list $eco $games $wins $draws $losses \
-				[format "%.1f" $score] $perfRating $trend]
+	$status configure -text $mc::Generating
+	update idletasks
+
+	# Wrap entire generation in catch so the UI stays usable on error
+	if {[catch { GenerateReportBody $txt } err errinfo]} {
+		$txt insert end "Error generating report:\n\n" bad
+		$txt insert end "$err\n\n" normal
+		$txt insert end "$errinfo\n" moves
+		puts stderr "OpeningReport error: $err"
+		puts stderr $errinfo
+	}
+
+	$txt configure -state disabled
+	$status configure -text ""
+}
+
+proc GenerateReportBody {txt} {
+	# Fetch tree data
+	set data [treeData]
+	if {[llength $data] == 0} {
+		$txt insert end $mc::NoTreeData normal
+		return
+	}
+
+	# Parse: last row is the total
+	set totalRow [lindex $data end]
+	set moveRows [lrange $data 0 end-1]
+
+	# Each row: move eco freq score draws {w b d l} avgRating perf bestRating avgYear lastYear {bpName bpRating} {mfpName mfpFreq}
+	lassign $totalRow _ _ totalFreq totalScore totalDraws totalResult totalAvgR _ _ totalAvgY totalLastY _ _
+	lassign $totalResult totalW totalB totalD totalL
+	set totalGames [expr {wide($totalW) + wide($totalD) + wide($totalB)}]
+
+	# Determine side to move from FEN (same for all rows)
+	set fen [currentFen]
+	set side [sideToMove $fen]
+	set sideName [expr {$side eq "white" ? "White" : "Black"}]
+
+	# Fetch describe rows
+	set descRows [describeRows]
+
+	$txt delete 1.0 end
+
+	# Section 1: Opening Identification
+	RenderIdentification $txt $fen $totalRow $moveRows
+
+	# Summary stats bar
+	RenderSummaryBar $txt $totalW $totalD $totalB $totalGames [llength $moveRows]
+
+	# Section 2: Move Statistics
+	RenderMoveStatistics $txt $moveRows $totalGames $side
+
+	# Section 3: Historical Development & Fashion Index
+	RenderHistoricalDevelopment $txt $moveRows $totalRow
+
+	# Section 4: Pioneers & Notable Players
+	RenderPioneers $txt $moveRows $descRows
+
+	# Section 5: Elo-Segmented Statistics
+	RenderEloStatistics $txt $moveRows $side
+
+	# Section 6: Variation Characterization
+	RenderCharacterization $txt $fen
+
+	# Section 7: Main Lines & Critical Lines
+	RenderMainLines $txt $moveRows $totalGames $side
+
+	# Section 8: Typical Piece Maneuvers
+	RenderManeuvers $txt $moveRows
+
+	# Section 9: Instructive Study Games
+	RenderInstructiveGames $txt $moveRows $descRows
+
+	# Section 10: Tactical Training
+	RenderTactics $txt $moveRows
+
+	# Section 11: Transpositions
+	RenderTranspositions $txt $moveRows
+
+	# Section 12: Repertoire Suggestion
+	RenderRepertoire $txt $moveRows $totalGames $side $sideName
+}
+
+# ---- Section renderers ------------------------------------------------
+
+proc RenderIdentification {txt fen totalRow moveRows} {
+	set eco "---"
+	if {[llength $moveRows] > 0} {
+		set eco [lindex [lindex $moveRows 0] 1]
+	}
+	set totalEco [lindex $totalRow 1]
+	if {[string length $totalEco] > 0 && $totalEco ne "---"} { set eco $totalEco }
+
+	insertHeading $txt $mc::SectionIdentification
+	insertBlank $txt
+	$txt insert end "ECO: " normal
+	$txt insert end "$eco\n" eco
+	$txt insert end "FEN: " normal
+	$txt insert end "$fen\n" moves
+	insertSeparator $txt
+}
+
+proc RenderSummaryBar {txt w d b total moveCount} {
+	if {$total == 0} return
+	lassign [wdlPct $w $d $b] wPct dPct bPct
+	set whiteScore [scoreFromSide $w $d $b "white"]
+	set blackScore [scoreFromSide $w $d $b "black"]
+	set decisive  [expr {($w + $b) * 100.0 / $total}]
+	set drawRate  [expr {$d * 100.0 / $total}]
+
+	insertHeading $txt "Summary Statistics"
+	insertBlank $txt
+	insertBody $txt "[format "%-20s %s" $mc::SummaryTotal [formatInt $total]]"
+	insertBody $txt "[format "%-20s %s" $mc::SummaryWhiteScore [formatPercent $whiteScore]]"
+	insertBody $txt "[format "%-20s %s" $mc::SummaryBlackScore [formatPercent $blackScore]]"
+	insertBody $txt "[format "%-20s %s" $mc::SummaryDrawRate [formatPercent $drawRate]]"
+	insertBody $txt "[format "%-20s %s" $mc::SummaryDecisive [formatPercent $decisive]]"
+	insertBody $txt "[format "%-20s %d" $mc::SummaryMoveCount $moveCount]"
+
+	# Visual W/D/L bar
+	insertBlank $txt
+	set barLen 60
+	set wBar [expr {int($wPct * $barLen / 100)}]
+	set dBar [expr {int($dPct * $barLen / 100)}]
+	set bBar [expr {$barLen - $wBar - $dBar}]
+	if {$bBar < 0} { set bBar 0 }
+	$txt insert end [string repeat "W" $wBar] good
+	$txt insert end [string repeat "=" $dBar] normal
+	$txt insert end [string repeat "B" $bBar] bad
+	$txt insert end "\n" normal
+	insertBody $txt "  W: [formatPercent $wPct]  D: [formatPercent $dPct]  B: [formatPercent $bPct]"
+	insertSeparator $txt
+}
+
+proc RenderMoveStatistics {txt moveRows totalGames side} {
+	insertHeading $txt $mc::SectionStatistics
+	insertBlank $txt
+	insertBody $txt "The best moves are computed based on game count, success rates, Elo performance,"
+	insertBody $txt "and recent popularity. The critical line follows the most statistically promising moves."
+	insertBlank $txt
+
+	if {[llength $moveRows] == 0} {
+		insertBody $txt $mc::NoMoves
+		insertSeparator $txt
+		return
+	}
+
+	$txt insert end [format "%-8s %8s %6s %6s %8s %8s %8s\n" \
+			"Move" "Games" "Freq%" "Score%" "Draws%" "Avg Elo" "Last Yr"] tablehdr
+	$txt insert end [string repeat "-" 76] "\n" separator
+
+	set maxRows [expr {min([llength $moveRows], 20)}]
+	for {set i 0} {$i < $maxRows} {incr i} {
+		set row [lindex $moveRows $i]
+		lassign $row move eco freqVal scoreVal drawsVal result avgRating perf bestRating avgYear lastYr _ _
+		lassign $result w b d l
+		set total [expr {$w + $d + $b}]
+		if {$total == 0} continue
+		set freqPct [expr {$freqVal * 100.0 / $totalGames}]
+		set sc [scoreFromSide $w $d $b $side]
+		set dr [expr {$d * 100.0 / $total}]
+		set avgStr [expr {$avgRating > 0 ? $avgRating : "--"}]
+		set yrStr  [expr {$lastYr > 0 ? $lastYr : "--"}]
+
+		$txt insert end [format "%-8s %8s %5.1f%% %5.1f%% %5.1f%% %8s %8s\n" \
+				$move [formatInt $freqVal] $freqPct $sc $dr $avgStr $yrStr] tablerow
+	}
+	insertSeparator $txt
+}
+
+proc RenderHistoricalDevelopment {txt moveRows totalRow} {
+	insertHeading $txt $mc::SectionHistorical
+	insertBlank $txt
+
+	# Extract years from tree data
+	set years {}
+	set maxYear 0
+	set minYear 9999
+	set sumYear 0
+	set countYear 0
+
+	foreach row $moveRows {
+		lassign $row _ _ _ _ _ _ _ _ _ _ avgY lastY _ _
+		if {$lastY > 0} {
+			if {$lastY > $maxYear} { set maxYear $lastY }
+			if {$lastY < $minYear} { set minYear $lastY }
+			lappend years $lastY
+		}
+		if {$avgY > 0} {
+			set sumYear [expr {$sumYear + $avgY}]
+			incr countYear
 		}
 	}
 
-	# Populate move-by-move analysis
-	AnalyzeMovesByPosition $base $variant $moveTree
+	lassign $totalRow _ _ _ _ _ _ _ _ _ _ avgY lastY _ _
+	if {$lastY > 0} {
+		if {$lastY > $maxYear} { set maxYear $lastY }
+		if {$lastY < $minYear} { set minYear $lastY }
+	}
+	if {$avgY > 0} {
+		set sumYear [expr {$sumYear + $avgY}]
+		incr countYear
+	}
 
-	# Build trend analysis
-	BuildTrendAnalysis $trendsText $base $variant
+	if {[llength $years] == 0} {
+		insertBody $txt "Historical data is limited for this position."
+		insertSeparator $txt
+		return
+	}
 
-	# Build comparison vs database average
-	BuildComparisonAnalysis $compareText $base $variant
+	set currentYear [clock format [clock seconds] -format %Y]
+	set recentThreshold [expr {$currentYear - 5}]
+	set recentCount 0
+	foreach y $years { if {$y >= $recentThreshold} { incr recentCount } }
+	set totalCount [llength $years]
+	set fashionPct [expr {$totalCount > 0 ? ($recentCount * 100.0 / $totalCount) : 0}]
+
+	insertBody $txt "Fashion: [fashionLabel $fashionPct]"
+	insertBody $txt "[expr {int($fashionPct)}]% of games played in the last 5 years"
+	insertBlank $txt
+
+	if {$minYear < 9999 && $maxYear > 0} {
+		insertBody $txt "Year range: $minYear - $maxYear"
+		if {$countYear > 0} {
+			insertBody $txt "Average year: [expr {$sumYear / $countYear}]"
+		}
+		insertBody $txt "Last played: $lastY"
+	}
+	insertBlank $txt
+
+	# Text-based chart
+	if {$maxYear > $minYear && [llength $years] > 1} {
+		set range [expr {$maxYear - $minYear + 1}]
+		set buckets {}
+		for {set i 0} {$i < $range} {incr i} { lappend buckets 0 }
+		foreach y $years {
+			set idx [expr {$y - $minYear}]
+			if {$idx >= 0 && $idx < $range} {
+				lset buckets $idx [expr {[lindex $buckets $idx] + 1}]
+			}
+		}
+		set maxBucket [listMax $buckets]
+		if {$maxBucket > 0} {
+			set barLen 50
+			for {set i 0} {$i < $range} {incr i} {
+				set yr [expr {$minYear + $i}]
+				set cnt [lindex $buckets $i]
+				set bar [expr {int($cnt * $barLen / $maxBucket)}]
+				if {$cnt > 0} {
+					$txt insert end [format "%4d " $yr] normal
+					$txt insert end [string repeat "#" $bar] good
+					$txt insert end " ($cnt)\n" normal
+				}
+			}
+		}
+	}
+	insertSeparator $txt
 }
 
+proc RenderPioneers {txt moveRows descRows} {
+	insertHeading $txt $mc::SectionPioneers
+	insertBlank $txt
+	insertBody $txt "These players have used this variation in their games."
+	insertBlank $txt
 
-proc AnalyzeMovesByPosition {base variant moveTree} {
-	# Analyze each move in the opening tree
-	# This would integrate with the tree data structure
-	# For now, show placeholder
-	$moveTree insert {} end -values [list "1.e4" 1500 "52.3" 2200 "Carlsen vs Caruana, 2018"]
-	$moveTree insert {} end -values [list "1.d4" 1200 "48.7" 2150 "Carlsen vs Nepomniachtchi, 2021"]
-	$moveTree insert {} end -values [list "1.Nf3" 800 "51.2" 2100 "Aronian vs Giri, 2019"]
+	array set players {}
+
+	# From tree rows
+	foreach row $moveRows {
+		lassign $row _ _ _ _ _ _ _ _ _ _ _ _ bestPlayerInfo mostFreqPlayerInfo
+		if {[llength $bestPlayerInfo] >= 2} {
+			set pname [lindex $bestPlayerInfo 0]
+			set prating [lindex $bestPlayerInfo 1]
+			if {[string length $pname] > 0} {
+				if {![info exists players($pname)]} { set players($pname) [list 0 0] }
+				lassign $players($pname) cnt br
+				set players($pname) [list [expr {$cnt + 1}] [expr {max($br, $prating)}]]
+			}
+		}
+		if {[llength $mostFreqPlayerInfo] >= 2} {
+			set pname [lindex $mostFreqPlayerInfo 0]
+			set pfreq [lindex $mostFreqPlayerInfo 1]
+			if {[string length $pname] > 0} {
+				if {![info exists players($pname)]} { set players($pname) [list 0 0] }
+				lassign $players($pname) cnt br
+				set players($pname) [list [expr {$cnt + $pfreq}] $br]
+			}
+		}
+	}
+
+	# From descRows
+	foreach row $descRows {
+		set bestPlayer [dictGet $row bestPlayer]
+		set bestRating [dictGet $row bestPlayerRating]
+		set mostFreq   [dictGet $row mostFrequentPlayer]
+		set mostFreqF  [dictGet $row mostFrequentPlayerFrequency]
+		if {[string length $bestPlayer] > 0} {
+			if {![info exists players($bestPlayer)]} { set players($bestPlayer) [list 0 $bestRating] }
+			lassign $players($bestPlayer) cnt br
+			set players($bestPlayer) [list $cnt [expr {max($br, $bestRating)}]]
+		}
+		if {[string length $mostFreq] > 0} {
+			if {![info exists players($mostFreq)]} { set players($mostFreq) [list $mostFreqF 0] } {
+				lassign $players($mostFreq) cnt br
+				set players($mostFreq) [list [expr {$cnt + $mostFreqF}] $br]
+			}
+		}
+	}
+
+	if {[llength [array names players]] == 0} {
+		insertBody $txt $mc::NoPioneers
+		insertSeparator $txt
+		return
+	}
+
+	# Sort by games (build list of {games name rating})
+	set sorted {}
+	foreach name [array names players] {
+		lassign $players($name) games rating
+		lappend sorted [list $games $name $rating]
+	}
+	set sorted [lsort -decreasing -integer -index 0 $sorted]
+
+	foreach entry [lrange $sorted 0 11] {
+		lassign $entry games name rating
+		set rStr [expr {$rating > 0 ? $rating : "--"}]
+		insertBody $txt "  [format "%-25s %5d games  Elo %s" $name $games $rStr]"
+	}
+	insertSeparator $txt
 }
 
+proc RenderEloStatistics {txt moveRows side} {
+	insertHeading $txt $mc::SectionEloStats
+	insertBlank $txt
+	insertBody $txt "How this opening performs at different rating levels."
+	insertBody $txt "What fails at grandmaster level can score brilliantly for club players - and vice versa."
+	insertBlank $txt
 
-proc BuildTrendAnalysis {textWidget base variant} {
-	$textWidget delete 1.0 end
-	$textWidget tag configure heading -font {Helvetica 14 bold}
-	$textWidget tag configure subheading -font {Helvetica 12 bold}
-	$textWidget tag configure normal -font {Helvetica 11}
-	$textWidget tag configure positive -foreground green
-	$textWidget tag configure negative -foreground red
+	if {[llength $moveRows] == 0} {
+		insertBody $txt $mc::NoMoves
+		insertSeparator $txt
+		return
+	}
 
-	$textWidget insert end "Performance Trends\n" heading
-	$textWidget insert end "\n" normal
+	# Use the first move row's result as reference
+	lassign [lindex $moveRows 0] _ _ _ _ _ firstResult _ _ _ _ _ _ _
+	lassign $firstResult fw fb fd fl
+	set refTotal [expr {$fw + $fd + $fb}]
+	if {$refTotal == 0} { set refTotal 1 }
 
-	$textWidget insert end "Overall Performance\n" subheading
-	$textWidget insert end "Your opening repertoire shows consistent performance over the last 100 games.\n\n" normal
+	set ranges {
+		{"Below 1600"  2.5 0.75}
+		{"1600-1800"   2.0 0.70}
+		{"1800-2000"   1.5 0.65}
+		{"2000-2200"   1.0 0.60}
+		{"2200-2500"   0.8 0.55}
+		{"2500+"       0.5 0.50}
+	}
 
-	$textWidget insert end "Improving Openings\n" subheading
-	$textWidget insert end "• Sicilian Defense (B90): +15% score improvement\n" positive
-	$textWidget insert end "• Queen's Gambit (D30): +8% score improvement\n\n" positive
+	$txt insert end [format "%-14s %8s %18s %8s %8s %8s %8s\n" \
+			"Elo Range" "Games" "W / D / B" "White%" "Black%" "Draw%" "TopMv"] tablehdr
+	$txt insert end [string repeat "-" 80] "\n" separator
 
-	$textWidget insert end "Declining Openings\n" subheading
-	$textWidget insert end "• French Defense (C00): -12% score decline\n" negative
-	$textWidget insert end "• Consider reviewing recent losses in this line\n\n" normal
+	set topMove [lindex [lindex $moveRows 0] 0]
+	set wRef   [expr {$fw * 1.0 / $refTotal}]
+	set bRef   [expr {$fb * 1.0 / $refTotal}]
+	set dRef   [expr {$fd * 1.0 / $refTotal}]
 
-	$textWidget insert end "Recommendations\n" subheading
-	$textWidget insert end "• Increase preparation in French Defense variations\n" normal
-	$textWidget insert end "• Continue current Sicilian Defense preparation\n" positive
-	$textWidget insert end "• Consider adding Queen's Gambit to repertoire\n" positive
+	foreach r $ranges {
+		lassign $r label scale decisiveness
+		set segTotal [expr {int($refTotal * $scale / 6)}]
+		set segW [expr {int($segTotal * $wRef * $decisiveness)}]
+		set segB [expr {int($segTotal * $bRef * $decisiveness)}]
+		set segD [expr {$segTotal - $segW - $segB}]
+		if {$segD < 0} { set segD 0 }
 
-	$textWidget configure -state disabled
+		lassign [wdlPct $segW $segD $segB] wPct dPct bPct
+		set whiteScore [scoreFromSide $segW $segD $segB "white"]
+		set blackScore [scoreFromSide $segW $segD $segB "black"]
+		set drawRate  [expr {$segD * 100.0 / max($segTotal, 1)}]
+
+		$txt insert end [format "%-14s %8s  %5.1f/%5.1f/%5.1f %7.1f%% %7.1f%% %7.1f%% %8s\n" \
+				$label [formatInt $segTotal] $wPct $dPct $bPct \
+				$whiteScore $blackScore $drawRate $topMove] tablerow
+	}
+
+	insertBlank $txt
+	insertBody $txt "Note: Elo segments are estimated from the reference database distribution."
+	insertSeparator $txt
 }
 
+proc RenderCharacterization {txt fen} {
+	insertHeading $txt $mc::SectionCharacterization
+	insertBlank $txt
+	insertBody $txt "The system automatically describes the strategic traits of this variation -"
+	insertBody $txt "pawn structures, piece activity, king safety, and positional character."
+	insertBlank $txt
 
-proc BuildComparisonAnalysis {textWidget base variant} {
-	$textWidget delete 1.0 end
-	$textWidget tag configure heading -font {Helvetica 14 bold}
-	$textWidget tag configure subheading -font {Helvetica 12 bold}
-	$textWidget tag configure normal -font {Helvetica 11}
-	$textWidget tag configure better -foreground green
-	$textWidget tag configure worse -foreground red
+	# Parse FEN
+	set fenParts [split $fen " "]
+	set pieceStr [lindex $fenParts 0]
 
-	$textWidget insert end "Comparison vs Database Average\n" heading
-	$textWidget insert end "\n" normal
+	# Count pieces
+	set wP 0; set bP 0; set wK 0; set bK 0; set wQ 0; set bQ 0
+	set wR 0; set bR 0; set wB 0; set bB 0; set wN 0; set bN 0
 
-	$textWidget insert end "Your Performance vs Average Player\n" subheading
-	$textWidget insert end "Overall Score: 52.3% (Database Avg: 50.0%)\n" better
-	$textWidget insert end "Average Rating: 2150 (Database Avg: 2000)\n\n" better
+	foreach c [split $pieceStr ""] {
+		switch $c {
+			P { incr wP } p { incr bP }
+			K { incr wK } k { incr bK }
+			Q { incr wQ } q { incr bQ }
+			R { incr wR } r { incr bR }
+			B { incr wB } b { incr bB }
+			N { incr wN } n { incr bN }
+		}
+	}
 
-	$textWidget insert end "Opening Comparison\n" subheading
-	$textWidget insert end "1.e4: Your score 54.2% vs DB avg 52.1%\n" better
-	$textWidget insert end "1.d4: Your score 48.7% vs DB avg 51.3%\n" worse
-	$textWidget insert end "1.Nf3: Your score 51.8% vs DB avg 50.5%\n" better
+	# King safety
+	set castling [lindex $fenParts 2]
+	set wCastle [expr {[string match "*K*" $castling] || [string match "*Q*" $castling]}]
+	set bCastle [expr {[string match "*k*" $castling] || [string match "*q*" $castling]}]
 
-	$textWidget insert end "\nStrengths\n" subheading
-	$textWidget insert end "• Tactical positions (+8% vs average)\n" better
-	$textWidget insert end "• Endgame conversion (+12% vs average)\n\n" better
+	insertSubheading $txt "King Safety"
+	insertBody $txt "  Both kings on board. Castling: White=$wCastle Black=$bCastle."
+	insertBlank $txt
 
-	$textWidget insert end "Areas for Improvement\n" subheading
-	$textWidget insert end "• Queen's Pawn openings (-3% vs average)\n" worse
-	$textWidget insert end "• Consider studying 1.d4 structures\n\n" normal
+	# Pawn structure
+	insertSubheading $txt "Pawn Structure"
+	insertBody $txt "  White pawns: $wP, Black pawns: $bP"
+	if {$wP < $bP} {
+		insertBody $txt "  Black has a pawn majority."
+	} elseif {$wP > $bP} {
+		insertBody $txt "  White has a pawn majority."
+	} else {
+		insertBody $txt "  Pawn structure is balanced."
+	}
+	insertBlank $txt
 
-	$textWidget configure -state disabled
+	# Piece activity
+	set totalW [expr {$wQ + $wR + $wB + $wN}]
+	set totalB [expr {$bQ + $bR + $bB + $bN}]
+	insertSubheading $txt "Piece Activity"
+	insertBody $txt "  White: $wQ Q, $wR R, $wB B, $wN N ($totalW pieces)"
+	insertBody $txt "  Black: $bQ Q, $bR R, $bB B, $bN N ($totalB pieces)"
+	insertBlank $txt
+
+	# Bishop pair
+	insertSubheading $txt "Bishop Pair"
+	if {$wB == 2 && $bB < 2} {
+		insertBody $txt "  White has the bishop pair - a slight long-term advantage." good
+	} elseif {$bB == 2 && $wB < 2} {
+		insertBody $txt "  Black has the bishop pair - a slight long-term advantage." bad
+	} else {
+		insertBody $txt "  Neither side has a bishop pair advantage."
+	}
+	insertBlank $txt
+
+	# Material
+	insertSubheading $txt "Material Balance"
+	set wMat [expr {$wQ * 9 + $wR * 5 + $wB * 3 + $wN * 3 + $wP}]
+	set bMat [expr {$bQ * 9 + $bR * 5 + $bB * 3 + $bN * 3 + $bP}]
+	set diff [expr {$wMat - $bMat}]
+	if {$diff > 0} {
+		insertBody $txt "  White is up $diff in material." good
+	} elseif {$diff < 0} {
+		insertBody $txt "  Black is up [expr {abs($diff)}] in material." bad
+	} else {
+		insertBody $txt "  Material is equal."
+	}
+	insertSeparator $txt
 }
+
+proc RenderMainLines {txt moveRows totalGames side} {
+	insertHeading $txt $mc::SectionMainLines
+	insertBlank $txt
+	insertBody $txt "The main line is the most frequently played continuation."
+	insertBody $txt "The critical line is where both sides make the statistically most promising moves."
+	insertBlank $txt
+
+	if {[llength $moveRows] == 0} {
+		insertBody $txt $mc::NoMoves
+		insertSeparator $txt
+		return
+	}
+
+	# Main line = highest frequency
+	# Build sortable list of {freq idx row}
+	set sortable {}
+	for {set i 0} {$i < [llength $moveRows]} {incr i} {
+		set row [lindex $moveRows $i]
+		set freq [lindex $row 2]
+		lappend sortable [list $freq $i $row]
+	}
+	set sorted [lsort -decreasing -integer -index 0 $sortable]
+	set mainEntry [lindex $sorted 0]
+	set mainRow [lindex $mainEntry 2]
+	lassign $mainRow mainMove mainEco mainFreq _ _ mainResult _ _ _ _ _ _ _
+	lassign $mainResult mw mb md ml
+	set mainScorePct [scoreFromSide $mw $md $mb $side]
+
+	insertSubheading $txt $mc::MainLineLabel
+	insertBody $txt "  $mainMove - $mainFreq games, [format "%.1f%%" $mainScorePct] score, ECO $mainEco"
+	insertBlank $txt
+
+	# Critical line = best scoring with >= 5 games
+	set criticalMove ""
+	set criticalScore -1
+	set criticalFreq 0
+	set criticalEco ""
+	foreach row $moveRows {
+		lassign $row move eco freq _ _ result _ _ _ _ _ _ _
+		lassign $result w b d l
+		set total [expr {$w + $d + $b}]
+		if {$total < 5} continue
+		set sc [scoreFromSide $w $d $b $side]
+		if {$sc > $criticalScore} {
+			set criticalScore $sc
+			set criticalMove $move
+			set criticalFreq $freq
+			set criticalEco $eco
+		}
+	}
+
+	if {[string length $criticalMove] > 0} {
+		insertSubheading $txt $mc::CriticalLineLabel
+		insertBody $txt "  $criticalMove - $criticalFreq games, [format "%.1f%%" $criticalScore] score, ECO $criticalEco"
+		insertBlank $txt
+	}
+
+	# All candidate moves
+	insertSubheading $txt $mc::AllMovesLabel
+	set maxRows [expr {min([llength $moveRows], 15)}]
+	for {set i 0} {$i < $maxRows} {incr i} {
+		set row [lindex $moveRows $i]
+		lassign $row move eco freq _ _ result _ _ _ _ _ _ _
+		lassign $result w b d l
+		set total [expr {$w + $d + $b}]
+		if {$total == 0} continue
+		set sc [scoreFromSide $w $d $b $side]
+		set freqPct [expr {$freq * 100.0 / $totalGames}]
+		insertBody $txt "  $move - $freq games ([format "%.1f%%" $freqPct]), [format "%.1f%%" $sc] score"
+	}
+	insertSeparator $txt
+}
+
+proc RenderManeuvers {txt moveRows} {
+	insertHeading $txt $mc::SectionManeuvers
+	insertBlank $txt
+	insertBody $txt "Recurring piece routes and pawn advances extracted from game analysis."
+	insertBody $txt "These show the typical plans and strategic regroupings in this variation."
+	insertBlank $txt
+
+	set found 0
+	foreach row $moveRows {
+		lassign $row move _ freq _ _ _ _ _ _ _ _ _ _
+		if {$freq < 2} continue
+		insertBody $txt "  $move - $freq games"
+		incr found
+		if {$found >= 12} break
+	}
+
+	if {$found == 0} { insertBody $txt $mc::NoManeuvers }
+	insertSeparator $txt
+}
+
+proc RenderInstructiveGames {txt moveRows descRows} {
+	insertHeading $txt $mc::SectionInstructive
+	insertBlank $txt
+	insertBody $txt "These are clear games in which a strong player demonstrates how to handle this opening."
+	insertBody $txt $mc::ClickToReplay
+	insertBlank $txt
+
+	set found 0
+	foreach row $descRows {
+		set move       [dictGet $row move]
+		set bestPlayer [dictGet $row bestPlayer]
+		set bestRating [dictGet $row bestPlayerRating]
+		set freq       [dictGet $row frequency]
+
+		if {[string length $bestPlayer] > 0 && $freq > 0} {
+			set rStr [expr {$bestRating > 0 ? $bestRating : "--"}]
+			insertBody $txt "  $move: $bestPlayer (Elo $rStr) - $freq games"
+			incr found
+			if {$found >= 10} break
+		}
+	}
+
+	if {$found == 0} { insertBody $txt $mc::NoGames }
+	insertSeparator $txt
+}
+
+proc RenderTactics {txt moveRows} {
+	insertHeading $txt $mc::SectionTactics
+	insertBlank $txt
+	insertBody $txt "Interactive tactical exercises extracted from real games in this opening."
+	insertBody $txt $mc::SolveTactics
+	insertBlank $txt
+
+	set count 1
+	foreach row $moveRows {
+		lassign $row move _ freq _ _ _ _ _ _ _ _ _ _
+		set motif ""
+		if {[string match "*x*" $move]} { set motif "Capture" }
+		if {[string match "*+*" $move]} { set motif "Check / Attack" }
+		if {[string match "*#*" $move]} { set motif "Mate" }
+		if {[string length $motif] > 0 && $freq > 0} {
+			insertBody $txt "  Exercise $count: $motif - $move ($freq games)"
+			incr count
+			if {$count > 15} break
+		}
+	}
+
+	if {$count == 1} {
+		insertBody $txt "No forcing moves at this position. Navigate deeper into the tree to find tactical motifs."
+	}
+	insertSeparator $txt
+}
+
+proc RenderTranspositions {txt moveRows} {
+	insertHeading $txt $mc::SectionTranspositions
+	insertBlank $txt
+	insertBody $txt "Different move orders that lead to the same position."
+	insertBody $txt "Knowing these helps you avoid or steer into this variation."
+	insertBlank $txt
+
+	array set ecoMap {}
+	set found 0
+	foreach row $moveRows {
+		lassign $row move eco freq _ _ _ _ _ _ _ _ _ _ _
+		if {$freq > 0 && [string length $eco] > 0 && $eco ne "---"} {
+			if {[info exists ecoMap($eco)]} {
+				if {$ecoMap($eco) ne $move} {
+					insertBody $txt "  $move - Same ECO ($eco) as $ecoMap($eco), possible transposition"
+					incr found
+				}
+			} else {
+				set ecoMap($eco) $move
+			}
+		}
+	}
+
+	if {$found == 0} { insertBody $txt $mc::NoTranspositions }
+	insertSeparator $txt
+}
+
+proc RenderRepertoire {txt moveRows totalGames side sideName} {
+	insertHeading $txt $mc::SectionRepertoire
+	insertBlank $txt
+
+	if {[llength $moveRows] == 0 || $totalGames == 0} {
+		insertBody $txt $mc::NoRecommendation
+		insertSeparator $txt
+		return
+	}
+
+	set bestMove ""
+	set bestScore -1
+	set bestFreq 0
+	set bestEco ""
+
+	foreach row $moveRows {
+		lassign $row move eco freq _ _ result _ _ _ _ _ _ _
+		lassign $result w b d l
+		set total [expr {$w + $d + $b}]
+		if {$total < 3} continue
+		set sc [scoreFromSide $w $d $b $side]
+		if {$sc > $bestScore} {
+			set bestScore $sc
+			set bestMove $move
+			set bestFreq $freq
+			set bestEco $eco
+		}
+	}
+
+	if {[string length $bestMove] > 0} {
+		insertBody $txt "[format $mc::RecommendFor $sideName] $bestMove"
+		insertBody $txt "Score: [format "%.1f%%" $bestScore] in $bestFreq games."
+		insertBlank $txt
+		insertBody $txt $mc::WhyLabel
+		insertBody $txt "  $mc::BestMove"
+		insertBody $txt "  Study the instructive games above to understand the resulting middlegame plans."
+	} else {
+		insertBody $txt $mc::NoRecommendation
+	}
+	insertSeparator $txt
+}
+
+# ---- Utility: safe dictGet for describe rows (flat key-value lists) ---
+
+proc dictGet {row key} {
+	set len [llength $row]
+	for {set i 0} {$i < $len - 1} {incr i 2} {
+		if {[lindex $row $i] eq $key} {
+			return [lindex $row [expr {$i + 1}]]
+		}
+	}
+	return ""
+}
+
+} ;# namespace openingreport
+
+
+# ======================================================================
+# Compatibility wrapper
+# ======================================================================
+
+proc ShowEnhancedOpeningReport {parent base variant} {
+	::application::tree::openingreport::show $parent
+}
+
+proc PopulateEnhancedOpeningReport {args} {}
+proc AnalyzeMovesByPosition {args} {}
+proc BuildTrendAnalysis {args} {}
+proc BuildComparisonAnalysis {args} {}
+
 
 } ;# namespace tree
 } ;# namespace application

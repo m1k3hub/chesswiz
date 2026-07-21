@@ -443,6 +443,10 @@ protected:
 	virtual void updateCurrLine();
 	virtual void updateBestMove();
 	virtual void updateDepthInfo();
+	// Base class default is a no-op. The Tcl engine override was intentionally
+	// removed; depth/nodes/nps/tbhits are now sent via updateDepthInfo() using
+	// the m_time Tcl key (see tcl_engine.cpp). Subclasses that need time info
+	// should override updateDepthInfo() instead.
 	virtual void updateTimeInfo();
 	virtual void updateHashFullInfo();
 

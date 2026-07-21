@@ -1,0 +1,125 @@
+/* ===== MiniBoard — read-only board renderer for modals ===== */
+
+.mini-board-wrapper {
+  display: flex;
+  justify-content: center;
+  background: #111315;
+  padding: 10px;
+  border: 1px solid #30343a;
+  border-radius: var(--radius, 4px);
+}
+
+.mini-board {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  width: 360px;
+  max-width: 100%;
+  aspect-ratio: 1;
+  border: 2px solid #30343a;
+  user-select: none;
+  font-size: 0;
+}
+
+.mini-square {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: background-color 0.12s;
+}
+
+.mini-square.clickable {
+  cursor: pointer;
+}
+
+.mini-square.light {
+  background: #f0d9b5;
+}
+
+.mini-square.dark {
+  background: #b58863;
+}
+
+.mini-square.selected {
+  background: rgba(78, 168, 222, 0.55) !important;
+}
+
+.mini-square.valid-target::after {
+  content: '';
+  position: absolute;
+  width: 30%;
+  height: 30%;
+  border-radius: 50%;
+  background: rgba(78, 168, 222, 0.35);
+  pointer-events: none;
+}
+
+.mini-square.valid-capture::after {
+  content: '';
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  border: 3px solid rgba(78, 168, 222, 0.5);
+  background: transparent;
+  width: auto;
+  height: auto;
+  pointer-events: none;
+}
+
+.mini-piece {
+  font-size: 30px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.mini-piece.white {
+  color: #f8f8f8;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.mini-piece.black {
+  color: #2a2a2a;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+/* coordinate labels */
+.mini-coord {
+  position: absolute;
+  font-size: 8px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 2;
+  line-height: 1;
+}
+
+.mini-coord.rank-coord {
+  top: 2px;
+  left: 3px;
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.mini-square.dark .mini-coord.rank-coord {
+  color: rgba(240, 217, 181, 0.7);
+}
+
+.mini-coord.file-coord {
+  bottom: 1px;
+  right: 3px;
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.mini-square.dark .mini-coord.file-coord {
+  color: rgba(240, 217, 181, 0.7);
+}
+
+/* responsive */
+@media (max-width: 720px) {
+  .mini-board {
+    width: 100%;
+  }
+  .mini-piece {
+    font-size: 6vw;
+  }
+}
