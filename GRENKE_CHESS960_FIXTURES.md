@@ -196,3 +196,18 @@ is no free/trial ChessBase writer, and the read-only ChessBase Reader / ChessBas
 Light cannot create or convert databases.  The scidb native `.sci` database plus the
 original ChessBase-served PGN are therefore the authoritative fixtures for testing
 and development.
+
+### Diagnostic tooling
+
+```bash
+# Per-FEN statistics from the PGN (castling patterns, legal start rights)
+python3 scripts/analyze_grenke_fixtures.py \
+  opening-report/tests/fixtures/grenke_freestyle_2026.pgn
+
+# Low-level CBH custom-position codec coverage for all nine start FENs
+make -C src verify_cbh_write && ./src/verify_cbh_write
+```
+
+See `CHESS960_STATUS.md` for the full reverse-engineering status, including
+why the current CBH encoder cannot faithfully encode every legal Chess960
+castling move from these fixtures.

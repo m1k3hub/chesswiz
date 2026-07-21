@@ -607,6 +607,61 @@ verifyChess960PieceMoveCodec()
 	return true;
 }
 
+
+bool
+verifyGrenkeChess960FENs()
+{
+	::fprintf(stderr, "step 5: GRENKE Chess960 start-position codec check...\n");
+
+	// The nine unique Chess960 start positions from the Grenke Freestyle
+	// Chess Open 2026 (see GRENKE_CHESS960_FIXTURES.md).  In the raw start
+	// positions the squares between the king and rooks are usually occupied,
+	// so castling is not legal.  We therefore verify the CBH custom-position
+	// codec by round-tripping a simple pawn move in each position; this still
+	// exercises the 28-byte start-position encoding/decoding path for every
+	// GRENKE FEN.
+	char const* const fens[] =
+	{
+		"bnrqnkrb/pppppppp/8/8/8/8/PPPPPPPP/BNRQNKRB w GCgc - 0 1",
+		"nnbbrqkr/pppppppp/8/8/8/8/PPPPPPPP/NNBBRQKR w HEhe - 0 1",
+		"nrbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/NRBQKBNR w HBhb - 0 1",
+		"rkqrbbnn/pppppppp/8/8/8/8/PPPPPPPP/RKQRBBNN w DAda - 0 1",
+		"rnqnbkrb/pppppppp/8/8/8/8/PPPPPPPP/RNQNBKRB w GAga - 0 1",
+		"rnbbknqr/pppppppp/8/8/8/8/PPPPPPPP/RNBBKNQR w HAha - 0 1",
+		"rnbkqbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBKQBNR w HAha - 0 1",
+		"nbrqkrbn/pppppppp/8/8/8/8/PPPPPPPP/NBRQKRBN w FCfc - 0 1",
+		"nrbbknqr/pppppppp/8/8/8/8/PPPPPPPP/NRBBKNQR w HBhb - 0 1",
+	};
+	char const* const labels[] =
+	{
+		"FEN1", "FEN2", "FEN3", "FEN4", "FEN5", "FEN6", "FEN7", "FEN8", "FEN9",
+	};
+
+	for (unsigned i = 0; i < sizeof(fens)/sizeof(fens[0]); ++i)
+	{
+		Board start;
+		char const* err = start.setup(fens[i], variant::Normal);
+		if (!err)
+		{
+			::fprintf(stderr, "failed to set up %s (%s)\n", labels[i], fens[i]);
+			return false;
+		}
+
+		// Verify that a simple one-square pawn advance round-trips through the
+		// CBH custom-position codec.  a2->a3 is legal in every GRENKE FEN.
+		Square fromSq = sq::make(sq::FyleA, sq::Rank2);
+		Square toSq   = sq::make(sq::FyleA, sq::Rank3);
+		Move m = Move::genOneForward(fromSq, toSq);
+		mstl::string label;
+		label.format("%s pawn move", labels[i]);
+		if (!verifySingleMoveCodec(start, m, label.c_str(), false))
+			return false;
+	}
+
+	::fprintf(stderr, "  GRENKE Chess960 FEN codec check passed\n");
+	return true;
+}
+
 } // namespace
 
 
@@ -684,6 +739,14 @@ main(int argc, char** argv)
 		if (!verifyChess960PieceMoveCodec())
 		{
 			::fprintf(stderr, "CBH Chess960 piece-move verification FAILED\n");
+			cleanupSci(sciRoot);
+			cleanupCbh(cbhRoot);
+			return 1;
+		}
+
+		if (!verifyGrenkeChess960FENs())
+		{
+			::fprintf(stderr, "CBH GRENKE Chess960 FEN verification FAILED\n");
 			cleanupSci(sciRoot);
 			cleanupCbh(cbhRoot);
 			return 1;
