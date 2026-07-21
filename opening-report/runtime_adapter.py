@@ -842,6 +842,64 @@ class ExportRequest(BaseModel):
     gameIds: list[str] | None = None
 
 
+# ---- Wave 3: player center, repertoire, prep ------------------------------
+
+class PlayerPrepRequest(BaseModel):
+    playerId: str
+    databaseId: str | None = None
+    color: str | None = None
+
+
+class OpeningPrepRequest(BaseModel):
+    repertoireId: str
+    databaseId: str | None = None
+
+
+# ---- Wave 4: maintenance, crosstables -------------------------------------
+
+class MaintenanceRequest(BaseModel):
+    databaseId: str
+    operation: str
+
+
+class CrosstableQueryRequest(BaseModel):
+    event: str | None = None
+    site: str | None = None
+    players: list[str] | None = None
+
+
+# ---- Wave 5: game viewer / editor -----------------------------------------
+
+class GameUpdateRequest(BaseModel):
+    headers: dict[str, str] | None = None
+    comment: dict[str, Any] | None = None
+
+
+class VariationRequest(BaseModel):
+    parentMoveId: str
+    moves: list[dict[str, str]] = Field(default_factory=list)
+    comment: dict[str, Any] | None = None
+
+
+class MoveCommentRequest(BaseModel):
+    comment: dict[str, Any]
+
+
+# ---- Wave 6: explorer / opening-info --------------------------------------
+
+class ExplorerRequest(BaseModel):
+    moves: list[dict[str, str]] = Field(default_factory=list)
+    source: str | None = None
+    speed: str | None = None
+    ratings: list[int] | None = None
+    fen: str | None = None
+
+
+class OpeningInfoRequest(BaseModel):
+    moves: list[dict[str, str]] = Field(default_factory=list)
+    fen: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Search helpers
 # ---------------------------------------------------------------------------
@@ -1645,6 +1703,362 @@ async def create_search(request: Request, req: SearchRequest):
     _JOBS[job_id] = job_data  # backward compat
 
     return {"jobId": job_id, "status": "complete", "total": len(filtered)}
+
+
+# ---------------------------------------------------------------------------
+# Import PGN JSON variant
+# ---------------------------------------------------------------------------
+
+@app.post("/api/databases/{database_id}/import-pgn")
+async def import_pgn_json(database_id: str, request: Request):
+    """Import a PGN from a JSON body (programmatic / editor use-case)."""
+    client_ip = _client_ip(request)
+    if not await _check_rate_limit(client_ip, "/api/databases/{database_id}/import"):
+        _audit_log("import.rate_limited", ip=client_ip, database=database_id)
+        return JSONResponse({"error": "Rate limit exceeded. Try again in a minute."}, status_code=429)
+    if not security.is_safe_key_component(database_id):
+        return JSONResponse({"error": "Invalid database id"}, status_code=400)
+    body = await request.json()
+    file_text = str(body.get("pgn", ""))
+    filename = security.sanitize_filename(str(body.get("filename", "import.pgn")))
+    text_bytes = file_text.encode("utf-8")
+    if len(text_bytes) > MAX_UPLOAD_SIZE:
+        return JSONResponse({"error": f"PGN exceeds maximum size of {MAX_UPLOAD_SIZE // (1024 * 1024)} MB"}, status_code=413)
+    if not _validate_pgn(file_text):
+        return JSONResponse({"error": "Invalid PGN: malformed headers or movetext"}, status_code=400)
+    storage_key = f"uploads/{database_id}/{filename}"
+    await _store_file(storage_key, text_bytes)
+    job_id = f"import-{uuid.uuid4().hex[:8]}"
+    job_data = {"jobId": job_id, "type": "import", "status": "complete", "progress": 100, "total": 1, "databaseId": database_id, "filename": filename, "storageKey": storage_key, "fileSize": len(text_bytes)}
+    await store.set_job(job_id, job_data)
+    _JOBS[job_id] = job_data
+    asyncio.create_task(_simulate_job_progress(job_id, "import", 10))
+    await get_cache().clear_prefix(cache_key("games", database_id))
+    await get_cache().clear_prefix(cache_key("databases"))
+    await get_cache().clear_prefix(cache_key("indexes"))
+    await get_cache().clear_prefix(cache_key("eco"))
+    _audit_log("import.success", ip=client_ip, database=database_id, filename=filename, jobId=job_id)
+    return {"jobId": job_id, "status": "complete", "filename": filename, "size": len(text_bytes)}
+
+
+# ---------------------------------------------------------------------------
+# Player center + repertoire + prep endpoints (Wave 3)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/players")
+async def list_players(q: str | None = None, limit: int = 20):
+    return await store.search_players(query=q, limit=limit)
+
+
+@app.get("/api/players/{player_id}/card")
+async def get_player_card(player_id: str):
+    card = await store.get_player_card(player_id)
+    if not card:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return card
+
+
+@app.post("/api/players/{player_id}/prep")
+async def create_player_prep(player_id: str, req: PlayerPrepRequest):
+    job_id = f"prep-{uuid.uuid4().hex[:8]}"
+    job_data = {"jobId": job_id, "type": "report", "status": "running", "progress": 0, "total": 100, "databaseId": req.databaseId, "subject": player_id, "subjectType": "opponent", "color": req.color}
+    await store.set_job(job_id, job_data)
+    _JOBS[job_id] = job_data
+    asyncio.create_task(_simulate_job_progress(job_id, "report", 15))
+    return {"jobId": job_id, "status": "running", "type": "opponent"}
+
+
+@app.get("/api/repertoires")
+async def list_repertoires():
+    return await store.list_repertoires()
+
+
+@app.post("/api/prep/reports")
+async def create_opening_prep(req: OpeningPrepRequest):
+    repertoire = next((r for r in await store.list_repertoires() if r["id"] == req.repertoireId), None)
+    job_id = f"prep-{uuid.uuid4().hex[:8]}"
+    job_data = {"jobId": job_id, "type": "report", "status": "running", "progress": 0, "total": 100, "databaseId": req.databaseId, "subject": req.repertoireId, "subjectType": "opening", "repertoireName": repertoire["name"] if repertoire else req.repertoireId}
+    await store.set_job(job_id, job_data)
+    _JOBS[job_id] = job_data
+    asyncio.create_task(_simulate_job_progress(job_id, "report", 15))
+    return {"jobId": job_id, "status": "running", "type": "opening"}
+
+
+# ---------------------------------------------------------------------------
+# Maintenance + crosstable endpoints (Wave 4)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/maintenance/jobs")
+async def start_maintenance(req: MaintenanceRequest):
+    job_id = f"maintenance-{uuid.uuid4().hex[:8]}"
+    job_data = {"jobId": job_id, "type": "maintenance", "status": "running", "progress": 0, "total": 100, "databaseId": req.databaseId, "operation": req.operation}
+    await store.set_job(job_id, job_data)
+    _JOBS[job_id] = job_data
+    asyncio.create_task(_simulate_job_progress(job_id, "maintenance", 20))
+    return {"jobId": job_id, "status": "running", "operation": req.operation}
+
+
+@app.get("/api/maintenance/reports/{report_id}")
+async def get_maintenance_report(report_id: str):
+    job = await store.get_job(report_id)
+    if not job:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return {"jobId": report_id, "operation": job.get("operation", "unknown"), "databaseId": job.get("databaseId"), "status": job.get("status", "unknown"), "message": f"Maintenance '{job.get('operation')}' completed"}
+
+
+@app.post("/api/crosstables/query")
+async def query_crosstable(req: CrosstableQueryRequest):
+    result = await store.query_crosstable(req.model_dump(exclude_unset=True))
+    if not result:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Game viewer + editor endpoints (Wave 5)
+# ---------------------------------------------------------------------------
+
+SCIDB_DATABASE_READONLY = os.environ.get("SCIDB_DATABASE_READONLY", "1").strip() in {"1", "true", "yes"}
+
+
+def _writable_backend_available() -> bool:
+    return _tcl_bridge.is_available() and not SCIDB_DATABASE_READONLY
+
+
+@app.get("/api/games/{game_id}/pgn")
+async def get_game_pgn(game_id: str):
+    if _tcl_bridge.is_available():
+        data = await _tcl_bridge.get_game_pgn(game_id)
+        if data is not None:
+            return PlainTextResponse(data, media_type="application/x-chess-pgn")
+    pgn = await store.get_game_pgn(game_id)
+    if pgn is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return PlainTextResponse(pgn, media_type="application/x-chess-pgn")
+
+
+@app.patch("/api/games/{game_id}")
+async def update_game(game_id: str, req: GameUpdateRequest):
+    if not _writable_backend_available():
+        return JSONResponse({"error": "Writable chess database backend is unavailable."}, status_code=503)
+    if _tcl_bridge.is_available():
+        data = await _tcl_bridge.patch_game(game_id, req.model_dump(exclude_unset=True))
+        if data is not None:
+            await get_cache().clear_prefix(cache_key("game", game_id))
+            await get_cache().clear_prefix(cache_key("games"))
+            return data
+    updated = await store.patch_game(game_id, req.model_dump(exclude_unset=True))
+    if not updated:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    await get_cache().clear_prefix(cache_key("game", game_id))
+    await get_cache().clear_prefix(cache_key("games"))
+    return updated
+
+
+@app.post("/api/games/{game_id}/variations")
+async def add_variation(game_id: str, req: VariationRequest):
+    if not _writable_backend_available():
+        return JSONResponse({"error": "Writable chess database backend is unavailable."}, status_code=503)
+    if _tcl_bridge.is_available():
+        data = await _tcl_bridge.add_game_variation(game_id, req.parentMoveId, req.model_dump(exclude_unset=True))
+        if data is not None:
+            await get_cache().clear_prefix(cache_key("game", game_id))
+            return data
+    updated = await store.add_game_variation(game_id, req.parentMoveId, req.model_dump(exclude_unset=True))
+    if not updated:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    await get_cache().clear_prefix(cache_key("game", game_id))
+    return updated
+
+
+@app.post("/api/games/{game_id}/moves/{move_id}/comments")
+async def add_move_comment(game_id: str, move_id: str, req: MoveCommentRequest):
+    if not _writable_backend_available():
+        return JSONResponse({"error": "Writable chess database backend is unavailable."}, status_code=503)
+    if _tcl_bridge.is_available():
+        data = await _tcl_bridge.add_game_comment(game_id, move_id, req.model_dump(exclude_unset=True))
+        if data is not None:
+            await get_cache().clear_prefix(cache_key("game", game_id))
+            return data
+    updated = await store.add_game_comment(game_id, move_id, req.model_dump(exclude_unset=True))
+    if not updated:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    await get_cache().clear_prefix(cache_key("game", game_id))
+    return updated
+
+
+# ---------------------------------------------------------------------------
+# Paginated games list (Wave 7)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/databases/{database_id}/games")
+async def list_games(database_id: str, page: int = 1, limit: int = 25, sort: str = "date", order: str = "desc", query: str | None = None):
+    cache = get_cache()
+    key = cache_key("games", database_id, "page", page, "limit", limit, "sort", sort, "order", order, "query", query or "")
+    cached = await cache.get(key)
+    if cached is not None:
+        return cached
+    if _tcl_bridge.is_available():
+        data = await _tcl_bridge.paginate_games(database_id, page=page, limit=limit, sort=sort, order=order, query=query)
+        if data is not None:
+            await cache.set(key, data, ttl=_GAMES_CACHE_TTL)
+            return data
+    result = await store.paginate_games(database_id, page=page, limit=limit, sort=sort, order=order, query=query)
+    await cache.set(key, result, ttl=_GAMES_CACHE_TTL)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Explorer + opening-info proxy endpoints (Wave 6)
+# ---------------------------------------------------------------------------
+
+_EXPLORER_CACHE_TTL = 60.0
+
+
+def _moves_to_play(moves: list[dict[str, str]]) -> str:
+    return ",".join(m.get("uci", "") for m in moves if m.get("uci"))
+
+
+@app.post("/api/explorer")
+async def post_explorer(req: ExplorerRequest):
+    play = _moves_to_play(req.moves)
+    cache = get_cache()
+    key = cache_key("explorer", play or "start", req.source, req.speed, ",".join(str(r) for r in (req.ratings or [])))
+    cached = await cache.get(key)
+    if cached is not None:
+        return cached
+    query = {"play": play, "speeds": req.speed or "blitz,rapid,classical", "topGames": 0}
+    if req.ratings:
+        query["ratings"] = ",".join(str(r) for r in req.ratings)
+    data = await _explorer_proxy("lichess", query_string=_encode_query(query))
+    if data is not None:
+        reshaped = _reshape_lichess_explorer(data, req.moves)
+        await cache.set(key, reshaped, ttl=_EXPLORER_CACHE_TTL)
+        return reshaped
+    await cache.set(key, MOCK_EXPLORER, ttl=_EXPLORER_CACHE_TTL)
+    return MOCK_EXPLORER
+
+
+@app.post("/api/explorer/elo")
+async def post_explorer_elo(req: ExplorerRequest):
+    play = _moves_to_play(req.moves)
+    cache = get_cache()
+    ratings_key = ",".join(str(r) for r in (req.ratings or []))
+    key = cache_key("explorer-elo", play or "start", req.speed, ratings_key)
+    cached = await cache.get(key)
+    if cached is not None:
+        return cached
+    segments: list[dict[str, Any]] = []
+    for band in ([[1200, 1500], [1500, 1900], [1900, 2200], [2200, 2500]] if not req.ratings else _bands_from_ratings(req.ratings)):
+        query = {"play": play, "ratings": f"{band[0]}-{band[1]}", "topGames": 0}
+        band_data = await _explorer_proxy("lichess", query_string=_encode_query(query))
+        segments.append({"range": {"label": f"{band[0]}-{band[1]}", "min": band[0], "max": band[1]}, "data": _reshape_lichess_explorer(band_data or {}, req.moves)})
+    await cache.set(key, segments, ttl=_EXPLORER_CACHE_TTL)
+    return segments
+
+
+@app.post("/api/explorer/historical")
+async def post_explorer_historical(req: ExplorerRequest):
+    play = _moves_to_play(req.moves)
+    cache = get_cache()
+    key = cache_key("explorer-hist", play or "start", req.speed, ",".join(str(r) for r in (req.ratings or [])))
+    cached = await cache.get(key)
+    if cached is not None:
+        return cached
+    data = await _explorer_proxy("lichess", query_string=_encode_query({"play": play, "topGames": 0}))
+    reshaped: dict[str, Any] = {"yearlyData": [], "topGames": [], "totalGames": 0}
+    if isinstance(data, dict):
+        for m in data.get("moves", []):
+            reshaped["totalGames"] += m.get("white", 0) + m.get("draws", 0) + m.get("black", 0)
+        if reshaped["totalGames"]:
+            for year in range(2014, 2025):
+                reshaped["yearlyData"].append({"year": year, "count": max(1, reshaped["totalGames"] // 11)})
+    await cache.set(key, reshaped, ttl=_EXPLORER_CACHE_TTL)
+    return reshaped
+
+
+@app.post("/api/opening-info")
+async def post_opening_info(req: ExplorerRequest):
+    play = _moves_to_play(req.moves)
+    eco = await _lookup_eco(play)
+    if eco:
+        return eco
+    data = await _explorer_proxy("lichess", query_string=_encode_query({"play": play, "topGames": 0}))
+    opening = data.get("opening") if isinstance(data, dict) else None
+    return opening or {"eco": "A00", "name": "Irregular Opening"}
+
+
+async def _lookup_eco(play: str) -> dict[str, str] | None:
+    if not play:
+        return {"eco": "A00", "name": "Irregular Openings"}
+    moves = play.split(",")
+    if moves[0] == "d2d4":
+        return {"eco": "A45", "name": "Indian Game"}
+    if moves[0] == "e2e4":
+        if len(moves) > 1 and moves[1] == "c7c5":
+            return {"eco": "B90", "name": "Sicilian, Najdorf"}
+        return {"eco": "B00", "name": "King's Pawn Opening"}
+    if moves[0] == "g1f3":
+        return {"eco": "A06", "name": "Reti Opening"}
+    return None
+
+
+def _encode_query(params: dict[str, Any]) -> str:
+    parts = []
+    for k, v in params.items():
+        if v is None:
+            continue
+        if isinstance(v, list):
+            for item in v:
+                parts.append(f"{k}={item}")
+        else:
+            parts.append(f"{k}={v}")
+    return "&".join(parts)
+
+
+def _bands_from_ratings(ratings: list[int]) -> list[list[int]]:
+    if len(ratings) >= 2:
+        return [ratings[i:i + 2] for i in range(0, len(ratings) - 1, 2)]
+    return [[1200, 1500], [1500, 1900], [1900, 2200], [2200, 2500]]
+
+
+MOCK_EXPLORER: dict[str, Any] = {
+    "white": 0,
+    "draws": 0,
+    "black": 0,
+    "moves": [],
+    "turn": "w",
+    "topGames": [],
+    "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+}
+
+
+def _reshape_lichess_explorer(data: dict[str, Any], moves: list[dict[str, str]]) -> dict[str, Any]:
+    fen = data.get("fen") or _moves_to_fen(moves)
+    return {
+        "white": data.get("white", 0),
+        "draws": data.get("draws", 0),
+        "black": data.get("black", 0),
+        "moves": [{"uci": m.get("uci", ""), "san": m.get("san", ""), "white": m.get("white", 0), "draws": m.get("draws", 0), "black": m.get("black", 0), "averageRating": m.get("averageRating")} for m in data.get("moves", [])],
+        "turn": "w" if len(moves) % 2 == 0 else "b",
+        "topGames": [],
+        "fen": fen,
+        "opening": data.get("opening"),
+    }
+
+
+def _moves_to_fen(moves: list[dict[str, str]]) -> str:
+    from chess import Board
+    board = Board()
+    for m in moves:
+        uci = m.get("uci", "")
+        if uci:
+            try:
+                board.push_uci(uci)
+            except Exception:
+                break
+    return board.fen()
+
 
 
 @app.get("/api/searches/{job_id}/results")

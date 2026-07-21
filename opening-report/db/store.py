@@ -145,10 +145,89 @@ class Store:
         """Return ECO classification table rows."""
         raise NotImplementedError
 
+    # --- Player center / repertoire / prep -----------------------------------
+
+    async def search_players(self, query: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+        """Return player summaries matching an optional name prefix."""
+        raise NotImplementedError
+
+    async def get_player_card(self, player_id: str) -> dict[str, Any] | None:
+        """Return detailed player statistics for the player card modal."""
+        raise NotImplementedError
+
+    async def list_repertoires(self) -> list[dict[str, Any]]:
+        """Return saved repertoire lines."""
+        raise NotImplementedError
+
+    async def query_crosstable(self, query: dict[str, Any]) -> dict[str, Any] | None:
+        """Return crosstable result for an event/site/player set."""
+        raise NotImplementedError
+
+    # --- Game editor ---------------------------------------------------------
+
+    async def get_game_pgn(self, game_id: str) -> str | None:
+        """Return the raw PGN text for a single game."""
+        raise NotImplementedError
+
+    async def patch_game(self, game_id: str, patch: dict[str, Any]) -> dict[str, Any] | None:
+        """Update game headers and/or top-level comment. Requires writable backend."""
+        raise NotImplementedError
+
+    async def add_game_variation(self, game_id: str, move_id: str, variation: dict[str, Any]) -> dict[str, Any] | None:
+        """Add a variation to a game. Requires writable backend."""
+        raise NotImplementedError
+
+    async def add_game_comment(self, game_id: str, move_id: str, comment: dict[str, Any]) -> dict[str, Any] | None:
+        """Add a comment to a game move. Requires writable backend."""
+        raise NotImplementedError
+
+    async def paginate_games(
+        self,
+        database_id: str,
+        page: int = 1,
+        limit: int = 25,
+        sort: str = "date",
+        order: str = "desc",
+        query: str | None = None,
+    ) -> dict[str, Any]:
+        """Return a paginated slice of games with total/totalPages metadata."""
+        raise NotImplementedError
+
     # --- Lifecycle ------------------------------------------------------------
 
     async def close(self) -> None:
         pass
+
+
+_SEED_REPERTOIRES: list[dict[str, Any]] = [
+    {"id": "rep-white", "name": "White Repertoire: Queen's Pawn", "side": "white", "eco": "A45", "moves": [{"san": "d4", "uci": "d2d4", "fen": "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 1"}, {"san": "Nf6", "uci": "g8f6", "fen": "rnbqkbnr/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 1 2"}, {"san": "c4", "uci": "c2c4", "fen": "rnbqkbnr/pppppppp/5n2/8/2PP4/8/PP2PPPP/RNBQKBNR b KQkq - 0 2"}], "updatedAt": "2024-01-15T10:00:00Z"},
+    {"id": "rep-black", "name": "Black Repertoire: Sicilian", "side": "black", "eco": "B90", "moves": [{"san": "e4", "uci": "e2e4", "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"}, {"san": "c5", "uci": "c7c5", "fen": "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"}, {"san": "Nf3", "uci": "g1f3", "fen": "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKBNR b KQkq - 1 2"}], "updatedAt": "2024-02-20T14:30:00Z"},
+]
+
+_SEED_CROSSTABLE: dict[str, Any] = {
+    "event": "WCh 2021",
+    "site": "Dubai UAE",
+    "players": [
+        {"player": "Carlsen, Magnus", "games": 11, "points": 7.5, "wins": 4, "draws": 7, "losses": 0, "sonnebornBerger": 52.25, "rank": 1},
+        {"player": "Nepomniachtchi, Ian", "games": 11, "points": 3.5, "wins": 0, "draws": 7, "losses": 4, "sonnebornBerger": 28.75, "rank": 2},
+    ],
+    "totalRounds": 11,
+}
+
+
+def _game_pgn(game: dict[str, Any]) -> str:
+    """Return a minimal PGN string for a mock game."""
+    return (
+        f'[Event "{game.get("event", "?")}"]\n'
+        f'[Site "{game.get("site", "?")}"]\n'
+        f'[Date "{game.get("date", "?")}"]\n'
+        f'[White "{game.get("white", "?")}"]\n'
+        f'[Black "{game.get("black", "?")}"]\n'
+        f'[WhiteElo "{game.get("whiteElo", "")}"]\n'
+        f'[BlackElo "{game.get("blackElo", "")}"]\n'
+        f'[Result "{game.get("result", "*")}"]\n'
+        f'1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *\n'
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -226,6 +305,10 @@ class MemoryStore(Store):
         self._databases: list[dict[str, Any]] = [dict(d) for d in _SEED_DATABASES]
         self._games: list[dict[str, Any]] = [dict(g) for g in _SEED_GAMES]
         self._users: dict[str, dict[str, Any]] = {}
+        self._repertoires: list[dict[str, Any]] = [dict(r) for r in _SEED_REPERTOIRES]
+        self._game_pgn: dict[str, str] = {}
+        self._game_comments: dict[str, dict[str, dict[str, Any]]] = {}
+        self._game_variations: dict[str, list[dict[str, Any]]] = {}
 
     async def get_job(self, job_id: str) -> dict[str, Any] | None:
         return self._jobs.get(job_id)
@@ -319,6 +402,127 @@ class MemoryStore(Store):
 
     async def list_eco(self) -> list[dict[str, Any]]:
         return [dict(e) for e in _SEED_ECO]
+
+    # --- Player center / repertoire / prep -----------------------------------
+
+    async def search_players(self, query: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+        q = (query or "").lower()
+        players = _SEED_NAMEBASE.get("players", [])
+        if q:
+            players = [p for p in players if q in p["name"].lower()]
+        return [dict(p) for p in players[:limit]]
+
+    async def get_player_card(self, player_id: str) -> dict[str, Any] | None:
+        player = next((p for p in _SEED_NAMEBASE.get("players", []) if p["id"] == player_id), None)
+        if not player:
+            return None
+        recent = [dict(g) for g in _SEED_GAMES if player["name"] in (g["white"], g["black"])][:5]
+        return {
+            "id": player["id"],
+            "name": player["name"],
+            "elo": player["elo"],
+            "title": player.get("title"),
+            "country": player.get("country"),
+            "peakElo": player["elo"] + 25,
+            "games": player["games"],
+            "winRate": 0.48,
+            "drawRate": 0.32,
+            "lossRate": 0.20,
+            "topOpenings": [
+                {"eco": "C78", "name": "Ruy Lopez", "games": 120, "score": 0.55},
+                {"eco": "D37", "name": "QGD", "games": 90, "score": 0.52},
+            ],
+            "recentGames": recent,
+        }
+
+    async def list_repertoires(self) -> list[dict[str, Any]]:
+        return [dict(r) for r in self._repertoires]
+
+    async def query_crosstable(self, query: dict[str, Any]) -> dict[str, Any] | None:
+        event = query.get("event") or _SEED_CROSSTABLE["event"]
+        site = query.get("site") or _SEED_CROSSTABLE["site"]
+        players = query.get("players")
+        rows = [dict(r) for r in _SEED_CROSSTABLE["players"]]
+        if players:
+            rows = [r for r in rows if r["player"] in players]
+        return {
+            "event": event,
+            "site": site,
+            "players": rows,
+            "totalRounds": _SEED_CROSSTABLE["totalRounds"],
+        }
+
+    # --- Game editor ---------------------------------------------------------
+
+    async def get_game_pgn(self, game_id: str) -> str | None:
+        game = next((g for g in self._games if g["id"] == game_id), None)
+        if not game:
+            return None
+        return self._game_pgn.get(game_id) or _game_pgn(game)
+
+    async def patch_game(self, game_id: str, patch: dict[str, Any]) -> dict[str, Any] | None:
+        game = next((g for g in self._games if g["id"] == game_id), None)
+        if not game:
+            return None
+        if "headers" in patch:
+            header_map = {"White": "white", "Black": "black", "Event": "event", "Site": "site", "Date": "date", "Result": "result", "ECO": "eco"}
+            for k, v in patch["headers"].items():
+                if k in header_map:
+                    game[header_map[k]] = v
+        return dict(game)
+
+    async def add_game_variation(self, game_id: str, move_id: str, variation: dict[str, Any]) -> dict[str, Any] | None:
+        game = next((g for g in self._games if g["id"] == game_id), None)
+        if not game:
+            return None
+        entry = {
+            "id": f"v-{len(self._game_variations.get(game_id, [])) + 1}",
+            "parentMoveId": move_id,
+            "moves": variation.get("moves", []),
+            "comment": variation.get("comment"),
+        }
+        self._game_variations.setdefault(game_id, []).append(entry)
+        return dict(game)
+
+    async def add_game_comment(self, game_id: str, move_id: str, comment: dict[str, Any]) -> dict[str, Any] | None:
+        game = next((g for g in self._games if g["id"] == game_id), None)
+        if not game:
+            return None
+        self._game_comments.setdefault(game_id, {})[move_id] = comment.get("comment", comment)
+        return dict(game)
+
+    async def paginate_games(
+        self,
+        database_id: str,
+        page: int = 1,
+        limit: int = 25,
+        sort: str = "date",
+        order: str = "desc",
+        query: str | None = None,
+    ) -> dict[str, Any]:
+        games = list(self._games)
+        if query:
+            q = query.lower()
+            games = [
+                g for g in games
+                if q in g["white"].lower()
+                or q in g["black"].lower()
+                or q in g["event"].lower()
+                or q in g.get("eco", "").lower()
+            ]
+        reverse = order.lower() == "desc"
+        sort_key = sort if sort in {"white", "black", "event", "site", "date", "eco", "result"} else "date"
+        games.sort(key=lambda g: g.get(sort_key, "") or "", reverse=reverse)
+        total = len(games)
+        start = (max(1, page) - 1) * limit
+        end = start + limit
+        return {
+            "games": [dict(g) for g in games[start:end]],
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "totalPages": max(1, (total + limit - 1) // limit),
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -506,6 +710,119 @@ class RedisStore(Store):
 
     async def list_eco(self) -> list[dict[str, Any]]:
         return [dict(e) for e in _SEED_ECO]
+
+    # --- Player center / repertoire / prep (MemoryStore seed fallback) -------
+
+    async def search_players(self, query: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+        q = (query or "").lower()
+        players = _SEED_NAMEBASE.get("players", [])
+        if q:
+            players = [p for p in players if q in p["name"].lower()]
+        return [dict(p) for p in players[:limit]]
+
+    async def get_player_card(self, player_id: str) -> dict[str, Any] | None:
+        player = next((p for p in _SEED_NAMEBASE.get("players", []) if p["id"] == player_id), None)
+        if not player:
+            return None
+        recent = [dict(g) for g in _SEED_GAMES if player["name"] in (g["white"], g["black"])][:5]
+        return {
+            "id": player["id"],
+            "name": player["name"],
+            "elo": player["elo"],
+            "title": player.get("title"),
+            "country": player.get("country"),
+            "peakElo": player["elo"] + 25,
+            "games": player["games"],
+            "winRate": 0.48,
+            "drawRate": 0.32,
+            "lossRate": 0.20,
+            "topOpenings": [
+                {"eco": "C78", "name": "Ruy Lopez", "games": 120, "score": 0.55},
+                {"eco": "D37", "name": "QGD", "games": 90, "score": 0.52},
+            ],
+            "recentGames": recent,
+        }
+
+    async def list_repertoires(self) -> list[dict[str, Any]]:
+        return [dict(r) for r in _SEED_REPERTOIRES]
+
+    async def query_crosstable(self, query: dict[str, Any]) -> dict[str, Any] | None:
+        event = query.get("event") or _SEED_CROSSTABLE["event"]
+        site = query.get("site") or _SEED_CROSSTABLE["site"]
+        players = query.get("players")
+        rows = [dict(r) for r in _SEED_CROSSTABLE["players"]]
+        if players:
+            rows = [r for r in rows if r["player"] in players]
+        return {
+            "event": event,
+            "site": site,
+            "players": rows,
+            "totalRounds": _SEED_CROSSTABLE["totalRounds"],
+        }
+
+    # --- Game editor (mutations no-op in Redis; use MemoryStore if needed) -----
+
+    async def get_game_pgn(self, game_id: str) -> str | None:
+        game = next((g for g in self._games if g["id"] == game_id), None)
+        if not game:
+            return None
+        return _game_pgn(game)
+
+    async def patch_game(self, game_id: str, patch: dict[str, Any]) -> dict[str, Any] | None:
+        game = next((g for g in self._games if g["id"] == game_id), None)
+        if not game:
+            return None
+        if "headers" in patch:
+            header_map = {"White": "white", "Black": "black", "Event": "event", "Site": "site", "Date": "date", "Result": "result", "ECO": "eco"}
+            for k, v in patch["headers"].items():
+                if k in header_map:
+                    game[header_map[k]] = v
+        return dict(game)
+
+    async def add_game_variation(self, game_id: str, move_id: str, variation: dict[str, Any]) -> dict[str, Any] | None:
+        game = next((g for g in self._games if g["id"] == game_id), None)
+        if not game:
+            return None
+        return dict(game)
+
+    async def add_game_comment(self, game_id: str, move_id: str, comment: dict[str, Any]) -> dict[str, Any] | None:
+        game = next((g for g in self._games if g["id"] == game_id), None)
+        if not game:
+            return None
+        return dict(game)
+
+    async def paginate_games(
+        self,
+        database_id: str,
+        page: int = 1,
+        limit: int = 25,
+        sort: str = "date",
+        order: str = "desc",
+        query: str | None = None,
+    ) -> dict[str, Any]:
+        games = list(self._games)
+        if query:
+            q = query.lower()
+            games = [
+                g for g in games
+                if q in g["white"].lower()
+                or q in g["black"].lower()
+                or q in g["event"].lower()
+                or q in g.get("eco", "").lower()
+            ]
+        reverse = order.lower() == "desc"
+        sort_key = sort if sort in {"white", "black", "event", "site", "date", "eco", "result"} else "date"
+        games.sort(key=lambda g: g.get(sort_key, "") or "", reverse=reverse)
+        total = len(games)
+        start = (max(1, page) - 1) * limit
+        end = start + limit
+        return {
+            "games": [dict(g) for g in games[start:end]],
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "totalPages": max(1, (total + limit - 1) // limit),
+        }
 
     async def close(self) -> None:
         if self._redis is not None:
@@ -860,6 +1177,131 @@ class PostgresStore(Store):
     async def list_eco(self) -> list[dict[str, Any]]:
         # Phase 4 will delegate to ::scidb::db::ecoStats; for now return seed data.
         return [dict(e) for e in _SEED_ECO]
+
+    # --- Player center / repertoire / prep (seed fallback) ------------------
+
+    async def search_players(self, query: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+        q = (query or "").lower()
+        players = _SEED_NAMEBASE.get("players", [])
+        if q:
+            players = [p for p in players if q in p["name"].lower()]
+        return [dict(p) for p in players[:limit]]
+
+    async def get_player_card(self, player_id: str) -> dict[str, Any] | None:
+        player = next((p for p in _SEED_NAMEBASE.get("players", []) if p["id"] == player_id), None)
+        if not player:
+            return None
+        recent = [dict(g) for g in _SEED_GAMES if player["name"] in (g["white"], g["black"])][:5]
+        return {
+            "id": player["id"],
+            "name": player["name"],
+            "elo": player["elo"],
+            "title": player.get("title"),
+            "country": player.get("country"),
+            "peakElo": player["elo"] + 25,
+            "games": player["games"],
+            "winRate": 0.48,
+            "drawRate": 0.32,
+            "lossRate": 0.20,
+            "topOpenings": [
+                {"eco": "C78", "name": "Ruy Lopez", "games": 120, "score": 0.55},
+                {"eco": "D37", "name": "QGD", "games": 90, "score": 0.52},
+            ],
+            "recentGames": recent,
+        }
+
+    async def list_repertoires(self) -> list[dict[str, Any]]:
+        return [dict(r) for r in _SEED_REPERTOIRES]
+
+    async def query_crosstable(self, query: dict[str, Any]) -> dict[str, Any] | None:
+        event = query.get("event") or _SEED_CROSSTABLE["event"]
+        site = query.get("site") or _SEED_CROSSTABLE["site"]
+        players = query.get("players")
+        rows = [dict(r) for r in _SEED_CROSSTABLE["players"]]
+        if players:
+            rows = [r for r in rows if r["player"] in players]
+        return {
+            "event": event,
+            "site": site,
+            "players": rows,
+            "totalRounds": _SEED_CROSSTABLE["totalRounds"],
+        }
+
+    # --- Game editor (mutations require writable backend; seed fallback) -----
+
+    async def get_game_pgn(self, game_id: str) -> str | None:
+        row = await self.get_game(game_id)
+        if not row:
+            return None
+        return _game_pgn(row)
+
+    async def patch_game(self, game_id: str, patch: dict[str, Any]) -> dict[str, Any] | None:
+        from .models import Game as GameModel
+
+        async with self._session_scope() as session:
+            row = await session.get(GameModel, game_id)
+            if row is None:
+                return None
+            if "headers" in patch:
+                header_map = {"White": "white", "Black": "black", "Event": "event", "Site": "site", "Date": "date", "Result": "result", "ECO": "eco"}
+                for k, v in patch["headers"].items():
+                    if k in header_map:
+                        setattr(row, header_map[k], v)
+            await session.commit()
+            return self._game_to_dict(row)
+
+    async def add_game_variation(self, game_id: str, move_id: str, variation: dict[str, Any]) -> dict[str, Any] | None:
+        row = await self.get_game(game_id)
+        return row
+
+    async def add_game_comment(self, game_id: str, move_id: str, comment: dict[str, Any]) -> dict[str, Any] | None:
+        row = await self.get_game(game_id)
+        return row
+
+    async def paginate_games(
+        self,
+        database_id: str,
+        page: int = 1,
+        limit: int = 25,
+        sort: str = "date",
+        order: str = "desc",
+        query: str | None = None,
+    ) -> dict[str, Any]:
+        from sqlalchemy import select
+        from .models import Game as GameModel
+
+        async with self._session_scope() as session:
+            stmt = select(GameModel).where(GameModel.database_id == database_id)
+            if query:
+                q = f"%{query}%"
+                from sqlalchemy import or_
+                stmt = stmt.where(
+                    or_(
+                        GameModel.white.ilike(q),
+                        GameModel.black.ilike(q),
+                        GameModel.event.ilike(q),
+                        GameModel.eco.ilike(q),
+                    )
+                )
+            reverse = order.lower() == "desc"
+            sort_key = sort if sort in {"white", "black", "event", "site", "date", "eco", "result"} else "date"
+            order_attr = getattr(GameModel, sort_key if sort_key != "white" else "white", GameModel.date)
+            if reverse:
+                stmt = stmt.order_by(order_attr.desc())
+            else:
+                stmt = stmt.order_by(order_attr.asc())
+            offset = (max(1, page) - 1) * limit
+            total_result = await session.execute(select(func.count()).select_from(stmt.subquery()))
+            total = total_result.scalar() or 0
+            stmt = stmt.offset(offset).limit(limit)
+            rows = (await session.execute(stmt)).scalars().all()
+            return {
+                "games": [self._game_to_dict(r) for r in rows],
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "totalPages": max(1, (total + limit - 1) // limit),
+            }
 
     async def close(self) -> None:
         if self._redis_store:
