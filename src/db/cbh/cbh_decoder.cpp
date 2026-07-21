@@ -462,31 +462,39 @@ Decoder::decodeMoves(uint16_t* line, unsigned length, Board* startBoard)
 
 
 void
+Decoder::setupStartPosition(TagSet* tags)
+{
+	// In CBH format, the start position is always 28 bytes.
+	// The 36-byte format (with chess960 rook data) is not used in practice.
+	// The 0x08000000 bit in newer formats indicates a position with
+	// annotations/correspondence, not chess960.
+	// Chess960 detection should use a separate indicator.
+	unsigned const size = 28;
+
+	if (m_gStrm.remaining() < size)
+		throw DecodingFailedException("corrupted data (insufficient bytes for start position: have %u, need %u)",
+		                             m_gStrm.remaining(), size);
+
+	BitStream bstrm(m_gStrm.data(), size);
+	m_position.setup(bstrm, m_isChess960);
+	m_gStrm.skip(size);
+
+	if (tags)
+	{
+		tags->set(tag::SetUp, "1");	// bad PGN design
+		tags->set(tag::Fen, m_position.board().toFen(variant::Normal, Board::Shredder));
+	}
+}
+
+
+void
 Decoder::startDecoding(TagSet* tags)
 {
 	unsigned word = m_gStrm.uint32();
 
 	if (word & 0x40000000)
 	{
-		// In CBH format, the start position is always 28 bytes.
-		// The 36-byte format (with chess960 rook data) is not used in practice.
-		// The 0x08000000 bit in newer formats indicates a position with
-		// annotations/correspondence, not chess960.
-		// Chess960 detection should use a separate indicator.
-		unsigned size = 28;
-
-		if (m_gStrm.remaining() < size)
-			throw DecodingFailedException("corrupted data");
-
-		BitStream bstrm(m_gStrm.data(), size);
-		m_position.setup(bstrm, m_isChess960);
-		m_gStrm.skip(size);
-
-		if (tags)
-		{
-			tags->set(tag::SetUp, "1");	// bad PGN design
-			tags->set(tag::Fen, m_position.board().toFen(variant::Normal, Board::Shredder));
-		}
+		setupStartPosition(tags);
 	}
 	else
 	{

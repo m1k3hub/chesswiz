@@ -837,6 +837,11 @@ class ConvertRequest(BaseModel):
     targetFormat: str = "SCI"
 
 
+class ExportRequest(BaseModel):
+    format: str = "PGN"
+    gameIds: list[str] | None = None
+
+
 # ---------------------------------------------------------------------------
 # Search helpers
 # ---------------------------------------------------------------------------
@@ -1321,6 +1326,8 @@ async def create_database(req: CreateDatabaseRequest):
         created = db
     # Invalidate the cached database list so the new database shows up.
     await get_cache().clear_prefix(cache_key("databases"))
+    await get_cache().clear_prefix(cache_key("indexes"))
+    await get_cache().clear_prefix(cache_key("eco"))
     return created
 
 
@@ -1531,6 +1538,8 @@ async def import_database(database_id: str, request: Request, file: UploadFile =
     # Invalidate cached game lists and database stats for this database.
     await get_cache().clear_prefix(cache_key("games", database_id))
     await get_cache().clear_prefix(cache_key("databases"))
+    await get_cache().clear_prefix(cache_key("indexes"))
+    await get_cache().clear_prefix(cache_key("eco"))
 
     return {"jobId": job_id, "status": "complete", "filename": safe_filename, "size": len(contents)}
 
@@ -1671,6 +1680,46 @@ async def tree_query(req: TreeQueryRequest):
 
 
 # ---------------------------------------------------------------------------
+# Index browser + ECO endpoints
+# ---------------------------------------------------------------------------
+
+_INDEXES_CACHE_TTL = 300.0
+_ECO_CACHE_TTL = 300.0
+_VALID_INDEX_TYPES = {"players", "events", "sites", "annotators"}
+
+
+@app.get("/api/indexes/{index_type}")
+async def list_indexes(index_type: str):
+    """Return namebase entries for the given index type."""
+    if index_type not in _VALID_INDEX_TYPES:
+        return JSONResponse(
+            {"error": f"Invalid index type '{index_type}'. Valid types: {sorted(_VALID_INDEX_TYPES)}"},
+            status_code=400,
+        )
+    cache = get_cache()
+    key = cache_key("indexes", index_type)
+    cached = await cache.get(key)
+    if cached is not None:
+        return cached
+    data = await store.list_namebase(index_type)
+    await cache.set(key, data, ttl=_INDEXES_CACHE_TTL)
+    return data
+
+
+@app.get("/api/eco")
+async def list_eco():
+    """Return the ECO classification table."""
+    cache = get_cache()
+    key = cache_key("eco", "table")
+    cached = await cache.get(key)
+    if cached is not None:
+        return cached
+    data = await store.list_eco()
+    await cache.set(key, data, ttl=_ECO_CACHE_TTL)
+    return data
+
+
+# ---------------------------------------------------------------------------
 # Engines endpoint
 # ---------------------------------------------------------------------------
 
@@ -1803,6 +1852,121 @@ async def get_job(job_id: str):
     if not job:
         return JSONResponse({"jobId": job_id, "status": "unknown"}, status_code=404)
     return {k: v for k, v in job.items() if k != "result"}
+
+
+@app.delete("/api/jobs/{job_id}")
+async def delete_job(job_id: str):
+    """Delete a job from the store.
+
+    For analysis jobs, also delete the analysis record.
+    Returns 204 on success, 404 if the job does not exist.
+    """
+    job = await store.get_job(job_id)
+    if not job:
+        analysis = await store.get_analysis(job_id)
+        if not analysis:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        await store.delete_analysis(job_id)
+        _ANALYSIS.pop(job_id, None)
+        return JSONResponse({"jobId": job_id, "status": "deleted"}, status_code=200)
+    await store.delete_job(job_id)
+    _JOBS.pop(job_id, None)
+    # Also clean up analysis if this was an analysis job
+    analysis = await store.get_analysis(job_id)
+    if analysis:
+        await store.delete_analysis(job_id)
+        _ANALYSIS.pop(job_id, None)
+    return JSONResponse({"jobId": job_id, "status": "deleted"}, status_code=200)
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str):
+    """Cancel a running job.
+
+    Sets job status to "cancelled" and publishes a job.cancelled event.
+    For analysis jobs, also delegates to the stop-analysis logic.
+    Returns 404 if the job does not exist.
+    """
+    job = await store.get_job(job_id)
+    if not job:
+        analysis = await store.get_analysis(job_id)
+        if not analysis:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        # Analysis job cancel → stop
+        analysis["status"] = "cancelled"
+        await store.set_analysis(job_id, analysis)
+        _ANALYSIS[job_id] = analysis
+        await _publish_analysis(job_id, {**analysis, "type": "analysis.cancelled"})
+        return {"jobId": job_id, "status": "cancelled"}
+    job["status"] = "cancelled"
+    await store.set_job(job_id, job)
+    _JOBS[job_id] = job
+    await _publish_event({
+        "type": "job.cancelled",
+        "jobId": job_id,
+        "jobType": job.get("type", "unknown"),
+        "timestamp": time.time(),
+    })
+    return {"jobId": job_id, "status": "cancelled"}
+
+
+# ---------------------------------------------------------------------------
+# Search cancel endpoint
+# ---------------------------------------------------------------------------
+
+@app.delete("/api/searches/{job_id}")
+async def delete_search(job_id: str):
+    """Cancel and delete a search job.
+
+    Marks the search as cancelled, publishes a search.cancelled event,
+    then deletes it from the store.
+    Returns 204 on success, 404 if the search does not exist.
+    """
+    job = await store.get_job(job_id)
+    if not job:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    job["status"] = "cancelled"
+    await store.set_job(job_id, job)
+    await _publish_event({
+        "type": "search.cancelled",
+        "jobId": job_id,
+        "timestamp": time.time(),
+    })
+    await store.delete_job(job_id)
+    _JOBS.pop(job_id, None)
+    return JSONResponse({"jobId": job_id, "status": "deleted"}, status_code=200)
+
+
+# ---------------------------------------------------------------------------
+# Export endpoint
+# ---------------------------------------------------------------------------
+
+@app.post("/api/databases/{database_id}/export")
+async def export_database(database_id: str, req: ExportRequest):
+    """Create an export job for a database.
+
+    Request body: { format: str, gameIds?: list[str] }
+    Returns a JobProgress object with status "running".
+    The actual export is deferred to Phase 4 (Tcl ::scidb::view::export);
+    for now the job stays "running" and will be completed by future work.
+    """
+    job_id = f"export-{uuid.uuid4().hex[:8]}"
+    job_data = {
+        "jobId": job_id,
+        "type": "export",
+        "status": "running",
+        "progress": 0,
+        "total": 100,
+        "databaseId": database_id,
+        "format": req.format,
+        "gameIds": req.gameIds,
+    }
+    await store.set_job(job_id, job_data)
+    _JOBS[job_id] = job_data  # backward compat
+
+    _audit_log("export.start", database=database_id, format=req.format, jobId=job_id)
+
+    return {"jobId": job_id, "status": "running", "format": req.format}
 
 
 # ---------------------------------------------------------------------------

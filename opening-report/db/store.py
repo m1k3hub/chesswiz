@@ -131,6 +131,20 @@ class Store:
     async def add_audit_log(self, action: str, **fields: Any) -> None:
         pass  # no-op by default; MemoryStore logs to stdout
 
+    # --- Index browser / ECO --------------------------------------------------
+
+    async def list_namebase(self, index_type: str) -> list[dict[str, Any]]:
+        """Return namebase entries for the given index type.
+
+        ``index_type`` is one of ``players``, ``events``, ``sites``,
+        ``annotators``.
+        """
+        raise NotImplementedError
+
+    async def list_eco(self) -> list[dict[str, Any]]:
+        """Return ECO classification table rows."""
+        raise NotImplementedError
+
     # --- Lifecycle ------------------------------------------------------------
 
     async def close(self) -> None:
@@ -153,6 +167,50 @@ _SEED_GAMES: list[dict[str, Any]] = [
     {"id": "g-002", "white": "Kasparov, Garry", "whiteElo": 2810, "black": "Karpov, Anatoly", "blackElo": 2725, "event": "Linares", "site": "Linares ESP", "date": "1993.03.02", "result": "1-0", "eco": "D37"},
     {"id": "g-003", "white": "Polgar, Judit", "whiteElo": 2735, "black": "Anand, Viswanathan", "blackElo": 2774, "event": "Hoogeveen", "site": "Hoogeveen NED", "date": "2003.10.16", "result": "0-1", "eco": "B90"},
     {"id": "g-004", "white": "Fischer, Robert James", "whiteElo": 2785, "black": "Spassky, Boris", "blackElo": 2660, "event": "Reykjavik WCh", "site": "Reykjavik ISL", "date": "1972.07.23", "result": "1-0", "eco": "E56"},
+]
+
+# Seed namebase data — 4-8 entries per type for dev/test.
+_SEED_NAMEBASE: dict[str, list[dict[str, Any]]] = {
+    "players": [
+        {"id": "p-001", "name": "Carlsen, Magnus", "elo": 2839, "title": "GM", "country": "NOR", "games": 2400},
+        {"id": "p-002", "name": "Caruana, Fabiano", "elo": 2820, "title": "GM", "country": "USA", "games": 2100},
+        {"id": "p-003", "name": "Nepomniachtchi, Ian", "elo": 2792, "title": "GM", "country": "RUS", "games": 1800},
+        {"id": "p-004", "name": "Ding, Liren", "elo": 2780, "title": "GM", "country": "CHN", "games": 1600},
+        {"id": "p-005", "name": "Anand, Viswanathan", "elo": 2754, "title": "GM", "country": "IND", "games": 3200},
+        {"id": "p-006", "name": "Kasparov, Garry", "elo": 2812, "title": "GM", "country": "RUS", "games": 2500},
+    ],
+    "events": [
+        {"id": "e-001", "name": "WCh 2021", "games": 11},
+        {"id": "e-002", "name": "Linares", "games": 200},
+        {"id": "e-003", "name": "Hoogeveen", "games": 30},
+        {"id": "e-004", "name": "Reykjavik WCh", "games": 24},
+        {"id": "e-005", "name": "Tata Steel", "games": 800},
+    ],
+    "sites": [
+        {"id": "s-001", "name": "Dubai UAE", "games": 11},
+        {"id": "s-002", "name": "Linares ESP", "games": 200},
+        {"id": "s-003", "name": "Hoogeveen NED", "games": 30},
+        {"id": "s-004", "name": "Reykjavik ISL", "games": 24},
+        {"id": "s-005", "name": "Wijk aan Zee NED", "games": 800},
+    ],
+    "annotators": [
+        {"id": "a-001", "name": "Kasparov, Garry", "games": 120},
+        {"id": "a-002", "name": "Anand, Viswanathan", "games": 80},
+        {"id": "a-003", "name": "Dvoretsky, Mark", "games": 50},
+        {"id": "a-004", "name": "Rowson, Jonathan", "games": 30},
+    ],
+}
+
+# Seed ECO table — representative subset.
+_SEED_ECO: list[dict[str, Any]] = [
+    {"code": "A00", "name": "Irregular Openings", "games": 120},
+    {"code": "A45", "name": "Indian Game", "games": 3400},
+    {"code": "A06", "name": "Reti Opening", "games": 2100},
+    {"code": "B00", "name": "King's Pawn Opening", "games": 2800},
+    {"code": "B90", "name": "Sicilian, Najdorf", "games": 5200},
+    {"code": "C00", "name": "French Defence", "games": 4100},
+    {"code": "D37", "name": "Queen's Gambit Declined", "games": 3800},
+    {"code": "E56", "name": "Nimzo-Indian, Rubinstein", "games": 1900},
 ]
 
 
@@ -255,6 +313,12 @@ class MemoryStore(Store):
     async def add_audit_log(self, action: str, **fields: Any) -> None:
         entry = {"timestamp": time.time(), "action": action, **fields}
         print(json.dumps(entry, default=str, ensure_ascii=False), flush=True)
+
+    async def list_namebase(self, index_type: str) -> list[dict[str, Any]]:
+        return [dict(e) for e in _SEED_NAMEBASE.get(index_type, [])]
+
+    async def list_eco(self) -> list[dict[str, Any]]:
+        return [dict(e) for e in _SEED_ECO]
 
 
 # ---------------------------------------------------------------------------
@@ -436,6 +500,12 @@ class RedisStore(Store):
 
     async def get_user(self, user_id: str) -> dict[str, Any] | None:
         return self._users.get(user_id)
+
+    async def list_namebase(self, index_type: str) -> list[dict[str, Any]]:
+        return [dict(e) for e in _SEED_NAMEBASE.get(index_type, [])]
+
+    async def list_eco(self) -> list[dict[str, Any]]:
+        return [dict(e) for e in _SEED_ECO]
 
     async def close(self) -> None:
         if self._redis is not None:
@@ -782,6 +852,14 @@ class PostgresStore(Store):
             )
             session.add(record)
             await session.commit()
+
+    async def list_namebase(self, index_type: str) -> list[dict[str, Any]]:
+        # Phase 4 will delegate to ::scidb::db::match; for now return seed data.
+        return [dict(e) for e in _SEED_NAMEBASE.get(index_type, [])]
+
+    async def list_eco(self) -> list[dict[str, Any]]:
+        # Phase 4 will delegate to ::scidb::db::ecoStats; for now return seed data.
+        return [dict(e) for e in _SEED_ECO]
 
     async def close(self) -> None:
         if self._redis_store:

@@ -56,6 +56,12 @@ protected:
 	unsigned decodeMove(db::Move& move, unsigned& count, bool skipVariations = false);
 	void startDecoding(TagSet* tags = 0);
 
+	/// Setup a custom start position from the game stream.
+	/// Reads 28 bytes of position data and sets up the board.
+	/// If @p tags is non-null, sets the SetUp and FEN tags.
+	/// Throws DecodingFailedException if the stream has insufficient data.
+	void setupStartPosition(TagSet* tags);
+
 	util::ByteStream&	m_gStrm;
 	decoder::Position	m_position;
 	bool					m_isChess960;

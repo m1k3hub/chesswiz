@@ -181,7 +181,9 @@ Position::doCastling(Byte offs)
 	Pieces&		pieces				= lookup.pieces;
 	Board&		board					= lookup.board;
 	color::ID	sideToMove			= board.sideToMove();
-	bool			isShortCastling	= offs > 0;
+	// `Byte` is unsigned, so `Byte(-2)` does not compare negative.
+	// 0x09 encodes with offset +2 (short), 0x0a with offset -2 (long).
+	bool			isShortCastling	= offs == Byte(+2);
 
 	Byte rank		= sq::rank(from);
 	Byte rookFrom	= isShortCastling

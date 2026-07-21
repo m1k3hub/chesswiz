@@ -7,6 +7,7 @@ appropriate environment variables (REDIS_URL / DATABASE_URL) are set.
 import asyncio
 import os
 import pytest
+import pytest_asyncio
 
 from db.store import (
     Store,
@@ -201,14 +202,16 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 class TestPostgresStore:
     """PostgresStore tests — require a running PostgreSQL instance."""
 
-    @pytest.fixture
-    def store(self):
+    @pytest_asyncio.fixture
+    async def store(self):
         s = PostgresStore(DATABASE_URL, REDIS_URL)
+        await s._ensure_ready()
+        from db.models import Base
+        async with s._engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
         yield s
-        # Use a fresh event loop for cleanup
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(s.close())
-        loop.close()
+        await s.close()
 
     @pytest.mark.asyncio
     async def test_list_databases(self, store):

@@ -282,3 +282,83 @@ TCL_BRIDGE_PATH=/path/to/tcl_bridge pytest tests/test_tcl_bridge_contract.py -v
 
 If `TCL_BRIDGE_PATH` is not set or the executable is not found, all Tcl bridge
 tests are skipped.
+
+### GET /api/indexes/:type
+
+Returns namebase entries for the given index type.
+
+**Path parameters:**
+
+| Parameter | Type   | Required | Description |
+|-----------|--------|----------|-------------|
+| `type`    | string | yes      | One of `players`, `events`, `sites`, `annotators` |
+
+**Response (players):**
+
+```json
+[
+  {
+    "id": "p-001",
+    "name": "Carlsen, Magnus",
+    "elo": 2839,
+    "title": "GM",
+    "country": "NOR",
+    "games": 2400
+  }
+]
+```
+
+**Response (events, sites, annotators):**
+
+```json
+[
+  {
+    "id": "e-001",
+    "name": "WCh 2021",
+    "games": 11
+  }
+]
+```
+
+**NamebaseEntry schema (players):**
+
+| Field     | Type    | Required | Description |
+|-----------|---------|----------|-------------|
+| `id`      | string  | yes      | Entry identifier |
+| `name`    | string  | yes      | Player name |
+| `elo`     | integer | yes      | Elo rating (players only) |
+| `title`   | string  | yes      | Title, e.g. `GM` (players only) |
+| `country` | string  | yes      | Country code (players only) |
+| `games`   | integer | yes      | Game count |
+
+**NamebaseEntry schema (events, sites, annotators):**
+
+| Field   | Type    | Required | Description |
+|---------|---------|----------|-------------|
+| `id`    | string  | yes      | Entry identifier |
+| `name`  | string  | yes      | Name |
+| `games` | integer | yes      | Game count |
+
+Returns `400` if the index type is not one of the valid types.
+
+### GET /api/eco
+
+Returns the ECO classification table.
+
+```json
+[
+  {
+    "code": "A45",
+    "name": "Indian Game",
+    "games": 3400
+  }
+]
+```
+
+**EcoEntry schema:**
+
+| Field   | Type    | Required | Description |
+|---------|---------|----------|-------------|
+| `code`  | string  | yes      | ECO code |
+| `name`  | string  | yes      | Opening name |
+| `games` | integer | yes      | Game count |

@@ -2471,7 +2471,9 @@ Codec::startDecoding(ByteStream& gameStream,
 
 		if (word & 0x80000000)
 		{
-			throw DecodingFailedException("cannot decode");
+			throw DecodingFailedException(
+				"encrypted game not supported (CBH bit 31 set, offset %llu)",
+				(unsigned long long)info.gameOffset());
 
 			// TODO: we have something special to do, but what?
 			// look at Big2010, #1964391, Giffard, Nicalas - Castlagliola, Marina

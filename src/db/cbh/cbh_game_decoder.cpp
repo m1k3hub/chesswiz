@@ -447,7 +447,7 @@ GameDecoder::getAnnotation(MoveNode* node, int moveNo)
 		return;
 
 	if (__m_unlikely(m_aStrm.isEmpty()))
-		throw DecodingFailedException("unexpected end of stream");
+		throw DecodingFailedException("unexpected end of annotation stream (moveNo=%d)", moveNo);
 
 	while (moveNo == m_moveNo)
 	{
@@ -476,7 +476,7 @@ GameDecoder::getAnnotation(MoveNode* node, int moveNo)
 
 			case 0x03:	// symbols
 				if (__m_unlikely(length > 3))
-					throw DecodingFailedException("bad data");
+					throw DecodingFailedException("bad data (annotation type 0x03, length=%u)", length);
 				decodeSymbols(node, length);
 				break;
 
@@ -531,7 +531,7 @@ GameDecoder::decodeMoves(Consumer& consumer)
 				break;
 
 			case ::Push:
-				IO_RAISE(Game, Corrupted, "unexpected PUSH");
+				IO_RAISE(Game, Corrupted, "unexpected PUSH at move count %u", count);
 				break;
 
 			case ::Pop:
@@ -573,7 +573,7 @@ GameDecoder::decodeMoves(MoveNode* root, unsigned& count)
 						MoveNode* main = varList[0];
 
 						if (!main->next())
-							IO_RAISE(Game, Corrupted, "bad data");
+							IO_RAISE(Game, Corrupted, "bad data (variation without next move, count=%u)", count);
 
 						root->setNext(main->removeNext());
 						root = root->next();
@@ -618,7 +618,7 @@ GameDecoder::decodeMoves(MoveNode* root, unsigned& count)
 				}
 				else
 				{
-					throw DecodingFailedException("corrupted data");
+					throw DecodingFailedException("corrupted data (null move at count %u)", count);
 				}
 				break;
 
@@ -668,7 +668,7 @@ GameDecoder::decodeMoves(MoveNode* root, unsigned& count, MoveNodeAllocator& all
 						MoveNode* main = varList[0];
 
 						if (!main->next())
-							IO_RAISE(Game, Corrupted, "bad data");
+							IO_RAISE(Game, Corrupted, "bad data (variation without next move, count=%u)", count);
 
 						M_REQUIRE(root->next() == 0);
 						root->setNext(main->removeNext());
@@ -717,7 +717,7 @@ GameDecoder::decodeMoves(MoveNode* root, unsigned& count, MoveNodeAllocator& all
 				}
 				else
 				{
-					throw DecodingFailedException("corrupted data");
+					throw DecodingFailedException("corrupted data (null move at count %u)", count);
 				}
 				break;
 
@@ -763,20 +763,7 @@ GameDecoder::startDecoding(TagSet* tags)
 
 	if (word & 0x40000000)
 	{
-		// In CBH format, the start position is always 28 bytes.
-		// The 36-byte format (with chess960 rook data) is not used in practice.
-		unsigned size = 28;
-
-		BitStream bstrm(m_gStrm.data(), size);
-		m_position.setup(bstrm, m_isChess960);
-		m_gStrm.skip(size);
-
-
-		if (tags)
-		{
-			tags->set(tag::SetUp, "1");	// bad PGN design
-			tags->set(tag::Fen, m_position.board().toFen(variant::Normal, Board::Shredder));
-		}
+		setupStartPosition(tags);
 	}
 	else
 	{

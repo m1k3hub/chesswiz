@@ -250,3 +250,216 @@ class TestGameDetailContract:
     def test_game_detail_not_found(self):
         resp = client.get("/api/games/nonexistent")
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Tests: DELETE /api/searches/:id
+# ---------------------------------------------------------------------------
+
+class TestSearchDeleteContract:
+    def test_delete_search_schema(self):
+        # Create a search first
+        search_resp = client.post("/api/searches", json={
+            "databaseId": "masters",
+            "type": "advanced",
+            "query": {},
+        })
+        job_id = search_resp.json()["jobId"]
+        resp = client.delete(f"/api/searches/{job_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, dict)
+        assert isinstance(data.get("jobId"), str)
+        assert data.get("status") == "deleted"
+
+    def test_delete_search_not_found(self):
+        resp = client.delete("/api/searches/nonexistent")
+        assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Tests: DELETE /api/jobs/:id
+# ---------------------------------------------------------------------------
+
+class TestJobDeleteContract:
+    def test_delete_job_schema(self):
+        # Create a search job first (it creates a job in the store)
+        search_resp = client.post("/api/searches", json={
+            "databaseId": "masters",
+            "type": "advanced",
+            "query": {},
+        })
+        job_id = search_resp.json()["jobId"]
+        resp = client.delete(f"/api/jobs/{job_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, dict)
+        assert isinstance(data.get("jobId"), str)
+        assert data.get("status") == "deleted"
+
+    def test_delete_job_not_found(self):
+        resp = client.delete("/api/jobs/nonexistent")
+        assert resp.status_code == 404
+
+    def test_delete_analysis_job(self):
+        # Create an analysis job (uses the analysis store, not the job store)
+        start_resp = client.post("/api/analysis/start", json={
+            "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "multiPv": 1,
+            "depth": 2,
+        })
+        job_id = start_resp.json()["jobId"]
+        resp = client.delete(f"/api/jobs/{job_id}")
+        assert resp.status_code == 200
+        assert resp.json().get("status") == "deleted"
+
+
+# ---------------------------------------------------------------------------
+# Tests: POST /api/jobs/:id/cancel
+# ---------------------------------------------------------------------------
+
+class TestJobCancelContract:
+    def test_cancel_job_schema(self):
+        # Create a search job first
+        search_resp = client.post("/api/searches", json={
+            "databaseId": "masters",
+            "type": "advanced",
+            "query": {},
+        })
+        job_id = search_resp.json()["jobId"]
+        resp = client.post(f"/api/jobs/{job_id}/cancel")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, dict)
+        assert isinstance(data.get("jobId"), str)
+        assert data.get("status") == "cancelled"
+
+    def test_cancel_job_not_found(self):
+        resp = client.post("/api/jobs/nonexistent/cancel")
+        assert resp.status_code == 404
+
+    def test_cancel_analysis_job(self):
+        # Create an analysis job
+        start_resp = client.post("/api/analysis/start", json={
+            "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "multiPv": 1,
+            "depth": 2,
+        })
+        job_id = start_resp.json()["jobId"]
+        resp = client.post(f"/api/jobs/{job_id}/cancel")
+        assert resp.status_code == 200
+        assert resp.json().get("status") == "cancelled"
+
+
+# ---------------------------------------------------------------------------
+# Tests: POST /api/databases/:id/export
+# ---------------------------------------------------------------------------
+
+class TestExportContract:
+    def test_export_schema(self):
+        resp = client.post("/api/databases/masters/export", json={
+            "format": "PGN",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, dict)
+        assert isinstance(data.get("jobId"), str) and data["jobId"]
+        assert data.get("status") == "running"
+        assert isinstance(data.get("format"), str)
+
+    def test_export_with_game_ids(self):
+        resp = client.post("/api/databases/masters/export", json={
+            "format": "PGN",
+            "gameIds": ["g-001", "g-002"],
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data.get("jobId"), str)
+        assert data.get("status") == "running"
+
+    def test_export_default_format(self):
+        resp = client.post("/api/databases/masters/export", json={})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data.get("format") == "PGN"
+
+# ---------------------------------------------------------------------------
+# Tests: GET /api/indexes/:type
+# ---------------------------------------------------------------------------
+
+def assert_namebase_entry_schema(entry: dict, index_type: str) -> None:
+    """Assert that ``entry`` matches the NamebaseEntry schema."""
+    assert isinstance(entry, dict), "namebase entry must be an object"
+    assert isinstance(entry.get("id"), str) and entry["id"], "entry.id must be a non-empty string"
+    assert isinstance(entry.get("name"), str) and entry["name"], "entry.name must be a non-empty string"
+    assert isinstance(entry.get("games"), int), "entry.games must be an integer"
+    if index_type == "players":
+        assert isinstance(entry.get("elo"), int), "player entry.elo must be an integer"
+        assert isinstance(entry.get("title"), str), "player entry.title must be a string"
+        assert isinstance(entry.get("country"), str), "player entry.country must be a string"
+
+
+class TestIndexesContract:
+    def test_list_players_schema(self):
+        resp = client.get("/api/indexes/players")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, list)
+        assert len(data) >= 4
+        for entry in data:
+            assert_namebase_entry_schema(entry, "players")
+
+    def test_list_events_schema(self):
+        resp = client.get("/api/indexes/events")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, list)
+        assert len(data) >= 3
+        for entry in data:
+            assert_namebase_entry_schema(entry, "events")
+
+    def test_list_sites_schema(self):
+        resp = client.get("/api/indexes/sites")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, list)
+        assert len(data) >= 3
+        for entry in data:
+            assert_namebase_entry_schema(entry, "sites")
+
+    def test_list_annotators_schema(self):
+        resp = client.get("/api/indexes/annotators")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, list)
+        assert len(data) >= 2
+        for entry in data:
+            assert_namebase_entry_schema(entry, "annotators")
+
+    def test_invalid_index_type_returns_400(self):
+        resp = client.get("/api/indexes/invalid")
+        assert resp.status_code == 400
+        assert "error" in resp.json()
+
+
+# ---------------------------------------------------------------------------
+# Tests: GET /api/eco
+# ---------------------------------------------------------------------------
+
+def assert_eco_entry_schema(entry: dict) -> None:
+    """Assert that ``entry`` matches the EcoEntry schema."""
+    assert isinstance(entry, dict), "eco entry must be an object"
+    assert isinstance(entry.get("code"), str) and entry["code"], "eco.code must be a non-empty string"
+    assert isinstance(entry.get("name"), str), "eco.name must be a string"
+    assert isinstance(entry.get("games"), int), "eco.games must be an integer"
+
+
+class TestEcoContract:
+    def test_list_eco_schema(self):
+        resp = client.get("/api/eco")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, list)
+        assert len(data) >= 5
+        for entry in data:
+            assert_eco_entry_schema(entry)
