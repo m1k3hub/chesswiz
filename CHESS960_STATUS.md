@@ -211,7 +211,7 @@ identical 28-byte position logic. Any fix must be applied to both copies.
 |------|--------|--------|
 | `probe_cbh_chess960` | `src/probe_cbh_chess960.cpp` | ✅ Builds, inspects raw CBH/CBG flags and custom-start bytes |
 | `scan_db_chess960` | `src/scan_db_chess960.cpp` | ✅ Builds, scans any database for Chess960 FEN tags |
-| `verify_cbh_write` | `src/verify_cbh_write.cpp` | ⚠️ Builds, includes Chess960 castling/piece-move codec tests (steps 3–4), but program fails at step 2 (CBH save precondition violation: `isWritable()`) before reaching Chess960 tests |
+| `verify_cbh_write` | `src/verify_cbh_write.cpp` | ✅ Builds and passes all 5 steps end-to-end (exit 0), including Chess960 castling/piece-move codec tests and the nine GRENKE start FENs. (An earlier version failed at step 2 on `isWritable()`; that precondition was fixed.) |
 
 ### verify_cbh_write Chess960 Tests
 
@@ -239,7 +239,7 @@ do **not** test:
 
 | Resource | Available | Location | Notes |
 |----------|-----------|----------|-------|
-| CBH/CBG Chess960 database | ❌ | — | No .cbh/.cbg files with Chess960 games exist in `tests/` |
+| CBV Chess960 database | ✅ | `opening-report/tests/fixtures/twic1639_grenke_freestyle_open.cbv` | Real TWIC ChessBase `.cbv` (1.2 MB) containing the grenke Freestyle Open Chess960 games; scidb currently fails to decode the Chess960 games (606 corrupted) - see Phase 5 Part C section below |
 | Chess960 PGN data | ✅ | `/tmp/CB/grenke_freestyle_2026.pgn` | 534 games, 9 unique Chess960 positions, may not persist |
 | GRENKE_CHESS960_FIXTURES.md | ✅ | Repository root | Documents PGN data with FEN positions and castling patterns |
 | CBASE16.exe | ✅ (was) | `/tmp/CB/CB16_cab/CBASE16_EXE` | ChessBase 16 binary for reverse engineering, may not persist |
@@ -296,9 +296,10 @@ make -C src probe_cbh_chess960 # ✅ Building probe_cbh_chess960
 make -C src scan_db_chess960   # ✅ Building scan_db_chess960
 ```
 
-`verify_cbh_write` runs but fails at step 2 (CBH round-trip save) due to a
-pre-existing precondition violation (`isMemoryOnly() || isWritable()`),
-unrelated to Chess960. The Chess960 codec tests (steps 3–4) are not reached.
+`verify_cbh_write` now passes all 5 steps end-to-end (exit 0), including the
+Chess960 codec tests. The earlier `isWritable()` precondition failure at
+step 2 has been fixed; the low-level Chess960 castling/piece-move codec tests
+now run and pass.
 ---
 
 ## Phase 5 Part A — Completed
@@ -387,3 +388,101 @@ python3 scripts/analyze_grenke_fixtures.py \
 
 `verify_cbh_write` now reaches and passes all Chess960 codec tests,
 including the nine GRENKE start FENs.
+
+---
+
+## Phase 5 Part C — Real ChessBase CBV fixture acquired (2026-07-22)
+
+The long-standing blocker — "no real ChessBase `.cbh`/`.cbg`/`.cbv`
+fixtures available" — is resolved for the **decoder** path by the TWIC
+archive.
+
+### Source
+
+TWIC publishes each weekly issue as a free ChessBase-format zip
+(`https://theweekinchess.com/zips/twicNNNNc6.zip`), which contains a real
+ChessBase-produced `.cbv`. Issue **twic1639** (covering the grenke Chess
+Open, 2–6 April 2026) also covers the **grenke Freestyle Open** — the
+Chess960 event whose games we already hold as PGN
+(`opening-report/tests/fixtures/grenke_freestyle_2026.pgn`, 535 games).
+
+### Two decoder bugs fixed to read real CBV archives
+
+Real TWIC `.cbv` files exposed two bugs in scidb's CBV/CBH path, both
+previously invisible because no real ChessBase binary had ever been tested:
+
+1. **CBV container record parser** (`src/db/cbv/cbv_codec.cpp`, newly added).
+   The parser hardcoded a 4-byte signature `01 37 26 35` at record offset 140,
+   but that offset is the start of per-file trailing metadata, which varies
+   per archive (e.g. `01 71 27 35` on TWIC files). The bogus check silently
+   skipped every member, failing with "CBV archive does not contain a .cbh
+   file". Rewritten to the layout documented by antoyo/uncbv: name = leading
+   non-zero bytes in the first 132 bytes, `compressed_size` `le_i32` @132,
+   `decompressed_size` `le_i32` @136, cumulative data offset (verified exact:
+   member offsets sum to the file size to the byte).
+
+2. **Charset-detector segfault** (`src/db/cbh/cbh_codec.cpp`). The namebase
+   preload fed empty name buffers (`strlen == 0`) to the vendored
+   `nsSJISProber::HandleData`, which read `aBuf[-1]` → SIGSEGV. All five
+   `HandleData(buf, strlen(buf))` call sites now guard on a non-zero length.
+
+### Result
+
+`cdb2sci` now converts real TWIC ChessBase archives:
+
+| Archive | Written | Corrupted | Notes |
+|---------|---------|-----------|-------|
+| `twic1654.cbv` | 8441 | 280 | standard chess only; 0 Chess960 |
+| `twic1600.cbv` | 8891 | 0 | standard chess only |
+| `twic1639.cbv` | 7965 | **606** | contains the **grenke Freestyle Open** |
+
+### The Chess960 games fail to decode
+
+`twic1639.cbv`'s tournament namebase (`.cbt`) contains both
+`grenke Chess Open 2026` (orthodox) **and** `grenke Freestyle Open`
+(Karlsruhe GER). `scan_db_chess960` on the converted `.sci` reports
+`setups=0 fens=0 likely_chess960=0`, yet **606 games are rejected as
+"corrupted"** — and the grenke Freestyle PGN has 535 games. The corrupted
+set is therefore the Chess960 event (535 Freestyle + ~71 other
+genuinely-bad games, a known ChessBase quirk).
+
+This is **exactly** the Phase 5 Part C limitation, now reproducible against
+an authentic fixture: scidb's CBH decoder cannot read real ChessBase
+Chess960 games (custom start position / off-e-file castling), confirming
+the open questions in §"Missing Implementation Steps" are real, not
+hypothetical.
+
+### Fixture committed
+
+| Fixture | Location | Purpose |
+|---------|----------|---------|
+| `twic1639_grenke_freestyle_open.cbv` | `opening-report/tests/fixtures/` | Real ChessBase `.cbv` (1.2 MB) containing the grenke Freestyle Open Chess960 games that scidb fails to decode |
+
+Reproduce:
+
+```bash
+make -C src cdb2sci
+./src/cdb2sci --force \
+  opening-report/tests/fixtures/twic1639_grenke_freestyle_open.cbv \
+  /tmp/twic1639.sci
+# -> 7965 written, 606 corrupted
+```
+
+### Next action for Part C
+
+With the fixture in hand, the probe-gated work is no longer blocked on
+data acquisition:
+
+1. Keep the temp extraction (`/tmp/scidb-cbv-*`) and run
+   `probe_cbh_chess960` on the extracted `.cbh` to inspect the custom-start
+   games: does the 36-byte position block exist, and what do its extra 8
+   bytes encode?
+2. Compare a decoded Freestyle game's castling move against the ground-truth
+   PGN (`grenke_freestyle_2026.pgn`) to settle the Convention A vs B
+   ambiguity for off-e-file kings.
+3. Characterize the exact decode failure (which `IO_RAISE`/`DecodingFailedException`
+   fires) by running `cdb2sci` under gdb on the fixture.
+
+The 36-byte format, off-e-file castling token, and XOR keystream questions
+(§"Part C — Probe-gated reverse engineering") can now be answered against
+real data instead of being left as "blocked on fixtures".
