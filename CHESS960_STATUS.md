@@ -555,8 +555,18 @@ acquisition:
 3. **Fix `setupStartPosition`** (`src/db/cbh/cbh_decoder.cpp`) to read 36
    bytes for Chess960 games (`unsigned const size = m_isChess960 ? 36 : 28;`)
    and pass all 36 bytes to `Position::setup` so it can consume the
-   extension. This also realigns the move bitstream (the root cause of the
-   current "null move at count 1").
+   extension. **Caveat (tried 2026-07-22):** skipping 36 bytes alone does NOT
+   realign the move bitstream - the first move byte at game-stream offset 36
+   still decodes to an impossible move (e.g. game 757 byte 0x21 ->
+   `MoveNumberLookup[0x21]=0x15` -> `doQueenMove(0, OFFSET(4,0))`, a 4-file
+   horizontal queen move that is blocked by pawns in the start position, so
+   `doQueenMove` returns a null move -> "null move at count 1"). Sweeping
+   skip sizes 28/36/44/48 all leave all 606 games corrupted. So the move
+   stream is NOT at a simple byte offset after the 36-byte position block;
+   the Chess960 move encoding/alignment needs reverse-engineering by
+   matching decoded byte sequences against `grenke_freestyle_2026.pgn`
+   move sequences. The 8-byte extension decode (step 1) is still correct and
+   verified; only the move-alignment piece is open.
 4. **Verify** by converting `twic1639_grenke_freestyle_open.cbv`: the 606
    corrupted count should drop to ~0, and decoded moves should match
    `grenke_freestyle_2026.pgn`.
