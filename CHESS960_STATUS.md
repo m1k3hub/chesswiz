@@ -510,21 +510,53 @@ hypothetical:
    must be **parsed** into the board (rook source squares / castling
    rights), not merely skipped, before the move stream will decode.
 
+### Decoded: the 8-byte Chess960 position extension (2026-07-22)
+
+Step 1 is **done**. By adding a temporary diagnostic to `setupStartPosition`
+that prints the FEN (decoded by scidb's own `Position::setup` from the
+28-byte block) alongside the 8 trailing bytes, all 9 distinct
+`(FEN, extra8)` pairs were captured and the field layout cracked. The 8
+bytes encode **six castling-relevant squares** in CBH's square encoding
+(`square = file*8 + (rank-1)`, rank 1 -> 0), followed by 2 trailing bytes:
+
+| byte | meaning |
+|------|---------|
+| 0 | white king square |
+| 1 | black king square |
+| 2 | white **short**-castling rook square (the h-side rook; Shredder castling 1st letter) |
+| 3 | white **long**-castling rook square (the a-side rook; 2nd letter) |
+| 4 | black short-castling rook square |
+| 5 | black long-castling rook square |
+| 6-7 | trailing 2 bytes - vary per full position even when rook files match (likely a checksum); not needed for castling setup |
+
+Verified against all 9 start positions (predicted == actual for every
+byte 0-5). Example: FEN `rkqrbbnn/.../RKQRBBNN w DAda - 0 1` ->
+`08 0f 18 00 1f 07 03 8a` = wKing b1 (0x08), bKing b8 (0x0f), wShort rook
+d1 (0x18), wLong rook a1 (0x00), bShort d8 (0x1f), bLong a8 (0x07).
+
+CBH squares convert to scidb's native `rank*8+file` encoding via the
+existing `mapSquare(s) = ((s&7)<<3)|(s>>3)` helper
+(`src/db/cbh/cbh_decoder_position.cpp:50`).
+
 ### Remaining implementation work for Part C
 
 The fixture unblocks the work; what remains is implementation, not data
 acquisition:
 
-1. **Decode the 8-byte Chess960 extension.** Correlate the 9 distinct
-   `setup[28:36]` values with the 9 known FENs in
-   `grenke_freestyle_2026.pgn` (whose Shredder castling rights, e.g.
-   `DAda`, name the rook files) to determine the field layout - likely the
-   short/long castling rook source squares for each side.
-2. **Extend `Position::setup`** to consume the 8 extra bytes (when
-   `isChess960`) and set `Board::setCastleShort()` / `setCastleLong()` from
-   them, instead of scanning.
-3. **Fix `setupStartPosition`** to read 36 bytes for Chess960 games and pass
-   them through to `Position::setup`.
+1. ~~~~Decode the 8-byte extension~~~~ **done** (above).
+2. **Extend `Position::setup`** to consume the 8 extra bytes when
+   `isChess960`, map the 6 rook/king squares via `mapSquare`, and - when
+   the corresponding castling boolean from the 28-byte block is set - call
+   the 2-arg `Board::setCastleShort(color, square)` /
+   `setCastleLong(color, square)` (`src/db/db_board.h:694-695`) with the
+   extension's rook square, instead of the 1-arg form that scans the rank.
+   (King squares in bytes 0-1 are informational; the board already has the
+   king from the piece loop.)
+3. **Fix `setupStartPosition`** (`src/db/cbh/cbh_decoder.cpp`) to read 36
+   bytes for Chess960 games (`unsigned const size = m_isChess960 ? 36 : 28;`)
+   and pass all 36 bytes to `Position::setup` so it can consume the
+   extension. This also realigns the move bitstream (the root cause of the
+   current "null move at count 1").
 4. **Verify** by converting `twic1639_grenke_freestyle_open.cbv`: the 606
    corrupted count should drop to ~0, and decoded moves should match
    `grenke_freestyle_2026.pgn`.
