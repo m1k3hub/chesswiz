@@ -585,10 +585,10 @@ encoding scheme, they are scidb's bytes plus a side-dependent offset:
   - black move 2 (d5): scidb byte `0x0c`, .cbv byte `0xf6` = `0x0c - 22`
 
 i.e. `raw = InverseMoveNumberLookup[logicalCode] + count + (white ? +22 : -22)`
-holds for the opening moves. (Game 757 is `1.d4 d5 ...`, NOT the PGN's first
-game Carlsen-Khalafova `1.d4 d5 2.f3...` - the .cbv ordering differs from the
-PGN.) Game 757's first two moves are confirmed `d4 d5` by the exact +22/-22
-match.
+holds for the opening moves. Game 757's first two moves are confirmed `d4 d5`
+by the exact +22/-22 match. (An earlier note guessed game 757 was not the PGN's
+first game; the namebase-matching tool later confirmed game 757 IS PGN game 1,
+Carlsen-Khalafova - see the update below.)
 
 ### Move-encoding update (2026-07-22): same logicalCode mapping, evolving count cipher
 
