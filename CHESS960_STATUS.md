@@ -590,14 +590,46 @@ game Carlsen-Khalafova `1.d4 d5 2.f3...` - the .cbv ordering differs from the
 PGN.) Game 757's first two moves are confirmed `d4 d5` by the exact +22/-22
 match.
 
-The offset does NOT stay at a constant +/-22 past the opening: for move 3
-(.cbv `0x2a`) the simple +22 formula predicts `h3` but ChessBase's byte does
-not match scidb's encoded `h3` under +22, so the offset evolves per move
-(likely a running counter, not a fixed side offset). The next step is to
-encode a full known game (matching a .cbv game to the PGN by player names)
-and solve for the per-move offset sequence, then teach the decoder to
-subtract it. The lookup table itself is unchanged, so this is an offset
-problem, not a re-encoding problem.
+### Move-encoding update (2026-07-22): same logicalCode mapping, evolving count cipher
+
+The `list_cbv_headers` tool confirmed `.cbv` game 757 = PGN game 1
+(Carlsen-Khalafova, `1.d4 d5 2.f3 Nf6 3.g4 a5 4.a4 e6 ...`, 55 plies). A
+standalone encoder probe (scidb `cbh::Encoder` + `Board::parseMove`) encoded
+the full 44-pline prefix (castling `O-O-O` at ply 45 needs the Chess960
+variant to parse) and the bytes were diffed against `.cbv` game 757's move
+bytes move-by-move.
+
+**Definitive result:** ChessBase's Chess960 move encoding uses the **SAME
+`MoveNumberLookup` and the SAME logicalCode->move mapping as scidb**. For
+every ply, `MoveNumberLookup[(.cbv_byte - count_i) & 0xff]` decodes to exactly
+the PGN move (verified across 44 plies; e.g. ply 0 `0x21-22=0x0b->0x7c->d4`,
+ply 2 `0x2a-33=0x09->0x83->f3`). The ONLY difference is the `count`:
+
+  - scidb: `count = move_index` (0, 1, 2, ...).
+  - ChessBase: `count` is an **evolving per-move value** with seed 22 for
+    this game: 22, 235, 33, 152, 241, 50, 188, 19, 218, 171, 49, 165, 237,
+    29, 142, 20, 159, 239, 248, 150, ... .
+
+So this is purely a **count-cipher** problem, not a re-encoding problem:
+the decoder just needs to track ChessBase's evolving count instead of the
+move index.
+
+**The count-evolution rule is NOT a simple function** of the prior count,
+byte, logicalCode, or `InverseMoveNumberLookup[logicalCode]`:
+linear-congruential `(a*count + b*byte + c) mod 256` (tested all a,b,c on
+the whole game and on white/black sub-streams), running sum, running XOR,
+and two-term byte combinations all fail. The seed (22) may be position- or
+game-derived (the DAda 8-byte extension's 2 trailing bytes are `03 8a`, not
+obviously 22). Cracking the cipher likely needs either the ChessBase binary
+(CBASE16) or correlating the count sequence across many games with known
+moves (encode each with scidb, derive `count_i = .cbv_byte - Inv[logicalCode_i]`,
+search for the evolution rule).
+
+This is the last unknown for the Chess960 CBH decoder: the move->logicalCode
+mapping is solved (it is scidb's own), the 8-byte position extension is
+decoded, and only the count cipher remains. A diagnostic encoder probe
+(`src/probe_encode960.cpp`, untracked) and `list_cbv_headers` (committed)
+are the tools to continue this.
 
 Reproduce the probe:
 
