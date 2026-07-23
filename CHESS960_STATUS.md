@@ -573,6 +573,32 @@ acquisition:
 5. Then settle the Convention A vs B castling-destination question by
    comparing a decoded off-e-file castling move against the ground-truth PGN.
 
+### Move-encoding lead (2026-07-22)
+
+A standalone encoder probe (scidb's `cbh::Encoder` driving a single DAda
+game) compared scidb's encoded move bytes against the `.cbv`'s bytes and
+found that **ChessBase's Chess960 move encoding uses the SAME
+`MoveNumberLookup` as scidb** - the move bytes are not a different
+encoding scheme, they are scidb's bytes plus a side-dependent offset:
+
+  - white move 1 (d4): scidb byte `0x0b`, .cbv byte `0x21` = `0x0b + 22`
+  - black move 2 (d5): scidb byte `0x0c`, .cbv byte `0xf6` = `0x0c - 22`
+
+i.e. `raw = InverseMoveNumberLookup[logicalCode] + count + (white ? +22 : -22)`
+holds for the opening moves. (Game 757 is `1.d4 d5 ...`, NOT the PGN's first
+game Carlsen-Khalafova `1.d4 d5 2.f3...` - the .cbv ordering differs from the
+PGN.) Game 757's first two moves are confirmed `d4 d5` by the exact +22/-22
+match.
+
+The offset does NOT stay at a constant +/-22 past the opening: for move 3
+(.cbv `0x2a`) the simple +22 formula predicts `h3` but ChessBase's byte does
+not match scidb's encoded `h3` under +22, so the offset evolves per move
+(likely a running counter, not a fixed side offset). The next step is to
+encode a full known game (matching a .cbv game to the PGN by player names)
+and solve for the per-move offset sequence, then teach the decoder to
+subtract it. The lookup table itself is unchanged, so this is an offset
+problem, not a re-encoding problem.
+
 Reproduce the probe:
 
 ```bash
