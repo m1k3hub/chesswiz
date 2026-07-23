@@ -183,10 +183,14 @@ the Chess960 rook starting squares, which would allow proper castling setup.
 instead of 28. Parse the extra 8 bytes to extract rook positions and pass
 them to `Board::setCastleShort()` / `Board::setCastleLong()`.
 
-**Risk:** Without actual CBH test fixtures containing 36-byte positions, the
-format of the extra 8 bytes is speculative. The `probe_cbh_chess960` tool
-exists to inspect real files but no CBH Chess960 databases are available
-locally.
+**Risk:** ~~Without actual CBH test fixtures containing 36-byte positions, the
+format of the extra 8 bytes is speculative.~~ **RESOLVED (2026-07-22):** a
+real ChessBase `.cbv` fixture (`twic1639_grenke_freestyle_open.cbv`) is now
+committed, and `probe_cbh_chess960` confirms the 36-byte block is real and
+used by all 606 Chess960 games, with 9 distinct 8-byte extensions matching
+the 9 start positions. See the "Phase 5 Part C" section for the definitive
+probe results. The exact field layout of the 8 bytes remains to be decoded
+(correlate with the 9 known FENs).
 
 **Estimated size:** ~30 lines across 4 files. Requires verification with
 real data.
@@ -354,7 +358,7 @@ now run and pass.
 
 | Deliverable | Blocker |
 |-------------|---------|
-| 36-byte position format parsing | No real `.cbh` fixture with 36-byte custom positions |
+| 36-byte position format parsing | **Unblocked.** Fixture `twic1639_grenke_freestyle_open.cbv` committed; 36-byte block confirmed (9 distinct 8-byte extensions). Field layout + `Position::setup` extension remain to implement |
 | XOR keystream characterization | No encrypted + unencrypted game pair; no CBASE16 analysis |
 | Off-e-file castling token encoding | Need to know how ChessBase actually serializes these moves |
 
@@ -468,21 +472,74 @@ make -C src cdb2sci
 # -> 7965 written, 606 corrupted
 ```
 
-### Next action for Part C
+### Probe results (2026-07-22)
 
-With the fixture in hand, the probe-gated work is no longer blocked on
-data acquisition:
+The fixture was probed. The findings are now **definitive**, not
+hypothetical:
 
-1. Keep the temp extraction (`/tmp/scidb-cbv-*`) and run
-   `probe_cbh_chess960` on the extracted `.cbh` to inspect the custom-start
-   games: does the 36-byte position block exist, and what do its extra 8
-   bytes encode?
-2. Compare a decoded Freestyle game's castling move against the ground-truth
-   PGN (`grenke_freestyle_2026.pgn`) to settle the Convention A vs B
-   ambiguity for off-e-file kings.
-3. Characterize the exact decode failure (which `IO_RAISE`/`DecodingFailedException`
-   fires) by running `cdb2sci` under gdb on the fixture.
+1. **The 606 corrupted games are exactly the Chess960 games.**
+   `probe_cbh_chess960` on the extracted `.cbh` reports
+   `total=8571 custom=606 chess960=606 newer=606 custom_and_960=606`.
+   There are no other corrupt games; the entire corrupted set is the
+   grenke Freestyle Open. (The `.cbv` has 606 Chess960 games, more than
+   the 535 in the committed PGN subset.)
 
-The 36-byte format, off-e-file castling token, and XOR keystream questions
-(§"Part C — Probe-gated reverse engineering") can now be answered against
-real data instead of being left as "blocked on fixtures".
+2. **The 36-byte position block is real and used.** Every Chess960 game
+   carries 8 bytes after the 28-byte position block. There are exactly
+   **9 distinct `setup[0:28]` values and 9 distinct `setup[28:36]`
+   values**, with matching per-position game counts (summing to 606) - one
+   pair per Chess960 start position. The 8 extra bytes are per-start-position
+   data (almost certainly the Chess960 rook/castling setup), **not** move
+   data (which would have hundreds of distinct values).
+   The comment in `Decoder::setupStartPosition` claiming "The 36-byte
+   format (with chess960 rook data) is not used in practice" is **wrong**.
+
+3. **Root cause of the decode failure.** `setupStartPosition` reads a
+   hardcoded 28 bytes (`unsigned const size = 28;`) and then
+   `m_gStrm.skip(28)`, so the move bitstream starts 8 bytes too early -
+   inside the Chess960 extension. Under gdb the first failure is at game
+   757, first move: `cbh_game_decoder.cpp:720` throws
+   `"corrupted data (null move at count %u)"` with `count = 1`.
+
+4. **`skip(36)` alone is NOT sufficient.** Changing only
+   `unsigned const size = m_isChess960 ? 36 : 28;` still fails with the
+   same "null move at count 1". `Position::setup` reads exactly 224 bits
+   (28 bytes) for a 32-piece start position - a fixed structure, not
+   "until exhausted" - so the 8 extra bytes are left uninterpreted and the
+   board is set up without the Chess960 rook/castling data. The 8 bytes
+   must be **parsed** into the board (rook source squares / castling
+   rights), not merely skipped, before the move stream will decode.
+
+### Remaining implementation work for Part C
+
+The fixture unblocks the work; what remains is implementation, not data
+acquisition:
+
+1. **Decode the 8-byte Chess960 extension.** Correlate the 9 distinct
+   `setup[28:36]` values with the 9 known FENs in
+   `grenke_freestyle_2026.pgn` (whose Shredder castling rights, e.g.
+   `DAda`, name the rook files) to determine the field layout - likely the
+   short/long castling rook source squares for each side.
+2. **Extend `Position::setup`** to consume the 8 extra bytes (when
+   `isChess960`) and set `Board::setCastleShort()` / `setCastleLong()` from
+   them, instead of scanning.
+3. **Fix `setupStartPosition`** to read 36 bytes for Chess960 games and pass
+   them through to `Position::setup`.
+4. **Verify** by converting `twic1639_grenke_freestyle_open.cbv`: the 606
+   corrupted count should drop to ~0, and decoded moves should match
+   `grenke_freestyle_2026.pgn`.
+5. Then settle the Convention A vs B castling-destination question by
+   comparing a decoded off-e-file castling move against the ground-truth PGN.
+
+Reproduce the probe:
+
+```bash
+make -C src cdb2sci probe_cbh_chess960
+./src/cdb2sci --force \
+  opening-report/tests/fixtures/twic1639_grenke_freestyle_open.cbv /tmp/t.sci
+# -> 7965 written, 606 corrupted
+# gdb: catch throw db::DecodingFailedException -> cbh_game_decoder.cpp:720, count=1
+# probe (extract .cbh to temp first):
+./src/probe_cbh_chess960 /tmp/scidb-cbv-*/twic1639.cbh | tail
+# -> total=8571 custom=606 chess960=606 custom_and_960=606
+```
