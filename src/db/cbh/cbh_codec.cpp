@@ -1400,10 +1400,10 @@ Codec::preloadTournamentData(mstl::string const& rootname, util::Progress& progr
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 40);
 			::convPlayerName(name);
-			HandleData(name, ::strlen(name));
+			if (size_t n = ::strlen(name)) HandleData(name, n);
 
 			strm.read(city.data(), 30);
-			HandleData(city, ::strlen(city));
+			if (size_t n = ::strlen(city)) HandleData(city, n);
 
 			strm.seekg(RecordSize - 79, mstl::ios_base::cur);
 		}
@@ -1458,11 +1458,11 @@ Codec::preloadPlayerData(mstl::string const& rootname, util::Progress& progress)
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 30);
 			::convPlayerName(name);
-			HandleData(name, ::strlen(name));
+			if (size_t n = ::strlen(name)) HandleData(name, n);
 
 			strm.read(name.data(), 20);
 			::convPlayerName(name);
-			HandleData(name, ::strlen(name));
+			if (size_t n = ::strlen(name)) HandleData(name, n);
 
 			strm.seekg(RecordSize - 59, mstl::ios_base::cur);
 		}
@@ -1516,7 +1516,7 @@ Codec::preloadAnnotatorData(mstl::string const& rootname, util::Progress& progre
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 45);
-			HandleData(name, ::strlen(name));
+			if (size_t n = ::strlen(name)) HandleData(name, n);
 
 			strm.seekg(RecordSize - 54, mstl::ios_base::cur);
 		}
