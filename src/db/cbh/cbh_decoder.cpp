@@ -178,8 +178,15 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 		}
 		else if (numMatches == 0)
 		{
-			// H0 miss: fallback to InvLUT + push/pop validation.
+			// H0 miss: fallback to InvLUT + push/pop + look-ahead.
+			// For each legal candidate, check if the NEXT move's H0
+			// is consistent. This disambiguates when H0 misses the
+			// current state but covers the next state.
 			buildInvLUT();
+			unsigned bestLc = 0xff;
+			unsigned bestCount = 0;
+			int bestScore = -1;
+
 			for (unsigned candidateLc = 0; candidateLc < 256; ++candidateLc)
 			{
 				if (candidateLc >= 0xec)
@@ -196,12 +203,42 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 				catch (...) { m_position.pop(); m_gStrm.seekg(streamPos); continue; }
 				m_position.pop();
 				m_gStrm.seekg(streamPos);
-				if (testResult == Token_Move && !testMove.isEmpty())
+				if (testResult != Token_Move || testMove.isEmpty())
+					continue;
+
+				// Look-ahead: check if next state (candidateCount, candidateLc)
+				// has H0 entries that match the next raw byte.
+				int score = 0;
+				if (m_gStrm.remaining() >= 2)
 				{
-					lc = candidateLc;
-					decodeCount = candidateCount;
-					break;
+					Byte nextRaw = m_gStrm.data()[1];  // next byte after current
+					for (unsigned nextLc = 0; nextLc < 256; ++nextLc)
+					{
+						unsigned nextCount = s_cipher.lookupH0(candidateCount, candidateLc, nextLc);
+						if (nextCount == 0xffff)
+							continue;
+						if (::MoveNumberLookup[Byte(nextRaw - nextCount)] == nextLc)
+						{
+							score = 1;  // next move verified via H0
+							break;
+						}
+					}
 				}
+
+				if (score > bestScore)
+				{
+					bestScore = score;
+					bestLc = candidateLc;
+					bestCount = candidateCount;
+					if (score == 1)
+						break;  // verified — no need to try more
+				}
+			}
+
+			if (bestLc != 0xff)
+			{
+				lc = bestLc;
+				decodeCount = bestCount;
 			}
 		}
 		else
