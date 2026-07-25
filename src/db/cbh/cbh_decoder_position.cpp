@@ -29,6 +29,7 @@
 // http://talkchess.com/forum/viewtopic.php?topic_view=threads&p=287896&t=29468&sid=a535ba2e9a17395e2582bdddf57c2425
 
 #include "cbh_decoder_position.h"
+#include <cstring>
 
 #include "db_exception.h"
 
@@ -67,6 +68,24 @@ Position::reset()
 
 	while (m_stack.size() > 1)
 		m_stack.pop();
+}
+
+
+void
+Position::savePieceState(Pieces& savedPieces, Count& savedCount) const
+{
+	Lookup const& lookup = m_stack.top();
+	::memcpy(savedPieces, lookup.pieces, sizeof(Pieces));
+	::memcpy(savedCount,  lookup.pieceCount, sizeof(Count));
+}
+
+
+void
+Position::restorePieceState(Pieces const& savedPieces, Count const& savedCount)
+{
+	Lookup& lookup = m_stack.top();
+	::memcpy(lookup.pieces, savedPieces, sizeof(Pieces));
+	::memcpy(lookup.pieceCount, savedCount, sizeof(Count));
 }
 
 

@@ -42,6 +42,9 @@ class Position
 {
 public:
 
+	typedef Byte Count[64];
+	typedef Byte Pieces[10][15];
+
 	Position();
 
 	unsigned variationLevel() const;
@@ -54,6 +57,11 @@ public:
 
 	Board const& board() const;
 	Board& board();
+
+	/// Save/restore piece tracking state for cipher candidate validation.
+	/// Only pieces and pieceCount are saved (Board is handled via undoMove).
+	void savePieceState(Pieces& savedPieces, Count& savedCount) const;
+	void restorePieceState(Pieces const& savedPieces, Count const& savedCount);
 
 	Move doNullMove();
 	Move doCastling(Byte offs);
@@ -69,9 +77,6 @@ public:
 	Move doMove(Byte from, Byte to, Byte promoted);
 
 private:
-
-	typedef Byte Count[64];
-	typedef Byte Pieces[10][15];
 
 	struct Lookup
 	{

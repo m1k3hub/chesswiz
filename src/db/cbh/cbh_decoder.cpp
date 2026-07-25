@@ -30,6 +30,7 @@
 
 #include "cbh_decoder.h"
 #include "cbh_count_cipher.h"
+#include "m_exception.h"
 
 static db::cbh::CountCipher s_cipher;
 
@@ -173,7 +174,7 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 		{
 			result = dispatchMove(lc, decodeCount, move, skipVariations);
 		}
-		catch (...)
+		catch (mstl::exception const&)
 		{
 			throw DecodingFailedException("chess960 decode failed at move %u", count);
 		}
