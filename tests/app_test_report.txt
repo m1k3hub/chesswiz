@@ -1,0 +1,18 @@
+==============================================
+  Scidb App Test Suite
+==============================================
+Test directory: /media/michael-g-thomas/sas_mirror/src/chess/scidb-code.codex/tests
+Match pattern: *
+
+
+=== Running test_app_database.tcl ===
+
+==============================================
+  App Test Results Summary
+==============================================
+Total Passed: 6
+Total Failed: 0
+Total Skipped: 0
+Duration: 0s
+
+STATUS: PASSED

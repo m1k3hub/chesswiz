@@ -46,3 +46,7 @@ llmos-plan.md
 .pi-subagents/
 .claude/*
 !.claude/skills/
+
+# generated test artifacts
+tests/tmp-app/
+tests/test_cpp_backend
