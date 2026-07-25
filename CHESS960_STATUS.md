@@ -1024,6 +1024,40 @@ structurally complete but the first-match candidate selection needs refinement
    needs re-adding (save/restore on variation enter/exit).
 
 
+### Phase 5 Part E — Try-and-see, look-ahead analysis, and table experiments (2026-07-25)
+
+Several decoder improvements and H0 table experiments were tested. All failed to
+improve beyond 5/606. Key findings:
+
+1. **330 of 603 games have ALL correct H0 entries in the combined table**, yet
+   only 5 decode. The issue is NOT missing entries but **ambiguous matches**
+   (numMatches >= 2): the decoder picks the first valid candidate without
+   look-ahead, picks wrong, and the cipher state diverges.
+
+2. **Decode stats** (from instrumentation): fast=11770 (81.2%), miss=593 (4.1%),
+   ambig=2111 (14.6%). Ambiguous matches are 3.6x more common than H0 misses.
+
+3. **H0 look-ahead on ambiguous matches makes things WORSE** (1/606 vs 5/606).
+   Wrong H0 entries from other fixtures bias the look-ahead toward wrong
+   candidates — the wrong candidate's cipher state has more (wrong) H0
+   coverage, giving a higher look-ahead score.
+
+4. **Try-and-see approach** (full decodeMove look-ahead) also doesn't help: the
+   depth-1 fallback fails quickly (score 1-2) because H0 coverage is 33%.
+
+5. **Reducing table size kills coverage**: twic1639-only table (38K) gives 0/606,
+   majority-vote table (31K) gives 0/606, filtered table (38K) gives 5/606.
+   The combined table's 100K entries are CRITICAL for coverage. The path
+   forward is to INCREASE coverage, not reduce it.
+
+6. **H0 is NOT mathematically decomposable**: XOR/ADD of 1-D tables, 2-input
+   combinations (a^b, a+b, b^c, etc.) — all have >58% conflict rates. H0 is a
+   genuine 3-input byte substitution with no simple closed form.
+
+7. **CBASE16 binary is no longer available** and the status doc concludes the H0
+   cipher is NOT in CBase16.exe anyway (it uses count=move_index, not H0).
+   The chess960 encoder that uses the H0 cipher is a different code path.
+
 ### Path forward (priority order)
 
 1. **Re-acquire CBASE16 binary and extract H0 algorithm** (highest impact):
