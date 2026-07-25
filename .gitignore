@@ -15,3 +15,34 @@ __pycache__/
 Makefile.in
 Makefile.in.bak
 
+
+# vendor engine trees (built locally, not part of scidb)
+engines/
+
+# compiled probe/tool binaries
+src/probe_encode960
+src/probe_encode_many
+src/list_cbv_headers
+src/verify_cbh_write
+src/verify_conversion
+src/benchmark_conversion
+src/benchmark_workflows
+src/scan_db_chess960
+src/probe_cbh_chess960
+src/verify_maintenance
+src/recover_index
+src/cdb2sci
+
+# local scratch / generated data
+fix-sci.*
+pt_fill.txt
+st_fill.txt
+opening-report/
+package-lock.json
+llmos-plan.md
+
+# agent/tool state (keep .claude/skills tracked)
+.pi/
+.pi-subagents/
+.claude/*
+!.claude/skills/
