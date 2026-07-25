@@ -107,8 +107,14 @@ main(int argc, char** argv)
 	mstl::string cbgPath(root + ".cbg");
 
 	unsigned maxGames = ~0u;
+	bool dumpMoves = false;
 	if (argc == 3)
-		maxGames = ::strtoul(argv[2], 0, 10);
+	{
+		if (::strcmp(argv[2], "--dump-moves") == 0)
+			dumpMoves = true;
+		else
+			maxGames = ::strtoul(argv[2], 0, 10);
+	}
 
 	FILE* cbh = ::fopen(cbhPath.c_str(), "rb");
 	if (cbh == 0)
@@ -208,6 +214,32 @@ main(int argc, char** argv)
 			newerFlag ? 1 : 0,
 			customStart ? 1 : 0,
 			encrypted ? 1 : 0);
+
+		if (dumpMoves && chess960 && customStart && size > 4 + 36)
+		{
+			// game record: 4-byte word, 28-byte position, 8-byte extension,
+			// then the move bytes
+			unsigned char setupBytes[36];
+			unsigned moveLen = size - 4 - 36;
+
+			if (readExact(cbg, setupBytes, 36))
+			{
+				unsigned char* moveBytes = new unsigned char[moveLen];
+
+				if (readExact(cbg, moveBytes, moveLen))
+				{
+					::printf("  pos=");
+					dumpHex(setupBytes, 36);
+					::printf("\n  moves=");
+					dumpHex(moveBytes, moveLen);
+					::putchar('\n');
+				}
+
+				delete[] moveBytes;
+			}
+
+			continue;
+		}
 
 		if (customStart)
 		{
