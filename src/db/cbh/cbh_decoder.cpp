@@ -31,7 +31,6 @@
 #include "cbh_decoder.h"
 #include "cbh_count_cipher.h"
 #include "m_exception.h"
-#include <unistd.h>
 
 
 static db::cbh::CountCipher s_cipher;
@@ -200,7 +199,7 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 				Move testMove;
 				unsigned testResult;
 				try { testResult = dispatchMove(candidateLc, candidateCount, testMove, true); }
-				catch (...) { m_position.pop(); m_gStrm.seekg(streamPos); continue; }
+				catch (mstl::exception const&) { m_position.pop(); m_gStrm.seekg(streamPos); continue; }
 				m_position.pop();
 				m_gStrm.seekg(streamPos);
 				if (testResult != Token_Move || testMove.isEmpty())
