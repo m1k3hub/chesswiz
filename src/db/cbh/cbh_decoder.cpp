@@ -103,6 +103,7 @@ Decoder::Decoder(ByteStream& gStrm, bool isChess960)
 	,m_lcPrev(0)
 	,m_cipherActive(false)
 	,m_useCipher(false)
+	,m_lookaheadDepth(0)
 {
 
 }
@@ -177,14 +178,19 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 		}
 		else if (numMatches == 0)
 		{
-			// H0 miss: fallback to InvLUT + push/pop + look-ahead.
-			// For each legal candidate, check if the NEXT move's H0
-			// is consistent. This disambiguates when H0 misses the
-			// current state but covers the next state.
+			// H0 miss: try-and-see with full decode.
+			// For each legal candidate, apply the move and try to decode
+			// the next N moves using the full decodeMove (H0 + InvLUT).
+			// The correct candidate will produce the longest valid
+			// continuation; wrong candidates will hit a dead end quickly.
 			buildInvLUT();
 			unsigned bestLc = 0xff;
 			unsigned bestCount = 0;
 			int bestScore = -1;
+
+			// Only do full try-and-see at the top level (not inside
+			// a recursive look-ahead) to avoid exponential blowup.
+			bool const tryAndSee = (m_lookaheadDepth == 0);
 
 			for (unsigned candidateLc = 0; candidateLc < 256; ++candidateLc)
 			{
@@ -193,63 +199,147 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 				unsigned candidateCount = (raw - s_invLUT[candidateLc]) & 0xff;
 				if (::MoveNumberLookup[candidateCount] != candidateLc)
 					continue;
+
+				// Save state.
 				unsigned streamPos = m_gStrm.tellg();
 				m_position.push();
-				m_gStrm.get();
-				Move testMove;
-				unsigned testResult;
-				try { testResult = dispatchMove(candidateLc, candidateCount, testMove, true); }
-				catch (mstl::exception const&) { m_position.pop(); m_gStrm.seekg(streamPos); continue; }
-				m_position.pop();
-				m_gStrm.seekg(streamPos);
-				if (testResult != Token_Move || testMove.isEmpty())
-					continue;
+				unsigned savedCipherCount = m_cipherCount;
+				unsigned savedLcPrev = m_lcPrev;
+				bool savedCipherActive = m_cipherActive;
 
-				// Deep look-ahead: follow the H0 path for up to 20 steps.
-				// The correct candidate will have a consistent path; wrong
-				// candidates will diverge quickly (H0 miss at step 1-2).
-				int score = 0;
+				// Apply the candidate's move.
+				m_gStrm.get();
+				Move laMove;
+				unsigned laResult;
+				bool valid = true;
+				try { laResult = dispatchMove(candidateLc, candidateCount, laMove, true); }
+				catch (mstl::exception const&) { valid = false; laResult = 0; }
+
+				if (!valid || laResult != Token_Move || laMove.isEmpty())
 				{
-					unsigned laCount = candidateCount;
-					unsigned laLc = candidateLc;
-					unsigned laOffset = (candidateLc == 0xeb) ? 3 : 1;
-					unsigned const maxSteps = 20;
-					Byte const* base = m_gStrm.data();
-					unsigned remaining = m_gStrm.remaining();
-					for (int step = 1; step <= maxSteps; ++step)
+					m_position.pop();
+					m_gStrm.seekg(streamPos);
+					m_cipherCount = savedCipherCount;
+					m_lcPrev = savedLcPrev;
+					m_cipherActive = savedCipherActive;
+					continue;
+				}
+
+				// Update cipher state.
+				m_cipherCount = candidateCount;
+				m_lcPrev = candidateLc;
+				m_cipherActive = true;
+
+				int score = 1;  // the candidate's move itself
+
+				if (tryAndSee)
+				{
+					// Full try-and-see: call decodeMove in a loop.
+					// decodeMove handles H0/InvLUT + cipher state.
+					m_lookaheadDepth = 1;
+					unsigned laCount = count + 1;
+					unsigned const maxSteps = 30;
+					for (int step = 0; step < maxSteps; ++step)
 					{
-						if (laOffset >= remaining)
-							break;
-						Byte stepRaw = base[laOffset];
-						bool found = false;
-						for (unsigned stepLc = 0; stepLc < 256; ++stepLc)
-						{
-							unsigned stepCount = s_cipher.lookupH0(laCount, laLc, stepLc);
-							if (stepCount == 0xffff)
-								continue;
-							if (::MoveNumberLookup[Byte(stepRaw - stepCount)] == stepLc)
+						Move stepMove;
+						unsigned stepCount = laCount;
+						try {
+							unsigned r = decodeMove(stepMove, stepCount, true);
+							if (r == Token_Move && !stepMove.isEmpty())
 							{
 								laCount = stepCount;
-								laLc = stepLc;
-								laOffset += (stepLc == 0xeb) ? 3 : 1;
+								score++;
+							}
+							else if (r == Token_Pop)
+							{
+								score++;  // reached end of game
+								break;
+							}
+							else
+								break;
+						}
+						catch (...) {
+							break;
+						}
+					}
+					m_lookaheadDepth = 0;
+				}
+				else
+				{
+					// Inside a look-ahead: use simple board-legality
+					// look-ahead (H0 + InvLUT, first valid candidate).
+					unsigned const maxSteps = 20;
+					for (int step = 1; step <= maxSteps; ++step)
+					{
+						if (m_gStrm.remaining() == 0) { score = step; break; }
+						Byte stepRaw = m_gStrm.peek();
+
+						unsigned stepLc = 0xff;
+						unsigned stepCount = 0;
+						bool found = false;
+						for (unsigned c = 0; c < 256; ++c)
+						{
+							unsigned cc = resolveCipherCount(c);
+							if (cc == 0xffff)
+								continue;
+							if (::MoveNumberLookup[Byte(stepRaw - cc)] == c)
+							{
+								stepLc = c;
+								stepCount = cc;
 								found = true;
 								break;
 							}
 						}
-						if (found)
-							score = step;
-						else
+
+						if (!found)
+						{
+							for (unsigned c = 0; c < 256; ++c)
+							{
+								if (c >= 0xec)
+									continue;
+								unsigned cc = (stepRaw - s_invLUT[c]) & 0xff;
+								if (::MoveNumberLookup[cc] != c)
+									continue;
+								stepLc = c;
+								stepCount = cc;
+								found = true;
+								break;
+							}
+						}
+
+						if (!found)
 							break;
+
+						m_gStrm.get();
+						Move stepMove;
+						unsigned stepResult;
+						try { stepResult = dispatchMove(stepLc, stepCount, stepMove, true); }
+						catch (mstl::exception const&) { break; }
+						if (stepResult != Token_Move || stepMove.isEmpty())
+							break;
+
+						m_cipherCount = stepCount;
+						m_lcPrev = stepLc;
+						score = step;
 					}
 				}
+
+				// Restore state.
+				m_position.pop();
+				m_gStrm.seekg(streamPos);
+				m_cipherCount = savedCipherCount;
+				m_lcPrev = savedLcPrev;
+				m_cipherActive = savedCipherActive;
 
 				if (score > bestScore)
 				{
 					bestScore = score;
 					bestLc = candidateLc;
 					bestCount = candidateCount;
-					if (score >= 3)
-						break;  // high confidence — no need to try more
+					if (tryAndSee && score >= 10)
+						break;  // high confidence
+					if (!tryAndSee && score >= 3)
+						break;
 				}
 			}
 
@@ -277,7 +367,7 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 				Move testMove;
 				unsigned testResult;
 				try { testResult = dispatchMove(candidateLc, matchCnt[i], testMove, true); }
-				catch (...) { m_position.pop(); m_gStrm.seekg(streamPos); continue; }
+				catch (mstl::exception const&) { m_position.pop(); m_gStrm.seekg(streamPos); continue; }
 				m_position.pop();
 				m_gStrm.seekg(streamPos);
 				if (testResult == Token_Move && !testMove.isEmpty())

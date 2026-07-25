@@ -88,6 +88,7 @@ private:
 	unsigned				m_lcPrev;		///< Previous move's logicalCode (Chess960)
 	bool					m_cipherActive;	///< True after the first cipher-decoded move
 	bool					m_useCipher;		///< True for real ChessBase Chess960 (36-byte pos)
+	unsigned				m_lookaheadDepth;	///< Recursion guard for try-and-see
 };
 
 } // namespace cbh
