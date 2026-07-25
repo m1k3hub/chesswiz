@@ -157,14 +157,33 @@ uncbv Rust tool," suggesting the code may be more accurate than the spec.
 
 ## Recommended Next Action
 
-**Obtain a small `.cbv` test fixture and run `cdb2sci` on it.** This
-will immediately reveal whether the existing code works correctly or
-has bugs. If it works, update the spec to match the code. If it fails,
-the failure mode will pinpoint which discrepancy is the real bug.
+~~Obtain a small `.cbv` test fixture and run `cdb2sci` on it.~~
 
-Command to test:
+**DONE 2026-07-25 — the CBV code works.** Tested against two real
+fixtures (`opening-report/tests/fixtures/`, gitignored):
+
+- `twic1654.cbv` (TWIC issue 1654, downloaded from theweekinchess.com,
+  `zips/twic1654c6.zip`): `--count-games` reports **8721**, exactly
+  matching the PGN edition (`twic1654g.zip`) of the same issue.
+  Conversion: **8441 written, 0 rejected, 280 corrupted, 0 warnings,
+  0 errors** in ~2s. The PGN edition contains exactly **280 games
+  tagged `[Variant "Chess960"]`** — a perfect 1:1 match, so every
+  failure is the known Chess960 CBG move-decoding gap (see
+  `CHESS960_STATUS.md`), not a CBV container bug. Standard-chess
+  decode rate: 8441/8441 = 100%.
+- `twic1639_grenke_freestyle_open.cbv`: 7965 written, 606 corrupted
+  (Chess960-heavy freestyle issue, same failure class).
+
+Conclusion: CBV extraction/decompression and standard-chess CBH decode
+are verified end-to-end against real ChessBase-produced archives. The
+spec/code discrepancies listed above should be resolved in favor of the
+code where they conflict; remaining conversion failures are tracked as
+Chess960 decoder work, not CBV work.
+
+Command used:
 ```bash
-./src/cdb2sci /path/to/test.cbv /tmp/test_output.sci
+./src/cdb2sci --count-games fixtures/twic1654.cbv
+./src/cdb2sci --force fixtures/twic1654.cbv /tmp/twic1654.sci
 ```
 
 ## Binary Fixtures Availability
