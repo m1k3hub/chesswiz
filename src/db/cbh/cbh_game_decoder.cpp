@@ -740,6 +740,7 @@ MoveNode*
 GameDecoder::decodeMoves(MoveNode* root)
 {
 	unsigned count = 0;
+	getAnnotation(root, -1);	// consume game-level records (moveNo 0xffffff)
 	decodeMoves(root, count);
 	return root;
 }
@@ -751,6 +752,7 @@ GameDecoder::decodeMoves(MoveNodeAllocator& allocator)
 	unsigned		count	= 0;
 	MoveNode*	root	= allocator.allocate();
 
+	getAnnotation(root, -1);	// consume game-level records (moveNo 0xffffff)
 	decodeMoves(root, count, allocator);
 	return root;
 }

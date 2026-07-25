@@ -103,7 +103,21 @@ char const* SamplePgn =
 	"[Result \"0-1\"]\n"
 	"[ECO \"B01\"]\n"
 	"\n"
-	"1. e4 d5 2. exd5 Qxd5 3. Nc3 Qa5 4. d4 Nf6 5. Nf3 Bf5 0-1\n";
+	"1. e4 d5 2. exd5 Qxd5 3. Nc3 Qa5 4. d4 Nf6 5. Nf3 Bf5 0-1\n"
+	"\n"
+	"[Event \"CBH Test 4\"]\n"
+	"[Site \"TestCity\"]\n"
+	"[Date \"2024.06.18\"]\n"
+	"[Round \"4\"]\n"
+	"[White \"Var, Vera\"]\n"
+	"[Black \"Line, Lou\"]\n"
+	"[WhiteElo \"2100\"]\n"
+	"[BlackElo \"2150\"]\n"
+	"[Result \"1-0\"]\n"
+	"[ECO \"C44\"]\n"
+	"\n"
+	"{Pre-game comment} 1. e4 e5 2. Nf3 (2. f4 exf4 {inside variation}) 2... Nc6 $2\n"
+	"{after the variation} 3. Bb5 $1 a6 4. Ba4 Nf6 1-0\n";
 
 
 struct SilentPgnReader : public PgnReader
@@ -702,7 +716,7 @@ main(int argc, char** argv)
 		source.close();
 		::fprintf(stderr, "import done\n");
 
-		if (reader.errors != 0 || imported != 3)
+		if (reader.errors != 0 || imported != 4)
 		{
 			::fprintf(stderr, "PGN import failed: imported=%u errors=%u\n", imported, reader.errors);
 			cleanupSci(sciRoot);
