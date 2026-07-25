@@ -2210,38 +2210,59 @@ Database::playerStatistic(NamebasePlayer const& player, PlayerStats& stats) cons
 	workers.reserve(nWorkers);
 	threads.reserve(nWorkers);
 
-	for (unsigned i = 0; i < nWorkers; ++i)
+	try
 	{
-		unsigned first = i*chunkSize;
-		unsigned last = mstl::min(first + chunkSize, nGames);
-
-		if (first >= last)
-			break;
-
-		PlayerStatsWorker* worker = new PlayerStatsWorker(*this, player, first, last);
-		sys::Thread* thread = new sys::Thread;
-
-		workers.push_back(worker);
-		threads.push_back(thread);
-
-		if (!thread->start(sys::Thread::Runnable(&PlayerStatsWorker::operator(), worker)))
+		for (unsigned i = 0; i < nWorkers; ++i)
 		{
-			delete thread;
-			delete worker;
-			threads.pop_back();
-			workers.pop_back();
-			serialFirst = first;
-			break;
+			unsigned first = i*chunkSize;
+			unsigned last = mstl::min(first + chunkSize, nGames);
+
+			if (first >= last)
+				break;
+
+			// push the worker before allocating the thread (vectors are
+			// reserved, so push_back cannot throw): if `new sys::Thread`
+			// throws, the worker is still owned and cleaned up below
+			PlayerStatsWorker* worker = new PlayerStatsWorker(*this, player, first, last);
+			workers.push_back(worker);
+
+			sys::Thread* thread = new sys::Thread;
+			threads.push_back(thread);
+
+			if (!thread->start(sys::Thread::Runnable(&PlayerStatsWorker::operator(), worker)))
+			{
+				delete thread;
+				delete worker;
+				threads.pop_back();
+				workers.pop_back();
+				serialFirst = first;
+				break;
+			}
 		}
+
+		// join everything before merging: a merge failure must not leave
+		// threads running over freed workers
+		for (unsigned i = 0; i < threads.size(); ++i)
+			threads[i]->join();
+
+		for (unsigned i = 0; i < threads.size(); ++i)
+			stats.merge(workers[i]->stats);
+	}
+	catch (...)
+	{
+		for (unsigned i = 0; i < threads.size(); ++i)
+			threads[i]->join();
+		for (unsigned i = 0; i < threads.size(); ++i)
+			delete threads[i];
+		for (unsigned i = 0; i < workers.size(); ++i)
+			delete workers[i];
+		throw;
 	}
 
 	for (unsigned i = 0; i < threads.size(); ++i)
-	{
-		threads[i]->join();
-		stats.merge(workers[i]->stats);
 		delete threads[i];
+	for (unsigned i = 0; i < workers.size(); ++i)
 		delete workers[i];
-	}
 
 	if (serialFirst < nGames)
 		accumulatePlayerStats(stats, *this, player, serialFirst, nGames);

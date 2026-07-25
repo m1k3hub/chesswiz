@@ -712,6 +712,7 @@ Thread::~Thread()
 		cancelThread();
 	}
 
+	delete m_exception;
 	Guard::destroy(m_lock);
 }
 
@@ -749,6 +750,10 @@ bool
 Thread::doStart(Runnable runnable)
 {
 	m_runnable = runnable;
+
+	// discard a stale exception from a previous run (also fixes the leak)
+	delete m_exception;
+	m_exception = 0;
 
 #ifndef NDEBUG
 	if (::m_noThreads)

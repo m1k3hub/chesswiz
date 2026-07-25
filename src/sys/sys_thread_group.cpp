@@ -59,7 +59,17 @@ bool
 ThreadGroup::start(Thread::Runnable const& runnable)
 {
 	Thread* thread = new Thread;
-	m_threads.push_back(thread); // push before start so push_back exception won't leak a running thread
+
+	// push before start so push_back exception won't leak a running thread
+	try
+	{
+		m_threads.push_back(thread);
+	}
+	catch (...)
+	{
+		delete thread;	// not yet started, safe to destroy
+		throw;
+	}
 
 	if (!thread->start(runnable))
 	{
@@ -78,18 +88,23 @@ ThreadGroup::joinNoThrow(mstl::string& failMsg)
 	bool failed = false;
 	failMsg.clear();
 
+	// join everything first: no allocation may interrupt this loop,
+	// otherwise remaining threads stay unjoined (and this must not throw
+	// when reached from the destructor).
 	for (unsigned i = 0; i < m_threads.size(); ++i)
-	{
 		m_threads[i]->join();
 
+	for (unsigned i = 0; i < m_threads.size(); ++i)
+	{
 		if (!failed && m_threads[i]->exception())
 		{
 			failed = true;
-			failMsg = m_threads[i]->exception()->what();
+			try { failMsg = m_threads[i]->exception()->what(); } catch (...) {}
 		}
-
-		delete m_threads[i];
 	}
+
+	for (unsigned i = 0; i < m_threads.size(); ++i)
+		delete m_threads[i];
 
 	m_threads.clear();
 	return !failed;

@@ -326,11 +326,21 @@ findDuplicates(Database& db)
 		mstl::string failMsg1;
 		bool ok1 = group.joinNoThrow(failMsg1);
 
-		for (unsigned i = 0; i < workers.size(); ++i)
+		// merge before cleanup: if a merge throws, still free every worker
+		try
 		{
-			appendDuplicateEntries(entries, workers[i]->entries);
-			delete workers[i];
+			for (unsigned i = 0; i < workers.size(); ++i)
+				appendDuplicateEntries(entries, workers[i]->entries);
 		}
+		catch (...)
+		{
+			for (unsigned i = 0; i < workers.size(); ++i)
+				delete workers[i];
+			throw;
+		}
+
+		for (unsigned i = 0; i < workers.size(); ++i)
+			delete workers[i];
 
 		if (!ok1)
 			M_RAISE("%s", failMsg1.c_str());
@@ -413,9 +423,24 @@ findDuplicates(Database& db)
 	mstl::string failMsg2;
 	bool ok2 = group.joinNoThrow(failMsg2);
 
+	// merge before cleanup: if a merge throws, still free workers and readers
+	try
+	{
+		for (unsigned i = 0; i < workers.size(); ++i)
+			appendDuplicateGroups(result, workers[i]->groups);
+	}
+	catch (...)
+	{
+		for (unsigned i = 0; i < workers.size(); ++i)
+		{
+			delete workers[i];
+			db.closeAsyncReader(readers[i]);
+		}
+		throw;
+	}
+
 	for (unsigned i = 0; i < workers.size(); ++i)
 	{
-		appendDuplicateGroups(result, workers[i]->groups);
 		delete workers[i];
 		db.closeAsyncReader(readers[i]);
 	}
@@ -473,11 +498,21 @@ computeEcoStats(Database const& db, variant::Type variant)
 		mstl::string failMsg3;
 		bool ok3 = group.joinNoThrow(failMsg3);
 
-		for (unsigned i = 0; i < workers.size(); ++i)
+		// merge before cleanup: if a merge throws, still free every worker
+		try
 		{
-			mergeEcoStats(stats, workers[i]->stats);
-			delete workers[i];
+			for (unsigned i = 0; i < workers.size(); ++i)
+				mergeEcoStats(stats, workers[i]->stats);
 		}
+		catch (...)
+		{
+			for (unsigned i = 0; i < workers.size(); ++i)
+				delete workers[i];
+			throw;
+		}
+
+		for (unsigned i = 0; i < workers.size(); ++i)
+			delete workers[i];
 
 		if (!ok3)
 			M_RAISE("%s", failMsg3.c_str());
