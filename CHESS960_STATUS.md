@@ -988,39 +988,28 @@ structurally complete but the first-match candidate selection needs refinement
 | Test | Result |
 |------|--------|
 | `verify_cbh_write` (all 5 steps) | ✅ PASSED (exit 0) |
-| `cdb2sci` on twic1639 fixture | ✅ Completes without crash (7965 written, 606 corrupted) |
+| `cdb2sci` on twic1639 fixture | ✅ 7970 written, 601 corrupted (5 Chess960 decoded) |
 | Standard chess games | ✅ Unaffected |
 | scidb-produced Chess960 | ✅ Unaffected (28-byte, standard encoding) |
-| Real ChessBase Chess960 | ⚠️ First ~17 games decode correctly; remaining fail due to ambiguous cipher matches |
+| Real ChessBase Chess960 | ⚠️ 5/606 decoded; rest fail due to sparse H0 table + ambiguous matches |
 
 ### Remaining work
 
-1. **Move execution failure at later plies**: The cipher matching is verified
-   correct — each move's first cipher candidate produces a valid (non-empty)
-   move, and the Python analysis confirms exactly 1 match per move for test
-   games. The first 4 moves of every Chess960 game decode as "OK" (non-empty).
-   However, all 606 games eventually fail with `mstl::exception` (assertion
-   or precondition violation) from `Board::doMove` at a later ply. This
-   suggests the `Position::doMove(pieceType, ...)` function corrupts the
-   pieces/pieceCount tracking arrays during Chess960 move execution, causing
-   subsequent moves to reference wrong piece squares. The corruption is
-   likely because the piece-number-to-square mapping in the 28-byte position
-   block differs from what the move encoder expects for Chess960 positions.
-   **Next step**: trace the pieces array state after each move for a known
-   game (e.g., game 757: 1.d4 d5 2.f3 Nf6) and compare against the expected
-   board state.
+1. **H0 table sparsity** (primary blocker): 95,340 entries cover only 33% of
+   possible (count, lc_prev) states. When H0 is missing, the InvLUT fallback
+   with push/pop validation is used, but it accepts the first legal move
+   (not necessarily the correct one). Densifying the H0 table from more TWIC
+   fixtures would directly increase the decode rate.
 
-2. **Narrow exception handling**: Changed `catch(...)` to
-   `catch(mstl::exception const&)` to avoid catching `DecodingFailedException`
-   (different exception hierarchy). This prevents crashes from assertion/
-   precondition violations while allowing normal decoding exceptions to
-   propagate correctly.
+2. **Ambiguous match resolution**: When H0 has 2+ matches, push/pop validation
+   accepts the first legal move. If multiple candidates are legal (which is
+   common — all produce valid moves), the first (lowest lc) may be wrong.
+   The correct approach: enumerate legal moves, compute their lc values,
+   and verify the cipher for each. This requires a reverse move-to-lc mapping.
 
-3. **Variation cipher state**: Push/Pop token handling for cipher state
-   (save/restore on variation enter/exit) was removed to fix a crash. Needs
-   to be re-added with a lightweight stack (not mstl::stack, which caused
-   static destruction issues).
+3. **Castling king destination**: Fixed `doCastling` to use Convention B
+   (g-file/c-file) for the king's pieces/pieceCount tracking. The rook
+   destination was already correct.
 
-4. **H0 table densification**: 95340 entries cover most but not all needed
-   (count, lc_prev, lc) triples. Games with missing triples fail with
-   "no matching move". More TWIC fixtures or binary extraction would fill gaps.
+4. **Variation cipher state**: Push/Pop token handling for cipher state
+   needs re-adding (save/restore on variation enter/exit).
