@@ -1022,3 +1022,37 @@ structurally complete but the first-match candidate selection needs refinement
 
 4. **Variation cipher state**: Push/Pop token handling for cipher state
    needs re-adding (save/restore on variation enter/exit).
+
+
+### Path forward (priority order)
+
+1. **Re-acquire CBASE16 binary and extract H0 algorithm** (highest impact):
+   The ChessBase 16 binary contains the exact H0/g cipher algorithm.
+   Previous RE located the codec routines (VA `0x14086de00/0x14086e910/
+   0x14086f310`, encoder `0x140870c60`) but concluded the cipher lives
+   in a separate code path. Extracting the algorithm gives 100% H0
+   coverage with no alignment or harvesting issues.
+   - Binary was at `/tmp/cb16/update/CBase16.exe` (24 MB PE32+ x64)
+   - `MoveNumberLookup` at file offset `0x12e13c0` (VA `0x1412e27c0`)
+   - `InverseMoveNumberLookup` at VA `0x1412e26c0`
+   - Per-move count evolution in jump-table dispatch after codec init
+
+2. **Rebuild H0 from scratch with twic1639 as trusted** (medium impact):
+   Re-harvest ALL 37 TWIC fixtures using the improved alignment
+   (TWIC PGN with last-name matching), starting with twic1639
+   (606 games, best alignment). Other fixtures are trimmed against
+   twic1639's entries. This eliminates wrong entries from misaligned
+   games in other fixtures.
+   - Expected: ~50K entries from twic1639 + ~50K from other fixtures
+   - Challenge: 559 disputed keys require resolution
+
+3. **Fix chess960 castling in probe_encode_many** (low impact):
+   Only 13/559 disputes involve castling. Fixing the off-e-file
+   castling encoding would resolve those 13 disputes but wouldn't
+   significantly improve the decode rate.
+
+4. **Try-and-see with backtracking** (research):
+   At each H0 miss, try each legal candidate and decode the next
+   N moves. Accept the candidate whose subsequent moves all decode
+   successfully. This doesn't need H0 but is very expensive (O(N^M)
+   where M is the number of H0-miss moves in a game).
