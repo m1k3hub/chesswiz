@@ -30,6 +30,7 @@
 #include "cbh_decoder_position.h"
 #include "db_move.h"
 
+
 namespace util { class ByteStream; }
 
 namespace db {
@@ -56,6 +57,7 @@ protected:
 	unsigned decodeMove(db::Move& move, unsigned& count, bool skipVariations = false);
 	void startDecoding(TagSet* tags = 0);
 
+
 	/// Setup a custom start position from the game stream.
 	/// Reads 28 bytes of position data and sets up the board.
 	/// If @p tags is non-null, sets the SetUp and FEN tags.
@@ -72,6 +74,20 @@ private:
 	Decoder& operator=(Decoder const&);
 
 	unsigned decodeMoves(uint16_t* line, unsigned length, Board* startBoard);
+
+	/// Dispatch a decoded logicalCode through the move switch.
+	/// @p decodeCount is the count used for multi-byte (0xeb) reads.
+	unsigned dispatchMove(unsigned lc, unsigned decodeCount,
+	                       db::Move& move, bool skipVariations);
+
+	/// Resolve the cipher count for a candidate logicalCode.
+	/// Returns 0xffff if the candidate is not in the table.
+	unsigned resolveCipherCount(unsigned candidateLc) const;
+
+	unsigned				m_cipherCount;	///< Current cipher count (Chess960)
+	unsigned				m_lcPrev;		///< Previous move's logicalCode (Chess960)
+	bool					m_cipherActive;	///< True after the first cipher-decoded move
+	bool					m_useCipher;		///< True for real ChessBase Chess960 (36-byte pos)
 };
 
 } // namespace cbh

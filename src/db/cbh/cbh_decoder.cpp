@@ -29,6 +29,9 @@
 // http://talkchess.com/forum/viewtopic.php?topic_view=threads&p=287896&t=29468&sid=a535ba2e9a17395e2582bdddf57c2425
 
 #include "cbh_decoder.h"
+#include "cbh_count_cipher.h"
+
+static db::cbh::CountCipher s_cipher;
 
 #include "db_tag_set.h"
 #include "db_exception.h"
@@ -81,7 +84,32 @@ static Byte MoveNumberLookup[256] =
 Decoder::Decoder(ByteStream& gStrm, bool isChess960)
 	:m_gStrm(gStrm)
 	,m_isChess960(isChess960)
+	,m_cipherCount(0)
+	,m_lcPrev(0)
+	,m_cipherActive(false)
+	,m_useCipher(false)
 {
+
+}
+
+
+unsigned
+Decoder::resolveCipherCount(unsigned candidateLc) const
+{
+	if (!m_cipherActive)
+	{
+		// First move of the game: use the seed table g.
+		return s_cipher.lookupG(candidateLc);
+	}
+
+	if (candidateLc >= 0xec)
+	{
+		// Tokens (Push/Pop/Skip) use the current cipher count unchanged.
+		return m_cipherCount;
+	}
+
+	// Move codes: look up H0(count_prev, lc_prev, lc).
+	return s_cipher.lookupH0(m_cipherCount, m_lcPrev, candidateLc);
 }
 
 
@@ -96,7 +124,85 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 	if (m_gStrm.remaining() == 0)
 		return Token_Pop;
 
-	switch (::MoveNumberLookup[Byte(m_gStrm.get() - count)])
+	unsigned lc;
+	unsigned decodeCount;
+
+	if (m_useCipher)
+		s_cipher.load();  // lazy load (no-op if already loaded)
+
+	if (m_useCipher && s_cipher.isLoaded())
+	{
+		// Chess960 count-cipher path: the raw byte encodes
+		//   raw = InverseMoveNumberLookup[lc] + cipherCount (mod 256)
+		// where cipherCount depends on the move's lc via H0/g.
+		Byte raw = m_gStrm.peek();
+		lc = 0xff;
+		decodeCount = 0;
+
+		for (unsigned candidateLc = 0; candidateLc < 256; ++candidateLc)
+		{
+			unsigned candidateCount = resolveCipherCount(candidateLc);
+			if (candidateCount == 0xffff)
+				continue;
+
+			if (::MoveNumberLookup[Byte(raw - candidateCount)] == candidateLc)
+			{
+				lc = candidateLc;
+				decodeCount = candidateCount;
+				break;
+			}
+		}
+
+		if (lc == 0xff)
+			throw DecodingFailedException(
+				"chess960 count cipher: no matching move for byte 0x%02x at move %u",
+				unsigned(raw), count);
+
+		m_gStrm.get();  // consume the byte
+	}
+	else
+	{
+		decodeCount = count;
+		lc = ::MoveNumberLookup[Byte(m_gStrm.get() - decodeCount)];
+	}
+
+	unsigned result;
+	if (m_useCipher)
+	{
+		try
+		{
+			result = dispatchMove(lc, decodeCount, move, skipVariations);
+		}
+		catch (...)
+		{
+			throw DecodingFailedException("chess960 decode failed at move %u", count);
+		}
+	}
+	else
+	{
+		result = dispatchMove(lc, decodeCount, move, skipVariations);
+	}
+
+	if (result == Token_Move)
+	{
+		++count;  // move index (used by callers for annotations)
+
+		if (m_useCipher && s_cipher.isLoaded())
+		{
+			m_cipherCount = decodeCount;
+			m_lcPrev = lc;
+			m_cipherActive = true;
+		}
+	}
+
+	return result;
+}
+
+
+unsigned
+Decoder::dispatchMove(unsigned lc, unsigned decodeCount, Move& move, bool skipVariations)
+{
+	switch (lc)
 	{
 #define OFFSET(x, y) ((x) + (y)*8)
 
@@ -382,8 +488,8 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 		// Multiple byte move ##################
 		case 0xeb:
 			{
-				unsigned word = ::MoveNumberLookup[Byte(m_gStrm.get() - count)] << 8;
-				word |= ::MoveNumberLookup[Byte(m_gStrm.get() - count)];
+				unsigned word = ::MoveNumberLookup[Byte(m_gStrm.get() - decodeCount)] << 8;
+				word |= ::MoveNumberLookup[Byte(m_gStrm.get() - decodeCount)];
 				move = m_position.doMove(word & 63, (word >> 6) & 63, ((word >> 12) & 3) + piece::Queen);
 			}
 			break;
@@ -425,7 +531,6 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 #undef OFFSET
 	}
 
-	++count;
 	return Token_Move;
 }
 
@@ -464,20 +569,52 @@ Decoder::decodeMoves(uint16_t* line, unsigned length, Board* startBoard)
 void
 Decoder::setupStartPosition(TagSet* tags)
 {
-	// In CBH format, the start position is always 28 bytes.
-	// The 36-byte format (with chess960 rook data) is not used in practice.
-	// The 0x08000000 bit in newer formats indicates a position with
-	// annotations/correspondence, not chess960.
-	// Chess960 detection should use a separate indicator.
-	unsigned const size = 28;
+	// Standard CBH start position: 28 bytes.
+	// Chess960 CBH start position: 36 bytes (28 + 8-byte extension).
+	// The 8-byte extension encodes castling-relevant squares:
+	//   byte 0: white king square (CBH encoding, informational)
+	//   byte 1: black king square
+	//   byte 2: white short-castling rook square
+	//   byte 3: white long-castling rook square
+	//   byte 4: black short-castling rook square
+	//   byte 5: black long-castling rook square
+	//   byte 6-7: trailing bytes (likely checksum, not needed)
+	// CBH squares: file*8 + (rank-1); convert to scidb via mapSquare().
+	// Chess960 real ChessBase files have a 36-byte position block (28 + 8-byte extension).
+	// scidb-produced Chess960 files have only a 28-byte block.
+	// Use 36 bytes only if enough data is available.
+	unsigned const posSize = (m_isChess960 && m_gStrm.remaining() >= 36) ? 36 : 28;
+	m_useCipher = (posSize == 36);
 
-	if (m_gStrm.remaining() < size)
+	if (m_gStrm.remaining() < posSize)
 		throw DecodingFailedException("corrupted data (insufficient bytes for start position: have %u, need %u)",
-		                             m_gStrm.remaining(), size);
+		                             m_gStrm.remaining(), posSize);
 
-	BitStream bstrm(m_gStrm.data(), size);
+	BitStream bstrm(m_gStrm.data(), 28);  // Position::setup reads 224 bits = 28 bytes
 	m_position.setup(bstrm, m_isChess960);
-	m_gStrm.skip(size);
+
+	if (m_isChess960 && posSize == 36)
+	{
+		// Set castling rook squares from the 8-byte extension.
+		// Position::setup already set castling rights via the 1-arg form
+		// (which scans for the rook). The 2-arg form here overrides with
+		// the exact rook square from the ChessBase extension.
+		unsigned char const* ext = m_gStrm.data() + 28;
+		Board& board = m_position.board();
+
+		auto cbhToScidb = [](unsigned char s) { return ((s & 7) << 3) | (s >> 3); };
+
+		if (m_position.m_wshrt)
+			board.setCastleShort(color::White, cbhToScidb(ext[2]));
+		if (m_position.m_wlong)
+			board.setCastleLong(color::White, cbhToScidb(ext[3]));
+		if (m_position.m_bshrt)
+			board.setCastleShort(color::Black, cbhToScidb(ext[4]));
+		if (m_position.m_blong)
+			board.setCastleLong(color::Black, cbhToScidb(ext[5]));
+	}
+
+	m_gStrm.skip(posSize);
 
 	if (tags)
 	{

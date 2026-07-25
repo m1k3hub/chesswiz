@@ -30,6 +30,7 @@ namespace decoder {
 
 inline unsigned Position::variationLevel() const	{ return m_stack.size() - 1; }
 inline Board const& Position::board() const			{ return m_stack.top().board; }
+inline Board& Position::board()					{ return m_stack.top().board; }
 
 inline void Position::push()	{ m_stack.dup(); }
 inline void Position::pop()	{ m_stack.pop(); }

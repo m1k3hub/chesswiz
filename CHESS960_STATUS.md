@@ -942,3 +942,76 @@ and emits scidb move-bytes per game, for bulk `(cp,lc_prev,lc)->cn`
 sample harvesting. Build: see the g++ invocation captured from
 `make -n probe_encode960.o` (same flags) then link against
 `db/libdb.a mstl/libmstl.a util/libutil.a sys/libsys.a -ltcl8.6 -ltk8.6 -lz`.
+
+
+---
+
+## Phase 5 Part D — Count cipher decoder wiring (2026-07-25)
+
+The count cipher has been wired into the CBH decoder. The implementation is
+structurally complete but the first-match candidate selection needs refinement
+(see Remaining below).
+
+### What was implemented
+
+1. **CountCipher class** (`src/db/cbh/cbh_count_cipher.{h,cpp}`):
+   - Loads H0 (95340 entries) and g (22 entries) from
+     `src/count_cipher_universal.json` at runtime
+   - Static singleton (file-scope static in `cbh_decoder.cpp`); loaded once,
+     no per-instance overhead
+   - Minimal JSON parser (no external dependencies)
+
+2. **36-byte position block** (`Decoder::setupStartPosition`):
+   - Detects 36-byte Chess960 position blocks (vs 28-byte standard/scidb)
+   - Sets `m_useCipher = true` only for 36-byte blocks (real ChessBase files)
+   - Parses the 8-byte extension to override castling rook squares via
+     `Board::setCastleShort(color, square)` / `setCastleLong(color, square)`
+   - scidb-produced Chess960 files (28-byte) use standard encoding (no cipher)
+
+3. **Cipher-based move decoding** (`Decoder::decodeMove`):
+   - Refactored: `decodeMove` determines `lc` + `decodeCount`, then calls
+     `dispatchMove` (extracted from the original switch)
+   - For cipher mode: tries each candidate lc (0-255), checks
+     `LUT[(raw - H0_count) & 0xff] == lc`, accepts first match
+   - Cipher state: `m_cipherCount`, `m_lcPrev`, `m_cipherActive` (per-game)
+   - Exception handling: catches assertion failures from invalid moves and
+     converts to `DecodingFailedException` (game marked corrupted, no crash)
+
+4. **Board API**: `setCastleShort(color, square)` / `setCastleLong(color, square)`
+   moved from private to public (needed for Chess960 extension parsing).
+
+5. **Position API**: added non-const `board()` accessor and castling flag
+   members (`m_wshrt`, `m_wlong`, `m_bshrt`, `m_blong`) for extension parsing.
+
+### Current results
+
+| Test | Result |
+|------|--------|
+| `verify_cbh_write` (all 5 steps) | ✅ PASSED (exit 0) |
+| `cdb2sci` on twic1639 fixture | ✅ Completes without crash (7965 written, 606 corrupted) |
+| Standard chess games | ✅ Unaffected |
+| scidb-produced Chess960 | ✅ Unaffected (28-byte, standard encoding) |
+| Real ChessBase Chess960 | ⚠️ First ~17 games decode correctly; remaining fail due to ambiguous cipher matches |
+
+### Remaining work
+
+1. **Ambiguous match resolution**: The first-match approach (lowest lc that
+   passes the H0+LUT check) is wrong for ~2% of raw bytes per cipher state.
+   A push/pop validation approach was prototyped but needs debugging:
+   - Save position state (push), try each candidate (dispatchMove), check if
+     move is non-empty, restore (pop)
+   - The push/pop approach got 1 game to succeed (vs 17 with first-match)
+     but made things worse overall — likely because the Position state
+     restoration is incomplete
+   - Alternative: enumerate legal moves from the current position, compute
+     their lc values, and check the cipher for each (requires reverse
+     move-to-lc mapping)
+
+2. **Variation cipher state**: Push/Pop token handling for cipher state
+   (save/restore on variation enter/exit) was removed to fix a crash. Needs
+   to be re-added with a lightweight stack (not mstl::stack, which caused
+   static destruction issues).
+
+3. **H0 table densification**: 95340 entries cover most but not all needed
+   (count, lc_prev, lc) triples. Games with missing triples fail with
+   "no matching move". More TWIC fixtures or binary extraction would fill gaps.

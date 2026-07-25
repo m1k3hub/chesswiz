@@ -499,6 +499,9 @@ public:
 	void setCastleShort(color::ID color);
 	/// Grant castling rights on the queenside to the given color
 	void setCastleLong(color::ID color);
+	/// Set castling rook square for Chess960 positions (2-arg form)
+	void setCastleShort(color::ID color, unsigned square);
+	void setCastleLong(color::ID color, unsigned square);
 	/// Remove castling rights on the kingside to the given color
 	void tryCastleShort(color::ID color);
 	/// Grant castling rights on the queenside to the given color
@@ -690,9 +693,6 @@ private:
 
 	void genCastleShort(MoveList& result, color::ID side) const;
 	void genCastleLong(MoveList& result, color::ID side) const;
-
-	void setCastleShort(color::ID color, unsigned square);
-	void setCastleLong(color::ID color, unsigned square);
 
 	bool shortCastlingIsLegal() const;
 	bool longCastlingIsLegal() const;

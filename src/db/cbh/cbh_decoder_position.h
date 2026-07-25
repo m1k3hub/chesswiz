@@ -53,6 +53,7 @@ public:
 	void pop();
 
 	Board const& board() const;
+	Board& board();
 
 	Move doNullMove();
 	Move doCastling(Byte offs);
@@ -94,6 +95,12 @@ private:
 	Move doMove(Move move);
 
 	Stack m_stack;
+
+public:
+	bool m_wshrt;
+	bool m_wlong;
+	bool m_bshrt;
+	bool m_blong;
 };
 
 } // namespace decoder

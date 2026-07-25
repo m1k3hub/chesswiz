@@ -404,6 +404,11 @@ Position::setup(BitStream& strm, bool isChess960)
 		}
 	}
 
+	m_wshrt = wshrt;
+	m_wlong = wlong;
+	m_bshrt = bshrt;
+	m_blong = blong;
+
 	if (bshrt) board.setCastleShort(color::Black);
 	if (blong) board.setCastleLong (color::Black);
 	if (wshrt) board.setCastleShort(color::White);

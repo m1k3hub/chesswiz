@@ -133,6 +133,7 @@ SRC_CXX = \
 	cbh/cbh_encoder.cpp \
 	cbh/cbh_encoder_position.cpp \
 	cbh/cbh_game_decoder.cpp \
+	cbh/cbh_count_cipher.cpp \
 
 SRC	= $(SRC_CXX)
 OBJS	= $(SRC_CXX:.cpp=.o)
