@@ -216,22 +216,23 @@ if {0 && [testOption update-player-photos]} {
 			}
 			timeout {
 				puts ""
-				puts $::util::photos::mc::TimeoutOut
-				puts $::util::photos::mc::UpdateAborted
+				puts $::util::photos::mc::TimeOut
+				puts $::util::photos::mc::DownloadAborted
 			}
 			error {
 				lassign $args file msg
 				puts ""
-				puts [format $::util::photos::mc::ErrorOccurred $msg]
-				puts $::util::photos::mc::UpdateAborted
+				puts [format $::util::photos::mc::Message(httperr) $msg]
+				puts $::util::photos::mc::DownloadAborted
 			}
 		}
 	}
 
-	lassign [::util::photos::updateFiles [namespace current]::inform] state msg
+	# NOTE: the photo download server is defunct (see ::util::photos::checkForUpdate)
+	lassign [::util::photos::checkForUpdate [namespace current]::inform] state msg
 	if {$state eq "error"} {
-		puts [format $::util::photos::mc::ErrorOccurred $msg]
-		puts $::util::photos::mc::UpdateAborted
+		puts [format $::util::photos::mc::Message(httperr) $msg]
+		puts $::util::photos::mc::DownloadAborted
 	}
 }
 

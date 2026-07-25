@@ -557,8 +557,8 @@ Beispiel:
 --></code></pre></div>
 
 <p>
-Findet Positionen auf, in denen WeiÃ entweder einen weiÃfeldrigen LÃ¤ufer, oder
-einen schwarzfeldrigen LÃ¤ufer hat, aber nicht beides.
+Findet Positionen auf, in denen Weiß entweder einen weißfeldrigen Läufer, oder
+einen schwarzfeldrigen Läufer hat, aber nicht beides.
 </p>
 
 <!-- ############################################################################## -->
@@ -1831,35 +1831,35 @@ The supported pawn structures and pawn attributes are:
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>quart(n)</code></span></td>
       <td class="r">Bauern verbunden in einer Reihe: es werden alle verbundenen Bauern
-                    auf einer Reihe gezÃ¤hlt, wenn mindestens n Bauern zu diesem Verbund
-                    gehÃ¶ren.</td>
+                    auf einer Reihe gezählt, wenn mindestens n Bauern zu diesem Verbund
+                    gehören.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>quart!(n)</code></span></td>
       <td class="r">Bauern verbunden in einer Reihe (exakt): es werden alle
-                    verbundenen Bauern auf einer Reihe gezÃ¤hlt, wenn genau n
-                    Bauern zu diesem Verbund gehÃ¶ren.</td>
+                    verbundenen Bauern auf einer Reihe gezählt, wenn genau n
+                    Bauern zu diesem Verbund gehören.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>connected</code></span></td>
-      <td class="r">Verbundene Bauern: es werden alle Bauern gezÃ¤hlt, die einen
+      <td class="r">Verbundene Bauern: es werden alle Bauern gezählt, die einen
                     Bauern der gleichen Farbe auf einer benachbarten Linie haben.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>integrated</code></span></td>
-      <td class="r">Integrierte Bauern: es werden alle Bauern gezÃ¤hlt, die
+      <td class="r">Integrierte Bauern: es werden alle Bauern gezählt, die
                     auf allen Nachbarslinien Bauern der gleichen Farbe
                     haben.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>isolated</code></span></td>
-      <td class="r">Isolierte Bauern (Isolani): es werden alle Bauern gezÃ¤hlt,
+      <td class="r">Isolierte Bauern (Isolani): es werden alle Bauern gezählt,
                     die keinen Bauern gleicher Farbe auf einer benachbarten
                     Linie haben.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>halfisolated</code></span></td>
-      <td class="r">Halb-isolierte Bauern: es werden alle Bauern gezÃ¤hlt,
+      <td class="r">Halb-isolierte Bauern: es werden alle Bauern gezählt,
                     die auf einer benachbarten Linie mindstens einen
                     gleichfarbigen Bauern haben, aber keinen auf der anderen
                     benachbarten Linie. Ein Randbauer kann niemals
@@ -1867,141 +1867,141 @@ The supported pawn structures and pawn attributes are:
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>defended</code></span></td>
-      <td class="r">Verteidigte Bauern: es werden alle Bauern gezÃ¤hlt, die von
+      <td class="r">Verteidigte Bauern: es werden alle Bauern gezählt, die von
                     einem Bauern der gleichen Farbe gedeckt werden (auch wenn
                     sie nicht angegriffen sind).</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>defender</code></span></td>
-      <td class="r">Verteidigende Bauern: es werden alle Bauern gezÃ¤hlt, die
+      <td class="r">Verteidigende Bauern: es werden alle Bauern gezählt, die
                     einen Bauern der gleichen Farbe decken (auch wenn der
                     gedeckte Bauer nicht angegriffen ist).</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>chained</code></span></td>
-      <td class="r">Bauernkette: es werden alle Bauern gezÃ¤hlt, die sich mit
-                    gleichfarbigen Bauern auf einer SchrÃ¤ge befinden (sie
+      <td class="r">Bauernkette: es werden alle Bauern gezählt, die sich mit
+                    gleichfarbigen Bauern auf einer Schräge befinden (sie
                     sind verbunden, und bis auf den hintersten sind alle
                     gedeckt).</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>chained(n)</code></span></td>
-      <td class="r">Bauernkette: es werden alle Bauern gezÃ¤hlt, die sich mit
-                    gleichfarbigen Bauern auf einer SchrÃ¤ge befinden (sie
+      <td class="r">Bauernkette: es werden alle Bauern gezählt, die sich mit
+                    gleichfarbigen Bauern auf einer Schräge befinden (sie
                     sind verbunden, und bis auf den hintersten sind alle
                     gedeckt), aber nur wenn sich in diesem Verbund mindestens
                     n Bauern befinden.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>chained!(n)</code></span></td>
-      <td class="r">Bauernkette: es werden alle Bauern gezÃ¤hlt, die sich mit
-                    gleichfarbigen Bauern auf einer SchrÃ¤ge befinden (sie
+      <td class="r">Bauernkette: es werden alle Bauern gezählt, die sich mit
+                    gleichfarbigen Bauern auf einer Schräge befinden (sie
                     sind verbunden, und bis auf den hintersten sind alle
                     gedeckt), aber  nur wenn sich in diesem Verbund genau
                     n Bauern befinden.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>passed</code></span></td>
-      <td class="r">Freibauern: es werden alle Bauern gezÃ¤hlt, die keinen
+      <td class="r">Freibauern: es werden alle Bauern gezählt, die keinen
                     gegnerischen Bauer auf der gleichen Linie haben, und
                     von keinem gegnerischen Bauern auf einer benachbarten
-                    Linie gestoppt werden kÃ¶nnen.</td>
+                    Linie gestoppt werden können.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>candidate</code></span></td>
-      <td class="r">Kandidaten: es werden alle Bauern gezÃ¤hlt, die keinen
+      <td class="r">Kandidaten: es werden alle Bauern gezählt, die keinen
                     gegnerischen Bauer auf der gleichen Linie vor sich haben,
                     und wenn die Anzahl der gleichfarbigen Bauern seitlich
                     des Bauern bzw. hinter dem Bauern auf benachbarten Linien
-                    mindestens so groÃ ist wie die Anzahl der andersfarbigen
-                    Bauern auf den benachbarten Linien in der VowÃ¤rtsrichtung
-                    (somit ein Kanditat fÃ¼r einen Freibauern). Freibauern
+                    mindestens so groß ist wie die Anzahl der andersfarbigen
+                    Bauern auf den benachbarten Linien in der Vowärtsrichtung
+                    (somit ein Kanditat für einen Freibauern). Freibauern
                     (d.h. Bauern die keinen andersfarbigen Bauern auf den
-                    Nachbarslinien begegnen) werden auch als Kandidat gezÃ¤hlt.</td>
+                    Nachbarslinien begegnen) werden auch als Kandidat gezählt.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>candidate!</code></span></td>
-      <td class="r">Kandidaten: Ein Kandidat fÃ¼r einen Freibauern, der jedoch
+      <td class="r">Kandidaten: Ein Kandidat für einen Freibauern, der jedoch
                     noch kein Freibauer ist.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>blocked</code></span></td>
-      <td class="r">Blockierte Bauern: zÃ¤hlt alle Bauern, denen auf der gleichen
-                    Linie ein gegnerischer Bauer gegenÃ¼bersteht.</td>
+      <td class="r">Blockierte Bauern: zählt alle Bauern, denen auf der gleichen
+                    Linie ein gegnerischer Bauer gegenübersteht.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>blocked!</code></span></td>
-      <td class="r">Blockierte Bauern (unmittelbar): zÃ¤hlt alle Bauern, denen
-                    unmittelbar ein Bauer gegenÃ¼bersteht.</td>
+      <td class="r">Blockierte Bauern (unmittelbar): zählt alle Bauern, denen
+                    unmittelbar ein Bauer gegenübersteht.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>behind</code></span></td>
-      <td class="r">Bauern hinter dem Feind: zÃ¤hlt alle Bauern, die hinter
+      <td class="r">Bauern hinter dem Feind: zählt alle Bauern, die hinter
                     dem hintersten gegenerischen Bauer auf der gleichen Linie
-                    stehen.  Z.B. kann ein weiÃer Bauer c7 hinter einem schwarzen
+                    stehen.  Z.B. kann ein weißer Bauer c7 hinter einem schwarzen
                     Bauer c5 stehen, wenn auch entfernt.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>behind!</code></span></td>
-      <td class="r">Bauern unmittelbar hinter dem Feind: zÃ¤hlt alle Bauern, die
+      <td class="r">Bauern unmittelbar hinter dem Feind: zählt alle Bauern, die
                     unmittelbar hinter dem hintersten gegenerischen Bauer auf der
-                    gleichen Linie stehen. Z.B. kann ein weiÃer Bauer c7 unmittelbar
+                    gleichen Linie stehen. Z.B. kann ein weißer Bauer c7 unmittelbar
                     hinter einem schwarzen Bauer c6 stehen.</td>
     </tr>
     </tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>stoppable</code></span></td>
-      <td class="r">Stoppbare Bauern: alle Bauern, die am WeiterrÃ¼cken bis
+      <td class="r">Stoppbare Bauern: alle Bauern, die am Weiterrücken bis
                     zur gegnerischen Grundreihe von einem gegnerischen Bauern
                     in einer benachbarten Linie gehindert werden.</td>
     </tr>
     </tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>stopped</code></span></td>
-      <td class="r">Gestoppte Bauern: alle Bauern, die am WeiterrÃ¼cken von
+      <td class="r">Gestoppte Bauern: alle Bauern, die am Weiterrücken von
                     einem gegnerischen Bauern, der in einer benachbarten Reihe
                     einer benachbarten Linie steht, gehindert werden.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>backward</code></span></td>
-      <td class="r">RÃ¼ckstÃ¤ndige Bauern: alle Bauern, deren benachbarte Bauern
-                    gleicher Farbe zu weit vorgerÃ¼ckt sind, um ihn decken zu
-                    kÃ¶nnen. Isolierte Bauern sind niemals rÃ¼ckstÃ¤ndig.</td>
+      <td class="r">Rückständige Bauern: alle Bauern, deren benachbarte Bauern
+                    gleicher Farbe zu weit vorgerückt sind, um ihn decken zu
+                    können. Isolierte Bauern sind niemals rückständig.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>advanced</code></span></td>
-      <td class="r">VorgerÃ¼ckte Bauern: alle Bauern, die bereits in der gegnerischen
-                    HÃ¤lfte stehen.</td>
+      <td class="r">Vorgerückte Bauern: alle Bauern, die bereits in der gegnerischen
+                    Hälfte stehen.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>consecutive</code></span></td>
       <td class="r">Hintereinanderstehende Bauern: alle Bauern gleicher
                     Farbe, die auf einer Linie direkt hintereinander stehen,
-                    werden gezÃ¤hlt.</td>
+                    werden gezählt.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>consecutive(n)</code></span></td>
       <td class="r">Hintereinanderstehende Bauern: mindestens n Bauern gleicher
                     Farbe, die auf einer Linie direkt hintereinander stehen,
-                    werden gezÃ¤hlt.</td>
+                    werden gezählt.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>consecutive!(n)</code></span></td>
       <td class="r">Hintereinanderstehende Bauern: genau n Bauern gleicher
                     Farbe, die auf einer Linie direkt hintereinander stehen,
-                    werden gezÃ¤hlt.</td>
+                    werden gezählt.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>inside</code></span></td>
-      <td class="r">Einholbare Bauern: zÃ¤hlt die Bauern, die sich noch innerhalb
-                    der Reichweite des gegnerischen KÃ¶nigs befinden.</td>
+      <td class="r">Einholbare Bauern: zählt die Bauern, die sich noch innerhalb
+                    der Reichweite des gegnerischen Königs befinden.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>symmetrical</code></span></td>
-      <td class="r">Symmetrische Bauernstruktur: zÃ¤hlt die Bauern, auf deren Linie
+      <td class="r">Symmetrische Bauernstruktur: zählt die Bauern, auf deren Linie
                     sich die gleiche Anzahl gegnerischer Bauern befindet.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>mirrored</code></span></td>
-      <td class="r">Gespiegelte Bauernstruktur: zÃ¤hlt alle Bauern,
+      <td class="r">Gespiegelte Bauernstruktur: zählt alle Bauern,
                     auf deren Linie alle gegnerischen Bauern auf horizontal
                     gespiegelten Feldern stehen.</td>
     </tr>
@@ -2013,7 +2013,7 @@ Es muss mindestens eine dieser Bauerneigenschaften verwendet werden.
 </p>
 
 <p>
-Alle Bauerneigenschaften kÃ¶nnen auch mit einem vorangestellten Ausrufungszeichen
+Alle Bauerneigenschaften können auch mit einem vorangestellten Ausrufungszeichen
 negiert werden, dazu Beispiele:
 </p>
 
@@ -2022,8 +2022,8 @@ negiert werden, dazu Beispiele:
 </code></div>
 
 <p>
-Mehr als 50% der weiÃen Bauern stehen keine gegnerischen Bauern auf der gleichen Linie
-gegenÃ¼ber.
+Mehr als 50% der weißen Bauern stehen keine gegnerischen Bauern auf der gleichen Linie
+gegenüber.
 </p>
 
 <div class='verb'><code>
@@ -2031,8 +2031,8 @@ gegenÃ¼ber.
 </code></div>
 
 <p>
-Mehr als 50% der weiÃen Bauern stehen keine gegnerischen Bauern auf der gleichen Linie
-unmittelbar gegenÃ¼ber.
+Mehr als 50% der weißen Bauern stehen keine gegnerischen Bauern auf der gleichen Linie
+unmittelbar gegenüber.
 </p>
 
 <div class='verb'><code>
@@ -2041,7 +2041,7 @@ unmittelbar gegenÃ¼ber.
 
 <p>
 Mindestens ein Freibauer ist nicht mehr innerhalb der Reichweite des gegnerischen
-KÃ¶nigs.
+Königs.
 </p>
 
 <p>
@@ -2078,7 +2078,7 @@ Bemerkung: Das Attribut <span style='white-space:nowrap;'><code>candidate!</code
 
 <p>
 Die folgenden Attribute, die ebenfalls mit einem vorangestellten Ausrufungszeichen
-negiert werden kÃ¶nnen, schrÃ¤nken die Sichtweise auf die Bauern ein:
+negiert werden können, schränken die Sichtweise auf die Bauern ein:
 </p>
 
 <div class='box'>
@@ -2098,8 +2098,8 @@ negiert werden kÃ¶nnen, schrÃ¤nken die Sichtweise auf die Bauern ein:
 
 <p>
 Die Position von <span style='white-space:nowrap;'><code>forefront</code></span> bzw. <span style='white-space:nowrap;'><code>rear</code></span> innerhalb der
-Liste der Eigenschaften beeinfluÃt, fÃ¼r welche Attribute die Sichtweise
-eingeschrÃ¤nkt wird. Beispiel:
+Liste der Eigenschaften beeinflußt, für welche Attribute die Sichtweise
+eingeschränkt wird. Beispiel:
 </p>
 
 <div class='verb'><code>
@@ -2108,135 +2108,135 @@ eingeschrÃ¤nkt wird. Beispiel:
 
 <p>
 Dies findet nebeneinanderstehende Doppelbauern gleicher Farbe auf, wobei sie
-auf den gleichen Reihen stehen mÃ¼ssen. <span style='white-space:nowrap;'><code>forefront</code></span> muÃ nach
+auf den gleichen Reihen stehen müssen. <span style='white-space:nowrap;'><code>forefront</code></span> muß nach
 <span style='white-space:nowrap;'><code>double!</code></span> verwendet werden, ansonsten ist kein Doppelbauer
-auffindbar (tatsÃ¤chlich meldet die Applikation dann einen Fehler). Die
+auffindbar (tatsächlich meldet die Applikation dann einen Fehler). Die
 Reihenfolge zu <span style='white-space:nowrap;'><code>duo</code></span> spielt hier keine Rolle.
 </p>
 
 <p>
-Die unterstÃ¼tzen Attribute fÃ¼r die Modifikation der ZÃ¤hlweise sind:
+Die unterstützen Attribute für die Modifikation der Zählweise sind:
 </p>
 
 <div class='box'>
   <table style="margin-top:5px;margin-bottom:5px">
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>islands</code></span></td>
-      <td class="r">Bauerninseln: zÃ¤hle alle Bauerninseln (nicht die Anzahl der
-                    Bauern, die zu den Inseln gehÃ¶ren). Eine Bauerninsel besteht
+      <td class="r">Bauerninseln: zähle alle Bauerninseln (nicht die Anzahl der
+                    Bauern, die zu den Inseln gehören). Eine Bauerninsel besteht
                     aus einem Bauernverbund gleicher Farbe, die jeweils alle auf
                     benachbarten Linien stehen. Zwischen gleichfarbigen Inseln
                     kann sich also kein Bauer gleicher Farbe befinden.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>islands(n)</code></span></td>
-      <td class="r">Bauerninseln: zÃ¤hle alle Bauerninseln (nicht die Anzahl der
-                    Bauern, die zu den Inseln gehÃ¶ren). Eine Bauerninsel besteht
+      <td class="r">Bauerninseln: zähle alle Bauerninseln (nicht die Anzahl der
+                    Bauern, die zu den Inseln gehören). Eine Bauerninsel besteht
                     aus einem Bauernverbund gleicher Farbe, die jeweils alle auf
                     benachbarten Linien stehen. Zwischen gleichfarbigen Inseln
                     kann sich also kein Bauer gleicher Farbe befinden. Es werden
-                    jedoch nur die Inseln gezÃ¤hlt, zu denen jeweils mindestens
-                    n Bauern gehÃ¶ren.</td>
+                    jedoch nur die Inseln gezählt, zu denen jeweils mindestens
+                    n Bauern gehören.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>islands!(n)</code></span></td>
-      <td class="r">Bauerninseln: zÃ¤hle alle Bauerninseln (nicht die Anzahl der
-                    Bauern, die zu den Inseln gehÃ¶ren). Eine Bauerninsel besteht
+      <td class="r">Bauerninseln: zähle alle Bauerninseln (nicht die Anzahl der
+                    Bauern, die zu den Inseln gehören). Eine Bauerninsel besteht
                     aus einem Bauernverbund gleicher Farbe, die jeweils alle auf
                     benachbarten Linien stehen. Zwischen gleichfarbigen Inseln
                     kann sich also kein Bauer gleicher Farbe befinden. Es werden
-                    jedoch nur die Inseln gezÃ¤hlt, zu denen jeweils genau
-                    n Bauern gehÃ¶ren.</td>
+                    jedoch nur die Inseln gezählt, zu denen jeweils genau
+                    n Bauern gehören.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>compounds</code></span></td>
-      <td class="r">BauernverbÃ¼nde: zÃ¤hle alle BauernverbÃ¼nde (nicht die Anzahl der
-                    Bauern, die zu dem Verbund gehÃ¶ren). Eine Bauernverbund besteht
+      <td class="r">Bauernverbünde: zähle alle Bauernverbünde (nicht die Anzahl der
+                    Bauern, die zu dem Verbund gehören). Eine Bauernverbund besteht
                     aus Bauern gleicher Farbe, die jeweils alle auf benachbarten Reihen
-                    stehen. Zwischen gleichfarbigen VerbÃ¼nden kann sich also kein Bauer
+                    stehen. Zwischen gleichfarbigen Verbünden kann sich also kein Bauer
                     gleicher Farbe befinden.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>compounds(n)</code></span></td>
-      <td class="r">BauernverbÃ¼nde: zÃ¤hle alle BauernverbÃ¼nde (nicht die Anzahl der
-                    Bauern, die zu dem Verbund gehÃ¶ren). Eine Bauernverbund besteht
+      <td class="r">Bauernverbünde: zähle alle Bauernverbünde (nicht die Anzahl der
+                    Bauern, die zu dem Verbund gehören). Eine Bauernverbund besteht
                     aus Bauern gleicher Farbe, die jeweils alle auf benachbarten Reihen
-                    stehen. Zwischen gleichfarbigen VerbÃ¼nden kann sich also kein Bauer
-                    gleicher Farbe befinden. Es werden jedoch nur die VerbÃ¼nde gezÃ¤hlt,
-                    zu denen jeweils mindestens n Bauern gehÃ¶ren</td>
+                    stehen. Zwischen gleichfarbigen Verbünden kann sich also kein Bauer
+                    gleicher Farbe befinden. Es werden jedoch nur die Verbünde gezählt,
+                    zu denen jeweils mindestens n Bauern gehören</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>compounds!(n)</code></span></td>
-      <td class="r">BauernverbÃ¼nde: zÃ¤hle alle BauernverbÃ¼nde (nicht die Anzahl der
-                    Bauern, die zu dem Verbund gehÃ¶ren). Eine Bauernverbund besteht
+      <td class="r">Bauernverbünde: zähle alle Bauernverbünde (nicht die Anzahl der
+                    Bauern, die zu dem Verbund gehören). Eine Bauernverbund besteht
                     aus Bauern gleicher Farbe, die jeweils alle auf benachbarten Reihen
-                    stehen. Zwischen gleichfarbigen VerbÃ¼nden kann sich also kein Bauer
-                    gleicher Farbe befinden. Es werden jedoch nur die VerbÃ¼nde gezÃ¤hlt,
-                    zu denen jeweils genau n Bauern gehÃ¶ren</td>
+                    stehen. Zwischen gleichfarbigen Verbünden kann sich also kein Bauer
+                    gleicher Farbe befinden. Es werden jedoch nur die Verbünde gezählt,
+                    zu denen jeweils genau n Bauern gehören</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>files</code></span></td>
-      <td class="r">Bauer pro Linie: zÃ¤hle alle Linien (nicht die Bauern auf den
+      <td class="r">Bauer pro Linie: zähle alle Linien (nicht die Bauern auf den
                     Linien), auf denen sich Bauern mit den genannten Eigenschaften
                     befinden.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>files(n)</code></span></td>
-      <td class="r">Bauer pro Linie: zÃ¤hle alle Linien (nicht die Bauern auf den
+      <td class="r">Bauer pro Linie: zähle alle Linien (nicht die Bauern auf den
                     Linien), auf denen sich mindestens n Bauern mit den genannten
                     Eigenschaften befinden.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>files!(n)</code></span></td>
-      <td class="r">Bauer pro Linie: zÃ¤hle alle Linien (nicht die Bauern auf den
+      <td class="r">Bauer pro Linie: zähle alle Linien (nicht die Bauern auf den
                     Linien), auf denen sich genau n Bauern mit den genannten
                     Eigenschaften befinden.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>ranks</code></span></td>
-      <td class="r">Bauer pro Reihe: zÃ¤hle alle Reihen (nicht die Bauern auf den
+      <td class="r">Bauer pro Reihe: zähle alle Reihen (nicht die Bauern auf den
                     Linien), auf denen sich Bauern mit den genannten Eigenschaften
                     befinden.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>ranks(n)</code></span></td>
-      <td class="r">Bauer pro Reihe: zÃ¤hle alle Reihen (nicht die Bauern auf den
+      <td class="r">Bauer pro Reihe: zähle alle Reihen (nicht die Bauern auf den
                     Linien), auf denen sich mindestens n Bauern mit den genannten
                     Eigenschaften befinden.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>ranks!(n)</code></span></td>
-      <td class="r">Bauer pro Reihe: zÃ¤hle alle Reihen (nicht die Bauern auf den
+      <td class="r">Bauer pro Reihe: zähle alle Reihen (nicht die Bauern auf den
                     Linien), auf denen sich genau n Bauern mit den genannten
                     Eigenschaften befinden.</td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>bothsides</code></span></td>
-      <td class="r">Beide FlÃ¼gel: das Resultat der ZÃ¤hlung ist das Minimum der
-                    Bauernzahl auf dem DamenflÃ¼gel (a-d) und der Bauernzahl auf dem
-                    KÃ¶nigsflÃ¼gel <span style='white-space:nowrap;'>(e-h).</span></td>
+      <td class="r">Beide Flügel: das Resultat der Zählung ist das Minimum der
+                    Bauernzahl auf dem Damenflügel (a-d) und der Bauernzahl auf dem
+                    Königsflügel <span style='white-space:nowrap;'>(e-h).</span></td>
     </tr>
     <tr>
       <td class="l" valign="top"><span style='white-space:nowrap;'><code>oneside</code></span></td>
-      <td class="r">Ein FlÃ¼gel: entweder wird Null gezÃ¤hlt, wenn kein Bauer vorhanden
-                    ist, bzw. wenn mindestens ein Bauer sowohl auf dem DameflÃ¼gel
-                    <span style='white-space:nowrap;'>(a-d)</span> als auch auf dem KÃ¶nigsflÃ¼gel <span style='white-space:nowrap;'>(e-h)</span>
-                    vorhanden ist, ansonsten wird die Gesamtzahl der Bauern gezÃ¤hlt.</td>
+      <td class="r">Ein Flügel: entweder wird Null gezählt, wenn kein Bauer vorhanden
+                    ist, bzw. wenn mindestens ein Bauer sowohl auf dem Dameflügel
+                    <span style='white-space:nowrap;'>(a-d)</span> als auch auf dem Königsflügel <span style='white-space:nowrap;'>(e-h)</span>
+                    vorhanden ist, ansonsten wird die Gesamtzahl der Bauern gezählt.</td>
     </tr>
   </table>
 </div>
 
 <p>
-Eine ZÃ¤hlung erfolgt immer am SchluÃ, nachdem aller Bauern mit den gewÃ¼nschten
+Eine Zählung erfolgt immer am Schluß, nachdem aller Bauern mit den gewünschten
 Eigenschaften aufgefunden wurden. Damit dies klarer beim Lesen des Ausdrucks
-wird, dÃ¼rfen Attribute fÃ¼r die ZÃ¤hlung nur am Ende einer Attributliste
+wird, dürfen Attribute für die Zählung nur am Ende einer Attributliste
 verwendet werden.
 </p>
 
 <p>
-Die Attribute fÃ¼r die ZÃ¤hlweise haben keinen EinfluÃ auf die Auswahl der gezÃ¤hlten
-Bauern. Sobald beispielsweise <span style='white-space:nowrap;'><code>islands</code></span> in einer VerknÃ¼pfung verwendet wird,
-werden immer die Anzahl der Insel gezÃ¤hlt. Dazu Beispiele:
+Die Attribute für die Zählweise haben keinen Einfluß auf die Auswahl der gezählten
+Bauern. Sobald beispielsweise <span style='white-space:nowrap;'><code>islands</code></span> in einer Verknüpfung verwendet wird,
+werden immer die Anzahl der Insel gezählt. Dazu Beispiele:
 </p>
 
 <div class='verb'><code>
@@ -2244,7 +2244,7 @@ werden immer die Anzahl der Insel gezÃ¤hlt. Dazu Beispiele:
 </code></div>
 
 <p>
-Nun wird die Anzahl aller Bauerntrios gezÃ¤hlt, nicht mehr die Anzahl der beteiligten
+Nun wird die Anzahl aller Bauerntrios gezählt, nicht mehr die Anzahl der beteiligten
 Bauern.
 </p>
 
@@ -2253,11 +2253,11 @@ Bauern.
 </code></div>
 
 <p>
-Die Anzahl der Bauernketten wird gezÃ¤hlt, nicht die Anzahl der beteiligten Bauern.
+Die Anzahl der Bauernketten wird gezählt, nicht die Anzahl der beteiligten Bauern.
 </p>
 
 <p>
-Manche dieser Attribute kÃ¶nnen ein ZÃ¤hler als Argument haben. Der ZÃ¤hler muÃ den
+Manche dieser Attribute können ein Zähler als Argument haben. Der Zähler muß den
 Wertebereich einhalten:
 </p>
 
@@ -2291,31 +2291,31 @@ Wertebereich einhalten:
 </div>
 
 <p>
-GrundsÃ¤tzlich kÃ¶nnen alle Attribute miteinander verknÃ¼pft werden,
-jedoch sind nicht alle VerknÃ¼pfungen sinnvoll. Es erfolgt eine Fehlermeldung,
-wenn sich in einer VerknÃ¼pfung Attribute widersprechen (wie z.B. bei
+Grundsätzlich können alle Attribute miteinander verknüpft werden,
+jedoch sind nicht alle Verknüpfungen sinnvoll. Es erfolgt eine Fehlermeldung,
+wenn sich in einer Verknüpfung Attribute widersprechen (wie z.B. bei
 <span style='white-space:nowrap;'><code>chained-isolated</code></span>, oder <span style='white-space:nowrap;'><code>mirrored-unblocked</code></span>).
 </p>
 
 <p>
 Die Attribute wirken als Filter, d.h. jedes Attribut filtert die Bauern mit
 der spezifizierten Eigenschaft, und das nachfolgende Attribut filtert dann
-die verbliebenen Bauern aus der vorhergehenden ZÃ¤hlung. Daraus resultiert,
-daÃ die Reihenfolge der verknÃ¼pften Attribute generell eine Rolle spielt,
-so sind die folgenden Beispiele nicht Ã¤quivalent:
+die verbliebenen Bauern aus der vorhergehenden Zählung. Daraus resultiert,
+daß die Reihenfolge der verknüpften Attribute generell eine Rolle spielt,
+so sind die folgenden Beispiele nicht äquivalent:
 </p>
 
 <div class='verb'><code><span style='white-space:nowrap;'><span class='keyword'>:pawncount</span></span> single-behind &gt;0</code></div>
 <div class='verb'><code><span style='white-space:nowrap;'><span class='keyword'>:pawncount</span></span> behind-single &gt;0</code></div>
 
 <p>
-Im ersten Fall kÃ¶nnen tatsÃ¤chlich nur dann Bauern auf einer Linie gezÃ¤hlt
+Im ersten Fall können tatsächlich nur dann Bauern auf einer Linie gezählt
 werden, wenn es keinen weiteren der gleichen Farbe auf dieser Linie gibt,
-aber im zweiten Fall wÃ¼rde <span style='white-space:nowrap;'><code>behind</code></span> evt. nur Bauern zurÃ¼cklassen
+aber im zweiten Fall würde <span style='white-space:nowrap;'><code>behind</code></span> evt. nur Bauern zurücklassen
 (filtern), die dann ganz alleine auf der Linie sind (gegnerische Bauern
-werden nicht berÃ¼cksichtigt), und diese werden dann alle als Einzelbauern
-gezÃ¤hlt. Diese Methodik mit der Filterung erlaubt mehr EinfluÃmÃ¶glichkeiten
-auf die ZÃ¤hlung als eine einfache Und-VerknÃ¼pfung.
+werden nicht berücksichtigt), und diese werden dann alle als Einzelbauern
+gezählt. Diese Methodik mit der Filterung erlaubt mehr Einflußmöglichkeiten
+auf die Zählung als eine einfache Und-Verknüpfung.
 </p>
 
 <p>
@@ -2327,8 +2327,8 @@ Weitere Beispiele:
 </code></div>
 
 <p>
-Alle weiÃen Bauern sind blockiert, d.h. jedem weiÃen Bauern steht ein schwarzer
-Bauer (mÃ¶glicherweise entfernt) gegenÃ¼ber.
+Alle weißen Bauern sind blockiert, d.h. jedem weißen Bauern steht ein schwarzer
+Bauer (möglicherweise entfernt) gegenüber.
 </p>
 
 <div class='verb'><code>
@@ -2336,8 +2336,8 @@ Bauer (mÃ¶glicherweise entfernt) gegenÃ¼ber.
 </code></div>
 
 <p>
-Alle Bauern auf dem DamenflÃ¼gel sind blockiert, d.h. jedem Bauern auf dem DamenflÃ¼gel
-steht ein gegnerischer Bauer (mÃ¶glicherweise entfernt) gegenÃ¼ber.
+Alle Bauern auf dem Damenflügel sind blockiert, d.h. jedem Bauern auf dem Damenflügel
+steht ein gegnerischer Bauer (möglicherweise entfernt) gegenüber.
 </p>
 
 <div class='verb'><code>
@@ -2345,9 +2345,9 @@ steht ein gegnerischer Bauer (mÃ¶glicherweise entfernt) gegenÃ¼ber.
 </code></div>
 
 <p>
-Mindestens der HÃ¤lfte der weiÃen Bauern auf dem DamenflÃ¼gel steht ein schwarzer
-Bauer direkt gegenÃ¼ber (dies kann niemals zutreffen, wenn es keine weiÃen Bauern
-auf dem DamenflÃ¼gel gibt).
+Mindestens der Hälfte der weißen Bauern auf dem Damenflügel steht ein schwarzer
+Bauer direkt gegenüber (dies kann niemals zutreffen, wenn es keine weißen Bauern
+auf dem Damenflügel gibt).
 </p>
 
 <div class='box'><pre><code><!--
@@ -2358,7 +2358,7 @@ auf dem DamenflÃ¼gel gibt).
 
 <p>
 Einer der Parteien hat mindestens zwei Doppelbauern, wobei keiner
-der betroffenen Bauern in der gegnerischen HÃ¤lfte steht.
+der betroffenen Bauern in der gegnerischen Hälfte steht.
 </p>
 
 <div class='verb'><code>
@@ -2384,8 +2384,8 @@ Die Alternative
 </code></div>
 
 <p>
-wÃ¤re hier nicht das gewÃ¼nschte, denn in diesem Fall werden beispielsweise auch
-Trippelbauern gezÃ¤hlt, die nicht allesamt miteinander verbunden sind,
+wäre hier nicht das gewünschte, denn in diesem Fall werden beispielsweise auch
+Trippelbauern gezählt, die nicht allesamt miteinander verbunden sind,
 beispielsweise zwei isolierte Doppelbauern auf einer Linie. Wird jedoch
 </p>
 
@@ -2397,7 +2397,7 @@ beispielsweise zwei isolierte Doppelbauern auf einer Linie. Wird jedoch
 verwendet, dann werden zwar wieder hintereinanderstehende isolierte Trippelbauern
 gefunden, aber keine Stellungen mit mehr als drei hintereinanderstehenden isolierten
 Bauern. Aber in diesem speziellen Beispiel ist die folgende alternative Formulierung
-Ã¤quivalent zu <span style='white-space:nowrap;'><code>isolated-consecutive(3)</code></span>:
+äquivalent zu <span style='white-space:nowrap;'><code>isolated-consecutive(3)</code></span>:
 </p>
 
 <div class='verb'><code>
@@ -2414,9 +2414,9 @@ lesbar.
 </code></div>
 
 <p>
-Einer der Parteien hat mindestens einen rÃ¼ckstÃ¤ndigen Bauern, der keinen gegnerischen
+Einer der Parteien hat mindestens einen rückständigen Bauern, der keinen gegnerischen
 Bauern auf der gleichen Linie vor ihm hat, aber von einem gegnerischen Bauer auf einer
-benachbarten Linie in direkter Weise am VorÃ¼cken gehindert wird.
+benachbarten Linie in direkter Weise am Vorücken gehindert wird.
 </p>
 
 <div class='verb'><code>
@@ -2424,7 +2424,7 @@ benachbarten Linie in direkter Weise am VorÃ¼cken gehindert wird.
 </code></div>
 
 <p>
-WeiÃ hat hÃ¤ngende Bauern auf der vierten Reihe: ein Bauerduo (zwei Bauern nebeneinander
+Weiß hat hängende Bauern auf der vierten Reihe: ein Bauerduo (zwei Bauern nebeneinander
 auf einer Reihe), die sich auf halboffenen Linien befinden (d.h. sie sind nicht
 blockiert, aber auch keine Freibauern).
 </p>
@@ -2434,7 +2434,7 @@ blockiert, aber auch keine Freibauern).
 </code></div>
 
 <p>
-Schwarz hat nicht mehr auf beiden FlÃ¼geln Bauern aufzuweisen.
+Schwarz hat nicht mehr auf beiden Flügeln Bauern aufzuweisen.
 </p>
 
 <div class='verb'><code>
@@ -2442,12 +2442,12 @@ Schwarz hat nicht mehr auf beiden FlÃ¼geln Bauern aufzuweisen.
 </code></div>
 
 <p>
-Schwarz hat alle seine Bauern entweder auf dem DamenflÃ¼gel oder auf
-dem KÃ¶nigsflÃ¼gel, aber nicht auf beiden FlÃ¼geln.
+Schwarz hat alle seine Bauern entweder auf dem Damenflügel oder auf
+dem Königsflügel, aber nicht auf beiden Flügeln.
 </p>
 
 <p>
-Siehe bei <a href="CQL-Examples.html#pawnending">CQL-Beispiele</a> fÃ¼r weiter Beispiele.
+Siehe bei <a href="CQL-Examples.html#pawnending">CQL-Beispiele</a> für weiter Beispiele.
 </p>
 
 <p>
@@ -2461,22 +2461,22 @@ See also:
 
 <p>
 <span style='white-space:nowrap;'>:pawncountdifference</span> filtert Positionen, wenn die Differenz
-der ZÃ¤hlung von Bauern mit den spezifizierten Eigenschaften oder Strukturen
-innerhalb der gegebenen Bereichsangabe liegt. Dieses SchlÃ¼sselwort kann
-ein oder zwei Figurenbezeichner, die nur Bauern enthalten dÃ¼rfen, als Argumente
-erhalten, gefolgt von einer bindestrich-separarierten AufzÃ¤hlung von Eigenschaften,
+der Zählung von Bauern mit den spezifizierten Eigenschaften oder Strukturen
+innerhalb der gegebenen Bereichsangabe liegt. Dieses Schlüsselwort kann
+ein oder zwei Figurenbezeichner, die nur Bauern enthalten dürfen, als Argumente
+erhalten, gefolgt von einer bindestrich-separarierten Aufzählung von Eigenschaften,
 und als letztes Argument wird eine
 <a href="CQL-Range-Specifiers.html">Bereichsangabe</a> erwartet. Ist nur ein
-Figurenbezeichner gegeben, dann wird die Differenz des Resultats der ZÃ¤hlung der
-weiÃen Figuren im Figurenbezeichner minus dem Resultat der ZÃ¤hlung der schwarzen
+Figurenbezeichner gegeben, dann wird die Differenz des Resultats der Zählung der
+weißen Figuren im Figurenbezeichner minus dem Resultat der Zählung der schwarzen
 Figuren im Figurenbezeichner ermittelt. Bei der Angabe von zwei Figurenbezeichnern
-wird die Differenz des Resultats der ZÃ¤hlung des ersten Figurenbezeichners minus
-dem Resultat der ZÃ¤hlung des zweiten Figurenbezeichners ermittelt. Diese Differenz
-muÃ innerhalb der Bereichsangabe liegen, damit eine Position gefiltert wird.
+wird die Differenz des Resultats der Zählung des ersten Figurenbezeichners minus
+dem Resultat der Zählung des zweiten Figurenbezeichners ermittelt. Diese Differenz
+muß innerhalb der Bereichsangabe liegen, damit eine Position gefiltert wird.
 </p>
 
 <p>
-Die unterstÃ¼tzen Bauerneigenschaften bzw. Bauernstruktureigenschaften sind
+Die unterstützen Bauerneigenschaften bzw. Bauernstruktureigenschaften sind
 die gleichen wie unter <span style='white-space:nowrap;'><a href="CQL-Position-List.html#position:pawncount">:pawncount</span></a>.
 </p>
 
@@ -2490,9 +2490,9 @@ Beispiele:
 --></code></pre></div>
 
 <p>
-WeiÃ hat mehr Freibauern, die in der gegnerischen HÃ¤lfte stehen, als Schwarz. Es
-werden hier jedoch fÃ¼r jede Farbe nur ein Freibauer pro Linie gezÃ¤hlt (in diesem
-speziellen Fall kÃ¶nnte statt <span style='white-space:nowrap;'><code>lines</code></span> auch <span style='white-space:nowrap;'><code>forefront</code></span>
+Weiß hat mehr Freibauern, die in der gegnerischen Hälfte stehen, als Schwarz. Es
+werden hier jedoch für jede Farbe nur ein Freibauer pro Linie gezählt (in diesem
+speziellen Fall könnte statt <span style='white-space:nowrap;'><code>lines</code></span> auch <span style='white-space:nowrap;'><code>forefront</code></span>
 verwendet werden).
 </p>
 
@@ -2908,13 +2908,13 @@ capture is <span style='white-space:nowrap;'><code>.e4</code></span>.
 <h3 id="position:captureforced">:captureforced&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Schlagen ist erzwungen)</span></h3>
 
 <p>
-Der nÃ¤chste Zug ist verpflichtet eine Figur zu schlagen. Dieses SchlÃ¼sselwort
+Der nächste Zug ist verpflichtet eine Figur zu schlagen. Dieses Schlüsselwort
 hat nur in der Schachform Antichess eine Bedeutung und wird in
-anderen Schachformen niemals erfÃ¼llt.
+anderen Schachformen niemals erfüllt.
 </p>
 
 <p>
-Dieses SchlÃ¼sselwort kann auch in negierter Form &ndash; mit einem vorangestellten
+Dieses Schlüsselwort kann auch in negierter Form &ndash; mit einem vorangestellten
 Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </p>
 
@@ -2923,10 +2923,10 @@ Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </code></div>
 
 <p>
-Der nÃ¤chste Zug ist nicht verpflichtet eine Figur zu schlagen, dies
-heiÃt das in dieser Stellung auch keine Figur geschlagen werden kann.
-Dies gilt jedoch nur fÃ¼r die Schachform Antichess,
-in allen anderen Schachformen wird diese Bedingung immer erfÃ¼llt.
+Der nächste Zug ist nicht verpflichtet eine Figur zu schlagen, dies
+heißt das in dieser Stellung auch keine Figur geschlagen werden kann.
+Dies gilt jedoch nur für die Schachform Antichess,
+in allen anderen Schachformen wird diese Bedingung immer erfüllt.
 </p>
 
 <p>
@@ -2936,11 +2936,11 @@ Siehe auch: <span style='white-space:nowrap;'><a href="CQL-Position-List.html#po
 <h3 id="position:forced">:forced&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Forciert)</span></h3>
 
 <p>
-Der nÃ¤chste Zug ist erzwungen, kein anderer Zug ist mÃ¶glich.
+Der nächste Zug ist erzwungen, kein anderer Zug ist möglich.
 </p>
 
 <p>
-Dieses SchlÃ¼sselwort kann auch in negierter Form &ndash; mit einem vorangestellten
+Dieses Schlüsselwort kann auch in negierter Form &ndash; mit einem vorangestellten
 Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </p>
 
@@ -2948,7 +2948,7 @@ Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </code></div>
 
 <p>
-Der nÃ¤chste Zug ist nicht erzwungen, es gibt auch andere ZÃ¼ge (auch wenn sie nicht
+Der nächste Zug ist nicht erzwungen, es gibt auch andere Züge (auch wenn sie nicht
 gut sein sollten).
 </p>
 
@@ -3067,18 +3067,18 @@ See also: <span style='white-space:nowrap;'><a href="CQL-Position-List.html#posi
 <h3 id="position:ischeck">:ischeck&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Schachgebot?)</span></h3>
 
 <p>
-Filtert eine Position, wenn der nÃ¤chste Zug ein Schachgebot ist. Ist als Argument
+Filtert eine Position, wenn der nächste Zug ein Schachgebot ist. Ist als Argument
 eine <a href="CQL-Range-Specifiers.html">Bereichsangabe</a> vorhanden, dann wird
-eine Position gefiltert, wenn der nÃ¤chste Zug ein Schachgebot ist, und die Anzahl
-der Schachgebote, die die Seite am Zug dem Gegner bot, einschlieÃlich des
-nÃ¤chsten Zugs, innerhalb dieser Bereichsangabe liegt. Die untere Schranke dieser
+eine Position gefiltert, wenn der nächste Zug ein Schachgebot ist, und die Anzahl
+der Schachgebote, die die Seite am Zug dem Gegner bot, einschließlich des
+nächsten Zugs, innerhalb dieser Bereichsangabe liegt. Die untere Schranke dieser
 Bereichsangabe kann nicht kleiner als 1 sein.
 </p>
 
 <p><img src='../images/note.png' alt='note' /> 
-<span style='white-space:nowrap;'>:ischeck</span> mit nachfolgender Bereichsangabe ist in erster Linie nÃ¼tzlich
+<span style='white-space:nowrap;'>:ischeck</span> mit nachfolgender Bereichsangabe ist in erster Linie nützlich
 in der Schachform Three-check Chess. Das nachfolgende Beispiel gilt
-fÃ¼r diese Schachform.
+für diese Schachform.
 </p>
 
 <div class='verb'><code>
@@ -3097,11 +3097,11 @@ Schach. Dies kann nur eine Endstellung sein (in Three-check Chess).
 </code></div>
 
 <p>
-Das einzige Schachgebot in der Partie Ã¼berhaupt.
+Das einzige Schachgebot in der Partie überhaupt.
 </p>
 
 <p>
-Dieses SchlÃ¼sselwort kann auch in negierter Form &ndash; mit einem vorangestellten
+Dieses Schlüsselwort kann auch in negierter Form &ndash; mit einem vorangestellten
 Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </p>
 
@@ -3110,7 +3110,7 @@ Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </code></div>
 
 <p>
-Der nÃ¤chste Zug ist kein Schachgebot.
+Der nächste Zug ist kein Schachgebot.
 </p>
 
 <p>
@@ -3120,11 +3120,11 @@ Siehe auch: <span style='white-space:nowrap;'><a href="CQL-Position-List.html#po
 <h3 id="position:iscontactcheck">:iscontactcheck&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Kontaktschachgebot?)</span></h3>
 
 <p>
-Der nÃ¤chste Zug ist ein Kontaktschachgebot.
+Der nächste Zug ist ein Kontaktschachgebot.
 </p>
 
 <p>
-Dieses SchlÃ¼sselwort kann auch in negierter Form &ndash; mit einem vorangestellten
+Dieses Schlüsselwort kann auch in negierter Form &ndash; mit einem vorangestellten
 Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </p>
 
@@ -3133,7 +3133,7 @@ Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </code></div>
 
 <p>
-Der nÃ¤chste Zug ist kein Kontaktschachgebot (aber trotzdem mÃ¶glicherweise
+Der nächste Zug ist kein Kontaktschachgebot (aber trotzdem möglicherweise
 ein Schachgebot).
 </p>
 
@@ -3144,11 +3144,11 @@ Siehe auch: <span style='white-space:nowrap;'><a href="CQL-Position-List.html#po
 <h3 id="position:isdoublecheck">:isdoublecheck&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Doppelschachgebot?)</span></h3>
 
 <p>
-Der nÃ¤chste Zug ist ein Doppelschachgebot.
+Der nächste Zug ist ein Doppelschachgebot.
 </p>
 
 <p>
-Dieses SchlÃ¼sselwort kann auch in negierter Form &ndash; mit einem vorangestellten
+Dieses Schlüsselwort kann auch in negierter Form &ndash; mit einem vorangestellten
 Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </p>
 
@@ -3157,7 +3157,7 @@ Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </code></div>
 
 <p>
-Der nÃ¤chste Zug ist kein Doppelschachgebot (aber trotzdem mÃ¶glicherweise
+Der nächste Zug ist kein Doppelschachgebot (aber trotzdem möglicherweise
 ein Schachgebot).
 </p>
 
@@ -3168,12 +3168,12 @@ Siehe auch: <span style='white-space:nowrap;'><a href="CQL-Position-List.html#po
 <h3 id="position:isillegal">:isillegal&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Regelwidrig?)</span></h3>
 
 <p>
-Der nÃ¤chste Zug ist ein regelwidriger Zug, beispielsweise eine Rochade, obwohl der
-KÃ¶nig im Schach steht.
+Der nächste Zug ist ein regelwidriger Zug, beispielsweise eine Rochade, obwohl der
+König im Schach steht.
 </p>
 
 <p>
-Dieses SchlÃ¼sselwort kann auch in negierter Form &ndash; mit einem vorangestellten
+Dieses Schlüsselwort kann auch in negierter Form &ndash; mit einem vorangestellten
 Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </p>
 
@@ -3182,19 +3182,19 @@ Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </code></div>
 
 <p>
-Der nÃ¤chste ZUg ist kein regelwidriger Zug.
+Der nächste ZUg ist kein regelwidriger Zug.
 </p>
 
 <h3 id="position:isinvalid">:isinvalid&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Unerlaubt?)</span></h3>
 
 <p>
-Der nÃ¤chste Zug ist ein unerlaubter Zug, beispielsweise ein LÃ¤uferzug, der auf einem
-schwarzen Feld beginnt, aber auf einem weiÃen Feld endet (dies unterstÃ¼tzt den
+Der nächste Zug ist ein unerlaubter Zug, beispielsweise ein Läuferzug, der auf einem
+schwarzen Feld beginnt, aber auf einem weißen Feld endet (dies unterstützt den
 Kinderschachmodus).
 </p>
 
 <p>
-Dieses SchlÃ¼sselwort kann auch in negierter Form &ndash; mit einem vorangestellten
+Dieses Schlüsselwort kann auch in negierter Form &ndash; mit einem vorangestellten
 Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </p>
 
@@ -3203,17 +3203,17 @@ Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </code></div>
 
 <p>
-Der nÃ¤chste ZUg ist kein unerlaubter Zug.
+Der nächste ZUg ist kein unerlaubter Zug.
 </p>
 
 <h3 id="position:ismate">:ismate&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Mattgebot?)</span></h3>
 
 <p>
-Der nÃ¤chste Zug ist ein Mattgebot.
+Der nächste Zug ist ein Mattgebot.
 </p>
 
 <p>
-Dieses SchlÃ¼sselwort kann auch in negierter Form &ndash; mit einem vorangestellten
+Dieses Schlüsselwort kann auch in negierter Form &ndash; mit einem vorangestellten
 Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </p>
 
@@ -3222,7 +3222,7 @@ Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </code></div>
 
 <p>
-Der nÃ¤chste Zug ist kein Mattgebot.
+Der nächste Zug ist kein Mattgebot.
 </p>
 
 <p>
@@ -3232,7 +3232,7 @@ Siehe auch: <span style='white-space:nowrap;'><a href="CQL-Position-List.html#po
 <h3 id="position:isnull">:isnull&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Nullzug?)</span></h3>
 
 <p>
-Der nÃ¤chste Zug ist ein Nullzug.
+Der nächste Zug ist ein Nullzug.
 </p>
 
 <div class='verb'><code>
@@ -3244,7 +3244,7 @@ Suche nach Partien die einen Nullzug enthalten.
 </p>
 
 <p>
-Dieses SchlÃ¼sselwort kann auch in negierter Form &ndash; mit einem vorangestellten
+Dieses Schlüsselwort kann auch in negierter Form &ndash; mit einem vorangestellten
 Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </p>
 
@@ -3259,11 +3259,11 @@ Filtere alle Positionen, in denen kein Nullzug erfolgt.
 <h3 id="position:isstalemate">:isstalemate&emsp;<span class='normal'>(Pattgebot?)</span></h3>
 
 <p>
-Der nÃ¤chste Zug ist ein Pattgebot.
+Der nächste Zug ist ein Pattgebot.
 </p>
 
 <p>
-Dieses SchlÃ¼sselwort kann auch in negierter Form &ndash; mit einem vorangestellten
+Dieses Schlüsselwort kann auch in negierter Form &ndash; mit einem vorangestellten
 Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </p>
 
@@ -3272,7 +3272,7 @@ Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </code></div>
 
 <p>
-Der nÃ¤chste Zug ist kein Pattgebot.
+Der nächste Zug ist kein Pattgebot.
 </p>
 
 <p>
@@ -3562,16 +3562,16 @@ See also: <span style='white-space:nowrap;'><a href="CQL-Position-List.html#posi
 <span style='white-space:nowrap;'><a href="CQL-Position-List.html#position:moveto">:moveto</span></a>, <span style='white-space:nowrap;'><a href="CQL-Position-List.html#position:null">:null</span></a>.
 </p>
 
-<h3 id="position:takeslastpiece">:takeslastpiece&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(SchlÃ¤gt die letzte Figur)</span></h3>
+<h3 id="position:takeslastpiece">:takeslastpiece&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Schlägt die letzte Figur)</span></h3>
 
 <p>
-Dieses SchlÃ¼sselwort hat nur in der Schachform Antichess eine Bedeutung,
-und kann in anderen Schachformen niemals erfÃ¼llt werden. Es wird erfÃ¼llt, wenn im nÃ¤chsten
+Dieses Schlüsselwort hat nur in der Schachform Antichess eine Bedeutung,
+und kann in anderen Schachformen niemals erfüllt werden. Es wird erfüllt, wenn im nächsten
 Zug die letzte gegnerische Figur geschlagen wird.
 </p>
 
 <p>
-Dieses SchlÃ¼sselwort kann auch in negierter Form &ndash; mit einem vorangestellten
+Dieses Schlüsselwort kann auch in negierter Form &ndash; mit einem vorangestellten
 Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </p>
 
@@ -3580,9 +3580,9 @@ Ausrufungszeichen &ndash; verwendet werden. Beispiel:
 </code></div>
 
 <p>
-In der Schachformen Antichess wird es erfÃ¼llt, wenn im nÃ¤chsten
+In der Schachformen Antichess wird es erfüllt, wenn im nächsten
 Zug nicht die letzte gegnerische Figur geschlagen wird. In anderen Schachformen
-wird diese Bedingung immer erfÃ¼llt.
+wird diese Bedingung immer erfüllt.
 </p>
 
 <p>
@@ -3785,24 +3785,24 @@ See also: <span style='white-space:nowrap;'><a href="CQL-Position-List.html#posi
 <h3 id="position:line_">:line*&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Transpositionsinvariante Zugfolge)</span></h3>
 
 <p>
-Diese Version von <span style='white-space:nowrap;'><a href="CQL-Position-List.html#position:line">:line</span></a> prÃ¼ft Zugsequenzen
+Diese Version von <span style='white-space:nowrap;'><a href="CQL-Position-List.html#position:line">:line</span></a> prüft Zugsequenzen
 transpositionsinvariant, und die Suche beginnt deshalb immer mit dem ersten
-Zug in der vorliegenden Grundstellung. Es kÃ¶nnen optional Zugnummern verwendet
+Zug in der vorliegenden Grundstellung. Es können optional Zugnummern verwendet
 werden, sie sind jedoch hier nicht erforderlich.  Eine transpositionsinvariante
-Suche ist jedoch nur mÃ¶glich wenn alle ZÃ¼ge eindeutig bestimmt sind (eindeutiges
+Suche ist jedoch nur möglich wenn alle Züge eindeutig bestimmt sind (eindeutiges
 Herkunftsfeld, eindeutiges Zielfeld, eindeutige Figuren, eindeutige
 Bauernumwandlung). Dies ist erforderlich damit beispielsweise auch
-Schach-960-Positionen korrekt geprÃ¼ft werden. Weiterhin wird bei der
-transpositionsinvarianten Suche ein mÃ¶gliches en-passant-Recht ignoriert.
-Transformierende SchlÃ¼sselwÃ¶rter (<span style='white-space:nowrap;'><a href="CQL-Position-List.html#position:flip">:flip</span></a>,
+Schach-960-Positionen korrekt geprüft werden. Weiterhin wird bei der
+transpositionsinvarianten Suche ein mögliches en-passant-Recht ignoriert.
+Transformierende Schlüsselwörter (<span style='white-space:nowrap;'><a href="CQL-Position-List.html#position:flip">:flip</span></a>,
 <span style='white-space:nowrap;'><a href="CQL-Position-List.html#position:flipcolor">:flipcolor</span></a>, &hellip;) sind in Verbindung mit
 Transpositionsinvarianz nicht erlaubt.
 </p>
 
 <p>
 Auch sind bei einer transpositionsinvarianten Suche die Angaben von Schach,
-Doppelschach und Kontaktschach nicht erlaubt, auÃer im letzten Halbzug.
-Solche Angaben im letzten Zug schrÃ¤nken im allgemeinen die mÃ¶glichen
+Doppelschach und Kontaktschach nicht erlaubt, außer im letzten Halbzug.
+Solche Angaben im letzten Zug schränken im allgemeinen die möglichen
 Transpositionen ein.
 </p>
 
@@ -3848,7 +3848,7 @@ Beispiele:
     </dd>
     <dt style="margin-top:10px"><span style='white-space:nowrap;'><code>(<span class='piece'>&#x2659;</span>e2-e4 <span class='piece'>&#x2659;</span>f7-f6 <span class='piece'>&#x2655;</span>d1-h5+)</code></span></dt>
     <dd>
-      Korrekt, ein Schachgebot im letzten Halbzug ist zulÃ¤ssig,
+      Korrekt, ein Schachgebot im letzten Halbzug ist zulässig,
     </dd>
   </dl>
 </div>
@@ -3862,8 +3862,8 @@ Weitere Beispiele:
 --></code></pre></div>
 
 <p>
-Filtere alle Stellungen die mit FranzÃ¶sisch beginnen, inklusive Zugumstellungen
-wie 1.d4 d5 2.e4 e6. Dies ist Ã¤quivalent zur folgenden
+Filtere alle Stellungen die mit Französisch beginnen, inklusive Zugumstellungen
+wie 1.d4 d5 2.e4 e6. Dies ist äquivalent zur folgenden
 Abfrage:
 </p>
 
@@ -3873,7 +3873,7 @@ Abfrage:
 --></code></pre></div>
 
 <p>
-Wird die exakte ErÃ¶ffnungszugfolge 1.e4 e6 2.d4 d5 gesucht,
+Wird die exakte Eröffnungszugfolge 1.e4 e6 2.d4 d5 gesucht,
 so geschieht dies mit:
 </p>
 
@@ -3891,10 +3891,10 @@ Siehe auch:
 
 <p>
 Dies entspricht genau dem Verhalten der Suchliste <span style='white-space:nowrap;'><code>(match</code></span>
-<span style='white-space:nowrap;'><code>...)</code></span>, nur daÃ hier ausnahmslos Positionslisten als Argumente
-erwartet werden. Somit wird dieses SchlÃ¼sselwort normalerweise nicht
-benÃ¶tigt, es kann jedoch von Nutzen sein, wenn es als Argument fÃ¼r eines der
-logischen SchlÃ¼sselwÃ¶rter dient. Ein formales Beispiel:
+<span style='white-space:nowrap;'><code>...)</code></span>, nur daß hier ausnahmslos Positionslisten als Argumente
+erwartet werden. Somit wird dieses Schlüsselwort normalerweise nicht
+benötigt, es kann jedoch von Nutzen sein, wenn es als Argument für eines der
+logischen Schlüsselwörter dient. Ein formales Beispiel:
 </p>
 
 <div class='box'><pre><code><!--
@@ -3913,7 +3913,7 @@ logischen SchlÃ¼sselwÃ¶rter dient. Ein formales Beispiel:
 
 <p>
 Diese Variante der Suchfolge filtert genau dann eine Partie, wenn alle Positionen
-dieser Suchfolge nacheinander aufgefunden werden, jedoch unabhÃ¤ngig von der Reihenfolge.
+dieser Suchfolge nacheinander aufgefunden werden, jedoch unabhängig von der Reihenfolge.
 </p>
 
 <p>
@@ -3932,7 +3932,7 @@ Beispiel:
 
 <p>
 Filtert alle Partien, in denen nacheinander eine der Parteien eine
-Bauernumwandlung in zwei verschiedene Leichtfiguren ausfÃ¼hrt.
+Bauernumwandlung in zwei verschiedene Leichtfiguren ausführt.
 </p>
 
 <h3 id="position:sequence">:sequence</h3>
@@ -4344,13 +4344,13 @@ square. Were the <span style='white-space:nowrap;'>:pretransformmatchcount</span
 at least 12 captures occurred anywhere on board.
 </p>
 
-<h3 id="position:pretransformrepetitioncount">:pretransformrepetitioncount&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(PrÃ¤-Transformation-WiederholungszÃ¤hler)</span></h3>
+<h3 id="position:pretransformrepetitioncount">:pretransformrepetitioncount&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Prä-Transformation-Wiederholungszähler)</span></h3>
 
 <p>
-Dieses SchlÃ¼sselwort hat die gleiche Syntax wie <span style='white-space:nowrap;'><a href="CQL-Position-List.html#position:repetitioncount">:repetitioncount</span></a>,
-und ist so zu verstehen wie das Ã¤hnliche SchlÃ¼sselwort
-<span style='white-space:nowrap;'><a href="CQL-Position-List.html#position:pretransformmatchcount">:pretransformmatchcount</span></a>, nur daÃ <span style='white-space:nowrap;'>:repetitioncount</span>
-aufeinanderfolgende Positionsmerkmale zÃ¤hlt.
+Dieses Schlüsselwort hat die gleiche Syntax wie <span style='white-space:nowrap;'><a href="CQL-Position-List.html#position:repetitioncount">:repetitioncount</span></a>,
+und ist so zu verstehen wie das ähnliche Schlüsselwort
+<span style='white-space:nowrap;'><a href="CQL-Position-List.html#position:pretransformmatchcount">:pretransformmatchcount</span></a>, nur daß <span style='white-space:nowrap;'>:repetitioncount</span>
+aufeinanderfolgende Positionsmerkmale zählt.
 </p>
 
 <p>
@@ -4365,11 +4365,11 @@ Beispiel:
 --></code></pre></div>
 
 <p>
-Dies wÃ¼rde jede Partie finden in der mindestens sechs Figuren aufeinanderfolgend
+Dies würde jede Partie finden in der mindestens sechs Figuren aufeinanderfolgend
 auf dem gleichen Feld geschlagen wurden.
 </p>
 
-<h3 id="position:repetitioncount">:repetitioncount&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(WiederholungszÃ¤hler)</span></h3>
+<h3 id="position:repetitioncount">:repetitioncount&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Wiederholungszähler)</span></h3>
 
 <p>
 Filtert eine Position, wenn sich die Positionsmerkmale aufeinanderfolgend wiederholen,
@@ -4394,7 +4394,7 @@ Filtert jede Position, in der aufeinanderfolgend mindestens zehn Figuren geschla
 </code></div>
 
 <p>
-Filtert jede Partie, in der niemals eine Figur geschlagen wird. Jedoch ist es gÃ¼nstiger,
+Filtert jede Partie, in der niemals eine Figur geschlagen wird. Jedoch ist es günstiger,
 dies so zu formulieren:
 </p>
 
@@ -4426,8 +4426,8 @@ quite faster, although fairly time consuming.
 <h3 id="position:endgameevaluation">:endgameevaluation&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Endspielbewertung)</span></h3>
 
 <p>
-Dieses SchlÃ¼sselwort bewertet die aktuelle Endspielposition mit Hilfe von
-Endspieltabellen (Tablebases). Dieses SchlÃ¼sselwort kann nur dann erfÃ¼llt
+Dieses Schlüsselwort bewertet die aktuelle Endspielposition mit Hilfe von
+Endspieltabellen (Tablebases). Dieses Schlüsselwort kann nur dann erfüllt
 werden, wenn die entsprechenden Endspieltabellen lokal vorliegen (es erfolgt
 keine Online-Abfrage).
 </p>
@@ -4449,7 +4449,7 @@ bei bestem Spiel erzielt wird:
       <td class="l"><span style='white-space:nowrap;'><code>*mate</code></span></td><td class="r">Einer der Parteien kann gewinnen.</td>
     </tr>
     <tr>
-      <td class="l"><span style='white-space:nowrap;'><code>+mate</code></span></td><td class="r">WeiÃ kann gewinnen.</td>
+      <td class="l"><span style='white-space:nowrap;'><code>+mate</code></span></td><td class="r">Weiß kann gewinnen.</td>
     </tr>
     <tr>
       <td class="l"><span style='white-space:nowrap;'><code>-mate</code></span></td><td class="r">Schwarz kann gewinnen.</td>
@@ -4458,7 +4458,7 @@ bei bestem Spiel erzielt wird:
 </div>
 
 <p>
-Das optionale zweite Argument gibt an, wieviele HalbzÃ¼ge minimal und maximal
+Das optionale zweite Argument gibt an, wieviele Halbzüge minimal und maximal
 bei beidseitig bestem Spiel erforderlich sind, um Matt zu setzen.
 </p>
 
@@ -4490,16 +4490,16 @@ Filtert alle Positionen mit einem Endspiel <span style='white-space:nowrap;'><co
 <p>
 Filtert alle Positionen mit einem Endspiel <span style='white-space:nowrap;'><code><span class='piece'>&#x2654;</span>+<span class='piece'>&#x2659;</span>+<span class='piece'>&#x2659;</span></code></span> gegen
 <span style='white-space:nowrap;'><code><span class='piece'>&#x2654;</span>+<span class='piece'>&#x2659;</span>+<span class='piece'>&#x2659;</span></code></span>, in dem die Seite am Zug laut Endspieltabelle gewinnen
-kann, aber dafÃ¼r bei beidseitig bestem Spiel mindestens 40 HalbzÃ¼ge zum Matt
-benÃ¶tigt.
+kann, aber dafür bei beidseitig bestem Spiel mindestens 40 Halbzüge zum Matt
+benötigt.
 </p>
 
 <h3 id="position:endgameevaluation_">:endgameevaluation*&ensp;<img src="../images/ft-scidb-tiny.png" alt="" />&emsp;<span class='normal'>(Endspielbewertung)</span></h3>
 
 <p>
 Diese Version von <span style='white-space:nowrap;'><a href="CQL-Position-List.html#position:endgameevaluation">:endgameevaluation</span></a> untersucht nur die Positionen,
-in denen die spezifizierte Figurenkonstellation zum ersten Mal in der Partie erfÃ¼llt wird.
-Somit ist diese Version unter UmstÃ¤nden erheblich schneller in der Suche.
+in denen die spezifizierte Figurenkonstellation zum ersten Mal in der Partie erfüllt wird.
+Somit ist diese Version unter Umständen erheblich schneller in der Suche.
 </p>
 
 <h3 id="position:evaluation">:evaluation&ensp;<img src="../images/ft-scidb-tiny.png" alt="" /></h3>

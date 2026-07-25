@@ -73,7 +73,7 @@ proc Build {w args} {
 
 	ChangeStyle $w
 	bind $w <<ThemeChanged>> [namespace code [list ChangeStyle $w]]
-	bind $w <<ComboboxSelected>> [namespace code [list ComboboxSelected $w]]
+	bind $w <<ComboboxSelected>> [list ::theme::ComboboxSelected $w]
 	catch { rename ::$w $w.__w__ }
 	proc ::$w {command args} "[namespace current]::WidgetProc $w \$command {*}\$args"
 

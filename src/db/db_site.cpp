@@ -195,7 +195,7 @@ skipSpace(char* s)
 mstl::string&
 Site::normalize(mstl::string& name)
 {
-	static mstl::string const Exclude(" .-'�`/,()");
+	static mstl::string const Exclude(" .-'\xb4`/,()");	// \xb4 = Latin-1 acute accent
 
 	name.make_writable();
 

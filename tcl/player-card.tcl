@@ -398,6 +398,19 @@ proc setupPrivateCard {parent} {
 }
 
 
+# TODO: the private-player-card dialog is unfinished (its menu entry in
+# menu.tcl is disabled with 'if {0}'). These handlers are stubs so the
+# button commands resolve if the dialog is ever enabled.
+
+proc NewPlayer {list} { bell }
+proc SavePlayer {list} { bell }
+proc DeletePlayer {list} { bell }
+
+proc CloseSetup {list} {
+	destroy [winfo toplevel $list]
+}
+
+
 proc buildWebMenu {parent m info} {
 	variable Options
 

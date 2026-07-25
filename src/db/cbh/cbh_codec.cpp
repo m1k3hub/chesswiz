@@ -906,7 +906,7 @@ Codec::readTournamentData(mstl::string const& rootname, util::Progress& progress
 				if (	countryCode == country::Jersey
 					&& (	::strstr(city, "Guernsey") != 0
 						|| ::strstr(city, "Dgernesy") != 0
-						|| ::strstr(city, "Dgèrnésy") != 0	// "Dg�rn�sy"
+						|| ::strstr(city, "Dgèrnésy") != 0
 						|| ::strstr(city, "Peter Port") != 0))
 				{
 					countryCode = country::Guernsey;
