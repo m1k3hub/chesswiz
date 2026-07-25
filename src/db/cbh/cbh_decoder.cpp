@@ -31,8 +31,12 @@
 #include "cbh_decoder.h"
 #include "cbh_count_cipher.h"
 #include "m_exception.h"
+#include <unistd.h>
+
 
 static db::cbh::CountCipher s_cipher;
+static unsigned char s_invLUT[256];
+static bool s_invLUTBuilt = false;
 
 #include "db_tag_set.h"
 #include "db_exception.h"
@@ -80,6 +84,17 @@ static Byte MoveNumberLookup[256] =
 	0xb2, 0xc2, 0x59, 0x5d, 0xb6, 0x72, 0x51, 0xf8,	// 240 - 247
 	0x28, 0x7e, 0x61, 0x39, 0xe1, 0xdb, 0x69, 0x80,	// 248 - 255
 };
+
+static void
+buildInvLUT()
+{
+	if (s_invLUTBuilt)
+		return;
+	for (unsigned i = 0; i < 256; ++i)
+		s_invLUT[MoveNumberLookup[i]] = i;
+	s_invLUTBuilt = true;
+}
+
 
 
 Decoder::Decoder(ByteStream& gStrm, bool isChess960)
@@ -133,24 +148,89 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 
 	if (m_useCipher && s_cipher.isLoaded())
 	{
-		// Chess960 count-cipher path: the raw byte encodes
-		//   raw = InverseMoveNumberLookup[lc] + cipherCount (mod 256)
-		// where cipherCount depends on the move's lc via H0/g.
 		Byte raw = m_gStrm.peek();
 		lc = 0xff;
 		decodeCount = 0;
 
-		for (unsigned candidateLc = 0; candidateLc < 256; ++candidateLc)
+		// Pass 1: try H0/g table (fast path for known states).
+		unsigned matchLc[8];
+		unsigned matchCnt[8];
+		unsigned numMatches = 0;
+
+		for (unsigned candidateLc = 0; candidateLc < 256 && numMatches < 8; ++candidateLc)
 		{
 			unsigned candidateCount = resolveCipherCount(candidateLc);
 			if (candidateCount == 0xffff)
 				continue;
-
 			if (::MoveNumberLookup[Byte(raw - candidateCount)] == candidateLc)
 			{
-				lc = candidateLc;
-				decodeCount = candidateCount;
-				break;
+				matchLc[numMatches] = candidateLc;
+				matchCnt[numMatches] = candidateCount;
+				++numMatches;
+			}
+		}
+
+		if (numMatches == 1)
+		{
+			// Exactly one H0 match — accept it (fast path).
+			lc = matchLc[0];
+			decodeCount = matchCnt[0];
+		}
+		else if (numMatches == 0)
+		{
+			// H0 miss: fallback to InvLUT + push/pop validation.
+			buildInvLUT();
+			for (unsigned candidateLc = 0; candidateLc < 256; ++candidateLc)
+			{
+				if (candidateLc >= 0xec)
+					continue;
+				unsigned candidateCount = (raw - s_invLUT[candidateLc]) & 0xff;
+				if (::MoveNumberLookup[candidateCount] != candidateLc)
+					continue;
+				unsigned streamPos = m_gStrm.tellg();
+				m_position.push();
+				m_gStrm.get();
+				Move testMove;
+				unsigned testResult;
+				try { testResult = dispatchMove(candidateLc, candidateCount, testMove, true); }
+				catch (...) { m_position.pop(); m_gStrm.seekg(streamPos); continue; }
+				m_position.pop();
+				m_gStrm.seekg(streamPos);
+				if (testResult == Token_Move && !testMove.isEmpty())
+				{
+					lc = candidateLc;
+					decodeCount = candidateCount;
+					break;
+				}
+			}
+		}
+		else
+		{
+			// Ambiguous: 2+ H0 matches. Validate each via push/pop.
+			for (unsigned i = 0; i < numMatches; ++i)
+			{
+				unsigned candidateLc = matchLc[i];
+				if (candidateLc >= 0xec)
+				{
+					lc = candidateLc;
+					decodeCount = matchCnt[i];
+					break;
+				}
+				unsigned streamPos = m_gStrm.tellg();
+				m_position.push();
+				m_gStrm.get();
+				Move testMove;
+				unsigned testResult;
+				try { testResult = dispatchMove(candidateLc, matchCnt[i], testMove, true); }
+				catch (...) { m_position.pop(); m_gStrm.seekg(streamPos); continue; }
+				m_position.pop();
+				m_gStrm.seekg(streamPos);
+				if (testResult == Token_Move && !testMove.isEmpty())
+				{
+					lc = candidateLc;
+					decodeCount = matchCnt[i];
+					break;
+			}
 			}
 		}
 

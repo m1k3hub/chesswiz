@@ -213,9 +213,17 @@ Position::doCastling(Byte offs)
 	if (rookFrom == sq::Null)
 		rookFrom = sq::make(isShortCastling ? sq::FyleH : sq::FyleA, rank);
 
-	Byte rookTo		= sq::make(isShortCastling ? sq::FyleF : sq::FyleD, rank);
-	Byte rookNum	= pieceCount[rookFrom];
+	// Convention B: Board puts king on g-file (short) / c-file (long),
+	// rook on f-file (short) / d-file (long). The pieces/pieceCount
+	// tracking must match the Board, not the raw from+offs computation.
+	Byte kingTo	= sq::make(isShortCastling ? sq::FyleG : sq::FyleC, rank);
+	Byte rookTo	= sq::make(isShortCastling ? sq::FyleF : sq::FyleD, rank);
 
+	// Fix king position in pieces/pieceCount (was from+offs, but Board uses g/c file).
+	pieces[0][piece::piece(piece::King, sideToMove)] = kingTo;
+	pieceCount[kingTo] = 0;
+
+	Byte rookNum	= pieceCount[rookFrom];
 	pieces[rookNum][piece::piece(piece::Rook, sideToMove)] = rookTo;
 	pieceCount[rookTo] = rookNum;
 
