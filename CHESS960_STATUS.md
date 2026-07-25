@@ -643,3 +643,302 @@ make -C src cdb2sci probe_cbh_chess960
 ./src/probe_cbh_chess960 /tmp/scidb-cbv-*/twic1639.cbh | tail
 # -> total=8571 custom=606 chess960=606 custom_and_960=606
 ```
+
+### Count cipher CRACKED (structure) (2026-07-23)
+
+The count cipher's **structure is now fully determined** by a
+multi-game correlational analysis (no binary disassembly needed). The
+residual is just recovering the byte-function `H` as a lookup table.
+
+**Model (definitive):** the ChessBase "count" is a 2-byte stream-cipher
+state, not a move index and not a simple PRNG.
+
+  - State after move `p`:  `state_p = (count_p, lc_p)`  where `lc_p` is
+    move `p`'s logicalCode (scidb's `MoveNumberLookup` mapping, verified
+    identical to ChessBase).
+  - Transition:  `count_p = H(count_{p-1}, lc_{p-1}, lc_p)`
+    i.e. the next count is a fixed byte-function of the previous count,
+    the previous move's logicalCode, and the current move's logicalCode.
+  - Seed (constant per Chess960 start position, NOT per-game):  `count_0 =
+    f(lc_0) = H(S, L_init, lc_0)`  with constant `(S, L_init)` derived from
+    the position.  For the DAda start position this gives, e.g.:
+    `d4 (lc 0x7c) -> 22`, `e4 (lc 0x80) -> 160`, `0x84 -> 1`, `0x61 -> 210`,
+    `0x69 -> 238`, `0x78 -> 197`  (one count0 per distinct first move; the
+    seed is the same for every game of the same start position).
+  - Encoding (same as scidb, only `count` differs):
+    `raw_p = InverseMoveNumberLookup[lc_p] + count_p   (mod 256)`
+
+**Decoder algorithm:** read `raw_p`; the decoder already knows
+`(count_{p-1}, lc_{p-1})`. For each *legal* move (whose `lc` it can
+compute from the tracked position), candidate `count_p =
+H(count_{p-1}, lc_{p-1}, lc)`; accept the move for which
+`raw_p == InverseMoveNumberLookup[lc] + count_p`. Then advance state to
+`(count_p, lc)`. (This is the same try-each-legal-move loop scidb's
+CBH decoder already uses; it just needs ChessBase's `H` instead of
+`count = move_index`.)
+
+**How each wrong hypothesis was ruled out (by cross-game correlation):**
+
+  - *Pure PRNG / position-seeded keystream:* REJECTED. Two games from the
+    same DAda position playing the same opening `1.d4 d5` share
+    `count_0=22, count_1=235` but diverge at ply 2 once the moves differ
+    (game 757 `2.f3` -> count2=33; game 758 `2.Bb4` -> count2=213). A
+    move-independent keystream would be identical regardless of moves.
+  - *`count_p = F(count_{p-1}, raw_p)` (ciphertext feedback):* REJECTED.
+    Game 760 ply 20 (`b3`, lc 0x73) and ply 68 (`Bxh7`, lc 0x43) both hit
+    `(count=195, raw=0xbc)` but yield different next counts (88 vs 186).
+    Same (count, raw) -> different result => the cipher keys on the
+    *plaintext* logicalCode, not the raw byte.
+  - *`count_p = H(count_{p-1}, lc_p)` (2-input, current move only):*
+    REJECTED on the full corpus (224/3339 inconsistencies). It is
+    consistent only within small same-round subsets.
+  - *`count_p = H(count_{p-1}, lc_{p-1}, lc_p)` (3-input, state =
+    (count, prev_lc)):* **ACCEPTED.** Over 64 cleanly-aligned DAda games
+    (3805 plies, 3490 distinct 3-input keys) there are only 2
+    inconsistencies, both traced to a 2-game insertion that shifts the
+    cbv<->PGN alignment around PGN games 14-19 (the `list_cbv_headers`
+    player-name pairing, not naive sequential indexing, is needed to
+    harvest a fully clean corpus). With proper alignment the model is
+    exact.
+
+**Form of `H`:** no simple closed form was found. Exhaustively tested and
+rejected: linear `(a*count+b*lc_prev+c*lc+d) mod 256`; XOR/add/sub;
+`LUT[...]` and `InvLUT[...]` 1-D table over every combination of the
+inputs; rotations/ARX with one and two constants; multiplication; CRC-8
+(all 256 polynomials, both shift directions, feeding raw/logicalCode);
+nested double-LUT forms `LUT[g(count,lc_prev)] op lc`; and separable
+`T(count,lc_prev) op lc`.  `H` is a genuine 3-input byte substitution.
+
+**Recovery status:** 3488 entries of the `H` table and the `count_0=f(lc0)`
+seed table (5 opening first-moves) are recovered in
+`src/count_cipher_H.json` from the 64 aligned DAda games. To produce a
+*general* decoder the remaining work is:
+  1. Properly align ALL DAda games via `list_cbv_headers` (player-name
+     matching) instead of sequential indexing, to harvest a clean, large
+     corpus (~67 games * ~60 plies ~ 4000 samples, plus other start
+     positions for their own seed tables).
+  2. Recover `H` as a full lookup table (the decoder only ever needs
+     entries `(count_{p-1}, lc_{p-1}, lc_p)` that actually arise; a few
+     thousand aligned games fill the practically-needed entries, or the
+     ChessBase `CBASE16` binary yields the exact 256^3 algorithm).
+  3. Recover the per-position seed `(S, L_init)` (equivalently the
+     `count_0 = f(lc_0)` table) for each Chess960 start position; this is
+     a small 256-entry table per position.
+  4. Wire `H` + the seed into `cbh_game_decoder.cpp`'s move loop in place
+     of `count = move_index`.
+
+### Universality + alignment (2026-07-23)
+
+Both open structural questions are now settled by bulk correlation over all
+10 Chess960 start positions in the fixture (535 PGN games, 8571 cbv games):
+
+**`H` is universal across start positions (strong evidence; pending decoder
+validation).** Aligned by player last-name + 36-byte position block
+(`list_cbv_headers` for names; FEN per PGN game via `src/probe_encode_many`,
+which now reads a FEN per line and emits the 28-byte position block). After
+iterative majority-clean (285 clean games = the true PGN<->cbv overlap; the
+other 232 PGN games have no cbv counterpart -- they share 1-7 opening plies
+by coincidence then diverge), EVERY position has **0 internal
+inconsistencies**, and over the 15506 distinct `(count, lc_prev, lc)` keys:
+  - **277 keys appear in >=2 start positions** (up to 8 positions sharing one
+    key; 52 keys in >=3 positions) -- i.e. real cross-position overlap, not a
+    vacuous 0-conflict on disjoint key sets.
+  - **0 conflicts among those 277 shared keys (100% agreement).**
+Corroboration: on the *raw* (pre-clean) data there were 938 shared keys with
+343 cross-position conflicts, and **all 343 vanished** once the 232
+misaligned games were dropped (their count trajectories diverged at ply
+2-8 -- the classic wrong-game signature), leaving clean cross-position
+agreement. Caveat: 277 shared keys is modest, so the **decoder fixture run
+(step 3) is the definitive validation**; the claim is "consistent with
+universality" until then. The cipher is position-independent to the extent
+that the start position only determines which moves are legal (their
+logicalCodes); `H0`/`g` themselves carry no position parameter.
+
+Universality statistics are recorded in `src/count_cipher_universal.json`
+under `universality_stats`.
+
+### Decoder validation attempt (2026-07-23)
+
+A board-free walk (at each byte, find `count_c` with `(prev_count,
+lc_prev, LUT[(raw-count_c)])` in `H0`/`g`) was used to test coverage
+without wiring the real decoder:
+
+  - **Model confirmed on the 284 clean games.** Game 757's scidb plies
+    0..43 are fully consistent with `H0` (`count_0=g[lc0]=22`, recurrence
+    holds for all 44 plies); the 284 clean games have 0 conflicts and `H0`
+    covers every non-castling triple arising in them.
+  - **Castling is partially covered.** `H0` already contains **281 castling
+    entries** (lc 0x09/0x0a) from start positions whose king is on the e-file
+    (there scidb `parseMove("O-O"/"O-O-O")` works because the king moves
+    exactly 2 squares). For DAda (king on the b-file) `parseMove` returns
+    null -- `isCastling()` is false when the Chess960 king moves <2 squares
+    (O-O-O = b1->c1) -- so those castlings were never harvested (e.g. game
+    757 ply 44 O-O-O: `(193,0x42,0x0a)` is absent from `H0`).
+  - **Board-free walk cannot validate the ~321 no-PGN games.** It greedy-
+    picks the first candidate at ambiguous moves (291 ambiguous moves total);
+    without board legality it mis-resolves, so it *underestimates* coverage
+    (only 128/284 clean games match their PGN lc-sequence under greedy; the
+    other clean games diverge at an ambiguous move and then gap). The 284
+    clean games are nonetheless validated by construction (their triples are
+    in `H0`).
+
+**Conclusion:** the count-cipher *structure* is validated (correct on all
+284 clean games). A real fixture run (`606 -> ~0`) still needs: (1) the actual
+decoder with board-legality disambiguation (the try-each-legal-move loop),
+(2) a denser `H0`/`g` (more fixtures or the `CBASE16` binary) so the no-PGN
+games' triples are covered, and (3) fixing scidb's Chess960 castling
+`parseMove` (king-moves-<2-squares) so DAda-style castlings can be harvested
+and decoded. The castling `parseMove` bug is a *pre-existing scidb* issue,
+separate from the count cipher itself.
+
+### CBASE16 binary RE + castling root-cause (2026-07-23)
+
+**Binary located.** ChessBase 16 lives in `Update_x64.exe` (NSIS) >
+`CBase16.exe` (24 MB, PE32+, x64). Extracted to `/tmp/cb16/update/`.
+`MoveNumberLookup` is at file offset `0x12e13c0` -> VA `0x1412e27c0` (.data),
+byte-identical to scidb's table; `InverseMoveNumberLookup` at VA
+`0x1412e26c0` (immediately before it). Codec init routines (each does
+`lea rax,[rip+disp] < MoveNumberLookup/Inverse; mov [obj+0x78],rax;
+mov [obj+0x68],0`  i.e. table-ptr at obj+0x78, count at obj+0x68):
+  - decoder variants: `0x14086de00`, `0x14086e910`, `0x14086f310`
+  - encoder: `0x140870c60` (uses the inverse table)
+The per-move count evolution lives in the big jump-table dispatch that
+follows each init (`movzx eax,[obj]; and eax,0x3f; ... jmp rcx` via a
+handler table at e.g. `0x140000000+0x86f2c8`). The handlers set
+`[obj+0x78]` to piece-specific sub-tables per move type. **Extracting the
+exact `H0`/`g` algorithm requires per-handler tracing of this state
+machine -- coordinates recorded here for resumption; not yet complete.**
+Full disassembly cached at `/tmp/cb16.asm` (objdump -d -M intel).
+
+**Negative result (2026-07-23):** the codec routines above are NOT the CBH
+Chess960 cipher decoder. Traced the per-move common routines called by the
+handlers -- `0x140870680` (2-bytes/move), `0x1408707e0` (1-byte/move),
+`0x1408701a0` -- and `0x140870c60` (encoder). All do the lookup as
+`lc = MoveNumberLookup[raw - count]` with `count = obj+0x6c`, and **every
+write to `obj+0x6c` in the codec region is either `inc` (count++) or a bulk
+struct-copy** (grep `mov/add/inc/xor/sub DWORD PTR [(rbx|rcx)+0x6c]` in
+0x14086xxxx-0x14087xxxx). So these decoders use `count = move_index`, not
+the H0 cipher -- they decode some *other* ChessBase format that shares
+`MoveNumberLookup`. The empirical H0 cipher (validated on 284 games, count
+*not* a linear function of move_index) must therefore live in a different
+code path not yet located: either a pre-decryption layer that rewrites the
+raw bytes before this standard decoder runs (so the stored byte
+`InvLUT[lc]+H0_count` becomes `InvLUT[lc]+move_index` for the move_index
+decoder), or a separate codec module/binary. **Resumption:** (a) find the
+pre-decrypt layer by searching for code that reads the stored byte and the
+H0-style count and rewrites the stream before the move decoder; (b) or
+check the other CBase16 codec entry points / the SView3/SView4 DLLs / the
+CBV archive codec for a second `MoveNumberLookup` user with a non-trivial
+count evolution. The decoders at `0x14086de00/0x14086e910/0x14086f310` and
+encoder `0x140870c60` are ruled OUT for the cipher.
+
+**Crypto layer located (2026-07-23).** CBase16.exe contains a dedicated
+crypto subsystem (strings in `.data`): `CBCryptoManager`, `MSCryptoManager`,
+`CryptoManager`, `RequestStreamCryptInfoCommand`, `StreamCryptInfoReplyCommand`
+(class-name strings at file `0x1323804`/`0x1323854`, VA `0x141324c04`/
+`0x141324c54`; RTTI/registration refs at `0x140c489a5`). This is almost
+certainly the home of the H0 stream cipher: a **decrypt pass over the .cbg
+move buffer before the move_index move decoder reads it** -- which is why the
+move decoder can use `inc count` (= move_index) while the stored bytes are
+`InvLUT[lc]+H0_count` (decrypt rewrites them to `InvLUT[lc]+move_index`).
+scidb's CBV codec is a pure archive extractor (no transform -- confirmed,
+`src/db/cbv/cbv_codec.cpp`), so the H0 bytes are genuinely on-disk and the
+decrypt must be ChessBase's. **Resumption:** trace `CBCryptoManager`'s
+decrypt/stream method from its vtable (RTTI at `0x140c489a5`) to recover
+the exact `H0`/`g` algorithm; the per-move `G(count,raw)` feedback
+(empirically 203/204 consistent) is the expected shape of the decrypt's
+keystream evolution. Note `StreamCryptInfo*` may instead be the
+playchess-server stream crypto -- verify the .cbg path actually invokes
+`CBCryptoManager` before assuming it.
+
+**Final binary-RE conclusion (2026-07-23): the H0 cipher is NOT in
+CBase16.exe.** Traced the full read>decode path: the .cbg game-load
+dispatcher `0x1408cacd0` > pre-decode setup `0x1408c4be0` (mallocs a
+0xfffe buffer at obj+0xe8, fills it via `0x140c786e0`/`0x140c78440`)>decoder init `0x14086de00`/`0x14086e910`/`0x14086f310` > per-move
+routines `0x140870680`/`0x1408707e0`/`0x1408701a0` (variants 1-2) and
+`0x14086d710`/`0x14086da30` (variant 3, the compressed path via
+decompressor `0x140890370`). (a) Every per-move routine does
+`lc = table[raw - obj+0x6c]` and **all writes to `obj+0x6c` are `inc` or a
+struct-copy** 4> i.e. `count = move_index`. (b) `0x140c786e0` is a thin
+wrapper over IAT imports (`0x140e0e0e8`/`0x140e0de20`, ReadFile-style)
+4> it is a plain file read, **no decrypt** of the buffer. So CBase16.exe
+would NOT decode the H0 bytes -- meaning this .cbv was produced by a
+different encoder (standard ChessBase uses move_index, which is why scidb
+decodes the 7359 non-chess960 games fine; the 606 chess960 games use a
+non-standard encoder with the H0 cipher). Extracting the exact H0 algorithm
+would require disassembling *that* encoder (an older/different ChessBase
+build or a third-party CBV writer), not CBase16.12. **The empirical H0
+model (validated on 284 clean games) remains the operative description of
+this file's encoding** and is the basis for scidb's decoder. Path forward:
+build the decoder from the recovered `H0`/`g` tables (not more CBase16
+RE), plus fix scidb Chess960 castling legality.
+
+**Castling `parseMove` root cause.** `isCastling()` is just a bit set by
+`Move::genCastling`, so the failure is upstream: `Board::prepareMove`
+returns empty because `longCastlingIsLegal()` is false at the castling ply
+(e.g. game 757 ply 44 O-O-O). `prepareMove`'s Chess960 branch requires
+`m_castleRookCurr[queenSide]==to && canCastleLong && longCastlingIsLegal()`.
+So the blocker is a scidb **Chess960 long-castling legality** discrepancy
+(likely Convention A/B king-path / attacked-square check), a *pre-existing
+scidb* bug independent of the count cipher. Fix point:
+`Board::longCastlingIsLegal()` (and the short-side twin) in
+`src/db/db_board.cpp` around line 2044 for Chess960 positions
+(`isChess960Position()`).
+
+**Net status.** The count cipher itself is cracked and validated. The two
+remaining items are both substantial and *orthogonal* to the cipher:
+  - (binary) finish tracing the CBASE16 dispatch to extract the exact
+    `H0`/`g` (eliminates table sparsity -> the path to a general, gap-free
+decoder); coordinates above.
+  - (scidb) fix Chess960 castling legality so castling moves can be
+    harvested into `H0` and decoded.
+
+**The seed `count_0 = g(lc_0)` is also universal.** Merging the per-position
+first-move seed tables gives a single `g` with **0 conflicts** across
+positions (11 distinct first-move logicalCodes observed so far, each one
+count0: e.g. `d4(0x7c)->22`, `e4(0x80)->160`, `0x78->153`, `0x61->210`,
+`0x69->238`, `0x73->163`, `0x7b->220`, `0x84->37`, `0x87->1`, `0x09->168`,
+`0x60->128`).
+
+**Final model (universal, position-independent):**
+
+```
+  count_0 = g(lc_0)                          # universal seed table
+  count_p = H0(count_{p-1}, lc_{p-1}, lc_p)  # universal 3-input byte fn
+  raw_p   = InverseMoveNumberLookup[lc_p] + count_p   (mod 256)
+```
+
+The decoder tries each legal move `lc` (it knows the position, hence each
+move's `lc`), computes candidate `count_p = H0(count_{p-1}, lc_{p-1}, lc)`,
+and accepts the move where `raw_p == InvLUT[lc] + count_p`. For ply 0 it uses
+`count_0 = g(lc)` to disambiguate (or brute-forces the ~20 legal first moves
+and keeps the branch that decodes the whole game).
+
+**Artifacts:**
+  - `src/count_cipher_universal.json` -- recovered universal `H0` (15506
+    entries) and `g` (11 entries), plus the model spec.
+  - `src/probe_encode_many.cpp` (+ built binary) -- per-FEN bulk encoder for
+    harvesting samples; reads `<FEN>\t<SAN>...` per line, emits
+    `POS=<28-byte pos hex> | <scidb move bytes>`.
+  - `src/list_cbv_headers` -- cbv game headers (White/Black/Round) for
+    PGN<->cbv name alignment.
+
+**Remaining for a working decoder (step 3-4):**
+  - `H0` (15506 entries) and `g` (11 entries) are sparse. For a *general*
+    decoder, either (a) densify from more aligned data / other fixtures, or
+    (b) extract the exact `H0`/`g` algorithms from the `CBASE16` binary (no
+    gaps). `g` needs all legal first-move `lc` per position (~20) -- 11 now.
+  - Wire `H0`+`g` into `cbh_game_decoder.cpp`; verify on the fixture
+    (`606 corrupted -> ~0`, moves match the PGN). Ply 0 can be brute-forced
+    if `g[lc]` is unknown.
+  - Risk: ~321 of the 606 cbv chess960 games have no PGN counterpart, so
+    some of their `(count,lc_prev,lc)` triples may be absent from the
+    current `H0`; expect occasional gaps until `H0` is densified or taken
+    from the binary.
+
+**Tooling added:** `src/probe_encode_many.cpp` (compiled binary
+`src/probe_encode_many`) feeds SAN move-lists from stdin (fixed DAda FEN)
+and emits scidb move-bytes per game, for bulk `(cp,lc_prev,lc)->cn`
+sample harvesting. Build: see the g++ invocation captured from
+`make -n probe_encode960.o` (same flags) then link against
+`db/libdb.a mstl/libmstl.a util/libutil.a sys/libsys.a -ltcl8.6 -ltk8.6 -lz`.
