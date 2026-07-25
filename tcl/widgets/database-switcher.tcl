@@ -233,6 +233,10 @@ proc WidgetProc {w command args} {
 			return [lindex $Vars(bases) $Vars(index:$file) 3]
 		}
 
+		filetype {
+			return [string range [GetFileType [lindex $args 0]] 1 end]
+		}
+
 		encoding {
 			set index $Vars(index:[lindex $args 0])
 			if {[llength $args] == 1} {

@@ -2431,7 +2431,12 @@ proc AskFileAction {w old new} {
 	if {[file isdirectory $old]} {
 		set icon $icon::16x16::folder
 	} else {
-		set icon $Vars(fti:[::util::fileExtension $new])
+		set ext [::util::fileExtension $new]
+		if {[info exists Vars(fti:$ext)]} {
+			set icon $Vars(fti:$ext)
+		} else {
+			set icon $icon::16x16::document
+		}
 	}
 
 	set oldTime [file mtime $old]

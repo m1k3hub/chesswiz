@@ -2250,7 +2250,7 @@ proc SetupBindings {w position} {
 	$w tag bind m:move    <Any-Button>      [namespace code [list HidePosition $w]]
 	$w tag bind m:illegal <ButtonPress-1>   [namespace code [list GotoMove]]
 	$w tag bind m:nag     <ButtonPress-1>   [namespace code [list EditAnnotation nag]]
-	$w tag bind m:mark    <ButtonPress-1>   [namespace code [list OpenMarksPalette]]
+	$w tag bind m:mark    <ButtonPress-1>   [namespace code [list openMarksPalette]]
 	$w tag bind m:info    <ButtonPress-1>   [namespace code [list EditInfo $w this]]
 	$w tag bind m:comment <ButtonPress-1>   [namespace code [list EditComment $w]]
 	$w tag bind m:expand  <ButtonPress-1>   [namespace code [list ToggleFold $w expand 0]]

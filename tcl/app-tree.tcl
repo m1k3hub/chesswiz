@@ -2134,8 +2134,8 @@ proc insertSubheading {w text} {
 	$w insert end "$text\n" subheading
 }
 
-proc insertBody {w text} {
-	$w insert end "$text\n" normal
+proc insertBody {w text {tag normal}} {
+	$w insert end "$text\n" $tag
 }
 
 proc insertBlank {w} {

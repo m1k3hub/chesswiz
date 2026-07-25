@@ -488,8 +488,9 @@ proc openBase {parent file byUser args} {
 		set opts(-encoding) $::encoding::autoEncoding
 	}
 	if {![$Vars(switcher) contains? $file]} {
+		set fileType [$Vars(switcher) filetype $file]
 		foreach base [$Vars(switcher) bases] {
-			if {$ext eq [$Vars(switcher) extension $base]} {
+			if {$fileType eq [$Vars(switcher) extension $base]} {
 				if {[::scidb::misc::hardLinked? $file $base]} {
 					set msg [string map [list "%file1" $file "%file2" $base] $mc::HardLinkDetected]
 					::dialog::error \
@@ -1564,7 +1565,7 @@ proc PopupMenu {parent x y {base ""}} {
 				;
 		}
 		switch $ext {
-			si3 - si4 - cbh - cbf - pgn - pgn.gz - bpgn - bpgn.gz {
+			si3 - si4 - cbh - cbf - pgn - bpgn {
 				if {[file readable $base] && ![::scidb::db::get unsaved? $base]} {
 					set state normal
 				} else {
@@ -1582,7 +1583,7 @@ proc PopupMenu {parent x y {base ""}} {
 
 		$menu add separator
 
-		if {!$isClipbase && ($ext eq "sci" || $ext eq "pgn" || $ext eq "pgn.gz")} {
+		if {!$isClipbase && ($ext eq "sci" || $ext eq "pgn")} {
 			variable ReadOnly_
 			set ReadOnly_ [::scidb::db::get readonly? $base]
 			if {![::scidb::db::get writable? $base] || [::scidb::db::get unsaved? $base]} {
