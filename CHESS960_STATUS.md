@@ -995,21 +995,30 @@ structurally complete but the first-match candidate selection needs refinement
 
 ### Remaining work
 
-1. **H0 table sparsity** (primary blocker): 95,340 entries cover only 33% of
-   possible (count, lc_prev) states. When H0 is missing, the InvLUT fallback
-   with push/pop validation is used, but it accepts the first legal move
-   (not necessarily the correct one). Densifying the H0 table from more TWIC
-   fixtures would directly increase the decode rate.
+1. **H0 table wrong entries** (root cause): The combined H0 table (100K entries
+   from 37 fixtures) has wrong entries from misaligned games in other fixtures.
+   These wrong entries crowd out correct entries at the same state. For example,
+   state (18, 0x1c) has 7 H0 entries, but NONE match the raw byte — the correct
+   lc is not among the 7 because a wrong entry took its place. The twic1639
+   re-harvest (606 games, last-name alignment) found 559 disputed keys where
+   games disagree. Only 13 involve castling; the rest are from misaligned games
+   or encoding differences. Adding twic1639 entries to the combined table makes
+   things WORSE (7969 vs 7970) because the wrong entries from other fixtures
+   conflict with the correct twic1639 entries.
 
-2. **Ambiguous match resolution**: When H0 has 2+ matches, push/pop validation
-   accepts the first legal move. If multiple candidates are legal (which is
-   common — all produce valid moves), the first (lowest lc) may be wrong.
-   The correct approach: enumerate legal moves, compute their lc values,
-   and verify the cipher for each. This requires a reverse move-to-lc mapping.
+2. **Deep look-ahead** (implemented, limited impact): The InvLUT fallback now
+   does a 20-step H0 look-ahead to disambiguate candidates. The correct
+   candidate follows a unique H0 path; wrong candidates diverge quickly.
+   But the impact is limited because H0 coverage is only 33%, so the next
+   state also likely misses H0.
 
-3. **Castling king destination**: Fixed `doCastling` to use Convention B
-   (g-file/c-file) for the king's pieces/pieceCount tracking. The rook
-   destination was already correct.
+3. **Solution paths**:
+   - Rebuild H0 from scratch: twic1639 first (trusted), then other fixtures
+     trimmed against it. This eliminates wrong entries from other fixtures.
+   - Extract H0 algorithm from CBASE16 binary (100% coverage, no alignment
+     issues). Binary was previously extracted to /tmp/cb16/ but cleaned up.
+   - Fix chess960 castling in probe_encode_many to resolve the 13 castling
+     disputes and improve harvest quality.
 
 4. **Variation cipher state**: Push/Pop token handling for cipher state
    needs re-adding (save/restore on variation enter/exit).

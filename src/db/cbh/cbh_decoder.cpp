@@ -206,22 +206,41 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 				if (testResult != Token_Move || testMove.isEmpty())
 					continue;
 
-				// Look-ahead: check if next state (candidateCount, candidateLc)
-				// has H0 entries that match the next raw byte.
+				// Deep look-ahead: follow the H0 path for up to 20 steps.
+				// The correct candidate will have a consistent path; wrong
+				// candidates will diverge quickly (H0 miss at step 1-2).
 				int score = 0;
-				if (m_gStrm.remaining() >= 2)
 				{
-					Byte nextRaw = m_gStrm.data()[1];  // next byte after current
-					for (unsigned nextLc = 0; nextLc < 256; ++nextLc)
+					unsigned laCount = candidateCount;
+					unsigned laLc = candidateLc;
+					unsigned laOffset = (candidateLc == 0xeb) ? 3 : 1;
+					unsigned const maxSteps = 20;
+					Byte const* base = m_gStrm.data();
+					unsigned remaining = m_gStrm.remaining();
+					for (int step = 1; step <= maxSteps; ++step)
 					{
-						unsigned nextCount = s_cipher.lookupH0(candidateCount, candidateLc, nextLc);
-						if (nextCount == 0xffff)
-							continue;
-						if (::MoveNumberLookup[Byte(nextRaw - nextCount)] == nextLc)
-						{
-							score = 1;  // next move verified via H0
+						if (laOffset >= remaining)
 							break;
+						Byte stepRaw = base[laOffset];
+						bool found = false;
+						for (unsigned stepLc = 0; stepLc < 256; ++stepLc)
+						{
+							unsigned stepCount = s_cipher.lookupH0(laCount, laLc, stepLc);
+							if (stepCount == 0xffff)
+								continue;
+							if (::MoveNumberLookup[Byte(stepRaw - stepCount)] == stepLc)
+							{
+								laCount = stepCount;
+								laLc = stepLc;
+								laOffset += (stepLc == 0xeb) ? 3 : 1;
+								found = true;
+								break;
+							}
 						}
+						if (found)
+							score = step;
+						else
+							break;
 					}
 				}
 
@@ -230,8 +249,8 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 					bestScore = score;
 					bestLc = candidateLc;
 					bestCount = candidateCount;
-					if (score == 1)
-						break;  // verified — no need to try more
+					if (score >= 3)
+						break;  // high confidence — no need to try more
 				}
 			}
 
