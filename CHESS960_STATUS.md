@@ -1125,3 +1125,58 @@ format (unchecked what it writes for chess960).
 import in chunks, harvest H0/g densely, validate decoder on the 606 TWIC
 games; then locate the `0x08000000`-gated transform statically and verify
 the extracted algorithm against oracle pairs.
+
+## COUNT CIPHER FULLY REVERSE-ENGINEERED (2026-07-26, afternoon)
+
+### The model (validated end-to-end)
+
+```
+count_0  = g(lc0)                                  // 22-entry universal seed
+count_p  = H0(count_{p-1}, lc_{p-1}, lc_p, p)      // 4-input function, p = 0-based ply
+raw_p    = InvLUT[lc_p] + count_p        (mod 256)
+```
+
+- H0 has **439,009 harvested entries** from the CB26 oracle (5760 generated
+  games, all 960 positions, byte-exact UCI alignment incl. castling segments
+  and underpromotions). Strict true-path walk: **5702/5760 (99.0%)**.
+- Adding the ply `p` as 4th input dropped conflicts from 12.5% (3-input) to ~0.
+
+### 0xeb multi-byte moves (~0.3% of plies: promotions AND ordinary moves)
+
+```
+b0 = InvLUT[0xeb] + cnt                        // marker (same move-chain count)
+b1 = InvLUT[X1] + P1(cnt, X1, p+1),  X1 = (promo-2)<<6 | to     // promo=2 for non-promotions
+b2 = InvLUT[X2] + P2(c1, X2, p+2),   X2 = from
+```
+
+- P1: 1240 entries, P2: 1342 entries, ~0 conflicts. Separate functions from H0.
+
+### Bracketed moves (~0.03% of plies)
+
+Some moves are encoded `[M, X1..Xk, M]` (k=1..3): the move byte repeated
+around k cipher-transparent X bytes (unexplained; not checksums, not
+alternative SAN). Decoder recovers via the prev-byte-repeat pattern.
+
+### Game end
+
+- Final Pop token: `InvLUT[0xff] + moveNumber` where moveNumber = plies/2
+  (NOT the cipher count).
+- Up to 8 unexplained trailing bytes may precede the final Pop (odd counts 1/3/5/7).
+
+### Decoder (src/db/cbh/cbh_decoder.cpp, cbh_count_cipher.cpp)
+
+Fast path (unique H0 candidate) → bracket recovery → ambiguity/miss scored by
+a board-aware continuation walk (full `Board::checkMove` legality; margin rule).
+Defensive per-game exception catch. Decode rates:
+- Oracle corpus: **3273/5760 (57%)** — losses are move+move ambiguity ties.
+- TWIC 606 chess960: **~100/606 (16%)** — losses are table-coverage gaps
+  (real-game chain states vs synthetic-corpus states).
+
+### Why the table can't generalize; the endgame
+
+H0 is NOT: affine mod 256, XOR-affine (GF(2) per-bit), decomposable into
+XOR-of-1D-tables (all >98% error). It is a genuine 4-input nonlinear byte
+function, and its count-chain keys are game-specific, so cross-game coverage
+is inherently sparse. **Extracting the H0 algorithm from CBase26.exe (the
+`0x08000000`-gated byte-stream transform) is the only path to 100%.**
+Breakpoints from the previous session: `cbase26+0x20c080/+0x20f170/+0x20fd00`.
