@@ -1090,3 +1090,38 @@ improve beyond 5/606. Key findings:
    N moves. Accept the candidate whose subsequent moves all decode
    successfully. This doesn't need H0 but is very expensive (O(N^M)
    where M is the number of H0-miss moves in a game).
+
+## BREAKTHROUGH (2026-07-26): ChessBase 26 IS the H0 encoder — working oracle established
+
+**The H0 cipher is ChessBase 26's own encoder for chess960 games in classic
+CBH format.** Proven by round-trip byte comparison:
+
+1. ChessBase 26.8 (extracted from `ChessBase26Setup_x64.msi`, runs under
+   Wine 10.0 in unregistered mode, network blocked via LD_PRELOAD guard)
+   opens `twic1639_grenke_freestyle_open.cbv` and decodes ALL chess960
+   games correctly (verified: game 758 = Carlsen-Khalafova, DAda position,
+   incl. `23. O-O-O` — the exact game+castling scidb could not decode).
+2. Re-encoding the same game (Append Games of the ChessBase-exported PGN
+   into a fresh classic-CBH database) produces a **byte-identical** .cbg
+   record (flags `0x4a000062`, 36-byte setup, move stream through `a895`).
+
+**Consequences:**
+- TWIC CBV files are written by current ChessBase (not a third-party tool).
+- The H0 decoder AND encoder both exist in CBase26.exe. The single
+  InvLUT-referencing encoder (`0x140211270`) uses count=move_index, yet the
+  on-disk output is H0 — so **H0 is a post-encode / pre-decode byte-stream
+  transform** gated by the game-header "newer format" flag `0x08000000`
+  (chess960 games carry flags `0x0a000000` = `0x08000000|0x02000000`).
+- We now have a **perfect oracle**: craft any PGN -> ChessBase encodes ->
+  read .cbg bytes. H0 harvesting with 100% correct alignment (no majority
+  voting, no disputed keys), unlimited volume, all 960 positions.
+
+**Environment notes:** Xvfb :99 + xdotool drives the GUI; clipboard via
+xclip (Copy Game yields PGN). Unregistered mode allows creating classic
+CBH databases and Append Games import. `2CBH` is CB26's new default
+format (unchecked what it writes for chess960).
+
+**Next:** bulk-generate random chess960 games across all 960 positions,
+import in chunks, harvest H0/g densely, validate decoder on the 606 TWIC
+games; then locate the `0x08000000`-gated transform statically and verify
+the extracted algorithm against oracle pairs.
