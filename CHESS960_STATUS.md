@@ -1180,3 +1180,13 @@ function, and its count-chain keys are game-specific, so cross-game coverage
 is inherently sparse. **Extracting the H0 algorithm from CBase26.exe (the
 `0x08000000`-gated byte-stream transform) is the only path to 100%.**
 Breakpoints from the previous session: `cbase26+0x20c080/+0x20f170/+0x20fd00`.
+
+### Structural refinement (same day)
+
+The 4-input H0 is additive: **count_p = count_{p-1} + F(lc_{p-1}, lc_p, p)
+(mod 256)** with F deterministic at 99.84% (residuals = bracket-game tail
+misalignment). The count chain is a running sum of a 3-input increment.
+F does not decompose further (not F=A(lcPrev,lc)+B(lc,p), not
+F=A(lcPrev)+B(lc)+C(p), not affine/XOR-affine). For the binary RE this means
+the encoder likely does `count += F(lcPrev, lc, ply)` per move — one
+table lookup + one add; the F table (or its generator) lives in CBase26.exe.
