@@ -106,6 +106,7 @@ Decoder::Decoder(ByteStream& gStrm, bool isChess960)
 	,m_lookaheadDepth(0)
 	,m_rawPrev(0)
 	,m_missCount(0)
+	,m_curPly(0)
 {
 
 }
@@ -132,7 +133,7 @@ Decoder::resolveCipherCount(unsigned candidateLc, unsigned ply) const
 
 
 int
-Decoder::walkContinuation(unsigned startCount, unsigned startLc, unsigned startRaw, unsigned startPly)
+Decoder::walkContinuation(unsigned startCount, unsigned startLc, unsigned startRaw, unsigned startPly, unsigned depth)
 {
 	// Board-aware continuation walk: the caller has already applied the
 	// candidate's move to m_position (inside a push/pop frame).  Each
@@ -145,7 +146,7 @@ Decoder::walkContinuation(unsigned startCount, unsigned startLc, unsigned startR
 	unsigned prevRaw = startRaw;
 	unsigned ply = startPly;
 	int score = 1;  // the candidate's own move
-	unsigned const maxSteps = 12;
+	unsigned const maxSteps = (depth == 0 ? 24 : 12);
 
 	for (unsigned step = 1; step <= maxSteps; ++step)
 	{
@@ -159,9 +160,11 @@ Decoder::walkContinuation(unsigned startCount, unsigned startLc, unsigned startR
 
 		Byte wraw = m_gStrm.peek();
 		unsigned stepPly = ply + 1;
+		m_curPly = stepPly;
 		unsigned nM = 0, sLc = 0, sCnt = 0;
+		unsigned branchL[4], branchC[4], nBranch = 0;
 
-		for (unsigned c = 0; c < 256 && nM < 2; ++c)
+		for (unsigned c = 0; c < 256; ++c)
 		{
 			unsigned cc;
 			if (c >= 0xec)
@@ -184,7 +187,10 @@ Decoder::walkContinuation(unsigned startCount, unsigned startLc, unsigned startR
 				continue;
 			}
 
-			// board-validate the candidate move
+			// board-validate the candidate move (pseudo-legal dispatch
+			// plus full legality check; castling exempt because
+			// Board::checkMove uses orthodox castling rules)
+			Board bcopy = m_position.board();
 			m_position.push();
 			m_gStrm.get();
 			Move vMove;
@@ -196,14 +202,60 @@ Decoder::walkContinuation(unsigned startCount, unsigned startLc, unsigned startR
 
 			if (vResult == Token_Move && !vMove.isEmpty())
 			{
-				sLc = c;
-				sCnt = cc;
-				++nM;
+				bool legal = true;
+				if (!vMove.isCastling())
+				{
+					try { legal = bcopy.checkMove(vMove, variant::Normal, move::DontAllowIllegalMove); }
+					catch (mstl::exception const&) { legal = false; }
+				}
+				if (legal)
+				{
+					sLc = c;
+					sCnt = cc;
+					++nM;
+					if (nBranch < 4)
+					{
+						branchL[nBranch] = c;
+						branchC[nBranch] = cc;
+						++nBranch;
+					}
+				}
 			}
 		}
 
 		if (nM >= 2)
-			break;  // ambiguous: scoring stops here
+		{
+			// Ambiguous step: recurse into each board-valid move branch
+			// (depth-limited) and take the best continuation score.
+			if (depth >= 2 || nBranch == 0)
+				break;
+
+			int bestBranch = 0;
+			for (unsigned bi = 0; bi < nBranch; ++bi)
+			{
+				m_position.push();
+				m_gStrm.get();
+				Move bMove;
+				unsigned bResult;
+				try { bResult = dispatchMove(branchL[bi], branchC[bi], bMove, true); }
+				catch (mstl::exception const&) { bResult = ~0u; }
+
+				int sub = 0;
+				if (bResult == Token_Move && !bMove.isEmpty())
+					sub = walkContinuation(branchC[bi], branchL[bi], unsigned(wraw), stepPly, depth + 1);
+
+				m_position.pop();
+				m_gStrm.seekg(pos);
+
+				if (sub > bestBranch)
+					bestBranch = sub;
+			}
+
+			if (bestBranch == 0)
+				break;
+			score += bestBranch;
+			break;
+		}
 
 		if (nM == 0)
 		{
@@ -304,6 +356,8 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 	unsigned decodeCount;
 	Byte moveRaw = 0;
 
+	m_curPly = count;
+
 	if (m_useCipher)
 		s_cipher.load();  // lazy load (no-op if already loaded)
 
@@ -345,19 +399,35 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 			if (numMatches == 0)
 			{
 			// The game-ending Pop token is written with the move-number
-			// count (plies/2), not the cipher count (ChessBase 26 oracle,
-			// 2026-07-26). Only accept at the very end of the stream, so
+			// count (plies/2), not the cipher count, and may be preceded
+			// by up to 8 unexplained trailing bytes (ChessBase 26 oracle,
+			// 2026-07-26).  Only accept at the very end of the stream, so
 			// that mid-game move bytes cannot be hijacked as tokens.
-			if (m_gStrm.remaining() == 1)
 			{
-				for (unsigned k = 0; k < 2 && !tokenMatch; ++k)
+				unsigned tPos = m_gStrm.tellg();
+				unsigned tAvail = m_gStrm.remaining();
+				Byte tbuf[9];
+				for (unsigned i = 0; i < tAvail && i < 9; ++i)
+					tbuf[i] = m_gStrm.get();
+				m_gStrm.seekg(tPos);
+
+				for (unsigned tskip = 0; tskip <= 8 && !tokenMatch; tskip += 2)
 				{
-					unsigned mnCount = (k == 0) ? count / 2 : (count + 1) / 2;
-					if (::MoveNumberLookup[Byte(raw - mnCount)] == 0xff)
+					if (tAvail != tskip + 1)
+						continue;
+					Byte tb = tbuf[tskip];
+					for (unsigned k = 0; k < 2 && !tokenMatch; ++k)
 					{
-						lc = 0xff;
-						decodeCount = mnCount;
-						tokenMatch = true;
+						unsigned mnCount = (k == 0) ? count / 2 : (count + 1) / 2;
+						if (::MoveNumberLookup[Byte(tb - mnCount)] == 0xff)
+						{
+							lc = 0xff;
+							decodeCount = mnCount;
+							tokenMatch = true;
+							// consume the unexplained trailing bytes before the Pop
+							for (unsigned i = 0; i < tskip; ++i)
+								m_gStrm.get();
+						}
 					}
 				}
 			}
@@ -438,6 +508,8 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 				{
 					for (unsigned i = 0; i < numMatches; ++i)
 					{
+						// Tokens are excluded from scoring: a Skip would
+						// let the chain continue unchanged and always win.
 						if (matchLc[i] >= 0xec)
 							continue;
 						candList[nCand] = matchLc[i];
@@ -481,6 +553,7 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 					// Apply the candidate to the board; walk its continuation
 					// with the position advanced (restored afterwards).
 					unsigned svPos = m_gStrm.tellg();
+					Board bcopy = m_position.board();
 					m_position.push();
 					m_gStrm.get();
 					Move vMove;
@@ -488,9 +561,16 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 					try { vResult = dispatchMove(candLc, candCnt, vMove, true); }
 					catch (mstl::exception const&) { vResult = ~0u; }
 
+					bool legal = (vResult == Token_Move && !vMove.isEmpty());
+					if (legal && !vMove.isCastling())
+					{
+						try { legal = bcopy.checkMove(vMove, variant::Normal, move::DontAllowIllegalMove); }
+						catch (mstl::exception const&) { legal = false; }
+					}
+
 					int score = -1;
-					if (vResult == Token_Move && !vMove.isEmpty())
-						score = walkContinuation(candCnt, candLc, unsigned(raw), count);
+					if (legal)
+						score = walkContinuation(candCnt, candLc, unsigned(raw), count, 0);
 
 					m_position.pop();
 					m_gStrm.seekg(svPos);
@@ -511,7 +591,7 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 				// Accept only a well-separated winner: a garbage pick
 				// desynchronizes the game (and can crash the position
 				// decoder), so a near-tie is a miss, not a guess.
-				if (bestLc != 0xff && bestScore - secondScore >= 2)
+				if (bestLc != 0xff && bestScore - secondScore >= 1)
 				{
 					lc = bestLc;
 					decodeCount = bestCount;
@@ -856,9 +936,55 @@ Decoder::dispatchMove(unsigned lc, unsigned decodeCount, Move& move, bool skipVa
 		// Multiple byte move ##################
 		case 0xeb:
 			{
-				unsigned word = ::MoveNumberLookup[Byte(m_gStrm.get() - decodeCount)] << 8;
-				word |= ::MoveNumberLookup[Byte(m_gStrm.get() - decodeCount)];
-				move = m_position.doMove(word & 63, (word >> 6) & 63, ((word >> 12) & 3) + piece::Queen);
+				if (m_useCipher && s_cipher.isLoaded())
+				{
+					// ChessBase 26 chain-encrypted parameter bytes:
+					//   b1 = InvLUT[X1] + P1(cnt, X1, p+1),  X1 = (promo-2)<<6|to
+					//   b2 = InvLUT[X2] + P2(c1, X2, p+2),   X2 = from
+					Byte b1 = m_gStrm.get();
+					Byte b2 = m_gStrm.get();
+
+					unsigned x1 = 0xffff, c1 = 0;
+					for (unsigned x = 0; x < 256; ++x)
+					{
+						unsigned cc1 = s_cipher.lookupP1(decodeCount, x, m_curPly + 1);
+						if (cc1 == 0xffff)
+							continue;
+						if (::MoveNumberLookup[Byte(b1 - cc1)] == x)
+						{
+							if (x1 != 0xffff)
+								throw DecodingFailedException("chess960: ambiguous 0xeb parameter byte 1");
+							x1 = x;
+							c1 = cc1;
+						}
+					}
+					if (x1 == 0xffff)
+						throw DecodingFailedException("chess960: undecodable 0xeb parameter byte 1");
+
+					unsigned x2 = 0xffff;
+					for (unsigned x = 0; x < 256; ++x)
+					{
+						unsigned cc2 = s_cipher.lookupP2(c1, x, m_curPly + 2);
+						if (cc2 == 0xffff)
+							continue;
+						if (::MoveNumberLookup[Byte(b2 - cc2)] == x)
+						{
+							if (x2 != 0xffff)
+								throw DecodingFailedException("chess960: ambiguous 0xeb parameter byte 2");
+							x2 = x;
+						}
+					}
+					if (x2 == 0xffff)
+						throw DecodingFailedException("chess960: undecodable 0xeb parameter byte 2");
+
+					move = m_position.doMove(x2, x1 & 63, (x1 >> 6) + 2);
+				}
+				else
+				{
+					unsigned word = ::MoveNumberLookup[Byte(m_gStrm.get() - decodeCount)] << 8;
+					word |= ::MoveNumberLookup[Byte(m_gStrm.get() - decodeCount)];
+					move = m_position.doMove(word & 63, (word >> 6) & 63, ((word >> 12) & 3) + piece::Queen);
+				}
 			}
 			break;
 

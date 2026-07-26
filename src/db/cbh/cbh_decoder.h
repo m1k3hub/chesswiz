@@ -85,11 +85,11 @@ private:
 	unsigned resolveCipherCount(unsigned candidateLc, unsigned ply) const;
 
 	/// Score the continuation after a candidate move by walking the raw
-	/// stream with the H0 table only (no board operations).  The walk
-	/// stops at the first table miss or ambiguity; reaching the game end
-	/// scores a bonus.  The stream position is preserved.
+	/// stream with the H0 table plus board legality.  Ambiguous steps
+	/// recurse depth-limited (<=2) into each valid branch.  The stream
+	/// position is preserved; board changes are undone by the caller.
 	int walkContinuation(unsigned startCount, unsigned startLc,
-								unsigned startRaw, unsigned startPly);
+								unsigned startRaw, unsigned startPly, unsigned depth);
 
 	unsigned				m_cipherCount;	///< Current cipher count (Chess960)
 	unsigned				m_lcPrev;		///< Previous move's logicalCode (Chess960)
@@ -98,6 +98,7 @@ private:
 	unsigned				m_lookaheadDepth;	///< Recursion guard for try-and-see
 	unsigned				m_rawPrev;		///< Raw byte of the last cipher-decoded move (bracket detection)
 	unsigned				m_missCount;		///< Top-level full-miss count (per-game budget)
+	unsigned				m_curPly;		///< Ply of the move currently being dispatched (0xeb parameter lookup)
 };
 
 } // namespace cbh

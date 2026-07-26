@@ -13,6 +13,8 @@ namespace cbh {
 
 CountCipher::Table* CountCipher::s_h0 = 0;
 CountCipher::Table* CountCipher::s_g = 0;
+CountCipher::Table* CountCipher::s_p1 = 0;
+CountCipher::Table* CountCipher::s_p2 = 0;
 bool CountCipher::s_loaded = false;
 
 
@@ -38,6 +40,8 @@ CountCipher::load(mstl::string const& path)
 		return true;
 	if (!s_h0) s_h0 = new Table;
 	if (!s_g) s_g = new Table;
+	if (!s_p1) s_p1 = new Table;
+	if (!s_p2) s_p2 = new Table;
 
 	mstl::string fpath(path);
 	if (fpath.empty())
@@ -68,7 +72,7 @@ CountCipher::load(mstl::string const& path)
 	//
 	// We scan for keys and values line by line.
 
-	enum Section { None, H0, G };
+	enum Section { None, H0, G, P1, P2 };
 	Section section = None;
 
 	char const* p = buf;
@@ -137,6 +141,18 @@ CountCipher::load(mstl::string const& path)
 			skipWs();
 			matchLit("{");
 		}
+		else if (::strcmp(keyName, "P1") == 0)
+		{
+			section = P1;
+			skipWs();
+			matchLit("{");
+		}
+		else if (::strcmp(keyName, "P2") == 0)
+		{
+			section = P2;
+			skipWs();
+			matchLit("{");
+		}
 		else
 		{
 			// Skip value -- could be string, number, object, or array.
@@ -198,6 +214,21 @@ CountCipher::load(mstl::string const& path)
 				if (tok) d = unsigned(::atoi(tok));
 				(*s_h0)[makeKey(a, b, c, d)] = unsigned(val);
 			}
+			else if (section == P1 || section == P2)
+			{
+				// Parse "a,b,c"
+				unsigned a = 0, b = 0, c = 0;
+				char* tok = ::strtok(entryKey, ",");
+				if (tok) a = unsigned(::atoi(tok));
+				tok = ::strtok(0, ",");
+				if (tok) b = unsigned(::atoi(tok));
+				tok = ::strtok(0, ",");
+				if (tok) c = unsigned(::atoi(tok));
+				if (section == P1)
+					(*s_p1)[makeKey(0, a, b, c)] = unsigned(val);
+				else
+					(*s_p2)[makeKey(0, a, b, c)] = unsigned(val);
+			}
 			else if (section == G)
 			{
 				unsigned a = unsigned(::atoi(entryKey));
@@ -238,6 +269,26 @@ CountCipher::lookupG(unsigned lc) const
 {
 	Table::const_iterator it = s_g->find(makeKey(0, 0, 0, lc));
 	if (it == s_g->end())
+		return 0xffff;
+	return it->second;
+}
+
+
+unsigned
+CountCipher::lookupP1(unsigned cnt, unsigned x1, unsigned ply) const
+{
+	Table::const_iterator it = s_p1->find(makeKey(0, cnt, x1, ply));
+	if (it == s_p1->end())
+		return 0xffff;
+	return it->second;
+}
+
+
+unsigned
+CountCipher::lookupP2(unsigned c1, unsigned x2, unsigned ply) const
+{
+	Table::const_iterator it = s_p2->find(makeKey(0, c1, x2, ply));
+	if (it == s_p2->end())
 		return 0xffff;
 	return it->second;
 }

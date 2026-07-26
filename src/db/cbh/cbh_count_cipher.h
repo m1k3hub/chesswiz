@@ -50,6 +50,14 @@ public:
 	/// Look up g(lc) -- the seed count for the first move.  Returns 0xffff if not found.
 	unsigned lookupG(unsigned lc) const;
 
+	/// Look up P1(cnt, X1, ply) for 0xeb triple parameter byte 1.
+	/// X1 = (promo-2)<<6|to.  Returns 0xffff if not found.
+	unsigned lookupP1(unsigned cnt, unsigned x1, unsigned ply) const;
+
+	/// Look up P2(c1, X2, ply) for 0xeb triple parameter byte 2.
+	/// X2 = from square.  Returns 0xffff if not found.
+	unsigned lookupP2(unsigned c1, unsigned x2, unsigned ply) const;
+
 	/// Number of H0 entries loaded.
 	unsigned h0Size() const;
 
@@ -75,6 +83,8 @@ private:
 
 	static Table* s_h0;
 	static Table* s_g;
+	static Table* s_p1;
+	static Table* s_p2;
 	static bool s_loaded;
 
 	/// Reverse index: for each (countPrev << 8 | lcPrev), a list of (lc, countNext).
