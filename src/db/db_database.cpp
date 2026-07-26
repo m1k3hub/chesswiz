@@ -1473,6 +1473,11 @@ Database::exportGame(unsigned index, Consumer& consumer) const
 	{
 		IO_RAISE(Game, Read_Error, exc.backtrace(), "read error");
 	}
+	catch (mstl::exception const& exc)
+	{
+		// Defensive: a malformed game must not abort the whole conversion.
+		rc = save::DecodingFailed;
+	}
 
 	setEncodingFailed(m_codec->encodingFailed());
 	consumer.finalizeGame();

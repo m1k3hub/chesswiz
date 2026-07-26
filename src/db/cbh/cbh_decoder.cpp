@@ -104,13 +104,15 @@ Decoder::Decoder(ByteStream& gStrm, bool isChess960)
 	,m_cipherActive(false)
 	,m_useCipher(false)
 	,m_lookaheadDepth(0)
+	,m_rawPrev(0)
+	,m_missCount(0)
 {
 
 }
 
 
 unsigned
-Decoder::resolveCipherCount(unsigned candidateLc) const
+Decoder::resolveCipherCount(unsigned candidateLc, unsigned ply) const
 {
 	if (!m_cipherActive)
 	{
@@ -124,8 +126,166 @@ Decoder::resolveCipherCount(unsigned candidateLc) const
 		return m_cipherCount;
 	}
 
-	// Move codes: look up H0(count_prev, lc_prev, lc).
-	return s_cipher.lookupH0(m_cipherCount, m_lcPrev, candidateLc);
+	// Move codes: look up H0(count_prev, lc_prev, lc, ply).
+	return s_cipher.lookupH0(m_cipherCount, m_lcPrev, candidateLc, ply);
+}
+
+
+int
+Decoder::walkContinuation(unsigned startCount, unsigned startLc, unsigned startRaw, unsigned startPly)
+{
+	// Board-aware continuation walk: the caller has already applied the
+	// candidate's move to m_position (inside a push/pop frame).  Each
+	// step's move must be H0-consistent AND legal on the board; wrong
+	// candidates die on illegality quickly.  The stream position is
+	// preserved; board changes are undone by the caller's pop.
+	unsigned streamPos = m_gStrm.tellg();
+	unsigned count = startCount;
+	unsigned lcPrev = startLc;
+	unsigned prevRaw = startRaw;
+	unsigned ply = startPly;
+	int score = 1;  // the candidate's own move
+	unsigned const maxSteps = 12;
+
+	for (unsigned step = 1; step <= maxSteps; ++step)
+	{
+		unsigned pos = m_gStrm.tellg();
+
+		if (m_gStrm.remaining() == 0)
+		{
+			score += 8;  // reached the end of the stream
+			break;
+		}
+
+		Byte wraw = m_gStrm.peek();
+		unsigned stepPly = ply + 1;
+		unsigned nM = 0, sLc = 0, sCnt = 0;
+
+		for (unsigned c = 0; c < 256 && nM < 2; ++c)
+		{
+			unsigned cc;
+			if (c >= 0xec)
+				cc = count;
+			else
+			{
+				cc = s_cipher.lookupH0(count, lcPrev, c, stepPly);
+				if (cc == 0xffff)
+					continue;
+			}
+			if (::MoveNumberLookup[Byte(wraw - cc)] != c)
+				continue;
+
+			if (c >= 0xec)
+			{
+				// tokens: no board check
+				sLc = c;
+				sCnt = cc;
+				++nM;
+				continue;
+			}
+
+			// board-validate the candidate move
+			m_position.push();
+			m_gStrm.get();
+			Move vMove;
+			unsigned vResult;
+			try { vResult = dispatchMove(c, cc, vMove, true); }
+			catch (mstl::exception const&) { vResult = ~0u; }
+			m_position.pop();
+			m_gStrm.seekg(pos);
+
+			if (vResult == Token_Move && !vMove.isEmpty())
+			{
+				sLc = c;
+				sCnt = cc;
+				++nM;
+			}
+		}
+
+		if (nM >= 2)
+			break;  // ambiguous: scoring stops here
+
+		if (nM == 0)
+		{
+			// Game-ending Pop with move-number count?
+			if (m_gStrm.remaining() == 1
+				&& (::MoveNumberLookup[Byte(wraw - stepPly / 2)] == 0xff
+					|| ::MoveNumberLookup[Byte(wraw - (stepPly + 1) / 2)] == 0xff))
+			{
+				score += 8;
+				break;
+			}
+
+			// Bracketed move [X1..Xk, M_prev]?
+			for (unsigned skip = 2; skip <= 4 && nM == 0; ++skip)
+			{
+				if (m_gStrm.remaining() <= skip)
+					break;
+				Byte buf[5];
+				buf[0] = wraw;
+				for (unsigned i = 1; i <= skip; ++i)
+					buf[i] = m_gStrm.get();
+				m_gStrm.seekg(pos);
+
+				if (buf[skip - 1] != prevRaw)
+					continue;
+
+				for (unsigned c = 0; c < 0xec && nM < 2; ++c)
+				{
+					unsigned cc = s_cipher.lookupH0(count, lcPrev, c, stepPly);
+					if (cc == 0xffff)
+						continue;
+					if (::MoveNumberLookup[Byte(buf[skip] - cc)] == c)
+					{
+						sLc = c;
+						sCnt = cc;
+						++nM;
+					}
+				}
+
+				if (nM == 1)
+				{
+					// consume the bracket, then apply the move below
+					for (unsigned i = 0; i < skip; ++i)
+						m_gStrm.get();
+				}
+			}
+
+			if (nM == 0)
+				break;
+		}
+
+		// apply the step (move or token)
+		if (sLc >= 0xec)
+		{
+			if (sLc == 0xff)  // Pop: variation or game ends here
+			{
+				score += 8;
+				break;
+			}
+			m_gStrm.get();  // Push/Skip: consume, chain unchanged
+		}
+		else
+		{
+			Byte consumed = m_gStrm.get();
+			Move stepMove;
+			unsigned stepResult;
+			try { stepResult = dispatchMove(sLc, sCnt, stepMove, true); }
+			catch (mstl::exception const&) { break; }
+			if (stepResult != Token_Move || stepMove.isEmpty())
+				break;
+
+			count = sCnt;
+			lcPrev = sLc;
+			prevRaw = consumed;
+			ply = stepPly;
+		}
+
+		++score;
+	}
+
+	m_gStrm.seekg(streamPos);
+	return score;
 }
 
 
@@ -142,6 +302,7 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 
 	unsigned lc;
 	unsigned decodeCount;
+	Byte moveRaw = 0;
 
 	if (m_useCipher)
 		s_cipher.load();  // lazy load (no-op if already loaded)
@@ -151,15 +312,17 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 		Byte raw = m_gStrm.peek();
 		lc = 0xff;
 		decodeCount = 0;
+		moveRaw = raw;
 
 		// Pass 1: try H0/g table (fast path for known states).
 		unsigned matchLc[8];
 		unsigned matchCnt[8];
 		unsigned numMatches = 0;
+		bool tokenMatch = false;  // lc==0xff (Pop) collides with the no-match sentinel
 
 		for (unsigned candidateLc = 0; candidateLc < 256 && numMatches < 8; ++candidateLc)
 		{
-			unsigned candidateCount = resolveCipherCount(candidateLc);
+			unsigned candidateCount = resolveCipherCount(candidateLc, count);
 			if (candidateCount == 0xffff)
 				continue;
 			if (::MoveNumberLookup[Byte(raw - candidateCount)] == candidateLc)
@@ -175,211 +338,189 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 			// Exactly one H0 match — accept it (fast path).
 			lc = matchLc[0];
 			decodeCount = matchCnt[0];
-		}
-		else if (numMatches == 0)
-		{
-			// H0 miss: try-and-see with full decode.
-			// For each legal candidate, apply the move and try to decode
-			// the next N moves using the full decodeMove (H0 + InvLUT).
-			// The correct candidate will produce the longest valid
-			// continuation; wrong candidates will hit a dead end quickly.
-			buildInvLUT();
-			unsigned bestLc = 0xff;
-			unsigned bestCount = 0;
-			int bestScore = -1;
-
-			// Only do full try-and-see at the top level (not inside
-			// a recursive look-ahead) to avoid exponential blowup.
-			bool const tryAndSee = (m_lookaheadDepth == 0);
-
-			for (unsigned candidateLc = 0; candidateLc < 256; ++candidateLc)
-			{
-				if (candidateLc >= 0xec)
-					continue;
-				unsigned candidateCount = (raw - s_invLUT[candidateLc]) & 0xff;
-				if (::MoveNumberLookup[candidateCount] != candidateLc)
-					continue;
-
-				// Save state.
-				unsigned streamPos = m_gStrm.tellg();
-				m_position.push();
-				unsigned savedCipherCount = m_cipherCount;
-				unsigned savedLcPrev = m_lcPrev;
-				bool savedCipherActive = m_cipherActive;
-
-				// Apply the candidate's move.
-				m_gStrm.get();
-				Move laMove;
-				unsigned laResult;
-				bool valid = true;
-				try { laResult = dispatchMove(candidateLc, candidateCount, laMove, true); }
-				catch (mstl::exception const&) { valid = false; laResult = 0; }
-
-				if (!valid || laResult != Token_Move || laMove.isEmpty())
-				{
-					m_position.pop();
-					m_gStrm.seekg(streamPos);
-					m_cipherCount = savedCipherCount;
-					m_lcPrev = savedLcPrev;
-					m_cipherActive = savedCipherActive;
-					continue;
-				}
-
-				// Update cipher state.
-				m_cipherCount = candidateCount;
-				m_lcPrev = candidateLc;
-				m_cipherActive = true;
-
-				int score = 1;  // the candidate's move itself
-
-				if (tryAndSee)
-				{
-					// Full try-and-see: call decodeMove in a loop.
-					// decodeMove handles H0/InvLUT + cipher state.
-					m_lookaheadDepth = 1;
-					unsigned laCount = count + 1;
-					unsigned const maxSteps = 30;
-					for (int step = 0; step < maxSteps; ++step)
-					{
-						Move stepMove;
-						unsigned stepCount = laCount;
-						try {
-							unsigned r = decodeMove(stepMove, stepCount, true);
-							if (r == Token_Move && !stepMove.isEmpty())
-							{
-								laCount = stepCount;
-								score++;
-							}
-							else if (r == Token_Pop)
-							{
-								score++;  // reached end of game
-								break;
-							}
-							else
-								break;
-						}
-						catch (...) {
-							break;
-						}
-					}
-					m_lookaheadDepth = 0;
-				}
-				else
-				{
-					// Inside a look-ahead: use simple board-legality
-					// look-ahead (H0 + InvLUT, first valid candidate).
-					unsigned const maxSteps = 20;
-					for (int step = 1; step <= maxSteps; ++step)
-					{
-						if (m_gStrm.remaining() == 0) { score = step; break; }
-						Byte stepRaw = m_gStrm.peek();
-
-						unsigned stepLc = 0xff;
-						unsigned stepCount = 0;
-						bool found = false;
-						for (unsigned c = 0; c < 256; ++c)
-						{
-							unsigned cc = resolveCipherCount(c);
-							if (cc == 0xffff)
-								continue;
-							if (::MoveNumberLookup[Byte(stepRaw - cc)] == c)
-							{
-								stepLc = c;
-								stepCount = cc;
-								found = true;
-								break;
-							}
-						}
-
-						if (!found)
-						{
-							for (unsigned c = 0; c < 256; ++c)
-							{
-								if (c >= 0xec)
-									continue;
-								unsigned cc = (stepRaw - s_invLUT[c]) & 0xff;
-								if (::MoveNumberLookup[cc] != c)
-									continue;
-								stepLc = c;
-								stepCount = cc;
-								found = true;
-								break;
-							}
-						}
-
-						if (!found)
-							break;
-
-						m_gStrm.get();
-						Move stepMove;
-						unsigned stepResult;
-						try { stepResult = dispatchMove(stepLc, stepCount, stepMove, true); }
-						catch (mstl::exception const&) { break; }
-						if (stepResult != Token_Move || stepMove.isEmpty())
-							break;
-
-						m_cipherCount = stepCount;
-						m_lcPrev = stepLc;
-						score = step;
-					}
-				}
-
-				// Restore state.
-				m_position.pop();
-				m_gStrm.seekg(streamPos);
-				m_cipherCount = savedCipherCount;
-				m_lcPrev = savedLcPrev;
-				m_cipherActive = savedCipherActive;
-
-				if (score > bestScore)
-				{
-					bestScore = score;
-					bestLc = candidateLc;
-					bestCount = candidateCount;
-					if (tryAndSee && score >= 10)
-						break;  // high confidence
-					if (!tryAndSee && score >= 3)
-						break;
-				}
-			}
-
-			if (bestLc != 0xff)
-			{
-				lc = bestLc;
-				decodeCount = bestCount;
-			}
+			tokenMatch = (matchLc[0] >= 0xec);
 		}
 		else
 		{
-			// Ambiguous: 2+ H0 matches. Validate each via push/pop.
-			for (unsigned i = 0; i < numMatches; ++i)
+			if (numMatches == 0)
 			{
-				unsigned candidateLc = matchLc[i];
-				if (candidateLc >= 0xec)
+			// The game-ending Pop token is written with the move-number
+			// count (plies/2), not the cipher count (ChessBase 26 oracle,
+			// 2026-07-26). Only accept at the very end of the stream, so
+			// that mid-game move bytes cannot be hijacked as tokens.
+			if (m_gStrm.remaining() == 1)
+			{
+				for (unsigned k = 0; k < 2 && !tokenMatch; ++k)
 				{
-					lc = candidateLc;
-					decodeCount = matchCnt[i];
-					break;
+					unsigned mnCount = (k == 0) ? count / 2 : (count + 1) / 2;
+					if (::MoveNumberLookup[Byte(raw - mnCount)] == 0xff)
+					{
+						lc = 0xff;
+						decodeCount = mnCount;
+						tokenMatch = true;
+					}
 				}
-				unsigned streamPos = m_gStrm.tellg();
-				m_position.push();
-				m_gStrm.get();
-				Move testMove;
-				unsigned testResult;
-				try { testResult = dispatchMove(candidateLc, matchCnt[i], testMove, true); }
-				catch (mstl::exception const&) { m_position.pop(); m_gStrm.seekg(streamPos); continue; }
-				m_position.pop();
-				m_gStrm.seekg(streamPos);
-				if (testResult == Token_Move && !testMove.isEmpty())
+			}
+
+			// Bracketed-move recovery: ChessBase occasionally encodes a move
+			// as [M, X1..Xk, M] (k=1..3): the move byte repeated around k
+			// cipher-transparent parameter bytes. Detect the bracket via the
+			// repeated previous move byte; accept when the byte after the
+			// bracket decodes to exactly one H0 candidate that dispatches
+			// to a legal move.
+			if (m_cipherActive && m_lookaheadDepth == 0 && !tokenMatch)
+			{
+				unsigned streamPos0 = m_gStrm.tellg();
+
+				for (unsigned skip = 2; skip <= 4 && lc == 0xff; ++skip)
 				{
-					lc = candidateLc;
-					decodeCount = matchCnt[i];
-					break;
+					if (m_gStrm.remaining() <= skip)
+						break;
+
+					Byte buf[5];
+					for (unsigned i = 0; i <= skip; ++i)
+						buf[i] = m_gStrm.get();
+					m_gStrm.seekg(streamPos0);
+
+					if (buf[skip - 1] != m_rawPrev)
+						continue;
+
+					unsigned nM = 0, bLc = 0xff, bCnt = 0;
+					for (unsigned cand = 0; cand < 0xec && nM < 2; ++cand)
+					{
+						unsigned cc = resolveCipherCount(cand, count);
+						if (cc == 0xffff)
+							continue;
+						if (::MoveNumberLookup[Byte(buf[skip] - cc)] == cand)
+						{
+							bLc = cand;
+							bCnt = cc;
+							++nM;
+						}
+					}
+
+					if (nM != 1)
+						continue;
+
+					// Validate the candidate move on the board.
+					m_position.push();
+					Move bMove;
+					unsigned bResult;
+					try { bResult = dispatchMove(bLc, bCnt, bMove, true); }
+					catch (mstl::exception const&) { bResult = ~0u; }
+					m_position.pop();
+
+					if (bResult != Token_Move || bMove.isEmpty())
+						continue;
+
+					// Accept: skip the bracket bytes (X's + repeated M).
+					for (unsigned i = 0; i < skip; ++i)
+						m_gStrm.get();
+					lc = bLc;
+					decodeCount = bCnt;
+					moveRaw = buf[skip];
+				}
 			}
 			}
+
+			// Ambiguous (2+ matches) or none: score candidates by the
+			// depth of their table-consistent continuation (flat walk,
+			// no board operations beyond one legality check each).
+			if (!tokenMatch && lc == 0xff)
+			{
+				buildInvLUT();
+
+				unsigned candList[256];
+				unsigned candCntList[256];
+				unsigned nCand = 0;
+
+				if (numMatches >= 2)
+				{
+					for (unsigned i = 0; i < numMatches; ++i)
+					{
+						if (matchLc[i] >= 0xec)
+							continue;
+						candList[nCand] = matchLc[i];
+						candCntList[nCand] = matchCnt[i];
+						++nCand;
+					}
+
+					if (nCand == 0)
+					{
+						// All matches are tokens: accept the first.
+						lc = matchLc[0];
+						decodeCount = matchCnt[0];
+						tokenMatch = true;
+					}
+				}
+				else
+				{
+					// True miss: scan all move codes.  Expensive; a game that
+					// needs it too often is hopeless.
+					if (m_lookaheadDepth == 0 && ++m_missCount > 12)
+						throw DecodingFailedException("chess960 count cipher: too many misses");
+
+					for (unsigned c = 0; c < 0xec; ++c)
+					{
+						candList[nCand] = c;
+						candCntList[nCand] = (raw - s_invLUT[c]) & 0xff;
+						++nCand;
+					}
+				}
+
+				unsigned bestLc = 0xff;
+				unsigned bestCount = 0;
+				int bestScore = -1;
+				int secondScore = -1;
+
+				for (unsigned ci = 0; ci < nCand; ++ci)
+				{
+					unsigned candLc = candList[ci];
+					unsigned candCnt = candCntList[ci];
+
+					// Apply the candidate to the board; walk its continuation
+					// with the position advanced (restored afterwards).
+					unsigned svPos = m_gStrm.tellg();
+					m_position.push();
+					m_gStrm.get();
+					Move vMove;
+					unsigned vResult;
+					try { vResult = dispatchMove(candLc, candCnt, vMove, true); }
+					catch (mstl::exception const&) { vResult = ~0u; }
+
+					int score = -1;
+					if (vResult == Token_Move && !vMove.isEmpty())
+						score = walkContinuation(candCnt, candLc, unsigned(raw), count);
+
+					m_position.pop();
+					m_gStrm.seekg(svPos);
+
+					if (score > bestScore)
+					{
+						secondScore = bestScore;
+						bestScore = score;
+						bestLc = candLc;
+						bestCount = candCnt;
+					}
+					else if (score > secondScore)
+					{
+						secondScore = score;
+					}
+				}
+
+				// Accept only a well-separated winner: a garbage pick
+				// desynchronizes the game (and can crash the position
+				// decoder), so a near-tie is a miss, not a guess.
+				if (bestLc != 0xff && bestScore - secondScore >= 2)
+				{
+					lc = bestLc;
+					decodeCount = bestCount;
+				}
+			}
+
 		}
 
-		if (lc == 0xff)
+		if (lc == 0xff && !tokenMatch)
 			throw DecodingFailedException(
 				"chess960 count cipher: no matching move for byte 0x%02x at move %u",
 				unsigned(raw), count);
@@ -418,6 +559,7 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 			m_cipherCount = decodeCount;
 			m_lcPrev = lc;
 			m_cipherActive = true;
+			m_rawPrev = moveRaw;
 		}
 	}
 
@@ -750,7 +892,10 @@ Decoder::dispatchMove(unsigned lc, unsigned decodeCount, Move& move, bool skipVa
 
 		// Pop position ########################
 		case 0xff:
-			if (m_position.variationLevel())
+			// Symmetric with Push: only pop when variations are being
+			// decoded.  In look-ahead (skipVariations) the position stack
+			// must stay balanced with the look-ahead's own save/restore.
+			if (!skipVariations && m_position.variationLevel())
 				m_position.pop();
 			return Token_Pop;
 

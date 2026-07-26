@@ -5,9 +5,15 @@
 // ChessBase encodes Chess960 move bytes with an evolving count cipher
 // instead of the move-index count used by standard chess:
 //
-//   count_0 = g(lc_0)                          // universal seed table
-//   count_p = H0(count_{p-1}, lc_{p-1}, lc_p)  // universal 3-input byte fn
+//   count_0 = g(lc_0)                             // universal seed table
+//   count_p = H0(count_{p-1}, lc_{p-1}, lc_p, p)  // universal 4-input byte fn
 //   raw_p   = InverseMoveNumberLookup[lc_p] + count_p   (mod 256)
+//
+// The 4th input p is the 0-based ply index (ChessBase 26 oracle,
+// 2026-07-26: adding the ply drops table conflicts from 12.5% to 0%).
+// Additionally, ChessBase occasionally encodes a move in bracketed form
+// [M, X1..Xk, M] (k=1..3): the move byte repeated around k cipher-
+// transparent parameter bytes which do not advance the count chain.
 //
 // This class loads the recovered H0 and g tables from
 // src/count_cipher_universal.json and provides lookups.
@@ -18,6 +24,8 @@
 
 #include "m_string.h"
 #include "m_map.h"
+
+#include <stdint.h>
 
 namespace db {
 namespace cbh {
@@ -36,8 +44,8 @@ public:
 	/// True if the tables have been loaded.
 	bool isLoaded() const;
 
-	/// Look up H0(count_prev, lc_prev, lc).  Returns 0xffff if not found.
-	unsigned lookupH0(unsigned countPrev, unsigned lcPrev, unsigned lc) const;
+	/// Look up H0(count_prev, lc_prev, lc, ply).  Returns 0xffff if not found.
+	unsigned lookupH0(unsigned countPrev, unsigned lcPrev, unsigned lc, unsigned ply) const;
 
 	/// Look up g(lc) -- the seed count for the first move.  Returns 0xffff if not found.
 	unsigned lookupG(unsigned lc) const;
@@ -57,11 +65,11 @@ public:
 
 private:
 
-	typedef mstl::map<uint32_t,unsigned> Table;
+	typedef mstl::map<uint64_t,unsigned> Table;
 
 
 
-	static uint32_t makeKey(unsigned a, unsigned b, unsigned c);
+	static uint64_t makeKey(unsigned a, unsigned b, unsigned c, unsigned d);
 
 
 

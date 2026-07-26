@@ -80,15 +80,24 @@ private:
 	unsigned dispatchMove(unsigned lc, unsigned decodeCount,
 	                       db::Move& move, bool skipVariations);
 
-	/// Resolve the cipher count for a candidate logicalCode.
+	/// Resolve the cipher count for a candidate logicalCode at 0-based ply @p ply.
 	/// Returns 0xffff if the candidate is not in the table.
-	unsigned resolveCipherCount(unsigned candidateLc) const;
+	unsigned resolveCipherCount(unsigned candidateLc, unsigned ply) const;
+
+	/// Score the continuation after a candidate move by walking the raw
+	/// stream with the H0 table only (no board operations).  The walk
+	/// stops at the first table miss or ambiguity; reaching the game end
+	/// scores a bonus.  The stream position is preserved.
+	int walkContinuation(unsigned startCount, unsigned startLc,
+								unsigned startRaw, unsigned startPly);
 
 	unsigned				m_cipherCount;	///< Current cipher count (Chess960)
 	unsigned				m_lcPrev;		///< Previous move's logicalCode (Chess960)
 	bool					m_cipherActive;	///< True after the first cipher-decoded move
 	bool					m_useCipher;		///< True for real ChessBase Chess960 (36-byte pos)
 	unsigned				m_lookaheadDepth;	///< Recursion guard for try-and-see
+	unsigned				m_rawPrev;		///< Raw byte of the last cipher-decoded move (bracket detection)
+	unsigned				m_missCount;		///< Top-level full-miss count (per-game budget)
 };
 
 } // namespace cbh

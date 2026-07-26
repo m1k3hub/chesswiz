@@ -21,10 +21,13 @@ CountCipher::CountCipher()
 }
 
 
-uint32_t
-CountCipher::makeKey(unsigned a, unsigned b, unsigned c)
+uint64_t
+CountCipher::makeKey(unsigned a, unsigned b, unsigned c, unsigned d)
 {
-	return (uint32_t(a) << 16) | (uint32_t(b) << 8) | uint32_t(c);
+	// a = count_prev, b = lc_prev, c = lc, d = ply (0-based).
+	// Sorted key order matches the JSON emission order, so loading
+	// appends to the map (no quadratic insert cost).
+	return (uint64_t(a) << 32) | (uint64_t(b) << 24) | (uint64_t(c) << 16) | uint64_t(d);
 }
 
 
@@ -60,7 +63,7 @@ CountCipher::load(mstl::string const& path)
 	buf[n] = '\0';
 
 	// Minimal parser for our specific JSON format:
-	//   "H0": { "a,b,c": v, ... }
+	//   "H0": { "a,b,c,d": v, ... }
 	//   "g_count0": { "a": v, ... }
 	//
 	// We scan for keys and values line by line.
@@ -183,20 +186,22 @@ CountCipher::load(mstl::string const& path)
 
 			if (section == H0)
 			{
-				// Parse "a,b,c"
-				unsigned a = 0, b = 0, c = 0;
+				// Parse "a,b,c,d"
+				unsigned a = 0, b = 0, c = 0, d = 0;
 				char* tok = ::strtok(entryKey, ",");
 				if (tok) a = unsigned(::atoi(tok));
 				tok = ::strtok(0, ",");
 				if (tok) b = unsigned(::atoi(tok));
 				tok = ::strtok(0, ",");
 				if (tok) c = unsigned(::atoi(tok));
-				(*s_h0)[makeKey(a, b, c)] = unsigned(val);
+				tok = ::strtok(0, ",");
+				if (tok) d = unsigned(::atoi(tok));
+				(*s_h0)[makeKey(a, b, c, d)] = unsigned(val);
 			}
 			else if (section == G)
 			{
 				unsigned a = unsigned(::atoi(entryKey));
-				(*s_g)[makeKey(0, 0, a)] = unsigned(val);
+				(*s_g)[makeKey(0, 0, 0, a)] = unsigned(val);
 			}
 
 			skipWs();
@@ -219,9 +224,9 @@ CountCipher::isLoaded() const
 
 
 unsigned
-CountCipher::lookupH0(unsigned countPrev, unsigned lcPrev, unsigned lc) const
+CountCipher::lookupH0(unsigned countPrev, unsigned lcPrev, unsigned lc, unsigned ply) const
 {
-	Table::const_iterator it = s_h0->find(makeKey(countPrev, lcPrev, lc));
+	Table::const_iterator it = s_h0->find(makeKey(countPrev, lcPrev, lc, ply));
 	if (it == s_h0->end())
 		return 0xffff;
 	return it->second;
@@ -231,7 +236,7 @@ CountCipher::lookupH0(unsigned countPrev, unsigned lcPrev, unsigned lc) const
 unsigned
 CountCipher::lookupG(unsigned lc) const
 {
-	Table::const_iterator it = s_g->find(makeKey(0, 0, lc));
+	Table::const_iterator it = s_g->find(makeKey(0, 0, 0, lc));
 	if (it == s_g->end())
 		return 0xffff;
 	return it->second;

@@ -325,6 +325,10 @@ Position::handleCapture(Pieces& pieces, Count& pieceCount, Byte to, Byte piece)
 
 	Byte pieceNum = pieceCount[to];
 
+	// Defensive: corrupt input may produce insane indices.
+	if (pieceNum >= 10 || piece >= 15)
+		return;
+
 	pieces[pieceNum][piece] = Null;
 
 	if (piece::type(piece::ID(piece)) == piece::Pawn)
