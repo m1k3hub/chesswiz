@@ -1464,3 +1464,26 @@ are "no matching move" (well-separated check fails), not "too many misses".
 (bestScore - secondScore < 1), where no candidate has H0-consistent
 continuation. These require H0 entries that can only be obtained from
 oracle generation or binary RE of the CBase26 transform function.
+
+### PGN alignment harvest: +945 entries → 8070/501 (+5 games) (2026-07-28)
+
+Implemented loose-verification TWIC PGN harvest: walk game-by-game,
+predicting exact raw bytes at known-F moves (anchors), extracting H0
+counts at unknown-F moves via raw byte search. Key realization: the FEN
+must not use Shredder-FEN castling format ("DAda") — use standard "KQkq"
+for scidb's probe_encode960.
+
+**Method:**
+- For each move: if F known → predict exact byte and search stream
+- If F unknown → search stream for byte b where LUT[(b-cc)&0xff]==lc
+- Extract cc=(b-InvLUT[lc])&0xff as the H0 count
+- Verify via next known-F anchor (implicit chain verification)
+
+**Results:**
+- +945 new H0 entries (0 conflicts in 605 games, 1 in first pass)
+- 8070 written (+5 vs baseline), 501 corrupted (-5)
+- Converged after 1 iteration (subsequent iterations yield 0 new entries)
+
+**Coverage:** H0 table now 440,295 entries. Remaining 501 corrupt games
+fail at specific (count_prev, lc_prev, ply) states that no TWIC game
+covers in a decodable prefix. Oracle generation needed for those.
