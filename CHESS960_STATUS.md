@@ -1435,3 +1435,32 @@ CBase26 that produce specific (count_prev, lc_prev, ply) states. This
 requires finding chess960 positions and move sequences that reach the
 target states. The scidb encoder can verify the move sequence produces
 the right lc chain before generating with the oracle.
+
+### Decoder-based H0 harvest: +331 entries → 8067/504 (2026-07-28)
+
+Implemented side-table harvesting directly in the decoder: when the
+continuation walk resolves a miss and finds a well-separated winner
+(bestScore - secondScore ≥ 1), the verified H0 entry is collected.
+
+**Method:**
+- `CBH_HARVEST=1` env var enables collection of verified entries
+- Entries are (count_prev, lc_prev, lc, ply) → count pairs
+- Only new (non-conflicting) entries are merged
+
+**Results (3 bootstrap iterations):**
+- Iteration 1: +286 new entries → 8067/504 (+2 games)
+- Iteration 2: +44 new entries → 8067/504 (no change)
+- Iteration 3: +1 new entry → converged
+
+**Conflict analysis:** 97 harvested entries conflict with the existing
+table. F-value differences are completely random (not systematic),
+confirming the conflicts are wrong candidates picked by the walk, not
+a systematic difference in the H0 model. Table values are trusted.
+
+**Miss limit:** Raising from 12 to 999 had no effect — all 504 failures
+are "no matching move" (well-separated check fails), not "too many misses".
+
+**Remaining 504 failures** all fail at the continuation walk tie check
+(bestScore - secondScore < 1), where no candidate has H0-consistent
+continuation. These require H0 entries that can only be obtained from
+oracle generation or binary RE of the CBase26 transform function.
