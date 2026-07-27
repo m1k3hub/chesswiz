@@ -1355,3 +1355,47 @@ but it needs to be adapted for TWIC games.
    synthetic games that specifically produce the missing (count_prev,
    lc_prev, lc, ply) states. This avoids alignment issues but requires
    GUI automation.
+
+### Harvesting alignment challenge (2026-07-27, continued)
+
+Attempted to harvest H0 entries from TWIC PGN + raw CBH bytes for all 606
+chess960 games. Three approaches tried:
+
+1. **Byte-by-byte comparison** (29K entries): 27 regressions — wrong entries
+   from stream misalignment at variation tokens (Push/Pop).
+2. **2-move lookahead** (28K entries): 4 regressions — better but still wrong
+   entries passing the weak verification.
+3. **Strict F-consistency** (390 entries): 4 regressions — 34K entries
+   rejected because F values don't match existing table, confirming the
+   alignment is fundamentally broken for most games.
+
+**Root cause:** The scidb encoder produces a main-line-only byte stream
+(no variations). The TWIC raw bytes include Push/Pop-delimited variations.
+When the streams diverge at a variation, byte-by-byte comparison produces
+wrong H0 entries. The search for "expected lc" in the TWIC stream can't
+distinguish true matches from false ones (any byte matches any lc with
+some H0_count).
+
+**Proper solution:** Use the scidb decoder's internal state to identify
+H0 misses. The decoder handles all alignment (tokens, 0xeb, variations).
+When it fails at a miss, log (count_prev, lc_prev, ply, raw_byte). Then
+use the PGN to determine the correct lc at that ply and compute:
+`H0_count = (raw_byte - invLUT[lc]) & 0xff`.
+
+Challenge: the decoder's `count` includes variation moves, so converting
+count → main-line ply requires tracking the Push/Pop nesting level. This
+can be done by logging the cipher count (which only advances for moves,
+not tokens) and matching it to the PGN's main-line ply.
+
+### Alternative approach: targeted oracle generation
+
+Instead of harvesting from TWIC (which has alignment challenges), generate
+synthetic games via CBase26 that specifically produce the missing H0 states.
+The oracle generates clean games (no variations), so alignment is trivial.
+The key is generating games that reach the specific (count_prev, lc_prev,
+lc, ply) states that real TWIC games need.
+
+This requires:
+1. Identifying the missing states (from the 506 failing games)
+2. Generating games that produce those states
+3. Harvesting with the proven harvest_count_cipher.py script
