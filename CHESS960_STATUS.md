@@ -1399,3 +1399,39 @@ This requires:
 1. Identifying the missing states (from the 506 failing games)
 2. Generating games that produce those states
 3. Harvesting with the proven harvest_count_cipher.py script
+
+### NO_MATCH analysis: exact failure states identified (2026-07-27, late)
+
+Ran decoder with debug to identify the exact (raw_byte, count_prev, lc_prev,
+ply) states where the 506 failing games hit "no matching move":
+
+- 472 NO_MATCH errors at 398 unique states
+- 322 unique (count_prev, lc_prev, ply) combinations
+- 56 states have multiple raw byte values (different games reach the same
+  cipher state but with different next moves)
+- Failures cluster at ply 3-13 (71 at ply 6, 52 at ply 7, 50 at ply 8)
+
+### Why PGN-based harvesting fails: ply mismatch
+
+The decoder's `ply` (move index) includes variation moves. The PGN only has
+main-line moves. When a game has variations before the NO_MATCH point,
+the decoder's ply > PGN's main-line ply. This causes the harvest to use
+the wrong lc from the PGN, producing wrong H0 entries (1765 conflicts).
+
+The conflict count (1765 vs 286 new entries) confirms the ply mismatch is
+systematic — most harvested entries are wrong because they use the wrong
+move from the PGN.
+
+### Path forward: oracle generation
+
+The proven approach (harvest_count_cipher.py with synthetic oracle games)
+works because:
+1. Oracle games have no variations → scidb and CB streams align perfectly
+2. The harvest script handles alignment with the walk() function
+3. No ply mismatch
+
+To fill the 322 missing states, generate targeted synthetic games via
+CBase26 that produce specific (count_prev, lc_prev, ply) states. This
+requires finding chess960 positions and move sequences that reach the
+target states. The scidb encoder can verify the move sequence produces
+the right lc chain before generating with the oracle.
