@@ -1190,3 +1190,106 @@ F does not decompose further (not F=A(lcPrev,lc)+B(lc,p), not
 F=A(lcPrev)+B(lc)+C(p), not affine/XOR-affine). For the binary RE this means
 the encoder likely does `count += F(lcPrev, lc, ply)` per move — one
 table lookup + one add; the F table (or its generator) lives in CBase26.exe.
+
+## BINARY RE + DECODER ANALYSIS (2026-07-27)
+
+### Ghidra MCP decompilation of CBase26.exe
+
+Ghidra MCP headless server (v5.0.0) loaded CBase26.exe for decompilation.
+Key functions decompiled:
+
+- **0x14020c080** (BP1 decode): Jump-table dispatch on game type (low 6 bits
+  of decoder object's first 16-bit word). 24 cases, 22 unique + default.
+  Sets MoveNumberLookup at [obj+0x78] in prologue. Cipher flag [obj+0xb6]
+  initialized to 0, set to 1 in various cases.
+
+- **0x140210e10** (per-move decode): Reads raw byte, applies cipher based on
+  [obj+0xb6]:
+  - Flag == 0 (cipher OFF): `lc = MoveNumberLookup[(raw - count) & 0xff]`
+  - Flag != 0 (cipher ON): `lc = MoveNumberLookup[raw] - count`
+  Where count at [obj+0x6c] is incremented by 1 (move_index) by the calling
+  function (0x140210760 / 0x140210bc0).
+
+- **0x140211270** (encoder): Same jump-table structure. Sets InvLUT at
+  [obj+0x78]. Different cases use different LUT variant pairs:
+  - Case 0: 0x141a782c0 (InvLUT) / 0x141a783c0 (MoveNumberLookup)
+  - Case 4: 0x141a78cc0 / 0x141a78dc0
+  - Case 8: 0x141a794c0 / 0x141a796c0
+  Each case pair is 0x200 apart (256-byte encode table + 256-byte decode table).
+  Encoder also uses count=move_index (just `inc` by 1).
+
+- **0x140212450** (per-move encode): Writes `raw = InvLUT[lc] + count` (cipher
+  OFF) or `raw = InvLUT[count + lc]` (cipher ON). Tokens (Push/Pop) encoded as
+  `InvLUT[0xfe/0xff/0xec] + count`.
+
+### Key finding: decoder count is move_index, not H0
+
+All three decode functions (BP1/BP2/BP3) and the encoder use `count =
+move_index` (incremented by 1 per move). There is NO F(lcPrev, lc, ply)
+computation in the decode/encode path. This means either:
+
+1. The H0 transform is a SEPARATE byte-stream transform applied between
+   file I/O and the decoder (gated by 0x08000000), OR
+2. The H0 count artifact arises from a table difference (chess960 uses a
+   different LUT variant than standard chess)
+
+### H0 cipher effect on TWIC decoding
+
+Test: disabling the H0 cipher (using move_index for chess960):
+- With H0 cipher: **8065 written, 506 corrupted** (100 chess960 games decoded)
+- Without H0 cipher: **7965 written, 606 corrupted** (0 chess960 games decoded)
+- The H0 cipher helps exactly 100 games and hurts none.
+- The 100 helped games have F ≠ 1 for some moves, requiring the H0 table.
+- The 506 remaining failures are H0 table coverage gaps.
+
+### F function period discovery
+
+F(lcPrev, lc, ply) has **period ≥ 106 in ply** (100% deterministic at N=112,
+99.87% at N=96, max ply in data = 105). This means the F table is finite:
+at most 256 × 256 × 128 = 8M entries, but the actual domain is much smaller
+(426K harvested entries). The period boundary is between 100 and 112.
+
+### F function structure analysis
+
+- F is NOT additively separable: F(lp,lc,p1) - F(lp,lc,p2) ≠ constant
+- F is NOT XOR separable: F(lp,lc,p1) XOR F(lp,lc,p2) ≠ constant
+- F does NOT depend on (lp XOR lc) or (lp + lc) alone
+- F takes all 256 values with ~uniform distribution (0.4% each)
+- At ply=1: 219 unique F values across 461 entries
+- Conclusion: F is a genuine 3-input nonlinear byte function
+
+### Lookup table atlas in CBase26.exe
+
+Tables at 0x141a78000+ in .data section, paired 256-byte encode/decode:
+```
+0x141a782c0: InvLUT (encode, case 0)       ← referenced by encoder 0x1402112da
+0x141a783c0: MoveNumberLookup (decode, c0)  ← referenced by decoder 0x14020c11e
+0x141a784c0: InvLUT variant (case 1 enc)
+0x141a785c0: MoveNumberLookup variant (c1)   ← referenced at 0x14020c2d4
+0x141a786c0: (case 2 encode)
+0x141a787c0: (case 2 decode)                 ← referenced at 0x14020c68b
+...
+```
+Each game-type case uses its own LUT pair. Chess960 might use a different
+case than standard chess, which would explain the "H0 count" as a table
+difference rather than a count cipher.
+
+### Next steps
+
+1. **Determine which game-type case chess960 uses** — compare the LUT variant
+   for that case with the standard MoveNumberLookup. If they differ, the "H0
+   count" is actually `InvLUT_variant[lc] - InvLUT_standard[lc]` (independent
+   of move history), which would be much simpler than a 3-input F function.
+
+2. **Verify with oracle PGN** — extract PGN for TWIC game 757 via CBase26,
+   encode with scidb (move_index), compare with raw TWIC bytes. If they
+   match, the encoding IS move_index (no H0 transform). If they differ, the
+   difference reveals the H0 transform.
+
+3. **Search for the 0x08000000-gated transform** — 83 `and eax, 0x08000000`
+   instructions found in .text, concentrated in 0x140fbxxxx-0x14110xxxx.
+   Decompile functions in this range to find the byte-stream transform.
+
+4. **Dynamic tracing via winedbg** — restart CBase26 under winedbg, set
+   breakpoints at per-move decode (0x140210e10), trace count values for a
+   chess960 game to verify whether count=move_index or count=H0.
