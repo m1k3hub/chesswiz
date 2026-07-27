@@ -1293,3 +1293,65 @@ difference rather than a count cipher.
 4. **Dynamic tracing via winedbg** — restart CBase26 under winedbg, set
    breakpoints at per-move decode (0x140210e10), trace count values for a
    chess960 game to verify whether count=move_index or count=H0.
+
+## H0 MODEL VERIFIED + TWIC PGN HARVEST (2026-07-27, evening)
+
+### H0 encoding model confirmed against real TWIC data
+
+Extracted PGN for TWIC game 757 (Carlsen-Khalafova) from CBase26 via clipboard.
+Compared scidb-encoded bytes (move_index model) with raw TWIC bytes:
+
+**All 21 moves match the H0 model perfectly:**
+```
+ply  scidb  twic   diff   lc    mi_cnt  h0_cnt  h0_table  match
+  0  0x0b   0x21   0x16   124        0      22    g=22      ✓
+  1  0x0c   0xf6   0xea   124        1     235    H0=235    ✓
+  2  0x0b   0x2a   0x1f   131        2      33    H0=33     ✓
+  ...
+```
+
+The formula: `H0_count = (twic_raw - scidb_raw + move_index) & 0xff`
+gives the exact H0 count for every move. This **definitively confirms**:
+- TWIC bytes are H0-encoded (raw = InvLUT[lc] + H0_count)
+- The H0/g table values are correct
+- H0_count ≠ move_index for most moves (F ≠ 1)
+
+### TWIC 1639 PGN downloaded
+
+Downloaded from `https://theweekinchess.com/zips/twic1639g.zip` (7.6MB, 17233 games).
+Contains all 606 chess960 games with `[Variant "Chess960"]` header.
+All 606 games align 1:1 with the CBH database by (White, Black, Round).
+
+### Harvesting attempt: 29K new entries but alignment issues
+
+Harvested 29,578 new H0 entries from TWIC games by comparing scidb-encoded
+bytes with raw TWIC bytes. However, adding these entries made decoding WORSE
+(533 corrupted vs 506 baseline), indicating some entries are wrong due to
+stream misalignment (0xeb multi-byte moves, tokens, castling encoding
+differences between scidb and ChessBase).
+
+**Root cause of misalignment:** The scidb encoder and ChessBase may encode
+some moves differently (e.g., castling, 0xeb parameter bytes), causing the
+byte-by-byte comparison to desynchronize. The harvest_count_cipher.py script
+from the previous session handles this properly with a walk-based alignment,
+but it needs to be adapted for TWIC games.
+
+### Path forward for H0 table expansion
+
+1. **Fix stream alignment** — adapt harvest_count_cipher.py to use the TWIC
+   PGN + raw bytes, with proper handling of 0xeb triples, Push/Pop tokens,
+   and castling encoding differences.
+
+2. **Verify each entry** — only accept H0 entries where:
+   - The scidb and TWIC streams are perfectly aligned (no skipped bytes)
+   - The computed H0_count is consistent with the running sum model
+   - The move is legal on the board
+
+3. **Iterative harvesting** — harvest from TWIC, rebuild, test. If decode
+   rate improves, the entries are correct. If it degrades, identify and
+   remove the problematic entries.
+
+4. **Alternative: targeted oracle generation** — use CBase26 to generate
+   synthetic games that specifically produce the missing (count_prev,
+   lc_prev, lc, ply) states. This avoids alignment issues but requires
+   GUI automation.
