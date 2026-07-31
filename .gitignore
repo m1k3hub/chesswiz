@@ -37,7 +37,6 @@ src/cdb2sci
 fix-sci.*
 pt_fill.txt
 st_fill.txt
-opening-report/
 package-lock.json
 llmos-plan.md
 

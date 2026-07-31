@@ -40,9 +40,16 @@ import type {
   CrosstableQuery,
   CrosstableResult,
   EngineInfo,
+  PlaySeek,
+  PlayMatch,
+  PlayMove,
+  PlayResult,
+  PlayTimeControl,
+  PlayVariant,
 } from '@/types';
 import { authHeaders } from './auth';
 import { Chess } from 'chess.js';
+import { mockPlay } from '@/features/play/mockPlayBackend';
 
 export interface ScidbApiClient {
   listDatabases(): Promise<Database[]>;
@@ -84,6 +91,32 @@ export interface ScidbApiClient {
   startMaintenance(payload: MaintenanceJobRequest): Promise<JobProgress>;
   getMaintenanceReport(jobId: string): Promise<MaintenanceReport>;
   queryCrosstable(payload: CrosstableQuery): Promise<CrosstableResult>;
+  // Online play (milestone 6). Mock impl (Phase 2) delegates to mockPlay;
+  // HTTP impl (Phase 3+) calls /api/play/* and /api/ws/play.
+  listSeeks(): Promise<PlaySeek[]>;
+  listMySeeks(): Promise<PlaySeek[]>;
+  createSeek(payload: {
+    timeControl: PlayTimeControl;
+    variant: PlayVariant;
+    rated: boolean;
+    color: 'w' | 'b' | 'random';
+    ratingRange?: [number, number] | null;
+    startFen?: string;
+  }): Promise<PlaySeek>;
+  cancelSeek(id: string): Promise<void>;
+  acceptSeek(seekId: string): Promise<PlayMatch>;
+  submitMove(matchId: string, uci: string): Promise<{ move: PlayMove; match: PlayMatch; result: PlayResult | null }>;
+  resignMatch(matchId: string): Promise<PlayResult>;
+  getMatch(matchId: string): Promise<PlayMatch | null>;
+  getMatchMoves(matchId: string): Promise<PlayMove[]>;
+  listMyGames(): Promise<PlayMatch[]>;
+  getMyRating(): Promise<{ variant: PlayVariant; timeControl: string; rating: number; rd: number; vol: number }[]>;
+  // Phase 5: offers, abort, chat
+  offerMatch(matchId: string, kind: 'draw' | 'rematch' | 'takeback'): Promise<void>;
+  respondOffer(matchId: string, accept: boolean): Promise<void>;
+  abortMatch(matchId: string): Promise<PlayResult>;
+  chatMatch(matchId: string, text: string): Promise<{ side: 'w' | 'b'; text: string }>;
+  archiveMatch(matchId: string, databaseId: string): Promise<{ jobId: string }>;
 }
 
 const defaultHeaders = { Accept: 'application/json' };
@@ -323,6 +356,63 @@ export class HttpScidbApiClient implements ScidbApiClient {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+
+  // ---- Online play (HTTP; server wired in Phase 3) ----
+  listSeeks(): Promise<PlaySeek[]> {
+    return httpRequest<PlaySeek[]>(this.baseUrl, '/play/seeks');
+  }
+  listMySeeks(): Promise<PlaySeek[]> {
+    return httpRequest<PlaySeek[]>(this.baseUrl, '/play/seeks/mine');
+  }
+  createSeek(payload: {
+    timeControl: PlayTimeControl; variant: PlayVariant; rated: boolean;
+    color: 'w' | 'b' | 'random'; ratingRange?: [number, number] | null; startFen?: string;
+  }): Promise<PlaySeek> {
+    return httpRequest<PlaySeek>(this.baseUrl, '/play/seek', {
+      method: 'POST', body: JSON.stringify(payload),
+    });
+  }
+  cancelSeek(id: string): Promise<void> {
+    return httpRequest<void>(this.baseUrl, `/play/seek/${id}`, { method: 'DELETE' });
+  }
+  acceptSeek(seekId: string): Promise<PlayMatch> {
+    return httpRequest<PlayMatch>(this.baseUrl, `/play/seek/${seekId}/accept`, { method: 'POST' });
+  }
+  submitMove(matchId: string, uci: string): Promise<{ move: PlayMove; match: PlayMatch; result: PlayResult | null }> {
+    return httpRequest(this.baseUrl, `/play/match/${matchId}/move`, {
+      method: 'POST', body: JSON.stringify({ uci }),
+    });
+  }
+  resignMatch(matchId: string): Promise<PlayResult> {
+    return httpRequest<PlayResult>(this.baseUrl, `/play/match/${matchId}/resign`, { method: 'POST' });
+  }
+  getMatch(matchId: string): Promise<PlayMatch | null> {
+    return httpRequest<PlayMatch | null>(this.baseUrl, `/play/match/${matchId}`);
+  }
+  getMatchMoves(matchId: string): Promise<PlayMove[]> {
+    return httpRequest<PlayMove[]>(this.baseUrl, `/play/match/${matchId}/moves`);
+  }
+  listMyGames(): Promise<PlayMatch[]> {
+    return httpRequest<PlayMatch[]>(this.baseUrl, '/play/me/games');
+  }
+  getMyRating(): Promise<{ variant: PlayVariant; timeControl: string; rating: number; rd: number; vol: number }[]> {
+    return httpRequest(this.baseUrl, '/play/me/rating');
+  }
+  offerMatch(matchId: string, kind: 'draw' | 'rematch' | 'takeback'): Promise<void> {
+    return httpRequest<void>(this.baseUrl, `/play/match/${matchId}/offer`, { method: 'POST', body: JSON.stringify({ kind }) });
+  }
+  respondOffer(matchId: string, accept: boolean): Promise<void> {
+    return httpRequest<void>(this.baseUrl, `/play/match/${matchId}/offer/respond`, { method: 'POST', body: JSON.stringify({ accept }) });
+  }
+  abortMatch(matchId: string): Promise<PlayResult> {
+    return httpRequest<PlayResult>(this.baseUrl, `/play/match/${matchId}/abort`, { method: 'POST' });
+  }
+  chatMatch(matchId: string, text: string): Promise<{ side: 'w' | 'b'; text: string }> {
+    return httpRequest(this.baseUrl, `/play/match/${matchId}/chat`, { method: 'POST', body: JSON.stringify({ text }) });
+  }
+  archiveMatch(matchId: string, databaseId: string): Promise<{ jobId: string }> {
+    return httpRequest<{ jobId: string }>(this.baseUrl, `/play/match/${matchId}/archive`, { method: 'POST', body: JSON.stringify({ databaseId }) });
   }
 }
 
@@ -1140,6 +1230,43 @@ export class MockScidbApiClient implements ScidbApiClient {
       };
     }
     return result;
+  }
+
+  // ---- Online play (mock; Phase 2). Delegates to the shared mockPlay
+  // singleton so state persists across MockScidbApiClient instances and
+  // syncs across tabs via BroadcastChannel. ----
+  async listSeeks(): Promise<PlaySeek[]> { return mockPlay.listSeeks(); }
+  async listMySeeks(): Promise<PlaySeek[]> { return mockPlay.listMySeeks(); }
+  async createSeek(payload: {
+    timeControl: PlayTimeControl; variant: PlayVariant; rated: boolean;
+    color: 'w' | 'b' | 'random'; ratingRange?: [number, number] | null; startFen?: string;
+  }): Promise<PlaySeek> { return mockPlay.createSeek(payload); }
+  async cancelSeek(id: string): Promise<void> { mockPlay.cancelSeek(id); }
+  async acceptSeek(seekId: string): Promise<PlayMatch> { return mockPlay.acceptSeek(seekId); }
+  async submitMove(matchId: string, uci: string): Promise<{ move: PlayMove; match: PlayMatch; result: PlayResult | null }> {
+    return mockPlay.submitMove(matchId, uci);
+  }
+  async resignMatch(matchId: string): Promise<PlayResult> { return mockPlay.resign(matchId); }
+  async getMatch(matchId: string): Promise<PlayMatch | null> { return mockPlay.getMatch(matchId); }
+  async getMatchMoves(matchId: string): Promise<PlayMove[]> { return mockPlay.getMatchMoves(matchId); }
+  async listMyGames(): Promise<PlayMatch[]> { return mockPlay.listMyGames(); }
+  async getMyRating(): Promise<{ variant: PlayVariant; timeControl: string; rating: number; rd: number; vol: number }[]> {
+    return mockPlay.getMyRating();
+  }
+  async offerMatch(matchId: string, kind: 'draw' | 'rematch' | 'takeback'): Promise<void> {
+    mockPlay.offer(matchId, kind);
+  }
+  async respondOffer(matchId: string, accept: boolean): Promise<void> {
+    mockPlay.respondOffer(matchId, accept);
+  }
+  async abortMatch(matchId: string): Promise<PlayResult> {
+    return mockPlay.abort(matchId);
+  }
+  async chatMatch(matchId: string, text: string): Promise<{ side: 'w' | 'b'; text: string }> {
+    return mockPlay.chat(matchId, text);
+  }
+  async archiveMatch(_matchId: string, _databaseId: string): Promise<{ jobId: string }> {
+    return { jobId: `mock-archive-${Date.now()}` };
   }
 }
 

@@ -49,6 +49,28 @@ if _HAVE_PROM:
         "Cache lookups by backend and result",
         ["backend", "result"],
     )
+    PLAY_MATCHES_ACTIVE = Gauge(
+        "scidb_play_matches_active",
+        "Currently active (playing) online-play matches",
+    )
+    PLAY_SEEKS_OPEN = Gauge(
+        "scidb_play_seeks_open",
+        "Currently open (unmatched) online-play seeks",
+    )
+    PLAY_MOVE_LATENCY = Histogram(
+        "scidb_play_move_latency_seconds",
+        "Wall-clock time between consecutive moves in a match",
+        buckets=(0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0),
+    )
+    PLAY_TIMEOUTS = Counter(
+        "scidb_play_timeouts_total",
+        "Matches finished by clock timeout",
+    )
+    PLAY_FLAGGED_GAMES = Counter(
+        "scidb_play_flagged_games_total",
+        "Matches flagged by anti-cheat heuristics",
+        ["reason"],
+    )
 
 
 _ID_PREFIX_RE = re.compile(r"^(analysis|import|search|convert|job|db|g|m)-", re.IGNORECASE)
@@ -103,6 +125,41 @@ def analysis_started() -> None:
 def analysis_finished() -> None:
     if _HAVE_PROM:
         ANALYSIS_ACTIVE.dec()
+
+
+def play_match_started() -> None:
+    if _HAVE_PROM:
+        PLAY_MATCHES_ACTIVE.inc()
+
+
+def play_match_finished() -> None:
+    if _HAVE_PROM:
+        PLAY_MATCHES_ACTIVE.dec()
+
+
+def play_seek_opened() -> None:
+    if _HAVE_PROM:
+        PLAY_SEEKS_OPEN.inc()
+
+
+def play_seek_closed() -> None:
+    if _HAVE_PROM:
+        PLAY_SEEKS_OPEN.dec()
+
+
+def play_move_latency(seconds: float) -> None:
+    if _HAVE_PROM:
+        PLAY_MOVE_LATENCY.observe(seconds)
+
+
+def play_timeout() -> None:
+    if _HAVE_PROM:
+        PLAY_TIMEOUTS.inc()
+
+
+def play_flagged(reason: str) -> None:
+    if _HAVE_PROM:
+        PLAY_FLAGGED_GAMES.labels(reason=reason).inc()
 
 
 _EXCLUDED_PATHS = frozenset({"/metrics", "/api/health/live", "/api/health/ready"})

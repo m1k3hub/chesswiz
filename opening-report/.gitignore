@@ -29,6 +29,10 @@ lerna-debug.log*
 # Testing
 coverage
 __snapshots__
+test-results/
+
+# Runtime data
+data/uploads/
 
 # Python runtime adapter
 .venv

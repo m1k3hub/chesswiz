@@ -603,3 +603,83 @@ export interface PrepLine {
   performance: 'good' | 'solid' | 'risky' | 'rare' | 'neutral';
   note: string;
 }
+
+/* ---------- Online play (Phase 0: types only; backend wired in later phases) ---------- */
+
+export type PlayMode = 'analysis' | 'play';
+export type PlayVariant = 'standard' | 'chess960';
+
+export interface PlayTimeControl {
+  kind: 'unlimited' | 'rapid' | 'blitz' | 'bullet' | 'correspondence';
+  baseSeconds: number;      // initial clock, 0 = unlimited
+  incrementSeconds: number;  // per-move increment
+}
+
+export interface PlayUser {
+  id: string;        // OIDC subject, or 'guest-<random>' for anonymous
+  name: string;      // display name; 'Guest-XXXX' for anonymous
+  rating: number;    // Glicko-2 rating; provisional default for guests
+  title?: string;
+}
+
+export interface PlaySeek {
+  id: string;
+  owner: PlayUser;          // null/anonymous for open seeks
+  timeControl: PlayTimeControl;
+  variant: PlayVariant;
+  rated: boolean;
+  color: 'w' | 'b' | 'random';
+  ratingRange: [number, number] | null;
+  startFen?: string;        // custom/Chess960 start
+  createdAt: number;        // epoch ms
+}
+
+export type PlayMatchState = 'seeking' | 'paired' | 'playing' | 'finished';
+
+export type PlayResult =
+  | { kind: 'mate'; winner: 'w' | 'b' }
+  | { kind: 'resign'; winner: 'w' | 'b' }
+  | { kind: 'timeout'; winner: 'w' | 'b' }
+  | { kind: 'draw'; reason: 'agreement' | 'stalemate' | 'insufficient' | 'threefold' | 'fifty' | 'timeout-both' }
+  | { kind: 'aborted' }      // no rated effect, too few plies
+  | { kind: 'adjourned' };
+
+export interface PlayMatch {
+  id: string;
+  variant: PlayVariant;
+  timeControl: PlayTimeControl;
+  rated: boolean;
+  white: PlayUser;
+  black: PlayUser;
+  startFen: string;
+  ply: number;              // moves played (0 = start)
+  status: PlayMatchState;
+  result: PlayResult | null;
+  clocks: { whiteMs: number; blackMs: number };  // server snapshot at last event
+  clockUpdatedAt: number;   // epoch ms of clock snapshot
+  drawOfferSide: 'w' | 'b' | null;
+  rematchOfferSide: 'w' | 'b' | null;
+  /** Mock-only: the tab that arbitrates clocks/timeout. Not part of the wire
+   *  contract; the real server handles this server-side. */
+  arbiterId?: string;
+}
+
+export interface PlayMove {
+  ply: number;
+  san: string;
+  uci: string;
+  fen: string;
+  clockMsAfter: number;
+  latencyMs: number;
+}
+
+/** Server→client event union for the /api/ws/play channel (and the mock). */
+export type PlayEvent =
+  | { type: 'seek.created'; seek: PlaySeek }
+  | { type: 'seek.cancelled'; seekId: string }
+  | { type: 'match.paired'; match: PlayMatch }
+  | { type: 'match.move'; matchId: string; move: PlayMove; clocks: PlayMatch['clocks']; clockUpdatedAt: number }
+  | { type: 'match.finish'; matchId: string; result: PlayResult; clocks: PlayMatch['clocks'] }
+  | { type: 'match.offer'; matchId: string; offer: 'draw' | 'rematch' | 'takeback'; side: 'w' | 'b' }
+  | { type: 'match.offer.response'; matchId: string; offer: 'draw' | 'rematch' | 'takeback'; accepted: boolean; side: 'w' | 'b' }
+  | { type: 'match.chat'; matchId: string; side: 'w' | 'b'; text: string };

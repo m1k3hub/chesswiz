@@ -42,6 +42,13 @@ export default function Header() {
         <button className="top-nav-item active">Workspace</button>
         <button className="top-nav-item">Databases</button>
         <button className="top-nav-item">Reports</button>
+        <button
+          className="top-nav-item"
+          title="Online play"
+          onClick={() => window.dispatchEvent(new CustomEvent('scidb:open-play'))}
+        >
+          Play
+        </button>
       </nav>
       <div className="header-right">
         <span className="sync-status">

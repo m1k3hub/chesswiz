@@ -18,6 +18,8 @@ import {
 import { Chess, type Square } from 'chess.js';
 import { useWorkspaceStore } from '@/state/workspace';
 import { isValidFen } from '@/lib/validation';
+import type { PlayMode } from '@/types';
+import PromotionPicker, { type PromoPiece } from './PromotionPicker';
 import './ChessBoard.css';
 
 /* ---------- types ---------- */
@@ -32,10 +34,25 @@ export interface GameMove {
 export interface ChessBoardHandle {
   getMoves: () => GameMove[];
   getCurrentFen: () => string;
+  /** Apply a move by UCI (e.g. "e2e4", "e7e8q") programmatically — used by the
+   * hotseat controller and the live WebSocket play channel. Returns false on
+   * illegal move. Bypasses the promotion picker (the uci carries the piece). */
+  applyExternalMove: (uci: string) => boolean;
 }
 
 interface ChessBoardProps {
   onPositionChange?: (fen: string) => void;
+  /** 'analysis' (default) = free move, takeback, FEN load. 'play' = legal-only,
+   *  no takeback, no FEN load, opponent-side rejection when myColor is set. */
+  mode?: PlayMode;
+  /** When set in play mode, only this colour's pieces are selectable by click
+   *  — prevents moving the opponent's pieces on their turn. Undefined = hotseat
+   *  (both sides playable on their turn). */
+  myColor?: 'w' | 'b';
+  /** Optional start position seed (FEN). Respected at mount only; this is a
+   *  match seed, not a mid-game load, so it is allowed in play mode. Used for
+   *  Chess960/custom starts and for tests. */
+  startFen?: string;
 }
 
 /* ---------- constants ---------- */
@@ -51,14 +68,17 @@ const RANKS = [8, 7, 6, 5, 4, 3, 2, 1] as const;
 /* ---------- component ---------- */
 
 const ChessBoard = forwardRef<ChessBoardHandle, ChessBoardProps>(
-  ({ onPositionChange }, ref) => {
-    const chessRef = useRef(new Chess());
+  ({ onPositionChange, mode = 'analysis', myColor, startFen }, ref) => {
+    const chessRef = useRef(startFen ? new Chess(startFen) : new Chess());
     const [gameHistory, setGameHistory] = useState<GameMove[]>([]);
     const [currentPly, setCurrentPly] = useState(0);
     const [flipped, setFlipped] = useState(false);
     const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
     const [validTargets, setValidTargets] = useState<Set<string>>(new Set());
     const [fenInput, setFenInput] = useState('');
+    const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
+
+    const isPlay = mode === 'play';
 
     const setCurrentFen = useWorkspaceStore((s) => s.setCurrentFen);
 
@@ -73,6 +93,13 @@ const ChessBoard = forwardRef<ChessBoardHandle, ChessBoardProps>(
     useImperativeHandle(ref, () => ({
       getMoves: () => gameHistoryRef.current.slice(0, currentPlyRef.current),
       getCurrentFen: () => chessRef.current.fen(),
+      applyExternalMove: (uci: string) => {
+        if (uci.length < 4) return false;
+        const from = uci.slice(0, 2);
+        const to = uci.slice(2, 4);
+        const promo = (uci[4] as PromoPiece | undefined) || 'q';
+        return makeMove(from, to, promo);
+      },
     }));
 
     /* ----- position sync ----- */
@@ -95,11 +122,13 @@ const ChessBoard = forwardRef<ChessBoardHandle, ChessBoardProps>(
     /* ----- move making ----- */
 
     const makeMove = useCallback(
-      (from: string, to: string): boolean => {
+      (from: string, to: string, promotion: PromoPiece = 'q'): boolean => {
         const chess = chessRef.current;
 
-        // Truncate history if navigating from a non-final ply.
-        if (currentPlyRef.current < gameHistoryRef.current.length) {
+        // In play mode there is no takeback, so the cursor is always at the
+        // tail of history; never truncate. In analysis mode, truncate when
+        // navigating from a non-final ply (legacy behaviour, unchanged).
+        if (!isPlay && currentPlyRef.current < gameHistoryRef.current.length) {
           gameHistoryRef.current = gameHistoryRef.current.slice(
             0,
             currentPlyRef.current,
@@ -107,7 +136,7 @@ const ChessBoard = forwardRef<ChessBoardHandle, ChessBoardProps>(
         }
 
         try {
-          const move = chess.move({ from, to, promotion: 'q' });
+          const move = chess.move({ from, to, promotion });
           if (!move) return false;
 
           const entry: GameMove = {
@@ -125,7 +154,7 @@ const ChessBoard = forwardRef<ChessBoardHandle, ChessBoardProps>(
           return false;
         }
       },
-      [syncPosition],
+      [syncPosition, isPlay],
     );
 
     /* ----- click interaction ----- */
@@ -136,6 +165,18 @@ const ChessBoard = forwardRef<ChessBoardHandle, ChessBoardProps>(
 
         // Attempt a move if a piece is selected and the target is valid.
         if (selectedSquare && validTargets.has(square)) {
+          // In play mode, surface a promotion picker instead of auto-queening.
+          if (isPlay) {
+            const moves = chess.moves({ square: selectedSquare as Square, verbose: true });
+            const targetMoves = moves.filter((m) => m.to === square);
+            const isPromotion = targetMoves.some((m) => m.promotion);
+            if (isPromotion) {
+              setPendingPromotion({ from: selectedSquare, to: square });
+              setSelectedSquare(null);
+              setValidTargets(new Set());
+              return;
+            }
+          }
           makeMove(selectedSquare, square);
           setSelectedSquare(null);
           setValidTargets(new Set());
@@ -149,9 +190,15 @@ const ChessBoard = forwardRef<ChessBoardHandle, ChessBoardProps>(
           return;
         }
 
-        // Select a piece if it belongs to the side to move.
+        // Select a piece if it belongs to the side to move. In play mode with
+        // myColor set, additionally require the piece to be the user's own colour
+        // so the opponent's pieces can't be moved on the opponent's turn.
         const piece = chess.get(square as Square);
-        if (piece && piece.color === chess.turn()) {
+        if (
+          piece &&
+          piece.color === chess.turn() &&
+          (!isPlay || !myColor || piece.color === myColor)
+        ) {
           setSelectedSquare(square);
           const moves = chess.moves({ square: square as Square, verbose: true });
           setValidTargets(new Set(moves.map((m) => m.to)));
@@ -160,7 +207,7 @@ const ChessBoard = forwardRef<ChessBoardHandle, ChessBoardProps>(
           setValidTargets(new Set());
         }
       },
-      [selectedSquare, validTargets, makeMove],
+      [selectedSquare, validTargets, makeMove, isPlay, myColor],
     );
 
     /* ----- navigation ----- */
@@ -296,7 +343,8 @@ const ChessBoard = forwardRef<ChessBoardHandle, ChessBoardProps>(
           <span
             key={i}
             className={`move-cell${isActive ? ' active' : ''}`}
-            onClick={() => goToPly(i + 1)}
+            onClick={mode === 'analysis' ? () => goToPly(i + 1) : undefined}
+            style={mode === 'play' ? { cursor: 'default' } : undefined}
           >
             {isWhite && <span className="move-num">{moveNum}.</span>}
             <span className="move-text">{m.san}</span>
@@ -314,16 +362,16 @@ const ChessBoard = forwardRef<ChessBoardHandle, ChessBoardProps>(
         </div>
 
         <div className="scidb-controls">
-          <button className="ctrl-btn" title="Start position" onClick={goStart}>
+          <button className="ctrl-btn" title="Start position" onClick={goStart} disabled={isPlay}>
             ⏮
           </button>
-          <button className="ctrl-btn" title="Previous move" onClick={goPrev}>
+          <button className="ctrl-btn" title="Previous move" onClick={goPrev} disabled={isPlay}>
             ◀
           </button>
-          <button className="ctrl-btn" title="Next move" onClick={goNext}>
+          <button className="ctrl-btn" title="Next move" onClick={goNext} disabled={isPlay}>
             ▶
           </button>
-          <button className="ctrl-btn" title="Last move" onClick={goEnd}>
+          <button className="ctrl-btn" title="Last move" onClick={goEnd} disabled={isPlay}>
             ⏭
           </button>
           <button className="ctrl-btn" title="Flip board" onClick={toggleFlip}>
@@ -337,18 +385,36 @@ const ChessBoard = forwardRef<ChessBoardHandle, ChessBoardProps>(
           </div>
         </div>
 
-        <div className="scidb-fen-bar">
-          <input
-            type="text"
-            placeholder="Paste FEN or make moves on board…"
-            value={fenInput}
-            onChange={handleFenInputChange}
-            onKeyDown={handleFenKeyDown}
+        {mode === 'analysis' && (
+          <div className="scidb-fen-bar">
+            <input
+              type="text"
+              placeholder="Paste FEN or make moves on board…"
+              value={fenInput}
+              onChange={handleFenInputChange}
+              onKeyDown={handleFenKeyDown}
+            />
+            <button className="small-btn" onClick={handleLoadFen}>
+              Load FEN
+            </button>
+          </div>
+        )}
+
+        {pendingPromotion && (
+          <PromotionPicker
+            color={chessRef.current.turn()}
+            onSelect={(piece) => {
+              const { from, to } = pendingPromotion;
+              setPendingPromotion(null);
+              makeMove(from, to, piece);
+            }}
+            onCancel={() => {
+              setPendingPromotion(null);
+              setSelectedSquare(null);
+              setValidTargets(new Set());
+            }}
           />
-          <button className="small-btn" onClick={handleLoadFen}>
-            Load FEN
-          </button>
-        </div>
+        )}
       </div>
     );
   },

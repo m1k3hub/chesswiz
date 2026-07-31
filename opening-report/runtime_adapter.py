@@ -53,6 +53,9 @@ from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 import config
+from play_routes import router as play_router
+from play_ws import router as play_ws_router
+from play_service import play_service
 import security
 from cache import cache_key, get_cache, hash_payload
 from engines.engine_pool import EnginePool, get_engine_pool, reset_engine_pool, _max_concurrent_from_env
@@ -368,6 +371,7 @@ _RATE_LIMIT_MAX_REQUESTS: dict[str, int] = {
     "/api/searches": 30,
     "/api/analysis/start": 20,
     "/api/databases/{database_id}/import": 10,
+    "/api/play": 120,
 }
 
 # In-memory rate-limit state (used by MemoryStore when no Redis/Postgres store
@@ -545,6 +549,8 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(title="scidb-beta Runtime Adapter", version="0.1.0", lifespan=_lifespan)
+app.include_router(play_router, prefix="/api")
+app.include_router(play_ws_router)
 
 # CORS is environment-driven (SCIDB_ALLOWED_ORIGINS). Wildcard origins are
 # never combined with credentials; in production they are a startup error.
@@ -2148,11 +2154,22 @@ async def list_engines():
 # ---------------------------------------------------------------------------
 
 @app.post("/api/analysis/start")
-async def start_analysis(request: Request, req: AnalysisStartRequest):
+async def start_analysis(request: Request, req: AnalysisStartRequest, authorization: str | None = Header(default=None)):
     client_ip = _client_ip(request)
     if not await _check_rate_limit(client_ip, "/api/analysis/start"):
         _audit_log("analysis.rate_limited", ip=client_ip)
         return JSONResponse({"error": "Rate limit exceeded. Try again in a minute."}, status_code=429)
+
+    # Rated-game engine lock (ONLINE_PLAY_PLAN.md §5.2, Phase 7): refuse to
+    # start an engine for a user with an active rated match. Guests can never
+    # be in a rated match (play_routes rejects rated seeks from guests), so
+    # only an authenticated subject needs checking here.
+    auth_payload = _get_auth_payload_sync(authorization)
+    if auth_payload:
+        sub = auth_payload.get("sub") or auth_payload.get("id")
+        if sub and play_service.is_user_in_rated_match(sub):
+            _audit_log("analysis.engine_locked", ip=client_ip, user=sub)
+            return JSONResponse({"error": "Engine disabled during a rated game", "code": "rated_engine_lock"}, status_code=403)
 
     # Validate FEN server-side (accept "start" as alias for the initial position)
     fen = req.fen or DEFAULT_FEN

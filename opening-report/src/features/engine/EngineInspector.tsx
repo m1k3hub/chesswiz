@@ -68,6 +68,12 @@ export default function EngineInspector({ visible }: { visible: boolean }) {
   const setActiveEngineJobId = useWorkspaceStore((s) => s.setActiveEngineJobId);
   const toast = window.ScidbWorkspace?.toast || console.log;
 
+  // Rated-game engine lock (ONLINE_PLAY_PLAN.md §5.2, Phase 7): defense in
+  // depth alongside the server-side /api/analysis/start check.
+  const activePlayMode = useWorkspaceStore((s) => s.activePlayMode);
+  const activeMatch = useWorkspaceStore((s) => s.activeMatch);
+  const ratedLocked = activePlayMode === 'play' && !!activeMatch?.rated && activeMatch.status === 'playing';
+
   const renderIdle = useCallback(() => {
     setEvalText('0.00');
     setEvalPct(50);
@@ -173,6 +179,10 @@ export default function EngineInspector({ visible }: { visible: boolean }) {
   }, [renderAnalysis, finish]);
 
   const start = useCallback(async () => {
+    if (ratedLocked) {
+      toast('Engine disabled during a rated game', 'warning');
+      return;
+    }
     if (jobIdRef.current) await stop();
 
     setIsRunning(true);
@@ -201,7 +211,7 @@ export default function EngineInspector({ visible }: { visible: boolean }) {
       toast(`Engine start failed: ${e instanceof Error ? e.message : String(e)}`, 'accent');
       setIsRunning(false);
     }
-  }, [stop, multiPv, depth, engineId, setActiveEngineJobId, clearPolling, poll, toast, useStreaming, clearSubscription, applyAnalysisUpdate]);
+  }, [ratedLocked, stop, multiPv, depth, engineId, setActiveEngineJobId, clearPolling, poll, toast, useStreaming, clearSubscription, applyAnalysisUpdate]);
 
   const clear = useCallback(() => {
     stop();
@@ -283,9 +293,10 @@ export default function EngineInspector({ visible }: { visible: boolean }) {
             id="engine-start-btn"
             className="primary-btn"
             onClick={start}
-            disabled={isRunning}
+            disabled={isRunning || ratedLocked}
+            title={ratedLocked ? 'Engine disabled during a rated game' : undefined}
           >
-            {isRunning ? 'Running…' : 'Start'}
+            {isRunning ? 'Running…' : ratedLocked ? 'Locked (rated game)' : 'Start'}
           </button>
           <button
             id="engine-stop-btn"

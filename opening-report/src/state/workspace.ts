@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { GameSummary, SavedWorkingSet } from '@/types';
+import type { GameSummary, SavedWorkingSet, PlayMode, PlaySeek, PlayMatch, PlayMove } from '@/types';
 
 export interface WorkspaceState {
   activeDatabaseId: string;
@@ -12,6 +12,15 @@ export interface WorkspaceState {
   savedWorkingSets: SavedWorkingSet[];
   activeSearchJobId: string | null;
   activeEngineJobId: string | null;
+  // Online play slice (Phase 0: mode flag + volatile fields).
+  activePlayMode: PlayMode;
+  activeMatchId: string | null;
+  seeks: PlaySeek[];          // open seeks visible to the user
+  mySeeks: PlaySeek[];        // this user's open seeks
+  activeMatch: PlayMatch | null;
+  activeMatchMoves: PlayMove[];   // synced move list for the active match
+  connected: boolean;          // ws/play connection state
+  pendingSeek: PlaySeek | null;
 }
 
 export interface WorkspaceActions {
@@ -27,6 +36,15 @@ export interface WorkspaceActions {
   loadWorkingSet(id: string): void;
   setActiveSearchJobId(jobId: string | null): void;
   setActiveEngineJobId(jobId: string | null): void;
+  setPlayMode(mode: PlayMode): void;
+  setSeeks(seeks: PlaySeek[]): void;
+  upsertSeek(seek: PlaySeek): void;
+  removeSeek(id: string): void;
+  setActiveMatch(match: PlayMatch | null): void;
+  patchMatch(patch: Partial<PlayMatch>): void;
+  appendActiveMatchMove(move: PlayMove): void;
+  setActiveMatchMoves(moves: PlayMove[]): void;
+  setPlayConnected(connected: boolean): void;
   reset(): void;
 }
 
@@ -42,6 +60,14 @@ const defaults: WorkspaceState = {
   savedWorkingSets: [],
   activeSearchJobId: null,
   activeEngineJobId: null,
+  activePlayMode: 'analysis',
+  activeMatchId: null,
+  seeks: [],
+  mySeeks: [],
+  activeMatch: null,
+  activeMatchMoves: [],
+  connected: false,
+  pendingSeek: null,
 };
 
 export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>()(
@@ -78,9 +104,41 @@ export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>()(
     },
       setActiveSearchJobId: (jobId) => set({ activeSearchJobId: jobId }),
       setActiveEngineJobId: (jobId) => set({ activeEngineJobId: jobId }),
+      setPlayMode: (mode) => set({ activePlayMode: mode }),
+      setSeeks: (seeks) => set({ seeks }),
+      upsertSeek: (seek) => set((state) => {
+        const exists = state.seeks.some((s) => s.id === seek.id);
+        return { seeks: exists ? state.seeks.map((s) => (s.id === seek.id ? seek : s)) : [...state.seeks, seek] };
+      }),
+      removeSeek: (id) => set((state) => ({ seeks: state.seeks.filter((s) => s.id !== id) })),
+      setActiveMatch: (match) => set({ activeMatch: match, activeMatchId: match?.id ?? null, activeMatchMoves: [] }),
+      patchMatch: (patch) => set((state) => ({
+        activeMatch: state.activeMatch ? { ...state.activeMatch, ...patch } : state.activeMatch,
+      })),
+      appendActiveMatchMove: (move) => set((state) => ({
+        activeMatchMoves: [...state.activeMatchMoves, move],
+      })),
+      setActiveMatchMoves: (moves) => set({ activeMatchMoves: moves }),
+      setPlayConnected: (connected) => set({ connected }),
       reset: () => set(defaults),
     }),
-    { name: STORAGE_KEY }
+    {
+      name: STORAGE_KEY,
+      // Do not persist volatile play state (matches/seeks are session-only).
+      // activePlayMode is persisted so a deliberate switch to play survives reload.
+      partialize: (state) => ({
+        activeDatabaseId: state.activeDatabaseId,
+        activeGameId: state.activeGameId,
+        activePanel: state.activePanel,
+        currentFen: state.currentFen,
+        pendingJobId: state.pendingJobId,
+        workingSet: state.workingSet,
+        savedWorkingSets: state.savedWorkingSets,
+        activeSearchJobId: state.activeSearchJobId,
+        activeEngineJobId: state.activeEngineJobId,
+        activePlayMode: state.activePlayMode,
+      }),
+    }
   )
 );
 
@@ -97,6 +155,8 @@ declare global {
       setPendingJobId: (jobId: string | null) => void;
       setActiveSearchJobId: (jobId: string | null) => void;
       setActiveEngineJobId: (jobId: string | null) => void;
+      getPlayMode: () => PlayMode;
+      setPlayMode: (mode: PlayMode) => void;
       subscribe: (listener: (state: WorkspaceState) => void) => () => void;
       toast: (message: string, tone?: 'neutral' | 'accent' | 'warning' | 'success') => void;
       getWorkingSet: () => GameSummary[];
@@ -141,6 +201,8 @@ export function installGlobalWorkspaceBridge() {
     setPendingJobId: (jobId) => useWorkspaceStore.setState({ pendingJobId: jobId }),
     setActiveSearchJobId: (jobId) => useWorkspaceStore.setState({ activeSearchJobId: jobId }),
     setActiveEngineJobId: (jobId) => useWorkspaceStore.setState({ activeEngineJobId: jobId }),
+    getPlayMode: () => useWorkspaceStore.getState().activePlayMode,
+    setPlayMode: (mode) => useWorkspaceStore.setState({ activePlayMode: mode }),
     subscribe: (listener) => {
       listener(useWorkspaceStore.getState());
       return useWorkspaceStore.subscribe(listener);

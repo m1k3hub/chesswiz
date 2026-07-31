@@ -21,6 +21,7 @@ const GameEditorModal = lazy(() => import('@/features/games/GameEditorModal'));
 const TacticsModal = lazy(() => import('@/features/tactics/TacticsModal'));
 const GameViewerModal = lazy(() => import('@/features/games/GameViewerModal'));
 const JobCenter = lazy(() => import('@/features/jobs/JobCenter'));
+const PlayCenter = lazy(() => import('@/features/play/PlayCenter'));
 
 /**
  * Shell — full workspace layout rendered by React.
@@ -53,6 +54,7 @@ export default function Shell() {
         <TacticsModal />
         <GameViewerModal />
         <JobCenter />
+        <PlayCenter />
       </Suspense>
     </>
   );
