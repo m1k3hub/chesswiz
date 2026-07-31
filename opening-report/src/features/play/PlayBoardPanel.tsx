@@ -69,19 +69,11 @@ export default function PlayBoardPanel() {
       if (submittedRef.current >= boardMoves) return;
       submittedRef.current = boardMoves;
       const lastMove = board.getMoves()[boardMoves - 1];
-      const t0 = performance.now();
+      // The store is updated from the match.move event alone (fired for both
+      // the mover and the opponent — see usePlaySocket), not from this
+      // response, so a local move isn't double-appended to activeMatchMoves.
       api
         .submitMove(activeMatch.id, lastMove.uci)
-        .then(({ move, match, result }) => {
-          const latency = Math.round(performance.now() - t0);
-          useWorkspaceStore.getState().appendActiveMatchMove({ ...move, latencyMs: latency });
-          useWorkspaceStore.getState().patchMatch({
-            ply: match.ply,
-            clocks: match.clocks,
-            clockUpdatedAt: match.clockUpdatedAt,
-            ...(result ? { status: 'finished', result } : {}),
-          });
-        })
         .catch((e) => {
           submittedRef.current = 0;
           window.ScidbWorkspace?.toast?.(

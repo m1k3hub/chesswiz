@@ -342,7 +342,7 @@ class MockPlayBackend {
   }
 
   getMatchMoves(matchId: string): PlayMove[] {
-    return this.matches.get(matchId)?.moves ?? [];
+    return [...(this.matches.get(matchId)?.moves ?? [])];
   }
   // ---- Phase 5: offers, abort, chat (mirror the server) ----
 

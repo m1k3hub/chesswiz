@@ -98,17 +98,17 @@ const ChessBoard = forwardRef<ChessBoardHandle, ChessBoardProps>(
         const from = uci.slice(0, 2);
         const to = uci.slice(2, 4);
         const promo = (uci[4] as PromoPiece | undefined) || 'q';
-        return makeMove(from, to, promo);
+        return makeMove(from, to, promo, { external: true });
       },
     }));
 
     /* ----- position sync ----- */
 
     const syncPosition = useCallback(
-      (newFen: string) => {
+      (newFen: string, notify = true) => {
         setFenInput(newFen);
         setCurrentFen(newFen);
-        onPositionChange?.(newFen);
+        if (notify) onPositionChange?.(newFen);
       },
       [setCurrentFen, onPositionChange],
     );
@@ -122,7 +122,7 @@ const ChessBoard = forwardRef<ChessBoardHandle, ChessBoardProps>(
     /* ----- move making ----- */
 
     const makeMove = useCallback(
-      (from: string, to: string, promotion: PromoPiece = 'q'): boolean => {
+      (from: string, to: string, promotion: PromoPiece = 'q', opts?: { external?: boolean }): boolean => {
         const chess = chessRef.current;
 
         // In play mode there is no takeback, so the cursor is always at the
@@ -146,9 +146,12 @@ const ChessBoard = forwardRef<ChessBoardHandle, ChessBoardProps>(
             color: move.color,
           };
 
-          setGameHistory([...gameHistoryRef.current, entry]);
-          setCurrentPly(gameHistoryRef.current.length + 1);
-          syncPosition(chess.fen());
+          const nextHistory = [...gameHistoryRef.current, entry];
+          gameHistoryRef.current = nextHistory;
+          currentPlyRef.current = nextHistory.length;
+          setGameHistory(nextHistory);
+          setCurrentPly(nextHistory.length);
+          syncPosition(chess.fen(), !opts?.external);
           return true;
         } catch {
           return false;
