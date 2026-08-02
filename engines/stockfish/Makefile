@@ -219,7 +219,7 @@ GCC_MINOR := `$(CXX) -dumpversion | cut -f2 -d.`
 ifeq (1,$(shell expr \( $(GCC_MAJOR) \> 4 \) \| \( $(GCC_MAJOR) \= 4 \& $(GCC_MINOR) \>= 5 \)))
 	# on some systems LTO is disabled (but why?)
 	DISABLE_LTO := `$(CXX) -v 2>&1 | grep disable-lto`
-	ifeq (1,$(shell expr "$(DISABLE_LTO)" == ""))
+	ifeq (1,$(shell expr "$(DISABLE_LTO)" = ""))
 		CXXFLAGS += -flto
 		LDFLAGS += $(CXXFLAGS)
 	endif
