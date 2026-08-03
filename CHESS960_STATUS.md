@@ -60,31 +60,32 @@ when the token is present; the limitation is in generating the token.
 
 | File | Line(s) | Function | Status |
 |------|---------|----------|--------|
-| `src/db/cbh/cbh_decoder.cpp` | 467–485 | `Decoder::startDecoding()` | ⚠️ Reads only 28 bytes; comments say 36-byte format "not used in practice" |
-| `src/db/cbh/cbh_game_decoder.cpp` | 763–775 | `GameDecoder::startDecoding()` | ⚠️ Same 28-byte hardcode, duplicated |
-| `src/db/cbh/cbh_decoder_position.cpp` | 327–430 | `Position::setup(BitStream&)` | ⚠️ Reads 224 bits (28 bytes); calls `fixBadCastlingRights()` when bits exhausted |
+| `src/db/cbh/cbh_decoder.cpp` | 1090–1140 | `Decoder::setupStartPosition()` | ✅ Reads 36 bytes for Chess960 (`posSize = m_isChess960 && remaining>=36 ? 36 : 28`); passes the 28-byte part to `Position::setup` and applies the 8-byte extension's rook squares via the 2-arg `Board::setCastleShort/Long` |
+| `src/db/cbh/cbh_game_decoder.cpp` | 763–775 | `GameDecoder::startDecoding()` | ✅ Delegates to the shared `setupStartPosition(tags)` |
+| `src/db/cbh/cbh_decoder_position.cpp` | 327–430 | `Position::setup(BitStream&)` | ✅ Reads 224 bits (28 bytes); skips `fixBadCastlingRights()` when `isChess960` |
 
 ### Castling
 
 | File | Line(s) | Function | Status |
 |------|---------|----------|--------|
 | `src/db/cbh/cbh_decoder.cpp` | 115–116 | `decodeMove()` | ✅ Maps 0x09→short, 0x0a→long castling |
-| `src/db/cbh/cbh_decoder_position.cpp` | 173–201 | `Position::doCastling()` | ⚠️ Rook *source* uses `board.shortCastlingRook()` (good); rook *destination* hardcoded to FyleF/FyleD (bad for Chess960) |
-| `src/db/db_board.cpp` | 5587–5637 | `Board::doMove()` (Castle case) | ⚠️ King destination hardcoded to FyleG/FyleC; rook destination hardcoded to FyleF/FyleD — wrong for Chess960 where king is not on e-file |
+| `src/db/cbh/cbh_decoder_position.cpp` | 173–201 | `Position::doCastling()` | ✅ Rook *source* via `board.shortCastlingRook()`/`longCastlingRook()`; Convention B file-based destinations (king→g/c, rook→f/d) |
+| `src/db/db_board.cpp` | 5587–5637 | `Board::doMove()` (Castle case) | ✅ Convention B file-based destinations; `shortCastlingRook()`/`longCastlingRook()` scan the home rank |
 | `src/db/db_board.cpp` | 2573–2625 | `Board::shortCastlingRook()` / `longCastlingRook()` | ✅ Scans for rooks relative to king position on home rank; works for Chess960 |
 
 ### `m_isChess960` Usage
 
 | File | Line(s) | Status |
 |------|---------|--------|
-| `src/db/cbh/cbh_decoder.cpp` | 83 | Stored but **never read** anywhere in the decoder |
-| `src/db/cbh/cbh_decoder.h` | 61 | Declared, never used in logic |
+| `src/db/cbh/cbh_decoder.cpp` | 1106 | ✅ Used in `setupStartPosition` to select 36-byte position size and gate the count cipher (`m_useCipher`) |
+| `src/db/cbh/cbh_decoder_position.cpp` | 327 | ✅ Passed to `Position::setup` to skip `fixBadCastlingRights()` |
+| `src/db/cbh/cbh_decoder.h` | 61 | ✅ Declared and consumed by the decoder |
 
 ### XOR Encryption
 
 | File | Line(s) | Function | Status |
 |------|---------|----------|--------|
-| `src/db/cbh/cbh_codec.cpp` | 2473–2478 | `Codec::startDecoding()` | ❌ Throws `DecodingFailedException("cannot decode")` when bit 31 is set |
+| `src/db/cbh/cbh_codec.cpp` | 2472–2478 | `Codec::startDecoding()` | ✅ Throws `DecodingFailedException("encrypted game not supported (CBH bit 31 set, offset …)")` when bit 31 is set |
 
 ### Board Helpers
 
@@ -124,91 +125,53 @@ The encoder side (`cbh_encoder_position.cpp`, line 238–240) also uses
 comment: "CBH keeps castling as logical short/long tokens, even when the
 rook starts on a Chess960 file."
 
-**However**, the rook and king *destination* squares are still hardcoded.
+**Note (2026-08-03):** the decoder no longer hardcodes the rook/king
+destination squares — it uses Convention B file-based destinations and,
+for real Chess960 archives, reads the exact rook squares from the 8-byte
+position extension (see "Missing Implementation Steps" below).
 
 ---
 
 ## Missing Implementation Steps
 
-### 1. Use `m_isChess960` to skip `fixBadCastlingRights()` (critical, small)
+**Status 2026-08-03: items 1-3 and 5 are DONE.** Item 4 (XOR) is still
+blocked. The remaining gap is the H0 count-cipher coverage (deferred
+indefinitely).
 
-In `cbh_decoder_position.cpp`, `Position::setup(BitStream&)` calls
-`board.fixBadCastlingRights()` when `strm.bitsLeft() == 0` (after consuming
-the 28-byte format). This function strips castling rights when the king is
-not on e1/e8, which is wrong for Chess960.
+### 1. Use `m_isChess960` to skip `fixBadCastlingRights()` — DONE
 
-**Fix:** Pass `isChess960` to `Position::setup()` and skip
-`fixBadCastlingRights()` when true. The `m_isChess960` flag is already stored
-in the `Decoder` base class but never passed to `Position::setup()`.
+In `cbh_decoder_position.cpp`, `Position::setup(BitStream&, bool isChess960)`
+skips `board.fixBadCastlingRights()` when `isChess960` is true (previously it
+was called when `strm.bitsLeft() == 0`). This is Phase 5 Part A item A4.
 
-**Estimated size:** ~10 lines across 3 files.
+### 2. Fix castling rook/king destination squares — DONE
 
-### 2. Fix castling rook/king destination squares (critical, medium)
+`Position::doCastling()` and `Board::doMove()` (Castle case) now use
+Convention B *file-based* destinations: short → king g-file / rook f-file,
+long → king c-file / rook d-file. The rook *source* is derived from
+`Board::shortCastlingRook()`/`longCastlingRook()` (scans the home rank), and
+for real Chess960 archives the decoder additionally reads the exact rook
+squares from the 8-byte extension (see item 3).
 
-In `cbh_decoder_position.cpp` `doCastling()` (line 195):
+### 3. Handle the 36-byte position format — DONE
 
-```cpp
-Byte rookTo = sq::make(isShortCastling ? sq::FyleF : sq::FyleD, rank);
-```
+`Decoder::setupStartPosition()` reads 36 bytes for Chess960 (`posSize =
+(m_isChess960 && remaining >= 36) ? 36 : 28`), passes the 28-byte part to
+`Position::setup`, and applies the 8-byte extension's rook squares (bytes
+2-5) via the 2-arg `Board::setCastleShort/Long(color, square)`. Verified
+against the ground-truth FENs (see the "Remaining implementation work for
+Part C" section).
 
-And in `src/db/db_board.cpp` `Board::doMove()` (lines 5601–5605):
+### 4. Handle XOR encryption (0x80000000 bit) — still blocked
 
-```cpp
-if (from < to) {
-    rookTo = sq::make(FyleF, rank);
-    to = sq::make(FyleG, rank);
-} else {
-    rookTo = sq::make(FyleD, rank);
-    to = sq::make(FyleC, rank);
-}
-```
+When bit 31 is set, the game data is XOR-encrypted. Currently throws a
+precise exception. The XOR key/algorithm is unknown without analyzing CBASE16
+and requires an encrypted + unencrypted game pair.
 
-For Chess960, the correct destinations are:
-- Short: king → `from + 2`, rook → `from + 1`
-- Long: king → `from - 2`, rook → `from - 1`
+### 5. Remove duplicate `startDecoding()` code — DONE
 
-Where `from` is the king's starting square. The hardcoded g/c/f/d squares are
-only correct when the king starts on the e-file.
-
-**Fix:** Compute destinations dynamically based on `from` (king's square) when
-`isChess960` is true. This affects the core `Board` class, so it must be
-gated on the Chess960 variant flag to avoid breaking standard chess.
-
-**Estimated size:** ~20 lines in `db_board.cpp`, ~5 lines in `cbh_decoder_position.cpp`.
-
-### 3. Handle the 36-byte position format (important, medium)
-
-Both `Decoder::startDecoding()` and `GameDecoder::startDecoding()` hardcode
-`unsigned size = 28;`. The extra 8 bytes in the 36-byte format likely encode
-the Chess960 rook starting squares, which would allow proper castling setup.
-
-**Fix:** When `isChess960` is true and enough bytes remain, read 36 bytes
-instead of 28. Parse the extra 8 bytes to extract rook positions and pass
-them to `Board::setCastleShort()` / `Board::setCastleLong()`.
-
-**Risk:** ~~Without actual CBH test fixtures containing 36-byte positions, the
-format of the extra 8 bytes is speculative.~~ **RESOLVED (2026-07-22):** a
-real ChessBase `.cbv` fixture (`twic1639_grenke_freestyle_open.cbv`) is now
-committed, and `probe_cbh_chess960` confirms the 36-byte block is real and
-used by all 606 Chess960 games, with 9 distinct 8-byte extensions matching
-the 9 start positions. See the "Phase 5 Part C" section for the definitive
-probe results. The exact field layout of the 8 bytes remains to be decoded
-(correlate with the 9 known FENs).
-
-**Estimated size:** ~30 lines across 4 files. Requires verification with
-real data.
-
-### 4. Handle XOR encryption (0x80000000 bit) (low priority, unknown)
-
-When bit 31 is set, the game data is XOR-encrypted. Currently throws an
-exception. The XOR key/algorithm is unknown without analyzing CBASE16.exe.
-
-**Estimated size:** Unknown. Requires reverse engineering.
-
-### 5. Remove duplicate `startDecoding()` code (cleanup, small)
-
-`Decoder::startDecoding()` and `GameDecoder::startDecoding()` contain
-identical 28-byte position logic. Any fix must be applied to both copies.
+`GameDecoder::startDecoding()` delegates to the shared `setupStartPosition()`
+from the `Decoder` base class; the 36-byte position logic lives in one place.
 
 ---
 
