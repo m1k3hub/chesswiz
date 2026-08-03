@@ -64,6 +64,8 @@ test_export.tcl:	Total	14	Passed	14	Skipped	0	Failed	0
 ++++ audit-db-tests-load-framework-06 PASSED
 ++++ audit-db-tests-not-fully-skipped-07 PASSED
 test_audit_regressions.tcl:	Total	7	Passed	7	Skipped	0	Failed	0
+Warning: files left behind:
+	test_audit_regressions.tcl:	test_cpp_backend
 
 === Running test_widgets.tcl ===
   NOTE: Scidb widgets not loaded - using basic Tk tests
@@ -80,9 +82,8 @@ test_widgets.tcl:	Total	8	Passed	8	Skipped	0	Failed	0
 === Running test_cli_smoke.tcl ===
 ++++ cli-cdb2sci-help-01 PASSED
 ++++ cli-cbh2si4-help-02 PASSED
-test_cli_smoke.tcl:	Total	3	Passed	2	Skipped	1	Failed	0
-Number of tests skipped for each constraint:
-	1	hasVerifyCbhWrite
+++++ cli-verify-cbh-write-03 PASSED
+test_cli_smoke.tcl:	Total	3	Passed	3	Skipped	0	Failed	0
 
 === Running test_database.tcl ===
   NOTE: Scidb application not loaded - database tests will be skipped individually
@@ -118,6 +119,11 @@ Number of tests skipped for each constraint:
 ++++ src-contract-board-square-y-clamp-15d PASSED
 ++++ src-contract-board-piece-y-clamp-15e PASSED
 ++++ src-contract-database-switcher-rethrow-15f PASSED
+++++ src-contract-util-fileExtension-exists-22 PASSED
+++++ src-contract-no-raw-file-extension-for-gz-23 PASSED
+++++ src-contract-app-database-uses-helper-24 PASSED
+++++ src-contract-database-switcher-uses-helper-25 PASSED
+++++ src-contract-fsbox-uses-helper-26 PASSED
 ++++ src-contract-no-vla-engine-16 PASSED
 ++++ src-contract-sprintf-count-17 PASSED
 ++++ src-contract-cbh2si4-cbh-upper-18 PASSED
@@ -132,7 +138,7 @@ Number of tests skipped for each constraint:
 ++++ src-contract-si3-namelist-erase-no-reverse-iter-34 PASSED
 ++++ src-contract-detect-email-npos-35 PASSED
 ++++ src-contract-makefile-no-missing-src-36 PASSED
-test_source_contracts.tcl:	Total	41	Passed	41	Skipped	0	Failed	0
+test_source_contracts.tcl:	Total	46	Passed	46	Skipped	0	Failed	0
 
 === Running test_board.tcl ===
 ++++ fen-parse-startpos-01 PASSED
@@ -154,9 +160,9 @@ test_board.tcl:	Total	14	Passed	14	Skipped	0	Failed	0
 ==============================================
   Test Results Summary
 ==============================================
-Total Passed: 106
+Total Passed: 112
 Total Failed: 0
-Total Skipped: 7
-Duration: 1s
+Total Skipped: 6
+Duration: 2s
 
 STATUS: PASSED

@@ -597,7 +597,7 @@ tcltest::test src-contract-fsbox-uses-helper-26 \
     variable repoRoot
     set src [slurp [file join $repoRoot tcl widgets fsbox.tcl]]
     expr {
-        [regexp {set icon \$Vars\(fti:\[::util::fileExtension \$new\]\)} $src]
+        [regexp {set ext \[::util::fileExtension \$new\]} $src]
         && [regexp {set ext \[::util::fileExtension \$f\]} $src]
         && [regexp {\[::util::fileExtension \$Vars\(initialfile\)\] in \$Vars\(customfiletypes\)} $src]
         && [regexp {\[::util::fileExtension \$file\] in \$Vars\(customfiletypes\)} $src]

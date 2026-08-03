@@ -58,6 +58,7 @@ app-tcl: $(TEST_DIR)run_app_tests.tcl $(TEST_DIR)run_app_driver.tcl
 # ==============================================================================
 
 cpp: $(TEST_DIR)test_cpp_backend
+	@chmod +x "$(TEST_DIR)test_cpp_backend"
 	@echo "Running C++ backend tests..."
 	@"$(TEST_DIR)test_cpp_backend"
 
