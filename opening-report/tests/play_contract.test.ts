@@ -60,18 +60,18 @@ class GuestPinnedHttpClient {
     this.guestId = seedGuestId ?? null;
     this.client = new HttpScidbApiClient(baseUrl);
     const realFetch = globalThis.fetch;
-    const self = this;
     // Wrap fetch just for this client's requests: attach the pinned guest id
-    // and capture any id the server assigns/echoes back.
+    // and capture any id the server assigns/echoes back. The arrow function
+    // lexically captures `this` (the instance), so no `self` alias is needed.
     (this.client as unknown as { _fetch?: typeof fetch })._fetch = undefined;
     globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString();
       if (!url.startsWith(baseUrl)) return realFetch(input, init);
       const headers = new Headers(init?.headers);
-      if (self.guestId) headers.set('X-Play-Guest-Id', self.guestId);
+      if (this.guestId) headers.set('X-Play-Guest-Id', this.guestId);
       return realFetch(input, { ...init, headers }).then((res) => {
         const issued = res.headers.get('x-play-guest-id');
-        if (issued) self.guestId = issued;
+        if (issued) this.guestId = issued;
         return res;
       });
     }) as typeof fetch;

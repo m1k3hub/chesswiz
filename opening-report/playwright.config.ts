@@ -14,6 +14,11 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './src/e2e',
+  // Only collect Playwright specs; exclude the Vitest/jsdom tests that live
+  // alongside them in src/e2e (e.g. workspace.e2e.test.tsx). Playwright's
+  // default testMatch also matches *.test.tsx, which would make it try to run
+  // jsdom-only tests and fail on CSS imports.
+  testMatch: '**/*.spec.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
