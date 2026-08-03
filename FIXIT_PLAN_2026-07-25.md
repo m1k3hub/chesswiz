@@ -5,7 +5,14 @@ required rewriting cbh::Consumer to buffer the game tree and emit in ChessBase
 order (main continuation = first pushed variation, last alternative inline).
 Verified: `src/verify_cbh_write` PASSED (incl. new variation/annotation test
 game); libdb/libsys build clean; all edited Tcl files brace-checked.
-Pending: verify-only bugcheck re-run before closeout.
+
+**STATUS 2026-08-03: verify-only bugcheck re-run COMPLETE.** An independent
+reviewer re-read the current file content at every cited location and confirmed
+all 7 groups (A–G) are PRESENT in the current code. See the verification table
+in the commit message. Residual notes: A4's secondary `M_ASSERT(number <= 2)`
+guard is debug-only (the `encodeMove` guard at line 354 is the primary defense
+and covers all call paths); F3's help files still contain untranslated German
+in the English docs (content, not corruption).
 
 Source: full-tree bugcheck (35 confirmed findings, all adversarially verified).
 Grouped by root-cause pattern to minimize context-switching. Fix a group, run its

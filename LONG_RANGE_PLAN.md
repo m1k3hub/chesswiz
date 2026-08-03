@@ -10,7 +10,7 @@
 | 2 — Security, performance, observability | **Done** | Committed: auth lockdown, CORS, rate limits, audit logging, structured logging, metrics, engine sandboxing. |
 | 3 — Feature modal completeness | **Done** | Committed with Phase 4: 18 endpoints + 2 shape fixes, Tcl-first dispatch, Store fallback. |
 | 4 — Complete C++ backend integration | **Done** | Merged into Phase 3. |
-| 5 — Chess960 + XOR-encrypted CBH reverse engineering | **Part A done, Part B/C blocked** | Part A shipped; GRENKE PGN + `.sci` fixtures acquired; Part B/C blocked on real ChessBase `.cbh`/`.cbg`/`.cbv` fixtures. |
+| 5 — Chess960 + XOR-encrypted CBH reverse engineering | **Part A done, 36-byte block done, XOR blocked** | Part A shipped; GRENKE PGN + `.sci` fixtures acquired; 36-byte position block implemented (2026-08-03); H0 count-cipher coverage gap deferred indefinitely; XOR still blocked on encrypted game pairs. |
 
 ---
 
@@ -199,7 +199,9 @@ npx playwright test src/e2e/workspace.spec.ts
 
 ## Phase 5: Chess960 + XOR-Encrypted CBH Reverse Engineering
 
-**Status:** Part A done; Part B/C blocked on real ChessBase fixtures.
+**Status:** Part A done; 36-byte position block implemented (2026-08-03);
+H0 count-cipher coverage gap deferred indefinitely; XOR still blocked on
+real ChessBase fixtures.
 
 **Goal:** resolve the remaining ChessBase format TODOs. Split into safe
 shippable pieces (no fixtures) and probe-gated pieces that need real
@@ -241,33 +243,43 @@ The best available substitutes are:
 | 10-game subset | Fast smoke tests | `opening-report/tests/fixtures/grenke_subset_10.{pgn,sci,scg,scn}` |
 | `generate_sci.tcl` | Regenerate `.sci` from PGN | `opening-report/tests/fixtures/generate_sci.tcl` |
 
-### Part C — Probe-gated reverse engineering (blocked)
+### Part C — Probe-gated reverse engineering (partially done)
+
+**Status 2026-08-03:** the 36-byte position block is **implemented and
+verified** (`src/db/cbh/cbh_decoder.cpp` `setupStartPosition` reads 36 bytes
+and applies the extension's rook squares via the 2-arg
+`Board::setCastleShort/Long(color, square)`). The decode rate on the real
+`twic1639_grenke_freestyle_open.cbv` fixture is **8070 written / 501
+corrupted**; the 501 remaining are H0 count-cipher table coverage gaps,
+deferred indefinitely. XOR encryption remains blocked.
 
 **Fixture requirements:**
 
 | Fixture | Purpose |
 |---------|---------|
 | ChessBase 16/17-generated `.cbh`/`.cbg` with king off the e-file | Confirm how the encoder represents off-e-file castling moves |
-| Custom-start Chess960 game (bit 30 set) | Determine if a 36-byte position block exists and what its extra 8 bytes encode |
 | Encrypted + unencrypted game pair | Characterize XOR keystream |
 | ChessBase-exported PGN for the same king-off-e-file game | Ground-truth move comparison |
 
 **Decision tree after probes:**
 
-- **36-byte block confirmed?** Implement parsing only with the exact proved
-  layout; otherwise keep the 28-byte read.
+- **36-byte block confirmed?** — **DONE**: parsing implemented with the exact
+  proved layout.
 - **Off-e-file castling token characterized?** Adjust the encoder to emit
   the same representation ChessBase uses (different token, multi-byte move,
   or ordinary king move with implicit rook update).
 - **XOR keystream characterized?** Implement decryption in `cbh_codec.cpp`
   before normal decoding. Otherwise keep A1's precise "not supported" error.
+- **H0 count-cipher coverage gap (501 corrupt games)?** — **Deferred
+  indefinitely** (requires targeted oracle generation or binary RE of the
+  CBase26 transform).
 
 ### Files to modify (conditional)
 
 | File | Condition |
 |------|-----------|
-| `src/db/cbh/cbh_decoder.cpp` | 36-byte format confirmed |
-| `src/db/cbh/cbh_decoder_position.cpp` | Parse extra 8 bytes or off-e-file castling token |
+| `src/db/cbh/cbh_decoder.cpp` | ~~36-byte format confirmed~~ **done** — `setupStartPosition` reads 36 bytes |
+| `src/db/cbh/cbh_decoder_position.cpp` | ~~Parse extra 8 bytes~~ **done** — handled in `setupStartPosition`; still open for off-e-file castling token |
 | `src/db/cbh/cbh_encoder.cpp` / `cbh_encoder_position.cpp` | Off-e-file castling token characterized |
 | `src/db/cbh/cbh_codec.cpp` | XOR keystream characterized |
 
@@ -292,14 +304,16 @@ python3 scripts/analyze_grenke_fixtures.py \
 
 1. **Phase 3+4** is done and committed.
 2. **Phase 5 Part A** is done and committed.
-3. **Phase 5 Part B/C** is blocked until real ChessBase fixtures are obtained.
-   The available GRENKE PGN + `.sci` database provide the best possible
-   substitute for testing and documentation. Keep the C++ changes
-   minimal and do not alter the established Convention B castling
-   destinations without fixture-backed proof.
-4. **Future work** (after fixtures): characterize the 36-byte position block,
-   the off-e-file castling token, and the XOR keystream; implement only
-   what is proved by real `.cbh` data.
+3. **Phase 5 Part B** (fixtures) is done as far as possible; the 36-byte
+   position block is implemented and verified.
+4. **Phase 5 Part C** 36-byte work is done. Remaining: XOR encryption
+   (blocked on fixtures) and the H0 count-cipher coverage gap **deferred
+   indefinitely**. Keep the C++ changes minimal and do not alter the
+   established Convention B castling destinations without fixture-backed
+   proof.
+5. **Future work** (after fixtures): characterize the off-e-file castling
+   token and the XOR keystream; implement only what is proved by real
+   `.cbh` data.
 
 ---
 

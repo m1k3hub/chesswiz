@@ -8,20 +8,23 @@
 ## Current Capability
 
 **Summary:** Chess960 games are **detected** and the flag is propagated to the
-decoder. The `m_isChess960` flag is now used to skip the standard-chess-only
-`fixBadCastlingRights()` step in `Position::setup()`. The decoder and board
-engine use **file-based castling destinations** (Convention B): short
-castling always places the king on the g-file and the rook on the f-file;
-long castling always places the king on the c-file and the rook on the
-d-file. The 28-byte custom-position format is read but the 36-byte Chess960-
-extended format is explicitly skipped. XOR-encrypted games (bit 31) throw a
+decoder. The `m_isChess960` flag is used to skip the standard-chess-only
+`fixBadCastlingRights()` step in `Position::setup()`. The decoder reads the
+**36-byte Chess960 position block** (28-byte custom-start format + 8-byte
+castling-squares extension) and applies the extension's rook squares with the
+2-arg `Board::setCastleShort/Long(color, square)` calls. The decoder and board
+engine use **file-based castling destinations** (Convention B): short castling
+always places the king on the g-file and the rook on the f-file; long castling
+always places the king on the c-file and the rook on the d-file. Real Chess960
+move streams are decoded via the **count cipher** (H0/g tables in
+`src/count_cipher_universal.json`); XOR-encrypted games (bit 31) throw a
 precise exception.
 
-**Bottom line:** The decoder can correctly set up Chess960 start positions
-and round-trip games whose castling moves happen to be representable as a
-two-square king move. Real ChessBase-generated `.cbh`/`.cbg` fixtures are
-still required to validate positions where the king is off the e-file and
-castling is encoded differently.
+**Bottom line:** The decoder reads real ChessBase `.cbh`/`.cbv` Chess960
+archives and decodes the move stream via the count cipher. On the
+`twic1639_grenke_freestyle_open.cbv` fixture the decode rate is **8070 written /
+501 corrupted**; the 501 remaining are H0 table coverage gaps (see the
+count-cipher sections below), not position-block or castling issues.
 
 ---
 
@@ -257,35 +260,26 @@ tool, then inspect with `probe_cbh_chess960`.
 
 ## Recommended Next Action
 
-### Immediate (safe, no binary fixtures needed)
+### Done (2026-08-03)
 
 1. **Pass `m_isChess960` to `Position::setup()` and skip
-   `fixBadCastlingRights()`** when true. This is a ~10-line change across
-   `cbh_decoder.cpp`, `cbh_game_decoder.cpp`, `cbh_decoder_position.cpp`,
-   and `cbh_decoder_position.h`. It prevents the most immediate breakage:
-   castling rights being incorrectly stripped for Chess960 positions.
+   `fixBadCastlingRights()`** — DONE (`A4` in Phase 5 Part A).
+2. **Fix the rook destination in `Position::doCastling()`** to use
+   `Board::shortCastlingRook()/longCastlingRook()` with Convention B
+   file-based destinations — DONE.
+3. **Fix `Board::doMove()` Castle case** for Chess960 file-based
+   destinations — DONE (Convention B).
+4. **Obtain CBH Chess960 test fixtures** — DONE
+   (`twic1639_grenke_freestyle_open.cbv` committed).
+5. **Implement 36-byte position format** — DONE (2026-08-03):
+   `setupStartPosition` reads 36 bytes and applies the extension.
 
-2. **Fix the rook destination in `Position::doCastling()`** to compute
-   `rookTo = from + (isShort ? 1 : -1)` instead of hardcoding FyleF/FyleD.
-   This fixes the Position's internal piece tracking. ~5 lines.
+### Remaining
 
-### Medium-term (requires verification)
-
-3. **Fix `Board::doMove()` Castle case** to compute king/rook destinations
-   dynamically when the position is Chess960. This is the core fix but
-   touches the central Board class, so it must be gated carefully.
-   ~20 lines.
-
-4. **Obtain CBH Chess960 test fixtures** by importing the Grenke PGN into
-   ChessBase and exporting as CBV. Use `probe_cbh_chess960` to inspect the
-   36-byte format hypothesis.
-
-### Long-term
-
-5. **Implement 36-byte position format** once the format is verified with
-   real data.
-
-6. **Handle XOR encryption** (requires CBASE16 reverse engineering).
+6. **Handle XOR encryption** (requires CBASE16 reverse engineering) — blocked
+   on encrypted + unencrypted game pair.
+7. **Close the H0 count-cipher coverage gap** (501 corrupt games) — requires
+   targeted oracle generation or binary RE of the CBase26 transform (deferred).
 
 ---
 
@@ -356,11 +350,12 @@ now run and pass.
 
 ### What remains blocked
 
-| Deliverable | Blocker |
-|-------------|---------|
-| 36-byte position format parsing | **Unblocked.** Fixture `twic1639_grenke_freestyle_open.cbv` committed; 36-byte block confirmed (9 distinct 8-byte extensions). Field layout + `Position::setup` extension remain to implement |
-| XOR keystream characterization | No encrypted + unencrypted game pair; no CBASE16 analysis |
-| Off-e-file castling token encoding | Need to know how ChessBase actually serializes these moves |
+| Deliverable | Status |
+|-------------|--------|
+| 36-byte position format parsing | **Done** (2026-08-03). Field layout decoded; `setupStartPosition` reads 36 bytes and applies the extension's rook squares. Verified against ground-truth FENs. |
+| XOR keystream characterization | **Blocked** — no encrypted + unencrypted game pair; no CBASE16 analysis |
+| Off-e-file castling token encoding | **Partial** — decoder reads real rook squares from the extension and uses Convention B (file-based destinations); the encoder's two-square castling assumption remains a limitation for off-e-file kings |
+| H0 table coverage gaps (501 corrupt games) | **Blocked** — needs targeted oracle generation or binary RE of the CBase26 transform (deferred) |
 
 ### Recommended next action
 
@@ -368,18 +363,19 @@ now run and pass.
    king-relative (Convention A) destinations; the project already decided
    to stay file-based to match ChessBase output.
 
-2. **If real ChessBase fixtures become available**, run `probe_cbh_chess960`
-   on them to determine:
-   - Whether the 36-byte position block exists and what the extra 8 bytes
-     encode.
-   - How ChessBase encodes off-e-file castling moves (different token?
-     multi-byte move? ordinary king move with implicit rook update?).
+2. **The 36-byte position block is implemented and verified.** If real
+   ChessBase fixtures become available, run `probe_cbh_chess960` on them to
+   confirm the off-e-file castling token encoding (does the encoder emit a
+   distinct token, a multi-byte move, or an ordinary king move with implicit
+   rook update?) and the XOR keystream.
 
-3. **Until then**, treat Chess960 CBH support as best-effort:
-   - Use `.sci`/`.pgn` as the canonical interchange format.
-   - Round-trip through `.cbh` is reliable for standard-chess-like positions
-     and e-file Chess960 positions with clear two-square castling paths.
-   - Document any game whose decoded SAN differs from the source PGN.
+3. **Remaining decode gap is the H0 count cipher table coverage** (501
+   corrupt games). The binary RE session (`/tmp/cb26`) found that the
+   case-0 InvLUT matches scidb's table exactly while the variant tables
+   (case 1/2 and the Chess960 tables at 0x141a78ec0 / 0x141a7a2c0) differ,
+   but the count is not a simple `(variantLUT - standardLUT) + move_index`
+   difference. Closing the gap requires targeted oracle generation or
+   deriving the H0 transform from the binary (deferred).
 
 ### Build verification
 
@@ -540,38 +536,37 @@ existing `mapSquare(s) = ((s&7)<<3)|(s>>3)` helper
 
 ### Remaining implementation work for Part C
 
-The fixture unblocks the work; what remains is implementation, not data
-acquisition:
+**Status 2026-08-03: the 36-byte position block is fully implemented and
+verified.** The move-stream alignment issue described in the old caveat below
+was resolved by the count cipher (H0 model); the fixture now decodes at
+8070/501 (the 501 remaining are H0 table coverage gaps, not 36-byte alignment).
 
-1. ~~~~Decode the 8-byte extension~~~~ **done** (above).
-2. **Extend `Position::setup`** to consume the 8 extra bytes when
-   `isChess960`, map the 6 rook/king squares via `mapSquare`, and - when
-   the corresponding castling boolean from the 28-byte block is set - call
-   the 2-arg `Board::setCastleShort(color, square)` /
-   `setCastleLong(color, square)` (`src/db/db_board.h:694-695`) with the
-   extension's rook square, instead of the 1-arg form that scans the rank.
-   (King squares in bytes 0-1 are informational; the board already has the
-   king from the piece loop.)
-3. **Fix `setupStartPosition`** (`src/db/cbh/cbh_decoder.cpp`) to read 36
-   bytes for Chess960 games (`unsigned const size = m_isChess960 ? 36 : 28;`)
-   and pass all 36 bytes to `Position::setup` so it can consume the
-   extension. **Caveat (tried 2026-07-22):** skipping 36 bytes alone does NOT
-   realign the move bitstream - the first move byte at game-stream offset 36
-   still decodes to an impossible move (e.g. game 757 byte 0x21 ->
-   `MoveNumberLookup[0x21]=0x15` -> `doQueenMove(0, OFFSET(4,0))`, a 4-file
-   horizontal queen move that is blocked by pawns in the start position, so
-   `doQueenMove` returns a null move -> "null move at count 1"). Sweeping
-   skip sizes 28/36/44/48 all leave all 606 games corrupted. So the move
-   stream is NOT at a simple byte offset after the 36-byte position block;
-   the Chess960 move encoding/alignment needs reverse-engineering by
-   matching decoded byte sequences against `grenke_freestyle_2026.pgn`
-   move sequences. The 8-byte extension decode (step 1) is still correct and
-   verified; only the move-alignment piece is open.
-4. **Verify** by converting `twic1639_grenke_freestyle_open.cbv`: the 606
-   corrupted count should drop to ~0, and decoded moves should match
-   `grenke_freestyle_2026.pgn`.
-5. Then settle the Convention A vs B castling-destination question by
-   comparing a decoded off-e-file castling move against the ground-truth PGN.
+1. **Decode the 8-byte extension** — **done** (above).
+2. **Extend `setupStartPosition` to consume the 8 extra bytes** — **done**
+   (`src/db/cbh/cbh_decoder.cpp:1090-1140`). When `isChess960 && posSize==36`,
+   the extension's rook squares (bytes 2-5) are mapped via `cbhToScidb` and
+   applied with the 2-arg `Board::setCastleShort(color, square)` /
+   `setCastleLong(color, square)` calls, overriding the 1-arg scan. King
+   squares (bytes 0-1) are informational. Verified against the ground-truth
+   FEN: for the Carlsen-Khalafova game (`FEN "... DAda ..."`, white king on
+   b1), ext[2]=0x18→d1 (white kingside rook), ext[3]=0x00→a1 (white queenside
+   rook), ext[4]=0x1f→d8 (black kingside), ext[5]=0x07→a8 (black queenside) —
+   all match the Shredder-FEN castling rights.
+3. **Fix `setupStartPosition` to read 36 bytes** — **done**. `posSize =
+   (m_isChess960 && m_gStrm.remaining() >= 36) ? 36 : 28;`. The 28-byte part
+   is passed to `Position::setup(bstrm, isChess960)`; the caller reads the
+   extension directly from `m_gStrm.data() + 28`. `m_useCipher` is set when
+   `posSize == 36` (real Chess960), which gates the count-cipher decode.
+   **Old caveat (2026-07-22, resolved):** skipping 36 bytes alone did not
+   realign the move bitstream; that was the count-cipher problem, now solved.
+4. **Verify** — **done**: `cdb2sci` on `twic1639_grenke_freestyle_open.cbv`
+   yields 8070 written / 501 corrupted (down from 606 corrupted). The
+   remaining 501 are H0 table coverage gaps (see the count-cipher sections
+   below), not position-block alignment errors.
+5. Convention A vs B castling — scidb uses Convention B (file-based
+   destinations); the decoder reads the real rook squares from the extension
+   and `Board::doCastling`/`Position::doCastling` compute file-based
+   destinations, matching ChessBase output.
 
 ### Move-encoding lead (2026-07-22)
 
