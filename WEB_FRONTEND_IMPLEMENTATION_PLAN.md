@@ -45,6 +45,7 @@ Recommended frontend: TypeScript + React + Vite, with a small state layer (Zusta
 | UCI engine, PVs, eval, tablebases | Analysis inspector | WebSocket `/analysis`, `POST /engines/:id/start` |
 | Namebases and ECO table | Index browser | `GET /indexes/:type`, `GET /eco` |
 | Import/export progress | Job center | `GET /jobs/:id`, WebSocket `/events` |
+| Internet chess play (ICC/Lichess/Chess.com/ChessBase style) | Play center | WebSocket `/play`, `POST /play/match`, `POST /play/move`, `POST /play/resign` |
 
 ## First implementation slice
 
@@ -56,6 +57,79 @@ Recommended frontend: TypeScript + React + Vite, with a small state layer (Zusta
 6. Add a runtime adapter endpoint for the existing Python opening-report proxy.
 7. Add WebSocket job events for imports, reports, maintenance, and engine analysis.
 8. Replace mock providers one capability at a time with C++/Tcl-backed handlers.
+
+## Internet chess server (online play)
+
+Add a live-play capability so scidb-beta can host and join real-time chess games over the internet through the same scid-style board used for analysis — ICC, Lichess, Chess.com, and ChessBase Playchess are the reference UX targets. The board, move entry, clock, and notation must be identical whether the opponent is local, a server bot, or a remote human, so the play experience is a *mode* of the existing board, not a separate widget.
+
+### Scope and game lifecycle
+
+- Supported formats: unlimited/blitz/rapid/bullet correspondence, Chess960, and custom start positions (FEN/PGN seed).
+- Match types: casual, ranked/rated, tournament, simul (one player vs. many), and engine-assisted analysis-free rated play.
+- Lifecycle: seek/graph challenge → match → play → finish (mate/draw/resign/timeout/disconnect/adjudication) → stored game archived into a scidb database as PGN.
+
+### Architecture
+
+```text
+Browser Play Center
+  ├─ scid-style ChessBoard (shared with analysis mode)
+  ├─ Move/clock/offer controller
+  ├─ Seek graph + challenge list + game list
+  └─ WebSocket play channel
+       │
+  ├─ Play service (WebSocket /play)
+  │    ├─ matchmaker, rating, seek graph, challenge/accept
+  │    ├─ move validation (server-authoritative), clock, offers
+  │    ├─ anti-cheat (move-time heuristics, engine-detection hooks)
+  │    └─ game archival → PGN → scidb database
+  │
+  └─ Optional federation bridge
+       ├─ ICC/Lichess/Chess.com API + OAuth (play-through proxy)
+       └─ Playchess/ChessBase network connector
+```
+
+Server is the source of truth for move legality, clocks, and results; the client is a thin renderer that submits intents and renders streamed state. Reconnect and resync after dropped WebSocket is required.
+
+### Board integration rules
+
+- The Play Center reuses `features/board/ChessBoard` and the scid move-entry path (click-click, drag, SAN/UCI entry). No board fork.
+- A `playMode` flag on workspace state switches the board from analysis mode (free move, takeback, engine) to play mode (only legal moves, no takeback, clock running, engine disabled in rated games).
+- Arrows, highlights, and last-move markers behave the same as analysis mode; promotion, draw offers, resign, and rematch are first-class board-adjacent controls.
+- Clocks render beside the board and in the notation rail; flag-fall ends the game.
+- Game chat (optional), watchers/spectators, and PV-less eval-only spectator mode for rated games.
+
+### API and events
+
+- `POST /play/seek` — create a seek (time control, variant, rated, color, rating range).
+- `POST /play/challenge/:user` — direct challenge.
+- `POST /play/match/:id/accept|decline` — accept/decline.
+- `POST /play/match/:id/move` — submit a move (UCI/SAN); server validates and broadcasts.
+- `POST /play/match/:id/offer` — draw/abort/rematch/takeback (casual only) offers.
+- `POST /play/match/:id/resign` — resign.
+- WebSocket `/play` — match updates, opponent moves, clock ticks, offers, chat, and terminal events (checkmate, stalemate, draw, flag, disconnect, adjudication).
+- `POST /play/match/:id/archive` — store finished game as PGN into a chosen scidb database.
+- Federation bridge: `POST /federations/:provider/connect` (OAuth handshake), `GET /federations/:provider/seeks`, `POST /federations/:provider/play` — proxy games through a configured external server when enabled.
+
+### Rating, pairing, and integrity
+
+- Glicko-2 per format and variant; provisional games; rating floors/ceilings configurable.
+- Matchmaker pools by time control, variant, rating band, and seek freshness; tournament brackets supported.
+- Anti-cheat: server-side move-time and blur-loss heuristics, optional Stockfish-correlation screening for rated games, and a review queue with adjudicator actions.
+- Disconnect handling: grace window (configurable per time control), auto-flag/resign on timeout, and resync on reconnect using match state snapshot.
+- Fair-play: no engine assistance in rated games (engine inspector disabled in `playMode` rated), move premove/lag compensation, and abort/adjourn rules.
+
+### Security and operational rules (online play)
+
+- WebSocket auth via the same OIDC session token; per-match authorization enforced server-side.
+- Rate-limit seeks, challenges, and moves; per-user concurrent game cap.
+- Clocks are server-authoritative; never trust client clock values for results.
+- Sanitize chat; optional per-match chat disable and reporting.
+- Audit moves, offers, disconnects, and adjudications; archive all rated games.
+- Isolate federation bridges behind separate OAuth credentials and per-provider rate limits; never proxy untrusted game state into the scidb runtime without validation.
+
+### Federation (optional) bridge
+
+The first release ships scidb-native play. Federation bridges to ICC, Lichess, Chess.com, and Playchess are optional, gated behind provider OAuth and admin approval, and treated as untrusted input — moves from external servers are validated against the scidb rules engine before rendering or archiving.
 
 ## API and runtime rules
 
@@ -106,11 +180,15 @@ Keep the frontend static and the API contract portable. Package the runtime adap
 3. **Search and tree:** advanced/material/rating/CQL search, working sets, opening tree.
 4. **Preparation:** repertoire, opening prep, player cards, opponent dossiers.
 5. **Analysis and maintenance:** UCI engine, crosstables, duplicates, ECO stats, compaction.
-6. **Production hardening:** auth, quotas, observability, object storage, AWS/Cloudflare deployment manifests, browser and adapter contract tests.
+6. **Online play (scidb-native):** Play Center, scid-style board in play mode, seek graph, match lifecycle, server-authoritative clocks/moves, Glicko-2, anti-cheat, game archival to PGN.
+7. **Federation (optional):** ICC/Lichess/Chess.com/Playchess OAuth bridges behind admin approval; treated as untrusted input.
+8. **Production hardening:** auth, quotas, observability, object storage, AWS/Cloudflare deployment manifests, browser and adapter contract tests.
 
 ## Definition of done for the first release
 
 - A user can upload/open a database, browse games, open a game on the board, edit a variation, search by player/position/material, inspect the opening tree, generate an opening report, and export PGN from a browser.
+- A user can create a seek, accept a challenge, play a real-time game (including Chess960) on the same scid-style board used for analysis, with server-authoritative clocks and move legality, and archive the finished game as PGN into a scidb database.
+- Federation bridges to external servers (when enabled) let a user connect an external account and play through scidb-beta, with external game state validated before rendering or archiving.
 - Long-running work has visible progress, cancellation, and retry states.
 - The frontend can run against mock data, the opening-report proxy, or the production runtime adapter through environment configuration.
 - The same Dockerized API/runtime contract can be deployed on AWS, while the SPA can be served from either AWS CloudFront/S3 or Cloudflare Pages.
