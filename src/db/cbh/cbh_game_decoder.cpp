@@ -625,7 +625,9 @@ GameDecoder::decodeMoves(MoveNode* root, unsigned& count)
 			case Token_Push:
 				node = new MoveNode;
 				varList.push_back(node);
+				pushCipherState();
 				decodeMoves(node, count);
+				popCipherState();
 				break;
 
 			case Token_Pop:
@@ -724,7 +726,9 @@ GameDecoder::decodeMoves(MoveNode* root, unsigned& count, MoveNodeAllocator& all
 			case Token_Push:
 				node = allocator.allocate();
 				varList.push_back(node);
+				pushCipherState();
 				decodeMoves(node, count, allocator);
+				popCipherState();
 				break;
 
 			case Token_Pop:

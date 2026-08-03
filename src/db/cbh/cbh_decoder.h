@@ -64,6 +64,16 @@ protected:
 	/// Throws DecodingFailedException if the stream has insufficient data.
 	void setupStartPosition(TagSet* tags);
 
+	/// Save the current Chess960 count-cipher state onto a stack.
+	/// Called by the game decoder when entering a variation (Token_Push),
+	/// so the main line can resume from its divergence point.
+	void pushCipherState();
+
+	/// Restore the Chess960 count-cipher state most recently saved by
+	/// pushCipherState(). Called when leaving a variation (Token_Pop).
+	/// A no-op if the stack is empty (corrupt/balanced-input edge cases).
+	void popCipherState();
+
 	util::ByteStream&	m_gStrm;
 	decoder::Position	m_position;
 	bool					m_isChess960;
@@ -99,6 +109,16 @@ private:
 	unsigned				m_rawPrev;		///< Raw byte of the last cipher-decoded move (bracket detection)
 	unsigned				m_missCount;		///< Top-level full-miss count (per-game budget)
 	unsigned				m_curPly;		///< Ply of the move currently being dispatched (0xeb parameter lookup)
+
+	struct CipherStateSave
+	{
+		unsigned count;
+		unsigned lcPrev;
+		unsigned rawPrev;
+		bool active;
+	};
+
+	mstl::stack<CipherStateSave>	m_cipherStack; ///< Per-game cipher-state stack for variations
 };
 
 } // namespace cbh

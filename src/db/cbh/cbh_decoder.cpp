@@ -132,6 +132,29 @@ Decoder::resolveCipherCount(unsigned candidateLc, unsigned ply) const
 }
 
 
+void
+Decoder::pushCipherState()
+{
+	CipherStateSave s = { m_cipherCount, m_lcPrev, m_rawPrev, m_cipherActive };
+	m_cipherStack.push(s);
+}
+
+
+void
+Decoder::popCipherState()
+{
+	if (m_cipherStack.empty())
+		return;
+
+	CipherStateSave const& s = m_cipherStack.top();
+	m_cipherCount = s.count;
+	m_lcPrev = s.lcPrev;
+	m_rawPrev = s.rawPrev;
+	m_cipherActive = s.active;
+	m_cipherStack.pop();
+}
+
+
 int
 Decoder::walkContinuation(unsigned startCount, unsigned startLc, unsigned startRaw, unsigned startPly, unsigned depth)
 {

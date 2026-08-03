@@ -14,6 +14,14 @@ include ../Makefile.in
 
 .SUFFIXES: .cpp
 
+# FORCE: the recursive library rules below always delegate to their sub-make
+# (which decides actual staleness from the sources).  Without this, a rule
+# like 'db/libdb.a' with no prerequisites is considered permanently up to
+# date and never recurses, so a changed libdb.a source would never be
+# rebuilt — and dependents (e.g. verify_cbh_write) would link a stale libdb.a.
+.PHONY: FORCE
+FORCE:
+
 TK_PROGRAM		= tkscidb$(SUFFIX)
 TCL_PROGRAM		= tclscidb$(SUFFIX)
 
@@ -221,64 +229,64 @@ recursive:
 		if [ $$? != 0 ]; then exit 1; fi; \
 	done
 
-mstl/libmstl.a:
+mstl/libmstl.a: FORCE
 	$(MAKE) -C mstl
 
-sys/libsys.a:
+sys/libsys.a: FORCE
 	$(MAKE) -C sys
 
-util/libutil.a:
+util/libutil.a: FORCE
 	$(MAKE) -C util
 
-util/minizip/libminizip.a:
+util/minizip/libminizip.a: FORCE
 	$(MAKE) -C util/minizip
 
-util/zzip/libzzip.a:
+util/zzip/libzzip.a: FORCE
 	$(MAKE) -C util/zzip
 
-util/libharu/libharu.a:
+util/libharu/libharu.a: FORCE
 	$(MAKE) -C util/libharu
 
-util/libTeXt/libTeXt.a:
+util/libTeXt/libTeXt.a: FORCE
 	$(MAKE) -C util/libTeXt
 
-util/universalchardet/libchardet.a:
+util/universalchardet/libchardet.a: FORCE
 	$(MAKE) -C util/universalchardet
 
-util/libhyphenate/libhyphenate.a:
+util/libhyphenate/libhyphenate.a: FORCE
 	$(MAKE) -C util/libhyphenate
 
-tcl/libtcl.a:
+tcl/libtcl.a: FORCE
 	$(MAKE) -C tcl
 
-tk/libtk.a:
+tk/libtk.a: FORCE
 	$(MAKE) -C tk
 
-tk/jpeg/libjpegd.a:
+tk/jpeg/libjpegd.a: FORCE
 	$(MAKE) -C tk/jpeg
 
-tk/svg/libsvg.a:
+tk/svg/libsvg.a: FORCE
 	$(MAKE) -C tk/svg
 
-tk/svg/agg/libagg.a:
+tk/svg/agg/libagg.a: FORCE
 	$(MAKE) -C tk/svg/agg
 
-tk/treectrl/libtreectrl.a:
+tk/treectrl/libtreectrl.a: FORCE
 	$(MAKE) -C tk/treectrl
 
-tk/html/libTkhtml3.a:
+tk/html/libTkhtml3.a: FORCE
 	$(MAKE) -C tk/html
 
-tk/text/libTkText.a:
+tk/text/libTkText.a: FORCE
 	$(MAKE) -C tk/text
 
-app/libapp.a:
+app/libapp.a: FORCE
 	$(MAKE) -C app
 
-db/libdb.a:
+db/libdb.a: FORCE
 	$(MAKE) -C db
 
-db/libdbstubs.a:
+db/libdbstubs.a: FORCE
 	$(MAKE) -C db libdbstubs.a
 
 #permute_eco: permute_eco.o $(LIBS)

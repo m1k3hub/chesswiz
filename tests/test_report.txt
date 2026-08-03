@@ -163,6 +163,6 @@ test_board.tcl:	Total	14	Passed	14	Skipped	0	Failed	0
 Total Passed: 112
 Total Failed: 0
 Total Skipped: 6
-Duration: 2s
+Duration: 1s
 
 STATUS: PASSED
