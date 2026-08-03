@@ -46,6 +46,10 @@ llmos-plan.md
 .claude/*
 !.claude/skills/
 
+# stray OCR/session artifacts (tesseract setup)
+--psm.txt
+tesseract-*.tar.gz
+
 # generated test artifacts
 tests/tmp-app/
 tests/test_cpp_backend
