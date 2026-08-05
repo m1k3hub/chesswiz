@@ -1039,6 +1039,33 @@ game-header "newer format" flag `0x08000000`).
   .cbg bytes. For the correct TWIC-vs-scidb offset math, follow
   `scripts/harvest_h0_fverified.py`, not harvest_dada_oracle.py.
 
+### Move-accuracy audit + CBV-aligned harvest results (2026-08-05, evening)
+
+A move-level audit (probe_dump_moves + python-chess vs the Grenke PGN)
+established the true decode-quality metric: **the 8070/501 "written/corrupted"
+counts measure how many games throw DecodingFailedException, NOT correctness.**
+Checked three ways (lastname-pair, position+name, position+name+round): the
+exact-move-match rate for Chess960 games in the fixture is 0-9 of 85-305
+verified — i.e. ~97-100% of written Chess960 games contain wrong moves. Even
+games that never hit an H0 table gap decode wrong, because the ambiguity
+continuation-walk mis-picks with a sparse table. Standard chess in the same
+CBV remains 100% correct (median 83 plies vs PGN).
+
+CBV-aligned harvesting (489 of 534 PGN games matched to CBV games by
+lastname+round, vs 59 via the old naive index assumption) was tried with
+three strengths:
+1. Permissive (derived chain, add-only): +26,919 entries -> 8043/528, WORSE (-27).
+   Hidden drift: 93/396 matched games contain variation tokens (Push/Pop)
+   that a 1:1 walk misreads, silently poisoning derived counts.
+2. Strict all-or-nothing (verified-every-ply): +355 entries from 23 games,
+   too conservative to matter.
+3. Bracketed (gap entries only between verified neighbor plies): +830 entries,
+   8079/492 (+9 written, -24​ lost, +33 gained). Still 0% exact vs PGN.
+
+Conclusion: table-coverage harvesting from this single fixture cannot produce
+move-accurate Chess960 decode. The 440K-entry table state is the best
+maintained state; further marginal harvests trade regressions for noise.
+
 ### Path forward (priority order)
 
 1. **Re-acquire CBASE16 binary and extract H0 algorithm** (highest impact):
