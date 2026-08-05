@@ -32,6 +32,10 @@ src/probe_cbh_chess960
 src/verify_maintenance
 src/recover_index
 src/cdb2sci
+src/probe_dump_moves
+
+# ChessBase archive fixtures (large, re-downloadable)
+opening-report/tests/fixtures/*.cbv
 
 # local scratch / generated data
 fix-sci.*
