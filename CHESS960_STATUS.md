@@ -1016,6 +1016,29 @@ improve beyond 5/606. Key findings:
    cipher is NOT in CBase16.exe anyway (it uses count=move_index, not H0).
    The chess960 encoder that uses the H0 cipher is a different code path.
 
+### Synthetic-harvest negative result (2026-08-05)
+
+Attempted to close the coverage gap by synthetically generating DAda-class
+opening corpora (plies 10-40) and harvesting H0 entries from scidb's own
+encoder output (`scripts/harvest_dada_oracle.py`, via `probe_encode_many`).
+FAILED, and the mechanism is now proven:
+
+- `Encoder::encodeMove` (src/db/cbh/cbh_encoder.cpp) writes
+  `raw = InvLUT[lc] + move_index`. The H0 cipher is a *separate* byte-stream
+transform that exists only inside ChessBase 26.8's encoder (gated by the
+game-header "newer format" flag `0x08000000`).
+- Chaining counts from scidb's encoded bytes therefore yields
+  `count == move_index` at every ply — a tautology. Harvested entries are
+  move-index counts mislabeled as H0 counts: noise.
+- Verified: 13,938 such entries merged 2026-08-05 gave 0 decode improvement
+  (8070/501 unchanged); merge was reverted (`count_cipher_universal.json`
+  restored from the pre-dada backup).
+- The *only* working oracle is ChessBase 26.8 under Wine (see the 2026-07-26
+  BREAKTHROUGH section below): bulk-generate DAda-class games to ply 10-40
+  with the fixture's actual first-move distribution, then harvest from those
+  .cbg bytes. For the correct TWIC-vs-scidb offset math, follow
+  `scripts/harvest_h0_fverified.py`, not harvest_dada_oracle.py.
+
 ### Path forward (priority order)
 
 1. **Re-acquire CBASE16 binary and extract H0 algorithm** (highest impact):
