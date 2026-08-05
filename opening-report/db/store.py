@@ -569,11 +569,13 @@ class RedisStore(Store):
         *,
         job_ttl_seconds: int = JOB_TTL_SECONDS,
         analysis_ttl_seconds: int = ANALYSIS_TTL_SECONDS,
+        redis_client: Any | None = None,
     ) -> None:
         self._redis_url = redis_url
         self._job_ttl = job_ttl_seconds
         self._analysis_ttl = analysis_ttl_seconds
-        self._redis = None
+        # Allow injecting a pre-built async client (e.g. fakeredis in tests).
+        self._redis = redis_client
         # Fallback in-memory data for databases/games when no PostgresStore
         self._databases: list[dict[str, Any]] = [dict(d) for d in _SEED_DATABASES]
         self._games: list[dict[str, Any]] = [dict(g) for g in _SEED_GAMES]

@@ -5,6 +5,12 @@ websockets>=12
 python-multipart>=0.0.9
 pytest>=8
 pytest-asyncio>=0.23
+# Test-only: in-process Redis emulation so RedisStore tests need no external
+# server (tests fall back to fakeredis when REDIS_URL is unset)
+fakeredis>=2.30
+
+# Test-only: lets the async PostgresStore tests run against SQLite with no
+# PostgreSQL server (tests skip automatically when absent)
 # Optional: Redis event bus (enable by setting REDIS_URL)
 redis>=5.0
 # Optional: S3 / S3-compatible object storage (enable by setting S3_BUCKET)

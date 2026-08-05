@@ -145,13 +145,21 @@ class TestMemoryStore:
 REDIS_URL = os.environ.get("REDIS_URL", "")
 
 
-@pytest.mark.skipif(not REDIS_URL, reason="REDIS_URL not set")
 class TestRedisStore:
-    """RedisStore tests — require a running Redis instance."""
+    """RedisStore tests. Uses a real Redis when REDIS_URL is set, otherwise a
+    fakeredis in-process client (so the suite needs no external infra)."""
 
     @pytest.fixture
     def store(self):
-        s = RedisStore(REDIS_URL)
+        if REDIS_URL:
+            s = RedisStore(REDIS_URL)
+        else:
+            try:
+                import fakeredis.aioredis
+            except ImportError:
+                pytest.skip("neither REDIS_URL nor fakeredis available")
+            fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
+            s = RedisStore("redis://localhost:6379", redis_client=fake)
         yield s
         loop = asyncio.new_event_loop()
         loop.run_until_complete(s.close())
