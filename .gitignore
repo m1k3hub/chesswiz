@@ -53,3 +53,4 @@ tesseract-*.tar.gz
 # generated test artifacts
 tests/tmp-app/
 tests/test_cpp_backend
+src/probe_dump_moves

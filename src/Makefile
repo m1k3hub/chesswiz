@@ -98,6 +98,8 @@ TARGETS += verify_cbh_write
 TARGETS += probe_cbh_chess960
 TARGETS += scan_db_chess960
 TARGETS += list_cbv_headers
+TARGETS += probe_dump_moves
+TARGETS += probe_match_game
 
 all: check-mtime recursive cbh2si4 cdb2sci $(TK_PROGRAM) $(TCL_PROGRAM)
 tkscidb-only: recursive $(TK_PROGRAM)
@@ -353,6 +355,14 @@ scan_db_chess960: scan_db_chess960.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
 list_cbv_headers: list_cbv_headers.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
+probe_dump_moves: probe_dump_moves.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
+probe_match_game: probe_match_game.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
 

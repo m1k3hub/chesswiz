@@ -32,6 +32,9 @@
 #include "cbh_count_cipher.h"
 #include "m_exception.h"
 
+#include <cstdlib>
+#include <cstdio>
+
 
 static db::cbh::CountCipher s_cipher;
 static unsigned char s_invLUT[256];
@@ -618,6 +621,35 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 				{
 					lc = bestLc;
 					decodeCount = bestCount;
+				}
+				else if (bestLc != 0xff && bestScore >= 1 && bestScore - secondScore < 1)
+				{
+					// OPT-IN experimental fallback (CBH_FALLBACK_MIN_SCORE): the
+					// best candidate's own move is legal on the board, but the
+					// continuation walk cannot find a well-separated winner (H0
+					// table gap on the continuation).  Accepting the best LEGAL
+					// move rescues games that would otherwise fail, but is silent
+					// corruption when the pick is wrong.  Move-vs-PGN validation
+					// (2026-08-04) shows ~3% precision on the Grenke fixture, so
+					// this is OFF unless explicitly requested.  The real fix is
+					// H0 table coverage, not this fallback.
+					char const* mins = ::getenv("CBH_FALLBACK_MIN_SCORE");
+					if (mins)
+					{
+						int minScore = ::atoi(mins);
+						if (bestScore >= minScore)
+						{
+							lc = bestLc;
+							decodeCount = bestCount;
+						}
+					}
+				}
+				if (::getenv("CBH_FALLBACK_DIAG"))
+				{
+					if (bestLc == 0xff)
+						::fprintf(stderr, "[fbdiag] no legal candidate (bestLc=0xff) move %u\n", count);
+					else if (bestScore - secondScore < 1)
+						::fprintf(stderr, "[fbdiag] tie bestScore=%d second=%d (bestLc=%u) move %u\n", bestScore, secondScore, bestLc, count);
 				}
 			}
 
