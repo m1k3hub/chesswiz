@@ -58,9 +58,17 @@ async function playMoveAndSync(mover: Page, other: Page, from: string, to: strin
 }
 
 test.describe('Online play — two players', () => {
-  test('create seek, accept, play Fool\'s mate, board/clock/finish reflect the result on both sides', async ({ context }) => {
-    const pageA = await context.newPage();
-    const pageB = await context.newPage();
+  test('create seek, accept, play Fool\'s mate, board/clock/finish reflect the result on both sides', async ({ browser }) => {
+    // Two SEPARATE browser contexts. Each context has its own storage partition
+    // and therefore its own guest identity (sessionStorage). This is required
+    // for the real backend: the server keys the local player by the
+    // X-Play-Guest-Id header, so two players must be distinct guests (A cannot
+    // accept its own seek). The two clients then sync through the server, not
+    // a local BroadcastChannel.
+    const contextA = await browser.newContext();
+    const contextB = await browser.newContext();
+    const pageA = await contextA.newPage();
+    const pageB = await contextB.newPage();
 
     await openPlay(pageA);
     await openPlay(pageB);

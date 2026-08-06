@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createApiClient } from '@/api/client';
-import { mockPlay } from './mockPlayBackend';
 import type { PlayMatch } from '@/types';
+import { isLocalPlayer } from './playIdentity';
 
 const api = createApiClient();
 
@@ -17,15 +17,14 @@ export interface MatchControlsProps {
   match: PlayMatch;
 }
 
-function myColor(match: PlayMatch, meId: string): 'w' | 'b' {
-  return match.white.id === meId ? 'w' : 'b';
+function myColor(match: PlayMatch): 'w' | 'b' {
+  return isLocalPlayer(match.white.id) ? 'w' : 'b';
 }
 
 export default function MatchControls({ match }: MatchControlsProps) {
   const [busy, setBusy] = useState(false);
   const toast = window.ScidbWorkspace?.toast || console.log;
-  const meId = mockPlay.me.id;
-  const color = myColor(match, meId);
+  const color = myColor(match);
   const finished = match.status === 'finished';
 
   // Opponent's pending offer (the side != mine).

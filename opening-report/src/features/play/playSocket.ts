@@ -11,12 +11,19 @@
 
 import type { PlayEvent, PlaySeek } from '@/types';
 import { mockPlay } from './mockPlayBackend';
+import { getPlayGuestId } from './playIdentity';
 
 export interface PlaySocket {
   /** Subscribe to play events. Returns an unsubscribe function. */
   subscribe(handler: (event: PlayEvent) => void): () => void;
   /** Connection state. */
   readonly connected: boolean;
+  /**
+   * Real (WebSocket) transport vs in-process mock. Callers that need extra
+   * polling (e.g. seek discovery the WS does not push) should only do it for
+   * the real transport.
+   */
+  readonly isRealTransport: boolean;
   /**
    * Anti-cheat v1 signal (Phase 7): report focus-out during the opponent's
    * turn. Fire-and-forget; no-op on the mock transport.
@@ -33,17 +40,8 @@ function wsBase(): string {
   return `${protocol}//${window.location.host}`;
 }
 
-function guestId(): string {
-  if (typeof sessionStorage === 'undefined') return '';
-  let id = sessionStorage.getItem('scidb-play-guest-id');
-  if (!id) {
-    id = 'guest-' + Math.random().toString(36).slice(2, 10);
-    sessionStorage.setItem('scidb-play-guest-id', id);
-  }
-  return id;
-}
-
 class WsPlaySocket implements PlaySocket {
+  readonly isRealTransport = true;
   private socket: WebSocket | null = null;
   private handlers: Array<(e: PlayEvent) => void> = [];
   private _connected = false;
@@ -53,7 +51,7 @@ class WsPlaySocket implements PlaySocket {
   }
 
   private connect() {
-    const url = `${wsBase()}/api/ws/play?guest=${encodeURIComponent(guestId())}`;
+    const url = `${wsBase()}/api/ws/play?guest=${encodeURIComponent(getPlayGuestId())}`;
     try {
       this.socket = new WebSocket(url);
       this.socket.onopen = () => {
@@ -110,6 +108,7 @@ class WsPlaySocket implements PlaySocket {
 }
 
 class MockPlaySocket implements PlaySocket {
+  readonly isRealTransport = false;
   connected = false;
   subscribe(handler: (e: PlayEvent) => void): () => void {
     this.connected = true;

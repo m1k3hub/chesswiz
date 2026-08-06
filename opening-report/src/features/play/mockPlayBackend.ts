@@ -28,14 +28,13 @@ import type {
 } from '@/types';
 
 const CHANNEL = 'scidb-play-mock';
-const GUEST_KEY = 'scidb-play-guest-id';
+
+import { getPlayGuestId } from './playIdentity';
 
 function makeGuestUser(): PlayUser {
-  let id = sessionStorage.getItem(GUEST_KEY);
-  if (!id) {
-    id = 'guest-' + Math.random().toString(36).slice(2, 10);
-    sessionStorage.setItem(GUEST_KEY, id);
-  }
+  // Reuse the single shared session identity so the mock agrees with the real
+  // transport and with REST/WS guest ids (see playIdentity.ts).
+  const id = getPlayGuestId();
   const name = 'Guest-' + id.slice(-4).toUpperCase();
   return { id, name, rating: 1500 };
 }
@@ -485,6 +484,9 @@ class MockPlayBackend {
     this.matches.clear();
     this.myGames = [];
     this.subscribers.clear();
+    // Re-derive the local identity from the shared session id so repeated
+    // (test) resets never drift away from isLocalPlayer()/getPlayGuestId().
+    this.me = makeGuestUser();
   }
 }
 

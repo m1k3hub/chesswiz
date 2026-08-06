@@ -31,6 +31,7 @@ afterEach(() => {
   if (root) act(() => { root.unmount(); });
   currentRoot = null;
   document.body.innerHTML = '';
+  sessionStorage.clear();
 });
 
 function foreignSeek(id: string, owner: PlayUser, color: 'w' | 'b' = 'w'): PlaySeek {
@@ -44,6 +45,10 @@ function foreignSeek(id: string, owner: PlayUser, color: 'w' | 'b' = 'w'): PlayS
 describe('usePlaySocket (Phase 2 mock event stream)', () => {
   beforeEach(() => {
     __resetMockPlay();
+    // Seed the shared session identity so the mock's local user (mockPlay.me)
+    // and the real-transport isLocalPlayer()/getPlayGuestId() agree. This
+    // mirrors production, where the play UI uses one identity across REST/WS.
+    sessionStorage.setItem('scidb-play-guest-id', 'userA');
     mockPlay.__setMe(userA);
     useWorkspaceStore.getState().setActiveMatch(null);
     useWorkspaceStore.getState().setActiveMatchMoves([]);

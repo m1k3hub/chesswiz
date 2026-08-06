@@ -3,6 +3,7 @@ import { useWorkspaceStore } from '@/state/workspace';
 import { mockPlay } from './mockPlayBackend';
 import { createApiClient } from '@/api/client';
 import { getSharedPlaySocket } from './playSocket';
+import { isLocalPlayer } from './playIdentity';
 
 const api = createApiClient();
 
@@ -23,7 +24,18 @@ export function usePlaySocket(): void {
 
     const refreshSeeks = () => {
       if (cancelled) return;
-      useWorkspaceStore.getState().setSeeks(mockPlay.listSeeks());
+      if (socket.isRealTransport) {
+        // Real backend: fetch the seek list over REST.
+        api.listSeeks().then((seeks) => {
+          if (!cancelled) useWorkspaceStore.getState().setSeeks(seeks);
+        }).catch(() => {
+          // Backend unreachable: fall back to the mock seek list.
+          if (!cancelled) useWorkspaceStore.getState().setSeeks(mockPlay.listSeeks());
+        });
+      } else {
+        // Mock transport: the seek list is the in-process mock's.
+        useWorkspaceStore.getState().setSeeks(mockPlay.listSeeks());
+      }
     };
     const refreshMyGames = () => {
       api.listMyGames().then((games) => {
@@ -47,7 +59,7 @@ export function usePlaySocket(): void {
           break;
         case 'match.paired': {
           const m = event.match;
-          if (m.white.id === mockPlay.me.id || m.black.id === mockPlay.me.id) {
+          if (isLocalPlayer(m.white.id) || isLocalPlayer(m.black.id)) {
             store.setActiveMatch(m);
             api.getMatchMoves(m.id).then((moves) => {
               if (!cancelled) useWorkspaceStore.getState().setActiveMatchMoves(moves ?? []);
@@ -106,9 +118,18 @@ export function usePlaySocket(): void {
 
     useWorkspaceStore.getState().setPlayConnected(true);
     refreshSeeks();
+    // Surface seeks created/removed by others. On the real WebSocket the WS
+    // pushes seek.list / seek.created, so no poll needed; the in-process mock
+    // syncs via BroadcastChannel. Keep a light poll only for the real transport
+    // so other players' REST-created seeks become visible promptly.
+    let poll: number | undefined;
+    if (socket.isRealTransport) {
+      poll = window.setInterval(refreshSeeks, 2000);
+    }
 
     return () => {
       cancelled = true;
+      if (poll !== undefined) window.clearInterval(poll);
       unsub();
       useWorkspaceStore.getState().setPlayConnected(false);
     };

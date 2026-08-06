@@ -115,13 +115,21 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Build SPA
-        run: npm run build
+      - name: Install backend deps
+        run: pip install -r requirements.txt
 
-      - name: Start preview server
+      - name: Start backend (adapter on :5001)
         run: |
-          npx vite preview --port 8765 &
-          sleep 3
+          (env -u REDIS_URL -u DATABASE_URL python -m uvicorn runtime_adapter:app \
+            --host 127.0.0.1 --port 5001 --log-level warning > /tmp/backend.log 2>&1 &) ;
+          sleep 4 ;
+          curl -sf http://127.0.0.1:5001/api/health > /dev/null
+
+      - name: Start dev server (proxies /api to :5001)
+        run: |
+          (env VITE_SCIDB_PLAY_WS=1 npx vite --host 127.0.0.1 --port 8765 > /tmp/vite.log 2>&1 &) ;
+          sleep 5 ;
+          curl -sf http://localhost:8765/ > /dev/null
 
       - name: Run Playwright tests
         run: npx playwright test

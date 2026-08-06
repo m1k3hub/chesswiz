@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import ChessBoard, { type ChessBoardHandle } from '@/features/board/ChessBoard';
 import { createApiClient } from '@/api/client';
 import { useWorkspaceStore } from '@/state/workspace';
-import { mockPlay } from './mockPlayBackend';
 import { getSharedPlaySocket } from './playSocket';
+import { isLocalPlayer } from './playIdentity';
 import ClockWidget from './ClockWidget';
 import MatchControls from './MatchControls';
 
@@ -30,8 +30,8 @@ export default function PlayBoardPanel() {
 
   const myColor = (() => {
     if (!activeMatch) return 'w' as const;
-    if (activeMatch.white.id === mockPlay.me.id) return 'w' as const;
-    if (activeMatch.black.id === mockPlay.me.id) return 'b' as const;
+    if (isLocalPlayer(activeMatch.white.id)) return 'w' as const;
+    if (isLocalPlayer(activeMatch.black.id)) return 'b' as const;
     return 'w' as const; // spectator fallback (not used in Phase 2)
   })();
 

@@ -50,6 +50,7 @@ import type {
 import { authHeaders } from './auth';
 import { Chess } from 'chess.js';
 import { mockPlay } from '@/features/play/mockPlayBackend';
+import { getPlayGuestId } from '@/features/play/playIdentity';
 
 export interface ScidbApiClient {
   listDatabases(): Promise<Database[]>;
@@ -122,10 +123,16 @@ export interface ScidbApiClient {
 const defaultHeaders = { Accept: 'application/json' };
 
 async function httpRequest<T>(baseUrl: string, path: string, options: RequestInit = {}): Promise<T> {
+  // Guest identity: the play backend (and only it) keys the local player by
+  // the X-Play-Guest-Id header. Sending our stable session id means seeks,
+  // matches and moves round-trip under a consistent identity (see
+  // playIdentity.ts). For non-play routes the backend ignores this header.
+  const guestId = getPlayGuestId();
   const response = await fetch(`${baseUrl}${path}`, {
     headers: {
       ...defaultHeaders,
       ...(await authHeaders()),
+      ...(guestId ? { 'X-Play-Guest-Id': guestId } : {}),
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
     },
     ...options,

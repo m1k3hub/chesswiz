@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { createApiClient } from '@/api/client';
 import { useWorkspaceStore } from '@/state/workspace';
-import { mockPlay } from './mockPlayBackend';
 import type { PlaySeek, PlayMatch } from '@/types';
+import { isLocalPlayer } from './playIdentity';
 
 const api = createApiClient();
 
@@ -137,7 +137,7 @@ export default function SeekLobby() {
           <ul className="seek-list">
             {myGames.map((g) => {
               const r = g.result;
-              const mine = g.white.id === mockPlay.me.id ? 'w' : 'b';
+              const mine = isLocalPlayer(g.white.id) ? 'w' : 'b';
               let outcome = '';
               if (r?.kind === 'mate' || r?.kind === 'resign' || r?.kind === 'timeout') outcome = r.winner === mine ? 'Win' : 'Loss';
               else if (r?.kind === 'draw') outcome = 'Draw';
