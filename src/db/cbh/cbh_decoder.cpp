@@ -30,6 +30,9 @@
 
 #include "cbh_decoder.h"
 #include "cbh_count_cipher.h"
+
+#include <stdlib.h>
+namespace db { namespace cbh { unsigned g_gameSeq = 0; } }
 #include "m_exception.h"
 
 #include <cstdlib>
@@ -85,6 +88,31 @@ static Byte MoveNumberLookup[256] =
 	0xbe, 0x62, 0x93, 0x14, 0xe9, 0xd0, 0x38, 0x9c,	// 232 - 239
 	0xb2, 0xc2, 0x59, 0x5d, 0xb6, 0x72, 0x51, 0xf8,	// 240 - 247
 	0x28, 0x7e, 0x61, 0x39, 0xe1, 0xdb, 0x69, 0x80,	// 248 - 255
+};
+// Chess960 move-token lookup table used by ChessBase 26 when decoding games with
+// header flags 0x0a000000 (dispatch case 10).  Extracted from CBase26.exe at VA
+// 0x141a799c0 (2026-08-16, gdb trace + static analysis; decode formula
+//  lc = Chess960MoveNumberLookup[raw] - move_index  (mod 256)).
+// The companion encode table (CBase26 VA 0x141a798c0) is its exact inverse.
+
+static Byte Chess960MoveNumberLookup[256] =
+{
+	0x38,	0x50,	0x64,	0xcc,	0x9f,	0x56,	0x6f,	0x73,	0x4d, 0x41, 0x66, 0xa2, 0xc6, 0xb9, 0x96, 0x47,	//   0 -  15
+	0xee,	0xcf,	0xb1,	0x6d,	0x48,	0x4f,	0x44,	0x20,	0x15, 0xbe, 0x82, 0x09, 0x34, 0x99, 0xeb, 0x1a,	//  16 -  31
+	0x33,	0x7c,	0xab,	0x59,	0x00,	0x22,	0x24,	0xb0,	0xb4, 0xfa, 0x85, 0xdd, 0x57, 0xf3, 0xd9, 0xd2,	//  32 -  47
+	0x8a,	0x8d,	0x70,	0xb5,	0x6e,	0x43,	0xa7,	0x0b,	0x27, 0x08, 0xea, 0xb3, 0x94, 0x1c, 0x63, 0x1b,	//  48 -  63
+	0x2b,	0xc5,	0x0c,	0xd4,	0x3f,	0x37,	0xe8,	0xde,	0xa6, 0x23, 0xef, 0x06, 0xfd, 0x3e, 0xc1, 0x40,	//  64 -  79
+	0x32,	0xdf,	0x2d,	0xc8,	0xd0,	0x0f,	0xf1,	0xe2,	0x7a, 0x95, 0xec, 0x3c, 0xca, 0x49, 0x11, 0xe0,	//  80 -  95
+	0x25,	0xd8,	0x30,	0xfe,	0x2e,	0xba,	0xdc,	0xaa,	0x53, 0x4c, 0xd1, 0x5e, 0x67, 0x8b, 0x0d, 0x9e,	//  96 - 111
+	0xa9,	0xbf,	0x05,	0x78,	0x35,	0xc4,	0xb6,	0xa4,	0x4b, 0xd6, 0x04, 0x52, 0xa8, 0x76, 0x2c, 0xbd,	// 112 - 127
+	0xae,	0x39,	0xb2,	0xe3,	0x03,	0x81,	0x17,	0x9a,	0x3d, 0x68, 0xc0, 0x65, 0x92, 0xc9, 0xf7, 0x77,	// 128 - 143
+	0x16,	0xff,	0xf5,	0xe1,	0x1e,	0x36,	0xbb,	0x86,	0x8e, 0xf9, 0x9d, 0xd5, 0x6b, 0xf4, 0x74, 0x80,	// 144 - 159
+	0x2f,	0x7b,	0x14,	0x97,	0x29,	0xe5,	0x4a,	0x02,	0x93, 0x5c, 0xcb, 0xa1, 0x58, 0x79, 0xf8, 0x5f,	// 160 - 175
+	0x26,	0x28,	0x8f,	0x7e,	0xa5,	0xed,	0xd3,	0x89,	0xc7, 0x88, 0x9b, 0x54, 0x87, 0x60, 0xda, 0xf0,	// 176 - 191
+	0x45,	0x3a,	0xc2,	0x84,	0x90,	0x21,	0xf6,	0xf2,	0x5a, 0x2a, 0x55, 0x18, 0x61, 0x01, 0xfb, 0xe6,	// 192 - 207
+	0x8c,	0x6a,	0x12,	0xb8,	0x62,	0x83,	0x98,	0x10,	0x71, 0x5b, 0xe4, 0xad, 0xdb, 0x42, 0x0a, 0xcd,	// 208 - 223
+	0x46,	0xd7,	0x72,	0x07,	0xce,	0x19,	0xb7,	0x3b,	0x31, 0x9c, 0x51, 0xc3, 0x69, 0xa3, 0x91, 0xe9,	// 224 - 239
+	0x0e,	0x1f,	0xfc,	0x75,	0x6c,	0x1d,	0x7d,	0xe7,	0xaf, 0x5d, 0xa0, 0xbc, 0x13, 0x7f, 0xac, 0x4e	// 240 - 255
 };
 
 static void
@@ -385,282 +413,28 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 	m_curPly = count;
 
 	if (m_useCipher)
-		s_cipher.load();  // lazy load (no-op if already loaded)
-
-	if (m_useCipher && s_cipher.isLoaded())
 	{
-		Byte raw = m_gStrm.peek();
-		lc = 0xff;
-		decodeCount = 0;
-		moveRaw = raw;
-
-		// Pass 1: try H0/g table (fast path for known states).
-		unsigned matchLc[8];
-		unsigned matchCnt[8];
-		unsigned numMatches = 0;
-		bool tokenMatch = false;  // lc==0xff (Pop) collides with the no-match sentinel
-
-		for (unsigned candidateLc = 0; candidateLc < 256 && numMatches < 8; ++candidateLc)
-		{
-			unsigned candidateCount = resolveCipherCount(candidateLc, count);
-			if (candidateCount == 0xffff)
-				continue;
-			if (::MoveNumberLookup[Byte(raw - candidateCount)] == candidateLc)
-			{
-				matchLc[numMatches] = candidateLc;
-				matchCnt[numMatches] = candidateCount;
-				++numMatches;
-			}
-		}
-
-		if (numMatches == 1)
-		{
-			// Exactly one H0 match — accept it (fast path).
-			lc = matchLc[0];
-			decodeCount = matchCnt[0];
-			tokenMatch = (matchLc[0] >= 0xec);
-		}
-		else
-		{
-			if (numMatches == 0)
-			{
-			// The game-ending Pop token is written with the move-number
-			// count (plies/2), not the cipher count, and may be preceded
-			// by up to 8 unexplained trailing bytes (ChessBase 26 oracle,
-			// 2026-07-26).  Only accept at the very end of the stream, so
-			// that mid-game move bytes cannot be hijacked as tokens.
-			{
-				unsigned tPos = m_gStrm.tellg();
-				unsigned tAvail = m_gStrm.remaining();
-				Byte tbuf[9];
-				for (unsigned i = 0; i < tAvail && i < 9; ++i)
-					tbuf[i] = m_gStrm.get();
-				m_gStrm.seekg(tPos);
-
-				for (unsigned tskip = 0; tskip <= 8 && !tokenMatch; tskip += 2)
-				{
-					if (tAvail != tskip + 1)
-						continue;
-					Byte tb = tbuf[tskip];
-					for (unsigned k = 0; k < 2 && !tokenMatch; ++k)
-					{
-						unsigned mnCount = (k == 0) ? count / 2 : (count + 1) / 2;
-						if (::MoveNumberLookup[Byte(tb - mnCount)] == 0xff)
-						{
-							lc = 0xff;
-							decodeCount = mnCount;
-							tokenMatch = true;
-							// consume the unexplained trailing bytes before the Pop
-							for (unsigned i = 0; i < tskip; ++i)
-								m_gStrm.get();
-						}
-					}
-				}
-			}
-
-			// Bracketed-move recovery: ChessBase occasionally encodes a move
-			// as [M, X1..Xk, M] (k=1..3): the move byte repeated around k
-			// cipher-transparent parameter bytes. Detect the bracket via the
-			// repeated previous move byte; accept when the byte after the
-			// bracket decodes to exactly one H0 candidate that dispatches
-			// to a legal move.
-			if (m_cipherActive && m_lookaheadDepth == 0 && !tokenMatch)
-			{
-				unsigned streamPos0 = m_gStrm.tellg();
-
-				for (unsigned skip = 2; skip <= 4 && lc == 0xff; ++skip)
-				{
-					if (m_gStrm.remaining() <= skip)
-						break;
-
-					Byte buf[5];
-					for (unsigned i = 0; i <= skip; ++i)
-						buf[i] = m_gStrm.get();
-					m_gStrm.seekg(streamPos0);
-
-					if (buf[skip - 1] != m_rawPrev)
-						continue;
-
-					unsigned nM = 0, bLc = 0xff, bCnt = 0;
-					for (unsigned cand = 0; cand < 0xec && nM < 2; ++cand)
-					{
-						unsigned cc = resolveCipherCount(cand, count);
-						if (cc == 0xffff)
-							continue;
-						if (::MoveNumberLookup[Byte(buf[skip] - cc)] == cand)
-						{
-							bLc = cand;
-							bCnt = cc;
-							++nM;
-						}
-					}
-
-					if (nM != 1)
-						continue;
-
-					// Validate the candidate move on the board.
-					m_position.push();
-					Move bMove;
-					unsigned bResult;
-					try { bResult = dispatchMove(bLc, bCnt, bMove, true); }
-					catch (mstl::exception const&) { bResult = ~0u; }
-					m_position.pop();
-
-					if (bResult != Token_Move || bMove.isEmpty())
-						continue;
-
-					// Accept: skip the bracket bytes (X's + repeated M).
-					for (unsigned i = 0; i < skip; ++i)
-						m_gStrm.get();
-					lc = bLc;
-					decodeCount = bCnt;
-					moveRaw = buf[skip];
-				}
-			}
-			}
-
-			// Ambiguous (2+ matches) or none: score candidates by the
-			// depth of their table-consistent continuation (flat walk,
-			// no board operations beyond one legality check each).
-			if (!tokenMatch && lc == 0xff)
-			{
-				buildInvLUT();
-
-				unsigned candList[256];
-				unsigned candCntList[256];
-				unsigned nCand = 0;
-
-				if (numMatches >= 2)
-				{
-					for (unsigned i = 0; i < numMatches; ++i)
-					{
-						// Tokens are excluded from scoring: a Skip would
-						// let the chain continue unchanged and always win.
-						if (matchLc[i] >= 0xec)
-							continue;
-						candList[nCand] = matchLc[i];
-						candCntList[nCand] = matchCnt[i];
-						++nCand;
-					}
-
-					if (nCand == 0)
-					{
-						// All matches are tokens: accept the first.
-						lc = matchLc[0];
-						decodeCount = matchCnt[0];
-						tokenMatch = true;
-					}
-				}
-				else
-				{
-					// True miss: scan all move codes.  Expensive; a game that
-					// needs it too often is hopeless.
-					if (m_lookaheadDepth == 0 && ++m_missCount > 12)
-						throw DecodingFailedException("chess960 count cipher: too many misses");
-
-					for (unsigned c = 0; c < 0xec; ++c)
-					{
-						candList[nCand] = c;
-						candCntList[nCand] = (raw - s_invLUT[c]) & 0xff;
-						++nCand;
-					}
-				}
-
-				unsigned bestLc = 0xff;
-				unsigned bestCount = 0;
-				int bestScore = -1;
-				int secondScore = -1;
-
-				for (unsigned ci = 0; ci < nCand; ++ci)
-				{
-					unsigned candLc = candList[ci];
-					unsigned candCnt = candCntList[ci];
-
-					// Apply the candidate to the board; walk its continuation
-					// with the position advanced (restored afterwards).
-					unsigned svPos = m_gStrm.tellg();
-					Board bcopy = m_position.board();
-					m_position.push();
-					m_gStrm.get();
-					Move vMove;
-					unsigned vResult;
-					try { vResult = dispatchMove(candLc, candCnt, vMove, true); }
-					catch (mstl::exception const&) { vResult = ~0u; }
-
-					bool legal = (vResult == Token_Move && !vMove.isEmpty());
-					if (legal && !vMove.isCastling())
-					{
-						try { legal = bcopy.checkMove(vMove, variant::Normal, move::DontAllowIllegalMove); }
-						catch (mstl::exception const&) { legal = false; }
-					}
-
-					int score = -1;
-					if (legal)
-						score = walkContinuation(candCnt, candLc, unsigned(raw), count, 0);
-
-					m_position.pop();
-					m_gStrm.seekg(svPos);
-
-					if (score > bestScore)
-					{
-						secondScore = bestScore;
-						bestScore = score;
-						bestLc = candLc;
-						bestCount = candCnt;
-					}
-					else if (score > secondScore)
-					{
-						secondScore = score;
-					}
-				}
-
-				// Accept only a well-separated winner: a garbage pick
-				// desynchronizes the game (and can crash the position
-				// decoder), so a near-tie is a miss, not a guess.
-				if (bestLc != 0xff && bestScore - secondScore >= 1)
-				{
-					lc = bestLc;
-					decodeCount = bestCount;
-				}
-				else if (bestLc != 0xff && bestScore >= 1 && bestScore - secondScore < 1)
-				{
-					// OPT-IN experimental fallback (CBH_FALLBACK_MIN_SCORE): the
-					// best candidate's own move is legal on the board, but the
-					// continuation walk cannot find a well-separated winner (H0
-					// table gap on the continuation).  Accepting the best LEGAL
-					// move rescues games that would otherwise fail, but is silent
-					// corruption when the pick is wrong.  Move-vs-PGN validation
-					// (2026-08-04) shows ~3% precision on the Grenke fixture, so
-					// this is OFF unless explicitly requested.  The real fix is
-					// H0 table coverage, not this fallback.
-					char const* mins = ::getenv("CBH_FALLBACK_MIN_SCORE");
-					if (mins)
-					{
-						int minScore = ::atoi(mins);
-						if (bestScore >= minScore)
-						{
-							lc = bestLc;
-							decodeCount = bestCount;
-						}
-					}
-				}
-				if (::getenv("CBH_FALLBACK_DIAG"))
-				{
-					if (bestLc == 0xff)
-						::fprintf(stderr, "[fbdiag] no legal candidate (bestLc=0xff) move %u\n", count);
-					else if (bestScore - secondScore < 1)
-						::fprintf(stderr, "[fbdiag] tie bestScore=%d second=%d (bestLc=%u) move %u\n", bestScore, secondScore, bestLc, count);
-				}
-			}
-
-		}
-
-		if (lc == 0xff && !tokenMatch)
-			throw DecodingFailedException(
-				"chess960 count cipher: no matching move for byte 0x%02x at move %u",
-				unsigned(raw), count);
-
-		m_gStrm.get();  // consume the byte
+		// Chess960 (header flags 0x0a000000) move decode.  ChessBase 26
+		// selects a dedicated 256-byte lookup table for these games and uses
+		// the plain move index as the count:
+		//
+		//    lc = Chess960MoveNumberLookup[raw] - count    (mod 256)
+		//
+		// Established by a live gdb trace of CBase26 26.8 (2026-08-16;
+		// breakpoints at FUN_14020c080/FUN_140210e10): for the chess960
+		// dispatch case the LUT pointer is 0x141a799c0 and [obj+0x6c]
+		// increments by exactly 1 per move (seed 0).  Validated offline:
+		// 534/534 oracle-corpus games and 606/606 TWIC-fixture chess960
+		// games decode to clean, variation-aware streams with a single
+		// terminating 0xff token and zero ambiguous bytes.
+		//
+		// The harvested H0 "count-cipher" tables encode precisely this
+		// decode re-derived through the standard LUT; they are no longer
+		// consulted.  (Their values satisfy raw - lookup960_inv[lc] ==
+		// count only accidentally; keep the JSON around for reference.)
+		moveRaw = m_gStrm.get();
+		lc = Byte(Chess960MoveNumberLookup[moveRaw] - count);
+		decodeCount = count;
 	}
 	else
 	{
@@ -675,9 +449,9 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 		{
 			result = dispatchMove(lc, decodeCount, move, skipVariations);
 		}
-		catch (mstl::exception const&)
+		catch (mstl::exception const& e)
 		{
-			throw DecodingFailedException("chess960 decode failed at move %u", count);
+			throw DecodingFailedException("chess960 decode failed at move %u (lc=0x%02x raw=0x%02x: %s)", count, lc, unsigned(moveRaw), e.what());
 		}
 	}
 	else
@@ -685,8 +459,25 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 		result = dispatchMove(lc, decodeCount, move, skipVariations);
 	}
 
+	if (m_useCipher && ::getenv("SCIDB_TRACE960"))
+	{
+		unsigned tgt = (unsigned)::atoi(::getenv("SCIDB_TRACE960"));
+		if (g_gameSeq == tgt)
+			::fprintf(stderr, "[t960] cnt=%u lc=0x%02x raw=0x%02x res=%u from=%u to=%u %s\n",
+					count, lc, unsigned(moveRaw), result,
+					result == Token_Move ? unsigned(move.from()) : 999,
+					result == Token_Move ? unsigned(move.to()) : 999,
+					move.isEmpty() ? "EMPTY" : "");
+	}
+
 	if (result == Token_Move)
 	{
+		if (m_useCipher && ::getenv("SCIDB_DECODE_DIAG"))
+		{
+			if (move.isEmpty() || move.isNull())
+				::fprintf(stderr, "[emptymove] count=%u lc=0x%02x raw=0x%02x %s\n",
+						count, lc, unsigned(moveRaw), move.isNull() ? "null" : "empty");
+		}
 		++count;  // move index (used by callers for annotations)
 
 		if (m_useCipher && s_cipher.isLoaded())
@@ -991,48 +782,56 @@ Decoder::dispatchMove(unsigned lc, unsigned decodeCount, Move& move, bool skipVa
 		// Multiple byte move ##################
 		case 0xeb:
 			{
-				if (m_useCipher && s_cipher.isLoaded())
+				if (m_useCipher)
 				{
-					// ChessBase 26 chain-encrypted parameter bytes:
-					//   b1 = InvLUT[X1] + P1(cnt, X1, p+1),  X1 = (promo-2)<<6|to
-					//   b2 = InvLUT[X2] + P2(c1, X2, p+2),   X2 = from
+					// Chess960 0xeb special move (CBase26 FUN_140212eb0 +
+					// empirical fit over all 896 corpus occurrences,
+					// 2026-08-16).  Params decode with the chess960 LUT and
+					// the SAME count as the marker byte:
+					//
+					//   X1 = Chess960MoveNumberLookup[b1] - count
+					//   X2 = Chess960MoveNumberLookup[b2] - count
+					//
+					// Chess960 uses 0xeb ONLY for castling and promotions:
+					//
+					//   castling:  (X1,X2) in { (4,16) O-O-O white,
+					//			  (12,48) O-O white, (5,215) O-O-O black,
+					//			  (13,247) O-O black }
+					//   promotion: X1 = (piece<<4) | (toFile<<1) | color
+					//              X2 = (fromFile<<3) | (color ? 6 : 1)
+					//              piece nibble: 0=Q, 1=R, 2=B, 3=N;
+					//              color: 0=white, 1=black
 					Byte b1 = m_gStrm.get();
 					Byte b2 = m_gStrm.get();
 
-					unsigned x1 = 0xffff, c1 = 0;
-					for (unsigned x = 0; x < 256; ++x)
-					{
-						unsigned cc1 = s_cipher.lookupP1(decodeCount, x, m_curPly + 1);
-						if (cc1 == 0xffff)
-							continue;
-						if (::MoveNumberLookup[Byte(b1 - cc1)] == x)
-						{
-							if (x1 != 0xffff)
-								throw DecodingFailedException("chess960: ambiguous 0xeb parameter byte 1");
-							x1 = x;
-							c1 = cc1;
-						}
-					}
-					if (x1 == 0xffff)
-						throw DecodingFailedException("chess960: undecodable 0xeb parameter byte 1");
+					unsigned x1 = Byte(Chess960MoveNumberLookup[b1] - decodeCount);
+					unsigned x2 = Byte(Chess960MoveNumberLookup[b2] - decodeCount);
 
-					unsigned x2 = 0xffff;
-					for (unsigned x = 0; x < 256; ++x)
+					if ((x1 == 4 && x2 == 16) || (x1 == 12 && x2 == 48) ||
+					    (x1 == 5 && x2 == 215) || (x1 == 13 && x2 == 247))
 					{
-						unsigned cc2 = s_cipher.lookupP2(c1, x, m_curPly + 2);
-						if (cc2 == 0xffff)
-							continue;
-						if (::MoveNumberLookup[Byte(b2 - cc2)] == x)
-						{
-							if (x2 != 0xffff)
-								throw DecodingFailedException("chess960: ambiguous 0xeb parameter byte 2");
-							x2 = x;
-						}
+						// Castling: destinations are fixed (Convention B);
+						// the rook source comes from the position.
+						bool kside = (x1 == 12 || x1 == 13);
+						move = m_position.doCastling(Byte(kside ? +2 : -2));
+						if (::getenv("SCIDB_DECODE_DIAG") && move.isEmpty())
+							::fprintf(stderr, "[eb-diag] count=%u x1=%u x2=%u kside=%d -> EMPTY (castle rejected)\n", decodeCount, x1, x2, int(kside));
 					}
-					if (x2 == 0xffff)
-						throw DecodingFailedException("chess960: undecodable 0xeb parameter byte 2");
+					else
+					{
+						// Promotion of a home-stretch pawn.
+						unsigned color = x1 & 1;
+						unsigned toFile = (x1 >> 1) & 7;
+						unsigned fromFile = (x2 >> 3) & 7;
+						Byte promo = Byte((x1 >> 4) + piece::Queen); // 0=Q,1=R,2=B,3=N
 
-					move = m_position.doMove(x2, x1 & 63, (x1 >> 6) + 2);
+						move = m_position.doMove(
+							Byte(fromFile + (color ? 48 : 8)),
+							Byte(toFile + (color ? 56 : 0)),
+							promo);
+						if (::getenv("SCIDB_DECODE_DIAG") && move.isEmpty())
+							::fprintf(stderr, "[eb-diag] count=%u x1=%u x2=%u fromF=%u toF=%u color=%u promo=%d -> EMPTY (promo rejected)\n", decodeCount, x1, x2, fromFile, toFile, color, int(promo));
+					}
 				}
 				else
 				{
@@ -1121,6 +920,8 @@ Decoder::decodeMoves(uint16_t* line, unsigned length, Board* startBoard)
 void
 Decoder::setupStartPosition(TagSet* tags)
 {
+	++g_gameSeq;
+	if (getenv("SCIDB_TRACE960")) fprintf(stderr,"[t960-game] seq=%u\n", g_gameSeq);
 	// Standard CBH start position: 28 bytes.
 	// Chess960 CBH start position: 36 bytes (28 + 8-byte extension).
 	// The 8-byte extension encodes castling-relevant squares:

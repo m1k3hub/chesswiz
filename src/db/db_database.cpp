@@ -1041,6 +1041,8 @@ Database::loadGame(unsigned index, Game& game, mstl::string* encoding, mstl::str
 	}
 	catch (DecodingFailedException const& exc)
 	{
+		if (::getenv("SCIDB_DECODE_DIAG"))
+			::fprintf(stderr, "[decfail] game %u: %s\n", index, exc.what());
 		return load::Failed;
 	}
 	catch (ByteStream::UnexpectedEndOfStreamException const& exc)
@@ -1463,6 +1465,8 @@ Database::exportGame(unsigned index, Consumer& consumer) const
 	}
 	catch (DecodingFailedException const& exc)
 	{
+		if (::getenv("SCIDB_DECODE_DIAG"))
+			::fprintf(stderr, "[decfail] game %u: %s\n", index, exc.what());
 		rc = save::DecodingFailed;
 	}
 	catch (ByteStream::UnexpectedEndOfStreamException const& exc)

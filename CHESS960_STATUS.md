@@ -1495,3 +1495,100 @@ for scidb's probe_encode960.
 **Coverage:** H0 table now 440,295 entries. Remaining 501 corrupt games
 fail at specific (count_prev, lc_prev, ply) states that no TWIC game
 covers in a decodable prefix. Oracle generation needed for those.
+
+## GATE-TRANSFORM DECOMPILE (2026-08-16, deepsek/ghidra)
+
+Full Ghidra 12.0.4 headless auto-analysis of CBase26.exe (823 s) + targeted
+decompile of all 77 `and eax,0x08000000` sites and the 4 known decode/encode/
+dispatch functions. Dump: `/tmp/ghidra_cb26/decompile_gate.log` (81 functions).
+
+**Decisive result: the `0x08000000`-gated region is a dead end for the H0
+transform.** All 77 `and eax,0x08000000` sites are trivial flag-clearing
+destructors:
+
+```c
+if ((*(uint *)(obj + OFF) & 0x8000000) != 0) {
+  *(uint *)(obj + OFF) &= 0xf7ffffff;      // clear bit 27
+  SString::~SString((SString *)(obj + STR_OFF));  // free optional field
+}
+```
+
+`0x08000000` (bit 27) is a "field-is-present / newer-format" flag; the 77 sites
+are the destructors that free the associated optional field. None reads/writes a
+byte stream or touches the LUT atlas / count field. This **contradicts** the prior
+hypothesis that the H0 transform is "a separate byte-stream transform gated by
+0x08000000" — the gate sites are destructors, not a transform.
+
+**Count is move_index, not H0.** Byte-pattern scan of `.text` for writes to
+`[reg+0x6c]` (the count field): 18 `inc [reg+0x6c]` (all in decode/encode region,
+each a plain increment-by-1), 0 `add [reg+0x6c], F(...)`, 0 `sub`. Confirmed in the
+decode calling function `FUN_140210bc0` (`inc dword ptr [rbx+0x6c]` at 0x140210c77)
+and the per-move decode `FUN_140210e10` / encode `FUN_140212450`. There is **no**
+`count = count_prev + F(lc_prev, lc, ply)` computation anywhere in the decode/encode
+path or the gate region.
+
+**The cipher flag `[obj+0xb6]` is a LUT-application mode, not H0:**
+- cipher OFF: `lc = LUT[(raw - count) & 0xff]`  (count subtracted before lookup)
+- cipher ON:  `lc = LUT[raw] - count`           (count subtracted after lookup)
+
+This is a different way of applying the move_index count, not the H0 count cipher.
+
+**Open discrepancy:** the per-move encoder `FUN_140212450` (cipher ON) emits
+`raw = InvLUT[count + lc]` with `count = move_index`, which is **not** scidb's
+verified `raw = InvLUT[lc] + H0_count`. So the H0 transform is applied either
+before/after the per-move encoder (a separate pass not yet located), or by a
+different component, or gated by a different flag (e.g. chess960 `0x02000000`,
+not `0x08000000`).
+
+**Next step:** locate the byte-stream transform by a different signal — functions
+that loop over a byte buffer AND reference the LUT atlas `0x141a78xxx` AND maintain
+a running byte accumulator, or are gated by `0x02000000` (chess960) rather than
+`0x08000000`. The `0x08000000`-gated region is now ruled out.
+
+## DYNAMIC TRACE: THE H0 CIPHER IS A LUT SWAP — SOLVED (2026-08-16)
+
+gdb trace of live CBase26.exe (sandbox wineprefix, pid attached, base 0x140000000,
+no ASLR) at FUN_14020c080 (dispatch) / /+0x116 (seed) / FUN_140210e10 (per-move
+decode) while opening Grenke Freestyle games from `/tmp/all.cbh` (535-game oracle):
+
+- DISPATCH: `type_word=0x4a` → **case 10**, cipher flag set to 1 in the case body.
+- SEED: `count_init = 0`. Per-move: **`count = move_index` (increments +1 per
+  move)** — NO history-dependent count chain exists in live decode.
+- Decode LUT selected for chess960: **`0x141a799c0`** (NOT the standard
+  `0x141a783c0`). Decode formula (cipher-ON branch of FUN_140210e10):
+  `lc = LUT960[raw] - move_index (mod 256)`.
+- Encode pair `0x141a798c0` verified to be exactly InvLUT of the decode table.
+
+Offline replay validation (`lc = LUT960[raw] - mi`):
+- Oracle `/tmp/all.cbh`: 534/534 games structurally clean, exactly one 0xff
+  terminator each, 804 0xeb-triple moves.
+- **Real TWIC corpus** (extracted `twic1639.cbh` from the
+  `twic1639_grenke_freestyle_open.cbv` fixture with a Python port of
+  `cbv_codec.cpp`): **606/606 chess960 games decode to clean streams, single
+  0xff terminator each**, 896 0xeb moves. Game 757 lc stream begins
+  `124,124,131,...` — byte-exact vs the hand-verified table above.
+
+**Consequence (rewrites the count-cipher sections below):** the chess960 H0/F
+"count cipher" documented in this file is an *empirical shadow* of the LUT-960
+decode. The harvested `H0(count_prev, lc_prev, lc, ply) -> count` table is what
+`count = raw - InvLUT_std[lc]` computes when `lc` was genuinely produced by
+`LUT960[raw]-mi`; its sparse 4-input structure falls out of re-deriving lc
+through the wrong (standard) table. There is no F algorithm to extract from the
+binary beyond the 256-byte LUT at 0x141a799c0.
+
+**Engineering follow-up (decoder fix):** for `isChess960 | 0x02000000` games,
+decode with Chess960_MoveNumberLookup + count=move_index instead of the H0
+table path. Expected: 8070/501 → ~8571/0 on the fixture (castling legality
+bug at db_board.cpp:2044 then becomes the only chess960 decoder-side defect).
+Extracted tables: `/tmp/chess960_lut.h` (decode LUT + InvLUT), hex dump
+`/tmp/chess960.lut`. Trace script: `/tmp/trace_cbase26.gdb`; raw capture:
+`/tmp/trace_hits.log`. Ghidra re-import project: `/tmp/ghidra_cb26/CB26`;
+gate-region decompiles: `/tmp/ghidra_cb26/decompile_gate.log` (deepsek — its
+"no 0x08000000 transform in codec" negative is consistent: the codec gates on
+the game-type word, not the header bit; the 0x08000000 sites are unrelated
+flag-masking).
+
+  *Validation tightened (2026-08-16, post-watchdog): re-ran with real
+  assertions — both corpora: 100% 0xff termination, 0 0xeb-overrun errors,
+  and ZERO mid-stream tokens >= 0xec in all 1140 games (the fixture's
+  chess960 games contain no variations, so Push/Pop never appears).*
