@@ -62,6 +62,9 @@ public:
 	// Apply a move to update internal position state (without encoding).
 	void doMove(Move const& move);
 
+	// Set Chess960 mode (uses 0xeb castling/promotion descriptors).
+	void setChess960(bool on) { m_isChess960 = on; }
+
 private:
 
 	typedef Byte Count[64];
@@ -92,6 +95,7 @@ private:
 	Byte findPieceNumber(piece::Type pieceType, Square square) const;
 
 	Stack m_stack;
+	bool m_isChess960;
 };
 
 } // namespace encoder

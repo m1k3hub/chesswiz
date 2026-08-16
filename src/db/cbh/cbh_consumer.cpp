@@ -97,9 +97,6 @@ Consumer::supportsVariant(variant::Type variant) const
 bool
 Consumer::beginGame(TagSet const& tags)
 {
-	if (board().notDerivableFromChess960())
-		return false;
-
 	m_gameStream.reset(sizeof(m_gameBuffer));
 	m_gameStream.resetp();
 	m_annotationStream.reset(sizeof(m_annotationBuffer));
@@ -129,6 +126,8 @@ Consumer::endGame(TagSet const& tags)
 	uint32_t gameHeader = gameSize;
 	if (!m_isStandardPosition)
 		gameHeader |= 0x40000000;
+	if (isChess960())
+		gameHeader |= 0x0a000000;  // Chess960 (0x08000000 | 0x02000000)
 	util::ByteStream::set(m_gameStream.base(), gameHeader);
 
 	return m_codec.addGame(m_gameStream, m_annotationStream, tags, *this);

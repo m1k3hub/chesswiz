@@ -47,6 +47,7 @@ mapSquare(Byte sq)
 
 
 Position::Position()
+	:m_isChess960(false)
 {
 	m_stack.reserve(5);
 	m_stack.push();
@@ -431,20 +432,59 @@ Position::encodeMove(Move const& move, uint16_t* multiByteWord)
 	}
 	else if (move.isCastling())
 	{
-		code = encodeCastling(move);
+		if (m_isChess960)
+		{
+			// Chess960 castling uses 0xeb with one of four fixed
+			// descriptors (verified against CBase26 26.8, 2026-08-16):
+			//   (4,16) O-O-O white, (12,48) O-O white,
+			//   (5,215) O-O-O black, (13,247) O-O black
+			bool isShort = move.isShortCastling();
+			bool black   = m_stack.top().board.sideToMove() == color::Black;
+			Byte x1 = isShort ? (black ? 13 : 12) : (black ? 5 : 4);
+			Byte x2 = isShort ? (black ? 247 : 48) : (black ? 215 : 16);
+
+			if (multiByteWord)
+				*multiByteWord = uint16_t((x1 << 8) | x2);
+
+			code = 0xeb;
+		}
+		else
+		{
+			code = encodeCastling(move);
+		}
 	}
 	else if (move.isPromotion())
 	{
-		// All promotions use multi-byte encoding (0xEB + 2 bytes)
-		Byte mapped_from = ::mapSquare(move.from());
-		Byte mapped_to   = ::mapSquare(move.to());
-		Byte promo       = move.promoted() - piece::Queen;
-		uint16_t word    = (mapped_from & 63) | ((mapped_to & 63) << 6) | ((promo & 3) << 12);
+		if (m_isChess960)
+		{
+			// Chess960 promotion packing (verified 2026-08-16):
+			//   X1 = (piece<<4) | (toFile<<1) | color   (piece: 0=Q,1=R,2=B,3=N)
+			//   X2 = (fromFile<<3) | (color ? 0xC6 : 0x01)  (color: 1=white, 0=black)
+			Byte color = (m_stack.top().board.sideToMove() == color::White) ? 1 : 0;
+			Byte toFile   = sq::fyle(move.to());
+			Byte fromFile = sq::fyle(move.from());
+			Byte pieceNibble = move.promoted() - piece::Queen;
+			Byte x1 = Byte((pieceNibble << 4) | (toFile << 1) | color);
+			Byte x2 = Byte((fromFile << 3) | (color ? 0xC6 : 0x01));
 
-		if (multiByteWord)
-			*multiByteWord = word;
+			if (multiByteWord)
+				*multiByteWord = uint16_t((x1 << 8) | x2);
 
-		code = 0xeb;
+			code = 0xeb;
+		}
+		else
+		{
+			// All promotions use multi-byte encoding (0xEB + 2 bytes)
+			Byte mapped_from = ::mapSquare(move.from());
+			Byte mapped_to   = ::mapSquare(move.to());
+			Byte promo       = move.promoted() - piece::Queen;
+			uint16_t word    = (mapped_from & 63) | ((mapped_to & 63) << 6) | ((promo & 3) << 12);
+
+			if (multiByteWord)
+				*multiByteWord = word;
+
+			code = 0xeb;
+		}
 	}
 	else
 	{

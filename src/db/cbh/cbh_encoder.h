@@ -61,6 +61,10 @@ public:
 	/// Access the encoder position.
 	encoder::Position& position();
 
+	/// True if the current game is Chess960 (uses the Chess960 LUT and
+	/// 0xeb castling/promotion descriptors).
+	bool isChess960() const { return m_isChess960; }
+
 private:
 
 	Encoder(Encoder const&);
@@ -71,8 +75,10 @@ private:
 
 	util::ByteStream&		m_gStrm;
 	encoder::Position		m_position;
+	bool						m_isChess960;
 
 	static Byte InverseMoveNumberLookup[256];
+	static Byte Chess960InverseMoveNumberLookup[256];
 	static bool s_initialized;
 
 	static void initialize();

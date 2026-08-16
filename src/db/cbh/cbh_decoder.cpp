@@ -779,9 +779,9 @@ Decoder::dispatchMove(unsigned lc, unsigned decodeCount, Move& move, bool skipVa
 					//			  (12,48) O-O white, (5,215) O-O-O black,
 					//			  (13,247) O-O black }
 					//   promotion: X1 = (piece<<4) | (toFile<<1) | color
-					//              X2 = (fromFile<<3) | (color ? 6 : 1)
+					//              X2 = (fromFile<<3) | (color ? 0xC6 : 0x01)
 					//              piece nibble: 0=Q, 1=R, 2=B, 3=N;
-					//              color: 0=white, 1=black
+					//              color: 1=white, 0=black
 					Byte b1 = m_gStrm.get();
 					Byte b2 = m_gStrm.get();
 
