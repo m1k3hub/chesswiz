@@ -22,7 +22,7 @@ The first `uint32` word of each game in the CBG stream encodes:
 | 25 | `0x02000000` | **Chess960 / Fischer Random variant** |
 | 27 | `0x08000000` | **Newer format flag** (possibly annotations/correspondence, possibly Chess960 position data) |
 | 30 | `0x40000000` | **Custom starting position present** |
-| 31 | `0x80000000` | **XOR-encrypted data** (current scidb code throws "cannot decode" if set) |
+| 31 | `0x80000000` | **Unencoded (plain) data** — not the standard LUT encoding; used for "guiding texts"/training files. NOT encryption (that is the separate `.cbz` DES archive). scidb throws "unencoded game not supported" if set |
 
 **Detection in scidb**: `isChess960 = bool(word & 0x0a000000);`
 This checks both bits 25 and 27, meaning either bit being set triggers Chess960 mode.
@@ -94,12 +94,13 @@ The ChessBase 16 binary (`CBASE16_EXE`, 23.8 MB) contains:
 
 The Chess960Position class likely overrides the position setup and castling logic.
 
-### The `0x80000000` XOR Encryption
+### The `0x80000000` "Not Encoded" Flag
 
-When bit 31 is set, the game data is XOR-encrypted. Scidb currently throws an
-exception rather than decrypting. This needs to be investigated:
-- Find the XOR key/algorithm in CBASE16
-- Implement decryption wrapper
+When bit 31 is set, the game data is stored *unencoded* (plain format), not the
+standard LUT encoding. ChessBase uses this for "guiding texts" / embedded
+training files whose text must be directly readable. It is NOT encryption —
+the separate `.cbz` archive is the DES-encrypted (password-gated) format.
+Scidb currently throws an exception rather than parsing this plain format.
 
 ## Recommended Next Steps
 
@@ -171,12 +172,12 @@ In `cbh_decoder_position.cpp`, the `doCastling` function needs to:
 2. Instead of hardcoding `sq::FyleA`/`sq::FyleH`, use the actual rook files from the starting position
 3. Determine whether the castling is "short" (O-O) or "long" (O-O-O) based on which rook participates
 
-### Step 5: Investigate the XOR Encryption (`0x80000000`)
+### Step 5: Investigate the "Not Encoded" Flag (`0x80000000`)
 
-Search CBASE16 for the XOR key:
-- The key might be derived from the game offset, a fixed constant, or the position data
-- Compare encrypted and unencrypted versions of the same game data
-- Check if the encryption is a simple XOR with a repeating pattern
+Bit 31 means the game data is stored unencoded (plain format), not the standard
+LUT encoding. To parse it, obtain a bit-31 game (e.g. a "guiding text" / training
+file) and determine the plain format. This is NOT encryption — the `.cbz` archive
+is the DES-encrypted (password-gated) format.
 
 ### Step 6: Fix move offset calculation for non-standard positions
 
@@ -201,11 +202,11 @@ Verify this assumption holds for Chess960 starting positions.
 | File | Change Required |
 |------|----------------|
 | `src/db/cbh/cbh_codec.cpp` | Pass `isChess960` to position decoder; detect 36-byte format |
-| `src/db/cbh/cbh_decoder.cpp` | Use `m_isChess960` in castling decoding; handle XOR encryption |
+| `src/db/cbh/cbh_decoder.cpp` | Use `m_isChess960` in castling decoding; handle unencoded (bit-31) games |
 | `src/db/cbh/cbh_decoder.h` | Add `m_rookFiles` or similar to store Chess960 rook positions |
 | `src/db/cbh/cbh_decoder_position.cpp` | Fix `doCastling()` for Chess960; parse 36-byte position format |
 | `src/db/cbh/cbh_decoder_position.h` | Add members for Chess960 rook positions |
-| `src/db/cbh/cbh_game_decoder.cpp` | Same castling fix as decoder.cpp; handle XOR encryption |
+| `src/db/cbh/cbh_game_decoder.cpp` | Same castling fix as decoder.cpp; handle unencoded (bit-31) games |
 
 ## Grenke Freestyle Chess Open 2026 — Chess960 PGN Data
 

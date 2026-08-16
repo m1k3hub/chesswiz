@@ -19,7 +19,7 @@ always places the king on the c-file and the rook on the d-file. Real Chess960
 move streams are decoded via the **Chess960 lookup table**
 (`Chess960MoveNumberLookup[256]`, extracted from CBase26.exe VA `0x141a799c0`)
 with the plain move index as the count: `lc = LUT960[raw] - move_index`.
-XOR-encrypted games (bit 31) throw a precise exception.
+Unencoded games (bit 31) throw a precise exception.
 
 **Bottom line:** The decoder reads real ChessBase `.cbh`/`.cbv` Chess960
 archives and decodes the move stream via the Chess960 LUT. On the
@@ -92,11 +92,11 @@ round-trip with real ChessBase.
 | `src/db/cbh/cbh_decoder_position.cpp` | 327 | ✅ Passed to `Position::setup` to skip `fixBadCastlingRights()` |
 | `src/db/cbh/cbh_decoder.h` | 61 | ✅ Declared and consumed by the decoder |
 
-### XOR Encryption
+### Unencoded (bit 31) Games
 
 | File | Line(s) | Function | Status |
 |------|---------|----------|--------|
-| `src/db/cbh/cbh_codec.cpp` | 2472–2478 | `Codec::startDecoding()` | ✅ Throws `DecodingFailedException("encrypted game not supported (CBH bit 31 set, offset …)")` when bit 31 is set |
+| `src/db/cbh/cbh_codec.cpp` | 2472–2478 | `Codec::startDecoding()` | ✅ Throws `DecodingFailedException("unencoded game not supported (CBH bit 31 set, offset …)")` when bit 31 is set. Bit 31 = plain (unencoded) data, not the standard LUT encoding; NOT encryption (that is the separate `.cbz` DES archive). |
 
 ### Board Helpers
 
@@ -173,11 +173,13 @@ squares from the 8-byte extension (see item 3).
 against the ground-truth FENs (see the "Remaining implementation work for
 Part C" section).
 
-### 4. Handle XOR encryption (0x80000000 bit) — still blocked
+### 4. Handle unencoded (bit 31) games — still blocked
 
-When bit 31 is set, the game data is XOR-encrypted. Currently throws a
-precise exception. The XOR key/algorithm is unknown without analyzing CBASE16
-and requires an encrypted + unencrypted game pair.
+When bit 31 is set, the game data is stored *unencoded* (plain format), not the
+standard LUT encoding. Currently throws a precise exception. The plain format is
+unknown without a bit-31 game (e.g. a "guiding text" / training file). This is
+NOT encryption — the separate `.cbz` archive is the DES-encrypted (password-gated)
+format.
 
 ### 5. Remove duplicate `startDecoding()` code — DONE
 
@@ -250,8 +252,8 @@ tool, then inspect with `probe_cbh_chess960`.
 
 ### Remaining
 
-6. **Handle XOR encryption** (requires CBASE16 reverse engineering) — blocked
-   on encrypted + unencrypted game pair.
+6. **Handle unencoded (bit 31) games** — blocked on a bit-31 game fixture
+   (e.g. a "guiding text" / training file). Bit 31 = plain data, not encryption.
 7. **~~Close the H0 count-cipher coverage gap~~** — **RESOLVED (2026-08-16).**
    Chess960 decode is a 256-byte LUT swap, not a count cipher:
    `lc = Chess960MoveNumberLookup[raw] - move_index`. The decoder now uses
@@ -285,7 +287,7 @@ now run and pass.
 
 | # | Deliverable | File | Status |
 |---|-------------|------|--------|
-| A1 | Precise encrypted-game error | `src/db/cbh/cbh_codec.cpp` | ✅ `"encrypted game not supported (CBH bit 31 set, offset …)"` |
+| A1 | Precise unencoded-game error | `src/db/cbh/cbh_codec.cpp` | ✅ `"unencoded game not supported (CBH bit 31 set, offset …)"` |
 | A2 | De-duplicate position setup | `src/db/cbh/cbh_decoder.cpp`, `cbh_game_decoder.cpp`, `cbh_decoder_position.cpp` | ✅ `setupStartPosition()` helper; size guard |
 | A3 | Off-e-file Chess960 round-trip test | `src/verify_cbh_write.cpp` | ✅ `verifyChess960OffFileKingCastling()` |
 | A4 | `m_isChess960` skips `fixBadCastlingRights()` | `src/db/cbh/cbh_decoder_position.cpp` | ✅ `Position::setup(BitStream&, bool)` |
@@ -334,7 +336,7 @@ now run and pass.
 | Deliverable | Status |
 |-------------|--------|
 | 36-byte position format parsing | **Done** (2026-08-03). Field layout decoded; `setupStartPosition` reads 36 bytes and applies the extension's rook squares. Verified against ground-truth FENs. |
-| XOR keystream characterization | **Blocked** — no encrypted + unencrypted game pair; no CBASE16 analysis |
+| Unencoded (bit 31) format characterization | **Blocked** — no bit-31 game fixture; bit 31 = plain data, not encryption |
 | Off-e-file castling token encoding | **Partial** — decoder reads real rook squares from the extension and uses Convention B (file-based destinations); the encoder's two-square castling assumption remains a limitation for off-e-file kings |
 | H0 table coverage gaps (501 corrupt games) | **RESOLVED** (2026-08-16) — Chess960 decode is a 256-byte LUT swap, not a count cipher; `lc = Chess960MoveNumberLookup[raw] - move_index`. Fixture now 8571/0. |
 
@@ -348,7 +350,7 @@ now run and pass.
    ChessBase fixtures become available, run `probe_cbh_chess960` on them to
    confirm the off-e-file castling token encoding (does the encoder emit a
    distinct token, a multi-byte move, or an ordinary king move with implicit
-   rook update?) and the XOR keystream.
+   rook update?) and the unencoded (bit 31) format.
 
 3. **Chess960 decode is resolved** (2026-08-16). The "count cipher" was a
    256-byte LUT swap: `lc = Chess960MoveNumberLookup[raw] - move_index`

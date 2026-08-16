@@ -2472,12 +2472,15 @@ Codec::startDecoding(ByteStream& gameStream,
 		if (word & 0x80000000)
 		{
 			throw DecodingFailedException(
-				"encrypted game not supported (CBH bit 31 set, offset %llu)",
+				"unencoded game not supported (CBH bit 31 set, offset %llu)",
 				(unsigned long long)info.gameOffset());
 
-			// TODO: we have something special to do, but what?
+			// TODO: bit 31 = the game data is stored *unencoded* (plain format),
+			// not the standard LUT encoding. ChessBase uses this for "guiding
+			// texts" / embedded training files whose text must be directly
+			// readable. It is NOT encryption (that is the separate .cbz DES
+			// archive). scidb does not yet parse this plain format.
 			// look at Big2010, #1964391, Giffard, Nicalas - Castlagliola, Marina
-			// Is CB shuffling (XOR) the data when this flag is set?
 		}
 
 		isChess960 = bool(word & 0x0a000000);

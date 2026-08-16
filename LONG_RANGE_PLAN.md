@@ -10,7 +10,7 @@
 | 2 — Security, performance, observability | **Done** | Committed: auth lockdown, CORS, rate limits, audit logging, structured logging, metrics, engine sandboxing. |
 | 3 — Feature modal completeness | **Done** | Committed with Phase 4: 18 endpoints + 2 shape fixes, Tcl-first dispatch, Store fallback. |
 | 4 — Complete C++ backend integration | **Done** | Merged into Phase 3. |
-| 5 — Chess960 + XOR-encrypted CBH reverse engineering | **Chess960 decode done (8571/0), XOR blocked** | Part A shipped; GRENKE PGN + `.sci` fixtures acquired; 36-byte position block implemented (2026-08-03); Chess960 decode resolved via the Chess960 LUT (2026-08-16, 8571/0 on fixture); XOR still blocked on encrypted game pairs. |
+| 5 — Chess960 + unencoded (bit-31) CBH reverse engineering | **Chess960 decode done (8571/0), unencoded (bit-31) blocked** | Part A shipped; GRENKE PGN + `.sci` fixtures acquired; 36-byte position block implemented (2026-08-03); Chess960 decode resolved via the Chess960 LUT (2026-08-16, 8571/0 on fixture); unencoded (bit-31) still blocked on fixtures. |
 
 ---
 
@@ -197,11 +197,11 @@ npx playwright test src/e2e/workspace.spec.ts
 
 ---
 
-## Phase 5: Chess960 + XOR-Encrypted CBH Reverse Engineering
+## Phase 5: Chess960 + Unencoded (bit-31) CBH Reverse Engineering
 
 **Status:** Part A done; 36-byte position block implemented (2026-08-03);
 Chess960 decode resolved via the Chess960 LUT (2026-08-16, 8571/0 on the
-fixture); XOR still blocked on real ChessBase fixtures.
+fixture); unencoded (bit-31) still blocked on fixtures.
 
 **Goal:** resolve the remaining ChessBase format TODOs. Split into safe
 shippable pieces (no fixtures) and probe-gated pieces that need real
@@ -217,7 +217,7 @@ change to king-relative (Convention A) destinations was reverted.
 
 | # | Deliverable | File | Change |
 |---|-------------|------|--------|
-| A1 | Precise encrypted-game error | `src/db/cbh/cbh_codec.cpp` | `"encrypted game not supported (CBH bit 31 set, offset …)"` |
+| A1 | Precise unencoded-game error | `src/db/cbh/cbh_codec.cpp` | `"unencoded game not supported (CBH bit 31 set, offset …)"` |
 | A2 | De-duplicate position setup | `src/db/cbh/cbh_decoder.cpp`, `cbh_decoder.h`, `cbh_game_decoder.cpp` | `setupStartPosition()` helper; size guard |
 | A3 | Off-e-file Chess960 round-trip test | `src/verify_cbh_write.cpp` | `verifyChess960OffFileKingCastling()` locks in Convention B behavior |
 | A4 | `m_isChess960` skips `fixBadCastlingRights()` | `src/db/cbh/cbh_decoder_position.cpp` | `Position::setup(BitStream&, bool)` |
@@ -252,15 +252,15 @@ and applies the extension's rook squares via the 2-arg
 `twic1639_grenke_freestyle_open.cbv` fixture is **8571 written / 0
 corrupted** (all 606 chess960 games move-exact vs PGN). The decode uses the
 Chess960 lookup table (`Chess960MoveNumberLookup[256]`) with the move index
-as the count — see `CHESS960_STATUS.md` "RESOLVED (2026-08-16)". XOR
-encryption remains blocked.
+as the count — see `CHESS960_STATUS.md` "RESOLVED (2026-08-16)". Unencoded
+(bit-31) games remain blocked.
 
 **Fixture requirements:**
 
 | Fixture | Purpose |
 |---------|---------|
 | ChessBase 16/17-generated `.cbh`/`.cbg` with king off the e-file | Confirm how the encoder represents off-e-file castling moves |
-| Encrypted + unencrypted game pair | Characterize XOR keystream |
+| bit-31 game ("guiding text" / training file) | Characterize the unencoded (plain) format |
 | ChessBase-exported PGN for the same king-off-e-file game | Ground-truth move comparison |
 
 **Decision tree after probes:**
@@ -270,8 +270,9 @@ encryption remains blocked.
 - **Off-e-file castling token characterized?** — **DONE (2026-08-16).** The
   encoder now emits the `0xeb` castle descriptors and promotion packing that
   ChessBase uses, plus the 36-byte position block and LUT-960 inverse.
-- **XOR keystream characterized?** Implement decryption in `cbh_codec.cpp`
-  before normal decoding. Otherwise keep A1's precise "not supported" error.
+- **Unencoded (bit-31) format characterized?** Implement plain-format parsing
+  in `cbh_codec.cpp` before normal decoding. Otherwise keep A1's precise
+  "not supported" error.
 - **H0 count-cipher coverage gap (501 corrupt games)?** — **RESOLVED
   (2026-08-16).** Chess960 decode is a 256-byte LUT swap, not a count
   cipher: `lc = Chess960MoveNumberLookup[raw] - move_index`. The decoder
@@ -284,7 +285,7 @@ encryption remains blocked.
 | `src/db/cbh/cbh_decoder.cpp` | ~~36-byte format confirmed~~ **done** — `setupStartPosition` reads 36 bytes |
 | `src/db/cbh/cbh_decoder_position.cpp` | ~~Parse extra 8 bytes~~ **done** — handled in `setupStartPosition`; still open for off-e-file castling token |
 | `src/db/cbh/cbh_encoder.cpp` / `cbh_encoder_position.cpp` | ~~Off-e-file castling token characterized~~ **done** — emits `0xeb` castle/promo descriptors + 36-byte block + LUT-960 inverse |
-| `src/db/cbh/cbh_codec.cpp` | XOR keystream characterized |
+| `src/db/cbh/cbh_codec.cpp` | unencoded (bit-31) format characterized |
 
 ### Verification gate
 
@@ -310,12 +311,12 @@ python3 scripts/analyze_grenke_fixtures.py \
 3. **Phase 5 Part B** (fixtures) is done as far as possible; the 36-byte
    position block is implemented and verified.
 4. **Phase 5 Part C** 36-byte work is done and Chess960 decode is resolved
-   (2026-08-16, 8571/0 via the Chess960 LUT). Remaining: XOR encryption
-   (blocked on fixtures). Keep the C++ changes minimal and do not alter the
+   (2026-08-16, 8571/0 via the Chess960 LUT). Remaining: unencoded (bit-31)
+   format (blocked on fixtures). Keep the C++ changes minimal and do not alter the
    established Convention B castling destinations without fixture-backed
    proof.
 5. **Future work** (after fixtures): characterize the off-e-file castling
-   token and the XOR keystream; implement only what is proved by real
+   token and the unencoded (bit-31) format; implement only what is proved by real
    `.cbh` data.
 
 ---

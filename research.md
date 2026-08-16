@@ -16,7 +16,7 @@
 ## Summary
 
 The 501 remaining "corrupted" Chess960 games on the Grenke `.cbv` fixture are **not**
-position-block, castling, or XOR-encryption problems. They are **H0 count-cipher table
+position-block, castling, or unencoded (bit-31) problems. They are **H0 count-cipher table
 coverage gaps**: at a specific `(count_prev, lc_prev, lc, ply)` cipher state the game's
 next move has no H0-consistent candidate (or no unambiguous one), the decoder's
 continuation-walk tie-check fails, and the game is discarded with `DecodingFailedException`.
@@ -30,18 +30,18 @@ regress rather than help.
 
 ## Findings
 
-### 1. What the 501 failures actually are — H0 table coverage gaps, not castling/XOR/alignment
+### 1. What the 501 failures actually are — H0 table coverage gaps, not castling/unencoded/alignment
 
 - The fixture now decodes at **8070 written / 501 corrupted**, down from 606 corrupted, and
   the 501 are explicitly characterized as "H0 table coverage gaps (…), not position-block
   or castling issues." [CHESS960_STATUS.md](CHESS960_STATUS.md) "Remaining implementation work for Part C" (2026-08-03).
 - The 36-byte position block is fully implemented and verified; the move-stream alignment
   issue is solved by the cipher. [CHESS960_STATUS.md](CHESS960_STATUS.md) "Decoded: the 8-byte Chess960 position extension".
-- **Not XOR-encryption:** XOR-encrypted games (CBH bit 31 = `0x80000000`) throw a separate
-  precise `DecodingFailedException("encrypted game not supported …")` at
+- **Not unencoded (bit-31):** unencoded games (CBH bit 31 = `0x80000000`) throw a separate
+  precise `DecodingFailedException("unencoded game not supported …")` at
   `src/db/cbh/cbh_codec.cpp:2472–2478`. The Chess960 games carry flags `0x0a000000`
   (`0x08000000 | 0x02000000`, i.e. "newer format" + chess960), **not** bit 31, so none of the
-  501 are the XOR path. [CHESS960_STATUS.md](CHESS960_STATUS.md) "XOR Encryption" and "BREAKTHROUGH".
+  501 are the unencoded path. [CHESS960_STATUS.md](CHESS960_STATUS.md) "Unencoded (bit 31) Games" and "BREAKTHROUGH".
 - **Not off-e-file castling:** only **13/559** disputed H0 keys involve castling
   (`lc` 0x09/0x0a); castling is orthogonal to the count gap and the table already holds
   ~281+ castling entries. There is a *separate pre-existing scidb* bug
@@ -203,7 +203,7 @@ Concrete code/data actions that follow from the evidence:
   `scripts/enumerate_missing_h0.py` (fresh missing-state enumeration), `scripts/harvest_oracle.py`
   (clean-oracle harvest, proves the negative result in Findings §6).
 - **Kept:** `LONG_RANGE_PLAN.md` — Phase 5 status: "36-byte block done; H0 coverage gap
-  deferred indefinitely; XOR blocked."
+  deferred indefinitely; unencoded (bit-31) blocked."
 - **Dropped:** scidb SourceForge help pages (Database formats / Chess variants / CQL) — generic
   format documentation, no H0-cipher content.
 - **Dropped:** TalkChess "CBH file format" thread — classic CB9/CB10 move-index encoding
