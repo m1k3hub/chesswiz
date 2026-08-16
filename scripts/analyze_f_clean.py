@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""Decisive test: is F = (count_p - count_prev) a deterministic pure function of
+(lc_prev, lc, ply) once lc is CORRECT?
+
+Use clean oracle games (exact ChessBase raw bytes + known moves). Walk each game,
+and for every move VALIDATE scidb's lc against the existing table: a move's sample
+(count_prev, lc_prev, lc, ply -> count_p) is trusted ONLY if the table already has
+H0[count_prev, lc_prev, lc, ply] == (raw - invLUT[lc]). Games stop at the first
+unvalidatable move (missing state or mismatch) so a wrong prior lc cannot cascade.
+
+If F is deterministic across all trusted samples -> F is a pure function of
+(lc_prev, lc, ply) and recoverable from the oracle (the earlier 322 ambiguous
+triples were lc noise, not genuine count_prev dependence).
+"""
+import json, re, subprocess, chess, chess.pgn
+from pathlib import Path
+from collections import defaultdict
+
+REPO = Path('/media/michael-g-thomas/sas_mirror/src/chess/scidb-code.codex')
+CBH = '/tmp/oracle.cbh'
+PGN = '/tmp/grenke_clean_20.pgn'
+
+src = (REPO/'src/db/cbh/cbh_decoder.cpp').read_text()
+m = re.search(r'MoveNumberLookup\[256\] =\s*\{(.*?)\};', src, re.S)
+LUT = [int(x, 16) for x in re.findall(r'0x[0-9a-f]{2}', m.group(1))]
+INV = [0]*256
+for i, v in enumerate(LUT):
+    INV[v] = i
+u = json.load(open(REPO/'src/count_cipher_universal.json'))
+H0 = u['H0']; g = u['g_count0']
+
+res = subprocess.run([str(REPO/'src/probe_cbh_chess960'), CBH, '--dump-moves'],
+                     capture_output=True, text=True)
+raws = {}; cur = None
+for line in res.stdout.splitlines():
+    mm = re.match(r'game=(\d+) ', line)
+    if mm: cur = int(mm.group(1)); continue
+    mm = re.match(r'\s+moves=([0-9a-f ]+)$', line)
+    if mm and cur is not None: raws[cur] = bytes.fromhex(mm.group(1).replace(' ',''))
+
+pgames = []
+with open(PGN, encoding='utf-8') as fh:
+    while True:
+        gm = chess.pgn.read_game(fh)
+        if gm is None: break
+        fen = gm.headers.get('FEN','')
+        if not fen: continue
+        brd = chess.Board(fen, chess960=True); ucis = []
+        for mv in gm.mainline_moves():
+            ucis.append(mv.uci()); brd.push(mv)
+        pgames.append((fen, ucis))
+
+def lcs_of(fen, ucis):
+    try:
+        b = chess.Board(fen, chess960=True); sans = []
+        for uc in ucis:
+            mv = chess.Move.from_uci(uc); sans.append(b.san(mv)); b.push(mv)
+        clean = [s.rstrip('+#') for s in sans]
+        r = subprocess.run([str(REPO/'src/probe_encode960'), fen] + clean,
+                           capture_output=True, text=True, timeout=10)
+        for line in r.stdout.splitlines():
+            mm = re.search(r'move bytes.*?:\s*([0-9a-f ]+)', line)
+            if mm:
+                sb = bytes.fromhex(mm.group(1).replace(' ',''))
+                out = []; j = c = 0
+                while j < len(sb):
+                    lc = LUT[(sb[j]-c) & 0xff]
+                    nb = 3 if lc == 0xeb else 1
+                    out.append((lc, nb)); j += nb; c += 1
+                return out
+        return []
+    except Exception:
+        return []
+
+F_vals = defaultdict(set)   # (lc_prev, lc, ply) -> set of F
+n_trusted = 0
+n_games = 0
+for idx in range(len(pgames)):
+    if idx not in raws: continue
+    fen, ucis = pgames[idx]
+    raw = raws[idx]
+    lcs = lcs_of(fen, ucis)
+    if not lcs: continue
+    n_games += 1
+    # validate lc_0 via g + raw_0
+    lc0 = lcs[0][0]
+    c0 = (raw[0] - INV[lc0]) & 0xff
+    if str(lc0) in g and g[str(lc0)] != c0:
+        continue  # first move lc wrong -> skip game
+    if str(lc0) not in g:
+        continue  # can't seed -> skip
+    count = c0; lc_prev = lc0
+    for ply in range(1, len(lcs)):
+        lc, nb = lcs[ply]
+        rp = raw[sum(nb for _, nb in lcs[:ply])] if sum(nb for _, nb in lcs[:ply]) < len(raw) else None
+        if rp is None: break
+        cnt = (rp - INV[lc]) & 0xff
+        key = f"{count},{lc_prev},{lc},{ply}"
+        known = H0.get(key)
+        if known is None or known != cnt:
+            break   # missing/mismatch -> stop trusting this game
+        # trusted sample
+        F_vals[(lc_prev, lc, ply)].add((cnt - count) & 0xff)
+        n_trusted += 1
+        count = cnt; lc_prev = lc
+
+total = len(F_vals)
+det = {k for k,v in F_vals.items() if len(v)==1}
+amb = {k:v for k,v in F_vals.items() if len(v)>1}
+print(f"games seeded: {n_games}, trusted samples: {n_trusted}, (lc_prev,lc,ply) triples: {total}")
+print(f"deterministic F (trusted): {len(det)} ({100.0*len(det)/max(total,1):.2f}%)")
+print(f"AMBIGUOUS F (trusted): {len(amb)} ({100.0*len(amb)/max(total,1):.2f}%)")
+if amb:
+    print("\nambiguous among TRUSTED samples (genuine count_prev dependence):")
+    for k,v in list(amb.items())[:20]:
+        print(f"  (lc_prev={k[0]}, lc={k[1]}, ply={k[2]}) -> F in {sorted(v)}")
