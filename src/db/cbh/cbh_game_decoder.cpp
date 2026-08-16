@@ -767,8 +767,6 @@ GameDecoder::startDecoding(TagSet* tags)
 {
 	unsigned word = m_gStrm.uint32();
 
-	if (getenv("SCIDB_TRACE960"))
-		fprintf(stderr, "[t960-gd] stream word=0x%08x chess960=%d\n", word, int(m_isChess960));
 
 	if (word & 0x40000000)
 	{

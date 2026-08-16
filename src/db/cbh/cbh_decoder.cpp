@@ -31,8 +31,6 @@
 #include "cbh_decoder.h"
 #include "cbh_count_cipher.h"
 
-#include <stdlib.h>
-namespace db { namespace cbh { unsigned g_gameSeq = 0; } }
 #include "m_exception.h"
 
 #include <cstdlib>
@@ -459,28 +457,8 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 		result = dispatchMove(lc, decodeCount, move, skipVariations);
 	}
 
-	if (m_useCipher && ::getenv("SCIDB_TRACE960"))
-	{
-		unsigned tgt = (unsigned)::atoi(::getenv("SCIDB_TRACE960"));
-		if (g_gameSeq == tgt)
-		{
-			::fprintf(stderr, "[t960] cnt=%u lc=0x%02x raw=0x%02x res=%u from=%u to=%u %s",
-					count, lc, unsigned(moveRaw), result,
-					result == Token_Move ? unsigned(move.from()) : 999,
-					result == Token_Move ? unsigned(move.to()) : 999,
-					move.isEmpty() ? "EMPTY" : "");
-			m_position.debugPieces();
-		}
-	}
-
 	if (result == Token_Move)
 	{
-		if (m_useCipher && ::getenv("SCIDB_DECODE_DIAG"))
-		{
-			if (move.isEmpty() || move.isNull())
-				::fprintf(stderr, "[emptymove] count=%u lc=0x%02x raw=0x%02x %s\n",
-						count, lc, unsigned(moveRaw), move.isNull() ? "null" : "empty");
-		}
 		++count;  // move index (used by callers for annotations)
 
 		if (m_useCipher && s_cipher.isLoaded())
@@ -817,8 +795,6 @@ Decoder::dispatchMove(unsigned lc, unsigned decodeCount, Move& move, bool skipVa
 						// the rook source comes from the position.
 						bool kside = (x1 == 12 || x1 == 13);
 						move = m_position.doCastling(Byte(kside ? +2 : -2));
-						if (::getenv("SCIDB_DECODE_DIAG") && move.isEmpty())
-							::fprintf(stderr, "[eb-diag] count=%u x1=%u x2=%u kside=%d -> EMPTY (castle rejected)\n", decodeCount, x1, x2, int(kside));
 					}
 					else
 					{
@@ -834,8 +810,6 @@ Decoder::dispatchMove(unsigned lc, unsigned decodeCount, Move& move, bool skipVa
 							Byte(fromFile * 8 + (color ? 6 : 1)),
 							Byte(toFile * 8 + (color ? 7 : 0)),
 							promo);
-						if (::getenv("SCIDB_DECODE_DIAG") && move.isEmpty())
-							::fprintf(stderr, "[eb-diag] count=%u x1=%u x2=%u fromF=%u toF=%u color=%u promo=%d -> EMPTY (promo rejected)\n", decodeCount, x1, x2, fromFile, toFile, color, int(promo));
 					}
 				}
 				else
@@ -925,8 +899,6 @@ Decoder::decodeMoves(uint16_t* line, unsigned length, Board* startBoard)
 void
 Decoder::setupStartPosition(TagSet* tags)
 {
-	++g_gameSeq;
-	if (getenv("SCIDB_TRACE960")) fprintf(stderr,"[t960-game] seq=%u\n", g_gameSeq);
 	// Standard CBH start position: 28 bytes.
 	// Chess960 CBH start position: 36 bytes (28 + 8-byte extension).
 	// The 8-byte extension encodes castling-relevant squares:

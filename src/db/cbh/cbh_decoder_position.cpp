@@ -38,8 +38,6 @@
 #include "m_utility.h"
 
 #include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 using namespace util;
 using namespace db;
@@ -239,9 +237,6 @@ Position::doCastling(Byte offs)
 	{
 		Move cm = Move::genCastling(from, rookFrom);
 		Move res = doMove(cm);
-		if (::getenv("SCIDB_DECODE_DIAG"))
-			::fprintf(stderr, "[castle-diag] from=%u rookFrom=%u offs=%d -> %s\n",
-					unsigned(from), unsigned(rookFrom), int(int8_t(offs)), res.isEmpty() ? "EMPTY" : "ok");
 		return res;
 	}
 }
@@ -532,23 +527,3 @@ Position::setup()
 // vi:set ts=3 sw=3:
 
 
-void
-Position::debugPieces() const
-{
-	Lookup const& L = m_stack.top();
-	// pieces[number][piece::piece(type,color)] = square; piece index = type | (color<<3)
-	for (int c = 0; c < 2; ++c)
-	{
-		for (int t = 1; t <= 6; ++t)
-		{
-			int idx = t | (c << 3);
-			for (int n = 0; n < 10; ++n)
-			{
-				Byte sq = L.pieces[n][idx];
-				if (sq != 64)
-					fprintf(stderr, " %c%d=%u", " KQRBNP"[t], n, unsigned(sq));
-			}
-		}
-	}
-	fprintf(stderr, "\n");
-}

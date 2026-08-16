@@ -66,8 +66,6 @@ public:
 	Move doNullMove();
 	Move doCastling(Byte offs);
 
-	/// debug: print rook/piece tracker squares
-	void debugPieces() const;
 	Move doKingMove(Byte offs);
 	Move doQueenMove(Byte number, Byte offs);
 	Move doRookMove(Byte number, Byte offs);
