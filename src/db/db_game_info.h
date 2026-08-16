@@ -177,6 +177,8 @@ public:
 	Signature signature() const;							// ChessBase: n/a; Scid: roughly
 	bool isGiveaway() const;
 	bool isSuicide() const;
+	bool isGuidingText() const;
+	void setGuidingText(bool flag = true);
 
 	NamebasePlayer* playerEntry(color::ID color);
 	NamebaseEvent* eventEntry();
@@ -366,7 +368,8 @@ private:
 	uint64_t m_dateYear			:10;
 	uint32_t m_plyCount			:11;
 	uint32_t m_result				: 3;
-	uint32_t __unused__			: 8;
+	uint32_t m_isGuidingText	: 1;
+	uint32_t __unused__			: 7;
 
 	static const GameInfo m_initializer;
 }

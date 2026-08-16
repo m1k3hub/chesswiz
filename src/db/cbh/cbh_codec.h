@@ -182,7 +182,8 @@ private:
 								GameInfo const& info,
 								bool& isChess960);
 	void decodeIndex(util::ByteStream& strm, GameInfo& info);
-	void decodeGuidingText(util::ByteStream& strm);
+	void decodeGuidingTextIndex(util::ByteStream& strm, GameInfo& info);
+	void decodeGuidingTextBody(GameInfo const& info, mstl::string& title, mstl::string& body);
 
 	unsigned readHeader(mstl::string const& rootname);
 

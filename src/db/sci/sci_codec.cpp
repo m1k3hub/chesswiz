@@ -1333,6 +1333,11 @@ Codec::decodeIndex(ByteStream& strm, GameInfo& item)
 	item.m_dateMonth							= bits->dateMonth;
 	item.m_dateDay								= bits->dateDay;
 	item.m_result								= bits->result;
+	if (item.m_result == 5)	// reserved: marks a guiding-text entry
+	{
+		item.m_result = result::Unknown;
+		item.setGuidingText(true);
+	}
 	item.m_gameOffset							= bits->gameOffset;
 	item.m_plyCount							= bits->plyCount;
 	item.m_positionId							= bits->positionId;
@@ -1406,6 +1411,11 @@ printf("id; %u\n", id);
 	item.m_dateMonth							= GET_DATE_MONTH(bits);
 	item.m_dateDay								= GET_DATE_DAY(bits);
 	item.m_result								= GET_RESULT(bits);
+	if (item.m_result == 5)	// reserved: marks a guiding-text entry
+	{
+		item.m_result = result::Unknown;
+		item.setGuidingText(true);
+	}
 	item.m_gameOffset							= GET_GAME_OFFSET(bits);
 	item.m_plyCount							= GET_PLY_COUNT(bits);
 	item.m_positionId							= GET_POSITION_ID(bits);
@@ -1576,7 +1586,7 @@ Codec::encodeIndex(GameInfo const& item, ByteStream& strm)
 	bits->dateDay				= item.m_dateDay;
 	bits->dateMonth			= item.m_dateMonth;
 	bits->dateYear				= item.m_dateYear;
-	bits->result				= item.m_result;
+	bits->result				= item.isGuidingText() ? 5 : item.m_result;
 	bits->termination			= item.m_termination;
 	bits->whiteElo				= item.m_pd[color::White].elo;
 	bits->blackElo				= item.m_pd[color::Black].elo;
@@ -1617,7 +1627,7 @@ Codec::encodeIndex(GameInfo const& item, ByteStream& strm)
 	SET_DATE_DAY			(bits, item.m_dateDay);
 	SET_DATE_MONTH			(bits, item.m_dateMonth);
 	SET_DATE_YEAR			(bits, item.m_dateYear);
-	SET_RESULT				(bits, item.m_result);
+	SET_RESULT				(bits, item.isGuidingText() ? 5 : item.m_result);
 	SET_TERMINATION		(bits, item.m_termination);
 	SET_WHITE_ELO			(bits, item.m_pd[color::White].elo);
 	SET_BLACK_ELO			(bits, item.m_pd[color::Black].elo);
@@ -1653,7 +1663,8 @@ Codec::encodeIndex(GameInfo const& item, ByteStream& strm)
 	M_ASSERT(item.m_dateDay									== (GET_DATE_DAY(bits)));
 	M_ASSERT(item.m_dateMonth								== (GET_DATE_MONTH(bits)));
 	M_ASSERT(item.m_dateYear								== (GET_DATE_YEAR(bits)));
-	M_ASSERT(item.m_result									== (GET_RESULT(bits)));
+	M_ASSERT(item.m_result									== (GET_RESULT(bits))
+			 || (item.isGuidingText() && GET_RESULT(bits) == 5));
 	M_ASSERT(item.m_termination							== (GET_TERMINATION(bits)));
 	M_ASSERT(item.m_pd[color::White].elo				== (GET_WHITE_ELO(bits)));
 	M_ASSERT(item.m_pd[color::Black].elo				== (GET_BLACK_ELO(bits)));

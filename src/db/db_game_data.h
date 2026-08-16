@@ -52,6 +52,7 @@ public:
 	uint16_t			m_idn;
 	EngineList		m_engines;
 	TimeTable		m_timeTable;
+	mstl::string	m_guidingText;	///< Body text of a guiding-text (bit-31) entry; empty for games
 
 };
 

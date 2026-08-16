@@ -1214,6 +1214,11 @@ DatabaseCodec::saveGame(ByteStream const& gameData, TagSet const& tags, Provider
 					provider,
 					m_db->m_namebases);
 
+	// Reconstruct the guiding-text flag from the marker tag (the consumer path
+	// rebuilds GameInfo from tags, so the in-memory flag is otherwise lost).
+	if (tags.contains(tag::Remark) && tags.value(tag::Remark) == "GUIDING_TEXT")
+		info->setGuidingText(true);
+
 	return state;
 }
 

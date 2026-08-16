@@ -44,6 +44,7 @@ struct Accessor
 inline bool GameInfo::isDeleted() const						{ return m_gameFlags & Flag_Deleted; }
 inline bool GameInfo::isDirty() const							{ return m_gameFlags & Flag_Dirty; }
 inline bool GameInfo::isChanged() const						{ return m_gameFlags & Flag_Changed; }
+inline bool GameInfo::isGuidingText() const					{ return m_isGuidingText; }
 inline bool GameInfo::hasPromotion() const					{ return m_signature.hasPromotion(); }
 inline bool GameInfo::hasUnderPromotion() const				{ return m_signature.hasUnderPromotion(); }
 inline bool GameInfo::containsIllegalMoves() const			{ return m_gameFlags & Flag_Illegal_Move; }
@@ -75,6 +76,7 @@ inline Signature GameInfo::signature() const					{ return m_signature; }
 inline unsigned GameInfo::moveCount() const 					{ return mstl::div2(m_plyCount + 1); }
 
 inline void GameInfo::setGameOffset(unsigned offset)		{ m_gameOffset = offset; }
+inline void GameInfo::setGuidingText(bool flag)				{ m_isGuidingText = flag; }
 
 inline species::ID GameInfo::playerType(color::ID color) const	{ return m_player[color]->type(); }
 inline sex::ID GameInfo::sex(color::ID color) const				{ return m_player[color]->sex(); }

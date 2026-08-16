@@ -160,6 +160,7 @@ GameInfo::GameInfo(Initializer const&)
 	,m_dateYear(Date::Zero10Bits)
 	,m_plyCount(0)
 	,m_result(result::Unknown)
+	,m_isGuidingText(false)
 {
 #if defined(__i386__)
 	static_assert(sizeof(GameInfo) == 64, "should be 64 bytes");

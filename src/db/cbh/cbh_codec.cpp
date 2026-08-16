@@ -39,6 +39,8 @@
 #include "db_reader.h"
 #include "db_game_data.h"
 #include "db_exception.h"
+#include "db_annotation.h"
+#include "db_mark_set.h"
 
 #include "u_progress.h"
 #include "u_byte_stream.h"
@@ -1959,7 +1961,11 @@ Codec::readIndexData(mstl::string const& rootname, util::Progress& progress)
 		}
 		else
 		{
-			decodeGuidingText(bstrm);
+			GameInfo& info = infoList.push_back();
+
+			decodeGuidingTextIndex(bstrm, info);
+
+			gameIndex += 1;
 		}
 	}
 
@@ -2172,173 +2178,147 @@ Codec::getSource(uint32_t ref)
 
 
 void
-Codec::decodeGuidingText(ByteStream& strm)
+Codec::decodeGuidingTextIndex(ByteStream& strm, GameInfo& info)
 {
-	M_ASSERT(m_gameStream.is_open());
-
-if (::getenv("SCIDB_GUIDING_TEXT") == 0) return;
-
 	Byte flags = strm.get();
 
 	if (flags & (1 << 7))
-		return; // is deleted
+		info.m_gameFlags |= GameInfo::Flag_Deleted;
 
-	unsigned offset			= strm.uint32();
+	info.m_gameOffset = strm.uint32();
 
-//printf("skip(0): %02x %02x %02x\n", Byte(strm.data()[0]), Byte(strm.data()[1]), Byte(strm.data()[2]));
 	strm.skip(3);
 
-	__attribute__((unused)) unsigned tournamentId	= strm.uint24();
-	__attribute__((unused)) unsigned sourceId			= strm.uint24();
-	__attribute__((unused)) unsigned annotatorId		= strm.uint24();
-	__attribute__((unused)) unsigned round				= strm.get();
+	unsigned tournamentId = strm.uint24();
+	unsigned sourceId = strm.uint24();
+	unsigned annotatorId = strm.uint24();
+	unsigned round = strm.get();
 
-//printf("offset:     %u\n", offset);
-//printf("tournament: %u\n", tournamentId);
-//printf("source:     %u\n", sourceId);
-//printf("annotator:  %u\n", annotatorId);
-//printf("round:      %u\n", round);
+	info.m_event = getEvent(tournamentId);
 
-#if 0
 	if (NamebaseEntry* annotator = getAnnotator(annotatorId))
-		send(annotator);
-	if (Source* source = getSource(sourceId))
-		send(source);
-	if (NamebaseEvent* event = getEvent(tournamentId))
-		send(event);
-	if (round)
-		send(round);
-#endif
+		info.m_annotator = annotator;
+
+	if (!m_sourceMap2.empty())
+		m_sourceMap.push_back(getSource(sourceId));
+
+	info.m_round = round;
+	info.setGuidingText(true);
+}
+
+
+void
+Codec::decodeGuidingTextBody(GameInfo const& info, mstl::string& title, mstl::string& body)
+{
+	M_ASSERT(m_gameStream.is_open());
 
 	char header[8];
 
-	if (m_gameStream.seekg(offset, mstl::ios_base::beg) && m_gameStream.read(header, sizeof(header)))
+	if (!m_gameStream.seekg(info.gameOffset(), mstl::ios_base::beg) || !m_gameStream.read(header, sizeof(header)))
+		return;
+
+	// Header (8 bytes) -----------------------------------------------------------------------
+	// 80 00 20 cd			bit 0-29: Game size (including this, excluding trash bytes)
+	// 						bit 30: ?
+	// 						bit 31: If set, the data is not encoded
+	//
+	// 03					type of entries (after titles)?
+	// 00					?
+	// 01 00				Number of titles (can be 0) (little endian)
+	//
+	// For each title: ------------------------------------------------------------------------
+	// 01 00				Language (0=english, 1=german, 2=france, 3=spain, 4=italian, 5=dutch)
+	// 						(little endian) (unknown: italian, portuguese, polish)
+	// 05 00				Length of title (little endian)
+	// string				Title
+
+	ByteStream bstrm(header, sizeof(header));
+
+	int size = bstrm.uint32();
+
+	if ((size & 0x80000000) == 0)
+		return; // data is encoded
+
+	size = (size & 0x3fffffff) - sizeof(header);
+
+	unsigned type = bstrm.get();
+
+	bstrm.skip(1); // ??
+
+	unsigned numTitles = bstrm.uint16LE();
+
+	mstl::vector<char> buf(size);
+
+	if (!m_gameStream.read(buf.data(), size))
+		return;
+
+	bstrm.setup(reinterpret_cast<Byte*>(buf.data()), size);
+
+	// Parse titles; prefer the English title (lang 0), else the first.
+	for (unsigned i = 0; i < numTitles; ++i)
 	{
-		// Header (8 bytes) -----------------------------------------------------------------------
-		// 80 00 20 cd			bit 0-29: Game size (including this, excluding trash bytes)
-		// 						bit 30: ?
-		// 						bit 31: If set, the data is not encoded
-		//
-		// 03						type of entries (after titles)?
-		// 00						?
-		// 01 00					Number of titles (can be 0) (little endian)
-		//
-		// For each title: ------------------------------------------------------------------------
-		// 01 00					Language (0=english, 1=german, 2=france, 3=spain, 4=italian, 5=dutch)
-		// 						(little endian) (unknown: italian, portuguese, polish)
-		// 05 00					Length of title (little endian)
-		// string				Title
+		if (bstrm.remaining() <= 4)
+			return;
 
-		ByteStream bstrm(header, sizeof(header));
+		unsigned lang = bstrm.uint16LE();
+		unsigned length = bstrm.uint16LE();
 
-		int size = bstrm.uint32();
+		if (length > bstrm.remaining())
+			return;
 
-		if ((size & 0x80000000) == 0)
-			return; // data is encoded
-
-		size = (size & 0x3fffffff) - sizeof(header);
-//printf("skip(1): %02x %02x\n", Byte(bstrm.data()[0]), Byte(bstrm.data()[1]));
-
-		unsigned type = bstrm.get();
-
-		bstrm.skip(1); // ??
-
-		unsigned numTitles = bstrm.uint16LE();
-
-		mstl::vector<char> buf(size);
 		mstl::string str;
+		bstrm.get(str, length);
+		::replaceNewlines(str);
 
-		if (m_gameStream.read(buf.data(), size))
+		if (title.empty() || lang == 0)
+			title = str;
+	}
+
+	// Parse the body text.
+	if (type == 1)
+	{
+		if (bstrm.remaining() > 7)
 		{
-			bstrm.setup(reinterpret_cast<Byte*>(buf.data()), size);
+			bstrm.get();			// language
+			bstrm.uint32LE();	// id
+			unsigned length = bstrm.uint16LE();
 
-			for (unsigned i = 0; i < numTitles; ++i)
-			{
-				if (bstrm.remaining() <= 4)
-				{
-					return;
-				}
+			if (length > bstrm.remaining())
+				return;
 
-				__attribute__((unused)) unsigned lang		= bstrm.uint16LE();
-				__attribute__((unused)) unsigned length	= bstrm.uint16LE();
-
-				if (length > bstrm.remaining())
-				{
-					return;
-				}
-
-				str.clear();
-				bstrm.get(str, length);
-				::replaceNewlines(str);
-
-//printf("lang=%u, length=%u: '%s'\n", lang, length, str.c_str());
-			}
+			bstrm.get(body, length);
+			::replaceNewlines(body);
 		}
+	}
+	else
+	{
+		bstrm.get();			// language
+		bstrm.uint32LE();	// title id
 
-		// PAN-EGC:
-		// 01 | 01 00 00 00 | 67 34
-		// language | id | length
-
-		// Big2010:
-		// 01 | 01 00 00 00 | 20 02
-		// language | id | length
-
-		// CB Light Database:
-		// 01 | 08 00 00 00 | 6e 09 00 00
-		// language | id | length
-
-		// Test1:
-		// 01 | 08 00 00 00 | 96 00 00 00
-		// language | id | length
-
-		if (type == 1)
+		while (bstrm.remaining() > 4)
 		{
-			if (bstrm.remaining() > 7)
+			unsigned length = bstrm.uint32LE();
+
+			if (length >= bstrm.remaining())
+				return;
+
+			mstl::string str;
+			bstrm.get(str, length);
+			::replaceNewlines(str);
+			body.append(str);
+
+			bstrm.get(); // nul byte?
+
+			if (bstrm.remaining() > 9)
 			{
-				__attribute__((unused)) unsigned lang		= bstrm.get();
-				__attribute__((unused)) unsigned id			= bstrm.uint32LE();	// which?
-				__attribute__((unused)) unsigned length	= bstrm.uint16LE();
-
-				if (length > bstrm.remaining())
-				{
-					return;
-				}
-
-				str.clear();
-				bstrm.get(str, length);
-				::replaceNewlines(str);
-//printf("id=%u, lang=%u: '%s'\n", id, lang, str.c_str());
-				bstrm.get(); // nul byte?
-			}
-		}
-		else
-		{
-			bstrm.get();			// language (unused)
-			bstrm.uint32LE();	// title id (unused)
-
-			while (bstrm.remaining() > 4)
-			{
-				unsigned length = bstrm.uint32LE();
-
-				if (length >= bstrm.remaining())
-				{
-					return;
-				}
-
-				str.clear();
-				bstrm.get(str, length);
-				::replaceNewlines(str);
-//printf("id=%u, lang=%u: '%s'\n", id, lang, str.c_str());
-				bstrm.get(); // nul byte?
-
-				if (bstrm.remaining() > 9)
-				{
-					bstrm.uint32();	// title id (unused)
-					bstrm.get();		// language (unused)
-				}
+				bstrm.uint32();	// title id
+				bstrm.get();		// language
 			}
 		}
 	}
+
+	toUtf8(title);
+	toUtf8(body);
 }
 
 
@@ -2649,6 +2629,17 @@ Codec::doDecoding(::util::BlockFileReader* reader, // not used
 void
 Codec::doDecoding(GameData& data, GameInfo& info, unsigned gameIndex, mstl::string*)
 {
+	if (info.isGuidingText())
+	{
+		mstl::string title;
+		decodeGuidingTextBody(info, title, data.m_guidingText);
+
+		if (!title.empty())
+			data.m_tags.set(tag::Event, title);
+
+		return;
+	}
+
 	Byte buf[2][32768];
 
 	ByteStream gStrm(buf[0], sizeof(buf[0]));
@@ -2670,6 +2661,30 @@ Codec::doDecoding(GameData& data, GameInfo& info, unsigned gameIndex, mstl::stri
 save::State
 Codec::doDecoding(db::Consumer& consumer, TagSet& tags, GameInfo const& info, unsigned gameIndex)
 {
+	if (info.isGuidingText())
+	{
+		mstl::string title;
+		mstl::string body;
+		decodeGuidingTextBody(info, title, body);
+
+		if (!title.empty())
+			tags.set(tag::Event, title);
+
+		// Marker so the destination codec can reconstruct the guiding-text flag
+		// (the consumer path rebuilds GameInfo from tags, losing the in-memory flag).
+		tags.set(tag::Remark, "GUIDING_TEXT");
+
+		if (!consumer.startGame(tags))
+			return save::UnsupportedVariant;
+
+		if (!body.empty())
+			consumer.putPrecedingComment(Comment(body, 0), Annotation(), MarkSet());
+
+		consumer.startMoveSection();
+		consumer.finishMoveSection(result::Unknown);
+		return consumer.finishGame(tags);
+	}
+
 	Byte buf[2][32768];
 
 	ByteStream gStrm(buf[0], sizeof(buf[0]));
