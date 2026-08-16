@@ -6,7 +6,10 @@
 > `lc = Chess960MoveNumberLookup[raw] - move_index`. The H0/F tables were the
 > *empirical shadow* of re-deriving `lc` through the wrong (standard) table.
 > The decoder now uses the LUT directly: **8571/8571 games decode, 606/606
-> chess960 games move-exact vs PGN.** See `CHESS960_STATUS.md`
+> chess960 games move-exact vs PGN.** The encoder (2026-08-16) now writes the
+> inverse — 36-byte position block, LUT-960 inverse, `0xeb` castle/promotion
+> descriptors — so scidb-produced Chess960 CBH files round-trip with real
+> ChessBase. See `CHESS960_STATUS.md`
 > "RESOLVED (2026-08-16)" for the full write-up. The sections below are kept
 > as the historical record of the (superseded) count-cipher investigation.
 

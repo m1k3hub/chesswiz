@@ -29,6 +29,12 @@ archives and decodes the move stream via the Chess960 LUT. On the
 "count cipher" / H0-table framing in the sections below is superseded — it
 was the empirical shadow of re-deriving `lc` through the standard LUT.)
 
+**Encoder (2026-08-16):** The CBH encoder now writes ChessBase-compatible
+Chess960: a 36-byte position block (28-byte start + 8-byte castling
+squares extension), the LUT-960 inverse for move tokens, and `0xeb`
+castle/promotion descriptors. `verify_cbh_write` round-trips Chess960 games
+end-to-end (castling, off-e-file kings, promotions, GRENKE start FENs).
+
 ---
 
 ## Conventions
@@ -42,11 +48,13 @@ Chess960 castling:
 This matches ChessBase behavior and the GRENKE PGN/SAN output. An earlier
 sub-agent change to king-relative (Convention A) destinations was reverted.
 
-The CBH move **encoder**, however, currently emits castling as a two-square
-king move token (`0x09` / `0x0a`). When the king is off the e-file, a
-file-based castling move is not always a two-square king move, so the encoder
-cannot represent every legal Chess960 castling. The decoder path is correct
-when the token is present; the limitation is in generating the token.
+The CBH move **encoder** now emits Chess960 castling as the `0xeb` descriptor
+tokens (`(4,16)` O-O-O white, `(12,48)` O-O white, `(5,215)` O-O-O black,
+`(13,247)` O-O black) and promotions as the `0xeb` packing
+(`X1=(piece<<4)|(toFile<<1)|color`, `X2=(fromFile<<3)|(color?0xC6:0x01)`),
+matching the decoder. The encoder writes a 36-byte position block and uses the
+LUT-960 inverse for move tokens, so scidb-produced Chess960 CBH files
+round-trip with real ChessBase.
 
 ## Exact Files and Functions Involved
 
@@ -248,6 +256,11 @@ tool, then inspect with `probe_cbh_chess960`.
    Chess960 decode is a 256-byte LUT swap, not a count cipher:
    `lc = Chess960MoveNumberLookup[raw] - move_index`. The decoder now uses
    the LUT directly (8571/0 on the fixture).
+8. **~~Make the encoder write ChessBase-compatible Chess960~~** — **DONE (2026-08-16).**
+   The encoder now writes a 36-byte position block (28-byte start + 8-byte
+   castling extension), uses the LUT-960 inverse for move tokens, and emits
+   `0xeb` castle/promotion descriptors. `verify_cbh_write` round-trips Chess960
+   games end-to-end.
 
 ---
 
@@ -1643,7 +1656,7 @@ X2 = Chess960MoveNumberLookup[b2] - count
   `(13,247)` O-O black. Destinations are fixed (Convention B: king→g/c,
   rook→f/d); the rook source comes from the position.
 - **Promotion** — `X1 = (piece<<4) | (toFile<<1) | color`,
-  `X2 = (fromFile<<3) | (color ? 6 : 1)`, where `color` is 1=white/0=black
+  `X2 = (fromFile<<3) | (color ? 0xC6 : 0x01)`, where `color` is 1=white/0=black
   and the piece nibble is 0=Q, 1=R, 2=B, 3=N. Squares are CBH-numbered
   (`file*8 + rank-1`), matching `doMove()`'s `mapSquare()`.
 
@@ -1665,11 +1678,26 @@ pieces. Three bugs in the `0xeb` path corrupted it:
    numbering but `doMove()` applies `mapSquare()` expecting CBH numbering.
    Fixed by emitting CBH-numbered squares.
 
+### Encoder (2026-08-16)
+
+The write side is now the exact inverse of the decode model, so scidb-produced
+Chess960 CBH files round-trip with real ChessBase:
+
+- 36-byte position block (28-byte start + 8-byte castling extension with
+  king/rook squares in CBH `file*8+rank` numbering).
+- Move tokens via the LUT-960 inverse: `raw = InvLUT960[lc + move_index]`.
+- `0xeb` castling descriptors and promotion packing (see above).
+- `0x0a000000` game flag; the `notDerivableFromChess960()` rejection removed.
+
+`verify_cbh_write` passes all steps (round-trip + Chess960 castling/promotion
+codec checks).
+
 ### Commits
 
 - `e069f30` feat(chess960): decode via ChessBase LUT-960 + move_index
 - `9656b35` fix(chess960): complete decode — 8571/0 on fixture
 - `2f6149f` chore(chess960): remove debug instrumentation
+- `0f2e912` feat(chess960): make CBH encoder write ChessBase-compatible Chess960
 
 ### Artifacts
 

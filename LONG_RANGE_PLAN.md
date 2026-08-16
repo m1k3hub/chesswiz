@@ -267,9 +267,9 @@ encryption remains blocked.
 
 - **36-byte block confirmed?** — **DONE**: parsing implemented with the exact
   proved layout.
-- **Off-e-file castling token characterized?** Adjust the encoder to emit
-  the same representation ChessBase uses (different token, multi-byte move,
-  or ordinary king move with implicit rook update).
+- **Off-e-file castling token characterized?** — **DONE (2026-08-16).** The
+  encoder now emits the `0xeb` castle descriptors and promotion packing that
+  ChessBase uses, plus the 36-byte position block and LUT-960 inverse.
 - **XOR keystream characterized?** Implement decryption in `cbh_codec.cpp`
   before normal decoding. Otherwise keep A1's precise "not supported" error.
 - **H0 count-cipher coverage gap (501 corrupt games)?** — **RESOLVED
@@ -283,7 +283,7 @@ encryption remains blocked.
 |------|-----------|
 | `src/db/cbh/cbh_decoder.cpp` | ~~36-byte format confirmed~~ **done** — `setupStartPosition` reads 36 bytes |
 | `src/db/cbh/cbh_decoder_position.cpp` | ~~Parse extra 8 bytes~~ **done** — handled in `setupStartPosition`; still open for off-e-file castling token |
-| `src/db/cbh/cbh_encoder.cpp` / `cbh_encoder_position.cpp` | Off-e-file castling token characterized |
+| `src/db/cbh/cbh_encoder.cpp` / `cbh_encoder_position.cpp` | ~~Off-e-file castling token characterized~~ **done** — emits `0xeb` castle/promo descriptors + 36-byte block + LUT-960 inverse |
 | `src/db/cbh/cbh_codec.cpp` | XOR keystream characterized |
 
 ### Verification gate
