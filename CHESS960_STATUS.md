@@ -1592,3 +1592,88 @@ flag-masking).
   assertions — both corpora: 100% 0xff termination, 0 0xeb-overrun errors,
   and ZERO mid-stream tokens >= 0xec in all 1140 games (the fixture's
   chess960 games contain no variations, so Push/Pop never appears).*
+
+## RESOLVED (2026-08-16): Chess960 decode is a LUT swap, not a count cipher
+
+**Final state: 8571/8571 games decode (0 corrupted); 606/606 chess960 games
+move-exact vs PGN (0 wrong moves).** The only remaining difference is scidb's
+SAN output omitting the `+`/`#` check/mate suffix (cosmetic, pre-existing,
+unrelated to decode).
+
+### The model
+
+ChessBase 26 decodes Chess960 games (game-type word `0x4a`, dispatch case 10)
+with a dedicated 256-byte lookup table and the plain move index as the count:
+
+```
+lc = Chess960MoveNumberLookup[raw] - move_index   (mod 256)
+```
+
+- Decode LUT: CBase26.exe VA `0x141a799c0` (extracted to
+  `Chess960MoveNumberLookup[256]` in `src/db/cbh/cbh_decoder.cpp`).
+- Encode LUT: VA `0x141a798c0`, verified to be the exact inverse.
+- The standard `MoveNumberLookup` (VA `0x141a783c0`) is *not* used for
+  chess960; every other 256-byte permutation in the binary differs from it in
+  ~150–170 of 256 positions (essentially random), so no variant is a
+  constant-shift of the standard table.
+
+The previously harvested H0/F "count cipher" (440,295 entries in
+`src/count_cipher_universal.json`) is the *empirical shadow* of this decode:
+`count = raw - InvLUT_std[lc]` computed when `lc` was genuinely produced by
+`LUT960[raw] - mi`. Its sparse 4-input structure falls out of re-deriving `lc`
+through the wrong (standard) table. There is no F algorithm in the binary
+beyond the 256-byte LUT.
+
+### The 0xeb special move (castling / promotion)
+
+In chess960, `0xeb` is used *only* for castling (872/896 corpus occurrences)
+and promotions (24/896). The two parameter bytes decode with the same LUT and
+the same count as the marker byte (`FUN_140212eb0`):
+
+```
+X1 = Chess960MoveNumberLookup[b1] - count
+X2 = Chess960MoveNumberLookup[b2] - count
+```
+
+- **Castling** — `(X1,X2)` is one of four fixed descriptors:
+  `(4,16)` O-O-O white, `(12,48)` O-O white, `(5,215)` O-O-O black,
+  `(13,247)` O-O black. Destinations are fixed (Convention B: king→g/c,
+  rook→f/d); the rook source comes from the position.
+- **Promotion** — `X1 = (piece<<4) | (toFile<<1) | color`,
+  `X2 = (fromFile<<3) | (color ? 6 : 1)`, where `color` is 1=white/0=black
+  and the piece nibble is 0=Q, 1=R, 2=B, 3=N. Squares are CBH-numbered
+  (`file*8 + rank-1`), matching `doMove()`'s `mapSquare()`.
+
+### Piece-tracking bugs fixed (the last 155 failures)
+
+scidb's `Position` maintains a hand-mirrored `pieces[]`/`pieceCount[]` table
+(separate from the `Board`) used only to resolve `lc` tokens to specific
+pieces. Three bugs in the `0xeb` path corrupted it:
+
+1. **`doCastling` king piece-walk** — `doMove(piece::King, 0, offs, ...)`
+   computed `to = from + offs`, which for an off-e-file king lands on the
+   rook's square and clobbered `pieceCount[rookFrom]` (→0), selecting the
+   wrong rook. Fixed by reading the king square directly.
+2. **`doCastling` swap case** — when king and rook are adjacent
+   (king f1/g1, rook g1/f1), `kingTo == rookFrom`, so the
+   `pieceCount[kingTo] = 0` write clobbered `pieceCount[rookFrom]` again.
+   Fixed by reading `rookNum` before any `pieceCount` write.
+3. **Promotion square numbering** — from/to were emitted in scidb square
+   numbering but `doMove()` applies `mapSquare()` expecting CBH numbering.
+   Fixed by emitting CBH-numbered squares.
+
+### Commits
+
+- `e069f30` feat(chess960): decode via ChessBase LUT-960 + move_index
+- `9656b35` fix(chess960): complete decode — 8571/0 on fixture
+- `2f6149f` chore(chess960): remove debug instrumentation
+
+### Artifacts
+
+- `src/db/cbh/cbh_decoder.cpp` — `Chess960MoveNumberLookup[256]` + the
+  direct decode + `0xeb` castle/promo handling.
+- `src/db/cbh/cbh_decoder_position.cpp` — `doCastling` piece-tracking fix.
+- `/tmp/chess960_lut.h`, `/tmp/chess960.lut` — extracted tables (hex).
+- `/tmp/trace_cbase26.gdb`, `/tmp/trace_hits.log` — live-trace script/capture.
+- `/tmp/ghidra_cb26/CB26` — re-imported Ghidra project;
+  `/tmp/ghidra_cb26/decompile_gate.log` — gate-region decompiles.
