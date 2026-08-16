@@ -1,6 +1,6 @@
 # Chess960 CBG/CBH Decoding Status — Assessment Report
 
-**Date:** 2025-07-21 (updated after Phase 5 Part A + fixture acquisition)  
+**Date:** 2025-07-21 (updated 2026-08-16 after Chess960 decode resolution)  
 **Scope:** CBH/CBG decoder (`src/db/cbh/`), Board engine, probe tools, test fixtures
 
 ---
@@ -16,15 +16,18 @@ castling-squares extension) and applies the extension's rook squares with the
 engine use **file-based castling destinations** (Convention B): short castling
 always places the king on the g-file and the rook on the f-file; long castling
 always places the king on the c-file and the rook on the d-file. Real Chess960
-move streams are decoded via the **count cipher** (H0/g tables in
-`src/count_cipher_universal.json`); XOR-encrypted games (bit 31) throw a
-precise exception.
+move streams are decoded via the **Chess960 lookup table**
+(`Chess960MoveNumberLookup[256]`, extracted from CBase26.exe VA `0x141a799c0`)
+with the plain move index as the count: `lc = LUT960[raw] - move_index`.
+XOR-encrypted games (bit 31) throw a precise exception.
 
 **Bottom line:** The decoder reads real ChessBase `.cbh`/`.cbv` Chess960
-archives and decodes the move stream via the count cipher. On the
-`twic1639_grenke_freestyle_open.cbv` fixture the decode rate is **8070 written /
-501 corrupted**; the 501 remaining are H0 table coverage gaps (see the
-count-cipher sections below), not position-block or castling issues.
+archives and decodes the move stream via the Chess960 LUT. On the
+`twic1639_grenke_freestyle_open.cbv` fixture the decode rate is **8571 written /
+0 corrupted**; all 606 chess960 games are move-exact vs PGN. See
+"RESOLVED (2026-08-16)" below for the full write-up. (The earlier
+"count cipher" / H0-table framing in the sections below is superseded — it
+was the empirical shadow of re-deriving `lc` through the standard LUT.)
 
 ---
 
@@ -77,7 +80,7 @@ when the token is present; the limitation is in generating the token.
 
 | File | Line(s) | Status |
 |------|---------|--------|
-| `src/db/cbh/cbh_decoder.cpp` | 1106 | ✅ Used in `setupStartPosition` to select 36-byte position size and gate the count cipher (`m_useCipher`) |
+| `src/db/cbh/cbh_decoder.cpp` | 1106 | ✅ Used in `setupStartPosition` to select 36-byte position size and gate the Chess960 LUT decode (`m_useCipher`) |
 | `src/db/cbh/cbh_decoder_position.cpp` | 327 | ✅ Passed to `Position::setup` to skip `fixBadCastlingRights()` |
 | `src/db/cbh/cbh_decoder.h` | 61 | ✅ Declared and consumed by the decoder |
 
@@ -135,8 +138,8 @@ position extension (see "Missing Implementation Steps" below).
 ## Missing Implementation Steps
 
 **Status 2026-08-03: items 1-3 and 5 are DONE.** Item 4 (XOR) is still
-blocked. The remaining gap is the H0 count-cipher coverage (deferred
-indefinitely).
+blocked. The Chess960 decode gap is **RESOLVED** (2026-08-16) — it was a
+256-byte LUT swap, not a count cipher (see "RESOLVED (2026-08-16)" below).
 
 ### 1. Use `m_isChess960` to skip `fixBadCastlingRights()` — DONE
 
@@ -241,8 +244,10 @@ tool, then inspect with `probe_cbh_chess960`.
 
 6. **Handle XOR encryption** (requires CBASE16 reverse engineering) — blocked
    on encrypted + unencrypted game pair.
-7. **Close the H0 count-cipher coverage gap** (501 corrupt games) — requires
-   targeted oracle generation or binary RE of the CBase26 transform (deferred).
+7. **~~Close the H0 count-cipher coverage gap~~** — **RESOLVED (2026-08-16).**
+   Chess960 decode is a 256-byte LUT swap, not a count cipher:
+   `lc = Chess960MoveNumberLookup[raw] - move_index`. The decoder now uses
+   the LUT directly (8571/0 on the fixture).
 
 ---
 
@@ -318,7 +323,7 @@ now run and pass.
 | 36-byte position format parsing | **Done** (2026-08-03). Field layout decoded; `setupStartPosition` reads 36 bytes and applies the extension's rook squares. Verified against ground-truth FENs. |
 | XOR keystream characterization | **Blocked** — no encrypted + unencrypted game pair; no CBASE16 analysis |
 | Off-e-file castling token encoding | **Partial** — decoder reads real rook squares from the extension and uses Convention B (file-based destinations); the encoder's two-square castling assumption remains a limitation for off-e-file kings |
-| H0 table coverage gaps (501 corrupt games) | **Blocked** — needs targeted oracle generation or binary RE of the CBase26 transform (deferred) |
+| H0 table coverage gaps (501 corrupt games) | **RESOLVED** (2026-08-16) — Chess960 decode is a 256-byte LUT swap, not a count cipher; `lc = Chess960MoveNumberLookup[raw] - move_index`. Fixture now 8571/0. |
 
 ### Recommended next action
 
@@ -332,13 +337,11 @@ now run and pass.
    distinct token, a multi-byte move, or an ordinary king move with implicit
    rook update?) and the XOR keystream.
 
-3. **Remaining decode gap is the H0 count cipher table coverage** (501
-   corrupt games). The binary RE session (`/tmp/cb26`) found that the
-   case-0 InvLUT matches scidb's table exactly while the variant tables
-   (case 1/2 and the Chess960 tables at 0x141a78ec0 / 0x141a7a2c0) differ,
-   but the count is not a simple `(variantLUT - standardLUT) + move_index`
-   difference. Closing the gap requires targeted oracle generation or
-   deriving the H0 transform from the binary (deferred).
+3. **Chess960 decode is resolved** (2026-08-16). The "count cipher" was a
+   256-byte LUT swap: `lc = Chess960MoveNumberLookup[raw] - move_index`
+   (table at CBase26.exe VA `0x141a799c0`). The decoder now uses the LUT
+   directly — 8571/0 on the fixture, 606/606 chess960 games move-exact.
+   See "RESOLVED (2026-08-16)" below.
 
 ### Build verification
 

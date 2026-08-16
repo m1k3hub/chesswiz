@@ -10,7 +10,7 @@
 | 2 — Security, performance, observability | **Done** | Committed: auth lockdown, CORS, rate limits, audit logging, structured logging, metrics, engine sandboxing. |
 | 3 — Feature modal completeness | **Done** | Committed with Phase 4: 18 endpoints + 2 shape fixes, Tcl-first dispatch, Store fallback. |
 | 4 — Complete C++ backend integration | **Done** | Merged into Phase 3. |
-| 5 — Chess960 + XOR-encrypted CBH reverse engineering | **Part A done, 36-byte block done, XOR blocked** | Part A shipped; GRENKE PGN + `.sci` fixtures acquired; 36-byte position block implemented (2026-08-03); H0 count-cipher coverage gap deferred indefinitely; XOR still blocked on encrypted game pairs. |
+| 5 — Chess960 + XOR-encrypted CBH reverse engineering | **Chess960 decode done (8571/0), XOR blocked** | Part A shipped; GRENKE PGN + `.sci` fixtures acquired; 36-byte position block implemented (2026-08-03); Chess960 decode resolved via the Chess960 LUT (2026-08-16, 8571/0 on fixture); XOR still blocked on encrypted game pairs. |
 
 ---
 
@@ -200,8 +200,8 @@ npx playwright test src/e2e/workspace.spec.ts
 ## Phase 5: Chess960 + XOR-Encrypted CBH Reverse Engineering
 
 **Status:** Part A done; 36-byte position block implemented (2026-08-03);
-H0 count-cipher coverage gap deferred indefinitely; XOR still blocked on
-real ChessBase fixtures.
+Chess960 decode resolved via the Chess960 LUT (2026-08-16, 8571/0 on the
+fixture); XOR still blocked on real ChessBase fixtures.
 
 **Goal:** resolve the remaining ChessBase format TODOs. Split into safe
 shippable pieces (no fixtures) and probe-gated pieces that need real
@@ -249,9 +249,11 @@ The best available substitutes are:
 verified** (`src/db/cbh/cbh_decoder.cpp` `setupStartPosition` reads 36 bytes
 and applies the extension's rook squares via the 2-arg
 `Board::setCastleShort/Long(color, square)`). The decode rate on the real
-`twic1639_grenke_freestyle_open.cbv` fixture is **8070 written / 501
-corrupted**; the 501 remaining are H0 count-cipher table coverage gaps,
-deferred indefinitely. XOR encryption remains blocked.
+`twic1639_grenke_freestyle_open.cbv` fixture is **8571 written / 0
+corrupted** (all 606 chess960 games move-exact vs PGN). The decode uses the
+Chess960 lookup table (`Chess960MoveNumberLookup[256]`) with the move index
+as the count — see `CHESS960_STATUS.md` "RESOLVED (2026-08-16)". XOR
+encryption remains blocked.
 
 **Fixture requirements:**
 
@@ -270,9 +272,10 @@ deferred indefinitely. XOR encryption remains blocked.
   or ordinary king move with implicit rook update).
 - **XOR keystream characterized?** Implement decryption in `cbh_codec.cpp`
   before normal decoding. Otherwise keep A1's precise "not supported" error.
-- **H0 count-cipher coverage gap (501 corrupt games)?** — **Deferred
-  indefinitely** (requires targeted oracle generation or binary RE of the
-  CBase26 transform).
+- **H0 count-cipher coverage gap (501 corrupt games)?** — **RESOLVED
+  (2026-08-16).** Chess960 decode is a 256-byte LUT swap, not a count
+  cipher: `lc = Chess960MoveNumberLookup[raw] - move_index`. The decoder
+  now uses the LUT directly (8571/0 on the fixture).
 
 ### Files to modify (conditional)
 
@@ -306,9 +309,9 @@ python3 scripts/analyze_grenke_fixtures.py \
 2. **Phase 5 Part A** is done and committed.
 3. **Phase 5 Part B** (fixtures) is done as far as possible; the 36-byte
    position block is implemented and verified.
-4. **Phase 5 Part C** 36-byte work is done. Remaining: XOR encryption
-   (blocked on fixtures) and the H0 count-cipher coverage gap **deferred
-   indefinitely**. Keep the C++ changes minimal and do not alter the
+4. **Phase 5 Part C** 36-byte work is done and Chess960 decode is resolved
+   (2026-08-16, 8571/0 via the Chess960 LUT). Remaining: XOR encryption
+   (blocked on fixtures). Keep the C++ changes minimal and do not alter the
    established Convention B castling destinations without fixture-backed
    proof.
 5. **Future work** (after fixtures): characterize the off-e-file castling
