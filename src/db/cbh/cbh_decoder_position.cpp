@@ -193,10 +193,6 @@ Position::doMove(Byte from, Byte to, Byte promoted)
 Move
 Position::doCastling(Byte offs)
 {
-	Byte from, to;
-
-	doMove(piece::King, 0, offs, from, to, false);
-
 	Lookup&		lookup				= m_stack.top();
 	Count&		pieceCount			= lookup.pieceCount;
 	Pieces&		pieces				= lookup.pieces;
@@ -205,6 +201,13 @@ Position::doCastling(Byte offs)
 	// `Byte` is unsigned, so `Byte(-2)` does not compare negative.
 	// 0x09 encodes with offset +2 (short), 0x0a with offset -2 (long).
 	bool			isShortCastling	= offs == Byte(+2);
+
+	// Read the king square directly.  The old code used
+	// doMove(piece::King, 0, offs, from, to, false) here, whose
+	// intermediate "to = from + offs" lands on the rook's square for an
+	// off-e-file king and clobbers pieceCount[rookFrom] (setting it to 0),
+	// so the wrong rook was selected for the piece-tracking update.
+	Byte from		= pieces[0][piece::piece(piece::King, sideToMove)];
 
 	Byte rank		= sq::rank(from);
 	Byte rookFrom	= isShortCastling
@@ -221,11 +224,15 @@ Position::doCastling(Byte offs)
 	Byte kingTo	= sq::make(isShortCastling ? sq::FyleG : sq::FyleC, rank);
 	Byte rookTo	= sq::make(isShortCastling ? sq::FyleF : sq::FyleD, rank);
 
+	// Resolve the rook's piece number BEFORE writing pieceCount[kingTo]:
+	// in the swap case (king f1/g1, rook g1/f1) kingTo == rookFrom, so the
+	// kingTo write would clobber the rook's pieceCount entry.
+	Byte rookNum	= pieceCount[rookFrom];
+
 	// Fix king position in pieces/pieceCount (was from+offs, but Board uses g/c file).
 	pieces[0][piece::piece(piece::King, sideToMove)] = kingTo;
 	pieceCount[kingTo] = 0;
 
-	Byte rookNum	= pieceCount[rookFrom];
 	pieces[rookNum][piece::piece(piece::Rook, sideToMove)] = rookTo;
 	pieceCount[rookTo] = rookNum;
 

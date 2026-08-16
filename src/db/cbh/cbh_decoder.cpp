@@ -463,11 +463,14 @@ Decoder::decodeMove(Move& move, unsigned& count, bool skipVariations)
 	{
 		unsigned tgt = (unsigned)::atoi(::getenv("SCIDB_TRACE960"));
 		if (g_gameSeq == tgt)
-			::fprintf(stderr, "[t960] cnt=%u lc=0x%02x raw=0x%02x res=%u from=%u to=%u %s\n",
+		{
+			::fprintf(stderr, "[t960] cnt=%u lc=0x%02x raw=0x%02x res=%u from=%u to=%u %s",
 					count, lc, unsigned(moveRaw), result,
 					result == Token_Move ? unsigned(move.from()) : 999,
 					result == Token_Move ? unsigned(move.to()) : 999,
 					move.isEmpty() ? "EMPTY" : "");
+			m_position.debugPieces();
+		}
 	}
 
 	if (result == Token_Move)
@@ -819,15 +822,17 @@ Decoder::dispatchMove(unsigned lc, unsigned decodeCount, Move& move, bool skipVa
 					}
 					else
 					{
-						// Promotion of a home-stretch pawn.
-						unsigned color = x1 & 1;
+						// Promotion of a home-stretch pawn.  Squares are in
+						// CBH numbering (file*8 + rank-1), matching the
+						// standard 0xeb path and doMove()'s mapSquare().
+						unsigned color = x1 & 1;      // 1 = white, 0 = black
 						unsigned toFile = (x1 >> 1) & 7;
 						unsigned fromFile = (x2 >> 3) & 7;
 						Byte promo = Byte((x1 >> 4) + piece::Queen); // 0=Q,1=R,2=B,3=N
 
 						move = m_position.doMove(
-							Byte(fromFile + (color ? 48 : 8)),
-							Byte(toFile + (color ? 56 : 0)),
+							Byte(fromFile * 8 + (color ? 6 : 1)),
+							Byte(toFile * 8 + (color ? 7 : 0)),
 							promo);
 						if (::getenv("SCIDB_DECODE_DIAG") && move.isEmpty())
 							::fprintf(stderr, "[eb-diag] count=%u x1=%u x2=%u fromF=%u toF=%u color=%u promo=%d -> EMPTY (promo rejected)\n", decodeCount, x1, x2, fromFile, toFile, color, int(promo));
