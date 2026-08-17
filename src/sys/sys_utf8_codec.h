@@ -24,6 +24,8 @@
 
 #include "sys_mutex.h"
 
+#include <atomic>
+
 extern "C" { struct Tcl_Encoding_; }
 
 namespace sys {
@@ -102,9 +104,9 @@ private:
 	mstl::string				m_buf;
 	mstl::string				m_encoding;
 	unsigned						m_unknown;
-	bool							m_error;
+	std::atomic<bool>		m_error;
 	unsigned						m_type;
-	Mutex							m_mutex;	///< guards m_buf/m_unknown/m_error during concurrent conversion
+	Mutex							m_mutex;	///< guards m_buf/m_unknown during concurrent conversion
 };
 
 } // namespace utf8
