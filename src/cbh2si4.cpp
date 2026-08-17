@@ -29,15 +29,23 @@
 #include "db_pgn_reader.h"
 #include "db_exception.h"
 #include "db_log.h"
+#include "db_game_data.h"
+#include "db_consumer.h"
+#include "db_tag_set.h"
 
 #include "si3/si3_consumer.h"
 #include "si3/si3_encoder.h"
 #include "si3/si3_codec.h"
 
+#include "cbh/cbh_game_decoder.h"
+
 #include "u_progress.h"
 
 #include "sys_utf8_codec.h"
 #include "sys_file.h"
+#include "sys_thread_group.h"
+#include "sys_thread.h"
+#include "sys_info.h"
 
 #include "tcl_base.h"
 
@@ -556,6 +564,284 @@ exportGames(Database& src, Consumer& dst, ::util::Progress& progress, ::Log& log
 }
 
 
+static unsigned
+computeWorkerCount(unsigned nGames)
+{
+	char const* value = ::getenv("SCIDB_MAINTENANCE_THREADS");
+
+	if (value && *value)
+	{
+		long forced = ::strtol(value, 0, 10);
+		if (forced > 0)
+			return unsigned(forced);
+	}
+
+	unsigned processors = sys::info::numberOfProcessors();
+
+	if (processors < 2 || nGames < 20000)
+		return 1;
+
+	unsigned maxWorkers = nGames/10000;
+	if (maxWorkers == 0)
+		return 1;
+
+	if (processors > maxWorkers)
+		processors = maxWorkers;
+
+	return mstl::max(1u, processors);
+}
+
+
+struct DecodeWorker
+{
+	DecodeWorker(Database& src_,
+					 mstl::vector<GameData*>& results_,
+					 unsigned chunkStart_,
+					 unsigned first_,
+					 unsigned last_)
+		:src(src_)
+		,results(results_)
+		,chunkStart(chunkStart_)
+		,first(first_)
+		,last(last_)
+	{
+	}
+
+	void operator() ()
+	{
+		for (unsigned i = first; i < last; ++i)
+		{
+			GameData* data = new GameData();
+
+			try
+			{
+				GameInfo& info = src.gameInfo(i);
+				src.codec().decodeGame(*data, info, i, 0);
+				results[i - chunkStart] = data;
+			}
+			catch (DecodingFailedException const&)
+			{
+				delete data;
+				results[i - chunkStart] = 0;
+			}
+			catch (mstl::exception const&)
+			{
+				delete data;
+				results[i - chunkStart] = 0;
+			}
+		}
+	}
+
+	Database&					src;
+	mstl::vector<GameData*>&	results;
+	unsigned						chunkStart;
+	unsigned						first;
+	unsigned						last;
+};
+
+
+static save::State
+reencodeGame(GameData& data, GameInfo const& info, variant::Type variant, Consumer& consumer)
+{
+	TagSet tags;
+	info.setupTags(tags, variant);
+
+	// Merge the extra tags produced during decode (Source, EventCategory,
+	// team tags, FEN/SetUp) into the standard tag set. Skip the placeholder
+	// tags that GameData's constructor initializes, since setupTags() already
+	// set the correct values for those.
+	for (tag::ID i = data.m_tags.findFirst(); i <= tag::LastTag; i = data.m_tags.findNext(i))
+	{
+		if (i == tag::Event || i == tag::Site || i == tag::Date || i == tag::Round
+			|| i == tag::White || i == tag::Black || i == tag::Result)
+			continue;
+
+		tags.set(i, data.m_tags.value(i));
+	}
+
+	consumer.setGameFlags(info.flags());
+	consumer.setLangFlags(info.langFlags());
+
+	if (info.isGuidingText())
+	{
+		// The decode phase stored the guiding-text title in the Event tag;
+		// restore it (setupTags() left a placeholder '?').
+		if (data.m_tags.contains(tag::Event))
+			tags.set(tag::Event, data.m_tags.value(tag::Event));
+
+		tags.set(tag::Remark, "GUIDING_TEXT");
+
+		if (!consumer.startGame(tags))
+		{
+			consumer.finalizeGame();
+			return save::UnsupportedVariant;
+		}
+
+		if (!data.m_guidingText.empty())
+			consumer.putPrecedingComment(Comment(data.m_guidingText, 0), Annotation(), MarkSet());
+
+		consumer.startMoveSection();
+		consumer.finishMoveSection(result::Unknown);
+		save::State rc = consumer.finishGame(tags);
+		consumer.finalizeGame();
+		return rc;
+	}
+
+	if (!consumer.startGame(tags, data.m_startBoard))
+	{
+		consumer.finalizeGame();
+		return save::UnsupportedVariant;
+	}
+
+	consumer.startMoveSection();
+	cbh::GameDecoder::traverse(consumer, data.m_startNode);
+
+	char buf[32];
+	::snprintf(buf, sizeof(buf), "%u", info.plyCount());
+	tags.set(tag::PlyCount, buf);
+
+	consumer.finishMoveSection(result::fromString(tags.value(tag::Result)));
+	save::State rc = consumer.finishGame(tags);
+	consumer.finalizeGame();
+	return rc;
+}
+
+
+static unsigned
+exportGamesParallel(Database& src, Consumer& dst, util::Progress& progress, ::Log& log)
+{
+	unsigned numGames = src.countGames();
+	unsigned nWorkers = computeWorkerCount(numGames);
+
+	if (nWorkers == 1)
+		return exportGames(src, dst, progress, log);
+
+	util::ProgressWatcher watcher(progress, numGames);
+	progress.setFrequency(mstl::min(200u, mstl::max(numGames/1000, 50u)));
+
+	unsigned countGames = 0;
+	unsigned reportAfter = progress.frequency();
+	unsigned count = 0;
+
+	const unsigned chunkSize = 1000;
+
+	for (unsigned chunkStart = 0; chunkStart < numGames; chunkStart += chunkSize)
+	{
+		unsigned chunkEnd = mstl::min(chunkStart + chunkSize, numGames);
+		unsigned chunkGames = chunkEnd - chunkStart;
+
+		// Phase 1: decode the chunk in parallel.
+		mstl::vector<GameData*> results(chunkGames, static_cast<GameData*>(0));
+		mstl::vector<DecodeWorker*> workers;
+		sys::ThreadGroup group;
+
+		unsigned perWorker = (chunkGames + nWorkers - 1)/nWorkers;
+		workers.reserve(nWorkers);
+
+		for (unsigned w = 0; w < nWorkers; ++w)
+		{
+			unsigned first = w*perWorker;
+			unsigned last = mstl::min(first + perWorker, chunkGames);
+
+			if (first >= last)
+				break;
+
+			DecodeWorker* worker = new DecodeWorker(src, results, chunkStart, chunkStart + first, chunkStart + last);
+			workers.push_back(worker);
+
+			if (!group.start(sys::Thread::Runnable(&DecodeWorker::operator(), worker)))
+			{
+				workers.pop_back();
+				delete worker;
+
+				// Fall back to serial decode for the remaining games.
+				for (unsigned i = first; i < chunkGames; ++i)
+				{
+					GameData* data = new GameData();
+					try
+					{
+						GameInfo& info = src.gameInfo(chunkStart + i);
+						src.codec().decodeGame(*data, info, chunkStart + i, 0);
+						results[i] = data;
+					}
+					catch (...)
+					{
+						delete data;
+						results[i] = 0;
+					}
+				}
+				break;
+			}
+		}
+
+		mstl::string failMsg;
+		bool ok = group.joinNoThrow(failMsg);
+
+		// Phase 2: re-encode and write in order.
+		for (unsigned i = 0; i < chunkGames; ++i)
+		{
+			if (reportAfter == count)
+			{
+				progress.update(count);
+				reportAfter += progress.frequency();
+				::newNewline = true;
+			}
+			count += 1;
+
+			GameData* data = results[i];
+
+			if (!data)
+			{
+				++rejected;
+				continue;
+			}
+
+			try
+			{
+				save::State state = reencodeGame(*data, src.gameInfo(chunkStart + i), src.variant(), dst);
+
+				if (state == save::Ok)
+					++countGames;
+				else if (!log.error(state, chunkStart + i + 1))
+				{
+					delete data;
+					for (unsigned j = i + 1; j < chunkGames; ++j)
+						delete results[j];
+					for (unsigned j = 0; j < workers.size(); ++j)
+						delete workers[j];
+					return countGames;
+				}
+			}
+			catch (IOException const& exc)
+			{
+				logIOError(exc, chunkStart + i + 1);
+			}
+			catch (...)
+			{
+				printf("\n");
+				fflush(stdout);
+				fprintf(stderr, "*** Exception catched while encoding game #%u\n", count);
+				throw;
+			}
+
+			delete data;
+		}
+
+		for (unsigned j = 0; j < workers.size(); ++j)
+			delete workers[j];
+
+		if (!ok)
+		{
+			fflush(stdout);
+			fprintf(stderr, "\n%s\n", failMsg.c_str());
+			exit(1);
+		}
+	}
+
+	return countGames;
+}
+
+
 int
 main(int argc, char* argv[])
 {
@@ -581,6 +867,7 @@ main(int argc, char* argv[])
 	mstl::string	convertto(::ConvertTo);
 	mstl::string	convertfrom(::ConvertFrom);
 	bool				force(false);
+	bool				serial(false);
 	bool				allTags(false);
 	bool				noTags(false);
 	bool				defaultTags(true);
@@ -652,6 +939,10 @@ main(int argc, char* argv[])
 		else if (strcmp(argv[i], "--force") == 0)
 		{
 			force = true;
+		}
+		else if (strcmp(argv[i], "--serial") == 0)
+		{
+			serial = true;
 		}
 		else
 		{
@@ -765,7 +1056,9 @@ main(int argc, char* argv[])
 		printf("Convert '%s' to '%s' ", cbhPath.c_str(), si4Path.c_str());
 		fflush(stdout);
 		::newNewline = true;
-		unsigned numGames = exportGames(src, consumer, progress, log);
+		unsigned numGames = serial
+								? exportGames(src, consumer, progress, log)
+								: exportGamesParallel(src, consumer, progress, log);
 		stats.written = numGames;
 		stats.rejected = rejected;
 		stats.warnings = log.warningCount;

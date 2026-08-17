@@ -22,6 +22,8 @@
 #include "m_string.h"
 #include "m_list.h"
 
+#include "sys_mutex.h"
+
 extern "C" { struct Tcl_Encoding_; }
 
 namespace sys {
@@ -102,6 +104,7 @@ private:
 	unsigned						m_unknown;
 	bool							m_error;
 	unsigned						m_type;
+	Mutex							m_mutex;	///< guards m_buf/m_unknown/m_error during concurrent conversion
 };
 
 } // namespace utf8

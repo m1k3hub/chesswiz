@@ -66,6 +66,12 @@ public:
 									MoveNodeAllocator& allocator);
 	unsigned doDecoding(uint16_t* moves, unsigned length, Board& startBoard);
 
+	// Walk a decoded MoveNode tree and emit it to a consumer. Pure function
+	// of (consumer, root); does not touch decoder state, so it can be reused
+	// to re-encode a GameData that was decoded in a prior (possibly parallel)
+	// pass.
+	static void traverse(Consumer& consumer, MoveNode const* root);
+
 private:
 
 
@@ -74,7 +80,6 @@ private:
 	MoveNode* decodeMoves(MoveNodeAllocator& allocator);
 	void decodeMoves(MoveNode* root, unsigned& count);
 	void decodeMoves(MoveNode* root, unsigned& count, MoveNodeAllocator& allocator);
-	void traverse(Consumer& consumer, MoveNode const* root);
 	void getAnnotation(MoveNode* node, int moveNo);
 	void decodeComment(MoveNode* node, unsigned length, move::Position position);
 	void decodeSymbols(MoveNode* node, unsigned length);

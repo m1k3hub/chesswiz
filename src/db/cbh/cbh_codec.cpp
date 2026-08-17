@@ -2212,6 +2212,10 @@ Codec::decodeGuidingTextBody(GameInfo const& info, mstl::string& title, mstl::st
 {
 	M_ASSERT(m_gameStream.is_open());
 
+	// m_gameStream is a shared fstream; guard it so parallel decode workers
+	// do not race on seekg/read.
+	sys::Lock lock(&m_mutex);
+
 	char header[8];
 
 	if (!m_gameStream.seekg(info.gameOffset(), mstl::ios_base::beg) || !m_gameStream.read(header, sizeof(header)))
@@ -2558,6 +2562,10 @@ Codec::addTeamTags(TagSet& tags, GameInfo const& info)
 {
 	if (m_teamRecords == 0)
 		return;
+
+	// m_teamStream is a shared fstream; guard it so parallel decode workers
+	// do not race on seekg/read.
+	sys::Lock lock(&m_mutex);
 
 	M_ASSERT(m_gameIndexLookup.find(&info) != m_gameIndexLookup.end());
 
