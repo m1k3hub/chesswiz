@@ -1279,6 +1279,7 @@ Codec::decodeIndex(ByteStream& strm, GameInfo& item)
 	item.m_dateMonth							= bits->dateMonth;
 	item.m_dateDay								= bits->dateDay;
 	item.m_result								= bits->result;
+	if (item.m_result > result::Lost) item.m_result = result::Unknown; // sanitize invalid/corrupt result code
 	item.m_gameOffset							= bits->gameOffset;
 	item.m_plyCount							= bits->plyCount;
 	item.m_positionId							= bits->positionId;
@@ -1341,6 +1342,7 @@ Codec::decodeIndex(ByteStream& strm, GameInfo& item)
 	item.m_dateMonth							= GET_DATE_MONTH(bits);
 	item.m_dateDay								= GET_DATE_DAY(bits);
 	item.m_result								= GET_RESULT(bits);
+	if (item.m_result > result::Lost) item.m_result = result::Unknown; // sanitize invalid/corrupt result code
 	item.m_gameOffset							= GET_GAME_OFFSET(bits);
 	item.m_plyCount							= GET_PLY_COUNT(bits);
 	item.m_positionId							= GET_POSITION_ID(bits);

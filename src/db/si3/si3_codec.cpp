@@ -1355,6 +1355,7 @@ Codec::decodeIndex(ByteStream& strm, unsigned index)
 	uint16_t ecoCode	= strm.uint16();
 
 	item.m_result	= varCount >> 12;
+	if (item.m_result > result::Lost) item.m_result = result::Unknown; // sanitize invalid/corrupt result code
 	item.m_eco		= ecoCode ? (ecoCode - 1)/131 + 1 : 0;
 
 	item.m_variationCount	= varCount & 15;

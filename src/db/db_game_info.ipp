@@ -56,7 +56,16 @@ inline bool GameInfo::containsEnglishLanguage() const		{ return m_pd[0].langFlag
 inline bool GameInfo::containsOtherLanguage() const		{ return m_pd[1].langFlag; }
 
 inline uint16_t GameInfo::idn() const							{ return m_positionId; }
-inline result::ID GameInfo::result() const					{ return result::ID(m_result); }
+inline result::ID GameInfo::result() const
+{
+	// m_result is a 3-bit field (0..7); on disk it can hold out-of-range values
+	// (e.g. .sci reserves 5 for guiding-text and may carry corrupt 6/7;
+	// .si3 even packs 4 bits, i.e. 0..15). Clamping here protects every
+	// index-by-result site (Statistic::count, TreeInfo::m_scoreCount,
+	// result::toString's Lookup[]) from out-of-bounds access.
+	unsigned r = m_result;
+	return r <= result::Lost ? result::ID(r) : result::Unknown;
+}
 inline uint16_t GameInfo::plyCount() const					{ return m_plyCount; }
 inline event::Mode GameInfo::eventMode() const				{ return m_event->eventMode(); }
 inline time::Mode GameInfo::timeMode() const					{ return m_event->timeMode(); }

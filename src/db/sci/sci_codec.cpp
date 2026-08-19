@@ -1338,6 +1338,10 @@ Codec::decodeIndex(ByteStream& strm, GameInfo& item)
 		item.m_result = result::Unknown;
 		item.setGuidingText(true);
 	}
+	else if (item.m_result > result::Lost) // 6/7: invalid/corrupt result code
+	{
+		item.m_result = result::Unknown;
+	}
 	item.m_gameOffset							= bits->gameOffset;
 	item.m_plyCount							= bits->plyCount;
 	item.m_positionId							= bits->positionId;
@@ -1415,6 +1419,10 @@ printf("id; %u\n", id);
 	{
 		item.m_result = result::Unknown;
 		item.setGuidingText(true);
+	}
+	else if (item.m_result > result::Lost) // 6/7: invalid/corrupt result code
+	{
+		item.m_result = result::Unknown;
 	}
 	item.m_gameOffset							= GET_GAME_OFFSET(bits);
 	item.m_plyCount							= GET_PLY_COUNT(bits);

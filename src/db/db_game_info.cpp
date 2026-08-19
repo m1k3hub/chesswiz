@@ -896,7 +896,7 @@ GameInfo::setupTags(TagSet& tags, variant::Type variant) const
 
 	tags.set(tag::White, m_player[White]->name());
 	tags.set(tag::Black, m_player[Black]->name());
-	tags.set(tag::Result, result::toString(result::ID(m_result)));
+	tags.set(tag::Result, result::toString(result()));
 
 	if (!hasGameRecordLength())
 		tags.set(tag::Annotator, m_annotator->name());
