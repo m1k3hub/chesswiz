@@ -347,6 +347,10 @@ verify_cbh_write: verify_cbh_write.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
 
+test_sci_result: test_sci_result.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
 probe_cbh_chess960: probe_cbh_chess960.o $(LIBS_BASE)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(LIBS_BASE)
