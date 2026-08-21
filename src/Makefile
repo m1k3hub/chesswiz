@@ -22,6 +22,8 @@ include ../Makefile.in
 .PHONY: FORCE
 FORCE:
 
+.DEFAULT_GOAL := all
+
 TK_PROGRAM		= tkscidb$(SUFFIX)
 TCL_PROGRAM		= tclscidb$(SUFFIX)
 
@@ -102,8 +104,15 @@ TARGETS += probe_cbm
 TARGETS += probe_dump_moves
 TARGETS += probe_match_game
 
-all: check-mtime recursive cbh2si4 cdb2sci $(TK_PROGRAM) $(TCL_PROGRAM)
-tkscidb-only: recursive $(TK_PROGRAM)
+all: check-mtime cbh2si4 cdb2sci $(TK_PROGRAM) $(TCL_PROGRAM)
+
+# Ensure all sub-libraries are built before any link target.  Without this,
+# parallel makes (-j) race: 'recursive' and '$(TK_PROGRAM)' both trigger
+# 'make -C app' simultaneously, causing 'ar: app_application.o: No such
+# file or directory'.  The order-only prerequisite (|) forces recursive to
+# complete first without causing spurious rebuilds.
+$(TK_PROGRAM) $(TCL_PROGRAM) cbh2si4 cdb2sci: | recursive
+tkscidb-only: $(TK_PROGRAM)
 verify-maintenance: recursive verify_maintenance
 verify-conversion: recursive verify_conversion
 verify-cbh-write: recursive verify_cbh_write
@@ -123,7 +132,7 @@ check-mtime:
 		fi                                                      \
 	fi
 
-install-executables: recursive cbh2si4 cdb2sci $(TK_PROGRAM)
+install-executables: cbh2si4 cdb2sci $(TK_PROGRAM)
 	@echo "Install executables"
 	@install -m 755 -d $(BINDIR)
 	@install -m 755 -p $(TK_PROGRAM) $(BINDIR)
@@ -279,6 +288,9 @@ tk/treectrl/libtreectrl.a: FORCE
 
 tk/html/libTkhtml3.a: FORCE
 	$(MAKE) -C tk/html
+
+tk/tkdnd/libtkDnd.a: FORCE
+	$(MAKE) -C tk/tkdnd
 
 tk/text/libTkText.a: FORCE
 	$(MAKE) -C tk/text
