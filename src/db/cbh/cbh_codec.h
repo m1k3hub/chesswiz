@@ -30,6 +30,8 @@
 #include "db_database_codec.h"
 #include "db_move_node.h"
 #include "db_date.h"
+#include "cbh_media.h"
+#include "scm/scm_media.h"
 
 #include "sys_mutex.h"
 
@@ -68,6 +70,10 @@ public:
 	bool isWritable() const override;
 	bool encodingFailed() const override;
 
+	/// Optional scidb media manifest (.scm) loaded for this database.
+	/// Returns nullptr if no .scm companion is present. Owned by the codec.
+	scm::MediaTable const* scmMediaTable() const override;
+
 	Format format() const override;
 
 	unsigned maxGameRecordLength() const override;
@@ -98,6 +104,7 @@ public:
 	void reloadNamebases(mstl::string const& rootname,
 								mstl::string const& originalSuffix,
 								util::Progress& progress) override;
+	void readScmMedia(mstl::string const& rootname); ///< load optional <rootname>.scm media manifest (non-fatal)
 
 	void close() override;
 	void sync() override;
@@ -193,6 +200,7 @@ private:
 	void readAnnotatorData(mstl::string const& rootname, util::Progress& progress);
 	void readSourceData(mstl::string const& rootname, util::Progress& progress);
 	void readTeamData(mstl::string const& rootname, util::Progress& progress);
+	void readMediaData(mstl::string const& rootname, util::Progress& progress);
 	void readIndexData(mstl::string const& rootname, util::Progress& progress);
 	void reloadPlayerData(mstl::string const& rootname, util::Progress& progress);
 	void reloadTournamentData(mstl::string const& rootname, util::Progress& progress);
@@ -250,6 +258,8 @@ private:
 	TournamentMap		m_tournamentMap;
 	TeamBase				m_teamBase;
 	GameIndexLookup	m_gameIndexLookup;
+	MediaTable			m_mediaTable;
+	scm::MediaTable	m_scmMedia;		///< optional scidb media manifest (.scm)
 	mstl::string		m_encoding;
 	Allocator			m_allocator;
 	Namebase				m_sourceBase;

@@ -30,6 +30,8 @@
 #include "db_database_codec.h"
 #include "db_common.h"
 
+#include "scm/scm_media.h"
+
 #include "m_fstream.h"
 #include "m_string.h"
 #include "m_vector.h"
@@ -62,6 +64,11 @@ public:
 	bool isWritable() const override;
 	bool encodingFailed() const override;
 	bool usingAsyncReader() const override;
+
+	/// Access the optional scidb media manifest (.scm) loaded for this
+	/// database. Empty (isOpen()==false) if no .scm companion is present.
+	scm::MediaTable const& scmMedia() const { return m_scmMedia; }
+	scm::MediaTable const* scmMediaTable() const override { return &m_scmMedia; }
 
 	Format format() const override;
 
@@ -177,6 +184,8 @@ private:
 	void decodeIndex(util::ByteStream& strm, GameInfo& item);
 
 	void readNamebases(mstl::fstream& stream, util::Progress& progress);
+	void readScmMedia(mstl::string const& rootname);	///< load optional <rootname>.scm media manifest (non-fatal)
+	void applyScmMediaFlags();						///< set GameInfo hasAudio/Picture/Video from the .scm linkage
 	void readNamebase(util::ByteStream& bstrm, Namebase& base, unsigned count, util::Progress& progress);
 	void readSitebase(util::ByteStream& bstrm, Namebase& base, unsigned count, util::Progress& progress);
 	void readEventbase(util::ByteStream& bstrm, Namebase& base, unsigned count, util::Progress& progress);
@@ -204,6 +213,7 @@ private:
 	util::BlockFile*	m_gameData;
 	mstl::string		m_magicGameFile;
 	Lookup				m_lookup[4];
+	scm::MediaTable		m_scmMedia;			///< optional scidb media manifest (.scm)
 	unsigned				m_progressFrequency;
 	unsigned				m_progressReportAfter;
 	unsigned				m_progressCount;

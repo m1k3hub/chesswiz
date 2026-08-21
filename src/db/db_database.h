@@ -53,6 +53,7 @@ class GameInfo;
 class TagSet;
 class DatabaseCodec;
 class Consumer;
+namespace scm { class MediaTable; }
 class Producer;
 class Statistic;
 class NamebaseEntry;
@@ -190,6 +191,11 @@ public:
 
 	/// Returns game information at given index.
 	GameInfo const& gameInfo(unsigned index) const;
+
+	/// Optional scidb media manifest for this database (.scm companion).
+	/// Returns nullptr if this database has no .scm (e.g. a ChessBase .cbh
+	/// database, or a native database with no .scm file). Owned by the codec.
+	scm::MediaTable const* scmMediaTable() const;
 	/// Returns game information at given index.
 	GameInfo& gameInfo(unsigned index);
 	/// Returns the player at given index.

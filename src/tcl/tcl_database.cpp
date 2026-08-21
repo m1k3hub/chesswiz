@@ -47,6 +47,7 @@
 
 #include "db_database.h"
 #include "db_database_codec.h"
+#include "scm/scm_media.h"
 #include "db_maintenance.h"
 #include "db_multi_base.h"
 #include "db_game_info.h"
@@ -123,6 +124,7 @@ static char const* CmdUpgrade			= "::scidb::db::upgrade";
 static char const* CmdWrite			= "::scidb::db::write";
 static char const* CmdFindDuplicates	= "::scidb::db::findDuplicates";
 static char const* CmdEcoStats			= "::scidb::db::ecoStats";
+static char const* CmdMediaFiles		= "::scidb::db::mediaFiles";
 static char const* CmdMarkDeleted		= "::scidb::db::markDeleted";
 
 
@@ -2099,6 +2101,22 @@ getGameInfo(int index, int view, char const* database, variant::Type variant, un
 			obj = Tcl_NewBooleanObj(cursor.database().isAdded(index));
 			break;
 
+		case attribute::game::HasAudio:
+			obj = Tcl_NewBooleanObj(info.hasAudio());
+			break;
+
+		case attribute::game::HasPicture:
+			obj = Tcl_NewBooleanObj(info.hasPicture());
+			break;
+
+		case attribute::game::HasVideo:
+			obj = Tcl_NewBooleanObj(info.hasVideo());
+			break;
+
+		case attribute::game::HasMedia:
+			obj = Tcl_NewBooleanObj(info.hasMedia());
+			break;
+
 		default:
 			return error(::CmdGet, "gameInfo", nullptr, "cannot access number %u", which);
 	}
@@ -2243,6 +2261,10 @@ tcl::db::getGameInfo(Database const& db, unsigned index, Ratings const& ratings,
 	SET(Variation,            Tcl_NewStringObj(opening->part[2], opening->part[2].size()));
 	SET(SubVariation,         Tcl_NewStringObj(opening->part[3], opening->part[3].size()));
 	SET(InternalEco,          Tcl_NewStringObj(eop.asString(), -1));
+	SET(HasAudio,             Tcl_NewBooleanObj(info.hasAudio()));
+	SET(HasPicture,           Tcl_NewBooleanObj(info.hasPicture()));
+	SET(HasVideo,             Tcl_NewBooleanObj(info.hasVideo()));
+	SET(HasMedia,             Tcl_NewBooleanObj(info.hasMedia()));
 
 #undef SET
 
@@ -4764,6 +4786,68 @@ cmdMarkDeleted(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 
 static int
+cmdMediaFiles(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::db::mediaFiles <database> <variant> <gameIndex>
+	// Returns a list of {path type title mediaId inline} rows for the media
+	// associated with the game at <gameIndex> via the database's optional
+	// .scm companion manifest. Empty list if no .scm or no media for the
+	// game. type: 0=none 1=picture 2=audio 3=video 4=stream. inline: 1 if
+	// path is a base64 payload rather than a filesystem path.
+	if (objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <gameIndex>");
+		return TCL_ERROR;
+	}
+
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant		= tcl::game::variantFromObj(objc, objv, 2);
+	int				gameIndex	= 0;
+	if (Tcl_GetIntFromObj(ti, objv[3], &gameIndex) != TCL_OK || gameIndex < 0)
+	{
+		Tcl_SetResult(ti, "expected a non-negative game index", TCL_STATIC);
+		return TCL_ERROR;
+	}
+
+	Cursor const&		cursor	= Scidb->cursor(database, variant);
+	Database const&	db		= cursor.database();
+
+	scm::MediaTable const* table = db.scmMediaTable();
+	Tcl_Obj* result = Tcl_NewListObj(0, nullptr);
+
+	if (table != nullptr && table->isOpen())
+	{
+		GameInfo const& info = db.gameInfo(unsigned(gameIndex));
+
+		uint64_t fp = scm::MediaTable::fingerprint(	info.playerName(color::White),
+											info.playerName(color::Black),
+											info.event(),
+											info.date().asString(),
+											info.round(),
+											unsigned(info.result()));
+
+		mstl::vector<scm::MediaTable::Entry> entries;
+		table->mediaFor(fp, entries);
+
+		for (unsigned i = 0; i < entries.size(); ++i)
+		{
+			mstl::string resolved = table->resolvePath(entries[i]);
+			Tcl_Obj* row[5];
+			row[0] = Tcl_NewStringObj(resolved.c_str(), int(resolved.size()));
+			row[1] = Tcl_NewIntObj(int(entries[i].type));
+			row[2] = Tcl_NewStringObj(entries[i].title.c_str(), int(entries[i].title.size()));
+			row[3] = Tcl_NewStringObj(entries[i].mediaId.c_str(), int(entries[i].mediaId.size()));
+			row[4] = Tcl_NewBooleanObj(int(entries[i].inlineData));
+			Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(5, row));
+		}
+	}
+
+	Tcl_SetObjResult(ti, result);
+	return TCL_OK;
+}
+
+
+static int
 cmdEcoStats(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	if (objc != 3)
@@ -4833,6 +4917,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdWrite,				cmdWrite);
 	createCommand(ti, CmdFindDuplicates,	cmdFindDuplicates);
 	createCommand(ti, CmdEcoStats,			cmdEcoStats);
+	createCommand(ti, CmdMediaFiles,		cmdMediaFiles);
 	createCommand(ti, CmdMarkDeleted,		cmdMarkDeleted);
 }
 

@@ -620,6 +620,33 @@ Codec::encodingFailed() const
 }
 
 
+scm::MediaTable const*
+Codec::scmMediaTable() const
+{
+	return m_scmMedia.isOpen() ? &m_scmMedia : nullptr;
+}
+
+
+void
+Codec::readScmMedia(mstl::string const& rootname)
+{
+	// Optional scidb media manifest: <rootname>.scm. Missing/corrupt is
+	// non-fatal — media is enrichment, never blocks database access.
+	try
+	{
+		mstl::string filename(rootname + ".scm");
+		util::Progress& progress = util::Progress::null();
+
+		if (!m_scmMedia.read(filename, progress))
+			m_scmMedia.clear();
+	}
+	catch (...)
+	{
+		m_scmMedia.clear();
+	}
+}
+
+
 Codec::Format
 Codec::format() const
 {
@@ -748,6 +775,7 @@ Codec::close()
 		m_namebaseStream.close();
 	if (m_teamStream.is_open())
 		m_teamStream.close();
+	m_scmMedia.clear();
 }
 
 
@@ -791,6 +819,7 @@ Codec::doOpen(	mstl::string const& rootname,
 	readAnnotatorData(rootname, progress);
 	readTournamentData(rootname, progress);
 	readTeamData(rootname, progress);
+	readMediaData(rootname, progress);
 	readIndexData(rootname, progress);
 
 	namebases().setReadonly();
@@ -809,6 +838,8 @@ Codec::doOpen(	mstl::string const& rootname,
 	filename.assign(rootname + ".cba");
 	checkPermissions(filename);
 	openFile(m_annotationStream, filename, Readonly);
+
+	readScmMedia(rootname); // optional scidb media manifest (.scm) — non-fatal
 }
 
 
@@ -1906,6 +1937,31 @@ Codec::readHeader(mstl::string const& rootname)
 
 
 void
+Codec::readMediaData(mstl::string const& rootname, util::Progress& progress)
+{
+	mstl::string filename(rootname + ".cbm");
+
+	if (!sys::file::access(filename, sys::file::Existence))
+		return; // optional file — silently skip
+
+	try
+	{
+		if (!m_mediaTable.read(rootname, progress))
+		{
+			// File exists but couldn't be parsed — non-fatal.
+			// Media metadata is enrichment, not core game data.
+			m_mediaTable.clear();
+		}
+	}
+	catch (...)
+	{
+		// Defensive: never let .cbm parsing block database access.
+		m_mediaTable.clear();
+	}
+}
+
+
+void
 Codec::readIndexData(mstl::string const& rootname, util::Progress& progress)
 {
 	mstl::string	filename(rootname + ".cbh");
@@ -2204,6 +2260,23 @@ Codec::decodeGuidingTextIndex(ByteStream& strm, GameInfo& info)
 
 	info.m_round = round;
 	info.setGuidingText(true);
+
+	// Offset 18: stream flag (bit 2 = WMV)
+	if (strm.remaining() > 0)
+	{
+		Byte mediaFlags = strm.get();
+		if (mediaFlags & (1 << 2))
+			info.m_hasVideo = true; // stream is a video variant
+	}
+
+	// Offset 19: audio/image/video link flags
+	if (strm.remaining() > 0)
+	{
+		Byte linkFlags = strm.get();
+		if (linkFlags & (1 << 0)) info.m_hasAudio = true;
+		if (linkFlags & (1 << 1)) info.m_hasPicture = true;
+		if (linkFlags & (1 << 2)) info.m_hasVideo = true;
+	}
 }
 
 
@@ -2413,7 +2486,22 @@ Codec::decodeIndex(ByteStream& strm, GameInfo& info)
 	if (medals & (1 << 14)) info.m_gameFlags |= GameInfo::Flag_Blunder;	// Flag_Strategical_Blunder
 	if (medals & (1 << 15)) info.m_gameFlags |= GameInfo::Flag_User;
 
-	strm.skip(3);
+	// Offset 39: critical position / correspondence header
+	flags = strm.get();
+	if (flags & (1 << 0)) info.m_hasCriticalPos = true;
+	if (flags & (1 << 1)) info.m_hasCorrHeader = true;
+
+	// Offset 40: embedded media flags
+	flags = strm.get();
+	if (flags & (1 << 0)) info.m_hasAudio = true;
+	if (flags & (1 << 1)) info.m_hasPicture = true;
+	if (flags & (1 << 2)) info.m_hasVideo = true;
+	if (flags & (1 << 3)) info.m_hasGameQuote = true;
+
+	// Offset 41: training annotation (bit 1)
+	flags = strm.get();
+	if (flags & (1 << 1)) info.m_hasTraining = true;
+
 	flags = strm.get();
 	info.m_positionId = flags & (1 << 0) ? 0 : variant::Standard; // XXX possibly wrong
 	info.m_setup = bool(flags & (1 << 0));
@@ -3657,8 +3745,22 @@ Codec::writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& s
 	if (info.m_gameFlags & GameInfo::Flag_User)           medals |= (1 << 15);
 	strm << medals;
 
-	// Bytes 39-41: Unknown/reserved.
-	strm.advance(3);
+	// Bytes 39-41: Media/annotation flags (round-trip preserved)
+	Byte byte39 = 0;
+	if (info.m_hasCriticalPos)	byte39 |= (1 << 0);
+	if (info.m_hasCorrHeader)	byte39 |= (1 << 1);
+	strm.put(byte39);
+
+	Byte byte40 = 0;
+	if (info.m_hasAudio)		byte40 |= (1 << 0);
+	if (info.m_hasPicture)		byte40 |= (1 << 1);
+	if (info.m_hasVideo)		byte40 |= (1 << 2);
+	if (info.m_hasGameQuote)	byte40 |= (1 << 3);
+	strm.put(byte40);
+
+	Byte byte41 = 0;
+	if (info.m_hasTraining)		byte41 |= (1 << 1);
+	strm.put(byte41);
 
 	// Byte 42: Flags (position ID, setup, variation count, etc.)
 	Byte flags2 = 0;

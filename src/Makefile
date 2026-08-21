@@ -98,6 +98,7 @@ TARGETS += verify_cbh_write
 TARGETS += probe_cbh_chess960
 TARGETS += scan_db_chess960
 TARGETS += list_cbv_headers
+TARGETS += probe_cbm
 TARGETS += probe_dump_moves
 TARGETS += probe_match_game
 
@@ -351,6 +352,22 @@ test_sci_result: test_sci_result.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
 
+make_media_test: make_media_test.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
+test_cbm_media: test_cbm_media.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
+test_scm_media: test_scm_media.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
+cbm2scm: cbm2scm.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
 probe_cbh_chess960: probe_cbh_chess960.o $(LIBS_BASE)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(LIBS_BASE)
@@ -361,6 +378,10 @@ scan_db_chess960: scan_db_chess960.o $(LIBS)
 list_cbv_headers: list_cbv_headers.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
+probe_cbm: probe_cbm.o $(LIBS_BASE)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(LIBS_BASE)
 
 probe_dump_moves: probe_dump_moves.o $(LIBS)
 	@echo "Building $@"

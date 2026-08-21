@@ -100,6 +100,7 @@ set F_Variation			"Variation"
 set F_Subvariation		"Subvariation"
 set F_Overview				"Overview"
 set F_Key					"Internal ECO code"
+set F_HasMedia			"Media"
 
 set T_Number				"Number"
 set T_Acv					"Annotations / Comments / Variations"
@@ -120,6 +121,7 @@ set T_ShuffleChessPos	"Shuffle Chess Position"
 set T_Deleted				"Deleted"
 set T_Changed				"Changed"
 set T_Added					"Added"
+set T_HasMedia			"Has Media"
 set T_EngFlag				"English Language Flag"
 set T_OthFlag				"Other Language Flag"
 set T_Idn					"Chess 960 Position Number"
@@ -255,6 +257,7 @@ variable Columns {
 	{ variation			opening	left		10		 0		10			1			1			1			{}				}
 	{ subvariation		opening	left		10		 0		10			1			1			1			{}				}
 	{ key					internal	right		 4		 9		 9			0			1			0			magenta4		}
+	{ hasMedia			flags		center	 0		 0		14px		0		1		0		{}				}
 }
 # alternative colors: darkgoldenrod
 
@@ -1222,6 +1225,14 @@ proc TableFill {path args} {
 						lappend text [list @ $image]
 					}
 
+					hasMedia {
+						if {$item} {
+							lappend text "\u25b6"
+						} else {
+							lappend text ""
+						}
+					}
+
 					idn {
 						if {$codec eq "sci"} {
 							if {$item} {
@@ -1708,6 +1719,10 @@ proc TableVisit {table data} {
 
 		added {
 			if {$item} { set tip [set [namespace current]::mc::T_Added] }
+		}
+
+		hasMedia {
+			if {$item} { set tip [set [namespace current]::mc::T_HasMedia] }
 		}
 	}
 

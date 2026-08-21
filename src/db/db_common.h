@@ -1598,6 +1598,12 @@ namespace attribute
 			SubVariation,
 			InternalEco,
 
+			// media attributes (CBM .cbm media flags from CBH index)
+			HasAudio,
+			HasPicture,
+			HasVideo,
+			HasMedia,
+
 			// extraneous attributes
 			WhiteElo,
 			BlackElo,

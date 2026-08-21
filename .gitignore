@@ -34,6 +34,14 @@ src/recover_index
 src/cdb2sci
 src/probe_dump_moves
 
+# new media-tool binaries
+src/cbm2scm
+src/probe_cbm
+src/test_cbm_media
+src/test_sci_result
+src/test_scm_media
+src/make_media_test
+
 # ChessBase archive fixtures (large, re-downloadable)
 opening-report/tests/fixtures/*.cbv
 

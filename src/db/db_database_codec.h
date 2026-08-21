@@ -37,6 +37,7 @@
 #include "m_vector.h"
 
 namespace db { namespace cbv { class Codec; } }
+namespace db { namespace scm { class MediaTable; } }
 
 namespace sys
 {
@@ -112,6 +113,12 @@ public:
 	virtual bool isWritable() const = 0;
 	virtual bool encodingFailed() const = 0;
 	virtual bool usingAsyncReader() const;
+
+	/// Optional scidb media manifest (.scm) loaded for this database.
+	/// Returns nullptr for codecs/formats that do not carry an .scm companion
+	/// (e.g. ChessBase .cbm uses its own media table). The pointer is owned
+	/// by the codec and is valid for the database's lifetime.
+	virtual scm::MediaTable const* scmMediaTable() const;
 
 	variant::Type variant() const;
 	virtual Format format() const = 0;

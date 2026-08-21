@@ -178,6 +178,14 @@ public:
 	bool isGiveaway() const;
 	bool isSuicide() const;
 	bool isGuidingText() const;
+	bool hasAudio() const;
+	bool hasPicture() const;
+	bool hasVideo() const;
+	bool hasMedia() const;
+	bool hasGameQuote() const;
+	bool hasTraining() const;
+	bool hasCriticalPos() const;
+	bool hasCorrHeader() const;
 	void setGuidingText(bool flag = true);
 
 	NamebasePlayer* playerEntry(color::ID color);
@@ -369,7 +377,17 @@ private:
 	uint32_t m_plyCount			:11;
 	uint32_t m_result				: 3;
 	uint32_t m_isGuidingText	: 1;
-	uint32_t __unused__			: 7;
+
+	/// \brief Media/annotation flags from CBH index (ofs 39–41)
+	/// \details Set by cbh::Codec::decodeIndex(). Repurposed from
+	/// former __unused__ bits; struct size unchanged.
+	uint32_t m_hasAudio		: 1;	///< CBH ofs 40 bit 0: embedded audio
+	uint32_t m_hasPicture	: 1;	///< CBH ofs 40 bit 1: embedded picture
+	uint32_t m_hasVideo		: 1;	///< CBH ofs 40 bit 2: embedded video
+	uint32_t m_hasGameQuote	: 1;	///< CBH ofs 40 bit 3: game quotation
+	uint32_t m_hasTraining	: 1;	///< CBH ofs 41 bit 1: training annotation
+	uint32_t m_hasCriticalPos	: 1;	///< CBH ofs 39 bit 0: critical position
+	uint32_t m_hasCorrHeader	: 1;	///< CBH ofs 39 bit 1: correspondence header
 
 	static const GameInfo m_initializer;
 }

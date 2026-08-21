@@ -161,6 +161,13 @@ GameInfo::GameInfo(Initializer const&)
 	,m_plyCount(0)
 	,m_result(result::Unknown)
 	,m_isGuidingText(false)
+	,m_hasAudio(false)
+	,m_hasPicture(false)
+	,m_hasVideo(false)
+	,m_hasGameQuote(false)
+	,m_hasTraining(false)
+	,m_hasCriticalPos(false)
+	,m_hasCorrHeader(false)
 {
 #if defined(__i386__)
 	static_assert(sizeof(GameInfo) == 64, "should be 64 bytes");

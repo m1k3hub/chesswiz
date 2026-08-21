@@ -639,6 +639,13 @@ DatabaseCodec::usingAsyncReader() const
 }
 
 
+scm::MediaTable const*
+DatabaseCodec::scmMediaTable() const
+{
+	return nullptr; // default: no .scm companion (overridden by sci::Codec)
+}
+
+
 BlockFileReader*
 DatabaseCodec::getAsyncReader()
 {

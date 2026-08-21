@@ -15,7 +15,7 @@ include ../../Makefile.in
 .SUFFIXES: .cpp
 .PRECIOUS:
 
-INCLUDE	= -I. -Icql -Isci -Isci/v91 -Isci/v92 -Isci/v93 -Isi3 -Icbh -Icbf -Icbv -I../mstl -I../util -I../util/libTeXt -I../util/libharu -I../util/universalchardet -I../util/expat -I../sys $(ZLIB_INC)
+INCLUDE	= -I. -Icql -Isci -Isci/v91 -Isci/v92 -Isci/v93 -Isi3 -Icbh -Icbf -Icbv -Iscm -I../mstl -I../util -I../util/libTeXt -I../util/libharu -I../util/universalchardet -I../util/expat -I../sys $(ZLIB_INC)
 CXXFLAGS	+= $(OPTIMIZE) $(PROFILING) $(CXX_DEBUG) $(EXTRA_DEBUG_FLAGS) $(SYS_CXXFLAGS) $(TCL_INCLUDE) -DSCI_NAMEBASE_FIX=1
 
 SRC_CXX = \
@@ -134,6 +134,8 @@ SRC_CXX = \
 	cbh/cbh_encoder_position.cpp \
 	cbh/cbh_game_decoder.cpp \
 	cbh/cbh_count_cipher.cpp \
+	cbh/cbh_media.cpp \
+	scm/scm_media.cpp \
 
 SRC	= $(SRC_CXX)
 OBJS	= $(SRC_CXX:.cpp=.o)

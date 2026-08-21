@@ -137,6 +137,7 @@ SOURCES = \
 	app-db-annotators.tcl \
 	app-db-positions.tcl \
 	app-db-games.tcl \
+	app-media.tcl \
 	app-db-players.tcl \
 	app-db-events.tcl \
 	app-db-sites.tcl \

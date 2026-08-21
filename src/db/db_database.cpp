@@ -955,6 +955,13 @@ Database::reopen(mstl::string const& encoding, util::Progress& progress)
 }
 
 
+scm::MediaTable const*
+Database::scmMediaTable() const
+{
+	return m_codec ? m_codec->scmMediaTable() : nullptr;
+}
+
+
 util::crc::checksum_t
 Database::computeChecksum(unsigned index) const
 {

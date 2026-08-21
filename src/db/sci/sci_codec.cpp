@@ -1020,8 +1020,67 @@ Codec::doOpen(	mstl::string const& rootname,
 		throw;
 	}
 
+	readScmMedia(rootname); // optional scidb media manifest (.scm) — non-fatal
+	applyScmMediaFlags();   // mirror .scm linkage into GameInfo hasMedia flags
+
 	namebaseStream.close();
 	indexStream.close();
+}
+
+
+void
+Codec::readScmMedia(mstl::string const& rootname)
+{
+	// Optional scidb media manifest: <rootname>.scm. Missing/corrupt is
+	// non-fatal — media is enrichment, never blocks database access.
+	try
+	{
+		mstl::string filename(rootname + ".scm");
+		util::Progress& progress = util::Progress::null();
+
+		if (!m_scmMedia.read(filename, progress))
+			m_scmMedia.clear();
+	}
+	catch (...)
+	{
+		m_scmMedia.clear();
+	}
+}
+
+
+void
+Codec::applyScmMediaFlags()
+{
+	// Mirror the .scm media linkage into the per-game hasAudio/Picture/Video
+	// bitfields so the UI list-column “hasMedia” glyph reflects .scm media.
+	// Only ORs flags in; never clears (the .sci index never sets these).
+	if (!m_scmMedia.isOpen())
+		return;
+
+	GameInfoList& infos = gameInfoList();
+	for (unsigned i = 0; i < infos.size(); ++i)
+	{
+		GameInfo& info = infos[i];
+		uint64_t fp = scm::MediaTable::fingerprint(	info.playerName(color::White),
+															info.playerName(color::Black),
+															info.event(),
+															info.date().asString(),
+															info.round(),
+															unsigned(info.result()));
+		mstl::vector<scm::MediaTable::Entry> entries;
+		m_scmMedia.mediaFor(fp, entries);
+		for (unsigned k = 0; k < entries.size(); ++k)
+		{
+			switch (entries[k].type)
+			{
+				case scm::MediaTable::Media_Audio:   info.m_hasAudio   = true; break;
+				case scm::MediaTable::Media_Picture: info.m_hasPicture = true; break;
+				case scm::MediaTable::Media_Video:
+				case scm::MediaTable::Media_Stream:   info.m_hasVideo   = true; break;
+				default: break;
+			}
+		}
+	}
 }
 
 

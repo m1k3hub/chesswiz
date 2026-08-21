@@ -49,7 +49,7 @@ array set Options {
 }
 
 variable Columns {
-	number white whiteElo black blackElo event result site date round length eco deleted changed acv
+	number white whiteElo black blackElo event result site date round length eco deleted changed acv hasMedia
 }
 
 array set FrameOptions {

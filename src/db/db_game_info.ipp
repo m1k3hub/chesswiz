@@ -45,6 +45,14 @@ inline bool GameInfo::isDeleted() const						{ return m_gameFlags & Flag_Deleted
 inline bool GameInfo::isDirty() const							{ return m_gameFlags & Flag_Dirty; }
 inline bool GameInfo::isChanged() const						{ return m_gameFlags & Flag_Changed; }
 inline bool GameInfo::isGuidingText() const					{ return m_isGuidingText; }
+inline bool GameInfo::hasAudio() const						{ return m_hasAudio; }
+inline bool GameInfo::hasPicture() const						{ return m_hasPicture; }
+inline bool GameInfo::hasVideo() const						{ return m_hasVideo; }
+inline bool GameInfo::hasMedia() const						{ return m_hasAudio | m_hasPicture | m_hasVideo; }
+inline bool GameInfo::hasGameQuote() const					{ return m_hasGameQuote; }
+inline bool GameInfo::hasTraining() const					{ return m_hasTraining; }
+inline bool GameInfo::hasCriticalPos() const					{ return m_hasCriticalPos; }
+inline bool GameInfo::hasCorrHeader() const					{ return m_hasCorrHeader; }
 inline bool GameInfo::hasPromotion() const					{ return m_signature.hasPromotion(); }
 inline bool GameInfo::hasUnderPromotion() const				{ return m_signature.hasUnderPromotion(); }
 inline bool GameInfo::containsIllegalMoves() const			{ return m_gameFlags & Flag_Illegal_Move; }
