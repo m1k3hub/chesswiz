@@ -147,6 +147,16 @@ proc load {twm} {
 	set layoutVariant [GetLayout $id]
 	LoadOptionFile $layoutVariant
 	set layout $Options($id:layout:list:$layoutVariant)
+
+	# Migrate saved board layouts that predate the gamemedia (Media) pane.
+	# If the saved layout doesn't contain gamemedia, fall back to the default
+	# BoardLayout (which includes it) so the Media tab appears. The user can
+	# then re-customize their layout with the Media pane included.
+	if {$id eq "board" && [string length $layout] > 0 && ![string match {*gamemedia*} $layout]} {
+		set layout {}
+		set Options($id:layout:list:$layoutVariant) {}
+	}
+
 	if {[llength $layout] > 0 || ![LoadLayout $twm $layoutVariant $Options($id:layout:name) load]} {
 		set Vars(loading) 1
 		$twm load $layout
