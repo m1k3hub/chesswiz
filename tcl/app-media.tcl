@@ -48,9 +48,6 @@ proc application::media::build {twm frame width height} {
 	set tree $frame.tree
 	set status $frame.status
 
-	ttk::frame $frame
-
-	# Media list (treeview with columns: type, title, path)
 	ttk::treeview $tree \
 		-columns {type title path} \
 		-displaycolumns {type title path} \
