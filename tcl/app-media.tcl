@@ -244,7 +244,7 @@ proc application::media::TypeLabel {type} {
 }
 
 
-proc application::media::activate {flag} {
+proc application::media::activate {w flag} {
 	# Called when the pane is shown/hidden.  Could be used to defer
 	# updates when the pane is not visible.
 }
