@@ -41,6 +41,12 @@ src/test_cbm_media
 src/test_sci_result
 src/test_scm_media
 src/make_media_test
+src/test_media_extract
+src/probe_cbllight
+src/media_console
+
+# local scratch
+.llmos/
 
 # ChessBase archive fixtures (large, re-downloadable)
 opening-report/tests/fixtures/*.cbv

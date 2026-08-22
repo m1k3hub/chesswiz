@@ -101,6 +101,9 @@ set F_Subvariation		"Subvariation"
 set F_Overview				"Overview"
 set F_Key					"Internal ECO code"
 set F_HasMedia			"Media"
+set F_HasAudio			"Media"
+set F_HasPicture		"Media"
+set F_HasVideo			"Media"
 
 set T_Number				"Number"
 set T_Acv					"Annotations / Comments / Variations"
@@ -121,7 +124,10 @@ set T_ShuffleChessPos	"Shuffle Chess Position"
 set T_Deleted				"Deleted"
 set T_Changed				"Changed"
 set T_Added					"Added"
-set T_HasMedia			"Has Media"
+set T_HasMedia			"Has media"
+set T_HasAudio			"Has audio media"
+set T_HasPicture		"Has picture media"
+set T_HasVideo			"Has video media"
 set T_EngFlag				"English Language Flag"
 set T_OthFlag				"Other Language Flag"
 set T_Idn					"Chess 960 Position Number"
@@ -257,6 +263,9 @@ variable Columns {
 	{ variation			opening	left		10		 0		10			1			1			1			{}				}
 	{ subvariation		opening	left		10		 0		10			1			1			1			{}				}
 	{ key					internal	right		 4		 9		 9			0			1			0			magenta4		}
+	{ hasAudio			flags		center	 0		 0		14px		0		1		0		{}				}
+	{ hasPicture		flags		center	 0		 0		14px		0		1		0		{}				}
+	{ hasVideo			flags		center	 0		 0		14px		0		1		0		{}				}
 	{ hasMedia			flags		center	 3		 0		14px		0		1		1		{}				}
 }
 # alternative colors: darkgoldenrod
@@ -1225,7 +1234,11 @@ proc TableFill {path args} {
 						lappend text [list @ $image]
 					}
 
-					hasMedia {
+					hasMedia - hasPicture - hasVideo - hasAudio {
+						# Simple indicator: a ▶ play triangle when the game has that
+						# media type. hasMedia is the aggregate (shown by default);
+						# hasPicture/hasVideo/hasAudio are per-type (hidden by default
+						# but available from the column chooser).
 						if {$item} {
 							lappend text "\u25b6"
 						} else {
@@ -1571,6 +1584,7 @@ proc TableVisit {table data} {
 		whiteRating1 - blackRating1 { if {$Options(rating:1) ne [lindex $ratings end]} { return } }
 		whiteRating2 - blackRating2 { if {$Options(rating:2) ne [lindex $ratings end]} { return } }
 		deleted - changed - added {}
+		hasMedia - hasAudio - hasPicture - hasVideo {}
 		default { return }
 	}
 
@@ -1721,8 +1735,8 @@ proc TableVisit {table data} {
 			if {$item} { set tip [set [namespace current]::mc::T_Added] }
 		}
 
-		hasMedia {
-			if {$item} { set tip [set [namespace current]::mc::T_HasMedia] }
+		hasMedia - hasAudio - hasPicture - hasVideo {
+			if {$item} { set tip [set [namespace current]::mc::T_[string toupper $id 0 0]] }
 		}
 	}
 
