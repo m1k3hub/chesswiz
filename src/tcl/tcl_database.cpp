@@ -4950,9 +4950,19 @@ cmdMediaGallery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				for (unsigned i = 0; i < entries.size(); ++i)
 			{
 					mstl::string path(htmlDir + "/" + entries[i].filename);
+					// Convert cbh bitmask type to sequential type (matching scm::MediaTable)
+					int type = 0;
+					switch (int(entries[i].type))
+					{
+						case 1: type = 2; break; // cbh Audio → scm Audio
+						case 2: type = 1; break; // cbh Picture → scm Picture
+						case 4: type = 3; break; // cbh Video → scm Video
+						case 8: type = 4; break; // cbh Stream → scm Stream
+						default: type = 0; break;
+					}
 					Tcl_Obj* row[4];
 					row[0] = Tcl_NewStringObj(path.c_str(), int(path.size()));
-					row[1] = Tcl_NewIntObj(int(entries[i].type));
+					row[1] = Tcl_NewIntObj(type);
 					row[2] = Tcl_NewStringObj("", 0);
 					row[3] = Tcl_NewIntObj(int(entries[i].bagIndex));
 					Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(4, row));
