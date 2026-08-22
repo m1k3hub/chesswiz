@@ -202,31 +202,33 @@ proc application::media::Open {tree} {
 proc application::media::LaunchFile {path} {
 	if {![string length $path]} return
 
+	set err {}
 	switch -- [tk windowingsystem] {
 		"aqua" {
-			catch {exec open [list $path] &}
+			set err [catch { exec open $path & }]
 		}
 		"win32" {
 			if {$::tcl_platform(os) eq "Windows NT"} {
-				catch {exec $::env(COMSPEC) /c start "" [list $path] &}
+				set err [catch { exec $::env(COMSPEC) /c start "" $path & }]
 			} else {
-				catch {exec start "" [list $path] &}
+				set err [catch { exec start "" $path & }]
 			}
 		}
 		"x11" {
 			set opener [auto_execok xdg-open]
 			if {[string length $opener]} {
-				catch {exec $opener [list $path] &}
+				set err [catch { exec $opener $path & } msg]
 			} else {
-				# Fallback: try common openers
 				foreach cmd {gio gnome-open kde-open} {
 					if {[string length [auto_execok $cmd]]} {
-						catch {exec $cmd [list $path] &}
-						return
+						set err [catch { exec $cmd $path & } msg]
+						break
 					}
 				}
+			}
+			if {[string length $err] && $err != 0} {
 				tk_messageBox -icon error -type ok \
-					-message [format $mc::OpenError $path]
+					-message [format $mc::OpenError $path]\n$msg
 			}
 		}
 	}
