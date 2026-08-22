@@ -47,8 +47,10 @@
 
 #include "db_database.h"
 #include "db_database_codec.h"
+#include "db_game.h"
 #include "scm/scm_media.h"
 #include "cbh/cbh_media.h"
+#include "tcl_media_extract.h"
 #include "db_maintenance.h"
 #include "db_multi_base.h"
 #include "db_game_info.h"
@@ -4856,6 +4858,45 @@ cmdMediaFiles(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			row[3] = Tcl_NewStringObj(entries[i].mediaId.c_str(), int(entries[i].mediaId.size()));
 			row[4] = Tcl_NewBooleanObj(int(entries[i].inlineData));
 			Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(5, row));
+		}
+	}
+
+	// Fallback for ChessBase databases: a guiding-text entry carries its
+	// media references in its HTML body (<IMG src="..."> and
+	// CBLink(tag_stream,...)). Extract them and resolve to the database's
+	// sibling "<DBName>.html" folder.
+	{
+		int len = 0;
+		Tcl_ListObjLength(ti, result, &len);
+		if (len == 0 && unsigned(gameIndex) < db.countGames())
+		{
+			GameInfo const& info = db.gameInfo(unsigned(gameIndex));
+			if (info.isGuidingText())
+			{
+				Database& mdb = const_cast<Cursor&>(Scidb->cursor(database, variant)).getDatabase();
+				Game game;
+				if (mdb.loadGame(unsigned(gameIndex), game) == load::Ok)
+				{
+					mstl::string const& html = game.data().m_guidingText;
+					if (!html.empty())
+					{
+						mstl::vector<mstl::string> files;
+						mstl::vector<int> types;
+						tcl_media::extractGuidingTextMedia(html, files, types);
+						for (unsigned i = 0; i < files.size(); ++i)
+						{
+							mstl::string path(tcl_media::resolveGuidingTextPath(database, files[i]));
+							Tcl_Obj* row[5];
+							row[0] = Tcl_NewStringObj(path.c_str(), int(path.size()));
+							row[1] = Tcl_NewIntObj(types[i]);
+							row[2] = Tcl_NewStringObj("", 0);
+							row[3] = Tcl_NewStringObj("", 0);
+							row[4] = Tcl_NewBooleanObj(0);
+							Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(5, row));
+						}
+					}
+				}
+			}
 		}
 	}
 

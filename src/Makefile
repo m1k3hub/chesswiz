@@ -376,6 +376,18 @@ test_scm_media: test_scm_media.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
 
+test_media_extract: test_media_extract.o mstl/libmstl.a
+	@echo "Building $@"
+	@$(CXX) -o $@ test_media_extract.o $(LDFLAGS) $(PROFILING) mstl/libmstl.a -lpthread
+
+probe_cbllight: probe_cbllight.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
+media_console: media_console.o $(TCL_LIBS) $(LIBS) $(TK_LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ media_console.o $(LDFLAGS) $(PROFILING) $(ALL_TK_LIBS) $(ALL_LIBS)
+
 cbm2scm: cbm2scm.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
