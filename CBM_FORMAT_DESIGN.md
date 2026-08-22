@@ -869,3 +869,87 @@ Key decisions:
 - **libmpv** chosen over GStreamer/FFmpeg for its clean C API, Tk window
   embedding via `wid`, custom stream callbacks (in-memory playback),
   and license compatibility with Scidb's GPL.
+---
+
+## 7. Linkage RE — SOLVED (2025-08)
+
+### 7.1 The key discovery
+
+**The .cbm binary region is NOT a bag→game linkage table.** The per-game
+media linkage is in the **guiding-text HTML bodies**, which contain
+`<img src="DBName.html\filename.jpg">` tags referencing media files. The
+.cbm is a **file manifest** grouped by tournament, with the binary region
+containing media object metadata (frame sizes, flags, .cbg offsets to
+encoded media data).
+
+### 7.2 Endianness correction
+
+`ByteStream::uint32()` reads **BIG-ENDIAN** (not LE as I initially assumed
+in Python analysis). The gameOffset for both game and guiding-text records
+is a BE u32 at bytes 1-4, and is always a valid .cbg offset. There is no
+bug in the existing scidb code's offset reading.
+
+### 7.3 The 1:1 bag ↔ guiding-text mapping
+
+Each .cbm bag maps 1:1 to a guiding-text record (in .cbh record order).
+Verified by matching image filenames in the HTML body to the bag manifest:
+
+| Guiding-text rec | Tournament | .cbm bag | Files match |
+|---|---|---|---|
+| Rec 1 | Intro | Bag 0 | CBL_Logo.jpg ✓ |
+| Rec 10263 | (text-only report) | — | no images |
+| Rec 12060 | Bilbao | Bag 1 | 7/7 ✓ |
+| Rec 12129 | Linares | Bag 2 | 7/7 ✓ |
+| Rec 12646 | Tal Memorial | Bag 3 | 4/4 ✓ |
+| Rec 12677 | Ivanchuk | Bag 4 | 4/4 ✓ |
+| Rec 12769 | (unknown) | Bag 5 | 4/4 ✓ |
+| Rec 12981 | Baku | Bag 6 | 5/5 ✓ |
+| Rec 13139 | Foros | Bag 7 | 6/6 ✓ |
+| Rec 13237 | Sochi | Bag 8 | 9/9 ✓ |
+| Rec 13443 | Dortmund | Bag 9 | 7/7 ✓ |
+
+### 7.4 How ChessBase media works (end-to-end)
+
+1. **Guiding-text records** in .cbh (flags bit1 set) have HTML bodies
+   stored in .cbg at their gameOffset (BE u32 at bytes 1-4).
+2. The HTML bodies contain `<img src="DBName.html\filename.jpg">` and
+   similar tags referencing media files in the database's .html folder.
+3. **.cbm bags** are a manifest/inventory of which media files exist,
+   grouped by tournament. Each bag's text manifest lists the same files
+   referenced by the corresponding guiding-text record's HTML.
+4. The .cbm binary region contains **media object metadata** — structured
+   property stores with named fields (FWSize, Flags0-17, dir0_0, nCnt0,
+   siz0, etc.) and .cbg offsets to encoded media data within the "media
+   holder" records (2094, 7329, 2844).
+5. To display media for a game: find guiding-text records for the game's
+   tournament → read the HTML body from .cbg → extract `<img>` tags →
+   locate files in the .html folder.
+
+### 7.5 What the binary region contains
+
+Bags 1,2,4,6,7,8 (pure binary, no strings): 200+ 4-byte entries that are
+TAG(1 byte) + OFFSET(3 bytes LE) pointing into .cbg media holder data.
+
+Bag 3 (Tal Memorial): structured objects with named fields FWSize,
+Flags0-Flags17 at 80-byte intervals — video/media object descriptors with
+frame dimensions and flag properties.
+
+Bag 5: ChessBase application configuration (TabDBLW_TmsConfig,
+DBPlayerItemsSrtCol/Dir, dir0_0, nCnt0, siz0, Games).
+
+Bag 9: toolbar visibility config (TBVisible0).
+
+### 7.6 Implications for scidb
+
+- **The .cbm binary region does not need to be decoded** for basic media
+  display. The media linkage is in the HTML bodies.
+- **To show media for a game**: scidb already reads guiding-text bodies
+  via `decodeGuidingTextBody()`. It needs to extract `<img>` tags from
+  the HTML and locate the referenced files in the .html folder.
+- **The .cbm is a cross-reference/manifest** that can validate which files
+  exist and group them by tournament, but is not strictly needed for
+  per-game media display if the HTML bodies are already decoded.
+- **The binary region's .cbg offsets** point to encoded media data (not
+  standard image/video formats — likely ChessBase's proprietary encoding).
+  Extracting and decoding this data is Phase 3 work.
+
