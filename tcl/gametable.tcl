@@ -257,7 +257,7 @@ variable Columns {
 	{ variation			opening	left		10		 0		10			1			1			1			{}				}
 	{ subvariation		opening	left		10		 0		10			1			1			1			{}				}
 	{ key					internal	right		 4		 9		 9			0			1			0			magenta4		}
-	{ hasMedia			flags		center	 0		 0		14px		0		1		0		{}				}
+	{ hasMedia			flags		center	 3		 0		14px		0		1		1		{}				}
 }
 # alternative colors: darkgoldenrod
 

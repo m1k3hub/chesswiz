@@ -164,6 +164,20 @@ proc application::media::Update {position} {
 	catch { set entries [::scidb::db::mediaFiles $base $variant $index] }
 
 	if {![llength $entries]} {
+		# No per-game media (.scm) — try the gallery (.cbm or .scm gallery)
+		set gallery {}
+		catch { set gallery [::scidb::db::mediaGallery $base $variant] }
+		if {[llength $gallery]} {
+			set Priv(statusbar) "Media gallery (not game-specific)"
+			set n 0
+			foreach entry $gallery {
+				lassign $entry path type title mediaId
+				set typeLabel [TypeLabel $type]
+				$tree insert {} end -id item$n -values [list $typeLabel $title $path]
+				incr n
+			}
+			return
+		}
 		set Priv(statusbar) $mc::NoMedia
 		return
 	}

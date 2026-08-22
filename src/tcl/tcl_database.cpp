@@ -48,6 +48,7 @@
 #include "db_database.h"
 #include "db_database_codec.h"
 #include "scm/scm_media.h"
+#include "cbh/cbh_media.h"
 #include "db_maintenance.h"
 #include "db_multi_base.h"
 #include "db_game_info.h"
@@ -125,6 +126,7 @@ static char const* CmdWrite			= "::scidb::db::write";
 static char const* CmdFindDuplicates	= "::scidb::db::findDuplicates";
 static char const* CmdEcoStats			= "::scidb::db::ecoStats";
 static char const* CmdMediaFiles		= "::scidb::db::mediaFiles";
+static char const* CmdMediaGallery	= "::scidb::db::mediaGallery";
 static char const* CmdMarkDeleted		= "::scidb::db::markDeleted";
 
 
@@ -4863,6 +4865,108 @@ cmdMediaFiles(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 
 static int
+cmdMediaGallery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::db::mediaGallery <database> <variant>
+	// Returns ALL media entries for the database (not per-game) — the
+	// “gallery”. For .scm databases this calls scm::MediaTable::collectAll();
+	// for .cbh databases with a .cbm it calls cbh::MediaTable::collectMediaFiles().
+	// Returns a list of {path type title mediaId} rows.
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant>");
+		return TCL_ERROR;
+	}
+
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant		= tcl::game::variantFromObj(objc, objv, 2);
+
+	Cursor const&		cursor	= Scidb->cursor(database, variant);
+	Database const&	db		= cursor.database();
+
+	Tcl_Obj* result = Tcl_NewListObj(0, nullptr);
+
+	// Try .scm companion first (scidb-native databases)
+	scm::MediaTable const* scmTable = db.scmMediaTable();
+	if (scmTable != nullptr && scmTable->isOpen())
+	{
+		mstl::vector<scm::MediaTable::Entry> entries;
+		scmTable->collectAll(entries);
+
+		mstl::string dir = ::util::misc::file::dirname(database);
+		if (!dir.empty())
+		{
+			if (dir[dir.size() - 1] != '/')
+				dir += '/';
+		}
+
+		for (unsigned i = 0; i < entries.size(); ++i)
+		{
+			mstl::string resolved = scmTable->resolvePath(entries[i]);
+			if (!entries[i].inlineData && !resolved.empty()
+				&& resolved[0] != '/' && resolved[0] != '\\')
+			{
+				resolved = dir + resolved;
+			}
+
+			Tcl_Obj* row[4];
+			row[0] = Tcl_NewStringObj(resolved.c_str(), int(resolved.size()));
+			row[1] = Tcl_NewIntObj(int(entries[i].type));
+			row[2] = Tcl_NewStringObj(entries[i].title.c_str(), int(entries[i].title.size()));
+			row[3] = Tcl_NewStringObj(entries[i].mediaId.c_str(), int(entries[i].mediaId.size()));
+			Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(4, row));
+		}
+	}
+	else
+	{
+		// Try .cbm companion (ChessBase databases)
+		// Fallback: read .cbm directly to get the gallery
+		mstl::string cbmPath(database);
+		// Strip the suffix and add .cbm
+		mstl::string base(cbmPath);
+		mstl::string::size_type dot = base.rfind('.');
+		if (dot != mstl::string::npos)
+			base.resize(dot);
+		mstl::string mediaPath(base + ".cbm");
+
+		if (sys::file::access(mediaPath, sys::file::Readable))
+		{
+			mstl::string htmlDir(base + ".html");
+			mstl::string dir = ::util::misc::file::dirname(database);
+			if (!dir.empty())
+			{
+				if (dir[dir.size() - 1] != '/')
+				dir += '/';
+			}
+
+			// Use cbh::MediaTable to parse the .cbm
+			cbh::MediaTable cbm;
+			util::Progress& progress = util::Progress::null();
+			if (cbm.read(base, progress) && cbm.isOpen())
+			{
+				mstl::vector<cbh::MediaTable::MediaEntry> entries;
+				cbm.collectMediaFiles(entries);
+
+				for (unsigned i = 0; i < entries.size(); ++i)
+			{
+					mstl::string path(htmlDir + "/" + entries[i].filename);
+					Tcl_Obj* row[4];
+					row[0] = Tcl_NewStringObj(path.c_str(), int(path.size()));
+					row[1] = Tcl_NewIntObj(int(entries[i].type));
+					row[2] = Tcl_NewStringObj("", 0);
+					row[3] = Tcl_NewIntObj(int(entries[i].bagIndex));
+					Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(4, row));
+			}
+			}
+		}
+	}
+
+	Tcl_SetObjResult(ti, result);
+	return TCL_OK;
+}
+
+
+static int
 cmdEcoStats(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	if (objc != 3)
@@ -4933,6 +5037,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdFindDuplicates,	cmdFindDuplicates);
 	createCommand(ti, CmdEcoStats,			cmdEcoStats);
 	createCommand(ti, CmdMediaFiles,		cmdMediaFiles);
+	createCommand(ti, CmdMediaGallery,	cmdMediaGallery);
 	createCommand(ti, CmdMarkDeleted,		cmdMarkDeleted);
 }
 
