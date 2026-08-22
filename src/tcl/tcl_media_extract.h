@@ -144,24 +144,34 @@ extractGuidingTextMedia(mstl::string const& html, mstl::vector<mstl::string>& ou
 			}
 			if (!cb)
 				break;
-			// Find "tag_stream" after the '('.
-			char const* ts = nullptr;
-			for (char const* r = cb + 7; r + 10 <= end; ++r)
+			// Detect a CBLink tag: tag_stream (video, type 4), tag_audio (audio,
+			// type 2) or tag_image (ignored — pictures come via <IMG>).
+			int linkType = -1; // -1 = ignore (unknown/tag_image)
+			char const* tl = nullptr; // token location
+			for (char const* r = cb + 7; r + 5 <= end; ++r)
 			{
 				if ((r[0] == 't' || r[0] == 'T') && (r[1] == 'a' || r[1] == 'A') &&
-					(r[2] == 'g' || r[2] == 'G') && r[3] == '_' &&
-					(r[4] == 's' || r[4] == 'S') && (r[5] == 't' || r[5] == 'T') &&
-					(r[6] == 'r' || r[6] == 'R') && (r[7] == 'e' || r[7] == 'E') &&
-					(r[8] == 'a' || r[8] == 'A') && (r[9] == 'm' || r[9] == 'M'))
+					(r[2] == 'g' || r[2] == 'G') && r[3] == '_')
 				{
-					ts = r;
+					tl = r;
+					char const* k = r + 4; // past "tag_"
+					// Case-insensitive match on "stream"/"audio" (tag_image ignored).
+					bool isStream = (end - k >= 6)
+						&& (k[0]|0x20)=='s' && (k[1]|0x20)=='t' && (k[2]|0x20)=='r'
+						&& (k[3]|0x20)=='e' && (k[4]|0x20)=='a' && (k[5]|0x20)=='m';
+					bool isAudio = (end - k >= 5)
+						&& (k[0]|0x20)=='a' && (k[1]|0x20)=='u' && (k[2]|0x20)=='d'
+						&& (k[3]|0x20)=='i' && (k[4]|0x20)=='o';
+					if (isStream) linkType = 4;
+					else if (isAudio) linkType = 2;
+					else linkType = -1;
 					break;
 				}
 			}
-			if (ts)
+			if (tl && linkType > 0)
 			{
-				// The stream path follows "tag_stream," up to the next ','.
-				char const* comma = static_cast<char const*>(::memchr(ts, ',', end - ts));
+				// The media path follows "tag_<kind>," up to the next ','.
+				char const* comma = static_cast<char const*>(::memchr(tl, ',', end - tl));
 				if (comma)
 				{
 					char const* valStart = comma + 1;
@@ -181,7 +191,7 @@ extractGuidingTextMedia(mstl::string const& html, mstl::vector<mstl::string>& ou
 							if (!dup)
 							{
 								outFiles.push_back(filename);
-								outTypes.push_back(4); // stream (video)
+								outTypes.push_back(linkType); // 2 audio, 4 stream/video
 							}
 						}
 					}

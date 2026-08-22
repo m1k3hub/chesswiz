@@ -58,7 +58,7 @@ static bool streq(mstl::string const& a, char const* b)
 // the search space without the test depending on exact positions.
 // ---------------------------------------------------------------------
 
-enum RefKind { REF_IMG, REF_STREAM, REF_IMGONLY }; // IMGONLY = tag_image, must be ignored
+enum RefKind { REF_IMG, REF_STREAM, REF_AUDIO, REF_IMGONLY }; // IMGONLY = tag_image, must be ignored
 
 struct Ref { RefKind kind; char const* render; char const* bare; int style; };
 
@@ -77,11 +77,13 @@ static void renderRef(mstl::string& html, Ref const& r)
 		}
 		break;
 	case REF_STREAM:
+	case REF_AUDIO:
 	case REF_IMGONLY:
 	{
 		// case variants on the tag and the token name.
 		char const* tag    = (r.style & 1) ? "cblink" : "CBLink";
 		char const* token  = (r.style & 2) ? "TAG_STREAM" : "tag_stream";
+		if (r.kind == REF_AUDIO)   token = (r.style & 2) ? "TAG_AUDIO" : "tag_audio";
 		if (r.kind == REF_IMGONLY) token = "tag_image";
 		html += tag; html += '('; html += token; html += ',';
 		html += r.render; html += ",)";
@@ -91,25 +93,27 @@ static void renderRef(mstl::string& html, Ref const& r)
 }
 
 // Derive the expected (files[], types[]) from the model using the documented
-// order: all IMG refs (in ref order), then all stream refs (in ref order),
-// de-duplicated BY BARE FILENAME across both passes. Returns expected count
-// (<= cap).
+// order: all IMG refs (in ref order), then all CBLink refs (stream/audio, in
+// ref order), de-duplicated BY BARE FILENAME across all passes. Returns the
+// expected count (<= cap).
 static int buildExpectation(Ref const* refs, int nrefs,
 							mstl::string* expFile, int* expType, int cap)
 {
-	mstl::string imgF[32]; int ni = 0;
-	mstl::string strF[32]; int ns = 0;
+	mstl::string order[48]; int otype[48]; int no = 0;
+	// picture pass first (all IMG in ref order) — helper order.
 	for (int i = 0; i < nrefs; ++i)
 	{
-		if (refs[i].kind == REF_IMG)       imgF[ni++] = refs[i].bare;
-		else if (refs[i].kind == REF_STREAM) strF[ns++] = refs[i].bare;
+		if (refs[i].kind == REF_IMG)
+			{ order[no] = refs[i].bare; otype[no++] = 1; }
+	}
+	// then the CBLink pass: stream/audio in document (=ref) order.
+	for (int i = 0; i < nrefs; ++i)
+	{
+		if (refs[i].kind == REF_STREAM)      { order[no] = refs[i].bare; otype[no++] = 4; }
+		else if (refs[i].kind == REF_AUDIO)  { order[no] = refs[i].bare; otype[no++] = 2; }
 		// REF_IMGONLY contributes nothing (tag_image refs are ignored).
 	}
 	int n = 0;
-	mstl::string order[32]; int otype[32]; int no = 0;
-	// picture pass first, then stream pass — this is the helper's order.
-	for (int i = 0; i < ni; ++i) { order[no] = imgF[i]; otype[no++] = 1; }
-	for (int i = 0; i < ns; ++i) { order[no] = strF[i]; otype[no++] = 4; }
 	for (int i = 0; i < no; ++i)
 	{
 		bool dup = false;
@@ -243,6 +247,24 @@ int main()
 			{ REF_STREAM,  "clip.avi",        "clip.avi", 2 },   // TAG_STREAM uppercase token
 		};
 		checkBody("bare names + uppercase tokens", refs, 2);
+	}
+	{
+		// 1ca: tag_audio is extracted as type 2 (previously ignored), mixed
+		// with tag_stream in document order.
+		Ref refs[] = {
+			{ REF_STREAM, "x.html\\clip.wmv",  "clip.wmv", 0 },
+			{ REF_AUDIO,  "x.html\\interview.mp3", "interview.mp3", 1 }, // cblink(TAG_AUDIO,...)
+		};
+		checkBody("tag_audio extracted as audio type", refs, 2);
+	}
+	{
+		// 1cb: stream/audio cross-kind dedup — first CBLink occurrence wins in
+		// document order (stream at type 4), audio duplicate dropped.
+		Ref refs[] = {
+			{ REF_AUDIO,   "x.html\\dupe.mp3",  "dupe.mp3", 0 },
+			{ REF_STREAM,  "x.html\\dupe.mp3",  "dupe.mp3", 0 },
+		};
+		checkBody("stream/audio dedup (first CBLink wins)", refs, 2);
 	}
 	{
 		// 1d: plain text, and only tag_image links -> nothing extracted.
