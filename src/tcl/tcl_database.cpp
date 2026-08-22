@@ -4832,7 +4832,22 @@ cmdMediaFiles(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		for (unsigned i = 0; i < entries.size(); ++i)
 		{
 			mstl::string resolved = table->resolvePath(entries[i]);
-			Tcl_Obj* row[5];
+
+				// Resolve relative paths against the database directory so
+				// the caller (xdg-open etc.) can find the file.
+				if (!entries[i].inlineData && !resolved.empty()
+					&& resolved[0] != '/' && resolved[0] != '\\')
+				{
+					mstl::string dir = ::util::misc::file::dirname(database);
+					if (!dir.empty())
+					{
+						if (dir[dir.size() - 1] != '/')
+							dir += '/';
+						resolved = dir + resolved;
+					}
+				}
+
+				Tcl_Obj* row[5];
 			row[0] = Tcl_NewStringObj(resolved.c_str(), int(resolved.size()));
 			row[1] = Tcl_NewIntObj(int(entries[i].type));
 			row[2] = Tcl_NewStringObj(entries[i].title.c_str(), int(entries[i].title.size()));

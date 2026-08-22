@@ -201,7 +201,7 @@ int main(int argc, char** argv)
 		writeFile(imgDir + "/bilbao2008.png",  Png1x1, Png1x1Size);
 		writeFile(imgDir + "/linares2009.png", Png1x1, Png1x1Size);
 		writeFile(imgDir + "/london2012.png",  Png1x1, Png1x1Size);
-		writeTextFile(audDir + "/interview.mp3", "dummy audio file\n");
+		writeTextFile(audDir + "/interview.wav", "dummy audio file\n");
 		writeTextFile(vidDir + "/analysis.mp4", "dummy video file\n");
 		printf("Created media directory: %s\n", mediaDir.c_str());
 	}
@@ -225,7 +225,7 @@ int main(int argc, char** argv)
 
 		// Media library
 		fprintf(f, "[Media \"M01\"]\nType: picture\nPath: images/bilbao2008.png\nTitle: \"Bilbao 2008: Topalov-Anand\"\n\n");
-		fprintf(f, "[Media \"M02\"]\nType: audio\nPath: audio/interview.mp3\nTitle: \"Post-game interview\"\n\n");
+		fprintf(f, "[Media \"M02\"]\nType: audio\nPath: audio/interview.wav\nTitle: \"Post-game interview\"\n\n");
 		fprintf(f, "[Media \"M03\"]\nType: picture\nPath: images/linares2009.png\nTitle: \"Linares 2009: Carlsen-Kramnik\"\n\n");
 		fprintf(f, "[Media \"M04\"]\nType: video\nPath: video/analysis.mp4\nTitle: \"Game analysis video\"\n\n");
 		fprintf(f, "[Media \"M05\"]\nType: picture\nPath: images/london2012.png\nTitle: \"London 2012: Carlsen-Kramnik\"\n\n");
