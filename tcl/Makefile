@@ -68,6 +68,7 @@ SOURCES = \
 	widgets/treetable.tcl \
 	widgets/scrolledframe.tcl \
 	widgets/gamebar.tcl \
+	widgets/corrclock.tcl \
 	widgets/gamehistory.tcl \
 	widgets/scrolledtable.tcl \
 	widgets/panedwindow.tcl \
