@@ -78,14 +78,43 @@ proc initTls {} {
 
 	if {$Config(initialized)} { return 1 }
 
-	# Add system TLS path if not in auto_path
-	if {![llength [info commands ::tls::socket]]} {
-		foreach path {/usr/lib/tcltk/x86_64-linux-gnu /usr/lib/tcltk/x86_64-linux-gnu/tls1.8.0} {
+	# Step 1: Try direct package require (works when auto_path is correct)
+	if {[catch {package require tls} version] == 0} {
+		set tlsOk 1
+	} else {
+		# Step 2: Search common TLS package paths across distros
+		set tlsOk 0
+		set searchPaths {
+			/usr/lib/tcltk/x86_64-linux-gnu
+			/usr/lib/tcltk/aarch64-linux-gnu
+			/usr/lib/tcltk/arm-linux-gnueabihf
+			/usr/lib/tcl/tls1.8.0
+			/usr/lib/tcl/tls1.7
+			/usr/lib64/tcl/tls1.8.0
+			/usr/local/lib/tls1.8.0
+			/usr/local/lib/tcltls1.8.0
+			/opt/local/lib/tls1.8.0
+			/Library/Tcl/tls1.8.0
+			/Library/Tcl/tls1.7
+		}
+		# Also check TCLLIBPATH env var (user-set package search path)
+		if {[info exists ::env(TCLLIBPATH)]} {
+			foreach p $::env(TCLLIBPATH) {
+				lappend searchPaths $p
+			}
+		}
+		# Try each path
+		foreach path $searchPaths {
+			if {![file isdirectory $path]} { continue }
 			if {$path ni $::auto_path} { lappend ::auto_path $path }
+		}
+		# Retry package require with expanded auto_path
+		if {[catch {package require tls} version] == 0} {
+			set tlsOk 1
 		}
 	}
 
-	if {[catch {package require tls}]} {
+	if {!$tlsOk} {
 		puts stderr $TlsNotAvailable
 		return 0
 	}
@@ -94,7 +123,6 @@ proc initTls {} {
 		return 0
 	}
 
-	variable Config
 	::http::register https 443 [list ::tls::socket -servername $Config(host)]
 	set Config(initialized) 1
 	return 1
