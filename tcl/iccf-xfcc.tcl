@@ -438,6 +438,134 @@ proc timeRemaining {game} {
 	return [list $playerTime $opponentTime]
 }
 
+
+# ======================================================================
+# Credential persistence (options file)
+# ======================================================================
+
+
+proc WriteOptions {chan} {
+	variable Config
+	::options::writeItem $chan [namespace current]::Config(username)
+	::options::writeItem $chan [namespace current]::Config(password)
+	::options::writeItem $chan [namespace current]::Config(endpoint)
+}
+
+
+proc obfuscate {s} {
+	# Simple obfuscation (not encryption — system provides security)
+	set result {}
+	foreach c [split $s ""] {
+		scan $c %c code
+		append result [format %02x [expr {$code ^ 0x5A}]]
+	}
+	return $result
+}
+
+
+proc deobfuscate {s} {
+	set result {}
+	for {set i 0} {$i < [string length $s]} {incr i 2} {
+		scan [string range $s $i [expr {$i + 1}]] %x code
+		append result [format %c [expr {$code ^ 0x5A}]]
+	}
+	return $result
+}
+
+
+proc saveCredentials {} {
+	variable Config
+	# Obfuscate password before saving
+	set Config(password) [obfuscate $Config(password)]
+	# The options writer will handle the actual file write
+	# Restore the deobfuscated password in memory
+	set Config(password) [deobfuscate $Config(password)]
+}
+
+
+proc loadCredentials {username password {endpoint ""}} {
+	# Called from options file source — password is obfuscated
+	variable Config
+	set Config(username) $username
+	set Config(password) [deobfuscate $password]
+	if {[string length $endpoint]} { set Config(endpoint) $endpoint }
+	set Config(host) [regsub {^https?://([^/]+)/.*} $Config(endpoint) {\1}]
+	set Config(configured) [expr {[string length $username] && [string length $password]}]
+}
+
+
+# Register with options system — but we need a custom writer
+# since writeItem doesn't obfuscate the password
+proc WriteConfig {chan} {
+	variable Config
+	puts $chan "set [namespace current]::Config(username) {$Config(username)}"
+	puts $chan "set [namespace current]::Config(endpoint) {$Config(endpoint)}"
+	puts $chan "::iccf::xfcc::loadCredentials {$Config(username)} {[obfuscate $Config(password)]} {$Config(endpoint)}"
+}
+::options::hookWriter [namespace current]::WriteConfig
+
+
+# ======================================================================
+# Settings dialog
+# ======================================================================
+
+
+proc openSettings {parent} {
+	variable Config
+	variable mc
+
+	set dlg $parent.iccfSettings
+	if {[winfo exists $dlg]} {
+		raise $dlg
+		return $dlg
+	}
+
+	set dlg [tk::toplevel $parent.iccfSettings -class Dialog]
+	wm title $dlg "ICCF XFCC Settings"
+	wm transient $dlg [winfo toplevel $parent]
+	wm resizable $dlg false false
+
+	set f [ttk::frame $dlg.f -padding 12]
+
+	ttk::label $f.userlbl -text "ICCF Username:"
+	ttk::entry $f.user -width 30 -textvariable [namespace current]::Config(username)
+	ttk::label $f.passlbl -text "ICCF Password:"
+	ttk::entry $f.pass -width 30 -textvariable [namespace current]::Config(password) -show "*"
+	ttk::label $f.endptlbl -text "Endpoint:"
+	ttk::entry $f.endpt -width 40 -textvariable [namespace current]::Config(endpoint)
+
+	grid $f.userlbl -row 1 -column 1 -sticky w -pady 2
+	grid $f.user    -row 1 -column 2 -sticky ew -pady 2
+	grid $f.passlbl -row 2 -column 1 -sticky w -pady 2
+	grid $f.pass    -row 2 -column 2 -sticky ew -pady 2
+	grid $f.endptlbl -row 3 -column 1 -sticky w -pady 2
+	grid $f.endpt   -row 3 -column 2 -sticky ew -pady 2
+	grid columnconfigure $f 2 -weight 1
+
+	set btns [ttk::frame $dlg.btns -padding {0 8 0 0}]
+	ttk::button $btns.ok -text "OK" -command [namespace code [list SaveAndClose $dlg]]
+	ttk::button $btns.cancel -text "Cancel" -command [list destroy $dlg]
+	pack $btns.ok -side left -padx 4
+	pack $btns.cancel -side left -padx 4
+
+	pack $f -fill x -expand yes
+	pack $btns -side bottom -anchor e
+
+	wm protocol $dlg WM_DELETE_WINDOW [list destroy $dlg]
+	::util::place $dlg -parent $parent -position center
+	wm deiconify $dlg
+	focus $f.user
+	return $dlg
+}
+
+
+proc SaveAndClose {dlg} {
+	variable Config
+	set Config(configured) [expr {[string length $Config(username)] && [string length $Config(password)]}]
+	if {$Config(configured)} { initTls }
+	destroy $dlg
+}
+
 } ;# namespace xfcc
 } ;# namespace iccf
 

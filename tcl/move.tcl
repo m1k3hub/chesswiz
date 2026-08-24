@@ -512,6 +512,19 @@ proc doAction {action san {noMoveCmd {}}} {
 		set key [::scidb::game::query current]
 		set timestamp [clock format [clock seconds] -format {%Y.%m.%d, %H:%M:%S}]
 		catch { ::scidb::game::update moveinfo $key ccsnt $timestamp }
+
+		# Auto-submit to ICCF server if configured and game has ICCFGameID
+		if {[info commands ::iccf::xfcc::configured?] ne {} && [::iccf::xfcc::configured?]} {
+			set iccfId ""
+			foreach pair [::scidb::game::tags 0] {
+				lassign $pair name value
+				if {$name eq "ICCFGameID"} { set iccfId $value; break }
+			}
+			if {[string length $iccfId]} {
+				set movecount [::scidb::game::query ply]
+				catch { ::iccf::xfcc::submitMove $iccfId $san $movecount }
+			}
+		}
 	}
 
 	return 1

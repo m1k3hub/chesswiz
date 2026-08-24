@@ -40,6 +40,7 @@ set StatusOngoing		"Ongoing"
 set StatusFinished	"Finished"
 set NoGames			"No correspondence games found"
 set NoDatabase		"No database is open"
+set Sync			"Sync"
 set Close				"Close"
 set Game				"Game"
 set ICCF				"ICCF"
@@ -90,6 +91,7 @@ proc build {dlg} {
 	# Toolbar -----------------------------------------------------------------
 	set tb [ttk::frame $dlg.tb -borderwidth 0]
 	ttk::button $tb.refresh -text $mc::Refresh -command [namespace code [list refresh $dlg]]
+	ttk::button $tb.sync -text $mc::Sync -command [namespace code [list syncFromServer $dlg]]
 	ttk::button $tb.open -text $mc::OpenGame -command [namespace code [list openGame $dlg]]
 	ttk::label $tb.filterlbl -text $mc::Filter
 	set filter [ttk::combobox $tb.filter \
@@ -102,6 +104,7 @@ proc build {dlg} {
 	ttk::button $tb.close -text $mc::Close -command [list destroy $dlg]
 
 	pack $tb.refresh -side left -padx 2
+	pack $tb.sync -side left -padx 2
 	pack $tb.open -side left -padx 2
 	pack $tb.filterlbl -side left -padx {12 2}
 	pack $tb.filter -side left -padx 2
@@ -218,6 +221,34 @@ proc refresh {dlg} {
 			-values [list [expr {$i + 1}] $white $black $iccf $status \
 							$whiteTime $blackTime $lastMove $event $result]
 	}
+}
+
+
+proc syncFromServer {dlg} {
+	variable Vars
+
+	if {![::iccf::xfcc::configured?]} {
+		::iccf::xfcc::openSettings $dlg
+		return
+	}
+
+	::widget::busyCursor on
+	if {[catch {
+		set games [::iccf::xfcc::getGames]
+		set count [llength $games]
+		# Refresh the local table to show updated data
+		refresh $dlg
+		tk_messageBox -parent $dlg -title $mc::Sync \
+			-message "Synced $count game(s) from ICCF server." \
+			-type ok -icon info
+	} err]} {
+		::widget::busyCursor off
+		tk_messageBox -parent $dlg -title $mc::Sync \
+			-message "Sync failed: $err" \
+			-type ok -icon error
+		return
+	}
+	::widget::busyCursor off
 }
 
 

@@ -83,6 +83,7 @@ set AssignFileTypes				"Assign File &Types"
 set OpenEngineDictionary		"Open &Engine Dictionary"
 set OpenPlayerDictionary		"Open &Player Dictionary"
 set CorrespondenceGames		"&Correspondence Games"
+set ICCFSettings				"ICCF &Settings"
 
 # Setup
 set Engines							"&Engines"
@@ -349,6 +350,15 @@ if {0} {
 	### correspondence games #################################################
 	lassign [::tk::UnderlineAmpersand $mc::CorrespondenceGames] text ul
 	set cmd [list ::application::corr::games::open .application]
+	$m add command \
+		-label " $text..." \
+		-underline [IncrUL $ul] \
+		-command $cmd \
+		;
+
+	### iccf settings ########################################################
+	lassign [::tk::UnderlineAmpersand $mc::ICCFSettings] text ul
+	set cmd [list ::iccf::xfcc::openSettings .application]
 	$m add command \
 		-label " $text..." \
 		-underline [IncrUL $ul] \
