@@ -45,6 +45,7 @@
 #include "db_edit_node.h"
 #include "db_move.h"
 #include "db_move_node.h"
+#include "db_move_info.h"
 #include "db_eco_table.h"
 #include "db_annotation.h"
 #include "db_mark_set.h"
@@ -238,6 +239,10 @@ getMoveInfoTypes(char const* cmd, char const* subcmd, Tcl_Obj* moveInfo, unsigne
 			moveInfoTypes |= moveinfo::CorrSent;
 		else if (equal(type, "video"))
 			moveInfoTypes |= moveinfo::Video;
+		else if (equal(type, "cclk"))
+			moveInfoTypes |= moveinfo::CorrClock;
+		else if (equal(type, "cemt"))
+			moveInfoTypes |= moveinfo::CorrElapsed;
 		else
 			return error(cmd, subcmd, nullptr, "unknown move info type '%s'", type);
 	}
@@ -3526,7 +3531,7 @@ cmdUpdate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	static char const* subcommands[] =
 	{
-		"annotation", "infix", "prefix", "suffix", "comment", "marks", "moves", "addcomment", 0
+		"annotation", "infix", "prefix", "suffix", "comment", "marks", "moves", "addcomment", "moveinfo", 0
 	};
 	static char const* args[] =
 	{
@@ -3538,12 +3543,13 @@ cmdUpdate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		"<key> <type> <color> <from> <to>",
 		"<key>",
 		"<key> <position> <string>",
+		"<key> <type> <value>",
 		nullptr
 	};
 	enum
 	{
 		Cmd_Annotation, Cmd_Infix, Cmd_Pefix, Cmd_Suffix,
-		Cmd_Comment, Cmd_Marks, Cmd_Moves, Cmd_AddComment,
+		Cmd_Comment, Cmd_Marks, Cmd_Moves, Cmd_AddComment, Cmd_MoveInfo,
 	};
 
 	if (objc < 2)
@@ -3622,6 +3628,26 @@ cmdUpdate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			{
 				mstl::string comment(stringFromObj(objc, objv, 4));
 				game.appendComment(comment, move::Post);
+				break;
+			}
+
+			case Cmd_MoveInfo:
+			{
+				char const* type	= stringFromObj(objc, objv, 3);
+				char const* value	= stringFromObj(objc, objv, 4);
+
+				MoveInfo info;
+				if (::strcmp(type, "ccsnt") == 0)
+					info.parseCorrespondenceChessSent(value);
+				else if (::strcmp(type, "cclk") == 0)
+					info.parseCorrespondenceClock(value);
+				else if (::strcmp(type, "cemt") == 0)
+					info.parseCorrespondenceElapsed(value);
+				else
+					return error(::CmdUpdate, "moveinfo", nullptr,
+									"unknown move info type '%s' (expected ccsnt, cclk, or cemt)", type);
+
+				game.addMoveInfo(info);
 				break;
 			}
 

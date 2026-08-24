@@ -55,6 +55,7 @@ namespace edit { class Root; }
 namespace edit { class Node; }
 
 class MoveNode;
+class MoveInfo;
 class Annotation;
 class MarkSet;
 class TagSet;
@@ -130,6 +131,7 @@ public:
 		StripAnnotations,
 		StripComments,
 		StripMoveInfo,
+		AddMoveInfo,
 		StripMarks,
 		StripVariations,
 		CopyComments,
@@ -462,6 +464,7 @@ public:
 	void setTrailingComment(mstl::string const& comment);
 	/// Sets the annotation associated with current move
 	void setAnnotation(Annotation const& annotation);
+	void addMoveInfo(MoveInfo const& info);
 	/// Sets the marks associated with current move
 	void setMarks(MarkSet const& marks);
 	/// Adds a move at the current position

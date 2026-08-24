@@ -27,6 +27,7 @@
 #include "db_game.h"
 #include "db_game_info.h"
 #include "db_move_node.h"
+#include "db_move_info.h"
 #include "db_move_list.h"
 #include "db_annotation.h"
 #include "db_mark_set.h"
@@ -2004,6 +2005,15 @@ Game::setAnnotation(Annotation const& annotation)
 	insertUndo(Set_Annotation, SetAnnotation, m_currentNode->annotation(), annotation);
 	m_currentNode->replaceAnnotation(annotation);
 	updateSubscriber(UpdatePgn | UpdateBoard);
+}
+
+
+void
+Game::addMoveInfo(MoveInfo const& info)
+{
+	insertUndo(Revert_Game, AddMoveInfo, m_startNode->clone());
+	m_currentNode->addMoveInfo(info);
+	updateSubscriber(UpdatePgn);
 }
 
 
