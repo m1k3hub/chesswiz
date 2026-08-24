@@ -522,7 +522,7 @@ proc IsCorrespondenceGame {} {
 	set tags [::scidb::game::tags 0]
 	foreach pair $tags {
 		lassign $pair name value
-		if {$name eq "TimeMode" && $value eq "Correspondence"} {
+		if {$name eq "TimeMode" && [string tolower $value] eq "corr"} {
 			return 1
 		}
 	}
