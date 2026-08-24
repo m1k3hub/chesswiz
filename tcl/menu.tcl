@@ -82,6 +82,7 @@ set AssignFileTypes				"Assign File &Types"
 # Tools
 set OpenEngineDictionary		"Open &Engine Dictionary"
 set OpenPlayerDictionary		"Open &Player Dictionary"
+set CorrespondenceGames		"&Correspondence Games"
 
 # Setup
 set Engines							"&Engines"
@@ -339,6 +340,15 @@ if {0} {
 		;
 	lassign [::tk::UnderlineAmpersand $mc::OpenEngineDictionary] text ul
 	set cmd [namespace code [list ::engine::showEngineDictionary .application]]
+	$m add command \
+		-label " $text..." \
+		-underline [IncrUL $ul] \
+		-command $cmd \
+		;
+
+	### correspondence games #################################################
+	lassign [::tk::UnderlineAmpersand $mc::CorrespondenceGames] text ul
+	set cmd [list ::application::corr::games::open .application]
 	$m add command \
 		-label " $text..." \
 		-underline [IncrUL $ul] \

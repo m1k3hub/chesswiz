@@ -99,6 +99,8 @@ set MoveInfo(clk)						"Players Clock"
 set MoveInfo(emt)						"Elapsed Time"
 set MoveInfo(ccsnt)					"Correspondence Chess Sent"
 set MoveInfo(video)					"Video Time"
+set MoveInfo(cclk)					"Correspondence Clock"
+set MoveInfo(cemt)					"Correspondence Elapsed"
 
 } ;# namespace mc
 
@@ -113,6 +115,8 @@ array set MoveInfoPGN {
 	emt	"%emt, %egt"
 	ccsnt	"%ccsnt"
 	video	"%video"
+	cclk	"%cclk"
+	cemt	"%cemt"
 }
 
 
@@ -154,7 +158,10 @@ proc build {top width height} {
 	set gamebar [::gamebar::gamebar $edit.gamebar]
 
 	grid $gamebar -row 1 -column 1 -sticky nsew
-	grid $panes   -row 2 -column 1 -sticky nsew
+	set corrclock [::corrclock::corrclock $edit.corrclock -position 0]
+	grid $corrclock -row 2 -column 1 -sticky ew
+	grid remove $corrclock
+	grid $panes   -row 3 -column 1 -sticky nsew
 
 	::gamebar::addReceiver $gamebar [namespace code GameBarEvent]
 
@@ -194,6 +201,7 @@ proc build {top width height} {
 	set Vars(main) $main
 	set Vars(hist) $hist
 	set Vars(gamebar) $gamebar
+	set Vars(corrclock) $corrclock
 	set Vars(games) $games
 	set Vars(logo) $logo
 	set Vars(panes) $panes
@@ -995,7 +1003,37 @@ proc GameBarEvent {action position} {
 			::scidb::game::switch $position
 			[namespace parent]::board::updateMarks [::scidb::game::query marks]
 			Raise $position
+			UpdateCorrClock $position
 		}
+	}
+}
+
+
+proc UpdateCorrClock {position} {
+	variable Vars
+
+	set w $Vars(corrclock)
+	if {![winfo exists $w]} { return }
+
+	# Check if this is a correspondence game
+	set tags [::scidb::game::tags $position]
+	set isCorr 0
+	foreach pair $tags {
+		lassign $pair name value
+		if {$name eq "TimeMode" && [string tolower $value] eq "corr"} {
+			set isCorr 1
+			break
+		}
+	}
+
+	if {$isCorr} {
+		set ::corrclock::${w}::Position $position
+		$w update
+		$w start
+		grid $w
+	} else {
+		$w stop
+		grid remove $w
 	}
 }
 
@@ -2811,7 +2849,7 @@ proc PopupMenu {parent position} {
 		-menu $menu.display.moveinfo \
 		-label $mc::MoveInfoSelection \
 		;
-	foreach type {eval clk emt ccsnt video} {
+	foreach type {eval clk emt ccsnt video cclk cemt} {
 		$menu.display.moveinfo add checkbutton \
 			-label "$mc::MoveInfo($type) ($MoveInfoPGN($type))" \
 			-variable ::pgn::setup::ShowMoveInfo($type) \
