@@ -182,7 +182,7 @@ proc refresh {dlg} {
 
 	$tree delete [$tree children {}]
 
-	set base [::scidb::db::get name]
+	set base ""; catch { set base [::scidb::db::get name] }
 	if {[string length $base] == 0} {
 		$tree insert {} end -values [list "" "" "" "" $mc::NoDatabase "" "" "" "" ""]
 		return
@@ -305,7 +305,7 @@ proc openGame {dlg} {
 	set number [lindex $values 0]
 	if {![string is integer -strict $number]} { return }
 
-	set base [::scidb::db::get name]
+	set base ""; catch { set base [::scidb::db::get name] }
 	set variant [::scidb::app::variant]
 
 	catch {

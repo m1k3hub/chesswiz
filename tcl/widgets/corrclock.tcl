@@ -164,7 +164,8 @@ proc update {w} {
 	variable ${w}::OrigBlackTime
 	variable ${w}::BaseTime
 
-	set tags [::scidb::game::tags $Position]
+	# Guard against game not loaded (can happen during teardown)
+	if {[catch { set tags [::scidb::game::tags $Position] }]} { return }
 	set whiteTime {}
 	set blackTime {}
 
@@ -220,7 +221,7 @@ proc Tick {w} {
 
 	if {!$Running} { return }
 
-	set stm [::scidb::game::query $Position stm]
+	if {[catch { set stm [::scidb::game::query $Position stm] }]} { return }
 	set elapsed [expr {[clock seconds] - $BaseTime}]
 
 	if {$stm eq "white" && [llength $OrigWhiteTime]} {
@@ -258,7 +259,7 @@ proc Redraw {w} {
 	variable ${w}::ActiveColor
 	variable ${w}::NormalColor
 
-	set stm [::scidb::game::query $Position stm]
+	if {[catch { set stm [::scidb::game::query $Position stm] }]} { return }
 
 	foreach {side time} {white $WhiteTime black $BlackTime} {
 		set name [string tolower $side]

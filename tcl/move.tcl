@@ -533,7 +533,7 @@ proc doAction {action san {noMoveCmd {}}} {
 
 
 proc IsCorrespondenceGame {{tags {}}} {
-	if {[llength $tags] == 0} { set tags [::scidb::game::tags 0] }
+	if {[llength $tags] == 0} { catch { set tags [::scidb::game::tags 0] } }
 	foreach pair $tags {
 		lassign $pair name value
 		if {$name eq "TimeMode" && [string tolower $value] eq "corr"} {
