@@ -58,8 +58,10 @@ public:
 		ClockTime,
 		CorrespondenceChessSent,
 		VideoTime,
+		CorrespondenceClock,
+		CorrespondenceElapsed,
 
-		LAST = VideoTime,
+		LAST = CorrespondenceElapsed,
 	};
 
 	enum Format
@@ -103,6 +105,8 @@ public:
 	void encode(util::ByteStream& strm) const;
 
 	char const* parseCorrespondenceChessSent(char const* s);
+	char const* parseCorrespondenceClock(char const* s);
+	char const* parseCorrespondenceElapsed(char const* s);
 	char const* parsePlayersClock(char const* s);
 	char const* parseClockTime(char const* s);
 	char const* parseElapsedGameTime(char const* s);
@@ -143,6 +147,16 @@ private:
 		uint16_t	m_milliSeconds;
 	};
 
+	struct CorrDuration
+	{
+		CorrDuration();
+
+		uint16_t	m_days;
+		uint8_t	m_hours;
+		uint8_t	m_minutes;
+		uint8_t	m_seconds;
+	};
+
 	char const* parseTime(Type type, char const* s);
 	char const* parseElapsedTime(char const* s);
 	char const* parseCentiSeconds(char const* s);
@@ -161,6 +175,7 @@ private:
 		ElapsedTime		m_elapsed;
 		AnalysisInfo	m_analysis;
 		uint32_t			m_centiSeconds;
+		CorrDuration	m_corrDuration;
 
 #if HAVE_C11_UNRESTRICTED_UNIONS
 	};

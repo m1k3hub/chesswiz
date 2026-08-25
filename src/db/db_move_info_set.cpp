@@ -286,8 +286,15 @@ MoveInfoSet::extractFromComment(EngineList& engineList, mstl::string& comment)
 							break;
 
 						case 'l':
-							if ((q = ::match(p + 2, "clk", 3)))
+							if ((q = ::match(p + 2, "cclk", 4)))
+								q = info.parseCorrespondenceClock(q);
+							else if ((q = ::match(p + 2, "clk", 3)))
 									q = info.parsePlayersClock(q);
+							break;
+
+						case 'e':
+							if ((q = ::match(p + 2, "cemt", 4)))
+								q = info.parseCorrespondenceElapsed(q);
 							break;
 
 						case 't':

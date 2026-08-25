@@ -329,7 +329,24 @@ Writer::beginGame(TagSet const& tags)
 
 			case tag::TimeMode:
 				if (!isEmpty && test(Flag_Include_Time_Mode_Tag))
+				{
 					writeTag(tag, value);
+
+					// Also output TimeControl for PGN compatibility.
+					// Map scidb's time mode to a standard PGN TimeControl value.
+					if (!tags.contains(tag::TimeControl))
+					{
+						time::Mode tm = time::fromString(value);
+						if (tm == time::Corr)
+							writeTag(tag::TimeControl, "correspondence");
+						else if (tm == time::Blitz)
+							writeTag(tag::TimeControl, "blitz");
+						else if (tm == time::Rapid)
+							writeTag(tag::TimeControl, "rapid");
+						else if (tm == time::Bullet)
+							writeTag(tag::TimeControl, "bullet");
+					}
+				}
 				break;
 
 			case tag::Variant:
@@ -395,30 +412,34 @@ Writer::beginGame(TagSet const& tags)
 				{
 					if (tag::isWhiteRatingTag(tag))
 					{
-						if (!whiteElo)
-						{
-							if (	tag == tag::WhiteElo
+						if (	!whiteElo
+							&& (	tag == tag::WhiteElo
 								|| (	test(Flag_Write_Any_Rating_As_ELO)
 									&& !tags.contains(tag::WhiteElo)
-									&& (tag == tag::WhiteRating || !tags.contains(tag::WhiteRating))))
-							{
-								writeTag(tag, value);
-								whiteElo = true;
-							}
+									&& (tag == tag::WhiteRating || !tags.contains(tag::WhiteRating)))))
+						{
+							writeTag(tag, value);
+							whiteElo = true;
+						}
+						else if (tag == tag::WhiteICCF && !isEmpty)
+						{
+							writeTag(tag, value);
 						}
 					}
 					else if (tag::isBlackRatingTag(tag))
 					{
-						if (!blackElo)
-						{
-							if (	tag == tag::BlackElo
+						if (	!blackElo
+							&& (	tag == tag::BlackElo
 								|| (	test(Flag_Write_Any_Rating_As_ELO)
 									&& !tags.contains(tag::BlackElo)
-									&& (tag == tag::BlackRating || !tags.contains(tag::BlackRating))))
-							{
-								writeTag(tag, value);
-								blackElo = true;
-							}
+									&& (tag == tag::BlackRating || !tags.contains(tag::BlackRating)))))
+						{
+							writeTag(tag, value);
+							blackElo = true;
+						}
+						else if (tag == tag::BlackICCF && !isEmpty)
+						{
+							writeTag(tag, value);
 						}
 					}
 					else if (!tag::isMandatory(tag) && !test(Flag_Exclude_Extra_Tags))

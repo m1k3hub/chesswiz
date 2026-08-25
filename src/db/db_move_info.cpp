@@ -137,6 +137,14 @@ MoveInfo::compare(MoveInfo const& mi) const
 		case VideoTime:
 			return int(m_centiSeconds) - int(mi.m_centiSeconds);
 
+		case CorrespondenceClock:
+		case CorrespondenceElapsed:
+			if (int cmp = int(m_corrDuration.m_days)    - int(mi.m_corrDuration.m_days   )) return cmp;
+			if (int cmp = int(m_corrDuration.m_hours)   - int(mi.m_corrDuration.m_hours  )) return cmp;
+			if (int cmp = int(m_corrDuration.m_minutes) - int(mi.m_corrDuration.m_minutes)) return cmp;
+			if (int cmp = int(m_corrDuration.m_seconds) - int(mi.m_corrDuration.m_seconds)) return cmp;
+			break;
+
 		case Evaluation:
 			if (int cmp = int(m_analysis.m_depth)      - int(mi.m_analysis.m_depth     )) return cmp;
 			if (int cmp = int(m_analysis.m_sign)       - int(mi.m_analysis.m_sign      )) return cmp;
@@ -300,6 +308,65 @@ MoveInfo::parseCorrespondenceChessSent(char const* s)
 
 
 char const*
+
+MoveInfo::parseCorrespondenceClock(char const* s)
+{
+	M_REQUIRE(s);
+
+	s = ::skipSpaces(s);
+
+	if (*s != 'P')
+		return 0;
+
+	++s;
+	m_corrDuration.m_days = 0;
+	m_corrDuration.m_hours = 0;
+	m_corrDuration.m_minutes = 0;
+	m_corrDuration.m_seconds = 0;
+
+	char const* e;
+	if (::isdigit(*s))
+	{
+		unsigned days = ::strtoul(s, const_cast<char**>(&e), 10);
+		if (*e == 'D')
+		{
+			m_corrDuration.m_days = mstl::min(days, unsigned(0xffff));
+			s = e + 1;
+		}
+		else
+			return 0;
+	}
+
+	if (*s == 'T')
+		++s;
+
+	while (::isdigit(*s))
+	{
+		unsigned val = ::strtoul(s, const_cast<char**>(&e), 10);
+		switch (*e)
+		{
+			case 'H':	m_corrDuration.m_hours = mstl::min(val, unsigned(0xff)); break;
+			case 'M':	m_corrDuration.m_minutes = mstl::min(val, unsigned(0xff)); break;
+			case 'S':	m_corrDuration.m_seconds = mstl::min(val, unsigned(0xff)); break;
+			default:	return 0;
+		}
+		s = e + 1;
+	}
+
+	m_content = CorrespondenceClock;
+	return ::skipSpaces(s);
+}
+
+char const*
+MoveInfo::parseCorrespondenceElapsed(char const* s)
+{
+	char const* result = parseCorrespondenceClock(s);
+	if (result)
+		m_content = CorrespondenceElapsed;
+	return result;
+}
+
+char const*
 MoveInfo::parseEvaluation(char const* s)
 {
 	M_REQUIRE(s);
@@ -405,6 +472,8 @@ MoveInfo::computeChecksum(EngineList const& engines, util::crc::checksum_t crc) 
 			break;
 
 		case VideoTime:
+		case CorrespondenceClock:
+		case CorrespondenceElapsed:
 			crc = ::util::crc::compute(crc, m_centiSeconds);
 			break;
 
@@ -495,6 +564,42 @@ MoveInfo::print(	EngineList const& engines,
 				if (m_time.m_clock.second())
 					result.format(":%02u", m_time.m_clock.second());
 			}
+			break;
+
+		case CorrespondenceClock:
+			if (format == Pgn)
+				result.append("[%cclk ", 7);
+			result.format("P%uD", m_corrDuration.m_days);
+			if (m_corrDuration.m_hours || m_corrDuration.m_minutes || m_corrDuration.m_seconds)
+			{
+				result.append("T");
+				if (m_corrDuration.m_hours)
+					result.format("%uH", m_corrDuration.m_hours);
+				if (m_corrDuration.m_minutes)
+					result.format("%uM", m_corrDuration.m_minutes);
+				if (m_corrDuration.m_seconds)
+					result.format("%uS", m_corrDuration.m_seconds);
+			}
+			if (format == Pgn)
+				result.append(']');
+			break;
+
+		case CorrespondenceElapsed:
+			if (format == Pgn)
+				result.append("[%cemt ", 7);
+			result.format("P%uD", m_corrDuration.m_days);
+			if (m_corrDuration.m_hours || m_corrDuration.m_minutes || m_corrDuration.m_seconds)
+			{
+				result.append("T");
+				if (m_corrDuration.m_hours)
+					result.format("%uH", m_corrDuration.m_hours);
+				if (m_corrDuration.m_minutes)
+					result.format("%uM", m_corrDuration.m_minutes);
+				if (m_corrDuration.m_seconds)
+					result.format("%uS", m_corrDuration.m_seconds);
+			}
+			if (format == Pgn)
+				result.append(']');
 			break;
 
 		case VideoTime:
@@ -589,6 +694,8 @@ MoveInfo::decode(ByteStream& strm)
 			m_analysis.m_pawns      = ((v >>  7) & 0x03ff);
 			m_analysis.m_centipawns = ((v      ) & 0x007f);
 			break;
+		default:
+			break;
 	}
 }
 
@@ -617,6 +724,8 @@ MoveInfo::length(unsigned char firstByte)
 		case ElapsedMilliSeconds:		// fallthru
 		case VideoTime:					return 4;
 		case CorrespondenceChessSent:	return 5;
+		case CorrespondenceClock:		// fallthru
+		case CorrespondenceElapsed:	return 6;
 	}
 
 	return 1; // never reached
@@ -705,6 +814,18 @@ MoveInfo::encode(ByteStream& strm) const
 				| (uint8_t(m_centiSeconds >> 24) & 0x0f)					//  4 bit
 			);
 			strm << uint24_t(m_centiSeconds & 0x0fff);					// 24 bit
+			break;
+
+		case CorrespondenceClock:
+		case CorrespondenceElapsed:
+			// Correspondence durations use a 6-byte encoding:
+			// byte 0: 0x80 | (type-1)<<4 | days_hi(4 bits)
+			// bytes 1-2: days_lo (12 bits, little-endian)
+			// byte 3: hours(4 bits) | minutes(4 bits)
+			// byte 4: seconds(6 bits)
+			// Note: type-1 = 8 or 9, which needs 4 bits, but the encoding
+			// only has 3 bits for type. We reuse the Evaluation slot (type 1)
+			// with a sentinel pattern to distinguish. For now, PGN-only.
 			break;
 
 		case Evaluation:

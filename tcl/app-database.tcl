@@ -176,6 +176,8 @@ set MoveInfo(elapsedMilliSecs)	"Elapsed Milliseconds"
 set MoveInfo(clockTime)				"Clock Time"
 set MoveInfo(corrChessSent)		"Correspondence Chess Sent"
 set MoveInfo(videoTime)				"Video Time"
+set MoveInfo(corrClock)			"Correspondence Clock"
+set MoveInfo(corrElapsed)		"Correspondence Elapsed"
 
 }
 
@@ -187,8 +189,12 @@ set MoveInfoExample(elapsedMilliSecs)	{ {[%emt 102.34]}		{emt 102.34} }
 set MoveInfoExample(clockTime)			{ {[%ct 17:10:42]}	{ct 17:10:42} }
 set MoveInfoExample(corrChessSent)		{ {[%ccsnt 2011.06.16, 17:53:02]} {2011.06.16, 17:53:02} }
 set MoveInfoExample(videoTime)			{ {[%vt 122.44]}		{vt 122.44} }
+set MoveInfoExample(corrClock)		{ {[%cclk P28DT12H30M]}	{cclk P28DT12H30M} }
+set MoveInfoExample(corrElapsed)	{ {[%cemt P2DT4H30M]}	{cemt P2DT4H30M} }
 
 set MoveInfoAttrs {evaluation playersClock elapsedGameTime elapsedMoveTime
+				 elapsedMilliSecs clockTime corrChessSent videoTime
+				 corrClock corrElapsed}
 							elapsedMilliSecs clockTime corrChessSent videoTime}
 
 set Variants {Normal ThreeCheck Bughouse Crazyhouse Antichess Losers}

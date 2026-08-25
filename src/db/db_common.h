@@ -1120,6 +1120,8 @@ namespace moveinfo {
 		ElapsedTime	= 1 << 2,
 		CorrSent		= 1 << 3,
 		Video			= 1 << 4,
+		CorrClock		= 1 << 5,
+		CorrElapsed	= 1 << 6,
 	};
 
 }

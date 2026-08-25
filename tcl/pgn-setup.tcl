@@ -107,6 +107,8 @@ array set ShowMoveInfo {
 	emt	1
 	ccsnt	1
 	video	0
+	cclk	1
+	cemt	1
 }
 
 set StyleLayout {
