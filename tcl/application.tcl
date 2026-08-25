@@ -170,6 +170,12 @@ proc open {} {
 
 	::ttk::notebook::enableTraversal $nb
 	bind $nb <<NotebookTabChanged>> [namespace code [list TabChanged $nb]]
+	# Release any in-process media player before a tab switch. The switch (and
+	# the unmap of the board/paned content) commits on button *release*; closing
+	# the tkvlc/libVLC handle on *press* guarantees its video surface is torn
+	# down before the canvas window is unmapped, otherwise the vo thread can
+	# crash during teardown.
+	bind $nb <ButtonPress-1> +[list ::application::media::Stop]
 	set info [::ttk::frame $nb.information]
 	set db [::ttk::frame $nb.database]
 

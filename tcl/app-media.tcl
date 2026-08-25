@@ -3,9 +3,11 @@
 # ======================================================================
 # Displays media entries (pictures, audio, video, streams) associated
 # with the currently loaded game.  Images render inline via Tk photo;
-# audio/video play embedded via mpv --wid=<tk-window-id>.
+# audio/video play embedded via the tkvlc package (libVLC bound to a
+# Tk frame's window ID).
 #
-# If mpv is not found, falls back to xdg-open (external player).
+# If tkvlc (and thus libVLC) is not available, falls back to xdg-open
+# (external player).
 # ======================================================================
 
 ::util::source application-media
@@ -28,7 +30,7 @@ set TypeNone			"Unknown"
 set Play				"Play"
 set Stop				"Stop"
 set OpenError		"Cannot open media file: %s"
-set NoPlayer			"No media player found (mpv or xdg-open)"
+set NoPlayer			"No media player found (tkvlc or xdg-open)"
 
 } ;# namespace mc
 
@@ -42,8 +44,10 @@ array set Priv {
 	statusbar		{}
 	viewer			{}
 	viewerimg		{}
-	mpv_pid		0
-	mpv_wid		{}
+	vlc_handle	{}
+	vlc_loaded	0
+	inprocess	0
+	checkid		{}
 }
 
 } ;# namespace media
@@ -82,7 +86,7 @@ proc application::media::build {twm frame width height} {
 	pack $ctrl.stop -side left -padx 2
 
 	# Embedded viewer area — a frame that holds either an image label
-	# or an mpv video window.
+	# or a tkvlc video window.
 	ttk::frame $viewer -relief sunken -borderwidth 1
 	canvas $viewer.canvas -bg black -highlightthickness 0
 	pack $viewer.canvas -fill both -expand yes
@@ -209,26 +213,27 @@ proc application::media::PlaySelected {tree} {
 	variable Priv
 
 	set sel [$tree selection]
-	if {![llength $sel]} return
-
-	set values [$tree item [lindex $sel 0] -values]
-	if {[llength $values] < 3} return
-
-	lassign $values typeLabel title path
-	if {![string length $path]} return
-
-	# Find the type (numeric) from the entries
-	set type 0
-	foreach entry [$tree children {}] {
-		set vals [$tree item $entry -values]
-		if {[lindex $vals 2] eq $path} {
-			# The typeLabel is the first column; we need the numeric type
-			# Re-query mediaFiles to get it
-			break
-		}
+	if {![llength $sel]} {
+		MediaDebug "PlaySelected: no selection"
+		set Priv(statusbar) "Select a media entry first."
+		return
 	}
 
-	# Determine type by file extension
+	set values [$tree item [lindex $sel 0] -values]
+	if {[llength $values] < 3} {
+		MediaDebug "PlaySelected: unexpected values [list $values]"
+		return
+	}
+
+	lassign $values typeLabel title path
+	if {![string length $path]} {
+		MediaDebug "PlaySelected: empty path (inline media), title=[list $title]"
+		set Priv(statusbar) "Cannot play '$title': media is stored inline (not yet extractable)."
+		return
+	}
+
+	MediaDebug "PlaySelected: type=[list $typeLabel] path=[list $path] typeNum=[ClassifyFile $path]"
+
 	set type [ClassifyFile $path]
 
 	Stop
@@ -237,9 +242,21 @@ proc application::media::PlaySelected {tree} {
 		# Picture — display inline via Tk photo
 		ShowImage $path
 	} else {
-		# Audio/video — embed mpv or launch external
+		# Audio/video — embed via tkvlc or launch external
 		PlayMedia $path
 	}
+}
+
+
+# Append a diagnostic line to /tmp/scidb-media-debug.log (and stderr) so
+# playback failures are traceable without a debugger.
+proc application::media::MediaDebug {msg} {
+	catch {
+		set fd [open /tmp/scidb-media-debug.log a]
+		puts $fd "[clock format [clock seconds]] [pid] $msg"
+		close $fd
+	}
+	puts stderr "scidb-media: $msg"
 }
 
 
@@ -295,36 +312,141 @@ proc application::media::ShowImage {path} {
 }
 
 
+# Try to load the tkvlc package (once).  Returns 1 if available, 0 otherwise.
+proc application::media::LoadVlc {} {
+	variable Priv
+
+	if {$Priv(vlc_loaded)} {
+		return [expr {$Priv(vlc_handle) ne ""}]
+	}
+	set Priv(vlc_loaded) 1
+
+	if {![catch { package require tkvlc } msg]} {
+		MediaDebug "LoadVlc: tkvlc loaded"
+		return 1
+	}
+
+	MediaDebug "LoadVlc: package require tkvlc failed: $msg"
+	return 0
+}
+
+
 proc application::media::PlayMedia {path} {
 	variable Priv
 	variable mc
 
 	if {![file exists $path]} {
+		MediaDebug "PlayMedia: file not found: $path"
 		set Priv(statusbar) "File not found: $path"
 		return
 	}
 
-	# Try mpv with --wid embedding first
-	set mpv [auto_execok mpv]
-	if {[string length $mpv]} {
-		# Get the canvas window ID for embedding
-		set canvas $Priv(viewer).canvas
-		set wid [winfo id $canvas]
-
-		# Clear canvas
-		$canvas delete all
-
-		# Launch mpv embedded in the canvas
-		set cmd [list $mpv --wid=$wid --no-terminal --no-osd-bar --force-window=no \
-				--keep-open=yes --vo=gpu --audio-display=no $path]
-		set Priv(mpv_pid) [exec {*}$cmd &]
-
-		set Priv(statusbar) "Playing: $path"
-		return
+	# Prefer the tkvlc backend (embedded, in-window playback via libVLC).
+	if {[LoadVlc]} {
+		MediaDebug "PlayMedia: tkvlc available, trying in-process"
+		if {[PlayInProcess $path]} {
+			return
+		}
+		MediaDebug "PlayMedia: tkvlc failed, falling back to external player"
 	}
 
 	# Fallback: xdg-open / open / start
 	LaunchExternal $path
+}
+
+
+# Play a media file using the tkvlc (libVLC) backend.
+# Video is embedded into the viewer canvas by passing its X11 window ID
+# to ::tkvlc::init.  Returns 1 on success, 0 if tkvlc is unavailable or
+# failed, so the caller can fall back to an external player.
+proc application::media::PlayInProcess {path} {
+	variable Priv
+	variable mc
+
+	set canvas $Priv(viewer).canvas
+
+	# Destroy any previous tkvlc handle so we start fresh.
+	DestroyVlcHandle
+
+	# Realize the canvas so winfo id returns a valid window id.
+	update idletasks
+	set wid [winfo id $canvas]
+	MediaDebug "PlayInProcess: canvas=$canvas wid=$wid"
+
+	# Clear canvas (tkvlc renders directly into the window, but clear
+	# any leftover photo image from a previous picture display).
+	$canvas delete all
+
+	# Initialise a new tkvlc handle bound to the canvas window id.
+	set handle "scidb_vlc"
+	if {[catch { ::tkvlc::init $handle $wid } msg]} {
+		MediaDebug "PlayInProcess: ::tkvlc::init failed: $msg"
+		set Priv(statusbar) "tkvlc initialization failed; trying external player."
+		return 0
+	}
+
+	set Priv(vlc_handle) $handle
+
+	# Open the file (use native path for Windows compatibility).
+	set native [file nativename $path]
+	if {[catch { $handle open $native } msg]} {
+		MediaDebug "PlayInProcess: $handle open failed: $msg"
+		DestroyVlcHandle
+		return 0
+	}
+
+	# Start playback.
+	if {[catch { $handle play } msg]} {
+		MediaDebug "PlayInProcess: $handle play failed: $msg"
+		DestroyVlcHandle
+		return 0
+	}
+
+	set Priv(inprocess) 1
+	set Priv(statusbar) "Playing: $path"
+	MediaDebug "PlayInProcess: playback started for $path"
+
+	# Check shortly after that playback actually started (media decoded).
+	catch { after cancel $Priv(checkid) }
+	set Priv(checkid) [after 800 [namespace code [list CheckDecode $path]]]
+	return 1
+}
+
+
+# Verify a just-started tkvlc playback actually started.  An unsupported
+# or corrupt file will report an error state, so surface a clear error
+# rather than leaving the panel silently blank.
+proc application::media::CheckDecode {path} {
+	variable Priv
+
+	if {!$Priv(inprocess) || $Priv(vlc_handle) eq ""} { return }
+
+	set handle $Priv(vlc_handle)
+
+	set state ""
+	catch { set state [$handle state] }
+	MediaDebug "CheckDecode: state=$state"
+
+	if {$state eq "error" || $state eq "idle"} {
+		MediaDebug "CheckDecode: state=$state -> cannot play [list $path]"
+		DestroyVlcHandle
+		set Priv(inprocess) 0
+		set Priv(statusbar) "Cannot play: unsupported or corrupt media file."
+	}
+}
+
+
+# Destroy the current tkvlc handle and release libVLC resources.
+proc application::media::DestroyVlcHandle {} {
+	variable Priv
+
+	set handle $Priv(vlc_handle)
+	if {$handle ne ""} {
+		catch { $handle stop }
+		catch { $handle destroy }
+	}
+	set Priv(vlc_handle) ""
+	set Priv(inprocess) 0
 }
 
 
@@ -357,10 +479,12 @@ proc application::media::LaunchExternal {path} {
 proc application::media::Stop {} {
 	variable Priv
 
-	# Stop mpv if running
-	if {$Priv(mpv_pid) != 0} {
-		catch { exec kill $Priv(mpv_pid) }
-		set Priv(mpv_pid) 0
+	catch { after cancel $Priv(checkid) }
+	set Priv(checkid) {}
+
+	# Stop and release tkvlc playback.
+	if {$Priv(inprocess) || $Priv(vlc_handle) ne ""} {
+		DestroyVlcHandle
 	}
 
 	# Clear canvas
@@ -395,11 +519,28 @@ proc application::media::ClassifyFile {path} {
 
 
 proc application::media::activate {w flag} {
+	# Stop playback when the panel is unmapped/hidden so media does not
+	# keep playing (or keep its video window) once the panel is gone.
+	if {!$flag} {
+		Stop
+	}
 }
 
 
 proc application::media::setActive {flag} {
+	# Stop and fully release the player when the panel loses focus (e.g. a
+	# modal dialog grabs input), so libVLC is not rendering into the Tk
+	# window during the dialog's window management.
+	if {$flag eq "no"} {
+		Stop
+	}
+}
+
+
+# Called when the media pane frame is destroyed (bound in application.tcl).
+# Fully release the player so libVLC never outlives its embedding window.
+proc application::media::closed {frame} {
+	Stop
 }
 
 # vi:set ts=3 sw=3:
-

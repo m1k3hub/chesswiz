@@ -34,6 +34,7 @@ SRC_CXX = \
 	tcl_game.cpp \
 	tcl_http.cpp \
 	tcl_log.cpp \
+	tcl_media.cpp \
 	tcl_misc.cpp \
 	tcl_pgn_reader.cpp \
 	tcl_player.cpp \

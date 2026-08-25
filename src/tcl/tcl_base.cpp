@@ -1306,6 +1306,7 @@ namespace zlib			{ void init(Tcl_Interp* interp); }
 namespace fam			{ void init(Tcl_Interp* interp); }
 namespace engine		{ void init(Tcl_Interp* interp); }
 namespace player		{ void init(Tcl_Interp* interp); }
+namespace media			{ void init(Tcl_Interp* interp); }
 
 } // namespace tcl
 
@@ -1359,6 +1360,7 @@ tcl::init(Tcl_Interp* ti)
 	fam::init(ti);
 	engine::init(ti);
 	player::init(ti);
+	media::init(ti);
 }
 
 // vi:set ts=3 sw=3:

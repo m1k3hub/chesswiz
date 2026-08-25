@@ -117,6 +117,19 @@ void mkdirp(mstl::string const& path)
 	::mkdir(path.c_str(), 0777);
 }
 
+// Generate a media file by shelling out to ffmpeg (lavfi sources). Returns
+// true on success; the output path is quoted to tolerate spaces.
+bool generateMedia(mstl::string const& out, char const* ffargs)
+{
+	char cmd[2048];
+	int n = snprintf(cmd, sizeof(cmd),
+		"ffmpeg -hide_banner -loglevel error -y %s \"%s\" >/dev/null 2>&1",
+		ffargs, out.c_str());
+	if (n < 0 || (size_t)n >= sizeof(cmd))
+		return false;
+	return ::system(cmd) == 0;
+}
+
 } // namespace
 
 struct TclInterpreter
@@ -198,11 +211,31 @@ int main(int argc, char** argv)
 		mkdirp(audDir);
 		mkdirp(vidDir);
 
-		writeFile(imgDir + "/bilbao2008.png",  Png1x1, Png1x1Size);
-		writeFile(imgDir + "/linares2009.png", Png1x1, Png1x1Size);
-		writeFile(imgDir + "/london2012.png",  Png1x1, Png1x1Size);
-		writeTextFile(audDir + "/interview.wav", "dummy audio file\n");
-		writeTextFile(vidDir + "/analysis.mp4", "dummy video file\n");
+		// Real media (so the GUI actually renders/plays): a 3s H.264+AAC
+		// test card video, a 3s sine-tone WAV, and three solid-color PNGs.
+		// Falls back to tiny valid stubs if ffmpeg is unavailable.
+		bool ffmpeg = generateMedia(vidDir + "/analysis.mp4",
+			"-f lavfi -i testsrc=duration=3:size=320x240:rate=25 "
+			"-f lavfi -i sine=frequency=440:duration=3 "
+			"-c:v libx264 -pix_fmt yuv420p -c:a aac -shortest");
+		ffmpeg = generateMedia(audDir + "/interview.wav",
+			"-f lavfi -i sine=frequency=440:duration=3 -c:a pcm_s16le") && ffmpeg;
+		ffmpeg = generateMedia(imgDir + "/bilbao2008.png",
+			"-f lavfi -i color=c=0x1a4f8a:s=400x300 -frames:v 1") && ffmpeg;
+		ffmpeg = generateMedia(imgDir + "/linares2009.png",
+			"-f lavfi -i color=c=0x8a1a4f:s=400x300 -frames:v 1") && ffmpeg;
+		ffmpeg = generateMedia(imgDir + "/london2012.png",
+			"-f lavfi -i color=c=0x1a8a4f:s=400x300 -frames:v 1") && ffmpeg;
+
+		if (!ffmpeg)
+		{
+			writeFile(imgDir + "/bilbao2008.png",  Png1x1, Png1x1Size);
+			writeFile(imgDir + "/linares2009.png", Png1x1, Png1x1Size);
+			writeFile(imgDir + "/london2012.png",  Png1x1, Png1x1Size);
+			writeTextFile(audDir + "/interview.wav", "dummy audio file\n");
+			writeTextFile(vidDir + "/analysis.mp4", "dummy video file\n");
+			fprintf(stderr, "warning: ffmpeg unavailable, wrote stub media files\n");
+		}
 		printf("Created media directory: %s\n", mediaDir.c_str());
 	}
 
