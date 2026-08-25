@@ -236,8 +236,49 @@ proc syncFromServer {dlg} {
 	if {[catch {
 		set games [::iccf::xfcc::getGames]
 		set count [llength $games]
-		# Refresh the local table to show updated data
-		refresh $dlg
+
+		# Update the treeview with server data
+		set tree $Vars(tree)
+		$tree delete [$tree children {}]
+
+		if {$count == 0} {
+			$tree insert {} end -values [list "" "" "" "" $mc::NoGames "" "" "" "" ""]
+		} else {
+			foreach game $games {
+				set id [dict get $game id]
+				set white [dict get $game white]
+				set black [dict get $game black]
+				set event [dict get $game event]
+				set result [::iccf::xfcc::resultToPgn [dict get $game result]]
+				set myTurn [dict get $game myTurn]
+				set status [expr {$myTurn eq "true" ? "ongoing" : "ongoing"}]
+				if {[dict get $game result] ne "Ongoing"} { set status "finished" }
+
+				# Format time remaining
+				set dp [dict get $game daysPlayer]
+				set hp [dict get $game hoursPlayer]
+				set mp [dict get $game minutesPlayer]
+				set do [dict get $game daysOpponent]
+				set ho [dict get $game hoursOpponent]
+				set mo [dict get $game minutesOpponent]
+				set hasWhite [dict get $game hasWhite]
+				if {$hasWhite eq "true"} {
+					set wt [format "P%sDT%sH%sM" $dp $hp $mp]
+					set bt [format "P%sDT%sH%sM" $do $ho $mo]
+				} else {
+					set wt [format "P%sDT%sH%sM" $do $ho $mo]
+					set bt [format "P%sDT%sH%sM" $dp $hp $mp]
+				}
+				set wtf [::corrclock::formatDuration {*}[::corrclock::parseIsoDuration $wt]]
+				set btf [::corrclock::formatDuration {*}[::corrclock::parseIsoDuration $bt]]
+
+				set eventDate [dict get $game eventDate]
+
+				$tree insert {} end \
+					-values [list $id $white $black "" $status $wtf $btf $eventDate $event $result]
+			}
+		}
+
 		tk_messageBox -parent $dlg -title $mc::Sync \
 			-message "Synced $count game(s) from ICCF server." \
 			-type ok -icon info

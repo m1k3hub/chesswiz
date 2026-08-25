@@ -508,7 +508,8 @@ proc doAction {action san {noMoveCmd {}}} {
 	}
 
 	# Auto-timestamp correspondence chess moves with ccsnt.
-	if {[IsCorrespondenceGame]} {
+	set tags [::scidb::game::tags 0]
+	if {[IsCorrespondenceGame $tags]} {
 		set key [::scidb::game::query current]
 		set timestamp [clock format [clock seconds] -format {%Y.%m.%d, %H:%M:%S}]
 		catch { ::scidb::game::update moveinfo $key ccsnt $timestamp }
@@ -516,7 +517,7 @@ proc doAction {action san {noMoveCmd {}}} {
 		# Auto-submit to ICCF server if configured and game has ICCFGameID
 		if {[info commands ::iccf::xfcc::configured?] ne {} && [::iccf::xfcc::configured?]} {
 			set iccfId ""
-			foreach pair [::scidb::game::tags 0] {
+			foreach pair $tags {
 				lassign $pair name value
 				if {$name eq "ICCFGameID"} { set iccfId $value; break }
 			}
@@ -531,8 +532,8 @@ proc doAction {action san {noMoveCmd {}}} {
 }
 
 
-proc IsCorrespondenceGame {} {
-	set tags [::scidb::game::tags 0]
+proc IsCorrespondenceGame {{tags {}}} {
+	if {[llength $tags] == 0} { set tags [::scidb::game::tags 0] }
 	foreach pair $tags {
 		lassign $pair name value
 		if {$name eq "TimeMode" && [string tolower $value] eq "corr"} {

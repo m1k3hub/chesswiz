@@ -3633,6 +3633,9 @@ cmdUpdate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 			case Cmd_MoveInfo:
 			{
+				if (objc != 5)
+					return usage(::CmdUpdate, "moveinfo", nullptr, subcommands, args);
+
 				char const* type	= stringFromObj(objc, objv, 3);
 				char const* value	= stringFromObj(objc, objv, 4);
 

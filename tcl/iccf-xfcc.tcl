@@ -473,16 +473,6 @@ proc deobfuscate {s} {
 }
 
 
-proc saveCredentials {} {
-	variable Config
-	# Obfuscate password before saving
-	set Config(password) [obfuscate $Config(password)]
-	# The options writer will handle the actual file write
-	# Restore the deobfuscated password in memory
-	set Config(password) [deobfuscate $Config(password)]
-}
-
-
 proc loadCredentials {username password {endpoint ""}} {
 	# Called from options file source — password is obfuscated
 	variable Config
@@ -498,8 +488,6 @@ proc loadCredentials {username password {endpoint ""}} {
 # since writeItem doesn't obfuscate the password
 proc WriteConfig {chan} {
 	variable Config
-	puts $chan "set [namespace current]::Config(username) {$Config(username)}"
-	puts $chan "set [namespace current]::Config(endpoint) {$Config(endpoint)}"
 	puts $chan "::iccf::xfcc::loadCredentials {$Config(username)} {[obfuscate $Config(password)]} {$Config(endpoint)}"
 }
 ::options::hookWriter [namespace current]::WriteConfig
