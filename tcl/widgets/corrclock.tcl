@@ -165,7 +165,7 @@ proc update {w} {
 	variable ${w}::BaseTime
 
 	# Guard against game not loaded (can happen during teardown)
-	if {[catch { set tags [::scidb::game::tags $Position] }]} { return }
+	if {[catch { set tags [::scidb::game::tags $Position] } err]} { puts stderr "corrclock: $err"; return }
 	set whiteTime {}
 	set blackTime {}
 
@@ -221,7 +221,7 @@ proc Tick {w} {
 
 	if {!$Running} { return }
 
-	if {[catch { set stm [::scidb::game::query $Position stm] }]} { return }
+	if {[catch { set stm [::scidb::game::query $Position stm] } err]} { puts stderr "corrclock: $err"; return }
 	set elapsed [expr {[clock seconds] - $BaseTime}]
 
 	if {$stm eq "white" && [llength $OrigWhiteTime]} {
@@ -259,7 +259,7 @@ proc Redraw {w} {
 	variable ${w}::ActiveColor
 	variable ${w}::NormalColor
 
-	if {[catch { set stm [::scidb::game::query $Position stm] }]} { return }
+	if {[catch { set stm [::scidb::game::query $Position stm] } err]} { puts stderr "corrclock: $err"; return }
 
 	foreach {side time} {white $WhiteTime black $BlackTime} {
 		set name [string tolower $side]

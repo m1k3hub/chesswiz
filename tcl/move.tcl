@@ -512,7 +512,7 @@ proc doAction {action san {noMoveCmd {}}} {
 	if {[IsCorrespondenceGame $tags]} {
 		set key [::scidb::game::query current]
 		set timestamp [clock format [clock seconds] -format {%Y.%m.%d, %H:%M:%S}]
-		catch { ::scidb::game::update moveinfo $key ccsnt $timestamp }
+		if {[catch { ::scidb::game::update moveinfo $key ccsnt $timestamp } err]} { puts stderr "move: ccsnt failed: $err" }
 
 		# Auto-submit to ICCF server if configured and game has ICCFGameID
 		if {[info commands ::iccf::xfcc::configured?] ne {} && [::iccf::xfcc::configured?]} {
@@ -523,7 +523,7 @@ proc doAction {action san {noMoveCmd {}}} {
 			}
 			if {[string length $iccfId]} {
 				set movecount [::scidb::game::query ply]
-				catch { ::iccf::xfcc::submitMove $iccfId $san $movecount }
+				if {[catch { ::iccf::xfcc::submitMove $iccfId $san $movecount } err]} { puts stderr "move: ICCF submit failed: $err" }
 			}
 		}
 	}
@@ -533,7 +533,7 @@ proc doAction {action san {noMoveCmd {}}} {
 
 
 proc IsCorrespondenceGame {{tags {}}} {
-	if {[llength $tags] == 0} { catch { set tags [::scidb::game::tags 0] } }
+	if {[llength $tags] == 0} { if {[catch { set tags [::scidb::game::tags 0] } err]} { puts stderr "move: $err"; return 0 } }
 	foreach pair $tags {
 		lassign $pair name value
 		if {$name eq "TimeMode" && [string tolower $value] eq "corr"} {

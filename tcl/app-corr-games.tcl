@@ -182,7 +182,8 @@ proc refresh {dlg} {
 
 	$tree delete [$tree children {}]
 
-	set base ""; catch { set base [::scidb::db::get name] }
+	set base ""
+	if {[catch { set base [::scidb::db::get name] } err]} { puts stderr "corr-games: $err" }
 	if {[string length $base] == 0} {
 		$tree insert {} end -values [list "" "" "" "" $mc::NoDatabase "" "" "" "" ""]
 		return
@@ -190,7 +191,7 @@ proc refresh {dlg} {
 
 	set variant [::scidb::app::variant]
 	set count 0
-	catch { set count [::scidb::db::count games $base $variant] }
+	if {[catch { set count [::scidb::db::count games $base $variant] } err]} { puts stderr "corr-games: $err" }
 
 	if {$count == 0} {
 		$tree insert {} end -values [list "" "" "" "" $mc::NoGames "" "" "" "" ""]
@@ -201,7 +202,7 @@ proc refresh {dlg} {
 
 	for {set i 0} {$i < $count} {incr i} {
 		set tags {}
-		catch { set tags [::scidb::db::get tags $i $base $variant] }
+		if {[catch { set tags [::scidb::db::get tags $i $base $variant] } err]} { puts stderr "corr-games: $err" }
 
 		if {![isCorrespondenceGame $tags]} { continue }
 
@@ -305,15 +306,16 @@ proc openGame {dlg} {
 	set number [lindex $values 0]
 	if {![string is integer -strict $number]} { return }
 
-	set base ""; catch { set base [::scidb::db::get name] }
+	set base ""
+	if {[catch { set base [::scidb::db::get name] } err]} { puts stderr "corr-games: $err" }
 	set variant [::scidb::app::variant]
 
-	catch {
+	if {[catch {
 		::game::new [winfo toplevel $dlg] \
 			-base $base \
 			-number [expr {$number - 1}] \
 			-variant $variant
-	}
+	} err]} { puts stderr "corr-games: $err" }
 }
 
 
