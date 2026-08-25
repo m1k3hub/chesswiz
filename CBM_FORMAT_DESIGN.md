@@ -719,6 +719,7 @@ reading remains correct for DBs that use it, but is not authoritative here.
 | Locate referenced images on disk (`.html` folder) | ✅ done (98% present) |
 | Classify media type per reference (image/video/audio) | ✅ done |
 | Map a specific game → its media (per-game playback) | ❌ blocked on linkage RE |
+| Play audio/video (image/audio/video files on disk) | ✅ done (tkvlc + system-player fallback) |
 | Extract audio/video payloads | ❌ Phase 3 |
 
 ---
@@ -862,12 +863,13 @@ extraction and display/playback).
 Key decisions:
 - **Tier 1 (immediate):** System player delegation — extract to temp file,
   launch OS media player. No new dependency.
-- **Tier 2 (optional):** libmpv integration — embed mpv as a library for
-  in-app audio/video playback. Optional `--enable-mpv` configure flag.
+- **Tier 2 (optional):** tkvlc integration — embed libVLC via the tkvlc
+  Tcl package for in-app audio/video playback. Loaded at runtime, no
+  compile-time dependency.
 - **Images:** Already handled by existing Tk photo infrastructure
   (bundled JPEG/PNG decoders).
-- **libmpv** chosen over GStreamer/FFmpeg for its clean C API, Tk window
-  embedding via `wid`, custom stream callbacks (in-memory playback),
+- **tkvlc** chosen over GStreamer/FFmpeg for its clean Tcl API, Tk window
+  embedding via `winfo id`, runtime-only loading (no app rebuild),
   and license compatibility with Scidb's GPL.
 ---
 

@@ -11,8 +11,8 @@ CBH databases (see `CBM_FORMAT_DESIGN.md`).
 | Capability | Status | How |
 |------------|--------|-----|
 | **Image display** | ✅ Built-in | Tk `image create photo -data [binary]` + bundled JPEG decoder (`src/tk/jpeg/`) + PNG support (`tk_png.cpp`) |
-| **Audio playback** | ❌ None | — |
-| **Video playback** | ❌ None | — |
+| **Audio playback** | ✅ Via tkvlc (libVLC) | `tcl/app-media.tcl` — `package require tkvlc`; falls back to system player |
+| **Video playback** | ✅ Via tkvlc (libVLC) | Embedded in Tk canvas via `::tkvlc::init HANDLE [winfo id $canvas]` |
 | **Player photos** | ✅ Built-in | `tcl/utils/player-photos.tcl` — downloads and displays player photos using Tk photo images |
 | **External process launch** | ✅ Tcl `exec` | Used for engine subprocesses, photo download subprocess |
 
@@ -52,36 +52,51 @@ default media player:
 | Trivial to implement | Requires temp file extraction |
 | Cross-platform via Tcl `exec` | User experience is jarring |
 
-### 2.2 libmpv (embedded mpv as library)
+### 2.2 tkvlc (embedded libVLC as Tcl package)
 
-[libmpv](https://mpv.io/manual/master/#embedding-into-other-programs-libmpv)
-is the C API for embedding the mpv media player as a playback backend.
+[tkvlc](https://github.com/ray2501/tkvlc) is a Tcl extension that wraps
+[libVLC](https://wiki.videolan.org/LibVLC/) and embeds VLC video playback
+into a Tk frame widget.
 
-**Integration methods:**
+**Integration method:**
 
-1. **Native window embedding** (`wid` option) — pass a Tk widget's
-   window ID to mpv, it renders video inside that widget. Simple, works
-   on X11/win32/macOS.
+Pass a Tk widget's window ID (via `winfo id`) to `::tkvlc::init`, which
+creates a VLC media player bound to that window. VLC handles video
+rendering directly into the Tk widget.
 
-2. **Render API** (OpenGL) — create an OpenGL context, use
-   `mpv_render_context_render()` to draw video frames. More control,
-   can overlay UI, but requires OpenGL integration with Tk.
+**Tcl API (tkvlc commands):**
 
-3. **Custom stream callbacks** — register a protocol handler so mpv
-   reads directly from in-memory `.cbm` data (no temp file needed).
+```tcl
+::tkvlc::init HANDLE ?HWND|photo?   ;# create a player handle
+HANDLE open filename                 ;# load a media file
+HANDLE openurl url                   ;# load a media URL
+HANDLE play                          ;# start playback
+HANDLE pause                         ;# pause / resume
+HANDLE stop                          ;# stop playback
+HANDLE isplaying                     ;# -> 1 if playing
+HANDLE volume ?value?                ;# get/set volume
+HANDLE duration                      ;# -> duration in seconds
+HANDLE time ?value?                  ;# get/set position in seconds
+HANDLE position ?value?              ;# get/set position (0.0–1.0)
+HANDLE isseekable                    ;# -> 1 if seekable
+HANDLE state                         ;# -> idle|opening|buffering|playing|paused|stopped|ended|error
+HANDLE rate ?value?                  ;# get/set playback speed
+HANDLE repeat ?flag?                 ;# get/set repeat flag
+HANDLE event ?cmd?                   ;# get/set event callback
+HANDLE info                          ;# -> array of player info
+HANDLE destroy                       ;# release the player
+```
 
 | Pros | Cons |
 |------|------|
-| In-app audio + video playback | New optional dependency (~5-15 MB) |
-| Handles all common formats (WMV, MP4, MP3, WAV) | Requires OpenGL for render API |
-| Can read from memory via stream callbacks | GPL license consideration (see below) |
-| Clean C API, well-documented | X11 focus-stealing issues with `wid` |
+| In-app audio + video playback | New optional dependency (libVLC + tkvlc extension) |
+| Handles all common formats (WMV, MP4, MP3, WAV) | Must build/install tkvlc Tcl extension |
+| Clean Tcl API, no C++ compilation needed | X11 window-embedding focus-stealing issues (as with any wid approach) |
 | Audio-only and video-only both supported | |
-| Used by many projects (Qt, SDL, wxWidgets examples) | |
+| MIT licensed, actively maintained | |
+| Pure Tcl-loadable (`package require tkvlc`) — no app rebuild needed | |
 
-**License:** libmpv C API is ISC. mpv core is GPLv2+ by default, or
-LGPLv2.1+ when built with `-Dgpl=false`. Scidb is GPL, so GPLv2+ mpv
-is compatible.
+**License:** tkvlc is MIT. libVLC is GPLv2+ (compatible with Scidb's GPL).
 
 ### 2.3 GStreamer
 
@@ -124,21 +139,21 @@ dependencies.
 - Images: Display in-app using existing Tk photo infrastructure
   (`image create photo -data [payload]`).
 - Audio/Video: Extract to temp file, launch system player via Tcl `exec`.
-- This is the fallback when libmpv is not available.
+- This is the fallback when tkvlc is not available.
 
-### Tier 2 — libmpv (optional, `--enable-mpv`)
+### Tier 2 — tkvlc (optional, loaded at runtime via `package require`)
 
-**Implement second.** Optional dependency detected at configure time,
-following the existing `--enable-fam` pattern.
+**Implemented.** Optional dependency loaded at runtime via Tcl's
+`package require tkvlc`. No compile-time dependency, no app rebuild.
 
-- Embed mpv video window in a Tk frame via the `wid` option.
-- Play audio-only files through mpv's audio output (no video window needed).
-- Use custom stream callbacks to play from `.cbm` in-memory data.
-- Provide play/pause/stop/seek controls in Tcl via a new `::media` namespace.
+- Embed VLC video window in a Tk frame via `::tkvlc::init HANDLE [winfo id $w]`.
+- Play audio-only files through VLC's audio output (no video window needed).
+- Provide play/pause/stop/seek controls in Tcl via the tkvlc handle commands.
+- If tkvlc is not installed, gracefully falls back to Tier 1 (system player).
 
 ### Tier 3 — OpenGL render API (future, advanced)
 
-**Deferred.** Use libmpv's render API to render video into a Tk OpenGL
+**Deferred.** Use libVLC's render API to render video into a Tk OpenGL
 widget for tight integration (overlay chess board, custom OSD). This
 requires a Tk OpenGL widget (e.g., `tkogl` or `togl`) and is significantly
 more complex.
@@ -157,38 +172,25 @@ more complex.
 │  ┌─────────────────────────────────────────────┐    │
 │  │ Media Panel (Tk frame)                        │    │
 │  │  ┌───────────────┐  ┌──────────────────┐    │    │
-│  │  │ Image display  │  │ Video (mpv wid)  │    │    │
+│  │  │ Image display  │  │ Video (tkvlc)   │    │    │
 │  │  │ (Tk photo)     │  │ (or system player)│   │    │
 │  │  └───────────────┘  └──────────────────┘    │    │
 │  └─────────────────────────────────────────────┘    │
 └──────────────────┬───────────────────────────────────┘
                    │
 ┌──────────────────┴───────────────────────────────────┐
-│              C++ Media Player Module                  │
+│              C++ Media Module (stub)               │
 │                                                       │
-│  src/media/media_player.h                             │
-│  src/media/media_player.cpp                           │
-│                                                       │
-│  class MediaPlayer {                                   │
-│      bool isAvailable();      // libmpv present?      │
-│      bool play(path);        // play audio/video      │
-│      bool play(data, size);  // play from memory      │
-│      void stop();                                    │
-│      void pause(bool);                               │
-│      void seek(double seconds);                      │
-│      double position() const;                         │
-│      double duration() const;                        │
-│      void setWindowHandle(uint64_t wid);             │
-│      // event callback for position updates          │
-│  };                                                   │
+│  src/tcl/tcl_media.cpp (no-op init)                │
+│  Playback is handled entirely in Tcl via tkvlc.   │
 └──────────────────┬───────────────────────────────────┘
                    │
         ┌──────────┴──────────┐
         │                      │
 ┌───────┴──────┐      ┌───────┴──────┐
-│  libmpv      │      │  System      │
+│  tkvlc       │      │  System      │
 │  (optional)  │      │  fallback    │
-│  - embedded  │      │  - exec      │
+│  - libVLC    │      │  - exec      │
 │  - in-app    │      │  - xdg-open  │
 └──────────────┘      └──────────────┘
 ```
@@ -199,11 +201,12 @@ more complex.
 
 ### 5.1 Phase A — System player delegation (no dependency)
 
+**Status: Implemented** in `tcl/app-media.tcl` (`LaunchExternal` proc).
+
 **Files:**
 | File | Description |
 |------|-------------|
-| `tcl/utils/media.tcl` (new) | Tcl `::media` namespace — play/stop/available |
-| `tcl/utils/media-player.tcl` (new) | System player delegation: extract + exec |
+| `tcl/app-media.tcl` | Media panel UI + system player fallback (`LaunchExternal`) |
 
 **Tcl API:**
 ```tcl
@@ -230,98 +233,47 @@ proc ::media::systemPlayer {} {
 }
 ```
 
-### 5.2 Phase B — libmpv integration (optional)
+### 5.2 Phase B — tkvlc integration (optional, runtime)
 
 **Files:**
 | File | Description |
 |------|-------------|
-| `src/media/media_player.h` (new) | C++ MediaPlayer class wrapping libmpv |
-| `src/media/media_player.cpp` (new) | Implementation |
-| `src/media/Makefile` (new) | Build rules |
-| `src/tcl/tcl_media.cpp` (new) | Tcl command bindings (`::media::mpv`) |
-| `configure` (modified) | Add `--enable-mpv` check, like `checkFAM` |
-| `Makefile.in` (modified) | Add `MPV_INC`, `MPV_LIB` variables |
+| `tcl/app-media.tcl` (modified) | Media panel UI using tkvlc for playback |
+| `src/tcl/tcl_media.cpp` (stub) | No-op `media::init`; playback is pure Tcl |
 
-**Configure check** (following the `checkFAM` pattern):
+**No build system changes needed.** tkvlc is loaded at runtime via
+`package require tkvlc`. If the package is not installed, the media
+panel falls back to the system player (Tier 1).
+
+**Tcl usage** (see `tcl/app-media.tcl`):
 ```tcl
-proc checkMPV {} {
-    global feature
-    if {$feature(mpv)} {
-        puts -nonewline "    Checking if your system has libmpv: "
-        flush stdout
-        if {[SystemHasMPV]} { puts "yes." } else { puts "no" }
-    }
-}
-```
+# Load tkvlc (lazy, on first playback)
+package require tkvlc
 
-**C++ MediaPlayer class:**
-```cpp
-namespace media {
+# Create a VLC player bound to a Tk canvas window id
+::tkvlc::init scidb_vlc [winfo id $canvas]
 
-class MediaPlayer
-{
-public:
-    /// Returns true if libmpv is linked at compile time.
-    static bool isAvailable();
+# Open and play
+scidb_vlc open [file nativename $path]
+scidb_vlc play
 
-    MediaPlayer();
-    ~MediaPlayer();
+# Check state
+set state [scidb_vlc state]   ;# playing|paused|stopped|ended|error|...
 
-    /// Set the parent window handle for video embedding.
-    /// On X11: pass the Tk widget's window ID.
-    void setWindowHandle(uint64_t wid);
-
-    /// Play a file from path.
-    bool playFile(mstl::string const& path);
-
-    /// Play from in-memory data (using mpv stream callbacks).
-    bool playData(unsigned char const* data, size_t size);
-
-    void stop();
-    void pause(bool flag);
-    void seek(double seconds);
-    double position() const;
-    double duration() const;
-
-    /// Callback for position updates (called from mpv event thread).
-    typedef void (*PositionCallback)(void* ctx, double pos);
-    void setPositionCallback(PositionCallback cb, void* ctx);
-
-private:
-    mpv_handle* m_mpv;
-    PositionCallback m_posCallback;
-    void* m_posCtx;
-};
-
-} // namespace media
-```
-
-**Tcl bindings** (`tcl_media.cpp`):
-```cpp
-// ::media::mpv play $path
-// ::media::mpv playData $data
-// ::media::mpv stop
-// ::media::mpv pause $bool
-// ::media::mpv seek $seconds
-// ::media::mpv position
-// ::media::mpv duration
-// ::media::mpv setWindow $wid
-// ::media::mpv available
+# Stop and release
+scidb_vlc stop
+scidb_vlc destroy
 ```
 
 ### 5.3 Phase C — Tcl UI media panel
 
-**Files:**
-| File | Description |
-|------|-------------|
-| `tcl/utils/media-panel.tcl` (new) | Media viewer panel widget |
-| `tcl/app-database.tcl` (modified) | Add media column to game list |
+**Status: Implemented** in `tcl/app-media.tcl` (`build`, `PlaySelected`, `ShowImage`, `PlayMedia`).
 
 **Media panel features:**
 - Shows image thumbnails for games with `hasPicture()`
 - "Play audio" button for games with `hasAudio()`
 - "Play video" button for games with `hasVideo()`
-- If libmpv available: embedded video in panel
+- If tkvlc available: embedded video in panel
 - If not: launches system player
 - Media indicator column in game list (📷 🔊 🎬)
 
@@ -330,62 +282,35 @@ private:
 **Goal:** Play media directly from `.cbm` file data without extracting
 to a temp file.
 
-Uses libmpv's `mpv_stream_cb_add_ro()` to register a custom protocol
-(e.g., `cbm://game=123;type=video`) that reads from the MediaTable's
-in-memory data.
-
-This eliminates temp file I/O and is cleaner for large media files.
+Deferred — would require a custom libVLC media callback or a temporary
+file approach. Not currently implemented.
 
 ---
 
 ## 6. Build system integration
 
-### 6.1 configure changes (following the FAM pattern)
+**No build system changes needed.** tkvlc is a standard Tcl package
+loaded at runtime. The C++ `tcl_media.cpp` is a no-op stub; no
+compile-time dependency on libVLC or tkvlc is required.
 
+To install tkvlc:
+```
+# Install libVLC development files
+sudo apt-get install libvlc-dev   # Debian/Ubuntu
+sudo zypper in vlc-devel          # openSUSE
+
+# Build and install tkvlc
+git clone https://github.com/ray2501/tkvlc
+cd tkvlc
+./configure --prefix=/opt/tcl
+make && make install
+```
+
+In Tcl, detection is runtime-only:
 ```tcl
-# In configure:
-set feature(mpv) no
-# ...
-puts "  --enable-mpv               build with libmpv media support [default=$feature(mpv)]"
-# ...
-proc checkMPV {} {
-    global feature
-    if {$feature(mpv)} {
-        puts -nonewline "    Checking if your system has libmpv: "
-        flush stdout
-        if {[SystemHasMPV]} { puts "yes." } else { puts "no" }
-    }
-}
-```
-
-### 6.2 Makefile.in changes
-
-```makefile
-MPV_INC          =
-MPV_LIB          =
-HAVE_LIBMPV     =
-```
-
-When `--enable-mpv` is used:
-```makefile
-HAVE_LIBMPV     = -DHAVE_LIBMPV=1
-MPV_LIB         = -lmpv
-```
-
-### 6.3 Conditional compilation
-
-In C++ code:
-```cpp
-#if HAVE_LIBMPV
-#  include <mpv/client.h>
-#endif
-```
-
-In Tcl:
-```tcl
-if {[info commands ::media::mpv] ne ""} {
-    # libmpv is available
-    set ::media::backend "mpv"
+if {![catch { package require tkvlc }]} {
+    # tkvlc is available
+    set ::media::backend "vlc"
 } else {
     set ::media::backend "system"
 }
@@ -397,12 +322,10 @@ if {[info commands ::media::mpv] ne ""} {
 
 | Component | License | Compatible with Scidb (GPL)? |
 |-----------|--------|------------------------------|
-| libmpv C API | ISC | ✅ |
-| mpv core (default) | GPLv2+ | ✅ |
-| mpv core (`-Dgpl=false`) | LGPLv2.1+ | ✅ |
-| FFmpeg (mpv dependency) | LGPL/GPL | ✅ (typically LGPL build) |
+| tkvlc | MIT | ✅ |
+| libVLC | GPLv2+ | ✅ |
 
-No license conflict. Scidb is GPL, mpv is GPLv2+, both are compatible.
+No license conflict. Scidb is GPL, libVLC is GPLv2+, both are compatible.
 
 ---
 
@@ -411,22 +334,21 @@ No license conflict. Scidb is GPL, mpv is GPLv2+, both are compatible.
 | Phase | What | Dependency | Effort |
 |-------|------|------------|--------|
 | **A** | System player delegation | None | Small |
-| **B** | libmpv integration | Optional libmpv | Medium |
+| **B** | tkvlc integration | Optional tkvlc (runtime) | Small |
 | **C** | Tcl UI media panel | A or B | Medium |
-| **D** | Custom stream callbacks (in-memory playback) | B | Small |
+| **D** | Custom stream callbacks (in-memory playback) | B | Deferred |
 
-**Recommended path:** Implement Phase A first (immediate, no dependency),
-then Phase B (libmpv) as an optional enhancement, then Phase C (UI), then
-Phase D (stream callbacks) for polish.
+**Implemented path:** Phase A (system player fallback, always available)
+and Phase B (tkvlc for embedded playback, loaded at runtime) are both
+implemented in `tcl/app-media.tcl`.
 
-The key insight is that **libmpv** is the right embedded library choice
+The key insight is that **tkvlc** is the right embedded playback choice
 because:
 1. It handles all ChessBase media formats (WMV, MP4, MP3, WAV)
-2. It has a clean C API that integrates well with C++/Tcl
-3. It can embed in Tk windows via the `wid` option
-4. It supports custom stream callbacks for in-memory playback
-5. Its license is compatible with Scidb
-6. It's actively maintained and widely used
+2. It has a clean Tcl API — no C++ compilation or app rebuild needed
+3. It can embed in Tk windows via `winfo id`
+4. Its license (MIT) is compatible with Scidb
+5. It wraps libVLC, which is actively maintained and widely used
 
-The system player fallback ensures media works even without libmpv
+The system player fallback ensures media works even without tkvlc
 installed — it just opens in an external window instead of embedded.

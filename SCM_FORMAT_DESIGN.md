@@ -202,7 +202,7 @@ opened game. scidb is Tcl/Tk, so:
 | Picture (jpg/png/gif/bmp) | **Tk `image create photo`** with scidb's bundled JPEG/PNG/GIF decoders | available now |
 | Audio (mp3/wav/ogg) | **Tier 1:** extract inline→temp, launch system player (`xdg-open`/platform) | no new dep |
 | Video (mp4/wmv/…) | **Tier 1:** same system-player delegation | no new dep |
-| Video (embedded, board-synced) | **Tier 2 (optional `--enable-mpv`):** libmpv embedded in a Tk frame, cued to move timestamps | future, see `MEDIA_PLAYBACK_DESIGN.md` |
+| Video (embedded, board-synced) | **Tier 2 (optional tkvlc):** libVLC embedded in a Tk frame, cued to move timestamps | future, see `MEDIA_PLAYBACK_DESIGN.md` |
 | Stream (URL) | hand URL to system browser/player | trivial |
 
 UI flow:
@@ -210,7 +210,7 @@ UI flow:
 2. A **media pane** in the game view shows one thumbnail/button per entry:
    - Picture → render inline with Tk photo (click = full-size).
    - Audio/Video → a "▶ Play" button; click extracts (if inline) and launches
-     the system player, or plays embedded (mpv tier).
+     the system player, or plays embedded (tkvlc tier).
 3. Missing payload file → the entry shows a "media missing" placeholder, not
    an error (graceful degradation).
 
