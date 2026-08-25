@@ -119,7 +119,8 @@ proc corrclock {path args} {
 
 	bind $path <Destroy> [namespace code [list stop $path]]
 
-	update $path
+	# Don't call update during construction -- no game may be loaded yet.
+	# UpdateCorrClock in app-pgn.tcl will call update/start when a game is selected.
 	return $path
 }
 

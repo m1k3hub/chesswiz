@@ -195,7 +195,6 @@ set MoveInfoExample(corrElapsed)	{ {[%cemt P2DT4H30M]}	{cemt P2DT4H30M} }
 set MoveInfoAttrs {evaluation playersClock elapsedGameTime elapsedMoveTime
 				 elapsedMilliSecs clockTime corrChessSent videoTime
 				 corrClock corrElapsed}
-							elapsedMilliSecs clockTime corrChessSent videoTime}
 
 set Variants {Normal ThreeCheck Bughouse Crazyhouse Antichess Losers}
 set Tabs {games player event site annotator position}
