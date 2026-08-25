@@ -189,6 +189,7 @@ toString(Game::Command command)
 		case Game::StripMoves:			return "strip:moves";
 		case Game::StripAnnotations:	return "strip:annotations";
 		case Game::StripMoveInfo:		return "strip:info";
+		case Game::AddMoveInfo:			return "add:info";
 		case Game::StripMarks:			return "strip:marks";
 		case Game::StripComments:		return "strip:comments";
 		case Game::StripVariations:	return "strip:variations";

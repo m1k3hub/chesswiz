@@ -157,6 +157,12 @@ private:
 		uint8_t	m_seconds;
 	};
 
+public:
+	/// Access correspondence duration (days/hours/minutes/seconds)
+	CorrDuration const& corrDuration() const { return m_corrDuration; }
+
+private:
+
 	char const* parseTime(Type type, char const* s);
 	char const* parseElapsedTime(char const* s);
 	char const* parseCentiSeconds(char const* s);

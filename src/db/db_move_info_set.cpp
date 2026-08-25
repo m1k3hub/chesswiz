@@ -220,6 +220,8 @@ MoveInfoSet::count(unsigned types) const
 			case MoveInfo::ElapsedGameTime:				// fallthru
 			case MoveInfo::ElapsedMoveTime:				if (types & moveinfo::ElapsedTime) ++n; break;
 			case MoveInfo::CorrespondenceChessSent:	if (types & moveinfo::CorrSent) ++n; break;
+			case MoveInfo::CorrespondenceClock:			// fallthru
+			case MoveInfo::CorrespondenceElapsed:		if (types & moveinfo::CorrClock) ++n; break;
 			case MoveInfo::VideoTime:						if (types & moveinfo::Video) ++n; break;
 		}
 	}
@@ -561,6 +563,8 @@ MoveInfoSet::print(	EngineList const& engines,
 				case MoveInfo::ElapsedGameTime:				// fallthru
 				case MoveInfo::ElapsedMoveTime:				print = bool(types & moveinfo::ElapsedTime); break;
 				case MoveInfo::CorrespondenceChessSent:	print = bool(types & moveinfo::CorrSent); break;
+				case MoveInfo::CorrespondenceClock:			// fallthru
+				case MoveInfo::CorrespondenceElapsed:		print = bool(types & moveinfo::CorrClock); break;
 				case MoveInfo::VideoTime:						print = bool(types & moveinfo::Video); break;
 			}
 

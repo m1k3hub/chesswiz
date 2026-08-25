@@ -580,8 +580,6 @@ MoveInfo::print(	EngineList const& engines,
 				if (m_corrDuration.m_seconds)
 					result.format("%uS", m_corrDuration.m_seconds);
 			}
-			if (format == Pgn)
-				result.append(']');
 			break;
 
 		case CorrespondenceElapsed:
@@ -598,8 +596,6 @@ MoveInfo::print(	EngineList const& engines,
 				if (m_corrDuration.m_seconds)
 					result.format("%uS", m_corrDuration.m_seconds);
 			}
-			if (format == Pgn)
-				result.append(']');
 			break;
 
 		case VideoTime:
