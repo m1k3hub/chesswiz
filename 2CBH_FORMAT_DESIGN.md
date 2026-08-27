@@ -1,9 +1,10 @@
 # 2CBH Format Reverse Engineering — Design for Scidb
 
-**Status:** Index format decoded. Move encoding uses standard LUT with an evolving
-count, but the count evolution is a per-game KEYED function that depends on
-the 8-byte nonce. The data IS genuinely encrypted (not a LUT swap like
-Chess960). Binary RE of CBase26.exe is needed to recover the key derivation.
+**Status:** Index format decoded. Move encoding is **plaintext 16-bit
+"Move16" codes** (NOT encrypted — refuted 2026-08-27 via Ghidra RE + a
+decisive cross-nonce collision test; see §3.6). The only remaining piece is
+the Move16 code→move mapping table (runtime-built, deterministic —
+extractable via one Wine dump or by reimplementing the builder).
 Fixture: `LumbrasGigaBase_OTB_ELO2400` (863,538 games).
 
 ## 1. Context
@@ -138,60 +139,102 @@ The constant prefix `01 00 fc ff 83 ac` likely encodes:
 | 8 | 2 | `ff ff` terminator |
 | 10+ | varies | Zero padding to `extraSize` |
 
-### 3.6 Encoding scheme (DECODED 2026-08-23)
+### 3.6 Encoding scheme — PLAINTEXT 16-bit Move16 codes (2026-08-27, Ghidra RE)
 
-The game data is **NOT encrypted**. XOR analysis proved that games with the
-same opening moves produce identical ciphertext, confirming plaintext
-encoding. The encoding has been **verified end-to-end for 21 plies** of game 0
-against scidb's own classic CBG encoder.
+**The earlier "per-game keyed encryption" hypothesis (below, kept for the
+record) is REFUTED by binary RE + empirical verification.** The `.2cbg`
+move data is **plaintext 16-bit "Move16" codes**, not encrypted. The
+"431 cross-game conflicts" in the count model were an artifact of fitting
+plaintext 16-bit codes to a non-existent byte-LUT+count cipher (exactly
+the kind of shadow that misled the Chess960 effort).
 
-**Model (genuinely encrypted — keyed by nonce):**
-
-The encoding uses the standard LUT (`MoveNumberLookup` at VA `0x141a783c0`)
-with an evolving count:
+**Corrected record layout** (Ghidra RE of `FUN_1401590d0`/`FUN_140158c80`
++ empirical parse of the fixture, verified against the trailer's self-
+referencing `totalRecordSize`):
 
 ```
-raw_p = (InvLUT[lc_p] + count_p) mod 256
-count_p = f(count_{p-1}, lc_{p-1}, lc_p, ply, KEY)
+offset  size  field
+0x00    8     magic = 0x1122334455667788
+0x08    4     dataSize   (uint32 LE)
+0x0c    4     extraSize  (uint32 LE)
+0x10    8     sub-field  (game id / hash — the field earlier misread as
+                          the "8-byte nonce"; it is NOT a cipher key)
+0x18    2     type       (uint16 LE; 0x0001 = standard-chess game)
+0x1a    dSize data       = [0xfffc][16-bit move codes...][0xffff]
+extra   eSize extra      (hash + 0xffff terminator + padding)
+trailer 18    10 zero + uint32 LE (totalRecordSize = 16+dSize+eSize+18) + 4 zero
 ```
 
-where KEY is a per-game value derived from the 8-byte nonce. The count
-evolution function `f` depends on FIVE inputs: the previous count, the
-previous move's lc, the current move's lc, the ply number, and the
-per-game key. The key makes the function non-deterministic from the move
-sequence alone — the same (count_prev, lc_prev, lc, ply) can produce
-different count_p in different games with different nonces.
+`totalRecordSize = 16 + dataSize + extraSize + 18` (verified exact for all
+records via the trailer uint32). **The design doc's earlier "data starts
+at offset 16" was wrong by 10 bytes** — it missed the 8-byte sub-field +
+2-byte type word, so its "8-byte nonce + 8-byte sub-header 01 00 fc ff
+83 ac" were actually `sub-field(8) + type(0x0001) + first move short
+(0xfffc)` mis-aligned.
 
-**Evidence:**
-- The LUT-swap hypothesis (like Chess960) was tested and RULED OUT: no
-  LUT + constant offset combination decodes all 5 plies of game 0.
-- The 4-input model `(count_prev, lc_prev, lc, ply)` has 431 cross-game
-  conflicts (same key, different output), proving the function needs a
-  5th input (the per-game key/nonce).
-- 999/1000 games pass per-game consistency (the key is constant within
-  a game), but cross-game conflicts confirm the per-game variation.
-- The specific conflict: `(161, 0xad, 0xc0, ply=2)` gives count_p=42 in
-  game 4 but 46 in another game, despite identical count_prev and move pair.
-  The only difference is the nonce.
+**Move data = plaintext 16-bit Move16 codes.** Each `uint16 LE` < `0xfffb`
+is a move code decoded via the runtime-built inverse table
+`DAT_141ad7110[code*8]` → 8-byte move descriptor (from, to, piece,
+promo). Tokens:
+- `0xfffc` (65532): leading "game start" token — appears exactly once per
+  game (4000/4000 in the sample).
+- `0xfffb` (65531): rare sub-structure / variation marker (143 total / 4000
+  games).
+- `0xfffe`/`0xffff`: terminator — every game ends with `0xffff`.
 
-**Disproven models:**
-- `count_p = count_{p-1} + F(lc_{p-1}, lc_p)` (additive, 2-input): WRONG
-- `count_p = 2*count_{p-1} + G(lc_{p-1}, lc_p)` (doubling, 2-input): WRONG
-- `count_p = f(count_{p-1}, lc_{p-1}, lc_p)` (3-input, no ply): WRONG
-- `count_p = f(count_{p-1}, lc_{p-1}, lc_p, ply)` (4-input): WRONG (431 conflicts)
-- LUT swap with count=move_index (like Chess960): RULED OUT
+**Proof the data is NOT nonce-encrypted (the decisive test):** among 4000
+sampled game records, **671 games share the identical 6-move opening
+`ace1 afcf ac83 b02e 2ca1 8929` across 669 distinct `sub-field` (nonce)
+values.** A per-game nonce-keyed cipher would produce *different*
+ciphertext for the same opening under different nonces. Identical bytes
+across 669 different nonces ⇒ plaintext. (The same opening ⇒ same codes ⇒
+same bytes, independent of the nonce.) Reproduction script:
+`docs/ghidra_2cbh/confirm_plaintext.py`.
 
-**What IS verified:**
-- The LUT is the standard `MoveNumberLookup` (same as classic CBH).
-- `raw = InvLUT[lc] + count` mod 256 — this part IS correct.
-- Move bytes are contiguous at the start of the move data.
-- Games decode correctly when their counts are provided manually.
-- The count evolution is keyed by the per-game nonce (genuine encryption).
+**What the sub-field (8 bytes @ 0x10) actually is:** NOT a cipher key. It
+is unique per game (≈999/1000 distinct — this is what the earlier analysis
+read as a "nonce"). It is most likely a game id / hash / seed used for
+indexing or the `.2cba` annotation linkage, not move encryption.
 
-**What is needed:**
-Binary RE of CBase26.exe to recover the key derivation function from
-the 8-byte nonce. The nonce-to-key derivation determines how the count
-evolves, and without it, the game data cannot be decoded.
+### 3.6.0 Refuted model (kept for the record)
+
+The earlier hypothesis, now disproven:
+
+> The encoding uses the standard LUT (`MoveNumberLookup` at VA `0x141a783c0`)
+> with an evolving count: `raw_p = (InvLUT[lc_p] + count_p) mod 256`,
+> `count_p = f(count_{p-1}, lc_{p-1}, lc_p, ply, KEY)` with KEY derived from
+> the 8-byte nonce; 431 cross-game conflicts prove a 5th input.
+
+Why it was wrong: it assumed single-byte LUT-encoded `lc` (the classic CBH
+model). The 2CBH format instead uses 16-bit Move16 codes (no byte LUT, no
+count). Re-fitting the high-entropy 16-bit codes to a byte-LUT+count model
+produced the apparent "431 conflicts" and the "keyed count" — phantoms.
+
+**What IS verified (carried forward):**
+- The record magic `0x1122334455667788` and the 0x1a-byte header layout.
+- `totalRecordSize = 16 + dataSize + extraSize + 18` (exact, per trailer).
+- Move data is contiguous 16-bit LE codes at data offset 0, prefixed by
+  `0xfffc`, terminated by `0xffff`, with rare `0xfffb` markers.
+- Each code < `0xfffb` decodes to a move via `DAT_141ad7110[code*8]`.
+
+**What is needed now (bounded, no cipher RE):**
+Recover the **Move16 code → move mapping**. The inverse table
+`DAT_141ad7110` (512 KB) is runtime-built deterministically by
+`FUN_14021aaf0` / `FUN_1402191e0` / `FUN_140219890` / `FUN_140218fd0`
+(they enumerate all legal (piece, from, to, promo) and assign sequential
+codes). Three options:
+1. **Reimplement the table builder** from the decompiled functions (it is
+   deterministic move generation — translate to C++/Python).
+2. **Dump the table from a running CBase26** (one-time dynamic extraction
+   of `DAT_141ad7110` + the encode table `DAT_141b57110`, 8 MB) — the
+   fastest route, needs one Wine run.
+3. **Derive the code assignment** by reproducing the builder's enumeration
+   order (pieces 1..6, squares 0..63, with castling/promotion special
+   cases; the code counter is `DAT_142357150`).
+
+Once the table is available, `.2cbg` decoding is: read `data@0x1a`, skip
+the `0xfffc` token, decode each `0xffff`-terminated run of 16-bit codes
+through the inverse table into moves. No encryption, no key derivation.
 
 ## 3.7 Ghidra static RE — move codec architecture (2026-08-26/27)
 
@@ -269,23 +312,20 @@ references the LUT atlas at `0x141a783c0`:
 
 ### 3.7.4 What this means for the §3.6 model
 
-The §3.6 empirical model ("standard LUT + evolving keyed count") is a
-**partial shadow** of the real codec, analogous to the H0-count shadow
-in the Chess960 effort. The real 2CBH path is:
+The §3.6 empirical model ("standard LUT + evolving keyed count") was a
+**phantom** — refuted 2026-08-27 (see §3.6). The real 2CBH path is:
 
 1. `move` → 16-bit code via `FUN_14021a020` (the `s_nIndex` table).
-2. The 16-bit code (2 bytes) is written to the `.2cbg` data field.
-3. A byte-stream cipher (reusing the LUT-atlas + count machinery in
-   `0x14020xxxx`) scrambles the bytes, with the **count evolution keyed
-   by the 8-byte nonce**.
+2. The 16-bit code (2 bytes) is written **in plaintext** to the `.2cbg`
+   data field (prefixed by `0xfffc`, terminated by `0xffff`).
+3. Decoding reads the 16-bit codes back through the inverse table
+   `DAT_141ad7110[code*8]` → move. **No cipher, no nonce key, no count.**
 
-Step 3's key-derivation + count-update function has **not yet** been
-located statically. The 2CBG record writer `FUN_1401c42d0` and the
-validators only touch the plain header; the cipher must be applied by a
-function reached from the game-data reader that consumes the nonce. The
-classic `FUN_14020c080` dispatch and `FUN_140210e10` per-move decode use
-`count = move_index` (plain increment), so the 2CBH keyed-count path is a
-**different** callee selected by the 2CBH game-type word.
+The decisive proof: 671 games share the identical opening bytes across
+669 distinct sub-field (nonce) values — impossible under per-game
+encryption (§3.6 / `docs/ghidra_2cbh/confirm_plaintext.py`). The earlier
+"431 cross-game conflicts" were the artifact of fitting plaintext 16-bit
+codes to a non-existent byte-LUT+count model.
 
 ### 3.7.5 DRM / opening-key context (NOT the move cipher)
 
@@ -324,24 +364,16 @@ To avoid future false leads, three "key" subsystems were ruled out:
 | `0x14020fd00` | chess960/variant byte-stream decoder |
 | `0x140964540` | Windows DigitalProductId decoder (DRM, NOT move cipher) |
 
-### 3.7.7 Next step (decisive)
+### 3.7.7 Next step (decisive — now bounded)
 
-The remaining unknown is the **nonce → key → count-evolution** function.
-Two routes:
-
-1. **Static:** find the function that reads the 8-byte nonce at game-data
-   offset 0 (the first `FUN_140f42780`/read of size 8 after the record
-   header) and trace where the value feeds a per-move count update that
-   also references the LUT atlas. Likely a callee of the 2CBH game-data
-   reader distinct from `FUN_14020c080` (selected by the 2CBH game-type
-   word in the sub-header). Search: xrefs to the LUT atlas that are NOT
-   `FUN_14020c080`/`14020f170`/`14020fd00`, plus functions reading an
-   8-byte value then seeding an LCG/PRNG.
-2. **Dynamic (recommended, per §9):** winedbg trace of live CBase26
-   opening a 2CBH fixture, breakpoint the Move16 encode `FUN_14021a020`
-   and the byte-stream cipher, capture (nonce, count_prev, lc_prev, lc,
-   ply → count_p) for one known game to recover the keyed count function
-   empirically — the same approach that solved Chess960.
+The "nonce → key → count-evolution" hunt is **moot**: the data is
+plaintext (§3.6). The only remaining work is recovering the **Move16
+code ↔ move table** (`DAT_141ad7110` inverse, `DAT_141b57110` encode),
+which is runtime-built deterministically by `FUN_14021aaf0` /
+`FUN_1402191e0` / `FUN_140219890` / `FUN_140218fd0`. Options:
+1. One Wine run of CBase26 + dump the two tables (fastest).
+2. Reimplement the table builder from the decompiled functions.
+3. Reproduce the builder's enumeration order to derive the code assignment.
 
 ### 3.7.8 Reproducing this RE
 
@@ -468,38 +500,26 @@ This would be a read-only "browse" mode — clicking a game would show
 
 | Capability | Blocker |
 |------------|---------|
-| Decode game moves | Per-game keyed byte-stream cipher: 16-bit Move16 codes (`s_nIndex` @ `0x141b57110`, encoder `FUN_14021a020`) are written to `.2cbg` then scrambled by a nonce-keyed count evolution reusing the LUT atlas. The nonce→key→count function is **not yet located statically** (see §3.7.7). |
-| Read annotations | Likely same encoding as `.2cbg` (same magic-based records) |
-| Write 2CBH | Cannot write without the nonce-keyed cipher (and producing a valid nonce) |
-| Read result code | Stored in game data stream, not in index |
+| Decode game moves | **SOLVED (encoding):** move data is plaintext 16-bit Move16 codes (§3.6). Remaining: the Move16 code→move table `DAT_141ad7110` (runtime-built, deterministic — dump from one Wine run or reimplement the builder `FUN_14021aaf0`). |
+| Read annotations | Likely same plaintext-codec as `.2cbg` (same magic-based records) |
+| Write 2CBH | Needs the Move16 move→code table (`DAT_141b57110`, encode side) + the per-game sub-field semantics |
+| Read result code | Stored in game data stream / sub-field, not in index |
 
 ## 9. Path forward
 
 1. **Short term:** Implement index-only 2CBH browsing (player/event/date
-   listing without move data). This gives users visibility into Corr
-   Database and other 2CBH databases they own. The index/namebase layout
-   (§2, §5, §6) is fully decoded.
+   listing without move data). The index/namebase layout (§2, §5, §6) is
+   fully decoded.
 
-2. **Medium term — static RE (in progress, §3.7):** the move layer is
-   solved (`FUN_14021a020` encode, `s_nIndex` table). Remaining: locate the
-   nonce-keyed count-evolution function — a byte-stream cipher callee that
-   reads the 8-byte nonce at game-data offset 0 and feeds an LCG/PRNG that
-   advances the count per move. Search: xrefs to the LUT atlas
-   `0x141a783c0` that are NOT `FUN_14020c080`/`14020f170`/`14020fd00`,
-   plus functions reading 8 bytes then seeding a state. Decompile scripts
-   in `docs/ghidra_2cbh/` (PyGhidra).
+2. **Move decode (now unblocked, no cipher RE):** recover the Move16
+   code↔move tables. Fastest: one Wine run of CBase26 with a Ghidra/winedbg
+   dump of `DAT_141ad7110` (512 KB inverse) + `DAT_141b57110` (8 MB
+   encode). Then `.2cbg` decode = read `data@0x1a`, skip `0xfffc`, decode
+   each `0xffff`-terminated run of 16-bit codes through the inverse table.
+   Reproduce: `docs/ghidra_2cbh/confirm_plaintext.py` (proves plaintext);
+   decompile of the table builders in `docs/ghidra_2cbh/decompile_2cbh_phase4.log`.
 
-3. **Medium term — dynamic RE (decisive):** winedbg trace of live CBase26
-   opening a 2CBH fixture. Breakpoint `FUN_14021a020` (encode) and the
-   byte-stream cipher; capture `(nonce, count_prev, lc_prev, lc, ply →
-   count_p)` for one known game to recover the keyed count function
-   empirically — the same approach that solved Chess960 (see
-   `CHESS960_STATUS.md` "DYNAMIC TRACE"). CBase26 runs under Wine 10.0;
-   fixture `LumbrasGigaBase_OTB_ELO2400` opens fine; binary extracted to
-   `/tmp/cb26_files/CBase26_EXE` (31 MB PE32+), Ghidra project
-   `/home/michael-g-thomas/ghidra_projects/CBase26`.
-
-4. **Alternative:** Export 2CBH databases to PGN using ChessBase itself
+3. **Alternative:** Export 2CBH databases to PGN using ChessBase itself
    (under Wine), then import the PGN into scidb. This is the pragmatic
    workaround for users who need the game data today.
 
