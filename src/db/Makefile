@@ -135,6 +135,8 @@ SRC_CXX = \
 	cbh/cbh_game_decoder.cpp \
 	cbh/cbh_count_cipher.cpp \
 	cbh/cbh_media.cpp \
+	2cbh/cb2_move16_table.cpp \
+	2cbh/2cbh_move16.cpp \
 	scm/scm_media.cpp \
 
 SRC	= $(SRC_CXX)

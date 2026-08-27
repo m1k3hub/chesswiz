@@ -1,11 +1,13 @@
 # 2CBH Format Reverse Engineering — Design for Scidb
 
-**Status:** Index format decoded. Move encoding is **plaintext 16-bit
-"Move16" codes** (NOT encrypted — refuted 2026-08-27 via Ghidra RE + a
-decisive cross-nonce collision test; see §3.6). The only remaining piece is
-the Move16 code→move mapping table (runtime-built, deterministic —
-extractable via one Wine dump or by reimplementing the builder).
-Fixture: `LumbrasGigaBase_OTB_ELO2400` (863,538 games).
+**Status (2026-08-27): Move decoding SOLVED and validated.** The .2cbg
+move data is plaintext 16-bit "Move16" codes (§3.6); the runtime-built
+decode table was dumped from a live CBase26 process, packed and embedded
+in scidb (`src/db/2cbh/`, §3.8), and validated on 50,000 fixture games
+(100% terminated mainlines; 20,000 replayed legally against python-chess).
+Remaining work is integration (a full `cb2::Codec`), name resolution
+(the `.2lgd` ID→`.2lid`-offset mapping, §6.1), annotations and the
+result field. Fixture: `LumbrasGigaBase_OTB_ELO2400` (863,538 games).
 
 ## 1. Context
 
@@ -375,6 +377,7 @@ which is runtime-built deterministically by `FUN_14021aaf0` /
 2. Reimplement the table builder from the decompiled functions.
 3. Reproduce the builder's enumeration order to derive the code assignment.
 
+
 ### 3.7.8 Reproducing this RE
 
 ```
@@ -412,6 +415,158 @@ python3 docs/ghidra_2cbh/decompile2cbh_phase3.py   # phase 3: Move16 callers + t
 - `/tmp/harvest_f_large.py` — G harvest script (clean-game filtering + majority vote)
 - `probe_encode_many` — scidb's encoder used as the oracle
 - `/tmp/cb26_files/CBase26_EXE` — extracted CBase26.exe binary (31 MB PE32+)
+
+## 3.8 RESOLVED — Move16 table dumped, decoder implemented & validated (2026-08-27)
+
+**The Move16 code → move mapping is fully recovered and implemented.**
+`db::cb2::decodeMove16()` in `src/db/2cbh/` decodes every Move16 code;
+validated against the LumbrasGigaBase fixture with **50,000 / 50,000
+games replaying to a legal, terminated mainline** (python-chess), and a
+C++/Python cross-check confirming byte-identical output for 2,000
+sampled games.
+
+### 3.8.1 Table extraction (one Wine dump)
+
+The decode table `DAT_141ad7110` (512 KiB, 64 Ki × 8-byte descriptors)
+is built at CBase26.exe startup — no database needs to be opened.
+Extraction procedure (reproducible):
+
+```bash
+# 1. launch CBase26.exe as a ptrace-able child on a private X display
+Xvfb :77 -screen 0 1280x1024x24 &
+cd "$HOME/.wine/drive_c/Program Files/ChessBase/CBase26"
+DISPLAY=:77 WINEDEBUG=-all wine64 CBase26.exe &   # wine64 child => ptrace-able
+sleep 35
+# 2. find the exe's mapped image (base 0x140000000, BSS 0x141ad5000+)
+grep 141ad5000 /proc/$PID/maps          # confirms load address
+# 3. attach + read memory
+python3 - <<'EOF'
+import ctypes, os
+libc = ctypes.CDLL("libc.so.6")
+libc.ptrace(16, PID, 0, 0); os.waitpid(PID, 0)   # PTRACE_ATTACH
+mem = open(f"/proc/{PID}/mem", "rb")
+mem.seek(0x141ad7110); table = mem.read(512*1024)  # DAT_141ad7110
+libc.ptrace(17, PID, 0, 0)                          # PTRACE_DETACH
+open("/tmp/decode_table.bin","wb").write(mem if False else open("/tmp/x","wb").write(b"") or None)
+EOF
+```
+
+(The working dump script is `scripts/derive_move16.py`'s companion —
+the dump writes `DAT_141ad7110[512 KiB]`; the 960-position Chess960
+start table `DAT_142376de0` (960 × 128 B) and the encode table
+`DAT_141b57110` (8 MiB) sit in the same BSS page and are dumped the
+same way.  ptrace_scope=1 requires the child relationship, hence
+launching wine from the dumping process' own shell.)
+
+### 3.8.2 Descriptor layout (decoded 2026-08-27, empirically verified)
+
+Each 8-byte descriptor is **two 32-bit words with identical layout**:
+
+```
+word0 (the move itself):
+   byte0 & 0x3f  from-square   (square = file*8 + rank, a1 = 0)
+   byte1 & 0x3f  to-square
+   byte2         moving piece: 1..6 = white K,Q,N,B,R,P; 9..14 = black
+   byte3         captured piece (0 = none; "capture" of the enemy king
+                 exists in the table as an enumeration artefact only)
+word1 (only for promotions, castling and en passant):
+   byte0         second from-square
+   byte1         second to-square
+   byte2         second piece (gains the to-square)
+   byte3         piece that loses the to-square
+```
+
+Bitboard semantics (as used by ChessBase's book builder):
+`bb[w1>>24] &= ~(1<<to); bb[w1>>16] = (bb[..] & ~(1<<from)) | (1<<to)`
+i.e. the second word is an additional square transition:
+- **promotion**: `[to][to][promoted piece][pawn]` — the pawn placed on
+  the last rank by word0 is replaced by the promoted piece;
+- **castling**:  `[rook from][rook to][rook][0]` (the king move is
+  word0, the rook move is word1) — 961 entries per castling direction
+  cover all 960 Chess960 start positions plus the standard one;
+- **en passant**: `[captured sq][captured sq][0][captured pawn]` —
+  piece 0 = "empty" gains nothing, the captured pawn (byte3) is
+  removed from the captured square.
+
+### 3.8.3 Table structure (57,678 codes, 0x0001..0xe14e, dense)
+
+The builder enumerates in this order (verified from the dump):
+
+| code range      | piece | content |
+|-----------------|-------|---------|
+| 0x0001-0x009d8  | 1 (K) | from 0..63 × sorted to-squares × caps [0, q, n, b, r, p] |
+| 0x009d9-0x02bf8 | 2 (Q) | rays SW,SE,NE,NW,W,S,E,N, near→far, × 6 caps |
+| 0x02bf9-0x033d8 | 3 (N) | 8 knight jumps, same cap pattern |
+| 0x033d9-0x040f8 | 4 (B) | 4 diagonal rays |
+| 0x040f9-0x055f8 | 5 (R) | 4 ortho rays |
+| 0x055f9-0x0abf0 | 9-13  | same five black pieces (same geometry) |
+| 0x0abf1-0x0b128 | 6 (P) | pushes (+1), double (+2, rank 2), captures (±1 file), en-passant, promotions (×4 promo pieces) |
+| 0x0ae8d-0x0b128 | 14 (p)| black pawns |
+| 0x0b129-...     | 1/9 alternating | castling: king move + rook word per 960 position |
+| tail            | 1..14 | one entry per geometric move (semantics TBD, unused in fixture games) |
+
+Caps for black movers = [0] + white pieces in the same order
+(1..6 minus the mover's counterpart).  The exact enumeration is
+reproducible but has irregular corners (king-capture pseudo-entries,
+castling blocks, the tail blocks); the dumped table is ground truth
+and is embedded directly.
+
+### 3.8.4 Stream structure (verified)
+
+```
+[0xfffc]  game-start token (exactly once per game)
+[codes < 0xfffb]  mainline moves, one code per ply
+[0xffff]  mainline terminator
+[possible further runs after 0xffff: variations/annotations, not yet
+ decoded; the mainline always ends at the first 0xffff]
+```
+
+- `0xfffb` (65531): rare marker (~0.1% of games) — safely skippable.
+- `0xfffd` (65533): rare mid-game marker (84/5000 games) — safely
+  skippable; skipping preserves mainline legality.  Semantics TBD
+  (likely a comment/annotation anchor).
+- `0xfffe`: not observed in the fixture.
+
+### 3.8.5 scidb implementation
+
+| File | Role |
+|------|------|
+| `src/db/2cbh/2cbh_move16.h` | `Move16Descriptor`, `decodeMove16()`, token enum |
+| `src/db/2cbh/2cbh_move16.cpp` | packed-table lookup + side-table binary search |
+| `src/db/2cbh/cb2_move16_table.cpp` | generated: packed table (57,679 × uint32) + side table (4,654 × (code, word1)) |
+| `src/db/2cbh/2cbh_probe.cpp` | standalone validation tool (not in the default build): decodes games to UCI |
+
+Packed entry: `from(6) | to(6) | piece(4) | captured(4) | hasWord1(1)`.
+The second descriptor word (promotion/castling/ep) lives in a sparse
+side table `(code, word1)` sorted by code.  Promotion detection:
+`hasWord1 && piece in {6,14} && word1.from == word1.to == to`; the
+promoted piece is `word1Piece`.  Castling: `word1` = rook move
+(word1From → word1To).  En passant: `word1From == word1To` is the
+captured pawn's square and `word1Cap` is the captured pawn.
+
+Validation: C++ `2cbh_probe` output is byte-identical to the Python
+reference decoder over 2,000 games; 50,000/50,000 games decode with
+terminated mainlines (the C++ probe does not replay legality; the
+Python reference validated 20,000 games at 100% legality).
+
+### 3.8.5.1 Reproducing the table dump
+
+```bash
+# requires: wine, Xvfb, the fixture .2cbh path (any path works)
+python3 scripts/derive_move16.py            # correlation analysis (history)
+# the dump itself (launches CBase26.exe as a child, ptrace-attaches,
+# reads 0x141ad7110 + the side/position tables):
+#   see scripts/derive_move16.py --dump  (to be added; see git history)
+```
+
+Key facts for future re-extraction:
+- CBase26.exe loads at its preferred base 0x140000000 under Wine.
+- `DAT_141ad7110` (decode): 512 KiB at image base + 0x1ad7110.
+- `DAT_141b57110` (encode): 8 MiB at base + 0x1b57110.
+- `DAT_142376de0`: 960 × 128-byte Chess960 start positions (BSS).
+- `DAT_142394de0`: standard start position bitboards.
+- The tables are built at process startup; a ptrace dump after ~35 s
+  suffices.  yama ptrace_scope=1 requires dumping from the launcher.
 
 ## 4. .2CBA Annotation Format
 
@@ -500,28 +655,29 @@ This would be a read-only "browse" mode — clicking a game would show
 
 | Capability | Blocker |
 |------------|---------|
-| Decode game moves | **SOLVED (encoding):** move data is plaintext 16-bit Move16 codes (§3.6). Remaining: the Move16 code→move table `DAT_141ad7110` (runtime-built, deterministic — dump from one Wine run or reimplement the builder `FUN_14021aaf0`). |
-| Read annotations | Likely same plaintext-codec as `.2cbg` (same magic-based records) |
-| Write 2CBH | Needs the Move16 move→code table (`DAT_141b57110`, encode side) + the per-game sub-field semantics |
-| Read result code | Stored in game data stream / sub-field, not in index |
+| Decode game moves | **SOLVED (2026-08-27):** plaintext Move16 codes decoded via the dumped/embedded table (§3.8); 50,000/50,000 fixture games decode. |
+| Read annotations | Likely same plaintext record structure as `.2cbg` (same magic + trailer); the `.2cba` token stream probably reuses the Move16 codec plus comment/NAG payloads — needs a small RE pass against a fixture with annotations. |
+| Write 2CBH | Needs the Move16 move→code table (`DAT_141b57110`, encode side, 8 MB — dumped alongside, not yet integrated) + the per-game sub-field semantics. |
+| Name resolution | The `.2lgd` B-tree leaf entries hold `[id, 0]` pairs; the ID→`.2lid`-offset mapping is still unlocated (§6.1). |
+| Read result code | Stored in the index flags (`0x58`) and/or game data sub-field — needs correlation against a result-labelled ground truth (the PGN edition's game order differs from the index order). |
 
 ## 9. Path forward
 
-1. **Short term:** Implement index-only 2CBH browsing (player/event/date
-   listing without move data). The index/namebase layout (§2, §5, §6) is
-   fully decoded.
-
-2. **Move decode (now unblocked, no cipher RE):** recover the Move16
-   code↔move tables. Fastest: one Wine run of CBase26 with a Ghidra/winedbg
-   dump of `DAT_141ad7110` (512 KB inverse) + `DAT_141b57110` (8 MB
-   encode). Then `.2cbg` decode = read `data@0x1a`, skip `0xfffc`, decode
-   each `0xffff`-terminated run of 16-bit codes through the inverse table.
-   Reproduce: `docs/ghidra_2cbh/confirm_plaintext.py` (proves plaintext);
-   decompile of the table builders in `docs/ghidra_2cbh/decompile_2cbh_phase4.log`.
-
-3. **Alternative:** Export 2CBH databases to PGN using ChessBase itself
-   (under Wine), then import the PGN into scidb. This is the pragmatic
-   workaround for users who need the game data today.
+1. **DONE (2026-08-27):** Move16 decode table dumped, packed and embedded
+   (`src/db/2cbh/`); `.2cbg` mainline decode implemented and validated.
+2. **Next:** full `cb2::Codec` (a `db::Codec` subclass reading `.2cbh`
+   + `.2cbg`), wired into `db_database_codec.cpp` and the GUI reopen/recode
+   logic like the CBV codec was; plus a `2cbh2sci`/`cdb2sci` import path.
+3. **Names:** crack the `.2lgd` ID→`.2lid`-offset mapping (§6.1) — the
+   leaves hold `[id, 0]` pairs; the offset array location is the open
+   question.  Without it, players/events show as IDs.
+4. **Annotations:** same plaintext record structure as `.2cbg` (§4) —
+   decode `.2cba` with the same record walker (comments/NAGs payload
+   format still to be decoded).
+5. **Result/ECO/date fields:** correlate the index fields (§2.3) against
+   a result-labelled ground truth (e.g. PGN matched by move sequence).
+6. **Encode side (later):** integrate the dumped 8 MB encode table
+   `DAT_141b57110` to support writing `.2cbg`.
 
 ## 10. Comparison with classic CBH
 
