@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — ChessBase 17+ (2CBH) Move Decoding
+
+### Overview
+
+The ChessBase 17+ `.2cbg` move encoding (used by Mega Database 2026,
+Corr Database 2024 and LumbrasGigaBase) is fully reverse engineered and
+decoded in scidb.  Full `cb2::Codec` integration is the next step.
+
+### Details
+- The move data is plaintext 16-bit "Move16" codes (not encrypted)
+- The runtime-built ChessBase decode table was extracted from a live
+  CBase26 process under Wine, packed and embedded in `src/db/2cbh/`
+- Validated on 50,000 games of the LumbrasGigaBase fixture: 100% of
+  mainlines decode and terminate; 20,000 games replay legally through
+  python-chess (castling, promotions, en passant all correct)
+- Standalone validation tool `2cbh_probe`; reproducible table-dump
+  script in `scripts/`
+- See `2CBH_FORMAT_DESIGN.md` section 3.8
+
 ## Unreleased — Correspondence Chess Support
 
 ### Overview
