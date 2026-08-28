@@ -568,35 +568,36 @@ Python reference validated 20,000 games at 100% legality).
   pending the .2lgd mapping; result not yet decoded ("*"); type-2
   (Chess960) games are skipped.
 
-### 3.8.7 .2LID slot structure (2026-08-27, partially decoded)
+### 3.8.7 .2LID namebase — SOLVED (2026-08-27)
 
-The .2lid stores player records in **fixed-size slots** (stride 4234
-bytes in the fixture) in *first-appearance* (insertion) order — NOT
-alphabetically and NOT ID order (for a filtered subset database the
-original IDs are preserved).  Slot layout: [total][lastLen][last]
-[firstLen][first][8 zeros][ffffffff][08 00 00 00][ffffffff] where the
-20-byte tail ends with a distinctive signature
-`ff ff ff ff 08 00 00 00 ff ff ff ff` (10,700 records in the fixture,
-matching the .2lid header count 0x29cc = 10700).  Deleted players leave
-empty slots (total = 0x20, zero-length names).
+**The player ID ↔ name mapping is solved and implemented:**
 
-The player ID ↔ slot mapping is NOT ordinal — a filtered subset
-preserves the parent database's IDs (the fixture's first game
-references players 391/392 whose records are the first two slots).
-The ID→slot map lives in .2lgd (§6.1, still unsolved).
+- The .2lid holds player records in **insertion order** (the order the
+  players first appear in the .2cbg file order), at variable offsets
+  with zero-gap padding between them.
+- Each record ends with the 12-byte signature
+  `ff ff ff ff 08 00 00 00 ff ff ff ff`; the record itself is
+  `[total:u32][lastLen:u32][last][firstLen:u32][first][tail 20]`
+  (tail = 8 zeros + ff*4 + 08 00 00 00 + ff*4).
+- **The player ID == the record's 0-based ordinal among ALL signature
+  slots** (counting empty deleted-player slots, whose total = 0x20 with
+  zero-length names).  Verified over 40 games: .2cbh IDs == .2lid
+  ordinals exactly (e.g. Bischoff = 391, Krush = 373, Karpov = 413).
+- 10,700 slots in the fixture (10,492 named; 208 empty/unparseable).
+- The .2lgd (207,062 x 512-byte entries) appears to be the parent
+  database's per-player statistics file, copied stale -- NOT needed for
+  the subset's ID mapping.
 
-**Confirmed by move-sequence matching:**
-- .2cbg records map to the PGN edition nearly sequentially: records
-  0,1,2 = PGN games 0,1,2 (Balashov/Kholmov, Vokac/Simacek,
-  Lau/Rausis) with IDs (391,392), (393,394), (395,396).
-- Record 3 = a *different* game with identical moves to record 0
-  (duplicate 21-ply line) with IDs (397,398) -- so identical move
-  sequences exist for different games; matching must use full
-  sequences, not prefixes.
-- The ID-to-name mapping is NOT base+ordinal: e.g. Brodda (Wolfgang)
-  has .2lid insertion ordinal 11 but ID 373, while Lazic (Miroljub)
-  has ordinal 7 and ID 402.  IDs are parent-database-preserved and
-  non-contiguous; the mapping must come from .2lgd (or elsewhere).
+**Corrected .2cbg/index relationship:** the .2cbg records are in
+*insertion* order, NOT index order -- the first ~348 records are deleted
+games (unreferenced by the index).  The only game-to-record mapping is
+the index's **@0x08 = the .2cbg record offset**.  The earlier sequential
+walk paired games with the wrong records (all still legal, hence the
+mistake surviving the legality check -- caught by the name validation).
+
+**`2cbh2pgn` now resolves real player names** (walks the .2lid once,
+builds ordinal-to-name, emits [White]/[Black]): 200,000 games converted,
+names verified against the PGN edition via full-sequence identity.
 
 ### 3.8.8 The .pgi PGN cache (side finding)
 
