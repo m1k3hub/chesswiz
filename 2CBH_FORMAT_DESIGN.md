@@ -660,6 +660,50 @@ the next step is aligning items against the PGN edition's comments for
 annotated games (the fixture's PGN twin lacks some of them, so a
 ChessBase-Wine export may be needed).
 
+## 4b. cb2::Codec Integration Plan (next session)
+
+The `2cbh2pgn` converter validates the format end-to-end; the remaining
+step is a `db::DatabaseCodec` subclass so the GUI can open `.2cbh`
+databases directly.  The integration points (studied against the CBV
+codec, which is the read-only template):
+
+```
+1. src/db/db_common.h       add `ChessBase2 = 1 << 8` to format::Type
+2. src/db/db_common.cpp     format::fromString("2cbh" / ".2cbh") -> ChessBase2
+                            isChessBaseFormat() includes it
+3. src/db/db_database_codec.cpp
+                            createCodec():   case ChessBase2 -> new cb2::Codec
+                            getAttributes(): case ChessBase2 -> cb2::Codec::getAttributes
+                            getSuffixes():   cb2 suffix list (2cbh/2cbg/2cba/2lid/2lcd/2lgd)
+4. src/app/app_application.cpp  reopen/recode dispatch (mirror the CBV cases)
+5. src/db/2cbh/cb2_codec.{h,cpp}  the DatabaseCodec subclass:
+   - doOpen(rootname, suffix, encoding, progress):
+       read the .2cbh header (record size 192, count @0x10, games from
+       record 256), build the GameInfo list (gameOffset = @0x08,
+       white/black/event IDs = @0x18/@0x20/@0x28, result = byte 0x58 & 3),
+       read the .2lid namebase (signature-record walk; ordinal == ID),
+       read the .2lcd events.
+   - doDecoding(Consumer&, TagSet&, info, gameIndex):
+       set the tags (White/Black/Event/Result), decode the record at
+       info.gameOffset() through the Move16 table into the consumer
+       (the same code path as 2cbh2pgn).
+   - The metadata methods: maxGameCount etc. (2CBH limits are large),
+       isWritable() = false, encodingFailed() = false.
+   - Type-2 (Chess960) games: skip with a warning for v1 (the start
+       positions are dumped and ready for a follow-up).
+6. src/db/2cbh/Makefile     add cb2_codec.cpp to SRC_CXX
+7. tests                    round-trip: 2cbh2pgn output vs the codec's
+                            consumer output on the fixture
+```
+
+Known framework pitfalls (from the CBV/CBH study):
+- `GameInfo` needs the namebase indices, not raw IDs -- the codec's
+  namebase inserts return the entries to store in the game info.
+- The index `@0x98` field is a sequential build counter (do not use it
+  as the game number).
+- Deleted games leave unreferenced .2cbg records; the index only lists
+  live games (863,538 of the file's records).
+
 ## 5. .2LID Player Namebase
 
 Variable-length records with length-prefixed strings:
