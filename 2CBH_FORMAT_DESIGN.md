@@ -670,7 +670,15 @@ the next step is aligning items against the PGN edition's comments for
 annotated games (the fixture's PGN twin lacks some of them, so a
 ChessBase-Wine export may be needed).
 
-## 4b. cb2::Codec Integration — IMPLEMENTED (2026-08-28)
+## 4b. cb2::Codec Integration — IMPLEMENTED AND VALIDATED AT FULL SCALE (2026-08-28)
+
+**Full-database validation:** the complete LumbrasGigaBase_OTB_ELO2400
+(863,538 games, 251 MB game data) was converted through the codec
+(`cdb2sci .2cbh -> .sci`) with **863,538 written / 0 rejected / 0
+corrupted / 0 errors**.  The resulting .sci database (85 MB game data,
+48 MB index) round-trips through scidb's own --count-games: also
+863,538.  The Move16 decode is lossless for all 863,538 standard-chess
+games in the database.
 
 **The codec is integrated and working:** `format::ChessBase2` is
 registered; `cdb2sci --count-games` reports 863,538 games from the
