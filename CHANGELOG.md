@@ -15,6 +15,8 @@ decoded in scidb.  Full `cb2::Codec` integration is the next step.
 - Validated on 200,000 games of the LumbrasGigaBase fixture: 100% of
   mainlines decode, replay legally, and carry the correct player names
   (the .2lid namebase mapping: player ID == namebase slot ordinal)
+- The game result decoded: index byte 0x58 low 2 bits (0 = 0-1,
+  1 = draw, 2 = 1-0), validated on 2,748 games with zero mismatches
 - `2cbh2pgn` converts complete databases to PGN (names included)
 - Standalone validation tool `2cbh_probe`; reproducible table-dump
   script in `scripts/`
