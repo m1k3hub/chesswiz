@@ -599,6 +599,13 @@ Python reference validated 20,000 games at 100% legality).
   database's per-player statistics file, copied stale -- NOT needed for
   the subset's ID mapping.
 
+**Date field: unresolved.**  The `.2cbh` @0x88 field (a u64) was tested
+against the PGN Date tag over 3,208 verified games: no byte, byte-pair,
+or u16 within @0x88-0x8f consistently determines the year/month/day.
+The field may encode a compound value (date + source + flags), reference
+the `.2cba` record, or store the date in a non-obvious packed form.
+The PGN `Date` tag is optional; the converter emits a placeholder.
+
 **Corrected .2cbg/index relationship:** the .2cbg records are in
 *insertion* order, NOT index order -- the first ~348 records are deleted
 games (unreferenced by the index).  The only game-to-record mapping is
