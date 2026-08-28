@@ -9,10 +9,13 @@
   2 = 1-0 (validated 2,748/2,748 against the PGN edition).
 - The .2cbg is in insertion order; the index @0x08 = the record pointer
   (§3.8.7).  The .2cba/@0x10 = the annotation record offset.
-- Metadata correlation findings: byte 0x81 correlates with the ECO
-  letter (values 5-8 -> 'A' in the sample; likely a scaled/combined
-  encoding); the Elo/date are not simple byte/u16 fields -- correlation
-  tooling committed (`scripts/fcorr.py`, `scripts/idverify.py`).
+- Metadata correlation findings: the u16 @0x80 encodes the ECO code
+  (byte 0x81 = the ECO letter+number grouping: 0x05-0x2b -> 'A',
+  0x32-0x47 -> 'B', 0x64-0x83 -> 'C', 0x97-0xc7 -> 'D', 0xc8-0xfa -> 'E';
+  byte 0x80 = the ECO number sub-field).  116/220 1:1 mappings confirmed;
+  the remaining are ECO sub-variants sharing the same base code.
+  The Elo/date are not simple byte/u16 fields -- correlation tooling
+  committed (`scripts/fcorr.py`, `scripts/idverify.py`).
 - Remaining: the date/ECO/Elo encodings, the annotations payload,
   Chess960 start positions, and the `cb2::Codec` GUI integration.
   Fixture: `LumbrasGigaBase_OTB_ELO2400` (863,538 games).
