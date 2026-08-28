@@ -14,6 +14,9 @@
 // ======================================================================
 
 #include "2cbh_move16.h"
+
+#include <string>
+#include <vector>
 #include "db_common.h"
 
 #include "db_board.h"
@@ -63,7 +66,71 @@ bool loadFile(char const* name, mstl::string& data)
    return true;
 }
 
-// Move16 squares are file-major (sq = file*8 + rank), scidb is rank-major.
+// Walk the .2lid namebase: player records end with the signature
+// ff ff ff ff 08 00 00 00 ff ff ff ff; the record's 0-based ordinal among
+// ALL signature slots equals the player ID used in the .2cbh index.
+// Slot layout: [total][lastLen][last][firstLen][first][tail 20 bytes].
+void loadNames(unsigned char const* lid, size_t size,
+               std::vector<std::string>& out_names)
+{
+   static unsigned char const sig[12] = {
+      0xff, 0xff, 0xff, 0xff, 0x08, 0x00, 0x00, 0x00,
+      0xff, 0xff, 0xff, 0xff };
+
+   size_t pos = 0xb8;
+   unsigned ordinal = 0;
+   while (ordinal < 200000u)
+   {
+      size_t i = pos;
+      while (i + 12 <= size)
+      {
+         if (::memcmp(lid + i, sig, 12) == 0)
+            break;
+         ++i;
+      }
+      if (i + 12 > size)
+         break;
+      size_t end = i + 12;
+      // the record starts at end - total; total is stored at the start
+      size_t lo = (i + 8 > 320) ? i + 8 - 320 : 0;
+      for (size_t start = i + 4; start-- > lo;)
+      {
+         uint32_t total = uint32_t(lid[start])
+                        | (uint32_t(lid[start+1]) << 8)
+                        | (uint32_t(lid[start+2]) << 16)
+                        | (uint32_t(lid[start+3]) << 24);
+         if (start + total != end || total <= 20 || total >= 320)
+             continue;
+         uint32_t llen = uint32_t(lid[start+4]) | (uint32_t(lid[start+5]) << 8);
+         if (llen == 0 || llen >= 80 || start + 8 + llen + 4 > size)
+             continue;
+         size_t fo = start + 8 + llen;
+         uint32_t flen = uint32_t(lid[fo]) | (uint32_t(lid[fo+1]) << 8);
+         if (flen >= 80 || fo + 4 + flen != end - 20)
+             continue;
+         // valid record: read the name if ASCII
+         bool ascii = true;
+         for (uint32_t j = 0; j < llen; ++j)
+         {
+            unsigned char ch = lid[start + 8 + j];
+            if (!(32 <= ch && ch < 127))
+               ascii = false;
+         }
+         if (ascii && ordinal < out_names.size())
+         {
+            std::string last(reinterpret_cast<char const*>(&lid[start + 8]), llen);
+            std::string first(reinterpret_cast<char const*>(&lid[fo + 4]), flen);
+            out_names[ordinal] = first.empty() ? last
+                                               : last + ", " + first;
+         }
+         break;
+      }
+      ++ordinal;
+      pos = end;
+   }
+}
+
+// Move16 squares are file-major (sq = file*8 + rank), scidb is rank-major.// Move16 squares are file-major (sq = file*8 + rank), scidb is rank-major.
 inline unsigned toScidbSquare(unsigned m16sq)
 {
    return ((m16sq & 7) << 3) | (m16sq >> 3);
@@ -113,6 +180,23 @@ int main(int argc, char* argv[])
       return 1;
    }
 
+   // player names from the .2lid namebase (ID == slot ordinal)
+   std::vector<std::string> names(200000u);
+   {
+      mstl::string lidData;
+      if (loadFile((prefix + ".2lid").c_str(), lidData))
+      {
+         loadNames(reinterpret_cast<unsigned char const*>(lidData.data()),
+                   lidData.size(), names);
+         unsigned named = 0;
+         for (unsigned i = 0; i < names.size(); ++i)
+            if (!names[i].empty())
+               ++named;
+         ::fprintf(stderr, "# namebase: %u of %u slots named (lidData=%zu bytes)\n",
+                   named, unsigned(names.size()), lidData.size());
+      }
+   }
+
    unsigned char const* cbh = reinterpret_cast<unsigned char const*>(cbhData.data());
    unsigned char const* cbg = reinterpret_cast<unsigned char const*>(cbgData.data());
 
@@ -132,15 +216,12 @@ int main(int argc, char* argv[])
    unsigned skipped = 0;
    unsigned failed = 0;
 
-   // .2cbg records are stored sequentially in index order; walk them.
-   unsigned cbgOff = readLE16(cbg + 8); // header size (12)
-   if (cbgOff < 12 || cbgOff > 4096)
-      cbgOff = 12;
-
+   // Each .2cbh index record points to its .2cbg record via the offset
+   // at 0x08 (the .2cbg itself is in insertion order, which differs from
+   // the index order; deleted games leave unreferenced records).
    for (unsigned k = 0; k < maxGames; ++k)
    {
-      // locate record k (sequential walk)
-      // (cbgOff advanced at the end of the loop body)
+      unsigned long cbgOff = (unsigned long) readLE32(cbh + (256u + k) * recordSize + 0x08);
       if (cbgOff + 0x1a > cbgData.size())
          break;
       uint64_t magic = 0;
@@ -149,19 +230,6 @@ int main(int argc, char* argv[])
       if (magic != 0x1122334455667788ull)
       {
          ++skipped;
-         // try to resync: scan forward for the next magic
-         unsigned p = cbgOff + 1;
-         while (p + 8 <= cbgData.size())
-         {
-            uint64_t m2 = 0;
-            for (int i = 7; i >= 0; --i)
-               m2 = (m2 << 8) | cbg[p + i];
-            if (m2 == 0x1122334455667788ull)
-               break;
-            ++p;
-         }
-         cbgOff = p;
-         --k;
          continue;
       }
       uint32_t dataSize = readLE32(cbg + cbgOff + 0x08);
@@ -172,7 +240,6 @@ int main(int argc, char* argv[])
       if (type != 1)
       {
          ++skipped;
-         cbgOff += 16 + dataSize + extraSize + 18;
          continue;
       }
 
@@ -278,16 +345,23 @@ int main(int argc, char* argv[])
          continue;
       ++converted;
 
+      unsigned long wid = readLE32(cbh + (256u + k) * recordSize + 0x18) & 0xffffffu;
+      unsigned long bid = readLE32(cbh + (256u + k) * recordSize + 0x20) & 0xffffffu;
+      std::string wname = (wid < names.size() && !names[wid].empty())
+                        ? names[wid]
+                        : ("Player " + std::to_string(wid));
+      std::string bname = (bid < names.size() && !names[bid].empty())
+                        ? names[bid]
+                        : ("Player " + std::to_string(bid));
       ::fprintf(out,
                 "[Event \"?\"]\n"
                 "[Site \"?\"]\n"
                 "[Date \"????.??.??\"]\n"
                 "[Round \"?\"]\n"
-                "[White \"Player %lu\"]\n"
-                "[Black \"Player %lu\"]\n"
+                "[White \"%s\"]\n"
+                "[Black \"%s\"]\n"
                 "[Result \"*\"]\n\n",
-                (unsigned long) readLE32(cbh + (256u + k) * recordSize + 0x18) & 0xffffffu,
-                (unsigned long) readLE32(cbh + (256u + k) * recordSize + 0x20) & 0xffffffu);
+                wname.c_str(), bname.c_str());
       ::fprintf(out, "%s*\n\n", movetext.c_str());
    }
 
