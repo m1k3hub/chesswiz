@@ -44,6 +44,7 @@ src/make_media_test
 src/test_media_extract
 src/probe_cbllight
 src/media_console
+src/test_corr_moveinfo
 
 # local scratch
 .llmos/
@@ -57,6 +58,7 @@ pt_fill.txt
 st_fill.txt
 package-lock.json
 llmos-plan.md
+gdb.txt
 
 # agent/tool state (keep .claude/skills tracked)
 .pi/
