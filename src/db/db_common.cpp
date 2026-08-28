@@ -4833,6 +4833,10 @@ format::fromString(mstl::string const& extension)
 			if (extension == "cbv") return ChessBaseArchive;
 			if (extension == "CBV") return ChessBaseArchive;
 			break;
+
+		case '2':
+			if (extension == "2cbh") return ChessBase2;
+			break;
 	}
 
 	return Invalid;

@@ -548,6 +548,7 @@ getFormat(mstl::string& path)
 		else if	(ext == "CBV") fmt = format::ChessBaseArchive;
 		else if	(ext == "cbf") fmt = format::ChessBaseDOS;
 		else if	(ext == "CBF") fmt = format::ChessBaseDOS;
+		else if	(ext == "2cbh") fmt = format::ChessBase2;
 		else if	(ext == "pgn") fmt = format::Pgn;
 		else if	(ext == "PGN") fmt = format::Pgn;
 		else if	(ext == "zip") fmt = format::Pgn;

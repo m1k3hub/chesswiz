@@ -1084,6 +1084,7 @@ namespace format
 		Pgn					= 1 << 5,
 		LaTeX					= 1 << 6,
 		ChessBaseArchive	= 1 << 7,	///< CBV container format
+		ChessBase2			= 1 << 8,	///< CB 17+ 2CBH container format
 
 		Invalid				= LaTeX, // makes sense if used for input format
 	};

@@ -38,6 +38,7 @@
 #include "cbh_codec.h"
 #include "cbf_codec.h"
 #include "cbv_codec.h"
+#include "2cbh/cb2_codec.h"
 
 #include "u_byte_stream.h"
 #include "u_block_file.h"
@@ -341,6 +342,7 @@ DatabaseCodec::makeCodec(mstl::string const& name, Mode mode)
 		case format::ChessBase:		return new cbh::Codec;
 		case format::ChessBaseDOS:	return new cbf::Codec;
 		case format::ChessBaseArchive:	return new cbv::Codec;
+		case format::ChessBase2:		return new cb2::Codec;
 		case format::Pgn:				return new sci::Codec;
 		case format::Scidb:			return mode == Existing ? sci::Codec::makeCodec(name) : new sci::Codec;
 		case format::Scid3:			return new si3::Codec;
@@ -382,6 +384,8 @@ DatabaseCodec::getAttributes(	mstl::string const& filename,
 
 		case format::ChessBaseArchive:
 			return cbv::Codec::getAttributes(filename, numGames, type, description);
+		case format::ChessBase2:
+			return cb2::Codec::getAttributes(filename, numGames, type, description);
 
 		case format::Scid3:
 		case format::Scid4:
@@ -410,6 +414,7 @@ DatabaseCodec::getSuffixes(mstl::string const& filename, StringList& result)
 		case format::ChessBase:		cbh::Codec::getSuffixes(filename, result); break;
 		case format::ChessBaseDOS:	cbf::Codec::getSuffixes(filename, result); break;
 		case format::ChessBaseArchive:	cbv::Codec::getSuffixes(filename, result); break;
+		case format::ChessBase2:		cb2::Codec::getSuffixes(filename, result); break;
 		case format::Scid3:			// fallthru
 		case format::Scid4:			si3::Codec::getSuffixes(filename, result); break;
 		case format::Pgn:				result.push_back(ext); break;

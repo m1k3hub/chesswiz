@@ -38,6 +38,7 @@
 namespace db {
 
 namespace sci  { namespace v91 { class Codec; } }
+namespace cb2  { class Codec; }
 namespace sci  { namespace v92 { class Codec; } }
 namespace sci  { namespace v93 { class Codec; } }
 namespace sci  { class Codec; }
@@ -315,6 +316,7 @@ private:
 	friend class si3::Codec;
 	friend class cbh::Codec;
 	friend class cbf::Codec;
+	friend class cb2::Codec;
 
 	struct Initializer {};
 

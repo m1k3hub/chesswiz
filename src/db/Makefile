@@ -137,6 +137,7 @@ SRC_CXX = \
 	cbh/cbh_media.cpp \
 	2cbh/cb2_move16_table.cpp \
 	2cbh/2cbh_move16.cpp \
+	2cbh/cb2_codec.cpp \
 	scm/scm_media.cpp \
 
 SRC	= $(SRC_CXX)
