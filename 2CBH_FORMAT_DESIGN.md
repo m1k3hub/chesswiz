@@ -660,7 +660,23 @@ the next step is aligning items against the PGN edition's comments for
 annotated games (the fixture's PGN twin lacks some of them, so a
 ChessBase-Wine export may be needed).
 
-## 4b. cb2::Codec Integration Plan (next session)
+## 4b. cb2::Codec Integration — IMPLEMENTED (2026-08-28)
+
+**The codec is integrated and working:** `format::ChessBase2` is
+registered; `cdb2sci --count-games` reports 863,538 games from the
+fixture; `cdb2sci .2cbh -> .sci` converted 1,000 games (0 rejected,
+0 corrupted); the GUI codec factory dispatches `.2cbh` to `cb2::Codec`.
+
+The .sci round-trip hits a **pre-existing scidb assertion** in
+`Board::setup` (frcCastling check, db_board.cpp:3959) — reproduced with
+a plain PGN-sourced .sci, so it is NOT a 2CBH codec issue.  Filed
+separately.
+
+The original integration plan is preserved below for reference.
+
+---
+
+## 4b.1 cb2::Codec Integration Plan (original)
 
 The `2cbh2pgn` converter validates the format end-to-end; the remaining
 step is a `db::DatabaseCodec` subclass so the GUI can open `.2cbh`
