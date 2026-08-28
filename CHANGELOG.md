@@ -12,9 +12,10 @@ decoded in scidb.  Full `cb2::Codec` integration is the next step.
 - The move data is plaintext 16-bit "Move16" codes (not encrypted)
 - The runtime-built ChessBase decode table was extracted from a live
   CBase26 process under Wine, packed and embedded in `src/db/2cbh/`
-- Validated on 50,000 games of the LumbrasGigaBase fixture: 100% of
-  mainlines decode and terminate; 20,000 games replay legally through
-  python-chess (castling, promotions, en passant all correct)
+- Validated on 200,000 games of the LumbrasGigaBase fixture: 100% of
+  mainlines decode, replay legally, and carry the correct player names
+  (the .2lid namebase mapping: player ID == namebase slot ordinal)
+- `2cbh2pgn` converts complete databases to PGN (names included)
 - Standalone validation tool `2cbh_probe`; reproducible table-dump
   script in `scripts/`
 - See `2CBH_FORMAT_DESIGN.md` section 3.8
