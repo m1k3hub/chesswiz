@@ -668,20 +668,29 @@ of the file (after a small B-tree header).
 - Neither has the `0x1122334455667788` magic
 - `.2lgd` contains B-tree nodes with offsets and `0xFFFFFFFF` sentinels
 
-### 6.1 Refined findings (2026-08-26)
+### 6.1 Refined findings (2026-08-26/27)
 
-- `.2lgd` header (little-endian): `0x00` = page size `0x100` (256),
-  `0x04` = entry count `0x328d6` (207,062 players).
-- `.2lgd` is a **B-tree of player IDs in sorted order**. A leaf node holds
-  consecutive player IDs as 8-byte entries with the ID in the **high 32
-  bits** and `0` in the low 32 bits (e.g. `… 388, 389, 390, 391, 392 …` at
-  `0xb118`+). The low-32-bit field (the `.2lid` offset) is **not yet
-  located** — it is not in the leaf entries examined so far.
-- **Open question:** where the `.2lid` byte offset for a given player ID is
-  stored. The offset `0xb8` (Balashov) appears in `.2lgd` at `0x5d4c`,
-  `0x5f4c`, `0x614c`… (spaced `0x200` apart), suggesting a separate
-  parallel offset array or a second B-tree level. This is the remaining
-  blocker for resolving player/event names in index-only browsing.
+- **File structure solved:** the .2lgd is exactly `12 + 207062 * 512`
+  bytes — the header is `[u32 256][u32 207062]` and the body is
+  **207,062 fixed 512-byte entries** (64 u64 slots each).  The entry
+  count equals the ID space of the parent database.
+- **Entries are (likely) ID-indexed:** entry 391 contains game 0 in its
+  slots (three times), entry 392 also references game 0 — game 0's
+  players are IDs 391/392.  Entry contents look like per-player
+  statistics: small counts (slot 21/22), a constant slot 30 = 12 in all
+  entries, and an increasing run of ~21 values in slots 33..53 (game
+  indices? rating-change points?).  Entry 0 holds database-level
+  numbers (863,796 = the record count).
+- **The ID→.2lid-slot map is still unlocated.**  The .2lid offsets of
+  the first players (184, 4418, 12886, 17120, 21354 ...) do not appear
+  in the corresponding entries' early slots.  It is possible that the
+  .2lgd was **copied from the parent database** (207,062 = the parent's
+  player count, while the subset .2lid holds only 10,700 players) and
+  is stale for subset databases; the real map may then be computed
+  another way (hash) or live in a structure not yet examined.
+- Player records in .2lid end with the signature
+  `ff ff ff ff 08 00 00 00 ff ff ff ff` (constant across all records);
+  deleted players leave empty slots (total = 0x20, empty names).
 
 ## 7. What scidb CAN do now (index-only support)
 
