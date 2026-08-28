@@ -1,6 +1,9 @@
-# scidb-beta Long-Range Plan — Revised for Phases 3+4+5
+# scidb-beta Long-Range Plan — Revised for Workstreams 6-8
 
-*Revision after committing Phase 1 + Phase 2 (ec40d0e).*
+*Revised 2026-08-27: workstreams 1-7 done; workstream 8 (ChessBase 2CBH)
+mostly done — moves, player names, results decoded, `2cbh2pgn` converter
+working; remaining items listed in the table row and
+`2CBH_FORMAT_DESIGN.md`.*
 
 ## Status
 
@@ -10,7 +13,7 @@
 | 2 — Security, performance, observability | **Done** | Committed: auth lockdown, CORS, rate limits, audit logging, structured logging, metrics, engine sandboxing. |
 | 3 — Feature modal completeness | **Done** | Committed with Phase 4: 18 endpoints + 2 shape fixes, Tcl-first dispatch, Store fallback. |
 | 4 — Complete C++ backend integration | **Done** | Merged into Phase 3. |
-| 5 — Chess960 + unencoded (bit-31) CBH reverse engineering | **Chess960 decode done (8571/0), unencoded (bit-31) blocked** | Part A shipped; GRENKE PGN + `.sci` fixtures acquired; 36-byte position block implemented (2026-08-03); Chess960 decode resolved via the Chess960 LUT (2026-08-16, 8571/0 on fixture); unencoded (bit-31) still blocked on fixtures. |
+| 5 — Chess960 + unencoded (bit-31) CBH reverse engineering | **Chess960 decode done (8571/0); bit-31 guiding-text entries parsed as text documents; plain bit-31 game decode still open** | Part A shipped; GRENKE PGN + `.sci` fixtures acquired; 36-byte position block implemented (2026-08-03); Chess960 decode resolved via the Chess960 LUT (2026-08-16, 8571/0 on fixture); bit-31 entries parsed as text documents (2026-08-27). Note: fixtures are no longer blocked — ChessBase 26 runs under Wine (see workstream 8), so real `.cbh`/`.cbg` fixtures can be generated on demand. |
 | 6 — Media playback (tkvlc) | **Done** | libmpv backend ripped out (GPU/EGL binding + BadMatch crashes with Tk X11 windows); `tcl/app-media.tcl` rewritten to use `package require tkvlc` (libVLC) with `::tkvlc::init HANDLE [winfo id $canvas]` embedding; C++ `tcl_media.cpp` is now a no-op stub; all mpv build-system references removed (`Makefile.conf`, `Makefile.in`, `src/Makefile`, `src/tcl/Makefile`, `configure`); system-player fallback retained. Built + tested 2026-08-23. |
 | 7 — Correspondence chess support | **Done** | ICCF ratings/titles/IDs, ccsnt/cclk/cemt move info, TimeControl export, CCG format design, notation panel display, game table ICCF columns, corr clock widget, auto ccsnt timestamp, corr game manager panel, menu wiring + gamebar corrclock, ICCF XFCC SOAP client + credential storage + sync UI + auto-submit. 9 commits, 12 files, ~1,640 lines. |
 | 8 — ChessBase 2CBH (CB 17+) format reverse engineering | **Mostly done — moves, player names, results decoded; `2cbh2pgn` converter working (300k games, 0 failures); remaining: date/ECO fields, .2cba annotation payload, cb2::Codec GUI integration** | Fixture `LumbrasGigaBase_OTB_ELO2400` (863,538 games). Move16 decoding via the runtime table dumped from a live CBase26 process (2026-08-27), packed and embedded (`src/db/2cbh/`); 200k+ games replayed legally. Player ID == the `.2lid` slot ordinal (signature-record walk); real names emitted. Game result = index byte 0x58 low 2 bits (validated 2,748/2,748). The `.2lgd` = the parent database's stale statistics file. Remaining: date/ECO fields, `.2cba` annotation payload, Chess960 start positions. Details: `2CBH_FORMAT_DESIGN.md`; converter `src/db/2cbh/2cbh2pgn.cpp`; RE artifacts in `docs/ghidra_2cbh/`. |
@@ -309,18 +312,41 @@ python3 scripts/analyze_grenke_fixtures.py \
 
 ## Suggested execution order
 
-1. **Phase 3+4** is done and committed.
-2. **Phase 5 Part A** is done and committed.
-3. **Phase 5 Part B** (fixtures) is done as far as possible; the 36-byte
-   position block is implemented and verified.
-4. **Phase 5 Part C** 36-byte work is done and Chess960 decode is resolved
-   (2026-08-16, 8571/0 via the Chess960 LUT). Remaining: unencoded (bit-31)
-   format (blocked on fixtures). Keep the C++ changes minimal and do not alter the
-   established Convention B castling destinations without fixture-backed
-   proof.
-5. **Future work** (after fixtures): characterize the off-e-file castling
-   token and the unencoded (bit-31) format; implement only what is proved by real
-   `.cbh` data.
+1. **Workstreams 1-4** (cloud deployment, security, feature modal
+   completeness, backend integration) — done and committed.
+2. **Workstream 5** (Chess960) — decode done (8571/0, 2026-08-16);
+   bit-31 guiding-text entries parsed as text documents (2026-08-27).
+   The full plain bit-31 game decode remains open but is no longer
+   fixture-blocked: ChessBase 26 runs under Wine (workstream 8 setup).
+3. **Workstream 6** (media playback via tkvlc/libVLC) — done.
+4. **Workstream 7** (correspondence chess) — done.
+5. **Workstream 8** (ChessBase 2CBH) — mostly done: Move16 move decoding,
+   player names (`.2lid` slot ordinal = player ID), results (index byte
+   0x58 low 2 bits), and the `2cbh2pgn` converter (300k games, 0
+   failures) shipped.  Remaining, in order: (a) date/ECO index fields,
+   (b) the `.2cba` annotation payload, (c) Chess960 start positions (the
+   960-position table + LUT are already dumped), (d) the `cb2::Codec`
+   `DatabaseCodec` subclass for GUI integration, modeled on the CBV
+   codec.  Details: `2CBH_FORMAT_DESIGN.md`.
+
+---
+
+## Workstream 8: ChessBase 2CBH (CB 17+) Reverse Engineering
+
+**Status:** mostly done — see `2CBH_FORMAT_DESIGN.md` for the complete
+format specification.
+
+| Piece | State |
+|-------|-------|
+| Move16 move decoding | Done — runtime table dumped from a live CBase26 process (Wine + ptrace), packed and embedded in `src/db/2cbh/cb2_move16_table.cpp`; validated on 200k+ games |
+| Player names | Done — `.2lid` slot ordinal == the player ID; signature-record walk implemented in `2cbh2pgn` |
+| Game result | Done — index byte 0x58 low 2 bits (0 = 0-1, 1 = draw, 2 = 1-0); validated 2,748/2,748 |
+| Game-record mapping | Done — index `@0x08` = the `.2cbg` offset (the `.2cbg` is in insertion order; deleted games leave unreferenced records) |
+| `2cbh2pgn` converter | Done — 300k games, real names + results, 100% legal replay |
+| Date/ECO index fields | Open — byte 0x81 partially maps the ECO letter; the date is packed elsewhere |
+| `.2cba` annotation payload | Open — the per-game records are located via index `@0x10`; payload TBD |
+| Chess960 start positions | Tables dumped (960 × 128 bytes); wiring pending |
+| `cb2::Codec` GUI integration | Not started — conventional `DatabaseCodec` subclass (CBV codec as the template) |
 
 ---
 
