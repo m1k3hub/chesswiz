@@ -1,14 +1,20 @@
 # 2CBH Format Reverse Engineering — Design for Scidb
 
-**Status (2026-08-27): move decoding AND player names SOLVED.**
+**Status (2026-08-27): moves, player names and game results SOLVED.**
 - Moves: plaintext 16-bit "Move16" codes via the dumped/embedded table
-  (§3.8); 200,000 fixture games converted to legal PGN with real names.
+  (§3.8); 300,000 fixture games converted to legal PGN with real names
+  and results (`2cbh2pgn`).
 - Names: `.2lid` slot ordinal == the player ID (§3.8.7).
+- Results: index byte 0x58 low 2 bits -- 0 = 0-1, 1 = 1/2-1/2,
+  2 = 1-0 (validated 2,748/2,748 against the PGN edition).
 - The .2cbg is in insertion order; the index @0x08 = the record pointer
   (§3.8.7).  The .2cba/@0x10 = the annotation record offset.
-- Remaining: the result field, date/ECO fields, annotations payload,
-  Chess960 start positions (.2lid/.2lgd tables exist in CBase26 memory),
-  and the `cb2::Codec` GUI integration.
+- Metadata correlation findings: byte 0x81 correlates with the ECO
+  letter (values 5-8 -> 'A' in the sample; likely a scaled/combined
+  encoding); the Elo/date are not simple byte/u16 fields -- correlation
+  tooling committed (`scripts/fcorr.py`, `scripts/idverify.py`).
+- Remaining: the date/ECO/Elo encodings, the annotations payload,
+  Chess960 start positions, and the `cb2::Codec` GUI integration.
   Fixture: `LumbrasGigaBase_OTB_ELO2400` (863,538 games).
 
 ## 1. Context
