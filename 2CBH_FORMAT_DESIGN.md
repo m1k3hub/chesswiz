@@ -549,6 +549,50 @@ reference decoder over 2,000 games; 50,000/50,000 games decode with
 terminated mainlines (the C++ probe does not replay legality; the
 Python reference validated 20,000 games at 100% legality).
 
+### 3.8.6 2CBH2PGN converter (2026-08-27)
+
+`src/db/2cbh/2cbh2pgn.cpp` — headless converter: `.2cbh` + `.2cbg` → PGN.
+
+- .2cbg records are walked **sequentially** (they are in .2cbh index
+  order — verified via the .2lid insertion-order player pattern:
+  records 0-2 = games 0-2 whose players are the 1st/2nd/3rd/... namebase
+  entries); the index @0x08 field is NOT the .2cbg offset.
+- Moves are matched against the board's *generated* legal moves rather
+  than constructed manually: scidb uses the internal Chess960 move
+  representation (castling = king to the rook square), and the
+  double-push flag must come from move generation so the ep square is
+  tracked.  ChessBase's king e1→g1 form is accepted via the second
+  descriptor word's rook square.
+- Validated: 20,000/20,000 games converted, 100% legal replay.
+- Known limitations: player/event names are placeholders ("Player 391")
+  pending the .2lgd mapping; result not yet decoded ("*"); type-2
+  (Chess960) games are skipped.
+
+### 3.8.7 .2LID slot structure (2026-08-27, partially decoded)
+
+The .2lid stores player records in **fixed-size slots** (stride 4234
+bytes in the fixture) in *first-appearance* (insertion) order — NOT
+alphabetically and NOT ID order (for a filtered subset database the
+original IDs are preserved).  Slot layout: [total][lastLen][last]
+[firstLen][first][8 zeros][ffffffff][08 00 00 00][ffffffff] where the
+20-byte tail ends with a distinctive signature
+`ff ff ff ff 08 00 00 00 ff ff ff ff` (10,700 records in the fixture,
+matching the .2lid header count 0x29cc = 10700).  Deleted players leave
+empty slots (total = 0x20, zero-length names).
+
+The player ID ↔ slot mapping is NOT ordinal — a filtered subset
+preserves the parent database's IDs (the fixture's first game
+references players 391/392 whose records are the first two slots).
+The ID→slot map lives in .2lgd (§6.1, still unsolved).
+
+### 3.8.8 The .pgi PGN cache (side finding)
+
+The companion `.pgi` file is an 8-bytes-per-game array
+`[gameCount][offset of game 0 in the .pgn][offset of game 1]...` — but
+its game order is *different* from the .2cbh/.2cbg order (the PGN cache
+seems to keep its own ordering).  Useful for ground-truth work, but do
+not assume index alignment.
+
 ### 3.8.5.1 Reproducing the table dump
 
 ```bash
