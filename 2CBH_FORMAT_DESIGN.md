@@ -636,9 +636,29 @@ Key facts for future re-extraction:
 
 ## 4. .2CBA Annotation Format
 
-Same magic-based record structure as `.2cbg`:
-- `magic(8) + dataSize(4) + extraSize(4) + data + extra + trailer(18)`
-- Records referenced by `cbaOffset` in `.2cbh` game records.
+**Partially decoded (2026-08-27).**  The per-game records (located via
+the index `@0x10`) share the container framing:
+`[magic 0x1122334455667788][dataSize][extraSize][sub-field 8][type:u16][data][extra][trailer 18]`.
+Unannotated games have `data = ff ff ff 7f` (a 4-byte "none" marker);
+the `extra` is zero padding.
+
+Annotated games (`dataSize > 4`) contain a sequence of items:
+
+```
+[u32 A]                  record-lead (values seen: 0x8e, 0x5d, 0x1c, 0x24, 0x47)
+[u32 2][u16 3][u16 6][u8 0]      position/move marker
+[u16 7][u32 len][text]           a comment item ("Inaccuracy. a5 was best.")
+... repeating ...
+[ff ff ff 7f]            end marker
+```
+
+Observed comment texts are engine evaluations ("Inaccuracy. a5 was
+best.", "Blunder. N8h7 was best.\"", "continues in main line") written
+by ChessBase's analysis.  The exact grammar of the move-reference items
+(which ply/variation the comment attaches to) is not yet decoded --
+the next step is aligning items against the PGN edition's comments for
+annotated games (the fixture's PGN twin lacks some of them, so a
+ChessBase-Wine export may be needed).
 
 ## 5. .2LID Player Namebase
 
