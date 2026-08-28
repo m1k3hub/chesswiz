@@ -7,7 +7,6 @@
 // Limitations (see 2CBH_FORMAT_DESIGN.md):
 //   - player/event names are not yet resolved (the .2lgd ID->offset
 //     mapping is not decoded yet); placeholders are emitted
-//   - the game result is not yet located in the format; "*" is emitted
 //   - only standard-chess games (record type 1) are converted
 //
 // Usage: 2cbh2pgn <prefix> <out.pgn> [maxGames]
@@ -353,6 +352,16 @@ int main(int argc, char* argv[])
       std::string bname = (bid < names.size() && !names[bid].empty())
                         ? names[bid]
                         : ("Player " + std::to_string(bid));
+      // result: byte 0x58 low 2 bits (0 = 0-1, 1 = 1/2-1/2, 2 = 1-0)
+      unsigned char f58 = cbh[(256u + k) * recordSize + 0x58];
+      char const* result = "*";
+      switch (f58 & 3)
+      {
+         case 0:  result = "0-1"; break;
+         case 1:  result = "1/2-1/2"; break;
+         case 2:  result = "1-0"; break;
+         default: break;
+      }
       ::fprintf(out,
                 "[Event \"?\"]\n"
                 "[Site \"?\"]\n"
@@ -360,9 +369,9 @@ int main(int argc, char* argv[])
                 "[Round \"?\"]\n"
                 "[White \"%s\"]\n"
                 "[Black \"%s\"]\n"
-                "[Result \"*\"]\n\n",
-                wname.c_str(), bname.c_str());
-      ::fprintf(out, "%s*\n\n", movetext.c_str());
+                "[Result \"%s\"]\n\n",
+                wname.c_str(), bname.c_str(), result);
+      ::fprintf(out, "%s%s\n\n", movetext.c_str(), result);
    }
 
    ::fclose(out);
