@@ -585,6 +585,19 @@ preserves the parent database's IDs (the fixture's first game
 references players 391/392 whose records are the first two slots).
 The ID→slot map lives in .2lgd (§6.1, still unsolved).
 
+**Confirmed by move-sequence matching:**
+- .2cbg records map to the PGN edition nearly sequentially: records
+  0,1,2 = PGN games 0,1,2 (Balashov/Kholmov, Vokac/Simacek,
+  Lau/Rausis) with IDs (391,392), (393,394), (395,396).
+- Record 3 = a *different* game with identical moves to record 0
+  (duplicate 21-ply line) with IDs (397,398) -- so identical move
+  sequences exist for different games; matching must use full
+  sequences, not prefixes.
+- The ID-to-name mapping is NOT base+ordinal: e.g. Brodda (Wolfgang)
+  has .2lid insertion ordinal 11 but ID 373, while Lazic (Miroljub)
+  has ordinal 7 and ID 402.  IDs are parent-database-preserved and
+  non-contiguous; the mapping must come from .2lgd (or elsewhere).
+
 ### 3.8.8 The .pgi PGN cache (side finding)
 
 The companion `.pgi` file is an 8-bytes-per-game array
