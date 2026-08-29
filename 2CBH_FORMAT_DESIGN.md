@@ -745,10 +745,16 @@ comments only when the game has NO markers/blocks (mainline-only games —
 verified exact); games with variation data are emitted without comments
 for now.
 
-**Clock data:** the [%clk ...] comments of the PGN twin do NOT come from
-.2cba — they come from the .2cbg `extra` section (a per-move time table;
-e.g. game 291940 Kalogridis-Ioannidis has extraSize=104 and no .2cba
-items).  Mapping extra -> scidb TimeTable/putMoveInfo is future work.
+**Clock data:** the [%clk ...] comments of the PGN twin are NOT stored in
+the .2cbh file family at all.  They are artifacts of the twin PGN's own
+source files (the DB was imported from clock-bearing PGNs; the twin PGN
+was exported from those sources, not from these .2cb* files).  Evidence:
+game 15098 (Kalogridis-Ioannidis, twin has 77 per-ply [%clk] comments):
+its .2cbg = exactly 77 codes + markers, .2cba = 8 eval items fully
+accounted for, .2cbg extra (104 bytes) = all zeros; the 7z that shipped
+the twin contains only the .pgn.  Also incidentally re-validated: the
+twin renders the .2cba channel as a real NAG ('Ke6 $4 { ... }') and the
+item at X=73 renders after ply 74.
 
 **Validation (full 863,538-game DB, comments emitted at full scale):**
 - converted=863538 skipped=0 failed=0
