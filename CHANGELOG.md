@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased — ChessBase (.cbh) Per-Game Media via tag_game Anchors
+
+### Overview
+
+`::scidb::db::mediaFiles` now maps a REGULAR game of a ChessBase `.cbh`
+database onto its tournament report's media, closing the last open row of
+the CBM capability table (CBM_FORMAT_DESIGN.md §7.7).
+
+### Details
+- Reports (guiding-text entries) anchor games in their HTML bodies via
+  `CBLink(tag_game,White,Black,Event,Site,Year,Round,…)`; anchors match
+  game headers on (lastname, lastname, event-key, year, round) — fixture:
+  Topalov–Anand/Bilbao 2008 r4 = game 12038, exact match
+- Guiding-text CBH index records carry no usable tournament reference
+  ("? (illegal reference)" for all 11 reports) — the anchors are the only
+  per-game route (so the CBH event table cannot link them)
+- Media association = section ownership: each reference belongs to the
+  game of the last anchor at-or-before it (report-header art lands on the
+  first anchored game — documented approximation)
+- New: `tcl_media::scanGuidingTextMediaRefs/extractGuidingTextMediaRange/
+  extractGuidingTextGameBlocks` + `GuidingTextLinkCache` in `cmdMediaFiles`
+- `tcl_media_extract` unit tests extended to 577 structural checks
+- E2E (CB Light Database): 35 games carry media (10 reports + 25 mapped),
+  125 refs, all mapped pictures on disc; probe-gamemap + run-e2e PASS
+- `src/probe_cbllight` extended: event semantics, per-report block counts,
+  cache simulator (dev tool)
+
 ## Unreleased — ChessBase 17+ (2CBH) Move Decoding
 
 ### Overview

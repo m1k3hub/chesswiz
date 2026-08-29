@@ -767,7 +767,7 @@ reading remains correct for DBs that use it, but is not authoritative here.
 | Enumerate all media files referenced by a database | ✅ done (validated) |
 | Locate referenced images on disk (`.html` folder) | ✅ done (98% present) |
 | Classify media type per reference (image/video/audio) | ✅ done |
-| Map a specific game → its media (per-game playback) | ❌ blocked on linkage RE |
+| Map a specific game → its media (per-game playback) | ✅ done (tag_game anchors, §7.7) |
 | Play audio/video (image/audio/video files on disk) | ✅ done (tkvlc + system-player fallback) |
 | Extract audio/video payloads | ❌ Phase 3 |
 
@@ -1003,4 +1003,63 @@ Bag 9: toolbar visibility config (TBVisible0).
 - **The binary region's .cbg offsets** point to encoded media data (not
   standard image/video formats — likely ChessBase's proprietary encoding).
   Extracting and decoding this data is Phase 3 work.
+
+### 7.7 Implementation — per-game media via tag_game anchors (2026-08-29)
+
+The §7.3 verification left one gap: a REGULAR game (not a report entry)
+still is linked to the reports. The missing connector is the game anchor
+ChessBase writes into the report HTML:
+
+```html
+<A href="javascript:CBLink(tag_game,Topalov,Veselin,Anand,Viswanathan,
+   Grand Slam Final,Bilbao,2008,4,0,27)">Topalov,V - Anand,V 1-0</A>
+```
+
+i.e. `CBLink(tag_game, WhiteLast, WhiteFirst, BlackLast, BlackFirst,
+Event, Site, Year, Round, [Extra...])`. The anchor fields match the game
+headers directly (header of the anchored Bilbao game: idx 12038,
+event "Grand Slam Final", year 2008, round 4 — an exact key match).
+Two findings close the linkage:
+
+1. **Guiding-text CBH index records carry unusable tournament
+   references** — `getEvent()` yields "?" / "? (illegal reference)" for
+   all 11 reports (their record layout differs from game records; the
+   u24 at offset 5 is not a CBH tournament id). So the report→tournament
+   link cannot go through the CBH event table; the anchors are the only
+   route.
+2. **Media association rule (section ownership)**: each media reference
+   belongs to the game of the LAST tag_game anchor at-or-before it
+   (right-side media after the link, "report header + first game's
+   photos" before the first anchor attach to the first anchored game).
+   Known approximation: report-header art (cblogo, tournaments.jpg) also
+   lands on the first anchored game of each report. ChessBase's own
+   per-game linkage lives in the undecoded .cbm binary region (§5.6).
+
+**Delivered in this pass:**
+
+- `src/tcl/tcl_media_extract.h` — `scanGuidingTextMediaRefs()` (position-
+  aware scanner), `extractGuidingTextMediaRange()` (legacy whole-body
+  behavior preserved), `extractGuidingTextGameBlocks()` (anchor fields +
+  section-ownership media assignment). Unit-tested in
+  `src/test_media_extract.cpp` (577 structural checks).
+- `cmdMediaFiles` (`::scidb::db::mediaFiles`): for a regular .cbh game,
+  builds `GuidingTextLinkCache` (per database/variant/game-count): loads
+  every report once, parses anchors, and matches them to game headers by
+  (white last name, black last name, event-key substring, year, round —
+  round/year 0 act as wildcards; earliest report wins). Mapped rows carry
+  the anchor's event string in the title column. Guiding-text records
+  keep returning their own body's media (title empty).
+- `src/probe_cbllight` extended (event semantics, per-report block
+  counts, cache simulator);
+  `media-console/probe-gamemap.tcl` + updated `run-e2e.tcl` validate
+  the mapping end-to-end against the CB Light Database fixture:
+  10 guiding-text records (54 rows, §7.3 ground truth) + 25 mapped
+  regular games (71 rows) = 35 games / 125 references; all mapped
+  pictures exist on disc; absent streams = the known CBM-disc set.
+- `GameSwitched` per-game media panel (`tcl/app-media.tcl`) shows mapped
+  rows with the tournament name; playback unchanged.
+
+Revert risk: none outside `tcl/tcl_database.cpp`, `tcl/tcl_media_extract.h`,
+`src/test_media_extract.cpp`, `src/probe_cbllight.cpp`, `src/media_console*`
+and the `media-console/`.
 

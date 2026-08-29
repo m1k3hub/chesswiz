@@ -109,10 +109,14 @@ for {set i 0} {$i < $n} {incr i} {
     }
 }
 
-check {$totGames == 10} "guiding-text games with media = $totGames (10 expected)"
-check {$totRefs == 54}  "total media references = $totRefs (54 expected)"
+# With the tag_game anchor mapping (doc §7.6), regular games of the linked
+# tournament sections also carry media: 10 guiding-text records + 25 mapped
+# regular games (one per section that anchors a game of this database), 54
+# guiding rows + 71 mapped rows (fixture-stable counts).
+check {$totGames == 35} "games carrying media = $totGames (10 guiding + 25 tag_game-mapped, expected)"
+check {$totRefs == 125} "total media references = $totRefs (54 guiding + 71 mapped, expected)"
 
-# per-index expected checks (doc §7.3 ground truth)
+# per-index expected checks (doc §7.3 ground truth — guiding-text records)
 puts "  per-game media counts (index -> n): [lsort -integer [array names gotCount]]"
 foreach idx [array names expected] {
     set idx [string range $idx 6 end]
@@ -120,6 +124,26 @@ foreach idx [array names expected] {
     set got [expr {[info exists gotCount($idx)] ? $gotCount($idx) : 0}]
     check {$got == $expCount} "index $idx: $got/$expCount media (doc §7.3)"
 }
+
+# tag_game anchor mapping ground truth (doc §7.6): game 12038 = Topalov,
+# Veselin - Anand, Viswanathan (Grand Slam Final 2008 round 4) is the first
+# anchored game of the Bilbao report; its section carries the report header
+# art plus the game's FEN thumbnail and players photo.
+set mrows [::scidb::db::mediaFiles $base $variant 12038]
+check {[llength $mrows] == 4} "game 12038 (Topalov-Anand, gsf r4): 4 mapped rows"
+set mtitles {}
+set mnames {}
+foreach r $mrows {
+    lappend mtitles [lindex $r 2]
+    lappend mnames [file tail [lindex $r 0]]
+}
+set mtitles [lsort -unique $mtitles]
+check {[llength $mtitles] == 1 && [lindex $mtitles 0] eq "Grand Slam Final"} \
+    "mapped rows carry the anchor event in the title column"
+set mnames [lsort $mnames]
+set mwant [lsort [list cblogo.gif tournaments.jpg 29461125p0.jpg "Bilbao Topalov-Anand.jpg"]]
+check {[llength $mnames] == 4 && $mnames eq $mwant} \
+    "game 12038 media = Bilbao report section (header art + FEN thumb + players photo)"
 
 check {$missingPictures == 0} "all referenced pictures exist in <DB>.html (0 missing, got $missingPictures)"
 check {$badType == 0}         "all media types in {1..4} (got $badType bad)"
@@ -132,10 +156,10 @@ set expectAbsent {
     {CBM 126 Aronian - Grischuk.wmv}
     {CBM 126 Ftacnik on Jakovenko - Gashimov.wmv}
 }
-set absentSorted [lsort $absentStreams]
+set absentSorted [lsort -unique $absentStreams]
 set expectSorted [lsort $expectAbsent]
 check {[string equal $absentSorted $expectSorted]} \
-    "absent stream refs == known CBM-disc set (got: [join $absentSorted {, }])"
+    "absent stream refs == known CBM-disc set (mapped + guiding, de-duplicated)"
 
 puts ""
 if {$failures == 0} {

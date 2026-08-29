@@ -4789,15 +4789,210 @@ cmdMarkDeleted(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 }
 
 
+// ======================================================================
+// Per-game media for ChessBase (.cbh) databases.
+//
+// Guiding-text records (tournament reports) carry their media in HTML
+// bodies stored in .cbg. Regular games are linked to the reports that
+// carry their media via CBLink(tag_game,White,Black,Event,Site,Year,Round)
+// anchors in the report body (CBM_FORMAT_DESIGN.md §7.7). The anchors give
+// a direct game->report linkage: player lastnames + event + year + round
+// match the game headers. (The guiding-text CBH index records themselves
+// carry unusable tournament references — getEvent() yields "?" — so the
+// event field of the CBH tournament table cannot be used to link them.)
+// ======================================================================
+
+namespace
+{
+
+struct GuidingTextMediaRow
+{
+	unsigned		gameIndex;
+	int				type;
+	mstl::string	path;
+	mstl::string	title;
+};
+
+
+// Game -> report media mapping, rebuilt when the database (path, variant,
+// game count) changes. The builder loads every guiding-text report once,
+// parses its CBLink(tag_game,...) anchors into per-game blocks and matches
+// the blocks against the game headers. Owned by the Tcl command layer,
+// which runs on the app thread (like Scidb's cursor registry).
+struct GuidingTextLinkCache
+{
+	mstl::string				database;
+	unsigned						countGames;
+	mstl::vector<unsigned>	gtIndices;		// guiding-text record indices
+	unsigned						blockCount;		// parsed tag_game anchors
+	mstl::vector<GuidingTextMediaRow> rows;	// sorted by gameIndex
+
+	GuidingTextLinkCache():countGames(0),blockCount(0){}
+
+	bool validFor(char const* db, variant::Type v, unsigned count) const
+	{
+		return database == db && thisVariant == v && countGames == count;
+	}
+
+	void clear()
+	{
+		database.clear();
+		countGames = 0;
+		blockCount = 0;
+		gtIndices.clear();
+		rows.clear();
+	}
+
+	variant::Type	thisVariant;
+};
+
+GuidingTextLinkCache mediaLinkCache;
+
+
+// Manifest key: lowercase, alphanumerics only.
+void
+mediaLinkKey(mstl::string const& s, mstl::string& out)
+{
+	out.clear();
+	for (unsigned i = 0; i < s.size(); ++i)
+	{
+		unsigned char c = static_cast<unsigned char>(s[i]);
+		if (::isalnum(c))
+			out += static_cast<char>(::tolower(c));
+	}
+}
+
+
+// Surname key of a game header name: "Lastname, Firstname" -> lastname key;
+// names without a comma are keyed in full.
+void
+mediaLinkLastName(mstl::string const& name, mstl::string& out)
+{
+	mstl::string::size_type comma = name.find(',');
+	mediaLinkKey(comma == mstl::string::npos ? name : name.substr(0, comma), out);
+}
+
+
+void
+buildMediaLinkCache(mstl::string const& database, variant::Type vtype, Database& db,
+						GuidingTextLinkCache& cache)
+{
+	cache.clear();
+	cache.database	= database;
+	cache.thisVariant	= vtype;
+	cache.countGames	= db.countGames();
+
+	// 1. Locate the guiding-text records (cheap index scan, no game bodies).
+	for (unsigned i = 0; i < cache.countGames; ++i)
+	{
+		if (db.gameInfo(i).isGuidingText())
+			cache.gtIndices.push_back(i);
+	}
+	if (cache.gtIndices.empty())
+		return;
+
+	// 2. Parse every report body into per-game blocks (the extraction helper
+	// clears its output, so parse into a per-report vector and append).
+	mstl::vector<tcl_media::GuidingTextGameBlock> blocks;
+	for (unsigned k = 0; k < cache.gtIndices.size(); ++k)
+	{
+		Game game;
+		if (db.loadGame(cache.gtIndices[k], game) != load::Ok)
+			continue;
+
+		mstl::string const& html = game.data().m_guidingText;
+		if (!html.empty())
+		{
+			mstl::vector<tcl_media::GuidingTextGameBlock> report;
+			tcl_media::extractGuidingTextGameBlocks(html, report);
+			for (unsigned q = 0; q < report.size(); ++q)
+				blocks.push_back(report[q]);
+		}
+	}
+	cache.blockCount = blocks.size();
+	if (cache.blockCount == 0)
+		return;
+
+	// Manifest keys for the blocks, computed once.
+	mstl::vector<mstl::string> blockWhite(blocks.size());
+	mstl::vector<mstl::string> blockBlack(blocks.size());
+	mstl::vector<mstl::string> blockEvent(blocks.size());
+	mstl::vector<unsigned> blockYear(blocks.size());
+	mstl::vector<unsigned> blockRound(blocks.size());
+	for (unsigned b = 0; b < blocks.size(); ++b)
+	{
+		mediaLinkKey(blocks[b].white, blockWhite[b]);
+		mediaLinkKey(blocks[b].black, blockBlack[b]);
+		mediaLinkKey(blocks[b].event, blockEvent[b]);
+		blockYear[b]	= blocks[b].year;
+		blockRound[b]	= blocks[b].round;
+	}
+
+	// 3. Match games in record order (keeps rows sorted by gameIndex).
+	mstl::string whiteKey, blackKey, eventKey;
+	for (unsigned i = 0; i < cache.countGames; ++i)
+	{
+		GameInfo const& info = db.gameInfo(i);
+		if (info.isGuidingText())
+			continue;
+
+		mediaLinkLastName(info.playerName(color::White), whiteKey);
+		if (whiteKey.empty())
+			continue;
+		mediaLinkLastName(info.playerName(color::Black), blackKey);
+		if (blackKey.empty())
+			continue;
+		mediaLinkKey(info.event(), eventKey);
+		unsigned year = info.date().year();
+		unsigned round = info.round();
+
+		for (unsigned b = 0; b < blocks.size(); ++b)
+		{
+			if (blockWhite[b] != whiteKey || blockBlack[b] != blackKey)
+				continue;
+			if (blockYear[b] != 0 && blockYear[b] != year)
+				continue;
+			if (blockRound[b] != 0 && blockRound[b] != round)
+				continue;
+			if (!blockEvent[b].empty()
+				&& eventKey.find(blockEvent[b]) == mstl::string::npos)
+				continue;
+
+			// First matching block wins (a game linked by two reports keeps
+			// the media of the earliest report).
+			for (unsigned f = 0; f < blocks[b].files.size(); ++f)
+			{
+				GuidingTextMediaRow row;
+				row.gameIndex	= i;
+				row.type			= blocks[b].types[f];
+				row.path			= tcl_media::resolveGuidingTextPath(database, blocks[b].files[f]);
+				row.title			= blocks[b].event;
+				cache.rows.push_back(row);
+			}
+			break;
+		}
+	}
+}
+
+
+} // anonymous namespace
+
+
 static int
 cmdMediaFiles(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	// Usage: ::scidb::db::mediaFiles <database> <variant> <gameIndex>
 	// Returns a list of {path type title mediaId inline} rows for the media
-	// associated with the game at <gameIndex> via the database's optional
-	// .scm companion manifest. Empty list if no .scm or no media for the
-	// game. type: 0=none 1=picture 2=audio 3=video 4=stream. inline: 1 if
-	// path is a base64 payload rather than a filesystem path.
+	// associated with the game at <gameIndex>. Order of resolution:
+	//   1. .scm companion manifest fingerprint lookup (scidb-native DBs).
+	//   2. .cbh guiding-text HTML bodies (<IMG src>, CBLink(tag_stream,...)):
+	//      when the game IS a guiding-text record its own body is used.
+	//   3. .cbh regular games: mapped onto the tournament reports that link
+	//      them via CBLink(tag_game,...) anchors; rows carry the anchor's
+	//      event string in the title column (CBM_FORMAT_DESIGN §7.7).
+	// Empty list if nothing matches. type: 0=none 1=picture 2=audio
+	// 3=video 4=stream. inline: 1 if path is a base64 payload rather than
+	// a filesystem path.
 	if (objc != 4)
 	{
 		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <gameIndex>");
@@ -4863,17 +5058,20 @@ cmdMediaFiles(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	// Fallback for ChessBase databases: a guiding-text entry carries its
 	// media references in its HTML body (<IMG src="..."> and
-	// CBLink(tag_stream,...)). Extract them and resolve to the database's
-	// sibling "<DBName>.html" folder.
+	// CBLink(tag_stream,...)); a regular game is mapped onto the reports
+	// that link it via CBLink(tag_game,...) anchors. Paths resolve to the
+	// database's sibling "<DBName>.html" folder.
 	{
 		int len = 0;
 		Tcl_ListObjLength(ti, result, &len);
 		if (len == 0 && unsigned(gameIndex) < db.countGames())
 		{
 			GameInfo const& info = db.gameInfo(unsigned(gameIndex));
+			Database& mdb = const_cast<Cursor&>(Scidb->cursor(database, variant)).getDatabase();
+
 			if (info.isGuidingText())
 			{
-				Database& mdb = const_cast<Cursor&>(Scidb->cursor(database, variant)).getDatabase();
+				// The record itself carries the media in its HTML body.
 				Game game;
 				if (mdb.loadGame(unsigned(gameIndex), game) == load::Ok)
 				{
@@ -4895,6 +5093,27 @@ cmdMediaFiles(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 							Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(5, row));
 						}
 					}
+				}
+			}
+			else
+			{
+				// Regular game: use the tag_game anchor mapping.
+				if (!mediaLinkCache.validFor(database, variant, db.countGames()))
+					buildMediaLinkCache(mstl::string(database), variant, mdb, mediaLinkCache);
+
+				for (unsigned i = 0; i < mediaLinkCache.rows.size(); ++i)
+				{
+					if (mediaLinkCache.rows[i].gameIndex != unsigned(gameIndex))
+						continue;
+
+					GuidingTextMediaRow const& row = mediaLinkCache.rows[i];
+					Tcl_Obj* cells[5];
+					cells[0] = Tcl_NewStringObj(row.path.c_str(), int(row.path.size()));
+					cells[1] = Tcl_NewIntObj(row.type);
+					cells[2] = Tcl_NewStringObj(row.title.c_str(), int(row.title.size()));
+					cells[3] = Tcl_NewStringObj("", 0);
+					cells[4] = Tcl_NewBooleanObj(0);
+					Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(5, cells));
 				}
 			}
 		}

@@ -378,6 +378,125 @@ int main()
 		(void)::system(cmd);
 	}
 
+	// --- (4) tag_game blocks — association of media to anchored games ---
+	printf("[4] extractGuidingTextGameBlocks — tag_game anchor semantics\n");
+	{
+		// 4a: realistic two-game report — header logo excluded, each game's
+		// media limited to its own block, fields parsed from the anchor.
+		mstl::string html =
+			"<P><IMG src=\"db.html\\cblogo.gif\"></P>"
+			"<P class=1>Game 1: <A href=\"javascript:CBLink(tag_game,Topalov,Veselin,Anand,Viswanathan,Grand Slam Final,Bilbao,2008,4,0,27)\">Topalov,V - Anand,V</A></P>"
+			"<P><IMG src=\"db.html\\TopalovAnand1.jpg\"></P>"
+			"<P><A href=\"javascript:CBLink(tag_stream,db.html\\round4.wmv,)\">video</A></P>"
+			"<P class=1>Game 2: <A href=\"javascript:CBLink(tag_game,Carlsen,Magnus,Topalov,Veselin,Grand Slam Final,Bilbao,2008,3,0,0)\">Carlsen,M - Topalov,V</A></P>"
+			"<P><IMG src=\"db.html\\CarlsenTopalov3.jpg\"></P>";
+
+		mstl::vector<tcl_media::GuidingTextGameBlock> blocks;
+		tcl_media::extractGuidingTextGameBlocks(html, blocks);
+		check((unsigned)blocks.size() == 2, "two anchors -> two blocks");
+
+		if (blocks.size() == 2)
+		{
+			check(streq(blocks[0].white, "Topalov"), "block 0 white lastname");
+			check(streq(blocks[0].black, "Anand"),   "block 0 black lastname");
+			check(streq(blocks[0].event, "Grand Slam Final"), "block 0 event field");
+			check(streq(blocks[0].site,  "Bilbao"),  "block 0 site field");
+			check(blocks[0].year  == 2008, "block 0 year parsed");
+			check(blocks[0].round == 4,    "block 0 round parsed");
+			// Section ownership: each reference belongs to the game of the
+			// last anchor at-or-before it. cblogo.gif (header zone) and
+			// TopalovAnand1.jpg attach to block 0; round4.wmv — still inside
+			// block 0's section in this hand-written tight layout — also
+			// attaches to block 0 (its report companion "start the video"
+			// link pattern).
+			check((unsigned)blocks[0].files.size() == 3
+				&& streq(blocks[0].files[0], "cblogo.gif") && blocks[0].types[0] == 1
+				&& streq(blocks[0].files[1], "TopalovAnand1.jpg") && blocks[0].types[1] == 1
+				&& streq(blocks[0].files[2], "round4.wmv") && blocks[0].types[2] == 4,
+				"block 0 = [cblogo.gif (header zone), TopalovAnand1.jpg, round4.wmv]");
+			check(streq(blocks[1].white, "Carlsen"), "block 1 white lastname");
+			check(blocks[1].round == 3, "block 1 round parsed");
+			check((unsigned)blocks[1].files.size() == 1
+				&& streq(blocks[1].files[0], "CarlsenTopalov3.jpg") && blocks[1].types[0] == 1,
+				"block 1 = [CarlsenTopalov3.jpg]");
+		}
+	}
+	{
+		// 4a2: realistic magazine layout (Sinquefield shape) — the game's
+		// video link sits right after its anchor and far from the next one,
+		// so it belongs to the anchored game despite being on the right side.
+		mstl::string html =
+			"<P><IMG src=\"s.html\\cblogo.gif\"></P>"
+			"<P class=1>Enjoy this attacking game with the annotations of Krisztian Szabo: "
+			"<A href=\"javascript:CBLink(tag_game,So,Wesley,Nakamura,Hikaru,Sinquefield Cup 3rd,Saint Louis,2015,6,0,17)\">So,W - Nakamura,H 0-1</A>. "
+			"But you can also start the video of Daniel King: "
+			"<A href=\"javascript:CBLink(tag_stream,s.html\\Sinquefield Cup 2015 round 6.wmv,)\">video</A>"
+			"</P>"
+			"<P class=1><IMG src=\"s.html\\168 So-Nakamura.jpg\"></P>"
+			"<P class=1>In the following round the boards went quiet for a long time: "
+			"<A href=\"javascript:CBLink(tag_game,Aronian,Levon,Caruana,Fabiano,Sinquefield Cup 3rd,Saint Louis,2015,6,0,15)\">Aronian,L - Caruana,F 0.5-0.5</A></P>"
+			"<P class=1><IMG src=\"s.html\\168 Aronian-Caruana.jpg\"></P>";
+
+		mstl::vector<tcl_media::GuidingTextGameBlock> blocks;
+		tcl_media::extractGuidingTextGameBlocks(html, blocks);
+		check((unsigned)blocks.size() == 2, "realistic layout: two anchors -> two blocks");
+		if (blocks.size() == 2)
+		{
+			check(streq(blocks[0].white, "So") && streq(blocks[0].black, "Nakamura"),
+				"realistic layout: block 0 = So-Nakamura");
+			check(blocks[0].year == 2015 && blocks[0].round == 6,
+				"realistic layout: block 0 fields");
+			check((unsigned)blocks[0].files.size() == 3
+				&& streq(blocks[0].files[1], "Sinquefield Cup 2015 round 6.wmv")
+				&& blocks[0].types[1] == 4
+				&& streq(blocks[0].files[2], "168 So-Nakamura.jpg")
+				&& blocks[0].types[2] == 1,
+				"realistic layout: video + image attach to the anchored game (cblogo header zone also on block 0)");
+			check((unsigned)blocks[1].files.size() == 1,
+				"realistic layout: block 1 keeps only its section");
+		}
+	}
+	{
+		// 4b: malformed anchors (too few fields) yield no blocks; media after
+		// them stays unassociated.
+		mstl::string html =
+			"CBLink(tag_game,Only,Three,Fields)<IMG src=\"db.html\\orphan.jpg\">";
+		mstl::vector<tcl_media::GuidingTextGameBlock> blocks;
+		tcl_media::extractGuidingTextGameBlocks(html, blocks);
+		check((unsigned)blocks.size() == 0, "malformed anchor (3 fields) -> 0 blocks");
+	}
+	{
+		// 4c: trailing anchor — its block extends to the end of the body.
+		mstl::string html =
+			"<A href=\"javascript:CBLink(tag_game,So,Wesley,Nakamura,Hikaru,Sinquefield Cup 3rd,Saint Louis,2015,6,0,17)\">g</A>"
+			"<IMG src=\"db.html\\SoNakamura.jpg\">";
+		mstl::vector<tcl_media::GuidingTextGameBlock> blocks;
+		tcl_media::extractGuidingTextGameBlocks(html, blocks);
+		check((unsigned)blocks.size() == 1, "trailing anchor -> 1 block");
+		check((unsigned)blocks.size() == 1 && (unsigned)blocks[0].files.size() == 1
+			&& streq(blocks[0].files[0], "SoNakamura.jpg"),
+			"trailing block reaches end of body");
+		check((unsigned)blocks.size() == 1 && blocks[0].year == 2015
+			&& blocks[0].round == 6, "trailing anchor fields parsed");
+	}
+	{
+		// 4c: case-insensitive anchor tag; empty-block dedupe within a block.
+		mstl::string html =
+			"<A href=\"javascript:cblink(Tag_Game,a,B,b,C,tourney,site,2010,2,0)\">x</A>"
+			"<IMG src=\"db.html\\twice.jpg\"><IMG src=\"db.html\\twice.jpg\">";
+		mstl::vector<tcl_media::GuidingTextGameBlock> blocks;
+		tcl_media::extractGuidingTextGameBlocks(html, blocks);
+		check((unsigned)blocks.size() == 1, "lowercase anchor still a block");
+		check((unsigned)blocks.size() == 1 && (unsigned)blocks[0].files.size() == 1,
+			"duplicate media within one block de-duplicated");
+	}
+	{
+		// 4d: zero anchors -> zero blocks.
+		mstl::vector<tcl_media::GuidingTextGameBlock> blocks;
+		tcl_media::extractGuidingTextGameBlocks(mstl::string("<P><IMG src=\"db.html\\logo.jpg\"></P>"), blocks);
+		check((unsigned)blocks.size() == 0, "no anchors -> 0 blocks");
+	}
+
 	printf("\n%s\n", g_fail ? "RESULT: FAIL" : "RESULT: PASS");
 	return g_fail ? 1 : 0;
 }

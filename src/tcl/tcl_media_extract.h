@@ -12,6 +12,21 @@
 // The `src`/stream value is "<DBName>.html\<filename>" (backslash
 // separator); the media files live in the database's sibling
 // "<DBName>.html" folder.
+//
+// Regular games are linked to the tournament reports that carry their
+// media via game anchors in the report body (CBM_FORMAT_DESIGN.md §7.6):
+//   <A href="javascript:CBLink(tag_game,So,Wesley,Nakamura,Hikaru,
+//        Sinquefield Cup 3rd,Saint Louis,2015,6,0,17)">So,W - Nakamura,H 0-1</A>
+// i.e. CBLink(tag_game, WhiteLast, WhiteFirst, BlackLast, BlackFirst,
+//              Event, Site, Year, Round, [Extra...]).
+// ChessBase reports embed a game's media between successive anchors: the
+// narrative introduces the game and links it (CBLink(tag_game,…)), then
+// places its video/audio links and photos, until the next game's anchor
+// closes the section. Each reference therefore attaches to the first anchor
+// at-or-after it (right-attachment): refs before the first anchor (report
+// header art + the section introducing the first game) attach to the first
+// anchored game — a known, bounded approximation: ChessBase's own per-game
+// linkage lives in the undecoded .cbm binary region (§5.6).
 // ======================================================================
 
 #ifndef _tcl_media_extract_included
@@ -24,57 +39,88 @@
 
 namespace tcl_media {
 
-// Extract media file references from a ChessBase guiding-text HTML body.
-// Appends matching filenames to `outFiles` and their types to `outTypes`
-// (type: 1=picture 2=audio 3=video 4=stream, matching scm::MediaTable).
-// De-duplicates by filename across both passes.
+// One CBLink(tag_game,...) anchor and the media references assigned to it.
+struct GuidingTextGameBlock
+{
+	mstl::string					white;		// White lastname ("Topalov")
+	mstl::string					black;		// Black lastname ("Anand")
+	mstl::string					event;		// Event as written in the anchor
+	mstl::string					site;			// Site as written ("Bilbao")
+	unsigned						year;			// Year (0 if absent)
+	unsigned						round;		// Round (0 if absent/unknown)
+	mstl::vector<mstl::string>	files;		// media filenames assigned to this game
+	mstl::vector<int>				types;		// 1=picture 2=audio 3=video 4=stream
+};
+
+// One media reference found in a body.
+struct GuidingTextMediaRef
+{
+	unsigned		pos;		// document offset of the reference
+	mstl::string	file;	// bare filename (backslash prefix stripped)
+	int				type;	// 1=picture 2=audio 3=video 4=stream
+};
+
+
+// Case-insensitive substring search over [from, to); 0 if not found.
+inline
+char const*
+ciSearch(char const* from, char const* to, char const* needle, unsigned needleLen)
+{
+	if (needleLen == 0 || unsigned(to - from) < needleLen)
+		return 0;
+	char const* last = to - needleLen;
+	for (char const* p = from; p <= last; ++p)
+	{
+		unsigned k = 0;
+		while (k < needleLen && (p[k]|0x20) == (needle[k]|0x20))
+			++k;
+		if (k == needleLen)
+			return p;
+	}
+	return 0;
+}
+
+
+// Scan the range [from, to) of a ChessBase HTML body and append every media
+// reference (IMG src / CBLink(tag_stream,...)/CBLink(tag_audio,...)) to
+// `out` in document order. No de-duplication (callers decide).
 inline
 void
-extractGuidingTextMedia(mstl::string const& html, mstl::vector<mstl::string>& outFiles,
-						mstl::vector<int>& outTypes)
+scanGuidingTextMediaRefs(	mstl::string const&			html,
+									char const*						from,
+									char const*						to,
+									mstl::vector<GuidingTextMediaRef>&	out)
 {
-	// Scan for <IMG ... src="..." ...> (case-insensitive) and
-	// CBLink(tag_stream,...) references.
-	char const* p = html.c_str();
-	char const* end = p + html.size();
+	char const* p = from;
+	char const* end = to;
+
+	// Images: <IMG ... src="..." ...> (case-insensitive, quote variants).
 	while (p < end)
 	{
-		// Find the next '<' that starts an IMG tag or a CBLink( call.
 		char const* lt = static_cast<char const*>(::memchr(p, '<', end - p));
 		if (!lt)
 			break;
-		// Check for "<IMG" (case-insensitive).
-		bool isImg = false;
-		if (end - lt >= 4)
-		{
-			char c0 = lt[1], c1 = lt[2], c2 = lt[3];
-			if ((c0 == 'I' || c0 == 'i') && (c1 == 'M' || c1 == 'm') && (c2 == 'G' || c2 == 'g'))
-				isImg = true;
-		}
+		bool isImg = (end - lt >= 4)
+			&& (lt[1]|0x20) == 'i' && (lt[2]|0x20) == 'm' && (lt[3]|0x20) == 'g';
 		if (isImg)
 		{
-			// Find src="..." within this tag (up to the closing '>').
 			char const* gt = static_cast<char const*>(::memchr(lt, '>', end - lt));
 			if (!gt)
 				gt = end;
-			char const* s = lt;
-			while (s < gt)
+			char const* src = 0;
+			for (char const* q = lt; q + 4 <= gt; ++q)
 			{
-				char const* src = nullptr;
-				// case-insensitive search for "src="
-				for (char const* q = s; q + 4 <= gt; ++q)
+				if ((q[0]|0x20) == 's' && (q[1]|0x20) == 'r' &&
+					(q[2]|0x20) == 'c' && q[3] == '=')
 				{
-					if ((q[0] == 's' || q[0] == 'S') && (q[1] == 'r' || q[1] == 'R') &&
-						(q[2] == 'c' || q[2] == 'C') && q[3] == '=')
-					{
-						src = q + 4;
-						break;
-					}
-				}
-				if (!src)
+					src = q + 4;
 					break;
-				// Skip optional whitespace and quote.
-				while (src < gt && (*src == ' ' || *src == '\t' || *src == '\r' || *src == '\n'))
+				}
+			}
+			if (src)
+			{
+				while (src < gt && (*src == ' ' || *src == '\t'
+							|| *src == '\r' || *src == '\n'))
 					++src;
 				char quote = 0;
 				if (src < gt && (*src == '"' || *src == '\''))
@@ -82,7 +128,6 @@ extractGuidingTextMedia(mstl::string const& html, mstl::vector<mstl::string>& ou
 					quote = *src;
 					++src;
 				}
-				char const* valStart = src;
 				char const* valEnd = src;
 				while (valEnd < gt)
 				{
@@ -95,112 +140,314 @@ extractGuidingTextMedia(mstl::string const& html, mstl::vector<mstl::string>& ou
 						break;
 					++valEnd;
 				}
-				if (valEnd > valStart)
+				if (valEnd > src)
 				{
-					mstl::string val(valStart, valEnd - valStart);
-					// Strip the "<DBName>.html\" prefix to get the bare filename.
+					mstl::string val(src, valEnd - src);
+					// Strip a "<DBName>.html\" prefix to the bare filename.
 					mstl::string::size_type bs = val.rfind('\\');
-					mstl::string filename = (bs != mstl::string::npos) ? val.substr(bs + 1) : val;
+					mstl::string filename = (bs != mstl::string::npos)
+						? val.substr(bs + 1) : val;
 					if (!filename.empty())
 					{
-						// De-dup.
-						bool dup = false;
-						for (unsigned i = 0; i < outFiles.size(); ++i)
-							if (outFiles[i] == filename) { dup = true; break; }
-						if (!dup)
-						{
-							outFiles.push_back(filename);
-							outTypes.push_back(1); // picture
-						}
+						GuidingTextMediaRef ref;
+						ref.pos = unsigned(lt - html.c_str());
+						ref.file = filename;
+						ref.type = 1;
+						out.push_back(ref);
 					}
 				}
-				s = valEnd;
-				if (s < gt && *s == quote)
-					++s;
 			}
 			p = gt + 1;
 			continue;
 		}
-		// Not an IMG tag — advance past this '<'.
 		p = lt + 1;
 	}
-	// Second pass: find CBLink(tag_stream, ...) references (these are not
-	// inside <...> tags).
+
+	// CBLink(tag_stream/tag_audio) refs (these are not inside <...> tags);
+	// collected first, then merged with the IMG refs into document order.
+	mstl::vector<GuidingTextMediaRef> links;
+	char const* q = from;
+	while (q < end)
 	{
-		char const* q = html.c_str();
-		while (q < end)
+		char const* cb = ciSearch(q, end, "cblink(", 7);
+		if (!cb)
+			break;
+		int linkType = -1;
+		char const* tl = 0;
+		for (char const* r = cb + 7; r + 5 <= end; ++r)
 		{
-			char const* cb = nullptr;
-			for (char const* r = q; r + 7 <= end; ++r)
+			if ((r[0]|0x20) == 't' && (r[1]|0x20) == 'a' && (r[2]|0x20) == 'g'
+					&& r[3] == '_')
 			{
-				if ((r[0] == 'C' || r[0] == 'c') && (r[1] == 'B' || r[1] == 'b') &&
-					(r[2] == 'L' || r[2] == 'l') && (r[3] == 'i' || r[3] == 'I') &&
-					(r[4] == 'n' || r[4] == 'N') && (r[5] == 'k' || r[5] == 'K') &&
-					r[6] == '(')
-				{
-					cb = r;
-					break;
-				}
-			}
-			if (!cb)
+				tl = r;
+				char const* k = r + 4; // past "tag_"
+				bool isStream = (end - k >= 6)
+					&& (k[0]|0x20)=='s' && (k[1]|0x20)=='t' && (k[2]|0x20)=='r'
+					&& (k[3]|0x20)=='e' && (k[4]|0x20)=='a' && (k[5]|0x20)=='m';
+				bool isAudio = (end - k >= 5)
+					&& (k[0]|0x20)=='a' && (k[1]|0x20)=='u' && (k[2]|0x20)=='d'
+					&& (k[3]|0x20)=='i' && (k[4]|0x20)=='o';
+				if (isStream)
+					linkType = 4;
+				else if (isAudio)
+					linkType = 2;
 				break;
-			// Detect a CBLink tag: tag_stream (video, type 4), tag_audio (audio,
-			// type 2) or tag_image (ignored — pictures come via <IMG>).
-			int linkType = -1; // -1 = ignore (unknown/tag_image)
-			char const* tl = nullptr; // token location
-			for (char const* r = cb + 7; r + 5 <= end; ++r)
-			{
-				if ((r[0] == 't' || r[0] == 'T') && (r[1] == 'a' || r[1] == 'A') &&
-					(r[2] == 'g' || r[2] == 'G') && r[3] == '_')
-				{
-					tl = r;
-					char const* k = r + 4; // past "tag_"
-					// Case-insensitive match on "stream"/"audio" (tag_image ignored).
-					bool isStream = (end - k >= 6)
-						&& (k[0]|0x20)=='s' && (k[1]|0x20)=='t' && (k[2]|0x20)=='r'
-						&& (k[3]|0x20)=='e' && (k[4]|0x20)=='a' && (k[5]|0x20)=='m';
-					bool isAudio = (end - k >= 5)
-						&& (k[0]|0x20)=='a' && (k[1]|0x20)=='u' && (k[2]|0x20)=='d'
-						&& (k[3]|0x20)=='i' && (k[4]|0x20)=='o';
-					if (isStream) linkType = 4;
-					else if (isAudio) linkType = 2;
-					else linkType = -1;
-					break;
-				}
 			}
-			if (tl && linkType > 0)
+		}
+		if (tl && linkType > 0)
+		{
+			char const* comma = static_cast<char const*>(::memchr(tl, ',', end - tl));
+			if (comma)
 			{
-				// The media path follows "tag_<kind>," up to the next ','.
-				char const* comma = static_cast<char const*>(::memchr(tl, ',', end - tl));
-				if (comma)
+				char const* valStart = comma + 1;
+				char const* valEnd = valStart;
+				while (valEnd < end && *valEnd != ',' && *valEnd != ')')
+					++valEnd;
+				if (valEnd > valStart)
 				{
-					char const* valStart = comma + 1;
-					char const* valEnd = valStart;
-					while (valEnd < end && *valEnd != ',' && *valEnd != ')')
-						++valEnd;
-					if (valEnd > valStart)
+					mstl::string val(valStart, valEnd - valStart);
+					mstl::string::size_type bs = val.rfind('\\');
+					mstl::string filename = (bs != mstl::string::npos)
+						? val.substr(bs + 1) : val;
+					if (!filename.empty())
 					{
-						mstl::string val(valStart, valEnd - valStart);
-						mstl::string::size_type bs = val.rfind('\\');
-						mstl::string filename = (bs != mstl::string::npos) ? val.substr(bs + 1) : val;
-						if (!filename.empty())
-						{
-							bool dup = false;
-							for (unsigned i = 0; i < outFiles.size(); ++i)
-								if (outFiles[i] == filename) { dup = true; break; }
-							if (!dup)
-							{
-								outFiles.push_back(filename);
-								outTypes.push_back(linkType); // 2 audio, 4 stream/video
-							}
-						}
+						GuidingTextMediaRef ref;
+						ref.pos = unsigned(cb - html.c_str());
+						ref.file = filename;
+						ref.type = linkType; // 2 audio, 4 stream/video
+						links.push_back(ref);
 					}
 				}
 			}
-			q = cb + 7;
+		}
+		q = cb + 7;
+	}
+
+	// Merge the two ordered streams into document order.
+	if (!links.empty())
+	{
+		unsigned a = 0, b = 0;
+		while (a < out.size() && b < links.size())
+		{
+			if (out[a].pos <= links[b].pos)
+				{ ++a; continue; }
+			out.insert(out.begin() + a, links[b]);
+			++a;
+			++b;
+		}
+		while (b < links.size())
+		{
+			out.push_back(links[b]);
+			++b;
 		}
 	}
 }
+
+
+inline
+unsigned
+parseDigits(char const* from, char const* to)
+{
+	unsigned value = 0;
+	bool digits = false;
+	for (char const* p = from; p < to; ++p)
+	{
+		if ('0' <= *p && *p <= '9')
+		{
+			value = 10*value + (*p - '0');
+			digits = true;
+		}
+		else if (digits && *p != ' ')
+		{
+			break;
+		}
+	}
+	return digits ? value : 0;
+}
+
+
+// Extract media file references from the range [from, to) of a ChessBase
+// guiding-text HTML body: <IMG ... src="..."> (picture, type 1) and
+// CBLink(tag_stream,...)/CBLink(tag_audio,...) refs (type 4/2). Appends
+// matching filenames to `outFiles` and their types to `outTypes`,
+// de-duplicated across the picture and link passes in the documented
+// order (pictures first).
+inline
+void
+extractGuidingTextMediaRange(	mstl::string const&			html,
+										char const*						from,
+										char const*						to,
+										mstl::vector<mstl::string>&	outFiles,
+										mstl::vector<int>&				outTypes)
+{
+	mstl::vector<GuidingTextMediaRef> refs;
+	scanGuidingTextMediaRefs(html, from, to, refs);
+
+	// Picture pass first (document order), then the link pass;
+	// de-duplicate by filename across both.
+	for (unsigned i = 0; i < refs.size(); ++i)
+	{
+		if (refs[i].type != 1)
+			continue;
+		bool dup = false;
+		for (unsigned k = 0; k < outFiles.size(); ++k)
+			if (outFiles[k] == refs[i].file) { dup = true; break; }
+		if (!dup)
+		{
+			outFiles.push_back(refs[i].file);
+			outTypes.push_back(1);
+		}
+	}
+	for (unsigned i = 0; i < refs.size(); ++i)
+	{
+		if (refs[i].type == 1)
+			continue;
+		bool dup = false;
+		for (unsigned k = 0; k < outFiles.size(); ++k)
+			if (outFiles[k] == refs[i].file) { dup = true; break; }
+		if (!dup)
+		{
+			outFiles.push_back(refs[i].file);
+			outTypes.push_back(refs[i].type);
+		}
+	}
+}
+
+
+// Extract media file references from a whole guiding-text HTML body.
+inline
+void
+extractGuidingTextMedia(mstl::string const& html, mstl::vector<mstl::string>& outFiles,
+						mstl::vector<int>& outTypes)
+{
+	extractGuidingTextMediaRange(
+		html, html.c_str(), html.c_str() + html.size(), outFiles, outTypes);
+}
+
+
+// Parse the CBLink(tag_game,...) anchors of a guiding-text HTML body and
+// associate the body's media references with the anchored games (nearest
+// anchor in document order, see the header comment above).
+inline
+void
+extractGuidingTextGameBlocks(	mstl::string const&						html,
+										mstl::vector<GuidingTextGameBlock>&	blocks)
+{
+	static char const* const TAG = "cblink(tag_game,";
+	static unsigned const TAG_LEN = 16;
+
+	char const* begin = html.c_str();
+	char const* end = begin + html.size();
+	blocks.clear();
+
+	// Pass 1: locate the anchors and parse their fields.
+	char const* anchor = begin;
+	while ((anchor = ciSearch(anchor, end, TAG, TAG_LEN)) != 0)
+	{
+		char const* next = ciSearch(anchor + TAG_LEN, end, TAG, TAG_LEN);
+		char const* blockEnd = (next ? next : end);
+		char const* f = anchor + TAG_LEN;
+		char const* rpar = static_cast<char const*>(::memchr(f, ')', blockEnd - f));
+		if (!rpar)
+			rpar = blockEnd;
+
+		GuidingTextGameBlock block;
+		block.year = 0;
+		block.round = 0;
+
+		mstl::string fields[10];
+		unsigned fieldCount = 0;
+		char const* fieldStart = f;
+		for (char const* c = f; c <= rpar && fieldCount < 10; ++c)
+		{
+			if (c == rpar || *c == ',')
+			{
+				fields[fieldCount].assign(fieldStart, c - fieldStart);
+				++fieldCount;
+				fieldStart = c + 1;
+				if (c == rpar)
+					break;
+			}
+		}
+
+		if (fieldCount >= 8)
+		{
+			block.white = fields[0];
+			block.black = fields[2];
+			block.event = fields[4];
+			block.site = fields[5];
+			block.year = parseDigits(fields[6].c_str(),
+											 fields[6].c_str() + fields[6].size());
+			block.round = parseDigits(fields[7].c_str(),
+											 fields[7].c_str() + fields[7].size());
+			blocks.push_back(block);
+		}
+		anchor = blockEnd;
+	}
+	if (blocks.empty())
+		return;
+
+	// Recompute the anchor positions of the VALID anchors (pass-1 skips
+	// anchors with unrecognized field layouts).
+	mstl::vector<unsigned> apos;
+	anchor = begin;
+	unsigned b = 0;
+	while ((anchor = ciSearch(anchor, end, TAG, TAG_LEN)) != 0 && b < blocks.size())
+	{
+		char const* next = ciSearch(anchor + TAG_LEN, end, TAG, TAG_LEN);
+		char const* blockEnd = (next ? next : end);
+		char const* f = anchor + TAG_LEN;
+		char const* rpar = static_cast<char const*>(::memchr(f, ')', blockEnd - f));
+		if (!rpar)
+			rpar = blockEnd;
+		unsigned commas = 1;
+		for (char const* c = f; c < rpar; ++c)
+			if (*c == ',')
+				++commas;
+		if (commas >= 8)
+		{
+			apos.push_back(unsigned(anchor - begin));
+			++b;
+		}
+		anchor = blockEnd;
+	}
+
+	// Pass 2: collect every media reference in document order.
+	mstl::vector<GuidingTextMediaRef> refs;
+	scanGuidingTextMediaRefs(html, begin, end, refs);
+
+	// Pass 3: attach each reference to its owning section: the last anchor
+	// at-or-before the reference opens the section that carries the media
+	// ("…can start the video of Daniel King: <A…CBLink(tag_stream,…)") and
+	// the next anchor closes it. Refs before the first anchor (report
+	// header art + the section introducing the first game) attach to the
+	// first anchored game.
+	for (unsigned i = 0; i < refs.size(); ++i)
+	{
+		unsigned pos = refs[i].pos;
+		unsigned best = 0;
+		bool found = false;
+		for (unsigned k = 0; k < apos.size(); ++k)
+		{
+			if (apos[k] <= pos)
+			{
+				best = k;   // keep the latest anchor not after the reference
+				found = true;
+			}
+		}
+		if (!found)
+			best = 0;      // refs before the first anchor: first anchored game
+		// De-duplicate per block (first occurrence in document order wins).
+		bool dup = false;
+		for (unsigned k = 0; k < blocks[best].files.size(); ++k)
+			if (blocks[best].files[k] == refs[i].file) { dup = true; break; }
+		if (dup)
+			continue;
+		blocks[best].files.push_back(refs[i].file);
+		blocks[best].types.push_back(refs[i].type);
+	}
+}
+
 
 // Resolve a guiding-text media filename to "<dbdir>/<DBName>.html/<filename>".
 // `database` is the database path (with or without an extension). The
