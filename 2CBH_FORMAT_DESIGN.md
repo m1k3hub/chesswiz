@@ -774,6 +774,35 @@ item at X=73 renders after ply 74.
   scripts/analyze_2cba_plies.py, scripts/verify_2cba_walk.py,
   scripts/collect_twin_movetext.py, scripts/validate_2cbh_pgn_comments.py.
 
+### 4.2 Variation tree in .2cbg — STRUCTURE CRACKED (2026-08-29),
+decoder still flat-only
+
+The .2cbg record carries the complete game tree:
+
+  mainline: [0xfffc] moves [0xffff]
+  sub-blocks: the RAV subtrees in REVERSE POST-ORDER (parent node's own
+  move runs — interleaved with 0xfffd markers at nested-variation points —
+  immediately followed by its children's subtrees in REVERSE doc order);
+  every node is closed by its own 0xffff.
+
+A marker's value M = the 1-based mainline ply the RAV replaces; the
+block replays legally from the position BEFORE ply M.  Several sibling
+RAVs can share one marker.  The flattened walk (section 4.1's X) counts
+every move of the tree in document order and never resets.
+
+Validation (scripts/verify_varwalk.py + varwalk.py):
+- 81/81 .2cba items over 43 twin games (with variations) place comments
+  EXACTLY at the twin's norst positions (text-matched, order-aligned);
+- 2 known-limitation games (Westerinen-Ernst 2012, Kotronias-Ivanchuk
+  2011) fail the 1:1 pairing: their trees host sibling/nested RAVs; the
+  storage order is confirmed reverse-post-order for those too (verified
+  via region-structure dumps — see scripts/analyze_ravs.py and
+  scripts/match_blocks.py).  The tree rebuild (nested walk) is scheduled
+  next; until then games whose pairing fails keep comments off.
+
+Remaining for RAV-aware emission: tree rebuild (reverse post-order),
+walk positions for nested nodes, and the Consumer startVariation path.
+
 ## 5. .2LID Player Namebase
 
 Variable-length records with length-prefixed strings:
