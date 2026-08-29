@@ -9193,3 +9193,8 @@ cbv/cbv_codec.o: ../sys/sys_file.h
 cbv/cbv_codec.o: ../mstl/m_fstream.h
 cbv/cbv_codec.o: ../mstl/m_string.h
 cbv/cbv_codec.o: ../mstl/m_vector.h
+
+
+2cbh2pgn: 2cbh/2cbh2pgn.o 2cbh/2cbh_move16.o 2cbh/cb2_move16_table.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $^ $(LDFLAGS) $(ALL_LIBS)

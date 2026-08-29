@@ -341,9 +341,18 @@ Codec::doOpen(	mstl::string const& rootname,
 			default: info.m_result = result::Unknown; break;
 		}
 
-		info.m_dateYear = Date::Zero10Bits;
-		info.m_dateMonth = 0;
-		info.m_dateDay = 0;
+		{
+			// date: 3-byte packed at @0xBC (LE): day(5)|month(4)<<5|year(12)<<9
+			unsigned p24 = rec[0xBC]
+						 | (rec[0xBD] << 8)
+						 | (rec[0xBE] << 16);
+			unsigned dday = p24 & 0x1f;
+			unsigned dmon = (p24 >> 5) & 0xf;
+			unsigned dyr = (p24 >> 9) & 0xfff;
+			info.m_dateYear = Date::encodeYearTo10Bits(dyr);
+			info.m_dateMonth = dmon;
+			info.m_dateDay = dday;
+		}
 
 		// record length: peek the .2cbg record header
 		m_gameStream.clear();
