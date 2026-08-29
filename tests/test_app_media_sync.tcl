@@ -77,6 +77,61 @@ tcltest::test mediasync-transport-idle-noop {no transport calls while media stop
 	set ::syncCalls
 } -cleanup {reset} -result {}
 
+tcltest::test mediasync-step-under-autoplay-keeps-playing {step during autoplay keeps media playing} -body {
+	reset
+	set ::syncCalls {}
+	::media::sync::configure transport-cmd [list ::apply {what {lappend ::syncCalls $what}}]
+	::media::sync::set-config 1 0
+	::media::sync::onPlaybackStarted
+	::media::sync::autoplay 1
+	::media::sync::step
+	::media::sync::autoplay 0
+	set ::syncCalls
+} -cleanup {reset} -result {play pause}
+
+tcltest::test mediasync-transport-disabled-inert {transport sync off -> no transport traffic} -body {
+	reset
+	set ::syncCalls {}
+	::media::sync::configure transport-cmd [list ::apply {what {lappend ::syncCalls $what}}]
+	::media::sync::set-config 0 0
+	::media::sync::onPlaybackStarted
+	::media::sync::autoplay 1
+	::media::sync::autoplay 0
+	::media::sync::step
+	set ::syncCalls
+} -cleanup {reset} -result {}
+
+tcltest::test mediasync-follow-tick-cap-and-convergence {drive ticks cap at 4 plies each and converge to the mapped goal} -body {
+	reset
+	set ::syncPly 0
+	::media::sync::configure \
+		boardforward-cmd {::apply {{} {incr ::syncPly}}} \
+		boardstart-cmd   {::apply {{} {set ::syncPly 0}}} \
+		boardlength-cmd  {::apply {{} {return 40}}} \
+		boardply-cmd     {::apply {{} {return $::syncPly}}}
+	::media::sync::set-config 1 1
+	::media::sync::onPlaybackStarted
+	::media::sync::drive 20000 40000           ;# halfway -> goal 20, first tick
+	set capped [expr {$::syncPly <= 4}]
+	::media::sync::drive 20000 40000           ;# repeated ticks catch up
+	::media::sync::drive 20000 40000
+	list $capped [expr {$::syncPly >= 10}]
+} -cleanup {reset} -result {1 1}
+
+tcltest::test mediasync-follow-off-drive-ignored {follow mode off -> drive leaves the board alone} -body {
+	reset
+	set ::syncPly 5
+	::media::sync::configure \
+		boardforward-cmd {::apply {{} {incr ::syncPly}}} \
+		boardstart-cmd   {::apply {{} {set ::syncPly 0}}} \
+		boardlength-cmd  {::apply {{} {return 40}}} \
+		boardply-cmd     {::apply {{} {return $::syncPly}}}
+	::media::sync::set-config 1 0
+	::media::sync::onPlaybackStarted
+	::media::sync::drive 30000 40000
+	set ::syncPly
+} -cleanup {reset} -result 5
+
 tcltest::test mediasync-follow-drives-board {drive() maps media time linearly onto plies} -body {
 	reset
 	set ::syncFwds 0
