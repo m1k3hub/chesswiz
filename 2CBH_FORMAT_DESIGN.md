@@ -774,6 +774,16 @@ item at X=73 renders after ply 74.
   scripts/analyze_2cba_plies.py, scripts/verify_2cba_walk.py,
   scripts/collect_twin_movetext.py, scripts/validate_2cbh_pgn_comments.py.
 
+Game records begin at offset 0xe898 (59,544); the preceding header
+region starts with the file length as a u32 LE (= the exact .2cba file
+size, 205,063,640 at this fixture), then a count field, the file magic
+0x1122334455667788 (little-endian `88 77 66 55 44 33 22 11`) at +0x0c,
+and further bookkeeping (0x14: 4, 0x18: 198, 0x20: 0xffffff7f) —
+structure not yet fully mapped.  Also: all 8842 strictly-parsed sample
+items carry body type 7 only; graphical annotations (arrows/squares)
+are NOT represented by the 1-byte-type scheme allegedly present, and
+the ~5% unparseable records are nested-container forms.
+
 ### 4.2 Variation tree in .2cbg — STRUCTURE CRACKED and NESTED WALK VERIFIED
 (2026-08-29)
 
