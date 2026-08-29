@@ -196,6 +196,7 @@ proc build {top width height} {
 		$panes add $edit.f$i
 		set Vars(pgn:$i) $pgn
 		set Vars(frame:$i) $edit.f$i
+		set Vars(see:$i) 1
 	}
 
 	set Vars(main) $main
@@ -870,7 +871,7 @@ proc See {position {key ""} {succKey ""}} {
 	variable Vars
 	variable CharLimit
 
-	if {!$Vars(see:$position)} { return }
+	if {![info exists Vars(see:$position)] || !$Vars(see:$position)} { return }
 
 	if {[string length $key] == 0} {
 		set key $Vars(current:$position)
@@ -1028,11 +1029,11 @@ proc UpdateCorrClock {position} {
 
 	if {$isCorr} {
 		set ::corrclock::${w}::Position $position
-		$w update
-		$w start
+		::corrclock::update $w
+		::corrclock::start $w
 		grid $w
 	} else {
-		$w stop
+		::corrclock::stop $w
 		grid remove $w
 	}
 }

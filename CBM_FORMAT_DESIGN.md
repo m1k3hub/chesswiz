@@ -1063,3 +1063,55 @@ Revert risk: none outside `tcl/tcl_database.cpp`, `tcl/tcl_media_extract.h`,
 `src/test_media_extract.cpp`, `src/probe_cbllight.cpp`, `src/media_console*`
 and the `media-console/`.
 
+
+### 7.8 Live playback debug — CLOSED (2026-08-29)
+
+The live-Tk playback path was driven end-to-end under Xvfb against the
+ripped CBM168 fixtures (`/media/michael-g-thomas/fixt/cbm168`,
+`168!Start.cbh`, 7 games). Recipe that reproduces the session:
+
+- Build driver: `cp tcl/scidb-beta /tmp/drv.tcl` and append a driver
+  appendix (namespace ::mdbg + `after`-scheduled steps). Run:
+  `DISPLAY=:N TCLLIBPATH=/home/michael-g-thomas/src/tkvlc \
+   ./src/tkscidb-beta /tmp/drv.tcl`
+- Base open: `::application::database::openBase . <cbh> no` →
+  `::application::database::switchToBase <cbh>` → load a game with
+  `::game::new .application -base <cbh> -variant Normal -view 0 -number 0`.
+  NOTE: `::scidb::game::switch N` is a *board-view* switch and requires a
+  loaded game (C++ precondition `containsGameAt`, app_application.cpp).
+- Driver after-bodies run via `uplevel 1` — access array variables fully
+  qualified (`$::application::media::Priv(x)`); `variable` links are
+  unreliable there.
+- Diagnostics: `/tmp/scidb-media-debug.log` (MediaDebug) + app stderr.
+
+Validated end-to-end:
+
+| Step | Result |
+|------|--------|
+| Per-game media panel (game 0) | 13 rows: 8 pictures + 5 stream/video refs |
+| Picture play (`ShowImage`) | inline photo, statusbar shows path + dims |
+| Video play (embedded tkvlc) | `PlayInProcess` → libVLC → `CheckDecode: state=playing` (29 MB .wmv, Biel Navara-Adams) |
+| Game switch (game 1) | `Stop` released the vlc handle (`inprocess=0`), rows rebuilt (17 for the CBM-magazine game incl. .cms type-4 refs) |
+| Fixed see:/corrclock paths | no `bad command "stop"`, no unset-array errors on stderr throughout |
+
+Fixes validated by this session (same commit):
+- `tcl/app-pgn.tcl`: `UpdateCorrClock` now calls the widget's real
+  namespace procs (`::corrclock::update/start/stop $w`) — the old `$w
+  update/stop` raised `bad command "stop"` on every game switch (ttk frame
+  has no such subcommand; see /tmp/scidb-trace.log of the buggy session).
+- `tcl/app-pgn.tcl`: `Vars(see:$position)` initialized for all views in
+  `build` + `info exists` guard in `See` (previously only `see:9` existed).
+- `tcl/app-media.tcl`: `.cms` classification consolidated (kept type 4).
+
+Open follow-ups (not .cbm-playback blockers):
+
+1. `tkvlc` is not installed as a system package; embedded playback needs
+   `TCLLIBPATH=/home/michael-g-thomas/src/tkvlc` (local build 1.0 against
+   libvlc 3). Without it the tier-2 design falls back to `xdg-open`.
+2. Pre-existing shutdown abort (unrelated to playback): `exit` from a
+   script during Tcl_Exit → `Tk_DestroyWindow` chain → a scidb command
+   hits `tk::mainWindow()` (tk/tk_base.cpp:146) after the main window is
+   gone → `tcl::Exception` → std::terminate/abort (core dump). Same
+   family as the 3320899 ttk guards; a `mainWindow()` returning nullptr +
+   graceful handling wherever it is called would fix it.
+
