@@ -680,7 +680,13 @@ recSize=1024, numRecords per database, fileSize = 32 + numRec×1024 ✓.
 Manifest parser validates end-to-end on all 27: 462 file references
 total, 386 resolve inside the corresponding `.html` folder (the rest =
 video/audio content on the magazine disc — CBM168 mounts confirmed at
-`/run/media/michael-g-thomas/CBM168/`).  The BINARY region is now
+`/run/media/michael-g-thomas/CBM168/` and RIPPED VERBATIM to the repo
+drive: `/media/michael-g-thomas/sas_mirror/fixt/cbm168/` (3.0 GB,
+1,348 files, all-files md5 checksum-verified).  The disc also ships
+26 full CBH-family databases (one per magazine section) — each with
+its .cbm/.cbh/.cbg/.cba set AND its `.html` media folder, giving
+persistent offline fixtures for both the CBM parser and the CBH
+annotation/media work without the CD-ROM.  The BINARY region is now
 partially interpreted: 4-byte little-endian u32 RUNS of (id | offset)
 families with repeated tags per bag (samples: tag 0x04 for the
 website-bag, tag 0xfb/0x92 pairs for the .cms stream regions) — the
