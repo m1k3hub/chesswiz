@@ -840,8 +840,14 @@ parent).  Second test case: Kotronias-Ivanchuk 2011 (game 177694,
 Validation recipe: `python3 scripts/verify_varwalk.py` (twin cache
 auto-built into /tmp/varwalk_twin_cache.json on first run; ~40s PGN
 stream).  Target: 0 mismatches including the two nested games after the
-tree rebuild; then PGN emission with `(...)` nesting and the Consumer
-startVariation path in cb2::Codec.
+tree rebuild — DONE (2026-08-29, see the section 4.2 headline).  The C++
+side: `db::cb2::parseCbgTree` + `cbgWalkTotal` are STAGED in
+src/db/2cbh/2cbh_annotations.cpp and wired into 2cbh2pgn with the
+emission gate left flat-validated (variation games keep comments off so
+the 855855-game comment path stays byte-identical to the verified
+state).  The remaining C++ work = port scripts/varwalk.py
+buildTreeModel + flattenTree (the verified Python reference) into the
+recursive renderer and the Consumer startVariation path.
 
 ## 5. .2LID Player Namebase
 
