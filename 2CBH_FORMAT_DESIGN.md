@@ -800,8 +800,49 @@ Validation (scripts/verify_varwalk.py + varwalk.py):
   scripts/match_blocks.py).  The tree rebuild (nested walk) is scheduled
   next; until then games whose pairing fails keep comments off.
 
-Remaining for RAV-aware emission: tree rebuild (reverse post-order),
-walk positions for nested nodes, and the Consumer startVariation path.
+#### 4.2.1 Exact grammar for the nested rebuild (handoff, 2026-08-29)
+
+Parse procedure (token stream after the mainline terminator):
+
+    parsesubtree():                     # one storage node + its claimed children
+        node.own = [codes]              # moves until 0xfffd or the node's E
+        while token not in (E, end):
+            if 0xfffd: node.markers.append(len(node.own)); continue?? — no:
+                       count the own moves BEFORE the marker
+            else: node.own.append(code)
+        consume E
+        # storage = reverse post-order: the node's own tokens come FIRST,
+        # then its children's subtrees in REVERSE doc order, one child per
+        # internal marker:
+        kids_stor = [parsesubtree() for _ in range(len(node.markers))]
+        node.kids_doc = reversed(kids_stor)
+
+Rules:
+  - an INTERNAL 0xfffd records the count of the node's own moves written
+    so far (= the 0-based index of the parent's own move the child
+    variation replaces; the marker sits between that move and the next).
+  - a node with k internal markers owns the NEXT k storage subtrees, in
+    reverse doc order; children's subtrees recurse identically.
+  - the number of ROOT-level subtrees equals the number of mainline
+    0xfffd markers; root subtrees appear in REVERSE doc order.
+  - flattened walk: the child content walks at its insertion point inside
+    the parent (between parent-own[offset-1] and parent-own[offset]);
+    comment X attaches after the (X+1)-th move of that walk, exactly as
+    in the flat case.
+
+Worked example — Westerinen-Ernst 2012 (game 143022): post-mainline
+regions `......E | ...M...E | ....E | ..E | .E | ....E` map to the doc
+tree RAV0(4, m24), RAV1(1), RAV2(2), RAV3(6 own moves + internal marker,
+nested child RAV4(4)), RAV5(6): file order = RAV5, RAV3, RAV4, RAV2,
+RAV1, RAV0 (reverse post-order incl. the child directly after its
+parent).  Second test case: Kotronias-Ivanchuk 2011 (game 177694,
+12 RAVs / 10 root markers, two markers with two sibling RAVs).
+
+Validation recipe: `python3 scripts/verify_varwalk.py` (twin cache
+auto-built into /tmp/varwalk_twin_cache.json on first run; ~40s PGN
+stream).  Target: 0 mismatches including the two nested games after the
+tree rebuild; then PGN emission with `(...)` nesting and the Consumer
+startVariation path in cb2::Codec.
 
 ## 5. .2LID Player Namebase
 
