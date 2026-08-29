@@ -11,7 +11,7 @@ from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pgn_ground_truth import parse_items_at
-from varwalk import parseCBG, reconstruct, decodePosition
+from varwalk import parseCBG, buildTreeModel, flattenTree
 
 movetext_lines = []
 collected = []
@@ -228,13 +228,13 @@ for k, cbaOff, ds in sample:
 
     off = int.from_bytes(CBH[(256 + k) * recordSize + 0x08:
                              (256 + k) * recordSize + 0x0c], "little")
-    mainline, markers, blocks = parseCBG(CBG, off)
-    res = reconstruct(mainline, markers, blocks)
-    if res is None:
+    try:
+        mainline, rootInsert, rootsDoc, region = buildTreeModel(CBG, off)
+        walk, total = flattenTree(mainline, rootInsert, rootsDoc)
+    except Exception:
         stats["reconstruct_failed"] += 1
-        fails.append((k, key, "reconstruct"))
+        fails.append((k, key, "exception"))
         continue
-    plyPos, varPos, ml, varTotal = res
     items, complete = parse_items_at(CBA, cbaOff, ds)
     if not complete or not items:
         stats["no_items"] += 1
@@ -256,9 +256,7 @@ for k, cbaOff, ds in sample:
             continue
         twinPos = pgnComments[j][1]
         pi = j + 1
-        pos = decodePosition(it["X"], plyPos, varPos, ml + varTotal)
-        # decodePosition returns the walk position itself in pos[1]
-        modelPos = None if pos is None else pos[1]
+        modelPos = it["X"] + 1 if it["X"] + 1 in walk else None
         if modelPos is None or modelPos != twinPos:
             stats["mismatch"] += 1
             fails.append((k, key[:30], it["X"], "model", modelPos,

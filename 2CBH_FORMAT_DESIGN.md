@@ -806,10 +806,9 @@ Parse procedure (token stream after the mainline terminator):
 
     parsesubtree():                     # one storage node + its claimed children
         node.own = [codes]              # moves until 0xfffd or the node's E
-        while token not in (E, end):
-            if 0xfffd: node.markers.append(len(node.own)); continue?? — no:
-                       count the own moves BEFORE the marker
-            else: node.own.append(code)
+        while token not (E | end):
+            if 0xfffd: node.markers.append(len(node.own))  # own moves BEFORE
+            else:      node.own.append(code)
         consume E
         # storage = reverse post-order: the node's own tokens come FIRST,
         # then its children's subtrees in REVERSE doc order, one child per

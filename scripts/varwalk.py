@@ -164,3 +164,107 @@ def decodePosition(X, plyPos, varPos, total):
         di_, off = byVal[t]
         return ("var", t, (di_, off))
     return None
+
+# ----------------------------------------------------------------------
+# Nested tree model — section 4.2.1 grammar
+# ----------------------------------------------------------------------
+
+def parseSubtreeTokens(region, idx):
+    """One storage node + its claimed child subtrees (recursive).
+
+    Returns (node, nextIdx); node = dict(own, markers, kidsDoc):
+      own     = the node's own move codes in walk order
+      markers = 0-based own indices at which the child variations sit
+      kidsDoc = child subtrees in DOC order
+    """
+    node = dict(own=[], markers=[], kids=None)
+    while idx < len(region) and region[idx] != 0xffff:
+        code = region[idx]
+        if code == 0xfffd:
+            node["markers"].append(len(node["own"]))   # own moves BEFORE = insert index
+            idx += 1
+        elif code >= 0xfffb:
+            idx += 1
+        else:
+            node["own"].append(code)
+            idx += 1
+    idx += 1  # consume this node's E
+    kidsStor = []
+    for _ in range(len(node["markers"])):   # children appear in REVERSE doc order
+        kid, idx = parseSubtreeTokens(region, idx)
+        kidsStor.append(kid)
+    node["kids"] = list(reversed(kidsStor))  # -> doc order
+    return node, idx
+
+
+def buildTreeModel(CBG, off):
+    """-> (mainline, rootInsert, rootsDoc, region).
+
+    rootInsert[j] = the 0-based mainline index replaced by rootsDoc[j]'s
+    first move (= marker ply M minus 1, from the mainline markers).
+    """
+    mainline, markers, blocks = parseCBG(CBG, off)   # markers as stored (1-based)
+    ds = int.from_bytes(CBG[off + 8:off + 12], "little")
+    data = CBG[off + 0x1a:off + 0x1a + ds]
+    n = len(data) // 2
+    toks = [int.from_bytes(data[2*i:2*i+2], "little") for i in range(n)]
+    idx0 = 0
+    while idx0 < n and toks[idx0] != 0xffff:
+        idx0 += 1
+    region = toks[idx0 + 1:]
+    rootsStor = []
+    idx = 0
+    while idx < len(region):
+        node, idx = parseSubtreeTokens(region, idx)
+        rootsStor.append(node)
+    rootsDoc = list(reversed(rootsStor))     # doc order = marker-ascending
+    rootInsert = [m - 1 for m in markers] if markers else []
+    return mainline, rootInsert, rootsDoc, region
+
+
+def flattenTree(mainline, rootInsert, rootsDoc):
+    """Flattened (norst) walk of the tree.
+
+    Returns walk: dict(1-based walk position -> ('main', ply0) |
+    ('rav', (parentPath, ki), ownIdx)).  Uniform marker semantics: the
+    child's content walks BEFORE the own move at its marker index (it
+    replaces that move); root markers are pre-converted 0-based.
+    """
+    walkMap = {}
+    state = dict(pos=0, walk=walkMap)
+
+    def walkRec(own, markers, kids, rav):
+        vi = 0
+        ki = 0
+        n = len(own)
+        while vi < n or ki < len(kids):
+            if ki < len(kids) and markers[ki] == vi:
+                walkRec(kids[ki]["own"], kids[ki]["markers"], kids[ki]["kids"],
+                        (rav, ki))
+                ki += 1
+                continue
+            if vi < n:
+                state["pos"] += 1
+                ref = ("main", vi) if rav is None else ("rav", rav, vi)
+                walkMap[state["pos"]] = ref
+                vi += 1
+            else:
+                break
+
+    # root: marker insert indices already 0-based (M-1)
+    vi = 0
+    ki = 0
+    n = len(mainline)
+    while vi < n or ki < len(rootsDoc):
+        if ki < len(rootsDoc) and rootInsert[ki] == vi:
+            walkRec(rootsDoc[ki]["own"], rootsDoc[ki]["markers"],
+                    rootsDoc[ki]["kids"], ki)
+            ki += 1
+            continue
+        if vi < n:
+            state["pos"] += 1
+            walkMap[state["pos"]] = ("main", vi)
+            vi += 1
+        else:
+            break
+    return walkMap, state["pos"]
