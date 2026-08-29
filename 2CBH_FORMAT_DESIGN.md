@@ -774,8 +774,8 @@ item at X=73 renders after ply 74.
   scripts/analyze_2cba_plies.py, scripts/verify_2cba_walk.py,
   scripts/collect_twin_movetext.py, scripts/validate_2cbh_pgn_comments.py.
 
-### 4.2 Variation tree in .2cbg — STRUCTURE CRACKED (2026-08-29),
-decoder still flat-only
+### 4.2 Variation tree in .2cbg — STRUCTURE CRACKED and NESTED WALK VERIFIED
+(2026-08-29)
 
 The .2cbg record carries the complete game tree:
 
@@ -793,12 +793,12 @@ every move of the tree in document order and never resets.
 Validation (scripts/verify_varwalk.py + varwalk.py):
 - 81/81 .2cba items over 43 twin games (with variations) place comments
   EXACTLY at the twin's norst positions (text-matched, order-aligned);
-- 2 known-limitation games (Westerinen-Ernst 2012, Kotronias-Ivanchuk
-  2011) fail the 1:1 pairing: their trees host sibling/nested RAVs; the
-  storage order is confirmed reverse-post-order for those too (verified
-  via region-structure dumps — see scripts/analyze_ravs.py and
-  scripts/match_blocks.py).  The tree rebuild (nested walk) is scheduled
-  next; until then games whose pairing fails keep comments off.
+- the NESTED tree walk (section 4.2.1 grammar) is implemented in
+  scripts/varwalk.py (buildTreeModel + flattenTree) and verifies the two
+  nested games exactly: Westerinen-Ernst (65 main + 23 RAV moves = 88
+  walk) and Kotronias-Ivanchuk 2011 (74 + 46 = 120).  Comment placement
+  is X+1 = the twin's norst position for every matched text (81 total
+  incl. all nested content); zero reconstruct failures.
 
 #### 4.2.1 Exact grammar for the nested rebuild (handoff, 2026-08-29)
 
