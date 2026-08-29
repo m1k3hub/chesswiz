@@ -207,26 +207,32 @@ def main():
         rendered = " ".join(r.tokens)
         print(f"=== mode={mode}: RENDERED {r.dbgRendered} rav groups; walk={r.flat} tokens={len(r.tokens)}")
         norm = re.sub(r"\s+", " ", rendered).strip()
-        # score against the twin: longest common prefix ratio + comment positions
-        twin_norm = re.sub(r"\s+", " ", twinMt).strip()
-        # strip move numbers for a comparable stream
-        mine = [t for t in norm.split(" ") if t]
-        twin_toks = [t for t in twin_norm.split(" ") if t]
-        same = sum(1 for a, b in zip(mine, []) )
-        # exact prefix length
-        pl = 0
-        for a, b in zip(mine, twin_norm.split(" ")):
+        # comparable streams: collapse whitespace, drop separators, and
+        # normalize brace-boundary padding on BOTH streams
+        nrm = re.sub(r"\s+", " ", rendered).strip()
+        twn = re.sub(r"\s+", " ", twinMt).strip()
+        nrm = nrm.replace("{ ", "{").replace(" }", "}")
+        twn = twn.replace("{ ", "{").replace(" }", "}")
+
+        def clean(s):
+            out = []
+            for x in s.split(" "):
+                x2 = x.strip("{}")
+                if x2 and x2 not in ("1/2-1/2",) and not re.match(r"^\d+\.\.?$", x):
+                    out.append(x2)
+            return out
+
+        twin_tokens = clean(twn)
+        mine = clean(nrm)
+        cp = 0
+        for a, b in zip(mine, twin_tokens):
             if a != b:
                 break
-            pl += 1
-        tw = len(twin_norm.split(" "))
-        print(f"   common-prefix tokens: {pl} of twin {tw}")
-        # show first mismatch
-        tt = twin_norm.split(" ")
-        if pl < min(len(mine), len(tt)):
+            cp += 1
+        print(f"   common-prefix(cleaned): {cp} / ours {len(mine)} / twin {len(twin_tokens)}")
+        if cp < min(len(mine), len(twin_tokens)):
             print("   first mismatch:")
-            print("    ours:", " ".join(mine[max(0, pl-4):pl+6]))
-            print("    twin:", " ".join(tt[max(0, pl):pl+6]))
-
+            print("    ours:", " ".join(mine[max(0, cp-8):cp+10]))
+            print("    twin:", " ".join(twin_tokens[max(0, cp-8):cp+10]))
 
 main()
