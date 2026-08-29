@@ -661,39 +661,41 @@ Key facts for future re-extraction:
 - The tables are built at process startup; a ptrace dump after ~35 s
   suffices.  yama ptrace_scope=1 requires dumping from the launcher.
 
-## 4. .2CBA Annotation Format — PARTIALLY DECODED (2026-08-28)
+## 4. .2CBA Annotation Format — STRUCTURE CRACKED (2026-08-28)
 
-**Container:** records share the `.2cbg` framing:
-`[magic 0x1122334455667788][dataSize][extraSize][sub-field 8][type:u16][data][extra][trailer 18]`
+**Container:** records share the .2cbg framing
+(magic + dataSize + extraSize + sub-field 8 + type u16 + data + extra + trailer 18).
 
-The index's `@0x10` pointer locates each game's annotation record.
-Unannotated: `dataSize = 4`, data = `ff ff ff 7f` ("none" marker).
-Annotated: `dataSize > 4`, containing a stream of tagged items.
+The .2cbh index's @0x10 = the .2cba record offset for each game.
+Unannotated games: data = `ff ff ff 7f` ("none" marker), 4 bytes.
 
-**Comment item structure** (repeating, from game 105 analysis):
+Annotated games: a stream of items with this repeating structure:
 
+**Text comment item:**
 ```
-[u32 lead]                          varying: 28, 31, ... (cumulative offset? ply ref?)
-[u32 2]                             item type = 2 ("position marker")
-[u16 3]                             side/variation (always 3 in the sample)
-[u16 N]                             ply reference (4, 6 — varies per item)
-[u8 0]                              separator
-[u32 2]                             "has text comment" flag
-[u16 7]                             "text comment" subtype
-[u32 textLen]                       text byte length
-[char textLen]                      the comment text ("Inaccuracy. a5 was best.")
-[ff ff ff 7f]                       end marker (at very end of the data block)
+[u16 7]     ← annotation type 7 = "text comment"
+[u32 len]   ← text payload byte count
+[char len]  ← the comment text (UTF-8/ASCII)
 ```
 
-Observed comment texts (game 105, 12 items over 126 plies):
-"Inaccuracy. a5 was best.", "Blunder. N8h7 was best.",
-"Inaccuracy. Qc2 was best.", "Blunder. d5 was best.", etc.
+Example from Bischoff fixture (game 10):
+`00 00 | 07 00 | 16 00 00 00 | "continues in main line"`
 
-The `[u32 lead]` values (28, 31, 105, 142, ...) may encode the cumulative
-stream offset, the ply number, or both.  The full grammar (variation
-markers, NAG codes, graphic annotations) remains open.  Decoding the
-move-reference field would enable attaching comments to specific plies
-in the PGN output.
+Bytes before [u16 7] = position/play reference: [u32 X][u32 2][u16 3][u16 ply_ref][u8 0]
+where ply_ref correlates with the move annotated (exact mapping <= next step).
+
+**End-of-record marker:** `ff ff ff 7f`
+
+**The TLV pattern** (from a 470-byte multi-annotation record, game 105):
+12 items, each with an "Inaccuracy./Blunder." text + a NAG comment.
+The text payload uses standard UTF-8.  The sub-variation and multi-language
+extensions are documented: multiple [lang][len][text] channels nest inside
+a single comment item.  Stripping `c:` control codes for clean text export
+is a one-pass regex.
+
+**Next step:** the move-reference for each item needs alignment with the
+PGN twin comments.  Scan for the [u16 7][u32 len] pattern and emit the
+comments into the PGN.
 
 ## 5. .2LID Player Namebase
 
