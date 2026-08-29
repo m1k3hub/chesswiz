@@ -482,8 +482,12 @@ proc application::media::Stop {} {
 	catch { after cancel $Priv(checkid) }
 	set Priv(checkid) {}
 
+	if {![info exists Priv(viewer)]} { return }   ;# panel not built yet
+
 	# Stop and release tkvlc playback.
-	if {$Priv(inprocess) || $Priv(vlc_handle) ne ""} {
+	if {[info exists Priv(inprocess)] && $Priv(inprocess)} {
+		DestroyVlcHandle
+	} elseif {[info exists Priv(vlc_handle)] && $Priv(vlc_handle) ne ""} {
 		DestroyVlcHandle
 	}
 
