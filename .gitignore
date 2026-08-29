@@ -33,6 +33,21 @@ src/verify_maintenance
 src/recover_index
 src/cdb2sci
 src/probe_dump_moves
+src/cbh2si4
+
+# ECO codebook tool binaries (regenerate via: make -C src <name>)
+src/code2eco
+src/extend_eco
+src/eco2code
+src/dump_eco
+src/best_move
+src/pawn_progress
+
+# beta app binaries (built from tcl/merge + src, see tcl/Makefile $(SCRIPT))
+src/scidb-beta
+src/tclscidb-beta
+src/tkscidb-beta
+tcl/scidb-beta
 
 # new media-tool binaries
 src/cbm2scm
