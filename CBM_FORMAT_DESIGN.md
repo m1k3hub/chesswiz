@@ -702,6 +702,18 @@ bags = correctly empty).  UNBLOCKED THREADS now that the disc is local:
   3. test_cbm_media / probe_cbm regression runs offline (no CD-ROM
      dependency); the .cbm gallery path (cbm2scm -> .scm) can run in
      loops for all 27 fixtures (429 entries round-trip).
+
+MediaTable playback status (2026-08-29, off the ripped set):
+test_cbm_media executed against all 27 ripped fixtures (26 top-level
++ the Data Collect 3-bagger): 27/27 RESULT: PASS — header/size match,
+independent marker scan, entryCount parity, manifest refs onto the
+.html folders on disk, plus the 6 synthetic corrupt-header cases
+(garbage header, corrupt marker, truncation, both empty sentinels,
+huge-FilesUsed clamp).  Interactive playback content CONFIRMED on
+disc, incl. .wmv training clips under
+168Endgame.html/CBM168Interaktivdeutsch01/ (stream URLs inside the
+RAV content, filename-encoded FEN seeds like
+2Q5z4k3z8z3Q3Kz1q6z6P1z8zq7 b - - 0 1x11y59v3u2.wmv).
 partially interpreted: 4-byte little-endian u32 RUNS of (id | offset)
 families with repeated tags per bag (samples: tag 0x04 for the
 website-bag, tag 0xfb/0x92 pairs for the .cms stream regions) — the
