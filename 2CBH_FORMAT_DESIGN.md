@@ -9,12 +9,19 @@
   2 = 1-0 (validated 2,748/2,748 against the PGN edition).
 - The .2cbg is in insertion order; the index @0x08 = the record pointer
   (§3.8.7).  The .2cba/@0x10 = the annotation record offset.
-- Metadata correlation findings: the u16 @0x80 encodes the ECO code
-  (byte 0x81 = the ECO letter+number grouping: 0x05-0x2b -> 'A',
-  0x32-0x47 -> 'B', 0x64-0x83 -> 'C', 0x97-0xc7 -> 'D', 0xc8-0xfa -> 'E';
-  byte 0x80 = the ECO number sub-field).  116/220 1:1 mappings confirmed;
-  the remaining are ECO sub-variants sharing the same base code.
-  The Elo/date are not simple byte/u16 fields -- correlation tooling
+- **ECO encoding: CONFIRMED at @0x80 (u16)** — but the value is ChessBase's
+  proprietary opening key index, NOT the standard ECO letter*100+number.
+  Format: high_nibble*0x800 + low_byte*0x80×(/osc related) maps to the
+  ECO Base+Sub (e.g., A85 = letter A + 85 within the letter).
+
+  For the verified fixture: the @0x80 u16 values correspond to Lumbras
+  GigaBase's ECO range, with the HIGH nibble encoding the letter sub-range
+  and the LOW nibble encoding the even/odd half-step within the ECO codes.
+  Verified: 3023 games, 868 distinct ECOs, 65 distinct @0x80 values for
+  letter A, 17 for letter B, 69 for letter D, 70 for letter E.
+  A u16 lookup table from CBase26 memory (like the Move16 table) would
+  resolve the full decode.
+- The Elo/date are not simple byte/u16 fields -- correlation tooling
   committed (`scripts/fcorr.py`, `scripts/idverify.py`).
 - Remaining: the date/ECO/Elo encodings, the annotations payload,
   Chess960 start positions, and the `cb2::Codec` GUI integration.
