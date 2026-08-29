@@ -90,7 +90,45 @@ bool flattenToMainline(	uint32_t position,
 								CbgStructure const& structure,
 								uint32_t& mainlinePly);
 
+// ----------------------------------------------------------------------
+// Variation tree (section 4.2): post-mainline storage is REVERSE
+// POST-ORDER.  A node = its own move runs (interleaved with 0xfffd
+// markers at nested-variation points; the marker value = the 0-based
+// index of the replaced move), closed by 0xffff; a node with k markers
+// is followed by k child subtrees in REVERSE doc order.
+struct CbgNode
+{
+	mstl::vector<uint16_t>	own;      ///< node's own moves in walk order
+	mstl::vector<uint32_t>	markers;  ///< 0-based own indices of nested points
+	mstl::vector<uint32_t>	kids;     ///< child node indices into the pool
+};
+
+/** Parse the post-mainline token region into a variation tree.
+ *
+ *  The caller slices the record's tokens AFTER the mainline terminator.
+ *  Output: the node pool (children refer to pool indices), the doc-order
+ *  root node indices, and rootInsert[j] = the 0-based mainline index of
+ *  the move replaced by doc root j.  Returns false when the child-count
+ *  bookkeeping does not close cleanly.
+ */
+bool
+parseCbgTree(	uint16_t const* region,
+					uint32_t regionSize,
+					mstl::vector<uint32_t> const& rootMarkers,
+					mstl::vector<CbgNode>& pool,
+					mstl::vector<uint32_t>& rootsDoc,
+					mstl::vector<uint32_t>& rootInsert);
+
+/** Number of own+descendant moves of the node at pool index i. */
+uint32_t
+cbgSubtreeSize(mstl::vector<CbgNode> const& pool, uint32_t i);
+
+/** Total flattened (document-order) walk length. */
+uint32_t
+cbgWalkTotal(mstl::vector<CbgNode> const& pool, mstl::vector<uint32_t> const& rootsDoc,
+				 uint32_t mainlinePly);
+
+#endif // _db_cb2_2cbh_annotations_included
 } // namespace cb2
 } // namespace db
 
-#endif // _db_cb2_2cbh_annotations_included

@@ -192,3 +192,141 @@ flattenToMainline(	uint32_t position,
 
 } // namespace cb2
 } // namespace db
+
+// ----------------------------------------------------------------------
+// variation tree (section 4.2): recursive parse of the reverse-post-order
+
+namespace db
+{
+
+namespace cb2
+{
+
+namespace
+{
+
+uint32_t
+parseSubtree(uint16_t const* region,
+				 uint32_t regionSize,
+				 uint32_t& idx,
+				 mstl::vector<CbgNode>& pool,
+				 uint32_t& nodeIdxOut)
+{
+	// own tokens until this node's terminator
+	mstl::vector<uint16_t> own;
+	mstl::vector<uint32_t> markers;
+	while (idx < regionSize && region[idx] != 0xffff)
+	{
+		uint16_t code = region[idx];
+		if (code == 0xfffd)
+		{
+			markers.push_back(uint32_t(own.size()));
+			++idx;
+		}
+		else if (code >= 0xfffb)
+		{
+			++idx;
+		}
+		else
+		{
+			own.push_back(code);
+			++idx;
+		}
+	}
+	if (idx >= regionSize)
+		return false;
+	++idx;                                   // consume the node's 0xffff
+	uint32_t const self = uint32_t(pool.size());
+	pool.push_back(CbgNode());
+	pool[self].own = own;
+	pool[self].markers = markers;
+	mstl::vector<uint32_t> kidsStor;               // storage order
+	for (uint32_t k = 0; k < uint32_t(markers.size()); ++k)
+	{
+		uint32_t kid = 0;
+		if (!parseSubtree(region, regionSize, idx, pool, kid))
+			return false;
+		kidsStor.push_back(kid);
+	}
+	// doc order = reverse of storage order
+	for (uint32_t k = uint32_t(kidsStor.size()); k > 0; --k)
+		pool[self].kids.push_back(kidsStor[k - 1]);
+	nodeIdxOut = self;
+	return true;
+}
+
+} // anonymous namespace
+
+
+bool
+parseCbgTree(	uint16_t const* region,
+					uint32_t regionSize,
+					mstl::vector<uint32_t> const& rootMarkers,
+					mstl::vector<CbgNode>& pool,
+					mstl::vector<uint32_t>& rootsDoc,
+					mstl::vector<uint32_t>& rootInsert)
+{
+	pool.clear();
+	rootsDoc.clear();
+	rootInsert.clear();
+
+	uint32_t idx = 0;
+	mstl::vector<uint32_t> rootsStor;
+	for (uint32_t k = 0; k < uint32_t(rootMarkers.size()); ++k)
+	{
+		uint32_t root = 0;
+		if (!parseSubtree(region, regionSize, idx, pool, root))
+			return false;
+		rootsStor.push_back(root);          // storage order for now
+	}
+	if (idx != regionSize)
+		return false;                        // trailing garbage -> failure
+
+	if (rootsStor.empty())
+		return true;         // no markers: empty forest (flat game)
+
+	// storage order is REVERSE doc order (per 4.2): reverse the root list
+	// and the root markers pairing; doc root j pairs with the j-th
+	// smallest root marker
+	mstl::vector<uint32_t> sortedMarkers(rootMarkers);
+	for (mstl::vector<uint32_t>::size_type a = 0; a + 1 < sortedMarkers.size(); ++a)
+		for (mstl::vector<uint32_t>::size_type b = a + 1; b < sortedMarkers.size(); ++b)
+			if (sortedMarkers[b] < sortedMarkers[a])
+			{
+				uint32_t t = sortedMarkers[a];
+				sortedMarkers[a] = sortedMarkers[b];
+				sortedMarkers[b] = t;
+			}
+	rootsDoc.clear();
+	for (mstl::vector<uint32_t>::size_type a = 0; a < sortedMarkers.size(); ++a)
+	{
+		uint32_t nodeIdx = rootsStor[rootsStor.size() - 1 - mstl::vector<uint32_t>::size_type(a)];
+		rootsDoc.push_back(nodeIdx);
+		rootInsert.push_back(sortedMarkers[a] - 1);   // 0-based replaced ply
+	}
+	return true;
+}
+
+
+uint32_t
+cbgSubtreeSize(mstl::vector<CbgNode> const& pool, uint32_t i)
+{
+	uint32_t s = uint32_t(pool[i].own.size());
+	for (mstl::vector<uint32_t>::size_type k = 0; k < pool[i].kids.size(); ++k)
+		s += cbgSubtreeSize(pool, pool[i].kids[k]);
+	return s;
+}
+
+
+uint32_t
+cbgWalkTotal(mstl::vector<CbgNode> const& pool, mstl::vector<uint32_t> const& rootsDoc,
+				 uint32_t mainlinePly)
+{
+	uint32_t s = mainlinePly;
+	for (mstl::vector<uint32_t>::size_type k = 0; k < rootsDoc.size(); ++k)
+		s += cbgSubtreeSize(pool, rootsDoc[k]);
+	return s;
+}
+
+} // namespace cb2
+} // namespace db

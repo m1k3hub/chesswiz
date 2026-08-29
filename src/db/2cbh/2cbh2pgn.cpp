@@ -77,7 +77,7 @@ bool loadFile(char const* name, std::string& data)
 // ALL signature slots equals the player ID used in the .2cbh index.
 // Slot layout: [total][lastLen][last][firstLen][first][tail 20 bytes].
 void loadNames(unsigned char const* lid, size_t size,
-               std::vector<std::string>& out_names)
+               mstl::vector<std::string>& out_names)
 {
    static unsigned char const sig[12] = {
       0xff, 0xff, 0xff, 0xff, 0x08, 0x00, 0x00, 0x00,
@@ -191,7 +191,7 @@ int main(int argc, char* argv[])
       ::fprintf(stderr, "# no .2cba annotations file, comments disabled\n");
 
    // player names from the .2lid namebase (ID == slot ordinal)
-   std::vector<std::string> names(200000u);
+   mstl::vector<std::string> names(200000u);
    {
       std::string lidData;
       if (loadFile((prefix + ".2lid").c_str(), lidData))
@@ -256,11 +256,46 @@ int main(int argc, char* argv[])
       }
 
       // ---------------------------------------------
-      // annotations (.2cba record at index @0x10)
-      // ---------------------------------------------
-      std::vector<std::string> comments;  // [ply 1..] comment per ply
-      unsigned long cbaOff = (unsigned long) readLE32(cbh + (256u + k) * recordSize + 0x10);
+      // --------------------------------------------------------------
+      // annotations (.2cba record at index @0x10) + variation tree (4.2)
+      // --------------------------------------------------------------
+
+      // mainline markers (token index j == 0-based mainline index) and the
+      // post-mainline region
+      mstl::vector<uint32_t> rootMarkers;   // 0-based replaced indices
+      unsigned nShorts = (dataSize - dataSize % 2u) / 2u;
+      unsigned mainEnd = nShorts;
+      {
+         uint16_t prev = 0;
+         for (unsigned j = 0; j < nShorts; ++j)
+         {
+            uint16_t code = readLE16(data + 2*j);
+            if (code == db::cb2::Move16_GameStart)
+            { prev = code; continue; }
+            if (code == db::cb2::Move16_Terminator)
+            { mainEnd = j; break; }
+            if (code == db::cb2::Move16_Marker)
+            { rootMarkers.push_back(uint32_t(j)); prev = code; continue; }
+            if (code >= db::cb2::Move16_None)
+            { prev = code; continue; }
+            (void) prev;
+         }
+      }
+      uint16_t const* region =
+         reinterpret_cast<uint16_t const*>(data) + (mainEnd + 1u);
+      uint32_t regionWords = 0;
+      if (mainEnd + 1u < nShorts)
+      {
+         region = reinterpret_cast<uint16_t const*>(data) + (mainEnd + 1u);
+         regionWords = nShorts - (mainEnd + 1u);
+      }
+
+      std::vector<std::string> comments;   // [walk position 1..] comment
+      mstl::vector<db::cb2::CbgNode> pool;
+      mstl::vector<uint32_t> rootsDoc;
+      mstl::vector<uint32_t> rootInsert;
       bool annotationsOk = false;
+      unsigned long cbaOff = (unsigned long) readLE32(cbh + (256u + k) * recordSize + 0x10);
       if (haveCba && cbaOff != 0x7fffffffu && cbaOff + 0x1a < cbaData.size())
       {
          unsigned char const* arec = (unsigned char const*) cbaData.c_str() + cbaOff;
@@ -270,33 +305,26 @@ int main(int argc, char* argv[])
             if (cbaOff + 0x1a + adSize <= cbaData.size())
             {
                mstl::vector<db::cb2::CbaItem> items;
-               if (db::cb2::parseCbaItems(arec + 0x1a, adSize, items))
-               {
-                  db::cb2::CbgStructure structure;
-                  db::cb2::parseCbgStructure(data, dataSize, structure);
-                  // mainline-only emission (variation comments need the
-                  // subtree tree-walk; see 2CBH_FORMAT_DESIGN.md 4.1)
-                  if (structure.markerPly.empty() && structure.blockSize.empty())
+               if (db::cb2::parseCbaItems(arec + 0x1a, adSize, items)
+                     && db::cb2::parseCbgTree(region, regionWords, rootMarkers,
+                                              pool, rootsDoc, rootInsert)
+                     && rootsDoc.empty())   // flat games only (validated path);
+               {                            // variation emission is next
+                  annotationsOk = true;
+                  ++annotationGames;
+                  uint32_t const walkTotal =
+                     db::cb2::cbgWalkTotal(pool, rootsDoc, uint32_t(mainEnd));
+                  comments.resize(walkTotal + 2);
+                  for (size_t ci = 0; ci < comments.size(); ++ci)
+                     comments[ci].clear();
+                  for (size_t i = 0; i < items.size(); ++i)
                   {
-                     annotationsOk = true;
-                     ++annotationGames;
-                     comments.assign(structure.mainlinePly + 2, std::string());
-                     for (size_t i = 0; i < items.size(); ++i)
+                     db::cb2::CbaItem const& item = items[i];
+                     if (item.position + 1 < comments.size())
                      {
-                        db::cb2::CbaItem const& item = items[i];
-                        // position X = flattened walk position; the comment
-                        // renders AFTER the (X+1)-th mainline ply (X = 0
-                        // attaches to the first move)
-                        if (item.position + 1 < comments.size())
-                        {
-                           if (!comments[item.position + 1].empty())
-                              comments[item.position + 1] += "\\n";
-                           comments[item.position + 1] += item.text.c_str();
-                        }
-                        else
-                        {
-                           ++skippedVariationComments;
-                        }
+                        if (!comments[item.position + 1].empty())
+                           comments[item.position + 1] += "\n";
+                        comments[item.position + 1] += item.text.c_str();
                      }
                   }
                }
@@ -307,7 +335,6 @@ int main(int argc, char* argv[])
       Board board(Board::standardBoard(Normal));
 
       std::string movetext;
-      unsigned nShorts = dataSize / 2u;
       unsigned moves = 0;
       bool ok = true;
 
