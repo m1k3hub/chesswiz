@@ -119,7 +119,7 @@ proc application::media::build {twm frame width height} {
 
 proc application::media::GameSwitched {oldPos newPos} {
 	variable Priv
-	after cancel $Priv(afterid)
+	catch { after cancel $Priv(afterid) }
 	set Priv(afterid) [after 1 [namespace code [list Update $newPos]]]
 }
 
