@@ -687,6 +687,21 @@ drive: `/media/michael-g-thomas/sas_mirror/fixt/cbm168/` (3.0 GB,
 its .cbm/.cbh/.cbg/.cba set AND its `.html` media folder, giving
 persistent offline fixtures for both the CBM parser and the CBH
 annotation/media work without the CD-ROM.  The BINARY region is now
+
+Now exercised: cbm2scm ran against all 26 non-empty ripped galleries
+(429 [Media] manifest entries produce offline; 168Training.cbm has 0
+bags = correctly empty).  UNBLOCKED THREADS now that the disc is local:
+
+  1. .cbm binary-region linkage decode: 27 corpora + their .cbh/.cbg
+     companions = the differential evidence the single old fixture
+     lacked (436 binary u32s in Data Collect alone vs 302 games in
+     its .cbh; per-bag tag families: 04, fb, 92, 0e...).
+  2. CBH media-flag decode (the skipped 3 bytes at index offset 39-41):
+     26 ripped databases give the per-game media-flag X the .cbm
+     manifests to correlate against.
+  3. test_cbm_media / probe_cbm regression runs offline (no CD-ROM
+     dependency); the .cbm gallery path (cbm2scm -> .scm) can run in
+     loops for all 27 fixtures (429 entries round-trip).
 partially interpreted: 4-byte little-endian u32 RUNS of (id | offset)
 families with repeated tags per bag (samples: tag 0x04 for the
 website-bag, tag 0xfb/0x92 pairs for the .cms stream regions) — the
