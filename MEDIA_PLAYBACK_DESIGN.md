@@ -240,6 +240,7 @@ proc ::media::systemPlayer {} {
 |------|-------------|
 | `tcl/app-media.tcl` (modified) | Media panel UI using tkvlc for playback |
 | `src/tcl/tcl_media.cpp` (stub) | No-op `media::init`; playback is pure Tcl |
+| `tcl/app-media-sync.tcl` | Board ⇄ media synchronization state machine (§5.5) |
 
 **No build system changes needed.** tkvlc is loaded at runtime via
 `package require tkvlc`. If the package is not installed, the media
@@ -284,6 +285,32 @@ to a temp file.
 
 Deferred — would require a custom libVLC media callback or a temporary
 file approach. Not currently implemented.
+
+---
+
+## 5.5 Phase B+ — Board ⇄ media synchronization
+
+**Implemented (2026-08-29)** in `tcl/app-media-sync.tcl` (state machine,
+UI-free) + `tcl/app-media.tcl` (panel wiring). Board code reports
+playback events; the media panel controls the transport:
+
+| Direction | Event | Action (sync enabled) |
+|-----------|-------|----------------------|
+| board → media | browser/pane autoplay starts | media plays |
+| board → media | autoplay stops/pauses | media pauses |
+| board → media | manual position navigation | media pauses |
+| media → board | video plays with "Board follows video" | main board advances linearly over the video duration (4 plies/tick max; a media rewind restarts the game) |
+
+State machine: `::media::sync` (see `tcl/app-media-sync.tcl`); the media
+panel registers delegates (`SyncTransport`, `SyncBoard*`) so the machine
+never touches tkvlc or the game API directly. Headless tests:
+`tests/media-test/test-sync.tcl` (13 assertions, stub delegates).
+
+Known scope limits: ChessBase media refs carry no per-move timecodes, so
+"board follows video" maps the timeline linearly onto the game's ply
+range. The sync couples to the main board (position −1) and any browser
+dialog's autoplay; per-game media switching still stops playback (the
+panel rebuilds per game as before).
 
 ---
 

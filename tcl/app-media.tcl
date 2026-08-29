@@ -31,6 +31,8 @@ set Play				"Play"
 set Stop				"Stop"
 set OpenError		"Cannot open media file: %s"
 set NoPlayer			"No media player found (tkvlc or xdg-open)"
+set SyncBoard		"Sync with board"
+set FollowBoard	"Board follows video"
 
 } ;# namespace mc
 
@@ -85,6 +87,24 @@ proc application::media::build {twm frame width height} {
 	ttk::button $ctrl.stop -text $mc::Stop -command [namespace code Stop]
 	pack $ctrl.play -side left -padx 2
 	pack $ctrl.stop -side left -padx 2
+
+	# Board-sync wiring (state machine in tcl/app-media-sync.tcl)
+	::mediasync::configure \
+		transport-cmd	[namespace code SyncTransport] \
+		boardforward-cmd	[namespace code SyncBoardForward] \
+		boardstart-cmd	[namespace code SyncBoardStart] \
+		boardlength-cmd	[namespace code SyncBoardLength] \
+		boardply-cmd	[namespace code SyncBoardPly]
+	ttk::checkbutton $ctrl.sync \
+		-text $mc::SyncBoard \
+		-variable ::mediasync::opts(transport) \
+		-command [namespace code SyncChanged]
+	ttk::checkbutton $ctrl.follow \
+		-text $mc::FollowBoard \
+		-variable ::mediasync::opts(follow) \
+		-command [namespace code SyncChanged]
+	pack $ctrl.sync -side left -padx 12
+	pack $ctrl.follow -side left -padx 2
 
 	# Embedded viewer area — a frame that holds either an image label
 	# or a tkvlc video window.
@@ -411,6 +431,12 @@ proc application::media::PlayInProcess {path} {
 	set Priv(statusbar) "Playing: $path"
 	MediaDebug "PlayInProcess: playback started for $path"
 
+	# media is playing: sync state machine active (drives the board in
+	# follow mode; transport coupling reacts to board playback events).
+	::media::sync::onPlaybackStarted
+	catch { ::mediasync::opts(transport) } ;# keep checkbutton state authoritative
+	SyncChanged
+
 	# Check shortly after that playback actually started (media decoded).
 	catch { after cancel $Priv(checkid) }
 	set Priv(checkid) [after 800 [namespace code [list CheckDecode $path]]]
@@ -481,6 +507,116 @@ proc application::media::LaunchExternal {path} {
 }
 
 
+# ----------------------------------------------------------------------
+# Media <-> board synchronization (see tcl/app-media-sync.tcl)
+# ----------------------------------------------------------------------
+
+# Transport delegate: play/pause the current tkvlc media.
+proc application::media::SyncTransport {what} {
+	variable Priv
+
+	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
+	set handle $Priv(vlc_handle)
+	if {$handle eq ""} { return }
+
+	switch -- $what {
+		play {
+			set st ""; catch { set st [$handle state] }
+			if {$st eq "paused" || $st eq "ended"} {
+				catch { $handle play }
+				# a resumed transport must re-arm the follow loop
+				StartFollowTick
+			}
+		}
+		pause {
+			set st ""; catch { set st [$handle state] }
+			if {$st eq "playing"} {
+				catch { $handle pause }
+			}
+		}
+	}
+}
+
+# Board delegates for "board follows video" mode.
+proc application::media::SyncBoardForward {} {
+	catch { ::scidb::game::go -1 1 }
+}
+
+proc application::media::SyncBoardStart {} {
+	catch { ::scidb::game::go -1 start }
+}
+
+proc application::media::SyncBoardLength {} {
+	if {[catch { set len [::scidb::game::query -1 length] }]} { return 0 }
+	if {![string is integer -strict $len]} { return 0 }
+	return $len
+}
+
+# Same as ::scidb::game::ply but always returns an integer (may be called
+# before the scratch game exists).
+proc application::media::SyncBoardPly {} {
+	if {[catch { set ply [::scidb::game::ply] }]} { return 0 }
+	if {![string is integer -strict $ply]} { return 0 }
+	return $ply
+}
+
+# One tick of "board follows video": map the media position linearly onto
+# the game and step the main board accordingly.
+proc application::media::FollowTick {} {
+	variable Priv
+
+	set Priv(followafter) {}
+
+	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
+	set handle $Priv(vlc_handle)
+	if {$handle eq ""} { return }
+
+	set st ""; catch { set st [$handle state] }
+	if {$st ne "playing"} {
+		# video paused/ended: stop the follow loop; a resumed Transport
+		# play restarts it.
+		return
+	}
+
+	set t 0; set dur 0
+	catch { set t [$handle time] }
+	catch { set dur [$handle duration] }
+	if {$t eq "" || $dur eq ""} { return }
+
+	::media::sync::drive $t $dur
+
+	# reschedule while follow mode stays enabled
+	StartFollowTick
+}
+
+proc application::media::StartFollowTick {} {
+	variable Priv
+
+	catch { after cancel $Priv(followafter) }
+	set Priv(followafter) [after 250 [namespace code FollowTick]]
+}
+
+proc application::media::StopFollowTick {} {
+	variable Priv
+
+	catch { after cancel $Priv(followafter) }
+	set Priv(followafter) {}
+}
+
+# Checkbutton callback: push the UI state into the state machine and
+# (re)start the follow tick when enabled while a video plays.
+proc application::media::SyncChanged {} {
+	lassign [::mediasync::config] transport follow
+	::media::sync::set-config $transport $follow
+
+	if {$follow} {
+		StartFollowTick
+	} else {
+		StopFollowTick
+	}
+}
+
+
 proc application::media::Stop {} {
 	variable Priv
 
@@ -488,6 +624,10 @@ proc application::media::Stop {} {
 	set Priv(checkid) {}
 
 	if {![info exists Priv(viewer)]} { return }   ;# panel not built yet
+
+	# media no longer playing: reset the sync state machine and timers
+	StopFollowTick
+	::media::sync::onPlaybackStopped
 
 	# Stop and release tkvlc playback.
 	if {[info exists Priv(inprocess)] && $Priv(inprocess)} {

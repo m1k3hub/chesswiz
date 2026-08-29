@@ -139,6 +139,7 @@ SOURCES = \
 	app-db-positions.tcl \
 	app-db-games.tcl \
 	app-corr-games.tcl \
+	app-media-sync.tcl \
 	app-media.tcl \
 	iccf-xfcc.tcl \
 	app-db-players.tcl \

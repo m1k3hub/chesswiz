@@ -822,6 +822,7 @@ proc Goto {position step} {
 	variable Options
 
 	::scidb::game::go $position $step
+	::media::sync::step ;# media playback follows the board (see app-media.tcl)
 
 	if {$Vars(autoplay)} {
 		if {[::scidb::game::position $position atEnd?]} {
@@ -1305,12 +1306,14 @@ proc ToggleAutoPlay {position {hide 0}} {
 	if {[$w cget -image] eq $::icon::22x22::start} {
 		$w configure -image $::icon::22x22::playerStop
 		set Vars(autoplay) 1
+		::media::sync::autoplay 1 ;# media plays along with board autoplay
 		Goto $position +1
 	} else {
 		$w configure -image $::icon::22x22::start
 		set Vars(autoplay) 0
 		after cancel $Vars(afterid)
 		set Vars(afterid) {}
+		::media::sync::autoplay 0 ;# media pauses with board autoplay
 	}
 
 	SetAutoPlayTooltip $position

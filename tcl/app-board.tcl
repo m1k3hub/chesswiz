@@ -490,6 +490,7 @@ proc goto {step} {
 	::variation::hide
 	::move::cancelVariation
 	::scidb::game::go -1 $step
+	::media::sync::step ;# media playback follows the board (see app-media.tcl)
 
 	if {$Vars(autoplay)} {
 		if {[::scidb::game::position -1 atEnd?]} {
