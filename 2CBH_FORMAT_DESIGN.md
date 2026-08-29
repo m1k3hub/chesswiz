@@ -672,7 +672,17 @@ ChessBase-Wine export may be needed).
 
 ## 4b. cb2::Codec Integration — IMPLEMENTED AND VALIDATED AT FULL SCALE (2026-08-28)
 
-**Full-database validation:** the complete LumbrasGigaBase_OTB_ELO2400
+**Full-database validation (both output paths):**
+
+| Output | Games | Notes |
+|--------|-------|-------|
+| `cdb2sci` 2CBH → .sci | 863,538 written | 0 rejected / corrupted / errors |
+| `2cbh2pgn` 2CBH → PGN | 863,538 converted | 514 MB PGN, 8.6M lines |
+| PGN result distribution | 416,409 draw (48%), 268,232 1-0 (31%), 178,897 0-1 (21%) | plausible for ELO-2400+ OTB |
+| PGN unique White names | 9,882 | ✓ matches ~10,700 .2lid slots minus deleted |
+| PGN unique Black names | 9,992 | ✓ close to White count |
+
+**Full-database validation (codec path):** the complete LumbrasGigaBase_OTB_ELO2400
 (863,538 games, 251 MB game data) was converted through the codec
 (`cdb2sci .2cbh -> .sci`) with **863,538 written / 0 rejected / 0
 corrupted / 0 errors**.  The resulting .sci database (85 MB game data,
