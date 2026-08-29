@@ -118,7 +118,7 @@ class Renderer:
     def __init__(self, mainline, rootMarkers, rootsDoc, items):
         self.mainline = mainline
         self.roots = sorted(zip(rootMarkers, rootsDoc))  # doc order
-        self.mode = "before"
+        self.dbgRendered = 0
         self.items = items
         self.board = chess.Board()
         self.tokens = []
@@ -127,11 +127,16 @@ class Renderer:
 
     def emitMove(self, code):
         board = self.board
+        self.flat += 1
         mv = moveFromCode(code, board)
-        san = board.san(mv)
+        try:
+            san = board.san(mv)
+        except AssertionError:
+            san = "ILLEGAL:" + mv.uci() + "/" + board.fen()[:40]
+        if (self.flat % 2) == 1:
+            self.tokens.append(f"{(self.flat + 1) // 2}.")
         self.tokens.append(san)
         board.push(mv)
-        self.flat += 1
         while self.ii < len(self.items) and self.items[self.ii]["X"] + 1 == self.flat:
             item = self.items[self.ii]
             self.ii += 1
@@ -140,48 +145,43 @@ class Renderer:
     def emitNode(self, node):
         own = node["own"]
         kids = sorted(zip(node["markers"], node["kids"]))
+        
         vi = 0
         for offset, kid in kids:
-            stop = offset if self.mode == "before" else offset + 1
-            while vi < stop:
+            pre = self.board.copy(stack=False)   # board BEFORE own[offset]
+            while vi <= offset:
                 self.emitMove(own[vi])
                 vi += 1
-            # child replay must not disturb the parent's board state
-            outer = self.board
-            self.board = outer.copy(stack=False)
+            # child content: textually after the replaced move's SAN, but it
+            # replays from the position BEFORE that move
             self.tokens.append("( ")
+            self.board = pre
             self.emitNode(kid)
             self.tokens.append(") ")
-            self.board = outer
-        while vi < len(own):
-            self.emitMove(own[vi])
-            vi += 1
+            self.board = saved
 
-    def run(self, mode):
+    def run(self, mode="after"):
         self.mode = mode
         vi = 0
         ki = 0
+        dbg = 0
+        # root RAVs render after the SAN of their replaced mainline move;
+        # their content replays from the position BEFORE that move.
         roots = self.roots
-        while vi < len(self.mainline) or ki < len(roots):
-            if ki < len(roots):
-                replaced0, node = roots[ki]
-                stop = replaced0 if mode == "before" else replaced0 + 1
-                while vi < stop:
-                    self.emitMove(self.mainline[vi])
-                    vi += 1
-                outer = self.board
-                self.board = outer.copy(stack=False)
+        while vi < len(self.mainline):
+            pre = self.board.copy(stack=False)   # pre-move snapshot
+            self.emitMove(self.mainline[vi])
+            while ki < len(roots) and self.roots[ki][0] - 1 == vi:
+                _, rnode = self.roots[ki]
+                saved = self.board
+                self.board = pre                    # child replays pre-move
                 self.tokens.append("( ")
-                self.emitNode(node)
+                self.emitNode(rnode)
                 self.tokens.append(") ")
-                self.board = outer
+                self.board = saved
                 ki += 1
-                continue
-            if vi < len(self.mainline):
-                self.emitMove(self.mainline[vi])
-                vi += 1
-            else:
-                break
+                self.dbgRendered += 1
+            vi += 1
 
 
 def main():
@@ -197,17 +197,21 @@ def main():
     twins = json.load(open("/tmp/twin_movetext.json"))
     twinMt = twins["Fischer, Bobby|Petrosian, Tigran V|1971.10.19"]
 
-    for mode in ("before", "after"):
+    for mode in ("after",):
         r = Renderer(mainline, rootMarkers, rootsDoc, items)
-        r.run(mode)
+        try:
+            r.run(mode)
+        except AssertionError as e:
+            print(f"=== mode={mode}: FAILED mid-render: {e}")
+            continue
         rendered = " ".join(r.tokens)
-        print(f"=== mode={mode}: walk={r.flat} tokens={len(r.tokens)}")
+        print(f"=== mode={mode}: RENDERED {r.dbgRendered} rav groups; walk={r.flat} tokens={len(r.tokens)}")
         norm = re.sub(r"\s+", " ", rendered).strip()
         # score against the twin: longest common prefix ratio + comment positions
         twin_norm = re.sub(r"\s+", " ", twinMt).strip()
         # strip move numbers for a comparable stream
-        twin_toks = [t for t in twin_norm.split(" ") if t and not re.match(r"^\d+\.+$", t)]
         mine = [t for t in norm.split(" ") if t]
+        twin_toks = [t for t in twin_norm.split(" ") if t]
         same = sum(1 for a, b in zip(mine, []) )
         # exact prefix length
         pl = 0
