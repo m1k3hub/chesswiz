@@ -99,6 +99,7 @@ private:
 	mstl::fstream		m_annotationStream;	// .2cba
 	mstl::string			m_encoding;
 	mstl::vector<uint32_t>	m_annotationOffsets;	// .2cba record offset per game
+	mstl::vector<uint16_t>	m_ecoValues;			// index @0x80 per game
 };
 
 } // namespace cb2

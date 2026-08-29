@@ -236,6 +236,16 @@ Codec::doOpen(	mstl::string const& rootname,
 	// optional — annotation decode is skipped when the file is absent
 	// ------------------------------------------------------------------
 	m_annotationOffsets.clear();
+	// ECO values come from the index itself (independent of .2cba presence)
+	m_ecoValues.clear();
+	m_ecoValues.reserve(m_numGames);
+	m_annotationOffsets.clear();
+	for (unsigned k = 0; k < m_numGames; ++k)
+	{
+		unsigned char const* rec = cbh + (256u + k) * recordSize;
+		m_ecoValues.push_back(uint16_t(readLE16(rec + 0x80)));
+	}
+
 	{
 		mstl::string cbaName(rootname + ".2cba");
 		mstl::ifstream cbaStrm(cbaName, mstl::ios_base::in | mstl::ios_base::binary);
@@ -447,6 +457,20 @@ Codec::doDecoding(	db::Consumer& consumer,
 {
 	if (!consumer.startGame(tags))
 		return save::UnsupportedVariant;
+
+	// ECO from the index key @0x80 (128 * (base + 1)); the ChessBase
+	// sub-letter suffix is not stored in the .2cbh index
+	if (gameIndex < m_ecoValues.size())
+	{
+		unsigned eco16 = m_ecoValues[gameIndex];
+		if (eco16 >= 128u && eco16 <= 64000u && (eco16 & 127u) == 0u)
+		{
+			unsigned base = (eco16 >> 7) - 1u;
+			char buf[8];
+			::snprintf(buf, sizeof(buf), "%c%02u", "ABCDE"[base / 100u], base % 100u);
+			tags.set(tag::Eco, buf);
+		}
+	}
 
 	consumer.startMoveSection();
 

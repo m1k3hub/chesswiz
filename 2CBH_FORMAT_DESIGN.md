@@ -9,18 +9,26 @@
   2 = 1-0 (validated 2,748/2,748 against the PGN edition).
 - The .2cbg is in insertion order; the index @0x08 = the record pointer
   (§3.8.7).  The .2cba/@0x10 = the annotation record offset.
-- **ECO encoding: CONFIRMED at @0x80 (u16)** — but the value is ChessBase's
-  proprietary opening key index, NOT the standard ECO letter*100+number.
-  Format: high_nibble*0x800 + low_byte*0x80×(/osc related) maps to the
-  ECO Base+Sub (e.g., A85 = letter A + 85 within the letter).
-
-  For the verified fixture: the @0x80 u16 values correspond to Lumbras
-  GigaBase's ECO range, with the HIGH nibble encoding the letter sub-range
-  and the LOW nibble encoding the even/odd half-step within the ECO codes.
-  Verified: 3023 games, 868 distinct ECOs, 65 distinct @0x80 values for
-  letter A, 17 for letter B, 69 for letter D, 70 for letter E.
-  A u16 lookup table from CBase26 memory (like the Move16 table) would
-  resolve the full decode.
+- **ECO encoding: SOLVED (2026-08-29) at @0x80 (u16 LE).**  The value is
+  `128 * (base + 1)` where `base` = the 0-based ECO code number
+  (A00 = 0 .. E99 = 499); the low 7 bits are unused (always 0).
+  Decode: `base = eco16 >> 7 - 1`; letter = "ABCDE"[base/100],
+  number = base%100.  Verified 0 exceptions across 496 distinct keys /
+  57146 identity-matched PGN-twin pairs (all keys are multiples of 128,
+  full coverage of A00..E99 minus 4 openings unrepresented in the
+  fixture: A76, A98, C38, E78); 863519 of 863538 index records carry a
+  valid key (19 zeros = unclassified/deleted).
+  **ChessBase's extended-ECO sub-letter suffix (a..z) is NOT stored in
+  the index** — injectivity probes for both u8 and u16 fields over all
+  192 offsets found no record field that carries it (192 candidate
+  regions).  The sub-letter is a runtime classification of ChessBase's
+  opening key (the CBase26 opening-key table), so scidb renders the
+  base ECO only.  Independent LLM-wizard review (Gemini 3.7 flash)
+  concurred on the structure (0/496 exceptions; sub-letters not in the
+  index); its first-draft pseudocode had an off-by-one at the A00
+  boundary which the 57146-pair floor caught — the implemented rule is
+  the empirically validated one.
+  Implemented in `cb2::Codec` (tag::Eco) and `2cbh2pgn` ([ECO "…"]).
 - The Elo/date are not simple byte/u16 fields -- correlation tooling
   committed (`scripts/fcorr.py`, `scripts/idverify.py`).
 - Remaining: the date/ECO/Elo encodings, the annotations payload,

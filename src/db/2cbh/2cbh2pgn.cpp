@@ -446,6 +446,20 @@ int main(int argc, char* argv[])
          case 2:  result = "1-0"; break;
          default: break;
       }
+      // ECO: index @0x80 = 128 * (base + 1), base = 0-based ECO code
+      // (A00 = 0 .. E99 = 499); low 7 bits unused.  Verified on 57146
+      // identity-matched twin pairs (see 2CBH_FORMAT_DESIGN.md section
+      // 2.3).  ChessBase's sub-letter suffix is not stored in the index.
+      char ecoBuf[8] = "";
+      {
+         unsigned eco16 = readLE16(cbh + (256u + k) * recordSize + 0x80);
+         if (eco16 >= 128u && eco16 <= 64000u && (eco16 & 127u) == 0u)
+         {
+            unsigned base = (eco16 >> 7) - 1u;
+            char const letter = "ABCDE"[base / 100u];
+            ::snprintf(ecoBuf, sizeof(ecoBuf), "%c%02u", letter, base % 100u);
+         }
+      }
       ::fprintf(out,
                 "[Event \"?\"]\n"
                 "[Site \"?\"]\n"
@@ -453,8 +467,11 @@ int main(int argc, char* argv[])
                 "[Round \"?\"]\n"
                 "[White \"%s\"]\n"
                 "[Black \"%s\"]\n"
-                "[Result \"%s\"]\n\n",
+                "[Result \"%s\"]\n",
                 dateBuf, wname.c_str(), bname.c_str(), result);
+      if (ecoBuf[0])
+         ::fprintf(out, "[ECO \"%s\"]\n", ecoBuf);
+      ::fprintf(out, "\n%s%s\n\n", movetext.c_str(), result);
       ::fprintf(out, "%s%s\n\n", movetext.c_str(), result);
    }
 
