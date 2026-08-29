@@ -89,7 +89,7 @@ proc application::media::build {twm frame width height} {
 	pack $ctrl.stop -side left -padx 2
 
 	# Board-sync wiring (state machine in tcl/app-media-sync.tcl)
-	::mediasync::configure \
+	::media::sync::configure \
 		transport-cmd	[namespace code SyncTransport] \
 		boardforward-cmd	[namespace code SyncBoardForward] \
 		boardstart-cmd	[namespace code SyncBoardStart] \

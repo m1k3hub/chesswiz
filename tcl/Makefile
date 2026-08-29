@@ -631,9 +631,13 @@ uninstall: uninstall-scripts uninstall-pieces uninstall-cursors uninstall-flags 
 	fi
 
 $(SCRIPT): $(SOURCES)
+	@echo "Checking trailing newlines in sources"
+	@err=; for f in $(SOURCES); do \
+		if [ -n "`tail -c 1 "$$f"`" ]; then echo "ERROR: $$f does not end with a newline"; err=1; fi; \
+	done; if [ -n "$$err" ]; then exit 1; fi
 	@echo "Building $(SCRIPT)"
 	@if [ -e $(SCRIPT) ]; then rm -f $(SCRIPT); fi
-	@cat $(SOURCES) | sed                                  \
+	@for f in $(SOURCES); do cat "$$f"; echo; done | sed                  \
 		-e 's/# vi:set ts=3 sw=3:/update idletasks/'        \
 		-e 's#%SHAREDIR%#$(DATADIR)#g'                      \
 		-e 's#%%ENGINESDIR%%#$(%ENGINESDIR%)#g'             \
