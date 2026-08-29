@@ -840,14 +840,22 @@ parent).  Second test case: Kotronias-Ivanchuk 2011 (game 177694,
 Validation recipe: `python3 scripts/verify_varwalk.py` (twin cache
 auto-built into /tmp/varwalk_twin_cache.json on first run; ~40s PGN
 stream).  Target: 0 mismatches including the two nested games after the
-tree rebuild — DONE (2026-08-29, see the section 4.2 headline).  The C++
-side: `db::cb2::parseCbgTree` + `cbgWalkTotal` are STAGED in
-src/db/2cbh/2cbh_annotations.cpp and wired into 2cbh2pgn with the
-emission gate left flat-validated (variation games keep comments off so
-the 855855-game comment path stays byte-identical to the verified
-state).  The remaining C++ work = port scripts/varwalk.py
-buildTreeModel + flattenTree (the verified Python reference) into the
-recursive renderer and the Consumer startVariation path.
+tree rebuild — DONE (2026-08-29, see the section 4.2 headline).  TWO
+C++/Python pieces remain open at section-4.2 level:
+
+  1. C++ RAV renderer + Consumer startVariation path: the tree parse is
+     STAGED (db::cb2::parseCbgTree + cbgWalkTotal, wired into 2cbh2pgn;
+     emission gate left flat-validated so the 855855-game comment path
+     stays byte-identical).  The recursive renderer must port
+     scripts/varwalk.py buildTreeModel/flattenTree (the verified Python
+     model).  NOTE: render_tree_test.py (scaffold) exposed an
+     UNVALIDATED corner: whether the flattened walk order places a
+     child's content BEFORE (as validated for comments) or AFTER the
+     replaced own move in the rendered PGN — a diff-vs-twin run settles
+     it; the scaffold exists (scripts/render_tree_test.py) but hits
+     board-state desyncs in nested emission; the copy-board pattern is
+     required at every subtree level (root and nested).
+  2. the ~5% .2cba nested-container records.
 
 ## 5. .2LID Player Namebase
 
