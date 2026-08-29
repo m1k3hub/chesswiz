@@ -1102,12 +1102,21 @@ Fixes validated by this session (same commit):
 - `tcl/app-pgn.tcl`: `Vars(see:$position)` initialized for all views in
   `build` + `info exists` guard in `See` (previously only `see:9` existed).
 - `tcl/app-media.tcl`: `.cms` classification consolidated (kept type 4).
+- `tcl/app-media.tcl`: `LoadVlc` cached-path bug — it returned
+  `vlc_handle ne ""` when the package was already loaded, but
+  `vlc_handle` only exists DURING playback, so every `PlayMedia` between
+  plays (after `Stop`, after a failed play, or after any early `LoadVlc`)
+  silently skipped tkvlc and fell back to `xdg-open`. Now the load state
+  (`vlc_available`) is sticky and separate from the handle.
 
 Open follow-ups (not .cbm-playback blockers):
 
-1. `tkvlc` is not installed as a system package; embedded playback needs
-   `TCLLIBPATH=/home/michael-g-thomas/src/tkvlc` (local build 1.0 against
-   libvlc 3). Without it the tier-2 design falls back to `xdg-open`.
+1. tkvlc 1.0 IS installed system-wide (`/usr/lib/tkvlc1.0`, identical
+   to the ~/src/tkvlc build) and the scidb app's interpreter (Debian
+   Tcl 8.6 via tkscidb) discovers it via `package require tkvlc` — no
+   `TCLLIBPATH` needed (the miniconda `tclsh` cannot see it, which had
+   been misread as "not installed"). Validated live: package require →
+   1.0, two consecutive embedded plays with `state=playing`.
 2. Pre-existing shutdown abort (unrelated to playback): `exit` from a
    script during Tcl_Exit → `Tk_DestroyWindow` chain → a scidb command
    hits `tk::mainWindow()` (tk/tk_base.cpp:146) after the main window is

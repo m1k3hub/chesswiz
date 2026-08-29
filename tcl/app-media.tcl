@@ -46,6 +46,7 @@ array set Priv {
 	viewerimg		{}
 	vlc_handle	{}
 	vlc_loaded	0
+	vlc_available	0
 	inprocess	0
 	checkid		{}
 }
@@ -316,16 +317,20 @@ proc application::media::ShowImage {path} {
 proc application::media::LoadVlc {} {
 	variable Priv
 
+	# Package-load state is sticky; the vlc_handle is NOT an indicator of
+	# package availability (it only exists while a video is playing).
 	if {$Priv(vlc_loaded)} {
-		return [expr {$Priv(vlc_handle) ne ""}]
+		return $Priv(vlc_available)
 	}
 	set Priv(vlc_loaded) 1
 
 	if {![catch { package require tkvlc } msg]} {
+		set Priv(vlc_available) 1
 		MediaDebug "LoadVlc: tkvlc loaded"
 		return 1
 	}
 
+	set Priv(vlc_available) 0
 	MediaDebug "LoadVlc: package require tkvlc failed: $msg"
 	return 0
 }
