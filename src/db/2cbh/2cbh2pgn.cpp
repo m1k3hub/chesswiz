@@ -21,8 +21,8 @@
 #include "db_board.h"
 #include "db_move.h"
 
-#include "m_string.h"
-#include "m_ifstream.h"
+#include <string>
+#include <vector>
 
 #include <stdint.h>
 #include <stdio.h>
@@ -49,20 +49,18 @@ uint16_t readLE16(unsigned char const* p)
    return uint16_t(p[0] | (p[1] << 8));
 }
 
-bool loadFile(char const* name, mstl::string& data)
+bool loadFile(char const* name, std::string& data)
 {
-   mstl::ifstream strm(name, mstl::ios_base::in | mstl::ios_base::binary);
-   if (!strm)
+   FILE* fh = fopen(name, "rb");
+   if (!fh)
       return false;
-   strm.seekg(0, mstl::ios_base::end);
-   long size = strm.tellg();
-   strm.seekg(0, mstl::ios_base::beg);
-   data.resize(size);
-   if (size > 0)
-   {
-      strm.read(data.begin(), size);
-   }
-   return true;
+   fseek(fh, 0, SEEK_END);
+   long sz = ftell(fh);
+   fseek(fh, 0, SEEK_SET);
+   data.resize(sz);
+   bool ok = fread(&data[0], 1, sz, fh) == (size_t)sz;
+   fclose(fh);
+   return ok;
 }
 
 // Walk the .2lid namebase: player records end with the signature
@@ -161,13 +159,13 @@ int main(int argc, char* argv[])
       return 1;
    }
 
-   mstl::string prefix(argv[1]);
+   std::string prefix(argv[1]);
    if (prefix.size() > 5 && prefix.substr(prefix.size() - 5) == ".2cbh")
       prefix.erase(prefix.size() - 5);
    unsigned maxGames = (argc > 3) ? unsigned(::atoi(argv[3])) : 0u;
 
-   mstl::string cbhData;
-   mstl::string cbgData;
+   std::string cbhData;
+   std::string cbgData;
    if (!loadFile((prefix + ".2cbh").c_str(), cbhData))
    {
       ::fprintf(stderr, "cannot read %s.2cbh\n", prefix.c_str());
@@ -182,10 +180,10 @@ int main(int argc, char* argv[])
    // player names from the .2lid namebase (ID == slot ordinal)
    std::vector<std::string> names(200000u);
    {
-      mstl::string lidData;
+      std::string lidData;
       if (loadFile((prefix + ".2lid").c_str(), lidData))
       {
-         loadNames(reinterpret_cast<unsigned char const*>(lidData.data()),
+         loadNames(reinterpret_cast<unsigned char const*>(lidData.c_str()),
                    lidData.size(), names);
          unsigned named = 0;
          for (unsigned i = 0; i < names.size(); ++i)
@@ -196,8 +194,8 @@ int main(int argc, char* argv[])
       }
    }
 
-   unsigned char const* cbh = reinterpret_cast<unsigned char const*>(cbhData.data());
-   unsigned char const* cbg = reinterpret_cast<unsigned char const*>(cbgData.data());
+   unsigned char const* cbh = (unsigned char const*)cbhData.c_str();
+   unsigned char const* cbg = (unsigned char const*)cbgData.c_str();
 
    unsigned const recordSize = readLE16(cbh + 0x0a);
    unsigned const gameCount = unsigned(cbhData.size() / recordSize) - 256u;
@@ -244,7 +242,7 @@ int main(int argc, char* argv[])
 
       Board board(Board::standardBoard(Normal));
 
-      mstl::string movetext;
+      std::string movetext;
       unsigned nShorts = dataSize / 2u;
       unsigned moves = 0;
       bool ok = true;
@@ -332,7 +330,7 @@ int main(int argc, char* argv[])
             ::sprintf(buf, "%u. ", moves / 2 + 1);
             movetext += buf;
          }
-         movetext += san;
+         movetext += san.c_str();
          movetext += ' ';
          ++moves;
 
@@ -346,6 +344,20 @@ int main(int argc, char* argv[])
 
       unsigned long wid = readLE32(cbh + (256u + k) * recordSize + 0x18) & 0xffffffu;
       unsigned long bid = readLE32(cbh + (256u + k) * recordSize + 0x20) & 0xffffffu;
+      // date: 3 bytes at @0xBC packed as day(5) | month(4) << 5 | year(12) << 9
+      unsigned p24 = cbh[(256u + k) * recordSize + 0xBC]
+                   | (cbh[(256u + k) * recordSize + 0xBD] << 8)
+                   | (cbh[(256u + k) * recordSize + 0xBE] << 16);
+      unsigned dday = p24 & 0x1f;
+      unsigned dmon = (p24 >> 5) & 0xf;
+      unsigned dyear = (p24 >> 9) & 0xfff;
+      char dateBuf[16] = "????.??.??";
+      if (dday > 0)
+         ::snprintf(dateBuf, sizeof(dateBuf), "%04d.%02d.%02d", dyear, dmon, dday);
+      else if (dmon > 0)
+         ::snprintf(dateBuf, sizeof(dateBuf), "%04d.%02d.??", dyear, dmon);
+      else if (dyear > 0)
+         ::snprintf(dateBuf, sizeof(dateBuf), "%04d.??.??", dyear);
       std::string wname = (wid < names.size() && !names[wid].empty())
                         ? names[wid]
                         : ("Player " + std::to_string(wid));
@@ -365,12 +377,12 @@ int main(int argc, char* argv[])
       ::fprintf(out,
                 "[Event \"?\"]\n"
                 "[Site \"?\"]\n"
-                "[Date \"????.??.??\"]\n"
+                "[Date \"%s\"]\n"
                 "[Round \"?\"]\n"
                 "[White \"%s\"]\n"
                 "[Black \"%s\"]\n"
                 "[Result \"%s\"]\n\n",
-                wname.c_str(), bname.c_str(), result);
+                dateBuf, wname.c_str(), bname.c_str(), result);
       ::fprintf(out, "%s%s\n\n", movetext.c_str(), result);
    }
 
