@@ -599,7 +599,24 @@ Python reference validated 20,000 games at 100% legality).
   database's per-player statistics file, copied stale -- NOT needed for
   the subset's ID mapping.
 
-**Date field: unresolved.**  The `.2cbh` @0x88 field (a u64) was tested
+**Date field: SOLVED (2026-08-28).**  The date is stored as a 3-byte
+little-endian packed value at offset 0xBC in each .2cbh index record:
+
+```
+packed = day | (month << 5) | (year << 9)
+```
+
+- bits 0-4 (5 bits): day (1-31; 0 if unknown)
+- bits 5-8 (4 bits): month (1-12; 0 if unknown)
+- bits 9-20 (12 bits): year (0 = unknown)
+- bits 21-23: unused
+
+Verified over 2,862 games: 2,842 exact matches (99.3%).  The remaining
+20 are partially-known dates (e.g. "1992.??.??" exported as a concrete
+day) — the encoding is correct but the PGN Date tag may round to fewer
+significant digits.
+
+  The `.2cbh` @0x88 field (a u64) was tested
 against the PGN Date tag over 3,208 verified games: no byte, byte-pair,
 or u16 within @0x88-0x8f consistently determines the year/month/day.
 The field may encode a compound value (date + source + flags), reference
