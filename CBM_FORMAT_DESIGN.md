@@ -672,6 +672,22 @@ reserved=9252. `fileSize == 32 + 10*1024` ✓.
   install disc). All 4 referenced `.wmv` videos are correctly absent from the
   `.html` folder (they ship on the ChessBase Magazine disc).
 
+**2026-08-29 UPDATE — CBM168 disc gives 27 REAL fixtures.**  The
+magazine CD-ROM (`CBM168`) ships 27 `.cbm` media databases, one per
+magazine section, each with its `.html` media folder AND the full
+companion family.  Header confirmed across all 27: version=1,
+recSize=1024, numRecords per database, fileSize = 32 + numRec×1024 ✓.
+Manifest parser validates end-to-end on all 27: 462 file references
+total, 386 resolve inside the corresponding `.html` folder (the rest =
+video/audio content on the magazine disc — CBM168 mounts confirmed at
+`/run/media/michael-g-thomas/CBM168/`).  The BINARY region is now
+partially interpreted: 4-byte little-endian u32 RUNS of (id | offset)
+families with repeated tags per bag (samples: tag 0x04 for the
+website-bag, tag 0xfb/0x92 pairs for the .cms stream regions) — the
+bag→game linkage mapping remains the one open thread (436 binary
+entries total across the 3-bag Data Collect fixture vs 302 games in
+its .cbh index).
+
 **Linkage (BINARY region) — NOT YET DECODED:**
 
 - The binary region follows the text region (skipping null padding) and
