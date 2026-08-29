@@ -661,109 +661,39 @@ Key facts for future re-extraction:
 - The tables are built at process startup; a ptrace dump after ~35 s
   suffices.  yama ptrace_scope=1 requires dumping from the launcher.
 
-## 4. .2CBA Annotation Format
+## 4. .2CBA Annotation Format — PARTIALLY DECODED (2026-08-28)
 
-**Partially decoded (2026-08-27).**  The per-game records (located via
-the index `@0x10`) share the container framing:
-`[magic 0x1122334455667788][dataSize][extraSize][sub-field 8][type:u16][data][extra][trailer 18]`.
-Unannotated games have `data = ff ff ff 7f` (a 4-byte "none" marker);
-the `extra` is zero padding.
+**Container:** records share the `.2cbg` framing:
+`[magic 0x1122334455667788][dataSize][extraSize][sub-field 8][type:u16][data][extra][trailer 18]`
 
-Annotated games (`dataSize > 4`) contain a sequence of items:
+The index's `@0x10` pointer locates each game's annotation record.
+Unannotated: `dataSize = 4`, data = `ff ff ff 7f` ("none" marker).
+Annotated: `dataSize > 4`, containing a stream of tagged items.
 
-```
-[u32 A]                  record-lead (values seen: 0x8e, 0x5d, 0x1c, 0x24, 0x47)
-[u32 2][u16 3][u16 6][u8 0]      position/move marker
-[u16 7][u32 len][text]           a comment item ("Inaccuracy. a5 was best.")
-... repeating ...
-[ff ff ff 7f]            end marker
-```
-
-Observed comment texts are engine evaluations ("Inaccuracy. a5 was
-best.", "Blunder. N8h7 was best.\"", "continues in main line") written
-by ChessBase's analysis.  The exact grammar of the move-reference items
-(which ply/variation the comment attaches to) is not yet decoded --
-the next step is aligning items against the PGN edition's comments for
-annotated games (the fixture's PGN twin lacks some of them, so a
-ChessBase-Wine export may be needed).
-
-## 4b. cb2::Codec Integration — IMPLEMENTED AND VALIDATED AT FULL SCALE (2026-08-28)
-
-**Full-database validation (both output paths):**
-
-| Output | Games | Notes |
-|--------|-------|-------|
-| `cdb2sci` 2CBH → .sci | 863,538 written | 0 rejected / corrupted / errors |
-| `2cbh2pgn` 2CBH → PGN | 863,538 converted | 514 MB PGN, 8.6M lines |
-| PGN result distribution | 416,409 draw (48%), 268,232 1-0 (31%), 178,897 0-1 (21%) | plausible for ELO-2400+ OTB |
-| PGN unique White names | 9,882 | ✓ matches ~10,700 .2lid slots minus deleted |
-| PGN unique Black names | 9,992 | ✓ close to White count |
-
-**Full-database validation (codec path):** the complete LumbrasGigaBase_OTB_ELO2400
-(863,538 games, 251 MB game data) was converted through the codec
-(`cdb2sci .2cbh -> .sci`) with **863,538 written / 0 rejected / 0
-corrupted / 0 errors**.  The resulting .sci database (85 MB game data,
-48 MB index) round-trips through scidb's own --count-games: also
-863,538.  The Move16 decode is lossless for all 863,538 standard-chess
-games in the database.
-
-**The codec is integrated and working:** `format::ChessBase2` is
-registered; `cdb2sci --count-games` reports 863,538 games from the
-fixture; `cdb2sci .2cbh -> .sci` converted 1,000 games (0 rejected,
-0 corrupted); the GUI codec factory dispatches `.2cbh` to `cb2::Codec`.
-
-The .sci round-trip hits a **pre-existing scidb assertion** in
-`Board::setup` (frcCastling check, db_board.cpp:3959) — reproduced with
-a plain PGN-sourced .sci, so it is NOT a 2CBH codec issue.  Filed
-separately.
-
-The original integration plan is preserved below for reference.
-
----
-
-## 4b.1 cb2::Codec Integration Plan (original)
-
-The `2cbh2pgn` converter validates the format end-to-end; the remaining
-step is a `db::DatabaseCodec` subclass so the GUI can open `.2cbh`
-databases directly.  The integration points (studied against the CBV
-codec, which is the read-only template):
+**Comment item structure** (repeating, from game 105 analysis):
 
 ```
-1. src/db/db_common.h       add `ChessBase2 = 1 << 8` to format::Type
-2. src/db/db_common.cpp     format::fromString("2cbh" / ".2cbh") -> ChessBase2
-                            isChessBaseFormat() includes it
-3. src/db/db_database_codec.cpp
-                            createCodec():   case ChessBase2 -> new cb2::Codec
-                            getAttributes(): case ChessBase2 -> cb2::Codec::getAttributes
-                            getSuffixes():   cb2 suffix list (2cbh/2cbg/2cba/2lid/2lcd/2lgd)
-4. src/app/app_application.cpp  reopen/recode dispatch (mirror the CBV cases)
-5. src/db/2cbh/cb2_codec.{h,cpp}  the DatabaseCodec subclass:
-   - doOpen(rootname, suffix, encoding, progress):
-       read the .2cbh header (record size 192, count @0x10, games from
-       record 256), build the GameInfo list (gameOffset = @0x08,
-       white/black/event IDs = @0x18/@0x20/@0x28, result = byte 0x58 & 3),
-       read the .2lid namebase (signature-record walk; ordinal == ID),
-       read the .2lcd events.
-   - doDecoding(Consumer&, TagSet&, info, gameIndex):
-       set the tags (White/Black/Event/Result), decode the record at
-       info.gameOffset() through the Move16 table into the consumer
-       (the same code path as 2cbh2pgn).
-   - The metadata methods: maxGameCount etc. (2CBH limits are large),
-       isWritable() = false, encodingFailed() = false.
-   - Type-2 (Chess960) games: skip with a warning for v1 (the start
-       positions are dumped and ready for a follow-up).
-6. src/db/2cbh/Makefile     add cb2_codec.cpp to SRC_CXX
-7. tests                    round-trip: 2cbh2pgn output vs the codec's
-                            consumer output on the fixture
+[u32 lead]                          varying: 28, 31, ... (cumulative offset? ply ref?)
+[u32 2]                             item type = 2 ("position marker")
+[u16 3]                             side/variation (always 3 in the sample)
+[u16 N]                             ply reference (4, 6 — varies per item)
+[u8 0]                              separator
+[u32 2]                             "has text comment" flag
+[u16 7]                             "text comment" subtype
+[u32 textLen]                       text byte length
+[char textLen]                      the comment text ("Inaccuracy. a5 was best.")
+[ff ff ff 7f]                       end marker (at very end of the data block)
 ```
 
-Known framework pitfalls (from the CBV/CBH study):
-- `GameInfo` needs the namebase indices, not raw IDs -- the codec's
-  namebase inserts return the entries to store in the game info.
-- The index `@0x98` field is a sequential build counter (do not use it
-  as the game number).
-- Deleted games leave unreferenced .2cbg records; the index only lists
-  live games (863,538 of the file's records).
+Observed comment texts (game 105, 12 items over 126 plies):
+"Inaccuracy. a5 was best.", "Blunder. N8h7 was best.",
+"Inaccuracy. Qc2 was best.", "Blunder. d5 was best.", etc.
+
+The `[u32 lead]` values (28, 31, 105, 142, ...) may encode the cumulative
+stream offset, the ply number, or both.  The full grammar (variation
+markers, NAG codes, graphic annotations) remains open.  Decoding the
+move-reference field would enable attaching comments to specific plies
+in the PGN output.
 
 ## 5. .2LID Player Namebase
 
