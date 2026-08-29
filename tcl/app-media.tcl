@@ -513,6 +513,7 @@ proc application::media::ClassifyFile {path} {
 		.mp3 - .wav - .ogg - .flac { return 2 }
 		.mp4 - .avi - .wmv - .mkv - .webm - .mpg - .mpeg { return 3 }
 		.m3u8 - .pls { return 4 }
+		.cms { return 4 }   ;# ChessBase Media System stream (video ref)
 		default { return 0 }
 	}
 }
