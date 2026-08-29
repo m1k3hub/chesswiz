@@ -13,6 +13,7 @@
 #include "m_fstream.h"
 #include "m_map.h"
 #include "m_string.h"
+#include "m_vector.h"
 
 namespace sys { namespace utf8 { class Codec; }; };
 
@@ -97,6 +98,7 @@ private:
 	mstl::fstream		m_gameStream;			// .2cbg
 	mstl::fstream		m_annotationStream;	// .2cba
 	mstl::string			m_encoding;
+	mstl::vector<uint32_t>	m_annotationOffsets;	// .2cba record offset per game
 };
 
 } // namespace cb2

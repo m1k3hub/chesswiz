@@ -13,6 +13,7 @@
 // ======================================================================
 
 #include "2cbh_move16.h"
+#include "2cbh_annotations.h"
 
 #include <string>
 #include <vector>
@@ -47,6 +48,14 @@ uint32_t readLE32(unsigned char const* p)
 uint16_t readLE16(unsigned char const* p)
 {
    return uint16_t(p[0] | (p[1] << 8));
+}
+
+uint64_t readLE64(unsigned char const* p)
+{
+   uint64_t v = 0;
+   for (int i = 7; i >= 0; --i)
+      v = (v << 8) | p[i];
+   return v;
 }
 
 bool loadFile(char const* name, std::string& data)
@@ -176,6 +185,10 @@ int main(int argc, char* argv[])
       ::fprintf(stderr, "cannot read %s.2cbg\n", prefix.c_str());
       return 1;
    }
+   std::string cbaData;
+   bool haveCba = loadFile((prefix + ".2cba").c_str(), cbaData);
+   if (!haveCba)
+      ::fprintf(stderr, "# no .2cba annotations file, comments disabled\n");
 
    // player names from the .2lid namebase (ID == slot ordinal)
    std::vector<std::string> names(200000u);
@@ -212,6 +225,8 @@ int main(int argc, char* argv[])
    unsigned converted = 0;
    unsigned skipped = 0;
    unsigned failed = 0;
+   unsigned skippedVariationComments = 0;
+   unsigned annotationGames = 0;
 
    // Each .2cbh index record points to its .2cbg record via the offset
    // at 0x08 (the .2cbg itself is in insertion order, which differs from
@@ -238,6 +253,55 @@ int main(int argc, char* argv[])
       {
          ++skipped;
          continue;
+      }
+
+      // ---------------------------------------------
+      // annotations (.2cba record at index @0x10)
+      // ---------------------------------------------
+      std::vector<std::string> comments;  // [ply 1..] comment per ply
+      unsigned long cbaOff = (unsigned long) readLE32(cbh + (256u + k) * recordSize + 0x10);
+      bool annotationsOk = false;
+      if (haveCba && cbaOff != 0x7fffffffu && cbaOff + 0x1a < cbaData.size())
+      {
+         unsigned char const* arec = (unsigned char const*) cbaData.c_str() + cbaOff;
+         if (readLE64(arec) == 0x1122334455667788ull)
+         {
+            uint32_t const adSize = readLE32(arec + 0x08);
+            if (cbaOff + 0x1a + adSize <= cbaData.size())
+            {
+               mstl::vector<db::cb2::CbaItem> items;
+               if (db::cb2::parseCbaItems(arec + 0x1a, adSize, items))
+               {
+                  db::cb2::CbgStructure structure;
+                  db::cb2::parseCbgStructure(data, dataSize, structure);
+                  // mainline-only emission (variation comments need the
+                  // subtree tree-walk; see 2CBH_FORMAT_DESIGN.md 4.1)
+                  if (structure.markerPly.empty() && structure.blockSize.empty())
+                  {
+                     annotationsOk = true;
+                     ++annotationGames;
+                     comments.assign(structure.mainlinePly + 2, std::string());
+                     for (size_t i = 0; i < items.size(); ++i)
+                     {
+                        db::cb2::CbaItem const& item = items[i];
+                        // position X = flattened walk position; the comment
+                        // renders AFTER the (X+1)-th mainline ply (X = 0
+                        // attaches to the first move)
+                        if (item.position + 1 < comments.size())
+                        {
+                           if (!comments[item.position + 1].empty())
+                              comments[item.position + 1] += "\\n";
+                           comments[item.position + 1] += item.text.c_str();
+                        }
+                        else
+                        {
+                           ++skippedVariationComments;
+                        }
+                     }
+                  }
+               }
+            }
+         }
       }
 
       Board board(Board::standardBoard(Normal));
@@ -331,6 +395,14 @@ int main(int argc, char* argv[])
             movetext += buf;
          }
          movetext += san.c_str();
+         if (annotationsOk
+               && moves + 1 < comments.size()
+               && !comments[moves + 1].empty())
+         {
+            movetext += " {";
+            movetext += comments[moves + 1];
+            movetext += '}';
+         }
          movetext += ' ';
          ++moves;
 
@@ -387,7 +459,8 @@ int main(int argc, char* argv[])
    }
 
    ::fclose(out);
-   ::printf("converted=%u skipped=%u failed=%u of %u\n",
-            converted, skipped, failed, maxGames);
+   ::printf("converted=%u skipped=%u failed=%u of %u"
+            "\n# annotations: games-with-comments=%u skipped-variation-comments=%u\n",
+            converted, skipped, failed, maxGames, annotationGames, skippedVariationComments);
    return failed ? 1 : 0;
 }

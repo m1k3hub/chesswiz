@@ -74,3 +74,4 @@ tesseract-*.tar.gz
 tests/tmp-app/
 tests/test_cpp_backend
 src/probe_dump_moves
+2cbh2pgn

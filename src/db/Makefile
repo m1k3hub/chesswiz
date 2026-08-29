@@ -137,6 +137,7 @@ SRC_CXX = \
 	cbh/cbh_media.cpp \
 	2cbh/cb2_move16_table.cpp \
 	2cbh/2cbh_move16.cpp \
+	2cbh/2cbh_annotations.cpp \
 	2cbh/cb2_codec.cpp \
 	scm/scm_media.cpp \
 
@@ -9195,6 +9196,6 @@ cbv/cbv_codec.o: ../mstl/m_string.h
 cbv/cbv_codec.o: ../mstl/m_vector.h
 
 
-2cbh2pgn: 2cbh/2cbh2pgn.o 2cbh/2cbh_move16.o 2cbh/cb2_move16_table.o $(LIBS)
+2cbh2pgn: 2cbh/2cbh2pgn.o 2cbh/2cbh_move16.o 2cbh/2cbh_annotations.o 2cbh/cb2_move16_table.o $(LIBS)
 	@echo "Building $@"
-	@$(CXX) -o $@ $^ $(LDFLAGS) $(ALL_LIBS)
+	@$(CXX) -o $@ $^ $(LDFLAGS) $(ALL_LIBS) ../db/libdb.a ../mstl/libmstl.a ../db/libdb.a ../mstl/libmstl.a

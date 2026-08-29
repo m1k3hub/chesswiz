@@ -704,6 +704,62 @@ is a one-pass regex.
 PGN twin comments.  Scan for the [u16 7][u32 len] pattern and emit the
 comments into the PGN.
 
+### 4.1 SOLVED (2026-08-29): item grammar, ply semantics, .2cbg subtrees
+
+The full item grammar has three header forms (all verified against PGN
+twins; implemented in `src/db/2cbh/2cbh_annotations.{h,cpp}`):
+
+```
+A  23 B  [u32 X][u32 2][u16 3][u16 ch][u8 0][u32 2][u16 type=7][u32 len][text]
+B  18 B  [u32 X][u32 1][u32 2][u16 type=7][u32 len][text]
+C  18 B  [u32 X][u32 2][u32 2][u16 type=7][u32 len][text]
+```
+
+* `X` = **flattened walk position** (0-based).  The comment renders after
+  the (X+1)-th ply of the flattened document-order walk of the game tree.
+  The walk counter does NOT reset when a variation closes — a mainline
+  comment following a closed RAV sits X positions later by exactly the
+  RAV's move count (verified 35/35 on a Fischer-Petrosian game with 8
+  variations; 233/233 items over 94 aligned twin games at +1 offset).
+* `ch` (form A only) = the PGN NAG paired with the text:
+  2 = "Mistake" (?), 4 = "Blunder" (??), 6 = "Inaccuracy" (?!); these are
+  the standard PGN NAG codes (scidb: nag::PoorMove/VeryPoorMove/
+  QuestionableMove).  Forms B/C carry no channel (plain prose, diagrams,
+  glyph texts ("!", "?", "(=)"), "%eval ... %clk" markup, source metadata).
+* `type` = 7 (text comment) is the only form seen so far.
+
+**.2cba item stats (full DB, every-8th sampling):** 2141 of 2224
+content-bearing records parse strictly (95%); all text payloads are valid
+UTF-8; ~5% fail the walker — those use nested container forms (language
+channels under kind=1 with [u16 3][u16 ch] + nested sub-items) that are
+not yet formalised.  A strict-parse failure disables that game's
+annotations entirely (no risk of misplaced text).
+
+**.2cbg variation structure (NEW):** after the mainline terminator
+(0xffff) the record holds one plain move run per 0xfffd marker (document
+order), each closed by its own 0xffff.  The number of blocks equals the
+number of 0xfffd markers in the mainline.  Each block is the variation's
+own move list; the mapping to flattening positions requires the tree
+walk (open: how nesting composes).  The current decoder emits mainline
+comments only when the game has NO markers/blocks (mainline-only games —
+verified exact); games with variation data are emitted without comments
+for now.
+
+**Clock data:** the [%clk ...] comments of the PGN twin do NOT come from
+.2cba — they come from the .2cbg `extra` section (a per-move time table;
+e.g. game 291940 Kalogridis-Ioannidis has extraSize=104 and no .2cba
+items).  Mapping extra -> scidb TimeTable/putMoveInfo is future work.
+
+**Validation (full 863,538-game DB, comments emitted at full scale):**
+- converted=863538 skipped=0 failed=0
+- per-ply comment comparison vs the PGN twin over 93 comparable
+  annotated twin games: 628 of 630 ply positions agree exactly (the 2
+  others are wording variants); the ONLY unmatched twin comments are
+  [%clk ...] (source: .2cbg extra, see above).
+- validation scripts: scripts/pgn_ground_truth.py (needle scan),
+  scripts/analyze_2cba_plies.py, scripts/verify_2cba_walk.py,
+  scripts/collect_twin_movetext.py, scripts/validate_2cbh_pgn_comments.py.
+
 ## 5. .2LID Player Namebase
 
 Variable-length records with length-prefixed strings:

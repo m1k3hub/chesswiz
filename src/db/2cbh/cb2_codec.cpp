@@ -17,6 +17,7 @@
 
 #include "cb2_codec.h"
 #include "2cbh_move16.h"
+#include "2cbh_annotations.h"
 
 #include "db_move_node.h"
 #include "u_progress.h"
@@ -32,6 +33,8 @@
 #include "db_game_data.h"
 #include "db_board.h"
 #include "db_move_list.h"
+#include "db_annotation.h"
+#include "db_mark_set.h"
 
 #include "sys_utf8_codec.h"
 
@@ -227,6 +230,26 @@ Codec::doOpen(	mstl::string const& rootname,
 	mstl::string gameName(rootname + ".2cbg");
 	checkPermissions(gameName);
 	openFile(m_gameStream, gameName, Readonly);
+
+	// ------------------------------------------------------------------
+	// annotations (.2cba): one record per game, reached via index @0x10;
+	// optional — annotation decode is skipped when the file is absent
+	// ------------------------------------------------------------------
+	m_annotationOffsets.clear();
+	{
+		mstl::string cbaName(rootname + ".2cba");
+		mstl::ifstream cbaStrm(cbaName, mstl::ios_base::in | mstl::ios_base::binary);
+		if (cbaStrm)
+		{
+			openFile(m_annotationStream, cbaName, Readonly);
+			m_annotationOffsets.reserve(m_numGames);
+			for (unsigned k = 0; k < m_numGames; ++k)
+			{
+				unsigned char const* rec = cbh + (256u + k) * recordSize;
+				m_annotationOffsets.push_back(uint32_t(readLE32(rec + 0x10)));
+			}
+		}
+	}
 
 	// ------------------------------------------------------------------
 	// player namebase (.2lid): the 0-based signature-slot ordinal is the
@@ -465,6 +488,46 @@ Codec::doDecoding(	db::Consumer& consumer,
 	Board board(Board::standardBoard(variant::Normal));
 	unsigned moves = 0;
 
+	// ------------------------------------------------------------------
+	// annotations: parse the .2cba record (optional).  Comments attach to
+	// the move at their flattened walk position; games whose stream has
+	// variations are skipped (tree-walk mapping is future work, see the
+	// design doc).  A strict parse failure disables annotations for the
+	// game instead of risking misplaced text.
+	// ------------------------------------------------------------------
+	mstl::vector<CbaItem> items;
+	CbgStructure structure;
+	bool annotationsOk = false;
+	unsigned nextItem = 0;
+
+	if (!m_annotationOffsets.empty() && gameIndex < m_annotationOffsets.size())
+	{
+		uint32_t cbaOff = m_annotationOffsets[gameIndex];
+		if (m_annotationStream.is_open() && cbaOff != 0x7fffffffu)
+		{
+			m_annotationStream.clear();
+			m_annotationStream.seekg(cbaOff, mstl::ios_base::beg);
+			unsigned char hdr[0x1a];
+			if (m_annotationStream.read(reinterpret_cast<char*>(hdr), sizeof(hdr))
+					&& readLE64(hdr) == 0x1122334455667788ull)
+			{
+				uint32_t const adSize = readLE32(hdr + 0x08);
+				mstl::string adata(adSize, '\0');
+				if (adSize > 0)
+					m_annotationStream.read(adata.begin(), adSize);
+				annotationsOk = parseCbaItems(
+					reinterpret_cast<unsigned char const*>(adata.data()), adSize, items);
+				parseCbgStructure(data, dataSize, structure);
+			}
+		}
+	}
+
+	if (annotationsOk
+			 && (!structure.markerPly.empty() || !structure.blockSize.empty()))
+	{
+		annotationsOk = false; // variation-bearing game: needs subtree tree-walk
+	}
+
 	for (uint32_t j = 0; j + 1 < dataSize / 2u; ++j)
 	{
 		uint16_t code = readLE16(data + 2*j);
@@ -530,8 +593,42 @@ Codec::doDecoding(	db::Consumer& consumer,
 		if (!found)
 			break;
 
+		// comments attached to this move (position == 1-based ply of move
+		// just emitted, i.e. the flattened walk position after it)
+		Annotation annotation;
+		db::Comment comment;
+		nag::ID itemNag = nag::Null;
+		bool hasComment = annotationsOk
+			&& nextItem < items.size()
+			&& items[nextItem].position == moves;
+		if (hasComment)
+		{
+			mstl::string text;
+			while (nextItem < items.size()
+					&& items[nextItem].position == unsigned(moves))
+			{
+				if (!text.empty())
+					text += '\n';
+				if (items[nextItem].nag && itemNag == nag::Null)
+					itemNag = nag::ID(items[nextItem].nag);
+				text += items[nextItem].text;
+				++nextItem;
+			}
+			comment = db::Comment(text, 0);
+		}
+
 		board.prepareForPrint(move, variant::Normal, Board::ExternalRepresentation);
-		consumer.putMove(move);
+		if (hasComment || itemNag != nag::Null)
+		{
+			MarkSet marks;
+			if (itemNag != nag::Null)
+				annotation = Annotation(itemNag);
+			consumer.putMove(move, annotation, db::Comment(), comment, marks);
+		}
+		else
+		{
+			consumer.putMove(move);
+		}
 		board.doMove(move, variant::Normal);
 		++moves;
 	}
