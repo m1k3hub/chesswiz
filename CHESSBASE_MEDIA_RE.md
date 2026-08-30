@@ -157,6 +157,23 @@ the text export preserves the original command timestamps, while the ASF
 stream carries the same information as script packets. It is not a separate
 game notation file.
 
+Across 234 text exports, six command prefixes occur immediately after `GA:`:
+
+```text
+?_  5731
+?o  4455
+@_  2166
+B_  1210
+@?   742
+A?     4
+```
+
+This is a better candidate for the command dispatch table than the decoded
+leading integer alone. The prefix is part of the outer text/export encoding;
+the binary opcode is produced only after decoding the command payload. The
+counts also explain why a decoder built from one `.wmv` will miss substantial
+parts of the format.
+
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
