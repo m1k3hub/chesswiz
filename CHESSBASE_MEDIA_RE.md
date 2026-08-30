@@ -388,7 +388,11 @@ header:
   `0x000FBE00` = 2015-00-00 (year only); a second full packed date
   `0x000FBEF9` = 2015-07-25 appears later in the body, after a
   length-prefixed Windows-1252 string (`09 51... 00` = `Robot 11`, the
-  annotator/recording-agent name) and further binary metadata.
+  annotator/recording-agent name) and further binary metadata. The two
+  u16le values just before the second date, `0x0aa4` and `0x0ab4`, are
+  2724 and 2740 — exactly Navara's and Adams' published Elo ratings in
+  this game, so the body carries per-player Elo right after the
+  annotator string.
 - The remaining body is a fixed region (u16/u32 words including `df 07` =
   2015 twice, u32-length strings `FIDE` twice, and a block whose values
   `bb 80`/`0b b8`/`03 e8` read as u24be/big-endian millisecond offsets
@@ -410,13 +414,17 @@ header:
   embeds the same records the deltas carry.
 
 The pair bytes in the node table walk as strict 5-byte entries
-`[pair][00 00 00]` (17 entries precede the first collection with values
-`11 13`, `26 25`, `08 12`, `19 1b`, `37 2d`, …), plausibly one entry per
-tree node/move with a square id role under the 0-based engine convention;
-their exact field roles are not yet pinned. Opcode-`06` collections are
-inserted into the zero padding of the node entry they decorate (the
-collection replaces padding bytes in place, so entry rhythm stays
-visible).
+`[pair][00 00 00]` with values `11 13`, `26 25`, `08 12`, `19 1b`,
+`37 2d`, …, plausibly one entry per tree node/move with a square-id role
+under the 0-based engine convention; their exact field roles are not yet
+pinned. Plain correlations with the published round-6 score are
+inconclusive (no pair matches the common ply signatures `c2-c4` =
+`10 1a` or `b2-b4` = `09 19` under either square convention), so these
+two bytes remain unidentified. Opcode-`06` collections are inserted
+into the zero padding of the node entry they decorate (the collection
+replaces padding bytes in place, so entry rhythm stays visible). Note:
+a nearby small u16be word `03 4a` advances to `03 4c` while the lesson
+plays, so it is a millisecond-ish counter, not a ply or node count.
 
 ### Binary oracle strings
 
