@@ -11,7 +11,8 @@ public class DecompileChessBaseMedia extends GhidraScript {
         DecompInterface decomp = new DecompInterface();
         decomp.openProgram(currentProgram);
         String[] targets = {"1407bd3d0", "1407ae660", "1403ac3b0",
-                "140549080", "14101f200", "14101f2b0"};
+                "140549080", "14101f200", "14101f2b0",
+                "140d7b530", "140d7c9c0", "140d7d8b0"};
         for (String text : targets) {
             Function f = getFunctionAt(toAddr(text));
             if (f == null) {
