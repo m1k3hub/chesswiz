@@ -284,8 +284,10 @@ proc application::media::PlaySelected {tree} {
 	}
 	if {[string is integer -strict $galleryIndex] && $galleryIndex >= 0
 		&& $galleryIndex != $Priv(index)} {
-		after idle [namespace code [list PlayMedia $path]]
 		::game::new .application -base $Priv(base) -variant $Priv(variant) -number $galleryIndex
+		# Update() installs the owning game's media/sync state.  Queue
+		# playback only after that switch has completed.
+		after idle [namespace code [list PlayMedia $path]]
 		return
 	}
 
@@ -748,6 +750,14 @@ proc application::media::PlayMedia {path {startMs {}} {endMs {}}} {
 			return
 		}
 		MediaDebug "PlayMedia: tkvlc failed, falling back to external player"
+	}
+
+	# An external player has no board position or transport callbacks.  Do
+	# not claim to play a game-coupled video independently of its game.
+	if {[ClassifyFile $path] == 3} {
+		set Priv(statusbar) "Cannot play video with board synchronization: embedded VLC is unavailable."
+		MediaDebug "PlayMedia: refusing unsynchronized external video [list $path]"
+		return
 	}
 
 	# Fallback: xdg-open / open / start
