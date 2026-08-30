@@ -299,18 +299,34 @@ playback events; the media panel controls the transport:
 | board → media | browser/pane autoplay starts | media plays |
 | board → media | autoplay stops/pauses | media pauses |
 | board → media | manual position navigation | media pauses |
-| media → board | video plays with "Board follows video" | main board advances linearly over the video duration (4 plies/tick max; a media rewind restarts the game) |
+| media → board | video plays with "Board follows video" | main board advances per the loaded sync sidecar: one navigation step per elapsed transition mark (verified ChessBase per-move timecodes, see §5.6); without a sidecar the mapping degrades to linear over the video duration (4 plies/tick max; a media rewind restarts the game) |
 
 State machine: `::media::sync` (see `tcl/app-media-sync.tcl`); the media
 panel registers delegates (`SyncTransport`, `SyncBoard*`) so the machine
-never touches tkvlc or the game API directly. Headless tests:
-`tests/media-test/test-sync.tcl` (13 assertions, stub delegates).
+never touches tkvlc or the game API directly. Tests with stub delegates:
+`tests/test_app_media_sync.tcl` (run inside the app:
+`xvfb-run -a ./src/tkscidb-beta tests/run_app_tests.tcl -match mediasync*`).
 
-Known scope limits: ChessBase media refs carry no per-move timecodes, so
-"board follows video" maps the timeline linearly onto the game's ply
-range. The sync couples to the main board (position −1) and any browser
-dialog's autoplay; per-game media switching still stops playback (the
-panel rebuilds per game as before).
+Per-move timecodes ("board follows video" follows the actual ChessBase
+lesson replay): the ChessBase script stream inside the WMV carries the
+authoritative per-step media times — reverse-engineered and documented in
+`CHESSBASE_MEDIA_RE.md` (checkpoint game-tree stream + opcode-`03`
+transitions; `CBM_FORMAT_DESIGN.md` §7.8 superseded the linear
+assumption). Generate the sidecar with
+`media-console/wmv2timeline.py <base>.wmv --plytimes <video>.plytimes`
+(one media-ms per line, replay order); `tcl/app-media.tcl`
+(`LoadSyncSidecar`) auto-loads it at playback start and
+`::media::sync::load-timeline` feeds the state machine — one board step
+per elapsed mark, rewind-safe, linear fallback when absent. Headless
+tests: `tests/test_app_media_sync.tcl` (case prefix `mediasync-`,
+run via `./src/tkscidb-beta tests/run_app_tests.tcl -match mediasync*`).
+
+Remaining scope limits: the timeline drives the board ply only —
+applying the decoded board annotations (arrows/marks/comments, file-major
+squares per `CHESSBASE_MEDIA_RE.md`) to the board during playback is
+future work; the sync couples to the main board (position −1) and any
+browser dialog's autoplay; per-game media switching still stops playback
+(the panel rebuilds per game as before).
 
 ---
 
