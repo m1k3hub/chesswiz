@@ -132,6 +132,15 @@ id at offset 8. It is likely a separate timeline/object identifier or a
 substate selector. This prevents treating every compact record as a direct
 state lookup.
 
+The Biel lesson also shows that the `06` and `04` records are sparse relative
+to the `0e` sequence. `06` appears at 60.642, 170.642, and 343.142 seconds
+with payloads containing repeated structural fields (`...01 00 0c 00...` or
+`...02 00 07 00...`) followed by short value pairs. `04` appears at 84.142,
+265.142, 279.142, 467.681, and 468.681 seconds. The latter two records are
+adjacent, showing that `04` is not merely a periodic checkpoint. These are
+strong candidates for board/annotation actions, but the current evidence is
+not sufficient to name individual fields or map them to squares.
+
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
