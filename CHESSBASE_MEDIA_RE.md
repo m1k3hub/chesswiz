@@ -380,10 +380,22 @@ Diffing the 87 consecutive opcode-`02` snapshots of the Navara-Adams base
 lecture resolves the tail of the checkpoint section beyond the identity
 header:
 
-- The state value at offset 8 is a u32 whose upper three bytes are always
-  zero in every snapshot — fields 9–11 never change — so the effective
-  cursor/ply id is the single byte at offset 8 (matching the 0x00–0xff
-  game-tree ids above).
+- The state value at offset 8 is a u32. Within the Navara-Adams snapshots
+  its upper three bytes are always zero — fields 9–11 never change — so
+  bytes 8–11 look like a lone byte there. Corpus-wide, however, the same
+  field reaches `0x1af` (431) in the `CBM 168 Strategie/Strategy` base
+  lectures: 337 of 5,731 checkpoint records (and 215 of 4,455 opcode-`03`
+  transitions) carry upper byte `1`. The cursor is therefore genuinely
+  u32le, and the Navara-Adams `0x98`/`0x99` display ids are flat
+  serialized-node indices of a tree with ~154 nodes, not
+  high-bit-flagged plies. Any playback implementation must read ids as
+  full integers.
+- Best working model after the corpus scan: ids enumerate game-tree
+  nodes serially (main line plus the serialized variation forest), so
+  their correlation with ply numbers holds only for linear stretches,
+  and the former "bit `0x80` = variation-mode flag" hypothesis is
+  inconsistent with ids beyond `0xff` and is retired — the low seven
+  bits "matching" nearby ply anchors was an artifact of a small tree.
 - After the six identity strings the first packed date is
   `0x000FBE00` = 2015-00-00 (year only); a second full packed date
   `0x000FBEF9` = 2015-07-25 appears later in the body, after a
@@ -633,7 +645,11 @@ No one of these implementation paths has been selected yet.
    and the per-node pair table semantics, then validate the node-table
    ordering against the game score.
 3. Determine opcode-`04` action-class and modifier semantics visually.
-4. Validate cursor high-bit variation behavior on games exceeding 127 plies.
+4. (Closed 2026-08-30) Cursor ids above `0xff` exist corpus-wide (Strategy
+   lectures reach `0x1af`), so the bit-`0x80` variation-flag hypothesis is
+   retired; ids enumerate serialized tree nodes. Remaining: pin the
+   node-id → host-position mapping (which decode pass assigns node
+   numbers during the `06`→`02` replay).
 5. Correlate `.cms` FEN branches with the decoded game-tree IDs.
 6. Feed decoded timestamped events into Scidb instead of linear time-to-ply
    approximation.
