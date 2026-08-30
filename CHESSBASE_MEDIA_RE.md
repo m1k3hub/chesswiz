@@ -52,12 +52,18 @@ must be converted by subtracting `0x3f`; it must not be mapped to the normal
 Base64 alphabet by adding an ASCII offset.
 
 After this decoding, the payload is structured binary data containing plain
-ASCII strings and integers.
+ASCII strings and integers. The first decoded byte is significant; it is not
+part of the six-bit transport header.
 
 ## Decoded large records
 
-Large packets decode to records with a common `01 a0`-family command prefix in
-the encoded representation and contain game/header state. A representative
+Large packets decode to records beginning with:
+
+```text
+02 00 00 00
+```
+
+They contain game/header state. A representative
 decoded record includes:
 
 ```text
@@ -85,22 +91,25 @@ The 30-byte stream packets decode to eight-byte records with this recurring
 shape:
 
 ```text
-02 a0 00 00 XX YY 00 00
+03 00 00 00 XX XX XX XX
 ```
 
 Examples include:
 
 ```text
-02 a0 00 00 17 80 00 00
-02 a0 00 00 16 80 00 00
-02 a0 00 00 d6 00 00 00
-02 a0 00 00 d7 80 00 00
-02 a0 00 00 d8 80 00 00
+03 00 00 00 17 00 00 00
+03 00 00 00 18 00 00 00
+03 00 00 00 d6 00 00 00
+03 00 00 00 d7 00 00 00
+03 00 00 00 d8 00 00 00
 ```
 
-These records are timestamped independently by ASF. Their semantic meaning
-(move, board state, annotation, checkpoint reference, or another command) is
-not yet proven.
+These records are timestamped independently by ASF. Their semantic meaning is
+not yet proven, but their values clearly correlate with the first field of
+nearby large records. For example, the stream contains a compact `d6` record,
+then a large record whose leading state value is `d7`, followed by compact
+`d8`, `d9`, and later values. This is consistent with a state/checkpoint
+sequence rather than arbitrary media metadata.
 
 ## Role of `.cms`
 
