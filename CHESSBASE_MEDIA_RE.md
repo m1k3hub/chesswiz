@@ -619,6 +619,29 @@ the `.cms` maps positions to clip files.
 The `.cbm` file is a media catalog/manifest and is not itself the authoritative
 playback timeline.
 
+### `.cms` binary layout (partially decoded, 2026-08-30)
+
+Header: `u32be` body length (filesize − 4), `u32le` record count, `u32le`
+base-name length, base name (e.g. `02 Mar del Plata000`). Records follow;
+the first is the drill-position record:
+
+```text
+u32le kind = 1
+u32le 0
+u32le duration-seconds      (= the base video's full length, 433 for
+                             Mar del Plata)
+u32le u (0)
+u32le namelen, name        (the drill FEN in standard slash form)
+u32le namelen2, name2      (the base's x0y0 clip file name)
+```
+
+Later records name the position clips; each carries a duration and the
+clip's `v`/`u` selectors, but their exact field count is still ambiguous
+(the final short record is misaligned by one field under both 5- and
+6-field attempts), so `x`/`y` remain filename-only selectors. The
+`cms2smv.tcl` port is unaffected: it keys on the embedded FEN-plus-
+selector strings, which are present verbatim.
+
 ## Reader14 dynamic playback path
 
 Opening a fixture WMV directly with ChessBase Reader 14 under Wine produced
