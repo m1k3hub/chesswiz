@@ -44,8 +44,8 @@ class PacketBytesTest(unittest.TestCase):
         self.assertEqual(PROBE.packet_bytes(packet_data(encoded)), payload)
         description = PROBE.describe(payload)
         self.assertIn(
-            "type=5 len=12 arrows=[green:b4-a4,green:d1-a4]", description)
-        self.assertIn("type=4 len=8 marks=[green:d1]", description)
+            "type=5 len=12 arrows=[green:d2-d1,green:a4-d1]", description)
+        self.assertIn("type=4 len=8 marks=[green:a4]", description)
 
     def test_decodes_type_two_text_as_windows_1252(self):
         text = b"\x00\x35wei\xdffeldriger L\xe4ufer"

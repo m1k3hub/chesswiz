@@ -58,8 +58,12 @@ def square_name(value):
 
 
 def annotation_square_name(value):
-    """Opcode-06 graphic squares are 1-based: 0 = none, a1 = 1, h8 = 64."""
-    return "none" if value == 0 else square_name(value - 1)
+    """Opcode-06 graphic squares are one-based file-major:
+    0 = none, a1 = 1, b1 = 9, a2 = 2, h8 = 64."""
+    if value == 0:
+        return "none"
+    v = value - 1
+    return "abcdefgh"[v // 8] + str((v % 8) + 1)
 
 
 def checkpoint_header(payload):

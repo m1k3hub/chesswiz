@@ -276,24 +276,20 @@ yielding 1,639 directed square pairs. Styles are overwhelmingly `2` or `4`,
 with only three style-`3` entries (type 4: `2`×1598, `4`×336, `3`×1; type 5:
 `2`×1433, `4`×204, `3`×2).
 
-Type-`4`/`5` squares are one-based, not zero-based: value `0` means "no
-square" (it never occurs in any of the 5,214 coordinate instances), `1` =
-`a1`, and `64` = `h8` is a genuine board corner observed 40 times. The
-value-`64` occurrences are decisive: all 17 arrow segments entering `64`
-show clean ray geometry into `h8` — `b2`→`h8` (long diagonal, in both the
-German and English Tarrasch–Lasker lectures), `e8`→`h8`/`f8`→`h8` (back-rank
-rays, repeatedly in the `CBM168Taktik` tactics lessons, whose theme is
-back-rank mates), `h6`→`h8` (file), `f6`→`h8`, `e5`→`h8`, `c8`→`h8` — while
-all 23 type-`4` markers at `64` sit on `h8` in the same mate-zone contexts.
-Under a zero-based reading value `64` would be an off-board sentinel and no
-reading explains this geometry. The one-based convention differs from
-opcode `04`, which spans `0..63` with `0` actually occurring 26 times and
-`64` never: the transient board-action channel keeps `a1 = 0` while the
-persistent opcode-`06` graphic channel is one-based, consistent with the
-CBA annotation engine these records otherwise reuse. Occupancy checks of
-drawn coordinates against the FEN in position-clip filenames are neutral
-(43.9 % vs 46.1 % piece hits over 1,144 coordinates in 77 FEN-named clips)
-because lesson arrows freely target empty squares.
+Type-`4`/`5` squares are **one-based file-major** (closed 2026-08-30 to
+the same convention family as the node table and opcode `04`):
+`0` = "no square", `1` = `a1`, `2` = `a2`, `9` = `b1`, `64` = `h8`
+(square = file×8+rank+1). Value `0` never occurs in any of the 5,214
+coordinate instances, while `64` occurs 40×. Tie-breaking rank- vs
+file-major within the one-based frame: piece-occupancy checks of the
+77 FEN-named drill clips give **59.1 %** endpoints on occupied squares
+under file-major-one-based versus 46.1 % under rank-major-one-based
+(43.9/39.4 % for the zero-based frames) over 1,146 coordinate
+instances, so file-major wins decisively. The 40 value-`64` occurrences
+are all consistent with arrows/markers into `h8` (back-rank rays
+`f8`→`h8`/`e8`→`h8` in the `CBM168Taktik` tactics lessons, file rays
+`h6`→`h8`, long diagonals `d1`→`h8`), remaining corner-invariant across
+both conventions.
 
 Type `4` therefore encodes styled square markers and type `5` styled
 arrows/vectors. The style values' color names (`2` = green, `3` = yellow,
@@ -536,14 +532,24 @@ u16 modifier
 ```
 
 All 742 exported records have both square bytes in `0..63`; together they
-cover that full range. Interpreting `0` as `a1`, increasing by file and then
-rank, yields plausible pairs such as `e8-f8`, `g6-f6`, and `b4-e7`. The six
-little-endian action classes are `0x80` (498 records), `0` (204), `0x200`
-(33), `1` (4), `0x800` (2), and `2` (1). The observed modifiers are `0`
-(468), `0x80` (230), `0x240` (24), `0x20` (12), `2` (4), `1` (3), and
-`0x10` (1). This proves the field boundaries and board-square arguments.
-Whether each class draws an arrow, highlights a square, or performs another
-board action still requires an oracle observation.
+cover that full range, and the squares are **file-major** (`a1` = 0,
+`b1` = 8, `a2` = 1 — square = file×8+rank), matching the checkpoint node
+table. Verified against the published game trees in tree correlations:
+the Biel round-1 lecture's 14 class-`0x80` events decode to real game
+edges 10/14 (vs 3/14 under a rank-major reading, and 0 reversed
+mismatches); round 6 gives 4/8 + 1 reverse (vs 1/8); the misses are the
+lecturer's own analysis arrows that exist only in the lesson tree. The
+class-`0x80` arrows are **(from, to) move arrows**: round-6 examples
+decode as `c8-e6` (= 13...Be6 ✓), `c8-f5` (= the round-1 post-mortem RAV
+move 6...Bf5 ✓) and `b7-b6`; Mar del Plata shows `f3-g4`, `g5-f4`,
+`f4-d3` along the thematic King's-Indian geometry. Prior rank-major
+decodings (`e8-f8`, `g6-f6`, `b4-e7`) were coincidental re-readings of
+the same bytes. The six little-endian action classes are `0x80` (498
+records), `0` (204), `0x200` (33), `1` (4), `0x800` (2), and `2` (1).
+The observed modifiers are `0` (468), `0x80` (230), `0x240` (24), `0x20`
+(12), `2` (4), `1` (3), and `0x10` (1). Field boundaries and board-argument
+arguments are proven; class-`0x80` = arrows, while the other classes'
+visual meaning still requires an oracle observation.
 
 Opcode `04` is not the incremental form of opcode-`06` type-`4`/type-`5`
 graphics. For all 742 opcode-`04` events, the next opcode `06` within ten
