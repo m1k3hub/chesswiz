@@ -51,6 +51,7 @@ namespace eval ::media::sync {
 		follow    1
 		autoplay  0
 		playing   0
+		driving   0
 		lastgoal  -1
 	}
 
@@ -65,7 +66,7 @@ namespace eval ::media::sync {
 		boardply      {}
 	}
 
-	namespace export configure set-config autoplay step drive \
+	namespace export configure set-config autoplay step drive driving? \
 		onPlaybackStarted onPlaybackStopped
 }
 
@@ -143,6 +144,15 @@ proc ::media::sync::onPlaybackStopped {} {
 }
 
 
+# True while drive() is advancing the board as a consequence of media time.
+# The media panel uses this to distinguish those board notifications from a
+# user-initiated move, which should seek the video in the opposite direction.
+proc ::media::sync::driving? {} {
+	variable State
+	return $State(driving)
+}
+
+
 # One "board follows video" tick: <timeMs>/<durationMs> maps linearly
 # onto the game's ply range; step the board forward when the mapped
 # target has advanced past the board's position. Handles at most 4
@@ -171,10 +181,12 @@ proc ::media::sync::drive {timeMs durationMs} {
 
 	# drive the board forward, at most 4 plies per tick
 	set guard 0
+	set State(driving) 1
 	while {[BoardPly] < $goal && $guard < 4} {
 		BoardForward
 		incr guard
 	}
+	set State(driving) 0
 	set State(lastgoal) $goal
 }
 
