@@ -141,6 +141,12 @@ def describe(payload):
                     for i in range(0, len(value), 3)
                 ]
                 rendered = f"arrows=[{','.join(items)}]"
+            elif record_type == 130 and value.startswith(b"\x00\x00"):
+                rendered = f"question={value[2:].decode('ascii', 'replace')!r}"
+            elif record_type in (7, 34, 37) and len(value) == 4:
+                rendered = f"u32be={struct.unpack('>I', value)[0]}"
+            elif record_type == 3 and len(value) in (1, 2):
+                rendered = f"u{len(value) * 8}be={int.from_bytes(value, 'big')}"
             else:
                 strings = re.findall(rb"[ -~]{4,}", value)
                 if strings:
