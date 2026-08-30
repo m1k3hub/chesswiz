@@ -150,6 +150,13 @@ annotations or board objects, not with a fixed-size move tuple. The value at
 offset 8 should consequently be treated as a snapshot selector, while the
 rest of the record must be parsed before deriving board state.
 
+Some fixtures also include a same-basename `.txt` export. It contains
+timestamped `GA:` commands such as `0:00:01.5: GA:B_...` followed by the
+encoded state payload. This is a useful oracle for packet framing and timing:
+the text export preserves the original command timestamps, while the ASF
+stream carries the same information as script packets. It is not a separate
+game notation file.
+
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
