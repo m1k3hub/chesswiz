@@ -5210,30 +5210,22 @@ cmdMediaGallery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			util::Progress& progress = util::Progress::null();
 			if (cbm.read(base, progress) && cbm.isOpen())
 			{
-				mstl::vector<cbh::MediaTable::MediaEntry> entries;
-				cbm.collectMediaFiles(entries);
-
-				for (unsigned i = 0; i < entries.size(); ++i)
-			{
-					mstl::string path(::tcl_media::resolveMediaFilename(database, entries[i].filename));
-					// Convert cbh bitmask type to sequential type (matching scm::MediaTable)
-					int type = 0;
-					switch (int(entries[i].type))
-					{
-						case 1: type = 2; break; // cbh Audio → scm Audio
-						case 2: type = 1; break; // cbh Picture → scm Picture
-						case 4: type = 3; break; // cbh Video → scm Video
-						case 8: type = 4; break; // cbh Stream → scm Stream
-						default: type = 0; break;
-					}
-				Tcl_Obj* row[5];
-					row[0] = Tcl_NewStringObj(path.c_str(), int(path.size()));
-					row[1] = Tcl_NewIntObj(type);
-					row[2] = Tcl_NewStringObj("", 0);
-					row[3] = Tcl_NewIntObj(int(entries[i].bagIndex));
-					row[4] = Tcl_NewIntObj(-1);
-					Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(4, row));
-			}
+				// The CBM bag index is not a game index. Use the existing
+				// guiding-text tag_game cache, which resolves each media file
+				// to its owning CBH game.
+				buildMediaLinkCache(mstl::string(database), variant,
+					const_cast<Database&>(db), mediaLinkCache);
+				for (unsigned i = 0; i < mediaLinkCache.rows.size(); ++i)
+				{
+					GuidingTextMediaRow const& entry = mediaLinkCache.rows[i];
+					Tcl_Obj* row[5];
+					row[0] = Tcl_NewStringObj(entry.path.c_str(), int(entry.path.size()));
+					row[1] = Tcl_NewIntObj(entry.type);
+					row[2] = Tcl_NewStringObj(entry.title.c_str(), int(entry.title.size()));
+					row[3] = Tcl_NewStringObj("", 0);
+					row[4] = Tcl_NewIntObj(int(entry.gameIndex));
+					Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(5, row));
+				}
 			}
 		}
 	}
