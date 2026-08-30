@@ -199,7 +199,7 @@ not the outer transport or opcode dispatch.
 ### Opcode `06` container grammar
 
 The `06` family is not a single fixed-size record. After its eight-byte
-header, it contains concatenated subrecords with this verified shape:
+header, single-field records contain a subrecord with this verified shape:
 
 ```text
 u16 tag
@@ -208,12 +208,15 @@ byte payload[length]
 ```
 
 For example, a 24-byte record contains tag `1`, length `12`, and a 12-byte
-payload. Longer records contain several such subrecords. Some payloads include
+payload. Longer records appear to contain several related subrecords, but
+applying the same four-byte framing naively after every field misaligns some
+samples. Some payloads include
 plain UTF-8 text, including lesson annotations such as `Quiet move no. 1!`,
 `Stilller Zug Nr 3!`, and explanatory English sentences. Other payloads end in
 short numeric pairs such as `02 1e 36`, consistent with board/object
-references. The container framing is therefore solved; the tag-specific
-payload semantics remain to be mapped.
+references. The first-level container boundary is understood, but the
+multi-field framing variant and tag-specific payload semantics remain to be
+mapped.
 
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
