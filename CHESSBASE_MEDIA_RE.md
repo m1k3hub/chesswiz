@@ -247,6 +247,15 @@ This rules out a generic directory format for every opcode: `03/04/08/0e`
 are fixed command structures, while only `06` and `02` need variable-length
 parsers.
 
+Opcode `04` has a stable 12-byte layout after the opcode header. Its final
+eight bytes vary as four-byte groups such as `80 00 00 00 3c 3d 00 00`,
+`00 00 00 00 19 34 00 00`, and `80 00 00 00 15 16 00 00`. The recurring
+values in the last four bytes are in the 0–63 range in many records, making
+board-square references plausible, but other samples use values such as
+`40 02`; this may be packed coordinates or flags rather than two plain square
+indices. The fixed shape is established; its action semantics are not yet
+proven.
+
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
