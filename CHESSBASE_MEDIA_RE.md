@@ -449,18 +449,26 @@ header:
   `03`/`06`-before-`02` byte-equality therefore confirms the checkpoint
   embeds the same records the deltas carry.
 
-The pair bytes in the node table walk as strict 5-byte entries
-`[pair][00 00 00]` with values `11 13`, `26 25`, `08 12`, `19 1b`,
-`37 2d`, …, plausibly one entry per tree node/move with a square-id role
-under the 0-based engine convention; their exact field roles are not yet
-pinned. Plain correlations with the published round-6 score are
-inconclusive (no pair matches the common ply signatures `c2-c4` =
-`10 1a` or `b2-b4` = `09 19` under either square convention), so these
-two bytes remain unidentified. Opcode-`06` collections are inserted
-into the zero padding of the node entry they decorate (the collection
-replaces padding bytes in place, so entry rhythm stays visible). Note:
-a nearby small u16be word `03 4a` advances to `03 4c` while the lesson
-plays, so it is a millisecond-ish counter, not a ply or node count.
+The pair bytes in the node table are the **serialized game-tree edge
+stream** (closed 2026-08-30): each entry is `[u8 from][u8 to]` plus
+three zero bytes, squares encoded **file-major** (`a1` = 0, `b1` = 8,
+`a2` = 1 — square = file×8+rank, the transpose of the usual rank-major
+board index), edges ordered depth-first through the game tree with
+variations interleaved. Verified byte-exact for the first 18 entries of
+the Navara-Adams checkpoint against the published round-6 score tree:
+`c2-c4` = `(17,19)`, `e7-e6` = `(38,37)`, `b1-c3` = `(8,18)`,
+`d7-d5` = `(30,28)`, … ending `f6-h5` = `(45,60)` at entry 17, then
+`(59,38)` = `h4×e7` (10.Bxe7) — 18/18 against python-chess. This also
+explains the earlier `03`-transition id correlation: the cursor ids are
+node indices into this same serialized edge stream (the max observed
+cursor id ≈ the tree's edge count), so the former `0x80` "variation
+flag" ids were simply deeper variation nodes. Opcode-`06` collections
+are attached to the padding of the node entry they decorate (the
+collection replaces padding bytes in place, so entry rhythm stays
+visible), with padding 4-byte-aligned after inline record collections.
+Note: a nearby small u16be word `03 4a` advances to `03 4c` while the
+lesson plays, so it is a millisecond-ish counter, not a ply or node
+count.
 
 The larger Mar del Plata base checkpoint (2,534 bytes, ~70 entries)
 resolves what the collections carry. Every decorated node has a
@@ -723,10 +731,13 @@ No one of these implementation paths has been selected yet.
 1. Map mark styles `2/3/4` and opcode-`04` action classes/modifiers with a
    visual oracle; identify the opcode-`06` type-`7` object semantics and
    the remaining `37`/`3`-per-record rollover behavior.
-2. Finish the opcode-`02` checkpoint parser: pin the post-date fixed
-   region fields (annotator string, millisecond offsets, `FIDE` strings)
-   and the per-node pair table semantics, then validate the node-table
-   ordering against the game score.
+2. (Closed 2026-08-30) The checkpoint body is fully mapped: post-date
+   annotator slot, white/black Elo u16le pair (white first, corpus-verified
+   against published ratings), full-precision packed game date, the
+   serialized game-tree edge stream with file-major squares, and per-node
+   media timestamps (type-`37`) plus quotation texts in the padding
+   collections. Remaining polish: name the u32 words after the game date
+   (the `38`/`FIDE` source block) and the ms-ish counter word.
 3. Determine opcode-`04` action-class and modifier semantics visually.
 4. (Closed 2026-08-30) Cursor ids above `0xff` exist corpus-wide (Strategy
    lectures reach `0x1af`), so the bit-`0x80` variation-flag hypothesis is
