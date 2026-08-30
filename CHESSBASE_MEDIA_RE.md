@@ -542,6 +542,23 @@ now have binary-internal witnesses:
   play-server robot, not the lecture annotator — no conflict with the
   checkpoint finding.
 
+**Ghidra decompilation (CBase26, 64-bit) confirms the script-item
+object model.**  The script items referenced by `ScriptItems`/`GA:`
+carry `{timestamp @+0x40, action-name string @+0x30, payload
+SString @+0x20}`; the exported column formatter renders the timestamp
+as `item.ms / double-constant`, and for the Action column substitutes
+the literal `"Game Action"` when the item's action name is `"TEXT"`.
+The sequence formatter special-cases the action names `"TEXT"` and
+`"GA"` — so the script items are *named actions* (`GA` = the
+Game-Action payload records decoded throughout this document, `TEXT`,
+and the viewer actions `V_MAP`/`V_ZOOM`/`V_LASTMOVE`/`V_MOVES`/`EDITOR`),
+and the `.txt` sidecar is their timestamped export.  The annotation-dialog
+wiring decompiles the full type registry: text (`V_T_TEXT`,
+`V_T_IN_PB_BEFORE`/`V_T_IN_PB_AFTER`), symbols, square list, time and
+date, critical position, move medal, game quotation, pawn structure,
+Fritz eval, training, piece path, correspondence, variation color, eval
+profile — matching the decoded opcode-`06` record families one-to-one.
+
 The raw PE RTTI cluster around the callback names also contains
 `IWMStatusCallback`, `IWMReaderCallback`, and `IWMReaderCallbackAdvanced`
 descriptors. This confirms ChessBase links the legacy Windows Media reader
