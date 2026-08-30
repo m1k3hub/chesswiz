@@ -266,35 +266,82 @@ type 5 payload: repeat { u8 style; u8 from_square; u8 to_square; }
 All 1,208 type-`4` records have even payload lengths, yielding 1,935 square
 entries. All 1,062 type-`5` records have payload lengths divisible by three,
 yielding 1,639 directed square pairs. Styles are overwhelmingly `2` or `4`,
-with only three style-`3` entries. Coordinates use the same `a1 = 0` mapping
-as opcode `04`; `64` is the only out-of-board value and acts as a sentinel
-(23 type-`4` entries and 17 type-`5` coordinates). Type `4` therefore encodes
-styled square markers and type `5` styled arrows/vectors. The visual meaning
-of styles `2`, `3`, and `4`, and the precise sentinel operation, still need
-oracle confirmation.
+with only three style-`3` entries (type 4: `2`×1598, `4`×336, `3`×1; type 5:
+`2`×1433, `4`×204, `3`×2).
 
-Type `130` is an interactive-question identifier. All 22 payloads begin with
-two zero bytes and then contain one of `Q1`, `Q2`, `Q2a`, `Q2b`, `Q3`, `Q4`,
-or `Q5a`. Type `34` is always the four-byte big-endian value `1`, consistent
-with an enable/presence flag, although the enabled feature is not identified.
+Type-`4`/`5` squares are one-based, not zero-based: value `0` means "no
+square" (it never occurs in any of the 5,214 coordinate instances), `1` =
+`a1`, and `64` = `h8` is a genuine board corner observed 40 times. The
+value-`64` occurrences are decisive: all 17 arrow segments entering `64`
+show clean ray geometry into `h8` — `b2`→`h8` (long diagonal, in both the
+German and English Tarrasch–Lasker lectures), `e8`→`h8`/`f8`→`h8` (back-rank
+rays, repeatedly in the `CBM168Taktik` tactics lessons, whose theme is
+back-rank mates), `h6`→`h8` (file), `f6`→`h8`, `e5`→`h8`, `c8`→`h8` — while
+all 23 type-`4` markers at `64` sit on `h8` in the same mate-zone contexts.
+Under a zero-based reading value `64` would be an off-board sentinel and no
+reading explains this geometry. The one-based convention differs from
+opcode `04`, which spans `0..63` with `0` actually occurring 26 times and
+`64` never: the transient board-action channel keeps `a1 = 0` while the
+persistent opcode-`06` graphic channel is one-based, consistent with the
+CBA annotation engine these records otherwise reuse. Occupancy checks of
+drawn coordinates against the FEN in position-clip filenames are neutral
+(43.9 % vs 46.1 % piece hits over 1,144 coordinates in 77 FEN-named clips)
+because lesson arrows freely target empty squares.
 
-Type `2` is Windows-1252 lesson text. Every observed payload begins with a
-zero byte; ordinary labels then have another zero byte, while paired English
-and German instructional annotations instead begin their visible bytes with
-`*` (`0x2a`) and `5` (`0x35`) respectively. The record length supplies the
-string boundary—there is no required trailing NUL. Decoding as UTF-8 loses
-German characters such as `ß` and `ä`; decoding the bytes after the leading
-zero as Windows-1252 recovers strings such as `weißfeldriger Läufer`. The
-special leading `*`/`5` values may be ChessBase font/glyph selectors rather
-than literal prose and should be preserved until visually mapped.
+Type `4` therefore encodes styled square markers and type `5` styled
+arrows/vectors. The style values' color names (`2` = green, `3` = yellow,
+`4` = red) remain a visual-oracle hypothesis. A style×move-glyph
+correlation over all 3,574 style entries shows no clean good/bad split —
+style `4` events join `!` symbols 143 times and `?!` 43 times — so the
+color semantics, and whether style means color at all, stay unresolved.
+
+Type `130` is text before move with a language selector, not a question
+record. All 22 payloads begin with the u16be language code `0x0000` (all
+languages) followed by one of `Q1`, `Q2`, `Q2a`, `Q2b`, `Q3`, `Q4`, or
+`Q5a` — the interactive-question labels themselves. Type `34` is a medal
+bitmask, not an enable flag: all 35 payloads are u32 `1`, setting bit 0 of
+ChessBase's medal word (= the *Best Game*/brilliancy medal, same bit
+numbering as the CBH index medals, scidb `Flag_Best_Game`).
+
+### Opcode-06 record types follow the CBA annotation grammar
+
+The type numbers are exactly the decimal images of the `.cba` annotation
+types documented in `CHESSBASE_FORMAT_REFERENCES.md` §4.4 — the media
+stream reuses the CBA annotation writer verbatim (`130` = 0x82 = text
+before move, `34` = 0x22 = medal, `2` = 0x02 = text after move, `3` =
+symbols). Byte-range checks below make this corpus-verified.
+
+The type-`3` symbols payload validates the CBA field order across all 239
+records: 171 are one byte (move glyph only), 68 two bytes (move glyph +
+evaluation); the prefix byte never occurs. Index-0 values are exclusively
+move glyphs — `1` (`!`)×102, `6` (`?!`)×33, `2` (`?`)×21, `3` (`!!`)×7,
+`4` (`??`)×7, `5` (`!?`)×4, `0` (unset)×65. Index-1 values are exclusively
+position evaluations — `0x0F` (`=/+`)×24, `0x0E` (`+/=`)×13, `0x12`
+(`+-`)×10, `0x13` (`-+`)×9, `0x0B` (`=`)×9, `0x0D` (unclear)×3. The former
+reading of type `3` as "an unknown scalar most commonly 1, 6, 15, 2, 14" is
+fully explained: those were `!`, `?!`, `=/+`, `?`, `+/=`.
+
+The leading u16be word of type-`2`/`130` payloads is the CBA text-comment
+language code: `0x0000` all languages, `0x2A` English, `0x35` German,
+`0x2B`/`0x31`/`0x46`/`0x67`/`0x75` Spanish/French/Italian/Dutch/
+Portuguese. The earlier "leading `*`/`5` glyph selectors" were these
+language bytes. The corpus histogram over 90 type-`2` records is
+`0x0000`×68, `0x002A`×11, `0x0035`×11 — exactly the paired English/German
+instructional labels. All 22 type-`130` payloads carry `0x0000`.
+
+Type `2` is Windows-1252 lesson text. The record length supplies the
+string boundary—there is no required trailing NUL. Decoding the bytes
+after the language code as Windows-1252 recovers German strings such as
+`weißfeldriger Läufer`. Text pairs carrying `0x002A`/`0x0035` show the
+same lesson sentence in two languages; ChessBase then displays only the
+one matching the UI language. Play-and-decode layers must read both.
 
 Type `7` has the fixed payload `00 index square 00` in all 531 records. The
-index ranges from 0 through 27; the square ranges from 0 through 59 and uses
-the standard square mapping. It therefore associates a small lesson/game
-object index with one board square. Whether that object is a piece, selection,
-question target, or branch marker remains unresolved. Type `3` is a one- or
-two-byte big-endian scalar (239 records), most commonly `1`, `6`, `15`, `2`,
-or `14`; its role is still unknown.
+index ranges from 0 through 27; the square value is probably one-based like
+the other graphic fields (`0` occurs only 27 times, plausibly "no square",
+and observed squares `1`–`59` = `a1`–`c8`), so it associates a small
+lesson/game object index with one board square. Whether that object is a
+piece, selection, question target, or branch marker remains unresolved.
 
 Type `37` is a four-byte big-endian millisecond timeline cursor. Values such
 as `0x0004a6e9` become
@@ -537,8 +584,9 @@ No one of these implementation paths has been selected yet.
 
 ## Next RE tasks
 
-1. Decode the remaining opcode-`06` record types (`2/3/7/34/37/130`) and map
-   styles `2/3/4` plus square sentinel `64` with a visual oracle.
+1. Map mark styles `2/3/4` and opcode-`04` action classes/modifiers with a
+   visual oracle; identify the opcode-`06` type-`7` object semantics and
+   the remaining `37`/`3`-per-record rollover behavior.
 2. Parse opcode-`02` checkpoints into game headers, game-tree cursor state, and
    their embedded opcode-`06` record collection.
 3. Determine opcode-`04` action-class and modifier semantics visually.

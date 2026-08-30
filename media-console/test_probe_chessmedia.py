@@ -43,15 +43,17 @@ class PacketBytesTest(unittest.TestCase):
         self.assertEqual(len(encoded) % 4, 2)
         self.assertEqual(PROBE.packet_bytes(packet_data(encoded)), payload)
         description = PROBE.describe(payload)
-        self.assertIn("type=5 len=12 arrows=[2:c4-b4,2:e1-b4]", description)
-        self.assertIn("type=4 len=8 squares=[2:e1]", description)
+        self.assertIn(
+            "type=5 len=12 arrows=[green:b4-a4,green:d1-a4]", description)
+        self.assertIn("type=4 len=8 marks=[green:d1]", description)
 
     def test_decodes_type_two_text_as_windows_1252(self):
-        text = b"\x005wei\xdffeldriger L\xe4ufer"
+        text = b"\x00\x35wei\xdffeldriger L\xe4ufer"
         length = 6 + len(text)
         payload = struct.pack("<IIHH", 6, 0, 1, length)
         payload += struct.pack(">IH", 2, length) + text
-        self.assertIn("text='5weißfeldriger Läufer'", PROBE.describe(payload))
+        self.assertIn("comment=post:de:'weißfeldriger Läufer'",
+                      PROBE.describe(payload))
 
     def test_decodes_checkpoint_identity_header(self):
         values = ["Navara", "David", "Adams", "Michael", "Biel", "48th Biel Festival 2015"]

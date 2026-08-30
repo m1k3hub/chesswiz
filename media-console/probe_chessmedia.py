@@ -15,6 +15,38 @@ import sys
 
 
 HEX_LINE = re.compile(r"(?m)^........: ((?:[0-9a-f]{4} ?)+)")
+# CBA text-annotation language codes (CHESSBASE_FORMAT_REFERENCES 4.4).
+COMMENT_LANGUAGES = {
+    0x00: "all", 0x2A: "en", 0x2B: "es", 0x31: "fr", 0x35: "de",
+    0x46: "it", 0x67: "nl", 0x75: "pt",
+}
+# Style values are verified byte values; the color names are provisional
+# until observed against ChessBase's on-screen rendering.
+MARK_COLORS = {2: "green", 3: "yellow", 4: "red"}
+MOVE_SYMBOLS = {
+    1: "good-move", 2: "poor-move", 3: "very-good-move",
+    4: "very-poor-move", 5: "speculative-move", 6: "questionable-move",
+    8: "singular-move", 0x16: "zugzwang(side-to-move)",
+}
+POSITION_SYMBOLS = {
+    0x0B: "drawish", 0x0D: "unclear", 0x0E: "white-slight-advantage",
+    0x0F: "black-slight-advantage", 0x10: "white-moderate-advantage",
+    0x11: "black-moderate-advantage", 0x12: "white-decisive-advantage",
+    0x13: "black-decisive-advantage", 0x20: "time-advantage(side-to-move)",
+    0x24: "initiative(side-to-move)", 0x28: "attack(side-to-move)",
+    0x2C: "compensation(side-to-move)", 0x84: "counterplay(side-to-move)",
+    0x8A: "time-limit", 0x92: "novelty",
+}
+EDITOR_SYMBOLS = {
+    0x8C: "with-the-idea", 0x8D: "aimed-against", 0x8E: "better-move",
+    0x8F: "worse-move", 0x90: "equivalent-move", 0x91: "editors-remark",
+}
+# Same medal bit numbering as scidb's CBH index medal word (cbh_codec.cpp).
+MEDAL_BITS = {
+    0: "best-game", 1: "decided-tournament", 2: "model-game", 3: "novelty",
+    4: "pawn-structure", 5: "strategy", 6: "tactics", 7: "with-attack",
+    8: "sacrifice",
+}
 
 
 def square_name(value):
@@ -23,6 +55,11 @@ def square_name(value):
     if value < 64:
         return f"{'abcdefgh'[value & 7]}{1 + (value >> 3)}"
     return f"#{value}"
+
+
+def annotation_square_name(value):
+    """Opcode-06 graphic squares are 1-based: 0 = none, a1 = 1, h8 = 64."""
+    return "none" if value == 0 else square_name(value - 1)
 
 
 def checkpoint_header(payload):
@@ -156,29 +193,39 @@ def describe(payload):
             value = payload[offset + 8:end]
             if record_type == 4 and len(value) % 2 == 0:
                 items = [
-                    f"{value[i]}:{square_name(value[i + 1])}"
+                    f"{MARK_COLORS.get(value[i], value[i])}:{annotation_square_name(value[i + 1])}"
                     for i in range(0, len(value), 2)
                 ]
-                rendered = f"squares=[{','.join(items)}]"
+                rendered = f"marks=[{','.join(items)}]"
             elif record_type == 5 and len(value) % 3 == 0:
                 items = [
-                    f"{value[i]}:{square_name(value[i + 1])}-{square_name(value[i + 2])}"
+                    f"{MARK_COLORS.get(value[i], value[i])}:"
+                    f"{annotation_square_name(value[i + 1])}-{annotation_square_name(value[i + 2])}"
                     for i in range(0, len(value), 3)
                 ]
                 rendered = f"arrows=[{','.join(items)}]"
-            elif record_type == 130 and value.startswith(b"\x00\x00"):
-                rendered = f"question={value[2:].decode('ascii', 'replace')!r}"
-            elif record_type == 2 and value.startswith(b"\x00"):
-                text = value[1:].lstrip(b"\x00").decode("cp1252")
-                rendered = f"text={text!r}"
+            elif record_type in (2, 130) and len(value) >= 2:
+                country = struct.unpack_from(">H", value)[0]
+                language = COMMENT_LANGUAGES.get(country, "all" if country == 0 else f"#{country}")
+                text = value[2:].decode("cp1252")
+                position = "post" if record_type == 2 else "pre"
+                rendered = f"comment={position}:{language}:{text!r}"
+            elif record_type == 3 and len(value) <= 3:
+                maps = (MOVE_SYMBOLS, POSITION_SYMBOLS, EDITOR_SYMBOLS)
+                symbols = [
+                    "none" if item == 0 else maps[i].get(item, f"#{item}")
+                    for i, item in enumerate(value)
+                ]
+                rendered = f"symbols=[{','.join(symbols)}]"
+            elif record_type == 34:
+                medal = struct.unpack_from(">I", value)[0]
+                names = [name for bit, name in MEDAL_BITS.items() if medal & (1 << bit)]
+                rendered = f"medal=0x{medal:x}" + (f" ({','.join(names)})" if names else "")
             elif record_type == 37 and len(value) == 4:
                 rendered = f"time_ms={struct.unpack('>I', value)[0]}"
             elif record_type == 7 and len(value) == 4 and value[0] == value[3] == 0:
-                rendered = f"index={value[1]} square={square_name(value[2])}"
-            elif record_type == 34 and len(value) == 4:
-                rendered = f"u32be={struct.unpack('>I', value)[0]}"
-            elif record_type == 3 and len(value) in (1, 2):
-                rendered = f"u{len(value) * 8}be={int.from_bytes(value, 'big')}"
+                square = "none" if value[2] == 0 else annotation_square_name(value[2])
+                rendered = f"index={value[1]} square={square}"
             else:
                 strings = re.findall(rb"[ -~]{4,}", value)
                 if strings:
