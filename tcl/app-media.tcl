@@ -1011,10 +1011,41 @@ proc application::media::SyncTransport {what} {
 # Board annotation delegate: receives decoded script events from
 # ::media::sync (arrows/marks render future, comments go to the status
 # bar).  The kind and data arguments come from ::media::sync::load-events.
+# Map a style byte (from the decoded script stream) to a drawable color.
+# The actual colors are ChessBase's media overlay palette (styles 2=green,
+# 3=yellow, 4=red; the mapping is a visual-oracle hypothesis).
+variable SyncColors
+array set SyncColors { 2 green 3 yellow 4 red }
+
 proc application::media::SyncAnnotate {kind data} {
 	variable Priv
+	variable SyncColors
 
 	switch -- $kind {
+		arrow {
+			lassign $data from to style
+			set color "green"
+			if {[info exists SyncColors($style)]} {
+				set color $SyncColors($style)
+			}
+			# draw on the active board widget
+			set brd [application::media::boardWidget]
+			if {$brd eq ""} { return }
+			set fromIdx [algebraic_to_index $from]
+			set toIdx   [algebraic_to_index $to]
+			if {$fromIdx >= 0 && $toIdx >= 0} {
+				::board::diagram::drawAlternative $brd $fromIdx $toIdx $color ""
+			}
+		}
+		mark {
+			lassign $data square style
+			set brd [application::media::boardWidget]
+			if {$brd eq ""} { return }
+			set sqIdx [algebraic_to_index $square]
+			if {$sqIdx >= 0} {
+				::board::diagram::hilite $brd $sqIdx "suggested"
+			}
+		}
 		comment {
 			if {[llength $data] >= 3} {
 				set text [lindex $data 2]
@@ -1023,16 +1054,8 @@ proc application::media::SyncAnnotate {kind data} {
 			}
 			set Priv(statusbar) "\u25b6 $text"
 		}
-		arrow {
-			lassign $data from to style
-			MediaDebug "arrow $from$to style=$style"
-		}
-		mark {
-			lassign $data square style
-			MediaDebug "mark $square style=$style"
-		}
 		symbol {
-			MediaDebug "symbol $data"
+			MediaDebug "SyncAnnotate: symbol $data"
 		}
 	}
 }
@@ -1041,12 +1064,34 @@ proc application::media::SyncAnnotate {kind data} {
 proc application::media::SyncClearAnnotations {} {
 	variable Priv
 	set Priv(statusbar) ""
-	MediaDebug "SyncClearAnnotations"
+
+	set brd [application::media::boardWidget]
+	if {$brd eq ""} { return }
+	::board::diagram::clearMarks $brd
+
+	# remove all transient alternative arrows drawn by the sync layer
+	set canv [::board::diagram::canvas $brd]
+	if {$canv ne ""} {
+		foreach item [$canv find withtag alternative:*] {
+			$canv delete $item
+		}
+	}
 }
 
+# Convert an algebraic square ("c4") to its file-major 0-63 index.
+proc application::media::algebraic_to_index {sq} {
+	if {[string length $sq] < 2} { return -1 }
+	set file [scan [string index $sq 0] %c]
+	set file [expr {$file - [scan a %c]}]
+	set rank [scan [string index $sq 1] %d]
+	if {$file < 0 || $file > 7 || $rank < 1 || $rank > 8} { return -1 }
+	return [expr {$file * 8 + ($rank - 1)}]
+}
 
-proc application::media::SyncClearAnnotations {} {
-	MediaDebug "SyncClearAnnotations"
+# Resolve the active board widget identifier for ::board::diagram calls.
+# The board is stored in the application::board namespace (set by build()).
+proc application::media::boardWidget {} {
+	return $application::board::board
 }
 
 
