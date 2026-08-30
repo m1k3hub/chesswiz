@@ -438,6 +438,26 @@ replaces padding bytes in place, so entry rhythm stays visible). Note:
 a nearby small u16be word `03 4a` advances to `03 4c` while the lesson
 plays, so it is a millisecond-ish counter, not a ply or node count.
 
+The larger Mar del Plata base checkpoint (2,534 bytes, ~70 entries)
+resolves what the collections carry. Every decorated node has a
+single-record collection whose record is the type-`37` ms cursor:
+`[u16le count=1][len=10][type u32be 0x25=37][echo=10][u32be ms][00 00]`.
+The serialized per-node field the checkpoint patches is that node's
+media timestamp (values such as `0x0001623b` = 90,683 ms, `0x0000e510`
+= 58,640 ms) — confirming type `37` as the per-node media time of the
+serialized lesson tree, consistent with the earlier finding that such
+cursors persist in cumulative deltas and first appear shortly after
+their media moment. Decorated nodes also host type-`2` game-quotation
+texts, e.g. `1-0 (3520) Shirov,A (2701)-Bacrot,E (2729) Bilbao 2014 CBM
+163 [Krasenkow,M]` — quotation records embed the game number, both
+rated players, the event, the source database (CBM 163) and the
+annotator (`Krasenkow`) inline.
+
+The node pairs still do not equal the sibling `.cms` selectors
+(`x0y0`/`x24y25`/`x26y43`/`x34y43`) under decimal or hex readings; the
+two tables plausibly index different layers (serialized tree nodes vs
+position clips).
+
 ### Binary oracle strings
 
 The ChessBase 26 executable contains media-related identifiers including
