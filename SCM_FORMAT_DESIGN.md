@@ -154,6 +154,81 @@ MyBase/
           └── lasker_commentary.mp3
 ```
 
+### 1.6 `[BoardSync]` — lecture timelines + board events (v1.2, from the WMV RE)
+
+The ChessBase WMV reverse engineering (`CHESSBASE_MEDIA_RE.md`) proved
+that Chess Media lectures are not just audio/video: the ASF script
+stream carries a **serialized game-tree replay** (per-step media
+timestamps), from/to move arrows, styled square marks, positional symbol
+lights and multilingual pre/post comments — all keyed to the video
+timeline. The `[BoardSync]` section gives `.scm` the same capability
+without any of ChessBase's encoding hazards:
+
+```
+[Media "V05"]
+Type: video
+Path: videos/biel_r6_marin.wmv
+Title: "Biel 2015 round 6 — Marin"
+Title-lang de: "Biel 2015 Runde 6 — Marin"
+
+[Game <fingerprint>]
+Media: V05
+
+[BoardSync "V05"]
+# navigation timeline: one Step per replay step — media-ms, ascending,
+# in the lecture's own navigation order (depth-first through the game
+# tree, variations interleaved).  The board advances one step per
+# elapsed mark.
+Step: 30642
+Step: 37142
+Step: 51142
+
+# transient board events: <media-ms>, <kind>, payload (one per line)
+Arrow: 45200, green, c8-e6
+Mark: 46000, green, h8
+Comment: 51000, post, , "would transpose to a Shirov-Bacrot 2014 game"
+Symbols: 51000, 1, 1
+Comment: 90200, pre, de, "Der Läufer nach c7 verliert"
+Reset: 63000
+```
+
+Key rules — each settles a trap the ChessBase binary left us:
+
+- **Time base**: integer media-ms in the referenced video, ascending.
+  `Step` marks follow the lecture's own navigation order, which is
+  depth-first through the game tree with variations interleaved.
+- **Squares are algebraic** (`c8`, `e6`), never numeric board indices.
+  The decoded ChessBase stream uses file-major square bytes (`a1` = 0,
+  `b1` = 8, `a2` = 1; graphics one-based) — an encoding trap that took a
+  full RE round to pin down; `.scm` stores what a human and scidb's core
+  already speak.  An omitted index (ChessBase `0`) means "none".
+- **Styles** are free short tags (`green`, `yellow`, `red`, …).
+  ChessBase media uses numeric style bytes (2/3/4; colors still
+  unverified against the GUI) — `.scm` never stores those numbers, only
+  the author's intent.
+- **`Comment`**: `post` (after the move; ChessBase type `0x02`) or
+  `pre` (before; type `0x82`), then the language code (empty = all
+  languages), then the quoted text.  Imports transcode from
+  Windows-1252 to UTF-8; script records carry per-language copies, and
+  the UI shows only the active locale's copy when present.
+- **`Symbols`**: scidb NAG numbers (the decoded symbol records are
+  move glyphs / position evaluations / prefix glyphs — standard NAG
+  territory, not worth re-inventing).
+- **`Reset`** clears transient overlays at that time (the ancestor
+  opcode-`08` boundary).
+- Unknown event kinds are ignored — like every other section.
+- **`Step`-only sections** are the flat case consumed today:
+  `wmv2timeline.py --plytimes` writes the one-mark-per-line form, and
+  an `.scm` `[BoardSync]` with only `Step:` lines is its in-manifest
+  generalization.  Event-carrying sections cover the full decoded WMV
+  record set (types 2/3/4/5/8/14).
+
+Consumption: the panel feeds the `Step:` marks to
+`::media::sync::load-timeline` (the ply driver) and queues the events
+for the annotation layer when playback reaches them (§4 tier-2, future).
+The `Step`-only form is the v1.2 ship set; events ride along whenever an
+importer produced them.
+
 ## 2. Linkage: stable game id (the central design decision)
 
 This is where ChessBase's `.cbm` failed us: its linkage couples media to `.cbg`
@@ -310,8 +385,14 @@ tiers) — no new core dependency for v1.
 2. **Inline base64 cap** — small enough to keep the manifest readable (e.g.
    ≤64 KiB), above which external is required.
 3. **Tombstones on game delete** — keep `[Game]` blocks as records vs prune.
-4. **Board-sync (v2)** — the `[BoardSync "mediaId" @moveN=ts …]` grammar, so
-   video can be cued to game positions (the real "Chess Media System"). Design
-   the extension point now even if v1 ignores it.
+4. **Board-sync (v2)** — DESIGNED (2026-08-30): §1.6 `[BoardSync]` gives
+   the grammar lecture timelines (`Step:` marks) and board events
+   (arrows/marks/comments/symbols, algebraic squares, NAGs), informed by
+   the decoded ChessBase script stream (`CHESSBASE_MEDIA_RE.md`).  The
+   `Step`-only form ships with the landed `wmv2timeline.py` +
+   `::media::sync::load-timeline` path; the event form awaits the
+   annotation application layer.  Open sub-question: whether event-heavy
+   lectures should inline their events in the `.scm` or reference an
+   external `V05.sync` payload (§1.2's inline-cap rule applies).
 5. **One `.scm` per DB vs per-game `.scm`** — one companion file is simpler
    and fine for the scale; chosen here.
