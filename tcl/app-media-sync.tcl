@@ -27,7 +27,7 @@ namespace eval ::mediasync {
 	variable opts
 	array set opts {
 		transport 1
-		follow    0
+		follow    1
 	}
 }
 
@@ -43,12 +43,12 @@ proc ::mediasync::set-config {transport follow} {
 }
 
 namespace eval ::media::sync {
-	# Config: transport sync on by default; follow (board driven by the
-	# media timeline) is opt-in.
+	# Config: board follows the media timeline by default (ChessBase
+	# interactive-video behaviour); disable via the checkbox.
 	variable State
 	array set State {
 		transport 1
-		follow    0
+		follow    1
 		autoplay  0
 		playing   0
 		lastgoal  -1

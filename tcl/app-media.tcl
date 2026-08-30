@@ -88,23 +88,14 @@ proc application::media::build {twm frame width height} {
 	pack $ctrl.play -side left -padx 2
 	pack $ctrl.stop -side left -padx 2
 
-	# Board-sync wiring (state machine in tcl/app-media-sync.tcl)
+	# Board-sync wiring (state machine in tcl/app-media-sync.tcl).
+	# The coupling is inherent: no options, always bidirectional.
 	::media::sync::configure \
 		transport-cmd	[namespace code SyncTransport] \
 		boardforward-cmd	[namespace code SyncBoardForward] \
 		boardstart-cmd	[namespace code SyncBoardStart] \
 		boardlength-cmd	[namespace code SyncBoardLength] \
 		boardply-cmd	[namespace code SyncBoardPly]
-	ttk::checkbutton $ctrl.sync \
-		-text $mc::SyncBoard \
-		-variable ::mediasync::opts(transport) \
-		-command [namespace code SyncChanged]
-	ttk::checkbutton $ctrl.follow \
-		-text $mc::FollowBoard \
-		-variable ::mediasync::opts(follow) \
-		-command [namespace code SyncChanged]
-	pack $ctrl.sync -side left -padx 12
-	pack $ctrl.follow -side left -padx 2
 
 	# Embedded viewer area — a frame that holds either an image label
 	# or a tkvlc video window.
@@ -147,6 +138,8 @@ proc application::media::GameSwitched {oldPos newPos} {
 
 proc application::media::DatabaseSwitched {base variant} {
 	variable Priv
+	set Priv(lastBase) $base
+	set Priv(lastVariant) $variant
 	if {$base ne $Priv(base)} {
 		after cancel $Priv(afterid)
 		set Priv(afterid) [after 1 [namespace code [list Update $Priv(position)]]]
@@ -168,9 +161,30 @@ proc application::media::Update {position} {
 	foreach item [$tree children {}] { $tree delete $item }
 
 	if {$position < 0 || $position == 9} {
+		# independent mode - no game on the board: keep the media of the
+		# last opened base playable (gallery browsing without a game).
+		set Priv(index) -1
+		if {[info exists Priv(lastBase)] && [string length $Priv(lastBase)]
+			&& [file exists $Priv(lastBase)]} {
+			array unset Priv "interactive:played:*"
+			catch {
+				set gallery [::scidb::db::mediaGallery $Priv(lastBase) $Priv(lastVariant)]
+				if {[llength $gallery]} {
+					set n 0
+					foreach gentry $gallery {
+						lassign $gentry gpath gtype gtitle gmediaId
+						$tree insert {} end -id item$n -values [list [TypeLabel $gtype] $gtitle $gpath]
+						incr n
+					}
+					set Priv(base) $Priv(lastBase)
+					set Priv(variant) $Priv(lastVariant)
+					set Priv(statusbar) "Media gallery - playable without a game"
+					return
+				}
+			}
+		}
 		set Priv(base) {}
 		set Priv(variant) {}
-		set Priv(index) -1
 		set Priv(statusbar) $mc::NoDatabase
 		return
 	}
@@ -179,6 +193,8 @@ proc application::media::Update {position} {
 	set Priv(base) $base
 	set Priv(variant) $variant
 	set Priv(index) $index
+	set Priv(lastBase) $base
+	set Priv(lastVariant) $variant
 	# database-level interactive manifest applies to every game
 	LoadDbInteractive $base
 	LoadUserInteractive
@@ -526,12 +542,44 @@ proc application::media::BoardUpdated {position} {
 	if {[info exists Priv(dbInteractive)] && [llength $Priv(dbInteractive)]} { set haveInter 1 }
 	if {!$haveInter} { return }
 	if {$position != $Priv(position) || $position < 0 || $position == 9} { return }
-	# auto-jump is gated by the 'Sync with board' checkbox (transport sync)
-	set on 1
-	catch { set on $::mediasync::opts(transport) }
-	if {!$on} { return }
 
+	# bidirectional coupling (1): stepping the board repositions the media
+	set Priv(seekid) [after 250 [namespace code [list PlySeek $position]]]
 	set Priv(interactiveid) [after 150 [namespace code [list InteractiveFollow $position]]]
+}
+
+
+# Deferred body of BoardUpdated: seek the loaded media to the time the
+# board's current ply maps to, so pressing play resumes at the board.
+# Skipped while follow mode owns the mapping (media playing): the follow
+# tick is the master then, and stepping is what it produces itself.
+proc application::media::PlySeek {position} {
+	variable Priv
+
+	if {$position != $Priv(position)} { return }
+	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
+	set handle $Priv(vlc_handle)
+	if {$handle eq ""} { return }
+
+	set dur 0
+	catch { set dur [$handle duration] }
+	set len [SyncBoardLength]
+	if {!$dur || $dur <= 0 || $len <= 1} { return }
+
+	set st ""
+	catch { set st [$handle state] }
+	if {$st eq "playing"} { return }
+
+	set ply [SyncBoardPly]
+	# tkvlc 'time' speaks SECONDS (getter and setter)
+	set t 0.0
+	catch { set t [$handle time] }
+	set tol [expr {max(1.2, $dur / 100.0)}]
+	set target [expr {double($ply) / double($len - 1) * ($dur - 0.3)}]
+	if {abs($target - $t) > $tol} {
+		MediaDebug "PlySeek: ply=$ply/$len -> seek to ${target}s (media at ${t}s)"
+		catch { $handle time $target }
+	}
 }
 
 
@@ -702,6 +750,11 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	variable Priv
 	variable mc
 
+	set Priv(lastMedia) $path
+	set Priv(lastStartMs) $startMs
+	set Priv(lastEndMs) $endMs
+	set Priv(vlcretry) 0
+
 	set canvas $Priv(viewer).canvas
 
 	# Destroy any previous tkvlc handle so we start fresh.
@@ -758,8 +811,7 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	# media is playing: sync state machine active (drives the board in
 	# follow mode; transport coupling reacts to board playback events).
 	::media::sync::onPlaybackStarted
-	catch { ::mediasync::opts(transport) } ;# keep checkbutton state authoritative
-	SyncChanged
+	StartFollowTick
 
 	# Check shortly after that playback actually started (media decoded).
 	catch { after cancel $Priv(checkid) }
@@ -781,6 +833,15 @@ proc application::media::CheckDecode {path} {
 	set state ""
 	catch { set state [$handle state] }
 	MediaDebug "CheckDecode: state=$state"
+
+	if {$state eq "error" || $state eq "idle" || $state eq "ended"} {
+		if {![info exists Priv(vlcretry)] || $Priv(vlcretry) < 1} {
+			set Priv(vlcretry) 1
+			MediaDebug "CheckDecode: state=$state -> retrying once (demux pre-fill hiccup)"
+			catch { ::application::media::PlayMedia $Priv(lastMedia) $Priv(lastStartMs) $Priv(lastEndMs) }
+			return
+		}
+	}
 
 	if {$state eq "error" || $state eq "idle"} {
 		MediaDebug "CheckDecode: state=$state -> cannot play [list $path]"
@@ -946,6 +1007,7 @@ proc application::media::Stop {} {
 
 	catch { after cancel $Priv(checkid) }
 	catch { after cancel $Priv(rangeid) }
+	catch { after cancel $Priv(seekid) }
 	set Priv(checkid) {}
 	set Priv(rangeid) {}
 
