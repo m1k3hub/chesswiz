@@ -559,6 +559,20 @@ date, critical position, move medal, game quotation, pawn structure,
 Fritz eval, training, piece path, correspondence, variation color, eval
 profile — matching the decoded opcode-`06` record families one-to-one.
 
+**The WM-SDK delivery loop decompiles cleanly** (`FUN_1403ace20`): it
+walks the ASF script-command entries through a WM-reader interface
+(vtable entries 0x58 = GetCount/0x60 = Get with two out-strings), and
+builds a `ScriptItem` (`FUN_1403abbe0`) per entry from the
+`(name, value)` wide-char pair.  The `ScriptItem` ctor assigns the
+action→type ids `"TEXT"` → 1, `"EDITOR"` → 2, `"GA"` → 3, and defaults a
+missing timestamp to `10,000,000` — **100-ns units, i.e. one second** —
+so the internal timeline is FILETIME-style, exporting to seconds (the
+divisor seen earlier).  The dispatcher (`FUN_1403a88a0`) routes items
+with action `"GA"`/`"TEXT"` into the board-side consumer (vtable
+`+0x480`) and separately handles `"MA"`.  This is the exact pipeline the
+static decoder in this document bypasses: ASF script stream → named
+items → the `GA` payload grammar decoded above.
+
 The raw PE RTTI cluster around the callback names also contains
 `IWMStatusCallback`, `IWMReaderCallback`, and `IWMReaderCallbackAdvanced`
 descriptors. This confirms ChessBase links the legacy Windows Media reader
