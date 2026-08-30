@@ -141,6 +141,15 @@ adjacent, showing that `04` is not merely a periodic checkpoint. These are
 strong candidates for board/annotation actions, but the current evidence is
 not sufficient to name individual fields or map them to squares.
 
+Large records in this same lesson are cumulative snapshots: their decoded
+length grows from 1311 bytes to 1509 bytes as the lesson progresses. Some
+snapshots differ only at offset 8, while others append or modify sizeable
+regions beginning around offsets 334, 378, 421, 635, 715, 1101, and 1217.
+This pattern is consistent with a serialized lesson state accumulating
+annotations or board objects, not with a fixed-size move tuple. The value at
+offset 8 should consequently be treated as a snapshot selector, while the
+rest of the record must be parsed before deriving board state.
+
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
