@@ -183,10 +183,17 @@ rest of the record must be parsed before deriving board state.
 
 Some fixtures also include a same-basename `.txt` export. It contains
 timestamped `GA:` commands such as `0:00:01.5: GA:B_...` followed by the
-encoded state payload. This is a useful oracle for packet framing and timing:
-the text export preserves the original command timestamps, while the ASF
-stream carries the same information as script packets. It is not a separate
-game notation file.
+encoded state payload. This is a useful oracle for packet framing and
+timing, but it is not byte-identical to the sibling `.wmv` script
+stream: side-by-side counts of the Mar del Plata base fixture give
+identical checkpoints (73 opcode-`02` commands on both sides) but the
+text export carries 23 extra transitions (99 opcode-`03` vs the `.wmv`'s
+76), and the Navara-Adams text export has 87 checkpoint commands while
+its `.wmv` script stream decodes 62. At playback the transport feeds
+the `.wmv` stream; the export additionally reflects the interactive
+replay/edit timeline. It is not a separate game notation file, and
+counts taken from text exports overstate what a single base video
+carries by itself.
 
 Across 234 text exports, six command prefixes occur immediately after `GA:`:
 
@@ -373,6 +380,16 @@ and `02` is its cumulative/checkpoint representation. They are two views of
 the same state, not independent command families. A decoder can process `06`
 for low-latency updates and use `02` to initialize after seeking or to verify
 and repair accumulated state.
+
+Interactive (`.cms`-attached) lessons refine this: their base `.wmv`
+script stream carries no standalone opcode-`06` commands at all (the
+Mar del Plata base stream = 73 checkpoints + 76 transitions and nothing
+else) — all annotations live inside the checkpoint tails, per node. In
+plain lectures (no `.cms`), standalone opcode-`06` deltas flow in the
+base stream and the checkpoint tails embed the same bytes. Both
+designs share one invariant: the opcode-`02` checkpoint is the
+authoritative serialized state; the deltas are its playback-time update
+channel.
 
 ### Checkpoint body structure (Navara-Adams)
 
