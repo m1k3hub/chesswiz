@@ -243,6 +243,28 @@ length)` pairs followed by a raw block: the candidate lengths leave
 inconsistent residual bytes and no stable alignment. The count hypothesis is
 therefore retained as a lead, while the directory grammar remains unverified.
 
+The relationship between `06` and `02` is now confirmed even though the inner
+grammar is not. Across 10 script-bearing WMVs, the final `06` delta before each
+following `02` checkpoint occurs byte-for-byte inside that checkpoint in all
+83 observed groups. In total, 89 of 109 individual deltas occur literally;
+the remaining 20 are earlier members of multi-delta groups whose final form is
+what the checkpoint retains. Thus `06` is an incremental lesson-state update
+and `02` is its cumulative/checkpoint representation. They are two views of
+the same state, not independent command families. A decoder can process `06`
+for low-latency updates and use `02` to initialize after seeking or to verify
+and repair accumulated state.
+
+### Game-tree cursor IDs
+
+In the Navara-Adams fixture, ordinary opcode `03` transition IDs and the state
+ID at offset 8 of opcode `02` track the game's main-line ply number. This is
+confirmed against the published 74-ply score: the stream reaches IDs through
+74 while the lecturer navigates the game. IDs with bit `0x80` set occur while
+annotated side variations are shown; their low seven bits repeatedly match the
+nearby branch anchor (for example `0x98`/`0x99` around plies 24/25). Treating
+the high bit as a variation-mode flag is a strong working hypothesis, but it
+still needs validation on games or trees exceeding 127 plies.
+
 ### Binary oracle strings
 
 The ChessBase 26 executable contains media-related identifiers including
@@ -278,22 +300,25 @@ This rules out a generic directory format for every opcode: `03/04/08/0e`
 are fixed command structures, while only `06` and `02` need variable-length
 parsers.
 
-Opcode `04` has a stable 12-byte layout after the opcode header. Its final
-eight bytes vary as four-byte groups such as `80 00 00 00 3c 3d 00 00`,
-`00 00 00 00 19 34 00 00`, and `80 00 00 00 15 16 00 00`. The recurring
-values in the last four bytes are in the 0–63 range in many records, making
-board-square references plausible, but other samples use values such as
-`40 02`; this may be packed coordinates or flags rather than two plain square
-indices. The fixed shape is established; its action semantics are not yet
-proven.
+Opcode `04` has this stable 12-byte layout:
 
-Across 742 opcode-`04` records, the four-byte flag field takes only six
-values: `0x80000000` (498 records), `0` (204), `0x00020000` (33),
-`0x01000000` (4), `0x00080000` (2), and `0x02000000` (1). The final four
-bytes vary independently, with common values such as `3c3d0000`,
-`19340000`, and `15160000`. This indicates a small action-type flag plus a
-packed argument, rather than an arbitrary 12-byte blob; the flag-to-action
-mapping still needs an oracle observation.
+```text
+u32 opcode       = 4
+u32 action_class
+u8  first_square
+u8  second_square
+u16 modifier
+```
+
+All 742 exported records have both square bytes in `0..63`; together they
+cover that full range. Interpreting `0` as `a1`, increasing by file and then
+rank, yields plausible pairs such as `e8-f8`, `g6-f6`, and `b4-e7`. The six
+little-endian action classes are `0x80` (498 records), `0` (204), `0x200`
+(33), `1` (4), `0x800` (2), and `2` (1). The observed modifiers are `0`
+(468), `0x80` (230), `0x240` (24), `0x20` (12), `2` (4), `1` (3), and
+`0x10` (1). This proves the field boundaries and board-square arguments.
+Whether each class draws an arrow, highlights a square, or performs another
+board action still requires an oracle observation.
 
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
@@ -313,7 +338,7 @@ Examples include:
 ```
 
 These records are timestamped independently by ASF. Their value is a
-little-endian 32-bit field. In the observed lecture, compact values precede
+little-endian 16-bit field. In the observed lecture, compact values precede
 large records carrying the same state value at offset 8. For example, the
 stream contains compact `d6`, compact `d7`, then a large record with state
 value `d7`; later it contains compact `d8`, followed by large records with
@@ -438,6 +463,10 @@ annotations in the multimedia stream and synchronizes them during playback:
 
 - https://help.chessbase.com/CBase/16/Eng/chess_media_system.htm
 - https://help.chessbase.com/Fritz/19/Eng/chess_media_system.htm
+
+The published score used to correlate the Navara-Adams cursor IDs is at:
+
+- https://en.chessbase.com/post/biel-06-three-at-the-top
 
 Microsoft's ASF documentation confirms the script-stream model:
 

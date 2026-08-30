@@ -66,6 +66,15 @@ def describe(payload):
     if kind == 3 and len(payload) >= 6:
         state = struct.unpack_from("<H", payload, 4)[0]
         return f"transition kind=3 id=0x{state:x} decoded={len(payload)}"
+    if kind == 4 and len(payload) == 12 and payload[8] < 64 and payload[9] < 64:
+        action = struct.unpack_from("<I", payload, 4)[0]
+        first, second, modifier = struct.unpack_from("<BBH", payload, 8)
+        square = lambda value: f"{'abcdefgh'[value & 7]}{1 + (value >> 3)}"
+        return (
+            f"board-action kind=4 class=0x{action:x} "
+            f"squares={square(first)},{square(second)} "
+            f"modifier=0x{modifier:x} decoded=12"
+        )
     if kind == 6 and len(payload) >= 8:
         fields = []
         offset = 8
@@ -82,7 +91,7 @@ def describe(payload):
             else:
                 fields.append(f"tag={tag} len={length} hex={value.hex()}")
             offset += length
-        return f"container kind=6 decoded={len(payload)} fields=[{'; '.join(fields)}]"
+        return f"delta kind=6 decoded={len(payload)} fields=[{'; '.join(fields)}]"
     if kind == 14 and len(payload) == 6:
         counter = struct.unpack_from("<H", payload, 4)[0]
         return f"source-time kind=14 counter={counter} decoded=6"
