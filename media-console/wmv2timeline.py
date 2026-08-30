@@ -3,7 +3,12 @@
 
 Reads the ASF script stream (stream 3) of a base `.wmv` Chess Media file
 via ffprobe and writes a JSON sidecar describing the full lesson event
-timeline:
+timeline. Squares are decoded to algebraic names (c8, e6, ...) using the
+verified file-major conventions:
+
+  node squares   — file-major zero-based (a1 = 0): checkpoint edge stream
+  opcode-04      — file-major zero-based
+  opcode-06 4/5  — file-major one-based (0 = none)
 
   nodes        — per-node media timestamps (type-37 ms) recovered from
                  the prefix checkpoint's searchable delta stream
@@ -26,6 +31,21 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from probe_chessmedia import packets, checkpoint_header  # noqa: E402
+
+FILESS = "abcdefgh"
+
+
+def fm_square(v, one_based):
+    """Decode a script-stream square (file-major) to algebraic form.
+
+    Node-table and opcode-04 squares are zero-based file-major
+    (a1 = 0, b1 = 8, a2 = 1); opcode-06 graphics are the same plus one
+    (a1 = 1, h8 = 64).
+    """
+    v = v - (1 if one_based else 0)
+    if not (0 <= v < 64):
+        return None
+    return FILESS[v // 8] + str((v % 8) + 1)
 
 
 def split_delta(payload):
@@ -70,10 +90,10 @@ def timeline(wmv_path):
             continue
         if kind == 4 and len(payload) == 12:
             action = struct.unpack_from("<I", payload, 4)[0]
-            first, second, modifier = struct.unpack_from("<BBH", payload, 8)
             events.append({"t": t, "kind": "board", "class": action,
-                           "squares": [payload[8], payload[9]],
-                           "modifier": modifier})
+                           "squares": [fm_square(payload[8], False),
+                                       fm_square(payload[9], False)],
+                           "modifier": payload[10]})
             continue
         if kind == 6:
             records, end = split_delta(payload)
@@ -88,10 +108,12 @@ def timeline(wmv_path):
                     events.append({"t": t, "kind": "symbols",
                                    "glyphs": list(value)})
                 elif rtype == 4 and len(value) % 2 == 0:
-                    items = [(value[i], value[i + 1]) for i in range(0, len(value), 2)]
+                    items = [(value[i], fm_square(value[i + 1], True))
+                             for i in range(0, len(value), 2)]
                     events.append({"t": t, "kind": "marks", "items": items})
                 elif rtype == 5 and len(value) % 3 == 0:
-                    items = [(value[i], value[i + 1], value[i + 2])
+                    items = [(value[i], fm_square(value[i + 1], True),
+                              fm_square(value[i + 2], True))
                              for i in range(0, len(value), 3)]
                     events.append({"t": t, "kind": "arrows", "items": items})
                 else:
