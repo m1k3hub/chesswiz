@@ -14,10 +14,17 @@ public class DecompileChessBaseMedia extends GhidraScript {
                 "140549080", "14101f200", "14101f2b0",
                 "140d7b530", "140d7c9c0", "140d7d8b0",
                 "140fb3dc6", "1405b4880", "1405b4bc0",
-                "1405b4eb0", "1405b49b0"};
+                "1405b4eb0", "1405b49b0",
+                "0054ae3e", "006291bb"};
 
         for (String text : targets) {
-            Function f = getFunctionAt(toAddr(text));
+            Address address = toAddr(text);
+            if (address == null) {
+                println("MISSING " + text);
+                continue;
+            }
+            Function f = getFunctionAt(address);
+            if (f == null) f = getFunctionContaining(address);
             if (f == null) {
                 println("MISSING " + text);
                 continue;
