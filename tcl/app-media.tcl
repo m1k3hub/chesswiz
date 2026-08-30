@@ -623,7 +623,13 @@ proc application::media::InteractiveFollow {position} {
 		return
 	}
 
-	set idx [lindex $Priv(interactive) 0]	;# first interactive index of the game
+	# The database/user manifest may provide interactivity even when the
+	# current game has no .cms index.  Do not read the optional array element
+	# unless LoadMedia initialized it.
+	set idx ""
+	if {[info exists Priv(interactive)] && [llength $Priv(interactive)]} {
+		set idx [lindex $Priv(interactive) 0]
+	}	;# first interactive index of the game
 	if {![string length $idx]} { return }
 
 	if {[catch { ResolveIndex $idx $position } res]} { return }
