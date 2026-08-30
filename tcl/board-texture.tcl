@@ -588,7 +588,7 @@ proc buildBrowser {w recv which nrows ncols currentTexture {otherTexture {}}} {
 	bind $canv <Destroy> +[namespace code { catch { image delete [set %W::Browser(image)] } }]
 	bind $canv <Configure> [namespace code [list Configure %W $which %w %h]]
 
-	after idle [FindTextures $canv $which]
+	after idle [namespace code [list FindTextures $canv $which]]
 	return $w.container
 }
 

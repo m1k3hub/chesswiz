@@ -62,10 +62,12 @@ throwCorruptData()
 
 
 static Byte const*
-skipString(Byte const* p)
+skipString(Byte const* p, Byte const* eos)
 {
-	while (*p)
+	while (p < eos && *p)
 		++p;
+	if (p == eos)
+		throwCorruptData();
 	return p + 1;
 }
 
@@ -917,14 +919,18 @@ Decoder::doDecoding(GameData& gameData)
 Byte const*
 Decoder::skipTags(Byte const* p)
 {
-	for (tag::ID id = tag::ID(*p++); id; id = tag::ID(*p++))
+	Byte const* eos = m_strm.end();
+	while (p < eos)
 	{
-		p = ::skipString(p);
+		tag::ID id = tag::ID(*p++);
+		if (!id)
+			return p;
+		p = ::skipString(p, eos);
 
 		if (id == tag::ExtraTag)
-			p = ::skipString(p);
+			p = ::skipString(p, eos);
 	}
-
+	throwCorruptData();
 	return p;
 }
 
@@ -932,8 +938,12 @@ Decoder::skipTags(Byte const* p)
 Byte const*
 Decoder::skipEngines(Byte const* p)
 {
-	for (unsigned i = 0, count = *p++; i < count; ++i)
-		p = ::skipString(p);
+	Byte const* eos = m_strm.end();
+	if (p == eos)
+		throwCorruptData();
+	unsigned count = *p++;
+	for (unsigned i = 0; i < count; ++i)
+		p = ::skipString(p, eos);
 
 	return p;
 }
@@ -1141,6 +1151,7 @@ Decoder::stripTags(TagMap const& tags)
 
 	Byte const*	q = data;
 	Byte const*	p = data;
+	Byte const*	eos = m_strm.end();
 	Byte*			r = data;
 
 	mstl::string name;
@@ -1150,7 +1161,12 @@ Decoder::stripTags(TagMap const& tags)
 		if (id == tag::ExtraTag)
 		{
 			char* s = const_cast<char*>(reinterpret_cast<char const*>(q));
-			name.hook(s, ::strlen(s));
+			Byte const* e = q;
+			while (e < eos && *e)
+				++e;
+			if (e == eos)
+				throwCorruptData();
+			name.hook(s, e - q);
 		}
 		else
 		{
@@ -1165,19 +1181,19 @@ Decoder::stripTags(TagMap const& tags)
 			stripped = true;
 			::memmove(r, p, n);
 			r += n;
-			q = ::skipString(q);
+			q = ::skipString(q, m_strm.end());
 
 			if (id == tag::ExtraTag)
-				q = ::skipString(q);
+				q = ::skipString(q, m_strm.end());
 
 			p = q;
 		}
 		else
 		{
-			q = ::skipString(q);
+			q = ::skipString(q, m_strm.end());
 
 			if (id == tag::ExtraTag)
-				q = ::skipString(q);
+				q = ::skipString(q, m_strm.end());
 		}
 	}
 

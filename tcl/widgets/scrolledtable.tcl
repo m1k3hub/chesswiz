@@ -747,7 +747,7 @@ proc GenerateTableMinSizeEvent {table} {
 	variable ${table}::
 
 	if {$(theme) ne [::theme::currentTheme]} {
-		after idle [event generate $table <<TableLayout>>]
+		after idle [list event generate $table <<TableLayout>>]
 		set (theme) [::theme::currentTheme]
 	}
 }

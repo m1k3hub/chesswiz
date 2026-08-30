@@ -776,7 +776,7 @@ proc EngineLock {tree} {
 
 	if {[::engine::active? $Vars(number)] && !$Vars(engine:locked)} {
 		after cancel $Vars(after:id)
-		after idle [list :::engine::startAnalysis $Vars(number)]
+		after idle [list ::engine::startAnalysis $Vars(number)]
 	}
 }
 
@@ -1222,7 +1222,7 @@ proc UpdateInfo {tree id type info} {
 proc IsReady {tree id} {
 	if {![winfo exists $tree]} { return }
 	variable ${tree}::Vars
-	after idle [list :::engine::startAnalysis $Vars(number)]
+	after idle [list ::engine::startAnalysis $Vars(number)]
 }
 
 

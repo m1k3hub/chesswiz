@@ -2213,11 +2213,13 @@ set feature(assertions) yes
 set configure(program-suffix) "-beta"
 
 if {[lsearch $argv -h] >= 0 || [lsearch $argv --help] >= 0} { usage 0 }
+set noCreate [expr {[lsearch $argv -n] >= 0 || [lsearch $argv --no-create] >= 0}]
 
 puts "configure: Makefile configuration program for Scidb"
 
 # Parse command-line arguments:
 foreach arg $argv {
+	if {$arg eq "-n" || $arg eq "--no-create"} { continue }
     set arg1 {}
     lassign [split $arg =] arg0 arg1
     if {[string match --enable-* $arg0]} {
@@ -2263,7 +2265,7 @@ if {$configure(gcc-version) in $problematicGCCVersions} {
     exit 1
 }
 
-if {[file readable "Makefile.in"]} {
+if {!$noCreate && [file readable "Makefile.in"]} {
     puts "Renaming \"Makefile.in\" to \"Makefile.in.bak\""
     catch { file rename -force "Makefile.in" "Makefile.in.bak" }
 }
@@ -2369,7 +2371,7 @@ if {[string length $gxxVer]} {
     # For any reason the method with the frame addresses is crashing with newer compilers
     Append option(EXTRA_CXXFLAGS) "-DDONT_USE_FRAME_ADDR"
 
-    if {[lsearch $argv -n] == -1 && [lsearch $argv --no-create] == -1} {
+    if {!$noCreate} {
         writeMakefile $success
     }
 

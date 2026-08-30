@@ -621,6 +621,7 @@ proc application::media::InteractiveFollow {position} {
 	if {![string length $idx]} { return }
 
 	if {[catch { ResolveIndex $idx $position } res]} { return }
+	if {[llength $res] < 4} { return }
 	lassign $res video interactive startMs endMs
 	if {$interactive} {
 		set Priv(interactive:played:$key) 1
