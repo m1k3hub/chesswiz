@@ -5209,7 +5209,7 @@ cmdMediaGallery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 				for (unsigned i = 0; i < entries.size(); ++i)
 			{
-					mstl::string path(htmlDir + "/" + entries[i].filename);
+					mstl::string path(::tcl_media::resolveMediaFilename(database, entries[i].filename));
 					// Convert cbh bitmask type to sequential type (matching scm::MediaTable)
 					int type = 0;
 					switch (int(entries[i].type))

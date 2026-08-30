@@ -34,6 +34,7 @@
 
 #include "m_string.h"
 #include "m_vector.h"
+#include "tcl_media_resolve.h"
 
 #include <cstring>
 
@@ -459,12 +460,10 @@ inline
 mstl::string
 resolveGuidingTextPath(mstl::string const& database, mstl::string const& filename)
 {
-	mstl::string base(database);
-	mstl::string::size_type dot = base.rfind('.');
-	if (dot != mstl::string::npos)
-		base.resize(dot);
-	mstl::string htmlDir(base + ".html");
-	return htmlDir + "/" + filename;
+	// manifest references are resolved across every media folder of the
+	// ChessBase release (see tcl_media_resolve.h) — e.g. a stream link of
+	// "Data Collect/CBM168.cbm" may live in "Festival Biel 2015.html/".
+	return resolveMediaFilename(database, filename);
 }
 
 } // namespace tcl_media
