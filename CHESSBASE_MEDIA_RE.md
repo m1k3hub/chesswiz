@@ -218,6 +218,14 @@ references. The first-level container boundary is understood, but the
 multi-field framing variant and tag-specific payload semantics remain to be
 mapped.
 
+The proposed multi-record interpretation was tested against the corpus. The
+first `u16` after the eight-byte `06` header is `1` in the 24-byte sample and
+`2` in several longer samples, so it is a credible record-count candidate.
+However, the remaining bytes do not fit a simple directory of `(offset,
+length)` pairs followed by a raw block: the candidate lengths leave
+inconsistent residual bytes and no stable alignment. The count hypothesis is
+therefore retained as a lead, while the directory grammar remains unverified.
+
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
