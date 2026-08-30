@@ -174,6 +174,28 @@ the binary opcode is produced only after decoding the command payload. The
 counts also explain why a decoder built from one `.wmv` will miss substantial
 parts of the format.
 
+### Verified prefix-to-opcode dispatch
+
+The outer encoding is the same six-bit packing used by the ASF probe, but the
+text export omits the UTF-16LE-shaped `GA` wrapper. Decoding the characters
+after `GA:` immediately produces the binary record header. Verified samples
+establish this dispatch table:
+
+```text
+?_  -> 02 00 00 00   large state/checkpoint record
+?o  -> 03 00 00 00   compact transition record
+@?  -> 04 00 00 00   12-byte action record
+@_  -> 06 00 00 00   variable-length action record
+A?  -> 08 00 00 00   6-byte record
+B_  -> 0e 00 00 00   6-byte selector/timeline record
+```
+
+This is now verified rather than inferred from frequency: for example,
+`GA:B_????w????` decodes to `0e0000000e00`, `GA:?o????C????` decodes to
+`030000000100`, and `GA:@?.......` samples decode with opcode `04`.
+The remaining work is the field grammar and semantics of each binary record,
+not the outer transport or opcode dispatch.
+
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
