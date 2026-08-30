@@ -272,6 +272,17 @@ position-specific WMV clips. The evidence supports this division:
 The `.cbm` file is a media catalog/manifest and is not itself the authoritative
 playback timeline.
 
+### `.cbm` catalog structure
+
+The beginning of `168Endgame.cbm` is a compact little-endian binary header,
+followed by readable sections. The first section is introduced by the ASCII
+marker `FilesUsed`, a decimal count, and newline-delimited filenames. The list
+includes images, `.cms` indexes, and the corresponding language-specific WMV
+files, for example `CBM168Interaktivenglisch01.cms` and
+`CBM 168 Mueller - Endgame1.wmv`. This establishes `.cbm` as the authoritative
+file inventory/manifest for a media package, while the WMV script stream
+remains authoritative for synchronized playback events.
+
 ## Implications for Scidb
 
 The current linear mapping of video time to game ply in
