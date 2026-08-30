@@ -718,19 +718,30 @@ remains authoritative for synchronized playback events.
 
 ## Implications for Scidb
 
-The current linear mapping of video time to game ply in
-`tcl/app-media-sync.tcl` is not ChessBase-compatible. Authentic playback must
-consume stream 3 and apply its commands at ASF presentation timestamps.
+The linear mapping of video time to game ply that existed in
+`tcl/app-media-sync.tcl` was not ChessBase-compatible. Authentic playback
+now consumes the decoded stream-3 events through the
+`wmv2timeline.py` → `<video>.plytimes` sidecar → `::media::sync::load-timeline`
+path (see the landed state in `MEDIA_PLAYBACK_DESIGN.md` §5.5): the board
+follows the lesson's own replay order with per-move media times. The
+remaining abstraction gap is the annotation application layer (drawing
+arrows/marks/comments during playback) and any future player that
+consumes stream 3 natively at ASF presentation timestamps — the static
+sidecar pre-parser removed the runtime dependency for the ply mapping.
 
-`tkvlc` currently renders the audio/video portion but does not expose the ASF
-script-command stream to Tcl. A faithful implementation therefore needs one of:
+`tkvlc` renders only the audio/video portion; nothing runtime-side needs
+the ASF script-command stream while the sidecar covers playback. A
+faithful in-runtime implementation would still need one of:
 
 1. a native ASF/WMF stream reader that exposes stream 3;
 2. an FFmpeg/libavformat bridge that forwards stream-3 packets to Tcl; or
 3. a standalone pre-parser that builds a timestamped Scidb synchronization
    sidecar before playback.
 
-No one of these implementation paths has been selected yet.
+Path 3 is the selected and landed one for ply sync (see above); the sidecar
+generator is exactly option 3 as originally scoped, with the board already
+consuming it. Options 1/2 remain relevant only for in-runtime annotation
+playback (drawing arrows/marks live).
 
 ## Next RE tasks
 
