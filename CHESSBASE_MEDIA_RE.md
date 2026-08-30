@@ -573,6 +573,56 @@ with action `"GA"`/`"TEXT"` into the board-side consumer (vtable
 static decoder in this document bypasses: ASF script stream → named
 items → the `GA` payload grammar decoded above.
 
+### Board-side dispatcher decompilation (2026-08-30, kimi)
+
+Ghidra headless decompilation of the apply layer (probe 9, functions
+`FUN_140da2160`/`FUN_140da1d70`/`FUN_1409f09c0`/`FUN_140da1650` plus 13
+auxiliary functions) closes the payload-grammar questions:
+
+**The opcode dictionary is literal in the binary** (`FUN_140da1d70` —
+the record→`Sequence`-column text formatter).  Wire high-level opcodes,
+verified against the decompiled switch:
+
+| opcode | binary name | semantics |
+|---:|---|---|
+| 2 | `Set Game` (+ side to move) | position sync — full game/tree install |
+| 15 | `Set Game` | same family (fixtures show it as the variant of 2) |
+| 3 | `GotoIndex: N` | navigate the game tree to node index N (the transition ids = tree node indices, confirmed) |
+| 4 | (rendered by `FUN_140b87d60`) | transient board action — see below |
+| 5 | (rendered by `FUN_140d36610`) | a second board-action record (not in the CBM 168 corpus) |
+| 6 | `Annotation Count=N` | opcode-06 delta container; N = record count |
+| 8 | **`Promote Line`** | promotes a variation to main line — *not* a reset as earlier guessed |
+| 11 | `UnAnnotate` | removes annotations |
+| 12 | `Add Annotext` | annotation text channel |
+| 13 | `WebOrigin` | web-origin marker |
+| 14 | `Sync` | the source-time sync counter (matches the found 6 s cadence) |
+| 16 | `Set Moves` | move-list install |
+| 17 | `Set Header` | header install |
+
+The apply function `FUN_140da1650` (board-object `param_2`) decodes each
+case: opcode 3 = `FUN_140b7c940(board, index, 3)` (tree navigation);
+opcode 4 = validate then `FUN_140b7df70(board, sq0, sq1, kind)` with
+`kind` = the record's class word **and a built-in upgrade: kind `0x40`
+becomes `0x80` when the position index is below the tree length**; opcode
+6 = install/replace a `DirEntry` list on the board object (the
+C-by-C-record annotations — matching the 8-byte-per-record count
+arithmetic); opcode 7 = `FUN_140b7ac00(board)`; opcode 8 (Promote Line) =
+`FUN_140b7d530(board)`; opcodes 9/10 = viewer helpers, 11 = UnAnnotate
+with a `DirEntry(5)`, 12 = Add Annotext (writes into move column 7 with
+a `0x20` flag), 16/17 = board/header installs.  The kernel wrapper
+`FUN_1409f09c0` adds: opcodes with bit pattern `0x28002` (1, 15, 17)
+force a view refresh; opcode `0x12` (18) calls the header/mode vtable
+entry with `record[4]==1`; and the opcode-14 `Sync` walks the per-node
+list comparing the record counter against the `+0x1c` node field — the
+type-37/edge-node map observed in the checkpoints.
+
+**Style colors, board-actions and type-7**: the per-case handlers
+(`FUN_140b7df70`, `FUN_140d369f0`, `FUN_140b7ac00`, `FUN_140b7d950`,
+`FUN_140b7d530`) are the visual primitives; their color/style tables
+remain the only GUI-observable unknowns, but the opcode semantics above
+now bound them (4/5 = styled square marks/arrows; 7 = an object
+clearing/navigation case; 8 = line promotion).
+
 The raw PE RTTI cluster around the callback names also contains
 `IWMStatusCallback`, `IWMReaderCallback`, and `IWMReaderCallbackAdvanced`
 descriptors. This confirms ChessBase links the legacy Windows Media reader
