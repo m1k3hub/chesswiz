@@ -744,7 +744,10 @@ No one of these implementation paths has been selected yet.
    media timestamps (type-`37`) plus quotation texts in the padding
    collections. Remaining polish: name the u32 words after the game date
    (the `38`/`FIDE` source block) and the ms-ish counter word.
-3. Determine opcode-`04` action-class and modifier semantics visually.
+3. (Mostly closed) opcode-`04` squares are file-major and class `0x80` =
+   from/to move arrows (verified by game-tree correlation, 10/14 + 4/8
+   hits versus chance). Remaining: a visual oracle for classes
+   `0x200`/`0`/`1`/`0x800`/`2` and the modifier bits.
 4. (Closed 2026-08-30) Cursor ids above `0xff` exist corpus-wide (Strategy
    lectures reach `0x1af`), so the bit-`0x80` variation-flag hypothesis is
    retired; ids enumerate serialized tree nodes. Remaining: pin the
