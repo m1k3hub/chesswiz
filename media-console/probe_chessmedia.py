@@ -17,6 +17,14 @@ import sys
 HEX_LINE = re.compile(r"(?m)^........: ((?:[0-9a-f]{4} ?)+)")
 
 
+def square_name(value):
+    if value == 64:
+        return "*"
+    if value < 64:
+        return f"{'abcdefgh'[value & 7]}{1 + (value >> 3)}"
+    return f"#{value}"
+
+
 def packet_bytes(data):
     raw = bytes.fromhex("".join(HEX_LINE.findall(data)).replace(" ", ""))
     text = raw.decode("utf-16le", "replace")
@@ -36,6 +44,37 @@ def packet_bytes(data):
             | values[offset + 3]
         )
         result.extend(value.to_bytes(3, "big"))
+    complete_length = len(result)
+    remainder = len(values) % 4
+    if remainder == 1:
+        raise ValueError("invalid one-character six-bit tail")
+    if remainder >= 2:
+        offset = len(values) - remainder
+        result.append((values[offset] << 2) | (values[offset + 1] >> 4))
+    if remainder == 3:
+        result.append(((values[offset + 1] & 0x0F) << 4) | (values[offset + 2] >> 2))
+
+    if complete_length < 4:
+        return bytes(result)
+    kind = struct.unpack_from("<I", result, 0)[0]
+    fixed_lengths = {3: 6, 4: 12, 8: 6, 14: 6}
+    logical_length = fixed_lengths.get(kind)
+    if kind == 2:
+        logical_length = complete_length
+    elif kind == 6 and len(result) >= 10:
+        count = struct.unpack_from("<H", result, 8)[0]
+        logical_length = 10
+        for _ in range(count):
+            if logical_length + 2 > len(result):
+                raise ValueError("truncated delta record length")
+            length = struct.unpack_from("<H", result, logical_length)[0]
+            logical_length += 2 + length
+    if logical_length is not None:
+        if logical_length > len(result):
+            raise ValueError("truncated logical payload")
+        if any(result[logical_length:]):
+            raise ValueError("nonzero six-bit transport padding")
+        del result[logical_length:]
     return bytes(result)
 
 
@@ -69,29 +108,55 @@ def describe(payload):
     if kind == 4 and len(payload) == 12 and payload[8] < 64 and payload[9] < 64:
         action = struct.unpack_from("<I", payload, 4)[0]
         first, second, modifier = struct.unpack_from("<BBH", payload, 8)
-        square = lambda value: f"{'abcdefgh'[value & 7]}{1 + (value >> 3)}"
         return (
             f"board-action kind=4 class=0x{action:x} "
-            f"squares={square(first)},{square(second)} "
+            f"squares={square_name(first)},{square_name(second)} "
             f"modifier=0x{modifier:x} decoded=12"
         )
     if kind == 6 and len(payload) >= 8:
         fields = []
-        offset = 8
-        while offset + 4 <= len(payload):
-            tag, length = struct.unpack_from("<HH", payload, offset)
-            offset += 4
-            if offset + length > len(payload):
-                fields.append(f"tag={tag} truncated={length}")
+        count = struct.unpack_from("<H", payload, 8)[0]
+        offset = 10
+        for _ in range(count):
+            if offset + 8 > len(payload):
+                fields.append("truncated-header")
                 break
-            value = payload[offset:offset + length]
-            text = value.decode("utf-8", "replace")
-            if text.isprintable() and text:
-                fields.append(f"tag={tag} len={length} text={text!r}")
+            length = struct.unpack_from("<H", payload, offset)[0]
+            record_type = struct.unpack_from(">I", payload, offset + 2)[0]
+            echoed_length = struct.unpack_from(">H", payload, offset + 6)[0]
+            end = offset + 2 + length
+            if length < 6 or end > len(payload):
+                fields.append(f"type={record_type} truncated={length}")
+                break
+            value = payload[offset + 8:end]
+            if record_type == 4 and len(value) % 2 == 0:
+                items = [
+                    f"{value[i]}:{square_name(value[i + 1])}"
+                    for i in range(0, len(value), 2)
+                ]
+                rendered = f"squares=[{','.join(items)}]"
+            elif record_type == 5 and len(value) % 3 == 0:
+                items = [
+                    f"{value[i]}:{square_name(value[i + 1])}-{square_name(value[i + 2])}"
+                    for i in range(0, len(value), 3)
+                ]
+                rendered = f"arrows=[{','.join(items)}]"
             else:
-                fields.append(f"tag={tag} len={length} hex={value.hex()}")
-            offset += length
-        return f"delta kind=6 decoded={len(payload)} fields=[{'; '.join(fields)}]"
+                strings = re.findall(rb"[ -~]{4,}", value)
+                if strings:
+                    rendered = "text=" + repr(
+                        " | ".join(item.decode("utf-8", "replace") for item in strings)
+                    )
+                else:
+                    rendered = f"hex={value.hex()}"
+            echo = "" if echoed_length == length else f" echoed={echoed_length}"
+            fields.append(f"type={record_type} len={length}{echo} {rendered}")
+            offset = end
+        trailing = "" if offset == len(payload) else f" trailing={len(payload) - offset}"
+        return (
+            f"delta kind=6 count={count} decoded={len(payload)}{trailing} "
+            f"fields=[{'; '.join(fields)}]"
+        )
     if kind == 8 and payload == b"\x08\x00\x00\x00\x00\x00":
         return "reset-candidate kind=8 decoded=6"
     if kind == 14 and len(payload) == 6:

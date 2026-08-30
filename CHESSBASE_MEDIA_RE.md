@@ -46,10 +46,17 @@ The remaining printable code units use a custom 64-character alphabet:
 '?' = 0, '@' = 1, 'A' = 2, ..., '~' = 63
 ```
 
-Every four six-bit values decode to three binary bytes. This is similar to
-Base64 packing, but the source alphabet is ASCII `0x3f` through `0x7e` and
-must be converted by subtracting `0x3f`; it must not be mapped to the normal
-Base64 alphabet by adding an ASCII offset.
+Every four six-bit values decode to three binary bytes. A final group of two
+or three values carries residual data bits followed by zero-valued transport
+padding; a one-value tail is invalid. Because `?` represents zero and there is
+no `=` marker, logical record framing—not the tail alone—determines how many
+residual bytes are real. The decoder must unpack the residual bits and then
+trim only zero bytes beyond the opcode's declared logical length. This is
+similar to Base64 packing, but the source alphabet is ASCII `0x3f` through
+`0x7e` and must be converted by subtracting `0x3f`; it must not be mapped to
+the normal Base64 alphabet by adding an ASCII offset. Across 14,308 exported
+commands, 8,090 use a three-character tail, 2,522 use a two-character tail,
+and only 3,696 end on a complete four-character group.
 
 After this decoding, the payload is structured binary data containing plain
 ASCII strings and integers. The first decoded byte is significant; it is not
@@ -201,32 +208,49 @@ not the outer transport or opcode dispatch.
 
 ### Opcode `06` container grammar
 
-The `06` family is not a single fixed-size record. After its eight-byte
-header, single-field records contain a subrecord with this verified shape:
+The complete outer grammar of opcode `06` is now verified:
 
 ```text
-u16 tag
-u16 length
-byte payload[length]
+u32le opcode          = 6
+u32le reserved        = 0 in observed records
+u16le record_count
+repeat record_count times:
+    u16le record_length
+    u32be record_type
+    u16be echoed_length
+    byte payload[record_length - 6]
 ```
 
-For example, a 24-byte record contains tag `1`, length `12`, and a 12-byte
-payload. Longer records appear to contain several related subrecords, but
-applying the same four-byte framing naively after every field misaligns some
-samples. Some payloads include
-plain UTF-8 text, including lesson annotations such as `Quiet move no. 1!`,
-`Stilller Zug Nr 3!`, and explanatory English sentences. Other payloads end in
-short numeric pairs such as `02 1e 36`, consistent with board/object
-references. The first-level container boundary is understood, but the
-multi-field framing variant and tag-specific payload semantics remain to be
-mapped.
+`record_length` counts the six bytes occupied by `record_type` and
+`echoed_length` plus the payload, but excludes its own two-byte field. The
+big-endian echoed length always equals the little-endian leading length. This
+mixed-endian duplication was the source of the earlier apparent
+misalignment. All 2,166 opcode-`06` commands in 234 exports parse to their
+exact end with the declared record count and matching lengths; there are no
+truncated or trailing records.
 
-A decoded text-bearing sample starts with `tag=3, length=0x61`; its payload
-contains the annotation text `would transpose to a Shirov-Bacrot 2014 game.
-It's a mistake to allow the knight into c7.` This confirms that at least tag
-`3` represents a textual lesson annotation. The payload also has a short
-binary preamble and a terminator before subsequent records, so the length is
-not simply the length of the visible UTF-8 string.
+The observed record types are `37` (1,507 records), `4` (1,208), `5`
+(1,062), `7` (531), `3` (239), `2` (90), `34` (35), and `130` (22). Type `2`
+contains the long textual lesson annotations, including `would transpose to a
+Shirov-Bacrot 2014 game. It's a mistake to allow the knight into c7.` Other
+types contain short numeric and board/object references.
+
+Types `4` and `5` have complete inner grammars:
+
+```text
+type 4 payload: repeat { u8 style; u8 square; }
+type 5 payload: repeat { u8 style; u8 from_square; u8 to_square; }
+```
+
+All 1,208 type-`4` records have even payload lengths, yielding 1,935 square
+entries. All 1,062 type-`5` records have payload lengths divisible by three,
+yielding 1,639 directed square pairs. Styles are overwhelmingly `2` or `4`,
+with only three style-`3` entries. Coordinates use the same `a1 = 0` mapping
+as opcode `04`; `64` is the only out-of-board value and acts as a sentinel
+(23 type-`4` entries and 17 type-`5` coordinates). Type `4` therefore encodes
+styled square markers and type `5` styled arrows/vectors. The visual meaning
+of styles `2`, `3`, and `4`, and the precise sentinel operation, still need
+oracle confirmation.
 
 Corpus scanning finds several annotation classes inside `06`, including
 interactive-moment labels (`7th Interactive Moment`, `16th Interactive
@@ -235,19 +259,11 @@ Moment`), instructional labels (`*Quiet move no. 1!`), speaker names
 `(70) Carlsen,M ... Nakamura,H ... Zuerich 2014`. This confirms that `06`
 is a general lesson-object container, not just a move-delta stream.
 
-The proposed multi-record interpretation was tested against the corpus. The
-first `u16` after the eight-byte `06` header is `1` in the 24-byte sample and
-`2` in several longer samples, so it is a credible record-count candidate.
-However, the remaining bytes do not fit a simple directory of `(offset,
-length)` pairs followed by a raw block: the candidate lengths leave
-inconsistent residual bytes and no stable alignment. The count hypothesis is
-therefore retained as a lead, while the directory grammar remains unverified.
-
-The relationship between `06` and `02` is now confirmed even though the inner
-grammar is not. Across 10 script-bearing WMVs, the final `06` delta before each
+The relationship between `06` and `02` is also confirmed. Across 10
+script-bearing WMVs, the final `06` delta before each
 following `02` checkpoint occurs byte-for-byte inside that checkpoint in all
-83 observed groups. In total, 89 of 109 individual deltas occur literally;
-the remaining 20 are earlier members of multi-delta groups whose final form is
+83 observed groups. In total, 84 of 109 individual deltas occur literally;
+the remaining 25 are earlier members of multi-delta groups whose final form is
 what the checkpoint retains. Thus `06` is an incremental lesson-state update
 and `02` is its cumulative/checkpoint representation. They are two views of
 the same state, not independent command families. A decoder can process `06`
@@ -293,12 +309,12 @@ Corpus-wide decoding of all 234 text exports provides a stronger length
 profile: opcode `03` is always 6 bytes (4,455 records), opcode `04` is
 always 12 bytes (742), opcode `08` is always 6 bytes (4), and opcode `0e` is
 always 6 bytes (1,210). Opcode `06` is variable but its observed lengths are
-mostly 18, 21, 24, 30, 33, 36, 39, 42, 45, 48, 54, and larger; these are
-consistent with records built from three-byte-packed substructures. Opcode
-`02` is variable-length and ranges from short records to several kilobytes.
-This rules out a generic directory format for every opcode: `03/04/08/0e`
-are fixed command structures, while only `06` and `02` need variable-length
-parsers.
+10 through 214 bytes. The formerly conspicuous multiples of three were an
+artifact of dropping unpadded six-bit tails, not a property of the binary
+grammar. Opcode `02` is variable-length and ranges from short records to
+several kilobytes. This rules out a generic directory format for every opcode:
+`03/04/08/0e` are fixed command structures, while only `06` and `02` need
+variable-length parsers.
 
 Opcode `04` has this stable 12-byte layout:
 
@@ -455,12 +471,15 @@ No one of these implementation paths has been selected yet.
 
 ## Next RE tasks
 
-1. Recover the exact six-bit decoder and packet framing as a reusable probe.
-2. Parse all large records and identify their integer/string field boundaries.
-3. Diff consecutive records at adjacent timestamps.
-4. Correlate compact records with the `.cms` FEN sequence and known game moves.
-5. Validate the decoded event sequence against ChessBase/Fritz playback.
-6. Only then replace the current approximation in Scidb.
+1. Decode the remaining opcode-`06` record types (`2/3/7/34/37/130`) and map
+   styles `2/3/4` plus square sentinel `64` with a visual oracle.
+2. Parse opcode-`02` checkpoints into game headers, game-tree cursor state, and
+   their embedded opcode-`06` record collection.
+3. Determine opcode-`04` action-class and modifier semantics visually.
+4. Validate cursor high-bit variation behavior on games exceeding 127 plies.
+5. Correlate `.cms` FEN branches with the decoded game-tree IDs.
+6. Feed decoded timestamped events into Scidb instead of linear time-to-ply
+   approximation.
 
 ## Evidence and references
 
