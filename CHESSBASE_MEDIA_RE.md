@@ -225,6 +225,13 @@ It's a mistake to allow the knight into c7.` This confirms that at least tag
 binary preamble and a terminator before subsequent records, so the length is
 not simply the length of the visible UTF-8 string.
 
+Corpus scanning finds several annotation classes inside `06`, including
+interactive-moment labels (`7th Interactive Moment`, `16th Interactive
+Moment`), instructional labels (`*Quiet move no. 1!`), speaker names
+(`Dave Smerdon!`), explanatory prose, and embedded game references such as
+`(70) Carlsen,M ... Nakamura,H ... Zuerich 2014`. This confirms that `06`
+is a general lesson-object container, not just a move-delta stream.
+
 The proposed multi-record interpretation was tested against the corpus. The
 first `u16` after the eight-byte `06` header is `1` in the 24-byte sample and
 `2` in several longer samples, so it is a credible record-count candidate.
