@@ -46,6 +46,13 @@ class PacketBytesTest(unittest.TestCase):
         self.assertIn("type=5 len=12 arrows=[2:c4-b4,2:e1-b4]", description)
         self.assertIn("type=4 len=8 squares=[2:e1]", description)
 
+    def test_decodes_type_two_text_as_windows_1252(self):
+        text = b"\x005wei\xdffeldriger L\xe4ufer"
+        length = 6 + len(text)
+        payload = struct.pack("<IIHH", 6, 0, 1, length)
+        payload += struct.pack(">IH", 2, length) + text
+        self.assertIn("text='5weißfeldriger Läufer'", PROBE.describe(payload))
+
 
 if __name__ == "__main__":
     unittest.main()

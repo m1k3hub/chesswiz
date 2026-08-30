@@ -257,15 +257,36 @@ two zero bytes and then contain one of `Q1`, `Q2`, `Q2a`, `Q2b`, `Q3`, `Q4`,
 or `Q5a`. Type `34` is always the four-byte big-endian value `1`, consistent
 with an enable/presence flag, although the enabled feature is not identified.
 
-Type `37` is always a four-byte big-endian integer and is strongly consistent
-with a millisecond media-time anchor. Values such as `0x0004a6e9` become
+Type `2` is Windows-1252 lesson text. Every observed payload begins with a
+zero byte; ordinary labels then have another zero byte, while paired English
+and German instructional annotations instead begin their visible bytes with
+`*` (`0x2a`) and `5` (`0x35`) respectively. The record length supplies the
+string boundary—there is no required trailing NUL. Decoding as UTF-8 loses
+German characters such as `ß` and `ä`; decoding the bytes after the leading
+zero as Windows-1252 recovers strings such as `weißfeldriger Läufer`. The
+special leading `*`/`5` values may be ChessBase font/glyph selectors rather
+than literal prose and should be preserved until visually mapped.
+
+Type `7` has the fixed payload `00 index square 00` in all 531 records. The
+index ranges from 0 through 27; the square ranges from 0 through 59 and uses
+the standard square mapping. It therefore associates a small lesson/game
+object index with one board square. Whether that object is a piece, selection,
+question target, or branch marker remains unresolved. Type `3` is a one- or
+two-byte big-endian scalar (239 records), most commonly `1`, `6`, `15`, `2`,
+or `14`; its role is still unknown.
+
+Type `37` is a four-byte big-endian millisecond timeline cursor. Values such
+as `0x0004a6e9` become
 304,873 ms; they are in the scale of their containing videos, usually first
 appear shortly after that media time, and then persist in later cumulative
 updates. Across 883 values unique within their export file, the median value
 is 2.318 seconds behind the command carrying its first observed copy, with
-248 appearing within one second. Larger offsets occur when an unchanged value
-is carried forward and in edited/trimmed clips. Treat this as a time-anchor
-hypothesis until an oracle confirms what event the timestamp anchors.
+248 appearing within one second. Successive changed values increase in 756 of
+765 transitions (98.8%); the nine decreases occur in interactive or branch
+clips where backward navigation is plausible. Larger offsets occur when an
+unchanged value is carried forward and in edited/trimmed clips. The remaining
+oracle question is whether this cursor names source/edit time, an annotation's
+activation time, or another closely related timeline.
 
 Corpus scanning finds several annotation classes inside `06`, including
 interactive-moment labels (`7th Interactive Moment`, `16th Interactive
