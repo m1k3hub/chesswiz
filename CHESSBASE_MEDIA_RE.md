@@ -250,6 +250,13 @@ does not expose the private record grammar through symbols or documentation.
 They provide useful search anchors for later disassembly, not proof of field
 semantics.
 
+The raw PE RTTI cluster around the callback names also contains
+`IWMStatusCallback`, `IWMReaderCallback`, and `IWMReaderCallbackAdvanced`
+descriptors. This confirms ChessBase links the legacy Windows Media reader
+callback family as a group. The names are adjacent metadata, not direct call
+sites; locating the implementing vtable remains necessary before assigning a
+callback method to script-packet decoding.
+
 The ChessBase 26 binary imports Media Foundation's
 `MFCreateSourceReaderFromURL` from `MFReadWrite.dll` and contains RTTI for
 `IWMReaderCallback`/`IWMReaderCallbackAdvanced`. This indicates the modern
