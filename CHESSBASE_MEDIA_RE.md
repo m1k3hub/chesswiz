@@ -415,13 +415,20 @@ header:
   bits "matching" nearby ply anchors was an artifact of a small tree.
 - After the six identity strings the first packed date is
   `0x000FBE00` = 2015-00-00 (year only); a second full packed date
-  `0x000FBEF9` = 2015-07-25 appears later in the body, after a
-  length-prefixed Windows-1252 string (`09 51... 00` = `Robot 11`, the
-  annotator/recording-agent name) and further binary metadata. The two
-  u16le values just before the second date, `0x0aa4` and `0x0ab4`, are
-  2724 and 2740 — exactly Navara's and Adams' published Elo ratings in
-  this game, so the body carries per-player Elo right after the
-  annotator string.
+  appears later in the body, after a length-prefixed Windows-1252
+  string (the annotator/recording-agent slot: `Robot 11` for the Biel
+  auto-recorded lessons; magazine games instead carry sources like
+  `Mega2015 Update 36` / `Chessbase` and the annotator
+  `Mihail,Marin`). The two u16le values right after that string are
+  the **players' Elo ratings, white first**: corpus-verified over 218
+  of 234 exports against published ratings — `2724/2740` (Navara–Adams),
+  `2740/2724` (Adams–Navara round 1, confirming order), `2779/2814`
+  (So–Nakamura), `2724/2733` (Navara–Wojtaszek). The 16 exceptions are
+  interactive drill-clip checkpoints with a different metadata block.
+  The second packed date decodes with full precision and equals the
+  played game date (`0x000FBEF4` = 2015-07-20 for round 1, `0x000FBEF9`
+  = 2015-07-25 for round 6, `0x000FBF1D` = 2015-08-29 for Sinquefield
+  round 6).
 - The remaining body is a fixed region (u16/u32 words including `df 07` =
   2015 twice, u32-length strings `FIDE` twice, and a block whose values
   `bb 80`/`0b b8`/`03 e8` read as u24be/big-endian millisecond offsets
