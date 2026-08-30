@@ -623,6 +623,48 @@ remain the only GUI-observable unknowns, but the opcode semantics above
 now bound them (4/5 = styled square marks/arrows; 7 = an object
 clearing/navigation case; 8 = line promotion).
 
+### GUI observation (2026-08-30, glm vision) — BLOCKER-observed
+
+Attempt to answer the remaining visual questions by driving ChessBase 26
+under Wine against the ripped CBM 168 tree.  Result: **the observation
+path is gated by the magazine's serial/abonnement wall before any
+script annotation renders.**
+
+What worked (evidence in `media-console/gui-observation/`):
+- ChessBase '26 runs under Wine on a private Xvfb display
+  (`Xvfb :77`, 1920×1080; `wine "C:\Program
+  Files\ChessBase\CBase26\CBase26.exe"`; `WINEPREFIX=~/.wine`).
+  Screenshots automatable via `ffmpeg -f x11grab -i :77` (`import`
+  from ImageMagick 7.1.2 errors out); interaction via `xdotool`
+  click/keys works (dialog dismissal verified).
+- The whole GUI renders: database tree (ripped `168 !START` visible
+  under My Databases), the Chess Media board pane initialized
+  (empty board shown on the right), account chip ("Not registered" →
+  "Logged in Guest").
+- On load, an **"Activate data abonnement:"** dialog demands the 5×5
+  DVD serial printed on the package and a captcha; `03-xvfb-launch.png`
+  / `01-activation.png`.  `04-after-cancel.png`: after Cancel —
+  **"Authorisation: The serial number is not valid"**, then
+  **"No games found"** for the 168 magazine tree.  `05-video-node.png`:
+  the Video node lists no playable entries without the serial.
+
+Verdicts:
+- Q1 (mark/arrow style bytes 2/3/4 → colors): **OPEN** — blocked by the
+  serial wall before any annotation renders.  The screenshot pipeline
+  and decoded event timeline (`/tmp/navara_sync2.json`: which style
+  byte paints which squares at which media-ms) are prepared; only the
+  valid CBM serial (or a licensed install) is missing to finish.
+- Q2 (opcode-04 classes/modifiers → visual actions): **OPEN** — same
+  blocker.
+- Q3 (type-7 / `.cms` board points): **OPEN** — same blocker.
+
+Re-run recipe once a serial is available: launch on Xvfb, cancel nothing,
+enter the serial in the "Activate data abonnement" dialog, open
+`168 !START`, play the "Biel 2015 round 06 Navara-Adams" media entry,
+screenshot at the marks in `/tmp/navara_sync2.json` (t=60.642 s arrows
+green?, 84.142 s class-`0x200` e1-c1, 475.181 s style-2 mark a4 …), then
+map observed colors to style bytes 2/3/4 and classes to actions.
+
 The raw PE RTTI cluster around the callback names also contains
 `IWMStatusCallback`, `IWMReaderCallback`, and `IWMReaderCallbackAdvanced`
 descriptors. This confirms ChessBase links the legacy Windows Media reader
