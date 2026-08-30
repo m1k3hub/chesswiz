@@ -226,6 +226,16 @@ length)` pairs followed by a raw block: the candidate lengths leave
 inconsistent residual bytes and no stable alignment. The count hypothesis is
 therefore retained as a lead, while the directory grammar remains unverified.
 
+### Binary oracle strings
+
+The ChessBase 26 executable contains media-related identifiers including
+`ScriptItems`, `ScriptActivationManager::IsStreamCrypted`, `Extra Chess
+Media`, `Chess Media System`, and `Audio Stream`. These confirm that script
+items are handled by a dedicated activation/stream layer, but the executable
+does not expose the private record grammar through symbols or documentation.
+They provide useful search anchors for later disassembly, not proof of field
+semantics.
+
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
