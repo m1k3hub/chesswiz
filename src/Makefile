@@ -380,6 +380,10 @@ test_media_extract: test_media_extract.o mstl/libmstl.a
 	@echo "Building $@"
 	@$(CXX) -o $@ test_media_extract.o $(LDFLAGS) $(PROFILING) mstl/libmstl.a -lpthread
 
+test_scriptstream: test_scriptstream.o mstl/libmstl.a
+	@echo "Building $@"
+	@$(CXX) -o $@ test_scriptstream.o $(LDFLAGS) $(PROFILING) mstl/libmstl.a -lpthread
+
 probe_cbllight: probe_cbllight.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)

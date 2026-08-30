@@ -91,6 +91,8 @@ proc application::media::build {twm frame width height} {
 	# Board-sync wiring (state machine in tcl/app-media-sync.tcl).
 	# The coupling is inherent: no options, always bidirectional.
 	::media::sync::configure \
+		annotate-cmd	[namespace code SyncAnnotate] \
+		clearann-cmd	[namespace code SyncClearAnnotations] \
 		transport-cmd	[namespace code SyncTransport] \
 		boardforward-cmd	[namespace code SyncBoardForward] \
 		boardstart-cmd	[namespace code SyncBoardStart] \
@@ -836,6 +838,7 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	# follow mode; transport coupling reacts to board playback events).
 	::media::sync::onPlaybackStarted
 	LoadSyncSidecar $path
+	LoadSyncEvents $path
 	StartFollowTick
 
 	# Check shortly after that playback actually started (media decoded).
@@ -853,6 +856,32 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 # 	video" follows the actual lesson replay instead of the linear
 # 	duration mapping; without it the state machine keeps the linear
 # 	fallback.
+# Load the optional board-annotation sidecar (one event per line:
+# "ms kind payload...").  Loaded alongside the timeline so the sync
+# state machine can fire board annotations during playback.
+proc application::media::LoadSyncEvents {path} {
+	set eventsfile [file rootname $path].events
+	if {![file exists $eventsfile]} {
+		::media::sync::load-events {}
+		MediaDebug "SyncEvents: none for [file tail $path]"
+		return
+	}
+	set events [list]
+	if {![catch {open $eventsfile r} fh]} {
+		set data [read $fh]
+		close $fh
+		foreach line [split $data "\n"] {
+			set line [string trim $line]
+			if {[llength $line] >= 3 && ![string match "#*" $line]} {
+				lappend events $line
+			}
+		}
+	}
+	::media::sync::load-events $events
+	MediaDebug "SyncEvents: [llength $events] loaded from [file tail $eventsfile]"
+}
+
+
 proc application::media::LoadSyncSidecar {path} {
 	variable Priv
 	set syncfile [file rootname $path].plytimes
@@ -978,6 +1007,19 @@ proc application::media::SyncTransport {what} {
 		}
 	}
 }
+
+# Board annotation delegate: receives decoded script events from
+# ::media::sync (arrows/marks render future, comments go to the status
+# bar).  The kind and data arguments come from ::media::sync::load-events.
+proc application::media::SyncAnnotate {kind data} {
+	MediaDebug "SyncAnnotate: $kind $data"
+}
+
+
+proc application::media::SyncClearAnnotations {} {
+	MediaDebug "SyncClearAnnotations"
+}
+
 
 # Board delegates for "board follows video" mode.
 proc application::media::SyncBoardForward {} {

@@ -15,6 +15,10 @@
 #     the media's script stream, see media-console/wmv2timeline.py);
 #     without one, the mapping is linear over the video duration.
 #
+#   * annotation layer — with board events loaded (load-events), the
+#     state machine fires arrow/mark/comment/symbol/reset callbacks as
+#     the media time passes each event's timestamp.
+#
 # The state machine is UI-free: the media panel wires it to tkvlc handles
 # and the scidb board commands (see application::media::SyncTransport,
 # application::media::SyncBoard*), while tests inject stubs. Board code
@@ -45,8 +49,6 @@ proc ::mediasync::set-config {transport follow} {
 }
 
 namespace eval ::media::sync {
-	# Config: board follows the media timeline by default (ChessBase
-	# interactive-video behaviour); disable via the checkbox.
 	variable State
 	array set State {
 		transport 1
@@ -57,10 +59,10 @@ namespace eval ::media::sync {
 		lastgoal  -1
 		timeline  {}
 		tlidx     0
+		events    {}
+		evidx     0
 	}
 
-	# Delegate procs, set via ::media::sync::configure. Each is optional;
-	# missing delegates degrade to no-ops.
 	variable Delegates
 	array set Delegates {
 		transport     {}
@@ -68,10 +70,12 @@ namespace eval ::media::sync {
 		boardstart    {}
 		boardlength   {}
 		boardply      {}
+		annotate      {}
+		clearann      {}
 	}
 
 	namespace export configure set-config autoplay step drive driving? \
-		onPlaybackStarted onPlaybackStopped load-timeline
+		onPlaybackStarted onPlaybackStopped load-timeline load-events
 }
 
 proc ::media::sync::configure {args} {
@@ -83,6 +87,8 @@ proc ::media::sync::configure {args} {
 			boardstart-cmd    { set Delegates(boardstart) $value }
 			boardlength-cmd   { set Delegates(boardlength) $value }
 			boardply-cmd      { set Delegates(boardply) $value }
+			annotate-cmd      { set Delegates(annotate) $value }
+			clearann-cmd      { set Delegates(clearann) $value }
 			default {
 				return -code error "media::sync::configure: unknown option $key"
 			}
@@ -138,6 +144,7 @@ proc ::media::sync::onPlaybackStarted {} {
 	set State(playing) 1
 	set State(lastgoal) -1
 	set State(tlidx) 0
+	set State(evidx) 0
 }
 
 
@@ -147,6 +154,7 @@ proc ::media::sync::onPlaybackStopped {} {
 	set State(autoplay) 0
 	set State(lastgoal) -1
 	set State(tlidx) 0
+	set State(evidx) 0
 }
 
 
@@ -168,42 +176,56 @@ proc ::media::sync::load-timeline {msList} {
 }
 
 
+# Load/replace the board annotation events: a Tcl list of triples
+# {ms kind payload} — kind = arrow|mark|comment|symbol|reset, payload
+# is kind-specific.  An empty list clears them.
+proc ::media::sync::load-events {eventList} {
+	variable State
+	set State(events) [list]
+	foreach ev $eventList {
+		if {[llength $ev] >= 3 && [string is integer -strict [lindex $ev 0]]} {
+			lappend State(events) [list [lindex $ev 0] [lindex $ev 1] [lrange $ev 2 end]]
+		}
+	}
+	set State(evidx) 0
+}
+
+
 # True while drive() is advancing the board as a consequence of media time.
-# The media panel uses this to distinguish those board notifications from a
-# user-initiated move, which should seek the video in the opposite direction.
 proc ::media::sync::driving? {} {
 	variable State
 	return $State(driving)
 }
 
 
-# One "board follows video" tick: with a per-move timeline loaded
-# (load-timeline), advance the board once per elapsed transition; the
-# mapping follows the game-tree replay instead of being linear. Without
-# a timeline <timeMs>/<durationMs> maps linearly onto the game's ply
-# range. In both modes step the board forward when the mapped target has
-# advanced past the board's position, at most 4 plies per tick. A mapped
-# rewind (media seeked backwards) restarts the game to stay consistent.
+# One "board follows video" tick. Fires annotation events that fall in
+# the [prev_ms, timeMs] window, then advances the board via the timeline
+# or the linear mapping.
 proc ::media::sync::drive {timeMs durationMs} {
 	variable State
 
 	if {!$State(follow) || !$State(playing)} { return }
 
+	# fire board annotation events in this time window
+	if {[llength $State(events)]} {
+		::media::sync::_fire_events $timeMs
+	}
+
 	set len [BoardLength]
 	if {$len <= 1} { return }
 
 	if {[llength $State(timeline)]} {
-		# stateless mark count: rewind-safe
 		set goal 0
 		foreach mark $State(timeline) {
 			if {$mark <= $timeMs} { incr goal } else { break }
 		}
 		set goal [expr {min($goal, $len - 1)}]
 		if {$goal < $State(lastgoal)} {
-			# media jumped backwards: replay the game from the start
+			set State(tlidx) $goal
+			set State(evidx) 0
 			BoardStart
+			BoardClearAnnotations
 		}
-
 		# drive the board forward, at most 4 plies per tick
 		set guard 0
 		set State(driving) 1
@@ -221,15 +243,11 @@ proc ::media::sync::drive {timeMs durationMs} {
 	set frac [expr {double($timeMs)/$dur}]
 	if {$frac < 0.0} { set frac 0.0 }
 	if {$frac > 1.0} { set frac 1.0 }
-
 	set goal [expr {min(int($frac*$len), $len - 1)}]
-
 	if {$goal < $State(lastgoal)} {
-		# media jumped backwards: replay the game from the start
 		BoardStart
+		BoardClearAnnotations
 	}
-
-	# drive the board forward, at most 4 plies per tick
 	set guard 0
 	set State(driving) 1
 	while {[BoardPly] < $goal && $guard < 4} {
@@ -238,6 +256,23 @@ proc ::media::sync::drive {timeMs durationMs} {
 	}
 	set State(driving) 0
 	set State(lastgoal) $goal
+}
+
+
+# Fire board annotation events whose media-ms has elapsed.
+proc ::media::sync::_fire_events {timeMs} {
+	variable State
+	set n [llength $State(events)]
+	while {$State(evidx) < $n} {
+		lassign [lindex $State(events) $State(evidx)] ms kind data
+		if {$ms > $timeMs} { break }
+		if {$kind eq "reset"} {
+			BoardClearAnnotations
+		} else {
+			BoardAnnotate $kind $data
+		}
+		incr State(evidx)
+	}
 }
 
 
@@ -263,6 +298,22 @@ proc ::media::sync::BoardStart {} {
 	variable Delegates
 	if {[llength $Delegates(boardstart)]} {
 		catch { uplevel #0 $Delegates(boardstart) }
+	}
+}
+
+
+proc ::media::sync::BoardAnnotate {kind data} {
+	variable Delegates
+	if {[llength $Delegates(annotate)]} {
+		catch { uplevel #0 $Delegates(annotate) [list $kind $data] }
+	}
+}
+
+
+proc ::media::sync::BoardClearAnnotations {} {
+	variable Delegates
+	if {[llength $Delegates(clearann)]} {
+		catch { uplevel #0 $Delegates(clearann) }
 	}
 }
 

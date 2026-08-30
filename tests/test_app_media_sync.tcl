@@ -299,7 +299,76 @@ tcltest::test mediasync-timeline-empty-falls-back-linear {empty timeline falls b
 	set ::syncFwds
 } -cleanup {reset} -result 3
 
+tcltest::test mediasync-events-fire {load-events fires arrow/mark/comment in time order} -body {
+	reset
+	set ::anns {}
+	::media::sync::configure \
+		boardforward-cmd {::apply {{} {incr ::syncFwds}}} \
+		boardlength-cmd  {::apply {{} {return 5}}} \
+		boardply-cmd     {::apply {{} {return $::syncFwds}}} \
+		annotate-cmd     {::apply {{kind data} {lappend ::anns [list $kind $data]}}}
+	::media::sync::set-config 1 1
+	::media::sync::load-timeline {600 1200 1800}
+	::media::sync::load-events {
+		{700 arrow {c8 e6 green}}
+		{1100 mark {a4 green}}
+		{1300 comment {en "shirov game"}}
+	}
+	::media::sync::onPlaybackStarted
+	::media::sync::drive 800 1000  ;# arrow fires only
+	set a [llength $::anns]
+	::media::sync::drive 1400 1000 ;# mark + comment fire
+	list $a [llength $::anns] \
+		[lindex $::anns 0 0] \
+		[lindex $::anns 1 0] \
+		[lindex $::anns 2 0]
+} -cleanup {reset} -result {1 3 arrow mark comment}
+
+tcltest::test mediasync-events-reset {reset events clear the annotation list} -body {
+	reset
+	set ::anns {}
+	::media::sync::configure \
+		annotate-cmd {::apply {{kind data} {lappend ::anns $kind}}} \
+		clearann-cmd {::apply {{} {set ::anns {}; incr ::syncClears}}}
+	::media::sync::set-config 1 1
+	::media::sync::load-timeline {}
+	::media::sync::load-events {
+		{500 arrow {c8 e6 green}}
+		{800 reset {}}
+		{1000 mark {a4 green}}
+	}
+	::media::sync::onPlaybackStarted
+	::media::sync::drive 900 1000   ;# +1 reset (canns=1) +1 mark
+	::media::sync::drive 1100 1000  ;# +1 mark (total 2 anns since reset)
+	list $::syncClears [llength $::anns]
+} -cleanup {reset} -result {1 1}
+
+tcltest::test mediasync-events-rewind-clears {rewind restarts annotation state} -body {
+	reset
+	set ::syncStarts 0
+	set ::syncAnn {}
+	::media::sync::configure \
+		boardforward-cmd {::apply {{} {incr ::syncFwds}}} \
+		boardstart-cmd   {::apply {{} {incr ::syncStarts; set ::syncFwds 0; set ::syncAnn {}}}} \
+		boardlength-cmd  {::apply {{} {return 5}}} \
+		boardply-cmd     {::apply {{} {return $::syncFwds}}} \
+		annotate-cmd     {::apply {{kind data} {lappend ::syncAnn [list $kind $data]}}} \
+		clearann-cmd     {::apply {{} {set ::syncAnn {}}}}
+	::media::sync::set-config 1 1
+	::media::sync::load-timeline {600 1200 1800}
+	::media::sync::load-events {
+		{700 arrow {c8 e6 green}}
+		{1300 mark {a4 green}}
+	}
+	::media::sync::onPlaybackStarted
+	::media::sync::drive 800 1000    ;# arrow fires, board advances
+	set pre [llength $::syncAnn]     ;# 1
+	::media::sync::drive 300 1000    ;# rewind -> restart + clear annotations
+	list $pre $::syncStarts [llength $::syncAnn]
+} -cleanup {reset} -result {1 1 0}
+
 tcltest::cleanupTests
+
 
 
 } ;# namespace ::scidb::test::mediasync
