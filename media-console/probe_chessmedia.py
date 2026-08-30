@@ -83,6 +83,9 @@ def describe(payload):
                 fields.append(f"tag={tag} len={length} hex={value.hex()}")
             offset += length
         return f"container kind=6 decoded={len(payload)} fields=[{'; '.join(fields)}]"
+    if kind == 14 and len(payload) == 6:
+        counter = struct.unpack_from("<H", payload, 4)[0]
+        return f"source-time kind=14 counter={counter} decoded=6"
     return f"kind={kind} decoded={len(payload)} head={payload[:16].hex()}"
 
 

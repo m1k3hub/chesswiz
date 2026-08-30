@@ -124,12 +124,15 @@ the `0e` example occurs at 0.642 seconds in the Biel lesson. Their lengths
 and fields differ from the `03` transition, so they must be decoded as
 separate record types. Their semantics are still unknown.
 
-The Biel stream gives one useful constraint: `0e` records advance through
-values `0e`, `0f`, `10`, `12`, `13`, `14`, `17`, `18`, `19`, `1b`, and `1c`
-while following large records continue to report state id `0` (and later
-`0x12`/`0x16`). Therefore the `0e` value is not simply the large-record state
-id at offset 8. It is likely a separate timeline/object identifier or a
-substate selector. This prevents treating every compact record as a direct
+The `0e` record is a periodic source-time counter, not a state selector. Its
+little-endian `u16` value advances by one about every six seconds. In the Biel
+round-6 stream it runs from 14 at 0.642 seconds to 99 at 511.681 seconds:
+85 increments over 511.039 seconds, or 6.012 seconds per increment. Nine
+distinct lecture files produce ratios between 6.012 and 6.028 seconds per
+increment. Initial values vary by file (including 0, 2, 10, 11, 14, and 1582),
+so the value is not simply elapsed time within the current WMV; it is consistent
+with a counter inherited from the source recording or edit timeline. It is
+independent of the large-record state id and must not be treated as a direct
 state lookup.
 
 The Biel lesson also shows that the `06` and `04` records are sparse relative
@@ -187,7 +190,7 @@ establish this dispatch table:
 @?  -> 04 00 00 00   12-byte action record
 @_  -> 06 00 00 00   variable-length action record
 A?  -> 08 00 00 00   6-byte record
-B_  -> 0e 00 00 00   6-byte selector/timeline record
+B_  -> 0e 00 00 00   6-byte source-time counter record
 ```
 
 This is now verified rather than inferred from frequency: for example,
