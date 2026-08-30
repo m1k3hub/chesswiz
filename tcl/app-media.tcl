@@ -1012,7 +1012,36 @@ proc application::media::SyncTransport {what} {
 # ::media::sync (arrows/marks render future, comments go to the status
 # bar).  The kind and data arguments come from ::media::sync::load-events.
 proc application::media::SyncAnnotate {kind data} {
-	MediaDebug "SyncAnnotate: $kind $data"
+	variable Priv
+
+	switch -- $kind {
+		comment {
+			if {[llength $data] >= 3} {
+				set text [lindex $data 2]
+			} else {
+				set text [join $data " "]
+			}
+			set Priv(statusbar) "\u25b6 $text"
+		}
+		arrow {
+			lassign $data from to style
+			MediaDebug "arrow $from$to style=$style"
+		}
+		mark {
+			lassign $data square style
+			MediaDebug "mark $square style=$style"
+		}
+		symbol {
+			MediaDebug "symbol $data"
+		}
+	}
+}
+
+
+proc application::media::SyncClearAnnotations {} {
+	variable Priv
+	set Priv(statusbar) ""
+	MediaDebug "SyncClearAnnotations"
 }
 
 

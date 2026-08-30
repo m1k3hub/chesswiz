@@ -150,6 +150,10 @@ def main():
                         help="also write the flat sync sidecar (one media"
                              " ms per line, replay order) consumed by"
                              " the media panel as <video>.plytimes")
+    parser.add_argument("--events", metavar="FILE", default=None,
+                        help="write the board-annotation sidecar (one"
+                             " event per line: ms kind payload) consumed"
+                             " by the media panel as <video>.events")
     args = parser.parse_args()
 
     events = timeline(args.wmv)
@@ -168,6 +172,30 @@ def main():
         marks = plytimes(events)
         Path(args.plytimes).write_text("\n".join(str(m) for m in marks) + "\n")
         print(f"wrote {args.plytimes} ({len(marks)} transitions)")
+
+    if args.events:
+        lines = []
+        for ev in events:
+            ms = int(round(ev["t"] * 1000))
+            kind = ev["kind"]
+            if kind == "arrows":
+                for item in ev.get("items", []):
+                    style, frm, to = item
+                    lines.append(f"{ms} arrow {frm} {to} {style}")
+            elif kind == "marks":
+                for item in ev.get("items", []):
+                    style, sq = item
+                    lines.append(f"{ms} mark {sq} {style}")
+            elif kind == "comment":
+                txt = ev.get("text", "").replace('"', "'")
+                lines.append(f'{ms} comment "" "{txt}"')
+            elif kind == "symbols":
+                lines.append(f'{ms} symbol {ev.get("glyphs", [])}')
+            elif kind == "r8":
+                lines.append(f"{ms} reset")
+        Path(args.events).write_text("\n".join(lines) + "\n")
+        nb = len(lines)
+        print(f"wrote {args.events} ({nb} events)")
 
 
 if __name__ == "__main__":
