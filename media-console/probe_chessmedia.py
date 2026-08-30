@@ -66,6 +66,23 @@ def describe(payload):
     if kind == 3 and len(payload) >= 6:
         state = struct.unpack_from("<H", payload, 4)[0]
         return f"transition kind=3 id=0x{state:x} decoded={len(payload)}"
+    if kind == 6 and len(payload) >= 8:
+        fields = []
+        offset = 8
+        while offset + 4 <= len(payload):
+            tag, length = struct.unpack_from("<HH", payload, offset)
+            offset += 4
+            if offset + length > len(payload):
+                fields.append(f"tag={tag} truncated={length}")
+                break
+            value = payload[offset:offset + length]
+            text = value.decode("utf-8", "replace")
+            if text.isprintable() and text:
+                fields.append(f"tag={tag} len={length} text={text!r}")
+            else:
+                fields.append(f"tag={tag} len={length} hex={value.hex()}")
+            offset += length
+        return f"container kind=6 decoded={len(payload)} fields=[{'; '.join(fields)}]"
     return f"kind={kind} decoded={len(payload)} head={payload[:16].hex()}"
 
 
