@@ -270,6 +270,14 @@ board-square references plausible, but other samples use values such as
 indices. The fixed shape is established; its action semantics are not yet
 proven.
 
+Across 742 opcode-`04` records, the four-byte flag field takes only six
+values: `0x80000000` (498 records), `0` (204), `0x00020000` (33),
+`0x01000000` (4), `0x00080000` (2), and `0x02000000` (1). The final four
+bytes vary independently, with common values such as `3c3d0000`,
+`19340000`, and `15160000`. This indicates a small action-type flag plus a
+packed argument, rather than an arbitrary 12-byte blob; the flag-to-action
+mapping still needs an oracle observation.
+
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
