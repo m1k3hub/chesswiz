@@ -162,6 +162,84 @@ tcltest::test mediasync-follow-rewind-restarts {media rewind below lastgoal -> B
 	list $::syncStarts $::syncFwds
 } -cleanup {reset} -result {1 0}
 
+tcltest::test mediasync-fenkey {FenKey normalizes '/' to 'z', board+side only} -body {
+	list [::application::media::FenKey "r1bq2k1/ppp2r2/3p1n1b/3n4/P1pP1N2/2N1P2P/2Q2PP1/1R1R2K1 b - - 0 12"] \
+	     [::application::media::FenKey "r1bq2k1/ppp2r2/3p1n1b/3n4/P1pP1N2/2N1P2P/2Q2PP1/1R1R2K1 b"]
+} -result {{r1bq2k1zppp2r2z3p1n1bz3n4zP1pP1N2z2N1P2Pz2Q2PP1z1R1R2K1 b} {r1bq2k1zppp2r2z3p1n1bz3n4zP1pP1N2z2N1P2Pz2Q2PP1z1R1R2K1 b}}
+
+tcltest::test mediasync-imatch-side-strict {InteractiveMatch ignores counters, respects side to move} -body {
+	set fen "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b - e3 0 2"
+	set entries [list \
+		[list "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b" fileA 5 9 black] \
+		[list "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w" fileB {} {} white]]
+	list [::application::media::InteractiveMatch $entries $fen] \
+	     [::application::media::InteractiveMatch $entries "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1"]
+} -cleanup {reset} -result {{{rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b} fileA 5 9 black} {{rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w} fileB {} {} white}}
+
+tcltest::test mediasync-smv-parse {SmvEntries parses clip + range sections} -body {
+	set d [file join $::scidb::test::appdb::tmpDir smv-test]
+	file mkdir [file join $d videos]
+	set fh [open [file join $d videos lecture.mp4] w]; puts $fh x; close $fh
+	set fh [open [file join $d videos hot.wmv] w]; puts $fh x; close $fh
+	set fh [open [file join $d test.smv] w]
+	puts $fh "\# scidb media manifest"
+	puts $fh "\[Media \"V01\"\]"
+	puts $fh "Type: video"
+	puts $fh "Path: videos/lecture.mp4"
+	puts $fh "\[Interactive \"V02\"\]"
+	puts $fh "Media: V01"
+	puts $fh "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b"
+	puts $fh "Kind: range"
+	puts $fh "Start: 5"
+	puts $fh "End: 9"
+	puts $fh "\[Interactive \"V03\"\]"
+	puts $fh "Fen: 2r1r1k1/p2b1pp1/1pPq3p/3n4/P1pP1N2/2N1P2P/2Q2PP1/1R1R2K1 b"
+	puts $fh "Kind: clip"
+	puts $fh "Clip: videos/hot.wmv"
+	puts $fh "Label: \"hotspot\""
+	close $fh
+	set res [::application::media::SmvEntries [file join $d test.smv]]
+	set baseline [dict get $res baseline]
+	set entries [dict get $res entries]
+	list $baseline [llength $entries] [lindex $entries 0 1] [lindex $entries 0 2] [lindex $entries 1 1] [lindex $entries 1 4]
+} -cleanup {reset} -result [list {} 2 [file join $::scidb::test::appdb::tmpDir smv-test videos lecture.mp4] 5 [file join $::scidb::test::appdb::tmpDir smv-test videos hot.wmv] hotspot]
+
+set zboard "r1bq2k1zppp2r2z3p1n1bz2PPp1ppz4Pn2z2NNBPR1zPP2B2Pz2RQ3K"
+
+tcltest::test mediasync-smv-missing-ok {SmvEntries tolerates a missing manifest (the .cms fallback path)} -body {
+	dict size [::application::media::SmvEntries [file join $::scidb::test::appdb::tmpDir nope-does-not-exist.smv]]
+} -cleanup {reset} -result 2
+
+tcltest::test mediasync-cms-parse {CmsEntries finds base video + hotspot entries} -body {
+	set d [file join $::scidb::test::appdb::tmpDir cms-test html "TestBase"]
+	file mkdir $d
+	set name "$zboard w - - 0 1x7y2v1u3"
+	set fh [open [file join $d $name.wmv] w]; puts $fh x; close $fh
+	set fh [open [file join $d TestBase000.wmv] w]; puts $fh x; close $fh
+	set fh [open [file join [file dirname $d] "TestBase.cms"] w]
+	fconfigure $fh -translation binary
+	puts -nonewline $fh "\x00\x00\x02fJ"
+	puts -nonewline $fh "$name"
+	close $fh
+	set res [::application::media::CmsEntries [file join [file dirname $d] "TestBase.cms"]]
+	set base [dict get $res baseline]
+	set entries [dict get $res entries]
+	list [file tail $base] [llength $entries] \
+	    [expr {[string match "*x7y2v1u3.wmv" [lindex $entries 0 1]] ? "clip-ok" : "clip-bad"}] \
+	    [::application::media::FenKey [lindex $entries 0 0]]
+} -cleanup {reset} -result [list TestBase000.wmv 1 clip-ok "$zboard w"]
+
+tcltest::test mediasync-resolveindex-base {ResolveIndex without a game falls back to the .cms base video} -body {
+	set d [file join $::scidb::test::appdb::tmpDir cms-test html "TestBase"]
+	set res [::application::media::ResolveIndex [file join [file dirname $d] "TestBase.cms"] 9]
+	lassign $res video interactive startMs endMs
+	list $interactive [file tail $video] $startMs $endMs
+} -cleanup {reset} -result {0 TestBase000.wmv {} {}}
+
 tcltest::cleanupTests
 
+
 } ;# namespace ::scidb::test::mediasync
+
+
+

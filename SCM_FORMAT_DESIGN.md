@@ -97,6 +97,50 @@ Key rules:
 
 ### 1.3 File layout
 
+### 1.5 `[Interactive]` — position-keyed video (v1.1)
+
+Interactive video: media segments attached to *positions* rather than
+whole games. While a game is played through on the board, the media panel
+jumps to the segment that owns the current position (ChessBase "Media
+System" `.cms` semantics — see CBM_FORMAT_DESIGN.md §7 — implemented
+natively). Two segment kinds:
+
+```
+[Media "V0"]
+Type: video
+Path: videos/mardelplata_lecture.mp4
+
+# Kind: clip — the segment is its own file (what a .cms import yields)
+[Interactive "V1"]
+Fen: r1bq2k1/ppp2r2/3p1n1b/3n4/P1pP1N2/2N1P2P/2Q2PP1/1R1R2K1 b
+Kind: clip
+Clip: videos/mardelplata_x0y0v4u0.wmv
+Label: "hotspot x0 y0"
+
+# Kind: range — the segment is a time range of a [Media] video
+[Interactive "V2"]
+Media: V0
+Fen: r1bq1rk1/2p1bppp/p1np1n2/... w
+Kind: range
+Start: 84.0
+End: 160.0
+Label: "Aronian explains the plan"
+```
+
+Key rules:
+- `Fen` comparison uses board + side to move only (castling/move counters
+  are ignored, so transposed lines and differing headers match).
+  For clip filenames scidb keeps the ChessBase convention: '/' → 'z'.
+- `Kind: clip` — `Clip` (and `Label`) present; playback plays the file.
+- `Kind: range` — `Media`, `Start`, `End` (seconds, float); playback
+  seeks to `Start` in the referenced video and stops at `End`.
+- Referencing from `[Game]` uses the plain `Media:` key; position-keyed
+  segments may also sit standalone in an `.smv` manifest with no
+  `[Game]` blocks (then any game of the companion DB can use them).
+- A sibling `<name>.smv` next to a ChessBase `<name>.cms` **overrides**
+  the .cms parse (author once, keeps the .cbm-era binary out of the loop).
+  `media-console/cms2smv.tcl` ports a .cms into this grammar.
+
 ```
 MyBase/
   ├── MyBase.si4          # the games

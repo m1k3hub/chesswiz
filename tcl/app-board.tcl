@@ -538,6 +538,11 @@ proc update {position cmd data promoted} {
 	UpdateControls
 	::variation::hide 0
 	::move::cancelVariation
+	# let the media panel follow board positions (interactive video, see
+	# tcl/app-media.tcl ::application::media::BoardUpdated)
+	if {[llength [info commands ::application::media::BoardUpdated]]} {
+		::application::media::BoardUpdated $position
+	}
 }
 
 

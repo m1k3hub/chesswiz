@@ -179,6 +179,9 @@ proc application::media::Update {position} {
 	set Priv(base) $base
 	set Priv(variant) $variant
 	set Priv(index) $index
+	# database-level interactive manifest applies to every game
+	LoadDbInteractive $base
+	LoadUserInteractive
 
 	if {$base eq "" || $index < 0} {
 		set Priv(statusbar) $mc::NoMedia
@@ -213,6 +216,17 @@ proc application::media::Update {position} {
 		set typeLabel [TypeLabel $type]
 		$tree insert {} end -id item$n -values [list $typeLabel $title $path]
 		incr n
+	}
+
+	# collect interactive-video indexes (.cms; .scm/.smv manifests already
+	# loaded database-level) for board-position–keyed playback
+	set Priv(interactive) {}
+	array unset Priv "interactive:played:*"
+	foreach entry $entries {
+		lassign $entry path type title mediaId inline
+		if {[string equal -nocase [file extension $path] ".cms"]} {
+			lappend Priv(interactive) $path
+		}
 	}
 
 	set Priv(statusbar) {}
@@ -262,9 +276,309 @@ proc application::media::PlaySelected {tree} {
 	if {$type == 1} {
 		# Picture — display inline via Tk photo
 		ShowImage $path
+	} elseif {[string equal -nocase [file extension $path] ".cms"]} {
+		# ChessBase interactive-video index — resolve to the actual position-
+		# matched clip (or base video); see ResolveIndex.
+		if {[catch { ResolveIndex $path [set [namespace current]::Priv(position)] } res]} {
+			MediaDebug "ResolveIndex failed: $res"
+			set res {}
+		}
+		lassign $res video interactive startMs endMs
+		if {[string length $video]} {
+			set Priv(statusbar) [expr {$interactive
+				? "Interactive video for current position"
+				: "Video: [file tail [file dirname $video]]"}]
+			PlayMedia $video $startMs $endMs
+		} else {
+			MediaDebug "ResolveIndex: no video found for [list $path]"
+			set Priv(statusbar) "No video found next to [file tail $path]"
+		}
 	} else {
 		# Audio/video — embed via tkvlc or launch external
 		PlayMedia $path
+	}
+}
+
+
+# --- interactive video: position-keyed clips -----------------------------
+
+# Normalize a FEN to the comparison key used by interactive video:
+# "<board with rank separators '/' as 'z'> <side>", mirroring the FEN-
+# seeded clip filenames ChessBase ships (Windows paths cannot contain
+# '/'; they use 'z' instead).
+proc application::media::FenKey {fen} {
+	if {![string length $fen]} { return {} }
+	set parts [split [string trim $fen] " "]
+	if {[llength $parts] < 2} { return {} }
+	return "[join [split [lindex $parts 0] /] z] [lindex $parts 1]"
+}
+
+
+# Parse the interactive-video entries of a ChessBase .cms file (CBM168
+# reverse engineering, CBM_FORMAT_DESIGN.md §7). Layout:
+# <db>.html/<name>.cms with a sibling <name>/ clip directory holding
+#
+#   <FEN with '/' as 'z'>x{X}y{Y}v{V}u{U}.wmv   (position-keyed hotspot)
+#   <name>*000.wmv                              (base video, globbed)
+#
+# Returns {baseline entryList}: baseline = default video path ({} if
+# none), entryList = {fen file label} (fen already the raw file-form; a
+# real FEN, not the comparison key).
+proc application::media::CmsEntries {path} {
+	set ext [file rootname $path]		;# <db>.html/<name>
+	set dir $ext
+
+	if {![file isdirectory $dir] && ![file exists $path]} { return [list baseline {} entries {}] }
+
+	# hotspot entries live in the .cms itself
+	set fh [open $path rb]
+	set data [read $fh]
+	close $fh
+	set entries {}
+	set pairs [regexp -all -inline -- {([pnbrqkPNBRQKz0-9]+ [bw] - - 0 1)x(\d+)y(\d+)v(\d+)u(\d+)} $data]
+	foreach {whole efen x y v u} $pairs {
+		set clip [file join $dir "${whole}.wmv"]
+		if {[file exists $clip]} {
+			lappend entries [list $efen $clip {} {} "hotspot x$x y$y"]
+		}
+	}
+
+	# base video
+	set base [lindex [glob -nocomplain -directory $dir *000.wmv] 0]
+	if {![string length $base]} { set base [lindex [glob -nocomplain -directory $dir *.wmv] 0] }
+	if {[string length $base] && ![file exists $base]} { set base {} }
+
+	return [list baseline $base entries $entries]
+}
+
+
+# Parse interactive-video entries from a scidb media manifest (see
+# SCM_FORMAT_DESIGN.md §1.5). Supported keys inside [Interactive "…"]:
+#   Fen, Kind (clip|range), Clip, Media, Start, End, Label.
+# Clip paths are relative to the manifest's directory; a Kind: range
+# entry plays the referenced [Media] id from Start to End seconds.
+# Returns {baseline entryList}: baseline = {} (a manifest's base video
+# is an ordinary [Media]/[Game] row), entryList rows =
+# {fen file start end label}.
+proc application::media::SmvEntries {path} {
+	if {![file exists $path]} { return [list baseline {} entries {}] }
+	set dir [file dirname $path]
+
+	# pass 1: collect sections
+	set sections {}
+	array set cur {type {} id {} body {}}
+	set fh [open $path r]
+	while {[gets $fh line] >= 0} {
+		set line [string trim $line]
+		if {[string match "\#*" $line] || ![string length $line]} { continue }
+		if {[regexp {^\[(\w+)\s*(?:"([^"]*)")?\]} $line -> t id]} {
+			if {[string length $cur(type)]} { lappend sections [array get cur] }
+			array set cur [list type [string tolower $t] id $id body {}]
+			continue
+		}
+		if {$cur(type) ne ""} { append cur(body) $line "\n" }
+	}
+	close $fh
+	if {[string length $cur(type)]} { lappend sections [array get cur] }
+
+	# pass 2: interpret [Media] blocks, then emit interactive entries
+	set mp {}
+	set entries {}
+	array set keyOf {}
+	foreach s $sections {
+		array unset s_ ; array set s_ $s
+		array set kv {}
+		foreach line [split $s_(body) "\n"] {
+			if {[regexp {^([\w\.]+)\s*:\s*(.*)$} $line -> k v]} { set kv([string tolower $k]) [string trim $v "\" \t"] }
+		}
+		switch -- $s_(type) {
+			"media" {
+				if {[info exists kv(path)]} { set keyOf($s_(id)) [file join $dir $kv(path)] }
+				if {![info exists mp] || ![string length $mp]} {
+					catch { set mp $keyOf($s_(id)) }
+				} elseif {$kv(type) eq "video"} { set mp $keyOf($s_(id)) }
+			}
+			"interactive" {
+				set kind "clip"
+				if {[info exists kv(kind)]} { set kind [string tolower $kv(kind)] }
+				set f {}
+				switch -- $kind {
+					"range" {
+						if {[info exists kv(media)] && [info exists keyOf($kv(media))]} { set f $keyOf($kv(media)) }
+						if {![info exists kv(start)] || ![info exists kv(end)]} { set f {} }
+					}
+					default {
+						if {[info exists kv(clip)]} { set f [file join $dir $kv(clip)] }
+					}
+				}
+				if {[string length $f] && [file exists $f] && [info exists kv(fen)]} {
+					lappend entries [list $kv(fen) $f \
+						[expr {[info exists kv(start)] ? $kv(start) : ""}] \
+						[expr {[info exists kv(end)] ? $kv(end) : ""}] \
+						[expr {[info exists kv(label)] ? $kv(label) : ""}]]
+				}
+			}
+		}
+	}
+	return [list baseline {} entries $entries]
+}
+
+
+# Match a FEN (of the current board position) against the interactive
+# entries. entryList is {fen file start end label} (SmvEntries shape;
+# CmsEntries rows are converted with start/end empty).
+proc application::media::InteractiveMatch {entryList fen} {
+	set key [FenKey $fen]
+	if {![string length $key]} { return {} }
+	foreach e $entryList {
+		if {[FenKey [lindex $e 0]] eq $key} {
+			return $e
+		}
+	}
+	return {}
+}
+
+
+# Resolve a .cms (or a .scm interactive sibling) to a playable video for
+# the given board position: the position-matched clip if the index has
+# one, else the base video. Returns {path interactive?} ({} if nothing).
+proc application::media::ResolveIndex {path position} {
+	array set smv [SmvEntries "[file rootname $path].smv"]
+	set entries $smv(entries)
+	set base $smv(baseline)
+
+	# position-matched clip?  .smv wins over .cms when both exist
+	set fen ""
+	if {![info exists ::application::media::Priv(suppress:fen)] && [info commands ::scidb::game::fen] ne "" && $position >= 0 && $position != 9} {
+		catch { set fen [::scidb::game::fen $position] }
+	}
+	set hit {}
+	if {[llength $entries] && [string length $fen]} {
+		set hit [InteractiveMatch $entries $fen]
+	}
+	if {[llength $hit]} {
+		return [list [lindex $hit 1] 1 [lindex $hit 2] [lindex $hit 3]]
+	}
+	if {[llength $base]} { return [list $base 0 {} {}] }
+
+	array set cms [CmsEntries $path]
+	if {[llength $cms(entries)] && [string length $fen]} {
+		set hit [InteractiveMatch $cms(entries) $fen]
+		if {[llength $hit]} { return [list [lindex $hit 1] 1 [lindex $hit 2] [lindex $hit 3]] }
+	}
+	if {[llength $cms(baseline)]} { return [list $cms(baseline) 0 {} {}] }
+	return {}
+}
+
+
+# Load the database-level media manifest (<rootname>.scm, the scidb
+# native companion format; see SCM_FORMAT_DESIGN.md). Its [Interactive]
+# entries apply to every game of the database (position-keyed).
+proc application::media::LoadDbInteractive {base} {
+	variable Priv
+
+	set Priv(dbInteractive) {}
+	set scm "[file rootname $base].scm"
+	if {![file exists $scm]} { return }
+	if {[catch { array set r [SmvEntries $scm] } msg]} {
+		MediaDebug "LoadDbInteractive: parse failed: $msg"
+		return
+	}
+	if {[llength $r(entries)]} {
+		set Priv(dbInteractive) $r(entries)
+		MediaDebug "LoadDbInteractive: [llength $r(entries)] entries from [list $scm]"
+	}
+}
+
+
+# Load the user-level interactive media index
+# (<user-dir>/media/interactive.scm): hand-authored position-keyed video
+# entries that apply in every database — the scidb replacement for
+# hand-annotating media onto games.
+proc application::media::LoadUserInteractive {} {
+	variable Priv
+
+	set Priv(userInteractive) {}
+	set path [file join $::scidb::dir::user media interactive.scm]
+	if {![file exists $path]} { return }
+	if {[catch { array set r [SmvEntries $path] } msg]} {
+		MediaDebug "LoadUserInteractive: parse failed: $msg"
+		return
+	}
+	if {[llength $r(entries)]} {
+		set Priv(userInteractive) $r(entries)
+		MediaDebug "LoadUserInteractive: [llength $r(entries)] entries from [list $path]"
+	}
+}
+
+
+# Called from application::board::update after every board change: with
+# 'Sync with board' engaged, entering a position that owns an interactive
+# clip jumps the media player to that clip (ChessBase interactive-video
+# semantics, implemented on scidb's side with a debounce).
+proc application::media::BoardUpdated {position} {
+	variable Priv
+
+	catch { after cancel $Priv(interactiveid) }
+	set haveInter 0
+	if {[info exists Priv(interactive)] && [llength $Priv(interactive)]} { set haveInter 1 }
+	if {[info exists Priv(userInteractive)] && [llength $Priv(userInteractive)]} { set haveInter 1 }
+	if {[info exists Priv(dbInteractive)] && [llength $Priv(dbInteractive)]} { set haveInter 1 }
+	if {!$haveInter} { return }
+	if {$position != $Priv(position) || $position < 0 || $position == 9} { return }
+	# auto-jump is gated by the 'Sync with board' checkbox (transport sync)
+	set on 1
+	catch { set on $::mediasync::opts(transport) }
+	if {!$on} { return }
+
+	set Priv(interactiveid) [after 150 [namespace code [list InteractiveFollow $position]]]
+}
+
+
+# Deferred body of BoardUpdated: resolve the FEN and jump to a matched
+# interactive clip. Debounced so dragging through positions does not
+# fire per ply; re-entering the same position does not replay.
+proc application::media::InteractiveFollow {position} {
+	variable Priv
+
+	if {$position != $Priv(position)} { return }
+	set fen ""
+	if {[info commands ::scidb::game::fen] ne ""} {
+		catch { set fen [::scidb::game::fen $position] }
+	}
+	set key [FenKey $fen]
+	if {![string length $key] || [info exists Priv(interactive:played:$key)]} { return }
+
+	# user-level then database-level manifests first (authored
+	# interactivity), then any .cms-derived indexes of the loaded game
+	set hit {}
+	foreach lst [list [info exists Priv(userInteractive)] [info exists Priv(dbInteractive)]] idx_ {userInteractive dbInteractive} {
+		if {$lst && [llength $Priv($idx_)]} {
+			set hit [InteractiveMatch $Priv($idx_) $fen]
+			if {[llength $hit]} { break }
+		}
+	}
+	if {[llength $hit]} {
+		lassign $hit _fen file start end label
+		set Priv(interactive:played:$key) 1
+		set Priv(statusbar) "Interactive video: $label"
+		MediaDebug "InteractiveFollow: manifest match [list $label] -> [list $file]"
+		# manifest times are seconds; the player expects milliseconds
+		PlayMedia $file [expr {$start ne "" && [string is double -strict $start] ? $start*1000.0 : ""}] \
+			[expr {$end ne "" && [string is double -strict $end] ? $end*1000.0 : ""}]
+		return
+	}
+
+	set idx [lindex $Priv(interactive) 0]	;# first interactive index of the game
+	if {![string length $idx]} { return }
+
+	if {[catch { ResolveIndex $idx $position } res]} { return }
+	lassign $res video interactive startMs endMs
+	if {$interactive} {
+		set Priv(interactive:played:$key) 1
+		set Priv(statusbar) "Interactive video for current position"
+		MediaDebug "InteractiveFollow: position match ([FenKey $fen]) -> [list $video]"
+		PlayMedia $video $startMs $endMs
 	}
 }
 
@@ -356,7 +670,7 @@ proc application::media::LoadVlc {} {
 }
 
 
-proc application::media::PlayMedia {path} {
+proc application::media::PlayMedia {path {startMs {}} {endMs {}}} {
 	variable Priv
 	variable mc
 
@@ -369,7 +683,7 @@ proc application::media::PlayMedia {path} {
 	# Prefer the tkvlc backend (embedded, in-window playback via libVLC).
 	if {[LoadVlc]} {
 		MediaDebug "PlayMedia: tkvlc available, trying in-process"
-		if {[PlayInProcess $path]} {
+		if {[PlayInProcess $path $startMs $endMs]} {
 			return
 		}
 		MediaDebug "PlayMedia: tkvlc failed, falling back to external player"
@@ -384,7 +698,7 @@ proc application::media::PlayMedia {path} {
 # Video is embedded into the viewer canvas by passing its X11 window ID
 # to ::tkvlc::init.  Returns 1 on success, 0 if tkvlc is unavailable or
 # failed, so the caller can fall back to an external player.
-proc application::media::PlayInProcess {path} {
+proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	variable Priv
 	variable mc
 
@@ -425,6 +739,16 @@ proc application::media::PlayInProcess {path} {
 		MediaDebug "PlayInProcess: $handle play failed: $msg"
 		DestroyVlcHandle
 		return 0
+	}
+
+	# Interactive 'range' entries: seek into the video and stop at End.
+	set Priv(rangeid) {}
+	if {[string is double -strict $startMs] && $startMs > 0} {
+		catch { $handle time [expr {int($startMs)}] }
+	}
+	if {[string is double -strict $endMs] && $endMs > $startMs} {
+		set Priv(rangeid) [after [expr {int($endMs - ($startMs > 0 ? $startMs : 0))}] \
+			[namespace code { catch { Stop } }]]
 	}
 
 	set Priv(inprocess) 1
@@ -621,7 +945,9 @@ proc application::media::Stop {} {
 	variable Priv
 
 	catch { after cancel $Priv(checkid) }
+	catch { after cancel $Priv(rangeid) }
 	set Priv(checkid) {}
+	set Priv(rangeid) {}
 
 	if {![info exists Priv(viewer)]} { return }   ;# panel not built yet
 
