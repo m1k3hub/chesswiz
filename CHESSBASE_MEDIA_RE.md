@@ -107,6 +107,23 @@ does not assign semantics to them. A playback implementation that handles
 only `02`/`03` would therefore be incomplete, even if it works for the
 representative lecture.
 
+Initial examples of the other families are now captured. They are compact
+binary records rather than six-bit text payloads after transport decoding:
+
+```text
+04 00 00 00 00 02 00 00 20 10 01 00   (12 bytes)
+06 00 00 00 00 00 00 00 01 00 0c 00
+   00 00 00 05 00 0c 02 27 3c 02 3c 33 (24 bytes)
+08 00 00 00 00 00                     (6 bytes)
+0e 00 00 00 0e 00                     (6 bytes)
+```
+
+The `06` example occurs at 60.642 seconds and the `04` example at 84.142
+seconds in the Biel 2015 lesson. The `08` example occurs in an endgame lesson;
+the `0e` example occurs at 0.642 seconds in the Biel lesson. Their lengths
+and fields differ from the `03` transition, so they must be decoded as
+separate record types. Their semantics are still unknown.
+
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
