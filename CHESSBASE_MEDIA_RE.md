@@ -374,16 +374,49 @@ the same state, not independent command families. A decoder can process `06`
 for low-latency updates and use `02` to initialize after seeking or to verify
 and repair accumulated state.
 
-### Game-tree cursor IDs
+### Checkpoint body structure (Navara-Adams)
 
-In the Navara-Adams fixture, ordinary opcode `03` transition IDs and the state
-ID at offset 8 of opcode `02` track the game's main-line ply number. This is
-confirmed against the published 74-ply score: the stream reaches IDs through
-74 while the lecturer navigates the game. IDs with bit `0x80` set occur while
-annotated side variations are shown; their low seven bits repeatedly match the
-nearby branch anchor (for example `0x98`/`0x99` around plies 24/25). Treating
-the high bit as a variation-mode flag is a strong working hypothesis, but it
-still needs validation on games or trees exceeding 127 plies.
+Diffing the 87 consecutive opcode-`02` snapshots of the Navara-Adams base
+lecture resolves the tail of the checkpoint section beyond the identity
+header:
+
+- The state value at offset 8 is a u32 whose upper three bytes are always
+  zero in every snapshot — fields 9–11 never change — so the effective
+  cursor/ply id is the single byte at offset 8 (matching the 0x00–0xff
+  game-tree ids above).
+- After the six identity strings the first packed date is
+  `0x000FBE00` = 2015-00-00 (year only); a second full packed date
+  `0x000FBEF9` = 2015-07-25 appears later in the body, after a
+  length-prefixed Windows-1252 string (`09 51... 00` = `Robot 11`, the
+  annotator/recording-agent name) and further binary metadata.
+- The remaining body is a fixed region (u16/u32 words including `df 07` =
+  2015 twice, u32-length strings `FIDE` twice, and a block whose values
+  `bb 80`/`0b b8`/`03 e8` read as u24be/big-endian millisecond offsets
+  48,000/3,000/1,000) followed by a per-node table of 5-byte entries:
+  two bytes in the square-id range `0x02`–`0x3e` plus three zero bytes.
+- Opcode-`06` annotations are materialized inside this node table as
+  inline collections using the exact opcode-`06` record byte grammar:
+  `[u16le count][records...]`, a record being
+  `[u16le length][u32be type][u16be echoed_length][payload]`. Example from
+  the fixture: `01 00 0f 00 00 00 00 05 00 0f 02 27 3c 02 3c 33 02 3d 33`
+  = count 1 + a type-`5` record with arrows `g5`→`d8` and `d8`→`c7`
+  (one-based squares) — a queen-path diagonal into `c7`. Collections at
+  empty nodes start as two zero placeholder bytes and are replaced as the
+  lesson accumulates annotations; this is why diffing successive
+  checkpoints shows insertions at ever-growing offsets (334, 390, 421,
+  635, 736, 1126, 1217, 1456, 1477, 1479 in this lecture) plus the
+  single-byte cursor updates already documented. The recorded
+  `03`/`06`-before-`02` byte-equality therefore confirms the checkpoint
+  embeds the same records the deltas carry.
+
+The pair bytes in the node table walk as strict 5-byte entries
+`[pair][00 00 00]` (17 entries precede the first collection with values
+`11 13`, `26 25`, `08 12`, `19 1b`, `37 2d`, …), plausibly one entry per
+tree node/move with a square id role under the 0-based engine convention;
+their exact field roles are not yet pinned. Opcode-`06` collections are
+inserted into the zero padding of the node entry they decorate (the
+collection replaces padding bytes in place, so entry rhythm stays
+visible).
 
 ### Binary oracle strings
 
@@ -587,8 +620,10 @@ No one of these implementation paths has been selected yet.
 1. Map mark styles `2/3/4` and opcode-`04` action classes/modifiers with a
    visual oracle; identify the opcode-`06` type-`7` object semantics and
    the remaining `37`/`3`-per-record rollover behavior.
-2. Parse opcode-`02` checkpoints into game headers, game-tree cursor state, and
-   their embedded opcode-`06` record collection.
+2. Finish the opcode-`02` checkpoint parser: pin the post-date fixed
+   region fields (annotator string, millisecond offsets, `FIDE` strings)
+   and the per-node pair table semantics, then validate the node-table
+   ordering against the game score.
 3. Determine opcode-`04` action-class and modifier semantics visually.
 4. Validate cursor high-bit variation behavior on games exceeding 127 plies.
 5. Correlate `.cms` FEN branches with the decoded game-tree IDs.
