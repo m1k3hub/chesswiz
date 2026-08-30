@@ -87,6 +87,26 @@ fully identified.
 
 ## Decoded compact records
 
+### Stream census
+
+The probe was run over all 259 local `.wmv` fixtures. It decoded 6,368
+script packets. The observed leading opcodes were:
+
+```text
+02  3294 packets  large state/checkpoint records
+03  1293 packets  compact state transitions
+04   432 packets  additional record family, not yet identified
+06   779 packets  additional record family, not yet identified
+08     3 packets  additional record family, not yet identified
+0e   567 packets  additional record family, not yet identified
+```
+
+This is important: `02` and `03` are not the whole ChessBase command
+language. The decoder currently preserves and reports the other families but
+does not assign semantics to them. A playback implementation that handles
+only `02`/`03` would therefore be incomplete, even if it works for the
+representative lecture.
+
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
