@@ -12,6 +12,8 @@ GUI app.
 | `media-console/run-e2e.tcl` | e2e fixture test: drives `::scidb::db::mediaFiles` across every game of the media-rich `CB Light Database.cbh` and asserts the per-game **guiding-text HTML extraction** matches the ground truth in `CBM_FORMAT_DESIGN.md` §7. |
 | `media-console/fixture.tcl` | Diagnostic probe used during development (open + scan + report). |
 | `media-console/probe_chessmedia.py` | Static decoder for the ASF ChessBase script stream in `.wmv` Chess Media files (`ffprobe` + six-bit transport decode + opcode record rendering). Companion unit tests: `test_probe_chessmedia.py` |
+| `media-console/wmv2timeline.py` | Emits the machine-readable sync sidecar (JSON) for a base `.wmv`: the per-event media-time timeline the future Scidb playback will consume |
+| `media-console/analyze_checkpoints.py` | Opcode-`02` snapshot diffing: cursor updates, inline annotation collections, node-table tail dumps |
 | `media-console/analyze_annotations.py` | Corpus statistics for opcode-`06` record types over all CBM168 text exports (CBA-annotation verification) |
 | `media-console/analyze_squares.py` / `analyze_edge64.py` | Structural probes that settled the one-based graphic-square encoding (64 = h8 rays) |
 

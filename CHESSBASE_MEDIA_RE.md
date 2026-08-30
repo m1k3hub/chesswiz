@@ -672,7 +672,14 @@ No one of these implementation paths has been selected yet.
    numbers during the `06`→`02` replay).
 5. Correlate `.cms` FEN branches with the decoded game-tree IDs.
 6. Feed decoded timestamped events into Scidb instead of linear time-to-ply
-   approximation.
+   approximation — first deliverable landed (2026-08-30):
+   `media-console/wmv2timeline.py` emits the machine-readable sync sidecar
+   (JSON: checkpoint/transition/board/delta events with media times and
+   cursor ids) that `tcl/app-media-sync.tcl` will consume to replace the
+   linear ply-per-video-time mapping. Open implementation work: stream
+   the sidecar into the sync state machine and apply deltas progressively
+   (seek = start from the latest opcode-`02` checkpoint before the seek
+   point, then replay later opcode-`06` deltas).
 
 ## Evidence and references
 
