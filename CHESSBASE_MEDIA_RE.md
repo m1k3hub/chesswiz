@@ -600,6 +600,22 @@ position-specific WMV clips. The evidence supports this division:
 .wmv  -> carries audio, video, and timestamped ChessBase script commands
 ```
 
+Corpus-wide, 159 position clips carry 77 distinct `x/y/v/u` selectors:
+`x` and `y` are both bounded 0–63 (e.g. `x0y0` on every drill, plus
+points like `x30y21`, `x49y50`, `x33y60`), `v` ∈ {2, 3, 4} and `u` ∈
+{0, 2, 5}. Their semantics remain open: decoded clip script streams
+do not start at node id `x` (clips restart their own cursor ids from
+zero or small values, and the Strategy drill clip `x30y44` plays ~100
+transitions over ids `0x1a5`..`0x10b` of that lecture's 431-node
+tree), so `x`/`y` are not node-id ranges; the base-WMV node pairs are
+not equal to `.cms` coordinates either. Each interactive clip's own
+script stream is a small annotated loop (2–20 commands, cursor restart
+at zero) whose per-branch position is the responsibility of the base
+checkpoint's per-node type-`37` media times. The inner join for
+playback is therefore: the base checkpoint's per-node timestamp tells
+when to switch to the clip that shows the drill at that node, while
+the `.cms` maps positions to clip files.
+
 The `.cbm` file is a media catalog/manifest and is not itself the authoritative
 playback timeline.
 
