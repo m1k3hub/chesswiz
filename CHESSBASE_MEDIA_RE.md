@@ -236,6 +236,17 @@ does not expose the private record grammar through symbols or documentation.
 They provide useful search anchors for later disassembly, not proof of field
 semantics.
 
+Corpus-wide decoding of all 234 text exports provides a stronger length
+profile: opcode `03` is always 6 bytes (4,455 records), opcode `04` is
+always 12 bytes (742), opcode `08` is always 6 bytes (4), and opcode `0e` is
+always 6 bytes (1,210). Opcode `06` is variable but its observed lengths are
+mostly 18, 21, 24, 30, 33, 36, 39, 42, 45, 48, 54, and larger; these are
+consistent with records built from three-byte-packed substructures. Opcode
+`02` is variable-length and ranges from short records to several kilobytes.
+This rules out a generic directory format for every opcode: `03/04/08/0e`
+are fixed command structures, while only `06` and `02` need variable-length
+parsers.
+
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
