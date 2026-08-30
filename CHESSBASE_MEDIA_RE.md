@@ -124,6 +124,14 @@ the `0e` example occurs at 0.642 seconds in the Biel lesson. Their lengths
 and fields differ from the `03` transition, so they must be decoded as
 separate record types. Their semantics are still unknown.
 
+The Biel stream gives one useful constraint: `0e` records advance through
+values `0e`, `0f`, `10`, `12`, `13`, `14`, `17`, `18`, `19`, `1b`, and `1c`
+while following large records continue to report state id `0` (and later
+`0x12`/`0x16`). Therefore the `0e` value is not simply the large-record state
+id at offset 8. It is likely a separate timeline/object identifier or a
+substate selector. This prevents treating every compact record as a direct
+state lookup.
+
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
