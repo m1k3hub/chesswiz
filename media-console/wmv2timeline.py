@@ -129,23 +129,45 @@ def timeline(wmv_path):
     return events
 
 
+def plytimes(events):
+    """Media ms of each navigation transition, in replay order.
+
+    These are the per-move timecodes "board follows video" replays: at
+    each elapsed mark the board advances one navigation step.  Returns a
+    list of integers, one per line in the sync sidecar.
+    """
+    return sorted(int(round(float(e["t"]) * 1000))
+                  for e in events if e["kind"] == "transition")
+
+
 def main():
-    if len(sys.argv) < 2:
-        print(__doc__, file=sys.stderr)
-        sys.exit(2)
-    wmv = sys.argv[1]
-    events = timeline(wmv)
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("wmv", help="ChessBase base .wmv media file")
+    parser.add_argument("json_out", nargs="?", default=None,
+                        help="output sidecar .json (stdout if omitted)")
+    parser.add_argument("--plytimes", metavar="FILE", default=None,
+                        help="also write the flat sync sidecar (one media"
+                             " ms per line, replay order) consumed by"
+                             " the media panel as <video>.plytimes")
+    args = parser.parse_args()
+
+    events = timeline(args.wmv)
     summary = {
-        "source": wmv,
+        "source": args.wmv,
         "counters": {"events": len(events)},
     }
-    out = sys.argv[2] if len(sys.argv) > 2 else None
     text = json.dumps({"summary": summary, "events": events}, indent=1)
-    if out:
-        Path(out).write_text(text)
-        print(f"wrote {out} ({len(events)} events)")
+    if args.json_out:
+        Path(args.json_out).write_text(text)
+        print(f"wrote {args.json_out} ({len(events)} events)")
     else:
         print(text)
+
+    if args.plytimes:
+        marks = plytimes(events)
+        Path(args.plytimes).write_text("\n".join(str(m) for m in marks) + "\n")
+        print(f"wrote {args.plytimes} ({len(marks)} transitions)")
 
 
 if __name__ == "__main__":

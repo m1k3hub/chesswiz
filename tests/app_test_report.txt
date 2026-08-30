@@ -7,10 +7,12 @@ Match pattern: *
 
 === Running test_app_database.tcl ===
 
+=== Running test_app_media_sync.tcl ===
+
 ==============================================
   App Test Results Summary
 ==============================================
-Total Passed: 6
+Total Passed: 29
 Total Failed: 0
 Total Skipped: 0
 Duration: 1s

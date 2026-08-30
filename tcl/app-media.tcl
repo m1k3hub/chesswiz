@@ -835,12 +835,45 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	# media is playing: sync state machine active (drives the board in
 	# follow mode; transport coupling reacts to board playback events).
 	::media::sync::onPlaybackStarted
+	LoadSyncSidecar $path
 	StartFollowTick
 
 	# Check shortly after that playback actually started (media decoded).
 	catch { after cancel $Priv(checkid) }
 	set Priv(checkid) [after 800 [namespace code [list CheckDecode $path]]]
 	return 1
+}
+
+
+# Load the optional ChessBase script-stream sidecar for a media file:
+#
+# 	media-console/wmv2timeline.py writes the real per-move timecodes
+# 	(one media-ms per line, replay order; decoded with the verified
+# 	file-major square conventions).  When present, "board follows
+# 	video" follows the actual lesson replay instead of the linear
+# 	duration mapping; without it the state machine keeps the linear
+# 	fallback.
+proc application::media::LoadSyncSidecar {path} {
+	variable Priv
+	set syncfile [file rootname $path].plytimes
+	if {![file exists $syncfile]} {
+		::media::sync::load-timeline {}
+		MediaDebug "SyncSidecar: none for [file tail $path]"
+		return
+	}
+	set marks [list]
+	if {![catch {open $syncfile r} fh]} {
+		set data [read $fh]
+		close $fh
+		foreach line [split $data "\n"] {
+			set line [string trim $line]
+			if {[string is integer -strict $line]} {
+				lappend marks $line
+			}
+		}
+	}
+	::media::sync::load-timeline $marks
+	MediaDebug "SyncSidecar: [llength $marks] timecodes loaded from [file tail $syncfile]"
 }
 
 

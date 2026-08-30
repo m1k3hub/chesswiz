@@ -755,14 +755,18 @@ No one of these implementation paths has been selected yet.
    numbers during the `06`→`02` replay).
 5. Correlate `.cms` FEN branches with the decoded game-tree IDs.
 6. Feed decoded timestamped events into Scidb instead of linear time-to-ply
-   approximation — first deliverable landed (2026-08-30):
-   `media-console/wmv2timeline.py` emits the machine-readable sync sidecar
-   (JSON: checkpoint/transition/board/delta events with media times and
-   cursor ids) that `tcl/app-media-sync.tcl` will consume to replace the
-   linear ply-per-video-time mapping. Open implementation work: stream
-   the sidecar into the sync state machine and apply deltas progressively
-   (seek = start from the latest opcode-`02` checkpoint before the seek
-   point, then replay later opcode-`06` deltas).
+   approximation — landed (2026-08-30):
+   `media-console/wmv2timeline.py` emits the sync sidecar (`--plytimes`
+   writes one media-ms per line, replay order); `tcl/media-sync.tcl`
+   (`::media::sync::load-timeline`) consumes it and `drive()` maps each
+   elapsed mark to one navigation step instead of linear ply mapping,
+   with the existing rewind/restart and 4-plies-per-tick caps intact;
+   `application::media::LoadSyncSidecar` auto-loads `<video>.plytimes`
+   sidecars at playback start (the linear fallback remains when absent).
+   Remaining: apply the annotation deltas (marks/arrows/comments) to the
+   board during playback — the timeline drives the ply only; pixels and
+   symbols need the annotation application layer (seek = start from the
+   latest opcode-`02` checkpoint, then replay the opcode-`06` deltas).
 
 ## Evidence and references
 

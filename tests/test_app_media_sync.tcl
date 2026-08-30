@@ -236,6 +236,69 @@ tcltest::test mediasync-resolveindex-base {ResolveIndex without a game falls bac
 	list $interactive [file tail $video] $startMs $endMs
 } -cleanup {reset} -result {0 TestBase000.wmv {} {}}
 
+tcltest::test mediasync-timeline-drives-board {drive() advances one step per elapsed transition mark} -body {
+	reset
+	set ::syncFwds 0
+	::media::sync::configure \
+		boardforward-cmd {::apply {{} {incr ::syncFwds}}} \
+		boardstart-cmd   {::apply {{} {set ::syncFwds 0}}} \
+		boardlength-cmd  {::apply {{} {return 5}}} \
+		boardply-cmd     {::apply {{} {return $::syncFwds}}}
+	::media::sync::set-config 1 1
+	::media::sync::load-timeline {600 1200 1800}
+	::media::sync::onPlaybackStarted
+	::media::sync::drive 700 1000   ;# one mark elapsed -> 1 forward
+	set a $::syncFwds
+	::media::sync::drive 1500 1000  ;# two marks elapsed -> 2 total
+	list $a $::syncFwds
+} -cleanup {reset} -result {1 2}
+
+tcltest::test mediasync-timeline-clamps {timeline goal clamps to the board length} -body {
+	reset
+	set ::syncFwds 0
+	::media::sync::configure \
+		boardforward-cmd {::apply {{} {incr ::syncFwds}}} \
+		boardstart-cmd   {::apply {{} {set ::syncFwds 0}}} \
+		boardlength-cmd  {::apply {{} {return 3}}} \
+		boardply-cmd     {::apply {{} {return $::syncFwds}}}
+	::media::sync::set-config 1 1
+	::media::sync::load-timeline {100 200 300 400 500 600}
+	::media::sync::onPlaybackStarted
+	::media::sync::drive 5000 10000
+	set ::syncFwds
+} -cleanup {reset} -result 2
+
+tcltest::test mediasync-timeline-rewind-restarts {timeline rewind restarts the board and the cursor} -body {
+	reset
+	set ::syncFwds 0
+	set ::syncStarts 0
+	::media::sync::configure \
+		boardforward-cmd {::apply {{} {incr ::syncFwds}}} \
+		boardstart-cmd   {::apply {{} {incr ::syncStarts; set ::syncFwds 0}}} \
+		boardlength-cmd  {::apply {{} {return 4}}} \
+		boardply-cmd     {::apply {{} {return $::syncFwds}}}
+	::media::sync::set-config 1 1
+	::media::sync::load-timeline {100 200 300 400}
+	::media::sync::onPlaybackStarted
+	::media::sync::drive 350 1000   ;# goal 3
+	::media::sync::drive 250 1000   ;# rewind below goal 3 -> restart, goal 2
+	list $::syncStarts $::syncFwds
+} -cleanup {reset} -result {1 2}
+
+tcltest::test mediasync-timeline-empty-falls-back-linear {empty timeline falls back to the linear mapping} -body {
+	reset
+	set ::syncFwds 0
+	::media::sync::configure \
+		boardforward-cmd {::apply {{} {incr ::syncFwds}}} \
+		boardlength-cmd  {::apply {{} {return 5}}} \
+		boardply-cmd     {::apply {{} {return $::syncFwds}}}
+	::media::sync::set-config 1 1
+	::media::sync::load-timeline {}
+	::media::sync::onPlaybackStarted
+	::media::sync::drive 600 1000   ;# 60% of 5 plies -> 3 (linear)
+	set ::syncFwds
+} -cleanup {reset} -result 3
+
 tcltest::cleanupTests
 
 

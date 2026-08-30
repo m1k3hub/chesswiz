@@ -9,9 +9,11 @@
 #     navigation pauses the media (it no longer matches the position).
 #
 #   * follow mode — the board follows the media: while the video plays,
-#     the main board advances through the game, mapped linearly over the
-#     video duration (no per-move timecodes exist in the ChessBase media
-#     refs, so the mapping is linear by construction).
+#     the main board advances through the game. With a per-move timeline
+#     loaded (load-timeline) the mapping follows the ChessBase script
+#     stream's own replay order (real per-move timecodes recovered from
+#     the media's script stream, see media-console/wmv2timeline.py);
+#     without one, the mapping is linear over the video duration.
 #
 # The state machine is UI-free: the media panel wires it to tkvlc handles
 # and the scidb board commands (see application::media::SyncTransport,
@@ -53,6 +55,8 @@ namespace eval ::media::sync {
 		playing   0
 		driving   0
 		lastgoal  -1
+		timeline  {}
+		tlidx     0
 	}
 
 	# Delegate procs, set via ::media::sync::configure. Each is optional;
@@ -67,7 +71,7 @@ namespace eval ::media::sync {
 	}
 
 	namespace export configure set-config autoplay step drive driving? \
-		onPlaybackStarted onPlaybackStopped
+		onPlaybackStarted onPlaybackStopped load-timeline
 }
 
 proc ::media::sync::configure {args} {
@@ -133,6 +137,7 @@ proc ::media::sync::onPlaybackStarted {} {
 	variable State
 	set State(playing) 1
 	set State(lastgoal) -1
+	set State(tlidx) 0
 }
 
 
@@ -140,6 +145,25 @@ proc ::media::sync::onPlaybackStopped {} {
 	variable State
 	set State(playing) 0
 	set State(autoplay) 0
+	set State(lastgoal) -1
+	set State(tlidx) 0
+}
+
+
+# Load/replace the optional per-move timeline: media→board timecodes
+# recovered from a ChessBase script stream (media-console/wmv2timeline.py
+# writes them one per line). One entry = the media ms at which the board
+# advances one navigation step, in replay order. An empty list falls back
+# to the linear ply mapping.
+proc ::media::sync::load-timeline {msList} {
+	variable State
+	set State(timeline) [list]
+	foreach ms $msList {
+		if {[string is integer -strict $ms]} {
+			lappend State(timeline) $ms
+		}
+	}
+	set State(tlidx) 0
 	set State(lastgoal) -1
 }
 
@@ -153,11 +177,13 @@ proc ::media::sync::driving? {} {
 }
 
 
-# One "board follows video" tick: <timeMs>/<durationMs> maps linearly
-# onto the game's ply range; step the board forward when the mapped
-# target has advanced past the board's position. Handles at most 4
-# plies per tick. A mapped rewind (media seeked backwards) restarts
-# the game from the beginning to stay consistent.
+# One "board follows video" tick: with a per-move timeline loaded
+# (load-timeline), advance the board once per elapsed transition; the
+# mapping follows the game-tree replay instead of being linear. Without
+# a timeline <timeMs>/<durationMs> maps linearly onto the game's ply
+# range. In both modes step the board forward when the mapped target has
+# advanced past the board's position, at most 4 plies per tick. A mapped
+# rewind (media seeked backwards) restarts the game to stay consistent.
 proc ::media::sync::drive {timeMs durationMs} {
 	variable State
 
@@ -165,6 +191,30 @@ proc ::media::sync::drive {timeMs durationMs} {
 
 	set len [BoardLength]
 	if {$len <= 1} { return }
+
+	if {[llength $State(timeline)]} {
+		# stateless mark count: rewind-safe
+		set goal 0
+		foreach mark $State(timeline) {
+			if {$mark <= $timeMs} { incr goal } else { break }
+		}
+		set goal [expr {min($goal, $len - 1)}]
+		if {$goal < $State(lastgoal)} {
+			# media jumped backwards: replay the game from the start
+			BoardStart
+		}
+
+		# drive the board forward, at most 4 plies per tick
+		set guard 0
+		set State(driving) 1
+		while {[BoardPly] < $goal && $guard < 4} {
+			BoardForward
+			incr guard
+		}
+		set State(driving) 0
+		set State(lastgoal) $goal
+		return
+	}
 
 	set dur [expr {double($durationMs)}]
 	if {$dur < 500.0} { return }
