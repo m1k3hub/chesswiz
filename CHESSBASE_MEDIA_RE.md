@@ -366,6 +366,28 @@ explicit selection of stream 3 and delivery of its commands to ChessBase remain
 to be demonstrated. Wine reports the manual-selection call as an unimplemented
 (`fixme`) operation, making it a concrete compatibility suspect.
 
+A dedicated `+wmvcore` trace separates two reader passes and exposes an even
+earlier failure:
+
+1. Reader14 calls `WMCreateReader`, opens the fixture, queries
+   `IWMProfile`, obtains the profile stream count, and requests stream index 0.
+2. It obtains that stream's number and queries its media-properties interface.
+3. Wine logs `stream_props_GetType(..., major_type, stub!)`; Reader14 then
+   immediately closes and releases that reader without examining stream index
+   1 or 2.
+4. A second reader pass (the WMP control) queries duration, enables a
+   user-provided clock, requests manual stream selection, and closes.
+
+Thus the first demonstrated compatibility blocker is Wine's stubbed
+`IWMMediaProps::GetType`, not merely manual selection. Reader14 appears to
+enumerate stream types itself, but cannot get past the first stream under this
+Wine implementation. The underlying GStreamer trace likewise creates only
+audio and video pads; it creates no pad for ASF script stream 3. These are two
+independent reasons the Windows playback stack cannot currently deliver the
+ChessBase command stream under Wine. This behavior is a Wine limitation, not
+evidence that the WMV lacks synchronization data—the static extractor reads
+that data directly from the same fixture.
+
 ### `.cbm` catalog structure
 
 The beginning of `168Endgame.cbm` is a compact little-endian binary header,
