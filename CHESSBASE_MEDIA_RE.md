@@ -87,21 +87,21 @@ fully identified.
 
 ## Decoded compact records
 
-The 30-byte stream packets decode to eight-byte records with this recurring
+The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
 ```text
-03 00 00 00 XX XX XX XX
+03 00 00 00 XX XX
 ```
 
 Examples include:
 
 ```text
-03 00 00 00 17 00 00 00
-03 00 00 00 18 00 00 00
-03 00 00 00 d6 00 00 00
-03 00 00 00 d7 00 00 00
-03 00 00 00 d8 00 00 00
+03 00 00 00 17 00
+03 00 00 00 18 00
+03 00 00 00 d6 00
+03 00 00 00 d7 00
+03 00 00 00 d8 00
 ```
 
 These records are timestamped independently by ASF. Their value is a
