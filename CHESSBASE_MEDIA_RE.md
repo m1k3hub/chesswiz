@@ -218,6 +218,13 @@ references. The first-level container boundary is understood, but the
 multi-field framing variant and tag-specific payload semantics remain to be
 mapped.
 
+A decoded text-bearing sample starts with `tag=3, length=0x61`; its payload
+contains the annotation text `would transpose to a Shirov-Bacrot 2014 game.
+It's a mistake to allow the knight into c7.` This confirms that at least tag
+`3` represents a textual lesson annotation. The payload also has a short
+binary preamble and a terminator before subsequent records, so the length is
+not simply the length of the visible UTF-8 string.
+
 The proposed multi-record interpretation was tested against the corpus. The
 first `u16` after the eight-byte `06` header is `1` in the 24-byte sample and
 `2` in several longer samples, so it is a credible record-count candidate.
