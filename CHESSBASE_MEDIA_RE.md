@@ -88,9 +88,30 @@ Heibei
 FIDE
 ```
 
-The observed string convention is a one-byte length followed by a
-null-terminated ASCII string. The exact integer-field layout is not yet
-fully identified.
+The leading checkpoint schema is:
+
+```text
+u32le opcode       = 2
+u32le reserved
+u32le cursor_id
+u32le reserved
+string white_last
+string white_first
+string black_last
+string black_first
+string site
+string event
+u32le packed_date
+```
+
+Each string is a one-byte length followed by Windows-1252 bytes ending in NUL;
+the length includes that NUL. Exactly these six identity strings parse at
+offset 16 in all 5,731 exported checkpoints with no exceptions. `packed_date`
+uses `(year << 9) | (month << 5) | day`; zero month/day components represent
+unknown precision. The first Navara-Adams date is `2015-00-00`; a later date
+field uses `0x000fbef9`, which decodes to the exact game date 2015-07-25.
+Additional game metadata and the game-tree block follow this header and remain
+only partially decoded.
 
 ## Decoded compact records
 

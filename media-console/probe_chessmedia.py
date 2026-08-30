@@ -25,6 +25,25 @@ def square_name(value):
     return f"#{value}"
 
 
+def checkpoint_header(payload):
+    if len(payload) < 16:
+        raise ValueError("short checkpoint header")
+    offset = 16
+    strings = []
+    for _ in range(6):
+        if offset >= len(payload):
+            raise ValueError("truncated checkpoint string length")
+        length = payload[offset]
+        end = offset + 1 + length
+        if length < 1 or end > len(payload) or payload[end - 1] != 0:
+            raise ValueError("invalid checkpoint string")
+        strings.append(payload[offset + 1:end - 1].decode("cp1252"))
+        offset = end
+    date_word = struct.unpack_from("<I", payload, offset)[0]
+    date = (date_word >> 9, (date_word >> 5) & 0x0F, date_word & 0x1F)
+    return strings, date, offset + 4
+
+
 def packet_bytes(data):
     raw = bytes.fromhex("".join(HEX_LINE.findall(data)).replace(" ", ""))
     text = raw.decode("utf-16le", "replace")
@@ -99,9 +118,15 @@ def describe(payload):
     kind = struct.unpack_from("<I", payload, 0)[0]
     if kind == 2 and len(payload) >= 12:
         state = struct.unpack_from("<I", payload, 8)[0]
-        strings = re.findall(rb"[ -~]{4,}", payload)
-        names = ", ".join(item.decode("ascii", "replace") for item in strings[:8])
-        return f"state kind=2 id=0x{state:x} decoded={len(payload)} strings=[{names}]"
+        strings, date, _ = checkpoint_header(payload)
+        white = f"{strings[0]}, {strings[1]}"
+        black = f"{strings[2]}, {strings[3]}"
+        rendered_date = f"{date[0]:04d}-{date[1]:02d}-{date[2]:02d}"
+        return (
+            f"state kind=2 id=0x{state:x} decoded={len(payload)} "
+            f"white={white!r} black={black!r} site={strings[4]!r} "
+            f"event={strings[5]!r} date={rendered_date}"
+        )
     if kind == 3 and len(payload) >= 6:
         state = struct.unpack_from("<H", payload, 4)[0]
         return f"transition kind=3 id=0x{state:x} decoded={len(payload)}"

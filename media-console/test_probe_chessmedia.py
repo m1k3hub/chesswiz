@@ -53,6 +53,18 @@ class PacketBytesTest(unittest.TestCase):
         payload += struct.pack(">IH", 2, length) + text
         self.assertIn("text='5weißfeldriger Läufer'", PROBE.describe(payload))
 
+    def test_decodes_checkpoint_identity_header(self):
+        values = ["Navara", "David", "Adams", "Michael", "Biel", "48th Biel Festival 2015"]
+        payload = struct.pack("<IIII", 2, 0, 24, 0)
+        for value in values:
+            encoded = value.encode("cp1252") + b"\x00"
+            payload += bytes([len(encoded)]) + encoded
+        payload += struct.pack("<I", (2015 << 9) | (7 << 5) | 25)
+        strings, date, offset = PROBE.checkpoint_header(payload)
+        self.assertEqual(strings, values)
+        self.assertEqual(date, (2015, 7, 25))
+        self.assertEqual(offset, len(payload))
+
 
 if __name__ == "__main__":
     unittest.main()
