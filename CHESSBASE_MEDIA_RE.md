@@ -250,6 +250,13 @@ does not expose the private record grammar through symbols or documentation.
 They provide useful search anchors for later disassembly, not proof of field
 semantics.
 
+The ChessBase 26 binary imports Media Foundation's
+`MFCreateSourceReaderFromURL` from `MFReadWrite.dll` and contains RTTI for
+`IWMReaderCallback`/`IWMReaderCallbackAdvanced`. This indicates the modern
+reader has both a Media Foundation path and legacy Windows Media callback
+support. A faithful Scidb implementation should therefore not assume that
+the old WMP callback API is the only way ChessBase consumes script streams.
+
 Corpus-wide decoding of all 234 text exports provides a stronger length
 profile: opcode `03` is always 6 bytes (4,455 records), opcode `04` is
 always 12 bytes (742), opcode `08` is always 6 bytes (4), and opcode `0e` is
