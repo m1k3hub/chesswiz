@@ -346,6 +346,26 @@ position-specific WMV clips. The evidence supports this division:
 The `.cbm` file is a media catalog/manifest and is not itself the authoritative
 playback timeline.
 
+## Reader14 dynamic playback path
+
+Opening a fixture WMV directly with ChessBase Reader 14 under Wine produced
+two decisive runtime events:
+
+1. Reader14 instantiated the Windows Media Player ActiveX control,
+   CLSID `{6BF52A52-394A-11D3-B153-00C04F79FAA6}`.
+2. During control initialization, Wine's `wmvcore` implementation logged
+   `WMReaderAdvanced_SetManualStreamSelection(..., TRUE)`.
+
+The first event directly establishes that Reader14 uses the Windows Media
+Player control for this playback path. The second establishes that the
+resulting Wine playback stack requests manual Windows Media stream selection,
+which is the mechanism needed to select non-audio/video ASF streams. The trace
+does not identify whether Reader14 or Wine's WMP-control implementation made
+that call, nor did it show a subsequent script-sample callback. Therefore
+explicit selection of stream 3 and delivery of its commands to ChessBase remain
+to be demonstrated. Wine reports the manual-selection call as an unimplemented
+(`fixme`) operation, making it a concrete compatibility suspect.
+
 ### `.cbm` catalog structure
 
 The beginning of `168Endgame.cbm` is a compact little-endian binary header,
