@@ -393,6 +393,15 @@ little-endian action classes are `0x80` (498 records), `0` (204), `0x200`
 Whether each class draws an arrow, highlights a square, or performs another
 board action still requires an oracle observation.
 
+Opcode `04` is not the incremental form of opcode-`06` type-`4`/type-`5`
+graphics. For all 742 opcode-`04` events, the next opcode `06` within ten
+seconds (when one exists) never contains the same or reversed square pair as a
+type-`5` arrow; only three events share even one endpoint with a type-`4`
+marker. There are 567 events with no nearby delta and 172 whose nearby delta
+is unrelated. Opcode `04` therefore represents an independent, transient
+board action channel, while opcode `06` updates persistent checkpoint state.
+Its class/modifier mapping still needs visual identification.
+
 Opcode `08` occurs only four times in all 234 exports and is always the same
 six-byte value, `08 00 00 00 00 00`. Every occurrence lies at a board-context
 boundary: it follows an `04`, `06`, or `03` event and is followed by a new
