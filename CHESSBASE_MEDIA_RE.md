@@ -24,7 +24,10 @@ The stream-3 type GUID is:
 
 This is not an arbitrary unknown binary stream. It is an ASF script-command
 stream. Microsoft documents script streams as timestamped type/argument pairs
-delivered in presentation-time order.
+delivered in presentation-time order.  Note: `CBase26.exe` contains
+`ScriptActivationManager::IsStreamCrypted/GetProductId/GetCryptKey` — script
+streams **can be encrypted per product**; the CBM 168 fixtures decode
+cleanly and are therefore unencrypted.
 
 The sampled base file `02 Mar del Plata000.wmv` is 433.852 seconds long. Its
 stream 3 contains 149 packets and 389,574 bytes. Packet timestamps run across
@@ -496,6 +499,49 @@ does not expose the private record grammar through symbols or documentation.
 They provide useful search anchors for later disassembly, not proof of field
 semantics.
 
+**(2026-08-30) The August 30 corpus findings are corroborated by strings
+directly inside `CBase26.exe`** — several decode-bricks in this document
+now have binary-internal witnesses:
+
+- The export-format record vocabulary sits directly next to
+  `ScriptItems`: `EDITOR`, **`GA:`** (the script-command prefix decoded
+  all through this document), `Timestamp`, `Action`, `Sequence`,
+  **`Game Action`** — the `.txt` sidecar of each WMV is a
+  `Game Action`/`Timestamp`/`Sequence` record export, exactly as parsed
+  here (each `GA:` line = one timestamped action).
+- The action names `V_LASTMOVE`, `V_MOVES`, `V_MAP`, `V_ZOOM` sit in the
+  same cluster — the script-item action alphabet of the media viewer
+  (drawing/mapping moves and camera zooms).
+- `ScriptActivationManager::IsStreamCrypted`, `::GetProductId`,
+  `::GetCryptKey` next to `HBStreams`/`.prot`: script streams **can be
+  encrypted per product**.  The CBM 168 fixtures decode cleanly, so they
+  are unencrypted — commercial/activated media may need the crypt-key
+  path before a generic decoder can read them.
+- The **64-byte file-major square transpose table**
+  (`00 08 10 18 20 28 30 38 01 09 11 19 …`, file×8 + rank for index
+  i) exists at `0x194f8d0` in the binary — direct corroboration of the
+  file-major square convention the decoded checkpoint edge stream,
+  opcode-`04` arrows and opcode-`06` graphics all use.
+- The annotation-type registry vocabulary `V_T_*` maps one-to-one onto
+  the decoded record families: `V_T_TEXT` + `V_T_IN_PB_AFTER` (type
+  `0x02`, text after move) / `V_T_IN_PB_BEFORE` (type `0x82` = 130, text
+  before move — *before/after is playback placement*), `V_T_SYMBOLS`
+  (`0x03`), `V_T_MOVE_MEDAL` (`0x22` = 34, the found value `1` = the
+  Best-Game medal), `V_T_GAME_QUOTATION` (the quotation texts with game
+  number/ratings/source), `V_T_SQUARELIST` (the styled square marks and
+  arrows, types 4/5), `V_T_PAWN_STRUCTURE`, `V_T_PIECE_PATH`,
+  `V_T_CRITICAL_POS`, `V_T_TRAINING` (the remaining CBA annotation
+  families).  `V_CB_BOARDPOINTS` names the `.cms` `x/y` selectors:
+  they are **board points**.
+- `dmcs`, `Traning Generator` (sic) and the `V_*` vocabulary identify
+  the authoring layer ("Training Generator"; the lecture robot/mastering
+  side), matching the `Robot 11` annotator strings seen in the
+  checkpoints of auto-generated Biel lessons.
+- The `Robot` strings in the binary (`Robot - no candidates`, `Robot
+  Timeout`, `ToggleRentRobot`, `AutoRobotChat`) belong to the
+  play-server robot, not the lecture annotator — no conflict with the
+  checkpoint finding.
+
 The raw PE RTTI cluster around the callback names also contains
 `IWMStatusCallback`, `IWMReaderCallback`, and `IWMReaderCallbackAdvanced`
 descriptors. This confirms ChessBase links the legacy Windows Media reader
@@ -657,11 +703,15 @@ u32le namelen2, name2      (the base's x0y0 clip file name)
 ```
 
 Later records name the position clips; each carries a duration and the
-clip's `v`/`u` selectors, but their exact field count is still ambiguous
-(the final short record is misaligned by one field under both 5- and
-6-field attempts), so `x`/`y` remain filename-only selectors. The
-`cms2smv.tcl` port is unaffected: it keys on the embedded FEN-plus-
-selector strings, which are present verbatim.
+clip's `v`/`u` selectors. The duration field is **verified**: ffprobe of
+all four Mar del Plata clips gives 30.892/61.473/37.041/333.140 s against
+the recorded 30/61/37/333 (and the base 433.892 vs 433).  The exact field
+count is still ambiguous (the final short record breaks both 5- and
+6-field framings by one field), and the binary names the `x`/`y`
+selectors `V_CB_BOARDPOINTS` — "board points" — but their rule stays
+undecoded, so `x`/`y` remain filename-only for tools.  The `cms2smv.tcl`
+port is unaffected: it keys on the embedded FEN-plus-selector strings,
+which are present verbatim.
 
 ## Reader14 dynamic playback path
 
