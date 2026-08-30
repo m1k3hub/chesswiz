@@ -104,12 +104,18 @@ Examples include:
 03 00 00 00 d8 00 00 00
 ```
 
-These records are timestamped independently by ASF. Their semantic meaning is
-not yet proven, but their values clearly correlate with the first field of
-nearby large records. For example, the stream contains a compact `d6` record,
-then a large record whose leading state value is `d7`, followed by compact
-`d8`, `d9`, and later values. This is consistent with a state/checkpoint
-sequence rather than arbitrary media metadata.
+These records are timestamped independently by ASF. Their value is a
+little-endian 32-bit field. In the observed lecture, compact values precede
+large records carrying the same state value at offset 8. For example, the
+stream contains compact `d6`, compact `d7`, then a large record with state
+value `d7`; later it contains compact `d8`, followed by large records with
+state value `d8`. The same pattern occurs for the `18`, `19`, `1a`, `1b`, and
+subsequent values.
+
+This establishes a state-transition/checkpoint relationship. It is stronger
+than the earlier hypothesis that these were arbitrary event IDs, although the
+contents of each state and the exact meaning of the transition opcode `03`
+remain to be decoded.
 
 ## Role of `.cms`
 
