@@ -92,6 +92,8 @@ def describe(payload):
                 fields.append(f"tag={tag} len={length} hex={value.hex()}")
             offset += length
         return f"delta kind=6 decoded={len(payload)} fields=[{'; '.join(fields)}]"
+    if kind == 8 and payload == b"\x08\x00\x00\x00\x00\x00":
+        return "reset-candidate kind=8 decoded=6"
     if kind == 14 and len(payload) == 6:
         counter = struct.unpack_from("<H", payload, 4)[0]
         return f"source-time kind=14 counter={counter} decoded=6"

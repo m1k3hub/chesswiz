@@ -320,6 +320,16 @@ little-endian action classes are `0x80` (498 records), `0` (204), `0x200`
 Whether each class draws an arrow, highlights a square, or performs another
 board action still requires an oracle observation.
 
+Opcode `08` occurs only four times in all 234 exports and is always the same
+six-byte value, `08 00 00 00 00 00`. Every occurrence lies at a board-context
+boundary: it follows an `04`, `06`, or `03` event and is followed by a new
+checkpoint or a new cluster of `04` board actions. One occurrence clears the
+context after a rare class-`0x800` action on `h1-g1`, immediately before two
+new class-`0x80` actions. With no varying argument and this placement, `08` is
+very likely a reset/clear-transient-board-state command. The affected layer
+(graphical arrows/highlights, selection, or a broader interaction state) still
+needs visual oracle confirmation.
+
 The 30-byte stream packets decode to six-byte records with this recurring
 shape:
 
