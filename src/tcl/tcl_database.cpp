@@ -5131,7 +5131,8 @@ cmdMediaGallery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	// Returns ALL media entries for the database (not per-game) — the
 	// “gallery”. For .scm databases this calls scm::MediaTable::collectAll();
 	// for .cbh databases with a .cbm it calls cbh::MediaTable::collectMediaFiles().
-	// Returns a list of {path type title mediaId} rows.
+	// Returns a list of {path type title mediaId gameIndex} rows. Only media
+	// with a resolvable owning game is returned.
 	if (objc != 3)
 	{
 		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant>");
@@ -5150,9 +5151,6 @@ cmdMediaGallery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	scm::MediaTable const* scmTable = db.scmMediaTable();
 	if (scmTable != nullptr && scmTable->isOpen())
 	{
-		mstl::vector<scm::MediaTable::Entry> entries;
-		scmTable->collectAll(entries);
-
 		mstl::string dir = ::util::misc::file::dirname(database);
 		if (!dir.empty())
 		{
@@ -5160,21 +5158,29 @@ cmdMediaGallery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				dir += '/';
 		}
 
-		for (unsigned i = 0; i < entries.size(); ++i)
+		for (unsigned gameIndex = 0; gameIndex < db.countGames(); ++gameIndex)
 		{
-			mstl::string resolved = scmTable->resolvePath(entries[i]);
-			if (!entries[i].inlineData && !resolved.empty()
-				&& resolved[0] != '/' && resolved[0] != '\\')
+			GameInfo const& info = db.gameInfo(gameIndex);
+			uint64_t fp = scm::MediaTable::fingerprint(info.playerName(color::White),
+				info.playerName(color::Black), info.event(), info.date().asString(),
+				info.round(), unsigned(info.result()));
+			mstl::vector<scm::MediaTable::Entry> entries;
+			scmTable->mediaFor(fp, entries);
+			for (unsigned i = 0; i < entries.size(); ++i)
 			{
-				resolved = dir + resolved;
-			}
+				mstl::string resolved = scmTable->resolvePath(entries[i]);
+				if (!entries[i].inlineData && !resolved.empty()
+					&& resolved[0] != '/' && resolved[0] != '\\')
+					resolved = dir + resolved;
 
-			Tcl_Obj* row[4];
-			row[0] = Tcl_NewStringObj(resolved.c_str(), int(resolved.size()));
-			row[1] = Tcl_NewIntObj(int(entries[i].type));
-			row[2] = Tcl_NewStringObj(entries[i].title.c_str(), int(entries[i].title.size()));
-			row[3] = Tcl_NewStringObj(entries[i].mediaId.c_str(), int(entries[i].mediaId.size()));
-			Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(4, row));
+				Tcl_Obj* row[5];
+				row[0] = Tcl_NewStringObj(resolved.c_str(), int(resolved.size()));
+				row[1] = Tcl_NewIntObj(int(entries[i].type));
+				row[2] = Tcl_NewStringObj(entries[i].title.c_str(), int(entries[i].title.size()));
+				row[3] = Tcl_NewStringObj(entries[i].mediaId.c_str(), int(entries[i].mediaId.size()));
+				row[4] = Tcl_NewIntObj(int(gameIndex));
+				Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(5, row));
+			}
 		}
 	}
 	else
@@ -5220,11 +5226,12 @@ cmdMediaGallery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 						case 8: type = 4; break; // cbh Stream → scm Stream
 						default: type = 0; break;
 					}
-					Tcl_Obj* row[4];
+				Tcl_Obj* row[5];
 					row[0] = Tcl_NewStringObj(path.c_str(), int(path.size()));
 					row[1] = Tcl_NewIntObj(type);
 					row[2] = Tcl_NewStringObj("", 0);
 					row[3] = Tcl_NewIntObj(int(entries[i].bagIndex));
+					row[4] = Tcl_NewIntObj(-1);
 					Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(4, row));
 			}
 			}

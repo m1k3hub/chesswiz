@@ -172,8 +172,8 @@ proc application::media::Update {position} {
 				if {[llength $gallery]} {
 					set n 0
 					foreach gentry $gallery {
-						lassign $gentry gpath gtype gtitle gmediaId
-						$tree insert {} end -id item$n -values [list [TypeLabel $gtype] $gtitle $gpath]
+						lassign $gentry gpath gtype gtitle gmediaId gindex
+						$tree insert {} end -id item$n -values [list [TypeLabel $gtype] $gtitle $gpath $gindex]
 						incr n
 					}
 					set Priv(base) $Priv(lastBase)
@@ -276,10 +276,16 @@ proc application::media::PlaySelected {tree} {
 		return
 	}
 
-	lassign $values typeLabel title path
+	lassign $values typeLabel title path galleryIndex
 	if {![string length $path]} {
 		MediaDebug "PlaySelected: empty path (inline media), title=[list $title]"
 		set Priv(statusbar) "Cannot play '$title': media is stored inline (not yet extractable)."
+		return
+	}
+	if {[string is integer -strict $galleryIndex] && $galleryIndex >= 0
+		&& $galleryIndex != $Priv(index)} {
+		after idle [namespace code [list PlayMedia $path]]
+		::game::new .application -base $Priv(base) -variant $Priv(variant) -number $galleryIndex
 		return
 	}
 
