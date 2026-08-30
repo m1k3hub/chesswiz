@@ -11,10 +11,11 @@ public class FindChessBaseMediaRefs extends GhidraScript {
     public void run() throws Exception {
         String[] needles = {"ScriptItems", "ScriptActivationManager",
                 "Chess Media System", "Extra Chess Media", "Audio Stream"};
+        String[] callbackNeedles = {"IWMReaderCallback", "IWMReaderCallbackAdvanced"};
         for (Data data : currentProgram.getListing().getDefinedData(true)) {
             String value = data.getDefaultValueRepresentation();
             if (value == null) continue;
-            for (String needle : needles) {
+            for (String needle : concat(needles, callbackNeedles)) {
                 if (!value.contains(needle)) continue;
                 Address address = data.getAddress();
                 println("STRING " + address + " " + value);
@@ -26,5 +27,12 @@ public class FindChessBaseMediaRefs extends GhidraScript {
                 break;
             }
         }
+    }
+
+    private String[] concat(String[] first, String[] second) {
+        String[] result = new String[first.length + second.length];
+        System.arraycopy(first, 0, result, 0, first.length);
+        System.arraycopy(second, 0, result, first.length, second.length);
+        return result;
     }
 }
