@@ -15,6 +15,6 @@ Match pattern: *
 Total Passed: 29
 Total Failed: 0
 Total Skipped: 0
-Duration: 1s
+Duration: 0s
 
 STATUS: PASSED
