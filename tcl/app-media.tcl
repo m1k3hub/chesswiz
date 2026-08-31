@@ -1299,6 +1299,23 @@ proc application::media::FollowTick {} {
 	set Priv(followafter) {}
 
 	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
+
+	# mpv transport: read the cached position/duration (kept fresh by
+	# the IPC property-push events) and drive the board.  This must run
+	# BEFORE the tkvlc guards below: with mpv active there is no vlc
+	# handle, so the old ordering made the follow loop exit immediately
+	# and the board never followed the video.
+	if {[info exists Priv(mpv_active)] && $Priv(mpv_active)} {
+		set t 0.0; set dur 0.0
+		catch { set t [::media::mpv::getPlaybackTime] }
+		catch { set dur [::media::mpv::getDuration] }
+		if {$t eq "" || $dur eq ""} { return }
+		::media::sync::drive $t $dur
+		StartFollowTick
+		return
+	}
+
+	# tkvlc transport
 	set handle $Priv(vlc_handle)
 	if {$handle eq ""} { return }
 
@@ -1309,15 +1326,6 @@ proc application::media::FollowTick {} {
 		return
 	}
 
-	if {[info exists Priv(mpv_active)] && $Priv(mpv_active)} {
-		set t 0.0; set dur 0.0
-		catch { set t [::media::mpv::getPlaybackTime] }
-		catch { set dur [::media::mpv::getDuration] }
-		if {$t eq "" || $dur eq ""} { return }
-		::media::sync::drive $t $dur
-		StartFollowTick
-		return
-	}
 	set t 0; set dur 0
 	catch { set t [$handle time] }
 	catch { set dur [$handle duration] }
