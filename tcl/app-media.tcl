@@ -837,8 +837,31 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	# media is playing: sync state machine active (drives the board in
 	# follow mode; transport coupling reacts to board playback events).
 	::media::sync::onPlaybackStarted
-	LoadSyncSidecar $path
-	LoadSyncEvents $path
+# decode the script stream in-process (no sidecar files, no media mod)
+	set timeline [list]
+	set events [list]
+	if {[catch {
+		set decoded [::media::decoder::decode $path]
+		foreach entry $decoded {
+			set op [dict get $entry opcode]
+			set name [dict get $entry name]
+			if {$op == 3} {
+				set idx [dict get $entry gotoIndex]
+				if {$idx >= 0 && $idx < 1000} { lappend timeline $idx }
+			} elseif {[dict exists $entry type] && [dict get $entry type] eq "board-action"} {
+				set from [dict get $entry from]
+				set to [dict get $entry to]
+				set class [dict get $entry class]
+				set mod [dict get $entry modifier]
+				lappend events [list [lindex $entry pkt] arrow $class $from $to $mod]
+			}
+		}
+	} err]} {
+		MediaDebug "DecodeScriptStream: $err"
+	}
+	::media::sync::load-timeline $timeline
+	::media::sync::load-events $events
+	MediaDebug "DecodeScript: [llength $timeline] timeline, [llength $events] events for [file tail $path]"
 	StartFollowTick
 
 	# Check shortly after that playback actually started (media decoded).
