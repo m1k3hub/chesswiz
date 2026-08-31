@@ -46,7 +46,7 @@ proc ::application::media::mpv::launch {wmvPath wid {startMs 0}} {
 		--load-scripts=no \
 		[file normalize $wmvPath] \
 	]
-	log "mpv::launch: [file tail $wmvPath] wid=$wid"
+	MediaDebug "mpv::launch: [file tail $wmvPath] wid=$wid"
 	set pid [exec -- {*}$cmdline &]
 	set Pid $pid
 
@@ -56,14 +56,14 @@ proc ::application::media::mpv::launch {wmvPath wid {startMs 0}} {
 		after 100
 	}
 	if {![file exists $SockFile]} {
-		log "IPC socket not created"
+		MediaDebug "IPC socket not created"
 		return 0
 	}
 
 	# connect the IPC socket
 	set Chan [open $SockFile r+]
 	fconfigure $Chan -translation binary -buffering none -blocking 0
-	log "IPC connected"
+	MediaDebug "IPC connected"
 	return 1
 }
 
