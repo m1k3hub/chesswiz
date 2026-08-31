@@ -116,11 +116,37 @@ proc ::application::media::mpv::seek {ms} {
 }
 
 proc ::application::media::mpv::getPlaybackTime {} {
-	command get_property playback-time
+	variable Chan
+	return [queryProperty playback-time]
 }
 
 proc ::application::media::mpv::getDuration {} {
-	command get_property duration
+	variable Chan
+	return [expr {[query_property duration] * 1000.0}]
+}
+
+# query a numeric property via the JSON-IPC channel (blocking read)
+proc ::application::media::mpv::query_property {prop} {
+	variable Chan
+	if {$Chan eq ""} return 0.0
+	incr Seq
+	set msg [format {{"command": ["get_property", "%s"], "request_id": %d}\n} $prop $Seq]
+	catch { puts $Chan $msg } err
+	if {[catch { gets $Chan line } err]} { return 0.0 }
+	# parse the JSON response for data field
+	# simple pattern match for {"data": <num>}
+	if {[regexp {"data":\s*([0-9]+\.?[0-9]*)} $msg -> val]} {
+		return $val
+	}
+	return 0.0
+}
+
+proc ::application::media::mpv::play {} {
+	command set_property pause false
+}
+
+proc ::application::media::mpv::pause {} {
+	command set_property pause true
 }
 
 proc ::application::media::mpv::stop {} {

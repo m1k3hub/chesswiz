@@ -795,6 +795,23 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	# any leftover photo image from a previous picture display).
 	$canvas delete all
 
+	# Tier-2b: try mpv first (built-in codecs, no host codec install)
+	if {[llength [auto_execok mpv]]} {
+		MediaDebug "PlayInProcess: using mpv transport"
+		set rc [::application::media::mpv::launch $path $canvas $startMs]
+		if {$rc != 0} {
+			set Priv(inprocess) 1
+			set Priv(statusbar) "Playing: $path (mpv)"
+			set Priv(mpv_active) 1
+			::media::sync::onPlaybackStarted
+			StartFollowTick
+			return 1
+		}
+	}
+
+	# Tier-2a: tkvlc (fallback when mpv is not available)
+	set Priv(statusbar) "tkvlc path"
+
 	# Initialise a new tkvlc handle bound to the canvas window id.
 	set handle "scidb_vlc"
 	if {[catch { ::tkvlc::init $handle $wid } msg]} {
@@ -964,6 +981,12 @@ proc application::media::CheckDecode {path} {
 # Destroy the current tkvlc handle and release libVLC resources.
 proc application::media::DestroyVlcHandle {} {
 	variable Priv
+	catch {
+		if {$::application::media::mpv::Pid > 0} {
+			::media::mpv::stop
+		}
+	}
+
 
 	set handle $Priv(vlc_handle)
 	if {$handle ne ""} {
@@ -1010,6 +1033,22 @@ proc application::media::SyncTransport {what} {
 	variable Priv
 
 	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
+
+	# mpv transport: route to the JSON-IPC channel
+	if {[info exists Priv(mpv_active)] && $Priv(mpv_active)} {
+		switch -- $what {
+			play {
+				::media::mpv::play
+				StartFollowTick
+			}
+			pause {
+				::media::mpv::pause
+			}
+		}
+		return
+	}
+
+	# tkvlc fallback
 	set handle $Priv(vlc_handle)
 	if {$handle eq ""} { return }
 
@@ -1159,6 +1198,15 @@ proc application::media::FollowTick {} {
 		return
 	}
 
+	if {[info exists Priv(mpv_active)] && $Priv(mpv_active)} {
+		set t 0.0; set dur 0.0
+		catch { set t [::media::mpv::getPlaybackTime] }
+		catch { set dur [::media::mpv::getDuration] }
+		if {$t eq "" || $dur eq ""} { return }
+		::media::sync::drive $t $dur
+		StartFollowTick
+		return
+	}
 	set t 0; set dur 0
 	catch { set t [$handle time] }
 	catch { set dur [$handle duration] }
