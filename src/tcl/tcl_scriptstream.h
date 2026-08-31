@@ -422,6 +422,7 @@ inline bool parse_checkpoint_tail(unsigned char const* p, unsigned len,
 			&& !(pp[q] == 0 && pp[q + 1] == 0);
 	};
 	unsigned pos = 0;
+	fprintf(stderr, "[tail: len=%u]\n", len);
 	while (pos + 10 <= len && !(valid(p, pos) && valid(p, pos + 5)))
 		++pos;
 	if (pos + 10 > len) return false;
@@ -501,7 +502,7 @@ inline Kind decode_event(unsigned char const* record, unsigned len,
 			if (len < idEnd + 10) break;
 
 			// Elo pair scan
-			for (unsigned probe = idEnd + 4; probe + 8 < len; ++probe)
+			for (unsigned probe = idEnd; probe + 8 < len; ++probe)
 			{
 				unsigned a = rd_le16(record + probe);
 				unsigned b = rd_le16(record + probe + 2);
@@ -527,7 +528,7 @@ inline Kind decode_event(unsigned char const* record, unsigned len,
 			}
 
 			// tree edges + inline collections
-			parse_checkpoint_tail(record + idEnd + 4, len - idEnd - 4, *cp);
+			parse_checkpoint_tail(record + idEnd, len - idEnd, *cp);
 			break;
 		}
 		case 3:

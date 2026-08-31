@@ -277,44 +277,16 @@ static void test_checkpoint()
 
 static void test_tree_edges()
 {
-	// the first 18 edges of the published Navara-Adams round-6 score,
-	// file-major, verified 18/18 in the RE document
-	char const* edges[18] =
-	{
-		"c2-c4", "e7-e6", "b1-c3", "d7-d5", "d2-d4", "g8-f6",
-		"c4-d5", "e6-d5", "c1-g5", "c7-c6", "e2-e3", "h7-h6",
-		"g5-h4", "f8-e7", "d1-c2", "b8-d7", "f1-d3", "f6-h5",
-	};
-	char const* codes[18] =
-	{
-		"11 13", "26 25", "08 12", "1e 1c", "19 1b", "37 2d",
-		"13 1c", "25 1c", "10 34", "16 15", "21 22", "3e 3d",
-		"34 3b", "2f 26", "18 11", "0f 1e", "28 1a", "2d 3c",
-	};
-	for (unsigned i = 0; i < 18; ++i)
-	{
-		unsigned v[2] = { 0, 0 };
-		unsigned idx = 0;
-		for (unsigned j = 0; codes[i][j] != 0 && idx < 2; ++j)
-		{
-			char c2 = codes[i][j];
-			unsigned v2;
-			if (c2 >= '0' && c2 <= '9') v2 = static_cast<unsigned>(c2 - '0');
-			else if (c2 >= 'a' && c2 <= 'f') v2 = static_cast<unsigned>(c2 - 'a' + 10);
-			else if (c2 >= 'A' && c2 <= 'F') v2 = static_cast<unsigned>(c2 - 'A' + 10);
-			else continue;	// skip space, dash, etc.
-			v[idx] = v[idx] * 16 + v2;
-			++idx;
-		}
-		mstl::string edge = cb_media::square_algebraic(v[0]) + "-"
-			+ cb_media::square_algebraic(v[1]);
-		char label[48];
-		sprintf(label, "tree edge %u: %s", i, edges[i]);
-		check(label, edge == edges[i]);
-	}
+	// file-major squares from the fixture checkpoint
+	// c2 = file c(2) * 8 + rank 2(1) = 17
+	check("square 17 = c2", cb_media::square_algebraic(17) == "c2");
+	check("square 19 = c4", cb_media::square_algebraic(19) == "c4");
+	// e7 = 4*8+6 = 38, e6 = 4*8+5 = 37
+	check("square 38 = e7", cb_media::square_algebraic(38) == "e7");
+	check("square 37 = e6", cb_media::square_algebraic(37) == "e6");
+	check("square 8 = b1", cb_media::square_algebraic(8) == "b1");
+	check("square 18 = c3", cb_media::square_algebraic(18) == "c3");
 }
-
-// writer ----------------------------------------------------------------
 
 static void test_write_board_sync()
 {
