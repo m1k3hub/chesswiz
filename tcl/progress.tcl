@@ -79,13 +79,13 @@ proc DoCmd {cmd parent {value 0}} {
 
 	switch $cmd {
 		open {
-			if {![winfo exists .progress]} {
+			if {![winfo exists $parent.progressbar]} {
 				lappend Priv(options) -variable [namespace current]::Priv(value)
 				lappend Priv(options) -maximum $value
 				lappend Priv(options) -close no
 				lappend Priv(options) -parent $parent
 				lappend Priv(options) -title $mc::Progress
-				::dialog::progressbar::open .progress {*}$Priv(options)
+				::dialog::progressbar::open $parent.progressbar {*}$Priv(options)
 				focus -force .progress
 				ttk::grabWindow .progress
 				::widget::busyCursor .progress
