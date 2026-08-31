@@ -1,174 +1,91 @@
 # ======================================================================
-# ChessBase script-stream decoder (pure Tcl, runtime)
+# ChessBase script-stream decoder — ::media::decoder
 # ======================================================================
-# Reads a WMV's script stream (stream 2) via ffprobe, decodes the
-# six-bit transport and opcode records, and produces:
-#   * a navigation timeline (transition marks, replay order)
-#   * board annotation events (arrows/marks/comments/symbols)
+# Decodes the "script stream" (ffprobe stream 2) of a ChessBase media
+# lesson into replay/timeline entries.  This is the ONE place where raw
+# WMV script packets are parsed; the resulting lesson (timeline + board
+# events) is built/cached by ::media::lesson and, in a later phase,
+# persisted into the .cms [BoardSync] section (SCM_FORMAT_DESIGN.md
+# §1.6) so the decode never runs twice for the same entry.
 #
-# Used by ::media::sync::load-timeline and load-events to replace the
-# linear ply mapping with real per-move timecodes from the decoded
-# ChessBase script stream.  No sidecar files, no media modification.
+# Grammar: SCM_FORMAT_DESIGN.md (script-stream RE, from the WMV/CBase26
+# reverse-engineering).  Six-bit transport: chars '?'..'~' (0x3F..0x7E)
+# encode 6 bits, 4 chars -> 3 bytes.
 #
-# All findings verified from the CBM 168 fixture corpus and CBase26
-# decompilation (see CHESSBASE_MEDIA_RE.md for the full derivation).
+# NOTE: all procs are defined INSIDE "namespace eval ::media::decoder"
+# so their bodies execute in this namespace.  Procs defined with a
+# qualified name at global scope run their bodies in "::" and cannot
+# resolve their siblings — the previous version of this file failed
+# exactly like that.
 # ======================================================================
 
-::util::source media-sync
+namespace eval ::media::decoder {
 
-namespace eval ::media::cm {
-	variable cache
-}
-
-proc ::media::decoder::log {msg} {
-	if {[info commands MediaDebug] ne ""} {
-		MediaDebug "Decoder: $msg"
-	}
-}
-
-# ---------------------------------------------------------------------
-# six-bit transport: chars '?'..'~' = 0x3f..0x7e = 6 bits, 4 -> 3 bytes
-# ---------------------------------------------------------------------
-
-proc ::media::decoder::decodeTransport {hexstr} {
+# ffprobe -show_data emits an xxd-style hexdump (JSON-escaped newlines,
+# offsets, 2-byte word groups, ASCII gutter); reduce it to clean
+# contiguous hex so the GA/six-bit forms can be detected.
+proc hexdump2hex {dump} {
 	set out {}
+	foreach ln [split [string map {"\\n" "\n"} $dump] "\n"] {
+		if {![regexp {^[0-9a-f]{8}: } $ln]} { continue }
+		set body [string range $ln 10 end]
+		set cut [string first {  } $body]
+		if {$cut >= 0} { set body [string range $body 0 [expr {$cut - 1}]] }
+		regsub -all { } $body {} body
+		append out $body
+	}
+	return $out
+}
+
+proc log {msg} {
+	catch { ::application::media::MediaDebug "Decoder: $msg" }
+}
+
+# ---------------------------------------------------------------------
+# logical trim: fixed-size opcodes carry zero padding after their
+# payload; cut it so payload offsets stay meaningful
+# ---------------------------------------------------------------------
+
+proc _trim {out} {
+	if {[llength $out] < 4} { return $out }
+	binary scan [binary format H* [join [lrange $out 0 3] {}]] i opcode
+	set logical 0
+	switch -- $opcode {
+		3 - 8 - 14 { set logical 6 }
+		4          { set logical 12 }
+	}
+	if {$logical && $logical <= [llength $out]} {
+		foreach ch [lrange $out $logical end] {
+			if {$ch ne "00"} { return $out }
+		}
+		set out [lrange $out 0 [expr {$logical - 1}]]
+	}
+	return $out
+}
+
+# six-bit codes (list of char codes 0x3F..0x7E) -> record (hex-byte list)
+proc sixbit-decode {codes} {
+	set record {}
 	set value 0
 	set bitcount 0
-	foreach ch [split $hexstr ""] {
-		scan $ch %c c
-		if {$c < 0x3F || $c > 0x7E} { return {} }
-		set value [expr {($value << 6) | ($c - 0x3F) & 0x3F}]
+	foreach c $codes {
+		set value [expr {(($value << 6) | ($c - 0x3F)) & 0x3FFFFF}]
 		incr bitcount 6
 		if {$bitcount >= 8} {
 			incr bitcount -8
 			set byte [expr {($value >> $bitcount) & 0xFF}]
-			lappend out [format {%02x} $byte]
+			lappend record [format %02x $byte]
 		}
 	}
-	if {[llength $out] < 4} { return {} }
-
-	# logical trim for fixed-size opcodes
-	set opcode 0
-	binary scan [binary format H* [join [lrange $out 0 3] {}]] I opcode
-	set logical 0
-	switch -- $opcode {
-		3 - 8 - 14 { set logical 6 }
-		4          { set logical 12 }
-	}
-	if {$logical && $logical <= [llength $out]} {
-		set out [lrange $out 0 [expr {$logical - 1}]]
-	}
-	return $out
+	if {[llength $record] < 4} { return {} }
+	return [_trim $record]
 }
 
 # ---------------------------------------------------------------------
-# strip the command prefix and decode to a hex record
+# opcode name (from the CBase26 decompilation)
 # ---------------------------------------------------------------------
 
-proc ::media::decoder::decodeCommand {hexstr} {
-	set n [string length $hexstr]
-	if {$n < 4} { return {} }
-
-	# scan the first bytes to detect the form
-	set b {}
-	for {set i 0} {$i + 1 < [string length $hexstr]} {incr i 2} {
-		binary scan [binary format H2 [string range $hexstr $i [expr {$i+1}]]] c c_
-		lappend b $c_
-	}
-
-	# UTF-16LE: G=0x47 A=0x41 with zero high bytes
-	if {[llength $b] >= 3 && [lindex $b 0] == 0x47 && [lindex $b 1] == 0x41
-			&& [lindex $b 2] == 0 && [lindex $b 3] == 0} {
-		# wide chars: every other byte starting at +6
-		set sixbit {}
-		for {set i 6} {$i < [llength $b]} {incr i 2} {
-			if {[lindex $b $i] >= 0x3F && [lindex $b [expr {$i + 1}]] == 0} {
-				lappend sixbit [lindex $b $i]
-			} else {
-				break
-			}
-		}
-
-		set record {}
-		set value 0 ; set bitcount 0
-		foreach ch $sixbit {
-			set value [expr {($value << 6) | ($ch - 0x3F)}]
-			incr bitcount 6
-			if {$bitcount >= 8} {
-				incr bitcount -8
-				set byte [expr {($value >> $bitcount) & 0xFF}]
-				set record [concat $record [format {%02x} $byte]]
-			}
-		}
-		set record [_trim_opcode [string map {" " {}} $record]]
-		return $record
-	}
-
-	if {[lindex $b 0] == 0x47 && [lindex $b 1] == 0x41} {
-		# ASCII "GA:" (G=47 A=41 :=3a)
-		set begin 2
-		if {[llength $b] >= 3 && [lindex $b 2] == 0x3A} { set begin 3 }
-		set sixbit [lrange $b $begin end]
-
-		set record {}
-		set value 0 ; set bitcount 0
-		foreach ch $sixbit {
-			set value [expr {($value << 6) | ($ch - 0x3F)}]
-			incr bitcount 6
-			if {$bitcount >= 8} {
-				incr bitcount -8
-				set byte [expr {($value >> $bitcount) & 0xFF}]
-				lappend record [format {%02x} $byte]
-			}
-		}
-		set record [_trim $record]
-		return $record
-	}
-
-	return $hexstr  ;# bare six-bit
-}
-
-proc ::media::decoder::_trim {out} {
-	if {[llength $out] < 4} { return $out }
-	set bytes [lrange $out 0 3]
-	binary scan [binary format H* [join $bytes {}]] I opcode
-	set logical 0
-	switch -- $opcode {
-		3 - 8 - 14 { set logical 6 }
-		4          { set logical 12 }
-	}
-	if {$logical && $logical <= [llength $out]} {
-		foreach ch [lrange $out $logical end] {
-			if {$ch ne "00"} { return $out }
-		}
-		set out [lrange $out 0 [expr {$logical - 1}]]
-	}
-	return $out
-}
-
-proc ::media::decoder::_trim {out} {
-	if {[llength $out] < 4} { return $out }
-	set bytes [lrange $out 0 3]
-	binary scan [binary format H* [join $bytes {}]] I opcode
-	set logical 0
-	switch -- $opcode {
-		3 - 8 - 14 { set logical 6 }
-		4          { set logical 12 }
-	}
-	if {$logical && $logical <= [llength $out]} {
-		foreach ch [lrange $out $logical end] {
-			if {$ch ne "00"} { return $out }
-		}
-		set out [lrange $out 0 [expr {$logical - 1}]]
-	}
-	return $out
-}
-
-# ---------------------------------------------------------------------
-# opcode name (from CBase26 decompilation FUN_140da1d70)
-# ---------------------------------------------------------------------
-
-proc ::media::decoder::opcodeName {opcode} {
+proc opcodeName {opcode} {
 	switch -- $opcode {
 		2 - 15 { return "Set Game" }
 		3      { return "GotoIndex" }
@@ -189,129 +106,212 @@ proc ::media::decoder::opcodeName {opcode} {
 }
 
 # ---------------------------------------------------------------------
-# decode one decoded-record byte list into an event dict
+# one six-bit square (file-major) -> algebraic, e.g. 19 -> d3
 # ---------------------------------------------------------------------
 
-proc ::media::decoder::parseRecord {rec} {
-	if {[llength $rec] < 4} { return {} }
-	set op [lindex $rec 0]
-	binary scan [binary format H* [join [lrange $rec 0 3] {}]] I opcode
+proc sq0 {v} {
+	if {$v >= 64} { return "?" }
+	return [string index "abcdefgh" [expr {$v >> 3}]][expr {($v & 7) + 1}]
+}
 
-	set kind [opcodeName $opcode]
-	set result [dict create opcode $opcode name $kind]
+# ---------------------------------------------------------------------
+# decode one packet's hex payload into a record (hex-byte list)
+#
+# Known forms (see SCM_FORMAT_DESIGN.md):
+#   UTF-16LE "GA" prefix: 47 00 41 00, six-bit wide chars from +6
+#   ASCII     "GA"/"GA:" prefix: 47 41 (3a), six-bit chars from +2/+3
+#   bare six-bit transport: the payload bytes are six-bit chars
+# ---------------------------------------------------------------------
+
+proc decodeCommand {hexstr} {
+	if {[string length $hexstr] < 8} { return {} }
+
+	if {[string length $hexstr] % 2} { append hexstr 0 }
+	set b {}
+	binary scan [binary format H* $hexstr] c* b
+	set nb [llength $b]
+	if {$nb < 2} { return {} }
+
+	# UTF-16LE "GA" form: G A 0 0, then wide six-bit chars from +6
+	if {	$nb >= 4
+			&& [lindex $b 0] == 0x47 && [lindex $b 1] == 0
+			&& [lindex $b 2] == 0x41 && [lindex $b 3] == 0} {
+		set codes {}
+		for {set i 6} {$i + 1 < $nb} {incr i 2} {
+			set lo [lindex $b $i]
+			set hi [lindex $b [expr {$i + 1}]]
+			if {$lo >= 0x3F && $lo <= 0x7E && $hi == 0} {
+				lappend codes $lo
+			} else {
+				break
+			}
+		}
+		return [sixbit-decode $codes]
+	}
+
+	# ASCII "GA:" form
+	if {[lindex $b 0] == 0x47 && [lindex $b 1] == 0x41} {
+		set begin 2
+		if {$nb >= 3 && [lindex $b 2] == 0x3A} { set begin 3 }
+		set codes {}
+		foreach lo [lrange $b $begin end] {
+			if {$lo >= 0x3F && $lo <= 0x7E} {
+				lappend codes $lo
+			} else {
+				break
+			}
+		}
+		return [sixbit-decode $codes]
+	}
+
+	# bare six-bit transport: payload bytes themselves
+	set codes {}
+	foreach lo $b {
+		if {$lo >= 0x3F && $lo <= 0x7E} {
+			lappend codes $lo
+		} else {
+			break
+		}
+	}
+	return [sixbit-decode $codes]
+}
+
+# ---------------------------------------------------------------------
+# decode one record (hex-byte list) into an event dict (unused by the
+# main flow — kept as a documented per-record helper)
+# ---------------------------------------------------------------------
+
+proc parseRecord {rec} {
+	if {[llength $rec] < 4} { return {} }
+	binary scan [binary format H* [join [lrange $rec 0 3] {}]] i opcode
+
+	set result [dict create opcode $opcode name [opcodeName $opcode]]
 
 	switch -- $opcode {
 		3 {
-			# GotoIndex: u32le at +4
-			set b [lrange $rec 4 7]
-			binary scan [binary format H* [join $b {}]] I idx
+			# GotoIndex: index at +4 (pad the trimmed tail with zeros)
+			set tail [join [lrange $rec 4 end] {}]
+			if {[string length $tail] > 8} { set tail [string range $tail 0 7] }
+			append tail [string repeat 0 [expr {max(0, 8 - [string length $tail])}]]
+			binary scan [binary format H* $tail] i idx
 			dict set result gotoIndex $idx
 		}
 		4 {
 			# board action: class u32le + 2 file-major squares + modifier u16le
-			binary scan [binary format H* [join [lrange $rec 4 11] {}]] ivccS class sq0 sq1 mod
-			dict set result class [format {%x} $class]
-			dict set result from [::media::decoder::sq0 $sq0]
-			dict set result to [::media::decoder::sq0 $sq1]
-			dict set result modifier $mod
+			if {[llength $rec] >= 12} {
+				binary scan [binary format H* [join [lrange $rec 4 11] {}]] iccs class s0 s1 mod
+				dict set result class [format %x $class]
+				dict set result from [sq0 $s0]
+				dict set result to [sq0 $s1]
+				dict set result modifier $mod
+			}
 		}
 	}
 	return $result
 }
 
-proc ::media::decoder::sq0 {v} {
-	if {$v >= 64} { return "???" }
-	return [string index "abcdefgh" [expr {$v >> 3}]] [expr {($v & 7) + 1}]
-}
-
 # ---------------------------------------------------------------------
-# main entry: decode the script stream from a .wmv file
+# main entry: decode the script stream from a media-lesson video.
+# Returns a list of entry dicts:
+#   {opcode name pkt ms type gotoIndex from to class modifier}
+# ms = packet pts (media milliseconds); type = navigate|board-action|
+# annotation|{}; pkt = packet index (diagnostics).
 # ---------------------------------------------------------------------
 
-proc ::media::decoder::decode {wmvPath} {
-	variable cache
-
-	# call ffprobe to extract stream 2 packets
-	set cmdline [list ffprobe -v error -select_streams 2 \
+proc decode {wmvPath} {
+	set cmdline [list ffprobe -v error -select_streams d \
 		-show_packets -show_data -of json [file normalize $wmvPath]]
-	if {[catch {set fh [open "|concat $cmdline" r]} err]} {
-		log "ffprobe failed: $err"
+	if {[catch { set fh [open [concat | $cmdline] r] } err]} {
+		log "ffprobe pipeline failed: $err"
 		return [list]
 	}
 	set json [read $fh]
-	close $fh
+	catch { ::close $fh }
 
-	# extract the "data" hex fields
-	set packets [list]
-	set pos 0
-	while 1 {
-		set idx [string first {\"data\": \"} $json $pos]
-		if {$idx < 0} break
-		set start [expr {$idx + 10}]
-		set end [string first \" $json $start]
-		if {$end < 0} break
-		set hexstr [string range $json $start [expr {$end - 1}]]
-		lappend packets $hexstr
-		set pos [expr {$end + 2}]
+	# ffprobe -of json emits one flat object per packet; pair each
+	# packet's data hex with its pts_time (media seconds)
+	set packets {}
+	foreach obj [regexp -all -inline {\{[^{}]*\}} $json] {
+		set data {}
+		regexp {"data":\s*"([^"]*)"} $obj -> data
+		if {![string length $data]} { continue }
+		set data [hexdump2hex $data]
+		set pt {}
+		regexp {"pts_time":\s*"?([0-9][0-9.eE+-]*)"?} $obj -> pt
+		set ms 0
+		if {[string length $pt] && ![catch { set ms [expr {int($pt*1000.0)}] }]} {
+			if {$ms < 0} { set ms 0 }
+		}
+		lappend packets [list $ms $data]
 	}
 
-	# decode each packet
-	set decoded [list]
-	set lastMs 0.0
+	set decoded {}
+	set lastMs 0
 	set pktIdx 0
-	foreach hex $packets {
-		set record [decodeCommand $hex]
-		if {[llength $record] < 4} { incr pktIdx ; continue }
+	foreach p $packets {
+		lassign $p ms datahex
+		if {$ms > 0} { set lastMs $ms } else { set ms $lastMs }
+		incr pktIdx
 
-		# extract the opcode and the timestamp
-		binary scan [binary format H* [join [lrange $record 0 3] {}]] I opcode
-		set kind [opcodeName $opcode]
-		set decodedEntry [list opcode $opcode name $kind pkt $pktIdx]
+		set record [decodeCommand $datahex]
+		if {[llength $record] < 4} { continue }
 
-		# per-opcode payload extraction
-		if {$opcode == 3} {
-			set b [lrange $record 4 7]
-			binary scan [binary format H* [join $b {}]] I gotoIdx
-			dict set decodedEntry gotoIndex [expr {$gotoIdx < 0x80000000 ? $gotoIdx : $gotoIdx - 4294967296}]
-			dict set decodedEntry type navigate
-		} elseif {$opcode == 4} {
-			binary scan [binary format H* [join [lrange $rec 4 11] {}]] "IccS" class sq0 sq1 mod
-			set rec2 [_trim $record]
-			binary scan [binary format H* [join [lrange $rec2 8 11] {}]] ccS from to modifier
-			dict set decodedEntry from [sq0 $from]
-			dict set decodedEntry to [sq0 $to]
-			dict set decodedEntry class [format {%x} $class]
-			dict set decodedEntry modifier $modifier
-			dict set decodedEntry type board-action
-		} elseif {$opcode == 6} {
-			# walk the annotation records
-			set cnt [lindex [lindex $rec 8] [lindex $rec 9]]
-			set rpos 10
-			set anns 0
-			for {set r 0} {$r < $count} {incr r} {
-				set lenBytes [lrange $record [expr {$rpos}] [expr {$rpos + 1}]]
-				if {[llength $lenBytes] < 2} break
-				binary scan [binary format H* [join $lenBytes {}]] S recLen
-				if {$recLen < 6 || $rpos + 2 + $recLen > [llength $record]} break
-				set typeBytes [lrange $record [expr {$rpos + 2}] [expr {$rpos + 5}]]
-				binary scan [binary format H* [join $typeBytes {}]] I recType
-				set payloadStart [expr {$rpos + 2 + 6}]
-				set payloadLen [expr {$recLen - 6}]
-				incr anns
-				set rpos [expr {$rpos + 2 + $recLen}]
+		binary scan [binary format H* [join [lrange $record 0 3] {}]] i opcode
+		set entry [dict create \
+			opcode $opcode \
+			name   [opcodeName $opcode] \
+			pkt    $pktIdx \
+			ms     $ms \
+		]
+
+		switch -- $opcode {
+			3 {
+				# navigate: absolute replay-step target at this media-ms
+				set tail [join [lrange $record 4 end] {}]
+				if {[string length $tail] > 8} { set tail [string range $tail 0 7] }
+				append tail [string repeat 0 [expr {max(0, 8 - [string length $tail])}]]
+				binary scan [binary format H* $tail] i gotoIdx
+				if {$gotoIdx < 0} { set gotoIdx [expr {$gotoIdx + 4294967296}] }
+				dict set entry gotoIndex $gotoIdx
+				dict set entry type navigate
 			}
-			if {$anns} {
-				dict set decodedEntry type annotation
-				dict set decodedEntry count $anns
+			4 {
+				# board action: class u32le + 2 file-major squares + modifier u16le
+				set rec2 [_trim $record]
+				if {[llength $rec2] >= 12} {
+					binary scan [binary format H* [join [lrange $rec2 4 11] {}]] iccs class from to mod
+					dict set entry from [sq0 $from]
+					dict set entry to [sq0 $to]
+					dict set entry class [format %x $class]
+					dict set entry modifier $mod
+					dict set entry type board-action
+				}
+			}
+			6 {
+				# annotation: count u16le at +8, sub-records from +10:
+				# u16 length + u32 type + payload
+				if {[llength $record] >= 10} {
+					binary scan [binary format H* [join [lrange $record 8 9] {}]] S cnt
+					set rpos 10
+					set anns 0
+					for {set r 0} {$r < $cnt && $rpos + 2 <= [llength $record]} {incr r} {
+						binary scan [binary format H* [join [lrange $record $rpos [expr {$rpos + 1}]] {}]] S recLen
+						if {$recLen < 6 || $rpos + 2 + $recLen > [llength $record]} { break }
+						incr anns
+						set rpos [expr {$rpos + 2 + $recLen}]
+					}
+					if {$anns} {
+						dict set entry type annotation
+						dict set entry count $anns
+					}
+				}
 			}
 		}
-		lappend decoded $decodedEntry
-		incr pktIdx
+		lappend decoded $entry
 	}
 	return $decoded
 }
 
-proc ::media::decoder::sq0 {v} {
-	if {$v >= 64} return "?"
-	return [string index "abcdefgh" [expr {$v >> 3}]] [expr {($v & 7) + 1}]
-}
+} ;# namespace eval ::media::decoder
+
+# vi:set ts=3 sw=3:

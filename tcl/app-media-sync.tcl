@@ -158,17 +158,31 @@ proc ::media::sync::onPlaybackStopped {} {
 }
 
 
-# Load/replace the optional per-move timeline: media→board timecodes
-# recovered from a ChessBase script stream (media-console/wmv2timeline.py
-# writes them one per line). One entry = the media ms at which the board
-# advances one navigation step, in replay order. An empty list falls back
-# to the linear ply mapping.
+# Load/replace the optional per-move timeline.  Two entry forms are
+# accepted:
+#
+#   {mediaMs goalPly} pairs — absolute replay targets: when the media
+#   time reaches mediaMs the board replays toward board position
+#   goalPly.  Produced by the lesson decoder (::media::lesson, script
+#   stream gotoIndex events) and by [BoardSync] sections.
+#
+#   bare integers — legacy per-ply timecodes (count model), one media-ms
+#   per line in replay order (e.g. media-console/wmv2timeline.py
+#   .plytimes sidecars): each elapsed mark advances the board one step.
+#
+# An empty list falls back to the linear ply mapping.
 proc ::media::sync::load-timeline {msList} {
 	variable State
 	set State(timeline) [list]
-	foreach ms $msList {
-		if {[string is integer -strict $ms]} {
-			lappend State(timeline) $ms
+	foreach mark $msList {
+		if {[llength $mark] >= 2} {
+			set ms [lindex $mark 0]
+			set goal [lindex $mark 1]
+			if {[string is integer -strict $ms] && [string is integer -strict $goal]} {
+				lappend State(timeline) [list $ms $goal]
+			}
+		} elseif {[string is integer -strict $mark]} {
+			lappend State(timeline) $mark
 		}
 	}
 	set State(tlidx) 0
@@ -217,7 +231,19 @@ proc ::media::sync::drive {timeMs durationMs} {
 	if {[llength $State(timeline)]} {
 		set goal 0
 		foreach mark $State(timeline) {
-			if {$mark <= $timeMs} { incr goal } else { break }
+			if {[llength $mark] >= 2} {
+				# absolute target: {mediaMs goalPly}
+				set markMs [lindex $mark 0]
+				if {$markMs <= $timeMs} {
+					set idx [lindex $mark 1]
+					if {$idx >= 0} { set goal $idx }
+				} else {
+					break
+				}
+			} else {
+				# legacy count model: bare media-ms marks
+				if {$mark <= $timeMs} { incr goal } else { break }
+			}
 		}
 		set goal [expr {min($goal, $len - 1)}]
 		if {$goal < $State(lastgoal)} {

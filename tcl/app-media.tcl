@@ -51,6 +51,7 @@ array set Priv {
 	vlc_available	0
 	inprocess	0
 	checkid		{}
+	mpv_active	0
 }
 
 } ;# namespace media
@@ -181,6 +182,7 @@ proc application::media::Update {position} {
 					set Priv(base) $Priv(lastBase)
 					set Priv(variant) $Priv(lastVariant)
 					set Priv(statusbar) "Media gallery - playable without a game"
+					PrebuildLessons
 					return
 				}
 			}
@@ -222,6 +224,7 @@ proc application::media::Update {position} {
 				$tree insert {} end -id item$n -values [list $typeLabel $title $path]
 				incr n
 			}
+			PrebuildLessons
 			return
 		}
 		set Priv(statusbar) $mc::NoMedia
@@ -247,6 +250,7 @@ proc application::media::Update {position} {
 		}
 	}
 
+	PrebuildLessons
 	set Priv(statusbar) {}
 }
 
@@ -284,6 +288,30 @@ proc application::media::PlaySelected {tree} {
 		set Priv(statusbar) "Cannot play '$title': media is stored inline (not yet extractable)."
 		return
 	}
+
+	set type [ClassifyFile $path]
+
+	# per-game media items carry no explicit index in their values; the
+	# owning game is then whichever game is currently on the board
+	if {![string is integer -strict $galleryIndex] || $galleryIndex < 0} {
+		set galleryIndex $Priv(index)
+	}
+
+	# Coupled lesson (video owned by a game): video + game play as ONE
+	# unit — neither without the other (PlayLesson).
+	if {$type == 3 && [string is integer -strict $galleryIndex] && $galleryIndex >= 0} {
+		Stop
+		if {$galleryIndex != $Priv(index)} {
+			::game::new .application -base $Priv(base) -variant $Priv(variant) -number $galleryIndex
+			# Update() installs the owning game's media/sync state.
+			# Queue playback only after that switch has completed.
+			after idle [namespace code [list PlayLesson $path $galleryIndex]]
+			return
+		}
+		PlayLesson $path $galleryIndex
+		return
+	}
+
 	if {[string is integer -strict $galleryIndex] && $galleryIndex >= 0
 		&& $galleryIndex != $Priv(index)} {
 		::game::new .application -base $Priv(base) -variant $Priv(variant) -number $galleryIndex
@@ -293,9 +321,7 @@ proc application::media::PlaySelected {tree} {
 		return
 	}
 
-	MediaDebug "PlaySelected: type=[list $typeLabel] path=[list $path] typeNum=[ClassifyFile $path]"
-
-	set type [ClassifyFile $path]
+	MediaDebug "PlaySelected: type=[list $typeLabel] path=[list $path] typeNum=$type"
 
 	Stop
 
@@ -314,7 +340,12 @@ proc application::media::PlaySelected {tree} {
 			set Priv(statusbar) [expr {$interactive
 				? "Interactive video for current position"
 				: "Video: [file tail [file dirname $video]]"}]
-			PlayMedia $video $startMs $endMs
+			# a position-matched clip is coupled to the current game
+			if {$interactive && [string is integer -strict $Priv(index)] && $Priv(index) >= 0} {
+				PlayLesson $video $Priv(index) $startMs $endMs
+			} else {
+				PlayMedia $video $startMs $endMs
+			}
 		} else {
 			MediaDebug "ResolveIndex: no video found for [list $path]"
 			set Priv(statusbar) "No video found next to [file tail $path]"
@@ -521,6 +552,25 @@ proc application::media::LoadDbInteractive {base} {
 # (<user-dir>/media/interactive.scm): hand-authored position-keyed video
 # entries that apply in every database — the scidb replacement for
 # hand-annotating media onto games.
+# Background prebuild: decode lesson timelines once, shortly after the
+# media tree is populated, so the first PlayLesson does not pay the
+# ffprobe cost.  In-memory cache ([BoardSync] persistence comes later).
+proc application::media::PrebuildLessons {} {
+	variable Priv
+
+	set n 0
+	foreach item [$Priv(tree) children {}] {
+		lassign [$Priv(tree) item $item -values] typeLabel title path galleryIndex
+		if {![string length $path] || ![file exists $path]} { continue }
+		if {[ClassifyFile $path] != 3} { continue }
+		after idle [namespace code [list catch [list ::media::lesson::get $path]]]
+		incr n
+		if {$n >= 8} break
+	}
+	if {$n} { MediaDebug "PrebuildLessons: scheduled $n lesson(s)" }
+}
+
+
 proc application::media::LoadUserInteractive {} {
 	variable Priv
 
@@ -665,6 +715,10 @@ proc application::media::ShowImage {path} {
 	variable Priv
 	variable mc
 
+	# plain media is not board-coupled: clear any stale lesson sync
+	::media::sync::load-timeline {}
+	::media::sync::load-events {}
+
 	set canvas $Priv(viewer).canvas
 
 	# Clear previous content
@@ -736,6 +790,61 @@ proc application::media::LoadVlc {} {
 }
 
 
+# Play a coupled media lesson — ONE unit of video commentary + game
+# moves.  Neither part is playable without the other: the owning game
+# must be on the board, the video must embed in-process (no external
+# fallback), and the sync timeline/events binding video and board load
+# together from the lesson cache (::media::lesson).
+proc application::media::PlayLesson {path gameIndex {startMs {}} {endMs {}}} {
+	variable Priv
+
+	if {![file exists $path]} {
+		MediaDebug "PlayLesson: video missing: [list $path]"
+		set Priv(statusbar) "Lesson video missing: [file tail $path]"
+		return 0
+	}
+
+	# strict coupling: the owning game must be loaded on the board
+	if {![string is integer -strict $gameIndex] || $gameIndex < 0} {
+		set Priv(statusbar) "Cannot play: this video is coupled to a game (none selected)."
+		MediaDebug "PlayLesson: no owning game for [file tail $path]"
+		return 0
+	}
+	if {$gameIndex != $Priv(index)} {
+		set Priv(statusbar) "Cannot play: load the owning game first."
+		MediaDebug "PlayLesson: game $gameIndex not loaded (current $Priv(index))"
+		return 0
+	}
+
+	# lesson: built once (script-stream decode), cached by ::media::lesson
+	set lesson [::media::lesson::get $path]
+	if {![dict get $lesson valid]} {
+		set Priv(statusbar) "Lesson not playable: [dict get $lesson reason]"
+		MediaDebug "PlayLesson: invalid lesson: [dict get $lesson reason]"
+		return 0
+	}
+	MediaDebug "PlayLesson: [llength [dict get $lesson timeline]] timeline marks, [llength [dict get $lesson events]] events"
+
+	# transport first: embedded playback only — a lesson never falls
+	# back to an external player (that would decouple video from board)
+	if {![PlayInProcess $path $startMs $endMs]} {
+		set Priv(statusbar) "Lesson requires embedded video playback (mpv/tkvlc)."
+		MediaDebug "PlayLesson: embedded playback failed for [file tail $path]"
+		::media::sync::load-timeline {}
+		::media::sync::load-events {}
+		return 0
+	}
+
+	# media is playing: sync state machine active (drives the board in
+	# follow mode; transport coupling reacts to board playback events).
+	::media::sync::load-timeline [dict get $lesson timeline]
+	::media::sync::load-events [dict get $lesson events]
+	::media::sync::onPlaybackStarted
+	StartFollowTick
+	return 1
+}
+
+
 proc application::media::PlayMedia {path {startMs {}} {endMs {}}} {
 	variable Priv
 	variable mc
@@ -745,6 +854,10 @@ proc application::media::PlayMedia {path {startMs {}} {endMs {}}} {
 		set Priv(statusbar) "File not found: $path"
 		return
 	}
+
+	# plain media is not board-coupled: clear any stale lesson sync
+	::media::sync::load-timeline {}
+	::media::sync::load-events {}
 
 	# Prefer the tkvlc backend (embedded, in-window playback via libVLC).
 	if {[LoadVlc]} {
@@ -798,13 +911,24 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	# Tier-2b: try mpv first (built-in codecs, no host codec install)
 	if {[llength [auto_execok mpv]]} {
 		MediaDebug "PlayInProcess: using mpv transport"
-		set rc [::application::media::mpv::launch $path $canvas $startMs]
+		set rc [::media::mpv::launch $path $wid $startMs]
 		if {$rc != 0} {
 			set Priv(inprocess) 1
 			set Priv(statusbar) "Playing: $path (mpv)"
 			set Priv(mpv_active) 1
-			::media::sync::onPlaybackStarted
-			StartFollowTick
+
+			# Interactive 'range' entries: mpv seeks via --start (handled in
+			# launch); schedule the stop-at-End timer like the tkvlc branch.
+			catch { after cancel $Priv(rangeid) }
+			set Priv(rangeid) {}
+			if {[string is double -strict $endMs] && $endMs > $startMs} {
+				set Priv(rangeid) [after [expr {int($endMs - ($startMs > 0 ? $startMs : 0))}] \
+					[namespace code { catch { Stop } }]]
+			}
+
+			# check shortly after that playback actually started
+			catch { after cancel $Priv(checkid) }
+			set Priv(checkid) [after 800 [namespace code [list CheckDecode $path]]]
 			return 1
 		}
 	}
@@ -851,35 +975,8 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	set Priv(statusbar) "Playing: $path"
 	MediaDebug "PlayInProcess: playback started for $path"
 
-	# media is playing: sync state machine active (drives the board in
-	# follow mode; transport coupling reacts to board playback events).
-	::media::sync::onPlaybackStarted
-# decode the script stream in-process (no sidecar files, no media mod)
-	set timeline [list]
-	set events [list]
-	if {[catch {
-		set decoded [::media::decoder::decode $path]
-		foreach entry $decoded {
-			set op [dict get $entry opcode]
-			set name [dict get $entry name]
-			if {$op == 3} {
-				set idx [dict get $entry gotoIndex]
-				if {$idx >= 0 && $idx < 1000} { lappend timeline $idx }
-			} elseif {[dict exists $entry type] && [dict get $entry type] eq "board-action"} {
-				set from [dict get $entry from]
-				set to [dict get $entry to]
-				set class [dict get $entry class]
-				set mod [dict get $entry modifier]
-				lappend events [list [lindex $entry pkt] arrow $class $from $to $mod]
-			}
-		}
-	} err]} {
-		MediaDebug "DecodeScriptStream: $err"
-	}
-	::media::sync::load-timeline $timeline
-	::media::sync::load-events $events
-	MediaDebug "DecodeScript: [llength $timeline] timeline, [llength $events] events for [file tail $path]"
-	StartFollowTick
+	# sync timeline/events are loaded by PlayLesson (lesson cache); plain
+	# media keeps an empty sync state (linear fallback in drive)
 
 	# Check shortly after that playback actually started (media decoded).
 	catch { after cancel $Priv(checkid) }
@@ -952,7 +1049,21 @@ proc application::media::LoadSyncSidecar {path} {
 proc application::media::CheckDecode {path} {
 	variable Priv
 
-	if {!$Priv(inprocess) || $Priv(vlc_handle) eq ""} { return }
+	if {!$Priv(inprocess)} { return }
+
+	# mpv transport: the process must still be alive shortly after launch
+	if {[info exists Priv(mpv_active)] && $Priv(mpv_active)} {
+		if {[::media::mpv::alive?]} {
+			MediaDebug "CheckDecode: mpv playing"
+		} else {
+			MediaDebug "CheckDecode: mpv died for [file tail $path]"
+			set Priv(statusbar) "Video playback failed."
+			Stop
+		}
+		return
+	}
+
+	if {$Priv(vlc_handle) eq ""} { return }
 
 	set handle $Priv(vlc_handle)
 
@@ -982,7 +1093,7 @@ proc application::media::CheckDecode {path} {
 proc application::media::DestroyVlcHandle {} {
 	variable Priv
 	catch {
-		if {$::application::media::mpv::Pid > 0} {
+		if {$::media::mpv::Pid > 0} {
 			::media::mpv::stop
 		}
 	}
@@ -1067,31 +1178,6 @@ proc application::media::SyncTransport {what} {
 				catch { $handle pause }
 			}
 		}
-	}
-}
-
-# Deferred script-stream decode: runs after the media starts
-# playing so the initial layout is displayed first.
-proc application::media::DeferredScriptDecode {path} {
-	MediaDebug "DeferredScriptDecode: $path"
-	catch {
-		set decoded [::media::decoder::decode $path]
-		set timeline [list]
-		set events [list]
-		foreach entry $decoded {
-			set op [dict get $entry opcode]
-			if {$op == 3} {
-				set idx [dict get $entry gotoIndex]
-				if {$idx >= 0 && $idx < 1000} { lappend timeline $idx }
-			} elseif {[dict exists $entry type] && [dict get $entry type] eq "board-action"} {
-				lappend events [list [lindex $entry pkt] arrow  [dict get $entry class]  [dict get $entry from]  [dict get $entry to]  [dict get $entry modifier]]
-			}
-		}
-		::media::sync::load-timeline $timeline
-		::media::sync::load-events $events
-		MediaDebug "DeferredDecode: [llength $timeline] timeline, [llength $events] events"
-	} err {
-		MediaDebug "DeferredDecode: $err"
 	}
 }
 
