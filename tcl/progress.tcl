@@ -79,16 +79,20 @@ proc DoCmd {cmd parent {value 0}} {
 
 	switch $cmd {
 		open {
-			if {![winfo exists $parent.progressbar]} {
+			if {![winfo exists .progress]} {
 				lappend Priv(options) -variable [namespace current]::Priv(value)
 				lappend Priv(options) -maximum $value
 				lappend Priv(options) -close no
 				lappend Priv(options) -parent $parent
 				lappend Priv(options) -title $mc::Progress
-				::dialog::progressbar::open $parent.progressbar {*}$Priv(options)
-				focus -force .progress
-				ttk::grabWindow .progress
-				::widget::busyCursor .progress
+				::dialog::progressbar::open .progress {*}$Priv(options)
+				if {[winfo exists .progress]} {
+					# Under x11 the dialog may be deleted during tkwait visibility
+					# (see dialogs/progressbar.tcl), so don't fail on a dead path.
+					focus -force .progress
+					ttk::grabWindow .progress
+					::widget::busyCursor .progress
+				}
 				::log::delay
 			}
 		}
