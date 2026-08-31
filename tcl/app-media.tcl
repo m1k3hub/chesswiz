@@ -1070,6 +1070,31 @@ proc application::media::SyncTransport {what} {
 	}
 }
 
+# Deferred script-stream decode: runs after the media starts
+# playing so the initial layout is displayed first.
+proc application::media::DeferredScriptDecode {path} {
+	MediaDebug "DeferredScriptDecode: $path"
+	catch {
+		set decoded [::media::decoder::decode $path]
+		set timeline [list]
+		set events [list]
+		foreach entry $decoded {
+			set op [dict get $entry opcode]
+			if {$op == 3} {
+				set idx [dict get $entry gotoIndex]
+				if {$idx >= 0 && $idx < 1000} { lappend timeline $idx }
+			} elseif {[dict exists $entry type] && [dict get $entry type] eq "board-action"} {
+				lappend events [list [lindex $entry pkt] arrow  [dict get $entry class]  [dict get $entry from]  [dict get $entry to]  [dict get $entry modifier]]
+			}
+		}
+		::media::sync::load-timeline $timeline
+		::media::sync::load-events $events
+		MediaDebug "DeferredDecode: [llength $timeline] timeline, [llength $events] events"
+	} err {
+		MediaDebug "DeferredDecode: $err"
+	}
+}
+
 # Board annotation delegate: receives decoded script events from
 # ::media::sync (arrows/marks render future, comments go to the status
 # bar).  The kind and data arguments come from ::media::sync::load-events.
@@ -1328,3 +1353,4 @@ proc application::media::closed {frame} {
 }
 
 # vi:set ts=3 sw=3:
+
