@@ -111,6 +111,11 @@ all: check-mtime cbh2si4 cdb2sci $(TK_PROGRAM) $(TCL_PROGRAM)
 # 'make -C app' simultaneously, causing 'ar: app_application.o: No such
 # file or directory'.  The order-only prerequisite (|) forces recursive to
 # complete first without causing spurious rebuilds.
+# The same guard is attached to every FORCE'd sub-library rule below:
+# under -j the link prerequisites re-enter the sub-make for a directory
+# while 'recursive' is still building the same directory, so two 'ar'
+# processes race on one archive (observed: 'ar: libTkText.a: file format
+# not recognized' and a zero-byte tkTextBTree.o member).
 $(TK_PROGRAM) $(TCL_PROGRAM) cbh2si4 cdb2sci: | recursive
 tkscidb-only: $(TK_PROGRAM)
 verify-maintenance: recursive verify_maintenance
@@ -241,67 +246,67 @@ recursive:
 		if [ $$? != 0 ]; then exit 1; fi; \
 	done
 
-mstl/libmstl.a: FORCE
+mstl/libmstl.a: FORCE | recursive
 	$(MAKE) -C mstl
 
-sys/libsys.a: FORCE
+sys/libsys.a: FORCE | recursive
 	$(MAKE) -C sys
 
-util/libutil.a: FORCE
+util/libutil.a: FORCE | recursive
 	$(MAKE) -C util
 
-util/minizip/libminizip.a: FORCE
+util/minizip/libminizip.a: FORCE | recursive
 	$(MAKE) -C util/minizip
 
-util/zzip/libzzip.a: FORCE
+util/zzip/libzzip.a: FORCE | recursive
 	$(MAKE) -C util/zzip
 
-util/libharu/libharu.a: FORCE
+util/libharu/libharu.a: FORCE | recursive
 	$(MAKE) -C util/libharu
 
-util/libTeXt/libTeXt.a: FORCE
+util/libTeXt/libTeXt.a: FORCE | recursive
 	$(MAKE) -C util/libTeXt
 
-util/universalchardet/libchardet.a: FORCE
+util/universalchardet/libchardet.a: FORCE | recursive
 	$(MAKE) -C util/universalchardet
 
-util/libhyphenate/libhyphenate.a: FORCE
+util/libhyphenate/libhyphenate.a: FORCE | recursive
 	$(MAKE) -C util/libhyphenate
 
-tcl/libtcl.a: FORCE
+tcl/libtcl.a: FORCE | recursive
 	$(MAKE) -C tcl
 
-tk/libtk.a: FORCE
+tk/libtk.a: FORCE | recursive
 	$(MAKE) -C tk
 
-tk/jpeg/libjpegd.a: FORCE
+tk/jpeg/libjpegd.a: FORCE | recursive
 	$(MAKE) -C tk/jpeg
 
-tk/svg/libsvg.a: FORCE
+tk/svg/libsvg.a: FORCE | recursive
 	$(MAKE) -C tk/svg
 
-tk/svg/agg/libagg.a: FORCE
+tk/svg/agg/libagg.a: FORCE | recursive
 	$(MAKE) -C tk/svg/agg
 
-tk/treectrl/libtreectrl.a: FORCE
+tk/treectrl/libtreectrl.a: FORCE | recursive
 	$(MAKE) -C tk/treectrl
 
-tk/html/libTkhtml3.a: FORCE
+tk/html/libTkhtml3.a: FORCE | recursive
 	$(MAKE) -C tk/html
 
-tk/tkdnd/libtkDnd.a: FORCE
+tk/tkdnd/libtkDnd.a: FORCE | recursive
 	$(MAKE) -C tk/tkdnd
 
-tk/text/libTkText.a: FORCE
+tk/text/libTkText.a: FORCE | recursive
 	$(MAKE) -C tk/text
 
-app/libapp.a: FORCE
+app/libapp.a: FORCE | recursive
 	$(MAKE) -C app
 
-db/libdb.a: FORCE
+db/libdb.a: FORCE | recursive
 	$(MAKE) -C db
 
-db/libdbstubs.a: FORCE
+db/libdbstubs.a: FORCE | recursive
 	$(MAKE) -C db libdbstubs.a
 
 #permute_eco: permute_eco.o $(LIBS)
