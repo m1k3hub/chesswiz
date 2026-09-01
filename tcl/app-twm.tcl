@@ -148,11 +148,14 @@ proc load {twm} {
 	LoadOptionFile $layoutVariant
 	set layout $Options($id:layout:list:$layoutVariant)
 
-	# Migrate saved board layouts that predate the gamemedia (Media) pane.
-	# If the saved layout doesn't contain gamemedia, fall back to the default
-	# BoardLayout (which includes it) so the Media tab appears. The user can
-	# then re-customize their layout with the Media pane included.
-	if {$id eq "board" && [string length $layout] > 0 && ![string match {*gamemedia*} $layout]} {
+	# Migrate saved board layouts that predate the gamemedia (Media) pane
+	# — or lost it: closing the Media tab and saving leaves the pane in
+	# the TWM snapshot metadata ({m editor games gamemedia}) while its
+	# 'frame gamemedia' element is gone from the built layout. Key the
+	# migration on the frame element, not on any mention of the token,
+	# and fall back to the default BoardLayout (which includes it).
+	if {$id eq "board" && [string length $layout] > 0
+		&& [string first {frame gamemedia} $layout] < 0} {
 		set layout {}
 		set Options($id:layout:list:$layoutVariant) {}
 	}

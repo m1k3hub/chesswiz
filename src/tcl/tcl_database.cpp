@@ -51,6 +51,7 @@
 #include "scm/scm_media.h"
 #include "cbh/cbh_media.h"
 #include "tcl_media_extract.h"
+#include "html/html_cb_adapter.h"
 #include "db_maintenance.h"
 #include "db_multi_base.h"
 #include "db_game_info.h"
@@ -129,6 +130,7 @@ static char const* CmdFindDuplicates	= "::scidb::db::findDuplicates";
 static char const* CmdEcoStats			= "::scidb::db::ecoStats";
 static char const* CmdMediaFiles		= "::scidb::db::mediaFiles";
 static char const* CmdMediaGallery	= "::scidb::db::mediaGallery";
+static char const* CmdGuidingText	= "::scidb::db::guidingText";
 static char const* CmdMarkDeleted		= "::scidb::db::markDeleted";
 
 
@@ -5124,6 +5126,219 @@ cmdMediaFiles(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 }
 
 
+// ----------------------------------------------------------------------
+// PathResolver over the ChessBase release media folders (the database's
+// own "<DB>.html" folder first, then the release's shared media folders;
+// see tcl_media_resolve.h). Backslash separators are normalized here so
+// the core stays filesystem-shaped.
+// ----------------------------------------------------------------------
+namespace {
+
+struct ReleaseMediaResolver : public html::PathResolver
+{
+	explicit ReleaseMediaResolver(mstl::string const& database) :m_database(database) {}
+
+	bool resolve(mstl::string const& file, mstl::string& out) override
+	{
+		mstl::string normalized(file);
+
+		for (unsigned i = 0; i < normalized.size(); ++i)
+		{
+			if (normalized[i] == '\\')
+				normalized[i] = '/';
+		}
+
+		mstl::string candidate(tcl_media::resolveGuidingTextPath(m_database, normalized));
+
+		// resolveMediaFilename returns the primary candidate even when the
+		// file is absent; an absent candidate means "unresolved"
+		if (candidate.empty() || !tcl_media::mediaFileExists(candidate))
+			return false;
+
+		out = candidate;
+		return true;
+	}
+
+private:
+
+	mstl::string	m_database;
+};
+
+
+char const*
+refStatusName(html::RefStatus status)
+{
+	switch (status)
+	{
+		case html::Ref_Kept:			return "kept";
+		case html::Ref_Rewritten:	return "resolved";
+		case html::Ref_Dropped:		return "dropped";
+		case html::Ref_Unresolved:	return "unresolved";
+		case html::Ref_External:	return "external";
+		case html::Ref_ScidbGame:	return "game";
+		case html::Ref_ScidbMedia:	return "media";
+	}
+
+	return "kept";
+}
+
+} // anonymous namespace
+
+
+static void
+appendEmptyGuidingResult(Tcl_Interp* ti, Tcl_Obj* result, int isGuiding)
+{
+	Tcl_Obj* empty = Tcl_NewListObj(0, nullptr);
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("html", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("", 0));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("title", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("", 0));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("isGuiding", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewIntObj(isGuiding));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("media", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(0, nullptr));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("anchors", -1));
+	Tcl_ListObjAppendElement(ti, result, empty);
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("warnings", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(0, nullptr));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("unresolved", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewIntObj(0));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("converted", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewIntObj(0));
+}
+
+
+static int
+cmdGuidingText(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::db::guidingText <database> <variant> <gameIndex>
+	//
+	// Returns the guiding-text body of the record at <gameIndex> as a
+	// dict (flat key/value list):
+	//   html       — sanitized UTF-8 fragment (the scidb HTML profile;
+	//                ChessBase constructs rewritten: CBLink(tag_game,..) ->
+	//                scidb-game: anchors, CBLink(tag_stream|audio,..) ->
+	//                scidb-media: links, <IMG src> resolved to filesystem
+	//                paths). Empty for non-guiding-text records.
+	//   title      — <title> content (may be empty)
+	//   isGuiding  — 1 if the record is a guiding-text entry
+	//   media      — list of {path type status} rows (status: kept /
+	//                resolved / dropped / unresolved / external / media)
+	//   anchors    — list of CBLink argument strings (game anchors, in
+	//                document order)
+	//   warnings   — non-fatal diagnostics from the sanitizer
+	//   unresolved — count of unresolved media references
+	//   converted  — 1 if the body needed transcoding to UTF-8
+	if (objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <gameIndex>");
+		return TCL_ERROR;
+	}
+
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant		= tcl::game::variantFromObj(objc, objv, 2);
+	int				gameIndex	= 0;
+
+	if (Tcl_GetIntFromObj(ti, objv[3], &gameIndex) != TCL_OK || gameIndex < 0)
+	{
+		Tcl_SetResult(ti, "expected a non-negative game index", TCL_STATIC);
+		return TCL_ERROR;
+	}
+
+	Cursor const&	cursor	= Scidb->cursor(database, variant);
+	Database const&	db		= cursor.database();
+
+	Tcl_Obj* result = Tcl_NewListObj(0, nullptr);
+
+	if (unsigned(gameIndex) >= db.countGames() || !db.gameInfo(unsigned(gameIndex)).isGuidingText())
+	{
+		appendEmptyGuidingResult(ti, result, 0);
+		Tcl_SetObjResult(ti, result);
+		return TCL_OK;
+	}
+
+	Database& mdb = const_cast<Cursor&>(cursor).getDatabase();
+	Game game;
+
+	if (mdb.loadGame(unsigned(gameIndex), game) != load::Ok)
+	{
+		Tcl_SetResult(ti, "cannot load the guiding-text record", TCL_STATIC);
+		return TCL_ERROR;
+	}
+
+	mstl::string const& raw = game.data().m_guidingText;
+
+	if (raw.empty())
+	{
+		appendEmptyGuidingResult(ti, result, 1);
+		Tcl_SetObjResult(ti, result);
+		return TCL_OK;
+	}
+
+	// 1. ChessBase pre-pass: CBLink(...) -> scidb-game:/scidb-media: URIs
+	ReleaseMediaResolver resolver(database);
+	mstl::string preprocessed;
+	unsigned rewritten = 0;
+	unsigned unresolved = 0;
+
+	html::cbPreprocess(raw, resolver, preprocessed, rewritten, unresolved);
+
+	// 2. sanitize into the scidb HTML profile
+	html::ChessBaseRewriter rewriter(resolver);
+	html::Report report;
+	html::sanitize(preprocessed, rewriter, report);
+
+	// 3. report rows
+	Tcl_Obj* mediaRows = Tcl_NewListObj(0, nullptr);
+
+	for (unsigned i = 0; i < report.media.size(); ++i)
+	{
+		Tcl_Obj* row[3];
+		row[0] = Tcl_NewStringObj(report.media[i].resolved.c_str(), int(report.media[i].resolved.size()));
+		row[1] = Tcl_NewIntObj(report.media[i].type);
+		row[2] = Tcl_NewStringObj(refStatusName(report.media[i].status), -1);
+		Tcl_ListObjAppendElement(ti, mediaRows, Tcl_NewListObj(3, row));
+	}
+
+	Tcl_Obj* anchorRows = Tcl_NewListObj(0, nullptr);
+
+	for (unsigned i = 0; i < report.anchors.size(); ++i)
+	{
+		Tcl_Obj* row[1];
+		row[0] = Tcl_NewStringObj(report.anchors[i].args.c_str(), int(report.anchors[i].args.size()));
+		Tcl_ListObjAppendElement(ti, anchorRows, Tcl_NewListObj(1, row));
+	}
+
+	Tcl_Obj* warningRows = Tcl_NewListObj(0, nullptr);
+
+	for (unsigned i = 0; i < report.warnings.size(); ++i)
+	{
+		Tcl_ListObjAppendElement(ti, warningRows,
+			Tcl_NewStringObj(report.warnings[i].c_str(), int(report.warnings[i].size())));
+	}
+
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("html", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj(report.html.c_str(), int(report.html.size())));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("title", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj(report.title.c_str(), int(report.title.size())));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("isGuiding", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewIntObj(1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("media", -1));
+	Tcl_ListObjAppendElement(ti, result, mediaRows);
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("anchors", -1));
+	Tcl_ListObjAppendElement(ti, result, anchorRows);
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("warnings", -1));
+	Tcl_ListObjAppendElement(ti, result, warningRows);
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("unresolved", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewIntObj(int(unresolved)));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("converted", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewIntObj(report.wasConverted ? 1 : 0));
+
+	Tcl_SetObjResult(ti, result);
+	return TCL_OK;
+}
+
+
 static int
 cmdMediaGallery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
@@ -5307,6 +5522,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdEcoStats,			cmdEcoStats);
 	createCommand(ti, CmdMediaFiles,		cmdMediaFiles);
 	createCommand(ti, CmdMediaGallery,	cmdMediaGallery);
+	createCommand(ti, CmdGuidingText,	cmdGuidingText);
 	createCommand(ti, CmdMarkDeleted,		cmdMarkDeleted);
 }
 
