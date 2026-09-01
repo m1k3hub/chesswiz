@@ -281,8 +281,11 @@ cbPreprocess(	mstl::string const& raw,
 			break;
 		}
 
-		// href="javascript:CBLink(...)" wrapper? hit-11 is the 'j'.
+		// href value wrappers around CBLink(...):
+		//   href="javascript:CBLink(...)"   (hit-11 is the 'j')
+		//   href="[CBLink(...)]"            (ChessBase bracket form)
 		bool			inHrefJs	= false;
+		bool			inHrefBr	= false;
 		char			quote		= '"';
 		char const*	openQ		= 0;
 
@@ -292,6 +295,13 @@ cbPreprocess(	mstl::string const& raw,
 			inHrefJs = true;
 			openQ = hit - 12;
 			quote = hit[-12];
+		}
+		else if (hit - base >= 13 && hit[-1] == '['
+			&& ::strncasecmp(hit - 12, "href=", 5) == 0)
+		{
+			inHrefBr = true;
+			openQ = hit - 11;	// the '['
+			quote = '"';
 		}
 
 		CbLink link;
@@ -306,10 +316,10 @@ cbPreprocess(	mstl::string const& raw,
 
 		char const* after = hit + link.endPos;
 
-		// emit everything before the construct; inside a javascript: href
-		// value, emit up to AND INCLUDING the opening quote (the URI is
-		// replaced from there)
-		if (inHrefJs)
+		// emit everything before the construct; inside an href value
+		// (javascript: or bracket form) emit up to AND INCLUDING the
+		// opening quote (the URI is replaced from there)
+		if (inHrefJs || inHrefBr)
 			out.append(p, unsigned(openQ - p) + 1);
 		else
 			out.append(p, unsigned(hit - p));
@@ -325,7 +335,7 @@ cbPreprocess(	mstl::string const& raw,
 				args.append(link.args[i]);
 			}
 
-			if (inHrefJs)
+			if (inHrefJs || inHrefBr)
 			{
 				out.append("scidb-game:");
 				cbAppendAttrValue(out, args);
@@ -351,6 +361,23 @@ cbPreprocess(	mstl::string const& raw,
 				++rewritten;
 				p = labelEnd;
 			}
+		}
+		else if (link.kind == "tag_extertext"
+		|| link.kind == "tag_extern gamelist")
+		{
+			// cross-database links: the file argument names another
+			// database of the release; rewrite to scidb-open: and let
+			// the viewer report it as not-followed (classified, not silent)
+			if (!link.args.empty())
+			{
+				out.append("<a href=\"scidb-open:");
+				cbAppendAttrValue(out, link.args[0]);
+				out.append("\">");
+				cbAppendAttrValue(out, cbBasename(link.args[0]));
+				out.append("</a>");
+				++rewritten;
+			}
+			p = after;
 		}
 		else if (   link.kind == "tag_stream" || link.kind == "tag_video"
 				 || link.kind == "tag_audio" || link.kind == "tag_picture")
@@ -398,7 +425,7 @@ cbPreprocess(	mstl::string const& raw,
 			p = after;
 		}
 
-		if (inHrefJs)
+		if (inHrefJs || inHrefBr)
 		{
 			// swallow through the closing quote of the old href value
 			char const* q = p;
@@ -410,6 +437,9 @@ cbPreprocess(	mstl::string const& raw,
 			{
 				out.push_back(quote);
 				p = q + 1;
+				// the bracket form leaves the closing ']' behind
+				if (inHrefBr && p < end && *p == ']')
+				++p;
 			}
 			else
 			{

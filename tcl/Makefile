@@ -144,6 +144,7 @@ SOURCES = \
 	app-media-decode.tcl \
 	app-media-lesson.tcl \
 	app-media.tcl \
+	app-report.tcl \
 	iccf-xfcc.tcl \
 	app-db-players.tcl \
 	app-db-events.tcl \

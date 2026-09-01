@@ -32,6 +32,7 @@ set Stop				"Stop"
 set OpenError		"Cannot open media file: %s"
 set NoPlayer			"No media player found (tkvlc or xdg-open)"
 set SyncBoard		"Sync with board"
+set ViewReport		"View report"
 set FollowBoard	"Board follows video"
 
 } ;# namespace mc
@@ -86,8 +87,10 @@ proc application::media::build {twm frame width height} {
 	ttk::frame $ctrl
 	ttk::button $ctrl.play -text $mc::Play -command [namespace code [list PlaySelected $tree]]
 	ttk::button $ctrl.stop -text $mc::Stop -command [namespace code Stop]
+	ttk::button $ctrl.report -text $mc::ViewReport -command [namespace code ViewReport]
 	pack $ctrl.play -side left -padx 2
 	pack $ctrl.stop -side left -padx 2
+	pack $ctrl.report -side left -padx 2
 
 	# Board-sync wiring (state machine in tcl/app-media-sync.tcl).
 	# The coupling is inherent: no options, always bidirectional.
@@ -262,6 +265,23 @@ proc application::media::SelectionChanged {tree} {
 	set values [$tree item [lindex $sel 0] -values]
 	if {[llength $values] >= 3} {
 		set Priv(statusbar) [lindex $values 2]
+	}
+}
+
+
+# View the guiding-text report of the currently loaded game (if it is
+# one); the viewer itself reports "not a report entry" otherwise.
+proc application::media::ViewReport {} {
+	variable Priv
+
+	if {![string length $Priv(base)]
+		|| ![string is integer -strict $Priv(index)]
+		|| $Priv(index) < 0} {
+		return
+	}
+
+	catch {
+		::application::report::show $Priv(base) $Priv(variant) $Priv(index)
 	}
 }
 

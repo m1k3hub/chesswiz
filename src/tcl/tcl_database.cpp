@@ -131,6 +131,7 @@ static char const* CmdEcoStats			= "::scidb::db::ecoStats";
 static char const* CmdMediaFiles		= "::scidb::db::mediaFiles";
 static char const* CmdMediaGallery	= "::scidb::db::mediaGallery";
 static char const* CmdGuidingText	= "::scidb::db::guidingText";
+static char const* CmdGameAnchor	= "::scidb::db::gameAnchor";
 static char const* CmdMarkDeleted		= "::scidb::db::markDeleted";
 
 
@@ -5148,6 +5149,27 @@ struct ReleaseMediaResolver : public html::PathResolver
 				normalized[i] = '/';
 		}
 
+		// ChessBase writes IMG src values relative to the DATABASE's
+		// directory ("168Strategy.html/cblogo.gif"), which already
+		// contains the media folder prefix. Resolve such references
+		// against the base directory first, then fall back to the
+		// multi-folder release lookup (bare filenames).
+		mstl::string::size_type htmlSlash = normalized.find(".html/");
+
+		if (htmlSlash != mstl::string::npos)
+		{
+			mstl::string::size_type slash = m_database.rfind('/');
+			mstl::string dir = (slash == mstl::string::npos)
+			? mstl::string() : mstl::string(m_database, 0, slash + 1);
+			mstl::string candidate(dir + normalized);
+
+			if (tcl_media::mediaFileExists(candidate))
+			{
+				out = candidate;
+				return true;
+			}
+		}
+
 		mstl::string candidate(tcl_media::resolveGuidingTextPath(m_database, normalized));
 
 		// resolveMediaFilename returns the primary candidate even when the
@@ -5205,6 +5227,174 @@ appendEmptyGuidingResult(Tcl_Interp* ti, Tcl_Obj* result, int isGuiding)
 	Tcl_ListObjAppendElement(ti, result, Tcl_NewIntObj(0));
 	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("converted", -1));
 	Tcl_ListObjAppendElement(ti, result, Tcl_NewIntObj(0));
+}
+
+
+// ----------------------------------------------------------------------
+// ::scidb::db::gameAnchor <database> <variant> <anchor-args>
+//
+// Resolves a scidb-game: URI payload (the CBLink(tag_game,...) argument
+// list: "WhiteLast,WhiteFirst,BlackLast,BlackFirst,Event,Site,Year,
+// Round,[Extra...]") to the index of the first game (record order)
+// linked by that anchor in the database's guiding-text reports.
+// Returns -1 when nothing matches.
+//
+// The matching mirrors buildMediaLinkCache's rules: case/alnum-folded
+// lastname keys for both players, event substring, year/round equality
+// (0 = don't care). Commas inside event/site names shift the parsed
+// fields — the identical shift happens on both sides (blocks are parsed
+// from the same syntax), so the match still holds.
+// ----------------------------------------------------------------------
+static int
+cmdGameAnchor(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <anchor-args>");
+		return TCL_ERROR;
+	}
+
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant		= tcl::game::variantFromObj(objc, objv, 2);
+	int				len			= 0;
+	Tcl_Obj* const*	fields		= nullptr;
+
+	if (Tcl_ListObjGetElements(ti, objv[3], &len, const_cast<Tcl_Obj***>(&fields)) != TCL_OK)
+	{
+		Tcl_SetResult(ti, "expected the anchor arguments as a list", TCL_STATIC);
+		return TCL_ERROR;
+	}
+
+	// minimum: 4 name fields (white last/first, black last/first)
+	if (len < 4)
+	{
+		Tcl_SetObjResult(ti, Tcl_NewIntObj(-1));
+		return TCL_OK;
+	}
+
+	// fold the anchor's name fields
+	mstl::string anchorWhite, anchorBlack;
+
+	mediaLinkLastName(mstl::string(Tcl_GetString(fields[0])), anchorWhite);
+	mediaLinkLastName(mstl::string(Tcl_GetString(fields[2])), anchorBlack);
+
+	// optional year/round at the documented positions (6, 7)
+	unsigned anchorYear	= 0;
+	unsigned anchorRound	= 0;
+
+	if (len >= 8)
+	{
+		char const* y = Tcl_GetString(fields[6]);
+		char const* r = Tcl_GetString(fields[7]);
+		anchorYear	= tcl_media::parseDigits(y, y + ::strlen(y));
+		anchorRound	= tcl_media::parseDigits(r, r + ::strlen(r));
+	}
+
+	Cursor const&	cursor	= Scidb->cursor(database, variant);
+	Database const&	db		= cursor.database();
+
+	// 1. parse every guiding-text report into per-game blocks
+	mstl::vector<tcl_media::GuidingTextGameBlock> blocks;
+
+	for (unsigned i = 0; i < db.countGames(); ++i)
+	{
+		if (!db.gameInfo(i).isGuidingText())
+			continue;
+
+		Database& mdb = const_cast<Cursor&>(cursor).getDatabase();
+		Game game;
+
+		if (mdb.loadGame(i, game) != load::Ok)
+			continue;
+
+		mstl::string const& html = game.data().m_guidingText;
+
+		if (html.empty())
+			continue;
+
+		tcl_media::extractGuidingTextGameBlocks(html, blocks);
+	}
+
+	if (blocks.empty())
+	{
+		Tcl_SetObjResult(ti, Tcl_NewIntObj(-1));
+		return TCL_OK;
+	}
+
+	// 2. find the block matching the anchor
+	int matchedBlock = -1;
+
+	for (unsigned b = 0; b < blocks.size(); ++b)
+	{
+		mstl::string blockWhite, blockBlack;
+
+		mediaLinkKey(blocks[b].white, blockWhite);
+		mediaLinkKey(blocks[b].black, blockBlack);
+
+		if (blockWhite != anchorWhite || blockBlack != anchorBlack)
+			continue;
+
+		if (anchorYear && blocks[b].year != 0 && blocks[b].year != anchorYear)
+			continue;
+
+		if (anchorRound && blocks[b].round != 0 && blocks[b].round != anchorRound)
+			continue;
+
+		matchedBlock = int(b);
+		break;
+	}
+
+	if (matchedBlock < 0)
+	{
+		Tcl_SetObjResult(ti, Tcl_NewIntObj(-1));
+		return TCL_OK;
+	}
+
+	tcl_media::GuidingTextGameBlock const& block = blocks[matchedBlock];
+
+	// 3. first game (record order) matching the block's headers
+	mstl::string blockWhite, blockBlack, blockEvent, whiteKey, blackKey, eventKey;
+
+	mediaLinkKey(block.white, blockWhite);
+	mediaLinkKey(block.black, blockBlack);
+	mediaLinkKey(block.event, blockEvent);
+
+	for (unsigned i = 0; i < db.countGames(); ++i)
+	{
+		GameInfo const& info = db.gameInfo(i);
+
+		if (info.isGuidingText())
+			continue;
+
+		mediaLinkLastName(info.playerName(color::White), whiteKey);
+		mediaLinkLastName(info.playerName(color::Black), blackKey);
+
+		if (whiteKey.empty() || blackKey.empty())
+			continue;
+
+		if (blockWhite != whiteKey || blockBlack != blackKey)
+			continue;
+
+		if (block.year != 0 && block.year != info.date().year())
+			continue;
+
+		if (block.round != 0 && block.round != info.round())
+			continue;
+
+		if (!blockEvent.empty())
+		{
+			mediaLinkKey(info.event(), eventKey);
+
+			if (eventKey.find(blockEvent) == mstl::string::npos)
+				continue;
+		}
+
+		Tcl_SetObjResult(ti, Tcl_NewIntObj(int(i)));
+		return TCL_OK;
+	}
+
+	Tcl_SetObjResult(ti, Tcl_NewIntObj(-1));
+	return TCL_OK;
 }
 
 
@@ -5523,6 +5713,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdMediaFiles,		cmdMediaFiles);
 	createCommand(ti, CmdMediaGallery,	cmdMediaGallery);
 	createCommand(ti, CmdGuidingText,	cmdGuidingText);
+	createCommand(ti, CmdGameAnchor,		cmdGameAnchor);
 	createCommand(ti, CmdMarkDeleted,		cmdMarkDeleted);
 }
 
