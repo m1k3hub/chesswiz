@@ -80,6 +80,7 @@ static char const* CmdMap				= "::scidb::view::map";
 static char const* CmdNew				= "::scidb::view::new";
 static char const* CmdOpen				= "::scidb::view::open?";
 static char const* CmdPrint			= "::scidb::view::print";
+static char const* CmdPrintHtml	= "::scidb::view::printHtml";
 static char const* CmdSearch			= "::scidb::view::search";
 static char const* CmdSetTreeFilter	= "::scidb::view::setTreeFilter";
 static char const* CmdStrip			= "::scidb::view::strip";
@@ -716,6 +717,57 @@ cmdExport(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 
 static int
+cmdPrintHtml(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::view::printHtml <database> <variant> <view> <file>
+	//                                   <flags> <progress-cmd> <progress-arg>
+	//                                   <log-cmd> <log-arg>
+	//
+	// Publishes the games of the view as a standalone HTML file (UTF-8,
+	// embedded CSS, inline-SVG diagrams). The write path of scidb's
+	// native HTML support — independent of the TeXt print pipeline.
+	// Returns the number of exported games.
+	if (objc != 11)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv,
+			"<database> <variant> <view> <file> <flags> <languages> <progress-cmd> <progress-arg> <log-cmd> <log-arg>");
+		return TCL_ERROR;
+	}
+
+	char const*			database	= stringFromObj(objc, objv, 1);
+	variant::Type		variant		= tcl::game::variantFromObj(objc, objv, 2);
+	unsigned				view			= unsignedFromObj(objc, objv, 3);
+	char const*			filename	= stringFromObj(objc, objv, 4);
+	unsigned				flags		= unsignedFromObj(objc, objv, 5);
+
+	Tcl_Obj**				objs;
+	View::Languages	languages;
+	int					significant;
+
+	significant = view::makeLangList(ti, CmdPrintHtml, objv[6], languages);
+
+	if (significant == -1)
+		return TCL_ERROR;
+
+	Progress				progress(objv[7], objv[8]);
+	tcl::Log				log(objv[9], objv[10]);
+	Cursor&				cursor(scidb->cursor(database, variant));
+	View&					v(cursor.view(view));
+
+	setResult(v.printHtml(	filename,
+									format::Html,
+									flags,
+									significant == 0 ? nullptr : &languages,
+									unsigned(significant),
+									nullptr, // illegal moves are not rejected on export
+									log,
+									progress));
+
+	return TCL_OK;
+}
+
+
+static int
 cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	struct Log : public TeXt::Controller::Log
@@ -1031,6 +1083,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdNew,				cmdNew);
 	createCommand(ti, CmdOpen,				cmdOpen);
 	createCommand(ti, CmdPrint,			cmdPrint);
+	createCommand(ti, CmdPrintHtml,	cmdPrintHtml);
 	createCommand(ti, CmdSearch,			cmdSearch);
 	createCommand(ti, CmdSetTreeFilter,	cmdSetTreeFilter);
 	createCommand(ti, CmdStrip,			cmdStrip);

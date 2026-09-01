@@ -33,6 +33,7 @@
 #include "db_game.h"
 #include "db_pgn_writer.h"
 #include "db_latex_writer.h"
+#include "db_html_writer.h"
 #include "db_log.h"
 #include "db_exception.h"
 
@@ -1106,6 +1107,37 @@ View::printGames(	TeXt::Environment& environment,
 		default:
 			M_RAISE("unsupported format");
 	}
+
+	return count;
+}
+
+
+unsigned
+View::printHtml(	mstl::string const& filename,
+						db::format::Type format,
+						unsigned flags,
+						Languages const* languages,
+						unsigned significantLanguages,
+						unsigned* illegalRejected,
+						db::Log& log,
+						util::Progress& progress) const
+{
+	M_REQUIRE(isUsed(table::Games));
+
+	if (format != db::format::Html)
+		M_RAISE("unsupported format");
+
+	unsigned count = 0;
+
+	db::HtmlWriter writer(	database().format(),
+									filename,
+									"utf-8",
+									flags,
+									languages,
+									significantLanguages);
+
+	progress.message("print-game");
+	count = exportGames(writer, database().variant(), illegalRejected, log, progress);
 
 	return count;
 }

@@ -226,12 +226,24 @@ public:
 									util::Progress& progress,
 									FileMode fmode = Create) const;
 
-	/// Print games in view.
+	/// Print games in view (TeXt/PDF/LaTeX path).
 	unsigned printGames(	TeXt::Environment& environment,
 								db::format::Type format,
 								unsigned flags,
 								unsigned options,
 								NagMap const& nagMap,
+								Languages const* languages,
+								unsigned significantLanguages,
+								unsigned* illegalRejected,
+								db::Log& log,
+								util::Progress& progress) const;
+
+	/// Publish games in view as a standalone HTML file (see
+	/// db_html_writer.h). The write path of scidb's native HTML
+	/// support; independent of the TeXt machinery.
+	unsigned printHtml(	mstl::string const& filename,
+								db::format::Type format,
+								unsigned flags,
 								Languages const* languages,
 								unsigned significantLanguages,
 								unsigned* illegalRejected,

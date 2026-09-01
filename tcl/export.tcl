@@ -3481,7 +3481,22 @@ proc DoExport {parent dlg file} {
 				}
 			}
 
-			html - pdf - tex {
+			html {
+				# native HTML publish path (no TeXt machinery): standalone
+				# UTF-8 file with embedded CSS + SVG diagrams. The progress
+				# and log arguments are appended by ::progress::start and
+				# the lappend below (same convention as view::print).
+				set cmd [list ::scidb::view::printHtml \
+					$Info(base) \
+					$Info(variant) \
+					$Info(view) \
+					$file \
+					$flags \
+					$languages \
+				]
+			}
+
+			pdf - tex {
 				set cmd [list ::scidb::view::print \
 					$Info(base) \
 					$Info(variant) \
