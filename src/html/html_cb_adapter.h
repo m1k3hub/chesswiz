@@ -164,16 +164,6 @@ parseCbLink(char const* p, char const* end, CbLink& link)
 }
 
 
-inline char const*
-mediaKindTag(char const* kind)
-{
-	if (::strcmp(kind, "tag_stream") == 0)	return "stream";
-	if (::strcmp(kind, "tag_video") == 0)	return "video";
-	if (::strcmp(kind, "tag_audio") == 0)	return "audio";
-	if (::strcmp(kind, "tag_picture") == 0)	return "picture";
-	return 0;
-}
-
 } // anonymous namespace
 
 

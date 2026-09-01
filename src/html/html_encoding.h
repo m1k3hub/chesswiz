@@ -394,7 +394,14 @@ decodeEntities(mstl::string const& text, mstl::string& out)
 						ok = false; // oversized literal: emit literally
 						break;
 					}
-					cp = cp * (hex ? 16u : 10u) + unsigned(d);
+					// overflow-checked accumulation (9 hex digits overflow u32)
+					uint64_t next = uint64_t(cp) * (hex ? 16u : 10u) + unsigned(d);
+					if (next > 0x10ffff)
+					{
+						ok = false;
+						break;
+					}
+					cp = uint32_t(next);
 				}
 				++r;
 			}
@@ -405,7 +412,8 @@ decodeEntities(mstl::string const& text, mstl::string& out)
 				// (the table holds identity values for undefined slots)
 				if (cp >= 0x80 && cp <= 0x9f)
 					cp = Cp1252High[cp - 0x80];
-				if (cp == 0)
+				// HTML5: surrogate and out-of-range references are U+FFFD
+				if (cp == 0 || (cp >= 0xd800 && cp <= 0xdfff) || cp > 0x10ffff)
 					cp = 0xfffd;
 				appendUtf8(out, cp);
 				p = r + 1;
@@ -436,7 +444,9 @@ decodeEntities(mstl::string const& text, mstl::string& out)
 		}
 
 		// not a known reference: if reference-shaped (&name;) pass it
-		// through literally (browser behaviour); otherwise escape the '&'
+		// through literally (browser behaviour); otherwise emit a bare
+		// '&'. decodeEntities is a PURE decoder: escaping is the
+		// caller's job (double escaping here corrupts 'A & B').
 		{
 			char const* r2 = p + 1;
 			bool shaped = r2 < end && *r2 != '<' && *r2 != '>' && *r2 != '&'
@@ -460,7 +470,7 @@ decodeEntities(mstl::string const& text, mstl::string& out)
 				}
 			}
 
-			out.append("&amp;");
+			out.push_back('&');
 			++p;
 		}
 	}

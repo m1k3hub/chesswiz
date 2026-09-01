@@ -175,6 +175,63 @@ testSanitizeBasics()
 	CHECK(sanitize("<img src=\"data:text/html;base64,AAAA\">", rw, r));
 	CHECK(r.html.find("data:") == mstl::string::npos);
 
+	// CRITICAL: entity-encoded scheme must be checked DECODED
+	CHECK(sanitize("<a href=\"&#106;avascript:alert(1)\">x</a>", rw, r));
+	CHECK(r.html.find("javascript") == mstl::string::npos);
+	CHECK(r.html.find("&#106;") == mstl::string::npos);
+	CHECK_EQ(r.html, "<a>x</a>"); // the whole attribute dies, link text survives
+
+	// leading whitespace/control chars before the scheme (browsers strip
+	// them before scheme parsing)
+	CHECK(sanitize("<a href=\" javascript:alert(1)\">x</a>", rw, r));
+	CHECK(r.html.find("javascript") == mstl::string::npos);
+
+	// mixed-case scheme
+	CHECK(sanitize("<a href=\"JaVaScRiPt:alert(1)\">x</a>", rw, r));
+	CHECK(r.html.find("alert") == mstl::string::npos || r.html.find("href") == mstl::string::npos);
+
+	// REVIEW FINDING 1: bare '&' must NOT double-escape (decode is pure)
+	CHECK(sanitize("<p>A & B</p>", rw, r));
+	CHECK_EQ(r.html, "<p>A &amp; B</p>");
+
+	// known entity in a URI: decoded ONCE, emitted escaped once
+	CHECK(sanitize("<a href=\"lookup?x=1&amp;y=2\">q</a>", rw, r));
+	CHECK_EQ(r.html, "<a href=\"lookup?x=1&amp;y=2\">q</a>");
+
+	// REVIEW FINDING 3: surrogate numeric reference -> U+FFFD
+	CHECK(sanitize("<p>&#xD800;</p>", rw, r));
+	CHECK_EQ(r.html, "<p>\xef\xbf\xbd</p>");
+
+	// REVIEW FINDING 4: 9-hex-digit entity overflows -> literal passthrough
+	// (emitted as visible text, escaped: &amp;#x...)
+	CHECK(sanitize("<p>&#xFFFFFFFFF;</p>", rw, r));
+	CHECK(r.html.find("&amp;#xFFFFFFFFF;") != mstl::string::npos);
+	CHECK(r.html.find("<p>") != mstl::string::npos);
+
+	// REVIEW FINDING 5: "</scriptx>" does not terminate a <script> block
+	CHECK(sanitize("<script>evil</scriptx><img src=x onerror=go()>after</script>", rw, r));
+	CHECK(r.html.find("onerror") == mstl::string::npos);
+	CHECK(r.html.find("<img") == mstl::string::npos);
+	CHECK(r.html.find("evil") == mstl::string::npos);
+
+	// REVIEW FINDING 2: unknown-tag soup cannot grow the stack unbounded
+	{
+		mstl::string soup2;
+
+		for (int i = 0; i < 5000; ++i)
+			soup2.append("<zzz>");
+
+		soup2.append("core");
+
+		for (int i = 0; i < 5000; ++i)
+			soup2.append("</zzz>");
+
+		CHECK(sanitize(soup2, rw, r));
+		CHECK(r.html.find("core") != mstl::string::npos);
+		// output stays bounded (5ooo markers capped at MaxNesting)
+		CHECK(r.html.size() < 50000);
+	}
+
 	// unknown tags unwrap, children stay
 	CHECK(sanitize("<o:p>styled text</o:p>", rw, r));
 	CHECK_EQ(r.html, "styled text");

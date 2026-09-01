@@ -67,13 +67,6 @@ enum RefStatus
 };
 
 
-struct Attribute
-{
-	char const*	name;
-	bool		isUrl;	///< value is a URI: scheme-check + rewrite
-};
-
-
 struct TagPolicy
 {
 	char const*	name;		///< lowercase
@@ -303,13 +296,6 @@ isVoidElement(char const* name)
 	return false;
 }
 
-inline bool
-isRawtextElement(char const* name)
-{
-	return    ::strcmp(name, "script") == 0 || ::strcmp(name, "style") == 0
-		   || ::strcmp(name, "textarea") == 0;
-}
-
 /// Elements implicitly closed by the start of `name` (HTML5 adoption
 /// agency, heavily simplified to the cases that occur in the wild).
 inline bool
@@ -404,10 +390,9 @@ struct Report
 
 namespace {
 
-unsigned const MaxAttrsPerTag		= 64;
-unsigned const MaxAttrName			= 64;
-unsigned const MaxAttrValue			= 4096;
-unsigned const MaxTagName			= 32;
+unsigned const MaxAttrsPerTag		= 64;		///< attrs parsed per tag (pathology cap)
+unsigned const MaxAttrName			= 64;		///< chars kept of an attribute name
+unsigned const MaxAttrValue			= 4096;	///< chars kept of an attribute value
 unsigned const MaxNesting			= 64;
 unsigned const MaxEndTagScan		= 64;	///< how far up an end tag may close
 
@@ -438,34 +423,6 @@ appendEscapedText(mstl::string& out, char const* s, unsigned len)
 		out.append(s + start, len - start);
 }
 
-
-inline void
-appendEscapedAttr(mstl::string& out, char const* s, unsigned len)
-{
-	unsigned start = 0;
-
-	for (unsigned i = 0; i < len; ++i)
-	{
-		char c = s[i];
-		char const* ent = 0;
-
-		if (c == '&')		ent = "&amp;";
-		else if (c == '"')	ent = "&quot;";
-		else if (c == '<')	ent = "&lt;";
-		else if (c == '>')	ent = "&gt;";
-
-		if (ent)
-		{
-			if (i > start)
-				out.append(s + start, i - start);
-			out.append(ent);
-			start = i + 1;
-		}
-	}
-
-	if (start < len)
-		out.append(s + start, len - start);
-}
 
 /// One open element of the repair stack.
 struct OpenElement
@@ -500,32 +457,22 @@ sanitize(	mstl::string const& raw,
 		char const*	p		= input.c_str();
 		char const*	end	= p + input.size();
 		mstl::vector<OpenElement> stack;
-		bool inTitle = false;
 		mstl::string titleText;
 		mstl::string text;		// pending text run (entity-decoded)
 		bool anyText = false;
 
 		auto flushText = [&]()
 		{
-			if (anyText && !text.empty())
-			{
-				if (inTitle)
-				{
-					mstl::string decoded;
-					decodeEntities(text, decoded);
-					titleText.append(decoded);
-				}
-				else
-				{
-					// decode entities, THEN re-escape: the output must be
-					// well-formed regardless of what the input contained
-					mstl::string decoded;
-					decodeEntities(text, decoded);
-					appendEscapedText(out, decoded.c_str(), unsigned(decoded.size()));
-				}
-			}
-			text.clear();
-			anyText = false;
+		if (anyText && !text.empty())
+		{
+		// decode entities, THEN re-escape: the output must be
+		// well-formed regardless of what the input contained
+		mstl::string decoded;
+		decodeEntities(text, decoded);
+		appendEscapedText(out, decoded.c_str(), unsigned(decoded.size()));
+		}
+		text.clear();
+		anyText = false;
 		};
 
 		while (p < end)
@@ -640,9 +587,7 @@ sanitize(	mstl::string const& raw,
 				}
 				else
 				{
-					if (*tagEnd == '/')
-						selfClosed = true;
-					++tagEnd;
+					++tagEnd; // '/' before '>' is legal but has no effect here
 				}
 			}
 
@@ -656,16 +601,10 @@ sanitize(	mstl::string const& raw,
 				// --- end tag ---
 				if (action == Keep || action == CaptureTitle || action == Unwrap)
 				{
-					if (action == CaptureTitle)
-					{
-						// </title>: stop capturing
-						if (inTitle)
-						{
-							inTitle = false;
-							report.title = titleText;
-						}
-					}
-					else if (!isVoidElement(name))
+					// </title> is normally consumed inside the CaptureTitle
+					// start-tag branch; a stray one is a no-op (it must never
+					// clobber a captured title)
+					if (action != CaptureTitle && !isVoidElement(name))
 					{
 						// close matching open element (bounded scan)
 						unsigned found = stack.size();
@@ -746,7 +685,12 @@ sanitize(	mstl::string const& raw,
 							&& (r[2 + k] | 0x20) == name[k])
 							++k;
 
-						if (k == nlen)
+						// the name must be followed by a delimiter — otherwise
+						// "</scriptx>" would terminate a <script> block early
+						if (k == nlen && (r + 2 + k >= end
+						|| r[2 + k] == '>' || r[2 + k] == '/'
+						|| r[2 + k] == ' ' || r[2 + k] == '\t'
+						|| r[2 + k] == '\r' || r[2 + k] == '\n'))
 							break;
 					}
 					++r;
@@ -770,6 +714,7 @@ sanitize(	mstl::string const& raw,
 			mstl::string attrs;
 			mstl::string hrefValue;		// for <a>: classify afterwards
 			mstl::string srcValue;		// for <img>
+			RefStatus srcStatus = Ref_Kept;
 			bool hasHref = false;
 			bool hasSrc = false;
 			unsigned droppedAttrs = 0;
@@ -787,6 +732,12 @@ sanitize(	mstl::string const& raw,
 					break;
 
 				// attribute name
+				if (droppedAttrs >= MaxAttrsPerTag)
+				{
+				// pathological attribute count: stop scanning this tag
+				break;
+				}
+
 				char aname[MaxAttrName + 1];
 				unsigned alen = 0;
 
@@ -887,6 +838,31 @@ sanitize(	mstl::string const& raw,
 				// URI attributes: scheme check + rewrite
 				if (::strcmp(aname, "href") == 0 || ::strcmp(aname, "src") == 0)
 				{
+					// entities must be decoded BEFORE the scheme check:
+					// "&#106;avascript:..." passes a raw check as "relative" but
+					// is javascript: once decoded. The emitted value is always
+					// the decoded one, so check it in its final form.
+					{
+						mstl::string decoded;
+						decodeEntities(value, decoded);
+						value = decoded;
+					}
+
+					// browsers strip leading/trailing C0 controls and space before
+					// scheme parsing (" javascript:" is javascript:); do the same
+					{
+						mstl::string::size_type b = 0;
+						mstl::string::size_type e = value.size();
+
+						while (b < e && unsigned((unsigned char)value[b]) <= 0x20)
+							++b;
+						while (e > b && unsigned((unsigned char)value[e - 1]) <= 0x20)
+							--e;
+
+						if (b > 0 || e < value.size())
+							value = mstl::string(value, b, e - b);
+					}
+
 					RefStatus status = Ref_Kept;
 					mstl::string rewritten;
 
@@ -910,6 +886,7 @@ sanitize(	mstl::string const& raw,
 					{
 						hasSrc = true;
 						srcValue = rewritten.empty() ? value : rewritten;
+						srcStatus = status;
 					}
 
 					// the EMITTED attribute value is the rewritten URI
@@ -1015,8 +992,9 @@ sanitize(	mstl::string const& raw,
 					r.file = srcValue;
 					r.resolved = srcValue;
 					r.type = 1;
+					// keep the rewriter verdict (Ref_Unresolved must stay visible)
 					r.status = (::strncmp(srcValue.c_str(), "scidb-media:", 12) == 0)
-						? Ref_ScidbMedia : Ref_Kept;
+						? Ref_ScidbMedia : srcStatus;
 					report.media.push_back(r);
 				}
 			}
@@ -1026,10 +1004,11 @@ sanitize(	mstl::string const& raw,
 				if (action == Drop)
 					++report.droppedElements;
 
-				if (!isVoidElement(name) && action == Unwrap)
+				if (!isVoidElement(name) && action == Unwrap
+				&& stack.size() < MaxNesting)
 				{
 					// push a non-emitting marker so the end tag doesn't
-					// close a real element
+					// close a real element (the cap keeps the stack bounded)
 					OpenElement e;
 					e.emitted = false;
 					::strncpy(e.name, name, sizeof(e.name) - 1);
@@ -1056,17 +1035,16 @@ sanitize(	mstl::string const& raw,
 	catch (...)
 	{
 		// degrade gracefully: emit the raw text escaped, mark the report
-		report.html.clear();
-
 		try
 		{
+			report.html.clear();
 			appendEscapedText(report.html, raw.c_str(), unsigned(raw.size()));
+			report.warnings.push_back(mstl::string("internal error: degraded to escaped text"));
 		}
 		catch (...)
 		{
 		}
 
-		report.warnings.push_back(mstl::string("internal error: degraded to escaped text"));
 		return false;
 	}
 }
