@@ -93,6 +93,18 @@ Scidb should treat <abbr>.sci</abbr> as the primary working format for large dat
   <li>3D chessboard</li>
 </ul>
 
+<h2>Known limitation: single-game PDF/TeX export</h2>
+
+<p>
+The export dialog's single-game PDF/TeX path is gated because the underlying
+print path dereferences an uninitialized game entry when called (crash
+reproduced in a minimal harness; the PGN export of the same loaded game
+works, so the bug is specific to the print-game game-window accessor).
+Single-game <b>HTML</b> export is unaffected and fully functional. Fixing
+this requires a game-window lifecycle fix, tracked together with the
+<abbr>.cbm</abbr> in-app linkage work.
+</p>
+
 <h2>HTML &amp; media: next steps</h2>
 
 <ul>
