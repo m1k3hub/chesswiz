@@ -25,6 +25,7 @@
 // ======================================================================
 
 #include "tcl_game.h"
+#include "db_html_writer.h"
 #include "tcl_board.h"
 #include "tcl_database.h"
 #include "tcl_application.h"
@@ -113,6 +114,7 @@ static char const* CmdPly				= "::scidb::game::ply";
 static char const* CmdPop				= "::scidb::game::pop";
 static char const* CmdPosition		= "::scidb::game::position";
 static char const* CmdPrint			= "::scidb::game::print";
+static char const* CmdPrintHtml	= "::scidb::game::printHtml";
 static char const* CmdPromoted		= "::scidb::game::promoted";
 static char const* CmdPush				= "::scidb::game::push";
 static char const* CmdQuery			= "::scidb::game::query";
@@ -4098,6 +4100,43 @@ cmdToPGN(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 
 static int
+cmdPrintHtml(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::game::printHtml <database> <variant> <gameIndex>
+	//                                   <file> <flags>
+	//
+	// Publishes the record at <gameIndex> as a standalone HTML file (the
+	// write path of scidb's native HTML support, single-game form).
+	// Returns nothing; raises on I/O errors.
+	if (objc != 6)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <gameIndex> <file> <flags>");
+		return TCL_ERROR;
+	}
+
+	char const*			database	= stringFromObj(objc, objv, 1);
+	variant::Type		variant		= tcl::game::variantFromObj(objc, objv, 2);
+	int					gameIndex	= 0;
+	char const*			filename	= stringFromObj(objc, objv, 4);
+	unsigned				flags		= unsignedFromObj(objc, objv, 5);
+
+	if (Tcl_GetIntFromObj(ti, objv[3], &gameIndex) != TCL_OK || gameIndex < 0)
+	{
+		Tcl_SetResult(ti, "expected a non-negative game index", TCL_STATIC);
+		return TCL_ERROR;
+	}
+
+	Cursor const&	cursor(scidb->cursor(database, variant));
+	Database&		databaseRef(const_cast<Cursor&>(cursor).getDatabase());
+
+	HtmlWriter writer(databaseRef.format(), mstl::string(filename), "utf-8", flags);
+	databaseRef.exportGame(unsigned(gameIndex), writer);
+
+	return TCL_OK;
+}
+
+
+static int
 cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	struct Log : public TeXt::Controller::Log
@@ -4504,6 +4543,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdPop,				cmdPop);
 	createCommand(ti, CmdPosition,		cmdPosition);
 	createCommand(ti, CmdPrint,			cmdPrint);
+	createCommand(ti, CmdPrintHtml,	cmdPrintHtml);
 	createCommand(ti, CmdPromoted,		cmdPromoted);
 	createCommand(ti, CmdPush,				cmdPush);
 	createCommand(ti, CmdQuery,			cmdQuery);

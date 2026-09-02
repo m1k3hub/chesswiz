@@ -3435,7 +3435,14 @@ proc DoExport {parent dlg file} {
 					;
 			}
 
-			html - pdf - tex {
+			html {
+				# native HTML publish path for a single game (see the
+				# database branch for the design notes)
+				::scidb::game::printHtml $Info(base) $Info(variant) $Info(index) $file $flags
+				return 1
+			}
+
+			pdf - tex {
 				return [::beta::notYetImplemented .application print-game]
 				::scidb::game::print $file $searchPath $script $preamble \
 					-flags $flags \

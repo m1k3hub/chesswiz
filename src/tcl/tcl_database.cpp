@@ -132,6 +132,7 @@ static char const* CmdMediaFiles		= "::scidb::db::mediaFiles";
 static char const* CmdMediaGallery	= "::scidb::db::mediaGallery";
 static char const* CmdGuidingText	= "::scidb::db::guidingText";
 static char const* CmdGameAnchor	= "::scidb::db::gameAnchor";
+static char const* CmdHtmlSanitize	= "::scidb::html::sanitize";
 static char const* CmdMarkDeleted		= "::scidb::db::markDeleted";
 
 
@@ -5231,6 +5232,125 @@ appendEmptyGuidingResult(Tcl_Interp* ti, Tcl_Obj* result, int isGuiding)
 
 
 // ----------------------------------------------------------------------
+// ::scidb::html::sanitize <text> <basedir>
+//
+// Runs arbitrary HTML through the scidb HTML profile (the intake gate of
+// scidb's native HTML support): encoding normalization, active-content
+// removal, structural repair, URI scheme checks. Relative references
+// (img src) resolve against <basedir> — the semantics of a saved web
+// page and its asset folder. Returns a dict (flat key/value list):
+//   html, title, media {{path type status} ...}, anchors, warnings,
+//   unresolved, converted.
+// ----------------------------------------------------------------------
+namespace {
+
+struct DirResolver : public html::PathResolver
+{
+	explicit DirResolver(mstl::string const& dir) :m_dir(dir) {}
+
+	bool resolve(mstl::string const& file, mstl::string& out) override
+	{
+		mstl::string normalized(file);
+
+		for (unsigned i = 0; i < normalized.size(); ++i)
+		{
+			if (normalized[i] == '\\')
+				normalized[i] = '/';
+		}
+
+		// absolute references pass through if they exist
+		if (normalized.size() > 1 && normalized[0] == '/')
+		{
+			if (tcl_media::mediaFileExists(normalized))
+			{
+				out = normalized;
+				return true;
+			}
+			return false;
+		}
+
+		// relative to the document's directory (../ climbs handled by the OS)
+		mstl::string candidate(m_dir + '/' + normalized);
+
+		if (tcl_media::mediaFileExists(candidate))
+		{
+			out = candidate;
+			return true;
+		}
+
+		return false;
+	}
+
+private:
+
+	mstl::string	m_dir;
+};
+
+} // anonymous namespace
+
+
+static int
+cmdHtmlSanitize(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<html-text> <basedir>");
+		return TCL_ERROR;
+	}
+
+	char const*		html		= stringFromObj(objc, objv, 1);
+	char const*		basedir	= stringFromObj(objc, objv, 2);
+
+	DirResolver resolver(basedir);
+	mstl::string preprocessed;
+	unsigned rewritten = 0;
+	unsigned unresolved = 0;
+
+	// the general profile has no ChessBase constructs; cbPreprocess is
+	// harmless on clean HTML (no CBLink occurrences) and keeps one entry
+	// point for all intake
+	html::cbPreprocess(mstl::string(html), resolver, preprocessed, rewritten, unresolved);
+
+	html::ChessBaseRewriter rewriter(resolver);
+	html::Report report;
+	html::sanitize(preprocessed, rewriter, report);
+
+	Tcl_Obj* result = Tcl_NewListObj(0, nullptr);
+	Tcl_Obj* mediaRows = Tcl_NewListObj(0, nullptr);
+
+	for (unsigned i = 0; i < report.media.size(); ++i)
+	{
+		Tcl_Obj* row[3];
+		row[0] = Tcl_NewStringObj(report.media[i].resolved.c_str(), int(report.media[i].resolved.size()));
+		row[1] = Tcl_NewIntObj(report.media[i].type);
+		row[2] = Tcl_NewStringObj(refStatusName(report.media[i].status), -1);
+		Tcl_ListObjAppendElement(ti, mediaRows, Tcl_NewListObj(3, row));
+	}
+
+	Tcl_Obj* anchorRows = Tcl_NewListObj(0, nullptr);
+	Tcl_Obj* warningRows = Tcl_NewListObj(0, nullptr);
+
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("html", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj(report.html.c_str(), int(report.html.size())));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("title", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj(report.title.c_str(), int(report.title.size())));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("media", -1));
+	Tcl_ListObjAppendElement(ti, result, mediaRows);
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("anchors", -1));
+	Tcl_ListObjAppendElement(ti, result, anchorRows);
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("warnings", -1));
+	Tcl_ListObjAppendElement(ti, result, warningRows);
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("unresolved", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewIntObj(int(unresolved)));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewStringObj("converted", -1));
+	Tcl_ListObjAppendElement(ti, result, Tcl_NewIntObj(report.wasConverted ? 1 : 0));
+
+	Tcl_SetObjResult(ti, result);
+	return TCL_OK;
+}
+
+
+// ----------------------------------------------------------------------
 // ::scidb::db::gameAnchor <database> <variant> <anchor-args>
 //
 // Resolves a scidb-game: URI payload (the CBLink(tag_game,...) argument
@@ -5714,6 +5834,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdMediaGallery,	cmdMediaGallery);
 	createCommand(ti, CmdGuidingText,	cmdGuidingText);
 	createCommand(ti, CmdGameAnchor,		cmdGameAnchor);
+	createCommand(ti, CmdHtmlSanitize,	cmdHtmlSanitize);
 	createCommand(ti, CmdMarkDeleted,		cmdMarkDeleted);
 }
 

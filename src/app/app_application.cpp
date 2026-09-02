@@ -43,6 +43,7 @@
 #include "db_line.h"
 #include "db_pgn_writer.h"
 #include "db_latex_writer.h"
+#include "db_html_writer.h"
 #include "db_producer.h"
 #include "db_exception.h"
 
@@ -3748,6 +3749,24 @@ Application::printGame(	unsigned position,
 		default:
 			M_RAISE("unsupported format");
 	}
+}
+
+
+void
+Application::printHtmlGame(	unsigned position,
+									mstl::string const& filename,
+									unsigned flags) const
+{
+	M_REQUIRE(containsGameAt(position));
+
+	EditGame const& game = *m_gameMap.find(position)->second;
+
+	db::HtmlWriter writer(	game.sink.cursor->database().format(),
+									filename,
+									"utf-8",
+									flags);
+
+	game.sink.cursor->database().exportGame(game.sink.index, writer);
 }
 
 

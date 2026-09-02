@@ -39,6 +39,7 @@ set RestartRequired				"A restart of the application is required before this cha
 
 set AllScidbFiles					"All Scidb files"
 set AllScidbBases					"All Scidb databases"
+set HtmlFiles						"HTML documents"
 set ScidBases						"Scid databases"
 set ScidbBases						"Scidb databases"
 set ChessBaseBases				"ChessBase databases"
@@ -649,6 +650,7 @@ proc dbOpen {parent} {
 		[list $mc::PGNFilesArchives {.pgn .pgn.gz .zip} {.ZIP}]                                        \
 		[list $mc::PGNArchives		{.zip} {.ZIP}]                                                      \
 	]
+	lappend filetypes [list $mc::HtmlFiles {.html} {.HTML}]
 	set result [::dialog::openFile \
 		-parent $parent \
 		-class database \
@@ -667,6 +669,13 @@ proc dbOpen {parent} {
 	if {[llength $result] == 0} { return 0 }
 
 	lassign $result file encoding
+
+	# HTML documents are consumed natively: sanitized and displayed in
+	# the report viewer (not opened as databases)
+	if {[string equal -nocase [file extension $file] ".html"]} {
+		return [::application::report::showFile $parent $file]
+	}
+
 	return [::application::database::openBase $parent $file yes -encoding $encoding]
 }
 

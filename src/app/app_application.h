@@ -348,6 +348,12 @@ public:
 						unsigned maximalVariationLength,
 						unsigned modificationPosition);
 	void pasteGame(unsigned from, unsigned to);
+	/// Publish the game at <position> as a standalone HTML file (the
+	/// write path of scidb's native HTML support).
+	void printHtmlGame(	unsigned position,
+								mstl::string const& filename,
+								unsigned flags) const;
+
 	void printGame(unsigned position,
 						TeXt::Environment& environment,
 						db::format::Type format,

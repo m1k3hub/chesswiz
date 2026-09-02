@@ -28,6 +28,8 @@ namespace eval mc {
 set Title				"Report"
 set Close				"Close"
 set NotGuidingText	"The current game is not a report entry."
+set HtmlDocument	"HTML Document"
+set CannotRead		"Cannot read file: %s"
 set Unresolved		"%d media reference(s) unresolved"
 set NoMediaFile		"Cannot open media file: %s"
 set JumpFailed		"No game matches this report link."
@@ -50,34 +52,57 @@ array set Priv {
 
 
 # ----------------------------------------------------------------------
-# Entry point: show the guiding-text report of <gameIndex>.
-# Returns the window path, or {} when the record is not a report.
+# Entry point: open an arbitrary HTML file as a document (File > Open >
+# HTML documents). The file is sanitized through the scidb HTML profile;
+# relative references resolve against the file's directory (the semantics
+# of a saved web page and its asset folder).
 # ======================================================================
-proc application::report::show {db variant gameIndex {parent .application}} {
+proc application::report::showFile {parent file} {
 	variable Priv
-	variable mc
 
-	set data [::scidb::db::guidingText $db $variant $gameIndex]
-
-	if {![dict get $data isGuiding]} {
+	if {![file readable $file]} {
 		::dialog::info -parent [winfo toplevel $parent] \
-			-message $mc::NotGuidingText
+			-message [format $mc::CannotRead $file]
 		return {}
 	}
 
+	set fh [open $file rb]
+	fconfigure $fh -encoding binary
+	set raw [read $fh]
+	close $fh
+
+	set data [::scidb::html::sanitize $raw [file dirname $file]]
+
+	set w [showHtmlData $parent [file tail $file] $data]
+	return $w
+}
+
+
+# ----------------------------------------------------------------------
+# Shared window builder: displays a sanitized HTML payload.
+# ======================================================================
+proc application::report::showHtmlData {parent title data} {
+	variable Priv
+	variable mc
+
 	set w .report
-	set Priv(db) $db
-	set Priv(variant) $variant
-	set Priv(index) $gameIndex
+
+	# file-backed documents have no owning game: drop the game actions
+	set Priv(db) {}
+	set Priv(variant) {}
+	set Priv(index) -1
+	set Priv(title) $title
+	set Priv(data) $data
 
 	if {[winfo exists $w]} {
+		wm title $w "$mc::Title ($title)"
 		Load $data
 		raise $w
 		return $w
 	}
 
 	tk::toplevel $w -class Scidb
-	wm title $w "$mc::Title ([file tail $db])"
+	wm title $w "$mc::Title ($title)"
 	wm transient $w [winfo toplevel $parent]
 	wm protocol $w WM_DELETE_WINDOW [namespace code Close]
 
@@ -87,14 +112,12 @@ proc application::report::show {db variant gameIndex {parent .application}} {
 	if {[catch {
 		html $sw.html -width 700 -height 600 -imagecmd [namespace code Image]
 	} err]} {
-		# Tkhtml unavailable (not built/linked): report and abort
 		tk_messageBox -parent $w -type ok -icon warning \
 			-title $mc::Title -message "Tkhtml widget unavailable: $err"
 		destroy $w
 		return {}
 	}
 
-	# the wrapper is $sw.html; the inner Tkhtml is $sw.html.sub.html
 	set inner $sw.html.sub.html
 
 	ttk::scrollbar $sw.sb -command [list $inner yview]
@@ -116,9 +139,6 @@ proc application::report::show {db variant gameIndex {parent .application}} {
 	wm minsize $w 500 400
 	::util::place $w -parent $parent -position center
 
-	# link dispatch: the wrapper registers a debug node handler that
-	# only prints; ours is parse-time neutral, dispatch happens in
-	# LinkClick via [inner href x y]
 	$inner handler node a [namespace code [list LinkSetup $inner]]
 	bind $inner <ButtonRelease-1> [namespace code [list LinkClick $inner %x %y]]
 
@@ -130,6 +150,34 @@ proc application::report::show {db variant gameIndex {parent .application}} {
 	update idletasks
 
 	Load $data
+
+	return $w
+}
+
+
+# ----------------------------------------------------------------------
+# Entry point: show the guiding-text report of <gameIndex>.
+# Returns the window path, or {} when the record is not a report.
+# ======================================================================
+proc application::report::show {db variant gameIndex {parent .application}} {
+	variable Priv
+	variable mc
+
+	set data [::scidb::db::guidingText $db $variant $gameIndex]
+
+	if {![dict get $data isGuiding]} {
+		::dialog::info -parent [winfo toplevel $parent] \
+			-message $mc::NotGuidingText
+		return {}
+	}
+
+	set w [showHtmlData $parent [file tail $db] $data]
+
+	if {[winfo exists $w]} {
+		set Priv(db) $db
+		set Priv(variant) $variant
+		set Priv(index) $gameIndex
+	}
 
 	return $w
 }

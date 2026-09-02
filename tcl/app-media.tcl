@@ -33,6 +33,13 @@ set OpenError		"Cannot open media file: %s"
 set NoPlayer			"No media player found (tkvlc or xdg-open)"
 set SyncBoard		"Sync with board"
 set ViewReport		"View report"
+set OpenExternal		"Open externally"
+set Group				"Media"
+set SectionReports	"Reports"
+set SectionPictures	"Pictures"
+set SectionAudio		"Audio"
+set SectionVideo		"Video"
+set SectionOther		"Other"
 set FollowBoard	"Board follows video"
 
 } ;# namespace mc
@@ -68,29 +75,71 @@ proc application::media::build {twm frame width height} {
 	set status $frame.status
 	set ctrl $frame.ctrl
 
-	# Media list (treeview with columns: type, title, path)
-	ttk::treeview $tree \
-		-columns {type title path} \
-		-displaycolumns {type title path} \
-		-show headings \
-		-selectmode browse \
-		-height 6 \
-		;
-	$tree heading type -text $mc::ColumnType
-	$tree heading title -text $mc::ColumnTitle
-	$tree heading path  -text $mc::ColumnPath
-	$tree column type  -width 70  -anchor center
-	$tree column title -width 180 -anchor w
-	$tree column path  -width 200 -anchor w
-
-	# Control buttons
+	# --- toolbar: playback + document actions -------------------------
 	ttk::frame $ctrl
 	ttk::button $ctrl.play -text $mc::Play -command [namespace code [list PlaySelected $tree]]
 	ttk::button $ctrl.stop -text $mc::Stop -command [namespace code Stop]
+	ttk::separator $ctrl.sep -orient vertical
 	ttk::button $ctrl.report -text $mc::ViewReport -command [namespace code ViewReport]
+	ttk::button $ctrl.external -text $mc::OpenExternal -command [namespace code OpenSelectedExternal]
 	pack $ctrl.play -side left -padx 2
 	pack $ctrl.stop -side left -padx 2
+	pack $ctrl.sep -side left -fill y -padx 4
 	pack $ctrl.report -side left -padx 2
+	pack $ctrl.external -side left -padx 2
+
+	# --- media list (left) + viewer (right) ----------------------------
+	set pw [ttk::panedwindow $frame.pw -orient horizontal]
+
+	ttk::frame $pw.list
+	ttk::treeview $tree \
+		-columns {type title path} \
+		-displaycolumns {type title} \
+		-show {tree headings} \
+		-selectmode browse \
+		-height 6
+	$tree heading #0 -text $mc::Group
+	$tree heading type -text $mc::ColumnType
+	$tree heading title -text $mc::ColumnTitle
+	$tree column type -width 70 -anchor center -stretch false
+	$tree column title -width 180 -anchor w
+	grid $tree   -row 1 -column 1 -sticky nsew
+	grid rowconfigure $pw.list 1 -weight 1
+	grid columnconfigure $pw.list 1 -weight 1
+	pack propagate $pw.list 0
+
+	ttk::frame $pw.view
+	ttk::frame $viewer -relief sunken -borderwidth 1
+	canvas $viewer.canvas -bg black -highlightthickness 0
+	pack $viewer.canvas -fill both -expand yes
+	grid $viewer -row 1 -column 1 -sticky nsew
+	grid rowconfigure $pw.view 1 -weight 1
+	grid columnconfigure $pw.view 1 -weight 1
+
+	$pw add $pw.list -weight 3
+	$pw add $pw.view -weight 2
+
+	# --- status bar ---------------------------------------------------
+	ttk::label $status -textvariable [namespace current]::Priv(statusbar) \
+		-anchor w -relief sunken -borderwidth 1
+
+	grid $ctrl   -row 1 -column 1 -sticky ew
+	grid $pw     -row 2 -column 1 -sticky nsew
+	grid $status -row 3 -column 1 -sticky ew
+	grid rowconfigure $frame 2 -weight 1
+	grid columnconfigure $frame 1 -weight 1
+
+	bind $tree <Double-Button-1> [namespace code [list PlaySelected $tree]]
+	bind $tree <<TreeviewSelect>> [namespace code [list SelectionChanged $tree]]
+
+	set Priv(tree) $tree
+	set Priv(viewer) $viewer
+	set Priv(statusbar) $mc::NoDatabase
+	set Priv(ctrl) $ctrl
+
+	# React to game switches
+	::scidb::db::subscribe gameSwitch [namespace current]::GameSwitched
+	::scidb::db::subscribe databaseSwitch [namespace current]::DatabaseSwitched
 
 	# Board-sync wiring (state machine in tcl/app-media-sync.tcl).
 	# The coupling is inherent: no options, always bidirectional.
@@ -102,36 +151,56 @@ proc application::media::build {twm frame width height} {
 		boardstart-cmd	[namespace code SyncBoardStart] \
 		boardlength-cmd	[namespace code SyncBoardLength] \
 		boardply-cmd	[namespace code SyncBoardPly]
+}
 
-	# Embedded viewer area — a frame that holds either an image label
-	# or a tkvlc video window.
-	ttk::frame $viewer -relief sunken -borderwidth 1
-	canvas $viewer.canvas -bg black -highlightthickness 0
-	pack $viewer.canvas -fill both -expand yes
 
-	# Status bar
-	ttk::label $status -textvariable [namespace current]::Priv(statusbar) \
-		-anchor w -relief sunken -borderwidth 1
+# Section headers of the grouped list (order matters for display).
+proc application::media::Sections {} {
+	variable mc
+	return [list									\
+		reports	$mc::SectionReports	\
+		picture	$mc::SectionPictures	\
+		audio	$mc::SectionAudio		\
+		video	$mc::SectionVideo		\
+		other	$mc::SectionOther		\
+	]
+}
 
-	grid $tree   -row 1 -column 1 -sticky nsew
-	grid $ctrl   -row 2 -column 1 -sticky ew
-	grid $viewer -row 3 -column 1 -sticky nsew
-	grid $status -row 4 -column 1 -sticky ew
-	grid rowconfigure $frame 3 -weight 1
-	grid columnconfigure $frame 1 -weight 1
+# All leaf items of the grouped list (entries, not section headers).
+proc application::media::MediaRows {} {
+	variable Priv
+	set rows {}
+	foreach section [$Priv(tree) children {}] {
+		foreach item [$Priv(tree) children $section] { lappend rows $item }
+	}
+	return $rows
+}
 
-	bind $tree <Double-Button-1> [namespace code [list PlaySelected $tree]]
-	bind $tree <<TreeviewSelect>> [namespace code [list SelectionChanged $tree]]
+# Insert one entry under its type section; returns the item id.
+proc application::media::InsertEntry {typeLabel title path index} {
+	variable Priv
+	set tree $Priv(tree)
 
-	set Priv(tree) $tree
-	set Priv(viewer) $viewer
-	set Priv(statusbar) $mc::NoDatabase
+	# map the type label to a section
+	set typeNum [TypeNumber $typeLabel]
+	set section {}
+	foreach {key label} [Sections] {
+		if {$key eq $typeNum} { set section $section_$key ; break }
+	}
+	if {![string length $section] || ![$tree exists $section]} {
+		foreach {key label} [Sections] {
+			set id section_$key
+			if {![$tree exists $id]} {
+				$tree insert {} end -id $id -open true -text $label -values [list {} {} {}]
+			}
+		}
+		set section section_$typeNum
+	}
 
-	# React to game switches
-	::scidb::db::subscribe gameSwitch [namespace current]::GameSwitched
-	::scidb::db::subscribe databaseSwitch [namespace current]::DatabaseSwitched
-
-	return $frame
+	set n 0
+	while {[$tree exists "item$n"]} { incr n }
+	$tree insert $section end -id item$n -values [list $typeLabel $title $path $index]
+	return item$n
 }
 
 
@@ -176,11 +245,9 @@ proc application::media::Update {position} {
 			catch {
 				set gallery [::scidb::db::mediaGallery $Priv(lastBase) $Priv(lastVariant)]
 				if {[llength $gallery]} {
-					set n 0
 					foreach gentry $gallery {
 						lassign $gentry gpath gtype gtitle gmediaId gindex
-						$tree insert {} end -id item$n -values [list [TypeLabel $gtype] $gtitle $gpath $gindex]
-						incr n
+						InsertEntry $gtype $gtitle $gpath $gindex
 					}
 					set Priv(base) $Priv(lastBase)
 					set Priv(variant) $Priv(lastVariant)
@@ -220,12 +287,9 @@ proc application::media::Update {position} {
 		catch { set gallery [::scidb::db::mediaGallery $base $variant] }
 		if {[llength $gallery]} {
 			set Priv(statusbar) "Media gallery (not game-specific)"
-			set n 0
 			foreach entry $gallery {
 				lassign $entry path type title mediaId
-				set typeLabel [TypeLabel $type]
-				$tree insert {} end -id item$n -values [list $typeLabel $title $path]
-				incr n
+				InsertEntry $type $title $path -1
 			}
 			PrebuildLessons
 			return
@@ -234,12 +298,9 @@ proc application::media::Update {position} {
 		return
 	}
 
-	set n 0
 	foreach entry $entries {
 		lassign $entry path type title mediaId inline
-		set typeLabel [TypeLabel $type]
-		$tree insert {} end -id item$n -values [list $typeLabel $title $path]
-		incr n
+		InsertEntry $type $title $path $index
 	}
 
 	# collect interactive-video indexes (.cms; .scm/.smv manifests already
@@ -255,6 +316,22 @@ proc application::media::Update {position} {
 
 	PrebuildLessons
 	set Priv(statusbar) {}
+}
+
+
+# Open the selected entry with the system default application.
+proc application::media::OpenSelectedExternal {} {
+	variable Priv
+
+	set sel [$Priv(tree) selection]
+	if {![llength $sel]} {
+		set Priv(statusbar) "Select a media entry first."
+		return
+	}
+	set values [$Priv(tree) item [lindex $sel 0] -values]
+	lassign $values typeLabel title path
+	if {![string length $path]} { return }
+	LaunchExternal $path
 }
 
 
@@ -303,6 +380,10 @@ proc application::media::PlaySelected {tree} {
 	}
 
 	lassign $values typeLabel title path galleryIndex
+
+	# section headers carry no values: ignore silently
+	if {![string length $typeLabel] && ![string length $title]} { return }
+
 	if {![string length $path]} {
 		MediaDebug "PlaySelected: empty path (inline media), title=[list $title]"
 		set Priv(statusbar) "Cannot play '$title': media is stored inline (not yet extractable)."
@@ -579,7 +660,7 @@ proc application::media::PrebuildLessons {} {
 	variable Priv
 
 	set n 0
-	foreach item [$Priv(tree) children {}] {
+	foreach item [MediaRows] {
 		lassign [$Priv(tree) item $item -values] typeLabel title path galleryIndex
 		if {![string length $path] || ![file exists $path]} { continue }
 		if {[ClassifyFile $path] != 3} { continue }
