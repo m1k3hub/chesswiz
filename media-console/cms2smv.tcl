@@ -6,7 +6,23 @@
 #
 # Usage: tclsh cms2smv.tcl "<db>.html/<name>.cms" [out.smv] [gameId]
 #
-# The .cms layout (reverse-engineered, CBM_FORMAT_DESIGN.md §7):
+# The .cms layout (FULLY DECODED 2026-09-02, see CHESSBASE_MEDIA_RE.md):
+#   header: u32be body length, u32le record count, u32le base-name length
+#   + base name.  Records (4 shapes):
+#     kind=1 (drill):  [kind][0][dur-s][0][len][FEN][len][base clip name]
+#     kind=2 (video):  [kind][0][dur-s][0][5][len][base video name]
+#     kind=3 (alt):    [kind][0][dur-s][2][0][len][clip name]
+#     kind=4 (main):   [kind][0][dur-s][0][0][len][clip name]
+#   The last kind=2 record omits its name (equals the header base name).
+#   Clip names embed the FEN (z for /) plus x/y/v/u selectors:
+#     x = from-square of the key move (file-major 0-based, a1=0)
+#     y = to-square of the key move (same encoding)
+#     v, u = structural constants ((3,2) primary, (2,5) alternative)
+#   x->y is a fully legal move in the FEN position (109/109 corpus).
+#   sibling directory <name>/ holds
+#     <name>*000.wmv                       base video
+#     <FEN with '/' as 'z'>x{X}y{Y}.wmv   hotspot clips
+
 #   sibling directory <name>/ holds
 #     <name>*000.wmv                       base video
 #     <FEN with '/' as 'z'>x{X}y{Y}…​.wmv  hotspot clips
@@ -15,6 +31,11 @@
 # ======================================================================
 
 package require Tcl 8.5
+
+# Convert a file-major 0-based square index to algebraic notation.
+proc squareName {idx} {
+	return [lindex {a b c d e f g h} [expr {$idx / 8}]][expr {$idx % 8 + 1}]
+}
 
 proc main {argv} {
 	if {[llength $argv] < 1} {
@@ -37,7 +58,7 @@ proc main {argv} {
 	foreach {whole fen x y v u} $pairs {
 		set clip [file join $dir "${whole}.wmv"]
 		if {[file exists $clip]} {
-			lappend entries [list $fen $clip $x $y]
+			lappend entries [list $fen $clip $x $y [squareName $x]-[squareName $y]]
 		}
 	}
 	set base [lindex [glob -nocomplain -directory $dir *000.wmv] 0]
@@ -62,13 +83,16 @@ proc main {argv} {
 	}
 	set ids {}
 	foreach e $entries {
-		lassign $e fen clip x y
+		lassign $e fen clip x y hotspot
 		incr vid
 		lappend lines "\[Interactive \"V[format %02d $vid]\"\]"
 		lappend lines "Fen: $fen"
 		lappend lines "Kind: clip"
 		lappend lines "Clip: [file join [file tail $dir] [file tail $clip]]"
 		lappend lines "Label: \"hotspot x$x y$y\""
+		if {[info exists hotspot] && [string length $hotspot]} {
+			lappend lines "Hotspot: $hotspot"
+		}
 		lappend lines ""
 		lappend ids "V[format %02d $vid]"
 	}

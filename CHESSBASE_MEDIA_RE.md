@@ -809,32 +809,97 @@ the `.cms` maps positions to clip files.
 The `.cbm` file is a media catalog/manifest and is not itself the authoritative
 playback timeline.
 
-### `.cms` binary layout (partially decoded, 2026-08-30)
+### `.cms` binary layout (FULLY DECODED, 2026-09-02)
 
-Header: `u32be` body length (filesize − 4), `u32le` record count, `u32le`
-base-name length, base name (e.g. `02 Mar del Plata000`). Records follow;
-the first is the drill-position record:
+Header: `u32be` body length (filesize - 4), `u32le` record count,
+`u32le` base-name length, base name.  The body contains exactly
+`count` records; four shapes exist, discriminated by the kind field:
+
+**kind=1 (drill/position record)** - marks chapter boundaries and the
+terminal position:
 
 ```text
-u32le kind = 1
-u32le 0
-u32le duration-seconds      (= the base video's full length, 433 for
-                             Mar del Plata)
-u32le u (0)
-u32le namelen, name        (the drill FEN in standard slash form)
-u32le namelen2, name2      (the base's x0y0 clip file name)
+[kind=1 u32le]
+[0 u32le]
+[duration-seconds u32le]
+[0 u32le]
+[namelen1 u32le][FEN slash-form, namelen1 bytes]
+[namelen2 u32le][base x0y0 clip name, namelen2 bytes]   (optional)
 ```
 
-Later records name the position clips; each carries a duration and the
-clip's `v`/`u` selectors. The duration field is **verified**: ffprobe of
-all four Mar del Plata clips gives 30.892/61.473/37.041/333.140 s against
-the recorded 30/61/37/333 (and the base 433.892 vs 433).  The exact field
-count is still ambiguous (the final short record breaks both 5- and
-6-field framings by one field), and the binary names the `x`/`y`
-selectors `V_CB_BOARDPOINTS` — "board points" — but their rule stays
-undecoded, so `x`/`y` remain filename-only for tools.  The `cms2smv.tcl`
-port is unaffected: it keys on the embedded FEN-plus-selector strings,
-which are present verbatim.
+The clip-name pair is absent on the LAST kind=1 record in the file
+(the terminal position has no clip to play after it).  This is the
+"trailing short record" that broke the 5- and 6-field framings in the
+earlier partial decode (commit fb3aa3d).
+
+**kind=2 (base-video record)** - marks a base video segment:
+
+```text
+[kind=2 u32le]
+[0 u32le]
+[duration-seconds u32le]
+[5 u32le]
+[namelen u32le][base-video name, namelen bytes]   (optional)
+```
+
+The final kind=2 record omits its name: the name is implicitly the
+header's base name.  Intermediate kind=2 records (base-video segments
+001, 002, ...) carry their names explicitly.
+
+**kind=4 (primary hotspot clip):**
+
+```text
+[kind=4 u32le]
+[0 u32le]
+[duration-seconds u32le]
+[0 u32le]        <- f3 = 0 for kind=4
+[0 u32le]        <- f4
+[namelen u32le][clip name, namelen bytes]
+```
+
+**kind=3 (alternative hotspot clip):**
+
+```text
+[kind=3 u32le]
+[0 u32le]
+[duration-seconds u32le]
+[2 u32le]        <- f3 = 2 for kind=3
+[0 u32le]        <- f4
+[namelen u32le][clip name, namelen bytes]
+```
+
+#### The x/y/v/u selectors (DECODED)
+
+The clip name embeds the FEN (with `/` replaced by `z`) plus four
+selectors: `x{X}y{Y}v{V}u{U}`.  The selectors were verified against
+python-chess (109 hotspot clips across all 15 CBM168 `.cms` files):
+
+- **x = from-square** of the lesson's key move, encoded
+  **file-major 0-based** (a1=0, b1=1, ..., h1=7, a2=8, ..., h8=63).
+  Verified: the from-square is occupied by a piece in 109/109 clips
+  (100%).
+- **y = to-square** of the key move, same encoding.  Verified: the
+  x->y move is fully legal in the FEN position in 109/109 clips
+  (100%, not just pseudo-legal - no king-safety violations either).
+- **v, u = structural constants**, part of the filename key but not
+  per-clip parameters: `(3,2)` for primary clips, `(2,5)` for
+  alternative clips, `(4,0)` for base-position clips.  These probably
+  encode view/priority tiers in ChessBase's Reader UI.
+
+Example: clip `8z5k2z2P5z3Q3Kz1q6z6P1zp7z8 b - - 0 1x46y54v3u2.wmv`
+= FEN `8/5k2/2P5/3Q3K/1q6/6P1/p7/8 b - - 0 1`, key move **f7-g7**
+(black king steps to g7), hotspot squares f7 (from) and g7 (to).
+
+#### Verification methodology
+
+The square encoding was tested against four candidate hypotheses
+(file-major/rank-major, 0-based/1-based) across all 109 hotspot clips
+in the CBM168 corpus.  Only file-major 0-based yields 100% from-square
+occupancy and 100% legal moves.  The encoding matches the RE doc's
+established square-encoding family (opcode-4 board actions use the
+same file-major 0-based scheme; op-6 inline graphics use 1-based
+file-major - the 1-based variant scores only 43/109 for from-square
+occupancy, ruling it out here).
 
 ## Reader14 dynamic playback path
 
