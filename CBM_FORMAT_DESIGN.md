@@ -872,6 +872,82 @@ authoritative (provisional) source.
    desktop ChessBase session (search by tournament, open the entry, match
    images) would let `isLinkageDecoded()` flip to `true`.
 
+### 5.7 Linkage region analysis (2026-09, probe-based corpus pass)
+
+A dedicated probe (`src/probe_cbm_linkage.cpp`) ran the property-store
+hypothesis across the full corpus: 26 CBM168 magazine databases plus CB
+Light (27 bases, toolchain notes at the end). It opens each base through
+`MultiBase(rootname + ".cbh", "automatic", permission::ReadOnly)`, parses
+every 1024-byte bag per the documented layout, and scans the binary
+region for (a) null-terminated ASCII property keys, (b) 4-byte LE values,
+(c) 3-byte LE offset candidates, and tests them against the CBH game
+count and the `.cbg` size.
+
+**CONFIRMED (corpus-wide):**
+
+1. The binary region is a **property store with null-terminated ASCII
+   keys** — §5.6's CB Light finding replicates. 168!Start bag 1: 12
+   properties at exactly **80-byte intervals** (Visible9@53, Flags0@133,
+   Visible0@253 … Visible15@813); CB Light's FWSize/Flags0..17 family
+   reconfirmed.
+2. **Property keys include German SAN move tokens** — 168!Start bag 0:
+   `cxb5@240 axb5@272 Sf4@304 Scd5@368 Sxd5@400 Sxd5@432 Dd8@464 Sc6@528
+   Sd4@592 Lxd4@624` (32-byte stride; S/L/T/D = knight/bishop/rook/queen
+   in German notation); also Dc7, Dxd8, Sc6, Texd8, Tfe1, La6, Lf8, cxd4,
+   dxe5, fxe5, axb5 on other bags. Media properties are **keyed by
+   moves**, not game indices — consistent with ChessBase's move-attached
+   media model and with the HTML-body right-attachment approximation
+   used by `extractGuidingTextGameBlocks`.
+3. **`Visible0..17` / `Flags*` families** appear beyond CB Light
+   (168!Start bag 1: Visible0…15 + Flags0 + Visible9).
+4. **Some bags store application UI state, not media**: `DBSourceItems_
+   LCWid1..6` (168Move by Move), `Strg+Alt+O` shortcut and `Move.html`
+   (168Opening Trap), `)\shell` (168Strategy), CB Light bag 5 (§5.6). A
+   .cbm bag is a generic property bucket.
+5. **CBM168 guiding texts are encoded** (bit 31 clear in the `.cbg` size
+   field; verified raw on 168!Start record 0). The application decodes
+   them through `Database::loadGame`; a standalone reader cannot.
+
+**EXCLUDED (by corpus evidence):**
+
+1. **Flat bag→game-index table** — belowGames fractions vary wildly with
+   no consistent semantics (168Opening Videos 0/61, Sinquefield Cup 0/137,
+   168!Start 616/1187, CB Light 185/2010); no dense index pattern.
+2. **Pure .cbg offset array** — media-rich bags are dominated by the
+   property store; fixed-stride u32 reads do not align with the token
+   structure (§5.6 confirmed on CB Light; now on 27 bases).
+3. **Bag = game unit** — 168!Start bag 0's move keys span several
+   openings whose section images (168-A09/A22/A37/A40/B12.jpg) share the
+   bag; CB Light bags share holder records. A bag is a media *group*.
+
+**OPEN:**
+
+1. The value layout after each property key (§5.6's 3-byte `.cbg` offset
+   clusters on CB Light; Visible flag bytes on 168!Start — the probe
+   records keys+positions; values need a dedicated pass).
+2. Which game's move list the SAN keys refer to (presumably resolved via
+   the §5.6 media-holder records; this pass's span heuristic from
+   `gameOffset()` deltas did NOT reproduce the §5.6 holders on CB Light —
+   a discrepancy to resolve in the next pass).
+3. Ground-truth correlation via CBLink(tag_game) anchors was BLOCKED:
+   all CBM168 guiding texts are encoded and standalone `loadGame` on
+   bit-31 records aborts with `kingOnBoard()` (the same call works inside
+   the application). Running the correlation inside the app process (e.g.
+   as a Tcl command) is the recommended next pass.
+
+`isLinkageDecoded()` stays `false`: the per-game attribution still runs
+through the HTML-body scan; the property-store grammar (key layout is
+established, value layout is not) does not yet yield a per-game map.
+
+Probe toolchain (works): compile with
+`g++ -c -g -I. -Imstl -Iutil -Isys -Idb -Idb/si3 -Idb/sci
+-Iutil/universalchardet -I/usr/include/tcl8.6 src/probe_cbm_linkage.cpp`
+and link with `db/libdb.a mstl/libmstl.a util/libutil.a
+util/libTeXt/libTeXt.a sys/libsys.a util/universalchardet/libchardet.a
+util/minizip/libminizip.a -lexpat -lzzip -lminizip -lz -lpthread
+-ltcl8.6`. The probe creates its own Tcl interpreter (the encoding codec
+requires one) and defines `tcl::bits::interp` itself.
+
 ---
 
 ## 6. Summary
