@@ -35,6 +35,8 @@ set NoMediaFile		"Cannot open media file: %s"
 set JumpFailed		"No game matches this report link."
 set ExternalHint	"External link opened in browser"
 set IgnoredLink	"link ignored: %s"
+set OpeningLinked	"Opening linked database: %s"
+set LinkedMissing	"Linked database not found: %s"
 
 } ;# namespace mc
 
@@ -301,9 +303,38 @@ proc application::report::LinkClick {w x y} {
 	}
 
 	if {[string match scidb-open:* $href]} {
-		# cross-database links (CBLink(tag_extertext,...)): reported, not
-		# followed — opening another magazine section is a later feature
-		$Priv(status) configure -text [format $mc::IgnoredLink $href]
+		# cross-database link: the payload names another database of the
+		# same release, relative to the report database's directory
+		set target [string range $href 11 end]
+
+		if {![string length $Priv(db)]} {
+			# file-backed document: no owning release directory
+			$Priv(status) configure -text [format $mc::IgnoredLink $href]
+			return
+		}
+
+		set dir [file dirname $Priv(db)]
+		set candidates [list [file join $dir $target]]
+		set ext [file extension $target]
+
+		if {![string length $ext]} {
+			lappend candidates "$dir/$target.cbh" "$dir/$target.sci"
+		} elseif {[string equal -nocase $ext ".cbh"]} {
+			lappend candidates "$dir/[file rootname $target].cbg"
+		}
+
+		set found {}
+		foreach cand $candidates {
+			if {[file exists $cand]} { set found $cand; break }
+		}
+
+		if {![string length $found]} {
+			$Priv(status) configure -text [format $mc::LinkedMissing $target]
+			return
+		}
+
+		$Priv(status) configure -text [format $mc::OpeningLinked [file tail $found]]
+		catch { ::application::database::openBase .application $found yes }
 		return
 	}
 

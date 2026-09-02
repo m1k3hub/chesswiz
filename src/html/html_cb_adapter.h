@@ -365,15 +365,30 @@ cbPreprocess(	mstl::string const& raw,
 		else if (link.kind == "tag_extertext"
 		|| link.kind == "tag_extern gamelist")
 		{
-			// cross-database links: the file argument names another
-			// database of the release; rewrite to scidb-open: and let
-			// the viewer report it as not-followed (classified, not silent)
-			if (!link.args.empty())
+			// cross-database links: a file argument names another database of
+			// the release. The observed form is (tag_extertext,MODE,FILE) -
+			// MODE is a small integer - so the file is the first NON-numeric
+			// argument. Rewrite to scidb-open:FILE; the viewer opens the
+			// linked database from the same release directory.
+			mstl::string file;
+			for (unsigned a = 0; a < link.args.size() && file.empty(); ++a)
+			{
+				bool numeric = !link.args[a].empty();
+				for (unsigned k = 0; k < link.args[a].size() && numeric; ++k)
+				{
+					char c = link.args[a][k];
+					if (c < '0' || c > '9')
+						numeric = false;
+				}
+				if (!numeric)
+					file = link.args[a];
+			}
+			if (!file.empty())
 			{
 				out.append("<a href=\"scidb-open:");
-				cbAppendAttrValue(out, link.args[0]);
+				cbAppendAttrValue(out, file);
 				out.append("\">");
-				cbAppendAttrValue(out, cbBasename(link.args[0]));
+				cbAppendAttrValue(out, cbBasename(file));
 				out.append("</a>");
 				++rewritten;
 			}
