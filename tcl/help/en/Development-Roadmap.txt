@@ -41,14 +41,54 @@ Scidb should treat <abbr>.sci</abbr> as the primary working format for large dat
   <li>Board photo</li>
 </ul>
 
+<h2>Recently completed (HTML &amp; ChessBase media)</h2>
+
+<ul>
+  <li>Native HTML stack: safe intake (sanitizer), built-in report viewer on
+      the bundled HTML widget, and standalone HTML publishing (export) with
+      tag tables, variations, comments, and inline-SVG diagrams. HTML files
+      can be opened directly (File &gt; Open &gt; HTML documents) - all
+      foreign markup is sanitized before display.</li>
+  <li>ChessBase media: <abbr>.cbm</abbr> manifests, the media panel (grouped
+      pictures/audio/video), embedded playback, and board-synced lessons
+      (Chess Media System semantics).</li>
+  <li>Interactive ChessBase lessons: <abbr>.cms</abbr> indexes and
+      position-keyed clips, driven by the board.</li>
+  <li>Chess 960: move-exact decoding of real <abbr>.cbh</abbr>/<abbr>.cbv</abbr>
+      archives (Chess960 lookup table).</li>
+</ul>
+
 <h2>Features for the far future</h2>
 
 <ul>
   <li>Duplicate detection</li>
   <li>Player dictionary dialog</li>
-  <li>Document generation: PDF export and HTML export</li>
+  <li>Document generation: PDF export</li>
   <li>Dialog for spell checking player names</li>
   <li>Tip of the Day window</li>
+  <li>Generating opening reports</li>
+  <li>Usage of end-game tables</li>
+  <li>3D chessboard</li>
+</ul>
+
+<h2>HTML &amp; media: next steps</h2>
+
+<ul>
+  <li>Cross-database links in reports (<abbr>scidb-open:</abbr>): opening
+      the linked magazine section.</li>
+  <li>ChessBase rich-text comments rendered through the sanitizer instead
+      of plain text in HTML exports.</li>
+  <li>Decoding the <abbr>.cbm</abbr> bag-to-game linkage (per-game media
+      attribution straight from the manifest).</li>
+  <li>Decoding the <abbr>.cms</abbr> x/y selectors (hotspot geometry).</li>
+  <li>Persisting decoded lesson timelines (<abbr>.cms</abbr> BoardSync
+      section) so the decode runs once per media file.</li>
+</ul>
+
+<h2>Features for the far future</h2>
+
+<ul>
+  <li>Dialog for spell checking player names</li>
   <li>Generating opening reports</li>
   <li>Usage of end-game tables</li>
   <li>3D chessboard</li>

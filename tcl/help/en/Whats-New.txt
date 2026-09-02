@@ -19,7 +19,20 @@
 TITLE What's new?
 
 <h3>
-Current development snapshot
+Current development snapshot (HTML &amp; ChessBase media)
+</h3>
+
+<ul style="padding: 5px;">
+  <li class="space">ChessBase magazine reports come alive: guiding texts are rendered in a built-in HTML viewer with navigation, diagrams, and video stills. Game links jump to games, media links play in the media panel.</li>
+  <li class="space">The media panel has been redesigned: entries are grouped (reports, pictures, audio, video), playback controls and document actions sit in a toolbar, and the player sits beside the list.</li>
+  <li class="space">Board-synced playback: the board follows the video and the video follows the board (Chess Media System semantics), including interactive <abbr>.cms</abbr> lessons where entering a position jumps to the matching clip.</li>
+  <li class="space">Native HTML publishing: export games (whole views or single games) as standalone HTML with tag tables, variations, comments in the selected language, and inline-SVG diagrams - no external assets needed.</li>
+  <li class="space">HTML documents can be opened directly (File &gt; Open &gt; HTML documents); all foreign markup is sanitized before display (no scripts, no event handlers, scheme-checked links).</li>
+  <li class="space">ChessBase media manifests (<abbr>.cbm</abbr>) are parsed and surfaced in the media gallery; interactive indexes (<abbr>.cms</abbr>) drive the board-follow.</li>
+</ul>
+
+<h3>
+Previous snapshot
 </h3>
 
 <ul style="padding: 5px;">

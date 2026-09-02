@@ -44,6 +44,9 @@ SCIDb should treat `.sci` as the primary working format for large databases and 
 - `P4` has started:
   - command-line converters now emit per-source import summaries with format/range and warning/error counts
   - the headless conversion benchmark now reopens output databases and sample-checks per-game checksums for database imports
+  - native HTML support is implemented end to end (read/render/publish): safe HTML intake via the sanitizer in `src/html`, a built-in report viewer on the bundled HTML widget (ChessBase magazine reports with navigation, diagrams, video stills; clickable game and media links), and standalone HTML publishing from the export dialog (whole views or single games) with tag tables, variations, language-selected comments, and inline-SVG diagrams; HTML documents can also be opened directly (File > Open > HTML documents)
+  - ChessBase media is surfaced in the UI: `.cbm` manifests feed the media gallery, the redesigned media panel groups pictures/audio/video/reports with embedded playback, and board-synced playback (Chess Media System semantics) plus interactive `.cms` lessons are wired to the board
+  - the HTML corpus gate (`tests/corpus_html_export.tcl`) passes on the full CBM168 magazine set (27/27), and the user-facing help pages (Welcome, What's New, Development Roadmap) reflect the current capabilities
 - `P5` has started:
   - player cards and crosstables can now hand off directly into the player prep report workflow
   - crosstable player rows can now export a player's games to the switcher or a working set
@@ -210,6 +213,9 @@ Planned features:
 Implemented so far:
 - safer command-line import summaries for `cdb2sci` and `cbh2si4`
 - stronger headless verification in the conversion benchmark for database-to-`.sci` runs
+- ChessBase media manifests (`.cbm`) parsed and surfaced in the media gallery; media folders of a release resolve across sibling sections
+- interactive lesson indexes (`.cms`) decoded enough to drive position-keyed playback
+- the native HTML stack (read/render/publish) is complete for the profile documented in `SCIDB_HTML_PROFILE.md`; the export path passes the CBM168 corpus gate
 
 Likely files:
 - [src/db/db_database_codec.cpp](/home/michael-g-thomas/src/chess/scidb-code.codex/src/db/db_database_codec.cpp)
