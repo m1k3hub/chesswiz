@@ -74,15 +74,20 @@ Scidb should treat <abbr>.sci</abbr> as the primary working format for large dat
 <h2>HTML &amp; media: next steps</h2>
 
 <ul>
-  <li>Cross-database links in reports (<abbr>scidb-open:</abbr>): opening
-      the linked magazine section.</li>
-  <li>ChessBase rich-text comments rendered through the sanitizer instead
-      of plain text in HTML exports.</li>
-  <li>Decoding the <abbr>.cbm</abbr> bag-to-game linkage (per-game media
-      attribution straight from the manifest).</li>
-  <li>Decoding the <abbr>.cms</abbr> x/y selectors (hotspot geometry).</li>
-  <li>Persisting decoded lesson timelines (<abbr>.cms</abbr> BoardSync
-      section) so the decode runs once per media file.</li>
+  <li class="space"><b>Done:</b> cross-database links in reports
+      (<abbr>scidb-open:</abbr>) now open the linked magazine section.</li>
+  <li class="space"><b>Done:</b> ChessBase rich-text comments are rendered
+      through the sanitizer in HTML exports (no more plain-text
+      flattening).</li>
+  <li class="space"><b>Done:</b> decoded lesson timelines persist in a
+      sidecar so the decode runs once per media file.</li>
+  <li class="space"><b>Done:</b> the <abbr>.cms</abbr> x/y selectors are
+      decoded: they are file-major 0-based from/to squares of the lesson's
+      key move (verified 109/109 legal against python-chess); hotspot
+      geometry is available to tooling.</li>
+  <li class="space">In progress: the <abbr>.cbm</abbr> linkage region is a
+      property store keyed by moves (German SAN tokens); the value layout
+      and per-game attribution remain open.</li>
 </ul>
 
 <h2>Features for the far future</h2>
