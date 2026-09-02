@@ -91,3 +91,5 @@ tests/test_cpp_backend
 src/probe_dump_moves
 2cbh2pgn
 win32
+src/probe_cbm_linkage
+src/test_html_core
