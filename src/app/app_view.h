@@ -250,6 +250,15 @@ public:
 								db::Log& log,
 								util::Progress& progress) const;
 
+	/// Publish games in view as a native PDF file (PdfWriter; the
+	/// non-TeXt print path).
+	unsigned printPdf(	mstl::string const& filename,
+							db::format::Type format,
+							unsigned flags,
+							unsigned* illegalRejected,
+							db::Log& log,
+							util::Progress& progress) const;
+
 private:
 
 	unsigned exportGames(db::Consumer& destination,

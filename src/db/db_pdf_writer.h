@@ -28,6 +28,7 @@
 #define _db_pdf_writer_included
 
 #include "db_writer.h"
+#include "db_move_info_set.h"
 #include "db_common.h"
 
 #include "m_string.h"
@@ -68,8 +69,15 @@ public:
 	void writeEndMoveSection(result::ID result) override;
 	void writeBeginVariation(unsigned level) override;
 	void writeEndVariation(unsigned level) override;
+	void writePrecedingComment(	Annotation const& annotation,
+											Comment const& comment,
+											MarkSet const& marks) override;
+	void writeTrailingComment(Comment const& comment) override;
+	void writeMoveInfo(MoveInfoSet const& moveInfo) override;
 	void writeBeginComment() override;
 	void writeEndComment() override;
+
+	format::Type format() const override;
 
 	void start() override;
 	void finish() override;
@@ -156,6 +164,10 @@ private:
 	};
 
 	void writeDiagram(Board const& board, double x0, double y0);
+	void showText(mstl::string const& text, Style style);
+	void putSpace();
+	void newLine();
+
 	void setFont(Style style);
 	void loadImages();
 
@@ -177,6 +189,12 @@ private:
 	unsigned				m_fontSize[LAST];
 	_HPDF_Dict_Rec*	m_image[256];
 	Style					m_currentStyle;
+	double					m_cursorX;
+	double					m_cursorY;
+	double					m_pageWidth;
+	double					m_pageHeight;
+	double					m_lineHeight;
+	double					m_margin;
 	mstl::string		m_imagePath;
 	mstl::string		m_boardStyle;
 	mstl::string		m_pieceSet;

@@ -25,6 +25,8 @@
 // ======================================================================
 
 #include "db_pdf_writer.h"
+#include "db_move_info_set.h"
+#include "db_comment.h"
 #include "db_annotation.h"
 #include "db_mark_set.h"
 #include "db_move.h"
@@ -69,6 +71,12 @@ PdfWriter::PdfWriter(format::Type srcFormat,
 	,m_doc(HPDF_New(::errorHandler, this))
 	,m_page(nullptr)
 	,m_currentStyle(LAST)
+	,m_cursorX(0.0)
+	,m_cursorY(0.0)
+	,m_pageWidth(0.0)
+	,m_pageHeight(0.0)
+	,m_lineHeight(14.0)
+	,m_margin(48.0)
 {
 	M_REQUIRE(isUsable());
 
@@ -138,24 +146,38 @@ PdfWriter::setFont(Style style)
 void
 PdfWriter::writeTag(mstl::string const& name, mstl::string const& value)
 {
+	mstl::string line(name);
+	line += ":  ";
+	line += value;
+	showText(line, GameInfo);
 }
 
 
 void
 PdfWriter::writeComment(Comment const& comment, MarkSet const& marks)
 {
+	if (!comment.isEmpty())
+{
+		mstl::string text;
+		comment.flatten(text, encoding::Utf8, langFlags());
+		showText(text, Comment_MainLine);
+	}
 }
 
 
 void
-PdfWriter::writeMove(Move const& move,
-							mstl::string const& moveNumber,
-							Annotation const& annotation,
-							MarkSet const& marks,
-							Comment const& preComment,
-							Comment const& comment)
+PdfWriter::writeMove(	Move const& move,
+						mstl::string const& moveNumber,
+						Annotation const& annotation,
+						MarkSet const& marks,
+						Comment const& preComment,
+						Comment const& comment)
 {
-	M_ASSERT(m_page);
+	if (!preComment.isEmpty())
+		writeComment(preComment, marks);
+
+	mstl::string num(moveNumber);
+	showText(num, Move_Text_MainLine);
 
 	mstl::string str;
 
@@ -170,19 +192,17 @@ PdfWriter::writeMove(Move const& move,
 
 			if (len > 1)
 			{
-				setFont(Move_Figurine_MainLine);
-				HPDF_Page_ShowText(m_page, s, len);
+				showText(mstl::string(s, len), Move_Figurine_MainLine);
 				s += len;
 			}
 			else
 			{
 				char const* t = s + 1;
 
-				while (t < s && ::sys::utf8::charLength(t) == 1)
+				while (t < str.c_str() + str.size() && ::sys::utf8::charLength(t) == 1)
 					++t;
 
-				setFont(Move_Text_MainLine);
-				HPDF_Page_ShowText(m_page, s, t - s);
+				showText(mstl::string(s, unsigned(t - s)), Move_Text_MainLine);
 				s = t;
 			}
 		}
@@ -190,45 +210,138 @@ PdfWriter::writeMove(Move const& move,
 	else
 	{
 		move.printSAN(str, protocol::Standard, encoding::Latin1);
-		setFont(Move_Text_Variation);
-		HPDF_Page_ShowText(m_page, str, str.size());
+		showText(str, Move_Text_MainLine);
 	}
+
+	if (!annotation.isEmpty())
+	{
+		mstl::string sym;
+		annotation.print(sym, Annotation::Flag_Symbolic_Annotation_Style);
+
+		if (!sym.empty())
+			showText(sym, Move_Symbol_MainLine);
+	}
+
+	putSpace();
+
+	if (annotation.contains(nag::Diagram) || annotation.contains(nag::DiagramFromBlack))
+		writeDiagram(board(), m_cursorX, m_cursorY + 120.0);
+
+	if (!comment.isEmpty())
+		writeComment(comment, MarkSet());
+}
+
+
+void
+PdfWriter::writePrecedingComment(	Annotation const& annotation,
+											Comment const& comment,
+											MarkSet const& marks)
+{
+	writeComment(comment, marks);
+}
+
+
+void
+PdfWriter::writeTrailingComment(Comment const& comment)
+{
+	writeComment(comment, MarkSet());
+}
+
+
+void
+PdfWriter::writeMoveInfo(MoveInfoSet const&)
+{
+	// clock/eval info is not rendered (v1)
+}
+
+
+// ----------------------------------------------------------------------
+// Page flow: draw one text run at the cursor and advance; wrap at the
+// right margin. PDF coordinates are bottom-up: the cursor tracks a
+// top-down Y that is mirrored at draw time.
+// ----------------------------------------------------------------------
+void
+PdfWriter::showText(mstl::string const& text, Style style)
+{
+	double width = HPDF_Page_TextWidth(m_page, text.c_str(), HPDF_INT(text.size()));
+
+	if (m_cursorX + width > m_pageWidth - m_margin)
+		newLine();
+
+	HPDF_Page_BeginText(m_page);
+	HPDF_Page_MoveTextPos(m_page, m_cursorX, m_cursorY);
+	HPDF_Page_ShowText(m_page, text.c_str(), HPDF_INT(text.size()));
+	HPDF_Page_EndText(m_page);
+
+	m_cursorX += width + 4.0;
+}
+
+
+void
+PdfWriter::putSpace()
+{
+	m_cursorX += 4.0;
+}
+
+
+void
+PdfWriter::newLine()
+{
+	m_cursorX = m_margin;
+	m_cursorY -= m_lineHeight;
 }
 
 
 void
 PdfWriter::writeBeginGame(unsigned number)
 {
+	// one game per page: new page, A4 portrait, cursor at top-left margin
+	m_page = HPDF_AddPage(m_doc);
+	HPDF_Page_SetSize(m_page, HPDF_PAGE_SIZE_A4, HPDF_PAGE_PORTRAIT);
+	m_pageWidth = HPDF_Page_GetWidth(m_page);
+	m_pageHeight = HPDF_Page_GetHeight(m_page);
+	m_cursorX = m_margin;
+	m_cursorY = m_pageHeight - m_margin;
+	m_currentStyle = LAST;
+	m_lineHeight = 14.0;
 }
 
 
 void
 PdfWriter::writeEndGame()
 {
+	// the finished page is kept; the next game starts a new page
 }
 
 
 void
 PdfWriter::writeBeginMoveSection()
 {
+	newLine();
 }
 
 
 void
 PdfWriter::writeEndMoveSection(result::ID result)
 {
+	mstl::string res(result::toString(result));
+	newLine();
+	showText(res, Result);
 }
 
 
 void
-PdfWriter::writeBeginVariation(unsigned level)
+PdfWriter::writeBeginVariation(unsigned)
 {
+	showText(mstl::string("("), Move_Text_Variation);
 }
 
 
 void
-PdfWriter::writeEndVariation(unsigned level)
+PdfWriter::writeEndVariation(unsigned)
 {
+	showText(mstl::string(")"), Move_Text_Variation);
+	putSpace();
 }
 
 
@@ -540,4 +653,11 @@ PdfWriter::errorMessage(unsigned detailNo)
 	return buf;
 }
 
+format::Type
+PdfWriter::format() const
+{
+	return format::Pdf;
+}
+
 // vi:set ts=3 sw=3:
+

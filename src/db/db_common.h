@@ -1086,6 +1086,7 @@ namespace format
 		ChessBaseArchive	= 1 << 7,	///< CBV container format
 		ChessBase2			= 1 << 8,	///< CB 17+ 2CBH container format
 		Html					= 1 << 9,
+		Pdf					= 1 << 10,
 
 		Invalid				= LaTeX, // makes sense if used for input format
 	};

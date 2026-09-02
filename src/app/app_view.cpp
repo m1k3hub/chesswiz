@@ -34,6 +34,7 @@
 #include "db_pgn_writer.h"
 #include "db_latex_writer.h"
 #include "db_html_writer.h"
+#include "db_pdf_writer.h"
 #include "db_log.h"
 #include "db_exception.h"
 
@@ -1135,6 +1136,30 @@ View::printHtml(	mstl::string const& filename,
 									flags,
 									languages,
 									significantLanguages);
+
+	progress.message("print-game");
+	count = exportGames(writer, database().variant(), illegalRejected, log, progress);
+
+	return count;
+}
+
+
+unsigned
+View::printPdf(	mstl::string const& filename,
+					db::format::Type format,
+					unsigned flags,
+					unsigned* illegalRejected,
+					db::Log& log,
+					util::Progress& progress) const
+{
+	M_REQUIRE(isUsed(table::Games));
+
+	if (format != db::format::Pdf)
+		M_RAISE("unsupported format");
+
+	unsigned count = 0;
+
+	db::PdfWriter writer(database().format(), filename, "utf-8", flags);
 
 	progress.message("print-game");
 	count = exportGames(writer, database().variant(), illegalRejected, log, progress);

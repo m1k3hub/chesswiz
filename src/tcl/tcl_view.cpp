@@ -81,6 +81,7 @@ static char const* CmdNew				= "::scidb::view::new";
 static char const* CmdOpen				= "::scidb::view::open?";
 static char const* CmdPrint			= "::scidb::view::print";
 static char const* CmdPrintHtml	= "::scidb::view::printHtml";
+static char const* CmdPrintPdf	= "::scidb::view::printPdf";
 static char const* CmdSearch			= "::scidb::view::search";
 static char const* CmdSetTreeFilter	= "::scidb::view::setTreeFilter";
 static char const* CmdStrip			= "::scidb::view::strip";
@@ -768,6 +769,45 @@ cmdPrintHtml(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 
 static int
+cmdPrintPdf(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::view::printPdf <database> <variant> <view> <file>
+	//                                  <flags> <progress-cmd> <progress-arg>
+	//                                  <log-cmd> <log-arg>
+	//
+	// Publishes the games of the view as a native PDF file (PdfWriter -
+	// embedded fonts, diagram images from the pdf/sets). Returns the
+	// number of exported games.
+	if (objc != 10)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv,
+			"<database> <variant> <view> <file> <flags> <progress-cmd> <progress-arg> <log-cmd> <log-arg>");
+		return TCL_ERROR;
+	}
+
+	char const*			database	= stringFromObj(objc, objv, 1);
+	variant::Type		variant		= tcl::game::variantFromObj(objc, objv, 2);
+	unsigned				view			= unsignedFromObj(objc, objv, 3);
+	char const*			filename	= stringFromObj(objc, objv, 4);
+	unsigned				flags		= unsignedFromObj(objc, objv, 5);
+
+	Progress				progress(objv[6], objv[7]);
+	tcl::Log				log(objv[8], objv[9]);
+	Cursor&				cursor(scidb->cursor(database, variant));
+	View&					v(cursor.view(view));
+
+	setResult(v.printPdf(	filename,
+								format::Pdf,
+								flags,
+								nullptr,
+								log,
+								progress));
+
+	return TCL_OK;
+}
+
+
+static int
 cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	struct Log : public TeXt::Controller::Log
@@ -1084,6 +1124,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdOpen,				cmdOpen);
 	createCommand(ti, CmdPrint,			cmdPrint);
 	createCommand(ti, CmdPrintHtml,	cmdPrintHtml);
+	createCommand(ti, CmdPrintPdf,		cmdPrintPdf);
 	createCommand(ti, CmdSearch,			cmdSearch);
 	createCommand(ti, CmdSetTreeFilter,	cmdSetTreeFilter);
 	createCommand(ti, CmdStrip,			cmdStrip);

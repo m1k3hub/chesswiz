@@ -3725,6 +3725,13 @@ Application::printGame(	unsigned position,
 								Languages const* languages,
 								unsigned significantLanguages) const
 {
+	// resolve the fallback BEFORE the lookup: containsGameAt maps
+	// InvalidPosition to m_currentPosition, but a find(position) with the
+	// original value would dereference end() (garbage EditGame - the crash
+	// behind the old print-game gate)
+	if (position == InvalidPosition)
+		position = m_currentPosition;
+
 	M_REQUIRE(containsGameAt(position));
 
 	EditGame const& game = *m_gameMap.find(position)->second;

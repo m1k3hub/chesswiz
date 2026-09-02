@@ -26,6 +26,7 @@
 
 #include "tcl_game.h"
 #include "db_html_writer.h"
+#include "db_pdf_writer.h"
 #include "tcl_board.h"
 #include "tcl_database.h"
 #include "tcl_application.h"
@@ -115,6 +116,7 @@ static char const* CmdPop				= "::scidb::game::pop";
 static char const* CmdPosition		= "::scidb::game::position";
 static char const* CmdPrint			= "::scidb::game::print";
 static char const* CmdPrintHtml	= "::scidb::game::printHtml";
+static char const* CmdPrintPdf	= "::scidb::game::printPdf";
 static char const* CmdPromoted		= "::scidb::game::promoted";
 static char const* CmdPush				= "::scidb::game::push";
 static char const* CmdQuery			= "::scidb::game::query";
@@ -4100,6 +4102,42 @@ cmdToPGN(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 
 static int
+cmdPrintPdf(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::game::printPdf <database> <variant> <gameIndex>
+	//                                  <file> <flags>
+	//
+	// Publishes the record at <gameIndex> as a native PDF file. Returns
+	// nothing; raises on I/O errors.
+	if (objc != 6)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <gameIndex> <file> <flags>");
+		return TCL_ERROR;
+	}
+
+	char const*			database	= stringFromObj(objc, objv, 1);
+	variant::Type		variant		= tcl::game::variantFromObj(objc, objv, 2);
+	int					gameIndex	= 0;
+	char const*			filename	= stringFromObj(objc, objv, 4);
+	unsigned				flags		= unsignedFromObj(objc, objv, 5);
+
+	if (Tcl_GetIntFromObj(ti, objv[3], &gameIndex) != TCL_OK || gameIndex < 0)
+	{
+		Tcl_SetResult(ti, "expected a non-negative game index", TCL_STATIC);
+		return TCL_ERROR;
+	}
+
+	Cursor const&	cursor(scidb->cursor(database, variant));
+	Database&		databaseRef(const_cast<Cursor&>(cursor).getDatabase());
+
+	PdfWriter writer(databaseRef.format(), mstl::string(filename), "utf-8", flags);
+	databaseRef.exportGame(unsigned(gameIndex), writer);
+
+	return TCL_OK;
+}
+
+
+static int
 cmdPrintHtml(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	// Usage: ::scidb::game::printHtml <database> <variant> <gameIndex>
@@ -4544,6 +4582,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdPosition,		cmdPosition);
 	createCommand(ti, CmdPrint,			cmdPrint);
 	createCommand(ti, CmdPrintHtml,	cmdPrintHtml);
+	createCommand(ti, CmdPrintPdf,		cmdPrintPdf);
 	createCommand(ti, CmdPromoted,		cmdPromoted);
 	createCommand(ti, CmdPush,				cmdPush);
 	createCommand(ti, CmdQuery,			cmdQuery);
