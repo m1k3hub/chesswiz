@@ -12,6 +12,9 @@
 #include "db_move.h"
 #include "db_move_info_set.h"
 
+// the intake gate of scidb's native HTML support (src/html)
+#include "html/html_sanitize.h"
+
 #include "m_assert.h"
 #include "m_fstream.h"
 #include "sys_file.h"
@@ -536,7 +539,7 @@ HtmlWriter::putComment(Comment const& comment)
 
 	// ChessBase diagram convention: a comment of exactly "#" is the
 	// diagram marker of the PREVIOUS move's position (the producer has
-	// already advanced the board) — render the diagram, not the text
+	// already advanced the board) - render the diagram, not the text
 	if (comment.size() == 1)
 	{
 		mstl::string probe;
@@ -550,34 +553,75 @@ HtmlWriter::putComment(Comment const& comment)
 	}
 
 	mstl::string text;
+	bool rich = comment.isXml();
 
-	// v1 renders comments as PLAIN TEXT in the selected language:
-	// flatten() strips the ChessBase XML markup (language sections,
-	// rich-text tags) so no foreign markup leaks into the published
-	// HTML. Rich-text round-tripping is a later phase (the sanitizer
-	// in src/html is the intended gate).
-	comment.flatten(text, encoding::Utf8, langFlags());
+	if (rich)
+	{
+		// ChessBase rich text: toHtml wraps the markup in <html>...</html>.
+		// Strip the wrapper and run the inner fragment through the
+		// sanitizer (default profile: active content removed, markup
+		// normalized). Unknown tags such as the language markers <de>/<en>
+		// are unwrapped - both languages stay visible; selecting one
+		// language is a later refinement. The sanitizer output is already
+		// escaped and safe, so it is emitted as-is (never re-escaped).
+		// toHtml's XML parser asserts on elements outside its accepted
+		// set (b/i/u/sym/emo/nag/language) - one unusual comment would
+		// otherwise abort the whole export. Degrade to plain text.
+		try
+		{
+			comment.toHtml(text);
+		}
+		catch (...)
+		{
+			rich = false;
+			text.clear();
+			comment.flatten(text, encoding::Utf8, langFlags());
+		}
+
+		// toHtml always emits the <html> wrapper first and </html> last;
+		// mstl::string has no rfind(const_pointer), so anchor on the tail
+		char const* d = text.c_str();
+		unsigned const len = text.size();
+
+		if (len >= 13 && ::memcmp(d, "<html>", 6) == 0 && ::memcmp(d + len - 7, "</html>", 7) == 0)
+			text = text.substr(6, len - 13);
+
+		if (text.empty())
+			return;
+
+		html::Rewriter rewriter;
+		html::Report report;
+
+		if (html::sanitize(text, rewriter, report))
+		{
+			text = report.html;
+		}
+		else
+		{
+			// sanitizer degraded (internal error): fall back to plain
+			// text, ESCAPED (rich=false semantics)
+			rich = false;
+			text.clear();
+			comment.flatten(text, encoding::Utf8, langFlags());
+		}
+	}
+	else
+	{
+		comment.flatten(text, encoding::Utf8, langFlags());
+	}
 
 	if (text.empty())
 		return;
 
-	put("<span class=\"comment\">");
-	putEscaped(text);
-	put("</span> ");
-	return;
-
-	if (text.find('\n') != mstl::string::npos)
-	{
-		put("<p class=\"comment\">");
-		m_strm.write(text, text.size());
-		put("</p>\n");
-	}
+	put("<span class=\"comment");
+	if (rich)
+		put(" rich");
+	put("\">");
+	if (rich)
+		m_strm.write(text, text.size());	// sanitized: safe, emit as-is
 	else
-	{
-		put("<span class=\"comment\">");
-		m_strm.write(text, text.size());
-		put("</span> ");
-	}
+		putEscaped(text);					// plain text: escape
+	put("</span> ");
 }
 
 
