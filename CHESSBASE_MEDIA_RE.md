@@ -890,6 +890,14 @@ Example: clip `8z5k2z2P5z3Q3Kz1q6z6P1zp7z8 b - - 0 1x46y54v3u2.wmv`
 = FEN `8/5k2/2P5/3Q3K/1q6/6P1/p7/8 b - - 0 1`, key move **f7-g7**
 (black king steps to g7), hotspot squares f7 (from) and g7 (to).
 
+Scidb surfaces these in `tcl/app-media.tcl`: `CmsEntries` appends the
+from/to squares to each hotspot row (`CmsSquare`), `ResolveIndex`
+carries them to `InteractiveFollow`, and entering a matched position
+draws the hotspot move as a green board arrow via `SyncAnnotate` (the
+board's own update path erases it on the next position change).
+Degenerate `a1-a1` corpus hotspots (quiz positions with no single key
+move) no-op in the arrow layer.
+
 #### Verification methodology
 
 The square encoding was tested against four candidate hypotheses
