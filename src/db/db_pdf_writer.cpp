@@ -35,6 +35,7 @@
 
 #include "sys_utf8.h"
 #include "sys_utf8_codec.h"
+#include "sys_file.h"
 
 #include "hpdf.h"
 
@@ -58,7 +59,7 @@ static void
 errorHandler(HPDF_STATUS errorNo, HPDF_STATUS detailNo, void* user_data)
 {
 
-	static_cast<PdfWriter*>(user_data)->errorHandler(errorNo, PdfWriter::errorMessage(detailNo));
+	static_cast<PdfWriter*>(user_data)->errorHandler(errorNo, PdfWriter::errorMessage(errorNo));
 }
 
 
@@ -71,12 +72,17 @@ PdfWriter::PdfWriter(format::Type srcFormat,
 	,m_doc(HPDF_New(::errorHandler, this))
 	,m_page(nullptr)
 	,m_currentStyle(LAST)
+	,m_saved(false)
+	,m_variationLevel(0)
 	,m_cursorX(0.0)
 	,m_cursorY(0.0)
 	,m_pageWidth(0.0)
 	,m_pageHeight(0.0)
 	,m_lineHeight(14.0)
 	,m_margin(48.0)
+	,m_imagePath(SHAREDIR "/pdf/sets")
+	,m_boardStyle("Default")
+	,m_pieceSet("Merida")
 {
 	M_REQUIRE(isUsable());
 
@@ -119,7 +125,12 @@ PdfWriter::PdfWriter(format::Type srcFormat,
 
 PdfWriter::~PdfWriter() throw()
 {
-	HPDF_Free(m_doc);
+	// the export framework never calls finish() (same as start()), so
+	// the document is saved here; a destructor must never throw
+	try { finish(); } catch (...) {}
+
+	if (m_doc)
+		HPDF_Free(m_doc);
 }
 
 
@@ -134,6 +145,20 @@ void
 PdfWriter::setFont(Style style)
 {
 	M_ASSERT(m_page);
+
+	if (m_font[style] == 0)
+	{
+		// font resolution failed for this style: fall back to the first
+		// available font so text rendering cannot enter an error state
+		for (unsigned i = 0; i < LAST; ++i)
+		{
+			if (m_font[i] != 0)
+			{
+				style = Style(i);
+				break;
+			}
+		}
+	}
 
 	if (style != m_currentStyle)
 	{
@@ -150,6 +175,7 @@ PdfWriter::writeTag(mstl::string const& name, mstl::string const& value)
 	line += ":  ";
 	line += value;
 	showText(line, GameInfo);
+	newLine();	// one tag per line (game header block)
 }
 
 
@@ -157,10 +183,10 @@ void
 PdfWriter::writeComment(Comment const& comment, MarkSet const& marks)
 {
 	if (!comment.isEmpty())
-{
+	{
 		mstl::string text;
 		comment.flatten(text, encoding::Utf8, langFlags());
-		showText(text, Comment_MainLine);
+		showWrapped(text, commentStyle());
 	}
 }
 
@@ -176,12 +202,15 @@ PdfWriter::writeMove(	Move const& move,
 	if (!preComment.isEmpty())
 		writeComment(preComment, marks);
 
+	Style style		= moveStyle();
+	Style figurine	= figurineStyle();
+
 	mstl::string num(moveNumber);
-	showText(num, Move_Text_MainLine);
+	showText(num, style);
 
 	mstl::string str;
 
-	if (m_font[Move_Figurine_MainLine])
+	if (m_font[figurine])
 	{
 		move.printSAN(str, protocol::Standard, encoding::Utf8);
 		char const* s = str;
@@ -192,7 +221,7 @@ PdfWriter::writeMove(	Move const& move,
 
 			if (len > 1)
 			{
-				showText(mstl::string(s, len), Move_Figurine_MainLine);
+				showText(mstl::string(s, len), figurine);
 				s += len;
 			}
 			else
@@ -200,9 +229,9 @@ PdfWriter::writeMove(	Move const& move,
 				char const* t = s + 1;
 
 				while (t < str.c_str() + str.size() && ::sys::utf8::charLength(t) == 1)
-					++t;
+				++t;
 
-				showText(mstl::string(s, unsigned(t - s)), Move_Text_MainLine);
+				showText(mstl::string(s, unsigned(t - s)), style);
 				s = t;
 			}
 		}
@@ -210,22 +239,32 @@ PdfWriter::writeMove(	Move const& move,
 	else
 	{
 		move.printSAN(str, protocol::Standard, encoding::Latin1);
-		showText(str, Move_Text_MainLine);
+		showText(str, style);
 	}
 
 	if (!annotation.isEmpty())
 	{
-		mstl::string sym;
-		annotation.print(sym, Annotation::Flag_Symbolic_Annotation_Style);
+		// the diagram NAGs are layout markers, not annotation symbols
+		Annotation symbols(annotation);
+		symbols.removeDiagramNags();
 
-		if (!sym.empty())
-			showText(sym, Move_Symbol_MainLine);
+		if (!symbols.isEmpty())
+		{
+			mstl::string sym;
+			symbols.print(sym, Annotation::Flag_Symbolic_Annotation_Style);
+
+			if (!sym.empty())
+				showText(sym, symbolStyle());
+		}
 	}
 
 	putSpace();
 
 	if (annotation.contains(nag::Diagram) || annotation.contains(nag::DiagramFromBlack))
-		writeDiagram(board(), m_cursorX, m_cursorY + 120.0);
+	{
+		newLine();
+		writeDiagram(board());
+	}
 
 	if (!comment.isEmpty())
 		writeComment(comment, MarkSet());
@@ -263,10 +302,19 @@ PdfWriter::writeMoveInfo(MoveInfoSet const&)
 void
 PdfWriter::showText(mstl::string const& text, Style style)
 {
+	M_ASSERT(m_page);
+
+	setFont(style);
+
+	if (m_font[m_currentStyle] == 0)
+		return;	// no usable font: skip (the font error was already reported)
+
 	double width = HPDF_Page_TextWidth(m_page, text.c_str(), HPDF_INT(text.size()));
 
 	if (m_cursorX + width > m_pageWidth - m_margin)
-		newLine();
+		newLine();	// may add a fresh page (which resets the current style)
+
+	setFont(style);	// re-apply: a page break inside newLine() cleared the page font
 
 	HPDF_Page_BeginText(m_page);
 	HPDF_Page_MoveTextPos(m_page, m_cursorX, m_cursorY);
@@ -274,6 +322,33 @@ PdfWriter::showText(mstl::string const& text, Style style)
 	HPDF_Page_EndText(m_page);
 
 	m_cursorX += width + 4.0;
+}
+
+
+// Word-wrapped placement for long runs (comments): the text is split
+// at whitespace and the words are placed one by one, so a comment that
+// exceeds the line width continues on the next line.
+void
+PdfWriter::showWrapped(mstl::string const& text, Style style)
+{
+	char const* s	= text.c_str();
+	char const* end	= s + text.size();
+
+	while (s < end)
+	{
+		while (s < end && (*s == ' ' || *s == '\t'))
+			++s;
+
+		char const* t = s;
+
+		while (t < end && *t != ' ' && *t != '\t')
+			++t;
+
+		if (t > s)
+			showText(mstl::string(s, unsigned(t - s)), style);
+
+		s = t;
+	}
 }
 
 
@@ -288,21 +363,35 @@ void
 PdfWriter::newLine()
 {
 	m_cursorX = m_margin;
-	m_cursorY -= m_lineHeight;
+
+	if (m_cursorY - 2*m_lineHeight < m_margin)
+		addPage();	// bottom margin reached: continue on a fresh page
+	else
+		m_cursorY -= m_lineHeight;
+}
+
+
+// Begin a new page (A4 portrait) and reset the cursor to the top-left
+// margin. Used both per game and for bottom-margin page breaks.
+void
+PdfWriter::addPage()
+{
+	m_page = HPDF_AddPage(m_doc);
+	HPDF_Page_SetSize(m_page, HPDF_PAGE_SIZE_A4, HPDF_PAGE_PORTRAIT);
+	m_pageWidth	= HPDF_Page_GetWidth(m_page);
+	m_pageHeight	= HPDF_Page_GetHeight(m_page);
+	m_cursorX		= m_margin;
+	m_cursorY		= m_pageHeight - m_margin;
+	m_currentStyle	= LAST;
 }
 
 
 void
 PdfWriter::writeBeginGame(unsigned number)
 {
-	// one game per page: new page, A4 portrait, cursor at top-left margin
-	m_page = HPDF_AddPage(m_doc);
-	HPDF_Page_SetSize(m_page, HPDF_PAGE_SIZE_A4, HPDF_PAGE_PORTRAIT);
-	m_pageWidth = HPDF_Page_GetWidth(m_page);
-	m_pageHeight = HPDF_Page_GetHeight(m_page);
-	m_cursorX = m_margin;
-	m_cursorY = m_pageHeight - m_margin;
-	m_currentStyle = LAST;
+	// one game per page
+	addPage();
+	m_variationLevel = 0;
 	m_lineHeight = 14.0;
 }
 
@@ -331,16 +420,18 @@ PdfWriter::writeEndMoveSection(result::ID result)
 
 
 void
-PdfWriter::writeBeginVariation(unsigned)
+PdfWriter::writeBeginVariation(unsigned level)
 {
-	showText(mstl::string("("), Move_Text_Variation);
+	m_variationLevel = level;
+	showText(mstl::string("("), moveStyle());
 }
 
 
 void
-PdfWriter::writeEndVariation(unsigned)
+PdfWriter::writeEndVariation(unsigned level)
 {
-	showText(mstl::string(")"), Move_Text_Variation);
+	m_variationLevel = level > 1 ? level - 1 : 0;
+	showText(mstl::string(")"), moveStyle());
 	putSpace();
 }
 
@@ -357,78 +448,128 @@ PdfWriter::writeEndComment()
 }
 
 
+// Style mapping for the current variation depth (0 = main line,
+// 1 = variation, >1 = subvariation).
+PdfWriter::Style
+PdfWriter::moveStyle() const
+{
+	switch (m_variationLevel)
+	{
+		case 0:	return Move_Text_MainLine;
+		case 1:	return Move_Text_Variation;
+		default:	return Move_Text_SubVariation;
+	}
+}
+
+
+PdfWriter::Style
+PdfWriter::figurineStyle() const
+{
+	switch (m_variationLevel)
+	{
+		case 0:	return Move_Figurine_MainLine;
+		case 1:	return Move_Figurine_Variation;
+		default:	return Move_Figurine_SubVariation;
+	}
+}
+
+
+PdfWriter::Style
+PdfWriter::commentStyle() const
+{
+	switch (m_variationLevel)
+	{
+		case 0:	return Comment_MainLine;
+		case 1:	return Comment_Variation;
+		default:	return Comment_SubVariation;
+	}
+}
+
+
+PdfWriter::Style
+PdfWriter::symbolStyle() const
+{
+	switch (m_variationLevel)
+	{
+		case 0:	return Move_Symbol_MainLine;
+		case 1:	return Move_Symbol_Variation;
+		default:	return Move_Symbol_SubVariation;
+	}
+}
+
+
 void
-PdfWriter::writeDiagram(Board const& board, double x, double y)
+PdfWriter::writeDiagram(Board const& board)
 {
 	M_ASSERT(m_page);
 
-	if (m_font[Diagram])
+	loadImages();
+
+	if (m_image[Square_Lite] == 0 || m_image[Border_Top] == 0)
+		return;	// image set unavailable: skip diagrams
+
+	double wd	= ::pixelsToPoints(HPDF_Image_GetWidth(m_image[Square_Lite]));
+	double ht	= ::pixelsToPoints(HPDF_Image_GetHeight(m_image[Square_Lite]));
+	double bht	= ::pixelsToPoints(HPDF_Image_GetHeight(m_image[Border_Top]));
+	double bwd	= ::pixelsToPoints(HPDF_Image_GetWidth(m_image[Border_Left]));
+
+	double height = 8.0*ht + 2.0*bht;
+
+	if (m_cursorY - height < m_margin)
+		addPage();	// does not fit on this page: continue on a fresh one
+
+	// top-left outer corner of the border ring; PDF coordinates are
+	// bottom-up, so yTop is the highest y of the diagram block
+	double x		= m_margin;
+	double yTop	= m_cursorY;
+
+	// border ring
+	for (unsigned f = 0; f < 8; ++f)
 	{
+		double xb = x + bwd + f*wd;
+		HPDF_Page_DrawImage(m_page, m_image[Border_Top],		xb, yTop - bht,				wd, bht);
+		HPDF_Page_DrawImage(m_page, m_image[Border_Bottom],	xb, yTop - 2*bht - 8*ht,	wd, bht);
 	}
-	else
+
+	for (unsigned r = 0; r < 8; ++r)
 	{
-		loadImages();
-
-		double wd	= ::pixelsToPoints(HPDF_Image_GetWidth(m_image[Square_Lite]));
-		double ht	= ::pixelsToPoints(HPDF_Image_GetHeight(m_image[Square_Lite]));
-		double bht	= ::pixelsToPoints(HPDF_Image_GetHeight(m_image[Border_Top]));
-		double bwd	= ::pixelsToPoints(HPDF_Image_GetWidth(m_image[Border_Left]));
-
-		y += 8.0*ht + 2.0*bht;
-
-		double x0 = x;
-		double y0 = y - bht;
-		double x1 = x0 + 8*wd + bwd;
-		double y1 = y0 - 7*ht - bht;
-
-		for (unsigned i = 0; i < 8u; ++i)
-		{
-			double x2 = x0 + i*wd + bwd;
-
-			HPDF_Page_DrawImage(m_page, m_image[Border_Top], x2, y0 + ht, wd, bht);
-			HPDF_Page_DrawImage(m_page, m_image[Border_Bottom], x2, y1, wd, bht);
-			HPDF_Page_DrawImage(m_page, m_image[Border_Left], x0, y0 - i*ht, bwd, ht);
-			HPDF_Page_DrawImage(m_page, m_image[Border_Right], x1, y0 - i*ht, bwd, ht);
-		}
-
-		HPDF_Page_DrawImage(m_page, m_image[Border_TopLeft], x0, y0 + ht, bwd, bht);
-		HPDF_Page_DrawImage(m_page, m_image[Border_BottomLeft], x0, y1, bwd, bht);
-		HPDF_Page_DrawImage(m_page, m_image[Border_TopRight], x1, y0 + ht, bwd, bht);
-		HPDF_Page_DrawImage(m_page, m_image[Border_BottomRight], x1, y1, bwd, bht);
-
-		y -= bht;
-		x += bwd;
-
-		x0 = x;
-		y0 = y;
-
-		color::ID color = color::White;
-
-		for (unsigned i = 0; i < 64; ++i)
-		{
-			piece::ID piece = board.pieceAt(sq::ID(i));
-
-			if (i > 0 && i % 8 == 0)
-			{
-				x0 = x;
-				y0 -= ht;
-			}
-			else
-			{
-				color = color::opposite(color);
-			}
-
-			Part part;
-
-			if (piece == piece::Empty)
-				part = color::isWhite(color) ? Square_Lite : Square_Dark;
-			else
-				part = color::isWhite(color) ? Part(piece) : Part(piece << 4);
-
-			HPDF_Page_DrawImage(m_page, m_image[part], x0, y0, wd, ht);
-			x0 += wd;
-		}
+		double yb = yTop - bht - (r + 1)*ht;
+		HPDF_Page_DrawImage(m_page, m_image[Border_Left],	x,				yb, bwd, ht);
+		HPDF_Page_DrawImage(m_page, m_image[Border_Right],	x + bwd + 8*wd,	yb, bwd, ht);
 	}
+
+	HPDF_Page_DrawImage(m_page, m_image[Border_TopLeft],		x,				yTop - bht,			bwd, bht);
+	HPDF_Page_DrawImage(m_page, m_image[Border_TopRight],	x + bwd + 8*wd,	yTop - bht,			bwd, bht);
+	HPDF_Page_DrawImage(m_page, m_image[Border_BottomLeft],	x,				yTop - 2*bht - 8*ht,	bwd, bht);
+	HPDF_Page_DrawImage(m_page, m_image[Border_BottomRight],x + bwd + 8*wd,	yTop - 2*bht - 8*ht,	bwd, bht);
+
+	// squares, file-major (a1 = 0; a1 is a light square)
+	for (unsigned i = 0; i < 64; ++i)
+	{
+		unsigned file	= i % 8;
+		unsigned rank	= i / 8;	// 0 = rank 1
+
+		piece::ID piece = board.pieceAt(sq::ID(i));
+		bool lite = (file + rank) % 2 == 0;
+
+		Part part;
+
+		if (piece == piece::Empty)
+			part = lite ? Square_Lite : Square_Dark;
+		else
+			part = lite ? Part(piece) : Part(piece << 4);
+
+		HPDF_Page_DrawImage(	m_page,
+									m_image[part],
+									x + bwd + file*wd,
+									yTop - bht - (rank + 1)*ht,
+									wd,
+									ht);
+	}
+
+	// reserve the diagram's vertical space
+	m_cursorY -= height + 0.5*m_lineHeight;
+	m_cursorX = m_margin;
 }
 
 
@@ -438,9 +579,20 @@ void PdfWriter::start()
 }
 
 
+// Saves the document. The export framework never calls finish() (nor
+// start()), so the destructor performs the save; finish() stays
+// idempotent for explicit callers.
 void
 PdfWriter::finish()
 {
+	if (m_saved || m_doc == 0)
+		return;
+
+	m_saved = true;
+
+	if (m_page == 0)
+		return;	// nothing was written (empty export): no output file
+
 	HPDF_SaveToFile(m_doc, m_fname);
 }
 
@@ -502,15 +654,24 @@ PdfWriter::loadImage(Part part,
 	filename += ::util::misc::file::pathSeparator();
 	filename += style;
 	filename += ::util::misc::file::pathSeparator();
+	filename += "200";	// square size (pixels) of the bundled sets
 
 	if (!pieceSet.empty())
 	{
-		filename += pieceSet;
 		filename += ::util::misc::file::pathSeparator();
+		filename += "pieces";
+		filename += ::util::misc::file::pathSeparator();
+		filename += pieceSet;
 	}
 
+	filename += ::util::misc::file::pathSeparator();
 	filename += id;
-	filename += ".jpg"; // XXX
+	filename += ".jpg";
+
+	// a missing image must not put the document into the error state
+	// (libharu errors are sticky), so the file is probed first
+	if (!::sys::file::access(filename.c_str(), ::sys::file::Existence))
+		return;
 
 	m_image[part] = HPDF_LoadJpegImageFromFile(m_doc, filename);
 }
@@ -649,7 +810,7 @@ PdfWriter::errorMessage(unsigned detailNo)
 	}
 
 	char buf[200];
-	::snprintf(buf, sizeof(buf), "<unknown detail number %04X>", detailNo);
+	::snprintf(buf, sizeof(buf), "<unknown error code %04X>", detailNo);
 	return buf;
 }
 

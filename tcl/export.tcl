@@ -3442,7 +3442,16 @@ proc DoExport {parent dlg file} {
 				return 1
 			}
 
-			pdf - tex {
+			pdf {
+				# native PDF publish path for a single game (PdfWriter):
+				# embedded figurine font, image diagrams from the pdf/sets.
+				# Content flags: variations, comments, annotations, move
+				# info, marks, termination tag (engine-level convention).
+				::scidb::game::printPdf $Info(base) $Info(variant) $Info(index) $file 63
+				return 1
+			}
+
+			tex {
 				return [::beta::notYetImplemented .application print-game]
 				::scidb::game::print $file $searchPath $script $preamble \
 					-flags $flags \
@@ -3503,7 +3512,22 @@ proc DoExport {parent dlg file} {
 				]
 			}
 
-			pdf - tex {
+			pdf {
+				# native PDF publish path (PdfWriter; embedded figurine font,
+				# image diagrams from the pdf/sets). The progress and log
+				# arguments are appended by ::progress::start (same
+				# convention as the html branch above); content flags as in
+				# the single-game pdf branch.
+				set cmd [list ::scidb::view::printPdf \
+					$Info(base) \
+					$Info(variant) \
+					$Info(view) \
+					$file \
+					63 \
+				]
+			}
+
+			tex {
 				set cmd [list ::scidb::view::print \
 					$Info(base) \
 					$Info(variant) \

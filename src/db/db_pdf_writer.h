@@ -163,13 +163,20 @@ private:
 		Border_BottomRight = 247,
 	};
 
-	void writeDiagram(Board const& board, double x0, double y0);
+	void writeDiagram(Board const& board);
 	void showText(mstl::string const& text, Style style);
+	void showWrapped(mstl::string const& text, Style style);
 	void putSpace();
 	void newLine();
+	void addPage();
 
 	void setFont(Style style);
 	void loadImages();
+
+	Style moveStyle() const;
+	Style figurineStyle() const;
+	Style commentStyle() const;
+	Style symbolStyle() const;
 
 	void loadImage(Part part,
 						mstl::string const& style,
@@ -189,6 +196,8 @@ private:
 	unsigned				m_fontSize[LAST];
 	_HPDF_Dict_Rec*	m_image[256];
 	Style					m_currentStyle;
+	bool					m_saved;
+	unsigned				m_variationLevel;
 	double					m_cursorX;
 	double					m_cursorY;
 	double					m_pageWidth;
