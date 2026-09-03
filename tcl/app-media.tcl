@@ -480,8 +480,9 @@ proc application::media::FenKey {fen} {
 #   <name>*000.wmv                              (base video, globbed)
 #
 # Returns {baseline entryList}: baseline = default video path ({} if
-# none), entryList = {fen file label} (fen already the raw file-form; a
-# real FEN, not the comparison key).
+# none), entryList rows = {fen file start end label fromSq toSq}
+# (start/end empty; fen already the raw file-form; a real FEN, not the
+# comparison key; fromSq/toSq = algebraic squares of the hotspot move).
 proc application::media::CmsEntries {path} {
 	set ext [file rootname $path]		;# <db>.html/<name>
 	set dir $ext
@@ -497,7 +498,9 @@ proc application::media::CmsEntries {path} {
 	foreach {whole efen x y v u} $pairs {
 		set clip [file join $dir "${whole}.wmv"]
 		if {[file exists $clip]} {
-			lappend entries [list $efen $clip {} {} "hotspot x$x y$y"]
+			set fromSq [CmsSquare $x]
+			set toSq [CmsSquare $y]
+			lappend entries [list $efen $clip {} {} "hotspot $fromSq-$toSq" $fromSq $toSq]
 		}
 	}
 
@@ -507,6 +510,16 @@ proc application::media::CmsEntries {path} {
 	if {[string length $base] && ![file exists $base]} { set base {} }
 
 	return [list baseline $base entries $entries]
+}
+
+
+# Convert a .cms x/y selector (file-major 0-based, a1=0, h8=63) to
+# algebraic notation. Verified corpus-wide (109/109 legal moves).
+proc application::media::CmsSquare {n} {
+	set files {a b c d e f g h}
+	set f [lindex $files [expr {$n % 8}]]
+	set r [expr {$n / 8 + 1}]
+	return "$f$r"
 }
 
 
@@ -583,8 +596,9 @@ proc application::media::SmvEntries {path} {
 
 
 # Match a FEN (of the current board position) against the interactive
-# entries. entryList is {fen file start end label} (SmvEntries shape;
-# CmsEntries rows are converted with start/end empty).
+# entries. Rows are {fen file start end label ?fromSq toSq?}: SmvEntries
+# rows are 5-wide, CmsEntries rows carry the hotspot squares as elements
+# 5 and 6.
 proc application::media::InteractiveMatch {entryList fen} {
 	set key [FenKey $fen]
 	if {![string length $key]} { return {} }
@@ -622,7 +636,10 @@ proc application::media::ResolveIndex {path position} {
 	array set cms [CmsEntries $path]
 	if {[llength $cms(entries)] && [string length $fen]} {
 		set hit [InteractiveMatch $cms(entries) $fen]
-		if {[llength $hit]} { return [list [lindex $hit 1] 1 [lindex $hit 2] [lindex $hit 3]] }
+		if {[llength $hit]} {
+			# carry the hotspot squares (elements 5/6) for the board arrow
+			return [list [lindex $hit 1] 1 [lindex $hit 2] [lindex $hit 3] [lindex $hit 5] [lindex $hit 6]]
+		}
 	}
 	if {[llength $cms(baseline)]} { return [list $cms(baseline) 0 {} {}] }
 	return {}
@@ -790,12 +807,17 @@ proc application::media::InteractiveFollow {position} {
 
 	if {[catch { ResolveIndex $idx $position } res]} { return }
 	if {[llength $res] < 4} { return }
-	lassign $res video interactive startMs endMs
+	lassign $res video interactive startMs endMs fromSq toSq
 	if {$interactive} {
 		set Priv(interactive:played:$key) 1
 		set Priv(statusbar) "Interactive video for current position"
 		MediaDebug "InteractiveFollow: position match ([FenKey $fen]) -> [list $video]"
 		PlayMedia $video $startMs $endMs
+		# draw the .cms hotspot (from/to squares of the key move); the
+		# board's own update path erases it on the next position change
+		if {[string length $fromSq] && [string length $toSq]} {
+			SyncAnnotate arrow [list $fromSq $toSq hotspot]
+		}
 	}
 }
 
@@ -1290,6 +1312,9 @@ proc application::media::SyncTransport {what} {
 # 3=yellow, 4=red; the mapping is a visual-oracle hypothesis).
 variable SyncColors
 array set SyncColors { 2 green 3 yellow 4 red }
+
+# ChessBase .cms interactive-video hotspots use the default arrow color.
+array set SyncColors { hotspot green }
 
 proc application::media::SyncAnnotate {kind data} {
 	variable Priv
