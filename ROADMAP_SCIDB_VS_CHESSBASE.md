@@ -216,7 +216,7 @@ Implemented so far:
 - ChessBase media manifests (`.cbm`) parsed and surfaced in the media gallery; media folders of a release resolve across sibling sections
 - interactive lesson indexes (`.cms`) decoded enough to drive position-keyed playback
 - the native HTML stack (read/render/publish) is complete for the profile documented in `SCIDB_HTML_PROFILE.md`; the export path passes the CBM168 corpus gate
-- single-game PDF/TeX export: the print-game game-window accessor bug (uninitialized entry) is FIXED in printGame; the PdfWriter foundation (format::Pdf, page flow, printPdf commands) is landed — remaining: the writer's font-loading model (empty-message exception at construction) and the layout completion before the export dialog exposes PDF; TeX export needs the TeXt print script
+- single-game PDF/TeX export: the print-game game-window accessor bug (uninitialized entry) is FIXED in printGame; the native PdfWriter publish path is complete and exposed in the export dialog (single game + view): embedded figurine font with fallbacks, word-wrapped comments, per-variation styles, image diagrams (pdf/sets, diagram NAGs), bottom-margin page breaks, save-on-destructor contract; gated by tests/test_app_pdf.tcl (6 app tests) — remaining: move info (clock/eval) rendering and TeX export (needs the TeXt print script)
 
 Likely files:
 - [src/db/db_database_codec.cpp](/home/michael-g-thomas/src/chess/scidb-code.codex/src/db/db_database_codec.cpp)
