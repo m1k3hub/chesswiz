@@ -354,14 +354,6 @@ public:
 								mstl::string const& filename,
 								unsigned flags) const;
 
-	void printGame(unsigned position,
-						TeXt::Environment& environment,
-						db::format::Type format,
-						unsigned flags,
-						unsigned options,
-						NagMap const& nagMap,
-						Languages const* languages,
-						unsigned significantLanguages) const;
 
 	unsigned addEngine(Engine* engine);
 	void removeEngine(unsigned id);

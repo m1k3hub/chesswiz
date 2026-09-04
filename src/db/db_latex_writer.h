@@ -58,6 +58,7 @@ private:
 	TeXt::Environment&	m_env;
 	TeXt::TokenP			m_printHeader;
 	TeXt::TokenP			m_printResult;
+	TeXt::TokenP			m_printFooter;
 	TeXt::TokenP			m_white;
 	TeXt::TokenP			m_black;
 	TeXt::TokenP			m_whiteCountry;

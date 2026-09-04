@@ -26,6 +26,7 @@
 
 #include "tcl_game.h"
 #include "db_html_writer.h"
+#include "db_latex_writer.h"
 #include "db_pdf_writer.h"
 #include "tcl_board.h"
 #include "tcl_database.h"
@@ -4183,19 +4184,33 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		mstl::string str;
 	};
 
-	if (objc < 5 || ((objc - 5) % 2) == 1)
+	// Usage: ::scidb::game::print <database> <variant> <gameIndex> <file>
+	//                              <search-path> <script-path> <preamble>
+	//                              ?-flags <flags> -options <options>
+	//                              -nags <nag-map> -languages <languages>
+	//                              -trace <trace>?
+	//
+	// Publishes the record at <gameIndex> via the TeXt print pipeline. Like
+	// ::scidb::game::printPdf/::scidb::game::printHtml the game is exported
+	// directly from the database (the game-editor route resolves to the
+	// scratch database and carries no tags).
+	if (objc < 8 || ((objc - 8) % 2) == 1)
 	{
 		Tcl_WrongNumArgs(
 			ti, 1, objv,
-			"<file> <search-path> <script-path> <preamble> ?-flags <flags> "
-			"-options <options> -nags <nag-map> -languages <languages> -trace <trace>?");
+			"<database> <variant> <gameIndex> <file> <search-path> <script-path> "
+			"<preamble> ?-flags <flags> -options <options> -nags <nag-map> "
+			"-languages <languages> -trace <trace>?");
 		return TCL_ERROR;
 	}
 
-	char const*		filename			= stringFromObj(objc, objv, 1);
-	char const* 	searchPath		= stringFromObj(objc, objv, 2);
-	mstl::string 	scriptPath		= stringFromObj(objc, objv, 3);
-	mstl::string 	preamble			= stringFromObj(objc, objv, 4);
+	char const*		database			= stringFromObj(objc, objv, 1);
+	variant::Type	variant			= tcl::game::variantFromObj(objc, objv, 2);
+	int					gameIndex		= 0;
+	char const*		filename			= stringFromObj(objc, objv, 4);
+	char const* 	searchPath		= stringFromObj(objc, objv, 5);
+	mstl::string 	scriptPath		= stringFromObj(objc, objv, 6);
+	mstl::string 	preamble			= stringFromObj(objc, objv, 7);
 	unsigned			flags				= 0;
 	unsigned			options			= 0;
 	char const*		trace				= "";
@@ -4208,7 +4223,7 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	::memset(nagMap, 0, sizeof(nagMap));
 
-	while (objc > 6 && *(option = stringFromObj(objc, objv, objc - 2)) == '-')
+	while (objc > 9 && *(option = stringFromObj(objc, objv, objc - 2)) == '-')
 	{
 		if (equal(option, "-flags"))
 		{
@@ -4260,6 +4275,15 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		objc -= 2;
 	}
 
+	if (Tcl_GetIntFromObj(ti, objv[3], &gameIndex) != TCL_OK || gameIndex < 0)
+	{
+		Tcl_SetResult(ti, "expected a non-negative game index", TCL_STATIC);
+		return TCL_ERROR;
+	}
+
+	Cursor const&	cursor(scidb->cursor(database, variant));
+	Database&		databaseRef(const_cast<Cursor&>(cursor).getDatabase());
+
 	TeXt::Controller::LogP myLog(new Log);
 	TeXt::Controller controller(searchPath, TeXt::Controller::AbortMode, myLog);
 	mstl::istringstream src(preamble);
@@ -4274,14 +4298,14 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			out.write(static_cast<Log*>(myLog.get())->str);
 	}
 
-	Scidb->printGame(	Application::InvalidPosition,
-							controller.environment(),
-							format::LaTeX,
+	LaTeXWriter writer(	databaseRef.format(),
 							flags,
 							options,
 							nagMap,
 							significant == 0 ? nullptr : &languages,
-							significant);
+							unsigned(significant),
+							controller.environment());
+	databaseRef.exportGame(unsigned(gameIndex), writer);
 
 	{
 		mstl::string log(out.str());

@@ -3716,50 +3716,6 @@ Application::mergeGame(	unsigned primary,
 
 
 void
-Application::printGame(	unsigned position,
-								TeXt::Environment& environment,
-								format::Type format,
-								unsigned flags,
-								unsigned options,
-								NagMap const& nagMap,
-								Languages const* languages,
-								unsigned significantLanguages) const
-{
-	// resolve the fallback BEFORE the lookup: containsGameAt maps
-	// InvalidPosition to m_currentPosition, but a find(position) with the
-	// original value would dereference end() (garbage EditGame - the crash
-	// behind the old print-game gate)
-	if (position == InvalidPosition)
-		position = m_currentPosition;
-
-	M_REQUIRE(containsGameAt(position));
-
-	EditGame const& game = *m_gameMap.find(position)->second;
-
-	// save changes in new scratch game before printing
-
-	switch (int(format))
-	{
-		case format::LaTeX:
-			{
-				LaTeXWriter	writer(	game.sink.cursor->database().format(),
-											flags,
-											options,
-											nagMap,
-											languages,
-											significantLanguages,
-											environment);
-				game.sink.cursor->database().exportGame(game.sink.index, writer);
-			}
-			break;
-
-		default:
-			M_RAISE("unsupported format");
-	}
-}
-
-
-void
 Application::printHtmlGame(	unsigned position,
 									mstl::string const& filename,
 									unsigned flags) const

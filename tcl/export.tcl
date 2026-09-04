@@ -3453,7 +3453,8 @@ proc DoExport {parent dlg file} {
 
 			tex {
 				return [::beta::notYetImplemented .application print-game]
-				::scidb::game::print $file $searchPath $script $preamble \
+				::scidb::game::print $Info(base) $Info(variant) $Info(index) $file \
+					$searchPath $script $preamble \
 					-flags $flags \
 					-options $options \
 					-nags $nags \

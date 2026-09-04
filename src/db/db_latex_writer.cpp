@@ -28,11 +28,55 @@
 #include "db_tag_set.h"
 
 #include "T_ListToken.h"
+#include "T_MacroToken.h"
+
 #include "T_Environment.h"
 
 using namespace db;
 using namespace TeXt;
 
+
+namespace {
+
+// The print script defines the game header/result macros with \def; such
+// bindings live in the environment's domain lists, while the token handles
+// created by Environment::newUndefinedToken() refer to the (still undefined)
+// root slots. Moreover macro expansion is producer-driven: it happens while
+// the interpreter pumps getFinalToken()/execute() over the producer stack,
+// which is not running outside Controller::processInput(). So the macro is
+// resolved through the domain chain, its producer is pushed, and the parser
+// loop is pumped until the producer stack is drained again (the consumer
+// set up by the last processInput() call persists).
+void
+expandGameMacro(Environment& env, TokenP const& handle)
+{
+	TokenP macro = env.lookupMacro(handle->refID());
+
+	if (!macro || !macro->isBound())
+		return;
+
+	env.pushProducer(Environment::ProducerP(new MacroToken::TokenProducer(macro)));
+
+	try
+	{
+		while (TokenP token = env.getFinalToken(Environment::AllowNull))
+			env.execute(token);
+	}
+	catch (Token::AbortException const&)
+	{
+	}
+	catch (Token::EmergencyStopException const&)
+	{
+	}
+	catch (Token::UnexpectedEndOfInputException const&)
+	{
+	}
+	catch (Token::BreakExecutionException const&)
+	{
+	}
+}
+
+}
 
 LaTeXWriter::LaTeXWriter(	format::Type srcFormat,
 									unsigned flags,
@@ -45,6 +89,7 @@ LaTeXWriter::LaTeXWriter(	format::Type srcFormat,
 	,m_env(env)
 	,m_printHeader(env.newUndefinedToken("\\print-game-header"))
 	,m_printResult(env.newUndefinedToken("\\print-game-result"))
+	,m_printFooter(env.newUndefinedToken("\\print-footer"))
 	,m_white(env.newUndefinedToken("\\White"))
 	,m_black(env.newUndefinedToken("\\Black"))
 	,m_whiteCountry(env.newUndefinedToken("\\WhiteCountry"))
@@ -104,16 +149,17 @@ LaTeXWriter::beginGame(TagSet const& tags)
 	m_env.bindMacro(m_fen,				tags.value(tag::Fen));
 	m_env.bindMacro(m_annotator,		tags.value(tag::Annotator));
 
-	m_env.execute(m_printHeader);
+	expandGameMacro(m_env, m_printHeader);
 
-	return save::Ok;
+	return true;
 }
 
 
 save::State
 LaTeXWriter::endGame(TagSet const& tags)
 {
-	m_env.execute(m_printResult);
+	expandGameMacro(m_env, m_printResult);
+	expandGameMacro(m_env, m_printFooter);
 	return save::Ok;
 }
 
