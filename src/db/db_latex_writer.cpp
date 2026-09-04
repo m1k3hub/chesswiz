@@ -35,7 +35,6 @@
 #include "sys_utf8_codec.h"
 
 #include "db_tag_set.h"
-#include <stdio.h>
 
 #include "T_ListToken.h"
 #include "T_MacroToken.h"
@@ -279,9 +278,6 @@ LaTeXWriter::writeMove(	Move const& move,
 							Comment const& preComment,
 							Comment const& comment)
 {
-	static unsigned dbg = 0;
-	if (++dbg % 5 == 1)
-		::fprintf(stderr, "[DBG] writeMove #%u: num='%s'\n", dbg, moveNumber.c_str());
 	if (!preComment.isEmpty())
 	{
 		m_buffer.append("\\movecomment{");
