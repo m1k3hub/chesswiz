@@ -84,7 +84,9 @@ uint64_t board::Obstructed[64][64];
 uint8_t board::IsOutside[256];
 
 
+#ifndef BROKEN_LINKER_HACK
 static void __attribute__((constructor)) initialize() { board::base::initialize(); }
+#endif
 
 
 template <typename T> inline static T div8(T x) { return x >> 3; }

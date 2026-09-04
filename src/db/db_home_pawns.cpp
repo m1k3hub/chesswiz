@@ -43,7 +43,9 @@ using namespace db;
 uint16_t HomePawnMask[2][64];
 
 
+#ifndef BROKEN_LINKER_HACK
 static void __attribute__((constructor)) initialize() { HomePawns::initialize(); }
+#endif
 
 
 HomePawns::HomePawns()

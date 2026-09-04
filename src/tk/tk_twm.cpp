@@ -573,9 +573,9 @@ Node::load(Tcl_Obj* obj, Node* parent)
 	return node;
 }
 
-#ifndef NDEBUG
-
-__attribute__((unused))
+// NOTE: the dump methods are used by cmdDump (the Tcl 'dump' command),
+// which is compiled unconditionally; __attribute__((unused)) prevents
+// warnings when the call sites are compiled out.
 void
 Node::dump()
 {
@@ -605,7 +605,6 @@ Node::dump(unsigned level)
 	}
 }
 
-#endif // NDEBUG
 } // namespace structure
 
 
@@ -7827,8 +7826,9 @@ Node::adjust()
 	performUpdateDimensions();
 }
 
-#ifndef NDEBUG
-
+// NOTE: used by cmdDump (the Tcl 'dump' command), which is compiled
+// unconditionally; __attribute__((unused)) prevents warnings when the
+// call sites are compiled out.
 __attribute__((unused))
 void
 Node::dump() const
@@ -7907,8 +7907,6 @@ Node::dump(unsigned level, bool parentIsWithdrawn) const
 	}
 	m_dumpFlag = false;
 }
-
-#endif // NDEBUG
 
 void
 Node::initialize()

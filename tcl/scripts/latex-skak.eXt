@@ -123,6 +123,7 @@
 }
 
 \def\print-game-result{%
+	\\par\\Result\\par
 }
 
 \\def\\liftsym\#1\{\{\\fontfamily\{skak\}\\fontencoding\{U\}\\selectfont\#1\}\}
@@ -182,7 +183,7 @@
 
 \\def\\nag\#1\{%
 	\\expandafter\\let\\expandafter\\tok\\csname nag-\#1\\endcsname
-	\\if\\undefined\\tok\\else\\tok\\fi
+	\\ifx\\tok\\relax\\else\\tok\\fi
 \}
 
 % \catcode`\@=11

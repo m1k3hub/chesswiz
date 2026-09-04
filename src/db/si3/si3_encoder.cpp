@@ -101,12 +101,14 @@ struct TagLookup
 db::Consumer::TagBits TagLookup::m_info;
 db::Consumer::TagBits TagLookup::m_ignore;
 
+#ifndef BROKEN_LINKER_HACK
 static void
 __attribute__((constructor))
 initialize()
 {
 	TagLookup::initialize();
 }
+#endif
 
 } // namespace
 

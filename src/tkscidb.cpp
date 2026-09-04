@@ -26,6 +26,7 @@
 
 #include "app_application.h"
 #include "db_board.h"
+#include "db_board_base.h"
 
 #include "tk_init.h"
 #include "tcl_base.h"
@@ -79,6 +80,7 @@ init(Tcl_Interp* ti)
 		// properly working on these systems (among other problems).
 		db::tag::initialize();
 		db::castling::initialize();
+		db::board::base::initialize();
 		db::Board::initialize();
 		db::HomePawns::initialize();
 		db::Signature::initialize();

@@ -320,7 +320,13 @@ static mstl::string const IdReversedQueenAndKing("wild/0");
 
 namespace chess960 {
 
-static mstl::string const PositionTable[961] =
+static mstl::string const* positionTable()
+{
+	// NOTE: function-local static (constructed on first use): a namespace
+	// scope table is constructed by this TU's static constructor, whose
+	// order relative to db_board.cpp's Board::initialize() constructor is
+	// not guaranteed (static initialization order fiasco).
+	static mstl::string const PositionTable[961] =
 {
 	"",         "BQNBNRKR", "BQNNRBKR", "BQNNRKRB", "QBBNNRKR", "QNBBNRKR", "QNBNRBKR", "QNBNRKRB",
 	"QBNNBRKR", "QNNBBRKR", "QNNRBBKR", "QNNRBKRB", "QBNNRKBR", "QNNBRKBR", "QNNRKBBR", "QNNRKRBB",
@@ -443,7 +449,9 @@ static mstl::string const PositionTable[961] =
 	"BBRKRNNQ", "BRKBRNNQ", "BRKRNBNQ", "BRKRNNQB", "RBBKRNNQ", "RKBBRNNQ", "RKBRNBNQ", "RKBRNNQB",
 	"RBKRBNNQ", "RKRBBNNQ", "RKRNBBNQ", "RKRNBNQB", "RBKRNNBQ", "RKRBNNBQ", "RKRNNBBQ", "RKRNNQBB",
 	"BBQNNRKR",
-};
+	};
+	return PositionTable;
+}
 
 static uint16_t Twins[961] =
 {
@@ -3662,7 +3670,7 @@ mstl::string const&
 chess960::position(uint16_t idn)
 {
 	M_REQUIRE(idn <= 960);
-	return chess960::PositionTable[idn];
+	return chess960::positionTable()[idn];
 }
 
 
@@ -3709,9 +3717,11 @@ chess960::fen(uint16_t idn)
 uint16_t
 chess960::lookup(mstl::string const& position)
 {
-	for (uint16_t i = 0; i < U_NUMBER_OF(PositionTable); ++i)
+	mstl::string const* positionTable = chess960::positionTable();
+
+	for (uint16_t i = 0; i < 961; ++i)
 	{
-		if (position == PositionTable[i])
+		if (position == positionTable[i])
 			return i;
 	}
 
@@ -3743,7 +3753,7 @@ shuffle::position(uint16_t idn)
 	else if (idn > 3*960)
 		idn -= 3*960;
 
-	mstl::string result = chess960::PositionTable[((idn - 1) % 960) + 1];
+	mstl::string result = chess960::positionTable()[((idn - 1) % 960) + 1];
 
 	if (idn > 2*960)
 	{

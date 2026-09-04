@@ -52,6 +52,24 @@ public:
 
 private:
 
+	void writeBeginMoveSection() override;
+	void writeEndMoveSection(result::ID result) override;
+	void writeMove(	Move const& move,
+						mstl::string const& moveNumber,
+						Annotation const& annotation,
+						MarkSet const& marks,
+						Comment const& preComment,
+						Comment const& comment) override;
+	void writeBeginVariation(unsigned level) override;
+	void writeEndVariation(unsigned level) override;
+	void writePrecedingComment(	Annotation const& annotation,
+										Comment const& comment,
+										MarkSet const& marks) override;
+	void writeTrailingComment(Comment const& comment) override;
+
+	void flushMoveBuffer();
+
+
 	bool beginGame(TagSet const& tags) override;
 	save::State endGame(TagSet const& tags) override;
 
@@ -78,6 +96,8 @@ private:
 	TeXt::TokenP			m_idn;
 	TeXt::TokenP			m_fen;
 	TeXt::TokenP			m_annotator;
+	mstl::string			m_buffer;		// movetext of the current line
+	unsigned			m_variationLevel;
 };
 
 } // namespace db

@@ -64,8 +64,6 @@ test_export.tcl:	Total	14	Passed	14	Skipped	0	Failed	0
 ++++ audit-db-tests-load-framework-06 PASSED
 ++++ audit-db-tests-not-fully-skipped-07 PASSED
 test_audit_regressions.tcl:	Total	7	Passed	7	Skipped	0	Failed	0
-Warning: files left behind:
-	test_audit_regressions.tcl:	test_cpp_backend
 
 === Running test_widgets.tcl ===
   NOTE: Scidb widgets not loaded - using basic Tk tests
@@ -82,8 +80,9 @@ test_widgets.tcl:	Total	8	Passed	8	Skipped	0	Failed	0
 === Running test_cli_smoke.tcl ===
 ++++ cli-cdb2sci-help-01 PASSED
 ++++ cli-cbh2si4-help-02 PASSED
-++++ cli-verify-cbh-write-03 PASSED
-test_cli_smoke.tcl:	Total	3	Passed	3	Skipped	0	Failed	0
+test_cli_smoke.tcl:	Total	3	Passed	2	Skipped	1	Failed	0
+Number of tests skipped for each constraint:
+	1	hasVerifyCbhWrite
 
 === Running test_database.tcl ===
   NOTE: Scidb application not loaded - database tests will be skipped individually
@@ -160,9 +159,9 @@ test_board.tcl:	Total	14	Passed	14	Skipped	0	Failed	0
 ==============================================
   Test Results Summary
 ==============================================
-Total Passed: 112
+Total Passed: 111
 Total Failed: 0
-Total Skipped: 6
-Duration: 2s
+Total Skipped: 7
+Duration: 1s
 
 STATUS: PASSED

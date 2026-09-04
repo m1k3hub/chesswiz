@@ -294,7 +294,9 @@ errorInEGTB(int n)
 }
 
 
+#ifndef BROKEN_LINKER_HACK
 static void __attribute__((constructor)) initialize() { Probe::initialize(); }
+#endif
 
 
 static void

@@ -25,6 +25,15 @@
 // ======================================================================
 
 #include "db_latex_writer.h"
+#include "db_annotation.h"
+#include "db_comment.h"
+#include "db_move.h"
+#include "db_move_info_set.h"
+#include "db_mark_set.h"
+
+#include "sys_utf8.h"
+#include "sys_utf8_codec.h"
+
 #include "db_tag_set.h"
 
 #include "T_ListToken.h"
@@ -87,6 +96,7 @@ LaTeXWriter::LaTeXWriter(	format::Type srcFormat,
 									Environment& env)
 	:DocumentWriter(srcFormat, flags, options, nagMap, languages, significantLanguages)
 	,m_env(env)
+	,m_variationLevel(0)
 	,m_printHeader(env.newUndefinedToken("\\print-game-header"))
 	,m_printResult(env.newUndefinedToken("\\print-game-result"))
 	,m_printFooter(env.newUndefinedToken("\\print-footer"))
@@ -161,6 +171,183 @@ LaTeXWriter::endGame(TagSet const& tags)
 	expandGameMacro(m_env, m_printResult);
 	expandGameMacro(m_env, m_printFooter);
 	return save::Ok;
+}
+
+
+
+// ----------------------------------------------------------------------
+// Move section: the moves are accumulated into a buffer and flushed as
+// skak's \mainline (main line) / \variation (variation) calls; comments
+// are emitted with skak's \movecomment, annotations with the script's
+// \nag dispatcher, and diagram NAGs as skak boards (\showboard via the
+// diagram environment, showing the position reached so far). Nested
+// variations become sibling scidbvariation environments: a variation
+// interrupted by a subvariation is flushed in parts.
+// ----------------------------------------------------------------------
+
+namespace {
+
+void
+appendEscapedLaTeX(mstl::string& buf, mstl::string const& text)
+{
+	for (char const* s = text.c_str(); *s; ++s)
+	{
+		switch (*s)
+		{
+			case '\\': buf.append("\\textbackslash{}"); break;
+			case '{': buf.append("\\{"); break;
+			case '}': buf.append("\\}"); break;
+			case '%': buf.append("\\%"); break;
+			case '#': buf.append("\\#"); break;
+			case '$': buf.append("\\$"); break;
+			case '&': buf.append("\\&"); break;
+			case '_': buf.append("\\_"); break;
+			case '~': buf.append("\\textasciitilde{}"); break;
+			case '^': buf.append("\\textasciicircum{}"); break;
+			default: buf.append(*s); break;
+		}
+	}
+}
+
+
+mstl::string
+flattenComment(Comment const& comment, unsigned langFlags)
+{
+	mstl::string text;
+	comment.flatten(text, encoding::Utf8, langFlags);
+	return text;
+}
+
+}
+
+
+void
+LaTeXWriter::flushMoveBuffer()
+{
+	if (m_buffer.empty())
+		return;
+
+	mstl::string line(m_variationLevel == 0 ? "\\mainline{" : "\\variation{");
+	line += m_buffer;
+	line += "}\n";
+	m_env.filter().put(m_env, line);
+	m_buffer.clear();
+}
+
+
+void
+LaTeXWriter::writeBeginMoveSection()
+{
+	m_buffer.clear();
+	m_variationLevel = 0;
+}
+
+
+void
+LaTeXWriter::writeEndMoveSection(result::ID)
+{
+	flushMoveBuffer();
+	m_variationLevel = 0;
+}
+
+
+void
+LaTeXWriter::writeMove(	Move const& move,
+							mstl::string const& moveNumber,
+							Annotation const& annotation,
+							MarkSet const& marks,
+							Comment const& preComment,
+							Comment const& comment)
+{
+	if (!preComment.isEmpty())
+	{
+		m_buffer.append("\\movecomment{");
+		appendEscapedLaTeX(m_buffer, flattenComment(preComment, langFlags()));
+		m_buffer.append("} ");
+	}
+
+	if (!moveNumber.empty())
+	{
+		m_buffer.append(moveNumber);
+		m_buffer.append(' ');
+	}
+
+	mstl::string str;
+	move.printSAN(str, protocol::Standard, encoding::Latin1);
+	m_buffer.append(str);
+	m_buffer.append(' ');
+
+	if (!annotation.isEmpty())
+	{
+		// the diagram NAGs are layout markers, not annotation symbols
+		Annotation symbols(annotation);
+		symbols.removeDiagramNags();
+
+		for (unsigned i = 0; i < symbols.count(); ++i)
+		{
+			m_buffer.append("\\nag{");
+			m_buffer.append(mstl::string::cast(unsigned(symbols[i])));
+			m_buffer.append("} ");
+		}
+
+		if (annotation.contains(nag::Diagram)
+			|| annotation.contains(nag::DiagramFromBlack))
+		{
+			flushMoveBuffer();
+			m_env.filter().put(m_env, "\\begin{diagram}\\end{diagram}\n");
+		}
+	}
+
+	if (!comment.isEmpty())
+	{
+		m_buffer.append("\\movecomment{");
+		appendEscapedLaTeX(m_buffer, flattenComment(comment, langFlags()));
+		m_buffer.append("} ");
+	}
+}
+
+
+void
+LaTeXWriter::writeBeginVariation(unsigned level)
+{
+	flushMoveBuffer();
+	m_variationLevel = level;
+	m_env.filter().put(m_env, "\\begin{scidbvariation}\n");
+}
+
+
+void
+LaTeXWriter::writeEndVariation(unsigned level)
+{
+	flushMoveBuffer();
+	m_env.filter().put(m_env, "\\end{scidbvariation}\n");
+	m_variationLevel = level > 1 ? level - 1 : 0;
+}
+
+
+void
+LaTeXWriter::writePrecedingComment(	Annotation const&,
+												Comment const& comment,
+												MarkSet const&)
+{
+	if (comment.isEmpty())
+		return;
+
+	m_buffer.append("\\movecomment{");
+	appendEscapedLaTeX(m_buffer, flattenComment(comment, langFlags()));
+	m_buffer.append("} ");
+}
+
+
+void
+LaTeXWriter::writeTrailingComment(Comment const& comment)
+{
+	if (comment.isEmpty())
+		return;
+
+	m_buffer.append("\\movecomment{");
+	appendEscapedLaTeX(m_buffer, flattenComment(comment, langFlags()));
+	m_buffer.append("} ");
 }
 
 // vi:set ts=3 sw=3:
