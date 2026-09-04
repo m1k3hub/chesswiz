@@ -58,20 +58,20 @@ using namespace db::board;
 namespace bf = mstl::bf;
 
 #define LittleGame_Hash         UINT64_C(0x7bda5dadc845e3c6)
-#define PawnsOn4thRank_Hash     UINT64_C(0x8be1258a4ea8e584)
-#define Pyramid_Hash            UINT64_C(0xa71f1040e657c6a9)
+#define PawnsOn4thRank_Hash     UINT64_C(0x6741bdb0888a7d57)
+#define Pyramid_Hash            UINT64_C(0x4bbf887a20755e7a)
 #define KNNvsKP_Hash            UINT64_C(0xdcc896ced83a7ce4)
 #define PawnsOnly_Hash          UINT64_C(0x3a4fd07c22f6a534)
 #define KnightsOnly_Hash        UINT64_C(0x5dbe5ac131c561aa)
 #define BishopsOnly_Hash        UINT64_C(0x41041e489635398e)
-#define RooksOnly_Hash          UINT64_C(0x63b9384529bef7b5)
+#define RooksOnly_Hash          UINT64_C(0x8f19a07fef9c6f66)
 #define QueensOnly_Hash         UINT64_C(0x45537041bf95eb96)
-#define NoQueens_Hash           UINT64_C(0x7f037ccc8e4eaf91)
+#define NoQueens_Hash           UINT64_C(0x93a3e4f6486c3742)
 #define WildFive_Hash           UINT64_C(0xe2272812749517d8)
 #define KBNK_Hash               UINT64_C(0xa2f3dcd8a1b6ffed)
 #define KBBK_Hash               UINT64_C(0x51be7cba98acb392)
 #define Runaway_Hash            UINT64_C(0x548d1ba18e63df59)
-#define QueenVsRooks_Hash       UINT64_C(0xbeb7e50fdf362a01)
+#define QueenVsRooks_Hash       UINT64_C(0x0a4301a374bff9ae)
 #define UpsideDown_Hash         UINT64_C(0xcfa9f03a9b87134d)
 
 static uint64_t const DarkSquares	= A1 | C1 | E1 | G1
