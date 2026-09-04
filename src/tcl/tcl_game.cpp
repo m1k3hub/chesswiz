@@ -4306,6 +4306,7 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 							unsigned(significant),
 							controller.environment());
 	databaseRef.exportGame(unsigned(gameIndex), writer);
+	writer.finish();
 
 	{
 		mstl::string log(out.str());

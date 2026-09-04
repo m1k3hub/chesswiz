@@ -1102,6 +1102,7 @@ View::printGames(	TeXt::Environment& environment,
 
 				progress.message("print-game");
 				count = exportGames(writer, database().variant(), illegalRejected, log, progress);
+				writer.finish();
 			}
 			break;
 

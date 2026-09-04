@@ -48,6 +48,8 @@ public:
 					TeXt::Environment& env);
 	~LaTeXWriter() throw();
 
+	void finish() override;
+
 	format::Type format() const override;
 
 private:
@@ -72,6 +74,7 @@ private:
 
 	bool beginGame(TagSet const& tags) override;
 	save::State endGame(TagSet const& tags) override;
+
 
 	TeXt::Environment&	m_env;
 	TeXt::TokenP			m_printHeader;

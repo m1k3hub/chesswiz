@@ -35,6 +35,7 @@
 #include "sys_utf8_codec.h"
 
 #include "db_tag_set.h"
+#include <stdio.h>
 
 #include "T_ListToken.h"
 #include "T_MacroToken.h"
@@ -129,6 +130,16 @@ LaTeXWriter::~LaTeXWriter() throw()
 }
 
 
+// NOTE: the export framework calls finish() after the last game of the
+// export; \end{document} must come after ALL games, so \print-footer is
+// emitted here and not in endGame() (which runs per game).
+void
+LaTeXWriter::finish()
+{
+	expandGameMacro(m_env, m_printFooter);
+}
+
+
 format::Type
 LaTeXWriter::format() const
 {
@@ -169,7 +180,6 @@ save::State
 LaTeXWriter::endGame(TagSet const& tags)
 {
 	expandGameMacro(m_env, m_printResult);
-	expandGameMacro(m_env, m_printFooter);
 	return save::Ok;
 }
 
@@ -227,6 +237,16 @@ LaTeXWriter::flushMoveBuffer()
 	if (m_buffer.empty())
 		return;
 
+	// NOTE: a trailing space inside \mainline{...}/\variation{...} makes
+	// skak continue reading the movetext past the closing brace, which
+	// breaks with 'Paragraph ended before \FenBoard was complete' when a
+	// \par follows. Strip it.
+	while (!m_buffer.empty() && m_buffer[m_buffer.size() - 1] == ' ')
+		m_buffer.set_size(m_buffer.size() - 1);
+
+	if (m_buffer.empty())
+		return;
+
 	mstl::string line(m_variationLevel == 0 ? "\\mainline{" : "\\variation{");
 	line += m_buffer;
 	line += "}\n";
@@ -259,6 +279,9 @@ LaTeXWriter::writeMove(	Move const& move,
 							Comment const& preComment,
 							Comment const& comment)
 {
+	static unsigned dbg = 0;
+	if (++dbg % 5 == 1)
+		::fprintf(stderr, "[DBG] writeMove #%u: num='%s'\n", dbg, moveNumber.c_str());
 	if (!preComment.isEmpty())
 	{
 		m_buffer.append("\\movecomment{");

@@ -62,6 +62,7 @@
 \unless\ifbound\PageStyle		\def\PageStyle{a4paper}		\fi
 \unless\ifbound\FontFamily		\def\FontFamily{times}		\fi
 \unless\ifbound\BoardMover	\def\BoardMover{off}	\fi
+\unless\ifbound\ChessStyle	\def\ChessStyle{styleC}	\fi
 
 \def\print-header{%
 	\\documentclass[\PageStyle,\Orientation,\FontSize pt,\ColumnStyle,notitlepage]\{\DocumentStyle\}
@@ -115,6 +116,7 @@
 }
 
 \def\print-game-header{%
+	\\newgame
 	\\textbf\{\%
 		\$\\circ\$ \White\\\\
 		\$\\bullet\$ \Black\\\\
@@ -123,7 +125,9 @@
 }
 
 \def\print-game-result{%
-	\\par\\Result\\par
+	\\par
+	\Result
+	\\par
 }
 
 \\def\\liftsym\#1\{\{\\fontfamily\{skak\}\\fontencoding\{U\}\\selectfont\#1\}\}
