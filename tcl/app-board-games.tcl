@@ -68,9 +68,9 @@ proc closed {w} {
 }
 
 
-# View callback for ::gamestable: 0 selects the base's main view (all
-# games; no filter).
-proc View {} {
+# View callback for ::gamestable: called with (base variant); returning
+# 0 selects the base's main view (all games; no filter).
+proc View {base variant} {
 	return 0
 }
 
