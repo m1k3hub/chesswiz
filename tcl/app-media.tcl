@@ -265,6 +265,7 @@ proc application::media::Update {position} {
 					set Priv(base) $Priv(lastBase)
 					set Priv(variant) $Priv(lastVariant)
 					set Priv(statusbar) "Media gallery - playable without a game"
+					ShowEmptyHint "Media gallery\n\nSelect a media entry to play."
 					PrebuildLessons
 					return
 				}
@@ -273,6 +274,7 @@ proc application::media::Update {position} {
 		set Priv(base) {}
 		set Priv(variant) {}
 		set Priv(statusbar) $mc::NoDatabase
+		ShowEmptyHint $mc::NoDatabase
 		return
 	}
 
@@ -308,6 +310,7 @@ proc application::media::Update {position} {
 			return
 		}
 		set Priv(statusbar) $mc::NoMedia
+		ShowEmptyHint "No media for this game.\n\nMedia entries appear here when the\ndatabase has an .scm/.cbm media companion."
 		return
 	}
 
@@ -852,6 +855,24 @@ proc application::media::MediaDebug {msg} {
 		close $fd
 	}
 	puts stderr "scidb-media: $msg"
+}
+
+
+# Show a centered hint on the viewer canvas when there is nothing to
+# play (empty gallery / no media for the game) instead of a bare black
+# canvas, which reads as "broken".
+proc application::media::ShowEmptyHint {text} {
+	variable Priv
+	set canvas $Priv(viewer).canvas
+	if {![winfo exists $canvas]} { return }
+	$canvas delete all
+	set w [winfo width $canvas]
+	set h [winfo height $canvas]
+	if {$w < 10} { set w 300 }
+	if {$h < 10} { set h 200 }
+	$canvas create text [expr {$w/2}] [expr {$h/2}] \
+		-text $text -fill "#606060" -justify center \
+		-font {TkDefaultFont 12 bold}
 }
 
 
