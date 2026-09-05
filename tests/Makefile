@@ -57,6 +57,15 @@ app-tcl: $(TEST_DIR)run_app_tests.tcl $(TEST_DIR)run_app_driver.tcl
 # C++ Tests
 # ==============================================================================
 
+smoke:
+	@echo "Running headless startup smoke test..."
+	@timeout 30 xvfb-run -a $(SRC_DIR)/tkscidb-beta $(TEST_DIR)startup_smoke.tcl > /tmp/scidb-smoke.log 2>&1; \
+		rc=$$?; cat /tmp/scidb-smoke.log; \
+		if grep -q "STARTUP-SMOKE: OK" /tmp/scidb-smoke.log && ! grep -q "FAIL" /tmp/scidb-smoke.log; then \
+			exit 0; \
+		fi; \
+		echo "STARTUP-SMOKE: FAILED (exit $$rc)"; exit 1
+
 cpp: $(TEST_DIR)test_cpp_backend $(TEST_DIR)test_corr_duration
 	@chmod +x "$(TEST_DIR)test_cpp_backend"
 	@echo "Running C++ backend tests..."

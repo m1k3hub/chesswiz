@@ -21,7 +21,9 @@ proc build {parent {width 0} {height 0}} {
 	variable Tables
 	variable Columns
 
-	set id [::application::twm::getId $parent]
+	# NOTE: this pane is a plain frame in the application TWM (not a
+	# nested twm), so there is no twm id here; gamestable gets a constant
+	# options id.
 	set table $parent.table
 	namespace eval [namespace current]::$table {}
 	variable ${table}::Priv
@@ -30,14 +32,15 @@ proc build {parent {width 0} {height 0}} {
 	set Priv(variant) {}
 
 	::gamestable::build $table [namespace code [list View]] $Columns \
-		-id db:board:games:$id \
+		-id db:board:games \
 		-takefocus 0 \
 		-mode list \
 		;
 
+	variable Table $table
+
 	::scidb::db::subscribe gameList \
-		[list [namespace current]::TableUpdate $table] \
-		[list [namespace current]::Close $table] \
+		[list [namespace current]::GameListChanged] \
 		;
 	::scidb::db::subscribe databaseSwitch \
 		[list [namespace current]::DatabaseSwitched] \
@@ -56,16 +59,22 @@ proc View {} {
 
 # databaseSwitch: rebind the grid to the newly active base.
 proc DatabaseSwitched {base variant} {
-	TableUpdate "*" "*" $base $variant
+	variable Table
+	TableUpdate $Table $base $variant
 }
 
 
-# gameList event: refresh the visible rows after an insert/delete/change.
-proc TableUpdate {table id base variant {view -1} {index -1}} {
+# gameList event: refresh the visible rows after an insert/delete/change,
+# but only when the affected base is the one bound to the grid.
+proc GameListChanged {id base variant {view -1} {index -1}} {
+	variable Table
 	if {[::scidb::db::get name] ne $base} { return }
+	TableUpdate $Table $base $variant
+}
 
-	set n [::scidb::db::count games $base $variant]
-	::gamestable::update $table $base $variant $n
+
+proc TableUpdate {table base variant} {
+	::gamestable::update $table $base $variant [::scidb::db::count games $base $variant]
 }
 
 
