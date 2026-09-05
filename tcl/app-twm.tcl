@@ -156,7 +156,8 @@ proc load {twm} {
 	# migration on the frame element, not on any mention of the token,
 	# and fall back to the default BoardLayout (which includes it).
 	if {$id eq "board" && [string length $layout] > 0
-		&& [string first {frame gamemedia} $layout] < 0} {
+		&& ([string first {frame gamemedia} $layout] < 0
+			|| [string first {frame dbgames} $layout] < 0)} {
 		set layout {}
 		set Options($id:layout:list:$layoutVariant) {}
 	}

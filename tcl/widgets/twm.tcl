@@ -559,7 +559,12 @@ proc FrameHeaderSize {twm frame} {
 	variable ${twm}::Vars
 	variable Options
 
-	if {[$twm get! $frame flat 0]} {
+	# During a multiwindow<->notebook toggle the C++ may query the header
+	# size of a node that is no longer a frame; get! then throws. Treat
+	# that as not-flat (notebook-style header) instead of crashing.
+	set flat 0
+	catch { set flat [$twm get! $frame flat 0] }
+	if {$flat} {
 		set size $Options(flathandle:size)
 	} else {
 		lassign $Options(mtab:padding:selected) l t r b
