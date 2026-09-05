@@ -522,7 +522,7 @@ proc doAction {action san {noMoveCmd {}}} {
 				if {$name eq "ICCFGameID"} { set iccfId $value; break }
 			}
 			if {[string length $iccfId]} {
-				set movecount [::scidb::game::query ply]
+				set movecount [::scidb::game::ply]
 				if {[catch { ::iccf::xfcc::submitMove $iccfId $san $movecount } err]} { puts stderr "move: ICCF submit failed: $err" }
 			}
 		}

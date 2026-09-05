@@ -324,10 +324,12 @@ proc filterChanged {dlg} {
 
 	set box $Vars(filterbox)
 	set value [$box get]
-	switch -- $value {
-		$mc::StatusOngoing	{ set Vars(filter) ongoing }
-		$mc::StatusFinished	{ set Vars(filter) finished }
-		default					{ set Vars(filter) all }
+	if {$value eq $mc::StatusOngoing} {
+		set Vars(filter) ongoing
+	} elseif {$value eq $mc::StatusFinished} {
+		set Vars(filter) finished
+	} else {
+		set Vars(filter) all
 	}
 	refresh $dlg
 }

@@ -175,8 +175,8 @@ proc buildGetMyGames {} {
 	variable Config
 	variable NS
 	return [soapEnvelope "    <GetMyGames xmlns=\"$NS\">
-      <username>$Config(username)</username>
-      <password>$Config(password)</password>
+      <username>[xmlEncode $Config(username)]</username>
+      <password>[xmlEncode $Config(password)]</password>
     </GetMyGames>"]
 }
 
@@ -196,15 +196,15 @@ proc buildMakeAMove {gameId move movecount args} {
 
 	return [soapEnvelope "    <MakeAMove xmlns=\"$NS\">
       <username>$Config(username)</username>
-      <password>$Config(password)</password>
-      <gameId>$gameId</gameId>
+      <password>[xmlEncode $Config(password)]</password>
+      <gameId>[xmlEncode $gameId]</gameId>
       <resign>$opts(resign)</resign>
       <acceptDraw>$opts(acceptDraw)</acceptDraw>
       <movecount>$movecount</movecount>
-      <myMove>$move</myMove>
+      <myMove>[xmlEncode $move]</myMove>
       <offerDraw>$opts(offerDraw)</offerDraw>
       <claimDraw>$opts(claimDraw)</claimDraw>
-      <myMessage>$opts(message)</myMessage>
+      <myMessage>[xmlEncode $opts(message)]</myMessage>
     </MakeAMove>"]
 }
 
@@ -457,7 +457,7 @@ proc obfuscate {s} {
 	set result {}
 	foreach c [split $s ""] {
 		scan $c %c code
-		append result [format %02x [expr {$code ^ 0x5A}]]
+		append result [format %04x [expr {$code ^ 0x5A}]]
 	}
 	return $result
 }
@@ -465,8 +465,8 @@ proc obfuscate {s} {
 
 proc deobfuscate {s} {
 	set result {}
-	for {set i 0} {$i < [string length $s]} {incr i 2} {
-		scan [string range $s $i [expr {$i + 1}]] %x code
+	for {set i 0} {$i + 3 < [string length $s]} {incr i 4} {
+		scan [string range $s $i [expr {$i + 3}]] %x code
 		append result [format %c [expr {$code ^ 0x5A}]]
 	}
 	return $result

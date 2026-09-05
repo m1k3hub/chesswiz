@@ -283,15 +283,15 @@ MoveInfoSet::extractFromComment(EngineList& engineList, mstl::string& comment)
 					switch (p[3])
 					{
 						case 'c':
-							if ((q = ::match(p + 2, "ccsnt", 5)))
+							if ((q = ::match(p + 2, "cclk", 4)))
+								q = info.parseCorrespondenceClock(q);
+							else if ((q = ::match(p + 2, "ccsnt", 5)))
 								q = info.parseCorrespondenceChessSent(q);
 							break;
 
 						case 'l':
-							if ((q = ::match(p + 2, "cclk", 4)))
-								q = info.parseCorrespondenceClock(q);
-							else if ((q = ::match(p + 2, "clk", 3)))
-									q = info.parsePlayersClock(q);
+							if ((q = ::match(p + 2, "clk", 3)))
+								q = info.parsePlayersClock(q);
 							break;
 
 						case 'e':

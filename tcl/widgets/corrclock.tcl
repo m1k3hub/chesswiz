@@ -133,7 +133,7 @@ proc parseIsoDuration {s} {
 	set minutes 0
 	set seconds 0
 
-	if {![regexp {^P([0-9]+)D(?:T([0-9]+)H)?(?:([0-9]+)M)?(?:([0-9]+)S)?$} $s \
+	if {![regexp {^P([0-9]+)D(?:T(?:(?:([0-9]+)H)?(?:([0-9]+)M)?(?:([0-9]+)S)?))?$} $s \
 			-> days hours minutes seconds]} {
 		return {}
 	}
@@ -261,7 +261,7 @@ proc Redraw {w} {
 
 	if {[catch { set stm [::scidb::game::query $Position stm] } err]} { puts stderr "corrclock: $err"; return }
 
-	foreach {side time} {white $WhiteTime black $BlackTime} {
+	foreach {side time} [list white $WhiteTime black $BlackTime] {
 		set name [string tolower $side]
 		if {[llength $time]} {
 			lassign $time d h m s
