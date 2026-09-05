@@ -65,6 +65,18 @@ public:
 	bool encodingFailed() const override;
 	bool usingAsyncReader() const override;
 
+	/// SCI file version for writing (docs/SCI_CORRESPONDENCE_FORMAT.md §3).
+	/// New databases are created at the static creation version (96 since
+	/// the correspondence-duration feature); opened databases pin to their
+	/// own storage version (readIndexHeader).
+	unsigned sciVersion() const;
+	void setSciVersion(unsigned version);
+
+	/// Creation version for newly created SCI databases (static, default
+	/// 96). The legacy converter sets it to 95 to create v95 destinations.
+	static unsigned creationVersion();
+	static void setCreationVersion(unsigned version);
+
 	/// Access the optional scidb media manifest (.scm) loaded for this
 	/// database. Empty (isOpen()==false) if no .scm companion is present.
 	scm::MediaTable const& scmMedia() const { return m_scmMedia; }
@@ -213,6 +225,9 @@ private:
 	util::BlockFile*	m_gameData;
 	mstl::string		m_magicGameFile;
 	Lookup				m_lookup[4];
+	static unsigned		s_creationVersion;	// creation version for new databases (docs §3)
+	unsigned				m_fileVersion;	// version of the file being read
+	unsigned				m_sciVersion;	// version for writing (docs §3)
 	scm::MediaTable		m_scmMedia;			///< optional scidb media manifest (.scm)
 	unsigned				m_progressFrequency;
 	unsigned				m_progressReportAfter;

@@ -105,20 +105,22 @@ skipString(Byte const* p)
 }
 
 
-Decoder::Decoder(ByteStream& strm, variant::Type variant)
+Decoder::Decoder(ByteStream& strm, variant::Type variant, unsigned sciVersion)
 	:m_strm(strm)
 	,m_guaranteedStreamSize(strm.size())
 	,m_currentNode(0)
 	,m_variant(variant)
+	,m_sciVersion(sciVersion)
 {
 }
 
 
-Decoder::Decoder(ByteStream& strm, unsigned guaranteedStreamSize, variant::Type variant)
+Decoder::Decoder(ByteStream& strm, unsigned guaranteedStreamSize, variant::Type variant, unsigned sciVersion)
 	:m_strm(strm)
 	,m_guaranteedStreamSize(guaranteedStreamSize)
 	,m_currentNode(0)
 	,m_variant(variant)
+	,m_sciVersion(sciVersion)
 {
 }
 
@@ -462,7 +464,14 @@ Decoder::decodeVariation(ByteStream& data)
 			}
 
 			case token::Mark:
-				if (MoveInfo::isMoveInfo(data.peek()))
+				if (m_sciVersion >= 96 && data.peek() == MoveInfo::Extended_Sentinel)
+				{
+					MoveInfo info;
+					info.decodeExtended(data);
+					if (!info.isEmpty())		// unknown info-types decode to None (docs §4.1)
+						m_currentNode->addMoveInfo(info);
+				}
+				else if (MoveInfo::isMoveInfo(data.peek()))
 				{
 					MoveInfo info;
 					info.decode(data);
@@ -510,7 +519,9 @@ Decoder::skipEndOfVariation(ByteStream& data)
 				break;
 
 			case token::Mark:
-				if (MoveInfo::isMoveInfo(data.peek()))
+				if (m_sciVersion >= 96 && data.peek() == MoveInfo::Extended_Sentinel)
+					MoveInfo::skipExtended(data);
+				else if (MoveInfo::isMoveInfo(data.peek()))
 					MoveInfo::skip(data);
 				else
 					Mark::skip(data);
@@ -703,11 +714,24 @@ Decoder::decodeVariation(Consumer& consumer, ByteStream& data, ByteStream& text)
 					break;
 
 				case token::Mark:
-					if (MoveInfo::isMoveInfo(data.peek()))
+					if (m_sciVersion >= 96 && data.peek() == MoveInfo::Extended_Sentinel)
+					{
+						MoveInfo info;
+						info.decodeExtended(data);
+						if (!info.isEmpty())	// unknown info-types decode to None (docs §4.1)
+							moveInfo.add(info);
+						hasNote = true;
+					}
+					else if (MoveInfo::isMoveInfo(data.peek()))
+					{
 						moveInfo.add().decode(data);
+						hasNote = true;
+					}
 					else
+					{
 						marks.add().decode(data);
-					hasNote = true;
+						hasNote = true;
+					}
 					break;
 
 				case token::Comment:
@@ -774,7 +798,9 @@ Decoder::skipEndOfVariation(Consumer& consumer, ByteStream& data, ByteStream& te
 				break;
 
 			case token::Mark:
-				if (MoveInfo::isMoveInfo(data.peek()))
+				if (m_sciVersion >= 96 && data.peek() == MoveInfo::Extended_Sentinel)
+					MoveInfo::skipExtended(data);
+				else if (MoveInfo::isMoveInfo(data.peek()))
 					MoveInfo::skip(data);
 				else
 					Mark::skip(data);
@@ -1218,6 +1244,16 @@ Decoder::skipEngines(Byte const* p, Byte const* eos)
 
 
 Byte const*
+Decoder::skipInfoRecord(Byte const* p, Byte const* eos)
+{
+	if (m_sciVersion >= 96 && *::check(p, eos) == MoveInfo::Extended_Sentinel)
+		return MoveInfo::skipExtended(p, eos);
+
+	return MoveInfo::skip(::check(p, eos), eos);
+}
+
+
+Byte const*
 Decoder::skipMoveInfo(Byte const* p, Byte const* eos)
 {
 #ifndef DONT_SUPPORT_DEPRECATED_FORMAT
@@ -1226,7 +1262,7 @@ if (*p == 0)
 	unsigned length = ByteStream::uint16(p);
 
 	for (p += 2; length; length--)
-		p = MoveInfo::skip(p, eos);
+		p = skipInfoRecord(p, eos);
 }
 else
 {
@@ -1242,7 +1278,7 @@ else
 		++p;
 
 		while (length--)
-			p = MoveInfo::skip(::check(p, eos), eos);
+			p = skipInfoRecord(::check(p, eos), eos);
 	}
 #ifndef DONT_SUPPORT_DEPRECATED_FORMAT
 }
@@ -1386,7 +1422,38 @@ Decoder::stripMoveInformation(unsigned halfMoveCount, unsigned types)
 					break;
 
 				case token::Mark:
-					if (MoveInfo::isMoveInfo(*::check(dq, de)))
+					if (m_sciVersion >= 96 && *::check(dq, de) == MoveInfo::Extended_Sentinel)
+					{
+						// validate the full header before access (docs §4.1);
+						// wire ids map to internal mask bits, unknown types skip
+						if (de - dq < MoveInfo::Extended_Header_Size)
+							throwCorruptData();
+
+						unsigned maskBit = 0;
+
+						if (dq[1] == MoveInfo::wireIdClock)
+							maskBit = 1u << MoveInfo::CorrespondenceClock;
+						else if (dq[1] == MoveInfo::wireIdElapsed)
+							maskBit = 1u << MoveInfo::CorrespondenceElapsed;
+
+						if (types & maskBit)
+						{
+							n = dq - dp;
+							::memmove(dr, dp, n);
+							dr += n;
+							dp = dq = skipInfoRecord(dq, de);
+
+							n = mq - mp - 1;
+							::memmove(mr, mp, n);
+							mr += n;
+							mp = mq;
+						}
+						else
+						{
+							dq = skipInfoRecord(dq, de);
+						}
+					}
+					else if (MoveInfo::isMoveInfo(*::check(dq, de)))
 					{
 						if (types & (1 << MoveInfo::type(*dq)))
 						{

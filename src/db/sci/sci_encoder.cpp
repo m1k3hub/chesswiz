@@ -111,13 +111,29 @@ initialize()
 } // namespace
 
 
-Encoder::Encoder(ByteStream& strm, variant::Type variant)
+Encoder::Encoder(ByteStream& strm, variant::Type variant, unsigned sciVersion)
 	:m_strm(strm)
 	,m_data(m_buffer[0], sizeof(m_buffer[0]))
 	,m_text(m_buffer[1], sizeof(m_buffer[1]))
 	,m_runLength(0)
 	,m_variant(variant)
+	,m_sciVersion(sciVersion)
 {
+}
+
+
+void
+Encoder::setSciVersion(unsigned version)
+{
+	M_REQUIRE(version == 95 || version == 96);
+	m_sciVersion = version;
+}
+
+
+unsigned
+Encoder::sciVersion() const
+{
+	return m_sciVersion;
 }
 
 
@@ -470,6 +486,9 @@ Encoder::encodeVariation(MoveNode const* node, TimeTable const& timeTable)
 void
 Encoder::encodeNote(MoveNode const* node, TimeTable const* timeTable)
 {
+	EngineList const emptyEngines;
+	mstl::string demoted;
+
 	if (node->hasAnnotation())
 	{
 		Annotation const& annotation = node->annotation();
@@ -487,6 +506,12 @@ Encoder::encodeNote(MoveNode const* node, TimeTable const* timeTable)
 
 		for (unsigned i = 0; i < marks.count(); ++i)
 		{
+			// docs §4.1: an empty mark encodes as 0x00, the v96 extended
+			// envelope sentinel; exclude empty marks at runtime (their
+			// M_REQUIRE exclusion in Mark::encode() can compile away)
+			if (marks[i].isEmpty())
+				continue;
+
 			m_strm.put(token::Mark);
 			marks[i].encode(m_data);
 		}
@@ -500,21 +525,46 @@ Encoder::encodeNote(MoveNode const* node, TimeTable const* timeTable)
 		{
 			MoveInfo const& info = moveInfoSet[i];
 
-			if (timeTable == 0 || timeTable->size(info.content() - 1) == 0)
+			if (!info.isEncodable(m_sciVersion))
+			{
+				// docs/SCI_CORRESPONDENCE_FORMAT.md §5: never emit a Mark
+				// token without payload; the directive is merged into the
+				// node's serialized post-comment below (§1.1). The node
+				// itself is NOT mutated, so repeated saves stay stable.
+				if (!demoted.empty())
+					demoted.append(' ');
+				info.print(emptyEngines, demoted, MoveInfo::Pgn);
+				continue;
+			}
+
+			// docs §4.3.2: correspondence durations have no time-table
+			// representation, so table suppression must never apply to them
+			bool suppress =	timeTable != 0
+									&& 	!timeTable->isEmpty()
+									&& 	timeTable->size(info.content() - 1) != 0
+									&& 	info.content() != MoveInfo::CorrespondenceClock
+									&& 	info.content() != MoveInfo::CorrespondenceElapsed;
+
+			if (!suppress)
 			{
 				m_strm.put(token::Mark);
-				info.encode(m_data);
+
+				if (	info.content() == MoveInfo::CorrespondenceClock
+						||	info.content() == MoveInfo::CorrespondenceElapsed)
+					info.encodeExtended(m_data);	// v96 extended envelope (docs §4.1)
+				else
+					info.encode(m_data);
 			}
 		}
 	}
 
-	if (node->hasAnyComment())
-		encodeComment(node);
+	if (node->hasAnyComment() || !demoted.empty())
+		encodeComment(node, demoted);
 }
 
 
 void
-Encoder::encodeComment(MoveNode const* node)
+Encoder::encodeComment(MoveNode const* node, mstl::string const& postExtra)
 {
 	uint8_t flag = 0;
 
@@ -543,8 +593,29 @@ Encoder::encodeComment(MoveNode const* node)
 	if (flag & comm::Ante)
 		m_text.put(node->comment(move::Ante).content(), node->comment(move::Ante).size() + 1);
 
-	if (flag & comm::Post)
+	if ((flag & comm::Post) || !postExtra.empty())
+	{
+		flag |= comm::Post;
+
+		bool hasPost =	node->hasComment(move::Post)
+							&& node->comment(move::Post).size() > 0;
+
+		if (hasPost)
+			m_text.put(node->comment(move::Post).content(), node->comment(move::Post).size());
+
+		if (!postExtra.empty())
+		{
+			if (hasPost)
+				m_text.put(' ');
+			m_text.put(postExtra.data(), postExtra.size());
+		}
+
+		m_text.put('\0');
+	}
+	else if (flag & comm::Post)
+	{
 		m_text.put(node->comment(move::Post).content(), node->comment(move::Post).size() + 1);
+	}
 
 	m_data.put(flag);
 	m_strm.put(token::Comment);
@@ -686,6 +757,16 @@ Encoder::encodeTimeTableSection(TimeTable const& timeTable)
 
 	for (unsigned col = 0; col < MoveInfo::LAST; ++col)
 	{
+		// docs/SCI_CORRESPONDENCE_FORMAT.md §4.3.2: correspondence durations
+		// have no time-table representation in v96 (per-node records only);
+		// MoveInfo::encode() emits nothing for them, so writing the column
+		// would desynchronize the stream (docs §1.1).
+		if (	!MoveInfo::isEncodable(MoveInfo::Type(col + 1), m_sciVersion)
+				|| (	m_sciVersion >= 96
+						&& (	col + 1 == MoveInfo::CorrespondenceClock
+								||	col + 1 == MoveInfo::CorrespondenceElapsed)))
+			continue;
+
 		if (unsigned size = timeTable.size(col))
 		{
 			while (size >= 255)

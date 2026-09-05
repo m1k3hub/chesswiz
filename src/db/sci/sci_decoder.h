@@ -62,8 +62,8 @@ public:
 	typedef mstl::map<mstl::string,unsigned> TagMap;
 	typedef mstl::map<mstl::string,unsigned> LanguageSet;
 
-	Decoder(util::ByteStream& strm, variant::Type variant);
-	Decoder(util::ByteStream& strm, unsigned guaranteedStreamSize, variant::Type variant);
+	Decoder(util::ByteStream& strm, variant::Type variant, unsigned sciVersion = 95);
+	Decoder(util::ByteStream& strm, unsigned guaranteedStreamSize, variant::Type variant, unsigned sciVersion = 95);
 
 	Move findExactPosition(Board const& position, bool skipVariations);
 	void findTags(TagMap& tags);
@@ -89,6 +89,8 @@ private:
 	Byte const* skipTags(Byte const* p, Byte const* eos);
 	Byte const* skipEngines(Byte const* p, Byte const* eos);
 	Byte const* skipMoveInfo(Byte const* p, Byte const* eos);
+	/// Version-aware skip of one move-info record (v96 extended envelope or legacy).
+	Byte const* skipInfoRecord(Byte const* p, Byte const* eos);
 
 	void skipVariations();
 
@@ -124,6 +126,7 @@ private:
 	decoder::Position	m_position;
 	MoveNode*			m_currentNode;
 	variant::Type		m_variant;
+	unsigned				m_sciVersion;	// SCI file version of the stream being decoded
 };
 
 } // namespace sci

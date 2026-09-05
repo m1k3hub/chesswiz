@@ -627,7 +627,17 @@ proc dbNew {parent variant} {
 	lassign $result base encoding
 	set ext [::util::fileExtension $base]
 	if {$ext in {.pgn .pgn.gz .bpgn .bpgn.gz}} { set variant Undetermined }
-	return [::application::database::newBase $parent $variant $base $encoding]
+
+	# docs/SCI_CORRESPONDENCE_FORMAT.md §3: new databases default to SCI v96
+	# (native correspondence clock storage); offer legacy v95 explicitly.
+	set version 96
+	if {$ext eq ".sci"} {
+		set msg "Create this database in legacy SCI format (version 95)?\n\nAnswer No (recommended) to use the current format (version 96),\nwhich stores correspondence clocks natively. Legacy databases are\nreadable by older scidb releases."
+		set reply [::dialog::question -parent $parent -message $msg -default no]
+		if {$reply eq "yes"} { set version 95 }
+	}
+
+	return [::application::database::newBase $parent $variant $base $encoding $version]
 }
 
 

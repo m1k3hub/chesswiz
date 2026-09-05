@@ -104,6 +104,39 @@ public:
 	void decodeVersion92(util::ByteStream& strm);
 	void encode(util::ByteStream& strm) const;
 
+	/// SCI v96 extended-envelope wire support (see docs/SCI_CORRESPONDENCE_FORMAT.md §4).
+	/// Record layout: 0x00 sentinel, full-byte info-type, payload-length byte, payload.
+	void encodeExtended(util::ByteStream& strm) const;
+	void decodeExtended(util::ByteStream& strm);
+	static void skipExtended(util::ByteStream& strm);
+	/// Raw-pointer variant for skip/strip paths; advances p past one extended record.
+	/// Raises on truncation, wrong known-type length, or cursor overrun.
+	static unsigned char const* skipExtended(unsigned char const* strm, unsigned char const* eos);
+	static unsigned const Extended_Sentinel = 0x00;
+	static unsigned const Extended_Header_Size = 3;	// sentinel + info-type + payload-length
+	static unsigned const Duration_Payload_Size = 5;	// uint16 days + h + m + s (BE)
+
+	// wire info-type ids for correspondence durations (docs §4.2)
+	static unsigned const wireIdClock = 0x01;
+	static unsigned const wireIdElapsed = 0x02;
+
+	static unsigned wireType(Type type)
+	{
+		M_REQUIRE(type == CorrespondenceClock || type == CorrespondenceElapsed);
+		return type == CorrespondenceClock ? wireIdClock : wireIdElapsed;
+	}
+
+	static Type wireType(unsigned wireId)
+	{
+		M_REQUIRE(wireId == wireIdClock || wireId == wireIdElapsed);
+		return wireId == wireIdClock ? CorrespondenceClock : CorrespondenceElapsed;
+	}
+
+	/// Version-aware serializability (docs/SCI_CORRESPONDENCE_FORMAT.md §5):
+	/// correspondence durations are binary-encodable only in SCI v96+.
+	static bool isEncodable(Type type, unsigned sciVersion);
+	bool isEncodable(unsigned sciVersion) const;
+
 	char const* parseCorrespondenceChessSent(char const* s);
 	char const* parseCorrespondenceClock(char const* s);
 	char const* parseCorrespondenceElapsed(char const* s);

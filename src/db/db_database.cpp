@@ -1576,9 +1576,11 @@ Database::copyGames(	Database& destination,
 	}
 	else if (dstFormat == format::Scidb)
 	{
-		sci::Consumer::Codecs codecs(&dynamic_cast<sci::Codec&>(destination.codec()));
+		sci::Codec& sciCodec = dynamic_cast<sci::Codec&>(destination.codec());
+		sci::Consumer::Codecs codecs(&sciCodec);
 		// XXX we need the source encoding?
 		sci::Consumer consumer(srcFormat, codecs, allowedTags, allowExtraTags);
+		consumer.setSciVersion(sciCodec.sciVersion());	// docs/SCI_CORRESPONDENCE_FORMAT.md §3
 		consumer.setupVariant(destination.variant());
 		count = exportGames(	consumer,
 									gameFilter,

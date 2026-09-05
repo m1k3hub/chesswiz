@@ -90,6 +90,10 @@ TimeTable::set(unsigned index, MoveInfo const& moveInfo)
 
 	unsigned col = moveInfo.content() - 1;
 
+	// docs §4.3.2/§5: never populate correspondence columns
+	if (!MoveInfo::isEncodable(moveInfo.content(), 95))
+		return;
+
 	m_table[index][col] = moveInfo;
 	m_size[col] = mstl::max(m_size[col], index + 1);
 	m_types |= 1 << col;
@@ -98,6 +102,16 @@ TimeTable::set(unsigned index, MoveInfo const& moveInfo)
 
 void
 TimeTable::set(unsigned index, MoveInfoSet const& moveInfoSet)
+{
+	// docs/SCI_CORRESPONDENCE_FORMAT.md §4.3.2/§5: correspondence durations
+	// have no time-table representation in any current version; population
+	// must reject them so table serialization cannot desynchronize.
+	set(index, moveInfoSet, 95);
+}
+
+
+void
+TimeTable::set(unsigned index, MoveInfoSet const& moveInfoSet, unsigned sciVersion)
 {
 	unsigned size = index + 1;
 
@@ -113,6 +127,15 @@ TimeTable::set(unsigned index, MoveInfoSet const& moveInfoSet)
 		static_assert(MoveInfo::None == 0, "wrong index access");
 
 		MoveInfo const&	info	= moveInfoSet[i];
+
+		// docs/SCI_CORRESPONDENCE_FORMAT.md §4.3.2/§5: correspondence
+		// durations have no time-table representation in ANY version; other
+		// types without a binary representation at this version never enter.
+		if (	!MoveInfo::isEncodable(info.content(), sciVersion)
+				||	info.content() == MoveInfo::CorrespondenceClock
+				||	info.content() == MoveInfo::CorrespondenceElapsed)
+			continue;
+
 		unsigned				col	= info.content() - 1;
 
 		M_ASSERT(!info.isEmpty());

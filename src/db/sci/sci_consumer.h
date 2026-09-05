@@ -85,6 +85,9 @@ public:
 
 	format::Type format() const override;
 
+	/// SCI file version for the streams written by this consumer (docs §3).
+	void setSciVersion(unsigned version) { Encoder::setSciVersion(version); }
+
 private:
 
 	void start() override;

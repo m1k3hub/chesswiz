@@ -641,7 +641,7 @@ proc closeBase {parent {file {}}} {
 }
 
 
-proc newBase {parent variant file {encoding ""}} {
+proc newBase {parent variant file {encoding ""} {version 96}} {
 	variable Vars
 
 	set file [file normalize $file]
@@ -655,7 +655,14 @@ proc newBase {parent variant file {encoding ""}} {
 	set ext [::util::fileExtension $file]
 	if {$ext in {.pgn .pgn.gz}} { set type PGNFile } else { set type Unspecific }
 	::widget::busyCursor on
-	::scidb::db::new $file $variant [lookupType $type] {*}$encoding
+	if {$version != 96} { ::scidb::db::setcreationversion $version }
+	try {
+		::scidb::db::new $file $variant [lookupType $type] {*}$encoding
+	} finally {
+		# restore the default creation version even if db::new fails,
+		# so a leaked v95 setting cannot silently downgrade later databases
+		if {$version != 96} { ::scidb::db::setcreationversion 96 }
+	}
 	::scidb::db::attach $file $file
 	set encoding [::scidb::db::get encoding $file]
 	$Vars(switcher) add $file $type no $encoding

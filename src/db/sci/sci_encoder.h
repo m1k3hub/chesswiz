@@ -53,7 +53,12 @@ class Encoder
 {
 public:
 
-	Encoder(util::ByteStream& strm, db::variant::Type variant);
+	Encoder(util::ByteStream& strm, db::variant::Type variant, unsigned sciVersion = 95);
+
+	/// SCI file version for the stream being written (95 = legacy comment
+	/// mode, 96 = extended envelopes; docs/SCI_CORRESPONDENCE_FORMAT.md §3).
+	void setSciVersion(unsigned version);
+	unsigned sciVersion() const;
 
 	void doEncoding(	Signature const& signature,
 							GameData const& data,
@@ -94,6 +99,10 @@ protected:
 	Position				m_position;
 	uint16_t				m_runLength;
 
+protected:
+
+	unsigned				m_sciVersion;	// SCI file version: 95 = legacy, 96 = envelopes
+
 private:
 
 	bool doEncoding(Move const& move);
@@ -110,7 +119,6 @@ private:
 	void encodeMainline(MoveNode const* node, TimeTable const& timeTable);
 	void encodeVariation(MoveNode const* node, TimeTable const& timeTable);
 	void encodeNote(MoveNode const* node, TimeTable const* timeTable = 0);
-	void encodeComment(MoveNode const* node);
 
 	uint16_t encodeTextSection();
 	uint16_t encodeTagSection(	TagSet const& tags,
@@ -122,6 +130,9 @@ private:
 	void setup(GameData const& data);
 	void setup(Board const& board, uint16_t idn, db::variant::Type variant);
 	void putMoveByte(Square from, Byte value);
+	/// Encode the node comment, appending demoted PGN directives to the
+	/// post-comment text (docs §5; one comment per node, node not mutated).
+	void encodeComment(db::MoveNode const* node, mstl::string const& postExtra = mstl::string());
 
 	unsigned				m_offset;
 	db::variant::Type	m_variant;

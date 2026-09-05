@@ -337,6 +337,8 @@ static mstl::string const MagicNamebase  ("Scidb.n\0", 8);
 static mstl::string const Extension("sci");
 
 static uint16_t const FileVersion	= 95;
+static uint16_t const Max_FileVersion	= 96;	// docs/SCI_CORRESPONDENCE_FORMAT.md
+unsigned					Codec::s_creationVersion = 96;	// default version for new databases (docs §3)
 static unsigned const HeaderSize		= 128;
 
 static char const* NamebaseTags[Namebase::Round];
@@ -491,6 +493,51 @@ ByteOStream::flush()
 
 
 unsigned Codec::maxGameRecordLength() const	{ return (1u << 20) - 1; }
+unsigned Codec::sciVersion() const				{ return m_sciVersion; }
+void Codec::setSciVersion(unsigned version)
+{
+	M_REQUIRE(version >= FileVersion && version <= Max_FileVersion);
+
+	if (m_sciVersion == version)
+		return;
+
+	// docs/SCI_CORRESPONDENCE_FORMAT.md §3/§8: the storage version of a
+	// database with existing games is fixed; changing it would desync the
+	// index header from the game records (they are never re-encoded in
+	// place). Cross-version conversion goes through export/import.
+	if (!gameInfoList().empty())
+	{
+		if (version != m_fileVersion)
+			IO_RAISE(Index, Read_Only,
+				"cannot change the storage version of a database with existing games; "
+				"use export/import to convert (current: %u, requested: %u)",
+				m_fileVersion, version);
+		return;
+	}
+
+	// creation-time selection: both knobs move together so decoders use the
+	// chosen rules from the first record on, and a later downgrade attempt
+	// is caught by the guard above
+	m_fileVersion = version;
+
+	m_sciVersion = version;
+
+	// rebuild the cached game-file magic, which embeds the version
+	m_magicGameFile = MagicGameFile;
+	m_magicGameFile.resize(MagicGameFile.size() + 2);
+
+	ByteStream strm(m_magicGameFile.data(), m_magicGameFile.size());
+	strm.advance(MagicGameFile.size());
+	strm << uint16_t(m_sciVersion);
+}
+
+
+unsigned Codec::creationVersion()			{ return s_creationVersion; }
+void Codec::setCreationVersion(unsigned version)
+{
+	M_REQUIRE(version >= FileVersion && version <= Max_FileVersion);
+	s_creationVersion = version;
+}
 unsigned Codec::maxGameLength() const			{ return (1u << 12) - 1; }
 unsigned Codec::maxPlayerCount() const			{ return (1u << 24) - 1; }
 unsigned Codec::maxSiteCount() const			{ return (1u << 24) - 1; }
@@ -562,7 +609,7 @@ Codec::Codec()
 
 	ByteStream strm(m_magicGameFile.data(), m_magicGameFile.size());
 	strm.advance(MagicGameFile.size());
-	strm << uint16_t(FileVersion);
+	strm << uint16_t(m_sciVersion);
 }
 
 
@@ -859,7 +906,7 @@ Codec::doEncoding(util::ByteStream& strm,
 	M_ASSERT(namebase(Namebase::Site).size() <= maxSiteCount());
 	M_ASSERT(namebase(Namebase::Event).size() <= maxEventCount());
 
-	Encoder encoder(strm, variant());
+	Encoder encoder(strm, variant(), m_sciVersion);
 	encoder.doEncoding(signature, data, allowedTags, allowExtraTags);
 }
 
@@ -867,7 +914,9 @@ Codec::doEncoding(util::ByteStream& strm,
 db::Consumer*
 Codec::getConsumer(format::Type srcFormat)
 {
-	return new Consumer(srcFormat, Consumer::Codecs(this), Consumer::TagBits(true), true);
+	Consumer* consumer = new Consumer(srcFormat, Consumer::Codecs(this), Consumer::TagBits(true), true);
+	consumer->setSciVersion(m_sciVersion);
+	return static_cast<db::Consumer*>(consumer);
 }
 
 
@@ -883,7 +932,7 @@ Codec::doDecoding(::util::BlockFileReader* asyncReader,
 
 	ByteStream strm;
 	getGameRecord(info, *asyncReader, strm);
-	Decoder decoder(strm, variant());
+	Decoder decoder(strm, variant(), m_fileVersion);
 	return decoder.doDecoding(line, length, startBoard, useStartBoard);
 }
 
@@ -893,7 +942,7 @@ Codec::doDecoding(db::Consumer& consumer, TagSet& tags, GameInfo const& info, un
 {
 	ByteStream strm;
 	getGameRecord(info, m_gameData->reader(), strm);
-	Decoder decoder(strm, m_gameData->blockSize() - info.gameOffset(), variant());
+	Decoder decoder(strm, m_gameData->blockSize() - info.gameOffset(), variant(), m_fileVersion);
 	return decoder.doDecoding(consumer, tags);
 }
 
@@ -901,7 +950,7 @@ Codec::doDecoding(db::Consumer& consumer, TagSet& tags, GameInfo const& info, un
 save::State
 Codec::doDecoding(db::Consumer& consumer, ByteStream& strm, TagSet& tags)
 {
-	Decoder decoder(strm, variant());
+	Decoder decoder(strm, variant(), m_fileVersion);
 	return decoder.doDecoding(consumer, tags);
 }
 
@@ -911,7 +960,7 @@ Codec::doDecoding(GameData& data, GameInfo& info, unsigned gameIndex, mstl::stri
 {
 	ByteStream strm;
 	getGameRecord(info, m_gameData->reader(), strm);
-	Decoder decoder(strm, m_gameData->blockSize() - info.gameOffset(), variant());
+	Decoder decoder(strm, m_gameData->blockSize() - info.gameOffset(), variant(), m_fileVersion);
 	decoder.doDecoding(data);
 }
 
@@ -1201,13 +1250,23 @@ Codec::readIndexHeader(mstl::fstream& fstrm, unsigned* retNumGames)
 	unsigned version  = bstrm.uint16();
 	unsigned numGames;
 
-	if (version == ::FileVersion)
+	// docs/SCI_CORRESPONDENCE_FORMAT.md: v95 and v96 share the 32-bit game
+	// count; only the game-stream move-info encoding differs.
+	if (version >= 95 && version <= Max_FileVersion)
 	{
 		numGames = bstrm.uint32(); // 32-bit since v95
+		m_fileVersion = version;
+		// docs/SCI_CORRESPONDENCE_FORMAT.md §3: a database's storage version
+		// persists. Appended games must use the same encoding as existing
+		// records; downgrades require export/import (spec §8), not a relabel.
+		m_sciVersion = version;
 	}
 	else if (version == 94)
 	{
 		numGames = bstrm.uint24(); // legacy 24-bit format; will be upgraded on next save
+		// v94 has no extended envelopes; decode at v95 rules (docs §4.1)
+		m_fileVersion = 95;
+		m_sciVersion = 95;
 	}
 	else if (version < 94)
 	{
@@ -1250,7 +1309,7 @@ bool
 Codec::stripMoveInformation(GameInfo const& info, unsigned types)
 {
 	ByteStream	bstrm;
-	Decoder		decoder(bstrm, variant());
+	Decoder		decoder(bstrm, variant(), m_fileVersion);
 
 	m_gameData->get(bstrm, info.gameOffset());
 
@@ -1511,7 +1570,7 @@ Codec::writeIndexHeader(mstl::ostream& strm)
 		flags |= maintenance::Compact;
 
 	bstrm.put(::MagicIndexFile, 8);
-	bstrm << uint16_t(FileVersion);						// Scidb version
+	bstrm << uint16_t(m_sciVersion);						// Scidb version
 	bstrm << uint32_t(gameInfoList().size());			// number of games (32-bit since v95)
 	bstrm << uint8_t(variant::toIndex(variant()));	// chess variant in this base
 	bstrm << uint8_t(type());								// base type
@@ -2253,7 +2312,7 @@ Codec::writeNamebases(mstl::ostream& stream, util::Progress* progress)
 	}
 
 	bstrm.put(::MagicNamebase, 8);
-	bstrm << uint16_t(FileVersion);
+	bstrm << uint16_t(m_sciVersion);
 	bstrm << uint32_t(total);
 
 	for (unsigned i = 0; i < U_NUMBER_OF(::NamebaseTags); ++i)
@@ -2602,7 +2661,7 @@ Codec::findExactPosition(	GameInfo const& info,
 {
 	ByteStream src;
 	getGameRecord(info, reader ? *reader : m_gameData->reader(), src);
-	Decoder decoder(src, m_gameData->blockSize() - info.gameOffset(), variant());
+	Decoder decoder(src, m_gameData->blockSize() - info.gameOffset(), variant(), m_fileVersion);
 	return decoder.findExactPosition(position, skipVariations);
 }
 

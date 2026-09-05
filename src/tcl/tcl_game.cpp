@@ -3646,15 +3646,30 @@ cmdUpdate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				char const* value	= stringFromObj(objc, objv, 4);
 
 				MoveInfo info;
+				char const* result = 0;
+
 				if (::strcmp(type, "ccsnt") == 0)
-					info.parseCorrespondenceChessSent(value);
+					result = info.parseCorrespondenceChessSent(value);
 				else if (::strcmp(type, "cclk") == 0)
-					info.parseCorrespondenceClock(value);
+					result = info.parseCorrespondenceClock(value);
 				else if (::strcmp(type, "cemt") == 0)
-					info.parseCorrespondenceElapsed(value);
+					result = info.parseCorrespondenceElapsed(value);
 				else
 					return error(::CmdUpdate, "moveinfo", nullptr,
 									"unknown move info type '%s' (expected ccsnt, cclk, or cemt)", type);
+
+				// docs/SCI_CORRESPONDENCE_FORMAT.md §5: require parser success
+				// and full consumption of the value before accepting it
+				if (result == 0)
+					return error(::CmdUpdate, "moveinfo", nullptr,
+									"malformed %s value '%s'", type, value);
+
+				while (*result == ' ' || *result == '\t')
+					++result;
+
+				if (*result != '\0')
+					return error(::CmdUpdate, "moveinfo", nullptr,
+									"trailing characters after %s value '%s'", type, value);
 
 				game.addMoveInfo(info);
 				break;

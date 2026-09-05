@@ -704,6 +704,139 @@ MoveInfo::skip(ByteStream& strm)
 }
 
 
+bool
+MoveInfo::isEncodable(Type type, unsigned sciVersion)
+{
+	switch (int(type))
+	{
+		case CorrespondenceClock:	// fallthru
+		case CorrespondenceElapsed:	return sciVersion >= 96;
+		default:						return true;
+	}
+}
+
+
+bool
+MoveInfo::isEncodable(unsigned sciVersion) const
+{
+	return isEncodable(m_content, sciVersion);
+}
+
+
+void
+MoveInfo::encodeExtended(ByteStream& strm) const
+{
+	M_REQUIRE(m_content == CorrespondenceClock || m_content == CorrespondenceElapsed);
+
+	strm << uint8_t(Extended_Sentinel);
+	strm << uint8_t(wireType(m_content));				// full-byte info-type (docs §4.2)
+	strm << uint8_t(Duration_Payload_Size);
+
+	// 5-byte value body, big-endian: uint16 days, then h, m, s (docs §4.2)
+	strm << uint8_t((m_corrDuration.m_days >> 8) & 0xff);
+	strm << uint8_t(m_corrDuration.m_days & 0xff);
+	strm << uint8_t(m_corrDuration.m_hours);
+	strm << uint8_t(m_corrDuration.m_minutes);
+	strm << uint8_t(m_corrDuration.m_seconds);
+}
+
+
+void
+MoveInfo::decodeExtended(ByteStream& strm)
+{
+	unsigned sentinel = strm.get();
+
+	if (sentinel != Extended_Sentinel)
+		IO_RAISE(Game, Corrupted, "corrupted extended move-info record (bad sentinel)");
+
+	unsigned type = strm.get();
+
+	// docs §4.1: unknown info-types MUST be skipped length-delimited;
+	// the record is ignored (m_content stays None) for forward compatibility
+	if (type != wireIdClock && type != wireIdElapsed)
+	{
+		if (strm.remaining() < 1)
+			IO_RAISE(Game, Corrupted, "corrupted extended move-info record (truncated header)");
+
+		unsigned length = strm.get();
+
+		if (strm.remaining() < length)
+			IO_RAISE(Game, Corrupted, "corrupted extended move-info record (truncated payload)");
+
+		strm.skip(length);
+		return;
+	}
+
+	unsigned length = strm.get();
+
+	if (length != Duration_Payload_Size)
+		IO_RAISE(Game, Corrupted, "corrupted extended move-info record (bad payload length %u)", length);
+
+	if (strm.remaining() < Duration_Payload_Size)
+		IO_RAISE(Game, Corrupted, "corrupted extended move-info record (truncated payload)");
+
+	unsigned hi = strm.get();
+	unsigned lo = strm.get();
+
+	m_corrDuration.m_days = uint16_t((hi << 8) | lo);
+	m_corrDuration.m_hours = strm.get();
+	m_corrDuration.m_minutes = strm.get();
+	m_corrDuration.m_seconds = strm.get();
+	m_content = wireType(type);
+}
+
+
+void
+MoveInfo::skipExtended(ByteStream& strm)
+{
+	// cursor is at the sentinel (callers peek it before dispatch)
+	unsigned sentinel = strm.get();
+
+	if (sentinel != Extended_Sentinel)
+		IO_RAISE(Game, Corrupted, "corrupted extended move-info record (bad sentinel)");
+
+	unsigned type = strm.get();
+
+	if (strm.remaining() < 1)
+		IO_RAISE(Game, Corrupted, "corrupted extended move-info record (truncated header)");
+
+	unsigned length = strm.get();
+
+	if (	(type == wireIdClock || type == wireIdElapsed)
+			&& length != Duration_Payload_Size)
+		IO_RAISE(Game, Corrupted, "corrupted extended move-info record (bad payload length %u)", length);
+
+	if (strm.remaining() < length)
+		IO_RAISE(Game, Corrupted, "corrupted extended move-info record (truncated payload)");
+
+	strm.skip(length);
+}
+
+
+unsigned char const*
+MoveInfo::skipExtended(unsigned char const* strm, unsigned char const* eos)
+{
+	// cursor is at the sentinel (callers peek it before dispatch);
+	// cursor-relative validation per docs §4.1
+	if (eos - strm < 3)
+		IO_RAISE(Game, Corrupted, "corrupted extended move-info record (truncated header)");
+
+	unsigned type = strm[1];
+	unsigned length = strm[2];
+
+	if (	(type == wireIdClock || type == wireIdElapsed)
+			&& length != Duration_Payload_Size)
+		IO_RAISE(Game, Corrupted, "corrupted extended move-info record (bad payload length %u)", length);
+
+	strm += 3;
+
+	if (unsigned(eos - strm) < length)
+		IO_RAISE(Game, Corrupted, "corrupted extended move-info record (truncated payload)");
+
+	return strm + length;
+}
+
+
 unsigned
 MoveInfo::length(unsigned char firstByte)
 {
@@ -814,14 +947,11 @@ MoveInfo::encode(ByteStream& strm) const
 
 		case CorrespondenceClock:
 		case CorrespondenceElapsed:
-			// Correspondence durations use a 6-byte encoding:
-			// byte 0: 0x80 | (type-1)<<4 | days_hi(4 bits)
-			// bytes 1-2: days_lo (12 bits, little-endian)
-			// byte 3: hours(4 bits) | minutes(4 bits)
-			// byte 4: seconds(6 bits)
-			// Note: type-1 = 8 or 9, which needs 4 bits, but the encoding
-			// only has 3 bits for type. We reuse the Evaluation slot (type 1)
-			// with a sentinel pattern to distinguish. For now, PGN-only.
+			// Correspondence durations are serialized only through the v96
+			// extended envelope (encodeExtended); see
+			// docs/SCI_CORRESPONDENCE_FORMAT.md §4. Emission points must gate
+			// on MoveInfo::isEncodable() and never emit a Mark token for
+			// these types without a payload (docs §1.1, §5).
 			break;
 
 		case Evaluation:

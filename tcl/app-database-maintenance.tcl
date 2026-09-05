@@ -51,6 +51,12 @@ set Refresh							"Refresh"
 set CopySummary					"Copy Summary"
 set ReviewDuplicates				"Review Duplicates"
 set CompactNow						"Compact Now"
+set ScidbBases						"Scidb databases"
+set ConvertDatabase					"Convert Version"
+set ConvertQuestion				"Convert this database to the legacy SCI format (version 95) for use with older scidb releases?\n\nAnswer No to convert to the current format (version 96, native correspondence clock storage)."
+set ConvertTitle					"Convert Database Version"
+set ConvertDestination			"Destination of the converted database"
+set ConvertDone						"Conversion complete: %s games written to %s"
 set OpeningsCovered				"Opening codes"
 set DuplicateGroups				"Duplicate groups"
 set DuplicateGames				"Games in duplicate groups"
@@ -209,6 +215,8 @@ proc OpenMaintenanceReport {parent file variant {tab overview}} {
 			-command [namespace code [list SelectMaintenanceTab $dlg duplicates]]
 		ttk::button $actions.compact -text $mc::CompactNow \
 			-command [namespace code [list CompactReportDatabase $dlg]]
+		ttk::button $actions.convert -text $mc::ConvertDatabase \
+			-command [namespace code [list ConvertReportDatabase $dlg]]
 		ttk::button $actions.copy -text $mc::CopySummary \
 			-command [namespace code [list CopyMaintenanceSummary $dlg]]
 		ttk::button $actions.refresh -text $mc::Refresh \
@@ -216,6 +224,7 @@ proc OpenMaintenanceReport {parent file variant {tab overview}} {
 		ttk::button $actions.close -text $mc::Close -command [list destroy $dlg]
 		pack $actions.duplicates -side left -padx {0 4}
 		pack $actions.compact -side left -padx 4
+		pack $actions.convert -side left -padx 4
 		pack $actions.copy -side left -padx 4
 		pack $actions.refresh -side left -padx 4
 		pack $actions.close -side right
@@ -437,6 +446,70 @@ proc CompactReportDatabase {dlg} {
 	variable ReportData
 	Compact $dlg $ReportData($dlg,file)
 	after idle [namespace code [list RefreshMaintenanceReport $dlg]]
+}
+
+
+proc ConvertReportDatabase {dlg} {
+	variable ReportData
+	ConvertDatabase $dlg $ReportData($dlg,file) $ReportData($dlg,variant)
+}
+
+
+proc ConvertDatabase {parent file variant} {
+	variable mc
+
+	if {[::scidb::db::get unsaved? $file]} {
+		::dialog::error -parent $parent -message $mc::UnsavedFiles
+		return
+	}
+
+	set reply [::dialog::question -parent $parent -message $mc::ConvertQuestion -default no]
+	set version [expr { $reply eq "yes" ? 95 : 96 }]
+
+	set title $mc::ConvertTitle
+	set dstFile [::dialog::saveFile \
+		-parent $parent \
+		-class database \
+		-filetypes [list [list $mc::ScidbBases {.sci}]] \
+		-geometry last \
+		-defaultextension .sci \
+		-title "$title ($version)" \
+		-customicon $::icon::16x16::filetypeArchive]
+	if {[llength $dstFile] == 0} { return }
+	lassign $dstFile dst dstEncoding
+
+	if {[file exists $dst]} {
+		::dialog::error -parent $parent -title $title \
+			-message [format $mc::DatabaseAlreadyOpen [::util::databaseName $dst]]
+		return
+	}
+
+	::scidb::db::setcreationversion $version
+	if {[catch {
+		::scidb::db::new $dst $variant [::application::database::lookupType Unspecific]
+		::scidb::db::attach $dst $dst
+	} rc opts]} {
+		::scidb::db::setcreationversion 96
+		return {*}$opts -rethrow 1 $rc
+	}
+	::scidb::db::setcreationversion 96	;# restore default (docs §3)
+
+	set cmd [list ::scidb::db::copy $file $dst {}]
+	if {[catch { ::util::catchException $cmd result } rc opts]} {
+		::log::error $::import::mc::AbortedDueToInternalError
+		return {*}$opts -rethrow 1 $rc
+	}
+
+	if {[catch { ::scidb::db::save $dst } rc opts]} {
+		::log::error $::import::mc::AbortedDueToIoError
+		return {*}$opts -rethrow 1 $rc
+	}
+
+	lassign $result total illegal accepted rejected
+	::scidb::db::close $dst
+
+	::dialog::info -parent $parent -title $mc::ConvertTitle \
+		-message [format $mc::ConvertDone $total [::util::databaseName $dst]]
 }
 
 

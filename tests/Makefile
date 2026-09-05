@@ -57,10 +57,21 @@ app-tcl: $(TEST_DIR)run_app_tests.tcl $(TEST_DIR)run_app_driver.tcl
 # C++ Tests
 # ==============================================================================
 
-cpp: $(TEST_DIR)test_cpp_backend
+cpp: $(TEST_DIR)test_cpp_backend $(TEST_DIR)test_corr_duration
 	@chmod +x "$(TEST_DIR)test_cpp_backend"
 	@echo "Running C++ backend tests..."
 	@"$(TEST_DIR)test_cpp_backend"
+	@echo "Running correspondence-duration tests..."
+	@chmod +x "$(TEST_DIR)test_corr_duration"
+	@"$(TEST_DIR)test_corr_duration"
+
+$(TEST_DIR)test_corr_duration: $(TEST_DIR)test_corr_duration.cpp
+	@echo "Compiling correspondence-duration tests..."
+	@$(CXX) $(CXXFLAGS) \
+		-I$(SRC_DIR) -I$(SRC_DIR)/db -I$(SRC_DIR)/sys -I$(SRC_DIR)/util -I$(SRC_DIR)/mstl \
+		-o $@ $< \
+		$(SRC_DIR)/db/libdb.a $(SRC_DIR)/util/libutil.a $(SRC_DIR)/sys/libsys.a $(SRC_DIR)/mstl/libmstl.a
+
 
 $(TEST_DIR)test_cpp_backend: $(CPP_TESTS)
 	@echo "Compiling C++ tests..."

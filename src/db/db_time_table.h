@@ -56,6 +56,9 @@ public:
 	void ensure(unsigned size);
 	void set(unsigned index, MoveInfo const& moveInfo);
 	void set(unsigned index, MoveInfoSet const& moveInfoSet);
+	/// Version-aware variant: skips move-info types that are not binary-
+	/// encodable at the given SCI version (docs/SCI_CORRESPONDENCE_FORMAT.md §5).
+	void set(unsigned index, MoveInfoSet const& moveInfoSet, unsigned sciVersion);
 	void swap(TimeTable& table);
 
 private:

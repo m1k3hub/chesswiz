@@ -1342,6 +1342,44 @@ cmdNew(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 
 static int
+cmdSetCreationVersion(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// docs/SCI_CORRESPONDENCE_FORMAT.md §3: creation version for newly
+	// created SCI databases (96 = native correspondence clock storage,
+	// 95 = legacy comment mode). Affects databases created after this call.
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<version>");
+		return TCL_ERROR;
+	}
+
+	int version = intFromObj(objc, objv, 1);
+
+	if (version < 95 || version > 96)
+		return error(::CmdNew, nullptr, nullptr, "unsupported SCI version '%d' (expected 95 or 96)", version);
+
+	::db::sci::Codec::setCreationVersion(unsigned(version));
+
+	return TCL_OK;
+}
+
+
+static int
+cmdGetCreationVersion(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 1)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, nullptr);
+		return TCL_ERROR;
+	}
+
+	Tcl_SetObjResult(ti, Tcl_NewIntObj(int(::db::sci::Codec::creationVersion())));
+
+	return TCL_OK;
+}
+
+
+static int
 cmdSet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	static char const* subcommands[] =
@@ -5811,6 +5849,8 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdImport,			cmdImport);
 	createCommand(ti, CmdLoad,				cmdLoad);
 	createCommand(ti, CmdNew,				cmdNew);
+	createCommand(ti, "::scidb::db::setcreationversion",	cmdSetCreationVersion);
+	createCommand(ti, "::scidb::db::creationversion",		cmdGetCreationVersion);
 	createCommand(ti, CmdSet,				cmdSet);
 	createCommand(ti, CmdGet,				cmdGet);
 	createCommand(ti, CmdMatch,			cmdMatch);

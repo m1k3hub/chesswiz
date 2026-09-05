@@ -264,6 +264,11 @@ Consumer::writeComment(	Comment const& preComment,
 	{
 		for (unsigned i = 0; i < marks.count(); ++i)
 		{
+			// docs §4.1: an empty mark encodes as 0x00, the v96 extended
+			// envelope sentinel; exclude empty marks at runtime
+			if (marks[i].isEmpty())
+				continue;
+
 			m_strm.put(token::Mark);
 			marks[i].encode(m_data);
 		}
@@ -330,8 +335,23 @@ Consumer::sendMoveInfo(MoveInfoSet const& moveInfo)
 {
 	for (unsigned i = 0; i < moveInfo.count(); ++i)
 	{
+		MoveInfo const& info = moveInfo[i];
+
+		// docs/SCI_CORRESPONDENCE_FORMAT.md §5/§1.1: never emit a Mark token
+		// for a type that will not be encoded. Unencodable types are demoted
+		// to comments in preparseComment() before they can reach this point;
+		// this is a defensive invariant, not the enforcement point.
+		if (!info.isEncodable(m_sciVersion))
+			continue;
+
 		m_strm.put(token::Mark);
-		moveInfo[i].encode(m_data);
+
+		if (	m_sciVersion >= 96
+				&& (	info.content() == MoveInfo::CorrespondenceClock
+						||	info.content() == MoveInfo::CorrespondenceElapsed))
+			info.encodeExtended(m_data);	// v96 extended envelope (docs §4.1)
+		else
+			info.encode(m_data);
 
 		if (!m_endOfRun)
 		{
@@ -376,10 +396,69 @@ Consumer::preparseComment(mstl::string& comment)
 
 	if (InfoConsumer::preparseComment(comment))
 	{
+		// docs/SCI_CORRESPONDENCE_FORMAT.md §5: one shared eligibility rule.
+		// Correspondence durations never enter the time table (docs §4.3.2).
+		// In legacy mode (v95) they are demoted back into the comment stream
+		// from which they were extracted; in v96 they stay in the set for
+		// per-node envelope emission by sendMoveInfo (docs §4.3).
+		mstl::string demoted;
+		unsigned demotedCount = 0;
+
+		for (unsigned i = 0; i < m_moveInfoSet.count(); ++i)
+		{
+			if (!m_moveInfoSet[i].isEncodable(m_sciVersion))
+			{
+				if (!demoted.empty())
+					demoted.append(' ');
+				m_moveInfoSet[i].print(engines(), demoted, MoveInfo::Pgn);
+				++demotedCount;
+			}
+		}
+
+		if (demotedCount)
+		{
+			// compact: drop the demoted entries from the set
+			unsigned kept = 0;
+
+			for (unsigned i = 0; i < m_moveInfoSet.count(); ++i)
+			{
+				if (m_moveInfoSet[i].isEncodable(m_sciVersion))
+					m_moveInfoSet[kept++] = m_moveInfoSet[i];
+			}
+
+			m_moveInfoSet.resize(kept);
+			comment.append(demoted);
+		}
+
 		if (isMainline() && (!m_timeTable.isEmpty() || m_plyCount == 0))
 		{
-			m_timeTable.set(m_plyCount, m_moveInfoSet);
-			m_moveInfoSet.clear();
+			// the version-aware set() excludes correspondence columns
+			// (docs §4.3.2); they are emitted per-node via sendMoveInfo instead
+			m_timeTable.set(m_plyCount, m_moveInfoSet, m_sciVersion);
+
+			if (m_sciVersion >= 96)
+			{
+				// keep correspondence infos in the set for per-node emission;
+				// drop the legacy infos that went into the table
+				unsigned kept = 0;
+
+				for (unsigned i = 0; i < m_moveInfoSet.count(); ++i)
+				{
+					MoveInfo::Type t = m_moveInfoSet[i].content();
+
+					if (	t == MoveInfo::CorrespondenceClock
+							||	t == MoveInfo::CorrespondenceElapsed)
+					{
+						m_moveInfoSet[kept++] = m_moveInfoSet[i];
+					}
+				}
+
+				m_moveInfoSet.resize(kept);
+			}
+			else
+			{
+				m_moveInfoSet.clear();
+			}
 		}
 	}
 

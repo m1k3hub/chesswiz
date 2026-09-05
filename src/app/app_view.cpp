@@ -933,13 +933,15 @@ View::exportGames(mstl::string const& filename,
 		}
 		else
 		{
-			sci::Consumer::Codecs codecs(&dynamic_cast<sci::Codec&>(destination.codec()));
+			sci::Codec& sciCodec = dynamic_cast<sci::Codec&>(destination.codec());
+			sci::Consumer::Codecs codecs(&sciCodec);
 			sci::Consumer consumer(	m_cursor.m_db->format(),
 											codecs,
 											allowedTags,
 											allowExtraTags,
 											languages,
 											significantLanguages);
+			consumer.setSciVersion(sciCodec.sciVersion());	// docs/SCI_CORRESPONDENCE_FORMAT.md §3
 			count = exportGames(consumer, m_cursor.m_db->variant(), illegalRejected, log, progress);
 		}
 
