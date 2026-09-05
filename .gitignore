@@ -94,3 +94,4 @@ src/probe_dump_moves
 win32
 src/probe_cbm_linkage
 src/test_html_core
+tests/test_corr_duration
