@@ -184,11 +184,6 @@ private:
 	typedef mstl::map<GameInfo const*,unsigned>			GameIndexLookup;
 	typedef mstl::fixed_size_allocator<db::MoveNode>	MoveNodeAllocator;
 
-	Move findExactPosition(	GameInfo const& info,
-								Board const& position,
-								bool skipVariations,
-								::util::BlockFileReader* reader) override;
-
 	void startDecoding(	util::ByteStream& gameStream,
 								util::ByteStream* annotationStream,
 								GameInfo const& info,

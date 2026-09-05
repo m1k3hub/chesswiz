@@ -1176,9 +1176,7 @@ void
 Application::setReferenceBase(Cursor* cursor, bool isUserSet)
 {
 	M_REQUIRE(!cursor || !cursor->isScratchbase());
-	// ChessBase-format databases are permitted as reference bases; the
-	// tree build decodes games for the exact position check (no signature
-	// pre-filter), see Tree::makeTree and cbh::Codec::findExactPosition.
+	M_REQUIRE(!cursor || !format::isChessBaseFormat(cursor->format()));
 	M_REQUIRE(!cursor || cursor->variant() == variant::Normal);
 
 	m_isUserSet = isUserSet;
@@ -1233,6 +1231,7 @@ Application::switchBase(Cursor& cursor)
 	setActiveBase(&cursor);
 
 	if (	(m_switchReference || (!m_isUserSet && m_referenceBase && m_referenceBase->isClipbase()))
+		&& !format::isChessBaseFormat(cursor.format())
 		&& cursor.variant() == variant::Normal)
 	{
 		setReferenceBase(m_current, false);

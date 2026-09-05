@@ -643,10 +643,7 @@ Tree::makeTree(TreeP& tree,
 					rating::Type ratingType,
 					util::Progress& progress)
 {
-	// ChessBase-format databases are supported as tree sources: their
-	// index records carry no idn/signature, so every game falls through
-	// to possiblyAdd() -> Codec::findExactPosition() for the exact check
-	// (correct, but slower than the signature-filtered native path).
+	M_REQUIRE(!format::isChessBaseFormat(base.format()));
 	M_REQUIRE(base.variant() == variant::Normal);
 
 	typedef bool (Tree::*BuildMeth)(	unsigned,

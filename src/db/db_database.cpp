@@ -2048,9 +2048,7 @@ Database::findExactPosition(unsigned index, Board const& position, bool skipVari
 {
 	M_REQUIRE(isOpen());
 	M_REQUIRE(index < countGames());
-	// Note: ChessBase-format codecs provide no async reader; they search
-	// the game records through the codec's own mutex-protected stream
-	// (reader == 0). Do not require usingAsyncTreeSearchReader() here.
+	M_REQUIRE(usingAsyncTreeSearchReader());
 
 	return m_codec->findExactPosition(	m_gameInfoList[index],
 													position,
