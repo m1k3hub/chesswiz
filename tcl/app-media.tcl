@@ -1003,13 +1003,15 @@ proc application::media::PlayMedia {path {startMs {}} {endMs {}}} {
 	::media::sync::load-timeline {}
 	::media::sync::load-events {}
 
-	# Prefer the tkvlc backend (embedded, in-window playback via libVLC).
-	if {[LoadVlc] || [auto_execok mpv] ne ""} {
-		MediaDebug "PlayMedia: tkvlc available, trying in-process"
+	# Backend tiers (docs/MEDIA_PANEL_DESIGN.md §4): mpv is preferred
+	# (built-in codecs); tkvlc is loaded only when mpv is unavailable,
+	# so libVLC is not initialized when mpv will be used anyway.
+	if {[llength [auto_execok mpv]] || [LoadVlc]} {
+		MediaDebug "in-process playback available (mpv/tkvlc)"
 		if {[PlayInProcess $path $startMs $endMs]} {
 			return
 		}
-		MediaDebug "PlayMedia: tkvlc failed, falling back to external player"
+		MediaDebug "in-process playback failed, falling back to external player"
 	}
 
 	# An external player has no board position or transport callbacks.  Do
