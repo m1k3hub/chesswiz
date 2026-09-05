@@ -33,10 +33,13 @@ Both C++ commands document the SAME encoding (`tcl_database.cpp`,
 
 Tcl-side mapping to panel sections (`TypeNumber`, `Sections`):
 
-```
-1 → picture    2 → audio    3 → video    0/4/string-unknown → other
-"reports"      (string labels pass through when they name a section)
-```
+| Id / label | Section |
+|---|---|
+| `1` | picture |
+| `2` | audio |
+| `3` | video |
+| `0`, `4`, unrecognized string | other |
+| string naming a known section (e.g. `"reports"`) | passes through as that section |
 
 The `.cbm` bitflag encoding (1=audio, 2=picture, 4=video, 8=stream,
 `cbh_media.h`) is normalized to the ids above inside the C++ commands;
@@ -140,6 +143,37 @@ UI-free; the panel wires delegates at `build` time
   `application::board::update`) debounces 250 ms → `PlySeek` (seek the
   media to the board's ply unless the sync machine is `driving?`) and
   150 ms → `InteractiveFollow` (jump to a position-matched clip).
+
+```
+                 ┌─────────────────────┐
+                 │  Transport sync     │  board autoplay/step
+                 │  (board drives)     │  → ::media::sync::autoplay/step
+                 └─────────┬───────────┘
+                           │
+      board manual nav ────┴──── pauses media
+                           │
+┌──────────────┐   250ms debounce   ┌──────────────┐
+│ board::update │ ───────────────►  │   PlySeek    │  seek media to ply
+│ (BoardUpdated)│    150ms debounce │ (skipped if  │  (unless driving?)
+│               │ ───────────────►  │  driving?)   │
+└──────────────┘                    └──────────────┘
+        │
+        └──────────────────────────► InteractiveFollow
+                                      (jump to position-matched clip)
+
+┌──────────────┐  every 250ms   ┌──────────────┐   maps time→ply via
+│  FollowTick  │ ─────────────► │ sync::drive  │   lesson timeline or
+│ (mpv/tkvlc)  │  (time,dur)    │ "board       │   linear-over-duration
+└──────────────┘                │  follows     │ ─────────────────────►
+                                 │  video" mode │   board delegates
+                                 └──────────────┘   (Forward/Start/
+                                                      Length/Ply)
+```
+
+Transport sync and Follow mode are mutually exclusive directions of
+control (board→media vs. media→board); `driving?` is the flag that
+lets `PlySeek` know Follow mode currently owns the ply so it doesn't
+fight it.
 
 Timeline source precedence: lesson cache (`::media::lesson::get`, which
 decodes the WMV script stream via `::media::decoder` and persists a
