@@ -198,7 +198,7 @@ proc application::media::InsertEntry {typeLabel title path index} {
 	set typeNum [TypeNumber $typeLabel]
 	set section {}
 	foreach {key label} [Sections] {
-		if {$key eq $typeNum} { set section $section_$key ; break }
+		if {$key eq $typeNum} { set section section_$key ; break }
 	}
 	if {![string length $section] || ![$tree exists $section]} {
 		foreach {key label} [Sections] {
@@ -313,6 +313,7 @@ proc application::media::Update {position} {
 
 	foreach entry $entries {
 		lassign $entry path type title mediaId inline
+		if {[string is true -strict $inline]} { set path {} }	;# base64 payload: not extractable (docs §6)
 		InsertEntry $type $title $path $index
 	}
 
@@ -418,8 +419,10 @@ proc application::media::PlaySelected {tree} {
 		if {$galleryIndex != $Priv(index)} {
 			::game::new .application -base $Priv(base) -variant $Priv(variant) -number $galleryIndex
 			# Update() installs the owning game's media/sync state.
-			# Queue playback only after that switch has completed.
-			after idle [namespace code [list PlayLesson $path $galleryIndex]]
+			# Queue playback on the same 1ms timer path as Update's own
+			# refresh (scheduled earlier by GameSwitched, so FIFO order
+			# guarantees Update runs first) - 'after idle' would race it.
+			after 1 [namespace code [list PlayLesson $path $galleryIndex]]
 			return
 		}
 		PlayLesson $path $galleryIndex
@@ -429,9 +432,8 @@ proc application::media::PlaySelected {tree} {
 	if {[string is integer -strict $galleryIndex] && $galleryIndex >= 0
 		&& $galleryIndex != $Priv(index)} {
 		::game::new .application -base $Priv(base) -variant $Priv(variant) -number $galleryIndex
-		# Update() installs the owning game's media/sync state.  Queue
-		# playback only after that switch has completed.
-		after idle [namespace code [list PlayMedia $path]]
+		# same ordering argument as above (Update refreshes first)
+		after 1 [namespace code [list PlayMedia $path]]
 		return
 	}
 
@@ -732,12 +734,15 @@ proc application::media::BoardUpdated {position} {
 	if {[info exists Priv(interactive)] && [llength $Priv(interactive)]} { set haveInter 1 }
 	if {[info exists Priv(userInteractive)] && [llength $Priv(userInteractive)]} { set haveInter 1 }
 	if {[info exists Priv(dbInteractive)] && [llength $Priv(dbInteractive)]} { set haveInter 1 }
-	if {!$haveInter} { return }
+	set haveMedia [expr { [info exists Priv(inprocess)] && $Priv(inprocess) }]
+	if {!$haveInter && !$haveMedia} { return }
 	if {$position != $Priv(position) || $position < 0 || $position == 9} { return }
 
 	# bidirectional coupling (1): stepping the board repositions the media
 	set Priv(seekid) [after 250 [namespace code [list PlySeek $position]]]
-	set Priv(interactiveid) [after 150 [namespace code [list InteractiveFollow $position]]]
+	if {$haveInter} {
+		set Priv(interactiveid) [after 150 [namespace code [list InteractiveFollow $position]]]
+	}
 }
 
 
@@ -755,6 +760,7 @@ proc application::media::PlySeek {position} {
 	if {[info commands ::media::sync::driving?] ne ""
 		&& [::media::sync::driving?]} { return }
 	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
+	if {[info exists Priv(mpv_active)] && $Priv(mpv_active)} { return }	;# mpv: board-to-media seek not wired (mpv::seek exists, needs a position source)
 	set handle $Priv(vlc_handle)
 	if {$handle eq ""} { return }
 
@@ -764,14 +770,15 @@ proc application::media::PlySeek {position} {
 	if {!$dur || $dur <= 0 || $len <= 1} { return }
 
 	set ply [SyncBoardPly]
-	# tkvlc 'time' speaks SECONDS (getter and setter)
+	# tkvlc 'time'/'duration' speak MILLISECONDS (libVLC convention),
+	# consistent with ::media::sync::drive and the timeline marks
 	set t 0.0
 	catch { set t [$handle time] }
-	set tol [expr {max(1.2, $dur / 100.0)}]
-	set target [expr {double($ply) / double($len - 1) * ($dur - 0.3)}]
+	set tol [expr {max(1200.0, $dur / 100.0)}]
+	set target [expr {double($ply) / double($len - 1) * ($dur - 300.0)}]
 	if {abs($target - $t) > $tol} {
-		MediaDebug "PlySeek: ply=$ply/$len -> seek to ${target}s (media at ${t}s)"
-		catch { $handle time $target }
+		MediaDebug "PlySeek: ply=$ply/$len -> seek to ${target}ms (media at ${t}ms)"
+		catch { $handle time [expr {int($target)}] }
 	}
 }
 
@@ -1099,6 +1106,7 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	}
 
 	# Interactive 'range' entries: seek into the video and stop at End.
+	catch { after cancel $Priv(rangeid) }	;# a stale stop timer must not kill the new clip
 	set Priv(rangeid) {}
 	if {[string is double -strict $startMs] && $startMs > 0} {
 		catch { $handle time [expr {int($startMs)}] }
@@ -1243,6 +1251,7 @@ proc application::media::DestroyVlcHandle {} {
 	}
 	set Priv(vlc_handle) ""
 	set Priv(inprocess) 0
+	set Priv(mpv_active) 0	;# otherwise a later tkvlc fallback routes to the dead mpv channel
 }
 
 
@@ -1491,26 +1500,13 @@ proc application::media::StopFollowTick {} {
 	set Priv(followafter) {}
 }
 
-# Checkbutton callback: push the UI state into the state machine and
-# (re)start the follow tick when enabled while a video plays.
-proc application::media::SyncChanged {} {
-	lassign [::mediasync::config] transport follow
-	::media::sync::set-config $transport $follow
-
-	if {$follow} {
-		StartFollowTick
-	} else {
-		StopFollowTick
-	}
-}
-
-
 proc application::media::Stop {} {
 	variable Priv
 
 	catch { after cancel $Priv(checkid) }
 	catch { after cancel $Priv(rangeid) }
 	catch { after cancel $Priv(seekid) }
+	catch { after cancel $Priv(interactiveid) }
 	set Priv(checkid) {}
 	set Priv(rangeid) {}
 
@@ -1530,18 +1526,6 @@ proc application::media::Stop {} {
 	# Clear canvas
 	if {[winfo exists $Priv(viewer).canvas]} {
 		$Priv(viewer).canvas delete all
-	}
-}
-
-
-proc application::media::TypeLabel {type} {
-	variable mc
-	switch -- $type {
-		1 { return $mc::TypePicture }
-		2 { return $mc::TypeAudio }
-		3 { return $mc::TypeVideo }
-		4 { return $mc::TypeStream }
-		default { return $mc::TypeNone }
 	}
 }
 
