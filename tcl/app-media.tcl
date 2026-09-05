@@ -59,7 +59,6 @@ array set Priv {
 	vlc_available	0
 	inprocess	0
 	checkid		{}
-	mpv_active	0
 }
 
 } ;# namespace media
@@ -763,7 +762,6 @@ proc application::media::PlySeek {position} {
 	if {[info commands ::media::sync::driving?] ne ""
 		&& [::media::sync::driving?]} { return }
 	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
-	if {[info exists Priv(mpv_active)] && $Priv(mpv_active)} { return }	;# mpv: board-to-media seek not wired (mpv::seek exists, needs a position source)
 	set handle $Priv(vlc_handle)
 	if {$handle eq ""} { return }
 
@@ -993,7 +991,7 @@ proc application::media::PlayLesson {path gameIndex {startMs {}} {endMs {}}} {
 	# transport first: embedded playback only — a lesson never falls
 	# back to an external player (that would decouple video from board)
 	if {![PlayInProcess $path $startMs $endMs]} {
-		set Priv(statusbar) "Lesson requires embedded video playback (mpv/tkvlc)."
+		set Priv(statusbar) "Lesson requires embedded video playback (tkvlc)."
 		MediaDebug "PlayLesson: embedded playback failed for [file tail $path]"
 		::media::sync::load-timeline {}
 		::media::sync::load-events {}
@@ -1024,11 +1022,9 @@ proc application::media::PlayMedia {path {startMs {}} {endMs {}}} {
 	::media::sync::load-timeline {}
 	::media::sync::load-events {}
 
-	# Backend tiers (docs/MEDIA_PANEL_DESIGN.md §4): mpv is preferred
-	# (built-in codecs); tkvlc is loaded only when mpv is unavailable,
-	# so libVLC is not initialized when mpv will be used anyway.
-	if {[llength [auto_execok mpv]] || [LoadVlc]} {
-		MediaDebug "in-process playback available (mpv/tkvlc)"
+	# Backend: tkvlc (libVLC) is the only in-process multimedia backend.
+	if {[LoadVlc]} {
+		MediaDebug "in-process playback available (tkvlc)"
 		if {[PlayInProcess $path $startMs $endMs]} {
 			return
 		}
@@ -1075,32 +1071,7 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	# any leftover photo image from a previous picture display).
 	$canvas delete all
 
-	# Tier-2b: try mpv first (built-in codecs, no host codec install)
-	if {[llength [auto_execok mpv]]} {
-		MediaDebug "PlayInProcess: using mpv transport"
-		set rc [::media::mpv::launch $path $wid $startMs]
-		if {$rc != 0} {
-			set Priv(inprocess) 1
-			set Priv(statusbar) "Playing: $path (mpv)"
-			set Priv(mpv_active) 1
-
-			# Interactive 'range' entries: mpv seeks via --start (handled in
-			# launch); schedule the stop-at-End timer like the tkvlc branch.
-			catch { after cancel $Priv(rangeid) }
-			set Priv(rangeid) {}
-			if {[string is double -strict $endMs] && $endMs > $startMs} {
-				set Priv(rangeid) [after [expr {int($endMs - ($startMs > 0 ? $startMs : 0))}] \
-					[namespace code { catch { Stop } }]]
-			}
-
-			# check shortly after that playback actually started
-			catch { after cancel $Priv(checkid) }
-			set Priv(checkid) [after 800 [namespace code [list CheckDecode $path]]]
-			return 1
-		}
-	}
-
-	# Tier-2a: tkvlc (fallback when mpv is not available)
+	# tkvlc: the in-process transport
 	set Priv(statusbar) "tkvlc path"
 
 	# Initialise a new tkvlc handle bound to the canvas window id.
@@ -1219,18 +1190,6 @@ proc application::media::CheckDecode {path} {
 
 	if {!$Priv(inprocess)} { return }
 
-	# mpv transport: the process must still be alive shortly after launch
-	if {[info exists Priv(mpv_active)] && $Priv(mpv_active)} {
-		if {[::media::mpv::alive?]} {
-			MediaDebug "CheckDecode: mpv playing"
-		} else {
-			MediaDebug "CheckDecode: mpv died for [file tail $path]"
-			set Priv(statusbar) "Video playback failed."
-			Stop
-		}
-		return
-	}
-
 	if {$Priv(vlc_handle) eq ""} { return }
 
 	set handle $Priv(vlc_handle)
@@ -1260,12 +1219,6 @@ proc application::media::CheckDecode {path} {
 # Destroy the current tkvlc handle and release libVLC resources.
 proc application::media::DestroyVlcHandle {} {
 	variable Priv
-	catch {
-		if {$::media::mpv::Pid > 0} {
-			::media::mpv::stop
-		}
-	}
-
 
 	set handle $Priv(vlc_handle)
 	if {$handle ne ""} {
@@ -1274,7 +1227,6 @@ proc application::media::DestroyVlcHandle {} {
 	}
 	set Priv(vlc_handle) ""
 	set Priv(inprocess) 0
-	set Priv(mpv_active) 0	;# otherwise a later tkvlc fallback routes to the dead mpv channel
 }
 
 
@@ -1314,21 +1266,6 @@ proc application::media::SyncTransport {what} {
 
 	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
 
-	# mpv transport: route to the JSON-IPC channel
-	if {[info exists Priv(mpv_active)] && $Priv(mpv_active)} {
-		switch -- $what {
-			play {
-				::media::mpv::play
-				StartFollowTick
-			}
-			pause {
-				::media::mpv::pause
-			}
-		}
-		return
-	}
-
-	# tkvlc fallback
 	set handle $Priv(vlc_handle)
 	if {$handle eq ""} { return }
 
@@ -1472,22 +1409,6 @@ proc application::media::FollowTick {} {
 
 	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
 
-	# mpv transport: read the cached position/duration (kept fresh by
-	# the IPC property-push events) and drive the board.  This must run
-	# BEFORE the tkvlc guards below: with mpv active there is no vlc
-	# handle, so the old ordering made the follow loop exit immediately
-	# and the board never followed the video.
-	if {[info exists Priv(mpv_active)] && $Priv(mpv_active)} {
-		set t 0.0; set dur 0.0
-		catch { set t [::media::mpv::getPlaybackTime] }
-		catch { set dur [::media::mpv::getDuration] }
-		if {$t eq "" || $dur eq ""} { return }
-		::media::sync::drive $t $dur
-		StartFollowTick
-		return
-	}
-
-	# tkvlc transport
 	set handle $Priv(vlc_handle)
 	if {$handle eq ""} { return }
 

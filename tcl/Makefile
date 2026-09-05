@@ -141,7 +141,6 @@ SOURCES = \
 	app-corr-games.tcl \
 	app-board-games.tcl \
 	app-media-sync.tcl \
-	app-media-mpv.tcl \
 	app-media-decode.tcl \
 	app-media-lesson.tcl \
 	app-media.tcl \
