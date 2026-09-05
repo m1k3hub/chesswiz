@@ -423,11 +423,13 @@ proc application::media::PlaySelected {tree} {
 	}
 
 	# Coupled lesson (video owned by a game): video + game play as ONE
-	# unit — neither without the other (PlayLesson).
-	if {$type == 3 && [string is integer -strict $galleryIndex] && $galleryIndex >= 0} {
+	# unit — neither without the other (PlayLesson). Requires an owning
+	# database: gallery rows without one play as plain media below.
+	if {$type == 3 && [string length $Priv(base)] && [string is integer -strict $galleryIndex] && $galleryIndex >= 0} {
 		Stop
 		if {$galleryIndex != $Priv(index)} {
-			::game::new .application -base $Priv(base) -variant $Priv(variant) -number $galleryIndex
+			set v $Priv(variant) ; if {$v eq ""} { set v Normal }
+			::game::new .application -base $Priv(base) -variant $v -number $galleryIndex
 			# Update() installs the owning game's media/sync state.
 			# Queue playback on the same 1ms timer path as Update's own
 			# refresh (scheduled earlier by GameSwitched, so FIFO order
@@ -439,9 +441,10 @@ proc application::media::PlaySelected {tree} {
 		return
 	}
 
-	if {[string is integer -strict $galleryIndex] && $galleryIndex >= 0
+	if {[string length $Priv(base)] && [string is integer -strict $galleryIndex] && $galleryIndex >= 0
 		&& $galleryIndex != $Priv(index)} {
-		::game::new .application -base $Priv(base) -variant $Priv(variant) -number $galleryIndex
+		set v $Priv(variant) ; if {$v eq ""} { set v Normal }
+		::game::new .application -base $Priv(base) -variant $v -number $galleryIndex
 		# same ordering argument as above (Update refreshes first)
 		after 1 [namespace code [list PlayMedia $path]]
 		return
