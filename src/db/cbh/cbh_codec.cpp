@@ -2503,7 +2503,13 @@ Codec::decodeIndex(ByteStream& strm, GameInfo& info)
 	if (flags & (1 << 1)) info.m_hasTraining = true;
 
 	flags = strm.get();
-	info.m_positionId = flags & (1 << 0) ? 0 : variant::Standard; // XXX possibly wrong
+	// The CBH index does not encode an opening/idn (nor a ply count), so
+	// declare the opening as unknown (idn 0). Pretending every game is a
+	// standard-start game (variant::Standard) makes the tree pane's fast
+	// paths misfire: all games were aggregated into a single moveless row.
+	// With idn 0 the tree build falls through to the exact position check
+	// (Codec::findExactPosition), which decodes each candidate game.
+	info.m_positionId = 0;
 	info.m_setup = bool(flags & (1 << 0));
 
 	if (flags & (1 << 1)) info.m_variationCount = 10;
@@ -2702,6 +2708,25 @@ Codec::addTeamTags(TagSet& tags, GameInfo const& info)
 			}
 		}
 	}
+}
+
+
+// Locate a position in a single game (used by the tree pane's exact
+// position check). The reachability pre-filter of the tree passes every
+// CBH game here (ChessBase index records carry no idn/signature), so
+// this is the per-game arbiter: decode the game and walk it.
+Move
+Codec::findExactPosition(	GameInfo const& info,
+									Board const& position,
+									bool skipVariations,
+									::util::BlockFileReader* reader) // not used
+{
+	Byte buf[32768];
+	ByteStream gStrm(buf, sizeof(buf));
+	bool isChess960;
+
+	startDecoding(gStrm, nullptr, info, isChess960);
+	return Decoder(gStrm, isChess960).findExactPosition(position, skipVariations);
 }
 
 
