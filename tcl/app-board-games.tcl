@@ -50,6 +50,24 @@ proc build {parent {width 0} {height 0}} {
 }
 
 
+# Pane lifecycle (bound by application.tcl: <Map>/<Unmap>/<Destroy>).
+# On map, refresh the rows so the grid is current after the pane was
+# hidden while games changed.
+proc activate {w flag} {
+	variable Table
+	variable current
+
+	if {$flag && [info exists current]} {
+		TableUpdate $Table [lindex $current 0] [lindex $current 1]
+	}
+}
+
+
+proc closed {w} {
+	;# nothing to release: the grid holds no external resources
+}
+
+
 # View callback for ::gamestable: 0 selects the base's main view (all
 # games; no filter).
 proc View {} {
@@ -60,6 +78,8 @@ proc View {} {
 # databaseSwitch: rebind the grid to the newly active base.
 proc DatabaseSwitched {base variant} {
 	variable Table
+	variable current
+	set current [list $base $variant]
 	TableUpdate $Table $base $variant
 }
 
@@ -74,6 +94,8 @@ proc GameListChanged {id base variant {view -1} {index -1}} {
 
 
 proc TableUpdate {table base variant} {
+	variable current
+	if {![info exists current] || [lindex $current 0] ne $base} { return }
 	::gamestable::update $table $base $variant [::scidb::db::count games $base $variant]
 }
 
