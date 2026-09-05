@@ -61,7 +61,11 @@ smoke:
 	@echo "Running headless startup smoke test..."
 	@timeout 30 xvfb-run -a $(SRC_DIR)/tkscidb-beta $(TEST_DIR)startup_smoke.tcl > /tmp/scidb-smoke.log 2>&1; \
 		rc=$$?; cat /tmp/scidb-smoke.log; \
-		if grep -q "STARTUP-SMOKE: OK" /tmp/scidb-smoke.log && ! grep -q "FAIL" /tmp/scidb-smoke.log; then \
+		if [ $$rc -eq 124 ]; then \
+			echo "STARTUP-SMOKE: FAILED (hung, killed by timeout)"; exit 1; \
+		fi; \
+		if grep -q "STARTUP-SMOKE: OK" /tmp/scidb-smoke.log && ! grep -q "FAIL" /tmp/scidb-smoke.log \
+			&& { [ $$rc -eq 0 ] || [ $$rc -eq 134 ]; }; then \
 			exit 0; \
 		fi; \
 		echo "STARTUP-SMOKE: FAILED (exit $$rc)"; exit 1
