@@ -102,7 +102,7 @@ proc application::media::build {twm frame width height} {
 	$tree heading title -text $mc::ColumnTitle
 	$tree column type -width 70 -anchor center -stretch false
 	$tree column title -width 180 -anchor w
-	grid $tree   -row 1 -column 1 -sticky nsew
+	grid $tree   -row 1 -column 1 -sticky nsew -in $pw.list
 	grid rowconfigure $pw.list 1 -weight 1
 	grid columnconfigure $pw.list 1 -weight 1
 	pack propagate $pw.list 0
@@ -111,7 +111,7 @@ proc application::media::build {twm frame width height} {
 	ttk::frame $viewer -relief sunken -borderwidth 1
 	canvas $viewer.canvas -bg black -highlightthickness 0
 	pack $viewer.canvas -fill both -expand yes
-	grid $viewer -row 1 -column 1 -sticky nsew
+	grid $viewer -row 1 -column 1 -sticky nsew -in $pw.view
 	grid rowconfigure $pw.view 1 -weight 1
 	grid columnconfigure $pw.view 1 -weight 1
 
@@ -132,6 +132,7 @@ proc application::media::build {twm frame width height} {
 	bind $tree <<TreeviewSelect>> [namespace code [list SelectionChanged $tree]]
 
 	set Priv(tree) $tree
+	MediaDebug "build: pane twm=[list $twm] frame=[list $frame] tree=[list $tree] mapped=[winfo ismapped $tree]"
 	set Priv(viewer) $viewer
 	set Priv(statusbar) $mc::NoDatabase
 	set Priv(ctrl) $ctrl
@@ -211,7 +212,11 @@ proc application::media::InsertEntry {typeLabel title path index} {
 
 	set n 0
 	while {[$tree exists "item$n"]} { incr n }
-	$tree insert $section end -id item$n -values [list $typeLabel $title $path $index]
+	if {[catch { $tree insert $section end -id item$n -values [list $typeLabel $title $path $index] } err]} {
+		MediaDebug "InsertEntry: FAILED section=$section item=item$n: $err"
+	} else {
+		MediaDebug "InsertEntry: section=$section item=item$n type=$typeLabel path=[list $path]"
+	}
 	return item$n
 }
 
@@ -256,6 +261,7 @@ proc application::media::Update {position} {
 			array unset Priv "interactive:played:*"
 			catch {
 				set gallery [::scidb::db::mediaGallery $Priv(lastBase) $Priv(lastVariant)]
+				MediaDebug "Update: independent gallery returned [llength $gallery] entries"
 				if {[llength $gallery]} {
 					foreach gentry $gallery {
 						lassign $gentry gpath gtype gtitle gmediaId gindex
@@ -294,11 +300,12 @@ proc application::media::Update {position} {
 
 	set entries {}
 	catch { set entries [::scidb::db::mediaFiles $base $variant $index] }
-
+	MediaDebug "Update: base=[list $base] index=$index mediaFiles=[llength $entries]"
 	if {![llength $entries]} {
 		# No per-game media (.scm) — try the gallery (.cbm or .scm gallery)
 		set gallery {}
 		catch { set gallery [::scidb::db::mediaGallery $base $variant] }
+		MediaDebug "Update: game gallery fallback returned [llength $gallery] entries"
 		if {[llength $gallery]} {
 			set Priv(statusbar) "Media gallery (not game-specific)"
 			foreach entry $gallery {
@@ -318,6 +325,7 @@ proc application::media::Update {position} {
 		if {[string is true -strict $inline]} { set path {} }	;# base64 payload: not extractable (docs §6)
 		InsertEntry $type $title $path $index
 	}
+	MediaDebug "Update: done tree=[list $tree] rows=[$tree children {}] mapped=[winfo ismapped $tree] viewable=[winfo viewable $tree]"
 
 	# collect interactive-video indexes (.cms; .scm/.smv manifests already
 	# loaded database-level) for board-position–keyed playback
