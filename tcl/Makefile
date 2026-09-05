@@ -654,8 +654,9 @@ $(SCRIPT): $(SOURCES)
 	@chmod 0555 $(SCRIPT)
 	@echo "Checking merged script syntax"
 	@if [ -x /usr/bin/tclsh ]; then TCLSH=/usr/bin/tclsh; else TCLSH=tclsh; fi; \
-		$$TCLSH -c 'set fp [open $(SCRIPT) r]; set b [read $$fp]; close $$fp; \
+		printf '%s' 'set fp [open $(SCRIPT) r]; set b [read $$fp]; close $$fp; \
 			if {![info complete $$b]} { puts stderr "ERROR: merged script is syntactically incomplete"; exit 1 }' \
+			| $$TCLSH \
 		|| { echo "ERROR: $(SCRIPT) failed the syntax check"; exit 1; }
 
 $(UPDATE_PHOTO_FILES): utils/update-photos.tcl
