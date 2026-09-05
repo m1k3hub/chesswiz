@@ -209,8 +209,14 @@ int main(int argc, char* argv[])
 
    unsigned char const* cbh = (unsigned char const*)cbhData.c_str();
    unsigned char const* cbg = (unsigned char const*)cbgData.c_str();
+	if (cbhData.size() < 256u * 0x1a) {
+		::fprintf(stderr, "truncated 2CBH index\n"); return 1;
+	}
 
    unsigned const recordSize = readLE16(cbh + 0x0a);
+	if (recordSize < 0xbe || cbhData.size() < 256u * recordSize) {
+		::fprintf(stderr, "invalid 2CBH record size\n"); return 1;
+	}
    unsigned const gameCount = unsigned(cbhData.size() / recordSize) - 256u;
    if (maxGames == 0 || maxGames > gameCount)
       maxGames = gameCount;
@@ -499,7 +505,6 @@ int main(int argc, char* argv[])
       if (ecoBuf[0])
          ::fprintf(out, "[ECO \"%s\"]\n", ecoBuf);
       ::fprintf(out, "\n%s%s\n\n", movetext.c_str(), result);
-      ::fprintf(out, "%s%s\n\n", movetext.c_str(), result);
    }
 
    ::fclose(out);

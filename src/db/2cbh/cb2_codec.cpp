@@ -224,7 +224,11 @@ Codec::doOpen(	mstl::string const& rootname,
 	}
 
 	unsigned char const* cbh = reinterpret_cast<unsigned char const*>(cbhData.data());
+	if (cbhData.size() < 256u * 0x1a)
+		IO_RAISE(Index, Corrupted, "2CBH index is truncated");
 	unsigned const recordSize = readLE16(cbh + 0x0a);
+	if (recordSize < 0xbe || cbhData.size() < 256u * recordSize)
+		IO_RAISE(Index, Corrupted, "invalid 2CBH record size");
 	m_numGames = unsigned(cbhData.size() / recordSize) - 256u;
 
 	mstl::string gameName(rootname + ".2cbg");
@@ -480,14 +484,12 @@ Codec::doDecoding(	db::Consumer& consumer,
 	unsigned char header[0x1a];
 	if (!m_gameStream.read(reinterpret_cast<char*>(header), sizeof(header)))
 	{
-		consumer.finishMoveSection(result::Unknown);
-		return consumer.finishGame(tags);
+		return consumer.skipGame(tags);
 	}
 
 	if (readLE64(header) != 0x1122334455667788ull)
 	{
-		consumer.finishMoveSection(result::Unknown);
-		return consumer.finishGame(tags);
+		return consumer.skipGame(tags);
 	}
 
 	uint32_t const dataSize = readLE32(header + 0x08);
@@ -495,18 +497,14 @@ Codec::doDecoding(	db::Consumer& consumer,
 
 	if (type != 1)
 	{
-		// Chess960 (type 2) and other variants are not supported yet
-		char buf[32];
-		::snprintf(buf, sizeof(buf), "%u", 0u);
-		tags.set(tag::PlyCount, buf);
-		tags.set(tag::Result, "*");
-		consumer.finishMoveSection(result::Unknown);
-		return consumer.finishGame(tags);
+		// Chess960 (type 2) and other variants are not supported yet.
+		return consumer.skipGame(tags);
 	}
 
 	mstl::string record(dataSize, '\0');
 	if (dataSize > 0)
-		m_gameStream.read(record.begin(), dataSize);
+		if (!m_gameStream.read(record.begin(), dataSize))
+			return consumer.skipGame(tags);
 
 	unsigned char const* data = reinterpret_cast<unsigned char const*>(record.data());
 	Board board(Board::standardBoard(variant::Normal));
@@ -615,7 +613,7 @@ Codec::doDecoding(	db::Consumer& consumer,
 		}
 
 		if (!found)
-			break;
+			return consumer.skipGame(tags);
 
 		// comments attached to this move (position == 1-based ply of move
 		// just emitted, i.e. the flattened walk position after it)

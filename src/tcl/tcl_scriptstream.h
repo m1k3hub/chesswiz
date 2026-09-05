@@ -120,8 +120,7 @@ inline mstl::string cp1252_to_utf8(char const* s, unsigned len)
 			out += static_cast<char>(0xC0 | (c >> 6)),
 			out += static_cast<char>(0x80 | (c & 0x3F));
 		else
-			out += static_cast<char>(0xE0 | (c >> 12)),
-			out += static_cast<char>(0x80 | ((c >> 6) & 0x3F)),
+			out += static_cast<char>(0xC0 | (c >> 6)),
 			out += static_cast<char>(0x80 | (c & 0x3F));
 	}
 	return out;
@@ -533,7 +532,7 @@ inline Kind decode_event(unsigned char const* record, unsigned len,
 		}
 		case 3:
 		{
-			if (len < 6) break;
+			if (len < 8) break;
 			ev.gotoIndex = rd_le32(record + 4);
 			ev.kind = GotoIndex;
 			break;

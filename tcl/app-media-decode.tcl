@@ -41,6 +41,24 @@ proc log {msg} {
 	catch { ::application::media::MediaDebug "Decoder: $msg" }
 }
 
+proc jsonObjects {s} {
+	set out {}; set start -1; set depth 0; set quoted 0; set escaped 0
+	for {set i 0} {$i < [string length $s]} {incr i} {
+		set c [string index $s $i]
+		if {$quoted} {
+			if {$escaped} { set escaped 0 } elseif {$c eq "\\"} { set escaped 1 } elseif {$c eq "\""} { set quoted 0 }
+			continue
+		}
+		if {$c eq "\""} { set quoted 1; continue }
+		if {$c eq "\{"} { if {$depth == 0} { set start $i }; incr depth
+		} elseif {$c eq "\}" && $depth > 0} {
+			incr depth -1
+			if {$depth == 0} { lappend out [string range $s $start $i]; set start -1 }
+		}
+	}
+	return $out
+}
+
 # ---------------------------------------------------------------------
 # logical trim: fixed-size opcodes carry zero padding after their
 # payload; cut it so payload offsets stay meaningful
@@ -231,7 +249,7 @@ proc decode {wmvPath} {
 	# ffprobe -of json emits one flat object per packet; pair each
 	# packet's data hex with its pts_time (media seconds)
 	set packets {}
-	foreach obj [regexp -all -inline {\{[^{}]*\}} $json] {
+	foreach obj [jsonObjects $json] {
 		set data {}
 		regexp {"data":\s*"([^"]*)"} $obj -> data
 		if {![string length $data]} { continue }

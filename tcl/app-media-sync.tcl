@@ -226,7 +226,7 @@ proc ::media::sync::drive {timeMs durationMs} {
 	}
 
 	set len [BoardLength]
-	if {$len <= 1} { return }
+	if {$len <= 0} { return }
 
 	if {[llength $State(timeline)]} {
 		set goal 0
@@ -245,7 +245,7 @@ proc ::media::sync::drive {timeMs durationMs} {
 				if {$mark <= $timeMs} { incr goal } else { break }
 			}
 		}
-		set goal [expr {min($goal, $len - 1)}]
+		set goal [expr {min($goal, $len)}]
 		if {$goal < $State(lastgoal)} {
 			set State(tlidx) $goal
 			set State(evidx) 0
@@ -269,7 +269,7 @@ proc ::media::sync::drive {timeMs durationMs} {
 	set frac [expr {double($timeMs)/$dur}]
 	if {$frac < 0.0} { set frac 0.0 }
 	if {$frac > 1.0} { set frac 1.0 }
-	set goal [expr {min(int($frac*$len), $len - 1)}]
+	set goal [expr {min(int($frac*$len), $len)}]
 	if {$goal < $State(lastgoal)} {
 		BoardStart
 		BoardClearAnnotations

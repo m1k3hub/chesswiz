@@ -176,6 +176,19 @@ proc application::media::MediaRows {} {
 	return $rows
 }
 
+# Map a media type (numeric id from ::scidb::db::mediaFiles/mediaGallery:
+# 0=none 1=picture 2=audio 3=video 4=stream, or a string label) to a
+# section key used by Sections().
+proc application::media::TypeNumber {type} {
+	switch -glob -- $type {
+		picture -	audio -	video -	reports -	other	{ return $type }
+		1																{ return picture }
+		2																{ return audio }
+		3																{ return video }
+		default													{ return other }
+	}
+}
+
 # Insert one entry under its type section; returns the item id.
 proc application::media::InsertEntry {typeLabel title path index} {
 	variable Priv
@@ -288,8 +301,8 @@ proc application::media::Update {position} {
 		if {[llength $gallery]} {
 			set Priv(statusbar) "Media gallery (not game-specific)"
 			foreach entry $gallery {
-				lassign $entry path type title mediaId
-				InsertEntry $type $title $path -1
+				lassign $entry path type title mediaId gameIndex
+				InsertEntry $type $title $path [expr {[string is integer -strict $gameIndex] ? $gameIndex : -1}]
 			}
 			PrebuildLessons
 			return
@@ -558,6 +571,7 @@ proc application::media::SmvEntries {path} {
 	array set keyOf {}
 	foreach s $sections {
 		array unset s_ ; array set s_ $s
+		array unset kv
 		array set kv {}
 		foreach line [split $s_(body) "\n"] {
 			if {[regexp {^([\w\.]+)\s*:\s*(.*)$} $line -> k v]} { set kv([string tolower $k]) [string trim $v "\" \t"] }
@@ -983,7 +997,7 @@ proc application::media::PlayMedia {path {startMs {}} {endMs {}}} {
 	::media::sync::load-events {}
 
 	# Prefer the tkvlc backend (embedded, in-window playback via libVLC).
-	if {[LoadVlc]} {
+	if {[LoadVlc] || [auto_execok mpv] ne ""} {
 		MediaDebug "PlayMedia: tkvlc available, trying in-process"
 		if {[PlayInProcess $path $startMs $endMs]} {
 			return
@@ -1573,4 +1587,3 @@ proc application::media::closed {frame} {
 }
 
 # vi:set ts=3 sw=3:
-
