@@ -75,6 +75,7 @@ array set PaneOptions {
 	editor	{ -width 500 -height 520 -minwidth 150 -minheight 200 -expand y }
 	games		{ -width 500 -height 520 -minwidth 300 -minheight 100 -expand both }
 	gamemedia	{ -width 500 -height 200 -minwidth 200 -minheight 100 -expand y }
+	dbgames		{ -width 500 -height 200 -minwidth 200 -minheight 100 -expand y }
 	analysis	{ -width 500 -height 120 -minwidth 300 -minheight 120 -expand x }
 	eco		{ -width 500 -height 520 -minwidth 150 -minheight 100 -expand both }
 }
@@ -87,6 +88,7 @@ set BoardLayout {
 				multiwindow {} {
 					frame editor %editor%
 					frame games %games%
+					frame dbgames %dbgames%
 					frame gamemedia %gamemedia%
 				}
 			}
@@ -100,7 +102,7 @@ set BoardLayout {
 
 set FontSizeActive 0
 
-array set Prios		{ analysis 200 board 500 editor 400 games 100 gamemedia 95 tree 300 eco 90 }
+array set Prios		{ analysis 200 board 500 editor 400 games 100 dbgames 110 gamemedia 95 tree 300 eco 90 }
 array set Defaults	{ menu:background #c3c3c3 }
 
 array set Vars {
@@ -320,6 +322,7 @@ proc MakePane {twm parent type uid} {
 		games   { set ns tree::games }
 		editor  { set ns pgn }
 		gamemedia { set ns media }
+		dbgames { set ns boardgames }
 		default { set ns $name }
 	}
 	bind $frame <Map> [list [namespace current]::${ns}::activate $frame 1]
@@ -360,6 +363,7 @@ proc BuildPane {twm frame uid width height} {
 		board		{ board::build $frame $width $height }
 		editor	{ pgn::build $frame $width $height }
 		games		{ tree::games::build $twm $frame $width $height }
+		dbgames		{ boardgames::build $frame $width $height }
 		gamemedia		{ media::build $twm $frame $width $height }
 		default	{ return -code error "BuildPane: unknown pane $uid" }
 	}
