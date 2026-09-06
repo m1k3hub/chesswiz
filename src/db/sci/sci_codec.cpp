@@ -599,6 +599,8 @@ Codec::gameFlags() const
 Codec::Codec()
 	:m_progressiveStream(0)
 	,m_gameData(0)
+	,m_fileVersion(s_creationVersion)
+	,m_sciVersion(s_creationVersion)
 	,m_progressReportAfter(0)
 	,m_progressCount(0)
 {

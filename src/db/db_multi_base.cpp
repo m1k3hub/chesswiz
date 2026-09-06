@@ -452,10 +452,12 @@ MultiBase::importGames(Producer& producer, util::Progress& progress, GameCount* 
 
 		for (unsigned v = 0; v < variant::NumberOfVariants; ++v)
 		{
-			if (!codecs.supports(variant::Type(v)))
+			variant::Type variant = variant::fromIndex(v);
+
+			if (!codecs.supports(variant))
 				continue;
 
-			sciVersion = mstl::min(sciVersion, codecs[variant::Type(v)].sciVersion());
+			sciVersion = mstl::min(sciVersion, codecs[variant].sciVersion());
 		}
 
 		sci::Consumer consumer(format::Scidb, codecs, Consumer::TagBits(true), true);

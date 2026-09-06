@@ -65,7 +65,9 @@ tcltest::test audit-make-cpp-target-05 {Documented C++ test target should work f
     if {[catch {exec make --version}]} {
         return 1
     }
-    set rc [catch {exec make -C [file join $repoRoot tests] cpp} output]
+    # -ignorestderr: the corr-duration truncation tests throw on purpose and
+    # the exception logger writes to stderr; only the exit status matters here
+    set rc [catch {exec -ignorestderr make -C [file join $repoRoot tests] cpp} output]
     if {$rc} {
         puts stderr $output
     }
