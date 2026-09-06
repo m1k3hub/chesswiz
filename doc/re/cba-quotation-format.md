@@ -277,3 +277,89 @@ faster (256 candidate seeds × ~20 plies of pure table lookups, no board
 object churn) and inherently exception-free. Ghidra-tracing CBase26's own
 quotation-replay code (as recommended above) to read the seed directly is
 still the most reliable path and avoids brute-forcing altogether.
+
+### Fourth attempt (2026-09-06, later still) — exhaustive brute force, both remaining hypotheses conclusively ruled out
+
+Built and ran the safe brute-force approach (b) above, then extended it: a
+temporary `Decoder::bruteForceQuotationSeed()` tried every one of the 256
+possible starting values of `count` against real quotation records pulled
+live from the `cbm168`/`CBM168.cbh` fixture (16 distinct records recovered
+via a throwaway Tcl probe driving `::scidb::db::load` + `::scidb::game::load`
++ `::scidb::game::toPGN`, with a temporary `fprintf` in `decodeQuotation()`
+dumping each record's citing ply and raw blob bytes). Two safety layers
+were used per the note above: `lc >= 0xec` (Push/Pop/Skip token) rejection,
+and *also* calling the real `Decoder::decodeMove()` (not a hand-rolled
+byte walk) so multi-byte cases such as ambiguous-pawn-promotion codes,
+which read extra bytes directly from `m_gStrm`, are handled exactly as
+production does — an earlier version of this harness that read bytes by
+hand mis-handled these and threw spurious `unexpected end of stream`
+exceptions that escaped uncaught, exactly the hazard the previous attempt
+warned about; wrapping every `decodeMove()` call in `catch (mstl::exception
+const&)` and rejecting on any exception fixed this.
+
+**Harness validated with a positive control** before trusting any negative
+result: fed the harness 40 real raw bytes captured from an ordinary
+(non-quotation) game's move stream in the same database, decoded via the
+existing, already-correct production path. Result: **exactly 1 of 256
+seeds decoded cleanly (seed 0), and it was the expected one** — ordinary
+`.cbg` game streams are known to start `count` at 0. This confirms the
+harness neither over- nor under-accepts.
+
+**Finding 1 — the "seed = citing ply" hypothesis is conclusively false,
+independent of any decode attempt.** Multiple *different* quotations in
+this fixture, cited from wildly different points in their respective
+citing games (0-based ply 5, 15, 16, 19, 49, 226, 559 — captured directly
+from `m_moveNo` at the `decodeQuotation()` call site, which is exactly the
+citing move's 0-based ply index; see `getAnnotation(node, int(count) - 1)`
+in `cbh_game_decoder.cpp`), quote the **same** underlying game (recognizable
+by identical event/date and, notably, byte-for-byte identical raw blob
+bytes for as many bytes as the shorter of the two records covers — e.g.
+Caruana–Carlsen at ply 5, Polgar–Kasimdzhanov's Berlin-opening citations at
+plies 15/16, and Carlsen–Anand at ply 49 all begin
+`df 93 6c d8 f8 59 0d c6 c2 ec ...`). If `count`'s starting value depended
+on the citing ply, encoding the *same* quoted moves from *different* citing
+positions would necessarily produce *different* raw bytes (since
+`raw = InverseMoveNumberLookup[lc] + count`). It doesn't — the bytes are
+identical. This is a structural proof requiring no move-decode success at
+all, and it survives independent of everything below.
+
+**Finding 2 — no fixed global constant seed works either, and the model
+breaks almost immediately.** Ran the validated harness against all 16 real
+quotation blobs from the fixture, requiring 15 consecutive legal
+`Token_Move` results (a bar the positive control cleared easily at 15/15).
+**Zero of the 256 seeds produced even a single clean decode for any of the
+16 records.** The single best result over all seeds × all records was 3
+consecutive legal moves (seed 209, one record) — most seeds for most
+records fail at move 1 or 2. This rules out "reset to a fixed constant
+count" (0 or otherwise) as cleanly as Finding 1 ruled out "seed = citing
+ply" — not a wrong-seed problem, a wrong-model problem.
+
+**Combined, these two findings exhaust the entire realistic seed-search
+space** (constant vs. citing-context-derived) using the real production
+decode machinery, not a simplified reimplementation. The doc's standing
+model — "reuses the standard `.cbg` per-move decode, `count` free variable,
+fresh start" — is now disproven in both of its natural specializations.
+Something more fundamental is different: either the move-token table
+itself differs for embedded quotations (a different `MoveNumberLookup`,
+analogous to how Chess960 games use `Chess960MoveNumberLookup` and a
+different formula entirely), or there actually is additional framing/a
+sub-header immediately before the move bytes that has not been identified
+(consistent with the second attempt's suspicion of "a length-prefixed
+sub-record ChessBase's own quotation renderer parses differently from a
+bare `.cbg` game" — not yet tested because the *classical* per-move formula
+was assumed correct up to the seed).
+
+All debug/experimental code from this attempt was reverted; the working
+tree is unchanged from the header-only `decodeQuotation()`.
+
+**Recommended next step, now sharper than before:** Ghidra-trace
+CBase26.exe's actual quotation-move-replay function (not the PGN-tag
+dispatch table already found while solving 2CBH Elo — a different,
+unrelated function) to read the real table/formula/framing directly,
+rather than continuing to assume it must be a variant of the classical
+per-move scheme. Given the classical scheme is now ruled out in every
+constant/derived-seed form, the quotation replay most likely calls into
+either the Chess960 decode path (a different table, independent of
+whether the quoted game is actually Chess960) or a third, not-yet-seen
+table/routine dedicated to quotations — either is a concrete, falsifiable
+hypothesis Ghidra can answer directly, rather than more brute forcing.
