@@ -1731,7 +1731,10 @@ proc WriteLayout {twm id name layoutVariant} {
 
 
 proc ShowAllDockingPoints {twm} {
+	variable [namespace parent]::Vars
 	variable Options
+
+	set id $Vars($twm:id)
 	$twm showall $Options($id:docking:showall)
 }
 

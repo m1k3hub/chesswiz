@@ -193,7 +193,7 @@ proc build {top width height} {
 		bind $pgn <Button-3> [namespace code [list PopupMenu $edit $i]]
 		bind $pgn <Double-3> {#} ;# catch double clicks
 		bind $pgn <Leave> [namespace code [list HidePosition $pgn]]
-		set evalStrip [tk::canvas $edit.f$i.evalstrip -height 22 -highlightthickness 0 -background white]
+		set evalStrip [tk::canvas $edit.f$i.evalstrip -width 1 -height 22 -highlightthickness 0 -background white]
 		grid $evalStrip -row 2 -column 1 -columnspan 2 -sticky ew
 		bind $evalStrip <Configure> [namespace code [list DrawEvalStrip $i]]
 		bind $evalStrip <ButtonPress-1> [namespace code [list EvalStripClick $i %x]]
@@ -334,7 +334,7 @@ proc build {top width height} {
 	set Vars(toolbar:languages) $tbLanguages
 
 	grid columnconfigure $edit 1 -weight 1
-	grid rowconfigure $edit 2 -weight 1
+	grid rowconfigure $edit 3 -weight 1
 	bind $top <<LanguageChanged>> [namespace code LanguageChanged]
 
 	set Vars(lang:set) {}

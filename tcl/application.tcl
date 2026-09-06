@@ -70,7 +70,7 @@ namespace import ::tcl::mathfunc::abs
 namespace import ::tcl::mathfunc::max
 
 array set PaneOptions {
-	board		{ -width 500 -height 540 -minwidth 300 -minheight 300 -expand both }
+	board		{ -width 500 -height 540 -minwidth 300 -minheight 300 -expand both -shrink x -grow x }
 	tree		{ -width 500 -height 120 -minwidth 250 -minheight 100 -expand y }
 	editor	{ -width 500 -height 520 -minwidth 150 -minheight 200 -expand y }
 	games		{ -width 500 -height 520 -minwidth 300 -minheight 100 -expand both }
@@ -84,7 +84,7 @@ set BoardLayout {
 		panedwindow { -orient vert } {
 			panedwindow { -orient horz } {
 				pane board %board%
-				multiwindow {} {
+				multiwindow { -expand x -shrink x -grow x } {
 					frame editor %editor%
 					frame games %games%
 					frame dbgames %dbgames%
