@@ -208,3 +208,72 @@ first move or two, and should add a legality/board-consistency check
 per decoded move (not just catch `mstl::exception`, since `M_ASSERT`
 violations in this build do not throw) so a desync fails safe instead of
 crashing.
+
+### Third attempt and revert (2026-09-06, later still) — reframes the problem
+
+Two genuinely new, confirmed findings, no code changes kept (reverted; the
+tree is back to the header-only `decodeQuotation()`):
+
+**1. The blob byte-offset computation is confirmed correct.** Hex-dumped
+the raw bytes at the header parser's own computed blob start for the
+Caruana–Carlsen record: `df 93 6c d8 f8 59 0d c6 c2 ec 0a 5a a3 48 e6 98`
+— exactly matching the earlier "static leading bytes" observation. The
+grammar/offset hypothesis in this doc is not the problem; something else
+is.
+
+**2. The "cipher" framing in this doc is the wrong model for classical
+(non-Chess960) decode — it's much simpler.** Re-reading
+`Decoder::decodeMove` (`cbh_decoder.cpp`) line by line: the complex H0/seed
+table machinery (`resolveCipherCount`, `s_cipher`, `pushCipherState`) is
+used **only** when `m_useCipher` is true, i.e. Chess960 games. For a
+classical game (`m_useCipher == false`, which a quotation of a standard
+game is), the decode is a plain additive scheme:
+
+```cpp
+lc = MoveNumberLookup[Byte(rawByte - count)];
+```
+
+where `count` is just the 0-based move index, incremented by one per
+decoded move. There is no "cipher state" to reset for a fresh start in
+this path — the only free variable is the **starting value of `count`**.
+Feeding the blob through a bare `Decoder` with `count` seeded at 0
+(matching the doc's "reset to a fresh start" hypothesis) decodes `0xdf` at
+count=0 to a nonsense move (`g4` from the start position) for every
+record tried, regardless of the record's real opening — i.e. **seed 0 is
+demonstrably wrong**, not merely unlucky. This was verified two different
+ways (both reverted): a nested-`GameDecoder` version and a bare-`Decoder`
+version calling the same `decodeMove` directly with `count=0`; both
+produce the same wrong first move.
+
+This reframes the open problem precisely: it is **not** a framing/offset
+question (settled, see finding 1) and **not** really a "cipher" question
+(there's no cipher to get right in the classical path) — it is purely
+**"what is the correct starting value of `count` for an embedded
+quotation blob?"** The most likely candidate, not yet tested safely: the
+ply number of the citing move in the *outer* game at the point of
+citation (i.e. the quotation's own encoder continues the outer game's
+move-count sequence rather than resetting it, despite the doc's earlier
+"fresh start" inference from static leading bytes — the static-bytes
+observation only rules out a *per-game-content-dependent* seed, not a
+*constant or position-derived* one).
+
+**Safety note for whoever tries this next:** brute-forcing `count` by
+replaying candidate seeds through `Board::makeMove`/`prepareForPrint` is
+dangerous, not just wrong-output-prone — `Board::prepareForPrint`
+(`db_board.cpp:1347`) throws `mstl::precondition_violation_exception` for
+a large fraction of garbage decodes from wrong seeds, and this exception,
+while catchable in principle, was observed escaping through to the Tcl
+layer and silently killing the *entire* `toPGN` call for the game being
+tested (not just the one quotation) when the replay loop wasn't
+sufficiently guarded — losing output for unrelated, unaffected games in
+the same test run. Any brute-force approach must either (a) wrap every
+single per-move operation (`makeMove`, `prepareForPrint`, `printSAN`,
+`doMove`) in its own `catch (mstl::exception const&)`, independently, not
+just the outer loop, or (b) validate at the raw `lc` (logical code) level
+using `MoveNumberLookup` and a legality table **before** ever constructing
+a `Move`/`Board::makeMove` call, avoiding the precondition-throwing APIs
+during search entirely. Approach (b) is recommended — it's also much
+faster (256 candidate seeds × ~20 plies of pure table lookups, no board
+object churn) and inherently exception-free. Ghidra-tracing CBase26's own
+quotation-replay code (as recommended above) to read the seed directly is
+still the most reliable path and avoids brute-forcing altogether.
