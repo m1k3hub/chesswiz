@@ -106,6 +106,29 @@ The header alone already delivers the practical value (identifying what
 game is being cited); decoding the actual quoted moves is a clean,
 separable follow-up.
 
+### Attempted and reverted (2026-09-06)
+
+Tried exactly the approach above: nested `GameDecoder` over
+`[00 00 00 00] + blob`, looping `decodeMove()` (mainline only,
+`skipVariations=true`), printing SAN via `Board::prepareForPrint` +
+`Move::printSAN`. It ran without crashing (after fixing a `printSAN`
+precondition — needs `prepareForPrint` called on the **pre-move** board,
+captured before `decodeMove()` mutates the decoder's position) but produced
+**the same single move, `1.g4`, for every one of the 17 records** regardless
+of actual content, then immediately failed to decode a second move. Since
+17 structurally distinct blobs cannot legitimately all start with the exact
+same first move, this is a framing bug, not real data — most likely the
+synthetic 4-byte prefix is wrong (either the wrong length, or real `.cbg`
+per-game data has a different/no such prefix and `startDecoding()`'s first
+`uint32()` read needs to consume something else), or the cipher's initial
+`count` seed isn't actually 0 for an embedded quotation. Reverted rather
+than ship plausible-looking wrong data. Next attempt should compare a
+**known real quoted game's expected opening** (e.g. record 11 is
+Caruana–Carlsen, Berlin Defence, so bytes should decode to `1.e4 e5 2.Nf3
+Nc6 3.Bb5`) against the raw blob bytes/cipher output byte-by-byte to find
+the actual framing offset, or use Ghidra to trace CBase26's own quotation-
+rendering code path.
+
 ## Decoder implementation (2026-09-06)
 
 `src/db/cbh/cbh_game_decoder.{h,cpp}`: `decodeQuotation()` parses the header
