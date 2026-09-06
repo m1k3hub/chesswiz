@@ -532,3 +532,63 @@ hooks, the `decodeQuotation()` debug prints) was reverted; the working
 tree is unchanged except this doc entry and the `dump_cbase26_tables.py`
 region addition (kept — legitimate, reusable, zero-risk dump tooling, not
 a guess).
+
+### Sixth attempt (2026-09-06, later still) — Ghidra call-site trace: two dead ends ruled out, real dispatch not yet found
+
+Followed the recommendation above to trace CBase26's actual quotation-rendering
+call site rather than sweep more parameters. Two concrete leads were chased
+down and ruled out; the real dispatch function was not located within budget.
+
+**Lead 1 — constant-CMP scanning across `.text`: too noisy to be useful.**
+Scanned every `CMP`/`SUB` instruction in the binary for immediate operands
+matching the annotation-type bytes already solved (`0x07, 0x09, 0x13, 0x16,
+0x17, 0x18, 0x24`), on the theory that the general `.cba` item-type dispatch
+would reference several of them together in one function. This produced ~19
+functions referencing 3+ of these values, but every one decompiled was an
+unrelated coincidental hit — a file-extension-string table (`param_2==0x13`
+→ `"cbt"`), a hyperlink-type factory (`CBaseVideoLink`/`CBaseKeyLink`/
+`CBaseAliasAudioLink` — a completely different "link type" enum that also
+happens to use small integers including `0x13`), an ECO/country lookup
+table, and a hard-disk-cache file-path builder. These small integers are
+too common throughout a 15MB binary for this search strategy to isolate the
+real dispatch; **not recommended as a technique for whoever continues this.**
+
+**Lead 2 — `AnnoGameQuotationCmd` RTTI class: real class, wrong layer.**
+Found via plain `strings` on the exe (`Gamequot.cpp` debug path, RTTI class
+names `AnnoGameQuotationCmd`/`DeleteGameQuotationCmd`). Traced the
+constructor (`FUN_1408f9d90`) to the class's actual vftable address
+(`0x14122f210`, confirmed via direct disassembly — `LEA RAX,[0x14122f210]`)
+and dumped all 20 virtual slots. It overrides exactly **two** slots from
+its base `CBaseGameCommand` (vftable `0x14122c398`): slot 0 (destructor,
+`FUN_1408282a0`) and slot 13 (`thunk_FUN_1409de920`, decompiled in full —
+it's a *menu-enablement predicate*: checks a frame-window RTTI cast and a
+bitmask flag comparison, returns bool, contains no stream/blob access at
+all). **This class is a toolbar/menu "insert a game quotation" UI command,
+not the annotation-record reader/renderer** — it has no decode logic
+whatsoever. This rules it out cleanly and clarifies that the real
+byte-stream parser (which must exist, given classical `.cba` records
+clearly get *read back and rendered* when browsing an existing game) is
+architected differently — most likely a generic, non-RTTI, switch-on-type-
+byte function in the same family as `decode_caller`/`dispatch_CBH`
+(already found and fully characterized for *move* decoding), rather than
+one polymorphic class per annotation type.
+
+**Not yet tried, concrete next steps for whoever continues:**
+- Search for the generic `.cba`/annotation-stream *reader* (not the *insert
+  command*) by tracing backward from a known call site instead of forward
+  from a name: find where `decode_caller`/`dispatch_CBH` themselves are
+  invoked from (their callers, not their callees) — the caller is almost
+  certainly the general per-move/per-annotation stream walker, and the
+  annotation-type dispatch is likely a sibling switch inside or adjacent to
+  that same walker function, reachable by one hop from known-good addresses
+  rather than a blind binary-wide scan.
+- Alternatively, set a Ghidra/x64dbg breakpoint on `decode_caller` itself
+  while manually opening a game containing a quotation in a live CBase26
+  session under Wine, and inspect the call stack at that breakpoint — this
+  sidesteps static analysis entirely and directly answers "does quotation
+  rendering call this function at all, and if not, what calls happen
+  instead" with certainty, which six passes of static guessing have not
+  achieved. This is the most promising untried avenue.
+
+No code changes. All working files from this pass were scratch (`/tmp/*`,
+not committed). Tree unchanged from the prior commit.
