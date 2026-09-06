@@ -300,7 +300,8 @@ public:
 	::db::save::State exportGame(	unsigned position,
 											mstl::ostream& strm,
 											unsigned flags,
-											::db::copy::Source source);
+											::db::copy::Source source,
+											bool useChessPadDiagramNag = false);
 	db::save::State saveGame(Cursor& cursor, bool replace);
 	db::save::State updateMoves();
 	db::save::State updateCharacteristics(Cursor& cursor, unsigned index, db::TagSet const& tags);

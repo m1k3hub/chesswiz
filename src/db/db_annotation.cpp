@@ -470,12 +470,31 @@ Annotation::print(mstl::string& result, unsigned flags) const
 				::addNumber(evaluation, m_annotation[i]);
 				break;
 
-			case Novelty:
 			case Diagram:
+			case DiagramFromBlack:
+				if (flags & Flag_Use_ChessPad_Diagram_Nag)
+				{
+					::addSpace(other);
+					other += "$";
+					::addNumber(other, m_annotation[i] == Diagram ? unsigned(ChessPad_Diagram) : unsigned(ChessPad_DiagramFromBlack));
+					break;
+				}
 				if (flags & Flag_Extended_Symbolic_Annotation_Style)
 				{
 					::addSpace(symbolic1);
-					symbolic1 += m_annotation[i] == Novelty ? 'N' : 'D';
+					if (m_annotation[i] == Diagram)
+						symbolic1 += 'D';
+					else
+						symbolic1.append("D'", 2);
+					break;
+				}
+				// fallthru
+
+			case Novelty:
+				if (flags & Flag_Extended_Symbolic_Annotation_Style)
+				{
+					::addSpace(symbolic1);
+					symbolic1 += 'N';
 					break;
 				}
 				// fallthru

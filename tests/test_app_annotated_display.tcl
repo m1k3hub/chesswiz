@@ -117,6 +117,17 @@ tcltest::test annotated-diagram-04 {ChessBase diagram NAG $220 maps to Scidb dia
 		[expr {[lsearch -exact $nags {$220}] >= 0}]
 } -result {1 0}
 
+tcltest::test annotated-diagram-nag-export-04b {diagram NAG exports as $155 by default, $220/$221 opt-in} -body {
+	variable slot
+	loadGame chessbase
+	set default [::scidb::game::toPGN original -position $slot]
+	set chesspad [::scidb::game::toPGN original -position $slot -chesspad-diagram-nag 1]
+	list [expr {[string first {$155} $default] >= 0}] \
+		[expr {[string first {$220} $default] >= 0}] \
+		[expr {[string first {$155} $chesspad] >= 0}] \
+		[expr {[string first {$220} $chesspad] >= 0}]
+} -result {1 0 0 1}
+
 tcltest::test annotated-marks-05 {csl/cal command tags become board marks} -body {
 	variable slot
 	loadGame chessbase

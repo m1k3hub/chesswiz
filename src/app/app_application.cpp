@@ -3568,7 +3568,11 @@ Application::copyGame(MultiCursor& sink, unsigned position, copy::Source source)
 
 
 save::State
-Application::exportGame(unsigned position, mstl::ostream& strm, unsigned flags, copy::Source source)
+Application::exportGame(	unsigned position,
+									mstl::ostream& strm,
+									unsigned flags,
+									copy::Source source,
+									bool useChessPadDiagramNag)
 {
 	if (position == InvalidPosition)
 		position = currentPosition();
@@ -3615,6 +3619,7 @@ Application::exportGame(unsigned position, mstl::ostream& strm, unsigned flags, 
 			lineEnding = PgnWriter::Windows;
 
 		PgnWriter writer(format::Scidb, strm, encoding, lineEnding, flags);
+		writer.setUseChessPadDiagramNag(useChessPadDiagramNag);
 		writer.setupVariant(g->sink.cursor->variant());
 		state = g->sink.cursor->database().exportGame(g->data.game->index(), writer);
 	}

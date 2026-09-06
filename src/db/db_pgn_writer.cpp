@@ -617,7 +617,7 @@ PgnWriter::writePrecedingComment(Annotation const& annotation,
 	if ((annotation.contains(nag::Diagram) || annotation.contains(nag::DiagramFromBlack)))
 	{
 		mstl::string s;
-		annotation.print(s);
+		annotation.print(s, m_useChessPadDiagramNag ? Annotation::Flag_Use_ChessPad_Diagram_Nag : 0);
 		putToken(s);
 
 		if (hasComment)
@@ -726,6 +726,8 @@ PgnWriter::writeMove(Move const& move,
 			f |= Annotation::Flag_Symbolic_Annotation_Style;
 		if (test(Flag_Extended_Symbolic_Annotation_Style))
 			f |= Annotation::Flag_Extended_Symbolic_Annotation_Style;
+		if (m_useChessPadDiagramNag)
+			f |= Annotation::Flag_Use_ChessPad_Diagram_Nag;
 
 		// XXX what should we do with non-PGN-Standard Nags (>= Pgn_Last) ?
 		annotation.print(m_move, f);

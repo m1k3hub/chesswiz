@@ -1,6 +1,38 @@
 # Plan: Display Annotated Chess Games
 
-Status: Phase 1 complete (2026-09-06)
+Status: Phases 1-2 complete (2026-09-06)
+
+## Phase 2 results (2026-09-06)
+
+Implemented `$220`/`$221` (ChessBase-standard diagram NAGs) as an opt-in PGN
+export option, off by default (existing `$155`/`$156` output unchanged —
+regression test `annotated-diagram-04` still passes as-is).
+
+Corrected two premises from the Phase 1 audit before implementing:
+- The claim "`nag::fromChessPad` has zero callers, therefore dead" was wrong —
+  it's composed into `nag::map` (`db_common.ipp:496`), which the PGN reader's
+  `parseNag` already calls. **Import already correctly maps `$220`→`Diagram`**
+  (verified with a round-trip probe, not just re-reading the diff).
+- Writer/PgnWriter's 32-bit flags word is **fully exhausted** (bits 0-31 all
+  claimed: `Flag_Write_Any_Rating_As_ELO=1<<30` is `Flag_LAST`, and
+  `PgnWriter::Flag_Append_Games = Flag_LAST << 1` already claims bit 31). No
+  room for a new bitmask flag without a breaking type change, so the new
+  option is a plain `PgnWriter::setUseChessPadDiagramNag(bool)` member
+  (default false) instead — additive, no existing call site needs to change.
+
+Changes: `db_annotation.h` (`Flag_Use_ChessPad_Diagram_Nag`, a small
+independent flags namespace unrelated to Writer's exhausted one),
+`db_annotation.cpp` (`print()` emits `$220`/`$221` when the flag is set;
+also fixed `DiagramFromBlack` having no dedicated case at all before —
+previously always fell through to a bare `$156`), `db_pgn_writer.{h,cpp}`,
+`app_application.{h,cpp}` (new trailing `useChessPadDiagramNag` param,
+default false), `tcl_game.cpp` (new `-chesspad-diagram-nag` option on
+`::scidb::game::toPGN`).
+
+Verified: manual round-trip probe (`$220` in → `Diagram` internally →
+`$220` out with the flag set; `$155` unchanged without it); new regression
+test `annotated-diagram-nag-export-04b`; full app suite 32/32;
+`verify_cbh_write` round-trip passed.
 
 ## Phase 1 results (2026-09-06)
 

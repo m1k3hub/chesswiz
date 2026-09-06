@@ -45,6 +45,10 @@ public:
 
 	static unsigned const Flag_Symbolic_Annotation_Style				= 1 << 0;
 	static unsigned const Flag_Extended_Symbolic_Annotation_Style	= 1 << 1;
+	/// Print Diagram/DiagramFromBlack as the ChessBase-standard PGN NAGs
+	/// $220/$221 (nag::ChessPad_Diagram/_DiagramFromBlack) instead of the
+	/// Scidb-internal $155/$156, for round-tripping with other PGN tools.
+	static unsigned const Flag_Use_ChessPad_Diagram_Nag					= 1 << 2;
 
 	Annotation();
 	explicit Annotation(nag::ID nag);

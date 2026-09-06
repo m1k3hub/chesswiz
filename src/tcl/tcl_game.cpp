@@ -4082,6 +4082,7 @@ cmdToPGN(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	char const*	option;
 	unsigned		flags(PgnWriter::Default_Flags);
 	unsigned		position(Application::InvalidPosition);
+	bool			chessPadDiagramNag(false);
 
 	while (objc > 2 && *(option = stringFromObj(objc, objv, objc - 2)) == '-')
 	{
@@ -4089,6 +4090,8 @@ cmdToPGN(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			flags = unsignedFromObj(objc, objv, objc - 1);
 		else if (equal(option, "-position"))
 			position = unsignedFromObj(objc, objv, objc - 1);
+		else if (equal(option, "-chesspad-diagram-nag"))
+			chessPadDiagramNag = boolFromObj(objc, objv, objc - 1);
 		else
 			return error (CmdToPGN, nullptr, nullptr, "unexpected option '%s'", option);
 
@@ -4096,7 +4099,13 @@ cmdToPGN(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	}
 
 	if (objc != 2)
-		return error(CmdToPGN, nullptr, nullptr, "wrong # args: should be \"%s <original|modified> ?-flags <flags>? ?-position <index>?\"", CmdToPGN);
+	{
+		return error(
+			CmdToPGN, nullptr, nullptr,
+			"wrong # args: should be \"%s <original|modified> ?-flags <flags>? "
+			"?-position <index>? ?-chesspad-diagram-nag <bool>?\"",
+			CmdToPGN);
+	}
 
 	char const* arg = stringFromObj(objc, objv, 1);
 	copy::Source source;
@@ -4110,7 +4119,7 @@ cmdToPGN(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	mstl::ostringstream strm;
 
-	if (save::isOk(scidb->exportGame(position, strm, flags, source)))
+	if (save::isOk(scidb->exportGame(position, strm, flags, source, chessPadDiagramNag)))
 		setResult(strm.str());
 
 	return TCL_OK;

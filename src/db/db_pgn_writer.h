@@ -63,6 +63,12 @@ public:
 
 	format::Type format() const override;
 
+	/// When enabled, diagram annotations (Diagram/DiagramFromBlack) are
+	/// printed as the ChessBase-standard PGN NAGs $220/$221 instead of the
+	/// Scidb-internal $155/$156, for round-tripping with other PGN tools.
+	/// Off by default; independent of the (already exhausted) flags bitmask.
+	void setUseChessPadDiagramNag(bool flag) { m_useChessPadDiagramNag = flag; }
+
 	void writeCommentLines(mstl::string const& content);
 
 	void writeTag(mstl::string const& name, mstl::string const& value) override;
@@ -115,6 +121,7 @@ private:
 	bool				m_needPreComment;
 	bool				m_needPostComment;
 	bool				m_hasPrecedingComment;
+	bool				m_useChessPadDiagramNag = false;
 };
 
 } // namespace db
