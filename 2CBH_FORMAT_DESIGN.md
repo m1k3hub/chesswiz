@@ -47,6 +47,40 @@ GUI integration.**
   `scripts/idverify.py`) but no encoding found yet.  (The Elo solution
   in CHESSBASE_MEDIA_RE.md / commit `f2cc94f` applies to the
   media/checkpoint format, not the .2cbh index.)
+  **2026-09-06 re-run, negative result strengthened.** Re-verified
+  3,023 index records against their PGN twins (full identity check:
+  move-sequence match + White/Black player-ID match against the `.2lid`
+  namebase), then ran two independent sweeps of the full 192-byte
+  record for both `WhiteElo` and `BlackElo`: (1) exact byte/u16
+  injectivity, same method that found ECO @0x80 and Date @0xBC —
+  every byte offset (0x00-0xBF) and every u16 offset (0x00-0xBE, both
+  parities) checked for "one raw value maps to exactly one Elo string";
+  zero hits. (2) a looser tolerance sweep allowing a rounding/bucketing
+  scheme (group by raw u16 value, require all Elo values in a group to
+  fall within a 24-point range, cardinality >= 20 groups) to catch a
+  rounded/bucketed representation that an exact-match test would miss;
+  also zero hits anywhere in the record. Since the same exact-match
+  method reliably finds fields that genuinely are there (ECO, Date,
+  Results), this is a real negative result, not a tooling gap: Elo is
+  not present in the 192-byte `.2cbh` index record in any
+  byte/word-aligned linear or rounded form. Classic (non-2CBH) `.cbh`
+  Elo, for contrast, is a plain big-endian `u16` read directly from the
+  game-record stream (`cbh_codec.cpp:2451-2465`) with no obfuscation —
+  so 2CBH's Elo storage is either relocated entirely (e.g. a per-player
+  rating history keyed by player ID + date, stored outside the four
+  `.2cbh`/`.2cbg`/`.2cba`/`.2lid` files examined here — no such extra
+  file exists in the `LumbrasGigaBase_OTB_ELO2400` fixture, so if this
+  is right it must live inside one of the already-open files in a
+  region not yet attributed to a known field) or bit-packed at a
+  non-byte-aligned offset that a byte/word sweep cannot see. Recommended
+  next step, matching the standard set for the quotation-blob framing
+  bug (`doc/re/cba-quotation-format.md`): trace CBase26.exe's own
+  2CBH Elo-rendering code path in Ghidra rather than continuing to
+  guess at offsets — the decode/encode Move16 tables were already
+  successfully extracted this way (`scripts/dump_cbase26_tables.py`),
+  so the same live-process approach (attach during Elo-column render,
+  or static trace from the "rating" column formatter) is the
+  established, proven method here.
 - **Chess960 start positions: STILL OPEN in 2CBH.**  The LUT-960 /
   36-byte position-block solution (CHESS960_STATUS.md) was for classic
   CBH; the equivalent 2CBH representation is not yet decoded.
