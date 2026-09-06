@@ -60,6 +60,353 @@ test_export.tcl:	Total	14	Passed	14	Skipped	0	Failed	0
 ++++ audit-export-pdf-enabled-02 PASSED
 ++++ audit-cpp-test-banner-valid-03 PASSED
 ++++ audit-cpp-test-syntax-04 PASSED
+(func) skipExtended
+(file) db_move_info.cpp:807
+(what) corrupted extended move-info record (bad payload length 4)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) skipExtended
+(file) db_move_info.cpp:829
+(what) corrupted extended move-info record (bad payload length 4)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) skipExtended
+(file) db_move_info.cpp:807
+(what) corrupted extended move-info record (bad payload length 6)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) skipExtended
+(file) db_move_info.cpp:829
+(what) corrupted extended move-info record (bad payload length 6)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) skipExtended
+(file) db_move_info.cpp:807
+(what) corrupted extended move-info record (bad payload length 4)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) skipExtended
+(file) db_move_info.cpp:829
+(what) corrupted extended move-info record (bad payload length 4)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) skipExtended
+(file) db_move_info.cpp:807
+(what) corrupted extended move-info record (bad payload length 6)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) skipExtended
+(file) db_move_info.cpp:829
+(what) corrupted extended move-info record (bad payload length 6)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) underflow
+(file) u_byte_stream.cpp:163
+(what) unexpected end of stream
+(type) util::ByteStream::UnexpectedEndOfStreamException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) underflow
+(file) u_byte_stream.cpp:163
+(what) unexpected end of stream
+(type) util::ByteStream::UnexpectedEndOfStreamException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) decodeExtended
+(file) db_move_info.cpp:776
+(what) corrupted extended move-info record (truncated payload)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) decodeExtended
+(file) db_move_info.cpp:776
+(what) corrupted extended move-info record (truncated payload)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) decodeExtended
+(file) db_move_info.cpp:776
+(what) corrupted extended move-info record (truncated payload)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) decodeExtended
+(file) db_move_info.cpp:776
+(what) corrupted extended move-info record (truncated payload)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) decodeExtended
+(file) db_move_info.cpp:776
+(what) corrupted extended move-info record (truncated payload)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) decodeExtended
+(file) db_move_info.cpp:773
+(what) corrupted extended move-info record (bad payload length 4)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) skipExtended
+(file) db_move_info.cpp:822
+(what) corrupted extended move-info record (truncated header)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) skipExtended
+(file) db_move_info.cpp:822
+(what) corrupted extended move-info record (truncated header)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) skipExtended
+(file) db_move_info.cpp:834
+(what) corrupted extended move-info record (truncated payload)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) skipExtended
+(file) db_move_info.cpp:834
+(what) corrupted extended move-info record (truncated payload)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) skipExtended
+(file) db_move_info.cpp:834
+(what) corrupted extended move-info record (truncated payload)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) skipExtended
+(file) db_move_info.cpp:834
+(what) corrupted extended move-info record (truncated payload)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
+(func) skipExtended
+(file) db_move_info.cpp:834
+(what) corrupted extended move-info record (truncated payload)
+(type) db::IOException
+
+=== Backtrace ============================================
+ 
+ 
+ 
+ 
+ 
+ 
+ __libc_start_main
+==========================================================
+
 ++++ audit-make-cpp-target-05 PASSED
 ++++ audit-db-tests-load-framework-06 PASSED
 ++++ audit-db-tests-not-fully-skipped-07 PASSED

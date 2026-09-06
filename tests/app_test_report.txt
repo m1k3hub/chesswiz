@@ -7,7 +7,7 @@ Match pattern: *
 
 === Running test_app_database.tcl ===
 
-=== Running test_app_media_sync.tcl ===
+=== Running test_app_no_media.tcl ===
 
 === Running test_app_pdf.tcl ===
 
@@ -16,9 +16,9 @@ Match pattern: *
 ==============================================
   App Test Results Summary
 ==============================================
-Total Passed: 50
+Total Passed: 21
 Total Failed: 0
 Total Skipped: 0
-Duration: 0s
+Duration: 1s
 
 STATUS: PASSED
