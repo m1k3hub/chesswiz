@@ -441,3 +441,94 @@ decode function elsewhere in CBase26 not yet located.
 
 No code changes in this pass; all Ghidra/dump scripts were scratch work
 under `/tmp`, not committed. Working tree unchanged except this doc entry.
+
+### Sixth attempt (2026-09-06, later still) — exhaustive 19-table × 256-seed brute force: conclusively negative
+
+Executed the previous attempt's recommended next step. Extended
+`scripts/dump_cbase26_tables.py` with a `variant_tables.bin` region
+(`0x141a783c0`, `0x2600` bytes — covering all 16 dispatch-table addresses
+identified previously plus a few extra slots for margin) and live-dumped
+19 distinct 256-byte tables from a running CBase26.exe under Wine. Table 0
+matched scidb's classical `MoveNumberLookup` byte-for-byte; table 11
+matched `Chess960MoveNumberLookup` byte-for-byte — both exact matches,
+confirming the dump addresses/stride are correct.
+
+Extracted all real quotation move blobs directly from the `cbm168`
+fixture set (`Data Collect/CBM168.cbh`, `168Strategy.cbh`,
+`168Move by Move.cbh`, `168Training.cbh`) via a temporary debug print in
+`decodeQuotation()` dumping each blob's raw hex — 15 records recovered,
+including the Caruana–Carlsen (Berlin) record used as the standing
+verification target in earlier attempts.
+
+Built a scratch brute-force harness (`quot_bruteforce.cpp`, not committed)
+linking the real production `Decoder`/`Encoder` classes directly via a
+temporary `cbhTestSetTableOverride()` hook and a
+`decodeEmbeddedMovesTest(moves, length, seed)` entry point (both reverted
+after this pass), rather than a hand-rolled reimplementation.
+
+**Critical harness bug found and fixed before trusting any result:**
+`Position::doMove()` (`cbh_decoder_position.cpp`) does **not** throw on an
+illegal decoded move — it silently returns `Move::empty()`. The standing
+assumption (that `dispatchMove()`'s move-construction throws on illegal
+geometry, making a `try`/`catch` around each move sufficient) is false.
+An earlier version of this pass's harness that only checked for thrown
+exceptions reported spurious 64/64 "clean" decodes for table 0 at many
+seeds — directly contradicting the fourth attempt's finding that table
+0/any-seed maxes out at 3 consecutive legal moves. The fix: treat a
+returned empty `Move` as decode failure too, not just a caught exception.
+After the fix, table 0's results **exactly reproduced** the fourth
+attempt's numbers (e.g. seed 209 on the Karpov–Kortschnoj-shaped blob
+again tops out at 3 moves) — strong confirmation the harness is now
+correctly calibrated. (Anyone reusing `Decoder`/`Position` for future
+legality-checked brute forcing must apply the same empty-move check.)
+
+**Positive control:** encoded 16 real moves from the true start position
+in one `Encoder` session (an Italian-Game-shaped sequence, no castling),
+stripped the 4-byte size-placeholder header `startEncoding()` always
+writes (headerless streams are exactly what `decodeEmbeddedMovesTest`
+and the real quotation blob both are), sized the decode buffer exactly to
+the encoded byte count, and required all 16 decoded move indices to match
+the encoded ones exactly. **Passed.**
+
+**Result: zero winners across all 19 tables × 256 seeds × 15 real blobs**,
+requiring 15 consecutive legal moves per blob (same bar as the fourth
+attempt). The best result over the *entire* search space was 5 consecutive
+moves (one blob, table 2, seed 150); most (table, seed, blob) combinations
+still fail at move 1-3, matching the shape of the earlier classical-only
+negative result. This is a materially stronger and more complete negative
+result than the fifth attempt's Ghidra findings alone: it proves not just
+that a 16-table dispatch *exists*, but that **none of those 16 tables (nor
+the 3 extra dumped for margin) work for the quotation blob under any of
+the 256 possible starting counts**, using the real production decode
+machinery with a validated legality gate.
+
+**This effectively rules out the entire "quotation blob reuses some
+`MoveNumberLookup`-family table with a free seed" hypothesis space.**
+Also checked the quotation header's already-decoded `flag` byte (the byte
+immediately preceding the two Elo fields) as a possible table/variant
+selector per the standing recommendation to look there — it is `0` in
+every one of the 15 recovered records, so it carries no discriminating
+signal here (though this doesn't rule out a variant selector elsewhere in
+the header that simply happens to be constant across this particular
+fixture's records, all of which are standard, non-Chess960 games).
+
+**Recommendation:** stop brute-forcing seeds/tables against this field.
+Every combination in that space has now been tried exhaustively and
+failed. The only remaining productive avenue is Ghidra: trace CBase26's
+*actual quotation-rendering call site* forward from the confirmed
+`decode_caller`/`dispatch_CBH` machinery (or backward from wherever the
+0x13 annotation type is dispatched in the `.cba` reader) to find whatever
+function actually replays a quotation's moves for display — it almost
+certainly is not a `MoveNumberLookup`-table consumer at all, given how
+thoroughly that entire family has now been eliminated. This is real,
+targeted static-analysis work (find one specific function and read what
+it does), not another parameter sweep. Absent that, this field should be
+considered closed for now: header decoding ships and works; move replay
+is a known, well-characterized permanent gap pending that specific
+Ghidra trace.
+
+All scratch code (`quot_bruteforce.cpp`, the `cbh_decoder.{h,cpp}` test
+hooks, the `decodeQuotation()` debug prints) was reverted; the working
+tree is unchanged except this doc entry and the `dump_cbase26_tables.py`
+region addition (kept — legitimate, reusable, zero-risk dump tooling, not
+a guess).

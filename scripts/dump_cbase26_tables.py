@@ -34,6 +34,7 @@ REGIONS = {
     "decode_table.bin": (0x141ad7110, 512 * 1024),
     "encode_table.bin": (0x141b57110, 8 * 1024 * 1024),
     "pos960.bin":       (0x142376de0, 960 * 128),
+    "variant_tables.bin": (0x141a783c0, 0x141a7a9c0 - 0x141a783c0),
 }
 
 
