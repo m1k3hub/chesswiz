@@ -5,6 +5,8 @@ Test directory: /media/michael-g-thomas/sas_mirror/src/chess/scidb-code.codex/te
 Match pattern: *
 
 
+=== Running test_app_annotated_display.tcl ===
+
 === Running test_app_database.tcl ===
 
 === Running test_app_no_media.tcl ===
@@ -16,7 +18,7 @@ Match pattern: *
 ==============================================
   App Test Results Summary
 ==============================================
-Total Passed: 21
+Total Passed: 31
 Total Failed: 0
 Total Skipped: 0
 Duration: 1s

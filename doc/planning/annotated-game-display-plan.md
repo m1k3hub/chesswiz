@@ -1,0 +1,101 @@
+# Plan: Display Annotated Chess Games
+
+Status: Phase 1 complete (2026-09-06)
+
+## Phase 1 results (2026-09-06)
+
+New: `tests/corpus/annotated_games.tcl` (adversarial annotated PGN corpus),
+`tests/test_app_annotated_display.tcl` (10 layout-pipeline tests, all passing;
+runs in the app harness via `make app-tcl`), `tests/annotated_layout_probe.tcl`
+(manual edit-node dump tool). Full app suite: 31/31 passed.
+
+Audit findings — the pipeline is healthier than the gap table assumed:
+- `[%csl]/[%cal]`, Scid `[%draw]/[%mark]/[%arrow]`, `[%clk]/[%emt]/[%eval]`
+  are all stripped from displayed comment text; csl/cal and Scid syntaxes both
+  become marks (`MarkSet::extractFromComment`, `db_mark_set.cpp:97`).
+- Marks are position-scoped: `::scidb::game::query <pos> marks` returns them
+  only when the annotated node is current — already the best-practice behavior.
+- ChessBase `$220` is mapped to internal `$155` **on import** (also bare `D`
+  comments, `db_pgn_reader.cpp:3735`). Export still emits `$155`/`D`
+  (`Annotation::print`, `db_annotation.cpp`), so Phase 2 reduces to the
+  writer direction only: emit `$220/$221` (config-gated).
+- NAG grouping (prefix/infix/suffix), 7-NAG pile-up, depth-4 nested RAVs,
+  multibyte comments all round-trip through the layout stream correctly.
+- Test-harness gotchas: `::scidb::game::new <slot>` errors if the slot exists
+  (guard with catch; import replaces content); the app boot script clobbers
+  common global vars (`pgn`, `dir`) — compute paths before sourcing it.
+
+## Background
+
+Scidb already ships a complete annotated-game display pipeline — this feature is a
+gap-closing and polish effort, not a greenfield build.
+
+- C++ core builds a display AST (`edit::Node` tree, `src/db/db_edit_node.h`) from
+  `MoveNode` (`src/db/db_move_node.h`: comments Ante/Post, up to 7 NAGs
+  (`db_annotation.h`), marks (`db_mark.h`), variations).
+- `src/tcl/tcl_game.cpp` serializes the AST to Tcl node lists
+  (`edit::Visitor` subclass at :385, subscriber push at :1130).
+- `tcl/app-pgn.tcl` renders it: `DoLayout` :1206, `InsertMove` :1539,
+  `PrintComment` :1839, `PrintNumericalAnnotation` :1977, `InsertDiagram` :1715
+  (NAGs 155/156), marks, `[%clk]/[%emt]` move info, multi-language comments,
+  incremental updates, click navigation, middle-click position preview.
+- `tcl/browser.tcl` is the read-only viewer sharing the same engine
+  (contexts: editor / browser / merge).
+- NAG glyphs: `tcl/fonts.tcl` (`splitAnnotation` :1741, `mapNagToUtfSymbol` :1733).
+- ChessBase mark syntax parser exists: `Mark::parseChessBaseMark`
+  (`db_mark.cpp` :359) for `[%csl]`/`[%cal]`.
+
+## Gap analysis (vs. ChessBase / SCID vs PC / ChessX / lichess research)
+
+| Capability | scidb today | Benchmark | Verdict |
+|---|---|---|---|
+| Comments, NAG glyphs, variations, indent | full | SCID/ChessBase parity | audit only |
+| Inline diagrams in notation | NAGs 155/156 + `InsertDiagram` | only ChessBase does this | keep; fix interop |
+| Diagram NAG interop `$220/$221`, `D`/`#` | Scidb-private 155/156 | ChessBase standard `$220/$221` | gap |
+| `[%csl]/[%cal]` display | parser + `updateMarks` board overlay | show only at annotated position | verify |
+| Variation folding | fold markers + `ToggleFold` per node | fold all / unfold all / fold all but current line (top Scid-family request) | gap |
+| `[%eval]` | not surfaced | ChessBase eval-profile strip | gap (optional) |
+| Machine tags hidden from text | clk/emt handled | hide raw `%csl/%cal/%eval`, render effects | verify |
+
+## Phases
+
+### Phase 1 — Audit & harden the existing display (baseline)
+1. Adversarial annotated PGN corpus under `tests/`: deep nested RAVs, pre+post
+   comments, multi-language, all NAG classes, `[%csl][%cal][%clk][%emt][%eval]`,
+   ChessBase and Scid `[%draw]` mark syntaxes, diagram NAGs.
+2. Load each through browser and editor panes; verify comment styling, NAG glyph
+   mapping, variation indent per depth, marks shown only at the annotated node,
+   raw command tags never leaking into displayed text.
+3. Fix defects; add a headless smoke test (style of `tests/test_app_no_media.tcl`);
+   new Tcl must pass the merged-script syntax check.
+
+### Phase 2 — Diagram NAG interoperability
+Map incoming `$220/$221` → internal 155/156 (and accept trailing `D`/`#`) in the
+PGN reader; emit `$220/$221` (config-gated) in `db_pgn_writer` for ChessBase
+round-tripping. Contained change: `db_common.h` nag mapping + reader/writer.
+
+### Phase 3 — Variation folding, ChessBase-grade
+Tcl-side in `app-pgn.tcl`/`browser.tcl` on the existing `m:fold` tag and
+`ToggleFold`: Fold All / Unfold All / Fold All But Current Line; context-menu +
+keyboard bindings; persist fold state in pane options; auto-unfold path to the
+current move in `ProcessGoto`. If fold state must live in C++, add
+`::scidb::game::fold all|none|except-current` in `tcl_game.cpp` beside
+`cmdSetupStyle`.
+
+### Phase 4 — Read-only viewer polish (browser pane)
+Ensure the browser context matches the editor: setupNags, diagrams option, marks
+wired to its preview board, language toggling, same display-options dialog
+(`pgn-setup.tcl` supports per-context options). Verify against the Phase 1 suite.
+
+### Phase 5 (optional) — Evaluation profile
+Parse `[%eval]` in `db_move_info_set.cpp` (alongside `%clk/%emt`), surface
+per-ply evals through the edit AST move-info path, draw a bar strip under the
+notation pane (Tk canvas); click a bar to navigate.
+
+## Ordering & risk
+- Phases 1–2 low risk, independent. Phase 3 highest user-visible value.
+  Phase 5 separable/droppable.
+- Hazards: new panes need `activate`/`closed` procs and the correct grid master
+  (see 4d7e2a4, 53227b7); never reintroduce anything named `gamemedia`
+  (`tests/test_app_no_media.tcl` asserts absence); chmod 644 touched files
+  before committing.
