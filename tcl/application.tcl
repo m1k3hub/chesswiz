@@ -74,7 +74,6 @@ array set PaneOptions {
 	tree		{ -width 500 -height 120 -minwidth 250 -minheight 100 -expand y }
 	editor	{ -width 500 -height 520 -minwidth 150 -minheight 200 -expand y }
 	games		{ -width 500 -height 520 -minwidth 300 -minheight 100 -expand both }
-	gamemedia	{ -width 500 -height 200 -minwidth 200 -minheight 100 -expand y }
 	dbgames		{ -width 500 -height 200 -minwidth 200 -minheight 100 -expand y }
 	analysis	{ -width 500 -height 120 -minwidth 300 -minheight 120 -expand x }
 	eco		{ -width 500 -height 520 -minwidth 150 -minheight 100 -expand both }
@@ -89,7 +88,6 @@ set BoardLayout {
 					frame editor %editor%
 					frame games %games%
 					frame dbgames %dbgames%
-					frame gamemedia %gamemedia%
 				}
 			}
 			panedwindow { -orient horz } {
@@ -102,7 +100,7 @@ set BoardLayout {
 
 set FontSizeActive 0
 
-array set Prios		{ analysis 200 board 500 editor 400 games 100 dbgames 110 gamemedia 95 tree 300 eco 90 }
+array set Prios		{ analysis 200 board 500 editor 400 games 100 dbgames 110 tree 300 eco 90 }
 array set Defaults	{ menu:background #c3c3c3 }
 
 array set Vars {
@@ -172,12 +170,6 @@ proc open {} {
 
 	::ttk::notebook::enableTraversal $nb
 	bind $nb <<NotebookTabChanged>> [namespace code [list TabChanged $nb]]
-	# Release any in-process media player before a tab switch. The switch (and
-	# the unmap of the board/paned content) commits on button *release*; closing
-	# the tkvlc/libVLC handle on *press* guarantees its video surface is torn
-	# down before the canvas window is unmapped, otherwise the vo thread can
-	# crash during teardown.
-	bind $nb <ButtonPress-1> +[list ::application::media::Stop]
 	set info [::ttk::frame $nb.information]
 	set db [::ttk::frame $nb.database]
 
@@ -321,7 +313,6 @@ proc MakePane {twm parent type uid} {
 	switch $name {
 		games   { set ns tree::games }
 		editor  { set ns pgn }
-		gamemedia { set ns media }
 		dbgames { set ns boardgames }
 		default { set ns $name }
 	}
@@ -364,7 +355,6 @@ proc BuildPane {twm frame uid width height} {
 		editor	{ pgn::build $frame $width $height }
 		games		{ tree::games::build $twm $frame $width $height }
 		dbgames		{ boardgames::build $frame $width $height }
-		gamemedia		{ media::build $twm $frame $width $height }
 		default	{ return -code error "BuildPane: unknown pane $uid" }
 	}
 }

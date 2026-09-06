@@ -73,7 +73,6 @@ set Pane(board)					"Board"
 set Pane(editor)					"Notation"
 set Pane(tree)						"Tree"
 set Pane(games)					"Games"
-set Pane(gamemedia)					"Media"
 set Pane(dbgames)					"Game List"
 set Pane(player)					"Players"
 set Pane(event)					"Events"
@@ -149,14 +148,10 @@ proc load {twm} {
 	LoadOptionFile $layoutVariant
 	set layout $Options($id:layout:list:$layoutVariant)
 
-	# Migrate saved board layouts that predate the gamemedia (Media) pane
-	# — or lost it: closing the Media tab and saving leaves the pane in
-	# the TWM snapshot metadata ({m editor games gamemedia}) while its
-	# 'frame gamemedia' element is gone from the built layout. Key the
-	# migration on the frame element, not on any mention of the token,
-	# and fall back to the default BoardLayout (which includes it).
+	# Retire saved media panes, including their snapshot metadata. The
+	# replacement default layout has no experimental media integration.
 	if {$id eq "board" && [string length $layout] > 0
-		&& ([string first {frame gamemedia} $layout] < 0
+		&& ([string first {gamemedia} $layout] >= 0
 			|| [string first {frame dbgames} $layout] < 0)} {
 		set layout {}
 		set Options($id:layout:list:$layoutVariant) {}
@@ -414,6 +409,9 @@ proc switchLayout {variant reason} {
 						set Options($id:layout:saved:$newLayoutVariant) $Options($id:layout:list:normal)
 						set Options($id:layout:changed:$newLayoutVariant) 0
 					}
+				}
+				if {$id eq "board" && [string first gamemedia $Options($id:layout:list:$newLayoutVariant)] >= 0} {
+					set Options($id:layout:list:$newLayoutVariant) {}
 				}
 				set Options($id:layout:list) $Options($id:layout:list:$newLayoutVariant)
 				if {!$loaded} {
@@ -1172,6 +1170,9 @@ proc LoadLayout {twm layoutVariant name mode} {
 		return false
 	}
 
+	if {$id eq "board" && [string first gamemedia $Options($id:layout:list:$layoutVariant)] >= 0} {
+		set Options($id:layout:list:$layoutVariant) {}
+	}
 	set Options($id:layout:list) $Options($id:layout:list:$layoutVariant)
 	set Vars($id:options:saved:$layoutVariant) 1
 	set Options($id:layout:saved:$layoutVariant) $Options($id:layout:list:$layoutVariant)

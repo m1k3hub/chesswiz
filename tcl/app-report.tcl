@@ -285,19 +285,13 @@ proc application::report::LinkClick {w x y} {
 	}
 
 	if {[string match scidb-media:* $href]} {
-		set path [string range $href 12 end]
-
-		if {[file exists $path]} {
-			::application::media::PlayMedia $path
-		} else {
-			$Priv(status) configure -text [format $mc::NoMediaFile $path]
-		}
+		$Priv(status) configure -text "Media playback withdrawn pending format research."
 		return
 	}
 
 	if {   [string match http://* $href] || [string match https://* $href]
 		|| [string match file://* $href]} {
-		catch { ::application::media::LaunchExternal $href }
+		catch { ::web::open $w $href }
 		$Priv(status) configure -text $mc::ExternalHint
 		return
 	}

@@ -211,3 +211,4 @@ proc build {videoPath} {
 } ;# namespace eval ::media::lesson
 
 # vi:set ts=3 sw=3:
+# ARCHIVED EXPERIMENT — not loaded by Scidb; RE reference only.

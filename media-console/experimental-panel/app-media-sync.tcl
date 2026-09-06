@@ -1,4 +1,5 @@
 # ======================================================================
+# ARCHIVED EXPERIMENT — not loaded by Scidb; RE reference only.
 # Media ⇄ Board playback synchronization (state machine)
 # ======================================================================
 # Couples the media panel's transport (audio/video via tkvlc) with the
@@ -56,6 +57,7 @@ namespace eval ::media::sync {
 		autoplay  0
 		playing   0
 		driving   0
+		usertouch 0
 		lastgoal  -1
 		timeline  {}
 		tlidx     0
@@ -127,14 +129,16 @@ proc ::media::sync::autoplay {state} {
 
 
 # Called by board code after the board navigated one step (any direction,
-# any distance). During autoplay the media keeps playing; manual
-# navigation pauses the media (with transport sync on).
+# any distance). Board and media are coupled: the media keeps playing and
+# the media panel reseeks it to the new board position (PlySeek in
+# tcl/app-media.tcl). Recording the touch makes drive() yield until that
+# reseek lands, so follow mode does not tug the board back meanwhile.
 proc ::media::sync::step {} {
 	variable State
 
 	if {!$State(transport) || !$State(playing)} { return }
 	if {$State(autoplay)} { return }
-	Transport pause
+	set State(usertouch) [clock milliseconds]
 }
 
 
@@ -142,6 +146,7 @@ proc ::media::sync::step {} {
 proc ::media::sync::onPlaybackStarted {} {
 	variable State
 	set State(playing) 1
+	set State(usertouch) 0
 	set State(lastgoal) -1
 	set State(tlidx) 0
 	set State(evidx) 0
@@ -152,6 +157,7 @@ proc ::media::sync::onPlaybackStopped {} {
 	variable State
 	set State(playing) 0
 	set State(autoplay) 0
+	set State(usertouch) 0
 	set State(lastgoal) -1
 	set State(tlidx) 0
 	set State(evidx) 0
@@ -205,6 +211,28 @@ proc ::media::sync::load-events {eventList} {
 }
 
 
+# Inverse of the timeline mapping: the media time (ms) at which the board
+# reaches the given ply.  Returns -1 without a timeline, or when the ply
+# lies past the last mark (caller falls back to the linear mapping).
+proc ::media::sync::ms-for-ply {ply} {
+	variable State
+	if {![llength $State(timeline)]} { return -1 }
+	if {$ply <= 0} { return 0 }
+	set count 0
+	foreach mark $State(timeline) {
+		if {[llength $mark] >= 2} {
+			# absolute target: {mediaMs goalPly}
+			if {[lindex $mark 1] >= $ply} { return [lindex $mark 0] }
+		} else {
+			# legacy count model: the Nth mark advances to ply N
+			incr count
+			if {$count >= $ply} { return $mark }
+		}
+	}
+	return -1
+}
+
+
 # True while drive() is advancing the board as a consequence of media time.
 proc ::media::sync::driving? {} {
 	variable State
@@ -219,6 +247,11 @@ proc ::media::sync::drive {timeMs durationMs} {
 	variable State
 
 	if {!$State(follow) || !$State(playing)} { return }
+
+	# a manual board step is being reseeked by the media panel: hold off
+	# driving the board until the video catches up with the board
+	if {$State(usertouch)
+		&& [clock milliseconds] - $State(usertouch) < 600} { return }
 
 	# fire board annotation events in this time window
 	if {[llength $State(events)]} {
@@ -245,7 +278,7 @@ proc ::media::sync::drive {timeMs durationMs} {
 				if {$mark <= $timeMs} { incr goal } else { break }
 			}
 		}
-		set goal [expr {min($goal, $len)}]
+		set goal [expr {min($goal, $len - 1)}]
 		if {$goal < $State(lastgoal)} {
 			set State(tlidx) $goal
 			set State(evidx) 0
@@ -269,7 +302,7 @@ proc ::media::sync::drive {timeMs durationMs} {
 	set frac [expr {double($timeMs)/$dur}]
 	if {$frac < 0.0} { set frac 0.0 }
 	if {$frac > 1.0} { set frac 1.0 }
-	set goal [expr {min(int($frac*$len), $len)}]
+	set goal [expr {min(int($frac*$len), $len - 1)}]
 	if {$goal < $State(lastgoal)} {
 		BoardStart
 		BoardClearAnnotations

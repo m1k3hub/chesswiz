@@ -1,5 +1,11 @@
 # scidb-beta Long-Range Plan — Revised for Workstreams 6-8
 
+**2026-09-05: Media playback withdrawn.** The media panel and board-sync
+integration are removed. `.cms`/`.cbm` playback is blocked until the formats
+are fully understood. Return to reverse engineering; historical completion
+claims below do not represent current support. Experimental sources and
+uncommitted work are preserved in `media-console/experimental-panel/`.
+
 *Revised 2026-08-27: workstreams 1-7 done; workstream 8 (ChessBase 2CBH)
 mostly done — moves, player names, results decoded, `2cbh2pgn` converter
 working; remaining items listed in the table row and

@@ -1,4 +1,5 @@
 # ======================================================================
+# ARCHIVED EXPERIMENT — not loaded by Scidb; RE reference only.
 # Media Viewer Panel — embedded image/audio/video playback in scidb
 # ======================================================================
 # Displays media entries (pictures, audio, video, streams) associated
@@ -59,6 +60,9 @@ array set Priv {
 	vlc_available	0
 	inprocess	0
 	checkid		{}
+	seekgrab		0
+	seeklabel	{}
+	seektick		{}
 }
 
 } ;# namespace media
@@ -118,13 +122,26 @@ proc application::media::build {twm frame width height} {
 	$pw add $pw.list -weight 3
 	$pw add $pw.view -weight 2
 
+	# --- seek bar: video position slider + time readout ---------------
+	set seek $frame.seek
+	ttk::frame $seek
+	ttk::scale $seek.bar -orient horizontal -from 0 -to 1000 -value 0
+	ttk::label $seek.time -textvariable [namespace current]::Priv(seeklabel) \
+		-width 12 -anchor e
+	pack $seek.bar -side left -fill x -expand yes -padx 2
+	pack $seek.time -side right -padx 2
+	# dragging owns the slider; the actual seek happens on release
+	bind $seek.bar <ButtonPress-1> +[namespace code { set Priv(seekgrab) 1 }]
+	bind $seek.bar <ButtonRelease-1> +[namespace code SeekRelease]
+
 	# --- status bar ---------------------------------------------------
 	ttk::label $status -textvariable [namespace current]::Priv(statusbar) \
 		-anchor w -relief sunken -borderwidth 1
 
 	grid $ctrl   -row 1 -column 1 -sticky ew
 	grid $pw     -row 2 -column 1 -sticky nsew
-	grid $status -row 3 -column 1 -sticky ew
+	grid $seek   -row 3 -column 1 -sticky ew
+	grid $status -row 4 -column 1 -sticky ew
 	grid rowconfigure $frame 2 -weight 1
 	grid columnconfigure $frame 1 -weight 1
 
@@ -136,6 +153,7 @@ proc application::media::build {twm frame width height} {
 	set Priv(viewer) $viewer
 	set Priv(statusbar) $mc::NoDatabase
 	set Priv(ctrl) $ctrl
+	set Priv(seekbar) $seek.bar
 
 	# React to game switches
 	::scidb::db::subscribe gameSwitch [namespace current]::GameSwitched
@@ -259,21 +277,20 @@ proc application::media::Update {position} {
 		if {[info exists Priv(lastBase)] && [string length $Priv(lastBase)]
 			&& [file exists $Priv(lastBase)]} {
 			array unset Priv "interactive:played:*"
-			catch {
-				set gallery [::scidb::db::mediaGallery $Priv(lastBase) $Priv(lastVariant)]
+			set gallery {}
+			catch { set gallery [::scidb::db::mediaGallery $Priv(lastBase) $Priv(lastVariant)] }
+			if {[llength $gallery]} {
 				MediaDebug "Update: independent gallery returned [llength $gallery] entries"
-				if {[llength $gallery]} {
-					foreach gentry $gallery {
-						lassign $gentry gpath gtype gtitle gmediaId gindex
-						InsertEntry $gtype $gtitle $gpath $gindex
-					}
-					set Priv(base) $Priv(lastBase)
-					set Priv(variant) $Priv(lastVariant)
-					set Priv(statusbar) "Media gallery - playable without a game"
-					ShowEmptyHint "Media gallery\n\nSelect a media entry to play."
-					PrebuildLessons
-					return
+				foreach gentry $gallery {
+					lassign $gentry gpath gtype gtitle gmediaId gindex
+					InsertEntry $gtype $gtitle $gpath $gindex
 				}
+				set Priv(base) $Priv(lastBase)
+				set Priv(variant) $Priv(lastVariant)
+				set Priv(statusbar) "Media gallery - playable without a game"
+				ShowEmptyHint "Media gallery\n\nSelect a media entry to play."
+				PrebuildLessons
+				return
 			}
 		}
 		set Priv(base) {}
@@ -594,9 +611,13 @@ proc application::media::SmvEntries {path} {
 		switch -- $s_(type) {
 			"media" {
 				if {[info exists kv(path)]} { set keyOf($s_(id)) [file join $dir $kv(path)] }
-				if {![info exists mp] || ![string length $mp]} {
-					catch { set mp $keyOf($s_(id)) }
-				} elseif {$kv(type) eq "video"} { set mp $keyOf($s_(id)) }
+				if {[info exists keyOf($s_(id))]} {
+					if {![string length $mp]} {
+						set mp $keyOf($s_(id))
+					} elseif {[info exists kv(type)] && $kv(type) eq "video"} {
+						set mp $keyOf($s_(id))
+					}
+				}
 			}
 			"interactive" {
 				set kind "clip"
@@ -660,7 +681,7 @@ proc application::media::ResolveIndex {path position} {
 	if {[llength $hit]} {
 		return [list [lindex $hit 1] 1 [lindex $hit 2] [lindex $hit 3]]
 	}
-	if {[llength $base]} { return [list $base 0 {} {}] }
+	if {[string length $base]} { return [list $base 0 {} {}] }
 
 	array set cms [CmsEntries $path]
 	if {[llength $cms(entries)] && [string length $fen]} {
@@ -670,7 +691,7 @@ proc application::media::ResolveIndex {path position} {
 			return [list [lindex $hit 1] 1 [lindex $hit 2] [lindex $hit 3] [lindex $hit 5] [lindex $hit 6]]
 		}
 	}
-	if {[llength $cms(baseline)]} { return [list $cms(baseline) 0 {} {}] }
+	if {[string length $cms(baseline)]} { return [list $cms(baseline) 0 {} {}] }
 	return {}
 }
 
@@ -742,7 +763,12 @@ proc application::media::LoadUserInteractive {} {
 proc application::media::BoardUpdated {position} {
 	variable Priv
 
+	# Check at notification time: drive() has cleared this flag by the
+	# time the deferred seek runs. Do not cancel a pending user seek here.
+	if {[::media::sync::driving?]} { return }
+
 	catch { after cancel $Priv(interactiveid) }
+	catch { after cancel $Priv(seekid) }
 	set haveInter 0
 	if {[info exists Priv(interactive)] && [llength $Priv(interactive)]} { set haveInter 1 }
 	if {[info exists Priv(userInteractive)] && [llength $Priv(userInteractive)]} { set haveInter 1 }
@@ -777,20 +803,27 @@ proc application::media::PlySeek {position} {
 	if {$handle eq ""} { return }
 
 	set dur 0
-	catch { set dur [$handle duration] }
-	set len [SyncBoardLength]
-	if {!$dur || $dur <= 0 || $len <= 1} { return }
-
+	catch { set dur [expr {1000.0 * [$handle duration]}] }
 	set ply [SyncBoardPly]
-	# tkvlc 'time'/'duration' speak MILLISECONDS (libVLC convention),
-	# consistent with ::media::sync::drive and the timeline marks
+
+	# tkvlc exposes seconds; the sync timeline and tolerances use ms.
 	set t 0.0
-	catch { set t [$handle time] }
-	set tol [expr {max(1200.0, $dur / 100.0)}]
-	set target [expr {double($ply) / double($len - 1) * ($dur - 300.0)}]
+	catch { set t [expr {1000.0 * [$handle time]}] }
+
+	# lesson timeline first (exact per-move timecodes), linear fallback
+	set target -1
+	catch { set target [::media::sync::ms-for-ply $ply] }
+	if {$target >= 0} {
+		set tol 500.0
+	} else {
+		set len [SyncBoardLength]
+		if {!$dur || $dur <= 0 || $len <= 1} { return }
+		set tol [expr {max(1200.0, $dur / 100.0)}]
+		set target [expr {double($ply) / double($len - 1) * ($dur - 300.0)}]
+	}
 	if {abs($target - $t) > $tol} {
-		MediaDebug "PlySeek: ply=$ply/$len -> seek to ${target}ms (media at ${t}ms)"
-		catch { $handle time [expr {int($target)}] }
+		MediaDebug "PlySeek: ply=$ply -> seek to ${target}ms (media at ${t}ms)"
+		catch { $handle time [expr {$target / 1000.0}] }
 	}
 }
 
@@ -903,10 +936,6 @@ proc application::media::ShowImage {path} {
 		return
 	}
 
-	catch {
-		image create photo Priv(img) -file $path
-	}
-
 	if {[catch { image create photo Priv(img) -file $path }]} {
 		set Priv(statusbar) "Cannot load image: $path"
 		return
@@ -930,7 +959,7 @@ proc application::media::ShowImage {path} {
 		catch { image delete Priv(imgscaled) }
 		image create photo Priv(imgscaled)
 		# Tk doesn't have a native resize; use the subsample approach
-		set sx [expr {int(1.0/$scale)}]
+		set sx [expr {int(ceil(1.0/$scale))}]
 		catch { Priv(imgscaled) copy Priv(img) -subsample $sx $sx }
 		$canvas create image [expr {$canW/2}] [expr {$canH/2}] -image Priv(imgscaled) -anchor center
 	} else {
@@ -1063,10 +1092,19 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	variable Priv
 	variable mc
 
+	# Lessons and decode retries enter here directly, bypassing PlayMedia.
+	# Initialize the backend for every entry path (LoadVlc is cached).
+	if {![LoadVlc]} { return 0 }
+
 	set Priv(lastMedia) $path
 	set Priv(lastStartMs) $startMs
 	set Priv(lastEndMs) $endMs
-	set Priv(vlcretry) 0
+	# reset the decode-retry budget only for a new file; a CheckDecode
+	# retry of the same file must keep the counter or it loops forever
+	if {![info exists Priv(vlcretrypath)] || $Priv(vlcretrypath) ne $path} {
+		set Priv(vlcretry) 0
+		set Priv(vlcretrypath) $path
+	}
 
 	set canvas $Priv(viewer).canvas
 
@@ -1113,17 +1151,19 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	# Interactive 'range' entries: seek into the video and stop at End.
 	catch { after cancel $Priv(rangeid) }	;# a stale stop timer must not kill the new clip
 	set Priv(rangeid) {}
-	if {[string is double -strict $startMs] && $startMs > 0} {
-		catch { $handle time [expr {int($startMs)}] }
+	if {![string is double -strict $startMs] || $startMs < 0} { set startMs 0 }
+	if {$startMs > 0} {
+		catch { $handle time [expr {$startMs / 1000.0}] }
 	}
 	if {[string is double -strict $endMs] && $endMs > $startMs} {
-		set Priv(rangeid) [after [expr {int($endMs - ($startMs > 0 ? $startMs : 0))}] \
+		set Priv(rangeid) [after [expr {int($endMs - $startMs)}] \
 			[namespace code { catch { Stop } }]]
 	}
 
 	set Priv(inprocess) 1
 	set Priv(statusbar) "Playing: $path"
 	MediaDebug "PlayInProcess: playback started for $path"
+	StartSeekTick
 
 	# sync timeline/events are loaded by PlayLesson (lesson cache); plain
 	# media keeps an empty sync state (linear fallback in drive)
@@ -1213,7 +1253,9 @@ proc application::media::CheckDecode {path} {
 		if {![info exists Priv(vlcretry)] || $Priv(vlcretry) < 1} {
 			set Priv(vlcretry) 1
 			MediaDebug "CheckDecode: state=$state -> retrying once (demux pre-fill hiccup)"
-			catch { ::application::media::PlayMedia $Priv(lastMedia) $Priv(lastStartMs) $Priv(lastEndMs) }
+			# retry via PlayInProcess: PlayMedia would clear a playing
+			# lesson's sync timeline/events
+			catch { PlayInProcess $Priv(lastMedia) $Priv(lastStartMs) $Priv(lastEndMs) }
 			return
 		}
 	}
@@ -1384,7 +1426,10 @@ proc application::media::algebraic_to_index {sq} {
 # Resolve the active board widget identifier for ::board::diagram calls.
 # The board is stored in the application::board namespace (set by build()).
 proc application::media::boardWidget {} {
-	return $application::board::board
+	if {![info exists ::application::board::board]} { return "" }
+	set brd $::application::board::board
+	if {![winfo exists $brd]} { return "" }
+	return $brd
 }
 
 
@@ -1431,8 +1476,8 @@ proc application::media::FollowTick {} {
 	}
 
 	set t 0; set dur 0
-	catch { set t [$handle time] }
-	catch { set dur [$handle duration] }
+	catch { set t [expr {1000.0 * [$handle time]}] }
+	catch { set dur [expr {1000.0 * [$handle duration]}] }
 	if {$t eq "" || $dur eq ""} { return }
 
 	::media::sync::drive $t $dur
@@ -1440,6 +1485,66 @@ proc application::media::FollowTick {} {
 	# reschedule while follow mode stays enabled
 	StartFollowTick
 }
+
+# --- seek bar -------------------------------------------------------------
+
+proc application::media::FormatMs {ms} {
+	set s [expr {int($ms / 1000)}]
+	return [format "%d:%02d" [expr {$s / 60}] [expr {$s % 60}]]
+}
+
+
+# Periodic UI tick while media is loaded: track the playback position on
+# the slider (unless the user is dragging it) and the time readout.
+proc application::media::SeekTick {} {
+	variable Priv
+
+	set Priv(seektick) {}
+	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
+	set handle $Priv(vlc_handle)
+	if {$handle eq ""} { return }
+
+	set t 0; set dur 0
+	catch { set t [expr {1000.0 * [$handle time]}] }
+	catch { set dur [expr {1000.0 * [$handle duration]}] }
+	if {[string is double -strict $t] && [string is double -strict $dur] && $dur > 0} {
+		if {!$Priv(seekgrab) && [winfo exists $Priv(seekbar)]} {
+			catch { $Priv(seekbar) set [expr {double($t) / $dur * 1000.0}] }
+		}
+		set Priv(seeklabel) "[FormatMs $t] / [FormatMs $dur]"
+	}
+
+	set Priv(seektick) [after 500 [namespace code SeekTick]]
+}
+
+
+proc application::media::StartSeekTick {} {
+	variable Priv
+	catch { after cancel $Priv(seektick) }
+	set Priv(seektick) [after 500 [namespace code SeekTick]]
+}
+
+
+# Slider released: seek the video to the slider position.  Follow mode
+# then remaps the board to the new time on the next drive tick, so board
+# and video stay one unit.
+proc application::media::SeekRelease {} {
+	variable Priv
+
+	set Priv(seekgrab) 0
+	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
+	set handle $Priv(vlc_handle)
+	if {$handle eq ""} { return }
+
+	set dur 0
+	catch { set dur [$handle duration] }
+	if {![string is double -strict $dur] || $dur <= 0} { return }
+
+	set frac [expr {[$Priv(seekbar) get] / 1000.0}]
+	MediaDebug "SeekRelease: seek to [expr {int($frac * 100)}]% of ${dur}s"
+	catch { $handle time [expr {$frac * $dur}] }
+}
+
 
 proc application::media::StartFollowTick {} {
 	variable Priv
@@ -1462,8 +1567,16 @@ proc application::media::Stop {} {
 	catch { after cancel $Priv(rangeid) }
 	catch { after cancel $Priv(seekid) }
 	catch { after cancel $Priv(interactiveid) }
+	catch { after cancel $Priv(seektick) }
 	set Priv(checkid) {}
 	set Priv(rangeid) {}
+	set Priv(seektick) {}
+	set Priv(seeklabel) {}
+	catch {
+		if {[info exists Priv(seekbar)] && [winfo exists $Priv(seekbar)]} {
+			$Priv(seekbar) set 0
+		}
+	}
 
 	if {![info exists Priv(viewer)]} { return }   ;# panel not built yet
 
@@ -1522,6 +1635,9 @@ proc application::media::setActive {flag} {
 # Called when the media pane frame is destroyed (bound in application.tcl).
 # Fully release the player so libVLC never outlives its embedding window.
 proc application::media::closed {frame} {
+	variable Priv
+	catch { after cancel $Priv(afterid) }
+	set Priv(afterid) {}
 	Stop
 }
 

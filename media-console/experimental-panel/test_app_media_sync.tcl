@@ -57,7 +57,7 @@ tcltest::test mediasync-transport-autoplay {autoplay 1 -> transport play; autopl
 	set ::syncCalls
 } -cleanup {reset} -result {play pause}
 
-tcltest::test mediasync-transport-manual-pause {manual navigation pauses media} -body {
+tcltest::test mediasync-transport-manual-keeps-playing {manual navigation keeps media playing (panel reseeks it)} -body {
 	reset
 	set ::syncCalls {}
 	::media::sync::configure transport-cmd [list ::apply {what {lappend ::syncCalls $what}}]
@@ -65,7 +65,32 @@ tcltest::test mediasync-transport-manual-pause {manual navigation pauses media} 
 	::media::sync::onPlaybackStarted
 	::media::sync::step
 	set ::syncCalls
-} -cleanup {reset} -result {pause}
+} -cleanup {reset} -result {}
+
+tcltest::test mediasync-step-holds-drive {a manual step holds off follow-mode driving until the reseek lands} -body {
+	reset
+	set ::syncFwds 0
+	::media::sync::configure \
+		boardforward-cmd {::apply {{} {incr ::syncFwds}}} \
+		boardstart-cmd   {::apply {{} {set ::syncFwds 0}}} \
+		boardlength-cmd  {::apply {{} {return 40}}} \
+		boardply-cmd     {::apply {{} {return $::syncFwds}}}
+	::media::sync::set-config 1 1
+	::media::sync::onPlaybackStarted
+	::media::sync::step                        ;# user touched the board just now
+	::media::sync::drive 20000 40000           ;# drive must yield
+	set ::syncFwds
+} -cleanup {reset} -result 0
+
+tcltest::test mediasync-ms-for-ply-timeline {ms-for-ply inverts absolute and legacy timelines} -body {
+	reset
+	::media::sync::load-timeline {{1000 1} {2500 2} {4000 3}}
+	set a [list [::media::sync::ms-for-ply 0] [::media::sync::ms-for-ply 2] [::media::sync::ms-for-ply 9]]
+	::media::sync::load-timeline {100 200 300}
+	set b [list [::media::sync::ms-for-ply 1] [::media::sync::ms-for-ply 3] [::media::sync::ms-for-ply 4]]
+	::media::sync::load-timeline {}
+	list $a $b [::media::sync::ms-for-ply 1]
+} -cleanup {reset} -result {{0 2500 -1} {100 300 -1} -1}
 
 tcltest::test mediasync-transport-idle-noop {no transport calls while media stopped} -body {
 	reset
@@ -374,4 +399,4 @@ tcltest::cleanupTests
 } ;# namespace ::scidb::test::mediasync
 
 
-
+# Archived with the experimental media panel; not an application test.

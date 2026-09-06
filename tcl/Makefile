@@ -140,10 +140,6 @@ SOURCES = \
 	app-db-games.tcl \
 	app-corr-games.tcl \
 	app-board-games.tcl \
-	app-media-sync.tcl \
-	app-media-decode.tcl \
-	app-media-lesson.tcl \
-	app-media.tcl \
 	app-report.tcl \
 	iccf-xfcc.tcl \
 	app-db-players.tcl \
