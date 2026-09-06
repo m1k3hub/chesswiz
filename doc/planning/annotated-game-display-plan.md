@@ -1,6 +1,49 @@
 # Plan: Display Annotated Chess Games
 
-Status: Phases 1-3 complete (2026-09-06) — Phase 3 required no new code
+Status: Phases 1-4 complete (2026-09-06) — Phases 3-4 mostly corrected premises
+
+## Phase 4 results (2026-09-06)
+
+**Corrected finding, again: browser.tcl is deliberately minimal, not a
+missing-parity gap.** Read `browser.tcl`'s own layout renderer (`UpdatePGN`,
+`browser.tcl:1075` — a separate implementation from `app-pgn.tcl`'s
+`DoLayout`, not a shared one as an earlier note assumed) before touching
+anything:
+- Comments, NAGs, and marks are explicitly, deliberately skipped in the
+  browser's move rendering (`annotation - marks { # skip }`,
+  `browser.tcl:1135`).
+- `setupStyle`'s `browser` branch hard-codes `showDiagrams no`,
+  `showEmoticons no`, `showVariationNumbers no`, `paragraphSpacing no`
+  regardless of any option (`pgn-setup.tcl:485-490`) — diagrams and
+  annotation display are intentionally off for this context, not
+  unimplemented.
+
+This is coherent given what the browser pane actually is: a small,
+transient game-preview popup with its own live board widget already
+showing the position — not a second full annotated-game viewer. Bringing
+it to full parity with the editor (inline diagrams, marks-on-preview-board,
+comment/NAG text) would be a real, unrequested feature addition changing
+the character of an intentionally lean widget, not a bug fix — not done.
+
+**One genuine, narrow bug found and fixed**: `browser::open`
+(`browser.tcl:114`) never called `::pgn::setup::setupStyle browser
+<position>` / `::pgn::setup::setupNags browser` at pane-creation time
+(unlike the editor's `build`, `app-pgn.tcl:342`). Both calls exist and are
+correctly invoked later — on `refresh` (`browser.tcl:476`) and on the setup
+dialog's close handler (`pgn-setup.tcl:740-741`) — but never on first open.
+Net effect: a freshly opened browser window (before the user ever visits
+its own setup dialog in that session) rendered with whatever column-style/
+NAG-symbol choice some other context (typically the editor) last set
+globally, ignoring the browser's own persisted preferences. Fixed by adding
+both calls right after `position` is allocated in `open`, before any
+widget or layout work. Both are pure C++ state setters with no Tk
+dependency, so this is safe to call before the pane's widgets exist.
+
+Verified: full app suite 32/32; headless startup smoke test passes (exit
+134 — the pre-existing, Makefile-tolerated teardown-on-destroy artifact
+seen throughout this session's probes, not a regression).
+
+## Phase 3 results (2026-09-06)
 
 ## Phase 3 results (2026-09-06)
 
@@ -157,10 +200,12 @@ Turned out to already be fully implemented (`Game::setFolded`/`unfold`,
 context menu, toolbar, `ProcessGoto` auto-unfold) — see "Phase 3 results"
 above. No engineering needed; verified by source audit.
 
-### Phase 4 — Read-only viewer polish (browser pane)
-Ensure the browser context matches the editor: setupNags, diagrams option, marks
-wired to its preview board, language toggling, same display-options dialog
-(`pgn-setup.tcl` supports per-context options). Verify against the Phase 1 suite.
+### Phase 4 — Read-only viewer polish (browser pane) — DONE, narrower than planned
+Browser is a deliberately minimal preview widget, not a second annotated
+viewer missing parity — see "Phase 4 results" above. Fixed the one real
+bug (setupStyle/setupNags never applied at pane-open time); did not add
+diagrams/marks/annotation display, since that would change the widget's
+intentional character rather than close a gap.
 
 ### Phase 5 (optional) — Evaluation profile
 Parse `[%eval]` in `db_move_info_set.cpp` (alongside `%clk/%emt`), surface
@@ -168,7 +213,11 @@ per-ply evals through the edit AST move-info path, draw a bar strip under the
 notation pane (Tk canvas); click a bar to navigate.
 
 ## Ordering & risk
-- Phases 1–3 done. Phase 5 separable/droppable.
+- Phases 1–4 done. Phase 5 separable/droppable, and optional — evaluate
+  whether it's still wanted before starting, given how much of the
+  original gap analysis (Phases 3 and 4, and part of Phase 2) turned out
+  to already exist or to rest on a false premise once actually checked
+  against the code.
 - Hazards: new panes need `activate`/`closed` procs and the correct grid master
   (see 4d7e2a4, 53227b7); never reintroduce anything named `gamemedia`
   (`tests/test_app_no_media.tcl` asserts absence); chmod 644 touched files

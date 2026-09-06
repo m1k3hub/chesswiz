@@ -112,6 +112,12 @@ proc open {parent base variant info view index {fen {}}} {
 		}
 	}
 	set position [::game::nextGamePosition]
+	# establish this pane's own persisted display/NAG options before the
+	# first layout is generated; without this a freshly opened browser
+	# window inherits whatever context last called setupStyle/setupNags
+	# (e.g. the PGN editor) instead of its own saved settings
+	::pgn::setup::setupStyle browser $position
+	::pgn::setup::setupNags browser
 	set dlg $parent.browser$position
 	lappend Priv($base:$variant:$number:$view) $dlg
 	tk::toplevel $dlg -class Scidb
