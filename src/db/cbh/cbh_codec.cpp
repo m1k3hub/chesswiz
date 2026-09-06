@@ -2547,12 +2547,24 @@ Codec::startDecoding(ByteStream& gameStream,
 				"unencoded game not supported (CBH bit 31 set, offset %llu)",
 				(unsigned long long)info.gameOffset());
 
-			// TODO: bit 31 = the game data is stored *unencoded* (plain format),
-			// not the standard LUT encoding. ChessBase uses this for "guiding
-			// texts" / embedded training files whose text must be directly
-			// readable. It is NOT encryption (that is the separate .cbz DES
-			// archive). scidb does not yet parse this plain format.
-			// look at Big2010, #1964391, Giffard, Nicalas - Castlagliola, Marina
+			// bit 31 = the game data is stored *unencoded* (plain format),
+			// not the standard LUT encoding. It is NOT encryption (that is
+			// the separate .cbz DES archive).
+			//
+			// RE finding (2026-09-06, doc/re/cbh-bit31-unencoded.md): scanned
+			// every classic .cbh/.cbg fixture on hand (30 databases, 100+
+			// bit-31 records) - every single one is a guiding-text record
+			// (info.isGuidingText()), whose title/body text is already
+			// decoded separately by decodeGuidingTextBody(), which reads the
+			// same bit-31 "unencoded" header but as text, not moves. This
+			// path (real chess moves stored unencoded) has no attested
+			// example in any available fixture - the "Big2010 #1964391"
+			// example once noted here could not be located to confirm
+			// whether it was itself a guiding text. Do not ship a decode
+			// for this branch without real data to validate against; the
+			// caller (Database::loadGame) already catches this exception
+			// safely, and Codec::doDecoding() now skips straight to "no
+			// moves" for guiding texts to avoid hitting it at all.
 		}
 
 		isChess960 = bool(word & 0x0a000000);
@@ -2713,6 +2725,15 @@ Codec::doDecoding(::util::BlockFileReader* reader, // not used
 						Board& startBoard,
 						bool useStartBoard)
 {
+	// Guiding-text records carry no move data; their game slot is the
+	// "unencoded" (CBH bit 31) title/body text read by
+	// decodeGuidingTextBody(), not a LUT-encoded move stream. Without this
+	// check, startDecoding() throws on bit 31 and the caller (see
+	// Database::loadGame()) silently swallows it - correct in effect, but
+	// via an avoidable throw/catch on every guiding-text lookup.
+	if (info.isGuidingText())
+		return 0;
+
 	Byte buf[32768];
 	ByteStream gStrm(buf, sizeof(buf));
 	bool isChess960;
