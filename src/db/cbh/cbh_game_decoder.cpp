@@ -35,6 +35,7 @@
 #include "db_game_info.h"
 #include "db_database_codec.h"
 #include "db_move_node.h"
+#include "db_move_info.h"
 #include "db_mark_set.h"
 #include "db_annotation.h"
 #include "db_exception.h"
@@ -140,6 +141,9 @@ GameDecoder::traverse(Consumer& consumer, MoveNode const* node)
 		{
 			consumer.putMove(node->move());
 		}
+
+		if (node->hasMoveInfo())
+			consumer.putMoveInfo(node->moveInfo());
 
 		for (unsigned i = 0; i < node->variationCount(); ++i)
 		{
@@ -438,6 +442,157 @@ GameDecoder::decodeArrows(MoveNode* node, unsigned length)
 
 
 void
+GameDecoder::appendTextAnnotation(MoveNode* node, mstl::string const& text)
+{
+	M_ASSERT(node);
+
+	mstl::string str(text);
+	Comment comment;
+	comment.swap(str, i18n::English);
+
+	if (node->hasComment(move::Post))
+	{
+		Comment c;
+		node->swapComment(c, move::Post);
+		c.append(comment, '\n');
+		c.normalize();
+		node->swapComment(c, move::Post);
+	}
+	else
+	{
+		comment.normalize();
+		node->setComment(comment, move::Post);
+	}
+}
+
+
+// Annotation type 0x07: time spent on the move.
+// Payload: hours, minutes, seconds, and a marker byte (0x1e on the
+// first record per side).
+void
+GameDecoder::decodeTimeSpent(MoveNode* node, unsigned length)
+{
+	if (length < 3)
+	{
+		m_aStrm.skip(length);
+		return;
+	}
+
+	unsigned h = m_aStrm.get();
+	unsigned m = m_aStrm.get();
+	unsigned s = m_aStrm.get();
+
+	m_aStrm.skip(length - 3);
+
+	if (h < 24 && m < 60 && s < 60)
+	{
+		char buf[16];
+		::snprintf(buf, sizeof(buf), "%u:%02u:%02u", h, m, s);
+
+		MoveInfo info;
+
+		if (info.parseElapsedMoveTime(buf))
+			node->addMoveInfo(info);
+	}
+}
+
+
+// Annotation types 0x16/0x17: white/black clock display after the move.
+// Payload: clock time in hundredths of a second (big-endian); the side
+// is implied by the move the record is attached to.
+void
+GameDecoder::decodeClock(MoveNode* node, unsigned length)
+{
+	if (length < 4)
+	{
+		m_aStrm.skip(length);
+		return;
+	}
+
+	unsigned centiSecs = m_aStrm.uint32();
+
+	m_aStrm.skip(length - 4);
+
+	unsigned secs = centiSecs/100;
+
+	if (secs < 24*3600)
+	{
+		char buf[16];
+		::snprintf(buf, sizeof(buf), "%u:%02u:%02u", secs/3600, (secs/60) % 60, secs % 60);
+
+		MoveInfo info;
+
+		if (info.parsePlayersClock(buf))
+			node->addMoveInfo(info);
+	}
+}
+
+
+// Annotation type 0x18: critical position marker.
+// Payload: 1 = opening, 2 = middlegame, 3 = endgame.
+void
+GameDecoder::decodeCriticalPosition(MoveNode* node, unsigned length)
+{
+	if (length < 1)
+		return;
+
+	Byte phase = m_aStrm.get();
+
+	m_aStrm.skip(length - 1);
+
+	char const* text = 0;
+
+	switch (phase)
+	{
+		case 1: text = "Critical opening position"; break;
+		case 2: text = "Critical middlegame position"; break;
+		case 3: text = "Critical endgame position"; break;
+	}
+
+	if (text)
+		appendTextAnnotation(node, text);
+}
+
+
+// Annotation type 0x24: time control (game-wide record).
+// Payload: up to three 11-byte series - initial time (4 bytes) and
+// increment (4 bytes) in hundredths of a second (big-endian), move
+// count (2 bytes; 1000 = rest of the game), series type (1 byte).
+// Result is stored in PGN TimeControl syntax for the tag section.
+void
+GameDecoder::decodeTimeControl(unsigned length)
+{
+	m_timeControl.clear();
+
+	for ( ; length >= 11; length -= 11)
+	{
+		unsigned initial	= m_aStrm.uint32()/100;
+		unsigned increment= m_aStrm.uint32()/100;
+		unsigned moves		= m_aStrm.uint16();
+		Byte		type		= m_aStrm.get();
+
+		(void)type;
+
+		if (initial == 0 && moves == 0)
+			continue;
+
+		if (!m_timeControl.empty())
+			m_timeControl.append(':');
+
+		if (moves != 0 && moves != 1000)
+			m_timeControl.format("%u/", moves);
+
+		m_timeControl.format("%u", initial);
+
+		if (increment)
+			m_timeControl.format("+%u", increment);
+	}
+
+	m_aStrm.skip(length);
+}
+
+
+void
 GameDecoder::getAnnotation(MoveNode* node, int moveNo)
 {
 	M_ASSERT(moveNo != MaxMoveNo);
@@ -486,6 +641,23 @@ GameDecoder::getAnnotation(MoveNode* node, int moveNo)
 
 			case 0x05:	// arrows
 				decodeArrows(node, length);
+				break;
+
+			case 0x07:	// time spent on the move
+				decodeTimeSpent(node, length);
+				break;
+
+			case 0x16:	// white clock
+			case 0x17:	// black clock
+				decodeClock(node, length);
+				break;
+
+			case 0x18:	// critical position marker
+				decodeCriticalPosition(node, length);
+				break;
+
+			case 0x24:	// time control (game-wide)
+				decodeTimeControl(length);
 				break;
 
 			default:
@@ -812,6 +984,8 @@ GameDecoder::doDecoding(GameData& data)
 	data.m_startBoard = m_position.board();
 	unsigned plyNumber = m_position.board().plyNumber();
 	decodeMoves(data.m_startNode);
+	if (!m_timeControl.empty() && !data.m_tags.contains(tag::TimeControl))
+		data.m_tags.set(tag::TimeControl, m_timeControl);
 	return m_position.board().plyNumber() - plyNumber;
 }
 
@@ -823,6 +997,15 @@ GameDecoder::doDecoding(Consumer& consumer,
 								MoveNodeAllocator& allocator)
 {
 	startDecoding(&tags);
+
+	allocator.release();
+	allocator.reserve(mstl::mul2(m_gStrm.size()));
+
+	MoveNode* root = allocator.allocate();
+	getAnnotation(root, -1);	// consume game-level records (moveNo 0xffffff)
+
+	if (!m_timeControl.empty() && !tags.contains(tag::TimeControl))
+		tags.set(tag::TimeControl, m_timeControl);
 
 	if (!consumer.startGame(tags, m_position.board()))
 		return save::UnsupportedVariant;
@@ -842,14 +1025,17 @@ GameDecoder::doDecoding(Consumer& consumer,
 	else
 #endif
 	{
-		allocator.release();
-		allocator.reserve(mstl::mul2(m_gStrm.size()));
-		traverse(consumer, decodeMoves(allocator));
+		unsigned count = 0;
+		decodeMoves(root, count, allocator);
+		traverse(consumer, root);
 	}
 
 	char buf[32];
 	::snprintf(buf, sizeof(buf), "%u", m_position.board().plyNumber() - plyNumber);
 	tags.set(tag::PlyCount, buf);
+
+	if (!m_timeControl.empty() && !tags.contains(tag::TimeControl))
+		tags.set(tag::TimeControl, m_timeControl);
 
 	consumer.finishMoveSection(result::fromString(tags.value(tag::Result)));
 	return consumer.finishGame(tags);

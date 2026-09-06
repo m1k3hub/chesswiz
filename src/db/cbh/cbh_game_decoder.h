@@ -85,10 +85,16 @@ private:
 	void decodeSymbols(MoveNode* node, unsigned length);
 	void decodeSquares(MoveNode* node, unsigned length);
 	void decodeArrows(MoveNode* node, unsigned length);
+	void decodeTimeSpent(MoveNode* node, unsigned length);
+	void decodeClock(MoveNode* node, unsigned length);
+	void decodeCriticalPosition(MoveNode* node, unsigned length);
+	void decodeTimeControl(unsigned length);
+	void appendTextAnnotation(MoveNode* node, mstl::string const& text);
 
 	util::ByteStream&	m_aStrm;
 	sys::utf8::Codec&	m_codec;
 	int					m_moveNo;
+	mstl::string		m_timeControl;
 };
 
 } // namespace cbh
