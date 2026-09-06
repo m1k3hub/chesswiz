@@ -81,6 +81,57 @@ GUI integration.**
   so the same live-process approach (attach during Elo-column render,
   or static trace from the "rating" column formatter) is the
   established, proven method here.
+  **2026-09-06, Ghidra trace, 3 further passes.** Two earlier passes
+  identified but could not close out a PGN-tag-name string cluster
+  ("WhiteElo", "BlackElo", "EloW", "EloB" among others) at
+  `0x141155f10`-`0x141155f34` in `CBase26.exe`, and then found the
+  containing pointer table itself: a flat array of tag-name-string
+  pointers at `0x14190b430`+ (8-byte stride, index 0 = "Event",
+  index 8 = "WhiteElo", index 9 = "BlackElo", index 10 = "EloW",
+  index 11 = "EloB", continuing through ~90 known PGN tags) — but
+  Ghidra's reference manager reported zero xrefs to it, stalling
+  both passes.
+  Third pass root-caused that stall: earlier attempts checked xrefs
+  to nearby offsets (`0x14190b380/400/440/448`) but never the table's
+  *own* base address, `0x14190b430` — that address alone has 7 real
+  code xrefs, all directly on the PGN-tag import path (functions
+  `FUN_1401d71d0`, `FUN_1401d9fe0`, `FUN_1401de9a0`, `FUN_1401df140`).
+  `FUN_1401d9fe0` does the tag-name match: given input tag text, it
+  scans the table and returns the matching index (or -1). The caller,
+  `FUN_1401d71d0`, uses that index into a *second*, parallel `undefined4`
+  (4-byte stride, confirmed via Ghidra's declared data type) dispatch
+  table at `0x14190b340` — `switch ((&DAT_14190b340)[tagIndex])` — whose
+  values are simply `0,1,2,...` per tag in table order, **except** the
+  short PGN aliases `EloW`/`EloB` (indices 10/11) map to the *same* case
+  numbers (8/9) as `WhiteElo`/`BlackElo` — i.e. `EloW` and `EloB` really
+  are recognized as aliases for `WhiteElo`/`BlackElo`, not separate
+  fields, confirming the table-walk methodology is correct end to end.
+  `case 8` (WhiteElo) parses the tag value as an int, masks it to 16
+  bits, and calls `FUN_1401c3760(param_2, value & 0xffff)`; `case 9`
+  (BlackElo) is structurally identical, calling `FUN_1401c3340(param_2,
+  value & 0xffff)` — this is a real, confirmed "PGN import sets a 16-bit
+  Elo value on some in-memory record" finding.
+  **Not yet resolved**: decompiling `FUN_1401c3760`/`FUN_1401c3340`
+  themselves does not show where that 16-bit value lands. Ghidra
+  mis-recovered both functions' signatures as taking only ONE parameter
+  (`param_1`, the record pointer) even though the call site clearly
+  passes two arguments — the masked Elo value is dropped from the
+  decompilation entirely, most likely because it arrives in a register
+  Ghidra's signature-recovery didn't attribute to the function (a common
+  decompiler failure mode, not evidence the value is unused). Both
+  functions' visible bodies only show writing an unrelated packed
+  date/version stamp (`FUN_1401c5050(&local_28, DAT_141ad6800)` then
+  three field-writes) — this is very likely a shared "mark record
+  modified with a timestamp" side effect that fires on *any* tag write,
+  not the Elo storage itself.
+  **Next concrete step**: fix the dropped parameter by inspecting the
+  raw disassembly (not the decompiler's signature guess) at the
+  `FUN_1401c3760`/`FUN_1401c3340` call sites in `FUN_1401d71d0` (case 8
+  and case 9 bodies) to see which register/stack slot carries
+  `value & 0xffff`, force-correct the function signature in Ghidra to
+  include it as a second parameter, then re-decompile — the real
+  16-bit store should become visible once the decompiler is told the
+  parameter exists. This is a mechanical fix, not a new dead end.
 - **Chess960 start positions: STILL OPEN in 2CBH.**  The LUT-960 /
   36-byte position-block solution (CHESS960_STATUS.md) was for classic
   CBH; the equivalent 2CBH representation is not yet decoded.
