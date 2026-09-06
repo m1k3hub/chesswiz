@@ -336,7 +336,7 @@ now run and pass.
 | Deliverable | Status |
 |-------------|--------|
 | 36-byte position format parsing | **Done** (2026-08-03). Field layout decoded; `setupStartPosition` reads 36 bytes and applies the extension's rook squares. Verified against ground-truth FENs. |
-| Unencoded (bit 31) format characterization | **Blocked** — no bit-31 game fixture; bit 31 = plain data, not encryption |
+| Unencoded (bit 31) format characterization | **Blocked, empirically reconfirmed (2026-09-06)** — full scan of every accessible real ChessBase database (all 27+ cbm168 fixture DBs, plus two live Wine-installed ChessBase databases including "CB Light Database.cbh" with 14,831 games) found 59 bit-31 records total; **all 59 are guiding-text documents** (already handled by `decodeGuidingTextBody`), zero are real unencoded chess games. Bit 31 = plain data, not encryption. |
 | Off-e-file castling token encoding | **Partial** — decoder reads real rook squares from the extension and uses Convention B (file-based destinations); the encoder's two-square castling assumption remains a limitation for off-e-file kings |
 | H0 table coverage gaps (501 corrupt games) | **RESOLVED** (2026-08-16) — Chess960 decode is a 256-byte LUT swap, not a count cipher; `lc = Chess960MoveNumberLookup[raw] - move_index`. Fixture now 8571/0. |
 
@@ -350,7 +350,17 @@ now run and pass.
    ChessBase fixtures become available, run `probe_cbh_chess960` on them to
    confirm the off-e-file castling token encoding (does the encoder emit a
    distinct token, a multi-byte move, or an ordinary king move with implicit
-   rook update?) and the unencoded (bit 31) format.
+   rook update?) and the unencoded (bit 31) format. As of 2026-09-06, every
+   real bit-31 record found across all accessible databases is guiding text
+   (see table above) — a real unencoded game (like the developer-noted
+   "Big2010, #1964391, Giffard,Nicolas - Castagliola,Marina") has not turned
+   up locally. Producing one deliberately would need live experimentation
+   inside ChessBase 26 under Wine (it's unclear what import/edit path makes
+   CB fall back to plain storage for an actual game); this wasn't attempted
+   this session since it's speculative GUI trial-and-error rather than data
+   analysis, and implementing a plain-format parser without a real example
+   to validate against risks repeating the false-positive mistake documented
+   in `doc/re/cba-quotation-format.md`'s "Attempted and reverted" section.
 
 3. **Chess960 decode is resolved** (2026-08-16). The "count cipher" was a
    256-byte LUT swap: `lc = Chess960MoveNumberLookup[raw] - move_index`
