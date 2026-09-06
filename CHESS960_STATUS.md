@@ -354,13 +354,27 @@ now run and pass.
    real bit-31 record found across all accessible databases is guiding text
    (see table above) — a real unencoded game (like the developer-noted
    "Big2010, #1964391, Giffard,Nicolas - Castagliola,Marina") has not turned
-   up locally. Producing one deliberately would need live experimentation
-   inside ChessBase 26 under Wine (it's unclear what import/edit path makes
-   CB fall back to plain storage for an actual game); this wasn't attempted
-   this session since it's speculative GUI trial-and-error rather than data
-   analysis, and implementing a plain-format parser without a real example
-   to validate against risks repeating the false-positive mistake documented
-   in `doc/re/cba-quotation-format.md`'s "Attempted and reverted" section.
+   up locally.
+
+   **Live experiment attempted (2026-09-06):** drove ChessBase 26 under Wine
+   headlessly (Xvfb + xdotool + screenshots) to test the hypothesis that an
+   unusual piece count forces the plain-storage fallback. Entered a custom
+   position with 8 white queens (`8/8/4k3/8/8/8/8/QQQQKQQQ w - - 0 1`) via
+   Position Setup and saved it as a new game into a real ChessBase database
+   (`template.cbh`, game #8573). Result: encoded normally
+   (`word=0x40000021` — bit 30 set for the custom start position, bit 31
+   **not** set, size 0x21). This rules out "excess same-type pieces" as a
+   trigger, at least for a position with no actual game moves played.
+   The GUI-automation pipeline (Xvfb display, xdotool click/type driving
+   the ribbon UI, FEN paste via X clipboard into Position Setup, the
+   File>New / Ctrl+N / Save-prompt flow, and window-relative-coordinate
+   screenshots) is now proven end-to-end and could be reused to test other
+   hypotheses (e.g. an extremely long game hitting `GameInfo::MaxPlyCount`,
+   or importing/repairing a corrupted game) in a future session — the
+   documented gotcha is that `import -window root` screenshots are in
+   absolute screen coordinates while `xdotool --window <id>` expects
+   window-relative ones (offset by the window's Y position, 26px in this
+   session's WM-less Xvfb setup); mixing the two silently misdirects clicks.
 
 3. **Chess960 decode is resolved** (2026-08-16). The "count cipher" was a
    256-byte LUT swap: `lc = Chess960MoveNumberLookup[raw] - move_index`
