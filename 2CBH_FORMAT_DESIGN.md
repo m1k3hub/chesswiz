@@ -1,15 +1,21 @@
 # 2CBH Format Reverse Engineering — Design for Scidb
 
-**Status (2026-08-27): moves, player names and game results SOLVED.**
+**Status (refreshed 2026-09-05): moves, names, results, date, ECO and
+annotation payload SOLVED; remaining: Elo, Chess960 start positions,
+GUI integration.**
 - Moves: plaintext 16-bit "Move16" codes via the dumped/embedded table
   (§3.8); 300,000 fixture games converted to legal PGN with real names
-  and results (`2cbh2pgn`).
+  and results (`2cbh2pgn`). Full-scale: 863,538 games converted with
+  zero errors (commit `5fa7c72`).
 - Names: `.2lid` slot ordinal == the player ID (§3.8.7).
 - Results: index byte 0x58 low 2 bits -- 0 = 0-1, 1 = 1/2-1/2,
   2 = 1-0 (validated 2,748/2,748 against the PGN edition).
 - The .2cbg is in insertion order; the index @0x08 = the record pointer
   (§3.8.7).  The .2cba/@0x10 = the annotation record offset.
-- **ECO encoding: SOLVED (2026-08-29) at @0x80 (u16 LE).**  The value is
+- **Date: SOLVED (2026-08-28, commit `f74250f`).**  3-byte LE packed at
+  index offset 0xBC: `day(5) | month(4) << 5 | year(12) << 9`;
+  verified 2,842/2,862 exact (§3.8.7).
+- **ECO encoding: SOLVED (2026-08-29, commit `b84f337`) at @0x80 (u16 LE).**  The value is
   `128 * (base + 1)` where `base` = the 0-based ECO code number
   (A00 = 0 .. E99 = 499); the low 7 bits are unused (always 0).
   Decode: `base = eco16 >> 7 - 1`; letter = "ABCDE"[base/100],
@@ -29,10 +35,23 @@
   boundary which the 57146-pair floor caught — the implemented rule is
   the empirically validated one.
   Implemented in `cb2::Codec` (tag::Eco) and `2cbh2pgn` ([ECO "…"]).
-- The Elo/date are not simple byte/u16 fields -- correlation tooling
-  committed (`scripts/fcorr.py`, `scripts/idverify.py`).
-- Remaining: the date/ECO/Elo encodings, the annotations payload,
-  Chess960 start positions, and the `cb2::Codec` GUI integration.
+- **Annotations payload: SOLVED (2026-08-29, commits `9df2b4b`,
+  `4ec8517`).**  `.2cba` item grammar (type-7 length-prefixed UTF-8 text
+  comments, position/ply reference headers, multi-language channels),
+  implemented in `src/db/2cbh/2cbh_annotations.{h,cpp}` and verified
+  against PGN twins (§4.1).  Nested `.2cbg` RAV variation walk verified
+  81/81 (commit `3a10172`); `.2cba` item-type census: 8,842 items, all
+  type 7 so far (commit `319d4e1`).
+- **Elo: STILL OPEN.**  Not a simple byte/u16 field in the index;
+  correlation tooling committed (`scripts/fcorr.py`,
+  `scripts/idverify.py`) but no encoding found yet.  (The Elo solution
+  in CHESSBASE_MEDIA_RE.md / commit `f2cc94f` applies to the
+  media/checkpoint format, not the .2cbh index.)
+- **Chess960 start positions: STILL OPEN in 2CBH.**  The LUT-960 /
+  36-byte position-block solution (CHESS960_STATUS.md) was for classic
+  CBH; the equivalent 2CBH representation is not yet decoded.
+- Remaining: the Elo encoding, Chess960 start positions in 2CBH, and
+  the `cb2::Codec` GUI integration.
   Fixture: `LumbrasGigaBase_OTB_ELO2400` (863,538 games).
 
 ## 1. Context
