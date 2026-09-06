@@ -391,6 +391,29 @@ Codec::doOpen(	mstl::string const& rootname,
 			info.m_dateDay = dday;
 		}
 
+		// Elo: plain u16 LE, White @0x60, Black @0x70 (unencoded, same
+		// storage convention as classic .cbh); RE'd via Ghidra tracing
+		// of CBase26.exe's PGN-import tag setters (case 8/9 of the
+		// WhiteElo/BlackElo/EloW/EloB tag dispatch), see 2CBH_FORMAT_DESIGN.md
+		{
+			unsigned whiteElo = readLE16(rec + 0x60);
+			unsigned blackElo = readLE16(rec + 0x70);
+
+			if (rating::isValid(whiteElo))
+			{
+				info.m_pd[color::White].elo = whiteElo;
+				if (info.m_player[color::White] != m_illegalPlayer)
+					info.m_player[color::White]->setElo(whiteElo);
+			}
+
+			if (rating::isValid(blackElo))
+			{
+				info.m_pd[color::Black].elo = blackElo;
+				if (info.m_player[color::Black] != m_illegalPlayer)
+					info.m_player[color::Black]->setElo(blackElo);
+			}
+		}
+
 		// record length: peek the .2cbg record header
 		m_gameStream.clear();
 		m_gameStream.seekg(info.m_gameOffset + 8, mstl::ios_base::beg);

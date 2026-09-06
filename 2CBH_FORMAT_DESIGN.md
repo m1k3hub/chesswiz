@@ -1,7 +1,7 @@
 # 2CBH Format Reverse Engineering — Design for Scidb
 
-**Status (refreshed 2026-09-05): moves, names, results, date, ECO and
-annotation payload SOLVED; remaining: Elo, Chess960 start positions,
+**Status (refreshed 2026-09-06): moves, names, results, date, ECO, Elo
+and annotation payload SOLVED; remaining: Chess960 start positions,
 GUI integration.**
 - Moves: plaintext 16-bit "Move16" codes via the dumped/embedded table
   (§3.8); 300,000 fixture games converted to legal PGN with real names
@@ -132,11 +132,59 @@ GUI integration.**
   include it as a second parameter, then re-decompile — the real
   16-bit store should become visible once the decompiler is told the
   parameter exists. This is a mechanical fix, not a new dead end.
+- **Elo: RESOLVED (2026-09-06, 4th Ghidra pass).** Read the raw
+  disassembly at the two call sites directly (skipping the decompiler
+  entirely, since it had already dropped the second parameter twice).
+  Both calls are `CALL` with `RCX = record pointer` (`R14`, unchanged
+  since function entry) and `RDX = MOVZX-widened 16-bit Elo value`
+  (`EDX`, produced by `MOVZX EDX, BX` right before the call) — standard
+  Win64 `(this, value)` calling convention. Disassembling
+  `FUN_1401c3760` (WhiteElo) and `FUN_1401c3340` (BlackElo) themselves
+  showed their *first* instruction is a tail-call-like `CALL` to a tiny
+  2-line leaf function — `FUN_1401e49b0` for White, `FUN_1401e4270` for
+  Black — invoked with the same `(RCX, RDX)` still live from the outer
+  call, i.e. the real setter primitive. Both leaves are identical up to
+  the offset:
+  ```
+  FUN_1401e49b0:                    FUN_1401e4270:
+    CMP word [RCX+0x2], 0x101         CMP word [RCX+0x2], 0x101
+    JNZ skip                          JNZ skip
+    MOV word [RCX+0x60], DX           MOV word [RCX+0x70], DX
+    RET                                RET
+  ```
+  i.e. `WhiteElo` is a plain little-endian `u16` at offset `0x60` and
+  `BlackElo` at `0x70` of the record — guarded by a type/version tag
+  check at offset `0x2` (`== 0x101`), which is why an earlier full
+  byte/u16 injectivity sweep of the on-disk 192-byte index record found
+  *nothing*: that sweep never had ground-truth Elo values to correlate
+  against for its fixture (`LumbrasGigaBase_OTB_ELO2400`'s derived PGN
+  export carries no `WhiteElo`/`BlackElo` tags), so the injectivity
+  method had no signal at these offsets to detect — the field was
+  always there, just outside what that sweep could actually test against.
+  Confirmed against the real on-disk 192-byte `.2cbh` index record
+  itself (not just CBase26's in-memory object) two ways: (1) a 2,000-record
+  random sample from `LumbrasGigaBase_OTB_ELO2400` — every one of the
+  4,000 values (`White`+`Black`) fell in the plausible 100-3200 rating
+  range, with the sample minimum landing at *exactly* 2400, matching the
+  fixture's own name (a rating-filtered export); (2) pulling every
+  `Carlsen, Magnus` game's own rating by date via the newly-implemented
+  `2cbh2pgn` output and cross-checking against real, well-documented
+  FIDE history: `2570` (2005-11-27, age 14), `2714` (2007-11-21),
+  `2815` (2011-03-12 and 2011-06-15, his actual ~2815-2817 period),
+  `2877` (2014-08-11, his real career-peak live rating period),
+  `2856`/`2859` (2021-12-28/2022-12-28) — an exact match to public
+  record across a 17-year span, not a coincidental range fit.
+  Implemented in `src/db/2cbh/cb2_codec.cpp` (`readGameInfo`, alongside
+  the existing result/date parsing) writing to `GameInfo::m_pd[color].elo`
+  and `NamebasePlayer::setElo`, mirroring classic `.cbh`'s identical
+  plain-`u16` convention (`cbh_codec.cpp:2451-2465`); also added
+  `[WhiteElo]`/`[BlackElo]` tag output to the `2cbh2pgn` verification
+  tool (`src/db/2cbh/2cbh2pgn.cpp`) for validation and future RE use.
 - **Chess960 start positions: STILL OPEN in 2CBH.**  The LUT-960 /
   36-byte position-block solution (CHESS960_STATUS.md) was for classic
   CBH; the equivalent 2CBH representation is not yet decoded.
-- Remaining: the Elo encoding, Chess960 start positions in 2CBH, and
-  the `cb2::Codec` GUI integration.
+- Remaining: Chess960 start positions in 2CBH, and the `cb2::Codec`
+  GUI integration.
   Fixture: `LumbrasGigaBase_OTB_ELO2400` (863,538 games).
 
 ## 1. Context

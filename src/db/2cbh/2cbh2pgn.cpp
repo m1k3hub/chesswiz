@@ -493,6 +493,12 @@ int main(int argc, char* argv[])
             ::snprintf(ecoBuf, sizeof(ecoBuf), "%c%02u", letter, base % 100u);
          }
       }
+      // Elo: plain u16 LE, White @0x60, Black @0x70 (unencoded, same
+      // storage convention as classic .cbh); RE'd via Ghidra tracing of
+      // CBase26.exe's PGN-import tag setters (WhiteElo/BlackElo/EloW/EloB
+      // dispatch cases). See 2CBH_FORMAT_DESIGN.md.
+      unsigned whiteElo = readLE16(cbh + (256u + k) * recordSize + 0x60);
+      unsigned blackElo = readLE16(cbh + (256u + k) * recordSize + 0x70);
       ::fprintf(out,
                 "[Event \"?\"]\n"
                 "[Site \"?\"]\n"
@@ -504,6 +510,10 @@ int main(int argc, char* argv[])
                 dateBuf, wname.c_str(), bname.c_str(), result);
       if (ecoBuf[0])
          ::fprintf(out, "[ECO \"%s\"]\n", ecoBuf);
+      if (db::rating::isValid(whiteElo))
+         ::fprintf(out, "[WhiteElo \"%u\"]\n", whiteElo);
+      if (db::rating::isValid(blackElo))
+         ::fprintf(out, "[BlackElo \"%u\"]\n", blackElo);
       ::fprintf(out, "\n%s%s\n\n", movetext.c_str(), result);
    }
 
