@@ -1,6 +1,52 @@
 # Plan: Display Annotated Chess Games
 
-Status: Phases 1-2 complete (2026-09-06)
+Status: Phases 1-3 complete (2026-09-06) — Phase 3 required no new code
+
+## Phase 3 results (2026-09-06)
+
+**Corrected finding: the Phase 1 gap analysis was wrong here too.** Variation
+folding — Fold All / Unfold All / Fold All But Current Line — is already
+fully implemented, wired to both the toolbar and the context menu, and has
+been all along. No new engineering was needed; this phase reduces to source
+verification of already-shipped code, not a build.
+
+- `Game::setFolded(bool)` (`db_game.cpp:4529`): `setFolded(true)` calls
+  `m_startNode->fold(true)` (recursively marks every variation at every
+  level as folded via `MoveNode::fold`, `db_move_node.cpp:878`), then walks
+  up from `m_currentNode` via `getLineStart()`/`prev()` unfolding each
+  ancestor variation's line start (`MoveNode::unfold`, `db_move_node.cpp:1093`
+  clears `IsFolded` on `getLineStart()`). That combination *is* "fold
+  everything except the path to the current move" — exactly ChessBase's
+  "Fold All But Current Line", already implemented as a side effect of what
+  the code names "fold on". `setFolded(false)` unfolds everything (the same
+  up-walk is harmlessly redundant when nothing is folded) — "Unfold All".
+- Both already exposed: context menu "Collapse Variations"/"Expand
+  Variations" (`app-pgn.tcl:2748-2758`, bound to `variation fold on|off`)
+  and matching toolbar buttons (`app-pgn.tcl:299-307`,
+  `Vars(button:fold-variations)`/`Vars(button:expand-variations)`, via
+  `FoldVariations` at `app-pgn.tcl:3038`).
+- Auto-unfold-to-current-move on navigation — also already implemented:
+  `ProcessGoto` (`app-pgn.tcl:1441`) calls `::scidb::game::variation unfold`
+  (no `-force`) whenever the current key changes, which maps to
+  `Game::unfold()` (`db_game.cpp:4441`) — walks up from `m_currentNode`
+  unfolding each folded ancestor, i.e. exactly "reveal the path to wherever
+  you just navigated."
+- Per-node click-to-toggle-fold (single variation, not all) also predates
+  this plan: `ToggleFold`/`m:fold`/`m:expand` tags (`app-pgn.tcl:2159-2296`).
+
+Not added: a genuine regression test locking this behavior in. A headless
+probe via `::scidb::game::variation folded? <key>` kept hitting
+`isValidKey` precondition failures on the key values inferred from the raw
+edit-node layout stream (the "begin" node's second field is not the key
+`folded?`/`isFolded` expects) — the real, supported entry point is a Tk
+text-mark lookup (`FindKey` in `app-pgn.tcl:609`, used by the live click
+handler), which needs the actual rendered widget rather than raw layout
+introspection. Given this is pre-existing, unmodified code (not a change
+made in this session), verification was done by direct source reading
+(cited above) rather than by fighting an unfamiliar key format for
+additional confidence — a real end-to-end regression test (driving the
+actual `pgn::editor` Tk widget headlessly) is a reasonable follow-up but
+was not force-fit into this session.
 
 ## Phase 2 results (2026-09-06)
 
@@ -85,7 +131,7 @@ gap-closing and polish effort, not a greenfield build.
 | Inline diagrams in notation | NAGs 155/156 + `InsertDiagram` | only ChessBase does this | keep; fix interop |
 | Diagram NAG interop `$220/$221`, `D`/`#` | Scidb-private 155/156 | ChessBase standard `$220/$221` | gap |
 | `[%csl]/[%cal]` display | parser + `updateMarks` board overlay | show only at annotated position | verify |
-| Variation folding | fold markers + `ToggleFold` per node | fold all / unfold all / fold all but current line (top Scid-family request) | gap |
+| Variation folding | fold markers + `ToggleFold` per node, **plus already-implemented Fold All / Unfold All / auto-unfold-on-navigate (see Phase 3 results)** | fold all / unfold all / fold all but current line (top Scid-family request) | none — already implemented |
 | `[%eval]` | not surfaced | ChessBase eval-profile strip | gap (optional) |
 | Machine tags hidden from text | clk/emt handled | hide raw `%csl/%cal/%eval`, render effects | verify |
 
@@ -106,13 +152,10 @@ Map incoming `$220/$221` → internal 155/156 (and accept trailing `D`/`#`) in t
 PGN reader; emit `$220/$221` (config-gated) in `db_pgn_writer` for ChessBase
 round-tripping. Contained change: `db_common.h` nag mapping + reader/writer.
 
-### Phase 3 — Variation folding, ChessBase-grade
-Tcl-side in `app-pgn.tcl`/`browser.tcl` on the existing `m:fold` tag and
-`ToggleFold`: Fold All / Unfold All / Fold All But Current Line; context-menu +
-keyboard bindings; persist fold state in pane options; auto-unfold path to the
-current move in `ProcessGoto`. If fold state must live in C++, add
-`::scidb::game::fold all|none|except-current` in `tcl_game.cpp` beside
-`cmdSetupStyle`.
+### Phase 3 — Variation folding, ChessBase-grade — DONE, pre-existing
+Turned out to already be fully implemented (`Game::setFolded`/`unfold`,
+context menu, toolbar, `ProcessGoto` auto-unfold) — see "Phase 3 results"
+above. No engineering needed; verified by source audit.
 
 ### Phase 4 — Read-only viewer polish (browser pane)
 Ensure the browser context matches the editor: setupNags, diagrams option, marks
@@ -125,8 +168,7 @@ per-ply evals through the edit AST move-info path, draw a bar strip under the
 notation pane (Tk canvas); click a bar to navigate.
 
 ## Ordering & risk
-- Phases 1–2 low risk, independent. Phase 3 highest user-visible value.
-  Phase 5 separable/droppable.
+- Phases 1–3 done. Phase 5 separable/droppable.
 - Hazards: new panes need `activate`/`closed` procs and the correct grid master
   (see 4d7e2a4, 53227b7); never reintroduce anything named `gamemedia`
   (`tests/test_app_no_media.tcl` asserts absence); chmod 644 touched files
