@@ -156,3 +156,55 @@ real chess history; `verify_cbh_write` round-trip passed; app suite 31/31.
 - ECO/nation/category/tournament-type/medals fields are decoded but not
   rendered in the comment text (kept the change minimal); available in the
   header if a future pass wants richer output.
+
+### Second attempt and revert (2026-09-06, later same day)
+
+Tried the fix implied by the first attempt's own diagnosis: instead of a
+synthetic `[00 00 00 00] + blob` prefix (which the first attempt used and
+which shifts every real byte by 4), feed the raw blob directly into a
+nested `GameDecoder` with an **empty** annotation stream (avoids the
+`m_moveNo` constructor read touching the shared outer `.cba` stream) and
+let `startDecoding()` consume the blob's own leading bytes as the real
+`uint32` flags word, exactly as it does for a standalone `.cbg` record.
+
+This is a real improvement over the first attempt — using
+`GameDecoder::doDecoding(uint16_t* moves, unsigned length, Board&
+startBoard)` (the same flat, annotation-free API `Line::printMove` uses in
+production) and replaying with `Board::makeMove(uint16_t)` — but it is
+**not sufficient**: on the `cbm168`/`CBM168.cbh` fixture it decoded cleanly
+for a while, then hit a hard `M_ASSERT(from == to)` in
+`Board::makeMove(Square, Square, ...)` (`db_board.cpp:6875`) — a board/move
+desync partway through a real quotation blob, not a graceful decode
+failure. `M_ASSERT` in this build aborts rather than throwing, so this is
+**worse** than the first attempt's silently-wrong-but-stable output: it can
+crash the app on real annotation data. Reverted immediately; the working
+tree is back to the header-only `decodeQuotation()` from the commit above
+(no move decoding attempted).
+
+What this rules out: the blob is not simply "no header at all, moves start
+at byte 0 with a fresh cipher" (first attempt's assumption) NOR simply "a
+literal standalone `.cbg`-style record with its own leading flags word and
+nothing else special" (this attempt's assumption) — at least not
+uniformly across all quotation records. Something about the ongoing
+board/cipher state desyncs partway through, which could mean: the flags
+word *is* there but the move encoding beyond it still depends on outer
+per-game cipher continuation state (contradicting the "reset to fresh
+start" hypothesis noted above, which was inferred only from static leading
+bytes, not verified move-by-move); or castling-rights/en-passant state
+needs to be seeded from the citing game's actual position at the point of
+citation rather than a bare standard start; or the blob has a still-
+different framing entirely (e.g. a length-prefixed sub-record ChessBase's
+own quotation renderer parses differently from a bare `.cbg` game).
+
+Next attempt should not guess a third framing blindly. Recommended
+approach: use Ghidra to trace CBase26.exe's own quotation-rendering code
+path (a PyGhidra project "CBase26" already exists at `~/ghidra_projects`,
+per the RE tooling notes) to find the actual function that decodes this
+blob and read its framing directly, rather than continuing to infer it
+from the `.cbg` format's known shape. Any future attempt MUST validate
+move-by-move against the known Caruana–Carlsen Berlin Defence opening
+(record 11: `1.e4 e5 2.Nf3 Nc6 3.Bb5 ...`) before trusting output past the
+first move or two, and should add a legality/board-consistency check
+per decoded move (not just catch `mstl::exception`, since `M_ASSERT`
+violations in this build do not throw) so a desync fails safe instead of
+crashing.
