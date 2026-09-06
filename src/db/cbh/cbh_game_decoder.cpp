@@ -764,6 +764,169 @@ GameDecoder::decodeTraining(MoveNode* node, unsigned length)
 }
 
 
+// Annotation type 0x13: game quotation (a reference to a different,
+// historical game cited by the annotator). Header: u16 BE total length
+// (== the annotation length), u16 BE name count (always 2 observed),
+// white name (u16 BE lang + u8 len + latin1 bytes), black name (u8 lang +
+// u8 len + latin1 bytes), u8 flag + u16 BE white Elo + u16 BE black Elo +
+// u16 BE raw ECO, event name (u8 len + latin1 bytes), site name (u8 lang +
+// u8 len + latin1 bytes), u16 BE pad + 3-byte BE packed date
+// (year = v>>9, month = (v>>5)&0xf, day = v&0x1f - same packing as the
+// classic .cbh index date field), u8 time mode, u8 tournament type,
+// u16 BE nation + u16 BE category + u16 BE total rounds, u8 subround,
+// u8 round, u8 result (0=0-1, 1=1/2-1/2, 2=1-0, 3=*), u16 BE medals, then
+// the quoted game's own move stream (same per-ply cipher as regular .cbg
+// data, restarted fresh - not decoded here).
+// Rendered as a readable text comment; the embedded moves are not
+// currently replayed (see doc/re/cba-quotation-format.md).
+void
+GameDecoder::decodeQuotation(MoveNode* node, unsigned length)
+{
+	unsigned const start = m_aStrm.remaining();
+
+	if (length < 2 || length > start)
+	{
+		m_aStrm.skip(length);
+		return;
+	}
+
+	bool ok = true;
+
+	auto need = [&](unsigned n) -> bool { return ok = ok && (m_aStrm.remaining() >= n); };
+
+	mstl::string white, black, event, site;
+	unsigned round = 0, result = 4;
+	unsigned year = 0, month = 0, day = 0;
+
+	if (need(2)) m_aStrm.uint16();			// total length (redundant)
+	if (need(2)) m_aStrm.uint16();			// name count (always 2)
+
+	if (need(2)) m_aStrm.uint16();			// white name language (2 bytes)
+	if (need(1))
+	{
+		unsigned len = m_aStrm.get();
+		if (need(len))
+		{
+			white.assign(reinterpret_cast<char const*>(m_aStrm.data()), len);
+			m_codec.toUtf8(white);
+			if (!sys::utf8::validate(white))
+				m_codec.forceValidUtf8(white);
+			m_aStrm.skip(len);
+		}
+	}
+
+	if (need(1)) m_aStrm.get();				// black name language (1 byte)
+	if (need(1))
+	{
+		unsigned len = m_aStrm.get();
+		if (need(len))
+		{
+			black.assign(reinterpret_cast<char const*>(m_aStrm.data()), len);
+			m_codec.toUtf8(black);
+			if (!sys::utf8::validate(black))
+				m_codec.forceValidUtf8(black);
+			m_aStrm.skip(len);
+		}
+	}
+
+	if (need(7)) { m_aStrm.get(); m_aStrm.uint16(); m_aStrm.uint16(); m_aStrm.uint16(); }	// flag, elo x2, eco
+
+	if (need(1))
+	{
+		unsigned len = m_aStrm.get();
+		if (need(len))
+		{
+			event.assign(reinterpret_cast<char const*>(m_aStrm.data()), len);
+			m_codec.toUtf8(event);
+			if (!sys::utf8::validate(event))
+				m_codec.forceValidUtf8(event);
+			m_aStrm.skip(len);
+		}
+	}
+
+	if (need(1)) m_aStrm.get();				// site language
+	if (need(1))
+	{
+		unsigned len = m_aStrm.get();
+		if (need(len))
+		{
+			site.assign(reinterpret_cast<char const*>(m_aStrm.data()), len);
+			m_codec.toUtf8(site);
+			if (!sys::utf8::validate(site))
+				m_codec.forceValidUtf8(site);
+			m_aStrm.skip(len);
+		}
+	}
+
+	if (need(2)) m_aStrm.uint16();			// pad
+
+	if (need(3))
+	{
+		unsigned v = (unsigned(m_aStrm.get()) << 16) | (unsigned(m_aStrm.get()) << 8) | m_aStrm.get();
+		year = v >> 9;
+		month = (v >> 5) & 0xf;
+		day = v & 0x1f;
+	}
+
+	if (need(2)) { m_aStrm.get(); m_aStrm.get(); }	// time mode, tournament type
+	if (need(6)) { m_aStrm.uint16(); m_aStrm.uint16(); m_aStrm.uint16(); }	// nation, category, total rounds
+	if (need(1)) m_aStrm.get();				// subround
+	if (need(1)) round = m_aStrm.get();
+	if (need(1)) result = m_aStrm.get();
+	if (need(2)) m_aStrm.uint16();			// medals
+
+	unsigned consumed = start - m_aStrm.remaining();
+
+	if (!ok || consumed > length || white.empty() || black.empty())
+	{
+		m_aStrm.skip(length - mstl::min(consumed, length));
+		return;
+	}
+
+	m_aStrm.skip(length - consumed);	// the quoted game's own move stream
+
+	static char const* ResultText[] = { "0-1", "1/2-1/2", "1-0", "*" };
+
+	mstl::string text("Quoted game: ", 13);
+	text.append(white);
+	text.append(" - ", 3);
+	text.append(black);
+
+	if (!event.empty())
+	{
+		text.append(", ", 2);
+		text.append(event);
+	}
+	if (!site.empty())
+	{
+		text.append(", ", 2);
+		text.append(site);
+	}
+	if (year)
+	{
+		char buf[16];
+		if (month && day)
+			::snprintf(buf, sizeof(buf), " (%04u.%02u.%02u)", year, month, day);
+		else
+			::snprintf(buf, sizeof(buf), " (%04u)", year);
+		text.append(buf);
+	}
+	if (round)
+	{
+		char buf[16];
+		::snprintf(buf, sizeof(buf), ", round %u", round);
+		text.append(buf);
+	}
+	if (result < 4)
+	{
+		text.append(", ", 2);
+		text.append(ResultText[result]);
+	}
+
+	appendTextAnnotation(node, text);
+}
+
+
 void
 GameDecoder::getAnnotation(MoveNode* node, int moveNo)
 {
@@ -834,6 +997,10 @@ GameDecoder::getAnnotation(MoveNode* node, int moveNo)
 
 			case 0x09:	// training question (quiz)
 				decodeTraining(node, length);
+				break;
+
+			case 0x13:	// game quotation
+				decodeQuotation(node, length);
 				break;
 
 			default:

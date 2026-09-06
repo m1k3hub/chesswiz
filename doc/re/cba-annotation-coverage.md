@@ -22,7 +22,7 @@ length is LE — it is big-endian.) Game-wide records precede move records.
 | 0x18 | critical position    |    13 | **decoded 2026-09-06** → text comment |
 | 0x24 | time control         |     6 | **decoded 2026-09-06** → TimeControl tag |
 | 0x09 | training/quiz        |   344 | **decoded 2026-09-06** → text comment (see `cba-training-annotation-format.md`) |
-| 0x13 | game quotation       |    17 | skipped — embedded quoted-game header+text; RE target |
+| 0x13 | game quotation       |    17 | **decoded 2026-09-06** → text comment (header only; see `cba-quotation-format.md`) |
 | 0x22 | medal                |    48 | skipped — duplicates the medal bits already read from the .cbh index |
 | 0x23 | variation color      |     3 | skipped — payload `00 B G R`; no scidb model equivalent |
 | 0x14 | pawn structure       |     3 | skipped — 1-byte payload (`03` observed) |
@@ -35,12 +35,16 @@ Payload validations against real data:
   Sinquefield decodes to `40/7200:3600+30` — the tournament's actual control.
 - 0x18 = 1 byte, 1/2/3 = opening/middlegame/endgame.
 
-## RE targets with fixture data
+## Remaining gaps
 
-- **0x13 quotation** (17 samples): begins with a mini header (two
-  length-prefixed player names, date/site fields) then game text.
 - Correspondence types 0x19/0x61: absent from the fixture; needs a corr
   database saved by ChessBase.
+- 0x13's embedded quoted-game move blob is not decoded to SAN (header only;
+  see `cba-quotation-format.md` open items).
+- 0x22/0x23/0x14/0x15 (medal, variation color, pawn structure, piece path):
+  low value — medal duplicates data already read from the `.cbh` index
+  flags; the rest are too sparse in the fixture (2-3 samples each) to
+  RE confidently.
 
 ## Decoder changes (2026-09-06)
 

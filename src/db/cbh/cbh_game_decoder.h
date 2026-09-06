@@ -90,6 +90,7 @@ private:
 	void decodeCriticalPosition(MoveNode* node, unsigned length);
 	void decodeTimeControl(unsigned length);
 	void decodeTraining(MoveNode* node, unsigned length);
+	void decodeQuotation(MoveNode* node, unsigned length);
 	bool skipStringSet(mstl::string* text);
 	void appendTextAnnotation(MoveNode* node, mstl::string const& text);
 
