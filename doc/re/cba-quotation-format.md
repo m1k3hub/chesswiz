@@ -363,3 +363,81 @@ either the Chess960 decode path (a different table, independent of
 whether the quoted game is actually Chess960) or a third, not-yet-seen
 table/routine dedicated to quotations — either is a concrete, falsifiable
 hypothesis Ghidra can answer directly, rather than more brute forcing.
+
+### Fifth attempt (2026-09-06, later still) — Ghidra: found a 16-table variant dispatch, quotation table still unidentified
+
+Followed the recommended next step: traced `decode_caller`/`permove_decode`/
+`dispatch_CBH` (`FUN_140210bc0`/`FUN_140210e10`/`FUN_14020c080` — the exact
+addresses already named in `cbh_decoder.cpp`'s Chess960 comment as the
+breakpoints used to find `Chess960MoveNumberLookup`) via PyGhidra against
+the existing analyzed `CBase26` project (`~/ghidra_projects/CBase26`).
+
+**Housekeeping note:** the stale reference script at
+`docs/ghidra_2cbh/decompile2cbh_run.py` opens the project with
+`PROJ_DIR="~/ghidra_projects"` — one directory level too shallow (the real
+project root is `~/ghidra_projects/CBase26`, i.e. `ProjectLocator` wants
+`(path=~/ghidra_projects/CBase26, name=CBase26)`). Copying that script's
+constant literally fails with a misleading `FileNotFoundError: Project
+"CBase26" not found`, which looks like project corruption but isn't -
+worth fixing in that script if anyone reuses it as a template.
+
+**Finding: a 16-distinct-table move-decode dispatch, not just
+classical-vs-Chess960.** `decode_caller`'s only real (non-data) xref is
+from `FUN_14020f170`, which switches on `*param_1 & 0x3f` (a 6-bit
+variant/flags field read from the decoder's state object) and, for each
+of 22 case values (0-0x15 plus 0x3f), stores a *different* 256-byte table
+pointer into the object before calling `decode_caller` - e.g. case 10
+stores `&DAT_141a799c0`, which is exactly the already-known
+`Chess960MoveNumberLookup` address. Several cases alias the same table
+(12/16, 13/17, 14/18, 15/19/0x3f), giving **16 distinct table addresses**
+in the range `0x141a783c0`-`0x141a7a7c0` (stride `0x200`), plus an
+implicit default (case 0 leaves the object's pre-existing table pointer
+untouched).
+
+Like `Chess960MoveNumberLookup`, these tables are runtime-built - all-zero
+in the static `.exe` image, confirmed by reading them directly from the
+Ghidra-analyzed program. Dumped all 16 from a **live** CBase26.exe process
+under Wine by extending `scripts/dump_cbase26_tables.py`'s existing
+ptrace technique to the range `0x141a783c0`-`0x141a7a9c0` (9,728 bytes).
+Every one of the 16 is a valid permutation of 0-255 (i.e. all are
+structurally plausible `MoveNumberLookup`-style tables, not padding/
+unrelated data). **Case 0's table is byte-for-byte identical to scidb's
+own classical `MoveNumberLookup`** (first 16 bytes: `a2 95 43 f5 c1 3d 4a
+6c 53 83 cc 7c ff ae 68 ad`, matching exactly) - strong corroboration both
+that the dispatch-table reading is correct and that scidb's classical
+table is the right one for case 0.
+
+**This does not close out the quotation blob.** The previous fork already
+disproved "classical table (case 0), any of 256 seeds" via real
+move-legality checking. This pass reveals **15 other tables that have
+never been tried** (cases 1-9, 11-21 - everything except case 0/classical
+and case 10/Chess960), any of which is a live, concrete candidate for
+whatever table a quoted-game blob actually uses. A cheap proxy filter
+(reject `lc >= 0xec` for the first several bytes, `count` seeds 0-19) was
+tried as a fast triage across all 16 tables but is **far too weak to be
+useful** - a spurious 16-byte "clean" run over random table/seed
+combinations occurs by chance often enough (dozens of hits across the
+sweep) that it cannot discriminate a real decode from noise. Testing these
+15 tables properly needs the same rigor as the previous fork's harness:
+the real `Decoder::decodeMove()`/`dispatchMove()` and actual board
+legality checking (via `mstl::exception`-guarded per-move calls, never
+raw `Board::makeMove`/`prepareForPrint` without per-call isolation - see
+the safety note above), which requires wiring a C++ test harness, not
+achievable in this pass's remaining time.
+
+**Next concrete step:** extend the previous fork's validated brute-force
+harness (real `Decoder::decodeMove()`, per-move exception isolation,
+positive-control-verified) to try **all 16 dispatch tables × 256 seeds**
+against the 16 real quotation blobs, not just the classical table. The
+table byte arrays themselves are cheap to re-obtain (live ptrace dump per
+above, ~10s once CBase26 is running under Wine) or can be hardcoded from
+this session's dump if reproducibility is a concern. If none of the 16
+tables + any seed produces a clean decode either, that's a much stronger
+signal the blob isn't a `MoveNumberLookup`-family scheme at all (i.e. a
+genuinely different formula/framing, not just a different table) and the
+next step would shift to finding the *quotation-specific* caller of
+whichever table is eventually implicated, or a completely distinct
+decode function elsewhere in CBase26 not yet located.
+
+No code changes in this pass; all Ghidra/dump scripts were scratch work
+under `/tmp`, not committed. Working tree unchanged except this doc entry.
