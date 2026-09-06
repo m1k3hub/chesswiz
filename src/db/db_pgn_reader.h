@@ -31,6 +31,8 @@
 #include "db_annotation.h"
 #include "db_tag_set.h"
 #include "db_mark_set.h"
+#include "db_move_info_set.h"
+#include "db_engine_list.h"
 #include "db_move.h"
 #include "db_move_list.h"
 #include "db_comment.h"
@@ -270,6 +272,8 @@ private:
 	Comments					m_comments;
 	Warnings					m_warnings;
 	MarkSet					m_marks;
+	MoveInfoSet				m_moveInfo;
+	EngineList				m_engineList;
 	country::Code			m_eventCountry;
 	Annotation				m_annotation;
 	nag::ID					m_prefixAnnotation;

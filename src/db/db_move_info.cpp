@@ -375,21 +375,26 @@ MoveInfo::parseEvaluation(char const* s)
 
 	s = ::skipSpaces(s);
 
+	m_analysis.m_depth = 0;
+
 	if (::isdigit(*s))
 	{
-		m_analysis.m_depth = ::strtoul(s, &e, 10);
+		// Try an optional "depth:" prefix (e.g. "12:+0.61"). A leading
+		// digit run is ambiguous with a plain, depth-less value that
+		// happens to start with a digit (e.g. "0.35"), so only commit to
+		// the depth-prefix reading when a ':' actually follows it;
+		// otherwise fall through and reparse from the original position.
+		unsigned depth = ::strtoul(s, &e, 10);
 
-		if (*e != ':')
-			return 0;
-
-		s = e + 1;
-	}
-	else
-	{
-		m_analysis.m_depth = 0;
+		if (*e == ':')
+		{
+			m_analysis.m_depth = depth;
+			s = e + 1;
+		}
 	}
 
 	char sign = *s;
+	bool hasSignChar = true;
 
 	switch (sign)
 	{
@@ -397,10 +402,20 @@ MoveInfo::parseEvaluation(char const* s)
 		case '-':	m_analysis.m_sign = 1; break;
 		case 'M':	m_analysis.m_sign = 0; break;
 		case 'm':	m_analysis.m_sign = 1; break;
-		default:		return 0;
+
+		default:
+			// A missing sign is a common real-world convention for a
+			// positive evaluation (e.g. lichess/python-chess [%eval N]),
+			// unlike the "always signed" values this parser originally
+			// expected; only reject if it isn't even a plausible number.
+			if (!::isdigit(sign))
+				return 0;
+			m_analysis.m_sign = 0;
+			hasSignChar = false;
+			break;
 	}
 
-	unsigned pawns = ::strtoul(++s, &e, 10);
+	unsigned pawns = ::strtoul(hasSignChar ? ++s : s, &e, 10);
 
 	if (!::isalpha(sign))
 	{

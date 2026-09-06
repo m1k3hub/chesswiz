@@ -2336,6 +2336,33 @@ Game::countMoveInfo(unsigned moveInfoTypes) const
 }
 
 
+void
+Game::evalProfile(mstl::vector<unsigned>& plies, mstl::vector<float>& values) const
+{
+	unsigned ply = 0;
+
+	for (MoveNode const* node = m_startNode->next(); node->isBeforeLineEnd(); node = node->next())
+	{
+		++ply;
+
+		if (node->hasMoveInfo())
+		{
+			MoveInfoSet const& set = node->moveInfo();
+
+			for (unsigned i = 0; i < set.count(); ++i)
+			{
+				if (set[i].hasEvaluationInfo())
+				{
+					plies.push_back(ply);
+					values.push_back(set[i].value());
+					break;
+				}
+			}
+		}
+	}
+}
+
+
 unsigned
 Game::countMarks() const
 {

@@ -18,7 +18,7 @@ Match pattern: *
 ==============================================
   App Test Results Summary
 ==============================================
-Total Passed: 32
+Total Passed: 34
 Total Failed: 0
 Total Skipped: 0
 Duration: 1s

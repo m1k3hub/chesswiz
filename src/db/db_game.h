@@ -355,6 +355,10 @@ public:
 	unsigned countMoveInfo() const override;
 	/// Counts the number of move information for specified types
 	unsigned countMoveInfo(unsigned moveInfoTypes) const;
+	/// Collect the [%eval] value at every mainline ply that has one (1-based
+	/// ply numbers, parallel to \p values). Read-only; does not touch or
+	/// disturb the current position.
+	void evalProfile(mstl::vector<unsigned>& plies, mstl::vector<float>& values) const;
 	/// Counts the number of marks
 	unsigned countMarks() const override;
 	/// Counts the number of comments

@@ -128,6 +128,49 @@ tcltest::test annotated-diagram-nag-export-04b {diagram NAG exports as $155 by d
 		[expr {[string first {$220} $chesspad] >= 0}]
 } -result {1 0 0 1}
 
+tcltest::test annotated-eval-parsing-04c {[%eval] extracts into structured, queryable move info with correct sign} -body {
+	variable slot
+	catch { ::scidb::game::new $slot }
+	set pgn {[Event "e"]
+[Site "?"]
+[Date "2026.09.06"]
+[Round "?"]
+[White "A"]
+[Black "B"]
+[Result "1-0"]
+
+1. e4 {[%eval 0.35]} e5 {[%eval -0.20]} 2. Nf3 Nc6 1-0}
+	::scidb::game::import $slot $pgn {} {} -encoding utf-8 -variation 0
+	set profile [::scidb::game::evalProfile $slot]
+	set export [::scidb::game::toPGN original -position $slot -flags 9470975]
+	list $profile \
+		[expr {[string first {[%eval +0.35]} $export] >= 0}] \
+		[expr {[string first {[%eval -0.20]} $export] >= 0}]
+} -result {{{1 0.35} {2 -0.20}} 1 1}
+
+tcltest::test annotated-eval-comment-stripped-04d {[%eval] tag does not leak into displayed comment text} -body {
+	variable slot
+	catch { ::scidb::game::new $slot }
+	set pgn {[Event "e"]
+[Site "?"]
+[Date "2026.09.06"]
+[Round "?"]
+[White "A"]
+[Black "B"]
+[Result "1-0"]
+
+1. e4 {A real comment. [%eval 0.35]} e5 1-0}
+	variable layout {}
+	::scidb::game::import $slot $pgn {} {} -encoding utf-8 -variation 0
+	::scidb::game::subscribe pgn $slot [namespace current]::Capture
+	::scidb::game::layout $slot
+	::scidb::game::unsubscribe pgn $slot [namespace current]::Capture
+	set texts {}
+	foreach c [collect comment] { lappend texts [lindex $c 1] }
+	list [expr {[lsearch -glob $texts {*A real comment*}] >= 0}] \
+		[expr {[lsearch -glob $texts {*%eval*}] >= 0}]
+} -result {1 0}
+
 tcltest::test annotated-marks-05 {csl/cal command tags become board marks} -body {
 	variable slot
 	loadGame chessbase

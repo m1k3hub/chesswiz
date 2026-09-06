@@ -361,14 +361,14 @@ MoveInfoSet::extractFromComment(EngineList& engineList, mstl::string& comment)
 		}
 	}
 
-	bool rc = size < m_row.size();
+	bool const extractedBracketTag = size < m_row.size();
+	bool rc = false;
 
-	if (rc)
+	if (extractedBracketTag)
 	{
 		result.append(s, comment.end());
 		comment.swap(result);
 		comment.trim();
-		rc = false;
 	}
 
 	char const* m = ::skipMove(comment);
@@ -535,7 +535,7 @@ MoveInfoSet::extractFromComment(EngineList& engineList, mstl::string& comment)
 
 	M_ASSERT(!isEmpty() || result.empty());
 
-	return rc;
+	return rc || extractedBracketTag;
 }
 
 

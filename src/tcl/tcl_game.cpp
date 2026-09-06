@@ -89,6 +89,7 @@ static char const* CmdCurrent			= "::scidb::game::current";
 static char const* CmdDump				= "::scidb::game::dump";
 static char const* CmdDuplicate		= "::scidb::game::duplicate";
 static char const* CmdEcoTable		= "::scidb::game::ecotable";
+static char const* CmdEvalProfile	= "::scidb::game::evalProfile";
 static char const* CmdExchange		= "::scidb::game::exchange";
 static char const* CmdExecute			= "::scidb::game::execute";
 static char const* CmdExport			= "::scidb::game::export";
@@ -1575,6 +1576,37 @@ cmdEcoTable(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		setResult(result);
 	}
 
+	return TCL_OK;
+}
+
+
+static int
+cmdEvalProfile(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	unsigned position(Application::InvalidPosition);
+
+	if (objc == 2)
+		position = unsignedFromObj(objc, objv, 1);
+	else if (objc != 1)
+		return error(CmdEvalProfile, nullptr, nullptr, "wrong # args: should be \"%s ?<position>?\"", CmdEvalProfile);
+
+	mstl::vector<unsigned>	plies;
+	mstl::vector<float>		values;
+
+	Scidb->game(position).evalProfile(plies, values);
+
+	Tcl_Obj* result = newObj();
+
+	for (unsigned i = 0; i < plies.size(); ++i)
+	{
+		char buf[32];
+		::snprintf(buf, sizeof(buf), "%.2f", double(values[i]));
+
+		Tcl_Obj* objs[2] = { newObj(int(plies[i])), newObj(buf) };
+		addElement(result, objs);
+	}
+
+	setResult(result);
 	return TCL_OK;
 }
 
@@ -4603,6 +4635,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdDump,				cmdDump);
 	createCommand(ti, CmdDuplicate,		cmdDuplicate);
 	createCommand(ti, CmdEcoTable,		cmdEcoTable);
+	createCommand(ti, CmdEvalProfile,	cmdEvalProfile);
 	createCommand(ti, CmdExchange,		cmdExchange);
 	createCommand(ti, CmdExecute,			cmdExecute);
 	createCommand(ti, CmdExport,			cmdExport);

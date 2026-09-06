@@ -117,7 +117,8 @@ float
 MoveInfo::value() const
 {
 	M_REQUIRE(hasEvaluationInfo());
-	return float(m_analysis.m_pawns) + float(m_analysis.m_centipawns)/100.0f;
+	float magnitude = float(m_analysis.m_pawns) + float(m_analysis.m_centipawns)/100.0f;
+	return m_analysis.m_sign ? -magnitude : magnitude;
 }
 
 

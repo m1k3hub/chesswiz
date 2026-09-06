@@ -771,6 +771,7 @@ PgnReader::process(Progress& progress)
 				m_parsingFirstHdr = false;
 				m_comments.clear();
 				m_marks.clear();
+				m_moveInfo.clear();
 				m_variantValue.clear();
 				m_annotation.clear();
 				m_timeMode = time::Unknown;
@@ -870,6 +871,7 @@ PgnReader::process(Progress& progress)
 									m_comments.clear();
 									m_annotation.clear();
 									m_marks.clear();
+									m_moveInfo.clear();
 								}
 								else if (!m_comments.empty())
 								{
@@ -1680,7 +1682,7 @@ PgnReader::putMove(bool lastMove)
 {
 	if (__builtin_expect(m_move, 1))
 	{
-		M_ASSERT(m_hasNote == (!m_comments.empty() || !m_marks.isEmpty() || !m_annotation.isEmpty()));
+		M_ASSERT(m_hasNote == (!m_comments.empty() || !m_marks.isEmpty() || !m_annotation.isEmpty() || !m_moveInfo.isEmpty()));
 
 		if (m_hasNote)
 		{
@@ -1748,6 +1750,9 @@ PgnReader::putMove(bool lastMove)
 				m_comments.clear();
 			}
 
+			if (!m_moveInfo.isEmpty())
+				consumer().putMoveInfo(m_moveInfo);
+			m_moveInfo.clear();
 			m_marks.clear();
 			m_annotation.set(m_prefixAnnotation);
 			m_prefixAnnotation = nag::Null;
@@ -1785,6 +1790,7 @@ PgnReader::putMove(bool lastMove)
 			}
 
 			m_marks.clear();
+			m_moveInfo.clear();
 			m_annotation.clear();
 			m_hasNote = !m_comments.empty();
 			m_atStart = false;
@@ -3707,6 +3713,9 @@ PgnReader::parseComment(Token prevToken, int c)
 	bool isEmpty = m_content.empty();
 
 	if (m_marks.extractFromComment(m_content))
+		m_hasNote = true;
+
+	if (m_moveInfo.extractFromComment(m_engineList, m_content))
 		m_hasNote = true;
 
 	if (m_modification == Normalize)
