@@ -1461,7 +1461,23 @@ proc TableFill {path args} {
 						}
 					}
 
-					white - black - event - site {
+					white {
+						if {[string length $item] == 0} {
+							lappend text $::mc::GuidingText
+						} else {
+							lappend text $item
+						}
+					}
+
+					black {
+						if {[string length $item] == 0} {
+							lappend text ""
+						} else {
+							lappend text $item
+						}
+					}
+
+					event - site {
 						if {[string length $item] == 0} {
 							lappend text "-"
 						} else {

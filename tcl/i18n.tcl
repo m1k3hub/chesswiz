@@ -150,6 +150,8 @@ set VariantName(Shuffle)			"Shuffle Chess"
 set NotAvailableSign "\u2298"
 #set NotAvailableSign "\u2370" ;# not available on some systems
 
+set GuidingText "(Guiding text)"
+
 array set EcoTrans		{}
 set EcoMatch				{}
 set Language				English

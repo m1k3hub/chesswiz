@@ -193,16 +193,16 @@ proc build {top width height} {
 		bind $pgn <Button-3> [namespace code [list PopupMenu $edit $i]]
 		bind $pgn <Double-3> {#} ;# catch double clicks
 		bind $pgn <Leave> [namespace code [list HidePosition $pgn]]
-		$panes add $edit.f$i
-		set Vars(pgn:$i) $pgn
-		set Vars(frame:$i) $edit.f$i
-		set Vars(see:$i) 1
-
 		set evalStrip [tk::canvas $edit.f$i.evalstrip -height 22 -highlightthickness 0 -background white]
 		grid $evalStrip -row 2 -column 1 -columnspan 2 -sticky ew
 		bind $evalStrip <Configure> [namespace code [list DrawEvalStrip $i]]
 		bind $evalStrip <ButtonPress-1> [namespace code [list EvalStripClick $i %x]]
 		set Vars(evalstrip:$i) $evalStrip
+
+		$panes add $edit.f$i
+		set Vars(pgn:$i) $pgn
+		set Vars(frame:$i) $edit.f$i
+		set Vars(see:$i) 1
 	}
 
 	set Vars(main) $main
