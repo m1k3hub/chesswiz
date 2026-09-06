@@ -1,6 +1,47 @@
 # Plan: Display Annotated Chess Games
 
-Status: Phases 1-4 complete (2026-09-06) — Phases 3-4 mostly corrected premises
+Status: Phases 1-4 complete, Phase 5 implemented but not visually verified (2026-09-06)
+
+## Phase 5 results (2026-09-06)
+
+The audit (see below) found the original premise wrong: `[%eval]` was
+**not** actually reaching the display layer — a prior text-round-trip test
+only proved the comment string survived verbatim, not that it was parsed
+into anything queryable. Building the real query function surfaced that,
+plus three independent, previously-unexercised parsing bugs (full detail
+and fixes in commit `76fa406`): `MoveInfoSet::extractFromComment` silently
+discarded successful bracket-tag extractions in a specific case;
+`MoveInfo::parseEvaluation` rejected the common sign-omitted-for-positive
+convention and misparsed depth-less values as failed depth-prefixes;
+`MoveInfo::value()` dropped the sign entirely. All three are now fixed and
+covered by regression tests, independent of the widget itself.
+
+**The widget** (`DrawEvalStrip`/`EvalStripClick`, `tcl/app-pgn.tcl`): a Tk
+canvas per editor pane slot (`$edit.f$i.evalstrip`), redrawn on full
+layout reload (`DoLayout`'s `start` case, editor context only — matching
+the Phase 4 finding that browser stays intentionally minimal), reading
+`::scidb::game::evalProfile`, drawing a centered bar chart clipped to
+±3.0 pawns, blue for White-favoring / red for Black-favoring. Click maps
+x-position back to a ply and calls `::scidb::game::go <pos> ply <n-1>`
+(offset verified empirically: `go ply 0` lands on the first move, matching
+`evalProfile`'s 1-based ply numbering).
+
+**What's verified**: `evalProfile()` itself (unit-level, multiple probes,
+signs and values all correct); the `go ply` click-target offset math
+(empirical probe); Tcl syntax (startup smoke test + full app suite, which
+exercises `build()`'s canvas-creation code since it runs at normal app
+init); no regressions (34/34 app tests, `verify_cbh_write` clean).
+
+**What's not verified**: the actual on-screen rendering and click behavior
+of the eval-strip canvas. `DoLayout`'s editor-context subscription (and
+therefore `DrawEvalStrip`) only activates once a real editor pane is open
+via the app's normal database/game-opening UI flow — a headless probe
+calling `::application::pgn::build` directly hit unrelated scratch-slot
+initialization collisions specific to standalone invocation outside that
+normal flow, and reproducing the full flow (open a database through the
+real menu-driven UI) was judged disproportionate for this session. This
+is an honest gap, not a claim of completion — the next step for whoever
+picks this up is to open a real annotated game in the app and look at it.
 
 ## Phase 4 results (2026-09-06)
 
@@ -207,17 +248,17 @@ bug (setupStyle/setupNags never applied at pane-open time); did not add
 diagrams/marks/annotation display, since that would change the widget's
 intentional character rather than close a gap.
 
-### Phase 5 (optional) — Evaluation profile
-Parse `[%eval]` in `db_move_info_set.cpp` (alongside `%clk/%emt`), surface
-per-ply evals through the edit AST move-info path, draw a bar strip under the
-notation pane (Tk canvas); click a bar to navigate.
+### Phase 5 (optional) — Evaluation profile — DONE, pending visual verification
+Implemented; see "Phase 5 results" above. Remaining follow-up: confirm the
+canvas actually renders and click-to-navigate works in the real running app.
 
 ## Ordering & risk
-- Phases 1–4 done. Phase 5 separable/droppable, and optional — evaluate
-  whether it's still wanted before starting, given how much of the
-  original gap analysis (Phases 3 and 4, and part of Phase 2) turned out
-  to already exist or to rest on a false premise once actually checked
-  against the code.
+- Phases 1–5 done. Phase 5's widget still needs a real on-screen look
+  before calling it finished. Worth noting for future planning: a lot of
+  the original gap analysis (Phases 3 and 4, and part of Phase 2 and 5)
+  turned out to already exist or rest on a false premise once actually
+  checked against the code — verify before scoping, not just before
+  building.
 - Hazards: new panes need `activate`/`closed` procs and the correct grid master
   (see 4d7e2a4, 53227b7); never reintroduce anything named `gamemedia`
   (`tests/test_app_no_media.tcl` asserts absence); chmod 644 touched files

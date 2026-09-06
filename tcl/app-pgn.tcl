@@ -197,6 +197,12 @@ proc build {top width height} {
 		set Vars(pgn:$i) $pgn
 		set Vars(frame:$i) $edit.f$i
 		set Vars(see:$i) 1
+
+		set evalStrip [tk::canvas $edit.f$i.evalstrip -height 22 -highlightthickness 0 -background white]
+		grid $evalStrip -row 2 -column 1 -columnspan 2 -sticky ew
+		bind $evalStrip <Configure> [namespace code [list DrawEvalStrip $i]]
+		bind $evalStrip <ButtonPress-1> [namespace code [list EvalStripClick $i %x]]
+		set Vars(evalstrip:$i) $evalStrip
 	}
 
 	set Vars(main) $main
@@ -1227,7 +1233,7 @@ proc DoLayout {position content {context editor} {w {}}} {
 		if {$trace} { puts $node }
 
 		switch [lindex $node 0] {
-			start     { # no action }
+			start     { if {$context eq "editor"} { DrawEvalStrip $position } }
 			languages { UpdateLanguages $position [lindex $node 1] }
 			header    { UpdateHeader $context $position $w [lindex $node 1] }
 
@@ -3042,6 +3048,91 @@ proc FoldVariations {flag} {
 	if {$position == -1} { return }
 	::scidb::game::variation fold $flag
 	See $position
+}
+
+
+proc DrawEvalStrip {position} {
+	variable Vars
+
+	if {![info exists Vars(evalstrip:$position)]} { return }
+	set w $Vars(evalstrip:$position)
+	if {![winfo exists $w]} { return }
+
+	$w delete all
+
+	set width [winfo width $w]
+	set height [winfo height $w]
+	if {$width <= 1 || $height <= 1} { return }
+
+	set profile {}
+	catch { set profile [::scidb::game::evalProfile $position] }
+
+	set mid [expr {$height / 2.0}]
+	$w create line 0 $mid $width $mid -fill gray70
+
+	if {[llength $profile] == 0} { return }
+
+	set maxPly 0
+	foreach pair $profile {
+		set ply [lindex $pair 0]
+		if {$ply > $maxPly} { set maxPly $ply }
+	}
+	if {$maxPly <= 0} { return }
+
+	set maxEval 3.0
+	set barWidth [expr {double($width) / $maxPly}]
+
+	foreach pair $profile {
+		lassign $pair ply value
+
+		if {$value > $maxEval} { set value $maxEval }
+		if {$value < -$maxEval} { set value -$maxEval }
+
+		set barHeight [expr {($value / $maxEval) * $mid}]
+		set x0 [expr {($ply - 1) * $barWidth}]
+		set x1 [expr {$ply * $barWidth - 1}]
+
+		if {$barHeight >= 0} {
+			set y0 [expr {$mid - $barHeight}]
+			set y1 $mid
+			set color #4a90d9
+		} else {
+			set y0 $mid
+			set y1 [expr {$mid - $barHeight}]
+			set color #d9534f
+		}
+
+		$w create rectangle $x0 $y0 $x1 $y1 -fill $color -outline {} -tags [list ply$ply]
+	}
+}
+
+
+proc EvalStripClick {position x} {
+	variable Vars
+
+	if {![info exists Vars(evalstrip:$position)]} { return }
+	set w $Vars(evalstrip:$position)
+
+	set profile {}
+	catch { set profile [::scidb::game::evalProfile $position] }
+	if {[llength $profile] == 0} { return }
+
+	set maxPly 0
+	foreach pair $profile {
+		set ply [lindex $pair 0]
+		if {$ply > $maxPly} { set maxPly $ply }
+	}
+	if {$maxPly <= 0} { return }
+
+	set width [winfo width $w]
+	if {$width <= 0} { return }
+
+	set barWidth [expr {double($width) / $maxPly}]
+	set ply [expr {int($x / $barWidth) + 1}]
+	if {$ply < 1} { set ply 1 }
+	if {$ply > $maxPly} { set ply $maxPly }
+
+	catch { ::scidb::game::go $position ply [expr {$ply - 1}] }
 }
 
 
