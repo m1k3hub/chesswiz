@@ -42,12 +42,19 @@ GUI integration.**
   against PGN twins (§4.1).  Nested `.2cbg` RAV variation walk verified
   81/81 (commit `3a10172`); `.2cba` item-type census: 8,842 items, all
   type 7 so far (commit `319d4e1`).
-- **Elo: STILL OPEN.**  Not a simple byte/u16 field in the index;
-  correlation tooling committed (`scripts/fcorr.py`,
-  `scripts/idverify.py`) but no encoding found yet.  (The Elo solution
-  in CHESSBASE_MEDIA_RE.md / commit `f2cc94f` applies to the
+- **Elo: RESOLVED (2026-09-06, 4th Ghidra pass).** Plain u16 LE at
+  index offset 0x60 (White) / 0x70 (Black) — same storage convention
+  as classic .cbh.  Found by tracing CBase26.exe's PGN-tag dispatch
+  in Ghidra (the data-driven injectivity sweep missed it because many
+  players share the same Elo rating, so injectivity fails).
+  Validated: every Carlsen, Magnus record's rating-by-date matches
+  real FIDE history across a 17-year span (2570 in 2005, 2877 at his
+  2014 peak, 2856-2859 in 2021-2022).  The earlier "not a simple
+  byte/u16 field" negative result was correct about injectivity but
+  wrong about the conclusion: shared values ≠ absent field.
+  (The Elo solution in CHESSBASE_MEDIA_RE.md / commit `f2cc94f` applies to the
   media/checkpoint format, not the .2cbh index.)
-  **2026-09-06 re-run, negative result strengthened.** Re-verified
+  **2026-09-06 re-run, negative result superseded.** Re-verified
   3,023 index records against their PGN twins (full identity check:
   move-sequence match + White/Black player-ID match against the `.2lid`
   namebase), then ran two independent sweeps of the full 192-byte

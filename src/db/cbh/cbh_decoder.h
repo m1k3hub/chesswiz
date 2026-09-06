@@ -50,6 +50,13 @@ public:
 
 	unsigned doDecoding(uint16_t* moves, unsigned length, Board& startBoard, bool useStartBoard);
 
+	/// Decode a headerless embedded move stream: no leading 4-byte
+	/// startDecoding() framing word, fresh cipher state, standard start
+	/// position. Used for the move blob embedded in a .cba annotation
+	/// type 0x13 (game quotation) record, which — unlike a standalone
+	/// .cbg game record — has no such framing.
+	unsigned decodeEmbeddedMoves(uint16_t* moves, unsigned length);
+
 protected:
 
 	enum { Token_Move, Token_Push, Token_Pop, Token_Skip };

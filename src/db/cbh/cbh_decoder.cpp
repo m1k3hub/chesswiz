@@ -866,6 +866,14 @@ Decoder::dispatchMove(unsigned lc, unsigned decodeCount, Move& move, bool skipVa
 
 
 unsigned
+Decoder::decodeEmbeddedMoves(uint16_t* moves, unsigned length)
+{
+	m_position.setup();
+	return decodeMoves(moves, length, nullptr);
+}
+
+
+unsigned
 Decoder::decodeMoves(uint16_t* line, unsigned length, Board* startBoard)
 {
 	unsigned	count	= 0;
