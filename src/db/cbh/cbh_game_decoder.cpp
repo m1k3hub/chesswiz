@@ -592,6 +592,178 @@ GameDecoder::decodeTimeControl(unsigned length)
 }
 
 
+// Read and discard one "string set" as used by annotation type 0x09:
+// u16 LE count, then per entry (u16 LE language/kind, u16 LE byte length,
+// payload). Language/kind 0 = English text, 1 = German (and other codes
+// for further languages), 7 = packed 3-byte (color,from,to) board arrows,
+// 8 = packed 2-byte (color,square) colored squares.
+// If a preferred-language string is found (lang 0 = English, else the
+// first text entry seen), it is appended to *text (nullptr to discard).
+// Returns false if the stream is exhausted mid-set.
+bool
+GameDecoder::skipStringSet(mstl::string* text)
+{
+	if (m_aStrm.remaining() < 2)
+		return false;
+
+	unsigned count = m_aStrm.uint16LE();
+	bool haveText = false;
+
+	for (unsigned i = 0; i < count; ++i)
+	{
+		if (m_aStrm.remaining() < 4)
+			return false;
+
+		unsigned lang = m_aStrm.uint16LE();
+		unsigned len  = m_aStrm.uint16LE();
+
+		if (len > m_aStrm.remaining())
+			return false;
+
+		if (text && !haveText && lang <= 1)
+		{
+			unsigned char const* p = m_aStrm.data();
+			mstl::string s(reinterpret_cast<char const*>(p), len);
+			m_codec.toUtf8(s);
+			if (!sys::utf8::validate(s))
+				m_codec.forceValidUtf8(s);
+			text->append(s);
+			haveText = lang == 0;	// keep looking only if we haven't seen English yet
+		}
+
+		m_aStrm.skip(len);
+	}
+
+	return true;
+}
+
+
+// Annotation type 0x09: interactive training question (quiz).
+// Payload: u16 version(=1), u8 question type (1=move entry, 2=multiple
+// choice), u16 data length, u32 allotted time (seconds), u16 max points,
+// then four fixed string sets (question, wrong-move feedback, hint,
+// unused). For type 1: u8 candidate count, then per candidate
+// (u8 from-square, u8 to-square, s16 BE points, feedback string set),
+// squares in the column-major (file*8+rank) encoding used throughout
+// .cbg/.cba. For type 2: u8 choice count, then per choice (s8 points,
+// text string set, feedback string set).
+// Rendered as a readable text comment; there is no scidb model for an
+// interactive quiz, so this makes the content visible rather than
+// silently dropping it.
+void
+GameDecoder::decodeTraining(MoveNode* node, unsigned length)
+{
+	unsigned const start = m_aStrm.remaining();
+
+	if (length < 11 || length > start)
+	{
+		m_aStrm.skip(length);
+		return;
+	}
+
+	m_aStrm.uint16LE();				// version (always 1 observed)
+	Byte qtype = m_aStrm.get();
+	m_aStrm.uint16LE();				// data length (redundant with the annotation length)
+	m_aStrm.uint32LE();				// allotted time in seconds
+	m_aStrm.uint16LE();				// max points
+
+	mstl::string question;
+	mstl::string wrongFeedback;
+	mstl::string hint;
+
+	bool ok =		skipStringSet(&question)
+					&& skipStringSet(&wrongFeedback)
+					&& skipStringSet(&hint)
+					&& skipStringSet(0);	// unused fourth slot (always empty)
+
+	mstl::string text;
+
+	if (ok && (qtype == 1 || qtype == 2))
+	{
+		if (m_aStrm.remaining() < 1)
+		{
+			ok = false;
+		}
+		else
+		{
+			unsigned n = m_aStrm.get();
+
+			text.append("Training: ", 10);
+			text.append(question);
+
+			for (unsigned i = 0; ok && i < n; ++i)
+			{
+				mstl::string feedback;
+				int points = 0;
+
+				if (qtype == 1)
+				{
+					if (m_aStrm.remaining() < 4) { ok = false; break; }
+
+					Byte fromSq = m_aStrm.get();
+					Byte toSq   = m_aStrm.get();
+
+					points = int16_t(m_aStrm.uint16());	// signed, big-endian
+
+					if (!skipStringSet(&feedback)) { ok = false; break; }
+
+					char buf[8];
+					::snprintf(buf, sizeof(buf), "%c%c-%c%c",
+									sq::printFyle(::mapSquare(fromSq)),
+									sq::printRank(::mapSquare(fromSq)),
+									sq::printFyle(::mapSquare(toSq)),
+									sq::printRank(::mapSquare(toSq)));
+					text.append("\n- ", 3);
+					text.append(buf);
+				}
+				else
+				{
+					if (m_aStrm.remaining() < 1) { ok = false; break; }
+
+					points = int8_t(m_aStrm.get());
+
+					mstl::string choiceText;
+
+					if (!skipStringSet(&choiceText) || !skipStringSet(&feedback)) { ok = false; break; }
+
+					text.append("\n- ", 3);
+					text.append(choiceText);
+				}
+
+				char pbuf[16];
+				::snprintf(pbuf, sizeof(pbuf), " (%d pt)", points);
+				text.append(pbuf);
+
+				if (!feedback.empty())
+				{
+					text.append(": ", 2);
+					text.append(feedback);
+				}
+			}
+		}
+	}
+	else
+	{
+		ok = false;
+	}
+
+	unsigned consumed = start - m_aStrm.remaining();
+
+	if (!ok || consumed > length)
+	{
+		// Grammar mismatch (unexpected variant): skip whatever remains of
+		// this record rather than desynchronizing the annotation stream.
+		m_aStrm.skip(length - mstl::min(consumed, length));
+		return;
+	}
+
+	m_aStrm.skip(length - consumed);
+
+	if (!text.empty())
+		appendTextAnnotation(node, text);
+}
+
+
 void
 GameDecoder::getAnnotation(MoveNode* node, int moveNo)
 {
@@ -658,6 +830,10 @@ GameDecoder::getAnnotation(MoveNode* node, int moveNo)
 
 			case 0x24:	// time control (game-wide)
 				decodeTimeControl(length);
+				break;
+
+			case 0x09:	// training question (quiz)
+				decodeTraining(node, length);
 				break;
 
 			default:

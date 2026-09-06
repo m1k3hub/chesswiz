@@ -21,7 +21,7 @@ length is LE — it is big-endian.) Game-wide records precede move records.
 | 0x16/17 | white/black clock |     0 | **decoded 2026-09-06** → `%clk` MoveInfo (spec'd; no fixture data) |
 | 0x18 | critical position    |    13 | **decoded 2026-09-06** → text comment |
 | 0x24 | time control         |     6 | **decoded 2026-09-06** → TimeControl tag |
-| 0x09 | training/quiz        |   344 | skipped — publicly undocumented; fixture samples available (see below) |
+| 0x09 | training/quiz        |   344 | **decoded 2026-09-06** → text comment (see `cba-training-annotation-format.md`) |
 | 0x13 | game quotation       |    17 | skipped — embedded quoted-game header+text; RE target |
 | 0x22 | medal                |    48 | skipped — duplicates the medal bits already read from the .cbh index |
 | 0x23 | variation color      |     3 | skipped — payload `00 B G R`; no scidb model equivalent |
@@ -37,11 +37,6 @@ Payload validations against real data:
 
 ## RE targets with fixture data
 
-- **0x09 training** (344 samples, 168Training/168Tactics/168Endgame): payload
-  starts `01 00 01 <u16?> 02 <len?>...` followed by prompt text
-  ("White is threatening 28.…", "Black to play and win") and what look like
-  scored answer branches with embedded move references and German twins.
-  Nobody has published this layout; enough material exists here to solve it.
 - **0x13 quotation** (17 samples): begins with a mini header (two
   length-prefixed player names, date/site fields) then game text.
 - Correspondence types 0x19/0x61: absent from the fixture; needs a corr

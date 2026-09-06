@@ -89,6 +89,8 @@ private:
 	void decodeClock(MoveNode* node, unsigned length);
 	void decodeCriticalPosition(MoveNode* node, unsigned length);
 	void decodeTimeControl(unsigned length);
+	void decodeTraining(MoveNode* node, unsigned length);
+	bool skipStringSet(mstl::string* text);
 	void appendTextAnnotation(MoveNode* node, mstl::string const& text);
 
 	util::ByteStream&	m_aStrm;
