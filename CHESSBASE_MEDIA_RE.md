@@ -1267,3 +1267,35 @@ Microsoft's ASF documentation confirms the script-stream model:
 
 - https://learn.microsoft.com/en-us/windows/win32/wmformat/to-use-a-script-stream
 - https://learn.microsoft.com/en-us/windows/win32/medfound/mf-pd-asf-script-attribute
+
+### Checkpoint node-table grammar (WP2, 2026-09-07 — core solved, decorated tail open)
+
+The opcode-`02` checkpoint body (from the identity strings onward) parses
+as follows on the round-08 fixture (MVL-Adams, 2325-byte last snapshot):
+
+- After the six identity strings: packed date (year-only), annotator
+  LP-string (`Robot 11`), Elo pair u16le (white first: 2731/2740 ✓),
+  second packed date (full precision), fixed words, `FIDE` u32-length
+  strings ×2, then a 4-byte cursor word immediately before the node
+  table.
+- The node table starts at a fixed offset (0x101 here = right after the
+  cursor word) with entries:
+  `[u8 from][u8 to][u16le collection-count][count × ([u16le len]
+  [u32be type][u16be echo][payload len-6])][u8 pad=0]`
+  = 5 bytes when undecorated (the plain-entry edge case), 17 bytes for
+  the common single-type-7 decoration (`01 00 0a 00 00 00 00 07 00 0a
+  00 <4-byte payload>`), longer with arrow/text collections.
+- Edges are **file-major 0-based** (`e2`=0x21, `e4`=0x23); the stream is
+  the depth-first serialized game tree with variations interleaved.
+- Oracle result (python-chess 1.11.2): the **first checkpoint's** edge
+  stream walks **100% legally** and reproduces the full MVL-Adams score
+  (`e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5 Bb3 O-O c3 d5 exd5
+  Nxd5 Nxe5 Nxe5 Rxe5 c6 d3 Bd6 Re1 Bf5 Qf3 Qh4 g3 Qh3 Be3 Bxd3 Nd2
+  Qf5 Bd4 Rae8 Kg2 h6 a4 Qxf3+ Kxf3 Re6 axb5 axb5 Kg2 ...`), consuming
+  the entire checkpoint with 4 bytes trailing.  84 nodes at t=1.5 s.
+- OPEN (timeboxed out): the later checkpoints insert **time-patch
+  blocks** between edge entries — u32le millisecond values (9504,
+  9502, 12586, 5141, ... ≈ the goto timestamps) whose record framing is
+  not yet pinned; a resync-skip walk recovers 99+ nodes but the
+  node-count ≥ max-goto (114) gate is not yet cleanly met.  The block
+  begins after a node entry whose pad byte reads `01` instead of `00`.
