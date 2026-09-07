@@ -1268,7 +1268,18 @@ Microsoft's ASF documentation confirms the script-stream model:
 - https://learn.microsoft.com/en-us/windows/win32/wmformat/to-use-a-script-stream
 - https://learn.microsoft.com/en-us/windows/win32/medfound/mf-pd-asf-script-attribute
 
-### Checkpoint node-table grammar (WP2, 2026-09-07 — core solved, decorated tail open)
+### Checkpoint node-table grammar (WP2, 2026-09-07 — SOLVED; patch slots open)
+
+The checkpoint decoders (`::media::decoder::parse-checkpoint` in
+`media-console/experimental-panel/app-media-decode.tcl`, the python-chess
+oracle `wp2_checkpoint_oracle.py`, gates `test_checkpoint_wp2.tcl`) pass
+all WP2 acceptance gates on the round-08 fixture (all 79 snapshots):
+the node table is consumed completely in every snapshot (walked edges ==
+the u32le entry-count word: 83 in the first, 87 in the last), and the
+main-line walk is 100% legal python-chess — the real MVL-Adams score.
+Cross-fixture check: round 01 (Adams-Navara, plain 5-byte entries)
+consumes 111/111 entries; round 06's last snapshot partially resists
+its patch variant (39/76 — documented limitation, does not gate).
 
 The opcode-`02` checkpoint body (from the identity strings onward) parses
 as follows on the round-08 fixture (MVL-Adams, 2325-byte last snapshot):
@@ -1276,10 +1287,15 @@ as follows on the round-08 fixture (MVL-Adams, 2325-byte last snapshot):
 - After the six identity strings: packed date (year-only), annotator
   LP-string (`Robot 11`), Elo pair u16le (white first: 2731/2740 ✓),
   second packed date (full precision), fixed words, `FIDE` u32-length
-  strings ×2, then a 4-byte cursor word immediately before the node
-  table.
-- The node table starts at a fixed offset (0x101 here = right after the
-  cursor word) with entries:
+  strings ×2, ms constants `5f 90 00 00 0b b8 03 e8 03` — this
+  header-tail signature locates the table in every fixture (identical
+  relative position on rounds 01/06/08) — followed by the **u32le
+  entry-count word** (83 first / 87 last on round 08, 111 on round 01;
+  it equals the number of table entries and tracks the table growth).
+  RETIRED reading: the word @0x5e (0x0087 = 135) is a CONSTANT in all
+  fixtures — not a node count.
+- The node table starts right after the entry-count word (0x101 on
+  round 08) with entries:
   `[u8 from][u8 to][u16le collection-count][count × ([u16le len]
   [u32be type][u16be echo][payload len-6])][u8 pad=0]`
   = 5 bytes when undecorated (the plain-entry edge case), 17 bytes for
@@ -1293,18 +1309,19 @@ as follows on the round-08 fixture (MVL-Adams, 2325-byte last snapshot):
   Nxd5 Nxe5 Nxe5 Rxe5 c6 d3 Bd6 Re1 Bf5 Qf3 Qh4 g3 Qh3 Be3 Bxd3 Nd2
   Qf5 Bd4 Rae8 Kg2 h6 a4 Qxf3+ Kxf3 Re6 axb5 axb5 Kg2 ...`), consuming
   the entire checkpoint with 4 bytes trailing.  84 nodes at t=1.5 s.
-- INSERTION BLOCKS (partially decoded): later checkpoints insert blocks
-  between edge entries, always after a node entry whose pad byte reads
-  `01` instead of `00`.  Consecutive-checkpoint diffs show the blocks
-  GROW by whole entries (each diff adds exactly one 5-byte unit), so
-  they are per-node time tables: `[u16le count][count × 5-byte
-  [u16be time][u8 node]]` — round 08's cp14 block decodes count=15
-  with (time, node) pairs (32,37), (46,37), (42,49), (21,20), (0,5),
-  (47,31), (20,27), (5,29), (27,18), (9,18), (29,20), (5,37), (26,17),
-  (10,17), (28,34) — node ids in range and times plausible as early
-  lecture visit times.  OPEN: the time unit (seconds vs deciseconds)
-  and the exact relation to the goto timestamps (sidecar goto 1 =
-  12500 ms vs block value 32 for node 37) are not yet reconciled; the
-  pad-byte-01 + u16le-count + 5-byte-entries framing is byte-verified
-  across 20+ consecutive diffs, so the resync decoder can skip these
-  blocks reliably.
+- INSERTION BLOCKS (the patch; per-item semantics open): later
+  checkpoints insert blocks after node entries whose pad byte reads
+  `01`/`02` instead of `00`.  Framing byte-verified across 20+
+  consecutive-checkpoint diffs: the blocks grow by whole 5-byte units,
+  with `[u16le count][count × 5-byte slots]` chains.  The slots carry
+  (from,to) square pairs in two phase layouts — verified contents
+  include type-5-style ARROWS (e.g. round 06's inline collection
+  `[count 1][len 12][type 5][echo 12][02 27 23 02 23 24]` = the two
+  arrows g5→d8, d8→c7 known from the 2cba grammar) AND variation
+  square pairs that are legal moves at tree positions (lower bound 51
+  on round 08's last snapshot: 88 main-line nodes + 51 verified
+  variation slots = 139 >= the max goto cursor 114).  The exact
+  per-slot semantics (annotation vs tree edge, and the two layouts'
+  distinction) remain open; the decoder skips the whole patch
+  structurally (strict decorated-signature resync first, plain-entry
+  fallback — two fixture families).

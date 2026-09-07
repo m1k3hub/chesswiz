@@ -366,6 +366,179 @@ proc sidecar-parse {txtPath} {
 }
 
 
+# ---------------------------------------------------------------------
+# WP2 (Media Lesson v2): decode an opcode-2 checkpoint payload (hex
+# string) into the lesson-tree main line.
+#
+# Grammar (byte-verified on the Biel 2015 fixtures, rounds 01/06/08;
+# see CHESSBASE_MEDIA_RE.md "Checkpoint node-table grammar"):
+#
+#   [u32le opcode=2][u32le r][u32le cursor][u32le r]
+#   6 x [u8 len][cp1252 incl NUL]   identity strings
+#   [u32le packed_date1]           (year << 9)|(month << 5)|day
+#   fixed region (annotator LP-string, Elo u16le pair, full-precision
+#   packed date2, two u32-length "FIDE" strings, ms constants
+#   5f90/0bb8/03e8) -- fixture-relative, not fully decoded here
+#   [u32le entry-count]            immediately before the node table
+#   node table:
+#     [u8 from][u8 to]              edge, FILE-MAJOR 0-based squares
+#     [u16le collection-count]
+#     count x ([u16le len][u32be type][u16be echo][payload len-6])
+#     [u8 pad]                     0 = end of entry; 1 or 2 = patch
+#     patch (skipped structurally; see RE doc): annotation data with
+#       type-5 arrow records and 5-byte slots; ends at the next entry.
+#
+# The table start is located via the header-tail signature
+# "5f 90 00 00 0b b8 03 e8 03" (byte-verified at the same relative
+# position on rounds 01/06/08) followed by the u32le entry-count.
+#
+# Returns a dict:
+#   opcode cursor entryCount tableStart edges collections
+#   identity fields (white_last .. date1), edgeCount
+# The legality walk/positions are the caller's job (python-chess
+# oracle: wp2_checkpoint_oracle.py; gates: test_checkpoint_wp2.tcl).
+#
+# NOTE on byte access: all reads use `binary scan` @offsets, never
+# string index/range -- binary data with bytes >= 0x80 shifts Tcl's
+# char-based string indexing.
+# ---------------------------------------------------------------------
+
+proc parse-checkpoint {hexstr} {
+	set data [binary format H* [string map {" " ""} [string trim $hexstr]]]
+	set n [string length $data]
+	if {$n < 0x40} { return [dict create error "checkpoint too short"] }
+
+	binary scan $data @0iiii opcode r1 cursor r2
+	if {$opcode != 2} { return [dict create error "not a checkpoint (opcode=$opcode)"] }
+
+	# six identity strings from offset 16
+	set pos 16
+	set names {}
+	for {set i 0} {$i < 6} {incr i} {
+		binary scan $data @${pos}c len
+		incr pos
+		set s [encoding convertfrom cp1252 [string range $data $pos [expr {$pos + $len - 2}]]]
+		lappend names $s
+		incr pos $len
+	}
+	binary scan $data @${pos}i date1
+	set year  [expr {$date1 >> 9}]
+	set month [expr {($date1 >> 5) & 0xF}]
+	set day   [expr {$date1 & 0x1F}]
+
+	# ---- locate the node table via the header-tail signature
+	set sig [binary format H* "5f9000000bb803e803"]
+	set table 0
+	set entryCount 0
+	set limit [expr {$pos + 0x200}]
+	if {$limit > $n - 4} { set limit [expr {$n - 4}] }
+	for {set p [expr {$pos + 4}]} {$p + 13 <= $limit} {incr p} {
+		if {[string range $data $p [expr {$p+8}]] eq $sig} {
+			binary scan $data @[expr {$p+9}]i entryCount
+			if {$entryCount >= 10 && $entryCount <= $n/4} {
+				set table [expr {$p + 13}]
+				break
+			}
+		}
+	}
+	if {$table == 0} {
+		return [dict create error "node table not found" opcode $opcode \
+			cursor $cursor white_last [lindex $names 0]]
+	}
+
+	# ---- walk the node table
+	set edges {}
+	set collections {}
+	set node 0
+	set pos $table
+	while {$pos + 5 <= $n} {
+		binary scan $data @${pos}cc from to
+		if {$from > 63 || $to > 63} { break }
+		set p [expr {$pos + 2}]
+		binary scan $data @${p}s cnt
+		incr p 2
+		set ok [expr {$cnt <= 32}]
+		if {$ok} {
+			for {set r 0} {$r < $cnt} {incr r} {
+				if {$p + 2 > $n} { set ok 0; break }
+				binary scan $data @${p}s rlen
+				if {$rlen < 6 || $p + 2 + $rlen > $n} { set ok 0; break }
+				binary scan $data @[expr {$p+2}]I rtype
+				set ph [binary encode hex [string range $data [expr {$p+8}] [expr {$p+1+$rlen-1}]]]
+				lappend collections [list $node $rtype $ph]
+				set p [expr {$p + 2 + $rlen}]
+			}
+		}
+		if {!$ok} { break }
+		binary scan $data @${p}c padbyte
+		if {$padbyte == 0} {
+			incr p
+		} elseif {$padbyte == 1 || $padbyte == 2} {
+			set p [_cp_patch_resync $data [expr {$p+1}] $n]
+			if {$p < 0} { break }
+		} else {
+			break
+		}
+		lappend edges [list $from $to]
+		incr node
+		set pos $p
+	}
+
+	return [dict create \
+		opcode $opcode cursor $cursor entryCount $entryCount tableStart $table \
+		white_last [lindex $names 0] white_first [lindex $names 1] \
+		black_last [lindex $names 2] black_first [lindex $names 3] \
+		site [lindex $names 4] event [lindex $names 5] \
+		date1 [list $year $month $day] \
+		edges $edges collections $collections edgeCount [llength $edges]]
+}
+
+
+# patch resync: return the byte offset of the next node entry after a
+# patch region.  Two fixture formats exist (byte-verified): decorated
+# entries carrying the count=1/len=0x0a/type=7/echo=0x0a record
+# (round 08) and plain 5-byte entries (round 06).  The strict
+# decorated signature is scanned first (patch slots in round 08 mimic
+# plain entries, so the plain form is only a fallback when no strict
+# signature exists at all).
+proc _cp_patch_resync {data p n} {
+	set strict -1
+	set scan $p
+	while {$scan + 0x11 <= $n} {
+		binary scan $data @${scan}cc f2 t2
+		if {$f2 >= 1 && $f2 <= 63 && $t2 >= 1 && $t2 <= 63} {
+			binary scan $data @[expr {$scan+2}]s c3
+			if {$c3 == 1} {
+				binary scan $data @[expr {$scan+4}]s rlen3
+				if {$rlen3 == 10} {
+					binary scan $data @[expr {$scan+6}]I rtype3
+					binary scan $data @[expr {$scan+10}]S echo3
+					if {$rtype3 == 7 && $echo3 == 10} {
+						set strict $scan
+						break
+					}
+				}
+			}
+		}
+		incr scan
+	}
+	if {$strict >= 0} { return $strict }
+	set scan $p
+	while {$scan + 5 <= $n} {
+		binary scan $data @${scan}cc f2 t2
+		if {$f2 >= 1 && $f2 <= 63 && $t2 >= 1 && $t2 <= 63} {
+			binary scan $data @[expr {$scan+2}]s c3
+			if {$c3 == 0} {
+				binary scan $data @[expr {$scan+4}]c pad4
+				if {$pad4 == 0} {
+					return $scan
+				}
+			}
+		}
+		incr scan
+	}
+	return -1
+}
 
 proc decode {wmvPath} {
 	set cmdline [list ffprobe -v error -select_streams d \
