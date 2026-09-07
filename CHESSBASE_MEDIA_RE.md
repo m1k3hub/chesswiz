@@ -1293,9 +1293,18 @@ as follows on the round-08 fixture (MVL-Adams, 2325-byte last snapshot):
   Nxd5 Nxe5 Nxe5 Rxe5 c6 d3 Bd6 Re1 Bf5 Qf3 Qh4 g3 Qh3 Be3 Bxd3 Nd2
   Qf5 Bd4 Rae8 Kg2 h6 a4 Qxf3+ Kxf3 Re6 axb5 axb5 Kg2 ...`), consuming
   the entire checkpoint with 4 bytes trailing.  84 nodes at t=1.5 s.
-- OPEN (timeboxed out): the later checkpoints insert **time-patch
-  blocks** between edge entries — u32le millisecond values (9504,
-  9502, 12586, 5141, ... ≈ the goto timestamps) whose record framing is
-  not yet pinned; a resync-skip walk recovers 99+ nodes but the
-  node-count ≥ max-goto (114) gate is not yet cleanly met.  The block
-  begins after a node entry whose pad byte reads `01` instead of `00`.
+- INSERTION BLOCKS (partially decoded): later checkpoints insert blocks
+  between edge entries, always after a node entry whose pad byte reads
+  `01` instead of `00`.  Consecutive-checkpoint diffs show the blocks
+  GROW by whole entries (each diff adds exactly one 5-byte unit), so
+  they are per-node time tables: `[u16le count][count × 5-byte
+  [u16be time][u8 node]]` — round 08's cp14 block decodes count=15
+  with (time, node) pairs (32,37), (46,37), (42,49), (21,20), (0,5),
+  (47,31), (20,27), (5,29), (27,18), (9,18), (29,20), (5,37), (26,17),
+  (10,17), (28,34) — node ids in range and times plausible as early
+  lecture visit times.  OPEN: the time unit (seconds vs deciseconds)
+  and the exact relation to the goto timestamps (sidecar goto 1 =
+  12500 ms vs block value 32 for node 37) are not yet reconciled; the
+  pad-byte-01 + u16le-count + 5-byte-entries framing is byte-verified
+  across 20+ consecutive diffs, so the resync decoder can skip these
+  blocks reliably.

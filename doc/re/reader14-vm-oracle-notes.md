@@ -99,3 +99,24 @@ Records (probe_chessmedia.py, full list incl. non-sidecar records):
 Chess32.dll, CBReader14.exe (+strings: WMCreateSyncReader, ScriptItems, SetGames, GotoIndex:, HeumasFlags,
 ScriptActivationManager::{IsStreamCrypted,GetProductId,GetCryptKey}), ChessBaseAdminTool.exe,
 Eco.cbcod (4.2MB), EcoMoves.cod, World.cbw, WorldEx.cbw, registry keys (HKCU ChessBase settings/recent)
+
+## WP2 addendum (2026-09-07 late): checkpoint node-table + time-patch blocks
+
+- Node table entry grammar (byte-verified on round-08 MVL-Adams):
+  `[u8 from][u8 to][u16le collection count][count x ([u16le len]
+  [u32be type][u16be echo][payload])][u8 pad]` — 5 bytes plain,
+  17 bytes with the common single-type-7 decoration.
+- Edges = file-major 0-based DFS-serialized tree; round-08 cp1 walks
+  100% legally under python-chess (83 edges / 84 nodes = the full
+  MVL-Adams score; 4 bytes trailing).
+- The later snapshots insert TIME-PATCH blocks after node entries whose
+  pad byte reads 01: `[u16le count][count x ([u16be time][u8 node])]`
+  (cp14: count=15, pairs (32,37),(46,37),(42,49),(21,20),(0,5),(47,31),
+  (20,27),(5,29),(27,18),(9,18),(29,20),(5,37),(26,17),(10,17),(28,34)).
+  Framing byte-verified across 20+ consecutive checkpoint diffs; the
+  time unit and its relation to the goto timestamps remain open.
+- Skip-walk over decorated checkpoints recovers 99+ nodes; the formal
+  node-count >= max-goto (114) gate needs the time-block framing
+  finished plus a final entry-grammar pass on the last snapshot.
+- Harness: media-console/experimental-panel/wp2_checkpoint_oracle.py
+  (checkpoint hex -> header + edges + python-chess legality walk).
