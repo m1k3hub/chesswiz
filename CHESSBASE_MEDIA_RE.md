@@ -909,6 +909,41 @@ same file-major 0-based scheme; op-6 inline graphics use 1-based
 file-major - the 1-based variant scores only 43/109 for from-square
 occupancy, ruling it out here).
 
+### Interactive playback model — CLOSED (2026-09-07, agy pass; task 5)
+
+The base checkpoint tree, the per-node type-37 media times and the
+`.cms` index now close the interactive playback loop. Verified
+end-to-end on the Mar del Plata interactive lecture (base video
+433.852 s, 221-node lesson tree with 78 media-timestamped nodes):
+
+- The `.cms` index holds one chapter (kind=1, 433 s) whose FEN is the
+  **interactive prompt position**, plus the base clip `x0y0` and three
+  hotspot clips (kind 4 primary + kind 3 alternatives) whose filenames
+  embed the same FEN and the answer-move selectors (`x{from}y{to}`
+  file-major 0-based; all three hotspot moves verified legal in the FEN
+  with python-chess).
+- The chapter's prompt FEN matches **exactly one** base-tree node
+  (node 124, path `main/36.v2/5`, move `Nf4/g6-f4`), whose type-37
+  media time is **416.46 s** — 17.4 s before the base video's end
+  (433.852 s).  That is the interactive switch point: the base lesson
+  plays until the node's media time, then the player hands over to the
+  hotspot clip matching the user's chosen answer move (primary clip for
+  x/y, alternatives for other replies; kind 3 clips carry shorter
+  durations — 61 s/37 s vs the primary's 30 s).
+- Correlation statistics: 4/4 `.cms` clips matched base-tree nodes by
+  exact FEN (100% FEN match rate, 100% legal hotspot moves), and the
+  host node's media time validates the switch model.
+
+Reference implementation: `media-console/nodes.py` (the base-tree
+decoder: edge stream -> per-node FENs + media times, with `--summary`
+and `--find-fen`) and `media-console/cms_records.py` (the `.cms`
+parser/summary).  Together with `wmv2timeline.py` they complete the
+static side of an authentic interactive playback engine: base-tree
+positions + per-node media times + the clip mapping.  What remains for
+a player is the runtime application layer (applying annotations and
+switching to clips) and, for commercial media, the per-product
+decrypt path.
+
 ## Reader14 dynamic playback path
 
 Opening a fixture WMV directly with ChessBase Reader 14 under Wine produced
@@ -994,13 +1029,29 @@ playback (drawing arrows/marks live).
 1. Map mark styles `2/3/4` and opcode-`04` action classes/modifiers with a
    visual oracle; identify the opcode-`06` type-`7` object semantics and
    the remaining `37`/`3`-per-record rollover behavior.
-2. (Closed 2026-08-30) The checkpoint body is fully mapped: post-date
-   annotator slot, white/black Elo u16le pair (white first, corpus-verified
-   against published ratings), full-precision packed game date, the
-   serialized game-tree edge stream with file-major squares, and per-node
-   media timestamps (type-`37`) plus quotation texts in the padding
-   collections. Remaining polish: name the u32 words after the game date
-   (the `38`/`FIDE` source block) and the ms-ish counter word.
+   **(Closed 2026-09-07, agy pass — task 5) The `.cms` FEN branches are
+   now correlated with the decoded base-tree node ids** (see §
+   "Interactive playback model" below); remaining here is only the
+   visual-oracle-dependent style/class colour mapping (blocked by the
+   serial wall).
+2. (Closed 2026-08-30 + 2026-09-07) The checkpoint body is fully mapped:
+   post-date annotator slot, white/black Elo u16le pair (white first,
+   corpus-verified against published ratings), full-precision packed game
+   date, the serialized game-tree edge stream with file-major squares, and
+   per-node media timestamps (type-`37`) plus quotation texts in the
+   padding collections. The remaining u32 words are now named (agy pass,
+   2026-09-07): after the full game date (`date2`, e.g. `0x000fbef9` =
+   2015-07-25) follow the round/subround words (`u16le` subround then
+   round — Mar del Plata carries board/subround 4 + round 8), then a
+   length-prefixed tournament/source metadata block (`u32le` length 70
+   bytes for Mar del Plata, 56 for Navara-Adams; contains the event
+   strings `Hangzhou`/`Heibei`, FIDE indicators, further dates), and —
+   only in recorded live games, absent in magazine analysis lectures — a
+   52-byte time-control block of big-endian ms values: Biel round 6
+   carries 10 min base + 3 s increment, 5 min + 3 s, 90 s + 3 s, and a
+   1 s delay (the digital clock configuration of the tiebreak).  The
+   ms-ish counter word near the node table (`03 4a` -> `03 4c`) remains
+   unnamed.
 3. (Mostly closed) opcode-`04` squares are file-major and class `0x80` =
    from/to move arrows (verified by game-tree correlation, 10/14 + 4/8
    hits versus chance). Remaining: a visual oracle for classes
