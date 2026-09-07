@@ -821,3 +821,114 @@ Working files were scratch (`/tmp/gdb_quot_bp.py`, `/tmp/gdb*_cmds.txt`,
 `/tmp/gdb*_in` FIFOs, `/tmp/gdb*_out.log`, `/tmp/winedbg_out*.log`,
 `/tmp/find_quote_games*.tcl`, `/tmp/quot_*.png`) and were deleted, not
 committed. Tree unchanged from the prior commit except this doc update.
+
+### Tenth attempt (2026-09-06, later still) — target identified without CBase26's UI search; render confirmed live; new headless-input finding
+
+Scoped narrowly to the prior pass's own recommendation: find a
+quotation-containing game and confirm it renders, nothing else (no
+debugging).
+
+**Target identified without touching CBase26's UI at all**, sidestepping
+the blind search that stumped the eighth/ninth passes. Rather than
+resolving the `game::load` segfault, used scidb's own already-working,
+already-correct `decodeQuotation()` header decode via the *existing*,
+already-headless-safe `::scidb::game::printHtml <database> <variant>
+<gameIndex> <file> <flags>` command (no editor slot, no `game::load`, no
+segfault — this command was already used successfully by earlier forks
+for PDF export via the sibling `printPdf`) with
+`Flag_Include_Variations|Flag_Include_Comments|Flag_Include_Annotation`
+(`7`), looping every game in every `.cbh` fixture under
+`/media/michael-g-thomas/sas_mirror/fixt/cbm168/` (27 files) and grepping
+each game's rendered HTML for scidb's own `"Quoted game:"` marker text.
+Found 13 real matches across 4 files in under two minutes of runtime.
+**`Sinquefield Cup 2015.cbh`, game index 6 (0-based; row 7, 1-based UI),
+White=Caruana Black=Carlsen, round 2** carries the standing target
+quotation (Caruana-Carlsen, Norway Chess 2015, cited at 3...a6) and is a
+small, easy-to-navigate 46-game file — a much better target than blindly
+hunting through the 700+-game `CBM168.cbh`.
+
+**Confirmed the quotation renders, live, in CBase26 itself** — this had
+never actually been observed before this pass; every prior pass only had
+scidb's own decode as evidence the text existed. Screenshot evidence: with
+that game loaded, the notation pane shows `1.e4 e5 2.Nf3 Nc6 3.Bb5 a6`
+directly followed by *"There is little wonder that Carlsen avoids the
+Berlin after the recent defeat by Caruana's hands in `1-0 Caruana,F
+(2805)-Carlsen,M (2876) Norway Chess 3rd Stavanger 2015 (2)`"* — with the
+game-citation substring rendered in a visually distinct color (red/orange)
+from the surrounding annotation prose. **This settles an assumption every
+prior pass implicitly made and never verified: quotations do NOT render as
+a separate embedded sub-board/sub-game widget.** They render as an inline,
+distinctively-colored (and presumably clickable, though click-through was
+not tested) hyperlink-style span *inside the flowing annotation comment
+text*, indistinguishable in the extracted plain-text HTML from an
+ordinary styled game citation. Every prior static-analysis
+pass's search for a "quotation rendering function" or "quoted-game
+sub-board widget" may have been searching for the wrong kind of UI
+element; the real target is more likely a rich-text/hyperlink-run
+formatter that colors a citation span and attaches a quoted-game reference
+to it, closer in kind to how the *other* inline game-citation colored
+spans in the same comment (e.g. the `0-1 Hellers,F (2520)-Shirov,A (2580)
+Khanty-Mansiysk 2009` seen later in the same game's annotations) are
+rendered — those are NOT `0x13` quotations (no separate annotation record
+backs them; they're just colored text Marin typed/formatted directly), so
+the two need to be distinguished carefully in any future Ghidra pass, but
+they share a rendering mechanism worth investigating together.
+
+**New environment finding, distinct from all prior tooling notes**: mouse
+clicks (`xdotool click`/`mousedown`/`mouseup`, confirmed via `xdotool
+getmouselocation` to land on the correct window/coordinates, with input
+focus confirmed via `xdotool getwindowfocus`) are **not delivered** to
+CBase26 windows under this project's headless Xvfb setup (no window
+manager) — repeated clicks on live, focused, correctly-targeted dialogs
+and grid rows produced zero visible effect across two independent fresh
+CBase26 instances. **Keyboard input (`xdotool key`) works completely
+reliably** the whole time (confirmed: `Tab`/`Return` operated a dialog's
+default button, `Ctrl+Tab`/`Ctrl+Shift+Tab` cycled ribbon sub-tabs,
+`F6` moved focus from the ribbon into the game-list grid, and
+`Up`/`Down` moved the grid selection and live-loaded each selected game
+into the notation/board panes). **Practical rule for any future pass
+automating CBase26 under this headless setup: do not attempt mouse
+clicks at all; drive everything via keyboard** (`F6` to reach the grid
+from the ribbon, arrow keys to navigate rows, `Return`/`Space` to
+act on a selection, `Ctrl+Tab` to change sub-tabs). This one insight
+would have saved most of the wall-clock time burned in the eighth and
+ninth passes and the first half of this one.
+
+Also hit and worked around, in order: (1) a leftover CBase26 instance
+from a prior pass's winedbg session, correctly left untouched (per the
+"never interfere with another pass's debugging session" caution) in
+favor of a fresh instance on a new display; (2) that fresh instance's
+single-instance IPC silently routed a second `CBase26.exe <file>` launch
+into the *first* (pre-existing, differently-sized) instance instead of
+opening a new window, producing a window whose reported geometry
+(`2560x1366`) didn't match the actual Xvfb screen (`1920x2000`) and
+whose content was genuinely corrupted/blanked by an `xrefresh` recovery
+attempt — resolved by killing both processes (DISPLAY confirmed `:251`,
+not the real desktop, before touching them) and launching a **fully
+fresh** CBase26 + fresh Xvfb display pair together; (3) a first-run
+"Activate data abonnement" licensing/CAPTCHA dialog appeared on the
+fresh instance (did not appear on the reused/already-activated instance
+from prior passes) — dismissed via keyboard (`Tab` to the OK button,
+which correctly surfaced "The serial number is not valid" without
+blocking further use of the app, confirming the unactivated/trial state
+doesn't gate database browsing).
+
+No code changes; nothing to commit besides this doc update. Xvfb displays
+`:252`/`:253` and the CBase26 instance launched on `:253` (PID confirmed
+via `/proc/<pid>/environ` to be on `:253`, not the real desktop, before
+killing) were cleaned up. Scratch files (`/tmp/find_quote_target*.tcl`,
+`/tmp/gq_*.html`, `/tmp/*.png` screenshots) were deleted, not committed.
+
+**Recommended next step**: a Ghidra pass targeting the rich-text/hyperlink
+run-formatting code that colors and attaches citation metadata to a span
+within rendered comment text (not a "quotation widget" or "quoted-game
+sub-board" as previously assumed) — searching from the annotation-dispatch
+angle used successfully for other `.cba` types, now anchored to a
+concrete, confirmed-renderable target: `Sinquefield Cup 2015.cbh` game
+index 6 (0-based), the `3...a6` position. A live-debugging pass (now that
+the keyboard-only input rule is known and the target is concrete) is also
+far more tractable than before: breakpoint `decode_caller` per the ninth
+pass's `winedbg --gdb --no-start` recipe, then use keyboard-only
+navigation (`F6`, arrow keys, `Return`) to select this exact game and step
+to `3...a6` to trigger the render and capture whatever call stack
+actually fires.
