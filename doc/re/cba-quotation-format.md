@@ -703,3 +703,121 @@ found already running (and had to kill to gain ptrace access) was not
 restored, since it held no unsaved state - it was the same idle
 fixture-browsing instance from an earlier fork's session. Tree unchanged
 from the prior commit except this doc update.
+
+### Ninth attempt (2026-09-06, later still) — working breakpoint achieved via `winedbg --gdb --no-start`; no quotation triggered
+
+Solved the exact blocker the previous pass hit (gdb's pending-breakpoint
+mechanism never firing for Wine's PE-image mapping). The fix: don't attach
+gdb to the Wine ELF process at all. Use `winedbg --gdb --no-start
+<CBase26.exe path>` instead — `winedbg` launches the target itself, halts
+it after Wine's own PE loader has already fully mapped the module (proven:
+the reported stop address on first connect, e.g. `0000000140FB259C`, is
+already inside CBase26's own `.text`), starts a gdb-remote server, and
+prints the exact `target remote localhost:<port>` command. A plain `gdb -q`
+connecting to that port can then set `break *0x140210bc0` (`decode_caller`)
+immediately — no polling, no synchronization hack, no ELF/PE event
+mismatch. `continue` resumes the target normally; the breakpoint is real
+and armed (confirmed: process visibly running, no crash, CPU active) but
+was never hit in this pass because no quotation was actually opened in the
+UI. **This resolves the "no reliable synchronization point" problem the
+last three passes were stuck on and should be the standard way to attach
+for any future live-debugging pass on this codebase.**
+
+Two safety/environment notes for whoever reuses this:
+- **Always pass an explicit headless `DISPLAY`** (`DISPLAY=:<n> winedbg
+  --gdb --no-start ...`). Without it, CBase26 inherits whatever `DISPLAY`
+  the launching shell has — in one instance in this pass that was the
+  user's own real desktop (`:0`), and a live GUI window nearly opened
+  there unattended. Caught before any mouse/keyboard input was sent to it
+  and killed immediately; no interaction with the user's real session
+  occurred. Confirm via `cat /proc/<pid>/environ | grep DISPLAY` before
+  ever touching a CBase26 process found via `ps`, per the existing rule
+  in the eighth attempt above, and *also* explicitly export/prefix
+  `DISPLAY` on every launch rather than relying on inherited environment.
+- **The headless Xvfb screen must be tall, not just wide.** No window
+  manager runs under a raw Xvfb server, so CBase26's windows get no
+  decorations and cannot be moved, resized, or maximized — whatever
+  height the app requests is what you get, clipped to the virtual
+  screen's actual size with the excess simply unreachable. At
+  `1400x900` the board/notation editor view was clipped after ~5 ranks
+  with no way to reach the notation pane, the "File name" field of the
+  Open dialog, or anything below the fold. Raising the virtual screen to
+  `1920x2000` fixed this completely and is the size to start with next
+  time.
+
+Once a headless CBase26 instance was properly up (on `:251` at
+`1920x2000`), extensive UI navigation was spent trying to locate a game
+containing an existing `0x13` quotation to open, without success within
+budget:
+- Typing a Wine path (`Z:\...\CBM168.cbh`) directly into what was assumed
+  to be the Open dialog's filename field, after `Alt+N`, unexpectedly
+  opened an unrelated single-game file (`game_757`, a 2026 Carlsen game)
+  instead — most likely `Alt+N` did not focus a filename field at all
+  (no such field was ever visually confirmed) and `Return` simply
+  activated whatever icon happened to be selected in the "My Databases"
+  icon view at the time. This path-typing approach is unverified and
+  should not be reused as-is; navigating the folder tree by clicking
+  worked reliably where tried.
+- Opened `CB Light Database.cbh` (14,831 games, historical 1851 London
+  tournament onward) successfully via icon double-click, confirming the
+  icon-view double-click / select-then-`Return` pattern **does** work
+  once a window has real screen space (unlike the earlier `1400x900`
+  attempts, where the same pattern appeared to silently fail — most
+  likely because the target element was simply off-screen, not because
+  the interaction technique was wrong).
+- The `Ctrl+F` → "Advanced" → **Annotations** tab of the search-filter
+  dialog was found and inspected in detail — it exposes `Text1`/`Text2`
+  free-text search over annotation content, a `Symbols` field, and
+  checkboxes for `Training`, `Multimedia`, `Pawn structure`, `Piece path`,
+  `Variations`, `Critical Opening/Middlegame/Endgame Position`, etc., but
+  **no dedicated "Game Quotation" checkbox or annotation-type selector**.
+  A quotation-containing game cannot be isolated through this dialog by
+  type; `Text1` free-text search might work if the right search string
+  were known, but CBase26 renders a quotation as a clickable embedded
+  sub-game widget, not literal searchable text, so there is no obvious
+  string to search for.
+- The `::scidb::db::load` + `::scidb::game::load` Tcl approach (used
+  successfully by earlier forks for byte-level extraction) was retried to
+  enumerate `CBM168.cbh` game-by-game looking for scidb's own
+  `"Quoted game:"` decoded-comment marker, as a way to identify the
+  citing game's number without touching CBase26's UI at all. Got as far
+  as correctly loading the database and reading `::scidb::db::count total
+  <path>` (717 games, matching prior forks' fixture description), but
+  `::scidb::game::load <slot> <path> <variant> <index>` — note the
+  argument order requires `<variant>` before `<index>`, `<slot>` must be
+  in `0`-`8` (the app's fixed 9 editor slots; slot `9` segfaults
+  immediately) — still segfaulted on the very first game after fixing
+  those two mistakes; root cause not found (plausibly the same "editor
+  GUI infrastructure not initialized" class of problem as the missing
+  `pgn:$i`/`frame:$i` Tcl state seen when driving `app-pgn.tcl` headlessly
+  in an unrelated debugging session earlier today — `game::load` may
+  assume a built UI exists). Not resolved; abandoned in favor of the
+  live-CBase26 UI route above.
+
+**Honest final assessment after nine passes across static Ghidra analysis,
+exhaustive brute-force decoding, and now live debugging tooling:** the
+*hard* part of live-debugging (getting a reliable breakpoint on real
+target code with a clean, reproducible attach procedure) is now solved and
+documented above. The *remaining* blocker is entirely mundane — reliably
+navigating CBase26's own GUI, headless, to a database and game known to
+contain a `0x13` quotation, then triggering the annotation's render. This
+is very likely solvable with more patient, incremental UI probing (one
+action, one screenshot, verify, repeat — rather than chaining several
+actions between screenshots as this pass sometimes did) now that the
+`1920x2000`/no-WM clipping problem is understood, or by resolving the
+`game::load` segfault to identify the target game programmatically instead
+of hunting through the UI blind. Recommend one more pass specifically
+scoped to "find and open a quotation-containing game and confirm the
+annotation is visibly rendered" as its *only* goal (no debugging yet) —
+proving the render is reachable before spending another attempt wiring up
+the breakpoint dance around it. If that pass also fails to find a
+renderable quotation, the next fallback is the `Text1` annotation search
+with trial strings, or resolving the `game::load` segfault so scidb's own
+already-correct header decode can name the exact citing game.
+
+No code changes. All CBase26/winedbg/gdb processes and the dedicated Xvfb
+displays (`:250`, `:251`) used in this pass were killed and cleaned up.
+Working files were scratch (`/tmp/gdb_quot_bp.py`, `/tmp/gdb*_cmds.txt`,
+`/tmp/gdb*_in` FIFOs, `/tmp/gdb*_out.log`, `/tmp/winedbg_out*.log`,
+`/tmp/find_quote_games*.tcl`, `/tmp/quot_*.png`) and were deleted, not
+committed. Tree unchanged from the prior commit except this doc update.
