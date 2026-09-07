@@ -1189,14 +1189,13 @@ The .2cbh @0x28 stores the event ID (integer). The .2lcd maps
 event_id -> (event_name, site_name, event_date, etc.) in a similar
 manner to the .2lid for players, but the record structure differs
 (no signature terminator found).
-PYEOF
-git -C /media/michael-g-thomas/sas_mirror/src/chess/scidb-code.codex add 2CBH_FORMAT_DESIGN.md && git -C /media/michael-g-thomas/sas_mirror/src/chess/scidb-code.codex commit -m "docs(2cbh): .2lcd event namebase notes — 827 entries, not plain-ASCII encoded" 2>&1 | tail -1; git -C /media/michael-g-thomas/sas_mirror/src/chess/scidb-code.codex log --oneline -4
+
 ## 12. .2LCD Event Namebase Notes (2026-08-28)
 
-The .2lcd header = [u32 256][u32 827][u32 4096] (BE) - 827 events total.
-The file contains German default strings (Default Turnier, Default
-Quelle) at offsets 0x109c-0x131c. No plain-ASCII event names found for
-the PGN event Munchen Open or Cartak CZE - the events may use a
+The .2lcd header = [u32 256][u32 827][u32 4096] (BE) — 827 events total.
+The file contains German default strings ("Default Turnier", "Default
+Quelle") at offsets 0x109c-0x131c. No plain-ASCII event names found for
+the PGN event "Munchen Open" or "Cartak CZE" — the events may use a
 compressed or indexed encoding distinct from the .2lid format.
 
 The .2cbh @0x28 stores the event ID (integer). The .2lcd maps
