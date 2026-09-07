@@ -982,7 +982,29 @@ Consistent with the verified state: opcode-04 = structural/vector
 annotations and class 0x80 = directional arrows (proven by game-tree
 correlation, not by naming).  Everything else in the text is unfounded.
 
-### Rejected: a second fabricated opcode-04 class/colour table (2026-09-07)
+### Internet-blocked CBase26 run (2026-09-07, this repo)
+
+Launched CBase26 under Wine on Xvfb :78 with the Windows proxy set to
+127.0.0.1:1 (ProxyEnable=1, ProxyServer=127.0.0.1:1) to block internet
+access.  Passed 168!Start.cbh as a command-line argument (the working
+technique from the eleventh pass).  The database loaded: window
+"168 !START: 7 Games".
+
+Results:
+- The "Activate data abonnement:" dialog appeared immediately and was
+  dismissed via xdotool windowclose (not keyboard — the Wine modal
+  input-routing failure persists).
+- An "Info" dialog followed (serial-not-valid, from the prior pass).
+- The Wine log had ZERO script/media/activation/serial events: the
+  activation check is LOCAL (fires immediately without a network
+  round-trip), so blocking internet does NOT bypass the serial wall.
+- The GUI was too minimal under Xvfb (no WM) to navigate the media
+  tree after the dialog was dismissed.
+
+Conclusion: the serial validation is offline; internet blocking has
+no effect on the activation gate.
+
+## Reader14 dynamic playback path
 
 A second web-surfaced text claims opcode-04 sub-classes 0x00-0x3F =
 square highlights (0x01 Static Full Border, 0x02 Solid Fill, 0x04
