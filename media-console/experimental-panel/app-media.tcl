@@ -1344,8 +1344,15 @@ proc application::media::SyncTransport {what} {
 # ::media::sync (arrows/marks render future, comments go to the status
 # bar).  The kind and data arguments come from ::media::sync::load-events.
 # Map a style byte (from the decoded script stream) to a drawable color.
-# The actual colors are ChessBase's media overlay palette (styles 2=green,
-# 3=yellow, 4=red; the mapping is a visual-oracle hypothesis).
+# VISUAL-ORACLE VERDICT (Reader14 on Windows, 2026-09-07, CHESSBASE_MEDIA_RE.md
+# "Reader14 on genuine Windows"): script-stream style bytes carry NO colour.
+# Style 2 renders green (corridor-verified 51-75%); style 4 rendered green or
+# nothing; zero red/yellow/blue overlay pixels in 136 frames across 3 videos.
+# Every script annotation renders one green regardless of style/class, so the
+# 3/4 entries below are dead data kept only for the .cba classic palette
+# (a different record family).  Opcode-04 board-action CLASS values (0x80,
+# 0x200, ...) also arrive in the style slot via the lesson events; they never
+# match here and fall back to the default green.  Green fallback is correct.
 variable SyncColors
 array set SyncColors { 2 green 3 yellow 4 red }
 

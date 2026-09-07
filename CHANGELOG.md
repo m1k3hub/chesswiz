@@ -44,9 +44,18 @@ decoded in scidb.  Full `cb2::Codec` integration is the next step.
   (the .2lid namebase mapping: player ID == namebase slot ordinal)
 - The game result decoded: index byte 0x58 low 2 bits (0 = 0-1,
   1 = draw, 2 = 1-0), validated on 2,748 games with zero mismatches
-- `2cbh2pgn` converts complete databases to PGN (names included)
+- `2cbh2pgn` converts complete databases to PGN (names included), now
+  with full nested RAV variations and .2cba comments in position
+  (2026-09-07): emission goes through `db::cb2::walkGameRaw` +
+  `db::PgnWriter` instead of a duplicated flat mainline walk; UTF-8
+  output; two-pass per game so a desync never truncates a game
 - Standalone validation tool `2cbh_probe`; reproducible table-dump
   script in `scripts/`
+- Media RE: the script-stream colour question closed by a Reader14 VM
+  playback oracle (2026-09-07) — annotations render green regardless of
+  style/class byte (136 frames, 3 videos, pixel-correlated); the
+  renderer follows opcode-02 checkpoints, not opcode-06 deltas.  See
+  `CHESSBASE_MEDIA_RE.md` "Reader14 on genuine Windows"
 - See `2CBH_FORMAT_DESIGN.md` section 3.8
 
 ## Unreleased — Correspondence Chess Support

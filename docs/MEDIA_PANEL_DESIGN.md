@@ -180,8 +180,10 @@ decodes the WMV script stream via `::media::decoder` and persists a
 `.plytimes` sidecar) → `.plytimes` sidecar → empty (linear).
 Annotation events come from `.events` sidecars (`ms kind payload`),
 fired as `SyncAnnotate` calls: `arrow`/`mark` (board diagram overlay,
-ChessBase palette styles 2=green 3=yellow 4=red), `comment` (status
-bar), `symbol` (logged).
+rendered green — visual-oracle-verified in Reader14 on Windows,
+2026-09-07: the style/class byte carries no colour and every script
+annotation renders one green; see CHESSBASE_MEDIA_RE.md), `comment`
+(status bar), `symbol` (logged).
 
 ## 6. Known gaps / follow-ups
 

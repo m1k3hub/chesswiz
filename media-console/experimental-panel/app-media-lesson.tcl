@@ -19,7 +19,15 @@
 #   timeline   list of {mediaMs gotoIndex} pairs, ascending by mediaMs
 #   events     list of {ms arrow from to class modifier} board events
 #              (payload order matches SyncAnnotate: lassign data from to
-#              style, with class = the SyncColors style key)
+#              style.  NOTE: the value in the style slot is the raw
+#              opcode-04 CLASS (0x80 = directional arrows, 0x200, ...),
+#              NOT an opcode-06 mark style.  It therefore never matches
+#              the SyncColors table and every opcode-04 arrow falls back
+#              to the default green.  VISUAL-ORACLE CLOSED (Reader14 VM,
+#              2026-09-07): script-stream annotations render green
+#              regardless of style/class byte - no colour exists in the
+#              stream, so the green fallback is provably correct; see
+#              CHESSBASE_MEDIA_RE.md "Reader14 on genuine Windows".)
 # ======================================================================
 
 namespace eval ::media::lesson {

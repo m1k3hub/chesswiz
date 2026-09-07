@@ -982,6 +982,33 @@ Consistent with the verified state: opcode-04 = structural/vector
 annotations and class 0x80 = directional arrows (proven by game-tree
 correlation, not by naming).  Everything else in the text is unfounded.
 
+### Rejected: "opcode-04 class = SyncColors key (2=green, 3=yellow, 4=red)" (2026-09-07)
+
+A claim that the opcode-04 class field indexes a "SyncColors" table
+with 2=green, 3=yellow, 4=red is a **field conflation** and is
+falsified by the corpus:
+
+- The `SyncColors {2 green 3 yellow 4 red}` table in
+  `media-console/experimental-panel/app-media.tcl` is keyed by the
+  **opcode-06 mark/arrow style byte**, not the opcode-04 class.  The
+  opcode-06 style histogram matches its keys exactly (style 2 x1598,
+  4 x336, 3 x1); the opcode-04 class histogram does not.
+- The opcode-04 class histogram is 0x80 x498, 0x0 x204, 0x200 x33,
+  0x1 x4, 0x800 x2, 0x2 x1 (742 records, 234 exports).  Claimed keys
+  3 and 4 have **zero** corpus occurrences; key 2 occurs exactly once.
+- The decoded opcode-04 layout has separate u16 class and u16 modifier
+  fields; the class is not a colour/style key.
+- Even the opcode-06 style -> colour mapping itself remains a
+  visual-oracle hypothesis (panel code comment); the colours have
+  never been verified against rendered output (serial wall).
+
+Related code bug documented in place: lesson board events put the raw
+opcode-04 class into the style slot of `SyncAnnotate`'s arrow handler
+(`app-media-lesson.tcl`), so the `SyncColors` lookup never matches and
+every opcode-04 arrow silently renders green.  Comments in
+`app-media-lesson.tcl` and `app-media.tcl` now state this explicitly;
+the fallback behaviour is unchanged pending the visual oracle.
+
 ### Internet-blocked CBase26 run (2026-09-07, this repo)
 
 Launched CBase26 under Wine on Xvfb :78 with the Windows proxy set to
@@ -1110,16 +1137,69 @@ generator is exactly option 3 as originally scoped, with the board already
 consuming it. Options 1/2 remain relevant only for in-runtime annotation
 playback (drawing arrows/marks live).
 
+## Reader14 on genuine Windows — the visual oracle (2026-09-07)
+
+ChessBase Reader 14 (free, no activation wall) was installed in a
+Windows 11 VirtualBox VM (`Win11-Oracle`) and driven over
+`VBoxManage guestcontrol` (PowerShell synthetic mouse + host keyboard).
+The Biel 2015 fixtures were played back with synchronized script stream
+and the board window screenshot-sampled at 7.2-7.9 s cadence (136 frames,
+3 videos: Biel round 06, round 09, Sinquefield round 9).  Board geometry
+calibrated to pixel accuracy (inner board x 48-560, y 179-691, 64 px/square
+at 1024x768; verified by the round-09 a4 square mark landing exactly on
+the a4 centre).  Full method + frame data: session notes
+(`/tmp/vm_oracle_notes.md`, harvest in `~/sas_mirror/vm-harvest-2026-09-07/`).
+
+### Result 1 — script-stream style bytes carry NO colour
+
+- opcode-`06` style `2` arrows/marks render **green** (corridor tests:
+  51 %/55 %/75 % of the from→to corridor green in the exact event frames;
+  the 475.181 s square mark renders as a round green blob exactly on a4).
+- opcode-`06` style `4` (@127.138 s mark, @222.138 s arrow in Biel 09):
+  rendered **green** (127 s: a green arrow e6→e3, image-verified) or
+  **nothing at all** (222 s: the c4→d3 corridor is pixel-identical to the
+  clean board for 30 s).  Never red, never yellow.
+- Across 136 frames: **zero** red/yellow/blue/magenta overlay pixels on
+  the board.  The classic palette (2=green, 3=yellow, 4=red) is dead for
+  the script stream; every script annotation renders in one green.
+  Combined with the DE/EN evidence (same arrow, different class), the
+  colour is a function of the authoring tool state, not of any byte in
+  the stream.  scid's flatten-to-green `SyncAnnotate` fallback is
+  therefore **provably correct**; the OPEN colour item closes.
+
+### Result 2 — the renderer follows checkpoints, not deltas
+
+The opcode-`06` delta records (type `4` marks, type `5` arrows, type `7`
+index objects) are editor commands.  The rendered board follows the next
+opcode-`02` SetGame checkpoint: e.g. Biel 09 @212.138 s a SetGame brings a
+thick c3→h8 diagonal arrow band with **no** delta records present (the
+annotation is embedded in the checkpoint's serialized game tree), and the
+two-segment knight-path arrow c8→f5→d3 rendered @~266 s matches the
+266.638 s checkpoint (+12 bytes = exactly one appended annotation
+record), not the 261.638 s delta bytes.  This confirms the
+Media-Lesson-v2 model: checkpoints are the authoritative cumulative state.
+
+### Result 3 — timer/format operations notes
+
+- The Reader timer is `H:MM:SS`; frames were anchored to record times by
+  OCR-ing the green digits (occupancy-signature classification).
+- Automation traps: double-clicking the play button toggles pause;
+  `VBoxManage copyto` needs escaped backslash target paths.
+- The authoring sweeps requested in `MEDIA_VM_EXPERIMENT_REQUEST.md`
+  (colour/style/tool sweeps with an intent log) remain **blocked**: Reader
+  14 is playback-only and CBase26 needs a valid serial (offline local
+  check).  The visual-oracle question they were filed for is however
+  answered above with playback evidence alone.
+
 ## Next RE tasks
 
-1. Map mark styles `2/3/4` and opcode-`04` action classes/modifiers with a
-   visual oracle; identify the opcode-`06` type-`7` object semantics and
-   the remaining `37`/`3`-per-record rollover behavior.
-   **(Closed 2026-09-07, agy pass — task 5) The `.cms` FEN branches are
-   now correlated with the decoded base-tree node ids** (see §
-   "Interactive playback model" below); remaining here is only the
-   visual-oracle-dependent style/class colour mapping (blocked by the
-   serial wall).
+1. (Closed 2026-09-07) Style/colour mapping: **solved by the Reader14 VM
+   playback oracle** (§ above) — script-stream annotations always render
+   green; no colour byte exists.  Remaining sub-item (non-blocking):
+   opcode-`06` type-`7` object semantics and the `37`/`3` rollover
+   behavior; plus the CBase26 authoring sweeps if a licensed CBase26 ever
+   becomes available (only needed to probe colour paths Reader14 does not
+   exercise).
 2. (Closed 2026-08-30 + 2026-09-07) The checkpoint body is fully mapped:
    post-date annotator slot, white/black Elo u16le pair (white first,
    corpus-verified against published ratings), full-precision packed game
@@ -1140,8 +1220,13 @@ playback (drawing arrows/marks live).
    unnamed.
 3. (Mostly closed) opcode-`04` squares are file-major and class `0x80` =
    from/to move arrows (verified by game-tree correlation, 10/14 + 4/8
-   hits versus chance). Remaining: a visual oracle for classes
-   `0x200`/`0`/`1`/`0x800`/`2` and the modifier bits.
+   hits versus chance). The Reader14 VM run (2026-09-07) adds: opcode-`04`
+   records themselves produced **no distinct rendered overlay** in any
+   captured frame (class `0x200` @84 s/271 s, class `0x80` @265/279/341 s
+   — all silent on screen while the checkpoint-carried annotations
+   render), supporting the reading of opcode-`04` as authoring-action
+   metadata (selection/publish-state) rather than a drawing primitive.
+   Class semantics beyond `0x80` remain open but are not render-blocking.
 4. (Closed 2026-08-30) Cursor ids above `0xff` exist corpus-wide (Strategy
    lectures reach `0x1af`), so the bit-`0x80` variation-flag hypothesis is
    retired; ids enumerate serialized tree nodes. Remaining: pin the
