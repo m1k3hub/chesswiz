@@ -775,6 +775,25 @@ The converter now emits full nested RAV variations and .2cba comments
 - Removed: the token-index root-marker scan and the flat-only comment
   gate ("flat games only (validated path)").
 
+### 3.8.6.2 Event/site/round emission (2026-09-07)
+
+The converter now resolves the event pair like the codec (previously
+`[Event "?"]/[Site "?"]/[Round "?"]` placeholders):
+
+- Event id: 3 bytes LE @0x28 = the .2lid slot ordinal; the event pair
+  rides at slot+0x400 (section 3.8.7).  Sites: 300/300 identity-exact
+  vs the source PGN; events 287/300; rounds 296/300.
+- Round/subround: u8 @0x5a / @0x5c, emitted "r" or "r.s".  Team matches
+  carry a THIRD level in the source PGN ("4.16.4" = board number) which
+  is not in the index record (@0x5e-0x5f are zero); it presumably lives
+  in the per-game .2cba metadata (cf. the checkpoint's board/subround
+  words) — open.
+- Known limitation: the .2lid event text is capped at 40 bytes — long
+  names truncate ("European Rapid and Blitz Champions" vs the full
+  "...Championships 2025 | Rapid").  The bytes following the text look
+  like a u16 link id into .2lcd (e.g. 0x0fd2) where the full name
+  lives; see section 12.
+
 ### 3.8.7 .2LID namebase — SOLVED (2026-08-27)
 
 **The player ID ↔ name mapping is solved and implemented:**
@@ -1190,18 +1209,32 @@ event_id -> (event_name, site_name, event_date, etc.) in a similar
 manner to the .2lid for players, but the record structure differs
 (no signature terminator found).
 
-## 12. .2LCD Event Namebase Notes (2026-08-28)
+### Structure (2026-09-07)
 
-The .2lcd header = [u32 256][u32 827][u32 4096] (BE) — 827 events total.
-The file contains German default strings ("Default Turnier", "Default
-Quelle") at offsets 0x109c-0x131c. No plain-ASCII event names found for
-the PGN event "Munchen Open" or "Cartak CZE" — the events may use a
-compressed or indexed encoding distinct from the .2lid format.
+.2lcd is a multi-namebase container:
 
-The .2cbh @0x28 stores the event ID (integer). The .2lcd maps
-event_id -> (event_name, site_name, event_date, etc.) in a similar
-manner to the .2lid for players, but the record structure differs
-(no signature terminator found).
+- Header: `[u32be version=1][u32be 827 entries][u32be 0x1000 table
+  offset]`.
+- 8 category records @0x1000, stride 0x80: Default Spieler (player),
+  Default Turnier (tournament/event), Default Quelle (source/site),
+  Default Kommentator, Default Mannschaften (teams), Default
+  partietitle, Texttitel, Analysen.  Empty categories carry
+  ff ff ff ff markers.
+- Per category: a u32le ascending OFFSET TABLE (e.g. @0xa000 for the
+  player category: 2, 11, 14, 15, 17, 19, ...) into a string pool, and
+  the pools store BYTE-REVERSED strings (verified: 'tdimhcs' =
+  'schmidt', 'ksvelbur' = 'rublevsk(?)', 'namsab' = 'basman',
+  ' leahcim' = 'michael ').
+- Bulk data (0xa000..EOF, ~13% printable) = the reversed player-name
+  pool; event strings were NOT found in plain or reversed ASCII
+  ('Munchen', 'Biel', 'Dortmund' absent), so the Turnier entries are
+  further encoded (or referenced) differently.
+- Relevance: the .2lid event text is capped at 40 bytes and the bytes
+  after the text look like a u16 link id into .2lcd (e.g. 0x0fd2),
+  where the full event name (and presumably event dates) live.
+  Decoding the Turnier category would lift the 40-char truncation
+  (see section 3.8.6.2) and possibly fix the 0.5% unresolved events.
+
 
 ---
 

@@ -84,6 +84,64 @@ bool loadFile(char const* name, std::string& data)
 // ff ff ff ff 08 00 00 00 ff ff ff ff; the record's 0-based ordinal among
 // ALL signature slots equals the player ID used in the .2cbh index.
 // Slot layout: [total][lastLen][last][firstLen][first][tail 20 bytes].
+// Event/site namebase: the .2lid is a fixed-slot array (stride 0x108a,
+// first slot at 0xb8) whose slots carry an event pair at +0x400:
+//   [u32 x][u16 siteLen][site][u16 pad][u16 evLen][event][pad][u32 year]
+// The event id stored in the game index (@0x28, 3 bytes LE) is the slot
+// ordinal.  Reverse-engineered in the scid-code project (GLM pass,
+// 2026-09-07); validated against the source PGN (game 0 ->
+// 'Munchen Open'/'Munchen open'); ~99.5% of games resolve (deleted slots
+// stay unnamed).  See 2CBH_FORMAT_DESIGN.md section 3.8.7.
+void loadEvents(unsigned char const* lid, size_t size,
+                mstl::vector<std::string>& out_events,
+                mstl::vector<std::string>& out_sites)
+{
+   if (size < 0xb8 + 0x108a)
+      return;
+
+   size_t const nslots = (size - 0xb8) / 0x108a;
+
+   out_events.resize(nslots);
+   out_sites.resize(nslots);
+
+   for (size_t slot = 0; slot < nslots; ++slot)
+   {
+      size_t a = 0xb8 + slot * 0x108a + 0x400;
+      if (a + 8 > size)
+         break;
+
+      uint32_t siteLen = uint32_t(lid[a + 4]) | (uint32_t(lid[a + 5]) << 8);
+      if (siteLen > 80 || a + 8 + siteLen + 4 > size)
+         continue;
+
+      std::string site(reinterpret_cast<char const*>(lid + a + 8), siteLen);
+      bool text = true;
+      for (uint32_t j = 0; j < siteLen; ++j)
+         if (static_cast<unsigned char>(site[j]) < 32)
+            text = false;
+      if (!text)
+         continue;
+
+      size_t b = a + 8 + siteLen;
+      uint32_t evLen = uint32_t(lid[b]) | (uint32_t(lid[b + 1]) << 8);
+      if (evLen == 0 || evLen > 90 || b + 4 + evLen > size)
+         continue;
+
+      std::string event(reinterpret_cast<char const*>(lid + b + 4), evLen);
+      for (uint32_t j = 0; j < evLen; ++j)
+         if (static_cast<unsigned char>(event[j]) < 32)
+            text = false;
+      if (!text)
+         continue;
+
+      // .2lid text is UTF-8 (data-verified: c3 b8 = oe, c3 bc = ue,
+      // e4 b8 ad = CJK); pass through unchanged.
+      out_sites[slot] = site;
+      out_events[slot] = event;
+   }
+}
+
+
 void loadNames(unsigned char const* lid, size_t size,
                mstl::vector<std::string>& out_names)
 {
@@ -180,18 +238,26 @@ int main(int argc, char* argv[])
 
    // player names from the .2lid namebase (ID == slot ordinal)
    mstl::vector<std::string> names(200000u);
+   mstl::vector<std::string> eventNames;
+   mstl::vector<std::string> siteNames;
    {
       std::string lidData;
       if (loadFile((prefix + ".2lid").c_str(), lidData))
       {
          loadNames(reinterpret_cast<unsigned char const*>(lidData.c_str()),
                    lidData.size(), names);
+         loadEvents(reinterpret_cast<unsigned char const*>(lidData.c_str()),
+                    lidData.size(), eventNames, siteNames);
          unsigned named = 0;
          for (unsigned i = 0; i < names.size(); ++i)
             if (!names[i].empty())
                ++named;
-         ::fprintf(stderr, "# namebase: %u of %u slots named (lidData=%zu bytes)\n",
-                   named, unsigned(names.size()), lidData.size());
+         unsigned namedEvents = 0;
+         for (unsigned i = 0; i < eventNames.size(); ++i)
+            if (!eventNames[i].empty())
+               ++namedEvents;
+         ::fprintf(stderr, "# namebase: %u of %u slots named, %u event slots (lidData=%zu bytes)\n",
+                   named, unsigned(names.size()), namedEvents, lidData.size());
       }
    }
 
@@ -282,6 +348,12 @@ int main(int argc, char* argv[])
 
       unsigned long wid = readLE32(cbh + (256u + k) * recordSize + 0x18) & 0xffffffu;
       unsigned long bid = readLE32(cbh + (256u + k) * recordSize + 0x20) & 0xffffffu;
+      // event id: 3 bytes LE @0x28 = .2lid slot ordinal (see loadEvents)
+      unsigned long eid = readLE32(cbh + (256u + k) * recordSize + 0x28) & 0xffffffu;
+      // round/subround: u8 @0x5a, u8 @0x5c ('7.5' style; validated on 352
+      // date-verified games against the source PGN, scid-code GLM pass)
+      unsigned roundNo = cbh[(256u + k) * recordSize + 0x5a];
+      unsigned subRound = cbh[(256u + k) * recordSize + 0x5c];
       // date: 3 bytes at @0xBC packed as day(5) | month(4) << 5 | year(12) << 9
       unsigned p24 = cbh[(256u + k) * recordSize + 0xBC]
                    | (cbh[(256u + k) * recordSize + 0xBD] << 8)
@@ -334,10 +406,24 @@ int main(int argc, char* argv[])
       unsigned blackElo = readLE16(cbh + (256u + k) * recordSize + 0x70);
 
       db::TagSet tags;
-      tags.set(db::tag::Event, "?");
-      tags.set(db::tag::Site, "?");
+      std::string const eventStr = (eid < eventNames.size() && !eventNames[eid].empty())
+                                 ? eventNames[eid] : "?";
+      std::string const siteStr = (eid < siteNames.size() && !siteNames[eid].empty())
+                                ? siteNames[eid] : "?";
+      tags.set(db::tag::Event, mstl::string(eventStr.c_str()));
+      tags.set(db::tag::Site, mstl::string(siteStr.c_str()));
       tags.set(db::tag::Date, mstl::string(dateBuf));
-      tags.set(db::tag::Round, "?");
+      if (roundNo > 0)
+      {
+         char roundBuf[16];
+         if (subRound > 0)
+            ::snprintf(roundBuf, sizeof(roundBuf), "%u.%u", roundNo, subRound);
+         else
+            ::snprintf(roundBuf, sizeof(roundBuf), "%u", roundNo);
+         tags.set(db::tag::Round, mstl::string(roundBuf));
+      }
+      else
+         tags.set(db::tag::Round, "?");
       tags.set(db::tag::White, mstl::string(wname.c_str()));
       tags.set(db::tag::Black, mstl::string(bname.c_str()));
       tags.set(db::tag::Result, mstl::string(resultStr));
