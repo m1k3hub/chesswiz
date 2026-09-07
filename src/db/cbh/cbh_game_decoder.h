@@ -88,6 +88,8 @@ private:
 	void decodeTimeSpent(MoveNode* node, unsigned length);
 	void decodeClock(MoveNode* node, unsigned length);
 	void decodeCriticalPosition(MoveNode* node, unsigned length);
+	void decodeMedal(MoveNode* node, unsigned length);
+	void preserveDisplayAnnotation(MoveNode* node, unsigned length, char const* label);
 	void decodeTimeControl(unsigned length);
 	void decodeTraining(MoveNode* node, unsigned length);
 	void decodeQuotation(MoveNode* node, unsigned length);

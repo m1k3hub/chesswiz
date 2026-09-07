@@ -1,10 +1,13 @@
-# .cba annotation type 0x13 (game quotation) — header solved
+# .cba annotation type 0x13 (game quotation) — header and move blob solved
 
 Status: 2026-09-06. Header grammar validated on all 17 real records in the
 cbm168 fixture, cross-checked against the actual historical games they
 quote (players, tournament, site, date, round, result all match public
-record). No public documentation of this type exists; Morphy's
-`annotations.md` lists it as "not done yet".
+record). The embedded move blob is **also decoded** (see "The embedded
+move blob" below): all 17 records replay legally, ply-for-ply identical
+to independent python-chess SAN replay of the identified historical
+games (1,650 plies total). No public documentation of this type exists;
+Morphy's `annotations.md` lists it as "not done yet".
 
 Method: extracted all 17 raw payloads, hand-derived the player-name framing
 by byte inspection, then had `agy` extend it to the full header and
@@ -84,27 +87,63 @@ date/result, e.g.:
 
 (Full 17-record table in the session's scratch artifacts.)
 
-## The embedded move blob (not decoded)
+## The embedded move blob — decoded (2026-09-06)
 
 The quoted game's own moves follow the header directly, with no separate
 4-byte `.cbg`-style framing (flags byte + 3-byte size) — the boundary is
 just "rest of the annotation record". The first bytes of the blob are
 **static across independent games sharing an opening** — e.g. every record
 starting `1.e4 e5 2.Nf3 Nc6` begins with the identical 4 bytes `df 93 6c d8`
-regardless of which quoted game it is — which is exactly what the existing
-per-ply rolling cipher (`cbh_count_cipher.*`, keyed by move count from a
-fresh start) would produce if the quoted game's cipher state is reset to
-the beginning, i.e. this blob is presumed to reuse the standard `.cbg`
-move encoding starting fresh (not the .cbg file's own running count from
-elsewhere in that file).
+regardless of which quoted game it is.
 
-This was not implemented in this pass: replaying it would need constructing
-a `GameDecoder` over a synthetic stream (real blob bytes prefixed with a
-synthetic all-zero 4-byte flags/startpos word, since `startDecoding()`
-expects that framing) and converting the resulting move indices to SAN.
-The header alone already delivers the practical value (identifying what
-game is being cited); decoding the actual quoted moves is a clean,
-separable follow-up.
+### The encoding (twelfth pass, 2026-09-06 — solved)
+
+The observations above were the key, read correctly at last: the blob is
+**always even-length**, and same-opening records share the same leading
+bytes **and the same trailing bytes** — i.e. these are not 1-byte CBH
+tokens with a running count offset but **2-byte per-move words** under a
+fixed bijection, with a positional byte offset:
+
+```
+word = T[blob[2*ply]   - ply] << 8
+     | T[blob[2*ply+1] - ply]
+```
+
+- `T` = the fifth decode table from the CBH atlas (the 16-table variant
+  dispatch found in the fifth attempt; this is case 4, VA `0x141a78bc0`,
+  offset 2048 in `variant_tables.bin` — byte-identical to the
+  `QuotationLookup` embedded in `src/db/cbh/cbh_quotation.cpp`).
+- `ply` = 0-based ply index **within the blob** (not the citing game's
+  move count — this is what defeated the first eleven passes, which all
+  tried to reuse `Decoder::decodeMove`'s single-byte classical scheme).
+- Word layout: bits 0–5 from-square, 6–11 to-square, 12–13 promotion
+  (0 = none/queen, 1 = rook, 2 = bishop, 3 = knight), bits 14–15 control.
+  Squares use transposed (file-major) indexing: low 3 bits of the encoded
+  index are the rank, high 3 bits the file — hence the `square()` helper.
+- `word == 0x4000` is the end marker; a valid replay must end exactly
+  there (the decoder rejects a marker anywhere else, and rejects a blob
+  that runs out without one — no partial replay is ever published).
+- Other control words (bit 14/15 set) are rejected, not reinterpreted:
+  no fixture establishes nonstandard starts or variation structure
+  inside a quotation.
+- Castling is encoded as the king's from/to (matched against
+  `Move::castlingKingTo()`); en passant and promotions fall out of
+  matching against the generated legal-move list — the decoder matches
+  every decoded word against the position's legal moves before ever
+  mutating the board, so garbage decodes fail safe instead of asserting
+  (the failure mode that ended the second attempt).
+
+Validation: every one of the 17 fixture records decodes through to the
+`0x4000` marker — 1,650 plies — and the numbered SAN is identical to an
+independent python-chess replay of the identified historical games,
+including promotions (`bxa8=Q`, `gxf1=N`), castling and check/mate
+suffixes (`Qh4#`, `Rxd4+`). The Caruana–Carlsen record yields the expected
+Berlin Defence, all 89 plies.
+
+The blob decoder lives in `src/db/cbh/cbh_quotation.cpp`
+(`decodeQuotationMoves`); edge-case and byte-by-byte truncation tests in
+`src/verify_cbh_write.cpp` (`verifyQuotationEdges`, corpus in
+`tests/fixtures/cba_quotations.tsv`).
 
 ### Attempted and reverted (2026-09-06)
 
@@ -132,14 +171,22 @@ rendering code path.
 ## Decoder implementation (2026-09-06)
 
 `src/db/cbh/cbh_game_decoder.{h,cpp}`: `decodeQuotation()` parses the header
-fields (skipping the embedded move blob) and renders:
+fields and renders:
 
 ```
-Quoted game: <white> - <black>, <event>, <site> (<date>), round <n>, <result>
+Quoted game: <white> - <black>, <event>, <site> (<date>), round <n>, <result>, ECO <code>
+<numbered SAN of the quoted game> <result>
 ```
 
 as a post-move text comment, via the same `appendTextAnnotation` path used
-for 0x18/0x09. Player/event/site strings are decoded through the game's
+for 0x18/0x09. The embedded move blob is decoded by `decodeQuotationMoves`
+(`src/db/cbh/cbh_quotation.cpp`, see above) and appended only when it
+replays completely to the end marker. SAN printing uses
+`Board::prepareForPrint(..., InternalRepresentation)` before each move so
+disambiguation is computed against legality-filtered candidates (the
+Karpov–Kortschnoj citation needs `26...Nxd5`, not `Ncxd5`), and
+`protocol::Scidb` so check/mate suffixes are included (`Qh4#`), which the
+`protocol::Standard` form deliberately omits. Player/event/site strings are decoded through the game's
 UTF-8 codec (consistent with how ordinary comments are decoded) since names
 may contain diacritics not present in the fixture sample. Fails safe on any
 grammar mismatch: skips the record without desynchronizing the rest of the
@@ -151,11 +198,20 @@ real chess history; `verify_cbh_write` round-trip passed; app suite 31/31.
 
 ## Open items
 
-- The quoted game's own moves are parsed structurally (offset/length known)
-  but not decoded to SAN — a real but separable follow-up.
-- ECO/nation/category/tournament-type/medals fields are decoded but not
+- ~~The quoted game's own moves are parsed structurally (offset/length
+  known) but not decoded to SAN~~ — **solved later the same day**, see
+  "The embedded move blob — decoded" above.
+- ~~ECO not rendered~~ — also solved: the citation line now ends with
+  `ECO <code>` (same `(eco_raw >> 7) & 0x1ff` index packing).
+- Nation/category/tournament-type/medals fields are decoded but not
   rendered in the comment text (kept the change minimal); available in the
   header if a future pass wants richer output.
+- Import-only: the CBH *writer* does not emit 0x13 records (nor any
+  quotation round-trip), consistent with the other new annotation types.
+- Robustness beyond the fixture: control words other than the `0x4000`
+  end marker (nonstandard start positions, variation structure inside a
+  quotation) are rejected as unestablished; a future fixture showing a
+  quotation of a nonstandard-start game would extend the decoder.
 
 ### Second attempt and revert (2026-09-06, later same day)
 
@@ -1010,3 +1066,50 @@ launching the GUI, or (c) accept this specific field (the embedded
 quoted-game move replay) as a documented, well-characterized permanent
 gap for now — the header decode is solid and shipped; this is a
 separable, non-blocking enhancement, not a correctness bug.
+
+### Twelfth pass (2026-09-06, evening) — SOLVED, no live debugging needed
+
+Option (c) above was never needed. The unlock was re-reading the fixture
+data rather than the disassembler: every blob has **even length**, and
+same-opening records share leading bytes *and* trailing bytes — under the
+eleven passes' single-byte-token model (raw byte minus ply count →
+classical `MoveNumberLookup`) even length and byte-shared prefixes across
+independent games are inexplicable; under a **two-byte-per-move word**
+model they are the natural consequence of a fixed bijection with a
+positional offset. That reframing immediately suggested reusing the
+already-dumped 16-table atlas from the fifth attempt as candidate
+bijective tables, with the ply index subtracted from each byte before
+lookup (mirroring the classical scheme's `raw - count` shape, but per
+*word*, not per token).
+
+Case 4 of the dispatch (VA `0x141a78bc0`, offset 2048 in
+`variant_tables.bin`) worked on the first try: for every fixture record,
+every two-byte word maps to a legal move of the evolving position
+(from/to/promotion matched against the generated legal-move list), the
+stream terminates at `0x4000` exactly at the blob's end, and the SAN
+matches an independent python-chess replay of the identified historical
+games for all 17 records / 1,650 plies — including the Berlin Defence
+cross-check the eleventh pass's recommendation demanded. The whole search
+was a handful of candidate tables × the trivial `word` formula; no Ghidra
+pass, no CBase26 GUI, no breakpoint. The eleventh pass's "hard part
+solved, soft part blocked" assessment was correct but moot: the live-debug
+route had become the *slow* path, not the only one.
+
+Lessons for future RE passes (generalizing the eleventh pass's closing
+note): before investing in live debugging, enumerate structural invariants
+of the *encoded data* (length parity, cross-record byte sharing at both
+ends) and check whether they refute the assumed token size — "is it one
+byte per unit?" is a cheaper question than "which function decodes it?",
+and the sixteen-table atlas was already sitting in `/tmp` waiting to be
+reused.
+
+Implementation shipped in this pass: `src/db/cbh/cbh_quotation.cpp`
+(decoder, embedded table), wired into `GameDecoder::decodeQuotation()`
+with the ECO field now rendered; header reads bounded to the record via a
+`ByteStream` over the annotation length (a truncated header previously
+read into the *following* annotations — caught by the new byte-by-byte
+truncation test in `verifyQuotationCorpus`); `verifyQuotationEdges` covers
+promotion/castling/checkmate edges, unknown control words, junk after the
+end marker, and rejection of every truncation; corpus fixture
+`tests/fixtures/cba_quotations.tsv` (17 records, hex payload + ECO +
+expected SAN, independently generated with python-chess).

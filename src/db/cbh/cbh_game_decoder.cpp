@@ -29,6 +29,8 @@
 // http://talkchess.com/forum/viewtopic.php?topic_view=threads&p=287896&t=29468&sid=a535ba2e9a17395e2582bdddf57c2425
 
 #include "cbh_game_decoder.h"
+#include "cbh_quotation.h"
+#include "db_eco.h"
 
 #include "db_consumer.h"
 #include "db_game_data.h"
@@ -530,6 +532,70 @@ GameDecoder::decodeClock(MoveNode* node, unsigned length)
 
 // Annotation type 0x18: critical position marker.
 // Payload: 1 = opening, 2 = middlegame, 3 = endgame.
+// These display records have no equivalent in MoveNode. Keep their complete
+// payload at the original node; in particular, 0x23's leading byte is NOT
+// always zero (cbm168 has 02 00 00 00), so interpreting it as RGB loses data.
+void
+GameDecoder::preserveDisplayAnnotation(MoveNode* node, unsigned length, char const* label)
+{
+	mstl::string text(label);
+	text += " (CBH payload:";
+	for (unsigned i = 0; i < length; ++i)
+	{
+		char hex[4];
+		::snprintf(hex, sizeof(hex), " %02X", unsigned(m_aStrm.get()));
+		text += hex;
+	}
+	text += ')';
+	appendTextAnnotation(node, text);
+}
+
+
+void
+GameDecoder::decodeMedal(MoveNode* node, unsigned length)
+{
+	// A big-endian mask with the same low 16 bits as the index medals.
+	// Unlike the index, this record also identifies the annotated move.
+	if (length != 4)
+	{
+		preserveDisplayAnnotation(node, length, "Medal");
+		return;
+	}
+
+	unsigned medals = m_aStrm.uint32();
+	static char const* const names[] =
+	{
+		"Best game", "Decided tournament", "Model game", "Novelty",
+		"Pawn structure", "Strategy", "Tactics", "Attack", "Sacrifice",
+		"Defense", "Material", "Piece play", "Endgame", "Tactical blunder",
+		"Strategical blunder", "User",
+	};
+	mstl::string text("Medal: ");
+	bool separator = false;
+	for (unsigned bit = 0; bit < 16; ++bit)
+	{
+		if (medals & (1u << bit))
+		{
+			if (separator) text += ", ";
+			text += names[bit];
+			separator = true;
+		}
+	}
+	if (medals & 0xffff0000u)
+	{
+		char unknown[40];
+		::snprintf(unknown, sizeof(unknown), "Unknown bits 0x%08X", medals & 0xffff0000u);
+		if (separator) text += ", ";
+		text += unknown;
+	}
+	else if (!separator)
+	{
+		text += "None";
+	}
+	appendTextAnnotation(node, text);
+}
+
+
 void
 GameDecoder::decodeCriticalPosition(MoveNode* node, unsigned length)
 {
@@ -766,7 +832,7 @@ GameDecoder::decodeTraining(MoveNode* node, unsigned length)
 
 // Annotation type 0x13: game quotation (a reference to a different,
 // historical game cited by the annotator). Header: u16 BE total length
-// (== the annotation length), u16 BE name count (always 2 observed),
+// (== the payload length), u16 BE name count (always 2 observed),
 // white name (u16 BE lang + u8 len + latin1 bytes), black name (u8 lang +
 // u8 len + latin1 bytes), u8 flag + u16 BE white Elo + u16 BE black Elo +
 // u16 BE raw ECO, event name (u8 len + latin1 bytes), site name (u8 lang +
@@ -775,10 +841,8 @@ GameDecoder::decodeTraining(MoveNode* node, unsigned length)
 // classic .cbh index date field), u8 time mode, u8 tournament type,
 // u16 BE nation + u16 BE category + u16 BE total rounds, u8 subround,
 // u8 round, u8 result (0=0-1, 1=1/2-1/2, 2=1-0, 3=*), u16 BE medals, then
-// the quoted game's own move stream (same per-ply cipher as regular .cbg
-// data, restarted fresh - not decoded here).
-// Rendered as a readable text comment; the embedded moves are not
-// currently replayed (see doc/re/cba-quotation-format.md).
+// a two-byte-per-move stream (see cbh_quotation.cpp).
+// Rendered as a citation with ECO and, when fully validated, numbered SAN.
 void
 GameDecoder::decodeQuotation(MoveNode* node, unsigned length)
 {
@@ -790,100 +854,103 @@ GameDecoder::decodeQuotation(MoveNode* node, unsigned length)
 		return;
 	}
 
+	// Bound every header read to this record, not the following annotations.
+	ByteStream strm(m_aStrm.data(), length);
+	m_aStrm.skip(length);
 	bool ok = true;
 
-	auto need = [&](unsigned n) -> bool { return ok = ok && (m_aStrm.remaining() >= n); };
+	auto need = [&](unsigned n) -> bool { return ok = ok && (strm.remaining() >= n); };
 
 	mstl::string white, black, event, site;
-	unsigned round = 0, result = 4;
+	unsigned round = 0, result = 4, eco = 0;
 	unsigned year = 0, month = 0, day = 0;
 
-	if (need(2)) m_aStrm.uint16();			// total length (redundant)
-	if (need(2)) m_aStrm.uint16();			// name count (always 2)
+	if (need(2)) ok = strm.uint16() == length;	// payload length (redundant)
+	if (need(2)) ok = strm.uint16() == 2;	// supported name count
 
-	if (need(2)) m_aStrm.uint16();			// white name language (2 bytes)
+	if (need(2)) strm.uint16();			// white name language (2 bytes)
 	if (need(1))
 	{
-		unsigned len = m_aStrm.get();
+		unsigned len = strm.get();
 		if (need(len))
 		{
-			white.assign(reinterpret_cast<char const*>(m_aStrm.data()), len);
+			white.assign(reinterpret_cast<char const*>(strm.data()), len);
 			m_codec.toUtf8(white);
 			if (!sys::utf8::validate(white))
 				m_codec.forceValidUtf8(white);
-			m_aStrm.skip(len);
+			strm.skip(len);
 		}
 	}
 
-	if (need(1)) m_aStrm.get();				// black name language (1 byte)
+	if (need(1)) strm.get();				// black name language (1 byte)
 	if (need(1))
 	{
-		unsigned len = m_aStrm.get();
+		unsigned len = strm.get();
 		if (need(len))
 		{
-			black.assign(reinterpret_cast<char const*>(m_aStrm.data()), len);
+			black.assign(reinterpret_cast<char const*>(strm.data()), len);
 			m_codec.toUtf8(black);
 			if (!sys::utf8::validate(black))
 				m_codec.forceValidUtf8(black);
-			m_aStrm.skip(len);
+			strm.skip(len);
 		}
 	}
 
-	if (need(7)) { m_aStrm.get(); m_aStrm.uint16(); m_aStrm.uint16(); m_aStrm.uint16(); }	// flag, elo x2, eco
+	if (need(7))
+	{
+		strm.get(); strm.uint16(); strm.uint16(); // flag, Elo x2
+		eco = (strm.uint16() >> 7) & 0x1ff;
+	}
 
 	if (need(1))
 	{
-		unsigned len = m_aStrm.get();
+		unsigned len = strm.get();
 		if (need(len))
 		{
-			event.assign(reinterpret_cast<char const*>(m_aStrm.data()), len);
+			event.assign(reinterpret_cast<char const*>(strm.data()), len);
 			m_codec.toUtf8(event);
 			if (!sys::utf8::validate(event))
 				m_codec.forceValidUtf8(event);
-			m_aStrm.skip(len);
+			strm.skip(len);
 		}
 	}
 
-	if (need(1)) m_aStrm.get();				// site language
+	if (need(1)) strm.get();				// site language
 	if (need(1))
 	{
-		unsigned len = m_aStrm.get();
+		unsigned len = strm.get();
 		if (need(len))
 		{
-			site.assign(reinterpret_cast<char const*>(m_aStrm.data()), len);
+			site.assign(reinterpret_cast<char const*>(strm.data()), len);
 			m_codec.toUtf8(site);
 			if (!sys::utf8::validate(site))
 				m_codec.forceValidUtf8(site);
-			m_aStrm.skip(len);
+			strm.skip(len);
 		}
 	}
 
-	if (need(2)) m_aStrm.uint16();			// pad
+	if (need(2)) strm.uint16();			// pad
 
 	if (need(3))
 	{
-		unsigned v = (unsigned(m_aStrm.get()) << 16) | (unsigned(m_aStrm.get()) << 8) | m_aStrm.get();
+		unsigned v = (unsigned(strm.get()) << 16) | (unsigned(strm.get()) << 8) | strm.get();
 		year = v >> 9;
 		month = (v >> 5) & 0xf;
 		day = v & 0x1f;
 	}
 
-	if (need(2)) { m_aStrm.get(); m_aStrm.get(); }	// time mode, tournament type
-	if (need(6)) { m_aStrm.uint16(); m_aStrm.uint16(); m_aStrm.uint16(); }	// nation, category, total rounds
-	if (need(1)) m_aStrm.get();				// subround
-	if (need(1)) round = m_aStrm.get();
-	if (need(1)) result = m_aStrm.get();
-	if (need(2)) m_aStrm.uint16();			// medals
+	if (need(2)) { strm.get(); strm.get(); }	// time mode, tournament type
+	if (need(6)) { strm.uint16(); strm.uint16(); strm.uint16(); }	// nation, category, total rounds
+	if (need(1)) strm.get();				// subround
+	if (need(1)) round = strm.get();
+	if (need(1)) result = strm.get();
+	if (need(2)) strm.uint16();			// medals
 
-	unsigned consumed = start - m_aStrm.remaining();
-
-	if (!ok || consumed > length || white.empty() || black.empty())
-	{
-		m_aStrm.skip(length - mstl::min(consumed, length));
+	if (!ok || white.empty() || black.empty())
 		return;
-	}
 
-	m_aStrm.skip(length - consumed);	// the quoted game's own move stream
+	mstl::string moves;
+	decodeQuotationMoves(strm.data(), strm.remaining(), moves);
 
 	static char const* ResultText[] = { "0-1", "1/2-1/2", "1-0", "*" };
 
@@ -921,6 +988,22 @@ GameDecoder::decodeQuotation(MoveNode* node, unsigned length)
 	{
 		text.append(", ", 2);
 		text.append(ResultText[result]);
+	}
+
+	if (eco >= 1 && eco <= 500)
+	{
+		text += ", ECO ";
+		text += Eco::fromShort(eco).asShortString();
+	}
+	if (!moves.empty())
+	{
+		text += "\n";
+		text += moves;
+		if (result < 4)
+		{
+			text += ' ';
+			text += ResultText[result];
+		}
 	}
 
 	appendTextAnnotation(node, text);
@@ -1001,6 +1084,22 @@ GameDecoder::getAnnotation(MoveNode* node, int moveNo)
 
 			case 0x13:	// game quotation
 				decodeQuotation(node, length);
+				break;
+
+			case 0x22:	// medal at this move (or game-wide)
+				decodeMedal(node, length);
+				break;
+
+			case 0x23:	// variation display color; mode byte unresolved
+				preserveDisplayAnnotation(node, length, "Variation color");
+				break;
+
+			case 0x14:	// pawn structure display
+				preserveDisplayAnnotation(node, length, "Pawn structure");
+				break;
+
+			case 0x15:	// piece path display
+				preserveDisplayAnnotation(node, length, "Piece path");
 				break;
 
 			default:

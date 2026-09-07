@@ -20,6 +20,10 @@
 #include "db/cbh/cbh_codec.h"
 #include "db/cbh/cbh_consumer.h"
 #include "db/cbh/cbh_decoder.h"
+#include "db/cbh/cbh_game_decoder.h"
+#include "db/cbh/cbh_quotation.h"
+#include "db/db_game_data.h"
+#include "db/db_move_node.h"
 #include "db/cbh/cbh_encoder.h"
 
 #include "sys/sys_utf8_codec.h"
@@ -679,6 +683,185 @@ verifyGrenkeChess960FENs()
 } // namespace
 
 
+static bool
+verifyDisplayAnnotations()
+{
+	// Standard start, a3 and a6. Annotation positions count decoded moves
+	// from zero; -1 is game-wide. Exercise the public tree decoder.
+	Byte moves[] = {0, 0, 0, 6, 0x2d, 0x2e};
+	Byte annotations[] = {
+		0xff, 0xff, 0xff, 0x22, 0, 10, 0, 0, 0x80, 0,
+		0, 0, 0, 0x22, 0, 10, 0, 0, 0, 0x28,
+		0, 0, 0, 0x23, 0, 10, 2, 0, 0, 0,
+		0, 0, 0, 0x14, 0, 7, 3,
+		0, 0, 0, 0x15, 0, 8, 3, 0x36,
+		0, 0, 0, 0x22, 0, 10, 0x80, 0, 0x60, 0,
+		0, 0, 0, 0x22, 0, 7, 0xab,
+		0, 0, 0, 0x15, 0, 9, 3, 0x38, 0xff,
+		0, 0, 0, 0x14, 0, 6,
+		0, 0, 0, 0x22, 0, 10, 0, 0, 0, 0,
+		0, 0, 1, 0x22, 0, 10, 0, 0, 2, 0,
+		0, 0, 1, 0x18, 0, 7, 3,
+	};
+	util::ByteStream g(moves, sizeof(moves)), a(annotations, sizeof(annotations));
+	sys::utf8::Codec codec(sys::utf8::Codec::utf8());
+	cbh::GameDecoder decoder(g, a, codec, false);
+	GameData data;
+	// GameData starts with an empty end node; decodeMoves installs its own.
+	delete data.m_startNode->removeNext();
+	if (decoder.doDecoding(data) != 2 || !a.isEmpty()) return false;
+	mstl::string const& root = data.m_startNode->comment(move::Post).content();
+	mstl::string const& first = data.m_startNode->next()->comment(move::Post).content();
+	mstl::string const& second = data.m_startNode->next()->next()->comment(move::Post).content();
+	char const* expected[] = {
+		"Medal: Novelty, Strategy", "Variation color (CBH payload: 02 00 00 00)",
+		"Pawn structure (CBH payload: 03)", "Piece path (CBH payload: 03 36)",
+		"Medal: Tactical blunder, Strategical blunder, Unknown bits 0x80000000",
+		"Medal (CBH payload: AB)", "Piece path (CBH payload: 03 38 FF)",
+		"Pawn structure (CBH payload:)", "Medal: None",
+	};
+	for (unsigned i = 0; i < sizeof(expected)/sizeof(expected[0]); ++i)
+	{
+		if (!::strstr(first.c_str(), expected[i]))
+		{
+			::fprintf(stderr, "Missing annotation: %s\nActual: %s\n", expected[i], first.c_str());
+			return false;
+		}
+	}
+	return ::strstr(root.c_str(), "Medal: User")
+		&& !::strstr(root.c_str(), "Novelty")
+		&& !::strstr(first.c_str(), "Defense")
+		&& ::strstr(second.c_str(), "Medal: Defense")
+		&& ::strstr(second.c_str(), "Critical endgame position");
+}
+
+
+static mstl::string
+decodeQuotationPayload(Byte const* payload, unsigned length)
+{
+	Byte annotations[65536];
+	util::ByteStream out(annotations, sizeof(annotations));
+	out.resetp();
+	out << util::ByteStream::uint24_t(0xffffff) << uint8_t(0x13) << uint16_t(length + 6);
+	for (unsigned i = 0; i < length; ++i) out << uint8_t(payload[i]);
+	// Must still decode after a malformed or truncated quotation header/blob.
+	out << util::ByteStream::uint24_t(0xffffff) << uint8_t(0x18) << uint16_t(7) << uint8_t(3);
+	util::ByteStream a(annotations, out.tellp());
+	Byte moves[] = {0, 0, 0, 4};
+	util::ByteStream g(moves, sizeof(moves));
+	sys::utf8::Codec codec(sys::utf8::Codec::utf8());
+	cbh::GameDecoder decoder(g, a, codec, false);
+	GameData data;
+	delete data.m_startNode->removeNext();
+	decoder.doDecoding(data);
+	return data.m_startNode->comment(move::Post).content();
+}
+
+
+static bool
+verifyQuotationCorpus(char const* filename)
+{
+	FILE* file = ::fopen(filename, "r");
+	if (!file) return false;
+	char line[16384];
+	unsigned count = 0;
+	bool ok = true;
+	while (ok && ::fgets(line, sizeof(line), file))
+	{
+		if (line[0] == '#') continue;
+		char* eco = ::strchr(line, '\t');
+		if (!eco) { ok = false; break; }
+		*eco++ = 0;
+		char* san = ::strchr(eco, '\t');
+		if (!san) { ok = false; break; }
+		*san++ = 0;
+		san[::strcspn(san, "\r\n")] = 0;
+		unsigned length = ::strlen(line)/2;
+		Byte payload[8192];
+		if (length > sizeof(payload)) { ok = false; break; }
+		for (unsigned i = 0; i < length; ++i)
+		{
+			char hex[] = { line[2*i], line[2*i + 1], 0 };
+			payload[i] = Byte(::strtoul(hex, 0, 16));
+		}
+		mstl::string text = decodeQuotationPayload(payload, length);
+		mstl::string ecoText("ECO "); ecoText += eco;
+		ok = ::strstr(text.c_str(), "Quoted game:") && ::strstr(text.c_str(), ecoText.c_str())
+			&& ::strstr(text.c_str(), san) && ::strstr(text.c_str(), "Critical endgame position");
+		if (!ok) ::fprintf(stderr, "Quotation %u mismatch: %s\n", count, text.c_str());
+		// Truncate at every byte, updating the redundant payload length.
+		// No truncation may consume or suppress the following annotation,
+		// and none may publish a move replay (the SAN always starts a new
+		// line with the move-1 number; citation and follow-up never do).
+		for (unsigned n = 0; ok && n < length; ++n)
+		{
+			payload[0] = Byte(n >> 8); payload[1] = Byte(n);
+			text = decodeQuotationPayload(payload, n);
+			ok = ::strstr(text.c_str(), "Critical endgame position") && !::strstr(text.c_str(), "\n1.");
+			if (!ok) ::fprintf(stderr, "Quotation %u truncation %u failed: [%s]\n", count, n, text.c_str());
+		}
+		++count;
+	}
+	::fclose(file);
+	::printf("Quotation corpus: %u records %s\n", count, ok ? "PASSED" : "FAILED");
+	return ok && count != 0;
+}
+
+
+static bool
+verifyQuotationEdges()
+{
+	struct Case { unsigned length; Byte bytes[22]; char const* san; };
+	Case const cases[] = {
+		{10, {0xf6,0x8e,0x6c,0xd8,0x9f,0x58,0x3a,0x4b,0xb9,0xb3}, "1.f3 e5 2.g4 Qh4#"},
+		{12, {0xdf,0x93,0x14,0x6b,0x6d,0x49,0x9a,0x64,0x9b,0xde,0xba,0xb4}, "1.e4 a6 2.e5 d5 3.exd6"},
+		{22, {0xaf,0x6c,0xb8,0x0f,0x15,0xc0,0x3a,0xb9,0x17,0xc5,0x3c,0xe1,0xc4,0x33,0xa4,0x2e,0x1b,0xfa,0x84,0xf8,0xbf,0xb9},
+			"1.a4 h5 2.a5 h4 3.a6 h3 4.axb7 hxg2 5.bxa8=Q gxf1=N"},
+	};
+	for (unsigned i = 0; i < sizeof(cases)/sizeof(cases[0]); ++i)
+	{
+		mstl::string san;
+		if (!cbh::decodeQuotationMoves(cases[i].bytes, cases[i].length, san) || san != cases[i].san)
+		{
+			::fprintf(stderr, "Quotation edge %u: %s\n", i, san.c_str());
+			return false;
+		}
+		for (unsigned n = 0; n < cases[i].length; ++n)
+		{
+			san = "unchanged";
+			if (cbh::decodeQuotationMoves(cases[i].bytes, n, san) || san != "unchanged") return false;
+		}
+	}
+	Byte bad[] = {0, 0, 0xb6, 0xb0}; // unknown control word, then terminator
+	mstl::string san("unchanged");
+	if (cbh::decodeQuotationMoves(bad, sizeof(bad), san) || san != "unchanged") return false;
+	Byte trailing[] = {0xb5, 0xaf, 0xdf, 0x93}; // terminator followed by junk
+	if (cbh::decodeQuotationMoves(trailing, sizeof(trailing), san) || san != "unchanged") return false;
+
+	unsigned const ecoCodes[] = {0, 1, 100, 101, 500, 501, 511};
+	char const* expected[] = {0, "ECO A00", "ECO A99", "ECO B00", "ECO E99", 0, 0};
+	for (unsigned i = 0; i < sizeof(ecoCodes)/sizeof(ecoCodes[0]); ++i)
+	{
+		Byte payload[64];
+		util::ByteStream out(payload, sizeof(payload)); out.resetp();
+		out << uint16_t(0) << uint16_t(2) << uint16_t(0) << uint8_t(1) << uint8_t('W');
+		out << uint8_t(0) << uint8_t(1) << uint8_t('B');
+		out << uint8_t(0) << uint16_t(0) << uint16_t(0) << uint16_t((ecoCodes[i] << 7) | 0x7f);
+		// Empty event/site and fixed metadata, then 1.e4 and the end marker.
+		for (unsigned n = 0; n < 21; ++n) out << uint8_t(0);
+		out << uint8_t(0xdf) << uint8_t(0x93) << uint8_t(0xb6) << uint8_t(0xb0);
+		unsigned length = out.tellp();
+		payload[0] = Byte(length >> 8); payload[1] = Byte(length);
+		mstl::string text = decodeQuotationPayload(payload, length);
+		if (!::strstr(text.c_str(), "1.e4")) return false;
+		if (expected[i] ? ::strstr(text.c_str(), expected[i]) == 0
+		                    : ::strstr(text.c_str(), "ECO ") != 0) return false;
+	}
+	::puts("Quotation edge cases PASSED");
+	return true;
+}
+
+
 int
 main(int argc, char** argv)
 {
@@ -695,6 +878,16 @@ main(int argc, char** argv)
 		TclInterpreter tcl;
 		::fprintf(stderr, "initializing statics...\n");
 		initializeStatics();
+		if (!verifyQuotationEdges()) return 1;
+		if (argc == 3 && ::strcmp(argv[1], "--quotations") == 0)
+			return verifyQuotationCorpus(argv[2]) ? 0 : 1;
+		if (!verifyDisplayAnnotations())
+		{
+			::fprintf(stderr, "CBH display annotation verification FAILED\n");
+			return 1;
+		}
+		::puts("CBH display annotation verification PASSED");
+		if (argc == 2 && ::strcmp(argv[1], "--annotations-only") == 0) return 0;
 		::fprintf(stderr, "loading eco...\n");
 		loadEcoFile();
 		::fprintf(stderr, "init done\n");

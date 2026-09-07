@@ -133,6 +133,7 @@ SRC_CXX = \
 	cbh/cbh_encoder.cpp \
 	cbh/cbh_encoder_position.cpp \
 	cbh/cbh_game_decoder.cpp \
+	cbh/cbh_quotation.cpp \
 	cbh/cbh_count_cipher.cpp \
 	cbh/cbh_media.cpp \
 	2cbh/cb2_move16_table.cpp \

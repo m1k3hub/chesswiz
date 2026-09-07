@@ -22,11 +22,11 @@ length is LE — it is big-endian.) Game-wide records precede move records.
 | 0x18 | critical position    |    13 | **decoded 2026-09-06** → text comment |
 | 0x24 | time control         |     6 | **decoded 2026-09-06** → TimeControl tag |
 | 0x09 | training/quiz        |   344 | **decoded 2026-09-06** → text comment (see `cba-training-annotation-format.md`) |
-| 0x13 | game quotation       |    17 | **decoded 2026-09-06** → text comment (header only; see `cba-quotation-format.md`) |
-| 0x22 | medal                |    48 | skipped — duplicates the medal bits already read from the .cbh index |
-| 0x23 | variation color      |     3 | skipped — payload `00 B G R`; no scidb model equivalent |
-| 0x14 | pawn structure       |     3 | skipped — 1-byte payload (`03` observed) |
-| 0x15 | piece path           |     2 | skipped — 2-byte payload (`03 36/38` observed) |
+| 0x13 | game quotation       |    17 | **decoded 2026-09-06** → citation with ECO + full SAN replay of the quoted game (see `cba-quotation-format.md`) |
+| 0x22 | medal                |    75 | decoded to text at the recorded node (including game-wide records) |
+| 0x23 | variation color      |     3 | raw payload preserved in text; observed `02 00 00 00`, mode unresolved |
+| 0x14 | pawn structure       |     5 | raw payload preserved in text (`03` observed) |
+| 0x15 | piece path           |     3 | raw payload preserved in text (`03 36/38` observed) |
 
 Payload validations against real data:
 - 0x07 = `h m s flag` (flag 0x1e on a side's first record); e.g. Sinquefield
@@ -39,12 +39,14 @@ Payload validations against real data:
 
 - Correspondence types 0x19/0x61: absent from the fixture; needs a corr
   database saved by ChessBase.
-- 0x13's embedded quoted-game move blob is not decoded to SAN (header only;
-  see `cba-quotation-format.md` open items).
-- 0x22/0x23/0x14/0x15 (medal, variation color, pawn structure, piece path):
-  low value — medal duplicates data already read from the `.cbh` index
-  flags; the rest are too sparse in the fixture (2-3 samples each) to
-  RE confidently.
+- 0x13's embedded quoted-game move blob is decoded to numbered SAN and
+  cross-validated 17/17 (1,650 plies) against independent python-chess
+  replay; see `cba-quotation-format.md`.
+- 0x23/0x14/0x15 display semantics remain unresolved. Their full payloads
+  now survive import as labeled comments; there is no native color/structure/
+  path rendering or binary round-trip support. See `cba-display-annotations.md`.
+- 0x22 is **not** redundant with the index: move-level records retain medal
+  locations and distinguish tactical from strategic blunders.
 
 ## Decoder changes (2026-09-06)
 
@@ -57,3 +59,8 @@ Payload validations against real data:
 
 Known asymmetry: the CBH *writer* (`cbh_annotation_encoder.cpp`) still emits
 only 0x02/0x82/0x03/0x04/0x05 — new types are import-only for now.
+
+The four display-type counts above were rechecked with
+`scripts/census_cba_annotations.py`; these count all records across 27 databases,
+including duplicated games in the collected and individual tournament databases.
+The other type counts have not been recounted in this pass.
