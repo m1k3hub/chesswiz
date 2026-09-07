@@ -932,3 +932,81 @@ pass's `winedbg --gdb --no-start` recipe, then use keyboard-only
 navigation (`F6`, arrow keys, `Return`) to select this exact game and step
 to `3...a6` to trigger the render and capture whatever call stack
 actually fires.
+
+### Eleventh attempt (2026-09-06, later still) — breakpoint mechanics re-confirmed working; "Activate data abonnement" dialog conclusively proven un-drivable, both keyboard and mouse
+
+Goal: reach the confirmed-renderable target (`Sinquefield Cup 2015.cbh`
+game index 6, `3...a6`) with the `decode_caller` breakpoint already armed,
+and capture a call stack.
+
+**Breakpoint mechanics**: re-confirmed working exactly as documented.
+`winedbg --gdb --no-start` + `gdb -q` via a persistent named-pipe stdin
+(so follow-up commands can be sent after `continue`, unlike a one-shot
+heredoc) armed `break *0x140210bc0` cleanly on a freshly launched
+`CBase26.exe "<path>.cbh"` (passing the database as a launch argument, not
+opened via the UI, worked and skips the folder-browsing step entirely).
+
+**New, more precise negative finding on the licensing dialog**: this pass
+hit the same first-run "Activate data abonnement" CAPTCHA dialog four
+independent times (across two fresh CBase26 launches) and it was
+**never dismissible**, by either input method, despite both reporting
+success at the X level:
+- `xdotool key --window <dialog-id> ...` (Tab, Return, Space, Escape,
+  Alt+C) — `xdotool getwindowfocus` correctly reported the dialog's own
+  window ID as focused before sending keys, yet every keystroke's visible
+  effect landed on the **main window behind it** instead (ribbon mnemonics
+  underlining ribbon buttons, a Style dropdown opening, the ribbon tab
+  switching to "Players") — never on the dialog itself.
+- Direct mouse clicks at the OK button's exact on-screen pixel coordinates
+  — `xdotool getmouselocation` confirmed both the correct coordinates
+  *and* the dialog's window ID as the window under the cursor immediately
+  before clicking — produced no visible effect on the dialog (no
+  activation-flow progression, no close, no error dialog) across two
+  attempts at the same coordinates.
+
+This is a strictly stronger negative result than prior passes' "clicks
+don't work" note (which was only tested against the main game grid): it
+shows the X server's own focus/position bookkeeping (`getwindowfocus`,
+`getmouselocation`) is accurate and points at the dialog, but *input events
+still don't reach the dialog's win32 message loop* — a Wine input-routing
+bug specific to this modal-dialog class under a window-manager-less Xvfb,
+not a coordinate or focus-targeting mistake on the automation side. (One
+prior pass *did* dismiss an equivalent dialog with a single Tab+Return; the
+likely explanation, per that pass's own note about a "reused,
+already-activated instance," is that dialog belonged to a *different,
+already-activated* CBase26 instance whose dialog had different modal
+plumbing, not that a fresh instance's dialog is reliably dismissible.)
+
+**Consequence**: no CBase26 instance launched fresh in this environment
+can currently get past first run to reach the game grid interactively.
+The only known way past this dialog remains reusing a pre-existing,
+already-activated instance from an earlier pass's session (not available
+in this pass — none was left running), or finding an activation-bypass
+switch/registry key/config file for CBase26's trial state (not
+investigated this pass).
+
+**No code changes.** `decode_caller`'s breakpoint mechanics remain solid
+and reusable; the blocker is now precisely characterized as a Wine
+modal-dialog input-routing bug, not a targeting error. All CBase26/
+winedbg/gdb processes and the Xvfb `:253` display used in this pass were
+killed; scratch screenshots and log files deleted.
+
+**Honest recommendation after eleven passes**: the static-analysis and
+brute-force avenues are now exhaustively closed (per the tenth pass). The
+live-debugging avenue's *hard* part (breakpoint mechanics) is solid, but
+its *soft* part (reaching a triggerable UI state in a fresh headless
+instance) has now failed on two independent obstacles across two passes —
+first UI navigation getting lost in an unrelated Fritztrainer sub-view,
+now a licensing dialog that doesn't respond to either input method at all.
+Before investing an twelfth pass in more UI automation, the highest-value
+next move is almost certainly **not** another attempt at driving the fresh
+first-run dialog, but one of: (a) find and reuse or preserve an
+already-activated CBase26 instance across passes (e.g. leave one
+deliberately running and undisturbed between forks, rather than each pass
+starting fresh), (b) investigate whether CBase26's trial/unactivated state
+can be pre-satisfied via a config file or registry key under
+`~/.wine/drive_c/users/*/Application Data/ChessBase/` before ever
+launching the GUI, or (c) accept this specific field (the embedded
+quoted-game move replay) as a documented, well-characterized permanent
+gap for now — the header decode is solid and shipped; this is a
+separable, non-blocking enhancement, not a correctness bug.
