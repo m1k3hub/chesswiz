@@ -982,6 +982,32 @@ Consistent with the verified state: opcode-04 = structural/vector
 annotations and class 0x80 = directional arrows (proven by game-tree
 correlation, not by naming).  Everything else in the text is unfounded.
 
+### Rejected: a second fabricated opcode-04 class/colour table (2026-09-07)
+
+A second web-surfaced text claims opcode-04 sub-classes 0x00-0x3F =
+square highlights (0x01 Static Full Border, 0x02 Solid Fill, 0x04
+Target Reticle), 0x40 = text overlays, 0xC0+ = special markers (0xC1
+X-marks, 0xC2 ghost pieces), a nibble colour palette (0x01 Green,
+0x02 Red, 0x04 Yellow, 0x08 Blue), and .cms/.cbm expansions ("Chess
+Media Script/System", "ChessBase Multimedia Baggage").  Corpus
+falsification:
+
+- Classes 0x200 (33 records) and 0x800 (2 records) are absent from
+  the table; ~130 claimed class values (0x03-0x3F, 0xC0-0xC2, ...)
+  have zero corpus occurrences in 742 records across 234 exports.
+- The mark-style histogram is 2 x1598, 4 x336, 3 x1 - the claimed
+  palette keys 0x01 and 0x08 never occur in 3,574 style entries.
+- The file-name expansions contradict ChessBase's own binary strings
+  (`Chess Media System`, `Extra Chess Media`, `V_CB_BOARDPOINTS`).
+- The decoded record layout has SEPARATE u16 class and u16 modifier
+  fields with distinct histograms; the pasted "class byte with a
+  lower-nibble colour mask" structure does not exist.
+
+Consistent with the verified state: opcode-04 draws arrows/colours
+onto the canvas and class 0x80 = directional arrows (proven by
+game-tree correlation).  The style->colour mapping and the non-arrow
+class meanings remain visual-oracle-open (serial wall).
+
 ## Reader14 dynamic playback path
 
 Opening a fixture WMV directly with ChessBase Reader 14 under Wine produced
