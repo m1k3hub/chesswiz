@@ -753,6 +753,28 @@ Python reference validated 20,000 games at 100% legality).
   pending the .2lgd mapping; result not yet decoded ("*"); type-2
   (Chess960) games are skipped.
 
+### 3.8.6.1 Variation + comment emission (2026-09-07)
+
+The converter now emits full nested RAV variations and .2cba comments
+(in-variation included) instead of a flat mainline:
+
+- Emission goes through `db::cb2::walkGameRaw` (public wrapper over the
+  codec-internal `walkGame`) into `db::PgnWriter` — the same walk the
+  `cb2::Codec` uses, so the converter no longer duplicates the tree
+  logic and can no longer drift from the codec (the count-form root
+  marker fix, section 4.2 / commit 97e1131, applies automatically).
+- Two-pass per game: validate through a `VarConsumer` first (a desync
+  must not produce a truncated PGN game), then emit.
+- Consumer protocol note: `Consumer::startGame` asserts `finalized()`;
+  readers call `finalizeGame()` externally after `finishGame` to pop
+  the game line.  The converter does the same between games.
+- Output encoding is UTF-8 (the .2lid names pass through untouched).
+- Full-scale check: LumbrasGigaBase_OTB_ELO2400, first 20,000 games →
+  19,977 converted, 23 failed (illegal-move desyncs, same games the
+  codec path rejects), variations + comments present in the output.
+- Removed: the token-index root-marker scan and the flat-only comment
+  gate ("flat games only (validated path)").
+
 ### 3.8.7 .2LID namebase — SOLVED (2026-08-27)
 
 **The player ID ↔ name mapping is solved and implemented:**

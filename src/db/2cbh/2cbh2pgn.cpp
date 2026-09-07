@@ -1,12 +1,12 @@
 // ======================================================================
 // 2cbh2pgn -- headless converter: ChessBase 17+ (2CBH/2CBG) -> PGN.
 //
-// Reads a .2cbh database (index + .2cbg game data), decodes every
-// game's mainline through the embedded Move16 table and writes PGN.
+// Reads a .2cbh database (index + .2cbg game data + .2lid namebase +
+// .2cba annotations) and writes PGN.  Games are emitted through the
+// codec's variation walk (db::cb2::walkGameRaw): mainline + nested RAV
+// variations + comments/NAGs in document order, via db::PgnWriter.
 //
 // Limitations (see 2CBH_FORMAT_DESIGN.md):
-//   - player/event names are not yet resolved (the .2lgd ID->offset
-//     mapping is not decoded yet); placeholders are emitted
 //   - only standard-chess games (record type 1) are converted
 //
 // Usage: 2cbh2pgn <prefix> <out.pgn> [maxGames]
@@ -14,13 +14,20 @@
 
 #include "2cbh_move16.h"
 #include "2cbh_annotations.h"
+#include "cb2_codec.h"
 
 #include <string>
 #include <vector>
 #include "db_common.h"
 
 #include "db_board.h"
-#include "db_move.h"
+#include "db_pgn_writer.h"
+#include "db_tag_set.h"
+#include "db_var_consumer.h"
+
+#include "sys_utf8_codec.h"
+#include "m_fstream.h"
+#include "m_string.h"
 
 #include <string>
 #include <vector>
@@ -30,10 +37,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-using db::Board;
-using db::Move;
-using namespace db::piece;
-using namespace db::variant;
+#include <tcl.h>
+
+// sys::utf8::Codec resolves encodings through the Tcl encoding engine,
+// so a live interpreter is required (same pattern as cdb2sci).
+namespace tcl { namespace bits { Tcl_Interp* interp = nullptr; } }
 
 
 namespace
@@ -136,32 +144,12 @@ void loadNames(unsigned char const* lid, size_t size,
    }
 }
 
-// Move16 squares are file-major (sq = file*8 + rank), scidb is rank-major.// Move16 squares are file-major (sq = file*8 + rank), scidb is rank-major.
-inline unsigned toScidbSquare(unsigned m16sq)
-{
-   return ((m16sq & 7) << 3) | (m16sq >> 3);
-}
-
-// Move16 piece numbering -> scidb piece::ID (1=pawn .. 6=king)
-unsigned toScidbPiece(unsigned m16piece)
-{
-   switch (m16piece & 7)
-   {
-      case 1:  return King;
-      case 2:  return Queen;
-      case 3:  return Knight;
-      case 4:  return Bishop;
-      case 5:  return Rook;
-      case 6:  return Pawn;
-      default: return db::piece::None;
-   }
-}
-
 } // anonymous namespace
 
 int main(int argc, char* argv[])
 {
-   Board::initialize();
+   tcl::bits::interp = ::Tcl_CreateInterp();
+   db::Board::initialize();
    if (argc < 3)
    {
       ::fprintf(stderr, "usage: 2cbh2pgn <prefix> <output.pgn> [maxGames]\n");
@@ -221,17 +209,29 @@ int main(int argc, char* argv[])
    if (maxGames == 0 || maxGames > gameCount)
       maxGames = gameCount;
 
-   ::FILE* out = ::fopen(argv[2], "wb");
-   if (!out)
+   mstl::ofstream outStream(argv[2], mstl::ios_base::out);
+   if (!outStream)
    {
       ::fprintf(stderr, "cannot create %s\n", argv[2]);
       return 1;
    }
 
+   // PGN emission through the codec's variation walk: mainline + nested
+   // RAVs + comments/NAGs in document order.  Names are UTF-8
+   // pass-through from the .2lid, so the PGN encoding is UTF-8.
+   unsigned const pgnFlags =	db::Writer::Flag_Include_Variations
+										| db::Writer::Flag_Include_Comments
+										| db::Writer::Flag_Include_Annotation;
+   db::PgnWriter writer(	db::format::ChessBase2,
+   								outStream,
+									sys::utf8::Codec::utf8(),
+									db::PgnWriter::Unix,
+									pgnFlags);
+   writer.start();
+
    unsigned converted = 0;
    unsigned skipped = 0;
    unsigned failed = 0;
-   unsigned skippedVariationComments = 0;
    unsigned annotationGames = 0;
 
    // Each .2cbh index record points to its .2cbg record via the offset
@@ -251,7 +251,6 @@ int main(int argc, char* argv[])
          continue;
       }
       uint32_t dataSize = readLE32(cbg + cbgOff + 0x08);
-      uint32_t extraSize = readLE32(cbg + cbgOff + 0x0c);
       uint16_t type = readLE16(cbg + cbgOff + 0x18);
       unsigned char const* data = cbg + cbgOff + 0x1a;
 
@@ -261,45 +260,9 @@ int main(int argc, char* argv[])
          continue;
       }
 
-      // ---------------------------------------------
-      // --------------------------------------------------------------
-      // annotations (.2cba record at index @0x10) + variation tree (4.2)
-      // --------------------------------------------------------------
-
-      // mainline markers (token index j == 0-based mainline index) and the
-      // post-mainline region
-      mstl::vector<uint32_t> rootMarkers;   // 0-based replaced indices
-      unsigned nShorts = (dataSize - dataSize % 2u) / 2u;
-      unsigned mainEnd = nShorts;
-      {
-         uint16_t prev = 0;
-         for (unsigned j = 0; j < nShorts; ++j)
-         {
-            uint16_t code = readLE16(data + 2*j);
-            if (code == db::cb2::Move16_GameStart)
-            { prev = code; continue; }
-            if (code == db::cb2::Move16_Terminator)
-            { mainEnd = j; break; }
-            if (code == db::cb2::Move16_Marker)
-            { rootMarkers.push_back(uint32_t(j)); prev = code; continue; }
-            if (code >= db::cb2::Move16_None)
-            { prev = code; continue; }
-            (void) prev;
-         }
-      }
-      uint16_t const* region =
-         reinterpret_cast<uint16_t const*>(data) + (mainEnd + 1u);
-      uint32_t regionWords = 0;
-      if (mainEnd + 1u < nShorts)
-      {
-         region = reinterpret_cast<uint16_t const*>(data) + (mainEnd + 1u);
-         regionWords = nShorts - (mainEnd + 1u);
-      }
-
-      std::vector<std::string> comments;   // [walk position 1..] comment
-      mstl::vector<db::cb2::CbgNode> pool;
-      mstl::vector<uint32_t> rootsDoc;
-      mstl::vector<uint32_t> rootInsert;
+      // .2cba annotation items (comments/NAGs), keyed by document walk
+      // position; db::cb2::walkGameRaw places them, also inside RAVs.
+      mstl::vector<db::cb2::CbaItem> items;
       bool annotationsOk = false;
       unsigned long cbaOff = (unsigned long) readLE32(cbh + (256u + k) * recordSize + 0x10);
       if (haveCba && cbaOff != 0x7fffffffu && cbaOff + 0x1a < cbaData.size())
@@ -308,144 +271,14 @@ int main(int argc, char* argv[])
          if (readLE64(arec) == 0x1122334455667788ull)
          {
             uint32_t const adSize = readLE32(arec + 0x08);
-            if (cbaOff + 0x1a + adSize <= cbaData.size())
-            {
-               mstl::vector<db::cb2::CbaItem> items;
-               if (db::cb2::parseCbaItems(arec + 0x1a, adSize, items)
-                     && db::cb2::parseCbgTree(region, regionWords, rootMarkers,
-                                              pool, rootsDoc, rootInsert)
-                     && rootsDoc.empty())   // flat games only (validated path);
-               {                            // variation emission is next
-                  annotationsOk = true;
-                  ++annotationGames;
-                  uint32_t const walkTotal =
-                     db::cb2::cbgWalkTotal(pool, rootsDoc, uint32_t(mainEnd));
-                  comments.resize(walkTotal + 2);
-                  for (size_t ci = 0; ci < comments.size(); ++ci)
-                     comments[ci].clear();
-                  for (size_t i = 0; i < items.size(); ++i)
-                  {
-                     db::cb2::CbaItem const& item = items[i];
-                     if (item.position + 1 < comments.size())
-                     {
-                        if (!comments[item.position + 1].empty())
-                           comments[item.position + 1] += "\n";
-                        comments[item.position + 1] += item.text.c_str();
-                     }
-                  }
-               }
-            }
+            if (cbaOff + 0x1a + adSize <= cbaData.size()
+                  && db::cb2::parseCbaItems(arec + 0x1a, adSize, items)
+                  && !items.empty())
+               annotationsOk = true;
          }
       }
-
-      Board board(Board::standardBoard(Normal));
-
-      std::string movetext;
-      unsigned moves = 0;
-      bool ok = true;
-
-      for (unsigned j = 0; j < nShorts && ok; ++j)
-      {
-         uint16_t code = readLE16(data + 2*j);
-         if (code == db::cb2::Move16_GameStart)
-            continue;
-         if (code == db::cb2::Move16_Terminator)
-            break;
-         if (code >= db::cb2::Move16_None)
-            continue;
-
-         db::cb2::Move16Descriptor d;
-         if (!db::cb2::decodeMove16(code, d))
-         {
-            ++failed;
-            ok = false;
-            break;
-         }
-
-         unsigned from = toScidbSquare(d.from);
-         unsigned to = toScidbSquare(d.to);
-         unsigned promoType = 0;
-         bool isPromotion = false;
-
-         if (d.hasWord1
-             && (d.piece == 6 || d.piece == 14)
-             && d.word1From == d.to
-             && d.word1To == d.to)
-         {
-            promoType = toScidbPiece(d.word1Piece);
-            isPromotion = true;
-         }
-
-         // find the matching legal move generated by the board (this
-         // gets castling/ep/double-push flags right, unlike manual
-         // move construction)
-         Move move;
-         {
-            db::MoveList legalMoves;
-            board.generateMoves(Normal, legalMoves);
-            board.filterLegalMoves(legalMoves, Normal);
-            // ChessBase encodes castling as king e1->g1; scidb uses the
-            // internal Chess960 representation (king to the rook square),
-            // so also accept the rook square from the second descriptor.
-            unsigned to2 = (d.hasWord1
-                            && (d.word1Piece == 5 || d.word1Piece == 13))
-                           ? toScidbSquare(d.word1From) : to;
-            bool found = false;
-            for (unsigned mi = 0; mi < legalMoves.size(); ++mi)
-            {
-               Move const& m = legalMoves[mi];
-               if (m.from() != from || (m.to() != to && m.to() != to2))
-                  continue;
-               if (isPromotion)
-               {
-                  if (!m.isPromotion() || m.promoted() != promoType)
-                     continue;
-               }
-               else if (m.isPromotion())
-               {
-                  continue;
-               }
-               move = m;
-               found = true;
-               break;
-            }
-            if (!found)
-            {
-               ++failed;
-               ok = false;
-               break;
-            }
-         }
-
-         board.prepareForPrint(move, Normal, Board::ExternalRepresentation);
-         mstl::string san;
-         move.printSAN(san, db::protocol::Standard, db::encoding::Latin1);
-
-         if (moves % 2 == 0)
-         {
-            char buf[16];
-            ::sprintf(buf, "%u. ", moves / 2 + 1);
-            movetext += buf;
-         }
-         movetext += san.c_str();
-         if (annotationsOk
-               && moves + 1 < comments.size()
-               && !comments[moves + 1].empty())
-         {
-            movetext += " {";
-            movetext += comments[moves + 1];
-            movetext += '}';
-         }
-         movetext += ' ';
-         ++moves;
-
-         board.doMove(move, Normal);
-      }
-
-      cbgOff += 16 + dataSize + extraSize + 18;
-      if (!ok)
-         continue;
-      ++converted;
+      if (annotationsOk)
+         ++annotationGames;
 
       unsigned long wid = readLE32(cbh + (256u + k) * recordSize + 0x18) & 0xffffffu;
       unsigned long bid = readLE32(cbh + (256u + k) * recordSize + 0x20) & 0xffffffu;
@@ -471,12 +304,12 @@ int main(int argc, char* argv[])
                         : ("Player " + std::to_string(bid));
       // result: byte 0x58 low 2 bits (0 = 0-1, 1 = 1/2-1/2, 2 = 1-0)
       unsigned char f58 = cbh[(256u + k) * recordSize + 0x58];
-      char const* result = "*";
+      char const* resultStr = "*";
       switch (f58 & 3)
       {
-         case 0:  result = "0-1"; break;
-         case 1:  result = "1/2-1/2"; break;
-         case 2:  result = "1-0"; break;
+         case 0:  resultStr = "0-1"; break;
+         case 1:  resultStr = "1/2-1/2"; break;
+         case 2:  resultStr = "1-0"; break;
          default: break;
       }
       // ECO: index @0x80 = 128 * (base + 1), base = 0-based ECO code
@@ -499,27 +332,61 @@ int main(int argc, char* argv[])
       // dispatch cases). See 2CBH_FORMAT_DESIGN.md.
       unsigned whiteElo = readLE16(cbh + (256u + k) * recordSize + 0x60);
       unsigned blackElo = readLE16(cbh + (256u + k) * recordSize + 0x70);
-      ::fprintf(out,
-                "[Event \"?\"]\n"
-                "[Site \"?\"]\n"
-                "[Date \"%s\"]\n"
-                "[Round \"?\"]\n"
-                "[White \"%s\"]\n"
-                "[Black \"%s\"]\n"
-                "[Result \"%s\"]\n",
-                dateBuf, wname.c_str(), bname.c_str(), result);
+
+      db::TagSet tags;
+      tags.set(db::tag::Event, "?");
+      tags.set(db::tag::Site, "?");
+      tags.set(db::tag::Date, mstl::string(dateBuf));
+      tags.set(db::tag::Round, "?");
+      tags.set(db::tag::White, mstl::string(wname.c_str()));
+      tags.set(db::tag::Black, mstl::string(bname.c_str()));
+      tags.set(db::tag::Result, mstl::string(resultStr));
       if (ecoBuf[0])
-         ::fprintf(out, "[ECO \"%s\"]\n", ecoBuf);
+         tags.set(db::tag::Eco, mstl::string(ecoBuf));
       if (db::rating::isValid(whiteElo))
-         ::fprintf(out, "[WhiteElo \"%u\"]\n", whiteElo);
+         tags.set(db::tag::WhiteElo, whiteElo);
       if (db::rating::isValid(blackElo))
-         ::fprintf(out, "[BlackElo \"%u\"]\n", blackElo);
-      ::fprintf(out, "\n%s%s\n\n", movetext.c_str(), result);
+         tags.set(db::tag::BlackElo, blackElo);
+
+      // First pass: validate the walk so a desync cannot produce a
+      // truncated PGN game (the old flat converter skipped these too).
+      unsigned plyCount = 0;
+      {
+         db::VarConsumer validator(db::Board::standardBoard(db::variant::Normal));
+         if (   !validator.startGame(tags)
+             || !db::cb2::walkGameRaw( validator, data, dataSize,
+                                       items, annotationsOk, plyCount))
+         {
+            ++failed;
+            continue;
+         }
+         validator.finalizeGame();
+      }
+
+      // Second pass: emit through the PGN writer (variations included).
+      if (!writer.startGame(tags))
+      {
+         ++failed;
+         continue;
+      }
+      writer.startMoveSection();
+      bool const emitted = db::cb2::walkGameRaw(  writer, data, dataSize,
+                                                  items, annotationsOk, plyCount);
+      tags.set(db::tag::PlyCount, plyCount);
+      writer.finishMoveSection(db::result::fromString(resultStr));
+      writer.finishGame(tags);
+      writer.finalizeGame();   // pop the game line: next startGame asserts finalized()
+      if (!emitted)
+      {
+         ++failed;
+         continue;
+      }
+      ++converted;
    }
 
-   ::fclose(out);
+   writer.finish();
    ::printf("converted=%u skipped=%u failed=%u of %u"
-            "\n# annotations: games-with-comments=%u skipped-variation-comments=%u\n",
-            converted, skipped, failed, maxGames, annotationGames, skippedVariationComments);
+            "\n# annotations: games-with-annotation-items=%u\n",
+            converted, skipped, failed, maxGames, annotationGames);
    return failed ? 1 : 0;
 }

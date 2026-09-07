@@ -8,6 +8,7 @@
 #define _cb2_codec_included
 
 #include "db_database_codec.h"
+#include "db_consumer.h"
 #include "2cbh_annotations.h"
 #include "db_date.h"
 
@@ -23,6 +24,20 @@ namespace sys { namespace utf8 { class Codec; }; };
 namespace db {
 
 namespace cb2 {
+
+/// Feed one raw .2cbg game payload (a type-1 record's data) into a
+/// consumer: mainline + RAV variations + .2cba comments, in PGN order.
+/// Thin public wrapper over the codec-internal walkGame so the
+/// standalone 2cbh2pgn tool shares the codec's variation walk instead
+/// of duplicating it.  Returns false on desync (the caller should skip
+/// the game).
+bool walkGameRaw(	Consumer& consumer,
+						unsigned char const* data,
+						uint32_t dataSize,
+						mstl::vector<CbaItem> const& items,
+						bool annotationsOk,
+						unsigned& plyCount);
+
 
 class Codec : public DatabaseCodec
 {

@@ -284,10 +284,13 @@ feedLine( db::Consumer& consumer,
 /// Root marker pairing (reverse-engineered 2026-09-07 against the
 /// LumbrasGigaBase twin PGNs; verified on the Westerinen-Ernst and
 /// Kotronias-Ivanchuk nested games and the single-RAV Suba-Ermenkov
-/// game): the doc-order root #i replaces mainline ply
-/// `token(root marker i) - 2 - i` (0-based) and is fed directly after
-/// that move.  parseCbgTree delivers rootInsert = token - 1, so the
-/// replaced ply is rootInsert - 1 - i.
+/// game; count-form since commit 97e1131): a root marker records the
+/// MOVE COUNT (mainline moves so far, not a token index), and the
+/// doc-order root #i replaces mainline ply `count(root marker i) - 1 - i`
+/// (0-based, fed directly after that move).  The count form is immune
+/// to stray special tokens (e.g. 0xfffb) that would shift token -> ply
+/// arithmetic.  parseCbgTree delivers rootInsert = count - 1 - i, the
+/// 0-based replaced ply itself.
 ///
 /// Returns the mainline ply count; false on desync (the caller should
 /// skipGame).
@@ -386,6 +389,21 @@ walkGame( db::Consumer& consumer,
 }
 
 } // anonymous namespace
+
+
+/// Public wrapper over walkGame (see above); drives the consumer with
+/// the full game protocol (startGame/startMoveSection are the caller's
+/// responsibility).  See the declaration in cb2_codec.h.
+bool
+walkGameRaw(	Consumer& consumer,
+					unsigned char const* data,
+					uint32_t dataSize,
+					mstl::vector<CbaItem> const& items,
+					bool annotationsOk,
+					unsigned& plyCount)
+{
+	return walkGame(consumer, data, dataSize, items, annotationsOk, plyCount);
+}
 
 
 Codec::Codec()
