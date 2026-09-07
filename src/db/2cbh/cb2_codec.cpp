@@ -304,6 +304,12 @@ walkGame( db::Consumer& consumer,
    mstl::vector<uint32_t> rootMarkers;
    uint32_t j = 0;
 
+   // Root markers are recorded as MOVE COUNTS (the number of mainline
+   // moves before the marker), not as token indices: the count survives
+   // stray special tokens (e.g. a 0xfffb sub-structure word) that would
+   // otherwise shift the token -> ply arithmetic by one.  Never observed
+   // in the 863,538-game corpus, but the count form is immune regardless
+   // (scid-code GLM pass, cross-implementation review 2026-09-07).
    for (; j < n; ++j)
    {
       uint16_t code = readLE16(data + 2*j);
@@ -316,7 +322,7 @@ walkGame( db::Consumer& consumer,
       }
       if (code == db::cb2::Move16_Marker)
       {
-         rootMarkers.push_back(j);
+         rootMarkers.push_back(uint32_t(mainline.size()));
          continue;
       }
       if (code >= db::cb2::Move16_None)
@@ -330,8 +336,14 @@ walkGame( db::Consumer& consumer,
    mstl::vector<CbgNode> pool;
    mstl::vector<uint32_t> rootsDoc;
    mstl::vector<uint32_t> rootInsert;
-   bool const haveTree =
+   bool const treeOk =
       parseCbgTree(region, regionWords, rootMarkers, pool, rootsDoc, rootInsert);
+
+   // A malformed variation tree with variation data present would lose
+   // the RAV content silently and shift the .2cba walk positions
+   // (misplaced comments): refuse the whole record instead.
+   if (!treeOk && (!rootMarkers.empty() || regionWords != 0u))
+      return false;
 
    // doc-order root replaced plies: rootInsert[i] is the 0-based ply
    // replaced by doc root #i (see parseCbgTree); feedLine works with the
@@ -571,10 +583,7 @@ Codec::doOpen(	mstl::string const& rootname,
 			unsigned char const* lid =
 				reinterpret_cast<unsigned char const*>(lidData.data());
 			size_t const lsize = size_t(size);
-			// the .2lid text is Windows-1252; decode with the caller's
-			// encoding (cdb2sci's default is ISO-8859-1, matching
-			// ChessBase's own export behaviour)
-			sys::utf8::Codec textCodec(encoding);
+			sys::utf8::Codec textCodec(sys::utf8::Codec::utf8());  // for forceValidUtf8; .2lid text is UTF-8
 			static unsigned char const sig[12] = {
 				0xff, 0xff, 0xff, 0xff, 0x08, 0x00, 0x00, 0x00,
 				0xff, 0xff, 0xff, 0xff };
@@ -687,13 +696,14 @@ Codec::doOpen(	mstl::string const& rootname,
 					if (!text)
 						continue;
 
-					// the .2lid text is Windows-1252; convert to UTF-8 via
-					// the database encoding (the .2cbh game data is the
-					// same encoding)
-					textCodec.toUtf8(site);
+					// .2lid text is UTF-8 (data-verified in the
+					// cross-implementation review: the corpus contains
+					// c3 b8 = oe, c3 bc = ue and e4 b8 ad = CJK 'zhong',
+					// which cp1252 cannot encode; the source PGN stores
+					// the identical UTF-8 bytes).  Pass through; validate
+					// defensively.
 					if (!sys::utf8::validate(site))
 						textCodec.forceValidUtf8(site);
-					textCodec.toUtf8(event);
 					if (!sys::utf8::validate(event))
 						textCodec.forceValidUtf8(event);
 

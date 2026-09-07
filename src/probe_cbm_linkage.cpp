@@ -23,6 +23,12 @@
 // (rootname WITHOUT the .cbm suffix; the companion .cbh must exist)
 // ======================================================================
 
+#include "db/db_board.h"
+#include "db/db_board_base.h"
+#include "db/db_eco_table.h"
+#include "db/db_home_pawns.h"
+#include "db/db_signature.h"
+#include "db/sci/sci_encoder.h"
 #include "db/cbh/cbh_codec.h"
 #include "db/db_database.h"
 #include "db/db_database_codec.h"
@@ -367,10 +373,45 @@ readGuidingTextBody(	mstl::ifstream& cbg,
 int
 main(int argc, char** argv)
 {
+	// Statics: loadGame() aborts with kingOnBoard() without Board::initialize()
+	// (the same call works inside the application because the app initializes
+	// statics at startup).  Mirrors probe_cbllight's initStuff().  Also load
+	// the opening table: getGameInfo()/loadGame() recurse into
+	// EcoTable::getOpening and overflow the stack otherwise.
+	tag::initialize();
+	castling::initialize();
+	board::base::initialize();
+	Board::initialize();
+	HomePawns::initialize();
+	Signature::initialize();
+	sci::Encoder::initialize();
+
 	// the encoding codec needs a live Tcl interpreter (Tcl_GetEncoding)
 	Tcl_FindExecutable(argv[0]);
 	Tcl_Interp* ti = Tcl_CreateInterp();
 	tcl::bits::interp = ti;
+
+	// Load the opening table AFTER the interpreter exists (EcoTable's
+	// Loader constructs a sys::utf8::Codec, which calls Tcl_GetEncoding):
+	// getGameInfo()/loadGame() recurse into EcoTable::getOpening and
+	// overflow the stack otherwise.
+	{
+		char const* candidates[] = {
+			::getenv("SCIDB_ECO_FILE") ? ::getenv("SCIDB_ECO_FILE") : "",
+			"data/eco.bin",
+			"/media/michael-g-thomas/sas_mirror/src/chess/scidb-code.codex/src/data/eco.bin",
+		};
+		for (unsigned ci = 0; ci < sizeof(candidates)/sizeof(candidates[0]); ++ci)
+		{
+			if (*candidates[ci] == '\0') continue;
+			mstl::ifstream strm(candidates[ci], mstl::ios_base::in | mstl::ios_base::binary);
+			if (strm)
+			{
+				EcoTable::specimen(variant::Normal).load(strm, variant::Normal);
+				break;
+			}
+		}
+	}
 
 	if (argc < 2)
 	{

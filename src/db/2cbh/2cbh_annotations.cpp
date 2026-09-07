@@ -330,23 +330,23 @@ parseCbgTree(	uint16_t const* region,
 				sortedMarkers[a] = sortedMarkers[b];
 				sortedMarkers[b] = t;
 			}
-	rootsDoc.clear();
 	// Root marker pairing, reverse-engineered 2026-09-07 against the
 	// LumbrasGigaBase twin PGNs (Suba-Ermenkov single RAV, and the two
 	// nested games Westerinen-Ernst 2012 / Kotronias-Ivanchuk 2011; all
-	// 16 root RAVs verified): the doc-order root #a replaces mainline ply
-	// `token - 2 - a` (0-based) and feeds directly after that move.  The
-	// old `token - 1` reading was the 1-based ply in a stream where each
-	// preceding root RAV counts as one pseudo-move -- off by one for the
+	// 16 root RAVs verified).  rootMarkers are MOVE COUNTS (the number of
+	// mainline moves before the marker; the count survives stray special
+	// tokens that would shift token-index arithmetic).  The doc-order
+	// root #a replaces mainline ply `count - 1 - a` (0-based) and feeds
+	// directly after that move.  In token-index terms the old form was
+	// token - 2 - a; the naive token - 1 reading is off by one for the
 	// 2nd and later RAVs.
-	rootsDoc.clear();
 	for (mstl::vector<uint32_t>::size_type a = 0; a < sortedMarkers.size(); ++a)
 	{
-		if (sortedMarkers[a] < a + 2)
+		if (sortedMarkers[a] < a + 1)
 			return false; // marker before any replaceable mainline move
 		uint32_t nodeIdx = rootsStor[rootsStor.size() - 1 - mstl::vector<uint32_t>::size_type(a)];
 		rootsDoc.push_back(nodeIdx);
-		rootInsert.push_back(sortedMarkers[a] - 2 - a);   // 0-based replaced ply
+		rootInsert.push_back(sortedMarkers[a] - 1 - a);   // 0-based replaced ply
 	}
 	return true;
 }

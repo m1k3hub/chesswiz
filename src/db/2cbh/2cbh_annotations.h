@@ -93,9 +93,10 @@ bool flattenToMainline(	uint32_t position,
 // ----------------------------------------------------------------------
 // Variation tree (section 4.2): post-mainline storage is REVERSE
 // POST-ORDER.  A node = its own move runs (interleaved with 0xfffd
-// markers at nested-variation points; the marker value = the 0-based
-// index of the replaced move), closed by 0xffff; a node with k markers
-// is followed by k child subtrees in REVERSE doc order.
+// markers at nested-variation points; the marker records the COUNT of
+// own moves written before it, i.e. the replaced move's index is
+// count - 1), closed by 0xffff; a node with k markers is followed by
+// k child subtrees in REVERSE doc order.
 struct CbgNode
 {
 	mstl::vector<uint16_t>	own;      ///< node's own moves in walk order
