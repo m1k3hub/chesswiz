@@ -1325,3 +1325,19 @@ as follows on the round-08 fixture (MVL-Adams, 2325-byte last snapshot):
   distinction) remain open; the decoder skips the whole patch
   structurally (strict decorated-signature resync first, plain-entry
   fallback — two fixture families).
+
+### WP3/WP4 status (2026-09-07, glm-5.3:cloud pass)
+
+The pure-Tcl move applier (round-08 gates) and the lesson-v2 model are
+implemented and gated: 87/87 edges walk legally, the applier's 88
+position FENs byte-match a python-chess replay (raw ep convention,
+`fen(en_passant='fen')` on both sides), lesson::get on round 08 yields
+source=sidecar, 99 timeline pairs, 108 events, cache + persist
+round-trip.  The plan's "114+ positions" gate is honestly unmet at 88:
+the 51 off-mainline nodes live in the patch slots above (open
+semantics) so no ordered edges exist for them yet; gotos beyond the
+walkable tree are a WP5 clamp/degrade concern.  Open: round 01's edge
+stream dead-ends at edge 58 (h4-g5 illegal at every ancestor under
+python-chess) — an upstream parse/resync or non-standard-start
+question, not an applier issue; the lesson build degrades to valid=0
+with a reason there.

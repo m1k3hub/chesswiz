@@ -166,11 +166,14 @@ def parse(data):
                 collections=collections, patches=patches)
 
 
-def walk(edges):
-    """DFS walk with backtracking; returns (sans, positions, legal)."""
+def walk(edges, ep_mode='legal'):
+    """DFS walk with backtracking; returns (sans, positions, legal).
+
+    ep_mode: 'legal' (python-chess default) or 'fen' (raw convention:
+    the ep square prints after every double push)."""
     board = chess.Board()
     sans = []
-    positions = [board.fen()]
+    positions = [board.fen(en_passant=ep_mode)]
     for frm, to in edges:
         fm, tr = fm2sq(frm), fm2sq(to)
         mv = next((m for m in board.legal_moves
@@ -183,7 +186,7 @@ def walk(edges):
                        if m.from_square == fm and m.to_square == tr), None)
         sans.append(board.san(mv))
         board.push(mv)
-        positions.append(board.fen())
+        positions.append(board.fen(en_passant=ep_mode))
     return sans, positions, True
 
 
