@@ -369,6 +369,17 @@ Moment`), instructional labels (`*Quiet move no. 1!`), speaker names
 `(70) Carlsen,M ... Nakamura,H ... Zuerich 2014`. This confirms that `06`
 is a general lesson-object container, not just a move-delta stream.
 
+**(2026-09-07) The styled square/arrow annotations are media-stream-only.**
+A full-file census of the sibling `.2cba` annotation stream (863,538
+records, zero parse failures) finds **zero** type-4/type-5 square-list
+records: the `.2cba` sub-item inventory is exactly text (0x02, 88,741),
+NAG (0x03, 64,127), move time (0x07, 14,503) and engine eval (0x21,
+267).  The type-4/5 marks/arrows exist only in the WMV script stream
+(opcode-06 inline collections + opcode-04 transient actions) — the
+underlying database game carries none of them, so a 2CBH game import
+needs no square/arrow handler and the media player cannot inherit them
+from the annotation layer.
+
 The relationship between `06` and `02` is also confirmed. Across 10
 script-bearing WMVs, the final `06` delta before each
 following `02` checkpoint occurs byte-for-byte inside that checkpoint in all
