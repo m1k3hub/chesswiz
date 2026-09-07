@@ -955,6 +955,33 @@ a player is the runtime application layer (applying annotations and
 switching to clips) and, for commercial media, the per-product
 decrypt path.
 
+### Rejected: an AI-fabricated "mark-style colour / opcode-04 class" table (2026-09-07)
+
+A web-surfaced text claiming `.cms` = "Content Management / Style Map" and
+`.cbm` = "Compiled Binary Mark", a four-colour "Ocean" palette (#0071BC,
+#E6F1F8, #004F84, #00395E) keyed to mark styles 0x01-0x04, and an
+opcode-04 class table (0x00-0x1F internal transforms, 0x20 "Concentric
+Convergence", 0x40 "Dynamic Bounds Modifier", 0x60 "Bifurcated Anchor
+Paths", 0x80 "Directional Arrows", 0xA0 "Loop/Recurrence Loops") is
+**fabricated** and does not match the corpus:
+
+- The 742 opcode-04 records carry six classes (0x80 x498, 0x0 x204,
+  0x200 x33, 0x1 x4, 0x800 x2, 0x2 x1).  Class 0x200 (33 published
+  records) and 0x800 are absent from the pasted table, while the table's
+  0x3/0x4/0x5/.../0xA0 classes have never been observed.
+- The opcode-06 mark-style histogram is style 2 x1598, 4 x336, 3 x1 -
+  style 0x01 ("Primary Bold Line") never occurs in the corpus.
+- The file-name expansions contradict ChessBase's own binary strings
+  (`Chess Media System`, `Extra Chess Media`, `V_CB_BOARDPOINTS`);
+  "Compiled Binary Mark" and "Content Management / Style Map" are
+  backronyms.
+- The colour codes are unverifiable without the visual oracle (still
+  blocked by the serial wall).
+
+Consistent with the verified state: opcode-04 = structural/vector
+annotations and class 0x80 = directional arrows (proven by game-tree
+correlation, not by naming).  Everything else in the text is unfounded.
+
 ## Reader14 dynamic playback path
 
 Opening a fixture WMV directly with ChessBase Reader 14 under Wine produced
