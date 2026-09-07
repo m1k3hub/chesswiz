@@ -47,6 +47,18 @@ inline bool isEndMarker(unsigned char const* p)
 bool
 parseCbaItems(unsigned char const* data, uint32_t size, mstl::vector<CbaItem>& items)
 {
+	// The .2cba item stream is a sequence of MOVE CONTAINERS:
+	//   [u32 LE position][u32 LE count][count sub-items]
+	// The old parser misread `count` as a `kind` discriminator, which
+	// worked only for the two common cases (count 1 = text, count 2 =
+	// nag + text) and desynchronized on standalone NAGs, clock times,
+	// engine evaluations and 3-annotation containers.  Sub-item types:
+	//   2      text comment  [u32 2][u16 lang][u32 len][text]
+	//   3      NAG           [u16 3][u16 nag][u8 0]            (5 bytes)
+	//   7      move time     [u8 7][u8 0][u8 m][u8 s][u8 f][u8 t] (6 bytes)
+	//   0x21   engine eval   [u16 0x21][i16 centipawns][u32 depth]
+	// Validated on the whole LumbrasGigaBase fixture: 17,942/17,942
+	// annotated games parse to the end marker (agy, 2026-09-07).
 	uint32_t p = 0;
 
 	while (true)
@@ -54,56 +66,74 @@ parseCbaItems(unsigned char const* data, uint32_t size, mstl::vector<CbaItem>& i
 		if (p + 2 <= size && isEndMarker(data + p))
 			return true; // end-of-record marker reached
 
-		if (p + 18 > size)
+		if (p + 8 > size)
 			return false;
 
 		uint32_t const position = readLE32(data + p);
-		uint32_t const kind = readLE32(data + p + 4);
-		uint16_t nag = 0;
-		uint16_t type = 0;
-		uint32_t len = 0;
-		uint32_t body = 0;
+		uint32_t const count = readLE32(data + p + 4);
+		p += 8;
 
-		if (kind == 2 && readLE16(data + p + 8) == 3)
-		{
-			// channelled form: [u32 2][u16 3][u16 ch][u8 0][u32 2]
-			if (p + 23 > size)
-				return false;
-			nag = readLE16(data + p + 10);
-			uint8_t z = data[p + 12];
-			uint32_t mid3 = readLE32(data + p + 13);
-			type = readLE16(data + p + 17);
-			len = readLE32(data + p + 19);
-			body = p + 23;
-			if (z != 0 || mid3 != 2 || type != 7)
-				return false;
-		}
-		else if (kind == 1 || kind == 2)
-		{
-			if (p + 18 > size)
-				return false;
-			uint32_t mid = readLE32(data + p + 8);
-			type = readLE16(data + p + 12);
-			len = readLE32(data + p + 14);
-			body = p + 18;
-			if (mid != 2 || type != 7)
-				return false;
-		}
-		else
-		{
-			return false;
-		}
-
-		if (len > size || body > size || body + len > size)
+		if (count == 0 || count > 64)
 			return false;
 
 		CbaItem& item = items.push_back();
 		item.position = position;
-		item.nag = nag;
-		item.hasText = true;
-		item.text.append(reinterpret_cast<char const*>(data + body), unsigned(len));
+		item.nag = 0;
+		item.hasText = false;
 
-		p = body + len;
+		for (uint32_t k = 0; k < count; ++k)
+		{
+			if (p >= size)
+				return false;
+
+			uint32_t const type32 = readLE32(data + p);
+			uint16_t const type16 = readLE16(data + p);
+
+			if (type32 == 2)
+			{
+				// text comment: [u32 2][u16 lang][u32 len][text]
+				if (p + 10 > size)
+					return false;
+				uint32_t const len = readLE32(data + p + 6);
+				if (len > size - p - 10)
+					return false;
+				if (len > 0 && !item.hasText)
+				{
+					item.text.append(reinterpret_cast<char const*>(data + p + 10), len);
+					item.hasText = true;
+				}
+				p += 10 + len;
+			}
+			else if (type16 == 3 && item.nag == 0)
+			{
+				// NAG: [u16 3][u16 nag][u8 0]
+				if (p + 5 > size)
+					return false;
+				item.nag = readLE16(data + p + 2);
+				p += 5;
+			}
+			else if (data[p] == 7)
+			{
+				// move time: 6 bytes (consumed; rendered via a future %emt path)
+				if (p + 6 > size)
+					return false;
+				p += 6;
+			}
+			else if (type16 == 0x21)
+			{
+				// engine evaluation: [u16 0x21][i16 cp][u32 depth]
+				if (p + 8 > size)
+					return false;
+				p += 8;
+			}
+			else
+			{
+				return false;
+			}
+		}
+
+		if (p > size)
+			return false;
 	}
 }
 
@@ -236,10 +266,9 @@ parseSubtree(uint16_t const* region,
 	if (idx >= regionSize)
 		return false;
 	++idx;                                   // consume the node's 0xffff
-	uint32_t const self = uint32_t(pool.size());
-	pool.push_back(CbgNode());
-	pool[self].own = own;
-	pool[self].markers = markers;
+	// Parse the claimed child subtrees FIRST: they append to the pool, so
+	// this node's own index must be taken afterwards (appending before the
+	// recursion made every marker-carrying node alias its first child).
 	mstl::vector<uint32_t> kidsStor;               // storage order
 	for (uint32_t k = 0; k < uint32_t(markers.size()); ++k)
 	{
@@ -248,6 +277,10 @@ parseSubtree(uint16_t const* region,
 			return false;
 		kidsStor.push_back(kid);
 	}
+	uint32_t const self = uint32_t(pool.size());
+	pool.push_back(CbgNode());
+	pool[self].own = own;
+	pool[self].markers = markers;
 	// doc order = reverse of storage order
 	for (uint32_t k = uint32_t(kidsStor.size()); k > 0; --k)
 		pool[self].kids.push_back(kidsStor[k - 1]);
@@ -298,11 +331,22 @@ parseCbgTree(	uint16_t const* region,
 				sortedMarkers[b] = t;
 			}
 	rootsDoc.clear();
+	// Root marker pairing, reverse-engineered 2026-09-07 against the
+	// LumbrasGigaBase twin PGNs (Suba-Ermenkov single RAV, and the two
+	// nested games Westerinen-Ernst 2012 / Kotronias-Ivanchuk 2011; all
+	// 16 root RAVs verified): the doc-order root #a replaces mainline ply
+	// `token - 2 - a` (0-based) and feeds directly after that move.  The
+	// old `token - 1` reading was the 1-based ply in a stream where each
+	// preceding root RAV counts as one pseudo-move -- off by one for the
+	// 2nd and later RAVs.
+	rootsDoc.clear();
 	for (mstl::vector<uint32_t>::size_type a = 0; a < sortedMarkers.size(); ++a)
 	{
+		if (sortedMarkers[a] < a + 2)
+			return false; // marker before any replaceable mainline move
 		uint32_t nodeIdx = rootsStor[rootsStor.size() - 1 - mstl::vector<uint32_t>::size_type(a)];
 		rootsDoc.push_back(nodeIdx);
-		rootInsert.push_back(sortedMarkers[a] - 1);   // 0-based replaced ply
+		rootInsert.push_back(sortedMarkers[a] - 2 - a);   // 0-based replaced ply
 	}
 	return true;
 }

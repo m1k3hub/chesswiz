@@ -128,7 +128,8 @@ uint32_t
 cbgWalkTotal(mstl::vector<CbgNode> const& pool, mstl::vector<uint32_t> const& rootsDoc,
 				 uint32_t mainlinePly);
 
-#endif // _db_cb2_2cbh_annotations_included
 } // namespace cb2
 } // namespace db
+
+#endif // _db_cb2_2cbh_annotations_included
 

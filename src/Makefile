@@ -361,6 +361,10 @@ verify_conversion: verify_conversion.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
 
+cbh1trace: cbh1trace.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
 verify_cbh_write: verify_cbh_write.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)

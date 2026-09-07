@@ -8,6 +8,7 @@
 #define _cb2_codec_included
 
 #include "db_database_codec.h"
+#include "2cbh_annotations.h"
 #include "db_date.h"
 
 #include "m_fstream.h"
@@ -88,6 +89,9 @@ private:
 
 	NamebasePlayer* getPlayer(unsigned id);
 	NamebaseEvent* getEvent(unsigned id);
+
+	void applyEcoTag(TagSet& tags, unsigned gameIndex);
+	bool loadAnnotationItems(unsigned gameIndex, mstl::vector<CbaItem>& items);
 
 	typedef mstl::map<uint32_t, NamebaseEntry*> BaseMap;
 

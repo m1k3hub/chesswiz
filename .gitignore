@@ -95,3 +95,4 @@ win32
 src/probe_cbm_linkage
 src/test_html_core
 tests/test_corr_duration
+src/cbh1trace

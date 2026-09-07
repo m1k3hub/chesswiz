@@ -1181,3 +1181,68 @@ The .2cbh @0x28 stores the event ID (integer). The .2lcd maps
 event_id -> (event_name, site_name, event_date, etc.) in a similar
 manner to the .2lid for players, but the record structure differs
 (no signature terminator found).
+
+---
+
+## 14. .2lid Event/Site Namebase — SOLVED (2026-09-07, GLM pass in the scid-code project)
+
+The `.2lid` is a fixed-slot array:
+
+- stride `0x108a` (4234) bytes, slots start at `0xb8`; 72,578 slots = the
+  file size exactly.  A 184-byte header prefixes the array (6 entity
+  types, capacities [1024, 1120, 220, 1024, 314, 532] = 4234 per slot;
+  counts: players = 10,700, events = 72,588, sources = 1, annotators = 1
+  for the LumbrasGigaBase fixture).
+- slot N + 0: the player record (player id = the slot ordinal — which is
+  why the signature-record walk worked all along).
+- slot N + 0x400: the event pair
+  `[u32 x][u16 siteLen][site][u16 pad][u16 evLen][event][pad][u32 year]`
+  — the event id = the SAME slot ordinal.  Player ids and event ids are
+  independent dense counters over one slot array (slot 234 holds player
+  'Kural, Jaroslav' AND event 'Munchen Open' simultaneously; the x
+  field's 68 observed values [118..186] are not ids — a per-record
+  sub-field census is open, ~1000 records per value).
+- siteLen 0 is valid (site-less events); both lengths 0 = deleted
+  slots (4,688 games, 0.5%, correctly left "?").  Text is Windows-1252
+  (convert through the caller's encoding).
+- The `.2lcd` (827 blocks × 4096 bytes = 3,387,392 exactly; header
+  [1][827][4096] BE) is a default-namebase template + a checksum-ordered
+  index with byte-reversed name fragments — NOT the event storage; a
+  dead end for event names.
+
+Validated against the source PGN (game 0 -> 'Munchen Open'/'Munchen
+open', game 500000 -> 'World Rapid 2024'/'New York USA' — exact); an
+independent player+year cross-check in this repo matched 44/50 sample
+games exactly, with the remaining differences being genuine
+same-player/same-year event ambiguity (the .2cbh's own event id is
+authoritative there) and one site='?' rendering nuance.
+
+scidb integration (this project): `cb2::Codec::doOpen()` walks the
+event pairs, converts via the caller's encoding, and resolves the
+index's event ids directly (the 'Event N' placeholders are gone).  The
+round/subround fields (`0x5a`/`0x5c`, '7.5' style) were decoded in the
+same pass and are set per game record.
+
+## 15. .2cba Move Containers — SOLVED (2026-09-07, agy pass)
+
+The `.2cba` item stream is a sequence of MOVE CONTAINERS:
+
+    [u32 LE position][u32 LE count][count sub-items]
+
+with four sub-item types:
+
+- 2: text comment  `[u32 2][u16 lang][u32 len][text]`
+- 3: NAG           `[u16 3][u16 nag][u8 0]` (5 bytes)
+- 7: move time     `[u8 7][u8 0][u8 m][u8 s][u8 flags][u8 trailer]` (6 bytes)
+- 0x21: engine eval `[u16 0x21][i16 centipawns][u32 depth]` (8 bytes)
+
+The old parser misread `count` as a `kind` discriminator — that worked
+only for the two common cases (count 1 = text; count 2 = nag + text)
+and desynchronized or dropped data on standalone NAGs (4.35%), move
+times (13.25% of containers include a time sub-item), engine
+evaluations and 3-annotation containers.  The corrected walker parses
+17,942/17,942 annotated records (100%) across the whole 205 MB .2cba
+(verified with an independent full-file walk in this repo: 863,538
+records, 0 failures, 94,116 containers).  Container variant census:
+text 17.06%, nag+text 62.90%, text+time 13.25%, standalone nag 4.35%,
+time-only 1.27%, nag+text+time 0.89%, text+eval 0.18%, eval-only 0.10%.

@@ -9197,6 +9197,10 @@ cbv/cbv_codec.o: ../mstl/m_string.h
 cbv/cbv_codec.o: ../mstl/m_vector.h
 
 
+cbh1trace: cbh1trace.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $^ $(LDFLAGS) $(ALL_LIBS)
+
 2cbh2pgn: 2cbh/2cbh2pgn.o 2cbh/2cbh_move16.o 2cbh/2cbh_annotations.o 2cbh/cb2_move16_table.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $^ $(LDFLAGS) $(ALL_LIBS) ../db/libdb.a ../mstl/libmstl.a ../db/libdb.a ../mstl/libmstl.a
