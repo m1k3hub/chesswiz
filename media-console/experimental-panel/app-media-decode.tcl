@@ -236,6 +236,137 @@ proc parseRecord {rec} {
 # annotation|{}; pkt = packet index (diagnostics).
 # ---------------------------------------------------------------------
 
+# ---------------------------------------------------------------------
+# WP1 (Media Lesson v2): parse a CBase26 .txt sidecar export.
+#
+# Format (verified against the Biel 2015 round-08 fixture): one event per
+# two lines - an "H:MM:SS.d:" timestamp line, then "GA:" + the six-bit
+# transport payload (chars '?'..'~' = 0x3F..0x7E, 6 bits each, MSB-first,
+# 4 chars -> 3 bytes).  The payload decodes to [u32le opcode][payload].
+#
+# Returns a dict:
+#   events      list of {ms opcode hex} in file order (hex = payload
+#               bytes after the opcode word)
+#   gotos       {ms cursor} for opcode 3
+#   actions     {ms class from to modifier} for opcode 4 (file-major
+#               squares, algebraic)
+#   annotations {ms count}
+#   checkpoints list of {ms size hex} for opcode 2 (cumulative game
+#               snapshots; the LAST one is the authoritative state -
+#               Reader renders from checkpoints, not deltas - see
+#               CHESSBASE_MEDIA_RE.md "Reader14 on genuine Windows")
+#   counts      {total goto action annotation sync checkpoint other}
+# ---------------------------------------------------------------------
+
+proc sidecar-parse {txtPath} {
+	set fh [open $txtPath r]
+	fconfigure $fh -encoding utf-8 -translation auto
+	set lines [split [read $fh] "\n"]
+	close $fh
+
+	set events {}
+	set gotos {}
+	set actions {}
+	set annotations {}
+	set checkpoints {}
+	set cTotal 0; set cGoto 0; set cAction 0; set cAnn 0; set cSync 0; set cCp 0; set cOther 0
+
+	set pendingMs -1
+	foreach line $lines {
+		set line [string trim $line]
+		if {$line eq ""} { continue }
+
+		if {[string index $line end] eq ":" && [string index $line 0] ne "G"} {
+			# timestamp line: H:MM:SS.d:
+			if {[regexp {^(\d+):(\d+):(\d+)\.(\d+):$} $line -> h m s d]} {
+				scan $h %d h; scan $m %d m; scan $s %d s; scan $d %d d
+				set pendingMs [expr {(($h * 60 + $m) * 60 + $s) * 1000 + $d * 100}]
+			}
+			continue
+		}
+
+		if {![string match "GA:*" $line]} { continue }
+		if {$pendingMs < 0} { continue }
+
+		# six-bit transport, char-direct: the payload after "GA:"
+		set codes {}
+		foreach ch [split [string range $line 3 end] ""] {
+			scan $ch %c code
+			if {$code < 0x3F || $code > 0x7E} { break }
+			lappend codes $code
+		}
+		if {[llength $codes] < 4} { continue }
+
+		set bytes {}
+		set value 0
+		set bitcount 0
+		foreach c $codes {
+			set value [expr {(($value << 6) | ($c - 0x3F)) & 0xFFFFFFFF}]
+			incr bitcount 6
+			if {$bitcount >= 8} {
+				incr bitcount -8
+				lappend bytes [format %02x [expr {($value >> $bitcount) & 0xFF}]]
+			}
+		}
+		if {[llength $bytes] < 4} { continue }
+
+		binary scan [binary format H* [join [lrange $bytes 0 3] {}]] i opcode
+		if {$opcode < 0} { set opcode [expr {$opcode + 4294967296}] }
+
+		set payload [lrange $bytes 4 end]
+		incr cTotal
+
+		set type other
+		switch -- $opcode {
+			2 {
+				set type checkpoint
+				incr cCp
+				lappend checkpoints [list $pendingMs [llength $bytes] [join $bytes {}]]
+			}
+			3 {
+				set type goto
+				incr cGoto
+				set tail [join $payload {}]
+				if {[string length $tail] > 8} { set tail [string range $tail 0 7] }
+				append tail [string repeat 0 [expr {max(0, 8 - [string length $tail])}]]
+				binary scan [binary format H* $tail] i cursor
+				if {$cursor < 0} { set cursor [expr {$cursor + 4294967296}] }
+				lappend gotos [list $pendingMs $cursor]
+			}
+			4 {
+				set type board-action
+				incr cAction
+				if {[llength $payload] >= 8} {
+					binary scan [binary format H* [join [lrange $payload 0 7] {}]] iccs class from to mod
+					if {$class < 0} { set class [expr {$class + 4294967296}] }
+					lappend actions [list $pendingMs [format %x $class] [sq0 $from] [sq0 $to] $mod]
+				}
+			}
+			6 {
+				set type annotation
+				incr cAnn
+				lappend annotations $pendingMs
+			}
+			14 {
+				set type sync
+				incr cSync
+			}
+		}
+
+		if {$type eq "other"} { incr cOther }
+		lappend events [list $pendingMs $type [join $bytes {}]]
+		set pendingMs -1
+	}
+
+	return [dict create \
+		events $events gotos $gotos actions $actions \
+		annotations $annotations checkpoints $checkpoints \
+		counts [dict create total $cTotal goto $cGoto action $cAction \
+			annotation $cAnn sync $cSync checkpoint $cCp other $cOther]]
+}
+
+
+
 proc decode {wmvPath} {
 	set cmdline [list ffprobe -v error -select_streams d \
 		-show_packets -show_data -of json [file normalize $wmvPath]]
