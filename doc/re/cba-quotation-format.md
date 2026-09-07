@@ -592,3 +592,114 @@ one polymorphic class per annotation type.
 
 No code changes. All working files from this pass were scratch (`/tmp/*`,
 not committed). Tree unchanged from the prior commit.
+
+### Eighth attempt (2026-09-06, later still) — live-debugging tooling groundwork, no call stack captured
+
+Followed the recommended next step: attempt to breakpoint `decode_caller`
+(`0x140210bc0`) live under Wine and read the call stack while opening a
+quotation. This is genuinely useful negative tooling knowledge even though
+no call stack was captured — the next attempt should start from here
+instead of re-discovering the same friction.
+
+**Confirmed working:**
+- `winedbg` and `gdb` are both installed and usable in this environment.
+- CBase26.exe's load base under Wine is a fixed `0x140000000` with no
+  ASLR offset — Ghidra's static addresses (e.g. `decode_caller` at
+  `0x140210bc0`) are directly usable as runtime breakpoint addresses, no
+  translation needed. Confirmed via `/proc/<pid>/maps`.
+- The database this fixture lives in (`cbm168/Data Collect/CBM168.cbh`)
+  opens fine in CBase26's native UI via File → Open, typing the Wine path
+  `Z:\media\michael-g-thomas\sas_mirror\fixt\cbm168\Data Collect\CBM168.cbh`
+  directly into the file-open dialog's Name field (faster than
+  browsing the tree). It renders WhiteElo/BlackElo columns natively — a
+  nice incidental visual confirmation of the already-solved 2CBH Elo
+  offsets, though this is a classical `.cbh` file so not the same code
+  path.
+- Xvfb display `:77` (already running, a dedicated headless instance from
+  earlier RE work, distinct from the user's real desktop on `:0`) is safe
+  to drive with `xdotool`/`import` for GUI automation without risking the
+  user's actual session — confirmed by checking the target PID's
+  `DISPLAY` env var in `/proc/<pid>/environ` before touching it. Do this
+  check before ever attaching/killing a CBase26 process found via `ps`.
+
+**Confirmed NOT working / genuine obstacles:**
+- `gdb -p <pid>` attach to an *already-running* CBase26.exe fails outright:
+  `kernel.yama.ptrace_scope=1` in this environment only permits a tracer to
+  attach to its own descendants, and the already-running instance (left
+  over from an earlier fork's session) is not a descendant of the shell
+  doing the attaching. **Fix:** launch CBase26 as a child of gdb itself
+  (`gdb --args <real-elf> CBase26.exe`), not attach after the fact.
+- `wine`/`wine64` are POSIX shell script wrappers (`file` confirms), not
+  ELF — gdb refuses to load them as the debuggee directly ("not in
+  executable format"). **Fix:** trace the wrapper (`cat /usr/bin/wine64-stable`)
+  to the real ELF it execs — in this environment
+  `/usr/lib/x86_64-linux-gnu/wine/wine` — and pass *that* to `gdb --args`.
+  This part worked: gdb successfully launched the real wine ELF as its
+  child and it ran CBase26.exe within the same process (no further exec
+  boundary to worry about).
+- Setting the breakpoint *before* `run` fails with `Cannot access memory
+  at address 0x140210bc0`, because Wine's PE loader hasn't mapped
+  CBase26.exe's `.text` into the process yet at that point — gdb's normal
+  "pending breakpoint" auto-resolution (which watches ELF `dlopen`/shared-
+  library-load events) does **not** fire for Wine's own PE-image mapping,
+  since that isn't a tracked ELF shared-library event. The breakpoint must
+  be set *after* the module is mapped, which in practice means after the
+  main window has appeared (10-20 seconds of Wine/DXVK/UI startup).
+- Getting gdb to run the process, wait for it to finish initializing, and
+  *then* set the breakpoint - without a fixed, reliable synchronization
+  point - was not solved in this pass. Tried: sending `SIGINT` to the gdb
+  process from a second shell after a fixed sleep, hoping gdb would
+  interrupt the inferior and resume executing the rest of the command
+  script (setting the breakpoint, then `continue`). This did not behave
+  as hoped: the signal landed on an unrelated Wine-internal worker thread
+  (`SIGUSR1`, part of Wine's own thread-suspension mechanism) rather than
+  cleanly halting at a script-continuable point, and the batch-mode gdb
+  session terminated (auto-answering "Quit anyway? Y" on the resulting
+  prompt) instead of proceeding to the next command in the script.
+  Backgrounding gdb with `nohup ... &` and re-signaling from a second
+  shell command in this harness also proved fragile in its own right (one
+  attempt silently failed to even start due to a heredoc/compound-command
+  ordering mistake — worth writing the gdb command file and confirming it
+  exists with a separate step before launching gdb, not inline in the same
+  compound command).
+
+**Concrete next steps, more specific than before:**
+- Don't fight `SIGINT`-based synchronization. Use gdb's own `python`
+  scripting inside the command file to block until the target module is
+  mapped (poll `gdb.selected_inferior().read_memory(0x140210bc0, 1)` in a
+  loop with `time.sleep`, wrapped in `try/except gdb.MemoryError`) before
+  issuing `gdb.execute("break *0x140210bc0")` — this stays inside a single
+  synchronous gdb session and avoids the cross-process signal-timing
+  problem entirely.
+- Alternatively, use `winedbg --gdb` (Wine's own built-in gdb-remote proxy)
+  instead of attaching gdb directly to the wine ELF process — it's
+  designed specifically for debugging the *guest* Windows process's
+  address space and may handle the PE-mapping timing correctly out of the
+  box, sidestepping the pending-breakpoint gap entirely. Not tried in this
+  pass; worth trying first next time, before another custom gdb
+  synchronization scheme.
+- Once a breakpoint reliably lands: still need to identify which specific
+  game in the ~700+-game `CBM168.cbh` fixture contains a quotation, to
+  actually exercise the code path. Player-name search in CBase26's own
+  "Players" filter dialog (typed "Polgar", "Kasimdzhanov" — both named in
+  the prior fork's report as citing-game players) returned zero results
+  in this pass, either because the dialog needs a different interaction
+  (autocomplete list never populated, suggesting the typed text wasn't
+  actually registering as a filter term) or the specific sub-file opened
+  doesn't contain those exact games. Worth resolving this identification
+  step *before* the next debugging attempt, e.g. by finding the true
+  citing-game numbers directly from scidb's own already-correct header
+  decode (needs the right `::scidb::db::open` invocation for a classical
+  `.cbh` file - the generic one used elsewhere in this project's test
+  suite is for `.sci`/`.si4` and rejects `.cbh` with "unsupported
+  extension"; the classical-cbh-specific open command wasn't identified
+  in the time available this pass).
+
+No code changes. Working files were scratch (`/tmp/gdb_*.txt`, `/tmp/*.log`,
+`/tmp/*.png`, `/tmp/find_quote_games.tcl`) and were not committed. All
+CBase26/gdb processes spawned in this pass were killed cleanly before
+finishing; the pre-existing CBase26 instance on Xvfb `:77` that this pass
+found already running (and had to kill to gain ptrace access) was not
+restored, since it held no unsaved state - it was the same idle
+fixture-browsing instance from an earlier fork's session. Tree unchanged
+from the prior commit except this doc update.
