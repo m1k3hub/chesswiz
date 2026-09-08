@@ -368,12 +368,34 @@ proc ::media::sync::_fire_events {timeMs} {
 	while {$State(evidx) < $n} {
 		lassign [lindex $State(events) $State(evidx)] ms kind data
 		if {$ms > $timeMs} { break }
-		if {$kind eq "reset"} {
-			BoardClearAnnotations
-		} else {
-			BoardAnnotate $kind $data
+
+		# gather all events sharing this timestamp: one annotation moment
+		# (ChessBase reader semantics, vm-harvest frame evidence: an
+		# annotation moment REPLACES the previous arrows instead of
+		# accumulating - at most one moment's arrows are ever on the board)
+		set moment [list [list $kind $data]]
+		set i $State(evidx)
+		while {[incr i] < $n} {
+			lassign [lindex $State(events) $i] ms2 kind2 data2
+			if {$ms2 != $ms} { break }
+			lappend moment [list $kind2 $data2]
 		}
-		incr State(evidx)
+
+		set hasArrow 0
+		foreach e $moment {
+			if {[lindex $e 0] eq "arrow"} { set hasArrow 1; break }
+		}
+		if {$hasArrow} { BoardClearAnnotations }
+
+		foreach e $moment {
+			lassign $e kind data
+			if {$kind eq "reset"} {
+				BoardClearAnnotations
+			} else {
+				BoardAnnotate $kind $data
+			}
+		}
+		set State(evidx) $i
 	}
 }
 
