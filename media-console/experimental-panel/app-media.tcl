@@ -1551,7 +1551,11 @@ proc application::media::FollowTick {} {
 	if {$handle eq ""} { return }
 
 	set st ""; catch { set st [$handle state] }
-	if {$st ne "playing"} {
+	# stop the follow loop only on TERMINAL player states; transient
+	# ones (buffering, opening, an unreadable state during a seek) must
+	# keep ticking or the loop dies mid-lecture while the video plays on
+	# (board freezes, arrows never clear - R7/R9 rollback path dead too)
+	if {$st eq "paused" || $st eq "ended" || $st eq "error" || $st eq "idle"} {
 		# video paused/ended: stop the follow loop; a resumed Transport
 		# play restarts it.
 		return
