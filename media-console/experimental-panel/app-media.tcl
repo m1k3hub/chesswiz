@@ -1655,7 +1655,7 @@ proc application::media::StartFollowTick {} {
 	variable Priv
 
 	catch { after cancel $Priv(followafter) }
-	set Priv(followafter) [after 250 [namespace code FollowTick]]
+	set Priv(followafter) [after 100 [namespace code FollowTick]]
 }
 
 proc application::media::StopFollowTick {} {
