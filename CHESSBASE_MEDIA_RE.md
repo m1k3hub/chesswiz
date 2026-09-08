@@ -1341,3 +1341,33 @@ stream dead-ends at edge 58 (h4-g5 illegal at every ancestor under
 python-chess) — an upstream parse/resync or non-standard-start
 question, not an applier issue; the lesson build degrades to valid=0
 with a reason there.
+
+### M3 status (2026-09-07, sync v2 + panel wiring)
+
+- **Node-goal sync (WP5)**: `drive()` timelines of `{mediaMs nodeIndex}`
+  pairs jump the board directly via the `boardgoto` delegate — the
+  `min(goal, len-1)` ply clamp does NOT apply to node goals (R6; node
+  ids exceed the mainline ply count).  Rewind = goto +
+  annotation clear; same-node ticks are no-ops (R9, board side);
+  `::media::sync::step` swallows driving gotos via the `driving?` guard
+  (R7) and re-syncs `lastgoal` to the current node on manual navigation
+  (R8).  Legacy bare-int `.plytimes` timelines keep the count model.
+  Gates: `test_sync_wp5.tcl` (9 gates).
+- **`go -1 position $fen` semantics verified in source (R4)**:
+  `Game::goToPosition` (src/db/db_game.cpp) never creates a scratch
+  position or detaches from the game — an unmatched FEN parks the board
+  at the mainline end; matching is `isEqualZHPosition` (board+side,
+  counters ignored — the python-chess vs ScidB FEN counter dialect is
+  moot).  It searched ONLY the mainline (`TODO: also search in
+  variations`), so lesson variation nodes (jumps 44→88→96) silently
+  failed.  Fixed in-repo: `goToPositionInVariations` DFS via
+  `enterVariation`/`exitVariation`, with the historical mainline walk
+  kept as the not-found fallback.  Requires `tkscidb-beta` rebuild.
+- **Panel wiring (WP6)**: the media pane is registered in
+  tcl/application.tcl (Prios/BuildPane/BoardLayout), `board::update`
+  notifies `application::media::BoardUpdated`, `PlayLesson` stores the
+  lesson position list, `SyncBoardGoto` maps node → Scidb-dialect FEN →
+  `go -1 position $fen`, `SyncBoardNode` inverts it (exact, then
+  board+side) for the R8 re-sync, and seek-bar releases are coalesced
+  through a 200 ms debounce (R9, media side).  Statusbar shows lesson
+  node context; MediaDebug goto traces are throttled to 1/s.

@@ -224,10 +224,18 @@ Key rules — each settles a trap the ChessBase binary left us:
   record set (types 2/3/4/5/8/14).
 
 Consumption: the panel feeds the `Step:` marks to
-`::media::sync::load-timeline` (the ply driver) and queues the events
-for the annotation layer when playback reaches them (§4 tier-2, future).
-The `Step`-only form is the v1.2 ship set; events ride along whenever an
-importer produced them.
+`::media::sync::load-timeline` and queues the events for the annotation
+layer when playback reaches them.  Since the lesson-v2 sync rework
+(M3, `MEDIA_LESSON_V2_PLAN.md` WP5) the timeline is the **node-index
+model**: each `Step:` mark corresponds to one decoded node index (a
+`{mediaMs nodeIndex}` pair into the lesson's per-node FEN list), and
+drive() jumps the board directly via the `boardgoto` delegate
+(`::scidb::game::go -1 position $fen`, which searches the whole tree
+including variations).  Legacy bare-integer marks (the `.plytimes`
+count model) remain supported and still clamp to the mainline ply
+count; node-index goals are never clamped.  The `Step`-only form is
+the v1.2 ship set; events ride along whenever an importer produced
+them.
 
 ## 2. Linkage: stable game id (the central design decision)
 
