@@ -140,6 +140,10 @@ proc loadFromSidecar {videoPath} {
 	if {![dict exists $lesson valid]} { return {} }
 	if {![dict get $lesson valid]} { return {} }
 	if {![dict exists $lesson video] || [dict get $lesson video] ne $k} { return {} }
+	# v2 shape guard: lessons persisted by the pre-sidecar decoder carry
+	# valid=1 with an empty timeline and no positions key - accepting them
+	# would cache-hit forever and never decode the script stream
+	if {![dict exists $lesson positions]} { return {} }
 
 	set Cache($k) $lesson
 	return $lesson
