@@ -59,6 +59,7 @@ array set Priv {
 	vlc_loaded	0
 	vlc_available	0
 	inprocess	0
+	backend		tkvlc
 	checkid		{}
 	seekgrab		0
 	seeklabel	{}
@@ -1108,6 +1109,40 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	variable Priv
 	variable mc
 
+	# Tier-2b: mpv preferred (precise seek, reliable state reporting);
+	# tkvlc (Tier-2a) is the fallback.
+	if {$startMs eq ""} { set startMs 0 }
+	if {[::media::mpv::available?]} {
+		set canvas $Priv(viewer).canvas
+		if {[catch { set wid [winfo id $canvas] }]} { set wid 0 }
+		if {[::media::mpv::launch $path $wid $startMs]} {
+			set Priv(backend) mpv
+			set Priv(lastMedia) $path
+			set Priv(lastStartMs) $startMs
+			set Priv(lastEndMs) $endMs
+			if {![info exists Priv(vlcretrypath)] || $Priv(vlcretrypath) ne $path} {
+				set Priv(vlcretry) 0
+				set Priv(vlcretrypath) $path
+			}
+			$canvas delete all
+			catch { after cancel $Priv(rangeid) }
+			set Priv(rangeid) {}
+			if {[string is double -strict $endMs] && $endMs > $startMs} {
+				set Priv(rangeid) [after [expr {int($endMs - $startMs)}] \
+					[namespace code { catch { Stop } }]]
+			}
+			set Priv(inprocess) 1
+			set Priv(statusbar) "Playing (mpv): $path"
+			MediaDebug "PlayInProcess(mpv): playback started for $path"
+			StartSeekTick
+			catch { after cancel $Priv(checkid) }
+			set Priv(checkid) [after 800 [namespace code [list CheckDecode $path]]]
+			return 1
+		}
+		MediaDebug "PlayInProcess: mpv launch failed; falling back to tkvlc"
+		set Priv(backend) tkvlc
+	}
+
 	# Lessons and decode retries enter here directly, bypassing PlayMedia.
 	# Initialize the backend for every entry path (LoadVlc is cached).
 	if {![LoadVlc]} { return 0 }
@@ -1261,6 +1296,16 @@ proc application::media::CheckDecode {path} {
 
 	set handle $Priv(vlc_handle)
 
+	if {$Priv(backend) eq "mpv"} {
+		set state [MediaState]
+		MediaDebug "CheckDecode(mpv): state=$state"
+		if {$state eq "error"} {
+			set Priv(inprocess) 0
+			set Priv(statusbar) "Cannot play: unsupported or corrupt media file."
+		}
+		return
+	}
+
 	set state ""
 	catch { set state [$handle state] }
 	MediaDebug "CheckDecode: state=$state"
@@ -1329,28 +1374,87 @@ proc application::media::LaunchExternal {path} {
 # Media <-> board synchronization (see tcl/app-media-sync.tcl)
 # ----------------------------------------------------------------------
 
-# Transport delegate: play/pause the current tkvlc media.
+# --- playback backend abstraction (Tier-2b mpv, Tier-2a tkvlc) ----------
+# MediaState: playing|paused|ended|idle|error.  MediaTime/MediaDuration:
+# seconds (double).  MediaSeek: seconds.
+
+proc application::media::MediaState {} {
+	variable Priv
+	if {$Priv(backend) eq "mpv"} { return [::media::mpv::state] }
+	set st ""; catch { set st [$Priv(vlc_handle) state] }
+	if {$st eq ""} { set st error }
+	return $st
+}
+
+proc application::media::MediaTime {} {
+	variable Priv
+	if {$Priv(backend) eq "mpv"} {
+		set t [::media::mpv::time]
+		return [expr {[string is double -strict $t] ? $t : 0}]
+	}
+	set t 0
+	catch { set t [$Priv(vlc_handle) time] }
+	if {![string is double -strict $t]} { set t 0 }
+	return $t
+}
+
+proc application::media::MediaDuration {} {
+	variable Priv
+	if {$Priv(backend) eq "mpv"} {
+		set d [::media::mpv::duration]
+		return [expr {[string is double -strict $d] ? $d : 0}]
+	}
+	set d 0
+	catch { set d [$Priv(vlc_handle) duration] }
+	if {![string is double -strict $d]} { set d 0 }
+	return $d
+}
+
+proc application::media::MediaSeek {sec} {
+	variable Priv
+	if {$Priv(backend) eq "mpv"} { return [::media::mpv::seek [expr {$sec * 1000.0}]] }
+	catch { $Priv(vlc_handle) time $sec }
+}
+
+proc application::media::MediaPlay {} {
+	variable Priv
+	if {$Priv(backend) eq "mpv"} { return [::media::mpv::play] }
+	catch { $Priv(vlc_handle) play }
+}
+
+proc application::media::MediaPause {} {
+	variable Priv
+	if {$Priv(backend) eq "mpv"} { return [::media::mpv::pause] }
+	catch { $Priv(vlc_handle) pause }
+}
+
+proc application::media::MediaDestroy {} {
+	variable Priv
+	if {$Priv(backend) eq "mpv"} {
+		::media::mpv::stop
+		set Priv(inprocess) 0
+		return
+	}
+	DestroyVlcHandle
+}
+
+# Transport delegate: play/pause the current media.
 proc application::media::SyncTransport {what} {
 	variable Priv
 
 	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
 
-	set handle $Priv(vlc_handle)
-	if {$handle eq ""} { return }
-
 	switch -- $what {
 		play {
-			set st ""; catch { set st [$handle state] }
-			if {$st eq "paused" || $st eq "ended"} {
-				catch { $handle play }
+			if {[MediaState] in {paused ended}} {
+				MediaPlay
 				# a resumed transport must re-arm the follow loop
 				StartFollowTick
 			}
 		}
 		pause {
-			set st ""; catch { set st [$handle state] }
-			if {$st eq "playing"} {
-				catch { $handle pause }
+			if {[MediaState] eq "playing"} {
+				MediaPause
 			}
 		}
 	}
@@ -1550,7 +1654,7 @@ proc application::media::FollowTick {} {
 	set handle $Priv(vlc_handle)
 	if {$handle eq ""} { return }
 
-	set st ""; catch { set st [$handle state] }
+	set st [MediaState]
 	# stop the follow loop only on TERMINAL player states; transient
 	# ones (buffering, opening, an unreadable state during a seek) must
 	# keep ticking or the loop dies mid-lecture while the video plays on
@@ -1561,9 +1665,8 @@ proc application::media::FollowTick {} {
 		return
 	}
 
-	set t 0; set dur 0
-	catch { set t [expr {1000.0 * [$handle time]}] }
-	catch { set dur [expr {1000.0 * [$handle duration]}] }
+	set t [expr {1000.0 * [MediaTime]}]
+	set dur [expr {1000.0 * [MediaDuration]}]
 	if {$t eq "" || $dur eq ""} { return }
 
 	::media::sync::drive $t $dur
@@ -1590,9 +1693,8 @@ proc application::media::SeekTick {} {
 	set handle $Priv(vlc_handle)
 	if {$handle eq ""} { return }
 
-	set t 0; set dur 0
-	catch { set t [expr {1000.0 * [$handle time]}] }
-	catch { set dur [expr {1000.0 * [$handle duration]}] }
+	set t [expr {1000.0 * [MediaTime]}]
+	set dur [expr {1000.0 * [MediaDuration]}]
 	if {[string is double -strict $t] && [string is double -strict $dur] && $dur > 0} {
 		if {!$Priv(seekgrab) && [winfo exists $Priv(seekbar)]} {
 			catch { $Priv(seekbar) set [expr {double($t) / $dur * 1000.0}] }
@@ -1647,7 +1749,7 @@ proc application::media::SeekApply {frac dur} {
 	if {$handle eq ""} { return }
 
 	MediaDebug "SeekApply: seek to [expr {int($frac * 100)}]% of ${dur}s"
-	catch { $handle time [expr {$frac * $dur}] }
+	MediaSeek [expr {$frac * $dur}]
 }
 
 
@@ -1690,11 +1792,7 @@ proc application::media::Stop {} {
 	::media::sync::onPlaybackStopped
 
 	# Stop and release tkvlc playback.
-	if {[info exists Priv(inprocess)] && $Priv(inprocess)} {
-		DestroyVlcHandle
-	} elseif {[info exists Priv(vlc_handle)] && $Priv(vlc_handle) ne ""} {
-		DestroyVlcHandle
-	}
+	MediaDestroy
 
 	# Clear canvas
 	if {[winfo exists $Priv(viewer).canvas]} {
