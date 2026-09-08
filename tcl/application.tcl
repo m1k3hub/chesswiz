@@ -77,6 +77,7 @@ array set PaneOptions {
 	dbgames		{ -width 500 -height 200 -minwidth 200 -minheight 100 -expand y }
 	analysis	{ -width 500 -height 120 -minwidth 300 -minheight 120 -expand x }
 	eco		{ -width 500 -height 520 -minwidth 150 -minheight 100 -expand both }
+	media		{ -width 400 -height 300 -minwidth 250 -minheight 200 -expand y }
 }
 
 set BoardLayout {
