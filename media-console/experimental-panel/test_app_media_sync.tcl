@@ -395,6 +395,107 @@ tcltest::test mediasync-events-rewind-clears {rewind restarts annotation state} 
 tcltest::cleanupTests
 
 
+# ----------------------------------------------------------------------
+# WP5: node-goal model (lesson v2 sync)
+# ----------------------------------------------------------------------
+
+# Stub board: a goto-model board whose "node" is just a recorded integer.
+# boardlength stays deliberately small (40) to prove node goals are NOT
+# clamped against the mainline length (R6).
+proc wp5-setup {} {
+	reset
+	set ::syncGotos {}
+	set ::syncStarts 0
+	set ::syncClears 0
+	set ::syncCalls {}
+	set ::syncNode -1
+	set ::syncPly 0
+	::media::sync::configure \
+		transport-cmd  {::apply {{what} {lappend ::syncCalls $what}}} \
+		boardgoto-cmd  {::apply {{node} {lappend ::syncGotos $node; set ::syncNode $node}}} \
+		boardstart-cmd {::apply {{} {incr ::syncStarts}}} \
+		clearann-cmd   {::apply {{} {incr ::syncClears}}} \
+		boardnode-cmd  {::apply {{} {return $::syncNode}}} \
+		boardlength-cmd {::apply {{} {return 40}}} \
+		boardply-cmd   {::apply {{} {return $::syncPly}}}
+	# lesson v2 node-goal timeline (round-08 oracle shape: node ids far
+	# above the 40-ply main line)
+	::media::sync::load-timeline {{12500 1} {50800 88} {76000 96} {94900 44}}
+	::media::sync::load-events {}
+	::media::sync::onPlaybackStarted
+}
+
+tcltest::test wp5-node-goal-goto {drive() jumps directly to node goals (no stepped plies)} -body {
+	wp5-setup
+	::media::sync::drive 12500 100000
+	list $::syncGotos $::syncStarts
+} -cleanup {reset} -result {{1} 0}
+
+tcltest::test wp5-no-clamp-on-node-goals {node goal 114 with a 40-node main line is NOT clamped (R6)} -body {
+	wp5-setup
+	::media::sync::load-timeline {{12500 114}}
+	::media::sync::drive 12500 100000
+	set ::syncGotos
+} -cleanup {reset} -result {114}
+
+tcltest::test wp5-rewind-goto-plus-clear {rewind below the last goal jumps back and clears annotations} -body {
+	wp5-setup
+	::media::sync::drive 50800 100000   ;# goal 88
+	set a [llength $::syncGotos]
+	::media::sync::drive 94900 100000   ;# rewind to node 44
+	list $a $::syncGotos $::syncClears
+} -cleanup {reset} -result {1 {88 44} 1}
+
+tcltest::test wp5-same-node-noop {repeated drive ticks on the same node fire no repeated gotos (R9)} -body {
+	wp5-setup
+	::media::sync::drive 50800 100000
+	set a [llength $::syncGotos]
+	::media::sync::drive 50900 100000
+	::media::sync::drive 51000 100000
+	list $a [llength $::syncGotos]
+} -cleanup {reset} -result {1 1}
+
+tcltest::test wp5-driving-goto-no-transport-pause {a driving goto coming back through step() must not register a user touch (R7)} -body {
+	wp5-setup
+	# simulate the board subscriptions: the goto delegate echoes the jump
+	# back into ::media::sync::step, like the real BoardUpdated path does
+	::media::sync::configure boardgoto-cmd {::apply {{node} {
+		lappend ::syncGotos $node
+		set ::syncNode $node
+		::media::sync::step	;# board subscription fires during the drive
+	}}}
+	::media::sync::drive 50800 100000
+	# the step() echo must have been swallowed: an immediate follow drive
+	# still reaches its goal (the touch-holdoff did not engage)
+	::media::sync::load-timeline {{50800 88} {76000 96}}
+	::media::sync::drive 76100 100000
+	list $::syncCalls $::syncGotos
+} -cleanup {reset} -result {{} {88 96}}
+
+tcltest::test wp5-manual-step-resyncs-goal {a manual board move re-syncs lastgoal: no spurious rewind (R8)} -body {
+	wp5-setup
+	::media::sync::drive 50800 100000   ;# goal 88
+	# user navigates: board subscriptions report the new node
+	set ::syncNode 12
+	::media::sync::step
+	# the goal state must now be node 12 (not 88): the next tick past a
+	# 12-node timecode will not be treated as a rewind below 88
+	set ::media::sync::State(lastgoal)
+} -cleanup {reset} -result 12
+
+tcltest::test wp5-legacy-count-model-intact {legacy bare-int timelines still clamp to board length} -body {
+	reset
+	set ::syncFwds 0
+	::media::sync::configure \
+		boardforward-cmd {::apply {{} {incr ::syncFwds}}} \
+		boardlength-cmd  {::apply {{} {return 3}}} \
+		boardply-cmd     {::apply {{} {return $::syncFwds}}}
+	::media::sync::set-config 1 1
+	::media::sync::load-timeline {100 200 300 400 500 600}
+	::media::sync::onPlaybackStarted
+	::media::sync::drive 5000 10000
+	set ::syncFwds
+} -cleanup {reset} -result 2
 
 } ;# namespace ::scidb::test::mediasync
 

@@ -168,7 +168,9 @@ proc application::media::build {twm frame width height} {
 		boardforward-cmd	[namespace code SyncBoardForward] \
 		boardstart-cmd	[namespace code SyncBoardStart] \
 		boardlength-cmd	[namespace code SyncBoardLength] \
-		boardply-cmd	[namespace code SyncBoardPly]
+		boardply-cmd	[namespace code SyncBoardPly] \
+		boardgoto-cmd	[namespace code SyncBoardGoto] \
+		boardnode-cmd	[namespace code SyncBoardNode]
 }
 
 
@@ -1028,6 +1030,10 @@ proc application::media::PlayLesson {path gameIndex {startMs {}} {endMs {}}} {
 	}
 	MediaDebug "PlayLesson: [llength [dict get $lesson timeline]] timeline marks, [llength [dict get $lesson events]] events"
 
+	# node-goal resolution table: the sync state machine reports node
+	# indexes; the goto delegate maps them back to FENs via this list
+	set Priv(lessonPositions) [dict get $lesson positions]
+
 	# transport first: embedded playback only — a lesson never falls
 	# back to an external player (that would decouple video from board)
 	if {![PlayInProcess $path $startMs $endMs]} {
@@ -1455,6 +1461,65 @@ proc application::media::SyncBoardLength {} {
 	return $len
 }
 
+# Node-goal delegate (lesson v2): jump the board directly to a lesson
+# node. The lesson's position list (stored by PlayLesson) maps the node
+# index to a Scidb-dialect FEN, and `go -1 position $fen` navigates the
+# game tree — mainline AND variations (Game::goToPosition searches the
+# whole tree; it never detaches from the game: an unmatched FEN parks at
+# the mainline end instead of creating a scratch position).
+proc application::media::SyncBoardGoto {node} {
+	variable Priv
+
+	if {![info exists Priv(lessonPositions)]} { return }
+	set fen [lindex $Priv(lessonPositions) $node]
+	if {![string length $fen]} { return }
+
+	# R9: same-node no-op — a seek-bar drag burst across one node must
+	# not fire repeated gotos (the sync machine pre-filters, but the
+	# game fen also settles this for manual navigation races). Compare
+	# board+side only (isEqualZHPosition semantics: counters ignored).
+	set cur ""
+	catch { set cur [::scidb::game::fen -1] }
+	if {[FenKey $cur] eq [FenKey $fen] && [string length $cur]} { return }
+
+	if {[catch { ::scidb::game::go -1 position $fen } err]} {
+		MediaDebug "SyncBoardGoto: node=$node failed: $err"
+		return
+	}
+
+	# statusbar node/ply context + throttled debug trace for goto jumps
+	set Priv(statusbar) "Lesson node $node/[expr {[llength $Priv(lessonPositions)] - 1}]"
+	set now [clock seconds]
+	if {![info exists Priv(gotoDebugAt)] || $now != $Priv(gotoDebugAt)} {
+		set Priv(gotoDebugAt) $now
+		MediaDebug "SyncBoardGoto: node=$node fen=[list $fen]"
+	}
+}
+
+# Inverse mapping: the board's current position as a lesson node index
+# (-1 when the position is not part of the lesson). Used to re-sync the
+# sync machine's goal after manual board navigation (R8).
+proc application::media::SyncBoardNode {} {
+	variable Priv
+
+	if {![info exists Priv(lessonPositions)]} { return -1 }
+	set fen ""
+	if {[catch { set fen [::scidb::game::fen -1] }] || ![string length $fen]} { return -1 }
+	set idx [lsearch -exact $Priv(lessonPositions) $fen]
+	if {$idx < 0} {
+		# counters may differ between the game FEN and the lesson FEN
+		# (isEqualZHPosition semantics): retry on board+side only
+		set key "[lindex [split $fen " "] 0] [lindex [split $fen " "] 1]"
+		set i 0
+		foreach pos $Priv(lessonPositions) {
+			set pkey "[lindex [split $pos " "] 0] [lindex [split $pos " "] 1]"
+			if {$pkey eq $key} { set idx $i; break }
+			incr i
+		}
+	}
+	return $idx
+}
+
 # Same as ::scidb::game::ply but always returns an integer (may be called
 # before the scratch game exists).
 proc application::media::SyncBoardPly {} {
@@ -1535,6 +1600,11 @@ proc application::media::StartSeekTick {} {
 # Slider released: seek the video to the slider position.  Follow mode
 # then remaps the board to the new time on the next drive tick, so board
 # and video stay one unit.
+#
+# R9: rapid drag-release bursts are coalesced — only the last target in
+# a 200 ms window reaches the player, so follow mode does not chase a
+# storm of intermediate positions (the sync machine's same-node no-op
+# filters the board side; this filters the media side).
 proc application::media::SeekRelease {} {
 	variable Priv
 
@@ -1548,7 +1618,21 @@ proc application::media::SeekRelease {} {
 	if {![string is double -strict $dur] || $dur <= 0} { return }
 
 	set frac [expr {[$Priv(seekbar) get] / 1000.0}]
-	MediaDebug "SeekRelease: seek to [expr {int($frac * 100)}]% of ${dur}s"
+
+	# coalesce: replace any pending debounced seek with this one
+	catch { after cancel $Priv(seekdebounce) }
+	set Priv(seekdebounce) [after 200 [namespace code [list SeekApply $frac $dur]]]
+}
+
+# Debounced body of SeekRelease: the actual media seek.
+proc application::media::SeekApply {frac dur} {
+	variable Priv
+
+	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
+	set handle $Priv(vlc_handle)
+	if {$handle eq ""} { return }
+
+	MediaDebug "SeekApply: seek to [expr {int($frac * 100)}]% of ${dur}s"
 	catch { $handle time [expr {$frac * $dur}] }
 }
 

@@ -72,6 +72,8 @@ namespace eval ::media::sync {
 		boardstart    {}
 		boardlength   {}
 		boardply      {}
+		boardgoto     {}
+		boardnode     {}
 		annotate      {}
 		clearann      {}
 	}
@@ -89,6 +91,8 @@ proc ::media::sync::configure {args} {
 			boardstart-cmd    { set Delegates(boardstart) $value }
 			boardlength-cmd   { set Delegates(boardlength) $value }
 			boardply-cmd      { set Delegates(boardply) $value }
+			boardgoto-cmd     { set Delegates(boardgoto) $value }
+			boardnode-cmd     { set Delegates(boardnode) $value }
 			annotate-cmd      { set Delegates(annotate) $value }
 			clearann-cmd      { set Delegates(clearann) $value }
 			default {
@@ -136,8 +140,19 @@ proc ::media::sync::autoplay {state} {
 proc ::media::sync::step {} {
 	variable State
 
+	# R7: a goto issued by drive() itself comes back through here via the
+	# board subscriptions — it is not a user touch (recording it would make
+	# the next drive tick yield and could self-pause the transport).
+	if {$State(driving)} { return }
 	if {!$State(transport) || !$State(playing)} { return }
 	if {$State(autoplay)} { return }
+
+	# R8: a manual move during follow must not trigger a spurious
+	# rewind/annotation-reset on the next tick: re-sync the goal to the
+	# node the user navigated to.
+	set node [BoardNode]
+	if {$node >= 0} { set State(lastgoal) $node }
+
 	set State(usertouch) [clock milliseconds]
 }
 
@@ -167,10 +182,12 @@ proc ::media::sync::onPlaybackStopped {} {
 # Load/replace the optional per-move timeline.  Two entry forms are
 # accepted:
 #
-#   {mediaMs goalPly} pairs — absolute replay targets: when the media
-#   time reaches mediaMs the board replays toward board position
-#   goalPly.  Produced by the lesson decoder (::media::lesson, script
-#   stream gotoIndex events) and by [BoardSync] sections.
+#   {mediaMs goal} pairs — absolute replay targets: when the media
+#   time reaches mediaMs the board jumps to goal.  In the lesson v2
+#   node-goal model goal is a node index into the lesson's position
+#   list (produced by ::media::lesson from script-stream goto events)
+#   and is navigated via the boardgoto delegate; without that delegate
+#   the goal degenerates to a mainline ply (count model, clamped).
 #
 #   bare integers — legacy per-ply timecodes (count model), one media-ms
 #   per line in replay order (e.g. media-console/wmv2timeline.py
@@ -242,7 +259,8 @@ proc ::media::sync::driving? {} {
 
 # One "board follows video" tick. Fires annotation events that fall in
 # the [prev_ms, timeMs] window, then advances the board via the timeline
-# or the linear mapping.
+# (node-goal model: direct gotos; legacy count model: stepped plies) or
+# the linear mapping.
 proc ::media::sync::drive {timeMs durationMs} {
 	variable State
 
@@ -258,18 +276,17 @@ proc ::media::sync::drive {timeMs durationMs} {
 		::media::sync::_fire_events $timeMs
 	}
 
-	set len [BoardLength]
-	if {$len <= 0} { return }
-
 	if {[llength $State(timeline)]} {
 		set goal 0
+		set nodeModel 0
 		foreach mark $State(timeline) {
 			if {[llength $mark] >= 2} {
-				# absolute target: {mediaMs goalPly}
+				# absolute target: {mediaMs nodeIndex} (lesson v2 node-goal
+				# model: goal indexes the lesson's node/position list)
 				set markMs [lindex $mark 0]
 				if {$markMs <= $timeMs} {
 					set idx [lindex $mark 1]
-					if {$idx >= 0} { set goal $idx }
+					if {$idx >= 0} { set goal $idx; set nodeModel 1 }
 				} else {
 					break
 				}
@@ -278,6 +295,29 @@ proc ::media::sync::drive {timeMs durationMs} {
 				if {$mark <= $timeMs} { incr goal } else { break }
 			}
 		}
+		if {$nodeModel} {
+			# R6: NO ply clamp here — the goal is a node index into the
+			# lesson's position list, not a mainline ply. Clamping against
+			# the board length (a main-line ply count) would silently cap
+			# variation navigation.
+			if {$goal == $State(lastgoal)} { return }	;# R9: same-node no-op
+			set State(driving) 1
+			if {$goal < $State(lastgoal)} {
+				# rewind: jump + annotation reset (events replay from 0)
+				set State(tlidx) $goal
+				set State(evidx) 0
+				BoardGoto $goal
+				BoardClearAnnotations
+			} else {
+				BoardGoto $goal
+			}
+			set State(driving) 0
+			set State(lastgoal) $goal
+			return
+		}
+		# legacy count model: goal is a ply; clamp to the board length
+		set len [BoardLength]
+		if {$len <= 0} { return }
 		set goal [expr {min($goal, $len - 1)}]
 		if {$goal < $State(lastgoal)} {
 			set State(tlidx) $goal
@@ -296,6 +336,9 @@ proc ::media::sync::drive {timeMs durationMs} {
 		set State(lastgoal) $goal
 		return
 	}
+
+	set len [BoardLength]
+	if {$len <= 0} { return }
 
 	set dur [expr {double($durationMs)}]
 	if {$dur < 500.0} { return }
@@ -396,6 +439,28 @@ proc ::media::sync::BoardLength {} {
 		return 0
 	}
 	return 0
+}
+
+
+# Jump the board directly to a lesson node (node-goal model). The delegate
+# resolves the node's FEN and navigates the game tree (go -1 position $fen).
+proc ::media::sync::BoardGoto {node} {
+	variable Delegates
+	if {[llength $Delegates(boardgoto)]} {
+		catch { uplevel #0 $Delegates(boardgoto) [list $node] }
+	}
+}
+
+
+# Current board node as a lesson node index (-1 when unknown or not
+# resolvable — e.g. the board sits on a position outside the lesson).
+proc ::media::sync::BoardNode {} {
+	variable Delegates
+	if {[llength $Delegates(boardnode)]} {
+		if {[catch { uplevel #0 $Delegates(boardnode) } node]} { return -1 }
+		if {[string is integer -strict $node] && $node >= 0} { return $node }
+	}
+	return -1
 }
 
 # vi:set ts=3 sw=3:
