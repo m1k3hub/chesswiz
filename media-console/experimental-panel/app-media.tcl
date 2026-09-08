@@ -216,6 +216,13 @@ proc application::media::InsertEntry {typeLabel title path index} {
 
 	# map the type label to a section
 	set typeNum [TypeNumber $typeLabel]
+	# the CBM gallery reports the lecture WMVs as type 4 (stream): they
+	# are ordinary video files - reclassify by extension so they surface
+	# in the Video section instead of Other
+	if {$typeNum eq "other" && [string length $path]} {
+		set byExt [ClassifyFile $path]
+		if {$byExt >= 1 && $byExt <= 3} { set typeNum [TypeNumber $byExt] }
+	}
 	set section {}
 	foreach {key label} [Sections] {
 		if {$key eq $typeNum} { set section section_$key ; break }
