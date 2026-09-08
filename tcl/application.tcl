@@ -92,6 +92,7 @@ set BoardLayout {
 			}
 			panedwindow { -orient horz } {
 				frame tree %tree%
+				frame media %media%
 				frame analysis:1 %analysis%
 			}
 		}
@@ -100,7 +101,7 @@ set BoardLayout {
 
 set FontSizeActive 0
 
-array set Prios		{ analysis 200 board 500 editor 400 games 100 dbgames 110 tree 300 eco 90 }
+array set Prios		{ analysis 200 board 500 editor 400 games 100 dbgames 110 tree 300 eco 90 media 80 }
 array set Defaults	{ menu:background #c3c3c3 }
 
 array set Vars {
@@ -351,6 +352,7 @@ proc BuildPane {twm frame uid width height} {
 			tree::build $twm $frame $width $height
 			set Vars(align:board:tree) 1
 		}
+		media	{ media::build $twm $frame $width $height }
 		board		{ board::build $frame $width $height }
 		editor	{ pgn::build $frame $width $height }
 		games		{ tree::games::build $twm $frame $width $height }

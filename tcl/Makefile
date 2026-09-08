@@ -150,6 +150,10 @@ SOURCES = \
 	app-tree-games.tcl \
 	app-variation.tcl \
 	app-analysis.tcl \
+	app-media-decode.tcl \
+	app-media-lesson.tcl \
+	app-media-sync.tcl \
+	app-media.tcl \
 	app-twm.tcl \
 	manage-layouts.tcl \
 	pgn-setup.tcl \

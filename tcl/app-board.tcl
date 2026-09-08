@@ -537,6 +537,13 @@ proc update {position cmd data promoted} {
 	UpdateControls
 	::variation::hide 0
 	::move::cancelVariation
+
+	# media panel coupling: position-keyed playback + follow-mode reseek
+	# (no-ops unless a lesson/media is loaded; ::media::sync::driving?
+	# filters notifications produced by the follow tick itself)
+	if {[namespace which ::application::media::BoardUpdated] ne ""} {
+		::application::media::BoardUpdated $position
+	}
 }
 
 
