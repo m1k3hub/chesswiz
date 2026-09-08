@@ -83,6 +83,12 @@ array set Options {
 	background:hilite		browser,background:hilite
 	background:modified	browser,background:modified
 	foreground:hilite		browser,foreground:hilite
+	# display defaults read by ::pgn::setup::setupStyle/setupNags before
+	# buildText seeds the full set from DefaultOptions (browser::open
+	# establishes its own style at pane-open time)
+	style:column			0
+	style:move			san
+	show:nagtext			1
 }
 
 array set Active {}
