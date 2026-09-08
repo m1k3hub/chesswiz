@@ -701,6 +701,10 @@ proc build {videoPath} {
 
 	dict set lesson timeline $timeline
 	dict set lesson events $events
+	# v2 shape: node-goal sync requires the positions key even when the
+	# degraded v1 decode has no per-node FEN list (an empty list simply
+	# disables node resolution)
+	dict set lesson positions {}
 	dict set lesson valid 1
 	set Cache($k) $lesson
 

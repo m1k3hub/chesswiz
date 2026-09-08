@@ -1030,8 +1030,11 @@ proc application::media::PlayLesson {path gameIndex {startMs {}} {endMs {}}} {
 	MediaDebug "PlayLesson: [llength [dict get $lesson timeline]] timeline marks, [llength [dict get $lesson events]] events"
 
 	# node-goal resolution table: the sync state machine reports node
-	# indexes; the goto delegate maps them back to FENs via this list
-	set Priv(lessonPositions) [dict get $lesson positions]
+	# indexes; the goto delegate maps them back to FENs via this list.
+	# A degraded v1 lesson (no sidecar) has no positions key — an empty
+	# table simply disables node resolution (board follows by ply count).
+	set Priv(lessonPositions) [expr {[dict exists $lesson positions]
+		? [dict get $lesson positions] : {}}]
 
 	# transport first: embedded playback only — a lesson never falls
 	# back to an external player (that would decouple video from board)
