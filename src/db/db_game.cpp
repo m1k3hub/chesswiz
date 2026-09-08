@@ -2180,11 +2180,50 @@ Game::goToPosition(mstl::string const& fen)
 
 	moveToMainlineStart();
 
-	// TODO: also search in variations
+	if (goToPositionInVariations(position))
+	{
+		goToCurrentMove();
+		return;
+	}
+
+	// not found (not even in variations): walk to the mainline end,
+	// preserving the historical behavior for unknown positions
 	while (!atMainlineEnd() && !position.isEqualZHPosition(m_currentBoard))
 		forward();
 
 	goToCurrentMove();
+}
+
+
+bool
+Game::goToPositionInVariations(Board const& position)
+{
+	if (m_currentBoard.isEqualZHPosition(position))
+		return true;
+
+	while (!atLineEnd())
+	{
+		// variations branch at this node and start at the position before
+		// the node's move (see enterVariation/isValidVariation)
+		if (unsigned n = variationCount())
+		{
+			for (unsigned i = 0; i < n; ++i)
+			{
+				enterVariation(i);
+				if (goToPositionInVariations(position))
+					return true;
+				exitVariation();
+			}
+		}
+
+		if (!forward())
+			break;
+
+		if (m_currentBoard.isEqualZHPosition(position))
+			return true;
+	}
+
+	return false;
 }
 
 

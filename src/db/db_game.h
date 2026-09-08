@@ -658,6 +658,10 @@ public:
 
 private:
 
+	/// Search the position in the variations of the current line (DFS from
+	/// the current node); on success the game stands on the matching node.
+	bool goToPositionInVariations(Board const& position);
+
 	enum State { Begin_Group, End_Group, Begin_Var, End_Var, Do_Move };
 
 	enum UndoAction
