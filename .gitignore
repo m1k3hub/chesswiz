@@ -96,3 +96,15 @@ src/probe_cbm_linkage
 src/test_html_core
 tests/test_corr_duration
 src/cbh1trace
+
+# large ChessBase media fixtures (re-downloadable; media-console e2e
+# reports SKIP when absent, so they are not tracked)
+media-console/fixture/*.wmv
+media-console/fixture/**/*.wmv
+
+# generated test reports (rewritten by every `make -C tests` run)
+tests/test_report.txt
+tests/app_test_report.txt
+
+# stray shell-redirection artifact
+&1

@@ -244,12 +244,13 @@ proc packFiles {arch baseDir sources progress procCompression
 				file delete $arch
 				return -1
 			}
-			fconfigure $f -buffering none
 			switch $Compression {
 				zlib {
+					fconfigure $f -buffering none
 					lassign [::zlib::deflate $f $fd [namespace current]::tick $progress] size crc
 				}
 				raw {
+					fconfigure $f -buffering full -buffersize 65536
 					set size 0
 					set buf ""
 					set crc 0
@@ -412,13 +413,14 @@ proc unpack {arch procGetName progress {destDir ""}} {
 				seek $fd $Size current 
 				tick $progress $Size
 			} else {
-				fconfigure $f -buffering none
 				set ok 1
 				switch $Compression {
 					zlib {
+						fconfigure $f -buffering none
 						lassign [::zlib::inflate $fd $f $Size [namespace current]::tick $progress] size crc
 					}
 					raw {
+						fconfigure $f -buffering full -buffersize 65536
 						set remaining $Size
 						set crc 0
 						set buf ""

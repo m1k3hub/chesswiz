@@ -1,13 +1,13 @@
 # ======================================================================
-# ARCHIVED EXPERIMENT — not loaded by Scidb; RE reference only.
 # Media Viewer Panel — embedded image/audio/video playback in scidb
 # ======================================================================
 # Displays media entries (pictures, audio, video, streams) associated
 # with the currently loaded game.  Images render inline via Tk photo;
-# audio/video play embedded via the tkvlc package (libVLC bound to a
-# Tk frame's window ID).
+# audio/video play embedded via mpv (Tier-2b, JSON-IPC) when available,
+# otherwise via the tkvlc package (libVLC bound to a Tk frame's window
+# ID).
 #
-# If tkvlc (and thus libVLC) is not available, falls back to xdg-open
+# If neither embedded backend is available, falls back to xdg-open
 # (external player).
 # ======================================================================
 
@@ -31,7 +31,7 @@ set TypeNone			"Unknown"
 set Play				"Play"
 set Stop				"Stop"
 set OpenError		"Cannot open media file: %s"
-set NoPlayer			"No media player found (tkvlc or xdg-open)"
+set NoPlayer			"No media player found (mpv, tkvlc, or xdg-open)"
 set SyncBoard		"Sync with board"
 set ViewReport		"View report"
 set OpenExternal		"Open externally"
@@ -42,6 +42,19 @@ set SectionAudio		"Audio"
 set SectionVideo		"Video"
 set SectionOther		"Other"
 set FollowBoard	"Board follows video"
+
+# Chess Media System control-strip palette (see the ChessBase help
+# "Chess Media System" page): a light bar with a round blue transport
+# button, a black LCD time read-out with green digits and round
+# chapter-skip buttons.
+set MediaList		"Media list"
+set BarBackground	"#d9d9d9"
+set ButtonFace		"#3d6fb5"
+set ButtonEdge		"#2b4f83"
+set LcdBackground	"#000000"
+set LcdForeground	"#33ff33"
+set LcdEdge		"#404040"
+set LcdFont		"TkFixedFont"
 
 } ;# namespace mc
 
@@ -64,6 +77,9 @@ array set Priv {
 	seekgrab		0
 	seeklabel	{}
 	seektick		{}
+	volumelabel	100
+	playstate	paused
+	listvisible	1
 }
 
 } ;# namespace media
@@ -79,71 +95,73 @@ proc application::media::build {twm frame width height} {
 	set status $frame.status
 	set ctrl $frame.ctrl
 
-	# --- toolbar: playback + document actions -------------------------
-	ttk::frame $ctrl
-	ttk::button $ctrl.play -text $mc::Play -command [namespace code [list PlaySelected $tree]]
-	ttk::button $ctrl.stop -text $mc::Stop -command [namespace code Stop]
-	ttk::separator $ctrl.sep -orient vertical
-	ttk::button $ctrl.report -text $mc::ViewReport -command [namespace code ViewReport]
-	ttk::button $ctrl.external -text $mc::OpenExternal -command [namespace code OpenSelectedExternal]
-	pack $ctrl.play -side left -padx 2
-	pack $ctrl.stop -side left -padx 2
-	pack $ctrl.sep -side left -fill y -padx 4
-	pack $ctrl.report -side left -padx 2
-	pack $ctrl.external -side left -padx 2
+	# --- viewer: the video/image surface ------------------------------
+	ttk::frame $viewer -relief sunken -borderwidth 1
+	canvas $viewer.canvas -bg black -highlightthickness 0
+	pack $viewer.canvas -fill both -expand yes
 
-	# --- media list (left) + viewer (right) ----------------------------
-	set pw [ttk::panedwindow $frame.pw -orient horizontal]
+	# --- ChessBase-style transport bar --------------------------------
+	# Mirrors the Chess Media System control strip: a round play button,
+	# an LCD current/total time read-out, round chapter prev/next
+	# buttons, the seek slider and the volume indicator - all on one row
+	# directly beneath the video.
+	frame $ctrl -bg $mc::BarBackground -highlightthickness 0
+	canvas $ctrl.buttons -width 228 -height 40 -highlightthickness 0 \
+		-borderwidth 0 -bg $mc::BarBackground
+	ttk::scale $ctrl.seek -orient horizontal -from 0 -to 1000 -value 0
+	label $ctrl.vol -textvariable [namespace current]::Priv(volumelabel) \
+		-width 4 -anchor center -bg $mc::BarBackground -fg "#202020"
+	pack $ctrl.buttons -side left -padx {2 4}
+	pack $ctrl.seek -side left -fill x -expand yes -padx 2
+	pack $ctrl.vol -side right -padx {4 2}
+	# dragging owns the slider; the actual seek happens on release
+	bind $ctrl.seek <ButtonPress-1> +[namespace code { set Priv(seekgrab) 1 }]
+	bind $ctrl.seek <ButtonRelease-1> +[namespace code SeekRelease]
+	bind $ctrl.buttons <Configure> [namespace code _drawControlBar]
+	bind $ctrl.buttons <Button-1> [namespace code {_controlBarClick %x %y}]
+	bind $ctrl.vol <Button-1> [namespace code _toggleMute]
+	bind $ctrl.vol <Button-4> +[namespace code {_volumeStep +5}]
+	bind $ctrl.vol <Button-5> +[namespace code {_volumeStep -5}]
+	bind $ctrl.vol <MouseWheel> +[namespace code {_volumeStep %D}]
 
-	ttk::frame $pw.list
+	# --- media list (collapsible, below the transport) -----------------
+	frame $frame.listbox -bg $mc::BarBackground
+	frame $frame.listbox.head -bg $mc::BarBackground
+	ttk::button $frame.listbox.head.report -text $mc::ViewReport \
+		-command [namespace code ViewReport]
+	ttk::button $frame.listbox.head.external -text $mc::OpenExternal \
+		-command [namespace code OpenSelectedExternal]
+	pack $frame.listbox.head.report -side left -padx 2 -pady 2
+	pack $frame.listbox.head.external -side left -padx 2 -pady 2
+
 	ttk::treeview $tree \
 		-columns {type title path} \
 		-displaycolumns {type title} \
 		-show {tree headings} \
 		-selectmode browse \
-		-height 6
+		-height 5
 	$tree heading #0 -text $mc::Group
 	$tree heading type -text $mc::ColumnType
 	$tree heading title -text $mc::ColumnTitle
 	$tree column type -width 70 -anchor center -stretch false
 	$tree column title -width 180 -anchor w
-	grid $tree   -row 1 -column 1 -sticky nsew -in $pw.list
-	grid rowconfigure $pw.list 1 -weight 1
-	grid columnconfigure $pw.list 1 -weight 1
-	pack propagate $pw.list 0
+	pack $frame.listbox.head -in $frame.listbox -side top -fill x
+	pack $tree -in $frame.listbox -side top -fill both -expand yes
 
-	ttk::frame $pw.view
-	ttk::frame $viewer -relief sunken -borderwidth 1
-	canvas $viewer.canvas -bg black -highlightthickness 0
-	pack $viewer.canvas -fill both -expand yes
-	grid $viewer -row 1 -column 1 -sticky nsew -in $pw.view
-	grid rowconfigure $pw.view 1 -weight 1
-	grid columnconfigure $pw.view 1 -weight 1
-
-	$pw add $pw.list -weight 3
-	$pw add $pw.view -weight 2
-
-	# --- seek bar: video position slider + time readout ---------------
-	set seek $frame.seek
-	ttk::frame $seek
-	ttk::scale $seek.bar -orient horizontal -from 0 -to 1000 -value 0
-	ttk::label $seek.time -textvariable [namespace current]::Priv(seeklabel) \
-		-width 12 -anchor e
-	pack $seek.bar -side left -fill x -expand yes -padx 2
-	pack $seek.time -side right -padx 2
-	# dragging owns the slider; the actual seek happens on release
-	bind $seek.bar <ButtonPress-1> +[namespace code { set Priv(seekgrab) 1 }]
-	bind $seek.bar <ButtonRelease-1> +[namespace code SeekRelease]
-
-	# --- status bar ---------------------------------------------------
+	# --- footer: status + list toggle ---------------------------------
+	frame $frame.footer -bg $mc::BarBackground
 	ttk::label $status -textvariable [namespace current]::Priv(statusbar) \
 		-anchor w -relief sunken -borderwidth 1
+	ttk::button $frame.footer.list -text $mc::MediaList \
+		-command [namespace code ToggleList]
+	pack $status -in $frame.footer -side left -fill x -expand yes -padx {2 4}
+	pack $frame.footer.list -in $frame.footer -side right -padx 2
 
-	grid $ctrl   -row 1 -column 1 -sticky ew
-	grid $pw     -row 2 -column 1 -sticky nsew
-	grid $seek   -row 3 -column 1 -sticky ew
-	grid $status -row 4 -column 1 -sticky ew
-	grid rowconfigure $frame 2 -weight 1
+	grid $viewer        -row 1 -column 1 -sticky nsew
+	grid $ctrl          -row 2 -column 1 -sticky ew
+	grid $frame.listbox -row 3 -column 1 -sticky nsew
+	grid $frame.footer  -row 4 -column 1 -sticky ew
+	grid rowconfigure $frame 1 -weight 1
 	grid columnconfigure $frame 1 -weight 1
 
 	bind $tree <Double-Button-1> [namespace code [list PlaySelected $tree]]
@@ -154,7 +172,18 @@ proc application::media::build {twm frame width height} {
 	set Priv(viewer) $viewer
 	set Priv(statusbar) $mc::NoDatabase
 	set Priv(ctrl) $ctrl
-	set Priv(seekbar) $seek.bar
+	set Priv(ctrlbuttons) $ctrl.buttons
+	set Priv(seekbar) $ctrl.seek
+	set Priv(listbox) $frame.listbox
+	set Priv(listvisible) 1
+	set Priv(playstate) paused
+	if {![info exists Priv(volumelabel)]} { set Priv(volumelabel) 100 }
+
+	# The LCD read-out lives on the transport canvas; redraw it whenever
+	# SeekTick/Stop update the shared seeklabel variable.
+	trace add variable [namespace current]::Priv(seeklabel) write \
+		[namespace code _seeklabelChanged]
+	_drawControlBar
 
 	# React to game switches
 	::scidb::db::subscribe gameSwitch [namespace current]::GameSwitched
@@ -172,6 +201,195 @@ proc application::media::build {twm frame width height} {
 		boardply-cmd	[namespace code SyncBoardPly] \
 		boardgoto-cmd	[namespace code SyncBoardGoto] \
 		boardnode-cmd	[namespace code SyncBoardNode]
+}
+
+
+# --- ChessBase-style transport strip -----------------------------------
+
+# Redraw the transport canvas: round play/pause button, black LCD time
+# read-out with green digits and the round chapter prev/next buttons.
+# Called on <Configure> and whenever the transport state changes.
+proc application::media::_drawControlBar {} {
+	variable Priv
+	variable mc
+
+	if {![info exists Priv(ctrlbuttons)] || ![winfo exists $Priv(ctrlbuttons)]} { return }
+	set c $Priv(ctrlbuttons)
+
+	set h [winfo height $c]
+	if {$h < 20} { set h 40 }
+	set cy [expr {$h / 2}]
+	$c delete all
+
+	# play / pause button (round, blue)
+	$c create oval 4 [expr {$cy - 16}] 36 [expr {$cy + 16}] \
+		-fill $mc::ButtonFace -outline $mc::ButtonEdge -tags playbtn
+	if {$Priv(playstate) eq "playing"} {
+		$c create rectangle 15 [expr {$cy - 8}] 19 [expr {$cy + 8}] \
+			-fill white -outline white -tags playbtn
+		$c create rectangle 22 [expr {$cy - 8}] 26 [expr {$cy + 8}] \
+			-fill white -outline white -tags playbtn
+	} else {
+		$c create polygon 15 [expr {$cy - 9}] 15 [expr {$cy + 9}] 27 $cy \
+			-fill white -outline white -tags playbtn
+	}
+
+	# LCD time read-out (current / total)
+	set lx 44
+	set lw 132
+	$c create rectangle $lx [expr {$cy - 15}] [expr {$lx + $lw}] [expr {$cy + 15}] \
+		-fill $mc::LcdBackground -outline $mc::LcdEdge -tags lcd
+	set label {}
+	if {[info exists Priv(seeklabel)]} { set label $Priv(seeklabel) }
+	$c create text [expr {$lx + $lw / 2}] $cy \
+		-text [string map [list "/" " "] $label] \
+		-fill $mc::LcdForeground -font $mc::LcdFont -tags lcdtext
+
+	# chapter prev / next buttons
+	set px [expr {$lx + $lw + 20}]
+	foreach tag {prevbtn nextbtn} {
+		$c create oval [expr {$px - 12}] [expr {$cy - 12}] [expr {$px + 12}] [expr {$cy + 12}] \
+			-fill $mc::ButtonFace -outline $mc::ButtonEdge -tags $tag
+		if {$tag eq "prevbtn"} {
+			$c create polygon [expr {$px - 6}] $cy [expr {$px + 1}] [expr {$cy - 6}] \
+				[expr {$px + 1}] [expr {$cy + 6}] -fill white -outline white -tags $tag
+			$c create polygon [expr {$px + 1}] $cy [expr {$px + 8}] [expr {$cy - 6}] \
+				[expr {$px + 8}] [expr {$cy + 6}] -fill white -outline white -tags $tag
+		} else {
+			$c create polygon [expr {$px + 6}] $cy [expr {$px - 1}] [expr {$cy - 6}] \
+				[expr {$px - 1}] [expr {$cy + 6}] -fill white -outline white -tags $tag
+			$c create polygon [expr {$px - 1}] $cy [expr {$px - 8}] [expr {$cy - 6}] \
+				[expr {$px - 8}] [expr {$cy + 6}] -fill white -outline white -tags $tag
+		}
+		incr px 30
+	}
+}
+
+
+proc application::media::_seeklabelChanged {args} {
+	_drawControlBar
+}
+
+
+# Hit-test the transport canvas: play/pause, chapter prev/next.
+proc application::media::_controlBarClick {x y} {
+	variable Priv
+
+	if {![info exists Priv(ctrlbuttons)] || ![winfo exists $Priv(ctrlbuttons)]} { return }
+	set c $Priv(ctrlbuttons)
+
+	foreach item [lreverse [$c find overlapping $x $y $x $y]] {
+		set tags [$c gettags $item]
+		if {[lsearch -exact $tags playbtn] >= 0} { TogglePlayback ; return }
+		if {[lsearch -exact $tags prevbtn] >= 0} { ChapterStep -1 ; return }
+		if {[lsearch -exact $tags nextbtn] >= 0} { ChapterStep +1 ; return }
+	}
+}
+
+
+# Refresh the cached transport state used by the play/pause glyph.
+proc application::media::_refreshTransport {} {
+	variable Priv
+
+	set playing 0
+	if {[info exists Priv(inprocess)] && $Priv(inprocess)} {
+		catch { if {[MediaState] eq "playing"} { set playing 1 } }
+	}
+	set Priv(playstate) [expr {$playing ? "playing" : "paused"}]
+}
+
+
+# ChessBase's two arrows jump to the previous/next game (chapter) of the
+# media.  scidb's gallery is the chapter list: move the selection and
+# play the neighbouring entry.
+proc application::media::ChapterStep {delta} {
+	variable Priv
+
+	set tree $Priv(tree)
+	set rows [MediaRows]
+	if {![llength $rows]} { return }
+
+	set idx 0
+	set sel [$tree selection]
+	if {[llength $sel]} {
+		set found [lsearch -exact $rows [lindex $sel 0]]
+		if {$found >= 0} { set idx $found }
+	}
+	set idx [expr {$idx + $delta}]
+	if {$idx < 0} { set idx 0 }
+	if {$idx >= [llength $rows]} { set idx [expr {[llength $rows] - 1}] }
+
+	set item [lindex $rows $idx]
+	$tree selection set $item
+	catch { $tree see $item }
+	PlaySelected $tree
+}
+
+
+proc application::media::ToggleList {} {
+	variable Priv
+
+	if {![info exists Priv(listbox)] || ![winfo exists $Priv(listbox)]} { return }
+	if {$Priv(listvisible)} {
+		grid remove $Priv(listbox)
+		set Priv(listvisible) 0
+	} else {
+		grid $Priv(listbox) -row 3 -column 1 -sticky nsew
+		set Priv(listvisible) 1
+	}
+}
+
+
+# --- volume ------------------------------------------------------------
+
+proc application::media::MediaVolume {} {
+	variable Priv
+
+	if {![info exists Priv(backend)]} { return 100 }
+	if {$Priv(backend) eq "mpv"} {
+		set v ""
+		catch { set v [::media::mpv::_get volume] }
+		return [expr {[string is double -strict $v] ? int(round($v)) : 100}]
+	}
+	set v 100
+	if {[info exists Priv(vlc_handle)] && $Priv(vlc_handle) ne ""} {
+		catch { set v [$Priv(vlc_handle) volume] }
+	}
+	return [expr {[string is integer -strict $v] ? $v : 100}]
+}
+
+
+proc application::media::MediaSetVolume {v} {
+	variable Priv
+
+	set v [expr {max(0, min(200, int($v)))}]
+	if {![info exists Priv(backend)]} { return $v }
+	if {$Priv(backend) eq "mpv"} {
+		catch { ::media::mpv::_set volume $v }
+	} elseif {[info exists Priv(vlc_handle)] && $Priv(vlc_handle) ne ""} {
+		catch { $Priv(vlc_handle) volume $v }
+	}
+	return $v
+}
+
+
+proc application::media::_volumeStep {delta} {
+	variable Priv
+
+	set Priv(volumelabel) [MediaSetVolume [expr {[MediaVolume] + $delta}]]
+}
+
+
+proc application::media::_toggleMute {} {
+	variable Priv
+
+	if {![info exists Priv(mutevol)]} {
+		set Priv(mutevol) [MediaVolume]
+		set Priv(volumelabel) [MediaSetVolume 0]
+	} else {
+		set Priv(volumelabel) [MediaSetVolume $Priv(mutevol)]
+		unset Priv(mutevol)
+	}
 }
 
 
@@ -414,6 +632,39 @@ proc application::media::ViewReport {} {
 }
 
 
+proc application::media::Navigate {step} {
+	variable Priv
+	if {$Priv(position) < 0} { return }
+	::application::board::goto $step
+	catch { after cancel $Priv(seekid) }
+	PlySeek $Priv(position)
+}
+
+proc application::media::TogglePlayback {} {
+	variable Priv
+	if {!$Priv(inprocess)} {
+		PlaySelected $Priv(tree)
+		return
+	}
+	if {[MediaState] eq "playing"} {
+		SyncTransport pause
+	} else {
+		SyncTransport play
+	}
+}
+
+# True when a gallery row is a game-coupled lesson: a video or audio
+# file owned by a game in an open database.  Both play as one unit with
+# the owning game (PlayLesson); without an owning database they play as
+# plain media.
+proc application::media::CoupledLesson? {type galleryIndex} {
+	variable Priv
+	return [expr {($type == 2 || $type == 3)
+		&& [string length $Priv(base)]
+		&& [string is integer -strict $galleryIndex] && $galleryIndex >= 0}]
+}
+
+
 proc application::media::PlaySelected {tree} {
 	variable Priv
 
@@ -449,10 +700,10 @@ proc application::media::PlaySelected {tree} {
 		set galleryIndex $Priv(index)
 	}
 
-	# Coupled lesson (video owned by a game): video + game play as ONE
-	# unit — neither without the other (PlayLesson). Requires an owning
-	# database: gallery rows without one play as plain media below.
-	if {$type == 3 && [string length $Priv(base)] && [string is integer -strict $galleryIndex] && $galleryIndex >= 0} {
+	# Coupled lesson (video/audio owned by a game): media + game play as
+	# ONE unit — neither without the other (PlayLesson). Requires an
+	# owning database: gallery rows without one play as plain media below.
+	if {[CoupledLesson? $type $galleryIndex]} {
 		Stop
 		if {$galleryIndex != $Priv(index)} {
 			set v $Priv(variant) ; if {$v eq ""} { set v Normal }
@@ -572,8 +823,8 @@ proc application::media::CmsEntries {path} {
 # algebraic notation. Verified corpus-wide (109/109 legal moves).
 proc application::media::CmsSquare {n} {
 	set files {a b c d e f g h}
-	set f [lindex $files [expr {$n % 8}]]
-	set r [expr {$n / 8 + 1}]
+	set f [lindex $files [expr {int($n / 8)}]]
+	set r [expr {($n % 8) + 1}]
 	return "$f$r"
 }
 
@@ -788,7 +1039,8 @@ proc application::media::BoardUpdated {position} {
 	if {$position != $Priv(position) || $position < 0 || $position == 9} { return }
 
 	# bidirectional coupling (1): stepping the board repositions the media
-	set Priv(seekid) [after 250 [namespace code [list PlySeek $position]]]
+	::media::sync::step
+	set Priv(seekid) [after idle [namespace code [list PlySeek $position]]]
 	if {$haveInter} {
 		set Priv(interactiveid) [after 150 [namespace code [list InteractiveFollow $position]]]
 	}
@@ -809,32 +1061,17 @@ proc application::media::PlySeek {position} {
 	if {[info commands ::media::sync::driving?] ne ""
 		&& [::media::sync::driving?]} { return }
 	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
-	set handle $Priv(vlc_handle)
-	if {$handle eq ""} { return }
-
-	set dur 0
-	catch { set dur [expr {1000.0 * [$handle duration]}] }
-	set ply [SyncBoardPly]
-
-	# tkvlc exposes seconds; the sync timeline and tolerances use ms.
-	set t 0.0
-	catch { set t [expr {1000.0 * [$handle time]}] }
-
-	# lesson timeline first (exact per-move timecodes), linear fallback
-	set target -1
-	catch { set target [::media::sync::ms-for-ply $ply] }
-	if {$target >= 0} {
-		set tol 500.0
-	} else {
-		set len [SyncBoardLength]
-		if {!$dur || $dur <= 0 || $len <= 1} { return }
-		set tol [expr {max(1200.0, $dur / 100.0)}]
-		set target [expr {double($ply) / double($len - 1) * ($dur - 300.0)}]
+	set goal [SyncBoardPly]
+	if {[info exists Priv(lessonPositions)] && [llength $Priv(lessonPositions)]} {
+		set goal [SyncBoardNode]
 	}
-	if {abs($target - $t) > $tol} {
-		MediaDebug "PlySeek: ply=$ply -> seek to ${target}ms (media at ${t}ms)"
-		catch { $handle time [expr {$target / 1000.0}] }
+	set target [::media::sync::ms-for-ply $goal]
+	if {$target < 0} {
+		MediaPause
+		set Priv(statusbar) "No synchronized commentary for this position."
+		return
 	}
+	MediaSeek [expr {$target / 1000.0}]
 }
 
 
@@ -1040,15 +1277,15 @@ proc application::media::PlayLesson {path gameIndex {startMs {}} {endMs {}}} {
 
 	# node-goal resolution table: the sync state machine reports node
 	# indexes; the goto delegate maps them back to FENs via this list.
-	# A degraded v1 lesson (no sidecar) has no positions key — an empty
-	# table simply disables node resolution (board follows by ply count).
+	# Both text-sidecar and WMV lessons resolve nodes through checkpoints.
+	# Older cached lessons without source metadata are rebuilt on get().
 	set Priv(lessonPositions) [expr {[dict exists $lesson positions]
 		? [dict get $lesson positions] : {}}]
 
 	# transport first: embedded playback only — a lesson never falls
 	# back to an external player (that would decouple video from board)
 	if {![PlayInProcess $path $startMs $endMs]} {
-		set Priv(statusbar) "Lesson requires embedded video playback (tkvlc)."
+		set Priv(statusbar) "Lesson requires embedded playback (mpv or tkvlc)."
 		MediaDebug "PlayLesson: embedded playback failed for [file tail $path]"
 		::media::sync::load-timeline {}
 		::media::sync::load-events {}
@@ -1079,19 +1316,14 @@ proc application::media::PlayMedia {path {startMs {}} {endMs {}}} {
 	::media::sync::load-timeline {}
 	::media::sync::load-events {}
 
-	# Backend: tkvlc (libVLC) is the only in-process multimedia backend.
-	if {[LoadVlc]} {
-		MediaDebug "in-process playback available (tkvlc)"
-		if {[PlayInProcess $path $startMs $endMs]} {
-			return
-		}
-		MediaDebug "in-process playback failed, falling back to external player"
-	}
+	# PlayInProcess selects mpv first and initializes VLC only as a fallback.
+	if {[PlayInProcess $path $startMs $endMs]} { return }
+	MediaDebug "in-process playback unavailable"
 
 	# An external player has no board position or transport callbacks.  Do
 	# not claim to play a game-coupled video independently of its game.
 	if {[ClassifyFile $path] == 3} {
-		set Priv(statusbar) "Cannot play video with board synchronization: embedded VLC is unavailable."
+		set Priv(statusbar) "Cannot play video with board synchronization: embedded playback is unavailable."
 		MediaDebug "PlayMedia: refusing unsynchronized external video [list $path]"
 		return
 	}
@@ -1217,7 +1449,7 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	StartSeekTick
 
 	# sync timeline/events are loaded by PlayLesson (lesson cache); plain
-	# media keeps an empty sync state (linear fallback in drive)
+	# media keeps an empty sync state (no board synchronization)
 
 	# Check shortly after that playback actually started (media decoded).
 	catch { after cancel $Priv(checkid) }
@@ -1651,9 +1883,6 @@ proc application::media::FollowTick {} {
 
 	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
 
-	set handle $Priv(vlc_handle)
-	if {$handle eq ""} { return }
-
 	set st [MediaState]
 	# stop the follow loop only on TERMINAL player states; transient
 	# ones (buffering, opening, an unreadable state during a seek) must
@@ -1690,8 +1919,8 @@ proc application::media::SeekTick {} {
 
 	set Priv(seektick) {}
 	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
-	set handle $Priv(vlc_handle)
-	if {$handle eq ""} { return }
+
+	_refreshTransport
 
 	set t [expr {1000.0 * [MediaTime]}]
 	set dur [expr {1000.0 * [MediaDuration]}]
@@ -1726,11 +1955,7 @@ proc application::media::SeekRelease {} {
 
 	set Priv(seekgrab) 0
 	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
-	set handle $Priv(vlc_handle)
-	if {$handle eq ""} { return }
-
-	set dur 0
-	catch { set dur [$handle duration] }
+	set dur [MediaDuration]
 	if {![string is double -strict $dur] || $dur <= 0} { return }
 
 	set frac [expr {[$Priv(seekbar) get] / 1000.0}]
@@ -1745,11 +1970,10 @@ proc application::media::SeekApply {frac dur} {
 	variable Priv
 
 	if {![info exists Priv(inprocess)] || !$Priv(inprocess)} { return }
-	set handle $Priv(vlc_handle)
-	if {$handle eq ""} { return }
 
 	MediaDebug "SeekApply: seek to [expr {int($frac * 100)}]% of ${dur}s"
 	MediaSeek [expr {$frac * $dur}]
+	::media::sync::seek [expr {$frac * $dur * 1000.0}] [expr {$dur * 1000.0}]
 }
 
 
@@ -1775,6 +1999,7 @@ proc application::media::Stop {} {
 	catch { after cancel $Priv(seekid) }
 	catch { after cancel $Priv(interactiveid) }
 	catch { after cancel $Priv(seektick) }
+	catch { after cancel $Priv(seekdebounce) }
 	set Priv(checkid) {}
 	set Priv(rangeid) {}
 	set Priv(seektick) {}
@@ -1790,6 +2015,7 @@ proc application::media::Stop {} {
 	# media no longer playing: reset the sync state machine and timers
 	StopFollowTick
 	::media::sync::onPlaybackStopped
+	set Priv(playstate) paused
 
 	# Stop and release tkvlc playback.
 	MediaDestroy

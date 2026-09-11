@@ -52,14 +52,19 @@ proc ::media::mpv::launch {path wid {startMs 0}} {
 	stop	;# release any previous instance
 
 	set sockpath /tmp/scidb-mpv-[pid]-[incr Priv(seq)].sock
+	set Priv(sockpath) $sockpath
 	set startSec [expr {$startMs > 0 ? $startMs / 1000.0 : 0}]
 
 	# mpv parses --wid as a DECIMAL window id; winfo id returns hex
 	# (0x00200006) - an unparsable wid silently falls back to mpv's own
 	# toplevel window instead of embedding
 	if {[scan $wid "0x%x" widDec] != 1} {
-		set widDec [string trimleft $wid "0"]
-		if {![string is integer -strict $widDec]} { return 0 }
+		if {$wid eq "0"} {
+			set widDec 0
+		} else {
+			set widDec [string trimleft $wid "0"]
+			if {![string is integer -strict $widDec]} { return 0 }
+		}
 	}
 	set wid $widDec
 
@@ -178,11 +183,8 @@ proc ::media::mpv::_cmd {args} {
 		}
 		close $s
 	} emsg]} {
-		puts stderr "CMD-OK resp=[string range $response 0 60]"
-	} else {
-		puts stderr "CMD-ERR: $emsg"
+		catch { ::application::media::MediaDebug "mpv _cmd error: $emsg" }
 	}
-	flush stderr
 	return $response
 }
 

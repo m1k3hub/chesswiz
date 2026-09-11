@@ -635,14 +635,15 @@ uninstall: uninstall-scripts uninstall-pieces uninstall-cursors uninstall-flags 
 		fi;                                                                                   \
 	fi
 
-$(SCRIPT): $(SOURCES)
+$(SCRIPT): $(SOURCES) Makefile ../Makefile.in
 	@echo "Checking trailing newlines in sources"
 	@err=; for f in $(SOURCES); do \
 		if [ -n "`tail -c 1 "$$f"`" ]; then echo "ERROR: $$f does not end with a newline"; err=1; fi; \
 	done; if [ -n "$$err" ]; then exit 1; fi
 	@echo "Building $(SCRIPT)"
-	@if [ -e $(SCRIPT) ]; then rm -f $(SCRIPT); fi
-	@for f in $(SOURCES); do cat "$$f"; echo; done | sed                  \
+	@tmp="$(SCRIPT).tmp.$$$$"; \
+	trap 'rm -f "$$tmp"' EXIT INT TERM HUP; \
+	for f in $(SOURCES); do cat "$$f"; echo; done | sed                  \
 		-e 's/# vi:set ts=3 sw=3:/update idletasks/'        \
 		-e 's#%SHAREDIR%#$(DATADIR)#g'                      \
 		-e 's#%%ENGINESDIR%%#$(%ENGINESDIR%)#g'             \
@@ -650,33 +651,37 @@ $(SCRIPT): $(SOURCES)
 		-e '/^##/d'                                         \
 		-e '/^#$$/d'                                        \
 		-e '/^[ 	]*#[ 	]\+/d'                               \
-		> $(SCRIPT)
-	@chmod 0555 $(SCRIPT)
-	@echo "Checking merged script syntax"
-	@if [ -x /usr/bin/tclsh ]; then TCLSH=/usr/bin/tclsh; else TCLSH=tclsh; fi; \
-		printf '%s' 'set fp [open $(SCRIPT) r]; set b [read $$fp]; close $$fp; \
-			if {![info complete $$b]} { puts stderr "ERROR: merged script is syntactically incomplete"; exit 1 }' \
-			| $$TCLSH \
-		|| { echo "ERROR: $(SCRIPT) failed the syntax check"; exit 1; }
+		> "$$tmp"; \
+	if [ -x /usr/bin/tclsh ]; then TCLSH=/usr/bin/tclsh; else TCLSH=tclsh; fi; \
+	printf '%s' "set fp [open \"$$tmp\" r]; set b [read \$$fp]; close \$$fp; \
+		if {![info complete \$$b]} { puts stderr \"ERROR: merged script is syntactically incomplete\"; exit 1 }" \
+		| $$TCLSH \
+		|| { echo "ERROR: $(SCRIPT) failed the syntax check"; exit 1; }; \
+	chmod 0555 "$$tmp"; \
+	mv -f "$$tmp" $(SCRIPT)
 
 $(UPDATE_PHOTO_FILES): utils/update-photos.tcl
 	@echo "Building $(UPDATE_PHOTO_FILES)"
-	@if [ -e $(UPDATE_PHOTO_FILES) ]; then rm -f $(UPDATE_PHOTO_FILES); fi
-	@cat utils/update-photos.tcl | sed                     \
+	@tmp="$(UPDATE_PHOTO_FILES).tmp.$$$$"; \
+	trap 'rm -f "$$tmp"' EXIT INT TERM HUP; \
+	cat utils/update-photos.tcl | sed                     \
 		-e 's/%PROGRAM%/tclscidb$(SUFFIX)/g'                \
 		-e 's#%SHAREDIR%#$(DATADIR)#g'                      \
 		-e 's/%UPDATE_PHOTO_FILES%/$(UPDATE_PHOTO_FILES)/g' \
-		> $(UPDATE_PHOTO_FILES)
-	@chmod 0555 $(UPDATE_PHOTO_FILES)
+		> "$$tmp"; \
+	chmod 0555 "$$tmp"; \
+	mv -f "$$tmp" $(UPDATE_PHOTO_FILES)
 
 $(ARCH): utils/archive.tcl
 	@echo "Building $(ARCH)"
-	@if [ -e $(ARCH) ]; then rm -f $(ARCH); fi
-	@cat utils/archive.tcl | sed            \
+	@tmp="$(ARCH).tmp.$$$$"; \
+	trap 'rm -f "$$tmp"' EXIT INT TERM HUP; \
+	cat utils/archive.tcl | sed            \
 		-e 's/%PROGRAM%/tclscidb$(SUFFIX)/g' \
 		-e 's#%SHAREDIR%#$(DATADIR)#g'       \
 		-e 's/%ARCH%/$(ARCH)/g'              \
-		> $(ARCH)
-	@chmod 0555 $(ARCH)
+		> "$$tmp"; \
+	chmod 0555 "$$tmp"; \
+	mv -f "$$tmp" $(ARCH)
 
 # vi:set ts=3 sw=3:

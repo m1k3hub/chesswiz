@@ -552,6 +552,10 @@ proc decode {wmvPath} {
 
 	# ffprobe -of json emits one flat object per packet; pair each
 	# packet's data hex with its pts_time (media seconds)
+	# Walk the packet array, not the enclosing object (which would expose
+	# only its first data/pts_time pair to the expressions below).
+	if {![regexp -indices {"packets"\s*:\s*\[} $json packetArray]} { return {} }
+	set json [string range $json [expr {[lindex $packetArray 1] + 1}] end]
 	set packets {}
 	foreach obj [jsonObjects $json] {
 		set data {}
@@ -587,6 +591,11 @@ proc decode {wmvPath} {
 		]
 
 		switch -- $opcode {
+			2 {
+				# Keep the complete cumulative checkpoint for node resolution.
+				dict set entry type checkpoint
+				dict set entry checkpoint [join $record {}]
+			}
 			3 {
 				# navigate: absolute replay-step target at this media-ms
 				set tail [join [lrange $record 4 end] {}]
@@ -637,4 +646,3 @@ proc decode {wmvPath} {
 } ;# namespace eval ::media::decoder
 
 # vi:set ts=3 sw=3:
-# ARCHIVED EXPERIMENT — not loaded by Scidb; RE reference only.

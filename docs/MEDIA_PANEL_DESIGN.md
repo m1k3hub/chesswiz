@@ -9,7 +9,7 @@ format), `CBM_FORMAT_DESIGN.md` (ChessBase media system).
 
 | File | Namespace | Responsibility |
 |---|---|---|
-| `tcl/app-media.tcl` | `::application::media` | Panel UI (tree/viewer/status), media resolution, playback orchestration, sync wiring |
+| `tcl/app-media.tcl` | `::application::media` | Panel UI (ChessBase-style transport bar, viewer, collapsible tree, status), media resolution, playback orchestration, sync wiring |
 | `tcl/app-media-mpv.tcl` | `::media::mpv` | mpv JSON-IPC transport (Tier-2b backend) |
 | `tcl/app-media-decode.tcl` | `::media::decoder` | ChessBase script-stream (WMV stream 2) decoder |
 | `tcl/app-media-lesson.tcl` | `::media::lesson` | Lesson cache: timeline + board events per video, persisted to sidecars |
@@ -72,9 +72,9 @@ Re-classifies by file extension (`ClassifyFile`: 1 picture, 2 audio,
 
 - **Pictures** → inline Tk photo, scaled to fit (`ShowImage`).
 - **`.cms` index** → `ResolveIndex` (§3.3), then lesson/plain playback.
-- **Video owned by a game** (`type == 3` with `galleryIndex >= 0`) →
+- **Media owned by a game** (`type in {2 3}` with `galleryIndex >= 0`) →
   **coupled lesson** (`PlayLesson`): the owning game is loaded first
-  (`::game::new` + `after idle`), video plays embedded only, sync
+  (`::game::new` + `after idle`), media plays embedded only, sync
   timeline/events load together. Never falls back to an external player.
 - **Plain media** → `PlayMedia`: clear sync state, try embedded
   (mpv → tkvlc); video (`ClassifyFile == 3`) refuses the external
@@ -133,15 +133,25 @@ UI-free; the panel wires delegates at `build` time
 
 - **Transport sync** (board autoplay drives media; manual navigation
   pauses media) — `::media::sync::autoplay`/`step` from board code.
-- **Follow mode** ("board follows video"): `FollowTick` every 250 ms
+- **Follow mode** ("board follows video"): `FollowTick` every 100 ms
   feeds `(time, duration)` to `::media::sync::drive`, which maps media
-  time to plies — via the decoded per-move timeline when a lesson
-  sidecar/timeline exists, else linear over duration — and invokes the
+  time to nodes — via the decoded per-move timeline when a lesson
+  sidecar/timeline exists; without one the board is left at the game
+  position (no guessed timing) — and invokes the
   board delegates. mpv branch must be checked before tkvlc (no vlc
   handle exists while mpv is active).
+- **Main-line projection:** the lesson timeline is projected onto the
+  main-line position table by `::media::lesson::_mainline-timeline`
+  before it is persisted. The raw opcode-03 cursors address the
+  authoring tree including variation patch slots, which the position
+  table does not carry; keeping them made the board jump to unrelated
+  main-line plies during a variation. Out-of-range cursors and
+  variation detours (a jump of >2 plies that the next cursor rewinds)
+  are dropped, so the board holds the last main-line position through a
+  variation and resumes afterwards. Cache signature is v4.
 - **Board → media:** `BoardUpdated` (called from
-  `application::board::update`) debounces 250 ms → `PlySeek` (seek the
-  media to the board's ply unless the sync machine is `driving?`) and
+  `application::board::update`) defers to idle → `PlySeek` (seek the
+  media to the board's node unless the sync machine is `driving?`) and
   150 ms → `InteractiveFollow` (jump to a position-matched clip).
 
 ```
@@ -152,8 +162,8 @@ UI-free; the panel wires delegates at `build` time
                            │
       board manual nav ────┴──── pauses media
                            │
-┌──────────────┐   250ms debounce   ┌──────────────┐
-│ board::update │ ───────────────►  │   PlySeek    │  seek media to ply
+┌──────────────┐   idle debounce    ┌──────────────┐
+│ board::update │ ───────────────►  │   PlySeek    │  seek media to node
 │ (BoardUpdated)│    150ms debounce │ (skipped if  │  (unless driving?)
 │               │ ───────────────►  │  driving?)   │
 └──────────────┘                    └──────────────┘
@@ -161,13 +171,13 @@ UI-free; the panel wires delegates at `build` time
         └──────────────────────────► InteractiveFollow
                                       (jump to position-matched clip)
 
-┌──────────────┐  every 250ms   ┌──────────────┐   maps time→ply via
-│  FollowTick  │ ─────────────► │ sync::drive  │   lesson timeline or
-│ (mpv/tkvlc)  │  (time,dur)    │ "board       │   linear-over-duration
-└──────────────┘                │  follows     │ ─────────────────────►
+┌──────────────┐  every 100ms   ┌──────────────┐   maps time→node via
+│  FollowTick  │ ─────────────► │ sync::drive  │   lesson timeline (no
+│ (mpv/tkvlc)  │  (time,dur)    │ "board       │   guessed timing when
+└──────────────┘                │  follows     │   absent) ──────────►
                                  │  video" mode │   board delegates
-                                 └──────────────┘   (Forward/Start/
-                                                      Length/Ply)
+                                 └──────────────┘   (Goto/Forward/
+                                                      Start/Length/Ply)
 ```
 
 Transport sync and Follow mode are mutually exclusive directions of
@@ -177,7 +187,7 @@ fight it.
 
 Timeline source precedence: lesson cache (`::media::lesson::get`, which
 decodes the WMV script stream via `::media::decoder` and persists a
-`.plytimes` sidecar) → `.plytimes` sidecar → empty (linear).
+`.plytimes` sidecar) → `.plytimes` sidecar → empty (no board navigation).
 Annotation events come from `.events` sidecars (`ms kind payload`),
 fired as `SyncAnnotate` calls: `arrow`/`mark` (board diagram overlay,
 rendered green — visual-oracle-verified in Reader14 on Windows,
@@ -187,6 +197,10 @@ annotation renders one green; see CHESSBASE_MEDIA_RE.md), `comment`
 
 ## 6. Known gaps / follow-ups
 
+- Variation positions are not followed: the checkpoint patch slots that
+  carry off-main-line moves still have open per-slot semantics
+  (`CHESSBASE_MEDIA_RE.md`), so the board holds the main-line position
+  while the video explores a variation.
 - No unit tests for the panel itself; `tests/test_app_media_sync.tcl`
   covers only the sync state machine (with injected stubs).
 - Inline (base64) media entries are listed but not playable (status-bar
@@ -200,3 +214,23 @@ annotation renders one green; see CHESSBASE_MEDIA_RE.md), `comment`
   re-entering a position does not replay), but a database switch should
   arguably clear them too.
 - Debug log goes to `/tmp/scidb-media-debug.log` unconditionally.
+
+## 7. Panel layout (ChessBase-style, 2026-09-11)
+
+The pane mirrors the Chess Media System control strip (ChessBase help,
+"Chess Media System"): the video/viewer fills the pane, and a single
+transport bar sits directly beneath it with
+
+- a round blue play/pause button (canvas glyph reflects `MediaState`),
+- a black LCD read-out showing `current / total` in green digits,
+- round chapter prev/next buttons (`ChapterStep`, walking the gallery),
+- the seek slider, and
+- a volume indicator (mouse-wheel to change, click to mute).
+
+The transport canvas is drawn by `application::media::_drawControlBar`
+and hit-tested by `_controlBarClick`; `Priv(seeklabel)` is traced so the
+LCD follows `SeekTick`/`Stop`. The media list (treeview) sits below the
+transport and is collapsed with the footer's *Media list* button
+(`ToggleList`); the *View report* / *Open externally* actions live in
+the list header. `Priv(seekbar)` remains a `ttk::scale`, so the
+seek/scrub logic is unchanged.

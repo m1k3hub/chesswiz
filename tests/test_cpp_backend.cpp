@@ -11,6 +11,37 @@
 
 namespace {
 
+// Regression: adjacency is distance == 1. A previous implementation
+// returned distance > 1, which is the opposite of adjacency and broke
+// the endgame draw recognition in db_guess.cpp (king controls a square).
+bool check_is_adjacent()
+{
+    using db::sq::ID;
+
+    struct Case { ID a; ID b; bool expected; };
+    Case const cases[] = {
+        { db::sq::a1, db::sq::b1, true  },   // orthogonal
+        { db::sq::a1, db::sq::a2, true  },   // orthogonal
+        { db::sq::a1, db::sq::b2, true  },   // diagonal
+        { db::sq::h8, db::sq::g7, true  },   // diagonal
+        { db::sq::a1, db::sq::a1, false },   // same square is not adjacent
+        { db::sq::a1, db::sq::c1, false },   // two files away
+        { db::sq::a1, db::sq::a3, false },   // two ranks away
+        { db::sq::a1, db::sq::b3, false },   // knight-like
+    };
+
+    for (Case const& c : cases)
+    {
+        if (db::sq::isAdjacent(c.a, c.b) != c.expected)
+        {
+            std::cerr << "FAIL: isAdjacent(" << int(c.a) << ", " << int(c.b)
+                      << ") expected " << c.expected << std::endl;
+            return false;
+        }
+    }
+    return true;
+}
+
 void smoke_utf8()
 {
     mstl::string ascii("hello");
@@ -51,6 +82,12 @@ int main()
     smoke_utf8();
     smoke_variant();
     smoke_string();
+
+    if (!check_is_adjacent())
+    {
+        std::cout << "FAIL: C++ backend tests" << std::endl;
+        return 1;
+    }
 
     std::cout << "PASS: C++ backend smoke tests compiled and ran" << std::endl;
     return 0;

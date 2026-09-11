@@ -55,30 +55,30 @@ public:
 #endif
 
 	/// return true if filter is empty
-	bool isEmpty() const;
+	[[nodiscard]] bool isEmpty() const;
 	/// return true if the game is in the filter
-	bool contains(unsigned index) const;
+	[[nodiscard]] bool contains(unsigned index) const;
 	/// return true if all games are selected
-	bool isComplete() const;
+	[[nodiscard]] bool isComplete() const;
 	/// return true if filter is compresed
-	bool isCompressed() const;
+	[[nodiscard]] bool isCompressed() const;
 
 	/// return number of games in the filter
-	unsigned count() const;
+	[[nodiscard]] unsigned count() const;
 	/// return the size of the filter
-	unsigned size() const;
+	[[nodiscard]] unsigned size() const;
 
 	/// return next game in the filter or @p Invalid if there is none
 	/// use Invalid to retrieve first game in filter
-	int next(int current = Invalid) const;
+	[[nodiscard]] int next(int current = Invalid) const;
 	/// return previous game in the filter or @p Invalid if there is none
 	/// use Invalid to retrieve last game in filter
-	int prev(int current = Invalid) const;
+	[[nodiscard]] int prev(int current = Invalid) const;
 
 //	/// return @p number in filter of game with database index @p index
 //	int toNumber(unsigned index) const;
 	/// return database index of @p number from filter
-	unsigned toIndex(unsigned number) const;
+	[[nodiscard]] unsigned toIndex(unsigned number) const;
 
 	/// set all games in filter
 	void set();

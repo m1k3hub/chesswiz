@@ -61,10 +61,10 @@ split(uint32_t signature, Signature& white, Signature& black)
 
 namespace color {
 
-inline ID opposite(ID color) { return ID(!color); }
+[[nodiscard]] inline constexpr ID opposite(ID color) { return ID(!color); }
 
-inline bool isWhite(ID color) { return color == White; }
-inline bool isBlack(ID color) { return color == Black; }
+[[nodiscard]] inline constexpr bool isWhite(ID color) { return color == White; }
+[[nodiscard]] inline constexpr bool isBlack(ID color) { return color == Black; }
 
 inline
 ID
@@ -85,45 +85,45 @@ printColor(ID color)
 
 namespace sq {
 
-inline Fyle fyle(Square square) { return Fyle(square & 7); }
-inline Rank rank(Square square) { return Rank(square >> 3); }
+[[nodiscard]] inline constexpr Fyle fyle(Square square) { return Fyle(square & 7); }
+[[nodiscard]] inline constexpr Rank rank(Square square) { return Rank(square >> 3); }
 
-inline ID make(Square fyle, Square rank) { return ID((rank << 3) | fyle); }
+[[nodiscard]] inline constexpr ID make(Square fyle, Square rank) { return ID((rank << 3) | fyle); }
 
-inline
+[[nodiscard]] inline
 ID
 makeEnPassant(Fyle fyle, color::ID color)
 {
 	return make(fyle, color::isWhite(color) ? sq::Rank3 : sq::Rank6);
 }
 
-inline char printFyle(Square square)	{ return 'a' + fyle(square); }
-inline char printFYLE(Square square)	{ return 'A' + fyle(square); }
-inline char printRank(Square square)	{ return '1' + rank(square); }
-inline char printRank(Rank rank)			{ return '1' + rank; }
+[[nodiscard]] inline constexpr char printFyle(Square square)	{ return 'a' + fyle(square); }
+[[nodiscard]] inline constexpr char printFYLE(Square square)	{ return 'A' + fyle(square); }
+[[nodiscard]] inline constexpr char printRank(Square square)	{ return '1' + rank(square); }
+[[nodiscard]] inline constexpr char printRank(Rank rank)			{ return '1' + rank; }
 
-inline ID rankToSquare(Rank rank) { return ID(rank << 3); }
+[[nodiscard]] inline constexpr ID rankToSquare(Rank rank) { return ID(rank << 3); }
 
-inline db::color::ID color(ID s) { return db::color::ID(!((rank(s) + fyle(s)) & 1)); }
+[[nodiscard]] inline constexpr db::color::ID color(ID s) { return db::color::ID(!((rank(s) + fyle(s)) & 1)); }
 
-inline int fyleDistance(ID a, ID b) { return mstl::abs(int(fyle(a)) - int(fyle(b))); }
-inline int rankDistance(ID a, ID b) { return mstl::abs(int(rank(a)) - int(rank(b))); }
+[[nodiscard]] inline int fyleDistance(ID a, ID b) { return mstl::abs(int(fyle(a)) - int(fyle(b))); }
+[[nodiscard]] inline int rankDistance(ID a, ID b) { return mstl::abs(int(rank(a)) - int(rank(b))); }
 
-inline int distance(ID a, ID b) { return mstl::max(fyleDistance(a, b), rankDistance(a, b)); }
+[[nodiscard]] inline int distance(ID a, ID b) { return mstl::max(fyleDistance(a, b), rankDistance(a, b)); }
 
-inline ID flipFyle(ID s)	{ return make(Fyle(Rank8 - fyle(s)), rank(s)); }
-inline ID flipRank(ID s)	{ return make(fyle(s), Rank(Rank8 - rank(s))); }
+[[nodiscard]] inline ID flipFyle(ID s)	{ return make(Fyle(Rank8 - fyle(s)), rank(s)); }
+[[nodiscard]] inline ID flipRank(ID s)	{ return make(fyle(s), Rank(Rank8 - rank(s))); }
 
-inline Fyle flipFyle(Fyle fyle)	{ return Fyle(FyleH - fyle); }
-inline Rank flipRank(Rank rank)	{ return Rank(Rank8 - rank); }
+[[nodiscard]] inline constexpr Fyle flipFyle(Fyle fyle)	{ return Fyle(FyleH - fyle); }
+[[nodiscard]] inline constexpr Rank flipRank(Rank rank)	{ return Rank(Rank8 - rank); }
 
-inline Rank homeRank(db::color::ID color) { return color == db::color::White ? Rank1 : Rank8; }
-inline Rank pawnRank(db::color::ID color) { return color == db::color::White ? Rank2 : Rank7; }
+[[nodiscard]] inline constexpr Rank homeRank(db::color::ID color) { return color == db::color::White ? Rank1 : Rank8; }
+[[nodiscard]] inline constexpr Rank pawnRank(db::color::ID color) { return color == db::color::White ? Rank2 : Rank7; }
 
-inline bool isAdjacent(ID a, ID b) { return distance(a, b) > 1; }
+[[nodiscard]] inline bool isAdjacent(ID a, ID b) { return distance(a, b) == 1; }
 
-inline bool isValidFyle(Byte fyle) { return fyle <= FyleH; }
-inline bool isValidRank(Byte rank) { return rank <= Rank8; }
+[[nodiscard]] inline constexpr bool isValidFyle(Byte fyle) { return fyle <= FyleH; }
+[[nodiscard]] inline constexpr bool isValidRank(Byte rank) { return rank <= Rank8; }
 
 inline bool
 isValid(char const* s)
@@ -143,17 +143,17 @@ make(char const* s)
 
 namespace piece {
 
-inline db::color::ID color(ID piece)	{ return db::color::ID(piece >> 3); }
-inline Type type(ID piece)					{ return Type(piece & 7); }
+[[nodiscard]] inline constexpr db::color::ID color(ID piece)	{ return db::color::ID(piece >> 3); }
+[[nodiscard]] inline constexpr Type type(ID piece)					{ return Type(piece & 7); }
 
-inline bool isWhite(ID piece) { return piece && !color(piece); }
-inline bool isBlack(ID piece) { return color(piece); }
+[[nodiscard]] inline constexpr bool isWhite(ID piece) { return piece && !color(piece); }
+[[nodiscard]] inline constexpr bool isBlack(ID piece) { return color(piece); }
 
-inline ID piece(Type type, db::color::ID color) { return ID(type | (color << 3)); }
-inline ID swap(ID piece) { return ID(piece & (1 << 3) ? piece & 7 : piece | (1 << 3)); }
+[[nodiscard]] inline constexpr ID piece(Type type, db::color::ID color) { return ID(type | (color << 3)); }
+[[nodiscard]] inline constexpr ID swap(ID piece) { return ID(piece & (1 << 3) ? piece & 7 : piece | (1 << 3)); }
 
-inline
-bool
+[[nodiscard]] inline
+constexpr bool
 isLongStepPiece(ID piece)
 {
 	return (1 << piece) & (	(1 << WhiteQueen)
@@ -164,8 +164,8 @@ isLongStepPiece(ID piece)
 								 | (1 << BlackBishop));
 }
 
-inline
-bool
+[[nodiscard]] inline
+constexpr bool
 isOrthogonalLongStepPiece(ID piece)
 {
 	return (1 << piece) & (	(1 << WhiteQueen)
@@ -174,8 +174,8 @@ isOrthogonalLongStepPiece(ID piece)
 								 | (1 << BlackRook));
 }
 
-inline
-bool
+[[nodiscard]] inline
+constexpr bool
 isDiagonalLongStepPiece(ID piece)
 {
 	return (1 << piece) & (	(1 << WhiteQueen)
@@ -184,22 +184,22 @@ isDiagonalLongStepPiece(ID piece)
 								 | (1 << BlackBishop));
 }
 
-inline
-bool
+[[nodiscard]] inline
+constexpr bool
 isLongStepPiece(Type piece)
 {
 	return (1 << piece) & ((1 << Queen) | (1 << Rook) | (1 << Bishop));
 }
 
-inline
-bool
+[[nodiscard]] inline
+constexpr bool
 isOrthogonalLongStepPiece(Type piece)
 {
 	return (1 << piece) & ((1 << Queen) | (1 << Rook));
 }
 
-inline
-bool
+[[nodiscard]] inline
+constexpr bool
 isDiagonalLongStepPiece(Type piece)
 {
 	return (1 << piece) & ((1 << Queen) | (1 << Bishop));

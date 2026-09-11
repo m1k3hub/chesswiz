@@ -59,7 +59,7 @@ array set Default {
 	Filename							{}
 
 	lite,rotation					0
-	lite,solid						#b0c4de
+	lite,solid						#dee3e6
 	lite,texture					{}
 	lite,x1							0
 	lite,x2							0
@@ -67,20 +67,20 @@ array set Default {
 	lite,y2							0
 
 	dark,rotation					0
-	dark,solid						#4682b4
+	dark,solid						#8ca2ad
 	dark,texture					{}
 	dark,x1							0
 	dark,x2							0
 	dark,y1							0
 	dark,y2							0
 
-	borderline,width				0.007
-	borderline,opacity			0x80
+	borderline,width				0.005
+	borderline,opacity			0x50
 	borderline,gap					0
-	borderline,color				#002958
+	borderline,color				#3a4d5b
 
-	hilite,selected				#11ac1f
-	hilite,suggested				#fff056
+	hilite,selected				#4ba3e3
+	hilite,suggested				#ffdb4d
 
 	hint,border-color				#32719d
 	hint,border-coords			#ffffff

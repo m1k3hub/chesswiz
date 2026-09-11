@@ -654,17 +654,16 @@ option add *Entry.readonlyBackground white
 option add *Listbox.background white
 option add *Listbox.foreground black
 option add *Listbox.selectBorderWidth 0
-option add *Listbox.activeStyle dotbox
-option add *Listbox.selectBackground #ffdd76
-option add *Listbox.selectForeground black
+option add *Listbox.activeStyle none
+option add *Listbox.selectBackground #2b73af
+option add *Listbox.selectForeground white
 
-option add *Panedwindow.sashWidth 4
-option add *Panedwindow.sashRelief raised
+option add *Panedwindow.sashWidth 3
+option add *Panedwindow.sashRelief flat
 
 option add *Menu.tearOff 0
 option add *Menu.foreground black
-option add *Menu.activeBackground #678db2
-#option add *Menu.activeBackground #437597
+option add *Menu.activeBackground #2b73af
 option add *Menu.activeForeground white
 option add *Menu.activeBorderWidth 0
 

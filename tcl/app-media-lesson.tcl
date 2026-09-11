@@ -10,12 +10,13 @@
 # scidb user directory so the decode never runs again for the same
 # entry. ChessBase files are never mutated: the sidecar lives in the
 # user config dir, keyed by the normalized video path, and is
-# invalidated when the video's mtime passes the sidecar's.
+# invalidated when the video or its adjacent text export changes.
 #
 # Lesson dict (v2, WP4 - MEDIA_LESSON_V2_PLAN.md):
 #   valid      1|0
 #   reason     {} | human-readable failure reason
 #   video      normalized video path
+#   inputs     versioned video/text-export metadata for cache validation
 #   source     sidecar | wmv   (v2: the CBase26 .txt export next to the
 #              video is preferred; wmv = the ffprobe fallback, the v1
 #              degraded behaviour)
@@ -29,7 +30,13 @@
 #              patch slots whose per-slot semantics are open (see
 #              CHESSBASE_MEDIA_RE.md), so positions covers the walkable
 #              tree; gotos beyond it are a WP5 clamp/degrade concern.
-#   timeline   list of {mediaMs nodeIndex} pairs, ascending by mediaMs
+#   timeline   list of {mediaMs nodeIndex} pairs, ascending by mediaMs,
+#              projected onto the main-line position table (see
+#              _mainline-timeline).  The raw opcode-03 cursors address
+#              the authoring tree including the variation patch slots,
+#              which the position table does not carry; keeping them
+#              made the board jump to unrelated main-line plies during
+#              a variation (the reported video/board desync).
 #   events     list of {ms arrow from to class modifier} board events
 #              (payload order matches SyncAnnotate: lassign data from to
 #              style.  NOTE: the value in the style slot is the raw
@@ -58,10 +65,33 @@ proc key {videoPath} {
 proc get {videoPath} {
 	variable Cache
 	set k [key $videoPath]
-	if {[info exists Cache($k)]} { return $Cache($k) }
+	if {[info exists Cache($k)] && [inputsMatch $k $Cache($k)]} { return $Cache($k) }
+	catch { unset Cache($k) }
 	set lesson [loadFromSidecar $videoPath]
 	if {[dict size $lesson]} { return $lesson }
 	return [build $videoPath]
+}
+
+# Versioned source metadata also invalidates lessons written by older decoders.
+# Include missing files so adding/removing the text export changes the signature.
+proc inputSignature {videoPath} {
+	# v4: the timeline is projected onto the main-line position table
+	# (see _mainline-timeline); v3 timelines carry raw authoring-tree
+	# cursors that jump the board to unrelated main-line plies.
+	set signature {4}
+	foreach path [list $videoPath [file rootname $videoPath].txt] {
+		if {[catch { file stat $path st }]} {
+			lappend signature {}
+		} else {
+			lappend signature [list $st(mtime) $st(size)]
+		}
+	}
+	return $signature
+}
+
+proc inputsMatch {videoPath lesson} {
+	return [expr {[dict exists $lesson inputs]
+		&& [dict get $lesson inputs] eq [inputSignature $videoPath]}]
 }
 
 # Sidecar path for a video: deterministic, derived from the normalized
@@ -109,8 +139,8 @@ proc persist {videoPath lesson} {
 
 # Load a lesson from its sidecar. Returns the lesson dict (and fills the
 # in-memory cache), or an empty dict when: no sidecar exists, the video
-# is newer than the sidecar (the decode is stale), the sidecar does not
-# parse, is invalid, or names a different video.
+# or its text export changed, the sidecar does not parse, is invalid,
+# names a different video, or was written by an older decoder.
 proc loadFromSidecar {videoPath} {
 	variable Cache
 	set k [key $videoPath]
@@ -118,7 +148,6 @@ proc loadFromSidecar {videoPath} {
 
 	if {![file exists $path]} { return {} }
 	if {![file exists $k]} { return {} }
-	if {[file mtime $path] < [file mtime $k]} { return {} }
 
 	set row {}
 	if {[catch {
@@ -144,6 +173,7 @@ proc loadFromSidecar {videoPath} {
 	# valid=1 with an empty timeline and no positions key - accepting them
 	# would cache-hit forever and never decode the script stream
 	if {![dict exists $lesson positions]} { return {} }
+	if {![inputsMatch $k $lesson]} { return {} }
 
 	set Cache($k) $lesson
 	return $lesson
@@ -546,25 +576,69 @@ proc apply-edges {edges} {
 }
 
 
+# Project a raw script-stream timeline onto the lesson's main-line
+# position table.
+#
+# The opcode-03 goto cursors address the authoring tool's FULL node tree
+# - main line plus the variation "patch" slots whose per-slot semantics
+# are still open (see CHESSBASE_MEDIA_RE.md, "Checkpoint node-table
+# grammar").  The lesson's `positions` table, however, is main-line only
+# (the checkpoint edge stream is a legal main-line walk): a variation
+# cursor therefore either overflows the table or, worse, collides with
+# an unrelated main-line ply of the same number.  Driving the board from
+# the raw cursors makes it jump to the wrong position (or stall) every
+# time the lecture explores a variation - the reported video/board
+# desync.
+#
+# Keep only the marks that form the main-line walk:
+#   * drop cursors past the position table (unresolvable);
+#   * drop a forward jump that immediately snaps back to a lower cursor
+#     (a variation detour: the authoring cursor branches, then returns);
+#   * keep sequential advances, backtracks and genuine forward skips.
+# The board then holds the last main-line position through a variation
+# instead of jumping to a wrong one, and resumes when the cursor returns
+# to the main line.
+proc _mainline-timeline {timeline positionCount} {
+	set projected {}
+	set maxKept -1
+	set n [llength $timeline]
+
+	for {set i 0} {$i < $n} {incr i} {
+		set mark [lindex $timeline $i]
+		set ms [lindex $mark 0]
+		set node [lindex $mark 1]
+		if {$node < 0 || $node >= $positionCount} { continue }
+		# A jump of more than two plies that the next cursor immediately
+		# rewinds is the authoring tree branching into a variation, not a
+		# main-line skip (commentators step over one or two moves, but a
+		# jump of dozens at mid-game is a branch).
+		if {$node > $maxKept + 2} {
+			set nextNode -1
+			if {$i + 1 < $n} {
+				set nextNode [lindex [lindex $timeline [expr {$i + 1}]] 1]
+			}
+			if {$nextNode >= 0 && $nextNode < $node} { continue }
+		}
+		lappend projected [list $ms $node]
+		if {$node > $maxKept} { set maxKept $node }
+	}
+	return $projected
+}
+
+
 # Build the lesson for a video (decode ONCE, cache + persist).
 #
 # v2 flow (WP4): prefer the CBase26 .txt sidecar export next to the
 # video (source=sidecar): gotos -> timeline, actions -> events, the
 # LAST checkpoint -> parse-checkpoint -> edges -> apply-edges ->
-# positions.  When no .txt exists, fall back to the v1 ffprobe decode
-# (source=wmv; degraded behaviour, documented in the plan's R5/R10).
+# positions. When no .txt exists, decode WMV packets and apply their last
+# checkpoint through the same path. The WMV stream still has fewer events
+# than the text export (source=wmv; see the plan's R5/R10).
 proc build {videoPath} {
 	variable Cache
 	set k [key $videoPath]
-
-	set lesson [dict create \
-		valid    0 \
-		reason   {} \
-		video    $k \
-		source   wmv \
-		timeline {} \
-		events   {} \
-	]
+	set lesson [dict create valid 0 reason {} video $k source wmv \
+		timeline {} events {} inputs [inputSignature $k]]
 
 	if {![file exists $k]} {
 		dict set lesson reason "video file missing"
@@ -572,151 +646,107 @@ proc build {videoPath} {
 		return $lesson
 	}
 
-	if {![llength [info commands ::media::decoder::sidecar-parse]]} {
-		dict set lesson reason "script decoder unavailable"
-		set Cache($k) $lesson
-		return $lesson
-	}
-
-	# ---- v2: the CBase26 .txt export next to the video
 	set txt [file rootname $k].txt
+	set timeline {}
+	set events {}
+	set checkpoint {}
 	if {[file exists $txt]} {
-		set sd {}
+		dict set lesson source sidecar
 		if {[catch { set sd [::media::decoder::sidecar-parse $txt] } err]} {
 			dict set lesson reason "sidecar decode failed: $err"
 			set Cache($k) $lesson
 			return $lesson
 		}
-
-		set timeline {}
 		foreach g [dict get $sd gotos] {
 			lassign $g ms node
 			if {$node < 0} { set node 0 }
 			lappend timeline [list $ms $node]
 		}
-		set timeline [lsort -integer -index 0 $timeline]
-
-		set events {}
 		foreach a [dict get $sd actions] {
 			lassign $a ms class from to mod
 			lappend events [list $ms arrow $from $to $class $mod]
 		}
-		set events [lsort -integer -index 0 $events]
-
-		set cps [dict get $sd checkpoints]
-		if {![llength $cps]} {
-			dict set lesson reason "sidecar carries no checkpoint"
+		# Cumulative snapshots: the last checkpoint is authoritative.
+		set checkpoint [lindex [lindex [dict get $sd checkpoints] end] 2]
+	} else {
+		if {[catch { set decoded [::media::decoder::decode $k] } err]} {
+			dict set lesson reason "script decode failed: $err"
 			set Cache($k) $lesson
 			return $lesson
 		}
-		# cumulative snapshots: the last is the authoritative state
-		# (Reader14 renders from checkpoints; CHESSBASE_MEDIA_RE.md)
-		set lastCp [lindex $cps end]
-		set cp {}
-		if {[catch { set cp [::media::decoder::parse-checkpoint [lindex $lastCp 2]] } err]} {
-			dict set lesson reason "checkpoint decode failed: $err"
-			set Cache($k) $lesson
-			return $lesson
-		}
-		if {[dict exists $cp error]} {
-			dict set lesson reason "checkpoint decode failed: [dict get $cp error]"
-			set Cache($k) $lesson
-			return $lesson
-		}
-
-		set edges [dict get $cp edges]
-		lassign [apply-edges $edges] positions applyErr
-		if {$applyErr ne ""} {
-			dict set lesson reason "move applier failed: $applyErr"
-			catch { ::application::media::MediaDebug "lesson::build: $applyErr" }
-			set Cache($k) $lesson
-			return $lesson
-		}
-
-		# type-37 per-node times from the checkpoint collections ({} when
-		# the lesson has none)
-		set nodeTimes {}
-		foreach c [dict get $cp collections] {
-			lassign $c node rtype ph
-			if {$rtype == 37 && [string length $ph] == 8} {
-				binary scan [binary format H* $ph] I ms
-				lappend nodeTimes [list $node $ms]
+		foreach entry $decoded {
+			set op [dict get $entry opcode]
+			if {$op == 2 && [dict exists $entry checkpoint]} {
+				set checkpoint [dict get $entry checkpoint]
+			} elseif {$op == 3} {
+				set idx 0
+				if {[dict exists $entry gotoIndex]} {
+					set idx [expr {max(0, [dict get $entry gotoIndex])}]
+				}
+				lappend timeline [list [dict get $entry ms] $idx]
+			} elseif {[dict exists $entry type] && [dict get $entry type] eq "board-action"} {
+				lappend events [list [dict get $entry ms] arrow \
+					[dict get $entry from] [dict get $entry to] \
+					[dict get $entry class] [dict get $entry modifier]]
 			}
 		}
-
-		dict set lesson source   sidecar
-		dict set lesson edges    $edges
-		dict set lesson positions $positions
-		dict set lesson nodeTimes $nodeTimes
-		dict set lesson cursor    [dict get $cp cursor]
-		dict set lesson timeline $timeline
-		dict set lesson events   $events
-		dict set lesson valid    1
-		set Cache($k) $lesson
-		catch { persist $k $lesson }
-		catch {
-			::application::media::MediaDebug \
-				"lesson::build: sidecar lesson: [llength $timeline] timeline marks, [llength $positions] positions, [llength $events] events"
-		}
-		return $lesson
 	}
 
-	# ---- v1 fallback: ffprobe decode (source=wmv, degraded)
-	if {![llength [info commands ::media::decoder::decode]]} {
-		dict set lesson reason "script decoder unavailable"
+	# Both sources carry node IDs, so both must resolve their checkpoint.
+	# Falling back to ply numbers would silently navigate the wrong variation.
+	if {$checkpoint eq ""} {
+		dict set lesson reason "[dict get $lesson source] carries no checkpoint for board synchronization"
+		set Cache($k) $lesson
+		return $lesson
+	}
+	if {[catch { set cp [::media::decoder::parse-checkpoint $checkpoint] } err]} {
+		dict set lesson reason "checkpoint decode failed: $err"
+		set Cache($k) $lesson
+		return $lesson
+	}
+	if {[dict exists $cp error]} {
+		dict set lesson reason "checkpoint decode failed: [dict get $cp error]"
 		set Cache($k) $lesson
 		return $lesson
 	}
 
-	set decoded {}
-	if {[catch { set decoded [::media::decoder::decode $k] } err]} {
-		dict set lesson reason "script decode failed: $err"
-		catch { ::application::media::MediaDebug "lesson::build: $err" }
+	set edges [dict get $cp edges]
+	lassign [apply-edges $edges] positions applyErr
+	if {$applyErr ne ""} {
+		dict set lesson reason "move applier failed: $applyErr"
+		set Cache($k) $lesson
+		return $lesson
+	}
+	# The plan requires that a valid lesson always carries a position
+	# table; an empty table would advertise synchronization that can
+	# never move the board.
+	if {![llength $positions]} {
+		dict set lesson reason "checkpoint carries no moves for board synchronization"
 		set Cache($k) $lesson
 		return $lesson
 	}
 
-	set timeline {}
-	set events {}
-	foreach entry $decoded {
-		set op [dict get $entry opcode]
-		if {$op == 3} {
-			# navigate: absolute replay-step target at this media-ms
-			set idx 0
-			if {[dict exists $entry gotoIndex]} {
-				set idx [dict get $entry gotoIndex]
-				if {$idx < 0} { set idx 0 }
-			}
-			lappend timeline [list [dict get $entry ms] $idx]
-		} elseif {[dict exists $entry type] && [dict get $entry type] eq "board-action"} {
-			lappend events [list \
-				[dict get $entry ms] \
-				arrow \
-				[dict get $entry from] \
-				[dict get $entry to] \
-				[dict get $entry class] \
-				[dict get $entry modifier] \
-			]
+	set nodeTimes {}
+	foreach c [dict get $cp collections] {
+		lassign $c node rtype ph
+		if {$rtype == 37 && [string length $ph] == 8} {
+			binary scan [binary format H* $ph] I ms
+			lappend nodeTimes [list $node $ms]
 		}
 	}
-
-	# _fire_events walks both lists with an ascending cursor: sort by ms
-	set timeline [lsort -integer -index 0 $timeline]
-
-	dict set lesson timeline $timeline
-	dict set lesson events $events
-	# v2 shape: node-goal sync requires the positions key even when the
-	# degraded v1 decode has no per-node FEN list (an empty list simply
-	# disables node resolution)
-	dict set lesson positions {}
+	dict set lesson edges $edges
+	dict set lesson positions $positions
+	dict set lesson nodeTimes $nodeTimes
+	dict set lesson cursor [dict get $cp cursor]
+	dict set lesson timeline [lsort -integer -index 0 \
+		[_mainline-timeline $timeline [llength $positions]]]
+	dict set lesson events [lsort -integer -index 0 $events]
 	dict set lesson valid 1
 	set Cache($k) $lesson
-
-	# persist only valid decodes (the sidecar is the cross-restart cache)
 	catch { persist $k $lesson }
 	catch {
 		::application::media::MediaDebug \
-			"lesson::build: [llength $timeline] timeline marks, [llength $events] events from [file tail $k]"
+			"lesson::build: [dict get $lesson source]: [llength $timeline] timeline marks, [llength $positions] positions, [llength $events] events"
 	}
 	return $lesson
 }
@@ -724,4 +754,3 @@ proc build {videoPath} {
 } ;# namespace eval ::media::lesson
 
 # vi:set ts=3 sw=3:
-# ARCHIVED EXPERIMENT — not loaded by Scidb; RE reference only.

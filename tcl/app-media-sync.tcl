@@ -1,9 +1,8 @@
 # ======================================================================
-# ARCHIVED EXPERIMENT — not loaded by Scidb; RE reference only.
 # Media ⇄ Board playback synchronization (state machine)
 # ======================================================================
-# Couples the media panel's transport (audio/video via tkvlc) with the
-# chess-board replay:
+# Couples the media panel's transport (audio/video via the selected
+# backend) with the chess-board replay:
 #
 #   * transport sync — when the board autoplays a game the media plays
 #     along; stopping/pausing the autoplay pauses the media; manual
@@ -14,7 +13,8 @@
 #     loaded (load-timeline) the mapping follows the ChessBase script
 #     stream's own replay order (real per-move timecodes recovered from
 #     the media's script stream, see media-console/wmv2timeline.py);
-#     without one, the mapping is linear over the video duration.
+#     without one, the board is left at the game position (no guessed
+#     timing).
 #
 #   * annotation layer — with board events loaded (load-events), the
 #     state machine fires arrow/mark/comment/symbol/reset callbacks as
@@ -59,6 +59,7 @@ namespace eval ::media::sync {
 		driving   0
 		usertouch 0
 		lastgoal  -1
+		lasttime  -1
 		timeline  {}
 		tlidx     0
 		events    {}
@@ -160,6 +161,7 @@ proc ::media::sync::step {} {
 # The media player started/stopped playing (any file).
 proc ::media::sync::onPlaybackStarted {} {
 	variable State
+	set State(lasttime) -1
 	set State(playing) 1
 	set State(usertouch) 0
 	set State(lastgoal) -1
@@ -193,7 +195,7 @@ proc ::media::sync::onPlaybackStopped {} {
 #   per line in replay order (e.g. media-console/wmv2timeline.py
 #   .plytimes sidecars): each elapsed mark advances the board one step.
 #
-# An empty list falls back to the linear ply mapping.
+# An empty list disables follow-driven navigation.
 proc ::media::sync::load-timeline {msList} {
 	variable State
 	set State(timeline) [list]
@@ -230,16 +232,17 @@ proc ::media::sync::load-events {eventList} {
 
 # Inverse of the timeline mapping: the media time (ms) at which the board
 # reaches the given ply.  Returns -1 without a timeline, or when the ply
-# lies past the last mark (caller falls back to the linear mapping).
+# is not an exact timeline target (the caller then leaves the board alone).
 proc ::media::sync::ms-for-ply {ply} {
 	variable State
 	if {![llength $State(timeline)]} { return -1 }
-	if {$ply <= 0} { return 0 }
+	if {$ply < 0} { return -1 }
+	if {$ply == 0} { return 0 }
 	set count 0
 	foreach mark $State(timeline) {
 		if {[llength $mark] >= 2} {
 			# absolute target: {mediaMs goalPly}
-			if {[lindex $mark 1] >= $ply} { return [lindex $mark 0] }
+			if {[lindex $mark 1] == $ply} { return [lindex $mark 0] }
 		} else {
 			# legacy count model: the Nth mark advances to ply N
 			incr count
@@ -259,8 +262,16 @@ proc ::media::sync::driving? {} {
 
 # One "board follows video" tick. Fires annotation events that fall in
 # the [prev_ms, timeMs] window, then advances the board via the timeline
-# (node-goal model: direct gotos; legacy count model: stepped plies) or
-# the linear mapping.
+# (node-goal model: direct gotos; legacy count model: stepped plies).
+proc ::media::sync::seek {timeMs durationMs} {
+	variable State
+	set State(usertouch) 0
+	set State(evidx) 0
+	set State(lastgoal) -1
+	BoardClearAnnotations
+	drive $timeMs $durationMs
+}
+
 proc ::media::sync::drive {timeMs durationMs} {
 	variable State
 
@@ -270,6 +281,11 @@ proc ::media::sync::drive {timeMs durationMs} {
 	# driving the board until the video catches up with the board
 	if {$State(usertouch)
 		&& [clock milliseconds] - $State(usertouch) < 600} { return }
+	if {$State(lasttime) >= 0 && $timeMs < $State(lasttime)} {
+		set State(evidx) 0
+		BoardClearAnnotations
+	}
+	set State(lasttime) $timeMs
 
 	# fire board annotation events in this time window
 	if {[llength $State(events)]} {
@@ -278,7 +294,7 @@ proc ::media::sync::drive {timeMs durationMs} {
 
 	if {[llength $State(timeline)]} {
 		set goal 0
-		set nodeModel 0
+		set nodeModel [expr {[llength [lindex $State(timeline) 0]] >= 2}]
 		foreach mark $State(timeline) {
 			if {[llength $mark] >= 2} {
 				# absolute target: {mediaMs nodeIndex} (lesson v2 node-goal
@@ -302,15 +318,7 @@ proc ::media::sync::drive {timeMs durationMs} {
 			# variation navigation.
 			if {$goal == $State(lastgoal)} { return }	;# R9: same-node no-op
 			set State(driving) 1
-			if {$goal < $State(lastgoal)} {
-				# rewind: jump + annotation reset (events replay from 0)
-				set State(tlidx) $goal
-				set State(evidx) 0
-				BoardGoto $goal
-				BoardClearAnnotations
-			} else {
-				BoardGoto $goal
-			}
+			BoardGoto $goal
 			set State(driving) 0
 			set State(lastgoal) $goal
 			return
@@ -337,27 +345,8 @@ proc ::media::sync::drive {timeMs durationMs} {
 		return
 	}
 
-	set len [BoardLength]
-	if {$len <= 0} { return }
-
-	set dur [expr {double($durationMs)}]
-	if {$dur < 500.0} { return }
-	set frac [expr {double($timeMs)/$dur}]
-	if {$frac < 0.0} { set frac 0.0 }
-	if {$frac > 1.0} { set frac 1.0 }
-	set goal [expr {min(int($frac*$len), $len - 1)}]
-	if {$goal < $State(lastgoal)} {
-		BoardStart
-		BoardClearAnnotations
-	}
-	set guard 0
-	set State(driving) 1
-	while {[BoardPly] < $goal && $guard < 4} {
-		BoardForward
-		incr guard
-	}
-	set State(driving) 0
-	set State(lastgoal) $goal
+	# A duration cannot tell us when a commentator demonstrates a move.
+	# Without timestamps, preserve the actual game position.
 }
 
 

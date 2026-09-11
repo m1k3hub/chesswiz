@@ -35,6 +35,29 @@ package require Tk  8.5
 package require Ttk
 package require tkscidb
 
+# ----------------------------------------------------------------------
+# Dynamic HiDPI / Retina display scaling calibration:
+# Calculate true monitor DPI and calibrate Tk's font/geometry scaling.
+# ----------------------------------------------------------------------
+if {[tk windowingsystem] ne "aqua"} {
+	catch {
+		set _sWidth [winfo screenwidth .]
+		set _sMmWidth [winfo screenmmwidth .]
+		if {$_sWidth > 0 && $_sMmWidth > 0} {
+			set _calcDpi [expr {round(($_sWidth * 25.4) / $_sMmWidth)}]
+			# Clamp to sensible boundaries (84 to 288 DPI)
+			if {$_calcDpi >= 84 && $_calcDpi <= 288} {
+				set _scale [expr {$_calcDpi / 72.0}]
+				# Do not downscale below standard 1.0 (96 DPI = 1.3333 scaling)
+				if {$_scale > [tk scaling]} {
+					tk scaling $_scale
+				}
+			}
+		}
+		unset _sWidth _sMmWidth _calcDpi _scale
+	}
+}
+
 
 namespace eval scidb {
 	set app		Scidb

@@ -44,10 +44,10 @@ namespace color
 	// coincides with Scid 3.x
 	enum ID { White, Black };
 
-	ID opposite(ID color);
+	[[nodiscard]] constexpr ID opposite(ID color);
 
-	bool isWhite(ID color);
-	bool isBlack(ID color);
+	[[nodiscard]] constexpr bool isWhite(ID color);
+	[[nodiscard]] constexpr bool isBlack(ID color);
 
 	char const* printColor(ID color);
 	ID fromSide(char const* side);
@@ -75,40 +75,40 @@ namespace sq
 
 	enum Language { English, Spanish };
 
-	ID make(Square fyle, Square rank);
+	[[nodiscard]] constexpr ID make(Square fyle, Square rank);
 	ID make(char const* s);
-	ID makeEnPassant(Fyle fyle, color::ID color);
+	[[nodiscard]] ID makeEnPassant(Fyle fyle, color::ID color);
 
-	Fyle fyle(Square square);
-	Rank rank(Square square);
+	[[nodiscard]] constexpr Fyle fyle(Square square);
+	[[nodiscard]] constexpr Rank rank(Square square);
 
-	ID rankToSquare(Rank rank);
+	[[nodiscard]] constexpr ID rankToSquare(Rank rank);
 
-	color::ID color(ID s);
+	[[nodiscard]] constexpr color::ID color(ID s);
 
-	int fyleDistance(ID a, ID b);
-	int rankDistance(ID a, ID b);
+	[[nodiscard]] int fyleDistance(ID a, ID b);
+	[[nodiscard]] int rankDistance(ID a, ID b);
 
-	int distance(ID a, ID b);
+	[[nodiscard]] int distance(ID a, ID b);
 
-	ID flipFyle(ID s);
-	ID flipRank(ID s);
+	[[nodiscard]] ID flipFyle(ID s);
+	[[nodiscard]] ID flipRank(ID s);
 
-	Fyle flipFyle(Fyle rank);
-	Rank flipRank(Rank rank);
+	[[nodiscard]] constexpr Fyle flipFyle(Fyle rank);
+	[[nodiscard]] constexpr Rank flipRank(Rank rank);
 
-	Rank homeRank(db::color::ID color);
-	Rank pawnRank(db::color::ID color);
+	[[nodiscard]] constexpr Rank homeRank(db::color::ID color);
+	[[nodiscard]] constexpr Rank pawnRank(db::color::ID color);
 
 	bool isValid(char const* s);
-	bool isValidFyle(Byte fyle);
-	bool isValidRank(Byte rank);
-	bool isAdjacent(ID a, ID b);
+	[[nodiscard]] constexpr bool isValidFyle(Byte fyle);
+	[[nodiscard]] constexpr bool isValidRank(Byte rank);
+	[[nodiscard]] bool isAdjacent(ID a, ID b);
 
-	char printFyle(Square square);
-	char printFYLE(Square square);
-	char printRank(Square square);
-	char printRank(Rank rank);
+	[[nodiscard]] constexpr char printFyle(Square square);
+	[[nodiscard]] constexpr char printFYLE(Square square);
+	[[nodiscard]] constexpr char printRank(Square square);
+	[[nodiscard]] constexpr char printRank(Rank rank);
 
 	char const* printAlgebraic(Square square);
 	char const* printNumeric(Square square);
@@ -933,24 +933,24 @@ namespace piece
 		Last = BlackPawn,
 	};
 
-	bool isWhite(ID piece);
-	bool isBlack(ID piece);
-	bool isLongStepPiece(ID piece);
-	bool isOrthogonalLongStepPiece(ID piece);
-	bool isDiagonalLongStepPiece(ID piece);
+	[[nodiscard]] constexpr bool isWhite(ID piece);
+	[[nodiscard]] constexpr bool isBlack(ID piece);
+	[[nodiscard]] constexpr bool isLongStepPiece(ID piece);
+	[[nodiscard]] constexpr bool isOrthogonalLongStepPiece(ID piece);
+	[[nodiscard]] constexpr bool isDiagonalLongStepPiece(ID piece);
 
-	bool isLongStepPiece(Type piece);
-	bool isOrthogonalLongStepPiece(Type piece);
-	bool isDiagonalLongStepPiece(Type piece);
+	[[nodiscard]] constexpr bool isLongStepPiece(Type piece);
+	[[nodiscard]] constexpr bool isOrthogonalLongStepPiece(Type piece);
+	[[nodiscard]] constexpr bool isDiagonalLongStepPiece(Type piece);
 
 	bool canPromoteTo(Type type, variant::Type variant);
 	piece::Type promotion(::db::variant::Type variant);
 
-	Type type(ID piece);
-	color::ID color(ID piece);
+	[[nodiscard]] constexpr Type type(ID piece);
+	[[nodiscard]] constexpr color::ID color(ID piece);
 
-	ID piece(Type type, db::color::ID color);
-	ID swap(ID piece);
+	[[nodiscard]] constexpr ID piece(Type type, db::color::ID color);
+	[[nodiscard]] constexpr ID swap(ID piece);
 
 	/// Return ASCII character for given piece to be used in FEN.
 	char print(ID piece);

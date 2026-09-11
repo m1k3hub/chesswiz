@@ -886,7 +886,7 @@ selectors: `x{X}y{Y}v{V}u{U}`.  The selectors were verified against
 python-chess (109 hotspot clips across all 15 CBM168 `.cms` files):
 
 - **x = from-square** of the lesson's key move, encoded
-  **file-major 0-based** (a1=0, b1=1, ..., h1=7, a2=8, ..., h8=63).
+  **file-major 0-based** (a1=0, b1=8, c1=16, ..., h1=56, a2=1, ..., h8=63).
   Verified: the from-square is occupied by a piece in 109/109 clips
   (100%).
 - **y = to-square** of the key move, same encoding.  Verified: the
@@ -1371,3 +1371,37 @@ with a reason there.
   board+side) for the R8 re-sync, and seek-bar releases are coalesced
   through a 200 ms debounce (R9, media side).  Statusbar shows lesson
   node context; MediaDebug goto traces are throttled to 1/s.
+
+### M4 status (2026-09-11) — variation-cursor desync fixed, ChessBase panel
+
+**Root cause of the reported video/board desync.** The opcode-03 goto
+cursors address the authoring tool's *full* node tree, which includes
+the variation "patch" slots (per-slot semantics still open, see the
+node-table grammar above).  The lesson's `positions` table is a
+main-line walk only (the checkpoint edge stream has zero stack pops),
+so a variation cursor either overflows the table (board stalls) or
+collides with an unrelated main-line ply of the same number (board
+jumps to the wrong position).  On the round-08 fixture the timeline
+`1..44, 88, 89, 96, 44, ...` demonstrates it: cursors 88/89/96 overflow
+while 84/86/83 land on main-line plies 84/86/83 during a middlegame
+variation, so the board jumped to the endgame and back.
+
+**Fix.** `::media::lesson::_mainline-timeline` projects the raw timeline
+onto the main-line table before it is persisted/loaded: cursors past
+the table are dropped, and a forward jump of more than two plies that
+the next cursor immediately rewinds is treated as a variation detour
+and dropped.  Sequential advances, backtracks and genuine skips are
+kept.  The board then holds the last main-line position through a
+variation and resumes when the cursor returns; `ms-for-ply` (board →
+media) keeps working because the main-line marks are preserved.  The
+lesson cache signature is bumped to v4 so stale timelines are rebuilt.
+Gates: `tests/test_media_lessons.tcl` (`media-mainline-timeline*`).
+
+**Media panel.** The pane was rebuilt to mirror the Chess Media System
+control strip (ChessBase help, "Chess Media System"): the video fills
+the pane, with a round play/pause button, a black LCD current/total
+read-out with green digits, round chapter prev/next buttons, the seek
+slider and a volume indicator on one bar beneath it.  The media list
+moved below the transport (collapsible via *Media list*); the report /
+open-externally actions sit in the list header.  See
+`application::media::_drawControlBar` in `tcl/app-media.tcl`.

@@ -12,6 +12,7 @@ namespace eval ::scidb::test::annotated {
 
 variable testDir [file dirname [file normalize [info script]]]
 variable slot 7
+variable slotCreated 0
 variable layout {}
 variable importLog {}
 
@@ -29,9 +30,13 @@ proc Capture {position data} {
 # Import a corpus game into the test slot and capture its layout.
 proc loadGame {key} {
 	variable slot
+	variable slotCreated
 	variable layout {}
 	variable importLog {}
-	catch { ::scidb::game::new $slot } ;# slot may already exist; import replaces it
+	if {!$slotCreated} {
+		::scidb::game::new $slot
+		set slotCreated 1
+	}
 	set rc [::scidb::game::import $slot \
 		[set ::scidb::test::corpus::annotated($key)] \
 		[namespace current]::Log {} -encoding utf-8 -variation 0]

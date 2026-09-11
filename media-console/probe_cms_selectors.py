@@ -24,7 +24,7 @@
 #
 #   The clip name embeds the FEN (z for '/') plus the x/y/v/u selectors.
 #   x and y are BOARD SQUARES of the lesson's key move (from/to),
-#   encoded file-major 0-based (a1=0, b1=1, ..., a2=8, b2=9, ...):
+#   encoded file-major 0-based (a1=0, b1=8, ..., a2=1, b2=9, ...):
 #   verified 109/109 clips have an occupied from-square and a fully
 #   legal x->y move (python-chess, CBM168 corpus).
 # ======================================================================
@@ -99,7 +99,7 @@ def parse(path):
 
 
 def square_name_filemajor0(s):
-    # file-major 0-based: a1=0, b1=1, ..., h1=7, a2=8, ...
+    # file-major 0-based: a1=0, b1=8, ..., h1=56, a2=1, ...
     file_ = s // 8
     rank_ = s % 8
     return "abcdefgh"[file_] + "12345678"[rank_]

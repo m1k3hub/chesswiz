@@ -377,14 +377,8 @@ proc arrayEqual {lhs rhs} {
 		return 1
 	}
 
-	;# some 8.4 optimization using the lsort -unique feature 
-	set keys [lsort -unique [concat [array names foo] [array names bar]]]
-	if {[llength $keys] != [array size foo]} {
-		return 0
-	}
-
-	foreach key $keys {
-		if {$foo($key) ne $bar($key)} {
+	foreach key [array names foo] {
+		if {![info exists bar($key)] || $foo($key) ne $bar($key)} {
 			return 0
 		}
 	}
@@ -424,14 +418,12 @@ proc require {myNamespace requiredNamespaces} {
 
 proc lremove {list elem} {
 	upvar $list l
-	set result {}
 	if {[info exists l]} {
-		foreach k $l {
-			if {$k ne $elem} { lappend result $k }
-		}
+		set l [lsearch -all -inline -exact -not $l $elem]
+	} else {
+		set l {}
 	}
-	set l $result
-	return $result
+	return $l
 }
 
 

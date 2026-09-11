@@ -38,13 +38,13 @@ test: all
 
 tcl: $(TEST_DIR)run_all.tcl
 	@echo "Running Tcl test suite..."
-	@$(TCLSH) $(TEST_DIR)run_all.tcl -verbose 2>&1 | tee $(TEST_REPORT)
+	@set -o pipefail; $(TCLSH) $(TEST_DIR)run_all.tcl -verbose 2>&1 | tee $(TEST_REPORT)
 
 tcl-quiet: $(TEST_DIR)run_all.tcl
 	@$(TCLSH) $(TEST_DIR)run_all.tcl 2>&1
 
 tcl-match:
-	@$(TCLSH) $(TEST_DIR)run_all.tcl -match $(PATTERN)
+	@$(TCLSH) $(TEST_DIR)run_all.tcl -match "$(PATTERN)"
 
 app-tcl: $(TEST_DIR)run_app_tests.tcl $(TEST_DIR)run_app_driver.tcl
 	@echo "Running app-backed Tcl test suite..."

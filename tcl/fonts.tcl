@@ -1851,10 +1851,10 @@ namespace export getFontFamilyName
 namespace eval html {
 
 set DefaultFixedFamilies {
-	{Arial Monospaced} {Courier 10 Pitch} Fonotone {DejaVu Sans Mono} {Andale Mono} {Bitstream Vera Sans Mono} TkFixedFont {Lucida Typewriter}
+	{JetBrains Mono} {Fira Code} {Cascadia Code} {Source Code Pro} {DejaVu Sans Mono} {Ubuntu Mono} {Liberation Mono} {Courier 10 Pitch} TkFixedFont
 }
 set DefaultTextFamilies {
-	Arial {DejaVu Sans} {Bitstream Vera Sans} TkTextFont {Helvetica Neue} {Helvetica Neue LT Std} Verdana {Lucida Grande} Lucida
+	Inter Roboto {SF Pro Display} {Segoe UI} Cantarell {Ubuntu} {Noto Sans} {DejaVu Sans} Arial {Helvetica Neue} TkTextFont
 } 
 variable DefaultFonts {}
 

@@ -14,21 +14,26 @@ include Makefile.in
 
 MAKEFLAGS += --no-print-directory
 
-all: Makefile.in check-mtime
-	@$(MAKE) -C man
-	@if [ $$? != 0 ]; then exit 1; fi
-	@$(MAKE) -C src
-	@if [ $$? != 0 ]; then exit 1; fi
-	@$(MAKE) -C engines
-	@if [ $$? != 0 ]; then exit 1; fi
-	@$(MAKE) -C tcl
-	@if [ $$? != 0 ]; then exit 1; fi
+.PHONY: all subdirs-man subdirs-src subdirs-engines subdirs-tcl
+all: Makefile.in check-mtime subdirs-man subdirs-src subdirs-engines subdirs-tcl
 	@echo ""
 	@case $(BINDIR) in         \
 		/home/* ) make="make";; \
 		* ) make="sudo make";;  \
 	esac;                      \
 	echo "Now type \"$$make install\" for installation."
+
+subdirs-man: Makefile.in check-mtime
+	@$(MAKE) -C man
+
+subdirs-src: Makefile.in check-mtime
+	@$(MAKE) -C src
+
+subdirs-engines: Makefile.in check-mtime
+	@$(MAKE) -C engines
+
+subdirs-tcl: Makefile.in check-mtime
+	@$(MAKE) -C tcl
 
 verify-maintenance: Makefile.in check-mtime
 	@$(MAKE) -C src verify-maintenance
@@ -50,9 +55,21 @@ check-mtime:
 		exit 1;                                                 \
 	fi
 
+.PHONY: check-build
 check-build:
 	@echo "Running build check..."
-	@$(TCL_SHELL) src/check-build.tcl
+	@if [ ! -x "./src/tkscidb$(SUFFIX)" ]; then \
+		echo "Build check requires src/tkscidb$(SUFFIX); run make first." >&2; \
+		exit 1; \
+	fi
+	@if [ -n "$$DISPLAY" ]; then \
+		./src/tkscidb$(SUFFIX) src/check-build.tcl; \
+	elif command -v xvfb-run >/dev/null 2>&1; then \
+		xvfb-run -a ./src/tkscidb$(SUFFIX) src/check-build.tcl; \
+	else \
+		echo "Build check requires an X display or xvfb-run for headless execution." >&2; \
+		exit 1; \
+	fi
 
 depend:
 	@$(MAKE) -C src depend

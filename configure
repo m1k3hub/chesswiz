@@ -1647,7 +1647,7 @@ proc checkClang {cc} {
         }
     }
     if {[string length $version] > 0 && $cc eq "CXX"} {
-        set option(EXTRA_CXXFLAGS) "-std=c++0x"
+        set option(EXTRA_CXXFLAGS) "-std=c++17"
         if {$feature(sse2)} {
             puts -nonewline "    Checking if your compiler supports SSE2: "
             flush stdout
@@ -1746,8 +1746,11 @@ proc checkGCC {cc} {
         exit 1
     }
     if {[string length $version] > 0 && $cc eq "CXX"} {
-        if {[package vcompare $version "4.3"] >= 0} {
-            # Check for c++11 before usinf c++0x
+        if {[package vcompare $version "7.0"] >= 0} {
+            set option(EXTRA_CXXFLAGS) "-std=c++17"
+        } elseif {[package vcompare $version "4.7"] >= 0} {
+            set option(EXTRA_CXXFLAGS) "-std=c++11"
+        } elseif {[package vcompare $version "4.3"] >= 0} {
             set option(EXTRA_CXXFLAGS) "-std=c++0x"
         }
         if {$feature(sse2)} {

@@ -311,91 +311,91 @@ public:
 	// Query
 
 	/// Return whether given square is occupied.
-	bool isOccupied(Square s) const;
+	[[nodiscard]] bool isOccupied(Square s) const;
 	/// Return true if this is an empty board.
-	bool isEmpty() const;
+	[[nodiscard]] bool isEmpty() const;
 	/// Return true if position is same, but don't consider side to move, castling rights and e.p. fyle
-	bool isSamePosition(Board const& target) const;
+	[[nodiscard]] bool isSamePosition(Board const& target) const;
 	/// Return true if position is equal
-	bool isEqualPosition(Board const& target) const;
+	[[nodiscard]] bool isEqualPosition(Board const& target) const;
 	/// Return true if ZH position is equal
-	bool isEqualZHPosition(Board const& target) const;
+	[[nodiscard]] bool isEqualZHPosition(Board const& target) const;
 	/// Return true if side to move is in check
-	bool isInCheck() const;
+	[[nodiscard]] bool isInCheck() const;
 	/// Returns whether the side not to move is in check (illegal position).
-	bool sideNotToMoveInCheck() const;
+	[[nodiscard]] bool sideNotToMoveInCheck() const;
 	/// Return true if given side is in check
-	bool isInCheck(color::ID color) const;
+	[[nodiscard]] bool isInCheck(color::ID color) const;
 	/// Return true if given move is a contact check or double check
-	bool isUnblockableCheck(Move const& move, variant::Type variant) const;
+	[[nodiscard]] bool isUnblockableCheck(Move const& move, variant::Type variant) const;
 	/// Return true if side not to move gives a contact check
-	bool isContactCheck() const;
+	[[nodiscard]] bool isContactCheck() const;
 	/// Return true if side to move is mate
-	bool isMate(variant::Type variant) const;
+	[[nodiscard]] bool isMate(variant::Type variant) const;
 	/// Return true if side not to move is in check
-	bool givesCheck() const;
+	[[nodiscard]] bool givesCheck() const;
 	/// Return true if side to move is in double check
-	bool isDoubleCheck() const;
+	[[nodiscard]] bool isDoubleCheck() const;
 	/// Test to see if given color has the right to castle on kingside
-	bool canCastleShort(color::ID color) const;
+	[[nodiscard]] bool canCastleShort(color::ID color) const;
 	/// Test to see if given color has the right to castle on queenside
-	bool canCastleLong(color::ID color) const;
+	[[nodiscard]] bool canCastleLong(color::ID color) const;
 	/// Test to see if given color has any castling rights remaining
-	bool canCastle(color::ID color) const;
+	[[nodiscard]] bool canCastle(color::ID color) const;
 	/// Return whether side next to move is white
-	bool whiteToMove() const;
+	[[nodiscard]] bool whiteToMove() const;
 	/// Return whether side next to move is black
-	bool blackToMove() const;
+	[[nodiscard]] bool blackToMove() const;
 	/// Return true if the standard start position is on the board
-	bool isStandardPosition(variant::Type variant) const;
+	[[nodiscard]] bool isStandardPosition(variant::Type variant) const;
 	/// Return true if a start position is on the board
-	bool isStartPosition() const;
+	[[nodiscard]] bool isStartPosition() const;
 	/// Return true if a chess 960 start position is on the board
-	bool isChess960Position(variant::Type variant) const;
+	[[nodiscard]] bool isChess960Position(variant::Type variant) const;
 	/// Returns true is a shuffle chess start position (without castling rights) is on the board
-	bool isShuffleChessPosition(variant::Type variant) const;
+	[[nodiscard]] bool isShuffleChessPosition(variant::Type variant) const;
 	/// Return whether opponent side is not in check (then last move is legal)
-	bool isLegal() const;
+	[[nodiscard]] bool isLegal() const;
 	/// Return whether the move is valid (and legal)
-	bool isValidMove(	Move const& move,
+	[[nodiscard]] bool isValidMove(	Move const& move,
 							variant::Type variant,
 							move::Constraint flag = move::AllowIllegalMove) const;
 	/// Return whether the piece drop is invalid, because the piece is not in holding.
-	bool isInvalidPieceDrop(Move const& move) const;
+	[[nodiscard]] bool isInvalidPieceDrop(Move const& move) const;
 	/// Return whether castling rook position is ambiguous
-	bool needCastlingFyles() const;
+	[[nodiscard]] bool needCastlingFyles() const;
 	/// Return whether position cannot be derived from standard chess position
-	bool notDerivableFromStandardChess() const;
+	[[nodiscard]] bool notDerivableFromStandardChess() const;
 	/// return whether position cannot be derived from chess 960 start position
-	bool notDerivableFromChess960() const;
+	[[nodiscard]] bool notDerivableFromChess960() const;
 	/// Return true if making move would put oneself into check
-	bool isIntoCheck(Move const& move, variant::Type variant) const;
+	[[nodiscard]] bool isIntoCheck(Move const& move, variant::Type variant) const;
 	/// Check whether given castling is unambiguous
-	bool isUnambiguous(castling::Index castling) const;
+	[[nodiscard]] bool isUnambiguous(castling::Index castling) const;
 	/// Check whether the kings are on board
-	bool kingOnBoard() const;
+	[[nodiscard]] bool kingOnBoard() const;
 	/// Check whether the king of given side is on board
-	bool kingOnBoard(color::ID color) const;
+	[[nodiscard]] bool kingOnBoard(color::ID color) const;
 	/// Check whether game is over for given color
-	bool gameIsOver(variant::Type variant) const;
+	[[nodiscard]] bool gameIsOver(variant::Type variant) const;
 	/// Returns whether piece at given square is marked as promoted
-	bool hasPromoted(Square sq) const;
+	[[nodiscard]] bool hasPromoted(Square sq) const;
 	/// Returns whether given side has a bishop on dark squares
-	bool hasBishopOnDark(color::ID side) const;
+	[[nodiscard]] bool hasBishopOnDark(color::ID side) const;
 	/// Returns whether given side has a bishop on lite squares
-	bool hasBishopOnLite(color::ID side) const;
+	[[nodiscard]] bool hasBishopOnLite(color::ID side) const;
 	/// Returns whether the partner board (Bughouse) is set
-	bool hasPartnerBoard() const;
+	[[nodiscard]] bool hasPartnerBoard() const;
 	/// Returns whether any of the given squares is occupied
-	bool anyOccupied(uint64_t squares) const;
+	[[nodiscard]] bool anyOccupied(uint64_t squares) const;
 	/// Returns whether this game is drawn due to bishops of opposite colors
-	bool drawnDueToBishopsOfOppositeColors(variant::Type variant) const;
+	[[nodiscard]] bool drawnDueToBishopsOfOppositeColors(variant::Type variant) const;
 	/// Returns whether neither player has mating material
-	bool neitherPlayerHasMatingMaterial(variant::Type variant) const;
+	[[nodiscard]] bool neitherPlayerHasMatingMaterial(variant::Type variant) const;
 	/// Returns whether given side cannot win.
-	bool cannotWin(color::ID color, variant::Type variant) const;
+	[[nodiscard]] bool cannotWin(color::ID color, variant::Type variant) const;
 	/// Returns whether piece on given square is a promoted piece.
-	bool isPromotedPiece(Square s) const;
+	[[nodiscard]] bool isPromotedPiece(Square s) const;
 
 	/// Returns current board state (check mate, stale mate, ...)
 	unsigned checkState(variant::Type variant) const;

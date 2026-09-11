@@ -321,6 +321,20 @@ per elapsed mark, rewind-safe, linear fallback when absent. Headless
 tests: `tests/test_app_media_sync.tcl` (case prefix `mediasync-`,
 run via `./src/tkscidb-beta tests/run_app_tests.tcl -match mediasync*`).
 
+**Main-line projection (2026-09-11).** The opcode-03 goto cursors
+address the authoring tree including the variation patch slots, but the
+lesson's `positions` table is main-line only; using the raw cursors made
+the board jump to unrelated plies (or stall) whenever the lecture
+explored a variation.  `::media::lesson::_mainline-timeline` now projects
+the timeline onto the main-line table before it is persisted (dropping
+out-of-range cursors and variation detours); the board holds the last
+main-line position through a variation and resumes afterwards.  See
+`CHESSBASE_MEDIA_RE.md` "M4 status" for the fixture evidence.
+
+**Panel.** The pane mirrors the Chess Media System control strip (video
+on top; round play button, LCD time read-out, chapter prev/next, seek
+slider and volume on one bar beneath; collapsible media list below).
+
 Remaining scope limits: the timeline drives the board ply only —
 applying the decoded board annotations (arrows/marks/comments, file-major
 squares per `CHESSBASE_MEDIA_RE.md`) to the board during playback is

@@ -57,8 +57,8 @@ proc open {} {
 	wm deiconify .splash
 	raise .splash
 	update idletasks
-	tkwait visibility .splash
-	update idletasks
+	# The splash is optional: do not block startup waiting for a visibility
+	# event that may already have been delivered or never arrive from the WM.
 }
 
 

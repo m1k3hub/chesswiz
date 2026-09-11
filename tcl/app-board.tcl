@@ -483,6 +483,24 @@ proc setCursor {{type crosshair}} {
 }
 
 
+proc ToggleAutoPlay {} {
+	variable Vars
+	if {[info exists ::application::media::Priv(inprocess)]
+		&& $::application::media::Priv(inprocess)} {
+		# The media clock advances the board at the commentary timestamps.
+		after cancel $Vars(afterid)
+		set Vars(autoplay) 0
+		::application::media::TogglePlayback
+		return
+	}
+	set Vars(autoplay) [expr {!$Vars(autoplay)}]
+	if {$Vars(autoplay)} {
+		goto +1
+	} else {
+		after cancel $Vars(afterid)
+	}
+}
+
 proc goto {step} {
 	variable Vars
 
