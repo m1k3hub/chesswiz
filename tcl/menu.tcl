@@ -79,6 +79,7 @@ set ContactFeatureRequest		"&Feature Request"
 set InstallChessBaseFonts		"Install ChessBase &Fonts"
 set OpenEngineLog					"Open Engine &Console"
 set AssignFileTypes				"Assign File &Types"
+set DiscoverDatabases			"Discover &Databases..."
 
 # Tools
 set OpenEngineDictionary		"Open &Engine Dictionary"
@@ -388,6 +389,17 @@ if {0} {
 			-command $cmd \
 			;
 	}
+
+	### discover databases ###################################################
+	lassign [::tk::UnderlineAmpersand $mc::DiscoverDatabases] text ul
+	set cmd [list ::application::database::discover::open .application]
+	$m add command \
+		-compound left \
+		-label " $text" \
+		-underline [IncrUL $ul] \
+		-image $::icon::16x16::none \
+		-command $cmd \
+		;
 
 	if {[::util::photos::busy?]} { set state disabled } else { set state normal }
 	lassign [::tk::UnderlineAmpersand $::util::photos::mc::InstallPlayerPhotos] text ul

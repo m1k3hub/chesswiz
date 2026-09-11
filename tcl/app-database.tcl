@@ -156,6 +156,7 @@ set T_ThreeCheck						"Three-check"
 set T_Crazyhouse						"Crazyhouse"
 
 set OpenDatabase						"Open Database"
+set DiscoverDatabases				"Discover Databases"
 set OpenRecentDatabase				"Open Recent Database"
 set NewDatabase						"New Database"
 set CloseDatabase						"Close Database '%s'"
@@ -309,6 +310,11 @@ proc build {tab width height} {
 		-command [list ::menu::dbOpen $main] \
 		-menucmd [namespace current]::addRecentlyUsedToMenu \
 		;
+	::toolbar::add $tbFile button \
+		-image $::icon::toolbarSearch \
+		-tooltipvar [::mc::var [namespace current]::mc::DiscoverDatabases "..."] \
+		-command [list ::application::database::discover::open $main] \
+		;
 	set Vars(button:close) [::toolbar::add $tbFile button \
 		-image $::icon::toolbarDocClose \
 		-tooltipvar [namespace current]::_CloseDatabase \
@@ -457,6 +463,15 @@ proc currentVariant {} {
 	variable Vars
 	if {[info exists Vars(variant)]} { return $Vars(variant) }
 	return Normal
+}
+
+
+# Public accessor for the database switcher widget (used by the
+# database-discovery dialog to test membership and add bases).
+proc switcherWidget {} {
+	variable Vars
+	if {[info exists Vars(switcher)]} { return $Vars(switcher) }
+	return {}
 }
 
 

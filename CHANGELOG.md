@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — System-wide Database Discovery
+
+- New `tcl/app-database-discover.tcl`: a *Discover Databases…* dialog
+  (Database tab toolbar magnifier + main menu → Extras) that walks the
+  machine for every supported chess database format
+  (`.sci`/`.si4`/`.si3`, `.cbh`/`.cbf`/`.cbv`/`.2cbh`, `.scv`,
+  `.pgn`/`.pgn.gz`/`.bpgn`/`.bpgn.gz`) and lists the primary index/header
+  files with their game count and size.
+- Companion files (`.scg`, `.cbg`, `.sg4`, …) are never listed; binary
+  formats are confirmed by magic bytes; the walk is incremental (150
+  directories per event-loop tick) and cancellable, and skips
+  pseudo-filesystems, VCS dirs, caches and trash.
+- *Open* loads the selected databases; *Add to switcher* registers them
+  without changing the current base.
+- Tests: `tests/test_database_discover.tcl` (8 headless) and
+  `tests/test_app_discover.tcl` (4 app-backed); design in
+  `docs/DATABASE_DISCOVERY.md`.
+
 ## Unreleased — ChessBase (.cbh) Per-Game Media via tag_game Anchors
 
 ### Overview
