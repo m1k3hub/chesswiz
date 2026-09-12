@@ -113,6 +113,15 @@ tcltest::test board3d-app-configure-binding {the Configure binding passes window
 	string match "*OnConfigure*" [bind $canv <Configure>]
 } -result 1
 
+tcltest::test board3d-app-unknown-piece {a board string with an unknown piece character still renders} -body {
+	set b [string replace [::board3d::NormalizeBoard standard] 63 63 X]
+	::board3d::setBoard $b
+	update idletasks
+	set canv [b3dAppCanvas]
+	expr {[string length $::board3d::State(board)] == 64
+		&& [llength [$canv find withtag b3d]] > 0}
+} -result 1
+
 tcltest::test board3d-app-close {closing the viewer destroys the window} -body {
 	::board3d::closeViewer
 	list [::board3d::isOpen] [winfo exists .application.__board3d__]

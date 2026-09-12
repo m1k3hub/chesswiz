@@ -691,6 +691,9 @@ proc ::board3d::DrawPieces {canv} {
 	foreach sq [orderedSquares] {
 		set letter [string index $board $sq]
 		if {$letter eq "." || $letter eq " "} { continue }
+		# tolerate unexpected characters (malformed/variant board strings) so
+		# the render path can never raise a background error
+		if {![info exists LetterToPiece($letter)]} { continue }
 		set piece $LetterToPiece($letter)
 		if {$piece eq "e"} { continue }
 
@@ -854,6 +857,12 @@ proc ::board3d::closeViewer {} {
 	set Priv(window) {}
 	set Priv(canvas) {}
 	ClearPieceImages
+	# release the piece-size registration acquired by InitPieceAssets
+	if {$State(usePhotos) && $State(pieceSize) > 0} {
+		catch { ::board::unregisterPieceSize $State(pieceSize) }
+	}
+	set State(usePhotos) -1
+	set State(pieceSize) 0
 	set State(selected) -1
 	return
 }
