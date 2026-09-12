@@ -60,6 +60,7 @@ namespace eval ::media::sync {
 		usertouch 0
 		lastgoal  -1
 		lasttime  -1
+		reach     50
 		timeline  {}
 		tlidx     0
 		events    {}
@@ -231,25 +232,40 @@ proc ::media::sync::load-events {eventList} {
 
 
 # Inverse of the timeline mapping: the media time (ms) at which the board
-# reaches the given ply.  Returns -1 without a timeline, or when the ply
-# is not an exact timeline target (the caller then leaves the board alone).
-proc ::media::sync::ms-for-ply {ply} {
+# reaches the given ply.  A ply can be discussed more than once (the
+# lecturer steps back, or a variation returns to the same position), so
+# with $timeMs >= 0 the occurrence NEAREST to the current media position
+# is chosen.  Without it the first occurrence is returned (legacy).
+# Nearest keeps board-driven seeks local: stepping one ply back seeks to
+# the occurrence next to the video, not to one minutes earlier.
+proc ::media::sync::ms-for-ply {ply {timeMs -1}} {
 	variable State
 	if {![llength $State(timeline)]} { return -1 }
 	if {$ply < 0} { return -1 }
 	if {$ply == 0} { return 0 }
+
 	set count 0
+	set best -1
+	set bestDist -1
 	foreach mark $State(timeline) {
+		set ms -1
 		if {[llength $mark] >= 2} {
 			# absolute target: {mediaMs goalPly}
-			if {[lindex $mark 1] == $ply} { return [lindex $mark 0] }
+			if {[lindex $mark 1] == $ply} { set ms [lindex $mark 0] }
 		} else {
-			# legacy count model: the Nth mark advances to ply N
+			# legacy count model: the Nth mark advances to ply N, so only
+			# that exact mark inverts to the ply.  (A `count >= $ply` test
+			# would let ply P match every later mark once the nearest-time
+			# mode keeps scanning, returning a timecode for the wrong ply.)
 			incr count
-			if {$count >= $ply} { return $mark }
+			if {$count == $ply} { set ms $mark }
 		}
+		if {$ms < 0} { continue }
+		if {$timeMs < 0} { return $ms }
+		set dist [expr {abs($ms - $timeMs)}]
+		if {$best < 0 || $dist < $bestDist} { set best $ms ; set bestDist $dist }
 	}
-	return -1
+	return $best
 }
 
 
@@ -269,13 +285,19 @@ proc ::media::sync::seek {timeMs durationMs} {
 	set State(evidx) 0
 	set State(lastgoal) -1
 	BoardClearAnnotations
-	drive $timeMs $durationMs
+	# An explicit seek must reposition the board even while the transport
+	# is paused (slider scrub); the follow tick only runs while playing.
+	drive $timeMs $durationMs 1
 }
 
-proc ::media::sync::drive {timeMs durationMs} {
+proc ::media::sync::drive {timeMs durationMs {force 0}} {
 	variable State
 
-	if {!$State(follow) || !$State(playing)} { return }
+	if {!$State(follow)} { return }
+
+	# The follow tick only drives while the transport is playing; an
+	# explicit seek ($force) repositions the board while paused too.
+	if {!$State(playing) && !$force} { return }
 
 	# a manual board step is being reseeked by the media panel: hold off
 	# driving the board until the video catches up with the board
@@ -300,7 +322,11 @@ proc ::media::sync::drive {timeMs durationMs} {
 				# absolute target: {mediaMs nodeIndex} (lesson v2 node-goal
 				# model: goal indexes the lesson's node/position list)
 				set markMs [lindex $mark 0]
-				if {$markMs <= $timeMs} {
+				# A seek can land a few ms short of its target (keyframe
+				# rounding); the reach tolerance stops the board from
+				# stepping back onto the previous mark right after a
+				# board-driven seek.
+				if {$markMs <= $timeMs + $State(reach)} {
 					set idx [lindex $mark 1]
 					if {$idx >= 0} { set goal $idx; set nodeModel 1 }
 				} else {

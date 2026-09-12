@@ -1065,7 +1065,13 @@ proc application::media::PlySeek {position} {
 	if {[info exists Priv(lessonPositions)] && [llength $Priv(lessonPositions)]} {
 		set goal [SyncBoardNode]
 	}
-	set target [::media::sync::ms-for-ply $goal]
+	# Pick the occurrence of this ply nearest to where the video is now,
+	# so stepping one move back or forward seeks locally instead of
+	# jumping to the ply's first mention minutes earlier.
+	set now -1
+	catch { set now [expr {1000.0 * [MediaTime]}] }
+	if {![string is double -strict $now] || $now <= 0} { set now -1 }
+	set target [::media::sync::ms-for-ply $goal $now]
 	if {$target < 0} {
 		MediaPause
 		set Priv(statusbar) "No synchronized commentary for this position."

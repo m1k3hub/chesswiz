@@ -335,6 +335,26 @@ main-line position through a variation and resumes afterwards.  See
 on top; round play button, LCD time read-out, chapter prev/next, seek
 slider and volume on one bar beneath; collapsible media list below).
 
+**Bidirectional, reversible sync (2026-09-11).** The board and the
+video stay coupled in both directions, forwards and backwards:
+
+- *Video → board:* the follow tick maps the media clock to the last
+timeline mark reached; rewinding the video recomputes the goal and moves
+the board back (annotations reset on a rewind).  A `reach` tolerance
+(50 ms) absorbs keyframe/seek rounding so a seek that lands just short
+of a mark does not snap the board onto the previous move.
+- *Board → video:* stepping the board (buttons, autoplay, or a direct
+goto) seeks the video to that ply.  `ms-for-ply` takes the current media
+time and picks the occurrence **nearest** to it, so stepping one move
+back to a ply the lecturer revisited seeks to the nearby mention instead
+of jumping to the ply's first mention minutes earlier.
+- *Paused scrub:* an explicit seek (`::media::sync::seek`) drives the
+board even while the transport is paused, so dragging the slider moves
+the board backwards and forwards without needing the follow tick.
+
+The board-side `usertouch` hold-off still yields the follow tick for
+600 ms after a manual step so the two directions cannot fight.
+
 Remaining scope limits: the timeline drives the board ply only —
 applying the decoded board annotations (arrows/marks/comments, file-major
 squares per `CHESSBASE_MEDIA_RE.md`) to the board during playback is

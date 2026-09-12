@@ -1,5 +1,47 @@
 # Changelog
 
+## Unreleased — Reversible Board ⇄ Video Sync
+
+- Board navigation and video playback stay synchronized forwards and
+  backwards:
+  - `::media::sync::ms-for-ply` takes the current media time and picks
+    the occurrence *nearest* to it, so stepping one move back to a ply
+    the lecture revisited seeks to the nearby mention instead of jumping
+    to the ply's first mention minutes earlier.
+  - An explicit seek (`::media::sync::seek`, e.g. a slider scrub) drives
+    the board even while the transport is paused (`drive` gained a
+    `force` flag).
+  - A 50 ms `reach` tolerance stops a seek that lands a few ms short of
+    a timeline mark from snapping the board onto the previous move.
+  - Legacy `.plytimes` count timelines now invert exactly: a ply maps to
+    its own mark rather than any later mark, so a board-driven seek on a
+    legacy lesson no longer jumps to a future ply's timecode.
+  - `PlySeek` passes the video's current position to the nearest-occurrence
+    lookup.
+- Tests: `tests/test_media_sync.tcl` (nearest occurrence, paused tick,
+  paused seek, reach tolerance); a round trip over the Biel round-08
+  fixture matches all 89 marks with no drift.
+
+## Unreleased — Build & Test Hygiene
+
+- `make cpp` (hence `make all`/`make test`) now also builds and runs the
+  self-contained C++ unit tests that live in `src/`
+  (`test_html_core`, `test_scm_media`, `test_scriptstream`,
+  `test_media_extract`, `test_corr_moveinfo`, `test_sci_result`) via the
+  new `cpp-src` target, with a `PASS:`/`FAIL:` summary per binary.
+- `src/Makefile`: `test_media_extract` now links the libraries it
+  actually needs (`sys`/Tcl), and `test_corr_moveinfo` has a build rule
+  — both targets previously failed to build.
+- `test_media_extract` installs a live Tcl interpreter (the path
+  resolver reaches `sys::file` through Tcl's filesystem layer); it
+  previously segfaulted at startup.
+- `test_scriptstream` rebuilds its synthetic checkpoint record with the
+  verified 5-byte tree-edge grammar, restoring the exact
+  `c2-c4`/`e7-e6` assertion (was 50/51; now 51/51).
+- Removed a stray debug `fprintf(stderr, "[tail: …]")` from the script-stream
+  checkpoint parser.
+- `tests/tmp/` is ignored.
+
 ## Unreleased — System-wide Database Discovery
 
 - New `tcl/app-database-discover.tcl`: a *Discover Databases…* dialog

@@ -153,6 +153,14 @@ UI-free; the panel wires delegates at `build` time
   `application::board::update`) defers to idle → `PlySeek` (seek the
   media to the board's node unless the sync machine is `driving?`) and
   150 ms → `InteractiveFollow` (jump to a position-matched clip).
+- **Reversible (2026-09-11):** `ms-for-ply` accepts the current media
+  time and chooses the occurrence **nearest** to it, so stepping back to
+  a ply the lecturer revisited seeks to the nearby mention rather than
+  its first mention minutes earlier; and an explicit `::media::sync::seek`
+  (slider scrub) drives the board even while paused (`drive` takes a
+  `force` flag). A 50 ms `reach` tolerance stops a seek that lands just
+  short of a mark from snapping the board onto the previous move. Video
+  rewinds already recompute the goal and move the board back.
 
 ```
                  ┌─────────────────────┐
