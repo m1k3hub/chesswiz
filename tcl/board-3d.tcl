@@ -26,10 +26,10 @@ namespace export configure defaults preset setBoard setMarks setSelected \
 variable State
 array set State {
 	yaw          0
-	pitch        34
+	pitch        56
 	distance     12.0
 	thickness    0.30
-	margin       18
+	margin       14
 	pieceHeight  1.10
 	gap          0.045
 	lightColor   #f0d9b5
@@ -327,7 +327,7 @@ proc ::board3d::orderedSquares {} {
 proc ::board3d::defaults {} {
 	variable State
 	array set State {
-		yaw 0 pitch 34 distance 12.0 thickness 0.30
+		yaw 0 pitch 56 distance 12.0 thickness 0.30
 		pieceHeight 1.10 gap 0.045
 		showCoords 1 showShadow 1
 		selected -1 marks {}
@@ -373,9 +373,9 @@ proc ::board3d::preset {name} {
 	variable State
 	ClampPitch
 	switch -exact -- $name {
-		white { configure yaw 0   pitch 34 distance 12.0 ; set State(view) white }
-		black { configure yaw 180 pitch 34 distance 12.0 ; set State(view) black }
-		side  { configure yaw 90  pitch 44 distance 12.0 ; set State(view) side }
+		white { configure yaw 0   pitch 56 distance 12.0 ; set State(view) white }
+		black { configure yaw 180 pitch 56 distance 12.0 ; set State(view) black }
+		side  { configure yaw 90  pitch 56 distance 12.0 ; set State(view) side }
 		top   { configure yaw 0   pitch 90 distance 12.0 ; set State(view) top }
 		free  { set State(view) free }
 		default {
@@ -439,6 +439,17 @@ proc ::board3d::ThemeColors {} {
 			set State($var) $c
 		}
 	}
+}
+
+
+# Adopt the configured board theme and derive the slab/frame/shadow
+# colours from the dark square, so every theme stays harmonious.  Called
+# when the viewer opens and whenever the position changes.
+proc ::board3d::UpdateColors {} {
+	variable State
+	ThemeColors
+	set State(woodColor)   [Shade $State(darkColor) 0.62]
+	set State(shadowColor) [Shade $State(woodColor) 0.42]
 }
 
 
@@ -558,7 +569,8 @@ proc ::board3d::DrawScene {canv} {
 	set top [concat \
 		[ScreenPoint -4.4 -4.4] [ScreenPoint 4.4 -4.4] \
 		[ScreenPoint 4.4 4.4]  [ScreenPoint -4.4 4.4]]
-	$canv create polygon {*}$top -fill $State(woodColor) -outline #aa8154 -tags b3d
+	$canv create polygon {*}$top -fill $State(woodColor) \
+		-outline [Shade $State(woodColor) 0.85] -tags b3d
 
 	DrawTiles $canv
 	DrawMarks $canv
@@ -683,6 +695,9 @@ proc ::board3d::DrawPieces {canv} {
 	set board $State(board)
 	if {[string length $board] != 64} { return }
 
+	set sinp [expr {abs(sin([deg2rad $State(pitch)]))}]
+	set cosp [expr {abs(cos([deg2rad $State(pitch)]))}]
+
 	foreach sq [orderedSquares] {
 		set letter [string index $board $sq]
 		if {$letter eq "." || $letter eq " "} { continue }
@@ -694,28 +709,43 @@ proc ::board3d::DrawPieces {canv} {
 
 		lassign [squareCenter $sq] x y
 		lassign [projectPlane $x $y] bx by zb
-		# Keep a billboard within the projected row spacing. At the pole
-		# physical vertical height projects to zero, so use ground scale.
 		set scale [expr {$State(focal)/$zb}]
-		set height [expr {$scale * min(0.76, 0.80*abs(sin([deg2rad $State(pitch)]))) * min(1.0, $State(pieceHeight)/1.10)}]
 
-		# ground shadow
-		if {$State(showShadow)} {
-			set half [expr {$height*0.40}]
-			set rh   [expr {$half*0.35}]
-			set bxShadow [expr {$bx + $scale*0.08}]
-			set byShadow [expr {$by + $height*0.35}]
-			$canv create oval [expr {$bxShadow - $half}] [expr {$byShadow - $rh}] \
-				[expr {$bxShadow + $half}] [expr {$byShadow + $rh}] \
-				-fill #65513d -outline {} -tags b3d
-		}
+		# A piece stands on its square: the billboard's base sits on the
+		# projected square centre and the body rises towards the far side.
+		# The screen height is the physical projection of $pieceHeight,
+		# but never more than the screen distance to the row behind, so
+		# adjacent ranks never overlap.  Looking straight down (top view)
+		# the physical height vanishes; a small floor keeps the piece
+		# visible as the disc its top-down silhouette would be.
+		set height [expr {$scale * $State(pieceHeight) * $cosp}]
+		if {$height < $scale*0.52} { set height [expr {$scale*0.52}] }
+		if {$height > $scale*$sinp} { set height [expr {$scale*$sinp}] }
 		if {$height < 6} { continue }
+
+		# soft contact shadow, offset a little towards the viewer (the
+		# piece sets also bake a drop shadow into the photo, so keep this
+		# one faint)
+		if {$State(showShadow)} {
+			set half [expr {$height*0.38}]
+			set rh   [expr {$half*0.30}]
+			set sx   [expr {$bx + $scale*0.06}]
+			set sy   [expr {$by + $height*0.12}]
+			$canv create oval [expr {$sx - $half}] [expr {$sy - $rh}] \
+				[expr {$sx + $half}] [expr {$sy + $rh}] \
+				-fill $State(shadowColor) -stipple gray50 -outline {} -tags b3d
+		}
+
+		# the piece sets bake a drop shadow into the photo below the body
+		# (body base ~90% of the image height), so anchor the image a
+		# little below the square centre to ground the body on the square
+		set base [expr {$by + $height*0.10}]
 
 		set img [PieceImage $piece $height]
 		if {$img ne ""} {
-			$canv create image $bx $by -image $img -anchor center -tags {b3d piece}
+			$canv create image $bx $base -image $img -anchor s -tags {b3d piece}
 		} else {
-			DrawGlyph $canv $piece $bx $by $height
+			DrawGlyph $canv $piece $bx $base $height
 		}
 	}
 }
@@ -732,12 +762,12 @@ proc ::board3d::DrawGlyph {canv piece bx by height} {
 
 	if {$white eq "w"} {
 		$canv create text [expr {$bx + 1}] [expr {$by + 1}] -text $glyph \
-			-anchor center -fill #202020 -font [list "DejaVu Sans" $size] -tags b3d
+			-anchor s -fill #202020 -font [list "DejaVu Sans" $size] -tags b3d
 		$canv create text $bx $by -text $glyph \
-			-anchor center -fill #ffffff -font [list "DejaVu Sans" $size] -tags b3d
+			-anchor s -fill #ffffff -font [list "DejaVu Sans" $size] -tags b3d
 	} else {
 		$canv create text $bx $by -text $glyph \
-			-anchor center -fill #101010 -font [list "DejaVu Sans" $size] -tags b3d
+			-anchor s -fill #101010 -font [list "DejaVu Sans" $size] -tags b3d
 	}
 }
 
@@ -814,6 +844,7 @@ proc ::board3d::openViewer {parent} {
 	set Priv(canvas) $canv
 
 	set State(board) [CurrentBoard]
+	UpdateColors
 
 	::bind $canv <Configure>      [namespace code [list OnConfigure %W %w %h]]
 	::bind $canv <ButtonPress-1>  [namespace code [list OnPress %x %y]]
@@ -876,6 +907,7 @@ proc ::board3d::closeViewer {} {
 proc ::board3d::PositionChanged {board} {
 	variable State
 	set State(board) [NormalizeBoard $board]
+	UpdateColors
 	refresh
 	return $State(board)
 }

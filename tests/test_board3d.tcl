@@ -146,7 +146,7 @@ tcltest::test board3d-presets \
 	b3dEval {
 		set ok 1
 		::board3d::preset white
-		if {$::board3d::State(yaw) != 0 || $::board3d::State(pitch) != 34} { set ok 0 }
+		if {$::board3d::State(yaw) != 0 || $::board3d::State(pitch) != 56} { set ok 0 }
 		::board3d::preset black
 		if {$::board3d::State(yaw) != 180} { set ok 0 }
 		::board3d::preset side
