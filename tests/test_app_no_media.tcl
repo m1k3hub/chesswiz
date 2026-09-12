@@ -19,4 +19,13 @@ tcltest::test media-withdrawn-layout {media cannot be offered by the board layou
         [string match *gamemedia* $::application::BoardLayout]
 } -result {0 0 0}
 
+tcltest::test media-pane-label {the media pane has a layout-menu label} -body {
+    list [info exists ::application::twm::mc::Pane(media)] \
+        [expr {[string length [::application::twm::PaneLabel media]] > 0}]
+} -result {1 1}
+
+tcltest::test pane-label-fallback {an unlabeled pane falls back to its uid} -body {
+    ::application::twm::PaneLabel no_such_pane_xyz
+} -result {no_such_pane_xyz}
+
 tcltest::cleanupTests

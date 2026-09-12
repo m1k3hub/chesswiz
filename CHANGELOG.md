@@ -20,6 +20,17 @@
   math) and `tests/test_app_board3d.tcl` (viewer open/draw/preset/sync/
   close under X).
 
+## Unreleased — Media Pane Layout-Menu Crash Fix
+
+- The media pane was registered in `PaneOptions`/`BoardLayout` but had no
+  `::application::twm::mc::Pane(media)` label, so building the settings
+  menu (`BuildSettingsMenu` → `makeLayoutMenu`) raised
+  `can't read "mc::Pane(media)"` whenever the media pane was in the
+  active layout.  Added the default label in `app-twm.tcl` and to all
+  language files, and made `makeLayoutMenu` fall back to the pane uid so
+  an unlabeled pane can never break the layout/window menu again.
+- Tests: `tests/test_app_no_media.tcl` (label exists; uid fallback).
+
 ## Unreleased — Reversible Board ⇄ Video Sync
 
 - Board navigation and video playback stay synchronized forwards and

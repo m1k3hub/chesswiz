@@ -549,6 +549,7 @@
 ::application::twm::mc::Pane(site)		"Sites" ;# NEW
 ::application::twm::mc::Pane(position)		"Start Positions" ;# NEW
 ::application::twm::mc::Pane(eco)		"ECO-Table" ;# NEW
+::application::twm::mc::Pane(media)		"Media" ;# NEW
 
 ::application::twm::mc::UnsavedAction(discard)		"Discard changes (start next time with unchanged layout)" ;# NEW
 ::application::twm::mc::UnsavedAction(overwrite)	"Overwrite existing layout with changed layout" ;# NEW

@@ -80,6 +80,7 @@ set Pane(annotator)				"Annotator"
 set Pane(site)						"Site"
 set Pane(position)				"Position"
 set Pane(eco)						"ECO-Table"
+set Pane(media)					"Media"
 
 set UnsavedAction(discard)		"Discard changes (start next time with unchanged layout)"
 set UnsavedAction(overwrite)	"Overwrite existing layout with changed layout"
@@ -692,6 +693,14 @@ proc saveTableOptions {} {
 }
 
 
+# Label for a pane, falling back to the uid when a pane has no
+# translation: a missing label must never break the layout/window menu.
+proc PaneLabel {uid} {
+	if {[catch { set [namespace current]::mc::Pane($uid) } label]} { return $uid }
+	return $label
+}
+
+
 proc makeLayoutMenu {twm menu {w ""}} {
 	variable [namespace parent]::Vars
 	variable Options
@@ -907,7 +916,7 @@ proc makeLayoutMenu {twm menu {w ""}} {
 		foreach uid $leaves1 {
 			variable vis_${uid}_ [$twm isdocked $uid]
 			$menu.windows add checkbutton \
-				-label $mc::Pane($uid) \
+				-label [PaneLabel $uid] \
 				-variable [namespace current]::vis_${uid}_ \
 				-command [namespace code [list ChangeState $twm $uid]] \
 				;

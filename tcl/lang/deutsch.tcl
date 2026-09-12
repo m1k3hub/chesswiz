@@ -547,6 +547,7 @@
 ::application::twm::mc::Pane(site)			"Orte"
 ::application::twm::mc::Pane(position)		"Startpositionen"
 ::application::twm::mc::Pane(eco)			"ECO-Tabelle"
+::application::twm::mc::Pane(media)			"Medien"
 
 ::application::twm::mc::UnsavedAction(discard)		"Änderungen verwerfen (nächstes Mal mit unverändertem Layout starten)"
 ::application::twm::mc::UnsavedAction(overwrite)	"Das exisitierende Layout mit den Änderungen überschreiben"
