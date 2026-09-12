@@ -373,6 +373,10 @@ test_sci_result: test_sci_result.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
 
+test_corr_moveinfo: test_corr_moveinfo.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
 make_media_test: make_media_test.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
@@ -385,9 +389,9 @@ test_scm_media: test_scm_media.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
 
-test_media_extract: test_media_extract.o mstl/libmstl.a
+test_media_extract: test_media_extract.o $(LIBS) $(TCL_LIBS)
 	@echo "Building $@"
-	@$(CXX) -o $@ test_media_extract.o $(LDFLAGS) $(PROFILING) mstl/libmstl.a -lpthread
+	@$(CXX) -o $@ test_media_extract.o $(LDFLAGS) $(PROFILING) $(LIBS) $(ALL_TK_LIBS) $(ALL_LIBS)
 
 test_html_core: test_html_core.o mstl/libmstl.a
 	@echo "Building $@"

@@ -104,6 +104,20 @@ Also runs `verify_cbh_write` when that binary has been built locally.
 - PGN parsing
 - Variant handling
 
+### 10. C++ Source Unit Tests (`make cpp-src`)
+Built through the main `src/Makefile` and run by `make cpp` (and therefore by
+`make all`/`make test`). Each must exit non-zero on failure; noisy success
+output is captured and only `PASS:`/`FAIL:` is reported.
+
+| Binary (in `src/`) | Covers |
+|--------------------|--------|
+| `test_html_core` | HTML sanitizer / structural repair / ChessBase adapter |
+| `test_scm_media` | `.scm` manifest parser (fingerprint, classify, corrupt input) |
+| `test_scriptstream` | ChessBase media script-stream decoder |
+| `test_media_extract` | Guiding-text media extraction and path resolution |
+| `test_corr_moveinfo` | Correspondence clock / elapsed MoveInfo parsing |
+| `test_sci_result` | `.sci` result-field sanitization (5/6/7) |
+
 ## Requirements
 
 ### Tcl Tests

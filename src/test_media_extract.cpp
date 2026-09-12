@@ -29,6 +29,7 @@
 #include "m_string.h"
 #include "m_vector.h"
 
+#include <tcl.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -36,6 +37,21 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+// resolveGuidingTextPath -> mediaFileExists -> sys::file::exists() routes
+// through Tcl's filesystem layer, so the test must install a live interp
+// (exactly as make_media_test.cpp / cbm2scm.cpp do).
+namespace tcl { namespace bits { Tcl_Interp* interp = nullptr; } }
+
+namespace {
+
+struct TclInterpreter
+{
+	TclInterpreter()  { tcl::bits::interp = Tcl_CreateInterp(); Tcl_Init(tcl::bits::interp); }
+	~TclInterpreter() { Tcl_DeleteInterp(tcl::bits::interp); tcl::bits::interp = nullptr; }
+};
+
+} // namespace
 
 static int g_fail = 0;
 
@@ -206,6 +222,7 @@ static int countSubstr(char const* s, char const* sub)
 
 int main()
 {
+	TclInterpreter tclInterp;
 	printf("== test_media_extract (structural) ==\n");
 
 	// --- (1) extraction -------------------------------------------------

@@ -254,10 +254,10 @@ static void test_checkpoint()
 	r.push_back(0xA4); r.push_back(0x0A); r.push_back(0xB4); r.push_back(0x0A);
 	r.push_back(0x00); r.push_back(0x00);
 	r.push_back(0xF9); r.push_back(0xBE); r.push_back(0x0F); r.push_back(0x00);
-	// alignment + tree edge c2-c4 = (17, 19) + pad
+	// alignment + tree edges c2-c4, e7-e6, each a 5-byte {from,to,0,0,0} record
 	r.push_back(0x00); r.push_back(0x00);
-	r.push_back(0x11); r.push_back(0x13); r.push_back(0x00); r.push_back(0x00);
-	r.push_back(0x00);
+	r.push_back(0x11); r.push_back(0x13); r.push_back(0x00); r.push_back(0x00); r.push_back(0x00);
+	r.push_back(0x26); r.push_back(0x25); r.push_back(0x00); r.push_back(0x00); r.push_back(0x00);
 
 	cb_media::Event ev;
 	cb_media::Checkpoint cp;
@@ -271,7 +271,8 @@ static void test_checkpoint()
 	check("elo black", cp.blackElo == 2740);
 	check("identity year", cp.year == 2015);
 	check("game date", cp.gameYear == 2015 && cp.gameMonth == 7 && cp.gameDay == 25);
-	check("tree edge decoded", !cp.treeMoves.empty());
+	check("tree edge decoded", cp.treeMoves.size() == 2
+		&& cp.treeMoves[0] == "c2-c4" && cp.treeMoves[1] == "e7-e6");
 }
 
 static void test_tree_edges()

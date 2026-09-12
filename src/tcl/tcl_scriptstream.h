@@ -421,7 +421,6 @@ inline bool parse_checkpoint_tail(unsigned char const* p, unsigned len,
 			&& !(pp[q] == 0 && pp[q + 1] == 0);
 	};
 	unsigned pos = 0;
-	fprintf(stderr, "[tail: len=%u]\n", len);
 	while (pos + 10 <= len && !(valid(p, pos) && valid(p, pos + 5)))
 		++pos;
 	if (pos + 10 > len) return false;

@@ -25,7 +25,7 @@ COVERAGE_DIR := $(TEST_DIR)coverage
 # Targets
 # ==============================================================================
 
-.PHONY: all test tcl app-tcl cpp clean help report
+.PHONY: all test tcl app-tcl cpp cpp-src clean help report
 
 all: tcl app-tcl cpp
 
@@ -70,13 +70,39 @@ smoke:
 		fi; \
 		echo "STARTUP-SMOKE: FAILED (exit $$rc)"; exit 1
 
-cpp: $(TEST_DIR)test_cpp_backend $(TEST_DIR)test_corr_duration
+SRC_CPP_TESTS := test_html_core test_scm_media test_scriptstream test_media_extract test_corr_moveinfo
+
+cpp: $(TEST_DIR)test_cpp_backend $(TEST_DIR)test_corr_duration cpp-src
 	@chmod +x "$(TEST_DIR)test_cpp_backend"
 	@echo "Running C++ backend tests..."
 	@"$(TEST_DIR)test_cpp_backend"
 	@echo "Running correspondence-duration tests..."
 	@chmod +x "$(TEST_DIR)test_corr_duration"
 	@"$(TEST_DIR)test_corr_duration"
+
+# Self-contained C++ unit tests that live in src/ and build through the main
+# Makefile (html sanitizer, .scm/.cbm manifest parsers, script-stream decoder,
+# media extraction, correspondence MoveInfo).  Each must exit non-zero on
+# failure; noisy success output is captured and only the status is reported.
+cpp-src:
+	@echo "Building src/ self-contained C++ tests..."
+	@$(MAKE) -C $(SRC_DIR) $(SRC_CPP_TESTS) test_sci_result >/tmp/scidb-cpp-src-build.log 2>&1 || \
+		{ echo "FAIL: src/ C++ test build"; tail -30 /tmp/scidb-cpp-src-build.log; exit 1; }
+	@echo "Running src/ self-contained C++ tests..."
+	@for t in $(SRC_CPP_TESTS); do \
+		log=/tmp/scidb-test-$$t.log; \
+		if "$(SRC_DIR)/$$t" >$$log 2>&1; then \
+			echo "PASS: $$t"; \
+		else \
+			echo "FAIL: $$t"; tail -20 $$log; exit 1; \
+		fi; \
+	done
+	@rm -rf $(TEST_DIR)tmp/sci-result && mkdir -p $(TEST_DIR)tmp/sci-result
+	@if "$(SRC_DIR)/test_sci_result" $(TEST_DIR)tmp/sci-result >/tmp/scidb-test-sci-result.log 2>&1; then \
+		echo "PASS: test_sci_result"; \
+	else \
+		echo "FAIL: test_sci_result"; tail -20 /tmp/scidb-test-sci-result.log; exit 1; \
+	fi
 
 $(TEST_DIR)test_corr_duration: $(TEST_DIR)test_corr_duration.cpp
 	@echo "Compiling correspondence-duration tests..."

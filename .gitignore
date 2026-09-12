@@ -86,6 +86,7 @@ gdb.txt
 tesseract-*.tar.gz
 
 # generated test artifacts
+tests/tmp/
 tests/tmp-app/
 tests/tmp-pdf/
 tests/test_cpp_backend
