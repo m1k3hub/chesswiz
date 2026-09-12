@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — 3D Chessboard Viewer
+
+- New `tcl/board-3d.tcl` (`::board3d`) renders the current position as a
+  perspective board that can be orbited, tilted and zoomed:
+  - a pure-Tcl orbit camera with exact auto-fit (the board slab always fits
+    the canvas) and screen→square unprojection for hit-testing;
+  - a canvas renderer drawing a board slab, shaded tiles, coordinates,
+    marks and pieces as depth-scaled billboards of the configured piece
+    set (Unicode-glyph fallback when no piece set is loaded);
+  - a viewer window with White/Black/Side/Top presets, rotate/tilt/zoom
+    (drag, wheel, arrow keys, Home) and click-to-select.
+- Wired into the app: `Extras → 3D Board` opens the viewer; the main board
+  pushes its position through `::board3d::PositionChanged` from
+  `application::board::update` (via a new `::board::diagram::data`
+  accessor), so the 3D view mirrors play live.  Design and plan in
+  `docs/BOARD_3D_DESIGN.md`.
+- Tests: `tests/test_board3d.tcl` (headless camera/projection/hit-test
+  math) and `tests/test_app_board3d.tcl` (viewer open/draw/preset/sync/
+  close under X).
+
 ## Unreleased — Reversible Board ⇄ Video Sync
 
 - Board navigation and video playback stay synchronized forwards and

@@ -118,6 +118,7 @@ SOURCES = \
 	board-stuff.tcl \
 	board-holding.tcl \
 	board-options.tcl \
+	board-3d.tcl \
 	annotation.tcl \
 	comment.tcl \
 	marks.tcl \

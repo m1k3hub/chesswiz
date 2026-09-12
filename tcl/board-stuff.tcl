@@ -467,6 +467,13 @@ proc canvas {w} {
 }
 
 
+# Current 64-character board string (row 0 == rank 8), as drawn.
+proc data {w} {
+	variable ${w}::Board
+	return $Board(data)
+}
+
+
 proc hilite {w i which} {
 	variable [namespace parent]::hilite
 	variable ${w}::Board

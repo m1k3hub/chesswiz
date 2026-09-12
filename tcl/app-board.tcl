@@ -562,6 +562,11 @@ proc update {position cmd data promoted} {
 	if {[namespace which ::application::media::BoardUpdated] ne ""} {
 		::application::media::BoardUpdated $position
 	}
+
+	# 3D board view mirrors the position (no-op unless the viewer is open)
+	if {[llength [info commands ::board3d::PositionChanged]]} {
+		::board3d::PositionChanged [::board::diagram::data $board]
+	}
 }
 
 

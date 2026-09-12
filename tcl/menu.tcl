@@ -80,6 +80,7 @@ set InstallChessBaseFonts		"Install ChessBase &Fonts"
 set OpenEngineLog					"Open Engine &Console"
 set AssignFileTypes				"Assign File &Types"
 set DiscoverDatabases			"Discover &Databases..."
+set Open3DBoard					"Open &3D Board"
 
 # Tools
 set OpenEngineDictionary		"Open &Engine Dictionary"
@@ -381,6 +382,19 @@ if {0} {
 	if {[llength [info procs [namespace current]::AssignFileTypes]]} {
 		lassign [::tk::UnderlineAmpersand $mc::AssignFileTypes] text ul
 		set cmd [namespace code [list AssignFileTypes .application]]
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command $cmd \
+			;
+	}
+
+	### 3D board #############################################################
+	if {[llength [info commands ::board3d::openViewer]]} {
+		lassign [::tk::UnderlineAmpersand $mc::Open3DBoard] text ul
+		set cmd [list ::board3d::openViewer .application]
 		$m add command \
 			-compound left \
 			-label " $text" \
