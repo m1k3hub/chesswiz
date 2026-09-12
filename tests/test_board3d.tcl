@@ -108,12 +108,12 @@ tcltest::test board3d-depth-order \
 
 
 tcltest::test board3d-depth-monotone \
-{farther squares come first: a8 precedes a1 from the white view} -body {
+{farther squares come first: a8 (sq56) precedes a1 (sq0) from the white view} -body {
 	b3dEval {
 		::board3d::configure yaw 0 pitch 35 distance 12
 		::board3d::fit 800 800
 		set order [::board3d::orderedSquares]
-		expr {[lsearch -integer $order 0] < [lsearch -integer $order 56]}
+		expr {[lsearch -integer $order 0] > [lsearch -integer $order 56]}
 	}
 } -result 1
 
@@ -175,6 +175,78 @@ tcltest::test board3d-normalize \
 			[regexp {^R} [::board3d::NormalizeBoard standard]]
 	}
 } -result {64 64 64 1}
+
+# Record the actual renderer commands without requiring a display server.
+# This catches accidental depth values passed as polygon coordinates.
+b3dEval {
+	proc winfo {args} { return 0 }
+	proc captureCanvas {operation args} {
+		if {$operation eq "delete"} { set ::items {}; return }
+		lappend ::items $args
+	}
+}
+
+tcltest::test board3d-render-quads {all views emit 64 bounded quads, labels and correctly indexed hits} -body {
+	b3dEval {
+		set StateBackup [array get ::board3d::State]
+		set ::board3d::State(board) [::board3d::NormalizeBoard empty]
+		set ::board3d::State(marks) {0 red 63 green}
+		set ::board3d::State(selected) 7
+		foreach view {white black side top} {
+			::board3d::preset $view
+			::board3d::fit 900 728
+			::board3d::DrawScene captureCanvas
+			set tiles 0
+			set labels {}
+			foreach item $::items {
+				set type [lindex $item 0]
+				set split 1
+				while {[string is double -strict [lindex $item $split]]} { incr split }
+				set coords [lrange $item 1 [expr {$split-1}]]
+				set opts [dict create {*}[lrange $item $split end]]
+				if {$type eq "polygon"} {
+					if {[llength $coords] != 8} { error "$view: non-quad $coords" }
+					foreach {x y} $coords {
+						if {!($x >= 0 && $x <= 900 && $y >= 32 && $y <= 728)} {
+							error "$view: out-of-bounds quad $coords"
+						}
+					}
+				}
+				if {"tile" in [dict get $opts -tags]} { incr tiles }
+				if {"coord" in [dict get $opts -tags]} {
+					lassign $coords x y
+					if {$x < 8 || $x > 892 || $y < 40 || $y > 720} { error "clipped label" }
+					lappend labels [dict get $opts -text]
+				}
+			}
+			if {$tiles != 64 || [lsort $labels] ne [lsort {a b c d e f g h 1 2 3 4 5 6 7 8}]} {
+				error "$view: missing tiles or labels"
+			}
+			for {set sq 0} {$sq < 64} {incr sq} {
+				lassign [::board3d::squareCenter $sq] x y
+				lassign [::board3d::projectPlane $x $y] sx sy
+				if {[::board3d::squareAt $sx $sy] != $sq} { error "incorrect hit" }
+			}
+		}
+		array set ::board3d::State $StateBackup
+		set result ok
+	}
+} -result ok
+
+tcltest::test board3d-top-square {top is a square grid with a1 dark at bottom-left} -body {
+	b3dEval {
+		::board3d::preset top
+		::board3d::fit 900 728
+		lassign [::board3d::projectPlane -4 -4] left bottom
+		lassign [::board3d::projectPlane 4 4] right top
+		lassign [::board3d::squareCenter 0] x y
+		::board3d::DrawScene captureCanvas
+		set firstTile [lindex $::items 5]
+		expr {abs(($right-$left)-($bottom-$top)) < 1e-8
+			&& $right > $left && $bottom > $top && $x == -3.5 && $y == -3.5
+			&& [lindex $firstTile 10] eq $::board3d::State(darkColor)}
+	}
+} -result 1
 
 interp delete b3d
 tcltest::cleanupTests

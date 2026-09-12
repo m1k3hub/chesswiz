@@ -129,9 +129,10 @@ proc ::board3d::UpdateCamera {} {
 	set fy [expr {-$State(camY)/$d}]
 	set fz [expr {-$State(camZ)/$d}]
 
-	# right = normalize(forward x worldUp), worldUp = (0,0,1)
-	set rx $fy
-	set ry [expr {-$fx}]
+	# Derive right from yaw directly: forward x worldUp degenerates
+	# at the straight-down pole, but this basis remains well-defined.
+	set rx [expr {cos($yaw)}]
+	set ry [expr {sin($yaw)}]
 	set rl [expr {sqrt($rx*$rx + $ry*$ry)}]
 	if {$rl < 1e-9} { set rx 1.0 ; set ry 0.0 ; set rl 1.0 }
 	set rx [expr {$rx/$rl}]
@@ -183,8 +184,8 @@ proc ::board3d::fit {width height {margin 0}} {
 	# extreme slab points: four top corners + four bottom corners
 	set t $State(thickness)
 	set pts {}
-	foreach x {-4 4} {
-		foreach y {-4 4} {
+	foreach x {-4.4 4.4} {
+		foreach y {-4.4 4.4} {
 			lappend pts [list $x $y 0]
 			lappend pts [list $x $y [expr {-$t}]]
 		}
@@ -204,7 +205,7 @@ proc ::board3d::fit {width height {margin 0}} {
 	}
 
 	set availW [expr {double($width  - 2*$margin)}]
-	set availH [expr {double($height - 2*$margin)}]
+	set availH [expr {double($height - 2*$margin - 32)}]
 	if {$availW < 8} { set availW 8 }
 	if {$availH < 8} { set availH 8 }
 
@@ -217,7 +218,7 @@ proc ::board3d::fit {width height {margin 0}} {
 
 	set State(focal) $focal
 	set State(cx) [expr {$width/2.0  - $focal*($minOx + $maxOx)/2.0}]
-	set State(cy) [expr {$height/2.0 - $focal*($minOy + $maxOy)/2.0}]
+	set State(cy) [expr {($height + 32)/2.0 - $focal*($minOy + $maxOy)/2.0}]
 	set State(width)  $width
 	set State(height) $height
 
@@ -237,6 +238,12 @@ proc ::board3d::projectPoint {x y z} {
 
 proc ::board3d::projectPlane {x y} {
 	return [projectPoint $x $y 0]
+}
+
+
+# Canvas polygons accept screen pairs, never the projection depth.
+proc ::board3d::ScreenPoint {x y {z 0}} {
+	return [lrange [projectPoint $x $y $z] 0 1]
 }
 
 
@@ -267,12 +274,11 @@ proc ::board3d::unproject {sx sy} {
 # square geometry
 # ======================================================================
 
-# Square index uses the board-string convention: row 0 is rank 8, so
-# square = (7 - rank)*8 + file with file/rank starting at a/1.
+# Board-string row 0 is rank 1: square 0 is a1, nearest the white camera.
 proc ::board3d::squareCenter {sq} {
 	set row  [expr {$sq/8}]
 	set file [expr {$sq%8}]
-	set rank [expr {7 - $row}]
+	set rank $row
 	return [list [expr {$file - 3.5}] [expr {$rank - 3.5}]]
 }
 
@@ -282,7 +288,7 @@ proc ::board3d::SquareFromWorld {x y} {
 	set rank [expr {int(floor($y + 4.0))}]
 	if {$file < 0} { set file 0 } elseif {$file > 7} { set file 7 }
 	if {$rank < 0} { set rank 0 } elseif {$rank > 7} { set rank 7 }
-	return [expr {(7 - $rank)*8 + $file}]
+	return [expr {$rank*8 + $file}]
 }
 
 
@@ -358,7 +364,7 @@ proc ::board3d::configure {args} {
 
 proc ::board3d::ClampPitch {} {
 	variable State
-	if {$State(pitch) >  89} { set State(pitch)  89 }
+	if {$State(pitch) >  90} { set State(pitch)  90 }
 	if {$State(pitch) < -89} { set State(pitch) -89 }
 }
 
@@ -369,8 +375,8 @@ proc ::board3d::preset {name} {
 	switch -exact -- $name {
 		white { configure yaw 0   pitch 34 distance 12.0 ; set State(view) white }
 		black { configure yaw 180 pitch 34 distance 12.0 ; set State(view) black }
-		side  { configure yaw 90  pitch 26 distance 12.0 ; set State(view) side }
-		top   { configure yaw 0   pitch 88 distance 12.0 ; set State(view) top }
+		side  { configure yaw 90  pitch 44 distance 12.0 ; set State(view) side }
+		top   { configure yaw 0   pitch 90 distance 12.0 ; set State(view) top }
 		free  { set State(view) free }
 		default {
 			return -code error "board3d::preset: unknown view '$name'"
@@ -546,29 +552,18 @@ proc ::board3d::DrawScene {canv} {
 
 	$canv delete b3d
 
-	# drop shadow under the slab
-	if {$State(showShadow)} {
-		set quad [concat \
-			[projectPlane -4.05 -4.05] \
-			[projectPlane  4.05 -4.05] \
-			[projectPlane  4.05  4.05] \
-			[projectPlane -4.05  4.05]]
-		$canv create polygon {*}$quad -fill $State(shadowColor) -stipple gray25 \
-			-outline {} -tags b3d
-	}
-
 	DrawSlabSides $canv
 
 	# board top surface (wood) then inset tiles far to near
 	set top [concat \
-		[projectPlane -4 -4] [projectPlane 4 -4] \
-		[projectPlane 4 4]  [projectPlane -4 4]]
-	$canv create polygon {*}$top -fill $State(woodColor) -outline {} -tags b3d
+		[ScreenPoint -4.4 -4.4] [ScreenPoint 4.4 -4.4] \
+		[ScreenPoint 4.4 4.4]  [ScreenPoint -4.4 4.4]]
+	$canv create polygon {*}$top -fill $State(woodColor) -outline #aa8154 -tags b3d
 
 	DrawTiles $canv
-	if {$State(showCoords)} { DrawCoords $canv }
 	DrawMarks $canv
 	DrawPieces $canv
+	if {$State(showCoords)} { DrawCoords $canv }
 
 	DrawHud $canv
 }
@@ -582,10 +577,10 @@ proc ::board3d::DrawSlabSides {canv} {
 
 	# light direction for the four side faces: front brightest
 	set faces {
-		{ {{-4 -4 0} {4 -4 0} {4 -4 -T} {-4 -4 -T}} 0.80 }
-		{ {{4 4 0} {-4 4 0} {-4 4 -T} {4 4 -T}}     0.55 }
-		{ {{-4 4 0} {-4 -4 0} {-4 -4 -T} {-4 4 -T}} 0.68 }
-		{ {{4 -4 0} {4 4 0} {4 4 -T} {4 -4 -T}}     0.62 }
+		{ {{-4.4 -4.4 0} {4.4 -4.4 0} {4.4 -4.4 -T} {-4.4 -4.4 -T}} 0.80 }
+		{ {{4.4 4.4 0} {-4.4 4.4 0} {-4.4 4.4 -T} {4.4 4.4 -T}}     0.55 }
+		{ {{-4.4 4.4 0} {-4.4 -4.4 0} {-4.4 -4.4 -T} {-4.4 4.4 -T}} 0.68 }
+		{ {{4.4 -4.4 0} {4.4 4.4 0} {4.4 4.4 -T} {4.4 -4.4 -T}}     0.62 }
 	}
 
 	foreach face $faces {
@@ -594,7 +589,7 @@ proc ::board3d::DrawSlabSides {canv} {
 		foreach c $corners {
 			lassign $c x y z
 			if {$z eq "-T"} { set z [expr {-$t}] }
-			lappend pts {*}[projectPoint $x $y $z]
+			lappend pts {*}[ScreenPoint $x $y $z]
 		}
 		$canv create polygon {*}$pts \
 			-fill [Shade $base $factor] -outline {} -tags b3d
@@ -609,7 +604,7 @@ proc ::board3d::DrawTiles {canv} {
 	foreach sq [orderedSquares] {
 		set row  [expr {$sq/8}]
 		set file [expr {$sq%8}]
-		set rank [expr {7 - $row}]
+		set rank $row
 		set x0 [expr {$file - 4.0 + $gap}]
 		set x1 [expr {$file - 3.0 - $gap}]
 		set y0 [expr {$rank - 4.0 + $gap}]
@@ -619,8 +614,8 @@ proc ::board3d::DrawTiles {canv} {
 		if {($row + $file) % 2} { set color $State(lightColor) } else { set color $State(darkColor) }
 
 		set pts [concat \
-			[projectPlane $x0 $y0] [projectPlane $x1 $y0] \
-			[projectPlane $x1 $y1] [projectPlane $x0 $y1]]
+			[ScreenPoint $x0 $y0] [ScreenPoint $x1 $y0] \
+			[ScreenPoint $x1 $y1] [ScreenPoint $x0 $y1]]
 		$canv create polygon {*}$pts -fill $color -outline {} -tags [list b3d tile]
 	}
 }
@@ -630,23 +625,23 @@ proc ::board3d::DrawCoords {canv} {
 	variable State
 
 	set files {a b c d e f g h}
-	set off 0.68
+	set off 0.22
 	for {set f 0} {$f < 8} {incr f} {
 		set x [expr {$f - 3.5}]
 		set letter [lindex $files $f]
-		foreach y [list [expr {-4.0 - $off}] [expr {4.0 + $off}]] {
-			lassign [projectPlane $x $y] sx sy
+		foreach y [list [expr {$State(camY) > 0.001 ? 4.0 + $off : -4.0 - $off}]] {
+			lassign [ScreenPoint $x $y] sx sy
 			$canv create text $sx $sy -text $letter -anchor center \
-				-fill $State(coordColor) -font {TkDefaultFont 9} -tags b3d
+				-fill $State(coordColor) -font {TkDefaultFont -12 bold} -tags {b3d coord}
 		}
 	}
 	for {set r 0} {$r < 8} {incr r} {
 		set y [expr {$r - 3.5}]
 		set label [expr {$r + 1}]
-		foreach x [list [expr {-4.0 - $off}] [expr {4.0 + $off}]] {
-			lassign [projectPlane $x $y] sx sy
+		foreach x [list [expr {$State(camX) > 0.001 ? 4.0 + $off : -4.0 - $off}]] {
+			lassign [ScreenPoint $x $y] sx sy
 			$canv create text $sx $sy -text $label -anchor center \
-				-fill $State(coordColor) -font {TkDefaultFont 9} -tags b3d
+				-fill $State(coordColor) -font {TkDefaultFont -12 bold} -tags {b3d coord}
 		}
 	}
 }
@@ -660,14 +655,14 @@ proc ::board3d::DrawMarks {canv} {
 		if {$sq < 0 || $sq > 63} { continue }
 		set row  [expr {$sq/8}]
 		set file [expr {$sq%8}]
-		set rank [expr {7 - $row}]
+		set rank $row
 		set x0 [expr {$file - 4.0 + $gap}]
 		set x1 [expr {$file - 3.0 - $gap}]
 		set y0 [expr {$rank - 4.0 + $gap}]
 		set y1 [expr {$rank - 3.0 - $gap}]
 		set pts [concat \
-			[projectPlane $x0 $y0] [projectPlane $x1 $y0] \
-			[projectPlane $x1 $y1] [projectPlane $x0 $y1]]
+			[ScreenPoint $x0 $y0] [ScreenPoint $x1 $y0] \
+			[ScreenPoint $x1 $y1] [ScreenPoint $x0 $y1]]
 		$canv create polygon {*}$pts -fill $color -stipple gray50 \
 			-outline {} -tags b3d
 	}
@@ -699,23 +694,26 @@ proc ::board3d::DrawPieces {canv} {
 
 		lassign [squareCenter $sq] x y
 		lassign [projectPlane $x $y] bx by zb
-		lassign [projectPoint $x $y $State(pieceHeight)] tx ty zt
+		# Keep a billboard within the projected row spacing. At the pole
+		# physical vertical height projects to zero, so use ground scale.
+		set scale [expr {$State(focal)/$zb}]
+		set height [expr {$scale * min(0.76, 0.80*abs(sin([deg2rad $State(pitch)]))) * min(1.0, $State(pieceHeight)/1.10)}]
 
 		# ground shadow
 		if {$State(showShadow)} {
-			set half [expr {$State(focal)*0.30/$zb}]
-			set rh   [expr {$half*0.36}]
-			$canv create oval [expr {$bx - $half}] [expr {$by - $rh}] \
-				[expr {$bx + $half}] [expr {$by + $rh}] \
-				-fill $State(shadowColor) -stipple gray50 -outline {} -tags b3d
+			set half [expr {$height*0.40}]
+			set rh   [expr {$half*0.35}]
+			set bxShadow [expr {$bx + $scale*0.08}]
+			set byShadow [expr {$by + $height*0.35}]
+			$canv create oval [expr {$bxShadow - $half}] [expr {$byShadow - $rh}] \
+				[expr {$bxShadow + $half}] [expr {$byShadow + $rh}] \
+				-fill #65513d -outline {} -tags b3d
 		}
-
-		set height [expr {abs($by - $ty)}]
 		if {$height < 6} { continue }
 
 		set img [PieceImage $piece $height]
 		if {$img ne ""} {
-			$canv create image $bx $by -image $img -anchor s -tags b3d
+			$canv create image $bx $by -image $img -anchor center -tags {b3d piece}
 		} else {
 			DrawGlyph $canv $piece $bx $by $height
 		}
@@ -728,24 +726,32 @@ proc ::board3d::DrawGlyph {canv piece bx by height} {
 	variable State
 
 	set glyph $Glyph($piece)
-	set size [expr {int($height*0.82)}]
-	if {$size < 6} { return }
+	set size [expr {-int($height*0.90)}]
+	if {$size > -6} { return }
 	set white [string index $piece 0]
 
 	if {$white eq "w"} {
 		$canv create text [expr {$bx + 1}] [expr {$by + 1}] -text $glyph \
-			-anchor s -fill #202020 -font [list "DejaVu Sans" $size] -tags b3d
+			-anchor center -fill #202020 -font [list "DejaVu Sans" $size] -tags b3d
 		$canv create text $bx $by -text $glyph \
-			-anchor s -fill #ffffff -font [list "DejaVu Sans" $size] -tags b3d
+			-anchor center -fill #ffffff -font [list "DejaVu Sans" $size] -tags b3d
 	} else {
 		$canv create text $bx $by -text $glyph \
-			-anchor s -fill #101010 -font [list "DejaVu Sans" $size] -tags b3d
+			-anchor center -fill #101010 -font [list "DejaVu Sans" $size] -tags b3d
 	}
 }
 
 
 proc ::board3d::DrawHud {canv} {
 	variable State
+	variable Priv
+	foreach view {white black side top} {
+		set button "$Priv(window).bar.$view"
+		if {[winfo exists $button]} {
+			$button state [expr {$view eq $State(view) ? "pressed" : "!pressed"}]
+		}
+	}
+	$canv create rectangle 0 0 $State(width) 32 -fill #101418 -outline {} -tags b3d
 	set text "$State(view) view \u2014 drag to orbit, wheel to zoom"
 	$canv create text 10 8 -text $text -anchor nw -fill #d8d8d8 \
 		-font {TkDefaultFont 9} -tags b3d
@@ -808,7 +814,6 @@ proc ::board3d::openViewer {parent} {
 	set Priv(canvas) $canv
 
 	set State(board) [CurrentBoard]
-	ThemeColors
 
 	::bind $canv <Configure>      [namespace code [list OnConfigure %W %w %h]]
 	::bind $canv <ButtonPress-1>  [namespace code [list OnPress %x %y]]
