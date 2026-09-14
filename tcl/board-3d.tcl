@@ -22,7 +22,7 @@ namespace eval ::board3d {
 namespace export configure defaults preset setBoard setMarks setSelected \
 	fit projectPoint projectPlane unproject squareAt squareCenter depthOf \
 	orderedSquares render refresh openViewer closeViewer isOpen setTheme setPieceStyle openWebGLViewer \
-	toggleOpenGL embed unembed toggleEmbed
+	toggleOpenGL embed unembed toggleEmbed syncOrientation
 
 variable State
 array set State {
@@ -60,6 +60,7 @@ array set State {
 	useOpenGL    1
 	embed        0
 	suggested    -1
+	markList     {}
 }
 
 variable Priv
@@ -80,6 +81,7 @@ array set Priv {
 	drag,from   -1
 	drag,wx     0
 	drag,wy     0
+	markGL      {}
 }
 
 variable StandardBoard "RNBQKBNRPPPPPPPP................................pppppppprnbqkbnr"
@@ -462,10 +464,115 @@ proc ::board3d::setBoard {board} {
 }
 
 
+# ======================================================================
+# game marks: the %draw annotations pushed by the application
+# ("cmd,type,sq,sq2,color" with square names like e4 and named colors),
+# normalized into internal {kind sq sq2 color} items (kind: full,
+# square, circle, disk, arrow, text).  A legacy flat {sq color ...}
+# test form is accepted as well.  $State(markList) feeds the canvas
+# renderer; $Priv(markGL) is the flattened {kind sq sq2 r g b} form the
+# OpenGL renderer takes.
+# ======================================================================
+
 proc ::board3d::setMarks {marks} {
 	variable State
+	variable Priv
 	set State(marks) $marks
+	lassign [NormalizeMarks $marks] State(markList) Priv(markGL)
 	refresh
+}
+
+
+proc ::board3d::SquareFromName {name} {
+	# "e4" -> 12; a1 = 0, h8 = 63 (the ::board::diagram convention)
+	if {[llength [info commands ::board::diagram::square]]} {
+		set sq [::board::diagram::square $name]
+		if {[string is integer -strict $sq] && $sq >= 0 && $sq <= 63} { return $sq }
+		return -1
+	}
+	# headless fallback (no ::board::diagram loaded)
+	if {[regexp {^([a-h])([1-8])$} $name -> fileChar rank]} {
+		set file [expr {[scan $fileChar %c] - 97}]
+		return [expr {($rank - 1)*8 + $file}]
+	}
+	if {[string is integer -strict $name] && $name >= 0 && $name <= 63} { return $name }
+	return -1
+}
+
+
+proc ::board3d::MarkColorRGB {color} {
+	variable Priv
+	if {[info exists Priv(markRGB,$color)]} { return $Priv(markRGB,$color) }
+	set rgb {1.0 1.0 1.0}
+	catch {
+		lassign [winfo rgb . $color] r g b
+		set rgb [list [expr {$r/65535.0}] [expr {$g/65535.0}] [expr {$b/65535.0}]]
+	}
+	set Priv(markRGB,$color) $rgb
+	return $rgb
+}
+
+
+proc ::board3d::NormalizeMarks {marks} {
+	set result {}
+	set gl {}
+
+	set hasMarkString 0
+	foreach mark $marks {
+		if {[string first , $mark] >= 0} { set hasMarkString 1; break }
+	}
+	if {!$hasMarkString} {
+		# legacy/test form: flat {square color} pairs
+		foreach {sq color} $marks {
+			if {![string is integer -strict $sq] || $sq < 0 || $sq > 63} { continue }
+			lappend result [list full $sq -1 $color]
+			lassign [MarkColorRGB $color] r g b
+			lappend gl f $sq -1 $r $g $b
+		}
+		return [list $result $gl]
+	}
+
+	foreach mark $marks {
+		if {[catch { lassign [split $mark ,] _cmd type sqName sq2Name color }]} { continue }
+		set sq [SquareFromName $sqName]
+		if {$sq < 0} { continue }
+		set sq2 [SquareFromName $sq2Name]
+		switch -exact -- $type {
+			full - square - circle - disk {
+				lappend result [list $type $sq -1 $color]
+				lassign [MarkColorRGB $color] r g b
+				lappend gl [string range $type 0 0] $sq -1 $r $g $b
+			}
+			arrow {
+				if {$sq2 < 0} { continue }
+				lappend result [list arrow $sq $sq2 $color]
+				lassign [MarkColorRGB $color] r g b
+				lappend gl a $sq $sq2 $r $g $b
+			}
+			default {
+				# text marks: $type is the text itself (canvas only)
+				if {[string length $type] == 0} { continue }
+				lappend result [list text $sq -1 $type]
+			}
+		}
+	}
+	return [list $result $gl]
+}
+
+
+# Re-aim the 3D view after the 2D board was rotated: white/black preset
+# views follow the side the 2D board shows at the bottom; manual/free
+# camera angles are left alone.
+
+proc ::board3d::syncOrientation {rotated} {
+	variable State
+	switch -- $State(view) {
+		white - black {
+			preset [expr {$rotated ? "black" : "white"}]
+			refresh
+		}
+	}
+	return
 }
 
 
@@ -738,7 +845,8 @@ proc ::board3d::renderOpenGL {togl {board ""}} {
 			::scidb::tk::glboard_render $togl $State(board) \
 				$State(yaw) $State(pitch) $State(distance) \
 				$State(selected) $State(suggested) \
-				$Priv(drag,from) $Priv(drag,wx) $Priv(drag,wy)
+				$Priv(drag,from) $Priv(drag,wx) $Priv(drag,wy) \
+				$Priv(markGL)
 		}
 	}
 }
@@ -853,20 +961,61 @@ proc ::board3d::DrawMarks {canv} {
 	variable State
 	set gap $State(gap)
 
-	foreach {sq color} [concat $State(marks) [MarksFromSelection]] {
+	# merge the game marks with the click-selection highlight
+	set marks $State(markList)
+	if {$State(selected) >= 0} {
+		lappend marks [list sel $State(selected) -1 #3d7fd0]
+	}
+
+	foreach mark $marks {
+		lassign $mark kind sq sq2 color
 		if {$sq < 0 || $sq > 63} { continue }
 		set row  [expr {$sq/8}]
 		set file [expr {$sq%8}]
 		set rank $row
-		set x0 [expr {$file - 4.0 + $gap}]
-		set x1 [expr {$file - 3.0 - $gap}]
-		set y0 [expr {$rank - 4.0 + $gap}]
-		set y1 [expr {$rank - 3.0 - $gap}]
-		set pts [concat \
-			[ScreenPoint $x0 $y0] [ScreenPoint $x1 $y0] \
-			[ScreenPoint $x1 $y1] [ScreenPoint $x0 $y1]]
-		$canv create polygon {*}$pts -fill $color -stipple gray50 \
-			-outline {} -tags b3d
+		switch -exact -- $kind {
+			sel - full - square {
+				set x0 [expr {$file - 4.0 + $gap}]
+				set x1 [expr {$file - 3.0 - $gap}]
+				set y0 [expr {$rank - 4.0 + $gap}]
+				set y1 [expr {$rank - 3.0 - $gap}]
+				set pts [concat \
+					[ScreenPoint $x0 $y0] [ScreenPoint $x1 $y0] \
+					[ScreenPoint $x1 $y1] [ScreenPoint $x0 $y1]]
+				$canv create polygon {*}$pts -fill $color -stipple gray50 \
+					-outline {} -tags b3d
+			}
+			circle - disk {
+				set inset [expr {$kind eq "circle" ? 0.20 : 0.32}]
+				set x0 [expr {$file - 4.0 + $gap + $inset}]
+				set x1 [expr {$file - 3.0 - $gap - $inset}]
+				set y0 [expr {$rank - 4.0 + $gap + $inset}]
+				set y1 [expr {$rank - 3.0 - $gap - $inset}]
+				set pts [concat \
+					[ScreenPoint $x0 $y0] [ScreenPoint $x1 $y0] \
+					[ScreenPoint $x1 $y1] [ScreenPoint $x0 $y1]]
+				$canv create oval {*}[lrange $pts 0 1] {*}[lrange $pts 6 7] \
+					-fill {} -outline $color -width 3 -tags b3d
+			}
+			arrow {
+				if {$sq2 < 0 || $sq2 > 63} { continue }
+				lassign [squareCenter $sq] ax ay
+				lassign [squareCenter $sq2] bx by
+				lassign [projectPlane $ax $ay] sx1 sy1 z1
+				lassign [projectPlane $bx $by] sx2 sy2 z2
+				set width [expr {max(2.0, $State(focal)*0.05/$z2)}]
+				$canv create line $sx1 $sy1 $sx2 $sy2 \
+					-fill $color -width $width \
+					-arrow last -arrowshape {12 14 6} -tags b3d
+			}
+			text {
+				lassign [squareCenter $sq] ax ay
+				lassign [projectPlane $ax $ay] sx sy zb
+				set height [expr {max(10.0, $State(focal)*0.35/$zb)}]
+				$canv create text $sx $sy -text $color -fill #ff4040 \
+					-font [list TkDefaultFont [expr {int($height/2)}]] -tags b3d
+			}
+		}
 	}
 }
 

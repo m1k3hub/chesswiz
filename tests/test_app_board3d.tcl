@@ -278,6 +278,61 @@ tcltest::test board3d-3d-move-input {dragging pieces in the embedded 3D pane mak
 } -result {1 1 1}
 
 
+tcltest::test board3d-marks-rotation {marks render on the 3D views and rotation syncs the camera} -constraints embed3d -body {
+	# canvas viewer marks (full, arrow, circle, disk)
+	::board3d::openViewer .application
+	::board3d::toggleOpenGL 0
+	update idletasks
+	update
+	set canv [b3dAppCanvas]
+	::board3d::preset white
+	::board3d::refresh
+	update
+	::board3d::setMarks [list "add,full,d4,,green" "add,arrow,d1,d4,red" \
+		"add,circle,g1,,blue" "add,disk,e4,,yellow"]
+	update
+	set res {}
+	set fills {} ; set arrows 0 ; set ovals 0
+	foreach item [$canv find withtag b3d] {
+		switch [$canv type $item] {
+			polygon { lappend fills [$canv itemcget $item -fill] }
+			line { if {[$canv itemcget $item -arrow] eq "last"} { incr arrows } }
+			oval { if {[$canv itemcget $item -outline] in {blue yellow}} { incr ovals } }
+		}
+	}
+	lappend res [expr {[llength $fills] >= 2 && "green" in $fills}] [expr {$arrows == 1}] \
+		[expr {$ovals == 2}]
+
+	# the embedded GL view renders marks without errors
+	catch { .application.nb select .application.nb.board }
+	set ::board3d::State(embed) 1
+	::board3d::toggleEmbed
+	update idletasks
+	update
+	set t $::board3d::Priv(embed,togl)
+	set rc [catch { ::scidb::tk::glboard_render $t $::board3d::State(board) \
+		$::board3d::State(yaw) $::board3d::State(pitch) \
+		$::board3d::State(distance) -1 -1 -1 0 0 $::board3d::Priv(markGL) } out]
+	lappend res [expr {!$rc && $out == 1}]
+
+	# rotating the 2D board re-aims the preset camera
+	set yawWhite $::board3d::State(yaw)
+	catch { ::application::board::Rotate $::application::board::Vars(widget:frame) }
+	lappend res [expr {$::board3d::State(view) eq "black" \
+		&& $::board3d::State(yaw) != $yawWhite}]
+	catch { ::application::board::Rotate $::application::board::Vars(widget:frame) }
+	lappend res [expr {$::board3d::State(yaw) == $yawWhite \
+		&& $::board3d::State(view) eq "white"}]
+
+	# cleanup
+	set ::board3d::State(embed) 0
+	::board3d::toggleEmbed
+	::board3d::setMarks {}
+	::board3d::closeViewer
+	update
+	set res
+} -result {1 1 1 1 1 1}
+
 # WebGL viewer: local three.js front end served by web3d/server.py.
 # Skipped when python3 or the http package is unavailable.
 tcltest::testConstraint webgl [expr {![catch { exec python3 -c exit }] && ![catch { package require http }]}]

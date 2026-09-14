@@ -43,6 +43,16 @@
   and forwards plain keys to the hidden 2D board, so game navigation
   keeps working.  The 2D diagram and all its bindings are preserved and
   restored when toggling back.
+- v3 — marks and orientation sync on the 3D views: the game's %draw
+  annotations (%draw full/disk/circle/arrow/text) now reach the canvas
+  viewer and the embedded GL pane — `application::board::updateMarks`
+  pushes them through `::board3d::setMarks`, which parses scidb's
+  `cmd,type,sq,sq2,color` strings; the canvas renderer draws stippled
+  polygons, outlines, projected arrow lines and text, the GL renderer
+  draws flat translucent overlays and flat arrows on the board plane
+  (`glboard_render`'s new marks argument).  Rotating the 2D board
+  re-aims white/black preset cameras live (free camera angles are
+  untouched); the earlier documented limitation is gone.
 - v3 — GL board orientation and indexing fixes: the OpenGL renderer now
   uses the `::board::diagram` square convention everywhere
   (a1 = 0, h8 = 63, board string row 0 = rank 1 at the near edge of the

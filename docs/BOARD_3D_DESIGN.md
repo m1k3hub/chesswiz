@@ -215,9 +215,19 @@ or button-3 orbits the camera; the wheel zooms; plain keys are forwarded
 to the hidden 2D board.  Square indices are the `::board::diagram`
 convention everywhere (`a1 = 0`, `h8 = 63`, board string row 0 = rank 1).
 
-Limitations (v1): the embedded view does not draw marks/arrows, and
-rotating the 2D board while embedded is not reflected until re-embedding.
-Multiple board panes are not supported; the pane tracked by
+The game's `%draw` annotations (marks) reach the 3D views too:
+`application::board::updateMarks` pushes them to `::board3d::setMarks`,
+which parses scidb's `cmd,type,sq,sq2,color` strings (square names,
+named colors) into the internal form.  The canvas renderer draws full/
+square marks as stippled polygons, circles and disks as outlines, arrows
+as projected canvas lines with arrowheads and text marks as canvas text;
+the GL renderer draws flat translucent overlays and flat arrows on the
+board plane (text marks are canvas-only).  Rotating the 2D board re-aims
+white/black preset cameras live (`::board3d::syncOrientation`); free
+camera angles are left alone.
+
+Limitations (v1): text marks do not render on the GL surface, and
+multiple board panes are not supported; the pane tracked by
 `application::board::Vars(widget:frame)` is used.
 
 ### 6.3 WebGL viewer

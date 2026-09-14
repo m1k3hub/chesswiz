@@ -291,6 +291,111 @@ static void drawBoard(int selectedSq, int suggestedSq)
     }
 }
 
+static void drawMarkQuad(int sq, float inset, float z, float r, float g, float b, float a)
+{
+    if (sq < 0 || sq > 63) return;
+    int col = sq % 8;
+    int row = sq / 8;
+    float x0 = (float)col + 0.02f + inset;
+    float x1 = (float)col + 0.98f - inset;
+    float y0 = (float)row + 0.02f + inset;
+    float y1 = (float)row + 0.98f - inset;
+    glColor4f(r, g, b, a);
+    glBegin(GL_QUADS);
+    glVertex3f(x0, y0, z);
+    glVertex3f(x1, y0, z);
+    glVertex3f(x1, y1, z);
+    glVertex3f(x0, y1, z);
+    glEnd();
+}
+
+
+static void drawMarkArrow(int sq, int sq2, float z, float r, float g, float b)
+{
+    if (sq < 0 || sq > 63 || sq2 < 0 || sq2 > 63) return;
+    float fx = (float)(sq % 8) + 0.5f;
+    float fy = (float)(sq / 8) + 0.5f;
+    float tx = (float)(sq2 % 8) + 0.5f;
+    float ty = (float)(sq2 / 8) + 0.5f;
+    float dx = tx - fx, dy = ty - fy;
+    float len = sqrtf(dx*dx + dy*dy);
+    if (len < 1e-4f) return;
+    dx /= len; dy /= len;
+    float px = -dy, py = dx;
+    const float shaftW = 0.10f, headW = 0.26f, headL = 0.42f;
+    float ex = tx - dx*headL, ey = ty - dy*headL; // shaft end before the head
+
+    glColor4f(r, g, b, 0.8f);
+    glBegin(GL_QUADS);
+    glVertex3f(fx - px*shaftW, fy - py*shaftW, z);
+    glVertex3f(fx + px*shaftW, fy + py*shaftW, z);
+    glVertex3f(ex + px*shaftW, ey + py*shaftW, z);
+    glVertex3f(ex - px*shaftW, ey - py*shaftW, z);
+    glEnd();
+    glBegin(GL_TRIANGLES);
+    glVertex3f(tx, ty, z);
+    glVertex3f(ex + px*headW, ey + py*headW, z);
+    glVertex3f(ex - px*headW, ey - py*headW, z);
+    glEnd();
+}
+
+
+// Draw the game marks: a flat list {kind sq sq2 r g b ...} where kind is
+// one of f (full/square), c (circle), d (disk), a (arrow).
+static void drawMarks(Tcl_Interp* interp, Tcl_Obj* marksObj)
+{
+    if (marksObj == NULL) return;
+    int n = 0;
+    if (Tcl_ListObjLength(interp, marksObj, &n) != TCL_OK) return;
+    if (n < 6 || (n % 6) != 0) return;
+
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    const float markZ = 0.03f;
+    for (int i = 0; i + 5 < n; i += 6) {
+        Tcl_Obj* kindObj = NULL;
+        Tcl_Obj* v[5];
+        if (Tcl_ListObjIndex(interp, marksObj, i, &kindObj) != TCL_OK) break;
+        int sq = -1, sq2 = -1;
+        double r = 1.0, g = 1.0, b = 1.0;
+        bool ok = true;
+        for (int k = 0; k < 5; ++k) {
+            if (Tcl_ListObjIndex(interp, marksObj, i + 1 + k, &v[k]) != TCL_OK) { ok = false; break; }
+        }
+        if (!ok) break;
+        if (Tcl_GetIntFromObj(NULL, v[0], &sq) != TCL_OK
+            || Tcl_GetIntFromObj(NULL, v[1], &sq2) != TCL_OK
+            || Tcl_GetDoubleFromObj(NULL, v[2], &r) != TCL_OK
+            || Tcl_GetDoubleFromObj(NULL, v[3], &g) != TCL_OK
+            || Tcl_GetDoubleFromObj(NULL, v[4], &b) != TCL_OK) {
+            continue;
+        }
+        const char* kind = Tcl_GetString(kindObj);
+        switch (kind[0]) {
+            case 'f': case 's':
+                drawMarkQuad(sq, 0.06f, markZ, (float)r, (float)g, (float)b, 0.55f);
+                break;
+            case 'c':
+                drawMarkQuad(sq, 0.22f, markZ, (float)r, (float)g, (float)b, 0.75f);
+                break;
+            case 'd':
+                drawMarkQuad(sq, 0.32f, markZ, (float)r, (float)g, (float)b, 0.9f);
+                break;
+            case 'a':
+                drawMarkArrow(sq, sq2, markZ, (float)r, (float)g, (float)b);
+                break;
+            default:
+                break;
+        }
+    }
+
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+}
+
+
 static void drawPiece(char pieceChar, float x, float y, float lift)
 {
     bool isWhite = (pieceChar >= 'A' && pieceChar <= 'Z');
@@ -346,9 +451,9 @@ static void drawPiece(char pieceChar, float x, float y, float lift)
 static int
 glboardRenderCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* const objv[])
 {
-    // Syntax: ::scidb::tk::glboard_render <toglWidgetName> <boardString> <yaw> <pitch> <distance> ?selected? ?suggested? ?dragFrom? ?dragX? ?dragY?
+    // Syntax: ::scidb::tk::glboard_render <toglWidgetName> <boardString> <yaw> <pitch> <distance> ?selected? ?suggested? ?dragFrom? ?dragX? ?dragY? ?marks?
     if (objc < 6) {
-        Tcl_WrongNumArgs(interp, 1, objv, "toglName board yaw pitch distance ?selected? ?suggested? ?dragFrom? ?dragX? ?dragY?");
+        Tcl_WrongNumArgs(interp, 1, objv, "toglName board yaw pitch distance ?selected? ?suggested? ?dragFrom? ?dragX? ?dragY? ?marks?");
         return TCL_ERROR;
     }
 
@@ -384,6 +489,7 @@ glboardRenderCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* c
     if (objc >= 11) {
         if (Tcl_GetDoubleFromObj(interp, objv[10], &dragY) != TCL_OK) return TCL_ERROR;
     }
+    Tcl_Obj* marksObj = (objc >= 12) ? objv[11] : NULL;
 
     struct Togl* togl = NULL;
     if (fn_Togl_GetToglFromName(interp, toglName, &togl) != TCL_OK || !togl) {
@@ -453,6 +559,11 @@ glboardRenderCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* c
 
     // Render 3D Board
     drawBoard(selectedSq, suggestedSq);
+
+    // game marks on the board plane, under the pieces
+    if (marksObj != NULL) {
+        drawMarks(interp, marksObj);
+    }
 
     // Render Pieces
     if (strlen(boardStr) >= 64) {

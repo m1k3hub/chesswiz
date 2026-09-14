@@ -326,5 +326,23 @@ tcltest::test board3d-libroot {assets resolve from the load-time module root} -b
 	}
 } -result {1 1 1 1}
 
+tcltest::test board3d-marks-parse {game mark strings normalize into internal and GL forms} -body {
+	b3dEval {
+		lassign [::board3d::NormalizeMarks [list \
+			"add,full,d4,,green" \
+			"add,arrow,d1,d4,red" \
+			"add,circle,g1,,blue" \
+			"add,disk,e4,,yellow" \
+			"junk" \
+			"add,arrow,x9,d4,red"]] result gl
+		# d4 = 27, d1 = 3, g1 = 6, e4 = 28; junk/x9 are skipped;
+		# headless has no winfo, so colors fall back to white
+		list [llength $result] \
+			[lindex $result 0] [lindex $result 1] \
+			[lindex $result 2] [lindex $result 3] \
+			[lrange $gl 0 5] [expr {[llength $gl] % 6}] [llength $gl]
+	}
+} -result {4 {full 27 -1 green} {arrow 3 27 red} {circle 6 -1 blue} {disk 28 -1 yellow} {f 27 -1 1.0 1.0 1.0} 0 24}
+
 interp delete b3d
 tcltest::cleanupTests

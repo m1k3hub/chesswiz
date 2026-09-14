@@ -624,6 +624,10 @@ proc updateMarks {marks} {
 
 	if {[[namespace parent]::pgn::showMarkers]} {
 		::board::diagram::updateMarks $board $marks
+		# 3D board views mirror the game marks (no-op unless loaded)
+		if {[llength [info commands ::board3d::setMarks]]} {
+			::board3d::setMarks $marks
+		}
 		if {!$Vars(autoplay)} {
 			::move::leaveSquare
 			::move::enterSquare
@@ -639,6 +643,9 @@ proc toggleShowMarkers {flag} {
 		::scidb::game::go current
 	} else {
 		::board::diagram::clearMarks $board
+		if {[llength [info commands ::board3d::setMarks]]} {
+			::board3d::setMarks {}
+		}
 	}
 }
 
@@ -1902,6 +1909,10 @@ proc Rotate {canv} {
 	variable Vars
 
 	::board::diagram::rotate $board
+	# the 3D views follow the 2D orientation when on a white/black preset
+	if {[llength [info commands ::board3d::syncOrientation]]} {
+		catch { ::board3d::syncOrientation [::board::diagram::rotated? $board] }
+	}
 	ConfigureBoard $canv
 	DrawMaterialValues $Vars(widget:frame)
 	DrawChecks $Vars(widget:frame)
