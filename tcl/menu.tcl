@@ -81,6 +81,7 @@ set OpenEngineLog					"Open Engine &Console"
 set AssignFileTypes				"Assign File &Types"
 set DiscoverDatabases			"Discover &Databases..."
 set Open3DBoard					"Open &3D Board"
+set OpenWebGL3DBoard				"Open &WebGL Real 3D Board"
 
 # Tools
 set OpenEngineDictionary		"Open &Engine Dictionary"
@@ -402,6 +403,17 @@ if {0} {
 			-image $::icon::16x16::none \
 			-command $cmd \
 			;
+		if {[llength [info commands ::board3d::openWebGLViewer]]} {
+			lassign [::tk::UnderlineAmpersand $mc::OpenWebGL3DBoard] text ul
+			set cmd [list ::board3d::openWebGLViewer]
+			$m add command \
+				-compound left \
+				-label " $text" \
+				-underline [IncrUL $ul] \
+				-image $::icon::16x16::none \
+				-command $cmd \
+				;
+		}
 	}
 
 	### discover databases ###################################################

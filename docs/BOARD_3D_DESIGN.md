@@ -1,20 +1,28 @@
 # 3D Chessboard — Design and Plan
 
-Status: **implemented (v1, view-only 3D board window)**
+Status: **implemented (v3, Classic Woodcraft themes, 3D Vector Pieces,
+hardware-accelerated OpenGL view and WebGL viewer)**
 
 ## 1. Goal
 
-Render the current board as a perspective (3D) chessboard that the user can
+Render the current board as an aesthetic perspective (3D) chessboard that the user can
 orbit, tilt and zoom, and which stays in sync with the main board.  This is a
 third presentation of the same position, next to the 2D board widget and the
 piece/textual views.
 
-Non-goals for v1:
-
-* making the 3D view the *play* surface (legal-move input, promotion,
-  variations) — the 2D board remains the input surface;
-* mesh/shader rendering of pieces — pieces are depth-scaled billboards of the
-  existing piece-set photos, with a Unicode-glyph fallback.
+Features:
+* Handcrafted 3D woodworking themes (**Classic Woodcraft**, Rosewood & Boxwood, Walnut & Maple, Ebony & Ivory, Tournament Green).
+* Triple piece rendering engines:
+  - **Vector 3D Pieces**: Geometrically sculpted lathe-profile revolution solids (Pawns, Rooks, Knights, Bishops, Queens, Kings) with green baize felt bases, directional Lambertian shading, specular highlights, and architectural finials.
+  - **Realistic 3D Pieces**: Blender-rendered photo pieces from `img/pieces_3d/` (provenance: `models_3d/`, `scripts/build_3d_chess_blender.py`).
+  - **Billboard Piece Photos / Glyphs**: Scaled photo piece sets with graceful Unicode fallback.
+* Interactive viewer toolbar with live theme switching and piece style selection.
+* **Hardware-accelerated 3D view**: a Togl OpenGL widget renders the board
+  and sculpted mesh pieces (`src/tk/tk_glboard.cpp`) with two-lamp lighting;
+  click-to-select picks through the same projection (`glboard_pick`).
+* **WebGL viewer** (`web3d/`): a three.js front end served by
+  `web3d/server.py` on port 8899, kept in sync with the main board via a
+  local HTTP API (`Extras → Open WebGL Real 3D Board`).
 
 ## 2. Why a separate renderer
 
@@ -150,15 +158,60 @@ View presets: `white` (default), `black`, `side`, `top`, `free`.
 * `tcl/menu.tcl` — *Extras → 3D Board* menu entry.
 * `tcl/Makefile` — add the module to `SOURCES`.
 
+### 6.1 Hardware-accelerated OpenGL view
+
+`src/tk/tk_glboard.cpp` registers two Tcl commands,
+`::scidb::tk::glboard_render` and `::scidb::tk::glboard_pick`, implemented
+against the Togl 2.0 ABI (functions resolved at runtime with `dlsym`; no
+link-time dependency on libTogl — the binary only links `-lGL -lGLU`).
+The system Togl package (`libtogl2`/`libtogl-dev` on Debian) is the
+supported runtime dependency; a fallback copy can be placed at
+`lib/togl/libTogl.so` (not tracked — the repo ignores `*.so`).
+The viewer creates a `togl` widget when `lib/togl/libTogl.so` (or a system
+Togl) can be loaded and packs it in place of the Tk canvas; the "3D Hardware"
+toolbar button toggles between the two views at any time.  Piece meshes live
+in `src/tk/gl_piece_data.h` (triangles with normals, exported from the
+Blender models in `models_3d/`).
+
+`glboard_pick` unprojects the click through the same `gluPerspective`/
+`gluLookAt` matrices the renderer used, intersects the ray with the tile
+plane and returns the square in board-string indexing — so click-to-select
+(`::board3d::pickSquare`) behaves identically in both views.
+
+**Pitfall — duplicate libTogl instances.**  Tcl's `load` opens extension
+libraries `RTLD_LOCAL`, so they are invisible to `dlsym(RTLD_DEFAULT)`.
+Naively `dlopen`ing a *system* libTogl when Tcl already loaded the *vendored*
+copy creates a second instance whose Tcl stubs table was never initialized
+(`Togl_Init` never ran for it) — the first call into it dereferences a NULL
+stubs pointer and segfaults.  `loadToglSymbols` therefore resolves the exact
+file Tcl loaded (`info loaded`) and re-opens that path (which hands back the
+already-loaded object); only when no Togl was ever loaded does it open a
+system library and run its `Togl_Init` itself.
+
+### 6.2 WebGL viewer
+
+`web3d/index.html` (three.js + `OrbitControls`) renders the board and
+sculpted pieces in the browser; `web3d/server.py` serves it and exposes a
+`/api/board` GET/POST API.  `::board3d::openWebGLViewer` starts the server
+(python3, reused if already running), pushes the current position and opens
+the system browser (`SCIDB_WEB3D_NO_BROWSER=1` suppresses that, used by
+tests).  Afterwards every `PositionChanged` POSTs the new board; the page
+polls every 400ms and rebuilds the pieces.
+
 ## 7. Test plan
 
 * `tests/test_board3d.tcl` (headless): projection ↔ unprojection round trip
   on the board plane, `squareAt` returns every square from its own projected
   centre, depth ordering matches camera distance, `fit` keeps the projected
-  slab inside the canvas, camera basis is orthonormal, presets are sane.
+  slab inside the canvas, camera basis is orthonormal, presets are sane,
+  theme/piece-style switching, vector-piece drawing, `pickSquare` canvas
+  fallback, WebGL URL/JSON helpers.
 * `tests/test_app_board3d.tcl` (app-backed, xvfb): the module loads, the
   viewer toplevel opens with a populated canvas, rotation/preset/reset update
-  it, `PositionChanged` redraws a different position, and close destroys it.
+  it, `PositionChanged` redraws a different position, click selection works
+  in *both* the canvas and the hardware OpenGL view (via `glboard_pick`),
+  the WebGL server starts/serves/syncs the board (python3-gated), and close
+  destroys the window.
 
 ## 8. Phases
 
@@ -167,8 +220,10 @@ View presets: `white` (default), `black`, `side`, `top`, `free`.
 3. Viewer window + interaction.
 4. App integration (accessor, hook, menu) + app test.
 5. Docs/changelog.
+6. v2: woodcraft themes, vector pieces, realistic Blender renders, toolbar.
+7. v3: hardware OpenGL view (Togl) with click picking, WebGL viewer.
 
-All five phases are implemented.
+All phases are implemented.
 
 ## 9. Pitfalls found while implementing
 

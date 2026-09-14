@@ -248,5 +248,70 @@ tcltest::test board3d-top-square {top is a square grid with a1 dark at bottom-le
 	}
 } -result 1
 
+tcltest::test board3d-themes-and-styles {theme and pieceStyle configuration works properly} -body {
+	b3dEval {
+		set res {}
+		::board3d::setTheme "Rosewood & Boxwood"
+		lappend res $::board3d::State(theme) $::board3d::State(darkColor)
+		::board3d::setPieceStyle "realistic3d"
+		lappend res $::board3d::State(pieceStyle)
+		::board3d::setPieceStyle "vector"
+		lappend res $::board3d::State(pieceStyle)
+		::board3d::setPieceStyle "photos"
+		lappend res $::board3d::State(pieceStyle)
+		::board3d::setTheme "Classic Woodcraft"
+		lappend res $::board3d::State(theme)
+		set res
+	}
+} -result [list "Rosewood & Boxwood" "#8b2500" "realistic3d" "vector" "photos" "Classic Woodcraft"]
+
+tcltest::test board3d-vector-piece-render {vector piece draws baize felt base, polygons, and finials} -body {
+	b3dEval {
+		::board3d::preset white
+		::board3d::fit 800 600
+		set ::items {}
+		::board3d::DrawVectorPiece captureCanvas "wk" 400 300 35 0.8 0.6
+		set hasFelt 0
+		set hasCross 0
+		foreach item $::items {
+			set type [lindex $item 0]
+			set split 1
+			while {[string is double -strict [lindex $item $split]]} { incr split }
+			set opts [dict create {*}[lrange $item $split end]]
+			if {[dict exists $opts -fill]} {
+				if {[dict get $opts -fill] eq "#2d5a37"} { set hasFelt 1 }
+				if {[dict get $opts -fill] eq "#fff5ea" && $type eq "rectangle"} { set hasCross 1 }
+			}
+		}
+		list $hasFelt $hasCross [expr {[llength $::items] > 10}]
+	}
+} -result {1 1 1}
+
+tcltest::test board3d-pick-fallback {pickSquare falls back to the canvas projection without a hardware view} -body {
+	b3dEval {
+		set ::board3d::State(useOpenGL) 1
+		::board3d::preset white
+		::board3d::fit 800 600
+		set bad {}
+		for {set sq 0} {$sq < 64} {incr sq} {
+			lassign [::board3d::squareCenter $sq] x y
+			lassign [::board3d::projectPlane $x $y] sx sy
+			if {[::board3d::pickSquare $sx $sy] != $sq} { lappend bad $sq }
+		}
+		set bad
+	}
+} -result {}
+
+tcltest::test board3d-webgl-helpers {WebGL URL and JSON body are well formed} -body {
+	b3dEval {
+		join [list \
+			[::board3d::WebGLUrl] \
+			[::board3d::WebGLBoardJson "rnbq"] \
+			[::board3d::WebGLBoardJson {a"b\c}]] "\n"
+	}
+} -result {http://127.0.0.1:8899
+{"board": "rnbq"}
+{"board": "a\"b\\c"}}
+
 interp delete b3d
 tcltest::cleanupTests

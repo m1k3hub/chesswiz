@@ -21,7 +21,8 @@ namespace eval ::board3d {
 
 namespace export configure defaults preset setBoard setMarks setSelected \
 	fit projectPoint projectPlane unproject squareAt squareCenter depthOf \
-	orderedSquares render refresh openViewer closeViewer isOpen
+	orderedSquares render refresh openViewer closeViewer isOpen setTheme setPieceStyle openWebGLViewer \
+	toggleOpenGL
 
 variable State
 array set State {
@@ -54,15 +55,21 @@ array set State {
 	ux 0 uy 0 uz 0
 	usePhotos    -1
 	pieceSize    0
+	theme        "Classic Woodcraft"
+	pieceStyle   "realistic3d"
+	useOpenGL    1
 }
 
 variable Priv
 array set Priv {
 	window     {}
 	canvas     {}
+	togl       {}
 	parent     {}
 	cacheCount 0
 	afterid    {}
+	webgl,pid  {}
+	webgl,auto 0
 }
 
 variable StandardBoard "RNBQKBNRPPPPPPPP................................pppppppprnbqkbnr"
@@ -82,6 +89,48 @@ array set Glyph {
 	wk \u2654 wq \u2655 wr \u2656 wb \u2657 wn \u2658 wp \u2659
 	bk \u265A bq \u265B br \u265C bb \u265D bn \u265E bp \u265F
 }
+
+# Built-in handcrafted aesthetic themes
+variable Themes
+array set Themes {
+	"Classic Woodcraft" {
+		lightColor  #f0dab5
+		darkColor   #b58451
+		woodColor   #5c3a1e
+		coordColor  #edd8be
+		shadowColor #1a1008
+	}
+	"Rosewood & Boxwood" {
+		lightColor  #f4e4c1
+		darkColor   #8b2500
+		woodColor   #461300
+		coordColor  #faebd7
+		shadowColor #140804
+	}
+	"Walnut & Maple" {
+		lightColor  #eed9b7
+		darkColor   #7d512d
+		woodColor   #3d2311
+		coordColor  #e8d3b0
+		shadowColor #120904
+	}
+	"Ebony & Ivory" {
+		lightColor  #f5f5f0
+		darkColor   #2b2b2b
+		woodColor   #181818
+		coordColor  #e0e0e0
+		shadowColor #0a0a0a
+	}
+	"Tournament Green" {
+		lightColor  #ffffdd
+		darkColor   #648a5c
+		woodColor   #2d4028
+		coordColor  #eaeec8
+		shadowColor #0c140a
+	}
+}
+
+	variable WebGLPort 8899
 
 } ;# namespace board3d
 
@@ -332,6 +381,8 @@ proc ::board3d::defaults {} {
 		showCoords 1 showShadow 1
 		selected -1 marks {}
 		view white
+		theme "Classic Woodcraft"
+		pieceStyle "vector"
 	}
 }
 
@@ -352,6 +403,8 @@ proc ::board3d::configure {args} {
 			coordColor  { set State(coordColor) $value }
 			showCoords  { set State(showCoords) [expr {$value ? 1 : 0}] }
 			showShadow  { set State(showShadow) [expr {$value ? 1 : 0}] }
+			theme       { setTheme $value }
+			pieceStyle  { setPieceStyle $value }
 			default {
 				return -code error "board3d::configure: unknown option $key"
 			}
@@ -445,8 +498,44 @@ proc ::board3d::ThemeColors {} {
 # Adopt the configured board theme and derive the slab/frame/shadow
 # colours from the dark square, so every theme stays harmonious.  Called
 # when the viewer opens and whenever the position changes.
+proc ::board3d::setTheme {name} {
+	variable State
+	variable Themes
+
+	if {[info exists Themes($name)]} {
+		set State(theme) $name
+		array set State $Themes($name)
+	} else {
+		set State(theme) "Custom"
+	}
+	refresh
+	return $State(theme)
+}
+
+proc ::board3d::setPieceStyle {style} {
+	variable State
+	switch -exact -- $style {
+		realistic3d - vector - photos - glyphs {
+			set State(pieceStyle) $style
+		}
+		default {
+			return -code error "board3d::setPieceStyle: unknown style '$style' (expected realistic3d, vector, photos, glyphs)"
+		}
+	}
+	refresh
+	return $State(pieceStyle)
+}
+
+# Adopt the configured board theme and derive the slab/frame/shadow
+# colours from the dark square, so every theme stays harmonious.  Called
+# when the viewer opens and whenever the position changes.
 proc ::board3d::UpdateColors {} {
 	variable State
+	variable Themes
+	if {[info exists State(theme)] && [info exists Themes($State(theme))]} {
+		array set State $Themes($State(theme))
+		return
+	}
 	ThemeColors
 	set State(woodColor)   [Shade $State(darkColor) 0.62]
 	set State(shadowColor) [Shade $State(woodColor) 0.42]
@@ -484,6 +573,60 @@ proc ::board3d::InitPieceAssets {} {
 }
 
 
+# Return a realistic Blender 3D piece image scaled to $height pixels
+proc ::board3d::PieceImage3D {piece height} {
+	variable State
+	variable Priv
+
+	if {$height < 4} { set height 4 }
+	if {$height > 600} { set height 600 }
+	set h [expr {round($height)}]
+	set key "piece3d,$piece,$h"
+	if {[info exists Priv($key)]} { return $Priv($key) }
+
+	# Master 3D piece images loaded from img/pieces_3d/<piece>.png
+	set masterKey "master3d,$piece"
+	if {![info exists Priv($masterKey)]} {
+		set rootDir [file normalize [file join [file dirname [info script]] ..]]
+		set file [file join $rootDir img pieces_3d "${piece}.png"]
+		if {![file exists $file]} {
+			set file [file join [pwd] img pieces_3d "${piece}.png"]
+		}
+		if {![file exists $file]} { return {} }
+		if {[catch { image create photo -file $file } master]} {
+			return {}
+		}
+		set Priv($masterKey) $master
+	}
+	set master $Priv($masterKey)
+
+	set name "photo_Board3D_Real_${piece}_[incr Priv(cacheCount)]"
+	if {[catch {
+		image create photo $name -width $h -height $h
+		if {[llength [info commands ::scidb::tk::image]]} {
+			::scidb::tk::image copy $master $name
+		} else {
+			# Tk standard zoom/subsample fallback
+			set origW [image width $master]
+			if {$origW > 0 && $h > 0} {
+				set factor [expr {double($h) / $origW}]
+				if {$factor <= 0.5} {
+					set sub [expr {round(1.0 / $factor)}]
+					$name copy $master -subsample $sub $sub
+				} else {
+					$name copy $master
+				}
+			}
+		}
+	}]} {
+		catch { image delete $name }
+		return {}
+	}
+	set Priv($key) $name
+	return $name
+}
+
+
 # Return a canvas-ready image scaled to $height pixels, or {} when the
 # piece photos are unavailable.
 proc ::board3d::PieceImage {piece height} {
@@ -515,6 +658,10 @@ proc ::board3d::PieceImage {piece height} {
 proc ::board3d::ClearPieceImages {} {
 	variable Priv
 	foreach key [array names Priv -glob piece,*] {
+		catch { image delete $Priv($key) }
+		unset Priv($key)
+	}
+	foreach key [array names Priv -glob piece3d,*] {
 		catch { image delete $Priv($key) }
 		unset Priv($key)
 	}
@@ -552,8 +699,25 @@ proc ::board3d::render {canv {board ""}} {
 
 proc ::board3d::refresh {} {
 	variable Priv
+	variable State
+	if {$State(useOpenGL) && $Priv(togl) ne "" && [winfo exists $Priv(togl)]} {
+		renderOpenGL $Priv(togl)
+	}
 	if {$Priv(canvas) ne "" && [winfo exists $Priv(canvas)]} {
 		render $Priv(canvas)
+	}
+}
+
+proc ::board3d::renderOpenGL {togl {board ""}} {
+	variable State
+	if {[string length $board]} {
+		set State(board) [NormalizeBoard $board]
+	}
+	if {$State(board) eq ""} { set State(board) [NormalizeBoard standard] }
+	if {[llength [info commands ::scidb::tk::glboard_render]]} {
+		catch {
+			::scidb::tk::glboard_render $togl $State(board) $State(yaw) $State(pitch) $State(distance) $State(selected)
+		}
 	}
 }
 
@@ -563,15 +727,18 @@ proc ::board3d::DrawScene {canv} {
 
 	$canv delete b3d
 
+	# 1. Vertical slab sides (4 faces, items 0..3)
 	DrawSlabSides $canv
 
-	# board top surface (wood) then inset tiles far to near
+	# 2. Classic Woodcraft Frame top surface (item 4)
+	# Keeping exactly 5 background items preserves test_board3d polygon indexing
 	set top [concat \
 		[ScreenPoint -4.4 -4.4] [ScreenPoint 4.4 -4.4] \
 		[ScreenPoint 4.4 4.4]  [ScreenPoint -4.4 4.4]]
 	$canv create polygon {*}$top -fill $State(woodColor) \
 		-outline [Shade $State(woodColor) 0.85] -tags b3d
 
+	# 3. Tiles, Marks, Pieces, Coordinates, HUD
 	DrawTiles $canv
 	DrawMarks $canv
 	DrawPieces $canv
@@ -585,14 +752,14 @@ proc ::board3d::DrawSlabSides {canv} {
 	variable State
 
 	set t $State(thickness)
-	set base [Shade $State(woodColor) 0.7]
+	set base [Shade $State(woodColor) 0.75]
 
-	# light direction for the four side faces: front brightest
+	# Directional lighting for the four side faces: front brightest
 	set faces {
-		{ {{-4.4 -4.4 0} {4.4 -4.4 0} {4.4 -4.4 -T} {-4.4 -4.4 -T}} 0.80 }
-		{ {{4.4 4.4 0} {-4.4 4.4 0} {-4.4 4.4 -T} {4.4 4.4 -T}}     0.55 }
+		{ {{-4.4 -4.4 0} {4.4 -4.4 0} {4.4 -4.4 -T} {-4.4 -4.4 -T}} 0.82 }
+		{ {{4.4 4.4 0} {-4.4 4.4 0} {-4.4 4.4 -T} {4.4 4.4 -T}}     0.52 }
 		{ {{-4.4 4.4 0} {-4.4 -4.4 0} {-4.4 -4.4 -T} {-4.4 4.4 -T}} 0.68 }
-		{ {{4.4 -4.4 0} {4.4 4.4 0} {4.4 4.4 -T} {4.4 -4.4 -T}}     0.62 }
+		{ {{4.4 -4.4 0} {4.4 4.4 0} {4.4 4.4 -T} {4.4 -4.4 -T}}     0.60 }
 	}
 
 	foreach face $faces {
@@ -628,7 +795,8 @@ proc ::board3d::DrawTiles {canv} {
 		set pts [concat \
 			[ScreenPoint $x0 $y0] [ScreenPoint $x1 $y0] \
 			[ScreenPoint $x1 $y1] [ScreenPoint $x0 $y1]]
-		$canv create polygon {*}$pts -fill $color -outline {} -tags [list b3d tile]
+		set edgeCol [Shade $color 0.88]
+		$canv create polygon {*}$pts -fill $color -outline $edgeCol -width 1 -tags [list b3d tile]
 	}
 }
 
@@ -741,11 +909,229 @@ proc ::board3d::DrawPieces {canv} {
 		# little below the square centre to ground the body on the square
 		set base [expr {$by + $height*0.10}]
 
-		set img [PieceImage $piece $height]
-		if {$img ne ""} {
-			$canv create image $bx $base -image $img -anchor s -tags {b3d piece}
-		} else {
+		# Render piece using requested pieceStyle (realistic3d, vector, photos, or glyphs)
+		set rendered 0
+		if {$State(pieceStyle) eq "realistic3d"} {
+			set img [PieceImage3D $piece $height]
+			if {$img ne ""} {
+				$canv create image $bx [expr {$by + $height*0.04}] -image $img -anchor s -tags {b3d piece}
+				set rendered 1
+			}
+		}
+
+		if {!$rendered && $State(pieceStyle) eq "vector"} {
+			DrawVectorPiece $canv $piece $bx $by $scale $cosp $sinp
+			set rendered 1
+		} elseif {!$rendered && $State(pieceStyle) eq "photos"} {
+			set img [PieceImage $piece $height]
+			if {$img ne ""} {
+				$canv create image $bx $base -image $img -anchor s -tags {b3d piece}
+				set rendered 1
+			}
+		}
+
+		if {!$rendered} {
 			DrawGlyph $canv $piece $bx $base $height
+		}
+	}
+}
+
+
+# ======================================================================
+# 3D Vector Piece Renderer
+# ======================================================================
+
+proc ::board3d::DrawVectorPiece {canv piece bx by scale cosp sinp} {
+	variable State
+	set colorChar [string index $piece 0]
+	set pieceType [string index $piece 1]
+
+	# Material palette for Classic Woodcraft pieces
+	if {$colorChar eq "w"} {
+		set baseBody   #edd6b6
+		set highlight  #fff5ea
+		set shadowTone #c8a882
+		set deepTone   #99734e
+		set rimCol     #63472c
+	} else {
+		set baseBody   #31261e
+		set highlight  #5c4b3f
+		set shadowTone #201711
+		set deepTone   #120d09
+		set rimCol     #100b07
+	}
+	set feltCol #2d5a37
+
+	# Vector piece profile stack: list of {w1 w2 h_bottom h_top}
+	# Dimensions are in board units relative to square center
+	switch -exact -- $pieceType {
+		p {
+			# Pawn: pedestal + tiered body + spherical head
+			set layers [list \
+				[list 0.35 0.32 0.00 0.07] \
+				[list 0.30 0.22 0.07 0.18] \
+				[list 0.21 0.14 0.18 0.44] \
+				[list 0.16 0.18 0.44 0.50] \
+				[list 0.20 0.02 0.50 0.72]]
+			set finial none
+		}
+		r {
+			# Rook: broad base + columnar tower + battlement crenellations
+			set layers [list \
+				[list 0.37 0.33 0.00 0.08] \
+				[list 0.31 0.24 0.08 0.20] \
+				[list 0.23 0.21 0.20 0.60] \
+				[list 0.28 0.28 0.60 0.70] \
+				[list 0.29 0.29 0.70 0.85]]
+			set finial castle
+		}
+		n {
+			# Knight: curved sculpted body + mane & muzzle
+			set layers [list \
+				[list 0.37 0.33 0.00 0.08] \
+				[list 0.31 0.25 0.08 0.22] \
+				[list 0.24 0.20 0.22 0.45] \
+				[list 0.25 0.28 0.45 0.70] \
+				[list 0.22 0.08 0.70 0.88]]
+			set finial knight
+		}
+		b {
+			# Bishop: tapered waist + mitre + finial ball
+			set layers [list \
+				[list 0.37 0.33 0.00 0.08] \
+				[list 0.31 0.23 0.08 0.22] \
+				[list 0.22 0.15 0.22 0.55] \
+				[list 0.20 0.22 0.55 0.65] \
+				[list 0.22 0.04 0.65 0.94]]
+			set finial ball
+		}
+		q {
+			# Queen: tall elegant profile + coronet
+			set layers [list \
+				[list 0.38 0.34 0.00 0.08] \
+				[list 0.32 0.24 0.08 0.24] \
+				[list 0.23 0.16 0.24 0.66] \
+				[list 0.22 0.26 0.66 0.76] \
+				[list 0.27 0.14 0.76 1.05]]
+			set finial coronet
+		}
+		k {
+			# King: stately wide pedestal + tall torso + cross finial
+			set layers [list \
+				[list 0.39 0.35 0.00 0.08] \
+				[list 0.33 0.25 0.08 0.24] \
+				[list 0.24 0.17 0.24 0.72] \
+				[list 0.24 0.28 0.72 0.82] \
+				[list 0.28 0.16 0.82 1.12]]
+			set finial cross
+		}
+		default { return }
+	}
+
+	# Green Baize / Felt rim ring grounding the piece on the square
+	set feltR [expr {0.37 * $scale}]
+	set feltH [expr {$feltR * 0.32 * $cosp}]
+	$canv create oval [expr {$bx - $feltR}] [expr {$by - $feltH}] \
+		[expr {$bx + $feltR}] [expr {$by + $feltH}] \
+		-fill $feltCol -outline [Shade $feltCol 0.6] -width 1 -tags {b3d piece}
+
+	# Draw each 3D revolution segment from base upward
+	foreach layer $layers {
+		lassign $layer w1 w2 z1 z2
+		set r1 [expr {$w1 * $scale}]
+		set r2 [expr {$w2 * $scale}]
+		set y1 [expr {$by - $z1 * $scale * $cosp}]
+		set y2 [expr {$by - $z2 * $scale * $cosp}]
+		set ry1 [expr {$r1 * 0.30 * $cosp}]
+		set ry2 [expr {$r2 * 0.30 * $cosp}]
+
+		# Main lit quad body for the frustum
+		set bodyPts [list \
+			[expr {$bx - $r1}] $y1 \
+			[expr {$bx + $r1}] $y1 \
+			[expr {$bx + $r2}] $y2 \
+			[expr {$bx - $r2}] $y2]
+		$canv create polygon {*}$bodyPts -fill $baseBody -outline $rimCol -width 1 -tags {b3d piece}
+
+		# Shaded right half (giving strong 3D depth and directional lighting)
+		set shadePts [list \
+			$bx $y1 \
+			[expr {$bx + $r1}] $y1 \
+			[expr {$bx + $r2}] $y2 \
+			$bx $y2]
+		$canv create polygon {*}$shadePts -fill $shadowTone -outline {} -tags {b3d piece}
+
+		# Left specular highlight strip
+		set hlPts [list \
+			[expr {$bx - $r1 * 0.65}] $y1 \
+			[expr {$bx - $r1 * 0.35}] $y1 \
+			[expr {$bx - $r2 * 0.35}] $y2 \
+			[expr {$bx - $r2 * 0.65}] $y2]
+		$canv create polygon {*}$hlPts -fill $highlight -outline {} -tags {b3d piece}
+
+		# Cap ellipse at the top edge of this segment
+		$canv create oval [expr {$bx - $r2}] [expr {$y2 - $ry2}] \
+			[expr {$bx + $r2}] [expr {$y2 + $ry2}] \
+			-fill $baseBody -outline $rimCol -width 1 -tags {b3d piece}
+	}
+
+	# Specialized architectural finials
+	switch -exact -- $finial {
+		cross {
+			set topY [expr {$by - 1.15 * $scale * $cosp}]
+			set armW [expr {0.08 * $scale}]
+			set armH [expr {0.20 * $scale * $cosp}]
+			# Cross vertical bar
+			$canv create rectangle [expr {$bx - 0.03*$scale}] [expr {$topY - $armH}] \
+				[expr {$bx + 0.03*$scale}] $topY \
+				-fill $highlight -outline $rimCol -tags {b3d piece}
+			# Cross horizontal beam
+			$canv create rectangle [expr {$bx - $armW}] [expr {$topY - $armH*0.75}] \
+				[expr {$bx + $armW}] [expr {$topY - $armH*0.50}] \
+				-fill $highlight -outline $rimCol -tags {b3d piece}
+		}
+		coronet {
+			set topY [expr {$by - 1.08 * $scale * $cosp}]
+			# Small crown peak orbs
+			foreach ox {-0.12 -0.06 0 0.06 0.12} {
+				set obx [expr {$bx + $ox * $scale}]
+				set rad [expr {0.035 * $scale}]
+				$canv create oval [expr {$obx - $rad}] [expr {$topY - $rad}] \
+					[expr {$obx + $rad}] [expr {$topY + $rad}] \
+					-fill $highlight -outline $rimCol -tags {b3d piece}
+			}
+		}
+		castle {
+			set topY [expr {$by - 0.85 * $scale * $cosp}]
+			# Crenellation cutouts
+			foreach ox {-0.18 0.0 0.18} {
+				set cx [expr {$bx + $ox * $scale}]
+				$canv create rectangle [expr {$cx - 0.05*$scale}] [expr {$topY - 0.02*$scale}] \
+					[expr {$cx + 0.05*$scale}] [expr {$topY + 0.07*$scale}] \
+					-fill $shadowTone -outline $rimCol -tags {b3d piece}
+			}
+		}
+		knight {
+			set topY [expr {$by - 0.88 * $scale * $cosp}]
+			# Snout/jaw protrusion
+			set snoutPts [list \
+				[expr {$bx - 0.20*$scale}] [expr {$topY + 0.12*$scale*$cosp}] \
+				[expr {$bx - 0.32*$scale}] [expr {$topY + 0.22*$scale*$cosp}] \
+				[expr {$bx - 0.16*$scale}] [expr {$topY + 0.32*$scale*$cosp}]]
+			$canv create polygon {*}$snoutPts -fill $highlight -outline $rimCol -tags {b3d piece}
+			# Mane ridge
+			set manePts [list \
+				[expr {$bx + 0.12*$scale}] [expr {$topY + 0.05*$scale*$cosp}] \
+				[expr {$bx + 0.26*$scale}] [expr {$topY + 0.16*$scale*$cosp}] \
+				[expr {$bx + 0.20*$scale}] [expr {$topY + 0.35*$scale*$cosp}]]
+			$canv create polygon {*}$manePts -fill $shadowTone -outline $rimCol -tags {b3d piece}
+		}
+		ball {
+			set topY [expr {$by - 0.96 * $scale * $cosp}]
+			set rad [expr {0.05 * $scale}]
+			$canv create oval [expr {$bx - $rad}] [expr {$topY - $rad}] \
+				[expr {$bx + $rad}] [expr {$topY + $rad}] \
+				-fill $highlight -outline $rimCol -tags {b3d piece}
 		}
 	}
 }
@@ -782,7 +1168,7 @@ proc ::board3d::DrawHud {canv} {
 		}
 	}
 	$canv create rectangle 0 0 $State(width) 32 -fill #101418 -outline {} -tags b3d
-	set text "$State(view) view \u2014 drag to orbit, wheel to zoom"
+	set text "$State(view) view  |  $State(theme)  |  $State(pieceStyle) pieces  \u2014 drag to orbit, wheel to zoom"
 	$canv create text 10 8 -text $text -anchor nw -fill #d8d8d8 \
 		-font {TkDefaultFont 9} -tags b3d
 }
@@ -826,7 +1212,7 @@ proc ::board3d::openViewer {parent} {
 	set bar [ttk::frame $dlg.bar]
 	pack $bar -side bottom -fill x
 	foreach {label view} {White white Black black Side side Top top} {
-		ttk::button $bar.$view -text $label -width 6 \
+		ttk::button $bar.$view -text $label -width 5 \
 			-command [namespace code [list viewerPreset $view]]
 		pack $bar.$view -side left -padx 1 -pady 2
 	}
@@ -838,33 +1224,88 @@ proc ::board3d::openViewer {parent} {
 		-command [namespace code [list viewerPreset white]]
 	pack $bar.rotl $bar.rotr $bar.reset -side left -padx 1 -pady 2
 
+	# Theme selector combobox
+	ttk::label $bar.tl -text " Theme:"
+	set themeValues [list "Classic Woodcraft" "Rosewood & Boxwood" "Walnut & Maple" "Ebony & Ivory" "Tournament Green"]
+	set themeCombo [ttk::combobox $bar.theme -values $themeValues -state readonly -width 16]
+	$themeCombo set $State(theme)
+	bind $themeCombo <<ComboboxSelected>> [namespace code [list viewerThemeSelected %W]]
+	pack $bar.tl $themeCombo -side left -padx 2 -pady 2
+
+	# Piece Style toggle
+	ttk::label $bar.sl -text " Pieces:"
+	set styleValues [list "realistic3d" "vector" "photos" "glyphs"]
+	set styleCombo [ttk::combobox $bar.style -values $styleValues -state readonly -width 11]
+	$styleCombo set $State(pieceStyle)
+	bind $styleCombo <<ComboboxSelected>> [namespace code [list viewerStyleSelected %W]]
+	pack $bar.sl $styleCombo -side left -padx 2 -pady 2
+
+	# Hardware Accelerated OpenGL 3D toggle button
+	ttk::button $bar.opengl -text "\u2699 3D Hardware" \
+		-command [namespace code toggleOpenGL]
+	pack $bar.opengl -side right -padx 6 -pady 2
+
+	# Canvas container frame to support both OpenGL Togl and fallback Tk canvas
 	set canv [tk::canvas $dlg.canvas -borderwidth 0 -highlightthickness 0 \
 		-background #101418 -takefocus 1]
-	pack $canv -side top -fill both -expand yes
 	set Priv(canvas) $canv
+
+	# Try creating native hardware-accelerated OpenGL Togl viewport
+	set toglWin ""
+	if {$State(useOpenGL)} {
+		if {![llength [info commands togl]]} {
+			# vendored runtime library first, then the system packages
+			set candidates [list \
+				[file normalize [file join [file dirname [info script]] .. lib togl libTogl.so]] \
+				"/usr/lib/libTogl.so" \
+				"/usr/lib/libTogl.so.2.0" \
+				"/usr/lib/x86_64-linux-gnu/libTogl.so" \
+			]
+			foreach cand $candidates {
+				if {[file exists $cand]} {
+					if {![catch { load $cand Togl }]} { break }
+				}
+			}
+		}
+		if {[llength [info commands togl]]} {
+			catch {
+				set toglWin [togl $dlg.togl -width 640 -height 520 -rgba true -double true -depth true]
+				set Priv(togl) $toglWin
+			}
+		}
+	}
+
+	if {$Priv(togl) ne "" && [winfo exists $Priv(togl)]} {
+		pack $Priv(togl) -side top -fill both -expand yes
+		set activeView $Priv(togl)
+	} else {
+		pack $canv -side top -fill both -expand yes
+		set activeView $canv
+	}
 
 	set State(board) [CurrentBoard]
 	UpdateColors
 
-	::bind $canv <Configure>      [namespace code [list OnConfigure %W %w %h]]
-	::bind $canv <ButtonPress-1>  [namespace code [list OnPress %x %y]]
-	::bind $canv <B1-Motion>      [namespace code [list OnMotion %x %y]]
-	::bind $canv <ButtonRelease-1> [namespace code OnRelease]
-	::bind $canv <ButtonPress-3>  [namespace code [list OnPress %x %y pan]]
-	::bind $canv <B3-Motion>      [namespace code [list OnMotion %x %y]]
-	::bind $canv <Button-4>       [namespace code [list viewerZoom 1]]
-	::bind $canv <Button-5>       [namespace code [list viewerZoom -1]]
-	::bind $canv <MouseWheel>     [namespace code [list viewerZoom %D]]
-	::bind $canv <Left>           [namespace code [list viewerRotate -15]]
-	::bind $canv <Right>          [namespace code [list viewerRotate 15]]
-	::bind $canv <Up>             [namespace code [list viewerTilt 5]]
-	::bind $canv <Down>           [namespace code [list viewerTilt -5]]
-	::bind $canv <Home>           [namespace code [list viewerPreset white]]
+	foreach w [list $canv $dlg.togl] {
+		if {![winfo exists $w]} { continue }
+		::bind $w <Configure>      [namespace code [list OnConfigure %W %w %h]]
+		::bind $w <ButtonPress-1>  [namespace code [list OnPress %x %y]]
+		::bind $w <B1-Motion>      [namespace code [list OnMotion %x %y]]
+		::bind $w <ButtonRelease-1> [namespace code OnRelease]
+		::bind $w <ButtonPress-3>  [namespace code [list OnPress %x %y pan]]
+		::bind $w <B3-Motion>      [namespace code [list OnMotion %x %y]]
+		::bind $w <Button-4>       [namespace code [list viewerZoom 1]]
+		::bind $w <Button-5>       [namespace code [list viewerZoom -1]]
+		::bind $w <MouseWheel>     [namespace code [list viewerZoom %D]]
+		::bind $w <Left>           [namespace code [list viewerRotate -15]]
+		::bind $w <Right>          [namespace code [list viewerRotate 15]]
+		::bind $w <Up>             [namespace code [list viewerTilt 5]]
+		::bind $w <Down>           [namespace code [list viewerTilt -5]]
+		::bind $w <Home>           [namespace code [list viewerPreset white]]
+	}
 	::bind $dlg  <Escape>         [namespace code closeViewer]
 
-	# ::util::place only sets the position; force a size too.  A toplevel
-	# that is mapped without an explicit size, while carrying a <Configure>
-	# binding, makes `update idletasks` spin (no window manager under Xvfb).
+	# ::util::place only sets the position; force a size too.
 	lassign [::util::place $dlg -parent $parent -position center] px py
 	set sx [format "%+d" [expr {int($px)}]]
 	set sy [format "%+d" [expr {int($py)}]]
@@ -876,9 +1317,42 @@ proc ::board3d::openViewer {parent} {
 }
 
 
+proc ::board3d::toggleOpenGL {{value {}}} {
+	variable State
+	variable Priv
+	if {$Priv(window) eq "" || ![winfo exists $Priv(window)]} { return }
+	if {[string is boolean -strict $value]} {
+		set State(useOpenGL) [expr {$value ? 1 : 0}]
+	} else {
+		set State(useOpenGL) [expr {!$State(useOpenGL)}]
+	}
+	# the hardware view needs a live Togl widget; otherwise stay on canvas
+	set useGL [expr {$State(useOpenGL)
+		&& $Priv(togl) ne "" && [winfo exists $Priv(togl)]}]
+	if {$Priv(togl) ne "" && [winfo exists $Priv(togl)]} {
+		catch { pack forget $Priv(togl) }
+	}
+	if {$Priv(canvas) ne "" && [winfo exists $Priv(canvas)]} {
+		catch { pack forget $Priv(canvas) }
+	}
+	if {$useGL} {
+		pack $Priv(togl) -side top -fill both -expand yes
+	} elseif {$Priv(canvas) ne "" && [winfo exists $Priv(canvas)]} {
+		pack $Priv(canvas) -side top -fill both -expand yes
+	}
+	refresh
+}
+
+
 proc ::board3d::InitialDraw {canv} {
-	if {![winfo exists $canv]} { return }
-	render $canv
+	variable Priv
+	variable State
+	if {$State(useOpenGL) && $Priv(togl) ne "" && [winfo exists $Priv(togl)]} {
+		renderOpenGL $Priv(togl)
+	}
+	if {[winfo exists $canv]} {
+		render $canv
+	}
 }
 
 
@@ -892,6 +1366,7 @@ proc ::board3d::closeViewer {} {
 	}
 	set Priv(window) {}
 	set Priv(canvas) {}
+	set Priv(togl) {}
 	ClearPieceImages
 	# release the piece-size registration acquired by InitPieceAssets
 	if {$State(usePhotos) && $State(pieceSize) > 0} {
@@ -906,10 +1381,124 @@ proc ::board3d::closeViewer {} {
 
 proc ::board3d::PositionChanged {board} {
 	variable State
+	variable Priv
 	set State(board) [NormalizeBoard $board]
 	UpdateColors
 	refresh
+	# keep an open WebGL viewer in sync with the position
+	if {$Priv(webgl,auto)} {
+		catch { WebGLPost $State(board) }
+	}
 	return $State(board)
+}
+
+
+# ======================================================================
+# WebGL viewer (web3d/): three.js front end served by web3d/server.py.
+# The browser polls /api/board, so syncing is a single local POST.
+# ======================================================================
+
+proc ::board3d::WebGLUrl {} {
+	variable WebGLPort
+	return "http://127.0.0.1:$WebGLPort"
+}
+
+
+# minimal JSON body for the board push API (boards are plain ASCII,
+# but escape properly anyway)
+proc ::board3d::WebGLBoardJson {board} {
+	set board [string map {\\ \\\\ \" \\\" \n \\n \r \\r \t \\t} $board]
+	return "{\"board\": \"$board\"}"
+}
+
+
+proc ::board3d::WebGLServerUp {} {
+	variable WebGLPort
+	if {[catch { socket 127.0.0.1 $WebGLPort } sock]} { return 0 }
+	catch { close $sock }
+	return 1
+}
+
+
+proc ::board3d::WebGLStartServer {} {
+	variable Priv
+	if {[WebGLServerUp]} { return 1 }
+	set dir [file normalize [file join [file dirname [info script]] .. web3d]]
+	set server [file join $dir server.py]
+	if {![file exists $server]} { return 0 }
+
+	set python ""
+	if {![catch { exec python3 -c {import sys} }]} {
+		set python python3
+	} elseif {![catch { exec python -c {import sys} }]} {
+		set python python
+	}
+	if {$python eq ""} { return 0 }
+
+	set tmp /tmp
+	if {[info exists ::env(TMPDIR)] && $::env(TMPDIR) ne ""} { set tmp $::env(TMPDIR) }
+	set log [file join $tmp scidb-web3d-server.log]
+	if {[catch { exec $python $server >& $log & } pid]} { return 0 }
+	set Priv(webgl,pid) $pid
+
+	# wait (max ~3s) for the server to accept connections
+	for {set i 0} {$i < 30} {incr i} {
+		if {[WebGLServerUp]} { return 1 }
+		if {[llength [info commands after]]} { after 100 }
+	}
+	return 0
+}
+
+
+proc ::board3d::WebGLPost {board {timeout 2000}} {
+	if {[catch { package require http }]} { return 0 }
+	set body [WebGLBoardJson $board]
+	if {[catch {
+		set tok [::http::geturl [WebGLUrl]/api/board \
+			-query $body -type "application/json" -timeout $timeout]
+		set status [::http::status $tok]
+		set ncode  [::http::ncode $tok]
+		::http::cleanup $tok
+	}]} { return 0 }
+	return [expr {$status eq "ok" && $ncode == 200}]
+}
+
+
+proc ::board3d::openWebGLViewer {} {
+	variable Priv
+	if {![WebGLStartServer]} {
+		if {[llength [info commands tk_messageBox]]} {
+			set parent [expr {$Priv(window) ne "" && [winfo exists $Priv(window)] ? $Priv(window) : "."}]
+			catch {
+				tk_messageBox -parent $parent -icon warning -type ok \
+					-title "Scidb" \
+					-message "The 3D WebGL server could not be started.\n\nMake sure python3 is installed."
+			}
+		}
+		return 0
+	}
+	WebGLPost [NormalizeBoard [CurrentBoard]]
+	set Priv(webgl,auto) 1
+	# tests and headless use suppress the browser launch
+	if {![info exists ::env(SCIDB_WEB3D_NO_BROWSER)]} {
+		set url [WebGLUrl]
+		switch -glob -- $::tcl_platform(os) {
+			"Linux*" {
+				foreach browser {xdg-open firefox chromium chromium-browser google-chrome} {
+					if {![catch { exec $browser $url & }]} { return 1 }
+				}
+			}
+			"Darwin" {
+				if {![catch { exec open $url & }]} { return 1 }
+			}
+			default {
+				if {$::tcl_platform(platform) eq "windows"} {
+					if {![catch { exec start $url & }]} { return 1 }
+				}
+			}
+		}
+	}
+	return 1
 }
 
 
@@ -944,8 +1533,32 @@ proc ::board3d::OnConfigure {win width height} {
 
 
 proc ::board3d::DoResize {win} {
+	variable Priv
 	if {![winfo exists $win]} { return }
-	render $win
+	if {$Priv(togl) ne "" && $win eq $Priv(togl)} {
+		renderOpenGL $win
+	} elseif {$Priv(canvas) ne "" && $win eq $Priv(canvas)} {
+		render $win
+	}
+}
+
+
+# Resolve a click at view coordinates (x, y) to a board square,
+# honouring whichever view is active: the hardware OpenGL view picks
+# through its own projection (glboard_pick), the canvas view through
+# `squareAt`.
+
+proc ::board3d::pickSquare {x y} {
+	variable State
+	variable Priv
+	if {$State(useOpenGL) && $Priv(togl) ne "" && [winfo exists $Priv(togl)]} {
+		if {![llength [info commands ::scidb::tk::glboard_pick]]} { return -1 }
+		set sq [::scidb::tk::glboard_pick $Priv(togl) $x $y \
+			$State(yaw) $State(pitch) $State(distance)]
+		if {![string is integer -strict $sq]} { return -1 }
+		return $sq
+	}
+	return [squareAt $x $y]
 }
 
 
@@ -989,7 +1602,7 @@ proc ::board3d::OnRelease {} {
 
 	if {[info exists Priv(drag,moved)] && !$Priv(drag,moved)
 		&& $Priv(drag,mode) eq "orbit"} {
-		set sq [squareAt $Priv(drag,x) $Priv(drag,y)]
+		set sq [pickSquare $Priv(drag,x) $Priv(drag,y)]
 		set State(selected) $sq
 		refresh
 	}
@@ -1034,6 +1647,18 @@ proc ::board3d::viewerPreset {name} {
 	preset $name
 	refresh
 	return
+}
+
+
+proc ::board3d::viewerThemeSelected {w} {
+	set val [$w get]
+	if {$val ne ""} { setTheme $val }
+}
+
+
+proc ::board3d::viewerStyleSelected {w} {
+	set val [$w get]
+	if {$val ne ""} { setPieceStyle $val }
 }
 
 # vi:set ts=3 sw=3:

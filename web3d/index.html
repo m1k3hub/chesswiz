@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Scidb Real 3D Chessboard (Hardware Accelerated WebGL)</title>
+  <style>
+    body { margin: 0; padding: 0; overflow: hidden; background: #0e1117; font-family: sans-serif; }
+    #canvas-container { width: 100vw; height: 100vh; display: block; }
+    #hud {
+      position: absolute; top: 16px; left: 16px; color: #f0f0f0;
+      background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px);
+      padding: 14px 20px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); pointer-events: none;
+    }
+    #hud h1 { margin: 0 0 6px 0; font-size: 1.1rem; letter-spacing: 0.5px; color: #ffd700; }
+    #hud p { margin: 0; font-size: 0.85rem; color: #cbd5e1; }
+    #controls {
+      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 10px; background: rgba(15, 23, 42, 0.85);
+      padding: 10px 16px; border-radius: 30px; border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+    button {
+      background: #2563eb; color: #fff; border: none; padding: 8px 16px;
+      border-radius: 20px; cursor: pointer; font-weight: 600; font-size: 0.85rem;
+      transition: all 0.2s ease;
+    }
+    button:hover { background: #3b82f6; transform: translateY(-1px); }
+    button.theme-btn { background: #475569; }
+    button.theme-btn:hover { background: #64748b; }
+  </style>
+  <script src="three.min.js"></script>
+  <script src="OrbitControls.js"></script>
+</head>
+<body>
+  <div id="hud">
+    <h1>Scidb Real 3D Chessboard</h1>
+    <p>Hardware-Accelerated WebGL • Physically Based Shaders • Real 3D Meshes & Dynamic Shadows</p>
+    <p style="margin-top: 4px; color: #94a3b8;">Left-drag to Orbit • Right-drag to Pan • Scroll to Zoom</p>
+  </div>
+  <div id="controls">
+    <button onclick="setCameraView('white')">White View</button>
+    <button onclick="setCameraView('black')">Black View</button>
+    <button onclick="setCameraView('side')">Side View</button>
+    <button onclick="setCameraView('top')">Top View</button>
+    <button class="theme-btn" onclick="toggleTheme()">Toggle Wood/Marble</button>
+  </div>
+  <div id="canvas-container"></div>
+
+  <script>
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0d14);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 11, 10);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.05;
+    controls.target.set(0, 0.4, 0);
+
+    // Studio Lighting
+    const ambientLight = new THREE.AmbientLight(0xfff5ea, 0.65);
+    scene.add(ambientLight);
+
+    const keyLight = new THREE.DirectionalLight(0xfff8ee, 1.4);
+    keyLight.position.set(6, 12, 6);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.camera.near = 0.5;
+    keyLight.shadow.camera.far = 30;
+    keyLight.shadow.camera.left = -6;
+    keyLight.shadow.camera.right = 6;
+    keyLight.shadow.camera.top = 6;
+    keyLight.shadow.camera.bottom = -6;
+    keyLight.shadow.bias = -0.0005;
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0xaaccff, 0.6);
+    fillLight.position.set(-6, 8, -6);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    rimLight.position.set(0, 5, -8);
+    scene.add(rimLight);
+
+    // Materials
+    let isWood = true;
+    const woodLightMat = new THREE.MeshStandardMaterial({
+      color: 0xf5dfb8, roughness: 0.25, metalness: 0.05
+    });
+    const woodDarkMat = new THREE.MeshStandardMaterial({
+      color: 0x8a4513, roughness: 0.28, metalness: 0.05
+    });
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: 0x4a2508, roughness: 0.35, metalness: 0.08
+    });
+    const whitePieceMat = new THREE.MeshStandardMaterial({
+      color: 0xfbf0da, roughness: 0.18, metalness: 0.08
+    });
+    const blackPieceMat = new THREE.MeshStandardMaterial({
+      color: 0x1e1713, roughness: 0.16, metalness: 0.12
+    });
+    const feltMat = new THREE.MeshStandardMaterial({
+      color: 0x1e4620, roughness: 0.95
+    });
+
+    // Board Slab & Squares
+    const boardGroup = new THREE.Group();
+    scene.add(boardGroup);
+
+    // Beveled frame
+    const frameGeo = new THREE.BoxGeometry(9.4, 0.5, 9.4);
+    const frameMesh = new THREE.Mesh(frameGeo, frameMat);
+    frameMesh.position.y = 0.25;
+    frameMesh.receiveShadow = true;
+    boardGroup.add(frameMesh);
+
+    // Squares
+    const squareSize = 1.0;
+    const squares = [];
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const isDark = (r + c) % 2 === 1;
+        const mat = isDark ? woodDarkMat : woodLightMat;
+        const geo = new THREE.BoxGeometry(squareSize * 0.98, 0.04, squareSize * 0.98);
+        const tile = new THREE.Mesh(geo, mat);
+        tile.position.set((c - 3.5) * squareSize, 0.51, (r - 3.5) * squareSize);
+        tile.receiveShadow = true;
+        boardGroup.add(tile);
+        squares.push(tile);
+      }
+    }
+
+    // Procedural Staunton 3D Geometries
+    function createLathePiece(points) {
+      const vPoints = points.map(p => new THREE.Vector2(p[0], p[1]));
+      const geo = new THREE.LatheGeometry(vPoints, 32);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    const pawnGeo = createLathePiece([
+      [0.34, 0.00], [0.34, 0.05], [0.30, 0.08], [0.26, 0.12], [0.28, 0.15],
+      [0.23, 0.18], [0.15, 0.35], [0.12, 0.48], [0.14, 0.52], [0.19, 0.55],
+      [0.16, 0.58], [0.11, 0.62], [0.13, 0.64], [0.19, 0.72], [0.19, 0.80],
+      [0.14, 0.88], [0.00, 0.92]
+    ]);
+
+    const rookGeo = createLathePiece([
+      [0.36, 0.00], [0.36, 0.06], [0.33, 0.10], [0.29, 0.14], [0.31, 0.17],
+      [0.24, 0.22], [0.21, 0.52], [0.23, 0.65], [0.30, 0.72], [0.31, 0.88],
+      [0.26, 0.88], [0.23, 0.78], [0.00, 0.78]
+    ]);
+
+    const bishopGeo = createLathePiece([
+      [0.35, 0.00], [0.35, 0.06], [0.32, 0.10], [0.27, 0.14], [0.29, 0.17],
+      [0.22, 0.22], [0.14, 0.52], [0.17, 0.62], [0.22, 0.72], [0.21, 0.85],
+      [0.11, 0.94], [0.03, 0.98], [0.00, 0.98]
+    ]);
+
+    const queenGeo = createLathePiece([
+      [0.37, 0.00], [0.37, 0.06], [0.33, 0.10], [0.28, 0.14], [0.30, 0.17],
+      [0.22, 0.22], [0.15, 0.62], [0.18, 0.75], [0.26, 0.92], [0.24, 1.00],
+      [0.16, 1.04], [0.00, 1.04]
+    ]);
+
+    const kingGeo = createLathePiece([
+      [0.38, 0.00], [0.38, 0.06], [0.34, 0.10], [0.29, 0.14], [0.31, 0.17],
+      [0.23, 0.22], [0.16, 0.66], [0.20, 0.80], [0.26, 1.00], [0.20, 1.08],
+      [0.00, 1.08]
+    ]);
+
+    // Knight: Base + horse head group
+    function createKnightMesh(mat) {
+      const knightGroup = new THREE.Group();
+      const baseMesh = new THREE.Mesh(createLathePiece([
+        [0.36, 0.00], [0.36, 0.06], [0.32, 0.10], [0.28, 0.14], [0.30, 0.17],
+        [0.23, 0.22], [0.20, 0.32], [0.00, 0.32]
+      ]), mat);
+      baseMesh.castShadow = true;
+      baseMesh.receiveShadow = true;
+      knightGroup.add(baseMesh);
+
+      const headGeo = new THREE.BoxGeometry(0.24, 0.45, 0.38);
+      const headMesh = new THREE.Mesh(headGeo, mat);
+      headMesh.position.set(0, 0.52, -0.04);
+      headMesh.castShadow = true;
+      knightGroup.add(headMesh);
+
+      const snoutGeo = new THREE.BoxGeometry(0.18, 0.22, 0.28);
+      const snoutMesh = new THREE.Mesh(snoutGeo, mat);
+      snoutMesh.position.set(0, 0.44, -0.22);
+      snoutMesh.castShadow = true;
+      knightGroup.add(snoutMesh);
+
+      return knightGroup;
+    }
+
+    function createPieceMesh(type, isWhite) {
+      const mat = isWhite ? whitePieceMat : blackPieceMat;
+      let mesh;
+      if (type === 'p') {
+        mesh = new THREE.Mesh(pawnGeo, mat);
+      } else if (type === 'r') {
+        mesh = new THREE.Mesh(rookGeo, mat);
+      } else if (type === 'b') {
+        mesh = new THREE.Mesh(bishopGeo, mat);
+        // Add finial ball
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), mat);
+        ball.position.y = 1.02;
+        ball.castShadow = true;
+        const g = new THREE.Group();
+        g.add(mesh);
+        g.add(ball);
+        mesh = g;
+      } else if (type === 'n') {
+        mesh = createKnightMesh(mat);
+        mesh.rotation.y = isWhite ? 0 : Math.PI;
+      } else if (type === 'q') {
+        mesh = new THREE.Mesh(queenGeo, mat);
+        const crownBall = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), mat);
+        crownBall.position.y = 1.08;
+        const g = new THREE.Group();
+        g.add(mesh);
+        g.add(crownBall);
+        mesh = g;
+      } else if (type === 'k') {
+        mesh = new THREE.Mesh(kingGeo, mat);
+        const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.05), mat);
+        crossV.position.y = 1.18;
+        const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.05, 0.05), mat);
+        crossH.position.y = 1.20;
+        const g = new THREE.Group();
+        g.add(mesh);
+        g.add(crossV);
+        g.add(crossH);
+        mesh = g;
+      }
+
+      mesh.traverse(child => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      return mesh;
+    }
+
+    // Standard initial board placement
+    const initialBoard = [
+      "r", "n", "b", "q", "k", "b", "n", "r",
+      "p", "p", "p", "p", "p", "p", "p", "p",
+      ".", ".", ".", ".", ".", ".", ".", ".",
+      ".", ".", ".", ".", ".", ".", ".", ".",
+      ".", ".", ".", ".", ".", ".", ".", ".",
+      ".", ".", ".", ".", ".", ".", ".", ".",
+      "P", "P", "P", "P", "P", "P", "P", "P",
+      "R", "N", "B", "Q", "K", "B", "N", "R"
+    ];
+
+    const piecesGroup = new THREE.Group();
+    scene.add(piecesGroup);
+
+    function setupPieces() {
+      while (piecesGroup.children.length > 0) {
+        piecesGroup.remove(piecesGroup.children[0]);
+      }
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const char = initialBoard[r * 8 + c];
+          if (char === ".") continue;
+          const isWhite = char === char.toUpperCase();
+          const type = char.toLowerCase();
+          const pMesh = createPieceMesh(type, isWhite);
+          pMesh.position.set((c - 3.5) * squareSize, 0.53, (r - 3.5) * squareSize);
+          piecesGroup.add(pMesh);
+        }
+      }
+    }
+    setupPieces();
+
+    // Camera Views
+    window.setCameraView = function(view) {
+      if (view === 'white') {
+        gsapToCamera(0, 8.5, 9, 0, 0.4, 0);
+      } else if (view === 'black') {
+        gsapToCamera(0, 8.5, -9, 0, 0.4, 0);
+      } else if (view === 'side') {
+        gsapToCamera(10, 8.5, 0, 0, 0.4, 0);
+      } else if (view === 'top') {
+        gsapToCamera(0, 14, 0.1, 0, 0.4, 0);
+      }
+    };
+
+    function gsapToCamera(px, py, pz, tx, ty, tz) {
+      camera.position.set(px, py, pz);
+      controls.target.set(tx, ty, tz);
+      controls.update();
+    }
+
+    window.toggleTheme = function() {
+      isWood = !isWood;
+      if (isWood) {
+        woodLightMat.color.setHex(0xf5dfb8);
+        woodDarkMat.color.setHex(0x8a4513);
+        frameMat.color.setHex(0x4a2508);
+      } else {
+        woodLightMat.color.setHex(0xeaeaea);
+        woodDarkMat.color.setHex(0x2d3748);
+        frameMat.color.setHex(0x1a202c);
+      }
+    };
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    let currentBoardStr = "";
+
+    function updateBoardFromStr(boardStr) {
+      if (!boardStr || boardStr.length !== 64 || boardStr === currentBoardStr) return;
+      currentBoardStr = boardStr;
+      while (piecesGroup.children.length > 0) {
+        piecesGroup.remove(piecesGroup.children[0]);
+      }
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const char = boardStr[r * 8 + c];
+          if (char === "." || char === " ") continue;
+          const isWhite = char === char.toUpperCase();
+          const type = char.toLowerCase();
+          const pMesh = createPieceMesh(type, isWhite);
+          pMesh.position.set((c - 3.5) * squareSize, 0.53, (r - 3.5) * squareSize);
+          piecesGroup.add(pMesh);
+        }
+      }
+    }
+
+    // Poll live moves from Scidb
+    setInterval(async () => {
+      try {
+        const res = await fetch('/api/board');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.board) {
+            updateBoardFromStr(data.board);
+          }
+        }
+      } catch (e) {}
+    }, 400);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>

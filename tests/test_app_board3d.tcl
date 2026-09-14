@@ -74,17 +74,37 @@ tcltest::test board3d-app-position-sync {PositionChanged mirrors a new position 
 		[expr {[llength [$canv find withtag b3d]] > 0}]
 } -result {rnbqkbnrpppppppp................................PPPPPPPPRNBQKBNR 1}
 
-tcltest::test board3d-app-select {click selection resolves through the projection} -body {
-	# the canvas centre must be inside the board for the default view
+tcltest::test board3d-app-select {click selection resolves through the projection in both views} -body {
+	# canvas view: the canvas centre must be inside the board for the default view
+	::board3d::toggleOpenGL 0
 	::board3d::preset white
 	::board3d::refresh
 	update idletasks
+	update
 	set canv [b3dAppCanvas]
-	set w [winfo width $canv]
-	set h [winfo height $canv]
-	set sq [::board3d::squareAt [expr {$w/2}] [expr {$h/2}]]
-	expr {$sq >= 0 && $sq < 64}
-} -result 1
+	set cx [expr {[winfo width $canv]/2}]
+	set cy [expr {[winfo height $canv]/2}]
+	set sq [::board3d::squareAt $cx $cy]
+	set res [list [expr {$sq >= 0 && $sq < 64}] \
+		[expr {[::board3d::pickSquare $cx $cy] == $sq}]]
+	# hardware view: the same click picks through the GL projection
+	set t $::board3d::Priv(togl)
+	if {$t ne "" && [winfo exists $t] && [llength [info commands ::scidb::tk::glboard_pick]]} {
+		::board3d::toggleOpenGL 1
+		update idletasks
+		update
+		set gsq [::scidb::tk::glboard_pick $t \
+			[expr {[winfo width $t]/2}] [expr {[winfo height $t]/2}] \
+			$::board3d::State(yaw) $::board3d::State(pitch) $::board3d::State(distance)]
+		lappend res [expr {$gsq >= 0 && $gsq < 64}] \
+			[expr {$::board3d::State(useOpenGL) == 1}]
+		::board3d::toggleOpenGL 0
+		update
+	} else {
+		lappend res 1 1
+	}
+	set res
+} -result {1 1 1 1}
 
 tcltest::test board3d-app-callbacks {interaction callbacks accept their bound argument counts} -body {
 	set canv [b3dAppCanvas]
@@ -126,5 +146,32 @@ tcltest::test board3d-app-close {closing the viewer destroys the window} -body {
 	::board3d::closeViewer
 	list [::board3d::isOpen] [winfo exists .application.__board3d__]
 } -result {0 0}
+
+# WebGL viewer: local three.js front end served by web3d/server.py.
+# Skipped when python3 or the http package is unavailable.
+tcltest::testConstraint webgl [expr {![catch { exec python3 -c exit }] && ![catch { package require http }]}]
+
+tcltest::test board3d-app-webgl {WebGL server starts, serves and syncs the board} -constraints webgl -body {
+	set ::env(SCIDB_WEB3D_NO_BROWSER) 1
+	set rc [::board3d::openWebGLViewer]
+	if {$rc != 1} { error "WebGL server did not come up" }
+	set board "rnbqkbnrpppppppp................................PPPPPPPPRNBQKBNR"
+	::board3d::PositionChanged $board
+	set tok [::http::geturl http://127.0.0.1:8899/api/board -timeout 3000]
+	set data [::http::data $tok]
+	::http::cleanup $tok
+	# the pushed board round-trips through the server API
+	set match [string match "*\"board\": \"$board\"*" $data]
+	# and a position change syncs to the server without errors
+	set sync [::board3d::PositionChanged [::board3d::NormalizeBoard empty]]
+	list $match [expr {[string length $sync] == 64}]
+} -result {1 1}
+
+# stop the WebGL server again when this suite started it
+if {[string is integer -strict $::board3d::Priv(webgl,pid)]} {
+	catch { exec kill $::board3d::Priv(webgl,pid) }
+	set ::board3d::Priv(webgl,pid) {}
+	set ::board3d::Priv(webgl,auto) 0
+}
 
 tcltest::cleanupTests

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — 3D Chessboard Viewer
+## Unreleased — 3D Chessboard Viewer (v2/v3: themes, vector pieces, hardware OpenGL, WebGL)
 
 - New `tcl/board-3d.tcl` (`::board3d`) renders the current position as a
   perspective board that can be orbited, tilted and zoomed:
@@ -11,14 +11,42 @@
     set (Unicode-glyph fallback when no piece set is loaded);
   - a viewer window with White/Black/Side/Top presets, rotate/tilt/zoom
     (drag, wheel, arrow keys, Home) and click-to-select.
+- v2 — presentation upgrade: five handcrafted woodworking themes
+  (Classic Woodcraft, Rosewood & Boxwood, Walnut & Maple, Ebony & Ivory,
+  Tournament Green) selectable live from the new toolbar, plus three piece
+  styles: *realistic3d* (Blender-rendered pieces, `img/pieces_3d/`, built
+  from `models_3d/` via `scripts/build_3d_chess_blender.py`), *vector*
+  (lathe-profile revolution solids with felt bases and architectural
+  finials) and the existing *photos*/*glyphs* billboards.
+- v3 — hardware-accelerated view: `src/tk/tk_glboard.cpp` embeds an OpenGL
+  renderer (board slab, 64 shaded tiles, mesh pieces from
+  `src/tk/gl_piece_data.h`, two-lamp lighting) behind
+  `::scidb::tk::glboard_render`, loaded through the Togl 2.0 ABI at runtime
+  (`lib/togl/libTogl.so` vendored, system Togl as fallback; the binary only
+  gains `-lGL -lGLU`).  The "3D Hardware" button toggles between the OpenGL
+  widget and the Tk canvas; clicking a square resolves through the *active*
+  view (`glboard_pick` unprojects with the same matrices the renderer used).
+  Loading guards against the duplicate-libTogl segfault: the exact library
+  file Tcl `load`ed is re-opened (same object, stubs table initialized by
+  its `Togl_Init`); a fresh system copy is only opened — and initialized —
+  when no Togl was loaded at all.
+- v3 — WebGL viewer: `Extras → Open WebGL Real 3D Board` starts
+  `web3d/server.py` (local three.js viewer on port 8899, polling
+  `/api/board`), pushes the current position and opens the browser;
+  every position change keeps it in sync.  `SCIDB_WEB3D_NO_BROWSER=1`
+  suppresses the browser launch (used by tests).
 - Wired into the app: `Extras → 3D Board` opens the viewer; the main board
   pushes its position through `::board3d::PositionChanged` from
   `application::board::update` (via a new `::board::diagram::data`
   accessor), so the 3D view mirrors play live.  Design and plan in
   `docs/BOARD_3D_DESIGN.md`.
 - Tests: `tests/test_board3d.tcl` (headless camera/projection/hit-test
-  math) and `tests/test_app_board3d.tcl` (viewer open/draw/preset/sync/
-  close under X).
+  math, themes/styles, vector pieces, pick fallback, WebGL helpers) and
+  `tests/test_app_board3d.tcl` (viewer open/draw/preset/sync/click-select
+  in both views/WebGL round-trip/close under X).
+- Test infra: `tests/run_app_tests.tcl` exits through the real `exit` after
+  the summary, avoiding the post-suite abort when the application has
+  redefined `exit`.
 
 ## Unreleased — Media Pane Layout-Menu Crash Fix
 

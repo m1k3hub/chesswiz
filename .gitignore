@@ -109,3 +109,9 @@ tests/app_test_report.txt
 
 # stray shell-redirection artifact
 &1
+
+# Togl runtime: system libtogl2/libtogl-dev is the supported dependency;
+# lib/togl/libTogl.so is a local fallback copy (*.so is ignored above) and
+# the togl demos .deb was only used to extract it
+lib/togl/
+togl-demos*.deb
