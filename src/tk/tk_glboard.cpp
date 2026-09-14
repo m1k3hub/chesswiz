@@ -224,7 +224,7 @@ static void drawCube(float x, float y, float z, float sx, float sy, float sz)
     glEnd();
 }
 
-static void drawBoard(int selectedSq)
+static void drawBoard(int selectedSq, int suggestedSq)
 {
     // Wood border base slab
     float woodAmbient[4]  = {0.25f, 0.15f, 0.08f, 1.0f};
@@ -251,6 +251,10 @@ static void drawBoard(int selectedSq)
     float selDiffuse[4]    = {0.95f, 0.85f, 0.20f, 1.0f};
     float selSpecular[4]   = {0.50f, 0.50f, 0.30f, 1.0f};
 
+    float sugAmbient[4]    = {0.08f, 0.18f, 0.42f, 1.0f};
+    float sugDiffuse[4]    = {0.30f, 0.50f, 0.95f, 1.0f};
+    float sugSpecular[4]   = {0.40f, 0.40f, 0.45f, 1.0f};
+
     for (int r = 0; r < 8; ++r) {
         for (int c = 0; c < 8; ++c) {
             int sq = r * 8 + c;
@@ -261,6 +265,11 @@ static void drawBoard(int selectedSq)
                 glMaterialfv(GL_FRONT, GL_DIFFUSE, selDiffuse);
                 glMaterialfv(GL_FRONT, GL_SPECULAR, selSpecular);
                 glMaterialf(GL_FRONT, GL_SHININESS, 60.0f);
+            } else if (sq == suggestedSq) {
+                glMaterialfv(GL_FRONT, GL_AMBIENT, sugAmbient);
+                glMaterialfv(GL_FRONT, GL_DIFFUSE, sugDiffuse);
+                glMaterialfv(GL_FRONT, GL_SPECULAR, sugSpecular);
+                glMaterialf(GL_FRONT, GL_SHININESS, 55.0f);
             } else if (isLight) {
                 glMaterialfv(GL_FRONT, GL_AMBIENT, lightAmbient);
                 glMaterialfv(GL_FRONT, GL_DIFFUSE, lightDiffuse);
@@ -273,6 +282,8 @@ static void drawBoard(int selectedSq)
                 glMaterialf(GL_FRONT, GL_SHININESS, 40.0f);
             }
 
+            // board string row 0 = rank 1 (white's home rank), like
+            // ::board::diagram; the white camera sits at the y = 0 side
             float cx = (float)c + 0.5f;
             float cy = (float)r + 0.5f;
             drawCube(cx, cy, 0.005f, 0.98f, 0.98f, 0.02f);
@@ -280,7 +291,7 @@ static void drawBoard(int selectedSq)
     }
 }
 
-static void drawPiece(char pieceChar, float x, float y)
+static void drawPiece(char pieceChar, float x, float y, float lift)
 {
     bool isWhite = (pieceChar >= 'A' && pieceChar <= 'Z');
     char lower = isWhite ? (pieceChar + ('a' - 'A')) : pieceChar;
@@ -315,14 +326,14 @@ static void drawPiece(char pieceChar, float x, float y)
     }
 
     glPushMatrix();
-    glTranslatef(x, y, 0.015f);
+    glTranslatef(x, y, 0.015f + lift);
 
-    // Orientation: Knight faces slightly toward center
+    // Orientation: knights face toward the opponent's side
     if (lower == 'n') {
         if (isWhite) {
-            glRotatef(-75.0f, 0.0f, 0.0f, 1.0f);
+            glRotatef(-105.0f, 0.0f, 0.0f, 1.0f);
         } else {
-            glRotatef(105.0f, 0.0f, 0.0f, 1.0f);
+            glRotatef(75.0f, 0.0f, 0.0f, 1.0f);
         }
     }
 
@@ -335,9 +346,9 @@ static void drawPiece(char pieceChar, float x, float y)
 static int
 glboardRenderCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* const objv[])
 {
-    // Syntax: ::scidb::tk::glboard_render <toglWidgetName> <boardString> <yaw> <pitch> <distance> <selectedSq>
+    // Syntax: ::scidb::tk::glboard_render <toglWidgetName> <boardString> <yaw> <pitch> <distance> ?selected? ?suggested? ?dragFrom? ?dragX? ?dragY?
     if (objc < 6) {
-        Tcl_WrongNumArgs(interp, 1, objv, "toglName board yaw pitch distance ?selected?");
+        Tcl_WrongNumArgs(interp, 1, objv, "toglName board yaw pitch distance ?selected? ?suggested? ?dragFrom? ?dragX? ?dragY?");
         return TCL_ERROR;
     }
 
@@ -351,12 +362,27 @@ glboardRenderCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* c
 
     double yaw = 0.0, pitch = 56.0, distance = 14.0;
     int selectedSq = -1;
+    int suggestedSq = -1;
+    int dragFrom = -1;
+    double dragX = 0.0, dragY = 0.0;
 
     if (Tcl_GetDoubleFromObj(interp, objv[3], &yaw) != TCL_OK) return TCL_ERROR;
     if (Tcl_GetDoubleFromObj(interp, objv[4], &pitch) != TCL_OK) return TCL_ERROR;
     if (Tcl_GetDoubleFromObj(interp, objv[5], &distance) != TCL_OK) return TCL_ERROR;
     if (objc >= 7) {
         if (Tcl_GetIntFromObj(interp, objv[6], &selectedSq) != TCL_OK) return TCL_ERROR;
+    }
+    if (objc >= 8) {
+        if (Tcl_GetIntFromObj(interp, objv[7], &suggestedSq) != TCL_OK) return TCL_ERROR;
+    }
+    if (objc >= 9) {
+        if (Tcl_GetIntFromObj(interp, objv[8], &dragFrom) != TCL_OK) return TCL_ERROR;
+    }
+    if (objc >= 10) {
+        if (Tcl_GetDoubleFromObj(interp, objv[9], &dragX) != TCL_OK) return TCL_ERROR;
+    }
+    if (objc >= 11) {
+        if (Tcl_GetDoubleFromObj(interp, objv[10], &dragY) != TCL_OK) return TCL_ERROR;
     }
 
     struct Togl* togl = NULL;
@@ -426,21 +452,30 @@ glboardRenderCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* c
     glLightfv(GL_LIGHT1, GL_SPECULAR, l1Specular);
 
     // Render 3D Board
-    drawBoard(selectedSq);
+    drawBoard(selectedSq, suggestedSq);
 
     // Render Pieces
     if (strlen(boardStr) >= 64) {
         for (int r = 0; r < 8; ++r) {
             for (int c = 0; c < 8; ++c) {
-                // Board row 0 = rank 8 (top of board string)
-                // In our OpenGL coordinates, Y=0 is rank 1, Y=7 is rank 8
+                // board string row 0 = rank 1 (white's home rank), the same
+                // indexing ::board::diagram and ::move use (a1 = 0, h8 = 63);
+                // row r is drawn at world y = r, so white sits at the near
+                // edge of the default (white) camera
                 int boardIdx = r * 8 + c;
                 char piece = boardStr[boardIdx];
-                if (piece != ' ' && piece != '.' && piece != 0) {
-                    float px = (float)c + 0.5f;
-                    float py = (float)(7 - r) + 0.5f;
-                    drawPiece(piece, px, py);
-                }
+                if (piece == ' ' || piece == '.' || piece == 0) { continue; }
+                if (boardIdx == dragFrom) { continue; } // lifted by the cursor
+                float px = (float)c + 0.5f;
+                float py = (float)r + 0.5f;
+                drawPiece(piece, px, py, 0.0f);
+            }
+        }
+        // the dragged piece hovers over the board at the cursor position
+        if (dragFrom >= 0 && dragFrom < 64) {
+            char piece = boardStr[dragFrom];
+            if (piece != ' ' && piece != '.' && piece != 0) {
+                drawPiece(piece, (float)dragX, (float)dragY, 0.75f);
             }
         }
     }
@@ -459,9 +494,9 @@ glboardRenderCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* c
 static int
 glboardPickCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* const objv[])
 {
-    // Syntax: ::scidb::tk::glboard_pick <toglWidgetName> <x> <y> <yaw> <pitch> <distance>
-    if (objc != 7) {
-        Tcl_WrongNumArgs(interp, 1, objv, "toglName x y yaw pitch distance");
+    // Syntax: ::scidb::tk::glboard_pick <toglWidgetName> <x> <y> <yaw> <pitch> <distance> ?withWorld?
+    if (objc < 7) {
+        Tcl_WrongNumArgs(interp, 1, objv, "toglName x y yaw pitch distance ?withWorld?");
         return TCL_ERROR;
     }
 
@@ -531,7 +566,10 @@ glboardPickCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* con
         return TCL_OK;
     }
 
-    // Intersect the pick ray with the tile top plane z = 0.015
+    // Intersect the pick ray with the tile top plane z = 0.015.  t is the
+    // parameter along the near->far unprojected segment (0 = near plane,
+    // 1 = far plane), so an intersection behind the near plane means the
+    // click is above the horizon.
     double dz = fz - nz;
     if (fabs(dz) < 1e-9) {
         Tcl_SetObjResult(interp, Tcl_NewIntObj(-1));
@@ -544,16 +582,36 @@ glboardPickCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* con
     }
     double wx = nx + t * (fx - nx);
     double wy = ny + t * (fy - ny);
-    if (wx < 0.0 || wx >= 8.0 || wy < 0.0 || wy >= 8.0) {
-        Tcl_SetObjResult(interp, Tcl_NewIntObj(-1));
-        return TCL_OK;
+    // keep the world position near the board so the dragged piece stays
+    // in view even for wild rays
+    if (wx < -2.0) { wx = -2.0; } else if (wx > 10.0) { wx = 10.0; }
+    if (wy < -2.0) { wy = -2.0; } else if (wy > 10.0) { wy = 10.0; }
+
+    int sq = -1;
+    int col = (int)wx;
+    int row = (int)wy;
+    if (wx >= 0.0 && wx < 8.0 && wy >= 0.0 && wy < 8.0) {
+        // board string row 0 = rank 1 (white's home rank), matching
+        // ::board::diagram / ::move (a1 = 0, h8 = 63)
+        sq = row * 8 + col;
     }
 
-    int col = (int)wx;
-    int rankFromBottom = (int)wy;
-    int row = 7 - rankFromBottom; // board string row 0 = rank 8
+    // optional second result form: {square worldX worldY}, used by the
+    // 3D move input to position the dragged piece
+    if (objc >= 8) {
+        int withWorld = 0;
+        if (Tcl_GetBooleanFromObj(interp, objv[7], &withWorld) != TCL_OK) return TCL_ERROR;
+        if (withWorld) {
+            Tcl_Obj* result[3];
+            result[0] = Tcl_NewIntObj(sq);
+            result[1] = Tcl_NewDoubleObj(wx);
+            result[2] = Tcl_NewDoubleObj(wy);
+            Tcl_SetObjResult(interp, Tcl_NewListObj(3, result));
+            return TCL_OK;
+        }
+    }
 
-    Tcl_SetObjResult(interp, Tcl_NewIntObj(row * 8 + col));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(sq));
     return TCL_OK;
 }
 

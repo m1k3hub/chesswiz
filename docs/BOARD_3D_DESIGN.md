@@ -106,8 +106,10 @@ world = cam + t*ray
 ```
 
 `file = floor(world.x + 4)`, `rank = floor(world.y + 4)`, clamped to `0..7`;
-`square = (7 - rank)*8 + file` (the same `row*8+col` indexing the 2D board
-uses, row 0 = rank 8).
+`square = rank*8 + file`.  This is the same indexing `::board::diagram`,
+`::scidb::pos` and `::move` use, and the same order as the board string
+`::board::diagram::data` returns: **a1 = 0, h8 = 63, row 0 = rank 1**
+(white's home rank sits near the default camera).
 
 ## 4. Rendering
 
@@ -201,16 +203,21 @@ widget inside the pane.  The camera starts from the 2D board's
 orientation; the menu checkbutton state lives in
 `::board3d::State(embed)`.
 
-While embedded, the 3D pane takes the focus and forwards plain key
-presses to the (hidden) 2D board canvas, so game navigation (Home,
-Left/Right, …) keeps working; orbit/zoom and click-to-select stay on
-the mouse, exactly like in the viewer window.  The embedded view shares
-the camera state with the viewer window, so orbiting one turns both.
+While embedded, the 3D pane is **playable**: pressing a piece of the
+side to move starts a 3D drag — the piece is lifted over the board and
+follows the cursor, legal target squares light up blue
+(`glboard_render`'s `suggested` argument) — and releasing on a target
+plays the move through `::move::AddMove`, so legality, promotion
+dialogs, sounds, engine updates and game navigation behave exactly as
+on the 2D board.  Shift-drag allows illegal moves like the 2D board;
+press-release-press completes a move click-click; pressing empty squares
+or button-3 orbits the camera; the wheel zooms; plain keys are forwarded
+to the hidden 2D board.  Square indices are the `::board::diagram`
+convention everywhere (`a1 = 0`, `h8 = 63`, board string row 0 = rank 1).
 
-Limitations (v1): the embedded view is view-only — moves are still made
-on the 2D board —, it does not draw marks/arrows, and rotating the 2D
-board while embedded is not reflected until re-embedding.  Multiple
-board panes are not supported; the pane tracked by
+Limitations (v1): the embedded view does not draw marks/arrows, and
+rotating the 2D board while embedded is not reflected until re-embedding.
+Multiple board panes are not supported; the pane tracked by
 `application::board::Vars(widget:frame)` is used.
 
 ### 6.3 WebGL viewer
@@ -235,9 +242,11 @@ polls every 400ms and rebuilds the pieces.
   viewer toplevel opens with a populated canvas, rotation/preset/reset update
   it, `PositionChanged` redraws a different position, click selection works
   in *both* the canvas and the hardware OpenGL view (via `glboard_pick`),
-  the embedded 3D pane swaps into the main board window (Togl-gated), the
-  WebGL server starts/serves/syncs the board (python3-gated), and close
-  destroys the window.
+  the embedded 3D pane swaps into the main board window (Togl-gated),
+  dragging pieces in the 3D pane plays moves through the move machinery
+  (drag, click-click, illegal rejection; Togl-gated), the WebGL server
+  starts/serves/syncs the board (python3-gated), and close destroys the
+  window.
 
 ## 8. Phases
 

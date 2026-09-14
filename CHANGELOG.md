@@ -33,11 +33,25 @@
 - v3 — embedded hardware 3D pane: *Extras → 3D Board in Main Window*
   swaps the board pane's 2D diagram for the hardware OpenGL view inside
   the main window (same `glboard_render` engine, orbit/zoom on the mouse,
-  click-to-select through `glboard_pick`).  While embedded, the pane
-  takes the focus and forwards plain keys to the hidden 2D board, so
-  game navigation keeps working; moves are still made on the 2D board.
-  The 2D diagram and all its bindings are preserved and restored when
-  toggling back.
+  click-to-select through `glboard_pick`).  The pane is *playable*:
+  dragging a piece of the side to move lifts it over the board (it
+  follows the pick ray, legal targets highlight blue) and dropping it on
+  a square plays the move through `::move::AddMove` — legality,
+  promotion dialogs, sounds and engine updates behave exactly as on the
+  2D board; Shift-drag permits illegal moves, press-release-press
+  completes moves click-click.  While embedded, the pane takes the focus
+  and forwards plain keys to the hidden 2D board, so game navigation
+  keeps working.  The 2D diagram and all its bindings are preserved and
+  restored when toggling back.
+- v3 — GL board orientation and indexing fixes: the OpenGL renderer now
+  uses the `::board::diagram` square convention everywhere
+  (a1 = 0, h8 = 63, board string row 0 = rank 1 at the near edge of the
+  white camera); previously pieces were drawn transposed across ranks
+  relative to the board colours (the board appeared upside down with
+  pieces on the wrong squares) and picks returned mirrored indices.
+  `glboard_pick` optionally returns the ray's world intersection
+  (`{square worldX worldY}`) and `glboard_render` accepts `suggested`-
+  square and dragged-piece arguments used by the 3D move input.
 - v3 — WebGL viewer: `Extras → Open WebGL Real 3D Board` starts
   `web3d/server.py` (local three.js viewer on port 8899, polling
   `/api/board`), pushes the current position and opens the browser;

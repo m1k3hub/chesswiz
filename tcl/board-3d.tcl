@@ -59,6 +59,7 @@ array set State {
 	pieceStyle   "realistic3d"
 	useOpenGL    1
 	embed        0
+	suggested    -1
 }
 
 variable Priv
@@ -75,6 +76,10 @@ array set Priv {
 	embed,frame {}
 	embed,togl  {}
 	embed,error {}
+	drag,kind   {}
+	drag,from   -1
+	drag,wx     0
+	drag,wy     0
 }
 
 variable StandardBoard "RNBQKBNRPPPPPPPP................................pppppppprnbqkbnr"
@@ -389,7 +394,7 @@ proc ::board3d::defaults {} {
 		yaw 0 pitch 56 distance 12.0 thickness 0.30
 		pieceHeight 1.10 gap 0.045
 		showCoords 1 showShadow 1
-		selected -1 marks {}
+		selected -1 suggested -1 marks {}
 		view white
 		theme "Classic Woodcraft"
 		pieceStyle "vector"
@@ -723,13 +728,17 @@ proc ::board3d::refresh {} {
 
 proc ::board3d::renderOpenGL {togl {board ""}} {
 	variable State
+	variable Priv
 	if {[string length $board]} {
 		set State(board) [NormalizeBoard $board]
 	}
 	if {$State(board) eq ""} { set State(board) [NormalizeBoard standard] }
 	if {[llength [info commands ::scidb::tk::glboard_render]]} {
 		catch {
-			::scidb::tk::glboard_render $togl $State(board) $State(yaw) $State(pitch) $State(distance) $State(selected)
+			::scidb::tk::glboard_render $togl $State(board) \
+				$State(yaw) $State(pitch) $State(distance) \
+				$State(selected) $State(suggested) \
+				$Priv(drag,from) $Priv(drag,wx) $Priv(drag,wy)
 		}
 	}
 }
@@ -1217,13 +1226,23 @@ proc ::board3d::LoadToglLib {} {
 # zoom, click-to-select).  When $forward is given (the hidden 2D board
 # canvas of an embedded pane), plain key events are forwarded to it so
 # game navigation keeps working while the 3D pane has the focus.
+# When $movable is true (embedded pane), pressing a piece of the side to
+# move starts a 3D drag-and-drop move instead of orbiting; dragging on
+# empty squares or using button 3 still orbits.
 
-proc ::board3d::CreateTogl {w {forward {}}} {
+proc ::board3d::CreateTogl {w {forward {}} {movable 0}} {
 	set win [togl $w -width 640 -height 520 -rgba true -double true -depth true]
-	::bind $win <ButtonPress-1>  [namespace code [list OnPress $win %x %y]]
-	::bind $win <B1-Motion>      [namespace code [list OnMotion $win %x %y]]
-	::bind $win <ButtonRelease-1> [namespace code [list OnRelease $win]]
-	::bind $win <ButtonPress-3>  [namespace code [list OnPress $win %x %y pan]]
+	if {$movable} {
+		::bind $win <ButtonPress-1>  [namespace code [list OnMovePress $win %x %y %s]]
+		::bind $win <B1-Motion>      [namespace code [list OnMoveMotion $win %x %y %s]]
+		::bind $win <ButtonRelease-1> [namespace code [list OnMoveRelease $win %x %y %s]]
+	} else {
+		::bind $win <ButtonPress-1>  [namespace code [list OnPress $win %x %y]]
+		::bind $win <B1-Motion>      [namespace code [list OnMotion $win %x %y]]
+		::bind $win <ButtonRelease-1> [namespace code [list OnRelease $win]]
+	}
+	# button 3 always orbits (even over movable pieces)
+	::bind $win <ButtonPress-3>  [namespace code [list OnPress $win %x %y orbit]]
 	::bind $win <B3-Motion>      [namespace code [list OnMotion $win %x %y]]
 	::bind $win <Button-4>       [namespace code [list viewerZoom 1]]
 	::bind $win <Button-5>       [namespace code [list viewerZoom -1]]
@@ -1242,6 +1261,188 @@ proc ::board3d::ForwardKey {canv keysym state} {
 	# navigation bindings keep firing while the 3D pane has the focus
 	if {![winfo exists $canv]} { return }
 	catch { event generate $canv <KeyPress-$keysym> -state $state }
+	return
+}
+
+
+# ======================================================================
+# 3D move input (embedded pane): drag a piece between picked squares
+# ======================================================================
+
+# Is the move machinery currently accepting input?
+
+proc ::board3d::MovesEnabled {} {
+	if {[llength [info commands ::move::AddMove]] == 0} { return 0 }
+	if {[catch { set ::move::Disabled } disabled]} { return 0 }
+	if {$disabled} { return 0 }
+	if {[catch { ::scidb::game::query over? } over]} { return 0 }
+	if {$over} { return 0 }
+	return 1
+}
+
+
+# Pick through the given hardware view, returning the square *and* the
+# world coordinates of the ray intersection: {sq wx wy} (sq = -1 when the
+# ray misses the playing surface).
+
+proc ::board3d::SquareAtView {win x y} {
+	variable State
+	if {![llength [info commands ::scidb::tk::glboard_pick]]} { return {-1 0.0 0.0} }
+	set res [catch {
+		::scidb::tk::glboard_pick $win $x $y \
+			$State(yaw) $State(pitch) $State(distance) 1
+	} pick]
+	if {$res || [llength $pick] != 3} { return {-1 0.0 0.0} }
+	lassign $pick sq wx wy
+	if {![string is double -strict $wx] || ![string is double -strict $wy]} {
+		return {-1 0.0 0.0}
+	}
+	if {![string is integer -strict $sq] || $sq < 0 || $sq > 63} { set sq -1 }
+	return [list $sq $wx $wy]
+}
+
+
+# Does $sq hold a piece of the side to move (and may it be moved)?
+
+proc ::board3d::MovablePieceAt {sq} {
+	variable State
+	if {$sq < 0} { return 0 }
+	if {![MovesEnabled]} { return 0 }
+	set piece [string index $State(board) $sq]
+	if {$piece eq "." || $piece eq " " || $piece eq ""} { return 0 }
+	if {![string is alpha $piece]} { return 0 }
+	set color [expr {[string is upper -strict $piece] ? "w" : "b"}]
+	if {[catch { set stm [::scidb::pos::stm] }]} { return 0 }
+	return [expr {$color eq $stm}]
+}
+
+
+# Is $to a legal target for a piece on $from (with the Shift override)?
+
+proc ::board3d::LegalTarget? {from to state} {
+	if {$from < 0 || $to < 0} { return 0 }
+	set allowIllegal 0
+	catch { set allowIllegal [::util::shiftIsHeldDown? $state] }
+	if {[catch { ::scidb::pos::legal? $from $to $allowIllegal } legal]} { return 0 }
+	return [expr {$legal ? 1 : 0}]
+}
+
+
+# Make the move through the application's move machinery (legality,
+# promotion dialog, sounds, engine updates all come with it).
+
+proc ::board3d::MakeMove {from to state} {
+	set allowIllegal 0
+	catch { set allowIllegal [::util::shiftIsHeldDown? $state] }
+	if {[catch { ::move::AddMove $from $to $allowIllegal } err]} {
+		if {[llength [info commands tk_messageBox]]} {
+			catch {
+				tk_messageBox -parent .application -icon warning -type ok \
+					-title "Scidb" \
+					-message "The 3D move could not be made:\n\n$err"
+			}
+		}
+	}
+	return
+}
+
+
+proc ::board3d::ClearDrag {} {
+	variable Priv
+	variable State
+	set Priv(drag,kind) {}
+	set Priv(drag,from) -1
+	set Priv(drag,wx) 0
+	set Priv(drag,wy) 0
+	set State(suggested) -1
+	return
+}
+
+
+proc ::board3d::OnMovePress {win x y state} {
+	variable Priv
+	variable State
+	lassign [SquareAtView $win $x $y] sq wx wy
+
+	# click-click completion: a pending selection plus a legal target
+	if {$sq >= 0 && $State(selected) != -1 && $sq != $State(selected)} {
+		if {[LegalTarget? $State(selected) $sq $state]} {
+			set from $State(selected)
+			ClearDrag
+			set State(selected) -1
+			MakeMove $from $sq $state
+			refresh
+			return
+		}
+		set State(selected) -1
+	}
+
+	# press on a movable piece: start a 3D drag
+	if {$sq >= 0 && [MovablePieceAt $sq]} {
+		set Priv(drag,kind) move
+		set Priv(drag,from) $sq
+		set Priv(drag,wx) $wx
+		set Priv(drag,wy) $wy
+		set State(selected) $sq
+		set State(suggested) -1
+		refresh
+		return
+	}
+
+	# press on the selected square toggles the selection off
+	if {$sq >= 0 && $sq == $State(selected)} {
+		set State(selected) -1
+		refresh
+		return
+	}
+
+	# otherwise: orbit the camera (and drop any stale selection)
+	set State(selected) -1
+	OnPress $win $x $y orbit
+	return
+}
+
+
+proc ::board3d::OnMoveMotion {win x y state} {
+	variable Priv
+	variable State
+
+	if {$Priv(drag,kind) ne "move"} {
+		OnMotion $win $x $y
+		return
+	}
+	lassign [SquareAtView $win $x $y] sq wx wy
+	set Priv(drag,wx) $wx
+	set Priv(drag,wy) $wy
+	set State(suggested) -1
+	if {$sq >= 0 && $sq != $Priv(drag,from)} {
+		if {[LegalTarget? $Priv(drag,from) $sq $state]} {
+			set State(suggested) $sq
+		}
+	}
+	refresh
+	return
+}
+
+
+proc ::board3d::OnMoveRelease {win x y state} {
+	variable Priv
+	variable State
+
+	if {$Priv(drag,kind) ne "move"} {
+		OnRelease $win
+		return
+	}
+	set from $Priv(drag,from)
+	lassign [SquareAtView $win $x $y] sq wx wy
+	ClearDrag
+	if {$sq >= 0 && $sq != $from} {
+		set State(selected) -1
+		MakeMove $from $sq $state
+	}
+	# releasing on the source square keeps the selection armed for
+	# click-click input
+	refresh
 	return
 }
 
@@ -1276,7 +1477,8 @@ proc ::board3d::embed {canvas2d} {
 	set parent [winfo parent $canvas2d]
 	set frame [frame $parent.board3dgl -background #101418]
 	if {[catch {
-		set Priv(embed,togl) [CreateTogl $frame.togl $canvas2d]
+		# movable: dragging pieces in the 3D pane makes moves
+		set Priv(embed,togl) [CreateTogl $frame.togl $canvas2d 1]
 	} err]} {
 		catch { destroy $frame }
 		set Priv(embed,togl) {}
@@ -1302,6 +1504,8 @@ proc ::board3d::embed {canvas2d} {
 
 proc ::board3d::unembed {} {
 	variable Priv
+	ClearDrag
+	set Priv(embed,error) ""
 	if {$Priv(embed,frame) ne "" && [winfo exists $Priv(embed,frame)]} {
 		catch { pack forget $Priv(embed,frame) }
 	}
