@@ -42,6 +42,7 @@ void panedwindow_init(Tcl_Interp*);
 void notebook_init(Tcl_Interp*);
 void clockInit(Tcl_Interp*);
 void miscInit(Tcl_Interp*);
+void glboard_init(Tcl_Interp*);
 
 }
 

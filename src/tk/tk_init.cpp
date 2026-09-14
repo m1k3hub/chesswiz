@@ -69,6 +69,7 @@ tk::init(Tcl_Interp* ti)
 	multiwindow_init(ti);
 	panedwindow_init(ti);
 	notebook_init(ti);
+	glboard_init(ti);
 
 	Tkhtml_Init(ti);
 	Tkdnd_Init(ti);

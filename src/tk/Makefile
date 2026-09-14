@@ -27,6 +27,7 @@ SRC_CXX = \
 	tk_busy.cpp \
 	tk_clock.cpp \
 	tk_fixes.cpp \
+	tk_glboard.cpp \
 	tk_image.cpp \
 	tk_init.cpp \
 	tk_jpeg.cpp \
