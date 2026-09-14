@@ -1441,8 +1441,8 @@ proc ::board3d::WebGLStartServer {} {
 	if {[catch { exec $python $server >& $log & } pid]} { return 0 }
 	set Priv(webgl,pid) $pid
 
-	# wait (max ~3s) for the server to accept connections
-	for {set i 0} {$i < 30} {incr i} {
+	# wait (max ~5s) for the server to accept connections
+	for {set i 0} {$i < 50} {incr i} {
 		if {[WebGLServerUp]} { return 1 }
 		if {[llength [info commands after]]} { after 100 }
 	}

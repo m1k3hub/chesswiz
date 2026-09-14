@@ -77,9 +77,12 @@ tcltest::test board3d-app-position-sync {PositionChanged mirrors a new position 
 tcltest::test board3d-app-select {click selection resolves through the projection in both views} -body {
 	# canvas view: the canvas centre must be inside the board for the default view
 	::board3d::toggleOpenGL 0
-	::board3d::preset white
-	::board3d::refresh
 	update idletasks
+	update
+	::board3d::preset white
+	# re-fit with the now-real canvas size; the DoResize coalescing timer
+	# may not have fired yet at this point
+	::board3d::refresh
 	update
 	set canv [b3dAppCanvas]
 	set cx [expr {[winfo width $canv]/2}]
@@ -93,9 +96,14 @@ tcltest::test board3d-app-select {click selection resolves through the projectio
 		::board3d::toggleOpenGL 1
 		update idletasks
 		update
-		set gsq [::scidb::tk::glboard_pick $t \
-			[expr {[winfo width $t]/2}] [expr {[winfo height $t]/2}] \
-			$::board3d::State(yaw) $::board3d::State(pitch) $::board3d::State(distance)]
+		after 50		;# let the X server map and size the togl
+		update
+		set gsq -1
+		if {[winfo width $t] > 1 && [winfo height $t] > 1} {
+			set gsq [::scidb::tk::glboard_pick $t \
+				[expr {[winfo width $t]/2}] [expr {[winfo height $t]/2}] \
+				$::board3d::State(yaw) $::board3d::State(pitch) $::board3d::State(distance)]
+		}
 		lappend res [expr {$gsq >= 0 && $gsq < 64}] \
 			[expr {$::board3d::State(useOpenGL) == 1}]
 		::board3d::toggleOpenGL 0
@@ -157,19 +165,26 @@ tcltest::test board3d-app-webgl {WebGL server starts, serves and syncs the board
 	if {$rc != 1} { error "WebGL server did not come up" }
 	set board "rnbqkbnrpppppppp................................PPPPPPPPRNBQKBNR"
 	::board3d::PositionChanged $board
-	set tok [::http::geturl http://127.0.0.1:8899/api/board -timeout 3000]
-	set data [::http::data $tok]
-	::http::cleanup $tok
-	# the pushed board round-trips through the server API
+	set data ""
+	# the GET can race the just-started server; retry once
+	for {set i 0} {$i < 2} {incr i} {
+		set tok [::http::geturl http://127.0.0.1:8899/api/board -timeout 3000]
+		set data [::http::data $tok]
+		::http::cleanup $tok
+		if {[string match "*\"board\": \"$board\"*" $data]} { break }
+		after 300
+	}
 	set match [string match "*\"board\": \"$board\"*" $data]
 	# and a position change syncs to the server without errors
 	set sync [::board3d::PositionChanged [::board3d::NormalizeBoard empty]]
 	list $match [expr {[string length $sync] == 64}]
 } -result {1 1}
 
-# stop the WebGL server again when this suite started it
+# stop the WebGL server again when this suite started it, and make sure
+# the port is really free so a following run starts clean
 if {[string is integer -strict $::board3d::Priv(webgl,pid)]} {
 	catch { exec kill $::board3d::Priv(webgl,pid) }
+	for {set i 0} {$i < 20 && [::board3d::WebGLServerUp]} {incr i} { after 100 }
 	set ::board3d::Priv(webgl,pid) {}
 	set ::board3d::Priv(webgl,auto) 0
 }
