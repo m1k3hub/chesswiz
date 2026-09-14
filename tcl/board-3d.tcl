@@ -70,6 +70,7 @@ array set Priv {
 	afterid    {}
 	webgl,pid  {}
 	webgl,auto 0
+	webgl,error {}
 }
 
 variable StandardBoard "RNBQKBNRPPPPPPPP................................pppppppprnbqkbnr"
@@ -131,6 +132,11 @@ array set Themes {
 }
 
 	variable WebGLPort 8899
+
+	# Application root, captured at load time.  [info script] is only valid
+	# while the module is being sourced; in event callbacks (menu, toolbar)
+	# it is empty, so runtime procs must resolve paths through this instead.
+	variable LibRoot [file normalize [file dirname [file dirname [info script]]]]
 
 } ;# namespace board3d
 
@@ -577,6 +583,7 @@ proc ::board3d::InitPieceAssets {} {
 proc ::board3d::PieceImage3D {piece height} {
 	variable State
 	variable Priv
+	variable LibRoot
 
 	if {$height < 4} { set height 4 }
 	if {$height > 600} { set height 600 }
@@ -587,8 +594,7 @@ proc ::board3d::PieceImage3D {piece height} {
 	# Master 3D piece images loaded from img/pieces_3d/<piece>.png
 	set masterKey "master3d,$piece"
 	if {![info exists Priv($masterKey)]} {
-		set rootDir [file normalize [file join [file dirname [info script]] ..]]
-		set file [file join $rootDir img pieces_3d "${piece}.png"]
+		set file [file join $LibRoot img pieces_3d "${piece}.png"]
 		if {![file exists $file]} {
 			set file [file join [pwd] img pieces_3d "${piece}.png"]
 		}
@@ -1187,6 +1193,7 @@ proc ::board3d::isOpen {} {
 proc ::board3d::openViewer {parent} {
 	variable Priv
 	variable State
+	variable LibRoot
 
 	if {[isOpen]} {
 		raise $Priv(window)
@@ -1256,7 +1263,7 @@ proc ::board3d::openViewer {parent} {
 		if {![llength [info commands togl]]} {
 			# vendored runtime library first, then the system packages
 			set candidates [list \
-				[file normalize [file join [file dirname [info script]] .. lib togl libTogl.so]] \
+				[file join $LibRoot lib togl libTogl.so] \
 				"/usr/lib/libTogl.so" \
 				"/usr/lib/libTogl.so.2.0" \
 				"/usr/lib/x86_64-linux-gnu/libTogl.so" \
@@ -1422,10 +1429,14 @@ proc ::board3d::WebGLServerUp {} {
 
 proc ::board3d::WebGLStartServer {} {
 	variable Priv
+	variable LibRoot
+	variable WebGLPort
 	if {[WebGLServerUp]} { return 1 }
-	set dir [file normalize [file join [file dirname [info script]] .. web3d]]
-	set server [file join $dir server.py]
-	if {![file exists $server]} { return 0 }
+	set server [file join $LibRoot web3d server.py]
+	if {![file exists $server]} {
+		set Priv(webgl,error) "web3d/server.py not found (expected below '$LibRoot')"
+		return 0
+	}
 
 	set python ""
 	if {![catch { exec python3 -c {import sys} }]} {
@@ -1433,12 +1444,18 @@ proc ::board3d::WebGLStartServer {} {
 	} elseif {![catch { exec python -c {import sys} }]} {
 		set python python
 	}
-	if {$python eq ""} { return 0 }
+	if {$python eq ""} {
+		set Priv(webgl,error) "neither python3 nor python was found in PATH"
+		return 0
+	}
 
 	set tmp /tmp
 	if {[info exists ::env(TMPDIR)] && $::env(TMPDIR) ne ""} { set tmp $::env(TMPDIR) }
 	set log [file join $tmp scidb-web3d-server.log]
-	if {[catch { exec $python $server >& $log & } pid]} { return 0 }
+	if {[catch { exec $python $server >& $log & } pid]} {
+		set Priv(webgl,error) "could not run '$python $server': $pid"
+		return 0
+	}
 	set Priv(webgl,pid) $pid
 
 	# wait (max ~5s) for the server to accept connections
@@ -1446,6 +1463,7 @@ proc ::board3d::WebGLStartServer {} {
 		if {[WebGLServerUp]} { return 1 }
 		if {[llength [info commands after]]} { after 100 }
 	}
+	set Priv(webgl,error) "server did not accept connections on port $WebGLPort within 5s (log: $log)"
 	return 0
 }
 
@@ -1466,18 +1484,31 @@ proc ::board3d::WebGLPost {board {timeout 2000}} {
 
 proc ::board3d::openWebGLViewer {} {
 	variable Priv
+	variable WebGLPort
 	if {![WebGLStartServer]} {
 		if {[llength [info commands tk_messageBox]]} {
 			set parent [expr {$Priv(window) ne "" && [winfo exists $Priv(window)] ? $Priv(window) : "."}]
 			catch {
 				tk_messageBox -parent $parent -icon warning -type ok \
 					-title "Scidb" \
-					-message "The 3D WebGL server could not be started.\n\nMake sure python3 is installed."
+					-message "The 3D WebGL server could not be started.\n\n$Priv(webgl,error)"
 			}
 		}
 		return 0
 	}
-	WebGLPost [NormalizeBoard [CurrentBoard]]
+	set board [NormalizeBoard [CurrentBoard]]
+	if {![WebGLPost $board]} {
+		# something answers on the port but is not our board API
+		if {[llength [info commands tk_messageBox]]} {
+			set parent [expr {$Priv(window) ne "" && [winfo exists $Priv(window)] ? $Priv(window) : "."}]
+			catch {
+				tk_messageBox -parent $parent -icon warning -type ok \
+					-title "Scidb" \
+					-message "A service on port $WebGLPort did not accept the board update.\n\nIs another program using port $WebGLPort?"
+			}
+		}
+		return 0
+	}
 	set Priv(webgl,auto) 1
 	# tests and headless use suppress the browser launch
 	if {![info exists ::env(SCIDB_WEB3D_NO_BROWSER)]} {

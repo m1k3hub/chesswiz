@@ -242,4 +242,15 @@ All phases are implemented.
   without an explicit size while carrying a `<Configure>` binding can also
   spin under a window-manager-less X server (`::util::place` only sets the
   *position*).
+* **`[info script]` is empty in event callbacks.**  Menu and toolbar
+  commands run from the event loop after the startup script finished
+  evaluating, so `[info script]` returns `""` there — and any path built
+  from it collapses to something relative to the *current working
+  directory* (the app once failed to find `web3d/server.py` this way and
+  reported "could not be started").  Paths to assets must be resolved once
+  at *load time* (`::board3d::LibRoot`, captured in the `namespace eval`
+  while the module is being sourced) and reused from runtime procs.  Tests
+  sourced from a file never see the empty `[info script]`, so this can only
+  be caught by calling the entry points from an `after` callback that runs
+  after the startup script returns.
 

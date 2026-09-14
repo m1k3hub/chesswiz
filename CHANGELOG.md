@@ -34,7 +34,12 @@
   `web3d/server.py` (local three.js viewer on port 8899, polling
   `/api/board`), pushes the current position and opens the browser;
   every position change keeps it in sync.  `SCIDB_WEB3D_NO_BROWSER=1`
-  suppresses the browser launch (used by tests).
+  suppresses the browser launch (used by tests).  Asset paths resolve
+  through the load-time-captured `::board3d::LibRoot` — `[info script]`
+  is empty in menu/toolbar callbacks, which previously collapsed the
+  `web3d/` path to a cwd-relative location and made the server fail to
+  start with a misleading "make sure python3 is installed" message;
+  failures now report the concrete reason.
 - Wired into the app: `Extras → 3D Board` opens the viewer; the main board
   pushes its position through `::board3d::PositionChanged` from
   `application::board::update` (via a new `::board::diagram::data`

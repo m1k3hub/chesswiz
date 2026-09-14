@@ -313,5 +313,18 @@ tcltest::test board3d-webgl-helpers {WebGL URL and JSON body are well formed} -b
 {"board": "rnbq"}
 {"board": "a\"b\\c"}}
 
+tcltest::test board3d-libroot {assets resolve from the load-time module root} -body {
+	# [info script] is empty in menu/toolbar callbacks, so runtime path
+	# resolution must go through the load-time-captured LibRoot
+	b3dEval {
+		set root $::board3d::LibRoot
+		list \
+			[expr {[file pathtype $root] eq "absolute"}] \
+			[file exists [file join $root web3d server.py]] \
+			[file exists [file join $root web3d index.html]] \
+			[file exists [file join $root img pieces_3d wk.png]]
+	}
+} -result {1 1 1 1}
+
 interp delete b3d
 tcltest::cleanupTests
