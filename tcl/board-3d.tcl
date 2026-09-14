@@ -22,7 +22,7 @@ namespace eval ::board3d {
 namespace export configure defaults preset setBoard setMarks setSelected \
 	fit projectPoint projectPlane unproject squareAt squareCenter depthOf \
 	orderedSquares render refresh openViewer closeViewer isOpen setTheme setPieceStyle openWebGLViewer \
-	toggleOpenGL
+	toggleOpenGL embed unembed toggleEmbed
 
 variable State
 array set State {
@@ -58,6 +58,7 @@ array set State {
 	theme        "Classic Woodcraft"
 	pieceStyle   "realistic3d"
 	useOpenGL    1
+	embed        0
 }
 
 variable Priv
@@ -71,6 +72,9 @@ array set Priv {
 	webgl,pid  {}
 	webgl,auto 0
 	webgl,error {}
+	embed,frame {}
+	embed,togl  {}
+	embed,error {}
 }
 
 variable StandardBoard "RNBQKBNRPPPPPPPP................................pppppppprnbqkbnr"
@@ -709,6 +713,9 @@ proc ::board3d::refresh {} {
 	if {$State(useOpenGL) && $Priv(togl) ne "" && [winfo exists $Priv(togl)]} {
 		renderOpenGL $Priv(togl)
 	}
+	if {$Priv(embed,togl) ne "" && [winfo exists $Priv(embed,togl)]} {
+		renderOpenGL $Priv(embed,togl)
+	}
 	if {$Priv(canvas) ne "" && [winfo exists $Priv(canvas)]} {
 		render $Priv(canvas)
 	}
@@ -1181,6 +1188,146 @@ proc ::board3d::DrawHud {canv} {
 
 
 # ======================================================================
+# hardware view plumbing (shared by the viewer window and the
+# embedded main-window pane)
+# ======================================================================
+
+# Load the Togl library (vendored copy first, then system packages).
+# Returns true when the `togl` command is available.
+
+proc ::board3d::LoadToglLib {} {
+	if {[llength [info commands togl]]} { return 1 }
+	variable LibRoot
+	set candidates [list \
+		[file join $LibRoot lib togl libTogl.so] \
+		"/usr/lib/libTogl.so" \
+		"/usr/lib/libTogl.so.2.0" \
+		"/usr/lib/x86_64-linux-gnu/libTogl.so" \
+	]
+	foreach cand $candidates {
+		if {[file exists $cand]} {
+			if {![catch { load $cand Togl }]} { break }
+		}
+	}
+	return [expr {[llength [info commands togl]] > 0}]
+}
+
+
+# Create a Togl widget with the standard interaction bindings (orbit,
+# zoom, click-to-select).  When $forward is given (the hidden 2D board
+# canvas of an embedded pane), plain key events are forwarded to it so
+# game navigation keeps working while the 3D pane has the focus.
+
+proc ::board3d::CreateTogl {w {forward {}}} {
+	set win [togl $w -width 640 -height 520 -rgba true -double true -depth true]
+	::bind $win <ButtonPress-1>  [namespace code [list OnPress $win %x %y]]
+	::bind $win <B1-Motion>      [namespace code [list OnMotion $win %x %y]]
+	::bind $win <ButtonRelease-1> [namespace code [list OnRelease $win]]
+	::bind $win <ButtonPress-3>  [namespace code [list OnPress $win %x %y pan]]
+	::bind $win <B3-Motion>      [namespace code [list OnMotion $win %x %y]]
+	::bind $win <Button-4>       [namespace code [list viewerZoom 1]]
+	::bind $win <Button-5>       [namespace code [list viewerZoom -1]]
+	::bind $win <MouseWheel>    [namespace code [list viewerZoom %D]]
+	::bind $win <Configure>      [namespace code [list OnConfigure %W %w %h]]
+	if {$forward ne ""} {
+		catch { $win configure -takefocus 1 }
+		::bind $win <KeyPress>     [namespace code [list ForwardKey $forward %K %s]]
+	}
+	return $win
+}
+
+
+proc ::board3d::ForwardKey {canv keysym state} {
+	# replay plain key events on the hidden 2D board so the game's
+	# navigation bindings keep firing while the 3D pane has the focus
+	if {![winfo exists $canv]} { return }
+	catch { event generate $canv <KeyPress-$keysym> -state $state }
+	return
+}
+
+
+# ======================================================================
+# embedded 3D pane in the main board window
+# ======================================================================
+
+# Embed the hardware 3D view in the board pane that owns $canvas2d.
+# Returns the container frame (to be packed in place of the canvas by
+# the caller, which owns the pane geometry), or "" when OpenGL (Togl) is
+# not available; the reason is recorded in Priv(embed,error).
+
+proc ::board3d::embed {canvas2d} {
+	variable Priv
+	variable State
+	set Priv(embed,error) ""
+
+	# already embedded (e.g. pane was reactivated)?
+	if {$Priv(embed,frame) ne "" && [winfo exists $Priv(embed,frame)]} {
+		return $Priv(embed,frame)
+	}
+	if {![LoadToglLib]} {
+		set Priv(embed,error) "OpenGL support (Togl) is not available.\\n\\nInstall libtogl2 (Debian) or place libTogl.so in lib/togl/."
+		return ""
+	}
+	if {![winfo exists $canvas2d]} {
+		set Priv(embed,error) "the board pane no longer exists"
+		return ""
+	}
+
+	set parent [winfo parent $canvas2d]
+	set frame [frame $parent.board3dgl -background #101418]
+	if {[catch {
+		set Priv(embed,togl) [CreateTogl $frame.togl $canvas2d]
+	} err]} {
+		catch { destroy $frame }
+		set Priv(embed,togl) {}
+		set Priv(embed,error) "could not create the OpenGL widget: $err"
+		return ""
+	}
+	pack $Priv(embed,togl) -fill both -expand yes
+	set Priv(embed,frame) $frame
+
+	# camera orientation follows the 2D board at embed time
+	set rotated 0
+	if {[llength [info commands ::board::diagram::rotated?]]
+		&& [llength [info commands ::application::board::rotated?]]} {
+		catch { set rotated [::application::board::rotated?] }
+	}
+	preset [expr {$rotated ? "black" : "white"}]
+	return $frame
+}
+
+
+# Undo embed; the caller repacks the 2D canvas.  The widget is kept for
+# fast re-embedding.
+
+proc ::board3d::unembed {} {
+	variable Priv
+	if {$Priv(embed,frame) ne "" && [winfo exists $Priv(embed,frame)]} {
+		catch { pack forget $Priv(embed,frame) }
+	}
+	return
+}
+
+
+# Menu hook: switch the main board pane between 2D and hardware 3D.
+# The checkbutton state lives in State(embed).
+
+proc ::board3d::toggleEmbed {} {
+	variable State
+	if {[llength [info commands ::application::board::show3D]] == 0} { return }
+	if {$State(embed)} {
+		if {![::application::board::show3D 1]} {
+			# embedding failed (no Togl); keep the menu in sync
+			set State(embed) 0
+		}
+	} else {
+		::application::board::show3D 0
+	}
+	return
+}
+
+
+# ======================================================================
 # viewer window
 # ======================================================================
 
@@ -1260,23 +1407,9 @@ proc ::board3d::openViewer {parent} {
 	# Try creating native hardware-accelerated OpenGL Togl viewport
 	set toglWin ""
 	if {$State(useOpenGL)} {
-		if {![llength [info commands togl]]} {
-			# vendored runtime library first, then the system packages
-			set candidates [list \
-				[file join $LibRoot lib togl libTogl.so] \
-				"/usr/lib/libTogl.so" \
-				"/usr/lib/libTogl.so.2.0" \
-				"/usr/lib/x86_64-linux-gnu/libTogl.so" \
-			]
-			foreach cand $candidates {
-				if {[file exists $cand]} {
-					if {![catch { load $cand Togl }]} { break }
-				}
-			}
-		}
-		if {[llength [info commands togl]]} {
+		if {[LoadToglLib]} {
 			catch {
-				set toglWin [togl $dlg.togl -width 640 -height 520 -rgba true -double true -depth true]
+				set toglWin [CreateTogl $dlg.togl]
 				set Priv(togl) $toglWin
 			}
 		}
@@ -1296,11 +1429,11 @@ proc ::board3d::openViewer {parent} {
 	foreach w [list $canv $dlg.togl] {
 		if {![winfo exists $w]} { continue }
 		::bind $w <Configure>      [namespace code [list OnConfigure %W %w %h]]
-		::bind $w <ButtonPress-1>  [namespace code [list OnPress %x %y]]
-		::bind $w <B1-Motion>      [namespace code [list OnMotion %x %y]]
-		::bind $w <ButtonRelease-1> [namespace code OnRelease]
-		::bind $w <ButtonPress-3>  [namespace code [list OnPress %x %y pan]]
-		::bind $w <B3-Motion>      [namespace code [list OnMotion %x %y]]
+		::bind $w <ButtonPress-1>  [namespace code [list OnPress %W %x %y]]
+		::bind $w <B1-Motion>      [namespace code [list OnMotion %W %x %y]]
+		::bind $w <ButtonRelease-1> [namespace code [list OnRelease %W]]
+		::bind $w <ButtonPress-3>  [namespace code [list OnPress %W %x %y pan]]
+		::bind $w <B3-Motion>      [namespace code [list OnMotion %W %x %y]]
 		::bind $w <Button-4>       [namespace code [list viewerZoom 1]]
 		::bind $w <Button-5>       [namespace code [list viewerZoom -1]]
 		::bind $w <MouseWheel>     [namespace code [list viewerZoom %D]]
@@ -1566,7 +1699,7 @@ proc ::board3d::OnConfigure {win width height} {
 proc ::board3d::DoResize {win} {
 	variable Priv
 	if {![winfo exists $win]} { return }
-	if {$Priv(togl) ne "" && $win eq $Priv(togl)} {
+	if {$win eq $Priv(togl) || $win eq $Priv(embed,togl)} {
 		renderOpenGL $win
 	} elseif {$Priv(canvas) ne "" && $win eq $Priv(canvas)} {
 		render $win
@@ -1575,26 +1708,30 @@ proc ::board3d::DoResize {win} {
 
 
 # Resolve a click at view coordinates (x, y) to a board square,
-# honouring whichever view is active: the hardware OpenGL view picks
-# through its own projection (glboard_pick), the canvas view through
-# `squareAt`.
+# honouring whichever view received it: the hardware OpenGL views
+# (viewer window or embedded main-window pane) pick through their own
+# projection (glboard_pick), the canvas view through `squareAt`.
 
-proc ::board3d::pickSquare {x y} {
+proc ::board3d::pickSquare {x y {win {}}} {
 	variable State
 	variable Priv
-	if {$State(useOpenGL) && $Priv(togl) ne "" && [winfo exists $Priv(togl)]} {
+	if {$win ne ""
+		&& ($win eq $Priv(togl) || $win eq $Priv(embed,togl))
+		&& [winfo exists $win]} {
 		if {![llength [info commands ::scidb::tk::glboard_pick]]} { return -1 }
-		set sq [::scidb::tk::glboard_pick $Priv(togl) $x $y \
-			$State(yaw) $State(pitch) $State(distance)]
-		if {![string is integer -strict $sq]} { return -1 }
+		if {[catch {
+			::scidb::tk::glboard_pick $win $x $y \
+				$State(yaw) $State(pitch) $State(distance)
+		} sq] || ![string is integer -strict $sq]} { return -1 }
 		return $sq
 	}
 	return [squareAt $x $y]
 }
 
 
-proc ::board3d::OnPress {sx sy {mode orbit}} {
+proc ::board3d::OnPress {win sx sy {mode orbit}} {
 	variable Priv
+	set Priv(drag,win) $win
 	set Priv(drag,mode) $mode
 	set Priv(drag,x) $sx
 	set Priv(drag,y) $sy
@@ -1603,7 +1740,7 @@ proc ::board3d::OnPress {sx sy {mode orbit}} {
 }
 
 
-proc ::board3d::OnMotion {sx sy} {
+proc ::board3d::OnMotion {win sx sy} {
 	variable Priv
 	variable State
 
@@ -1627,17 +1764,17 @@ proc ::board3d::OnMotion {sx sy} {
 }
 
 
-proc ::board3d::OnRelease {} {
+proc ::board3d::OnRelease {win} {
 	variable Priv
 	variable State
 
 	if {[info exists Priv(drag,moved)] && !$Priv(drag,moved)
 		&& $Priv(drag,mode) eq "orbit"} {
-		set sq [pickSquare $Priv(drag,x) $Priv(drag,y)]
+		set sq [pickSquare $Priv(drag,x) $Priv(drag,y) $win]
 		set State(selected) $sq
 		refresh
 	}
-	unset -nocomplain Priv(drag,x) Priv(drag,y) Priv(drag,mode) Priv(drag,moved)
+	unset -nocomplain Priv(drag,x) Priv(drag,y) Priv(drag,mode) Priv(drag,moved) Priv(drag,win)
 	return
 }
 

@@ -20,6 +20,8 @@ Features:
 * **Hardware-accelerated 3D view**: a Togl OpenGL widget renders the board
   and sculpted mesh pieces (`src/tk/tk_glboard.cpp`) with two-lamp lighting;
   click-to-select picks through the same projection (`glboard_pick`).
+  Available as a separate viewer window and embedded directly in the main
+  board window (2D ⇄ 3D switch).
 * **WebGL viewer** (`web3d/`): a three.js front end served by
   `web3d/server.py` on port 8899, kept in sync with the main board via a
   local HTTP API (`Extras → Open WebGL Real 3D Board`).
@@ -188,7 +190,30 @@ file Tcl loaded (`info loaded`) and re-opens that path (which hands back the
 already-loaded object); only when no Togl was ever loaded does it open a
 system library and run its `Togl_Init` itself.
 
-### 6.2 WebGL viewer
+### 6.2 Embedded hardware 3D pane (main window)
+
+*Extras → 3D Board in Main Window* swaps the 2D diagram of the board pane
+for the hardware OpenGL view *inside the main window* — no separate
+window.  `::application::board::show3D` owns the pane geometry (packs
+`::board3d::embed`'s container frame in place of the 2D canvas and
+repacks the canvas on the way back); `::board3d::embed` creates the Togl
+widget inside the pane.  The camera starts from the 2D board's
+orientation; the menu checkbutton state lives in
+`::board3d::State(embed)`.
+
+While embedded, the 3D pane takes the focus and forwards plain key
+presses to the (hidden) 2D board canvas, so game navigation (Home,
+Left/Right, …) keeps working; orbit/zoom and click-to-select stay on
+the mouse, exactly like in the viewer window.  The embedded view shares
+the camera state with the viewer window, so orbiting one turns both.
+
+Limitations (v1): the embedded view is view-only — moves are still made
+on the 2D board —, it does not draw marks/arrows, and rotating the 2D
+board while embedded is not reflected until re-embedding.  Multiple
+board panes are not supported; the pane tracked by
+`application::board::Vars(widget:frame)` is used.
+
+### 6.3 WebGL viewer
 
 `web3d/index.html` (three.js + `OrbitControls`) renders the board and
 sculpted pieces in the browser; `web3d/server.py` serves it and exposes a
@@ -210,7 +235,8 @@ polls every 400ms and rebuilds the pieces.
   viewer toplevel opens with a populated canvas, rotation/preset/reset update
   it, `PositionChanged` redraws a different position, click selection works
   in *both* the canvas and the hardware OpenGL view (via `glboard_pick`),
-  the WebGL server starts/serves/syncs the board (python3-gated), and close
+  the embedded 3D pane swaps into the main board window (Togl-gated), the
+  WebGL server starts/serves/syncs the board (python3-gated), and close
   destroys the window.
 
 ## 8. Phases

@@ -82,6 +82,7 @@ set AssignFileTypes				"Assign File &Types"
 set DiscoverDatabases			"Discover &Databases..."
 set Open3DBoard					"Open &3D Board"
 set OpenWebGL3DBoard				"Open &WebGL Real 3D Board"
+set Embed3DBoard					"3D Board in &Main Window"
 
 # Tools
 set OpenEngineDictionary		"Open &Engine Dictionary"
@@ -412,6 +413,17 @@ if {0} {
 				-underline [IncrUL $ul] \
 				-image $::icon::16x16::none \
 				-command $cmd \
+				;
+		}
+		if {[llength [info commands ::board3d::toggleEmbed]]} {
+			lassign [::tk::UnderlineAmpersand $mc::Embed3DBoard] text ul
+			$m add checkbutton \
+				-compound left \
+				-label " $text" \
+				-underline [IncrUL $ul] \
+				-image $::icon::16x16::none \
+				-variable ::board3d::State(embed) \
+				-command [list ::board3d::toggleEmbed] \
 				;
 		}
 	}

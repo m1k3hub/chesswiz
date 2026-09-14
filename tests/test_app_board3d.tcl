@@ -116,13 +116,14 @@ tcltest::test board3d-app-select {click selection resolves through the projectio
 
 tcltest::test board3d-app-callbacks {interaction callbacks accept their bound argument counts} -body {
 	set canv [b3dAppCanvas]
+	set t [set ::board3d::Priv(togl)]
 	set errs {}
 	foreach script [list \
 		[list ::board3d::OnConfigure $canv 640 480] \
-		[list ::board3d::OnPress 100 100] \
-		[list ::board3d::OnMotion 110 105] \
-		[list ::board3d::OnPress 100 100 pan] \
-		[list ::board3d::OnRelease] \
+		[list ::board3d::OnPress $canv 100 100] \
+		[list ::board3d::OnMotion $canv 110 105] \
+		[list ::board3d::OnPress $canv 100 100 pan] \
+		[list ::board3d::OnRelease $canv] \
 		[list ::board3d::viewerZoom 1] \
 		[list ::board3d::viewerZoom -1] \
 		[list ::board3d::viewerRotate 15] \
@@ -130,6 +131,17 @@ tcltest::test board3d-app-callbacks {interaction callbacks accept their bound ar
 		[list ::board3d::viewerPreset side] \
 	] {
 		if {[catch { uplevel #0 $script } e]} { lappend errs [list $script $e] }
+	}
+	# the same handlers must also accept a togl window
+	if {$t ne "" && [winfo exists $t]} {
+		foreach script [list \
+			[list ::board3d::OnPress $t 100 100] \
+			[list ::board3d::OnMotion $t 110 105] \
+			[list ::board3d::OnPress $t 100 100 pan] \
+			[list ::board3d::OnRelease $t] \
+		] {
+			if {[catch { uplevel #0 $script } e]} { lappend errs [list $script $e] }
+		}
 	}
 	update idletasks
 	set errs
@@ -154,6 +166,46 @@ tcltest::test board3d-app-close {closing the viewer destroys the window} -body {
 	::board3d::closeViewer
 	list [::board3d::isOpen] [winfo exists .application.__board3d__]
 } -result {0 0}
+
+# Embedded hardware 3D in the main board pane: needs Togl
+set embedOK 0
+catch { set embedOK [::board3d::LoadToglLib] }
+tcltest::testConstraint embed3d $embedOK
+
+tcltest::test board3d-embed-pane {hardware 3D embeds into the main board pane} -constraints embed3d -body {
+	# the board page must be the visible tab, like in a real session
+	catch { .application.nb select .application.nb.board }
+	update idletasks
+	update
+	set res {}
+	# switch through the same path the menu checkbutton takes
+	set ::board3d::State(embed) 1
+	::board3d::toggleEmbed
+	update idletasks
+	update
+	set t $::board3d::Priv(embed,togl)
+	lappend res [expr {$::board3d::State(embed) == 1}] \
+		[expr {[winfo exists $t] && [winfo ismapped $t]}] \
+		[expr {![winfo ismapped $::application::board::Vars(widget:frame)]}]
+	# a position change renders into the embedded view
+	::board3d::PositionChanged "rnbqkbnrpppppppp................................PPPPPPPPRNBQKBNR"
+	set rc [catch { ::scidb::tk::glboard_render $t $::board3d::State(board) \
+		$::board3d::State(yaw) $::board3d::State(pitch) \
+		$::board3d::State(distance) $::board3d::State(selected) } out]
+	lappend res [expr {!$rc && $out == 1}]
+	# click pick resolves through the embedded view's own projection
+	set sq [::scidb::tk::glboard_pick $t \
+		[expr {[winfo width $t]/2}] [expr {[winfo height $t]/2}] \
+		$::board3d::State(yaw) $::board3d::State(pitch) $::board3d::State(distance)]
+	lappend res [expr {$sq >= 0 && $sq < 64}]
+	# and back to the 2D board
+	set ::board3d::State(embed) 0
+	::board3d::toggleEmbed
+	update
+	lappend res [expr {$::board3d::State(embed) == 0 \
+		&& [winfo ismapped $::application::board::Vars(widget:frame)]}]
+	set res
+} -result {1 1 1 1 1 1}
 
 # WebGL viewer: local three.js front end served by web3d/server.py.
 # Skipped when python3 or the http package is unavailable.

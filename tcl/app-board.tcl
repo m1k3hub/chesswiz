@@ -158,6 +158,8 @@ proc build {w width height} {
 	$border create window 0 0 -window $board -anchor nw -tag board
 	set Vars(widget:border) $border
 	set Vars(widget:frame) $canv
+	set Vars(3d) 0
+	set Vars(3dwin) {}
 	set Vars(autoplay) 0
 	set Vars(active) 0
 	set Vars(material) {}
@@ -439,11 +441,57 @@ proc activate {w flag} {
 	::toolbar::activate $w $flag
 
 	if {$flag} {
-		focus $Vars(widget:frame)
+		# while the hardware 3D view is embedded it holds the focus, so
+		# plain keys are forwarded to the (hidden) 2D board
+		if {$Vars(3d)
+			&& $Vars(3dwin) ne "" && [winfo exists $Vars(3dwin)]
+			&& $::board3d::Priv(embed,togl) ne ""
+			&& [winfo exists $::board3d::Priv(embed,togl)]} {
+			focus $::board3d::Priv(embed,togl)
+		} else {
+			focus $Vars(widget:frame)
+		}
 	}
 
 	[namespace parent]::pgn::activate $w $flag
 	set Vars(initialized) 1
+}
+
+
+# Switch the board pane between the 2D diagram and the embedded hardware
+# 3D view.  Returns 1 on success; 0 when the 3D view could not be set up
+# (in which case the pane stays on the 2D board).
+
+proc show3D {flag} {
+	variable Vars
+
+	if {$flag} {
+		if {![llength [info commands ::board3d::embed]]} { return 0 }
+		if {$Vars(3dwin) eq "" || ![winfo exists $Vars(3dwin)]} {
+			set Vars(3dwin) [::board3d::embed $Vars(widget:frame)]
+			if {$Vars(3dwin) eq ""} {
+				if {[llength [info commands tk_messageBox]]} {
+					catch {
+						tk_messageBox -parent .application -icon warning -type ok \
+							-title "Scidb" \
+							-message "3D in the main window is unavailable.\n\n$::board3d::Priv(embed,error)"
+					}
+				}
+				return 0
+			}
+		}
+		pack forget $Vars(widget:frame)
+		pack $Vars(3dwin) -fill both -expand yes
+		set Vars(3d) 1
+		::board3d::refresh
+	} else {
+		if {$Vars(3dwin) ne "" && [winfo exists $Vars(3dwin)]} {
+			pack forget $Vars(3dwin)
+		}
+		pack $Vars(widget:frame) -fill both -expand yes
+		set Vars(3d) 0
+	}
+	return 1
 }
 
 

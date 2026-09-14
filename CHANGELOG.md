@@ -30,6 +30,14 @@
   file Tcl `load`ed is re-opened (same object, stubs table initialized by
   its `Togl_Init`); a fresh system copy is only opened — and initialized —
   when no Togl was loaded at all.
+- v3 — embedded hardware 3D pane: *Extras → 3D Board in Main Window*
+  swaps the board pane's 2D diagram for the hardware OpenGL view inside
+  the main window (same `glboard_render` engine, orbit/zoom on the mouse,
+  click-to-select through `glboard_pick`).  While embedded, the pane
+  takes the focus and forwards plain keys to the hidden 2D board, so
+  game navigation keeps working; moves are still made on the 2D board.
+  The 2D diagram and all its bindings are preserved and restored when
+  toggling back.
 - v3 — WebGL viewer: `Extras → Open WebGL Real 3D Board` starts
   `web3d/server.py` (local three.js viewer on port 8899, polling
   `/api/board`), pushes the current position and opens the browser;
