@@ -333,16 +333,17 @@ tcltest::test board3d-marks-parse {game mark strings normalize into internal and
 			"add,arrow,d1,d4,red" \
 			"add,circle,g1,,blue" \
 			"add,disk,e4,,yellow" \
+			"add,Nf3,g1,,magenta" \
 			"junk" \
 			"add,arrow,x9,d4,red"]] result gl
 		# d4 = 27, d1 = 3, g1 = 6, e4 = 28; junk/x9 are skipped;
 		# headless has no winfo, so colors fall back to white
 		list [llength $result] \
 			[lindex $result 0] [lindex $result 1] \
-			[lindex $result 2] [lindex $result 3] \
-			[lrange $gl 0 5] [expr {[llength $gl] % 6}] [llength $gl]
+			[lindex $result 2] [lindex $result 3] [lindex $result 4] \
+			[lrange $gl 0 6] [expr {[llength $gl] % 7}] [llength $gl] [lrange $gl 28 34]
 	}
-} -result {4 {full 27 -1 green} {arrow 3 27 red} {circle 6 -1 blue} {disk 28 -1 yellow} {f 27 -1 1.0 1.0 1.0} 0 24}
+} -result {5 {full 27 -1 green} {arrow 3 27 red} {circle 6 -1 blue} {disk 28 -1 yellow} {text 6 -1 magenta Nf3} {f 27 -1 1.0 1.0 1.0 {}} 0 35 {t 6 -1 1.0 1.0 1.0 Nf3}}
 
 interp delete b3d
 tcltest::cleanupTests

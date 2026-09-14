@@ -43,6 +43,19 @@
   and forwards plain keys to the hidden 2D board, so game navigation
   keeps working.  The 2D diagram and all its bindings are preserved and
   restored when toggling back.
+- v3 — GL reliability: piece display lists are tracked per GL context
+  (each Togl window has its own) and validated with glIsList — a global
+  compiled-flag had made every view but the one created first silently
+  draw NO pieces.  The optional trailing photo argument of
+  glboard_render reads the rendered frame back into a Tk photo
+  (glReadPixels from the back buffer, rows flipped manually), which the
+  tests use to pixel-verify pieces in both contexts.  Text marks now
+  render on the GL surface too (baked pixel font as flat quads —
+  glXUseXFont proved to corrupt the GL context on some stacks; negative-
+  pitch Tk_PhotoPutBlock corrupts the heap and is also avoided).
+  New ::scidb::tk::glboard_info reports {renderer vendor version} of a
+  view's GL context, so anyone can check whether they are on hardware
+  (GPU name) or software (llvmpipe).
 - v3 — marks and orientation sync on the 3D views: the game's %draw
   annotations (%draw full/disk/circle/arrow/text) now reach the canvas
   viewer and the embedded GL pane — `application::board::updateMarks`

@@ -527,7 +527,7 @@ proc ::board3d::NormalizeMarks {marks} {
 			if {![string is integer -strict $sq] || $sq < 0 || $sq > 63} { continue }
 			lappend result [list full $sq -1 $color]
 			lassign [MarkColorRGB $color] r g b
-			lappend gl f $sq -1 $r $g $b
+			lappend gl f $sq -1 $r $g $b {}
 		}
 		return [list $result $gl]
 	}
@@ -541,18 +541,20 @@ proc ::board3d::NormalizeMarks {marks} {
 			full - square - circle - disk {
 				lappend result [list $type $sq -1 $color]
 				lassign [MarkColorRGB $color] r g b
-				lappend gl [string range $type 0 0] $sq -1 $r $g $b
+				lappend gl [string range $type 0 0] $sq -1 $r $g $b {}
 			}
 			arrow {
 				if {$sq2 < 0} { continue }
 				lappend result [list arrow $sq $sq2 $color]
 				lassign [MarkColorRGB $color] r g b
-				lappend gl a $sq $sq2 $r $g $b
+				lappend gl a $sq $sq2 $r $g $b {}
 			}
 			default {
-				# text marks: $type is the text itself (canvas only)
+				# text marks: $type is the text itself
 				if {[string length $type] == 0} { continue }
-				lappend result [list text $sq -1 $type]
+				lappend result [list text $sq -1 $color $type]
+				lassign [MarkColorRGB $color] r g b
+				lappend gl t $sq -1 $r $g $b $type
 			}
 		}
 	}
@@ -968,7 +970,7 @@ proc ::board3d::DrawMarks {canv} {
 	}
 
 	foreach mark $marks {
-		lassign $mark kind sq sq2 color
+		lassign $mark kind sq sq2 color text
 		if {$sq < 0 || $sq > 63} { continue }
 		set row  [expr {$sq/8}]
 		set file [expr {$sq%8}]
@@ -1012,7 +1014,7 @@ proc ::board3d::DrawMarks {canv} {
 				lassign [squareCenter $sq] ax ay
 				lassign [projectPlane $ax $ay] sx sy zb
 				set height [expr {max(10.0, $State(focal)*0.35/$zb)}]
-				$canv create text $sx $sy -text $color -fill #ff4040 \
+				$canv create text $sx $sy -text $text -fill $color \
 					-font [list TkDefaultFont [expr {int($height/2)}]] -tags b3d
 			}
 		}

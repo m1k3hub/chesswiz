@@ -10,10 +10,12 @@
 #include <tk.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
+#include "gl_text_font.h"
 #include <dlfcn.h>
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
+#include <map>
 
 struct Togl;
 
@@ -58,7 +60,9 @@ static bool loadToglSymbols(Tcl_Interp* interp)
     clearToglSyms();
 
     // 1. Maybe libTogl is already in the global dynamic scope.
-    if (resolveToglSyms(RTLD_DEFAULT)) return true;
+    if (resolveToglSyms(RTLD_DEFAULT)) {
+        return true;
+    }
     clearToglSyms();
 
     // 2. Prefer the exact libTogl instance that Tcl's `load` command opened
@@ -87,7 +91,9 @@ static bool loadToglSymbols(Tcl_Interp* interp)
                 if (path == NULL || path[0] == '\0') continue; // statically linked
                 void* handle = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
                 if (handle == NULL) continue;
-                if (resolveToglSyms(handle)) return true;
+                if (resolveToglSyms(handle)) {
+                    return true;
+                }
                 clearToglSyms();
             }
         }
@@ -124,18 +130,27 @@ static bool loadToglSymbols(Tcl_Interp* interp)
 
 namespace {
 
-// Display lists for pieces
-static GLuint g_pieceDisplayLists[6] = {0, 0, 0, 0, 0, 0}; // p, r, n, b, q, k
-static bool g_listsCompiled = false;
+// Piece display lists.  GL display lists are PER CONTEXT, and each Togl
+// window has its own GL context: a single global set of lists would only
+// be valid in the context that compiled it, so every other view (embedded
+// pane vs. viewer window) would call lists that do not exist in its
+// context and silently draw NO pieces.  The lists are therefore tracked
+// per Togl widget and validated with glIsList (a context-sensitive query)
+// for the context that is current at draw time.
+static std::map<const void*, GLuint> g_pieceListBases;   // Togl* -> list base
+static GLuint g_callBase = 0;								// base for the current render
 
-static void compileDisplayLists()
+static void ensurePieceLists(const struct Togl* togl)
 {
-    if (g_listsCompiled) return;
+    std::map<const void*, GLuint>::iterator it = g_pieceListBases.find((const void*)togl);
+    if (it != g_pieceListBases.end() && glIsList(it->second)) {
+        g_callBase = it->second;
+        return;
+    }
 
     GLuint base = glGenLists(6);
-    for (int i = 0; i < 6; ++i) {
-        g_pieceDisplayLists[i] = base + i;
-    }
+    g_pieceListBases[(const void*)togl] = base;
+    g_callBase = base;
 
     const struct {
         int tris;
@@ -150,7 +165,7 @@ static void compileDisplayLists()
     };
 
     for (int idx = 0; idx < 6; ++idx) {
-        glNewList(g_pieceDisplayLists[idx], GL_COMPILE);
+        glNewList(base + idx, GL_COMPILE);
         glBegin(GL_TRIANGLES);
         const float* d = pieceMeshes[idx].data;
         int nTris = pieceMeshes[idx].tris;
@@ -169,8 +184,6 @@ static void compileDisplayLists()
         glEnd();
         glEndList();
     }
-
-    g_listsCompiled = true;
 }
 
 static void drawCube(float x, float y, float z, float sx, float sy, float sz)
@@ -340,31 +353,95 @@ static void drawMarkArrow(int sq, int sq2, float z, float r, float g, float b)
 }
 
 
-// Draw the game marks: a flat list {kind sq sq2 r g b ...} where kind is
-// one of f (full/square), c (circle), d (disk), a (arrow).
-static void drawMarks(Tcl_Interp* interp, Tcl_Obj* marksObj)
+// Draw a text mark as flat quads on the board plane (a baked pixel font),
+// like a decal painted on the square.  Pure core GL: no display lists, no
+// X fonts (glXUseXFont proved to corrupt the GL context on some stacks).
+static void drawMarkText(int sq, const char* text, float z, float r, float g, float b)
+{
+    if (sq < 0 || sq > 63 || text[0] == '\0') return;
+
+    // measure the string in font pixels
+    float totalW = 0.0f;
+    int maxH = 0;
+    int count = 0;
+    for (const unsigned char* p = (const unsigned char*)text; *p; ++p, ++count) {
+        unsigned ch = *p;
+        if (ch < 32 || ch > 126) { ch = '?'; }
+        const Glyph& glyph = gl_glyphs[ch - 32];
+        totalW += (float)glyph.advance;
+        if (glyph.height > maxH) { maxH = glyph.height; }
+    }
+    if (count == 0 || totalW < 1.0f || maxH <= 0) return;
+
+    const float square = 0.96f;          // usable square size in world units
+    float scale = square / totalW;       // world units per font pixel
+    if ((float)maxH * scale > square * 0.55f) {
+        scale = square * 0.55f / (float)maxH;
+    }
+
+    const float cx = (float)(sq % 8) + 0.5f;
+    const float cy = (float)(sq / 8) + 0.5f;
+    const float halfH = (float)maxH * scale * 0.5f;
+    float px = cx - totalW * scale * 0.5f;
+
+    glColor4f(r, g, b, 0.95f);
+    glBegin(GL_QUADS);
+    for (const unsigned char* p = (const unsigned char*)text; *p; ++p) {
+        unsigned ch = *p;
+        if (ch < 32 || ch > 126) { ch = '?'; }
+        const Glyph& glyph = gl_glyphs[ch - 32];
+        if (glyph.height > 0 && glyph.rows != 0) {
+            const float gx = px + (float)glyph.xoffset * scale;
+            // row 0 is the glyph's top; on the board plane the glyph top
+            // points toward black (larger y) so the text reads from white's
+            // perspective
+            const float gyTop = cy + halfH - (float)glyph.yoffset * scale;
+            for (int y = 0; y < glyph.height; ++y) {
+                const unsigned int row = glyph.rows[y];
+                if (row == 0) continue;
+                const float yA = gyTop + (float)y * scale;
+                const float yB = yA + scale;
+                for (int x = 0; x < glyph.width; ++x) {
+                    if ((row & (1u << x)) == 0) continue;
+                    const float x0 = gx + (float)x * scale;
+                    const float x1 = x0 + scale;
+                    glVertex3f(x0, yB, z);
+                    glVertex3f(x1, yB, z);
+                    glVertex3f(x1, yA, z);
+                    glVertex3f(x0, yA, z);
+                }
+            }
+        }
+        px += (float)glyph.advance * scale;
+    }
+    glEnd();
+}
+
+// Draw the game marks: a flat list {kind sq sq2 r g b text ...} where kind
+// is one of f (full/square), c (circle), d (disk), a (arrow), t (text).
+static void drawMarks(Tcl_Interp* interp, Tcl_Obj* marksObj, const struct Togl* togl)
 {
     if (marksObj == NULL) return;
     int n = 0;
     if (Tcl_ListObjLength(interp, marksObj, &n) != TCL_OK) return;
-    if (n < 6 || (n % 6) != 0) return;
+    if (n < 7 || (n % 7) != 0) return;
 
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     const float markZ = 0.03f;
-    for (int i = 0; i + 5 < n; i += 6) {
+    for (int i = 0; i + 6 < n; i += 7) {
         Tcl_Obj* kindObj = NULL;
-        Tcl_Obj* v[5];
-        if (Tcl_ListObjIndex(interp, marksObj, i, &kindObj) != TCL_OK) break;
-        int sq = -1, sq2 = -1;
-        double r = 1.0, g = 1.0, b = 1.0;
+        Tcl_Obj* v[6];
         bool ok = true;
-        for (int k = 0; k < 5; ++k) {
+        if (Tcl_ListObjIndex(interp, marksObj, i, &kindObj) != TCL_OK) break;
+        for (int k = 0; k < 6; ++k) {
             if (Tcl_ListObjIndex(interp, marksObj, i + 1 + k, &v[k]) != TCL_OK) { ok = false; break; }
         }
         if (!ok) break;
+        int sq = -1, sq2 = -1;
+        double r = 1.0, g = 1.0, b = 1.0;
         if (Tcl_GetIntFromObj(NULL, v[0], &sq) != TCL_OK
             || Tcl_GetIntFromObj(NULL, v[1], &sq2) != TCL_OK
             || Tcl_GetDoubleFromObj(NULL, v[2], &r) != TCL_OK
@@ -386,6 +463,11 @@ static void drawMarks(Tcl_Interp* interp, Tcl_Obj* marksObj)
             case 'a':
                 drawMarkArrow(sq, sq2, markZ, (float)r, (float)g, (float)b);
                 break;
+            case 't': {
+                const char* text = Tcl_GetString(v[5]);
+                drawMarkText(sq, text, markZ + 0.005f, (float)r, (float)g, (float)b);
+                break;
+            }
             default:
                 break;
         }
@@ -442,7 +524,7 @@ static void drawPiece(char pieceChar, float x, float y, float lift)
         }
     }
 
-    glCallList(g_pieceDisplayLists[pieceIndex]);
+    glCallList(g_callBase + pieceIndex);
     glPopMatrix();
 }
 
@@ -451,9 +533,9 @@ static void drawPiece(char pieceChar, float x, float y, float lift)
 static int
 glboardRenderCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* const objv[])
 {
-    // Syntax: ::scidb::tk::glboard_render <toglWidgetName> <boardString> <yaw> <pitch> <distance> ?selected? ?suggested? ?dragFrom? ?dragX? ?dragY? ?marks?
+    // Syntax: ::scidb::tk::glboard_render <toglWidgetName> <boardString> <yaw> <pitch> <distance> ?selected? ?suggested? ?dragFrom? ?dragX> ?dragY? ?marks? ?photo?
     if (objc < 6) {
-        Tcl_WrongNumArgs(interp, 1, objv, "toglName board yaw pitch distance ?selected? ?suggested? ?dragFrom? ?dragX? ?dragY? ?marks?");
+        Tcl_WrongNumArgs(interp, 1, objv, "toglName board yaw pitch distance ?selected? ?suggested? ?dragFrom? ?dragX? ?dragY? ?marks? ?photo?");
         return TCL_ERROR;
     }
 
@@ -490,6 +572,9 @@ glboardRenderCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* c
         if (Tcl_GetDoubleFromObj(interp, objv[10], &dragY) != TCL_OK) return TCL_ERROR;
     }
     Tcl_Obj* marksObj = (objc >= 12) ? objv[11] : NULL;
+    // optional photo name: capture the frame into a Tk photo (before the
+    // buffer swap), used by tests to verify what was actually drawn
+    const char* photoName = (objc >= 13) ? Tcl_GetString(objv[12]) : NULL;
 
     struct Togl* togl = NULL;
     if (fn_Togl_GetToglFromName(interp, toglName, &togl) != TCL_OK || !togl) {
@@ -504,7 +589,8 @@ glboardRenderCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* c
     if (width <= 0) width = 1;
     if (height <= 0) height = 1;
 
-    compileDisplayLists();
+    // piece lists are per GL context (per Togl window)
+    ensurePieceLists(togl);
 
     // Viewport & Projection
     glViewport(0, 0, width, height);
@@ -562,7 +648,7 @@ glboardRenderCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* c
 
     // game marks on the board plane, under the pieces
     if (marksObj != NULL) {
-        drawMarks(interp, marksObj);
+        drawMarks(interp, marksObj, togl);
     }
 
     // Render Pieces
@@ -587,6 +673,58 @@ glboardRenderCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* c
             char piece = boardStr[dragFrom];
             if (piece != ' ' && piece != '.' && piece != 0) {
                 drawPiece(piece, (float)dragX, (float)dragY, 0.75f);
+            }
+        }
+    }
+
+    // capture the frame into the photo BEFORE the buffer swap: read the
+    // back buffer (our drawing target) directly with glReadPixels
+    if (photoName != NULL && photoName[0] != '\0') {
+        Tk_PhotoHandle photo = Tk_FindPhoto(interp, photoName);
+        if (photo == NULL) {
+            Tcl_AppendResult(interp, "glboard: no photo named '", photoName, "'", NULL);
+            return TCL_ERROR;
+        }
+        int pw = width;
+        int pheight = height;
+        if (pw > 0 && pheight > 0) {
+            unsigned char* buf = (unsigned char*)Tcl_Alloc(pw * pheight * 3);
+            if (buf != NULL) {
+                glPixelStorei(GL_PACK_ALIGNMENT, 1);
+                glReadBuffer(GL_BACK);
+                glReadPixels(0, 0, pw, pheight, GL_RGB, GL_UNSIGNED_BYTE, buf);
+                // GL rows are bottom-up; flip into a top-down copy (Tk must
+                // never be handed a negative pitch - its block iteration
+                // would read/write out of bounds)
+                unsigned char* topdown = (unsigned char*)Tcl_Alloc(pw * pheight * 3);
+                if (topdown == NULL) {
+                    Tcl_Free(reinterpret_cast<char*>(buf));
+                    Tcl_AppendResult(interp, "glboard: out of memory", NULL);
+                    return TCL_ERROR;
+                }
+                for (int row = 0; row < pheight; ++row) {
+                    memcpy(topdown + row * pw * 3,
+                           buf + (pheight - 1 - row) * pw * 3,
+                           (size_t)pw * 3);
+                }
+                Tcl_Free(reinterpret_cast<char*>(buf));
+                Tk_PhotoImageBlock block;
+                block.pixelPtr = topdown;
+                block.width = pw;
+                block.height = pheight;
+                block.pitch = pw * 3;
+                block.pixelSize = 3;
+                block.offset[0] = 0;
+                block.offset[1] = 1;
+                block.offset[2] = 2;
+                block.offset[3] = 0;
+                Tk_PhotoBlank(photo);
+                if (Tk_PhotoExpand(interp, photo, pw, pheight) != TCL_OK) {
+                    Tcl_Free(reinterpret_cast<char*>(topdown));
+                    return TCL_ERROR;
+                }
+                Tk_PhotoPutBlock(interp, photo, &block, 0, 0, pw, pheight, TK_PHOTO_COMPOSITE_SET);
+                Tcl_Free(reinterpret_cast<char*>(topdown));
             }
         }
     }
@@ -727,10 +865,46 @@ glboardPickCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* con
 }
 
 
+// Report the OpenGL implementation of the given Togl's GL context:
+// {renderer vendor version}.  "llvmpipe" as the renderer means software
+// rendering; a GPU name (e.g. NVIDIA ...) means hardware acceleration.
+static int
+glboardInfoCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* const objv[])
+{
+    if (objc != 2) {
+        Tcl_WrongNumArgs(interp, 1, objv, "toglName");
+        return TCL_ERROR;
+    }
+    if (!loadToglSymbols(interp)) {
+        Tcl_AppendResult(interp, "glboard: Togl symbols not found in process or dynamic library", NULL);
+        return TCL_ERROR;
+    }
+    const char* toglName = Tcl_GetString(objv[1]);
+    struct Togl* togl = NULL;
+    if (fn_Togl_GetToglFromName(interp, toglName, &togl) != TCL_OK || !togl) {
+        Tcl_AppendResult(interp, "glboard: invalid Togl widget '", toglName, "'", NULL);
+        return TCL_ERROR;
+    }
+
+    fn_Togl_MakeCurrent(togl);
+
+    Tcl_Obj* result[3];
+    const char* renderer = (const char*)glGetString(GL_RENDERER);
+    const char* vendor = (const char*)glGetString(GL_VENDOR);
+    const char* version = (const char*)glGetString(GL_VERSION);
+    result[0] = Tcl_NewStringObj(renderer ? renderer : "", -1);
+    result[1] = Tcl_NewStringObj(vendor ? vendor : "", -1);
+    result[2] = Tcl_NewStringObj(version ? version : "", -1);
+    Tcl_SetObjResult(interp, Tcl_NewListObj(3, result));
+    return TCL_OK;
+}
+
+
 void tk::glboard_init(Tcl_Interp* ti)
 {
     tcl::createCommand(ti, "::scidb::tk::glboard_render", glboardRenderCmd);
     tcl::createCommand(ti, "::scidb::tk::glboard_pick", glboardPickCmd);
+    tcl::createCommand(ti, "::scidb::tk::glboard_info", glboardInfoCmd);
 }
 
 // vi:set ts=4 sw=4:

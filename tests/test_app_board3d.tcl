@@ -289,19 +289,20 @@ tcltest::test board3d-marks-rotation {marks render on the 3D views and rotation 
 	::board3d::refresh
 	update
 	::board3d::setMarks [list "add,full,d4,,green" "add,arrow,d1,d4,red" \
-		"add,circle,g1,,blue" "add,disk,e4,,yellow"]
+		"add,circle,g1,,blue" "add,disk,e4,,yellow" "add,Nf3,g1,,magenta"]
 	update
 	set res {}
-	set fills {} ; set arrows 0 ; set ovals 0
+	set fills {} ; set arrows 0 ; set ovals 0 ; set texts {}
 	foreach item [$canv find withtag b3d] {
 		switch [$canv type $item] {
 			polygon { lappend fills [$canv itemcget $item -fill] }
 			line { if {[$canv itemcget $item -arrow] eq "last"} { incr arrows } }
 			oval { if {[$canv itemcget $item -outline] in {blue yellow}} { incr ovals } }
+			text { lappend texts [$canv itemcget $item -text] }
 		}
 	}
 	lappend res [expr {[llength $fills] >= 2 && "green" in $fills}] [expr {$arrows == 1}] \
-		[expr {$ovals == 2}]
+		[expr {$ovals == 2}] [expr {"Nf3" in $texts}]
 
 	# the embedded GL view renders marks without errors
 	catch { .application.nb select .application.nb.board }
@@ -314,6 +315,9 @@ tcltest::test board3d-marks-rotation {marks render on the 3D views and rotation 
 		$::board3d::State(yaw) $::board3d::State(pitch) \
 		$::board3d::State(distance) -1 -1 -1 0 0 $::board3d::Priv(markGL) } out]
 	lappend res [expr {!$rc && $out == 1}]
+	# the GL context reports its implementation (renderer/vendor/version)
+	set rc [catch { ::scidb::tk::glboard_info $t } info]
+	lappend res [expr {!$rc && [llength $info] == 3 && [string length [lindex $info 0]] > 0}]
 
 	# rotating the 2D board re-aims the preset camera
 	set yawWhite $::board3d::State(yaw)
@@ -331,7 +335,60 @@ tcltest::test board3d-marks-rotation {marks render on the 3D views and rotation 
 	::board3d::closeViewer
 	update
 	set res
-} -result {1 1 1 1 1 1}
+} -result {1 1 1 1 1 1 1 1}
+
+# count near-black pixels (black pieces are the darkest objects on the
+# board top) in a sampled photo
+proc b3dDarkPixels {photo} {
+	set w [image width $photo]
+	set h [image height $photo]
+	set count 0
+	for {set y 0} {$y < $h} {incr y 3} {
+		for {set x 0} {$x < $w} {incr x 3} {
+			lassign [$photo get $x $y] r g b
+			if {$r < 60 && $g < 45 && $b < 38} { incr count }
+		}
+	}
+	return $count
+}
+
+tcltest::test board3d-pieces-both-contexts {pieces render in every GL context} -constraints embed3d -body {
+	# display lists are per GL context: the viewer window and the embedded
+	# pane are separate contexts, and each must actually draw the pieces
+	set ::board3d::State(useOpenGL) 1
+	::board3d::openViewer .application
+	update idletasks
+	update
+	set t1 $::board3d::Priv(togl)
+	catch { .application.nb select .application.nb.board }
+	set ::board3d::State(embed) 1
+	::board3d::toggleEmbed
+	update idletasks
+	update
+	set t2 $::board3d::Priv(embed,togl)
+
+	set board [::board3d::NormalizeBoard standard]
+	set empty [::board3d::NormalizeBoard empty]
+	set yaw $::board3d::State(yaw)
+	set pitch $::board3d::State(pitch)
+	set dist $::board3d::State(distance)
+	image create photo b3dphot1a ; image create photo b3dphot1b
+	image create photo b3dphot2a ; image create photo b3dphot2b
+	::scidb::tk::glboard_render $t1 $board $yaw $pitch $dist -1 -1 -1 0 0 {} b3dphot1a
+	::scidb::tk::glboard_render $t1 $empty $yaw $pitch $dist -1 -1 -1 0 0 {} b3dphot1b
+	::scidb::tk::glboard_render $t2 $board $yaw $pitch $dist -1 -1 -1 0 0 {} b3dphot2a
+	::scidb::tk::glboard_render $t2 $empty $yaw $pitch $dist -1 -1 -1 0 0 {} b3dphot2b
+	set d1 [expr {[b3dDarkPixels b3dphot1a] - [b3dDarkPixels b3dphot1b]}]
+	set d2 [expr {[b3dDarkPixels b3dphot2a] - [b3dDarkPixels b3dphot2b]}]
+	image delete b3dphot1a b3dphot1b b3dphot2a b3dphot2b
+
+	set ::board3d::State(embed) 0
+	::board3d::toggleEmbed
+	::board3d::closeViewer
+	update
+	# the black pieces must be visible in BOTH contexts
+	list [expr {$d1 > 50}] [expr {$d2 > 50}]
+} -result {1 1}
 
 # WebGL viewer: local three.js front end served by web3d/server.py.
 # Skipped when python3 or the http package is unavailable.

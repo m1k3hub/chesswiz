@@ -171,6 +171,17 @@ link-time dependency on libTogl — the binary only links `-lGL -lGLU`).
 The system Togl package (`libtogl2`/`libtogl-dev` on Debian) is the
 supported runtime dependency; a fallback copy can be placed at
 `lib/togl/libTogl.so` (not tracked — the repo ignores `*.so`).
+
+**GL contexts are per window.** Each Togl widget has its own GL context,
+and display lists exist per context: the piece lists are therefore
+tracked per widget and validated with `glIsList` for the current context
+before drawing (a single global set would silently draw *no* pieces in
+every view but the one that compiled it).
+
+`::scidb::tk::glboard_info <togl>` reports the GL implementation of a
+view's context as `{renderer vendor version}` — `llvmpipe` in the
+renderer means software rendering (e.g. under Xvfb), a GPU name means
+hardware acceleration.
 The viewer creates a `togl` widget when `lib/togl/libTogl.so` (or a system
 Togl) can be loaded and packs it in place of the Tk canvas; the "3D Hardware"
 toolbar button toggles between the two views at any time.  Piece meshes live
@@ -222,13 +233,19 @@ named colors) into the internal form.  The canvas renderer draws full/
 square marks as stippled polygons, circles and disks as outlines, arrows
 as projected canvas lines with arrowheads and text marks as canvas text;
 the GL renderer draws flat translucent overlays and flat arrows on the
-board plane (text marks are canvas-only).  Rotating the 2D board re-aims
-white/black preset cameras live (`::board3d::syncOrientation`); free
-camera angles are left alone.
+board plane, and text marks with a baked pixel font (`gl_text_font.h`,
+flat quads — `glXUseXFont` proved to corrupt the GL context on some
+stacks).  Rotating the 2D board re-aims white/black preset cameras live
+(`::board3d::syncOrientation`); free camera angles are left alone.
 
-Limitations (v1): text marks do not render on the GL surface, and
-multiple board panes are not supported; the pane tracked by
-`application::board::Vars(widget:frame)` is used.
+`glboard_render` accepts an optional trailing photo name: the rendered
+frame is read back with `glReadPixels` (from the back buffer, rows
+flipped manually) into that Tk photo, which the tests use to verify
+pixel content across contexts.
+
+Limitations: the board pane is a singleton in scidb's twm (only the
+analysis panes multiply), so there is exactly one embedded view to
+manage.
 
 ### 6.3 WebGL viewer
 
@@ -299,3 +316,19 @@ All phases are implemented.
   be caught by calling the entry points from an `after` callback that runs
   after the startup script returns.
 
+* **GL display lists are per context; Tk photos must never see negative
+  pitch; glXUseXFont can poison the context.**  Three hard-won GL/Tk
+  lessons, each found by pixel-verifying frames instead of trusting
+  return codes:
+  - a *global* "lists compiled" flag made every Togl window but the
+    first silently draw no pieces (the lists only existed in the context
+    that compiled them) — track list bases per widget and validate with
+    `glIsList` for the current context;
+  - passing a `Tk_PhotoImageBlock` with **negative pitch** (to un-flip a
+    bottom-up GL read) walks out of bounds inside Tk and corrupts the
+    heap, breaking rendering in unrelated (even later-created) GL
+    contexts — flip the rows yourself and keep the pitch positive;
+  - `glXUseXFont` aborted display-list compilation on this stack
+    (Mesa/llvmpipe under Xvfb), leaving a phantom open list that
+    swallowed all further drawing in the context — text marks use a
+    baked pixel font (`gl_text_font.h`) drawn as flat quads instead.
