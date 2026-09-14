@@ -116,3 +116,6 @@ if {$::scidb::test::app::totalFail > 0} {
 catch { close $::scidb::test::app::reportHandle }
 catch { destroy .application }
 catch { destroy . }
+if {[info commands ::scidb::test::app::_real_exit] ne ""} {
+    ::scidb::test::app::_real_exit [expr {$::scidb::test::app::totalFail > 0 ? 1 : 0}]
+}
