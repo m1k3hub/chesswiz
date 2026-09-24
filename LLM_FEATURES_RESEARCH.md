@@ -1153,3 +1153,46 @@ proper bullet lists, and `fixedwidth` tracks the widget (714px widget -> 710).
 Regression tests (`tests/test_app_report.tcl`): the document `-fixedwidth` must exceed 100
 (i.e. not the widest-word fallback) and must not exceed the widget width. App suite:
 63 passed, 0 failed.
+
+### B.25 Tcl audit for flakiness (3 fixes)
+
+Scope: `tcl/` is 235 files / 236,715 lines, so this was a *pattern-and-evidence* audit
+rather than a line-by-line read: scan for the known flakiness classes, then verify
+empirically (repeat the suites, and look for error noise the harness swallows).
+
+**Found and fixed**
+
+1. **`ai-engine`: no re-entrancy guard.** `evaluate` pumps the event loop
+   (`vwait State(done)`), so a second concurrent call -- e.g. the user invoking
+   *Explain Position* twice -- clobbered the shared `State(done)`/`State(lines)` and could
+   hang or hand back the wrong position's evaluation. It now refuses with a clear error
+   instead of corrupting (and always clears the guard, including on the error path).
+
+2. **`ai-narrate`: blocking pipe read could freeze the UI.** `lookup` opened the engine
+   with `-blocking 1` and read with `gets`; an engine that never exits hung the whole app
+   (the queue-`quit` trick only helps engines that honour it). Made non-blocking with
+   `fileevent` + a bounded `after` timeout, mirroring the engine client. Verified: the
+   real fork answers in ~0.9 s, while `/bin/cat` (which echoes forever and never exits)
+   now returns `{}` at exactly the 1200 ms timeout instead of blocking.
+
+3. **`ai-narrate`: unguarded `$::env(PATH)`** in engine auto-discovery -- an unset PATH
+   raised instead of failing the lookup. Guarded.
+
+**Checked and found clean**
+
+- `ai-provider` async: `::http::geturl -command` fires exactly once (completion or error,
+  with its own timeout), so there is no double-callback to the UI.
+- All external `exec` paths (`ai-precedent`, `ai-annotations`, `ai-narrate`) are wrapped in
+  `catch` and return `{}`; a missing/failing helper cannot throw into the prompt builder.
+- `ai-claims`, `ai-prompt`, `ai-generate`: no timers, no `exec`, no globals.
+- Test flakiness: `make -C tests tcl` and `app-tcl` run 3x each -- 0 failures every time.
+- Error noise: grepped all suite output for `invalid command name` / `can't read` /
+  `can't set` / `no such element` -- zero occurrences (the only exceptions logged are the
+  tests deliberately probing error paths).
+
+**Observed but deliberately not changed**
+
+- `tcl/utils/player-photos.tcl:386` waits unboundedly: `while {![eof $sudoPipe]} { vwait
+  ... }`. If `sudo` hangs, that blocks the interface. It is the interactive superuser
+  photo-install path, so a timeout belongs there only with testing against a real `sudo`
+  prompt -- flagged rather than changed.

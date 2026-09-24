@@ -56,7 +56,8 @@ proc ::ai::narrate::available {} {
 	set exe $Config(engine)
 	if {[file exists $exe] && [file executable $exe]} { return 1 }
 	if {[llength [file split $exe]] == 1} {
-		foreach dir [split $::env(PATH) :] {
+		set path [expr {[info exists ::env(PATH)] ? $::env(PATH) : ""}]
+		foreach dir [split $path :] {
 			if {[file executable [file join $dir $exe]]} { return 1 }
 		}
 	}
@@ -64,33 +65,69 @@ proc ::ai::narrate::available {} {
 }
 
 
+# Read the engine's reply without blocking the event loop: a slow or hung
+# engine must not freeze the interface, so the pipe is non-blocking and bounded
+# by Config(timeout).
+proc ::ai::narrate::onReadable {chan} {
+	variable State
+
+	while {[gets $chan candidate] >= 0} {
+		incr State(count)
+		if {[string match "\{*" $candidate]} {
+			set State(line) $candidate
+			set State(done) 1
+			return
+		}
+		if {$State(count) >= 64} { break }
+	}
+	if {[eof $chan] || $State(count) >= 64} { set State(done) 1 }
+}
+
+
+proc ::ai::narrate::onTimeout {} {
+	variable State
+	set State(done) 1
+	return
+}
+
+
 proc ::ai::narrate::lookup {fen} {
 	variable Config
+	variable State
 
 	if {![available]} { return {} }
 	if {[catch {package require json}]} { return {} }
 
+	set chan ""
 	set line ""
 
 	if {[catch {
 		set chan [open "|$Config(engine)" r+]
-		fconfigure $chan -blocking 1 -buffering line
+		fconfigure $chan -blocking 0 -buffering line
 
 		puts $chan "position fen $fen"
 		puts $chan "narrate"
 		# Queue "quit" now: an engine without `narrate` (e.g. stock Stockfish)
 		# only prints "Unknown command" and would otherwise wait for input
-		# forever, blocking the gets loop below.
+		# forever.
 		puts $chan "quit"
 		flush $chan
 
-		for {set i 0} {$i < 64} {incr i} {
-			if {[gets $chan candidate] < 0} { break }
-			if {[string match "\{*" $candidate]} { set line $candidate; break }
-		}
-
+		set State(done) 0
+		set State(line) ""
+		set State(count) 0
+		fileevent $chan readable [namespace code [list ::ai::narrate::onReadable $chan]]
+		set token [after $Config(timeout) ::ai::narrate::onTimeout]
+		vwait ::ai::narrate::State(done)
+		after cancel $token
+		catch { fileevent $chan readable {} }
 		catch { close $chan }
+		set line $State(line)
 	}]} {
+		if {$chan ne ""} {
+			catch { fileevent $chan readable {} }
+			catch { close $chan }
+		}
 		return {}
 	}
 

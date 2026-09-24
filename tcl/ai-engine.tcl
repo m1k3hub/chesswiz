@@ -288,16 +288,26 @@ proc ::ai::engine::cpOf {d} {
 
 proc ::ai::engine::evaluate {fen args} {
 	variable Config
+	variable State
 	array set opts [list -depth $Config(depth) -multipv $Config(multipv) -timeout $Config(timeoutMs)]
 	array set opts $args
+
+	# evaluate() pumps the event loop (vwait on State(done)), so a second
+	# concurrent call would clobber State(done)/State(lines) and can hang or
+	# hand back the wrong position's evaluation. Refuse rather than corrupt.
+	if {[info exists State(busy)] && $State(busy)} {
+		error "engine is busy: a previous evaluation is still running"
+	}
 
 	# -timeout applies to this call only
 	set savedTimeout $Config(timeoutMs)
 	set Config(timeoutMs) $opts(-timeout)
+	set State(busy) 1
 	set rc [catch {
 		ensure
 		search $fen $opts(-depth) $opts(-multipv)
 	} res opts2]
+	set State(busy) 0
 	set Config(timeoutMs) $savedTimeout
 	if {$rc} { return -options $opts2 $res }
 	lassign $res lines best

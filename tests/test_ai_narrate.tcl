@@ -72,5 +72,19 @@ check "chess_narrate tool works" \
 check "chess_narrate_delta tool works" \
 	[string match {*balance*} [::ai::generate::runTool chess_narrate_delta [dict create fen $start move Nf3]]]
 
+# --- a hung engine must not freeze the interface ----------------------
+# The lookup used to read the pipe with a blocking gets(); an engine that
+# never exits (here: cat, which echoes input forever) hung the whole app.
+if {[file executable /bin/cat]} {
+	::ai::narrate::configure -engine /bin/cat -timeout 1200
+	set t0 [clock milliseconds]
+	set hung [::ai::narrate::lookup "8/8/8/8/8/8/8/8 w - - 0 1"]
+	set elapsed [expr {[clock milliseconds] - $t0}]
+	check "hung engine returns {} instead of blocking" [expr {[llength $hung] == 0}]
+	check "hung engine is bounded by the timeout" [expr {$elapsed < 8000}]
+} else {
+	puts "SKIP: /bin/cat unavailable for the hung-engine probe"
+}
+
 puts "AI-NARRATE-FAILURES: $failures"
 exit $failures

@@ -70,6 +70,20 @@ set only [::ai::engine::classify $mateIn1 "Re8"]
 check "classify(Re8#) is best" [expr {[dict get $only classification] eq "Best"}]
 check "classify flags an only move" [expr {[dict get $only onlyMove] == 1}]
 
+# --- re-entrancy guard ------------------------------------------------
+# evaluate() pumps the event loop (vwait), so a concurrent call would clobber
+# the shared State(done)/State(lines) and could hang or return the wrong
+# position's evaluation. A second call must be refused, not silently corrupt.
+set start2 "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+set ::ai::engine::State(busy) 1
+set rc [catch {::ai::engine::evaluate $start2 -depth 8} msg]
+set ::ai::engine::State(busy) 0
+check "concurrent evaluate is refused" [expr {$rc == 1}]
+check "refusal explains itself" [string match {*busy*} $msg]
+# and the guard clears, so the next call works again
+check "engine usable after the guard clears" \
+	[expr {[llength [::ai::engine::evaluate $start2 -depth 8]] > 0}]
+
 ::ai::engine::shutdown
 
 puts "AI-ENGINE-FAILURES: $failures"
