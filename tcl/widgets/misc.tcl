@@ -293,7 +293,7 @@ proc dialogButtons {dlg buttons args} {
 	array set opts $args
 
 	if {![winfo exists $dlg.__buttons]} {
-		if {[llength $opts(-default)] == 0} { set opts(-default) [lindex $buttons 0] }
+		if {[llength $opts(-default)] == 0} { set opts(-default) [lindex $buttons 0 0] }
 		bind $dlg <Alt-Key> [list tk::AltKeyInDialog $dlg %A]
 		::ttk::separator $dlg.__sep -class Dialog
 		tk::frame $dlg.__buttons -class Dialog -takefocus 0

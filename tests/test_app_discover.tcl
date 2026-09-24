@@ -28,6 +28,22 @@ tcltest::test discover-dialog {the dialog opens and closes cleanly} -body {
     list $opened [expr {$rows > 0}] [winfo exists $dlg]
 } -result {1 1 0}
 
+# Regression: dialogButtons defaulted -default to the whole first entry
+# ("ok {} {}") instead of its type, so focusing Cancel ran
+# ".application.__discover__.ok {} {} configure -default normal".
+tcltest::test discover-cancel-focus {focusing Cancel moves the default ring off OK} -body {
+    ::application::database::discover::open .application
+    set dlg .application.__discover__
+    update idletasks
+    foreach event {FocusIn FocusOut} {
+        eval [string map [list %W $dlg.cancel] [bind $dlg.cancel <$event>]]
+    }
+    set state [list [$dlg.ok cget -default] [$dlg.cancel cget -default]]
+    ::application::database::discover::Close
+    update idletasks
+    set state
+} -result {active normal}
+
 tcltest::test discover-menu-entry {the main menu offers Discover Databases} -body {
     catch { destroy .testmenu }
     menu .testmenu
