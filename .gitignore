@@ -115,3 +115,10 @@ tests/app_test_report.txt
 # the togl demos .deb was only used to extract it
 lib/togl/
 togl-demos*.deb
+
+# CBH->PGN exporter and chess-facts probe (built locally; not shipped)
+src/cdb2pgn
+src/probe_chess_facts
+
+# GUI debugging screenshots dumped in the repo root (local scratch only)
+/*.png

@@ -1,0 +1,16 @@
+-std=c++17
+-I.
+-Isrc
+-Isrc/db
+-Isrc/db/sci
+-Isrc/db/si3
+-Isrc/db/cql
+-Isrc/mstl
+-Isrc/util
+-Isrc/util/libTeXt
+-Isrc/util/libharu
+-Isrc/util/expat
+-Isrc/util/universalchardet
+-Isrc/sys
+-Isrc/app
+-Isrc/tcl
