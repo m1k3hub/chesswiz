@@ -265,7 +265,7 @@ proc WidgetProc {w command args} {
 
 		clone {
 			if {[llength $args] != 1} {
-				error "wrong # args: should be \"[namespace curent] clone <path>\""
+				error "wrong # args: should be \"[namespace current] clone <path>\""
 			}
 			set v [lindex $args 0]
 			Build $v -menucmd $Priv(menucmd)

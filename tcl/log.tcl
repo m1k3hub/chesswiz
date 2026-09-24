@@ -143,7 +143,10 @@ proc suppress {{flag 1}} {
 }
 
 
-proc exists	{} { return [winfo exists $Log] }
+proc exists	{} {
+	variable Log
+	return [winfo exists $Log]
+}
 
 
 proc finishLayout {} {

@@ -517,7 +517,7 @@ proc openSetup {parent {number -1}} {
 	### fst panel  ########################################################
 	set list [::tlistbox $lf.list -usescroll yes -height $listheight -minwidth 70 -sortable 1]
  	bind $list <<ListboxSelect>> [namespace code [list UseEngine $number $list %d $Vars(list:profiles)]]
-	bind $list <<ListboxDropRow>> [namespace code { UserSortEngines %W {*}%d }]
+	bind $list <<ListboxDropRow>> "[namespace code [list UserSortEngines $number %W]] {*}%d"
 	SetupEngineList $number
 
 	### snd panel #########################################################
@@ -763,11 +763,10 @@ proc checkForNewEngines {} {
 		foreach file [glob -nocomplain -directory $dir *.eng] {
 			set rootname [file rootname $file]
 			set i [lsearch -index 0 -exact $Plugins $rootname]
-			set detected 0
 			if {$i >= 0} {
 				file stat $file st
 				if {$st(mtime) > [lindex $Plugins $i 1]} { lappend detected $file }
-			} else if {![lindex $Plugins $i 2]} {
+			} else {
 				lappend detected $file
 			}
 		}
@@ -777,7 +776,7 @@ proc checkForNewEngines {} {
 
 	set list {}
 	foreach file $detected {
-		set data [::file::read $fp -encoding utf-8]
+		set data [::file::read $file -encoding utf-8]
 		set cmdline [lindex [split $data "\n"] 1]
 		set engine [lindex $cmdline 0]
 		set parameters [lrange $cmdline 1 end]
@@ -1603,7 +1602,7 @@ proc StartEngine {number list} {
 			}
 			if {$Vars(current:priority) ne $Vars(engine:priority)} {
 				set Vars(engine:priority) $Vars(current:priority)
-				::scidb::engine::priority $engineId $Vars(current:priority)
+				::scidb::engine::priority $Vars(engine:id) $Vars(current:priority)
 			}
 		}
 	} else {
@@ -2234,7 +2233,7 @@ proc RenameProfile {number parent} {
 }
 
 
-proc DoRenameProfile {dlg} {
+proc DoRenameProfile {number dlg} {
 	variable NewProfile_
 	variable OldProfile_
 	variable Engines
@@ -2905,7 +2904,6 @@ proc SaveOptions {number dlg} {
 		lappend newOptions $opt
 	}
 
-	array set Options_ [array get Options]
 	lset profiles $k $newOptions
 	set engine(Profiles:$protocol) $profiles
 	lset Engines $i [array get engine]
@@ -3088,7 +3086,7 @@ proc UserSortProfiles {number list args} {
 }
 
 
-proc UserSortEngines {list from to} {
+proc UserSortEngines {number list from to} {
 	variable Engines
 
 	set fromIndex [FindIndex [$list get $from name]]

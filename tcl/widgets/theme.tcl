@@ -482,8 +482,8 @@ proc GetTroughColor {} {
 		_aqua			-
 		_winnative	-
 		_xpnative	{
-			if {![info exists Settings([currentTheme]:troughcolor)} {
-				set sc [ttk::scale .__hopefully_unique_widget_id__[clock milliseconds]]
+			if {![info exists Settings([currentTheme]:troughcolor)]} {
+				set sc [tk::scale .__hopefully_unique_widget_id__[clock milliseconds]]
 				set Settings([currentTheme]:troughcolor) [$sc cget -troughcolor]
 				destroy $sc
 			}
@@ -1243,7 +1243,7 @@ bind ComboboxPopdown <ButtonPress-5> { %W.l yview scroll +1 units }
 namespace eval theme::clam {
 
 ttk::style theme settings clam {
-	ttk::style map TCombobox -foreground [list disabled $colors(-disabledfg)]
+	ttk::style map TCombobox -foreground [list disabled $::ttk::theme::clam::colors(-disabledfg)]
 }
 
 } ;# namespace theme::clam

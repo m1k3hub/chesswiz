@@ -267,8 +267,8 @@ proc olednd::_GetDroppedData {  } {
   set _prev_drop_target $_drop_target
   foreach type $_common_drag_source_types {
     if {![catch {
-      return [selection get -displayof $_drop_target -selection XdndSelection \
-                            -type $type] result options}]} {
+      selection get -displayof $_drop_target -selection XdndSelection \
+                    -type $type} result options]} {
       return $result
     }
   }

@@ -1033,7 +1033,7 @@ proc busy {w} {}
 proc unbusy {w} {}
 proc configureRadioEntry {m} { return $m }
 proc configureCheckEntry {m} { return $m }
-proc mySort {$args} { return [lsort {*}$args] }
+proc mySort {args} { return [lsort {*}$args] }
 
 
 proc makeStateSpecificIcons {img} {
@@ -1645,7 +1645,7 @@ proc GetFolders {w} {
 		win32 {
 			foreach drive [file volumes] {
 				if {![string match c:* $drive]} {
-					set name [string index $drive 0 2]
+					set name [string range $drive 0 1]
 					set id [string tolower $name]
 					set Vars(folder:$id) $drive
 					set Vars(icon:$id) $Vars(folder:filesystem) 
@@ -4543,7 +4543,7 @@ proc DeleteFile {w} {
 			]
 			if {$reply eq "no"} { return }
 			if {[catch { file mkdir $dst }]} {
-				return [::dialog::error -parent $parent -msg [Tr ErrorCreate]]
+				return [::dialog::error -parent $w -message [Tr ErrorCreate]]
 			}
 		}
 		[namespace parent]::DoFileOperations $w restore "file://localhost/$file" $dst 1
@@ -5005,7 +5005,7 @@ proc FinishNewFolder {w sel name} {
 	if {[file exists $folder]} {
 		::dialog::error -parent $Vars(widget:main) -message [format [Tr CannotCreate] $name]
 	} elseif {[catch {file mkdir $folder}]} {
-		::dialog::error -parent $Vars(widget:main) -message [Tr ErrorCreate($type)]
+		::dialog::error -parent $Vars(widget:main) -message [Tr ErrorCreate]
 		RefreshFileList $w
 	} else {
 		$Vars(widget:list:file) item element configure $sel 0 txtName -text $name

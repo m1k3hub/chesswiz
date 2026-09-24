@@ -23,7 +23,9 @@ variable testDir [file dirname [file normalize [info script]]]
 variable srcDir [file dirname $testDir]
 variable tclDir [file join $srcDir tcl]
 variable dataDir [file join $srcDir src/data]
-variable tmpDir [file join $testDir tmp]
+# Per-process scratch dir: concurrent runs must not share (or delete) each
+# other's artifacts under tests/tmp.
+variable tmpDir [file join $testDir tmp run-[pid]]
 
 variable verbose 0
 variable coverage 0
@@ -84,7 +86,7 @@ proc createTestPgn {{filename ""}} {
     variable tmpDir
     
     if {$filename eq ""} {
-        set filename [file join $tmpDir test_[clock seconds].pgn]
+        set filename [file join $tmpDir test_[clock microseconds].pgn]
     }
     
     set pgn {
@@ -139,7 +141,7 @@ proc createTestDatabase {{filename ""}} {
     variable tmpDir
     
     if {$filename eq ""} {
-        set filename [file join $tmpDir test_[clock seconds].sci]
+        set filename [file join $tmpDir test_[clock microseconds].sci]
     }
     
     # Create database using C++ tools if available

@@ -115,7 +115,7 @@ proc ::ai::engine::ensure {} {
 		error "no UCI engine: set ::ai::engine::configure -engine /path/to/stockfish"
 	}
 
-	set Proc [open "|$Config(engine)" r+]
+	set Proc [open "|[list $Config(engine)]" r+]
 	fconfigure $Proc -blocking 0 -buffering line
 
 	send "uci"

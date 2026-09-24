@@ -8,6 +8,8 @@ package require tcltest 2.5
 
 namespace eval ::scidb::test {
     variable testDir [file dirname [file normalize [info script]]]
+    # Per-process scratch dir (test_framework.tcl uses the same path).
+    variable tmpDir [file join $testDir tmp run-[pid]]
     variable totalPass 0
     variable totalFail 0
     variable totalSkip 0
@@ -29,7 +31,7 @@ for {set i 0} {$i < [llength $argv]} {incr i} {
 }
 
 # Create temp directory
-file mkdir [file join $::scidb::test::testDir tmp]
+file mkdir $::scidb::test::tmpDir
 
 puts "=============================================="
 puts "  Scidb Test Suite"
@@ -101,7 +103,9 @@ set endTime [clock seconds]
 set duration [expr {$endTime - $startTime}]
 
 # Cleanup temp
-catch { file delete -force [file join $::scidb::test::testDir tmp] }
+catch { file delete -force $::scidb::test::tmpDir }
+# Drop the shared parent only when no concurrent run still owns a subdir.
+catch { file delete [file dirname $::scidb::test::tmpDir] }
 
 # Summary
 puts "\n=============================================="

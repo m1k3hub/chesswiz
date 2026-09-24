@@ -94,6 +94,8 @@ array set Options {
 array set Priv {
 	busy 0
 	pipe {}
+	parent .
+	kill {}
 }
 
 
@@ -222,8 +224,8 @@ proc terminateUpdate {} {
 	variable Priv
 
 	if {[llength $Priv(pipe)]} {
-		puts $Priv(pipe) terminate
-		after 2000 [namespace code [list ForceTermination]]
+		catch { puts $Priv(pipe) terminate }
+		set Priv(kill) [after 2000 [namespace code [list ForceTermination]]]
 		vwait [namespace current]::Priv(pipe)
 	}
 }
@@ -359,12 +361,14 @@ proc OpenPipe {informProc shared parent} {
 
 	set Priv(empty) 1
 	set Priv(vwait) 0
+	set Priv(parent) $parent
 	set passwd ""
+	set cmd [list $script]
 
 	if {$shared && $tcl_platform(platform) eq "unix" && [exec id -u] != 0} {
 		if {$Options(use-gksudo) && [string length [set gksudo [auto_execok gksudo]]]} {
 			set msg [lindex [split $mc::RequiresSuperuserRights \n] 0]
-			set cmd "$gksudo -g -k -m \"$msg\" $script"
+			set cmd [list {*}$gksudo -g -k -m $msg $script]
 			set Priv(vwait) 1
 		} else {
 			variable Result_
@@ -376,10 +380,15 @@ proc OpenPipe {informProc shared parent} {
 			update idletasks
 			if {$result ne "ok"} { return cancelled }
 			catch { exec sudo -k }
-			if {[catch { open "| echo $passwd | $sudo -S echo \"\" 2>@1" r } sudoPipe ]} {
+			if {[catch { open "|[list {*}$sudo -S echo {}] 2>@1" r+ } sudoPipe ]} {
 				return failed
 			}
 			fconfigure $sudoPipe -buffering none -blocking 1
+			puts $sudoPipe $passwd
+			flush $sudoPipe
+			# EOF on stdin makes sudo give up after one attempt instead of
+			# waiting for a retry nobody will type.
+			chan close $sudoPipe write
 			fileevent $sudoPipe readable [namespace code [list ReadPipe $sudoPipe]]
 			set Result_ ""
 			update idletasks
@@ -397,11 +406,11 @@ proc OpenPipe {informProc shared parent} {
 #				set arg2 $env(http_proxy)
 #			}
 #			set cmd [string trim "$sudo -S -n $script $arg1 $arg2"]
-			set cmd "$sudo -E -S -n -- $script"
+			set cmd [list {*}$sudo -E -S -n -- $script]
 		}
 	}
 
-	set Priv(pipe) [open "| $cmd" r+]
+	set Priv(pipe) [open "|$cmd" r+]
 	fconfigure $Priv(pipe) -buffering line -blocking 0
 	fileevent $Priv(pipe) readable $informProc
 	if {[string length $passwd]} { puts $Priv(pipe) $passwd }
@@ -556,9 +565,11 @@ proc ProcessUpdate {parent} {
 proc ForceTermination {} {
 	variable Priv
 
+	after cancel $Priv(kill)
+	set Priv(kill) {}
 	set Priv(busy) 0
-	catch { destroy $parent.installPlayerPhotos }
-	catch { destroy $parent.downloadPlayerPhotos }
+	catch { destroy $Priv(parent).installPlayerPhotos }
+	catch { destroy $Priv(parent).downloadPlayerPhotos }
 	catch { close $Priv(pipe) }
 	set Priv(pipe) {}
 }

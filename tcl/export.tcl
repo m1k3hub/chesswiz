@@ -3360,12 +3360,12 @@ proc DoExport {parent dlg file} {
 				append preamble \
 					"\\def\\ImageStyle{$Values(tex,diagram,image-style) $Values(tex,diagram,image-size)}\n"
 			}
-			if {[string length $Values(tex,moves,figurines)] ne "graphic"} {
+			if {$Values(tex,moves,figurines) ne "graphic"} {
 				append preamble "\\def\\UseLetters{"
 				if {$Values(tex,moves,figurines) eq "user"} {
 					set set [namespace current]::Figurines
 				} else {
-					set set $::figurines::langSet($Values(tex,moves,figurines)
+					set set $::figurines::langSet($Values(tex,moves,figurines))
 				}
 				foreach piece $set {
 					# convert into UTF-8 sequence; e.g. "\u05d4\u05de" --> \xD7\x94\xd7\x9e
@@ -3653,7 +3653,7 @@ proc ShowTrace {parent trace} {
 		grid columnconfigure $f 1 -weight 1
 		::widget::dialogButtons $dlg close
 		$dlg.close configure -command [list destroy $dlg]
-		::util::place $dlg -parent $w -position center
+		::util::place $dlg -parent $parent -position center
 		wm protocol $dlg WM_DELETE_WINDOW [list destroy $dlg]
 		wm deiconify $dlg
 	}

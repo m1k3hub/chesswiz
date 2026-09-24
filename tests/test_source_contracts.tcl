@@ -783,6 +783,61 @@ tcltest::test src-contract-makefile-no-missing-src-36 \
     expr {!$hasGhostTarget}
 } -result 1
 
+# ==============================================================================
+# Tcl static guards (2026-09-24 nagelfar audit)
+# ==============================================================================
+
+# Application Tcl sources, read byte-transparently (some are Latin-1).
+proc appTclSources {} {
+    variable repoRoot
+    set files [glob -nocomplain -directory [file join $repoRoot src tk html] *.tcl]
+    foreach dir {tcl tcl/widgets tcl/dialogs tcl/utils tcl/dnd tcl/contrib tcl/tools} {
+        lappend files {*}[glob -nocomplain -directory [file join $repoRoot $dir] *.tcl]
+    }
+    set result {}
+    foreach f [lsort $files] {
+        set fd [open $f r]
+        fconfigure $fd -encoding iso8859-1
+        lappend result $f [read $fd]
+        close $fd
+    }
+    return $result
+}
+
+tcltest::test tcl-contract-regexp-literals-compile-01 \
+    {Every braced regexp/regsub literal in the app compiles (invalid range [0-9-.] regression)} -body {
+    set bad {}
+    set re {(?:regexp|regsub)(?:\s+-(?:nocase|all|inline|expanded|line|start\s+\S+|indices|lineanchor|linestop))*\s+\{([^{}\n]*)\}}
+    foreach {f src} [appTclSources] {
+        foreach {- pat} [regexp -all -inline $re $src] {
+            if {[catch {regexp -about $pat} err]} { lappend bad "[file tail $f]: {$pat}: $err" }
+        }
+    }
+    join $bad \n
+} -result {}
+
+tcltest::test tcl-contract-known-bad-idioms-02 \
+    {No invalid Tcl/Tk idioms that only fail when the branch runs} -body {
+    set patterns {
+        {\[namespace curent\]}          "misspelt namespace current"
+        {\[font exists }                "Tk has no 'font exists'"
+        {\}\s*else\s+if\s*\{}           "'else if' is a syntax error in Tcl"
+        {\[string index \$[\w:()]+ \d+ \d+\]} "string index takes one index"
+        {cget -cursor\] ne \$\w+\]\}}   "stray bracket in expression"
+        {\[llength \$\w+\}}             "unclosed command substitution"
+        {proc \w+ \{\$}                 "proc parameter named with a dollar sign"
+    }
+    set bad {}
+    foreach {f src} [appTclSources] {
+        foreach {pat why} $patterns {
+            foreach hit [grepLines $src $pat] {
+                lappend bad "[file tail $f]:[lindex $hit 0]: $why"
+            }
+        }
+    }
+    join $bad \n
+} -result {}
+
 tcltest::cleanupTests
 
 } ;# namespace ::scidb::test

@@ -104,6 +104,12 @@ proc Terminate {} {
 	variable Terminate
 	set data [gets stdin]
 	if {[string trim $data] eq "terminate"} { set Terminate 1 }
+	if {[eof stdin]} {
+		# The parent is gone; stop, and stop the readable event from
+		# firing forever on the closed stdin.
+		fileevent stdin readable {}
+		set Terminate 1
+	}
 }
 
 if {$tcl_platform(platform) eq "windows"} {

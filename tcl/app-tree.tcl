@@ -2160,15 +2160,15 @@ proc setupTextTags {w} {
 		set nameN "openingreport_n"
 		set nameB "openingreport_b"
 
-		if {[font exists $nameH]} { font delete $nameH }
-		if {[font exists $nameS]} { font delete $nameS }
-		if {[font exists $nameN]} { font delete $nameN }
-		if {[font exists $nameB]} { font delete $nameB }
+		if {$nameH in [font names]} { font delete $nameH }
+		if {$nameS in [font names]} { font delete $nameS }
+		if {$nameN in [font names]} { font delete $nameN }
+		if {$nameB in [font names]} { font delete $nameB }
 
-		array set h $b; set h(-size) [expr {max(13, $b(-size) + 5)}]; set h(-weight) bold
-		array set s $b; set s(-size) [expr {max(11, $b(-size) + 2)}]; set s(-weight) bold
-		array set n $b; set n(-size) [expr {max(9, $b(-size))}]
-		array set bb $b; set bb(-size) [expr {max(9, $b(-size))}]; set bb(-weight) bold
+		array set h $base; set h(-size) [expr {max(13, $b(-size) + 5)}]; set h(-weight) bold
+		array set s $base; set s(-size) [expr {max(11, $b(-size) + 2)}]; set s(-weight) bold
+		array set n $base; set n(-size) [expr {max(9, $b(-size))}]
+		array set bb $base; set bb(-size) [expr {max(9, $b(-size))}]; set bb(-weight) bold
 
 		font create $nameH {*}[array get h]
 		font create $nameS {*}[array get s]

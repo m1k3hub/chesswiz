@@ -2394,7 +2394,7 @@ proc PopupMenu {parent position} {
 	# Try to catch accidental double clicks.
 	if {[winfo exists $menu]} { return }
 	menu $menu
-	catch { wm attributes $m -type popup_menu }
+	catch { wm attributes $menu -type popup_menu }
 
 	if {[::game::trialMode?]} {
 		$menu add command \
@@ -3194,7 +3194,7 @@ proc RemoveVariation {{varno 0}} {
 		::scidb::game::position backward
 		::scidb::game::moveto [::scidb::game::position key]
 	} else {
-		::scidb::game::moveto [::scidb::game::query parent $key]
+		::scidb::game::moveto [::scidb::game::position key]
 	}
 }
 

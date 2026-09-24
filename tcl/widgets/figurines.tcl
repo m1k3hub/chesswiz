@@ -157,7 +157,7 @@ proc listbox {path args} {
 		set Variable $opts(-variable)
 		array unset opts -variable
 		set args [array get opts]
-		if {[llength [set $Variable]] == 0} { lset $Variable $langSet(user) }
+		if {[llength [set $Variable]] == 0} { set $Variable $langSet(user) }
 	} else {
 		set Variable [namespace current]::langSet(user)
 	}

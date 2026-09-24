@@ -449,11 +449,11 @@ proc alert {args} {
 	if {$n == -1} { set n [lsearch -exact $entries cancel] }
 	if {$n == -1} { set n [lsearch -exact $entries no] }
 	if {$n == -1 && [llength $entries] == 1} { set n 0 }
-	if {$n == 1 && [llength $entries] == 0} {
+	if {$n == -1 && [llength $entries] == 0} {
 		wm protocol $w WM_DELETE_WINDOW [list set ::dialog::Reply($w) ""] }
 
 	if {$n >= 0} {
-		bind escCmd [list $buttonFrame.bt-[lindex $entries $n] invoke]
+		set escCmd [list $buttonFrame.bt-[lindex $entries $n] invoke]
 		switch $::tcl_platform(platform) {
 			macintosh	{ bind $w <Command-period> $escCmd }
 			windows		{ bind $w <Escape> $escCmd }

@@ -280,7 +280,7 @@ proc GotoGame(first) {nb} {
 proc GotoGame(last) {nb} {
 	variable ${nb}::Vars
 
-	set index [expr {[scidb::view::count games $base $variant $Vars(view)] - 1}]
+	set index [expr {[scidb::view::count games $Vars(base) $Vars(variant) $Vars(view)] - 1}]
 
 	if {$Vars(index) < $index} {
 		set Vars(index) $index

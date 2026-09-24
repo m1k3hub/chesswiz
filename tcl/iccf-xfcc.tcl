@@ -216,6 +216,7 @@ proc buildMakeAMove {gameId move movecount args} {
 proc soapRequest {soapAction body} {
 	variable Config
 	variable mc::ConnectionFailed
+	variable mc::TlsNotAvailable
 
 	if {![initTls]} {
 		error $TlsNotAvailable

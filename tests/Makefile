@@ -25,6 +25,12 @@ COVERAGE_DIR := $(TEST_DIR)coverage
 # Targets
 # ==============================================================================
 
+# Targets share build outputs (test_cpp_backend, src/ test binaries) and
+# fixed log paths, and the Tcl suite itself shells out to `make cpp`
+# (test_audit_regressions.tcl).  Under `make -j` those would race: one
+# job relinking or deleting what another is executing.  Run serially.
+.NOTPARALLEL:
+
 .PHONY: all test tcl app-tcl cpp cpp-src ai-tests chess-facts ai-facts ai-claims ai-engine ai-eco ai-generate ai-ui ai-tools ai-precedent ai-narrate ai-annotations corpus-tests clean help report
 
 all: tcl app-tcl cpp ai-tests corpus-tests
@@ -217,11 +223,11 @@ cpp-src:
 			echo "FAIL: $$t"; tail -20 $$log; exit 1; \
 		fi; \
 	done
-	@rm -rf $(TEST_DIR)tmp/sci-result && mkdir -p $(TEST_DIR)tmp/sci-result
-	@if "$(SRC_DIR)/test_sci_result" $(TEST_DIR)tmp/sci-result >/tmp/scidb-test-sci-result.log 2>&1; then \
-		echo "PASS: test_sci_result"; \
+	@d=$$(mktemp -d "$${TMPDIR:-/tmp}/scidb-sci-result.XXXXXX") || exit 1; \
+	if "$(SRC_DIR)/test_sci_result" $$d >/tmp/scidb-test-sci-result.log 2>&1; then \
+		rm -rf "$$d"; echo "PASS: test_sci_result"; \
 	else \
-		echo "FAIL: test_sci_result"; tail -20 /tmp/scidb-test-sci-result.log; exit 1; \
+		rm -rf "$$d"; echo "FAIL: test_sci_result"; tail -20 /tmp/scidb-test-sci-result.log; exit 1; \
 	fi
 
 $(TEST_DIR)test_corr_duration: $(TEST_DIR)test_corr_duration.cpp

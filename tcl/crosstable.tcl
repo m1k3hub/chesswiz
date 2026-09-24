@@ -647,9 +647,12 @@ proc UpdateHistory {dlg} {
 		} elseif {[llength $RecentlyUsedHistory] == 30} {
 			set lastEntry [lindex $RecentlyUsedHistory end]
 			set RecentlyUsedHistory [lreplace $RecentlyUsedHistory end end]
-			set hist [concat $MostRecentHistory $lastEntry]
-			set hist [lsort -indices {0 2} -decreasing $hist]
-			if {[llength $hist] > 20} { set hist [lreplace $hist end end] }
+			# keep the evicted entry as the newest of the long-term history
+			set hist $MostRecentHistory
+			set k [lsearch -exact -index 0 $hist [lindex $lastEntry 0]]
+			if {$k >= 0} { set hist [lreplace $hist $k $k] }
+			set hist [linsert $hist 0 $lastEntry]
+			if {[llength $hist] > 20} { set hist [lrange $hist 0 19] }
 			set MostRecentHistory $hist
 		}
 

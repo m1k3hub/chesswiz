@@ -462,7 +462,7 @@ proc Mouse3Down {{nodes {}}} {
 	set menu $Priv(html).__menu__
 	catch { destroy $menu }
 	menu $menu
-	catch { wm attributes $m -type popup_menu }
+	catch { wm attributes $menu -type popup_menu }
 
 	foreach node $nodes {
 		set id [$node attribute -default {} id]

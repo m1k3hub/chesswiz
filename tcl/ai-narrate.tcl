@@ -97,12 +97,16 @@ proc ::ai::narrate::lookup {fen} {
 
 	if {![available]} { return {} }
 	if {[catch {package require json}]} { return {} }
+	# lookup() pumps the event loop (vwait); a nested call would clobber the
+	# shared State and end the outer wait early.
+	if {[info exists State(busy)] && $State(busy)} { return {} }
 
 	set chan ""
 	set line ""
+	set State(busy) 1
 
 	if {[catch {
-		set chan [open "|$Config(engine)" r+]
+		set chan [open "|[list $Config(engine)]" r+]
 		fconfigure $chan -blocking 0 -buffering line
 
 		puts $chan "position fen $fen"
@@ -124,12 +128,14 @@ proc ::ai::narrate::lookup {fen} {
 		catch { close $chan }
 		set line $State(line)
 	}]} {
+		set State(busy) 0
 		if {$chan ne ""} {
 			catch { fileevent $chan readable {} }
 			catch { close $chan }
 		}
 		return {}
 	}
+	set State(busy) 0
 
 	if {![string match "\{*" $line]} { return {} }
 	if {[catch {set d [json::json2dict $line]}]} { return {} }

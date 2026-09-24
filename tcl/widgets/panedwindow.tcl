@@ -109,7 +109,7 @@ proc WidgetProc {w command args} {
 
 		if {[info exists opts(-maxsize)]} {
 			if {[string is integer -strict $opts(-maxsize)]} {
-				set (maxsize:$child) [expr {$maxsize > 0 ? $maxsize : 32000}]
+				set (maxsize:$child) [expr {$opts(-maxsize) > 0 ? $opts(-maxsize) : 32000}]
 			} else {
 				error "bad screen distance \"$opts(-maxsize)\""
 			}
@@ -421,7 +421,7 @@ proc SetCursor {childs cursor} {
 		catch {
 			set cur [$child cget -cursor]
 			if {[string match {*_double_arrow} $cur]} { set cur "" }
-			if {[$child cget -cursor] ne $cursor]} {
+			if {[$child cget -cursor] ne $cursor} {
 				$child configure -cursor $cursor
 			}
 			lappend Priv(cursorList) $child $cur
@@ -439,7 +439,7 @@ proc ResetCursor {} {
 	foreach {child cursor} $Priv(cursorList) {
 		if {[winfo exists $child]} {
 			catch {
-				if {[$child cget -cursor] ne $cursor]} {
+				if {[$child cget -cursor] ne $cursor} {
 					$child configure -cursor $cursor
 				}
 			}

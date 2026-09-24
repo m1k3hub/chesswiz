@@ -297,7 +297,7 @@ proc VisitItem {table data} {
 		set opening [::scidb::app::lookup ecoCode $value]
 		lassign $opening long short
 		set vars [lrange $opening 2 end]
-		if {[llength $vars} {
+		if {[llength $vars]} {
 			set item [::mc::translateEco $short]
 			foreach var $vars { append item ", " [::mc::translateEco $var] }
 		} else {

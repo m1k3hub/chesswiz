@@ -392,16 +392,20 @@ proc SendPath {port} {
 
 
 proc Incoming {chan addr port} {
-#	fconfigure $chan -blocking 0
+	# Non-blocking: a peer that sends a partial line must not freeze the GUI.
+	fconfigure $chan -blocking 0
 	fileevent $chan readable [namespace code [list IncomingOffered $chan]]
 }
 
 
 proc IncomingOffered {chan} {
 	if {[gets $chan pathList] >= 0} {
-		fileevent $chan readable {}
-#		fconfigure $chan -blocking 1
+		catch { close $chan }
 		after idle [namespace code [list requestOpenBases $pathList]]
+	} elseif {[eof $chan]} {
+		# Peer went away without a full line; without closing here the
+		# readable event would fire forever (busy loop + leaked socket).
+		catch { close $chan }
 	}
 }
 

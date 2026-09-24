@@ -638,8 +638,8 @@ proc ParseArguments {args} {
 				}
 			}
 
-			-recentcolors - usercolors {
-				set $value [MakeColorList [set $value]]
+			-recentcolors - -usercolors {
+				set $value [MakeColorList $key [set $value]]
 				set opts([string range $key 1 end]) $value
 			}
 
@@ -687,7 +687,7 @@ proc ParseArguments {args} {
 }
 
 
-proc MakeColorList {colors} {
+proc MakeColorList {key colors} {
 	set newColors {}
 	foreach color $colors {
 		set actual ""

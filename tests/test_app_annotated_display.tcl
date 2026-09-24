@@ -246,7 +246,7 @@ tcltest::test annotated-unicode-09 {multibyte comments and 7-NAG pile-up survive
 
 tcltest::test annotated-corpus-10 {corpus round-trips as a PGN file on disk} -body {
 	variable testDir
-	set path [file join $testDir tmp-app annotated_corpus.pgn]
+	set path [file join $testDir tmp-app annotated_corpus_[pid].pgn]
 	file mkdir [file dirname $path]
 	::scidb::test::corpus::writeCorpusPgn $path
 	set chan [open $path r]

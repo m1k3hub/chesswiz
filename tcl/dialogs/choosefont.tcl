@@ -1035,13 +1035,13 @@ proc ParseArguments {setDefaults args} {
 
 			-geometry {
 				if {$value eq "last"} {
-					set $geometry [geometry]
+					set opts(geometry) [geometry]
 				} else {
 					if {[regexp {^(\d+x\d+)?(\+\d+\+\d+)?$} $value] == 0} {
 						return -code error \
 							"option \"$key\": invalid geometry '$value'; should be \[WxH\]\[+X+Y\]"
 					}
-					set geometry $value
+					set opts(geometry) $value
 				}
 			}
 

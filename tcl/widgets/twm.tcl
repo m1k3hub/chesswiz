@@ -213,7 +213,7 @@ proc frozen {} {
 
 proc frozen? {{twm ""}} {
 	variable Frozen
-	return [expr {[string length $twm] == 0 ? [string length $Frozen] > 0 : $frozen eq $twm}]
+	return [expr {[string length $twm] == 0 ? [string length $Frozen] > 0 : $Frozen eq $twm}]
 }
 
 
@@ -2527,14 +2527,20 @@ proc Pack {twm parent child opts} {
 }
 
 
-proc UpdateTab {twm notebook pane nameVar} {
-	if {![winfo exists $child] || ![winfo exists $notebook] || $pane ni [$notebook tabs]} { return }
+proc UpdateTab {twm notebook pane nameVar args} {
+	# args: name1 name2 op, appended by the variable trace
+	set cmd [list [namespace current]::UpdateTab $twm $notebook $pane $nameVar]
 
-	set leader [$twm leader $child]
+	if {![winfo exists $pane] || ![winfo exists $notebook] || $pane ni [$notebook tabs]} {
+		trace remove variable $nameVar write $cmd
+		return
+	}
+
+	set leader [$twm leader $pane]
 	set name [$twm get $leader name]
 
 	if {$name ne $nameVar} {
-		trace remove variable write $name [list [namespace current]::UpdateTab $twm $parent $child $name]
+		trace remove variable $nameVar write $cmd
 	} else {
 		$notebook tab $pane -text [set $name]
 	}

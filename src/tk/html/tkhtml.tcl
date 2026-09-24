@@ -108,7 +108,7 @@ namespace eval tkhtml {
     proc textarea_width {} {
         upvar N node
         set cols [$node attr -default "" cols]
-        if {[regexp {[[:digit:]]+}] $cols} { return "${cols}ex" }
+        if {[regexp {^[[:digit:]]+$} $cols]} { return "${cols}ex" }
         return $cols
     }
     proc textarea_height {} {

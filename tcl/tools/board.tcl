@@ -150,7 +150,7 @@ proc PopupMenu {} {
 	set menu $dlg.__menu__
 	catch { destroy $menu }
 	menu $menu
-	catch { wm attributes $m -type popup_menu }
+	catch { wm attributes $menu -type popup_menu }
 
 	$menu add command -label "Select Theme" -command SelectTheme
 	$menu add command -label "Select Piece Set" -command SelectPieceSet

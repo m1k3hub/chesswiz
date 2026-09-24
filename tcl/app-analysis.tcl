@@ -793,6 +793,7 @@ proc ClearLines {tree args} {
 
 
 proc SetMultiPV {tree {number 0}} {
+	variable GlobalOptions
 	variable ${tree}::Vars
 	variable ${Vars(number)}::Options
 
@@ -978,7 +979,7 @@ proc DisplayStartOfMotorFailed {tree rc} {
 	}
 	append msg "."
 	set Vars(current:message) [list [namespace current]::DisplayStartOfMotorFailed $tree $rc]
-	ShowMessage error $msg
+	ShowMessage $tree error $msg
 }
 
 
@@ -2081,7 +2082,7 @@ proc ShowEngineComparisonResults {dlg} {
 		set nps [expr {1000000 + int(rand() * 500000)}]
 		set agreement [expr {85 + int(rand() * 15)}]
 
-		$tree insert {} end -values [list $engine $depth $eval $nodes $nms "${agreement}%"]
+		$tree insert {} end -values [list $engine $depth $eval $nodes $nps "${agreement}%"]
 	}
 
 	# Disagreement analysis

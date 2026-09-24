@@ -2851,7 +2851,7 @@ proc CheckFields {top title fields} {
 				} elseif {$value eq "?" || $value eq "-"} {
 					# nothing to do
 				} elseif {![$top.$field valid?]} {
-					set msg [MakeMessage $top $tag [format $mc::InvalidRoundEntry $value] $field]
+					set msg [MakeMessage $top $tagName [format $mc::InvalidRoundEntry $value] $field]
 					set detail $mc::InvalidRoundEntryDetail
 					::dialog::error -parent $top -message $msg -detail $detail -title $title
 					$top.$field focus
@@ -3012,7 +3012,7 @@ proc CheckFields {top title fields} {
 							set domain ""
 							lassign [split $value @] local domain rest
 							if {	![regexp {^[A-Za-z0-9!#$%&'*+\-/=?^_`{|}~.]+$} $local]
-								|| ![regexp {^[A-Za-z0-9-.]+$} $domain]
+								|| ![regexp {^[A-Za-z0-9.-]+$} $domain]
 								|| [string match {*..*} $value]
 								|| [string index $local 0] eq "."
 								|| [string index $local end] eq "."

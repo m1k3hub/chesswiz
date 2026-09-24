@@ -9,7 +9,10 @@ package require tcltest 2.5
 namespace eval ::scidb::test {
 
 # Setup temp directory
-variable tmpDir [file join [file dirname [info script]] tmp]
+variable tmpDir
+if {![info exists tmpDir]} {
+    set tmpDir [file join [file dirname [file normalize [info script]]] tmp run-[pid]]
+}
 file mkdir $tmpDir
 
 # ==============================================================================

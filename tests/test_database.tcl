@@ -28,7 +28,7 @@ if {!$scidbAvailable} {
 tcltest::test db-create-01 {Create new database} -constraints scidbAvailable -setup {
     variable testDb
     variable tmpDir
-    set testDb [file join $tmpDir test_create_[clock seconds].sci]
+    set testDb [file join $tmpDir test_create_[clock microseconds].sci]
 } -body {
     set result [::scidb::db::create $testDb]
     set created [file exists $testDb]
@@ -43,7 +43,7 @@ tcltest::test db-create-01 {Create new database} -constraints scidbAvailable -se
 tcltest::test db-create-duplicate-02 {Prevent duplicate database names} -constraints scidbAvailable -setup {
     variable testDb
     variable tmpDir
-    set testDb [file join $tmpDir test_dup_[clock seconds].sci]
+    set testDb [file join $tmpDir test_dup_[clock microseconds].sci]
     ::scidb::db::create $testDb
 } -body {
     set result [catch {::scidb::db::create $testDb} err]
@@ -62,7 +62,7 @@ tcltest::test db-create-duplicate-02 {Prevent duplicate database names} -constra
 tcltest::test db-open-01 {Open existing database} -constraints scidbAvailable -setup {
     variable testDb
     variable tmpDir
-    set testDb [file join $tmpDir test_open_[clock seconds].sci]
+    set testDb [file join $tmpDir test_open_[clock microseconds].sci]
     ::scidb::db::create $testDb
 } -body {
     set result [::scidb::db::open $testDb]
@@ -78,7 +78,7 @@ tcltest::test db-open-01 {Open existing database} -constraints scidbAvailable -s
 tcltest::test db-close-02 {Close database} -constraints scidbAvailable -setup {
     variable testDb
     variable tmpDir
-    set testDb [file join $tmpDir test_close_[clock seconds].sci]
+    set testDb [file join $tmpDir test_close_[clock microseconds].sci]
     ::scidb::db::create $testDb
     ::scidb::db::open $testDb
 } -body {
@@ -93,7 +93,7 @@ tcltest::test db-close-02 {Close database} -constraints scidbAvailable -setup {
 
 tcltest::test db-open-nonexistent-03 {Fail on nonexistent database} -constraints scidbAvailable -body {
     variable tmpDir
-    set path [file join $tmpDir nonexistent_[clock seconds].sci]
+    set path [file join $tmpDir nonexistent_[clock microseconds].sci]
     set result [catch {::scidb::db::open $path} err]
     expr {$result != 0}
 } -result 1
@@ -105,7 +105,7 @@ tcltest::test db-open-nonexistent-03 {Fail on nonexistent database} -constraints
 tcltest::test db-import-pgn-01 {Import PGN file} -constraints scidbAvailable -setup {
     variable testDb
     variable tmpDir
-    set testDb [file join $tmpDir test_import_[clock seconds].sci]
+    set testDb [file join $tmpDir test_import_[clock microseconds].sci]
     ::scidb::db::create $testDb
     ::scidb::db::open $testDb
 } -body {

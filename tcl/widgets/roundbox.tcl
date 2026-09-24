@@ -63,7 +63,7 @@ proc WidgetProc {w command args} {
 	switch -- $command {
 		bind {
 			if {1 > [llength $args] || [llength $args] > 3} {
-				error "wrong # args: should be \"[namespace curent] bind <tag> ?<sequence>? ?<script?>\""
+				error "wrong # args: should be \"[namespace current] bind <tag> ?<sequence>? ?<script?>\""
 			}
 			return [bind $w {*}$args]
 		}
@@ -104,7 +104,7 @@ proc WidgetProc {w command args} {
 
 		instate {
 			if {[llength $args] != 1 && [llength $args] != 2} {
-				error "wrong # args: should be \"[namespace curent] $command <statespec> ?<script>?\""
+				error "wrong # args: should be \"[namespace current] $command <statespec> ?<script>?\""
 			}
 			if {[llength $args] == 2} {
 				if {[$w.__w__ instate [lindex $args 0]]} {

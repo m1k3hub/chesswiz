@@ -69,10 +69,18 @@ check "evidenceFromText ignores other lines" \
 	[expr {[llength [::ai::generate::evidenceFromText "just prose\nLEGAL MOVES: 20"]] == 0}]
 
 # --- async generation (stub) -----------------------------------------
+# Bounded wait: a callback that never fires must fail the check, not hang
+# the suite until the Makefile's outer timeout kills it.
+proc awaitResult {{ms 30000}} {
+	set id [after $ms {set ::gresult {ok 0 grounded 0 attempts 0 timeout 1}}]
+	if {$::gresult eq ""} { vwait ::gresult }
+	after cancel $id
+}
+
 ::ai::provider::configure -name stub -responses {"The position is balanced."}
 set ::gresult {}
 ::ai::generate::positionAsync $start [list set ::gresult] -engine 0
-vwait ::gresult
+awaitResult
 check "async generate succeeds" [expr {[dict get $::gresult ok] == 1}]
 check "async generate is grounded" [expr {[dict get $::gresult grounded] == 1}]
 check "async generate takes one attempt" [expr {[dict get $::gresult attempts] == 1}]
@@ -85,7 +93,7 @@ check "async result carries evidence" [dict exists $::gresult evidence]
 }
 set ::gresult {}
 ::ai::generate::positionAsync $start [list set ::gresult] -engine 0 -retries 1
-vwait ::gresult
+awaitResult
 check "async retry happens" [expr {[dict get $::gresult attempts] == 2}]
 check "async retry recovers" [expr {[dict get $::gresult grounded] == 1}]
 

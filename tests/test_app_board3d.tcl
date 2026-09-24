@@ -10,6 +10,22 @@ package require tcltest 2.5
 
 proc b3dAppCanvas {} { return .application.__board3d__.canvas }
 
+# Pump events until `w` reports the wanted size (or any real size when
+# none is given).  A fixed `after 50` races the X server under load:
+# the window may still be 1x1 or at its old geometry when we sample it.
+proc b3dWaitSize {w {width 0} {height 0} {ms 3000}} {
+	set deadline [expr {[clock milliseconds] + $ms}]
+	while {[clock milliseconds] < $deadline} {
+		update
+		if {![winfo exists $w]} { return 0 }
+		set ww [winfo width $w]
+		set wh [winfo height $w]
+		if {$width > 0 ? ($ww == $width && $wh == $height) : ($ww > 1 && $wh > 1)} { return 1 }
+		after 20
+	}
+	return 0
+}
+
 tcltest::test board3d-app-module {3D board module and entry points are loaded} -body {
 	list [namespace exists ::board3d] \
 		[llength [info commands ::board3d::openViewer]] \
@@ -95,9 +111,7 @@ tcltest::test board3d-app-select {click selection resolves through the projectio
 	if {$t ne "" && [winfo exists $t] && [llength [info commands ::scidb::tk::glboard_pick]]} {
 		::board3d::toggleOpenGL 1
 		update idletasks
-		update
-		after 50		;# let the X server map and size the togl
-		update
+		b3dWaitSize $t
 		set gsq -1
 		if {[winfo width $t] > 1 && [winfo height $t] > 1} {
 			set gsq [::scidb::tk::glboard_pick $t \
@@ -402,9 +416,7 @@ tcltest::test board3d-fit-pieces {all pieces stay inside portrait and landscape 
 	set ok 1
 	foreach {width height} {300 600 720 300 480 480} {
 		wm geometry .b3dfit ${width}x${height}+0+0
-		update
-		after 50
-		update
+		b3dWaitSize $t $width $height
 		foreach yaw {0 45 180} {
 			::scidb::tk::glboard_render $t [::board3d::NormalizeBoard standard] $yaw 56 12 -1 -1 -1 0 0 {} b3dfitphoto
 			if {[image width b3dfitphoto] != $width || [image height b3dfitphoto] != $height} { error "capture size [image width b3dfitphoto]x[image height b3dfitphoto], expected ${width}x${height}" }
@@ -452,12 +464,14 @@ tcltest::test board3d-app-webgl {WebGL server starts, serves and syncs the board
 	set board "rnbqkbnrpppppppp................................PPPPPPPPRNBQKBNR"
 	::board3d::PositionChanged $board
 	set data ""
-	# the GET can race the just-started server; retry once
-	for {set i 0} {$i < 2} {incr i} {
-		set tok [::http::geturl http://127.0.0.1:8899/api/board -timeout 3000]
-		set data [::http::data $tok]
-		::http::cleanup $tok
-		if {[string match "*\"board\": \"$board\"*" $data]} { break }
+	# the GET can race the just-started server (connection refused or stale
+	# board); retry for up to ~3 s
+	for {set i 0} {$i < 10} {incr i} {
+		if {![catch { ::http::geturl http://127.0.0.1:8899/api/board -timeout 3000 } tok]} {
+			set data [::http::data $tok]
+			::http::cleanup $tok
+			if {[string match "*\"board\": \"$board\"*" $data]} { break }
+		}
 		after 300
 	}
 	set match [string match "*\"board\": \"$board\"*" $data]

@@ -1845,7 +1845,7 @@ proc PopdownLanguages {dlg} {
 		$popdown.l select $first
 	}
 
-	catch { wm attributes $m -type dropdown_menu }
+	catch { wm attributes $popdown -type dropdown_menu }
 	::update idletasks
 	::util::place $popdown -parent $Vars(addLang) -position below -type popup
 	switch -- [tk windowingsystem] {

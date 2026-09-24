@@ -1910,7 +1910,7 @@ proc setupTextFont {context {font ""}} {
 
 	if {	[string length [lindex $Options($context:html:user) 0]] == 0
 		&& $Options($context:html:family) ni [defaultFonts]} {
-		set Options($context:html:family) [lindex $defaultFonts 0]
+		set Options($context:html:family) [lindex [defaultFonts] 0]
 	}
 }
 
@@ -2200,7 +2200,7 @@ proc addChangeFontToMenu {context m applycmd {textFontOnly no}} {
 		set options {}
 		set space ""
 	} else {
-		set options -compound left -image $::icon::16x16::fonts
+		set options [list -compound left -image $::icon::16x16::fonts]
 		set space " "
 	}
 	if {$userFont ne [textFont $context]} { set textFontOnly 1 }
