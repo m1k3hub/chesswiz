@@ -106,7 +106,7 @@ proc application::media::build {twm frame width height} {
 	# buttons, the seek slider and the volume indicator - all on one row
 	# directly beneath the video.
 	frame $ctrl -bg $mc::BarBackground -highlightthickness 0
-	canvas $ctrl.buttons -width 228 -height 40 -highlightthickness 0 \
+	canvas $ctrl.buttons -width 248 -height 40 -highlightthickness 0 \
 		-borderwidth 0 -bg $mc::BarBackground
 	ttk::scale $ctrl.seek -orient horizontal -from 0 -to 1000 -value 0
 	label $ctrl.vol -textvariable [namespace current]::Priv(volumelabel) \
@@ -428,6 +428,19 @@ proc application::media::TypeNumber {type} {
 	}
 }
 
+# Return a localized display string for the treeview "Type" column.
+proc application::media::TypeDisplayLabel {type} {
+	variable mc
+	switch -glob -- $type {
+		1 - picture	{ return $mc::TypePicture }
+		2 - audio	{ return $mc::TypeAudio }
+		3 - video	{ return $mc::TypeVideo }
+		4 - stream	{ return $mc::TypeStream }
+		reports		{ return $mc::SectionReports }
+		default		{ return $mc::SectionOther }
+	}
+}
+
 # Insert one entry under its type section; returns the item id.
 proc application::media::InsertEntry {typeLabel title path index} {
 	variable Priv
@@ -458,10 +471,11 @@ proc application::media::InsertEntry {typeLabel title path index} {
 
 	set n 0
 	while {[$tree exists "item$n"]} { incr n }
-	if {[catch { $tree insert $section end -id item$n -values [list $typeLabel $title $path $index] } err]} {
+	set dispType [TypeDisplayLabel $typeLabel]
+	if {[catch { $tree insert $section end -id item$n -values [list $dispType $title $path $index] } err]} {
 		MediaDebug "InsertEntry: FAILED section=$section item=item$n: $err"
 	} else {
-		MediaDebug "InsertEntry: section=$section item=item$n type=$typeLabel path=[list $path]"
+		MediaDebug "InsertEntry: section=$section item=item$n type=$typeLabel ($dispType) path=[list $path]"
 	}
 	return item$n
 }

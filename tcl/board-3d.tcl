@@ -70,7 +70,6 @@ array set Priv {
 	togl       {}
 	parent     {}
 	cacheCount 0
-	afterid    {}
 	webgl,pid  {}
 	webgl,auto 0
 	webgl,error {}
@@ -1382,7 +1381,8 @@ proc ::board3d::LoadToglLib {} {
 # empty squares or using button 3 still orbits.
 
 proc ::board3d::CreateTogl {w {forward {}} {movable 0}} {
-	set win [togl $w -width 640 -height 520 -rgba true -double true -depth true]
+	set win [togl $w -width 640 -height 520 -rgba true -double true -depth true \
+		-displaycommand [namespace code renderOpenGL]]
 	if {$movable} {
 		::bind $win <ButtonPress-1>  [namespace code [list OnMovePress $win %x %y %s]]
 		::bind $win <B1-Motion>      [namespace code [list OnMoveMotion $win %x %y %s]]
@@ -1399,6 +1399,7 @@ proc ::board3d::CreateTogl {w {forward {}} {movable 0}} {
 	::bind $win <Button-5>       [namespace code [list viewerZoom -1]]
 	::bind $win <MouseWheel>    [namespace code [list viewerZoom %D]]
 	::bind $win <Configure>      [namespace code [list OnConfigure %W %w %h]]
+	::bind $win <Destroy>        [namespace code [list CancelResize %W]]
 	if {$forward ne ""} {
 		catch { $win configure -takefocus 1 }
 		::bind $win <KeyPress>     [namespace code [list ForwardKey $forward %K %s]]
@@ -1607,6 +1608,36 @@ proc ::board3d::OnMoveRelease {win x y state} {
 # the caller, which owns the pane geometry), or "" when OpenGL (Togl) is
 # not available; the reason is recorded in Priv(embed,error).
 
+# Shared camera controls for the embedded pane and the independent viewer.
+proc ::board3d::CameraBar {bar} {
+	ttk::frame $bar -padding {4 3}
+	ttk::menubutton $bar.view -text "View" -menu $bar.view.menu -width 5
+	menu $bar.view.menu -tearoff 0
+	foreach {label view} {White white Black black Side side Top top} {
+		$bar.view.menu add radiobutton -label $label \
+			-variable ::board3d::State(view) -value $view \
+			-command [namespace code [list viewerPreset $view]]
+	}
+	pack $bar.view -side left -padx 2
+	foreach {name label command} {
+		left \u21ba {viewerRotate -15}
+		right \u21bb {viewerRotate 15}
+		out \u2212 {viewerZoom -1}
+		in + {viewerZoom 1}
+		fit Fit {FitView}
+	} {
+		ttk::button $bar.$name -text $label -width 3 -command [namespace code $command]
+		pack $bar.$name -side left -padx 1
+	}
+	return $bar
+}
+
+proc ::board3d::FitView {} {
+	variable State
+	set State(distance) 12.0
+	refresh
+}
+
 proc ::board3d::embed {canvas2d} {
 	variable Priv
 	variable State
@@ -1636,6 +1667,10 @@ proc ::board3d::embed {canvas2d} {
 		set Priv(embed,error) "could not create the OpenGL widget: $err"
 		return ""
 	}
+	# A small size request lets the docking layout allocate the space; the
+	# viewport fits its actual allocation instead of forcing a 640px pane.
+	$Priv(embed,togl) configure -width 240 -height 240
+	pack [CameraBar $frame.camera] -side bottom -fill x
 	pack $Priv(embed,togl) -fill both -expand yes
 	set Priv(embed,frame) $frame
 
@@ -1720,34 +1755,21 @@ proc ::board3d::openViewer {parent} {
 
 	set bar [ttk::frame $dlg.bar]
 	pack $bar -side bottom -fill x
-	foreach {label view} {White white Black black Side side Top top} {
-		ttk::button $bar.$view -text $label -width 5 \
-			-command [namespace code [list viewerPreset $view]]
-		pack $bar.$view -side left -padx 1 -pady 2
+	pack [CameraBar $dlg.camera] -side bottom -fill x
+
+	# Secondary appearance options stay accessible without widening the view.
+	ttk::menubutton $bar.appearance -text "Appearance" -menu $bar.appearance.menu
+	set appearance [menu $bar.appearance.menu -tearoff 0]
+	foreach theme {"Classic Woodcraft" "Rosewood & Boxwood" "Walnut & Maple" "Ebony & Ivory" "Tournament Green"} {
+		$appearance add radiobutton -label $theme -variable ::board3d::State(theme) \
+			-value $theme -command [namespace code [list setTheme $theme]]
 	}
-	ttk::button $bar.rotl -text "\u21ba" -width 3 \
-		-command [namespace code [list viewerRotate -15]]
-	ttk::button $bar.rotr -text "\u21bb" -width 3 \
-		-command [namespace code [list viewerRotate 15]]
-	ttk::button $bar.reset -text "Reset" \
-		-command [namespace code [list viewerPreset white]]
-	pack $bar.rotl $bar.rotr $bar.reset -side left -padx 1 -pady 2
-
-	# Theme selector combobox
-	ttk::label $bar.tl -text " Theme:"
-	set themeValues [list "Classic Woodcraft" "Rosewood & Boxwood" "Walnut & Maple" "Ebony & Ivory" "Tournament Green"]
-	set themeCombo [ttk::combobox $bar.theme -values $themeValues -state readonly -width 16]
-	$themeCombo set $State(theme)
-	bind $themeCombo <<ComboboxSelected>> [namespace code [list viewerThemeSelected %W]]
-	pack $bar.tl $themeCombo -side left -padx 2 -pady 2
-
-	# Piece Style toggle
-	ttk::label $bar.sl -text " Pieces:"
-	set styleValues [list "realistic3d" "vector" "photos" "glyphs"]
-	set styleCombo [ttk::combobox $bar.style -values $styleValues -state readonly -width 11]
-	$styleCombo set $State(pieceStyle)
-	bind $styleCombo <<ComboboxSelected>> [namespace code [list viewerStyleSelected %W]]
-	pack $bar.sl $styleCombo -side left -padx 2 -pady 2
+	$appearance add separator
+	foreach {label style} {"Rendered pieces" realistic3d "Vector pieces" vector "Piece photos" photos "Piece symbols" glyphs} {
+		$appearance add radiobutton -label $label -variable ::board3d::State(pieceStyle) \
+			-value $style -command [namespace code [list setPieceStyle $style]]
+	}
+	pack $bar.appearance -side left -padx 6 -pady 2
 
 	# Hardware Accelerated OpenGL 3D toggle button
 	ttk::button $bar.opengl -text "\u2699 3D Hardware" \
@@ -1855,7 +1877,10 @@ proc ::board3d::closeViewer {} {
 	variable Priv
 	variable State
 
-	if {[llength [info commands after]]} { after cancel $Priv(afterid) }
+	CancelResize $Priv(canvas)
+	if {$Priv(togl) ne ""} {
+		CancelResize $Priv(togl)
+	}
 	if {$Priv(window) ne "" && [winfo exists $Priv(window)]} {
 		destroy $Priv(window)
 	}
@@ -2040,19 +2065,24 @@ proc ::board3d::CurrentBoard {} {
 
 proc ::board3d::OnConfigure {win width height} {
 	variable Priv
-	variable State
-
-	# Ignore no-op configures and coalesce resize storms with a timer (an
-	# `after idle` reschedule here can spin inside `update idletasks`).
-	if {$width == $State(width) && $height == $State(height)} { return }
-	if {[llength [info commands after]]} { after cancel $Priv(afterid) }
-	set Priv(afterid) [after 16 [namespace code [list DoResize $win]]]
+	# Each view owns its pending redraw.  (Expose needs no binding: Togl's
+	# -displaycommand already repaints an exposed view.)
+	CancelResize $win
+	set Priv(resize,$win) [after 16 [namespace code [list DoResize $win]]]
 	return
 }
 
+proc ::board3d::CancelResize {win} {
+	variable Priv
+	if {[info exists Priv(resize,$win)]} {
+		after cancel $Priv(resize,$win)
+		unset Priv(resize,$win)
+	}
+}
 
 proc ::board3d::DoResize {win} {
 	variable Priv
+	CancelResize $win
 	if {![winfo exists $win]} { return }
 	if {$win eq $Priv(togl) || $win eq $Priv(embed,togl)} {
 		renderOpenGL $win

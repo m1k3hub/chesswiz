@@ -205,6 +205,20 @@ system library and run its `Togl_Init` itself.
 
 ### 6.2 Embedded hardware 3D pane (main window)
 
+The embedded pane and viewer share a compact camera bar (View, rotate,
+zoom, Fit). The embedded viewport requests only 240×240 pixels so it can
+compose with the docking layout; switching presentations preserves the
+original packing options and sibling order. Viewer appearance settings
+live in a secondary menu rather than a wide row of selectors.
+
+The GL renderer and picker share `setupCamera`: it fits the slab and a
+1.4-unit piece-height envelope to the actual viewport and orbit. Distance
+12 is the fitted view; zooming in can intentionally crop the board, and
+Fit restores that view without changing orientation. Togl's display
+callback repaints after buffer allocation, including the first frame after
+a resize. Coalesced redraw timers are per widget and canceled on destroy,
+so resizing one view cannot cancel another view's repaint.
+
 *Extras → 3D Board in Main Window* swaps the 2D diagram of the board pane
 for the hardware OpenGL view *inside the main window* — no separate
 window.  `::application::board::show3D` owns the pane geometry (packs

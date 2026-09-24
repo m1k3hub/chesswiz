@@ -130,6 +130,38 @@ static bool loadToglSymbols(Tcl_Interp* interp)
 
 namespace {
 
+// One camera contract for drawing and picking. Fit the entire slab and the
+// tallest piece, even when the containing pane is narrow or the board orbits.
+// The public distance remains a zoom control: 12 is the fitted view.
+static void setupCamera(int width, int height, double yaw, double pitch, double zoom)
+{
+    const double a = yaw * M_PI / 180.0;
+    const double p = fmax(0.1, fmin(1.55, pitch * M_PI / 180.0));
+    const double aspect = (double)width / height;
+    const double tanY = tan(21.0 * M_PI / 180.0);
+    const double tanX = tanY * aspect;
+    double fit = 0.0;
+    for (int i = 0; i < 8; ++i) {
+        const double x = (i & 1) ? 4.8 : -4.8;
+        const double y = (i & 2) ? 4.8 : -4.8;
+        const double z = (i & 4) ? 0.9 : -1.0; // relative to target z=.5
+        const double right = x*cos(a) + y*sin(a);
+        const double up = -x*sin(p)*sin(a) + y*sin(p)*cos(a) + z*cos(p);
+        const double toward = x*cos(p)*sin(a) - y*cos(p)*cos(a) + z*sin(p);
+        fit = fmax(fit, toward + fmax(fabs(right)/tanX, fabs(up)/tanY) * 1.08);
+    }
+    const double distance = fit * fmax(0.5, zoom / 12.0);
+    glViewport(0, 0, width, height);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(42.0, aspect, 0.1, distance + 30.0);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    gluLookAt(4.0 + distance*cos(p)*sin(a),
+              4.0 - distance*cos(p)*cos(a),
+              0.5 + distance*sin(p), 4.0, 4.0, 0.5, 0.0, 0.0, 1.0);
+}
+
 // Piece display lists.  GL display lists are PER CONTEXT, and each Togl
 // window has its own GL context: a single global set of lists would only
 // be valid in the context that compiled it, so every other view (embedded
@@ -592,26 +624,7 @@ glboardRenderCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* c
     // piece lists are per GL context (per Togl window)
     ensurePieceLists(togl);
 
-    // Viewport & Projection
-    glViewport(0, 0, width, height);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(42.0, (double)width / (double)height, 1.0, 100.0);
-
-    // Camera Modelview: orbit around board center (4.0, 4.0, 0.5)
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    double radYaw = yaw * M_PI / 180.0;
-    double radPitch = pitch * M_PI / 180.0;
-    if (radPitch < 0.1) radPitch = 0.1;
-    if (radPitch > 1.55) radPitch = 1.55;
-
-    double eyeX = 4.0 + distance * cos(radPitch) * sin(radYaw);
-    double eyeY = 4.0 - distance * cos(radPitch) * cos(radYaw);
-    double eyeZ = 0.5 + distance * sin(radPitch);
-
-    gluLookAt(eyeX, eyeY, eyeZ,  4.0, 4.0, 0.5,  0.0, 0.0, 1.0);
+    setupCamera(width, height, yaw, pitch, distance);
 
     // Clear background
     glClearColor(0.08f, 0.10f, 0.13f, 1.0f);
@@ -718,8 +731,7 @@ glboardRenderCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* c
                 block.offset[1] = 1;
                 block.offset[2] = 2;
                 block.offset[3] = 0;
-                Tk_PhotoBlank(photo);
-                if (Tk_PhotoExpand(interp, photo, pw, pheight) != TCL_OK) {
+                if (Tk_PhotoSetSize(interp, photo, pw, pheight) != TCL_OK) {
                     Tcl_Free(reinterpret_cast<char*>(topdown));
                     return TCL_ERROR;
                 }
@@ -778,25 +790,7 @@ glboardPickCmd(ClientData clientData, Tcl_Interp* interp, int objc, Tcl_Obj* con
         return TCL_OK;
     }
 
-    // Viewport & projection identical to glboardRenderCmd
-    glViewport(0, 0, width, height);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(42.0, (double)width / (double)height, 1.0, 100.0);
-
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    double radYaw = yaw * M_PI / 180.0;
-    double radPitch = pitch * M_PI / 180.0;
-    if (radPitch < 0.1) radPitch = 0.1;
-    if (radPitch > 1.55) radPitch = 1.55;
-
-    double eyeX = 4.0 + distance * cos(radPitch) * sin(radYaw);
-    double eyeY = 4.0 - distance * cos(radPitch) * cos(radYaw);
-    double eyeZ = 0.5 + distance * sin(radPitch);
-
-    gluLookAt(eyeX, eyeY, eyeZ,  4.0, 4.0, 0.5,  0.0, 0.0, 1.0);
+    setupCamera(width, height, yaw, pitch, distance);
 
     GLdouble model[16], proj[16];
     GLint view[4];

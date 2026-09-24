@@ -178,6 +178,8 @@ tcltest::test board3d-embed-pane {hardware 3D embeds into the main board pane} -
 	update idletasks
 	update
 	set res {}
+	set originalPack [pack info $::application::board::Vars(widget:frame)]
+	set originalOrder [pack slaves [winfo parent $::application::board::Vars(widget:frame)]]
 	# switch through the same path the menu checkbutton takes
 	set ::board3d::State(embed) 1
 	::board3d::toggleEmbed
@@ -204,8 +206,10 @@ tcltest::test board3d-embed-pane {hardware 3D embeds into the main board pane} -
 	update
 	lappend res [expr {$::board3d::State(embed) == 0 \
 		&& [winfo ismapped $::application::board::Vars(widget:frame)]}]
+	lappend res [expr {$originalPack eq [pack info $::application::board::Vars(widget:frame)]}] \
+		[expr {$originalOrder eq [pack slaves [winfo parent $::application::board::Vars(widget:frame)]]}]
 	set res
-} -result {1 1 1 1 1 1}
+} -result {1 1 1 1 1 1 1 1}
 
 # 3D move input: dragging a piece in the embedded pane plays a move on the
 # current game through the application's move machinery.
@@ -389,6 +393,53 @@ tcltest::test board3d-pieces-both-contexts {pieces render in every GL context} -
 	# the black pieces must be visible in BOTH contexts
 	list [expr {$d1 > 50}] [expr {$d2 > 50}]
 } -result {1 1}
+
+tcltest::test board3d-fit-pieces {all pieces stay inside portrait and landscape viewports} -constraints embed3d -body {
+	toplevel .b3dfit
+	set t [::board3d::CreateTogl .b3dfit.gl]
+	pack $t -fill both -expand 1
+	image create photo b3dfitphoto
+	set ok 1
+	foreach {width height} {300 600 720 300 480 480} {
+		wm geometry .b3dfit ${width}x${height}+0+0
+		update
+		after 50
+		update
+		foreach yaw {0 45 180} {
+			::scidb::tk::glboard_render $t [::board3d::NormalizeBoard standard] $yaw 56 12 -1 -1 -1 0 0 {} b3dfitphoto
+			if {[image width b3dfitphoto] != $width || [image height b3dfitphoto] != $height} { error "capture size [image width b3dfitphoto]x[image height b3dfitphoto], expected ${width}x${height}" }
+			set bg [b3dfitphoto get 0 0]
+			# No board or piece may touch the viewport edge at fitted zoom.
+			for {set x 0} {$x < $width} {incr x 3} {
+				if {[b3dfitphoto get $x 0] ne $bg || [b3dfitphoto get $x [expr {$height-1}]] ne $bg} { error "vertical clipping at $x in ${width}x${height}, yaw $yaw" }
+			}
+			for {set y 0} {$y < $height} {incr y 3} {
+				if {[b3dfitphoto get 0 $y] ne $bg || [b3dfitphoto get [expr {$width-1}] $y] ne $bg} { error "horizontal clipping at $y in ${width}x${height}, yaw $yaw" }
+			}
+			# Ensure this is a rendered position, not an empty background.
+			if {[b3dfitphoto get [expr {$width/2}] [expr {$height/2}]] eq $bg} { error "empty frame in ${width}x${height}, yaw $yaw" }
+			set sq [::scidb::tk::glboard_pick $t [expr {$width/2}] [expr {$height/2}] $yaw 56 12]
+			if {$sq < 0 || $sq > 63} { error "center pick missed in ${width}x${height}, yaw $yaw" }
+		}
+	}
+	set ok
+} -cleanup {
+	catch {image delete b3dfitphoto}
+	catch {destroy .b3dfit}
+} -result 1
+
+tcltest::test board3d-independent-redraw {simultaneous view resizes each retain a repaint} -constraints embed3d -body {
+	toplevel .b3dresize
+	set a [::board3d::CreateTogl .b3dresize.a]
+	set b [::board3d::CreateTogl .b3dresize.b]
+	::board3d::OnConfigure $a 300 400
+	set first $::board3d::Priv(resize,$a)
+	::board3d::OnConfigure $b 500 300
+	set second $::board3d::Priv(resize,$b)
+	set ok [expr {[lsearch -exact [after info] $first] >= 0 && [lsearch -exact [after info] $second] >= 0}]
+	destroy .b3dresize
+	expr {$ok && [lsearch -exact [after info] $first] < 0 && [lsearch -exact [after info] $second] < 0}
+} -result 1
 
 # WebGL viewer: local three.js front end served by web3d/server.py.
 # Skipped when python3 or the http package is unavailable.

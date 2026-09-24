@@ -454,13 +454,29 @@ proc activate {w flag} {
 	}
 
 	[namespace parent]::pgn::activate $w $flag
-	set Vars(initialized) 1
+	if {$flag && $Vars(initialized) == 0} {
+		set Vars(initialized) 1
+		after idle [namespace code [list RebuildBoard $Vars(widget:frame) $Vars(width) $Vars(height) true]]
+	} elseif {$Vars(initialized) == 0} {
+		set Vars(initialized) 1
+	}
 }
 
 
 # Switch the board pane between the 2D diagram and the embedded hardware
 # 3D view.  Returns 1 on success; 0 when the 3D view could not be set up
 # (in which case the pane stays on the 2D board).
+
+# Swap presentations in the same layout slot, retaining docking padding,
+# expansion and sibling order in either direction.
+proc ReplaceBoardView {from to} {
+	if {[winfo manager $from] eq "pack"} {
+		pack $to {*}[pack info $from] -before $from
+		pack forget $from
+	} else {
+		pack $to -fill both -expand yes
+	}
+}
 
 proc show3D {flag} {
 	variable Vars
@@ -480,15 +496,13 @@ proc show3D {flag} {
 				return 0
 			}
 		}
-		pack forget $Vars(widget:frame)
-		pack $Vars(3dwin) -fill both -expand yes
+		ReplaceBoardView $Vars(widget:frame) $Vars(3dwin)
 		set Vars(3d) 1
 		::board3d::refresh
 	} else {
 		if {$Vars(3dwin) ne "" && [winfo exists $Vars(3dwin)]} {
-			pack forget $Vars(3dwin)
+			ReplaceBoardView $Vars(3dwin) $Vars(widget:frame)
 		}
-		pack $Vars(widget:frame) -fill both -expand yes
 		set Vars(3d) 0
 	}
 	return 1

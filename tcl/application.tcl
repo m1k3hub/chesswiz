@@ -1095,6 +1095,12 @@ proc Startup {main args} {
 		bind $frame <Unmap> [list [namespace current]::${pane}::activate $frame 0]
 	}
 
+	# Switching notebook tabs maps/unmaps only the notebook page ($main), not
+	# the board pane inside it, so forward those events to the board pane.
+	set frame $Vars(frame:board)
+	bind $main <Map> +[list [namespace current]::board::activate $frame 1]
+	bind $main <Unmap> +[list [namespace current]::board::activate $frame 0]
+
 	::util::place $app -position center
 	wm deiconify $app
 	database::finish $app
