@@ -32,6 +32,7 @@ SRC_CXX = \
 	db_annotation.cpp \
 	db_board.cpp \
 	db_board_base.cpp \
+	db_chess_facts.cpp \
 	db_bpgn_reader.cpp \
 	db_clock.cpp \
 	db_comment.cpp \

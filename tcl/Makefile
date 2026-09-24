@@ -152,6 +152,15 @@ SOURCES = \
 	app-tree-games.tcl \
 	app-variation.tcl \
 	app-analysis.tcl \
+	ai-claims.tcl \
+	ai-engine.tcl \
+	ai-provider.tcl \
+	ai-narrate.tcl \
+	ai-prompt.tcl \
+	ai-precedent.tcl \
+	ai-annotations.tcl \
+	ai-generate.tcl \
+	app-ai.tcl \
 	app-media-decode.tcl \
 	app-media-lesson.tcl \
 	app-media-sync.tcl \

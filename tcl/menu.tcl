@@ -83,6 +83,7 @@ set DiscoverDatabases			"Discover &Databases..."
 set Open3DBoard					"Open &3D Board"
 set OpenWebGL3DBoard				"Open &WebGL Real 3D Board"
 set Embed3DBoard					"3D Board in &Main Window"
+set AIExplain						"AI: &Explain Position"
 
 # Tools
 set OpenEngineDictionary		"Open &Engine Dictionary"
@@ -438,6 +439,18 @@ if {0} {
 		-image $::icon::16x16::none \
 		-command $cmd \
 		;
+
+	### AI position assessment ###############################################
+	if {[llength [info commands ::application::ai::analyze]]} {
+		lassign [::tk::UnderlineAmpersand $mc::AIExplain] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [list ::application::ai::analyze .application] \
+			;
+	}
 
 	if {[::util::photos::busy?]} { set state disabled } else { set state normal }
 	lassign [::tk::UnderlineAmpersand $::util::photos::mc::InstallPlayerPhotos] text ul

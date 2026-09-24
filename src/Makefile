@@ -76,6 +76,7 @@ SRC = \
 	best_move.cpp \
 	cbh2si4.cpp \
 	cdb2sci.cpp \
+	cdb2pgn.cpp \
 	code2eco.cpp \
 	dump_eco.cpp \
 	eco2code.cpp \
@@ -91,7 +92,7 @@ ALL_TK_LIBS = $(TCL_LIBS) $(TK_LIBS) $(TK_LIBRARY) $(X_LIBRARY) -lGL -lGLU
 
 SUBDIRS = db app mstl sys tcl tk/jpeg tk/svg/agg tk/svg tk/treectrl tk/html tk/text tk/tkdnd tk util util/minizip util/libTeXt util/libharu util/universalchardet util/libhyphenate util/gdbm $(LIB_SUBDIRS)
 
-TARGETS = extend_eco dump_eco code2eco eco2code best_move pawn_progress cbh2si4 cdb2sci $(TK_PROGRAM) $(TCL_PROGRAM)
+TARGETS = extend_eco dump_eco code2eco eco2code best_move pawn_progress cbh2si4 cdb2sci cdb2pgn $(TK_PROGRAM) $(TCL_PROGRAM)
 TARGETS += verify_maintenance
 TARGETS += verify_conversion
 TARGETS += benchmark_conversion
@@ -102,6 +103,7 @@ TARGETS += scan_db_chess960
 TARGETS += list_cbv_headers
 TARGETS += probe_cbm
 TARGETS += probe_dump_moves
+TARGETS += probe_chess_facts
 TARGETS += probe_match_game
 
 all: check-mtime cbh2si4 cdb2sci $(TK_PROGRAM) $(TCL_PROGRAM)
@@ -349,6 +351,10 @@ cdb2sci: cdb2sci.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
 
+cdb2pgn: cdb2pgn.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
 recover_index: recover_index.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
@@ -429,6 +435,10 @@ probe_cbm: probe_cbm.o $(LIBS_BASE)
 	@$(CXX) -o $@ $< $(LDFLAGS) $(LIBS_BASE)
 
 probe_dump_moves: probe_dump_moves.o $(LIBS)
+	@echo "Building $@"
+	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
+
+probe_chess_facts: probe_chess_facts.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
 

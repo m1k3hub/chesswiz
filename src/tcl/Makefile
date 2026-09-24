@@ -21,6 +21,7 @@ ALL_INCLUDE	= $(INCLUDE) $(TCL_INCLUDE) $(TK_INCLUDE) $(ZLIB_INC)
 CXXFLAGS	+= $(OPTIMIZE) $(PROFILING) $(CXX_DEBUG) $(EXTRA_DEBUG_FLAGS) $(SYS_CXXFLAGS) $(SCIDB_VERSION) $(SCIDB_REVISION)
 
 SRC_CXX = \
+	tcl_ai.cpp \
 	tcl_application.cpp \
 	tcl_base.cpp \
 	tcl_board.cpp \

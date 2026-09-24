@@ -25,12 +25,31 @@ COVERAGE_DIR := $(TEST_DIR)coverage
 # Targets
 # ==============================================================================
 
-.PHONY: all test tcl app-tcl cpp cpp-src clean help report
+.PHONY: all test tcl app-tcl cpp cpp-src ai-tests chess-facts ai-facts ai-claims ai-engine ai-eco ai-generate ai-ui ai-tools ai-precedent ai-narrate ai-annotations corpus-tests clean help report
 
-all: tcl app-tcl cpp
+all: tcl app-tcl cpp ai-tests corpus-tests
 
 # Conventional alias expected by many scripts and contributors.
 test: all
+
+# App-backed AI grounding suites. They need the tkscidb shell (app-only
+# ::scidb::ai::* commands) and use their own pass/fail harness, so the
+# plain-tclsh runner cannot run or count them. Run them here, sequentially,
+# so `make test` / `make ci` actually gate on them.
+AI_TESTS := chess-facts ai-facts ai-claims ai-engine ai-eco ai-generate ai-ui ai-tools ai-precedent ai-narrate ai-annotations
+
+ai-tests:
+	@echo "Running AI grounding suites..."
+	@for t in $(AI_TESTS); do \
+		$(MAKE) --no-print-directory $$t || exit 1; \
+	done
+
+# Corpus tooling (Python; no app needed): precedent index and annotation extractor.
+corpus-tests:
+	@echo "Running corpus tests..."
+	@python3 $(TEST_DIR)test_corpus_precedent.py
+	@python3 $(TEST_DIR)test_annotation_extract.py
+	@python3 $(TEST_DIR)test_annotation_index.py
 
 # ==============================================================================
 # Tcl Tests
@@ -71,6 +90,107 @@ smoke:
 		echo "STARTUP-SMOKE: FAILED (exit $$rc)"; exit 1
 
 SRC_CPP_TESTS := test_html_core test_scm_media test_scriptstream test_media_extract test_corr_moveinfo
+
+# Chess anatomy fact extractor -- grounded JSON facts for the language layer.
+# The probe is standalone, so it is built here rather than in src/.
+chess-facts:
+	@echo "Building probe_chess_facts..."
+	@$(MAKE) -C $(SRC_DIR) probe_chess_facts >/tmp/scidb-chess-facts-build.log 2>&1 || \
+		{ echo "FAIL: probe_chess_facts build"; tail -30 /tmp/scidb-chess-facts-build.log; exit 1; }
+	@python3 $(TEST_DIR)test_chess_facts.py
+
+# The same facts through the Tcl binding, exercised in the real app shell
+# (needs Xvfb because tcl::init pulls in the Treectrl option machinery).
+ai-facts:
+	@echo "Building tkscidb-beta..."
+	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-facts-build.log 2>&1 || \
+		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-facts-build.log; exit 1; }
+	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_facts.tcl 2>&1 \
+		| tee /tmp/scidb-ai-facts.log | grep -E "PASS|FAIL|AI-FACTS-FAILURES"
+	@grep -q "AI-FACTS-FAILURES: 0" /tmp/scidb-ai-facts.log
+
+# The claim checker: generated prose vs. grounded facts.
+ai-claims:
+	@echo "Building tkscidb-beta and scidb-beta..."
+	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-claims-build.log 2>&1 || \
+		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-claims-build.log; exit 1; }
+	@$(MAKE) -C $(ROOT_DIR)/tcl >/tmp/scidb-ai-claims-tcl.log 2>&1 || \
+		{ echo "FAIL: scidb-beta build"; tail -30 /tmp/scidb-ai-claims-tcl.log; exit 1; }
+	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_claims.tcl 2>&1 \
+		| tee /tmp/scidb-ai-claims.log | grep -E "PASS|FAIL|AI-CLAIMS-FAILURES"
+	@grep -q "AI-CLAIMS-FAILURES: 0" /tmp/scidb-ai-claims.log
+
+# Engine facts: evaluation and move classification via a UCI engine.
+ai-engine:
+	@echo "Building tkscidb-beta..."
+	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-engine-build.log 2>&1 || \
+		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-engine-build.log; exit 1; }
+	@timeout 240 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_engine.tcl 2>&1 \
+		| tee /tmp/scidb-ai-engine.log | grep -E "PASS|FAIL|SKIP|AI-ENGINE-FAILURES"
+	@grep -q "AI-ENGINE-FAILURES: 0" /tmp/scidb-ai-engine.log
+
+# Opening theory: ECO identification for a move line.
+ai-eco:
+	@echo "Building tkscidb-beta..."
+	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-eco-build.log 2>&1 || \
+		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-eco-build.log; exit 1; }
+	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_eco.tcl 2>&1 \
+		| tee /tmp/scidb-ai-eco.log | grep -E "PASS|FAIL|AI-ECO-FAILURES"
+	@grep -q "AI-ECO-FAILURES: 0" /tmp/scidb-ai-eco.log
+
+# Grounded generation: prompt -> provider -> claim check -> retry (stub provider).
+ai-generate:
+	@echo "Building tkscidb-beta..."
+	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-generate-build.log 2>&1 || \
+		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-generate-build.log; exit 1; }
+	@timeout 200 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_generate.tcl 2>&1 \
+		| tee /tmp/scidb-ai-generate.log | grep -E "PASS|FAIL|AI-GENERATE-FAILURES"
+	@grep -q "AI-GENERATE-FAILURES: 0" /tmp/scidb-ai-generate.log
+
+# UI wiring: HTML rendering and the asynchronous generate path.
+ai-ui:
+	@echo "Building tkscidb-beta..."
+	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-ui-build.log 2>&1 || \
+		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-ui-build.log; exit 1; }
+	@timeout 200 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_ui.tcl 2>&1 \
+		| tee /tmp/scidb-ai-ui.log | grep -E "PASS|FAIL|AI-UI-FAILURES"
+	@grep -q "AI-UI-FAILURES: 0" /tmp/scidb-ai-ui.log
+
+# Engine-as-tool grounding (model calls Stockfish during generation).
+ai-tools:
+	@echo "Building tkscidb-beta..."
+	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-tools-build.log 2>&1 || \
+		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-tools-build.log; exit 1; }
+	@timeout 250 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_tools.tcl 2>&1 \
+		| tee /tmp/scidb-ai-tools.log | grep -E "PASS|FAIL|SKIP|AI-TOOLS-FAILURES"
+	@grep -q "AI-TOOLS-FAILURES: 0" /tmp/scidb-ai-tools.log
+
+# Master-precedent evidence wired into the narration prompt.
+ai-precedent:
+	@echo "Building tkscidb-beta..."
+	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-precedent-build.log 2>&1 || \
+		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-precedent-build.log; exit 1; }
+	@timeout 250 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_precedent.tcl 2>&1 \
+		| tee /tmp/scidb-ai-precedent.log | grep -E "PASS|FAIL|SKIP|AI-PRECEDENT-FAILURES"
+	@grep -q "AI-PRECEDENT-FAILURES: 0" /tmp/scidb-ai-precedent.log
+
+# Engine-native anatomy from the custom Stockfish fork (narrate).
+ai-narrate:
+	@echo "Building tkscidb-beta..."
+	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-narrate-build.log 2>&1 || \
+		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-narrate-build.log; exit 1; }
+	@timeout 250 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_narrate.tcl 2>&1 \
+		| tee /tmp/scidb-ai-narrate.log | grep -E "PASS|FAIL|SKIP|AI-NARRATE-FAILURES"
+	@grep -q "AI-NARRATE-FAILURES: 0" /tmp/scidb-ai-narrate.log
+
+# Annotation exemplars joined to positions by key.
+ai-annotations:
+	@echo "Building tkscidb-beta..."
+	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-annotations-build.log 2>&1 || \
+		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-annotations-build.log; exit 1; }
+	@timeout 250 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_annotations.tcl 2>&1 \
+		| tee /tmp/scidb-ai-annotations.log | grep -E "PASS|FAIL|SKIP|AI-ANNOTATIONS-FAILURES"
+	@grep -q "AI-ANNOTATIONS-FAILURES: 0" /tmp/scidb-ai-annotations.log
 
 cpp: $(TEST_DIR)test_cpp_backend $(TEST_DIR)test_corr_duration cpp-src
 	@chmod +x "$(TEST_DIR)test_cpp_backend"
@@ -170,7 +290,7 @@ coverage:
 # CI/CD Integration
 # ==============================================================================
 
-ci: clean tcl app-tcl cpp report
+ci: clean tcl app-tcl cpp report ai-tests corpus-tests
 	@echo "CI build complete"
 
 report: $(TEST_REPORT)

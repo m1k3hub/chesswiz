@@ -44,6 +44,11 @@ set testFiles [lsearch -inline -all -not -exact $testFiles \
     [file join $::scidb::test::testDir test_framework.tcl]]
 set testFiles [lsearch -inline -all -not -glob $testFiles \
     [file join $::scidb::test::testDir test_app_*.tcl]]
+# AI grounding suites need the tkscidb shell (app-only ::scidb::ai::* commands) and
+# use their own pass/fail harness, so they are not runnable under plain tclsh.
+# They are exercised by the tests/Makefile `ai-tests` group instead.
+set testFiles [lsearch -inline -all -not -glob $testFiles \
+    [file join $::scidb::test::testDir test_ai_*.tcl]]
 
 if {[llength $testFiles] == 0} {
     puts "ERROR: No test files found"
