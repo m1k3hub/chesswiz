@@ -145,7 +145,16 @@ proc ::ai::provider::request {url body args} {
 		-type "application/json; charset=utf-8" \
 		-query [encoding convertto utf-8 $body] \
 		-timeout $Config(timeoutMs) \
+		-binary 1 \
 		{*}$args]
+}
+
+
+# The response body as a string. JSON is UTF-8 by definition (RFC 8259),
+# but Ollama answers "application/json" without a charset, which http
+# would decode as ISO-8859-1 -- so the request asks for the raw bytes.
+proc ::ai::provider::body {token} {
+	return [encoding convertfrom utf-8 [::http::data $token]]
 }
 
 
@@ -175,7 +184,7 @@ proc ::ai::provider::post {body args} {
 
 	set status [::http::status $token]
 	set code [::http::ncode $token]
-	set data [::http::data $token]
+	set data [body $token]
 	::http::cleanup $token
 
 	if {$status ne "ok" || $code != 200} {
@@ -255,7 +264,7 @@ proc ::ai::provider::ollamaAsync {prompt system script} {
 proc ::ai::provider::onOllama {script token} {
 	set status [::http::status $token]
 	set code [::http::ncode $token]
-	set data [::http::data $token]
+	set data [body $token]
 	::http::cleanup $token
 
 	if {$status ne "ok" || $code != 200} {
@@ -478,7 +487,7 @@ proc ::ai::provider::chatAsync {messages tools script} {
 proc ::ai::provider::onOllamaChat {script token} {
 	set status [::http::status $token]
 	set code [::http::ncode $token]
-	set data [::http::data $token]
+	set data [body $token]
 	::http::cleanup $token
 
 	if {$status ne "ok" || $code != 200} {
