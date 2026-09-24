@@ -383,14 +383,19 @@ Consumer::preparePhrase(Comment& dst, Comment const& src)
 {
 	M_ASSERT(!src.isEmpty());
 	M_ASSERT(dst.isEmpty());
-	M_ASSERT(src.langFlags() & i18n::English);
 
 	if (!m_noComments)
 	{
 		if (m_wantedLanguages.empty() || src.containsAnyLanguageOf(m_relevantLangs))
 			prepareComment(dst, src);
-		else
+		else if (src.langFlags() & i18n::English)
 			(dst = src).strip("en", m_langFlags);
+		else
+		{
+			// Some external databases (e.g. ChessBase) carry phrases without an
+			// English variant; keep them as-is instead of asserting.
+			dst = src;
+		}
 	}
 
 	return dst;
@@ -400,7 +405,10 @@ Consumer::preparePhrase(Comment& dst, Comment const& src)
 void
 Consumer::putPrecedingComment(Comment const& comment, Annotation const& annotation, MarkSet const& marks)
 {
-	M_REQUIRE(!comment.isEmpty() || !annotation.isEmpty() || !marks.isEmpty());
+	// Some external databases (e.g. ChessBase) emit preceding-comment events for
+	// which all three payloads are empty; ignore them instead of failing.
+	if (comment.isEmpty() && annotation.isEmpty() && marks.isEmpty())
+		return;
 
 	if (m_terminated)
 		return;
