@@ -88,9 +88,11 @@ array set LastFolders {}
 set FileIcons [list                           \
 	.bpgn		$::icon::16x16::filetypeBPGN      \
 	.bpgn.gz	$::icon::16x16::filetypeBPGN      \
+	.2cbh		$::icon::16x16::filetypeChessBase \
 	.cbf		$::icon::16x16::filetypeChessBase \
 	.CBF		$::icon::16x16::filetypeChessBase \
 	.cbh		$::icon::16x16::filetypeChessBase \
+	.cbv		$::icon::16x16::filetypeChessBase \
 	.htm		$::icon::16x16::filetypeHTML      \
 	.html		$::icon::16x16::filetypeHTML      \
 	.ltx		$::icon::16x16::filetypeTeX       \
@@ -202,8 +204,10 @@ proc extensions {} {
 proc fileIcon {ext} {
 	variable FileIcons
 
-	set i [lsearch $FileIcons [string tolower $ext]]
-	return [lindex $FileIcons [expr {$i + 1}]]
+	# A miss must yield {}, not the first key (lsearch -1 -> lindex 0).
+	set ext [string tolower $ext]
+	if {![dict exists $FileIcons $ext]} { return {} }
+	return [dict get $FileIcons $ext]
 }
 
 
