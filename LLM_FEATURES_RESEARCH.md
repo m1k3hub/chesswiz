@@ -1196,3 +1196,27 @@ empirically (repeat the suites, and look for error noise the harness swallows).
   ... }`. If `sudo` hangs, that blocks the interface. It is the interactive superuser
   photo-install path, so a timeout belongs there only with testing against a real `sudo`
   prompt -- flagged rather than changed.
+
+### B.26 Extended audit: widget-geometry and timer sweeps
+
+Two mechanical classes checked across all 235 Tcl files.
+
+**1. `winfo width/height` on an unmapped widget (reports 1).** 227 uses. The dialog
+placement helper already does it right -- `tcl/utils/place.tcl` falls back to
+`max([winfo reqwidth $path], [winfo width $path])` -- as does `app-database.tcl`
+(`if {$height <= 1} { return }`) and `browser.tcl` (an explicit `> 1` guard before using a
+size). The one unguarded case was `browser.tcl:393`, computing the browser's minsize from a
+raw `winfo width` right after `update idletasks`; a window manager that has not yet
+configured the window leaves that at 1, giving a bogus minsize on first open. It now uses
+the same fallback idiom.
+
+**2. `after <ms>` timers firing after their widget is gone.** 26 timer callbacks take a
+widget argument. 24 guard explicitly (`winfo exists` and/or `after cancel` keyed by the
+dialog), e.g. `app-database-openingprep.tcl`'s 250 ms poll returns early on a missing
+dialog and cancels on `<Destroy>`, and `app-pgn.tcl`'s cursor timers check
+`winfo exists` plus a counter. The remaining two (the `Tick` callbacks in
+`corrclock.tcl`) are cancelled by a `<Destroy>` binding. Nothing to fix -- this codebase's
+timer hygiene is sound.
+
+Verified after the one change: tcl 0 failed / PASSED, app-tcl 0 failed / PASSED,
+ai-tests 11 suites green.

@@ -390,7 +390,11 @@ proc open {parent base variant info view index {fen {}}} {
 	::scidb::game::layout $position
 	::scidb::game::go $position position $Vars(fen)
 
-	set Priv(minWidth) [expr {[winfo width $dlg] - [winfo width $lt]}]
+	# the window manager may not have configured the window yet, in which case
+	# winfo width/height still report 1; fall back to the requested size
+	set dlgWidth [expr {max([winfo reqwidth $dlg], [winfo width $dlg])}]
+	set ltWidth  [expr {max([winfo reqwidth $lt],  [winfo width $lt])}]
+	set Priv(minWidth) [expr {$dlgWidth - $ltWidth}]
 	set Priv(minHeight) $Priv(minWidth)
 	if {[info exists Vars(holding:w)]} {
 		set holdingSize [::board::holding::computeWidth $squareSize]
