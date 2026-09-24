@@ -779,8 +779,12 @@ proc DoSbSet {sb first last} {
 }
 
 
-bind TScrollbar <ButtonPress-1>	{+ set [namespace current]::(sbset:orient) [%W cget -orient] }
-bind TScrollbar <ButtonPress-2>	{+ set [namespace current]::(sbset:orient) [%W cget -orient] }
+# NB: these scripts are brace-quoted, so [namespace current] would be evaluated
+# when the button is pressed (at global scope) and build the bogus variable
+# ::::(sbset:orient) instead of scrolledframe's own. [namespace code ...] is
+# substituted here, at definition time, exactly like the binds below.
+bind TScrollbar <ButtonPress-1> +[namespace code { set (sbset:orient) [%W cget -orient] }]
+bind TScrollbar <ButtonPress-2> +[namespace code { set (sbset:orient) [%W cget -orient] }]
 
 bind TScrollbar <ButtonRelease-1> +[namespace code SbSet]
 bind TScrollbar <ButtonRelease-2> +[namespace code SbSet]

@@ -44,6 +44,30 @@ tcltest::test report-viewer-image-fallback {Image returns {} for missing files} 
 	llength [::application::report::Image /nonexistent/file.jpg]
 } -result 0
 
+# ----------------------------------------------------------------------
+# Regression: scrolledframe's TScrollbar press binds are brace-quoted, so
+# [namespace current] was evaluated when the button was pressed (at global
+# scope). It built the bogus variable ::::(sbset:orient) instead of the
+# widget's own, which raised "can't set ::::(sbset:orient): variable isn't
+# array" on clicking any scrollbar -- including the report pane's.
+# ----------------------------------------------------------------------
+
+tcltest::test widget-scrollbar-press-bind-targets-namespace {the press bind names ::scrolledframe} -body {
+	set script [bind TScrollbar <ButtonPress-1>]
+	expr { [string match {*::scrolledframe*} $script]
+	     && ![string match {*namespace current*} $script] }
+} -result 1
+
+tcltest::test widget-scrollbar-press-sets-namespace-var {the press bind writes scrolledframe's own orient var} -body {
+	set sb [ttk::scrollbar .sbregtest -orient vertical]
+	set bound [bind TScrollbar <ButtonPress-1>]
+	# the ttk class prologue needs %x/%y; the appended (scrolledframe) part is last
+	eval [string map [list %W $sb] [lindex [split $bound "\n"] end]]
+	set value [set ::scrolledframe::(sbset:orient)]
+	destroy $sb
+	set value
+} -result vertical
+
 
 # ----------------------------------------------------------------------
 

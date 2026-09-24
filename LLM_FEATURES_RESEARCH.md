@@ -1079,3 +1079,43 @@ widget (they test the rendering helpers in isolation).
 **Tests.** `tests/test_ai_ui.tcl` now asserts the payload carries the keys `Load` reads,
 that the markup survives sanitizing, and pins the regression: the raw-string payload
 reproduces the original `dict get` failure, while `htmlData`'s payload is readable.
+
+### B.23 Scrollbar press binds fixed (latent bug the report pane exposed)
+
+Clicking a scrollbar raised
+
+```
+can't set "::::(sbset:orient)": variable isn't array
+set [namespace current]::(sbset:orient) [.report.sw.sb cget -orient]
+```
+
+`tcl/widgets/scrolledframe.tcl` keeps its scrollbar state in namespace variables
+(`set (sbset:orient) {}` inside `namespace eval scrolledframe`, read as
+`$(sbset:orient)`). Its class binds were written as
+
+```tcl
+bind TScrollbar <ButtonPress-1> {+ set [namespace current]::(sbset:orient) [%W cget -orient] }
+```
+
+The script is **brace-quoted**, so `[namespace current]` is evaluated when the button is
+pressed -- at global scope -- producing `::::(sbset:orient)`: a *different*, bogus variable
+(and a plain error when that name already exists as a scalar). So the widget's own
+`(sbset:orient)` was never written by a press, and any scrollbar click could abort.
+The sibling binds one line below do it correctly with `[namespace code SbSet]` (substituted
+at definition time).
+
+Fixed to the same idiom:
+
+```tcl
+bind TScrollbar <ButtonPress-1> +[namespace code { set (sbset:orient) [%W cget -orient] }]
+```
+
+This is a pre-existing bug in a shared widget -- it affects every scrollbar in the
+application, not just the report pane; the report pane merely made it easy to hit (it was
+opened by the new AI feature). `tcl/scidb-beta` is a generated bundle, so `make -C tcl`
+was rerun to pick the fix up.
+
+Regression tests in `tests/test_app_report.tcl` (run by `make -C tests app-tcl`): one
+asserts the press bind names `::scrolledframe` and no longer mentions `namespace current`,
+the other evaluates the bound script and asserts it actually sets
+`::scrolledframe::(sbset:orient)`. App suite: 61 passed, 0 failed.
