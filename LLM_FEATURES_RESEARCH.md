@@ -1119,3 +1119,37 @@ Regression tests in `tests/test_app_report.tcl` (run by `make -C tests app-tcl`)
 asserts the press bind names `::scrolledframe` and no longer mentions `namespace current`,
 the other evaluates the bound script and asserts it actually sets
 `::scrolledframe::(sbset:orient)`. App suite: 61 passed, 0 failed.
+
+### B.24 Report pane rendered the narrative in a ~90px column (fixed)
+
+The AI pane wrapped every line after a few characters -- text squeezed into a narrow strip
+at the left of a ~715px pane. Measured geometry showed the widget was fine
+(`.report.sw.html.sub.html` = 714px wide), so the fault was in the *document* layout.
+
+`tcl/widgets/html.tcl` (the app's tkhtml wrapper) lays a document out at `-fixedwidth`.
+With the defaults it does nothing when the option is unset, then falls back to the
+document's `minbbox`:
+
+```tcl
+set width [expr {min([lindex $bbox 2], 4000) + $Margin}]   ;# minbbox = widest single WORD
+$w.sub.html configure -fixedwidth $width
+```
+
+`app-report.tcl` never passed `-fixedwidth`, so the whole document was pinned to the
+widest word -- hence one word per line. The other HTML panes avoid this;
+`app-information.tcl` explicitly does `$html configure -fixedwidth [expr {min($maxWidth,
+$width - 40)}]`.
+
+Fix: `application::report::FitWidth` sets the document width to the pane width, bound to
+`<Configure>` on the html widget so it follows resizes, and called once before the first
+`Load`. Both the wrapper **and** the inner widget are set, because the wrapper re-applies
+its own `-fixedwidth` -- and re-runs the minbbox fallback -- on every parse, so setting
+only the inner widget would be undone by the next `Load`.
+
+Verified by rendering the pane under Xvfb and capturing it: the narrative now spans the
+full width, `STRUCTURE`/`PIECES`/`PLANS` are separate paragraphs, evidence and claims are
+proper bullet lists, and `fixedwidth` tracks the widget (714px widget -> 710).
+
+Regression tests (`tests/test_app_report.tcl`): the document `-fixedwidth` must exceed 100
+(i.e. not the widest-word fallback) and must not exceed the widget width. App suite:
+63 passed, 0 failed.

@@ -144,6 +144,11 @@ proc application::report::showHtmlData {parent title data} {
 	$inner handler node a [namespace code [list LinkSetup $inner]]
 	bind $inner <ButtonRelease-1> [namespace code [list LinkClick $inner %x %y]]
 
+	# Tkhtml lays the document out at -fixedwidth; without it the widget falls
+	# back to the document's minbbox (the widest single word) and wraps every
+	# line after a few characters. Track the pane width instead.
+	bind $inner <Configure> +[namespace code [list FitWidth $inner $sw.html %w]]
+
 	set Priv(window) $w
 	set Priv(html) $sw.html
 	set Priv(status) $status
@@ -151,6 +156,7 @@ proc application::report::showHtmlData {parent title data} {
 	wm deiconify $w
 	update idletasks
 
+	FitWidth $inner $sw.html [winfo width $inner]
 	Load $data
 
 	return $w
@@ -194,6 +200,25 @@ proc application::report::Close {} {
 	destroy $Priv(window)
 	set Priv(window) {}
 	set Priv(html) {}
+}
+
+
+# ----------------------------------------------------------------------
+# Give the document the pane's width. Both widgets must be told: the wrapper
+# re-applies its own -fixedwidth on every parse, so setting only the inner
+# widget would be undone by the next Load.
+# ======================================================================
+proc application::report::FitWidth {inner wrapper width} {
+	variable Priv
+
+	if {$width <= 1} { return }
+
+	set target [expr {$width - 4}]
+	if {[info exists Priv(fixedwidth)] && $Priv(fixedwidth) == $target} { return }
+
+	set Priv(fixedwidth) $target
+	catch { $wrapper configure -fixedwidth $target }
+	catch { $inner configure -fixedwidth $target }
 }
 
 

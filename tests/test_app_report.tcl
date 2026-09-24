@@ -68,6 +68,31 @@ tcltest::test widget-scrollbar-press-sets-namespace-var {the press bind writes s
 	set value
 } -result vertical
 
+# ----------------------------------------------------------------------
+# Regression: tkhtml lays a document out at -fixedwidth. Left unset, the
+# widget wrapper falls back to the document's minbbox (the widest single
+# WORD), so every line wrapped after a few characters -- the report text
+# appeared in a ~90px column inside a ~715px pane.
+# ----------------------------------------------------------------------
+
+tcltest::test report-pane-sets-document-width {the report pane lays the document out at the pane width} -body {
+	set data [::scidb::html::sanitize \
+		"<p>Hello world, this is a sentence of ordinary length used to probe the layout.</p>" ""]
+	::application::report::showHtmlData .application "width probe" $data
+	update idletasks
+	set inner .report.sw.html.sub.html
+	if {![winfo exists $inner]} { return unavailable }
+	set fixed [.report.sw.html.sub.html cget -fixedwidth]
+	# a real document width, not the widest-word fallback
+	expr { $fixed > 100 }
+} -result 1
+
+tcltest::test report-pane-width-tracks-the-widget {the document width does not exceed the widget} -body {
+	set inner .report.sw.html.sub.html
+	if {![winfo exists $inner]} { return unavailable }
+	expr { [.report.sw.html.sub.html cget -fixedwidth] <= [winfo width $inner] }
+} -result 1
+
 
 # ----------------------------------------------------------------------
 
