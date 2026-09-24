@@ -75,23 +75,65 @@ tcltest::test widget-scrollbar-press-sets-namespace-var {the press bind writes s
 # appeared in a ~90px column inside a ~715px pane.
 # ----------------------------------------------------------------------
 
+proc ::scidb::test::appreport::inner {} {
+	return $::application::report::Priv(html).sub.html
+}
+
 tcltest::test report-pane-sets-document-width {the report pane lays the document out at the pane width} -body {
 	set data [::scidb::html::sanitize \
 		"<p>Hello world, this is a sentence of ordinary length used to probe the layout.</p>" ""]
 	::application::report::showHtmlData .application "width probe" $data
 	update idletasks
-	set inner .report.sw.html.sub.html
+	set inner [::scidb::test::appreport::inner]
 	if {![winfo exists $inner]} { return unavailable }
-	set fixed [.report.sw.html.sub.html cget -fixedwidth]
 	# a real document width, not the widest-word fallback
-	expr { $fixed > 100 }
+	expr { [$inner cget -fixedwidth] > 100 }
 } -result 1
 
 tcltest::test report-pane-width-tracks-the-widget {the document width does not exceed the widget} -body {
-	set inner .report.sw.html.sub.html
+	set inner [::scidb::test::appreport::inner]
 	if {![winfo exists $inner]} { return unavailable }
-	expr { [.report.sw.html.sub.html cget -fixedwidth] <= [winfo width $inner] }
+	expr { [$inner cget -fixedwidth] <= [winfo width $inner] }
 } -result 1
+
+# ----------------------------------------------------------------------
+# The report (and with it "AI: Explain Position") is a pane of the board
+# layout, not a free toplevel, so it can be docked and undocked.
+# ----------------------------------------------------------------------
+
+tcltest::test report-is-a-dockable-pane {the report lives in the board twm and is undockable} -body {
+	set twm [::application::twm board]
+	list [expr {"report" in [$twm leaves]}] [expr {!![$twm isundockable report]}] [winfo exists .report]
+} -result {1 1 0}
+
+tcltest::test report-reuses-its-pane {showing a second document reuses the open pane} -body {
+	set w1 $::application::report::Priv(window)
+	set data [::scidb::html::sanitize "<p>second</p>" ""]
+	set w2 [::application::report::showHtmlData .application "second" $data]
+	list [expr {$w1 eq $w2}] $::application::report::PaneTitle
+} -result {1 {Report (second)}}
+
+tcltest::test report-pane-reopens-after-close {closing the pane and showing again rebuilds it} -body {
+	set twm [::application::twm board]
+	destroy [$twm leaf report]
+	update idletasks
+	set gone [expr {"report" ni [$twm leaves]}]
+	set data [::scidb::html::sanitize "<p>third</p>" ""]
+	set w [::application::report::showHtmlData .application "third" $data]
+	list $gone [winfo exists $w] [expr {"report" in [$twm leaves]}]
+} -result {1 1 1}
+
+
+tcltest::test report-pane-survives-undock {undocking floats the pane and keeps the document} -body {
+	set twm [::application::twm board]
+	set w $::application::report::Priv(window)
+	::twm::Undock $twm [$twm leaf report]
+	update idletasks
+	set top [$twm toplevel [$twm leaf report]]
+	set data [::scidb::html::sanitize "<p>floating</p>" ""]
+	set w2 [::application::report::showHtmlData .application "floating" $data]
+	list [$twm isfloat $top] [expr {$w eq $w2}] [winfo exists [::scidb::test::appreport::inner]]
+} -result {1 1 1}
 
 
 # ----------------------------------------------------------------------

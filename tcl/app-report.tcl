@@ -40,10 +40,13 @@ set LinkedMissing	"Linked database not found: %s"
 
 } ;# namespace mc
 
+variable PaneTitle ""
+
 array set Priv {
 	window		{}
 	html			{}
 	status		{}
+	title			{}
 	db			{}
 	variant		{}
 	index		-1
@@ -81,13 +84,13 @@ proc application::report::showFile {parent file} {
 
 
 # ----------------------------------------------------------------------
-# Shared window builder: displays a sanitized HTML payload.
+# Shared entry: displays a sanitized HTML payload in the "report" pane of
+# the board tab, opening the pane first when it is not part of the
+# layout. Being a twm pane, it can be docked, undocked and closed like
+# any other window. Returns the pane's content frame, or {}.
 # ======================================================================
 proc application::report::showHtmlData {parent title data} {
 	variable Priv
-	variable mc
-
-	set w .report
 
 	# file-backed documents have no owning game: drop the game actions
 	set Priv(db) {}
@@ -96,28 +99,46 @@ proc application::report::showHtmlData {parent title data} {
 	set Priv(title) $title
 	set Priv(data) $data
 
-	if {[winfo exists $w]} {
-		wm title $w "$mc::Title ($title)"
-		Load $data
-		raise $w
-		return $w
-	}
+	::application::openPane report
+	if {![winfo exists $Priv(window)]} { return {} }
 
-	tk::toplevel $w -class Scidb
-	wm title $w "$mc::Title ($title)"
-	wm transient $w [winfo toplevel $parent]
-	wm protocol $w WM_DELETE_WINDOW [namespace code Close]
+	UpdateTitle
+	Load $data
+	return $Priv(window)
+}
 
-	# --- the HTML view ------------------------------------------------
-	set sw [ttk::frame $w.sw]
+
+proc application::report::UpdateTitle {} {
+	variable Priv
+	variable PaneTitle
+
+	set PaneTitle $::application::twm::mc::Pane(report)
+	if {[string length $Priv(title)]} { append PaneTitle " ($Priv(title))" }
+}
+
+
+# ----------------------------------------------------------------------
+# Pane builder, called by ::application::BuildPane.
+# ======================================================================
+proc application::report::build {frame width height} {
+	variable Priv
+	variable mc
+
+	set sw [ttk::frame $frame.sw]
+	set status [ttk::label $frame.status -anchor w -relief sunken -borderwidth 1]
+	pack $status -side bottom -fill x
+	pack $sw -fill both -expand yes
+
+	set Priv(window) $frame
+	set Priv(status) $status
+	set Priv(html) {}
+	array unset Priv fixedwidth
 
 	if {[catch {
-		html $sw.html -width 700 -height 600 -imagecmd [namespace code Image]
+		html $sw.html -width $width -height $height -imagecmd [namespace code Image]
 	} err]} {
-		tk_messageBox -parent $w -type ok -icon warning \
-			-title $mc::Title -message "Tkhtml widget unavailable: $err"
-		destroy $w
-		return {}
+		$status configure -text "Tkhtml widget unavailable: $err" -foreground darkred
+		return
 	}
 
 	set inner $sw.html.sub.html
@@ -126,20 +147,6 @@ proc application::report::showHtmlData {parent title data} {
 	$inner configure -yscrollcommand [list $sw.sb set]
 	pack $sw.sb -side right -fill y
 	pack $sw.html -side left -fill both -expand yes
-	pack $sw -fill both -expand yes
-
-	# --- status bar ---------------------------------------------------
-	set status [ttk::label $w.status -anchor w -relief sunken -borderwidth 1]
-	pack $status -side bottom -fill x
-
-	# --- close button -------------------------------------------------
-	set btns [ttk::frame $w.btns]
-	ttk::button $btns.close -text $mc::Close -command [namespace code Close]
-	pack $btns.close -side right -padx 6 -pady 6
-	pack $btns -side bottom -fill x
-
-	wm minsize $w 500 400
-	::util::place $w -parent $parent -position center
 
 	$inner handler node a [namespace code [list LinkSetup $inner]]
 	bind $inner <ButtonRelease-1> [namespace code [list LinkClick $inner %x %y]]
@@ -149,17 +156,25 @@ proc application::report::showHtmlData {parent title data} {
 	# line after a few characters. Track the pane width instead.
 	bind $inner <Configure> +[namespace code [list FitWidth $inner $sw.html %w]]
 
-	set Priv(window) $w
 	set Priv(html) $sw.html
-	set Priv(status) $status
+	FitWidth $inner $sw.html $width
 
-	wm deiconify $w
-	update idletasks
+	# a rebuilt pane (layout change) keeps showing the last document
+	UpdateTitle
+	if {[info exists Priv(data)]} { Load $Priv(data) }
+}
 
-	FitWidth $inner $sw.html [winfo width $inner]
-	Load $data
 
-	return $w
+proc application::report::activate {frame flag} {}
+
+
+proc application::report::closed {frame} {
+	variable Priv
+
+	if {$frame ne $Priv(window)} { return }
+	set Priv(window) {}
+	set Priv(html) {}
+	set Priv(status) {}
 }
 
 
@@ -188,18 +203,6 @@ proc application::report::show {db variant gameIndex {parent .application}} {
 	}
 
 	return $w
-}
-
-
-proc application::report::Close {} {
-	variable Priv
-
-	if {![winfo exists $Priv(window)]} { return }
-
-	catch { $Priv(html) clear }
-	destroy $Priv(window)
-	set Priv(window) {}
-	set Priv(html) {}
 }
 
 
@@ -234,12 +237,18 @@ proc application::report::Load {data} {
 
 	# subcommands go through the per-widget command created by the
 	# wrapper (::html <path> would try to CREATE the widget again)
-	if {[catch { $Priv(html) parse $html } err]} {
-		# never leave the window empty: fall back to plain text
-		destroy $Priv(html)
-		set txt [tk::text $Priv(window).sw.fallback -wrap word]
+	if {![winfo exists $Priv(html)] || [catch { $Priv(html) parse $html } err]} {
+		if {![info exists err]} { set err "no HTML widget" }
+		# never leave the window empty: fall back to plain text (the
+		# fallback persists, later documents reuse it)
+		catch { destroy $Priv(html) }
+		set txt $Priv(window).sw.fallback
+		if {![winfo exists $txt]} {
+			tk::text $txt -wrap word
+			pack $txt -fill both -expand yes
+		}
+		$txt delete 1.0 end
 		$txt insert end $html
-		pack $txt -fill both -expand yes
 		$Priv(status) configure -text "parse failed: $err" -foreground darkred
 		return
 	}

@@ -81,6 +81,8 @@ set Pane(site)						"Site"
 set Pane(position)				"Position"
 set Pane(eco)						"ECO-Table"
 set Pane(media)					"Media"
+set Pane(report)					"Report"
+set Pane(assistant)				"Assistant"
 
 set UnsavedAction(discard)		"Discard changes (start next time with unchanged layout)"
 set UnsavedAction(overwrite)	"Overwrite existing layout with changed layout"

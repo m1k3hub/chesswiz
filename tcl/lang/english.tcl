@@ -547,6 +547,8 @@
 ::application::twm::mc::Pane(position)		"Start Positions"
 ::application::twm::mc::Pane(eco)			"ECO-Table"
 ::application::twm::mc::Pane(media)			"Media"
+::application::twm::mc::Pane(report)			"Report"
+::application::twm::mc::Pane(assistant)		"Assistant"
 
 ::application::twm::mc::UnsavedAction(discard)		"Discard changes (start next time with unchanged layout)"
 ::application::twm::mc::UnsavedAction(overwrite)	"Overwrite existing layout with changed layout"

@@ -78,6 +78,8 @@ array set PaneOptions {
 	analysis	{ -width 500 -height 120 -minwidth 300 -minheight 120 -expand x }
 	eco		{ -width 500 -height 520 -minwidth 150 -minheight 100 -expand both }
 	media		{ -width 400 -height 300 -minwidth 250 -minheight 200 -expand y }
+	report	{ -width 500 -height 400 -minwidth 250 -minheight 150 -expand both }
+	assistant	{ -width 400 -height 400 -minwidth 250 -minheight 150 -expand both }
 }
 
 set BoardLayout {
@@ -102,7 +104,7 @@ set BoardLayout {
 
 set FontSizeActive 0
 
-array set Prios		{ analysis 200 board 500 editor 400 games 100 dbgames 110 tree 300 eco 90 media 80 }
+array set Prios		{ analysis 200 board 500 editor 400 games 100 dbgames 110 tree 300 eco 90 media 80 report 70 assistant 60 }
 array set Defaults	{ menu:background #c3c3c3 }
 
 array set Vars {
@@ -252,6 +254,11 @@ proc nameVarFromUid {uid} {
 		trace add variable [namespace current]::twm::mc::Pane($name) write \
 			[namespace code [list UpdateNameVar $analysisNumber]]
 		UpdateAnalysisTitle $analysisNumber
+	} elseif {$name eq "report"} {
+		# the report pane titles itself after the document it shows
+		set nameVar [namespace current]::report::PaneTitle
+	} elseif {$name eq "assistant"} {
+		set nameVar [namespace current]::assistant::PaneTitle
 	} else {
 		set nameVar [namespace current]::twm::mc::Pane($name)
 	}
@@ -354,6 +361,8 @@ proc BuildPane {twm frame uid width height} {
 			set Vars(align:board:tree) 1
 		}
 		media	{ media::build $twm $frame $width $height }
+		report	{ report::build $frame $width $height }
+		assistant	{ assistant::build $frame $width $height }
 		board		{ board::build $frame $width $height }
 		editor	{ pgn::build $frame $width $height }
 		games		{ tree::games::build $twm $frame $width $height }
@@ -444,6 +453,38 @@ proc newAnalysisPane {analysisNumber} {
 	} else {
 		$twm new frame analysis:1 $PaneOptions(analysis)
 	}
+}
+
+
+# Show pane <uid> of the board tab: add it to the layout when it is not
+# part of it, then bring it to the front (its tab, its multiwindow or
+# notebook page, or its toplevel when undocked). Returns the twm frame,
+# or {} when the board layout is not available.
+proc openPane {uid} {
+	variable PaneOptions
+	variable Vars
+
+	if {![info exists Vars(board:twm)]} { return {} }
+	set twm $Vars(board:twm)
+
+	if {$uid ni [$twm leaves]} {
+		$twm new frame $uid $PaneOptions($uid)
+		update idletasks
+	}
+	if {[catch { set frame [$twm leaf $uid] }] || ![winfo exists $frame]} { return {} }
+
+	if {![string match {*.board} [$Vars(notebook) select]]} {
+		switchTab board
+	}
+
+	set parent [$twm parent $frame]
+	if {[$twm ismultiwindow $parent] || [$twm isnotebook $parent]} {
+		$twm select $parent $frame
+	}
+
+	set top [$twm toplevel $frame]
+	if {[$twm isfloat $top]} { raise $top }
+	return $frame
 }
 
 
