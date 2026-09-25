@@ -187,7 +187,7 @@ tcltest::test assistant-debug-tools-gated {debug tools are hidden and refused ou
 	set names [lmap t [json::json2dict [::application::assistant::toolsJson]] { dict get $t function name }]
 	list [expr {"eval_tcl" in $names}] [expr {"app_state" in $names}] \
 		[::application::assistant::runTool proc_source {name ::application::openPane}]
-} -result {0 1 {error: 'proc_source' is only available in debug mode (SCIDB_AI_DEBUG=1)}}
+} -result {0 1 {error: 'proc_source' is only available in debug mode (--ai-debug or SCIDB_AI_DEBUG=1)}}
 
 tcltest::test assistant-debug-inspection {in debug mode the model can read procs and variables} -body {
 	set ::application::assistant::Priv(debug) 1

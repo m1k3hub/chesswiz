@@ -503,3 +503,41 @@ proc ::ai::provider::onOllamaChat {script token} {
 	uplevel #0 [list {*}$script [list ok 1 message $message]]
 	return
 }
+
+
+# ----------------------------------------------------------------------
+# The models an Ollama server offers (/api/tags): a list of dicts
+# {name remote tools size}. <remote> is 1 for cloud models (the server
+# forwards them), <tools> 1 when the model supports tool calling.
+# ----------------------------------------------------------------------
+
+proc ::ai::provider::ollamaModels {{base http://localhost:11434} {timeoutMs 3000}} {
+	need http
+
+	set token [::http::geturl $base/api/tags -timeout $timeoutMs -binary 1]
+	set status [::http::status $token]
+	set code [::http::ncode $token]
+	set data [body $token]
+	::http::cleanup $token
+
+	if {$status ne "ok" || $code != 200} {
+		error "ai::provider: HTTP $code $status from $base/api/tags"
+	}
+	return [parseModels $data]
+}
+
+
+proc ::ai::provider::parseModels {data} {
+	need json
+	set models {}
+	foreach m [dict get [json::json2dict $data] models] {
+		set caps [expr {[dict exists $m capabilities] ? [dict get $m capabilities] : {}}]
+		lappend models [dict create \
+			name   [dict get $m name] \
+			remote [expr {[dict exists $m remote_host] && [string length [dict get $m remote_host]]}] \
+			tools  [expr {"tools" in $caps}] \
+			size   [expr {[dict exists $m size] ? [dict get $m size] : 0}] \
+		]
+	}
+	return [lsort -index 1 -dictionary $models]
+}

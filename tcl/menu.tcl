@@ -85,6 +85,7 @@ set OpenWebGL3DBoard				"Open &WebGL Real 3D Board"
 set Embed3DBoard					"3D Board in &Main Window"
 set AIExplain						"AI: &Explain Position"
 set AIAssistant					"AI: A&ssistant"
+set AIChooseModel				"AI: Choose &Model..."
 
 # Tools
 set OpenEngineDictionary		"Open &Engine Dictionary"
@@ -460,6 +461,16 @@ if {0} {
 			-underline [IncrUL $ul] \
 			-image $::icon::16x16::none \
 			-command ::application::assistant::show \
+			;
+	}
+	if {[llength [info commands ::application::ai::models::show]]} {
+		lassign [::tk::UnderlineAmpersand $mc::AIChooseModel] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [list ::application::ai::models::show .application] \
 			;
 	}
 

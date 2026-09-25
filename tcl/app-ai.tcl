@@ -28,14 +28,62 @@ array set Config {
 	numPredict 400
 }
 
-# Swap provider/model without editing code:
-#   SCIDB_AI_MODEL=glm-5.3:cloud pi
-# or at runtime: ::application::ai::configure -model glm-5.3:cloud
-if {[info exists ::env(SCIDB_AI_PROVIDER)]} { set Config(provider) $::env(SCIDB_AI_PROVIDER) }
-if {[info exists ::env(SCIDB_AI_MODEL)]}    { set Config(model) $::env(SCIDB_AI_MODEL) }
+# The provider and model chosen in Extras > AI: Choose Model, saved in the
+# options file. Config holds the values in effect, which are overridden
+# (for the session only) by, in this order:
+#   --ai-model=NAME / --ai-provider=NAME      command line
+#   SCIDB_AI_MODEL / SCIDB_AI_PROVIDER        environment
+variable Settings
+array set Settings [list provider $Config(provider) model $Config(model)]
 
 } ;# namespace ai
 } ;# namespace application
+
+
+# Where the value of <key> (provider|model) in effect comes from, and it:
+# {option|environment|settings value}.
+proc ::application::ai::setting {key} {
+	variable Settings
+
+	set value [::process::optionValue ai-$key]
+	if {[string length $value]} { return [list option $value] }
+	set env SCIDB_AI_[string toupper $key]
+	if {[info exists ::env($env)] && [string length $::env($env)]} {
+		return [list environment $::env($env)]
+	}
+	return [list settings $Settings($key)]
+}
+
+
+proc ::application::ai::applySettings {} {
+	variable Config
+
+	foreach key {provider model} {
+		set Config($key) [lindex [setting $key] 1]
+	}
+}
+
+
+# Save a new choice; it takes effect unless overridden.
+proc ::application::ai::choose {provider model} {
+	variable Settings
+
+	set Settings(provider) $provider
+	set Settings(model) $model
+	applySettings
+}
+
+
+proc ::application::ai::WriteOptions {chan} {
+	::options::writeItem $chan [namespace current]::Settings
+}
+if {[llength [info commands ::options::hookWriter]]} {
+	::options::hookWriter ::application::ai::WriteOptions
+}
+
+if {[llength [info commands ::process::optionValue]]} {
+	::application::ai::applySettings
+}
 
 
 proc ::application::ai::configure {args} {

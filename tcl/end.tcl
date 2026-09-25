@@ -274,6 +274,7 @@ proc ::toolbar::setOptions {id options} {
 proc dialog::fsbox::setBookmarks {args} {}
 
 options::sourceFile
+::application::ai::applySettings ;# saved AI model, then command-line/env overrides
 
 # START OF MIGRATION ################################################################
 if {[catch {

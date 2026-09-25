@@ -136,18 +136,36 @@ set ProgramOptions [list                                                        
 	[list "--update-player-photos"  "Update/install player photos"]                           \
 	[list "--force-grab"            "Do not suppress grabs in debug mode"                     \
 	                                "(only for debugging)"]                                   \
+	[list "--ai-model=MODEL"        "Use MODEL for the AI features (this session only)"]      \
+	[list "--ai-provider=NAME"      "Use provider NAME for the AI features (ollama, ...)"]    \
+	[list "--ai-debug"              "Enable the assistant's debugging tools"]                 \
 ]
 
+# Options that take a value: --name=value, or --name value.
+variable ValueOptions {ai-model ai-provider}
+
 array set Options {}
+array set Valued {}
 variable Arguments {}
 
 
 proc arguments {} { return [set [namespace current]::Arguments] }
 
 
+# The value of an option given as --name=value, or {}.
+proc optionValue {arg} {
+	set value {}
+	catch { set value [set [namespace current]::Options($arg)] }
+	if {$value eq "1" && ![info exists [namespace current]::Valued($arg)]} { return {} }
+	return $value
+}
+
+
+# Whether option <arg> was given.
 proc testOption {arg} {
 	set rc 0
 	catch { set rc [set [namespace current]::Options($arg)] }
+	if {[info exists [namespace current]::Valued($arg)]} { return 1 }
 	return $rc
 }
 
@@ -160,8 +178,10 @@ proc setOption {arg {value 1}} {
 proc ParseArgs {} {
 	global argc argv
 	variable Options
+	variable Valued
 	variable Arguments
 	variable ProgramOptions
+	variable ValueOptions
 
 	for {set i 0} {$i < $argc} {incr i} {
 		set arg [lindex $argv $i]
@@ -178,9 +198,23 @@ proc ParseArgs {} {
 		}
 
 		set option [string range $arg 2 end]
-		set Options($option) 1
+		set name $arg
+		if {[set k [string first = $option]] >= 0} {
+			# --name=value
+			set name --[string range $option 0 [expr {$k - 1}]]
+			set option [string range $option 0 [expr {$k - 1}]]
+			set Options($option) [string range $arg [expr {$k + 3}] end]
+			set Valued($option) 1
+		} elseif {$option in $ValueOptions && $i + 1 < $argc} {
+			# --name value
+			set Options($option) [lindex $argv [incr i]]
+			set Valued($option) 1
+		} else {
+			set Options($option) 1
+		}
 
-		if {[lsearch -exact -index 0 $ProgramOptions $arg] == -1} {
+		set known [lmap entry $ProgramOptions { lindex [split [lindex $entry 0] =] 0 }]
+		if {$name ni $known} {
 			puts stderr "Unrecognized option: $arg"
 		}
 	}

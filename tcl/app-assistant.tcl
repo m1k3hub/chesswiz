@@ -7,7 +7,7 @@
 # arguments are checked before anything runs. Every tool that changes
 # something asks the user first.
 #
-# Debug mode (SCIDB_AI_DEBUG=1) adds introspection tools for developers:
+# Debug mode (--ai-debug or SCIDB_AI_DEBUG=1) adds introspection tools for developers:
 # reading variables and procedure sources, and -- after confirmation of
 # the exact script -- evaluating Tcl.
 #
@@ -41,7 +41,7 @@ variable PaneTitle ""
 
 # Tool table: name {confirm debug what description parameters handler}.
 #   confirm     the tool changes something; it runs only once the user allows it
-#   debug       offered only in debug mode (SCIDB_AI_DEBUG=1)
+#   debug       offered only in debug mode (--ai-debug or SCIDB_AI_DEBUG=1)
 #   what        the action as shown in the confirmation (a format string over
 #               the checked arguments)
 #   parameters  JSON schema of the arguments
@@ -177,7 +177,8 @@ array set Priv {
 	confirm		::application::assistant::ConfirmDialog
 }
 
-if {[info exists ::env(SCIDB_AI_DEBUG)] && [string is true -strict $::env(SCIDB_AI_DEBUG)]} {
+if {   ([info exists ::env(SCIDB_AI_DEBUG)] && [string is true -strict $::env(SCIDB_AI_DEBUG)])
+	 || ([llength [info commands ::process::testOption]] && [::process::testOption ai-debug])} {
 	set Priv(debug) 1
 }
 
@@ -331,7 +332,7 @@ proc ::application::assistant::runTool {name cargs} {
 	}
 	lassign [dict get $Actions $name] confirm debug what _ _ handler
 	if {$debug && !$Priv(debug)} {
-		return "error: '$name' is only available in debug mode (SCIDB_AI_DEBUG=1)"
+		return "error: '$name' is only available in debug mode (--ai-debug or SCIDB_AI_DEBUG=1)"
 	}
 
 	if {[catch { set checked [CheckArgs $name $cargs] } err]} {

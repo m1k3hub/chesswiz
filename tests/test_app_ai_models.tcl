@@ -1,0 +1,144 @@
+# ======================================================================
+# Scidb App Test — AI model choice (tcl/app-ai.tcl, tcl/app-ai-models.tcl)
+# ======================================================================
+# Precedence: --ai-model/--ai-provider > SCIDB_AI_* > saved setting.
+# ======================================================================
+
+package require Tcl 8.5
+package require tcltest 2.5
+
+namespace eval ::scidb::test::aimodels {}
+
+# Run <body> with the AI settings, env and command-line options restored.
+proc ::scidb::test::aimodels::isolated {body} {
+	set settings [array get ::application::ai::Settings]
+	set config [array get ::application::ai::Config]
+	set options [array get ::process::Options ai-*]
+	set valued [array get ::process::Valued ai-*]
+	set env {}
+	foreach v {SCIDB_AI_MODEL SCIDB_AI_PROVIDER} {
+		if {[info exists ::env($v)]} { lappend env $v $::env($v); unset ::env($v) }
+	}
+	set rc [catch { uplevel 1 $body } result]
+	array set ::application::ai::Settings $settings
+	array set ::application::ai::Config $config
+	array unset ::process::Options ai-*
+	array unset ::process::Valued ai-*
+	array set ::process::Options $options
+	array set ::process::Valued $valued
+	foreach v {SCIDB_AI_MODEL SCIDB_AI_PROVIDER} { unset -nocomplain ::env($v) }
+	array set ::env $env
+	if {$rc} { return -code error $result }
+	return $result
+}
+
+tcltest::test aimodels-saved-setting {the saved choice is in effect without overrides} -body {
+	::scidb::test::aimodels::isolated {
+		::application::ai::choose ollama saved-model:1b
+		list [::application::ai::setting model] $::application::ai::Config(model)
+	}
+} -result {{settings saved-model:1b} saved-model:1b}
+
+tcltest::test aimodels-env-overrides {SCIDB_AI_MODEL overrides the saved choice} -body {
+	::scidb::test::aimodels::isolated {
+		::application::ai::choose ollama saved-model:1b
+		set ::env(SCIDB_AI_MODEL) env-model:2b
+		::application::ai::applySettings
+		list [::application::ai::setting model] $::application::ai::Config(model) \
+			$::application::ai::Settings(model)
+	}
+} -result {{environment env-model:2b} env-model:2b saved-model:1b}
+
+tcltest::test aimodels-option-overrides {--ai-model overrides the environment and the saved choice} -body {
+	::scidb::test::aimodels::isolated {
+		::application::ai::choose ollama saved-model:1b
+		set ::env(SCIDB_AI_MODEL) env-model:2b
+		::process::setOption ai-model flag-model:3b
+		set ::process::Valued(ai-model) 1
+		::application::ai::applySettings
+		list [::application::ai::setting model] $::application::ai::Config(model)
+	}
+} -result {{option flag-model:3b} flag-model:3b}
+
+tcltest::test aimodels-saved-in-options {the choice is written to the options file} -body {
+	::scidb::test::aimodels::isolated {
+		::application::ai::choose ollama saved-model:1b
+		set chan [file tempfile path]
+		::application::ai::WriteOptions $chan
+		close $chan
+		set chan [::open $path]
+		set text [read $chan]
+		close $chan
+		file delete $path
+		# sourcing it restores the setting
+		array set ::application::ai::Settings {model other}
+		eval $text
+		list [string match "array set ::application::ai::Settings*" $text] \
+			$::application::ai::Settings(model) \
+			[expr {"::application::ai::WriteOptions" in $::options::WriteCallbacks(options)}]
+	}
+} -result {1 saved-model:1b 1}
+
+tcltest::test aimodels-parse-tags {Ollama's model list is parsed with cloud and tool flags} -body {
+	set data {{"models":[
+		{"name":"qwen3:8b","size":5200000000,"capabilities":["completion","tools"]},
+		{"name":"glm-5.3:cloud","remote_host":"https://ollama.com","size":326,"capabilities":["completion","tools"]},
+		{"name":"gemma3:4b","size":3300000000,"capabilities":["completion","vision"]}]}}
+	lmap m [::ai::provider::parseModels $data] {
+		list [dict get $m name] [dict get $m remote] [dict get $m tools]
+	}
+} -result {{gemma3:4b 0 0} {glm-5.3:cloud 1 1} {qwen3:8b 0 1}}
+
+tcltest::test aimodels-dialog-saves-choice {picking a model in the dialog saves it} -body {
+	::scidb::test::aimodels::isolated {
+		rename ::ai::provider::ollamaModels ::scidb::test::aimodels::realModels
+		proc ::ai::provider::ollamaModels {args} {
+			return [list \
+				[dict create name local-a:1b remote 0 tools 1 size 1] \
+				[dict create name notools:1b remote 0 tools 0 size 1]]
+		}
+		set dlg [::application::ai::models::show .application]
+		set rows [$::application::ai::models::Priv(tree) children {}]
+		$::application::ai::models::Priv(tree) selection set notools:1b
+		update
+		set warning [$::application::ai::models::Priv(status) cget -text]
+		$::application::ai::models::Priv(tree) selection set local-a:1b
+		update
+		::application::ai::models::Apply
+		rename ::ai::provider::ollamaModels {}
+		rename ::scidb::test::aimodels::realModels ::ai::provider::ollamaModels
+		list $rows [string match "*does not support tool calling*" $warning] \
+			[winfo exists $dlg] $::application::ai::Settings(model) $::application::ai::Config(model)
+	}
+} -result {{local-a:1b notools:1b} 1 0 local-a:1b local-a:1b}
+
+tcltest::test aimodels-dialog-shows-override {the dialog says when a flag overrides the choice} -body {
+	::scidb::test::aimodels::isolated {
+		::process::setOption ai-model flag-model:3b
+		set ::process::Valued(ai-model) 1
+		rename ::ai::provider::ollamaModels ::scidb::test::aimodels::realModels
+		proc ::ai::provider::ollamaModels {args} { error "connection refused" }
+		::application::ai::models::show .application
+		set override [$::application::ai::models::Priv(override) cget -text]
+		set status [$::application::ai::models::Priv(status) cget -text]
+		::application::ai::models::Close
+		rename ::ai::provider::ollamaModels {}
+		rename ::scidb::test::aimodels::realModels ::ai::provider::ollamaModels
+		list [string match "*the command line (flag-model:3b)*" $override] \
+			[string match "*not reachable*" $status]
+	}
+} -result {1 1}
+
+tcltest::test aimodels-help-lists-flags {--help documents the AI flags} -body {
+	set exe [file join [file dirname [info nameofexecutable]] tkscidb-beta]
+	if {![file executable $exe]} { set exe [info nameofexecutable] }
+	set script [file join $::scidb::test::app::testDir .. tcl scidb-beta]
+	set out [exec $exe $script --help 2>@1]
+	list [string match "*--ai-model=MODEL*" $out] [string match "*--ai-provider=NAME*" $out] \
+		[string match "*--ai-debug*" $out]
+} -result {1 1 1}
+
+# ----------------------------------------------------------------------
+
+::tcltest::cleanupTests
+return

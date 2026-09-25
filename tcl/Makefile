@@ -161,6 +161,7 @@ SOURCES = \
 	ai-annotations.tcl \
 	ai-generate.tcl \
 	app-ai.tcl \
+	app-ai-models.tcl \
 	app-assistant.tcl \
 	app-media-decode.tcl \
 	app-media-lesson.tcl \
