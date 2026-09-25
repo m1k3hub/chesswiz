@@ -155,6 +155,7 @@ SOURCES = \
 	ai-claims.tcl \
 	ai-engine.tcl \
 	ai-provider.tcl \
+	ai-systemone.tcl \
 	ai-narrate.tcl \
 	ai-prompt.tcl \
 	ai-precedent.tcl \

@@ -28,6 +28,8 @@ set argc 0
 set ::env(SCIDB_ERROR_LOG) [file join $::scidb::test::app::testDir tmp-app errors-[pid].log]
 # nor to the model: triage runs only where a test asks for it
 set ::env(SCIDB_AI_TRIAGE) 0
+# and no System One classifier unless a test points at its own
+set ::env(SCIDB_AI_CLASSIFIER) off
 source [file join $::scidb::test::app::testDir .. tcl scidb-beta]
 set argv $argvCopy
 set argc $argcCopy
