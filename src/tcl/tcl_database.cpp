@@ -128,6 +128,8 @@ static char const* CmdUpgrade			= "::scidb::db::upgrade";
 static char const* CmdWrite			= "::scidb::db::write";
 static char const* CmdFindDuplicates	= "::scidb::db::findDuplicates";
 static char const* CmdEcoStats			= "::scidb::db::ecoStats";
+static char const* CmdFindPlayers		= "::scidb::db::findPlayers";
+static char const* CmdOpeningScore	= "::scidb::db::openingScore";
 static char const* CmdMediaFiles		= "::scidb::db::mediaFiles";
 static char const* CmdMediaGallery	= "::scidb::db::mediaGallery";
 static char const* CmdGuidingText	= "::scidb::db::guidingText";
@@ -5832,6 +5834,185 @@ cmdEcoStats(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 }
 
 
+static mstl::string
+asciiLower(mstl::string const& s)
+{
+	mstl::string result(s);
+
+	for (unsigned i = 0; i < result.size(); ++i)
+		result[i] = ::tolower(static_cast<unsigned char>(result[i]));
+
+	return result;
+}
+
+
+// Players whose name contains <text> (ASCII case-insensitive), most games first:
+// {{<player-index> <name> <games> <elo>} ...}
+static int
+cmdFindPlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 4 && objc != 5)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <text> ?<maximal>?");
+		return TCL_ERROR;
+	}
+
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 2);
+	mstl::string	text		= asciiLower(stringFromObj(objc, objv, 3));
+	unsigned			maximal	= objc == 5 ? unsignedFromObj(objc, objv, 4) : 10;
+	Database const&	db		= Scidb->cursor(database, variant).database();
+
+	mstl::vector<unsigned> found;
+
+	for (unsigned i = 0, n = db.countPlayers(); i < n; ++i)
+	{
+		NamebasePlayer const& player = db.player(i);
+
+		if (player.frequency() && ::strstr(asciiLower(player.name()), text))
+			found.push_back(i);
+	}
+
+	// partial selection sort: only the first <maximal> are needed
+	unsigned count = mstl::min(maximal, unsigned(found.size()));
+
+	for (unsigned i = 0; i < count; ++i)
+	{
+		unsigned best = i;
+
+		for (unsigned k = i + 1; k < found.size(); ++k)
+		{
+			if (db.player(found[k]).frequency() > db.player(found[best]).frequency())
+				best = k;
+		}
+
+		mstl::swap(found[i], found[best]);
+	}
+
+	Tcl_Obj* result = Tcl_NewListObj(0, nullptr);
+
+	for (unsigned i = 0; i < count; ++i)
+	{
+		NamebasePlayer const& player = db.player(found[i]);
+		Tcl_Obj* row[4];
+
+		row[0] = Tcl_NewIntObj(found[i]);
+		row[1] = Tcl_NewStringObj(player.name(), player.name().size());
+		row[2] = Tcl_NewIntObj(player.frequency());
+		row[3] = Tcl_NewIntObj(player.elo());
+		Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(4, row));
+	}
+
+	Tcl_SetObjResult(ti, result);
+	return TCL_OK;
+}
+
+
+// Results of the standard-chess games whose ECO code lies in <from>..<to>:
+//   {<games> <white-wins> <draws> <black-wins>}
+// With <player-index>, only that player's games, from the player's side:
+//   {<games> {<white: win draw loss>} {<black: win draw loss>}}
+static int
+cmdOpeningScore(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 5 && objc != 6)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <eco-from> <eco-to> ?<player-index>?");
+		return TCL_ERROR;
+	}
+
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 2);
+	uint16_t			from		= Eco::toShort(stringFromObj(objc, objv, 3));
+	uint16_t			to			= Eco::toShort(stringFromObj(objc, objv, 4));
+	Database const&	db		= Scidb->cursor(database, variant).database();
+
+	if (!from || !to || to < from)
+		return error(CmdOpeningScore, nullptr, nullptr, "invalid ECO range");
+
+	NamebasePlayer const* player = nullptr;
+
+	if (objc == 6)
+	{
+		unsigned index = unsignedFromObj(objc, objv, 5);
+
+		if (index >= db.countPlayers())
+			return error(CmdOpeningScore, nullptr, nullptr, "invalid player index");
+
+		player = &db.player(index);
+	}
+
+	unsigned games = 0;
+	unsigned score[2][4];	// [color][result::ID]: side-to-colour results
+	memset(score, 0, sizeof(score));
+
+	if (db.variant() == variant::Normal)
+	{
+		for (unsigned i = 0, n = db.countGames(); i < n; ++i)
+		{
+			GameInfo const& info = db.gameInfo(i);
+
+			// NOTE: in .si4 databases the ECO code may be undefined.
+			if (info.idn() != variant::Standard)
+				continue;
+
+			uint16_t eco = info.eco(variant::Normal).toShort();
+
+			if (eco < from || to < eco)
+				continue;
+
+			result::ID result = info.result();
+			unsigned side = color::White;
+
+			if (player)
+			{
+				if (info.playerEntry(color::Black) == player)
+					side = color::Black;
+				else if (info.playerEntry(color::White) != player)
+					continue;
+			}
+
+			++games;
+
+			if (result <= result::Draw)
+				++score[side][result];
+		}
+	}
+
+	Tcl_Obj* objs[3];
+
+	if (player)
+	{
+		for (unsigned side = 0; side < 2; ++side)
+		{
+			result::ID win  = side == color::White ? result::White : result::Black;
+			result::ID loss = side == color::White ? result::Black : result::White;
+			Tcl_Obj* wdl[3];
+
+			wdl[0] = Tcl_NewIntObj(score[side][win]);
+			wdl[1] = Tcl_NewIntObj(score[side][result::Draw]);
+			wdl[2] = Tcl_NewIntObj(score[side][loss]);
+			objs[side + 1] = Tcl_NewListObj(3, wdl);
+		}
+
+		objs[0] = Tcl_NewIntObj(games);
+		setResult(3, objs);
+	}
+	else
+	{
+		Tcl_Obj* row[4];
+
+		row[0] = Tcl_NewIntObj(games);
+		row[1] = Tcl_NewIntObj(score[color::White][result::White]);
+		row[2] = Tcl_NewIntObj(score[color::White][result::Draw]);
+		row[3] = Tcl_NewIntObj(score[color::White][result::Black]);
+		setResult(4, row);
+	}
+
+	return TCL_OK;
+}
+
+
 namespace tcl {
 namespace db {
 
@@ -5870,6 +6051,8 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdWrite,				cmdWrite);
 	createCommand(ti, CmdFindDuplicates,	cmdFindDuplicates);
 	createCommand(ti, CmdEcoStats,			cmdEcoStats);
+	createCommand(ti, CmdFindPlayers,		cmdFindPlayers);
+	createCommand(ti, CmdOpeningScore,		cmdOpeningScore);
 	createCommand(ti, CmdMediaFiles,		cmdMediaFiles);
 	createCommand(ti, CmdMediaGallery,	cmdMediaGallery);
 	createCommand(ti, CmdGuidingText,	cmdGuidingText);

@@ -106,6 +106,30 @@ variable Actions {
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoInstallFonts
 	}
+	current_game {
+		0 0 "read the current game"
+		"The game on the board: its header, moves and comments as PGN, and the current position as FEN. Use it to summarize or discuss the game."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoCurrentGame
+	}
+	database_summary {
+		0 0 "summarize the active database"
+		"Summarize the active database: number of games and players, overall results, and the most played openings (ECO) with their scores."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoDatabaseSummary
+	}
+	player_stats {
+		0 0 "report the statistics of %s"
+		"Statistics of a player in the active database: games, wins/draws/losses with White and with Black, score, first and last game, Elo range, most played openings. The name may be partial ('carlsen'); if several players match, the candidates are listed and you call again with the exact name."
+		{{"type":"object","properties":{"name":{"type":"string","description":"player name or part of it, e.g. 'Carlsen, Magnus' or 'carlsen'"}},"required":["name"]}}
+		::application::assistant::DoPlayerStats
+	}
+	opening_score {
+		0 0 "report the score of the opening %s %s"
+		"Results of an opening in the active database, by ECO code: 'B90' (one code), 'B9' (B90-B99), 'B' (B00-B99) or a range 'B90-B99'. Without a player: white wins, draws, black wins. With a player: that player's wins/draws/losses with White and with Black. Map opening names to ECO codes yourself (e.g. Najdorf = B90-B99)."
+		{{"type":"object","properties":{"eco":{"type":"string"},"player":{"type":"string","description":"optional player name or part of it"}},"required":["eco"]}}
+		::application::assistant::DoOpeningScore
+	}
 	app_state {
 		0 0 "report the application state"
 		"Report the application state for diagnosis: Tcl/Tk and model versions, the selected tab, the active database and variant, game counts, the current game and position, and the panes of the board layout."
@@ -117,6 +141,12 @@ variable Actions {
 		"The most recent background errors (message and Tcl stack) raised in this session, newest last."
 		{{"type":"object","properties":{"count":{"type":"integer","description":"how many, default 3"}}}}
 		::application::assistant::DoRecentErrors
+	}
+	tool_log {
+		0 0 "report recent tool calls"
+		"The most recent assistant tool calls of this session, newest last: time, tool, arguments, whether the user was asked, outcome (ok, error, declined) and the start of the reply. Use it to explain what the assistant did or why something failed."
+		{{"type":"object","properties":{"count":{"type":"integer","description":"how many, default 10"}}}}
+		::application::assistant::DoToolLog
 	}
 	list_procs {
 		0 1 "list procedures matching %s"
@@ -148,12 +178,14 @@ variable System {You are the assistant of Scidb, a chess database application.
 You operate the application only through the tools you are given; call a tool
 whenever it does what the user asks. If no tool fits, say so briefly and name
 the menu entry that does it if you know one. Never claim you did something a
-tool did not report. Answer in one or two short sentences.}
+tool did not report. Answer in one or two short sentences. For questions
+about games, players or openings, use the numbers the tools report and never
+invent statistics; a short list is fine there.}
 
 variable DebugSystem {
 You are also a debugging aid for the developer of Scidb (Tcl/Tk front end
 over a C++ core). When asked about a problem, gather facts with the tools
-(app_state, recent_errors, list_procs, proc_source, read_variable) before
+(app_state, recent_errors, tool_log, list_procs, proc_source, read_variable) before
 answering, cite procedure names and the evidence you saw, and say plainly
 what you could not verify. Longer answers are fine in this role.}
 
@@ -163,6 +195,10 @@ variable MaxReply 6000
 # background errors seen in this session: {time message stack}
 variable Errors {}
 variable MaxErrors 20
+
+# tool calls made in this session: see LogToolCall
+variable ToolLog {}
+variable MaxToolLog 50
 
 array set Priv {
 	window		{}
@@ -349,36 +385,58 @@ proc ::application::assistant::Finish {result round} {
 # model as text, never raised: the model can correct itself.
 # ======================================================================
 proc ::application::assistant::runTool {name cargs} {
+	lassign [RunTool $name $cargs] outcome asked reply
+	LogToolCall $name $cargs $asked $outcome $reply
+	return $reply
+}
+
+
+# Returns {outcome asked reply}: outcome is ok, error or declined; asked
+# tells whether the user was asked to confirm.
+proc ::application::assistant::RunTool {name cargs} {
 	variable Actions
 	variable MaxReply
 	variable Priv
 	variable mc
 
 	if {![dict exists $Actions $name]} {
-		return "error: unknown tool '$name'"
+		return [list error 0 "error: unknown tool '$name'"]
 	}
 	lassign [dict get $Actions $name] confirm debug what _ _ handler
 	if {$debug && !$Priv(debug)} {
-		return "error: '$name' is only available in debug mode (--ai-debug or SCIDB_AI_DEBUG=1)"
+		return [list error 0 "error: '$name' is only available in debug mode (--ai-debug or SCIDB_AI_DEBUG=1)"]
 	}
 
 	if {[catch { set checked [CheckArgs $name $cargs] } err]} {
-		return "error: $err"
+		return [list error 0 "error: $err"]
 	}
 
 	if {$confirm} {
 		set what [format $what {*}[dict values $checked]]
 		set confirm [expr {[llength $Priv(reqconfirm)] ? $Priv(reqconfirm) : $Priv(confirm)}]
-		if {![{*}$confirm $what]} { return $mc::Denied }
+		if {![{*}$confirm $what]} { return [list declined 1 $mc::Denied] }
+		set confirm 1
 	}
 
 	if {[catch { set reply [{*}$handler {*}[dict values $checked]] } err]} {
-		return "error: $err"
+		return [list error $confirm "error: $err"]
 	}
 	if {[string length $reply] > $MaxReply} {
 		set reply "[string range $reply 0 $MaxReply-1]\n... (truncated)"
 	}
-	return $reply
+	return [list ok $confirm $reply]
+}
+
+
+# Every tool call, whatever its outcome, for tool_log: {time name arguments asked outcome reply}
+proc ::application::assistant::LogToolCall {name cargs asked outcome reply} {
+	variable ToolLog
+	variable MaxToolLog
+
+	set reply [string map {\n " | "} [string trim $reply]]
+	if {[string length $reply] > 200} { set reply "[string range $reply 0 199]..." }
+	lappend ToolLog [list [clock format [clock seconds] -format %T] $name $cargs $asked $outcome $reply]
+	if {[llength $ToolLog] > $MaxToolLog} { set ToolLog [lrange $ToolLog end-[expr {$MaxToolLog - 1}] end] }
 }
 
 
@@ -418,8 +476,8 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			}
 			return [dict create kind $kind]
 		}
-		recent_errors {
-			set count 3
+		recent_errors - tool_log {
+			set count [expr {$name eq "tool_log" ? 10 : 3}]
 			if {[dict exists $cargs count]} { set count [dict get $cargs count] }
 			if {![string is integer -strict $count] || $count < 1} { error "count must be a positive integer" }
 			return [dict create count $count]
@@ -438,8 +496,32 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		eval_tcl {
 			return [dict create script [Arg $cargs script]]
 		}
+		player_stats {
+			set name [string trim [Arg $cargs name]]
+			if {![string length $name]} { error "name must not be empty" }
+			return [dict create name $name]
+		}
+		opening_score {
+			set player ""
+			if {[dict exists $cargs player]} { set player [string trim [dict get $cargs player]] }
+			return [dict create range [EcoRange [Arg $cargs eco]] player $player]
+		}
 	}
 	return {}
+}
+
+
+# "B90" -> {B90 B90}, "B9" -> {B90 B99}, "B" -> {B00 B99}, "B90-B99" -> {B90 B99}
+proc ::application::assistant::EcoRange {eco} {
+	set eco [string toupper [string map {" " ""} $eco]]
+	if {[regexp {^([A-E]\d\d)-([A-E]\d\d)$} $eco _ from to]} {
+		if {$to < $from} { error "the ECO range '$eco' is reversed" }
+		return [list $from $to]
+	}
+	if {[regexp {^[A-E]\d?\d?$} $eco]} {
+		return [list [string range ${eco}00 0 2] [string range ${eco}99 0 2]]
+	}
+	error "eco must be like 'B90', 'B9', 'B' or 'B90-B99'"
 }
 
 
@@ -498,6 +580,142 @@ proc ::application::assistant::DoExport {} {
 		-view 0 \
 		;
 	return "the export dialog is open for [::util::databaseName $base no]; the user picks format and file"
+}
+
+
+# --- read-only queries over the board game and the active database ------
+
+proc ::application::assistant::ActiveBase {} {
+	return [list [::scidb::db::get name] [::application::database::currentVariant]]
+}
+
+
+proc ::application::assistant::DoCurrentGame {} {
+	# the saved game unless it has unsaved changes
+	set source [expr {[::scidb::game::query modified?] ? "modified" : "original"}]
+	set pgn [string trim [::scidb::game::toPGN $source]]
+	return "$pgn\n\ncurrent position: [::scidb::pos::fen]"
+}
+
+
+proc ::application::assistant::DoDatabaseSummary {} {
+	lassign [ActiveBase] base variant
+	set lines {}
+	lappend lines "database: [::util::databaseName $base no] (variant $variant)"
+	lappend lines "games: [::scidb::db::count games $base $variant], players: [::scidb::db::count players $base $variant]"
+
+	set rows [lsort -integer -decreasing -index 1 [::scidb::db::ecoStats $base $variant]]
+	if {![llength $rows]} { return [join $lines \n] }
+	lassign {0 0 0 0} total white draws black
+	foreach row $rows {
+		lassign $row _ n w d b
+		incr total $n; incr white $w; incr draws $d; incr black $b
+	}
+	lappend lines "games with an ECO code: $total -- [Results $white $draws $black]"
+	lappend lines "most played openings:"
+	foreach row [lrange $rows 0 9] {
+		lassign $row eco n w d b
+		lappend lines "  $eco [EcoName $eco $variant]: $n games -- [Results $w $d $b]"
+	}
+	return [join $lines \n]
+}
+
+
+proc ::application::assistant::DoPlayerStats {name} {
+	lassign [ActiveBase] base variant
+	lassign [ResolvePlayer $base $variant $name] index name
+
+	lassign [::scidb::db::get playerStats $base $variant $index] \
+		dates elo games white black total openings
+	lassign $dates first last
+	lassign $elo eloMin eloMax
+	set lines [list "$name: $games games, $first to $last"]
+	if {$eloMax} { lappend lines "Elo: $eloMin to $eloMax" }
+	foreach side {White Black total} stats [list $white $black $total] {
+		lassign $stats win loss draw pct
+		lappend lines [format "%s: %d wins, %d draws, %d losses, score %.1f%%" \
+			$side $win $draw $loss [expr {$pct/100.0}]]
+	}
+	foreach side {White Black} rows $openings {
+		if {![llength $rows]} { continue }
+		lappend lines "most played with $side:"
+		foreach row $rows {
+			lassign $row count eco moves
+			lappend lines "  $eco [EcoName $eco $variant] ($count games): [Figurines $moves]"
+		}
+	}
+	return [join $lines \n]
+}
+
+
+proc ::application::assistant::DoOpeningScore {range player} {
+	lassign [ActiveBase] base variant
+	if {$variant ne "Normal"} { return "ECO codes exist only for standard chess, the active variant is $variant" }
+	lassign $range from to
+	set label [expr {$from eq $to ? "$from [EcoName $from $variant]" : "$from-$to"}]
+
+	if {![string length $player]} {
+		lassign [::scidb::db::openingScore $base $variant $from $to] games w d b
+		if {!$games} { return "no games with $label" }
+		return "$label: $games games -- [Results $w $d $b]"
+	}
+
+	lassign [ResolvePlayer $base $variant $player] index name
+	lassign [::scidb::db::openingScore $base $variant $from $to $index] games white black
+	if {!$games} { return "$name has no games with $label" }
+	set lines [list "$name with $label: $games games"]
+	foreach side {White Black} wdl [list $white $black] {
+		lassign $wdl win draw loss
+		set n [expr {$win + $draw + $loss}]
+		if {!$n} { continue }
+		lappend lines [format "with %s: %d wins, %d draws, %d losses, score %.1f%%" \
+			$side $win $draw $loss [expr {100.0*($win + 0.5*$draw)/$n}]]
+	}
+	return [join $lines \n]
+}
+
+
+# Returns {index name} of the player meant by <text>: an exact (case-insensitive)
+# name, or the only one containing it. Otherwise the candidates are raised, so
+# the model can ask again with an exact name.
+proc ::application::assistant::ResolvePlayer {base variant text} {
+	set found [::scidb::db::findPlayers $base $variant $text 11]
+	foreach row $found {
+		if {[string equal -nocase [lindex $row 1] $text]} { return [lrange $row 0 1] }
+	}
+	if {[llength $found] == 1} { return [lrange [lindex $found 0] 0 1] }
+	if {![llength $found]} { error "no player matching '$text' in [::util::databaseName $base no]" }
+	set names {}
+	foreach row [lrange $found 0 9] {
+		lassign $row _ name games
+		lappend names "$name ($games games)"
+	}
+	if {[llength $found] > 10} { lappend names "..." }
+	error "several players match '$text', call again with one exact name: [join $names {; }]"
+}
+
+
+proc ::application::assistant::EcoName {eco variant} {
+	set parts [lassign [::scidb::misc::lookup opening $eco $variant] long short]
+	set name [::mc::translateEco [expr {[string length $short] ? $short : $long}]]
+	foreach part $parts {
+		if {[string length $part]} { append name ", " [::mc::translateEco $part] }
+	}
+	return $name
+}
+
+
+proc ::application::assistant::Results {white draws black} {
+	set n [expr {$white + $draws + $black}]
+	if {!$n} { return "no results" }
+	return [format "white wins %d, draws %d, black wins %d (white scores %.1f%%)" \
+		$white $draws $black [expr {100.0*($white + 0.5*$draws)/$n}]]
+}
+
+
+# SAN with piece letters: the model reads "Nf3" better than the figurine "♘f3".
+proc ::application::assistant::Figurines {moves} {
+	return [string map {\u2654 K \u2655 Q \u2656 R \u2657 B \u2658 N \u265a K \u265b Q \u265c R \u265d B \u265e N} $moves]
 }
 
 
@@ -565,6 +783,20 @@ proc ::application::assistant::DoRecentErrors {count} {
 		lappend out "\[$time\] $message\n$stack"
 	}
 	return [join $out "\n\n"]
+}
+
+
+proc ::application::assistant::DoToolLog {count} {
+	variable ToolLog
+
+	if {![llength $ToolLog]} { return "no tool calls in this session" }
+	set out {}
+	foreach entry [lrange $ToolLog end-[expr {$count - 1}] end] {
+		lassign $entry time name cargs asked outcome reply
+		set confirmed [expr {$asked ? ", asked the user" : ""}]
+		lappend out "\[$time\] $name [list $cargs]$confirmed: $outcome -- $reply"
+	}
+	return [join $out \n]
 }
 
 

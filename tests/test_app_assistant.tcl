@@ -219,6 +219,119 @@ tcltest::test assistant-long-replies-truncated {a huge tool reply is cut} -body 
 	list [expr {[string length $reply] < 7000}] [string match "*(truncated)" $reply]
 } -result {1 1}
 
+# --- read-only queries over a small database ----------------------------
+
+proc ::scidb::test::assistant::openFixture {} {
+	variable Fixture
+	set dir [file join [file dirname [file normalize [info script]]] tmp-app]
+	file mkdir $dir
+	set Fixture [file join $dir assistant_[pid].pgn]
+	set fh [open $Fixture w]
+	fconfigure $fh -encoding utf-8
+	foreach {round white black result eco moves} {
+		1 {Carlsen, Magnus} {Anand, Viswanathan} 1-0 B90 {1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6}
+		2 {Anand, Viswanathan} {Carlsen, Magnus} 1/2-1/2 B92 {1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 6. Be2}
+		3 {Carlsen, Henrik} {Carlsen, Magnus} 0-1 C60 {1. e4 e5 2. Nf3 Nc6 3. Bb5}
+	} {
+		puts $fh "\[Event \"Assistant\"\]\n\[Site \"X\"\]\n\[Date \"202$round.01.01\"\]\n\[Round \"$round\"\]"
+		puts $fh "\[White \"$white\"\]\n\[Black \"$black\"\]\n\[Result \"$result\"\]\n\[ECO \"$eco\"\]\n"
+		puts $fh "$moves $result\n"
+	}
+	close $fh
+	::scidb::db::open $Fixture ::scidb::test::assistant::nop {} ::scidb::test::assistant::nop {}
+	# the queries read this base; switching the app to it would drag the GUI along
+	rename ::application::assistant::ActiveBase ::scidb::test::assistant::realActiveBase
+	proc ::application::assistant::ActiveBase {} { list $::scidb::test::assistant::Fixture Normal }
+}
+
+proc ::scidb::test::assistant::closeFixture {} {
+	variable Fixture
+	rename ::application::assistant::ActiveBase {}
+	rename ::scidb::test::assistant::realActiveBase ::application::assistant::ActiveBase
+	catch { ::scidb::db::close $Fixture }
+	file delete $Fixture
+}
+
+proc ::scidb::test::assistant::nop {args} {}
+
+::scidb::test::assistant::openFixture
+
+tcltest::test assistant-player-stats {player_stats finds a player by part of the name} -body {
+	::scidb::test::assistant::setup 0
+	set reply [::application::assistant::runTool player_stats {name {carlsen, m}}]
+	list [string match "Carlsen, Magnus: 3 games, 2021.01.01 to 2023.01.01*" $reply] \
+		[string match "*White: 1 wins, 0 draws, 0 losses, score 100.0%*" $reply] \
+		[string match "*Black: 1 wins, 1 draws, 0 losses, score 75.0%*" $reply] \
+		[string match "*B92 Sicilian*1.e4 c5 2.Nf3*" $reply] \
+		$::scidb::test::assistant::Asked
+} -result {1 1 1 1 {}}
+
+tcltest::test assistant-player-ambiguous {an ambiguous name lists the candidates, most games first} -body {
+	list [::application::assistant::runTool player_stats {name carlsen}] \
+		[::application::assistant::runTool player_stats {name kasparov}]
+} -match glob -result {{error: several players match 'carlsen', call again with one exact name: Carlsen, Magnus (3 games); Carlsen, Henrik (1 games)} {error: no player matching 'kasparov' in *}}
+
+tcltest::test assistant-opening-score {opening_score reports results by ECO code or range} -body {
+	list [::application::assistant::runTool opening_score {eco b9}] \
+		[::application::assistant::runTool opening_score {eco B90}] \
+		[::application::assistant::runTool opening_score {eco A00-A99}] \
+		[::application::assistant::runTool opening_score {eco Najdorf}]
+} -result {{B90-B99: 2 games -- white wins 1, draws 1, black wins 0 (white scores 75.0%)} {B90 Sicilian Defence, Najdorf Variation: 1 games -- white wins 1, draws 0, black wins 0 (white scores 100.0%)} {no games with A00-A99} {error: eco must be like 'B90', 'B9', 'B' or 'B90-B99'}}
+
+tcltest::test assistant-opening-score-player {opening_score with a player scores from that side} -body {
+	::application::assistant::runTool opening_score {eco B player {Carlsen, Magnus}}
+} -result "Carlsen, Magnus with B00-B99: 2 games\nwith White: 1 wins, 0 draws, 0 losses, score 100.0%\nwith Black: 0 wins, 1 draws, 0 losses, score 50.0%"
+
+tcltest::test assistant-database-summary {database_summary counts games and ranks the openings} -body {
+	set reply [::application::assistant::runTool database_summary {}]
+	list [string match "*games: 3, players: 3*" $reply] \
+		[string match "*games with an ECO code: 3 -- white wins 1, draws 1, black wins 1*" $reply] \
+		[string match "*most played openings:\n  B9* games*" $reply] \
+		[string match "*C60 Spanish Opening (Ruy L\u00f3pez): 1 games*" $reply]
+} -result {1 1 1 1}
+
+tcltest::test assistant-player-question-loop {the model resolves an ambiguous player in a second call} -body {
+	::application::assistant::clear
+	set text [::scidb::test::assistant::run "how does Carlsen do?" [list \
+		[::scidb::test::assistant::call player_stats {name carlsen}] \
+		[::scidb::test::assistant::call player_stats {name {Carlsen, Magnus}}] \
+		[dict create role assistant content "Magnus Carlsen scored 83.3% in 3 games."]]]
+	list [string match "*several players match*" $text] \
+		[string match "*total: 2 wins, 1 draws, 0 losses, score 83.3%*" $text] \
+		[string match "*scored 83.3% in 3 games.*" $text]
+} -result {1 1 1}
+
+::scidb::test::assistant::closeFixture
+
+tcltest::test assistant-current-game {current_game gives the board game as PGN with the position} -body {
+	set reply [::application::assistant::runTool current_game {}]
+	list [string match {*\[Event *} $reply] [string match "*current position: * w *" $reply]
+} -result {1 1}
+
+tcltest::test assistant-tool-log {every tool call is logged with its outcome} -body {
+	set saved $::application::assistant::ToolLog
+	set ::application::assistant::ToolLog {}
+	::scidb::test::assistant::setup 0
+	::application::assistant::runTool run_shell {command ls}
+	::application::assistant::runTool switch_tab {tab settings}
+	::scidb::test::assistant::stubbed ::menu::gameNew {
+		::application::assistant::runTool new_game {}
+	}
+	::application::assistant::runTool list_open_databases {}
+	set reply [::application::assistant::runTool tool_log {count 4}]
+	set ::application::assistant::ToolLog $saved
+	lmap line [split $reply \n] { regsub {^\[[0-9:]+\] } $line "" }
+} -match glob -result {{run_shell {command ls}: error -- error: unknown tool 'run_shell'} {switch_tab {tab settings}: error -- error: tab must be*} {new_game {}, asked the user: declined -- The user declined*} {list_open_databases {}: ok -- *(active)*}}
+
+tcltest::test assistant-tool-log-bounded {the log keeps only the latest calls} -body {
+	set saved $::application::assistant::ToolLog
+	set ::application::assistant::ToolLog {}
+	for {set i 0} {$i < 60} {incr i} { ::application::assistant::runTool list_open_databases {} }
+	set n [llength $::application::assistant::ToolLog]
+	set ::application::assistant::ToolLog $saved
+	set n
+} -result 50
+
 set ::application::assistant::Priv(confirm) ::application::assistant::ConfirmDialog
 
 # ----------------------------------------------------------------------
