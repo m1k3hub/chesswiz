@@ -260,6 +260,50 @@ private:
 	variant::Type m_variant;
 };
 
+/// ECO codes from..to, by their basic three-character code.
+class SearchEcoRange : public Search
+{
+public:
+
+	SearchEcoRange(uint16_t from, uint16_t to, variant::Type variant);
+
+	bool match(GameInfo const& info) const override;
+
+private:
+
+	uint16_t m_from;
+	uint16_t m_to;
+	variant::Type m_variant;
+};
+
+/// Dates as keys year*10000 + month*100 + day; a game without a year never matches.
+class SearchDate : public Search
+{
+public:
+
+	SearchDate(unsigned from, unsigned to);
+
+	bool match(GameInfo const& info) const override;
+
+private:
+
+	unsigned m_from;
+	unsigned m_to;
+};
+
+class SearchResult : public Search
+{
+public:
+
+	SearchResult(result::ID result);
+
+	bool match(GameInfo const& info) const override;
+
+private:
+
+	result::ID m_result;
+};
+
 class SearchMaterial : public Search
 {
 public:

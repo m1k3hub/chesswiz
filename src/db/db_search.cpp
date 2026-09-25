@@ -110,6 +110,14 @@ SearchEco::SearchEco(mstl::string const& eco, variant::Type variant)
 	,m_variant(variant)
 {
 }
+SearchEcoRange::SearchEcoRange(uint16_t from, uint16_t to, variant::Type variant)
+	:m_from(from)
+	,m_to(to)
+	,m_variant(variant)
+{
+}
+SearchDate::SearchDate(unsigned from, unsigned to) :m_from(from) ,m_to(to) {}
+SearchResult::SearchResult(result::ID result) :m_result(result) {}
 SearchMaterial::SearchMaterial(material::si3::Signature signature) :m_signature(signature) {}
 SearchMaterialClass::SearchMaterialClass(material::si3::Signature signature)
 	:m_whiteMajor(signature.wq + signature.wr)
@@ -313,6 +321,34 @@ bool
 SearchEco::match(GameInfo const& info) const
 {
 	return ::strcasecmp(info.eco(m_variant).asShortString(), m_eco) == 0;
+}
+
+
+bool
+SearchEcoRange::match(GameInfo const& info) const
+{
+	uint16_t eco = info.eco(m_variant).toShort();
+	return eco != 0 && m_from <= eco && eco <= m_to;
+}
+
+
+bool
+SearchDate::match(GameInfo const& info) const
+{
+	Date const& date = info.date();
+
+	if (date.year() == 0)
+		return false;
+
+	unsigned key = 10000*date.year() + 100*date.month() + date.day();
+	return m_from <= key && key <= m_to;
+}
+
+
+bool
+SearchResult::match(GameInfo const& info) const
+{
+	return info.result() == m_result;
 }
 
 

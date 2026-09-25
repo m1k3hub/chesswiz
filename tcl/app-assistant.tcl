@@ -147,6 +147,30 @@ variable Actions {
 		{{"type":"object","properties":{"name":{"type":"string","description":"the opponent's name or part of it"},"color":{"type":"string","enum":["white","black"],"description":"the colour the opponent will play"}},"required":["name"]}}
 		::application::assistant::DoPrepareAgainst
 	}
+	repertoire_check {
+		0 0 "check the repertoire %s %s %s"
+		"Check an opening repertoire (an open database of type Openings, Openings White or Openings Black) against practice, by ECO code: its lines that score below average, openings often reached but not covered, and repertoire lines never reached. Practice is the given player's own games in the active database, else all games there. 'color' is the repertoire's side, needed only for a repertoire of both colours."
+		{{"type":"object","properties":{"repertoire":{"type":"string","description":"name or part of the name of the repertoire database; needed only when several are open"},"player":{"type":"string","description":"whose games to check against, e.g. the user's own name"},"color":{"type":"string","enum":["white","black"]}}}}
+		::application::assistant::DoRepertoireCheck
+	}
+	search_games {
+		0 0 "search the games"
+		"Search the active database; nothing changes, the game list included. Returns the number of games found, the first of them, and the criteria as understood. Names may be partial. 'result' is win/draw/loss from the player's side, or 1-0/0-1/1/2-1/2 without a player. 'eco' is a code, class or range as for opening_score (map opening names to ECO yourself). Dates are YYYY, YYYY.MM or YYYY.MM.DD. To show the games in the game list, call show_search afterwards."
+		{{"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"}}}}
+		::application::assistant::DoSearchGames
+	}
+	show_search {
+		1 0 "show the games of the last search in the game list"
+		"Filter the game list of the active database to the games of the last search_games, and switch to the database tab."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoShowSearch
+	}
+	clear_search {
+		1 0 "show all games in the game list again"
+		"Remove the filter from the game list of the active database."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoClearSearch
+	}
 	app_state {
 		0 0 "report the application state"
 		"Report the application state for diagnosis: Tcl/Tk and model versions, the selected tab, the active database and variant, game counts, the current game and position, and the panes of the board layout."
@@ -609,6 +633,48 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			::application::triage::issueFile $issue
 			return [dict create issue $issue]
 		}
+		search_games {
+			set c {}
+			foreach key {player color result opponent eco from to event min_elo} {
+				dict set c $key [expr {[dict exists $cargs $key] ? [string trim [dict get $cargs $key]] : ""}]
+			}
+			dict with c {
+				set color [string tolower $color]
+				if {$color eq ""} { set color any }
+				if {$color ni {white black any}} { error "color must be white, black or any" }
+				if {$result ni {"" win draw loss 1-0 0-1 1/2-1/2}} {
+					error "result must be win, draw, loss, 1-0, 0-1 or 1/2-1/2"
+				}
+				if {$player eq "" && ($color ne "any" || $result in {win draw loss} || $opponent ne "")} {
+					error "color, opponent and a win/draw/loss result need a player"
+				}
+				if {$player ne "" && $result in {1-0 0-1 1/2-1/2}} {
+					error "with a player, give the result as win, draw or loss"
+				}
+				if {$eco ne ""} { set eco [EcoRange $eco] }
+				foreach bound {from to} {
+					if {[set $bound] ne "" && ![regexp {^\d{4}(\.\d\d?(\.\d\d?)?)?$} [set $bound]]} {
+						error "$bound must be YYYY, YYYY.MM or YYYY.MM.DD"
+					}
+				}
+				if {$min_elo ne "" && (![string is integer -strict $min_elo] || $min_elo < 0 || $min_elo > 4000)} {
+					error "min_elo must be a number up to 4000"
+				}
+			}
+			if {![llength [lmap v [dict values $c] { if {$v in {"" any}} continue; set v }]]} {
+				error "give at least one criterion"
+			}
+			return [dict create criteria $c]
+		}
+		repertoire_check {
+			set result {}
+			foreach key {repertoire player color} {
+				dict set result $key [expr {[dict exists $cargs $key] ? [string trim [dict get $cargs $key]] : ""}]
+			}
+			dict set result color [string tolower [dict get $result color]]
+			if {[dict get $result color] ni {"" white black}} { error "color must be 'white' or 'black'" }
+			return $result
+		}
 		prepare_against {
 			set name [string trim [Arg $cargs name]]
 			if {![string length $name]} { error "name must not be empty" }
@@ -1053,6 +1119,269 @@ proc ::application::assistant::CompareScore {a b} {
 	set sa [Score {*}[lrange $a 2 4]]
 	set sb [Score {*}[lrange $b 2 4]]
 	return [expr {$sa < $sb ? -1 : $sa > $sb}]
+}
+
+
+# --- search -----------------------------------------------------------
+#
+# The model fills in fixed fields; BuildQuery turns them into Scidb's search
+# language (tcl_search.cpp), so no query text of the model's reaches it.
+
+namespace eval ::application::assistant {
+	variable SearchGames 10
+	variable LastSearch {}
+}
+
+proc ::application::assistant::DoSearchGames {criteria} {
+	variable SearchGames
+	variable LastSearch
+
+	lassign [ActiveBase] base variant
+	lassign [BuildQuery $base $variant $criteria] query summary
+	set view [::scidb::view::new $base $variant unused unused unused unused master slave]
+	set rc [catch {
+		::scidb::view::search $base $variant $view null none $query
+		set count [::scidb::view::count games $base $variant $view]
+		set games {}
+		for {set row 0} {$row < min($count, $SearchGames)} {incr row} {
+			lappend games [GameLine [::scidb::db::get gameNumber $base $variant $row $view] $base $variant]
+		}
+	} err opts]
+	catch { ::scidb::view::close $base $variant $view }
+	if {$rc} { return -options $opts $err }
+
+	set LastSearch [list $base $variant $query $summary]
+	set lines [list "searched [::util::databaseName $base no] for: $summary" "$count games found"]
+	if {$count} {
+		lappend lines "first [llength $games]:"
+		foreach game $games { lappend lines "  $game" }
+	}
+	return [join $lines \n]
+}
+
+
+proc ::application::assistant::DoShowSearch {} {
+	variable LastSearch
+
+	if {![llength $LastSearch]} { return "error: there is no search to show; call search_games first" }
+	lassign $LastSearch base variant query summary
+	if {$base ne [lindex [ActiveBase] 0]} {
+		return "error: the last search was in [::util::databaseName $base no], which is no longer the active database"
+	}
+	::scidb::view::search $base $variant 0 null none $query
+	::application::switchTab database
+	return "the game list shows the [::scidb::view::count games $base $variant 0] games of: $summary"
+}
+
+
+proc ::application::assistant::DoClearSearch {} {
+	lassign [ActiveBase] base variant
+	::scidb::view::search $base $variant 0 reset none
+	return "the game list shows all [::scidb::view::count games $base $variant 0] games again"
+}
+
+
+# {query summary} for checked criteria.
+proc ::application::assistant::BuildQuery {base variant criteria} {
+	dict with criteria {}
+	set common {}
+	set summary {}
+
+	if {$player ne ""} {
+		lassign [ResolvePlayer $base $variant $player] _ player
+		set other ""
+		if {$opponent ne ""} { lassign [ResolvePlayer $base $variant $opponent] _ other }
+		set sides {}
+		foreach side {white black} {
+			if {$color ne "any" && $color ne $side} { continue }
+			set otherSide [expr {$side eq "white" ? "black" : "white"}]
+			# resolved names are exact; a plain pattern (no wildcards) matches exactly
+			set terms [list [list playername $side [GlobQuote $player]]]
+			if {$other ne ""} { lappend terms [list playername $otherSide [GlobQuote $other]] }
+			set won [expr {$side eq "white" ? "1-0" : "0-1"}]
+			set lost [expr {$side eq "white" ? "0-1" : "1-0"}]
+			switch -- $result {
+				win  { lappend terms [list result $won] }
+				loss { lappend terms [list result $lost] }
+				draw { lappend terms [list result 1/2-1/2] }
+			}
+			lappend sides [Combine AND $terms]
+		}
+		lappend common [Combine OR $sides]
+		set text "games of $player"
+		if {$color ne "any"} { append text " with $color" }
+		if {$other ne ""} { append text " against $other" }
+		if {$result ne ""} { append text ", [dict get {win won draw drawn loss lost} $result]" }
+		lappend summary $text
+	} elseif {$result ne ""} {
+		lappend common [list result $result]
+		lappend summary "result $result"
+	}
+	if {$eco ne ""} {
+		lassign $eco ecoFrom ecoTo
+		lappend common [list ecorange $ecoFrom $ecoTo]
+		lappend summary [expr {$ecoFrom eq $ecoTo ? "ECO $ecoFrom" : "ECO $ecoFrom-$ecoTo"}]
+	}
+	if {$from ne "" || $to ne ""} {
+		lappend common [list date [expr {$from ne "" ? $from : 1}] [expr {$to ne "" ? $to : 9999}]]
+		if {$from eq ""} {
+			lappend summary "until $to"
+		} elseif {$to eq ""} {
+			lappend summary "from $from"
+		} else {
+			lappend summary "from $from to $to"
+		}
+	}
+	if {$event ne ""} {
+		lappend common [list eventname "*$event*"]
+		lappend summary "event matching '$event'"
+	}
+	if {$min_elo ne ""} {
+		lappend common [list rating Elo average $min_elo-4000]
+		lappend summary "average Elo at least $min_elo"
+	}
+	return [list [Combine AND $common] [join $summary {; }]]
+}
+
+
+proc ::application::assistant::GlobQuote {text} {
+	return [string map {* \\* ? \\? [ \\[ ] \\]} $text]
+}
+
+
+# One term stays itself; AND/OR need two or more.
+proc ::application::assistant::Combine {op terms} {
+	if {[llength $terms] == 1} { return [lindex $terms 0] }
+	return [list $op {*}$terms]
+}
+
+
+proc ::application::assistant::GameLine {index base variant} {
+	foreach pair [::scidb::db::get tags $index $base $variant] { dict set tags {*}$pair }
+	foreach tag {Date White Black Result ECO Event} {
+		set $tag [expr {[dict exists $tags $tag] ? [dict get $tags $tag] : "?"}]
+	}
+	return "$Date $White - $Black $Result $ECO, $Event"
+}
+
+
+# --- repertoire check, by ECO code --------------------------------------
+
+namespace eval ::application::assistant {
+	variable RepLines 8
+}
+
+proc ::application::assistant::DoRepertoireCheck {repertoire player color} {
+	variable PrepWeakGames
+	variable RepLines
+
+	lassign [ActiveBase] base variant
+	if {$variant ne "Normal"} { return "the repertoire check needs standard chess, the active variant is $variant" }
+	set rep [FindRepertoire $repertoire]
+	set type [::scidb::db::get type $rep]
+	set side [dict get {OpeningsWhite white OpeningsBlack black Openings ""} $type]
+	if {[string length $color]} { set side $color }
+	if {![string length $side]} {
+		error "[::util::databaseName $rep no] holds both colours: say which side to check (color)"
+	}
+
+	# the repertoire's lines by ECO code
+	array set lines {}
+	foreach row [::scidb::db::ecoStats $rep $variant] {
+		lassign $row eco n
+		if {$eco ne "?"} { set lines([string range $eco 0 2]) $n }
+	}
+	if {![array size lines]} { return "[::util::databaseName $rep no] has no games with an ECO code" }
+
+	# practice, from the repertoire's side: {eco games win draw loss}
+	if {[string length $player]} {
+		lassign [ResolvePlayer $base $variant $player] index who
+		lassign [::scidb::db::playerOpenings $base $variant $index] asWhite asBlack
+		set rows [expr {$side eq "white" ? $asWhite : $asBlack}]
+		set source "$who's games as [string totitle $side]"
+	} else {
+		if {$base eq $rep} { error "the repertoire is the active database: open the games to check it against, or name a player" }
+		set rows {}
+		foreach row [::scidb::db::ecoStats $base $variant] {
+			lassign $row eco n w d b
+			if {$eco eq "?"} { continue }
+			lappend rows [expr {$side eq "white" ? [list $eco $n $w $d $b] : [list $eco $n $b $d $w]}]
+		}
+		set rows [lsort -integer -decreasing -index 1 $rows]
+		set source "all games, from [string totitle $side]'s side"
+	}
+
+	lassign {0 0 0 0} n w d l
+	foreach row $rows {
+		lassign $row _ g win draw loss
+		incr n $g; incr w $win; incr d $draw; incr l $loss
+	}
+	set out [list "Repertoire [::util::databaseName $rep no] ([string totitle $side]): [array size lines] ECO codes"]
+	lappend out "Checked against $source in [::util::databaseName $base no]: $n games, [Wdl $w $d $l]"
+	if {!$n} { return [join $out \n] }
+	set average [Score $w $d $l]
+
+	set weak {}
+	set gaps {}
+	set reached {}
+	foreach row $rows {
+		lassign $row eco g win draw loss
+		if {[info exists lines($eco)]} {
+			lappend reached $eco
+			if {$g >= $PrepWeakGames && [Score $win $draw $loss] < $average} { lappend weak $row }
+		} elseif {$g >= $PrepWeakGames} {
+			lappend gaps $row
+		}
+	}
+	set weak [lsort -command [namespace code CompareScore] $weak]
+
+	lappend out "" "Covered, but scoring below the average of [format %.1f $average]%:"
+	if {[llength $weak]} {
+		foreach row [lrange $weak 0 [expr {$RepLines - 1}]] { lappend out "  [OpeningLine $row $variant]" }
+	} else {
+		lappend out "  none (with at least $PrepWeakGames games)"
+	}
+	lappend out "" "Not covered, but reached in at least $PrepWeakGames games:"
+	if {[llength $gaps]} {
+		foreach row [lrange $gaps 0 [expr {$RepLines - 1}]] { lappend out "  [OpeningLine $row $variant]" }
+		if {[llength $gaps] > $RepLines} { lappend out "  ... [expr {[llength $gaps] - $RepLines}] more" }
+	} else {
+		lappend out "  none"
+	}
+	set unused [lsort [lmap eco [array names lines] { if {$eco in $reached} continue; set eco }]]
+	lappend out "" "In the repertoire, never reached:"
+	if {[llength $unused]} {
+		foreach eco [lrange $unused 0 [expr {2*$RepLines - 1}]] { lappend out "  $eco [EcoName $eco $variant]" }
+		if {[llength $unused] > 2*$RepLines} { lappend out "  ... [expr {[llength $unused] - 2*$RepLines}] more" }
+	} else {
+		lappend out "  none"
+	}
+	lappend out "" "(ECO codes only: one code spans many lines, so this finds regions to look at, not moves.)"
+	return [join $out \n]
+}
+
+
+# The open repertoire database meant by <text>, or the only one.
+proc ::application::assistant::FindRepertoire {text} {
+	set bases {}
+	foreach base [::scidb::tree::list] {
+		if {[catch { ::scidb::db::get type $base } type]} { continue }
+		if {$type in {Openings OpeningsWhite OpeningsBlack}} { lappend bases $base }
+	}
+	if {![llength $bases]} {
+		error "no repertoire is open: open a database of type Openings, Openings White or Openings Black"
+	}
+	if {[string length $text]} {
+		set bases [lmap b $bases {
+			if {[string first [string tolower $text] [string tolower [::util::databaseName $b no]]] < 0} continue
+			set b
+		}]
+		if {![llength $bases]} { error "no open repertoire matches '$text'" }
+	}
+	if {[llength $bases] > 1} {
+		error "several repertoires are open, say which: [join [lmap b $bases { ::util::databaseName $b no }] {, }]"
+	}
+	return [lindex $bases 0]
 }
 
 

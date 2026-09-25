@@ -102,6 +102,19 @@ request loop (`Later` / `Resolve`). Learned on the way:
 
 *"Carlsen's wins with the Najdorf as Black since 2018."*
 
+**Status: built** as `search_games`, `show_search` (confirmed) and
+`clear_search` (confirmed), with new search terms `ecorange`, `date` and
+`result`. "Won with any colour" needed no C++ `playerresult`: it is an `OR`
+of two `AND`s of `playername` and `result`. Learned on the way:
+
+- `::scidb::db::get gameIndex` maps a game number to its view row, not the
+  reverse; a view row maps to its game with
+  `::scidb::db::get gameNumber <base> <variant> <row> <view>`.
+- The `=` exact player-name mode never matches a name with a space: it
+  compares against `util::Pattern::content()`, which `normalize` has
+  rewritten. Resolved names are therefore passed as plain patterns, which
+  match exactly anyway.
+
 ### What exists
 
 - `::scidb::view::search <db> ?<variant>? <view> <null|and|or|not|reset|remove> <none|...> ?<query>?`
@@ -244,6 +257,7 @@ prepared?"*
 ### Design, in two phases
 
 **Phase 1: ECO level (cheap, synchronous, no board involvement).**
+*Status: built* as `repertoire_check {repertoire?, player?, color?}`.
 - Tool `repertoire_check {repertoire?, reference?}`: compare
   `ecoStats(repertoire)` with the user's results in a reference base.
   - The reference is the user's own games, via `playerOpenings` from
@@ -305,11 +319,17 @@ prepared?"*
   code saves right after copying; any path that copies without saving and
   then uses the base as tree base would hit this.
 
+- `SearchPlayerName` in exact mode (`=` prefix, `db_search.cpp:273`)
+  compares the game's name with `m_name.content()`, the pattern after
+  `Pattern::normalize` rewrote its spaces, so `=Carlsen, Magnus` matches
+  nothing. The advanced search dialog passes typed text through, so a user
+  typing `=` hits it. Fix: keep the raw name for the exact comparison.
+
 ## Suggested order
 
 1. ~~#2 move statistics~~ (built).
-2. **#5 phase 1**: small, and reuses `prepare_against`.
-3. **#3 search**: the new C++ search terms are the bulk of it.
+2. ~~#5 phase 1~~ (built).
+3. ~~#3 search~~ (built).
 4. **#4 review**: the largest in UX work, and needs Stockfish on PATH.
 5. **#5 phase 2**, with `positionStats` (which can also replace the
    asynchronous tree wait in #2).

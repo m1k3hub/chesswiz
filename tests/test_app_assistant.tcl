@@ -480,6 +480,122 @@ tcltest::test assistant-position-moves-refused {position_moves refuses a second 
 	list $busy [::application::assistant::runTool position_moves {limit 0}]
 } -result {{error: a position search is already running} {error: limit must be a positive integer}}
 
+
+# A White repertoire of two lines: the Najdorf (B90) and the Ruy Lopez (C60).
+proc ::scidb::test::assistant::makeRepertoire {} {
+	variable Fixture
+	set dir [file dirname $Fixture]
+	set pgn [file join $dir repertoire_[pid].pgn]
+	set sci [file join $dir repertoire_[pid].sci]
+	file delete {*}[glob -nocomplain [file rootname $sci].*]
+	set fh [open $pgn w]
+	foreach {eco moves} {
+		B90 {1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6}
+		C60 {1. e4 e5 2. Nf3 Nc6 3. Bb5}
+	} {
+		puts $fh "\[Event \"Repertoire\"\]\n\[White \"?\"\]\n\[Black \"?\"\]\n\[Result \"*\"\]\n\[ECO \"$eco\"\]\n\n$moves *\n"
+	}
+	close $fh
+	::scidb::db::open $pgn ::scidb::test::assistant::nop {} ::scidb::test::assistant::nop {}
+	::scidb::db::new $sci Normal [::application::database::lookupType OpeningsWhite]
+	::scidb::db::attach $sci $sci
+	::scidb::db::copy $pgn $sci {} ::scidb::test::assistant::nop {} ::scidb::test::assistant::nop {}
+	::scidb::db::save $sci ::scidb::test::assistant::nop {}
+	::scidb::db::close $pgn
+	file delete $pgn
+	return $sci
+}
+
+tcltest::test assistant-repertoire-check {repertoire_check finds weak lines, gaps and unused lines by ECO code} -setup {
+	set saved $::application::assistant::PrepWeakGames
+	set ::application::assistant::PrepWeakGames 1
+	set sci [::scidb::test::assistant::makeRepertoire]
+} -body {
+	set all [::application::assistant::runTool repertoire_check {}]
+	set own [::application::assistant::runTool repertoire_check {player {Carlsen, Magnus}}]
+	list [string match "Repertoire repertoire_* (White): 2 ECO codes
+Checked against all games, from White's side in assistant_*: 3 games, +1 =1 -1, score 50.0%
+
+Covered, but scoring below the average of 50.0%:
+  C60 Spanish Opening (Ruy López): 1 games, +0 =0 -1, score 0.0%
+
+Not covered, but reached in at least 1 games:
+  B92 Sicilian Defence, Najdorf Variation, Opocensky Variation: 1 games, +0 =1 -0, score 50.0%
+
+In the repertoire, never reached:
+  none
+
+(ECO codes only:*" $all] \
+		[string match "*Checked against Carlsen, Magnus's games as White in *: 1 games, +1 =0 -0, score 100.0%*below the average*\n  none*Not covered*\n  none*never reached:\n  C60 Spanish Opening*" $own] \
+		[::application::assistant::runTool repertoire_check {color red}] \
+		[::application::assistant::runTool repertoire_check {repertoire nosuch}]
+} -cleanup {
+	set ::application::assistant::PrepWeakGames $saved
+	catch { ::scidb::db::close $sci }
+	file delete {*}[glob -nocomplain [file rootname $sci].*]
+} -result {1 1 {error: color must be 'white' or 'black'} {error: no open repertoire matches 'nosuch'}}
+
+tcltest::test assistant-repertoire-none {without an open repertoire the tool says how to get one} -body {
+	::application::assistant::runTool repertoire_check {}
+} -result {error: no repertoire is open: open a database of type Openings, Openings White or Openings Black}
+
+
+proc ::scidb::test::assistant::search {criteria} {
+	set reply [::application::assistant::runTool search_games $criteria]
+	set lines [split $reply \n]
+	return [list [lindex $lines 1] [lmap line [lrange $lines 3 end] { string trim $line }]]
+}
+
+tcltest::test assistant-search-games {search_games combines player, colour, result, ECO and dates} -body {
+	list [::scidb::test::assistant::search {player {carlsen, m} result win}] \
+		[::scidb::test::assistant::search {player {Carlsen, Magnus} color black result draw}] \
+		[::scidb::test::assistant::search {player {Carlsen, Magnus} opponent anand}] \
+		[::scidb::test::assistant::search {eco B9 from 2022}] \
+		[lindex [split [::application::assistant::runTool search_games {eco B9 from 2022 to 2023.06}] \n] 0] \
+		[::scidb::test::assistant::search {result 1-0}] \
+		[::scidb::test::assistant::search {to 2021.06}] \
+		[lindex [split [::application::assistant::runTool search_games {player {carlsen, m} color white result loss}] \n] 0]
+} -match glob -result {{{2 games found} {{2021.01.01 Carlsen, Magnus - Anand, Viswanathan 1-0 B90, Assistant} {2023.01.01 Carlsen, Henrik - Carlsen, Magnus 0-1 C60, Assistant}}} {{1 games found} {{2022.01.01 Anand, Viswanathan - Carlsen, Magnus 1/2-1/2 B92, Assistant}}} {{2 games found} *} {{1 games found} {{2022.01.01 Anand*B92*}}} {searched * for: ECO B90-B99; from 2022 to 2023.06} {{1 games found} {{2021.01.01 Carlsen, Magnus*}}} {{1 games found} {{2021.01.01*}}} {searched * for: games of Carlsen, Magnus with white, lost}}
+
+tcltest::test assistant-search-refused {search_games checks its criteria} -body {
+	list [::application::assistant::runTool search_games {}] \
+		[::application::assistant::runTool search_games {color white}] \
+		[::application::assistant::runTool search_games {player carlsen result 1-0}] \
+		[::application::assistant::runTool search_games {from {last year}}] \
+		[::application::assistant::runTool search_games {min_elo 9000}]
+} -result {{error: give at least one criterion} {error: color, opponent and a win/draw/loss result need a player} {error: with a player, give the result as win, draw or loss} {error: from must be YYYY, YYYY.MM or YYYY.MM.DD} {error: min_elo must be a number up to 4000}}
+
+tcltest::test assistant-search-terms {the new search terms reject bad arguments} -body {
+	set base $::scidb::test::assistant::Fixture
+	set view [::scidb::view::new $base Normal unused unused unused unused master slave]
+	set result {}
+	foreach query {{ecorange B99 B90} {date 2020 x} {result 2-0} {date 2021 2022} {ecorange C00 C99}} {
+		if {[catch { ::scidb::view::search $base Normal $view null none $query } err]} {
+			lappend result error
+		} else {
+			lappend result [::scidb::view::count games $base Normal $view]
+		}
+	}
+	::scidb::view::close $base Normal $view
+	set result
+} -result {error error error 2 1}
+
+tcltest::test assistant-show-search {show_search filters the game list only once the user allows it} -body {
+	::scidb::test::assistant::setup 0
+	set base $::scidb::test::assistant::Fixture
+	::application::assistant::runTool search_games {player {Carlsen, Magnus} result win}
+	set denied [::application::assistant::runTool show_search {}]
+	set before [::scidb::view::count games $base Normal 0]
+	::scidb::test::assistant::setup 1
+	set calls [::scidb::test::assistant::stubbed ::application::switchTab {
+		set shown [::application::assistant::runTool show_search {}]
+	}]
+	set filtered [::scidb::view::count games $base Normal 0]
+	set cleared [::application::assistant::runTool clear_search {}]
+	list [string match "*NOT performed*" $denied] $before $shown $calls $filtered $cleared \
+		[::scidb::view::count games $base Normal 0]
+} -result {1 3 {the game list shows the 2 games of: games of Carlsen, Magnus, won} database 2 {the game list shows all 3 games again} 3}
+
 ::scidb::test::assistant::closeFixture
 
 tcltest::test assistant-current-game {current_game gives the board game as PGN with the position} -body {

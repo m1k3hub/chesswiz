@@ -93,6 +93,46 @@ parseRange(Tcl_Interp* ti, Tcl_Obj* obj, unsigned max, unsigned& minValue, unsig
 }
 
 
+// ---- Helper: date bound -> year*10000 + month*100 + day ----
+
+// "YYYY", "YYYY.MM" or "YYYY.MM.DD"; missing parts of an upper bound extend
+// to the end of the year or month.
+static bool
+parseDateKey(char const* text, bool upper, unsigned& key)
+{
+	unsigned parts[3] = { 0, 0, 0 };
+	unsigned n = 0;
+
+	while (n < 3)
+	{
+		if (!::isdigit(static_cast<unsigned char>(*text)))
+			return false;
+
+		while (::isdigit(static_cast<unsigned char>(*text)))
+			parts[n] = 10*parts[n] + (*text++ - '0');
+
+		++n;
+
+		if (*text == '\0')
+			break;
+		if (*text++ != '.')
+			return false;
+	}
+
+	if (*text != '\0' || parts[0] == 0 || parts[0] > 9999 || parts[1] > 12 || parts[2] > 31)
+		return false;
+
+	if (upper)
+	{
+		if (n < 2) parts[1] = 99;
+		if (n < 3) parts[2] = 99;
+	}
+
+	key = 10000*parts[0] + 100*parts[1] + parts[2];
+	return true;
+}
+
+
 // ---- Helper: decode literal pattern (exact vs glob) ----
 
 static mstl::string
@@ -290,7 +330,7 @@ tcl::search::buildSearch(Database const& db, Tcl_Interp* ti, Tcl_Obj* query)
 		"OR", "AND", "NOT", "REMOVE", "RESET", "NULL",
 		"player", "event", "site", "gameevent", "annotator", "position",
 		"playername", "eventname", "sitename", "annotatorname", "eco",
-		"material", "rating",
+		"material", "rating", "ecorange", "date", "result",
 		nullptr
 	};
 	// Must stay parallel to subcommands[]: usage() iterates until the
@@ -316,12 +356,16 @@ tcl::search::buildSearch(Database const& db, Tcl_Interp* ti, Tcl_Obj* query)
 		"<eco>",											// eco
 		"?exact|class|pawns? <signature>",		// material
 		"<type> white|black|average|both <range> ?<range>?",	// rating
+		"<eco-from> <eco-to>",						// ecorange
+		"<from> <to>",									// date: YYYY, YYYY.MM or YYYY.MM.DD
+		"1-0|0-1|1/2-1/2",							// result
 		nullptr
 	};
 	enum
 	{
 		Or, And, Not, Remove, Reset, Null, Player, Event, Site, GameEvent, Annotator, Position,
-		PlayerName, EventName, SiteName, AnnotatorName, Eco, Material, Rating
+		PlayerName, EventName, SiteName, AnnotatorName, Eco, Material, Rating, EcoRange, DateRange,
+		Result
 	};
 
 	SearchP search;
@@ -523,6 +567,56 @@ tcl::search::buildSearch(Database const& db, Tcl_Interp* ti, Tcl_Obj* query)
 			}
 			search = new SearchEco(Tcl_GetString(objv[1]), db.variant());
 			break;
+
+		case EcoRange:
+		{
+			uint16_t from = objc == 3 ? Eco::toShort(Tcl_GetString(objv[1])) : 0;
+			uint16_t to = objc == 3 ? Eco::toShort(Tcl_GetString(objv[2])) : 0;
+
+			if (from == 0 || to == 0 || to < from)
+			{
+				error(CmdSearch, "ecorange", 0, "invalid ECO range");
+				return search;
+			}
+			search = new SearchEcoRange(from, to, db.variant());
+			break;
+		}
+
+		case DateRange:
+		{
+			unsigned from = 0;
+			unsigned to = 0;
+
+			if (objc != 3 || !parseDateKey(Tcl_GetString(objv[1]), false, from)
+				|| !parseDateKey(Tcl_GetString(objv[2]), true, to) || to < from)
+			{
+				error(CmdSearch, "date", 0, "invalid date range, YYYY, YYYY.MM or YYYY.MM.DD expected");
+				return search;
+			}
+			search = new SearchDate(from, to);
+			break;
+		}
+
+		case Result:
+		{
+			char const* text = objc == 2 ? Tcl_GetString(objv[1]) : "";
+			result::ID id = result::Unknown;
+
+			if (::strcmp(text, "1-0") == 0)
+				id = result::White;
+			else if (::strcmp(text, "0-1") == 0)
+				id = result::Black;
+			else if (::strcmp(text, "1/2-1/2") == 0)
+				id = result::Draw;
+
+			if (id == result::Unknown)
+			{
+				error(CmdSearch, "result", 0, "invalid result, 1-0, 0-1 or 1/2-1/2 expected");
+				return search;
+			}
+			search = new SearchResult(id);
+			break;
+		}
 
 		case Material:
 		{
