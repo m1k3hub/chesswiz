@@ -22,6 +22,23 @@ Common rules, as for the existing tools:
 
 *"What is played here, and what scores best?" / "Is my move a novelty?"*
 
+**Status: built** as `position_moves`, with deferred tool results in the
+request loop (`Later` / `Resolve`). Learned on the way:
+
+- The C++ side calls the tree progress command directly, past Tcl
+  execution traces, so a trace on the pane's `Tick` never fires. The end of
+  a search is caught instead where `Tick` sets the search button back to
+  `Start` (`ConfigSearchButton`), and `tree::finish` returning `null` tells
+  an interrupted search from a finished one.
+- `tree::list` is not a usable eligibility test: it omits the Clipbase and
+  includes PGN bases. The tool tries `tree::set` and checks `tree::get`.
+- Tree subscribers can raise while the base switches; the switch still
+  happens.
+- Without a tree base the active base becomes it **and stays**. Restoring
+  the empty setting broke the tree pane: the switch schedules the pane's own
+  search, which then counted games of an empty base name, failed an
+  assertion (`tcl_database.cpp:1517`) and put up an error dialog.
+
 ### What exists
 
 - The tree (`::scidb::tree::*`, `src/tcl/tcl_tree.cpp`) computes per-move
@@ -281,9 +298,16 @@ prepared?"*
   `tag` calls on Scidb's own table widget and looks non-functional. Check it
   before building on it.
 
+- After `::scidb::db::copy` into a base, that base's namebase is
+  inconsistent until it is saved: `tree::set` on it then fails a
+  precondition (`db_namebase.ipp:80`, `isConsistent()`) and `tree::update`
+  asserts (`app_application.cpp:2196`, `hasTreeView()`). The maintenance
+  code saves right after copying; any path that copies without saving and
+  then uses the base as tree base would hit this.
+
 ## Suggested order
 
-1. **#2 move statistics**, including deferred tool results (reused by #4).
+1. ~~#2 move statistics~~ (built).
 2. **#5 phase 1**: small, and reuses `prepare_against`.
 3. **#3 search**: the new C++ search terms are the bulk of it.
 4. **#4 review**: the largest in UX work, and needs Stockfish on PATH.

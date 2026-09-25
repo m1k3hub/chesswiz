@@ -117,6 +117,12 @@ variable Actions {
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoCurrentGame
 	}
+	position_moves {
+		0 0 "report the moves played in this position"
+		"The moves played from the position on the board in the tree's database (if none is set, the active database becomes it): for each move the games, share, score for the side to move, draws, average Elo, last year played and best player. Answers 'what is played here', 'what scores best' and 'is this move a novelty' (a move missing from the list is new to that database)."
+		{{"type":"object","properties":{"limit":{"type":"integer","description":"how many moves, default 10"}}}}
+		::application::assistant::DoPositionMoves
+	}
 	database_summary {
 		0 0 "summarize the active database"
 		"Summarize the active database: number of games and players, overall results, and the most played openings (ECO) with their scores."
@@ -252,6 +258,8 @@ array set Priv {
 	observer		{}
 	reqconfirm	{}
 	confirm		::application::assistant::ConfirmDialog
+	pending		{}
+	laterCount	0
 }
 
 if {   ([info exists ::env(SCIDB_AI_DEBUG)] && [string is true -strict $::env(SCIDB_AI_DEBUG)])
@@ -377,23 +385,74 @@ proc ::application::assistant::OnReplyImpl {round result} {
 
 	if {[dict exists $msg tool_calls] && [llength [dict get $msg tool_calls]]} {
 		lappend Priv(messages) $msg
-		foreach call [dict get $msg tool_calls] {
-			set fn [dict get $call function]
-			set name [dict get $fn name]
-			set cargs [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
-			set reply [runTool $name $cargs]
-			Append tool "$name: $reply"
-			Notify tool $name $reply
-			lappend Priv(messages) [dict create role tool content $reply tool_name $name]
-		}
-		if {$round < $Priv(maxRounds)} {
-			Step $round
-			return
-		}
-		set msg [dict create role assistant content ""]
+		RunCalls $round [dict get $msg tool_calls]
+		return
 	}
 
 	Finish [dict create ok 1 message $msg] $round
+}
+
+
+# Run the tool calls of one reply in order, then ask the model again. A tool
+# that answers later (see Later) parks the rest until Resolve.
+proc ::application::assistant::RunCalls {round calls} {
+	variable Priv
+
+	while {[llength $calls]} {
+		set calls [lassign $calls call]
+		set fn [dict get $call function]
+		set name [dict get $fn name]
+		set cargs [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
+		set reply [runTool $name $cargs]
+		if {[string match "\x00later:*" $reply]} {
+			set Priv(pending) [list $reply $round $name $cargs $calls]
+			Append tool "$name: (working...)"
+			return
+		}
+		ToolReply $name $reply
+	}
+
+	if {$round < $Priv(maxRounds)} {
+		Step $round
+	} else {
+		Finish [dict create ok 1 message [dict create role assistant content ""]] $round
+	}
+}
+
+
+proc ::application::assistant::ToolReply {name reply} {
+	variable Priv
+
+	Append tool "$name: $reply"
+	Notify tool $name $reply
+	lappend Priv(messages) [dict create role tool content $reply tool_name $name]
+}
+
+
+# For a handler that answers later: return [Later] now, and hand the reply
+# to Resolve with that token when it is there.
+proc ::application::assistant::Later {} {
+	variable Priv
+	return "\x00later:[incr Priv(laterCount)]"
+}
+
+
+# Returns 0 when nothing waits for <token> (the request ended meanwhile).
+proc ::application::assistant::Resolve {token reply} {
+	variable Priv
+	variable MaxReply
+
+	if {[lindex $Priv(pending) 0] ne $token} { return 0 }
+	lassign $Priv(pending) _ round name cargs calls
+	set Priv(pending) {}
+	if {[string length $reply] > $MaxReply} {
+		set reply "[string range $reply 0 $MaxReply-1]\n... (truncated)"
+	}
+	LogToolCall $name $cargs 0 [expr {[string match "error: *" $reply] ? "error" : "ok"}] $reply
+	if {[catch { ToolReply $name $reply; RunCalls $round $calls } err]} {
+		Finish [dict create ok 0 error $err] $round
+	}
+	return 1
 }
 
 
@@ -415,6 +474,7 @@ proc ::application::assistant::Finish {result round} {
 	set observer $Priv(observer)
 	set Priv(observer) {}
 	set Priv(reqconfirm) {}
+	set Priv(pending) {}
 	if {[llength $observer]} { catch { {*}$observer {*}$event } }
 }
 
@@ -425,7 +485,8 @@ proc ::application::assistant::Finish {result round} {
 # ======================================================================
 proc ::application::assistant::runTool {name cargs} {
 	lassign [RunTool $name $cargs] outcome asked reply
-	LogToolCall $name $cargs $asked $outcome $reply
+	# a later answer is logged when it arrives (Resolve)
+	if {$outcome ne "later"} { LogToolCall $name $cargs $asked $outcome $reply }
 	return $reply
 }
 
@@ -461,6 +522,7 @@ proc ::application::assistant::RunTool {name cargs} {
 		RecordError assistant "$name: $err" [dict get $opts -errorinfo]
 		return [list error $confirm "error: $err"]
 	}
+	if {[string match "\x00later:*" $reply]} { return [list later $confirm $reply] }
 	if {[string length $reply] > $MaxReply} {
 		set reply "[string range $reply 0 $MaxReply-1]\n... (truncated)"
 	}
@@ -515,6 +577,12 @@ proc ::application::assistant::CheckArgs {name cargs} {
 				error "kind must be 'advanced', 'material' or 'rating'"
 			}
 			return [dict create kind $kind]
+		}
+		position_moves {
+			set limit 10
+			if {[dict exists $cargs limit]} { set limit [dict get $cargs limit] }
+			if {![string is integer -strict $limit] || $limit < 1} { error "limit must be a positive integer" }
+			return [dict create limit $limit]
 		}
 		recent_errors - tool_log {
 			set count [expr {$name eq "tool_log" ? 10 : 3}]
@@ -648,6 +716,179 @@ proc ::application::assistant::DoCurrentGame {} {
 	set source [expr {[::scidb::game::query modified?] ? "modified" : "original"}]
 	set pgn [string trim [::scidb::game::toPGN $source]]
 	return "$pgn\n\ncurrent position: [::scidb::pos::fen]"
+}
+
+
+# --- moves played in the board position (the tree) -----------------------
+#
+# The tree is computed on a worker thread for the current board position in
+# the reference base; its progress goes to the command given to tree::init:
+# the tree pane's Tick once that pane is built, else ours. The C++ side calls
+# that command directly, past execution traces, so with the pane the end of a
+# search shows as its Tick setting the search button back to Start (done or
+# interrupted alike; tree::finish tells them apart).
+
+namespace eval ::application::assistant {
+	variable TreeTimeout 60000
+	array set Tree {token {} fen {} timer {} options {}}
+}
+
+proc ::application::assistant::DoPositionMoves {limit} {
+	variable Tree
+	variable TreeTimeout
+
+	if {[string length $Tree(token)]} { return "error: a position search is already running" }
+	if {[::scidb::game::query mainvariant?] ne "Normal"} {
+		return "move statistics need standard chess"
+	}
+
+	# Without a tree database the active one becomes it, and stays: the tree
+	# pane follows the switch with a search of its own, which would fail on a
+	# base cleared again meanwhile.
+	set base [::scidb::tree::get]
+	if {![string length $base]} {
+		lassign [ActiveBase] base _
+		# the core refuses some bases (ChessBase formats, scratch bases), and a
+		# tree subscriber may raise while the base is switched; what counts is the switch
+		catch { ::scidb::tree::set $base }
+		if {[::scidb::tree::get] ne $base} {
+			return "error: no tree database is set, and the active database\
+				[::util::databaseName $base no] cannot serve as one"
+		}
+	}
+
+	set Tree(options) [TreeOptions]
+	set Tree(fen) [::scidb::pos::fen]
+	set Tree(limit) $limit
+	set Tree(base) $base
+	if {[catch { set done [::scidb::tree::update {*}$Tree(options)] }]} {
+		# the tree pane was never built, so nobody receives the progress yet
+		::scidb::tree::init ::application::assistant::TreeProgress {}
+		if {[catch { set done [::scidb::tree::update {*}$Tree(options)] } err]} {
+			return "error: $err"
+		}
+	}
+	set Tree(token) [Later]
+	if {$done} {
+		after idle [namespace code TreeCollect]
+	} else {
+		trace add execution ::application::tree::ConfigSearchButton enter ::application::assistant::TreeButton
+		set Tree(timer) [after $TreeTimeout [namespace code TreeTimedOut]]
+	}
+	return $Tree(token)
+}
+
+
+# The tree pane's settings, so its cache serves both.
+proc ::application::assistant::TreeOptions {} {
+	if {[info exists ::application::tree::Options(rating:type)]} {
+		return [list $::application::tree::Options(rating:type) \
+			$::application::tree::Options(search:mode) $::application::tree::Options(search:variations)]
+	}
+	return {Elo exact 0}
+}
+
+
+proc ::application::assistant::TreeProgress {arg n} {
+	if {$n == 255 || $n == 0} { after idle [namespace code [list TreeEnded $n]] }
+}
+
+
+# trace on ::application::tree::ConfigSearchButton: {ConfigSearchButton table Start|Stop}
+proc ::application::assistant::TreeButton {cmd op} {
+	if {[lindex $cmd 2] eq "Start"} { after idle [namespace code TreeCollect] }
+}
+
+
+proc ::application::assistant::TreeEnded {n} {
+	variable Tree
+	if {![string length $Tree(token)]} { return }
+	if {$n == 0} {
+		TreeDone "error: the search was interrupted (the database changed or the search was stopped)"
+	} else {
+		TreeCollect
+	}
+}
+
+
+proc ::application::assistant::TreeTimedOut {} {
+	variable Tree
+	variable TreeTimeout
+	set Tree(timer) {}
+	TreeDone "error: the search in [::util::databaseName $Tree(base) no] did not finish within\
+		[expr {$TreeTimeout/1000}] seconds; it goes on in the tree pane"
+}
+
+
+proc ::application::assistant::TreeCollect {} {
+	variable Tree
+
+	if {![string length $Tree(token)]} { return }
+	if {[::scidb::pos::fen] ne $Tree(fen)} {
+		TreeDone "error: the board moved during the search; ask again"
+		return
+	}
+	if {[catch { ::scidb::tree::finish {*}$Tree(options) -sort 2 } state]} {
+		TreeDone "error: $state"
+		return
+	}
+	if {$state eq "null"} {
+		TreeDone "error: the search was interrupted (the database changed or the search was stopped)"
+		return
+	}
+	if {[catch { ::scidb::tree::describe } rows]} {
+		TreeDone "error: $rows"
+		return
+	}
+	TreeDone [FormatTree $rows $Tree(fen) $Tree(base) $Tree(limit)]
+}
+
+
+proc ::application::assistant::TreeDone {reply} {
+	variable Tree
+
+	set token $Tree(token)
+	set Tree(token) {}
+	catch { after cancel $Tree(timer) }
+	set Tree(timer) {}
+	catch { trace remove execution ::application::tree::ConfigSearchButton enter ::application::assistant::TreeButton }
+	Resolve $token $reply
+}
+
+
+proc ::application::assistant::FormatTree {rows fen base limit} {
+	set white [expr {[lindex $fen 1] eq "w"}]
+	set side [expr {$white ? "White" : "Black"}]
+	set total 0
+	foreach row $rows { incr total [dict get $row frequency] }
+	set name [::util::databaseName $base no]
+	if {!$total} { return "no games in $name reach this position" }
+
+	set rows [lsort -decreasing -command [namespace code CompareFrequency] $rows]
+	set lines [list "$total games in $name reach this position; $side to move."]
+	foreach row [lrange $rows 0 [expr {$limit - 1}]] {
+		lassign [dict get $row result] w b d
+		set n [dict get $row frequency]
+		set line [format "%s: %d games (%.0f%%)" [Figurines [dict get $row move]] $n [expr {100.0*$n/$total}]]
+		if {$w + $b + $d} {
+			set score [expr {$white ? [Score $w $d $b] : [Score $b $d $w]}]
+			append line [format ", %s scores %.0f%%, draws %.0f%%" $side $score [expr {100.0*$d/($w + $b + $d)}]]
+		}
+		if {[dict get $row averageRating]} { append line ", average Elo [dict get $row averageRating]" }
+		if {[dict get $row lastYear]} { append line ", last played [dict get $row lastYear]" }
+		if {[string length [dict get $row bestPlayer]]} {
+			append line ", best player [dict get $row bestPlayer]"
+			if {[dict get $row bestPlayerRating]} { append line " ([dict get $row bestPlayerRating])" }
+		}
+		lappend lines "  $line"
+	}
+	if {[llength $rows] > $limit} { lappend lines "  ... [expr {[llength $rows] - $limit}] more moves" }
+	return [join $lines \n]
+}
+
+
+proc ::application::assistant::CompareFrequency {a b} {
+	return [expr {[dict get $a frequency] - [dict get $b frequency]}]
 }
 
 

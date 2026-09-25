@@ -106,6 +106,32 @@ tcltest::test assistant-keeps-history {the conversation carries into the next re
 	lmap m $::application::assistant::Priv(messages) { dict get $m role }
 } -result {system user assistant tool assistant user assistant}
 
+tcltest::test assistant-deferred-tool {a tool that answers later holds the loop, then it goes on in order} -body {
+	::application::assistant::clear
+	rename ::application::assistant::DoAppState ::scidb::test::assistant::realAppState
+	proc ::application::assistant::DoAppState {} {
+		set token [::application::assistant::Later]
+		after 50 [list ::application::assistant::Resolve $token "late state"]
+		return $token
+	}
+	set both [dict create role assistant content "" tool_calls [list \
+		[dict create function [dict create name app_state arguments {}]] \
+		[dict create function [dict create name list_open_databases arguments {}]]]]
+	set text [::scidb::test::assistant::run "state?" [list $both [dict create role assistant content "Done."]]]
+	rename ::application::assistant::DoAppState {}
+	rename ::scidb::test::assistant::realAppState ::application::assistant::DoAppState
+	set roles [lmap m $::application::assistant::Priv(messages) { dict get $m role }]
+	set messages $::application::assistant::Priv(messages)
+	::application::assistant::clear
+	list [regexp {app_state: \(working...\)\napp_state: late state\nlist_open_databases: .*\nDone\.} $text] \
+		$roles [dict get [lindex $messages 3] content] \
+		[string match "*app_state {}: ok -- late state*" [::application::assistant::runTool tool_log {count 3}]]
+} -result {1 {system user assistant tool tool assistant} {late state} 1}
+
+tcltest::test assistant-resolve-stale {a late answer nobody waits for is dropped} -body {
+	::application::assistant::Resolve "\x00later:999999" "too late"
+} -result 0
+
 tcltest::test assistant-provider-error {a failing provider releases the pane} -body {
 	set cfg ::application::ai::Config
 	set saved [array get $cfg provider]
@@ -337,7 +363,7 @@ proc ::scidb::test::assistant::closeFixture {} {
 	file delete $Fixture
 }
 
-proc ::scidb::test::assistant::nop {args} {}
+proc ::scidb::test::assistant::nop {args} { return 0 }
 
 ::scidb::test::assistant::openFixture
 
@@ -415,6 +441,44 @@ tcltest::test assistant-prepare-both-colours {without a colour both are shown; b
 		[::application::assistant::runTool prepare_against {name anand color red}] \
 		[::application::assistant::runTool prepare_against {name carlsen}]
 } -match glob -result {1 1 0 {error: color must be 'white' or 'black'} {error: several players match 'carlsen'*}}
+
+
+tcltest::test assistant-position-moves {position_moves reports the tree of the board position; without a tree base the active one becomes it} -setup {
+	# the Clipbase stands in for a Scidb base; the tree needs a saved one
+	::scidb::db::copy $::scidb::test::assistant::Fixture Clipbase {} \
+		::scidb::test::assistant::nop {} ::scidb::test::assistant::nop {}
+	::scidb::db::save Clipbase ::scidb::test::assistant::nop {}
+	set savedTree [::scidb::tree::get]
+	catch { ::scidb::tree::set "" }
+	proc ::application::assistant::ActiveBase {} { list Clipbase Normal }
+	set fen [::scidb::pos::fen]
+	set errors [llength $::application::assistant::Errors]
+} -body {
+	::application::assistant::clear
+	set text [::scidb::test::assistant::run "what is played here?" [list \
+		[::scidb::test::assistant::call position_moves] \
+		[dict create role assistant content "Only 1.e4."]]]
+	set reply [dict get [lindex $::application::assistant::Priv(messages) 3] content]
+	# the tree pane's own search, started by the switch, must find its base
+	after 500 { set ::scidb::test::assistant::settled 1 }
+	vwait ::scidb::test::assistant::settled
+	list [string match "3 games in * reach this position; White to move.\n  e4: 3 games (100%), White scores 50%, draws 33%, last played 2023, best player *" $reply] \
+		[string match "*position_moves: (working...)*position_moves: 3 games*Only 1.e4.*" $text] \
+		[::scidb::tree::get] [expr {[::scidb::pos::fen] eq $fen}] \
+		$::application::assistant::Tree(token) \
+		[lrange $::application::assistant::Errors $errors end]
+} -cleanup {
+	proc ::application::assistant::ActiveBase {} { list $::scidb::test::assistant::Fixture Normal }
+	catch { ::scidb::tree::set $savedTree }
+	::scidb::db::clear Clipbase
+} -result {1 1 Clipbase 1 {} {}}
+
+tcltest::test assistant-position-moves-refused {position_moves refuses a second search and a bad limit} -body {
+	set ::application::assistant::Tree(token) busy
+	set busy [::application::assistant::runTool position_moves {}]
+	set ::application::assistant::Tree(token) {}
+	list $busy [::application::assistant::runTool position_moves {limit 0}]
+} -result {{error: a position search is already running} {error: limit must be a positive integer}}
 
 ::scidb::test::assistant::closeFixture
 
