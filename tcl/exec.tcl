@@ -139,10 +139,14 @@ set ProgramOptions [list                                                        
 	[list "--ai-model=MODEL"        "Use MODEL for the AI features (this session only)"]      \
 	[list "--ai-provider=NAME"      "Use provider NAME for the AI features (ollama, ...)"]    \
 	[list "--ai-debug"              "Enable the assistant's debugging tools"]                 \
+	[list "--ask=REQUEST"           "Send REQUEST to the assistant of the running $::scidb::app," \
+	                                "print the reply and exit"]                               \
+	[list "--chat"                  "Chat with the assistant in this terminal (starts"        \
+	                                "$::scidb::app when it is not running)"]                  \
 ]
 
 # Options that take a value: --name=value, or --name value.
-variable ValueOptions {ai-model ai-provider}
+variable ValueOptions {ask ai-model ai-provider}
 
 array set Options {}
 array set Valued {}
@@ -425,6 +429,206 @@ proc SendPath {port} {
 }
 
 
+# ----------------------------------------------------------------------
+# Assistant client: --ask and --chat talk to the assistant of a running
+# instance over the single-instance socket. The session opens with the
+# line [list --assistant] (paths never start with "-"); then each line is
+# a Tcl list, client -> server:  ask TEXT | confirm 0|1 | clear
+#                 server -> client:  hello MODEL DEBUG | tool NAME REPLY |
+#                                    confirm WHAT | reply TEXT | error TEXT |
+#                                    ready
+# The client is event driven, so it runs in a separate process (vwait) and
+# inside a running instance alike. <done> is called with the exit status.
+# ----------------------------------------------------------------------
+
+array set Client {}
+
+
+# One message per line: a Tcl list with newlines and backslashes escaped
+# (tool replies and answers are multi-line).
+proc encodeLine {args} {
+	return [string map {\\ \\\\ \n \\n \r \\r} $args]
+}
+
+
+proc decodeLine {line} {
+	return [string map {\\\\ \\ \\n \n \\r \r} $line]
+}
+
+
+proc ClientSend {args} {
+	variable Client
+	puts $Client(sock) [encodeLine {*}$args]
+}
+
+proc assistantClient {port mode request done} {
+	variable Client
+
+	if {$mode eq "ask" && ![string length [string trim $request]]} {
+		puts stderr "usage: $::scidb::app --ask \"REQUEST\""
+		{*}$done 1
+		return
+	}
+
+	if {[catch { set sock [socket 127.0.0.1 $port] } err]} {
+		puts stderr "cannot reach $::scidb::app: $err"
+		{*}$done 2
+		return
+	}
+	fconfigure $sock -blocking 0 -buffering line -encoding utf-8
+	fconfigure stdout -buffering none -encoding utf-8
+	array set Client [list sock $sock mode $mode request $request done $done \
+		confirming 0 status 0 stdin 0]
+
+	puts $sock [list --assistant]
+	fileevent $sock readable [namespace code ClientRead]
+}
+
+
+proc ClientRead {} {
+	variable Client
+
+	set sock $Client(sock)
+	if {[gets $sock line] < 0} {
+		if {[eof $sock]} { ClientDone 1 "connection closed by $::scidb::app" }
+		return
+	}
+	if {[catch { set args [lassign [decodeLine $line] kind] }]} {
+		ClientDone 1 "garbled message from $::scidb::app: $line"
+		return
+	}
+
+	switch -- $kind {
+		hello {
+			lassign $args model debug
+			if {$Client(mode) eq "ask"} {
+				ClientSend ask $Client(request)
+			} else {
+				set dbg [expr {$debug ? ", debug tools on" : ""}]
+				puts "$::scidb::app assistant ($model$dbg). /clear resets, /quit or Ctrl-D leaves."
+				ClientListen
+			}
+		}
+		tool {
+			lassign $args name reply
+			set first [lindex [split $reply \n] 0]
+			if {[string length $first] > 160} { set first "[string range $first 0 156]..." }
+			puts "  \[$name\] $first"
+		}
+		confirm {
+			set Client(confirming) 1
+			puts -nonewline "The assistant wants to: [lindex $args 0]\nAllow? \[y/N\] "
+			ClientListen 1
+		}
+		reply { puts [lindex $args 0] }
+		error {
+			puts stderr "error: [lindex $args 0]"
+			set Client(status) 1
+		}
+		ready {
+			if {$Client(mode) eq "ask"} {
+				ClientDone $Client(status)
+			} else {
+				set Client(status) 0
+				ClientListen
+			}
+		}
+	}
+}
+
+
+# Read stdin only while waiting for the user: the prompt of a chat, or a
+# confirmation. Piped input is then consumed one request at a time.
+proc ClientListen {{confirm 0}} {
+	variable Client
+
+	if {!$confirm} { puts -nonewline "> " }
+	fconfigure stdin -blocking 0 -encoding utf-8
+	fileevent stdin readable [namespace code ClientStdin]
+}
+
+
+proc ClientPause {} {
+	catch { fileevent stdin readable {} }
+}
+
+
+proc ClientStdin {} {
+	variable Client
+
+	if {[gets stdin line] < 0} {
+		if {![eof stdin]} { return }
+		ClientPause
+		puts ""
+		# no terminal, or Ctrl-D: deny a pending confirmation, leave a chat
+		if {$Client(confirming)} {
+			set Client(confirming) 0
+			ClientSend confirm 0
+		} elseif {$Client(mode) eq "chat"} {
+			ClientDone 0
+		}
+		return
+	}
+	set line [string trim $line]
+
+	if {$Client(confirming)} {
+		set Client(confirming) 0
+		if {![ClientTerminal]} { puts $line }
+		ClientPause
+		ClientSend confirm [string match -nocase y* $line]
+		return
+	}
+
+	switch -- $line {
+		"" { puts -nonewline "> " }
+		/quit - /exit { ClientDone 0 }
+		/clear {
+			if {![ClientTerminal]} { puts $line }
+			puts "(conversation cleared)"
+			ClientPause
+			ClientSend clear
+		}
+		default {
+			# a piped chat echoes its requests, so the transcript reads well
+			if {![ClientTerminal]} { puts $line }
+			ClientPause
+			ClientSend ask $line
+		}
+	}
+}
+
+
+proc ClientTerminal {} {
+	return [expr {![catch { fconfigure stdin -mode }]}]
+}
+
+
+proc ClientDone {status {message ""}} {
+	variable Client
+
+	if {![info exists Client(sock)]} { return }
+	if {[string length $message]} { puts stderr $message }
+	catch { fileevent stdin readable {} }
+	catch { close $Client(sock) }
+	set done $Client(done)
+	array unset Client
+	{*}$done $status
+}
+
+
+# Where assistant sessions go in a running instance; defined by the app.
+proc IncomingAssistant {chan} {
+	if {[llength [info commands ::application::assistant::attach]]} {
+		::application::assistant::attach $chan
+	} else {
+		fconfigure $chan -blocking 1
+		puts $chan [encodeLine error "$::scidb::app is still starting, try again"]
+		puts $chan [encodeLine ready]
+		close $chan
+	}
+}
+
+
 proc Incoming {chan addr port} {
 	# Non-blocking: a peer that sends a partial line must not freeze the GUI.
 	fconfigure $chan -blocking 0
@@ -434,6 +638,11 @@ proc Incoming {chan addr port} {
 
 proc IncomingOffered {chan} {
 	if {[gets $chan pathList] >= 0} {
+		if {[lindex $pathList 0] eq "--assistant"} {
+			fileevent $chan readable {}
+			IncomingAssistant $chan
+			return
+		}
 		catch { close $chan }
 		after idle [namespace code [list requestOpenBases $pathList]]
 	} elseif {[eof $chan]} {
@@ -463,13 +672,26 @@ if {	![::process::testOption single-process]
 
 	# Pick a port number based on the name of the main script executing
 	set port [expr {1024 + [::scidb::misc::crc32 [file normalize $::argv0]] % 30000}]
+	set Vars(port) $port
 
 	if {[catch {socket -server [namespace code Incoming] -myaddr localhost $port} err]} {
 		lassign $::errorCode cls name
 		if {$cls eq "POSIX" && $name eq "EADDRINUSE"} {
+			if {[::process::testOption ask] || [::process::testOption chat]} {
+				# talk to the running instance's assistant, then leave
+				catch { wm withdraw . }
+				set mode [expr {[::process::testOption chat] ? "chat" : "ask"}]
+				assistantClient $port $mode [::process::optionValue ask] \
+					[list apply {{status args} { set ::remote::Vars(exit) $status }}]
+				if {![info exists Vars(exit)]} { vwait ::remote::Vars(exit) }
+				exit $Vars(exit)
+			}
 			SendPath $port
 			exit 1
 		}
+	} elseif {[::process::testOption ask]} {
+		puts stderr "$::scidb::app is not running; start it first, or use --chat"
+		exit 2
 	}
 	unset -nocomplain err
 }

@@ -174,6 +174,8 @@ array set Priv {
 	busy			0
 	maxRounds	8
 	debug			0
+	observer		{}
+	reqconfirm	{}
 	confirm		::application::assistant::ConfirmDialog
 }
 
@@ -198,12 +200,21 @@ proc ::application::assistant::show {} {
 }
 
 
-proc ::application::assistant::ask {request} {
+# Options, for this request only:
+#   -observer CMD   called as CMD tool NAME REPLY, CMD reply TEXT, CMD error TEXT
+#   -confirm CMD    asks the user instead of the dialog (CMD WHAT -> 0|1)
+# Returns 0 when the request was not started (empty, or another is running).
+proc ::application::assistant::ask {request args} {
 	variable Priv
 	variable System
 
+	array set opts {-observer {} -confirm {}}
+	array set opts $args
+
 	set request [string trim $request]
-	if {![string length $request] || $Priv(busy)} { return }
+	if {![string length $request] || $Priv(busy)} { return 0 }
+	set Priv(observer) $opts(-observer)
+	set Priv(reqconfirm) $opts(-confirm)
 
 	if {![llength $Priv(messages)]} {
 		variable DebugSystem
@@ -221,7 +232,16 @@ proc ::application::assistant::ask {request} {
 	} err]} {
 		Finish [dict create ok 0 error $err] 0
 	}
-	return
+	return 1
+}
+
+
+proc ::application::assistant::Notify {args} {
+	variable Priv
+
+	if {[llength $Priv(observer)]} {
+		catch { {*}$Priv(observer) {*}$args }
+	}
 }
 
 
@@ -288,6 +308,7 @@ proc ::application::assistant::OnReplyImpl {round result} {
 			set cargs [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
 			set reply [runTool $name $cargs]
 			Append tool "$name: $reply"
+			Notify tool $name $reply
 			lappend Priv(messages) [dict create role tool content $reply tool_name $name]
 		}
 		if {$round < $Priv(maxRounds)} {
@@ -310,10 +331,16 @@ proc ::application::assistant::Finish {result round} {
 		if {![string length $text]} { set text "(no answer)" }
 		lappend Priv(messages) [dict create role assistant content $text]
 		Append assistant $text
+		set event [list reply $text]
 	} else {
 		Append error "Error: [dict get $result error]"
+		set event [list error [dict get $result error]]
 	}
 	SetBusy 0
+	set observer $Priv(observer)
+	set Priv(observer) {}
+	set Priv(reqconfirm) {}
+	if {[llength $observer]} { catch { {*}$observer {*}$event } }
 }
 
 
@@ -341,7 +368,8 @@ proc ::application::assistant::runTool {name cargs} {
 
 	if {$confirm} {
 		set what [format $what {*}[dict values $checked]]
-		if {![{*}$Priv(confirm) $what]} { return $mc::Denied }
+		set confirm [expr {[llength $Priv(reqconfirm)] ? $Priv(reqconfirm) : $Priv(confirm)}]
+		if {![{*}$confirm $what]} { return $mc::Denied }
 	}
 
 	if {[catch { set reply [{*}$handler {*}[dict values $checked]] } err]} {
@@ -755,6 +783,115 @@ proc ::application::assistant::Append {tag text} {
 	$Priv(text) insert end "$prefix$text\n" $tag
 	$Priv(text) configure -state disabled
 	$Priv(text) see end
+}
+
+# ----------------------------------------------------------------------
+# Terminal sessions (--ask, --chat): the server end of the protocol in
+# ::remote (tcl/exec.tcl). Requests share the conversation with the pane;
+# confirmations are asked in the terminal.
+# ======================================================================
+proc ::application::assistant::attach {chan} {
+	variable ::application::ai::Config
+	variable Priv
+
+	fconfigure $chan -blocking 0 -buffering line -encoding utf-8
+	set Priv(answer:$chan) {}
+	Send $chan hello $Config(model) $Priv(debug)
+	fileevent $chan readable [namespace code [list RemoteRead $chan]]
+}
+
+
+proc ::application::assistant::Send {chan args} {
+	catch { puts $chan [::remote::encodeLine {*}$args] }
+}
+
+
+proc ::application::assistant::RemoteRead {chan} {
+	variable Priv
+
+	if {[catch { gets $chan line } n] || $n < 0} {
+		if {[catch { eof $chan } eof] || $eof} { RemoteClosed $chan }
+		return
+	}
+	if {[catch { set args [lassign [::remote::decodeLine $line] kind] }]} {
+		Send $chan error "garbled request"
+		Send $chan ready
+		return
+	}
+
+	switch -- $kind {
+		ask {
+			set request [lindex $args 0]
+			if {![string length [string trim $request]]} {
+				Send $chan error "empty request"
+				Send $chan ready
+			} elseif {![ask $request \
+					-observer [namespace code [list RemoteEvent $chan]] \
+					-confirm [namespace code [list RemoteConfirm $chan]]]} {
+				Send $chan error "the assistant is busy with another request"
+				Send $chan ready
+			}
+		}
+		confirm {
+			set Priv(answer:$chan) [expr {[lindex $args 0] ? 1 : 0}]
+		}
+		clear {
+			clear
+			Send $chan ready
+		}
+		default {
+			Send $chan error "unknown request '$kind'"
+			Send $chan ready
+		}
+	}
+}
+
+
+proc ::application::assistant::RemoteEvent {chan kind args} {
+	Send $chan $kind {*}$args
+	if {$kind ne "tool"} { Send $chan ready }
+}
+
+
+proc ::application::assistant::RemoteConfirm {chan what} {
+	variable Priv
+
+	set Priv(answer:$chan) {}
+	Send $chan confirm $what
+	# wait for the terminal; a closed connection counts as "no"
+	while {$Priv(answer:$chan) eq ""} {
+		vwait [namespace current]::Priv(answer:$chan)
+	}
+	return $Priv(answer:$chan)
+}
+
+
+proc ::application::assistant::RemoteClosed {chan} {
+	variable Priv
+
+	catch { close $chan }
+	if {[info exists Priv(answer:$chan)] && $Priv(answer:$chan) eq ""} {
+		set Priv(answer:$chan) 0
+	}
+	# let a pending request finish without reporting to a dead channel
+	if {[string match *RemoteEvent*$chan* $Priv(observer)]} { set Priv(observer) {} }
+	after idle [list array unset [namespace current]::Priv answer:$chan]
+}
+
+
+# --chat when no instance was running: this instance chats with itself
+# from the terminal it was started in, once it is ready.
+proc ::application::assistant::StartTerminalChat {} {
+	if {![::application::ready?]} {
+		after 500 [namespace code StartTerminalChat]
+		return
+	}
+	::remote::assistantClient $::remote::Vars(port) chat {} \
+		[list apply {{status args} { puts "(chat closed; $::scidb::app keeps running)" }}]
+}
+
+if {[llength [info commands ::process::testOption]] && [::process::testOption chat]} {
+	after 1000 ::application::assistant::StartTerminalChat
 }
 
 # vi:set ts=3 sw=3:
