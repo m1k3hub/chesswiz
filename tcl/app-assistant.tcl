@@ -135,6 +135,12 @@ variable Actions {
 		{{"type":"object","properties":{"eco":{"type":"string"},"player":{"type":"string","description":"optional player name or part of it"}},"required":["eco"]}}
 		::application::assistant::DoOpeningScore
 	}
+	prepare_against {
+		0 0 "prepare against %s %s"
+		"Preparation against an opponent from the active database: the openings they play with White and with Black and how they score in each, their weakest lines, and their latest games. 'color' is the colour the opponent will have; without it both are shown. The name may be partial, as for player_stats."
+		{{"type":"object","properties":{"name":{"type":"string","description":"the opponent's name or part of it"},"color":{"type":"string","enum":["white","black"],"description":"the colour the opponent will play"}},"required":["name"]}}
+		::application::assistant::DoPrepareAgainst
+	}
 	app_state {
 		0 0 "report the application state"
 		"Report the application state for diagnosis: Tcl/Tk and model versions, the selected tab, the active database and variant, game counts, the current game and position, and the panes of the board layout."
@@ -535,6 +541,14 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			::application::triage::issueFile $issue
 			return [dict create issue $issue]
 		}
+		prepare_against {
+			set name [string trim [Arg $cargs name]]
+			if {![string length $name]} { error "name must not be empty" }
+			set color ""
+			if {[dict exists $cargs color]} { set color [string tolower [dict get $cargs color]] }
+			if {$color ni {"" white black}} { error "color must be 'white' or 'black'" }
+			return [dict create name $name color $color]
+		}
 		player_stats {
 			set name [string trim [Arg $cargs name]]
 			if {![string length $name]} { error "name must not be empty" }
@@ -711,6 +725,93 @@ proc ::application::assistant::DoOpeningScore {range player} {
 			$side $win $draw $loss [expr {100.0*($win + 0.5*$draw)/$n}]]
 	}
 	return [join $lines \n]
+}
+
+
+# How many lines of each colour, and how many games a line needs to count
+# as one of the opponent's weak spots.
+namespace eval ::application::assistant {
+	variable PrepLines 8
+	variable PrepWeakGames 3
+	variable PrepGames 10
+}
+
+proc ::application::assistant::DoPrepareAgainst {name color} {
+	variable PrepLines
+	variable PrepWeakGames
+	variable PrepGames
+
+	lassign [ActiveBase] base variant
+	if {$variant ne "Normal"} { return "opening preparation needs standard chess, the active variant is $variant" }
+	lassign [ResolvePlayer $base $variant $name] index name
+	lassign [::scidb::db::playerOpenings $base $variant $index] asWhite asBlack
+
+	set lines [list "Preparing against $name"]
+	foreach side {white black} rows [list $asWhite $asBlack] {
+		if {[string length $color] && $side ne $color} { continue }
+		set title [string totitle $side]
+		if {![llength $rows]} {
+			lappend lines "" "As $title: no games with an ECO code"
+			continue
+		}
+		lassign {0 0 0 0} n w d l
+		foreach row $rows {
+			lassign $row _ g win draw loss
+			incr n $g; incr w $win; incr d $draw; incr l $loss
+		}
+		lappend lines "" "As $title: $n games, [Wdl $w $d $l]"
+		lappend lines "most played:"
+		foreach row [lrange $rows 0 [expr {$PrepLines - 1}]] {
+			lappend lines "  [OpeningLine $row $variant]"
+		}
+		# weak spots: lines they play often enough, scoring below their average
+		set average [Score $w $d $l]
+		set weak {}
+		foreach row $rows {
+			lassign $row _ g win draw loss
+			if {$g >= $PrepWeakGames && [Score $win $draw $loss] < $average} { lappend weak $row }
+		}
+		set weak [lsort -command [namespace code CompareScore] $weak]
+		if {[llength $weak]} {
+			lappend lines "weakest (at least $PrepWeakGames games, below their average):"
+			foreach row [lrange $weak 0 2] { lappend lines "  [OpeningLine $row $variant]" }
+		}
+	}
+
+	set games [::scidb::db::playerGames $base $variant $index $PrepGames]
+	if {[llength $games]} {
+		lappend lines "" "latest games:"
+		foreach game $games {
+			lassign $game _ date side opponent elo result eco event
+			set elo [expr {$elo ? " ($elo)" : ""}]
+			lappend lines "  $date as $side vs $opponent$elo: $result $eco, $event"
+		}
+	}
+	return [join $lines \n]
+}
+
+
+proc ::application::assistant::OpeningLine {row variant} {
+	lassign $row eco games win draw loss
+	return "$eco [EcoName $eco $variant]: $games games, [Wdl $win $draw $loss]"
+}
+
+
+proc ::application::assistant::Wdl {win draw loss} {
+	return [format "+%d =%d -%d, score %.1f%%" $win $draw $loss [Score $win $draw $loss]]
+}
+
+
+proc ::application::assistant::Score {win draw loss} {
+	set n [expr {$win + $draw + $loss}]
+	return [expr {$n ? 100.0*($win + 0.5*$draw)/$n : 0.0}]
+}
+
+
+proc ::application::assistant::CompareScore {a b} {
+	set sa [Score {*}[lrange $a 2 4]]
+	set sb [Score {*}[lrange $b 2 4]]
+	return [expr {$sa < $sb ? -1 : $sa > $sb}]
 }
 
 

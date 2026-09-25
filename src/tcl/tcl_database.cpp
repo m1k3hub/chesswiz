@@ -130,6 +130,8 @@ static char const* CmdFindDuplicates	= "::scidb::db::findDuplicates";
 static char const* CmdEcoStats			= "::scidb::db::ecoStats";
 static char const* CmdFindPlayers		= "::scidb::db::findPlayers";
 static char const* CmdOpeningScore	= "::scidb::db::openingScore";
+static char const* CmdPlayerOpenings	= "::scidb::db::playerOpenings";
+static char const* CmdPlayerGames		= "::scidb::db::playerGames";
 static char const* CmdMediaFiles		= "::scidb::db::mediaFiles";
 static char const* CmdMediaGallery	= "::scidb::db::mediaGallery";
 static char const* CmdGuidingText	= "::scidb::db::guidingText";
@@ -6013,6 +6015,191 @@ cmdOpeningScore(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 }
 
 
+static NamebasePlayer const*
+playerFromObj(Database const& db, int objc, Tcl_Obj* const objv[], unsigned index)
+{
+	unsigned player = unsignedFromObj(objc, objv, index);
+	return player < db.countPlayers() ? &db.player(player) : nullptr;
+}
+
+
+// A player's standard-chess openings by ECO code, from the player's side,
+// most played first: {<as-white> <as-black>}, each {{<eco> <games> <win> <draw> <loss>} ...}
+static int
+cmdPlayerOpenings(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <player-index>");
+		return TCL_ERROR;
+	}
+
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 2);
+	Database const&	db		= Scidb->cursor(database, variant).database();
+	NamebasePlayer const* player = playerFromObj(db, objc, objv, 3);
+
+	if (!player)
+		return error(CmdPlayerOpenings, nullptr, nullptr, "invalid player index");
+
+	enum { NumCodes = 5*10*10 + 1, Games = 0, Win, Draw, Loss };
+	mstl::vector<unsigned> counts[2];
+	counts[0].resize(NumCodes*4, 0);
+	counts[1].resize(NumCodes*4, 0);
+
+	if (db.variant() == variant::Normal)
+	{
+		for (unsigned i = 0, n = db.countGames(); i < n; ++i)
+		{
+			GameInfo const& info = db.gameInfo(i);
+			unsigned side;
+
+			if (info.playerEntry(color::White) == player)
+				side = color::White;
+			else if (info.playerEntry(color::Black) == player)
+				side = color::Black;
+			else
+				continue;
+
+			// NOTE: in .si4 databases the ECO code may be undefined.
+			if (info.idn() != variant::Standard)
+				continue;
+
+			uint16_t eco = info.eco(variant::Normal).toShort();
+
+			if (eco == 0 || eco >= NumCodes)
+				continue;
+
+			unsigned* c = &counts[side][eco*4];
+			result::ID won = side == color::White ? result::White : result::Black;
+
+			++c[Games];
+
+			if (info.result() == won)
+				++c[Win];
+			else if (info.result() == result::Draw)
+				++c[Draw];
+			else if (info.result() == result::White || info.result() == result::Black)
+				++c[Loss];
+		}
+	}
+
+	Tcl_Obj* sides[2];
+
+	for (unsigned side = 0; side < 2; ++side)
+	{
+		mstl::vector<unsigned> codes;
+
+		for (unsigned eco = 1; eco < NumCodes; ++eco)
+		{
+			if (counts[side][eco*4 + Games])
+				codes.push_back(eco);
+		}
+
+		// insertion sort by games, descending; at most 500 codes
+		for (unsigned i = 1; i < codes.size(); ++i)
+		{
+			for (unsigned k = i; k > 0 && counts[side][codes[k]*4] > counts[side][codes[k - 1]*4]; --k)
+				mstl::swap(codes[k], codes[k - 1]);
+		}
+
+		sides[side] = Tcl_NewListObj(0, nullptr);
+
+		for (unsigned i = 0; i < codes.size(); ++i)
+		{
+			unsigned const* c = &counts[side][codes[i]*4];
+			mstl::string eco(Eco::fromShort(codes[i]).asShortString());
+			Tcl_Obj* row[5];
+
+			row[0] = Tcl_NewStringObj(eco, eco.size());
+			row[1] = Tcl_NewIntObj(c[Games]);
+			row[2] = Tcl_NewIntObj(c[Win]);
+			row[3] = Tcl_NewIntObj(c[Draw]);
+			row[4] = Tcl_NewIntObj(c[Loss]);
+			Tcl_ListObjAppendElement(ti, sides[side], Tcl_NewListObj(5, row));
+		}
+	}
+
+	setResult(2, sides);
+	return TCL_OK;
+}
+
+
+// A player's latest games, newest first:
+// {{<game-index> <date> <colour> <opponent> <opponent-elo> <result> <eco> <event>} ...}
+static int
+cmdPlayerGames(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 4 && objc != 5)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <player-index> ?<maximal>?");
+		return TCL_ERROR;
+	}
+
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 2);
+	unsigned			maximal	= objc == 5 ? unsignedFromObj(objc, objv, 4) : 10;
+	Database const&	db		= Scidb->cursor(database, variant).database();
+	NamebasePlayer const* player = playerFromObj(db, objc, objv, 3);
+
+	if (!player)
+		return error(CmdPlayerGames, nullptr, nullptr, "invalid player index");
+
+	mstl::vector<unsigned> found;
+
+	for (unsigned i = 0, n = db.countGames(); i < n; ++i)
+	{
+		GameInfo const& info = db.gameInfo(i);
+
+		if (info.playerEntry(color::White) == player || info.playerEntry(color::Black) == player)
+			found.push_back(i);
+	}
+
+	// partial selection sort: only the newest <maximal> are needed
+	unsigned count = mstl::min(maximal, unsigned(found.size()));
+
+	for (unsigned i = 0; i < count; ++i)
+	{
+		unsigned best = i;
+
+		for (unsigned k = i + 1; k < found.size(); ++k)
+		{
+			if (db.gameInfo(found[best]).date() < db.gameInfo(found[k]).date())
+				best = k;
+		}
+
+		mstl::swap(found[i], found[best]);
+	}
+
+	Tcl_Obj* result = Tcl_NewListObj(0, nullptr);
+
+	for (unsigned i = 0; i < count; ++i)
+	{
+		GameInfo const& info = db.gameInfo(found[i]);
+		color::ID side = info.playerEntry(color::White) == player ? color::White : color::Black;
+		color::ID other = color::opposite(side);
+		mstl::string date(info.date().asString());
+		mstl::string eco(info.eco(variant::Normal).asShortString());
+		mstl::string const& opponent = info.playerName(other);
+		mstl::string const& res = result::toString(info.result());
+		Tcl_Obj* row[8];
+
+		row[0] = Tcl_NewIntObj(found[i]);
+		row[1] = Tcl_NewStringObj(date, date.size());
+		row[2] = Tcl_NewStringObj(side == color::White ? "white" : "black", -1);
+		row[3] = Tcl_NewStringObj(opponent, opponent.size());
+		row[4] = Tcl_NewIntObj(info.elo(other));
+		row[5] = Tcl_NewStringObj(res, res.size());
+		row[6] = Tcl_NewStringObj(eco, eco.size());
+		row[7] = Tcl_NewStringObj(info.event(), info.event().size());
+		Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(8, row));
+	}
+
+	Tcl_SetObjResult(ti, result);
+	return TCL_OK;
+}
+
+
 namespace tcl {
 namespace db {
 
@@ -6053,6 +6240,8 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdEcoStats,			cmdEcoStats);
 	createCommand(ti, CmdFindPlayers,		cmdFindPlayers);
 	createCommand(ti, CmdOpeningScore,		cmdOpeningScore);
+	createCommand(ti, CmdPlayerOpenings,	cmdPlayerOpenings);
+	createCommand(ti, CmdPlayerGames,		cmdPlayerGames);
 	createCommand(ti, CmdMediaFiles,		cmdMediaFiles);
 	createCommand(ti, CmdMediaGallery,	cmdMediaGallery);
 	createCommand(ti, CmdGuidingText,	cmdGuidingText);

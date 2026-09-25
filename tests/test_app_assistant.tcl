@@ -386,6 +386,36 @@ tcltest::test assistant-player-question-loop {the model resolves an ambiguous pl
 		[string match "*scored 83.3% in 3 games.*" $text]
 } -result {1 1 1}
 
+
+tcltest::test assistant-prepare-against {prepare_against shows an opponent's lines, weak spots and latest games} -body {
+	set saved $::application::assistant::PrepWeakGames
+	set ::application::assistant::PrepWeakGames 1
+	set reply [::application::assistant::runTool prepare_against {name {carlsen, m} color black}]
+	set ::application::assistant::PrepWeakGames $saved
+	set reply
+} -result "Preparing against Carlsen, Magnus
+
+As Black: 2 games, +1 =1 -0, score 75.0%
+most played:
+  B92 Sicilian Defence, Najdorf Variation, Opocensky Variation: 1 games, +0 =1 -0, score 50.0%
+  C60 Spanish Opening (Ruy L\u00f3pez): 1 games, +1 =0 -0, score 100.0%
+weakest (at least 1 games, below their average):
+  B92 Sicilian Defence, Najdorf Variation, Opocensky Variation: 1 games, +0 =1 -0, score 50.0%
+
+latest games:
+  2023.01.01 as black vs Carlsen, Henrik: 0-1 C60, Assistant
+  2022.01.01 as black vs Anand, Viswanathan: 1/2-1/2 B92, Assistant
+  2021.01.01 as white vs Anand, Viswanathan: 1-0 B90, Assistant"
+
+tcltest::test assistant-prepare-both-colours {without a colour both are shown; bad arguments are refused} -body {
+	set reply [::application::assistant::runTool prepare_against {name {Anand, Viswanathan}}]
+	list [string match "*As White: 1 games, +0 =1 -0, score 50.0%*" $reply] \
+		[string match "*As Black: 1 games, +0 =0 -1, score 0.0%*" $reply] \
+		[string match "*weakest*" $reply] \
+		[::application::assistant::runTool prepare_against {name anand color red}] \
+		[::application::assistant::runTool prepare_against {name carlsen}]
+} -match glob -result {1 1 0 {error: color must be 'white' or 'black'} {error: several players match 'carlsen'*}}
+
 ::scidb::test::assistant::closeFixture
 
 tcltest::test assistant-current-game {current_game gives the board game as PGN with the position} -body {
