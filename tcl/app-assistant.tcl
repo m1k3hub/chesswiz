@@ -7,6 +7,11 @@
 # arguments are checked before anything runs. Every tool that changes
 # something asks the user first.
 #
+# Every error the app reports -- background errors, the log window, error
+# dialogs, failing tools -- is recorded for recent_errors and appended to
+# the error log file, which ::application::triage (app-error-triage.tcl)
+# has the model sort into issues.
+#
 # Debug mode (--ai-debug or SCIDB_AI_DEBUG=1) adds introspection tools for developers:
 # reading variables and procedure sources, and -- after confirmation of
 # the exact script -- evaluating Tcl.
@@ -138,7 +143,7 @@ variable Actions {
 	}
 	recent_errors {
 		0 0 "report recent errors"
-		"The most recent background errors (message and Tcl stack) raised in this session, newest last."
+		"The most recent errors of this session, newest last: background Tcl errors (with stack), error messages of the log window and of error dialogs, and failing assistant tools."
 		{{"type":"object","properties":{"count":{"type":"integer","description":"how many, default 3"}}}}
 		::application::assistant::DoRecentErrors
 	}
@@ -147,6 +152,24 @@ variable Actions {
 		"The most recent assistant tool calls of this session, newest last: time, tool, arguments, whether the user was asked, outcome (ok, error, declined) and the start of the reply. Use it to explain what the assistant did or why something failed."
 		{{"type":"object","properties":{"count":{"type":"integer","description":"how many, default 10"}}}}
 		::application::assistant::DoToolLog
+	}
+	triage_errors {
+		0 0 "triage the error log"
+		"Have the error log triaged now: new error groups are classified (bug, environment, user, noise) and every bug gets an issue file. Runs in the background; the result is posted here when it is done."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoTriage
+	}
+	list_issues {
+		0 0 "list the issues"
+		"The bugs found by error triage, newest first: issue id, severity, summary and file."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoListIssues
+	}
+	handoff_issue {
+		1 0 "hand issue %s to the coding agent"
+		"Start the configured coding agent on an issue found by triage, to fix it in the Scidb sources. Only when the user asks for it."
+		{{"type":"object","properties":{"issue":{"type":"string","description":"the issue id, 8 hex digits"}},"required":["issue"]}}
+		::application::assistant::DoHandoff
 	}
 	list_procs {
 		0 1 "list procedures matching %s"
@@ -192,9 +215,19 @@ what you could not verify. Longer answers are fine in this role.}
 # Replies longer than this are cut, so one tool cannot flood the context.
 variable MaxReply 6000
 
-# background errors seen in this session: {time message stack}
+# errors seen in this session: {time source message detail}, see RecordError
 variable Errors {}
 variable MaxErrors 20
+
+# Every error is also appended here (SCIDB_ERROR_LOG overrides, "" disables);
+# at MaxErrorLogSize the file moves to <file>.1 and a new one starts.
+variable ErrorLogFile ""
+variable MaxErrorLogSize 1000000
+if {[info exists ::env(SCIDB_ERROR_LOG)]} {
+	set ErrorLogFile $::env(SCIDB_ERROR_LOG)
+} elseif {[info exists ::scidb::dir::user]} {
+	set ErrorLogFile [file join $::scidb::dir::user log errors.log]
+}
 
 # tool calls made in this session: see LogToolCall
 variable ToolLog {}
@@ -418,7 +451,8 @@ proc ::application::assistant::RunTool {name cargs} {
 		set confirm 1
 	}
 
-	if {[catch { set reply [{*}$handler {*}[dict values $checked]] } err]} {
+	if {[catch { set reply [{*}$handler {*}[dict values $checked]] } err opts]} {
+		RecordError assistant "$name: $err" [dict get $opts -errorinfo]
 		return [list error $confirm "error: $err"]
 	}
 	if {[string length $reply] > $MaxReply} {
@@ -495,6 +529,11 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		}
 		eval_tcl {
 			return [dict create script [Arg $cargs script]]
+		}
+		handoff_issue {
+			set issue [string trim [Arg $cargs issue]]
+			::application::triage::issueFile $issue
+			return [dict create issue $issue]
 		}
 		player_stats {
 			set name [string trim [Arg $cargs name]]
@@ -755,32 +794,106 @@ proc ::application::assistant::DoAppState {} {
 }
 
 
-# Record background errors; the app's own handler still reports them.
-proc ::application::assistant::RecordError {cmd op} {
+# --- error capture ------------------------------------------------------
+# Every error the app reports is recorded, whatever reports it; the app's
+# own handling is unchanged.
+
+proc ::application::assistant::RecordError {source message {detail ""}} {
 	variable Errors
 	variable MaxErrors
 
-	set message [lindex $cmd 1]
+	set message [string trim $message]
 	if {![string length $message]} { return }
-	set opts [lindex $cmd 2]
-	set stack [expr {[dict exists $opts -errorinfo] ? [dict get $opts -errorinfo] : $::errorInfo}]
-	lappend Errors [list [clock format [clock seconds] -format %T] $message $stack]
+	set now [clock seconds]
+	lappend Errors [list [clock format $now -format %T] $source $message $detail]
 	if {[llength $Errors] > $MaxErrors} { set Errors [lrange $Errors end-[expr {$MaxErrors - 1}] end] }
+	# the log must never become an error of its own
+	catch { WriteErrorLog $now $source $message $detail }
+	catch { ::application::triage::schedule }
 }
 
-if {[llength [info commands ::scidb::bgerror]]} {
-	trace add execution ::scidb::bgerror enter ::application::assistant::RecordError
+
+proc ::application::assistant::WriteErrorLog {now source message detail} {
+	variable ErrorLogFile
+	variable MaxErrorLogSize
+
+	if {![string length $ErrorLogFile]} { return }
+	file mkdir [file dirname $ErrorLogFile]
+	if {[file exists $ErrorLogFile] && [file size $ErrorLogFile] > $MaxErrorLogSize} {
+		file rename -force $ErrorLogFile $ErrorLogFile.1
+	}
+	# one header line per entry; further lines are indented, so the file stays parseable
+	set rest [lassign [split $message \n] first]
+	set entry "[clock format $now -format {%Y-%m-%d %T}] \[$source\] $first\n"
+	foreach line [concat $rest [split [string trim $detail] \n]] {
+		if {[string length $line]} { append entry "    " $line \n }
+	}
+	set fh [open $ErrorLogFile a]
+	fconfigure $fh -encoding utf-8
+	puts -nonewline $fh $entry
+	close $fh
 }
+
+
+# trace on ::scidb::bgerror: {::scidb::bgerror message options}
+proc ::application::assistant::TraceBgError {cmd op} {
+	# what ::scidb::bgerror itself ignores or only keeps for its next call
+	if {[string match {*selection doesn't exist*} [lindex $cmd 1]]} { return }
+	if {[info exists ::errorCode] && $::errorCode eq "SCIDB INTERMEDIATE"} { return }
+	set opts [lindex $cmd 2]
+	set stack [expr {[dict exists $opts -errorinfo] ? [dict get $opts -errorinfo] : $::errorInfo}]
+	RecordError background [lindex $cmd 1] $stack
+}
+
+
+# trace on ::log::Print: {Print type show ?callee? message}
+proc ::application::assistant::TraceLog {cmd op} {
+	set args [lassign $cmd _ type _]
+	if {$type ne "Error"} { return }
+	switch [llength $args] {
+		1 { set message [lindex $args 0]; set callee "" }
+		2 { lassign $args callee message }
+		default { set message $args; set callee "" }
+	}
+	# a message may be a list of {text tags} runs
+	if {[string index $message 0] eq "\{"} {
+		set message [join [lmap run $message { lindex $run 0 }] ""]
+	}
+	if {[string length $callee]} { set message "\[$callee\] $message" }
+	RecordError log $message
+}
+
+
+# trace on ::dialog::alert: {alert -option value ...}
+proc ::application::assistant::TraceAlert {cmd op} {
+	set opts [lrange $cmd 1 end]
+	if {[llength $opts] % 2 || ![dict exists $opts -type] || [dict get $opts -type] ne "error"} { return }
+	set detail [expr {[dict exists $opts -detail] ? [dict get $opts -detail] : ""}]
+	RecordError dialog [expr {[dict exists $opts -message] ? [dict get $opts -message] : ""}] $detail
+}
+
+
+apply {{} {
+	foreach {command handler} {
+		::scidb::bgerror	TraceBgError
+		::log::Print		TraceLog
+		::dialog::alert	TraceAlert
+	} {
+		if {[llength [info commands $command]]} {
+			trace add execution $command enter ::application::assistant::$handler
+		}
+	}
+}}
 
 
 proc ::application::assistant::DoRecentErrors {count} {
 	variable Errors
 
-	if {![llength $Errors]} { return "no background errors in this session" }
+	if {![llength $Errors]} { return "no errors in this session" }
 	set out {}
 	foreach e [lrange $Errors end-[expr {$count - 1}] end] {
-		lassign $e time message stack
-		lappend out "\[$time\] $message\n$stack"
+		lassign $e time source message detail
+		lappend out [string trimright "\[$time\] $source: $message\n$detail"]
 	}
 	return [join $out "\n\n"]
 }
@@ -797,6 +910,45 @@ proc ::application::assistant::DoToolLog {count} {
 		lappend out "\[$time\] $name [list $cargs]$confirmed: $outcome -- $reply"
 	}
 	return [join $out \n]
+}
+
+
+proc ::application::assistant::DoTriage {} {
+	if {![string length $::application::assistant::ErrorLogFile]} { return "the error log is switched off" }
+	if {$::application::triage::Priv(running)} { return "a triage is already running" }
+	set n [llength [::application::triage::pending]]
+	if {!$n} { return "no new errors to triage" }
+	::application::triage::run -done [namespace code TriageDone]
+	return "started triage of $n new error group(s); the result is posted here when it is done"
+}
+
+
+proc ::application::assistant::TriageDone {result} {
+	if {[dict get $result ok]} {
+		set text "Triage: [dict get $result summary]"
+	} else {
+		set text "Triage failed: [dict get $result error]"
+	}
+	Append assistant $text
+	# The next request knows about it too -- unless one is running, whose tool
+	# calls and results must stay together, or the history has no system
+	# prompt yet.
+	variable Priv
+	if {!$Priv(busy) && [llength $Priv(messages)]} {
+		lappend Priv(messages) [dict create role assistant content $text]
+	}
+}
+
+
+proc ::application::assistant::DoListIssues {} {
+	set issues [::application::triage::issues]
+	if {![llength $issues]} { return "no issues" }
+	return [join [lmap i $issues { lassign $i id severity summary file; set _ "$id ($severity) $summary -- $file" }] \n]
+}
+
+
+proc ::application::assistant::DoHandoff {issue} {
+	return [::application::triage::handoff $issue]
 }
 
 

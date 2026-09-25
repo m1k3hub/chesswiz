@@ -163,6 +163,7 @@ SOURCES = \
 	app-ai.tcl \
 	app-ai-models.tcl \
 	app-assistant.tcl \
+	app-error-triage.tcl \
 	app-media-decode.tcl \
 	app-media-lesson.tcl \
 	app-media-sync.tcl \

@@ -172,14 +172,99 @@ tcltest::test assistant-app-state {app_state reports versions, database and posi
 		[string match "*current position: *" $reply] [string match "*current game (slot *" $reply]
 } -result {1 1 1 1}
 
-tcltest::test assistant-recent-errors {background errors are recorded for recent_errors} -body {
-	set saved $::application::assistant::Errors
-	::application::assistant::RecordError [list ::scidb::bgerror "boom" {-errorinfo "boom\n    while executing x"}] enter
-	set reply [::application::assistant::runTool recent_errors {count 1}]
-	set ::application::assistant::Errors $saved
-	list [string match "*boom*while executing x*" $reply] \
-		[expr {"enter ::application::assistant::RecordError" in [trace info execution ::scidb::bgerror]}]
+# Run <body> with an empty error record and a scratch error log; returns
+# {recent_errors-reply log-file-contents}.
+proc ::scidb::test::assistant::capture {body} {
+	set saved [list $::application::assistant::Errors $::application::assistant::ErrorLogFile]
+	set file [file join [file dirname [file normalize [info script]]] tmp-app capture_[pid].log]
+	file delete $file
+	set ::application::assistant::Errors {}
+	set ::application::assistant::ErrorLogFile $file
+	set rc [catch { uplevel 1 $body } result]
+	set reply [::application::assistant::runTool recent_errors {count 5}]
+	set text ""
+	if {[file exists $file]} {
+		set fh [open $file]; set text [read $fh]; close $fh
+		file delete $file
+	}
+	lassign $saved ::application::assistant::Errors ::application::assistant::ErrorLogFile
+	if {$rc} { return -code error $result }
+	return [list $reply $text]
+}
+
+tcltest::test assistant-errors-traced {every error channel is traced from startup} -body {
+	lmap {command handler} {::scidb::bgerror TraceBgError ::log::Print TraceLog ::dialog::alert TraceAlert} {
+		expr {"enter ::application::assistant::$handler" in [trace info execution $command]}
+	}
+} -result {1 1 1}
+
+tcltest::test assistant-background-error {background errors are recorded with their stack} -body {
+	lassign [::scidb::test::assistant::capture {
+		::application::assistant::TraceBgError \
+			[list ::scidb::bgerror "boom" {-errorinfo "boom\n    while executing x"}] enter
+		::application::assistant::TraceBgError \
+			[list ::scidb::bgerror "selection doesn't exist" {}] enter
+	}] reply text
+	list [string match "*background: boom\nboom\n    while executing x" $reply] \
+		[regexp {^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d \[background\] boom\n    boom\n        while executing x\n$} $text]
 } -result {1 1}
+
+tcltest::test assistant-log-and-dialog-errors {errors of the log window and of error dialogs are recorded} -body {
+	lassign [::scidb::test::assistant::capture {
+		::log::error Import "cannot read game 7"
+		::log::info "just information"
+		::log::error {{"bad " {}} {"header" {bold}}}
+		# the modal dialog itself would block the test
+		::application::assistant::TraceAlert \
+			{::dialog::alert -parent . -message "Disk full" -detail "while saving x.sci" -type error} enter
+		::application::assistant::TraceAlert \
+			{::dialog::alert -parent . -message "Saved." -type info} enter
+	}] reply text
+	list [expr {[string first {log: [Import] cannot read game 7} $reply] >= 0}] \
+		[string match "*log: bad header*" $reply] \
+		[string match "*just information*" $reply] \
+		[string match "*dialog: Disk full\nwhile saving x.sci*" $reply] \
+		[string match "*Saved.*" $reply] \
+		[regexp -all -line {^\d{4}-\S+ \S+ \[(log|dialog)\]} $text]
+} -cleanup {
+	catch { ::log::close }
+	catch { wm withdraw .application.log }
+} -result {1 1 0 1 0 3}
+
+tcltest::test assistant-tool-failure-recorded {a tool that fails is recorded as an error} -body {
+	lassign [::scidb::test::assistant::capture {
+		rename ::application::assistant::DoAppState ::scidb::test::assistant::realAppState
+		proc ::application::assistant::DoAppState {} { error "state broke" }
+		set reply [::application::assistant::runTool app_state {}]
+		rename ::application::assistant::DoAppState {}
+		rename ::scidb::test::assistant::realAppState ::application::assistant::DoAppState
+		set reply
+	}] errors text
+	list [string match "*assistant: app_state: state broke\nstate broke*" $errors] \
+		[expr {[string first {[assistant] app_state: state broke} $text] >= 0}]
+} -result {1 1}
+
+tcltest::test assistant-error-log-rotates {a full error log moves aside} -body {
+	set saved [list $::application::assistant::ErrorLogFile $::application::assistant::MaxErrorLogSize]
+	set file [file join [file dirname [file normalize [info script]]] tmp-app rotate_[pid].log]
+	file delete $file $file.1
+	set ::application::assistant::ErrorLogFile $file
+	set ::application::assistant::MaxErrorLogSize 100
+	# the size is checked before each entry: 2 entries pass 100 bytes, the 3rd starts anew
+	for {set i 0} {$i < 3} {incr i} { ::application::assistant::RecordError test [string repeat x 40] }
+	set result [list [file exists $file.1] [expr {[file size $file] <= 100}]]
+	file delete $file $file.1
+	lassign $saved ::application::assistant::ErrorLogFile ::application::assistant::MaxErrorLogSize
+	set result
+} -result {1 1}
+
+tcltest::test assistant-error-log-disabled {an empty log file name keeps the record but writes nothing} -body {
+	set saved $::application::assistant::ErrorLogFile
+	set ::application::assistant::ErrorLogFile ""
+	::application::assistant::RecordError test "not written"
+	set ::application::assistant::ErrorLogFile $saved
+	lrange [lindex $::application::assistant::Errors end] 1 2
+} -result {test {not written}}
 
 tcltest::test assistant-debug-tools-gated {debug tools are hidden and refused outside debug mode} -body {
 	package require json

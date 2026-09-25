@@ -24,6 +24,10 @@ set argvCopy $argv
 set argcCopy $argc
 set argv {}
 set argc 0
+# errors raised by the tests go to a scratch log, not the user's
+set ::env(SCIDB_ERROR_LOG) [file join $::scidb::test::app::testDir tmp-app errors-[pid].log]
+# nor to the model: triage runs only where a test asks for it
+set ::env(SCIDB_AI_TRIAGE) 0
 source [file join $::scidb::test::app::testDir .. tcl scidb-beta]
 set argv $argvCopy
 set argc $argcCopy
