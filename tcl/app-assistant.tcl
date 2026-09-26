@@ -171,6 +171,54 @@ variable Actions {
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoClearSearch
 	}
+	list_engines {
+		0 0 "list the chess engines"
+		"The chess engines Scidb can run: the ones bundled with Scidb and the ones the user added. For each: name, version, protocol, variants, rating, threads, hash and line limits, its program and whether that program is there. Also which analysis panes run which engine."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoListEngines
+	}
+	engine_options {
+		0 0 "read the options of %s"
+		"The options of an engine's profile (default 'Default') as the Options dialog shows them: name, type, value, default and range or choices. Threads, hash and the number of lines are not options here; start_engine sets them."
+		{{"type":"object","properties":{"engine":{"type":"string","description":"engine name or part of it"},"profile":{"type":"string"}},"required":["engine"]}}
+		::application::assistant::DoEngineOptions
+	}
+	start_engine {
+		1 0 "analyse the board position with %s"
+		"Start an engine on the position on the board in an analysis pane; it follows the board as it changes. Without a pane a free one is used or a new one opened; giving the pane of a running engine replaces or restarts it (e.g. to change lines). lines = number of best lines (MultiPV), threads, hash in MB; each defaults to the pane's setting. Then read its lines with engine_analysis."
+		{{"type":"object","properties":{"engine":{"type":"string","description":"engine name or part of it"},"pane":{"type":"integer","description":"analysis pane number as in its title: 1 for 'Analysis', 2 for 'Analysis (2)'"},"lines":{"type":"integer"},"threads":{"type":"integer"},"hash":{"type":"integer","description":"hash size in MB"}},"required":["engine"]}}
+		::application::assistant::DoStartEngine
+	}
+	engine_analysis {
+		0 0 "read the engine analysis"
+		"The lines the running engines show for the board position: per pane the engine, depth and for each line the score (pawns from White's side, #n = mate in n) and the moves. 'seconds' waits that long first (at most 60) so the engine can search deeper; the result comes when the wait is over."
+		{{"type":"object","properties":{"pane":{"type":"integer"},"seconds":{"type":"integer"}}}}
+		::application::assistant::DoEngineAnalysis
+	}
+	stop_engine {
+		1 0 "stop the engine in analysis pane %s"
+		"Stop the engine of an analysis pane; the pane stays open. The pane may be left out when only one engine runs."
+		{{"type":"object","properties":{"pane":{"type":"integer"}}}}
+		::application::assistant::DoStopEngine
+	}
+	set_engine_option {
+		1 0 "set option '%2$s' of %1$s to '%3$s' (profile %4$s)"
+		"Change an option of an engine's profile (default 'Default'), checked against its type and range; engine_options lists them. Running panes of that engine restart with it. The change is saved."
+		{{"type":"object","properties":{"engine":{"type":"string"},"option":{"type":"string"},"value":{"type":"string"},"profile":{"type":"string"}},"required":["engine","option","value"]}}
+		::application::assistant::DoSetEngineOption
+	}
+	add_engine {
+		1 0 "add the engine program %s to the engine list"
+		"Add a UCI or WinBoard engine program, given the full path of its executable. Scidb probes it for its name, options and features; a program already in the list is refreshed."
+		{{"type":"object","properties":{"path":{"type":"string","description":"absolute path of the engine executable"}},"required":["path"]}}
+		::application::assistant::DoAddEngine
+	}
+	remove_engine {
+		1 0 "remove %s from the engine list"
+		"Remove an engine from the engine list (its program stays on disk). Not while it runs in a pane. Only when the user asks for it."
+		{{"type":"object","properties":{"engine":{"type":"string"}},"required":["engine"]}}
+		::application::assistant::DoRemoveEngine
+	}
 	app_state {
 		0 0 "report the application state"
 		"Report the application state for diagnosis: Tcl/Tk and model versions, the selected tab, the active database and variant, game counts, the current game and position, and the panes of the board layout."
@@ -683,6 +731,60 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			if {$color ni {"" white black}} { error "color must be 'white' or 'black'" }
 			return [dict create name $name color $color]
 		}
+		engine_options - remove_engine {
+			set result [dict create engine [EngineNamed [Arg $cargs engine]]]
+			if {$name eq "engine_options"} { dict set result profile [OptArg $cargs profile Default] }
+			return $result
+		}
+		start_engine {
+			set result [dict create engine [EngineNamed [Arg $cargs engine]]]
+			dict set result pane [OptArg $cargs pane ""]
+			if {[dict get $result pane] ne ""} { PaneNumber [dict get $result pane] }
+			foreach key {lines threads hash} {
+				set value [OptArg $cargs $key ""]
+				if {$value ne "" && (![string is integer -strict $value] || $value < 1)} {
+					error "$key must be a positive integer"
+				}
+				dict set result $key $value
+			}
+			return $result
+		}
+		engine_analysis {
+			set pane [OptArg $cargs pane ""]
+			if {$pane ne ""} { PaneNumber $pane }
+			set seconds [OptArg $cargs seconds 0]
+			if {![string is integer -strict $seconds] || $seconds < 0 || $seconds > 60} {
+				error "seconds must be a whole number from 0 to 60"
+			}
+			return [dict create pane $pane seconds $seconds]
+		}
+		stop_engine {
+			set pane [OptArg $cargs pane ""]
+			if {$pane eq ""} {
+				set running [RunningPanes]
+				if {[llength $running] == 0} { error "no engine is running" }
+				if {[llength $running] > 1} {
+					error "engines run in panes [join [lmap n $running { PaneLabel $n }] {, }]; name the pane"
+				}
+				set pane [PaneLabel [lindex $running 0]]
+			} elseif {![::engine::active? [PaneNumber $pane]]} {
+				error "no engine runs in analysis pane $pane"
+			}
+			return [dict create pane $pane]
+		}
+		set_engine_option {
+			set engine [EngineNamed [Arg $cargs engine]]
+			set profile [OptArg $cargs profile Default]
+			lassign [::engine::checkOption $engine [string trim [Arg $cargs option]] \
+				[string trim [Arg $cargs value]] $profile] _ option value
+			return [dict create engine $engine option $option value $value profile $profile]
+		}
+		add_engine {
+			set path [string trim [Arg $cargs path]]
+			if {![file isfile $path]} { error "no such file: $path" }
+			if {![file executable $path]} { error "not executable: $path" }
+			return [dict create path [file normalize $path]]
+		}
 		player_stats {
 			set name [string trim [Arg $cargs name]]
 			if {![string length $name]} { error "name must not be empty" }
@@ -715,6 +817,13 @@ proc ::application::assistant::EcoRange {eco} {
 proc ::application::assistant::Arg {cargs key} {
 	if {![dict exists $cargs $key]} { error "missing argument '$key'" }
 	return [dict get $cargs $key]
+}
+
+
+proc ::application::assistant::OptArg {cargs key default} {
+	if {![dict exists $cargs $key]} { return $default }
+	set value [string trim [dict get $cargs $key]]
+	return [expr {$value eq "" ? $default : $value}]
 }
 
 
@@ -1430,6 +1539,293 @@ proc ::application::assistant::Figurines {moves} {
 
 
 # --- diagnostics --------------------------------------------------------
+
+# ----------------------------------------------------------------------
+# Chess engines: the engine list of ::engine (bundled with Scidb or added
+# by the user) and the analysis panes of ::application::analysis. A pane
+# is named by the number in its title (1 = "Analysis", 2 = "Analysis (2)"),
+# which is not the pane's internal analysis number.
+# ======================================================================
+
+# The name of the engine <text> means: its exact name, or the only engine
+# whose name or version contains it.
+proc ::application::assistant::EngineNamed {text} {
+	set text [string trim $text]
+	set names [lmap e $::engine::Engines { dict get $e Name }]
+	if {![llength $names]} { error "no engine is installed; add one with add_engine" }
+	set i [lsearch -nocase -exact $names $text]
+	if {$i >= 0} { return [lindex $names $i] }
+	set matches {}
+	foreach e $::engine::Engines {
+		if {   [string match -nocase *$text* [dict get $e Name]]
+			 || ([dict exists $e Identifier] && [string match -nocase *$text* [dict get $e Identifier]])} {
+			lappend matches [dict get $e Name]
+		}
+	}
+	switch [llength $matches] {
+		0 { error "no engine matches '$text'; the engines are: [join $names {, }]" }
+		1 { return [lindex $matches 0] }
+	}
+	error "'$text' matches several engines: [join $matches {, }]; give the exact name"
+}
+
+
+# The analysis number of the pane titled with <label>.
+proc ::application::assistant::PaneNumber {label} {
+	if {![string is integer -strict $label]
+		|| ![info exists ::application::MapTerminalToAnalysis($label)]} {
+		set open [lsort -integer [array names ::application::MapTerminalToAnalysis]]
+		if {![llength $open]} { error "no analysis pane is open" }
+		error "no analysis pane $label; open are: [join $open {, }]"
+	}
+	return $::application::MapTerminalToAnalysis($label)
+}
+
+
+proc ::application::assistant::PaneLabel {number} {
+	return [::application::mapToTerminalNumber $number]
+}
+
+
+# Analysis numbers of the open panes, in title order.
+proc ::application::assistant::Panes {} {
+	set labels [lsort -integer [array names ::application::MapTerminalToAnalysis]]
+	return [lmap l $labels { set ::application::MapTerminalToAnalysis($l) }]
+}
+
+
+proc ::application::assistant::RunningPanes {} {
+	return [lmap n [Panes] { if {![::engine::active? $n]} continue; set n }]
+}
+
+
+proc ::application::assistant::EngineEntry {name} {
+	set index [::engine::FindIndex $name]
+	if {$index == -1} { error "no engine named '$name'" }
+	return [dict merge $::engine::EmptyEngine [lindex $::engine::Engines $index]]
+}
+
+
+# The protocol Scidb talks to engine <e> (an EngineEntry), and its features.
+proc ::application::assistant::EngineFeatures {e} {
+	set protocol [dict get $e Protocol]
+	set protocol [expr {"UCI" in $protocol ? "UCI" : [lindex $protocol 0]}]
+	return [list $protocol [dict get $e Features:$protocol]]
+}
+
+
+proc ::application::assistant::DoListEngines {} {
+	set lines {}
+	foreach entry $::engine::Engines {
+		set e [dict merge $::engine::EmptyEngine $entry]
+		lassign [EngineFeatures $e] protocol features
+		set line "[dict get $e Name]:"
+		if {[dict get $e Identifier] ne "" && [dict get $e Identifier] ne [dict get $e Name]} {
+			append line " [dict get $e Identifier],"
+		}
+		append line [expr {[dict get $e UserDefined] ? " added by the user" : " bundled with Scidb"}]
+		append line ", [join [dict get $e Protocol] /]"
+		if {[llength [dict get $e Variants]]} { append line ", variants [join [dict get $e Variants] /]" }
+		foreach {key label} {Elo Elo CCRL CCRL} {
+			if {[dict get $e $key] > 0} { append line ", $label [dict get $e $key]" }
+		}
+		if {![dict exists $features analyze]} { append line ", cannot analyse" }
+		foreach {key label unit} {threads threads "" smp threads "" hashSize hash " MB"} {
+			if {[dict exists $features $key] && [llength [dict get $features $key]] == 2} {
+				append line ", $label [join [dict get $features $key] -]$unit"
+			}
+		}
+		if {[dict exists $features multiPV]} { append line ", up to [dict get $features multiPV] lines" }
+		append line ", program [dict get $e Command]"
+		if {![file executable [dict get $e Command]]} { append line " (MISSING)" }
+		lappend lines $line
+	}
+	if {![llength $lines]} { set lines [list "No engine is installed; add one with add_engine."] }
+
+	set panes {}
+	foreach number [Panes] {
+		set label [PaneLabel $number]
+		if {[::engine::active? $number]} {
+			set n [llength [::application::analysis::lines $number]]
+			lappend panes "pane $label: [::engine::engineName $number] is analysing ($n lines so far)"
+		} else {
+			lappend panes "pane $label: no engine"
+		}
+	}
+	if {![llength $panes]} { set panes [list "no analysis pane is open"] }
+	return "Engines:\n[join $lines \n]\n\nAnalysis panes:\n[join $panes \n]"
+}
+
+
+proc ::application::assistant::DoEngineOptions {engine profile} {
+	lassign [::engine::profileOptions $engine $profile] protocol kind options
+	if {$kind eq "script"} {
+		return "$engine ($protocol) is set up by this script in profile '$profile':\n[join $options \n]"
+	}
+	set profiles [lmap {p _} [dict get [EngineEntry $engine] Profiles:$protocol] { set p }]
+	set lines [list "$engine ($protocol), profile '$profile' (profiles: [join $profiles {, }]):"]
+	foreach opt $options {
+		lassign $opt name type value dflt var max
+		switch $type {
+			spin		{ set range "whole number $var-$max" }
+			check		{ set range "true/false" }
+			combo		{ set range "one of [join [::engine::SplitComboEntries $var] {, }]" }
+			default	{ set range $type }
+		}
+		set line "$name = $value ($range"
+		if {$dflt ne $value} { append line ", default $dflt" }
+		lappend lines "$line)"
+	}
+	if {![llength $options]} { lappend lines "(no options)" }
+	return [join $lines \n]
+}
+
+
+proc ::application::assistant::DoStartEngine {engine pane lines threads hash} {
+	set e [EngineEntry $engine]
+	lassign [EngineFeatures $e] protocol features
+	if {![dict exists $features analyze]} { error "$engine cannot analyse" }
+	if {![file executable [dict get $e Command]]} {
+		error "the program of $engine is missing: [dict get $e Command]"
+	}
+	if {$lines ne "" && [dict exists $features multiPV] && $lines > [dict get $features multiPV]} {
+		error "$engine shows at most [dict get $features multiPV] lines"
+	}
+	foreach {value keys label} [list $threads {threads smp} threads $hash {hashSize} "hash size"] {
+		if {$value eq ""} { continue }
+		set range {}
+		foreach key $keys { if {[dict exists $features $key]} { set range [dict get $features $key] } }
+		if {[llength $range] != 2} { error "$engine does not take a $label" }
+		lassign $range min max
+		if {$value < $min || ($max > 0 && $value > $max)} { error "$label must be from $min to $max for $engine" }
+	}
+
+	if {$pane ne ""} {
+		set number [PaneNumber $pane]
+	} else {
+		set free [lmap n [Panes] { if {[::engine::active? $n]} continue; set n }]
+		set number [expr {[llength $free] ? [lindex $free 0] : [::application::analysis::newNumber]}]
+	}
+
+	::engine::initVars $number
+	namespace upvar ::engine::$number Vars Vars
+	set profiles [lmap {p _} [dict get $e Profiles:$protocol] { set p }]
+	set Vars(current:name) $engine
+	set Vars(current:protocol) $protocol
+	if {$Vars(current:profile) ni $profiles} {
+		set Vars(current:profile) [expr {"Default" in $profiles ? "Default" : [lindex $profiles 0]}]
+	}
+	if {$threads ne ""} { set Vars(current:cores) $threads }
+	if {$hash ne ""} { set Vars(current:memory) $hash }
+
+	if {![::application::analysis::exists? $number]} {
+		::application::newAnalysisPane $number
+		update idletasks
+	}
+	if {$lines ne ""} { ::application::analysis::setLines $number $lines }
+	::application::analysis::startAnalysis $number
+	set label [PaneLabel $number]
+	catch { ::application::openPane analysis:$label }
+
+	if {![::engine::active? $number]} {
+		error "$engine did not start; the analysis pane $label says why"
+	}
+	set n [expr {$lines ne "" ? $lines : [set ::application::analysis::${number}::Options(engine:multiPV)]}]
+	if {[set ::application::analysis::${number}::Options(engine:singlePV)]} { set n 1 }
+	return "$engine is analysing the board position in analysis pane $label: $n lines,\
+		$Vars(current:cores) threads, $Vars(current:memory) MB hash, profile '$Vars(current:profile)'.\
+		It follows the board. Read its lines with engine_analysis."
+}
+
+
+proc ::application::assistant::DoEngineAnalysis {pane seconds} {
+	set numbers [expr {$pane ne "" ? [list [PaneNumber $pane]] : [RunningPanes]}]
+	if {![llength [lmap n $numbers { if {![::engine::active? $n]} continue; set n }]]} {
+		return "No engine is running[expr {$pane ne "" ? " in analysis pane $pane" : ""}]. Start one with start_engine."
+	}
+	if {$seconds == 0} { return [EngineReport $numbers] }
+	set token [Later]
+	after [expr {$seconds*1000}] [list ::application::assistant::EngineReportLater $token $numbers]
+	return $token
+}
+
+
+proc ::application::assistant::EngineReportLater {token numbers} {
+	if {[catch { EngineReport $numbers } reply]} { set reply "error: $reply" }
+	Resolve $token $reply
+}
+
+
+proc ::application::assistant::EngineReport {numbers} {
+	set out [list "Board position: [::scidb::pos::fen]"]
+	foreach number $numbers {
+		set label [PaneLabel $number]
+		if {![::application::analysis::exists? $number] || ![::engine::active? $number]} {
+			lappend out "Pane $label: no engine running."
+			continue
+		}
+		set rows [::application::analysis::lines $number]
+		set head "Pane $label, [::engine::engineName $number]"
+		if {![llength $rows]} {
+			lappend out "$head: no lines yet (just started, or paused)."
+			continue
+		}
+		set depth 0
+		foreach row $rows { set depth [expr {max($depth, [lindex $row 2])}] }
+		lappend out "$head, depth $depth:"
+		set i 0
+		foreach row $rows {
+			lassign $row score mate depth seldepth time nodes nps tbhits pv
+			if {$mate} {
+				set eval [expr {$mate > 0 ? "#$mate" : "-#[expr {-$mate}]"}]
+			} else {
+				set eval [format %+.2f [expr {$score/100.0}]]
+			}
+			set moves [lrange [split [string trim $pv]] 0 23]
+			lappend out "  [incr i]. $eval (depth $depth) [join $moves { }]"
+		}
+	}
+	lappend out "Scores are in pawns from White's side; #n: White mates in n, -#n: Black mates in n."
+	return [join $out \n]
+}
+
+
+proc ::application::assistant::DoStopEngine {pane} {
+	set number [PaneNumber $pane]
+	set name [::engine::engineName $number]
+	::application::analysis::stopEngine $number
+	return "Stopped $name in analysis pane $pane; the pane stays open."
+}
+
+
+proc ::application::assistant::DoSetEngineOption {engine option value profile} {
+	::engine::setOption $engine $option $value $profile
+	set restarted {}
+	foreach number [RunningPanes] {
+		namespace upvar ::engine::$number Vars Vars
+		if {$Vars(engine:name) ne $engine || $Vars(current:profile) ne $profile} { continue }
+		::application::analysis::startAnalysis $number
+		lappend restarted [PaneLabel $number]
+	}
+	set reply "Set $option of $engine (profile '$profile') to $value; saved."
+	if {[llength $restarted]} { append reply " Restarted it in analysis pane [join $restarted {, }]." }
+	return $reply
+}
+
+
+proc ::application::assistant::DoAddEngine {path} {
+	set name [::engine::install $path]
+	set e [EngineEntry $name]
+	return "Added $name ([dict get $e Identifier], [join [dict get $e Protocol] /]) from $path.\
+		Start it with start_engine."
+}
+
+
+proc ::application::assistant::DoRemoveEngine {engine} {
+	::engine::remove $engine
+	return "Removed $engine from the engine list; its program is still on disk."
+}
+
 
 proc ::application::assistant::DoAppState {} {
 	variable ::application::ai::Config

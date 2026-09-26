@@ -480,37 +480,9 @@ proc openSetup {parent {number -1}} {
 	set lf [ttk::labelframe $top.engine -text $mc::Select(engine)]
 	set rf [ttk::labelframe $top.profile -text $mc::Select(profile)]
 
-	set memory [::scidb::misc::memFree]
-	if {$memory == -1} {
-		set memory 256
-	} else {
-		set memory [expr {min(256, [::scidb::misc::predPow2 [expr {$memory/1048576}]])}]
-	}
-
-	foreach {attr value} [list \
-		selection -1 \
-		priority $::mc::Normal \
-		list:profiles $rf.profiles \
-		list:engines $lf.list \
-		current:name "" \
-		current:protocol UCI \
-		current:memory $memory \
-		current:cores [expr {[::scidb::misc::numberOfProcessors] - 1}] \
-		current:priority $::mc::Normal \
-		current:profile Default \
-		engine:name "" \
-		engine:protocol UCI \
-		engine:memory 0 \
-		engine:cores 1 \
-		engine:priority $::mc::Normal \
-		engine:profile Default \
-		engine:id -1 \
-		selection -1 \
-		priority $::mc::Normal \
-		list:profiles $rf.profiles \
-		list:engines $lf.list] {
-		if {![info exists Vars($attr)]} { set Vars($attr) $value }
-	}
+	initVars $number
+	set Vars(list:profiles) $rf.profiles
+	set Vars(list:engines) $lf.list
 
 	set listheight 7
 
@@ -690,6 +662,41 @@ proc openSetup {parent {number -1}} {
 	focus $list
 	tkwait variable [namespace current]::openSetup_
 	::ttk::releaseGrab $dlg
+}
+
+
+# The engine state of analysis pane <number>, for the setup dialog and for
+# callers that start an engine without it (the assistant). Existing values
+# are kept.
+proc initVars {number} {
+	namespace eval $number {}
+	variable ${number}::Vars
+
+	set memory [::scidb::misc::memFree]
+	if {$memory == -1} {
+		set memory 256
+	} else {
+		set memory [expr {min(256, [::scidb::misc::predPow2 [expr {$memory/1048576}]])}]
+	}
+
+	foreach {attr value} [list \
+		selection -1 \
+		priority $::mc::Normal \
+		current:name "" \
+		current:protocol UCI \
+		current:memory $memory \
+		current:cores [expr {max(1, [::scidb::misc::numberOfProcessors] - 1)}] \
+		current:priority $::mc::Normal \
+		current:profile Default \
+		engine:name "" \
+		engine:protocol UCI \
+		engine:memory 0 \
+		engine:cores 1 \
+		engine:priority $::mc::Normal \
+		engine:profile Default \
+		engine:id -1] {
+		if {![info exists Vars($attr)]} { set Vars($attr) $value }
+	}
 }
 
 
@@ -3950,6 +3957,140 @@ proc FindIndex {name} {
 	}
 
 	return -1
+}
+
+
+# ----------------------------------------------------------------------
+# Engine list changes without the Manage Engines dialog (the assistant).
+# Each one raises an error with a plain reason instead of opening a dialog,
+# except the probe of a new engine, which shows its own progress and errors.
+# ----------------------------------------------------------------------
+
+proc adminIsOpen? {} {
+	variable Priv
+	return [expr {[info exists Priv(button:delete)] && [winfo exists $Priv(button:delete)]}]
+}
+
+
+# Probes the executable <path> and adds it to the engine list, or refreshes
+# the entry that already runs it. Returns the engine's name.
+proc install {path {parent .application}} {
+	variable EmptyEngine
+	variable Engines
+
+	if {[adminIsOpen?]} { error "close the Manage Engines dialog first" }
+	set path [file normalize $path]
+	if {![file isfile $path] || ![file executable $path]} { error "not an executable file: $path" }
+	if {![winfo exists $parent]} { set parent . }
+	if {![ProbeNewEngine $parent [list Command $path]]} {
+		error "$path does not answer as a UCI or WinBoard engine"
+	}
+
+	foreach entry $Engines {
+		array set engine $EmptyEngine
+		array set engine $entry
+		if {$engine(Command) eq $path} { break }
+	}
+	if {[string length $engine(Directory)]} { catch { file mkdir $engine(Directory) } }
+	SaveEngineList
+	return $engine(Name)
+}
+
+
+proc remove {name} {
+	variable Engines
+
+	if {[adminIsOpen?]} { error "close the Manage Engines dialog first" }
+	set index [FindIndex $name]
+	if {$index == -1} { error "no engine named '$name'" }
+	foreach ns [namespace children [namespace current] {[0-9]*}] {
+		if {[info exists ${ns}::Vars(engine:id)]
+			&& [set ${ns}::Vars(engine:id)] != -1
+			&& [set ${ns}::Vars(engine:name)] eq $name} {
+			error "'$name' is running in an analysis pane; stop it first"
+		}
+	}
+	set Engines [lreplace $Engines $index $index]
+	SaveEngineList
+}
+
+
+# The options of profile <profile> of engine <name> that the Options dialog
+# offers, as {name type value default min max} (for a combo, min holds the
+# choices separated by ';'), and the protocol they belong to.
+proc profileOptions {name {profile Default}} {
+	variable EmptyEngine
+	variable Engines
+
+	set index [FindIndex $name]
+	if {$index == -1} { error "no engine named '$name'" }
+	array set engine $EmptyEngine
+	array set engine [lindex $Engines $index]
+	set protocol [expr {"UCI" in $engine(Protocol) ? "UCI" : [lindex $engine(Protocol) 0]}]
+	array set profiles $engine(Profiles:$protocol)
+	if {![info exists profiles($profile)]} {
+		error "'$name' has no profile '$profile' (profiles: [join [array names profiles] {, }])"
+	}
+	if {$protocol eq "WB" && $engine(ProfileType) eq "Script"} {
+		return [list $protocol script $profiles($profile)]
+	}
+	return [list $protocol options [FilterOptions $protocol $profiles($profile)]]
+}
+
+
+# Checks <value> for option <option> of profile <profile> of engine <name>
+# against the option's type and range. Returns {protocol option value} with
+# the option's own spelling and the value as it is stored.
+proc checkOption {name option value {profile Default}} {
+	lassign [profileOptions $name $profile] protocol kind offered
+	if {$kind eq "script"} { error "'$name' is set up by a script, not by options" }
+	set opt [lsearch -inline -nocase -index 0 -exact $offered $option]
+	if {![llength $opt]} {
+		error "'$name' has no option '$option' in profile '$profile'"
+	}
+	lassign $opt option type _ _ var max
+	switch $type {
+		spin {
+			if {![string is integer -strict $value] || $value < $var || $value > $max} {
+				error "$option must be a whole number from $var to $max"
+			}
+		}
+		check {
+			if {![string is boolean -strict $value]} { error "$option must be true or false" }
+			set value [expr {$value ? "true" : "false"}]
+		}
+		combo {
+			set choices [SplitComboEntries $var]
+			set i [lsearch -nocase -exact $choices $value]
+			if {$i == -1} { error "$option must be one of: [join $choices {, }]" }
+			set value [lindex $choices $i]
+		}
+		button { error "$option is a button, not a setting" }
+	}
+	return [list $protocol $option $value]
+}
+
+
+# Sets option <option> of profile <profile> of engine <name> to <value>
+# (see checkOption). Returns the value stored.
+proc setOption {name option value {profile Default}} {
+	variable EmptyEngine
+	variable Engines
+
+	lassign [checkOption $name $option $value $profile] protocol option value
+	set index [FindIndex $name]
+	array set engine $EmptyEngine
+	array set engine [lindex $Engines $index]
+	set profiles $engine(Profiles:$protocol)
+	set k [expr {[lsearch -exact [lmap {p _} $profiles { set p }] $profile] * 2 + 1}]
+	set options [lindex $profiles $k]
+	set i [lsearch -index 0 -exact $options $option]
+	lset options $i 2 $value
+	lset profiles $k $options
+	set engine(Profiles:$protocol) $profiles
+	lset Engines $index [array get engine]
+	SaveEngineList
+	return $value
 }
 
 

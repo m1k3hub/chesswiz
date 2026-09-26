@@ -617,6 +617,37 @@ proc startAnalysis {number} {
 }
 
 
+# The lines engine of pane <number> shows now, best first when so ordered:
+# one {score mate depth seldepth time nodes nps tbhits pv} per row, the
+# score in centipawns from White's side.
+proc lines {number} {
+	variable NumberToTree
+
+	if {![exists? $number]} { return {} }
+	variable $NumberToTree($number)::Vars
+	variable ${number}::Options
+
+	if {$Options(engine:singlePV)} { set n 1 } else { set n $Options(engine:multiPV) }
+	set result {}
+	for {set row 0} {$row < $n} {incr row} {
+		if {[info exists Vars(lines:$row)]} { lappend result $Vars(lines:$row) }
+	}
+	return $result
+}
+
+
+proc setLines {number n} {
+	variable NumberToTree
+	SetMultiPV $NumberToTree($number) $n
+}
+
+
+proc stopEngine {number} {
+	variable NumberToTree
+	if {[exists? $number]} { CloseEngine $NumberToTree($number) }
+}
+
+
 proc restartAnalysis {number} {
 	variable NumberToTree
 	set tree [set NumberToTree($number)]
@@ -1213,6 +1244,12 @@ proc Display(error) {tree code} {
 
 proc UpdateInfo {tree id type info} {
 	variable ${tree}::Vars
+
+	# the latest line of each row, for lines
+	switch $type {
+		pv		{ set Vars(lines:[lindex $info 8]) [lreplace $info 8 8] }
+		clear	{ array unset Vars lines:* }
+	}
 
 	if {[winfo exists $tree]} {
 		Display($type) $tree {*}$info
