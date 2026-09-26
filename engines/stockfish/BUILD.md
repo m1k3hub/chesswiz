@@ -42,5 +42,6 @@ curl or wget and network access, or the file copied into `src/`.
    variants, features, options), e.g. by probing the binary from Scidb.
 
 The previous tree here (Stockfish 6 sources plus an untracked fork of
-Stockfish master with `narrate`) was moved to
-`engines/stockfish-fork-2026-09/` on 2026-09-26.
+Stockfish master with `narrate`) was removed on 2026-09-26; the Stockfish 6
+sources remain in git history (before fbb681e). Scidb's second engine is
+now Reckless (`engines/reckless`).

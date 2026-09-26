@@ -39,6 +39,32 @@ set ::engine::Engines {
 		}
 	}
 	{
+		Name Reckless
+		Identifier "Reckless 0.9.0"
+		Author "Arseniy Surkov, Shahin M. Shahin, and Styx"
+		Url https://github.com/codedeliveryservice/Reckless
+		Command reckless-scidb
+		Protocol UCI
+		Variants {standard chess960}
+		Features:UCI {
+			analyze true
+			multiPV 256
+			hashSize {1 262144}
+			threads {1 512}
+			clearHash true
+		}
+		Profiles:UCI {
+			Default {
+				{Threads spin 1 1 1 512}
+				{Hash spin 16 16 1 262144}
+				{{Clear Hash} button {} {} {} {}}
+				{MoveOverhead spin 100 100 0 2000}
+				{Minimal check false false {} {}}
+				{SyzygyPath path <empty> <empty> {} {}}
+			}
+		}
+	}
+	{
 		Name Sjeng
 		Identifier "Sjeng 11.2 scidb"
 		Author "Gian-Carlo Pascutto"
