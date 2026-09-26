@@ -104,10 +104,10 @@ tcltest::test systemone-body {questions are encoded in the /v1/systemone shape} 
 } -result {kev-latest {line one
 "quoted"} {type choice instructions Which? criteria {bug {a defect} noise harmless}} {type noul instructions Urgent?} {type score criteria {low medium high}}}
 
-tcltest::test systemone-backends {kev and jev presets; off disables; bad questions are refused} -body {
-	set saved [expr {[info exists ::env(TYPESAFE_API_KEY)] ? $::env(TYPESAFE_API_KEY) : ""}]
-	set ::env(TYPESAFE_API_KEY) secret
-	::ai::systemone::configure -backend jev
+tcltest::test systemone-backends {kev and simple-jev presets; off disables; bad questions are refused} -body {
+	set saved [expr {[info exists ::env(SIMPLE_JEV_API_KEY)] ? $::env(SIMPLE_JEV_API_KEY) : ""}]
+	set ::env(SIMPLE_JEV_API_KEY) secret
+	::ai::systemone::configure -backend simple-jev
 	set jev [list $::ai::systemone::Config(endpoint) $::ai::systemone::Config(model) $::ai::systemone::Config(apiKey)]
 	::ai::systemone::configure -backend vercel
 	set vercel [list $::ai::systemone::Config(endpoint) $::ai::systemone::Config(model)]
@@ -115,12 +115,12 @@ tcltest::test systemone-backends {kev and jev presets; off disables; bad questio
 	set kev [list $::ai::systemone::Config(endpoint) $::ai::systemone::Config(model)]
 	::ai::systemone::configure -backend off
 	set off [::ai::systemone::enabled]
-	set ::env(TYPESAFE_API_KEY) $saved
+	set ::env(SIMPLE_JEV_API_KEY) $saved
 	list $jev $vercel $kev $off \
 		[catch { ::ai::systemone::configure -backend gpt } err] $err \
 		[catch { ::ai::systemone::body x {q {type choice}} } err] $err \
 		[catch { ::ai::systemone::evaluate x {q {type noul}} } err] $err
-} -result {{https://api.typesafe.ai/v1/systemone jev-latest secret} {https://ai-gateway.vercel.sh/typesafe/v1/systemone typesafe-ai/jev} {http://127.0.0.1:8009/v1/systemone kev-latest} 0 1 {unknown System One backend 'gpt' (kev, jev, vercel or off)} 1 {question 'q': a choice question needs criteria} 1 {no System One backend is configured}}
+} -result {{http://127.0.0.1:8000/v1/systemone Qwen/Qwen3.5-0.8B secret} {https://ai-gateway.vercel.sh/typesafe/v1/systemone typesafe-ai/jev} {http://127.0.0.1:8009/v1/systemone kev-latest} 0 1 {unknown System One backend 'gpt' (kev, simple-jev, vercel or off)} 1 {question 'q': a choice question needs criteria} 1 {no System One backend is configured}}
 
 tcltest::test systemone-evaluate {evaluate posts the request and returns the answers} -setup {
 	::scidb::test::s1::start [list [::scidb::test::s1::choice noise 0.8]]

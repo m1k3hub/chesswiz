@@ -5,7 +5,7 @@
 # ::application::assistant::RecordError). Here the log is grouped by
 # signature, and each group not seen yet is sorted into a bug to fix, an
 # environment problem, a user mistake or noise. A System One classifier
-# (::ai::systemone: local Kev, or Jev) looks first: what it calls anything
+# (::ai::systemone: local Kev or Simple Jev) looks first: what it calls anything
 # but a bug with enough confidence is settled there. The rest goes to the
 # language model, which also writes the issue file for every bug -- a file a
 # coding agent can take over; starting that agent is always the user's

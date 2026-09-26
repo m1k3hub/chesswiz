@@ -4,12 +4,12 @@
 # A System One model does not write text: it reads a state and answers typed
 # questions with probabilities -- choice (one of named options), noul (yes or
 # no), score (ordered levels). TypeSafe's Jev defines the wire contract
-# (POST /v1/systemone); Kev serves the same contract from open weights on this
-# machine, so one client talks to both:
+# (POST /v1/systemone); Kev and Simple Jev serve the same contract from open
+# weights on this machine, so one client talks to all of them:
 #
-#   kev     http://127.0.0.1:8009/v1/systemone, no key   (local, the default)
-#   jev     https://api.typesafe.ai/v1/systemone, TYPESAFE_API_KEY
-#   vercel  Jev through Vercel's AI Gateway, AI_GATEWAY_API_KEY
+#   kev         http://127.0.0.1:8009/v1/systemone, no key   (local, the default)
+#   simple-jev  http://127.0.0.1:8000/v1/systemone, no key   (local)
+#   vercel      Jev through Vercel's AI Gateway, AI_GATEWAY_API_KEY
 #
 #   ::ai::systemone::configure -backend kev
 #   ::ai::systemone::evaluate <state> <questions>          -> answers dict
@@ -21,9 +21,10 @@
 # dict: {type choice choice NAME confidence C probabilities {NAME P ...}},
 # {type noul noul P}, or {type score score S confidence C probabilities ...}.
 #
-# Environment: SCIDB_AI_CLASSIFIER (kev, jev, vercel or off),
-# SCIDB_AI_CLASSIFIER_URL, TYPESAFE_API_KEY (jev), AI_GATEWAY_API_KEY (vercel),
-# KEV_API_KEY (a Kev server that requires one). Keys are read from the
+# Environment: SCIDB_AI_CLASSIFIER (kev, simple-jev, vercel or off),
+# SCIDB_AI_CLASSIFIER_URL, SCIDB_AI_CLASSIFIER_MODEL (Simple Jev answers only to
+# the model it loaded), AI_GATEWAY_API_KEY (vercel), KEV_API_KEY and
+# SIMPLE_JEV_API_KEY (a local server that requires one). Keys are read from the
 # environment only, never stored.
 #
 # Scidb does not start Kev; run it beside the app (github.com/jaredpalmer/kev):
@@ -45,7 +46,7 @@ namespace eval systemone {
 
 variable Backends {
 	kev {endpoint http://127.0.0.1:8009/v1/systemone model kev-latest key KEV_API_KEY}
-	jev {endpoint https://api.typesafe.ai/v1/systemone model jev-latest key TYPESAFE_API_KEY}
+	simple-jev {endpoint http://127.0.0.1:8000/v1/systemone model Qwen/Qwen3.5-0.8B key SIMPLE_JEV_API_KEY}
 	vercel {endpoint https://ai-gateway.vercel.sh/typesafe/v1/systemone model typesafe-ai/jev key AI_GATEWAY_API_KEY}
 }
 
@@ -227,6 +228,9 @@ apply {{} {
 	}
 	if {[info exists ::env(SCIDB_AI_CLASSIFIER_URL)]} {
 		::ai::systemone::configure -endpoint $::env(SCIDB_AI_CLASSIFIER_URL)
+	}
+	if {[info exists ::env(SCIDB_AI_CLASSIFIER_MODEL)]} {
+		::ai::systemone::configure -model $::env(SCIDB_AI_CLASSIFIER_MODEL)
 	}
 }}
 
