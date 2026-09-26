@@ -836,12 +836,13 @@ proc resize {n} {
 }
 
 
-proc flipTrialMode {{pos -1}} {
-	if {[trialMode? $pos]} {
-		::scidb::game::pop $pos
+# Trial mode is a property of the current game: push and pop take no position.
+proc flipTrialMode {} {
+	if {[trialMode?]} {
+		::scidb::game::pop
 		::gamebar::setEmphasized [::application::pgn::gamebar] 0
 	} else {
-		::scidb::game::push $pos
+		::scidb::game::push
 		::gamebar::setEmphasized [::application::pgn::gamebar] 1
 	}
 }

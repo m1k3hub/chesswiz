@@ -482,9 +482,15 @@ proc findTemporaryPosition {} {
 }
 
 
-proc saveCurrentLineToRepertoire {parent base} {
+# Saves the game on the board up to the current position to <base>; the
+# command prefix <extend>, if given, runs on the copy before it is saved.
+# The work is done on a copy in a temporary slot; the game on the board is
+# not changed.
+proc saveCurrentLineToRepertoire {parent base {extend {}}} {
+	variable mc
 
 	set position [::scidb::game::current]
+	set key [::scidb::game::query current]
 	set temp [findTemporaryPosition]
 
 	if {$temp < 0} {
@@ -498,23 +504,32 @@ proc saveCurrentLineToRepertoire {parent base} {
 	set rc [catch {
 		::scidb::tree::freeze 1
 		::scidb::game::duplicate $temp $position modified
+		# the game must have a subscriber, else the switch is silently ignored
+		::scidb::game::subscribe state $temp [namespace current]::IgnoreState
 		::scidb::game::switch $temp
+		if {[::scidb::game::current] != $temp} { error "cannot switch to the temporary game" }
+		::scidb::game::moveto $key
 		::scidb::game::strip truncate
+		if {[llength $extend]} { {*}$extend }
 		::application::pgn::saveGame add $base
 	} result options]
 
+	catch { ::scidb::game::switch $position }
+	catch { ::scidb::game::unsubscribe state $temp [namespace current]::IgnoreState }
 	catch {
 		if {[::scidb::game::query $temp open?]} {
 			::scidb::game::release $temp
 		}
 	}
-	catch { ::scidb::game::switch $position }
 	catch { ::scidb::tree::freeze 0 }
 
 	if {$rc} {
 		return -options $options $result
 	}
 }
+
+
+proc IgnoreState {args} {}
 
 
 proc addRepertoireLineDestinationsForSaveToMenu {parent m {discardActualBase 0} {variant {}}} {

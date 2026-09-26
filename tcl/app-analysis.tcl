@@ -65,6 +65,24 @@ set StartOfMotorFailed		"Start of motor failed"
 set WineIsNotInstalled		"'Wine' is not (properly) installed"
 set AnalyzeThisPosition		"Analyze this position"
 set PinToRepertoire			"Pin best line to repertoire"
+set EngineComparison			"Engine Comparison"
+set SelectEngines				"Engines to compare:"
+set Seconds						"Seconds:"
+set Engine						"Engine"
+set Depth						"Depth"
+set Eval							"Score"
+set BestMove					"Best move"
+set Nodes						"Nodes"
+set Nps							"Nodes/s"
+set StartComparison			"Start"
+set StopComparison			"Stop"
+set NeedTwoEngines			"Select at least two engines that can analyse."
+set SecondsLeft				"%d seconds left"
+set NoLinesYet					"No engine has a line yet."
+set AgreeOn						"%d of %d engines choose %s."
+set PrefersOther				"%s: %s."
+set ScoreSpread				"Scores from %s to %s (spread %s)."
+set DeepestSearch				"Deepest search: %s (depth %d)."
 set NoveltyFound				"Novelty: move not in database"
 set AnalyzeFromReport		"Analyze this position"
 set OpponentDossierTitle			"Opponent Dossier: %s"
@@ -694,6 +712,7 @@ proc CloseEngine {tree} {
 
 	::engine::kill $Vars(number)
 	::toolbar::childconfigure $Vars(widget:button:close) -state disabled
+	UpdatePinState $tree
 	::application::updateAnalysisTitle $Vars(number)
 	after idle [namespace code [list DisplayPressEngineButton $tree]]
 }
@@ -1247,12 +1266,14 @@ proc UpdateInfo {tree id type info} {
 
 	# the latest line of each row, for lines
 	switch $type {
-		pv		{ set Vars(lines:[lindex $info 8]) [lreplace $info 8 8] }
-		clear	{ array unset Vars lines:* }
+		pv			{ set Vars(lines:[lindex $info 8]) [lreplace $info 8 8] }
+		bestscore	{ set Vars(lines:best) [lindex $info 2] }
+		clear		{ array unset Vars lines:* }
 	}
 
 	if {[winfo exists $tree]} {
 		Display($type) $tree {*}$info
+		if {$type in {pv clear}} { UpdatePinState $tree }
 	}
 }
 
@@ -1813,338 +1834,446 @@ set arrowRight [image create photo -data {
 } ;# namespace 11x14
 } ;# namespace icon
 # ======================================================================
-# Analyze position from tree context menu
+# Engines started without the setup dialog: "Analyze this position" of
+# the tree, the engine comparison and the assistant.
+# ======================================================================
+
+# Starts engine <name> on the board position in analysis pane <number>
+# (the internal analysis number; "" = the first pane without a running
+# engine, else a new one). <settings> may give lines, threads and hash
+# (MB), checked against what the engine supports. Returns the pane's
+# analysis number; raises an error with a plain reason.
+proc startEngine {name {number ""} {settings {}}} {
+	set index [::engine::FindIndex $name]
+	if {$index == -1} { error "no engine named '$name'" }
+	set e [dict merge $::engine::EmptyEngine [lindex $::engine::Engines $index]]
+	set protocol [dict get $e Protocol]
+	set protocol [expr {"UCI" in $protocol ? "UCI" : [lindex $protocol 0]}]
+	set features [dict get $e Features:$protocol]
+	if {![dict exists $features analyze]} { error "$name cannot analyse" }
+	if {![file executable [dict get $e Command]]} {
+		error "the program of $name is missing: [dict get $e Command]"
+	}
+
+	set lines [expr {[dict exists $settings lines] ? [dict get $settings lines] : ""}]
+	if {$lines ne "" && [dict exists $features multiPV] && $lines > [dict get $features multiPV]} {
+		error "$name shows at most [dict get $features multiPV] lines"
+	}
+	foreach {key features:keys label} {threads {threads smp} threads hash {hashSize} "hash size"} {
+		set value [expr {[dict exists $settings $key] ? [dict get $settings $key] : ""}]
+		set $key $value
+		if {$value eq ""} { continue }
+		set range {}
+		foreach k ${features:keys} { if {[dict exists $features $k]} { set range [dict get $features $k] } }
+		if {[llength $range] != 2} { error "$name does not take a $label" }
+		lassign $range min max
+		if {$value < $min || ($max > 0 && $value > $max)} { error "$label must be from $min to $max for $name" }
+	}
+
+	if {$number eq ""} { set number [FreeNumber] }
+	::engine::initVars $number
+	namespace upvar ::engine::$number Vars Vars
+	set profiles [lmap {p _} [dict get $e Profiles:$protocol] { set p }]
+	set Vars(current:name) $name
+	set Vars(current:protocol) $protocol
+	if {$Vars(current:profile) ni $profiles} {
+		set Vars(current:profile) [expr {"Default" in $profiles ? "Default" : [lindex $profiles 0]}]
+	}
+	if {$threads ne ""} { set Vars(current:cores) $threads }
+	if {$hash ne ""} { set Vars(current:memory) $hash }
+
+	if {![exists? $number]} {
+		::application::newAnalysisPane $number
+		update idletasks
+	}
+	if {$lines ne ""} { setLines $number $lines }
+	startAnalysis $number
+	catch { ::application::openPane analysis:[::application::mapToTerminalNumber $number] }
+	if {![::engine::active? $number]} { error "$name did not start; the analysis pane says why" }
+	return $number
+}
+
+
+# The engine to use when the user has not chosen one: the one last chosen
+# in the setup dialog, else the first that can analyse. "" when none can.
+proc defaultEngine {} {
+	set names [lmap e $::engine::Engines { dict get $e Name }]
+	set last $::engine::Options(engine)
+	if {$last in $names} { set names [linsert [lsearch -all -inline -not -exact $names $last] 0 $last] }
+	foreach name $names {
+		if {[CanAnalyse $name]} { return $name }
+	}
+	return ""
+}
+
+
+proc CanAnalyse {name} {
+	set index [::engine::FindIndex $name]
+	if {$index == -1} { return 0 }
+	set e [dict merge $::engine::EmptyEngine [lindex $::engine::Engines $index]]
+	if {![file executable [dict get $e Command]]} { return 0 }
+	foreach protocol [dict get $e Protocol] {
+		if {[dict exists [dict get $e Features:$protocol] analyze]} { return 1 }
+	}
+	return 0
+}
+
+
+proc FreeNumber {} {
+	variable NumberToTree
+
+	foreach number [lsort -integer [array names NumberToTree]] {
+		if {![::engine::active? $number]} { return $number }
+	}
+	return [newNumber]
+}
+
+
+proc Running {} {
+	variable NumberToTree
+	return [lmap n [lsort -integer [array names NumberToTree]] { if {![::engine::active? $n]} continue; set n }]
+}
+
+
+# ======================================================================
+# "Analyze this position" of the tree's context menu: play the row's move
+# as a click on the row does, and have an engine analyse the result. A
+# running engine follows the board by itself; else the default one starts.
 # ======================================================================
 
 proc AnalyzePosition {table row} {
-	variable Vars
+	set move [::scidb::tree::move $row]
+	if {[string length $move]} { ::move::addMove menu $move }
+	if {[llength [Running]]} { return }
 
-	# Get the position from the tree row
-	set position [::scidb::tree::position $row]
-	if {$position < 0} { return }
-
-	# Get current database and variant
-	set base [::scidb::game::database]
-	set variant [::scidb::game::variant]
-
-	# Load the position
-	if {![::scidb::game::load $base $variant $position]} {
-		::ui::message "Failed to load position for analysis"
-		return
-	}
-
-	# Start or activate analysis panel
-	if {[active? 1]} {
-		# Analysis already running, just update position
-		restartAnalysis 1
-	} else {
-		# Start new analysis
-		::application::newAnalysisPane 1
-		startAnalysis 1
+	set name [defaultEngine]
+	if {$name eq ""} { return [::engine::openSetup .application] }
+	if {[catch { startEngine $name } err]} {
+		::dialog::error -parent .application -message $err
 	}
 }
 
+
 # ======================================================================
-# Pin best analysis line to repertoire database
+# Pin the engine's best line to a repertoire database: the game up to the
+# board position, then the engine's best move with its score as comment.
 # ======================================================================
+
+# The best line of the pane: {row line} (see lines), or {} while there is none.
+proc BestLine {tree} {
+	variable ${tree}::Vars
+
+	if {![::engine::active? $Vars(number)]} { return {} }
+	set row 0
+	if {[info exists Vars(lines:best)]} {
+		set i [lsearch -exact $Vars(lines:best) 1]
+		if {$i >= 0} { set row $i }
+	}
+	if {![info exists Vars(lines:$row)]} { return {} }
+	return [list $row $Vars(lines:$row)]
+}
+
+
+proc UpdatePinState {tree} {
+	variable ${tree}::Vars
+
+	if {![info exists Vars(widget:button:pin)]} { return }
+	set state [expr {[llength [BestLine $tree]] ? "normal" : "disabled"}]
+	::toolbar::childconfigure $Vars(widget:button:pin) -state $state
+}
+
+
+# "1.e4 e5 2.Nf3" -> e4, "12...Qxd5+ 13.Nc3" -> Qxd5+
+proc FirstMove {pv} {
+	set move [lindex [split [string trim $pv]] 0]
+	regsub {^\d+\.+} $move "" move
+	if {$move eq ""} { set move [lindex [split [string trim $pv]] 1] }
+	return $move
+}
+
 
 proc PinToRepertoire {tree} {
 	variable ${tree}::Vars
-	variable mc
 
-	# Get current best line from analysis
-	if {![info exists Vars(best:move:1)] || $Vars(best:move:1) eq ""} {
-		::ui::message "No analysis available to pin"
-		return
+	set best [BestLine $tree]
+	if {![llength $best]} { return }
+	lassign [lindex $best 1] score mate depth
+	set move [FirstMove [lindex $best 1 8]]
+	set comment "[::engine::engineName $Vars(number)]: [ScoreText $score $mate] (depth $depth)"
+	set parent [winfo toplevel $tree]
+
+	set bases [::application::database::repertoireBases 0 [::scidb::game::query Variant?]]
+	if {[llength $bases] == 0} {
+		return [::application::database::showNoRepertoireBases $parent]
 	}
-
-	set move $Vars(best:move:1)
-	set eval $Vars(best:score:1)
-	set depth $Vars(best:depth:1)
-	set variant [::scidb::game::query Variant?]
-
-	# Get repertoire databases
-	set bases [::application::database::repertoireBases 0 $variant]
-	if {![llength $bases]} {
-		::dialog::info \
-			-message $::application::database::mc::NoRepertoireBases \
-			-detail $::application::database::mc::NoRepertoireBasesDetail
-		return
-	}
-
-	# If only one repertoire, use it. Otherwise show selection menu
 	if {[llength $bases] == 1} {
-		SaveAnalysisToRepertoire $tree [lindex $bases 0] $move $eval $depth
-	} else {
-		# Show menu to select repertoire database
-		set menu .pinRepertoireMenu
-		if {[winfo exists $menu]} { destroy $menu }
-		tk_menu $menu -tearoff false
+		return [SaveBestLine $parent [lindex $bases 0] $move $comment]
+	}
 
-		foreach base $bases {
-			set name [::util::databaseName $base]
-			$menu add command -label $name -command [list [namespace current]::SaveAnalysisToRepertoire $tree $base $move $eval $depth]
-		}
+	set menu $parent.pinRepertoireMenu
+	catch { destroy $menu }
+	menu $menu -tearoff false
+	foreach base $bases {
+		$menu add command \
+			-label [::util::databaseName $base] \
+			-command [namespace code [list SaveBestLine $parent $base $move $comment]] \
+			;
+	}
+	tk_popup $menu [winfo pointerx $tree] [winfo pointery $tree]
+}
 
-		tk_popup $menu [winfo pointerx $tree] [winfo pointery $tree]
+
+proc SaveBestLine {parent base move comment} {
+	set extend [namespace code [list AppendMove $move $comment]]
+	if {[catch { ::application::database::saveCurrentLineToRepertoire $parent $base $extend } err]} {
+		::dialog::error -parent $parent -message $err
 	}
 }
 
 
-proc SaveAnalysisToRepertoire {tree base move eval depth} {
-	variable mc
-
-	# Get current position
-	set position [::scidb::game::current]
-	if {$position < 0} {
-		::ui::message "No valid position to save analysis"
-		return
-	}
-
-	# Duplicate current game to temporary position
-	set temp [::application::database::findTemporaryPosition]
-	if {$temp < 0} {
-		::ui::message "No temporary position slots available"
-		return
-	}
-
-	try {
-		# Duplicate game
-		::scidb::game::duplicate $temp $position modified
-
-		# Switch to temp position
-		::scidb::game::switch $temp
-
-		# Add engine line as variation with comment
-		set comment "Engine: $eval (depth $depth)"
-		::scidb::game::comment $comment
-
-		# Save to repertoire database
-		::application::pgn::saveGame add $base
-
-		# Release temp position
-		::scidb::game::release $temp
-
-		# Switch back to original position
-		::scidb::game::switch $position
-
-		::ui::message "Analysis pinned to [::util::databaseName $base]"
-
-	} trap {TCL ERROR} result {
-		catch { ::scidb::game::release $temp }
-		catch { ::scidb::game::switch $position }
-		::ui::message "Failed to save analysis: $result"
-	}
+# Appends <move> to the game on the board, with <comment> after it.
+proc AppendMove {move comment} {
+	::scidb::game::move $move
+	::scidb::game::go 1
+	set xml [::scidb::misc::xml fromList [list [list {} [list [list str $comment]]]]]
+	::scidb::game::update addcomment [::scidb::game::query current] [::scidb::game::current] $xml
 }
-
-
-# Enhanced Opening Report
-set EnhancedOpeningReport			"Opening Report"
-set ECOPerformance					"ECO Performance"
-set MoveAnalysis					"Move Analysis"
-set PerformanceTrends				"Performance Trends"
-set Comparison						"Comparison"
-set PerfRating						"Perf Rating"
-set Trend							"Trend"
-set Improving						"Improving"
-set Declining						"Declining"
-set Stable							"Stable"
 
 
 # ======================================================================
-# Multi-Engine Comparison - UNIQUE to SCIDb
-# ChessBase can only analyze with one engine at a time
+# Engine comparison: several engines analyse the board position, each in
+# its own analysis pane, for some seconds; then their best moves, scores
+# and depths are set side by side.
 # ======================================================================
 
-namespace eval multiEngine {
-	variable engines {}
-	variable comparisons {}
-	variable active 0
+namespace eval compare {
+	variable Seconds 10
+	array set Vars { dlg {} engines {} after {} remaining 0 }
 }
 
 
-proc SetupMultiEngineAnalysis {parent} {
-	variable multiEngine::engines
-	variable mc
+proc openComparison {parent} {
+	variable compare::Vars
 
-	set dlg [tk::toplevel .multiEngine -class Scidb]
-	wm title $dlg "Multi-Engine Comparison"
-	wm transient $dlg $parent
+	set dlg .compareEngines
+	if {[winfo exists $dlg]} { return [::widget::dialogRaise $dlg] }
 
-	# Engine selection panel
-	ttk::frame $dlg.engines
-	pack $dlg.engines -fill x -padx 5 -pady 5
+	set names [lmap e $::engine::Engines { set n [dict get $e Name]; if {![CanAnalyse $n]} continue; set n }]
+	if {[llength $names] < 2} {
+		return [::dialog::info -parent $parent -message $mc::NeedTwoEngines]
+	}
 
-	ttk::label $dlg.engines.lbl -text "Select Engines to Compare:"
-	ttk::combobox $dlg.engines.select -textvariable multiEngine::selectedEngine
-	$dlg.engines.select configure -values [GetAvailableEngines]
-	ttk::button $dlg.engines.add -text "Add Engine" -command [list AddEngineToComparison $dlg]
-	ttk::button $dlg.engines.start -text "Start Comparison" -command [list StartMultiEngineComparison $dlg]
-	ttk::button $dlg.engines.clear -text "Clear" -command [list ClearEngineSelection $dlg]
+	tk::toplevel $dlg -class Scidb
+	wm withdraw $dlg
+	set top [ttk::frame $dlg.top -takefocus 0]
+	pack $top -fill both -expand yes
+	set Vars(dlg) $dlg
 
-	grid $dlg.engines.lbl -row 0 -column 0 -sticky w -padx 5
-	grid $dlg.engines.select -row 0 -column 1 -sticky ew -padx 5
-	grid $dlg.engines.add -row 0 -column 2 -padx 5
-	grid $dlg.engines.start -row 0 -column 3 -padx 5
-	grid $dlg.engines.clear -row 0 -column 4 -padx 5
-	grid columnconfigure $dlg.engines 1 -weight 1
+	ttk::label $top.lengines -text $mc::SelectEngines
+	set lb [tk::listbox $top.engines -selectmode multiple -exportselection 0 -height [expr {min(8, [llength $names])}]]
+	$lb insert end {*}$names
+	ttk::label $top.lseconds -text $mc::Seconds
+	ttk::spinbox $top.seconds -from 2 -to 600 -width 5 -textvariable [namespace current]::compare::Seconds
+	::validate::spinboxInt $top.seconds
 
-	# Active engines list
-	ttk::frame $dlg.active
-	pack $dlg.active -fill both -expand yes -padx 5 -pady 5
+	set tv [ttk::treeview $top.results -show headings -height 6 \
+		-columns {engine depth eval move nodes nps}]
+	foreach {col head width anchor} [list \
+			engine $mc::Engine 160 w  depth $mc::Depth 60 e  eval $mc::Eval 70 e \
+			move $mc::BestMove 80 w  nodes $mc::Nodes 100 e  nps $mc::Nps 90 e] {
+		$tv heading $col -text $head
+		$tv column $col -width $width -anchor $anchor -stretch [expr {$col eq "engine"}]
+	}
+	set txt [tk::text $top.summary -height 5 -width 60 -wrap word -state disabled -borderwidth 1 -relief sunken]
+	ttk::label $top.status
 
-	set engineList [tk::listbox $dlg.active.list -height 10 -width 80]
-	ttk::scrollbar $dlg.active.sb -command [list $engineList yview]
-	$engineList configure -yscrollcommand [list $dlg.active.sb set]
-	$engineList configure -selectmode multiple
+	grid $top.lengines	-row 1 -column 1 -columnspan 3 -sticky w
+	grid $top.engines		-row 2 -column 1 -columnspan 3 -sticky ew
+	grid $top.lseconds	-row 3 -column 1 -sticky w
+	grid $top.seconds		-row 3 -column 2 -sticky w
+	grid $top.results		-row 5 -column 1 -columnspan 3 -sticky nsew
+	grid $top.summary		-row 7 -column 1 -columnspan 3 -sticky nsew
+	grid $top.status		-row 8 -column 1 -columnspan 3 -sticky w
+	grid rowconfigure $top {0 4 6 9} -minsize $::theme::pady
+	grid rowconfigure $top {5 7} -weight 1
+	grid columnconfigure $top {0 4} -minsize $::theme::padx
+	grid columnconfigure $top {3} -weight 1
 
-	grid $engineList -row 0 -column 0 -sticky nsew
-	grid $dlg.active.sb -row 0 -column 1 -sticky ns
-	grid rowconfigure $dlg.active 0 -weight 1
-	grid columnconfigure $dlg.active 0 -weight 1
+	::widget::dialogButtons $dlg {close}
+	::widget::dialogButtonAdd $dlg start [namespace current]::mc::StartComparison {}
+	::widget::dialogButtonAdd $dlg stop [namespace current]::mc::StopComparison {}
+	$dlg.start configure -command [namespace code [list StartComparison $lb]]
+	$dlg.stop configure -command [namespace code FinishComparison] -state disabled
+	$dlg.close configure -command [namespace code CloseComparison]
 
-	# Results panel (shown after analysis)
-	ttk::labelframe $dlg.results -text "Comparison Results"
-	# Initially hidden
-	# pack $dlg.results -fill both -expand yes -padx 5 -pady 5
-
-	wm minsize $dlg 700 400
-	::util::place $dlg -parent $parent -position center
+	wm protocol $dlg WM_DELETE_WINDOW [namespace code CloseComparison]
+	wm title $dlg $mc::EngineComparison
+	wm transient $dlg [winfo toplevel $parent]
+	::util::place $dlg -parent [winfo toplevel $parent] -position center
 	wm deiconify $dlg
-
-	return $dlg
 }
 
 
-proc GetAvailableEngines {} {
-	# Return list of available UCI engines
-	# In production, this would scan engine directories
-	return {
-		"Stockfish 15"
-		"Leela Chess Zero"
-		"Komodo Dragon"
-		"Ethereal 14"
-		"Rocketfish 9"
+proc StartComparison {lb} {
+	variable compare::Vars
+	variable compare::Seconds
+
+	set dlg $Vars(dlg)
+	set names [lmap i [$lb curselection] { $lb get $i }]
+	if {[llength $names] < 2} {
+		return [::dialog::info -parent $dlg -message $mc::NeedTwoEngines]
+	}
+	if {![string is integer -strict $Seconds] || $Seconds < 1} { set Seconds 10 }
+
+	StopComparisonEngines
+	$dlg.top.results delete [$dlg.top.results children {}]
+	SetSummary ""
+	set Vars(engines) {}
+	set failed {}
+	foreach name $names {
+		if {[catch { startEngine $name "" {lines 1} } number]} {
+			lappend failed "$name: $number"
+		} else {
+			lappend Vars(engines) [list $name $number]
+			$dlg.top.results insert {} end -id $number -values [list $name "" "" "" "" ""]
+		}
+	}
+	if {[llength $failed]} { SetSummary [join $failed \n] }
+	if {[llength $Vars(engines)] < 2} { return [FinishComparison] }
+
+	set Vars(remaining) $Seconds
+	$dlg.start configure -state disabled
+	$dlg.stop configure -state normal
+	TickComparison
+}
+
+
+proc TickComparison {} {
+	variable compare::Vars
+
+	if {![winfo exists $Vars(dlg)]} { return }
+	RefreshComparison
+	if {[incr Vars(remaining) -1] < 0} { return [FinishComparison] }
+	$Vars(dlg).top.status configure -text [format $mc::SecondsLeft [expr {$Vars(remaining) + 1}]]
+	set Vars(after) [after 1000 [namespace code TickComparison]]
+}
+
+
+# The best line of each compared engine: {name number line}, line {} if none yet.
+proc ComparisonLines {} {
+	variable compare::Vars
+	variable NumberToTree
+
+	set result {}
+	foreach entry $Vars(engines) {
+		lassign $entry name number
+		set line {}
+		if {[info exists NumberToTree($number)]} {
+			set best [BestLine $NumberToTree($number)]
+			if {[llength $best]} { set line [lindex $best 1] }
+		}
+		lappend result [list $name $number $line]
+	}
+	return $result
+}
+
+
+proc RefreshComparison {} {
+	variable compare::Vars
+
+	set tv $Vars(dlg).top.results
+	foreach entry [ComparisonLines] {
+		lassign $entry name number line
+		if {![$tv exists $number] || ![llength $line]} { continue }
+		lassign $line score mate depth seldepth time nodes nps tbhits pv
+		$tv item $number -values [list $name $depth [ScoreText $score $mate] \
+			[::font::translate [FirstMove $pv]] [::locale::formatNumber $nodes] [::locale::formatNumber $nps]]
 	}
 }
 
 
-proc AddEngineToComparison {dlg} {
-	variable multiEngine::engines
-	variable multiEngine::selectedEngine
+proc FinishComparison {} {
+	variable compare::Vars
 
-	if {[string length $selectedEngine] == 0} {
-		::ui::message "Please select an engine"
-		return
+	after cancel $Vars(after)
+	if {![winfo exists $Vars(dlg)]} { return }
+	RefreshComparison
+	SetSummary [ComparisonSummary [ComparisonLines]]
+	StopComparisonEngines
+	$Vars(dlg).top.status configure -text ""
+	$Vars(dlg).start configure -state normal
+	$Vars(dlg).stop configure -state disabled
+}
+
+
+# What the engines agree on: the most chosen best move, who chose another,
+# and the spread of their scores (in pawns, from White's side).
+proc ComparisonSummary {entries} {
+	set moves {}
+	set scores {}
+	set deepest {}
+	foreach entry $entries {
+		lassign $entry name number line
+		if {![llength $line]} { continue }
+		lassign $line score mate depth
+		set move [FirstMove [lindex $line 8]]
+		dict lappend moves $move $name
+		if {!$mate} { lappend scores $score }
+		if {![llength $deepest] || $depth > [lindex $deepest 1]} { set deepest [list $name $depth] }
 	}
+	if {![dict size $moves]} { return $mc::NoLinesYet }
 
-	if {$selectedEngine ni $engines} {
-		lappend engines $selectedEngine
-		$dlg.active.list insert end "$selectedEngine (Active)"
+	set total [llength [concat {*}[dict values $moves]]]
+	set top ""
+	dict for {move names} $moves {
+		if {$top eq "" || [llength $names] > [llength [dict get $moves $top]]} { set top $move }
+	}
+	set out [list [format $mc::AgreeOn [llength [dict get $moves $top]] $total [::font::translate $top]]]
+	dict for {move names} $moves {
+		if {$move ne $top} { lappend out [format $mc::PrefersOther [join $names ", "] [::font::translate $move]] }
+	}
+	if {[llength $scores] > 1} {
+		set scores [lsort -integer $scores]
+		lappend out [format $mc::ScoreSpread [FormatScore [lindex $scores 0]] \
+			[FormatScore [lindex $scores end]] [FormatScore [expr {[lindex $scores end] - [lindex $scores 0]}]]]
+	}
+	lappend out [format $mc::DeepestSearch {*}$deepest]
+	return [join $out \n]
+}
+
+
+proc SetSummary {text} {
+	variable compare::Vars
+
+	set w $Vars(dlg).top.summary
+	$w configure -state normal
+	$w delete 1.0 end
+	$w insert end $text
+	$w configure -state disabled
+}
+
+
+proc StopComparisonEngines {} {
+	variable compare::Vars
+
+	foreach entry $Vars(engines) {
+		lassign $entry name number
+		if {[::engine::active? $number] && [::engine::engineName $number] eq $name} {
+			stopEngine $number
+		}
 	}
 }
 
 
-proc ClearEngineSelection {dlg} {
-	variable multiEngine::engines
-	set engines {}
-	$dlg.active.list delete 0 end
+proc CloseComparison {} {
+	variable compare::Vars
+
+	after cancel $Vars(after)
+	StopComparisonEngines
+	set Vars(engines) {}
+	destroy $Vars(dlg)
 }
 
-
-proc StartMultiEngineComparison {dlg} {
-	variable multiEngine::engines
-	variable mc
-
-	if {[llength $engines] < 2} {
-		::ui::message "Please select at least 2 engines to compare"
-		return
-	}
-
-	# Start analysis with all engines simultaneously
-	# Each engine runs in background
-	set position [::scidb::game::current]
-	if {$position < 0} {
-		::ui::message "No valid position to analyze"
-		return
-	}
-
-	::ui::message "Starting multi-engine analysis with [llength $engines] engines..."
-
-	# In production, this would:
-	# 1. Launch each engine in background
-	# 2. Collect evaluations at regular intervals
-	# 3. Compare and display disagreements
-	# 4. Highlight tactical blind spots
-
-	# For now, show comparison UI
-	ShowEngineComparisonResults $dlg
-}
-
-
-proc ShowEngineComparisonResults {dlg} {
-	variable multiEngine::engines
-
-	# Create comparison display
-	set results [toplevel $dlg.results]
-	wm title $results "Engine Comparison Results"
-
-	# Comparison table
-	set tree [ttk::treeview $results.tree \
-		-columns {engine depth eval nodes nps agreement} \
-		-show headings \
-		-height 10]
-
-	$tree heading engine -text "Engine"
-	$tree heading depth -text "Depth"
-	$tree heading eval -text "Evaluation"
-	$tree heading nodes -text "Nodes"
-	$tree heading nps -text "NPS"
-	$tree heading agreement -text "Agreement"
-
-	$tree column engine -anchor w -width 150 -stretch 1
-	$tree column depth -anchor e -width 60 -stretch 0
-	$tree column eval -anchor e -width 80 -stretch 0
-	$tree column nodes -anchor e -width 80 -stretch 0
-	$tree column nps -anchor e -width 80 -stretch 0
-	$tree column agreement -anchor e -width 80 -stretch 0
-
-	pack $tree -fill both -expand yes -padx 5 -pady 5
-
-	# Populate with sample data (in production, this would be real engine data)
-	foreach engine $engines {
-		set depth [expr {25 + int(rand() * 10)}]
-		set eval [format "+%.2f" [expr {rand() * 2}]]
-		set nodes [expr {50000000 + int(rand() * 50000000)}]
-		set nps [expr {1000000 + int(rand() * 500000)}]
-		set agreement [expr {85 + int(rand() * 15)}]
-
-		$tree insert {} end -values [list $engine $depth $eval $nodes $nps "${agreement}%"]
-	}
-
-	# Disagreement analysis
-	set text [tk::text $results.analysis -height 10 -wrap word]
-	$text insert 1.0 "Analysis Summary:\n\n"
-	$text insert end "• All engines agree on best move: 1.e4\n"
-	$text insert end "• Evaluation spread: +0.50 to +0.75 (0.25 pawn difference)\n"
-	$text insert end "• Stockfish 15 shows deepest search (depth 34)\n"
-	$text insert end "• Leela Chess Zero has highest node count (95M)\n"
-	$text insert end "• Tactical blind spot detected: Engines disagree on 1...Nc6 viability\n"
-	$text configure -state disabled
-
-	pack $text -fill x -padx 5 -pady 5
-}
-
-
-# Multi-Engine Comparison
-set MultiEngineAnalysis			"Multi-Engine Comparison"
-set SelectEngine					"Select Engine"
-set AddEngine						"Add Engine"
-set StartComparison				"Start Comparison"
-set Clear							"Clear"
-set EngineComparison				"Engine Comparison"
-set Agreement						"Agreement"
-set Disagreement					"Disagreement"
 
 } ;# namespace analysis
 } ;# namespace application

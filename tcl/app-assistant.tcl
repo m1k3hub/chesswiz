@@ -1682,57 +1682,16 @@ proc ::application::assistant::DoEngineOptions {engine profile} {
 
 
 proc ::application::assistant::DoStartEngine {engine pane lines threads hash} {
-	set e [EngineEntry $engine]
-	lassign [EngineFeatures $e] protocol features
-	if {![dict exists $features analyze]} { error "$engine cannot analyse" }
-	if {![file executable [dict get $e Command]]} {
-		error "the program of $engine is missing: [dict get $e Command]"
+	set settings {}
+	foreach key {lines threads hash} {
+		if {[set $key] ne ""} { dict set settings $key [set $key] }
 	}
-	if {$lines ne "" && [dict exists $features multiPV] && $lines > [dict get $features multiPV]} {
-		error "$engine shows at most [dict get $features multiPV] lines"
-	}
-	foreach {value keys label} [list $threads {threads smp} threads $hash {hashSize} "hash size"] {
-		if {$value eq ""} { continue }
-		set range {}
-		foreach key $keys { if {[dict exists $features $key]} { set range [dict get $features $key] } }
-		if {[llength $range] != 2} { error "$engine does not take a $label" }
-		lassign $range min max
-		if {$value < $min || ($max > 0 && $value > $max)} { error "$label must be from $min to $max for $engine" }
-	}
-
-	if {$pane ne ""} {
-		set number [PaneNumber $pane]
-	} else {
-		set free [lmap n [Panes] { if {[::engine::active? $n]} continue; set n }]
-		set number [expr {[llength $free] ? [lindex $free 0] : [::application::analysis::newNumber]}]
-	}
-
-	::engine::initVars $number
+	set number [expr {$pane ne "" ? [PaneNumber $pane] : ""}]
+	set number [::application::analysis::startEngine $engine $number $settings]
 	namespace upvar ::engine::$number Vars Vars
-	set profiles [lmap {p _} [dict get $e Profiles:$protocol] { set p }]
-	set Vars(current:name) $engine
-	set Vars(current:protocol) $protocol
-	if {$Vars(current:profile) ni $profiles} {
-		set Vars(current:profile) [expr {"Default" in $profiles ? "Default" : [lindex $profiles 0]}]
-	}
-	if {$threads ne ""} { set Vars(current:cores) $threads }
-	if {$hash ne ""} { set Vars(current:memory) $hash }
-
-	if {![::application::analysis::exists? $number]} {
-		::application::newAnalysisPane $number
-		update idletasks
-	}
-	if {$lines ne ""} { ::application::analysis::setLines $number $lines }
-	::application::analysis::startAnalysis $number
-	set label [PaneLabel $number]
-	catch { ::application::openPane analysis:$label }
-
-	if {![::engine::active? $number]} {
-		error "$engine did not start; the analysis pane $label says why"
-	}
-	set n [expr {$lines ne "" ? $lines : [set ::application::analysis::${number}::Options(engine:multiPV)]}]
-	if {[set ::application::analysis::${number}::Options(engine:singlePV)]} { set n 1 }
-	return "$engine is analysing the board position in analysis pane $label: $n lines,\
+	namespace upvar ::application::analysis::$number Options Options
+	set n [expr {$Options(engine:singlePV) ? 1 : $Options(engine:multiPV)}]
+	return "$engine is analysing the board position in analysis pane [PaneLabel $number]: $n lines,\
 		$Vars(current:cores) threads, $Vars(current:memory) MB hash, profile '$Vars(current:profile)'.\
 		It follows the board. Read its lines with engine_analysis."
 }

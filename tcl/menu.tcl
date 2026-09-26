@@ -90,6 +90,7 @@ set AIChooseModel				"AI: Choose &Model..."
 # Tools
 set OpenEngineDictionary		"Open &Engine Dictionary"
 set OpenPlayerDictionary		"Open &Player Dictionary"
+set CompareEngines				"&Compare Engines"
 set CorrespondenceGames		"&Correspondence Games"
 set ICCFSettings				"ICCF &Settings"
 
@@ -349,6 +350,13 @@ if {0} {
 		;
 	lassign [::tk::UnderlineAmpersand $mc::OpenEngineDictionary] text ul
 	set cmd [namespace code [list ::engine::showEngineDictionary .application]]
+	$m add command \
+		-label " $text..." \
+		-underline [IncrUL $ul] \
+		-command $cmd \
+		;
+	lassign [::tk::UnderlineAmpersand $mc::CompareEngines] text ul
+	set cmd [list ::application::analysis::openComparison .application]
 	$m add command \
 		-label " $text..." \
 		-underline [IncrUL $ul] \

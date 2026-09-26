@@ -174,4 +174,95 @@ tcltest::test engines-analysis-waits {engine_analysis with seconds answers later
 	::scidb::test::engines::restore
 } -result {1}
 
+# --- analysis panes: shared engine start, pin, comparison -----------------
+
+tcltest::test analysis-first-move {the first move of an engine line, without its number} -body {
+	lmap pv {{1.e4 e5 2.Nf3} {12...Qxd5+ 13.Nc3} {Nf3 d5} {1. d4 Nf6}} { ::application::analysis::FirstMove $pv }
+} -result {e4 Qxd5+ Nf3 d4}
+
+tcltest::test analysis-comparison-summary {the comparison names the most chosen move, the dissent, the score spread and the deepest search} -body {
+	::application::analysis::ComparisonSummary [list \
+		[list A 1 {35 0 20 0 0 0 0 0 {1.e4 e5}}] \
+		[list B 2 {20 0 24 0 0 0 0 0 {1.e4 c5}}] \
+		[list C 3 {-10 0 18 0 0 0 0 0 {1.d4 d5}}] \
+		[list D 4 {}]]
+} -result "2 of 3 engines choose e4.
+C: d4.
+Scores from −0.10 to +0.35 (spread +0.45).
+Deepest search: B (depth 24)."
+
+tcltest::test analysis-default-engine {the default engine is the last chosen that can run, else the first} -setup {
+	::scidb::test::engines::isolate
+	set savedLast $::engine::Options(engine)
+	set ::engine::Engines [list [dict merge $::engine::EmptyEngine \
+		{Name Gone Command /nonexistent/engine Protocol UCI Features:UCI {analyze true}}]]
+} -body {
+	set none [::application::analysis::defaultEngine]
+	lappend ::engine::Engines \
+		[dict merge $::engine::EmptyEngine [list Name A Command [info nameofexecutable] Protocol UCI Features:UCI {analyze true}]] \
+		[dict merge $::engine::EmptyEngine [list Name B Command [info nameofexecutable] Protocol UCI Features:UCI {analyze true}]] \
+		[dict merge $::engine::EmptyEngine [list Name C Command [info nameofexecutable] Protocol UCI Features:UCI {}]]
+	set ::engine::Options(engine) B
+	set last [::application::analysis::defaultEngine]
+	set ::engine::Options(engine) C
+	list $none $last [::application::analysis::defaultEngine]
+} -cleanup {
+	set ::engine::Options(engine) $savedLast
+	::scidb::test::engines::restore
+} -result {{} B A}
+
+tcltest::test analysis-pin {pin is enabled by a best line and saves the game up to the board with the engine's move and score} -constraints uciEngine -setup {
+	::scidb::test::engines::isolate
+	::scidb::test::engines::tool add_engine [list path $::scidb::test::engines::Program]
+	set name [dict get [lindex $::engine::Engines 0] Name]
+	rename ::application::pgn::saveGame ::scidb::test::engines::saveGame
+	proc ::application::pgn::saveGame {args} {
+		set ::scidb::test::engines::Saved [list $args [::scidb::game::toPGN modified]]
+	}
+} -body {
+	set number [::application::analysis::startEngine $name "" {lines 2}]
+	set tree $::application::analysis::NumberToTree($number)
+	::scidb::test::engines::wait 2000
+	set pin [set ::application::analysis::${tree}::Vars(widget:button:pin)]
+	set enabled [::toolbar::childcget $pin -state]
+	lassign [::application::analysis::BestLine $tree] row line
+	set move [::application::analysis::FirstMove [lindex $line 8]]
+	set fen [::scidb::pos::fen]
+	::application::analysis::SaveBestLine .application base $move "$name: +0.10 (depth 9)"
+	lassign $::scidb::test::engines::Saved saveArgs pgn
+	::application::analysis::stopEngine $number
+	list $enabled $saveArgs \
+		[regexp "[regsub -all {[+]} $move {\\+}] \\{$name: \\+0.10 \\(depth 9\\)\\}" $pgn] \
+		[expr {[::scidb::pos::fen] eq $fen}] \
+		[::toolbar::childcget $pin -state]
+} -cleanup {
+	rename ::application::pgn::saveGame {}
+	rename ::scidb::test::engines::saveGame ::application::pgn::saveGame
+	::scidb::test::engines::restore
+} -result {normal {add base} 1 1 disabled}
+
+tcltest::test analysis-compare {the comparison runs the chosen engines side by side and sums up} -constraints uciEngine -setup {
+	::scidb::test::engines::isolate
+	::scidb::test::engines::tool add_engine [list path $::scidb::test::engines::Program]
+	set name [dict get [lindex $::engine::Engines 0] Name]
+	lappend ::engine::Engines [dict replace [lindex $::engine::Engines 0] Name "$name copy"]
+	set ::application::analysis::compare::Seconds 3
+} -body {
+	::application::analysis::openComparison .application
+	set dlg .compareEngines
+	$dlg.top.engines selection set 0 end
+	$dlg.start invoke
+	set running [llength [::application::analysis::Running]]
+	for {set i 0} {$i < 20 && [$dlg.start cget -state] eq "disabled"} {incr i} { ::scidb::test::engines::wait 500 }
+	set depths [lmap item [$dlg.top.results children {}] { lindex [$dlg.top.results item $item -values] 1 }]
+	set summary [$dlg.top.summary get 1.0 end-1c]
+	set after [llength [::application::analysis::Running]]
+	::application::analysis::CloseComparison
+	list $running [llength $depths] [expr {[lindex $depths 0] > 0 && [lindex $depths 1] > 0}] \
+		[string match "* of 2 engines choose *Deepest search: *" [string map {\n " "} $summary]] \
+		$after [winfo exists $dlg]
+} -cleanup {
+	::scidb::test::engines::restore
+} -result {2 2 1 1 0 0}
+
 tcltest::cleanupTests

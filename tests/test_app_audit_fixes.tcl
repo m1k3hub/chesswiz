@@ -46,4 +46,36 @@ tcltest::test audit-openingreport-fonts {opening-report text tags can be (re)cre
 	destroy .auditOpeningReport
 } -result 1
 
+tcltest::test audit-trial-mode {trial mode switches on and off again (push and pop take no position)} -body {
+	set fen [::scidb::pos::fen]
+	::game::flipTrialMode
+	set on [::game::trialMode?]
+	::game::flipTrialMode
+	list $on [::game::trialMode?] [expr {[::scidb::pos::fen] eq $fen}]
+} -result {1 0 1}
+
+tcltest::test audit-save-line-keeps-board-game {saving the line to a repertoire works on a copy, not on the game on the board} -setup {
+	rename ::application::pgn::saveGame ::auditSaveGame
+	proc ::application::pgn::saveGame {mode base} {
+		set ::auditSaved [list [::scidb::game::current] [::scidb::game::toPGN modified]]
+	}
+	set position [::scidb::game::current]
+	::scidb::game::move e4; ::scidb::game::go 1
+	::scidb::game::move e5; ::scidb::game::go 1
+	::scidb::game::move Nf3; ::scidb::game::go 1
+	::scidb::game::go -1
+} -body {
+	set before [::scidb::game::toPGN modified]
+	set fen [::scidb::pos::fen]
+	::application::database::saveCurrentLineToRepertoire .application base
+	lassign $::auditSaved savedAt savedPgn
+	list [expr {$savedAt != $position}] [regexp {1\.e4 e5 \*} $savedPgn] \
+		[expr {[::scidb::game::toPGN modified] eq $before}] [expr {[::scidb::pos::fen] eq $fen}] \
+		[::scidb::game::current]
+} -cleanup {
+	rename ::application::pgn::saveGame {}
+	rename ::auditSaveGame ::application::pgn::saveGame
+	unset -nocomplain ::auditSaved
+} -result [list 1 1 1 1 [::scidb::game::current]]
+
 tcltest::cleanupTests
