@@ -5,49 +5,36 @@
 set ::engine::Engines {
 	{
 		Name Stockfish
-		Identifier "Stockfish 4 scidb"
-		Author "Tord Romstad, Marco Costalba & Joona Kiiski"
-		Url http://www.stockfishchess.com
+		Identifier "Stockfish 19"
+		Author "the Stockfish developers (see AUTHORS file)"
+		Url https://stockfishchess.org
 		Command stockfish-scidb
 		Protocol UCI
-		Variants {standard chess960 3check}
+		Variants {standard chess960}
 		Features:UCI {
 			analyze true
-			multiPV 500
+			multiPV 256
 			ponder true
-			hashSize {4 8192}
-			threads {1 64}
-			skillLevel {0 20}
+			hashSize {4 33554432}
+			threads {1 1024}
 			clearHash true
+			limitStrength {1320 3190}
+			skillLevel {0 20}
 		}
 		Profiles:UCI {
 			Default {
-				{{Write Debug Log} check false false {} {}}
-				{{Write Search Log} check false false {} {}}
-				{{Search Log Filename} file SearchLog.txt SearchLog.txt {} {}}
-				{{Book File} file book.bin book.bin {} {}}
-				{{Best Book Move} check false false {} {}}
-				{{Mobility (Middle Game)} spin 100 100 0 200}
-				{{Mobility (Endgame)} spin 100 100 0 200}
-				{{Pawn Structure (Midgame)} spin 100 100 0 200}
-				{{Pawn Structure (Endgame)} spin 100 100 0 200}
-				{{Passed Pawns (Middle Game)} spin 100 100 0 200}
-				{{Passed Pawns (Endgame)} spin 100 100 0 200}
-				{Space spin 100 100 0 200}
-				{Aggressiveness spin 100 100 0 200}
-				{Cowardice spin 100 100 0 200}
-				{{Min Split Depth} spin 4 4 4 7}
-				{{Max Threads per Split Point} spin 5 5 4 8}
-				{Threads spin 4 4 1 32}
-				{{Idle Threads Sleep} check true true {} {}}
-				{Hash spin 32 32 4 8192}
+				{{Debug Log File} string <empty> <empty> {} {}}
+				{NumaPolicy string auto auto {} {}}
+				{Threads spin 1 1 1 1024}
+				{Hash spin 16 16 1 33554432}
 				{{Clear Hash} button {} {} {} {}}
 				{{Skill Level} spin 20 20 0 20}
-				{{Emergency Move Horizon} spin 40 40 0 50}
-				{{Emergency Base Time} spin 200 200 0 30000}
-				{{Emergency Move Time} spin 70 70 0 5000}
-				{{Minimum Thinking Time} spin 20 20 0 5000}
-				{{Slow Mover} spin 50 50 10 1000}
+				{{Move Overhead} spin 10 10 0 5000}
+				{nodestime spin 0 0 0 10000}
+				{SyzygyPath path <empty> <empty> {} {}}
+				{SyzygyProbeDepth spin 1 1 1 100}
+				{Syzygy50MoveRule check true true {} {}}
+				{SyzygyProbeLimit spin 7 7 0 7}
 			}
 		}
 	}
