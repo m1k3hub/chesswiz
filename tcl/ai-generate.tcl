@@ -90,6 +90,19 @@ proc ::ai::generate::onComplete {state result} {
 }
 
 
+# The rhetoric/coverage check calls this with its own result {ok 1 notices N}
+# or {ok 0}; merge the notices into the generation payload and deliver it
+# to the original caller. On ok 0 (no classifier, error, low confidence)
+# the payload is delivered exactly as it was — today's report, no badge.
+proc ::ai::generate::deliver {script payload result} {
+	if {[dict get $result ok] && [llength [dict get $result notices]]} {
+		dict set payload notices [dict get $result notices]
+	}
+	uplevel #0 [list {*}$script $payload]
+	return
+}
+
+
 proc ::ai::generate::onCompleteImpl {state result} {
 	set script [dict get $state script]
 
@@ -102,10 +115,25 @@ proc ::ai::generate::onCompleteImpl {state result} {
 	set problems [::ai::claims::check [dict get $state fen] $text]
 
 	if {[llength $problems] == 0 || [dict get $state attempt] > [dict get $state retries]} {
-		uplevel #0 [list {*}$script [dict create \
+		# The claim checker (deterministic, C++/regex) has passed or we've
+		# run out of retries. Before handing the result to the caller, ask
+		# the System One classifier for an advisory second opinion on the
+		# *language* (rhetoric, answer-coverage) — questions the claim
+		# checker cannot see. The notices are fixed, application-owned
+		# strings; the classifier only picks a label. On any abstention the
+		# result reaches the caller unchanged (today's behaviour).
+		set context [expr {[dict exists $state context] ? [dict get $state context] : ""}]
+		set task [expr {[string length $context] ? $context : "Explain the chess position."}]
+		set payload [dict create \
 			ok 1 text $text claims $problems attempts [dict get $state attempt] \
 			grounded [expr {[llength $problems] == 0}] \
-			evidence [evidenceFromText [dict get $state prompt]]]]
+			evidence [evidenceFromText [dict get $state prompt]]]
+		if {[llength [info commands ::ai::rhetoric::check]]} {
+			::ai::rhetoric::check $task $text \
+				[namespace code [list ::ai::generate::deliver $script $payload]]
+		} else {
+			uplevel #0 [list {*}$script $payload]
+		}
 		return
 	}
 

@@ -293,5 +293,99 @@ Jev-type integration in Scidb:
    make things faster or add a bounded flag; it cannot make them wrong in a
    way the status quo would not also be wrong.
 
-Build A, then B; defer the rest until the features they polish exist or the
-traces to tune them are in hand.
+## 7. Corrections from a second opinion (Codex / GPT-6 Astra)
+
+The analysis above was put to a second model. It changed three things and
+added one candidate:
+
+### A — narrow it (two gates, not one)
+
+Choosing a *relevant* tool is weaker than deciding its output *satisfies* the
+request. "Show the current PGN" and "Summarize this game" both select
+`current_game`; only the first is satisfied by returning PGN. "Show twenty
+continuations" must not silently run `position_moves` at its default limit.
+
+**Fix:** add a second `noul` question — `fully_satisfied_by_default_invocation`.
+Both routing *and* sufficiency must pass their thresholds before the shortcut
+fires. Two gates, not one.
+
+Three implementation details it caught that A must heed:
+- `player_stats` requires `name`, `opening_score` requires `eco` — they are
+  **not** zero-argument despite being read-only. The fast path must exclude
+  them (the "no required properties" schema check handles this).
+- `explain_position` still runs the Report-pane generation pipeline; A saves
+  the *assistant orchestration* (the tool loop), not the explanation
+  generation itself. Don't expect it to skip the LLM for that one.
+- `Finish` with empty content produces "(no answer)"; a routed tool needs a
+  deliberate response renderer, not an empty finish.
+
+### B — promote to now (C6 is not needed)
+
+C1 (Explain) is already shipped, and `analyze`/`explainSelection` already
+render generated prose in the Report pane via `::application::ai::onResult`.
+That prose can over-claim *today*. The rhetoric gate can pilot on the
+existing Explain reports right now — the seam is `onResult` in
+`tcl/app-ai.tcl`, not the unbuilt C6 Draft button.
+
+### F — request–answer coverage advisory (new)
+
+The existing `noAnswer` helper catches *empty* text. It structurally cannot
+catch a **substantive non-answer** — fluent, claim-check-passing prose that
+does not perform the requested communicative task. "I'll explain that in a
+moment" or generic chess advice when asked to explain a specific comment.
+
+- **State:** original task instruction + final prose + task kind
+  `{position, move, game, comment}`.
+- **Questions:** `choice` over `{addresses_request, generic_nonanswer,
+  refusal_or_deferral, unrelated, unclear}`.
+- **Integration:** after final generation checks, the same Report-pane advisory
+  hook as B.
+- **Reliability:** bounded, gated, additive, advisory. The classifier judges
+  *language against an explicit request* — it does not assess chess
+  correctness (the claim checker owns that) and cannot invent a category.
+- **Verdict: build now**, pilot alongside B. Obvious linguistic non-answers
+  are in scope; "strategically insightful" is not.
+
+A fixed notice — "This response may not address the selected request" — can
+accompany a user-triggered retry. Do not automatically discard the report or
+add an unbounded regeneration loop.
+
+### G — mutation intent-match notice (new, defer)
+
+Before the existing confirm gate for mutating tools, a `choice` over
+`{explicitly_requested, hypothetical_or_negated, different_action, unclear}`
+— catching "How would I start a new game?" (a question) being executed as
+`new_game` (a command). Good idea, but it adds latency to a path *already
+protected by user confirmation*. The confirm gate is the authority; this
+would be a second opinion on top of an existing safety layer. Build only if
+traces show mistaken proposals are common.
+
+### Two implementation observations (apply to every candidate)
+
+1. `::ai::systemone::enabled` checks *configuration*, not *server
+   reachability*. A configured-but-down backend reports `enabled=1`; callers
+   must handle the `ok 0` fallback (the triage code already does).
+2. `Answers` does not enforce per-answer enum/probability constraints —
+   callers should validate the response shape, not trust it.
+
+## 8. Revised prioritization
+
+| # | Use-case | Value | Reliability | Effort | Build? |
+|---|---|:---:|:---:|:---:|:---:|
+| A | Assistant tool pre-routing (narrowed) | high | high (two gates) | S–M | **after shadow eval** |
+| B | Rhetoric caution on Explain reports | medium-high | high (advisory) | S | **now** |
+| F | Request–answer coverage advisory | medium-high | high (advisory) | S | **now** |
+| C | Find-similar rationale | medium | high | S | with C5 |
+| G | Mutation intent-match notice | medium | high | S | defer (behind confirm gate) |
+| E | Loop-termination | medium | medium | S | defer (needs traces) |
+| D | Search-intent field set | low | high | S | skip |
+
+B and F share one Report-pane advisory hook: both gate *already-rendered*
+prose with a fixed advisory badge, both are post-engine and post-claim-checker,
+and both fall back to today's report on any abstention. They are the
+smallest-consequence, highest-readiness pair, and they are buildable now
+against the live `onResult` path.
+
+Build B and F now; shadow-evaluate A (narrowed) against real assistant
+traces; defer the rest until the features they polish exist or the traces to
+tune them are in hand.

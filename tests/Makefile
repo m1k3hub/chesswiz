@@ -31,7 +31,7 @@ COVERAGE_DIR := $(TEST_DIR)coverage
 # job relinking or deleting what another is executing.  Run serially.
 .NOTPARALLEL:
 
-.PHONY: all test tcl app-tcl cpp cpp-src ai-tests chess-facts ai-facts ai-claims ai-engine ai-eco ai-generate ai-ui ai-tools ai-precedent ai-narrate ai-annotations corpus-tests clean help report
+.PHONY: all test tcl app-tcl cpp cpp-src ai-tests chess-facts ai-facts ai-claims ai-engine ai-eco ai-generate ai-ui ai-tools ai-precedent ai-narrate ai-annotations ai-rhetoric corpus-tests clean help report
 
 all: tcl app-tcl cpp ai-tests corpus-tests
 
@@ -42,7 +42,7 @@ test: all
 # ::scidb::ai::* commands) and use their own pass/fail harness, so the
 # plain-tclsh runner cannot run or count them. Run them here, sequentially,
 # so `make test` / `make ci` actually gate on them.
-AI_TESTS := chess-facts ai-facts ai-claims ai-engine ai-eco ai-generate ai-ui ai-tools ai-precedent ai-narrate ai-annotations
+AI_TESTS := chess-facts ai-facts ai-claims ai-engine ai-eco ai-generate ai-ui ai-tools ai-precedent ai-narrate ai-annotations ai-rhetoric
 
 ai-tests:
 	@echo "Running AI grounding suites..."
@@ -188,6 +188,15 @@ ai-narrate:
 	@timeout 250 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_narrate.tcl 2>&1 \
 		| tee /tmp/scidb-ai-narrate.log | grep -E "PASS|FAIL|SKIP|AI-NARRATE-FAILURES"
 	@grep -q "AI-NARRATE-FAILURES: 0" /tmp/scidb-ai-narrate.log
+
+# The advisory rhetoric/coverage second opinion on generated prose.
+ai-rhetoric:
+	@echo "Building tkscidb-beta..."
+	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-rhetoric-build.log 2>&1 || \
+		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-rhetoric-build.log; exit 1; }
+	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_rhetoric.tcl 2>&1 \
+		| tee /tmp/scidb-ai-rhetoric.log | grep -E "PASS|FAIL|SKIP|AI-RHETORIC-FAILURES"
+	@grep -q "AI-RHETORIC-FAILURES: 0" /tmp/scidb-ai-rhetoric.log
 
 # Annotation exemplars joined to positions by key.
 ai-annotations:
