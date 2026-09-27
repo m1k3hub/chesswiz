@@ -66,11 +66,12 @@ pick_gpu() {
 [ -f "$MODEL_DIR/$GGUF" ] || download
 echo "Serving $MODEL_DIR/$GGUF"
 
-# the /v1/systemone readout needs a jevk5 new enough for the GGUF path;
+# the /v1/systemone readout needs jevk5 >= 0.3 for the GGUF knockout path
+# (routing questions with more than 16 options; 0.2.x rejects them);
 # it is standard library only on this path (no torch)
-if ! python3 -c "import jevk5.gguf" >/dev/null 2>&1; then
+if ! python3 -c "import jevk5, sys; sys.exit(0 if jevk5.__version__ >= '0.3' else 1)" >/dev/null 2>&1; then
 	echo "Installing the jevk5 readout package (standard library only) ..."
-	python3 -m pip install --no-deps "jevk5 @ git+https://github.com/allebee/jevk5@v0.2.1"
+	python3 -m pip install --no-deps "jevk5 @ git+https://github.com/allebee/jevk5@v0.3.3"
 fi
 
 NGML=99

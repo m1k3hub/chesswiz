@@ -332,6 +332,9 @@ array set Priv {
 	confirm		::application::assistant::ConfirmDialog
 	pending		{}
 	laterCount	0
+	routeGen		0
+	routeWait	0
+	routeInvocations {}
 }
 
 if {   ([info exists ::env(SCIDB_AI_DEBUG)] && [string is true -strict $::env(SCIDB_AI_DEBUG)])
@@ -383,7 +386,14 @@ proc ::application::assistant::ask {request args} {
 	SetBusy 1
 	if {[catch {
 		ConfigureProvider
-		Step 0
+		# the System One pre-router (app-assistant-route.tcl) decides
+		# whether one default tool invocation performs the request; every
+		# other path ends in the ordinary model loop
+		if {[llength [info commands ::application::assistant::RouteOrStep]]} {
+			RouteOrStep $request
+		} else {
+			Step 0
+		}
 	} err]} {
 		Finish [dict create ok 0 error $err] 0
 	}
@@ -406,6 +416,9 @@ proc ::application::assistant::clear {} {
 
 	if {$Priv(busy)} { return }
 	set Priv(messages) {}
+	# invalidate any in-flight pre-route prediction for the old conversation
+	if {[info exists Priv(routeGen)]} { incr Priv(routeGen) }
+	set Priv(routeWait) 0
 	if {[winfo exists $Priv(text)]} {
 		$Priv(text) configure -state normal
 		$Priv(text) delete 1.0 end
@@ -454,6 +467,16 @@ proc ::application::assistant::OnReplyImpl {round result} {
 
 	set msg [dict get $result message]
 	incr round
+
+	# the shadow log compares the classifier's prediction with what the
+	# model actually did first (app-assistant-route.tcl)
+	if {$round == 1 && [llength [info commands ::application::assistant::RecordRouteActual]]} {
+		if {[dict exists $msg tool_calls] && [llength [dict get $msg tool_calls]]} {
+			RecordRouteActual [dict get [dict get [lindex [dict get $msg tool_calls] 0] function] name]
+		} else {
+			RecordRouteActual prose
+		}
+	}
 
 	if {[dict exists $msg tool_calls] && [llength [dict get $msg tool_calls]]} {
 		lappend Priv(messages) $msg
@@ -515,12 +538,20 @@ proc ::application::assistant::Resolve {token reply} {
 	variable MaxReply
 
 	if {[lindex $Priv(pending) 0] ne $token} { return 0 }
-	lassign $Priv(pending) _ round name cargs calls
+	lassign $Priv(pending) _ round name cargs calls isRouted
 	set Priv(pending) {}
 	if {[string length $reply] > $MaxReply} {
 		set reply "[string range $reply 0 $MaxReply-1]\n... (truncated)"
 	}
 	LogToolCall $name $cargs 0 [expr {[string match "error: *" $reply] ? "error" : "ok"}] $reply
+	if {[llength $isRouted]} {
+		# a pre-routed asynchronous tool: deliver its reply directly,
+		# never re-enter the model loop
+		if {[catch { DeliverRoutedReply $name $reply $round } err]} {
+			Finish [dict create ok 0 error $err] $round
+		}
+		return 1
+	}
 	if {[catch { ToolReply $name $reply; RunCalls $round $calls } err]} {
 		Finish [dict create ok 0 error $err] $round
 	}

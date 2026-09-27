@@ -389,3 +389,28 @@ against the live `onResult` path.
 Build B and F now; shadow-evaluate A (narrowed) against real assistant
 traces; defer the rest until the features they polish exist or the traces to
 tune them are in hand.
+
+## 9. Implementation status
+
+- **B + F: shipped** (`tcl/ai-rhetoric.tcl`, wired into
+  `tcl/ai-generate.tcl` → `tcl/app-ai.tcl`). Advisory badges only; the claim
+  checker and Stockfish remain the only authorities on chess truth.
+- **A: shipped shadow-first** (`tcl/app-assistant-route.tcl`). The allowlist
+  is derived from the Actions table (27 invocations: bare tools, all-optional
+  tools at their defaults, and single-required-enum tools expanded per value,
+  e.g. `switch_tab(board)`); two gates (route choice ≥ 0.7, sufficiency noul
+  ≥ 0.4); a watchdog bounds the active wait; routed tools go through the
+  ordinary `runTool` path, so CheckArgs, the confirm gate and the tool log
+  all still run; a routed tool that errors falls back to the model loop with
+  the failed call in the transcript. Default mode is `shadow`: every request
+  logs the prediction against what the model actually did
+  (`route-shadow.log` next to the error log) without changing behaviour.
+  `SCIDB_AI_ROUTE=active` turns on the fast path; `off` disables routing
+  entirely. Sufficiency-instruction wording and the 0.4 threshold were
+  calibrated on a 10-request battery against plumb-4b (positives ≥ 0.50,
+  negatives ≤ 0.26); a live six-request check routes exactly the three
+  argument-free requests and defers the value-extraction, chit-chat and
+  quantified ones. Note: routing questions exceed 16 options, so the local
+  server needs a runtime with knockout passes (jevk5 ≥ 0.3 for the plumb
+  GGUF path; 0.2.x rejects them).
+- **C, G, E, D:** unchanged (deferred/deferred/deferred/skip).
