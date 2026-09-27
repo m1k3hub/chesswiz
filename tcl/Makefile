@@ -136,6 +136,7 @@ SOURCES = \
 	app-database-repertoire.tcl \
 	app-database-maintenance.tcl \
 	app-database-discover.tcl \
+	app-download-games.tcl \
 	app-db-icons.tcl \
 	app-db-annotators.tcl \
 	app-db-positions.tcl \

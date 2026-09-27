@@ -36,6 +36,7 @@ set FileNew								"New Database"
 set FileExport							"Export"
 set FileImport(pgn)					"Import PGN files"
 set FileImport(db)					"Import Databases"
+set FileDownload						"Download Games"
 set FileCreate							"Create Archive"
 set FileSaveChanges					"Save Changes"
 set FileClose							"Close"
@@ -1414,6 +1415,17 @@ proc PopupMenu {parent x y {base ""}} {
 			-command [list ::menu::dbImport $top $base pgn] \
 			-state $readonlyState \
 			;
+
+		### download games from the internet ###############################
+		if {[llength [info commands ::application::download::open]]} {
+			$menu add command \
+				-label " $mc::FileDownload..." \
+				-image $::icon::16x16::databaseImport \
+				-compound left \
+				-command [list ::application::download::open $top $base] \
+				-state $readonlyState \
+				;
+		}
 
 		$menu add command \
 			-label " $mc::FileCreate..." \
