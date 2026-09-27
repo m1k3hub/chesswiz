@@ -29,19 +29,20 @@ array set Config {
 }
 
 # The provider and model chosen in Extras > AI: Choose Model, saved in the
-# options file. Config holds the values in effect, which are overridden
-# (for the session only) by, in this order:
-#   --ai-model=NAME / --ai-provider=NAME      command line
-#   SCIDB_AI_MODEL / SCIDB_AI_PROVIDER        environment
+# options file. The System One classifier backend of the same dialog is saved
+# here too (Settings(classifier)). Config holds the values in effect, which
+# are overridden (for the session only) by, in this order:
+#   --ai-model=NAME / --ai-provider=NAME / --ai-classifier=NAME   command line
+#   SCIDB_AI_MODEL / SCIDB_AI_PROVIDER / SCIDB_AI_CLASSIFIER      environment
 variable Settings
-array set Settings [list provider $Config(provider) model $Config(model)]
+array set Settings [list provider $Config(provider) model $Config(model) classifier kev]
 
 } ;# namespace ai
 } ;# namespace application
 
 
-# Where the value of <key> (provider|model) in effect comes from, and it:
-# {option|environment|settings value}.
+# Where the value of <key> (provider|model|classifier) in effect comes from,
+# and it: {option|environment|settings value}.
 proc ::application::ai::setting {key} {
 	variable Settings
 
@@ -61,6 +62,9 @@ proc ::application::ai::applySettings {} {
 	foreach key {provider model} {
 		set Config($key) [lindex [setting $key] 1]
 	}
+	if {[llength [info commands ::ai::systemone::configure]]} {
+		::ai::systemone::configure -backend [lindex [setting classifier] 1]
+	}
 }
 
 
@@ -70,6 +74,15 @@ proc ::application::ai::choose {provider model} {
 
 	set Settings(provider) $provider
 	set Settings(model) $model
+	applySettings
+}
+
+
+# Save a new classifier backend; it takes effect unless overridden.
+proc ::application::ai::chooseClassifier {backend} {
+	variable Settings
+
+	set Settings(classifier) [expr {$backend eq "off" ? "" : $backend}]
 	applySettings
 }
 

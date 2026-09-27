@@ -1,12 +1,17 @@
 # ======================================================================
-# ::application::ai::models -- choose the model of the AI features.
+# ::application::ai::models -- choose the models of the AI features.
 #
-# Extras > "AI: Choose Model" lists the models of the local Ollama server
-# (/api/tags), marks cloud models and those that support tool calling
-# (which the assistant needs), and saves the choice in the options file
-# (::application::ai::Settings). A command-line flag or environment
-# variable still overrides the saved choice for its session; the dialog
-# says so.
+# Extras > "AI: Choose Model" has two sections. The first lists the models
+# of the local Ollama server (/api/tags), marks cloud models and those that
+# support tool calling (which the assistant needs). The second picks the
+# System One classifier backend (::ai::systemone): kev, simple-jev and plumb
+# serve the /v1/systemone contract on this machine, jev (TypeSafe's Jev)
+# runs in the cloud through Vercel's AI Gateway, and "off" leaves everything
+# to the language model.
+#
+# Both choices are saved in the options file (::application::ai::Settings,
+# keys model and classifier). A command-line flag or environment variable
+# still overrides the saved choice for its session; the dialog says so.
 # ======================================================================
 
 if {[llength [info commands ::util::source]]} {
@@ -21,7 +26,9 @@ namespace eval ai {
 namespace eval models {
 namespace eval mc {
 
-set Title			"AI Model"
+set Title			"AI Models"
+set LanguageModel	"Language model (Ollama)"
+set Classifier		"System One classifier"
 set Model			"Model"
 set Where			"Runs"
 set Tools			"Tools"
@@ -37,6 +44,12 @@ set NoTools			"This model does not support tool calling: the assistant will not 
 set Overridden		"The %s given by %s (%s) is used this session; the choice here is saved for later sessions."
 set Option			"the command line"
 set Environment	"the environment"
+
+set Off				"off"
+set OffNote			"No classifier: the language model classifies everything."
+set ClassifierNote	"kev, simple-jev and plumb run on this machine; jev is TypeSafe's Jev in the cloud (Vercel AI Gateway)."
+set PlumbNote		"Plumb-4B: scripts/serve-plumb-classifier.sh downloads it from Hugging Face and serves it on port 8090."
+set KeyNote			"needs %s in the environment"
 
 } ;# namespace mc
 
@@ -61,8 +74,10 @@ proc ::application::ai::models::show {{parent .application}} {
 		return $dlg
 	}
 	set Priv(dialog) $dlg
-	# the saved choice (an override is shown separately)
+	# the saved choices (an override is shown separately)
 	set Priv(name) $::application::ai::Settings(model)
+	lassign [::application::ai::setting classifier] Priv(classifier) _
+	# the vercel preset is the same server as jev; the dialog has one row
 
 	toplevel $dlg -class Scidb
 	wm title $dlg $mc::Title
@@ -74,8 +89,12 @@ proc ::application::ai::models::show {{parent .application}} {
 	set top [ttk::frame $dlg.top]
 	pack $top -fill both -expand yes -padx $::theme::padx -pady $::theme::pady
 
+	### language model (Ollama) ############################################
+	ttk::label $top.language -text $mc::LanguageModel
+	pack $top.language -anchor w
+
 	set list [ttk::frame $top.list]
-	set tree [ttk::treeview $list.tree -columns {where tools} -height 10 -selectmode browse]
+	set tree [ttk::treeview $list.tree -columns {where tools} -height 8 -selectmode browse]
 	$tree heading #0 -text $mc::Model -anchor w
 	$tree heading where -text $mc::Where -anchor w
 	$tree heading tools -text $mc::Tools -anchor w
@@ -97,8 +116,41 @@ proc ::application::ai::models::show {{parent .application}} {
 	pack $entry -fill x -pady [list $::theme::pady 0]
 
 	ttk::label $top.status -wraplength 460 -justify left
-	ttk::label $top.override -wraplength 460 -justify left -foreground darkred
 	pack $top.status -fill x -pady [list $::theme::pady 0]
+
+	### system one classifier ###############################################
+	set haveClassifier [llength [info commands ::ai::systemone::backends]]
+	if {$haveClassifier} {
+		ttk::separator $top.sep
+		pack $top.sep -fill x -pady $::theme::pady
+		ttk::label $top.classifierHead -text $mc::Classifier
+		pack $top.classifierHead -anchor w
+
+		set clist [ttk::frame $top.clist]
+		set ctree [ttk::treeview $clist.tree -columns {where model} -height 6 -selectmode browse]
+		$ctree heading #0 -text $mc::Classifier -anchor w
+		$ctree heading where -text $mc::Where -anchor w
+		$ctree heading model -text $mc::Model -anchor w
+		$ctree column #0 -width 120 -stretch no
+		$ctree column where -width 110 -stretch no
+		$ctree column model -width 260
+		$ctree column #0 -minwidth 120
+		ttk::scrollbar $clist.vs -orient vertical -command [list $ctree yview]
+		$ctree configure -yscrollcommand [list $clist.vs set]
+		pack $clist.vs -side right -fill y
+		pack $ctree -side left -fill both -expand yes
+		pack $clist -fill both -expand yes
+
+		ttk::label $top.cstatus -wraplength 460 -justify left
+		pack $top.cstatus -fill x -pady [list $::theme::pady 0]
+
+		bind $ctree <<TreeviewSelect>> [namespace code SelectedClassifier]
+		bind $ctree <Double-Button-1> [namespace code Apply]
+		set Priv(ctree) $ctree
+		set Priv(cstatus) $top.cstatus
+	}
+
+	ttk::label $top.override -wraplength 460 -justify left -foreground darkred
 	pack $top.override -fill x
 
 	::widget::dialogButtons $dlg {ok cancel}
@@ -119,6 +171,7 @@ proc ::application::ai::models::show {{parent .application}} {
 	$Priv(status) configure -text $mc::Fetching
 	update idletasks
 	Fill
+	if {$haveClassifier} { FillClassifiers }
 	focus $entry.name
 	return $dlg
 }
@@ -149,9 +202,39 @@ proc ::application::ai::models::Fill {} {
 	}
 	if {[$tree exists $Priv(name)]} {
 		$tree selection set [list $Priv(name)]
-		$tree see $Priv(name)
+		$tree see $Priv(name)]
 	}
 	$Priv(status) configure -text [format $mc::Found [llength $models]]
+}
+
+
+# The classifier rows: "off" plus one row per backend. The "vercel" preset
+# is the same server as "jev" and stays selectable only through the
+# environment, not through a second row.
+proc ::application::ai::models::FillClassifiers {} {
+	variable Priv
+	variable mc
+
+	set tree $Priv(ctree)
+	$tree delete [$tree children {}]
+	$tree insert {} end -id off -text $mc::Off -values [list "" ""]
+
+	foreach b [::ai::systemone::backends] {
+		set name [dict get $b name]
+		if {$name eq "vercel"} { continue }
+		set where [expr {[dict get $b local] ? $mc::Local : $mc::Cloud}]
+		$tree insert {} end -id $name -text $name \
+			-values [list $where [dict get $b model]] \
+			-tags [expr {[dict get $b local] ? "" : "cloud"}]
+	}
+
+	if {$Priv(classifier) eq "vercel"} { set Priv(classifier) jev }
+	if {[string length $Priv(classifier)] && [$tree exists $Priv(classifier)]} {
+		$tree selection set [list $Priv(classifier)]
+		$tree see $Priv(classifier)]
+	} else {
+		$tree selection set [list off]
+	}
 }
 
 
@@ -172,12 +255,41 @@ proc ::application::ai::models::Selected {} {
 }
 
 
+proc ::application::ai::models::SelectedClassifier {} {
+	variable Priv
+	variable mc
+
+	set sel [$Priv(ctree) selection]
+	if {![llength $sel]} { return }
+	set Priv(classifier) [lindex $sel 0]
+
+	set text ""
+	if {$Priv(classifier) eq "off"} {
+		set text $mc::OffNote
+	} elseif {$Priv(classifier) eq "plumb"} {
+		set text $mc::PlumbNote
+	} elseif {[catch { ::ai::systemone::configure -backend $Priv(classifier) ; ::ai::systemone::describe } describe] == 0} {
+		set text $describe
+	}
+	foreach b [::ai::systemone::backends] {
+		if {[dict get $b name] ne $Priv(classifier)} { continue }
+		set key [dict get $b key]
+		if {![info exists ::env($key)] || ![string length $::env($key)]} {
+			append text [expr {[string length $text] ? " " : ""}] [format $mc::KeyNote $key]
+		}
+		break
+	}
+	::application::ai::applySettings ;# restore the backend in effect
+	$Priv(cstatus) configure -text $text
+}
+
+
 proc ::application::ai::models::ShowOverride {} {
 	variable Priv
 	variable mc
 
 	set text ""
-	foreach key {model provider} {
+	foreach key {model provider classifier} {
 		lassign [::application::ai::setting $key] source value
 		if {$source ne "settings"} {
 			set by [expr {$source eq "option" ? $mc::Option : $mc::Environment}]
@@ -196,6 +308,9 @@ proc ::application::ai::models::Apply {} {
 	if {![string length $name]} { return }
 	# the assistant's tool loop only speaks the Ollama chat API
 	::application::ai::choose ollama $name
+	if {[info exists Priv(ctree)] && [string length $Priv(classifier)]} {
+		::application::ai::chooseClassifier $Priv(classifier)
+	}
 	Close
 }
 
@@ -205,6 +320,7 @@ proc ::application::ai::models::Close {} {
 
 	if {[winfo exists $Priv(dialog)]} { destroy $Priv(dialog) }
 	set Priv(dialog) {}
+	if {[info exists Priv(ctree)]} { unset Priv(ctree) }
 }
 
 # vi:set ts=3 sw=3:

@@ -4,12 +4,13 @@
 # A System One model does not write text: it reads a state and answers typed
 # questions with probabilities -- choice (one of named options), noul (yes or
 # no), score (ordered levels). TypeSafe's Jev defines the wire contract
-# (POST /v1/systemone); Kev and Simple Jev serve the same contract from open
-# weights on this machine, so one client talks to all of them:
+# (POST /v1/systemone); the open-weights servers below serve the same contract
+# on this machine, so one client talks to all of them:
 #
 #   kev         http://127.0.0.1:8009/v1/systemone, no key   (local, the default)
 #   simple-jev  http://127.0.0.1:8000/v1/systemone, no key   (local)
-#   vercel      Jev through Vercel's AI Gateway, AI_GATEWAY_API_KEY
+#   plumb       http://127.0.0.1:8090/v1/systemone, no key   (local; see below)
+#   jev/vercel  Jev through Vercel's AI Gateway, AI_GATEWAY_API_KEY (cloud)
 #
 #   ::ai::systemone::configure -backend kev
 #   ::ai::systemone::evaluate <state> <questions>          -> answers dict
@@ -21,16 +22,29 @@
 # dict: {type choice choice NAME confidence C probabilities {NAME P ...}},
 # {type noul noul P}, or {type score score S confidence C probabilities ...}.
 #
-# Environment: SCIDB_AI_CLASSIFIER (kev, simple-jev, vercel or off),
-# SCIDB_AI_CLASSIFIER_URL, SCIDB_AI_CLASSIFIER_MODEL (Simple Jev answers only to
-# the model it loaded), AI_GATEWAY_API_KEY (vercel), KEV_API_KEY and
-# SIMPLE_JEV_API_KEY (a local server that requires one). Keys are read from the
-# environment only, never stored.
+# The backend is chosen in Extras > AI: Choose Model (saved in the options
+# file as ::application::ai::Settings(classifier)); for one session it is
+# overridden by, in this order, the --ai-classifier option and the
+# SCIDB_AI_CLASSIFIER environment variable. SCIDB_AI_CLASSIFIER_URL and
+# SCIDB_AI_CLASSIFIER_MODEL override endpoint and model; AI_GATEWAY_API_KEY
+# (jev/vercel), KEV_API_KEY and SIMPLE_JEV_API_KEY (a local server that
+# requires one) are read from the environment only, never stored.
 #
-# Scidb does not start Kev; run it beside the app (github.com/jaredpalmer/kev):
-#   uv sync --extra serve
-#   KEV_DTYPE=fp16 uv run --extra serve python -m kev.serve --run jaredpalmer/kev-0.8b --port 8009
-# (fp16 on GPUs without bf16, e.g. Turing and Pascal; kev-4b/-9b need ~8/18 GB.)
+# Scidb does not start the local servers; run them beside the app:
+#   kev:        github.com/jaredpalmer/kev
+#               uv sync --extra serve
+#               KEV_DTYPE=fp16 uv run --extra serve python -m kev.serve \
+#                   --run jaredpalmer/kev-0.8b --port 8009
+#               (fp16 on GPUs without bf16, e.g. Turing and Pascal;
+#               kev-4b/-9b need ~8/18 GB.)
+#   simple-jev: github.com/featherless-ai/simple-jev
+#               hf_server.py --model Qwen/Qwen3.5-0.8B --port 8000
+#   plumb:      scripts/serve-plumb-classifier.sh downloads the model from
+#               Hugging Face (crh225/plumb-4b-GGUF, Q8_0 ~4.5 GB; Apache-2.0;
+#               JevBench v1.4.2.1 rank 1 of the open systems) and serves it
+#               with llama.cpp and a /v1/systemone shim on port 8090.
+#               Plumb-4B is the strongest open decision model that fits an
+#               8 GB card in one pass.
 # While no server answers, callers fall back: triage hands everything to the
 # language model.
 # ======================================================================
@@ -47,6 +61,8 @@ namespace eval systemone {
 variable Backends {
 	kev {endpoint http://127.0.0.1:8009/v1/systemone model kev-latest key KEV_API_KEY}
 	simple-jev {endpoint http://127.0.0.1:8000/v1/systemone model Qwen/Qwen3.5-0.8B key SIMPLE_JEV_API_KEY}
+	plumb {endpoint http://127.0.0.1:8090/v1/systemone model plumb-4b-v5}
+	jev {endpoint https://ai-gateway.vercel.sh/typesafe/v1/systemone model typesafe-ai/jev key AI_GATEWAY_API_KEY}
 	vercel {endpoint https://ai-gateway.vercel.sh/typesafe/v1/systemone model typesafe-ai/jev key AI_GATEWAY_API_KEY}
 }
 
@@ -70,7 +86,7 @@ proc ::ai::systemone::configure {args} {
 	foreach {key value} $args {
 		switch -- $key {
 			-backend {
-				if {$value ni [concat [dict keys $Backends] off ""]} {
+				if {$value ni [concat [dict keys $Backends] {off {}}]} {
 					error "unknown System One backend '$value' ([join [dict keys $Backends] {, }] or off)"
 				}
 				set Config(backend) [expr {$value eq "off" ? "" : $value}]
@@ -78,8 +94,12 @@ proc ::ai::systemone::configure {args} {
 					set b [dict get $Backends $Config(backend)]
 					set Config(endpoint) [dict get $b endpoint]
 					set Config(model) [dict get $b model]
-					set var [dict get $b key]
-					set Config(apiKey) [expr {[info exists ::env($var)] ? $::env($var) : ""}]
+					if {[dict exists $b key] && [string length [dict get $b key]]} {
+						set var [dict get $b key]
+						set Config(apiKey) [expr {[info exists ::env($var)] ? $::env($var) : ""}]
+					} else {
+						set Config(apiKey) ""
+					}
 				}
 			}
 			-endpoint { set Config(endpoint) $value }
@@ -217,6 +237,30 @@ proc ::ai::systemone::Request {state questions args} {
 	set ::ai::provider::Config(timeoutMs) $saved
 	if {$rc} { error $token }
 	return $token
+}
+
+
+# ----------------------------------------------------------------------
+# Backend metadata for the chooser dialog: a list of dicts
+# {name endpoint model local key}, <local> 1 when the server runs on this
+# machine. Aliases are listed too (jev and vercel share an endpoint); the
+# dialog decides which rows to show.
+# ----------------------------------------------------------------------
+
+proc ::ai::systemone::backends {} {
+	variable Backends
+	set result {}
+	dict for {name b} $Backends {
+		set endpoint [dict get $b endpoint]
+		lappend result [dict create \
+			name     $name \
+			endpoint $endpoint \
+			model    [dict get $b model] \
+			local    [expr {[regexp {^https?://(127\.0\.0\.1|localhost|\[::1\])} $endpoint] ? 1 : 0}] \
+			key      [expr {[dict exists $b key] ? [dict get $b key] : ""}] \
+		]
+	}
+	return $result
 }
 
 

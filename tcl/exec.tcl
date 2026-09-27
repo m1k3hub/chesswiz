@@ -138,6 +138,8 @@ set ProgramOptions [list                                                        
 	                                "(only for debugging)"]                                   \
 	[list "--ai-model=MODEL"        "Use MODEL for the AI features (this session only)"]      \
 	[list "--ai-provider=NAME"      "Use provider NAME for the AI features (ollama, ...)"]    \
+	[list "--ai-classifier=NAME"    "Use System One classifier NAME (kev, simple-jev, plumb," \
+	                                "jev, or off; this session only)"]                        \
 	[list "--ai-debug"              "Enable the assistant's debugging tools"]                 \
 	[list "--ask=REQUEST"           "Send REQUEST to the assistant of the running $::scidb::app," \
 	                                "print the reply and exit"]                               \
@@ -146,7 +148,7 @@ set ProgramOptions [list                                                        
 ]
 
 # Options that take a value: --name=value, or --name value.
-variable ValueOptions {ask ai-model ai-provider}
+variable ValueOptions {ask ai-model ai-provider ai-classifier}
 
 array set Options {}
 array set Valued {}

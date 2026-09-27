@@ -120,7 +120,7 @@ tcltest::test systemone-backends {kev and simple-jev presets; off disables; bad 
 		[catch { ::ai::systemone::configure -backend gpt } err] $err \
 		[catch { ::ai::systemone::body x {q {type choice}} } err] $err \
 		[catch { ::ai::systemone::evaluate x {q {type noul}} } err] $err
-} -result {{http://127.0.0.1:8000/v1/systemone Qwen/Qwen3.5-0.8B secret} {https://ai-gateway.vercel.sh/typesafe/v1/systemone typesafe-ai/jev} {http://127.0.0.1:8009/v1/systemone kev-latest} 0 1 {unknown System One backend 'gpt' (kev, simple-jev, vercel or off)} 1 {question 'q': a choice question needs criteria} 1 {no System One backend is configured}}
+} -result {{http://127.0.0.1:8000/v1/systemone Qwen/Qwen3.5-0.8B secret} {https://ai-gateway.vercel.sh/typesafe/v1/systemone typesafe-ai/jev} {http://127.0.0.1:8009/v1/systemone kev-latest} 0 1 {unknown System One backend 'gpt' (kev, simple-jev, plumb, jev, vercel or off)} 1 {question 'q': a choice question needs criteria} 1 {no System One backend is configured}}
 
 tcltest::test systemone-evaluate {evaluate posts the request and returns the answers} -setup {
 	::scidb::test::s1::start [list [::scidb::test::s1::choice noise 0.8]]
@@ -234,6 +234,53 @@ tcltest::test systemone-triage-down {without a reachable classifier the language
 	::ai::systemone::configure -backend off
 	::scidb::test::s1::triageCleanup
 } -result {2 1}
+
+# ----------------------------------------------------------------------
+# Backend presets: plumb (local, port 8090), jev (cloud, through Vercel's
+# AI Gateway; vercel is the same server under its older name) and off.
+# ----------------------------------------------------------------------
+
+proc ::scidb::test::s1::restoreConfig {config} {
+	array set ::ai::systemone::Config $config
+}
+
+tcltest::test systemone-backends {the backend presets carry endpoint, model and locality} -body {
+	set config [array get ::ai::systemone::Config]
+	set rows {}
+	foreach b [::ai::systemone::backends] {
+		lappend rows [list [dict get $b name] [dict get $b local] \
+			[expr {[dict get $b key] eq "" ? "-" : [dict get $b key]}]]
+	}
+	::scidb::test::s1::restoreConfig $config
+	set names [lmap r $rows { lindex $r 0 }]
+	list [lsearch -exact $names kev] [lsearch -exact $names plumb] \
+		[lsearch -exact $names jev] [lsearch -exact $names vercel] \
+		[lindex $rows [lsearch -exact -index 0 $rows plumb]] \
+		[lindex $rows [lsearch -exact -index 0 $rows jev]]
+} -result {0 2 3 4 {plumb 1 -} {jev 0 AI_GATEWAY_API_KEY}}
+
+tcltest::test systemone-plumb-configure {the plumb preset points at the local port 8090, no key} -body {
+	set config [array get ::ai::systemone::Config]
+	::ai::systemone::configure -backend plumb
+	set result [list [::ai::systemone::enabled] [::ai::systemone::describe]]
+	::scidb::test::s1::restoreConfig $config
+	set result
+} -result {1 {plumb (plumb-4b-v5 at http://127.0.0.1:8090/v1/systemone)}}
+
+tcltest::test systemone-jev-configure {the jev preset reads its key from the environment} -setup {
+	set config [array get ::ai::systemone::Config]
+} -body {
+	set ::env(AI_GATEWAY_API_KEY) test-key
+	::ai::systemone::configure -backend jev
+	set withKey [list [::ai::systemone::describe] $::ai::systemone::Config(apiKey)]
+	unset ::env(AI_GATEWAY_API_KEY)
+	::ai::systemone::configure -backend jev
+	set withoutKey $::ai::systemone::Config(apiKey)
+	::scidb::test::s1::restoreConfig $config
+	list [lindex $withKey 0] [lindex $withKey 1] $withoutKey
+} -cleanup {
+	unset -nocomplain ::env(AI_GATEWAY_API_KEY)
+} -result {{jev (typesafe-ai/jev at https://ai-gateway.vercel.sh/typesafe/v1/systemone)} test-key {}}
 
 ::tcltest::cleanupTests
 return

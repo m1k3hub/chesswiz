@@ -16,8 +16,12 @@ proc ::scidb::test::aimodels::isolated {body} {
 	set options [array get ::process::Options ai-*]
 	set valued [array get ::process::Valued ai-*]
 	set env {}
-	foreach v {SCIDB_AI_MODEL SCIDB_AI_PROVIDER} {
+	foreach v {SCIDB_AI_MODEL SCIDB_AI_PROVIDER SCIDB_AI_CLASSIFIER} {
 		if {[info exists ::env($v)]} { lappend env $v $::env($v); unset ::env($v) }
+	}
+	set systemone {}
+	if {[llength [info commands ::ai::systemone::configure]]} {
+		set systemone [array get ::ai::systemone::Config]
 	}
 	set rc [catch { uplevel 1 $body } result]
 	array set ::application::ai::Settings $settings
@@ -26,8 +30,9 @@ proc ::scidb::test::aimodels::isolated {body} {
 	array unset ::process::Valued ai-*
 	array set ::process::Options $options
 	array set ::process::Valued $valued
-	foreach v {SCIDB_AI_MODEL SCIDB_AI_PROVIDER} { unset -nocomplain ::env($v) }
+	foreach v {SCIDB_AI_MODEL SCIDB_AI_PROVIDER SCIDB_AI_CLASSIFIER} { unset -nocomplain ::env($v) }
 	array set ::env $env
+	if {[llength $systemone]} { array set ::ai::systemone::Config $systemone }
 	if {$rc} { return -code error $result }
 	return $result
 }
@@ -129,14 +134,82 @@ tcltest::test aimodels-dialog-shows-override {the dialog says when a flag overri
 	}
 } -result {1 1}
 
+tcltest::test aimodels-classifier-saved-setting {the saved classifier backend is in effect} -body {
+	::scidb::test::aimodels::isolated {
+		::application::ai::chooseClassifier plumb
+		list [::application::ai::setting classifier] [::ai::systemone::describe]
+	}
+} -result {{settings plumb} {plumb (plumb-4b-v5 at http://127.0.0.1:8090/v1/systemone)}}
+
+tcltest::test aimodels-classifier-env-overrides {SCIDB_AI_CLASSIFIER overrides the saved choice} -body {
+	::scidb::test::aimodels::isolated {
+		::application::ai::chooseClassifier plumb
+		set ::env(SCIDB_AI_CLASSIFIER) simple-jev
+		::application::ai::applySettings
+		list [::application::ai::setting classifier] [::ai::systemone::describe] 			$::application::ai::Settings(classifier)
+	}
+} -result {{environment simple-jev} {simple-jev (Qwen/Qwen3.5-0.8B at http://127.0.0.1:8000/v1/systemone)} plumb}
+
+tcltest::test aimodels-classifier-option-overrides {--ai-classifier overrides the environment and the saved choice} -body {
+	::scidb::test::aimodels::isolated {
+		::application::ai::chooseClassifier plumb
+		set ::env(SCIDB_AI_CLASSIFIER) simple-jev
+		::process::setOption ai-classifier off
+		set ::process::Valued(ai-classifier) 1
+		::application::ai::applySettings
+		list [::application::ai::setting classifier] [::ai::systemone::enabled]
+	}
+} -result {{option off} 0}
+
+tcltest::test aimodels-classifier-off {choosing off disables the classifier} -body {
+	::scidb::test::aimodels::isolated {
+		::application::ai::chooseClassifier off
+		list [::ai::systemone::enabled] $::application::ai::Settings(classifier)
+	}
+} -result {0 {}}
+
+tcltest::test aimodels-classifier-saved-in-options {the classifier choice is written to the options file} -body {
+	::scidb::test::aimodels::isolated {
+		::application::ai::chooseClassifier jev
+		set chan [file tempfile path]
+		::application::ai::WriteOptions $chan
+		close $chan
+		set chan [::open $path]
+		set text [read $chan]
+		close $chan
+		file delete $path
+		array set ::application::ai::Settings {classifier other}
+		array unset ::application::ai::Settings model
+		eval $text
+		list $::application::ai::Settings(classifier) [info exists ::application::ai::Settings(model)]
+	}
+} -result {jev 1}
+
+tcltest::test aimodels-dialog-saves-classifier {picking a classifier in the dialog saves it} -body {
+	::scidb::test::aimodels::isolated {
+		rename ::ai::provider::ollamaModels ::scidb::test::aimodels::realModels
+		proc ::ai::provider::ollamaModels {args} {
+			return [list [dict create name local-a:1b remote 0 tools 1 size 1]]
+		}
+		set dlg [::application::ai::models::show .application]
+		set rows [$::application::ai::models::Priv(ctree) children {}]
+		$::application::ai::models::Priv(ctree) selection set plumb
+		update
+		::application::ai::models::Apply
+		rename ::ai::provider::ollamaModels {}
+		rename ::scidb::test::aimodels::realModels ::ai::provider::ollamaModels
+		list $rows [winfo exists $dlg] 			$::application::ai::Settings(classifier) [::ai::systemone::describe]
+	}
+} -result {{off kev simple-jev plumb jev} 0 plumb {plumb (plumb-4b-v5 at http://127.0.0.1:8090/v1/systemone)}}
+
 tcltest::test aimodels-help-lists-flags {--help documents the AI flags} -body {
 	set exe [file join [file dirname [info nameofexecutable]] tkscidb-beta]
 	if {![file executable $exe]} { set exe [info nameofexecutable] }
 	set script [file join $::scidb::test::app::testDir .. tcl scidb-beta]
 	set out [exec $exe $script --help 2>@1]
 	list [string match "*--ai-model=MODEL*" $out] [string match "*--ai-provider=NAME*" $out] \
-		[string match "*--ai-debug*" $out]
-} -result {1 1 1}
+		[string match "*--ai-classifier=NAME*" $out] [string match "*--ai-debug*" $out]
+} -result {1 1 1 1}
 
 # ----------------------------------------------------------------------
 
