@@ -76,7 +76,7 @@ proc ::application::ai::models::show {{parent .application}} {
 	set Priv(dialog) $dlg
 	# the saved choices (an override is shown separately)
 	set Priv(name) $::application::ai::Settings(model)
-	lassign [::application::ai::setting classifier] Priv(classifier) _
+	set Priv(classifier) [lindex [::application::ai::setting classifier] 1]
 	# the vercel preset is the same server as jev; the dialog has one row
 
 	toplevel $dlg -class Scidb
@@ -231,7 +231,7 @@ proc ::application::ai::models::FillClassifiers {} {
 	if {$Priv(classifier) eq "vercel"} { set Priv(classifier) jev }
 	if {[string length $Priv(classifier)] && [$tree exists $Priv(classifier)]} {
 		$tree selection set [list $Priv(classifier)]
-		$tree see $Priv(classifier)]
+		$tree see $Priv(classifier)
 	} else {
 		$tree selection set [list off]
 	}

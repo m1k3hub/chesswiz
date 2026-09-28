@@ -58,12 +58,20 @@ proc ::application::ai::setting {key} {
 
 proc ::application::ai::applySettings {} {
 	variable Config
+	variable Settings
 
 	foreach key {provider model} {
 		set Config($key) [lindex [setting $key] 1]
 	}
 	if {[llength [info commands ::ai::systemone::configure]]} {
-		::ai::systemone::configure -backend [lindex [setting classifier] 1]
+		lassign [setting classifier] source backend
+		if {[catch { ::ai::systemone::configure -backend $backend }]} {
+			# A corrupt saved choice must not break startup: fall back to
+			# the default backend and heal the setting, so the bad value
+			# is not written back to the options file on exit.
+			catch { ::ai::systemone::configure -backend kev }
+			if {$source eq "settings"} { set Settings(classifier) kev }
+		}
 	}
 }
 

@@ -185,6 +185,31 @@ tcltest::test aimodels-classifier-saved-in-options {the classifier choice is wri
 	}
 } -result {jev 1}
 
+tcltest::test aimodels-corrupt-saved-classifier {a corrupt saved classifier heals instead of breaking startup} -body {
+	::scidb::test::aimodels::isolated {
+		set ::application::ai::Settings(classifier) settings
+		if {[catch { ::application::ai::applySettings } err]} { return "threw: $err" }
+		list $::application::ai::Settings(classifier) [::ai::systemone::describe]
+	}
+} -result {kev {kev (kev-latest at http://127.0.0.1:8009/v1/systemone)}}
+
+tcltest::test aimodels-dialog-classifier-value {the dialog starts from the backend VALUE, not the setting source} -body {
+	::scidb::test::aimodels::isolated {
+		::application::ai::chooseClassifier plumb
+		rename ::ai::provider::ollamaModels ::scidb::test::aimodels::realModels
+		proc ::ai::provider::ollamaModels {args} {
+			return [list [dict create name local-a:1b remote 0 tools 1 size 1]]
+		}
+		::application::ai::models::show .application
+		set initial $::application::ai::models::Priv(classifier)
+		set selected [$::application::ai::models::Priv(ctree) selection]
+		::application::ai::models::Close
+		rename ::ai::provider::ollamaModels {}
+		rename ::scidb::test::aimodels::realModels ::ai::provider::ollamaModels
+		list $initial $selected
+	}
+} -result {plumb plumb}
+
 tcltest::test aimodels-dialog-saves-classifier {picking a classifier in the dialog saves it} -body {
 	::scidb::test::aimodels::isolated {
 		rename ::ai::provider::ollamaModels ::scidb::test::aimodels::realModels
