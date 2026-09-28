@@ -141,7 +141,7 @@ action.
 | **Auto-annotate a game** (flagship) | `::ai::engine::classify` per move (truth) → a deterministic gate over the engine's verdict decides which moves deserve prose → a dedicated grounded draft (`ai::provider::completeAsync` + the move facts) → `::ai::claims::check` → `::scidb::game::update addcomment`/`annotation` | only the engine classifies moves; the gate cannot invent; a comment whose claims the facts contradict is never written; the game is left modified for the user to save | M | **shipped** |
 | **Mistake autopsy + study plan** | batch classify the user's games → cluster by engine features → classifier labels the *pattern* (`choice`: tactical/opening/endgame/time) → LLM writes a plan grounded in the clusters (claims checked) | patterns are labelled, not invented; examples are engine-verified | M |
 | **Annotation fact-checker** | paste any annotated PGN → `::ai::claims::check` + fact layer flag the author's ungrounded claims | deterministic checker; no model involved | S |
-| **Provable endgames** | Syzygy tablebase into the fact layer → "was it winning?" *proved*, then explained | tablebase is truth; the LLM may not contradict it | M |
+| ~~Provable endgames~~ | Syzygy tablebase into the fact layer → "was it winning?" *proved*, then explained | tablebase is truth; the LLM may not contradict it | M | **deferred** — it needs the Syzygy tablebase files (tens of GB, or per-set downloads) as a new external dependency; the plan's other features need no new data. Revisit when tablebases are wanted for their own sake. |
 
 ## Wave 2 — Preparation and data
 
