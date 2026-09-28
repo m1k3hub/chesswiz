@@ -86,6 +86,7 @@ set Embed3DBoard					"3D Board in &Main Window"
 set AIExplain						"AI: &Explain Position"
 set AIAssistant					"AI: A&ssistant"
 set AIChooseModel				"AI: Choose &Model..."
+set AIAnnotateGame			"AI: &Annotate Game..."
 set DownloadGames				"Download &Games from the Internet..."
 
 # Tools
@@ -480,6 +481,18 @@ if {0} {
 			-underline [IncrUL $ul] \
 			-image $::icon::16x16::none \
 			-command [list ::application::ai::models::show .application] \
+			;
+	}
+
+	### annotate the current game ###########################################
+	if {[llength [info commands ::ai::annotate::toggle]]} {
+		lassign [::tk::UnderlineAmpersand $mc::AIAnnotateGame] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [list ::ai::annotate::toggle .application] \
 			;
 	}
 

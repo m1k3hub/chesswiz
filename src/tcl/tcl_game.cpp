@@ -3072,7 +3072,42 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 						}
 						break;
 
-						case 'i':	// mainvariant?
+						case 'i':	// mainvariant? / mainline
+							if (equal(cmd, "mainline"))
+							{
+								// The whole mainline without disturbing the game:
+								// a list of {key san fenBefore} triples, one per
+								// ply.  Auto-annotation walks this instead of
+								// parsing PGN or moving the on-screen position;
+								// the subscriber is detached for the walk, as the
+								// per-key 'move'/'movefen' queries do above.
+								Game& game = scidb->game(pos);
+								edit::Key saved(game.currentKey());
+								Game::SubscriberP subscriber(game.subscriber());
+								game.setSubscriber(Game::SubscriberP());
+
+								Tcl_Obj* line = Tcl_NewListObj(0, nullptr);
+								game.goToMainlineStart();
+
+								while (!game.atLineEnd())
+								{
+									mstl::string fenBefore = game.currentBoard().toFen(game.variant());
+									mstl::string san = game.getNextMove(Game::ExportFormat);
+									game.forward();
+									edit::Key key(game.currentKey());
+
+									Tcl_Obj* ply = Tcl_NewListObj(0, nullptr);
+									Tcl_ListObjAppendElement(ti, ply, tcl::newObj(key.id()));
+									Tcl_ListObjAppendElement(ti, ply, tcl::newObj(san));
+									Tcl_ListObjAppendElement(ti, ply, tcl::newObj(fenBefore));
+									Tcl_ListObjAppendElement(ti, line, ply);
+								}
+
+								game.goTo(saved);
+								game.setSubscriber(subscriber);
+								Tcl_SetObjResult(ti, line);
+								break;
+							}
 							setResult(tcl::tree::variantToString(
 								variant::toMainVariant(Scidb->game(pos).variant())));
 							break;

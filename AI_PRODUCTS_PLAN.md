@@ -134,9 +134,9 @@ action.
 
 ## Wave 1 — Analysis products with receipts
 
-| Feature | Composition | Reliability | Effort |
-|---|---|---|---|
-| **Auto-annotate a game** (flagship) | `::ai::engine::classify` per move (truth) → annotation gate (`JEV_USE_CASES.md` B) decides which moves deserve prose → `ai-generate` draft → `ai-claims` check → `::scidb::game::update comment`/NAG | only the engine classifies moves; the gate cannot invent; every sentence audited | M |
+| Feature | Composition | Reliability | Effort | State |
+|---|---|---|---|---|
+| **Auto-annotate a game** (flagship) | `::ai::engine::classify` per move (truth) → a deterministic gate over the engine's verdict decides which moves deserve prose → a dedicated grounded draft (`ai::provider::completeAsync` + the move facts) → `::ai::claims::check` → `::scidb::game::update addcomment`/`annotation` | only the engine classifies moves; the gate cannot invent; a comment whose claims the facts contradict is never written; the game is left modified for the user to save | M | **shipped** |
 | **Mistake autopsy + study plan** | batch classify the user's games → cluster by engine features → classifier labels the *pattern* (`choice`: tactical/opening/endgame/time) → LLM writes a plan grounded in the clusters (claims checked) | patterns are labelled, not invented; examples are engine-verified | M |
 | **Annotation fact-checker** | paste any annotated PGN → `::ai::claims::check` + fact layer flag the author's ungrounded claims | deterministic checker; no model involved | S |
 | **Provable endgames** | Syzygy tablebase into the fact layer → "was it winning?" *proved*, then explained | tablebase is truth; the LLM may not contradict it | M |
@@ -191,6 +191,7 @@ confirm gate. No cloud call for audio, error logs or private games by default.
 | Feature | State |
 |---|---|
 | Error triage, rhetoric/coverage advisories, tool pre-routing | shipped |
+| **Auto-annotate a game** (`tcl/ai-annotate.tcl`, Extras + assistant tool) | **shipped** — engine-only mode for free, LLM prose checked against the facts; needs `::scidb::game::query mainline` (new, C++), which returns {key san fenBefore} per ply without disturbing the board |
 | Download games (GUI + assistant + headless) | shipped |
 | Classifier backends in the chooser (kev/simple-jev/plumb/jev) | shipped |
 | **Voice-driven assistant** | **shipped (Wave 0)** |

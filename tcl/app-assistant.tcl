@@ -261,6 +261,12 @@ variable Actions {
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoClassifierStatus
 	}
+	annotate_game {
+		1 0 "annotate this game with engine-grounded comments"
+		"Annotate the game on the board: classify every move with the chess engine, then write a comment for the moves that deserve one (blunders, mistakes, inaccuracies, and the only move that holds). With 'prose' true (the default) the comment is written by the language model from the engine's facts and checked; with 'prose' false the comment is the engine's own verdict in words, which costs no model call. 'marks' also sets the standard annotation mark. 'max_plies' bounds the work. The game is left modified for the user to save."
+		{{"type":"object","properties":{"prose":{"type":"boolean","description":"let the language model word the comments, default true"},"depth":{"type":"integer","description":"engine depth per move, default 12"},"marks":{"type":"boolean","description":"also set the move's annotation mark, default false"},"max_plies":{"type":"integer","description":"stop after this many moves, default 60"}}}}
+		::application::assistant::DoAnnotateGame
+	}
 	voice_status {
 		0 0 "report the voice assistant status"
 		"Whether speaking to the assistant is available: the recorder, the local speech-to-text engine and model, and how replies are spoken. Use it when the user asks about voice input, dictation, or why the microphone button is not there."
@@ -865,6 +871,25 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		}
 		classifier_status {
 			return {}
+		}
+		annotate_game {
+			set prose 1
+			if {[dict exists $cargs prose]} {
+				set prose [expr {[string is true -strict [dict get $cargs prose]] ? 1 : 0}]
+			}
+			set marks 0
+			if {[dict exists $cargs marks]} {
+				set marks [expr {[string is true -strict [dict get $cargs marks]] ? 1 : 0}]
+			}
+			set depth [OptArg $cargs depth 12]
+			if {![string is integer -strict $depth] || $depth < 4 || $depth > 30} {
+				error "depth must be an integer between 4 and 30"
+			}
+			set maxPlies [OptArg $cargs max_plies 60]
+			if {![string is integer -strict $maxPlies] || $maxPlies < 1 || $maxPlies > 200} {
+				error "max_plies must be an integer between 1 and 200"
+			}
+			return [dict create prose $prose marks $marks depth $depth max_plies $maxPlies]
 		}
 	}
 	return {}
@@ -2427,6 +2452,40 @@ proc ::application::assistant::SetEntry {text} {
 	$Priv(entry) insert 0 $text
 	focus $Priv(entry)
 	return 1
+}
+
+
+# ----------------------------------------------------------------------
+# Annotate the current game (see tcl/ai-annotate.tcl).  The engine pass and
+# the drafting take a while, so the tool answers when the run is over.
+# ----------------------------------------------------------------------
+proc ::application::assistant::DoAnnotateGame {prose marks depth max_plies} {
+	if {[llength [info commands ::ai::annotate::annotate]] == 0} {
+		return "error: the annotation module is not available"
+	}
+	if {[::ai::annotate::running?]} {
+		return "error: an annotation run is already in progress"
+	}
+	set token [Later]
+	if {[catch {
+		::ai::annotate::annotate .application \
+			-prose $prose -marks $marks -depth $depth -maxPlies $max_plies \
+			-done [namespace code [list AnnotateGameDone $token]]
+	} err]} {
+		after 0 [list Resolve $token "error: $err"]
+		return $token
+	}
+	return $token
+}
+
+
+proc ::application::assistant::AnnotateGameDone {token result} {
+	set reply [dict get $result summary]
+	if {[dict get $result written]} {
+		append reply "; the game is modified -- save it to keep the comments"
+	}
+	catch { Resolve $token $reply }
+	return
 }
 
 
