@@ -117,6 +117,26 @@ tcltest::test aimodels-dialog-saves-choice {picking a model in the dialog saves 
 	}
 } -result {{local-a:1b notools:1b} 1 0 local-a:1b local-a:1b}
 
+tcltest::test aimodels-dialog-sees-saved-model {the saved model's row is selected when the dialog opens} -body {
+	::scidb::test::aimodels::isolated {
+		::application::ai::choose ollama saved-model:1b
+		rename ::ai::provider::ollamaModels ::scidb::test::aimodels::realModels
+		proc ::ai::provider::ollamaModels {args} {
+			return [list \
+				[dict create name other:2b remote 0 tools 1 size 1] \
+				[dict create name saved-model:1b remote 0 tools 1 size 1]]
+		}
+		# Fill selects and `see`s the saved model's row; a malformed item
+		# name there raises ("Item ... not found")
+		set dlg [::application::ai::models::show .application]
+		set sel [$::application::ai::models::Priv(tree) selection]
+		::application::ai::models::Close
+		rename ::ai::provider::ollamaModels {}
+		rename ::scidb::test::aimodels::realModels ::ai::provider::ollamaModels
+		set sel
+	}
+} -result {saved-model:1b}
+
 tcltest::test aimodels-dialog-shows-override {the dialog says when a flag overrides the choice} -body {
 	::scidb::test::aimodels::isolated {
 		::process::setOption ai-model flag-model:3b

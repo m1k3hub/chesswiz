@@ -202,7 +202,7 @@ proc ::application::ai::models::Fill {} {
 	}
 	if {[$tree exists $Priv(name)]} {
 		$tree selection set [list $Priv(name)]
-		$tree see $Priv(name)]
+		$tree see $Priv(name)
 	}
 	$Priv(status) configure -text [format $mc::Found [llength $models]]
 }
