@@ -115,7 +115,14 @@ bool
 tk::exists(char const* path)
 {
 	M_REQUIRE(path);
-	return Tk_NameToWindow(::tcl::interp(), path, mainWindow());
+
+	// During exit teardown Tk destroys the main window before its children;
+	// the <Destroy> bindings of the children still run and ask whether their
+	// window exists. With no main window the honest answer is "no" --
+	// mainWindow() would throw, and throws from destructors (Node::~Node)
+	// and raw event callbacks terminate the process.
+	Tk_Window main = Tk_MainWindow(::tcl::interp());
+	return main && Tk_NameToWindow(::tcl::interp(), path, main);
 }
 
 

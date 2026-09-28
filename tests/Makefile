@@ -90,7 +90,7 @@ smoke:
 			echo "STARTUP-SMOKE: FAILED (hung, killed by timeout)"; exit 1; \
 		fi; \
 		if grep -q "STARTUP-SMOKE: OK" /tmp/scidb-smoke.log && ! grep -q "FAIL" /tmp/scidb-smoke.log \
-			&& { [ $$rc -eq 0 ] || [ $$rc -eq 134 ]; }; then \
+			&& [ $$rc -eq 0 ]; then \
 			exit 0; \
 		fi; \
 		echo "STARTUP-SMOKE: FAILED (exit $$rc)"; exit 1
