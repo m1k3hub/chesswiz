@@ -86,6 +86,7 @@ set Embed3DBoard					"3D Board in &Main Window"
 set AIExplain						"AI: &Explain Position"
 set AIAssistant					"AI: A&ssistant"
 set AIChooseModel				"AI: Choose &Model..."
+set DownloadGames				"Download &Games from the Internet..."
 
 # Tools
 set OpenEngineDictionary		"Open &Engine Dictionary"
@@ -479,6 +480,18 @@ if {0} {
 			-underline [IncrUL $ul] \
 			-image $::icon::16x16::none \
 			-command [list ::application::ai::models::show .application] \
+			;
+	}
+
+	### download games from the internet ####################################
+	if {[llength [info commands ::application::download::openActive]]} {
+		lassign [::tk::UnderlineAmpersand $mc::DownloadGames] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::databaseImport \
+			-command [list ::application::download::openActive .application] \
 			;
 	}
 

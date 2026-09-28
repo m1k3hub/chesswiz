@@ -101,6 +101,7 @@ proc ::application::download::open {parent base} {
 	}
 	set Priv(dialog) $dlg
 	set Priv(base) $base
+	set Priv(doneCmd) {}
 	set Priv(source) twic
 	set Priv(issues) 1
 	set Priv(lichess) ""
@@ -189,6 +190,14 @@ proc ::application::download::open {parent base} {
 }
 
 
+# The active database's download dialog; the Extras menu entry uses this,
+# the database popup menu opens a specific base directly.
+proc ::application::download::openActive {parent} {
+	set base [::scidb::db::get name]
+	return [open $parent $base]
+}
+
+
 proc ::application::download::SourceChanged {} {
 	# all sources keep their input; only the active one is used on start
 	return
@@ -241,8 +250,8 @@ proc ::application::download::Start {} {
 	switch -- $Priv(source) {
 		twic {
 			set Priv(title) $mc::TwicImport
-			$Priv(status) configure -text $mc::FetchingIndex
-			$Priv(dialog).ok configure -state disabled
+			Status $mc::FetchingIndex
+			if {[DialogExists]} { $Priv(dialog).ok configure -state disabled }
 			set Priv(running) 1
 			Get https://theweekinchess.com/twic [namespace code [list OnTwicIndex]]
 			return
@@ -250,7 +259,7 @@ proc ::application::download::Start {} {
 		lichess {
 			set ids [lichessGameIds [$Priv(lichessWidget) get 1.0 end]]
 			if {![llength $ids]} {
-				$Priv(status) configure -text $mc::NoGames
+				Status $mc::NoGames
 				return
 			}
 			set Priv(title) $mc::LichessImport
@@ -262,7 +271,7 @@ proc ::application::download::Start {} {
 		url {
 			set url [string trim $Priv(url)]
 			if {$url eq ""} {
-				$Priv(status) configure -text $mc::NoUrl
+				Status $mc::NoUrl
 				return
 			}
 			set Priv(title) $mc::UrlImport
@@ -270,7 +279,7 @@ proc ::application::download::Start {} {
 		}
 	}
 
-	$Priv(dialog).ok configure -state disabled
+	if {[DialogExists]} { $Priv(dialog).ok configure -state disabled }
 	set Priv(running) 1
 	set Priv(queue) $queue
 	FetchNext
@@ -383,6 +392,7 @@ proc ::application::download::Finish {text} {
 		if {[DialogExists]} {
 			$Priv(dialog).ok configure -state normal
 		}
+		Done [dict create ok 0 error $text]
 		return
 	}
 
@@ -395,9 +405,49 @@ proc ::application::download::Finish {text} {
 	set base $Priv(base)
 	if {[catch { ::import::import $parent $base $files $Priv(title) utf-8 } err]} {
 		catch { ::dialog::error -parent $parent -message $err }
-	} elseif {[catch { ::scidb::db::get name } name] == 0 && $base eq $name} {
+		Done [dict create ok 0 error "import failed: $err"]
+		return
+	}
+	if {[catch { ::scidb::db::get name } name] == 0 && $base eq $name} {
 		catch { ::application::database::refreshBase $base }
 	}
+	Done [dict create ok 1 files [llength $files] base $base]
+}
+
+
+# The headless completion callback, if the run was started by
+# ::application::download::run (the assistant), not by the dialog.
+proc ::application::download::Done {result} {
+	variable Priv
+
+	set cmd [expr {[info exists Priv(doneCmd)] ? $Priv(doneCmd) : {}}]
+	set Priv(doneCmd) {}
+	if {[llength $cmd]} { catch { {*}$cmd $result } }
+	return
+}
+
+
+# Headless entry: download <spec> into <base>, then call <doneCmd> with
+# {ok 1 files N base B} or {ok 0 error TEXT}. Used by the assistant tool
+# download_games; the dialog uses Start directly.
+#
+#   ::application::download::run $base {-source twic -issues 2} $cmd
+proc ::application::download::run {base spec doneCmd} {
+	variable Priv
+
+	if {[expr {[info exists Priv(running)] ? $Priv(running) : 0}]} {
+		{*}$doneCmd [list ok 0 error "a download is already running"]
+		return
+	}
+	set Priv(source)  [expr {[dict exists $spec -source]  ? [dict get $spec -source]  : "twic"}]
+	set Priv(issues)  [expr {[dict exists $spec -issues]  ? [dict get $spec -issues]  : 1}]
+	set Priv(lichess) [expr {[dict exists $spec -lichess] ? [dict get $spec -lichess] : ""}]
+	set Priv(url)     [expr {[dict exists $spec -url]     ? [dict get $spec -url]     : ""}]
+	set Priv(base)    $base
+	set Priv(dialog)  {}
+	set Priv(doneCmd) $doneCmd
+	Start
+	return
 }
 
 

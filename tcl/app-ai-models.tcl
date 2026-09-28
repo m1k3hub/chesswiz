@@ -145,7 +145,7 @@ proc ::application::ai::models::show {{parent .application}} {
 		pack $top.cstatus -fill x -pady [list $::theme::pady 0]
 
 		bind $ctree <<TreeviewSelect>> [namespace code SelectedClassifier]
-		bind $ctree <Double-Button-1> [namespace code Apply]
+		bind $ctree <Double-Button-1> [namespace code DeferredApply]
 		set Priv(ctree) $ctree
 		set Priv(cstatus) $top.cstatus
 	}
@@ -158,7 +158,7 @@ proc ::application::ai::models::show {{parent .application}} {
 	$dlg.cancel configure -command [namespace code Close]
 
 	bind $tree <<TreeviewSelect>> [namespace code Selected]
-	bind $tree <Double-Button-1> [namespace code Apply]
+	bind $tree <Double-Button-1> [namespace code DeferredApply]
 	bind $entry.name <Return> [namespace code Apply]
 
 	set Priv(tree) $tree
@@ -298,6 +298,19 @@ proc ::application::ai::models::ShowOverride {} {
 		}
 	}
 	$Priv(override) configure -text $text
+}
+
+
+# A double-click closes the dialog; Tk's own treeview DoubleClick class
+# binding still runs after the widget binding, so applying immediately
+# destroys the widget underneath it ("invalid command name ...tree").
+# Defer past the click.
+proc ::application::ai::models::DeferredApply {} {
+	variable Priv
+
+	if {![winfo exists $Priv(dialog)]} { return }
+	after idle [namespace code Apply]
+	return
 }
 
 

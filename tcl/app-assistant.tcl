@@ -93,6 +93,12 @@ variable Actions {
 		{{"type":"object","properties":{"kind":{"type":"string","enum":["advanced","material","rating"]}},"required":["kind"]}}
 		::application::assistant::DoOpenSearch
 	}
+	download_games {
+		1 0 "download games from the internet into this database"
+		"Download games from the internet into the active database and import them: 'twic' takes the latest weekly issues of The Week in Chess (default 1 issue, up to 12), 'lichess' takes game links or 8-character game ids given in 'lichess', 'url' takes a PGN/zip/gz link given in 'url'. The import runs like 'Import PGN files'. Ask only when the user wants games from the internet."
+		{{"type":"object","properties":{"source":{"type":"string","enum":["twic","lichess","url"],"description":"where to download from, default twic"},"issues":{"type":"integer","description":"TWIC: how many weekly issues, default 1 (max 12)"},"lichess":{"type":"string","description":"lichess: game links or ids, one per line"},"url":{"type":"string","description":"url: a PGN, zipped PGN or gzipped PGN link"}}}}
+		::application::assistant::DoDownloadGames
+	}
 	export_database {
 		0 0 "open the export dialog"
 		"Open the export dialog for the active database (PGN, HTML, LaTeX, PDF, Scidb formats). The user picks the format and file there."
@@ -248,6 +254,12 @@ variable Actions {
 		"The bugs found by error triage, newest first: issue id, severity, summary and file."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoListIssues
+	}
+	classifier_status {
+		0 0 "report the System One classifier status"
+		"Which System One decision model is configured (and whether it answers), whether it routes simple requests, and the most recent routing decisions it made. Use it when the user asks about the classifier, the decision model, or why a request was or was not routed."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoClassifierStatus
 	}
 	handoff_issue {
 		1 0 "hand issue %s to the coding agent"
@@ -825,6 +837,28 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			set player ""
 			if {[dict exists $cargs player]} { set player [string trim [dict get $cargs player]] }
 			return [dict create range [EcoRange [Arg $cargs eco]] player $player]
+		}
+		download_games {
+			set source [OptArg $cargs source twic]
+			if {$source ni {twic lichess url}} {
+				error "source must be 'twic', 'lichess' or 'url'"
+			}
+			set issues [OptArg $cargs issues 1]
+			if {![string is integer -strict $issues] || $issues < 1 || $issues > 12} {
+				error "issues must be an integer between 1 and 12"
+			}
+			set lichess [OptArg $cargs lichess ""]
+			set url [OptArg $cargs url ""]
+			if {$source eq "lichess" && $lichess eq ""} {
+				error "source 'lichess' needs the 'lichess' argument with links or game ids"
+			}
+			if {$source eq "url" && $url eq ""} {
+				error "source 'url' needs the 'url' argument"
+			}
+			return [dict create source $source issues $issues lichess $lichess url $url]
+		}
+		classifier_status {
+			return {}
 		}
 	}
 	return {}
@@ -2333,6 +2367,89 @@ proc ::application::assistant::StartTerminalChat {} {
 
 if {[llength [info commands ::process::testOption]] && [::process::testOption chat]} {
 	after 1000 ::application::assistant::StartTerminalChat
+}
+
+# vi:set ts=3 sw=3:
+
+
+# ----------------------------------------------------------------------
+# Download games from the internet (see ::application::download). The
+# download runs in the background; the reply is resolved when it is done.
+# ----------------------------------------------------------------------
+proc ::application::assistant::DoDownloadGames {source issues lichess url} {
+	if {[llength [info commands ::application::download::run]] == 0} {
+		return "error: the download module is not available"
+	}
+	set base [::scidb::db::get name]
+	set token [Later]
+	if {[catch {
+		::application::download::run $base \
+			[list -source $source -issues $issues -lichess $lichess -url $url] \
+			[namespace code [list DownloadGamesDone $token $base]]
+	} err]} {
+		after 0 [list Resolve $token "error: $err"]
+	}
+	return $token
+}
+
+
+proc ::application::assistant::DownloadGamesDone {token base result} {
+	if {[dict get $result ok]} {
+		set reply "downloaded and imported [dict get $result files] file(s) into [::util::databaseName $base]"
+	} else {
+		set reply "error: [dict get $result error]"
+	}
+	catch { Resolve $token $reply }
+	return
+}
+
+
+# ----------------------------------------------------------------------
+# The System One classifier as the user sees it: which backend, whether
+# it routes simple requests, and what it decided recently.
+# ----------------------------------------------------------------------
+proc ::application::assistant::DoClassifierStatus {} {
+	set out {}
+
+	if {[llength [info commands ::ai::systemone::describe]]} {
+		lappend out "System One decision model: [::ai::systemone::describe]"
+		lappend out "  (enabled: [expr {[::ai::systemone::enabled] ? "yes" : "no — nothing is classified"}])"
+	} else {
+		lappend out "System One decision model: not loaded"
+	}
+
+	if {[llength [info commands ::application::assistant::RouteOrStep]]} {
+		lappend out "assistant routing: [set ::application::assistant::RouteMode] \
+			(route >= [set ::application::assistant::RouteThreshold], satisfied >= \
+			[set ::application::assistant::SatisfiedThreshold]; modes: off, shadow, active)"
+	} else {
+		lappend out "assistant routing: not loaded"
+	}
+
+	lappend out "decision models in use: error triage (bug/environment/user/noise),"
+	lappend out "  advisory rhetoric/coverage on generated reports, and request routing"
+	lappend out "  (SCIDB_AI_ROUTE=active enables the routing fast path)."
+
+	set log [file join [file dirname [LogFile]] route-shadow.log]
+	if {[file readable $log]} {
+		set ch [open $log]
+		set lines [split [string trim [read $ch]] \n]
+		close $ch
+		set from [expr {max(0, [llength $lines] - 4)}]
+		lappend out "recent routing decisions ($log):"
+		foreach line [lrange $lines $from end] { lappend out "  $line" }
+	} else {
+		lappend out "no routing decisions logged yet; with routing in shadow mode they"
+		lappend out "appear in route-shadow.log beside the error log."
+	}
+	return [join $out \n]
+}
+
+
+# The error log's path, for the diagnostics above.
+proc ::application::assistant::LogFile {} {
+	variable ErrorLogFile
+	return $ErrorLogFile
 }
 
 # vi:set ts=3 sw=3:

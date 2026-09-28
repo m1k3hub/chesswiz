@@ -222,7 +222,14 @@ proc grab {args} {
 	# therefore we will kill all shadows as soon as
 	# a grab is released.
 	if {[lindex $args 0] eq "release"} { shadow::kill }
-	if {[llength $args] == 2 && ![winfo exists [lindex $args 1]]} { return }
+	if {[llength $args] == 2} {
+		set w [lindex $args 1]
+		if {![winfo exists $w]} { return }
+		# a window that is not viewable cannot be grabbed; Tk raises
+		# "grab failed: window not viewable" (seen when a pane header is
+		# pressed before its pane has been mapped)
+		if {![winfo viewable $w]} { return }
+	}
 
 	return [__grab__shadow {*}$args]
 }

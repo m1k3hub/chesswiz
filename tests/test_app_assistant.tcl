@@ -51,6 +51,40 @@ tcltest::test assistant-pane-is-dockable {the assistant is an undockable pane of
 	list [expr {"assistant" in [$twm leaves]}] [expr {!![$twm isundockable assistant]}]
 } -result {1 1}
 
+tcltest::test assistant-download-games-tool {the assistant can download games; the reply comes when it is done} -setup {
+	set savedConfirm $::application::assistant::Priv(confirm)
+	::scidb::test::assistant::setup 1
+	rename ::application::download::run ::scidb::test::assistant::realDownloadRun
+	proc ::application::download::run {base spec doneCmd} {
+		# a real download answers later; report the finished import after the
+		# assistant has parked the pending tool call
+		after 0 [list {*}$doneCmd [list ok 1 files 2 base $base]]
+	}
+} -body {
+	set transcript [::scidb::test::assistant::run \
+		"download the latest twic games" \
+		[list [::scidb::test::assistant::call download_games {source twic issues 1}]]]
+	list [string match {*imported 2 file*} $transcript] \
+		[string match {*download the latest twic games*} $transcript]
+} -cleanup {
+	rename ::application::download::run {}
+	rename ::scidb::test::assistant::realDownloadRun ::application::download::run
+	set ::application::assistant::Priv(confirm) $savedConfirm
+} -result {1 1}
+
+tcltest::test assistant-download-games-args {download_games checks its arguments} -body {
+	list [::application::assistant::runTool download_games {source dropbox}] \
+		[::application::assistant::runTool download_games {source url}] \
+		[::application::assistant::runTool download_games {source twic issues 99}]
+} -result {{error: source must be 'twic', 'lichess' or 'url'} {error: source 'url' needs the 'url' argument} {error: issues must be an integer between 1 and 12}}
+
+tcltest::test assistant-classifier-status-tool {the assistant reports the classifier status} -body {
+	set text [::application::assistant::runTool classifier_status {}]
+	list [string match {*System One decision model*} $text] \
+		[string match {*assistant routing*} $text] \
+		[string match {*error triage*} $text]
+} -result {1 1 1}
+
 tcltest::test assistant-unknown-tool {an unknown tool is reported to the model, not raised} -body {
 	::application::assistant::runTool run_shell {command {rm -rf ~}}
 } -result {error: unknown tool 'run_shell'}

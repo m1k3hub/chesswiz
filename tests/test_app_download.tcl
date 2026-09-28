@@ -230,4 +230,46 @@ tcltest::test download-dialog-twic {the dialog downloads TWIC issues and imports
 	::scidb::test::download::cleanup
 } -result {{1 1} test-download-base 2 1 utf-8 1 0}
 
+# The headless entry used by the assistant: run() reports its result to a
+# callback and needs no dialog at all.
+tcltest::test download-run-headless {run() downloads and reports without a dialog} -setup {
+	::scidb::test::download::captureImport
+	set html {<a href="https://theweekinchess.com/zips/twic1663g.zip">x</a>}
+	::scidb::test::download::stubGet [list \
+		[list ok 1 data $html code 200] \
+		[list ok 1 data "PK...zip..." code 200]]
+} -body {
+	::scidb::test::download::isolated {
+		set ::application::download::Priv(dialog) {}
+		set ::result {}
+		::application::download::run test-base {-source twic -issues 1} \
+			{apply {{r} {set ::result $r}}}
+		::scidb::test::download::tick
+		list [dict get $::result ok] [dict get $::result files] \
+			[llength $::scidb::test::download::importCalls] \
+			[file exists [file join [::application::download::Dir] twic1663g.zip]]
+	}
+} -cleanup {
+	::scidb::test::download::unstubGet
+	::scidb::test::download::uncaptureImport
+	::scidb::test::download::cleanup
+} -result {1 1 1 1}
+
+tcltest::test download-run-reports-failure {run() reports a failed download to its callback} -setup {
+	::scidb::test::download::captureImport
+	::scidb::test::download::stubGet [list [list ok 0 error "not found" code 404]]
+} -body {
+	::scidb::test::download::isolated {
+		set ::application::download::Priv(dialog) {}
+		set ::result {}
+		::application::download::run test-base {-source url -url https://example.com/x.pgn} \
+			{apply {{r} {set ::result $r}}}
+		list [dict get $::result ok] [string match {*not found*} [dict get $::result error]]
+	}
+} -cleanup {
+	::scidb::test::download::unstubGet
+	::scidb::test::download::uncaptureImport
+	::scidb::test::download::cleanup
+} -result {0 1}
+
 tcltest::cleanupTests

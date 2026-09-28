@@ -2304,8 +2304,12 @@ proc Dock {twm toplevel} {
 	# to catch errors by hand.
 	set errorInfo {}
 	set frame [$twm dock $toplevel {*}$options]
-	if {[llength $errorInfo]} {
+	if {[string length $errorInfo]} {
 		# Note that this cannot be reached if the error handling is working.
+		# (Test emptiness with string length, not llength: the recorded error
+		# text is arbitrary -- a message containing braces and colons, e.g. a
+		# JSON body from a failing HTTP request, is not a valid list and
+		# llength would fail here, masking the original error.)
 		return -code 1 -errorcode $errorCode -errorinfo $errorInfo -rethrow 1 $errorInfo
 	}
 
