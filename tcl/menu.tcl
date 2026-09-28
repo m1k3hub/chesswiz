@@ -483,6 +483,18 @@ if {0} {
 			;
 	}
 
+	### voice assistant #####################################################
+	if {[llength [info commands ::application::voice::toggle]]} {
+		lassign [::tk::UnderlineAmpersand $::application::voice::mc::Title] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command ::application::voice::toggle \
+			;
+	}
+
 	### download games from the internet ####################################
 	if {[llength [info commands ::application::download::openActive]]} {
 		lassign [::tk::UnderlineAmpersand $mc::DownloadGames] text ul

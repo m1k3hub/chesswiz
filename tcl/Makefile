@@ -167,6 +167,7 @@ SOURCES = \
 	app-ai-models.tcl \
 	app-assistant.tcl \
 	app-assistant-route.tcl \
+	app-voice.tcl \
 	app-error-triage.tcl \
 	app-media-decode.tcl \
 	app-media-lesson.tcl \
@@ -234,11 +235,14 @@ install-scripts: $(SCRIPTS)
 	@install -m 755 -d $(BINDIR)
 	@install -m 755 -p $(SCRIPT) $(BINDIR)
 	@install -m 755 -p $(UPDATE_PHOTO_FILES) $(BINDIR)
+	@install -m 755 -d $(DATADIR)/scripts
+	@install -m 644 -p ../scripts/stt-transcribe.py $(DATADIR)/scripts
 
 uninstall-scripts:
 	@echo "Uninstall Tcl scripts"
 	@rm -f $(BINDIR)/$(SCRIPT)
 	@rm -f $(BINDIR)/$(UPDATE_PHOTO_FILES)
+	@rm -f $(DATADIR)/scripts/stt-transcribe.py
 
 install-pieces:
 	@echo "Install piece sets"

@@ -261,6 +261,12 @@ variable Actions {
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoClassifierStatus
 	}
+	voice_status {
+		0 0 "report the voice assistant status"
+		"Whether speaking to the assistant is available: the recorder, the local speech-to-text engine and model, and how replies are spoken. Use it when the user asks about voice input, dictation, or why the microphone button is not there."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoVoiceStatus
+	}
 	handoff_issue {
 		1 0 "hand issue %s to the coding agent"
 		"Start the configured coding agent on an issue found by triage, to fix it in the Scidb sources. Only when the user asks for it."
@@ -2161,6 +2167,13 @@ proc ::application::assistant::build {frame width height} {
 	pack $clear -side right -padx {2 4} -pady 4
 	pack $send -side right -padx 2 -pady 4
 	pack $entry -side left -fill x -expand yes -padx {4 2} -pady 4
+	# push to talk, when the machine can actually do it
+	set mic {}
+	if {[llength [info commands ::application::voice::toggle]]} {
+		set mic [ttk::button $bottom.mic -text $::application::voice::mc::Speak \
+			-command ::application::voice::toggle]
+		pack $mic -side right -padx 2 -pady 4
+	}
 
 	set status [ttk::label $frame.status -anchor w -relief sunken -borderwidth 1]
 
@@ -2189,6 +2202,7 @@ proc ::application::assistant::build {frame width height} {
 	set Priv(entry) $entry
 	set Priv(send) $send
 	set Priv(status) $status
+	if {[llength $mic]} { ::application::voice::attach $mic $status }
 
 	# a rebuilt pane (layout change) replays the conversation
 	set replay 0
@@ -2401,6 +2415,29 @@ proc ::application::assistant::DownloadGamesDone {token base result} {
 	}
 	catch { Resolve $token $reply }
 	return
+}
+
+
+# Put <text> into the entry, for the voice assistant's review mode.
+proc ::application::assistant::SetEntry {text} {
+	variable Priv
+
+	if {![winfo exists $Priv(entry)]} { return 0 }
+	$Priv(entry) delete 0 end
+	$Priv(entry) insert 0 $text
+	focus $Priv(entry)
+	return 1
+}
+
+
+# ----------------------------------------------------------------------
+# Voice input, as the user sees it.
+# ----------------------------------------------------------------------
+proc ::application::assistant::DoVoiceStatus {} {
+	if {[llength [info commands ::application::voice::status]] == 0} {
+		return "the voice assistant is not loaded"
+	}
+	return [::application::voice::status]
 }
 
 
