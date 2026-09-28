@@ -136,6 +136,8 @@ action.
 
 | Feature | Composition | Reliability | Effort | State |
 |---|---|---|---|---|
+| **Study plan** (mistake autopsy) | the engine classifies every studied move → each mistake is labelled by *pattern* from the position facts (undefended pieces, pins, forks, phase, king safety) — deterministic rules first, the classifier as a second opinion behind a confidence gate → clusters ranked by count and damage → a plan with the evidence and what to train, and an optional model summary grounded in the cluster table | the engine owns what happened; the classifier only labels, and falls back to rules; examples are engine verdicts | M | **shipped** |
+| **Annotation fact-checker** | the existing deterministic claim checker pointed at *human* prose: every comment of a game is read with the position it annotates and reported only when the facts contradict it | reproducible, no model, no engine, no network; only positive contradictions are reported, so a clean report is meaningful | S | **shipped** |
 | **Auto-annotate a game** (flagship) | `::ai::engine::classify` per move (truth) → a deterministic gate over the engine's verdict decides which moves deserve prose → a dedicated grounded draft (`ai::provider::completeAsync` + the move facts) → `::ai::claims::check` → `::scidb::game::update addcomment`/`annotation` | only the engine classifies moves; the gate cannot invent; a comment whose claims the facts contradict is never written; the game is left modified for the user to save | M | **shipped** |
 | **Mistake autopsy + study plan** | batch classify the user's games → cluster by engine features → classifier labels the *pattern* (`choice`: tactical/opening/endgame/time) → LLM writes a plan grounded in the clusters (claims checked) | patterns are labelled, not invented; examples are engine-verified | M |
 | **Annotation fact-checker** | paste any annotated PGN → `::ai::claims::check` + fact layer flag the author's ungrounded claims | deterministic checker; no model involved | S |
@@ -191,7 +193,9 @@ confirm gate. No cloud call for audio, error logs or private games by default.
 | Feature | State |
 |---|---|
 | Error triage, rhetoric/coverage advisories, tool pre-routing | shipped |
-| **Auto-annotate a game** (`tcl/ai-annotate.tcl`, Extras + assistant tool) | **shipped** — engine-only mode for free, LLM prose checked against the facts; needs `::scidb::game::query mainline` (new, C++), which returns {key san fenBefore} per ply without disturbing the board |
+| **Auto-annotate a game** (`tcl/ai-annotate.tcl`, Extras + assistant tool) | **shipped** |
+| **Study plan** (`tcl/ai-studyplan.tcl`, Extras + `study_plan` tool) | **shipped** — engine-bound: one search per studied move, so a sample of games takes minutes; the report names the patterns and the evidence |
+| **Annotation fact-checker** (`tcl/ai-factcheck.tcl`, Extras + `factcheck_annotations` tool) | **shipped** — verified live: a human comment claiming an isolated queen's pawn in a position without one is flagged | — engine-only mode for free, LLM prose checked against the facts; needs `::scidb::game::query mainline` (new, C++), which returns {key san fenBefore} per ply without disturbing the board |
 | Download games (GUI + assistant + headless) | shipped |
 | Classifier backends in the chooser (kev/simple-jev/plumb/jev) | shipped |
 | **Voice-driven assistant** | **shipped (Wave 0)** |

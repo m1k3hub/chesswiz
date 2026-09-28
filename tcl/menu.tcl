@@ -87,6 +87,8 @@ set AIExplain						"AI: &Explain Position"
 set AIAssistant					"AI: A&ssistant"
 set AIChooseModel				"AI: Choose &Model..."
 set AIAnnotateGame			"AI: &Annotate Game..."
+set AIStudyPlan				"AI: &Study Plan..."
+set AIFactCheck				"AI: Fact-Check &Annotations"
 set DownloadGames				"Download &Games from the Internet..."
 
 # Tools
@@ -481,6 +483,30 @@ if {0} {
 			-underline [IncrUL $ul] \
 			-image $::icon::16x16::none \
 			-command [list ::application::ai::models::show .application] \
+			;
+	}
+
+	### study plan ##########################################################
+	if {[llength [info commands ::ai::studyplan::run]]} {
+		lassign [::tk::UnderlineAmpersand $mc::AIStudyPlan] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [list ::ai::studyplan::run .application] \
+			;
+	}
+
+	### fact-check the annotations ###########################################
+	if {[llength [info commands ::ai::factcheck::current]]} {
+		lassign [::tk::UnderlineAmpersand $mc::AIFactCheck] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [list ::ai::factcheck::current .application] \
 			;
 	}
 

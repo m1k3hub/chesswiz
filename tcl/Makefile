@@ -156,6 +156,8 @@ SOURCES = \
 	ai-claims.tcl \
 	ai-rhetoric.tcl \
 	ai-annotate.tcl \
+	ai-studyplan.tcl \
+	ai-factcheck.tcl \
 	ai-engine.tcl \
 	ai-provider.tcl \
 	ai-systemone.tcl \

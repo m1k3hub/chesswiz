@@ -267,6 +267,18 @@ variable Actions {
 		{{"type":"object","properties":{"prose":{"type":"boolean","description":"let the language model word the comments, default true"},"depth":{"type":"integer","description":"engine depth per move, default 12"},"marks":{"type":"boolean","description":"also set the move's annotation mark, default false"},"max_plies":{"type":"integer","description":"stop after this many moves, default 60"}}}}
 		::application::assistant::DoAnnotateGame
 	}
+	study_plan {
+		0 0 "audit the games and build a study plan"
+		"Audit a sample of games in the active database with the chess engine and turn the mistakes into a study plan: every mistake is labelled by pattern (tactics, opening, endgame, king safety, position) from the position facts, and the plan lists the evidence and what to train. 'player' studies one player's games (their moves only); without it both sides of the most recent games are studied. 'games' is how many games to audit (default 10). The report opens in the Report pane."
+		{{"type":"object","properties":{"player":{"type":"string","description":"study this player's games, e.g. 'Carlsen, Magnus' or part of the name"},"games":{"type":"integer","description":"how many games to audit, default 10"},"colour":{"type":"string","enum":["white","black","both"],"description":"which side's moves to study, default both"},"depth":{"type":"integer","description":"engine depth per move, default 10"}}}}
+		::application::assistant::DoStudyPlan
+	}
+	factcheck_annotations {
+		0 0 "fact-check the annotations of this game"
+		"Check the comments already stored in the game on the board against the positions they describe: an annotation is reported only when the facts (move legality, piece placement, pawn structure) positively contradict it. Use it for the user's own notes, or for annotations that came from a book or another program."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoFactCheck
+	}
 	voice_status {
 		0 0 "report the voice assistant status"
 		"Whether speaking to the assistant is available: the recorder, the local speech-to-text engine and model, and how replies are spoken. Use it when the user asks about voice input, dictation, or why the microphone button is not there."
@@ -870,6 +882,23 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			return [dict create source $source issues $issues lichess $lichess url $url]
 		}
 		classifier_status {
+			return {}
+		}
+		study_plan {
+			set player [OptArg $cargs player ""]
+			set games [OptArg $cargs games 10]
+			if {![string is integer -strict $games] || $games < 1 || $games > 200} {
+				error "games must be an integer between 1 and 200"
+			}
+			set colour [OptArg $cargs colour both]
+			if {$colour ni {white black both}} { error "colour must be 'white', 'black' or 'both'" }
+			set depth [OptArg $cargs depth 10]
+			if {![string is integer -strict $depth] || $depth < 4 || $depth > 30} {
+				error "depth must be an integer between 4 and 30"
+			}
+			return [dict create player $player games $games colour $colour depth $depth]
+		}
+		factcheck_annotations {
 			return {}
 		}
 		annotate_game {
@@ -2486,6 +2515,43 @@ proc ::application::assistant::AnnotateGameDone {token result} {
 	}
 	catch { Resolve $token $reply }
 	return
+}
+
+
+# ----------------------------------------------------------------------
+# Study plan and annotation fact-check.
+# ----------------------------------------------------------------------
+proc ::application::assistant::DoStudyPlan {player games colour depth} {
+	if {[llength [info commands ::ai::studyplan::run]] == 0} {
+		return "error: the study-plan module is not available"
+	}
+	if {[::ai::studyplan::running?]} {
+		return "error: an audit is already running"
+	}
+	set token [Later]
+	if {[catch {
+		::ai::studyplan::run .application -player $player -games $games \
+			-colour $colour -depth $depth \
+			-done [namespace code [list StudyPlanDone $token]]
+	} err]} {
+		after 0 [list Resolve $token "error: $err"]
+		return $token
+	}
+	return $token
+}
+
+
+proc ::application::assistant::StudyPlanDone {token result} {
+	catch { Resolve $token "[dict get $result summary]; the plan is in the Report pane" }
+	return
+}
+
+
+proc ::application::assistant::DoFactCheck {} {
+	if {[llength [info commands ::ai::factcheck::current]] == 0} {
+		return "error: the fact-check module is not available"
+	}
+	return [::ai::factcheck::current .application]
 }
 
 
