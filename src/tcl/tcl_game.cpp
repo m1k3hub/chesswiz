@@ -36,6 +36,7 @@
 #include "tcl_view.h"
 #include "tcl_tree.h"
 #include "tcl_log.h"
+#include "tcl_exception.h"
 #include "tcl_base.h"
 
 #include "app_application.h"
@@ -159,11 +160,11 @@ searchTag(char const* s)
 			++s;
 		while (*s && *s != '\n');
 
-		while (isspace(*s))
+		while (isspace(static_cast<unsigned char>(*s)))
 			++s;
 	}
 
-	while (isspace(*s))
+	while (isspace(static_cast<unsigned char>(*s)))
 		++s;
 
 	return s;
@@ -318,7 +319,7 @@ tcl::game::variantFromObj(Tcl_Obj* obj)
 {
 	char const* variant = asString(obj);
 
-	switch (::toupper(*variant))
+	switch (::toupper(static_cast<unsigned char>(*variant)))
 	{
 		case 'N': return ::db::variant::Normal;
 		case 'B': return ::db::variant::Bughouse;
@@ -411,7 +412,6 @@ public:
 			incrRef(m_ply				= newObj("ply"));
 			incrRef(m_white			= newObj("white"));
 			incrRef(m_black			= newObj("black"));
-			incrRef(m_legal			= newObj("legal"));
 			incrRef(m_diagram			= newObj("diagram"));
 			incrRef(m_color			= newObj("color"));
 			incrRef(m_board			= newObj("board"));
@@ -453,7 +453,6 @@ public:
 			incrRef(m_s					= newObj("s"));
 			incrRef(m_blank			= newObj(" "));
 			incrRef(m_delim			= newObj("|"));
-			incrRef(m_zero				= newObj(0));
 		}
 
 		incrRef(m_list = newObj());
@@ -917,7 +916,6 @@ public:
 	static Tcl_Obj* m_ply;
 	static Tcl_Obj* m_white;
 	static Tcl_Obj* m_black;
-	static Tcl_Obj* m_legal;
 	static Tcl_Obj* m_diagram;
 	static Tcl_Obj* m_color;
 	static Tcl_Obj* m_board;
@@ -952,7 +950,6 @@ public:
 	static Tcl_Obj* m_fold;
 	static Tcl_Obj* m_blank;
 	static Tcl_Obj* m_delim;
-	static Tcl_Obj* m_zero;
 	static Tcl_Obj* m_preceding;
 	static Tcl_Obj* m_trailing;
 	static Tcl_Obj* m_before;
@@ -978,7 +975,6 @@ Tcl_Obj* Visitor::m_languages			= nullptr;
 Tcl_Obj* Visitor::m_ply					= nullptr;
 Tcl_Obj* Visitor::m_white				= nullptr;
 Tcl_Obj* Visitor::m_black				= nullptr;
-Tcl_Obj* Visitor::m_legal				= nullptr;
 Tcl_Obj* Visitor::m_diagram			= nullptr;
 Tcl_Obj* Visitor::m_color				= nullptr;
 Tcl_Obj* Visitor::m_board				= nullptr;
@@ -1013,7 +1009,6 @@ Tcl_Obj* Visitor::m_close_fold		= nullptr;
 Tcl_Obj* Visitor::m_fold				= nullptr;
 Tcl_Obj* Visitor::m_blank				= nullptr;
 Tcl_Obj* Visitor::m_delim				= nullptr;
-Tcl_Obj* Visitor::m_zero				= nullptr;
 Tcl_Obj* Visitor::m_preceding			= nullptr;
 Tcl_Obj* Visitor::m_trailing			= nullptr;
 Tcl_Obj* Visitor::m_before				= nullptr;
@@ -1083,6 +1078,7 @@ public:
 			decrRef(m_opening[i]);
 		decrRef(m_pgn);
 		decrRef(m_state);
+		decrRef(m_position);
 	}
 
 	void setBoardCmd(Tcl_Obj* obj)	{ m_board.push_back(incrRef(obj)); m_count += 1; }
@@ -1502,6 +1498,19 @@ squareFromObj(int objc, Tcl_Obj* const objv[], unsigned index)
 }
 
 
+// Variation numbers are 1-based at the Tcl level, but 0-based in db::Game.
+static unsigned
+variationFromObj(int objc, Tcl_Obj* const objv[], unsigned index)
+{
+	unsigned varno = unsignedFromObj(objc, objv, index);
+
+	if (varno == 0)
+		TCL_RAISE("invalid variation number 0, expected a number >= 1");
+
+	return varno - 1;
+}
+
+
 static int
 cmdEcoTable(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
@@ -1917,6 +1926,16 @@ cmdSubscribe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	char const*		what				= stringFromObj(objc, objv, 1);
 	unsigned			position			= unsignedFromObj(objc, objv, 2);
+	bool				isBoard			= equal(what, "board");
+	bool				isTree				= equal(what, "tree");
+	bool				isState			= equal(what, "state");
+	bool				isPgn				= equal(what, "pgn");
+	bool				isOpening		= equal(what, "opening");
+
+	// validate 'what' before attaching a subscriber to the game
+	if (!isBoard && !isTree && !isState && !isPgn && !isOpening)
+		return error(::CmdSubscribe, nullptr, nullptr, "unexpected argument %s", what);
+
 	bool				mainlineOnly	= false;
 	Game&				game				= scidb->game(position);
 	MySubscriber*	subscriber		= static_cast<MySubscriber*>(game.subscriber().get());
@@ -1925,21 +1944,19 @@ cmdSubscribe(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	if (!subscriber)
 		game.setSubscriber(Game::SubscriberP(subscriber = new MySubscriber(objv[2])));
 
-	if (equal(what, "pgn") && objc >= 5)
+	if (isPgn && objc >= 5)
 		mainlineOnly = asBoolean(objv[4]);
 
-	if (equal(what, "board"))
+	if (isBoard)
 		subscriber->setBoardCmd(arg);
-	else if (equal(what, "tree"))
+	else if (isTree)
 		subscriber->setTreeCmd(arg);
-	else if (equal(what, "state"))
+	else if (isState)
 		subscriber->setStateCmd(arg);
-	else if (equal(what, "pgn"))
+	else if (isPgn)
 		subscriber->setPgnCmd(arg, mainlineOnly);
-	else if (equal(what, "opening"))
-		subscriber->setOpeningCmd(arg);
 	else
-		return error(::CmdSubscribe, nullptr, nullptr, "unexpected argument %s", what);
+		subscriber->setOpeningCmd(arg);
 
 	return TCL_OK;
 }
@@ -2345,8 +2362,8 @@ cmdLangSet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	if (objc != 2 && objc != 3)
 		return error(CmdLangSet, nullptr, nullptr, "wrong # args: should be \"%s ?<position>? <languages>\"", CmdLangSet);
 
-	int position = objc < 2 ? -1 : intFromObj(objc, objv, 1);
-	Tcl_Obj* languages = objectFromObj(objc, objv, objc < 2 ? 1 : 2);
+	int position = objc < 3 ? -1 : intFromObj(objc, objv, 1);
+	Tcl_Obj* languages = objectFromObj(objc, objv, objc < 3 ? 1 : 2);
 
 	char const* s = asString(languages);
 
@@ -2429,7 +2446,7 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		case Cmd_Remove:
 			if (objc != 3)
 				return usage(::CmdVariation, "remove", nullptr, subcommands, args);
-			game.removeVariation(unsignedFromObj(objc, objv, 2) - 1);
+			game.removeVariation(variationFromObj(objc, objv, 2));
 			break;
 
 		case Cmd_Insert:
@@ -2442,7 +2459,7 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				if (equal(stringFromObj(objc, objv, objc - 1), "-force"))
 					flag = Game::TruncateIfNeccessary;
 
-				setResult(game.insertMoves(unsignedFromObj(objc, objv, 2) - 1, flag));
+				setResult(game.insertMoves(variationFromObj(objc, objv, 2), flag));
 			}
 			break;
 
@@ -2457,14 +2474,14 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 					flag = Game::TruncateIfNeccessary;
 
 				setResult(game.exchangeMoves(
-					unsignedFromObj(objc, objv, 2) - 1, unsignedFromObj(objc, objv, 3), flag));
+					variationFromObj(objc, objv, 2), unsignedFromObj(objc, objv, 3), flag));
 			}
 			break;
 
 		case Cmd_Promote:
 			if (objc != 3)
 				return usage(::CmdVariation, "promote", nullptr, subcommands, args);
-			game.promoteVariation(unsignedFromObj(objc, objv, 2) - 1);
+			game.promoteVariation(variationFromObj(objc, objv, 2));
 			break;
 
 		case Cmd_Mainline:
@@ -2476,7 +2493,7 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		case Cmd_First:
 			if (objc != 3)
 				return usage(::CmdVariation, "first", nullptr, subcommands, args);
-			game.firstVariation(unsignedFromObj(objc, objv, 2) - 1);
+			game.firstVariation(variationFromObj(objc, objv, 2));
 			break;
 
 		case Cmd_Leave:
@@ -2490,10 +2507,13 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			if (objc <= 2)
 				setResult(game.lengthOfCurrentLine());
 			else
-				setResult(game.countHalfMoves(unsignedFromObj(objc, objv, 2) - 1));
+				setResult(game.countHalfMoves(variationFromObj(objc, objv, 2)));
 			break;
 
 		case Cmd_Fold:
+			if (objc < 3 || objc > 4)
+				return usage(::CmdVariation, "fold", nullptr, subcommands, args);
+
 			if (objc == 3)
 				scidb->game().setFolded(boolFromObj(objc, objv, 2));
 			else if (equal(stringFromObj(objc, objv, 3), "toggle"))
@@ -2885,7 +2905,7 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		case 'i': setResult(Scidb->game(pos).idn()); break;							// idn
 
 		case 'f': // fen
-			setResult(Scidb->game(pos).startBoard().toFen(Scidb->game().variant()));
+			setResult(Scidb->game(pos).startBoard().toFen(Scidb->game(pos).variant()));
 			break;
 
 		case 'V': // Variant? (of database)
@@ -2939,7 +2959,7 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 					break;
 
 				case 'v':	// over?
-					setResult(bool(Scidb->game(pos).currentBoard().gameIsOver(Scidb->game().variant())));
+					setResult(bool(Scidb->game(pos).currentBoard().gameIsOver(Scidb->game(pos).variant())));
 					break;
 
 				default:
@@ -3021,6 +3041,9 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 					case 'u':			// current?
 						setResult(Scidb->game(pos).currentKey().id());
 						break;
+
+					default:
+						return error(CmdQuery, nullptr, nullptr, "invalid command %s", cmd);
 				}
 			}
 			break;
@@ -3035,7 +3058,96 @@ cmdQuery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 							setResult(Scidb->game(pos).isModified());
 							break;
 
-						case 'v':	// moveInfo?
+						case 'v':	// moveInfo? / move? / movefen?
+							if (equal(cmd, "movefen"))
+							{
+								Game& game = scidb->game(pos);
+								// the FEN *before* the move at <key>, without
+								// disturbing the game's current position.  Used
+								// by the notation pane's "Explain this move".
+								if (nextArg >= objc)
+								{
+									setResult(mstl::string::empty_string);
+									break;
+								}
+								edit::Key key(stringFromObj(objc, objv, nextArg));
+								if (!game.isValidKey(key))
+								{
+									setResult(mstl::string::empty_string);
+									break;
+								}
+								edit::Key saved(game.currentKey());
+								Game::SubscriberP subscriber(game.subscriber());
+
+								// temporarily detach the subscriber so that the
+								// navigation below does not fire board/pgn
+								// update notifications
+								game.setSubscriber(Game::SubscriberP());
+
+								mstl::string fen;
+								game.goTo(key);
+
+								if (game.plyNumber() == 0 || !game.currentMove())
+								{
+									game.goTo(saved);
+									game.setSubscriber(subscriber);
+									setResult(mstl::string::empty_string);
+									break;
+								}
+
+								// currentBoard() is the position *after* the
+								// move at <key>; step back one ply for the
+								// position the move was played from.
+								game.goBackward(1);
+
+								fen = game.currentBoard().toFen(game.variant());
+								game.goTo(saved);
+								game.setSubscriber(subscriber);
+								setResult(fen);
+								break;
+							}
+							if (equal(cmd, "move"))
+							{
+								Game& game = scidb->game(pos);
+								// optional key: print the move at that key without
+								// disturbing the game's current position
+								if (nextArg < objc)
+								{
+									edit::Key key(stringFromObj(objc, objv, nextArg));
+									if (!game.isValidKey(key))
+									{
+										setResult(mstl::string::empty_string);
+										break;
+									}
+									edit::Key saved(game.currentKey());
+									Game::SubscriberP subscriber(game.subscriber());
+
+									// temporarily detach the subscriber so that
+									// the navigation below does not fire
+									// board/pgn update notifications
+									game.setSubscriber(Game::SubscriberP());
+
+									mstl::string san;
+									game.goTo(key);
+
+									if (game.plyNumber() != 0 && game.currentMove())
+										game.printMove(san, Game::ExportFormat, move::SAN);
+
+									game.goTo(saved);
+									game.setSubscriber(subscriber);
+									setResult(san);
+									break;
+								}
+								if (game.plyNumber() == 0 || !game.currentMove())
+								{
+									setResult(mstl::string::empty_string);
+									break;
+								}
+								mstl::string san;
+								game.printMove(san, Game::ExportFormat, move::SAN);
+								setResult(san);
+								break;
+							}
 							if (nextArg < objc)
 							{
 								Tcl_Obj* moveInfo = objectFromObj(objc, objv, nextArg);
@@ -3364,7 +3476,7 @@ cmdFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		return error(CmdFen, nullptr, nullptr, "wrong # args: should be \"%s ?<position>?\"", CmdFen);
 
 	int pos = objc == 1 ? Application::InvalidPosition : intFromObj(objc, objv, 1);
-	setResult(Scidb->game(pos).currentBoard().toFen(Scidb->game().variant()));
+	setResult(Scidb->game(pos).currentBoard().toFen(Scidb->game(pos).variant()));
 	return TCL_OK;
 }
 
@@ -3699,8 +3811,17 @@ cmdUpdate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 			case Cmd_AddComment:
 			{
+				if (objc != 5)
+					return usage(::CmdUpdate, "addcomment", nullptr, subcommands, args);
+
+				// <position> is 'b' for before the move (Ante), anything
+				// else means after the move (Post). The notation pane
+				// passes a game position number here, which also
+				// resolves to Post.
+				char const* pos = stringFromObj(objc, objv, 3);
 				mstl::string comment(stringFromObj(objc, objv, 4));
-				game.appendComment(comment, move::Post);
+
+				game.appendComment(comment, *pos == 'b' ? move::Ante : move::Post);
 				break;
 			}
 
@@ -4343,7 +4464,7 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				int lhs = intFromObj(2, pair, 0);
 				int rhs = intFromObj(2, pair, 1);
 
-				if (lhs >= nag::Scidb_Last || rhs >= nag::Scidb_Last)
+				if (lhs < 0 || lhs >= nag::Scidb_Last || rhs < 0 || rhs >= nag::Scidb_Last)
 					return error(CmdPrint, 0, 0, "invalid nag map values");
 
 				nagMap[lhs] = rhs;
@@ -4379,6 +4500,9 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	TeXt::Controller controller(searchPath, TeXt::Controller::AbortMode, myLog);
 	mstl::istringstream src(preamble);
 	mstl::ofstream dst(sys::file::internalName(filename));
+
+	if (!dst.is_open())
+		return error(CmdPrint, nullptr, nullptr, "cannot open file '%s'", filename);
 	mstl::ostringstream out;
 
 	if (controller.processInput(src, dst, &out, &out) >= 0)
@@ -4405,7 +4529,8 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		if (!log.empty() && log.back() == '\n')
 			log.set_size(log.size() - 1);
 
-		Tcl_SetVar2Ex(ti, trace, 0, newObj(log), TCL_GLOBAL_ONLY);
+		if (*trace)
+			Tcl_SetVar2Ex(ti, trace, 0, newObj(log), TCL_GLOBAL_ONLY);
 	}
 
 	return TCL_OK;

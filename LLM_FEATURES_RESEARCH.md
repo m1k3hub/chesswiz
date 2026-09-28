@@ -1220,3 +1220,252 @@ timer hygiene is sound.
 
 Verified after the one change: tcl 0 failed / PASSED, app-tcl 0 failed / PASSED,
 ai-tests 11 suites green.
+
+### B.27 C1 shipped: selection → explanation (implemented)
+
+Appendix C's first task is in the tree. The model is now reachable from the three panes
+where context already exists, without a new menu:
+
+- **Notation pane** — right-click a move → *Explain this move*. `::application::pgn::ExplainMove`
+  reads the SAN and the position it was played from, then calls the shared entry point.
+- **Game list** — right-click the selected row → *Explain this game*.
+- **Comment editor** — right-click → *Explain this comment*.
+
+All three route through one dispatcher, `::application::ai::explainSelection {kind payload}`,
+which maps the selection to the right fact-pack builder and renders through the existing
+`toHtml` / `showReport` path. The `analyze` body was factored into
+`::application::ai::generate` (placeholder → grounded generation → claim check → retry), so
+every entry point shares the same pipeline — the plan's "one grounding path".
+
+Two supporting additions:
+
+- `::scidb::game::query move <key>` returns the SAN at a key without disturbing the current
+  position; `::scidb::game::query movefen <key>` returns the FEN *before* that move. The
+  latter is what `moveFacts` / `classify` need (they parse the move in the position it was
+  played from), and it avoids mutating game state to obtain it.
+- `::ai::generate::buildMessages` / `positionToolsAsync` take an optional `-context` string:
+  the selection is the task, the fact pack still grounds it.
+
+Verified: `tests/test_app_move_query.tcl` (12 cases, `move` + `movefen`), tcl 0 failed /
+PASSED, app-tcl 175 passed / 0 failed, ai-tests 11 suites green. The three context menus
+were built in a headless probe and the entries confirmed present and enabled.
+
+---
+
+## Appendix C — More LLM-as-intermediary features (proposed)
+
+Status: proposal, not committed scope. Date: 2026-09 (draft).
+
+Sections 1–9 proposed the *grounding layer* and the first feature wave; Appendix B records
+what shipped. This appendix proposes the **next** wave, chosen for one property: the model
+sits *between the user and the app* — it turns intent into an action, or app state into
+understanding — rather than being a destination the user visits. Every proposal below is
+grounded in the machinery that already exists (fact packs, claim checker, the assistant
+tool table, the report pane, the evidence layers), so each is an integration, not a new
+subsystem.
+
+The current surface is deliberately small: three menu entries (`AI: Explain Position`,
+`AI: Assistant`, `AI: Choose Model...`) and a ~40-tool assistant. The gap is not capability
+— the tools can already search, prepare, run engines and read state — it is **reach**. The
+model is reachable only from a chat pane and one menu item. The features below widen reach
+and shorten the path from "I want X" to X.
+
+### C.1 The organising idea: the model as a *lens*, not a *place*
+
+Three interaction shapes, in increasing order of ambition:
+
+1. **Ambient** — the model annotates or explains something the user is already looking at,
+   with no prompt typed (a hover, a selection, a status line).
+2. **Command** — the user states an intent in the UI they are already in (a search box, a
+   game list, a comment field) and the model produces a *validated* artifact (a query, a
+   filter, a draft) that the existing deterministic code executes.
+3. **Agentic** — the model chains existing tools to complete a multi-step task, with the
+   user confirming each mutating step (the assistant already does this; the proposals
+   extend *where* it can be invoked and *what* it can reach).
+
+The rule from P1/P2 is unchanged: the model never reasons about the board and never
+invents a fact. What changes is *where the user meets it*.
+
+### C.2 Ambient features (no prompt typed)
+
+#### C1 — Selection → explanation ("explain this") ⭐⭐⭐ E:S R:L
+- **What:** Select a move, a comment, a game row, or a block of the report pane and get a
+  grounded explanation of *that thing*, in place. A right-click "Explain" on a move in the
+  notation pane explains the move (using `::ai::engine::classify` + `::scidb::ai::moveFacts`
+  + the precedent/annotation layers); on a game row it summarizes the game; on a comment it
+  expands or translates it.
+- **Why:** the highest-frequency UX win. Today the user must copy context into the chat
+  pane; here the context is already selected. It also makes the grounding layer reachable
+  from every pane without new menus.
+- **How:** a shared `::application::ai::explainSelection <kind> <payload>` that maps a
+  widget selection to the right fact-pack builder, then renders through the existing
+  `::application::ai::toHtml` / `showReport` path. The move case reuses `classify`; the
+  game case reuses `DoCurrentGame`'s PGN + `position_moves`.
+- **Guardrail:** identical claim-check + retry as `analyze`; the report pane already shows
+  evidence and the verified/unverified verdict (B.21).
+
+#### C2 — Hover/status-line "what is this?" ⭐⭐ E:S R:L
+- **What:** a status-line hint for the current position or the hovered move, generated once
+  and cached by position hash: "White is slightly better; the c4 pawn is isolated; last
+  played 2019." One line, no pane.
+- **Why:** zero-friction orientation. It is the cheapest possible use of the fact pack
+  (which is already computed for the tree) and needs no LLM call at all for the
+  deterministic half — the model is only needed to phrase it.
+- **How:** reuse `::scidb::ai::text` (the human-readable fact pack) for the deterministic
+  line; optionally pass it through the provider for phrasing, cached by
+  `hash(fen, template_version, model)`. Degrade to the deterministic line when no provider
+  is configured (P3/offline).
+- **Note:** this is the one feature that should work *without* a model — the fact pack is
+  already prose-able. The model is an enhancement, not a dependency.
+
+#### C3 — "Explain the engine's line" in the analysis pane ⭐⭐⭐ E:S R:M
+- **What:** a button in each analysis pane that narrates the engine's current PV in words,
+  grounded in the PV itself plus the move facts for each move of the line.
+- **Why:** the analysis pane is where users spend the most time and where the raw output
+  (a string of moves and a number) is least self-explanatory. This is the natural home for
+  "Consult AI" — closer to the work than a separate report pane.
+- **How:** `::ai::engine::evaluate` already returns `pv`; feed the PV through
+  `::scidb::ai::moveFacts --line` (B.4) to get per-move facts, then generate. The claim
+  checker already validates move sequences against a position.
+- **Guardrail:** the narration must cite the engine's own eval and PV; the claim checker
+  flags any move not in the line.
+
+### C.3 Command features (intent → validated artifact)
+
+#### C4 — Natural-language search box in the database tab ⭐⭐⭐ E:M R:M
+- **What:** a search field above the game list that accepts "Carlsen's losses as Black in
+  the Najdorf since 2015" and produces the *existing* advanced-search selector, shown for
+  editing and confirmed before it runs.
+- **Why:** this is F8, but the UX point is *where* it lives: in the database tab, next to
+  the game list, not in a chat pane. The assistant already has `search_games` +
+  `BuildQuery` (which builds scidb's search language from checked fields, so no model text
+  reaches the search engine) — this exposes that same path as a first-class UI control.
+- **How:** reuse `::application::assistant::BuildQuery` and `CheckArgs`'s `search_games`
+  validation verbatim; the model's only job is to fill the fixed field dict. Show the
+  generated criteria as editable chips, then call the existing `::scidb::view::search`.
+- **Guardrail:** never auto-execute; the query is always shown first (P5). The model emits
+  *fields*, not query text.
+
+#### C5 — "Find games like this one" ⭐⭐ E:S–M R:L
+- **What:** from the current game, one click finds the most similar games in the active
+  database — same opening, same material signature, same result pattern — and explains
+  *why* they are similar.
+- **Why:** a natural database task that today requires the user to hand-build a search.
+  The similarity is deterministic (ECO + position keys from the precedent index); the model
+  only phrases the rationale.
+- **How:** the precedent index (B.10/B.20) already keys positions by sha1; take the game's
+  positions, look up the most-shared continuations, and rank candidate games by overlap.
+  The model summarizes the shared features from the fact packs.
+- **Guardrail:** the "why similar" text is generated from the overlap facts, not invented.
+
+#### C6 — Comment/annotation drafting in place ⭐⭐⭐ E:M R:M
+- **What:** in the comment editor, a "Draft" button that proposes a grounded comment for
+  the current move (using `classify` + move facts + precedent), which the user edits and
+  saves through the existing `::scidb::game::update comment` path.
+- **Why:** this is F9, but scoped to *one move, in the editor the user already has open*,
+  rather than a batch job. It is the lowest-risk form of annotation writing (P4: the user
+  is the review queue) and it meets the user where the write happens.
+- **How:** `tcl/comment.tcl` already writes via `::scidb::game::update comment $key $pos
+  $comment`; add a Draft button that fills the text widget. No new write path.
+- **Guardrail:** the draft is never auto-saved; the claim checker runs before it is shown,
+  and ungrounded claims are flagged inline in the editor.
+
+#### C7 — "Explain this comment" / translate in place ⭐⭐ E:S R:L
+- **What:** right-click a comment → "Explain" (expand a terse note into prose) or
+  "Translate" (into another language slot, F10).
+- **Why:** the corpus is multilingual (B.18/B.19) and many comments are terse
+  ("Inaccuracy. h5 was best."). Expanding and translating them in place makes the existing
+  database more readable without any new data.
+- **How:** reuse the comment read/write commands and the language slots scidb already
+  stores; translation transforms existing human text, so it is low-risk (no facts invented).
+
+### C.4 Agentic reach (extend the assistant)
+
+The assistant's tool table is the strongest asset and the least reachable. These extend
+*what it can reach* and *where it can be invoked*, not its architecture.
+
+#### C8 — Assistant entry points beyond the pane ⭐⭐⭐ E:S–M R:L
+- **What:** invoke the assistant from (a) a global keyboard shortcut, (b) a right-click
+  "Ask the assistant about this…" that pre-fills the selection as context, and (c) the
+  command line (`--ask`, which already exists via `::remote`).
+- **Why:** the assistant is currently a pane the user must open and type into. Pre-filling
+  context from a selection removes the copy-paste step and makes the tool table reachable
+  from anywhere.
+- **How:** `ask` already accepts a request string and an `-observer`; add a context
+  preamble built from the selection (reusing C1's selection→payload mapping). The
+  `--ask`/`--chat` terminal path already exists (`attach`, `RemoteRead`).
+
+#### C9 — Tools for the panes the assistant cannot see ⭐⭐ E:S–M R:L
+- **What:** add read-only tools for the surfaces the assistant currently cannot reach:
+  the current game's comments/annotations as structured records, the game list selection,
+  the report pane contents, and the board's move history. Today the tool table covers
+  search, prep, engines and diagnostics; `current_game` returns the game's comments only
+  as part of its PGN, and there is **no** tool for the game-list selection or the report
+  pane at all.
+- **Why:** the assistant can answer "what is played here" but not "what does this game's
+  comment say" or "what is selected in the game list". Closing that gap makes the existing
+  conversational surface genuinely complete.
+- **How:** thin wrappers, exactly like the existing `Do*` handlers: read the comment store
+  (`::scidb::game::query`), the game list selection, and the report pane's current
+  document. All read-only, so no confirmation needed.
+- **Guardrail:** read-only tools only; any write stays behind the existing confirm gate.
+
+#### C10 — "Do this for me" from a report ⭐⭐ E:M R:M
+- **What:** the report pane (which already renders AI output and evidence) gains action
+  links: after an explanation, "show these games", "start an engine here", "annotate this
+  move". The link invokes the corresponding assistant tool.
+- **Why:** closes the loop between *understanding* and *acting*. Today the explanation is a
+  dead end; the user must re-state the intent in the chat pane.
+- **How:** the report pane already renders sanitized HTML with anchors
+  (`::scidb::html::sanitize` returns `anchors`); map a custom anchor scheme
+  (`ai:tool:search_games?...`) to `runTool`. Mutating tools still confirm.
+- **Guardrail:** the anchor only names a tool from the fixed table with checked arguments —
+  the same gate as the chat path.
+
+#### C11 — Multi-step task templates ⭐⭐ E:S R:L
+- **What:** named, one-click assistant tasks that chain existing tools: "Prepare against
+  the player in the game list", "Summarize this database", "Check my repertoire against my
+  games". Each is a canned request string the assistant already knows how to fulfil.
+- **Why:** the assistant can already do these, but the user must know to ask. Templates
+  make the capability discoverable and repeatable, and they are pure prompt presets — no
+  new code paths.
+- **How:** a small table of `{label request}` entries surfaced in the assistant pane and
+  the Extras menu; each calls `ask $request`. The tool table does the rest.
+
+### C.5 Cross-cutting UX concerns for this wave
+
+- **Latency honesty.** Every ambient feature (C1–C3) must show a placeholder immediately
+  and stream or replace it, because it is invoked mid-task. The async paths already exist
+  (`completeAsync`, `positionToolsAsync`); the UX rule is "never block the pane the user is
+  working in".
+- **Cache by position hash.** C2/C3 are invoked repeatedly on the same position; the
+  content-addressed cache (F3) makes repeats free. This is what makes ambient features
+  affordable.
+- **One grounding path.** C1, C3, C6 and C10 must all route through the same
+  fact-pack → prompt → claim-check → retry pipeline as `analyze`. Divergent paths are how
+  trust erodes; the claim checker is only meaningful if everything goes through it.
+- **Discoverability over capability.** The bottleneck is reach, not ability. Prefer
+  surfacing the existing tools in the panes where the work happens over adding new tools.
+- **Graceful absence.** With no provider configured, C2 falls back to the deterministic
+  fact-pack line, and C1/C3/C4/C6/C10 show a "configure AI" affordance rather than failing
+  (P3/offline).
+
+### C.6 Suggested sequencing for this wave
+
+| Order | Feature | Why first |
+|---|---|---|
+| 1 | C1 (selection → explain) | Highest frequency, reuses everything, no new menus |
+| 2 | C4 (NL search box) | Highest-value database feature; reuses `BuildQuery` |
+| 3 | C3 (explain the PV) | Meets users where they already are (analysis pane) |
+| 4 | C6 (draft a comment) | Core DB workflow, lowest-risk write (user reviews) |
+| 5 | C8, C9 (reach + missing tools) | Makes the assistant complete and reachable |
+| 6 | C2, C5, C7, C10, C11 | Ambient polish and loop-closing |
+
+### C.7 What this wave deliberately does not do
+
+- No new grounding machinery — every feature reuses the fact pack, claim checker and
+  evidence layers.
+- No new write path — C6/C7 write through the existing comment commands, behind review.
+- No autonomous action — C10's action links and C11's templates still confirm mutating
+  tools, exactly as the chat path does.
+- No model reasoning about the board — unchanged from P1.

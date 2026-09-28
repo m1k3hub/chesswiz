@@ -3,7 +3,7 @@
 
 SHELL := /bin/bash
 TCLSH := tclsh
-XVFB_RUN := xvfb-run -a
+XVFB_RUN := xvfb-run -a </dev/null
 CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -O2
 
@@ -84,7 +84,7 @@ app-tcl: $(TEST_DIR)run_app_tests.tcl $(TEST_DIR)run_app_driver.tcl
 
 smoke:
 	@echo "Running headless startup smoke test..."
-	@timeout 30 xvfb-run -a $(SRC_DIR)/tkscidb-beta $(TEST_DIR)startup_smoke.tcl > /tmp/scidb-smoke.log 2>&1; \
+	@timeout 30 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)startup_smoke.tcl > /tmp/scidb-smoke.log 2>&1; \
 		rc=$$?; cat /tmp/scidb-smoke.log; \
 		if [ $$rc -eq 124 ]; then \
 			echo "STARTUP-SMOKE: FAILED (hung, killed by timeout)"; exit 1; \

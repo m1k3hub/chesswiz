@@ -7,12 +7,20 @@
 # (POST /v1/systemone); the open-weights servers below serve the same contract
 # on this machine, so one client talks to all of them:
 #
-#   kev         http://127.0.0.1:8009/v1/systemone, no key   (local, the default)
+#   kev         http://127.0.0.1:8009/v1/systemone, no key   (local, preferred)
 #   simple-jev  http://127.0.0.1:8000/v1/systemone, no key   (local)
 #   plumb       http://127.0.0.1:8090/v1/systemone, no key   (local; see below)
 #   jev/vercel  Jev through Vercel's AI Gateway, AI_GATEWAY_API_KEY (cloud)
 #
-#   ::ai::systemone::configure -backend kev
+# When nothing is chosen -- no --ai-classifier, no SCIDB_AI_CLASSIFIER, no
+# saved setting -- the default is "auto": ::ai::systemone::autostart probes
+# the local backends in ProbeOrder (kev, simple-jev, plumb) and uses the
+# first that answers a trivial typed question, so ::ai::systemone::enabled is
+# the truth about what is reachable, not merely what is configured. Nothing
+# answering leaves the classifier off. A cloud backend is never probed: it
+# needs a deliberate choice and a key.
+#
+#   ::ai::systemone::configure -backend auto|kev|...|off   (auto discovers)
 #   ::ai::systemone::evaluate <state> <questions>          -> answers dict
 #   ::ai::systemone::evaluateAsync <state> <questions> <script>
 #
@@ -75,31 +83,65 @@ array set Config {
 	timeoutMs 30000
 }
 
+# Auto mode: no explicit choice, so autostart discovers a local server. An
+# explicit configure -backend NAME (or off) sets Auto 0 for the session.
+variable Auto 1
+variable Resolved 0
+variable ProbeOrder {kev simple-jev plumb}
+
 } ;# namespace systemone
 } ;# namespace ai
+
+
+# Apply a known backend's endpoint, model and key. Shared by an explicit
+# `configure -backend NAME` and by discovery.
+proc ::ai::systemone::SetBackend {name} {
+	variable Config
+	variable Backends
+
+	set b [dict get $Backends $name]
+	set Config(backend) $name
+	set Config(endpoint) [dict get $b endpoint]
+	set Config(model) [dict get $b model]
+	if {[dict exists $b key] && [string length [dict get $b key]]} {
+		set var [dict get $b key]
+		set Config(apiKey) [expr {[info exists ::env($var)] ? $::env($var) : ""}]
+	} else {
+		set Config(apiKey) ""
+	}
+	return
+}
 
 
 proc ::ai::systemone::configure {args} {
 	variable Config
 	variable Backends
+	variable Auto
+	variable Resolved
 
 	foreach {key value} $args {
 		switch -- $key {
 			-backend {
-				if {$value ni [concat [dict keys $Backends] {off {}}]} {
-					error "unknown System One backend '$value' ([join [dict keys $Backends] {, }] or off)"
+				if {$value eq "auto"} {
+					# auto: the app will discover a local server
+					set Auto 1
+					set Resolved 0
+					set Config(backend) ""
+					set Config(endpoint) ""
+					set Config(model) ""
+					set Config(apiKey) ""
+					continue
 				}
-				set Config(backend) [expr {$value eq "off" ? "" : $value}]
-				if {[string length $Config(backend)]} {
-					set b [dict get $Backends $Config(backend)]
-					set Config(endpoint) [dict get $b endpoint]
-					set Config(model) [dict get $b model]
-					if {[dict exists $b key] && [string length [dict get $b key]]} {
-						set var [dict get $b key]
-						set Config(apiKey) [expr {[info exists ::env($var)] ? $::env($var) : ""}]
-					} else {
-						set Config(apiKey) ""
-					}
+				if {$value ni [concat [dict keys $Backends] {off {}}]} {
+					error "unknown System One backend '$value' ([join [dict keys $Backends] {, }], auto or off)"
+				}
+				# an explicit choice turns discovery off for the session
+				set Auto 0
+				set Resolved 1
+				if {$value eq "off" || ![string length $value]} {
+					set Config(backend) ""
+				} else {
+					SetBackend $value
 				}
 			}
 			-endpoint { set Config(endpoint) $value }
@@ -121,8 +163,76 @@ proc ::ai::systemone::enabled {} {
 
 proc ::ai::systemone::describe {} {
 	variable Config
-	if {![enabled]} { return "off" }
+	variable Auto
+	if {![enabled]} {
+		return [expr {$Auto ? "auto (no local server found)" : "off"}]
+	}
 	return "$Config(backend) ($Config(model) at $Config(endpoint))"
+}
+
+
+# Is <name> really a System One server? A plain connect is not enough --
+# port 8000 in particular is a common developer port -- so after a quick
+# connect this asks one trivial typed question and requires a well-formed
+# answer. The connect makes an absent server fail at once, so the longer
+# request timeout only applies to something that is actually listening
+# (which may still be loading its model).
+proc ::ai::systemone::Reachable {name} {
+	variable Config
+	variable Backends
+
+	set endpoint [dict get $Backends $name endpoint]
+	if {![regexp {^https?://([^/:]+):([0-9]+)} $endpoint -> host port]} { return 0 }
+	if {[catch { set chan [socket $host $port] }]} { return 0 }
+	catch { close $chan }
+
+	set saved [array get Config]
+	set ok 0
+	if {![catch {
+		SetBackend $name
+		set Config(timeoutMs) 5000
+		evaluate "probe" [dict create probe [dict create type noul \
+			instructions "Is this a reachable System One server?"]]
+	}]} {
+		set ok 1
+	}
+	array set Config $saved
+	return $ok
+}
+
+
+# Find a local server: the first backend in ProbeOrder that answers. None
+# answering leaves the classifier off, so nothing is classified.
+proc ::ai::systemone::discover {} {
+	variable Config
+	variable ProbeOrder
+	variable Resolved
+
+	set Resolved 1
+	foreach name $ProbeOrder {
+		if {[Reachable $name]} {
+			SetBackend $name
+			return $name
+		}
+	}
+	set Config(backend) ""
+	set Config(endpoint) ""
+	set Config(model) ""
+	set Config(apiKey) ""
+	return ""
+}
+
+
+# Called by the app once the settings are in effect: in auto mode, look for
+# a local server. An explicit option, environment variable or saved choice
+# has already turned Auto off, so this is a no-op for those.
+proc ::ai::systemone::autostart {} {
+	variable Auto
+	variable Resolved
+
+	if {!$Auto || $Resolved} { return }
+	discover
+	return
 }
 
 
@@ -265,7 +375,7 @@ proc ::ai::systemone::backends {} {
 
 
 apply {{} {
-	set backend kev
+	set backend auto
 	if {[info exists ::env(SCIDB_AI_CLASSIFIER)]} { set backend $::env(SCIDB_AI_CLASSIFIER) }
 	if {[catch { ::ai::systemone::configure -backend $backend }]} {
 		::ai::systemone::configure -backend kev

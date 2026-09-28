@@ -196,9 +196,13 @@ proc ::ai::generate::runTool {name cargs} {
 }
 
 
-proc ::ai::generate::buildMessages {fen audience perspective depth} {
+proc ::ai::generate::buildMessages {fen audience perspective depth {context ""}} {
 	set user [::ai::prompt::position $fen \
 		-audience $audience -perspective $perspective -engine 0 -depth $depth]
+
+	# A caller-supplied context (a selected move, a game, a comment) is the
+	# task; the fact pack above still grounds it.
+	if {$context ne ""} { append user "\n$context\n" }
 
 	append user "\nYou may call chess_engine with the FEN to obtain an evaluation, best move and principal variation,"
 	append user " and chess_eco to identify an opening. State an evaluation only if you obtained it from chess_engine.\n"
@@ -267,12 +271,12 @@ proc ::ai::generate::evidenceFromText {text} {
 
 
 proc ::ai::generate::positionToolsAsync {fen script args} {
-	array set opts [list -audience club -perspective neutral -depth 12 -maxRounds 4 -retries 1]
+	array set opts [list -audience club -perspective neutral -depth 12 -maxRounds 4 -retries 1 -context ""]
 	array set opts $args
 
 	set state [dict create \
 		fen      $fen \
-		messages [buildMessages $fen $opts(-audience) $opts(-perspective) $opts(-depth)] \
+		messages [buildMessages $fen $opts(-audience) $opts(-perspective) $opts(-depth) $opts(-context)] \
 		rounds   0 \
 		maxRounds $opts(-maxRounds) \
 		attempt  0 \

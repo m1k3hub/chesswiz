@@ -31,6 +31,7 @@ namespace eval mc {
 
 set CommentBeforeMove		"Comment before move"
 set CommentAfterMove			"Comment after move"
+set ExplainComment			"Explain this comment"
 set PrecedingComment			"Preceding comment"
 set TrailingComment			"Trailing comment"
 set Language					"Language"
@@ -433,6 +434,15 @@ proc Revert {dlg} {
 proc GetComment {} {
 	variable Vars
 	return [::scidb::game::query comment $Vars(pos)]
+}
+
+
+# C1: explain the comment currently being edited.  The stored text is read
+# through the same query the editor uses, so the explanation matches what is
+# on screen.
+proc ExplainComment {parent} {
+	variable Vars
+	::application::ai::explainSelection $parent comment [list $Vars(pos)]
 }
 
 
@@ -1497,6 +1507,18 @@ proc PopupMenu {parent} {
 				-command [namespace code [list CopyText $lang $code]] \
 				;
 		}
+	}
+
+	# C1: explain the comment being edited, grounded in the stored text.
+	if {[llength [info commands ::application::ai::explainSelection]]} {
+		if {[string length $Vars(content:$lang)]} { set state normal } else { set state disabled }
+		$m add command \
+			-compound left \
+			-image $::icon::16x16::none \
+			-label " $mc::ExplainComment" \
+			-state $state \
+			-command [namespace code [list ExplainComment [winfo toplevel $parent]]] \
+			;
 	}
 	$m add separator
 

@@ -85,6 +85,7 @@ set SuffixCommentaries				"Suffixed Commentaries"
 set StripOriginalComments			"Strip original comments"
 
 set EditAnnotation					"Edit annotation"
+set ExplainMove						"Explain this move"
 set EditMoveInformation				"Edit move information"
 set EditCommentBefore				"Edit comment before move"
 set EditCommentAfter					"Edit comment after move"
@@ -643,6 +644,22 @@ proc EditAnnotation {{attr {}}} {
 		GotoMove $position [FindKey $Vars(pgn:$position) $attr]
 	}
 	Edit $position ::annotation
+}
+
+
+# C1: explain the move at the current key of pane <position>.  The SAN and the
+# position it was played from are read from the game (without disturbing the
+# current position) and handed to the shared selection->explanation entry point.
+proc ExplainMove {parent position} {
+	variable Vars
+
+	if {![info exists Vars(current:$position)]} { return }
+	set key $Vars(current:$position)
+	if {$key eq ""} { return }
+	set san [::scidb::game::query move $key]
+	if {$san eq ""} { return }
+	set fen [::scidb::game::query movefen $key]
+	::application::ai::explainSelection $parent move [list $san $fen]
 }
 
 
@@ -2662,6 +2679,25 @@ proc PopupMenu {parent position} {
 					}
 				}
 			}
+		}
+
+		# C1: explain the move at the current key, grounded in the move facts
+		# and the engine classification (see ::application::ai::explainMove).
+		if {[llength [info commands ::application::ai::explainSelection]]} {
+			set key [expr {[info exists Vars(current:$position)] ? $Vars(current:$position) : ""}]
+			if {$key ne "" && [::scidb::game::query move $key] ne ""} {
+				set state normal
+			} else {
+				set state disabled
+			}
+			$menu add command \
+				-label " $mc::ExplainMove" \
+				-image $::icon::16x16::none \
+				-compound left \
+				-state $state \
+				-command [namespace code [list ExplainMove $parent $position]] \
+				;
+			$menu add separator
 		}
 
 		if {[::annotation::open?]} { set state disabled } else { set state normal }

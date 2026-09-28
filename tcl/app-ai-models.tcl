@@ -47,6 +47,8 @@ set Environment	"the environment"
 
 set Off				"off"
 set OffNote			"No classifier: the language model classifies everything."
+set Auto			"auto (local)"
+set AutoNote		"Automatic: use the first local server that answers (kev, then simple-jev, then plumb). Off if none is running."
 set ClassifierNote	"kev, simple-jev and plumb run on this machine; jev is TypeSafe's Jev in the cloud (Vercel AI Gateway)."
 set PlumbNote		"Plumb-4B: scripts/serve-plumb-classifier.sh downloads it from Hugging Face and serves it on port 8090."
 set KeyNote			"needs %s in the environment"
@@ -217,6 +219,7 @@ proc ::application::ai::models::FillClassifiers {} {
 
 	set tree $Priv(ctree)
 	$tree delete [$tree children {}]
+	$tree insert {} end -id auto -text $mc::Auto -values [list $mc::Local ""]
 	$tree insert {} end -id off -text $mc::Off -values [list "" ""]
 
 	foreach b [::ai::systemone::backends] {
@@ -266,6 +269,8 @@ proc ::application::ai::models::SelectedClassifier {} {
 	set text ""
 	if {$Priv(classifier) eq "off"} {
 		set text $mc::OffNote
+	} elseif {$Priv(classifier) eq "auto"} {
+		set text $mc::AutoNote
 	} elseif {$Priv(classifier) eq "plumb"} {
 		set text $mc::PlumbNote
 	} elseif {[catch { ::ai::systemone::configure -backend $Priv(classifier) ; ::ai::systemone::describe } describe] == 0} {

@@ -120,7 +120,7 @@ tcltest::test systemone-backends {kev and simple-jev presets; off disables; bad 
 		[catch { ::ai::systemone::configure -backend gpt } err] $err \
 		[catch { ::ai::systemone::body x {q {type choice}} } err] $err \
 		[catch { ::ai::systemone::evaluate x {q {type noul}} } err] $err
-} -result {{http://127.0.0.1:8000/v1/systemone Qwen/Qwen3.5-0.8B secret} {https://ai-gateway.vercel.sh/typesafe/v1/systemone typesafe-ai/jev} {http://127.0.0.1:8009/v1/systemone kev-latest} 0 1 {unknown System One backend 'gpt' (kev, simple-jev, plumb, jev, vercel or off)} 1 {question 'q': a choice question needs criteria} 1 {no System One backend is configured}}
+} -result {{http://127.0.0.1:8000/v1/systemone Qwen/Qwen3.5-0.8B secret} {https://ai-gateway.vercel.sh/typesafe/v1/systemone typesafe-ai/jev} {http://127.0.0.1:8009/v1/systemone kev-latest} 0 1 {unknown System One backend 'gpt' (kev, simple-jev, plumb, jev, vercel, auto or off)} 1 {question 'q': a choice question needs criteria} 1 {no System One backend is configured}}
 
 tcltest::test systemone-evaluate {evaluate posts the request and returns the answers} -setup {
 	::scidb::test::s1::start [list [::scidb::test::s1::choice noise 0.8]]
@@ -281,6 +281,45 @@ tcltest::test systemone-jev-configure {the jev preset reads its key from the env
 } -cleanup {
 	unset -nocomplain ::env(AI_GATEWAY_API_KEY)
 } -result {{jev (typesafe-ai/jev at https://ai-gateway.vercel.sh/typesafe/v1/systemone)} test-key {}}
+
+# --- auto discovery --------------------------------------------------------
+
+tcltest::test systemone-discover {auto finds the first local server that answers} -setup {
+	set ::scidb::test::s1::SavedBackends $::ai::systemone::Backends
+	::scidb::test::s1::start [list [::scidb::test::s1::choice noise 0.9]]
+	# point the preferred kev preset at the mock server
+	dict set ::ai::systemone::Backends kev endpoint http://127.0.0.1:$::scidb::test::s1::Port/v1/systemone
+	::ai::systemone::configure -backend auto
+} -body {
+	set found [::ai::systemone::discover]
+	list $found [::ai::systemone::enabled] [::ai::systemone::describe]
+} -cleanup {
+	::scidb::test::s1::stop
+	set ::ai::systemone::Backends $::scidb::test::s1::SavedBackends
+	::ai::systemone::configure -backend off
+} -match glob -result {kev 1 {kev (kev-latest at http://127.0.0.1:*/v1/systemone)}}
+
+tcltest::test systemone-discover-none {auto with nothing listening is off} -setup {
+	set ::scidb::test::s1::SavedBackends $::ai::systemone::Backends
+	foreach b {kev simple-jev plumb} {
+		dict set ::ai::systemone::Backends $b endpoint http://127.0.0.1:1/v1/systemone
+	}
+	::ai::systemone::configure -backend auto
+} -body {
+	list [::ai::systemone::discover] [::ai::systemone::enabled] [::ai::systemone::describe]
+} -cleanup {
+	set ::ai::systemone::Backends $::scidb::test::s1::SavedBackends
+	::ai::systemone::configure -backend off
+} -result {{} 0 {auto (no local server found)}}
+
+tcltest::test systemone-autostart-explicit {an explicit backend is never discovered over} -setup {
+	::ai::systemone::configure -backend plumb
+} -body {
+	::ai::systemone::autostart
+	list [::ai::systemone::enabled] $::ai::systemone::Config(backend)
+} -cleanup {
+	::ai::systemone::configure -backend off
+} -result {1 plumb}
 
 ::tcltest::cleanupTests
 return

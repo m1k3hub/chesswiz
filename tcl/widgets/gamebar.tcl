@@ -56,6 +56,7 @@ set WillCopyModifiedGame			"This operation will copy the modified game in editor
 
 set CopyGame							"Copy Game"
 set ExportGame							"Export Game"
+set ExplainGame						"Explain this game"
 set LockGame							"Lock Game"
 set UnlockGame							"Unlock Game"
 set CloseGame							"Close Game"
@@ -724,6 +725,12 @@ proc popupMenu {gamebar parent {addGameHistory 1} {remove -1}} {
 	menu $menu -tearoff 0
 	AddGameMenuEntries $gamebar $menu 0 $addGameHistory 2 $remove
 	tk_popup $menu {*}[winfo pointerxy .]
+}
+
+
+# C1: explain the game currently on the board (the selected game list row).
+proc ExplainGame {parent} {
+	::application::ai::explainSelection $parent game {}
 }
 
 
@@ -2042,6 +2049,19 @@ proc BuildMenu {gamebar id side menu} {
 				::gamestable::addGameFlagsMenuEntry $menu $base $variant -1 $index
 				set addsep [list $menu add separator]
 			}
+		}
+
+		# C1: explain the game currently on the board (the selected row).
+		if {$current && [llength [info commands ::application::ai::explainSelection]]} {
+			eval $addsep
+			set addsep {}
+			$menu add command \
+				-compound left \
+				-image $::icon::16x16::none \
+				-label " $mc::ExplainGame" \
+				-command [namespace code [list ExplainGame [winfo parent $menu]]] \
+				;
+			set addsep [list $menu add separator]
 		}
 
 		if {$id == -1} { set lid $sid } else { set lid $id }
