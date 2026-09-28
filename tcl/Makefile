@@ -158,6 +158,7 @@ SOURCES = \
 	ai-annotate.tcl \
 	ai-studyplan.tcl \
 	ai-factcheck.tcl \
+	ai-brief.tcl \
 	ai-engine.tcl \
 	ai-provider.tcl \
 	ai-systemone.tcl \

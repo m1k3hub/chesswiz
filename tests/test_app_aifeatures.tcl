@@ -137,4 +137,31 @@ tcltest::test factcheck-text {a contradicting claim is caught, a true one is not
 		[llength [dict get $illegal problems]]
 } -result {0 2 1 1}   ;# both the isolatedPawn and iqp vocabulary terms are contradicted
 
+tcltest::test brief-stance-rules {the stance rules read the preparation facts} -body {
+	list [::ai::brief::ruleStance {their weakest line is the Najdorf}] \
+		[::ai::brief::ruleStance {a novelty appears here}] \
+		[::ai::brief::ruleStance {sharp theory in the main line}] \
+		[::ai::brief::ruleStance {plays a bit of everything}]
+} -result {punish_weakness outprepare avoid_theory neutral}
+
+tcltest::test brief-stance-gate {a confident classifier stance is used, the rules otherwise} -setup {
+	::scidb::test::aifeat::stub ::ai::systemone::enabled {{} {return 1}}
+	::scidb::test::aifeat::stub ::ai::brief::configure {{args} {return}}
+} -body {
+	set prep "the weakest line is B23 31%"
+	::ai::brief::OnStanceChosen $prep \
+		{apply {{r} {set ::scidb::test::aifeat::First $r}}} \
+		[dict create ok 1 answers [dict create stance [dict create type choice choice outprepare confidence 0.77]]]
+	update
+	::ai::brief::OnStanceChosen $prep \
+		{apply {{r} {set ::scidb::test::aifeat::Stance $r}}} \
+		[dict create ok 1 answers [dict create stance [dict create type choice choice outprepare confidence 0.3]]]
+	update
+	list [dict get $::scidb::test::aifeat::First stance] [dict get $::scidb::test::aifeat::First source] \
+		[dict get $::scidb::test::aifeat::Stance stance] [dict get $::scidb::test::aifeat::Stance source]
+} -cleanup {
+	::scidb::test::aifeat::restoreAll
+	unset -nocomplain ::scidb::test::aifeat::Stance ::scidb::test::aifeat::First
+} -result {outprepare classifier punish_weakness rules}
+
 tcltest::cleanupTests

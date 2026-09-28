@@ -267,6 +267,12 @@ variable Actions {
 		{{"type":"object","properties":{"prose":{"type":"boolean","description":"let the language model word the comments, default true"},"depth":{"type":"integer","description":"engine depth per move, default 12"},"marks":{"type":"boolean","description":"also set the move's annotation mark, default false"},"max_plies":{"type":"integer","description":"stop after this many moves, default 60"}}}}
 		::application::assistant::DoAnnotateGame
 	}
+	opponent_brief {
+		0 0 "build a preparation brief for an opponent"
+		"Preparation brief for one opponent from the active database: their openings with both colours and how they score in each, their weakest lines and their latest games, plus a stance for the game (punish their weak line, avoid their theory, out-prepare them, or stay neutral). With 'download' above zero the latest The Week in Chess games are fetched first. The brief opens in the Report pane."
+		{{"type":"object","properties":{"name":{"type":"string","description":"the opponent's name or part of it"},"colour":{"type":"string","enum":["white","black"],"description":"the colour the opponent will play"},"download":{"type":"integer","description":"fetch this many latest TWIC issues first, default 0"},"prose":{"type":"boolean","description":"let the language model write the brief, default true"}},"required":["name"]}}
+		::application::assistant::DoOpponentBrief
+	}
 	study_plan {
 		0 0 "audit the games and build a study plan"
 		"Audit a sample of games in the active database with the chess engine and turn the mistakes into a study plan: every mistake is labelled by pattern (tactics, opening, endgame, king safety, position) from the position facts, and the plan lists the evidence and what to train. 'player' studies one player's games (their moves only); without it both sides of the most recent games are studied. 'games' is how many games to audit (default 10). The report opens in the Report pane."
@@ -883,6 +889,21 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		}
 		classifier_status {
 			return {}
+		}
+		opponent_brief {
+			set name [string trim [Arg $cargs name]]
+			if {![string length $name]} { error "name must not be empty" }
+			set colour [OptArg $cargs colour ""]
+			if {$colour ni {white black ""}} { error "colour must be 'white' or 'black'" }
+			set download [OptArg $cargs download 0]
+			if {![string is integer -strict $download] || $download < 0 || $download > 12} {
+				error "download must be an integer between 0 and 12"
+			}
+			set prose 1
+			if {[dict exists $cargs prose]} {
+				set prose [expr {[string is true -strict [dict get $cargs prose]] ? 1 : 0}]
+			}
+			return [dict create name $name colour $colour download $download prose $prose]
 		}
 		study_plan {
 			set player [OptArg $cargs player ""]
@@ -2515,6 +2536,18 @@ proc ::application::assistant::AnnotateGameDone {token result} {
 	}
 	catch { Resolve $token $reply }
 	return
+}
+
+
+# ----------------------------------------------------------------------
+# Opponent brief.
+# ----------------------------------------------------------------------
+proc ::application::assistant::DoOpponentBrief {name colour download prose} {
+	if {[llength [info commands ::ai::brief::build]] == 0} {
+		return "error: the brief module is not available"
+	}
+	::ai::brief::build .application $name -colour $colour -download $download -prose $prose
+	return "brief for '$name' is being prepared; it appears in the Report pane"
 }
 
 

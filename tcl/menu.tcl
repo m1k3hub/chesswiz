@@ -88,6 +88,7 @@ set AIAssistant					"AI: A&ssistant"
 set AIChooseModel				"AI: Choose &Model..."
 set AIAnnotateGame			"AI: &Annotate Game..."
 set AIStudyPlan				"AI: &Study Plan..."
+set AIOpponentBrief			"AI: Opponent &Brief..."
 set AIFactCheck				"AI: Fact-Check &Annotations"
 set DownloadGames				"Download &Games from the Internet..."
 
@@ -483,6 +484,18 @@ if {0} {
 			-underline [IncrUL $ul] \
 			-image $::icon::16x16::none \
 			-command [list ::application::ai::models::show .application] \
+			;
+	}
+
+	### opponent brief ######################################################
+	if {[llength [info commands ::ai::brief::ask]]} {
+		lassign [::tk::UnderlineAmpersand $mc::AIOpponentBrief] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [list ::ai::brief::ask .application] \
 			;
 	}
 

@@ -148,7 +148,7 @@ action.
 | Feature | Composition | Reliability | Effort |
 |---|---|---|---|
 | **One-click opponent brief** | `download_games` → `prepare_against` + dossier → classifier ranks their dangerous lines → engine verifies each → claim-checked brief in the report pane | engine decides soundness; classifier ranks; checker audits | M |
-| **Repertoire gap detector** | repertoire DB × my games × opponent's games → classifier scores urgency → candidates validated by Stockfish | engine is the arbiter of playability | M |
+| **Repertoire gap detector** | repertoire DB × my games × opponent's games → classifier scores urgency → candidates validated by Stockfish | engine is the arbiter of playability | M | **shipped** |
 | **Novelty radar** | `::ai::precedent` × fresh imports → find new moves → classifier labels (novelty/side-line/transposition/blunder) | "playable?" is the engine's answer | M |
 | **Correspondence copilot** | XFCC move in → engine → repertoire compare → 3 candidates → position-type label → "out of book" warning | candidates engine-verified; auto-submit keeps its deterministic material gate | M |
 
@@ -194,6 +194,7 @@ confirm gate. No cloud call for audio, error logs or private games by default.
 |---|---|
 | Error triage, rhetoric/coverage advisories, tool pre-routing | shipped |
 | **Auto-annotate a game** (`tcl/ai-annotate.tcl`, Extras + assistant tool) | **shipped** |
+| **Opponent brief** (`tcl/ai-brief.tcl`, Extras + `opponent_brief` tool) | **shipped** — the downloader, the app's own preparation report, a classifier-chosen stance (confidence-gated, rules as fallback) and model prose that may only restate the facts |
 | **Study plan** (`tcl/ai-studyplan.tcl`, Extras + `study_plan` tool) | **shipped** — engine-bound: one search per studied move, so a sample of games takes minutes; the report names the patterns and the evidence |
 | **Annotation fact-checker** (`tcl/ai-factcheck.tcl`, Extras + `factcheck_annotations` tool) | **shipped** — verified live: a human comment claiming an isolated queen's pawn in a position without one is flagged | — engine-only mode for free, LLM prose checked against the facts; needs `::scidb::game::query mainline` (new, C++), which returns {key san fenBefore} per ply without disturbing the board |
 | Download games (GUI + assistant + headless) | shipped |
