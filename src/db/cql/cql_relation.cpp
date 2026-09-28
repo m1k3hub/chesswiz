@@ -122,7 +122,7 @@ Relation::parseChangeSideToMove(char const* s, Error& error)
 char const*
 Relation::parseFlip(char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	return s;
 }
 
@@ -138,7 +138,7 @@ Relation::parseIgnoreSideToMove(char const* s, Error& error)
 char const*
 Relation::parseMissingPieceCount(char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	return s;
 }
 
@@ -146,7 +146,7 @@ Relation::parseMissingPieceCount(char const* s, Error& error)
 char const*
 Relation::parseNewPieceCount(char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	return s;
 }
 
@@ -154,7 +154,7 @@ Relation::parseNewPieceCount(char const* s, Error& error)
 char const*
 Relation::parseOriginalDifferentCount(char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	return s;
 }
 
@@ -162,7 +162,7 @@ Relation::parseOriginalDifferentCount(char const* s, Error& error)
 char const*
 Relation::parseOriginalSameCount(char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	return s;
 }
 
@@ -170,7 +170,7 @@ Relation::parseOriginalSameCount(char const* s, Error& error)
 char const*
 Relation::parsePattern(char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	return s;
 }
 
@@ -186,7 +186,7 @@ Relation::parseSameSideToMove(char const* s, Error& error)
 char const*
 Relation::parseShift(char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	return s;
 }
 

@@ -124,13 +124,7 @@ proc ::ai::rhetoric::rhetoricNotice {answer} {
 # A usable answer: a choice from the offered criteria and a confidence that
 # is a number in [0,1]. Anything else is abstention, never a guess.
 proc ::ai::rhetoric::validAnswer {answer criteria} {
-	if {![dict exists $answer choice] || ![dict exists $answer confidence]} {
-		return 0
-	}
-	if {[dict get $answer choice] ni [dict keys $criteria]} { return 0 }
-	set c [dict get $answer confidence]
-	if {![string is double -strict $c]} { return 0 }
-	return [expr {$c >= 0.0 && $c <= 1.0}]
+	return [::ai::systemone::valid [dict create type choice criteria $criteria] $answer]
 }
 
 

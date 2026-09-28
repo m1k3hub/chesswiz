@@ -161,8 +161,8 @@ variable Actions {
 	}
 	search_games {
 		0 0 "search the games"
-		"Search the active database; nothing changes, the game list included. Returns the number of games found, the first of them, and the criteria as understood. Names may be partial. 'result' is win/draw/loss from the player's side, or 1-0/0-1/1/2-1/2 without a player. 'eco' is a code, class or range as for opening_score (map opening names to ECO yourself). Dates are YYYY, YYYY.MM or YYYY.MM.DD. To show the games in the game list, call show_search afterwards."
-		{{"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"}}}}
+		"Search the active database; nothing changes, the game list included. Returns the number of games found, the first of them, and the criteria as understood. Names may be partial. 'result' is win/draw/loss from the player's side, or 1-0/0-1/1/2-1/2 without a player. 'eco' is a code, class or range as for opening_score (map opening names to ECO yourself). Dates are YYYY, YYYY.MM or YYYY.MM.DD. To show the games in the game list, call show_search afterwards. 'pattern' keeps only games containing a position pattern (Scidb's CQL matcher reads their moves, which takes longer on a large database)."
+		{{"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"pattern":{"type":"string","enum":["checkmate","smothered_mate","stalemate","en_passant","underpromotion","double_check","opposite_castling","rook_endgame","pawn_endgame","isolated_queen_pawn","opposite_bishops","queenless"],"description":"a position pattern the game must contain, found by Scidb's CQL matcher: the game ends in checkmate, a smothered mate, the game ends in stalemate, an en-passant capture, an underpromotion, a double check, kings on opposite wings, a rook ending, a pawn ending, an isolated queen's pawn, opposite-coloured bishops, a queenless middlegame"}}}}
 		::application::assistant::DoSearchGames
 	}
 	show_search {
@@ -278,6 +278,24 @@ variable Actions {
 		"Audit a sample of games in the active database with the chess engine and turn the mistakes into a study plan: every mistake is labelled by pattern (tactics, opening, endgame, king safety, position) from the position facts, and the plan lists the evidence and what to train. 'player' studies one player's games (their moves only); without it both sides of the most recent games are studied. 'games' is how many games to audit (default 10). The report opens in the Report pane."
 		{{"type":"object","properties":{"player":{"type":"string","description":"study this player's games, e.g. 'Carlsen, Magnus' or part of the name"},"games":{"type":"integer","description":"how many games to audit, default 10"},"colour":{"type":"string","enum":["white","black","both"],"description":"which side's moves to study, default both"},"depth":{"type":"integer","description":"engine depth per move, default 10"}}}}
 		::application::assistant::DoStudyPlan
+	}
+	structure_profile {
+		0 0 "profile the position types of %s"
+		"Which kinds of position a player's games reach and how the player scores in them, found exactly by Scidb's CQL matcher in the active database: isolated queen's pawn, opposite-coloured bishops, queenless middlegames, rook and pawn endings, kings on opposite wings. Counts and scores come from the database. 'colour' limits it to the games with that colour; 'games' is how many of the latest games to read (default 200)."
+		{{"type":"object","properties":{"player":{"type":"string","description":"the player's name or part of it"},"colour":{"type":"string","enum":["white","black"]},"games":{"type":"integer","description":"how many of the latest games to read, default 200"}},"required":["player"]}}
+		::application::assistant::DoStructureProfile
+	}
+	training_set {
+		1 0 "build a training set from the games of the database"
+		"Build puzzles from the active database's games: Scidb's CQL matcher finds positions just before a checkmate, a smothered mate, a double check or an underpromotion, and the chess engine keeps only those whose solution is its best move and clearly the only good one. The puzzles are written to a PGN file under the user directory, which the user can open as a database to train. 'pattern' limits it to one kind; 'player' to one player's games; 'max' bounds the number of puzzles (default 20). It runs in the background; the Report pane shows the progress and the result."
+		{{"type":"object","properties":{"pattern":{"type":"string","enum":["checkmate","smothered_mate","double_check","underpromotion"]},"player":{"type":"string"},"max":{"type":"integer","description":"at most this many puzzles, default 20"}}}}
+		::application::assistant::DoTrainingSet
+	}
+	check_results {
+		1 0 "check the game results and show the games that contradict them"
+		"Find the games of the active database whose recorded result contradicts how the game ended: a checkmate scored as a draw or as a win for the mated side, a stalemate scored as a win. Scidb's CQL matcher reads the final positions; nothing is changed. The report lists the games, and the game list is filtered to them (clear_search shows all again)."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoCheckResults
 	}
 	factcheck_annotations {
 		0 0 "fact-check the annotations of this game"
@@ -756,7 +774,7 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		}
 		search_games {
 			set c {}
-			foreach key {player color result opponent eco from to event min_elo} {
+			foreach key {player color result opponent eco from to event min_elo pattern} {
 				dict set c $key [expr {[dict exists $cargs $key] ? [string trim [dict get $cargs $key]] : ""}]
 			}
 			dict with c {
@@ -780,6 +798,11 @@ proc ::application::assistant::CheckArgs {name cargs} {
 				}
 				if {$min_elo ne "" && (![string is integer -strict $min_elo] || $min_elo < 0 || $min_elo > 4000)} {
 					error "min_elo must be a number up to 4000"
+				}
+				if {$pattern ne "" && ([llength [info commands ::ai::search::patternIds]] == 0
+				 || $pattern ni [::ai::search::patternIds])} {
+					error "pattern must be one of: [join [expr {[llength [info commands ::ai::search::patternIds]]
+						? [::ai::search::patternIds] : {}}] {, }]"
 				}
 			}
 			if {![llength [lmap v [dict values $c] { if {$v in {"" any}} continue; set v }]]} {
@@ -920,6 +943,31 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			return [dict create player $player games $games colour $colour depth $depth]
 		}
 		factcheck_annotations {
+			return {}
+		}
+		structure_profile {
+			set player [string trim [Arg $cargs player]]
+			if {$player eq ""} { error "player is required" }
+			set colour [OptArg $cargs colour ""]
+			if {$colour ni {"" white black}} { error "colour must be 'white' or 'black'" }
+			set games [OptArg $cargs games 200]
+			if {![string is integer -strict $games] || $games < 1 || $games > 5000} {
+				error "games must be an integer between 1 and 5000"
+			}
+			return [dict create player $player colour $colour games $games]
+		}
+		training_set {
+			set pattern [OptArg $cargs pattern ""]
+			if {$pattern ni {"" checkmate smothered_mate double_check underpromotion}} {
+				error "pattern must be checkmate, smothered_mate, double_check or underpromotion"
+			}
+			set max [OptArg $cargs max 20]
+			if {![string is integer -strict $max] || $max < 1 || $max > 200} {
+				error "max must be an integer between 1 and 200"
+			}
+			return [dict create pattern $pattern player [string trim [OptArg $cargs player ""]] max $max]
+		}
+		check_results {
 			return {}
 		}
 		annotate_game {
@@ -1494,6 +1542,13 @@ proc ::application::assistant::BuildQuery {base variant criteria} {
 	if {$min_elo ne ""} {
 		lappend common [list rating Elo average $min_elo-4000]
 		lappend summary "average Elo at least $min_elo"
+	}
+	# a position pattern last: its games are decoded, so the terms above
+	# narrow them first
+	if {[info exists pattern] && $pattern ne ""} {
+		set p [::ai::search::pattern $pattern]
+		lappend common [list cql [dict get $p cql]]
+		lappend summary "with [dict get $p label]"
 	}
 	return [list [Combine AND $common] [join $summary {; }]]
 }
@@ -2577,6 +2632,44 @@ proc ::application::assistant::DoStudyPlan {player games colour depth} {
 proc ::application::assistant::StudyPlanDone {token result} {
 	catch { Resolve $token "[dict get $result summary]; the plan is in the Report pane" }
 	return
+}
+
+
+# ----------------------------------------------------------------------
+# CQL: structure profile, training set, result check.
+# ----------------------------------------------------------------------
+proc ::application::assistant::DoStructureProfile {player colour games} {
+	lassign [ActiveBase] base variant
+	set profile [::ai::cql::profile $base $variant $player -colour $colour -games $games]
+	set text [::ai::cql::profileText $profile]
+	if {$text eq ""} {
+		return "none of the structure patterns occurs in 3 or more of [dict get $profile player]'s latest [dict get $profile games] games"
+	}
+	return $text
+}
+
+
+proc ::application::assistant::DoTrainingSet {pattern player max} {
+	if {[::ai::cql::running?]} { return "error: a training set is already being built" }
+	set args [list -player $player -max $max]
+	if {$pattern ne ""} { lappend args -patterns [list $pattern] }
+	set token [Later]
+	if {[catch {
+		::ai::cql::training .application {*}$args -done [namespace code [list TrainingSetDone $token]]
+	} err]} {
+		after 0 [list [namespace current]::Resolve $token "error: $err"]
+	}
+	return $token
+}
+
+
+proc ::application::assistant::TrainingSetDone {token result} {
+	catch { Resolve $token [dict get $result text] }
+}
+
+
+proc ::application::assistant::DoCheckResults {} {
+	return [::ai::cql::qualityReport .application]
 }
 
 

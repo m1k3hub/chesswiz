@@ -104,6 +104,7 @@ operator<(mstl::string const& lhs, PosPair const& rhs)
 } // namespace mstl
 
 
+namespace { // file-local: cql_match.cpp and cql_position.cpp both define logical::And/Or
 namespace logical {
 
 struct Match : virtual public cql::move::Match, virtual public cql::board::Match
@@ -116,7 +117,7 @@ struct Match : virtual public cql::move::Match, virtual public cql::board::Match
 
 	Position& pushBack()
 	{
-		m_list.push_back();
+		m_list.push_back(new Position);
 		return *m_list.back();
 	}
 
@@ -194,6 +195,7 @@ struct Or : public Match
 };
 
 } // namespace logical
+} // namespace
 
 
 static bool
@@ -233,6 +235,69 @@ skipSpaces(char const* s)
 }
 
 
+// "(position" -> the pointer after the keyword, where Position::parse
+// takes over; Position::parse returns the pointer after its own ')'.
+static char const*
+openPosition(char const* s, error::Type& error)
+{
+	if (*s != '(')
+	{
+		error = error::Keyword_Position_Expected;
+		return s;
+	}
+
+	char const* t = ::skipSpaces(s + 1);
+
+	if (::strncmp(t, "position", 8) != 0 || ::isalnum(t[8]))
+	{
+		error = error::Keyword_Position_Expected;
+		return s;
+	}
+
+	return t + 8;
+}
+
+
+// "((position ...) (position ...))": every position is appended to <list>;
+// returns the pointer after the closing ')'.
+template <class List>
+static char const*
+parsePositionList(List& list, Match& match, char const* s, error::Type& error)
+{
+	if (*s != '(')
+	{
+		error = error::Left_Parenthesis_Expected;
+		return s;
+	}
+
+	s = ::skipSpaces(s + 1);
+
+	do
+	{
+		s = ::openPosition(s, error);
+
+		if (error != error::No_Error)
+			return s;
+
+		s = list.pushBack().parse(match, s, error);
+
+		if (error != error::No_Error)
+			return s;
+
+		s = ::skipSpaces(s);
+	}
+	while (*s == '(');
+
+	if (*s != ')')
+	{
+		error = error::Right_Parenthesis_Expected;
+		return s;
+	}
+
+	return ::skipSpaces(s + 1);
+}
+
+
 static unsigned
 lengthOfKeyword(char const* s)
 {
@@ -248,48 +313,7 @@ lengthOfKeyword(char const* s)
 static char const*
 parseSequence(cql::board::GappedSequence& seq, Match& match, char const* s, error::Type& error)
 {
-	if (*s != '(')
-	{
-		error = Left_Parenthesis_Expected;
-		return s;
-	}
-
-	s = ::skipSpaces(s + 1);
-
-	if (*s != '(')
-	{
-		error = Keyword_Position_Expected;
-		return s;
-	}
-
-	char const* t = ::skipToDelim(::skipSpaces(s + 1));
-
-	if (t - s != 8 || ::strncmp(s, "position", 8) != 0)
-	{
-		error = Keyword_Position_Expected;
-		return s;
-	}
-
-	s = ::skipSpaces(t);
-
-	do
-	{
-		s = seq.pushBack().parse(match, s, error);
-
-		if (error != No_Error)
-			return s;
-
-		s = ::skipSpaces(s);
-
-		if (*s != '(' && *s != ')')
-		{
-			error = Keyword_Position_Expected;
-			return s;
-		}
-	}
-	while (*s != ')');
-
-	return s;
+	return ::parsePositionList(seq, match, s, error);
 }
 
 
@@ -427,10 +451,122 @@ Position::doMatch(Board const& board, Move const& move, Variant variant)
 }
 
 
+// The position with the colours exchanged: ranks mirrored, white and black
+// swapped, the other side to move. Built through FEN, which carries the
+// castling rights and the en-passant square.
+static void
+swapCase(mstl::string& s)
+{
+	for (unsigned i = 0; i < s.size(); ++i)
+	{
+		if (::isupper(s[i]))
+			s[i] = char(::tolower(s[i]));
+		else if (::islower(s[i]))
+			s[i] = char(::toupper(s[i]));
+	}
+}
+
+
+static bool
+flipColor(db::Board const& board, db::variant::Type variant, db::Board& result)
+{
+	mstl::string fen(board.toFen(variant));
+
+	// the fields: placement, side to move, castling, en passant, the rest
+	mstl::string field[5];
+	unsigned n = 0;
+	mstl::string::size_type start = 0;
+
+	for (mstl::string::size_type i = 0; i <= fen.size() && n < 5; ++i)
+	{
+		if (i == fen.size() || (fen[i] == ' ' && n < 4))
+		{
+			field[n++].assign(fen, start, i - start);
+			start = i + 1;
+		}
+	}
+
+	if (n < 4)
+		return false;
+
+	// the ranks in reverse order (a holding makes more than eight: no flip)
+	mstl::string ranks[8];
+	unsigned k = 0;
+	start = 0;
+
+	for (mstl::string::size_type i = 0; i <= field[0].size(); ++i)
+	{
+		if (i == field[0].size() || field[0][i] == '/')
+		{
+			if (k == 8)
+				return false;
+			ranks[k++].assign(field[0], start, i - start);
+			start = i + 1;
+		}
+	}
+
+	if (k != 8)
+		return false;
+
+	mstl::string flipped;
+
+	for (unsigned i = 0; i < 8; ++i)
+	{
+		if (i > 0)
+			flipped += '/';
+		flipped += ranks[7 - i];
+	}
+
+	::swapCase(flipped);
+	::swapCase(field[2]);		// castling rights change hands
+
+	if (field[3].size() == 2)	// the en-passant square moves to the other side
+		field[3][1] = field[3][1] == '3' ? '6' : '3';
+
+	flipped += ' ';
+	flipped += field[1] == "w" ? "b" : "w";
+	flipped += ' ';
+	flipped += field[2];
+	flipped += ' ';
+	flipped += field[3];
+
+	if (n == 5)
+	{
+		flipped += ' ';
+		flipped += field[4];
+	}
+
+	return result.setup(flipped.c_str(), variant) != 0;
+}
+
+
+// <move> played on the colour-flipped board.
+static bool
+flipMove(db::Board const& flipped, db::Move const& move, db::Move& result)
+{
+	if (move.isPieceDrop() || move.isNull())
+		return false;
+
+	result = flipped.makeMove(
+		sq::flipRank(sq::ID(move.from())),
+		sq::flipRank(sq::ID(move.to())),
+		move.isPromotion() ? move.promoted() : db::piece::Queen);
+	return true;
+}
+
+
 bool
 Position::match(GameInfo const& info, Board const& board, Variant variant, unsigned flags)
 {
 	bool match = doMatch(info, board, variant, flags);
+
+	if (!match && (m_transformations & Flip_Color))
+	{
+		db::Board flipped;
+
+		if (::flipColor(board, variant, flipped))
+			match = doMatch(info, flipped, variant, flags);
+	}
 
 	if (match)
 		++m_matchCount;
@@ -453,7 +589,19 @@ Position::match(Board const& board, Move const& move, Variant variant)
 	if (m_minMoveNumber > moveNumber || moveNumber > m_maxMoveNumber)
 		return m_not;
 
-	return doMatch(board, move, variant);
+	if (doMatch(board, move, variant))
+		return true;
+
+	if (m_transformations & Flip_Color)
+	{
+		db::Board flipped;
+		db::Move flippedMove;
+
+		if (::flipColor(board, variant, flipped) && ::flipMove(flipped, move, flippedMove))
+			return doMatch(flipped, flippedMove, variant);
+	}
+
+	return false;
 }
 
 
@@ -481,7 +629,7 @@ Position::toggleNot()
 char const*
 Position::parseAccumulate(Match& match, char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	return s;
 }
 
@@ -489,51 +637,13 @@ Position::parseAccumulate(Match& match, char const* s, Error& error)
 char const*
 Position::parseAnd(Match& match, char const* s, Error& error)
 {
-	if (*s != '(')
-	{
-		error = Left_Parenthesis_Expected;
-		return s;
-	}
-
-	s = ::skipSpaces(s + 1);
-
-	if (*s != '(')
-	{
-		error = Keyword_Position_Expected;
-		return s;
-	}
-
-	char const* t = ::skipToDelim(::skipSpaces(s + 1));
-
-	if (t - s != 8 || ::strncmp(s, "position", 8) != 0)
-	{
-		error = Keyword_Position_Expected;
-		return s;
-	}
-
-	s = ::skipSpaces(t);
-
 	mstl::auto_ptr<logical::And> list(new logical::And);
+	s = ::parsePositionList(*list, match, s, error);
 
-	do
-	{
-		s = list->pushBack().parse(match, s, error);
+	if (error == No_Error)
+		m_boardMatchList.push_back(list.release());
 
-		if (error != No_Error)
-			return s;
-
-		s = ::skipSpaces(s);
-
-		if (*s != '(' && *s != ')')
-		{
-			error = Keyword_Position_Expected;
-			return s;
-		}
-	}
-	while (*s != ')');
-
-	m_boardMatchList.push_back(list.release());
-	return s + 1;
+	return s;
 }
 
 
@@ -791,7 +901,7 @@ Position::parseEndGame(Match& match, char const* s, Error& error)
 char const*
 Position::parseEndmost(Match& match, char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	return s;
 }
 
@@ -882,7 +992,7 @@ Position::parseEvaluation(Match& match, char const* s, Error& error)
 char const*
 Position::parseExclude(Match& match, char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	match.m_isStandard = false;
 	return s;
 }
@@ -970,6 +1080,8 @@ Position::parseFlipColor(Match& match, char const* s, Error& error)
 char const*
 Position::parseFlipDiagonal(Match& match, char const* s, Error& error)
 {
+	error = Not_Implemented; // Position::finish does not apply transformations yet
+	return s;
 	m_transformations |= Flip_Diagonal;
 	return s;
 }
@@ -978,6 +1090,8 @@ Position::parseFlipDiagonal(Match& match, char const* s, Error& error)
 char const*
 Position::parseFlipDihedral(Match& match, char const* s, Error& error)
 {
+	error = Not_Implemented; // Position::finish does not apply transformations yet
+	return s;
 	m_transformations |= Flip;
 	return s;
 }
@@ -986,6 +1100,8 @@ Position::parseFlipDihedral(Match& match, char const* s, Error& error)
 char const*
 Position::parseFlipHorizontal(Match& match, char const* s, Error& error)
 {
+	error = Not_Implemented; // Position::finish does not apply transformations yet
+	return s;
 	m_transformations |= Flip_Horizontal;
 	return s;
 }
@@ -994,6 +1110,8 @@ Position::parseFlipHorizontal(Match& match, char const* s, Error& error)
 char const*
 Position::parseFlipOffDiagonal(Match& match, char const* s, Error& error)
 {
+	error = Not_Implemented; // Position::finish does not apply transformations yet
+	return s;
 	m_transformations |= Flip_Off_Diagonal;
 	return s;
 }
@@ -1002,6 +1120,8 @@ Position::parseFlipOffDiagonal(Match& match, char const* s, Error& error)
 char const*
 Position::parseFlipVertical(Match& match, char const* s, Error& error)
 {
+	error = Not_Implemented; // Position::finish does not apply transformations yet
+	return s;
 	m_transformations |= Flip_Vertical;
 	return s;
 }
@@ -1010,7 +1130,7 @@ Position::parseFlipVertical(Match& match, char const* s, Error& error)
 char const*
 Position::parseFollowing(Match& match, char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	return s;
 }
 
@@ -1036,7 +1156,7 @@ char const*
 Position::parseGappedSequence(Match& match, char const* s, Error& error)
 {
 	mstl::auto_ptr<cql::board::GappedSequence> seq(new cql::board::GappedSequence);
-	::parseSequence(*seq, match, s, error);
+	s = ::parseSequence(*seq, match, s, error);
 	if (error == No_Error)
 		m_boardMatchList.push_back(seq.release());
 	match.m_sections |= Match::Section_Positions;
@@ -1086,7 +1206,7 @@ Position::parseInitial(Match& match, char const* s, Error& error)
 char const*
 Position::parseInside(Match& match, char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	match.m_isStandard = false;
 	match.m_sections |= Match::Section_Positions;
 	return s;
@@ -1415,51 +1535,13 @@ Position::parseNot(Match& match, char const* s, Error& error)
 char const*
 Position::parseOr(Match& match, char const* s, Error& error)
 {
-	if (*s != '(')
-	{
-		error = Left_Parenthesis_Expected;
-		return s;
-	}
-
-	s = ::skipSpaces(s + 1);
-
-	if (*s != '(')
-	{
-		error = Keyword_Position_Expected;
-		return s;
-	}
-
-	char const* t = ::skipToDelim(::skipSpaces(s + 1));
-
-	if (t - s != 8 || ::strncmp(s, "position", 8) != 0)
-	{
-		error = Keyword_Position_Expected;
-		return s;
-	}
-
-	s = ::skipSpaces(t);
-
 	mstl::auto_ptr<logical::Or> list(new logical::Or);
+	s = ::parsePositionList(*list, match, s, error);
 
-	do
-	{
-		s = list->pushBack().parse(match, s, error);
+	if (error == No_Error)
+		m_boardMatchList.push_back(list.release());
 
-		if (error != No_Error)
-			return s;
-
-		s = ::skipSpaces(s);
-
-		if (*s != '(' && *s != ')')
-		{
-			error = Keyword_Position_Expected;
-			return s;
-		}
-	}
-	while (*s != ')');
-
-	m_boardMatchList.push_back(list.release());
-	return s + 1;
+	return s;
 }
 
 
@@ -1536,7 +1618,7 @@ Position::parsePowerDifference(Match& match, char const* s, Error& error)
 char const*
 Position::parsePreceding(Match& match, char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	return s;
 }
 
@@ -1544,7 +1626,7 @@ Position::parsePreceding(Match& match, char const* s, Error& error)
 char const*
 Position::parsePreTransformMatchCount(Match& match, char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	return s;
 }
 
@@ -1691,7 +1773,7 @@ Position::parseRepetition(Match& match, char const* s, Error& error)
 char const*
 Position::parseReset(Match& match, char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	match.m_isStandard = false;
 	return s;
 }
@@ -1708,16 +1790,19 @@ char const*
 Position::parseSequence(Match& match, char const* s, Error& error)
 {
 	mstl::auto_ptr<cql::board::Sequence> seq(new cql::board::Sequence);
-	::parseSequence(*seq, match, s, error);
+	s = ::parseSequence(*seq, match, s, error);
 	if (error == No_Error)
 		m_boardMatchList.push_back(seq.release());
-	return s + 1;
+	match.m_sections |= Match::Section_Positions;
+	return s;
 }
 
 
 char const*
 Position::parseShift(Match& match, char const* s, Error& error)
 {
+	error = Not_Implemented; // Position::finish does not apply transformations yet
+	return s;
 	m_transformations |= Shift;
 	return s;
 }
@@ -1726,6 +1811,8 @@ Position::parseShift(Match& match, char const* s, Error& error)
 char const*
 Position::parseShiftDiagonal(Match& match, char const* s, Error& error)
 {
+	error = Not_Implemented; // Position::finish does not apply transformations yet
+	return s;
 	m_transformations |= Shift_Diagonal;
 	return s;
 }
@@ -1734,6 +1821,8 @@ Position::parseShiftDiagonal(Match& match, char const* s, Error& error)
 char const*
 Position::parseShiftHorizontal(Match& match, char const* s, Error& error)
 {
+	error = Not_Implemented; // Position::finish does not apply transformations yet
+	return s;
 	m_transformations |= Shift_Horizontal;
 	return s;
 }
@@ -1742,6 +1831,8 @@ Position::parseShiftHorizontal(Match& match, char const* s, Error& error)
 char const*
 Position::parseShiftMainDiagonal(Match& match, char const* s, Error& error)
 {
+	error = Not_Implemented; // Position::finish does not apply transformations yet
+	return s;
 	m_transformations |= Shift_Main_Diagonal;
 	return s;
 }
@@ -1750,6 +1841,8 @@ Position::parseShiftMainDiagonal(Match& match, char const* s, Error& error)
 char const*
 Position::parseShiftOffDiagonal(Match& match, char const* s, Error& error)
 {
+	error = Not_Implemented; // Position::finish does not apply transformations yet
+	return s;
 	m_transformations |= Shift_Off_Diagonal;
 	return s;
 }
@@ -1758,6 +1851,8 @@ Position::parseShiftOffDiagonal(Match& match, char const* s, Error& error)
 char const*
 Position::parseShiftVertical(Match& match, char const* s, Error& error)
 {
+	error = Not_Implemented; // Position::finish does not apply transformations yet
+	return s;
 	m_transformations |= Shift_Vertical;
 	return s;
 }
@@ -1778,7 +1873,7 @@ Position::parseStalemate(Match& match, char const* s, Error& error)
 char const*
 Position::parseSumRange(Match& match, char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	return s;
 }
 
@@ -1786,7 +1881,7 @@ Position::parseSumRange(Match& match, char const* s, Error& error)
 char const*
 Position::parseTagMatch(Match& match, char const* s, Error& error)
 {
-	// TODO
+	error = Not_Implemented; // TODO
 	match.m_sections |= Match::Section_Positions;
 	return s;
 }
@@ -1811,6 +1906,8 @@ Position::parseVariant(Match& match, char const* s, Error& error)
 char const*
 Position::parseVariations(Match& match, char const* s, Error& error)
 {
+	error = Not_Implemented; // m_includeMainline/m_includeVariations are never read
+	return s;
 	m_includeVariations = true;
 	return s;
 }
@@ -1819,6 +1916,8 @@ Position::parseVariations(Match& match, char const* s, Error& error)
 char const*
 Position::parseVariationsOnly(Match& match, char const* s, Error& error)
 {
+	error = Not_Implemented; // m_includeMainline/m_includeVariations are never read
+	return s;
 	m_includeMainline = false;
 	return s;
 }
@@ -1889,10 +1988,10 @@ Position::parse(Match& match, char const* s, Error& error)
  		Pair("blackrating",					&Position::parseBlackRating),
 		Pair("btm",								&Position::parseBlackToMove),
 		Pair("castling",						&Position::parseCastling),
-		Pair("cut",								&Position::parseCut),
 		Pair("check",							&Position::parseCheck),
 		Pair("checkcount",					&Position::parseCheckCount),
 		Pair("contactcheck",					&Position::parseContactCheck),
+		Pair("cut",								&Position::parseCut),
 		Pair("doublecheck",					&Position::parseDoubleCheck),
 	 	Pair("elo",								&Position::parseElo),
 		Pair("endgame",						&Position::parseEndGame),
@@ -1979,6 +2078,8 @@ Position::parse(Match& match, char const* s, Error& error)
 
 	error = No_Error;
 
+	bool closed = false;
+
 	do
 	{
 		match.m_isStandard = true;
@@ -1986,8 +2087,10 @@ Position::parse(Match& match, char const* s, Error& error)
 
 		if (*s == ')')
 		{
-			// empty position: match all
+			// the end of this position (an empty one matches all)
 			s = ::skipSpaces(s + 1);
+			closed = true;
+			break;
 		}
 		else if (*s == ':')
 		{
@@ -2015,10 +2118,35 @@ Position::parse(Match& match, char const* s, Error& error)
 			Designator designator;
 			s = designator.parse(s, error);
 			if (error == No_Error)
+			{
 				m_designators->add(designator);
+				match.m_sections |= Match::Section_Positions;
+			}
 		}
 	}
 	while (*s && error == No_Error);
+
+	if (error == No_Error && !closed)
+		error = Right_Parenthesis_Expected;
+
+	if (error == No_Error && (m_transformations & Flip_Color))
+	{
+		// these keep state between positions, which a second (flipped)
+		// evaluation of the same position would corrupt
+		bool stateful = m_relation || m_cutExpression || !m_positionList.empty();
+
+		for (BoardMatchList::const_iterator i = m_boardMatchList.begin(); i != m_boardMatchList.end(); ++i)
+		{
+			if (	dynamic_cast<cql::board::GappedSequence const*>(*i)
+				|| dynamic_cast<logical::Match const*>(*i))
+			{
+				stateful = true;
+			}
+		}
+
+		if (stateful)
+			error = Not_Implemented;
+	}
 
 	if (!match.m_ranges.empty())
 		match.m_isStandard = false;
@@ -2046,38 +2174,9 @@ Position::reset()
 void
 Position::finish(Match& match)
 {
-	// m_boardMatchList;
-	// m_moveMatchList;
-	// m_positionList;
-	// m_designators;
-
-	if (m_transformations == 0)
-		return;
-
-	mstl::auto_ptr<Position> flipped;
-
-	if ((m_transformations & (Flip | Shift | Flip_Color)) == (Flip | Shift | Flip_Color))
-	{
-	}
-
-	if (m_transformations & Flip_Color)
-	{
-		flipped.reset(new Position(*this));
-
-//		BoardMatchList::iterator i = flipped->m_boardMatchList.begin();
-//		BoardMatchList::iterator e = flipped->m_boardMatchList.end();
-
-//		for ( ; i != e; ++i)
-//			(*i)->flipcolor();
-	}
-
-	if (m_transformations & Flip_Vertical)
-	{
-	}
-
-	if (m_transformations & Flip_Horizontal)
-	{
-	}
+	// :flipcolor is applied at match time (Position::match tests the
+	// colour-flipped board as well); the other transformations are refused
+	// by their parsers.
 }
 
 
@@ -2094,15 +2193,17 @@ Position::parseUnsignedRange(char const* s, Error& error, unsigned& min, unsigne
 
 		min = ::strtoul(s, &e, 10);
 
-		s = ::skipSpaces(e);
+		char const* t = ::skipSpaces(e);
 
-		if (!::isdigit(*s))
+		if (!::isdigit(*t))
 		{
-			error = Positive_Integer_Expected;
+			// a single number is an exact count
+			max = min;
+			s = e;
 		}
 		else
 		{
-			max = ::strtoul(s, &e, 10);
+			max = ::strtoul(t, &e, 10);
 
 			if (min > max)
 				mstl::swap(min, max);

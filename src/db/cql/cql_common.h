@@ -105,7 +105,8 @@ namespace error
 		Any_Rank_Not_Allowed_In_Range,
 		Invalid_Fyle_In_Square_Designator,
 		Invalid_Rank_In_Square_Designator,
-		Missing_Rank_In_Square_Designator
+		Missing_Rank_In_Square_Designator,
+		Not_Implemented,
 	};
 
 } // namespace error

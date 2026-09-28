@@ -1069,27 +1069,32 @@ Board::isContactCheck() const
 	if (!isInCheck())
 		return false;
 
-	sq::ID ksq = sq::ID(m_ksq[m_stm]);
+	sq::ID	ksq	= sq::ID(m_ksq[m_stm]);
+	uint64_t	them	= m_occupiedBy[m_stm ^ 1];	// only the opponent gives check
 
 	// a pawn is always giving contact check
-	if (count(PawnAttacks[m_stm][ksq] & m_pawns))
+	if (count(PawnAttacks[m_stm][ksq] & m_pawns & them))
 		return true;
 
 	// a knight is always giving contact check
-	if (count(knightAttacks(ksq) & m_knights))
+	if (count(knightAttacks(ksq) & m_knights & them))
 		return true;
 
 	uint64_t attacks;
 
-	attacks = rankAttacks(ksq) & (m_rooks | m_queens);
+	// a rook or queen next to the king on its rank or file
+	attacks = rookAttacks(ksq) & (m_rooks | m_queens) & them;
 
 	while (attacks)
 	{
-		if (sq::rankDistance(sq::ID(lsbClear(attacks)), ksq) == 1)
+		sq::ID sq = sq::ID(lsbClear(attacks));
+
+		if (sq::rankDistance(sq, ksq) + sq::fyleDistance(sq, ksq) == 1)
 			return true;
 	}
 
-	attacks = bishopAttacks(ksq) & (m_bishops | m_queens);
+	// a bishop or queen diagonally next to the king
+	attacks = bishopAttacks(ksq) & (m_bishops | m_queens) & them;
 
 	while (attacks)
 	{
@@ -1156,7 +1161,8 @@ Board::checkState(variant::Type variant) const
 		if (variant::isThreeCheck(variant) && m_checksGiven[m_stm ^ 1] >= 3)
 			return state |= ThreeChecks;
 
-		if (!(state & Check) || findAnyLegalMove(variant))
+		// no legal move: mate when in check, stalemate otherwise
+		if (findAnyLegalMove(variant))
 			return state;
 
 		state |= (state & Check) ? Checkmate : Stalemate;

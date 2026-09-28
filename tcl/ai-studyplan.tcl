@@ -72,6 +72,10 @@ array set Settings {
 	maxPlies		60
 }
 
+# the game slot the audited games are read into (the merge dialog uses 20
+# and 21, the training set 31), so the user's board is untouched
+variable Slot 30
+
 variable Priv
 array set Priv {
 	running	0
@@ -146,60 +150,29 @@ proc ::ai::studyplan::pattern {facts side classification cpLoss} {
 }
 
 
-# The classifier's opinion on the same features, gated.  <script> gets
-# {ok 1 pattern P source classifier|rules} or {ok 0}.
+# The classifier's opinion on the same features, gated, with the rules as
+# the fallback.  <script> gets {ok 1 pattern P source classifier|rules}.
 proc ::ai::studyplan::classifyPattern {facts side classification cpLoss script} {
-	variable Settings
-
-	if {[llength [info commands ::ai::systemone::enabled]] == 0
-	 || ![::ai::systemone::enabled]} {
-		after 0 [list {*}$script [list ok 1 pattern [pattern $facts $side $classification $cpLoss] source rules]]
-		return
-	}
 	set state "ENGINE VERDICT: $classification, losing $cpLoss centipawns.\n\
 		POSITION FACTS (JSON):\n$facts"
-	set questions [dict create pattern [dict create type choice \
+	set question [dict create type choice \
 		instructions "Why did the side that moved most likely lose material or the advantage here?" \
 		criteria [dict create \
 			tactical   "a piece or pawn was hanging, or a fork, pin or skewer was available" \
 			opening    "the position is still in the opening; development is unfinished" \
 			endgame    "little material is left; this is technique, not tactics" \
 			kingsafety "the king is exposed or under attack" \
-			positional "no tactic was missed; the move slowly gives the position away"]]]
+			positional "no tactic was missed; the move slowly gives the position away"]]
 
-	if {[catch {
-		::ai::systemone::evaluateAsync $state $questions [namespace code [list OnClassified $facts $side $classification $cpLoss $script]]
-	}]} {
-		after 0 [list {*}$script [list ok 1 pattern [pattern $facts $side $classification $cpLoss] source rules]]
-	}
+	::ai::decide pattern $state $question [namespace code [list OnClassified $script]] \
+		-fallback [namespace code [list pattern $facts $side $classification $cpLoss]]
 	return
 }
 
 
-proc ::ai::studyplan::OnClassified {facts side classification cpLoss script result} {
-	variable Settings
-
-	set fallback [pattern $facts $side $classification $cpLoss]
-	if {![dict get $result ok]} {
-		after 0 [list {*}$script [list ok 1 pattern $fallback source rules]]
-		return
-	}
-	if {[catch {
-		set answer [dict get [dict get $result answers] pattern]
-		set label [dict get $answer choice]
-		set confidence [dict get $answer confidence]
-	}]} {
-		after 0 [list {*}$script [list ok 1 pattern $fallback source rules]]
-		return
-	}
-	# the label must be one we offered, and confident enough to trust
-	if {$label ni $mc::Patterns || ![string is double -strict $confidence]
-	 || $confidence < 0.6} {
-		after 0 [list {*}$script [list ok 1 pattern $fallback source rules]]
-		return
-	}
-	after 0 [list {*}$script [list ok 1 pattern $label source classifier]]
-	return
+proc ::ai::studyplan::OnClassified {script decision} {
+	uplevel #0 [list {*}$script [list ok 1 pattern [dict get $decision label] \
+		source [dict get $decision source]]]
 }
 
 
@@ -244,8 +217,6 @@ proc ::ai::studyplan::run {parent args} {
 	set Priv(base) $base
 	set Priv(variant) $variant
 	set Priv(games) $numbers
-	# remember where the user was, and put it back at the end
-	set Priv(saved) [list $base $variant [CurrentNumber] [::scidb::game::position key]]
 
 	Report [Progress [dict create]]
 	after 50 [namespace code NextGame]
@@ -271,7 +242,11 @@ proc ::ai::studyplan::GamesToStudy {player games} {
 	set query {}
 	if {[catch {
 		lassign [::application::assistant::ActiveBase] base variant
-		lassign [::application::assistant::BuildQuery $base $variant $criteria] query summary
+		if {[dict size $criteria]} {
+			# BuildQuery wants every search_games field; CheckArgs fills them in
+			set criteria [dict get [::application::assistant::CheckArgs search_games $criteria] criteria]
+			lassign [::application::assistant::BuildQuery $base $variant $criteria] query summary
+		}
 	}]} {
 		# an unknown player: nothing to study.  With no player asked for, fall
 		# back to the whole database (an empty query restricts nothing).
@@ -299,18 +274,12 @@ proc ::ai::studyplan::GamesToStudy {player games} {
 }
 
 
-proc ::ai::studyplan::CurrentNumber {} {
-	# the board's game number, so the audit can reload it afterwards
-	if {[catch { ::game::number? 9 } number]} { return {} }
-	return $number
-}
-
-
 # ----------------------------------------------------------------------
 # One game at a time; one move at a time inside a game.
 # ----------------------------------------------------------------------
 proc ::ai::studyplan::NextGame {} {
 	variable Priv
+	variable Slot
 	variable mc
 
 	if {!$Priv(running)} { return }
@@ -325,8 +294,10 @@ proc ::ai::studyplan::NextGame {} {
 	update idletasks
 
 	if {[catch {
-		::scidb::game::load $Priv(base) $Priv(variant) $number
-		set Priv(plies) [::scidb::game::query mainline]
+		# a slot of its own: the user's board is untouched
+		if {![::scidb::game::query $Slot open?]} { ::scidb::game::new $Slot }
+		::scidb::game::load $Slot $Priv(base) $Priv(variant) $number
+		set Priv(plies) [::scidb::game::query $Slot mainline]
 	}]} {
 		after 1 [namespace code NextGame]
 		return
@@ -397,10 +368,25 @@ proc ::ai::studyplan::OnPattern {key san fen side class cpLoss verdict result} {
 			ply $Priv(plyIndex) key $key san $san fen $fen side $side \
 			class $class cpLoss $cpLoss \
 			best [expr {[dict exists $verdict bestMove] ? [dict get $verdict bestMove] : ""}] \
-			pattern [dict get $result pattern] source [dict get $result source]]
+			pattern [dict get $result pattern] source [dict get $result source] \
+			structures [Structures $fen]]
 	}
 	after 1 [namespace code NextPly]
 	return
+}
+
+
+# The structure patterns of the position the mistake was played from
+# (CQL, exact): a second dimension next to the pattern label.
+proc ::ai::studyplan::Structures {fen} {
+	if {[llength [info commands ::ai::search::structures]] == 0} { return {} }
+	if {[catch { ::ai::search::structures $fen } found]} { return {} }
+	return $found
+}
+
+
+proc ::ai::studyplan::StructureLabel {id} {
+	return [dict get [::ai::search::pattern $id] label]
 }
 
 
@@ -442,13 +428,54 @@ proc ::ai::studyplan::PlanText {} {
 		lassign $cluster pattern count loss rows
 		lappend lines [format "%s: %d mistake(s), about %.1f pawns in total -- %s" \
 			$pattern $count [expr {$loss / 100.0}] $mc::Advice($pattern)]
+		set where [StructureCounts $rows]
+		if {[dict size $where]} {
+			lappend lines "   positions: [join [lmap {id c} $where { format "%d in %s" $c [StructureLabel $id] }] {, }]"
+		}
 		foreach m [lrange $rows 0 2] {
 			lappend lines [format "   game #%s move %d %s %s: %s (best %s)" \
 				[dict get $m game] [dict get $m ply] [dict get $m side] [dict get $m san] \
 				[dict get $m class] [dict get $m best]]
 		}
 	}
+
+	# the same mistakes by the kind of position they were played in
+	set total [llength $Priv(mistakes)]
+	set by {}
+	foreach m $Priv(mistakes) {
+		if {![dict exists $m structures]} { continue }
+		foreach id [dict get $m structures] {
+			if {![dict exists $by $id]} { dict set by $id {0 0} }
+			lassign [dict get $by $id] c loss
+			dict set by $id [list [incr c] [expr {$loss + [dict get $m cpLoss]}]]
+		}
+	}
+	if {[dict size $by]} {
+		lappend lines "By structure (found by CQL in the position before the move):"
+		foreach id [lsort -command [list apply {{by a b} {
+				expr {[lindex [dict get $by $b] 0] - [lindex [dict get $by $a] 0]}
+			}} $by] [dict keys $by]] {
+			lassign [dict get $by $id] c loss
+			lappend lines [format "   %s: %d of %d mistake(s), about %.1f pawns" \
+				[StructureLabel $id] $c $total [expr {$loss / 100.0}]]
+		}
+	}
 	return [join $lines \n]
+}
+
+
+# {id count ...} of the structures among <rows>, the most frequent first.
+proc ::ai::studyplan::StructureCounts {rows} {
+	set counts {}
+	foreach m $rows {
+		if {![dict exists $m structures]} { continue }
+		foreach id [dict get $m structures] { dict incr counts $id }
+	}
+	set out {}
+	foreach pair [lsort -integer -decreasing -index 1 [lmap {k v} $counts { list $k $v }]] {
+		lappend out {*}$pair
+	}
+	return $out
 }
 
 
@@ -483,15 +510,8 @@ proc ::ai::studyplan::Finish {} {
 	set cancelled $Priv(cancel)
 	set Priv(cancel) 0
 
-	# put the user's game back
-	if {[llength $Priv(saved)]} {
-		lassign $Priv(saved) base variant number key
-		if {[string length $number]} {
-			catch { ::scidb::game::load $base $variant $number }
-			if {[string length $key]} { catch { ::scidb::game::go key $key } }
-		}
-		set Priv(saved) {}
-	}
+	variable Slot
+	catch { ::scidb::game::release $Slot }
 
 	set summary [expr {$cancelled
 		? [format $mc::Cancelled $Priv(gameIndex) [llength $Priv(mistakes)]]

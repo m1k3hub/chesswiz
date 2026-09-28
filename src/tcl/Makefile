@@ -16,7 +16,7 @@ include ../../Makefile.version
 .SUFFIXES: .cpp
 .PRECIOUS:
 
-INCLUDE	= -I. -I../util/libTeXt -I../mstl -I../sys -I../util -I../util/expat -I../util/universalchardet -I../app -I../db -I../db/si3 -I../db/sci -I..
+INCLUDE	= -I. -I../util/libTeXt -I../mstl -I../sys -I../util -I../util/expat -I../util/universalchardet -I../app -I../db -I../db/si3 -I../db/sci -I../db/cql -I..
 ALL_INCLUDE	= $(INCLUDE) $(TCL_INCLUDE) $(TK_INCLUDE) $(ZLIB_INC)
 CXXFLAGS	+= $(OPTIMIZE) $(PROFILING) $(CXX_DEBUG) $(EXTRA_DEBUG_FLAGS) $(SYS_CXXFLAGS) $(SCIDB_VERSION) $(SCIDB_REVISION)
 
@@ -26,6 +26,7 @@ SRC_CXX = \
 	tcl_base.cpp \
 	tcl_board.cpp \
 	tcl_compare.cpp \
+	tcl_cql.cpp \
 	tcl_crosstable.cpp \
 	tcl_database.cpp \
 	tcl_engine.cpp \

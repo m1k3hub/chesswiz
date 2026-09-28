@@ -30,6 +30,7 @@
 #include "tcl_application.h"
 #include "tcl_position.h"
 #include "tcl_ai.h"
+#include "tcl_cql.h"
 
 #include "db_exception.h"
 
@@ -1363,6 +1364,7 @@ tcl::init(Tcl_Interp* ti)
 	player::init(ti);
 	media::init(ti);
 	ai::init(ti);
+	cql::init(ti);
 }
 
 // vi:set ts=3 sw=3:

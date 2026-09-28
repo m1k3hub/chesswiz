@@ -112,48 +112,19 @@ proc ::ai::brief::chooseStance {prep script} {
 		after 0 [list {*}$script [list ok 1 stance $Settings(stance) source setting]]
 		return
 	}
-	if {[llength [info commands ::ai::systemone::enabled]] == 0
-	 || ![::ai::systemone::enabled]} {
-		after 0 [list {*}$script [list ok 1 stance [ruleStance $prep] source rules]]
-		return
-	}
-
-	set questions [dict create stance [dict create type choice \
+	set question [dict create type choice \
 		instructions "Which stance should a player take against this opponent, given the preparation facts?" \
-		criteria $mc::Stances]]
-
-	if {[catch {
-		::ai::systemone::evaluateAsync "PREPARATION FACTS:\n[string range $prep 0 3000]" $questions \
-			[namespace code [list OnStanceChosen $prep $script]]
-	}]} {
-		after 0 [list {*}$script [list ok 1 stance [ruleStance $prep] source rules]]
-	}
+		criteria $mc::Stances]
+	::ai::decide stance "PREPARATION FACTS:\n[string range $prep 0 3000]" $question \
+		[namespace code [list OnStanceChosen $script]] \
+		-fallback [namespace code [list ruleStance $prep]]
 	return
 }
 
 
-proc ::ai::brief::OnStanceChosen {prep script result} {
-	set fallback [ruleStance $prep]
-
-	if {![dict get $result ok]} {
-		after 0 [list {*}$script [list ok 1 stance $fallback source rules]]
-		return
-	}
-	if {[catch {
-		set answer [dict get [dict get $result answers] stance]
-		set label [dict get $answer choice]
-		set confidence [dict get $answer confidence]
-	}]} {
-		after 0 [list {*}$script [list ok 1 stance $fallback source rules]]
-		return
-	}
-	if {![dict exists $mc::Stances $label] || ![string is double -strict $confidence]
-	 || $confidence < 0.6} {
-		after 0 [list {*}$script [list ok 1 stance $fallback source rules]]
-		return
-	}
-	after 0 [list {*}$script [list ok 1 stance $label source classifier]]
-	return
+proc ::ai::brief::OnStanceChosen {script decision} {
+	uplevel #0 [list {*}$script [list ok 1 stance [dict get $decision label] \
+		source [dict get $decision source]]]
 }
 
 
@@ -225,8 +196,23 @@ proc ::ai::brief::Prepare {parent opponent colour prose done} {
 		if {[llength $done]} { catch { {*}$done [dict create ok 0 error [format $mc::NoPlayer $opponent]] } }
 		return
 	}
+	# the kinds of position they reach and how they score there (CQL, exact);
+	# part of the facts before the stance is chosen
+	append prep [StructureFacts $opponent $colour]
 	chooseStance $prep [namespace code [list OnStance $parent $opponent $prep $prose $done]]
 	return
+}
+
+
+proc ::ai::brief::StructureFacts {opponent colour} {
+	if {[llength [info commands ::ai::cql::profile]] == 0} { return "" }
+	if {[catch {
+		lassign [::application::assistant::ActiveBase] base variant
+		set text [::ai::cql::profileText [::ai::cql::profile $base $variant $opponent -colour $colour]]
+	}]} {
+		return ""
+	}
+	return [expr {$text eq "" ? "" : "\n\n$text"}]
 }
 
 

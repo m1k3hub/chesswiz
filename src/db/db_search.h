@@ -39,6 +39,7 @@
 
 namespace db {
 
+class Database;
 class GameInfo;
 class NamebasePlayer;
 class NamebaseEvent;
@@ -378,6 +379,34 @@ private:
 	unsigned m_maxW;
 	unsigned m_minB;
 	unsigned m_maxB;
+};
+
+/// Games whose moves satisfy a CQL query (src/db/cql). The game is decoded
+/// only when the search reaches it, so inside an AND the cheap terms placed
+/// before it narrow what is decoded.
+class SearchCql : public Search
+{
+public:
+
+	SearchCql(Database const& db, mstl::string const& script);
+
+	bool match(GameInfo const& info) const override;
+
+private:
+
+	struct Entry
+	{
+		GameInfo const*	info;
+		unsigned				index;
+
+		bool operator<(Entry const& e) const { return info < e.info; }
+	};
+
+	typedef mstl::vector<Entry> Index;
+
+	Database const&	m_db;
+	mstl::string		m_script;
+	Index					m_index; // GameInfo address -> game index, sorted
 };
 
 } // namespace db

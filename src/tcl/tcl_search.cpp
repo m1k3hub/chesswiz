@@ -31,6 +31,8 @@
 
 #include "db_database.h"
 #include "db_search.h"
+#include "cql_match.h"
+#include "tcl_cql.h"
 #include "db_common.h"
 #include "db_game_info.h"
 
@@ -38,6 +40,7 @@
 
 #include "m_string.h"
 #include "m_assert.h"
+#include "m_exception.h"
 
 #include <tcl.h>
 #include <ctype.h>
@@ -330,7 +333,7 @@ tcl::search::buildSearch(Database const& db, Tcl_Interp* ti, Tcl_Obj* query)
 		"OR", "AND", "NOT", "REMOVE", "RESET", "NULL",
 		"player", "event", "site", "gameevent", "annotator", "position",
 		"playername", "eventname", "sitename", "annotatorname", "eco",
-		"material", "rating", "ecorange", "date", "result",
+		"material", "rating", "ecorange", "date", "result", "cql",
 		nullptr
 	};
 	// Must stay parallel to subcommands[]: usage() iterates until the
@@ -359,13 +362,14 @@ tcl::search::buildSearch(Database const& db, Tcl_Interp* ti, Tcl_Obj* query)
 		"<eco-from> <eco-to>",						// ecorange
 		"<from> <to>",									// date: YYYY, YYYY.MM or YYYY.MM.DD
 		"1-0|0-1|1/2-1/2",							// result
+		"<cql-script>",								// cql
 		nullptr
 	};
 	enum
 	{
 		Or, And, Not, Remove, Reset, Null, Player, Event, Site, GameEvent, Annotator, Position,
 		PlayerName, EventName, SiteName, AnnotatorName, Eco, Material, Rating, EcoRange, DateRange,
-		Result
+		Result, Cql
 	};
 
 	SearchP search;
@@ -615,6 +619,45 @@ tcl::search::buildSearch(Database const& db, Tcl_Interp* ti, Tcl_Obj* query)
 				return search;
 			}
 			search = new SearchResult(id);
+			break;
+		}
+
+		case Cql:
+		{
+			if (objc != 2)
+			{
+				error(CmdSearch, "cql", 0, "a CQL script expected");
+				return search;
+			}
+
+			char const*			script	= Tcl_GetString(objv[1]);
+			::cql::Match		match;
+			::cql::Match::Error	rc			= ::cql::error::No_Error;
+			char const*			end		= script;
+
+			try
+			{
+				end = match.parse(script, rc);
+			}
+			catch (mstl::exception const& exc)
+			{
+				error(CmdSearch, "cql", 0, "CQL parser failure: %s", exc.what());
+				return search;
+			}
+
+			if (rc != ::cql::error::No_Error)
+			{
+				error(	CmdSearch, "cql", 0, "CQL error %s at offset %d",
+						tcl::cql::errorName(rc), int(end - script));
+				return search;
+			}
+			if (match.sections() & ::cql::Match::Section_Comments)
+			{
+				error(CmdSearch, "cql", 0, "CQL comment filters are not supported yet");
+				return search;
+			}
+
+			search = new SearchCql(db, script);
 			break;
 		}
 

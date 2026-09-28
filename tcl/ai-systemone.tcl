@@ -351,6 +351,120 @@ proc ::ai::systemone::Request {state questions args} {
 
 
 # ----------------------------------------------------------------------
+# One gated decision: the shared reliability contract in one place.
+#
+#   ::ai::systemone::valid <question> <answer>
+#       1 when <answer> has the shape <question> asked for: a choice from
+#       the offered criteria with a confidence in [0,1], or a noul in
+#       [0,1]. Anything else is abstention, never a guess.
+#
+#   ::ai::systemone::threshold <feature> <default>
+#       SCIDB_AI_<FEATURE>_MIN_CONFIDENCE, else the (feature, backend)
+#       entry in Thresholds, else <default>. Thresholds are per model
+#       (research note §6.2), so a backend without calibrated numbers
+#       falls back to the caller's default.
+#
+#   ::ai::decide <feature> <state> <question> <script> ?-fallback CMD? ?-threshold T?
+#       Asks one question. <script> gets
+#           {ok 1 label L confidence C source classifier}
+#       when the classifier answered validly and confidently enough, else
+#           {ok 1 label L confidence {} source rules}
+#       with L from evaluating the command prefix CMD, else {ok 0}.
+#       For a noul question L is 1 or 0 (p >= threshold) and C is p.
+#       No classifier, a timeout, an error, a malformed reply or an
+#       unknown label all end in the fallback.
+# ----------------------------------------------------------------------
+
+namespace eval ::ai::systemone {
+	# {feature {backend threshold ...} ...}; empty until calibrated
+	variable Thresholds {}
+}
+
+
+proc ::ai::systemone::valid {question answer} {
+	if {[catch {
+		switch -- [dict get $question type] {
+			choice {
+				set ok [expr {[dict get $answer choice] in [dict keys [dict get $question criteria]]}]
+				set p [dict get $answer confidence]
+			}
+			noul {
+				set ok 1
+				set p [dict get $answer noul]
+			}
+			default { set ok 0 }
+		}
+	}]} {
+		return 0
+	}
+	if {!$ok || ![string is double -strict $p]} { return 0 }
+	return [expr {$p >= 0.0 && $p <= 1.0}]
+}
+
+
+proc ::ai::systemone::threshold {feature default} {
+	variable Thresholds
+	variable Config
+
+	set var SCIDB_AI_[string toupper $feature]_MIN_CONFIDENCE
+	if {[info exists ::env($var)] && [string is double -strict $::env($var)]} {
+		return $::env($var)
+	}
+	if {[dict exists $Thresholds $feature $Config(backend)]} {
+		return [dict get $Thresholds $feature $Config(backend)]
+	}
+	return $default
+}
+
+
+proc ::ai::decide {feature state question script args} {
+	array set opts {-fallback {} -threshold 0.6}
+	array set opts $args
+
+	if {[llength [info commands ::ai::systemone::enabled]] == 0
+	 || ![::ai::systemone::enabled]} {
+		::ai::systemone::Decided $feature $question $script [array get opts] [list ok 0]
+		return
+	}
+	set questions [dict create $feature $question]
+	if {[catch {
+		::ai::systemone::evaluateAsync $state $questions \
+			[list ::ai::systemone::Decided $feature $question $script [array get opts]]
+	}]} {
+		::ai::systemone::Decided $feature $question $script [array get opts] [list ok 0]
+	}
+	return
+}
+
+
+proc ::ai::systemone::Decided {feature question script opts result} {
+	set threshold [threshold $feature [dict get $opts -threshold]]
+	set decision {}
+	if {[dict get $result ok]
+	 && ![catch { dict get $result answers $feature } answer]
+	 && [valid $question $answer]} {
+		if {[dict get $question type] eq "noul"} {
+			set p [dict get $answer noul]
+			set decision [list ok 1 label [expr {$p >= $threshold}] confidence $p source classifier]
+		} elseif {[dict get $answer confidence] >= $threshold} {
+			set decision [list ok 1 label [dict get $answer choice] \
+				confidence [dict get $answer confidence] source classifier]
+		}
+	}
+	if {![llength $decision]} {
+		set fallback [dict get $opts -fallback]
+		if {[llength $fallback] && ![catch { uplevel #0 $fallback } label]} {
+			set decision [list ok 1 label $label confidence {} source rules]
+		} else {
+			set decision [list ok 0]
+		}
+	}
+	after 0 [list {*}$script $decision]
+	return
+}
+
+
+# ----------------------------------------------------------------------
 # Backend metadata for the chooser dialog: a list of dicts
 # {name endpoint model local key}, <local> 1 when the server runs on this
 # machine. Aliases are listed too (jev and vercel share an endpoint); the

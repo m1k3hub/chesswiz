@@ -1677,6 +1677,11 @@ Designator::flipcolor()
 char const*
 Designator::parse(char const* s, Error& error)
 {
+	while (::isspace(*s))
+		++s;
+
+	// the piece part -- one letter or "[...]" -- is [p, q); the squares
+	// start at t
 	char const* p = s;
 	char const* q = s;
 
@@ -1692,7 +1697,6 @@ Designator::parse(char const* s, Error& error)
 		}
 
 		++p;
-		--q;
 
 		if (p == q)
 		{
@@ -1707,7 +1711,7 @@ Designator::parse(char const* s, Error& error)
 
 	uint64_t squares = 0;
 
-	char const* t = s;
+	char const* t = *s == '[' ? q + 1 : q;
 
 	if (*t == '[')
 	{
@@ -1740,6 +1744,7 @@ Designator::parse(char const* s, Error& error)
 	else if (::isDelim(*t))
 	{
 		squares = ~uint64_t(0);
+		s = t;
 	}
 	else
 	{
@@ -1820,6 +1825,11 @@ Designator::parse(char const* s, Error& error)
 				break;
 		}
 	}
+
+	finish();
+
+	while (::isspace(*s))
+		++s;
 
 	return s;
 }

@@ -132,6 +132,7 @@ SOURCES = \
 	app-database-search-material.tcl \
 	app-database-search-rating.tcl \
 	app-database-search-advanced.tcl \
+	app-database-search-nl.tcl \
 	app-database-openingprep.tcl \
 	app-database-repertoire.tcl \
 	app-database-maintenance.tcl \
@@ -162,6 +163,8 @@ SOURCES = \
 	ai-engine.tcl \
 	ai-provider.tcl \
 	ai-systemone.tcl \
+	ai-search.tcl \
+	ai-cql.tcl \
 	ai-narrate.tcl \
 	ai-prompt.tcl \
 	ai-precedent.tcl \

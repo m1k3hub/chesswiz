@@ -94,30 +94,31 @@ tcltest::test plan-clusters-rank {clusters rank by count, then by damage} -body 
 tcltest::test plan-classifier-opinion {a confident classifier label is used, rules otherwise} -setup {
 	::scidb::test::aifeat::stub ::ai::systemone::enabled {{} {return 1}}
 	::scidb::test::aifeat::stub ::ai::systemone::evaluateAsync {{state questions script} {
-		uplevel #0 [list {*}$script $::scidb::test::aifeat::Result]
+		after 0 [list {*}$script $::scidb::test::aifeat::Result]
 	}}
 } -body {
 	set facts [::scidb::test::aifeat::facts middlegame]
-	set confident {}
-	::ai::studyplan::OnClassified $facts white Blunder 300 \
-		{apply {{r} {set ::scidb::test::aifeat::Confident $r}}} \
-		[dict create ok 1 answers [dict create pattern [dict create type choice choice kingsafety confidence 0.81]]]
-	update ;# the answer arrives through the event loop
-	set unsure {}
-	::ai::studyplan::OnClassified $facts white Blunder 300 \
-		{apply {{r} {set ::scidb::test::aifeat::Unsure $r}}} \
-		[dict create ok 1 answers [dict create pattern [dict create type choice choice kingsafety confidence 0.4]]]
-	update
-	set noClassifier {}
+	set out {}
+	foreach reply [list \
+		[dict create ok 1 answers [dict create pattern [dict create type choice choice kingsafety confidence 0.81]]] \
+		[dict create ok 1 answers [dict create pattern [dict create type choice choice kingsafety confidence 0.4]]] \
+		[dict create ok 1 answers [dict create pattern [dict create type choice choice zugzwang confidence 0.99]]] \
+		[dict create ok 0 error down]] {
+		set ::scidb::test::aifeat::Result $reply
+		unset -nocomplain ::scidb::test::aifeat::Got
+		::ai::studyplan::classifyPattern $facts white Blunder 300 {apply {{r} {set ::scidb::test::aifeat::Got $r}}}
+		vwait ::scidb::test::aifeat::Got
+		lappend out [dict get $::scidb::test::aifeat::Got pattern] [dict get $::scidb::test::aifeat::Got source]
+	}
 	proc ::ai::systemone::enabled {} { return 0 }
-	::ai::studyplan::classifyPattern $facts white Blunder 300 {apply {{r} {set ::scidb::test::aifeat::None $r}}}
-	update
-	list [dict get $::scidb::test::aifeat::Confident pattern] [dict get $::scidb::test::aifeat::Confident source] \
-		[dict get $::scidb::test::aifeat::Unsure pattern] [dict get $::scidb::test::aifeat::Unsure source] \
-		[dict get $::scidb::test::aifeat::None source]
+	unset -nocomplain ::scidb::test::aifeat::Got
+	::ai::studyplan::classifyPattern $facts white Blunder 300 {apply {{r} {set ::scidb::test::aifeat::Got $r}}}
+	vwait ::scidb::test::aifeat::Got
+	lappend out [dict get $::scidb::test::aifeat::Got source]
 } -cleanup {
 	::scidb::test::aifeat::restoreAll
-} -result {kingsafety classifier positional rules rules}
+	unset -nocomplain ::scidb::test::aifeat::Got
+} -result {kingsafety classifier positional rules positional rules positional rules rules}
 
 # ----------------------------------------------------------------------
 # The audit run
@@ -146,22 +147,24 @@ tcltest::test brief-stance-rules {the stance rules read the preparation facts} -
 
 tcltest::test brief-stance-gate {a confident classifier stance is used, the rules otherwise} -setup {
 	::scidb::test::aifeat::stub ::ai::systemone::enabled {{} {return 1}}
-	::scidb::test::aifeat::stub ::ai::brief::configure {{args} {return}}
+	::scidb::test::aifeat::stub ::ai::systemone::evaluateAsync {{state questions script} {
+		after 0 [list {*}$script $::scidb::test::aifeat::Result]
+	}}
 } -body {
 	set prep "the weakest line is B23 31%"
-	::ai::brief::OnStanceChosen $prep \
-		{apply {{r} {set ::scidb::test::aifeat::First $r}}} \
-		[dict create ok 1 answers [dict create stance [dict create type choice choice outprepare confidence 0.77]]]
-	update
-	::ai::brief::OnStanceChosen $prep \
-		{apply {{r} {set ::scidb::test::aifeat::Stance $r}}} \
-		[dict create ok 1 answers [dict create stance [dict create type choice choice outprepare confidence 0.3]]]
-	update
-	list [dict get $::scidb::test::aifeat::First stance] [dict get $::scidb::test::aifeat::First source] \
-		[dict get $::scidb::test::aifeat::Stance stance] [dict get $::scidb::test::aifeat::Stance source]
+	set out {}
+	foreach conf {0.77 0.3} {
+		set ::scidb::test::aifeat::Result \
+			[dict create ok 1 answers [dict create stance [dict create type choice choice outprepare confidence $conf]]]
+		unset -nocomplain ::scidb::test::aifeat::Stance
+		::ai::brief::chooseStance $prep {apply {{r} {set ::scidb::test::aifeat::Stance $r}}}
+		vwait ::scidb::test::aifeat::Stance
+		lappend out [dict get $::scidb::test::aifeat::Stance stance] [dict get $::scidb::test::aifeat::Stance source]
+	}
+	set out
 } -cleanup {
 	::scidb::test::aifeat::restoreAll
-	unset -nocomplain ::scidb::test::aifeat::Stance ::scidb::test::aifeat::First
+	unset -nocomplain ::scidb::test::aifeat::Stance
 } -result {outprepare classifier punish_weakness rules}
 
 tcltest::cleanupTests

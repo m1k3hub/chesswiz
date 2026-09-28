@@ -195,6 +195,12 @@ proc ::ai::annotate::prompt {san classification result} {
 	append out ".\nLead with the verdict. Say what went wrong or right in chess terms, \
 and what the better continuation was when there is one."
 	if {$facts ne ""} { append out "\nMOVE FACTS (JSON):\n$facts" }
+	# what the move does and where it leads, in exact vocabulary (CQL)
+	if {[llength [info commands ::ai::cql::themes]]
+	 && ![catch { ::ai::cql::themesText [::ai::cql::themes [dict get $result fen] $san] } themes]
+	 && $themes ne ""} {
+		append out "\n$themes"
+	}
 	return $out
 }
 
@@ -356,7 +362,7 @@ proc ::ai::annotate::NextPly {} {
 proc ::ai::annotate::rules {} {
 	return "You annotate ONE move of a chess game for the game's readers.\
 		Write one or two sentences, no headings and no lists.\
-		Use only what the ENGINE and MOVE FACTS blocks state: the verdict, the\
+		Use only what the ENGINE, MOVE FACTS and THEMES blocks state: the verdict, the\
 		loss and the better move are facts you must not contradict.  Speak in\
 		pawns, never in centipawns (a loss of 10 pawns or more is simply: loses\
 		to a forced mate).\

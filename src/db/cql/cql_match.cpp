@@ -97,6 +97,7 @@ public:
 };
 
 
+namespace { // file-local: cql_match.cpp and cql_position.cpp both define logical::And/Or
 namespace logical {
 
 struct And : public Match::Logical
@@ -163,6 +164,7 @@ struct Or : public Match::Logical
 };
 
 } // namespace logical
+} // namespace
 
 
 namespace mstl {
@@ -255,14 +257,7 @@ lengthOfKeyword(char const* s)
 }
 
 
-inline static bool
-matchKeyword(char const* s, char const* word, unsigned len)
-{
-	return *s == ':' && ::strncmp(s + 1, word, len) == 0 && !::isalnum(s[len]);
-}
-
-
-static char const*
+inline static char const*
 parseDate(char const* s, error::Type& error, Date& date)
 {
 	if (!date || (*s != '-' && *s != '+'))
@@ -1121,7 +1116,8 @@ Match::parseEventType(char const* s, Error& error)
 char const*
 Match::parseForAny(char const* s, Error& error)
 {
-	M_ASSERT(!"not yet implemented");
+	error = Not_Implemented;
+	return s;
 	return s;
 }
 
@@ -1318,7 +1314,8 @@ Match::parseIsShuffleChess(char const* s, Error& error)
 char const*
 Match::parseLanguage(char const* s, Error& error)
 {
-	M_ASSERT(!"not yet implemented");
+	error = Not_Implemented;
+	return s;
 	m_isStandard = false;
 	return s;
 }
@@ -1477,7 +1474,7 @@ Match::parsePosition(char const* s, Error& error)
 	{
 		mstl::auto_ptr<Position> position(new Position);
 		s = position->parse(*this, s, error);
-		if (error != No_Error)
+		if (error == No_Error)
 		{
 			position->finish(*this);
 			addPosition(position.release());
@@ -2041,11 +2038,11 @@ Match::parse(char const* s, Error& error)
 		Pair("player",					&Match::parsePlayer),
 		Pair("plycount",				&Match::parsePlyCount),
 		Pair("position",				&Match::parsePosition),
+		Pair("positionnumber",		&Match::parseStartPosition),
 		Pair("rating",					&Match::parseRating),
 		Pair("result",					&Match::parseResult),
 		Pair("round",					&Match::parseRound),
 		Pair("site",					&Match::parseSite),
-		Pair("positionnumber",		&Match::parseStartPosition),
 		Pair("termination",			&Match::parseTermination),
 		Pair("timemode",				&Match::parseTimeMode),
 		Pair("title",					&Match::parseTitle),
@@ -2067,13 +2064,15 @@ Match::parse(char const* s, Error& error)
 
 	error = No_Error;
 
+	s = ::skipSpaces(s);
+
 	if (*s == '(')
 	{
-		s = ::skipSpaces(s);
+		s = ::skipSpaces(s + 1);
 
-		if (::matchKeyword(s, "match", 5))
+		if (::strncmp(s, "match", 5) == 0 && !::isalnum(s[5]))
 		{
-			s = ::skipSpaces(s + 6);
+			s = ::skipSpaces(s + 5);
 
 			while (*s == ':' || *s == '(')
 			{
@@ -2081,19 +2080,23 @@ Match::parse(char const* s, Error& error)
 				{
 					char const* t = ::skipSpaces(s + 1);
 
-					if (t - s != 8 || ::strncmp(s, "position", 8) != 0)
+					if (::strncmp(t, "position", 8) != 0 || ::isalnum(t[8]))
 					{
 						error = Keyword_Position_Expected;
 						return s;
 					}
 
 					mstl::auto_ptr<Position> position(new Position);
-					position->parse(*this, t, error);
+					s = position->parse(*this, t + 8, error);
 
 					if (error != No_Error)
 						return s;
 
+					position->finish(*this);
 					addPosition(position.release());
+					// a position list is matched against positions, even when
+					// none of its filters says so (:contactcheck, :terminal, ...)
+					m_sections |= Section_Positions;
 				}
 				else
 				{
@@ -2110,9 +2113,9 @@ Match::parse(char const* s, Error& error)
 
 					if (error != No_Error)
 						return s;
-
-					s = ::skipSpaces(s);
 				}
+
+				s = ::skipSpaces(s);
 			}
 
 			if (*s != ')')
@@ -2138,6 +2141,13 @@ Match::parse(char const* s, Error& error)
 	}
 
 	return s;
+}
+
+
+void
+Match::newGame()
+{
+	reset();
 }
 
 

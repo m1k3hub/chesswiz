@@ -25,7 +25,16 @@
 // ======================================================================
 
 #include "db_search.h"
+#include "db_database.h"
 #include "db_game_info.h"
+
+#include "cql/cql_game_matcher.h"
+#include "cql/cql_match.h"
+
+#include "m_algorithm.h"
+#include "m_exception.h"
+
+#include <stdlib.h>
 #include "db_namebase_entry.h"
 
 #include "m_utility.h"
@@ -416,6 +425,64 @@ SearchRating::match(GameInfo const& info) const
 	}
 
 	return false;
+}
+
+
+static int
+compareEntries(void const* lhs, void const* rhs)
+{
+	// only the addresses matter, which is all Entry::operator< compares
+	GameInfo const* a = *static_cast<GameInfo const* const*>(lhs);
+	GameInfo const* b = *static_cast<GameInfo const* const*>(rhs);
+	return a < b ? -1 : (b < a ? 1 : 0);
+}
+
+
+SearchCql::SearchCql(Database const& db, mstl::string const& script)
+	:m_db(db)
+	,m_script(script)
+{
+	unsigned n = db.countGames();
+
+	m_index.resize(n);
+
+	for (unsigned i = 0; i < n; ++i)
+	{
+		m_index[i].info = &db.gameInfo(i);
+		m_index[i].index = i;
+	}
+
+	if (n > 1)
+		::qsort(m_index.begin(), n, sizeof(Entry), compareEntries);
+}
+
+
+bool
+SearchCql::match(GameInfo const& info) const
+{
+	Entry key = { &info, 0 };
+	Index::const_iterator i = mstl::lower_bound(m_index.begin(), m_index.end(), key);
+
+	if (i == m_index.end() || i->info != &info)
+		return false;
+
+	// a fresh matcher per game: nested position lists keep match counts
+	cql::Match match;
+	cql::Match::Error error;
+
+	try
+	{
+		match.parse(m_script.c_str(), error);
+
+		if (error != cql::error::No_Error)
+			return false;
+
+		return cql::matchGame(m_db, m_db.variant(), i->index, match) >= 0;
+	}
+	catch (mstl::exception const&)
+	{
+		return false; // a matcher failure is no match, never a broken search
+	}
 }
 
 // vi:set ts=3 sw=3:

@@ -321,5 +321,86 @@ tcltest::test systemone-autostart-explicit {an explicit backend is never discove
 	::ai::systemone::configure -backend off
 } -result {1 plumb}
 
+# --- ::ai::decide: one gated decision -------------------------------------
+
+proc ::scidb::test::s1::decide {question args} {
+	variable Decision
+	unset -nocomplain Decision
+	::ai::decide verdict "some state" $question {set ::scidb::test::s1::Decision} {*}$args
+	return [wait ::scidb::test::s1::Decision]
+}
+
+set ::scidb::test::s1::Verdict {type choice criteria {bug "a defect" noise "harmless"}}
+
+tcltest::test systemone-valid {only answers of the asked shape are valid} -body {
+	set c $::scidb::test::s1::Verdict
+	set n {type noul}
+	list [::ai::systemone::valid $c {choice noise confidence 0.8}] \
+		[::ai::systemone::valid $c {choice zugzwang confidence 0.8}] \
+		[::ai::systemone::valid $c {choice noise confidence 1.5}] \
+		[::ai::systemone::valid $c {choice noise confidence high}] \
+		[::ai::systemone::valid $c {choice noise}] \
+		[::ai::systemone::valid $n {noul 0.3}] \
+		[::ai::systemone::valid $n {noul -0.1}] \
+		[::ai::systemone::valid $n {choice noise confidence 0.8}] \
+		[::ai::systemone::valid {type score criteria {a b}} {score 1 confidence 0.5}]
+} -result {1 0 0 0 0 1 0 0 0}
+
+tcltest::test systemone-decide-gate {confident answers decide; unsure, unknown and absent ones fall back} -setup {
+	::scidb::test::s1::start [list \
+		[::scidb::test::s1::choice noise 0.9] \
+		[::scidb::test::s1::choice noise 0.4] \
+		[::scidb::test::s1::choice zugzwang 0.99] \
+		{500 {oops}}]
+} -body {
+	set q $::scidb::test::s1::Verdict
+	set out {}
+	foreach i {1 2 3 4} {
+		lappend out [::scidb::test::s1::decide $q -fallback {string cat bug}]
+	}
+	::scidb::test::s1::stop
+	lappend out [::scidb::test::s1::decide $q -fallback {string cat bug}]
+	lappend out [::scidb::test::s1::decide $q]
+} -result {{ok 1 label noise confidence 0.9 source classifier} {ok 1 label bug confidence {} source rules} {ok 1 label bug confidence {} source rules} {ok 1 label bug confidence {} source rules} {ok 1 label bug confidence {} source rules} {ok 0}}
+
+tcltest::test systemone-decide-noul {a noul decides yes or no at the threshold} -setup {
+	::scidb::test::s1::start [list \
+		{200 {{"answers":{"verdict":{"type":"noul","noul":0.35}}}}}]
+} -body {
+	list [::scidb::test::s1::decide {type noul} -threshold 0.3] \
+		[::scidb::test::s1::decide {type noul} -threshold 0.5]
+} -cleanup {
+	::scidb::test::s1::stop
+} -result {{ok 1 label 1 confidence 0.35 source classifier} {ok 1 label 0 confidence 0.35 source classifier}}
+
+tcltest::test systemone-threshold {environment, then the per-backend table, then the default} -setup {
+	set saved $::ai::systemone::Thresholds
+	::ai::systemone::configure -backend kev
+} -body {
+	set out [list [::ai::systemone::threshold verdict 0.6]]
+	set ::ai::systemone::Thresholds {verdict {kev 0.8 plumb 0.5}}
+	lappend out [::ai::systemone::threshold verdict 0.6]
+	set ::env(SCIDB_AI_VERDICT_MIN_CONFIDENCE) 0.9
+	lappend out [::ai::systemone::threshold verdict 0.6]
+	set ::env(SCIDB_AI_VERDICT_MIN_CONFIDENCE) junk
+	lappend out [::ai::systemone::threshold verdict 0.6]
+} -cleanup {
+	unset -nocomplain ::env(SCIDB_AI_VERDICT_MIN_CONFIDENCE)
+	set ::ai::systemone::Thresholds $saved
+	::ai::systemone::configure -backend off
+} -result {0.6 0.8 0.9 0.8}
+
+tcltest::test systemone-triage-unknown-label {a label that was not offered never settles a group} -setup {
+	::scidb::test::s1::triageSetup
+	lassign [lmap g [::application::triage::groups] { lindex $g 0 }] noise bug
+	::scidb::test::s1::start [list [::scidb::test::s1::choice harmless 0.95]]
+} -body {
+	set result [::scidb::test::s1::triage "\[{\"id\":\"$noise\",\"verdict\":\"noise\"},{\"id\":\"$bug\",\"verdict\":\"environment\"}\]"]
+	list [dict get $result triaged] [string match "*settled by the classifier*" [dict get $result summary]]
+} -cleanup {
+	::scidb::test::s1::stop
+	::scidb::test::s1::triageCleanup
+} -result {2 0}
+
 ::tcltest::cleanupTests
 return

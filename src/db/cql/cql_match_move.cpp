@@ -124,7 +124,9 @@ MoveTo::match(Board const& board, Move const& move, Variant variant)
 	{
 		uint64_t pos = set1Bit(move.to());
 
-		switch (move.captured())
+		// the designator names what stood on the target square: the
+		// captured piece, or an empty square
+		switch (move.isCapture() ? move.captured() : db::piece::None)
 		{
 			case db::piece::King:	return bool(pos & m_designator.kings(board.notToMove()));
 			case db::piece::Queen:	return bool(pos & m_designator.queens(board.notToMove()));

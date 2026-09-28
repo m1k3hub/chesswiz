@@ -418,8 +418,10 @@ AttackCount::AttackCount(Designator const& fst, Designator const& snd, unsigned 
 	,m_fst(fst)
 	,m_snd(snd)
 {
-	m_color[White] = bool(m_fst.pieces(White)) && bool(m_snd.pieces(Black));
-	m_color[Black] = bool(m_fst.pieces(Black)) && bool(m_snd.pieces(White));
+	// the side with designated attackers, when there is anything to attack:
+	// designated opponent pieces, or designated empty squares
+	m_color[White] = bool(m_fst.pieces(White)) && (bool(m_snd.pieces(Black)) || bool(m_snd.empty()));
+	m_color[Black] = bool(m_fst.pieces(Black)) && (bool(m_snd.pieces(White)) || bool(m_snd.empty()));
 }
 
 
@@ -433,10 +435,15 @@ AttackCount::match(GameInfo const& info, Board const& board, Variant variant, un
 	if (m_color[sideToMove])
 	{
 		uint64_t attackers	= m_fst.pieces(board, sideToMove);
-		uint64_t affected		= m_snd.pieces(board, board.notToMove());
+		// the designated opponent pieces, and the designated empty squares
+		// ("attackcount k [A.] 0": the king attacks no white piece and no
+		// empty square -- it is smothered)
+		uint64_t affected		= m_snd.pieces(board, board.notToMove()) | (m_snd.empty() & board.empty());
 
-		while (attackers)
-			n += count(board.attacks(sideToMove, lsbClear(attackers)) & affected);
+		// Board::attacks(color, square) are the pieces of <color> attacking
+		// <square>, so count the (attacker, target) pairs from the targets
+		while (affected)
+			n += count(board.attacks(sideToMove, lsbClear(affected)) & attackers);
 	}
 
 	return result(n);
@@ -644,7 +651,7 @@ GappedSequence::~GappedSequence() { ::deleteAll(m_list.begin(), m_list.end()); }
 cql::Position&
 GappedSequence::pushBack()
 {
-	m_list.push_back();
+	m_list.push_back(new cql::Position);
 	return *m_list.back();
 }
 

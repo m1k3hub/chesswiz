@@ -90,6 +90,8 @@ set AIAnnotateGame			"AI: &Annotate Game..."
 set AIStudyPlan				"AI: &Study Plan..."
 set AIOpponentBrief			"AI: Opponent &Brief..."
 set AIFactCheck				"AI: Fact-Check &Annotations"
+set AITrainingSet			"AI: Training Set from &Games"
+set AICheckResults			"AI: Check Game &Results"
 set DownloadGames				"Download &Games from the Internet..."
 
 # Tools
@@ -508,6 +510,30 @@ if {0} {
 			-underline [IncrUL $ul] \
 			-image $::icon::16x16::none \
 			-command [list ::ai::studyplan::run .application] \
+			;
+	}
+
+	### training set from the database's games (CQL + engine) ##############
+	if {[llength [info commands ::ai::cql::training]]} {
+		lassign [::tk::UnderlineAmpersand $mc::AITrainingSet] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [namespace code [list RunAI [list ::ai::cql::training .application]]] \
+			;
+	}
+
+	### results that contradict how the game ended (CQL) ####################
+	if {[llength [info commands ::ai::cql::qualityReport]]} {
+		lassign [::tk::UnderlineAmpersand $mc::AICheckResults] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [namespace code [list RunAI [list ::ai::cql::qualityReport .application]]] \
 			;
 	}
 
@@ -1030,6 +1056,14 @@ proc setFullscreen {flag} {
 
 proc fullscreen? {} {
 	return [set [namespace current]::Fullscreen]
+}
+
+
+# Run an AI action from the menu; its error is shown, not raised.
+proc RunAI {cmd} {
+	if {[catch { {*}$cmd } err]} {
+		::dialog::error -parent .application -message $err
+	}
 }
 
 

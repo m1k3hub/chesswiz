@@ -101,6 +101,9 @@ public:
 	/// Use only if move section is involved.
 	bool match(db::Board const& board, db::Move const& move, db::variant::Type variant);
 
+	/// Use this method before each game: position match counts start over.
+	void newGame();
+
 	/// Use this method after starting a variation. Returns false if
 	/// variation cannot match.
 	bool beginVariation();

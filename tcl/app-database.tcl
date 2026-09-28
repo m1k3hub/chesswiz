@@ -1574,6 +1574,13 @@ proc PopupMenu {parent x y {base ""}} {
 					-command [namespace code [list OpenAdvancedSearch $top $base $Vars(variant)]] \
 					-state $state \
 					;
+				$maint add command \
+					-label " $mc::PlainSearch..." \
+					-image $::icon::16x16::none \
+					-compound left \
+					-command [namespace code [list OpenPlainSearch $top $base $Vars(variant)]] \
+					-state $state \
+					;
 			}
 		}
 

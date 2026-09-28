@@ -26,7 +26,9 @@ SRC_CXX = \
 	cql/cql_match_board.cpp \
 	cql/cql_match_info.cpp \
 	cql/cql_match_move.cpp \
+	cql/cql_game_matcher.cpp \
 	cql/cql_match_relation.cpp \
+	cql/cql_piece_type_designator.cpp \
 	cql/cql_position.cpp \
 	cql/cql_relation.cpp \
 	db_annotation.cpp \

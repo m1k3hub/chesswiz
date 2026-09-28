@@ -284,7 +284,15 @@ proc ::application::triage::OnClassifiedImpl {todo keep result} {
 		Escalate [concat $keep [list $g] $todo]
 		return
 	}
-	set answer [dict get [dict get $result answers] verdict]
+	variable Classes
+	set question [dict create type choice criteria $Classes]
+	if {[catch { dict get $result answers verdict } answer]
+	 || ![::ai::systemone::valid $question $answer]} {
+		# a malformed answer or a label we did not offer: the model decides
+		lappend keep $g
+		Classify $todo $keep
+		return
+	}
 	set verdict [dict get $answer choice]
 	set confidence [dict get $answer confidence]
 	set Priv(opinion,$id) [format "%s %.2f" $verdict $confidence]
