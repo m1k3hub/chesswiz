@@ -64,9 +64,7 @@ proc ::ai::language::detect {text script} {
 		return
 	}
 
-	set question [dict create type choice \
-		instructions "In which language is this chess annotation written?" \
-		criteria $::ai::language::Criteria]
+	set question [Question]
 
 	::ai::decide language $text $question $script -fallback [namespace code Unknown]
 	return
@@ -75,6 +73,16 @@ proc ::ai::language::detect {text script} {
 
 proc ::ai::language::Unknown {} {
 	return yy
+}
+
+
+# The classifier question, in one place so calibration asks exactly what
+# production asks.
+proc ::ai::language::Question {} {
+	variable Criteria
+	return [dict create type choice \
+		instructions "In which language is this chess annotation written?" \
+		criteria $Criteria]
 }
 
 # vi:set ts=3 sw=3:

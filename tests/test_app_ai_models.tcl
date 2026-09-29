@@ -248,7 +248,7 @@ tcltest::test aimodels-dialog-saves-classifier {picking a classifier in the dial
 		rename ::scidb::test::aimodels::realModels ::ai::provider::ollamaModels
 		list $rows [winfo exists $dlg] 			$::application::ai::Settings(classifier) [::ai::systemone::describe]
 	}
-} -result {{auto off kev simple-jev plumb jev} 0 plumb {plumb (plumb-4b-v5 at http://127.0.0.1:8090/v1/systemone)}}
+} -result {{auto off kev simple-jev plumb jev typesafe} 0 plumb {plumb (plumb-4b-v5 at http://127.0.0.1:8090/v1/systemone)}}
 
 tcltest::test aimodels-help-lists-flags {--help documents the AI flags} -body {
 	set exe [file join [file dirname [info nameofexecutable]] tkscidb-beta]

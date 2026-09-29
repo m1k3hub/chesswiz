@@ -88,6 +88,17 @@ proc ::scidb::test::s1::wait {var} {
 }
 
 
+tcltest::test provider-tls-sni {the https handler passes the host as the SNI server name} -body {
+	catch { package require tls }
+	rename ::tls::socket ::scidb::test::s1::realTlsSocket
+	proc ::tls::socket {args} { set ::scidb::test::s1::TlsArgs $args ; return fake-socket }
+	set result [::ai::provider::tlsSocket api.typesafe.ai 443]
+	set args $::scidb::test::s1::TlsArgs
+	rename ::tls::socket {}
+	rename ::scidb::test::s1::realTlsSocket ::tls::socket
+	list $result $args
+} -result {fake-socket {-servername api.typesafe.ai api.typesafe.ai 443}}
+
 tcltest::test systemone-body {questions are encoded in the /v1/systemone shape} -setup {
 	::ai::systemone::configure -backend kev
 } -body {
@@ -120,7 +131,29 @@ tcltest::test systemone-backends {kev and simple-jev presets; off disables; bad 
 		[catch { ::ai::systemone::configure -backend gpt } err] $err \
 		[catch { ::ai::systemone::body x {q {type choice}} } err] $err \
 		[catch { ::ai::systemone::evaluate x {q {type noul}} } err] $err
-} -result {{http://127.0.0.1:8000/v1/systemone Qwen/Qwen3.5-0.8B secret} {https://ai-gateway.vercel.sh/typesafe/v1/systemone typesafe-ai/jev} {http://127.0.0.1:8009/v1/systemone kev-latest} 0 1 {unknown System One backend 'gpt' (kev, simple-jev, plumb, jev, vercel, auto or off)} 1 {question 'q': a choice question needs criteria} 1 {no System One backend is configured}}
+} -result {{http://127.0.0.1:8000/v1/systemone Qwen/Qwen3.5-0.8B secret} {https://ai-gateway.vercel.sh/typesafe/v1/systemone typesafe-ai/jev} {http://127.0.0.1:8009/v1/systemone kev-latest} 0 1 {unknown System One backend 'gpt' (kev, simple-jev, plumb, jev, vercel, typesafe, auto or off)} 1 {question 'q': a choice question needs criteria} 1 {no System One backend is configured}}
+
+tcltest::test systemone-env-overrides {presets and probe order are overridable by the environment} -body {
+	set savedBackends $::ai::systemone::Backends
+	set savedOrder $::ai::systemone::ProbeOrder
+	foreach v {SCIDB_AI_PLUMB_URL SCIDB_AI_PLUMB_MODEL SCIDB_AI_PROBE_ORDER} {
+		set existed($v) [info exists ::env($v)]
+		set prior($v) [expr {$existed($v) ? $::env($v) : ""}]
+	}
+	set ::env(SCIDB_AI_PLUMB_URL) http://127.0.0.1:1234/v1/systemone
+	set ::env(SCIDB_AI_PLUMB_MODEL) custom-model
+	set ::env(SCIDB_AI_PROBE_ORDER) plumb,kev
+	::ai::systemone::ApplyEnv
+	set url [dict get $::ai::systemone::Backends plumb endpoint]
+	set model [dict get $::ai::systemone::Backends plumb model]
+	set order $::ai::systemone::ProbeOrder
+	set ::ai::systemone::Backends $savedBackends
+	set ::ai::systemone::ProbeOrder $savedOrder
+	foreach v {SCIDB_AI_PLUMB_URL SCIDB_AI_PLUMB_MODEL SCIDB_AI_PROBE_ORDER} {
+		if {$existed($v)} { set ::env($v) $prior($v) } else { unset -nocomplain ::env($v) }
+	}
+	list $url $model $order
+} -result {http://127.0.0.1:1234/v1/systemone custom-model {plumb kev}}
 
 tcltest::test systemone-evaluate {evaluate posts the request and returns the answers} -setup {
 	::scidb::test::s1::start [list [::scidb::test::s1::choice noise 0.8]]
@@ -475,7 +508,7 @@ tcltest::test systemone-event-rule {the rule buckets the games; the rest is uncl
 	file delete -force $::scidb::test::s1::Dir
 } -result {4 1 1 1 1 {Time controls of 4 game(s): classical 1, blitz 1, bullet 1, unclear 1.}}
 
-tcltest::test systemone-event-classifier {the classifier settles the games the rule cannot} -setup {
+tcltest::test systemone-event-rule-only {the residual is unclear; the classifier is not consulted} -setup {
 	set f [::scidb::test::s1::eventFixture]
 	::scidb::test::s1::start [list [::scidb::test::s1::answer event_type rapid 0.9]]
 } -body {
@@ -488,7 +521,7 @@ tcltest::test systemone-event-classifier {the classifier settles the games the r
 	::scidb::test::s1::stop
 	::scidb::db::close $f
 	file delete -force $::scidb::test::s1::Dir
-} -result {1 0 1}
+} -result {0 1 0}
 
 tcltest::test systemone-event-assistant {event_types goes through CheckArgs and answers} -setup {
 	set f [::scidb::test::s1::eventFixture]
@@ -506,6 +539,47 @@ tcltest::test systemone-event-assistant {event_types goes through CheckArgs and 
 } -result {{player {} games 500} {player {} games 50} 1 {games must be an integer between 1 and 10000} later:}
 
 # --- comment language tagging (tcl/ai-language.tcl) ------------------------
+
+tcltest::test systemone-player-select {the classifier picks a roster candidate; code copies the row} -setup {
+	::scidb::test::s1::start [list [::scidb::test::s1::answer q "Carlsen, Magnus" 0.9]]
+} -body {
+	::application::assistant::SelectPlayer "magnus carlsen" \
+		{{1 {Carlsen, Magnus} 100} {2 {Carlsen, M.} 5}}
+} -cleanup {
+	::scidb::test::s1::stop
+} -result {1 {Carlsen, Magnus}}
+
+tcltest::test systemone-player-none {none of the candidates -> the caller keeps its fallback} -setup {
+	::scidb::test::s1::start [list [::scidb::test::s1::answer q none 0.9]]
+} -body {
+	::application::assistant::SelectPlayer "someone else" \
+		{{1 {Carlsen, Magnus} 100} {2 {Carlsen, M.} 5}}
+} -cleanup {
+	::scidb::test::s1::stop
+} -result {}
+
+tcltest::test systemone-player-lowconfidence {a weak pick is an abstention} -setup {
+	::scidb::test::s1::start [list [::scidb::test::s1::answer q "Carlsen, M." 0.2]]
+} -body {
+	::application::assistant::SelectPlayer "carlsen m" \
+		{{1 {Carlsen, Magnus} 100} {2 {Carlsen, M.} 5}}
+} -cleanup {
+	::scidb::test::s1::stop
+} -result {}
+
+tcltest::test systemone-player-threshold {a pick below the measured gate is an abstention} -setup {
+	::scidb::test::s1::start [list [::scidb::test::s1::answer q "Carlsen, Magnus" 0.7]]
+} -body {
+	::application::assistant::SelectPlayer "carlsen" \
+		{{1 {Carlsen, Magnus} 100} {2 {Carlsen, M.} 5}}
+} -cleanup {
+	::scidb::test::s1::stop
+} -result {}
+
+tcltest::test systemone-player-off {no classifier -> the caller keeps its fallback} -body {
+	::ai::systemone::configure -backend off
+	::application::assistant::SelectPlayer "magnus" {{1 {Carlsen, Magnus} 100}}
+} -result {}
 
 tcltest::test systemone-language-rule {scripts decide; Latin and shared scripts defer to the classifier} -body {
 	list [::ai::language::Rule "1. e4 e5"] \

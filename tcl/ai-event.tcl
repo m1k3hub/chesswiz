@@ -1,31 +1,22 @@
 # ======================================================================
-# AI: event-type bucketing (System One)
+# AI: event-type bucketing
 # ======================================================================
 # A game's kind of time control, from its PGN tags: a deterministic rule
-# first (parse TimeControl, then the Event/Site/Round words), and the
-# bounded classifier only for the games the rule cannot place. The result
-# is a count per class over the latest games of the active database (or a
-# player's games); nothing is written.
+# parses the TimeControl, then the Event/Site/Round words. Games the rule
+# cannot place are "unclear" and the classifier is deliberately *not*
+# consulted: the rule resolves every tag that carries the information, and
+# the residual's honest answer is "unclear" (naming an event's time control
+# from its name alone is world-knowledge recall; see
+# TYPESAFE_API_EXPERIMENT.md). The result is a count per class over the
+# latest games of the active database (or a player's games); nothing is
+# written.
 #
 # Firewall: this only buckets *time controls*; it never speaks about the
-# board. With no classifier the rule alone answers (and anything it cannot
-# place is "unclear"), so the feature degrades to a deterministic report.
+# board, and the feature is entirely deterministic.
 # ======================================================================
 
 namespace eval ::ai::event {
 	variable Classes {classical rapid blitz bullet correspondence simul training unclear}
-
-	# The classifier's answer set (choice criteria name -> description).
-	variable Criteria [dict create \
-		classical      "a slow game, at least 30 minutes per side" \
-		rapid          "about 10 to 30 minutes per side" \
-		blitz          "about 3 to 10 minutes per side" \
-		bullet         "under 3 minutes per side" \
-		correspondence "played over days (ICCF, XFCC, email)" \
-		simul          "a simultaneous exhibition" \
-		training       "a training or puzzle game" \
-		unclear        "the tags do not say"]
-
 	variable Priv
 }
 
@@ -85,11 +76,6 @@ proc ::ai::event::Rule {tags} {
 	return ""
 }
 
-proc ::ai::event::Unknown {} {
-	return unclear
-}
-
-
 # The deterministic bucket of each game, as a class -> count dict. Used where
 # the caller is synchronous (the study plan report) and no classifier is
 # available; games the rule cannot place count as "unclear".
@@ -146,8 +132,10 @@ proc ::ai::event::GamesToProfile {base variant player max} {
 
 
 # Run the profile. -done is called with the dict
-# {games N classes {class count} classified {state class} source {text/classifier}}
-# once the (deduplicated) classifier pass has finished.
+# {games N classes {class} classified {state class}}. Entirely
+# deterministic: the rule decides, and anything it cannot place is
+# "unclear". The callback is still scheduled (never called inline), so a
+# caller may register -done before it can be called.
 proc ::ai::event::profile {base variant args} {
 	variable Priv
 
@@ -177,40 +165,9 @@ proc ::ai::event::profile {base variant args} {
 	set Priv(byGame) $byGame
 	set Priv(games) [llength $games]
 
-	Classify $unique 0 {} $opts(-done)
-	return
-}
-
-
-proc ::ai::event::Classify {states index map done} {
-	if {$index >= [llength $states]} {
-		# always resolve asynchronously: a caller may have registered -done
-		# before it can be called (the assistant resolves a pending token)
-		after 0 [list ::ai::event::Finish $map $done]
-		return
-	}
-
-	set state [lindex $states $index]
-	set question [dict create type choice \
-		instructions "Which kind of chess game is this, judging only from its PGN tags?" \
-		criteria $::ai::event::Criteria]
-
-	::ai::decide event_type $state $question \
-		[namespace code [list OnClassified $states $index $map $done]] \
-		-fallback [namespace code Unknown]
-	return
-}
-
-
-proc ::ai::event::OnClassified {states index map done decision} {
-	set state [lindex $states $index]
-	set label unclear
-	if {[dict get $decision ok]} {
-		set label [dict get $decision label]
-		if {$label ni $::ai::event::Classes} { set label unclear }
-	}
-	dict set map $state $label
-	Classify $states [expr {$index + 1}] $map $done
+	set map {}
+	foreach state $unique { dict set map $state unclear }
+	after 0 [list ::ai::event::Finish $map $opts(-done)]
 	return
 }
 

@@ -61,6 +61,16 @@ proc ::ai::comment::Other {} {
 }
 
 
+# The classifier question, in one place so calibration asks exactly what
+# production asks.
+proc ::ai::comment::Question {} {
+	variable Criteria
+	return [dict create type choice \
+		instructions "What is this chess annotation comment about?" \
+		criteria $Criteria]
+}
+
+
 # <script> gets {ok 1 label KIND confidence C source S}.
 proc ::ai::comment::kind {text script} {
 	set rule [Rule $text]
@@ -70,11 +80,7 @@ proc ::ai::comment::kind {text script} {
 		return
 	}
 
-	set question [dict create type choice \
-		instructions "What is this chess annotation comment about?" \
-		criteria $::ai::comment::Criteria]
-
-	::ai::decide comment_kind $text $question $script -fallback [namespace code Other]
+	::ai::decide comment_kind $text [Question] $script -fallback [namespace code Other]
 	return
 }
 
