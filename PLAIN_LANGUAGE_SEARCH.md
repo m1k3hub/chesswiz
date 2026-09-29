@@ -102,8 +102,8 @@ and add aliases for the keyword stage.
   extension (`:accumulate` / `:sumrange` / `:reset`) is implemented. Still
   `Not_Implemented`: the tagging keywords (`:forany` / `:tagmatch`), the
   sequence-relative keywords (`:preceding` / `:following` / `:inside` /
-  `:endmost` / `:exclude`), `:pretransformmatchcount`, `:language`, and the
-  relation-list keywords.
+  `:endmost`), `:pretransformmatchcount`, `:language`, and the relation-list
+  keywords.
 - **Progress and cancel** for CQL searches over very large databases: the view search
   is synchronous today.
 - **Learning from edits:** record the user's corrections to the form (Wave 4 threshold

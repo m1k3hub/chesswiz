@@ -150,6 +150,11 @@ judge.
 
 ## Fixed on the way
 
+- **`:exclude`.** A game is excluded (at the whole-game level) when an
+  excluded sub-position list matches anywhere, or (bare form) when the
+  containing position list matches. It does not affect the containing
+  position's own result; the walker continues past a hit until the game ends.
+
 - **The accumulator extension.** `:accumulate <name>` counts the
   transformations for which the position list matches, `:sumrange <name> <range>`
   gates on the accumulated value, and `:reset <name>` clears it. The accumulator

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — CQL :exclude
+
+- `:exclude` is implemented (`src/db/cql/cql_position.cpp`, `cql_match.cpp`,
+  `cql_game_matcher.cpp`): with an argument, the game is excluded when the
+  sub-position list matches anywhere; without one, the game is excluded when
+  the containing position list matches. It never influences the containing
+  position's own result. The game walker keeps going after a hit while an
+  exclude is pending, and rejects the game at the end.
+- Tests: `tests/test_app_cqlfeatures.tcl` (`cqlf-exclude`); app suite 294/294,
+  Tcl and C++ suites green.
+
 ## Unreleased — CQL accumulator extension
 
 - The CQL-S accumulator keywords are implemented (`src/db/cql/cql_position.cpp`):

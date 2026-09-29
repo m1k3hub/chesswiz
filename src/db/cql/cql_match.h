@@ -108,6 +108,12 @@ public:
 	/// Use this method before each game: position match counts start over.
 	void newGame();
 
+	/// :exclude sets this when the excluded sub-position matches; the game
+	/// walker keeps going after a hit while an exclude is pending.
+	void exclude();
+	bool excluded() const;
+	bool hasExclude() const;
+
 	/// Use this method after starting a variation. Returns false if
 	/// variation cannot match.
 	bool beginVariation();
@@ -211,6 +217,8 @@ private:
 	bool						m_isTopLevel;
 	bool						m_not;
 	bool						m_includesVariations;
+	bool						m_excluded;
+	bool						m_hasExclude;
 	bool						m_initialOnly;
 	bool						m_finalOnly;
 	bool						m_isStandard;

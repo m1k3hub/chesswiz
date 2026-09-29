@@ -193,6 +193,9 @@ private:
 	PositionList			m_positionList;
 	Relation*				m_relation;
 	Position*				m_cutExpression;
+	Position*				m_excludeExpression;
+	bool						m_excludeSelf;
+	CutFunc					m_excludeFunc;
 	board::Designators*	m_designators;
 	board::State*			m_state;
 	board::State*			m_finalState;

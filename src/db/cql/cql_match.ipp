@@ -38,6 +38,9 @@ inline unsigned Match::sections() const { return m_sections; }
 inline void Match::setInitial()	{ m_initialOnly = true; }
 inline void Match::setFinal()		{ m_finalOnly = true; }
 inline void Match::cut()			{ m_proceed = false; }
+inline void Match::exclude()		{ m_excluded = true; }
+inline bool Match::excluded() const	{ return m_excluded; }
+inline bool Match::hasExclude() const	{ return m_hasExclude; }
 
 } // namespace cql
 

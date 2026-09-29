@@ -29,6 +29,7 @@ struct GameConsumer : public db::Consumer
 		,m_moves(match.sections() & cql::Match::Section_Moves)
 		,m_moveOk(!m_moves)
 		,m_variations(match.includesVariations())
+		,m_excludes(match.hasExclude())
 	{
 		setVariant(variant);
 	}
@@ -68,7 +69,8 @@ struct GameConsumer : public db::Consumer
 		if (!m_variations && variationLevel() > 0)
 			return true;
 		position(variationLevel() > 0 ? cql::flags::IsInsideVariation : 0u);
-		if (m_hit >= 0)
+		// keep going after a hit while an :exclude may still fire
+		if (m_hit >= 0 && !m_excludes)
 			return false;
 		if (m_moves)
 			m_moveOk = m_match.match(board(), move, m_variant);
@@ -94,6 +96,7 @@ struct GameConsumer : public db::Consumer
 	bool					m_moves;
 	bool					m_moveOk;
 	bool					m_variations;
+	bool					m_excludes;
 };
 
 } // namespace
@@ -115,7 +118,7 @@ cql::matchGame(Database const& db, variant::Type variant, unsigned index, Match&
 
 	GameConsumer consumer(match, info, variant);
 	db.exportGame(index, consumer);
-	return consumer.m_hit;
+	return match.excluded() ? -1 : consumer.m_hit;
 }
 
 // vi:set ts=3 sw=3:

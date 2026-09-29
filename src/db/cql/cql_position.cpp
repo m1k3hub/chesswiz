@@ -344,6 +344,8 @@ parseRange(char const* s, error::Type& error, float& lower, float& upper)
 Position::Position()
 	:m_relation(0)
 	,m_cutExpression(0)
+	,m_excludeExpression(0)
+	,m_excludeSelf(false)
 	,m_designators(new cql::board::Designators)
 	,m_state(0)
 	,m_finalState(0)
@@ -366,6 +368,7 @@ Position::~Position()
 {
 	delete m_designators;
 	delete m_relation;
+	delete m_excludeExpression;
 	::deleteAll(m_boardMatchList.begin(), m_boardMatchList.end());
 	::deleteAll(m_moveMatchList.begin(), m_moveMatchList.end());
 }
@@ -995,6 +998,14 @@ Position::match(GameInfo const& info, Board const& board, Variant variant, unsig
 	--g_accumulatorDepth;
 	cql::setActiveShift(outerFyle, outerRank);
 
+	// :exclude excludes the whole game (it never influences this position's
+	// own result); the sub-form fires when its position list matches anywhere,
+	// the bare form fires when this position list matches
+	if (m_excludeExpression && m_excludeExpression->match(info, board, variant, flags))
+		m_excludeFunc();
+	else if (m_excludeSelf && match)
+		m_excludeFunc();
+
 	if (match)
 		++m_matchCount;
 
@@ -1491,8 +1502,37 @@ Position::parseEvaluation(Match& match, char const* s, Error& error)
 char const*
 Position::parseExclude(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // TODO
+	char const* t = ::skipSpaces(s);
+
+	if (*t == '(')
+	{
+		char const* u = ::skipSpaces(t + 1);
+		char const* e = ::skipToDelim(u);
+
+		if (e - u != 8 || ::strncmp(u, "position", 8) != 0)
+		{
+			error = Keyword_Position_Expected;
+			return s;
+		}
+
+		u = ::skipSpaces(e);
+
+		mstl::auto_ptr<Position> pos(new Position);
+		s = pos->parse(match, u, error);
+
+		if (error == No_Error)
+			m_excludeExpression = pos.release();
+	}
+	else
+	{
+		m_excludeSelf = true;
+	}
+
+	m_excludeFunc = CutFunc(&Match::exclude, &match);
+
+	match.m_hasExclude = true;
 	match.m_isStandard = false;
+	match.m_sections |= Match::Section_Positions;
 	return s;
 }
 

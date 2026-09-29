@@ -169,6 +169,16 @@ tcltest::test cqlf-accumulate {count the matching transformations; :sumrange gat
 	set out
 } -result {{0 1 1} {0 1 1} {0 1 1} {0 0 1} {0 0 1} {0 0 1} {0 1 1}}
 
+tcltest::test cqlf-exclude {exclude a game when an excluded position list matches anywhere} -body {
+	set f $::scidb::test::cqlf::Fixture
+	list \
+		[::scidb::cql::search $f Normal {(match (position :check))}] \
+		[::scidb::cql::search $f Normal {(match (position :mate))}] \
+		[::scidb::cql::search $f Normal {(match (position :check :exclude (position :mate)))}] \
+		[::scidb::cql::search $f Normal {(match (position :mate :exclude))}] \
+		[::scidb::cql::search $f Normal {(match (position :mate :exclude (position :mate)))}]
+} -result {{5 6 8 9 10} {5 6 8 9} 10 {} {}}
+
 tcltest::test cqlf-kinds {events and structures} -body {
 	list [::ai::search::patternIds event] [::ai::search::patternIds structure]
 } -result {{checkmate smothered_mate stalemate en_passant underpromotion double_check} {opposite_castling rook_endgame pawn_endgame isolated_queen_pawn opposite_bishops queenless}}

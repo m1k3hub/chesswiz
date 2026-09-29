@@ -541,6 +541,8 @@ Match::Match()
 	:m_isTopLevel(true)
 	,m_not(false)
 	,m_includesVariations(false)
+	,m_excluded(false)
+	,m_hasExclude(false)
 	,m_initialOnly(false)
 	,m_finalOnly(false)
 	,m_isStandard(true)
@@ -555,6 +557,8 @@ Match::Match(bool isTopLevel)
 	:m_isTopLevel(isTopLevel)
 	,m_not(false)
 	,m_includesVariations(false)
+	,m_excluded(false)
+	,m_hasExclude(false)
 	,m_initialOnly(false)
 	,m_finalOnly(false)
 	,m_isStandard(true)
@@ -2149,6 +2153,7 @@ Match::parse(char const* s, Error& error)
 void
 Match::newGame()
 {
+	m_excluded = false;
 	reset();
 }
 
