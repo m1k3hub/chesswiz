@@ -291,6 +291,12 @@ variable Actions {
 		{{"type":"object","properties":{"player":{"type":"string","description":"the player's name or part of it"},"games":{"type":"integer","description":"how many of the latest games to read, default 500"}}}}
 		::application::assistant::DoEventTypes
 	}
+	detect_language {
+		0 0 "detect the language of a comment"
+		"Which language a chess comment is written in: a local classifier over a fixed set (English, German, French, Spanish, Italian, Russian, ... plus 'language independent' for notation-only text). Read-only; it does not change the comment, and the comment editor's Detect button applies the result to the current comment."
+		{{"type":"object","properties":{"text":{"type":"string","description":"the comment text"}},"required":["text"]}}
+		::application::assistant::DoDetectLanguage
+	}
 	training_set {
 		1 0 "build a training set from the games of the database"
 		"Build puzzles from the active database's games: Scidb's CQL matcher finds positions just before a checkmate, a smothered mate, a double check or an underpromotion, and the chess engine keeps only those whose solution is its best move and clearly the only good one. The puzzles are written to a PGN file under the user directory, which the user can open as a database to train. 'pattern' limits it to one kind; 'player' to one player's games; 'max' bounds the number of puzzles (default 20). It runs in the background; the Report pane shows the progress and the result."
@@ -968,6 +974,11 @@ proc ::application::assistant::CheckArgs {name cargs} {
 				error "games must be an integer between 1 and 10000"
 			}
 			return [dict create player [string trim [OptArg $cargs player ""]] games $games]
+		}
+		detect_language {
+			set text [Arg $cargs text]
+			if {[string trim $text] eq ""} { error "text is required" }
+			return [dict create text $text]
 		}
 		training_set {
 			set pattern [OptArg $cargs pattern ""]
@@ -2665,6 +2676,26 @@ proc ::application::assistant::DoEventTypes {player games} {
 
 proc ::application::assistant::EventTypesDone {token profile} {
 	Resolve $token [::ai::event::ProfileText $profile]
+}
+
+
+proc ::application::assistant::DoDetectLanguage {text} {
+	if {[llength [info commands ::ai::language::detect]] == 0} {
+		return "error: the language module is not available"
+	}
+	set token [Later]
+	::ai::language::detect $text [namespace code [list DetectLanguageDone $token]]
+	return $token
+}
+
+
+proc ::application::assistant::DetectLanguageDone {token decision} {
+	if {[dict get $decision ok]} {
+		set code [dict get $decision label]
+		Resolve $token "[::ai::language::Name $code] ($code, source [dict get $decision source])"
+	} else {
+		Resolve $token "the language could not be determined"
+	}
 }
 
 

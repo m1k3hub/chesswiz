@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — AI: comment language tagging (System One, A2)
+
+- New `tcl/ai-language.tcl`: the language of a chess comment. A deterministic
+  rule answers the scripts a Latin heuristic cannot see (Greek, Hebrew, Arabic,
+  Korean, Japanese kana) and leaves Cyrillic/Han/Latin to the bounded
+  classifier (`::ai::decide`, choice, gate 0.6) over a fixed set
+  (English, German, French, ... plus `xx` language-independent and `yy`
+  another language). Read-only.
+- Surfaces: the assistant tool `detect_language {text}`, and *Detect language*
+  in the comment editor's context menu, which carries the neutral (`xx`) text
+  into the detected language slot so the ordinary save path stores it tagged.
+- Tests: `tests/test_app_systemone.tcl` (`systemone-language-rule`,
+  `-detect`, `-rulepath`, `-assistant`). App suite 304/304; Tcl and C++
+  suites stay green.
+
 ## Unreleased — AI: event-type bucketing (System One)
 
 - New `tcl/ai-event.tcl`: a game's kind of time control (classical, rapid,

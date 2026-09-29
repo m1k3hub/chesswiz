@@ -32,6 +32,7 @@ namespace eval mc {
 set CommentBeforeMove		"Comment before move"
 set CommentAfterMove			"Comment after move"
 set ExplainComment			"Explain this comment"
+set DetectLanguage			"Detect language"
 set PrecedingComment			"Preceding comment"
 set TrailingComment			"Trailing comment"
 set Language					"Language"
@@ -443,6 +444,59 @@ proc GetComment {} {
 proc ExplainComment {parent} {
 	variable Vars
 	::application::ai::explainSelection $parent comment [list $Vars(pos)]
+}
+
+
+# A2: detect the language of the comment being edited and, when the current
+# slot is the neutral one, carry its text into the detected language slot.
+proc DetectLanguage {parent} {
+	variable Vars
+
+	if {[llength [info commands ::ai::language::detect]] == 0} { return }
+	set text [PlainComment [GetComment]]
+	if {[string trim $text] eq ""} { return }
+	::ai::language::detect $text [namespace code [list OnDetected $parent]]
+}
+
+
+proc PlainComment {comment} {
+	if {[llength [info commands ::ai::factcheck::plain]]} {
+		catch { return [::ai::factcheck::plain $comment] }
+	}
+	regsub -all {<[^>]*>} $comment " " text
+	return $text
+}
+
+
+proc OnDetected {parent decision} {
+	variable Vars
+
+	if {![dict get $decision ok]} { return }
+	set lang [dict get $decision label]
+	if {$lang eq "" || $lang eq "xx"} { return }
+
+	set source $Vars(lang)
+	if {$source eq $lang} { return }
+
+	set entries [ParseContent $source]
+	set carried {}
+	foreach e $entries {
+		lassign $e code content
+		if {$code eq "" || $code eq $source} { set carried $content }
+	}
+	if {![llength $carried]} { return }
+
+	if {![info exists Vars(tb:$lang)]} {
+		if {[lsearch -exact $Vars(langSet) $lang] < 0} { lappend Vars(langSet) $lang }
+		AddLanguageButton $lang
+	}
+
+	SwitchLanguage $lang
+	set Vars(content:$lang) $carried
+	set Vars(init:$lang) 0
+	SetupComment $lang $carried 1
+	set Vars(content:$source) ""
+	return
 }
 
 
@@ -1518,6 +1572,16 @@ proc PopupMenu {parent} {
 			-label " $mc::ExplainComment" \
 			-state $state \
 			-command [namespace code [list ExplainComment [winfo toplevel $parent]]] \
+			;
+	}
+
+	# A2: detect the language of this comment.
+	if {[llength [info commands ::ai::language::detect]]} {
+		$m add command \
+			-compound left \
+			-image $::icon::16x16::none \
+			-label " $mc::DetectLanguage" \
+			-command [namespace code [list DetectLanguage [winfo toplevel $parent]]] \
 			;
 	}
 	$m add separator

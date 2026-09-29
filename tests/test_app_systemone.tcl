@@ -501,5 +501,49 @@ tcltest::test systemone-event-assistant {event_types goes through CheckArgs and 
 	file delete -force $::scidb::test::s1::Dir
 } -result {{player {} games 500} {player {} games 50} 1 {games must be an integer between 1 and 10000} later:}
 
+# --- comment language tagging (tcl/ai-language.tcl) ------------------------
+
+tcltest::test systemone-language-rule {scripts decide; Latin and shared scripts defer to the classifier} -body {
+	list [::ai::language::Rule "1. e4 e5"] \
+		[::ai::language::Rule "\u041a\u043e\u0440\u043e\u043b\u044c"] \
+		[::ai::language::Rule "\u039f \u03b2\u03b1\u03c3\u03b9\u03bb\u03b9\u03ac\u03c2"] \
+		[::ai::language::Rule "\u05d4\u05de\u05dc\u05da"] \
+		[::ai::language::Rule "\u0627\u0644\u0645\u0644\u0643"] \
+		[::ai::language::Rule "\u30c1\u30a7\u30c3\u30af"] \
+		[::ai::language::Rule "\uccb4\ud06c\uba54\uc774\ud2b8"] \
+		[::ai::language::Rule "\u738b\u624b"] \
+		[::ai::language::Rule "the king is exposed"] \
+		[::ai::language::Rule "\u2658\u2657\u2655"]
+} -result {{} {} el he ar ja ko {} {} xx}
+
+tcltest::test systemone-language-detect {the classifier decides a Latin text} -setup {
+	::scidb::test::s1::start [list [::scidb::test::s1::answer language de 0.9]]
+} -body {
+	set ::scidb::test::s1::Lang {}
+	::ai::language::detect "der K\u00f6nig ist gefangen" {set ::scidb::test::s1::Lang}
+	set r [::scidb::test::s1::wait ::scidb::test::s1::Lang]
+	list [dict get $r label] [dict get $r source]
+} -cleanup {
+	::scidb::test::s1::stop
+} -result {de classifier}
+
+tcltest::test systemone-language-rulepath {a script decides with no request} -body {
+	set ::scidb::test::s1::Lang {}
+	::ai::language::detect "\u039f \u03b2\u03b1\u03c3\u03b9\u03bb\u03b9\u03ac\u03c2" {set ::scidb::test::s1::Lang}
+	set r [::scidb::test::s1::wait ::scidb::test::s1::Lang]
+	list [dict get $r label] [dict get $r source]
+} -result {el rules}
+
+tcltest::test systemone-language-assistant {detect_language checks args and answers} -setup {
+	::scidb::test::s1::start [list [::scidb::test::s1::answer language fr 0.8]]
+} -body {
+	set tok [::application::assistant::DoDetectLanguage "le roi est nu"]
+	list [::application::assistant::CheckArgs detect_language {text "le roi"}] \
+		[catch {::application::assistant::CheckArgs detect_language {}} e] $e \
+		[string range $tok 1 6]
+} -cleanup {
+	::scidb::test::s1::stop
+} -result {{text {le roi}} 1 {missing argument 'text'} later:}
+
 ::tcltest::cleanupTests
 return

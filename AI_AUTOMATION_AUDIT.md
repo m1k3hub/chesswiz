@@ -27,7 +27,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 |---|---|---|---|---|
 | **A. Bounded decisions (System One)** | | | | |
 | A1 | Event-type bucketing | study plan / brief mix blitz with classical (`ai-studyplan.tcl`, `ai-brief.tcl`) | System One `choice` | 🟢 *(shipped as `ai-event.tcl`; study-plan filter remains)* |
-| A2 | Comment language tagging | untagged comments in the multi-language store (`comment.tcl`, `lang`) | System One `choice` | 🟢 |
+| A2 | Comment language tagging | untagged comments in the multi-language store (`comment.tcl`, `lang`) | System One `choice` | 🟢 *(shipped as `ai-language.tcl`)* |
 | A3 | Comment kind facet | comment editor browse/filter (`comment.tcl`) | System One `choice` | 🟢 |
 | A4 | Import doctor | raw importer error list (`app-pgn.tcl`, `import.tcl`) | System One `choice` | 🟢 |
 | A5 | Duplicate-merge arbitration | ambiguous duplicate pairs (`app-database-maintenance.tcl`, `merge.tcl`) | System One `choice` | 🟢 |
@@ -90,9 +90,12 @@ classifier never decides chess truth.
   leans on the event words. The study plan report now *shows* the mix of the
   games it audited; a `-time` *filter* remains.
   (`SYSTEM_ONE_FEATURES.md` §2.1)
-- **A2 Comment language tagging** — `choice` over ISO-639 codes `+ {xx, yy}` for a comment
-  whose language slot is unset (`comment.tcl` already stores `lang`, default `xx`).
-  Fallback: leave untagged. Also feeds CQL's unimplemented `:language` game filter.
+- **A2 Comment language tagging** *shipped* (`tcl/ai-language.tcl`, assistant
+  `detect_language` + the comment editor's "Detect language"). — `choice` over a
+  fixed language set plus `{xx, yy}`; a script rule answers Greek/Hebrew/Arabic/
+  Korean/kana without the classifier. The editor carries the neutral text into
+  the detected slot, so the ordinary save stores it tagged. Fallback: the rule,
+  else undecided (the editor does nothing). Also feeds CQL's `:language` filter.
 - **A3 Comment kind facet** — `choice` over `{opening, tactics, endgame, plan, eval,
   bio, warning, other}`. Fallback: no facet. Enables filtering a database by comment kind.
 - **A4 Import doctor** — `choice` over the importer's error groups → a suggested fix.
