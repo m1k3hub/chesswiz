@@ -43,6 +43,7 @@
 
 #include <ctype.h>
 #include <stdlib.h>
+#include <map>
 
 using namespace cql;
 using namespace cql::error;
@@ -356,6 +357,7 @@ Position::Position()
 	,m_minMoveNumber(0)
 	,m_maxMoveNumber(unsigned(-1))
 	,m_transformations(0)
+	,m_accumulate(false)
 {
 }
 
@@ -883,6 +885,17 @@ collectShifts(uint64_t transformations, mstl::vector<ShiftOffset>& shifts)
 }
 
 
+// The accumulator extension (CQL-S). The map belongs to the board position
+// currently being matched: it is cleared when a new position is reached and is
+// shared by the nested position lists of that position.
+namespace {
+
+std::map<std::string, unsigned> g_accumulators;
+unsigned g_accumulatorDepth = 0;
+
+} // namespace
+
+
 bool
 Position::match(GameInfo const& info, Board const& board, Variant variant, unsigned flags)
 {
@@ -891,7 +904,6 @@ Position::match(GameInfo const& info, Board const& board, Variant variant, unsig
 	if ((flags & flags::IsInsideVariation) ? !m_includeVariations : !m_includeMainline)
 		return m_not;
 
-	bool match = false;
 	bool spatial = m_transformations
 		& (Flip | Flip_Horizontal | Flip_Vertical | Flip_Diagonal | Flip_Off_Diagonal);
 	bool shift = (m_transformations & Shift) != 0;
@@ -914,7 +926,19 @@ Position::match(GameInfo const& info, Board const& board, Variant variant, unsig
 	int outerFyle = cql::activeShiftFyle();
 	int outerRank = cql::activeShiftRank();
 
-	for (unsigned i = 0; i < perms.size() && !match; ++i)
+	// the accumulator map is cleared when a new position is reached; nested
+	// position lists share the map of their surrounding list
+	if (g_accumulatorDepth == 0)
+		g_accumulators.clear();
+	++g_accumulatorDepth;
+
+	if (!m_resetName.empty())
+		g_accumulators[m_resetName] = 0;
+
+	bool			needCount = m_accumulate || !m_sumRanges.empty();
+	unsigned		matches = 0;
+
+	for (unsigned i = 0; i < perms.size(); ++i)
 	{
 		db::Board transformed;
 		db::Board const* src = &board;
@@ -926,26 +950,49 @@ Position::match(GameInfo const& info, Board const& board, Variant variant, unsig
 			src = &transformed;
 		}
 
-		for (unsigned j = 0; j < shifts.size() && !match; ++j)
+		for (unsigned j = 0; j < shifts.size(); ++j)
 		{
 			cql::setActiveShift(outerFyle + shifts[j].fyle, outerRank + shifts[j].rank);
 
-			if (doMatch(info, *src, variant, flags))
-			{
-				match = true;
-			}
-			else if (colorFlip)
+			bool m = doMatch(info, *src, variant, flags);
+
+			if (!m && colorFlip)
 			{
 				db::Board flipped;
 
 				if (::flipColor(*src, variant, flipped))
-					match = doMatch(info, flipped, variant, flags);
+					m = doMatch(info, flipped, variant, flags);
 			}
 
 			cql::clearActiveShift();
+
+			if (m && ++matches == 1 && !needCount)
+				break;
+		}
+
+		if (matches && !needCount)
+			break;
+	}
+
+	if (m_accumulate)
+		g_accumulators[m_accumulateName] += matches;
+
+	bool sumsOk = true;
+
+	for (unsigned k = 0; k < m_sumRanges.size(); ++k)
+	{
+		unsigned value = g_accumulators[m_sumRanges[k].name];
+
+		if (value < m_sumRanges[k].min || value > m_sumRanges[k].max)
+		{
+			sumsOk = false;
+			break;
 		}
 	}
 
+	bool match = matches > 0 && sumsOk;
+
+	--g_accumulatorDepth;
 	cql::setActiveShift(outerFyle, outerRank);
 
 	if (match)
@@ -1069,8 +1116,20 @@ Position::toggleNot()
 char const*
 Position::parseAccumulate(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // TODO
-	return s;
+	s = ::skipSpaces(s);
+
+	char const* t = ::skipToDelim(s);
+
+	if (t == s)
+	{
+		error = Missing_Parameter;
+		return s;
+	}
+
+	m_accumulateName.assign(s, t - s);
+	m_accumulate = true;
+	match.m_sections |= Match::Section_Positions;
+	return t;
 }
 
 
@@ -2203,9 +2262,20 @@ Position::parseRepetition(Match& match, char const* s, Error& error)
 char const*
 Position::parseReset(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // TODO
+	s = ::skipSpaces(s);
+
+	char const* t = ::skipToDelim(s);
+
+	if (t == s)
+	{
+		error = Missing_Parameter;
+		return s;
+	}
+
+	m_resetName.assign(s, t - s);
 	match.m_isStandard = false;
-	return s;
+	match.m_sections |= Match::Section_Positions;
+	return t;
 }
 
 
@@ -2291,7 +2361,30 @@ Position::parseStalemate(Match& match, char const* s, Error& error)
 char const*
 Position::parseSumRange(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // TODO
+	s = ::skipSpaces(s);
+
+	char const* t = ::skipToDelim(s);
+
+	if (t == s)
+	{
+		error = Missing_Parameter;
+		return s;
+	}
+
+	SumRange range;
+	range.name.assign(s, t - s);
+
+	unsigned min(0), max(0);
+	s = parseUnsignedRange(::skipSpaces(t), error, min, max);
+
+	if (error == No_Error)
+	{
+		range.min = min;
+		range.max = max;
+		m_sumRanges.push_back(range);
+	}
+
+	match.m_sections |= Match::Section_Positions;
 	return s;
 }
 

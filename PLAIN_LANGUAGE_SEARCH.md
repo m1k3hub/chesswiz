@@ -98,8 +98,12 @@ and add aliases for the keyword stage.
   fixture games first. The **square-colour designators** `L` (light) and `D` (dark) are
   implemented (`[L?]`, `[D1]`, `BL?`, `b[D?]`), and so are the spatial **flip** and
   **shift** transformations, so colour-of-square and "anywhere on the board, reflected
-  or translated" patterns need no manual enumeration. The accumulator extension
-  (`:accumulate` / `:sumrange` / `:reset`) is still `Not_Implemented`.
+  or translated" patterns need no manual enumeration, and the accumulator
+  extension (`:accumulate` / `:sumrange` / `:reset`) is implemented. Still
+  `Not_Implemented`: the tagging keywords (`:forany` / `:tagmatch`), the
+  sequence-relative keywords (`:preceding` / `:following` / `:inside` /
+  `:endmost` / `:exclude`), `:pretransformmatchcount`, `:language`, and the
+  relation-list keywords.
 - **Progress and cancel** for CQL searches over very large databases: the view search
   is synchronous today.
 - **Learning from edits:** record the user's corrections to the form (Wave 4 threshold

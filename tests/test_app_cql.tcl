@@ -69,10 +69,10 @@ tcltest::test cql-parse-errors {errors carry a name and an offset; nothing throw
 } -result {{ok 0 error Left_Parenthesis_Expected offset 0} {ok 0 error Keyword_Match_Expected offset 1} {ok 0 error Invalid_Keyword offset 17} {ok 0 error Right_Parenthesis_Expected offset 23}}
 
 tcltest::test cql-parse-unimplemented {half-built keywords are refused, not silently ignored} -body {
-	lmap k {accumulate sumrange following} {
+	lmap k {following} {
 		dict get [::scidb::cql::parse "(match (position :$k))"] error
 	}
-} -result {Not_Implemented Not_Implemented Not_Implemented}
+} -result {Not_Implemented}
 
 
 # --- position filters ---------------------------------------------------------

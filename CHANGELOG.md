@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — CQL accumulator extension
+
+- The CQL-S accumulator keywords are implemented (`src/db/cql/cql_position.cpp`):
+  `:accumulate <name>` counts the transformations of the position list that
+  match, `:sumrange <name> <range>` matches only when the accumulated value is
+  in range, and `:reset <name>` clears the accumulator. The map is cleared when
+  a new board position is reached and is shared by nested position lists, so the
+  documented "count the passed pawns" and "at least three white and two black
+  passers" forms work.
+- Tests: `tests/test_app_cqlfeatures.tcl` (`cqlf-accumulate`); app suite
+  293/293, Tcl and C++ suites green.
+
 ## Unreleased — CQL transformation keywords (flips and shifts)
 
 - The spatial flip and translation keywords are implemented

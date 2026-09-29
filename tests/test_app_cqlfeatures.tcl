@@ -149,6 +149,26 @@ tcltest::test cqlf-shifts {translation transformations (designator shift)} -body
 	set out
 } -result {{1 0 0 0} {1 1 0 0} {1 0 1 0} {1 0 0 1} {1 0 0 1} {1 0 0 0} {1 1 1 1} {1 1 1 1}}
 
+tcltest::test cqlf-accumulate {count the matching transformations; :sumrange gates} -body {
+	set P0 {4k3/8/8/8/8/8/8/6K1 w - - 0 1}          ;# no rook
+	set P2 {4k2R/8/8/8/8/8/8/R5K1 w - - 0 1}        ;# rooks a1, h8
+	set P3 {4k2R/8/8/8/3R4/8/8/R5K1 w - - 0 1}      ;# rooks a1, d4, h8
+	set fens [list $P0 $P2 $P3]
+	set out {}
+	foreach q {
+		{(match (position Rd4 :shift))}
+		{(match (position Rd4 :shift :accumulate rooks))}
+		{(match (position Rd4 :shift :accumulate rooks :sumrange rooks 2 3))}
+		{(match (position Rd4 :shift :accumulate rooks :sumrange rooks 3 8))}
+		{(match (position :reset rooks Rd4 :shift :accumulate rooks :sumrange rooks 3 8))}
+		{(match (position :sumrange rooks 3 8 :and ((position Rd4 :shift :accumulate rooks))))}
+		{(match (position :sumrange rooks 2 8 :and ((position Rd4 :shift :accumulate rooks))))}
+	} {
+		lappend out [lmap fen $fens { ::scidb::cql::position $fen $q }]
+	}
+	set out
+} -result {{0 1 1} {0 1 1} {0 1 1} {0 0 1} {0 0 1} {0 0 1} {0 1 1}}
+
 tcltest::test cqlf-kinds {events and structures} -body {
 	list [::ai::search::patternIds event] [::ai::search::patternIds structure]
 } -result {{checkmate smothered_mate stalemate en_passant underpromotion double_check} {opposite_castling rook_endgame pawn_endgame isolated_queen_pawn opposite_bishops queenless}}

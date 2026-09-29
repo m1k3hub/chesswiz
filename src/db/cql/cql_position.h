@@ -30,6 +30,8 @@
 #include "m_vector.h"
 #include "m_function.h"
 
+#include <string>
+
 namespace db
 {
 	class GameInfo;
@@ -205,6 +207,21 @@ private:
 	unsigned					m_minMoveNumber;
 	unsigned					m_maxMoveNumber;
 	unsigned					m_transformations;
+
+	// Accumulator extension (CQL-S): :accumulate counts the transformations
+	// for which the position list matches, :sumrange tests the accumulated
+	// value, :reset clears it.
+	struct SumRange
+	{
+		std::string	name;
+		unsigned		min;
+		unsigned		max;
+	};
+
+	bool						m_accumulate;
+	std::string				m_accumulateName;
+	std::string				m_resetName;
+	mstl::vector<SumRange>	m_sumRanges;
 };
 
 } // namespace cql

@@ -150,6 +150,12 @@ judge.
 
 ## Fixed on the way
 
+- **The accumulator extension.** `:accumulate <name>` counts the
+  transformations for which the position list matches, `:sumrange <name> <range>`
+  gates on the accumulated value, and `:reset <name>` clears it. The accumulator
+  map is per board position and shared across the nested position lists, so
+  "count the passed pawns" works.
+
 - **The transformation keywords.** The spatial flips (`:flip*`) and the
   translations (`:shift*`) are implemented. Flips are applied to the board (a
   reflection is a bijection, so a pattern D reflected by F matches board B iff
