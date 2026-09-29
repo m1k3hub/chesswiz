@@ -150,6 +150,13 @@ judge.
 
 ## Fixed on the way
 
+- **`:variations` and `:variationsonly`.** The game consumer skipped every variation
+  (`cql_game_matcher.cpp`), and both keywords were refused with `Not_Implemented`. It
+  now walks the variations when a position list asks for them and passes
+  `flags::IsInsideVariation`; `Position::match` applies the include/exclude gate
+  (`:variations` = main line + variations, `:variationsonly` = variations only, no
+  keyword = main line only). A query without either keyword behaves exactly as before.
+
 - **Square-colour designators.** CQL's special `L` (light) and `D` (dark) square
   designators are now parsed (`src/db/cql/cql_designator.cpp`): `[L?]`/`[D1]` and the
   bare `BL?`/`b[D?]` forms. The `opposite_bishops` pattern no longer enumerates the
@@ -172,8 +179,10 @@ judge.
 
 ## Limits
 
-- **Main line only:** CQL visits the main line, so a structure reached only in a
-  variation doesn't count.
+- **Variations:** the matcher visits the main line by default. A position list with
+  `:variations` searches the main line and the variations, `:variationsonly` only the
+  variations. Without either keyword, a structure reached only in a variation does not
+  count.
 - **Speed:** `profile` and `quality` decode games synchronously. The profile is capped
   at the latest 200 games, while quality reads the whole database once per check. Both
   are fine for club-size databases and slow for millions of games (see the progress

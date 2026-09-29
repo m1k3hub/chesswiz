@@ -1,7 +1,13 @@
 # Changelog
 
-## Unreleased — CQL square-colour designators
+## Unreleased — CQL variations and square-colour designators
 
+- CQL's `:variations` and `:variationsonly` position keywords are implemented
+  (`src/db/cql/cql_game_matcher.cpp`, `cql_position.cpp`): the game consumer walks
+  the variations when a position list asks for them and tags the positions with
+  `IsInsideVariation`; the position list decides whether to accept the main line,
+  the variations, or both. A query without either keyword is unchanged (main line
+  only). This clears the "Main line only" limit in `CQL_FEATURES.md`.
 - CQL's special square-colour designators are implemented in the matcher
   (`src/db/cql/cql_designator.cpp`): `L` selects the light squares and `D` the
   dark squares, in the bracketed (`[L?]`, `[D1]`) and bare (`BL?`, `b[D?]`)
@@ -10,8 +16,8 @@
   `Not_Implemented` blocker named in `PLAIN_LANGUAGE_SEARCH.md`, and the
   `opposite_bishops` pattern now uses `BL?`/`bD?` instead of enumerating all
   32 light and dark squares.
-- Tests: `tests/test_app_cqlfeatures.tcl` (`cqlf-squarecolour`,
-  `cqlf-colour-error`).
+- Tests: `tests/test_app_cql.tcl` (`cql-variations`),
+  `tests/test_app_cqlfeatures.tcl` (`cqlf-squarecolour`, `cqlf-colour-error`).
 
 ## Unreleased — 3D Chessboard Viewer (v2/v3: themes, vector pieces, hardware OpenGL, WebGL)
 

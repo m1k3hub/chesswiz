@@ -17,7 +17,8 @@ class Match;
 /// of <db> satisfies <match>, or -1. A query with only game-information
 /// filters answers 0 for a matching game. <match> should be freshly parsed:
 /// nested position lists keep match counts that Match::newGame does not
-/// reach. Positions inside variations are not visited.
+/// reach. Positions inside variations are visited only when the query uses
+/// :variations or :variationsonly.
 int matchGame(db::Database const& db, db::variant::Type variant, unsigned index, Match& match);
 
 } // namespace cql

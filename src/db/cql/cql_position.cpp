@@ -558,6 +558,11 @@ flipMove(db::Board const& flipped, db::Move const& move, db::Move& result)
 bool
 Position::match(GameInfo const& info, Board const& board, Variant variant, unsigned flags)
 {
+	// :variations includes the main line and the variations, :variationsonly
+	// only the variations; a position list without either skips variations.
+	if ((flags & flags::IsInsideVariation) ? !m_includeVariations : !m_includeMainline)
+		return m_not;
+
 	bool match = doMatch(info, board, variant, flags);
 
 	if (!match && (m_transformations & Flip_Color))
@@ -1906,9 +1911,8 @@ Position::parseVariant(Match& match, char const* s, Error& error)
 char const*
 Position::parseVariations(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // m_includeMainline/m_includeVariations are never read
-	return s;
 	m_includeVariations = true;
+	match.m_includesVariations = true;
 	return s;
 }
 
@@ -1916,9 +1920,9 @@ Position::parseVariations(Match& match, char const* s, Error& error)
 char const*
 Position::parseVariationsOnly(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // m_includeMainline/m_includeVariations are never read
-	return s;
 	m_includeMainline = false;
+	m_includeVariations = true;
+	match.m_includesVariations = true;
 	return s;
 }
 

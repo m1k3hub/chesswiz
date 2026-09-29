@@ -75,6 +75,10 @@ public:
 	/// Returns whether given expression complies with CQL standard.
 	bool isStandard() const;
 
+	/// Returns true if any position list also searches the variations
+	/// (:variations or :variationsonly).
+	bool includesVariations() const;
+
 	/// Use this method after match of initial board position. Returns false if never matching.
 	bool proceed() const;
 
@@ -206,6 +210,7 @@ private:
 
 	bool						m_isTopLevel;
 	bool						m_not;
+	bool						m_includesVariations;
 	bool						m_initialOnly;
 	bool						m_finalOnly;
 	bool						m_isStandard;

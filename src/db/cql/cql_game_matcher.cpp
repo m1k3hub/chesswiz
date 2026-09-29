@@ -28,6 +28,7 @@ struct GameConsumer : public db::Consumer
 		,m_hit(-1)
 		,m_moves(match.sections() & cql::Match::Section_Moves)
 		,m_moveOk(!m_moves)
+		,m_variations(match.includesVariations())
 	{
 		setVariant(variant);
 	}
@@ -53,16 +54,20 @@ struct GameConsumer : public db::Consumer
 	void beginMoveSection() override									{}
 	void endMoveSection(result::ID) override						{ position(cql::flags::IsFinalPosition); }
 	void beginVariation() override									{}
-	void endVariation(bool) override									{}
+	void endVariation(bool isEmpty) override
+	{
+		if (m_variations && !isEmpty)
+			position(cql::flags::IsInsideVariation);
+	}
 
 	// board() is the position before <move>: test it, then decide whether
 	// <move> satisfies the move filters for the position it leads to.
 	// False stops decoding.
 	bool visit(Move const& move)
 	{
-		if (variationLevel() > 0)
+		if (!m_variations && variationLevel() > 0)
 			return true;
-		position(0);
+		position(variationLevel() > 0 ? cql::flags::IsInsideVariation : 0u);
 		if (m_hit >= 0)
 			return false;
 		if (m_moves)
@@ -73,15 +78,12 @@ struct GameConsumer : public db::Consumer
 
 	// A position is a candidate only when the move that led to it passed
 	// the move filters (so with move filters the start position is not).
+	// Variations are visited only for a :variations/:variationsonly query;
+	// Position::match applies the include/exclude gate itself.
 	void position(unsigned flags)
 	{
-		if (	m_hit < 0
-			&& variationLevel() == 0
-			&& m_moveOk
-			&& m_match.match(m_info, board(), m_variant, flags))
-		{
+		if (m_hit < 0 && m_moveOk && m_match.match(m_info, board(), m_variant, flags))
 			m_hit = int(m_ply);
-		}
 	}
 
 	cql::Match&			m_match;
@@ -91,6 +93,7 @@ struct GameConsumer : public db::Consumer
 	int					m_hit;
 	bool					m_moves;
 	bool					m_moveOk;
+	bool					m_variations;
 };
 
 } // namespace

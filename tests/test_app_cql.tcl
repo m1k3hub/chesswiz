@@ -25,7 +25,7 @@ proc ::scidb::test::cql::openFixture {} {
 	foreach {result moves} {
 		0-1     {1. f3 e5 2. g4 Qh4# 0-1}
 		1-0     {1. e4 c6 2. d4 d5 3. Nc3 dxe4 4. Nxe4 Nd7 5. Qe2 Ngf6 6. Nd6# 1-0}
-		1/2-1/2 {1. e4 e5 2. Nf3 Nc6 1/2-1/2}
+		1/2-1/2 {1. e4 e5 (1... c5 2. Nf3 d6) 2. Nf3 Nc6 1/2-1/2}
 		1/2-1/2 {1. e4 Nf6 2. e5 d5 3. exd6 exd6 4. Nf3 Be7 5. Bc4 O-O 6. O-O 1/2-1/2}
 	} {
 		incr n
@@ -69,10 +69,10 @@ tcltest::test cql-parse-errors {errors carry a name and an offset; nothing throw
 } -result {{ok 0 error Left_Parenthesis_Expected offset 0} {ok 0 error Keyword_Match_Expected offset 1} {ok 0 error Invalid_Keyword offset 17} {ok 0 error Right_Parenthesis_Expected offset 23}}
 
 tcltest::test cql-parse-unimplemented {half-built keywords are refused, not silently ignored} -body {
-	lmap k {flipvertical shift accumulate sumrange following variations variationsonly} {
+	lmap k {flipvertical shift accumulate sumrange following} {
 		dict get [::scidb::cql::parse "(match (position :$k))"] error
 	}
-} -result {Not_Implemented Not_Implemented Not_Implemented Not_Implemented Not_Implemented Not_Implemented Not_Implemented}
+} -result {Not_Implemented Not_Implemented Not_Implemented Not_Implemented Not_Implemented}
 
 
 # --- position filters ---------------------------------------------------------
@@ -120,6 +120,17 @@ tcltest::test cql-flipcolor {either colour: the board is also tested colour-flip
 		[::scidb::test::cql::plies {(match (position :flipcolor :movefrom K))}] \
 		[dict get [::scidb::cql::parse {(match (position :flipcolor :sequence ((position :check) (position :mate))))}] error]
 } -result {{4 11 -1 -1} {-1 11 -1 -1} {4 -1 -1 -1} {-1 -1 -1 10} Not_Implemented}
+
+tcltest::test cql-variations {variations are searched only when asked for} -body {
+	set f $::scidb::test::cql::Fixture
+	list \
+		[::scidb::test::cql::plies {(match (position pd6))}] \
+		[::scidb::test::cql::plies {(match (position :variations pd6))}] \
+		[::scidb::test::cql::plies {(match (position :variationsonly pd6))}] \
+		[::scidb::test::cql::search {(match (position pd6))}] \
+		[::scidb::test::cql::search {(match (position :variations pd6))}] \
+		[::scidb::test::cql::search {(match (position :variationsonly pd6))}]
+} -result {{-1 -1 -1 6} {-1 -1 5 6} {-1 -1 5 -1} 3 {2 3} 2}
 
 # --- move filters -------------------------------------------------------------
 
