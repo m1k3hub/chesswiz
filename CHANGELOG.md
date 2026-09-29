@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — AI: draft a comment in place (C1 / LLM_REACH_PLAN C6)
+
+- The comment editor's context menu gains **"Draft a comment"**: it runs the
+  ordinary grounded pipeline for the current position and puts the drafted text
+  into the editor for review. Nothing is saved — the editor's Accept is still the
+  user's decision, and the claim checker has already audited the text.
+- The grounded generation gains an `-observer` hook (`::application::ai::generate`),
+  so a caller can also use the produced text, not just the report.
+- Tests: `tests/test_app_comment_draft.tcl` (inserts, appends, ignores a failed
+  generation or an empty answer). App suite 313/313; `make -C tests ai-tests`,
+  Tcl and C++ suites green.
+
 ## Unreleased — AI: show your work (B9)
 
 - Every generated report now carries a **Grounding facts** block: the

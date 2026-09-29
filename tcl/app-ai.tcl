@@ -219,8 +219,16 @@ proc ::application::ai::begin {parent title placeholder} {
 # Run the grounded generation for <fen> and render the result in the report
 # pane.  <title> names the report; <placeholder> is shown immediately so the
 # pane never blocks (latency honesty).
+# <args> may carry -observer <cmd>: after the report is rendered the command
+# is called with the result dict, so a caller can also use the text (C1 fills
+# the comment editor from it).
 proc ::application::ai::generate {parent title placeholder fen args} {
 	variable Config
+
+	array set opts [list -observer {}]
+	array set opts $args
+	set forward {}
+	foreach {key value} [array get opts] { if {$key ne "-observer"} { lappend forward $key $value } }
 
 	if {![begin $parent $title $placeholder]} { return }
 
@@ -228,12 +236,12 @@ proc ::application::ai::generate {parent title placeholder fen args} {
 		::ai::provider::configure -name $Config(provider) -model $Config(model) \
 			-timeout 300000 -options [list num_predict $Config(numPredict)]
 		::ai::generate::positionToolsAsync $fen \
-			[namespace code [list ::application::ai::onResult $parent $title]] \
-			-depth $Config(depth) -retries $Config(retries) {*}$args
+			[namespace code [list ::application::ai::onResult $parent $title $opts(-observer)]] \
+			-depth $Config(depth) -retries $Config(retries) {*}$forward
 	} err]} {
 		# prompt construction is synchronous (facts, engine); report its
 		# failure in the pane rather than leaving the placeholder up
-		onResult $parent $title [dict create ok 0 error $err]
+		onResult $parent $title $opts(-observer) [dict create ok 0 error $err]
 	}
 	return
 }
@@ -249,13 +257,14 @@ proc ::application::ai::analyze {parent} {
 }
 
 
-proc ::application::ai::onResult {parent title result} {
+proc ::application::ai::onResult {parent title observer result} {
 	variable Busy
 	set Busy 0
 
 	if {![dict get $result ok]} {
 		::application::ai::showReport $parent "$title (error)" \
 			[toHtml "Generation failed: [dict get $result error]" {} {} 0]
+		if {[llength $observer]} { uplevel #0 [list {*}$observer $result] }
 		return
 	}
 
@@ -265,6 +274,7 @@ proc ::application::ai::onResult {parent title result} {
 	set facts [expr {[dict exists $result facts] ? [dict get $result facts] : ""}]
 	::application::ai::showReport $parent "$title ($state)" \
 		[toHtml [dict get $result text] [dict get $result claims] $evidence 1 $notices $facts]
+	if {[llength $observer]} { uplevel #0 [list {*}$observer $result] }
 	return
 }
 

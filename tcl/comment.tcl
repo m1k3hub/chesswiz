@@ -33,6 +33,7 @@ set CommentBeforeMove		"Comment before move"
 set CommentAfterMove			"Comment after move"
 set ExplainComment			"Explain this comment"
 set DetectLanguage			"Detect language"
+set DraftComment			"Draft a comment"
 set PrecedingComment			"Preceding comment"
 set TrailingComment			"Trailing comment"
 set Language					"Language"
@@ -496,6 +497,38 @@ proc OnDetected {parent decision} {
 	set Vars(init:$lang) 0
 	SetupComment $lang $carried 1
 	set Vars(content:$source) ""
+	return
+}
+
+
+# C1: draft a grounded comment for the current position and put it in the
+# editor for review.  Nothing is saved; Accept is still the user's decision.
+proc DraftComment {parent} {
+	variable Vars
+
+	if {[llength [info commands ::application::ai::generate]] == 0} { return }
+	set fen [::scidb::pos::fen]
+	::application::ai::generate $parent "Draft comment" "Drafting a comment..." $fen \
+		-context "Draft one or two sentences of annotation for this position, in the style of a chess author's database note. Ground every statement in the facts given; name only moves that are legal." \
+		-observer [namespace code [list OnDraft $parent]]
+	return
+}
+
+
+proc OnDraft {parent result} {
+	variable Vars
+
+	if {![dict get $result ok]} { return }
+	set text [string trim [dict get $result text]]
+	if {$text eq ""} { return }
+
+	set lang $Vars(lang)
+	set w $Vars(widget:text:$lang).text
+	if {![winfo exists $w]} { return }
+
+	if {[string length [string trim [$w get 1.0 end-1c]]]} { $w insert end "\n" }
+	$w insert end $text
+	focus $w
 	return
 }
 
@@ -1572,6 +1605,16 @@ proc PopupMenu {parent} {
 			-label " $mc::ExplainComment" \
 			-state $state \
 			-command [namespace code [list ExplainComment [winfo toplevel $parent]]] \
+			;
+	}
+
+	# C1: draft a grounded comment for this position.
+	if {[llength [info commands ::application::ai::generate]]} {
+		$m add command \
+			-compound left \
+			-image $::icon::16x16::none \
+			-label " $mc::DraftComment" \
+			-command [namespace code [list DraftComment [winfo toplevel $parent]]] \
 			;
 	}
 
