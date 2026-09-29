@@ -17,7 +17,8 @@
 # Modes (SCIDB_AI_ARGS):
 #   off      leave the model's arguments alone
 #   shadow   compute the correction and log it; run the model's arguments
-#   active   use the corrected arguments (default); a tool still runs through
+#            (default: active must beat the model on labelled requests first)
+#   active   use the corrected arguments; a tool still runs through
 #            runTool, so CheckArgs, the confirm gate and the tool log all run
 #
 # Environment: SCIDB_AI_ARGS, SCIDB_AI_ARGS_MIN_CONFIDENCE (0.7).
@@ -32,7 +33,7 @@ package require Tcl 8.5
 namespace eval application {
 namespace eval assistant {
 
-variable ArgsMode active
+variable ArgsMode shadow
 variable ArgsThreshold 0.7
 
 if {[info exists ::env(SCIDB_AI_ARGS)] && $::env(SCIDB_AI_ARGS) in {off shadow active}} {
@@ -60,6 +61,26 @@ proc ::application::assistant::enumArgs {name} {
 	set out {}
 	dict for {arg def} $props {
 		if {[dict exists $def enum]} { dict set out $arg [dict get $def enum] }
+	}
+	return $out
+}
+
+
+# The schema's own description of each argument: arg -> text. It says whose
+# value is meant ("the colour the opponent will play"), which the argument
+# name alone does not: without it the classifier answers the user's colour.
+proc ::application::assistant::argDescriptions {name} {
+	variable Actions
+
+	if {![dict exists $Actions $name]} { return {} }
+	if {[catch { package require json }]} { return {} }
+
+	lassign [dict get $Actions $name] _ _ _ _ parameters _
+	if {[catch { set schema [::json::json2dict $parameters] }]} { return {} }
+	set props [expr {[dict exists $schema properties] ? [dict get $schema properties] : {}}]
+	set out {}
+	dict for {arg def} $props {
+		if {[dict exists $def description]} { dict set out $arg [dict get $def description] }
 	}
 	return $out
 }
@@ -115,12 +136,17 @@ proc ::application::assistant::correctArgs {name cargs} {
 	set request [RequestText]
 	if {$request eq ""} { return $cargs }
 
+	set descriptions [argDescriptions $name]
 	set questions {}
 	dict for {arg values} $enums {
+		set what "Which $arg does the request specify?"
+		if {[dict exists $descriptions $arg]} {
+			append what " ($arg: [dict get $descriptions $arg])"
+		}
 		set criteria [dict create none "the request does not say which $arg"]
 		foreach value $values { dict set criteria $value "the request means $arg=$value" }
 		dict set questions $arg [dict create type choice \
-			instructions "Which $arg does the request specify? Answer none if it does not say." \
+			instructions "$what Answer none if it does not say." \
 			criteria $criteria]
 	}
 

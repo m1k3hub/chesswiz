@@ -141,11 +141,22 @@ argument the user never mentioned.
 from `RunCalls`) correct the closed-set arguments of a tool call before it
 runs; `::ai::systemone::chooseManySync` asks one `Choice` per enum arg in one
 request, gated at 0.7, and anything unfilled keeps the model's value. Modes
-`SCIDB_AI_ARGS=off|shadow|active` (default active). Measured on 26 enum-arg
+`SCIDB_AI_ARGS=off|shadow|active` (default shadow). Measured on 26 enum-arg
 slots across six tools: the LLM made errors **granite4.2:8b 4-8%**,
 **granite4.2:3b 8-12%**, **deepseek-v4.1-flash 12%** (a systematic `opponent`
 colour inversion), while TypeSafe was **0/26** every run, and its answer is
 always a schema value. Tests: `tests/test_app_assistant_args.tcl`.
+
+**Re-measured (2026-09-29), not reproduced.** Plumb-4B as the classifier,
+granite4.2:8b as the model, 45 hand-labelled requests over nine tools (38
+stated enum slots, 32 unstated): `off` 34/38, `active` 34/38, 0 invented
+values either way. The classifier changed nothing, and the four errors left
+are the opponent-colour inversion ("I'm playing white against X" -> the
+classifier answers the user's colour at 0.88 confidence). Putting the
+schema's argument description into the question did not change that. Hence
+the default is `shadow`: `active` has to beat the model on labelled requests
+first, and the perspective-dependent `color`/`colour` arguments are the case
+to test. (Not tried: the TypeSafe API backend, granite 3b, deepseek.)
 
 **Why less fragile:** arguments can only take values the tool accepts, and
 "not mentioned" is an explicit answer rather than an invented default.

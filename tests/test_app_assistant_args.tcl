@@ -58,6 +58,15 @@ tcltest::test args-enumargs {closed-set args are read from the tool schemas} -bo
 		[dict exists [::application::assistant::enumArgs search_games] pattern]
 } -result {{tab {board database}} {color {white black}} {} 1}
 
+tcltest::test args-descriptions {the schema's description of an argument is read} -body {
+	list [dict get [::application::assistant::argDescriptions prepare_against] color] \
+		[dict exists [::application::assistant::argDescriptions switch_tab] tab]
+} -result {{the colour the opponent will play} 0}
+
+tcltest::test args-default-shadow {the default mode is shadow, not active} -body {
+	set ::application::assistant::ArgsMode
+} -result shadow
+
 tcltest::test args-active-overrides {a confident classifier value replaces the model's} -body {
 	::scidb::test::args::isolated {
 		::scidb::test::args::stub {tab database}
