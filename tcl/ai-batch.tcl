@@ -21,9 +21,9 @@
 #
 #   ::ai::batch::run <items> <question> <script> ?options?
 #
-#   <items>    a list of {key state} pairs (a bare string is its own key
-#              and state). The key is the caller's handle; the state is
-#              what the model reads.
+#   <items>    a list of {key state} pairs. The key is the caller's handle;
+#              the state is what the model reads (use [list $text $text]
+#              when the text is its own handle).
 #   <question> one question dict (the same for every state), e.g.
 #              {type choice instructions "..." criteria {...}}.
 #   <script>   called once, asynchronously, with
@@ -126,11 +126,10 @@ proc ::ai::batch::run {items question script args} {
 
 	set pairs {}
 	foreach item $items {
-		if {[llength $item] >= 2} {
-			lappend pairs [list [lindex $item 0] [lindex $item 1]]
-		} else {
-			lappend pairs [list $item $item]
-		}
+		# always an explicit {key state}: a bare string cannot be told from a
+		# pair (a two-word comment would be split), so it is refused
+		if {[llength $item] != 2} { error "batch item must be {key state}: $item" }
+		lappend pairs [list [lindex $item 0] [lindex $item 1]]
 	}
 
 	variable Runs

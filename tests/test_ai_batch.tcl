@@ -180,6 +180,9 @@ check "basic: keys route to their state" [expr {
 check "basic: three requests" [expr {[llength $::scidb::test::b::Requests] == 3}]
 ::scidb::test::b::stop
 
+# --- a bare (unpaired) item is refused, never split into key and state ---
+check "bare item: refused" [catch {::ai::batch::run {"a fine quiet move"} $Q {} } msg]
+
 # --- dedupe: identical states share one request ------------------------
 ::scidb::test::b::start
 set r [::scidb::test::b::collect {{k1 s1} {k2 s1} {k3 s2}} $Q -concurrency 1]

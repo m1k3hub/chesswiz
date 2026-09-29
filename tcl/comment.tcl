@@ -596,11 +596,9 @@ proc OnKind {parent decision} {
 
 	if {![dict get $decision ok]} { return }
 	set kind [dict get $decision label]
-	if {[info exists Vars(widget:text:$Vars(lang)).text]} {
-		focus $Vars(widget:text:$Vars(lang)).text
-	}
 	catch {
-		::dialog::info -parent $parent -title "Classify comment" 			-message "This comment is about [::ai::comment::Name $kind] (source: [dict get $decision source])."
+		::dialog::info -parent $parent -title $mc::ClassifyComment \
+			-message "[::ai::comment::Name $kind] ([dict get $decision source])"
 	}
 }
 

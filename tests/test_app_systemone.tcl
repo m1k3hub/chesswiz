@@ -684,6 +684,14 @@ tcltest::test systemone-comment-rule {keywords map to a kind; unknown words defe
 		[::ai::comment::Rule "hello world"]
 } -result {tactics endgame evaluation opening plan warning endgame {}}
 
+tcltest::test systemone-comment-rule-symbols {evaluation symbols; must/check alone are not a kind} -body {
+	list [::ai::comment::Rule "+- with a clear plan"] \
+		[::ai::comment::Rule "black is =+ here"] \
+		[::ai::comment::Rule "you must see this"] \
+		[::ai::comment::Rule "check the line"] \
+		[::ai::comment::Rule "a discovered check wins"]
+} -result {evaluation evaluation {} {} tactics}
+
 tcltest::test systemone-comment-classifier {the classifier decides when the words do not} -setup {
 	::scidb::test::s1::start [list [::scidb::test::s1::answer comment_kind plan 0.9]]
 } -body {

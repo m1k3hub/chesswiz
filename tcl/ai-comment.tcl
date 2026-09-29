@@ -41,12 +41,15 @@ proc ::ai::comment::Name {kind} {
 proc ::ai::comment::Rule {text} {
 	set t [string tolower $text]
 
+	# evaluation symbols are not word characters, so \y cannot delimit them
+	if {[regexp {(?:^|\s)(?:\+-|-\+|\+=|=\+|\+/-|-/\+|\+/=|=/\+)(?:\s|$)} $t]} { return evaluation }
+
 	foreach entry {
-		{warning    {\y(blunder\w*|mistake\w*|only move|forced|careful\w*|must|trap\w*|lose\w*|hang\w*)\y}}
-		{tactics    {\y(fork\w*|pin\w*|skewer\w*|sacrifice\w*|combo\w*|tactic\w*|mate|check\w*|discovered|deflect\w*|decoy\w*|x-ray)\y}}
+		{warning    {\y(blunder\w*|mistake\w*|only move|forced|careful\w*|trap\w*|hang\w*)\y}}
+		{tactics    {\y(fork\w*|pin\w*|skewer\w*|sacrifice\w*|combo\w*|tactic\w*|mate|checkmate|(?:discovered|double) check|discovered|deflect\w*|decoy\w*|x-ray)\y}}
 		{endgame    {\y(endgame\w*|king and pawn|pawn ending\w*|zugzwang|promotion\w*|passed pawn\w*|rook ending\w*|bishop ending\w*|opposite-colou?red|fortress\w*|tablebase\w*)\y}}
 		{opening    {\y(opening\w*|develop\w*|castl\w*|gambit\w*|theor\w*|book move|novelt\w*|fianchetto\w*|sicilian|najdorf|centre|center)\y}}
-		{evaluation {\y(winning|better|worse|equal|advantage\w*|compensation|unclear|\+[-=]|[-=]\+|\+\-|-\+)\y}}
+		{evaluation {\y(winning|better|worse|equal|advantage\w*|compensation|unclear|evaluat\w*)\y}}
 		{plan       {\y(plan\w*|idea\w*|aim\w*|threat\w*|pressure\w*|target\w*|initiative|manoeuvre\w*|maneuver\w*|attack\w*)\y}}
 	} {
 		lassign $entry kind pattern
