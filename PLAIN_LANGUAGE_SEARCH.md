@@ -96,7 +96,10 @@ and add aliases for the keyword stage.
   field, which the parser validates.
 - **More patterns** (isolated queen's pawn, Greek gift, opposite-coloured bishops) need
   fixture games first, and some need CQL keywords that are still `Not_Implemented`
-  (`sumrange`, square-colour designators).
+  (`sumrange`, and the transformation/accumulation keywords it builds on). The
+  **square-colour designators** `L` (light) and `D` (dark) are implemented
+  (`[L?]`, `[D1]`, `BL?`, `b[D?]`), so colour-of-square patterns need no manual
+  light/dark square enumeration.
 - **Progress and cancel** for CQL searches over very large databases: the view search
   is synchronous today.
 - **Learning from edits:** record the user's corrections to the form (Wave 4 threshold

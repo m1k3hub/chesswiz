@@ -150,6 +150,12 @@ judge.
 
 ## Fixed on the way
 
+- **Square-colour designators.** CQL's special `L` (light) and `D` (dark) square
+  designators are now parsed (`src/db/cql/cql_designator.cpp`): `[L?]`/`[D1]` and the
+  bare `BL?`/`b[D?]` forms. The `opposite_bishops` pattern no longer enumerates the
+  32 light and dark squares by hand. Using `L`/`D` for both the files and the ranks
+  is refused with `Square_Colour_Not_Allowed`.
+
 - **`Board::checkState` never reported stalemate.** It searched for a legal move only
   when the side to move was in check. The importer's result correction, the
   "Drawn by stalemate" termination and the fact layer's `stalemate` field all depended

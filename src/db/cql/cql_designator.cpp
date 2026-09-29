@@ -1696,6 +1696,44 @@ Designator::parse(char const* s, Error& error)
 			}
 		}
 
+		// A bracket whose content uses the special square-colour
+		// designators L/D is a square designator, not a piece part:
+		// [L?] and [D1] denote the light and the dark squares.
+		for (char const* r = s + 1; r < q; ++r)
+		{
+			if (*r == 'L' || *r == 'D')
+			{
+				uint64_t sq = 0;
+				char const* t = parseSequence(s + 1, error, sq);
+
+				if (error != No_Error)
+					return s;
+				if (*t != ']')
+				{
+					error = Invalid_Square_Designator;
+					return s;
+				}
+
+				// No piece type: any piece on the designated squares.
+				for (unsigned i = 0; i < 2; ++i)
+				{
+					m_board.pieces[i].kings		|= sq;
+					m_board.pieces[i].queens		|= sq;
+					m_board.pieces[i].rooks		|= sq;
+					m_board.pieces[i].bishops	|= sq;
+					m_board.pieces[i].knights	|= sq;
+					m_board.pieces[i].pawns		|= sq;
+				}
+
+				finish();
+
+				s = t + 1;
+				while (::isspace(*s))
+					++s;
+				return s;
+			}
+		}
+
 		++p;
 
 		if (p == q)
@@ -1734,7 +1772,7 @@ Designator::parse(char const* s, Error& error)
 
 		s = t + 1;
 	}
-	else if (*t == '?' || ('a' <= *t && *t <= 'h'))
+	else if (*t == '?' || *t == 'L' || *t == 'D' || ('a' <= *t && *t <= 'h'))
 	{
 		s = parseRange(t, error, squares);
 
@@ -1862,92 +1900,127 @@ Designator::parseRange(char const* s, Error& error, uint64_t& squares)
 {
 	Byte fyle1 = FyleA;
 	Byte fyle2 = FyleH;
+	int fyleColour = -1;
 
-	if (s[0] != '?' && (s[0] < 'a' || 'h' < s[0]))
+	// The special square-colour designators L (light) and D (dark) may
+	// designate the files or the ranks, but not both at once.
+	if (s[0] == 'L' || s[0] == 'D')
 	{
-		error = Invalid_Fyle_In_Square_Designator;
-		return s;
+		fyleColour = s[0] == 'L' ? db::color::White : db::color::Black;
+		s += 1;
 	}
-
-	if (s[0] != '?')
-		fyle1 = fyle2 = FyleA + s[0] - 'a';
-
-	s += 1;
-
-	if (s[0] == '-')
+	else
 	{
-		if (s[-1] == '?')
-		{
-			error = Any_Fyle_Not_Allowed_In_Range;
-			return s - 1;
-		}
-
-		if (s[1] == '?')
-		{
-			error = Any_Fyle_Not_Allowed_In_Range;
-			return s + 1;
-		}
-
-		if (s[1] < 'a' || 'h' < s[1])
+		if (s[0] != '?' && (s[0] < 'a' || 'h' < s[0]))
 		{
 			error = Invalid_Fyle_In_Square_Designator;
-			return s + 1;
+			return s;
 		}
 
-		fyle2 = FyleA + s[1] - 'a';
+		if (s[0] != '?')
+			fyle1 = fyle2 = FyleA + s[0] - 'a';
 
-		if (fyle1 > fyle2)
-			mstl::swap(fyle1, fyle2);
+		s += 1;
 
-		s += 2;
-	}
+		if (s[0] == '-')
+		{
+			if (s[-1] == '?')
+			{
+				error = Any_Fyle_Not_Allowed_In_Range;
+				return s - 1;
+			}
 
-	if (s[0] != '?' && (s[0] < '1' || '8' < s[0]))
-	{
-		error = Missing_Rank_In_Square_Designator;
-		return s;
+			if (s[1] == '?')
+			{
+				error = Any_Fyle_Not_Allowed_In_Range;
+				return s + 1;
+			}
+
+			if (s[1] < 'a' || 'h' < s[1])
+			{
+				error = Invalid_Fyle_In_Square_Designator;
+				return s + 1;
+			}
+
+			fyle2 = FyleA + s[1] - 'a';
+
+			if (fyle1 > fyle2)
+				mstl::swap(fyle1, fyle2);
+
+			s += 2;
+		}
 	}
 
 	Byte rank1 = Rank1;
 	Byte rank2 = Rank8;
+	int rankColour = -1;
 
-	if (s[0] != '?')
-		rank1 = rank2 = Rank1 + s[0] - '1';
-
-	s += 1;
-
-	if (s[0] == '-')
+	if (s[0] == 'L' || s[0] == 'D')
 	{
-		if (s[-1] == '?')
+		if (fyleColour >= 0)
 		{
-			error = Any_Rank_Not_Allowed_In_Range;
-			return s - 1;
+			error = Square_Colour_Not_Allowed;
+			return s;
 		}
 
-		if (s[1] == '?')
+		rankColour = s[0] == 'L' ? db::color::White : db::color::Black;
+		s += 1;
+	}
+	else
+	{
+		if (s[0] != '?' && (s[0] < '1' || '8' < s[0]))
 		{
-			error = Any_Rank_Not_Allowed_In_Range;
-			return s + 1;
+			error = Missing_Rank_In_Square_Designator;
+			return s;
 		}
 
-		if (s[1] < '1' || '8' < s[1])
+		if (s[0] != '?')
+			rank1 = rank2 = Rank1 + s[0] - '1';
+
+		s += 1;
+
+		if (s[0] == '-')
 		{
-			error = Invalid_Rank_In_Square_Designator;
-			return s + 1;
+			if (s[-1] == '?')
+			{
+				error = Any_Rank_Not_Allowed_In_Range;
+				return s - 1;
+			}
+
+			if (s[1] == '?')
+			{
+				error = Any_Rank_Not_Allowed_In_Range;
+				return s + 1;
+			}
+
+			if (s[1] < '1' || '8' < s[1])
+			{
+				error = Invalid_Rank_In_Square_Designator;
+				return s + 1;
+			}
+
+			rank2 = Rank1 + s[1] - '1';
+
+			if (rank1 > rank2)
+				mstl::swap(rank1, rank2);
+
+			s += 2;
 		}
-
-		rank2 = Rank1 + s[1] - '1';
-
-		if (rank1 > rank2)
-			mstl::swap(rank1, rank2);
-
-		s += 2;
 	}
 
 	for (Byte f = fyle1; f <= fyle2; ++f)
 	{
 		for (Byte r = rank1; r <= rank2; ++r)
-			squares |= set1Bit(make(Fyle(f), Rank(r)));
+		{
+			db::sq::ID sq = make(Fyle(f), Rank(r));
+
+			if (fyleColour >= 0 && int(db::sq::color(sq)) != fyleColour)
+				continue;
+			if (rankColour >= 0 && int(db::sq::color(sq)) != rankColour)
+				continue;
+
+			squares |= set1Bit(sq);
+		}
 	}
 
 	return s;

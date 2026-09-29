@@ -106,6 +106,7 @@ namespace error
 		Invalid_Fyle_In_Square_Designator,
 		Invalid_Rank_In_Square_Designator,
 		Missing_Rank_In_Square_Designator,
+		Square_Colour_Not_Allowed,
 		Not_Implemented,
 	};
 

@@ -77,6 +77,35 @@ tcltest::test cqlf-position {one position, or one move and the position after it
 		[catch {::scidb::cql::position garbage {(match (position))}} e4] $e4
 } -result {1 0 1 1 {CQL move filters need a move} 1 {CQL game-information filters need a game} 1 {illegal move 'Ke2'} 1 {invalid FEN 'garbage'}}
 
+tcltest::test cqlf-squarecolour {L/D square-colour designators, bare and bracketed} -body {
+	set start $::scidb::test::cqlf::START
+	set ocb   $::scidb::test::cqlf::OCB
+	set scb   $::scidb::test::cqlf::SCB
+	set fens [list $start $start $start $start $start $start $start $start $start $start $ocb $scb $start $start $start]
+	set queries {
+		{(match (position :piececount BL? 1))}
+		{(match (position :piececount BD? 1))}
+		{(match (position :piececount bL? 1))}
+		{(match (position :piececount bD? 1))}
+		{(match (position :piececount [Bb]L? 2))}
+		{(match (position :piececount [Bb]D? 2))}
+		{(match (position :piececount ?L? 16))}
+		{(match (position :piececount [L?] 16))}
+		{(match (position :piececount B[D?] 1))}
+		{(match (position :piececount BD? 0))}
+		{(match (position :piececount BL? 1 :piececount bD? 1))}
+		{(match (position :piececount BL? 1 :piececount bD? 1))}
+		{(match (position :piececount [Bb]L? 1))}
+		{(match (position :piececount [Bb]L? 3))}
+		{(match (position :piececount [L?] 17))}
+	}
+	lmap fen $fens q $queries { ::scidb::cql::position $fen $q }
+} -result {1 1 1 1 1 1 1 1 1 0 1 0 0 0 0}
+
+tcltest::test cqlf-colour-error {L/D may not designate both the files and the ranks} -body {
+	dict get [::scidb::cql::parse {(match (position :piececount [DL] 1))}] error
+} -result Square_Colour_Not_Allowed
+
 tcltest::test cqlf-kinds {events and structures} -body {
 	list [::ai::search::patternIds event] [::ai::search::patternIds structure]
 } -result {{checkmate smothered_mate stalemate en_passant underpromotion double_check} {opposite_castling rook_endgame pawn_endgame isolated_queen_pawn opposite_bishops queenless}}

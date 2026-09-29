@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — CQL square-colour designators
+
+- CQL's special square-colour designators are implemented in the matcher
+  (`src/db/cql/cql_designator.cpp`): `L` selects the light squares and `D` the
+  dark squares, in the bracketed (`[L?]`, `[D1]`) and bare (`BL?`, `b[D?]`)
+  forms. `L`/`D` may designate the files or the ranks, but not both; using both
+  is refused with a new `Square_Colour_Not_Allowed` parse error. This removes a
+  `Not_Implemented` blocker named in `PLAIN_LANGUAGE_SEARCH.md`, and the
+  `opposite_bishops` pattern now uses `BL?`/`bD?` instead of enumerating all
+  32 light and dark squares.
+- Tests: `tests/test_app_cqlfeatures.tcl` (`cqlf-squarecolour`,
+  `cqlf-colour-error`).
+
 ## Unreleased — 3D Chessboard Viewer (v2/v3: themes, vector pieces, hardware OpenGL, WebGL)
 
 - New `tcl/board-3d.tcl` (`::board3d`) renders the current position as a
