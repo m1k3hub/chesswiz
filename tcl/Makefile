@@ -180,6 +180,8 @@ SOURCES = \
 	ai-generate.tcl \
 	ai-trend.tcl \
 	ai-openingprep.tcl \
+	ai-eventreport.tcl \
+	ai-duplicate.tcl \
 	ai-transcript.tcl \
 	app-ai.tcl \
 	app-ai-models.tcl \

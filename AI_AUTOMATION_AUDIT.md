@@ -30,7 +30,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | A2 | Comment language tagging | untagged comments in the multi-language store (`comment.tcl`, `lang`) | System One `choice` | 🟢 *(shipped as `ai-language.tcl`)* |
 | A3 | Comment kind facet | comment editor browse/filter (`comment.tcl`) | System One `choice` | 🟢 *(shipped as `ai-comment.tcl`)* |
 | A4 | Import doctor | raw importer error list (`app-pgn.tcl`, `import.tcl`) | System One `choice` | 🟢 *(shipped as `ai-import.tcl`)* |
-| A5 | Duplicate-merge arbitration | ambiguous duplicate pairs (`app-database-maintenance.tcl`, `merge.tcl`) | System One `choice` | 🟢 |
+| A5 | Duplicate-merge arbitration | ambiguous duplicate pairs (`app-database-maintenance.tcl`, `merge.tcl`) | System One `choice` | 🟢 *(module `ai-duplicate.tcl` shipped; not yet wired into the merge dialog)* |
 | A6 | New-move novelty label | new move vs precedent index (`ai-precedent.tcl`, `ai-cql.tcl`) | System One `choice` | 🟢 *(shipped as `ai-novelty.tcl`)* |
 | A7 | Auto-annotate ordering | which engine-flagged move gets prose first (`ai-annotate.tcl`) | System One `score` | 🟢 *(shipped)* |
 | A8 | Voice transcript gate | obviously-wrong transcripts (`app-voice.tcl`) | System One `noul` | 🟢 *(shipped)* |
@@ -44,7 +44,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | B2 | Study-plan prose | mistake clusters → plan (`ai-studyplan.tcl`) | LLM | 🟢 *(shipped)* |
 | B3 | Opening-report narrative | opening-prep table → article (`app-database-openingprep.tcl`, `db_tree`) | LLM | 🟢 *(shipped as `ai-openingprep.tcl`, "Narrate" button)* |
 | B4 | Maintenance / ECO-trend narrative | maintenance report (`app-database-maintenance.tcl` `EcoTrend`, `MaintenanceSummaryText`) | LLM | 🟢 *(shipped as `ai-trend.tcl`)* |
-| B5 | Event / crosstable report | event tables → report (`crosstable.tcl`, `eventtable.tcl`) | LLM | 🟢 |
+| B5 | Event / crosstable report | event tables → report (`crosstable.tcl`, `eventtable.tcl`) | LLM | 🟢 *(module `ai-eventreport.tcl` shipped; not yet wired to a crosstable button)* |
 | B6 | Explain the engine's line | PV → words in the analysis pane (`app-analysis.tcl`, `ai-engine.tcl`) | LLM | 🟢 *(shipped)* |
 | B7 | Hover/status "what is this?" | deterministic fact line, optionally phrased (`ai-prompt.tcl`) | rules + LLM | 🟢 |
 | B8 | Find games like this + why | overlap facts → rationale (`ai-precedent.tcl`) | LLM | 🟢 |
@@ -201,7 +201,7 @@ a screen.
 ### Status check (2026-09-29)
 
 Each row was compared with the code. Not started (no module, tool or hook found):
-A5, A9, A10, B5, B7 (only the C++ `::scidb::ai::text` fact line feeds the
+A9, A10, B7 (only the C++ `::scidb::ai::text` fact line feeds the
 generator; no hover/status line), B8 (`ai-annotations.tcl` retrieves exemplars,
 not a rationale), C3, C5, D1–D5, E1, F3, F4. The other unmarked rows above are
 partial, as noted in the table.
