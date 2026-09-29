@@ -76,6 +76,24 @@ $(LIB).a: $(OBJS)
 
 tcl_misc.o: ../../Makefile.version
 
+# The CQL library headers are included through -I../db/cql, which the
+# generated dependency list below does not cover (tcl_cql.o has no rules at
+# all), so a change to them would otherwise go unnoticed.
+CQL_HEADERS = \
+	../db/cql/cql_common.h \
+	../db/cql/cql_designator.h \
+	../db/cql/cql_designator.ipp \
+	../db/cql/cql_board.h \
+	../db/cql/cql_position.h \
+	../db/cql/cql_match.h \
+	../db/cql/cql_match.ipp \
+	../db/cql/cql_match_board.h \
+	../db/cql/cql_match_move.h \
+	../db/cql/cql_engine.h \
+	../db/cql/cql_relation.h
+
+tcl_cql.o tcl_search.o: $(CQL_HEADERS)
+
 # vi:set ts=3 sw=3:
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 

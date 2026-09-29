@@ -187,6 +187,28 @@ db_eco_table_stubs.o: db_eco_table_stubs.cpp
 	@$(CXX) -c -o $@ $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(INCLUDE) $<
 
 # vi:set ts=3 sw=3:
+# The CQL headers are included through -I./cql; the generated dependency
+# lists below are stale for db_search.o, so cover them here.
+CQL_HEADERS = \
+	cql/cql_common.h \
+	cql/cql_designator.h \
+	cql/cql_designator.ipp \
+	cql/cql_board.h \
+	cql/cql_position.h \
+	cql/cql_match.h \
+	cql/cql_match.ipp \
+	cql/cql_match_board.h \
+	cql/cql_match_move.h \
+	cql/cql_engine.h \
+	cql/cql_relation.h
+
+db_search.o: $(CQL_HEADERS)
+
+cql/cql_common.o cql/cql_designator.o cql/cql_engine.o cql/cql_game_matcher.o \
+cql/cql_match.o cql/cql_match_board.o cql/cql_match_info.o cql/cql_match_move.o \
+cql/cql_match_relation.o cql/cql_piece_type_designator.o cql/cql_position.o \
+cql/cql_relation.o: $(CQL_HEADERS)
+
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 
 cql/cql_common.o: cql/cql_common.h
