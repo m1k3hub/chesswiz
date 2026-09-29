@@ -42,7 +42,7 @@ test: all
 # ::scidb::ai::* commands) and use their own pass/fail harness, so the
 # plain-tclsh runner cannot run or count them. Run them here, sequentially,
 # so `make test` / `make ci` actually gate on them.
-AI_TESTS := chess-facts ai-facts ai-claims ai-engine ai-eco ai-generate ai-ui ai-tools ai-precedent ai-narrate ai-annotations ai-rhetoric
+AI_TESTS := chess-facts ai-facts ai-claims ai-engine ai-eco ai-generate ai-ui ai-tools ai-precedent ai-narrate ai-annotations ai-rhetoric ai-batch ai-calibrate ai-journal
 
 ai-tests:
 	@echo "Running AI grounding suites..."
@@ -197,6 +197,33 @@ ai-rhetoric:
 	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_rhetoric.tcl 2>&1 \
 		| tee /tmp/scidb-ai-rhetoric.log | grep -E "PASS|FAIL|SKIP|AI-RHETORIC-FAILURES"
 	@grep -q "AI-RHETORIC-FAILURES: 0" /tmp/scidb-ai-rhetoric.log
+
+# The decision / override journal that feeds threshold autotune.
+ai-journal:
+	@echo "Building tkscidb-beta..."
+	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-journal-build.log 2>&1 || \
+		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-journal-build.log; exit 1; }
+	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_journal.tcl 2>&1 \
+		| tee /tmp/scidb-ai-journal.log | grep -E "PASS|FAIL|AI-JOURNAL-FAILURES"
+	@grep -q "AI-JOURNAL-FAILURES: 0" /tmp/scidb-ai-journal.log
+
+# The calibration math and the per-backend threshold file.
+ai-calibrate:
+	@echo "Building tkscidb-beta..."
+	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-calibrate-build.log 2>&1 || \
+		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-calibrate-build.log; exit 1; }
+	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_calibrate.tcl 2>&1 \
+		| tee /tmp/scidb-ai-calibrate.log | grep -E "PASS|FAIL|AI-CALIBRATE-FAILURES"
+	@grep -q "AI-CALIBRATE-FAILURES: 0" /tmp/scidb-ai-calibrate.log
+
+# The batch helper: concurrency, dedupe, resume, progress, graceful fallback.
+ai-batch:
+	@echo "Building tkscidb-beta..."
+	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-batch-build.log 2>&1 || \
+		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-batch-build.log; exit 1; }
+	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_batch.tcl 2>&1 \
+		| tee /tmp/scidb-ai-batch.log | grep -E "PASS|FAIL|AI-BATCH-FAILURES"
+	@grep -q "AI-BATCH-FAILURES: 0" /tmp/scidb-ai-batch.log
 
 # Annotation exemplars joined to positions by key.
 ai-annotations:

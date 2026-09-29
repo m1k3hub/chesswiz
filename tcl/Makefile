@@ -163,6 +163,9 @@ SOURCES = \
 	ai-engine.tcl \
 	ai-provider.tcl \
 	ai-systemone.tcl \
+	ai-batch.tcl \
+	ai-calibrate.tcl \
+	ai-journal.tcl \
 	ai-search.tcl \
 	ai-cql.tcl \
 	ai-event.tcl \
@@ -181,6 +184,7 @@ SOURCES = \
 	app-ai-models.tcl \
 	app-assistant.tcl \
 	app-assistant-route.tcl \
+	app-assistant-args.tcl \
 	app-voice.tcl \
 	app-error-triage.tcl \
 	app-media-decode.tcl \
