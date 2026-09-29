@@ -109,4 +109,34 @@ proc ::ai::similar::narrate {parent facts args} {
 	return $block
 }
 
+# The GUI/assistant entry: retrieve the games that share the most opening
+# plies with database game <number> (zero-based, ai-simindex) and narrate
+# them. -done gets {ok 1 text ... claims ... grounded ...} as ::ai::trend does,
+# or {ok 0 text MESSAGE} when the retrieval is unavailable or fails. The
+# candidates come from the same starting position, so the standard start
+# position is what the claim checker is given; the facts never name a move.
+proc ::ai::similar::report {parent base variant number args} {
+	array set opts {-done {} -limit 10 -seconds 3}
+	array set opts $args
+
+	set start "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+	if {[llength [info commands ::ai::similar::candidates]] == 0} {
+		return [Failed $opts(-done) "similar-game retrieval is not available"]
+	}
+	if {[catch {
+		candidates $base $variant $number -limit $opts(-limit) -seconds $opts(-seconds)
+	} rows]} {
+		return [Failed $opts(-done) "similar games could not be retrieved: $rows"]
+	}
+	return [narrate $parent [facts $start $rows] -done $opts(-done)]
+}
+
+
+proc ::ai::similar::Failed {done message} {
+	if {[llength $done]} {
+		after 0 [list {*}$done [dict create ok 0 text $message]]
+	}
+	return $message
+}
+
 # vi:set ts=3 sw=3:

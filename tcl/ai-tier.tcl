@@ -79,7 +79,7 @@ namespace eval ::ai::tier {
 	# (tcl/app-assistant.tcl): queries over the board game, the active
 	# database, the engines and the session state. Anything absent
 	# writes, starts something, or opens a dialog a user must see.
-	variable ReadOnly {app_state classifier_status clear_search current_game database_summary database_trend discover_databases engine_options list_engines list_issues list_open_databases player_stats position_moves prepare_against recent_errors repertoire_check search_games show_search tool_log}
+	variable ReadOnly {app_state classifier_status clear_search current_game database_summary database_trend discover_databases engine_options list_engines list_issues list_open_databases player_stats position_moves prepare_against recent_errors repertoire_check search_games show_search similar_games tool_log}
 
 	# words that ask for long-form prose: the request is short, the
 	# answer is not

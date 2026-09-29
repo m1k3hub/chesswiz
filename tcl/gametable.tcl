@@ -59,6 +59,7 @@ set PGN_CountryCode		"PGN country code"
 set ISO_CountryCode		"ISO country code"
 set ExcludeElo				"Exclude Elo"
 set IncludePlayerType	"Include player type"
+set GamesLikeThis		"Games Like This (AI)"
 set ShowTournamentTable "Show Tournament Table"
 
 set Long						"Long"
@@ -1827,6 +1828,17 @@ proc GetSite {path base variant view index} {
 }
 
 
+# Audit B8: the games that share the most opening plies with this one,
+# narrated (ai-similar). Read-only.
+proc SimilarGames {path base variant index} {
+	variable ${path}::Vars
+
+	set view [{*}$Vars(viewcmd) $base $variant]
+	if {[catch { ::scidb::db::get gameNumber $base $variant $index $view } number]} { return }
+	::ai::similar::report $path $base $variant $number
+}
+
+
 proc PopupMenu {path menu base variant index column} {
 	variable ${path}::Vars
 	variable _Flags
@@ -1861,6 +1873,14 @@ proc PopupMenu {path menu base variant index column} {
 				-label " $::browser::mc::LoadGame" \
 				-command [namespace code [list LoadGame $path $index]] \
 				;
+			if {[llength [info commands ::ai::similar::report]]} {
+				$menu add command \
+					-compound left \
+					-image $::icon::16x16::overview \
+					-label " $mc::GamesLikeThis..." \
+					-command [namespace code [list SimilarGames $path $base $variant $index]] \
+					;
+			}
 			if {$Vars(mode) ne "merge"} {
 				if {[::scidb::game::current] < 9} { set state normal } else { set state disabled }
 				set position [list $base $variant $view $index]
@@ -1916,6 +1936,14 @@ proc PopupMenu {path menu base variant index column} {
 				-accelerator $mc::Space \
 				-command [namespace code [list LoadGame $path $index]] \
 				;
+			if {[llength [info commands ::ai::similar::report]]} {
+				$menu add command \
+					-compound left \
+					-image $::icon::16x16::overview \
+					-label " $mc::GamesLikeThis..." \
+					-command [namespace code [list SimilarGames $path $base $variant $index]] \
+					;
+			}
 			::bind $menu <Key-space> [namespace code [list InvokeAction $menu load $path $index]]
 			if {$Vars(mode) ne "merge"} {
 				if {[::scidb::game::current] < 9} { set state normal } else { set state disabled }

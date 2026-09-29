@@ -182,5 +182,58 @@ tcltest::test similar-narrate-fallback {without a model the facts are the report
 	::scidb::test::similar::restoreAll
 } -result {1 1 {AI: similar games} 1}
 
+tcltest::test similar-report-narrates {report retrieves the candidates and narrates their facts (GUI/assistant entry)} -setup {
+	::scidb::test::similar::clearResult
+	::scidb::test::similar::stub ::ai::similar::candidates {{base variant number args} {
+		set ::scidb::test::similar::Asked [list $base $variant $number $args]
+		return [::scidb::test::similar::candidates]
+	}}
+} -body {
+	::scidb::test::similar::hide ::ai::provider::completeAsync
+	::scidb::test::similar::stubReport
+	::ai::similar::report .application Normal Normal 6 -limit 3 -done {set ::scidb::test::similar::Result}
+	::scidb::test::similar::wait {[info exists ::scidb::test::similar::Result]}
+	list $::scidb::test::similar::Asked \
+		[dict get $::scidb::test::similar::Result ok] \
+		[string match {*Aronian - Grischuk*shares 7 continuations*} \
+			[dict get $::scidb::test::similar::Result text]]
+} -cleanup {
+	::scidb::test::similar::restoreAll
+} -result {{Normal Normal 6 {-limit 3 -seconds 3}} 1 1}
+
+tcltest::test similar-report-failure {a failing retrieval is reported, not raised} -setup {
+	::scidb::test::similar::clearResult
+	::scidb::test::similar::stub ::ai::similar::candidates {{args} { error "boom" }}
+} -body {
+	::ai::similar::report .application Normal Normal 0 -done {set ::scidb::test::similar::Result}
+	::scidb::test::similar::wait {[info exists ::scidb::test::similar::Result]}
+	list [dict get $::scidb::test::similar::Result ok] [dict get $::scidb::test::similar::Result text]
+} -cleanup {
+	::scidb::test::similar::restoreAll
+} -result {0 {similar games could not be retrieved: boom}}
+
+tcltest::test similar-report-unavailable {without the retrieval module the report says so} -setup {
+	::scidb::test::similar::clearResult
+	::scidb::test::similar::hide ::ai::similar::candidates
+} -body {
+	::ai::similar::report .application Normal Normal 0 -done {set ::scidb::test::similar::Result}
+	::scidb::test::similar::wait {[info exists ::scidb::test::similar::Result]}
+	dict get $::scidb::test::similar::Result ok
+} -cleanup {
+	::scidb::test::similar::restoreAll
+} -result 0
+
+tcltest::test similar-assistant-tool {the similar_games tool is registered and checks its arguments} -body {
+	set defs [::application::assistant::toolsJson]
+	list \
+		[string match {*"name":"similar_games"*} $defs] \
+		[::application::assistant::CheckArgs similar_games {number 3}] \
+		[catch { ::application::assistant::CheckArgs similar_games {number 0} }] \
+		[catch { ::application::assistant::CheckArgs similar_games {number abc} }] \
+		[catch { ::application::assistant::CheckArgs similar_games {number 2 limit 0} }] \
+		[catch { ::application::assistant::CheckArgs similar_games {} }]
+} -result {1 {number 3 limit 10} 1 1 1 1}
+
+
 ::tcltest::cleanupTests
 return

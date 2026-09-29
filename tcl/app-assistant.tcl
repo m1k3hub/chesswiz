@@ -141,6 +141,12 @@ variable Actions {
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoDatabaseTrend
 	}
+	similar_games {
+		0 0 "find games like game %s"
+		"Find the games of the active database that share the most opening plies with one game and narrate why they are alike. 'number' is the game's number as the game list shows it (the first game is 1); 'limit' bounds how many similar games are reported (default 10). Only games from the same starting position with the same first move qualify, and 'shared' counts the plies of the main line they have in common; transpositions are not found. The games are read by Scidb; the model only phrases the overlap, and the claim checker audits it. Read-only. The result appears in the Report pane."
+		{{"type":"object","properties":{"number":{"type":"integer","description":"game number in the active database, as shown in the game list (1 = first game)"},"limit":{"type":"integer","description":"at most this many similar games, default 10"}},"required":["number"]}}
+		::application::assistant::DoSimilarGames
+	}
 	player_stats {
 		0 0 "report the statistics of %s"
 		"Statistics of a player in the active database: games, wins/draws/losses with White and with Black, score, first and last game, Elo range, most played openings. The name may be partial ('carlsen'); if several players match, the candidates are listed and you call again with the exact name."
@@ -1000,6 +1006,17 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		database_trend {
 			return {}
 		}
+		similar_games {
+			set number [string trim [Arg $cargs number]]
+			if {![string is integer -strict $number] || $number < 1} {
+				error "number must be a positive integer (the game list's number, 1 = first game)"
+			}
+			set limit [string trim [OptArg $cargs limit 10]]
+			if {![string is integer -strict $limit] || $limit < 1} {
+				error "limit must be a positive integer"
+			}
+			return [dict create number $number limit $limit]
+		}
 		structure_profile {
 			set player [string trim [Arg $cargs player]]
 			if {$player eq ""} { error "player is required" }
@@ -1383,6 +1400,27 @@ proc ::application::assistant::DoDatabaseTrend {} {
 
 
 proc ::application::assistant::DatabaseTrendDone {token result} {
+	Resolve $token [dict get $result text]
+}
+
+
+proc ::application::assistant::DoSimilarGames {number limit} {
+	if {[llength [info commands ::ai::similar::report]] == 0} {
+		return "error: the similar-games module is not available"
+	}
+	lassign [ActiveBase] base variant
+	if {$base eq ""} { return "error: no active database" }
+	if {$number > [::scidb::db::count games $base $variant]} {
+		return "error: the database has only [::scidb::db::count games $base $variant] games"
+	}
+	set token [Later]
+	::ai::similar::report .application $base $variant [expr {$number - 1}] -limit $limit \
+		-done [namespace code [list SimilarGamesDone $token]]
+	return $token
+}
+
+
+proc ::application::assistant::SimilarGamesDone {token result} {
 	Resolve $token [dict get $result text]
 }
 

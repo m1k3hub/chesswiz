@@ -47,7 +47,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | B5 | Event / crosstable report | event tables → report (`crosstable.tcl`, `eventtable.tcl`) | LLM | 🟢 *(module `ai-eventreport.tcl`; crosstable window menu "Narrate the Standings (AI)", points from the Result tags)* |
 | B6 | Explain the engine's line | PV → words in the analysis pane (`app-analysis.tcl`, `ai-engine.tcl`) | LLM | 🟢 *(shipped)* |
 | B7 | Hover/status "what is this?" | deterministic fact line, optionally phrased (`ai-prompt.tcl`) | rules + LLM | 🟢 |
-| B8 | Find games like this + why | overlap facts → rationale (`ai-precedent.tcl`) | LLM | 🟢 *(retrieval is native, `::scidb::db::similar`; `ai-similar.tcl` narrates the overlap facts; no UI entry yet)* |
+| B8 | Find games like this + why | overlap facts → rationale (`ai-precedent.tcl`) | LLM | 🟢 *(retrieval is native, `::scidb::db::similar`; `ai-similar.tcl` narrates the overlap facts; game list context menu "Games Like This (AI)" and the assistant tool `similar_games`)* |
 | B9 | Show-your-work evidence | ground each claim in the report (`app-report.tcl`, `ai-claims.tcl`) | rules | 🟢 *(shipped: the fact pack is rendered)* |
 | **C. Reviewed writes** | | | | |
 | C1 | Draft a comment in place | comment editor "Draft" (`comment.tcl`) | LLM + claim check | 🟡 *(shipped)* |
@@ -149,7 +149,9 @@ a screen.
   top-N heap. Game/time caps bound partial results; decoding one record cannot
   be interrupted. Retrieval never changes editor state or database records.
   Older binaries and custom readers retain the cached Tcl fallback.
-  `ai-similar.tcl` narrates exact prefix facts, not transpositions. (C5)
+  `ai-similar.tcl` narrates exact prefix facts, not transpositions. Reached from
+  the game list's context menu and the assistant's `similar_games` tool
+  (`::ai::similar::report`). (C5)
 - **B9 Show-your-work** *shipped (first cut)* — every generated report now carries a
   **Grounding facts** block with the deterministic position facts the model was given
   (`toHtml`'s new facts argument; the generation result carries them). Per-claim
