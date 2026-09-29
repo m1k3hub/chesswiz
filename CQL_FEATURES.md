@@ -150,6 +150,12 @@ judge.
 
 ## Fixed on the way
 
+- **Tagging.** `:forany <tag> <designator>`, `:tagmatch <tag> <designator>` and
+  `$tag[squares]` track a piece's identity across the game (the document's
+  "same rook visits all four corners" example works). Limitation: candidate
+  marks come from the start position, so a pawn that only promotes to the
+  designator's piece is not a candidate.
+
 - **`:exclude`.** A game is excluded (at the whole-game level) when an
   excluded sub-position list matches anywhere, or (bare form) when the
   containing position list matches. It does not affect the containing

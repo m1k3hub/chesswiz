@@ -355,7 +355,7 @@ Position::Position()
 	,m_preceding(false)
 	,m_matchCount(0)
 	,m_minMatchCount(1)
-	,m_maxMatchCount(1)
+	,m_maxMatchCount(unsigned(-1))
 	,m_minMoveNumber(0)
 	,m_maxMoveNumber(unsigned(-1))
 	,m_transformations(0)
@@ -896,7 +896,71 @@ namespace {
 std::map<std::string, unsigned> g_accumulators;
 unsigned g_accumulatorDepth = 0;
 
+struct TagBinding
+{
+	char	name[32];
+	int	mark;
+};
+
+TagBinding	g_tagBindings[2];
+unsigned		g_tagCount = 0;
+int			g_markSquare[64];		// mark -> square (0 = off board)
+
 } // namespace
+
+
+void
+cql::clearTagBindings()
+{
+	g_tagCount = 0;
+}
+
+
+void
+cql::bindTag(char const* name, int mark)
+{
+	if (g_tagCount >= 2)
+		return;
+
+	unsigned len = unsigned(::strlen(name));
+
+	if (len >= sizeof(g_tagBindings[0].name))
+		len = sizeof(g_tagBindings[0].name) - 1;
+
+	::memcpy(g_tagBindings[g_tagCount].name, name, len);
+	g_tagBindings[g_tagCount].name[len] = '\0';
+	g_tagBindings[g_tagCount].mark = mark;
+	++g_tagCount;
+}
+
+
+int
+cql::tagSquare(char const* name)
+{
+	for (unsigned i = 0; i < g_tagCount; ++i)
+	{
+		if (::strcmp(g_tagBindings[i].name, name) == 0)
+			return g_markSquare[g_tagBindings[i].mark];
+	}
+
+	return -1;
+}
+
+
+void
+cql::setMarkSquare(int mark, int square)
+{
+	if (mark > 0 && mark < 64)
+		g_markSquare[mark] = square;
+}
+
+
+void
+cql::clearMarkSquares()
+{
+	for (unsigned i = 0; i < 64; ++i)
+		g_markSquare[i] = -1;
+}
 
 
 bool
@@ -1012,10 +1076,12 @@ Position::match(GameInfo const& info, Board const& board, Variant variant, unsig
 	if (m_relation && !m_relation->match(board, false)) // XXX set parameter insideVariation
 		return m_not;
 
+	// the default is "matched at least once"; :matchcount narrows it to a
+	// range, which is only enforced once the game is complete
 	if (flags & flags::IsFinalPosition)
 		return m_minMatchCount <= m_matchCount && m_matchCount <= m_maxMatchCount;
 
-	return m_matchCount >= m_maxMatchCount;
+	return m_matchCount >= m_minMatchCount;
 }
 
 
@@ -2432,7 +2498,28 @@ Position::parseSumRange(Match& match, char const* s, Error& error)
 char const*
 Position::parseTagMatch(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // TODO
+	char const* n = s;
+	while (::isalnum(*s))
+		++s;
+
+	unsigned len = unsigned(s - n);
+
+	if (len == 0 || len >= 32)
+	{
+		error = Missing_Parameter;
+		return s;
+	}
+
+	char tag[32];
+	::memcpy(tag, n, len);
+	tag[len] = '\0';
+
+	Designator designator;
+	s = designator.parse(s, error);
+
+	if (error == No_Error)
+		m_boardMatchList.push_back(new cql::board::TagMatch(tag, designator));
+
 	match.m_sections |= Match::Section_Positions;
 	return s;
 }

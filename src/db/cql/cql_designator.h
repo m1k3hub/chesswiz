@@ -98,6 +98,17 @@ public:
 
 	View view() const;
 
+	// A tag designator ($name[squares]) is the piece bound to the tag; it has
+	// no static piece type, so its masks are computed at match time from the
+	// tag context.
+	/// The set of piece IDs (db::piece::ID) this designator can designate,
+	/// ignoring squares; used to pick candidate marks for a tag.
+	unsigned idMask() const;
+
+	bool hasTag() const						{ return m_tag[0] != '\0'; }
+	char const* tag() const					{ return m_tag; }
+	uint64_t tagSquares() const			{ return m_tagSquares; }
+
 	bool match(db::Board const& board) const;
 	unsigned count(db::Board const& board) const;
 	uint64_t find(db::Board const& board) const;
@@ -152,6 +163,8 @@ private:
 	char const* parseRange(char const* s, Error& error, uint64_t& squares);
 
 	cql::Board	m_board;
+	char			m_tag[32];
+	uint64_t		m_tagSquares;
 	MatchFunc	m_match;
 	CountFunc	m_count;
 	FindFunc		m_find;
@@ -168,6 +181,14 @@ void setActiveShift(int fyle, int rank);
 void clearActiveShift();
 int  activeShiftFyle();
 int  activeShiftRank();
+
+// The tag context (CQL tagging): the bindings of the current match run, and
+// the square of each mark. Marks are 1-based; 0 means "no piece".
+void clearTagBindings();
+void bindTag(char const* name, int mark);
+int  tagSquare(char const* name);
+void setMarkSquare(int mark, int square);
+void clearMarkSquares();
 
 } // namespace cql
 

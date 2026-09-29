@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — CQL tagging (:forany / :tagmatch / $tag)
+
+- The CQL tagging system is implemented: `:forany <tag> <designator>` in a
+  match list, `:tagmatch <tag> <designator>` and `$tag[squares]` designators in
+  position lists. Each piece of the start position gets a mark that travels
+  with it (promotion keeps the mark, a capture destroys it); the query is run
+  once per binding of the tags to candidate marks (no two tags share a mark),
+  and a tag may only take a mark whose piece matches the designator. Up to two
+  tags, mainline only. Candidate marks use the start position's piece IDs, so a
+  pawn that only *promotes* to the designator's piece is not a candidate (a
+  documented narrowing).
+- Fixed while doing it: the default `:matchcount` was `1 1`, so a position that
+  matched more than once failed the final-position check; the default is now
+  "at least once" and an explicit range is enforced only when the game ends.
+- Tests: `tests/test_app_cqlfeatures.tcl` (`cqlf-tags` — the "same rook visits
+  all four corners" example, plus `:tagmatch` and `:movefrom $tag`). App suite
+  295/295, Tcl and C++ suites green.
+
 ## Unreleased — CQL :exclude
 
 - `:exclude` is implemented (`src/db/cql/cql_position.cpp`, `cql_match.cpp`,

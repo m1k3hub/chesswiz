@@ -30,6 +30,7 @@
 #include "db_board_base.h"
 
 #include <ctype.h>
+#include <string.h>
 
 using namespace cql;
 using namespace cql::error;
@@ -1601,6 +1602,9 @@ Designator::Designator()
 	,m_count(::count),
 	m_find(::find)
 {
+	m_tag[0] = '\0';
+	m_tagSquares = 0;
+
 	static_assert(variant::Index_Normal     == 0, "initialization not working");
 	static_assert(variant::Index_Bughouse   == 1, "initialization not working");
 	static_assert(variant::Index_Crazyhouse == 2, "initialization not working");
@@ -1617,11 +1621,67 @@ Designator::Designator()
 }
 
 
+unsigned
+Designator::idMask() const
+{
+	unsigned m = 0;
+
+	if (m_board.pieces[White].kings)		m |= 1u << db::piece::WhiteKing;
+	if (m_board.pieces[White].queens)		m |= 1u << db::piece::WhiteQueen;
+	if (m_board.pieces[White].rooks)		m |= 1u << db::piece::WhiteRook;
+	if (m_board.pieces[White].bishops)	m |= 1u << db::piece::WhiteBishop;
+	if (m_board.pieces[White].knights)	m |= 1u << db::piece::WhiteKnight;
+	if (m_board.pieces[White].pawns)		m |= 1u << db::piece::WhitePawn;
+	if (m_board.pieces[Black].kings)		m |= 1u << db::piece::BlackKing;
+	if (m_board.pieces[Black].queens)		m |= 1u << db::piece::BlackQueen;
+	if (m_board.pieces[Black].rooks)		m |= 1u << db::piece::BlackRook;
+	if (m_board.pieces[Black].bishops)	m |= 1u << db::piece::BlackBishop;
+	if (m_board.pieces[Black].knights)	m |= 1u << db::piece::BlackKnight;
+	if (m_board.pieces[Black].pawns)		m |= 1u << db::piece::BlackPawn;
+
+	return m;
+}
+
+
 Designator::View
 Designator::view() const
 {
 	View v;
 	v.board = m_board;
+
+	if (m_tag[0] != '\0')
+	{
+		// the tagged piece: any piece type at the tag's square, provided the
+		// square satisfies the designator's square constraint
+		int sq = ::tagSquare(m_tag);
+
+		if (sq >= 0 && sq < 64 && (m_tagSquares & (uint64_t(1) << sq)))
+		{
+			uint64_t bit = uint64_t(1) << sq;
+
+			for (unsigned i = 0; i < 2; ++i)
+			{
+				v.board.pieces[i].kings		= bit;
+				v.board.pieces[i].queens		= bit;
+				v.board.pieces[i].rooks		= bit;
+				v.board.pieces[i].bishops	= bit;
+				v.board.pieces[i].knights	= bit;
+				v.board.pieces[i].pawns		= bit;
+			}
+		}
+		else
+		{
+			v.board.pieces[0].kings = v.board.pieces[0].queens = v.board.pieces[0].rooks =
+			v.board.pieces[0].bishops = v.board.pieces[0].knights = v.board.pieces[0].pawns =
+			v.board.pieces[1].kings = v.board.pieces[1].queens = v.board.pieces[1].rooks =
+			v.board.pieces[1].bishops = v.board.pieces[1].knights = v.board.pieces[1].pawns = 0;
+		}
+
+		v.board.empty = 0;
+		v.board.complete();
+		::getFuncs(v.board, v.match, v.count, v.find, v.diff, v.same);
+		return v;
+	}
 
 	if (s_shiftActive)
 	{
@@ -1863,6 +1923,50 @@ Designator::parse(char const* s, Error& error)
 {
 	while (::isspace(*s))
 		++s;
+
+	// a tag designator: $name, optionally followed by a bracketed square set
+	if (*s == '$')
+	{
+		++s;
+
+		char const* n = s;
+		while (::isalnum(*s))
+			++s;
+
+		unsigned len = unsigned(s - n);
+
+		if (len == 0 || len >= sizeof(m_tag))
+		{
+			error = Invalid_Designator;
+			return s;
+		}
+
+		::memcpy(m_tag, n, len);
+		m_tag[len] = '\0';
+		m_tagSquares = ~uint64_t(0);
+
+		if (*s == '[')
+		{
+			m_tagSquares = 0;
+			char const* t = parseSequence(s + 1, error, m_tagSquares);
+
+			if (error != No_Error)
+				return s;
+			if (*t != ']')
+			{
+				error = Unmatched_Bracket;
+				return s;
+			}
+			s = t + 1;
+		}
+
+		finish();
+
+		while (::isspace(*s))
+			++s;
+
+		return s;
+	}
 
 	// the piece part -- one letter or "[...]" -- is [p, q); the squares
 	// start at t

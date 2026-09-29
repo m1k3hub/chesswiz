@@ -27,6 +27,8 @@
 namespace cql {
 
 inline bool Match::isStandard() const		{ return m_ranges.empty(); }
+inline unsigned Match::forAnyCount() const	{ return m_forAny.size(); }
+inline Match::ForAny const& Match::forAny(unsigned index) const { return m_forAny[index]; }
 inline bool Match::includesVariations() const	{ return m_includesVariations; }
 inline bool Match::matchComments() const	{ return !m_matchCommentList.empty(); }
 inline bool Match::proceed() const			{ return m_proceed; }

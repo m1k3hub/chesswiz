@@ -61,6 +61,13 @@ public:
 		Section_Flags		= 1 << 4,
 	};
 
+	// A :forany tag: its name and the piece IDs it may be bound to.
+	struct ForAny
+	{
+		char		name[32];
+		unsigned	idMask;
+	};
+
 	typedef mstl::pair<char const*, char const*> Range;
 	typedef mstl::vector<Range> Ranges;
 	typedef error::Type Error;
@@ -74,6 +81,9 @@ public:
 
 	/// Returns whether given expression complies with CQL standard.
 	bool isStandard() const;
+
+	unsigned forAnyCount() const;
+	ForAny const& forAny(unsigned index) const;
 
 	/// Returns true if any position list also searches the variations
 	/// (:variations or :variationsonly).
@@ -229,6 +239,7 @@ private:
 	MatchGameInfoList		m_matchGameInfoList;
 	MatchCommentList		m_matchCommentList;
 	MatchPositionList		m_matchPositionList;
+	mstl::vector<ForAny>	m_forAny;
 	Ranges					m_ranges;
 };
 

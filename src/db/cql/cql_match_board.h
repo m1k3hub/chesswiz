@@ -458,6 +458,23 @@ private:
 };
 
 
+// :tagmatch <tag> <designator>: the piece bound to the tag must match the
+// designator (its square and piece type).
+class TagMatch : public Match
+{
+public:
+
+	TagMatch(char const* tag, Designator const& designator);
+
+	bool match(GameInfo const& info, Board const& board, Variant variant, unsigned flags) override;
+
+private:
+
+	char			m_tag[32];
+	Designator	m_designator;
+};
+
+
 class MaxSwapEvaluation : public MatchMinMax
 {
 public:

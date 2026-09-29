@@ -712,6 +712,31 @@ Evaluation::match(GameInfo const& info, Board const& board, Variant variant, uns
 }
 
 
+TagMatch::TagMatch(char const* tag, Designator const& designator)
+	:m_designator(designator)
+{
+	unsigned len = unsigned(::strlen(tag));
+
+	if (len >= sizeof(m_tag))
+		len = sizeof(m_tag) - 1;
+
+	::memcpy(m_tag, tag, len);
+	m_tag[len] = '\0';
+}
+
+
+bool
+TagMatch::match(GameInfo const&, Board const& board, Variant, unsigned)
+{
+	int sq = cql::tagSquare(m_tag);
+
+	if (sq < 0 || sq >= 64)
+		return false;
+
+	return bool(m_designator.find(board) & (uint64_t(1) << sq));
+}
+
+
 bool
 MaxSwapEvaluation::match(GameInfo const& info, Board const& board, Variant variant, unsigned flags)
 {

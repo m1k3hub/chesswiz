@@ -1122,8 +1122,32 @@ Match::parseEventType(char const* s, Error& error)
 char const*
 Match::parseForAny(char const* s, Error& error)
 {
-	error = Not_Implemented;
-	return s;
+	char const* n = s;
+	while (::isalnum(*s))
+		++s;
+
+	unsigned len = unsigned(s - n);
+
+	if (len == 0 || len >= sizeof(ForAny::name))
+	{
+		error = Missing_Parameter;
+		return s;
+	}
+
+	Designator designator;
+	s = designator.parse(s, error);
+
+	if (error != No_Error)
+		return s;
+
+	ForAny entry;
+	::memcpy(entry.name, n, len);
+	entry.name[len] = '\0';
+	entry.idMask = designator.idMask();
+	m_forAny.push_back(entry);
+
+	m_isStandard = false;
+	m_sections |= Section_Positions;
 	return s;
 }
 

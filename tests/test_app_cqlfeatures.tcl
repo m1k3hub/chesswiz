@@ -179,6 +179,32 @@ tcltest::test cqlf-exclude {exclude a game when an excluded position list matche
 		[::scidb::cql::search $f Normal {(match (position :mate :exclude (position :mate)))}]
 } -result {{5 6 8 9 10} {5 6 8 9} 10 {} {}}
 
+tcltest::test cqlf-tags {track a piece through the game (:forany / $tag / :tagmatch)} -body {
+	set f [file join $::scidb::test::cqlf::testDir tmp-app cql-tags-[pid].pgn]
+	file mkdir [file dirname $f]
+	set fh [open $f w]
+	fconfigure $fh -encoding utf-8
+	puts $fh "\[Event \"T\"\]\n\[Site \"X\"\]\n\[Date \"2024.01.01\"\]\n\[Round \"1\"\]"
+	puts $fh "\[White \"W\"\]\n\[Black \"B\"\]\n\[Result \"*\"\]"
+	puts $fh "\[SetUp \"1\"\]\n\[FEN \"8/8/8/3k4/8/8/6K1/R7 w - - 0 1\"\]\n"
+	puts $fh "\n1. Rh1 Ke5 2. Rh8 Kd5 3. Ra8 *\n"
+	close $fh
+	::scidb::db::open $f ::scidb::test::cqlf::nop {} ::scidb::test::cqlf::nop {}
+	set r [list \
+		[::scidb::cql::search $f Normal {(match :forany rook [Rr] (position $rook[a1]) (position $rook[h1]) (position $rook[h8]) (position $rook[a8]))}] \
+		[::scidb::cql::search $f Normal {(match :forany rook [Rr] (position $rook[a1]) (position $rook[h1]))}] \
+		[::scidb::cql::search $f Normal {(match :forany rook [Rr] (position $rook[a1]) (position $rook[b1]))}] \
+		[::scidb::cql::search $f Normal {(match (position Ra1))}] \
+		[::scidb::cql::search $f Normal {(match :forany knight [Nn] (position $knight[a1]))}] \
+		[::scidb::cql::search $f Normal {(match :forany rook [Rr] (position :tagmatch rook [Rr]))}] \
+		[::scidb::cql::search $f Normal {(match :forany rook [Rr] (position :tagmatch rook [Qq]))}] \
+		[::scidb::cql::search $f Normal {(match :forany rook [Rr] (position :movefrom $rook))}] \
+		[::scidb::cql::search $f Normal {(match :forany knight [Nn] (position :movefrom $knight))}]]
+	::scidb::db::close $f
+	catch { file delete $f }
+	set r
+} -result {0 0 {} 0 {} 0 {} 0 {}}
+
 tcltest::test cqlf-kinds {events and structures} -body {
 	list [::ai::search::patternIds event] [::ai::search::patternIds structure]
 } -result {{checkmate smothered_mate stalemate en_passant underpromotion double_check} {opposite_castling rook_endgame pawn_endgame isolated_queen_pawn opposite_bishops queenless}}

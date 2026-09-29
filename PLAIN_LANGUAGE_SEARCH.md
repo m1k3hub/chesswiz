@@ -100,10 +100,10 @@ and add aliases for the keyword stage.
   **shift** transformations, so colour-of-square and "anywhere on the board, reflected
   or translated" patterns need no manual enumeration, and the accumulator
   extension (`:accumulate` / `:sumrange` / `:reset`) is implemented. Still
-  `Not_Implemented`: the tagging keywords (`:forany` / `:tagmatch`), the
-  sequence-relative keywords (`:preceding` / `:following` / `:inside` /
-  `:endmost`), `:pretransformmatchcount`, `:language`, and the relation-list
-  keywords.
+  `Not_Implemented`: the sequence-relative keywords (`:preceding` /
+  `:following` / `:inside` / `:endmost`), `:pretransformmatchcount`,
+  `:language`, and the relation-list keywords. The tagging keywords
+  (`:forany` / `:tagmatch` / `$tag`) are implemented.
 - **Progress and cancel** for CQL searches over very large databases: the view search
   is synchronous today.
 - **Learning from edits:** record the user's corrections to the form (Wave 4 threshold
