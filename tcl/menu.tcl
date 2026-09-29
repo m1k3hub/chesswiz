@@ -93,6 +93,7 @@ set AIFactCheck				"AI: Fact-Check &Annotations"
 set AITrainingSet			"AI: Training Set from &Games"
 set AICheckResults			"AI: Check Game &Results"
 set AIEventTypes			"AI: Time &Controls"
+set AIDatabaseTrend			"AI: Database &Trends"
 set DownloadGames				"Download &Games from the Internet..."
 
 # Tools
@@ -547,6 +548,18 @@ if {0} {
 			-underline [IncrUL $ul] \
 			-image $::icon::16x16::none \
 			-command [namespace code [list RunAI [list ::ai::event::report .application]]] \
+			;
+	}
+
+	### database trends (read-only) #########################################
+	if {[llength [info commands ::ai::trend::report]]} {
+		lassign [::tk::UnderlineAmpersand $mc::AIDatabaseTrend] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [namespace code [list RunAI [list ::ai::trend::report .application]]] \
 			;
 	}
 

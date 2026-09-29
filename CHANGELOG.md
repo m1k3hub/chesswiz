@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased — three more audit features (A6 novelty, B4 database trends, C4 media transcript)
+
+- **A6 — move novelty** (`tcl/ai-novelty.tcl`): label a move against master
+  practice, grounded in the precedent index. A position the index knows is
+  `known` without the classifier; otherwise the bounded classifier decides
+  `novelty`/`side_line`/`transposition` (an unsettled move stays `unknown`).
+  Firewall kept: `blunder` is deliberately *not* a label — move quality is
+  Stockfish's, never a model's. Surfaces: assistant tool `novelty_label`.
+- **B4 — database trends** (`tcl/ai-trend.tcl`): a read-only narrative of the
+  active database's opening trends from Scidb's own counts
+  (`::scidb::db::count`/`ecoStats`), through the ordinary grounded pipeline
+  (fact block → prompt → claim check → one retry); with no model or on a
+  provider error the deterministic facts are the report. Surfaces: *Extras →
+  AI: Database Trends* and assistant tool `database_trend`.
+- **C4 — media transcript** (`tcl/ai-transcript.tcl`): the speech of an audio
+  lesson as text, using the same local speech-to-text the voice assistant uses
+  (`scripts/stt-transcribe.py`, or an `SCIDB_AI_STT` template), with a
+  deterministic summary. Nothing is stored; the media player is untouched.
+  Surfaces: assistant tool `transcribe_media`. A failing engine's stderr is the
+  error detail; an exit status the event loop already reaped is no longer
+  mistaken for failure when there is stdout to return.
+- Tests: `tests/test_app_novelty.tcl`, `tests/test_app_ai_trend.tcl`,
+  `tests/test_app_transcript.tcl`. App suite 356/356; `make -C tests ai-tests`,
+  Tcl and C++ suites green.
+
 ## Unreleased — AI: auto-annotate priority (A7)
 
 - Auto-annotation now asks the classifier (the `score` primitive) how much each

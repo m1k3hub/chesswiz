@@ -169,11 +169,14 @@ SOURCES = \
 	ai-language.tcl \
 	ai-import.tcl \
 	ai-comment.tcl \
+	ai-novelty.tcl \
 	ai-narrate.tcl \
 	ai-prompt.tcl \
 	ai-precedent.tcl \
 	ai-annotations.tcl \
 	ai-generate.tcl \
+	ai-trend.tcl \
+	ai-transcript.tcl \
 	app-ai.tcl \
 	app-ai-models.tcl \
 	app-assistant.tcl \

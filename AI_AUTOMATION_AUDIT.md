@@ -31,7 +31,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | A3 | Comment kind facet | comment editor browse/filter (`comment.tcl`) | System One `choice` | 🟢 *(shipped as `ai-comment.tcl`)* |
 | A4 | Import doctor | raw importer error list (`app-pgn.tcl`, `import.tcl`) | System One `choice` | 🟢 *(shipped as `ai-import.tcl`)* |
 | A5 | Duplicate-merge arbitration | ambiguous duplicate pairs (`app-database-maintenance.tcl`, `merge.tcl`) | System One `choice` | 🟢 |
-| A6 | New-move novelty label | new move vs precedent index (`ai-precedent.tcl`, `ai-cql.tcl`) | System One `choice` | 🟢 |
+| A6 | New-move novelty label | new move vs precedent index (`ai-precedent.tcl`, `ai-cql.tcl`) | System One `choice` | 🟢 *(shipped as `ai-novelty.tcl`)* |
 | A7 | Auto-annotate ordering | which engine-flagged move gets prose first (`ai-annotate.tcl`) | System One `score` | 🟢 *(shipped)* |
 | A8 | Voice transcript gate | obviously-wrong transcripts (`app-voice.tcl`) | System One `noul` | 🟢 *(shipped)* |
 | A9 | Cloud egress gate | prompts that carry private games/comments (`ai-provider.tcl`) | System One `noul` | 🟡 |
@@ -43,7 +43,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | B1 | Opponent brief prose | prep stats → dossier (`ai-brief.tcl`, `PrepReport*`) | LLM | 🟢 *(shipped)* |
 | B2 | Study-plan prose | mistake clusters → plan (`ai-studyplan.tcl`) | LLM | 🟢 *(shipped)* |
 | B3 | Opening-report narrative | opening-prep table → article (`app-database-openingprep.tcl`, `db_tree`) | LLM | 🟢 |
-| B4 | Maintenance / ECO-trend narrative | maintenance report (`app-database-maintenance.tcl` `EcoTrend`, `MaintenanceSummaryText`) | LLM | 🟢 |
+| B4 | Maintenance / ECO-trend narrative | maintenance report (`app-database-maintenance.tcl` `EcoTrend`, `MaintenanceSummaryText`) | LLM | 🟢 *(shipped as `ai-trend.tcl`)* |
 | B5 | Event / crosstable report | event tables → report (`crosstable.tcl`, `eventtable.tcl`) | LLM | 🟢 |
 | B6 | Explain the engine's line | PV → words in the analysis pane (`app-analysis.tcl`, `ai-engine.tcl`) | LLM | 🟢 *(shipped)* |
 | B7 | Hover/status "what is this?" | deterministic fact line, optionally phrased (`ai-prompt.tcl`) | rules + LLM | 🟢 |
@@ -53,7 +53,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | C1 | Draft a comment in place | comment editor "Draft" (`comment.tcl`) | LLM + claim check | 🟡 *(shipped)* |
 | C2 | Explain / translate a comment | comment transforms into a language slot (`comment.tcl`) | LLM | 🟡 *(shipped)* |
 | C3 | Auto-tagging / enrichment | bulk game labels → custom tags (`ai-annotate.tcl`) | engine + LLM, review | 🟡 |
-| C4 | Media transcript + lesson outline | audio/video lessons (`app-media-lesson.tcl`, `tcl_media_extract`) | ASR + LLM | 🟡 |
+| C4 | Media transcript + lesson outline | audio/video lessons (`app-media-lesson.tcl`, `tcl_media_extract`) | ASR + LLM | 🟡 *(transcript shipped as `ai-transcript.tcl`; outline/LLM step remains)* |
 | C5 | Publication / export writer | tournament report / article from a game set (`export.tcl`) | LLM + claim check | 🟡 |
 | C6 | Training-set prose notes | puzzle sets (`ai-cql.tcl`) | LLM | 🟡 |
 | **D. Assistant reach** | | | | |

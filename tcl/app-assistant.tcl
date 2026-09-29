@@ -135,6 +135,12 @@ variable Actions {
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoDatabaseSummary
 	}
+	database_trend {
+		0 0 "narrate the trends of the active database"
+		"A read-only narrative of the active database's opening trends: total games, games with an ECO code, the overall results, and the most played openings with their scores and names, grounded in Scidb's own counts (::scidb::db::count and ecoStats). The numbers are read by Scidb; the model only phrases them, and the claim checker audits the phrase. Use it for questions about trends, or what is played most."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoDatabaseTrend
+	}
 	player_stats {
 		0 0 "report the statistics of %s"
 		"Statistics of a player in the active database: games, wins/draws/losses with White and with Black, score, first and last game, Elo range, most played openings. The name may be partial ('carlsen'); if several players match, the candidates are listed and you call again with the exact name."
@@ -309,6 +315,12 @@ variable Actions {
 		{{"type":"object","properties":{"text":{"type":"string","description":"the comment text"}},"required":["text"]}}
 		::application::assistant::DoCommentKind
 	}
+	novelty_label {
+		0 0 "label a move's novelty in the position"
+		"Label a move in a position against master practice, grounded in the precedent index: a position the index knows is labelled 'known' without the classifier, and the rest (novelty, side line or transposition) is decided by the local System One classifier; an unsettled move stays 'unknown'. Read-only."
+		{{"type":"object","properties":{"fen":{"type":"string","description":"the FEN of the position"},"san":{"type":"string","description":"the move in SAN"}},"required":["fen","san"]}}
+		::application::assistant::DoNoveltyLabel
+	}
 	training_set {
 		1 0 "build a training set from the games of the database"
 		"Build puzzles from the active database's games: Scidb's CQL matcher finds positions just before a checkmate, a smothered mate, a double check or an underpromotion, and the chess engine keeps only those whose solution is its best move and clearly the only good one. The puzzles are written to a PGN file under the user directory, which the user can open as a database to train. 'pattern' limits it to one kind; 'player' to one player's games; 'max' bounds the number of puzzles (default 20). It runs in the background; the Report pane shows the progress and the result."
@@ -332,6 +344,12 @@ variable Actions {
 		"Whether speaking to the assistant is available: the recorder, the local speech-to-text engine and model, and how replies are spoken. Use it when the user asks about voice input, dictation, or why the microphone button is not there."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoVoiceStatus
+	}
+	transcribe_media {
+		0 0 "transcribe the audio of %s"
+		"The transcript of a media file (the speech of an audio lesson or a video), as plain text, from the local speech-to-text engine. Read-only; nothing is stored. Use it when the user asks what is said in a lesson, or wants its text. Long transcripts are cut; the answer starts with a short summary."
+		{{"type":"object","properties":{"path":{"type":"string","description":"the media file"}},"required":["path"]}}
+		::application::assistant::DoTranscribeMedia
 	}
 	handoff_issue {
 		1 0 "hand issue %s to the coding agent"
@@ -796,6 +814,11 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			::application::triage::issueFile $issue
 			return [dict create issue $issue]
 		}
+		transcribe_media {
+			set path [Arg $cargs path]
+			if {![file isfile $path]} { error "no such file: $path" }
+			return [dict create path [file normalize $path]]
+		}
 		search_games {
 			set c {}
 			foreach key {player color result opponent eco from to event min_elo pattern} {
@@ -969,6 +992,9 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		factcheck_annotations {
 			return {}
 		}
+		database_trend {
+			return {}
+		}
 		structure_profile {
 			set player [string trim [Arg $cargs player]]
 			if {$player eq ""} { error "player is required" }
@@ -1001,6 +1027,13 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			set text [Arg $cargs text]
 			if {[string trim $text] eq ""} { error "text is required" }
 			return [dict create text $text]
+		}
+		novelty_label {
+			set fen [string trim [Arg $cargs fen]]
+			if {$fen eq ""} { error "fen is required" }
+			set san [string trim [Arg $cargs san]]
+			if {$san eq ""} { error "san is required" }
+			return [dict create fen $fen san $san]
 		}
 		training_set {
 			set pattern [OptArg $cargs pattern ""]
@@ -1327,6 +1360,25 @@ proc ::application::assistant::DoDatabaseSummary {} {
 		lappend lines "  $eco [EcoName $eco $variant]: $n games -- [Results $w $d $b]"
 	}
 	return [join $lines \n]
+}
+
+
+proc ::application::assistant::DoDatabaseTrend {} {
+	if {[llength [info commands ::ai::trend::narrate]] == 0} {
+		return "error: the trend module is not available"
+	}
+	lassign [ActiveBase] base variant
+	if {$base eq ""} { return "error: no active database" }
+	set facts [::ai::trend::facts $base $variant]
+	set token [Later]
+	::ai::trend::narrate .application $facts \
+		-done [namespace code [list DatabaseTrendDone $token]]
+	return $token
+}
+
+
+proc ::application::assistant::DatabaseTrendDone {token result} {
+	Resolve $token [dict get $result text]
 }
 
 
@@ -2751,6 +2803,26 @@ proc ::application::assistant::CommentKindDone {token decision} {
 }
 
 
+proc ::application::assistant::DoNoveltyLabel {fen san} {
+	if {[llength [info commands ::ai::novelty::label]] == 0} {
+		return "error: the novelty module is not available"
+	}
+	set token [Later]
+	::ai::novelty::label $fen $san [namespace code [list NoveltyLabelDone $token]]
+	return $token
+}
+
+
+proc ::application::assistant::NoveltyLabelDone {token decision} {
+	if {[dict get $decision ok]} {
+		set label [dict get $decision label]
+		Resolve $token "[::ai::novelty::describe $label] ($label, source [dict get $decision source])"
+	} else {
+		Resolve $token "the move's novelty could not be determined"
+	}
+}
+
+
 proc ::application::assistant::DiagnoseImportDone {token codes decision} {
 	set text [::ai::import::Text $codes]
 	if {[dict get $decision ok] && [dict get $decision label] ne ""} {
@@ -2813,6 +2885,26 @@ proc ::application::assistant::DoVoiceStatus {} {
 		return "the voice assistant is not loaded"
 	}
 	return [::application::voice::status]
+}
+
+
+proc ::application::assistant::DoTranscribeMedia {path} {
+	if {[llength [info commands ::ai::transcript::transcribe]] == 0} {
+		return "error: the transcript module is not available"
+	}
+	set token [Later]
+	::ai::transcript::transcribe $path [namespace code [list TranscribeMediaDone $token]]
+	return $token
+}
+
+
+proc ::application::assistant::TranscribeMediaDone {token result} {
+	if {![dict get $result ok]} {
+		Resolve $token "error: the transcription failed: [dict get $result error]"
+		return
+	}
+	set text [dict get $result text]
+	Resolve $token "[::ai::transcript::summary $text]\n\nFull transcript:\n$text"
 }
 
 
