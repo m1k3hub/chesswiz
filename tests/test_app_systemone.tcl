@@ -343,7 +343,7 @@ tcltest::test systemone-valid {only answers of the asked shape are valid} -body 
 		[::ai::systemone::valid $n {noul 0.3}] \
 		[::ai::systemone::valid $n {noul -0.1}] \
 		[::ai::systemone::valid $n {choice noise confidence 0.8}] \
-		[::ai::systemone::valid {type score criteria {a b}} {score 1 confidence 0.5}]
+		[::ai::systemone::valid {type score criteria {a b}} {score 1.5 confidence 0.5}]
 } -result {1 0 0 0 0 1 0 0 0}
 
 tcltest::test systemone-decide-gate {confident answers decide; unsure, unknown and absent ones fall back} -setup {

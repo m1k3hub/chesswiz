@@ -70,6 +70,7 @@ array set Settings {
 	marks			0
 	classes		{Blunder Mistake Inaccuracy}
 	bestOnlyMove	1
+	minImportance	low
 	prefix		""
 }
 
@@ -339,6 +340,51 @@ proc ::ai::annotate::NextPly {} {
 		after 1 [namespace code NextPly]
 		return
 	}
+
+	Prioritise $result
+	return
+}
+
+
+# A7: how much does this engine-flagged moment deserve a comment?  The score
+# orders the run and, with minImportance set, drops the routine moments.  With
+# no classifier the fallback is "high", so today's behaviour is unchanged.
+proc ::ai::annotate::Rank {level} {
+	return [lsearch -exact {low medium high} $level]
+}
+
+
+proc ::ai::annotate::High {} {
+	return high
+}
+
+
+proc ::ai::annotate::Prioritise {result} {
+	set state "ENGINE VERDICT: [dict get $result classification], losing [dict get $result cpLoss] centipawns."
+	set question [dict create type score criteria {low medium high} \
+		instructions "How much does this move deserve an explanatory comment? low = routine, medium = instructive, high = a key moment of the game."]
+	::ai::decide annotate_priority $state $question \
+		[namespace code [list OnPriority $result]] -fallback [namespace code High]
+	return
+}
+
+
+proc ::ai::annotate::OnPriority {result decision} {
+	variable Priv
+	variable Settings
+	variable mc
+
+	set level [expr {[dict get $decision ok] ? [dict get $decision label] : "high"}]
+	dict set result priority $level
+
+	if {[Rank $level] < [Rank $Settings(minImportance)]} {
+		lappend Priv(rows) "[dict get $result san]: $level priority, skipped"
+		incr Priv(skipped)
+		after 1 [namespace code NextPly]
+		return
+	}
+
+	set san [dict get $result san]
 
 	if {!$Priv(prose)} {
 		Write $result [plainComment $san [dict get $result classification] $result]

@@ -32,7 +32,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | A4 | Import doctor | raw importer error list (`app-pgn.tcl`, `import.tcl`) | System One `choice` | 🟢 *(shipped as `ai-import.tcl`)* |
 | A5 | Duplicate-merge arbitration | ambiguous duplicate pairs (`app-database-maintenance.tcl`, `merge.tcl`) | System One `choice` | 🟢 |
 | A6 | New-move novelty label | new move vs precedent index (`ai-precedent.tcl`, `ai-cql.tcl`) | System One `choice` | 🟢 |
-| A7 | Auto-annotate ordering | which engine-flagged move gets prose first (`ai-annotate.tcl`) | System One `score` | 🟢 |
+| A7 | Auto-annotate ordering | which engine-flagged move gets prose first (`ai-annotate.tcl`) | System One `score` | 🟢 *(shipped)* |
 | A8 | Voice transcript gate | obviously-wrong transcripts (`app-voice.tcl`) | System One `noul` | 🟢 *(shipped)* |
 | A9 | Cloud egress gate | prompts that carry private games/comments (`ai-provider.tcl`) | System One `noul` | 🟡 |
 | A10 | LLM tier routing | local-vs-cloud provider choice (`ai-provider.tcl`) | System One `score` | 🟡 |

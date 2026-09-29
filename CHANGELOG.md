@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — AI: auto-annotate priority (A7)
+
+- Auto-annotation now asks the classifier (the `score` primitive) how much each
+  engine-flagged moment deserves a comment (low/medium/high) before drafting it.
+  The score orders the run and, with `minImportance` set, drops the routine
+  moments (`::ai::annotate::configure -minImportance high`). With no classifier
+  the fallback is "high", so today's behaviour is unchanged.
+- Tests: `tests/test_app_annotate.tcl` (`annotate-rank`, `annotate-priority-skip`,
+  `annotate-priority-keeps`). App suite, `make -C tests ai-tests`, Tcl and C++
+  suites green.
+
 ## Unreleased — System One: the score primitive
 
 - The `score` question type (a position on an ordered level scale) is handled

@@ -194,6 +194,37 @@ tcltest::test annotate-cap {maxPlies bounds the work} -body {
 	}
 } -result {1 2}
 
+tcltest::test annotate-rank {the importance order} -body {
+	list [::ai::annotate::Rank low] [::ai::annotate::Rank medium] [::ai::annotate::Rank high]
+} -result {0 1 2}
+
+tcltest::test annotate-priority-skip {a low-priority moment is skipped when minImportance is high} -body {
+	set classes [dict create Nc6 Blunder]
+	::scidb::test::annotate::isolated [::scidb::test::annotate::plys] $classes {
+		::scidb::test::annotate::stub ::ai::decide {{feature state question script args} {
+			uplevel #0 [list {*}$script [list ok 1 label low confidence 0.9 source classifier]]
+		}}
+		::ai::annotate::configure -prose 0 -minImportance high
+		::ai::annotate::annotate .application
+		::scidb::test::annotate::wait {![::ai::annotate::running?]} 400
+		list [llength $::scidb::test::annotate::Written] $::ai::annotate::Priv(skipped) \
+			[expr {[lsearch -glob $::ai::annotate::Priv(rows) {Nc6: low priority*}] >= 0}]
+	}
+} -result {0 1 1}
+
+tcltest::test annotate-priority-keeps {a high-priority moment is annotated} -body {
+	set classes [dict create Nc6 Blunder]
+	::scidb::test::annotate::isolated [::scidb::test::annotate::plys] $classes {
+		::scidb::test::annotate::stub ::ai::decide {{feature state question script args} {
+			uplevel #0 [list {*}$script [list ok 1 label high confidence 0.9 source classifier]]
+		}}
+		::ai::annotate::configure -prose 0 -minImportance high
+		::ai::annotate::annotate .application
+		::scidb::test::annotate::wait {![::ai::annotate::running?]} 400
+		list [llength $::scidb::test::annotate::Written] $::ai::annotate::Priv(skipped)
+	}
+} -result {1 0}
+
 tcltest::test annotate-prose-grounded {grounded prose is written} -setup {
 	set ::scidb::test::annotate::Draft(script) [list ok 1 text "Nc6 allows a fork."]
 	set ::scidb::test::annotate::Draft(claims) {}
