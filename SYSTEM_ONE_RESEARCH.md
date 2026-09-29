@@ -343,7 +343,9 @@ These are not commitments; they are the places where the external survey suggest
 the tree is under-using the class.
 
 ### 5.1 The `score` primitive is unused
-The client supports `score`; every shipped feature uses `choice` or `noul`. Ordered
+**Update:** the client now handles `score` end to end (`valid` and `Decided`
+map a score to the ordered level and gate on confidence); the uses below are
+still open. Every shipped feature still uses `choice` or `noul`. Ordered
 levels are the natural fit for several things already on the roadmap:
 - **Repertoire-gap urgency** (`AI_PRODUCTS_PLAN.md` Wave 2: "classifier scores
   urgency") — `score` over `{rarely faced, occasional, critical}`, engine verifies

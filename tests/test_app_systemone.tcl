@@ -410,6 +410,10 @@ proc ::scidb::test::s1::answer {id name confidence} {
 	return [list 200 "{\"model\":\"kev-latest\",\"answers\":{\"$id\":{\"type\":\"choice\",\"choice\":\"$name\",\"confidence\":$confidence}},\"latency_ms\":5}"]
 }
 
+proc ::scidb::test::s1::level {id value confidence} {
+	return [list 200 "{\"model\":\"kev-latest\",\"answers\":{\"$id\":{\"type\":\"score\",\"score\":$value,\"confidence\":$confidence}},\"latency_ms\":5}"]
+}
+
 proc ::scidb::test::s1::eventFixture {} {
 	variable Dir
 	file delete -force $Dir
@@ -634,6 +638,40 @@ tcltest::test systemone-comment-assistant {comment_kind checks args and answers}
 } -cleanup {
 	::scidb::test::s1::stop
 } -result {{text {keeps the tension}} 1 {missing argument 'text'} later:}
+
+# --- the score primitive (previously unhandled) -----------------------------
+
+tcltest::test systemone-score-valid {valid checks the score shape} -body {
+	set q [dict create type score criteria {low medium high}]
+	list [::ai::systemone::valid $q {score 0.5 confidence 0.9}] \
+		[::ai::systemone::valid $q {score 1.5 confidence 0.9}] \
+		[::ai::systemone::valid $q {score 0.5 confidence 1.5}] \
+		[::ai::systemone::valid $q {choice low confidence 0.9}]
+} -result {1 0 0 0}
+
+tcltest::test systemone-score-level {a score maps to an ordered level} -setup {
+	::scidb::test::s1::start [list [::scidb::test::s1::level quality 0.8 0.9]]
+} -body {
+	set ::scidb::test::s1::Score {}
+	::ai::decide quality x {type score criteria {low medium high}} \
+		{set ::scidb::test::s1::Score}
+	set d [::scidb::test::s1::wait ::scidb::test::s1::Score]
+	list [dict get $d label] [dict get $d confidence] [dict get $d source]
+} -cleanup {
+	::scidb::test::s1::stop
+} -result {high 0.8 classifier}
+
+tcltest::test systemone-score-gate {a low-confidence score falls back} -setup {
+	::scidb::test::s1::start [list [::scidb::test::s1::level quality 0.8 0.3]]
+} -body {
+	set ::scidb::test::s1::Score {}
+	::ai::decide quality x {type score criteria {low medium high}} \
+		{set ::scidb::test::s1::Score} -fallback {expr {"low"}}
+	set d [::scidb::test::s1::wait ::scidb::test::s1::Score]
+	list [dict get $d label] [dict get $d source]
+} -cleanup {
+	::scidb::test::s1::stop
+} -result {low rules}
 
 ::tcltest::cleanupTests
 return

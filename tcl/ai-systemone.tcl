@@ -392,6 +392,11 @@ proc ::ai::systemone::valid {question answer} {
 				set ok 1
 				set p [dict get $answer noul]
 			}
+			score {
+				set value [dict get $answer score]
+				set ok [expr {[string is double -strict $value] && $value >= 0.0 && $value <= 1.0}]
+				set p [dict get $answer confidence]
+			}
 			default { set ok 0 }
 		}
 	}]} {
@@ -446,6 +451,16 @@ proc ::ai::systemone::Decided {feature question script opts result} {
 		if {[dict get $question type] eq "noul"} {
 			set p [dict get $answer noul]
 			set decision [list ok 1 label [expr {$p >= $threshold}] confidence $p source classifier]
+		} elseif {[dict get $question type] eq "score"} {
+			if {[dict get $answer confidence] >= $threshold} {
+				set levels [dict get $question criteria]
+				set n [llength $levels]
+				set s [dict get $answer score]
+				set i [expr {$n > 1 ? int(round($s * ($n - 1))) : 0}]
+				if {$i < 0} { set i 0 }
+				if {$i >= $n} { set i [expr {$n - 1}] }
+				set decision [list ok 1 label [lindex $levels $i] confidence $s source classifier]
+			}
 		} elseif {[dict get $answer confidence] >= $threshold} {
 			set decision [list ok 1 label [dict get $answer choice] \
 				confidence [dict get $answer confidence] source classifier]

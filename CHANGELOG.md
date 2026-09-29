@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — System One: the score primitive
+
+- The `score` question type (a position on an ordered level scale) is handled
+  end to end. `::ai::systemone::valid` accepted only `choice`/`noul`, so any
+  `score` question silently fell back; it now validates the `score`/`confidence`
+  shape, and `::ai::systemone::Decided` maps the score to the ordered level
+  (`criteria` is the low-to-high level list) and gates on confidence. This
+  closes the "the score primitive is unused" gap (`SYSTEM_ONE_RESEARCH.md` §5.1)
+  and unblocks the ordering uses (annotate priority, tier routing).
+- Tests: `tests/test_app_systemone.tcl` (`systemone-score-valid`,
+  `systemone-score-level`, `systemone-score-gate`). App suite, `make -C tests
+  ai-tests`, Tcl and C++ suites green.
+
 ## Unreleased — AI: comment kind (A3)
 
 - New `tcl/ai-comment.tcl`: what a comment is about — opening theory, a tactic,
