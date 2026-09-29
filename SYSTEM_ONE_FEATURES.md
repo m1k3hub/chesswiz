@@ -54,23 +54,17 @@ shadow logs exist) → 8.
 
 - **Problem:** the study plan (`ai-studyplan.tcl`) and the opponent brief (`ai-brief.tcl`)
   sample games from every time control, so blitz and classical games are mixed together.
-  A rule can't parse an Event tag such as `Titled Arena Jul '24`, but classifying it is
-  easy.
-- **Question:** `choice` over `{classical, rapid, blitz, bullet, correspondence, simul,
-  training, unclear}`, plus a `noul` "online?" in the same call.
-- **State:** `Event`, `Site`, `Round`, `TimeControl`, `Date`. Short and structured, which
-  keeps the state inside Kev's ≤384-token training range.
-- **Order of precedence:**
-  1. A well-formed `TimeControl` tag decides deterministically.
-  2. Otherwise the classifier decides, if its confidence is at least the threshold.
-  3. Otherwise the bucket is `unknown`.
-- **Threshold:** `SCIDB_AI_EVENT_MIN_CONFIDENCE`, default 0.7.
-- **Cost:** one classification per distinct `(Event, Site)` pair, not per game. Cache the
-  results in the database's sidecar metadata.
-- **Consumers:**
-  - a `bucket` filter for the study plan and the brief (default: classical + rapid)
-  - a tree/search filter
-- **Blast radius:** metadata only. A wrong label costs a filter miss, never a chess claim.
+- **Decision:** *deterministic, rule-only* (`tcl/ai-event.tcl`). The rule reads the
+  `TimeControl` tag, then the `Event`/`Site`/`Round` words; anything it cannot place is
+  `unclear`. A classifier is deliberately **not** consulted: the rule resolves every tag
+  that carries the information, and the residual's honest answer is `unclear` — naming an
+  event's time control from its name alone is world-knowledge recall, and both plumb-4b
+  and hosted Jev scored only 10/17 on exactly those inputs
+  (`TYPESAFE_API_EXPERIMENT.md`).
+- **Consumers:** the study plan and brief (a `bucket` filter, default classical + rapid),
+  the Extras → AI: Time Controls report, and the assistant `event_types` tool.
+- **Blast radius:** metadata only. A wrong bucket costs a filter miss, never a chess claim;
+  the feature has no model dependency at all.
 
 ### 2.2 Comment language tagging
 
@@ -185,14 +179,46 @@ shadow logs exist) → 8.
    `(feature, backend)` in a table and falls back to the environment variable. Why: under
    `auto` the resolved backend is often `kev`, while the current defaults were calibrated
    on plumb (research §6.2).
+
+   **Shipped** (`::ai::systemone::loadThresholds`, auto-loaded from
+   `SCIDB_AI_THRESHOLDS` or `tcl/ai-thresholds.tsv`). The table is filled
+   by `scripts/calibrate-systemone.tcl` from a labelled battery
+   (`tests/fixtures/systemone-battery.tcl`, math in `tcl/ai-calibrate.tcl`,
+   tests in `tests/test_ai_calibrate.tcl`): it measures a backend on the
+   *production* question, sweeps the confidence threshold, and writes the
+   most-coverage threshold that meets a target accuracy. A feature that
+   cannot meet the target is **not** written, so a calibration can never
+   loosen a gate. Live runs (2026): on `plumb-4b-v5`, `comment_kind`
+   → 0.85 (coverage 0.57, accuracy 0.94) and `language` → 0.75
+   (coverage 0.84, accuracy 0.94); on hosted `typesafe` (jev-latest),
+   `comment_kind` → 0.0 (1.00 / 0.967) and `language` → 0.0
+   (1.00 / 1.000). `event_type` is not calibrated because it is now
+   rule-only (§2.1, `TYPESAFE_API_EXPERIMENT.md`).
 3. **Batch helper.** Features 1–3 run over whole databases (100k+ games). They need:
    - a queue with limited concurrency over `evaluateAsync`
    - de-duplication by state hash
    - a progress bar
    - resuming after interruption from a sidecar cache
    - dropping silently to the fallback when `enabled` turns false partway through
+
+   **Shipped** (`tcl/ai-batch.tcl`, `::ai::batch::run`, tests in
+   `tests/test_ai_batch.tcl`). It is policy-free: each item yields its raw
+   answer (`{ok 1 answer A source classifier|cache}`) or an error
+   (`{ok 0 error E}`), and the caller applies `::ai::systemone::valid` and
+   its own threshold, exactly as `::ai::decide` would. The cache is
+   append-only and keyed by (endpoint, model, question, state), so a changed
+   backend or question never reuses a stale answer and a crashed run resumes
+   from the last persisted answer.
 4. **Override log.** Every time the user rejects a proposed label or tag, record it. This
    feeds the Wave 4 threshold autotune with real labels.
+
+   **Shipped** (`tcl/ai-journal.tcl`, tests in `tests/test_ai_journal.tcl`).
+   The *decision* half is wired: `::ai::decide` installs
+   `::ai::journal::logged` in front of every caller's script, so turning on
+   `SCIDB_AI_JOURNAL=<file>` records every gate's `(feature, state, label,
+   confidence, source)`. The *override* half is the exposed
+   `::ai::journal::override <feature> <state> <proposed> <corrected>` API;
+   the UI accept/reject hooks (e.g. the comment language slot) call it.
 
 ---
 

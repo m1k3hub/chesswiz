@@ -388,9 +388,18 @@ that the external research supports and the tree's own "fit the machine" require
 (8 GB cards, constrained hardware) makes valuable.
 
 ### 5.6 Calibration battery + threshold autotune (Wave 4, unbuilt)
-The tree has thresholds and a shadow log but no automated way to (a) measure
-coverage-at-error-budget for the *user's* backend and (b) refit thresholds from
-observed overrides. The external evidence is emphatic: **calibrate on your own
+**Update (shipped):** the coverage-at-error-budget half is built.
+`scripts/calibrate-systemone.tcl` runs a labelled battery through the live
+backend, sweeps the threshold, and writes the per-`(feature, backend)` value
+that `::ai::systemone::threshold` reads (auto-loaded from
+`tcl/ai-thresholds.tsv`); the pure math is in `tcl/ai-calibrate.tcl` and
+`tests/test_ai_calibrate.tcl`. A feature whose best accuracy is below the
+target is not written, so calibration can only tighten a gate. The
+*autotune-from-user-overrides* half (item 4, the override log) remains open —
+though the decision journal that feeds it now ships (`tcl/ai-journal.tcl`: every
+`::ai::decide` records `(feature, state, label, confidence, source)` when
+`SCIDB_AI_JOURNAL` is set, and `::ai::journal::override` is the correction API).
+The external evidence is emphatic: **calibrate on your own
 labels**; a temperature/threshold fitted elsewhere does not transfer (JevBench's
 public→sealed gap; Kev's "a temperature fitted in distribution does not transfer").
 Wave 4 already lists this; the research raises its priority.
