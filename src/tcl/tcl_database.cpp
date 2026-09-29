@@ -48,6 +48,7 @@
 #include "db_database.h"
 #include "db_database_codec.h"
 #include "db_game.h"
+#include "db_move_node.h"
 #include "scm/scm_media.h"
 #include "cbh/cbh_media.h"
 #include "tcl_media_extract.h"
@@ -89,6 +90,9 @@
 #include <tcl.h>
 #include <string.h>
 #include <ctype.h>
+#include <algorithm>
+#include <chrono>
+#include <vector>
 
 
 using namespace db;
@@ -4820,6 +4824,145 @@ cmdMarkDeleted(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	char const* database = stringFromObj(objc, objv, 1);
 	variant::Type variant = tcl::game::variantFromObj(objc, objv, 2);
+struct SimilarMatch
+{
+	unsigned number;
+	unsigned shared;
+
+	bool operator<(SimilarMatch const& other) const
+	{
+		return shared != other.shared ? shared > other.shared : number < other.number;
+	}
+};
+
+
+// One pass: O(D + G*L + G*log(N+1)) time, O(R + M + N) space, where
+// D is decoded data, G scanned games, L reference plies, R reference size,
+// M largest decoded game and N result limit. Only the reference first-ply
+// bucket is retained; real positions and moves verify every candidate.
+// Local Games never touch the editor or write database records. Time is
+// checked between decodes; a single codec read cannot be interrupted.
+static int
+cmdSimilar(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc < 4 || (objc - 4) % 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv,
+			"<database> <variant> <number> ?-limit N? ?-max G? ?-seconds S?");
+		return TCL_ERROR;
+	}
+
+	int number, limit = 10, maximum = 10000;
+	double seconds = 5;
+	if (Tcl_GetIntFromObj(ti, objv[3], &number) != TCL_OK)
+		return TCL_ERROR;
+	for (int i = 4; i < objc; i += 2)
+	{
+		char const* option = Tcl_GetString(objv[i]);
+		if (::strcmp(option, "-seconds") == 0)
+		{
+			if (Tcl_GetDoubleFromObj(ti, objv[i + 1], &seconds) != TCL_OK)
+				return TCL_ERROR;
+		}
+		else if (::strcmp(option, "-limit") == 0 || ::strcmp(option, "-max") == 0)
+		{
+			int& value = ::strcmp(option, "-limit") == 0 ? limit : maximum;
+			if (Tcl_GetIntFromObj(ti, objv[i + 1], &value) != TCL_OK)
+				return TCL_ERROR;
+		}
+		else
+		{
+			Tcl_SetObjResult(ti, Tcl_NewStringObj("unknown similar option", -1));
+			return TCL_ERROR;
+		}
+	}
+	if (number < 0 || limit < 0 || maximum < 0 || !(seconds >= 0 && seconds <= 3600))
+	{
+		Tcl_SetObjResult(ti, Tcl_NewStringObj("expected nonnegative integers and seconds between 0 and 3600", -1));
+		return TCL_ERROR;
+	}
+
+	variant::Type variant = tcl::game::variantFromObj(objc, objv, 2);
+	Database& db = scidb->cursor(stringFromObj(objc, objv, 1), variant).getDatabase();
+	if (unsigned(number) >= db.countGames())
+	{
+		Tcl_SetObjResult(ti, Tcl_NewStringObj("game number out of range", -1));
+		return TCL_ERROR;
+	}
+	Tcl_ResetResult(ti);
+	if (!limit || !maximum || !seconds || db.gameInfo(number).isDeleted())
+		return TCL_OK;
+
+	typedef std::chrono::steady_clock Clock;
+	auto deadline = Clock::now() + std::chrono::duration<double>(seconds);
+	Game reference;
+	if (db.loadGame(number, reference) != load::Ok)
+	{
+		Tcl_SetObjResult(ti, Tcl_NewStringObj("cannot read reference game", -1));
+		return TCL_ERROR;
+	}
+	MoveNode const* first = reference.data().m_startNode->next();
+	if (!first || first->atLineEnd())
+		return TCL_OK;
+
+	std::vector<SimilarMatch> best;
+	unsigned stop = mstl::min(unsigned(maximum), db.countGames());
+	for (unsigned n = 0; n < stop && Clock::now() < deadline; ++n)
+	{
+		if (n == unsigned(number) || db.gameInfo(n).isDeleted() || db.gameInfo(n).isGuidingText())
+			continue;
+		Game game;
+		if (db.loadGame(n, game) != load::Ok)
+		{
+			Tcl_SetObjResult(ti, Tcl_NewStringObj("cannot read candidate game", -1));
+			return TCL_ERROR;
+		}
+		MoveNode const* b = game.data().m_startNode->next();
+		if (!b || b->atLineEnd() || b->move().index() != first->move().index())
+			continue;
+		if (game.variant() != reference.variant()
+			|| !game.startBoard().isEqualZHPosition(reference.startBoard()))
+			continue;
+		unsigned shared = 0;
+		for (MoveNode const* a = first; a && b && !a->atLineEnd() && !b->atLineEnd();
+				a = a->next(), b = b->next())
+		{
+			if (a->move() != b->move())
+				break;
+			++shared;
+		}
+		if (!shared)
+			continue;
+		SimilarMatch match = { n, shared };
+		if (best.size() == unsigned(limit))
+		{
+			if (!(match < best.front()))
+				continue;
+			std::pop_heap(best.begin(), best.end());
+			best.pop_back();
+		}
+		best.push_back(match);
+		std::push_heap(best.begin(), best.end());
+	}
+	std::sort_heap(best.begin(), best.end());
+	Tcl_Obj* rows = Tcl_NewListObj(0, nullptr);
+	for (auto const& match : best)
+	{
+		GameInfo const& info = db.gameInfo(match.number);
+		Tcl_Obj* row = Tcl_NewDictObj();
+		Tcl_DictObjPut(ti, row, Tcl_NewStringObj("number", -1), Tcl_NewWideIntObj(match.number));
+		Tcl_DictObjPut(ti, row, Tcl_NewStringObj("white", -1), Tcl_NewStringObj(info.playerName(color::White), -1));
+		Tcl_DictObjPut(ti, row, Tcl_NewStringObj("black", -1), Tcl_NewStringObj(info.playerName(color::Black), -1));
+		Tcl_DictObjPut(ti, row, Tcl_NewStringObj("result", -1), Tcl_NewStringObj(result::toString(info.result()), -1));
+		Tcl_DictObjPut(ti, row, Tcl_NewStringObj("year", -1), Tcl_NewIntObj(info.date().year()));
+		Tcl_DictObjPut(ti, row, Tcl_NewStringObj("shared", -1), Tcl_NewIntObj(match.shared));
+		Tcl_ListObjAppendElement(ti, rows, row);
+	}
+	Tcl_SetObjResult(ti, rows);
+	return TCL_OK;
+}
+
+
 	unsigned index = unsigned(intFromObj(objc, objv, 3));
 
 	Cursor& cursor = scidb->cursor(database, variant);
@@ -6247,6 +6390,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdGuidingText,	cmdGuidingText);
 	createCommand(ti, CmdGameAnchor,		cmdGameAnchor);
 	createCommand(ti, CmdHtmlSanitize,	cmdHtmlSanitize);
+	createCommand(ti, "::scidb::db::similar", cmdSimilar);
 	createCommand(ti, CmdMarkDeleted,		cmdMarkDeleted);
 }
 

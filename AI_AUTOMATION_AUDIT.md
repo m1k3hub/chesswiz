@@ -47,7 +47,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | B5 | Event / crosstable report | event tables → report (`crosstable.tcl`, `eventtable.tcl`) | LLM | 🟢 *(module `ai-eventreport.tcl`; crosstable window menu "Narrate the Standings (AI)", points from the Result tags)* |
 | B6 | Explain the engine's line | PV → words in the analysis pane (`app-analysis.tcl`, `ai-engine.tcl`) | LLM | 🟢 *(shipped)* |
 | B7 | Hover/status "what is this?" | deterministic fact line, optionally phrased (`ai-prompt.tcl`) | rules + LLM | 🟢 |
-| B8 | Find games like this + why | overlap facts → rationale (`ai-precedent.tcl`) | LLM | 🟢 *(module `ai-similar.tcl` shipped; blocked on a retrieval source: no Tcl call lists the games that reach a position without a CQL scan)* |
+| B8 | Find games like this + why | overlap facts → rationale (`ai-precedent.tcl`) | LLM | 🟢 *(retrieval is native, `::scidb::db::similar`; `ai-similar.tcl` narrates the overlap facts; no UI entry yet)* |
 | B9 | Show-your-work evidence | ground each claim in the report (`app-report.tcl`, `ai-claims.tcl`) | rules | 🟢 *(shipped: the fact pack is rendered)* |
 | **C. Reviewed writes** | | | | |
 | C1 | Draft a comment in place | comment editor "Draft" (`comment.tcl`) | LLM + claim check | 🟡 *(shipped)* |
@@ -142,8 +142,13 @@ a screen.
   (`LLM_REACH_PLAN.md` C3). Caching by position hash remains.
 - **B7 Hover/status "what is this?"** — `::scidb::ai::text` gives the deterministic line;
   the model only phrases it. Must work with no provider. (C2)
-- **B8 Find games like this + why** — rank by shared continuations in
-  `::ai::precedent`, generate the rationale from the overlap facts only. (C5)
+- **B8 Find games like this + why** *shipped* — `::ai::similar::candidates`
+  uses native `::scidb::db::similar`: one-pass decoding into local games,
+  first-ply bucketing, exact starting-position/move verification, and a bounded
+  top-N heap. Game/time caps bound partial results; decoding one record cannot
+  be interrupted. Retrieval never changes editor state or database records.
+  Older binaries and custom readers retain the cached Tcl fallback.
+  `ai-similar.tcl` narrates exact prefix facts, not transpositions. (C5)
 - **B9 Show-your-work** *shipped (first cut)* — every generated report now carries a
   **Grounding facts** block with the deterministic position facts the model was given
   (`toHtml`'s new facts argument; the generation result carries them). Per-claim

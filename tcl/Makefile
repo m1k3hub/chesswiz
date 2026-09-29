@@ -183,6 +183,7 @@ SOURCES = \
 	ai-eventreport.tcl \
 	ai-duplicate.tcl \
 	ai-similar.tcl \
+	ai-simindex.tcl \
 	ai-egress.tcl \
 	ai-tier.tcl \
 	ai-modelfit.tcl \

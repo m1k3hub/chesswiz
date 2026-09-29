@@ -1,14 +1,11 @@
 # ======================================================================
 # ::ai::similar -- "find games like this + why" (audit B8).
 #
-# The retrieval itself is done before this module runs: a candidate list
-# of games, each with the number of continuation moves/positions it
-# shares with the reference game (the overlap the precedent index and the
-# tree search can supply). The counts are already computed, so this is
-# summarization only: rank by how much they overlap, then let the
-# language model phrase the rationale through the ordinary grounded
-# pipeline of ::ai::trend (fact block -> prompt -> provider -> claim
-# check -> one retry).
+# ai-simindex.tcl supplies candidates: exact common mainline ply prefixes
+# from the same starting position. Pass candidates to facts with that
+# starting FEN (not an arbitrary midgame position). This module ranks
+# those counts and phrases the rationale through the grounded pipeline
+# of ::ai::trend (fact block -> prompt -> provider -> claim check -> retry).
 #
 #   ::ai::similar::facts <fen> <candidates> ?-limit N?
 #       -> dict {fen F games N rows ROWS} with ROWS the N most similar
