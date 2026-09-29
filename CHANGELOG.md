@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — AI: explain the engine's line (C3 / audit B6)
+
+- "Explain this line" in the engine analysis pane's line context menu narrates
+  the engine's principal variation through the ordinary grounded pipeline (fact
+  pack → prompt → claim check → report pane). The line is handed to the claim
+  checker, so a move the model names from the engine's line is grounded even when
+  it is not legal in the current position: `::ai::claims::check <fen> <text>
+  ?<line>?` and `::ai::generate::positionToolsAsync ?-line?`.
+- Tests: `tests/test_ai_claims.tcl` (a later move in the line is grounded; the
+  same move without the line is flagged; a move outside the line is flagged).
+  App suite, `make -C tests ai-tests`, Tcl and C++ suites all green.
+
 ## Unreleased — AI: import doctor (System One, A4)
 
 - New `tcl/ai-import.tcl`: turn the importer's error/warning codes into a cause

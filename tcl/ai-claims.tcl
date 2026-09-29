@@ -180,7 +180,27 @@ proc ai::claims::hypothetical {text start end} {
 # move).  The move must be legal for the side the text attributes it to -- a
 # "..." prefix or a nearby "White"/"Black" -- or, when none is named, for
 # either side.
-proc ai::claims::legalMove {fen move side} {
+# A move token without the check/mate and annotation suffixes, for comparison
+# with the engine's line.
+proc ai::claims::bareMove {move} {
+	return [string trim [string map {+ "" "#" "" "!" "" "?" ""} $move]]
+}
+
+
+# A move named in the engine's principal variation is grounded even when it is
+# not legal in the current position (it belongs to a later ply of the line).
+proc ai::claims::inLine {move line} {
+	set m [bareMove $move]
+	foreach lm $line {
+		if {$m eq [bareMove $lm]} { return 1 }
+	}
+	return 0
+}
+
+
+proc ai::claims::legalMove {fen move side {line ""}} {
+	if {[llength $line] && [inLine $move $line]} { return 1 }
+
 	set fields [split [string trim $fen]]
 	if {[llength $fields] < 2} { return 0 }
 	set stm [expr {[lindex $fields 1] eq "b" ? "black" : "white"}]
@@ -200,7 +220,7 @@ proc ai::claims::legalMove {fen move side} {
 # ----------------------------------------------------------------------
 # ::ai::claims::check <fen> <text> -> list of ungrounded claims
 # ----------------------------------------------------------------------
-proc ai::claims::check {fen text} {
+proc ai::claims::check {fen text {line ""}} {
 	variable Terms
 	variable MovePattern
 
@@ -277,7 +297,7 @@ proc ai::claims::check {fen text} {
 		} else {
 			set side [sideBefore $text $ws]
 		}
-		if {![legalMove $fen $move $side]} {
+		if {![legalMove $fen $move $side $line]} {
 			lappend problems "illegal move: \"$move\""
 		}
 	}

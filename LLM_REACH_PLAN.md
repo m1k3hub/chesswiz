@@ -47,7 +47,7 @@ Confirmed present in the tree before planning (file:line):
 |---|---|---|---|---|---|
 | 1 | C1 selection → explain | S | L | — | Done |
 | 2 | C4 NL search box | M | M | — | Done — superseded by `PLAIN_LANGUAGE_SEARCH.md` (adds CQL patterns) |
-| 3 | C3 explain the PV | S | M | — | Planned |
+| 3 | C3 explain the PV | S | M | — | **Done** |
 | 4 | C6 draft a comment | M | M | — | Planned |
 | 5 | C8 assistant entry points | S–M | L | C1 mapping | Planned |
 | 6 | C9 missing read-only tools | S–M | L | — | Planned |

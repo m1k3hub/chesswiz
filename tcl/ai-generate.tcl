@@ -271,11 +271,12 @@ proc ::ai::generate::evidenceFromText {text} {
 
 
 proc ::ai::generate::positionToolsAsync {fen script args} {
-	array set opts [list -audience club -perspective neutral -depth 12 -maxRounds 4 -retries 1 -context ""]
+	array set opts [list -audience club -perspective neutral -depth 12 -maxRounds 4 -retries 1 -context "" -line ""]
 	array set opts $args
 
 	set state [dict create \
 		fen      $fen \
+		line     $opts(-line) \
 		messages [buildMessages $fen $opts(-audience) $opts(-perspective) $opts(-depth) $opts(-context)] \
 		rounds   0 \
 		maxRounds $opts(-maxRounds) \
@@ -333,7 +334,7 @@ proc ::ai::generate::onToolStepImpl {state result} {
 	}
 
 	set text [expr {[dict exists $msg content] ? [dict get $msg content] : ""}]
-	set problems [noAnswer $text [::ai::claims::check [dict get $state fen] $text]]
+	set problems [noAnswer $text [::ai::claims::check [dict get $state fen] $text [dict get $state line]]]
 
 	# one more try when the narrative contradicts the facts
 	if {[llength $problems] && [dict get $state attempt] < [dict get $state retries]} {

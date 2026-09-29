@@ -65,6 +65,7 @@ set StartOfMotorFailed		"Start of motor failed"
 set WineIsNotInstalled		"'Wine' is not (properly) installed"
 set AnalyzeThisPosition		"Analyze this position"
 set PinToRepertoire			"Pin best line to repertoire"
+set ExplainLine				"Explain this line"
 set EngineComparison			"Engine Comparison"
 set SelectEngines				"Engines to compare:"
 set Seconds						"Seconds:"
@@ -1096,6 +1097,8 @@ proc Display(pv) {tree score mate depth seldepth time nodes nps tbhits line pv} 
 	variable ${tree}::Vars
 	variable ${Vars(number)}::Options
 
+	set Vars(pv:$line) $pv
+
 	if {$Vars(state:suspended)} {
 		set args [list $score $mate $depth $seldepth $time $nodes $nps $tbhits $line $pv]
 		set Vars(suspended,[lindex $args 9]) $args
@@ -1483,6 +1486,17 @@ proc PopupMenu {tree number args} {
 						-image $icon::16x16::insert \
 						-compound left \
 						-command [namespace code [list InsertComment $tree $line]] \
+						;
+				}
+				# C3: explain the engine's line.
+				if {[llength [info commands ::application::ai::explainLine]]
+				 && [info exists Vars(pv:$line)] && [string length $Vars(pv:$line)]} {
+					$menu add command \
+						-label " $mc::ExplainLine" \
+						-image $::icon::16x16::none \
+						-compound left \
+						-command [namespace code [list ::application::ai::explainLine \
+							[winfo toplevel $tree] $Vars(pv:$line) [::scidb::pos::fen]]] \
 						;
 				}
 				$menu add separator

@@ -339,6 +339,20 @@ proc ::application::ai::explainComment {parent pos} {
 }
 
 
+# C3: explain the engine's principal variation.  The line is the context and
+# is also handed to the claim checker, so a move the model names from the line
+# is grounded even when it is not legal in the current position.
+proc ::application::ai::explainLine {parent pv fen} {
+	set pv [string trim $pv]
+	if {$pv eq ""} { return }
+	if {$fen eq ""} { set fen [::scidb::pos::fen] }
+	set context "Explain the engine's principal variation from this position to a club player.\nENGINE LINE: $pv\nDescribe what the first move achieves and how the idea unfolds. Every move you name must come from this line; do not invent moves or evaluations."
+	generate $parent "Explain the engine's line" "Explaining the engine's line..." $fen \
+		-context $context -line [split $pv]
+	return
+}
+
+
 # Dispatch on the selection kind: {move san fen} | {game} | {comment pos}.
 proc ::application::ai::explainSelection {parent kind payload} {
 	switch -- $kind {

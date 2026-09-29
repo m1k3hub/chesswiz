@@ -108,5 +108,13 @@ check "clean: counterfactual (instead of)" \
 check "flagged: general principle still flags the real claim" \
 	[flagged $start "Opposite-coloured bishops exist."]
 
+# --- the engine line grounds its own moves (C3) ----------------------------
+check "line: a later move in the line is grounded" \
+	[expr {[llength [::ai::claims::check $start "The line continues 3.Bb5." {e4 e5 Nf3 Nc6 Bb5}]] == 0}]
+check "no line: the later move is flagged" \
+	[flagged $start "The line continues 3.Bb5."]
+check "line: a move not in the line is still flagged" \
+	[expr {[llength [::ai::claims::check $start "The line continues 3.Qh5." {e4 e5 Nf3 Nc6 Bb5}]] > 0}]
+
 puts "AI-CLAIMS-FAILURES: $failures"
 exit $failures

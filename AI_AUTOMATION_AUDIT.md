@@ -45,7 +45,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | B3 | Opening-report narrative | opening-prep table → article (`app-database-openingprep.tcl`, `db_tree`) | LLM | 🟢 |
 | B4 | Maintenance / ECO-trend narrative | maintenance report (`app-database-maintenance.tcl` `EcoTrend`, `MaintenanceSummaryText`) | LLM | 🟢 |
 | B5 | Event / crosstable report | event tables → report (`crosstable.tcl`, `eventtable.tcl`) | LLM | 🟢 |
-| B6 | Explain the engine's line | PV → words in the analysis pane (`app-analysis.tcl`, `ai-engine.tcl`) | LLM | 🟢 |
+| B6 | Explain the engine's line | PV → words in the analysis pane (`app-analysis.tcl`, `ai-engine.tcl`) | LLM | 🟢 *(shipped)* |
 | B7 | Hover/status "what is this?" | deterministic fact line, optionally phrased (`ai-prompt.tcl`) | rules + LLM | 🟢 |
 | B8 | Find games like this + why | overlap facts → rationale (`ai-precedent.tcl`) | LLM | 🟢 |
 | B9 | Show-your-work evidence | ground each claim in the report (`app-report.tcl`, `ai-claims.tcl`) | rules | 🟢 |
@@ -134,8 +134,11 @@ a screen.
 - **B4 Maintenance / ECO-trend narrative** — `MaintenanceSummaryText`/`EcoTrend` already
   compute the trend table; narrate it. Zero new data.
 - **B5 Event / crosstable report** — summarise a crosstable or an event's games (F12).
-- **B6 Explain the engine's line** — read `pv` from `::ai::engine::evaluate`, feed
-  `moveFacts --line`, narrate; cache by position hash. (`LLM_REACH_PLAN.md` C3)
+- **B6 Explain the engine's line** *shipped* — the analysis pane's line context
+  menu narrates the engine's PV through the grounded pipeline; the claim checker
+  is line-aware (`::ai::claims::check <fen> <text> ?line?`), so a move named from
+  the line is grounded even when it is not legal in the current position.
+  (`LLM_REACH_PLAN.md` C3). Caching by position hash remains.
 - **B7 Hover/status "what is this?"** — `::scidb::ai::text` gives the deterministic line;
   the model only phrases it. Must work with no provider. (C2)
 - **B8 Find games like this + why** — rank by shared continuations in
