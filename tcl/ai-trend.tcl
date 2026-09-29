@@ -11,7 +11,12 @@
 #       -> dict {games N eco M white W draws D black B openings ROWS}
 #          with ROWS the most played openings, each {eco name games w d b}
 #   ::ai::trend::factsText <facts>  -> the deterministic fact block
-#   ::ai::trend::narrate <parent> <facts> ?-done CMD?
+#   ::ai::trend::narrate <parent> <facts> ?-done CMD? ?-block TEXT? ?-prompt TEXT?
+#                        ?-system TEXT? ?-title TEXT? ?-fen FEN?
+#       -block/-prompt/-system/-title let another counts-only narrative (the
+#       opening-prep one, ai-openingprep) run the same pipeline; the defaults
+#       are this module's own. -fen is the position the claim checker judges any
+#       named move against (default: none, so a move-like claim fails).
 #       -> (returns the fact block) and, when a model is configured, the
 #          ordinary grounded pipeline; -done is called with the dict
 #          {ok 1 text ... claims {...} grounded 0|1}
@@ -157,15 +162,18 @@ proc ::ai::trend::configureProvider {} {
 # Returns the fact block, so a caller that needs no event loop always has
 # something to show.
 proc ::ai::trend::narrate {parent facts args} {
-	array set opts [list -done {}]
+	array set opts [list -done {} -block {} -prompt {} -system {} -title "AI: database trends" -fen {}]
 	array set opts $args
 
-	set block [factsText $facts]
+	set block $opts(-block)
+	if {![string length $block]} { set block [factsText $facts] }
+	if {![string length $opts(-prompt)]} { set opts(-prompt) [prompt $block] }
+	if {![string length $opts(-system)]} { set opts(-system) [system] }
 
 	if {[llength [info commands ::ai::provider::completeAsync]] == 0} {
 		# no language model: resolve asynchronously, as a caller that
 		# registered -done after narrate returned would never hear anything
-		after 0 [list ::ai::trend::deliverFacts $parent $block $opts(-done)]
+		after 0 [list ::ai::trend::deliverFacts $parent $block $opts(-done) $opts(-title)]
 		return $block
 	}
 
@@ -174,7 +182,10 @@ proc ::ai::trend::narrate {parent facts args} {
 	set state [dict create \
 		parent $parent \
 		block $block \
-		prompt [prompt $block] \
+		prompt $opts(-prompt) \
+		system $opts(-system) \
+		title $opts(-title) \
+		fen $opts(-fen) \
 		attempt 0 \
 		done $opts(-done)]
 	attempt $state
@@ -185,7 +196,7 @@ proc ::ai::trend::narrate {parent facts args} {
 proc ::ai::trend::attempt {state} {
 	dict incr state attempt
 	::ai::provider::completeAsync [dict get $state prompt] \
-		[namespace code [list ::ai::trend::onComplete $state]] -system [system]
+		[namespace code [list ::ai::trend::onComplete $state]] -system [dict get $state system]
 	return
 }
 
@@ -196,7 +207,8 @@ proc ::ai::trend::attempt {state} {
 proc ::ai::trend::onComplete {state result} {
 	if {[catch {onCompleteImpl $state $result}]} {
 		after 0 [list catch [list ::ai::trend::deliverFacts \
-			[dict get $state parent] [dict get $state block] [dict get $state done]]]
+			[dict get $state parent] [dict get $state block] [dict get $state done] \
+			[dict get $state title]]]
 	}
 	return
 }
@@ -205,7 +217,8 @@ proc ::ai::trend::onComplete {state result} {
 proc ::ai::trend::onCompleteImpl {state result} {
 	if {![dict get $result ok]} {
 		# the provider is unreachable: the facts are the narrative
-		deliverFacts [dict get $state parent] [dict get $state block] [dict get $state done]
+		deliverFacts [dict get $state parent] [dict get $state block] \
+			[dict get $state done] [dict get $state title]
 		return
 	}
 
@@ -220,14 +233,14 @@ proc ::ai::trend::onCompleteImpl {state result} {
 		# no position to verify against: this is a fact block about the
 		# database, so the checker can only police board vocabulary, and any
 		# move-like or placement claim in the narrative fails it
-		catch { set problems [::ai::claims::check "" $text] }
+		catch { set problems [::ai::claims::check [dict get $state fen] $text] }
 	}
 
 	# one try, told exactly what contradicted the facts
 	if {[llength $problems] == 0 || [dict get $state attempt] > 1} {
 		deliver [dict get $state parent] $text $problems \
 			[expr {[llength $problems] == 0}] \
-			[dict get $state block] [dict get $state done]
+			[dict get $state block] [dict get $state done] [dict get $state title]
 		return
 	}
 
@@ -239,14 +252,14 @@ proc ::ai::trend::onCompleteImpl {state result} {
 
 # One ending: the report pane (if this build has one) and the caller's
 # -done. An empty narrative leaves the caller with the facts.
-proc ::ai::trend::deliver {parent text claims grounded block done} {
+proc ::ai::trend::deliver {parent text claims grounded block done {title "AI: database trends"}} {
 	if {![string length [string trim $text]]} {
-		return [deliverFacts $parent $block $done]
+		return [deliverFacts $parent $block $done $title]
 	}
 
 	if {[llength [info commands ::application::ai::showReport]]
 		&& [llength [info commands ::application::ai::toHtml]]} {
-		set title [expr {$grounded ? "AI: database trends" : "AI: database trends (unverified)"}]
+		if {!$grounded} { append title " (unverified)" }
 		set html [::application::ai::toHtml $text $claims {} 1 {} $block]
 		catch { ::application::ai::showReport $parent $title [::application::ai::htmlData $html] }
 	}
@@ -261,10 +274,12 @@ proc ::ai::trend::deliver {parent text claims grounded block done} {
 
 # The deterministic facts as the report: the ::ai::event-style degrade when
 # no model phrase is available.
-proc ::ai::trend::deliverFacts {parent block done} {
+proc ::ai::trend::deliverFacts {parent block done {title "AI: database trends"}} {
 	if {[llength [info commands ::application::ai::showReport]]} {
-		set html "<p><b>Database trends</b></p><pre>[::application::ai::escape $block]</pre>"
-		catch { ::application::ai::showReport $parent "AI: database trends" \
+		set head [regsub {^AI: } $title {}]
+		set head "[string toupper [string index $head 0]][string range $head 1 end]"
+		set html "<p><b>[::application::ai::escape $head]</b></p><pre>[::application::ai::escape $block]</pre>"
+		catch { ::application::ai::showReport $parent $title \
 			[::application::ai::htmlData $html] }
 	}
 	if {[llength $done]} {

@@ -179,6 +179,7 @@ SOURCES = \
 	ai-annotations.tcl \
 	ai-generate.tcl \
 	ai-trend.tcl \
+	ai-openingprep.tcl \
 	ai-transcript.tcl \
 	app-ai.tcl \
 	app-ai-models.tcl \

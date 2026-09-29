@@ -42,7 +42,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | **B. Grounded narration (read-only)** | | | | |
 | B1 | Opponent brief prose | prep stats → dossier (`ai-brief.tcl`, `PrepReport*`) | LLM | 🟢 *(shipped)* |
 | B2 | Study-plan prose | mistake clusters → plan (`ai-studyplan.tcl`) | LLM | 🟢 *(shipped)* |
-| B3 | Opening-report narrative | opening-prep table → article (`app-database-openingprep.tcl`, `db_tree`) | LLM | 🟢 |
+| B3 | Opening-report narrative | opening-prep table → article (`app-database-openingprep.tcl`, `db_tree`) | LLM | 🟢 *(shipped as `ai-openingprep.tcl`, "Narrate" button)* |
 | B4 | Maintenance / ECO-trend narrative | maintenance report (`app-database-maintenance.tcl` `EcoTrend`, `MaintenanceSummaryText`) | LLM | 🟢 *(shipped as `ai-trend.tcl`)* |
 | B5 | Event / crosstable report | event tables → report (`crosstable.tcl`, `eventtable.tcl`) | LLM | 🟢 |
 | B6 | Explain the engine's line | PV → words in the analysis pane (`app-analysis.tcl`, `ai-engine.tcl`) | LLM | 🟢 *(shipped)* |
@@ -55,21 +55,21 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | C3 | Auto-tagging / enrichment | bulk game labels → custom tags (`ai-annotate.tcl`) | engine + LLM, review | 🟡 |
 | C4 | Media transcript + lesson outline | audio/video lessons (`app-media-lesson.tcl`, `tcl_media_extract`) | ASR + LLM | 🟡 *(transcript shipped as `ai-transcript.tcl`; outline/LLM step remains)* |
 | C5 | Publication / export writer | tournament report / article from a game set (`export.tcl`) | LLM + claim check | 🟡 |
-| C6 | Training-set prose notes | puzzle sets (`ai-cql.tcl`) | LLM | 🟡 |
+| C6 | Training-set prose notes | puzzle sets (`ai-cql.tcl`) | LLM | 🟡 *(puzzle builder shipped as `training_set`; prose notes remain)* |
 | **D. Assistant reach** | | | | |
 | D1 | Entry points beyond the pane | global shortcut, context-menu "Ask about this", CLI (`app-assistant.tcl`) | wiring | 🟢 |
 | D2 | Tools for unseen panes | comments/selection/report/history as records (`app-assistant.tcl`) | wiring | 🟢 |
 | D3 | Report action links | "show these games", "start engine here" (`app-report.tcl`) | wiring | 🟢 |
 | D4 | Named task templates | one-click chained requests (`app-assistant.tcl`) | templates | 🟢 |
 | D5 | Correspondence copilot | XFCC move → 3 engine-verified candidates (`app-corr-games.tcl`, `ai-engine.tcl`) | engine + LLM | 🟡 |
-| D6 | Self-repair loop | triage → issue file → agent handoff (`app-error-triage.tcl`) | wiring | 🟡 *(half)* |
+| D6 | Self-repair loop | triage → issue file → agent handoff (`app-error-triage.tcl`) | wiring | 🟡 *(triage, issue files, `list_issues`/`handoff_issue` shipped; re-run tests remains)* |
 | **E. Semantic layer** | | | | |
 | E1 | Semantic search over comments/media | local embedding index (`ai-annotations.tcl`, `ai-precedent.tcl`) | embeddings | 🟡 |
-| E2 | Model-fit + calibration battery | detect device memory, recommend quant, measure (`app-ai-models.tcl`) | rules | 🟢 |
-| E3 | Threshold autotune | refit classifier gates from user overrides (`ai-systemone.tcl`) | offline | 🟡 |
+| E2 | Model-fit + calibration battery | detect device memory, recommend quant, measure (`app-ai-models.tcl`) | rules | 🟢 *(calibration battery `ai-calibrate.tcl` and the model chooser shipped; memory/quant detection remains)* |
+| E3 | Threshold autotune | refit classifier gates from user overrides (`ai-systemone.tcl`) | offline | 🟡 *(journal `ai-journal.tcl` and per-backend calibration shipped; refit from overrides remains)* |
 | **F. Curation / data (Wave 3)** | | | | |
-| F1 | Weekly digest / watchers | scheduled download → import → precedent → report (`app-download-games.tcl`) | rules + LLM | 🟢 |
-| F2 | Online-game sync | batch Lichess per account → tag as mine (`app-download-games.tcl`) | rules | 🟢 |
+| F1 | Weekly digest / watchers | scheduled download → import → precedent → report (`app-download-games.tcl`) | rules + LLM | 🟢 *(headless `download::run` only; timer, precedent check and report remain)* |
+| F2 | Online-game sync | batch Lichess per account → tag as mine (`app-download-games.tcl`) | rules | 🟢 *(per-game fetch only; per-account batch remains)* |
 | F3 | Import triage | bucket imported games, ECO-tag (`import.tcl`, `db_eco_table`) | System One + rules | 🟢 |
 | F4 | Curation merge review | scheduled dedup, classifier arbitrates doubtful merges (`app-database-maintenance.tcl`) | System One | 🟢 |
 
@@ -96,7 +96,7 @@ classifier never decides chess truth.
   Korean/kana without the classifier. The editor carries the neutral text into
   the detected slot, so the ordinary save stores it tagged. Fallback: the rule,
   else undecided (the editor does nothing). Also feeds CQL's `:language` filter.
-- **A3 Comment kind facet** — `choice` over `{opening, tactics, endgame, plan, eval,
+- **A3 Comment kind facet** *shipped* (`tcl/ai-comment.tcl`, assistant `comment_kind`) — `choice` over `{opening, tactics, endgame, plan, eval,
   bio, warning, other}`. Fallback: no facet. Enables filtering a database by comment kind.
 - **A4 Import doctor** *shipped* (`tcl/ai-import.tcl`; the file-import log ends with
   the rule-only doctor, the assistant `diagnose_import` uses the classifier). — a
@@ -106,10 +106,10 @@ classifier never decides chess truth.
 - **A5 Duplicate-merge arbitration** — dedup is deterministic (`db_search` duplicate
   detection); only *ambiguous* pairs ask the classifier: `{same game, different game,
   unsure}`. Fallback: deterministic dedup. Mutations stay behind the existing confirm gate.
-- **A6 New-move novelty label** — `choice` over `{novelty, side line, transposition,
+- **A6 New-move novelty label** *shipped* (`tcl/ai-novelty.tcl`, assistant `novelty_label`) — `choice` over `{novelty, side line, transposition,
   blunder}` for a move absent from `::ai::precedent`; the engine still answers
   "playable?". Fallback: no label. (Wave 2 novelty radar)
-- **A7 Auto-annotate ordering** — `score` the engine-flagged moments so the best prose
+- **A7 Auto-annotate ordering** *shipped* (`tcl/ai-annotate.tcl`) — `score` the engine-flagged moments so the best prose
   appears first / limited budgets spend on the right moves. Fallback: engine order.
 - **A8 Voice transcript gate** *shipped* — `noul`: is this transcript a plausible
   request? An implausible one is held in the entry for correction; a plausible or
@@ -130,7 +130,7 @@ Same pipeline as `::application::ai::analyze`: fact pack → prompt → provider
 `::ai::claims::check` → retry → `toHtml`/`showReport`. No mutation, so the blast radius is
 a screen.
 
-- **B3 Opening-report narrative** — feed the opening-prep rows (`db_tree`/ECO stats) to the
+- **B3 Opening-report narrative** *shipped* (`tcl/ai-openingprep.tcl`; the Opening Prep dialog's "Narrate" button, grounded through `::ai::trend::narrate`, moves judged against the table's position) — feed the opening-prep rows (`db_tree`/ECO stats) to the
   provider; the numbers are already computed, so this is pure summarization.
 - **B4 Maintenance / ECO-trend narrative** — `MaintenanceSummaryText`/`EcoTrend` already
   compute the trend table; narrate it. Zero new data.
@@ -195,6 +195,16 @@ a screen.
   mine. (Wave 3)
 - **F3 Import triage** — bucket tournament/analysis/fragment + ECO-tag via the table. (Wave 3)
 - **F4 Curation merge review** — F1 + A5 together. (Wave 3)
+
+---
+
+### Status check (2026-09-29)
+
+Each row was compared with the code. Not started (no module, tool or hook found):
+A5, A9, A10, B5, B7 (only the C++ `::scidb::ai::text` fact line feeds the
+generator; no hover/status line), B8 (`ai-annotations.tcl` retrieves exemplars,
+not a rationale), C3, C5, D1–D5, E1, F3, F4. The other unmarked rows above are
+partial, as noted in the table.
 
 ---
 

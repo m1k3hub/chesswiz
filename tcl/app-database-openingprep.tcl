@@ -51,6 +51,7 @@ set OpeningPrepRareLimit			"Max games"
 set OpeningPrepRareNoMoves			"No low-frequency moves found for the current position."
 set OpeningPrepRareSummary			"Low-frequency moves: %s candidate moves, %s games, top move %s"
 set OpeningPrepRareStatus			"Showing moves with %s games or fewer."
+set OpeningPrepNarrate			"Narrate"
 set OpeningPrepSummaryNone			"Current position: no move statistics loaded"
 set OpeningPrepSummary				"Current position: %s candidate moves, %s games, top move %s"
 set OpeningPrepRefBase				"Reference database"
@@ -272,6 +273,19 @@ proc UpdateOpeningPrepDisplay {dlg} {
 		set OpeningPrepData($dlg,status) ""
 	}
 	PopulateOpeningPrepTable $dlg $rows
+}
+
+
+# Audit B3: the table as a grounded, read-only narrative (ai-openingprep).
+proc OpeningPrepNarrate {dlg} {
+	variable OpeningPrepData
+
+	if {![winfo exists $dlg] || [llength [info commands ::ai::openingprep::narrate]] == 0} { return }
+	if {![info exists OpeningPrepData($dlg,data)] || [llength $OpeningPrepData($dlg,data)] == 0} { return }
+
+	set rows [OpeningPrepFilteredRows $dlg $OpeningPrepData($dlg,data)]
+	set facts [::ai::openingprep::facts $OpeningPrepData($dlg,positionText) $rows]
+	::ai::openingprep::narrate $dlg $facts
 }
 
 
@@ -638,6 +652,8 @@ proc OpenOpeningPrepReport {parent file variant} {
 			-command [namespace code [list OpenOpeningPrepEcoInSwitcher $dlg]]
 		ttk::button $controls.savews -text $mc::OpeningPrepSaveWorkingSet \
 			-command [namespace code [list SaveOpeningPrepEcoWorkingSet $dlg]]
+		ttk::button $controls.narrate -text $mc::OpeningPrepNarrate \
+			-command [namespace code [list OpeningPrepNarrate $dlg]]
 		ttk::button $controls.close -text $mc::Close -command [list destroy $dlg]
 
 		grid $controls.methodLabel -row 0 -column 0 -sticky w
@@ -653,7 +669,8 @@ proc OpenOpeningPrepReport {parent file variant} {
 		grid $controls.eco -row 0 -column 10 -sticky ew -padx {4 0}
 		grid $controls.switcher -row 0 -column 11 -sticky ew -padx {4 0}
 		grid $controls.savews -row 0 -column 12 -sticky ew -padx {4 0}
-		grid $controls.close -row 0 -column 13 -sticky e -padx {4 0}
+		grid $controls.narrate -row 0 -column 13 -sticky ew -padx {4 0}
+		grid $controls.close -row 0 -column 14 -sticky e -padx {4 0}
 		grid columnconfigure $controls 1 -weight 1
 		grid columnconfigure $controls 3 -weight 1
 		grid columnconfigure $controls 6 -weight 1
