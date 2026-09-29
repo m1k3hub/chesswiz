@@ -90,6 +90,24 @@ proc ::ai::event::Unknown {} {
 }
 
 
+# The deterministic bucket of each game, as a class -> count dict. Used where
+# the caller is synchronous (the study plan report) and no classifier is
+# available; games the rule cannot place count as "unclear".
+proc ::ai::event::RuleMix {base variant numbers} {
+	set classes {}
+	foreach c $::ai::event::Classes { dict set classes $c 0 }
+
+	foreach number $numbers {
+		set tags {}
+		catch { foreach pair [::scidb::db::get tags $number $base $variant] { dict set tags {*}$pair } }
+		set class [Rule $tags]
+		if {$class eq ""} { set class unclear }
+		dict incr classes $class
+	}
+	return $classes
+}
+
+
 # The tags of the latest games of the active database (or of a player).
 # Returns a list of {number tags}.
 proc ::ai::event::GamesToProfile {base variant player max} {

@@ -217,6 +217,10 @@ proc ::ai::studyplan::run {parent args} {
 	set Priv(base) $base
 	set Priv(variant) $variant
 	set Priv(games) $numbers
+	set Priv(timeMix) {}
+	if {[llength [info commands ::ai::event::RuleMix]]} {
+		catch { set Priv(timeMix) [::ai::event::RuleMix $base $variant $numbers] }
+	}
 
 	Report [Progress [dict create]]
 	after 50 [namespace code NextGame]
@@ -519,6 +523,16 @@ proc ::ai::studyplan::Finish {} {
 
 	set plan [PlanText]
 	set html "<p><b>$mc::Title</b></p><p>[::application::ai::escape $summary]</p>"
+	if {[llength $Priv(timeMix)]} {
+		set parts {}
+		foreach c {classical rapid blitz bullet correspondence simul training unclear} {
+			set n [dict get $Priv(timeMix) $c]
+			if {$n > 0} { lappend parts "$c $n" }
+		}
+		if {[llength $parts]} {
+			append html "<p>The studied games by kind: [::application::ai::escape [join $parts {, }]].</p>"
+		}
+	}
 	if {[string length $plan]} {
 		append html "<p><b>What the audit found</b></p><pre>[::application::ai::escape $plan]</pre>"
 	}

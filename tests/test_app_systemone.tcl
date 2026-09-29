@@ -432,6 +432,22 @@ proc ::scidb::test::s1::eventFixture {} {
 	return $file
 }
 
+tcltest::test systemone-event-rulemix {the deterministic mix over a set of games} -setup {
+	set f [::scidb::test::s1::eventFixture]
+} -body {
+	set numbers {}
+	set view [::scidb::view::new $f Normal unused unused unused unused master slave]
+	::scidb::view::search $f Normal $view reset none
+	for {set row 0} {$row < [::scidb::view::count games $f Normal $view]} {incr row} {
+		lappend numbers [::scidb::db::get gameNumber $f Normal $row $view]
+	}
+	set mix [::ai::event::RuleMix $f Normal $numbers]
+	list [dict get $mix classical] [dict get $mix blitz] [dict get $mix bullet] [dict get $mix unclear]
+} -cleanup {
+	::scidb::db::close $f
+	file delete -force $::scidb::test::s1::Dir
+} -result {1 1 1 1}
+
 tcltest::test systemone-event-rule-unit {TimeControl parsing and event words} -body {
 	list [::ai::event::BaseSeconds "300+0"] [::ai::event::BaseSeconds "40/7200:1800"] \
 		[::ai::event::BaseSeconds "-"] \

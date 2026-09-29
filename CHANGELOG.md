@@ -11,7 +11,9 @@
   Read-only; with no classifier the rule alone answers and the rest is
   "unclear", so it degrades to a deterministic report.
 - Note: scidb does not expose the `TimeControl` tag through `db::get tags`, so
-  in practice the rule leans on the event words and the classifier.
+  in practice the rule leans on the event words and the classifier. The study
+  plan report now also shows the mix of the games it audited, so the
+  blitz/classical mixing the audit warned about is visible.
 - Also fixed: `::application::assistant::Resolve` is now safe when no request
   is pending (an asynchronous tool could resolve after its call ended).
 - Tests: `tests/test_app_systemone.tcl` (`systemone-event-rule-unit`,

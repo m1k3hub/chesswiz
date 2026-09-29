@@ -87,7 +87,8 @@ classifier never decides chess truth.
   tool) — `choice` over `{classical, rapid, blitz, bullet, correspondence, simul,
   training, unclear}` from `TimeControl` and the event words. Fallback: the rule,
   else "unclear". Note: `db::get tags` does not expose `TimeControl`, so the rule
-  leans on the event words. The study-plan/brief *filter* that would use it remains.
+  leans on the event words. The study plan report now *shows* the mix of the
+  games it audited; a `-time` *filter* remains.
   (`SYSTEM_ONE_FEATURES.md` §2.1)
 - **A2 Comment language tagging** — `choice` over ISO-639 codes `+ {xx, yy}` for a comment
   whose language slot is unset (`comment.tcl` already stores `lang`, default `xx`).
