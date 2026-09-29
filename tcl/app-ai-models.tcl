@@ -50,6 +50,7 @@ set OffNote			"No classifier: the language model classifies everything."
 set Auto			"auto (local)"
 set AutoNote		"Automatic: use the first local server that answers (kev, then simple-jev, then plumb). Off if none is running."
 set ClassifierNote	"kev, simple-jev and plumb run on this machine; jev is TypeSafe's Jev in the cloud (Vercel AI Gateway)."
+set Recommended	"recommended on this machine (best on the calibration battery)"
 set PlumbNote		"Plumb-4B: scripts/serve-plumb-classifier.sh downloads it from Hugging Face and serves it on port 8090."
 set KeyNote			"needs %s in the environment"
 
@@ -226,8 +227,13 @@ proc ::application::ai::models::FillClassifiers {} {
 		set name [dict get $b name]
 		if {$name eq "vercel"} { continue }
 		set where [expr {[dict get $b local] ? $mc::Local : $mc::Cloud}]
+		set model [dict get $b model]
+		if {$name eq "typesafe" && [info exists ::env(TYPESAFE_API_KEY)]
+		 && [string length $::env(TYPESAFE_API_KEY)]} {
+			append model "  ($mc::Recommended)"
+		}
 		$tree insert {} end -id $name -text $name \
-			-values [list $where [dict get $b model]] \
+			-values [list $where $model] \
 			-tags [expr {[dict get $b local] ? "" : "cloud"}]
 	}
 
