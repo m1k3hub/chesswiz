@@ -167,6 +167,7 @@ SOURCES = \
 	ai-cql.tcl \
 	ai-event.tcl \
 	ai-language.tcl \
+	ai-import.tcl \
 	ai-narrate.tcl \
 	ai-prompt.tcl \
 	ai-precedent.tcl \

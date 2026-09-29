@@ -29,7 +29,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | A1 | Event-type bucketing | study plan / brief mix blitz with classical (`ai-studyplan.tcl`, `ai-brief.tcl`) | System One `choice` | 🟢 *(shipped as `ai-event.tcl`; study-plan filter remains)* |
 | A2 | Comment language tagging | untagged comments in the multi-language store (`comment.tcl`, `lang`) | System One `choice` | 🟢 *(shipped as `ai-language.tcl`)* |
 | A3 | Comment kind facet | comment editor browse/filter (`comment.tcl`) | System One `choice` | 🟢 |
-| A4 | Import doctor | raw importer error list (`app-pgn.tcl`, `import.tcl`) | System One `choice` | 🟢 |
+| A4 | Import doctor | raw importer error list (`app-pgn.tcl`, `import.tcl`) | System One `choice` | 🟢 *(shipped as `ai-import.tcl`)* |
 | A5 | Duplicate-merge arbitration | ambiguous duplicate pairs (`app-database-maintenance.tcl`, `merge.tcl`) | System One `choice` | 🟢 |
 | A6 | New-move novelty label | new move vs precedent index (`ai-precedent.tcl`, `ai-cql.tcl`) | System One `choice` | 🟢 |
 | A7 | Auto-annotate ordering | which engine-flagged move gets prose first (`ai-annotate.tcl`) | System One `score` | 🟢 |
@@ -98,9 +98,11 @@ classifier never decides chess truth.
   else undecided (the editor does nothing). Also feeds CQL's `:language` filter.
 - **A3 Comment kind facet** — `choice` over `{opening, tactics, endgame, plan, eval,
   bio, warning, other}`. Fallback: no facet. Enables filtering a database by comment kind.
-- **A4 Import doctor** — `choice` over the importer's error groups → a suggested fix.
-  Fallback: today's raw error list (`app-error-triage.tcl` already classifies runtime
-  errors; this extends it to the import path).
+- **A4 Import doctor** *shipped* (`tcl/ai-import.tcl`; the file-import log ends with
+  the rule-only doctor, the assistant `diagnose_import` uses the classifier). — a
+  deterministic code→category→fix table, `choice` only for unknown codes. Fallback:
+  today's raw error list. (Also fixed the log's encoding-warning filter, which read
+  the wrong argument.)
 - **A5 Duplicate-merge arbitration** — dedup is deterministic (`db_search` duplicate
   detection); only *ambiguous* pairs ask the classifier: `{same game, different game,
   unsure}`. Fallback: deterministic dedup. Mutations stay behind the existing confirm gate.

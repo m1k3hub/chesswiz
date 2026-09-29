@@ -545,5 +545,53 @@ tcltest::test systemone-language-assistant {detect_language checks args and answ
 	::scidb::test::s1::stop
 } -result {{text {le roi}} 1 {missing argument 'text'} later:}
 
+# --- import doctor (tcl/ai-import.tcl) -------------------------------------
+
+tcltest::test systemone-import-rule {known codes map to a category; unknown codes do not} -body {
+	list [::ai::import::Rule InvalidMove] \
+		[::ai::import::Rule SeemsNotToBePgnText] \
+		[::ai::import::Rule EncodingFailed] \
+		[::ai::import::Rule MissingResultTag] \
+		[::ai::import::Rule BogusCode]
+} -result {illegal-moves not-pgn encoding missing-tags {}}
+
+tcltest::test systemone-import-text {the rule-only doctor groups the messages} -body {
+	set expected [join [list \
+		"Import doctor:" \
+		"  the file's character encoding is wrong (1 message(s)): pick the source's character encoding in the import dialog" \
+		"  some moves could not be played (1 message(s)): the PGN is corrupt, or the game is a variant; check the moves" \
+		"  an unclassified problem (1 message(s)): review the messages above"] \n]
+	expr {[::ai::import::Text {InvalidMove EncodingFailed InvalidMove BogusCode}] eq $expected}
+} -result 1
+
+tcltest::test systemone-import-diagnose {the classifier answers when a code is unknown} -setup {
+	::scidb::test::s1::start [list [::scidb::test::s1::answer import_diagnosis bad-fen 0.9]]
+} -body {
+	set ::scidb::test::s1::Diag {}
+	::ai::import::diagnose {BogusCode} {set ::scidb::test::s1::Diag}
+	set r [::scidb::test::s1::wait ::scidb::test::s1::Diag]
+	list [dict get $r label] [dict get $r source] [llength $::scidb::test::s1::Requests]
+} -cleanup {
+	::scidb::test::s1::stop
+} -result {bad-fen classifier 1}
+
+tcltest::test systemone-import-rulepath {known codes decide without the classifier} -body {
+	set ::scidb::test::s1::Diag {}
+	::ai::import::diagnose {InvalidMove MissingResultTag} {set ::scidb::test::s1::Diag}
+	set r [::scidb::test::s1::wait ::scidb::test::s1::Diag]
+	list [dict get $r label] [dict get $r source]
+} -result {{} rules}
+
+tcltest::test systemone-import-assistant {diagnose_import checks args and answers} -setup {
+	::scidb::test::s1::start [list [::scidb::test::s1::answer import_diagnosis truncated 0.8]]
+} -body {
+	set tok [::application::assistant::DoDiagnoseImport {InvalidMove SeemsNotToBePgnText}]
+	list [::application::assistant::CheckArgs diagnose_import {codes {InvalidMove SeemsNotToBePgnText}}] \
+		[catch {::application::assistant::CheckArgs diagnose_import {}} e] $e \
+		[string range $tok 1 6]
+} -cleanup {
+	::scidb::test::s1::stop
+} -result {{codes {InvalidMove SeemsNotToBePgnText}} 1 {missing argument 'codes'} later:}
+
 ::tcltest::cleanupTests
 return

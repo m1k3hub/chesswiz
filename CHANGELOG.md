@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — AI: import doctor (System One, A4)
+
+- New `tcl/ai-import.tcl`: turn the importer's error/warning codes into a cause
+  and a fix. A deterministic table maps Scidb's PGN reader codes to a category
+  (encoding, not-PGN, truncated, bad FEN, illegal moves, missing tags, bad tags,
+  variant) with a concrete fix; the bounded classifier is asked only when a code
+  is not in the table. The file-import log now ends with the rule-only doctor
+  (`Import doctor:` grouped by cause); the assistant tool `diagnose_import`
+  uses the classifier too.
+- Fixed while wiring it: the import log's "show only encoding warnings" filter
+  compared the wrong argument (the empty message slot instead of the code), so
+  it never filtered; it now reads the code.
+- Tests: `tests/test_app_systemone.tcl` (`systemone-import-rule`, `-text`,
+  `-diagnose`, `-rulepath`, `-assistant`). App suite 309/309; Tcl and C++
+  suites stay green.
+
 ## Unreleased — AI: comment language tagging (System One, A2)
 
 - New `tcl/ai-language.tcl`: the language of a chess comment. A deterministic

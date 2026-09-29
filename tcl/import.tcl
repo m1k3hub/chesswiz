@@ -410,6 +410,8 @@ proc showOnlyEncodingWarnings {flag} {
 
 
 proc logResult {total illegal emptyText importText accepted rejected {unsupported {}}} {
+	variable Priv
+
 	set count 0
 	foreach acc $accepted rej $rejected { incr count $acc; incr count $rej }
 	set count [expr {$count + $illegal + [llength $unsupported]/2}]
@@ -464,6 +466,13 @@ proc logResult {total illegal emptyText importText accepted rejected {unsupporte
 		::log::info $lastMsg
 		if {$show > 0} { ::log::show }
 	}
+
+	# A4: the import doctor, rule-only (the classifier is only used by the
+	# diagnose_import tool), so the log stays synchronous.
+	if {[llength [info commands ::ai::import::Text]]} {
+		set advice [::ai::import::Text $Priv(importCodes)]
+		if {[string length $advice]} { ::log::info $advice }
+	}
 }
 
 
@@ -471,6 +480,7 @@ proc Open {parent file msg encoding type} {
 	variable Priv
 
 	set Priv(ok) 1
+	set Priv(importCodes) {}
 	set Priv(gameNo) 1
 
 	set msg "$mc::ImportingFile(pgn): [file tail $file]"
@@ -531,6 +541,7 @@ proc Import {parent base files msg encoding} {
 	variable Priv
 
 	set Priv(ok) 1
+	set Priv(importCodes) {}
 	set Priv(gameNo) 1
 
 	set codec [::scidb::db::get codec $base]
@@ -1250,7 +1261,16 @@ proc state {line}		{ Show error $line }
 proc Log {sink arguments} {
 	variable Priv
 
-	if {!$Priv(showOnlyEncodingWarnings) || [lindex $arguments 5] eq "EncodingFailed"} {
+	set code [lindex $arguments 6]
+
+	# the code is the eighth element (after the empty message slot); keep it
+	# for the import doctor
+	if {$code ne ""} {
+		if {![info exists Priv(importCodes)]} { set Priv(importCodes) {} }
+		lappend Priv(importCodes) $code
+	}
+
+	if {!$Priv(showOnlyEncodingWarnings) || $code eq "EncodingFailed"} {
 		set type [lindex $arguments 0]
 		::${sink}::${type} [makeLog $arguments]
 		update idletasks
