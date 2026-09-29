@@ -385,6 +385,7 @@ proc Accept {} {
 	set Vars(comment) [::scidb::misc::xml fromList [ParseContent $lang] -replacewithspace \u2423]
 	::scidb::game::update comment $Vars(key) $Vars(pos) $Vars(comment)
 	if {![info exists Vars(remember:$lang)]} { set Vars(remember:$lang) "" }
+	unset -nocomplain Vars(detectedLang) Vars(detectedText) Vars(detectText)
 	SetRevertState $lang
 }
 
@@ -458,6 +459,7 @@ proc DetectLanguage {parent} {
 	if {[llength [info commands ::ai::language::detect]] == 0} { return }
 	set text [PlainComment [GetComment]]
 	if {[string trim $text] eq ""} { return }
+	set Vars(detectText) $text
 	::ai::language::detect $text [namespace code [list OnDetected $parent]]
 }
 
@@ -493,6 +495,11 @@ proc OnDetected {parent decision} {
 		if {[lsearch -exact $Vars(langSet) $lang] < 0} { lappend Vars(langSet) $lang }
 		AddLanguageButton $lang
 	}
+
+	# remember what the classifier proposed, so a later switch to another
+	# language is recorded as an override for the calibration autotune
+	set Vars(detectedLang) $lang
+	set Vars(detectedText) [expr {[info exists Vars(detectText)] ? $Vars(detectText) : $carried}]
 
 	SwitchLanguage $lang
 	set Vars(content:$lang) $carried
@@ -682,6 +689,7 @@ proc SwitchLanguage {lang {setup no}} {
 
 	if {$lang eq $Vars(lang)} { return }
 
+	NoteLanguageOverride $lang
 	foreach fmt {bold italic underline} { set Vars(format:$fmt) 0 }
 	set Vars(format) ""
 	set Vars(lang) $lang
@@ -696,6 +704,22 @@ proc SwitchLanguage {lang {setup no}} {
 	$Vars(widget:main) raise [winfo parent $w]
 	EditAltered $w
 	focus $w
+}
+
+
+# If the classifier proposed a language and the user then switched to a
+# different one, that is a rejected label: record it for the calibration
+# autotune (tcl/ai-journal.tcl). No journal, or a switch to the proposed
+# language, records nothing.
+proc NoteLanguageOverride {lang} {
+	variable Vars
+
+	if {![info exists Vars(detectedLang)] || $lang eq $Vars(detectedLang)} { return }
+	if {[llength [info commands ::ai::journal::override]]} {
+		catch { ::ai::journal::override language $Vars(detectedText) $Vars(detectedLang) $lang }
+	}
+	unset -nocomplain Vars(detectedLang) Vars(detectedText) Vars(detectText)
+	return
 }
 
 
