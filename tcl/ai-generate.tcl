@@ -350,9 +350,14 @@ proc ::ai::generate::onToolStepImpl {state result} {
 	foreach m [dict get $state messages] {
 		if {[dict get $m role] eq "user"} { set user [dict get $m content]; break }
 	}
+
+	# the deterministic fact line the model was given, for "show your work"
+	set facts ""
+	catch { set facts [::scidb::ai::text [dict get $state fen]] }
+
 	uplevel #0 [list {*}$script [dict create \
 		ok 1 text $text claims $problems attempts [dict get $state rounds] \
 		grounded [expr {[llength $problems] == 0}] \
-		evidence [evidenceFromText $user]]]
+		evidence [evidenceFromText $user] facts $facts]]
 	return
 }

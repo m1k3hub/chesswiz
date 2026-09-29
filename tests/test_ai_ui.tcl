@@ -44,6 +44,13 @@ check "toHtml omits evidence when absent" \
 	[expr {![string match {*Evidence*} [::application::ai::toHtml "t" {}]]}]
 check "toHtml escapes evidence markup" \
 	[string match {*&lt;b&gt;*} [::application::ai::toHtml "t" {} [list "x <b> y"]]]
+check "toHtml renders the advisory notices" \
+	[string match {*<li><i>overstated</i></li>*} [::application::ai::toHtml "t" {} {} 1 {overstated}]]
+check "toHtml renders the grounding facts (B9)" \
+	[string match {*<b>Grounding facts</b>*pawns isolated=1*} \
+		[::application::ai::toHtml "t" {} {} 1 {} "pawns isolated=1"]]
+check "toHtml omits facts when absent" \
+	[expr {![string match {*Grounding facts*} [::application::ai::toHtml "t" {}]]}]
 
 # --- report payload shape ---------------------------------------------
 # The report pane's Load does `dict get $data html`, so showHtmlData must be

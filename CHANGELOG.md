@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — AI: show your work (B9)
+
+- Every generated report now carries a **Grounding facts** block: the
+  deterministic position facts (`::scidb::ai::text`) the model was given, so a
+  reader can see what it was working from beside the assessment. The generation
+  result carries them (`::ai::generate`) and `toHtml` renders them.
+- Fixed while doing it: `onResult` passed the advisory notices where `toHtml`
+  expects the verdict flag, so the System One advisory notices never rendered
+  (and a non-empty notice list silently acted as the verdict).
+- Tests: `tests/test_ai_ui.tcl` (facts rendered / omitted, advisory notices
+  rendered). App suite, `make -C tests ai-tests`, Tcl and C++ suites green.
+
 ## Unreleased — AI: explain the engine's line (C3 / audit B6)
 
 - "Explain this line" in the engine analysis pane's line context menu narrates

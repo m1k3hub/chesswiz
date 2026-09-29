@@ -48,7 +48,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | B6 | Explain the engine's line | PV → words in the analysis pane (`app-analysis.tcl`, `ai-engine.tcl`) | LLM | 🟢 *(shipped)* |
 | B7 | Hover/status "what is this?" | deterministic fact line, optionally phrased (`ai-prompt.tcl`) | rules + LLM | 🟢 |
 | B8 | Find games like this + why | overlap facts → rationale (`ai-precedent.tcl`) | LLM | 🟢 |
-| B9 | Show-your-work evidence | ground each claim in the report (`app-report.tcl`, `ai-claims.tcl`) | rules | 🟢 |
+| B9 | Show-your-work evidence | ground each claim in the report (`app-report.tcl`, `ai-claims.tcl`) | rules | 🟢 *(shipped: the fact pack is rendered)* |
 | **C. Reviewed writes** | | | | |
 | C1 | Draft a comment in place | comment editor "Draft" (`comment.tcl`) | LLM + claim check | 🟡 |
 | C2 | Explain / translate a comment | comment transforms into a language slot (`comment.tcl`) | LLM | 🟡 |
@@ -143,8 +143,12 @@ a screen.
   the model only phrases it. Must work with no provider. (C2)
 - **B8 Find games like this + why** — rank by shared continuations in
   `::ai::precedent`, generate the rationale from the overlap facts only. (C5)
-- **B9 Show-your-work** — render the grounding fact/engine line beside each generated
-  claim; mostly a rendering change over `::ai::claims`. (Wave 4)
+- **B9 Show-your-work** *shipped (first cut)* — every generated report now carries a
+  **Grounding facts** block with the deterministic position facts the model was given
+  (`toHtml`'s new facts argument; the generation result carries them). Per-claim
+  witnesses (the fact that grounds each individual phrase) remain, since the claim
+  checker reports only contradictions. Also fixed the advisory notices, which were
+  passed as the verdict flag and never rendered. (Wave 4)
 
 ### C. Reviewed writes (claim-checked, user confirms)
 

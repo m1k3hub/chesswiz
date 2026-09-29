@@ -153,7 +153,7 @@ proc ::application::ai::showReport {parent title html} {
 # messages have no claims to vouch for. <notices> are advisory second-opinion
 # labels from the System One classifier (rhetoric / coverage): they never
 # affect `grounded` or the claim-check verdict, only add a fixed caution.
-proc ::application::ai::toHtml {text claims {evidence {}} {verdict 1} {notices {}}} {
+proc ::application::ai::toHtml {text claims {evidence {}} {verdict 1} {notices {}} {facts ""}} {
 	set html ""
 
 	if {[llength $evidence]} {
@@ -185,6 +185,12 @@ proc ::application::ai::toHtml {text claims {evidence {}} {verdict 1} {notices {
 		}
 		append html "</ul>"
 	}
+
+	# B9: show the work -- the deterministic facts the model was given.
+	if {$facts ne ""} {
+		append html "<p><b>Grounding facts</b></p><pre>[escape $facts]</pre>"
+	}
+
 	return $html
 }
 
@@ -256,8 +262,9 @@ proc ::application::ai::onResult {parent title result} {
 	set state [expr {[dict get $result grounded] ? "grounded" : "unverified"}]
 	set evidence [expr {[dict exists $result evidence] ? [dict get $result evidence] : {}}]
 	set notices [expr {[dict exists $result notices] ? [dict get $result notices] : {}}]
+	set facts [expr {[dict exists $result facts] ? [dict get $result facts] : ""}]
 	::application::ai::showReport $parent "$title ($state)" \
-		[toHtml [dict get $result text] [dict get $result claims] $evidence $notices]
+		[toHtml [dict get $result text] [dict get $result claims] $evidence 1 $notices $facts]
 	return
 }
 
