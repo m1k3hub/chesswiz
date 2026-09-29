@@ -139,12 +139,17 @@ proc ::application::assistant::correctArgs {name cargs} {
 	set descriptions [argDescriptions $name]
 	set questions {}
 	dict for {arg values} $enums {
-		set what "Which $arg does the request specify?"
-		if {[dict exists $descriptions $arg]} {
-			append what " ($arg: [dict get $descriptions $arg])"
+		set desc [expr {[dict exists $descriptions $arg] ? [dict get $descriptions $arg] : ""}]
+		set criteria [dict create none "the request does not say"]
+		if {$desc ne ""} {
+			# the description is the question: "the colour the opponent will
+			# play" is not read as the user's own colour
+			set what "According to the request, what is $desc?"
+			foreach value $values { dict set criteria $value "$desc is $value" }
+		} else {
+			set what "Which $arg does the request specify?"
+			foreach value $values { dict set criteria $value "the request means $arg=$value" }
 		}
-		set criteria [dict create none "the request does not say which $arg"]
-		foreach value $values { dict set criteria $value "the request means $arg=$value" }
 		dict set questions $arg [dict create type choice \
 			instructions "$what Answer none if it does not say." \
 			criteria $criteria]

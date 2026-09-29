@@ -147,16 +147,25 @@ slots across six tools: the LLM made errors **granite4.2:8b 4-8%**,
 colour inversion), while TypeSafe was **0/26** every run, and its answer is
 always a schema value. Tests: `tests/test_app_assistant_args.tcl`.
 
-**Re-measured (2026-09-29), not reproduced.** Plumb-4B as the classifier,
-granite4.2:8b as the model, 45 hand-labelled requests over nine tools (38
-stated enum slots, 32 unstated): `off` 34/38, `active` 34/38, 0 invented
-values either way. The classifier changed nothing, and the four errors left
-are the opponent-colour inversion ("I'm playing white against X" -> the
-classifier answers the user's colour at 0.88 confidence). Putting the
-schema's argument description into the question did not change that. Hence
-the default is `shadow`: `active` has to beat the model on labelled requests
-first, and the perspective-dependent `color`/`colour` arguments are the case
-to test. (Not tried: the TypeSafe API backend, granite 3b, deepseek.)
+**Re-measured (2026-09-29).** 45 hand-labelled requests over nine tools (38
+stated enum slots, 32 unstated), granite4.2:8b as the model, the real
+`correctArgs` as the classifier path. With the original wording ("the request
+means color=white") the classifier answered the *user's* colour for "I'm
+playing white against X" and fixed nothing (`off` 34/38, `active` 34/38, both
+Plumb-4B and Jev). With the schema's argument description as the question and
+in each option ("the colour the opponent will play is white") the result is:
+
+| classifier | `off` (model) | `active` | fixed | broken | invented values |
+|---|---|---|---|---|---|
+| Jev (`typesafe`) | 34/38 | **37/38** | 3 | 0 | 0/32 |
+| Plumb-4B (local) | 34/38 | 36/38 | 2 | 0 | 0/32 |
+
+The remaining miss is "I'm black against Ding, write a brief" (classifier
+abstains below 0.7, so the model's value stands). One model, one labelled set
+written by the author, two classifiers: enough to say the description matters,
+not enough to call the 4-12% error rate general. The default stays `shadow`
+until a real-usage comparison from `args-shadow.log` agrees. (Not tried:
+granite4.2:3b, deepseek.)
 
 **Why less fragile:** arguments can only take values the tool accepts, and
 "not mentioned" is an explicit answer rather than an invented default.
