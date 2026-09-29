@@ -4,7 +4,7 @@
 One short command, on your own machine, with no network call after the model
 has been downloaded once:
 
-    scripts/stt-transcribe.py clip.wav                 # default model, auto language
+    scripts/stt-transcribe.py clip.wav --model base.en   # model is chosen by the caller
     scripts/stt-transcribe.py --model base.en --language en clip.wav
     scripts/stt-transcribe.py --device cuda --compute float16 clip.wav
 
@@ -15,7 +15,7 @@ and a short spoken command transcribes in well under a second on a modern
 CPU.  --device cuda --compute float16 uses a GPU when one is available.
 
 The model is chosen by the caller (Scidb's voice settings or
-SCIDB_AI_STT_MODEL); nothing is hard-coded.  Backed by faster-whisper
+SCIDB_AI_STT_MODEL); nothing is hard-coded here.  Backed by faster-whisper
 (CTranslate2), which reads the usual Whisper checkpoints from the Hugging
 Face hub on first use (tiny.en ~75 MB, base.en ~145 MB, small.en ~480 MB).
 
@@ -27,6 +27,7 @@ tcl/app-voice.tcl, ::application::voice::sttCommand).
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 
@@ -80,12 +81,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("audio", nargs="?", help="WAV file (16 kHz mono is ideal)")
     parser.add_argument("--serve", action="store_true",
                         help="read audio paths on stdin, print transcripts on stdout")
-    parser.add_argument("--model", default="base.en", help="Whisper model name (default base.en)")
+    parser.add_argument("--model", default=os.environ.get("SCIDB_AI_STT_MODEL", ""),
+                        help="Whisper model name (default: SCIDB_AI_STT_MODEL)")
     parser.add_argument("--language", default="", help="language code, e.g. en (default: detect)")
     parser.add_argument("--device", default="cpu", help="cpu or cuda (default cpu)")
     parser.add_argument("--compute", default="", help="int8, int8_float16, float16, float32 (default: by device)")
     parser.add_argument("--beam", type=int, default=1, help="beam size (1 = fastest, default)")
     args = parser.parse_args(argv)
+
+    if not args.model:
+        print("no model chosen: pass --model NAME or set SCIDB_AI_STT_MODEL", file=sys.stderr)
+        return 2
 
     try:
         import faster_whisper  # noqa: F401

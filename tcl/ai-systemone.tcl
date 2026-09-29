@@ -24,6 +24,17 @@
 #   ::ai::systemone::evaluate <state> <questions>          -> answers dict
 #   ::ai::systemone::evaluateAsync <state> <questions> <script>
 #
+# No endpoint, model, key or port is fixed in code: every preset field can
+# be overridden by the environment, by the preset's upper-cased name:
+#   SCIDB_AI_KEV_URL / _MODEL / _KEY
+#   SCIDB_AI_SIMPLE_JEV_URL / _MODEL / _KEY
+#   SCIDB_AI_PLUMB_URL / _MODEL / _KEY
+#   SCIDB_AI_TYPESAFE_URL / _MODEL / _KEY  (TypeSafe's own API, jev-latest)
+#   SCIDB_AI_VERCEL_URL / _MODEL / _KEY   (and the same for jev)
+#   SCIDB_AI_PROBE_ORDER=kev,plumb,...    (auto discovery order)
+# The generic SCIDB_AI_CLASSIFIER, SCIDB_AI_CLASSIFIER_URL and
+# SCIDB_AI_CLASSIFIER_MODEL still override the resolved backend itself.
+#
 # <questions> is a dict  id -> {type choice|noul|score instructions TEXT
 # criteria C}, where C is a dict name -> description for choice (and noul's
 # optional {false ... true ...}), a list of levels for score. An answer is a
@@ -72,6 +83,7 @@ variable Backends {
 	plumb {endpoint http://127.0.0.1:8090/v1/systemone model plumb-4b-v5}
 	jev {endpoint https://ai-gateway.vercel.sh/typesafe/v1/systemone model typesafe-ai/jev key AI_GATEWAY_API_KEY}
 	vercel {endpoint https://ai-gateway.vercel.sh/typesafe/v1/systemone model typesafe-ai/jev key AI_GATEWAY_API_KEY}
+	typesafe {endpoint https://api.typesafe.ai/v1/systemone model jev-latest key TYPESAFE_API_KEY}
 }
 
 variable Config
@@ -91,6 +103,33 @@ variable ProbeOrder {kev simple-jev plumb}
 
 } ;# namespace systemone
 } ;# namespace ai
+
+
+# Apply the environment overrides to the presets (see the header). This
+# keeps the preset table as *defaults*, never as the only option: a server
+# on a different port, or a different model of the same protocol, is
+# reachable without editing code.
+proc ::ai::systemone::ApplyEnv {} {
+	variable Backends
+	variable ProbeOrder
+
+	foreach name [dict keys $Backends] {
+		set tag [string toupper [string map {- _} $name]]
+		foreach {field suffix} {endpoint _URL model _MODEL key _KEY} {
+			set var SCIDB_AI_${tag}${suffix}
+			if {[info exists ::env($var)] && $::env($var) ne ""} {
+				dict set Backends $name $field $::env($var)
+			}
+		}
+	}
+
+	if {[info exists ::env(SCIDB_AI_PROBE_ORDER)] && $::env(SCIDB_AI_PROBE_ORDER) ne ""} {
+		set ProbeOrder [split $::env(SCIDB_AI_PROBE_ORDER) ,]
+	}
+	return
+}
+
+::ai::systemone::ApplyEnv
 
 
 # Apply a known backend's endpoint, model and key. Shared by an explicit
@@ -118,6 +157,8 @@ proc ::ai::systemone::configure {args} {
 	variable Backends
 	variable Auto
 	variable Resolved
+	variable Loaded
+	variable ThresholdFile
 
 	foreach {key value} $args {
 		switch -- $key {
@@ -151,6 +192,7 @@ proc ::ai::systemone::configure {args} {
 			default   { error "unknown option $key" }
 		}
 	}
+	if {!$Loaded} { set Loaded 1 ; catch { loadThresholds $ThresholdFile } }
 	return
 }
 
@@ -309,6 +351,64 @@ proc ::ai::systemone::evaluate {state questions} {
 }
 
 
+# A synchronous, bounded selection from a fixed candidate set, for callers
+# that cannot be made asynchronous (resolving a name while building a query).
+# <question> must be a choice question; returns the chosen label, or "" on
+# any abstention: no classifier, an error, a timeout, a label outside the
+# criteria, or confidence below the (per-backend calibrated) threshold. The
+# caller falls back to its own behaviour on "".
+proc ::ai::systemone::chooseSync {feature state question args} {
+	variable Config
+	array set opts {-timeout 3000 -threshold 0.6}
+	array set opts $args
+
+	if {![enabled]} { return "" }
+	if {[dict get $question type] ne "choice"} { error "chooseSync needs a choice question" }
+
+	set saved $Config(timeoutMs)
+	set Config(timeoutMs) $opts(-timeout)
+	set rc [catch { evaluate $state [dict create q $question] } answers]
+	set Config(timeoutMs) $saved
+	if {$rc || ![dict exists $answers q]} { return "" }
+
+	set answer [dict get $answers q]
+	if {![valid $question $answer]} { return "" }
+	if {[dict get $answer confidence] < [threshold $feature $opts(-threshold)]} { return "" }
+	return [dict get $answer choice]
+}
+
+
+# The same bounded synchronous contract for several choice questions in one
+# request. Returns a dict id -> label for the answers that are valid and at or
+# above the (per-backend calibrated) threshold; an id is absent on any
+# abstention. Used to fill several closed-set tool arguments at once.
+proc ::ai::systemone::chooseManySync {feature state questions args} {
+	variable Config
+	array set opts {-timeout 3000 -threshold 0.6}
+	array set opts $args
+
+	if {![enabled]} { return {} }
+	if {![dict size $questions]} { return {} }
+
+	set saved $Config(timeoutMs)
+	set Config(timeoutMs) $opts(-timeout)
+	set rc [catch { evaluate $state $questions } answers]
+	set Config(timeoutMs) $saved
+	if {$rc} { return {} }
+
+	set out {}
+	dict for {id question} $questions {
+		if {![dict exists $question type] || [dict get $question type] ne "choice"} { continue }
+		if {![dict exists $answers $id]} { continue }
+		set answer [dict get $answers $id]
+		if {![valid $question $answer]} { continue }
+		if {[dict get $answer confidence] < [threshold $feature $opts(-threshold)]} { continue }
+		dict set out $id [dict get $answer choice]
+	}
+	return $out
+}
+
+
 # <script> is called with {ok 1 answers A} or {ok 0 error TEXT}.
 proc ::ai::systemone::evaluateAsync {state questions script} {
 	if {![enabled]} {
@@ -376,8 +476,15 @@ proc ::ai::systemone::Request {state questions args} {
 # ----------------------------------------------------------------------
 
 namespace eval ::ai::systemone {
-	# {feature {backend threshold ...} ...}; empty until calibrated
+	# feature -> backend -> threshold; filled by ::ai::systemone::loadThresholds
+	# from a calibration file, and empty until then (the callers' defaults hold).
 	variable Thresholds {}
+	variable Loaded 0
+
+	# SCIDB_AI_THRESHOLDS overrides; otherwise a file beside this module.
+	variable ThresholdFile [expr {
+		[info exists ::env(SCIDB_AI_THRESHOLDS)] ? $::env(SCIDB_AI_THRESHOLDS) :
+		[file join [file dirname [file normalize [info script]]] ai-thresholds.tsv]}]
 }
 
 
@@ -422,21 +529,53 @@ proc ::ai::systemone::threshold {feature default} {
 }
 
 
+# Load per-(feature, backend) thresholds from a TSV written by
+# ::ai::calibrate::write: one "feature<TAB>backend<TAB>threshold" per line,
+# '#' comments allowed. Merges into Thresholds and returns the count read.
+# A missing file is silent (the callers' defaults then hold).
+proc ::ai::systemone::loadThresholds {file} {
+	variable Thresholds
+
+	if {$file eq "" || ![file exists $file]} { return 0 }
+	if {[catch { open $file r } chan]} { return 0 }
+
+	set count 0
+	set text [read $chan]
+	close $chan
+	foreach line [split $text "\n"] {
+		set line [string trim $line]
+		if {$line eq "" || [string index $line 0] eq "#"} { continue }
+		lassign [split $line "\t"] feature backend value
+		if {$feature eq "" || $backend eq "" || ![string is double -strict $value]} { continue }
+		dict set Thresholds $feature $backend $value
+		incr count
+	}
+	return $count
+}
+
+
 proc ::ai::decide {feature state question script args} {
 	array set opts {-fallback {} -threshold 0.6}
 	array set opts $args
 
+	# Record the decision (if journaling is on) without touching it: the
+	# journal sink forwards to the caller's script unchanged.
+	set sink $script
+	if {[llength [info commands ::ai::journal::logged]]} {
+		set sink [list ::ai::journal::logged $feature $state $script]
+	}
+
 	if {[llength [info commands ::ai::systemone::enabled]] == 0
 	 || ![::ai::systemone::enabled]} {
-		::ai::systemone::Decided $feature $question $script [array get opts] [list ok 0]
+		::ai::systemone::Decided $feature $question $sink [array get opts] [list ok 0]
 		return
 	}
 	set questions [dict create $feature $question]
 	if {[catch {
 		::ai::systemone::evaluateAsync $state $questions \
-			[list ::ai::systemone::Decided $feature $question $script [array get opts]]
+			[list ::ai::systemone::Decided $feature $question $sink [array get opts]]
 	}]} {
-		::ai::systemone::Decided $feature $question $script [array get opts] [list ok 0]
+		::ai::systemone::Decided $feature $question $sink [array get opts] [list ok 0]
 	}
 	return
 }

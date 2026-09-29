@@ -5,7 +5,7 @@
 # board and renders the result (and any ungrounded claims) in the HTML report
 # pane.  Generation is asynchronous so the interface never blocks.
 #
-#   ::application::ai::configure -provider ollama -model granite4.2:3b
+#   ::application::ai::configure -provider ollama -model NAME
 #   ::application::ai::analyze .application
 # ======================================================================
 
@@ -22,10 +22,21 @@ namespace eval ai {
 variable Config
 array set Config {
 	provider   ollama
-	model      "deepseek-v4.1-flash:cloud"
+	model      ""
 	depth      12
 	retries    1
 	numPredict 400
+}
+
+# No model name is fixed here: the environment supplies the defaults
+# (SCIDB_AI_PROVIDER / SCIDB_AI_MODEL), and the saved settings or the
+# command line overwrite them in applySettings. A model is chosen in
+# Extras > AI: Choose Model (or with SCIDB_AI_MODEL for a session).
+if {[info exists ::env(SCIDB_AI_PROVIDER)] && $::env(SCIDB_AI_PROVIDER) ne ""} {
+	set Config(provider) $::env(SCIDB_AI_PROVIDER)
+}
+if {[info exists ::env(SCIDB_AI_MODEL)] && $::env(SCIDB_AI_MODEL) ne ""} {
+	set Config(model) $::env(SCIDB_AI_MODEL)
 }
 
 # The provider and model chosen in Extras > AI: Choose Model, saved in the

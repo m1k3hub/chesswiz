@@ -5,7 +5,7 @@
 # drives a locally running model.  Remote adapters (`openai`, `anthropic`) exist
 # but are opt-in; nothing here sends a database anywhere without being asked.
 #
-#   ::ai::provider::configure -name ollama -model granite4.2:3b
+#   ::ai::provider::configure -name ollama -model NAME
 #   ::ai::provider::complete <prompt> ?-system <text>?
 #
 # `json`/`http` are required lazily so a missing tcllib package cannot break
@@ -24,7 +24,7 @@ namespace eval provider {
 variable Config
 array set Config {
 	name      stub
-	model     "deepseek-v4.1-flash:cloud"
+	model     ""
 	endpoint  ""
 	timeoutMs 120000
 	responses {}
@@ -34,6 +34,17 @@ array set Config {
 	think     false
 	chatResponses {}
 	chatIndex 0
+}
+
+# The provider and model are choices, never literals in a code path. The
+# environment supplies the standalone defaults (SCIDB_AI_PROVIDER /
+# SCIDB_AI_MODEL); the application overwrites both from its saved settings
+# or the command line before any request is issued.
+if {[info exists ::env(SCIDB_AI_PROVIDER)] && $::env(SCIDB_AI_PROVIDER) ne ""} {
+	set Config(name) $::env(SCIDB_AI_PROVIDER)
+}
+if {[info exists ::env(SCIDB_AI_MODEL)] && $::env(SCIDB_AI_MODEL) ne ""} {
+	set Config(model) $::env(SCIDB_AI_MODEL)
 }
 
 } ;# namespace provider
@@ -127,6 +138,19 @@ proc ::ai::provider::jsonObject {pairs} {
 }
 
 
+# The https handler for ::http: a plain ::tls::socket does not send SNI,
+# and many hosts (including api.typesafe.ai) reject the async handshake
+# without it. The http package calls the registered command as
+# <handler> ?sockopt ...? <host> <port>, so pull the host out and pass it
+# as the server name as well.
+proc ::ai::provider::tlsSocket {args} {
+	set host [lindex $args end-1]
+	set port [lindex $args end]
+	set opts [lrange $args 0 end-2]
+	return [::tls::socket -servername $host {*}$opts $host $port]
+}
+
+
 # Issue a JSON POST.  The http package writes -query as raw bytes (and sizes
 # Content-Length by character count), so the body must be UTF-8 encoded here
 # or any non-ASCII text corrupts the request.  https needs the tls package.
@@ -137,7 +161,7 @@ proc ::ai::provider::request {url body args} {
 	need http
 	if {[string match -nocase https://* $url] && ![info exists TlsRegistered]} {
 		need tls
-		::http::register https 443 ::tls::socket
+		::http::register https 443 ::ai::provider::tlsSocket
 		set TlsRegistered 1
 	}
 
