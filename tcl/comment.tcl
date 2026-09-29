@@ -34,6 +34,7 @@ set CommentAfterMove			"Comment after move"
 set ExplainComment			"Explain this comment"
 set DetectLanguage			"Detect language"
 set DraftComment			"Draft a comment"
+set TranslateComment		"Translate comment to"
 set PrecedingComment			"Preceding comment"
 set TrailingComment			"Trailing comment"
 set Language					"Language"
@@ -527,6 +528,43 @@ proc OnDraft {parent result} {
 	if {![winfo exists $w]} { return }
 
 	if {[string length [string trim [$w get 1.0 end-1c]]]} { $w insert end "\n" }
+	$w insert end $text
+	focus $w
+	return
+}
+
+
+# C2: translate the comment into another language slot, for review.  A
+# transformation of existing text: no facts are added or dropped, and the
+# ordinary Accept still stores it.
+proc TranslateComment {parent lang} {
+	variable Vars
+
+	if {[llength [info commands ::application::ai::generate]] == 0} { return }
+	set text [PlainComment [GetComment]]
+	if {[string trim $text] eq ""} { return }
+	set name [expr {[llength [info commands ::ai::language::Name]] ? [::ai::language::Name $lang] : $lang}]
+	::application::ai::generate $parent "Translate comment" "Translating the comment..." [::scidb::pos::fen] \
+		-context "Translate this chess annotation into $name. Keep every chess move and fact exactly as it is; do not add or drop information, and do not evaluate.\nCOMMENT:\n$text" \
+		-observer [namespace code [list OnTranslated $parent $lang]]
+	return
+}
+
+
+proc OnTranslated {parent lang result} {
+	variable Vars
+
+	if {![dict get $result ok]} { return }
+	set text [string trim [dict get $result text]]
+	if {$text eq ""} { return }
+
+	if {![info exists Vars(tb:$lang)]} {
+		if {[lsearch -exact $Vars(langSet) $lang] < 0} { lappend Vars(langSet) $lang }
+		AddLanguageButton $lang
+	}
+	SwitchLanguage $lang
+	set w $Vars(widget:text:$lang).text
+	$w delete 1.0 end
 	$w insert end $text
 	focus $w
 	return
@@ -1616,6 +1654,19 @@ proc PopupMenu {parent} {
 			-label " $mc::DraftComment" \
 			-command [namespace code [list DraftComment [winfo toplevel $parent]]] \
 			;
+	}
+
+	# C2: translate the comment into another language slot.
+	if {[llength [info commands ::application::ai::generate]]
+	 && [llength [info commands ::ai::language::Name]]} {
+		set sub $menu.translate
+		catch { destroy $sub }
+		menu $sub -tearoff no
+		foreach lang {en de fr es it pt nl ru pl cs uk tr el ar he zh ja ko} {
+			$sub add command -label " [::ai::language::Name $lang]" \
+				-command [namespace code [list TranslateComment [winfo toplevel $parent] $lang]]
+		}
+		$m add cascade -label " $mc::TranslateComment" -menu $sub
 	}
 
 	# A2: detect the language of this comment.

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — AI: translate a comment into a language slot (C2 / C7)
+
+- The comment editor's context menu gains **"Translate comment to"** with a
+  language submenu: it translates the comment through the grounded pipeline and
+  puts the result into the target language's slot for review. The transformation
+  preserves every move and fact; nothing is saved until the user accepts.
+  ("Explain this comment" already shipped, so this completes C2/C7.)
+- Tests: `tests/test_app_comment_draft.tcl` (`comment-translate-inserts`,
+  `comment-translate-ignores-failure`). App suite, `make -C tests ai-tests`,
+  Tcl and C++ suites green.
+
 ## Unreleased — AI: draft a comment in place (C1 / LLM_REACH_PLAN C6)
 
 - The comment editor's context menu gains **"Draft a comment"**: it runs the

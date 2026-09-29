@@ -55,5 +55,34 @@ tcltest::test comment-draft-ignores-empty {OnDraft ignores an empty answer} -bod
 	set text
 } -result {}
 
+tcltest::test comment-translate-inserts {OnTranslated puts the translation in the target slot} -body {
+	set source [::scidb::test::draft::editor]
+	set target .drafttarget[pid]
+	frame $target
+	text $target.text
+	set ::comment::Vars(langSet) {xx de}
+	set ::comment::Vars(widget:text:de) $target
+	set ::comment::Vars(tb:de) dummy
+	set ::comment::Vars(lang) de
+	::comment::OnTranslated . de [dict create ok 1 text "Der K\u00f6nig."]
+	set text [$target.text get 1.0 end-1c]
+	destroy $source $target
+	set text
+} -result {Der König.}
+
+tcltest::test comment-translate-ignores-failure {OnTranslated does nothing when generation failed} -body {
+	set target .draftfail[pid]
+	frame $target
+	text $target.text
+	set ::comment::Vars(langSet) {xx de}
+	set ::comment::Vars(widget:text:de) $target
+	set ::comment::Vars(tb:de) dummy
+	set ::comment::Vars(lang) de
+	::comment::OnTranslated . de [dict create ok 0 error "no model"]
+	set text [$target.text get 1.0 end-1c]
+	destroy $target
+	set text
+} -result {}
+
 ::tcltest::cleanupTests
 return

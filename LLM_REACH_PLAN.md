@@ -53,7 +53,7 @@ Confirmed present in the tree before planning (file:line):
 | 6 | C9 missing read-only tools | S–M | L | — | Planned |
 | 7 | C2 status-line hint | S | L | — | Planned |
 | 8 | C5 find similar games | S–M | L | — | Planned |
-| 9 | C7 explain/translate comment | S | L | C1 | Planned |
+| 9 | C7 explain/translate comment | S | L | C1 | **Done** |
 | 10 | C10 report action links | M | M | C9 | Planned |
 | 11 | C11 task templates | S | L | — | Planned |
 

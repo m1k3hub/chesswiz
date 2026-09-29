@@ -51,7 +51,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | B9 | Show-your-work evidence | ground each claim in the report (`app-report.tcl`, `ai-claims.tcl`) | rules | 🟢 *(shipped: the fact pack is rendered)* |
 | **C. Reviewed writes** | | | | |
 | C1 | Draft a comment in place | comment editor "Draft" (`comment.tcl`) | LLM + claim check | 🟡 *(shipped)* |
-| C2 | Explain / translate a comment | comment transforms into a language slot (`comment.tcl`) | LLM | 🟡 |
+| C2 | Explain / translate a comment | comment transforms into a language slot (`comment.tcl`) | LLM | 🟡 *(shipped)* |
 | C3 | Auto-tagging / enrichment | bulk game labels → custom tags (`ai-annotate.tcl`) | engine + LLM, review | 🟡 |
 | C4 | Media transcript + lesson outline | audio/video lessons (`app-media-lesson.tcl`, `tcl_media_extract`) | ASR + LLM | 🟡 |
 | C5 | Publication / export writer | tournament report / article from a game set (`export.tcl`) | LLM + claim check | 🟡 |
