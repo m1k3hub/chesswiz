@@ -50,6 +50,8 @@ set EcoColTrend					"Trend"
 set Refresh							"Refresh"
 set CopySummary					"Copy Summary"
 set ReviewDuplicates				"Review Duplicates"
+set CheckDuplicateGroup			"Check Group (AI)"
+set DuplicateVerdict				"Game %s: %s"
 set CompactNow						"Compact Now"
 set ScidbBases						"Scidb databases"
 set ConvertDatabase					"Convert Version"
@@ -291,6 +293,12 @@ proc OpenMaintenanceReport {parent file variant {tab overview}} {
 		pack $dupButtons.browse -side left -padx {0 4}
 		pack $dupButtons.select -side left -padx {0 4}
 		pack $dupButtons.mark -side left
+		if {[llength [info commands ::ai::duplicate::reviewGroup]]} {
+			ttk::button $dupButtons.check -text $mc::CheckDuplicateGroup
+			ttk::label $dupButtons.verdict -anchor w
+			pack $dupButtons.check -side left -padx {8 4}
+			pack $dupButtons.verdict -side left -padx {4 0} -fill x -expand yes
+		}
 
 		set ecoSummary [ttk::label $openings.summary -anchor w]
 		pack $ecoSummary -side top -fill x -padx 2 -pady {2 4}
@@ -361,6 +369,11 @@ proc OpenMaintenanceReport {parent file variant {tab overview}} {
 		-command [namespace code [list BrowseDuplicateSelection $ReportData($dlg,dupTv) $file $variant]]
 	$dlg.nb.duplicates.buttons.mark configure \
 		-command [namespace code [list MarkDuplicates $ReportData($dlg,dupTv) $file $variant]]
+	if {[winfo exists $dlg.nb.duplicates.buttons.check]} {
+		$dlg.nb.duplicates.buttons.check configure \
+			-command [namespace code [list CheckDuplicateGroup \
+				$ReportData($dlg,dupTv) $file $variant $dlg.nb.duplicates.buttons.verdict]]
+	}
 	bind $ReportData($dlg,dupTv) <Double-1> \
 		[namespace code [list BrowseDuplicateSelection $ReportData($dlg,dupTv) $file $variant]]
 	bind $ReportData($dlg,dupTv) <Return> \
@@ -580,6 +593,9 @@ proc PopulateMaintenanceReport {dlg} {
 	$dlg.nb.duplicates.buttons.browse configure -state $state
 	$dlg.nb.duplicates.buttons.select configure -state $state
 	$dlg.nb.duplicates.buttons.mark configure -state $state
+	if {[winfo exists $dlg.nb.duplicates.buttons.check]} {
+		$dlg.nb.duplicates.buttons.check configure -state $state
+	}
 	set state [expr {[llength [dict get $data rows]] > 0 ? "normal" : "disabled"}]
 	$dlg.nb.openings.buttons.switcher configure -state $state
 	$dlg.nb.openings.buttons.savews configure -state $state
@@ -680,6 +696,42 @@ proc BrowseDuplicateSelection {tv file variant} {
 	set index [lindex [$tv item $item -values] 0]
 	if {$index eq {}} { return }
 	::game::new $tv -base $file -variant $variant -number [expr {$index - 1}]
+}
+
+
+# Audit A5: the first game of the selected duplicate group against each other
+# one, labelled same / different / unsure by ::ai::duplicate. Advice only: it
+# never marks, merges or deletes anything.
+proc CheckDuplicateGroup {tv file variant label} {
+	set item [lindex [$tv selection] 0]
+	if {$item eq {}} { set item [$tv focus] }
+	if {$item eq {}} { return }
+	if {[$tv parent $item] ne {}} { set item [$tv parent $item] }
+
+	set numbers {}
+	foreach child [$tv children $item] {
+		set index [lindex [$tv item $child -values] 0]
+		if {$index ne {}} { lappend numbers [expr {$index - 1}] }
+	}
+	if {[llength $numbers] < 2} { return }
+
+	$label configure -text "..."
+	::ai::duplicate::reviewGroup $file $variant $numbers \
+		[namespace code [list ShowDuplicateVerdicts $label]]
+}
+
+
+proc ShowDuplicateVerdicts {label results} {
+	variable mc
+
+	if {![winfo exists $label]} { return }
+	set parts {}
+	foreach r $results {
+		lassign $r number verdict source
+		lappend parts [format $mc::DuplicateVerdict [expr {$number + 1}] \
+			[::ai::duplicate::describe $verdict]]
+	}
+	$label configure -text [join $parts "; "]
 }
 
 

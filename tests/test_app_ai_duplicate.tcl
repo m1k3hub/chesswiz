@@ -229,5 +229,35 @@ tcltest::test dup-describe {labels have human phrases; unknown labels echo} -bod
 		[::ai::duplicate::describe zugzwang]
 } -result {{the same game (a duplicate record)} {a different game} {undecided (the classifier did not settle the pair)} zugzwang}
 
+# --- the duplicate dialog's group review (wiring of audit A5) ------------
+
+tcltest::test dup-facts-of-tags {header facts from tags; moves from PlyCount, rounded up} -body {
+	set f [::ai::duplicate::factsOfTags [dict create White "A, B" Black "C, D" Date 2020.01.02 \
+		Result 1-0 ECO B90 Event Open PlyCount 61]]
+	set g [::ai::duplicate::factsOfTags [dict create White "A, B"]]
+	list [dict get $f white] [dict get $f moves] [dict get $f eco] \
+		[dict get $g black] [dict get $g moves]
+} -result {{A, B} 31 B90 {} {}}
+
+proc ::scidb::test::dup::Reader {base variant number} {
+	set same {White "Kasparov, Garry" Black "Karpov, Anatoly" Date 1985.10.01 PlyCount 81}
+	if {$number == 3} { return [dict create {*}$same Result 0-1] }
+	return [dict create {*}$same Result 1-0]
+}
+
+tcltest::test dup-review-group {the first game against each other one, results in game order} -body {
+	set ::scidb::test::dup::Group {}
+	::ai::duplicate::reviewGroup base Normal {1 2 3} {set ::scidb::test::dup::Group} \
+		-reader ::scidb::test::dup::Reader
+	::scidb::test::dup::wait ::scidb::test::dup::Group
+	set ::scidb::test::dup::Group
+} -result {{2 same rules} {3 different rules}}
+
+tcltest::test dup-review-group-single {a group of one has nothing to compare} -body {
+	set ::scidb::test::dup::Group x
+	::ai::duplicate::reviewGroup base Normal {1} {set ::scidb::test::dup::Group}
+	::scidb::test::dup::wait ::scidb::test::dup::Group
+} -result {}
+
 ::tcltest::cleanupTests
 return

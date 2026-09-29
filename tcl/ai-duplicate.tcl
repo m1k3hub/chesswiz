@@ -19,6 +19,10 @@
 #   ::ai::duplicate::Question               -> the classifier question
 #   ::ai::duplicate::decide <pairFacts> <script>
 #   ::ai::duplicate::describe <label>       -> a human phrase
+#   ::ai::duplicate::factsOfTags <tags>     -> one record's seven header facts
+#   ::ai::duplicate::reviewGroup <base> <variant> <numbers> <script> ?-reader CMD?
+#       the first game of a duplicate group against each other one; <script>
+#       gets {{number label source} ...}
 #
 # <pairFacts> is a dict with two keys, 1 and 2, each mapping to the
 # seven header facts of one record: white black date result eco moves
@@ -38,6 +42,10 @@
 package require Tcl 8.5
 
 namespace eval ::ai::duplicate {
+
+	# reviews in flight: key -> {pending N results {...} script CMD}
+	variable Review
+	variable ReviewSeq 0
 
 	# the classifier's answer set (choice criteria name -> description)
 	variable Criteria [dict create \
@@ -236,6 +244,75 @@ proc ::ai::duplicate::decide {pairFacts script} {
 
 	::ai::decide duplicate [State $pairFacts] [Question] $script \
 		-fallback [namespace code Unsure]
+	return
+}
+
+# The seven header facts of one game (its tags), for a pair. The move
+# count is the PlyCount tag halved, rounded up; a game without the tag
+# leaves it empty, so the rule never calls it 'same' on the moves alone.
+proc ::ai::duplicate::factsOfTags {tags} {
+	set facts [dict create]
+	foreach {field tag} {white White black Black date Date result Result eco ECO event Event} {
+		dict set facts $field [expr {[dict exists $tags $tag] ? [dict get $tags $tag] : ""}]
+	}
+	set moves ""
+	if {[dict exists $tags PlyCount] && [string is integer -strict [dict get $tags PlyCount]]} {
+		set moves [expr {([dict get $tags PlyCount] + 1) / 2}]
+	}
+	dict set facts moves $moves
+	return $facts
+}
+
+
+# Review one duplicate group: the first game against each other one.
+# <numbers> are game numbers of <base>. <script> gets, once, a list of
+# {number label source} for the other games. Reads only.
+proc ::ai::duplicate::ReadTags {base variant number} {
+	set tags {}
+	catch { foreach pair [::scidb::db::get tags $number $base $variant] { dict set tags {*}$pair } }
+	return $tags
+}
+
+
+proc ::ai::duplicate::reviewGroup {base variant numbers script args} {
+	array set opts [list -reader ::ai::duplicate::ReadTags]
+	array set opts $args
+
+	set first [lindex $numbers 0]
+	set rest [lrange $numbers 1 end]
+	if {[llength $rest] == 0} {
+		after 0 [list {*}$script {}]
+		return
+	}
+	set tags1 [{*}$opts(-reader) $base $variant $first]
+
+	variable Review
+	set key [incr ::ai::duplicate::ReviewSeq]
+	set Review($key) [dict create pending [llength $rest] results {} script $script]
+	foreach n $rest {
+		set tags2 [{*}$opts(-reader) $base $variant $n]
+		set pair [dict create 1 [factsOfTags $tags1] 2 [factsOfTags $tags2]]
+		decide $pair [namespace code [list ReviewStep $key $n]]
+	}
+	return
+}
+
+
+proc ::ai::duplicate::ReviewStep {key number decision} {
+	variable Review
+	if {![info exists Review($key)]} { return }
+	set state $Review($key)
+	set label [expr {[dict get $decision ok] ? [dict get $decision label] : "unsure"}]
+	set source [expr {[dict exists $decision source] ? [dict get $decision source] : "rules"}]
+	dict lappend state results [list $number $label $source]
+	dict incr state pending -1
+	if {[dict get $state pending] > 0} {
+		set Review($key) $state
+		return
+	}
+	unset Review($key)
+	uplevel #0 [list {*}[dict get $state script] \
+		[lsort -integer -index 0 [dict get $state results]]]
 	return
 }
 
