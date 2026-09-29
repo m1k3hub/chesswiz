@@ -293,7 +293,7 @@ variable Actions {
 	}
 	event_types {
 		0 0 "what time controls are the games in"
-		"The kinds of time control (classical, rapid, blitz, bullet, correspondence, simul, training) of the latest games in the active database, or of one player's games. A deterministic rule reads the TimeControl tag and the event name; a local classifier settles the games the rule cannot place. Read-only. 'player' limits it to one player; 'games' is how many of the latest games to read (default 500)."
+		"The kinds of time control (classical, rapid, blitz, bullet, correspondence, simul, training) of the latest games in the active database, or of one player's games. A deterministic rule reads the TimeControl tag and the event name; games the rule cannot place are counted as 'unclear' (no model is consulted). Read-only. 'player' limits it to one player; 'games' is how many of the latest games to read (default 500)."
 		{{"type":"object","properties":{"player":{"type":"string","description":"the player's name or part of it"},"games":{"type":"integer","description":"how many of the latest games to read, default 500"}}}}
 		::application::assistant::DoEventTypes
 	}
@@ -600,6 +600,11 @@ proc ::application::assistant::RunCalls {round calls} {
 		set fn [dict get $call function]
 		set name [dict get $fn name]
 		set cargs [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
+		# closed-set arguments are more reliable from the classifier than from
+		# the model's emitted JSON (app-assistant-args.tcl)
+		if {[llength [info commands ::application::assistant::correctArgs]]} {
+			catch { set cargs [::application::assistant::correctArgs $name $cargs] }
+		}
 		set reply [runTool $name $cargs]
 		if {[string match "\x00later:*" $reply]} {
 			set Priv(pending) [list $reply $round $name $cargs $calls]
@@ -1803,6 +1808,14 @@ proc ::application::assistant::ResolvePlayer {base variant text} {
 	}
 	if {[llength $found] == 1} { return [lrange [lindex $found 0] 0 1] }
 	if {![llength $found]} { error "no player matching '$text' in [::util::databaseName $base no]" }
+
+	# Several candidates: the database already found them, so let the
+	# classifier pick which one the text names and copy that row
+	# (pre-parsed value extraction, never generation). On any abstention the
+	# error below is today's behaviour.
+	set picked [::application::assistant::SelectPlayer $text $found]
+	if {$picked ne ""} { return $picked }
+
 	set names {}
 	foreach row [lrange $found 0 9] {
 		lassign $row _ name games
@@ -1810,6 +1823,37 @@ proc ::application::assistant::ResolvePlayer {base variant text} {
 	}
 	if {[llength $found] > 10} { lappend names "..." }
 	error "several players match '$text', call again with one exact name: [join $names {; }]"
+}
+
+
+# The classifier picks which database candidate the request names, from the
+# rows ::scidb::db::findPlayers already returned. Returns the {index name}
+# row, or "" when it cannot (no classifier, low confidence, or "none"). The
+# candidate names ARE the choice options, so the pick is always a real
+# database entry. The gate is 0.75, not 0.6: on a labelled set
+# (TYPESAFE_COOKBOOK_REVIEW.md), 0.75 commits every disambiguating query at
+# 100% accuracy and abstains on every ambiguous bare surname, where 0.6
+# committed a guess; any abstention falls back to the error below.
+proc ::application::assistant::SelectPlayer {text found} {
+	if {[llength [info commands ::ai::systemone::chooseSync]] == 0} { return "" }
+
+	set criteria {}
+	foreach row $found {
+		lassign $row _ name games
+		dict set criteria $name "the database player [list $name] ($games games)"
+	}
+	dict set criteria none "the text does not name any of these players"
+
+	set question [dict create type choice \
+		instructions "Which database player does the request name? Answer none if it names no player." \
+		criteria $criteria]
+
+	set label [::ai::systemone::chooseSync player $text $question -threshold 0.75]
+	if {$label eq "" || $label eq "none"} { return "" }
+	foreach row $found {
+		if {[lindex $row 1] eq $label} { return [lrange $row 0 1] }
+	}
+	return ""
 }
 
 
