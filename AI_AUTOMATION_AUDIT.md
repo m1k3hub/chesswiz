@@ -35,7 +35,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | A7 | Auto-annotate ordering | which engine-flagged move gets prose first (`ai-annotate.tcl`) | System One `score` | 🟢 *(shipped)* |
 | A8 | Voice transcript gate | obviously-wrong transcripts (`app-voice.tcl`) | System One `noul` | 🟢 *(shipped)* |
 | A9 | Cloud egress gate | prompts that carry private games/comments (`ai-provider.tcl`) | System One `noul` | 🟡 *(module `ai-egress.tcl` shipped; not yet wired into `ai-provider.tcl`)* |
-| A10 | LLM tier routing | local-vs-cloud provider choice (`ai-provider.tcl`) | System One `score` | 🟡 |
+| A10 | LLM tier routing | local-vs-cloud provider choice (`ai-provider.tcl`) | System One `score` | 🟡 *(module `ai-tier.tcl` shipped as a `choice` over local/cloud; not yet wired into `ai-provider.tcl`)* |
 | A11 | Free-text → search fields | natural-language search (shipped; extend pattern set) (`ai-search.tcl`) | System One + model | 🟢 *(shipped)* |
 | A12 | Tool pre-routing | single-tool requests (shipped, shadow) (`app-assistant-route.tcl`) | System One `choice` | 🟢 *(shipped)* |
 | A13 | Error triage | import/runtime error groups (shipped) (`app-error-triage.tcl`) | System One `choice` | 🟢 *(shipped)* |
@@ -65,7 +65,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | D6 | Self-repair loop | triage → issue file → agent handoff (`app-error-triage.tcl`) | wiring | 🟡 *(triage, issue files, `list_issues`/`handoff_issue` shipped; re-run tests remains)* |
 | **E. Semantic layer** | | | | |
 | E1 | Semantic search over comments/media | local embedding index (`ai-annotations.tcl`, `ai-precedent.tcl`) | embeddings | 🟡 |
-| E2 | Model-fit + calibration battery | detect device memory, recommend quant, measure (`app-ai-models.tcl`) | rules | 🟢 *(calibration battery `ai-calibrate.tcl` and the model chooser shipped; memory/quant detection remains)* |
+| E2 | Model-fit + calibration battery | detect device memory, recommend quant, measure (`app-ai-models.tcl`) | rules | 🟢 *(calibration battery `ai-calibrate.tcl`, the model chooser and `ai-modelfit.tcl` memory/quant recommendation shipped; the chooser dialog does not show it yet)* |
 | E3 | Threshold autotune | refit classifier gates from user overrides (`ai-systemone.tcl`) | offline | 🟡 *(journal `ai-journal.tcl` and per-backend calibration shipped; refit from overrides remains)* |
 | **F. Curation / data (Wave 3)** | | | | |
 | F1 | Weekly digest / watchers | scheduled download → import → precedent → report (`app-download-games.tcl`) | rules + LLM | 🟢 *(headless `download::run` only; timer, precedent check and report remain)* |
@@ -201,7 +201,7 @@ a screen.
 ### Status check (2026-09-29)
 
 Each row was compared with the code. Not started (no module, tool or hook found):
-A10, B7 (only the C++ `::scidb::ai::text` fact line feeds the
+B7 (only the C++ `::scidb::ai::text` fact line feeds the
 generator; no hover/status line), C3, C5, D1–D5, E1, F3, F4. The other unmarked rows above are
 partial, as noted in the table.
 

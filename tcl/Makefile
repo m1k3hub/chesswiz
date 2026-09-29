@@ -184,6 +184,8 @@ SOURCES = \
 	ai-duplicate.tcl \
 	ai-similar.tcl \
 	ai-egress.tcl \
+	ai-tier.tcl \
+	ai-modelfit.tcl \
 	ai-transcript.tcl \
 	app-ai.tcl \
 	app-ai-models.tcl \
