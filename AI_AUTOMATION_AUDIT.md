@@ -34,7 +34,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | A6 | New-move novelty label | new move vs precedent index (`ai-precedent.tcl`, `ai-cql.tcl`) | System One `choice` | 🟢 *(shipped as `ai-novelty.tcl`)* |
 | A7 | Auto-annotate ordering | which engine-flagged move gets prose first (`ai-annotate.tcl`) | System One `score` | 🟢 *(shipped)* |
 | A8 | Voice transcript gate | obviously-wrong transcripts (`app-voice.tcl`) | System One `noul` | 🟢 *(shipped)* |
-| A9 | Cloud egress gate | prompts that carry private games/comments (`ai-provider.tcl`) | System One `noul` | 🟡 |
+| A9 | Cloud egress gate | prompts that carry private games/comments (`ai-provider.tcl`) | System One `noul` | 🟡 *(module `ai-egress.tcl` shipped; not yet wired into `ai-provider.tcl`)* |
 | A10 | LLM tier routing | local-vs-cloud provider choice (`ai-provider.tcl`) | System One `score` | 🟡 |
 | A11 | Free-text → search fields | natural-language search (shipped; extend pattern set) (`ai-search.tcl`) | System One + model | 🟢 *(shipped)* |
 | A12 | Tool pre-routing | single-tool requests (shipped, shadow) (`app-assistant-route.tcl`) | System One `choice` | 🟢 *(shipped)* |
@@ -47,7 +47,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | B5 | Event / crosstable report | event tables → report (`crosstable.tcl`, `eventtable.tcl`) | LLM | 🟢 *(module `ai-eventreport.tcl` shipped; not yet wired to a crosstable button)* |
 | B6 | Explain the engine's line | PV → words in the analysis pane (`app-analysis.tcl`, `ai-engine.tcl`) | LLM | 🟢 *(shipped)* |
 | B7 | Hover/status "what is this?" | deterministic fact line, optionally phrased (`ai-prompt.tcl`) | rules + LLM | 🟢 |
-| B8 | Find games like this + why | overlap facts → rationale (`ai-precedent.tcl`) | LLM | 🟢 |
+| B8 | Find games like this + why | overlap facts → rationale (`ai-precedent.tcl`) | LLM | 🟢 *(module `ai-similar.tcl` shipped; no UI or ranking source yet)* |
 | B9 | Show-your-work evidence | ground each claim in the report (`app-report.tcl`, `ai-claims.tcl`) | rules | 🟢 *(shipped: the fact pack is rendered)* |
 | **C. Reviewed writes** | | | | |
 | C1 | Draft a comment in place | comment editor "Draft" (`comment.tcl`) | LLM + claim check | 🟡 *(shipped)* |
@@ -201,9 +201,8 @@ a screen.
 ### Status check (2026-09-29)
 
 Each row was compared with the code. Not started (no module, tool or hook found):
-A9, A10, B7 (only the C++ `::scidb::ai::text` fact line feeds the
-generator; no hover/status line), B8 (`ai-annotations.tcl` retrieves exemplars,
-not a rationale), C3, C5, D1–D5, E1, F3, F4. The other unmarked rows above are
+A10, B7 (only the C++ `::scidb::ai::text` fact line feeds the
+generator; no hover/status line), C3, C5, D1–D5, E1, F3, F4. The other unmarked rows above are
 partial, as noted in the table.
 
 ---

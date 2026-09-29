@@ -182,6 +182,8 @@ SOURCES = \
 	ai-openingprep.tcl \
 	ai-eventreport.tcl \
 	ai-duplicate.tcl \
+	ai-similar.tcl \
+	ai-egress.tcl \
 	ai-transcript.tcl \
 	app-ai.tcl \
 	app-ai-models.tcl \
