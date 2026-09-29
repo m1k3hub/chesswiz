@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — AI: comment kind (A3)
+
+- New `tcl/ai-comment.tcl`: what a comment is about — opening theory, a tactic,
+  the endgame, a plan, an evaluation, a warning or something else. A deterministic
+  keyword rule answers the obvious cases; the bounded classifier (`::ai::decide`,
+  choice, gate 0.6) the rest. Read-only.
+- Surfaces: the assistant tool `comment_kind {text}`, and *Classify comment* in
+  the comment editor's context menu.
+- Tests: `tests/test_app_systemone.tcl` (`systemone-comment-rule`, `-classifier`,
+  `-rulepath`, `-assistant`). App suite, `make -C tests ai-tests`, Tcl and C++
+  suites green.
+
 ## Unreleased — AI: voice transcript gate (A8)
 
 - After transcription, before the transcript becomes an assistant request, a

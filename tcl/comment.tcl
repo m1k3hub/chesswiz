@@ -35,6 +35,7 @@ set ExplainComment			"Explain this comment"
 set DetectLanguage			"Detect language"
 set DraftComment			"Draft a comment"
 set TranslateComment		"Translate comment to"
+set ClassifyComment		"Classify comment"
 set PrecedingComment			"Preceding comment"
 set TrailingComment			"Trailing comment"
 set Language					"Language"
@@ -568,6 +569,32 @@ proc OnTranslated {parent lang result} {
 	$w insert end $text
 	focus $w
 	return
+}
+
+
+# A3: classify what the comment is about (opening, tactics, endgame, plan,
+# evaluation, warning).  Read-only; the result is reported, never stored.
+proc ClassifyComment {parent} {
+	variable Vars
+
+	if {[llength [info commands ::ai::comment::kind]] == 0} { return }
+	set text [PlainComment [GetComment]]
+	if {[string trim $text] eq ""} { return }
+	::ai::comment::kind $text [namespace code [list OnKind $parent]]
+}
+
+
+proc OnKind {parent decision} {
+	variable Vars
+
+	if {![dict get $decision ok]} { return }
+	set kind [dict get $decision label]
+	if {[info exists Vars(widget:text:$Vars(lang)).text]} {
+		focus $Vars(widget:text:$Vars(lang)).text
+	}
+	catch {
+		::dialog::info -parent $parent -title "Classify comment" 			-message "This comment is about [::ai::comment::Name $kind] (source: [dict get $decision source])."
+	}
 }
 
 
@@ -1667,6 +1694,16 @@ proc PopupMenu {parent} {
 				-command [namespace code [list TranslateComment [winfo toplevel $parent] $lang]]
 		}
 		$m add cascade -label " $mc::TranslateComment" -menu $sub
+	}
+
+	# A3: classify what the comment is about.
+	if {[llength [info commands ::ai::comment::kind]]} {
+		$m add command \
+			-compound left \
+			-image $::icon::16x16::none \
+			-label " $mc::ClassifyComment" \
+			-command [namespace code [list ClassifyComment [winfo toplevel $parent]]] \
+			;
 	}
 
 	# A2: detect the language of this comment.

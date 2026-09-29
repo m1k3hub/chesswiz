@@ -303,6 +303,12 @@ variable Actions {
 		{{"type":"object","properties":{"codes":{"type":"array","items":{"type":"string"},"description":"the import error/warning codes"}},"required":["codes"]}}
 		::application::assistant::DoDiagnoseImport
 	}
+	comment_kind {
+		0 0 "classify a comment's subject"
+		"What a chess annotation comment is about: opening theory, a tactic, the endgame, a plan, an evaluation, a warning, or something else. A deterministic keyword rule answers the obvious cases; a local classifier the rest. Read-only."
+		{{"type":"object","properties":{"text":{"type":"string","description":"the comment text"}},"required":["text"]}}
+		::application::assistant::DoCommentKind
+	}
 	training_set {
 		1 0 "build a training set from the games of the database"
 		"Build puzzles from the active database's games: Scidb's CQL matcher finds positions just before a checkmate, a smothered mate, a double check or an underpromotion, and the chess engine keeps only those whose solution is its best move and clearly the only good one. The puzzles are written to a PGN file under the user directory, which the user can open as a database to train. 'pattern' limits it to one kind; 'player' to one player's games; 'max' bounds the number of puzzles (default 20). It runs in the background; the Report pane shows the progress and the result."
@@ -990,6 +996,11 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			set codes [Arg $cargs codes]
 			if {![llength $codes]} { error "codes is required" }
 			return [dict create codes $codes]
+		}
+		comment_kind {
+			set text [Arg $cargs text]
+			if {[string trim $text] eq ""} { error "text is required" }
+			return [dict create text $text]
 		}
 		training_set {
 			set pattern [OptArg $cargs pattern ""]
@@ -2717,6 +2728,26 @@ proc ::application::assistant::DoDiagnoseImport {codes} {
 	set token [Later]
 	::ai::import::diagnose $codes [namespace code [list DiagnoseImportDone $token $codes]]
 	return $token
+}
+
+
+proc ::application::assistant::DoCommentKind {text} {
+	if {[llength [info commands ::ai::comment::kind]] == 0} {
+		return "error: the comment-kind module is not available"
+	}
+	set token [Later]
+	::ai::comment::kind $text [namespace code [list CommentKindDone $token]]
+	return $token
+}
+
+
+proc ::application::assistant::CommentKindDone {token decision} {
+	if {[dict get $decision ok]} {
+		set kind [dict get $decision label]
+		Resolve $token "[::ai::comment::Name $kind] ($kind, source [dict get $decision source])"
+	} else {
+		Resolve $token "the comment's subject could not be determined"
+	}
 }
 
 

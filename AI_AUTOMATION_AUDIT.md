@@ -28,7 +28,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | **A. Bounded decisions (System One)** | | | | |
 | A1 | Event-type bucketing | study plan / brief mix blitz with classical (`ai-studyplan.tcl`, `ai-brief.tcl`) | System One `choice` | 🟢 *(shipped as `ai-event.tcl`; study-plan filter remains)* |
 | A2 | Comment language tagging | untagged comments in the multi-language store (`comment.tcl`, `lang`) | System One `choice` | 🟢 *(shipped as `ai-language.tcl`)* |
-| A3 | Comment kind facet | comment editor browse/filter (`comment.tcl`) | System One `choice` | 🟢 |
+| A3 | Comment kind facet | comment editor browse/filter (`comment.tcl`) | System One `choice` | 🟢 *(shipped as `ai-comment.tcl`)* |
 | A4 | Import doctor | raw importer error list (`app-pgn.tcl`, `import.tcl`) | System One `choice` | 🟢 *(shipped as `ai-import.tcl`)* |
 | A5 | Duplicate-merge arbitration | ambiguous duplicate pairs (`app-database-maintenance.tcl`, `merge.tcl`) | System One `choice` | 🟢 |
 | A6 | New-move novelty label | new move vs precedent index (`ai-precedent.tcl`, `ai-cql.tcl`) | System One `choice` | 🟢 |

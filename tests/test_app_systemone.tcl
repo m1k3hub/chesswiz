@@ -593,5 +593,47 @@ tcltest::test systemone-import-assistant {diagnose_import checks args and answer
 	::scidb::test::s1::stop
 } -result {{codes {InvalidMove SeemsNotToBePgnText}} 1 {missing argument 'codes'} later:}
 
+# --- comment kind (tcl/ai-comment.tcl) -------------------------------------
+
+tcltest::test systemone-comment-rule {keywords map to a kind; unknown words defer} -body {
+	list [::ai::comment::Rule "the fork wins a rook"] \
+		[::ai::comment::Rule "a typical pawn ending"] \
+		[::ai::comment::Rule "White is clearly better"] \
+		[::ai::comment::Rule "develops and prepares to castle"] \
+		[::ai::comment::Rule "the point is to pressure e5"] \
+		[::ai::comment::Rule "a blunder, only move was Kf8"] \
+		[::ai::comment::Rule "zugzwang"] \
+		[::ai::comment::Rule "hello world"]
+} -result {tactics endgame evaluation opening plan warning endgame {}}
+
+tcltest::test systemone-comment-classifier {the classifier decides when the words do not} -setup {
+	::scidb::test::s1::start [list [::scidb::test::s1::answer comment_kind plan 0.9]]
+} -body {
+	set ::scidb::test::s1::Kind {}
+	::ai::comment::kind "this keeps the tension" {set ::scidb::test::s1::Kind}
+	set r [::scidb::test::s1::wait ::scidb::test::s1::Kind]
+	list [dict get $r label] [dict get $r source]
+} -cleanup {
+	::scidb::test::s1::stop
+} -result {plan classifier}
+
+tcltest::test systemone-comment-rulepath {the keyword rule decides without the classifier} -body {
+	set ::scidb::test::s1::Kind {}
+	::ai::comment::kind "a knight fork" {set ::scidb::test::s1::Kind}
+	set r [::scidb::test::s1::wait ::scidb::test::s1::Kind]
+	list [dict get $r label] [dict get $r source]
+} -result {tactics rules}
+
+tcltest::test systemone-comment-assistant {comment_kind checks args and answers} -setup {
+	::scidb::test::s1::start [list [::scidb::test::s1::answer comment_kind plan 0.9]]
+} -body {
+	set tok [::application::assistant::DoCommentKind "keeps the tension"]
+	list [::application::assistant::CheckArgs comment_kind {text "keeps the tension"}] \
+		[catch {::application::assistant::CheckArgs comment_kind {}} e] $e \
+		[string range $tok 1 6]
+} -cleanup {
+	::scidb::test::s1::stop
+} -result {{text {keeps the tension}} 1 {missing argument 'text'} later:}
+
 ::tcltest::cleanupTests
 return
