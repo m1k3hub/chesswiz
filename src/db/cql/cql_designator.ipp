@@ -26,25 +26,42 @@
 
 namespace cql {
 
-inline uint64_t Designator::kings(db::color::ID color) const	{ return m_board.pieces[color].kings; }
-inline uint64_t Designator::queens(db::color::ID color) const	{ return m_board.pieces[color].queens; }
-inline uint64_t Designator::rooks(db::color::ID color) const	{ return m_board.pieces[color].rooks; }
-inline uint64_t Designator::bishops(db::color::ID color) const	{ return m_board.pieces[color].bishops; }
-inline uint64_t Designator::knights(db::color::ID color) const	{ return m_board.pieces[color].knights; }
-inline uint64_t Designator::pawns(db::color::ID color) const	{ return m_board.pieces[color].pawns; }
-inline uint64_t Designator::pieces(db::color::ID color) const	{ return m_board.pieces[color].any; }
-inline uint64_t Designator::empty() const								{ return m_board.empty; }
+inline uint64_t Designator::kings(db::color::ID color) const	{ return view().board.pieces[color].kings; }
+inline uint64_t Designator::queens(db::color::ID color) const	{ return view().board.pieces[color].queens; }
+inline uint64_t Designator::rooks(db::color::ID color) const	{ return view().board.pieces[color].rooks; }
+inline uint64_t Designator::bishops(db::color::ID color) const	{ return view().board.pieces[color].bishops; }
+inline uint64_t Designator::knights(db::color::ID color) const	{ return view().board.pieces[color].knights; }
+inline uint64_t Designator::pawns(db::color::ID color) const	{ return view().board.pieces[color].pawns; }
+inline uint64_t Designator::pieces(db::color::ID color) const	{ return view().board.pieces[color].any; }
+inline uint64_t Designator::empty() const								{ return view().board.empty; }
 
-inline bool Designator::match(db::Board const& board) const			{ return m_match(m_board, board); }
-inline unsigned Designator::count(db::Board const& board) const	{ return m_count(m_board, board); }
-inline uint64_t Designator::find(db::Board const& board) const		{ return m_find(m_board, board); }
+inline bool Designator::match(db::Board const& board) const
+{
+	View v = view();
+	return v.match(v.board, board);
+}
+
+
+inline unsigned Designator::count(db::Board const& board) const
+{
+	View v = view();
+	return v.count(v.board, board);
+}
+
+
+inline uint64_t Designator::find(db::Board const& board) const
+{
+	View v = view();
+	return v.find(v.board, board);
+}
 
 
 inline
 unsigned
 Designator::different(db::Board const& p1, db::Board const& p2) const
 {
-	return m_diff(m_board, p1, p2);
+	View v = view();
+	return v.diff(v.board, p1, p2);
 }
 
 
@@ -52,7 +69,8 @@ inline
 unsigned
 Designator::same(db::Board const& p1, db::Board const& p2) const
 {
-	return m_same(m_board, p1, p2);
+	View v = view();
+	return v.same(v.board, p1, p2);
 }
 
 } // namespace cql

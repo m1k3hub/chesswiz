@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — CQL transformation keywords (flips and shifts)
+
+- The spatial flip and translation keywords are implemented
+  (`src/db/cql/cql_position.cpp`, `cql_designator.cpp`):
+  `:flip`/`:flipdihedral`, `:fliphorizontal`, `:flipvertical`, `:flipdiagonal`,
+  `:flipoffdiagonal`, `:shift`, `:shifthorizontal`, `:shiftvertical`,
+  `:shiftmaindiagonal`, `:shiftoffdiagonal`, `:shiftdiagonal`. Each names a
+  transformation set (identity included), and multiple keywords compose.
+  - The flips are bijections, so they are applied to the board: a pattern D
+    transformed by F matches board B iff D matches F(B). All square-based
+    conditions (designators, `:piececount`, `:attackcount`, rays, ...) are
+    covered uniformly, and move filters are transformed with the move.
+  - The shifts are not bijections (CQL's edges smear), so they are applied to
+    the designators through an active-shift view (`Designator::view`); nested
+    position lists compose with the surrounding shift.
+- Tests: `tests/test_app_cqlfeatures.tcl` (`cqlf-flips`, `cqlf-shifts`); the
+  app suite passes 292/292, Tcl and C++ suites stay green.
+
 ## Unreleased — CQL variations and square-colour designators
 
 - CQL's `:variations` and `:variationsonly` position keywords are implemented

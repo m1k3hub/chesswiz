@@ -150,6 +150,13 @@ judge.
 
 ## Fixed on the way
 
+- **The transformation keywords.** The spatial flips (`:flip*`) and the
+  translations (`:shift*`) are implemented. Flips are applied to the board (a
+  reflection is a bijection, so a pattern D reflected by F matches board B iff
+  D matches F(B)); shifts are applied to the position list's designators
+  through an active shift, because the CQL edge behaviour makes a shift a
+  non-bijection. Multiple transformation keywords compose. See the CHANGELOG.
+
 - **`:variations` and `:variationsonly`.** The game consumer skipped every variation
   (`cql_game_matcher.cpp`), and both keywords were refused with `Not_Implemented`. It
   now walks the variations when a position list asks for them and passes

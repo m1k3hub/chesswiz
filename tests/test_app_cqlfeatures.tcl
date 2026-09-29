@@ -106,6 +106,49 @@ tcltest::test cqlf-colour-error {L/D may not designate both the files and the ra
 	dict get [::scidb::cql::parse {(match (position :piececount [DL] 1))}] error
 } -result Square_Colour_Not_Allowed
 
+tcltest::test cqlf-flips {spatial flip transformations (board reflection)} -body {
+	set A {6k1/8/8/8/8/2R3q1/8/6K1 w - - 0 1}   ;# Rc3 qg3
+	set B {6k1/8/2R3q1/8/8/8/8/6K1 w - - 0 1}   ;# rank mirror of A
+	set C {6k1/8/8/8/8/2R5/8/6K1 w - - 0 1}     ;# no queen
+	set D {6k1/2q5/8/8/8/2R5/8/6K1 w - - 0 1}   ;# diagonal mirror of A
+	set E {6k1/8/5R2/8/8/8/5q2/6K1 w - - 0 1}   ;# off-diagonal mirror of A
+	set fens [list $A $B $C $D $E]
+	set out {}
+	foreach q {
+		{(match (position Rc3 qg3))}
+		{(match (position Rc3 qg3 :fliphorizontal))}
+		{(match (position Rc3 qg3 :flipvertical))}
+		{(match (position Rc3 qg3 :flipdiagonal))}
+		{(match (position Rc3 qg3 :flipoffdiagonal))}
+		{(match (position Rc3 qg3 :flip))}
+	} {
+		lappend out [lmap fen $fens { ::scidb::cql::position $fen $q }]
+	}
+	set out
+} -result {{1 0 0 0 0} {1 1 0 0 0} {1 0 0 0 0} {1 0 0 1 1} {1 0 0 0 1} {1 1 0 1 1}}
+
+tcltest::test cqlf-shifts {translation transformations (designator shift)} -body {
+	set A {6k1/8/8/8/8/2R3q1/8/6K1 w - - 0 1}   ;# Rc3 qg3
+	set G {6k1/8/8/8/8/1R3q2/8/6K1 w - - 0 1}   ;# Rb3 qf3 (shift -1 file)
+	set H {6k1/8/8/8/2R3q1/8/8/6K1 w - - 0 1}   ;# Rc4 qg4 (shift +1 rank)
+	set I {6k1/8/8/8/3R3q/8/8/6K1 w - - 0 1}    ;# Rd4 qh4 (shift +1,+1)
+	set fens [list $A $G $H $I]
+	set out {}
+	foreach q {
+		{(match (position Rc3 qg3))}
+		{(match (position Rc3 qg3 :shifthorizontal))}
+		{(match (position Rc3 qg3 :shiftvertical))}
+		{(match (position Rc3 qg3 :shiftmaindiagonal))}
+		{(match (position Rc3 qg3 :shiftdiagonal))}
+		{(match (position Rc3 qg3 :shiftoffdiagonal))}
+		{(match (position Rc3 qg3 :shift))}
+		{(match (position :piececount qL? 1 :shifthorizontal))}
+	} {
+		lappend out [lmap fen $fens { ::scidb::cql::position $fen $q }]
+	}
+	set out
+} -result {{1 0 0 0} {1 1 0 0} {1 0 1 0} {1 0 0 1} {1 0 0 1} {1 0 0 0} {1 1 1 1} {1 1 1 1}}
+
 tcltest::test cqlf-kinds {events and structures} -body {
 	list [::ai::search::patternIds event] [::ai::search::patternIds structure]
 } -result {{checkmate smothered_mate stalemate en_passant underpromotion double_check} {opposite_castling rook_endgame pawn_endgame isolated_queen_pawn opposite_bishops queenless}}

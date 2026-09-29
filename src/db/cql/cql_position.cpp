@@ -555,6 +555,334 @@ flipMove(db::Board const& flipped, db::Move const& move, db::Move& result)
 }
 
 
+// A permutation of the 64 squares. The piece on square s is moved to p.m[s].
+// Spatial transformation keywords build a set of these; every spatial flip is
+// a bijection, so it can be applied to the board instead of the pattern (a
+// pattern D transformed by F matches board B iff D matches F(B)).
+struct Perm
+{
+	Byte m[64];
+
+	Perm()
+	{
+		for (unsigned i = 0; i < 64; ++i)
+			m[i] = Byte(i);
+	}
+
+	bool isIdentity() const
+	{
+		for (unsigned i = 0; i < 64; ++i)
+		{
+			if (m[i] != Byte(i))
+				return false;
+		}
+		return true;
+	}
+
+	// apply *this first, then <other>
+	Perm compose(Perm const& other) const
+	{
+		Perm r;
+		for (unsigned i = 0; i < 64; ++i)
+			r.m[i] = other.m[m[i]];
+		return r;
+	}
+};
+
+
+static unsigned
+permRankMirror(unsigned sq)
+{
+	return sq::make(sq::fyle(sq), sq::flipRank(sq::rank(sq)));
+}
+
+
+static unsigned
+permFileMirror(unsigned sq)
+{
+	return sq::make(sq::flipFyle(sq::fyle(sq)), sq::rank(sq));
+}
+
+
+static unsigned
+permMainDiagonal(unsigned sq)
+{
+	return sq::make(sq::rank(sq), sq::fyle(sq));
+}
+
+
+static unsigned
+permAntiDiagonal(unsigned sq)
+{
+	return sq::make(sq::flipRank(sq::rank(sq)), sq::flipFyle(sq::fyle(sq)));
+}
+
+
+typedef unsigned (*SquareFunc)(unsigned);
+
+
+static Perm
+makePerm(SquareFunc func)
+{
+	Perm p;
+	for (unsigned i = 0; i < 64; ++i)
+		p.m[i] = Byte(func(i));
+	return p;
+}
+
+
+static bool
+samePerm(Perm const& a, Perm const& b)
+{
+	for (unsigned i = 0; i < 64; ++i)
+	{
+		if (a.m[i] != b.m[i])
+			return false;
+	}
+	return true;
+}
+
+
+// The transformation set of the spatial flip keywords: identity is always
+// included, and the reflections named by the bits generate the rest by
+// composition (the four reflections generate the eight-element dihedral
+// group, so :flip/:flipdihedral yields all eight).
+static void
+collectFlips(uint64_t transformations, mstl::vector<Perm>& perms)
+{
+	perms.clear();
+	perms.push_back(Perm());
+
+	mstl::vector<Perm> generators;
+
+	if (transformations & Flip_Main_Diagonal)	generators.push_back(makePerm(::permMainDiagonal));
+	if (transformations & Flip_Off_Diagonal)	generators.push_back(makePerm(::permAntiDiagonal));
+	if (transformations & Flip_Vertical)		generators.push_back(makePerm(::permFileMirror));
+	if (transformations & Flip_Horizontal)		generators.push_back(makePerm(::permRankMirror));
+
+	for (unsigned i = 0; i < perms.size(); ++i)
+	{
+		for (unsigned j = 0; j < generators.size(); ++j)
+		{
+			Perm c = perms[i].compose(generators[j]);
+			bool found = false;
+
+			for (unsigned k = 0; k < perms.size(); ++k)
+			{
+				if (::samePerm(c, perms[k]))
+				{
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+				perms.push_back(c);
+		}
+	}
+}
+
+
+// Applies <p> (and optional colour/side swaps) to <board> through the FEN,
+// which carries the castling rights and the en-passant square. Castling and
+// en passant are dropped for a non-trivial permutation: after a reflection
+// they no longer denote meaningful positions of king and rook.
+static bool
+transformBoard(	db::Board const& board,
+					db::variant::Type variant,
+					Perm const& p,
+					bool swapColor,
+					bool swapSide,
+					db::Board& result)
+{
+	mstl::string fen(board.toFen(variant));
+
+	mstl::string field[5];
+	unsigned n = 0;
+	mstl::string::size_type start = 0;
+
+	for (mstl::string::size_type i = 0; i <= fen.size() && n < 5; ++i)
+	{
+		if (i == fen.size() || (fen[i] == ' ' && n < 4))
+		{
+			field[n++].assign(fen, start, i - start);
+			start = i + 1;
+		}
+	}
+
+	if (n < 4)
+		return false;
+
+	char grid[64];
+	for (unsigned i = 0; i < 64; ++i)
+		grid[i] = 0;
+
+	int rank = 7;
+	int fyle = 0;
+
+	for (mstl::string::size_type i = 0; i < field[0].size(); ++i)
+	{
+		char c = field[0][i];
+
+		if (c == '/')
+		{
+			--rank;
+			fyle = 0;
+		}
+		else if ('1' <= c && c <= '9')
+		{
+			fyle += c - '0';
+		}
+		else
+		{
+			if (rank < 0 || rank > 7 || fyle < 0 || fyle > 7)
+				return false;
+			grid[rank*8 + fyle] = c;
+			++fyle;
+		}
+	}
+
+	char transformed[64];
+	for (unsigned i = 0; i < 64; ++i)
+		transformed[i] = 0;
+
+	for (unsigned i = 0; i < 64; ++i)
+	{
+		if (grid[i])
+		{
+			char c = grid[i];
+
+			if (swapColor)
+				c = ::isupper(c) ? char(::tolower(c)) : char(::toupper(c));
+
+			transformed[p.m[i]] = c;
+		}
+	}
+
+	mstl::string out;
+
+	for (int r = 7; r >= 0; --r)
+	{
+		int empty = 0;
+
+		for (int f = 0; f < 8; ++f)
+		{
+			char c = transformed[r*8 + f];
+
+			if (c)
+			{
+				if (empty)
+				{
+					out += char('0' + empty);
+					empty = 0;
+				}
+				out += c;
+			}
+			else
+			{
+				++empty;
+			}
+		}
+
+		if (empty)
+			out += char('0' + empty);
+		if (r > 0)
+			out += '/';
+	}
+
+	out += ' ';
+	out += swapSide ? (field[1] == "w" ? "b" : "w") : (field[1] == "w" ? "w" : "b");
+	out += ' ';
+	out += (p.isIdentity() || swapColor) ? field[2] : "-";
+	out += ' ';
+	out += (p.isIdentity() || swapColor) ? field[3] : "-";
+
+	if (n == 5)
+	{
+		out += ' ';
+		out += field[4];
+	}
+
+	return result.setup(out.c_str(), variant) != 0;
+}
+
+
+// <move> played on the board transformed by <p>.
+static bool
+permMove(db::Board const& transformed, db::Move const& move, Perm const& p, db::Move& result)
+{
+	if (move.isPieceDrop() || move.isNull())
+		return false;
+
+	result = transformed.makeMove(
+		sq::ID(p.m[move.from()]),
+		sq::ID(p.m[move.to()]),
+		move.isPromotion() ? move.promoted() : db::piece::Queen);
+	return true;
+}
+
+
+// A translation. Unlike the flips this is not a bijection (edges smear), so
+// it cannot be applied to the board; the active shift is applied to the
+// designators of the position list instead (see Designator::view).
+struct ShiftOffset
+{
+	int fyle;
+	int rank;
+
+	ShiftOffset(int f = 0, int r = 0) :fyle(f), rank(r) {}
+};
+
+
+static void
+collectShifts(uint64_t transformations, mstl::vector<ShiftOffset>& shifts)
+{
+	shifts.clear();
+	shifts.push_back(ShiftOffset());
+
+	uint64_t t = transformations & Shift;
+
+	if (t == 0)
+		return;
+
+	// the horizontal and the vertical families together generate every
+	// translation, and :shift names all four families
+	if ((t & Shift_Both) == Shift_Both || t == Shift)
+	{
+		for (int f = -7; f <= 7; ++f)
+		{
+			for (int r = -7; r <= 7; ++r)
+			{
+				if (f || r)
+					shifts.push_back(ShiftOffset(f, r));
+			}
+		}
+		return;
+	}
+
+	if (t & Shift_Horizontal)
+	{
+		for (int f = -7; f <= 7; ++f)
+			if (f) shifts.push_back(ShiftOffset(f, 0));
+	}
+	if (t & Shift_Vertical)
+	{
+		for (int r = -7; r <= 7; ++r)
+			if (r) shifts.push_back(ShiftOffset(0, r));
+	}
+	if (t & Shift_Main_Diagonal)
+	{
+		for (int d = -7; d <= 7; ++d)
+			if (d) shifts.push_back(ShiftOffset(d, d));
+	}
+	if (t & Shift_Off_Diagonal)
+	{
+		for (int d = -7; d <= 7; ++d)
+			if (d) shifts.push_back(ShiftOffset(-d, d));
+	}
+}
+
+
 bool
 Position::match(GameInfo const& info, Board const& board, Variant variant, unsigned flags)
 {
@@ -563,15 +891,62 @@ Position::match(GameInfo const& info, Board const& board, Variant variant, unsig
 	if ((flags & flags::IsInsideVariation) ? !m_includeVariations : !m_includeMainline)
 		return m_not;
 
-	bool match = doMatch(info, board, variant, flags);
+	bool match = false;
+	bool spatial = m_transformations
+		& (Flip | Flip_Horizontal | Flip_Vertical | Flip_Diagonal | Flip_Off_Diagonal);
+	bool shift = (m_transformations & Shift) != 0;
+	bool colorFlip = m_transformations & Flip_Color;
 
-	if (!match && (m_transformations & Flip_Color))
+	mstl::vector<Perm> perms;
+	if (spatial)
+		::collectFlips(m_transformations, perms);
+	else
+		perms.push_back(Perm());
+
+	mstl::vector<ShiftOffset> shifts;
+	if (shift)
+		::collectShifts(m_transformations, shifts);
+	else
+		shifts.push_back(ShiftOffset());
+
+	// a surrounding position list may have its own shift transformation: the
+	// transforms compose, so add this list's shift to the active one
+	int outerFyle = cql::activeShiftFyle();
+	int outerRank = cql::activeShiftRank();
+
+	for (unsigned i = 0; i < perms.size() && !match; ++i)
 	{
-		db::Board flipped;
+		db::Board transformed;
+		db::Board const* src = &board;
 
-		if (::flipColor(board, variant, flipped))
-			match = doMatch(info, flipped, variant, flags);
+		if (!perms[i].isIdentity())
+		{
+			if (!::transformBoard(board, variant, perms[i], false, false, transformed))
+				continue;
+			src = &transformed;
+		}
+
+		for (unsigned j = 0; j < shifts.size() && !match; ++j)
+		{
+			cql::setActiveShift(outerFyle + shifts[j].fyle, outerRank + shifts[j].rank);
+
+			if (doMatch(info, *src, variant, flags))
+			{
+				match = true;
+			}
+			else if (colorFlip)
+			{
+				db::Board flipped;
+
+				if (::flipColor(*src, variant, flipped))
+					match = doMatch(info, flipped, variant, flags);
+			}
+
+			cql::clearActiveShift();
+		}
 	}
+
+	cql::setActiveShift(outerFyle, outerRank);
 
 	if (match)
 		++m_matchCount;
@@ -594,17 +969,77 @@ Position::match(Board const& board, Move const& move, Variant variant)
 	if (m_minMoveNumber > moveNumber || moveNumber > m_maxMoveNumber)
 		return m_not;
 
-	if (doMatch(board, move, variant))
-		return true;
+	bool spatial = m_transformations
+		& (Flip | Flip_Horizontal | Flip_Vertical | Flip_Diagonal | Flip_Off_Diagonal);
+	bool shift = (m_transformations & Shift) != 0;
+	bool colorFlip = m_transformations & Flip_Color;
 
-	if (m_transformations & Flip_Color)
+	if (!spatial && !shift && !colorFlip)
+		return doMatch(board, move, variant);
+
+	mstl::vector<Perm> perms;
+	if (spatial)
+		::collectFlips(m_transformations, perms);
+	else
+		perms.push_back(Perm());
+
+	mstl::vector<ShiftOffset> shifts;
+	if (shift)
+		::collectShifts(m_transformations, shifts);
+	else
+		shifts.push_back(ShiftOffset());
+
+	int outerFyle = cql::activeShiftFyle();
+	int outerRank = cql::activeShiftRank();
+
+	for (unsigned i = 0; i < perms.size(); ++i)
 	{
-		db::Board flipped;
-		db::Move flippedMove;
+		db::Board transformed;
+		db::Move transformedMove;
+		db::Board const* src = &board;
+		db::Move const* mv = &move;
 
-		if (::flipColor(board, variant, flipped) && ::flipMove(flipped, move, flippedMove))
-			return doMatch(flipped, flippedMove, variant);
+		if (!perms[i].isIdentity())
+		{
+			if (!::transformBoard(board, variant, perms[i], false, false, transformed))
+				continue;
+			if (!::permMove(transformed, move, perms[i], transformedMove))
+				continue;
+			src = &transformed;
+			mv = &transformedMove;
+		}
+
+		for (unsigned j = 0; j < shifts.size(); ++j)
+		{
+			int fyle = outerFyle + shifts[j].fyle;
+			int rank = outerRank + shifts[j].rank;
+
+			cql::setActiveShift(fyle, rank);
+			bool match = doMatch(*src, *mv, variant);
+			cql::clearActiveShift();
+
+			if (match)
+				return true;
+
+			if (colorFlip)
+			{
+				db::Board flipped;
+				db::Move flippedMove;
+
+				if (::flipColor(*src, variant, flipped) && ::flipMove(flipped, *mv, flippedMove))
+				{
+					cql::setActiveShift(fyle, rank);
+					match = doMatch(flipped, flippedMove, variant);
+					cql::clearActiveShift();
+
+					if (match)
+						return true;
+				}
+			}
+		}
 	}
+
+	cql::setActiveShift(outerFyle, outerRank);
 
 	return false;
 }
@@ -1085,8 +1520,6 @@ Position::parseFlipColor(Match& match, char const* s, Error& error)
 char const*
 Position::parseFlipDiagonal(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // Position::finish does not apply transformations yet
-	return s;
 	m_transformations |= Flip_Diagonal;
 	return s;
 }
@@ -1095,8 +1528,6 @@ Position::parseFlipDiagonal(Match& match, char const* s, Error& error)
 char const*
 Position::parseFlipDihedral(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // Position::finish does not apply transformations yet
-	return s;
 	m_transformations |= Flip;
 	return s;
 }
@@ -1105,8 +1536,6 @@ Position::parseFlipDihedral(Match& match, char const* s, Error& error)
 char const*
 Position::parseFlipHorizontal(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // Position::finish does not apply transformations yet
-	return s;
 	m_transformations |= Flip_Horizontal;
 	return s;
 }
@@ -1115,8 +1544,6 @@ Position::parseFlipHorizontal(Match& match, char const* s, Error& error)
 char const*
 Position::parseFlipOffDiagonal(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // Position::finish does not apply transformations yet
-	return s;
 	m_transformations |= Flip_Off_Diagonal;
 	return s;
 }
@@ -1125,8 +1552,6 @@ Position::parseFlipOffDiagonal(Match& match, char const* s, Error& error)
 char const*
 Position::parseFlipVertical(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // Position::finish does not apply transformations yet
-	return s;
 	m_transformations |= Flip_Vertical;
 	return s;
 }
@@ -1806,8 +2231,6 @@ Position::parseSequence(Match& match, char const* s, Error& error)
 char const*
 Position::parseShift(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // Position::finish does not apply transformations yet
-	return s;
 	m_transformations |= Shift;
 	return s;
 }
@@ -1816,8 +2239,6 @@ Position::parseShift(Match& match, char const* s, Error& error)
 char const*
 Position::parseShiftDiagonal(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // Position::finish does not apply transformations yet
-	return s;
 	m_transformations |= Shift_Diagonal;
 	return s;
 }
@@ -1826,8 +2247,6 @@ Position::parseShiftDiagonal(Match& match, char const* s, Error& error)
 char const*
 Position::parseShiftHorizontal(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // Position::finish does not apply transformations yet
-	return s;
 	m_transformations |= Shift_Horizontal;
 	return s;
 }
@@ -1836,8 +2255,6 @@ Position::parseShiftHorizontal(Match& match, char const* s, Error& error)
 char const*
 Position::parseShiftMainDiagonal(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // Position::finish does not apply transformations yet
-	return s;
 	m_transformations |= Shift_Main_Diagonal;
 	return s;
 }
@@ -1846,8 +2263,6 @@ Position::parseShiftMainDiagonal(Match& match, char const* s, Error& error)
 char const*
 Position::parseShiftOffDiagonal(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // Position::finish does not apply transformations yet
-	return s;
 	m_transformations |= Shift_Off_Diagonal;
 	return s;
 }
@@ -1856,8 +2271,6 @@ Position::parseShiftOffDiagonal(Match& match, char const* s, Error& error)
 char const*
 Position::parseShiftVertical(Match& match, char const* s, Error& error)
 {
-	error = Not_Implemented; // Position::finish does not apply transformations yet
-	return s;
 	m_transformations |= Shift_Vertical;
 	return s;
 }
@@ -2133,7 +2546,9 @@ Position::parse(Match& match, char const* s, Error& error)
 	if (error == No_Error && !closed)
 		error = Right_Parenthesis_Expected;
 
-	if (error == No_Error && (m_transformations & Flip_Color))
+	if (error == No_Error
+		&& (m_transformations
+			& (Flip_Color | Flip | Flip_Horizontal | Flip_Vertical | Flip_Diagonal | Flip_Off_Diagonal | Shift)))
 	{
 		// these keep state between positions, which a second (flipped)
 		// evaluation of the same position would corrupt

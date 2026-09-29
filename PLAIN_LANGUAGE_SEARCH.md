@@ -95,11 +95,11 @@ and add aliases for the keyword stage.
 - **Free CQL written by a model:** never. A power user can type CQL in a later "CQL"
   field, which the parser validates.
 - **More patterns** (isolated queen's pawn, Greek gift, opposite-coloured bishops) need
-  fixture games first, and some need CQL keywords that are still `Not_Implemented`
-  (`sumrange`, and the transformation/accumulation keywords it builds on). The
-  **square-colour designators** `L` (light) and `D` (dark) are implemented
-  (`[L?]`, `[D1]`, `BL?`, `b[D?]`), so colour-of-square patterns need no manual
-  light/dark square enumeration.
+  fixture games first. The **square-colour designators** `L` (light) and `D` (dark) are
+  implemented (`[L?]`, `[D1]`, `BL?`, `b[D?]`), and so are the spatial **flip** and
+  **shift** transformations, so colour-of-square and "anywhere on the board, reflected
+  or translated" patterns need no manual enumeration. The accumulator extension
+  (`:accumulate` / `:sumrange` / `:reset`) is still `Not_Implemented`.
 - **Progress and cancel** for CQL searches over very large databases: the view search
   is synchronous today.
 - **Learning from edits:** record the user's corrections to the form (Wave 4 threshold

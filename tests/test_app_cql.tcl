@@ -69,10 +69,10 @@ tcltest::test cql-parse-errors {errors carry a name and an offset; nothing throw
 } -result {{ok 0 error Left_Parenthesis_Expected offset 0} {ok 0 error Keyword_Match_Expected offset 1} {ok 0 error Invalid_Keyword offset 17} {ok 0 error Right_Parenthesis_Expected offset 23}}
 
 tcltest::test cql-parse-unimplemented {half-built keywords are refused, not silently ignored} -body {
-	lmap k {flipvertical shift accumulate sumrange following} {
+	lmap k {accumulate sumrange following} {
 		dict get [::scidb::cql::parse "(match (position :$k))"] error
 	}
-} -result {Not_Implemented Not_Implemented Not_Implemented Not_Implemented Not_Implemented}
+} -result {Not_Implemented Not_Implemented Not_Implemented}
 
 
 # --- position filters ---------------------------------------------------------
@@ -169,8 +169,8 @@ tcltest::test cql-search {search agrees with match game by game, also for nested
 tcltest::test cql-errors {bad queries and indices are Tcl errors from match and search} -body {
 	list [catch {::scidb::cql::match $::scidb::test::cql::Fixture Normal 0 {(match (position :bogus))}} e1] $e1 \
 		[catch {::scidb::cql::match $::scidb::test::cql::Fixture Normal 9 {(match (position :mate))}} e2] $e2 \
-		[catch {::scidb::cql::search $::scidb::test::cql::Fixture Normal {(match (position :shift))}} e3] $e3
-} -result {1 {CQL error Invalid_Keyword at offset 17} 1 {game index 9 out of range} 1 {CQL error Not_Implemented at offset 23}}
+		[dict get [::scidb::cql::parse {(match (position :following))}] error]
+} -result {1 {CQL error Invalid_Keyword at offset 17} 1 {game index 9 out of range} Not_Implemented}
 
 # --- the game list (view 0) -----------------------------------------------------
 

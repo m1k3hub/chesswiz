@@ -1452,6 +1452,150 @@ static bool shiftmaindiagonal(uint64_t& value, int step)	{ return shift(value, +
 static bool shiftoffdiagonal(uint64_t& value, int step)	{ return shift(value, -step, step); }
 
 
+namespace {
+
+int  s_shiftFyle = 0;
+int  s_shiftRank = 0;
+bool s_shiftActive = false;
+
+uint64_t
+unitRight(uint64_t mask)
+{
+	uint64_t result = 0;
+
+	for (unsigned s = 0; s < 64; ++s)
+	{
+		if (mask & (uint64_t(1) << s))
+		{
+			unsigned f = s & 7;
+
+			if (f < 7)
+				result |= uint64_t(1) << (s + 1);
+			if (f == 0)
+				result |= uint64_t(1) << s;		// a square at the left edge survives
+		}
+	}
+
+	return result;
+}
+
+
+uint64_t
+unitLeft(uint64_t mask)
+{
+	uint64_t result = 0;
+
+	for (unsigned s = 0; s < 64; ++s)
+	{
+		if (mask & (uint64_t(1) << s))
+		{
+			unsigned f = s & 7;
+
+			if (f > 0)
+				result |= uint64_t(1) << (s - 1);
+			if (f == 7)
+				result |= uint64_t(1) << s;
+		}
+	}
+
+	return result;
+}
+
+
+uint64_t
+unitUp(uint64_t mask)
+{
+	uint64_t result = 0;
+
+	for (unsigned s = 0; s < 64; ++s)
+	{
+		if (mask & (uint64_t(1) << s))
+		{
+			unsigned r = s >> 3;
+
+			if (r < 7)
+				result |= uint64_t(1) << (s + 8);
+			if (r == 0)
+				result |= uint64_t(1) << s;		// a square at the bottom edge survives
+		}
+	}
+
+	return result;
+}
+
+
+uint64_t
+unitDown(uint64_t mask)
+{
+	uint64_t result = 0;
+
+	for (unsigned s = 0; s < 64; ++s)
+	{
+		if (mask & (uint64_t(1) << s))
+		{
+			unsigned r = s >> 3;
+
+			if (r > 0)
+				result |= uint64_t(1) << (s - 8);
+			if (r == 7)
+				result |= uint64_t(1) << s;
+		}
+	}
+
+	return result;
+}
+
+
+// The shift of a square set, as a composition of unit shifts (CQL's right/
+// left/up/down transformations, including the edge behaviour).
+uint64_t
+shiftMask(uint64_t mask, int dFyle, int dRank)
+{
+	for (int i = 0; i < dFyle; ++i)
+		mask = ::unitRight(mask);
+	for (int i = 0; i > dFyle; --i)
+		mask = ::unitLeft(mask);
+	for (int i = 0; i < dRank; ++i)
+		mask = ::unitUp(mask);
+	for (int i = 0; i > dRank; --i)
+		mask = ::unitDown(mask);
+
+	return mask;
+}
+
+} // namespace
+
+
+void
+cql::setActiveShift(int fyle, int rank)
+{
+	s_shiftFyle = fyle;
+	s_shiftRank = rank;
+	s_shiftActive = fyle || rank;
+}
+
+
+void
+cql::clearActiveShift()
+{
+	s_shiftActive = false;
+}
+
+
+int
+cql::activeShiftFyle()
+{
+	return s_shiftActive ? s_shiftFyle : 0;
+}
+
+
+int
+cql::activeShiftRank()
+{
+	return s_shiftActive ? s_shiftRank : 0;
+}
+
+
 Designator::Designator()
 	:m_match(::match)
 	,m_count(::count),
@@ -1473,10 +1617,46 @@ Designator::Designator()
 }
 
 
+Designator::View
+Designator::view() const
+{
+	View v;
+	v.board = m_board;
+
+	if (s_shiftActive)
+	{
+		for (unsigned i = 0; i < 2; ++i)
+		{
+			v.board.pieces[i].pawns	= ::shiftMask(m_board.pieces[i].pawns, s_shiftFyle, s_shiftRank);
+			v.board.pieces[i].knights	= ::shiftMask(m_board.pieces[i].knights, s_shiftFyle, s_shiftRank);
+			v.board.pieces[i].bishops	= ::shiftMask(m_board.pieces[i].bishops, s_shiftFyle, s_shiftRank);
+			v.board.pieces[i].rooks	= ::shiftMask(m_board.pieces[i].rooks, s_shiftFyle, s_shiftRank);
+			v.board.pieces[i].queens	= ::shiftMask(m_board.pieces[i].queens, s_shiftFyle, s_shiftRank);
+			v.board.pieces[i].kings	= ::shiftMask(m_board.pieces[i].kings, s_shiftFyle, s_shiftRank);
+		}
+
+		v.board.empty = ::shiftMask(m_board.empty, s_shiftFyle, s_shiftRank);
+		v.board.complete();
+		::getFuncs(v.board, v.match, v.count, v.find, v.diff, v.same);
+	}
+	else
+	{
+		v.match = m_match;
+		v.count = m_count;
+		v.find = m_find;
+		v.diff = m_diff;
+		v.same = m_same;
+	}
+
+	return v;
+}
+
+
 uint64_t
 Designator::pieces(db::Board const& board, color::ID color) const
 {
-	cql::Board::Pieces const& pieces = m_board.pieces[color];
+	View v = view();
+	cql::Board::Pieces const& pieces = v.board.pieces[color];
 
 	return	(board.kings(color)		& pieces.kings)
 			 | (board.queens(color)		& pieces.queens)
@@ -1510,14 +1690,16 @@ Designator::transform(Position& position, Transform func) const
 unsigned
 Designator::powerWhite(db::Board const& board, variant::Type variant)
 {
+	View v = view();
+	cql::Board::Pieces const& pieces = v.board.pieces[White];
 	material::Count count;
 
-	count.pawn		= ::countAny(m_board.pieces[White].pawns,		board.pawns(White));
-	count.knight	= ::countAny(m_board.pieces[White].knights,	board.knights(White));
-	count.bishop	= ::countAny(m_board.pieces[White].bishops,	board.bishops(White));
-	count.rook		= ::countAny(m_board.pieces[White].rooks,		board.rooks(White));
-	count.queen		= ::countAny(m_board.pieces[White].queens,	board.queens(White));
-	count.king		= ::countAny(m_board.pieces[White].kings,		board.kings(White));
+	count.pawn		= ::countAny(pieces.pawns,		board.pawns(White));
+	count.knight	= ::countAny(pieces.knights,	board.knights(White));
+	count.bishop	= ::countAny(pieces.bishops,	board.bishops(White));
+	count.rook		= ::countAny(pieces.rooks,		board.rooks(White));
+	count.queen		= ::countAny(pieces.queens,	board.queens(White));
+	count.king		= ::countAny(pieces.kings,		board.kings(White));
 
 	return power(count, variant);
 }
@@ -1526,14 +1708,16 @@ Designator::powerWhite(db::Board const& board, variant::Type variant)
 unsigned
 Designator::powerBlack(db::Board const& board, variant::Type variant)
 {
+	View v = view();
+	cql::Board::Pieces const& pieces = v.board.pieces[Black];
 	material::Count count;
 
-	count.pawn		= ::countAny(m_board.pieces[Black].pawns,		board.pawns(Black));
-	count.knight	= ::countAny(m_board.pieces[Black].knights,	board.knights(Black));
-	count.bishop	= ::countAny(m_board.pieces[Black].bishops,	board.bishops(Black));
-	count.rook		= ::countAny(m_board.pieces[Black].rooks,		board.rooks(Black));
-	count.queen		= ::countAny(m_board.pieces[Black].queens,	board.queens(Black));
-	count.king		= ::countAny(m_board.pieces[Black].kings,		board.kings(Black));
+	count.pawn		= ::countAny(pieces.pawns,		board.pawns(Black));
+	count.knight	= ::countAny(pieces.knights,	board.knights(Black));
+	count.bishop	= ::countAny(pieces.bishops,	board.bishops(Black));
+	count.rook		= ::countAny(pieces.rooks,		board.rooks(Black));
+	count.queen		= ::countAny(pieces.queens,	board.queens(Black));
+	count.king		= ::countAny(pieces.kings,		board.kings(Black));
 
 	return power(count, variant);
 }

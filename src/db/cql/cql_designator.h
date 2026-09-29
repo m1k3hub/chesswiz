@@ -82,7 +82,21 @@ public:
 
 	typedef error::Type Error;
 
+	// The masks and function pointers actually used for a query: the original
+	// ones, or (while a shift transformation is active) a shifted copy.
+	struct View
+	{
+		cql::Board	board;
+		MatchFunc	match;
+		CountFunc	count;
+		FindFunc		find;
+		DiffFunc		diff;
+		DiffFunc		same;
+	};
+
 	Designator();
+
+	View view() const;
 
 	bool match(db::Board const& board) const;
 	unsigned count(db::Board const& board) const;
@@ -146,6 +160,14 @@ private:
 
 	static int const* m_pieceValues[db::variant::NumberOfVariants];
 };
+
+// The active shift transformation, set while a :shift* position list is
+// matched. Designator queries apply it to their square masks; a null shift
+// (0,0) is the identity.
+void setActiveShift(int fyle, int rank);
+void clearActiveShift();
+int  activeShiftFyle();
+int  activeShiftRank();
 
 } // namespace cql
 
