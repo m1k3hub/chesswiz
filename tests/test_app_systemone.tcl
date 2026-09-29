@@ -402,5 +402,88 @@ tcltest::test systemone-triage-unknown-label {a label that was not offered never
 	::scidb::test::s1::triageCleanup
 } -result {2 0}
 
+# --- event-type bucketing (tcl/ai-event.tcl) -------------------------------
+
+proc ::scidb::test::s1::nop {args} { return 0 }
+
+proc ::scidb::test::s1::answer {id name confidence} {
+	return [list 200 "{\"model\":\"kev-latest\",\"answers\":{\"$id\":{\"type\":\"choice\",\"choice\":\"$name\",\"confidence\":$confidence}},\"latency_ms\":5}"]
+}
+
+proc ::scidb::test::s1::eventFixture {} {
+	variable Dir
+	file delete -force $Dir
+	file mkdir $Dir
+	set file [file join $Dir events.pgn]
+	set fh [open $file w]
+	fconfigure $fh -encoding utf-8
+	foreach {event tc} {
+		"Blitz Arena" "300+0"
+		"Classical Cup" "7200+30"
+		"Titled Arena Bullet" "-"
+		"Some Mystery Open" "-"
+	} {
+		puts $fh "\[Event \"$event\"\]\n\[Site \"X\"\]\n\[Date \"2024.01.01\"\]\n\[Round \"1\"\]"
+		puts $fh "\[White \"W\"\]\n\[Black \"B\"\]\n\[Result \"*\"\]\n\[TimeControl \"$tc\"\]\n"
+		puts $fh "\n1. e4 e5 *\n"
+	}
+	close $fh
+	::scidb::db::open $file ::scidb::test::s1::nop {} ::scidb::test::s1::nop {}
+	return $file
+}
+
+tcltest::test systemone-event-rule-unit {TimeControl parsing and event words} -body {
+	list [::ai::event::BaseSeconds "300+0"] [::ai::event::BaseSeconds "40/7200:1800"] \
+		[::ai::event::BaseSeconds "-"] \
+		[::ai::event::Rule {TimeControl 60+0}] [::ai::event::Rule {TimeControl 600+5}] \
+		[::ai::event::Rule {TimeControl 1800+0}] [::ai::event::Rule {Event "Titled Arena Blitz"}] \
+		[::ai::event::Rule {Event "Winter Open"}] [::ai::event::Rule {Event "ICCF" TimeControl -}]
+} -result {300 7200 {} bullet rapid classical blitz {} correspondence}
+
+tcltest::test systemone-event-rule {the rule buckets the games; the rest is unclear with no classifier} -setup {
+	::ai::systemone::configure -backend off
+	set f [::scidb::test::s1::eventFixture]
+} -body {
+	set ::scidb::test::s1::Event {}
+	::ai::event::profile $f Normal -done {set ::scidb::test::s1::Event}
+	set p [::scidb::test::s1::wait ::scidb::test::s1::Event]
+	set c [dict get $p classes]
+	list [dict get $p games] [dict get $c classical] [dict get $c blitz] [dict get $c bullet] [dict get $c unclear] \
+		[::ai::event::ProfileText $p]
+} -cleanup {
+	::scidb::db::close $f
+	file delete -force $::scidb::test::s1::Dir
+} -result {4 1 1 1 1 {Time controls of 4 game(s): classical 1, blitz 1, bullet 1, unclear 1.}}
+
+tcltest::test systemone-event-classifier {the classifier settles the games the rule cannot} -setup {
+	set f [::scidb::test::s1::eventFixture]
+	::scidb::test::s1::start [list [::scidb::test::s1::answer event_type rapid 0.9]]
+} -body {
+	set ::scidb::test::s1::Event {}
+	::ai::event::profile $f Normal -done {set ::scidb::test::s1::Event}
+	set p [::scidb::test::s1::wait ::scidb::test::s1::Event]
+	set c [dict get $p classes]
+	list [dict get $c rapid] [dict get $c unclear] [llength $::scidb::test::s1::Requests]
+} -cleanup {
+	::scidb::test::s1::stop
+	::scidb::db::close $f
+	file delete -force $::scidb::test::s1::Dir
+} -result {1 0 1}
+
+tcltest::test systemone-event-assistant {event_types goes through CheckArgs and answers} -setup {
+	set f [::scidb::test::s1::eventFixture]
+	::scidb::test::s1::start [list [::scidb::test::s1::answer event_type training 0.8]]
+} -body {
+	set tok [::application::assistant::DoEventTypes "" 500]
+	list [::application::assistant::CheckArgs event_types {}] \
+		[::application::assistant::CheckArgs event_types {games 50}] \
+		[catch {::application::assistant::CheckArgs event_types {games 0}} e] $e \
+		[string range $tok 1 6]
+} -cleanup {
+	::scidb::test::s1::stop
+	::scidb::db::close $f
+	file delete -force $::scidb::test::s1::Dir
+} -result {{player {} games 500} {player {} games 50} 1 {games must be an integer between 1 and 10000} later:}
+
 ::tcltest::cleanupTests
 return

@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — AI: event-type bucketing (System One)
+
+- New `tcl/ai-event.tcl`: a game's kind of time control (classical, rapid,
+  blitz, bullet, correspondence, simul, training) from its PGN tags. A
+  deterministic rule reads the `TimeControl` value and the event words first;
+  the bounded classifier (`::ai::decide`, choice, gate 0.6) settles the games
+  the rule cannot place, asked once per distinct event. Exposed as
+  *Extras → AI: Time Controls* and the assistant tool `event_types`.
+  Read-only; with no classifier the rule alone answers and the rest is
+  "unclear", so it degrades to a deterministic report.
+- Note: scidb does not expose the `TimeControl` tag through `db::get tags`, so
+  in practice the rule leans on the event words and the classifier.
+- Also fixed: `::application::assistant::Resolve` is now safe when no request
+  is pending (an asynchronous tool could resolve after its call ended).
+- Tests: `tests/test_app_systemone.tcl` (`systemone-event-rule-unit`,
+  `-rule`, `-classifier`, `-assistant`). App suite 299/299; Tcl and C++
+  suites stay green.
+
 ## Unreleased — CQL tagging (:forany / :tagmatch / $tag)
 
 - The CQL tagging system is implemented: `:forany <tag> <designator>` in a

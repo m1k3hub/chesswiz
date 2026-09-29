@@ -165,6 +165,7 @@ SOURCES = \
 	ai-systemone.tcl \
 	ai-search.tcl \
 	ai-cql.tcl \
+	ai-event.tcl \
 	ai-narrate.tcl \
 	ai-prompt.tcl \
 	ai-precedent.tcl \

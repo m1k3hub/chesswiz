@@ -285,6 +285,12 @@ variable Actions {
 		{{"type":"object","properties":{"player":{"type":"string","description":"the player's name or part of it"},"colour":{"type":"string","enum":["white","black"]},"games":{"type":"integer","description":"how many of the latest games to read, default 200"}},"required":["player"]}}
 		::application::assistant::DoStructureProfile
 	}
+	event_types {
+		0 0 "what time controls are the games in"
+		"The kinds of time control (classical, rapid, blitz, bullet, correspondence, simul, training) of the latest games in the active database, or of one player's games. A deterministic rule reads the TimeControl tag and the event name; a local classifier settles the games the rule cannot place. Read-only. 'player' limits it to one player; 'games' is how many of the latest games to read (default 500)."
+		{{"type":"object","properties":{"player":{"type":"string","description":"the player's name or part of it"},"games":{"type":"integer","description":"how many of the latest games to read, default 500"}}}}
+		::application::assistant::DoEventTypes
+	}
 	training_set {
 		1 0 "build a training set from the games of the database"
 		"Build puzzles from the active database's games: Scidb's CQL matcher finds positions just before a checkmate, a smothered mate, a double check or an underpromotion, and the chess engine keeps only those whose solution is its best move and clearly the only good one. The puzzles are written to a PGN file under the user directory, which the user can open as a database to train. 'pattern' limits it to one kind; 'player' to one player's games; 'max' bounds the number of puzzles (default 20). It runs in the background; the Report pane shows the progress and the result."
@@ -597,7 +603,7 @@ proc ::application::assistant::Resolve {token reply} {
 	variable Priv
 	variable MaxReply
 
-	if {[lindex $Priv(pending) 0] ne $token} { return 0 }
+	if {![info exists Priv(pending)] || [lindex $Priv(pending) 0] ne $token} { return 0 }
 	lassign $Priv(pending) _ round name cargs calls isRouted
 	set Priv(pending) {}
 	if {[string length $reply] > $MaxReply} {
@@ -955,6 +961,13 @@ proc ::application::assistant::CheckArgs {name cargs} {
 				error "games must be an integer between 1 and 5000"
 			}
 			return [dict create player $player colour $colour games $games]
+		}
+		event_types {
+			set games [OptArg $cargs games 500]
+			if {![string is integer -strict $games] || $games < 1 || $games > 10000} {
+				error "games must be an integer between 1 and 10000"
+			}
+			return [dict create player [string trim [OptArg $cargs player ""]] games $games]
 		}
 		training_set {
 			set pattern [OptArg $cargs pattern ""]
@@ -2638,6 +2651,23 @@ proc ::application::assistant::StudyPlanDone {token result} {
 # ----------------------------------------------------------------------
 # CQL: structure profile, training set, result check.
 # ----------------------------------------------------------------------
+proc ::application::assistant::DoEventTypes {player games} {
+	if {[llength [info commands ::ai::event::report]] == 0} {
+		return "error: the event-type module is not available"
+	}
+	lassign [ActiveBase] base variant
+	set token [Later]
+	::ai::event::profile $base $variant -player $player -games $games \
+		-done [namespace code [list EventTypesDone $token]]
+	return $token
+}
+
+
+proc ::application::assistant::EventTypesDone {token profile} {
+	Resolve $token [::ai::event::ProfileText $profile]
+}
+
+
 proc ::application::assistant::DoStructureProfile {player colour games} {
 	lassign [ActiveBase] base variant
 	set profile [::ai::cql::profile $base $variant $player -colour $colour -games $games]

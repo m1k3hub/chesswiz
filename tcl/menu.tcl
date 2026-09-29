@@ -92,6 +92,7 @@ set AIOpponentBrief			"AI: Opponent &Brief..."
 set AIFactCheck				"AI: Fact-Check &Annotations"
 set AITrainingSet			"AI: Training Set from &Games"
 set AICheckResults			"AI: Check Game &Results"
+set AIEventTypes			"AI: Time &Controls"
 set DownloadGames				"Download &Games from the Internet..."
 
 # Tools
@@ -534,6 +535,18 @@ if {0} {
 			-underline [IncrUL $ul] \
 			-image $::icon::16x16::none \
 			-command [namespace code [list RunAI [list ::ai::cql::qualityReport .application]]] \
+			;
+	}
+
+	### time-control profile (System One) ###################################
+	if {[llength [info commands ::ai::event::report]]} {
+		lassign [::tk::UnderlineAmpersand $mc::AIEventTypes] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [namespace code [list RunAI [list ::ai::event::report .application]]] \
 			;
 	}
 

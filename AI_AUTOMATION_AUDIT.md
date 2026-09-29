@@ -26,7 +26,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | # | Feature | Automates (location) | Actor | Reliability |
 |---|---|---|---|---|
 | **A. Bounded decisions (System One)** | | | | |
-| A1 | Event-type bucketing | study plan / brief mix blitz with classical (`ai-studyplan.tcl`, `ai-brief.tcl`) | System One `choice` | 🟢 |
+| A1 | Event-type bucketing | study plan / brief mix blitz with classical (`ai-studyplan.tcl`, `ai-brief.tcl`) | System One `choice` | 🟢 *(shipped as `ai-event.tcl`; study-plan filter remains)* |
 | A2 | Comment language tagging | untagged comments in the multi-language store (`comment.tcl`, `lang`) | System One `choice` | 🟢 |
 | A3 | Comment kind facet | comment editor browse/filter (`comment.tcl`) | System One `choice` | 🟢 |
 | A4 | Import doctor | raw importer error list (`app-pgn.tcl`, `import.tcl`) | System One `choice` | 🟢 |
@@ -83,10 +83,12 @@ Every item here obeys `SYSTEM_ONE_RESEARCH.md` §4: a fixed answer set, a confid
 threshold (`SCIDB_AI_*_MIN_CONFIDENCE`), and a fallback that is today's behaviour. The
 classifier never decides chess truth.
 
-- **A1 Event-type bucketing** — `choice` over `{classical, rapid, blitz, bullet,
-  correspondence, simul, training, unclear}` from `Event`/`Site`/`Round`/`TimeControl`.
-  Fallback: parse `TimeControl`, else `unknown`. Fixes the study plan mixing time
-  controls. (`SYSTEM_ONE_FEATURES.md` §2.1)
+- **A1 Event-type bucketing** *shipped* (`tcl/ai-event.tcl`, Extras + `event_types`
+  tool) — `choice` over `{classical, rapid, blitz, bullet, correspondence, simul,
+  training, unclear}` from `TimeControl` and the event words. Fallback: the rule,
+  else "unclear". Note: `db::get tags` does not expose `TimeControl`, so the rule
+  leans on the event words. The study-plan/brief *filter* that would use it remains.
+  (`SYSTEM_ONE_FEATURES.md` §2.1)
 - **A2 Comment language tagging** — `choice` over ISO-639 codes `+ {xx, yy}` for a comment
   whose language slot is unset (`comment.tcl` already stores `lang`, default `xx`).
   Fallback: leave untagged. Also feeds CQL's unimplemented `:language` game filter.
