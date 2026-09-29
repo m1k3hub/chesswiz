@@ -13,7 +13,7 @@ among candidates code produced*; code still owns every value.
 
 | # | Cookbook | Scidb code | Fragility it removes | Firewall |
 |---|---|---|---|---|
-| 1 | [Entity alignment](https://docs.typesafe.ai/cookbooks/entity_alignment.md) | `merge.tcl`, duplicate groups (A5) | exact-field grouping mis-merges; no middle "curator" outcome | safe (proposes only) |
+| 1 | [Entity alignment](https://docs.typesafe.ai/cookbooks/entity_alignment.md) | `merge.tcl`, duplicate groups (A5) | header-only key false-positives -> deterministic move compare, **not** a model | measured: no |
 | 2 | [Pre-parsed value extraction](https://docs.typesafe.ai/cookbooks/pre_parsed_value_extraction_cookbook.md) | `app-assistant.tcl::ResolvePlayer`, `ai-search.tcl::extract`, `iccf-xfcc.tcl` | ambiguity → error + LLM retry; regex/emitted values | safe (copies a candidate) |
 | 3 | [Re-ranking](https://docs.typesafe.ai/cookbooks/rerank_typesafe.md) | `ai-precedent.tcl`, `ai-annotations.tcl` | retrieval returns overlap/keyword order, not relevance order | safe (read-only) |
 | 4 | [Function calling](https://docs.typesafe.ai/cookbooks/function_calling.md) | `app-assistant-args.tcl` (shipped) | the LLM emits JSON args; enum values can be wrong | safe (code runs the tool) |
@@ -31,17 +31,29 @@ same}` plus companion `Noul`s per compared field; the middle level routes to a
 curator; no threshold to fit. Merging is the expensive error, so the third
 outcome is essential.
 
-**Scidb today:** `::scidb::db::findDuplicates` groups by exact fields; the
-merge dialog has no arbitration (A5 is audited 🟢 but unshipped). Exact grouping
-mis-handles transliterated names and same-players-different-games pairs.
+**Scidb today:** the duplicate key is **headers only** --
+`GameInfo::computeChecksum` covers event/site/players/ratings/date/ECO/result
+and *explicitly excludes move data*, and `DatabaseCodec::computeChecksum`
+returns that crc unchanged. So a flagged group can hold different games (same
+headers, different moves); the merge dialog has no arbitration (A5 audited 🟢
+but unshipped).
 
-**Refactor:** in `tcl/ai-merge.tcl`, send `{game_a, game_b}` (players, event,
-date, result, ply count, first moves) and ask
+**Refactor:** in `tcl/ai-merge.tcl`, send `{game_a, game_b}` and ask
 `Score {different | related | same}` + `Noul` per field. Code calls
-`merge`/`markDeleted` only on the confident ends and queues the middle. Never
-merge inside the model; the confirm gate stays.
+`merge`/`markDeleted` only on the confident ends and queues the middle.
 
-**Why less fragile:** removes the binary "is this a duplicate" decision and the
+**Measured -- not shipped.** On 8 pairs that share headers by construction
+(5 same-game, 5 with different moves): a classifier given only the shared
+headers made **4/8 errors** (no signal), and given the move text made 0/8 --
+but so does the one-line deterministic comparison `game_a.moves == game_b.moves`
+(0/8), which is exact, free and offline. A classifier cannot beat that, and
+the real gap (near-duplicates whose headers *differ* -- ratings, ECO, site
+spelling) needs fuzzy candidate generation, a different feature with its own
+labels. The right fix for the false positives is deterministic: compare the
+mainline move checksum when resolving a group (or include it in the key), not
+a model.
+
+**Why less fragile:** removing the binary "is this a duplicate" decision and
 tuned field weights; the model reads the pair, code keeps every write behind
 confirmation.
 
