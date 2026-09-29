@@ -17,6 +17,7 @@
 #include "db/db_exception.h"
 
 #include "db/sci/sci_encoder.h"
+#include "db/sci/sci_codec.h"
 #include "db/si3/si3_encoder.h"
 
 #include "sys/sys_utf8_codec.h"
@@ -688,6 +689,108 @@ verifyDecodeRoundTrip(mstl::string const& rootname)
 	return ok;
 }
 
+
+mstl::string
+fileBytes(mstl::string const& filename)
+{
+	mstl::string bytes;
+	FILE* file = ::fopen(filename.c_str(), "rb");
+	if (!file) M_RAISE("cannot read duplicate fixture");
+	char buffer[4096];
+	size_t count;
+	while ((count = ::fread(buffer, 1, sizeof(buffer), file))) bytes.append(buffer, count);
+	::fclose(file);
+	return bytes;
+}
+
+bool
+verifyNormalizedDuplicates(mstl::string const& rootname)
+{
+	mstl::string filename(::util::misc::file::rootname(rootname) + "-normalized.sci");
+	cleanup(filename);
+	mstl::string pgn;
+	for (unsigned i = 0; i < 15; ++i)
+	{
+		pgn += i == 1 ? "[Event \"Open\"]\n[Site \"LONDON\"]\n[Date \"2020.??.??\"]\n[Round \"3\"]\n"
+			: "[Event \"3rd Open 2020\"]\n[Site \"London (ENG)\"]\n[Date \"2020.04.05\"]\n[Round \"3.1\"]\n";
+		pgn += i == 10 ? "[White \"KASPÁROV, Garry\"]\n[Black \"Jose Smith\"]\n"
+			: i == 11 ? "[White \"Dr. Garry Kasparov\"]\n[Black \"JOSE SMITH\"]\n"
+			: i == 12 || i == 14 ? "[White \"ID Alpha\"]\n[Black \"Jose Smith\"]\n"
+			: i == 13 ? "[White \"Other Person\"]\n[Black \"Jose Smith\"]\n"
+			: i == 2 ? "[White \"José Smith\"]\n[Black \"Garry Kasparov\"]\n"
+			: i == 1 ? "[White \"Kasparov, G.\"]\n[Black \"Smith, J.\"]\n[WhiteElo \"2700\"]\n"
+			: "[White \"GM Garry Kasparov\"]\n[Black \"José Smith\"]\n[WhiteElo \"2800\"]\n[ECO \"C20\"]\n";
+		if (i == 12 || i == 13) pgn += "[WhiteFideId \"12345\"]\n";
+		if (i == 14) pgn += "[WhiteFideId \"54321\"]\n";
+		pgn += i == 3 ? "[Result \"0-1\"]\n" : i == 4 ? "[Result \"*\"]\n" : "[Result \"1-0\"]\n";
+		if (i == 8) pgn += "[SetUp \"1\"]\n[FEN \"4k3/8/8/8/8/8/8/4K3 w - - 0 1\"]\n";
+		if (i == 9) pgn += "[SetUp \"1\"]\n[FEN \"4k3/8/8/8/8/8/8/4K3 b - - 0 1\"]\n";
+		pgn += "\n";
+		if (i == 1) pgn += "1. e4 {extra comment} e5 (1... c5) 2. Nf3 $1 Nc6 ";
+		else if (i == 7) pgn += "1. d4 d5 2. Nf3 Nc6 ";
+		else if (i < 5 || i >= 10) pgn += "1. e4 e5 2. Nf3 Nc6 ";
+		pgn += i == 3 ? "0-1\n\n" : i == 4 ? "*\n\n" : "1-0\n\n";
+	}
+	mstl::istringstream stream(pgn);
+	SilentPgnReader reader(stream);
+	util::Progress& progress = util::Progress::null();
+	db::sci::Codec::setCreationVersion(96);
+	Database created(filename, sys::utf8::Codec::utf8(), storage::OnDisk, variant::Normal);
+	db::sci::Codec::setCreationVersion(95);
+	bool ok = created.importGames(reader, progress) == 15 && !reader.errors;
+	maintenance::DuplicateGroups expected;
+	maintenance::DuplicateGroup played, empty, identified;
+	played.push_back(0); played.push_back(1); played.push_back(4);
+	played.push_back(10); played.push_back(11);
+	empty.push_back(5); empty.push_back(6);
+	identified.push_back(12); identified.push_back(13);
+	expected.push_back(played); expected.push_back(empty); expected.push_back(identified);
+	auto check = [&expected](maintenance::DuplicateGroups actual) {
+		actual.qsort([](maintenance::DuplicateGroup const& a, maintenance::DuplicateGroup const& b) -> int {
+			return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0;
+		});
+		if (!sameDuplicateGroups(actual, expected))
+		{
+			::fprintf(stderr, "normalized groups:");
+			for (unsigned i = 0; i < actual.size(); ++i)
+			{
+				::fprintf(stderr, " [");
+				for (unsigned j = 0; j < actual[i].size(); ++j) ::fprintf(stderr, " %u", actual[i][j]);
+				::fprintf(stderr, " ]");
+			}
+			::fprintf(stderr, "\n");
+			return false;
+		}
+		return true;
+	};
+	maintenance::DuplicateGroups exactBefore = maintenance::findDuplicates(created);
+	mstl::vector<uint32_t> checksums;
+	for (unsigned i = 0; i < created.countGames(); ++i) checksums.push_back(created.computeChecksum(i));
+	ok = check(maintenance::findDuplicates(created, maintenance::Normalized)) && ok;
+	maintenance::DuplicateGroups exact = maintenance::findDuplicates(created);
+
+	ok = sameDuplicateGroups(exactBefore, exact) && ok;
+	for (unsigned i = 0; i < created.countGames(); ++i) ok = created.computeChecksum(i) == checksums[i] && ok;
+	created.close();
+	mstl::string root = ::util::misc::file::rootname(filename);
+	mstl::string indexBytes = fileBytes(root + ".sci");
+	mstl::string gameBytes = fileBytes(root + ".scg");
+	mstl::string nameBytes = fileBytes(root + ".scn");
+	Database reopened(filename, sys::utf8::Codec::utf8(), permission::ReadOnly, progress);
+	{
+		ScopedEnv serial("SCIDB_MAINTENANCE_THREADS", "1");
+		maintenance::DuplicateGroups groups = maintenance::findDuplicates(reopened, maintenance::Normalized);
+		ok = check(groups) && ok;
+		ScopedEnv parallel("SCIDB_MAINTENANCE_THREADS", "2");
+		ok = sameDuplicateGroups(groups, maintenance::findDuplicates(reopened, maintenance::Normalized)) && ok;
+	}
+	reopened.close();
+	ok = fileBytes(root + ".sci") == indexBytes && fileBytes(root + ".scg") == gameBytes
+		&& fileBytes(root + ".scn") == nameBytes && ok;
+	cleanup(filename);
+	return ok;
+}
+
 } // namespace
 
 
@@ -715,6 +818,8 @@ main(int argc, char** argv)
 	{
 		TclInterpreter tcl;
 		initializeStatics();
+		// Keep the existing exact-mode/index-attribute fixture at its original version.
+		db::sci::Codec::setCreationVersion(95);
 
 		cleanup(filename);
 		cleanup(compactedFilename);
@@ -727,6 +832,7 @@ main(int argc, char** argv)
 		unsigned imported = created.importGames(reader, progress);
 		CHECK("PGN import", reader.errors == 0 && imported == 4);
 		CHECK("Initial maintenance", verifyInitialState(created));
+		CHECK("Normalized duplicates", verifyNormalizedDuplicates(filename));
 		CHECK("Material search", verifyMaterialSearch(created));
 		CHECK("Rating search", verifyRatingSearch(created));
 		CHECK("Pattern search", verifyPatternSearch(created));
@@ -765,7 +871,7 @@ main(int argc, char** argv)
 		reopened.close();
 		cleanup(filename);
 		cleanup(compactedFilename);
-		::puts("maintenance verification passed");
+		::puts("maintenance verification passed (0 failed)");
 		return 0;
 	}
 	catch (IOException const& exc)

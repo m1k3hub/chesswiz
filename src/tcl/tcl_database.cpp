@@ -4786,10 +4786,21 @@ tcl::db::getPlayerStats(Database const& database, NamebasePlayer const& player)
 static int
 cmdFindDuplicates(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc != 3)
+	if (objc != 3 && objc != 5)
 	{
-		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant>");
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> ?-normalize 0|1?");
 		return TCL_ERROR;
+	}
+
+	int normalize = 1;
+	if (objc == 5)
+	{
+		if (strcmp(Tcl_GetString(objv[3]), "-normalize") != 0)
+		{
+			Tcl_SetObjResult(ti, Tcl_NewStringObj("expected -normalize", -1));
+			return TCL_ERROR;
+		}
+		if (Tcl_GetBooleanFromObj(ti, objv[4], &normalize) != TCL_OK) return TCL_ERROR;
 	}
 
 	char const* database = stringFromObj(objc, objv, 1);
@@ -4797,7 +4808,7 @@ cmdFindDuplicates(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	Cursor& cursor = scidb->cursor(database, variant);
 	Database& db = cursor.getDatabase();
-	::db::maintenance::DuplicateGroups groups = ::db::maintenance::findDuplicates(db);
+	::db::maintenance::DuplicateGroups groups = ::db::maintenance::findDuplicates(db, normalize ? ::db::maintenance::Normalized : ::db::maintenance::Exact);
 	Tcl_Obj* result = Tcl_NewListObj(0, nullptr);
 
 	for (unsigned i = 0; i < groups.size(); ++i)
@@ -4813,17 +4824,6 @@ cmdFindDuplicates(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 }
 
 
-static int
-cmdMarkDeleted(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
-{
-	if (objc != 4)
-	{
-		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <index>");
-		return TCL_ERROR;
-	}
-
-	char const* database = stringFromObj(objc, objv, 1);
-	variant::Type variant = tcl::game::variantFromObj(objc, objv, 2);
 struct SimilarMatch
 {
 	unsigned number;
@@ -4963,6 +4963,17 @@ cmdSimilar(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 }
 
 
+static int
+cmdMarkDeleted(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <index>");
+		return TCL_ERROR;
+	}
+
+	char const* database = stringFromObj(objc, objv, 1);
+	variant::Type variant = tcl::game::variantFromObj(objc, objv, 2);
 	unsigned index = unsigned(intFromObj(objc, objv, 3));
 
 	Cursor& cursor = scidb->cursor(database, variant);
@@ -6379,6 +6390,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdUpdate,			cmdUpdate);
 	createCommand(ti, CmdUpgrade,			cmdUpgrade);
 	createCommand(ti, CmdWrite,				cmdWrite);
+	createCommand(ti, "::scidb::db::similar", cmdSimilar);
 	createCommand(ti, CmdFindDuplicates,	cmdFindDuplicates);
 	createCommand(ti, CmdEcoStats,			cmdEcoStats);
 	createCommand(ti, CmdFindPlayers,		cmdFindPlayers);
@@ -6390,7 +6402,6 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdGuidingText,	cmdGuidingText);
 	createCommand(ti, CmdGameAnchor,		cmdGameAnchor);
 	createCommand(ti, CmdHtmlSanitize,	cmdHtmlSanitize);
-	createCommand(ti, "::scidb::db::similar", cmdSimilar);
 	createCommand(ti, CmdMarkDeleted,		cmdMarkDeleted);
 }
 

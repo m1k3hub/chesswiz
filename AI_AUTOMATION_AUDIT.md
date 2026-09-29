@@ -103,8 +103,9 @@ classifier never decides chess truth.
   deterministic code→category→fix table, `choice` only for unknown codes. Fallback:
   today's raw error list. (Also fixed the log's encoding-warning filter, which read
   the wrong argument.)
-- **A5 Duplicate-merge arbitration** — dedup is deterministic (`db_search` duplicate
-  detection); only *ambiguous* pairs ask the classifier: `{same game, different game,
+- **A5 Duplicate-merge arbitration** — groups now come from normalized, key-only
+  detection, including near-duplicates; database contents are unchanged.
+  Detection is deterministic (`db_maintenance`); only *ambiguous* pairs ask the classifier: `{same game, different game,
   unsure}`. Fallback: deterministic dedup. Mutations stay behind the existing confirm gate.
 - **A6 New-move novelty label** *shipped* (`tcl/ai-novelty.tcl`, assistant `novelty_label`) — `choice` over `{novelty, side line, transposition,
   blunder}` for a move absent from `::ai::precedent`; the engine still answers

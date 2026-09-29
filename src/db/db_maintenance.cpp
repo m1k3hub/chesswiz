@@ -7,6 +7,15 @@
 #include "db_database.h"
 #include "db_database_codec.h"
 #include "db_game_info.h"
+#include "db_game_data.h"
+#include "db_move_node.h"
+#include "sys_utf8.h"
+
+#include <algorithm>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <vector>
 
 #include "sys_info.h"
 #include "sys_lock.h"
@@ -184,6 +193,302 @@ resolveDuplicateRange(	DuplicateGroups& result,
 }
 
 
+// Key-only normalization: no tags, namebase entries or database records are edited.
+// Result stays out of the blocking hash so unknown results can match decided ones.
+// Union roots retain a decided result: an unknown cannot bridge opposite results.
+// This deliberately constrains transitivity where the two requirements conflict.
+// Blocking/sorting is O(G log G); compatibility edges cost O(B^2) per block.
+// Unknown headers cannot safely be hashed, so undecodable games share a fallback
+// block, verified using headers, variant, IDN and known ply count. Empty decoded
+// games retain their start position. FEN counters are ignored, but castling, side
+// to move and en-passant rights are retained, including Chess960 rook files.
+// Player identity prefers FIDE, then DSB, ECF and ICCF IDs in their own namespaces.
+// ECO is deliberately unused: a soft check cannot affect duplicate membership.
+struct NormalizedGame
+{
+	std::string players[2], event, site, position;
+	std::vector<uint16_t> moves;
+	unsigned ids[2][4], date[3], round, plies, idn, variant, result;
+	bool decoded;
+};
+
+static std::string
+foldText(mstl::string const& text)
+{
+	std::string result;
+	for (char const* p = text.c_str(); *p; )
+	{
+		sys::utf8::uchar c;
+		p = sys::utf8::nextChar(p, c);
+		if (c >= 0x300 && c <= 0x36f)
+			continue;
+		c = sys::utf8::toLower(c);
+		if (c == 0xdf || c == 0xe6 || c == 0x153 || c == 0xfe)
+		{
+			result += c == 0xdf ? "ss" : c == 0xe6 ? "ae" : c == 0x153 ? "oe" : "th";
+			continue;
+		}
+		if (c >= 0x80 && c <= 0xff)
+		{
+			mstl::string letter, mapped;
+			sys::utf8::append(letter, c);
+			sys::utf8::latin1::map(letter, mapped);
+			c = sys::utf8::getChar(mapped.c_str());
+		}
+		// Latin Extended-A letters not covered by the existing Latin-1 map.
+		static char const* const groups[] = { "āăą", "ćĉċč", "ďđ", "ēĕėęě", "ĝğġģ", "ĥħ",
+			"ĩīĭįı", "ĵ", "ķ", "ĺļľŀł", "ńņň", "ōŏő", "ŕŗř", "śŝşš", "ţťŧ", "ũūŭůűų", "ŵ", "ŷ", "źżž" };
+		char const* letters = "acdeghijklnorstuwyz";
+		for (unsigned i = 0; c >= 0x100 && i < sizeof(groups)/sizeof(*groups); ++i)
+		{
+			for (char const* q = groups[i]; *q; )
+			{
+				sys::utf8::uchar d;
+				q = sys::utf8::nextChar(q, d);
+				if (c == d) c = letters[i];
+			}
+		}
+		if (sys::utf8::isAlnum(c))
+		{
+			mstl::string letter;
+			sys::utf8::append(letter, c);
+			result += letter.c_str();
+		}
+		else if (sys::utf8::isSpace(c) && !result.empty() && result.back() != ' ')
+			result += ' ';
+	}
+	if (!result.empty() && result.back() == ' ') result.pop_back();
+	return result;
+}
+
+static std::vector<std::string>
+words(std::string const& text)
+{
+	std::istringstream stream(text);
+	std::vector<std::string> result;
+	std::string word;
+	while (stream >> word) result.push_back(word);
+	return result;
+}
+
+static std::string
+playerKey(mstl::string const& name)
+{
+	std::string raw(name.c_str());
+	size_t comma = raw.find(',');
+	std::replace(raw.begin(), raw.end(), ',', ' ');
+	std::replace(raw.begin(), raw.end(), '.', ' ');
+	std::vector<std::string> parts = words(foldText(mstl::string(raw.c_str())));
+	parts.erase(std::remove_if(parts.begin(), parts.end(), [](std::string const& s) {
+		return s == "gm" || s == "im" || s == "fm" || s == "cm" || s == "wgm"
+			|| s == "wim" || s == "wfm" || s == "wcm" || s == "dr";
+	}), parts.end());
+	if (parts.empty()) return "";
+	if (comma == std::string::npos && parts.size() > 1)
+		std::rotate(parts.begin(), parts.end() - 1, parts.end());
+	std::string result = parts[0];
+	for (unsigned i = 1; i < parts.size(); ++i) result += " " + parts[i];
+	return result;
+}
+
+static bool
+compatibleName(std::string const& a, std::string const& b)
+{
+	if (a.empty() || b.empty()) return true;
+	std::vector<std::string> x = words(a), y = words(b);
+	if (x[0] != y[0]) return false;
+	for (unsigned i = 1; i < std::min(x.size(), y.size()); ++i)
+	{
+		if (x[i] != y[i] && !(x[i][0] == y[i][0] && (x[i].size() == 1 || y[i].size() == 1)))
+			return false;
+	}
+	return true;
+}
+
+static std::string
+placeKey(mstl::string const& text, bool site)
+{
+	std::string raw(text.c_str());
+	if (site && raw.size() >= 5 && raw.back() == ')' && raw[raw.size() - 5] == '(')
+		raw.erase(raw.size() - 5);
+	std::vector<std::string> parts = words(foldText(mstl::string(raw.c_str())));
+	std::string result;
+	for (unsigned i = 0; i < parts.size(); ++i)
+	{
+		std::string const& s = parts[i];
+		size_t n = s.find_first_not_of("0123456789");
+		if ((s.size() == 4 && n == std::string::npos)
+			|| (n > 0 && n != std::string::npos && (s.substr(n) == "st" || s.substr(n) == "nd"
+				|| s.substr(n) == "rd" || s.substr(n) == "th"))) continue;
+		if (!result.empty()) result += ' ';
+		result += s;
+	}
+	return result;
+}
+
+static bool
+knownEqual(unsigned a, unsigned b) { return !a || !b || a == b; }
+
+static bool
+compatibleHeaders(NormalizedGame const& a, NormalizedGame const& b)
+{
+	if (a.decoded != b.decoded || a.variant != b.variant || !knownEqual(a.idn, b.idn)
+		|| !knownEqual(a.plies, b.plies) || !knownEqual(a.round, b.round)
+		|| !knownEqual(a.result, b.result)) return false;
+	for (unsigned i = 0; i < 2; ++i)
+	{
+		bool identified = false;
+		for (unsigned federation = 0; federation < 4; ++federation)
+		{
+			if (a.ids[i][federation] && b.ids[i][federation])
+			{
+				if (a.ids[i][federation] != b.ids[i][federation]) return false;
+				identified = true;
+				break;
+			}
+		}
+		if (!identified && !compatibleName(a.players[i], b.players[i])) return false;
+	}
+	for (unsigned i = 0; i < 3; ++i)
+		if (!knownEqual(a.date[i], b.date[i])) return false;
+	return (a.event.empty() || b.event.empty() || a.event == b.event)
+		&& (a.site.empty() || b.site.empty() || a.site == b.site)
+		&& (!a.decoded || !b.decoded || (a.position == b.position && a.moves == b.moves));
+}
+
+struct NormalizedWorker
+{
+	Database& database;
+	std::vector<NormalizedGame>& games;
+	::util::BlockFileReader* reader;
+	unsigned first, last;
+	mstl::vector<DuplicateEntry> entries;
+
+	NormalizedWorker(Database& db, std::vector<NormalizedGame>& data, unsigned begin, unsigned end)
+		:database(db), games(data), reader(db.isReadonly() ? db.openAsyncReader() : 0), first(begin), last(end) {}
+	~NormalizedWorker() { if (reader) database.closeAsyncReader(reader); }
+
+	void operator() ()
+	{
+		std::vector<uint16_t> line(database.codec().maxGameLength() + 1);
+		for (unsigned index = first; index < last; ++index)
+		{
+			GameInfo const& info = database.gameInfo(index);
+			if (info.isDeleted()) continue;
+			NormalizedGame& key = games[index];
+			for (unsigned c = 0; c < 2; ++c)
+			{
+				key.players[c] = playerKey(info.playerName(color::ID(c)));
+				key.ids[c][0] = info.fideID(color::ID(c));
+				Player const* player = info.player(color::ID(c));
+				if (player)
+				{
+					if (!key.ids[c][0]) key.ids[c][0] = player->fideID();
+					key.ids[c][1] = player->dsbID();
+					key.ids[c][2] = player->ecfID();
+					key.ids[c][3] = player->iccfID();
+				}
+			}
+			Date date = info.date();
+			if (!date.year()) date = info.eventDate();
+			key.date[0] = date.year(); key.date[1] = date.month(); key.date[2] = date.day();
+			key.event = placeKey(info.event(), false);
+			key.site = placeKey(info.site(), true);
+			key.round = info.round(); key.idn = info.idn(); key.plies = info.plyCount();
+			key.variant = database.variant();
+			if (database.variant() == variant::Antichess)
+				key.variant = info.isGiveaway() ? variant::Giveaway : variant::Suicide;
+			key.result = info.result() == result::White ? 1 : info.result() == result::Black ? 2 : info.result() == result::Draw ? 3 : 0;
+			key.decoded = false;
+			Board board;
+			try
+			{
+				if (reader)
+				{
+					unsigned count = database.codec().decodeGame(reader, info, line.data(), line.size(), board, false);
+					// A full buffer may be truncated: never compare its prefix as a game.
+					if (count < line.size())
+					{
+						key.moves.assign(line.begin(), line.begin() + count);
+						key.decoded = true;
+					}
+				}
+				else
+				{
+					GameData data;
+					GameInfo copy(info);
+					database.codec().decodeGame(data, copy, index);
+					board = data.m_startBoard;
+					for (MoveNode const* node = data.m_startNode->next(); node && !node->atLineEnd(); node = node->next())
+						key.moves.push_back(node->move().index());
+					key.decoded = true;
+				}
+			}
+			catch (mstl::exception const&) { key.moves.clear(); }
+			uint32_t hash = 0;
+			if (key.decoded)
+			{
+				std::vector<std::string> fen = words(board.toFen(variant::Type(key.variant), Board::Shredder).c_str());
+				for (unsigned i = 0; i < std::min(size_t(4), fen.size()); ++i) key.position += fen[i] + " ";
+				key.plies = key.moves.size();
+				hash = ::util::crc::compute(0, key.position.data(), key.position.size());
+				for (unsigned i = 0; i < key.moves.size(); ++i) hash = ::util::crc::compute(hash, key.moves[i]);
+			}
+			entries.push_back(DuplicateEntry(hash, index));
+		}
+	}
+};
+
+static DuplicateGroups
+findNormalizedDuplicates(Database& db)
+{
+	std::vector<NormalizedGame> games(db.countGames());
+	mstl::vector<DuplicateEntry> entries;
+	unsigned count = db.isReadonly() ? computeWorkerCount(db.countGames()) : 1;
+	unsigned chunk = (db.countGames() + count - 1)/count;
+	std::vector<std::unique_ptr<NormalizedWorker> > workers;
+	sys::ThreadGroup threads;
+	for (unsigned first = 0; first < db.countGames(); first += chunk)
+	{
+		workers.emplace_back(new NormalizedWorker(db, games, first, std::min(first + chunk, db.countGames())));
+		NormalizedWorker* worker = workers.back().get();
+		if (!worker->reader || count == 1 || !threads.start(sys::Thread::Runnable(&NormalizedWorker::operator(), worker)))
+			(*worker)();
+	}
+	mstl::string failure;
+	bool ok = threads.joinNoThrow(failure);
+	if (!ok) M_RAISE("%s", failure.c_str());
+	for (unsigned i = 0; i < workers.size(); ++i) appendDuplicateEntries(entries, workers[i]->entries);
+	entries.qsort([](DuplicateEntry const& a, DuplicateEntry const& b) -> int {
+		if (a.first != b.first) return a.first < b.first ? -1 : 1;
+		return a.second < b.second ? -1 : a.second > b.second ? 1 : 0;
+	});
+	DuplicateGroups result;
+	mstl::vector<DuplicateRange> ranges;
+	collectDuplicateRanges(entries, ranges);
+	for (unsigned r = 0; r < ranges.size(); ++r)
+	{
+		unsigned first = ranges[r].first, size = ranges[r].second - first;
+		std::vector<unsigned> parent(size), results(size);
+		for (unsigned i = 0; i < size; ++i) { parent[i] = i; results[i] = games[entries[first + i].second].result; }
+		auto root = [&parent](unsigned i) { while (parent[i] != i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+		for (unsigned i = 0; i < size; ++i)
+			for (unsigned j = i + 1; j < size; ++j)
+			{
+				unsigned a = root(i), b = root(j);
+				if (a == b || !knownEqual(results[a], results[b])) continue;
+				if (!compatibleHeaders(games[entries[first + i].second], games[entries[first + j].second])) continue;
+				if (a > b) std::swap(a, b);
+				parent[b] = a;
+				if (!results[a]) results[a] = results[b];
+			}
+		mstl::map<unsigned, DuplicateGroup> groups;
+		for (unsigned i = 0; i < size; ++i) groups[root(i)].push_back(entries[first + i].second);
+		for (auto const& group : groups) if (group.second.size() > 1) result.push_back(group.second);
+	}
+	return result;
+}
+
 struct EcoStatsWorker
 {
 	EcoStatsWorker(Database const& database_, variant::Type variant_, unsigned first_, unsigned last_)
@@ -278,8 +583,8 @@ EcoStats::EcoStats()
 }
 
 
-DuplicateGroups
-findDuplicates(Database& db)
+static DuplicateGroups
+findExactDuplicates(Database& db)
 {
 	unsigned nGames = db.countGames();
 	unsigned nWorkers = computeWorkerCount(nGames);
@@ -452,6 +757,14 @@ findDuplicates(Database& db)
 		resolveDuplicateRange(result, db, entries, ranges[i].first, ranges[i].second, 0);
 
 	return result;
+}
+
+
+DuplicateGroups
+findDuplicates(Database& db, DuplicateMode mode)
+{
+	// Keep separate return paths in helpers: mstl::vector requires copy elision.
+	return mode == Normalized ? findNormalizedDuplicates(db) : findExactDuplicates(db);
 }
 
 

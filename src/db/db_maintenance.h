@@ -31,7 +31,9 @@ typedef mstl::vector<unsigned> DuplicateGroup;
 typedef mstl::vector<DuplicateGroup> DuplicateGroups;
 typedef mstl::vector<EcoStats> EcoStatsList;
 
-DuplicateGroups findDuplicates(Database& db);
+enum DuplicateMode { Exact, Normalized };
+
+DuplicateGroups findDuplicates(Database& db, DuplicateMode mode = Exact);
 EcoStatsList computeEcoStats(Database const& db, variant::Type variant);
 
 } // namespace maintenance
