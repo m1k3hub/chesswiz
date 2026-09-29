@@ -469,7 +469,7 @@ proc logResult {total illegal emptyText importText accepted rejected {unsupporte
 
 	# A4: the import doctor, rule-only (the classifier is only used by the
 	# diagnose_import tool), so the log stays synchronous.
-	if {[llength [info commands ::ai::import::Text]]} {
+	if {[llength [::info commands ::ai::import::Text]]} {
 		set advice [::ai::import::Text $Priv(importCodes)]
 		if {[string length $advice]} { ::log::info $advice }
 	}

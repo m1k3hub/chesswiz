@@ -755,5 +755,17 @@ tcltest::test systemone-score-gate {a low-confidence score falls back} -setup {
 	::scidb::test::s1::stop
 } -result {low rules}
 
+# Regression: ::import defines its own `info` proc, so a bare [info commands]
+# inside it calls that proc and fails with 'wrong # args: should be "info line"'.
+# The import doctor's hook at the end of ::import::logResult used to do so,
+# which broke the log step of every file import.
+tcltest::test import-log-result-doctor-hook {logResult reaches the import doctor through ::info, not the shadowing proc} -body {
+	set body [info body ::import::logResult]
+	list \
+		[expr {[llength [info commands ::import::info]] > 0}] \
+		[string match {*\[::info commands ::ai::import::Text\]*} $body] \
+		[string match {*\[info commands ::ai::import::Text\]*} $body]
+} -result {1 1 0}
+
 ::tcltest::cleanupTests
 return

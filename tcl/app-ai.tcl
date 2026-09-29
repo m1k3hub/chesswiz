@@ -155,8 +155,23 @@ proc ::application::ai::htmlData {html} {
 }
 
 
+# <html> is a page (HTML text) or an already sanitized data dict as htmlData
+# returns it: most callers pass the latter, and sanitizing a dict as if it
+# were HTML rendered its Tcl text ("html {...} title {} media {} ...") in the
+# Report pane.
 proc ::application::ai::showReport {parent title html} {
-	return [::application::report::showHtmlData $parent $title [htmlData $html]]
+	if {![IsHtmlData $html]} { set html [htmlData $html] }
+	return [::application::report::showHtmlData $parent $title $html]
+}
+
+
+proc ::application::ai::IsHtmlData {value} {
+	if {[catch {
+		expr {[llength $value] % 2 == 0
+			&& [dict exists $value html] && [dict exists $value title]
+			&& [dict exists $value media] && [dict exists $value anchors]}
+	} yes]} { return 0 }
+	return $yes
 }
 
 
