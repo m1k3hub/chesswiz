@@ -242,6 +242,27 @@ tcltest::test voice-review {review mode holds the transcript instead of sending 
 	file delete -force $::scidb::test::voice::Dir
 } -result {{prepare against Carlsen} 0}
 
+tcltest::test voice-gate-holds {an implausible transcript is held for review} -body {
+	::scidb::test::voice::isolated {
+		::application::voice::OnGate "gibberish words" [dict create ok 1 label 0 confidence 0.9 source classifier]
+		list $::scidb::test::voice::Entry [llength $::scidb::test::voice::Asked]
+	}
+} -result {{gibberish words} 0}
+
+tcltest::test voice-gate-sends {a plausible transcript is sent} -body {
+	::scidb::test::voice::isolated {
+		::application::voice::OnGate "switch to the database tab" [dict create ok 1 label 1 confidence 0.9 source classifier]
+		list $::scidb::test::voice::Entry [llength $::scidb::test::voice::Asked]
+	}
+} -result {{} 1}
+
+tcltest::test voice-gate-undecided {an undecided gate sends as before} -body {
+	::scidb::test::voice::isolated {
+		::application::voice::OnGate "whatever" [dict create ok 0]
+		list $::scidb::test::voice::Entry [llength $::scidb::test::voice::Asked]
+	}
+} -result {{} 1}
+
 tcltest::test voice-tts-modes {replies are spoken only when they should be} -body {
 	::scidb::test::voice::isolated {
 		::application::voice::configure -ttsMode voice

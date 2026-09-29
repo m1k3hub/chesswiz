@@ -68,6 +68,7 @@ set Speak			"Speak"
 set Stop			"Stop"
 set Listening		"Listening... click to stop"
 set Transcribing	"Transcribing..."
+set CheckTranscript "Heard: %s (not sure this is a request - check and press Enter)"
 set Heard			"Heard: %s"
 set Nothing			"Nothing heard (no speech above the noise floor)"
 set NoMic			"No microphone found: install ffmpeg, arecord or sox, or set SCIDB_AI_RECORDER"
@@ -92,6 +93,8 @@ array set Settings {
 	ttsVoice     ""
 	ttsMode      voice
 	review       0
+	gate         1
+	gateThreshold 0.5
 	maxSeconds   30
 	silenceMs    900
 }
@@ -130,6 +133,8 @@ if {[info exists ::env(SCIDB_AI_TTS)]}          { set Settings(tts)        $::en
 if {[info exists ::env(SCIDB_AI_TTS_VOICE)]}    { set Settings(ttsVoice)   $::env(SCIDB_AI_TTS_VOICE) }
 if {[info exists ::env(SCIDB_AI_TTS_MODE)]}     { set Settings(ttsMode)    $::env(SCIDB_AI_TTS_MODE) }
 if {[info exists ::env(SCIDB_AI_VOICE_REVIEW)]} { set Settings(review)     $::env(SCIDB_AI_VOICE_REVIEW) }
+if {[info exists ::env(SCIDB_AI_VOICE_GATE)]}   { set Settings(gate)       $::env(SCIDB_AI_VOICE_GATE) }
+if {[info exists ::env(SCIDB_AI_VOICE_GATE_MIN_CONFIDENCE)]} { set Settings(gateThreshold) $::env(SCIDB_AI_VOICE_GATE_MIN_CONFIDENCE) }
 if {[info exists ::env(SCIDB_AI_VOICE_MAX_SECONDS)]} { set Settings(maxSeconds) $::env(SCIDB_AI_VOICE_MAX_SECONDS) }
 if {[info exists ::env(SCIDB_AI_VOICE_SILENCE_MS)]}  { set Settings(silenceMs)  $::env(SCIDB_AI_VOICE_SILENCE_MS) }
 
@@ -689,6 +694,52 @@ proc ::application::voice::OnTranscript {result} {
 		}
 		return
 	}
+	Gate $text
+	return
+}
+
+
+# A8: a last check on the transcript before it becomes an assistant request.
+# The classifier is a bounded noul ("is this a plausible request?"); with no
+# classifier, or when it is unsure, the transcript is sent as before.  An
+# implausible transcript is held in the entry for the user to correct.
+proc ::application::voice::Gate {text} {
+	if {[setting gate] && [llength [info commands ::ai::decide]]} {
+		set question [dict create type noul \
+			instructions "Is this a plausible request to Scidb, a chess database assistant? Answer yes when it is something the assistant could act on (search, explain, open, annotate, ...), no when the words look scrambled or unrelated."]
+		if {![catch {
+			::ai::decide voice_gate $text $question \
+				[namespace code [list OnGate $text]] \
+				-threshold [setting gateThreshold] \
+				-fallback [namespace code Plausible]
+		}]} { return }
+	}
+	Send $text
+	return
+}
+
+
+proc ::application::voice::Plausible {} {
+	return 1
+}
+
+
+proc ::application::voice::OnGate {text decision} {
+	variable mc
+
+	if {[dict get $decision ok] && ![dict get $decision label]} {
+		Message [format $mc::CheckTranscript $text]
+		if {[llength [info commands ::application::assistant::SetEntry]]} {
+			::application::assistant::SetEntry $text
+		}
+		return
+	}
+	Send $text
+	return
+}
+
+
+proc ::application::voice::Send {text} {
 	::application::assistant::ask $text -observer ::application::voice::OnAssistant
 	return
 }

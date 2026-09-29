@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — AI: voice transcript gate (A8)
+
+- After transcription, before the transcript becomes an assistant request, a
+  bounded `noul` classifier asks "is this a plausible request to Scidb?". An
+  implausible transcript ("gibberish words") is held in the entry for the user to
+  correct rather than sent; a plausible one, or an undecided one, is sent exactly
+  as before. With no classifier the gate is skipped (`SCIDB_AI_VOICE_GATE=0`
+  disables it, `SCIDB_AI_VOICE_GATE_MIN_CONFIDENCE` sets the gate).
+- Tests: `tests/test_app_voice.tcl` (`voice-gate-holds`, `voice-gate-sends`,
+  `voice-gate-undecided`). App suite, `make -C tests ai-tests`, Tcl and C++
+  suites green.
+
 ## Unreleased — AI: translate a comment into a language slot (C2 / C7)
 
 - The comment editor's context menu gains **"Translate comment to"** with a

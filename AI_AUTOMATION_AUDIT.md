@@ -33,7 +33,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | A5 | Duplicate-merge arbitration | ambiguous duplicate pairs (`app-database-maintenance.tcl`, `merge.tcl`) | System One `choice` | 🟢 |
 | A6 | New-move novelty label | new move vs precedent index (`ai-precedent.tcl`, `ai-cql.tcl`) | System One `choice` | 🟢 |
 | A7 | Auto-annotate ordering | which engine-flagged move gets prose first (`ai-annotate.tcl`) | System One `score` | 🟢 |
-| A8 | Voice transcript gate | obviously-wrong transcripts (`app-voice.tcl`) | System One `noul` | 🟢 |
+| A8 | Voice transcript gate | obviously-wrong transcripts (`app-voice.tcl`) | System One `noul` | 🟢 *(shipped)* |
 | A9 | Cloud egress gate | prompts that carry private games/comments (`ai-provider.tcl`) | System One `noul` | 🟡 |
 | A10 | LLM tier routing | local-vs-cloud provider choice (`ai-provider.tcl`) | System One `score` | 🟡 |
 | A11 | Free-text → search fields | natural-language search (shipped; extend pattern set) (`ai-search.tcl`) | System One + model | 🟢 *(shipped)* |
@@ -111,8 +111,9 @@ classifier never decides chess truth.
   "playable?". Fallback: no label. (Wave 2 novelty radar)
 - **A7 Auto-annotate ordering** — `score` the engine-flagged moments so the best prose
   appears first / limited budgets spend on the right moves. Fallback: engine order.
-- **A8 Voice transcript gate** — `noul`: is this transcript a plausible command for the
-  current context? Fallback: send as today (review mode already exists).
+- **A8 Voice transcript gate** *shipped* — `noul`: is this transcript a plausible
+  request? An implausible one is held in the entry for correction; a plausible or
+  undecided one is sent as before. Fallback: send (and no classifier skips it).
 - **A9 Cloud egress gate** — `noul`: does this outgoing prompt carry private games or
   comments? Fallback: send. Low value while the default is local-first.
 - **A10 LLM tier routing** — `score` local vs cloud by request + tools touched; log the
