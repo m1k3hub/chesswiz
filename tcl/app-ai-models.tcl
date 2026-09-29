@@ -12,6 +12,13 @@
 # Both choices are saved in the options file (::application::ai::Settings,
 # keys model and classifier). A command-line flag or environment variable
 # still overrides the saved choice for its session; the dialog says so.
+#
+# The model list also shows what the machine can run (blank when the rules
+# module tcl/ai-modelfit.tcl is not loaded): for every local model with a
+# known size the "Fit" column names the largest quant that fits and where
+# it goes (gpu or cpu; "none" for a model that fits nowhere), computed once
+# from the machine's RAM and VRAM. This is advice only -- it never changes
+# the choice.
 # ======================================================================
 
 if {[llength [info commands ::util::source]]} {
@@ -32,10 +39,13 @@ set Classifier		"System One classifier"
 set Model			"Model"
 set Where			"Runs"
 set Tools			"Tools"
+set Fit				"Fit"
 set Local			"locally"
 set Cloud			"in the cloud"
 set Yes				"yes"
 set No				"no"
+set NoSize			"no size"
+set Memory			"Machine: %d MB RAM, %d MB VRAM"
 set Name				"Model name:"
 set Fetching		"Asking Ollama for its models..."
 set Found			"%d models; the assistant needs one with tool support."
@@ -60,6 +70,7 @@ array set Priv {
 	dialog	{}
 	models	{}
 	name		{}
+	fit		{}
 }
 
 } ;# namespace models
@@ -97,19 +108,36 @@ proc ::application::ai::models::show {{parent .application}} {
 	pack $top.language -anchor w
 
 	set list [ttk::frame $top.list]
-	set tree [ttk::treeview $list.tree -columns {where tools} -height 8 -selectmode browse]
+	# the fit advice needs the rules module (tcl/ai-modelfit.tcl); without
+	# it the list is exactly the model/where/tools list it always was
+	set haveFit [expr {[llength [info commands ::ai::modelfit::memory]]
+		&& [llength [info commands ::ai::modelfit::recommend]]}]
+	set columns {where tools}
+	if {$haveFit} { lappend columns fit }
+	set tree [ttk::treeview $list.tree -columns $columns -height 8 -selectmode browse]
 	$tree heading #0 -text $mc::Model -anchor w
 	$tree heading where -text $mc::Where -anchor w
 	$tree heading tools -text $mc::Tools -anchor w
 	$tree column #0 -width 280
 	$tree column where -width 110 -stretch no
 	$tree column tools -width 60 -stretch no
+	if {$haveFit} {
+		$tree heading fit -text $mc::Fit -anchor w
+		$tree column fit -width 140 -stretch no
+	}
 	$tree tag configure notools -foreground #808080
 	ttk::scrollbar $list.vs -orient vertical -command [list $tree yview]
 	$tree configure -yscrollcommand [list $list.vs set]
 	pack $list.vs -side right -fill y
 	pack $tree -side left -fill both -expand yes
 	pack $list -fill both -expand yes
+
+	if {$haveFit} {
+		set Priv(fit) {}
+		ttk::label $top.memory -text "" -justify left
+		pack $top.memory -anchor w -pady [list $::theme::pady 0]
+		set Priv(memory) $top.memory
+	}
 
 	set entry [ttk::frame $top.entry]
 	ttk::label $entry.label -text $mc::Name
@@ -189,18 +217,25 @@ proc ::application::ai::models::Fill {} {
 
 	if {[catch { ::ai::provider::ollamaModels } models]} {
 		set Priv(models) {}
+		set Priv(fit) {}
 		$Priv(status) configure -text [format $mc::Unreachable $models]
 		return
 	}
 	set Priv(models) $models
 
+	set Priv(fit) [FitAdvice $models]
 	foreach m $models {
 		set name [dict get $m name]
 		set tools [dict get $m tools]
-		$tree insert {} end -id $name -text $name \
-			-values [list \
-				[expr {[dict get $m remote] ? $mc::Cloud : $mc::Local}] \
-				[expr {$tools ? $mc::Yes : $mc::No}]] \
+		set values [list \
+			[expr {[dict get $m remote] ? $mc::Cloud : $mc::Local}] \
+			[expr {$tools ? $mc::Yes : $mc::No}]]
+		if {[dict exists $Priv(fit) $name]} {
+			lappend values [dict get $Priv(fit) $name]
+		} elseif {[llength [info commands ::ai::modelfit::recommend]]} {
+			lappend values $mc::NoSize
+		}
+		$tree insert {} end -id $name -text $name -values $values \
 			-tags [expr {$tools ? "" : "notools"}]
 	}
 	if {[$tree exists $Priv(name)]} {
@@ -208,6 +243,85 @@ proc ::application::ai::models::Fill {} {
 		$tree see $Priv(name)
 	}
 	$Priv(status) configure -text [format $mc::Found [llength $models]]
+}
+
+
+# ----------------------------------------------------------------------
+# The fit advice for the listed models (audit E2): a dict name -> "quant
+# (placement)" for every local model whose size is known, plus the machine
+# line (RAM/VRAM in MiB). Empty when tcl/ai-modelfit.tcl is not loaded, so
+# the caller degrades to the list it always showed. Read-only: the choice
+# the user makes is untouched.
+# ----------------------------------------------------------------------
+
+proc ::application::ai::models::FitAdvice {models} {
+	variable mc
+	variable Priv
+
+	if {[llength [info commands ::ai::modelfit::memory]] == 0
+	 || [llength [info commands ::ai::modelfit::recommend]] == 0} {
+		return {}
+	}
+
+	# the candidates carry {name params_b}; a cloud model and one without
+	# a readable parameter size are not candidates and keep the "no size"
+	# note in the Fit column
+	set candidates {}
+	foreach m $models {
+		if {[dict get $m remote]} { continue }
+		set params [ParamsB $m]
+		if {$params <= 0.0} { continue }
+		lappend candidates [dict create name [dict get $m name] params_b $params]
+	}
+
+	if {[info exists Priv(memory)] && [winfo exists $Priv(memory)]} {
+		$Priv(memory) configure -text ""
+	}
+
+	set memory {}
+	if {[catch { ::ai::modelfit::memory } memory]} { set memory {} }
+	if {[llength $memory]
+	 && [info exists Priv(memory)] && [winfo exists $Priv(memory)]} {
+		$Priv(memory) configure -text [format $mc::Memory \
+			[dict get $memory ram_mb] [dict get $memory vram_mb]]
+	}
+
+	if {![llength $candidates]} { return {} }
+	if {[catch { ::ai::modelfit::recommend $memory $candidates } rows]} {
+		return {}
+	}
+	set advice {}
+	foreach row $rows {
+		dict set advice [dict get $row name] [format "%s (%s)" \
+			[dict get $row quant] [dict get $row placement]]
+	}
+	return $advice
+}
+
+
+# The parameter count in billions of a model from /api/tags: the named
+# details.parameter_size ("8.0B") when the server sends one, else the size
+# tag of the name ("qwen3:8b" -> 8). 0 when there is nothing to read (a
+# cloud model, a name without a size tag) -- no candidate, not an error.
+proc ::application::ai::models::ParamsB {m} {
+	set text ""
+	foreach key {parameter_size parameterSize} {
+		if {[dict exists $m details $key]} { set text [dict get $m details $key]; break }
+	}
+	if {![string length $text]} {
+		set name [dict get $m name]
+		foreach token [split $name ":-"] {
+			if {[regexp {^([0-9]+(?:\.[0-9]+)?)([bBmM])$} $token -> value unit]} {
+				set text $value
+				if {[string toupper $unit] eq "M"} { set text [expr {$value / 1000.0}] }
+				break
+			}
+		}
+	}
+	if {![string length $text]} { return 0.0 }
+	# "8.0B" -> 8.0, "7B" -> 7.0; a bare number is taken as billions
+	if {[scan $text "%f" value] != 1 || $value <= 0.0} { return 0.0 }
+	return $value
 }
 
 
@@ -344,7 +458,9 @@ proc ::application::ai::models::Close {} {
 
 	if {[winfo exists $Priv(dialog)]} { destroy $Priv(dialog) }
 	set Priv(dialog) {}
+	set Priv(fit) {}
 	if {[info exists Priv(ctree)]} { unset Priv(ctree) }
+	if {[info exists Priv(memory)]} { unset Priv(memory) }
 }
 
 # vi:set ts=3 sw=3:

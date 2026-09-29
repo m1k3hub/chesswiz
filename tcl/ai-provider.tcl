@@ -10,6 +10,20 @@
 #
 # `json`/`http` are required lazily so a missing tcllib package cannot break
 # application startup.
+#
+# Shadow labelling (audit A9/A10): before a completion entry point sends a
+# request, two System One gates -- the cloud egress gate (::ai::egress::decide,
+# cloud providers only) and the tier router (::ai::tier::decide, every
+# provider) -- are asked what they make of the prompt/request and the answer
+# is only recorded, in the decision journal (::ai::journal). The request is
+# built and sent exactly as before, at the same time: the gates run after 0
+# and their answer reaches nothing but the journal. Nothing here holds,
+# redirects or rewrites a request; 'active' routing is not implemented yet.
+#
+# Modes, one per feature, 'off' skipping the gate entirely:
+#   SCIDB_AI_EGRESS   off | shadow   (default shadow; A9)
+#   SCIDB_AI_TIER     off | shadow   (default shadow; A10)
+# A gate that is absent, or that raises, leaves the request untouched.
 # ======================================================================
 
 if {[llength [info commands ::util::source]]} {
@@ -45,6 +59,20 @@ if {[info exists ::env(SCIDB_AI_PROVIDER)] && $::env(SCIDB_AI_PROVIDER) ne ""} {
 }
 if {[info exists ::env(SCIDB_AI_MODEL)] && $::env(SCIDB_AI_MODEL) ne ""} {
 	set Config(model) $::env(SCIDB_AI_MODEL)
+}
+
+# The audit A9/A10 shadow gates: 'shadow' asks and records, 'off' does not
+# ask. 'active' is deliberately not implemented (the gates only label); an
+# unknown value leaves the default. Both are on by default so a session
+# collects calibration data without being asked.
+variable EgressMode shadow
+variable TierMode   shadow
+
+if {[info exists ::env(SCIDB_AI_EGRESS)] && $::env(SCIDB_AI_EGRESS) in {off shadow}} {
+	set EgressMode $::env(SCIDB_AI_EGRESS)
+}
+if {[info exists ::env(SCIDB_AI_TIER)] && $::env(SCIDB_AI_TIER) in {off shadow}} {
+	set TierMode $::env(SCIDB_AI_TIER)
 }
 
 } ;# namespace provider
@@ -198,6 +226,93 @@ proc ::ai::provider::failAsync {script err} {
 }
 
 
+# ----------------------------------------------------------------------
+# Shadow labelling (audit A9/A10).  Each gate is asked what it makes of
+# an outgoing request and its answer is recorded in the decision journal;
+# nothing here returns anything, blocks anything or edits a request.  The
+# gates are asked through 'after 0', so a classifier that is slow (or
+# never answers) cannot delay the send that is already under way.
+# ----------------------------------------------------------------------
+
+# Is the configured provider one that leaves this machine?  The local-first
+# default (stub, or the local ollama daemon) is not; the remote adapters are.
+# A stub is a test stand-in, never a send, so it is not cloud either.
+proc ::ai::provider::cloudProvider {} {
+	variable Config
+
+	switch -- $Config(name) {
+		openai    { return 1 }
+		anthropic { return 1 }
+		default   { return 0 }
+	}
+}
+
+# Record one gate's answer against the provider that actually served the
+# request.  The feature/state keys are what the calibration reads back
+# (::ai::journal::read); the script is handed the gate's own decision.
+proc ::ai::provider::ShadowSink {feature state decision} {
+	catch { ::ai::journal::decision $feature $state $decision }
+	return
+}
+
+# A9: ask the cloud egress gate about a prompt that is about to leave for a
+# cloud provider.  The prompt is the gate's state: judging what a prompt
+# carries takes the prompt.  Local traffic is private by construction here,
+# so it is not labelled.
+proc ::ai::provider::shadowEgress {prompt} {
+	variable EgressMode
+
+	if {$EgressMode eq "off"} { return }
+	if {[llength [info commands ::ai::egress::decide]] == 0} { return }
+	if {![cloudProvider]} { return }
+
+	catch {
+		::ai::egress::decide $prompt \
+			[namespace code [list ::ai::provider::ShadowSink egress $prompt]]
+	}
+	return
+}
+
+# A10: ask the tier router about the request and the tools it may touch.
+# Every provider is labelled, so the tier a request wanted can be compared
+# with the provider that served it.  The state is the router's own summary
+# (::ai::tier::State), not the raw request.
+proc ::ai::provider::shadowTier {request tools} {
+	variable TierMode
+
+	if {$TierMode eq "off"} { return }
+	if {[llength [info commands ::ai::tier::decide]] == 0} { return }
+
+	set state $request
+	catch { set state [::ai::tier::State $request $tools] }
+	catch {
+		::ai::tier::decide $request $tools \
+			[namespace code [list ::ai::provider::ShadowSink tier $state]]
+	}
+	return
+}
+
+# Ask both gates about one outgoing request.  Called by the completion entry
+# points just before they send; the send itself is not touched.
+proc ::ai::provider::shadow {prompt {tools ""}} {
+	if {[string trim $prompt] eq ""} { return }
+	after 0 [namespace code [list shadowEgress $prompt]]
+	after 0 [namespace code [list shadowTier $prompt $tools]]
+	return
+}
+
+# The request a chat carries: its last user message, which is what the tier
+# router judges.  A message without a readable role or content is skipped.
+proc ::ai::provider::requestText {messages} {
+	for {set i [expr {[llength $messages] - 1}]} {$i >= 0} {incr i -1} {
+		set msg [lindex $messages $i]
+		if {[catch { dict get $msg role } role] || $role ne "user"} { continue }
+		return [expr {[dict exists $msg content] ? [dict get $msg content] : ""}]
+	}
+	return ""
+}
+
+
 proc ::ai::provider::post {body args} {
 	variable Config
 	array set opts [list -headers {} -url ""]
@@ -222,6 +337,9 @@ proc ::ai::provider::complete {prompt args} {
 	variable Config
 	array set opts [list -system $Config(system)]
 	array set opts $args
+
+	# A9/A10: label the outgoing prompt (shadow only; see the header).
+	shadow $prompt
 
 	switch -- $Config(name) {
 		stub      { return [stub $prompt] }
@@ -259,6 +377,9 @@ proc ::ai::provider::completeAsync {prompt script args} {
 	variable Config
 	array set opts [list -system $Config(system)]
 	array set opts $args
+
+	# A9/A10: label the outgoing prompt (shadow only; see the header).
+	shadow $prompt
 
 	switch -- $Config(name) {
 		stub   { after 0 [list {*}$script [list ok 1 text [stub $prompt]]] }
@@ -455,6 +576,9 @@ proc ::ai::provider::chat {messages tools args} {
 	array set opts [list -chatResponses {}]
 	array set opts $args
 
+	# A9/A10: label the outgoing request and the tools it may touch.
+	shadow [requestText $messages] $tools
+
 	switch -- $Config(name) {
 		stub   { return [stubChat] }
 		ollama {
@@ -488,6 +612,9 @@ proc ::ai::provider::stubChat {} {
 
 proc ::ai::provider::chatAsync {messages tools script} {
 	variable Config
+
+	# A9/A10: label the outgoing request and the tools it may touch.
+	shadow [requestText $messages] $tools
 
 	switch -- $Config(name) {
 		stub { after 0 [list {*}$script [list ok 1 message [stubChat]]] }

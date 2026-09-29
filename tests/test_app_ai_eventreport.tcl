@@ -182,5 +182,15 @@ tcltest::test evrep-narrate-fallback {without a model the facts are the report} 
 	::scidb::test::evrep::restoreAll
 } -result {1 1 {AI: event report} 1}
 
+tcltest::test eventreport-standings-tags {points from Result tags: win 1, draw 1/2, unfinished 0 but played} -body {
+	set games [list \
+		[dict create Event "Open" White "A" Black "B" Result "1-0"] \
+		[dict create Event "Open" White "B" Black "C" Result "1/2-1/2"] \
+		[dict create Event "Open" White "C" Black "A" Result "*"]]
+	lassign [::ai::eventreport::standingsFromTags $games] event rows
+	list $event [lsort -index 0 $rows]
+} -result {Open {{A 1 2} {B 0.5 2} {C 0.5 2}}}
+
+
 ::tcltest::cleanupTests
 return

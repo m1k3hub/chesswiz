@@ -14,6 +14,9 @@
 #       -> dict {event E players N games G standings ROWS} with ROWS the
 #          N best-placed players, each {name points games} (points as the
 #          table reports them)
+#   ::ai::eventreport::standingsFromTags <tagDicts> -> {event ROWS}, points from Result tags
+#   ::ai::eventreport::report <parent> <base> <variant> <view>
+#       -> the crosstable window's entry: read the view's games, narrate
 #   ::ai::eventreport::factsText <facts>  -> the deterministic fact block
 #   ::ai::eventreport::narrate <parent> <facts> ?-done CMD?
 #
@@ -86,6 +89,63 @@ proc ::ai::eventreport::facts {event rows args} {
 
 	return [dict create \
 		event $event players [llength $rows] games $games standings $standings]
+}
+
+
+# The standings of a list of games' tag dicts (White, Black, Result, Event):
+# a win scores 1, a draw 1/2, and a game without a decided result scores
+# nothing but still counts as played. -> {event ROWS} with ROWS {name points games}.
+proc ::ai::eventreport::standingsFromTags {tagList} {
+	set event ""
+	array set points {}
+	array set played {}
+	foreach tags $tagList {
+		if {$event eq "" && [dict exists $tags Event]} { set event [dict get $tags Event] }
+		foreach {side other} {White 1-0 Black 0-1} {
+			if {![dict exists $tags $side]} { continue }
+			set name [dict get $tags $side]
+			if {![info exists points($name)]} { set points($name) 0 ; set played($name) 0 }
+			incr played($name)
+			set result [expr {[dict exists $tags Result] ? [dict get $tags Result] : "*"}]
+			if {$result eq $other} {
+				set points($name) [expr {$points($name) + 1}]
+			} elseif {$result eq "1/2-1/2"} {
+				set points($name) [expr {$points($name) + 0.5}]
+			}
+		}
+	}
+	set rows {}
+	foreach name [array names points] {
+		set pts $points($name)
+		if {$pts == int($pts)} { set pts [expr {int($pts)}] }
+		lappend rows [list $name $pts $played($name)]
+	}
+	return [list $event $rows]
+}
+
+
+# The games of the event a crosstable window shows: <view> is the window's
+# own view (it holds exactly the event's games). Reads only.
+proc ::ai::eventreport::Tags {base variant view} {
+	set list {}
+	set count [::scidb::view::count games $base $variant $view]
+	for {set row 0} {$row < $count} {incr row} {
+		set number [::scidb::db::get gameNumber $base $variant $row $view]
+		set tags {}
+		foreach pair [::scidb::db::get tags $number $base $variant] { dict set tags {*}$pair }
+		lappend list $tags
+	}
+	return $list
+}
+
+
+# The crosstable window's menu entry: the standings of the games of its view,
+# narrated (or, without a model, listed). Entirely read-only.
+proc ::ai::eventreport::report {parent base variant view} {
+	if {[catch { standingsFromTags [Tags $base $variant $view] } result]} { return "" }
+	lassign $result event rows
+	set facts [facts $event $rows -games [::scidb::view::count games $base $variant $view]]
+	return [narrate $parent $facts]
 }
 
 

@@ -34,8 +34,8 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | A6 | New-move novelty label | new move vs precedent index (`ai-precedent.tcl`, `ai-cql.tcl`) | System One `choice` | 🟢 *(shipped as `ai-novelty.tcl`)* |
 | A7 | Auto-annotate ordering | which engine-flagged move gets prose first (`ai-annotate.tcl`) | System One `score` | 🟢 *(shipped)* |
 | A8 | Voice transcript gate | obviously-wrong transcripts (`app-voice.tcl`) | System One `noul` | 🟢 *(shipped)* |
-| A9 | Cloud egress gate | prompts that carry private games/comments (`ai-provider.tcl`) | System One `noul` | 🟡 *(module `ai-egress.tcl` shipped; not yet wired into `ai-provider.tcl`)* |
-| A10 | LLM tier routing | local-vs-cloud provider choice (`ai-provider.tcl`) | System One `score` | 🟡 *(module `ai-tier.tcl` shipped as a `choice` over local/cloud; not yet wired into `ai-provider.tcl`)* |
+| A9 | Cloud egress gate | prompts that carry private games/comments (`ai-provider.tcl`) | System One `noul` | 🟡 *(module `ai-egress.tcl` shipped; wired into `ai-provider.tcl` in shadow mode: `SCIDB_AI_EGRESS`, decisions journaled, nothing held)* |
+| A10 | LLM tier routing | local-vs-cloud provider choice (`ai-provider.tcl`) | System One `score` | 🟡 *(module `ai-tier.tcl` shipped as a `choice` over local/cloud; wired into `ai-provider.tcl` in shadow mode: `SCIDB_AI_TIER`, decisions journaled, no routing)* |
 | A11 | Free-text → search fields | natural-language search (shipped; extend pattern set) (`ai-search.tcl`) | System One + model | 🟢 *(shipped)* |
 | A12 | Tool pre-routing | single-tool requests (shipped, shadow) (`app-assistant-route.tcl`) | System One `choice` | 🟢 *(shipped)* |
 | A13 | Error triage | import/runtime error groups (shipped) (`app-error-triage.tcl`) | System One `choice` | 🟢 *(shipped)* |
@@ -44,7 +44,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | B2 | Study-plan prose | mistake clusters → plan (`ai-studyplan.tcl`) | LLM | 🟢 *(shipped)* |
 | B3 | Opening-report narrative | opening-prep table → article (`app-database-openingprep.tcl`, `db_tree`) | LLM | 🟢 *(shipped as `ai-openingprep.tcl`, "Narrate" button)* |
 | B4 | Maintenance / ECO-trend narrative | maintenance report (`app-database-maintenance.tcl` `EcoTrend`, `MaintenanceSummaryText`) | LLM | 🟢 *(shipped as `ai-trend.tcl`)* |
-| B5 | Event / crosstable report | event tables → report (`crosstable.tcl`, `eventtable.tcl`) | LLM | 🟢 *(module `ai-eventreport.tcl` shipped; not yet wired to a crosstable button)* |
+| B5 | Event / crosstable report | event tables → report (`crosstable.tcl`, `eventtable.tcl`) | LLM | 🟢 *(module `ai-eventreport.tcl`; crosstable window menu "Narrate the Standings (AI)", points from the Result tags)* |
 | B6 | Explain the engine's line | PV → words in the analysis pane (`app-analysis.tcl`, `ai-engine.tcl`) | LLM | 🟢 *(shipped)* |
 | B7 | Hover/status "what is this?" | deterministic fact line, optionally phrased (`ai-prompt.tcl`) | rules + LLM | 🟢 |
 | B8 | Find games like this + why | overlap facts → rationale (`ai-precedent.tcl`) | LLM | 🟢 *(module `ai-similar.tcl` shipped; no UI or ranking source yet)* |
@@ -65,7 +65,7 @@ and gates; an LLM narrates. Neither is ever the authority on the board.
 | D6 | Self-repair loop | triage → issue file → agent handoff (`app-error-triage.tcl`) | wiring | 🟡 *(triage, issue files, `list_issues`/`handoff_issue` shipped; re-run tests remains)* |
 | **E. Semantic layer** | | | | |
 | E1 | Semantic search over comments/media | local embedding index (`ai-annotations.tcl`, `ai-precedent.tcl`) | embeddings | 🟡 |
-| E2 | Model-fit + calibration battery | detect device memory, recommend quant, measure (`app-ai-models.tcl`) | rules | 🟢 *(calibration battery `ai-calibrate.tcl`, the model chooser and `ai-modelfit.tcl` memory/quant recommendation shipped; the chooser dialog does not show it yet)* |
+| E2 | Model-fit + calibration battery | detect device memory, recommend quant, measure (`app-ai-models.tcl`) | rules | 🟢 *(calibration battery `ai-calibrate.tcl`, the model chooser and `ai-modelfit.tcl` memory/quant recommendation shipped; shown as a "Fit" column in Extras > AI: Choose Model)* |
 | E3 | Threshold autotune | refit classifier gates from user overrides (`ai-systemone.tcl`) | offline | 🟡 *(journal `ai-journal.tcl` and per-backend calibration shipped; refit from overrides remains)* |
 | **F. Curation / data (Wave 3)** | | | | |
 | F1 | Weekly digest / watchers | scheduled download → import → precedent → report (`app-download-games.tcl`) | rules + LLM | 🟢 *(headless `download::run` only; timer, precedent check and report remain)* |

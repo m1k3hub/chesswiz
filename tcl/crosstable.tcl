@@ -73,6 +73,7 @@ set Alphabetical				"Alphabetical"
 set Rating						"Rating"
 set Federation					"Federation"
 
+set NarrateEvent				"Narrate the Standings (AI)"
 set Debugging					"Debugging"
 set Display						"Display"
 set Style						"Style"
@@ -1478,8 +1479,25 @@ proc BuildMenu {dlg m} {
 		::theme::configureCheckEntry $sub
 	}
 
+	if {[llength [info commands ::ai::eventreport::report]]} {
+		$m add separator
+		$m add command \
+			-label $mc::NarrateEvent \
+			-command [namespace code [list NarrateEvent $dlg]] \
+			;
+	}
+
 	$m add separator
 	$m add cascade -label $mc::Debugging -menu $sub
+}
+
+
+# Audit B5: the standings as a grounded, read-only narrative (ai-eventreport).
+proc NarrateEvent {dlg} {
+	variable ${dlg}::Vars
+
+	if {![info exists Vars(viewId)]} { return }
+	::ai::eventreport::report $dlg $Vars(base) $Vars(variant) $Vars(viewId)
 }
 
 
