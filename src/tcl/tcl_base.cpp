@@ -1295,6 +1295,7 @@ tcl::removeElements(List& list, List const& toRemove)
 namespace tcl {
 
 namespace app			{ void init(Tcl_Interp* interp); }
+namespace diag			{ void init(Tcl_Interp* interp); }
 namespace progress	{ void init(Tcl_Interp* interp); }
 namespace db			{ void init(Tcl_Interp* interp); }
 namespace view			{ void init(Tcl_Interp* interp); }
@@ -1363,6 +1364,7 @@ tcl::init(Tcl_Interp* ti)
 	engine::init(ti);
 	player::init(ti);
 	media::init(ti);
+	diag::init(ti);
 	ai::init(ti);
 	cql::init(ti);
 }

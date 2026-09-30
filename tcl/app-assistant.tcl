@@ -381,6 +381,54 @@ variable Actions {
 		{{"type":"object","properties":{"name":{"type":"string"},"pattern":{"type":"string"}},"required":["name"]}}
 		::application::assistant::DoReadVariable
 	}
+	ui_state {
+		0 1 "inspect the windows, focus and grab"
+		"The toplevel windows (state, geometry, title), the focus and the grab holder. A grab held by a window that is not showing or by a menu button whose menu is not posted is flagged as stuck: that is what makes a GUI ignore mouse clicks while menus still work."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoUiState
+	}
+	timers {
+		0 1 "list pending timers and open channels"
+		"The pending [after] timers (id, kind, script) and the open channels of the interpreter. Use it for a busy or frozen GUI and for leaked timers."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoTimers
+	}
+	loop_health {
+		0 1 "report the event-loop health"
+		"How long the GUI was unresponsive: the heartbeat of the event loop, the worst stall seen and the recent stalls with their times."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoLoopHealth
+	}
+	media_state {
+		0 1 "report the media player state"
+		"The media panel and the libmpv player: whether it plays, its state, position, duration and volume, and the last media file."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoMediaState
+	}
+	child_processes {
+		0 1 "list the child processes"
+		"The processes started by this program (helpers, leftover players)."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoChildProcesses
+	}
+	hang_dumps {
+		0 1 "read the hang dumps"
+		"The stack dumps written when the program stalled (kill -USR1, or the watchdog started by debug mode): the Tcl stack of the stalled code, the pending timers and the window state. Read the newest first."
+		{{"type":"object","properties":{"count":{"type":"integer","description":"how many files to list, default 3"}}}}
+		::application::assistant::DoHangDumps
+	}
+	release_grab {
+		1 1 "release the input grab held by %s"
+		"Release the grab held by a window, which frees a GUI that ignores clicks. Only for a holder ui_state flagged as stuck, and only when the user asks for it."
+		{{"type":"object","properties":{"window":{"type":"string","description":"the grab holder's window path"}},"required":["window"]}}
+		::application::assistant::DoReleaseGrab
+	}
+	cancel_timer {
+		1 1 "cancel the timer %s"
+		"Cancel a pending [after] timer by its id as listed by timers. Only when the user asks for it."
+		{{"type":"object","properties":{"id":{"type":"string","description":"the timer id, e.g. after#12"}},"required":["id"]}}
+		::application::assistant::DoCancelTimer
+	}
 	eval_tcl {
 		1 1 "evaluate this Tcl script:\n\n%s"
 		"Evaluate a Tcl script at global level and return its result. The user reviews the exact script first; prefer the read-only tools."
@@ -400,9 +448,14 @@ invent statistics; a short list is fine there.}
 variable DebugSystem {
 You are also a debugging aid for the developer of Scidb (Tcl/Tk front end
 over a C++ core). When asked about a problem, gather facts with the tools
-(app_state, recent_errors, tool_log, list_procs, proc_source, read_variable) before
+(app_state, recent_errors, tool_log, ui_state, timers, loop_health, media_state,
+child_processes, hang_dumps, list_procs, proc_source, read_variable) before
 answering, cite procedure names and the evidence you saw, and say plainly
-what you could not verify. Longer answers are fine in this role.}
+what you could not verify. Longer answers are fine in this role.
+A GUI that ignores mouse clicks while menus still work usually has a stuck grab:
+check ui_state. A frozen or stalling GUI: read hang_dumps and loop_health.
+release_grab and cancel_timer change the running program; use them only when the
+user asks, after the evidence shows what is stuck.}
 
 # Replies longer than this are cut, so one tool cannot flood the context.
 variable MaxReply 6000
@@ -653,6 +706,7 @@ proc ::application::assistant::Resolve {token reply} {
 	if {![info exists Priv(pending)] || [lindex $Priv(pending) 0] ne $token} { return 0 }
 	lassign $Priv(pending) _ round name cargs calls isRouted
 	set Priv(pending) {}
+	set reply [Scrub $reply]
 	if {[string length $reply] > $MaxReply} {
 		set reply "[string range $reply 0 $MaxReply-1]\n... (truncated)"
 	}
@@ -739,10 +793,21 @@ proc ::application::assistant::RunTool {name cargs} {
 		return [list error $confirm "error: $err"]
 	}
 	if {[string match "\x00later:*" $reply]} { return [list later $confirm $reply] }
+	set reply [Scrub $reply]
 	if {[string length $reply] > $MaxReply} {
 		set reply "[string range $reply 0 $MaxReply-1]\n... (truncated)"
 	}
 	return [list ok $confirm $reply]
+}
+
+
+# No tool reply may carry a credential out to the model (it may be a cloud
+# model): the values of environment variables that name one are replaced.
+proc ::application::assistant::Scrub {text} {
+	if {[llength [info commands ::application::diagnose::scrub]]} {
+		return [::application::diagnose::scrub $text]
+	}
+	return $text
 }
 
 
@@ -805,6 +870,22 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			if {[dict exists $cargs count]} { set count [dict get $cargs count] }
 			if {![string is integer -strict $count] || $count < 1} { error "count must be a positive integer" }
 			return [dict create count $count]
+		}
+		hang_dumps {
+			set count 3
+			if {[dict exists $cargs count]} { set count [dict get $cargs count] }
+			if {![string is integer -strict $count] || $count < 1} { error "count must be a positive integer" }
+			return [dict create count $count]
+		}
+		release_grab {
+			set window [string trim [Arg $cargs window]]
+			if {$window ni [grab current]} { error "$window holds no grab (holders: [grab current])" }
+			return [dict create window $window]
+		}
+		cancel_timer {
+			set id [string trim [Arg $cargs id]]
+			if {$id ni [after info]} { error "no pending timer $id" }
+			return [dict create id $id]
 		}
 		list_procs {
 			return [dict create pattern [Arg $cargs pattern]]
@@ -2404,6 +2485,16 @@ proc ::application::assistant::DoReadVariable {name pattern} {
 }
 
 
+proc ::application::assistant::DoUiState {} { return [::application::diagnose::uiState] }
+proc ::application::assistant::DoTimers {} { return [::application::diagnose::timersAndChannels] }
+proc ::application::assistant::DoLoopHealth {} { return [::application::diagnose::loopHealth] }
+proc ::application::assistant::DoMediaState {} { return [::application::diagnose::mediaState] }
+proc ::application::assistant::DoChildProcesses {} { return [::application::diagnose::children] }
+proc ::application::assistant::DoHangDumps {count} { return [::application::diagnose::hangDumps $count] }
+proc ::application::assistant::DoReleaseGrab {window} { return [::application::diagnose::releaseGrab $window] }
+proc ::application::assistant::DoCancelTimer {id} { return [::application::diagnose::cancelTimer $id] }
+
+
 proc ::application::assistant::DoEvalTcl {script} {
 	if {[catch { uplevel #0 $script } result opts]} {
 		return "error: $result\n[dict get $opts -errorinfo]"
@@ -2753,13 +2844,14 @@ proc ::application::assistant::DoAnnotateGame {prose marks depth max_plies} {
 	}
 	set token [Later]
 	if {[catch {
-		::ai::annotate::annotate .application \
+		set started [::ai::annotate::annotate .application \
 			-prose $prose -marks $marks -depth $depth -maxPlies $max_plies \
-			-done [namespace code [list AnnotateGameDone $token]]
+			-done [namespace code [list AnnotateGameDone $token]]]
 	} err]} {
 		after 0 [list Resolve $token "error: $err"]
 		return $token
 	}
+	if {!$started} { return "error: the annotation request could not start" }
 	return $token
 }
 
@@ -2798,13 +2890,14 @@ proc ::application::assistant::DoStudyPlan {player games colour depth} {
 	}
 	set token [Later]
 	if {[catch {
-		::ai::studyplan::run .application -player $player -games $games \
+		set started [::ai::studyplan::run .application -player $player -games $games \
 			-colour $colour -depth $depth \
-			-done [namespace code [list StudyPlanDone $token]]
+			-done [namespace code [list StudyPlanDone $token]]]
 	} err]} {
 		after 0 [list Resolve $token "error: $err"]
 		return $token
 	}
+	if {!$started} { return "error: the study-plan request could not start" }
 	return $token
 }
 

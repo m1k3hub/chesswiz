@@ -193,6 +193,7 @@ SOURCES = \
 	app-assistant.tcl \
 	app-assistant-route.tcl \
 	app-assistant-args.tcl \
+	app-diagnose.tcl \
 	app-voice.tcl \
 	app-error-triage.tcl \
 	app-media-decode.tcl \
