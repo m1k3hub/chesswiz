@@ -100,8 +100,10 @@ tcltest::test media-wmv-navigation {real WMV packet decoding resolves nodes and 
         set positions [dict get $lesson positions]
         set ::application::media::Priv(lessonPositions) $positions
         namespace eval ::scidb::game {
-            proc fen {args} {return {}}
-            proc go {args} {lappend ::visited [lindex $args end]}
+            # a mock engine that behaves like the real one: the board is where
+            # "go position" last sent it (SyncBoardGoto verifies that)
+            proc fen {args} {return [expr {[info exists ::lastFen] ? $::lastFen : {}}]}
+            proc go {args} {lappend ::visited [lindex $args end]; set ::lastFen [lindex $args end]}
         }
         set visited {}
         ::media::sync::configure boardgoto-cmd ::application::media::SyncBoardGoto

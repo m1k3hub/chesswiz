@@ -695,6 +695,9 @@ proc application::media::PlaySelected {tree} {
 	# owning database: gallery rows without one play as plain media below.
 	if {[CoupledLesson? $type $galleryIndex]} {
 		Stop
+		# the manifest's owner is sometimes the neighbouring game: let the
+		# lesson's own positions decide which game it is played with
+		set galleryIndex [ResolveOwner $path $galleryIndex]
 		if {$galleryIndex != $Priv(index)} {
 			set v $Priv(variant) ; if {$v eq ""} { set v Normal }
 			::game::new .application -base $Priv(base) -variant $v -number $galleryIndex
@@ -751,6 +754,90 @@ proc application::media::PlaySelected {tree} {
 		# Audio/video — embed through libmpv or launch external
 		PlayMedia $path
 	}
+}
+
+
+# --- which game does a lesson video belong to? ---------------------------
+#
+# The media manifest (.cbm) names an owning game for every video, but that
+# index is sometimes the neighbour's: in the Biel 2015 fixture "round 08
+# MVL-Adams" is attached to game 21 (Wojtaszek-MVL), while its positions are
+# those of game 24. Played against the wrong game the board could not follow
+# (Game::goToPosition sends an unknown position to the END of the game, so the
+# board sat on the final position for the whole video). The video itself
+# tells which game it is: its decoded positions are in the owner's move tree.
+
+# A few positions spread over the lesson (not the start position, which every
+# game has); every one of them has to be found in the game.
+proc application::media::LessonProbes {positions} {
+	set n [llength $positions]
+	if {$n < 6} { return {} }
+	set probes {}
+	foreach k {1 2 3 4 5} {
+		set fen [lindex $positions [expr {$k * $n / 6}]]
+		if {[string length $fen] && $fen ni $probes} { lappend probes $fen }
+	}
+	return $probes
+}
+
+
+# Do all probe positions occur in the game of the given game slot? Moves
+# that game's current position.
+proc application::media::GameHasProbes {slot probes} {
+	if {![llength $probes]} { return 0 }
+	foreach fen $probes {
+		catch { ::scidb::game::go $slot position $fen }
+		set cur ""
+		catch { set cur [::scidb::game::fen $slot] }
+		if {[FenKey $cur] ne [FenKey $fen]} { return 0 }
+	}
+	return 1
+}
+
+
+# The number of the game of the open base that holds the lesson's positions:
+# the manifest's pick is tried first, then the game on the board, then the
+# others. Returns <hint> when the lesson cannot tell (no positions, nothing
+# found), so the caller keeps the old behaviour.
+proc application::media::ResolveOwner {path hint} {
+	variable Priv
+
+	set base $Priv(base)
+	set variant [expr {$Priv(variant) eq "" ? "Normal" : $Priv(variant)}]
+	if {![string length $base]} { return $hint }
+	set key "$base|$variant|$path"
+	if {[info exists Priv(ownerCache)] && [dict exists $Priv(ownerCache) $key]} {
+		return [dict get $Priv(ownerCache) $key]
+	}
+
+	set lesson {}
+	if {[catch { ::media::lesson::get $path } lesson] || ![dict get $lesson valid]} { return $hint }
+	set probes [LessonProbes [expr {[dict exists $lesson positions] ? [dict get $lesson positions] : {}}]]
+	if {![llength $probes]} { return $hint }
+
+	set count 0
+	catch { set count [::scidb::db::count games $base $variant] }
+	set order {}
+	if {[string is integer -strict $hint] && $hint >= 0 && $hint < $count} { lappend order $hint }
+	if {[string is integer -strict $Priv(index)] && $Priv(index) >= 0 && $Priv(index) < $count
+		&& $Priv(index) ni $order} { lappend order $Priv(index) }
+	# a magazine's games are few; a huge database is not scanned blindly
+	set limit [expr {min($count, 5000)}]
+	for {set g 0} {$g < $limit} {incr g} { if {$g ni $order} { lappend order $g } }
+
+	set slot [::game::nextGamePosition]
+	set owner $hint
+	foreach g $order {
+		if {[catch { ::scidb::game::load $slot $base $variant $g }]} { continue }
+		if {[GameHasProbes $slot $probes]} { set owner $g; break }
+	}
+	catch { ::scidb::game::release $slot }
+
+	dict set Priv(ownerCache) $key $owner
+	if {$owner != $hint} {
+		MediaDebug "ResolveOwner: [file tail $path] is attached to game $hint but its positions are in game $owner"
+	}
+	return $owner
 }
 
 
@@ -1627,6 +1714,28 @@ proc application::media::SyncBoardLength {} {
 # game tree — mainline AND variations (Game::goToPosition searches the
 # whole tree; it never detaches from the game: an unmatched FEN parks at
 # the mainline end instead of creating a scratch position).
+# The board could not be put on a lesson position: the game on it is not the
+# game of the video. Put the board back where it was; after three misses in a
+# row stop following and say so, instead of leaving the board at the end of
+# the game while the video plays on.
+proc application::media::GotoMissed {node previousFen} {
+	variable Priv
+
+	MediaDebug "SyncBoardGoto: node=$node is not in the game on the board"
+	if {[string length $previousFen]} { catch { ::scidb::game::go -1 position $previousFen } }
+	if {![info exists Priv(gotoMisses)]} { set Priv(gotoMisses) 0 }
+	if {[incr Priv(gotoMisses)] < 3} { return }
+	set Priv(gotoMisses) 0
+	lassign [::media::sync::config] transport follow
+	::media::sync::set-config $transport 0
+	set msg "The board does not follow this video: its positions are not in the game on the board. Open the game the video belongs to."
+	set Priv(statusbar) $msg
+	if {[llength [info commands ::dialog::notice::post]] && [::dialog::notice::available]} {
+		::dialog::notice::post warning $msg
+	}
+}
+
+
 proc application::media::SyncBoardGoto {node} {
 	variable Priv
 
@@ -1646,6 +1755,16 @@ proc application::media::SyncBoardGoto {node} {
 		MediaDebug "SyncBoardGoto: node=$node failed: $err"
 		return
 	}
+
+	# "go position" never reports a position it did not find: the game then
+	# just walks to its END. Check that the board is where it was sent.
+	set now ""
+	catch { set now [::scidb::game::fen -1] }
+	if {[FenKey $now] ne [FenKey $fen]} {
+		GotoMissed $node $cur
+		return
+	}
+	set Priv(gotoMisses) 0
 
 	# statusbar node/ply context + throttled debug trace for goto jumps
 	set Priv(statusbar) "Lesson node $node/[expr {[llength $Priv(lessonPositions)] - 1}]"
