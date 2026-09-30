@@ -646,8 +646,10 @@ proc PrepReportPlayerIndex {dlg} {
 }
 
 
+# ::scidb::db::get playerStats reports a score in hundredths of a percent
+# (8500 is 85.0%); this used to divide by 10 and show 850.0%.
 proc PrepReportPercent {value} {
-	return [format %.1f [expr {$value / 10.0}]]
+	return [format %.1f [expr {$value / 100.0}]]
 }
 
 
@@ -1067,11 +1069,14 @@ proc SelectedPrepGameNumber {dlg {warn 1}} {
 	variable PrepReportData
 	variable mc
 
-	if {![info exists PrepReportData($dlg,table)] || ![info exists PrepReportData($dlg,view)]} {
+	if {![info exists PrepReportData($dlg,scrolledTable)] || ![info exists PrepReportData($dlg,view)]} {
 		return -1
 	}
 
-	set table $PrepReportData($dlg,table)
+	# ::scrolledtable::index takes the scrolled table's own path; ,table is the
+	# inner table ::gamestable::build returns (fit as a parent widget only), and
+	# handing that to index failed with "parent namespace doesn't exist"
+	set table $PrepReportData($dlg,scrolledTable)
 	set index [::scrolledtable::index $table]
 	if {$index < 0} {
 		if {$warn} {

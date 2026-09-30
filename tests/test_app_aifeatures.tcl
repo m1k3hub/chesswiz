@@ -167,4 +167,13 @@ tcltest::test brief-stance-gate {a confident classifier stance is used, the rule
 	unset -nocomplain ::scidb::test::aifeat::Stance
 } -result {outprepare classifier punish_weakness rules}
 
+# Found by driving the players prep report: playerStats scores are hundredths
+# of a percent, and the report showed them ten times too large.
+tcltest::test prepreport-score-text {the prep report's score is a percentage, not ten times one} -body {
+	list [::application::database::player::PrepReportScoreText {7 0 3 8500}] \
+		[::application::database::player::PrepReportScoreText {4 0 2 8333}] \
+		[::application::database::player::PrepReportScoreText {0 2 0 0}] \
+		[::application::database::player::PrepReportPercent 10000]
+} -result {{7-0-3 (85.0%)} {4-0-2 (83.3%)} {0-2-0 (0.0%)} 100.0}
+
 tcltest::cleanupTests
