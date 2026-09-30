@@ -10,7 +10,7 @@
 #   ::ai::similar::facts <fen> <candidates> ?-limit N?
 #       -> dict {fen F games N rows ROWS} with ROWS the N most similar
 #          games, each {white black result year shared}, ranked by shared
-#          continuations (descending), ties by white then black
+#          plies (descending), ties by white then black
 #   ::ai::similar::factsText <facts>  -> the deterministic fact block
 #   ::ai::similar::narrate <parent> <facts> ?-done CMD?
 #
@@ -34,7 +34,7 @@ namespace eval ::ai::similar {
 }
 
 
-# Most shared continuations first; ties broken by the players, so the
+# Most shared plies first; ties broken by the players, so the
 # order never wavers.
 proc ::ai::similar::Compare {a b} {
 	set n [expr {[lindex $b 4] - [lindex $a 4]}]
@@ -70,20 +70,20 @@ proc ::ai::similar::factsText {facts} {
 	set lines [list "position: [dict get $facts fen]" \
 		"candidate games: [dict get $facts games]"]
 	if {![llength [dict get $facts rows]]} {
-		lappend lines "no games share continuations with this position"
+		lappend lines "no games share opening plies with this position"
 		return [join $lines \n]
 	}
-	lappend lines "games sharing the most continuations with it:"
+	lappend lines "games sharing the most opening plies (half-moves) with it:"
 	foreach row [dict get $facts rows] {
 		lassign $row white black result year shared
-		lappend lines "  $white - $black ($result, $year): shares $shared continuations"
+		lappend lines "  $white - $black ($result, $year): shares $shared [expr {$shared == 1 ? "ply" : "plies"}]"
 	}
 	return [join $lines \n]
 }
 
 
 proc ::ai::similar::prompt {block} {
-	return "A chess player's game is compared with games from a database by how many continuations they share:\n\n$block\n\nWrite a short note explaining why those games are alike: which share the most continuations with this game, and how their players, results and years compare. Use only the games, numbers, names, results and years in the overlap facts; repeat counts exactly; invent nothing, give no evaluation and no move or variation beyond the facts."
+	return "A chess player's game is compared with games from a database by how many opening plies (half-moves of the main line, from the same start) they share:\n\n$block\n\nWrite a short note explaining why those games are alike: which share the most plies with this game, and how their players, results and years compare. Use only the games, numbers, names, results and years in the overlap facts; repeat counts exactly; invent nothing, give no evaluation and no move or variation beyond the facts."
 }
 
 

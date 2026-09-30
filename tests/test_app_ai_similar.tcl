@@ -3,7 +3,7 @@
 # ======================================================================
 # The language model is the stub provider (as in test_app_ai_trend.tcl);
 # the claim checker runs for real against the reference position.  Under
-# test: the ranking of the candidate games by shared continuations, the
+# test: the ranking of the candidate games by shared plies, the
 # deterministic fact block, the grounded pipeline with a move judged
 # against the reference position, and the fall back to the facts.
 # ======================================================================
@@ -101,7 +101,7 @@ if {[llength [info commands ::ai::similar::facts]] == 0} {
 }
 
 # Candidate games as the retrieval delivers them: players, result, year
-# and the number of continuations shared with the reference game.
+# and the number of plies shared with the reference game.
 proc ::scidb::test::similar::candidates {} {
 	return [list \
 		[dict create white Carlsen black Nepo result "1-0" year 2021 shared 4] \
@@ -130,11 +130,11 @@ tcltest::test similar-fact-block {the block is deterministic and empty lists say
 	set text [::ai::similar::factsText $f]
 	list \
 		[expr {$text eq [::ai::similar::factsText $f]}] \
-		[string match "position: *\ncandidate games: 4\ngames sharing the most continuations with it:\n  Aronian - Grischuk (0-1, 2020): shares 7 continuations\n*" $text] \
+		[string match "position: *\ncandidate games: 4\ngames sharing the most opening plies (half-moves) with it:\n  Aronian - Grischuk (0-1, 2020): shares 7 plies\n*" $text] \
 		[::ai::similar::factsText [::ai::similar::facts x {}]]
 } -result {1 1 {position: x
 candidate games: 0
-no games share continuations with this position}}
+no games share opening plies with this position}}
 
 tcltest::test similar-prompt-grounding {the model is handed the block and held to it} -body {
 	set prompt [::ai::similar::prompt "CANDIDATES: 4"]
@@ -151,7 +151,7 @@ tcltest::test similar-narrate-grounded {a legal move is grounded against the ref
 		[::scidb::test::similar::candidates]]
 } -body {
 	::scidb::test::similar::stubModel [list \
-		"Aronian - Grischuk shares 7 continuations with this game, the most of the four, and both start 1. e4."]
+		"Aronian - Grischuk shares 7 plies with this game, the most of the four, and both start 1. e4."]
 	::scidb::test::similar::stubReport
 	set ret [::ai::similar::narrate .application $f \
 		-done {set ::scidb::test::similar::Result}]
@@ -177,7 +177,7 @@ tcltest::test similar-narrate-fallback {without a model the facts are the report
 	lassign [lindex $::scidb::test::similar::Reports 0] parent title html
 	list [expr {[dict get $::scidb::test::similar::Result text] eq [::ai::similar::factsText $f]}] \
 		[dict get $::scidb::test::similar::Result grounded] $title \
-		[string match {*<pre>position:*Aronian - Grischuk*shares 7 continuations*</pre>*} $html]
+		[string match {*<pre>position:*Aronian - Grischuk*shares 7 plies*</pre>*} $html]
 } -cleanup {
 	::scidb::test::similar::restoreAll
 } -result {1 1 {AI: similar games} 1}
@@ -195,7 +195,7 @@ tcltest::test similar-report-narrates {report retrieves the candidates and narra
 	::scidb::test::similar::wait {[info exists ::scidb::test::similar::Result]}
 	list $::scidb::test::similar::Asked \
 		[dict get $::scidb::test::similar::Result ok] \
-		[string match {*Aronian - Grischuk*shares 7 continuations*} \
+		[string match {*Aronian - Grischuk*shares 7 plies*} \
 			[dict get $::scidb::test::similar::Result text]]
 } -cleanup {
 	::scidb::test::similar::restoreAll
