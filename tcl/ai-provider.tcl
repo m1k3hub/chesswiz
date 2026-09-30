@@ -678,6 +678,36 @@ proc ::ai::provider::ollamaModels {{base http://localhost:11434} {timeoutMs 3000
 }
 
 
+# Callback receives {ok 1 models LIST} or {ok 0 error MESSAGE}.
+# The chooser must not keep its menu callback waiting for the HTTP reply.
+proc ::ai::provider::ollamaModelsAsync {script {base http://localhost:11434} {timeoutMs 3000}} {
+	if {[catch {
+		need http
+		::http::geturl $base/api/tags -timeout $timeoutMs -binary 1 \
+			-command [namespace code [list OnModels $script]]
+	} error]} {
+		after 0 [list {*}$script [dict create ok 0 error $error]]
+	}
+	return
+}
+
+
+proc ::ai::provider::OnModels {script token} {
+	set code [catch {
+		set status [::http::status $token]
+		set httpCode [::http::ncode $token]
+		if {$status ne "ok" || $httpCode != 200} { error "HTTP $httpCode $status" }
+		parseModels [body $token]
+	} result]
+	::http::cleanup $token
+	if {$code} {
+		{*}$script [dict create ok 0 error $result]
+	} else {
+		{*}$script [dict create ok 1 models $result]
+	}
+}
+
+
 proc ::ai::provider::parseModels {data} {
 	need json
 	set models {}
@@ -688,6 +718,7 @@ proc ::ai::provider::parseModels {data} {
 			remote [expr {[dict exists $m remote_host] && [string length [dict get $m remote_host]]}] \
 			tools  [expr {"tools" in $caps}] \
 			size   [expr {[dict exists $m size] ? [dict get $m size] : 0}] \
+			details [expr {[dict exists $m details] ? [dict get $m details] : {}}] \
 		]
 	}
 	return [lsort -index 1 -dictionary $models]

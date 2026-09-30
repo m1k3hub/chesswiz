@@ -67,6 +67,8 @@ set KeyNote			"needs %s in the environment"
 } ;# namespace mc
 
 array set Priv {
+	generation 0
+	probe {}
 	dialog	{}
 	models	{}
 	name		{}
@@ -87,6 +89,7 @@ proc ::application::ai::models::show {{parent .application}} {
 		raise $dlg
 		return $dlg
 	}
+	incr Priv(generation)
 	set Priv(dialog) $dlg
 	# the saved choices (an override is shown separately)
 	set Priv(name) $::application::ai::Settings(model)
@@ -210,20 +213,54 @@ proc ::application::ai::models::show {{parent .application}} {
 
 proc ::application::ai::models::Fill {} {
 	variable Priv
+	::ai::provider::ollamaModelsAsync [namespace code [list OnModels $Priv(generation)]]
+}
+
+
+proc ::application::ai::models::Current {generation} {
+	variable Priv
+	return [expr {$generation == $Priv(generation) && $Priv(dialog) ne {} && [winfo exists $Priv(dialog)]}]
+}
+
+
+proc ::application::ai::models::OnModels {generation result} {
+	variable Priv
 	variable mc
-
-	set tree $Priv(tree)
-	$tree delete [$tree children {}]
-
-	if {[catch { ::ai::provider::ollamaModels } models]} {
+	if {![Current $generation]} { return }
+	if {![dict get $result ok]} {
 		set Priv(models) {}
 		set Priv(fit) {}
-		$Priv(status) configure -text [format $mc::Unreachable $models]
+		$Priv(status) configure -text [format $mc::Unreachable [dict get $result error]]
 		return
 	}
-	set Priv(models) $models
+	set Priv(models) [dict get $result models]
+	# RAM-only advice is cheap and useful while the GPU query is pending.
+	set memory {ram_mb 0 vram_mb 0}
+	if {[llength [info commands ::ai::modelfit::memory]]} {
+		set memory [::ai::modelfit::memory -gpu {}]
+	}
+	RenderModels $memory
+	if {[llength [info commands ::ai::modelfit::memoryAsync]]} {
+		set Priv(probe) [::ai::modelfit::memoryAsync [namespace code [list OnMemory $generation]]]
+	}
+}
 
-	set Priv(fit) [FitAdvice $models]
+
+proc ::application::ai::models::OnMemory {generation memory} {
+	variable Priv
+	if {![Current $generation]} { return }
+	set Priv(probe) {}
+	RenderModels $memory
+}
+
+
+proc ::application::ai::models::RenderModels {memory} {
+	variable Priv
+	variable mc
+	set tree $Priv(tree)
+	$tree delete [$tree children {}]
+	set models $Priv(models)
+	set Priv(fit) [FitAdvice $models $memory]
 	foreach m $models {
 		set name [dict get $m name]
 		set tools [dict get $m tools]
@@ -254,7 +291,7 @@ proc ::application::ai::models::Fill {} {
 # the user makes is untouched.
 # ----------------------------------------------------------------------
 
-proc ::application::ai::models::FitAdvice {models} {
+proc ::application::ai::models::FitAdvice {models {memory {}}} {
 	variable mc
 	variable Priv
 
@@ -278,8 +315,7 @@ proc ::application::ai::models::FitAdvice {models} {
 		$Priv(memory) configure -text ""
 	}
 
-	set memory {}
-	if {[catch { ::ai::modelfit::memory } memory]} { set memory {} }
+	if {![llength $memory] && [catch { ::ai::modelfit::memory } memory]} { set memory {} }
 	if {[llength $memory]
 	 && [info exists Priv(memory)] && [winfo exists $Priv(memory)]} {
 		$Priv(memory) configure -text [format $mc::Memory \
@@ -321,6 +357,7 @@ proc ::application::ai::models::ParamsB {m} {
 	if {![string length $text]} { return 0.0 }
 	# "8.0B" -> 8.0, "7B" -> 7.0; a bare number is taken as billions
 	if {[scan $text "%f" value] != 1 || $value <= 0.0} { return 0.0 }
+	if {[regexp -nocase {m$} [string trim $text]]} { set value [expr {$value / 1000.0}] }
 	return $value
 }
 
@@ -393,18 +430,22 @@ proc ::application::ai::models::SelectedClassifier {} {
 		set text $mc::AutoNote
 	} elseif {$Priv(classifier) eq "plumb"} {
 		set text $mc::PlumbNote
-	} elseif {[catch { ::ai::systemone::configure -backend $Priv(classifier) ; ::ai::systemone::describe } describe] == 0} {
-		set text $describe
 	}
+	# Read the row from the backend table. Configuring the backend and
+	# restoring it through applySettings would run the auto-discovery,
+	# whose blocking connects and probe requests freeze the GUI.
 	foreach b [::ai::systemone::backends] {
 		if {[dict get $b name] ne $Priv(classifier)} { continue }
+		if {$text eq ""} {
+			set text [format "%s (%s at %s)" $Priv(classifier) \
+				[dict get $b model] [dict get $b endpoint]]
+		}
 		set key [dict get $b key]
 		if {![info exists ::env($key)] || ![string length $::env($key)]} {
 			append text [expr {[string length $text] ? " " : ""}] [format $mc::KeyNote $key]
 		}
 		break
 	}
-	::application::ai::applySettings ;# restore the backend in effect
 	$Priv(cstatus) configure -text $text
 }
 
@@ -455,6 +496,11 @@ proc ::application::ai::models::Apply {} {
 
 proc ::application::ai::models::Close {} {
 	variable Priv
+	incr Priv(generation)
+	if {$Priv(probe) ne {}} {
+		::ai::modelfit::cancelMemory $Priv(probe)
+		set Priv(probe) {}
+	}
 
 	if {[winfo exists $Priv(dialog)]} { destroy $Priv(dialog) }
 	set Priv(dialog) {}

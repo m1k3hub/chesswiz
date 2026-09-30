@@ -51,6 +51,80 @@ variable Overhead 1.2
 } ;# namespace ai
 
 
+# The chooser probes GPU memory through a nonblocking pipe. A wedged driver
+# may time out, but must never hold the Tk event loop or the menu grab.
+namespace eval ::ai::modelfit {
+	variable ProbeSeq 0
+	variable Probes
+	array set Probes {}
+}
+
+proc ::ai::modelfit::memoryAsync {script args} {
+	variable ProbeSeq
+	variable Probes
+	array set opts {-meminfo /proc/meminfo -timeoutMs 1500 \
+		-gpu {nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits}}
+	array set opts $args
+	set id [incr ProbeSeq]
+	set ram [memory -meminfo $opts(-meminfo) -gpu {}]
+	set Probes($id) [dict create script $script memory $ram output {} chan {} timer {}]
+	if {![llength $opts(-gpu)] || [catch {
+		set chan [open [concat [list |] $opts(-gpu) [list 2> /dev/null]] r]
+	}]} {
+		dict set Probes($id) timer [after 0 [namespace code [list FinishMemory $id]]]
+		return $id
+	}
+	fconfigure $chan -blocking 0 -encoding utf-8 -translation auto
+	dict set Probes($id) chan $chan
+	dict set Probes($id) timer [after $opts(-timeoutMs) [namespace code [list FinishMemory $id 1]]]
+	fileevent $chan readable [namespace code [list ReadMemory $id]]
+	return $id
+}
+
+proc ::ai::modelfit::ReadMemory {id} {
+	variable Probes
+	if {![info exists Probes($id)]} { return }
+	set chan [dict get $Probes($id) chan]
+	if {[catch {read $chan 8192} data]} { FinishMemory $id 1; return }
+	dict append Probes($id) output $data
+	if {[string length [dict get $Probes($id) output]] > 65536} {
+		FinishMemory $id 1
+	} elseif {[eof $chan]} {
+		FinishMemory $id
+	}
+}
+
+proc ::ai::modelfit::FinishMemory {id {failed 0} {deliver 1}} {
+	variable Probes
+	if {![info exists Probes($id)]} { return }
+	set probe $Probes($id)
+	unset Probes($id)
+	after cancel [dict get $probe timer]
+	set chan [dict get $probe chan]
+	if {$chan ne {}} {
+		fileevent $chan readable {}
+		if {$failed && $::tcl_platform(platform) eq "unix"} {
+			catch {exec kill -TERM {*}[pid $chan]}
+		}
+		# Closing a nonblocking pipeline does not wait for child termination.
+		catch {close $chan}
+	}
+	set memory [dict get $probe memory]
+	if {!$failed} {
+		set vram 0
+		foreach token [regexp -all -inline {\S+} [string map {, " "} [dict get $probe output]]] {
+			if {[string is integer -strict $token] && $token > 0} { incr vram $token }
+		}
+		dict set memory vram_mb $vram
+	}
+	if {$deliver} { {*}[dict get $probe script] $memory }
+}
+
+proc ::ai::modelfit::cancelMemory {id} {
+	FinishMemory $id 1 0
+}
+
+
 # Memory, every failure a zero: the MemTotal line (in kB) of the given
 # meminfo file, whole MiB numbers summed over the lines of the gpu
 # command ("24576" on its own line, or "24576, 24576" for many GPUs).

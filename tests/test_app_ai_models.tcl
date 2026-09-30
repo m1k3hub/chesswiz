@@ -11,6 +11,17 @@ namespace eval ::scidb::test::aimodels {}
 
 # Run <body> with the AI settings, env and command-line options restored.
 proc ::scidb::test::aimodels::isolated {body} {
+	# Existing fixture bodies supply a synchronous model list. Deliver it
+	# through the chooser's asynchronous provider seam, without real HTTP.
+	rename ::ai::provider::ollamaModelsAsync ::scidb::test::aimodels::realAsyncModels
+	proc ::ai::provider::ollamaModelsAsync {script args} {
+		if {[catch {::ai::provider::ollamaModels {*}$args} models]} {
+			set result [dict create ok 0 error $models]
+		} else {
+			set result [dict create ok 1 models $models]
+		}
+		after 0 [list {*}$script $result]
+	}
 	set settings [array get ::application::ai::Settings]
 	set config [array get ::application::ai::Config]
 	set options [array get ::process::Options ai-*]
@@ -26,6 +37,8 @@ proc ::scidb::test::aimodels::isolated {body} {
 		set discovery [list $::ai::systemone::Auto $::ai::systemone::Resolved]
 	}
 	set rc [catch { uplevel 1 $body } result]
+	rename ::ai::provider::ollamaModelsAsync {}
+	rename ::scidb::test::aimodels::realAsyncModels ::ai::provider::ollamaModelsAsync
 	array set ::application::ai::Settings $settings
 	array set ::application::ai::Config $config
 	array unset ::process::Options ai-*
@@ -106,6 +119,7 @@ tcltest::test aimodels-dialog-saves-choice {picking a model in the dialog saves 
 				[dict create name notools:1b remote 0 tools 0 size 1]]
 		}
 		set dlg [::application::ai::models::show .application]
+		update
 		set rows [$::application::ai::models::Priv(tree) children {}]
 		$::application::ai::models::Priv(tree) selection set notools:1b
 		update
@@ -132,6 +146,7 @@ tcltest::test aimodels-dialog-sees-saved-model {the saved model's row is selecte
 		# Fill selects and `see`s the saved model's row; a malformed item
 		# name there raises ("Item ... not found")
 		set dlg [::application::ai::models::show .application]
+		update
 		set sel [$::application::ai::models::Priv(tree) selection]
 		::application::ai::models::Close
 		rename ::ai::provider::ollamaModels {}
@@ -147,6 +162,7 @@ tcltest::test aimodels-dialog-shows-override {the dialog says when a flag overri
 		rename ::ai::provider::ollamaModels ::scidb::test::aimodels::realModels
 		proc ::ai::provider::ollamaModels {args} { error "connection refused" }
 		::application::ai::models::show .application
+		update
 		set override [$::application::ai::models::Priv(override) cget -text]
 		set status [$::application::ai::models::Priv(status) cget -text]
 		::application::ai::models::Close
@@ -224,6 +240,7 @@ tcltest::test aimodels-dialog-classifier-value {the dialog starts from the backe
 			return [list [dict create name local-a:1b remote 0 tools 1 size 1]]
 		}
 		::application::ai::models::show .application
+		update
 		set initial $::application::ai::models::Priv(classifier)
 		set selected [$::application::ai::models::Priv(ctree) selection]
 		::application::ai::models::Close
@@ -240,6 +257,7 @@ tcltest::test aimodels-dialog-saves-classifier {picking a classifier in the dial
 			return [list [dict create name local-a:1b remote 0 tools 1 size 1]]
 		}
 		set dlg [::application::ai::models::show .application]
+		update
 		set rows [$::application::ai::models::Priv(ctree) children {}]
 		$::application::ai::models::Priv(ctree) selection set plumb
 		update
