@@ -473,9 +473,25 @@ proc configureText {path {fontContext ""}} {
 }
 
 
+# A context's Options array is seeded from DefaultOptions by buildText, when
+# its first text widget is made. Opening a game in browse mode reads the
+# options earlier (setupStyle/setupNags at pane-open time), so seed them at
+# that point the same way. Nothing is created before it is needed: the
+# existence of the array tells the setup dialog whether a context has been
+# set up at all.
+proc EnsureOptions {context} {
+	variable DefaultOptions
+	variable [namespace parent]::${context}::Options
+
+	if {![info exists Options]} { array set Options [array get DefaultOptions] }
+}
+
+
 proc setupStyle {context positionList} {
 	variable [namespace parent]::${context}::Options
 	variable ShowMoveInfo
+
+	EnsureOptions $context
 
 #	if {$Options(style:column)} { set thresholds {0 0 0 0} } else { set thresholds {240 80 60 0} }
 	set thresholds {0 0 0 0}
@@ -521,6 +537,8 @@ proc setupStyle {context positionList} {
 
 proc setupNags {context} {
 	variable [namespace parent]::${context}::Options
+
+	EnsureOptions $context
 	set nags [expr {$Options(show:nagtext) ? [::annotation::unusualNags] : {}}]
 	::scidb::game::setupNags $nags
 }

@@ -120,6 +120,8 @@ array set Defaults {
 	rating:type			Elo
 	hilite:nextmove	0
 	show:tree			1
+	novelty:highlight	0
+	repertoire:db		{}
 
 	-background			tree,background
 	-emphasize			tree,emphasize
@@ -1747,7 +1749,7 @@ proc PopupMenu {table x y} {
 	$m add checkbutton \
 		-label " $::application::analysis::mc::HighlightNovelties" \
 		-variable [namespace current]::Options(novelty:highlight) \
-		-command [namespace code [list ToggleNoveltyHighlighting $table $Options(repertoire:db)]] \
+		-command [namespace code [list ToggleNoveltyHighlighting $table]] \
 		;
 	::theme::configureCheckEntry $m
 	$m add checkbutton \
@@ -1956,12 +1958,13 @@ proc HighlightNovelties {table repertoireDb} {
 }
 
 
-proc ToggleNoveltyHighlighting {table repertoireDb} {
+proc ToggleNoveltyHighlighting {table} {
 	variable Options
 
 	if {$Options(novelty:highlight)} {
-		# Turn on highlighting (checkbutton was just checked)
-		set count [HighlightNovelties $table $repertoireDb]
+		# Turn on highlighting (checkbutton was just checked); the repertoire
+		# database is whatever is configured now, none meaning nothing to compare
+		set count [HighlightNovelties $table $Options(repertoire:db)]
 		if {$count > 0} {
 			::ui::message "Highlighted $count novelty moves"
 		}

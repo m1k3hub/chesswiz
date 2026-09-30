@@ -64,7 +64,9 @@ tcltest::test notice-error-does-not-block {an error dialog returns at once and l
 tcltest::test notice-recorded-in-log {every notice is written to the log, which stays closed} -setup {
 	::scidb::test::notice::setup
 	set ::scidb::test::notice::oldShow $::log::Priv(show)
+	set ::scidb::test::notice::oldForce $::log::Priv(force)
 	set ::log::Priv(show) 1	;# the state after startup: the first error would open the window
+	set ::log::Priv(force) 0
 	wm withdraw $::log::Log
 } -body {
 	::dialog::error -parent . -message "Cannot open file x.sci" -detail "permission denied"
@@ -74,6 +76,7 @@ tcltest::test notice-recorded-in-log {every notice is written to the log, which 
 		[winfo ismapped $::log::Log] $::log::Priv(show) $::log::Priv(force)
 } -cleanup {
 	set ::log::Priv(show) $::scidb::test::notice::oldShow
+	set ::log::Priv(force) $::scidb::test::notice::oldForce
 	::scidb::test::notice::cleanup
 } -result {1 1 0 1 0}
 
