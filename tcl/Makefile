@@ -263,14 +263,12 @@ install-scripts: $(SCRIPTS)
 	@install -m 755 -p $(UPDATE_PHOTO_FILES) $(BINDIR)
 	@install -m 755 -d $(DATADIR)/scripts
 	@install -m 644 -p ../scripts/stt-transcribe.py $(DATADIR)/scripts
-	@install -m 644 -p mpv_ipc_bridge.py $(DATADIR)/scripts
 
 uninstall-scripts:
 	@echo "Uninstall Tcl scripts"
 	@rm -f $(BINDIR)/$(SCRIPT)
 	@rm -f $(BINDIR)/$(UPDATE_PHOTO_FILES)
 	@rm -f $(DATADIR)/scripts/stt-transcribe.py
-	@rm -f $(DATADIR)/scripts/mpv_ipc_bridge.py
 
 install-pieces:
 	@echo "Install piece sets"

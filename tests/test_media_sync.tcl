@@ -46,13 +46,11 @@ syncTest eval {
         proc MediaPause {} {set ::paused 1}
         set Priv(position) 7
         set Priv(inprocess) 1
-        set Priv(backend) mpv
-        set Priv(vlc_handle) {}
         set Priv(lessonPositions) {start a b}
     }
 }
 
-tcltest::test media-mpv-board-seek {board navigation seeks by lesson identity without a VLC handle} -body {
+tcltest::test media-mpv-board-seek {board navigation seeks by lesson identity without a player handle} -body {
     syncTest eval {
         ::media::sync::load-timeline {{1000 8} {2000 2} {3000 5}}
         ::application::media::PlySeek 7
@@ -120,6 +118,51 @@ tcltest::test media-reach-tolerance {a seek landing just short of a mark still r
         set nodes
     }
 } -result {2}
+
+
+tcltest::test media-follow-recover-transient {a temporary transport state must not permanently freeze video-to-board synchronization} -body {
+    syncTest eval {
+        proc ::application::media::MediaState {} {
+            set state [lindex $::playerStates 0]
+            if {[llength $::playerStates] > 1} {set ::playerStates [lrange $::playerStates 1 end]}
+            return $state
+        }
+        proc ::application::media::MediaTime {} {return 2.5}
+        proc ::application::media::MediaDuration {} {return 4.0}
+        ::media::sync::configure boardgoto-cmd {lappend ::nodes}
+        set results {}
+        foreach state {idle paused ended error buffering opening} {
+            set nodes {}
+            set playerStates [list $state playing]
+            set ::application::media::Priv(inprocess) 1
+            ::media::sync::load-timeline {{1000 1} {2000 2}}
+            ::media::sync::onPlaybackStarted
+            ::application::media::FollowTick
+            after 180 {set ::tickDone 1}
+            vwait ::tickDone
+            lappend results [list $state $nodes]
+            ::application::media::StopFollowTick
+        }
+        set results
+    }
+} -result {{idle 2} {paused 2} {ended 2} {error 2} {buffering 2} {opening 2}}
+
+tcltest::test media-follow-missing-clock {a missing time sample must not rewind the board or kill the follow timer} -body {
+    syncTest eval {
+        set nodes {}
+        proc ::application::media::MediaState {} {return playing}
+        proc ::application::media::MediaTime {} {return $::videoTime}
+        set videoTime 2.5
+        ::media::sync::load-timeline {{1000 1} {2000 2}}
+        ::media::sync::onPlaybackStarted
+        ::application::media::FollowTick
+        set videoTime {}
+        set failed [catch {::application::media::FollowTick}]
+        set active [expr {$::application::media::Priv(followafter) in [after info]}]
+        ::application::media::StopFollowTick
+        list $failed $nodes $active
+    }
+} -result {0 2 1}
 
 interp delete syncTest
 tcltest::cleanupTests

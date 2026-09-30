@@ -87,7 +87,7 @@ SRC = \
 	tclscidb.cpp \
 
 ALL_LIBS = $(LIBS) $(TCL_LIBRARY) $(ZZIPLIB_LIB) $(MINIZIP_LIB) $(ZLIB_LIB) $(EXPAT_LIB) $(FAM_LIB) -lpthread -lfontconfig -lpng -lm
-ALL_TK_LIBS = $(TCL_LIBS) $(TK_LIBS) $(TK_LIBRARY) $(X_LIBRARY) -lGL -lGLU
+ALL_TK_LIBS = $(TCL_LIBS) $(TK_LIBS) $(TK_LIBRARY) $(X_LIBRARY) -lGL -lGLU -lmpv
 #ALL_TK_LIBS = $(TCL_LIBS) $(TK_LIBS) -L/usr/local/lib -ltk $(X_LIBRARY)
 
 SUBDIRS = db app mstl sys tcl tk/jpeg tk/svg/agg tk/svg tk/treectrl tk/html tk/text tk/tkdnd tk util util/minizip util/libTeXt util/libharu util/universalchardet util/libhyphenate util/gdbm $(LIB_SUBDIRS)

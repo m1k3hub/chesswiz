@@ -79,12 +79,11 @@ namespace eval ::mediaLessonTest {
     }
 }
 
-tcltest::test media-backend-selection {plain media reaches mpv without VLC} -setup {
+tcltest::test media-backend-selection {plain media reaches the libmpv player} -setup {
     ::mediaLessonTest::setup
 } -body {
     lessonTest eval {
         namespace eval ::application::media {
-            proc LoadVlc {} {return 0}
             proc PlayInProcess {args} {incr ::attempts; return 1}
         }
         set attempts 0

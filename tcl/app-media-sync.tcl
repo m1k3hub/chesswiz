@@ -20,7 +20,7 @@
 #     state machine fires arrow/mark/comment/symbol/reset callbacks as
 #     the media time passes each event's timestamp.
 #
-# The state machine is UI-free: the media panel wires it to tkvlc handles
+# The state machine is UI-free: the media panel wires it to the libmpv player
 # and the scidb board commands (see application::media::SyncTransport,
 # application::media::SyncBoard*), while tests inject stubs. Board code
 # reports playback events through ::media::sync::autoplay / ::step.
