@@ -251,6 +251,56 @@ proc info {args} {
 }
 
 
+# ----------------------------------------------------------------------
+# Non-interactive mode (SCIDB_NONINTERACTIVE=1, or ::dialog::nonInteractive 1).
+# A modal dialog waits for a button, so a scripted, headless or unattended
+# run (a test, the assistant's tools, a batch job) looks like a hang. In this
+# mode no dialog is ever built: the message goes to stderr and to
+# ::dialog::NonInteractiveLog and the reply is the SAFE answer -- cancel, no
+# or abort when offered, never "yes" to an "overwrite?" question.
+# ----------------------------------------------------------------------
+
+variable NonInteractive 0
+variable NonInteractiveLog {}
+variable MaxNonInteractiveLog 100
+# (inside this namespace "info", "error", "warning" are the dialog procs)
+if {[::info exists ::env(SCIDB_NONINTERACTIVE)] && [string is true -strict $::env(SCIDB_NONINTERACTIVE)]} {
+	set NonInteractive 1
+}
+
+proc nonInteractive {args} {
+	variable NonInteractive
+	if {[llength $args]} { set NonInteractive [string is true -strict [lindex $args 0]] }
+	return $NonInteractive
+}
+
+# the answer of a dialog nobody will see: cancel > no > abort > ok > the first button
+proc safeReply {buttons} {
+	set names {}
+	foreach b $buttons { lappend names [lindex $b 0] }
+	foreach preferred {cancel no abort ok} {
+		if {$preferred in $names} { return $preferred }
+	}
+	return [lindex $names 0]
+}
+
+proc nonInteractiveReply {kind message detail buttons} {
+	variable NonInteractiveLog
+	variable MaxNonInteractiveLog
+
+	set reply [safeReply $buttons]
+	set text [string trim $message]
+	if {[string length [string trim $detail]]} { append text " -- [string trim $detail]" }
+	set text [string map {\n " "} $text]
+	lappend NonInteractiveLog [list [clock seconds] $kind $text $reply]
+	if {[llength $NonInteractiveLog] > $MaxNonInteractiveLog} {
+		set NonInteractiveLog [lrange $NonInteractiveLog end-[expr {$MaxNonInteractiveLog - 1}] end]
+	}
+	catch { puts stderr "scidb (non-interactive) $kind: $text -> $reply" }
+	return $reply
+}
+
+
 proc alert {args} {
 	variable iconGoNext
 	variable iconCancel
@@ -286,6 +336,21 @@ proc alert {args} {
 	if {	[llength $opts(-default)] == 0
 		|| [lsearch -exact -index 0 $opts(-buttons) $opts(-default)] == -1} {
 		set opts(-default) [lindex [lindex $opts(-buttons) 0] 0]
+	}
+
+	if {[nonInteractive]} {
+		return [nonInteractiveReply $opts(-type) $opts(-message) $opts(-detail) $opts(-buttons)]
+	}
+
+	# Only "OK" to press: nothing is asked, so nothing may block. The message
+	# is shown as a non-modal card (notice.tcl) and the caller carries on.
+	if {	[llength [::info commands ::dialog::notice::post]] && [::dialog::notice::available]
+		&& $opts(-type) in {error warning info}
+		&& [llength $opts(-buttons)] == 1 && [lindex [lindex $opts(-buttons) 0] 0] eq "ok"
+		&& [llength $opts(-check)] == 0 && [llength $opts(-addbuttons)] == 0
+		&& [llength $opts(-embed)] == 0} {
+		::dialog::notice::post $opts(-type) $opts(-message) $opts(-detail)
+		return ok
 	}
 
 	set parent $opts(-parent)
@@ -957,5 +1022,26 @@ set question [image create photo -data {
 } ;# namespace 64x64
 } ;# namespace icon
 } ;# namespace dialog
+
+# The 18 direct tk_messageBox calls of the program are modal too.
+if {[llength [info commands ::tk_messageBox]] || [auto_load tk_messageBox]} {
+	rename ::tk_messageBox ::__tk_messageBox__orig
+	proc ::tk_messageBox {args} {
+		if {[::dialog::nonInteractive]} {
+			array set o {-type ok -message "" -detail "" -icon info}
+			array set o $args
+			set buttons [dict get {
+				abortretryignore {abort retry ignore}
+				ok {ok}
+				okcancel {ok cancel}
+				retrycancel {retry cancel}
+				yesno {yes no}
+				yesnocancel {yes no cancel}
+			} $o(-type)]
+			return [::dialog::nonInteractiveReply $o(-icon) $o(-message) $o(-detail) $buttons]
+		}
+		return [::__tk_messageBox__orig {*}$args]
+	}
+}
 
 # vi:set ts=3 sw=3:

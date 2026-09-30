@@ -827,7 +827,15 @@ proc bgerror {err args} {
 		set errorInfo $info
 		set errmsg ""
 		set errresult ""
-		::tk::dialog::error::bgerror $err
+		if {[llength [info commands ::dialog::nonInteractive]] && [::dialog::nonInteractive]} {
+			# no modal error dialog in a scripted or unattended run
+			::dialog::nonInteractiveReply background-error $err $info {ok}
+		} elseif {[llength [info commands ::dialog::notice::post]] && [::dialog::notice::available]} {
+			# seen, but not in the way: a card with the stack in the log
+			::dialog::notice::post error $err $info
+		} else {
+			::tk::dialog::error::bgerror $err
+		}
 		catch { ::widget::busyCursor clear }
 	} elseif {[string length $errorInfo] > 0} {
 		# only save the stack info for next call of bgerror

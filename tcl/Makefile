@@ -35,6 +35,7 @@ SOURCES = \
 	contrib/filelist-bindings.tcl \
 	contrib/http.tcl \
 	dialogs/messagebox.tcl \
+	dialogs/notice.tcl \
 	dialogs/progressbar.tcl \
 	dialogs/choosecolor.tcl \
 	dialogs/choosecolor-cube.tcl \
