@@ -807,6 +807,21 @@ proc FinishSettings {m} {
 	} else {
 		EnterSettings $m
 	}
+
+	# Opening a window from an entry can leave the button holding its global
+	# grab, which swallows every click outside it. Once Tk has unposted the
+	# menu nothing may hold it.
+	after idle [namespace code [list ReleaseSettingsGrab $m]]
+}
+
+
+proc ReleaseSettingsGrab {m} {
+	if {![winfo exists $m]} { return }
+	if {[grab current $m] ne $m} { return }
+	set menu [$m cget -menu]
+	if {$menu eq "" || ![winfo exists $menu] || ![winfo ismapped $menu]} {
+		grab release $m
+	}
 }
 
 
