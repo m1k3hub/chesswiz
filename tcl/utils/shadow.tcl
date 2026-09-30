@@ -221,14 +221,21 @@ proc grab {args} {
 	# event will come too late (at end of session).
 	# therefore we will kill all shadows as soon as
 	# a grab is released.
-	if {[lindex $args 0] eq "release"} { shadow::kill }
+	set cmd [lindex $args 0]
+	if {$cmd eq "release"} { shadow::kill }
+	# Queries must always reach Tk. Tk unposts a menu and only then asks
+	# "grab current $menu" to find the grab to release: answering {} for
+	# the (by now unviewable) menu made it conclude nothing was held, so
+	# the menu button kept its global grab and swallowed every click.
+	if {$cmd eq "current" || $cmd eq "status"} { return [__grab__shadow {*}$args] }
 	if {[llength $args] == 2} {
 		set w [lindex $args 1]
 		if {![winfo exists $w]} { return }
 		# a window that is not viewable cannot be grabbed; Tk raises
 		# "grab failed: window not viewable" (seen when a pane header is
-		# pressed before its pane has been mapped)
-		if {![winfo viewable $w]} { return }
+		# pressed before its pane has been mapped). Only setting a grab is
+		# refused: releasing one must work whatever the window's state.
+		if {$cmd ne "release" && ![winfo viewable $w]} { return }
 	}
 
 	return [__grab__shadow {*}$args]

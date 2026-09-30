@@ -21,7 +21,7 @@ proc ::scidb::test::diag::setup {} {
 	file mkdir $Dir
 	set Saved [list $::application::assistant::Priv(debug) $::application::assistant::Priv(confirm) \
 		[expr {[info exists ::scidb::dir::user] ? $::scidb::dir::user : ""}] \
-		$::application::assistant::ErrorLogFile $::application::SettingsGuardMs]
+		$::application::assistant::ErrorLogFile]
 	set ::application::assistant::ErrorLogFile [file join $Dir errors.log]
 	set ::application::assistant::Priv(debug) 1
 	set ::application::assistant::Priv(confirm) ::scidb::test::diag::confirm
@@ -31,9 +31,8 @@ proc ::scidb::test::diag::setup {} {
 proc ::scidb::test::diag::cleanup {} {
 	variable Dir
 	variable Saved
-	lassign $Saved debug confirm user errlog guardMs
+	lassign $Saved debug confirm user errlog
 	set ::application::assistant::ErrorLogFile $errlog
-	set ::application::SettingsGuardMs $guardMs
 	set ::application::assistant::Priv(debug) $debug
 	set ::application::assistant::Priv(confirm) $confirm
 	set ::scidb::dir::user $user
@@ -214,61 +213,60 @@ tcltest::test diag-loop-health {a stall of the event loop is recorded by the hea
 	::scidb::test::diag::cleanup
 } -result {1 1 1}
 
-proc ::scidb::test::diag::wait {ms} {
-	after $ms { set ::scidb::test::diag::go 1 }
-	vwait ::scidb::test::diag::go
-}
-
-tcltest::test diag-menu-guard-frees-stuck-grab {a menubutton that keeps its grab after its menu is gone is freed and the event is logged} -setup {
+tcltest::test diag-grab-queries-reach-tk {grab current/status answer for a window that is not viewable} -setup {
 	::scidb::test::diag::setup
-	set ::application::SettingsGuardMs 40
 } -body {
 	::scidb::test::diag::stuckGrab
-	::application::ArmSettingsGrabGuard .diagtest.mb
-	::scidb::test::diag::wait 60
-	set early [grab current]	;# one strike is not enough
-	::scidb::test::diag::wait 200
-	set err [lindex $::application::assistant::Errors end]
-	list $early [grab current] [string match "*kept its global input grab*released*" [lindex $err 2]] \
-		[string match "*tk::Priv:*postedMb*" [lindex $err 3]] \
-		[info exists ::application::SettingsGuard(.diagtest.mb)]
+	toplevel .diagtest2
+	update
+	wm withdraw .diagtest2
+	update
+	# Tk asks this right after it unposts a menu, about the unviewable menu
+	list [winfo viewable .diagtest2] [grab current .diagtest2] [grab status .diagtest.mb]
 } -cleanup {
+	catch { destroy .diagtest2 }
 	::scidb::test::diag::cleanup
-} -result {.diagtest.mb {} 1 1 0}
+} -result {0 .diagtest.mb global}
 
-tcltest::test diag-menu-guard-leaves-open-menu {an open menu keeps its grab; it is freed only after the menu has closed} -setup {
+tcltest::test diag-grab-release-not-swallowed {only setting a grab on an unviewable window is refused; releasing reaches Tk} -setup {
 	::scidb::test::diag::setup
-	set ::application::SettingsGuardMs 40
+	set ::scidb::test::diag::Calls {}
+	rename ::__grab__shadow ::scidb::test::diag::realGrab
+	proc ::__grab__shadow {args} { lappend ::scidb::test::diag::Calls $args; return }
 } -body {
-	::scidb::test::diag::stuckGrab
-	.diagtest.mb.m add command -label one
-	.diagtest.mb.m post 100 100
+	toplevel .diagtest
 	update
-	::application::ArmSettingsGrabGuard .diagtest.mb
-	::scidb::test::diag::wait 300
-	set whileOpen [grab current]
-	.diagtest.mb.m unpost
+	wm withdraw .diagtest
 	update
-	::scidb::test::diag::wait 300
-	list $whileOpen [grab current]
+	grab set .diagtest
+	grab -global .diagtest
+	grab release .diagtest
+	grab release .doesnotexist
+	set ::scidb::test::diag::Calls
 } -cleanup {
+	rename ::__grab__shadow {}
+	rename ::scidb::test::diag::realGrab ::__grab__shadow
 	::scidb::test::diag::cleanup
-} -result {.diagtest.mb {}}
+} -result {{release .diagtest}}
 
-tcltest::test diag-menu-guard-disarms {with no grab the guard leaves no timer behind} -setup {
+tcltest::test diag-menu-unpost-releases-grab {a menubutton that posts and unposts its menu leaves no grab behind} -setup {
 	::scidb::test::diag::setup
-	set ::application::SettingsGuardMs 40
 } -body {
 	toplevel .diagtest
 	tk::menubutton .diagtest.mb -text x -menu .diagtest.mb.m
 	menu .diagtest.mb.m
-	::application::ArmSettingsGrabGuard .diagtest.mb
-	::scidb::test::diag::wait 150
-	list [info exists ::application::SettingsGuard(.diagtest.mb)] \
-		[llength [lmap id [after info] {expr {[string match *CheckSettingsGrab* [lindex [after info $id] 0]] ? $id : [continue]}}]]
+	.diagtest.mb.m add command -label one
+	pack .diagtest.mb
+	update
+	::tk::MbPost .diagtest.mb 100 100
+	update
+	set posted [list [winfo ismapped .diagtest.mb.m] [grab current]]
+	::tk::MenuUnpost .diagtest.mb.m
+	update
+	list $posted [grab current]
 } -cleanup {
 	::scidb::test::diag::cleanup
-} -result {0 0}
+} -result {{1 .diagtest.mb} {}}
 
 ::tcltest::cleanupTests
 return
