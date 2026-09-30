@@ -786,6 +786,7 @@ proc BuildSettingsMenu {m} {
 		-direction below \
 		;
 	set Vars(menu:locked) 1
+	ArmSettingsGrabGuard $m
 }
 
 
@@ -812,6 +813,58 @@ proc FinishSettings {m} {
 	# grab, which swallows every click outside it. Once Tk has unposted the
 	# menu nothing may hold it.
 	after idle [namespace code [list ReleaseSettingsGrab $m]]
+}
+
+
+# Tk's menubutton can leave its global grab held after its menu has gone
+# (seen in the field: <<MenuWillUnpost>> never ran, Tk's own bookkeeping
+# said nothing was posted, and every click outside the button was
+# swallowed). Posting the menu arms a check that frees the grab once the
+# menu has been gone for two checks in a row; it disarms as soon as the
+# grab is gone, so an idle program runs no timer.
+variable SettingsGuardMs 1000
+variable SettingsGuard		;# menubutton -> pending check
+
+proc ArmSettingsGrabGuard {m} {
+	variable SettingsGuard
+	variable SettingsGuardMs
+
+	if {[info exists SettingsGuard($m)]} { catch { after cancel $SettingsGuard($m) } }
+	set SettingsGuard($m) [after $SettingsGuardMs [namespace code [list CheckSettingsGrab $m 0]]]
+}
+
+
+proc CheckSettingsGrab {m strikes} {
+	variable SettingsGuard
+	variable SettingsGuardMs
+
+	unset -nocomplain SettingsGuard($m)
+	if {![winfo exists $m] || [grab current $m] ne $m} { return }
+
+	set menu [$m cget -menu]
+	if {$menu ne "" && [winfo exists $menu] && [winfo ismapped $menu]} {
+		set strikes 0	;# the menu is open: the grab is meant to be there
+	} elseif {[incr strikes] >= 2} {
+		ReleaseStuckGrab $m
+		return
+	}
+	set SettingsGuard($m) [after $SettingsGuardMs [namespace code [list CheckSettingsGrab $m $strikes]]]
+}
+
+
+proc ReleaseStuckGrab {m} {
+	set state {}
+	foreach key {postedMb activeMenu activeItem oldGrab grabStatus popup} {
+		lappend state "$key=[expr {[info exists ::tk::Priv($key)] ? "'$::tk::Priv($key)'" : "unset"}]"
+	}
+	set kind [grab status $m]
+	grab release $m
+	# leave a trace: the cause is not known yet
+	catch {
+		::application::assistant::RecordError menu \
+			"the menu button $m kept its $kind input grab after its menu closed; released" \
+			"tk::Priv: [join $state { }]"
+	}
 }
 
 
@@ -892,6 +945,7 @@ proc BuildUpdatesMenu {m} {
 		-direction below \
 		;
 	set Vars(menu:locked) 1
+	ArmSettingsGrabGuard $m
 }
 
 
