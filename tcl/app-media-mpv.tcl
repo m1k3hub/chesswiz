@@ -34,9 +34,26 @@ namespace eval ::media::mpv {
 	}
 	# capture at load time: info script is dynamic and would resolve to
 	# the caller's script inside launch()
-	set Priv(bridge) [file join [file dirname [info script]] mpv_ipc_bridge.py]
+	set Priv(moduledir) [file dirname [info script]]
 
 	namespace export launch stop time duration state play pause seek available?
+}
+
+# The bridge script: the installed build ships it below the share
+# directory (tcl/Makefile: $(DATADIR)/scripts); in the source tree it sits
+# next to this module. The installed Tcl is one file, so "next to this
+# module" is the bin directory there and must not be the only place tried.
+proc ::media::mpv::bridgeScript {} {
+	variable Priv
+	set candidates {}
+	if {[info exists ::scidb::dir::share]} {
+		lappend candidates [file join $::scidb::dir::share scripts mpv_ipc_bridge.py]
+	}
+	lappend candidates [file join $Priv(moduledir) mpv_ipc_bridge.py]
+	foreach candidate $candidates {
+		if {[file exists $candidate]} { return $candidate }
+	}
+	return {}
 }
 
 # mpv binary present?
@@ -93,7 +110,12 @@ proc ::media::mpv::launch {path wid {startMs 0}} {
 	# Tcl core has no unix sockets: the bridge (python3) listens on a
 	# loopback TCP port and forwards to mpv's --input-ipc-server unix
 	# socket; it reports the port in <sockpath>.port
-	set bridge $Priv(bridge)
+	set bridge [bridgeScript]
+	if {$bridge eq ""} {
+		catch { ::application::media::MediaDebug "mpv bridge script not found" }
+		stop
+		return 0
+	}
 	set Priv(bridgepid) [exec python3 $bridge $sockpath 2>> $Priv(bridgelog) &]
 
 	# the bridge writes its port to <sockpath>.port once listening
