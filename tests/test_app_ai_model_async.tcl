@@ -58,6 +58,9 @@ tcltest::test modelasync-gpu-heartbeat {GPU probing leaves Tcl timers responsive
 
 tcltest::test modelasync-stale-discovery {a reply for a closed dialog cannot fill its replacement} -setup {
  set ::scidb::test::modelasync::Callbacks {}
+ # Ollama is asked only for a saved local choice
+ set ::scidb::test::modelasync::SavedSettings [array get ::application::ai::Settings]
+ array set ::application::ai::Settings {provider ollama chosen 1}
  ::scidb::test::modelasync::stub ::ai::provider::ollamaModelsAsync {callback args} {
   lappend ::scidb::test::modelasync::Callbacks $callback
  }
@@ -72,6 +75,7 @@ tcltest::test modelasync-stale-discovery {a reply for a closed dialog cannot fil
 } -cleanup {
  ::application::ai::models::Close
  ::scidb::test::modelasync::restore
+ array set ::application::ai::Settings $::scidb::test::modelasync::SavedSettings
 } -result {{} new:1b}
 
 tcltest::test modelasync-gpu-timeout {a stuck GPU command times out and releases its probe} -body {

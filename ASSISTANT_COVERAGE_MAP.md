@@ -131,7 +131,7 @@ The columns are:
 - **Assistant:** `annotate_game`, `explain_position`, `study_plan`, `factcheck_annotations`, `current_game`.
 - **Lands:** the game or the Report pane.
 - **Gap:**
-  - The assistant doesn't know who "I" am, although MM ▸ Setup ▸ Private Player Card exists.
+  - The assistant doesn't know who "I" am. MM ▸ Setup ▸ Private Player Card was meant for this, but it is unfinished: its menu entry is disabled (`menu.tcl`, `if {0}`) and nothing is saved.
   - It can't load a given game ("my last game").
   - It can't move the board to a position.
 
@@ -197,7 +197,7 @@ The columns are:
    text. Filtering the list asks for confirmation although it changes nothing
    stored. Nothing opens a game at a move.
 4. **It doesn't know the player or the selection.** It has no "me" (the Private
-   Player Card is unused) and no selected games, comments or move history (C9
+   Player Card is unfinished) and no selected games, comments or move history (C9
    planned, `LLM_REACH_PLAN.md` Task 6).
 5. **One way in.** Extras ▸ AI: Assistant, voice, `--ask`/`--chat`. There is no
    global shortcut and no "Ask about this…" in the right-click menus (C8 planned,
@@ -269,7 +269,7 @@ the player takes with one click:
 | Moment | Offers |
 |---|---|
 | A large database is opened | "Openings in this database" · "Find positions…" · "Duplicates?" |
-| Your own game is loaded (the Private Player Card names you) | "Review this game" · "Where did it go wrong?" · "Games like this" |
+| Your own game is loaded (the assistant knows your name, `remember_me`) | "Review this game" · "Where did it go wrong?" · "Games like this" |
 | A player is selected | "Prep report" · "How does he score with Black?" · "Brief" |
 | A position on the board | "Games with this position" · "Positions like this" · "Explain" |
 | A search returns 0 games | "Loosen: drop the year?" |
@@ -435,7 +435,7 @@ Each phase ships on its own and is useful alone.
 
 | Phase | What | Size | Depends on |
 |---|---|---|---|
-| **0 Prerequisites** | `sudo make install` (CQL 6.2 + media fixes). Chat loop for the `anthropic`/`openai` adapters (tool calling); a strong cloud model as the default, local opt-in, the first-use notice (P6). "Me" from the Private Player Card. | S–M | — |
+| **0 Prerequisites** | `sudo make install` (CQL 6.2 + media fixes). Chat loop for the `anthropic`/`openai` adapters (tool calling); a strong cloud model as the default, local opt-in, the first-use notice (P6). "Me": the `remember_me` tool and a saved name (the Private Player Card is unfinished). | S–M | — |
 | **1 Position finder** | §5: `find_positions` tool, router, reference card, parse/repair loop, probe diagrams, async full run with `first_ply` jump, script shown, Save as pattern. Rule change §5.6. | L | 0 |
 | **2 Results land in the GUI** | Read-only view changes without confirmation; open a game at a ply; set up a position from a FEN or moves; C10 report links; the "how it was done" line. | M | — |
 | **3 Reach the unreachable** | Tools for §3: Opening Report, Repertoire Report, player card, crosstable, dossier, material/rating fields, current-board position search, duplicates, working sets, export a selection, add to repertoire (confirmed). Fix the §3.3 defects. | M | 2 |

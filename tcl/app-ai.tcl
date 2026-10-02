@@ -19,9 +19,12 @@ package require Tk 8.5
 namespace eval application {
 namespace eval ai {
 
+# The language model defaults to a strong cloud model (Claude); a local
+# Ollama model is opt-in (ASSISTANT_COVERAGE_MAP.md P6). An empty model
+# means the provider's default (::ai::provider::model).
 variable Config
 array set Config {
-	provider   ollama
+	provider   anthropic
 	model      ""
 	depth      12
 	retries    1
@@ -45,8 +48,25 @@ if {[info exists ::env(SCIDB_AI_MODEL)] && $::env(SCIDB_AI_MODEL) ne ""} {
 # are overridden (for the session only) by, in this order:
 #   --ai-model=NAME / --ai-provider=NAME / --ai-classifier=NAME   command line
 #   SCIDB_AI_MODEL / SCIDB_AI_PROVIDER / SCIDB_AI_CLASSIFIER      environment
+#
+# chosen is 1 once the user picked a model in the dialog; until then the
+# default above applies, also over a provider saved before it changed.
+# cloudNotice is 1 once the first-use notice about the cloud was shown.
+# me is the user's name as written in their games (the assistant's
+# remember_me tool).
 variable Settings
-array set Settings [list provider $Config(provider) model $Config(model) classifier auto]
+array set Settings [list provider $Config(provider) model $Config(model) classifier auto \
+	chosen 0 cloudNotice 0 me ""]
+
+# API keys live in their own file (mode 0600), never in the options file.
+variable Keys {}
+
+namespace eval mc {
+set CloudNotice		"Scidb's AI features use %s in the cloud."
+set CloudNoticeDetail	"Your requests and the facts the AI reads (game headers, moves, statistics) are sent to %s. No database is uploaded, and voice stays on this machine. To keep everything on this machine, choose a local model in Extras > AI: Choose Model."
+set NoKey				"The AI features need an API key for %s."
+set NoKeyDetail		"Enter the key in Extras > AI: Choose Model, or choose a local model there. Open it now?"
+}
 
 } ;# namespace ai
 } ;# namespace application
@@ -70,6 +90,12 @@ proc ::application::ai::setting {key} {
 proc ::application::ai::applySettings {} {
 	variable Config
 	variable Settings
+
+	if {!$Settings(chosen)} {
+		set Settings(provider) anthropic
+		set Settings(model) ""
+	}
+	loadKeys
 
 	foreach key {provider model} {
 		set Config($key) [lindex [setting $key] 1]
@@ -97,7 +123,84 @@ proc ::application::ai::choose {provider model} {
 
 	set Settings(provider) $provider
 	set Settings(model) $model
+	set Settings(chosen) 1
 	applySettings
+}
+
+
+proc ::application::ai::KeyFile {} {
+	if {![info exists ::scidb::dir::user]} { return "" }
+	return [file join $::scidb::dir::user config ai-keys]
+}
+
+
+# Read the key file into the provider (a dict provider -> key).
+proc ::application::ai::loadKeys {} {
+	variable Keys
+
+	set file [KeyFile]
+	if {$file ne "" && [file readable $file]} {
+		catch {
+			set chan [open $file r]
+			set data [read $chan]
+			close $chan
+			if {[llength $data] % 2 == 0} { set Keys $data }
+		}
+	}
+	if {[llength [info commands ::ai::provider::configure]]} {
+		::ai::provider::configure -keys $Keys
+	}
+}
+
+
+# The saved key of <provider> ("" when none).
+proc ::application::ai::key {provider} {
+	variable Keys
+	return [expr {[dict exists $Keys $provider] ? [dict get $Keys $provider] : ""}]
+}
+
+
+# Save (or with "" remove) the key of <provider>; the file is private.
+proc ::application::ai::setKey {provider key} {
+	variable Keys
+
+	set key [string trim $key]
+	if {$key eq ""} { dict unset Keys $provider } else { dict set Keys $provider $key }
+	set file [KeyFile]
+	if {$file ne ""} {
+		file mkdir [file dirname $file]
+		set chan [open $file w 0600]
+		puts $chan $Keys
+		close $chan
+		catch { file attributes $file -permissions 0600 }
+	}
+	::ai::provider::configure -keys $Keys
+}
+
+
+# Before a user-started AI request: with a cloud provider, make sure there
+# is a key (else offer the model dialog) and say once what is sent. Returns
+# 1 when the request may go ahead.
+proc ::application::ai::cloudReady {parent} {
+	variable Config
+	variable Settings
+	variable mc
+
+	if {$Config(provider) ni {anthropic openai}} { return 1 }
+	set name [expr {$Config(provider) eq "anthropic" ? "Claude (Anthropic)" : "OpenAI"}]
+
+	if {[::ai::provider::apiKey $Config(provider)] eq ""} {
+		set reply [::dialog::question -parent $parent -default yes \
+			-message [format $mc::NoKey $name] -detail $mc::NoKeyDetail]
+		if {$reply eq "yes"} { ::application::ai::models::show $parent }
+		return 0
+	}
+	if {!$Settings(cloudNotice)} {
+		set Settings(cloudNotice) 1
+		::dialog::info -parent $parent -message [format $mc::CloudNotice $name] \
+			-detail [format $mc::CloudNoticeDetail $name]
+	}
+	return 1
 }
 
 
@@ -236,6 +339,7 @@ proc ::application::ai::begin {parent title placeholder} {
 	variable Busy
 
 	if {[busy?]} { return 0 }
+	if {![cloudReady $parent]} { return 0 }
 	set Busy 1
 	::application::ai::showReport $parent $title [toHtml $placeholder {} {} 0]
 	return 1

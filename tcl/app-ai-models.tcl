@@ -1,9 +1,13 @@
 # ======================================================================
 # ::application::ai::models -- choose the models of the AI features.
 #
-# Extras > "AI: Choose Model" has two sections. The first lists the models
-# of the local Ollama server (/api/tags), marks cloud models and those that
-# support tool calling (which the assistant needs). The second picks the
+# Extras > "AI: Choose Model" has two sections. The first chooses the
+# language model: Claude through the Anthropic API (the default), OpenAI, or
+# a local model. A cloud choice takes a model name and an API key, which is
+# saved in its own private file (::application::ai::setKey). The local
+# choice lists the models of the Ollama server (/api/tags), marks cloud
+# models and those that support tool calling (which the assistant needs);
+# Ollama is asked only once that choice is shown. The second picks the
 # System One classifier backend (::ai::systemone): kev, simple-jev and plumb
 # serve the /v1/systemone contract on this machine, jev (TypeSafe's Jev)
 # runs in the cloud through Vercel's AI Gateway, and "off" leaves everything
@@ -34,7 +38,14 @@ namespace eval models {
 namespace eval mc {
 
 set Title			"AI Models"
-set LanguageModel	"Language model (Ollama)"
+set LanguageModel	"Language model"
+set Claude			"Claude (Anthropic) - recommended"
+set OpenAI			"OpenAI"
+set LocalModel		"Local model (Ollama)"
+set ApiKey			"API key:"
+set KeyStored		"The key is stored only on this machine, in the Scidb user folder, readable only by you."
+set KeyFromEnv		"%s is set in the environment and is used instead of the key here."
+set NoModel			"Enter a model name."
 set Classifier		"System One classifier"
 set Model			"Model"
 set Where			"Runs"
@@ -67,6 +78,11 @@ set KeyNote			"needs %s in the environment"
 } ;# namespace mc
 
 array set Priv {
+	provider	anthropic
+	cloudModel {}
+	key		{}
+	keySaved	{}
+	filled	0
 	generation 0
 	probe {}
 	dialog	{}
@@ -94,6 +110,11 @@ proc ::application::ai::models::show {{parent .application}} {
 	# the saved choices (an override is shown separately)
 	set Priv(name) $::application::ai::Settings(model)
 	set Priv(classifier) [lindex [::application::ai::setting classifier] 1]
+	set Priv(provider) $::application::ai::Settings(provider)
+	if {!$::application::ai::Settings(chosen) || $Priv(provider) ni {anthropic openai ollama}} {
+		set Priv(provider) anthropic
+	}
+	set Priv(filled) 0
 	# the vercel preset is the same server as jev; the dialog has one row
 
 	toplevel $dlg -class Scidb
@@ -106,11 +127,38 @@ proc ::application::ai::models::show {{parent .application}} {
 	set top [ttk::frame $dlg.top]
 	pack $top -fill both -expand yes -padx $::theme::padx -pady $::theme::pady
 
-	### language model (Ollama) ############################################
+	### language model ####################################################
 	ttk::label $top.language -text $mc::LanguageModel
 	pack $top.language -anchor w
 
-	set list [ttk::frame $top.list]
+	set choice [ttk::frame $top.choice]
+	foreach {value text} [list anthropic $mc::Claude openai $mc::OpenAI ollama $mc::LocalModel] {
+		ttk::radiobutton $choice.$value -text $text -value $value \
+			-variable [namespace current]::Priv(provider) \
+			-command [namespace code ProviderChanged]
+		pack $choice.$value -anchor w
+	}
+	pack $choice -fill x -pady [list 0 $::theme::pady]
+
+	set cloud [ttk::frame $top.cloud]
+	ttk::label $cloud.mlabel -text $mc::Model
+	ttk::combobox $cloud.model -textvariable [namespace current]::Priv(cloudModel)
+	ttk::label $cloud.klabel -text $mc::ApiKey
+	ttk::entry $cloud.key -show * -textvariable [namespace current]::Priv(key)
+	ttk::label $cloud.note -wraplength 460 -justify left
+	grid $cloud.mlabel -row 0 -column 0 -sticky w
+	grid $cloud.model -row 0 -column 1 -sticky ew -padx [list $::theme::padx 0]
+	grid $cloud.klabel -row 1 -column 0 -sticky w -pady [list $::theme::pady 0]
+	grid $cloud.key -row 1 -column 1 -sticky ew -padx [list $::theme::padx 0] -pady [list $::theme::pady 0]
+	grid $cloud.note -row 2 -column 0 -columnspan 2 -sticky w -pady [list $::theme::pady 0]
+	grid columnconfigure $cloud 1 -weight 1
+	bind $cloud.key <Return> [namespace code Apply]
+	set Priv(cloud) $cloud
+
+	set local [ttk::frame $top.local]
+	set Priv(local) $local
+
+	set list [ttk::frame $local.list]
 	# the fit advice needs the rules module (tcl/ai-modelfit.tcl); without
 	# it the list is exactly the model/where/tools list it always was
 	set haveFit [expr {[llength [info commands ::ai::modelfit::memory]]
@@ -137,20 +185,24 @@ proc ::application::ai::models::show {{parent .application}} {
 
 	if {$haveFit} {
 		set Priv(fit) {}
-		ttk::label $top.memory -text "" -justify left
-		pack $top.memory -anchor w -pady [list $::theme::pady 0]
-		set Priv(memory) $top.memory
+		ttk::label $local.memory -text "" -justify left
+		pack $local.memory -anchor w -pady [list $::theme::pady 0]
+		set Priv(memory) $local.memory
 	}
 
-	set entry [ttk::frame $top.entry]
+	set entry [ttk::frame $local.entry]
 	ttk::label $entry.label -text $mc::Name
 	ttk::entry $entry.name -textvariable [namespace current]::Priv(name)
 	pack $entry.label -side left
 	pack $entry.name -side left -fill x -expand yes -padx [list $::theme::padx 0]
 	pack $entry -fill x -pady [list $::theme::pady 0]
 
-	ttk::label $top.status -wraplength 460 -justify left
-	pack $top.status -fill x -pady [list $::theme::pady 0]
+	ttk::label $local.status -wraplength 460 -justify left
+	pack $local.status -fill x -pady [list $::theme::pady 0]
+
+	# the cloud or the local section goes here (ProviderChanged)
+	ttk::frame $top.slot
+	pack $top.slot -fill both -expand yes
 
 	### system one classifier ###############################################
 	set haveClassifier [llength [info commands ::ai::systemone::backends]]
@@ -196,18 +248,55 @@ proc ::application::ai::models::show {{parent .application}} {
 	bind $entry.name <Return> [namespace code Apply]
 
 	set Priv(tree) $tree
-	set Priv(status) $top.status
+	set Priv(status) $local.status
 	set Priv(override) $top.override
 	ShowOverride
+	ProviderChanged
 
 	::util::place $dlg -parent $parent -position center
 	wm deiconify $dlg
-	$Priv(status) configure -text $mc::Fetching
-	update idletasks
-	Fill
 	if {$haveClassifier} { FillClassifiers }
-	focus $entry.name
+	if {$Priv(provider) eq "ollama"} { focus $entry.name } else { focus $cloud.model }
 	return $dlg
+}
+
+
+# Show the section of the chosen provider. The cloud fields are filled from
+# the saved choice when it is that provider; Ollama is asked once, the
+# first time the local section is shown.
+proc ::application::ai::models::ProviderChanged {} {
+	variable Priv
+	variable mc
+
+	set provider $Priv(provider)
+	pack forget $Priv(cloud) $Priv(local)
+
+	if {$provider eq "ollama"} {
+		pack $Priv(local) -in $Priv(dialog).top.slot -fill both -expand yes
+		if {!$Priv(filled)} {
+			set Priv(filled) 1
+			$Priv(status) configure -text $mc::Fetching
+			Fill
+		}
+		return
+	}
+
+	set saved [expr {$::application::ai::Settings(provider) eq $provider && $::application::ai::Settings(chosen)
+		? $::application::ai::Settings(model) : ""}]
+	set models [expr {$provider eq "anthropic" ? {claude-opus-5-5 claude-sonnet-5-5 claude-haiku-4-5} : {}}]
+	$Priv(cloud).model configure -values $models
+	if {$saved eq ""} { set saved [lindex [array get ::ai::provider::DefaultModel $provider] 1] }
+	set Priv(cloudModel) $saved
+	set Priv(key) [::application::ai::key $provider]
+	set Priv(keySaved) $Priv(key)
+
+	set env [expr {$provider eq "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"}]
+	set note $mc::KeyStored
+	if {[info exists ::env($env)] && [string length $::env($env)]} {
+		append note " " [format $mc::KeyFromEnv $env]
+	}
+	$Priv(cloud).note configure -text $note
+	pack $Priv(cloud) -in $Priv(dialog).top.slot -fill x
 }
 
 
@@ -482,11 +571,25 @@ proc ::application::ai::models::DeferredApply {} {
 
 proc ::application::ai::models::Apply {} {
 	variable Priv
+	variable mc
 
-	set name [string trim $Priv(name)]
-	if {![string length $name]} { return }
-	# the assistant's tool loop only speaks the Ollama chat API
-	::application::ai::choose ollama $name
+	if {$Priv(provider) eq "ollama"} {
+		set name [string trim $Priv(name)]
+		if {![string length $name]} { return }
+		::application::ai::choose ollama $name
+	} else {
+		set model [string trim $Priv(cloudModel)]
+		if {![string length $model]} {
+			$Priv(cloud).note configure -text $mc::NoModel
+			return
+		}
+		# the provider's default is saved as "" so a newer default applies later
+		if {[lindex [array get ::ai::provider::DefaultModel $Priv(provider)] 1] eq $model} { set model "" }
+		if {[string trim $Priv(key)] ne $Priv(keySaved)} {
+			::application::ai::setKey $Priv(provider) $Priv(key)
+		}
+		::application::ai::choose $Priv(provider) $model
+	}
 	if {[info exists Priv(ctree)] && [string length $Priv(classifier)]} {
 		::application::ai::chooseClassifier $Priv(classifier)
 	}

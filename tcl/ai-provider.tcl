@@ -1,9 +1,10 @@
 # ======================================================================
 # ::ai::provider -- provider-agnostic text completion for the language layer.
 #
-# Local-first: the default is a `stub` (deterministic, for tests), and `ollama`
-# drives a locally running model.  Remote adapters (`openai`, `anthropic`) exist
-# but are opt-in; nothing here sends a database anywhere without being asked.
+# Providers: `anthropic` (the application's default, ASSISTANT_COVERAGE_MAP.md
+# P6), `openai`, `ollama` (local, opt-in) and `stub` (deterministic, for
+# tests, and the module's own default). Every provider speaks the same
+# completion and chat calls; nothing here ever uploads a database.
 #
 #   ::ai::provider::configure -name ollama -model NAME
 #   ::ai::provider::complete <prompt> ?-system <text>?
@@ -48,6 +49,10 @@ array set Config {
 	think     false
 	chatResponses {}
 	chatIndex 0
+	keys      {}
+	effort    medium
+	anthropicTools ""
+	callIds   0
 }
 
 # The provider and model are choices, never literals in a code path. The
@@ -107,6 +112,8 @@ proc ::ai::provider::configure {args} {
 			-system    { set Config(system) $value }
 			-options   { set Config(options) $value }
 			-think     { set Config(think) $value }
+			-keys      { set Config(keys) $value }
+			-effort    { set Config(effort) $value }
 			default    { error "unknown option $key" }
 		}
 	}
@@ -213,8 +220,8 @@ proc ::ai::provider::body {token} {
 # Asynchronous request; <done> gets the token.  Synchronous failures (no
 # http/tls package, unresolvable host) are reported through <failed>, called
 # with the error message, so the caller's callback always runs.
-proc ::ai::provider::requestAsync {url body done failed} {
-	if {[catch {request $url $body -command $done} err]} {
+proc ::ai::provider::requestAsync {url body done failed {headers {}}} {
+	if {[catch {request $url $body -command $done -headers $headers} err]} {
 		after 0 [list {*}$failed $err]
 	}
 	return
@@ -384,6 +391,12 @@ proc ::ai::provider::completeAsync {prompt script args} {
 	switch -- $Config(name) {
 		stub   { after 0 [list {*}$script [list ok 1 text [stub $prompt]]] }
 		ollama { ollamaAsync $prompt $opts(-system) $script }
+		anthropic - openai {
+			set messages {}
+			if {$opts(-system) ne ""} { lappend messages [dict create role system content $opts(-system)] }
+			lappend messages [dict create role user content $prompt]
+			cloudChatAsync $messages "" $script text
+		}
 		default {
 			after 0 [list {*}$script [list ok 0 error "async not supported for provider '$Config(name)'"]]
 		}
@@ -457,43 +470,635 @@ proc ::ai::provider::ollama {prompt system} {
 }
 
 
-proc ::ai::provider::openai {prompt system} {
+# ----------------------------------------------------------------------
+# Cloud providers: Anthropic (Messages API) and OpenAI (Chat Completions).
+#
+# Both speak the same internal message format as the Ollama chat: dicts
+# with role (system|user|assistant|tool) and content; an assistant message
+# may carry tool_calls ({id function {name arguments}}), and a tool message
+# answers the calls in order (tool_call_id when known). The adapters
+# translate that format at the edge, so the assistant and the features
+# never see a provider's wire format.
+#
+# The key comes from the environment (ANTHROPIC_API_KEY, OPENAI_API_KEY)
+# or from configure -keys (the application's key file).
+# ----------------------------------------------------------------------
+
+namespace eval ai {
+namespace eval provider {
+
+variable DefaultModel
+array set DefaultModel {
+	anthropic claude-opus-5-5
+	openai    ""
+}
+
+variable KeyEnv
+array set KeyEnv {
+	anthropic ANTHROPIC_API_KEY
+	openai    OPENAI_API_KEY
+}
+
+# Claude models that take output_config.effort, and those that take the
+# server-side refusal fallback in its "default" form.
+variable EffortModels {^claude-(opus|fable|mythos)-|^claude-sonnet-(5|4-6)}
+variable FallbackModels {claude-fable-5-1 claude-opus-5-5 claude-opus-5 claude-sonnet-5-5}
+
+} ;# namespace provider
+} ;# namespace ai
+
+
+proc ::ai::provider::model {} {
 	variable Config
-	need json
+	variable DefaultModel
 
-	set apiKey [expr {[info exists ::env(OPENAI_API_KEY)] ? $::env(OPENAI_API_KEY) : ""}]
-	if {$apiKey eq ""} { error "ai::provider: set OPENAI_API_KEY for the openai provider" }
+	if {$Config(model) ne ""} { return $Config(model) }
+	if {[info exists DefaultModel($Config(name))]} { return $DefaultModel($Config(name)) }
+	return ""
+}
 
-	set msgs "\["
-	if {$system ne ""} {
-		append msgs "{\"role\":\"system\",\"content\":\"[jsonEscape $system]\"},"
+
+# The API key of a cloud provider: the environment first, then the key the
+# application configured. Empty when there is none.
+proc ::ai::provider::apiKey {provider} {
+	variable Config
+	variable KeyEnv
+
+	if {[info exists KeyEnv($provider)]} {
+		set var $KeyEnv($provider)
+		if {[info exists ::env($var)] && [string length $::env($var)]} { return $::env($var) }
 	}
-	append msgs "{\"role\":\"user\",\"content\":\"[jsonEscape $prompt]\"}\]"
+	if {[dict exists $Config(keys) $provider]} { return [dict get $Config(keys) $provider] }
+	return ""
+}
 
-	set body "{\"model\":\"[jsonEscape $Config(model)]\",\"messages\":$msgs}"
-	set data [post $body -headers [list Authorization "Bearer $apiKey"]]
-	set d [json::json2dict $data]
-	return [dict get [lindex [dict get $d choices] 0] message content]
+
+proc ::ai::provider::NeedKey {provider} {
+	variable KeyEnv
+
+	set key [apiKey $provider]
+	if {$key eq ""} {
+		error "no API key for $provider: enter one in Extras > AI: Choose Model (or set $KeyEnv($provider))"
+	}
+	return $key
+}
+
+
+# ----------------------------------------------------------------------
+# Raw JSON spans. json::json2dict loses the types of what it decodes (the
+# string "1990" and the number 1990 come back alike), so text that must go
+# back to a server unchanged -- an Anthropic reply's content, whose
+# thinking blocks are signed, and the JSON Schemas of the tools -- is kept
+# as the exact text it arrived as. These helpers cut a JSON text into the
+# raw texts of its members or elements; they never re-encode anything.
+# ----------------------------------------------------------------------
+
+proc ::ai::provider::JsonNext {text i} {
+	if {![regexp -start $i -indices {\S} $text pos]} { error "truncated JSON" }
+	return [lindex $pos 0]
+}
+
+
+# The index just after the JSON value that starts at or after <i>.
+proc ::ai::provider::JsonSkip {text i} {
+	set i [JsonNext $text $i]
+	set c [string index $text $i]
+
+	if {$c eq "\""} {
+		if {![regexp -start $i -indices {\A"(?:[^"\\]|\\.)*"} $text span]} {
+			error "bad JSON string at $i"
+		}
+		return [expr {[lindex $span 1] + 1}]
+	}
+	if {$c eq "\{" || $c eq "\["} {
+		set close [expr {$c eq "\{" ? "\}" : "\]"}]
+		incr i
+		while {1} {
+			set i [JsonNext $text $i]
+			set c [string index $text $i]
+			if {$c eq $close} { return [expr {$i + 1}] }
+			if {$c eq "," || $c eq ":"} { incr i; continue }
+			set i [JsonSkip $text $i]
+		}
+	}
+	if {![regexp -start $i -indices {[-+0-9.eEa-z]+} $text span] || [lindex $span 0] != $i} {
+		error "bad JSON value at $i"
+	}
+	return [expr {[lindex $span 1] + 1}]
+}
+
+
+# A JSON object as a list {key rawValue ...}: keys decoded, values raw.
+proc ::ai::provider::jsonMembers {text} {
+	set i [JsonNext $text 0]
+	if {[string index $text $i] ne "\{"} { error "not a JSON object" }
+	incr i
+	set out {}
+	while {1} {
+		set i [JsonNext $text $i]
+		set c [string index $text $i]
+		if {$c eq "\}"} { return $out }
+		if {$c eq ","} { incr i; continue }
+		set end [JsonSkip $text $i]
+		set key [lindex [json::json2dict "\[[string range $text $i [expr {$end - 1}]]\]"] 0]
+		set i [JsonNext $text $end]
+		if {[string index $text $i] ne ":"} { error "bad JSON object" }
+		set start [JsonNext $text [expr {$i + 1}]]
+		set i [JsonSkip $text $start]
+		lappend out $key [string range $text $start [expr {$i - 1}]]
+	}
+}
+
+
+# A JSON array as a list of the raw texts of its elements.
+proc ::ai::provider::jsonElements {text} {
+	set i [JsonNext $text 0]
+	if {[string index $text $i] ne "\["} { error "not a JSON array" }
+	incr i
+	set out {}
+	while {1} {
+		set i [JsonNext $text $i]
+		set c [string index $text $i]
+		if {$c eq "\]"} { return $out }
+		if {$c eq ","} { incr i; continue }
+		set end [JsonSkip $text $i]
+		lappend out [string range $text $i [expr {$end - 1}]]
+		set i $end
+	}
+}
+
+
+# The decoded value of a raw JSON string literal ("" for anything else).
+proc ::ai::provider::jsonString {raw} {
+	if {[string index [string trim $raw] 0] ne "\""} { return "" }
+	return [lindex [json::json2dict "\[$raw\]"] 0]
+}
+
+
+# The type of a raw content block.
+proc ::ai::provider::BlockType {raw} {
+	set m [jsonMembers $raw]
+	return [expr {[dict exists $m type] ? [jsonString [dict get $m type]] : ""}]
+}
+
+
+# Tool ids for calls that came without one (a history begun on Ollama).
+proc ::ai::provider::CallId {call} {
+	variable Config
+	if {[dict exists $call id] && [dict get $call id] ne ""} { return [dict get $call id] }
+	return "toolu_scidb_[incr Config(callIds)]"
+}
+
+
+# ----------------------------------------------------------------------
+# Anthropic
+# ----------------------------------------------------------------------
+
+# The tools of the Ollama/OpenAI format ([{"type":"function","function":
+# {name description parameters}}]) as Anthropic tools; names, descriptions
+# and schemas are carried over as raw text.
+proc ::ai::provider::anthropicTools {tools} {
+	set out {}
+	foreach def [jsonElements $tools] {
+		set fn [jsonMembers [dict get [jsonMembers $def] function]]
+		set desc [expr {[dict exists $fn description] ? [dict get $fn description] : "\"\""}]
+		set params [expr {[dict exists $fn parameters] ? [dict get $fn parameters] : "{\"type\":\"object\"}"}]
+		lappend out "{\"name\":[dict get $fn name],\"description\":$desc,\"input_schema\":$params}"
+	}
+	return "\[[join $out ,]\]"
+}
+
+
+# The blocks of a raw assistant content array that may go back to the
+# server. After a refusal fallback, the thinking and tool_use blocks before
+# the last fallback marker belong to the declined attempt and are left out.
+proc ::ai::provider::ReplayBlocks {raw} {
+	set blocks [jsonElements $raw]
+	set types [lmap b $blocks { BlockType $b }]
+	set last [lsearch -exact -all $types fallback]
+	if {![llength $last]} { return $blocks }
+	set last [lindex $last end]
+	set out {}
+	foreach b $blocks t $types k [lsearch -all $types *] {
+		if {$k < $last && $t in {thinking redacted_thinking tool_use}} { continue }
+		lappend out $b
+	}
+	return $out
+}
+
+
+# The internal messages as {system messagesJson}: system messages are
+# joined into the system prompt, tool replies become tool_result blocks in
+# the next user turn, and consecutive turns of one role are merged.
+proc ::ai::provider::anthropicMessages {messages} {
+	set system {}
+	set turns {}		;# {role blocks} ...
+	set pending {}		;# tool_use ids still owed a result
+	set results {}
+
+	foreach msg $messages {
+		set role [dict get $msg role]
+		set content [expr {[dict exists $msg content] ? [dict get $msg content] : ""}]
+
+		if {$role eq "system"} {
+			if {$content ne ""} { lappend system $content }
+			continue
+		}
+		if {$role eq "tool"} {
+			if {[dict exists $msg tool_call_id] && [set k [lsearch -exact $pending [dict get $msg tool_call_id]]] >= 0} {
+				set id [lindex $pending $k]
+				set pending [lreplace $pending $k $k]
+			} elseif {[llength $pending]} {
+				set pending [lassign $pending id]
+			} else {
+				continue	;# a reply to no call
+			}
+			if {$content eq ""} { set content "(no output)" }
+			lappend results [format {{"type":"tool_result","tool_use_id":"%s","content":"%s"}} \
+				[jsonEscape $id] [jsonEscape $content]]
+			continue
+		}
+
+		# A user or assistant turn ends the tool replies; a call that got
+		# none (an interrupted loop) is answered so the history stays valid.
+		foreach id $pending {
+			lappend results [format {{"type":"tool_result","tool_use_id":"%s","content":"(not run)","is_error":true}} \
+				[jsonEscape $id]]
+		}
+		set pending {}
+		if {[llength $results]} {
+			lappend turns user $results
+			set results {}
+		}
+
+		if {$role eq "assistant"} {
+			set calls [expr {[dict exists $msg tool_calls] ? [dict get $msg tool_calls] : {}}]
+			if {[dict exists $msg raw]} {
+				set blocks [ReplayBlocks [dict get $msg raw]]
+				foreach call $calls { lappend pending [dict get $call id] }
+			} else {
+				set blocks {}
+				if {[string trim $content] ne ""} {
+					lappend blocks [format {{"type":"text","text":"%s"}} [jsonEscape $content]]
+				}
+				foreach call $calls {
+					set id [CallId $call]
+					set fn [dict get $call function]
+					set args [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
+					lappend blocks [format {{"type":"tool_use","id":"%s","name":"%s","input":%s}} \
+						[jsonEscape $id] [jsonEscape [dict get $fn name]] [jsonObject $args]]
+					lappend pending $id
+				}
+			}
+			if {![llength $blocks]} { set blocks [list {{"type":"text","text":"(no answer)"}}] }
+			lappend turns assistant $blocks
+		} else {
+			if {[string trim $content] eq ""} { set content "(empty)" }
+			lappend turns user [list [format {{"type":"text","text":"%s"}} [jsonEscape $content]]]
+		}
+	}
+
+	foreach id $pending {
+		lappend results [format {{"type":"tool_result","tool_use_id":"%s","content":"(not run)","is_error":true}} \
+			[jsonEscape $id]]
+	}
+	if {[llength $results]} { lappend turns user $results }
+
+	# merge consecutive turns of one role
+	set out {}
+	set lastRole ""
+	set acc {}
+	foreach {role blocks} $turns {
+		if {$role eq $lastRole} {
+			lappend acc {*}$blocks
+			continue
+		}
+		if {$lastRole ne ""} { lappend out [format {{"role":"%s","content":[%s]}} $lastRole [join $acc ,]] }
+		set lastRole $role
+		set acc $blocks
+	}
+	if {$lastRole ne ""} { lappend out [format {{"role":"%s","content":[%s]}} $lastRole [join $acc ,]] }
+
+	return [list [join $system "\n\n"] "\[[join $out ,]\]"]
+}
+
+
+proc ::ai::provider::HasToolTurns {messages} {
+	foreach msg $messages {
+		if {[dict get $msg role] eq "tool"} { return 1 }
+		if {[dict exists $msg tool_calls] && [llength [dict get $msg tool_calls]]} { return 1 }
+	}
+	return 0
+}
+
+
+# The request body. <tools> is the Ollama/OpenAI tools JSON, or "" for a
+# turn that must answer in prose. A history with tool turns still needs the
+# definitions, so such a turn sends the last ones with tool_choice none.
+proc ::ai::provider::anthropicBody {messages tools {maxTokens 16000}} {
+	variable Config
+	variable EffortModels
+	variable FallbackModels
+
+	set model [model]
+	lassign [anthropicMessages $messages] system msgs
+
+	set body "\{\"model\":\"[jsonEscape $model]\",\"max_tokens\":$maxTokens"
+	if {$system ne ""} {
+		append body [format {,"system":[{"type":"text","text":"%s"}]} [jsonEscape $system]]
+	}
+	append body ",\"messages\":$msgs"
+
+	set choice auto
+	if {$tools ne ""} {
+		set Config(anthropicTools) [anthropicTools $tools]
+	} elseif {[HasToolTurns $messages] && $Config(anthropicTools) ne ""} {
+		set choice none
+	}
+	if {$tools ne "" || $choice eq "none"} {
+		append body ",\"tools\":$Config(anthropicTools),\"tool_choice\":{\"type\":\"$choice\"}"
+	}
+	if {$Config(effort) ne "" && [regexp $EffortModels $model]} {
+		append body ",\"output_config\":{\"effort\":\"[jsonEscape $Config(effort)]\"}"
+	}
+	if {$model in $FallbackModels} {
+		append body ",\"fallbacks\":\"default\""
+	}
+	# the prompt prefix (tools, system, earlier turns) is cached
+	append body ",\"cache_control\":{\"type\":\"ephemeral\"}\}"
+	return $body
+}
+
+
+proc ::ai::provider::anthropicHeaders {} {
+	variable FallbackModels
+
+	set headers [list x-api-key [NeedKey anthropic] anthropic-version 2023-06-01]
+	if {[model] in $FallbackModels} {
+		lappend headers anthropic-beta server-side-fallback-2026-07-01
+	}
+	return $headers
+}
+
+
+# The configured endpoint (configure sets each provider's default; a test
+# points it at a local server).
+proc ::ai::provider::anthropicUrl {} {
+	variable Config
+	if {$Config(endpoint) ne ""} { return $Config(endpoint) }
+	return https://api.anthropic.com/v1/messages
+}
+
+
+# A Messages API response as an internal assistant message. The raw
+# content stays with the message (key raw) so the next request sends it
+# back unchanged.
+proc ::ai::provider::anthropicReply {data} {
+	set top [jsonMembers $data]
+	set stop [expr {[dict exists $top stop_reason] ? [jsonString [dict get $top stop_reason]] : ""}]
+	set raw [expr {[dict exists $top content] ? [dict get $top content] : "\[\]"}]
+	set blocks [ReplayBlocks $raw]
+
+	set texts {}
+	set calls {}
+	foreach b $blocks {
+		switch -- [BlockType $b] {
+			text {
+				lappend texts [dict get [json::json2dict $b] text]
+			}
+			tool_use {
+				set d [json::json2dict $b]
+				set input [expr {[dict exists $d input] ? [dict get $d input] : {}}]
+				lappend calls [dict create id [dict get $d id] \
+					function [dict create name [dict get $d name] arguments $input]]
+			}
+		}
+	}
+
+	set msg [dict create role assistant content [join $texts "\n"] stop_reason $stop]
+	switch -- $stop {
+		refusal {
+			dict set msg content "The model declined this request."
+			return $msg
+		}
+		max_tokens {
+			# a call cut off mid-way must not run
+			dict append msg content "\n(The answer was cut off.)"
+			return $msg
+		}
+	}
+	dict set msg raw "\[[join $blocks ,]\]"
+	if {[llength $calls]} { dict set msg tool_calls $calls }
+	return $msg
+}
+
+
+# The message of an error response, for the user.
+proc ::ai::provider::CloudError {provider code data} {
+	set text ""
+	catch {
+		set d [json::json2dict $data]
+		if {[dict exists $d error message]} { set text [dict get $d error message] }
+	}
+	switch -- $code {
+		401 - 403 {
+			return "$provider rejected the API key ($text). Enter a valid key in Extras > AI: Choose Model."
+		}
+		429 { return "$provider is busy or the account's limit is reached ($text). Try again shortly." }
+	}
+	if {$text eq ""} { set text "no details" }
+	return "$provider: HTTP $code: $text"
+}
+
+
+proc ::ai::provider::anthropicChat {messages tools} {
+	need json
+	set token [request [anthropicUrl] [anthropicBody $messages $tools] -headers [anthropicHeaders]]
+	set code [::http::ncode $token]
+	set status [::http::status $token]
+	set data [body $token]
+	::http::cleanup $token
+	if {$status ne "ok" || $code != 200} { error [CloudError Anthropic $code $data] }
+	return [anthropicReply $data]
 }
 
 
 proc ::ai::provider::anthropic {prompt system} {
-	variable Config
-	need json
+	set messages {}
+	if {$system ne ""} { lappend messages [dict create role system content $system] }
+	lappend messages [dict create role user content $prompt]
+	return [dict get [anthropicChat $messages ""] content]
+}
 
-	set apiKey [expr {[info exists ::env(ANTHROPIC_API_KEY)] ? $::env(ANTHROPIC_API_KEY) : ""}]
-	if {$apiKey eq ""} { error "ai::provider: set ANTHROPIC_API_KEY for the anthropic provider" }
 
-	set body "{\"model\":\"[jsonEscape $Config(model)]\",\"max_tokens\":1024,\"messages\":\[{\"role\":\"user\",\"content\":\"[jsonEscape $prompt]\"}\]"
-	if {$system ne ""} {
-		append body ",\"system\":\"[jsonEscape $system]\""
+# ----------------------------------------------------------------------
+# OpenAI (Chat Completions). Its tools format is the one the assistant
+# builds, so tools pass through as they are.
+# ----------------------------------------------------------------------
+
+proc ::ai::provider::openaiMessages {messages} {
+	set out {}
+	set pending {}
+
+	foreach msg $messages {
+		set role [dict get $msg role]
+		set content [expr {[dict exists $msg content] ? [dict get $msg content] : ""}]
+
+		switch -- $role {
+			tool {
+				if {[dict exists $msg tool_call_id]} {
+					set id [dict get $msg tool_call_id]
+					set k [lsearch -exact $pending $id]
+					if {$k >= 0} { set pending [lreplace $pending $k $k] }
+				} elseif {[llength $pending]} {
+					set pending [lassign $pending id]
+				} else {
+					continue
+				}
+				lappend out [format {{"role":"tool","tool_call_id":"%s","content":"%s"}} \
+					[jsonEscape $id] [jsonEscape $content]]
+			}
+			assistant {
+				set calls [expr {[dict exists $msg tool_calls] ? [dict get $msg tool_calls] : {}}]
+				set enc {}
+				foreach call $calls {
+					set id [CallId $call]
+					set fn [dict get $call function]
+					set args [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
+					lappend enc [format {{"id":"%s","type":"function","function":{"name":"%s","arguments":"%s"}}} \
+						[jsonEscape $id] [jsonEscape [dict get $fn name]] [jsonEscape [jsonObject $args]]]
+					lappend pending $id
+				}
+				if {[llength $enc]} {
+					lappend out [format {{"role":"assistant","content":"%s","tool_calls":[%s]}} \
+						[jsonEscape $content] [join $enc ,]]
+				} else {
+					lappend out [format {{"role":"assistant","content":"%s"}} [jsonEscape $content]]
+				}
+			}
+			default {
+				lappend out [format {{"role":"%s","content":"%s"}} [jsonEscape $role] [jsonEscape $content]]
+			}
+		}
 	}
-	append body "}"
+	return "\[[join $out ,]\]"
+}
 
-	set headers [list x-api-key $apiKey anthropic-version "2023-06-01"]
-	set data [post $body -headers $headers]
+
+proc ::ai::provider::openaiReply {data} {
 	set d [json::json2dict $data]
-	return [dict get [lindex [dict get $d content] 0] text]
+	set m [dict get [lindex [dict get $d choices] 0] message]
+	set content [expr {[dict exists $m content] && [dict get $m content] ne "null" ? [dict get $m content] : ""}]
+	set msg [dict create role assistant content $content]
+	if {[dict exists $m tool_calls] && [dict get $m tool_calls] ne "null"} {
+		set calls {}
+		foreach c [dict get $m tool_calls] {
+			set fn [dict get $c function]
+			set args {}
+			catch { set args [json::json2dict [dict get $fn arguments]] }
+			lappend calls [dict create id [dict get $c id] \
+				function [dict create name [dict get $fn name] arguments $args]]
+		}
+		if {[llength $calls]} { dict set msg tool_calls $calls }
+	}
+	return $msg
+}
+
+
+proc ::ai::provider::openaiBody {messages tools} {
+	set model [model]
+	if {$model eq ""} { error "no OpenAI model chosen: pick one in Extras > AI: Choose Model" }
+	set body "\{\"model\":\"[jsonEscape $model]\",\"messages\":[openaiMessages $messages]"
+	if {$tools ne ""} { append body ",\"tools\":$tools" }
+	return "$body\}"
+}
+
+
+proc ::ai::provider::openaiUrl {} {
+	variable Config
+	if {$Config(endpoint) ne ""} { return $Config(endpoint) }
+	return https://api.openai.com/v1/chat/completions
+}
+
+
+proc ::ai::provider::openaiChat {messages tools} {
+	need json
+	set headers [list Authorization "Bearer [NeedKey openai]"]
+	set token [request [openaiUrl] [openaiBody $messages $tools] -headers $headers]
+	set code [::http::ncode $token]
+	set status [::http::status $token]
+	set data [body $token]
+	::http::cleanup $token
+	if {$status ne "ok" || $code != 200} { error [CloudError OpenAI $code $data] }
+	return [openaiReply $data]
+}
+
+
+proc ::ai::provider::openai {prompt system} {
+	set messages {}
+	if {$system ne ""} { lappend messages [dict create role system content $system] }
+	lappend messages [dict create role user content $prompt]
+	return [dict get [openaiChat $messages ""] content]
+}
+
+
+# ----------------------------------------------------------------------
+# Asynchronous cloud requests. <script> gets {ok 1 message M} (chat) or
+# {ok 1 text T} (completion), or {ok 0 error E}.
+# ----------------------------------------------------------------------
+
+proc ::ai::provider::cloudChatAsync {messages tools script {mode chat}} {
+	variable Config
+
+	set provider $Config(name)
+	if {[catch {
+		need json
+		if {$provider eq "anthropic"} {
+			set url [anthropicUrl]
+			set body [anthropicBody $messages $tools]
+			set headers [anthropicHeaders]
+		} else {
+			set url [openaiUrl]
+			set body [openaiBody $messages $tools]
+			set headers [list Authorization "Bearer [NeedKey openai]"]
+		}
+	} err]} {
+		after 0 [list [namespace current]::failAsync $script $err]
+		return
+	}
+
+	requestAsync $url $body \
+		[namespace code [list ::ai::provider::OnCloud $provider $mode $script]] \
+		[namespace code [list ::ai::provider::failAsync $script]] \
+		$headers
+	return
+}
+
+
+proc ::ai::provider::OnCloud {provider mode script token} {
+	set status [::http::status $token]
+	set code [::http::ncode $token]
+	set data [body $token]
+	::http::cleanup $token
+
+	set name [expr {$provider eq "anthropic" ? "Anthropic" : "OpenAI"}]
+	if {$status ne "ok" || $code != 200} {
+		set err [expr {$status ne "ok" ? "$name: $status" : [CloudError $name $code $data]}]
+		uplevel #0 [list {*}$script [list ok 0 error $err]]
+		return
+	}
+	if {[catch {
+		set msg [expr {$provider eq "anthropic" ? [anthropicReply $data] : [openaiReply $data]}]
+	} err]} {
+		uplevel #0 [list {*}$script [list ok 0 error "$name: unreadable reply ($err)"]]
+		return
+	}
+	if {$mode eq "text"} {
+		uplevel #0 [list {*}$script [list ok 1 text [dict get $msg content]]]
+	} else {
+		uplevel #0 [list {*}$script [list ok 1 message $msg]]
+	}
+	return
 }
 
 
@@ -588,6 +1193,8 @@ proc ::ai::provider::chat {messages tools args} {
 			if {![dict exists $d message]} { error "ai::provider: no message in chat response" }
 			return [dict get $d message]
 		}
+		anthropic { return [anthropicChat $messages $tools] }
+		openai    { return [openaiChat $messages $tools] }
 		default { error "ai::provider: chat not supported for provider '$Config(name)'" }
 	}
 }
@@ -627,6 +1234,7 @@ proc ::ai::provider::chatAsync {messages tools script} {
 				[namespace code [list ::ai::provider::onOllamaChat $script]] \
 				[namespace code [list ::ai::provider::failAsync $script]]
 		}
+		anthropic - openai { cloudChatAsync $messages $tools $script }
 		default {
 			after 0 [list {*}$script [list ok 0 error "chat not supported for provider '$Config(name)'"]]
 		}

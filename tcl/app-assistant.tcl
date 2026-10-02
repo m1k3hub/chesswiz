@@ -147,6 +147,12 @@ variable Actions {
 		{{"type":"object","properties":{"number":{"type":"integer","description":"game number in the active database, as shown in the game list (1 = first game)"},"limit":{"type":"integer","description":"at most this many similar games, default 10"}},"required":["number"]}}
 		::application::assistant::DoSimilarGames
 	}
+	remember_me {
+		0 0 "remember that the user is %s"
+		"Remember who the user is: their name as it is written in their games, e.g. 'Thomas, Michael'. Call it when the user tells you their name; from then on I, me and my games mean that player. An empty name forgets it."
+		{{"type":"object","properties":{"name":{"type":"string","description":"the user's name as written in their games"}},"required":["name"]}}
+		::application::assistant::DoRememberMe
+	}
 	player_stats {
 		0 0 "report the statistics of %s"
 		"Statistics of a player in the active database: games, wins/draws/losses with White and with Black, score, first and last game, Elo range, most played openings. The name may be partial ('carlsen'); if several players match, the candidates are listed and you call again with the exact name."
@@ -538,6 +544,9 @@ proc ::application::assistant::ask {request args} {
 	if {![llength $Priv(messages)]} {
 		variable DebugSystem
 		set system $System
+		# who 'me' is, per request, from the private player card
+		set me [MePrompt]
+		if {[string length $me]} { append system \n $me }
 		if {$Priv(debug)} { append system \n $DebugSystem }
 		lappend Priv(messages) [dict create role system content $system]
 	}
@@ -586,6 +595,29 @@ proc ::application::assistant::clear {} {
 		$Priv(text) configure -state disabled
 		Greet
 	}
+}
+
+
+# The system prompt's sentence about who the user is. The name is the one
+# the user gave the assistant (remember_me, saved with the AI settings), or
+# the private player card's if it is ever filled in (its dialog is not
+# finished, see tcl/player-card.tcl). Read per request; a missing setting
+# or card never breaks a request.
+proc ::application::assistant::MePrompt {} {
+	set name ""
+	catch { set name [string trim $::application::ai::Settings(me)] }
+	if {$name eq ""} { catch { set name [string trim $::playercard::Var(Name)] } }
+	if {$name eq ""} {
+		return "The user's name is not known. If the user says I, me or my games, ask for their name as written in their games and call remember_me with it."
+	}
+	return "The user is $name. When the user says I, me or my games, use the player name $name in tool arguments."
+}
+
+
+proc ::application::assistant::DoRememberMe {name} {
+	set ::application::ai::Settings(me) $name
+	if {$name eq ""} { return "Forgotten: the user's name is no longer known." }
+	return "Remembered: the user is $name. I, me and my games now mean $name."
 }
 
 
@@ -1019,6 +1051,9 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			if {![file isfile $path]} { error "no such file: $path" }
 			if {![file executable $path]} { error "not executable: $path" }
 			return [dict create path [file normalize $path]]
+		}
+		remember_me {
+			return [dict create name [string trim [Arg $cargs name]]]
 		}
 		player_stats {
 			set name [string trim [Arg $cargs name]]
@@ -2715,6 +2750,7 @@ proc ::application::assistant::SendEntry {} {
 	if {![winfo exists $Priv(entry)]} { return }
 	set request [$Priv(entry) get]
 	if {![string length [string trim $request]] || $Priv(busy)} { return }
+	if {![::application::ai::cloudReady $Priv(window)]} { return }
 	$Priv(entry) delete 0 end
 	ask $request
 }
