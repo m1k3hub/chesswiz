@@ -189,6 +189,12 @@ variable Actions {
 		{{"type":"object","properties":{"request":{"type":"string","description":"what the user asked for, in their words"},"cql":{"type":"string","description":"the CQL 6.2 script for the positional part, starting with cql()"},"mode":{"type":"string","enum":["sample","all"],"description":"sample (default): up to 3 positions to check with the user; all: every match, shown in the game list"},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"}},"required":["request","cql"]}}
 		::application::assistant::DoFindPositions
 	}
+	find_similar {
+		0 0 "find positions like the one on the board"
+		"Find positions like the one on the board in the active database's games; the application writes the CQL 6.2 search, so no cql_help is needed. 'aspects' says what must be alike: pawns (the pawn structure, both sides), material (the same pieces), pieces (kings and pieces on the same squares); default pawns alone. The game on the board is left out of the results. 'tolerance' lets up to 0, 1 or 2 pawns per side stand elsewhere (default 0). 'colours' both also finds the structure with the colours reversed. Same two steps as find_positions: mode sample first (the user sees diagrams and the search in the Report pane; ask whether that is what they meant), then mode all. Header fields narrow the games first."
+		{{"type":"object","properties":{"aspects":{"type":"array","items":{"type":"string","enum":["pawns","material","pieces"]}},"tolerance":{"type":"integer","description":"0, 1 or 2 pawns per side may stand elsewhere"},"colours":{"type":"string","enum":["same","both"]},"mode":{"type":"string","enum":["sample","all"]},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"}}}}
+		::application::assistant::DoFindSimilar
+	}
 	cql_help {
 		0 0 "read the CQL reference"
 		"The CQL 6.2 reference card and worked examples (requests a player makes and the scripts that find them). Read it before writing a find_positions script."
@@ -1099,19 +1105,27 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			set mode [expr {[dict exists $cargs mode] ? [string tolower [string trim [dict get $cargs mode]]] : "sample"}]
 			if {$mode eq ""} { set mode sample }
 			if {$mode ni {sample all}} { error "mode must be sample or all" }
-			# the header fields, checked as search_games checks them
-			set header [dict create pattern ""]
-			foreach key {player color result opponent eco from to event min_elo} {
-				if {[dict exists $cargs $key] && [string trim [dict get $cargs $key]] ni {"" any}} {
-					dict set header $key [dict get $cargs $key]
-				}
+			return [dict create request $request cql $cql mode $mode criteria [HeaderCriteria $cargs]]
+		}
+		find_similar {
+			set aspects [expr {[dict exists $cargs aspects] ? [dict get $cargs aspects] : {}}]
+			if {![llength $aspects]} { set aspects {pawns} }
+			foreach a $aspects {
+				if {$a ni {pawns material pieces}} { error "aspects are pawns, material and pieces" }
 			}
-			if {[dict size $header] > 1} {
-				set criteria [dict get [CheckArgs search_games $header] criteria]
-			} else {
-				set criteria {}
+			set tolerance [expr {[dict exists $cargs tolerance] ? [dict get $cargs tolerance] : 0}]
+			if {$tolerance eq ""} { set tolerance 0 }
+			if {![string is integer -strict $tolerance] || $tolerance < 0 || $tolerance > 2} {
+				error "tolerance must be 0, 1 or 2"
 			}
-			return [dict create request $request cql $cql mode $mode criteria $criteria]
+			set colours [expr {[dict exists $cargs colours] ? [string tolower [dict get $cargs colours]] : "same"}]
+			if {$colours eq ""} { set colours same }
+			if {$colours ni {same both}} { error "colours must be same or both" }
+			set mode [expr {[dict exists $cargs mode] ? [string tolower [string trim [dict get $cargs mode]]] : "sample"}]
+			if {$mode eq ""} { set mode sample }
+			if {$mode ni {sample all}} { error "mode must be sample or all" }
+			return [dict create aspects [lsort -unique $aspects] tolerance $tolerance colours $colours \
+				mode $mode criteria [HeaderCriteria $cargs]]
 		}
 		save_pattern {
 			set name [string trim [Arg $cargs name]]
@@ -1969,6 +1983,19 @@ proc ::application::assistant::GameLine {index base variant} {
 
 # --- position finder (ASSISTANT_COVERAGE_MAP.md §5) ----------------------
 
+# The header fields of a position search, checked as search_games checks
+# them; {} when none is given.
+proc ::application::assistant::HeaderCriteria {cargs} {
+	set header [dict create pattern ""]
+	foreach key {player color result opponent eco from to event min_elo} {
+		if {[dict exists $cargs $key] && [string trim [dict get $cargs $key]] ni {"" any}} {
+			dict set header $key [dict get $cargs $key]
+		}
+	}
+	if {[dict size $header] == 1} { return {} }
+	return [dict get [CheckArgs search_games $header] criteria]
+}
+
 namespace eval ::application::assistant {
 	# {base variant {game ply ...}} of the last find_positions call
 	variable LastPositions {}
@@ -1983,15 +2010,43 @@ namespace eval ::application::assistant {
 
 
 proc ::application::assistant::DoFindPositions {request cql mode criteria} {
-	variable PositionSamples
-	variable ProbeBudget
-	variable SearchBudget
 	variable Priv
 
 	# models know little CQL; the reference makes the scripts right
 	if {![info exists Priv(cqlHelp)] || !$Priv(cqlHelp)} {
 		return "error: call cql_help first and write the script from its reference and examples; then call find_positions again"
 	}
+	return [FindPositions $request $cql $mode $criteria]
+}
+
+
+# Positions like the one on the board: the application writes the script
+# (tcl/ai-similar-positions.tcl), so no reference is needed.
+proc ::application::assistant::DoFindSimilar {aspects tolerance colours mode criteria} {
+	if {![llength [info commands ::ai::similar::script]]} {
+		return "error: finding similar positions is not available in this build"
+	}
+	set fen [::scidb::pos::fen]
+	set opts [list -aspects $aspects -tolerance $tolerance -colours $colours]
+	if {[catch { ::ai::similar::script $fen {*}$opts } cql]} { return "error: $cql" }
+	set what [::ai::similar::describe $fen {*}$opts]
+	# the game on the board matches itself; leave it out
+	set exclude -1
+	catch {
+		lassign [::scidb::game::link?] linkBase linkVariant linkIndex
+		if {$linkBase eq [lindex [ActiveBase] 0] && $linkIndex >= 0} { set exclude $linkIndex }
+	}
+	set loosen "nothing else matches: offer a looser search, e.g. tolerance 1 or 2, or fewer aspects (pawns alone)"
+	return [FindPositions "positions like the one on the board: $what" $cql $mode $criteria $exclude $loosen]
+}
+
+
+# <exclude> is a game index left out of the results (-1: none); <loosen>
+# is what to tell the model when nothing matches.
+proc ::application::assistant::FindPositions {request cql mode criteria {exclude -1} {loosen ""}} {
+	variable PositionSamples
+	variable ProbeBudget
+	variable SearchBudget
 
 	if {![llength [info commands ::scidb::cql6::search]] || [::scidb::cql6::version] eq "cql6 stub 6.2"} {
 		return "error: the CQL 6.2 engine is not available in this build"
@@ -2019,13 +2074,13 @@ proc ::application::assistant::DoFindPositions {request cql mode criteria} {
 	set token [Later]
 	set sample [expr {$mode eq "sample"}]
 	::ai::positions::search $base $variant $view $cql \
-		[namespace code [list PositionsDone $token $base $variant $view $mode $request $cql $summary $narrowed]] \
-		-max [expr {$sample ? $PositionSamples : 0}] -budget [expr {$sample ? $ProbeBudget : $SearchBudget}]
+		[namespace code [list PositionsDone $token $base $variant $view $mode $request $cql $summary $narrowed $exclude $loosen]] \
+		-max [expr {$sample ? $PositionSamples + ($exclude >= 0) : 0}] -budget [expr {$sample ? $ProbeBudget : $SearchBudget}]
 	return $token
 }
 
 
-proc ::application::assistant::PositionsDone {token base variant view mode request cql summary narrowed result} {
+proc ::application::assistant::PositionsDone {token base variant view mode request cql summary narrowed exclude loosen result} {
 	variable LastPositions
 	variable PositionsShown
 
@@ -2035,7 +2090,12 @@ proc ::application::assistant::PositionsDone {token base variant view mode reque
 		return
 	}
 	variable LastFind
-	set pairs [dict get $result matches]
+	set pairs {}
+	foreach {game ply} [dict get $result matches] {
+		if {$game != $exclude} { lappend pairs $game $ply }
+	}
+	variable PositionSamples
+	if {$mode eq "sample"} { set pairs [lrange $pairs 0 [expr {2 * $PositionSamples - 1}]] }
 	set complete [dict get $result complete]
 	set LastPositions [list $base $variant $pairs]
 	set found [expr {[llength $pairs] / 2}]
@@ -2052,12 +2112,13 @@ proc ::application::assistant::PositionsDone {token base variant view mode reque
 			return
 		}
 		set lines [list "searched $where for: $request" \
-			"$count games with a matching position[expr {$complete ? "" : " (the search stopped early; there may be more)"}]" \
+			"$count games with a matching position[expr {$complete ? "" : " (the search stopped early; there may be more)"}][expr {$exclude >= 0 ? " (the game on the board left out)" : ""}]" \
 			"the game list shows them; open_position N puts the Nth on the board at the position"]
 	} else {
 		set lines [list "searched $where for: $request"]
 		if {!$found} {
 			lappend lines [expr {$complete ? "no position matches" : "no match within the time limit; the script may be too strict or match nothing"}]
+			if {$loosen ne ""} { lappend lines $loosen }
 		} else {
 			lappend lines "sample positions (the user sees them as diagrams in the Report pane):"
 		}

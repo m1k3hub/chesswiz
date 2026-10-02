@@ -191,10 +191,43 @@ tcltest::test findpos-open-without-search {open_position needs a search first} -
 	::application::assistant::runTool open_position {index 1}
 } -match glob -result "error: there is no find_positions result*"
 
+tcltest::test findpos-similar-checks {find_similar arguments default to pawns and material, exact, same colours} -body {
+	set d [::application::assistant::CheckArgs find_similar {}]
+	list [dict get $d aspects] [dict get $d tolerance] [dict get $d colours] [dict get $d mode] \
+		[catch { ::application::assistant::CheckArgs find_similar {aspects {pawns kings}} } e1] $e1 \
+		[catch { ::application::assistant::CheckArgs find_similar {tolerance 3} } e2] $e2
+} -result {pawns 0 same sample 1 {aspects are pawns, material and pieces} 1 {tolerance must be 0, 1 or 2}}
+
+tcltest::test findpos-similar-runs {find_similar builds the script from the board and runs it like find_positions} -constraints cql6 -setup {
+	::scidb::test::findpos::openFixture
+	set had [llength [info commands ::ai::similar::script]]
+	if {$had} {
+		rename ::ai::similar::script ::scidb::test::findpos::realScript
+		rename ::ai::similar::describe ::scidb::test::findpos::realDescribe
+	}
+	namespace eval ::ai::similar {}
+	proc ::ai::similar::script {fen args} { set ::scidb::test::findpos::Board $fen; return "cql() mate" }
+	proc ::ai::similar::describe {fen args} { return "the same mating pattern" }
+	# no cql_help needed: the application wrote the script
+	set ::application::assistant::Priv(cqlHelp) 0
+} -body {
+	set reply [::scidb::test::findpos::run find_similar {aspects {pawns}}]
+	list [string match "*positions like the one on the board: the same mating pattern*" $reply] \
+		[string match "*Anderssen*" $reply] [expr {$::scidb::test::findpos::Board eq [::scidb::pos::fen]}]
+} -cleanup {
+	rename ::ai::similar::script {}
+	rename ::ai::similar::describe {}
+	if {$had} {
+		rename ::scidb::test::findpos::realScript ::ai::similar::script
+		rename ::scidb::test::findpos::realDescribe ::ai::similar::describe
+	}
+	::scidb::test::findpos::closeFixture
+} -result {1 1 1}
+
 tcltest::test findpos-offered {the tools are offered to the model} -body {
 	set json [::application::assistant::toolsJson]
 	list [string match {*"name":"find_positions"*} $json] [string match {*"name":"cql_help"*} $json] \
-		[string match {*"name":"open_position"*} $json]
-} -result {1 1 1}
+		[string match {*"name":"open_position"*} $json] [string match {*"name":"find_similar"*} $json]
+} -result {1 1 1 1}
 
 tcltest::cleanupTests
