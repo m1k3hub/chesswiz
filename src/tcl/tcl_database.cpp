@@ -5128,8 +5128,19 @@ buildMediaLinkCache(mstl::string const& database, variant::Type vtype, Database&
 		blockRound[b]	= blocks[b].round;
 	}
 
+	// Blocks by "white|black" key (keys are alphanumeric, so '|' cannot
+	// collide), each list in block order so the first match still wins.
+	// A linear scan of all blocks per game took minutes on Mega Database.
+	typedef mstl::map<mstl::string, mstl::vector<unsigned> > BlockIndex;
+	BlockIndex byPair;
+	for (unsigned b = 0; b < blocks.size(); ++b)
+	{
+		if (!blockWhite[b].empty() && !blockBlack[b].empty())
+			byPair[blockWhite[b] + '|' + blockBlack[b]].push_back(b);
+	}
+
 	// 3. Match games in record order (keeps rows sorted by gameIndex).
-	mstl::string whiteKey, blackKey, eventKey;
+	mstl::string whiteKey, blackKey, eventKey, pairKey;
 	for (unsigned i = 0; i < cache.countGames; ++i)
 	{
 		GameInfo const& info = db.gameInfo(i);
@@ -5142,14 +5153,20 @@ buildMediaLinkCache(mstl::string const& database, variant::Type vtype, Database&
 		mediaLinkLastName(info.playerName(color::Black), blackKey);
 		if (blackKey.empty())
 			continue;
+		pairKey = whiteKey;
+		pairKey += '|';
+		pairKey += blackKey;
+		BlockIndex::const_iterator candidates = byPair.find(pairKey);
+		if (candidates == byPair.end())
+			continue;
 		mediaLinkKey(info.event(), eventKey);
 		unsigned year = info.date().year();
 		unsigned round = info.round();
 
-		for (unsigned b = 0; b < blocks.size(); ++b)
+		mstl::vector<unsigned> const& list = candidates->second;
+		for (unsigned c = 0; c < list.size(); ++c)
 		{
-			if (blockWhite[b] != whiteKey || blockBlack[b] != blackKey)
-				continue;
+			unsigned b = list[c];
 			if (blockYear[b] != 0 && blockYear[b] != year)
 				continue;
 			if (blockRound[b] != 0 && blockRound[b] != round)
@@ -5934,8 +5951,9 @@ cmdMediaGallery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				// The CBM bag index is not a game index. Use the existing
 				// guiding-text tag_game cache, which resolves each media file
 				// to its owning CBH game.
-				buildMediaLinkCache(mstl::string(database), variant,
-					const_cast<Database&>(db), mediaLinkCache);
+				if (!mediaLinkCache.validFor(database, variant, db.countGames()))
+					buildMediaLinkCache(mstl::string(database), variant,
+						const_cast<Database&>(db), mediaLinkCache);
 				for (unsigned i = 0; i < mediaLinkCache.rows.size(); ++i)
 				{
 					GuidingTextMediaRow const& entry = mediaLinkCache.rows[i];
