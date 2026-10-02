@@ -191,6 +191,7 @@ SOURCES = \
 	ai-tier.tcl \
 	ai-modelfit.tcl \
 	ai-transcript.tcl \
+	ai-diagram.tcl \
 	app-ai.tcl \
 	app-ai-models.tcl \
 	app-assistant.tcl \
