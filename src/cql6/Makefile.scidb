@@ -1,0 +1,208 @@
+CXX ?= g++
+AR ?= ar
+LD ?= ld
+OBJCOPY ?= objcopy
+STRIP ?= strip
+
+# scidb: -include scidb_sink.h redirects every stdio/cout call in the library to the
+# per-search message sink (Task 3 §E1): the embedded library never writes to fd 1/2.
+# -DCQL6_LIBRARY_BUILD limits the redirection to the library's own translation units.
+BASE_FLAGS = -std=c++17 -pthread -w -DASSERTIONS -DCQL6_EMBEDDED -DCQL6_LIBRARY_BUILD -fvisibility=hidden -fno-gnu-unique -fPIC -I. -I./orig -include scidb_sink.h
+CXXFLAGS ?= $(BASE_FLAGS) -O2
+
+# Test drivers are compiled WITHOUT the sink macros (they are host code and may print),
+# but WITH -DCQL6_EMBEDDED like the library.
+TEST_BASE_FLAGS = -std=c++17 -pthread -w -DASSERTIONS -DCQL6_EMBEDDED -I. -I./orig
+TEST_CXXFLAGS ?= $(TEST_BASE_FLAGS) -O2
+
+BUILD_DIR ?= build
+OBJ_DIR = $(BUILD_DIR)/obj
+
+# All root .cpp files except test files, plus orig/ sources
+SRC_ROOT = $(wildcard *.cpp)
+SRC_ORIG = $(wildcard orig/*.cpp)
+
+OBJS_ROOT = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(SRC_ROOT))
+OBJS_ORIG = $(patsubst orig/%.cpp,$(OBJ_DIR)/orig_%.o,$(SRC_ORIG))
+ALL_OBJS = $(OBJS_ROOT) $(OBJS_ORIG)
+
+TARGET_LIB = $(BUILD_DIR)/libcql6.a
+COMBINED_OBJ = $(BUILD_DIR)/cql6_all.o
+HIDDEN_OBJ = $(BUILD_DIR)/cql6_hidden.o
+
+# --- sanitizer builds (Task 3 §B) -----------------------------------------
+# make -f Makefile.scidb asan|tsan  rebuild everything instrumented in
+# build/asan|build/tsan and run the whole acceptance suite + stress under the
+# sanitizer with halt_on_error=1. Instrumented builds skip the objcopy symbol
+# isolation step (tests link the plain archive; T1 still checks the real
+# build/libcql6.a) and therefore link test drivers without DRIVER_OBJS.
+SAN_COMMON = -O1 -g -fno-omit-frame-pointer
+ASAN_FLAGS = $(SAN_COMMON) -fsanitize=address,undefined -fno-sanitize-recover=all
+TSAN_FLAGS = $(SAN_COMMON) -fsanitize=thread
+ASAN_ENV = ASAN_OPTIONS=halt_on_error=1:abort_on_error=0:detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1
+TSAN_ENV = TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1
+TEST_PGN_3000 ?= /tmp/cql_test/mega_3000.pgn
+TEST_PGN_20000 ?= /tmp/cql_test/mega_20000.pgn
+TEST_PGN_20000_VARSAFE ?= /tmp/cql_test/mega_20000_varsafe.pgn
+ORACLE_BIN ?= /tmp/cql_oracle/cql
+
+.PHONY: all lib clean test oracle20k filelock stdout_race robustness stress strace-gate asan tsan asan-build tsan-build
+
+all: lib
+
+lib: $(TARGET_LIB)
+
+ifeq ($(SAN),)
+# release build: merge, hide every symbol but the three API entry points
+$(TARGET_LIB): $(ALL_OBJS)
+	@mkdir -p $(BUILD_DIR)
+	$(LD) -r -o $(COMBINED_OBJ) $(ALL_OBJS)
+	$(OBJCOPY) --remove-section=.group \
+	          --keep-global-symbol=cql6_search \
+	          --keep-global-symbol=cql6_free_result \
+	          --keep-global-symbol=cql6_version \
+	          $(COMBINED_OBJ) $(HIDDEN_OBJ)
+	$(STRIP) --strip-unneeded -R .group $(HIDDEN_OBJ)
+	rm -f $(TARGET_LIB)
+	$(AR) rcs $(TARGET_LIB) $(HIDDEN_OBJ)
+DRIVER_OBJS = $(OBJ_DIR)/scidb_lockdown.o $(OBJ_DIR)/scidb_sink.o $(OBJ_DIR)/orig_pgnparse.o $(OBJ_DIR)/orig_game.o $(OBJ_DIR)/orig_position.o $(OBJ_DIR)/orig_mfile.o $(OBJ_DIR)/orig_date.o $(OBJ_DIR)/orig_misc.o $(OBJ_DIR)/orig_movelist.o $(OBJ_DIR)/orig_stralloc.o $(OBJ_DIR)/orig_dstring.o $(OBJ_DIR)/orig_bytebuf.o $(OBJ_DIR)/orig_textbuf.o $(OBJ_DIR)/orig_myassert.o $(OBJ_DIR)/orig_matsig.o $(OBJ_DIR)/orig_index.o $(OBJ_DIR)/orig_stored.o $(OBJ_DIR)/cqlexit.o $(OBJ_DIR)/origChanges.o $(OBJ_DIR)/cqluassert.o $(OBJ_DIR)/cqleassert.o
+else
+# sanitizer build: plain archive, no symbol hiding
+$(TARGET_LIB): $(ALL_OBJS)
+	@mkdir -p $(BUILD_DIR)
+	rm -f $(TARGET_LIB)
+	$(AR) rcs $(TARGET_LIB) $(ALL_OBJS)
+DRIVER_OBJS =
+endif
+
+ORACLE20K_OBJS = $(DRIVER_OBJS) $(OBJ_DIR)/pgnsource.o $(OBJ_DIR)/cqlglobals.o $(OBJ_DIR)/util.o $(OBJ_DIR)/version.o $(OBJ_DIR)/filename.o
+
+$(OBJ_DIR)/%.o: %.cpp
+	@mkdir -p $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+$(OBJ_DIR)/orig_%.o: orig/%.cpp
+	@mkdir -p $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+# scidb: track header dependencies so a header edit really rebuilds every user
+-include $(ALL_OBJS:.o=.d)
+
+clean:
+	rm -rf $(BUILD_DIR)
+
+# ---- test binaries ---------------------------------------------------------
+DRIVER_BIN = $(BUILD_DIR)/pgn_driver
+
+test: $(TARGET_LIB) $(DRIVER_BIN)
+	$(DRIVER_BIN)
+
+$(DRIVER_BIN): tests/pgn_driver.cpp $(DRIVER_OBJS) $(TARGET_LIB)
+	$(CXX) $(TEST_CXXFLAGS) tests/pgn_driver.cpp $(DRIVER_OBJS) $(TEST_CXXFLAGS) $(TARGET_LIB) -o $@
+
+# scidb: Task 3 §D — 20000-game oracle comparison driver
+ORACLE20K_BIN = $(BUILD_DIR)/oracle20k
+
+oracle20k: $(TARGET_LIB) $(ORACLE20K_BIN)
+
+$(ORACLE20K_BIN): tests/oracle20k.cpp $(ORACLE20K_OBJS) $(TARGET_LIB)
+	$(CXX) $(TEST_CXXFLAGS) tests/oracle20k.cpp $(ORACLE20K_OBJS) $(TEST_CXXFLAGS) $(TARGET_LIB) -o $@
+
+# scidb: Task 3 §E1 — stdout/stderr race test
+STDOUT_RACE_BIN = $(BUILD_DIR)/stdout_race
+
+stdout_race: $(TARGET_LIB) $(STDOUT_RACE_BIN)
+
+$(STDOUT_RACE_BIN): tests/stdout_race.cpp $(ORACLE20K_OBJS) $(TARGET_LIB)
+	$(CXX) $(TEST_CXXFLAGS) tests/stdout_race.cpp $(ORACLE20K_OBJS) $(TEST_CXXFLAGS) $(TARGET_LIB) -o $@
+
+# scidb: Task 3 §A — file lockdown test + strace gate
+FILELOCK_BIN = $(BUILD_DIR)/filelock
+
+filelock: $(TARGET_LIB) $(FILELOCK_BIN)
+
+$(FILELOCK_BIN): tests/filelock.cpp $(ORACLE20K_OBJS) $(TARGET_LIB)
+	$(CXX) $(TEST_CXXFLAGS) tests/filelock.cpp $(ORACLE20K_OBJS) $(TEST_CXXFLAGS) $(TARGET_LIB) -o $@
+
+strace-gate: $(FILELOCK_BIN)
+	sh tests/strace_gate.sh $(FILELOCK_BIN) $(TEST_PGN_3000) /tmp/cql_filelock_work
+
+# scidb: Task 3 §C — feed robustness + fuzz
+ROBUST_BIN = $(BUILD_DIR)/robustness
+
+robustness: $(TARGET_LIB) $(ROBUST_BIN)
+
+$(ROBUST_BIN): tests/robustness.cpp $(ORACLE20K_OBJS) $(TARGET_LIB)
+	$(CXX) $(TEST_CXXFLAGS) tests/robustness.cpp $(ORACLE20K_OBJS) $(TEST_CXXFLAGS) $(TARGET_LIB) -o $@
+
+# scidb: Task 3 §B — stress test
+STRESS_BIN = $(BUILD_DIR)/stress
+
+stress: $(TARGET_LIB) $(STRESS_BIN)
+
+$(STRESS_BIN): tests/stress.cpp $(ORACLE20K_OBJS) $(TARGET_LIB)
+	$(CXX) $(TEST_CXXFLAGS) tests/stress.cpp $(ORACLE20K_OBJS) $(TEST_CXXFLAGS) $(TARGET_LIB) -o $@
+
+# ---- sanitizer gates -------------------------------------------------------
+asan-build: BUILD_DIR=build/asan
+asan-build:
+	$(MAKE) -f Makefile.scidb SAN=asan BUILD_DIR=build/asan \
+	  CXXFLAGS="$(BASE_FLAGS) $(ASAN_FLAGS)" TEST_CXXFLAGS="$(TEST_BASE_FLAGS) $(ASAN_FLAGS)" \
+	  $(BUILD_DIR)/annotation_limits $(BUILD_DIR)/legal_prefix $(BUILD_DIR)/multiscript $(BUILD_DIR)/feed_modes $(BUILD_DIR)/repeated_search $(BUILD_DIR)/pgn_driver $(BUILD_DIR)/oracle20k $(BUILD_DIR)/robustness $(BUILD_DIR)/filelock $(BUILD_DIR)/stdout_race $(BUILD_DIR)/stress
+
+asan: asan-build
+	cd . && env $(ASAN_ENV) ./build/asan/annotation_limits
+	cd . && env $(ASAN_ENV) ./build/asan/legal_prefix
+	cd . && env $(ASAN_ENV) ./build/asan/multiscript $(TEST_PGN_3000)
+	cd . && env $(ASAN_ENV) ./build/asan/feed_modes $(TEST_PGN_3000)
+	cd . && env $(ASAN_ENV) ./build/asan/repeated_search
+	cd . && env $(ASAN_ENV) ./build/asan/pgn_driver $(ORACLE_BIN)
+	cd . && env $(ASAN_ENV) ./build/asan/robustness 4
+	cd . && env $(ASAN_ENV) ./build/asan/filelock normal $(TEST_PGN_3000) /tmp/cql_asan_scratch
+	cd . && env $(ASAN_ENV) ./build/asan/stdout_race $(TEST_PGN_3000)
+	cd . && env $(ASAN_ENV) ./build/asan/oracle20k full $(TEST_PGN_20000) $(ORACLE_BIN) $(TEST_PGN_20000_VARSAFE)
+	cd . && env $(ASAN_ENV) ./build/asan/stress $(TEST_PGN_3000) 1 16 20000
+
+tsan-build:
+	$(MAKE) -f Makefile.scidb SAN=tsan BUILD_DIR=build/tsan \
+	  CXXFLAGS="$(BASE_FLAGS) $(TSAN_FLAGS)" TEST_CXXFLAGS="$(TEST_BASE_FLAGS) $(TSAN_FLAGS)" \
+	  build/tsan/annotation_limits build/tsan/legal_prefix build/tsan/multiscript build/tsan/feed_modes build/tsan/repeated_search build/tsan/pgn_driver build/tsan/robustness build/tsan/filelock build/tsan/stdout_race build/tsan/stress
+
+tsan: tsan-build
+	cd . && env $(TSAN_ENV) ./build/tsan/annotation_limits
+	cd . && env $(TSAN_ENV) ./build/tsan/legal_prefix
+	cd . && env $(TSAN_ENV) ./build/tsan/multiscript $(TEST_PGN_3000)
+	cd . && env $(TSAN_ENV) ./build/tsan/feed_modes $(TEST_PGN_3000)
+	cd . && env $(TSAN_ENV) ./build/tsan/repeated_search
+	cd . && env $(TSAN_ENV) ./build/tsan/pgn_driver $(ORACLE_BIN)
+	cd . && env $(TSAN_ENV) ./build/tsan/robustness 4
+	cd . && env $(TSAN_ENV) ./build/tsan/filelock normal $(TEST_PGN_3000) /tmp/cql_tsan_scratch
+	cd . && env $(TSAN_ENV) ./build/tsan/stdout_race $(TEST_PGN_3000)
+	cd . && env $(TSAN_ENV) ./build/tsan/stress $(TEST_PGN_3000) 1 16 20000
+
+# Repeated distinct valid and invalid searches exercise parser cleanup.
+$(BUILD_DIR)/repeated_search: tests/repeated_search.cpp $(TARGET_LIB)
+	$(CXX) $(TEST_CXXFLAGS) $< $(TARGET_LIB) -o $@
+
+.PHONY: repeated-search
+repeated-search: $(BUILD_DIR)/repeated_search
+	$(BUILD_DIR)/repeated_search
+
+$(BUILD_DIR)/feed_modes: tests/feed_modes.cpp $(ORACLE20K_OBJS) $(TARGET_LIB)
+	$(CXX) $(TEST_CXXFLAGS) $< $(ORACLE20K_OBJS) $(TARGET_LIB) -o $@
+
+$(BUILD_DIR)/multiscript: tests/multiscript.cpp tests/feed_common.h $(ORACLE20K_OBJS) $(TARGET_LIB)
+	$(CXX) $(TEST_CXXFLAGS) $< $(ORACLE20K_OBJS) $(TARGET_LIB) -o $@
+
+$(BUILD_DIR)/native_oracle: tests/native_oracle.cpp tests/feed_common.h $(ORACLE20K_OBJS) $(TARGET_LIB)
+	$(CXX) $(TEST_CXXFLAGS) $< $(ORACLE20K_OBJS) $(TARGET_LIB) -o $@
+
+$(BUILD_DIR)/annotation_limits: tests/annotation_limits.cpp $(TARGET_LIB)
+	$(CXX) $(TEST_CXXFLAGS) $< $(TARGET_LIB) -o $@
+
+$(BUILD_DIR)/legal_prefix: tests/legal_prefix.cpp $(TARGET_LIB)
+	$(CXX) $(TEST_CXXFLAGS) $< $(TARGET_LIB) -o $@
+
+# These drivers share the structured PGN feeder; rebuild when its conversion
+# changes (in particular, explicit null-move handling).
+$(ORACLE20K_BIN) $(STDOUT_RACE_BIN) $(FILELOCK_BIN) $(ROBUST_BIN) $(STRESS_BIN) $(BUILD_DIR)/feed_modes: tests/feed_common.h

@@ -1581,6 +1581,13 @@ proc PopupMenu {parent x y {base ""}} {
 					-command [namespace code [list OpenPlainSearch $top $base $Vars(variant)]] \
 					-state $state \
 					;
+				$maint add command \
+					-label " $mc::Cql6Search..." \
+					-image $::icon::16x16::none \
+					-compound left \
+					-command [namespace code [list OpenCql6Search $top $base $Vars(variant)]] \
+					-state $state \
+					;
 			}
 		}
 

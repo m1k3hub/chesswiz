@@ -66,6 +66,7 @@ class Producer;
 class TagSet;
 class Tree;
 class Query;
+class Filter;
 class Log;
 
 } // namespace db
@@ -415,6 +416,7 @@ public:
 	void endTrialMode();
 
 	void searchGames(Cursor& cursor, db::Query const& query, unsigned view = 0, unsigned filter = None);
+	void setGameFilter(Cursor& cursor, unsigned view, db::Filter const& filter);
 	void recode(Cursor& cursor, mstl::string const& encoding, util::Progress& progress);
 	void finalize();
 

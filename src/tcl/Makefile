@@ -27,6 +27,7 @@ SRC_CXX = \
 	tcl_board.cpp \
 	tcl_compare.cpp \
 	tcl_cql.cpp \
+	tcl_cql6.cpp \
 	tcl_crosstable.cpp \
 	tcl_database.cpp \
 	tcl_diag.cpp \
@@ -76,6 +77,17 @@ $(LIB).a: $(OBJS)
 	@$(CXX) -c $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(ALL_INCLUDE) $<
 
 tcl_misc.o: ../../Makefile.version
+
+# Snapshot conversion is on the GUI thread: optimize this adapter even in
+# the otherwise unoptimized developer build to keep each slice productive.
+# mstl::backtrace changes layout with __OPTIMIZE__; preserve the ABI of
+# the surrounding unoptimized libraries when adding this local optimization.
+ifeq ($(filter -O%,$(OPTIMIZE) $(CXXFLAGS) $(SYS_CXXFLAGS) $(EXTRA_CXXFLAGS)),)
+tcl_cql6.o: EXTRA_CXXFLAGS += -O2 -U__OPTIMIZE__
+endif
+tcl_cql6.o: EXTRA_CXXFLAGS += $(CQL6_FLAGS)
+tcl_cql6.o: ../cql6/cql6_api.h tcl_cql6.h
+tcl_base.o: tcl_cql6.h
 
 # The CQL library headers are included through -I../db/cql, which the
 # generated dependency list below does not cover (tcl_cql.o has no rules at

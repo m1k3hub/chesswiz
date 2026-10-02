@@ -6311,6 +6311,14 @@ Board::pawnCapturesTo(Square s) const
 bool
 Board::checkMove(Move const& move, variant::Type variant, move::Constraint constraint) const
 {
+	return checkMoveImpl(move, variant, constraint, true);
+}
+
+
+bool
+Board::checkMoveImpl(Move const& move, variant::Type variant,
+						move::Constraint constraint, bool checkTerminal) const
+{
 	if (move.isEmpty())
 		return false;
 
@@ -6318,7 +6326,7 @@ Board::checkMove(Move const& move, variant::Type variant, move::Constraint const
 //	if (move.color() != m_stm)
 //		return false;
 
-	if (checkState(variant) & (Checkmate | ThreeChecks | Stalemate | Losing))
+	if (checkTerminal && (checkState(variant) & (Checkmate | ThreeChecks | Stalemate | Losing)))
 		return false;
 
 	if (move.isNull())
@@ -6484,6 +6492,19 @@ Board::checkMove(Move const& move, variant::Type variant, move::Constraint const
 bool
 Board::isValidMove(Move const& move, variant::Type variant, move::Constraint constraint) const
 {
+	// A legal non-null move in normal chess proves this is neither mate nor
+	// stalemate. Avoid generating all legal moves merely to establish that fact.
+	// Null moves, other variants, and permissive illegal moves retain the full
+	// state check. checkMove's public contract also remains unchanged.
+	if (variant == variant::Normal && !move.isNull())
+	{
+		if (checkMoveImpl(move, variant, move::DontAllowIllegalMove, false)
+			&& !isIntoCheck(move, variant))
+			return true;
+		if (constraint == move::DontAllowIllegalMove)
+			return false;
+	}
+
 	if (!checkMove(move, variant, constraint))
 		return false;
 

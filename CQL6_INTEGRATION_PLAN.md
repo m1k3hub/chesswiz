@@ -1,8 +1,10 @@
 # CQL 6.2 in Scidb — integration plan
 
-**Status:** in progress (2026-10-01). Code lives on branch `cql6-port` (worktree
-`~/src/chess/worktrees/scidb-cql6`), not yet merged; the Tcl glue is in a separate copy
-(`~/src/chess/worktrees/scidb-cql6-glue`). Roadmap: `LONG_RANGE_PLAN.md` workstream 10.
+**Status:** in progress (2026-10-01). Engine and native Tcl glue have been imported
+into this working tree from `cql6-port` and the separate glue worktree. The
+integrated application builds; committing/merging and installing remain open.
+Current validation evidence and live processes are recorded in
+`docs/cql6/RESUME_STATUS.md`. Roadmap: `LONG_RANGE_PLAN.md` workstream 10.
 **Companions:** `PATTERN_INDEX_PLAN.md` (what this engine is for), `PLAIN_LANGUAGE_SEARCH.md`
 (the pattern library and the plain-language front end), `docs/cql6/` (the measurements below).
 
@@ -82,10 +84,13 @@ by reading it (the delegated agents wrote it).
 2. Review every change to the original sources, especially `orig/position.cpp` (the `exit`/`abort` sites),
    the lockdown guards and the retained-parse-tree handling (the engine keeps parse trees alive; check growth
    over thousands of searches).
-3. Performance: **trusted normalised feed** (Scidb stores only legal moves: skip generation and SAN; cheap
+3. Performance: **trusted normalised feed** (only when the host has established move legality: skip generation and SAN; cheap
    sanity checks, validating mode for unvalidated sources), **lazy per-position features** (demand-driven by
    the script set), **assertions off in release** after the sanitizer gate, early exit for existence-only
    scripts, algorithmic work on xray/shift/attack/pin/`find all`.
+   Native codec decoding alone is insufficient: the 2026-10-01 trusted-path rerun accepted one additional
+   Twic game that the validating path rejected. Keep validation enabled for native databases until that
+   difference is resolved. Imported native games can also contain explicit null placeholders.
 4. Integrate the glue with the real library; **end-to-end test on native databases** (`twic_complete`, 1.17M
    games; `CCRL-4040`; `LumbrasGigabase_OTB`), comparing against the pristine official program on a PGN export
    of a 20,000-game subset; measure throughput of the whole path and profile each stage (Scidb decode, snapshot,

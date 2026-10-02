@@ -58,6 +58,16 @@ LIBS = \
 
 TCL_LIBS = \
 	tcl/libtcl.a \
+	$(CQL6_LIB) \
+
+# The real engine is the default; tests explicitly select the test stub.
+CQL6_LIB ?= cql6/build/libcql6.a
+
+cql6/build/libcql6.a: FORCE | recursive
+	$(MAKE) -C cql6 -f Makefile.scidb lib
+
+cql6stub/libcql6stub.a: FORCE
+	$(MAKE) -C cql6stub
 
 TK_LIBS = \
 	tk/libtk.a \

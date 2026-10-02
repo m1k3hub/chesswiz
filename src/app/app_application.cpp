@@ -1246,6 +1246,15 @@ Application::switchBase(Cursor& cursor)
 
 
 void
+Application::setGameFilter(Cursor& cursor, unsigned view, db::Filter const& filter)
+{
+	cursor.view(view).setGameFilter(filter);
+	if (m_subscriber && m_current == &cursor)
+		m_subscriber->updateList(table::Games, m_updateCount, cursor.name(), cursor.variant(), view);
+	++m_updateCount;
+}
+
+void
 Application::searchGames(Cursor& cursor, Query const& query, unsigned view, unsigned filter)
 {
 	View& v = cursor.view(view);

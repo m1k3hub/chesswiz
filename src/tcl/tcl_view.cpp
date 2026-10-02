@@ -606,6 +606,33 @@ cmdSetTreeFilter(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	return TCL_OK;
 }
 
+static int
+cmdSetGames(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	CHECK_ARGS(ti, objc, objv, 5, "<database> <variant> <view> <game-indices>");
+	char const* base = Tcl_GetString(objv[1]);
+	variant::Type variant = tcl::game::variantFromObj(objv[2]);
+	unsigned view = unsignedFromObj(objc, objv, 3);
+	Cursor& cursor = scidb->cursor(base, variant);
+	if (!cursor.isValidView(view) || !cursor.isViewOpen(view) || !cursor.view(view).isUsed(table::Games))
+		return error("::scidb::view::setGames", 0, 0, "invalid game view");
+	int count; Tcl_Obj** indices;
+	if (Tcl_ListObjGetElements(ti, objv[4], &count, &indices) != TCL_OK) return TCL_ERROR;
+	Filter filter(cursor.database().countGames());
+	filter.reset();
+	for (int i=0;i<count;++i)
+	{
+		int index;
+		if (Tcl_GetIntFromObj(ti, indices[i], &index) != TCL_OK) return TCL_ERROR;
+		if (index<0 || unsigned(index)>=filter.size())
+			return error("::scidb::view::setGames", 0, 0, "game index out of range");
+		filter.add(unsigned(index));
+	}
+	scidb->setGameFilter(cursor, view, filter);
+	setResult(filter.count());
+	return TCL_OK;
+}
+
 
 static int
 cmdCopy(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
@@ -1127,6 +1154,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdPrintPdf,		cmdPrintPdf);
 	createCommand(ti, CmdSearch,			cmdSearch);
 	createCommand(ti, CmdSetTreeFilter,	cmdSetTreeFilter);
+	createCommand(ti, "::scidb::view::setGames", cmdSetGames);
 	createCommand(ti, CmdStrip,			cmdStrip);
 	createCommand(ti, CmdSubscribe,		cmdSubscribe);
 	createCommand(ti, CmdUnsubscribe,	cmdUnsubscribe);

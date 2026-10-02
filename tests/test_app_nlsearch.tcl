@@ -19,7 +19,7 @@ namespace eval ::scidb::test::nls {
 		{} 1/2-1/2 {1. e4 e5 2. Nf3 Nc6 1/2-1/2}
 		{} 1/2-1/2 {1. e4 Nf6 2. e5 d5 3. exd6 exd6 4. Nf3 Be7 5. Bc4 O-O 6. O-O 1/2-1/2}
 		{8/P7/8/8/8/8/k7/4K3 w - - 0 1} * {1. a8=N Kb3 *}
-		{4k3/8/8/8/8/8/4r3/R3K3 w - - 0 1} * {1. Ra8+ Kd7 *}
+		{4k2r/8/8/8/8/8/8/R3K3 w - - 0 1} * {1. Ra8+ Kd7 *}
 		{4k3/4p3/8/8/8/8/4P3/4K3 w - - 0 1} * {1. e4 e5 *}
 		{} * {1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. O-O d6 5. d3 Be6 6. Nc3 Qd7 7. Be3 O-O-O *}
 		{k7/8/2K5/8/8/8/8/1Q6 w - - 0 1} 1/2-1/2 {1. Qb6 1/2-1/2}
@@ -192,6 +192,11 @@ tcltest::test nls-dialog {the dialog fills its form, searches, and shows all aga
 		$::application::database::PlainSearchData($dlg,pattern) \
 		$::application::database::PlainSearchData($dlg,pattern,source)]
 	::application::database::PlainRun $dlg
+	set jobVar ::application::database::PlainSearchData($dlg,job)
+	set timeout [after 10000 [list set $jobVar timeout]]
+	vwait $jobVar
+	after cancel $timeout
+	if {[set $jobVar] eq "timeout"} {error "plain-language search timed out"}
 	set found [list [::scidb::view::count games $f Normal 0] $::application::database::PlainSearchData($dlg,status)]
 	::application::database::PlainShowAll $dlg
 	set all [::scidb::view::count games $f Normal 0]

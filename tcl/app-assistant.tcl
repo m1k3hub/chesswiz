@@ -1655,18 +1655,19 @@ proc ::application::assistant::CompareScore {a b} {
 namespace eval ::application::assistant {
 	variable SearchGames 10
 	variable LastSearch {}
+	variable LastSearchCriteria {}
 }
 
 proc ::application::assistant::DoSearchGames {criteria} {
 	variable SearchGames
 	variable LastSearch
+	variable LastSearchCriteria
 
 	lassign [ActiveBase] base variant
 	lassign [BuildQuery $base $variant $criteria] query summary
 	set view [::scidb::view::new $base $variant unused unused unused unused master slave]
 	set rc [catch {
-		::scidb::view::search $base $variant $view null none $query
-		set count [::scidb::view::count games $base $variant $view]
+		lassign [SearchView $base $variant $view $criteria] query summary count
 		set games {}
 		for {set row 0} {$row < min($count, $SearchGames)} {incr row} {
 			lappend games [GameLine [::scidb::db::get gameNumber $base $variant $row $view] $base $variant]
@@ -1676,6 +1677,7 @@ proc ::application::assistant::DoSearchGames {criteria} {
 	if {$rc} { return -options $opts $err }
 
 	set LastSearch [list $base $variant $query $summary]
+	set LastSearchCriteria $criteria
 	set lines [list "searched [::util::databaseName $base no] for: $summary" "$count games found"]
 	if {$count} {
 		lappend lines "first [llength $games]:"
@@ -1687,13 +1689,16 @@ proc ::application::assistant::DoSearchGames {criteria} {
 
 proc ::application::assistant::DoShowSearch {} {
 	variable LastSearch
+	variable LastSearchCriteria
 
 	if {![llength $LastSearch]} { return "error: there is no search to show; call search_games first" }
 	lassign $LastSearch base variant query summary
 	if {$base ne [lindex [ActiveBase] 0]} {
 		return "error: the last search was in [::util::databaseName $base no], which is no longer the active database"
 	}
-	::scidb::view::search $base $variant 0 null none $query
+	if {$LastSearchCriteria ne ""} {
+		SearchView $base $variant 0 $LastSearchCriteria
+	} else { ::scidb::view::search $base $variant 0 null none $query }
 	::application::switchTab database
 	return "the game list shows the [::scidb::view::count games $base $variant 0] games of: $summary"
 }
@@ -1707,7 +1712,7 @@ proc ::application::assistant::DoClearSearch {} {
 
 
 # {query summary} for checked criteria.
-proc ::application::assistant::BuildQuery {base variant criteria} {
+proc ::application::assistant::BuildQuery {base variant criteria {includePattern 1}} {
 	dict with criteria {}
 	set common {}
 	set summary {}
@@ -1769,10 +1774,72 @@ proc ::application::assistant::BuildQuery {base variant criteria} {
 	# narrow them first
 	if {[info exists pattern] && $pattern ne ""} {
 		set p [::ai::search::pattern $pattern]
-		lappend common [list cql [dict get $p cql]]
+		if {$includePattern} { lappend common [list cql [dict get $p cql]] }
 		lappend summary "with [dict get $p label]"
 	}
 	return [list [Combine AND $common] [join $summary {; }]]
+}
+
+# Validated fields narrow the view first. The model supplies a library id;
+# only application-owned templates reach the native CQL 6.2 engine.
+proc ::application::assistant::SearchView {base variant view criteria {callback {}} {guard {}}} {
+    set use6 [expr {$variant eq "Normal" && [dict exists $criteria pattern]
+        && [dict get $criteria pattern] ne "" && [llength [info commands ::scidb::cql6::search]]
+        && [::scidb::cql6::version] ne "cql6 stub 6.2"}]
+    lassign [BuildQuery $base $variant $criteria [expr {!$use6}]] query summary
+    if {$query eq "AND"} {
+        ::scidb::view::search $base $variant $view reset none
+    } else { ::scidb::view::search $base $variant $view null none $query }
+    if {$use6} {
+        set script [::ai::search::pattern6 [dict get $criteria pattern]]
+        if {$callback ne ""} {
+            return [::scidb::cql6::search $base $variant $script -view $view -compact 1 -command \
+                [list ::application::assistant::PatternSearchFinished $base $variant $view $query $summary $callback $guard]]
+        }
+        # Assistant tools keep their return-value contract while the nested event
+        # loop services GUI timers and native snapshot requests.
+        variable PatternWaitSerial
+        variable PatternWait
+        if {![info exists PatternWaitSerial]} {set PatternWaitSerial 0}
+        set token [incr PatternWaitSerial]
+        set done [list ::application::assistant::PatternSearchWait $token]
+        ::scidb::cql6::search $base $variant $script -view $view -compact 1 -command \
+            [list ::application::assistant::PatternSearchFinished $base $variant $view $query $summary $done {}]
+        vwait [namespace current]::PatternWait($token)
+        set result $PatternWait($token)
+        unset PatternWait($token)
+        if {![dict get $result ok]} {error [dict get $result error]}
+        return [list $query $summary [dict get $result count]]
+    }
+    if {$callback ne ""} {
+        after idle [list ::application::assistant::PatternSearchNotify $callback $guard \
+            [dict create ok 1 query $query summary $summary count [::scidb::view::count games $base $variant $view]]]
+        return {}
+    }
+    return [list $query $summary [::scidb::view::count games $base $variant $view]]
+}
+
+proc ::application::assistant::PatternSearchWait {token result} {
+    variable PatternWait
+    set PatternWait($token) $result
+}
+proc ::application::assistant::PatternSearchNotify {callback guard result} {
+    if {$guard ne "" && ![uplevel #0 $guard]} {return}
+    uplevel #0 [list {*}$callback $result]
+}
+proc ::application::assistant::PatternSearchFinished {base variant view query summary callback guard result} {
+    if {$guard ne "" && ![uplevel #0 $guard]} {return}
+    if {![dict get $result ok]} {
+        set answer [dict create ok 0 error [dict get $result error]]
+    } elseif {[dict get $result cancelled]} {
+        set answer [dict create ok 0 error "Pattern search cancelled"]
+    } elseif {[catch {
+        set games [lmap {game ply} [dict get $result matches] {set game}]
+        set count [::scidb::view::setGames $base $variant $view $games]
+    } error]} {set answer [dict create ok 0 error $error]} else {
+        set answer [dict create ok 1 query $query summary $summary count $count]
+    }
+    PatternSearchNotify $callback {} $answer
 }
 
 

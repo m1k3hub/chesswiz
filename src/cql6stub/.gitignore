@@ -1,0 +1,5 @@
+*.o
+*.a
+harness
+harness-baseline
+verification-logs/

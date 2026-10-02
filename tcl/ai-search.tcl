@@ -112,6 +112,22 @@ variable Patterns {
 
 variable Fields {player color result opponent eco from to event min_elo}
 
+# Application-owned CQL 6.2 templates. Models select only a Pattern id.
+variable Patterns6 {
+    checkmate {cql() terminal and mate}
+    smothered_mate {cql() flipcolor (btm and mate and not (k attacks (A | _)))}
+    stalemate {cql() terminal and stalemate}
+    en_passant {cql() enpassant}
+    underpromotion {cql() move previous promote [RBNrbn]}
+    double_check {cql() flipcolor (btm and #(A attacks k) == 2)}
+    opposite_castling {cql() flipcolor (Ka-c1 and kg-h8)}
+    rook_endgame {cql() not [QBNqbn] and R and r}
+    pawn_endgame {cql() not [QRBNqrbn] and [Pp]}
+    isolated_queen_pawn {cql() flipcolor (Pd4 and not (Pc2-7 or Pe2-7))}
+    opposite_bishops {cql() #B == 1 and #b == 1 and ((light B and dark b) or (dark B and light b))}
+    queenless {cql() not [Qq] and #[RBNrbn] >= 4 and #[RBNrbn] <= 12}
+}
+
 # the classifier's gate for choosing a pattern (SCIDB_AI_PATTERN_SEARCH_MIN_CONFIDENCE)
 variable ClassifierThreshold 0.6
 
@@ -134,6 +150,11 @@ proc ::ai::search::pattern {id} {
 	variable Patterns
 	lassign [dict get $Patterns $id] label description aliases cql kind
 	return [dict create label $label description $description cql $cql kind $kind]
+}
+
+proc ::ai::search::pattern6 {id} {
+    variable Patterns6
+    return [dict get $Patterns6 $id]
 }
 
 

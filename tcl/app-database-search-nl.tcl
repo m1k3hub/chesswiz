@@ -37,6 +37,7 @@ set PlainSearchPatternSlow		"A pattern reads the moves of every candidate game; 
 
 variable PlainSearchData
 variable PlainSearchFields {player color result opponent eco from to event min_elo pattern}
+variable PlainSearchSerial 0
 
 } ;# namespace database
 } ;# namespace application
@@ -66,6 +67,7 @@ proc ::application::database::OpenPlainSearch {parent file variant} {
 	variable PlainSearchData
 	variable PlainSearchFields
 	variable mc
+	variable PlainSearchSerial
 
 	set dlg [PlainDialogName $file $variant]
 	if {[winfo exists $dlg]} {
@@ -75,6 +77,8 @@ proc ::application::database::OpenPlainSearch {parent file variant} {
 	}
 
 	set PlainSearchData($dlg,file) $file
+	set PlainSearchData($dlg,epoch) [incr PlainSearchSerial]
+	set PlainSearchData($dlg,job) {}
 	set PlainSearchData($dlg,variant) $variant
 	set PlainSearchData($dlg,request) ""
 	set PlainSearchData($dlg,status) $mc::PlainSearchExample
@@ -151,6 +155,9 @@ proc ::application::database::OpenPlainSearch {parent file variant} {
 
 proc ::application::database::PlainForget {dlg} {
 	variable PlainSearchData
+	if {[info exists PlainSearchData($dlg,job)] && $PlainSearchData($dlg,job) ne ""} {
+		::scidb::cql6::cancel $PlainSearchData($dlg,job)
+	}
 	array unset PlainSearchData $dlg,*
 }
 
@@ -221,18 +228,35 @@ proc ::application::database::PlainRun {dlg} {
 		return [::dialog::error -parent $dlg -message $err]
 	}
 
-	::widget::busyCursor on
 	set rc [catch {
-		::scidb::view::search $file $variant 0 null none $query
-		set count [::scidb::view::count games $file $variant 0]
+		set epoch $PlainSearchData($dlg,epoch)
+		set PlainSearchData($dlg,job) [::application::assistant::SearchView $file $variant 0 $criteria \
+			[namespace code [list PlainSearchFinished $dlg $epoch]] [namespace code [list PlainSearchAlive $dlg $epoch]]]
 	} err options]
-	::widget::busyCursor off
 	if {$rc} {
 		return [::dialog::error -parent $dlg -message $err]
 	}
 
-	set PlainSearchData($dlg,status) [format $mc::PlainSearchFound [::locale::formatNumber $count] $summary]
-	catch { ::application::switchTab database }
+	$dlg.buttons.run configure -state disabled
+	$dlg.buttons.all configure -state disabled
+	set PlainSearchData($dlg,status) "Searching..."
+}
+
+proc ::application::database::PlainSearchAlive {dlg epoch} {
+	variable PlainSearchData
+	expr {[info exists PlainSearchData($dlg,epoch)] && $PlainSearchData($dlg,epoch) == $epoch}
+}
+proc ::application::database::PlainSearchFinished {dlg epoch result} {
+	variable PlainSearchData
+	variable mc
+	if {![PlainSearchAlive $dlg $epoch]} {return}
+	set PlainSearchData($dlg,job) {}
+	$dlg.buttons.run configure -state normal
+	$dlg.buttons.all configure -state normal
+	if {![dict get $result ok]} {set PlainSearchData($dlg,status) [dict get $result error];return}
+	set PlainSearchData($dlg,status) [format $mc::PlainSearchFound \
+		[::locale::formatNumber [dict get $result count]] [dict get $result summary]]
+	catch {::application::switchTab database}
 }
 
 

@@ -1,0 +1,19 @@
+#this makefile-flags is test for MacOS and clang (which uses the same executable name,
+# g++, as does the GNU compiler suite.
+# It should work with the modifications as described below on Linux with
+# the gcc compiler tool suite
+
+ifdef SYSTEMROOT
+ OSFLAGS= -DWIN32 -Wno-sign-compare
+else
+ OSFLAGS=  -Wno-deprecated-register -Wno-unused-private-field
+endif
+#If using gcc (for example, the default on Linux) uncomment the following line
+ OSFLAGS= -Wno-format-overflow -Wno-sign-compare -Wno-maybe-uninitialized
+# please contact us if there are any issues with the Linux build
+COMPILE = g++
+LINK = g++
+OPTIMIZE= -O3
+#uncomment the following line if on Linux and using the gcc toolsuite
+LINUXPTHREADOPTION = -pthread
+CPP_FLAGS = ${LINUXPTHREADOPTION} -g ${OPTIMIZE} ${OSFLAGS} -std=c++17 -Werror -Wall -Wno-write-strings -Wno-char-subscripts  -Wno-parentheses -fdiagnostics-show-option ${CYyy}  -DASSERTIONS -I. -I./orig

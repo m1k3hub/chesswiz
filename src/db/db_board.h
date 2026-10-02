@@ -601,6 +601,9 @@ public:
 
 private:
 
+	bool checkMoveImpl(Move const& move, variant::Type variant,
+						move::Constraint constraint, bool checkTerminal) const;
+
 	friend class Guess;
 
 	typedef Byte (*ChangeSide)(Byte);

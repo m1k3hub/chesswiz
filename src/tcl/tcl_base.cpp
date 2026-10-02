@@ -31,6 +31,7 @@
 #include "tcl_position.h"
 #include "tcl_ai.h"
 #include "tcl_cql.h"
+#include "tcl_cql6.h"
 
 #include "db_exception.h"
 
@@ -1367,6 +1368,7 @@ tcl::init(Tcl_Interp* ti)
 	diag::init(ti);
 	ai::init(ti);
 	cql::init(ti);
+	cql6::init(ti);
 }
 
 // vi:set ts=3 sw=3:
