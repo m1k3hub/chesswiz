@@ -22,8 +22,10 @@ proc ::scidb::test::app::emit {line} {
 
 set argvCopy $argv
 set argcCopy $argc
-set argv {}
-set argc 0
+# --single-process: no single-instance check, so test runs (several at a
+# time, or beside a running Scidb) do not hand off to each other and exit
+set argv {--single-process}
+set argc 1
 # errors raised by the tests go to a scratch log, not the user's
 set ::env(SCIDB_ERROR_LOG) [file join $::scidb::test::app::testDir tmp-app errors-[pid].log]
 # nor to the model: triage runs only where a test asks for it

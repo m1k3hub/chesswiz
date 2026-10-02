@@ -170,6 +170,7 @@ SOURCES = \
 	ai-journal.tcl \
 	ai-search.tcl \
 	ai-cql.tcl \
+	ai-positions.tcl \
 	ai-event.tcl \
 	ai-language.tcl \
 	ai-import.tcl \

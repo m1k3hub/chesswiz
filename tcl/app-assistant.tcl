@@ -183,6 +183,30 @@ variable Actions {
 		{{"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"pattern":{"type":"string","enum":["checkmate","smothered_mate","stalemate","en_passant","underpromotion","double_check","opposite_castling","rook_endgame","pawn_endgame","isolated_queen_pawn","opposite_bishops","queenless"],"description":"a position pattern the game must contain, found by Scidb's CQL matcher: the game ends in checkmate, a smothered mate, the game ends in stalemate, an en-passant capture, an underpromotion, a double check, kings on opposite wings, a rook ending, a pawn ending, an isolated queen's pawn, opposite-coloured bishops, a queenless middlegame"}}}}
 		::application::assistant::DoSearchGames
 	}
+	find_positions {
+		0 0 "find positions: %s"
+		"Find positions, patterns or tactics in the active database's games with Scidb's CQL 6.2 engine. You translate the request into a CQL 6.2 script; CQL decides what matches. Put only the positional part in 'cql', starting with cql() (e.g. 'cql() mate', 'cql() flipcolor {move from N} attacks k'); put names, colour, result, dates, event, ECO and Elo in the other fields, which narrow the games before any is read. Call cql_help first for the CQL 6.2 reference and worked examples unless the script is trivial. Step 1: mode sample (the default) returns up to 3 matching positions (the move that led there, the game, the FEN) and shows them to the user as diagrams in the Report pane; tell the user in one sentence what you searched for and ask whether these are what they meant. Step 2, only after the user agrees: call again with mode all and the same arguments; the game list then shows every matching game. If the script does not parse you get the parser's message: fix it and call again. Never describe a position's quality yourself."
+		{{"type":"object","properties":{"request":{"type":"string","description":"what the user asked for, in their words"},"cql":{"type":"string","description":"the CQL 6.2 script for the positional part, starting with cql()"},"mode":{"type":"string","enum":["sample","all"],"description":"sample (default): up to 3 positions to check with the user; all: every match, shown in the game list"},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"}},"required":["request","cql"]}}
+		::application::assistant::DoFindPositions
+	}
+	cql_help {
+		0 0 "read the CQL reference"
+		"The CQL 6.2 reference card and worked examples (requests a player makes and the scripts that find them). Read it before writing a find_positions script."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoCqlHelp
+	}
+	save_pattern {
+		0 0 "save the last position search as pattern '%s'"
+		"Save the last find_positions search (the user's request, its CQL script and the sample positions the user accepted) as one of the user's own patterns, under a short name. Only when the user asks to keep or save the search. Saved patterns appear in cql_help as worked examples."
+		{{"type":"object","properties":{"name":{"type":"string","description":"a short name, e.g. 'knight fork king and queen'"}},"required":["name"]}}
+		::application::assistant::DoSavePattern
+	}
+	open_position {
+		0 0 "open position %s of the last search"
+		"Put a game found by the last find_positions call on the board, at the matching position. 'index' counts the positions as they were listed, from 1."
+		{{"type":"object","properties":{"index":{"type":"integer","description":"1 for the first position listed"}},"required":["index"]}}
+		::application::assistant::DoOpenPosition
+	}
 	show_search {
 		1 0 "show the games of the last search in the game list"
 		"Filter the game list of the active database to the games of the last search_games, and switch to the database tab."
@@ -586,6 +610,7 @@ proc ::application::assistant::clear {} {
 
 	if {$Priv(busy)} { return }
 	set Priv(messages) {}
+	set Priv(cqlHelp) 0
 	# invalidate any in-flight pre-route prediction for the old conversation
 	if {[info exists Priv(routeGen)]} { incr Priv(routeGen) }
 	set Priv(routeWait) 0
@@ -1054,6 +1079,37 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		}
 		remember_me {
 			return [dict create name [string trim [Arg $cargs name]]]
+		}
+		find_positions {
+			set request [string trim [Arg $cargs request]]
+			set cql [string trim [Arg $cargs cql]]
+			if {$cql eq ""} { error "cql must not be empty" }
+			set mode [expr {[dict exists $cargs mode] ? [string tolower [string trim [dict get $cargs mode]]] : "sample"}]
+			if {$mode eq ""} { set mode sample }
+			if {$mode ni {sample all}} { error "mode must be sample or all" }
+			# the header fields, checked as search_games checks them
+			set header [dict create pattern ""]
+			foreach key {player color result opponent eco from to event min_elo} {
+				if {[dict exists $cargs $key] && [string trim [dict get $cargs $key]] ni {"" any}} {
+					dict set header $key [dict get $cargs $key]
+				}
+			}
+			if {[dict size $header] > 1} {
+				set criteria [dict get [CheckArgs search_games $header] criteria]
+			} else {
+				set criteria {}
+			}
+			return [dict create request $request cql $cql mode $mode criteria $criteria]
+		}
+		save_pattern {
+			set name [string trim [Arg $cargs name]]
+			if {$name eq ""} { error "name must not be empty" }
+			return [dict create name $name]
+		}
+		open_position {
+			set index [Arg $cargs index]
+			if {![string is integer -strict $index] || $index < 1} { error "index must be 1 or more" }
+			return [dict create index $index]
 		}
 		player_stats {
 			set name [string trim [Arg $cargs name]]
@@ -1896,6 +1952,203 @@ proc ::application::assistant::GameLine {index base variant} {
 		set $tag [expr {[dict exists $tags $tag] ? [dict get $tags $tag] : "?"}]
 	}
 	return "$Date $White - $Black $Result $ECO, $Event"
+}
+
+
+# --- position finder (ASSISTANT_COVERAGE_MAP.md §5) ----------------------
+
+namespace eval ::application::assistant {
+	# {base variant {game ply ...}} of the last find_positions call
+	variable LastPositions {}
+	# {request cql fens} of the last find_positions call
+	variable LastFind {}
+	variable PositionSamples 3
+	variable PositionsShown 10
+	# milliseconds before a search stops with what it found
+	variable ProbeBudget 30000
+	variable SearchBudget 600000
+}
+
+
+proc ::application::assistant::DoFindPositions {request cql mode criteria} {
+	variable PositionSamples
+	variable ProbeBudget
+	variable SearchBudget
+	variable Priv
+
+	# models know little CQL; the reference makes the scripts right
+	if {![info exists Priv(cqlHelp)] || !$Priv(cqlHelp)} {
+		return "error: call cql_help first and write the script from its reference and examples; then call find_positions again"
+	}
+
+	if {![llength [info commands ::scidb::cql6::search]] || [::scidb::cql6::version] eq "cql6 stub 6.2"} {
+		return "error: the CQL 6.2 engine is not available in this build"
+	}
+	lassign [ActiveBase] base variant
+	set view [::scidb::view::new $base $variant unused unused unused unused master slave]
+	set summary "all games"
+	if {[catch {
+		if {[llength $criteria]} {
+			lassign [BuildQuery $base $variant $criteria 0] query summary
+			::scidb::view::search $base $variant $view null none $query
+		} else {
+			::scidb::view::search $base $variant $view reset none
+		}
+	} err]} {
+		catch { ::scidb::view::close $base $variant $view }
+		return "error: $err"
+	}
+	set narrowed [::scidb::view::count games $base $variant $view]
+	if {$narrowed == 0} {
+		catch { ::scidb::view::close $base $variant $view }
+		return "no games of [::util::databaseName $base no] match the header fields ($summary); nothing was searched"
+	}
+
+	set token [Later]
+	set sample [expr {$mode eq "sample"}]
+	::ai::positions::search $base $variant $view $cql \
+		[namespace code [list PositionsDone $token $base $variant $view $mode $request $cql $summary $narrowed]] \
+		-max [expr {$sample ? $PositionSamples : 0}] -budget [expr {$sample ? $ProbeBudget : $SearchBudget}]
+	return $token
+}
+
+
+proc ::application::assistant::PositionsDone {token base variant view mode request cql summary narrowed result} {
+	variable LastPositions
+	variable PositionsShown
+
+	catch { ::scidb::view::close $base $variant $view }
+	if {![dict get $result ok]} {
+		Resolve $token "error: CQL 6.2 did not run the script: [dict get $result error]\nFix the script and call find_positions again."
+		return
+	}
+	variable LastFind
+	set pairs [dict get $result matches]
+	set complete [dict get $result complete]
+	set LastPositions [list $base $variant $pairs]
+	set found [expr {[llength $pairs] / 2}]
+	set where "[::util::databaseName $base no], $summary ($narrowed games)"
+
+	if {$mode eq "all"} {
+		set games [lsort -integer -unique [lmap {game ply} $pairs { set game }]]
+		if {[catch {
+			::scidb::view::search $base $variant 0 reset none
+			set count [::scidb::view::setGames $base $variant 0 $games]
+			::application::switchTab database
+		} err]} {
+			Resolve $token "error: $err"
+			return
+		}
+		set lines [list "searched $where for: $request" \
+			"$count games with a matching position[expr {$complete ? "" : " (the search stopped early; there may be more)"}]" \
+			"the game list shows them; open_position N puts the Nth on the board at the position"]
+	} else {
+		set lines [list "searched $where for: $request"]
+		if {!$found} {
+			lappend lines [expr {$complete ? "no position matches" : "no match within the time limit; the script may be too strict or match nothing"}]
+		} else {
+			lappend lines "sample positions (the user sees them as diagrams in the Report pane):"
+		}
+	}
+
+	set samples {}
+	set i 0
+	foreach {game ply} $pairs {
+		if {[incr i] > $PositionsShown} { break }
+		if {[catch { ::ai::positions::position $base $variant $game $ply } pos]} {
+			lappend lines "  $i. game [expr {$game + 1}]: $pos"
+			continue
+		}
+		set line [GameLine $game $base $variant]
+		set at [expr {[dict get $pos move] ne "" ? "after [dict get $pos move]" : "at the start"}]
+		lappend lines "  $i. $line, $at; FEN [dict get $pos fen]"
+		lappend samples [list $line $at [dict get $pos fen]]
+	}
+	set LastFind [list $request $cql [lmap s $samples { lindex $s 2 }]]
+	if {$mode eq "sample" && $found} {
+		lappend lines "these are the positions the script matched, not yet confirmed to be what was asked for: do not say they show it. Ask the user to look at the diagrams and say whether they are what they meant; if not, fix the script. Call again with mode all only after the user agrees."
+		catch { ShowPositions $request $cql $where $samples }
+	}
+	Resolve $token [join $lines \n]
+}
+
+
+# The sample positions as diagrams, with the script, in the Report pane.
+proc ::application::assistant::ShowPositions {request cql where samples} {
+	set esc {& &amp; < &lt; > &gt; \" &quot;}
+	set html "<html><body><h2>[string map $esc $request]</h2>"
+	append html "<p>Searched $where with this CQL 6.2 script:</p><pre>[string map $esc $cql]</pre>"
+	foreach sample $samples {
+		lassign $sample line at fen
+		set caption "[string map $esc $line], $at"
+		if {[llength [info commands ::ai::diagram::html]]} {
+			append html [::ai::diagram::html $fen -caption $caption]
+		} else {
+			append html "<p>$caption<br><tt>$fen</tt></p>"
+		}
+	}
+	append html "</body></html>"
+	::application::ai::showReport .application "Positions" $html
+}
+
+
+proc ::application::assistant::DoCqlHelp {} {
+	variable Priv
+	set Priv(cqlHelp) 1
+	if {[llength [info commands ::ai::positions::patterns]]} {
+		set own [::ai::positions::patterns]
+		if {[llength $own]} {
+			append mine "\n\nThe user's saved patterns (scripts the user has accepted):"
+			foreach p $own {
+				append mine "\n\nRequest: [dict get $p request] (saved as '[dict get $p name]')\n[dict get $p cql]"
+			}
+		}
+	}
+	if {[llength [info commands ::ai::cqlref::card]]} {
+		set text [::ai::cqlref::card]
+		foreach example [::ai::cqlref::examples] {
+			lassign $example id request cql
+			append text "\n\nRequest: $request\n$cql"
+		}
+		if {[info exists mine]} { append text $mine }
+		return $text
+	}
+	# the vetted library as worked examples when the card is not there
+	set text "CQL 6.2: a script starts with cql() and is a filter run on every position; a game matches when some position passes."
+	foreach id [::ai::search::patternIds] {
+		set p [::ai::search::pattern $id]
+		append text "\n\nRequest: [dict get $p description]\n[::ai::search::pattern6 $id]"
+	}
+	if {[info exists mine]} { append text $mine }
+	return $text
+}
+
+
+proc ::application::assistant::DoSavePattern {name} {
+	variable LastFind
+	if {![llength $LastFind]} { return "error: there is no position search to save; call find_positions first" }
+	lassign $LastFind request cql fens
+	set n [::ai::positions::savePattern $name $request $cql $fens]
+	return "saved as '$name'; the user now has $n saved pattern[expr {$n == 1 ? "" : "s"}]"
+}
+
+
+proc ::application::assistant::DoOpenPosition {index} {
+	variable LastPositions
+
+	if {![llength $LastPositions]} { return "error: there is no find_positions result; call find_positions first" }
+	lassign $LastPositions base variant pairs
+	if {$index > [llength $pairs] / 2} { return "error: the last search found [expr {[llength $pairs] / 2}] positions" }
+	set game [lindex $pairs [expr {2 * ($index - 1)}]]
+	set ply [lindex $pairs [expr {2 * ($index - 1) + 1}]]
+	::game::new .application -base $base -variant $variant -number $game
+	set plies [::scidb::game::query mainline]
+	if {$ply > 0 && $ply <= [llength $plies]} {
+		# the key of a ply is the position after it
+		::scidb::game::go key [lindex $plies [expr {$ply - 1}] 0]
+	}
+	::application::switchTab board
+	return "game [expr {$game + 1}] ([GameLine $game $base $variant]) is on the board at the position"
 }
 
 
