@@ -1347,6 +1347,15 @@ proc ::ai::provider::chatAsync {messages tools script} {
 }
 
 
+# Some models served by Ollama (kimi-k3) put their reasoning into the
+# content with role markers when thinking is off; keep the response only.
+proc ::ai::provider::StripReasoning {text} {
+	set k [string last "<|open|>response<|sep|>" $text]
+	if {$k >= 0} { set text [string range $text [expr {$k + 23}] end] }
+	return [string trim [regsub -all {<\|(?:open|close|sep)\|>} $text {}]]
+}
+
+
 proc ::ai::provider::onOllamaChat {script token} {
 	set status [::http::status $token]
 	set code [::http::ncode $token]
@@ -1361,6 +1370,9 @@ proc ::ai::provider::onOllamaChat {script token} {
 	if {[catch {set d [json::json2dict $data] ; set message [dict get $d message]} e]} {
 		uplevel #0 [list {*}$script [list ok 0 error $e]]
 		return
+	}
+	if {[dict exists $message content]} {
+		dict set message content [StripReasoning [dict get $message content]]
 	}
 
 	uplevel #0 [list {*}$script [list ok 1 message $message]]

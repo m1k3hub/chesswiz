@@ -1196,6 +1196,11 @@ test aipc-models-async-14.3 {modelsAsync without a key reports ok 0 and never se
 # ----------------------------------------------------------------------
 
 catch {close $::Mock(sock)}
+test aipc-strip-reasoning {reasoning markers leaked into an Ollama reply are dropped} -body {
+	list [::ai::provider::StripReasoning "I will run it.<|close|>think<|sep|><|open|>response<|sep|>Done: 50 games."] \
+		[::ai::provider::StripReasoning "plain answer"]
+} -result {{Done: 50 games.} {plain answer}}
+
 foreach v [array names SavedEnv] { set ::env($v) $SavedEnv($v) }
 
 set failed $::tcltest::numTests(Failed)

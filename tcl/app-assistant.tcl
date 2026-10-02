@@ -489,6 +489,9 @@ user asks, after the evidence shows what is stuck.}
 
 # Replies longer than this are cut, so one tool cannot flood the context.
 variable MaxReply 6000
+# tools whose whole reply the model needs (the CQL reference: a cut card
+# loses examples and the user's patterns)
+variable MaxReplyFor {cql_help 20000}
 
 # errors seen in this session: {time source message detail}, see RecordError
 variable Errors {}
@@ -755,6 +758,13 @@ proc ::application::assistant::Later {} {
 }
 
 
+proc ::application::assistant::ReplyLimit {name} {
+	variable MaxReply
+	variable MaxReplyFor
+	return [expr {[dict exists $MaxReplyFor $name] ? [dict get $MaxReplyFor $name] : $MaxReply}]
+}
+
+
 # Returns 0 when nothing waits for <token> (the request ended meanwhile).
 proc ::application::assistant::Resolve {token reply} {
 	variable Priv
@@ -764,8 +774,9 @@ proc ::application::assistant::Resolve {token reply} {
 	lassign $Priv(pending) _ round name cargs calls isRouted
 	set Priv(pending) {}
 	set reply [Scrub $reply]
-	if {[string length $reply] > $MaxReply} {
-		set reply "[string range $reply 0 $MaxReply-1]\n... (truncated)"
+	set limit [ReplyLimit $name]
+	if {[string length $reply] > $limit} {
+		set reply "[string range $reply 0 $limit-1]\n... (truncated)"
 	}
 	LogToolCall $name $cargs 0 [expr {[string match "error: *" $reply] ? "error" : "ok"}] $reply
 	if {[llength $isRouted]} {
@@ -851,8 +862,9 @@ proc ::application::assistant::RunTool {name cargs} {
 	}
 	if {[string match "\x00later:*" $reply]} { return [list later $confirm $reply] }
 	set reply [Scrub $reply]
-	if {[string length $reply] > $MaxReply} {
-		set reply "[string range $reply 0 $MaxReply-1]\n... (truncated)"
+	set limit [ReplyLimit $name]
+	if {[string length $reply] > $limit} {
+		set reply "[string range $reply 0 $limit-1]\n... (truncated)"
 	}
 	return [list ok $confirm $reply]
 }
