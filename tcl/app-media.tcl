@@ -74,6 +74,7 @@ array set Priv {
 	volumelabel	100
 	playstate	paused
 	listvisible	1
+	linksBase	{}
 }
 
 } ;# namespace media
@@ -475,11 +476,40 @@ proc application::media::DatabaseSwitched {base variant} {
 }
 
 
+# Mapping a ChessBase base's games onto the media of its tournament
+# reports takes seconds on a big base, so it is built in the background;
+# Update shows a hint meanwhile and runs again once the mapping is ready.
+proc application::media::LinksReady {base variant} {
+	variable Priv
+
+	set ready 1
+	set cmd [namespace code [list LinksBuilt $base $variant]]
+	catch { set ready [::scidb::db::mediaLinkReady $base $variant $cmd] }
+	if {$ready} { return 1 }
+	set Priv(linksBase) [list $base $variant]
+	set Priv(statusbar) "Indexing media links..."
+	ShowEmptyHint "Indexing media links...\n\nThe media list appears when\nthe database has been scanned."
+	return 0
+}
+
+
+proc application::media::LinksBuilt {base variant ok} {
+	variable Priv
+
+	if {$Priv(linksBase) ne [list $base $variant]} { return }
+	set Priv(linksBase) {}
+	if {!$ok} { return }
+	catch { after cancel $Priv(afterid) }
+	set Priv(afterid) [after 1 [namespace code [list Update $Priv(position)]]]
+}
+
+
 proc application::media::Update {position} {
 	variable Priv
 	variable mc
 
 	set Priv(position) $position
+	set Priv(linksBase) {}
 	set tree $Priv(tree)
 
 	# Stop any playing media
@@ -495,6 +525,7 @@ proc application::media::Update {position} {
 		if {[info exists Priv(lastBase)] && [string length $Priv(lastBase)]
 			&& [file exists $Priv(lastBase)]} {
 			array unset Priv "interactive:played:*"
+			if {![LinksReady $Priv(lastBase) $Priv(lastVariant)]} { return }
 			set gallery {}
 			catch { set gallery [::scidb::db::mediaGallery $Priv(lastBase) $Priv(lastVariant)] }
 			if {[llength $gallery]} {
@@ -532,6 +563,8 @@ proc application::media::Update {position} {
 		set Priv(statusbar) $mc::NoMedia
 		return
 	}
+
+	if {![LinksReady $base $variant]} { return }
 
 	set entries {}
 	catch { set entries [::scidb::db::mediaFiles $base $variant $index] }

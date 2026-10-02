@@ -91,7 +91,13 @@
 #include <string.h>
 #include <ctype.h>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <unordered_map>
 #include <vector>
 
 
@@ -138,6 +144,7 @@ static char const* CmdPlayerOpenings	= "::scidb::db::playerOpenings";
 static char const* CmdPlayerGames		= "::scidb::db::playerGames";
 static char const* CmdMediaFiles		= "::scidb::db::mediaFiles";
 static char const* CmdMediaGallery	= "::scidb::db::mediaGallery";
+static char const* CmdMediaLinkReady	= "::scidb::db::mediaLinkReady";
 static char const* CmdGuidingText	= "::scidb::db::guidingText";
 static char const* CmdGameAnchor	= "::scidb::db::gameAnchor";
 static char const* CmdHtmlSanitize	= "::scidb::html::sanitize";
@@ -5073,122 +5080,523 @@ mediaLinkLastName(mstl::string const& name, mstl::string& out)
 }
 
 
+// mediaLinkKey and mediaLinkLastName for std::string, keying the
+// characters in place.
 void
-buildMediaLinkCache(mstl::string const& database, variant::Type vtype, Database& db,
-						GuidingTextLinkCache& cache)
+mediaLinkKey(char const* s, unsigned n, std::string& out)
 {
-	cache.clear();
-	cache.database	= database;
-	cache.thisVariant	= vtype;
-	cache.countGames	= db.countGames();
+	out.clear();
+	for (unsigned i = 0; i < n; ++i)
+	{
+		unsigned char c = static_cast<unsigned char>(s[i]);
+		if (::isalnum(c))
+			out += static_cast<char>(::tolower(c));
+	}
+}
+
+
+void
+mediaLinkKey(mstl::string const& s, std::string& out)
+{
+	mediaLinkKey(s.c_str(), s.size(), out);
+}
+
+
+void
+mediaLinkLastName(mstl::string const& name, std::string& out)
+{
+	mstl::string::size_type comma = name.find(',');
+	mediaLinkKey(name.c_str(), comma == mstl::string::npos ? name.size() : comma, out);
+}
+
+
+// The cache is built in three steps. prepareMediaLinks runs on the app
+// thread: it decodes the guiding-text reports (Database::loadGame mutates
+// the shared codec) and snapshots the per-game header keys; it can stop at
+// a deadline and resume, so a background build runs in short slices of the
+// event loop. matchMediaLinks reads only that owned snapshot (std
+// containers: deep copies, never borrowed mstl buffers) and may run on a
+// worker. installMediaLinks runs on the app thread again: path resolution
+// probes the media folders.
+//
+// Namebase entries appear as opaque keys only: the matcher compares the
+// pointers and never dereferences them.
+typedef void const* MediaLinkEntry;
+
+struct MediaLinkGame
+{
+	MediaLinkEntry white, black, event;	// white == 0: skip (guiding text)
+	uint16_t year, round;
+};
+
+typedef std::vector<std::pair<MediaLinkEntry, std::string> > MediaLinkKeys;
+
+enum MediaLinkPhase { Scan, Parse, BlockKeys, Players, Events, Games, Prepared };
+
+struct MediaLinkJob
+{
+	mstl::string		database;
+	variant::Type		variant;
+	unsigned				countGames;
+	Database const*	identity;
+
+	// App thread only: preparation state, and the blocks for install.
+	MediaLinkPhase		phase;
+	unsigned				next;
+	mstl::vector<unsigned> gtIndices;
+	std::unordered_map<std::string, bool> blockPlayers;
+	Tcl_TimerToken		timer;
+	mstl::vector<tcl_media::GuidingTextGameBlock> blocks;
+
+	// Matcher input.
+	std::vector<std::string>	blockWhite, blockBlack, blockEvent;
+	std::vector<unsigned>		blockYear, blockRound;
+	MediaLinkKeys					playerKeys, eventKeys;
+	std::vector<MediaLinkGame>	games;
+
+	// Matcher output: (game index, block), in game order.
+	std::vector<std::pair<unsigned, unsigned> > matches;
+	std::atomic<bool> cancelled;
+
+	MediaLinkJob(mstl::string const& db, variant::Type v, Database const& base)
+		:database(db)
+		,variant(v)
+		,countGames(base.countGames())
+		,identity(&base)
+		,phase(Scan)
+		,next(0)
+		,timer(0)
+		,cancelled(false)
+	{
+	}
+};
+
+
+uint64_t const NoDeadline = uint64_t(-1);
+
+
+// Advances the preparation until it is done (returns true) or the deadline
+// (sys::time::timestamp) has passed (returns false; call again to resume).
+bool
+prepareMediaLinks(MediaLinkJob& job, Database& db, uint64_t deadline)
+{
+	unsigned count = 0;
+	auto expired = [&count, deadline]()
+	{
+		return (++count & 1023) == 0 && sys::time::timestamp() >= deadline;
+	};
+	std::string key;
 
 	// 1. Locate the guiding-text records (cheap index scan, no game bodies).
-	for (unsigned i = 0; i < cache.countGames; ++i)
+	if (job.phase == Scan)
 	{
-		if (db.gameInfo(i).isGuidingText())
-			cache.gtIndices.push_back(i);
+		while (job.next < job.countGames)
+		{
+			if (db.gameInfo(job.next++).isGuidingText())
+				job.gtIndices.push_back(job.next - 1);
+			if (expired())
+				return false;
+		}
+		job.phase = job.gtIndices.empty() ? Prepared : Parse;
+		job.next = 0;
 	}
-	if (cache.gtIndices.empty())
-		return;
 
 	// 2. Parse every report body into per-game blocks (the extraction helper
 	// clears its output, so parse into a per-report vector and append).
-	mstl::vector<tcl_media::GuidingTextGameBlock> blocks;
-	for (unsigned k = 0; k < cache.gtIndices.size(); ++k)
+	if (job.phase == Parse)
 	{
-		Game game;
-		if (db.loadGame(cache.gtIndices[k], game) != load::Ok)
-			continue;
-
-		mstl::string const& html = game.data().m_guidingText;
-		if (!html.empty())
+		while (job.next < job.gtIndices.size())
 		{
-			mstl::vector<tcl_media::GuidingTextGameBlock> report;
-			tcl_media::extractGuidingTextGameBlocks(html, report);
-			for (unsigned q = 0; q < report.size(); ++q)
-				blocks.push_back(report[q]);
+			Game game;
+			if (db.loadGame(job.gtIndices[job.next++], game) == load::Ok)
+			{
+				mstl::string const& html = game.data().m_guidingText;
+				if (!html.empty())
+				{
+					mstl::vector<tcl_media::GuidingTextGameBlock> report;
+					tcl_media::extractGuidingTextGameBlocks(html, report);
+					for (unsigned q = 0; q < report.size(); ++q)
+						job.blocks.push_back(report[q]);
+				}
+			}
+			if (sys::time::timestamp() >= deadline)	// a report decodes slowly
+				return false;
 		}
+		job.phase = job.blocks.empty() ? Prepared : BlockKeys;
+		job.next = 0;
 	}
-	cache.blockCount = blocks.size();
-	if (cache.blockCount == 0)
-		return;
 
-	// Manifest keys for the blocks, computed once.
-	mstl::vector<mstl::string> blockWhite(blocks.size());
-	mstl::vector<mstl::string> blockBlack(blocks.size());
-	mstl::vector<mstl::string> blockEvent(blocks.size());
-	mstl::vector<unsigned> blockYear(blocks.size());
-	mstl::vector<unsigned> blockRound(blocks.size());
-	for (unsigned b = 0; b < blocks.size(); ++b)
+	// 3. Snapshot the manifest keys: per block, per namebase entry, and the
+	// per-game entries. The worker builds its lookup tables from these.
+	if (job.phase == BlockKeys)
 	{
-		mediaLinkKey(blocks[b].white, blockWhite[b]);
-		mediaLinkKey(blocks[b].black, blockBlack[b]);
-		mediaLinkKey(blocks[b].event, blockEvent[b]);
-		blockYear[b]	= blocks[b].year;
-		blockRound[b]	= blocks[b].round;
+		for (unsigned b = 0; b < job.blocks.size(); ++b)
+		{
+			tcl_media::GuidingTextGameBlock const& block = job.blocks[b];
+			mediaLinkKey(block.white, key);
+			job.blockWhite.push_back(key);
+			mediaLinkKey(block.black, key);
+			job.blockBlack.push_back(key);
+			mediaLinkKey(block.event, key);
+			job.blockEvent.push_back(key);
+			job.blockYear.push_back(block.year);
+			job.blockRound.push_back(block.round);
+			if (!job.blockWhite[b].empty() && !job.blockBlack[b].empty())
+			{
+				job.blockPlayers[job.blockWhite[b]] = true;
+				job.blockPlayers[job.blockBlack[b]] = true;
+			}
+		}
+		job.phase = Players;
+		job.next = 0;
 	}
+
+	if (job.phase == Players)
+	{
+		// Only players named by some block can match.
+		Namebase const& players = db.namebase(Namebase::Player);
+		while (job.next < players.size())
+		{
+			NamebasePlayer const* entry = players.player(job.next++);
+			mediaLinkLastName(entry->name(), key);
+			if (!key.empty() && job.blockPlayers.count(key))
+				job.playerKeys.push_back(std::make_pair(MediaLinkEntry(entry), key));
+			if (expired())
+				return false;
+		}
+		job.phase = Events;
+		job.next = 0;
+	}
+
+	if (job.phase == Events)
+	{
+		Namebase const& events = db.namebase(Namebase::Event);
+		while (job.next < events.size())
+		{
+			NamebaseEvent const* entry = events.event(job.next++);
+			mediaLinkKey(entry->name(), key);
+			job.eventKeys.push_back(std::make_pair(MediaLinkEntry(entry), key));
+			if (expired())
+				return false;
+		}
+		job.phase = Games;
+		job.next = 0;
+		job.games.reserve(job.countGames);
+	}
+
+	// Pointers only, no dereference: a sequential pass over the game infos.
+	if (job.phase == Games)
+	{
+		while (job.next < job.countGames)
+		{
+			GameInfo const& info = db.gameInfo(job.next++);
+			MediaLinkGame game;
+
+			if (info.isGuidingText())
+			{
+				game.white = game.black = game.event = 0;
+				game.year = game.round = 0;
+			}
+			else
+			{
+				game.white	= info.playerEntry(color::White);
+				game.black	= info.playerEntry(color::Black);
+				game.event	= info.eventEntry();
+				game.year	= info.date().year();
+				game.round	= info.round();
+			}
+
+			job.games.push_back(game);
+			if (expired())
+				return false;
+		}
+		job.phase = Prepared;
+	}
+
+	return true;
+}
+
+
+void
+matchMediaLinks(MediaLinkJob& job)
+{
+	if (job.blocks.empty())
+		return;
 
 	// Blocks by "white|black" key (keys are alphanumeric, so '|' cannot
 	// collide), each list in block order so the first match still wins.
-	// A linear scan of all blocks per game took minutes on Mega Database.
-	typedef mstl::map<mstl::string, mstl::vector<unsigned> > BlockIndex;
-	BlockIndex byPair;
-	for (unsigned b = 0; b < blocks.size(); ++b)
+	std::unordered_map<std::string, std::vector<unsigned> > byPair;
+	for (unsigned b = 0; b < job.blockWhite.size(); ++b)
 	{
-		if (!blockWhite[b].empty() && !blockBlack[b].empty())
-			byPair[blockWhite[b] + '|' + blockBlack[b]].push_back(b);
+		if (!job.blockWhite[b].empty() && !job.blockBlack[b].empty())
+			byPair[job.blockWhite[b] + '|' + job.blockBlack[b]].push_back(b);
 	}
 
-	// 3. Match games in record order (keeps rows sorted by gameIndex).
-	mstl::string whiteKey, blackKey, eventKey, pairKey;
-	for (unsigned i = 0; i < cache.countGames; ++i)
+	std::unordered_map<MediaLinkEntry, std::string const*> playerKey;
+	for (auto const& entry : job.playerKeys)
+		playerKey[entry.first] = &entry.second;
+	std::unordered_map<MediaLinkEntry, std::string const*> eventKey;
+	for (auto const& entry : job.eventKeys)
+		eventKey[entry.first] = &entry.second;
+
+	std::string pairKey;
+	static std::string const NoEvent;
+
+	for (unsigned i = 0; i < job.games.size(); ++i)
 	{
-		GameInfo const& info = db.gameInfo(i);
-		if (info.isGuidingText())
+		if ((i & 0xffff) == 0 && job.cancelled.load(std::memory_order_relaxed))
+			return;
+
+		MediaLinkGame const& game = job.games[i];
+		if (game.white == 0)
 			continue;
 
-		mediaLinkLastName(info.playerName(color::White), whiteKey);
-		if (whiteKey.empty())
+		auto white = playerKey.find(game.white);
+		if (white == playerKey.end())
 			continue;
-		mediaLinkLastName(info.playerName(color::Black), blackKey);
-		if (blackKey.empty())
+		auto black = playerKey.find(game.black);
+		if (black == playerKey.end())
 			continue;
-		pairKey = whiteKey;
+
+		pairKey = *white->second;
 		pairKey += '|';
-		pairKey += blackKey;
-		BlockIndex::const_iterator candidates = byPair.find(pairKey);
+		pairKey += *black->second;
+		auto candidates = byPair.find(pairKey);
 		if (candidates == byPair.end())
 			continue;
-		mediaLinkKey(info.event(), eventKey);
-		unsigned year = info.date().year();
-		unsigned round = info.round();
 
-		mstl::vector<unsigned> const& list = candidates->second;
-		for (unsigned c = 0; c < list.size(); ++c)
+		auto event = eventKey.find(game.event);
+		std::string const& eventName = event == eventKey.end() ? NoEvent : *event->second;
+
+		for (unsigned b : candidates->second)
 		{
-			unsigned b = list[c];
-			if (blockYear[b] != 0 && blockYear[b] != year)
+			if (job.blockYear[b] != 0 && job.blockYear[b] != game.year)
 				continue;
-			if (blockRound[b] != 0 && blockRound[b] != round)
+			if (job.blockRound[b] != 0 && job.blockRound[b] != game.round)
 				continue;
-			if (!blockEvent[b].empty()
-				&& eventKey.find(blockEvent[b]) == mstl::string::npos)
+			if (!job.blockEvent[b].empty() && eventName.find(job.blockEvent[b]) == std::string::npos)
 				continue;
 
 			// First matching block wins (a game linked by two reports keeps
 			// the media of the earliest report).
-			for (unsigned f = 0; f < blocks[b].files.size(); ++f)
-			{
-				GuidingTextMediaRow row;
-				row.gameIndex	= i;
-				row.type			= blocks[b].types[f];
-				row.path			= tcl_media::resolveGuidingTextPath(database, blocks[b].files[f]);
-				row.title			= blocks[b].event;
-				cache.rows.push_back(row);
-			}
+			job.matches.push_back(std::make_pair(i, b));
 			break;
 		}
 	}
+
+	// The install step needs the matches and blocks only.
+	std::vector<MediaLinkGame>().swap(job.games);
+	MediaLinkKeys().swap(job.playerKeys);
+	MediaLinkKeys().swap(job.eventKeys);
+}
+
+
+void
+installMediaLinks(MediaLinkJob const& job, GuidingTextLinkCache& cache)
+{
+	cache.clear();
+	cache.database		= job.database;
+	cache.thisVariant	= job.variant;
+	cache.countGames	= job.countGames;
+	cache.blockCount	= job.blocks.size();
+
+	for (auto const& match : job.matches)
+	{
+		tcl_media::GuidingTextGameBlock const& block = job.blocks[match.second];
+
+		for (unsigned f = 0; f < block.files.size(); ++f)
+		{
+			GuidingTextMediaRow row;
+			row.gameIndex	= match.first;
+			row.type			= block.types[f];
+			row.path			= tcl_media::resolveGuidingTextPath(job.database, block.files[f]);
+			row.title		= block.event;
+			cache.rows.push_back(row);
+		}
+	}
+}
+
+
+void
+buildMediaLinkCache(mstl::string const& database, variant::Type vtype, Database& db,
+						GuidingTextLinkCache& cache)
+{
+	MediaLinkJob job(database, vtype, db);
+	prepareMediaLinks(job, db, NoDeadline);
+	matchMediaLinks(job);
+	installMediaLinks(job, cache);
+}
+
+
+// Background build, driven by ::scidb::db::mediaLinkReady. One build at a
+// time: a request for another database cancels the pending one. The app
+// thread prepares in slices of SliceTime; then a worker matches, owning
+// the job, and hands it back through the Tcl event queue. The app thread
+// installs it if the database is still the one it snapshotted.
+uint64_t const SliceTime = 10000;	// usec
+
+struct MediaLinkBuild
+{
+	std::shared_ptr<MediaLinkJob>	job;
+	Tcl_Interp*							interp;
+	mstl::vector<Tcl_Obj*>			callbacks;
+
+	MediaLinkBuild() :interp(0) {}
+};
+
+MediaLinkBuild mediaLinkBuild;	// app thread only
+
+// Workers may outlive the interpreter (process exit); they queue nothing
+// once it is gone. Leaked on purpose: no destructor can race a worker.
+struct MediaLinkOwner
+{
+	std::mutex		mutex;
+	bool				alive;
+	Tcl_ThreadId	thread;
+
+	MediaLinkOwner() :alive(false), thread(0) {}
+};
+
+MediaLinkOwner& mediaLinkOwner = *new MediaLinkOwner;
+
+struct MediaLinkEvent
+{
+	Tcl_Event header;
+	std::shared_ptr<MediaLinkJob>* job;
+};
+
+
+bool
+mediaLinkBaseAlive(MediaLinkJob const& job)
+{
+	return	Scidb->contains(job.database, job.variant)
+			&& &Scidb->cursor(job.database, job.variant).database() == job.identity
+			&& job.identity->countGames() == job.countGames;
+}
+
+
+void
+cancelMediaLinkBuild()
+{
+	if (MediaLinkJob* job = mediaLinkBuild.job.get())
+	{
+		job->cancelled = true;
+		if (job->timer)
+			Tcl_DeleteTimerHandler(job->timer);
+		job->timer = 0;
+	}
+	mediaLinkBuild.job.reset();
+	for (unsigned i = 0; i < mediaLinkBuild.callbacks.size(); ++i)
+		Tcl_DecrRefCount(mediaLinkBuild.callbacks[i]);
+	mediaLinkBuild.callbacks.clear();
+}
+
+
+// Ends the pending build: installs it if ok, then calls back.
+void
+finishMediaLinkBuild(bool ok)
+{
+	std::shared_ptr<MediaLinkJob> job;
+	mstl::vector<Tcl_Obj*> callbacks;
+	Tcl_Interp* ti = mediaLinkBuild.interp;
+
+	job.swap(mediaLinkBuild.job);
+	callbacks.swap(mediaLinkBuild.callbacks);
+
+	if (ok)
+		installMediaLinks(*job, mediaLinkCache);
+
+	for (unsigned i = 0; i < callbacks.size(); ++i)
+	{
+		Tcl_Obj* cmd = Tcl_DuplicateObj(callbacks[i]);
+		Tcl_IncrRefCount(cmd);
+		Tcl_ListObjAppendElement(ti, cmd, Tcl_NewBooleanObj(ok));
+		if (Tcl_EvalObjEx(ti, cmd, TCL_EVAL_GLOBAL) != TCL_OK)
+			Tcl_BackgroundException(ti, TCL_ERROR);
+		Tcl_DecrRefCount(cmd);
+		Tcl_DecrRefCount(callbacks[i]);
+	}
+}
+
+
+int
+mediaLinkEventProc(Tcl_Event* event, int)
+{
+	std::shared_ptr<MediaLinkJob> job(*reinterpret_cast<MediaLinkEvent*>(event)->job);
+	delete reinterpret_cast<MediaLinkEvent*>(event)->job;
+
+	if (job == mediaLinkBuild.job)	// else superseded
+		finishMediaLinkBuild(mediaLinkBaseAlive(*job));
+
+	return 1;
+}
+
+
+void
+runMediaLinkJob(std::shared_ptr<MediaLinkJob> job)
+{
+	matchMediaLinks(*job);
+
+	std::lock_guard<std::mutex> lock(mediaLinkOwner.mutex);
+	if (!mediaLinkOwner.alive || job->cancelled)
+		return;
+
+	MediaLinkEvent* e = reinterpret_cast<MediaLinkEvent*>(Tcl_Alloc(sizeof(MediaLinkEvent)));
+	e->header.proc = mediaLinkEventProc;
+	e->job = new std::shared_ptr<MediaLinkJob>(job);
+	Tcl_ThreadQueueEvent(mediaLinkOwner.thread, &e->header, TCL_QUEUE_TAIL);
+	Tcl_ThreadAlert(mediaLinkOwner.thread);
+}
+
+
+// Runs one slice of the pending build's preparation; once prepared, hands
+// the match to a worker (or does it here when no thread can be started).
+void
+mediaLinkSlice(ClientData)
+{
+	std::shared_ptr<MediaLinkJob> job = mediaLinkBuild.job;
+	if (!job)
+		return;
+	job->timer = 0;
+
+	if (!mediaLinkBaseAlive(*job))
+	{
+		finishMediaLinkBuild(false);
+		return;
+	}
+
+	Database& db = const_cast<Cursor&>(Scidb->cursor(job->database, job->variant)).getDatabase();
+
+	if (!prepareMediaLinks(*job, db, sys::time::timestamp() + SliceTime))
+	{
+		job->timer = Tcl_CreateTimerHandler(0, mediaLinkSlice, nullptr);
+		return;
+	}
+
+	if (!job->blocks.empty())
+	{
+		try
+		{
+			std::thread(runMediaLinkJob, job).detach();
+			return;
+		}
+		catch (std::exception const&)
+		{
+			matchMediaLinks(*job);
+		}
+	}
+
+	finishMediaLinkBuild(true);
+}
+
+
+void
+stopMediaLinkBuilds(ClientData)
+{
+	std::lock_guard<std::mutex> lock(mediaLinkOwner.mutex);
+	mediaLinkOwner.alive = false;
+	if (mediaLinkBuild.job)
+		mediaLinkBuild.job->cancelled = true;
 }
 
 
@@ -5863,6 +6271,68 @@ cmdGuidingText(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 
 static int
+cmdMediaLinkReady(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::db::mediaLinkReady <database> <variant> <command>
+	// Returns 1 if the game -> report media mapping that mediaFiles and
+	// mediaGallery use is built. Otherwise returns 0, builds it in the
+	// background, and calls <command> with one more argument: 1 when the
+	// mapping is installed, 0 when the database went away meanwhile. A
+	// request for another database cancels a pending build; the commands
+	// of a cancelled build are never called.
+	if (objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <command>");
+		return TCL_ERROR;
+	}
+
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant		= tcl::game::variantFromObj(objc, objv, 2);
+	Database&		db			= const_cast<Cursor&>(Scidb->cursor(database, variant)).getDatabase();
+	MediaLinkJob*	pending		= mediaLinkBuild.job.get();
+
+	bool samePending =	pending
+							&& pending->database == database
+							&& pending->variant == variant
+							&& pending->countGames == db.countGames()
+							&& pending->identity == &db;
+
+	if (!samePending)
+		cancelMediaLinkBuild();
+
+	if (mediaLinkCache.validFor(database, variant, db.countGames()))
+	{
+		setResult(true);
+		return TCL_OK;
+	}
+
+	if (!samePending)
+	{
+		std::shared_ptr<MediaLinkJob> job =
+			std::make_shared<MediaLinkJob>(mstl::string(database), variant, db);
+
+		if (prepareMediaLinks(*job, db, sys::time::timestamp() + SliceTime))
+		{
+			// A small base: done within one slice, no background build.
+			matchMediaLinks(*job);
+			installMediaLinks(*job, mediaLinkCache);
+			setResult(true);
+			return TCL_OK;
+		}
+
+		mediaLinkBuild.job = job;
+		mediaLinkBuild.interp = ti;
+		job->timer = Tcl_CreateTimerHandler(0, mediaLinkSlice, nullptr);
+	}
+
+	Tcl_IncrRefCount(objv[3]);
+	mediaLinkBuild.callbacks.push_back(objv[3]);
+	setResult(false);
+	return TCL_OK;
+}
+
+
+static int
 cmdMediaGallery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	// Usage: ::scidb::db::mediaGallery <database> <variant>
@@ -6417,6 +6887,14 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdPlayerGames,		cmdPlayerGames);
 	createCommand(ti, CmdMediaFiles,		cmdMediaFiles);
 	createCommand(ti, CmdMediaGallery,	cmdMediaGallery);
+	createCommand(ti, CmdMediaLinkReady,	cmdMediaLinkReady);
+
+	{
+		std::lock_guard<std::mutex> lock(mediaLinkOwner.mutex);
+		mediaLinkOwner.alive = true;
+		mediaLinkOwner.thread = Tcl_GetCurrentThread();
+	}
+	Tcl_CreateExitHandler(stopMediaLinkBuilds, nullptr);
 	createCommand(ti, CmdGuidingText,	cmdGuidingText);
 	createCommand(ti, CmdGameAnchor,		cmdGameAnchor);
 	createCommand(ti, CmdHtmlSanitize,	cmdHtmlSanitize);
