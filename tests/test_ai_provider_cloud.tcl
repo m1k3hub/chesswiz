@@ -1,6 +1,7 @@
 # ======================================================================
 # test_ai_provider_cloud.tcl -- unit tests for the cloud adapters of
-# tcl/ai-provider.tcl (Anthropic Messages API, OpenAI Chat Completions).
+# tcl/ai-provider.tcl (Anthropic Messages API, OpenAI Chat Completions,
+# and the OpenAI-compatible presets: openai, fireworks, qwen, gemini).
 #
 #   xvfb-run -a src/tkscidb-beta tests/test_ai_provider_cloud.tcl
 #
@@ -20,7 +21,8 @@ set ::env(SCIDB_AI_TIER) off
 # The tests own the key environment: save and drop what the runner set,
 # so apiKey() sees only what a test puts there.
 array set SavedEnv {}
-foreach v {ANTHROPIC_API_KEY OPENAI_API_KEY} {
+foreach v {ANTHROPIC_API_KEY OPENAI_API_KEY FIREWORKS_API_KEY
+	QWEN_TOKEN_PLAN_API_KEY QWEN_API_KEY GEMINI_API_KEY GOOGLE_API_KEY} {
 	if {[info exists ::env($v)]} {
 		set SavedEnv($v) $::env($v)
 		unset ::env($v)
@@ -890,6 +892,303 @@ test aipc-apikey-openai-missing-9.3 {openai without a key reports ok 0} -body {
 	Assert {[string match "*API key*" [dict get $r error]]}
 	Assert {[string match "*OPENAI_API_KEY*" [dict get $r error]]}
 	Assert {[llength $::Mock(requests)] == 0}
+	return OK
+} -result OK
+
+
+# ----------------------------------------------------------------------
+# 10. the presets: configure -name picks endpoint and default model
+# ----------------------------------------------------------------------
+
+test aipc-preset-endpoint-10.1 {configure -name takes the endpoint from the Endpoint array} -body {
+	foreach p {fireworks qwen gemini openai anthropic ollama} {
+		# route through a name with no preset so the fresh-name branch
+		# of configure drops the old endpoint before the new default
+		::ai::provider::configure -name stub -model ""
+		::ai::provider::configure -name $p
+		Assert {$::ai::provider::Config(endpoint) eq $::ai::provider::Endpoint($p)} \
+			"$p endpoint from the array ($::ai::provider::Config(endpoint))"
+		Assert {$::ai::provider::Config(endpoint) ne ""} "$p has an endpoint"
+	}
+	return OK
+} -result OK
+
+test aipc-preset-model-10.2 {model falls back to the per-provider DefaultModel} -body {
+	foreach {p want} {
+		ollama    kimi-k3:cloud
+		fireworks accounts/fireworks/models/glm-5p3
+		qwen      qwen3.8-max
+		gemini    ""
+		anthropic claude-opus-5-5
+		openai    ""
+	} {
+		::ai::provider::configure -name stub -model ""
+		::ai::provider::configure -name $p
+		Assert {[::ai::provider::model] eq $want} "$p default model"
+		# an explicit choice still wins over the preset default
+		if {$want ne ""} {
+			::ai::provider::configure -model "chosen-$p"
+			Assert {[::ai::provider::model] eq "chosen-$p"} "$p explicit model"
+			::ai::provider::configure -model ""
+			Assert {[::ai::provider::model] eq $want} "$p back to the default"
+		}
+	}
+	return OK
+} -result OK
+
+
+# ----------------------------------------------------------------------
+# 11. apiKey with a list of environment variables
+# ----------------------------------------------------------------------
+
+test aipc-apikey-envlist-11.1 {the first set env var wins, -keys is the fallback} -body {
+	::ai::provider::configure -name qwen -keys {}
+	# qwen: QWEN_TOKEN_PLAN_API_KEY first, then QWEN_API_KEY
+	set ::env(QWEN_API_KEY) q-plain
+	set a [::ai::provider::apiKey qwen]
+	set ::env(QWEN_TOKEN_PLAN_API_KEY) q-plan
+	set b [::ai::provider::apiKey qwen]
+	set ::env(QWEN_TOKEN_PLAN_API_KEY) ""	;# empty does not count
+	set c [::ai::provider::apiKey qwen]
+	unset ::env(QWEN_TOKEN_PLAN_API_KEY)
+	unset ::env(QWEN_API_KEY)
+	set d [::ai::provider::apiKey qwen]
+
+	# gemini: GEMINI_API_KEY first, then GOOGLE_API_KEY; -keys underneath
+	::ai::provider::configure -keys {qwen q-file gemini g-file}
+	set e [::ai::provider::apiKey qwen]
+	set ::env(GOOGLE_API_KEY) g-google
+	set f [::ai::provider::apiKey gemini]
+	set ::env(GEMINI_API_KEY) g-primary
+	set g [::ai::provider::apiKey gemini]
+	unset ::env(GEMINI_API_KEY)
+	unset ::env(GOOGLE_API_KEY)
+	set h [::ai::provider::apiKey gemini]
+	return [list $a $b $c $d $e $f $g $h]
+} -result [list q-plain q-plan q-plain "" q-file g-google g-primary g-file]
+
+test aipc-apikey-needkey-11.2 {NeedKey names the label and the first env var} -body {
+	::ai::provider::configure -name qwen -keys {}
+	set rc [catch {::ai::provider::NeedKey qwen} err]
+	Assert {$rc == 1} "no key errors"
+	Assert {[string match "*Qwen token plan*" $err]} "the label"
+	Assert {[string match "*QWEN_TOKEN_PLAN_API_KEY*" $err]} "the first env var"
+	set rc [catch {::ai::provider::NeedKey gemini} err]
+	Assert {$rc == 1} "no key errors"
+	Assert {[string match "*Gemini*" $err]} "the gemini label"
+	Assert {[string match "*GEMINI_API_KEY*" $err]} "the first gemini env var"
+	return OK
+} -result OK
+
+
+# ----------------------------------------------------------------------
+# 12. cloudProvider
+# ----------------------------------------------------------------------
+
+test aipc-cloudprovider-12.1 {cloudProvider knows the presets and ollama's cloud models} -body {
+	# anthropic and every OpenAI-compatible preset leave the machine
+	foreach p {anthropic openai fireworks qwen gemini} {
+		::ai::provider::configure -name stub -model ""
+		::ai::provider::configure -name $p
+		Assert {[::ai::provider::cloudProvider] == 1} "$p is cloud"
+	}
+	# ollama: only its cloud models are forwarded
+	::ai::provider::configure -name stub -model ""
+	::ai::provider::configure -name ollama -model kimi-k3:cloud
+	Assert {[::ai::provider::cloudProvider] == 1} "ollama cloud model"
+	::ai::provider::configure -model qwen3.5:9b
+	Assert {[::ai::provider::cloudProvider] == 0} "ollama local model"
+	::ai::provider::configure -model ""
+	Assert {[::ai::provider::cloudProvider] == 1} "ollama default model is cloud"
+	# the stub never sends
+	::ai::provider::configure -name stub
+	Assert {[::ai::provider::cloudProvider] == 0} "stub is not cloud"
+	return OK
+} -result OK
+
+
+# ----------------------------------------------------------------------
+# 13. end to end: the compatible presets through the openai adapter
+# ----------------------------------------------------------------------
+
+test aipc-e2e-fireworks-13.1 {fireworks rides the openai adapter with its key and label} -body {
+	MockStart
+	MockReset
+	set ::Mock(body) "{\"id\":\"c1\",\"choices\":\[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":\[{\"id\":\"call_fw\",\"type\":\"function\",\"function\":{\"name\":\"chess_engine\",\"arguments\":\"{\\\"depth\\\":8}\"}}]}}]}"
+	::ai::provider::configure -name fireworks -model "" \
+		-endpoint "http://127.0.0.1:$::Mock(port)/v1/chat/completions" -keys {fireworks fw-key}
+
+	set hist [list [dict create role user content "Best move?"]]
+	set r [AsyncRun {::ai::provider::chatAsync $hist $ToolsJson E2ESink}]
+	Assert {$r ne "TIMEOUT"} "callback fired"
+	Assert {[dict get $r ok]} "ok ($r)"
+	set calls [dict get [dict get $r message] tool_calls]
+	Assert {[llength $calls] == 1} "one call"
+	Assert {[dict get [lindex $calls 0] id] eq "call_fw"}
+	Assert {[dict get [lindex $calls 0] function arguments depth] == 8} "arguments decoded"
+
+	Assert {[llength $::Mock(requests)] == 1} "one request"
+	lassign [lindex $::Mock(requests) 0] method url hdrs body
+	Assert {$method eq "POST" && $url eq "/v1/chat/completions"} "openai adapter URL"
+	Assert {[dict get $hdrs authorization] eq "Bearer fw-key"} "the fireworks key"
+	set bd [json::json2dict $body]
+	Assert {[dict get $bd model] eq "accounts/fireworks/models/glm-5p3"} "preset model on the wire"
+	Assert {[llength [dict get $bd tools]] == 2} "tools pass through"
+
+	# completeAsync rides the same adapter and delivers the text
+	MockReset
+	set ::Mock(body) "{\"choices\":\[{\"message\":{\"role\":\"assistant\",\"content\":\"From Fireworks.\"}}]}"
+	set r [AsyncRun {::ai::provider::completeAsync "ping" E2ESink}]
+	Assert {[dict get $r ok]} "ok ($r)"
+	Assert {[dict get $r text] eq "From Fireworks."}
+	lassign [lindex $::Mock(requests) 0] method url hdrs body
+	Assert {[dict get $hdrs authorization] eq "Bearer fw-key"} "the fireworks key"
+	Assert {![dict exists [json::json2dict $body] tools]} "a completion carries no tools"
+
+	# errors are labelled with the preset's Label
+	MockReset
+	set ::Mock(code) 500
+	set ::Mock(body) "{\"error\":{\"message\":\"boom\"}}"
+	set r [AsyncRun {::ai::provider::chatAsync $hist "" E2ESink}]
+	set ::Mock(code) 200
+	Assert {$r ne "TIMEOUT"} "callback fired"
+	Assert {![dict get $r ok]} "not ok"
+	Assert {[dict get $r error] eq "Fireworks: HTTP 500: boom"} "labelled Fireworks"
+	return OK
+} -result OK
+
+test aipc-e2e-qwen-13.2 {qwen sends its first env key and errors are labelled} -body {
+	MockStart
+	MockReset
+	set ::Mock(body) "{\"choices\":\[{\"message\":{\"role\":\"assistant\",\"content\":\"Qwen says hi.\"}}]}"
+	::ai::provider::configure -name qwen -model "" \
+		-endpoint "http://127.0.0.1:$::Mock(port)/v1/chat/completions" -keys {}
+	set ::env(QWEN_TOKEN_PLAN_API_KEY) q-plan-env
+	set rc [catch {
+		set hist [list [dict create role user content "hi"]]
+		set r [AsyncRun {::ai::provider::chatAsync $hist "" E2ESink}]
+	} err]
+	unset ::env(QWEN_TOKEN_PLAN_API_KEY)
+	if {$rc} { return -code error $err }
+	Assert {$r ne "TIMEOUT"} "callback fired"
+	Assert {[dict get $r ok]} "ok ($r)"
+	Assert {[dict get [dict get $r message] role] eq "assistant"} "chat mode carries a message"
+	Assert {[dict get [dict get $r message] content] eq "Qwen says hi."}
+
+	Assert {[llength $::Mock(requests)] == 1} "one request"
+	lassign [lindex $::Mock(requests) 0] method url hdrs body
+	Assert {$method eq "POST" && $url eq "/v1/chat/completions"} "openai adapter URL"
+	Assert {[dict get $hdrs authorization] eq "Bearer q-plan-env"} "the token-plan env key"
+	set bd [json::json2dict $body]
+	Assert {[dict get $bd model] eq "qwen3.8-max"} "preset model on the wire"
+
+	# completeAsync with the -keys fallback
+	MockReset
+	set ::Mock(body) "{\"choices\":\[{\"message\":{\"role\":\"assistant\",\"content\":\"Qwen text.\"}}]}"
+	::ai::provider::configure -keys {qwen q-file-key}
+	set r [AsyncRun {::ai::provider::completeAsync "ping" E2ESink}]
+	Assert {[dict get $r ok]} "ok ($r)"
+	Assert {[dict get $r text] eq "Qwen text."}
+	lassign [lindex $::Mock(requests) 0] method url hdrs body
+	Assert {[dict get $hdrs authorization] eq "Bearer q-file-key"} "the -keys fallback"
+
+	# errors are labelled with 'Qwen token plan'
+	MockReset
+	set ::Mock(code) 500
+	set ::Mock(body) "{\"error\":{\"message\":\"boom\"}}"
+	set r [AsyncRun {::ai::provider::completeAsync "ping" E2ESink}]
+	set ::Mock(code) 200
+	Assert {![dict get $r ok]} "not ok"
+	Assert {[dict get $r error] eq "Qwen token plan: HTTP 500: boom"} "labelled Qwen token plan"
+	return OK
+} -result OK
+
+test aipc-e2e-gemini-nokey-13.3 {gemini without a key reports ok 0 and never sends} -body {
+	MockStart
+	MockReset
+	::ai::provider::configure -name gemini -model gemini-mock \
+		-endpoint "http://127.0.0.1:$::Mock(port)/v1/chat/completions" -keys {}
+	set hist [list [dict create role user content "hello"]]
+	set r [AsyncRun {::ai::provider::chatAsync $hist "" E2ESink}]
+	Assert {$r ne "TIMEOUT"} "callback fired"
+	Assert {![dict get $r ok]} "not ok"
+	set err [dict get $r error]
+	Assert {[string match "*API key*" $err]} "mentions the API key"
+	Assert {[string match "*GEMINI_API_KEY*" $err]} "and the first env var"
+	Assert {[string match "*Gemini*" $err]} "with the label"
+	Assert {[llength $::Mock(requests)] == 0} "nothing hit the wire"
+
+	set r [AsyncRun {::ai::provider::completeAsync "ping" E2ESink}]
+	Assert {$r ne "TIMEOUT"} "callback fired"
+	Assert {![dict get $r ok]} "not ok"
+	Assert {[string match "*GEMINI_API_KEY*" [dict get $r error]]} "the env var named"
+	Assert {[llength $::Mock(requests)] == 0} "nothing hit the wire"
+	return OK
+} -result OK
+
+
+# ----------------------------------------------------------------------
+# 14. modelsAsync against the mock server
+# ----------------------------------------------------------------------
+
+test aipc-models-async-14.1 {modelsAsync lists, filters and strips model ids} -body {
+	MockStart
+	MockReset
+	set ::Mock(body) "{\"data\":\[{\"id\":\"accounts/fireworks/models/glm-5p3\"},{\"id\":\"qwen3-embedding-8b\"},{\"id\":\"models/gemini-x\"},{\"id\":\"a-reranker\"}]}"
+	set saved $::ai::provider::Endpoint(fireworks)
+	set ::ai::provider::Endpoint(fireworks) "http://127.0.0.1:$::Mock(port)/v1/chat/completions"
+	::ai::provider::configure -name fireworks -keys {fireworks m-key}
+	set r [AsyncRun {::ai::provider::modelsAsync fireworks E2ESink}]
+	set reqs $::Mock(requests)
+	set ::ai::provider::Endpoint(fireworks) $saved
+	Assert {$::ai::provider::Endpoint(fireworks) eq $saved} "endpoint restored"
+
+	Assert {$r ne "TIMEOUT"} "callback fired"
+	Assert {[dict get $r ok]} "ok ($r)"
+	# sorted; embedding and reranker gone; the gemini 'models/' prefix stripped
+	Assert {[dict get $r models] eq {accounts/fireworks/models/glm-5p3 gemini-x}} \
+		"sorted and filtered ([dict get $r models])"
+
+	Assert {[llength $reqs] == 1} "one request"
+	lassign [lindex $reqs 0] method url hdrs body
+	Assert {$method eq "GET"} "a list is a GET"
+	Assert {$url eq "/v1/models"} "chat/completions mapped to models"
+	Assert {[dict get $hdrs authorization] eq "Bearer m-key"} "key sent"
+	return OK
+} -result OK
+
+test aipc-models-async-14.2 {a 401 model list blames the API key, labelled} -body {
+	MockStart
+	MockReset
+	set ::Mock(code) 401
+	set ::Mock(body) "{\"error\":{\"message\":\"bad key\"}}"
+	set saved $::ai::provider::Endpoint(qwen)
+	set ::ai::provider::Endpoint(qwen) "http://127.0.0.1:$::Mock(port)/v1/chat/completions"
+	::ai::provider::configure -name qwen -keys {qwen q-key}
+	set r [AsyncRun {::ai::provider::modelsAsync qwen E2ESink}]
+	set ::ai::provider::Endpoint(qwen) $saved
+	set ::Mock(code) 200
+	Assert {$::ai::provider::Endpoint(qwen) eq $saved} "endpoint restored"
+
+	Assert {$r ne "TIMEOUT"} "callback fired"
+	Assert {![dict get $r ok]} "not ok"
+	set err [dict get $r error]
+	Assert {[string match "*API key*" $err]} "mentions the API key"
+	Assert {[string match "*Qwen token plan*" $err]} "with the label"
+	Assert {[string match "*bad key*" $err]} "server message kept"
+	return OK
+} -result OK
+
+test aipc-models-async-14.3 {modelsAsync without a key reports ok 0 and never sends} -body {
+	MockStart
+	MockReset
+	::ai::provider::configure -name gemini -model gemini-mock -keys {}
+	set r [AsyncRun {::ai::provider::modelsAsync gemini E2ESink}]
+	Assert {$r ne "TIMEOUT"} "callback fired"
+	Assert {![dict get $r ok]} "not ok"
+	Assert {[string match "*API key*" [dict get $r error]]} "mentions the API key"
+	Assert {[string match "*GEMINI_API_KEY*" [dict get $r error]]} "and the env var"
+	Assert {[llength $::Mock(requests)] == 0} "nothing hit the wire"
 	return OK
 } -result OK
 
