@@ -82,6 +82,9 @@ present in the fact-pack. Ungrounded claims are highlighted, not silently shown.
 OpenAI-compatible localhost) as the default provider. Cloud providers are opt-in per
 feature. Professional opening prep is confidential; the product must not require
 uploading a private database.
+*Revised 2026-10-02 (`ASSISTANT_COVERAGE_MAP.md` P6):* for ease of use the default is a
+strong cloud model, and local is one switch away. The rest stands: the product never
+requires or performs an upload of a database, and what is sent is stated on first use.
 
 **P4 — No silent mutation.** Any generated text that would modify a database
 (comments, annotations, tags) goes to a **review queue** with per-item accept/reject,
@@ -300,9 +303,9 @@ assume F1–F4.
   stub provider.
 - **i18n.** Generated text should respect the app's language setting; translation is
   itself a feature (F10).
-- **Security/privacy.** Never send a database or game list to a cloud provider without
-  an explicit per-feature, remembered consent; local provider is the default. Redact
-  API keys from logs.
+- **Security/privacy.** Never send a database or game list to a cloud provider. Since
+  2026-10-02 the default provider is a strong cloud model (P3, revised); the tool
+  results the model reads are sent, and the first use says so. Redact API keys from logs.
 - **Offline behavior.** Every feature must degrade gracefully: with no provider
   configured, buttons show a clear "configure AI" affordance rather than failing.
 

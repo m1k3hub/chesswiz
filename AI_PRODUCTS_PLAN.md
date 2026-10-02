@@ -30,8 +30,10 @@ board. Every feature below restates its own version of this.
    Startup must survive a poisoned settings file (see `b62d63b`).
 3. **Confidence-gated.** Anything a classifier decides has a threshold, an env
    override, and a fallback that is today's behaviour.
-4. **Local-first and private.** Audio, error logs, games and comments do not leave
-   the machine unless the user picked a cloud backend for that task.
+4. **Private where it matters.** Audio does not leave the machine, and no database is
+   ever uploaded. *Revised 2026-10-02 (`ASSISTANT_COVERAGE_MAP.md` P6):* the language
+   model defaults to a strong cloud model, so the request and the tool results it reads
+   are sent; local models are opt-in, and the first use says what is sent.
 5. **Fit the machine.** Features must work on 8 GB Turing/Pascal cards and on CPU;
    measure and state the cost.
 6. **Auditable.** Where a report makes a claim, the fact/engine line that grounds it
@@ -176,7 +178,8 @@ action.
 Move quality, "who stands better", opening names, tablebase verdicts, and any
 "is this a good move" — Stockfish/facts/ECO or nothing. No feature may let a model
 speak about the board without a grounding line. No autonomous mutation without the
-confirm gate. No cloud call for audio, error logs or private games by default.
+confirm gate. No cloud call for audio; no database is ever uploaded (the language
+model defaults to the cloud since 2026-10-02, `ASSISTANT_COVERAGE_MAP.md` P6).
 
 ## Sequencing and success measures
 

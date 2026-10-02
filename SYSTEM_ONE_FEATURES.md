@@ -290,7 +290,9 @@ vetted CQL pattern.
   in the state that `label facts` reads, so rules replace guesses.
 - **The classifier fits in front of CQL** as a pre-router: a `choice` over a library of
   vetted CQL templates, the same pattern as tool pre-routing. The parser validates the
-  query and the user confirms before it runs.
+  query and the user confirms before it runs. (Since 2026-10-02 a model may also draft
+  CQL for requests no template covers; see `ASSISTANT_COVERAGE_MAP.md` §5.6. The
+  classifier still never drafts or judges.)
 
 ---
 

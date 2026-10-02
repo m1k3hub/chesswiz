@@ -219,10 +219,14 @@ partial, as noted in the table.
 
 - **Move quality, "who stands better", opening names, tablebase verdicts** — Stockfish,
   the fact layer or the ECO table, never a model (`AI_PRODUCTS_PLAN.md` §0).
-- **Free CQL written by a model** — only vetted pattern ids + validated fields
-  (`PLAIN_LANGUAGE_SEARCH.md` §2).
+- **CQL that a model writes and runs unseen.** Since 2026-10-02 a model may draft
+  CQL for the position finder: it is parsed, shown with sample positions before a full
+  run, and stays visible (`ASSISTANT_COVERAGE_MAP.md` §5.6). Vetted pattern ids stay
+  the only route for `search_games`.
 - **Autonomous mutation** — every write stays behind the confirm gate.
-- **Cloud by default for audio, error logs or private games.**
+- **Cloud by default for audio.** Since 2026-10-02 the language model defaults to a
+  strong cloud model, with local opt-in (`ASSISTANT_COVERAGE_MAP.md` P6). Audio is
+  still transcribed locally.
 - **Player-name fuzzy matching as an LLM task** — the merge dialog is better served by the
   deterministic name/ID columns; a classifier only for genuinely ambiguous merges (A5).
 

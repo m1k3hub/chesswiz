@@ -105,8 +105,10 @@ covers changes.
 
 The library is the product. Each pattern is a CQL 6.2 script with an id, a label, a plain-language
 description and aliases (as today), plus **fixture games that must match and must not match**.
-The index build refuses a pattern that fails its fixtures. The assistant never writes patterns
-(the rule of `PLAIN_LANGUAGE_SEARCH.md` stays); people do, with the engine's help for checking.
+The index build refuses a pattern that fails its fixtures. Library patterns are written by
+people, with the engine's help for checking. A script a model drafted for the position finder
+(`ASSISTANT_COVERAGE_MAP.md` §5) is never indexed. A player may save it as a user pattern, and
+it joins the library only after a person adds fixtures.
 
 ## 9. Risks and open questions
 

@@ -15,9 +15,9 @@ before it runs, and it runs through the same search path as the Advanced Search 
 
 ## 2. The rule that shapes everything
 
-**No model ever writes query text, and no model ever writes CQL.** A model may only
-fill fixed, typed fields (the existing `search_games` schema) and choose a **pattern id**
-from a vetted library. The application:
+**No model ever writes query text.** A model may only fill fixed, typed fields (the
+existing `search_games` schema) and choose a **pattern id** from a vetted library. The
+application:
 
 - validates every field (`CheckArgs search_games`)
 - builds the query (`BuildQuery`)
@@ -25,6 +25,12 @@ from a vetted library. The application:
 
 A wrong interpretation therefore costs a wrong filter the user can see and edit. It can
 never cost a malformed or runaway query, and it never produces a chess claim.
+
+**Amended 2026-10-02** (`ASSISTANT_COVERAGE_MAP.md` §5.6): this search still uses only
+vetted patterns. Requests no pattern covers go to the position finder, where **a model
+may draft CQL; it never decides a match and never runs unseen.** Every drafted script
+is parsed by CQL 6.2, shown with sample matching positions before a full run, and stays
+visible and editable with its results.
 
 ## 3. Pipeline
 
@@ -92,8 +98,9 @@ and add aliases for the keyword stage.
 
 ## 6. Out of scope, and next steps
 
-- **Free CQL written by a model:** never. A power user can type CQL in a later "CQL"
-  field, which the parser validates.
+- **Free CQL written by a model:** not in this search. Drafted CQL lives in the
+  position finder (`ASSISTANT_COVERAGE_MAP.md` §5), under the rule in §2. Power users
+  type CQL in the CQL 6.2 Search dialog.
 - **More patterns** (isolated queen's pawn, Greek gift, opposite-coloured bishops) need
   fixture games first. The **square-colour designators** `L` (light) and `D` (dark) are
   implemented (`[L?]`, `[D1]`, `BL?`, `b[D?]`), and so are the spatial **flip** and
