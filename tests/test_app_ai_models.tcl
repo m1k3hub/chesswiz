@@ -176,30 +176,37 @@ tcltest::test aimodels-dialog-shows-override {the dialog says when a flag overri
 	}
 } -result {1 1}
 
-tcltest::test aimodels-default-cloud {without a choice the default is Claude, whatever an old setting says} -body {
+tcltest::test aimodels-default-cloud {without a choice the default is kimi-k3:cloud on Ollama, whatever an old setting says} -body {
 	::scidb::test::aimodels::isolated {
-		array set ::application::ai::Settings {provider ollama model old:1b chosen 0}
+		array set ::application::ai::Settings {provider anthropic model old chosen 0}
 		::application::ai::applySettings
-		list $::application::ai::Config(provider) $::application::ai::Config(model)
+		::ai::provider::configure -name $::application::ai::Config(provider) -model $::application::ai::Config(model)
+		list $::application::ai::Config(provider) $::application::ai::Config(model) [::ai::provider::model] \
+			[::ai::provider::cloudProvider]
 	}
-} -result {anthropic {}}
+} -result {ollama {} kimi-k3:cloud 1}
 
-tcltest::test aimodels-dialog-cloud-default {the dialog opens on Claude with its default model, Ollama not asked} -body {
+tcltest::test aimodels-dialog-cloud-default {the dialog opens on Ollama with kimi-k3:cloud selected} -body {
 	::scidb::test::aimodels::isolated {
 		set ::application::ai::Settings(chosen) 0
 		rename ::ai::provider::ollamaModels ::scidb::test::aimodels::realModels
-		proc ::ai::provider::ollamaModels {args} { error "must not be asked" }
+		proc ::ai::provider::ollamaModels {args} {
+			return [list [dict create name kimi-k3:cloud remote 1 tools 1 size 1] \
+				[dict create name qwen3.5:9b remote 0 tools 1 size 1]]
+		}
 		::application::ai::models::show .application
 		update
-		set out [list $::application::ai::models::Priv(provider) $::application::ai::models::Priv(cloudModel) \
-			[winfo ismapped $::application::ai::models::Priv(cloud)] [winfo ismapped $::application::ai::models::Priv(local)] \
-			$::application::ai::models::Priv(filled)]
-		::application::ai::models::Close
+		set out [list $::application::ai::models::Priv(provider) \
+			[winfo ismapped $::application::ai::models::Priv(local)] \
+			[winfo ismapped $::application::ai::models::Priv(cloud)] \
+			[$::application::ai::models::Priv(tree) selection]]
+		::application::ai::models::Apply
+		lappend out $::application::ai::Settings(provider) $::application::ai::Settings(model)
 		rename ::ai::provider::ollamaModels {}
 		rename ::scidb::test::aimodels::realModels ::ai::provider::ollamaModels
 		set out
 	}
-} -result {anthropic claude-opus-5-5 1 0 0}
+} -result {ollama 1 0 kimi-k3:cloud ollama {}}
 
 tcltest::test aimodels-dialog-cloud-apply {a cloud choice saves the model and the key, the key file is private} -body {
 	::scidb::test::aimodels::isolated {
@@ -232,9 +239,9 @@ tcltest::test aimodels-dialog-cloud-default-saved-empty {choosing the default mo
 	}
 } -result {anthropic {}}
 
-tcltest::test aimodels-dialog-switch-local {switching to the local model shows the Ollama list} -body {
+tcltest::test aimodels-dialog-switch-local {switching from a preset to Ollama shows the Ollama list} -body {
 	::scidb::test::aimodels::isolated {
-		set ::application::ai::Settings(chosen) 0
+		::application::ai::choose anthropic ""
 		rename ::ai::provider::ollamaModels ::scidb::test::aimodels::realModels
 		proc ::ai::provider::ollamaModels {args} {
 			return [list [dict create name local-a:1b remote 0 tools 1 size 1]]
@@ -253,6 +260,31 @@ tcltest::test aimodels-dialog-switch-local {switching to the local model shows t
 		set out
 	}
 } -result {1 0 local-a:1b}
+
+tcltest::test aimodels-dialog-preset-list {a preset lists the provider's models live} -body {
+	::scidb::test::aimodels::isolated {
+		set keys $::application::ai::Keys
+		rename ::ai::provider::modelsAsync ::scidb::test::aimodels::realList
+		proc ::ai::provider::modelsAsync {provider script args} {
+			after 0 [list {*}$script [list ok 1 models [list $provider-a $provider-b]]]
+		}
+		::application::ai::setKey fireworks test-key
+		::application::ai::models::show .application
+		update
+		set ::application::ai::models::Priv(provider) fireworks
+		::application::ai::models::ProviderChanged
+		update
+		set out [list [$::application::ai::models::Priv(cloud).model cget -values] \
+			$::application::ai::models::Priv(cloudModel)]
+		set ::application::ai::models::Priv(cloudModel) fireworks-b
+		::application::ai::models::Apply
+		lappend out $::application::ai::Settings(provider) $::application::ai::Settings(model)
+		rename ::ai::provider::modelsAsync {}
+		rename ::scidb::test::aimodels::realList ::ai::provider::modelsAsync
+		::application::ai::setKey fireworks [expr {[dict exists $keys fireworks] ? [dict get $keys fireworks] : ""}]
+		set out
+	}
+} -result {{fireworks-a fireworks-b} accounts/fireworks/models/glm-5p3 fireworks fireworks-b}
 
 tcltest::test aimodels-classifier-saved-setting {the saved classifier backend is in effect} -body {
 	::scidb::test::aimodels::isolated {

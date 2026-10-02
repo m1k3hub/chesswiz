@@ -1,8 +1,10 @@
 # ======================================================================
 # ::ai::provider -- provider-agnostic text completion for the language layer.
 #
-# Providers: `anthropic` (the application's default, ASSISTANT_COVERAGE_MAP.md
-# P6), `openai`, `ollama` (local, opt-in) and `stub` (deterministic, for
+# Providers: `ollama` (local models and Ollama's cloud models; the
+# application's default is kimi-k3:cloud, ASSISTANT_COVERAGE_MAP.md
+# P6), `anthropic`, the OpenAI-compatible presets `openai`, `fireworks`,
+# `qwen` (Qwen token plan) and `gemini`, and `stub` (deterministic, for
 # tests, and the module's own default). Every provider speaks the same
 # completion and chat calls; nothing here ever uploads a database.
 #
@@ -118,12 +120,9 @@ proc ::ai::provider::configure {args} {
 		}
 	}
 
-	if {$Config(endpoint) eq ""} {
-		switch -- $Config(name) {
-			ollama    { set Config(endpoint) "http://localhost:11434/api/generate" }
-			openai    { set Config(endpoint) "https://api.openai.com/v1/chat/completions" }
-			anthropic { set Config(endpoint) "https://api.anthropic.com/v1/messages" }
-		}
+	variable Endpoint
+	if {$Config(endpoint) eq "" && [info exists Endpoint($Config(name))]} {
+		set Config(endpoint) $Endpoint($Config(name))
 	}
 	return
 }
@@ -247,11 +246,10 @@ proc ::ai::provider::failAsync {script err} {
 proc ::ai::provider::cloudProvider {} {
 	variable Config
 
-	switch -- $Config(name) {
-		openai    { return 1 }
-		anthropic { return 1 }
-		default   { return 0 }
-	}
+	variable Compatible
+	if {$Config(name) eq "anthropic" || $Config(name) in $Compatible} { return 1 }
+	# Ollama forwards its cloud models
+	return [expr {$Config(name) eq "ollama" && [string match *cloud* [model]]}]
 }
 
 # Record one gate's answer against the provider that actually served the
@@ -351,7 +349,7 @@ proc ::ai::provider::complete {prompt args} {
 	switch -- $Config(name) {
 		stub      { return [stub $prompt] }
 		ollama    { return [ollama $prompt $opts(-system)] }
-		openai    { return [openai $prompt $opts(-system)] }
+		openai - fireworks - qwen - gemini { return [openai $prompt $opts(-system)] }
 		anthropic { return [anthropic $prompt $opts(-system)] }
 		default   { error "ai::provider: unknown provider '$Config(name)'" }
 	}
@@ -391,7 +389,7 @@ proc ::ai::provider::completeAsync {prompt script args} {
 	switch -- $Config(name) {
 		stub   { after 0 [list {*}$script [list ok 1 text [stub $prompt]]] }
 		ollama { ollamaAsync $prompt $opts(-system) $script }
-		anthropic - openai {
+		anthropic - openai - fireworks - qwen - gemini {
 			set messages {}
 			if {$opts(-system) ne ""} { lappend messages [dict create role system content $opts(-system)] }
 			lappend messages [dict create role user content $prompt]
@@ -443,7 +441,7 @@ proc ::ai::provider::onOllama {script token} {
 proc ::ai::provider::ollamaBody {prompt system} {
 	variable Config
 
-	set body "{\"model\":\"[jsonEscape $Config(model)]\",\"prompt\":\"[jsonEscape $prompt]\",\"stream\":false"
+	set body "{\"model\":\"[jsonEscape [model]]\",\"prompt\":\"[jsonEscape $prompt]\",\"stream\":false"
 	if {[string length $Config(think)]} {
 		append body ",\"think\":$Config(think)"
 	}
@@ -487,17 +485,51 @@ proc ::ai::provider::ollama {prompt system} {
 namespace eval ai {
 namespace eval provider {
 
+# Per provider: the model used when none is chosen, the environment
+# variables that may hold the key (first set one wins), the endpoint and
+# the name shown to the user. The OpenAI-compatible presets all go through
+# the openai adapter.
 variable DefaultModel
 array set DefaultModel {
+	ollama    kimi-k3:cloud
 	anthropic claude-opus-5-5
 	openai    ""
+	fireworks accounts/fireworks/models/glm-5p3
+	qwen      qwen3.8-max
+	gemini    ""
 }
 
 variable KeyEnv
 array set KeyEnv {
 	anthropic ANTHROPIC_API_KEY
 	openai    OPENAI_API_KEY
+	fireworks FIREWORKS_API_KEY
+	qwen      {QWEN_TOKEN_PLAN_API_KEY QWEN_API_KEY}
+	gemini    {GEMINI_API_KEY GOOGLE_API_KEY}
 }
+
+variable Endpoint
+array set Endpoint {
+	ollama    http://localhost:11434/api/generate
+	anthropic https://api.anthropic.com/v1/messages
+	openai    https://api.openai.com/v1/chat/completions
+	fireworks https://api.fireworks.ai/inference/v1/chat/completions
+	qwen      https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions
+	gemini    https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
+}
+
+variable Label
+array set Label {
+	ollama    Ollama
+	anthropic Anthropic
+	openai    OpenAI
+	fireworks Fireworks
+	qwen      "Qwen token plan"
+	gemini    Gemini
+}
+
+# The providers spoken through the OpenAI Chat Completions adapter.
+variable Compatible {openai fireworks qwen gemini}
 
 # Claude models that take output_config.effort, and those that take the
 # server-side refusal fallback in its "default" form.
@@ -525,11 +557,18 @@ proc ::ai::provider::apiKey {provider} {
 	variable KeyEnv
 
 	if {[info exists KeyEnv($provider)]} {
-		set var $KeyEnv($provider)
-		if {[info exists ::env($var)] && [string length $::env($var)]} { return $::env($var) }
+		foreach var $KeyEnv($provider) {
+			if {[info exists ::env($var)] && [string length $::env($var)]} { return $::env($var) }
+		}
 	}
 	if {[dict exists $Config(keys) $provider]} { return [dict get $Config(keys) $provider] }
 	return ""
+}
+
+
+proc ::ai::provider::label {provider} {
+	variable Label
+	return [expr {[info exists Label($provider)] ? $Label($provider) : $provider}]
 }
 
 
@@ -538,7 +577,7 @@ proc ::ai::provider::NeedKey {provider} {
 
 	set key [apiKey $provider]
 	if {$key eq ""} {
-		error "no API key for $provider: enter one in Extras > AI: Choose Model (or set $KeyEnv($provider))"
+		error "no API key for [label $provider]: enter one in Extras > AI: Choose Model (or set [lindex $KeyEnv($provider) 0])"
 	}
 	return $key
 }
@@ -1007,7 +1046,7 @@ proc ::ai::provider::openaiReply {data} {
 
 proc ::ai::provider::openaiBody {messages tools} {
 	set model [model]
-	if {$model eq ""} { error "no OpenAI model chosen: pick one in Extras > AI: Choose Model" }
+	if {$model eq ""} { error "no [label [Current]] model chosen: pick one in Extras > AI: Choose Model" }
 	set body "\{\"model\":\"[jsonEscape $model]\",\"messages\":[openaiMessages $messages]"
 	if {$tools ne ""} { append body ",\"tools\":$tools" }
 	return "$body\}"
@@ -1021,15 +1060,24 @@ proc ::ai::provider::openaiUrl {} {
 }
 
 
+# The configured provider, or openai when it is not an OpenAI-compatible one
+# (the adapter's own calls from tests).
+proc ::ai::provider::Current {} {
+	variable Config
+	variable Compatible
+	return [expr {$Config(name) in $Compatible ? $Config(name) : "openai"}]
+}
+
+
 proc ::ai::provider::openaiChat {messages tools} {
 	need json
-	set headers [list Authorization "Bearer [NeedKey openai]"]
+	set headers [list Authorization "Bearer [NeedKey [Current]]"]
 	set token [request [openaiUrl] [openaiBody $messages $tools] -headers $headers]
 	set code [::http::ncode $token]
 	set status [::http::status $token]
 	set data [body $token]
 	::http::cleanup $token
-	if {$status ne "ok" || $code != 200} { error [CloudError OpenAI $code $data] }
+	if {$status ne "ok" || $code != 200} { error [CloudError [label [Current]] $code $data] }
 	return [openaiReply $data]
 }
 
@@ -1039,6 +1087,62 @@ proc ::ai::provider::openai {prompt system} {
 	if {$system ne ""} { lappend messages [dict create role system content $system] }
 	lappend messages [dict create role user content $prompt]
 	return [dict get [openaiChat $messages ""] content]
+}
+
+
+# The chat models an OpenAI-compatible preset offers (GET .../models).
+# <script> gets {ok 1 models {id ...}} (sorted; embedding, reranking,
+# image and speech models left out) or {ok 0 error E}.
+proc ::ai::provider::modelsAsync {provider script {timeoutMs 8000}} {
+	variable Endpoint
+	variable TlsRegistered
+
+	if {[catch {
+		need http
+		need json
+		set key [NeedKey $provider]
+		set url [string map {/chat/completions /models} $Endpoint($provider)]
+		if {[string match -nocase https://* $url] && ![info exists TlsRegistered]} {
+			need tls
+			::http::register https 443 ::ai::provider::tlsSocket
+			set TlsRegistered 1
+		}
+		::http::geturl $url -headers [list Authorization "Bearer $key"] -timeout $timeoutMs \
+			-binary 1 -command [namespace code [list OnModelList $provider $script]]
+	} err]} {
+		after 0 [list [namespace current]::failAsync $script $err]
+	}
+	return
+}
+
+
+proc ::ai::provider::OnModelList {provider script token} {
+	set status [::http::status $token]
+	set code [::http::ncode $token]
+	set data [body $token]
+	::http::cleanup $token
+
+	if {$status ne "ok" || $code != 200} {
+		set err [expr {$status ne "ok" ? "[label $provider]: $status" : [CloudError [label $provider] $code $data]}]
+		uplevel #0 [list {*}$script [list ok 0 error $err]]
+		return
+	}
+	if {[catch {
+		set ids {}
+		foreach m [dict get [json::json2dict $data] data] {
+			set id [dict get $m id]
+			# Gemini lists "models/<name>"; requests take the bare name
+			regsub {^models/} $id {} id
+			if {[regexp -nocase {embed|rerank|image|tts|audio|realtime|whisper|vision-exp|aqa} $id]} { continue }
+			lappend ids $id
+		}
+		set ids [lsort -unique $ids]
+	} err]} {
+		uplevel #0 [list {*}$script [list ok 0 error "[label $provider]: unreadable model list ($err)"]]
+		return
+	}
+	uplevel #0 [list {*}$script [list ok 1 models $ids]]
+	return
 }
 
 
@@ -1060,7 +1164,7 @@ proc ::ai::provider::cloudChatAsync {messages tools script {mode chat}} {
 		} else {
 			set url [openaiUrl]
 			set body [openaiBody $messages $tools]
-			set headers [list Authorization "Bearer [NeedKey openai]"]
+			set headers [list Authorization "Bearer [NeedKey [Current]]"]
 		}
 	} err]} {
 		after 0 [list [namespace current]::failAsync $script $err]
@@ -1081,7 +1185,7 @@ proc ::ai::provider::OnCloud {provider mode script token} {
 	set data [body $token]
 	::http::cleanup $token
 
-	set name [expr {$provider eq "anthropic" ? "Anthropic" : "OpenAI"}]
+	set name [label $provider]
 	if {$status ne "ok" || $code != 200} {
 		set err [expr {$status ne "ok" ? "$name: $status" : [CloudError $name $code $data]}]
 		uplevel #0 [list {*}$script [list ok 0 error $err]]
@@ -1154,7 +1258,7 @@ proc ::ai::provider::encodeMessages {messages} {
 proc ::ai::provider::chatBody {messages tools} {
 	variable Config
 
-	set body "{\"model\":\"[jsonEscape $Config(model)]\",\"messages\":[encodeMessages $messages],\"stream\":false"
+	set body "{\"model\":\"[jsonEscape [model]]\",\"messages\":[encodeMessages $messages],\"stream\":false"
 	if {[string length $Config(think)]} {
 		append body ",\"think\":$Config(think)"
 	}
@@ -1194,7 +1298,7 @@ proc ::ai::provider::chat {messages tools args} {
 			return [dict get $d message]
 		}
 		anthropic { return [anthropicChat $messages $tools] }
-		openai    { return [openaiChat $messages $tools] }
+		openai - fireworks - qwen - gemini { return [openaiChat $messages $tools] }
 		default { error "ai::provider: chat not supported for provider '$Config(name)'" }
 	}
 }
@@ -1234,7 +1338,7 @@ proc ::ai::provider::chatAsync {messages tools script} {
 				[namespace code [list ::ai::provider::onOllamaChat $script]] \
 				[namespace code [list ::ai::provider::failAsync $script]]
 		}
-		anthropic - openai { cloudChatAsync $messages $tools $script }
+		anthropic - openai - fireworks - qwen - gemini { cloudChatAsync $messages $tools $script }
 		default {
 			after 0 [list {*}$script [list ok 0 error "chat not supported for provider '$Config(name)'"]]
 		}

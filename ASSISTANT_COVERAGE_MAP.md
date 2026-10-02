@@ -304,10 +304,15 @@ rerun.
 Ease of use needs a model that understands loose requests, plans several tool calls
 and writes correct CQL. Local models on an 8 GB card don't, reliably. So:
 
-- **The default is a strong cloud model.** The chat loop speaks to the `anthropic`
-  and `openai` providers as well as Ollama.
-- **Local models are opt-in**, one switch in AI: Choose Model, for players who want
-  everything on the machine.
+- **The default is a strong cloud model on the user's own plan: `kimi-k3:cloud`
+  through Ollama.** It needs no extra key, and it supports tool calling (checked
+  2026-10-02).
+- **Other providers are one choice away** in AI: Choose Model:
+  - Fireworks, the Qwen token plan and Gemini, through the OpenAI-compatible
+    adapter, with model lists read live from each provider.
+  - Claude (Anthropic) and OpenAI.
+- **Models that run on this machine are opt-in**, picked from the same Ollama
+  list, for players who want everything local.
 - **What leaves the machine:**
   - **Sent:** the request, the CQL reference, and the tool results the model reads
     (game headers, moves, statistics, at most 6000 characters a reply).
@@ -454,7 +459,9 @@ Decided 2026-10-02:
 
 1. **The CQL rule** (§5.6): adopted, and the five documents are amended.
 2. **Models:** strong cloud models are the default for the whole language layer,
-   CQL drafting included. Local models are opt-in (P6). This replaces the local-first
+   CQL drafting included: `kimi-k3:cloud` through Ollama, on the user's
+   subscription. Fireworks, the Qwen token plan, Gemini, Claude and OpenAI are
+   presets, and models that run on this machine are opt-in (P6). This replaces the local-first
    rule of `LLM_FEATURES_RESEARCH.md` P3 and `AI_PRODUCTS_PLAN.md` requirement 4.
 3. **The reason:** ease of use (see the header).
 

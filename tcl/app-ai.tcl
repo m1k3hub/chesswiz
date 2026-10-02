@@ -19,12 +19,13 @@ package require Tk 8.5
 namespace eval application {
 namespace eval ai {
 
-# The language model defaults to a strong cloud model (Claude); a local
-# Ollama model is opt-in (ASSISTANT_COVERAGE_MAP.md P6). An empty model
-# means the provider's default (::ai::provider::model).
+# The language model defaults to a strong cloud model, kimi-k3:cloud
+# through Ollama; a model that runs on this machine, Claude, OpenAI and the
+# other presets are a choice in AI: Choose Model (ASSISTANT_COVERAGE_MAP.md
+# P6). An empty model means the provider's default (::ai::provider::model).
 variable Config
 array set Config {
-	provider   anthropic
+	provider   ollama
 	model      ""
 	depth      12
 	retries    1
@@ -92,7 +93,7 @@ proc ::application::ai::applySettings {} {
 	variable Settings
 
 	if {!$Settings(chosen)} {
-		set Settings(provider) anthropic
+		set Settings(provider) ollama
 		set Settings(model) ""
 	}
 	loadKeys
@@ -186,10 +187,12 @@ proc ::application::ai::cloudReady {parent} {
 	variable Settings
 	variable mc
 
-	if {$Config(provider) ni {anthropic openai}} { return 1 }
-	set name [expr {$Config(provider) eq "anthropic" ? "Claude (Anthropic)" : "OpenAI"}]
+	# the provider's own state decides (Ollama: a cloud model or not)
+	::ai::provider::configure -name $Config(provider) -model $Config(model)
+	if {![::ai::provider::cloudProvider]} { return 1 }
+	set name [::ai::provider::label $Config(provider)]
 
-	if {[::ai::provider::apiKey $Config(provider)] eq ""} {
+	if {$Config(provider) ne "ollama" && [::ai::provider::apiKey $Config(provider)] eq ""} {
 		set reply [::dialog::question -parent $parent -default yes \
 			-message [format $mc::NoKey $name] -detail $mc::NoKeyDetail]
 		if {$reply eq "yes"} { ::application::ai::models::show $parent }

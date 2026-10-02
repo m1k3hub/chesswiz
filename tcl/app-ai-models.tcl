@@ -2,12 +2,14 @@
 # ::application::ai::models -- choose the models of the AI features.
 #
 # Extras > "AI: Choose Model" has two sections. The first chooses the
-# language model: Claude through the Anthropic API (the default), OpenAI, or
-# a local model. A cloud choice takes a model name and an API key, which is
-# saved in its own private file (::application::ai::setKey). The local
-# choice lists the models of the Ollama server (/api/tags), marks cloud
-# models and those that support tool calling (which the assistant needs);
-# Ollama is asked only once that choice is shown. The second picks the
+# language model's provider: Ollama (the default, with its cloud model
+# kimi-k3:cloud), Fireworks, the Qwen token plan, Gemini, Claude
+# (Anthropic) or OpenAI. The Ollama choice lists the models of the Ollama
+# server (/api/tags), local and cloud, and marks those that support tool
+# calling (which the assistant needs); Ollama is asked only once that choice
+# is shown. The other choices take a model, listed live from the provider
+# where it offers a list, and an API key, which is saved in its own private
+# file (::application::ai::setKey). The second picks the
 # System One classifier backend (::ai::systemone): kev, simple-jev and plumb
 # serve the /v1/systemone contract on this machine, jev (TypeSafe's Jev)
 # runs in the cloud through Vercel's AI Gateway, and "off" leaves everything
@@ -39,9 +41,14 @@ namespace eval mc {
 
 set Title			"AI Models"
 set LanguageModel	"Language model"
-set Claude			"Claude (Anthropic) - recommended"
+set Ollama			"Ollama: local and cloud models (default: kimi-k3:cloud)"
+set Fireworks		"Fireworks"
+set Qwen				"Qwen token plan"
+set Gemini			"Gemini (Google)"
+set Claude			"Claude (Anthropic)"
 set OpenAI			"OpenAI"
-set LocalModel		"Local model (Ollama)"
+set Listing			"Asking %s for its models..."
+set ListFailed		"No model list (%s). You can still enter a model name."
 set ApiKey			"API key:"
 set KeyStored		"The key is stored only on this machine, in the Scidb user folder, readable only by you."
 set KeyFromEnv		"%s is set in the environment and is used instead of the key here."
@@ -109,10 +116,13 @@ proc ::application::ai::models::show {{parent .application}} {
 	set Priv(dialog) $dlg
 	# the saved choices (an override is shown separately)
 	set Priv(name) $::application::ai::Settings(model)
+	if {$Priv(name) eq "" || $::application::ai::Settings(provider) ne "ollama"} {
+		set Priv(name) $::ai::provider::DefaultModel(ollama)
+	}
 	set Priv(classifier) [lindex [::application::ai::setting classifier] 1]
 	set Priv(provider) $::application::ai::Settings(provider)
-	if {!$::application::ai::Settings(chosen) || $Priv(provider) ni {anthropic openai ollama}} {
-		set Priv(provider) anthropic
+	if {!$::application::ai::Settings(chosen) || ![info exists ::ai::provider::Label($Priv(provider))]} {
+		set Priv(provider) ollama
 	}
 	set Priv(filled) 0
 	# the vercel preset is the same server as jev; the dialog has one row
@@ -132,7 +142,8 @@ proc ::application::ai::models::show {{parent .application}} {
 	pack $top.language -anchor w
 
 	set choice [ttk::frame $top.choice]
-	foreach {value text} [list anthropic $mc::Claude openai $mc::OpenAI ollama $mc::LocalModel] {
+	foreach {value text} [list ollama $mc::Ollama fireworks $mc::Fireworks qwen $mc::Qwen \
+			gemini $mc::Gemini anthropic $mc::Claude openai $mc::OpenAI] {
 		ttk::radiobutton $choice.$value -text $text -value $value \
 			-variable [namespace current]::Priv(provider) \
 			-command [namespace code ProviderChanged]
@@ -283,20 +294,54 @@ proc ::application::ai::models::ProviderChanged {} {
 
 	set saved [expr {$::application::ai::Settings(provider) eq $provider && $::application::ai::Settings(chosen)
 		? $::application::ai::Settings(model) : ""}]
-	set models [expr {$provider eq "anthropic" ? {claude-opus-5-5 claude-sonnet-5-5 claude-haiku-4-5} : {}}]
-	$Priv(cloud).model configure -values $models
 	if {$saved eq ""} { set saved [lindex [array get ::ai::provider::DefaultModel $provider] 1] }
 	set Priv(cloudModel) $saved
 	set Priv(key) [::application::ai::key $provider]
 	set Priv(keySaved) $Priv(key)
-
-	set env [expr {$provider eq "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"}]
-	set note $mc::KeyStored
-	if {[info exists ::env($env)] && [string length $::env($env)]} {
-		append note " " [format $mc::KeyFromEnv $env]
-	}
-	$Priv(cloud).note configure -text $note
 	pack $Priv(cloud) -in $Priv(dialog).top.slot -fill x
+	KeyNote
+
+	if {$provider eq "anthropic"} {
+		$Priv(cloud).model configure -values {claude-opus-5-5 claude-sonnet-5-5 claude-haiku-4-5}
+	} else {
+		$Priv(cloud).model configure -values {}
+		if {[::ai::provider::apiKey $provider] ne ""} {
+			$Priv(cloud).note configure -text [format $mc::Listing [::ai::provider::label $provider]]
+			::ai::provider::modelsAsync $provider \
+				[namespace code [list OnCloudModels $Priv(generation) $provider]]
+		}
+	}
+}
+
+
+# Where the key comes from, under the key field.
+proc ::application::ai::models::KeyNote {{extra ""}} {
+	variable Priv
+	variable mc
+
+	set note $mc::KeyStored
+	foreach var [lindex [array get ::ai::provider::KeyEnv $Priv(provider)] 1] {
+		if {[info exists ::env($var)] && [string length $::env($var)]} {
+			append note " " [format $mc::KeyFromEnv $var]
+			break
+		}
+	}
+	if {$extra ne ""} { set note "$extra\n$note" }
+	$Priv(cloud).note configure -text $note
+}
+
+
+proc ::application::ai::models::OnCloudModels {generation provider result} {
+	variable Priv
+	variable mc
+
+	if {![Current $generation] || $Priv(provider) ne $provider} { return }
+	if {![dict get $result ok]} {
+		KeyNote [format $mc::ListFailed [dict get $result error]]
+		return
+	}
+	$Priv(cloud).model configure -values [dict get $result models]
+	KeyNote
 }
 
 
@@ -576,6 +621,8 @@ proc ::application::ai::models::Apply {} {
 	if {$Priv(provider) eq "ollama"} {
 		set name [string trim $Priv(name)]
 		if {![string length $name]} { return }
+		# the default is saved as "" so a newer default applies later
+		if {$name eq $::ai::provider::DefaultModel(ollama)} { set name "" }
 		::application::ai::choose ollama $name
 	} else {
 		set model [string trim $Priv(cloudModel)]
