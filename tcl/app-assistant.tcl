@@ -101,7 +101,7 @@ variable Actions {
 	}
 	export_database {
 		0 0 "open the export dialog"
-		"Open the export dialog for the active database (PGN, HTML, LaTeX, PDF, Scidb formats). The user picks the format and file there."
+		"Open the export dialog for the games the game list shows (PGN, HTML, LaTeX, PDF, Scidb formats): after show_search or a find_positions/find_similar run in mode all, that is the selection; otherwise the whole active database. The user picks the format and file there."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoExport
 	}
