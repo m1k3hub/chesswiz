@@ -1,8 +1,9 @@
 # Ask Scidb — coverage map and plan
 
 **Status:** adopted 2026-10-02 (decisions in §8). All five phases were built on
-2026-10-02 (§7, "Progress"). Still open: the request corpus, installing, and real
-use.
+2026-10-02 (§7, "Progress"). The request corpus (58 requests,
+`tests/run_assistant_corpus.tcl`) scores 58/58 with `kimi-k3:cloud` and
+thinking on (88% with thinking off). Still open: installing, and real use.
 **Question it answers:** how does a chess player get the full power of Scidb without
 learning Scidb's menus, dialogs and query languages?
 **Why:** ease of use. Every decision below is weighed by one test: can a chess player
