@@ -734,6 +734,21 @@ tcltest::test assistant-brief-download-asks {the brief's download asks first; re
 	list [string match "*without downloading: the user declined*" $reply] $refused $allowed
 } -result {1 0 1}
 
+tcltest::test assistant-save-working-set {the game list's games become a working set, after confirmation} -body {
+	rename ::application::database::SaveFilteredViewAsWorkingSet ::scidb::test::assistant::realWs
+	proc ::application::database::SaveFilteredViewAsWorkingSet {args} { set ::scidb::test::assistant::Ws $args; return 1 }
+	set ::scidb::test::assistant::Ws {}
+	::scidb::test::assistant::setup 0
+	set declined [::application::assistant::runTool save_working_set {name forks}]
+	set none $::scidb::test::assistant::Ws
+	::scidb::test::assistant::setup 1
+	set saved [::application::assistant::runTool save_working_set {name forks}]
+	rename ::application::database::SaveFilteredViewAsWorkingSet {}
+	rename ::scidb::test::assistant::realWs ::application::database::SaveFilteredViewAsWorkingSet
+	list [string match "*NOT performed*" $declined] $none [string match "the working set is saved*" $saved] \
+		[lrange $::scidb::test::assistant::Ws 3 5]
+} -result {1 {} 1 {0 assistant forks}}
+
 tcltest::test assistant-event-pattern {event names with spaces are found} -body {
 	list [::application::assistant::EventPattern "Karvina 5th"] [::application::assistant::EventPattern " Assistant "]
 } -result {*Karvina?5th* *Assistant*}

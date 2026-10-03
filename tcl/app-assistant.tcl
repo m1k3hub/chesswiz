@@ -207,6 +207,12 @@ variable Actions {
 		{{"type":"object","properties":{"name":{"type":"string","description":"a short name, e.g. 'knight fork king and queen'"}},"required":["name"]}}
 		::application::assistant::DoSavePattern
 	}
+	save_working_set {
+		1 0 "save the games of the game list as a new database (%s)"
+		"Save the games the game list shows (after show_search, or a find_positions/find_similar run in mode all) as a new Scidb database next to the active one, a working set, and open it. Scidb asks the user for its name; 'name' is the suggestion. Only when the user asks to keep or save the selection."
+		{{"type":"object","properties":{"name":{"type":"string","description":"a suggested name, e.g. 'knight forks'"}}}}
+		::application::assistant::DoSaveWorkingSet
+	}
 	add_to_repertoire {
 		1 0 "add the line on the board to the repertoire %s"
 		"Save the line on the board, up to the current move, into an open repertoire (opening) database; Scidb's save dialog opens for the user to check. 'repertoire' is part of the database's name when several are open. Only when the user asks to add the line."
@@ -1183,6 +1189,9 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			set name [string trim [Arg $cargs name]]
 			if {$name eq ""} { error "name must not be empty" }
 			return [dict create name $name]
+		}
+		save_working_set {
+			return [dict create name [expr {[dict exists $cargs name] ? [string trim [dict get $cargs name]] : ""}]]
 		}
 		add_to_repertoire {
 			return [dict create repertoire [expr {[dict exists $cargs repertoire] ? [string trim [dict get $cargs repertoire]] : ""}]]
@@ -2313,6 +2322,17 @@ proc ::application::assistant::DoSavePattern {name} {
 	lassign $LastFind request cql fens
 	set n [::ai::positions::savePattern $name $request $cql $fens]
 	return "saved as '$name'; the user now has $n saved pattern[expr {$n == 1 ? "" : "s"}]"
+}
+
+
+proc ::application::assistant::DoSaveWorkingSet {name} {
+	lassign [ActiveBase] base variant
+	if {[::scidb::view::count games $base $variant 0] == 0} { return "error: the game list shows no games" }
+	if {$name eq ""} { set name selection }
+	if {![::application::database::SaveFilteredViewAsWorkingSet .application $base $variant 0 assistant $name]} {
+		return "the user did not save the working set"
+	}
+	return "the working set is saved next to [::util::databaseName $base no] and open in the database switcher"
 }
 
 
