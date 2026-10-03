@@ -176,7 +176,7 @@ proc ::ai::annotate::plainComment {san classification result} {
 # The instruction handed to the grounded pipeline for one gated move.
 proc ::ai::annotate::prompt {san classification result} {
 	set facts ""
-	if {[catch { ::scidb::ai::moveFacts $san [dict get $result fen] } f]} { set facts $f }
+	if {![catch { ::scidb::ai::moveFacts $san [dict get $result fen] } f]} { set facts $f }
 	set kind [dict get $result classification]
 	set out "Annotate the move $san for this game's readers, in one or two sentences.\n"
 	append out "The engine's verdict, which you must not contradict: $kind"
@@ -232,6 +232,8 @@ proc ::ai::annotate::annotate {parent args} {
 		set plies [lrange $plies 0 [expr {$opts(-maxPlies) - 1}]]
 	}
 
+	# Capture game identity and editor state before any asynchronous work.
+	set Priv(owner) [Owner]
 	set Priv(running) 1
 	set Priv(cancel) 0
 	# the comment/mark write path only accepts the game's current key, so the
@@ -312,6 +314,7 @@ proc ::ai::annotate::NextPly {} {
 	variable mc
 
 	if {!$Priv(running)} { return }
+	if {![SameGame]} { set Priv(cancel) 1 }
 	if {$Priv(cancel) || $Priv(index) >= [llength $Priv(plies)]} {
 		Finish
 		return
@@ -508,6 +511,11 @@ proc ::ai::annotate::OnDraftImpl {result} {
 
 proc ::ai::annotate::Write {result text} {
 	variable Priv
+	if {![SameGame]} {
+		set Priv(cancel) 1
+		incr Priv(skipped)
+		return
+	}
 
 	set key [dict get $result key]
 	set san [dict get $result san]
@@ -527,6 +535,7 @@ proc ::ai::annotate::Write {result text} {
 		incr Priv(skipped)
 		return
 	}
+	if {![SameGame]} { set Priv(cancel) 1; incr Priv(skipped); return }
 	if {[catch {
 		::scidb::game::update addcomment $key after $text
 	} err]} {
@@ -535,6 +544,7 @@ proc ::ai::annotate::Write {result text} {
 		return
 	}
 
+	if {![SameGame]} { set Priv(cancel) 1; incr Priv(written); return }
 	if {$Priv(marks)} {
 		set nag [nagFor [dict get $result classification]]
 		if {[string length $nag]} {
@@ -545,6 +555,20 @@ proc ::ai::annotate::Write {result text} {
 	}
 	incr Priv(written)
 	return
+}
+
+
+# Bind the run to the selected game and exact mainline. Navigation and
+# appended comments are safe; replacing moves during a draft is not.
+proc ::ai::annotate::Owner {} {
+	return [list [::scidb::game::current] [::scidb::game::link?] \
+		[::scidb::game::query mainline]]
+}
+
+
+proc ::ai::annotate::SameGame {} {
+	variable Priv
+	return [expr {[info exists Priv(owner)] && ![catch {Owner} owner] && $owner eq $Priv(owner)}]
 }
 
 
@@ -559,7 +583,7 @@ proc ::ai::annotate::Finish {} {
 	set Priv(cancel) 0
 
 	# put the board back where the user left it
-	if {[info exists Priv(savedKey)] && [string length $Priv(savedKey)]} {
+	if {[SameGame] && [info exists Priv(savedKey)] && [string length $Priv(savedKey)]} {
 		catch { ::scidb::game::go key $Priv(savedKey) }
 		set Priv(savedKey) {}
 	}

@@ -44,6 +44,7 @@ set Title			"Opponent brief"
 set NoPlayer		"No games of '%s' are in the active database."
 set Downloading	"Fetching the latest games before the brief..."
 set Preparing		"Reading %s out of the database..."
+set NoBrief		"The language model gave no brief (%s); the database facts above stand."
 set Stances {
 	punish_weakness	"play the line they score worst in"
 	avoid_theory		"keep away from their sharpest theory"
@@ -143,7 +144,7 @@ proc ::ai::brief::build {parent opponent args} {
 
 	if {[llength [info commands ::application::ai::showReport]]} {
 		catch { ::application::ai::showReport $parent "$mc::Title: $opponent" \
-			[::application::ai::htmlData "<p>[::application::ai::escape $mc::Preparing]</p>"] }
+			[::application::ai::htmlData "<p>[::application::ai::escape [format $mc::Preparing $opponent]]</p>"] }
 	}
 
 	if {$opts(-download) > 0} {
@@ -223,13 +224,15 @@ proc ::ai::brief::OnStance {parent opponent prep prose done result} {
 	set source [dict get $result source]
 	set advice $mc::Advice($stance)
 
-	set html "<p><b>$mc::Title: [::application::ai::escape $opponent]</b></p>"
-	append html "<p><b>Stance</b> ($source): $mc::Stances($stance) -- [::application::ai::escape $advice]</p>"
-	append html "<p><b>What the database says</b></p><pre>[::application::ai::escape $prep]</pre>"
-	Report $parent $html
+	set head "<p><b>$mc::Title: [::application::ai::escape $opponent]</b></p>"
+	append head "<p><b>Stance</b> ($source): [::application::ai::escape [dict get $mc::Stances $stance]] -- [::application::ai::escape $advice]</p>"
+	set facts "<p><b>What the database says</b></p><pre>[::application::ai::escape $prep]</pre>"
+	# the model's brief goes between the two (OnNarrate), so keep the parts
+	set Page [dict create head $head facts $facts]
+	Report $parent $head$facts
 
 	if {$prose && [llength [info commands ::ai::provider::completeAsync]]} {
-		Narrate $parent $opponent $prep $stance $advice
+		Narrate $parent $opponent $prep $stance $advice $Page
 	} elseif {[llength $done]} {
 		catch { {*}$done [dict create ok 1 opponent $opponent stance $stance source $source] }
 	}
@@ -237,24 +240,57 @@ proc ::ai::brief::OnStance {parent opponent prep prose done result} {
 }
 
 
-proc ::ai::brief::Narrate {parent opponent prep stance advice} {
+proc ::ai::brief::Narrate {parent opponent prep stance advice {page {}}} {
 	set prompt "Preparation facts about $opponent, read from the database:\n\n$prep\n\n\
 		The stance chosen for the game: $advice\n\n\
 		Write a short brief for the player: what $opponent likes to play, where they are \
 		weak, what to prepare, and how the stance applies. Restate the numbers from the \
 		facts; invent nothing, and do not name a move or a game that is not in them."
-	::ai::provider::completeAsync $prompt [namespace code [list OnNarrate $parent $opponent]] \
+	configureProvider
+	::ai::provider::completeAsync $prompt [namespace code [list OnNarrate $parent $opponent $page]] \
 		-system "You write short chess preparation briefs. Every number, opening and game you \
 			mention must come from the preparation facts you were given."
 	return
 }
 
 
-proc ::ai::brief::OnNarrate {parent opponent result} {
-	if {![dict get $result ok]} { return }
+proc ::ai::brief::OnNarrate {parent opponent page result} {
+	variable mc
+
+	set head ""
+	set facts ""
+	if {[llength $page]} {
+		set head [dict get $page head]
+		set facts [dict get $page facts]
+	}
+
+	if {![dict get $result ok]} {
+		# say so instead of leaving the facts page as if nothing was asked
+		set why [expr {[dict exists $result error] ? [dict get $result error] : "no answer"}]
+		Report $parent "$head<p><i>[::application::ai::escape [format $mc::NoBrief $why]]</i></p>$facts"
+		return
+	}
 	set text [string trim [dict get $result text]]
-	if {![string length $text]} { return }
-	Report $parent "<p><b>Brief</b></p><p>[::application::ai::escape $text]</p>"
+	if {![string length $text]} {
+		Report $parent "$head<p><i>[::application::ai::escape [format $mc::NoBrief "empty answer"]]</i></p>$facts"
+		return
+	}
+	Report $parent "$head<p><b>Brief</b></p><p>[::application::ai::escape $text]</p>$facts"
+	return
+}
+
+
+# The model is the one chosen in Extras > AI: Choose Model, as in the trend,
+# annotation and study-plan pipelines; without this a brief run before any
+# other AI feature went to an unconfigured provider ("Missing host part").
+proc ::ai::brief::configureProvider {} {
+	if {[info exists ::application::ai::Config(provider)]} {
+		catch {
+			::ai::provider::configure -name $::application::ai::Config(provider) \
+				-model $::application::ai::Config(model) -timeout 300000 \
+				-options [list num_predict 400]
+		}
+	}
 	return
 }
 

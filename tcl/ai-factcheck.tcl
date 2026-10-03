@@ -88,10 +88,16 @@ proc ::ai::factcheck::game {{position 9}} {
 
 		if {[string length $after]} {
 			set found [CheckOne $san $ply $others $after $position after]
-			if {[llength $found]} { lappend findings $found ; incr checked }
+			if {[llength $found]} {
+				incr checked
+				if {[llength [dict get $found problems]]} { lappend findings $found }
+			}
 		}
 		set found [CheckOne $san $ply $mover $fen $position before]
-		if {[llength $found]} { lappend findings $found ; incr checked }
+		if {[llength $found]} {
+			incr checked
+			if {[llength [dict get $found problems]]} { lappend findings $found }
+		}
 	}
 	if {[string length $saved]} { catch { ::scidb::game::go $position key $saved } }
 

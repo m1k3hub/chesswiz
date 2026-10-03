@@ -176,4 +176,85 @@ tcltest::test prepreport-score-text {the prep report's score is a percentage, no
 		[::application::database::player::PrepReportPercent 10000]
 } -result {{7-0-3 (85.0%)} {4-0-2 (83.3%)} {0-2-0 (0.0%)} 100.0}
 
+# Found by driving the opponent brief: OnStance read the Stances dict as an
+# array and failed with 'variable isn't array', so no brief ever got past its
+# placeholder, and the placeholder itself showed a literal "%s".
+tcltest::test brief-on-stance-renders {a chosen stance is rendered into the report and the chain goes on} -setup {
+	set ::scidb::test::aifeat::Pages {}
+	set ::scidb::test::aifeat::Done {}
+	::scidb::test::aifeat::stub ::application::ai::showReport {{parent title html} {
+		lappend ::scidb::test::aifeat::Pages $html
+		return ""
+	}}
+} -body {
+	::ai::brief::OnStance .application "Caruana, Fabiano" "As White: 1.e4" 0 \
+		{set ::scidb::test::aifeat::Done} {ok 1 stance outprepare source rules}
+	set page [lindex $::scidb::test::aifeat::Pages 0]
+	list [string match {*Caruana, Fabiano*} $page] \
+		[string match {*Stance*rules*} $page] \
+		[string match {*Meet them in their own line*} $page] \
+		[string match {*As White: 1.e4*} $page] \
+		[dict get $::scidb::test::aifeat::Done stance]
+} -cleanup {
+	::scidb::test::aifeat::restoreAll
+} -result {1 1 1 1 outprepare}
+
+tcltest::test brief-stance-every-label {every stance the rules can return has a title and advice} -body {
+	set bad {}
+	foreach stance {punish_weakness avoid_theory outprepare neutral} {
+		if {[catch { dict get $::ai::brief::mc::Stances $stance }] || ![info exists ::ai::brief::mc::Advice($stance)]} { lappend bad $stance }
+	}
+	set bad
+} -result {}
+
+tcltest::test brief-placeholder-names-the-opponent {the placeholder page names the opponent instead of showing %s} -setup {
+	set ::scidb::test::aifeat::Pages {}
+	::scidb::test::aifeat::stub ::application::ai::showReport {{parent title html} {
+		lappend ::scidb::test::aifeat::Pages $html
+		return ""
+	}}
+	::scidb::test::aifeat::stub ::ai::brief::Prepare {{args} { return }}
+} -body {
+	::ai::brief::build .application "Caruana, Fabiano" -download 0 -prose 0
+	set html [dict get [lindex $::scidb::test::aifeat::Pages 0] html]
+	list [string match {*Reading Caruana, Fabiano out of the database*} $html] [string match {*%s*} $html]
+} -cleanup {
+	::scidb::test::aifeat::restoreAll
+} -result {1 0}
+
+tcltest::test brief-narrate-configures-provider {Narrate configures the chosen model before it asks} -setup {
+	set ::scidb::test::aifeat::Calls {}
+	set ::application::ai::Config(provider) ollama
+	set ::application::ai::Config(model) deepseek-v4.1-flash:cloud
+	::scidb::test::aifeat::stub ::ai::provider::configure {{args} { lappend ::scidb::test::aifeat::Calls [list configure $args] }}
+	::scidb::test::aifeat::stub ::ai::provider::completeAsync {{prompt script args} { lappend ::scidb::test::aifeat::Calls completeAsync }}
+} -body {
+	::ai::brief::Narrate .application "Caruana, Fabiano" "facts" neutral "advice"
+	list [lindex $::scidb::test::aifeat::Calls 0 0] \
+		[string match {*-name ollama*-model deepseek-v4.1-flash:cloud*} [lindex $::scidb::test::aifeat::Calls 0 1]] \
+		[lindex $::scidb::test::aifeat::Calls 1]
+} -cleanup {
+	::scidb::test::aifeat::restoreAll
+} -result {configure 1 completeAsync}
+
+tcltest::test brief-on-narrate-page {the model's brief sits between the stance and the database facts; a failure is said, not silent} -setup {
+	set ::scidb::test::aifeat::Pages {}
+	::scidb::test::aifeat::stub ::application::ai::showReport {{parent title html} {
+		lappend ::scidb::test::aifeat::Pages [expr {[dict exists $html html] ? [dict get $html html] : $html}]
+		return ""
+	}}
+} -body {
+	::ai::brief::OnStance .application "Caruana, Fabiano" "As White: 1.e4" 0 {} {ok 1 stance neutral source rules}
+	::ai::brief::OnNarrate .application "Caruana, Fabiano" {head Stance facts {As White: 1.e4}} {ok 1 text "Play your own repertoire."}
+	::ai::brief::OnNarrate .application "Caruana, Fabiano" {head Stance facts {As White: 1.e4}} {ok 0 error "Missing host part"}
+	set good [lindex $::scidb::test::aifeat::Pages 1]
+	set bad [lindex $::scidb::test::aifeat::Pages 2]
+	list \
+		[expr {[string first Stance $good] < [string first "Play your own" $good] && [string first "Play your own" $good] < [string first "As White: 1.e4" $good]}] \
+		[string match {*Missing host part*As White: 1.e4*} $bad] \
+		[string match {*Stance*} $bad]
+} -cleanup {
+	::scidb::test::aifeat::restoreAll
+} -result {1 1 1}
+
 tcltest::cleanupTests

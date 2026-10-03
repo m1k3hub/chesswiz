@@ -434,7 +434,7 @@ proc ::application::ai::moveFacts {san fen} {
 # available (the explanation then falls back to the move facts alone).
 proc ::application::ai::moveClass {san fen} {
 	if {[llength [info commands ::ai::engine::classify]] == 0} { return "" }
-	if {[catch {::ai::engine::classify $san $fen} c]} { return "" }
+	if {[catch {::ai::engine::classify $fen $san} c]} { return "" }
 	return "classification=[dict get $c classification] cpLoss=[dict get $c cpLoss] best=[dict get $c bestMove]"
 }
 

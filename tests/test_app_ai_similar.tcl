@@ -183,6 +183,7 @@ tcltest::test similar-narrate-fallback {without a model the facts are the report
 } -result {1 1 {AI: similar games} 1}
 
 tcltest::test similar-report-narrates {report retrieves the candidates and narrates their facts (GUI/assistant entry)} -setup {
+	::scidb::test::similar::stub ::ai::similar::StartingFen {{args} {return $::scidb::test::similar::Start}}
 	::scidb::test::similar::clearResult
 	::scidb::test::similar::stub ::ai::similar::candidates {{base variant number args} {
 		set ::scidb::test::similar::Asked [list $base $variant $number $args]

@@ -113,13 +113,12 @@ proc ::ai::similar::narrate {parent facts args} {
 # plies with database game <number> (zero-based, ai-simindex) and narrate
 # them. -done gets {ok 1 text ... claims ... grounded ...} as ::ai::trend does,
 # or {ok 0 text MESSAGE} when the retrieval is unavailable or fails. The
-# candidates come from the same starting position, so the standard start
-# position is what the claim checker is given; the facts never name a move.
+# reference starting position is read from the database, including setups
+# and Chess960 positions; it is also used by the claim checker.
 proc ::ai::similar::report {parent base variant number args} {
 	array set opts {-done {} -limit 10 -seconds 3}
 	array set opts $args
 
-	set start "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 	if {[llength [info commands ::ai::similar::candidates]] == 0} {
 		return [Failed $opts(-done) "similar-game retrieval is not available"]
 	}
@@ -128,9 +127,26 @@ proc ::ai::similar::report {parent base variant number args} {
 	} rows]} {
 		return [Failed $opts(-done) "similar games could not be retrieved: $rows"]
 	}
-	return [narrate $parent [facts $start $rows] -done $opts(-done)]
+	if {[catch {StartingFen $base $variant $number} start]} {
+		return [Failed $opts(-done) "reference starting position could not be read: $start"]
+	}
+	return [narrate $parent [facts $start $rows -limit $opts(-limit)] -done $opts(-done)]
 }
 
+
+# Decode the reference in a private slot: metadata tags omit synthesized FENs.
+# Slots 30 and 31 belong to study plans and training; this reader uses 32.
+proc ::ai::similar::StartingFen {base variant number} {
+	set slot 32
+	if {[::scidb::game::query $slot open?]} { error "reference reader already in use" }
+	set code [catch {
+		::scidb::game::new $slot
+		::scidb::game::load $slot $base $variant $number
+		::scidb::game::query $slot fen
+	} fen options]
+	catch { ::scidb::game::release $slot }
+	return -options $options $fen
+}
 
 proc ::ai::similar::Failed {done message} {
 	if {[llength $done]} {

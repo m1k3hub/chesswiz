@@ -90,7 +90,7 @@ proc ai::claims::pieceMap {fen} {	set map [dict create]
 			if {[string is digit -strict $ch]} {
 				incr file $ch
 			} else {
-				dict set map "[string index abcdefgh $file]$rank" [string toupper $ch]
+				dict set map "[string index abcdefgh $file]$rank" $ch
 				incr file
 			}
 		}
@@ -109,9 +109,11 @@ proc ai::claims::postNegated {text end} {
 
 
 # Describe a piece-placement mismatch, or "" when it is correct.
-proc ai::claims::placementProblem {map name sq} {
+proc ai::claims::placementProblem {map name sq {side {}}} {
 	set want [pieceLetterOf $name]
 	set have [expr {[dict exists $map $sq] ? [dict get $map $sq] : ""}]
+	if {$side eq "black"} { set want [string tolower $want] }
+	if {$side eq {}} { set have [string toupper $have] }
 	if {$have ne $want} {
 		return "ungrounded $name placement: $sq is [expr {[string length $have] ? $have : {empty}}], not $want"
 	}
@@ -242,7 +244,11 @@ proc ai::claims::check {fen text {line ""}} {
 
 			set ok 0
 			if {[catch {
-				if {$side eq {}} {
+				set prefix [string range $text [expr {max(0, $start - 48)}] [expr {$start - 1}]]
+				if {[regexp -nocase {\mboth\s+(?:sides|players)\M[^.!?;]*$} $prefix]} {
+					set side both
+					set ok [expr {[::scidb::ai::claimFor $fen $term white] && [::scidb::ai::claimFor $fen $term black]}]
+				} elseif {$side eq {}} {
 					set ok [::scidb::ai::claimFor $fen $term]
 				} else {
 					set ok [::scidb::ai::claimFor $fen $term $side]
@@ -314,15 +320,17 @@ proc ai::claims::check {fen text {line ""}} {
 
 		set p [placementProblem $map \
 			[string range $text [lindex $n 0] [lindex $n 1]] \
-			[string range $text [lindex $s 0] [lindex $s 1]]]
+			[string range $text [lindex $s 0] [lindex $s 1]] [sideBefore $text [lindex $w 0]]]
 		if {$p ne {}} { lappend problems $p }
 	}
 
 	# "<piece>s (<sq>, <sq>, ...)"
-	foreach {whole name list} [regexp -all -inline -nocase \
+	foreach {whole name list} [regexp -all -inline -indices -nocase \
 		{\m(king|queen|rook|bishop|knight|pawn)s?\s*\(([^)]*)\)} $text] {
-		foreach sq [regexp -all -inline {[a-h][1-8]} $list] {
-			set p [placementProblem $map $name $sq]
+		set side [sideBefore $text [lindex $whole 0]]
+		set name [string range $text {*}$name]
+		foreach sq [regexp -all -inline {[a-h][1-8]} [string range $text {*}$list]] {
+			set p [placementProblem $map $name $sq $side]
 			if {$p ne {}} { lappend problems $p }
 		}
 	}
