@@ -59,6 +59,8 @@ set ThisIsMe					"This is me"
 set PrivateCard				"Private card"
 set PrivateCardNote			"Entered by you; kept on this computer, never written into a database."
 set NameMissing				"A private card needs the player's name, as written in the games."
+set FromRatingList			"From rating list"
+set NotInRatingList			"No player '%s' is in the rating lists. Update them under Extras, or check the spelling or the FIDE ID."
 
 }
 
@@ -331,6 +333,9 @@ proc setupPrivateCard {parent} {
 
 	ttk::label		$f.lfide -textvar ::playertable::mc::F_FideID
 	ttk::entry		$f.efide -textvar [namespace current]::Var(FideID)
+	ttk::button		$f.bfill -textvar [namespace current]::mc::FromRatingList \
+		-command [namespace code [list FillFromLists $dlg]]
+	bind $f.efide <Return> [namespace code [list FillFromLists $dlg]]
 	ttk::label		$f.ldsb -text "DSB-ID"
 	ttk::entry		$f.edsb -textvar [namespace current]::Var(DsbID)
 	ttk::label		$f.lecf -text "ECF-ID"
@@ -381,7 +386,8 @@ proc setupPrivateCard {parent} {
 	grid $f.btitle3	-row 19 -column 3 -sticky we -columnspan 3
 
 	grid $f.lfide		-row 21 -column 1 -sticky w
-	grid $f.efide		-row 21 -column 3 -sticky w -columnspan 3
+	grid $f.efide		-row 21 -column 3 -sticky w
+	grid $f.bfill		-row 21 -column 5 -sticky w
 	grid $f.ldsb		-row 23 -column 1 -sticky w
 	grid $f.edsb		-row 23 -column 3 -sticky w -columnspan 3
 	grid $f.lecf		-row 25 -column 1 -sticky w
@@ -416,7 +422,7 @@ proc setupPrivateCard {parent} {
 	::util::place $dlg -parent $parent -position center
 	wm deiconify $dlg
 	focus $list
-	ClearVars
+	ClearVars $dlg
 	FillList $list
 	update idletasks
 	wm geometry $dlg [winfo width $dlg]x[winfo height $dlg]
@@ -431,6 +437,9 @@ proc setupPrivateCard {parent} {
 # directory, never written into a database; the player card shows it in a
 # section of its own, and the info tooltip fills in what the database lacks.
 # A photo is copied to where the photo lookup finds it (photos/<letter>/).
+# "From rating list" (or Return in the FIDE ID) fills the empty fields from
+# the rating lists (::scidb::player::lookup; FIDE's current list once it is
+# updated under Extras), by FIDE ID or by name; what the user typed stays.
 #
 #   ::playercard::privateCard <name>   -> the card's fields, or {}
 #   ::playercard::privateCards         -> dict name -> fields
@@ -506,14 +515,97 @@ proc PhotoPath {name} {
 }
 
 
-proc ClearVars {} {
+# The dialog's selection boxes (sex, federation, ratings, titles, birthday)
+# show translated text; their values are codes, read and set through them.
+proc FieldWidget {dlg field} {
+	set f $dlg.top.data
+	switch -glob -- $field {
+		Sex		{ return $f.bsex }
+		Nation	{ return $f.bnation }
+		Birthday	{ return $f.bbirthday }
+		Rating[123]	{ return $f.brating[string index $field end] }
+		Title[123]	{ return $f.btitle[string index $field end] }
+	}
+	return ""
+}
+
+
+proc GetField {dlg field} {
+	variable Var
+	set w [FieldWidget $dlg $field]
+	if {$w eq "" || ![winfo exists $w]} { return [string trim $Var($field)] }
+	if {$field eq "Birthday"} {
+		set date [$w value]
+		# a year alone is what the rating lists know ("1992.??.??")
+		if {![regexp {^(\d{4})\.(..)\.(..)$} $date -> y m d] || $y eq "0000"} { return "" }
+		if {[string match {*\?*} $m$d]} { return $y }
+		return $date
+	}
+	return [$w value]
+}
+
+
+proc SetField {dlg field value} {
+	variable Var
+	set w [FieldWidget $dlg $field]
+	if {$w eq "" || ![winfo exists $w]} { set Var($field) $value; return }
+	if {$field eq "Birthday"} {
+		if {$value eq ""} { set value 0.0.0 }
+		if {[string is integer -strict $value]} { set value $value.0.0 }
+	}
+	catch { $w set $value }
+}
+
+
+proc ClearVars {{dlg ""}} {
 	variable Var
 	variable PrivateFields
 	variable PhotoSource
-	foreach field $PrivateFields { set Var($field) "" }
+	foreach field $PrivateFields {
+		if {$dlg ne ""} { SetField $dlg $field "" } else { set Var($field) "" }
+	}
 	set Var(Me) 0
 	set Var(PhotoLabel) $mc::NoPhoto
 	set PhotoSource ""
+}
+
+
+# Fill the empty fields from the rating lists: by the FIDE ID when one is
+# given, else by the name. Returns the fields it filled.
+proc FillFromLists {dlg} {
+	variable Var
+
+	set id [string trim $Var(FideID)]
+	set name [string trim $Var(Name)]
+	set entry {}
+	if {[string is integer -strict $id]} {
+		set entry [::scidb::player::lookup -fide $id]
+	} elseif {$name ne ""} {
+		set entry [::scidb::player::lookup -name $name]
+		if {![llength $entry]} {
+			# "carlsen, magnus" as "Carlsen, Magnus"
+			set entry [::scidb::player::lookup -name [join [lmap w [split $name " "] {
+				string toupper $w 0 0
+			}] " "]]
+		}
+	}
+	if {![llength $entry]} {
+		::dialog::info -parent $dlg -message [format $mc::NotInRatingList [expr {$id ne "" ? $id : $name}]]
+		return {}
+	}
+	set filled {}
+	set values [list Name [dict get $entry name] FideID [dict get $entry fideID] \
+		Nation [dict get $entry federation] Sex [dict get $entry sex] Birthday [dict get $entry born] \
+		DsbID [dict get $entry dsb] EcfID [dict get $entry ecf] IccfID [dict get $entry iccf]]
+	if {[dict get $entry elo] ne ""} { lappend values Rating1 Elo Score1 [dict get $entry elo] }
+	set i 0
+	foreach t [dict get $entry titles] { if {[incr i] <= 3} { lappend values Title$i $t } }
+	foreach {field value} $values {
+		if {$value eq "" || [GetField $dlg $field] ne ""} continue
+		SetField $dlg $field $value
+		lappend filled $field
+	}
+	return $filled
 }
 
 
@@ -534,21 +626,19 @@ proc SelectPlayer {list index} {
 	if {![string is integer -strict $index] || $index < 0 || $index >= [llength $names]} { return }
 	set name [lindex $names $index]
 	set card [privateCard $name]
-	ClearVars
-	foreach field $PrivateFields {
-		if {[dict exists $card $field]} { set Var($field) [dict get $card $field] }
-	}
 	set dlg [winfo toplevel $list]
-	catch { $dlg.top.data.bbirthday set [expr {$Var(Birthday) eq "" ? "0.0.0" : $Var(Birthday)}] }
+	ClearVars $dlg
+	foreach field $PrivateFields {
+		if {[dict exists $card $field]} { SetField $dlg $field [dict get $card $field] }
+	}
 	set path [PhotoPath $name]
 	if {$path ne "" && [file readable $path]} { set Var(PhotoLabel) [file tail $path] }
 }
 
 
 proc NewPlayer {list} {
-	ClearVars
 	set dlg [winfo toplevel $list]
-	catch { $dlg.top.data.bbirthday set 0.0.0 }
+	ClearVars $dlg
 	focus $dlg.top.data.ename
 }
 
@@ -579,12 +669,8 @@ proc SavePlayer {list} {
 		::dialog::error -parent $dlg -message $mc::NameMissing
 		return
 	}
-	catch {
-		set date [$dlg.top.data.bbirthday value]
-		set Var(Birthday) [expr {[string match {*\?*} $date] || $date eq "0000.00.00" ? "" : $date}]
-	}
 	set card [dict create]
-	foreach field $PrivateFields { dict set card $field [string trim $Var($field)] }
+	foreach field $PrivateFields { dict set card $field [GetField $dlg $field] }
 	dict set card Name $name
 	dict set card Me [expr {$Var(Me) ? 1 : 0}]
 
@@ -619,7 +705,7 @@ proc DeletePlayer {list} {
 		set ::application::ai::Settings(me) ""
 	}
 	SavePrivate [dict remove $cards $name]
-	ClearVars
+	ClearVars [winfo toplevel $list]
 	FillList $list
 }
 

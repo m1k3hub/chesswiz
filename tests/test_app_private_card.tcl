@@ -28,7 +28,7 @@ proc ::scidb::test::pcard::cleanup {} {
 	variable SavedMe
 	catch { destroy .application.setupPrivateCard }
 	catch { file delete [::playercard::PrivateFile] }
-	foreach name {{Tester, Tom} {Club, Carl}} { catch { file delete [::playercard::PhotoPath $name] } }
+	foreach name {{Tester, Tom} {Club, Carl} {prefill, paula}} { catch { file delete [::playercard::PhotoPath $name] } }
 	if {$SavedFile ne ""} { file rename -force $SavedFile [::playercard::PrivateFile]; set SavedFile "" }
 	unset -nocomplain ::playercard::Private
 	set ::application::ai::Settings(me) $SavedMe
@@ -36,11 +36,9 @@ proc ::scidb::test::pcard::cleanup {} {
 # Fill the dialog as a user would and press Save.
 proc ::scidb::test::pcard::enter {fields {photo ""}} {
 	::playercard::NewPlayer .application.setupPrivateCard.top.select
-	foreach {k v} $fields { set ::playercard::Var($k) $v }
+	# the selection boxes take codes, as a user's choice in them does
+	foreach {k v} $fields { ::playercard::SetField .application.setupPrivateCard $k $v }
 	if {$photo ne ""} { set ::playercard::PhotoSource $photo }
-	if {[dict exists $fields Birthday]} {
-		.application.setupPrivateCard.top.data.bbirthday set [dict get $fields Birthday]
-	}
 	::playercard::SavePlayer .application.setupPrivateCard.top.select
 }
 
@@ -115,6 +113,44 @@ tcltest::test pcard-overlay {the tooltip fills in what the database lacks; the c
 	catch { file delete $::scidb::test::pcard::Fixture }
 	::scidb::test::pcard::cleanup
 } -result {{Tester, Tom} 4100001 GER FM 1 1 1}
+
+tcltest::test pcard-prefill {the rating lists fill the empty fields, by FIDE ID or by name; what the user typed stays} -setup {
+	::scidb::test::pcard::setup
+	::playercard::setupPrivateCard .application
+	set list [file join [file dirname $::scidb::test::pcard::Fixture] pcard-foa-[pid].txt]
+	set chan [open $list w]
+	puts $chan "ID Number      Name                                                         Fed Sex Tit  WTit OTit           FOA SRtng SGm SK RRtng RGm Rk BRtng BGm BK B-day Flag"
+	puts $chan [format "%-15s%-61s%-4s%-4s%-5s%-5s%-15s%-4s%-6s%-4s%-3s%-6s%-4s%-3s%-6s%-4s%-3s%-6s%-4s" \
+		999000501 {Prefill, Paula} ITA F IM WGM "" "" 2390 0 10 0 0 10 0 0 10 1992 w]
+	close $chan
+	::scidb::app::load fide $list
+	::scidb::app::load done
+} -body {
+	set dlg .application.setupPrivateCard
+	set fields {Name FideID Nation Sex Birthday Rating1 Score1 Title1 Title2}
+	# by FIDE ID, into an empty card
+	::playercard::NewPlayer $dlg.top.select
+	set ::playercard::Var(FideID) 999000501
+	set n1 [::playercard::FillFromLists $dlg]
+	set byId [lmap f $fields { ::playercard::GetField $dlg $f }]
+	# by name (typed in lower case), keeping the federation the user chose
+	::playercard::NewPlayer $dlg.top.select
+	set ::playercard::Var(Name) {prefill, paula}
+	::playercard::SetField $dlg Nation SUI
+	set n2 [::playercard::FillFromLists $dlg]
+	set byName [lmap f {FideID Nation Score1} { ::playercard::GetField $dlg $f }]
+	# saved as codes, read back
+	::playercard::SavePlayer $dlg.top.select
+	set saved [dict get [::playercard::privateCard {prefill, paula}] Title1]
+	# unknown
+	::playercard::NewPlayer $dlg.top.select
+	set ::playercard::Var(Name) {Nobody, Known}
+	set n3 [::playercard::FillFromLists $dlg]
+	list $n1 $byId $n2 $byName $saved $n3
+} -cleanup {
+	catch { file delete $list }
+	::scidb::test::pcard::cleanup
+} -result {{Name Nation Sex Birthday Rating1 Score1 Title1 Title2} {{Prefill, Paula} 999000501 ITA f 1992 Elo 2390 IM WGM} {FideID Sex Birthday Rating1 Score1 Title1 Title2} {999000501 SUI 2390} IM {}}
 
 tcltest::test pcard-delete {a deleted card is gone, and "me" with it} -setup {
 	::scidb::test::pcard::setup

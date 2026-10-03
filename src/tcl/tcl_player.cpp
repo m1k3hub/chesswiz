@@ -52,6 +52,7 @@ static char const* CmdLetter	= "::scidb::player::letter";
 static char const* CmdInfo		= "::scidb::player::info";
 static char const* CmdSearch	= "::scidb::player::search";
 static char const* CmdSort		= "::scidb::player::sort";
+static char const* CmdLookup	= "::scidb::player::lookup";
 
 static app::PlayerDictionary* m_dictionary = 0;
 
@@ -859,6 +860,70 @@ cmdFilter(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 }
 
 
+// ::scidb::player::lookup -fide <id> | -name <name>
+// The rating lists' entry for a player (FIDE's current list when the user
+// installed it) as a dict {name fideID federation sex born titles elo dsb ecf
+// iccf}; {} when there is none. Independent of the dictionary dialog.
+static int
+cmdLookup(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "-fide <id> | -name <name>");
+		return TCL_ERROR;
+	}
+
+	char const* how = stringFromObj(objc, objv, 1);
+	char const* key = stringFromObj(objc, objv, 2);
+	db::Player const* player = nullptr;
+
+	if (::strcmp(how, "-fide") == 0)
+	{
+		unsigned long id = ::strtoul(key, nullptr, 10);
+		if (id) player = db::Player::findFidePlayer(uint32_t(id));
+	}
+	else if (::strcmp(how, "-name") == 0)
+	{
+		if (*key) player = db::Player::findPlayer(mstl::string(key));
+	}
+	else
+	{
+		return error(CmdLookup, nullptr, nullptr, "expected -fide or -name, got '%s'", how);
+	}
+
+	if (!player)
+	{
+		setResult("");
+		return TCL_OK;
+	}
+
+	Tcl_Obj* d = Tcl_NewDictObj();
+	auto put = [&](char const* k, Tcl_Obj* v) { Tcl_DictObjPut(ti, d, Tcl_NewStringObj(k, -1), v); };
+	auto str = [](mstl::string const& s) { return Tcl_NewStringObj(s, s.size()); };
+
+	put("name", str(player->name()));
+	put("fideID", player->fideID() ? Tcl_NewWideIntObj(player->fideID()) : Tcl_NewStringObj("", 0));
+	put("federation", Tcl_NewStringObj(player->federation() == country::Unknown
+		? "" : country::toString(player->federation()), -1));
+	put("sex", Tcl_NewStringObj(player->sex() == sex::Female ? "f" : player->sex() == sex::Male ? "m" : "", -1));
+	put("born", player->birthYear() ? Tcl_NewIntObj(player->birthYear()) : Tcl_NewStringObj("", 0));
+
+	Tcl_Obj* titles = Tcl_NewListObj(0, nullptr);
+	for (unsigned t = player->titles(); t; t &= t - 1)
+		Tcl_ListObjAppendElement(ti, titles, str(title::toString(title::toID(t & (~t + 1)))));
+	put("titles", titles);
+
+	int elo = player->latestRating(rating::Elo);
+	put("elo", elo > 0 ? Tcl_NewIntObj(elo) : Tcl_NewStringObj("", 0));
+	put("dsb", str(player->organization(organization::DSB)));
+	put("ecf", str(player->organization(organization::ECF)));
+	put("iccf", str(player->organization(organization::ICCF)));
+
+	setResult(d);
+	return TCL_OK;
+}
+
+
 static int
 cmdSearch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
@@ -981,6 +1046,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdLetter,	cmdLetter);
 	createCommand(ti, CmdSearch,	cmdSearch);
 	createCommand(ti, CmdSort,		cmdSort);
+	createCommand(ti, CmdLookup,	cmdLookup);
 }
 
 } // namespace player
