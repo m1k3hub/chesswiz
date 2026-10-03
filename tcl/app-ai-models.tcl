@@ -284,6 +284,8 @@ proc ::application::ai::models::ProviderChanged {} {
 
 	if {$provider eq "ollama"} {
 		pack $Priv(local) -in $Priv(dialog).top.slot -fill both -expand yes
+		# the slot was created after the section and would cover it
+		raise $Priv(local) $Priv(dialog).top.slot
 		if {!$Priv(filled)} {
 			set Priv(filled) 1
 			$Priv(status) configure -text $mc::Fetching
@@ -295,10 +297,11 @@ proc ::application::ai::models::ProviderChanged {} {
 	set saved [expr {$::application::ai::Settings(provider) eq $provider && $::application::ai::Settings(chosen)
 		? $::application::ai::Settings(model) : ""}]
 	if {$saved eq ""} { set saved [lindex [array get ::ai::provider::DefaultModel $provider] 1] }
-	set Priv(cloudModel) $saved
+	set Priv(cloudModel) [ShortModel $provider $saved]
 	set Priv(key) [::application::ai::key $provider]
 	set Priv(keySaved) $Priv(key)
 	pack $Priv(cloud) -in $Priv(dialog).top.slot -fill x
+	raise $Priv(cloud) $Priv(dialog).top.slot
 	KeyNote
 
 	if {$provider eq "anthropic"} {
@@ -340,8 +343,22 @@ proc ::application::ai::models::OnCloudModels {generation provider result} {
 		KeyNote [format $mc::ListFailed [dict get $result error]]
 		return
 	}
-	$Priv(cloud).model configure -values [dict get $result models]
+	$Priv(cloud).model configure -values [lmap m [dict get $result models] { ShortModel $provider $m }]
 	KeyNote
+}
+
+
+# Fireworks names every model "accounts/fireworks/models/<name>"; the dialog
+# shows <name> and Apply puts the prefix back.
+proc ::application::ai::models::ShortModel {provider model} {
+	if {$provider eq "fireworks"} { regsub {^accounts/fireworks/models/} $model {} model }
+	return $model
+}
+
+
+proc ::application::ai::models::FullModel {provider model} {
+	if {$provider eq "fireworks" && ![string match */* $model]} { return "accounts/fireworks/models/$model" }
+	return $model
 }
 
 
@@ -625,7 +642,7 @@ proc ::application::ai::models::Apply {} {
 		if {$name eq $::ai::provider::DefaultModel(ollama)} { set name "" }
 		::application::ai::choose ollama $name
 	} else {
-		set model [string trim $Priv(cloudModel)]
+		set model [FullModel $Priv(provider) [string trim $Priv(cloudModel)]]
 		if {![string length $model]} {
 			$Priv(cloud).note configure -text $mc::NoModel
 			return

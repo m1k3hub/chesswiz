@@ -284,7 +284,44 @@ tcltest::test aimodels-dialog-preset-list {a preset lists the provider's models 
 		::application::ai::setKey fireworks [expr {[dict exists $keys fireworks] ? [dict get $keys fireworks] : ""}]
 		set out
 	}
-} -result {{fireworks-a fireworks-b} accounts/fireworks/models/glm-5p3 fireworks fireworks-b}
+} -result {{fireworks-a fireworks-b} glm-5p3 fireworks accounts/fireworks/models/fireworks-b}
+
+tcltest::test aimodels-fireworks-short-names {Fireworks models are shown without their account prefix and saved with it} -body {
+	::scidb::test::aimodels::isolated {
+		set keys $::application::ai::Keys
+		rename ::ai::provider::modelsAsync ::scidb::test::aimodels::realList2
+		proc ::ai::provider::modelsAsync {provider script args} {
+			after 0 [list {*}$script {ok 1 models {accounts/fireworks/models/glm-5p3 accounts/fireworks/models/kimi-k3}}]
+		}
+		::application::ai::setKey fireworks test-key
+		::application::ai::models::show .application
+		update
+		set ::application::ai::models::Priv(provider) fireworks
+		::application::ai::models::ProviderChanged
+		update
+		set out [list [$::application::ai::models::Priv(cloud).model cget -values] $::application::ai::models::Priv(cloudModel)]
+		set ::application::ai::models::Priv(cloudModel) kimi-k3
+		::application::ai::models::Apply
+		lappend out $::application::ai::Settings(model)
+		rename ::ai::provider::modelsAsync {}
+		rename ::scidb::test::aimodels::realList2 ::ai::provider::modelsAsync
+		::application::ai::setKey fireworks [expr {[dict exists $keys fireworks] ? [dict get $keys fireworks] : ""}]
+		set out
+	}
+} -result {{glm-5p3 kimi-k3} glm-5p3 accounts/fireworks/models/kimi-k3}
+
+tcltest::test aimodels-sections-visible {the shown section is above the slot, not hidden behind it} -body {
+	::scidb::test::aimodels::isolated {
+		::application::ai::models::show .application
+		update
+		set slot $::application::ai::models::Priv(dialog).top.slot
+		set order [winfo children $::application::ai::models::Priv(dialog).top]
+		set local $::application::ai::models::Priv(local)
+		set above [expr {[lsearch $order $local] > [lsearch $order $slot] || [string match *$local* [winfo containing [winfo rootx $local] [winfo rooty $local]]]}]
+		::application::ai::models::Close
+		set above
+	}
+} -result 1
 
 tcltest::test aimodels-classifier-saved-setting {the saved classifier backend is in effect} -body {
 	::scidb::test::aimodels::isolated {
