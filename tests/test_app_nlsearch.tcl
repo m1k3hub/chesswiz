@@ -128,6 +128,50 @@ tcltest::test nls-interpret-model {model fields are validated; an unknown patter
 	}
 } -result {{{player Carlsen color black result loss eco B90-B99 from 2015} {} {from model result model color model player model eco model}} {{player Kasparov} {} {player model}} {{} smothered_mate {pattern model}} {{} {} {}}}
 
+tcltest::test nls-positional {a position no library pattern covers comes back as words for the finder} -body {
+	::scidb::test::nls::withStub [list \
+		{{"player":"Kasparov","pattern":"","positional":"Greek gift bishop sacrifice on h7"}} \
+		{{"pattern":"smothered_mate","positional":"smothered mate"}}] {
+		lmap request {
+			{Kasparov's Greek gift sacrifices}
+			{smothered mates}
+		} {
+			set i [::scidb::test::nls::interpret $request -classifier 0]
+			list [dict get $i positional] [dict get $i pattern] [expr {[dict exists $i sources positional] ? [dict get $i sources positional] : ""}]
+		}
+	}
+} -result {{{Greek gift bishop sacrifice on h7} {} model} {{} smothered_mate {}}}
+
+tcltest::test nls-find-positions {Find Positions hands the position and the fields to the assistant} -setup {
+	set dlg .__nls_handoff__
+	array set ::application::database::PlainSearchData [list $dlg,file /x/base.sci $dlg,variant Normal \
+		$dlg,positional {Greek gift bishop sacrifice on h7}]
+	foreach key $::application::database::PlainSearchFields {
+		set ::application::database::PlainSearchData($dlg,$key) ""
+	}
+	set ::application::database::PlainSearchData($dlg,player) Kasparov
+	set ::application::database::PlainSearchData($dlg,color) white
+	foreach cmd {::application::ai::cloudReady ::application::database::switchToBase
+			::application::assistant::show ::application::assistant::ask} {
+		rename $cmd ${cmd}__saved
+	}
+	proc ::application::ai::cloudReady {args} { return 1 }
+	proc ::application::database::switchToBase {file} { lappend ::scidb::test::nls::Handoff base $file }
+	proc ::application::assistant::show {} { lappend ::scidb::test::nls::Handoff show }
+	proc ::application::assistant::ask {request args} { lappend ::scidb::test::nls::Handoff ask $request }
+	set ::scidb::test::nls::Handoff {}
+} -body {
+	::application::database::PlainFindPositions $dlg
+	set ::scidb::test::nls::Handoff
+} -cleanup {
+	foreach cmd {::application::ai::cloudReady ::application::database::switchToBase
+			::application::assistant::show ::application::assistant::ask} {
+		rename $cmd {}
+		rename ${cmd}__saved $cmd
+	}
+	array unset ::application::database::PlainSearchData $dlg,*
+} -result {base /x/base.sci show ask {Find positions in this database: Greek gift bishop sacrifice on h7. Search only the games with these fields: player Kasparov, color white.}}
+
 tcltest::test nls-interpret-classifier {the classifier picks a pattern only when the words named none} -setup {
 	set ::scidb::test::nls::SavedDecide [info body ::ai::decide]
 	set ::scidb::test::nls::SavedArgs [info args ::ai::decide]

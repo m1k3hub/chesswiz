@@ -132,8 +132,8 @@ variable Patterns6 {
 variable ClassifierThreshold 0.6
 
 variable System {You turn a request for chess games into search fields. Answer with one JSON object and nothing else:
-{"player":"","color":"","result":"","opponent":"","eco":"","from":"","to":"","event":"","min_elo":"","pattern":""}
-Rules: leave a field "" when the request does not say it. color is white, black or "" (the player's colour). result is win, draw or loss from the player's side, or 1-0, 0-1, 1/2-1/2 without a player. eco is an ECO code or range such as B90 or B90-B99 (map an opening name to its ECO code yourself). from and to are YYYY, YYYY.MM or YYYY.MM.DD. min_elo is the minimum average rating. pattern is one of the ids listed below or "". Never write anything else.}
+{"player":"","color":"","result":"","opponent":"","eco":"","from":"","to":"","event":"","min_elo":"","pattern":"","positional":""}
+Rules: leave a field "" when the request does not say it. color is white, black or "" (the player's colour). result is win, draw or loss from the player's side, or 1-0, 0-1, 1/2-1/2 without a player. eco is an ECO code or range such as B90 or B90-B99 (map an opening name to its ECO code yourself). from and to are YYYY, YYYY.MM or YYYY.MM.DD. min_elo is the minimum average rating. pattern is one of the ids listed below or "". positional is the part of the request about a position, pattern, tactic or structure that none of the ids covers, in a few plain words (e.g. "knight fork of king and queen", "rook sacrifice on h7"); "" when an id covers it or the request asks for none. Never write anything else.}
 
 } ;# namespace search
 } ;# namespace ai
@@ -175,7 +175,7 @@ proc ::ai::search::Empty {} {
 	variable Fields
 	set criteria {}
 	foreach key $Fields { dict set criteria $key "" }
-	return [dict create criteria $criteria pattern "" sources {}]
+	return [dict create criteria $criteria pattern "" positional "" sources {}]
 }
 
 
@@ -378,7 +378,7 @@ proc ::ai::search::ParseModel {text} {
 	if {[catch { json::json2dict $json } reply] || [catch { dict size $reply }]} { return {} }
 
 	set out {}
-	foreach key [concat $Fields pattern] {
+	foreach key [concat $Fields pattern positional] {
 		if {[dict exists $reply $key]} {
 			set value [string trim [dict get $reply $key]]
 			if {$value ne "" && $value ne "null"} { dict set out $key $value }
@@ -427,6 +427,13 @@ proc ::ai::search::Finish {id} {
 			dict set result pattern [dict get $decision label]
 			dict set result sources pattern [format "classifier %.2f" [dict get $decision confidence]]
 		}
+	}
+
+	# a positional request no library pattern covers goes to the position
+	# finder (ASSISTANT_COVERAGE_MAP.md §5): words here, never CQL
+	if {[dict exists $model positional] && [dict get $result pattern] eq ""} {
+		dict set result positional [dict get $model positional]
+		dict set result sources positional model
 	}
 
 	# without a player, a draw is 1/2-1/2, and a win, a loss or a colour

@@ -101,6 +101,10 @@ and add aliases for the keyword stage.
 - **Free CQL written by a model:** not in this search. Drafted CQL lives in the
   position finder (`ASSISTANT_COVERAGE_MAP.md` §5), under the rule in §2. Power users
   type CQL in the CQL 6.2 Search dialog.
+- **Positions no pattern covers** (since 2026-10-02): the model may name them in
+  the `positional` field, in plain words and never as CQL. The form shows them in
+  a Position row. Find Positions hands them, with the fields, to the assistant's
+  position finder, which drafts the search and shows sample positions first.
 - **More patterns** (isolated queen's pawn, Greek gift, opposite-coloured bishops) need
   fixture games first. The **square-colour designators** `L` (light) and `D` (dark) are
   implemented (`[L?]`, `[D1]`, `BL?`, `b[D?]`), and so are the spatial **flip** and

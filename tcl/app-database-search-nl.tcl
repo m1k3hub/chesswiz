@@ -3,7 +3,9 @@
 # (PLAIN_LANGUAGE_SEARCH.md). ::ai::search interprets the request into the
 # fixed search_games fields and a pattern id; the form shows every field
 # with where it came from; Search validates the fields and filters the
-# main game list. No model writes query text or CQL.
+# main game list. No model writes query text or CQL here. A positional
+# request no library pattern covers is shown as words; Find Positions
+# hands it, with the fields, to the assistant's position finder.
 # ======================================================================
 
 ::util::source database-search-nl
@@ -33,6 +35,9 @@ set PlainSearchRun				"Search"
 set PlainSearchShowAll			"Show All"
 set PlainSearchFound				"%s games: %s"
 set PlainSearchPatternSlow		"A pattern reads the moves of every candidate game; this can take a while."
+set PlainSearchPosition			"Position"
+set PlainSearchFindPositions	"Find Positions..."
+set PlainSearchPositionNote	"No library pattern covers the position asked for: Find Positions lets the assistant write the search and show sample positions first."
 } ;# namespace mc
 
 variable PlainSearchData
@@ -82,6 +87,7 @@ proc ::application::database::OpenPlainSearch {parent file variant} {
 	set PlainSearchData($dlg,variant) $variant
 	set PlainSearchData($dlg,request) ""
 	set PlainSearchData($dlg,status) $mc::PlainSearchExample
+	set PlainSearchData($dlg,positional) ""
 	foreach key $PlainSearchFields {
 		set PlainSearchData($dlg,$key) ""
 		set PlainSearchData($dlg,$key,source) ""
@@ -130,6 +136,13 @@ proc ::application::database::OpenPlainSearch {parent file variant} {
 		grid $dlg.form.s$key -row $row -column 2 -sticky w -padx 6
 		incr row
 	}
+	ttk::label $dlg.form.lpositional -text $mc::PlainSearchPosition
+	ttk::entry $dlg.form.positional -textvariable ${var}($dlg,positional) -width 28
+	ttk::button $dlg.form.findpositions -text $mc::PlainSearchFindPositions \
+		-command [namespace code [list PlainFindPositions $dlg]]
+	grid $dlg.form.lpositional -row $row -column 0 -sticky w -padx 4 -pady 1
+	grid $dlg.form.positional -row $row -column 1 -sticky ew -pady 1
+	grid $dlg.form.findpositions -row $row -column 2 -sticky w -padx 6
 	grid columnconfigure $dlg.form 1 -weight 1
 
 	ttk::frame $dlg.buttons
@@ -193,9 +206,35 @@ proc ::application::database::PlainUnderstood {dlg interpretation} {
 		set PlainSearchData($dlg,$key,source) \
 			[expr {[dict exists $sources $key] ? "([dict get $sources $key])" : ""}]
 	}
+	set positional [expr {[dict exists $interpretation positional] ? [dict get $interpretation positional] : ""}]
+	set PlainSearchData($dlg,positional) $positional
 	set PlainSearchData($dlg,status) [expr {[dict size $sources]
-		? [expr {[dict get $interpretation pattern] ne "" ? $mc::PlainSearchPatternSlow : ""}]
+		? [expr {[dict get $interpretation pattern] ne "" ? $mc::PlainSearchPatternSlow
+			: $positional ne "" ? $mc::PlainSearchPositionNote : ""}]
 		: $mc::PlainSearchNothing}]
+}
+
+
+# Hand the position asked for, with the fields, to the assistant's
+# position finder, in the assistant pane: it drafts the CQL, shows sample
+# positions to confirm, then fills the game list.
+proc ::application::database::PlainFindPositions {dlg} {
+	variable PlainSearchData
+
+	set positional [string trim $PlainSearchData($dlg,positional)]
+	if {$positional eq ""} { return }
+	set fields {}
+	foreach {key value} [PlainArguments $dlg] {
+		if {$key ne "pattern"} { lappend fields "$key $value" }
+	}
+	set request "Find positions in this database: $positional."
+	if {[llength $fields]} {
+		append request " Search only the games with these fields: [join $fields {, }]."
+	}
+	if {![::application::ai::cloudReady $dlg]} { return }
+	::application::database::switchToBase $PlainSearchData($dlg,file)
+	::application::assistant::show
+	::application::assistant::ask $request
 }
 
 
