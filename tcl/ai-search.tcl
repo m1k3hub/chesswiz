@@ -195,6 +195,56 @@ variable Patterns {
 		{lucena {lucena position} {building a bridge}}
 		{} structure
 	}
+	epaulette_mate {
+		"epaulette mate" "a queen mates the king on its back rank along its file, both squares beside the king blocked by its own pieces"
+		{{epaulette mate} {epaulette mates} epaulette {epaulet mate}}
+		{} event
+	}
+	queen_pawn_mate {
+		"queen-and-pawn mate (Damiano's, Lolli's)" "a queen next to the king mates it, defended by a pawn"
+		{{damiano's mate} {damianos mate} {damiano mate} damiano {lolli's mate} {lollis mate} {lolli mate} {queen and pawn mate} {queen-and-pawn mate}}
+		{} event
+	}
+	skewer {
+		"skewer" "a bishop, rook or queen checks the king, with a queen or rook behind the king on the same line"
+		{skewer skewers skewered {x-ray check}}
+		{} event
+	}
+	discovered_check {
+		"discovered check" "a piece moves off the line between its own bishop, rook or queen and the enemy king, which is then in check"
+		{{discovered check} {discovered checks} {discovered attack on the king} {discovery check}}
+		{} event
+	}
+	double_bishop_sacrifice {
+		"double bishop sacrifice (Lasker-Bauer)" "a bishop takes on h7 in front of the king on g8, and within three moves a bishop takes on g7 (h2 and g2 against g1)"
+		{{double bishop sacrifice} {two bishop sacrifice} {two-bishop sacrifice} {lasker's sacrifice} {lasker sacrifice} {lasker-bauer} {lasker bauer} {sacrifice of both bishops}}
+		{} event
+	}
+	alekhines_gun {
+		"Alekhine's gun" "the queen behind both rooks on one file, nothing between them (the rooks in front)"
+		{{alekhine's gun} {alekhines gun} {alekhine gun} {queen behind the rooks}}
+		{} structure
+	}
+	minority_attack {
+		"minority attack" "in the Carlsbad structure the b-pawn has reached b5 against c6 (b4 against c3 for Black)"
+		{{minority attack} {minority attacks}}
+		{} structure
+	}
+	hedgehog {
+		"hedgehog" "pawns on a6, b6, d6 and e6 without a c-pawn, against c4 and e4 without a d-pawn (or colours reversed)"
+		{hedgehog hedgehogs {hedgehog structure} {hedgehog system}}
+		{} structure
+	}
+	protected_passed_pawn {
+		"protected passed pawn" "a passed pawn on the 4th rank or beyond, defended by a pawn"
+		{{protected passed pawn} {protected passed pawns} {protected passer} {protected passers} {defended passed pawn}}
+		{} structure
+	}
+	weakened_fianchetto {
+		"weakened fianchetto" "a king castled short behind f2, g3 and h2 without its light-squared bishop, the opponent keeping a queen or a light-squared bishop (f7, g6, h7 and the dark-squared bishop for Black)"
+		{{weakened fianchetto} {fianchetto without the bishop} {missing fianchetto bishop} {weak fianchetto} {holes around the king}}
+		{} structure
+	}
 }
 
 variable Fields {player color result opponent eco from to event min_elo}
@@ -229,6 +279,16 @@ variable Patterns6 {
     queen_vs_rook {cql() flipcolor {#A == 2 Q #a == 2 r}}
     wrong_bishop {cql() {#a == 1 #A == 3 ((Pa2-7 and dark B) or (Ph2-7 and light B))} or {#A == 1 #a == 3 ((pa2-7 and light b) or (ph2-7 and dark b))}}
     lucena {cql() flipcolor {#A == 3 #a == 2 R r square x in Pb-g7 {K & up 1 x not (k & (x | horizontal 1 x | vertical (x | horizontal 1 x)))}}}
+    epaulette_mate {cql() flipcolor (btm and mate and kb-g8 and #(a & horizontal 1 k) == 2 and (Q & vertical k) attacks k)}
+    queen_pawn_mate {cql() flipcolor (btm and mate and ((Q & (. attackedby k)) attackedby P))}
+    skewer {cql() flipcolor (btm and check and (ray orthogonal ([RQ] k [qr]) or ray diagonal ([BQ] k [qr])))}
+    discovered_check {cql() flipcolor square y in [QRB] square x in A line --> (wtm and move from x and (ray orthogonal ((y & [QR]) x k) or ray diagonal ((y & [QB]) x k))) --> (btm and y attacks k)}
+    double_bishop_sacrifice {cql() flipcolor line --> (kg8 and move from B capture ph7) --> .{1,6} --> move from B capture pg7}
+    alekhines_gun {cql() flipcolor ray up (Q R R)}
+    minority_attack {cql() flipcolor {Pd4 not Pc2-7 pd5 pc6 not pe2-7 Pb5}}
+    hedgehog {cql() flipcolor {pa6 pb6 pd6 pe6 not pc2-7 Pc4 Pe4 not Pd2-7}}
+    protected_passed_pawn {cql() flipcolor ((passedpawns & Pa-h4-7) attackedby P)}
+    weakened_fianchetto {cql() flipcolor {K[g1,h1] Pf2 Pg3 Ph2 not light B (q or light b)}}
 }
 
 # the classifier's gate for choosing a pattern (SCIDB_AI_PATTERN_SEARCH_MIN_CONFIDENCE)

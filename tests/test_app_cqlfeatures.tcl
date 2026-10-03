@@ -207,7 +207,7 @@ tcltest::test cqlf-tags {track a piece through the game (:forany / $tag / :tagma
 
 tcltest::test cqlf-kinds {events and structures} -body {
 	list [::ai::search::patternIds event] [::ai::search::patternIds structure]
-} -result {{checkmate smothered_mate stalemate en_passant underpromotion double_check back_rank_mate boden_mate anastasia_mate arabian_mate knight_fork greek_gift} {opposite_castling rook_endgame pawn_endgame isolated_queen_pawn opposite_bishops queenless rook_seventh doubled_rooks_seventh knight_outpost hanging_pawns carlsbad maroczy_bind stonewall queen_vs_rook wrong_bishop lucena}}
+} -result {{checkmate smothered_mate stalemate en_passant underpromotion double_check back_rank_mate boden_mate anastasia_mate arabian_mate knight_fork greek_gift epaulette_mate queen_pawn_mate skewer discovered_check double_bishop_sacrifice} {opposite_castling rook_endgame pawn_endgame isolated_queen_pawn opposite_bishops queenless rook_seventh doubled_rooks_seventh knight_outpost hanging_pawns carlsbad maroczy_bind stonewall queen_vs_rook wrong_bishop lucena alekhines_gun minority_attack hedgehog protected_passed_pawn weakened_fianchetto}}
 
 tcltest::test cqlf-structures {each structure on positions that have it and positions that do not} -body {
 	set iqp $::scidb::test::cqlf::IQP

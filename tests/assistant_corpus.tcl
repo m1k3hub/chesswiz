@@ -44,6 +44,9 @@ set Corpus {
 	pos-lucena J3 {Show me Lucena positions.} {{search_games pattern lucena}}
 	pos-carlsbad J3 {Games with the Carlsbad pawn structure.} {{search_games pattern carlsbad}}
 	pos-outpost J3 {Knight outposts in my games.} {{search_games pattern knight_outpost player *thomas*}}
+	pos-skewer J3 {Find skewers in this database.} {{search_games pattern skewer}}
+	pos-hedgehog J3 {Hedgehog structures since 2015.} {{search_games pattern hedgehog from 2015*}}
+	pos-gun J3 {Has anyone set up Alekhine's gun here?} {{search_games pattern alekhines_gun}}
 
 	open-najdorf J4 {Set up the Najdorf after 6.Bg5.} {{set_position moves *bg5*}}
 	open-tree J4 {What is played in this position?} {{position_moves}}

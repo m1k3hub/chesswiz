@@ -1,7 +1,7 @@
 # ======================================================================
 # Scidb App Test Suite - the CQL 6.2-only part of the pattern library
 # (tcl/ai-search.tcl Patterns6: mates, tactics, structures and endgames
-# from the instructional canon). Each pattern must match the positions
+# from the instructional canon, Western and Soviet). Each pattern must match the positions
 # that show it and miss the near misses; its aliases must name it in a
 # plain-language request.
 # ======================================================================
@@ -52,6 +52,29 @@ namespace eval ::scidb::test::plib {
 		lucena must {4r3/2R5/8/8/8/8/3p2K1/3k4 b - - 0 1} {*}
 		lucena miss {3K4/3P4/4k3/8/8/8/2r5/R7 w - - 0 1} {*}
 		lucena miss {8/6k1/3P4/3K4/8/8/2r5/4R3 w - - 0 1} {*}
+		epaulette_mate must {3rkr2/8/4Q3/8/8/8/8/4K3 b - - 0 1} {*}
+		epaulette_mate miss {6k1/5ppp/8/8/8/8/8/3R2K1 w - - 0 1} {1. Rd8# *}
+		queen_pawn_mate must {5rk1/5p2/6P1/8/8/8/8/6KQ w - - 0 1} {1. Qh7# *}
+		queen_pawn_mate must {6k1/5p1p/5PpQ/8/8/8/8/6K1 w - - 0 1} {1. Qg7# *}
+		queen_pawn_mate miss {3rkr2/8/4Q3/8/8/8/8/4K3 b - - 0 1} {*}
+		skewer must {4q3/8/8/4k3/8/8/8/4R1K1 b - - 0 1} {*}
+		skewer must {7q/8/5k2/8/3B4/8/8/6K1 b - - 0 1} {*}
+		skewer miss {3q4/8/8/4k3/8/8/8/4R1K1 b - - 0 1} {*}
+		discovered_check must {4k3/8/8/8/8/4N3/8/4R1K1 w - - 0 1} {1. Nd5+ Kd7 *}
+		discovered_check miss {4k3/8/8/8/8/2N5/8/3R2K1 w - - 0 1} {1. Nd5 Kf7 *}
+		discovered_check miss {4k3/8/8/8/8/8/8/R5K1 w - - 0 1} {1. Ra8+ Kd7 *}
+		alekhines_gun must {4k3/8/8/8/8/3R4/3R4/3QK3 w - - 0 1} {1. Kf1 *}
+		alekhines_gun miss {4k3/8/8/8/8/3R4/3Q4/3RK3 w - - 0 1} {1. Kf1 *}
+		double_bishop_sacrifice must {r4rk1/5ppp/8/8/8/3B4/1B3PPP/3Q1RK1 w - - 0 1} {1. Bxh7+ Kxh7 2. Qh5+ Kg8 3. Bxg7 Kxg7 *}
+		double_bishop_sacrifice miss {r4rk1/5ppp/8/8/8/3B4/1B3PPP/3Q1RK1 w - - 0 1} {1. Bxh7+ Kxh7 2. Qh5+ Kg8 3. Qh4 *}
+		minority_attack must {4k3/pp3ppp/2p5/1P1p4/3P4/4P3/P4PPP/4K3 b - - 0 1} {1... Kd7 *}
+		minority_attack miss {4k3/pp3ppp/2p5/3p4/3P4/4P3/PP3PPP/4K3 b - - 0 1} {1... Kd7 *}
+		hedgehog must {4k3/5ppp/pp1pp3/8/2P1P3/8/PP3PPP/4K3 b - - 0 1} {1... Kd7 *}
+		hedgehog miss {4k3/pp2pppp/3p4/8/2P1P3/8/PP3PPP/4K3 b - - 0 1} {1... Kd7 *}
+		protected_passed_pawn must {4k3/8/8/3P4/4P3/8/8/4K3 b - - 0 1} {1... Kf7 *}
+		protected_passed_pawn miss {4k3/8/8/3P4/8/8/8/4K3 b - - 0 1} {1... Kf7 *}
+		weakened_fianchetto must {3qk3/8/8/8/8/6P1/5P1P/6K1 w - - 0 1} {*}
+		weakened_fianchetto miss {3qk3/8/8/8/8/6P1/5P1P/5BK1 w - - 0 1} {*}
 	}
 }
 
@@ -145,10 +168,20 @@ tcltest::test plib-aliases {a request naming a pattern selects it} -body {
 		{queen vs rook endings}
 		{wrong-coloured bishop draws}
 		{the Lucena position}
+		{an epaulette mate}
+		{Lolli's mate}
+		{skewers}
+		{discovered checks by White}
+		{the Lasker-Bauer double bishop sacrifice}
+		{Alekhine's gun}
+		{minority attack in the Carlsbad}
+		{hedgehog structures}
+		{protected passed pawns}
+		{weakened fianchetto}
 		{smothered mates}
 		{rook endings}
 	} { dict get [::ai::search::extract $request] pattern }
-} -result {back_rank_mate boden_mate anastasia_mate arabian_mate knight_fork greek_gift rook_seventh doubled_rooks_seventh knight_outpost hanging_pawns carlsbad maroczy_bind stonewall queen_vs_rook wrong_bishop lucena smothered_mate rook_endgame}
+} -result {back_rank_mate boden_mate anastasia_mate arabian_mate knight_fork greek_gift rook_seventh doubled_rooks_seventh knight_outpost hanging_pawns carlsbad maroczy_bind stonewall queen_vs_rook wrong_bishop lucena epaulette_mate queen_pawn_mate skewer discovered_check double_bishop_sacrifice alekhines_gun minority_attack hedgehog protected_passed_pawn weakened_fianchetto smothered_mate rook_endgame}
 
 tcltest::test plib-labels {every pattern has a label, a description, aliases and a known kind} -body {
 	lmap id [::ai::search::patternIds] {

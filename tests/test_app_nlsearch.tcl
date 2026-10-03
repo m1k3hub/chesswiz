@@ -118,12 +118,12 @@ proc ::scidb::test::nls::withStub {replies body} {
 tcltest::test nls-interpret-model {model fields are validated; an unknown pattern is dropped} -body {
 	::scidb::test::nls::withStub [list \
 		{{"player":"Carlsen","color":"black","result":"loss","eco":"B90-B99","from":"2015","pattern":""}} \
-		{Sure! {"player":"Kasparov","from":"yesterday","pattern":"minority_attack"}} \
+		{Sure! {"player":"Kasparov","from":"yesterday","pattern":"windmill"}} \
 		{{"pattern":"smothered_mate"}} \
 		{not json at all}] {
 		lmap request {
 			{Carlsen's losses as Black in the Najdorf since 2015}
-			{Kasparov's minority attacks}
+			{Kasparov's windmills}
 			{knight mates with the king boxed in}
 			{Carlsen's wins}
 		} { ::scidb::test::nls::brief [::scidb::test::nls::interpret $request -classifier 0] }
@@ -132,17 +132,17 @@ tcltest::test nls-interpret-model {model fields are validated; an unknown patter
 
 tcltest::test nls-positional {a position no library pattern covers comes back as words for the finder} -body {
 	::scidb::test::nls::withStub [list \
-		{{"player":"Kasparov","pattern":"","positional":"minority attack on the queenside"}} \
+		{{"player":"Kasparov","pattern":"","positional":"windmill of discovered checks"}} \
 		{{"pattern":"smothered_mate","positional":"smothered mate"}}] {
 		lmap request {
-			{Kasparov's minority attacks}
+			{Kasparov's windmills}
 			{smothered mates}
 		} {
 			set i [::scidb::test::nls::interpret $request -classifier 0]
 			list [dict get $i positional] [dict get $i pattern] [expr {[dict exists $i sources positional] ? [dict get $i sources positional] : ""}]
 		}
 	}
-} -result {{{minority attack on the queenside} {} model} {{} smothered_mate {}}}
+} -result {{{windmill of discovered checks} {} model} {{} smothered_mate {}}}
 
 tcltest::test nls-find-positions {Find Positions hands the position and the fields to the assistant} -setup {
 	set dlg .__nls_handoff__
@@ -203,7 +203,7 @@ tcltest::test nls-interpret-classifier {the classifier picks a pattern only when
 
 tcltest::test nls-checkargs {search_games takes a pattern alone, refuses an unknown one} -body {
 	list [::application::assistant::CheckArgs search_games {pattern en_passant}] \
-		[catch {::application::assistant::CheckArgs search_games {pattern minority_attack}} e] \
+		[catch {::application::assistant::CheckArgs search_games {pattern windmill}} e] \
 		[string match "pattern must be one of: checkmate, *" $e]
 } -result {{criteria {player {} color any result {} opponent {} eco {} from {} to {} event {} min_elo {} pattern en_passant}} 1 1}
 

@@ -132,6 +132,23 @@ people, with the engine's help for checking. A script a model drafted for the po
 (`ASSISTANT_COVERAGE_MAP.md` §5) is never indexed. A player may save it as a user pattern, and
 it joins the library only after a person adds fixtures.
 
+**How a pattern is added (2026-10-03, 26 patterns added this way):** pick a motif from the
+instructional literature; write its CQL 6.2 script in `Patterns6` and its entry (label,
+description, aliases, kind, an empty legacy script) in `Patterns`; add positions it must match
+and near misses it must not (`tests/test_app_pattern_library.tcl`, which also checks the
+aliases); run it over a 106k-game TWIC slice to see that it finds real instances and that a
+few samples are what the label says; extend the `search_games` enum. Two lessons: a fixture
+whose FEN is illegal is silently dropped on import (the test checks the count), and
+`flipcolor` maps light squares to dark ones (the board is mirrored), which is right for
+fianchetto bishops and wrong for queening squares (`wrong_bishop` spells out both colours).
+
+**Ideas not yet built** (from Kimi K3, asked for the Soviet school's systematic themes; each
+needs a definition that a script can test): absolute pin, pawn fork, windmill, clearance
+sacrifice, interference (Novotny), overloaded piece, removal of the guard, zwischenzug, two
+undefended pieces, Legal's mate, king on an open central file, Blackburne's and Pillsbury's
+mates, backward pawn, bad bishop behind its chain, locked pawn chains, the pawn breakthrough,
+triangulation, the trebuchet.
+
 ## 9. Risks and open questions
 
 * **Multi-script evaluation on one prepared game** is not in the official CQL 6.2 program
