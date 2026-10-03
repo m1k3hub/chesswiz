@@ -15,6 +15,8 @@
 #   ::ai::search::extract <request>      -> the deterministic part, same shape
 #   ::ai::search::patternIds ?event|structure? -> the ids of the library
 #   ::ai::search::pattern <id>           -> dict {label description cql kind}
+#       (cql is the legacy engine's template, "" for the CQL 6.2-only ones)
+#   ::ai::search::pattern6 <id>          -> the CQL 6.2 template
 #   ::ai::search::structures <fen>       -> the structure patterns a position shows
 #
 # The query is built by ::application::assistant::BuildQuery, which appends
@@ -34,7 +36,11 @@ namespace eval search {
 # id {label description aliases cql kind} -- kind is event (something that
 # happens) or structure (a kind of position, used by the brief and the study
 # plan); every template is checked against fixture games and positions in
-# tests/test_app_nlsearch.tcl
+# tests/test_app_nlsearch.tcl. The entries with an empty legacy cql run on
+# CQL 6.2 only (Patterns6; tests/test_app_pattern_library.tcl): the
+# instructional canon, beginner to master -- Renaud & Kahn's mates,
+# Vukovic's attack, Nimzowitsch, Kmoch and Soltis on structure, Dvoretsky's
+# endgames.
 variable Patterns {
 	checkmate {
 		"checkmate" "the game ends in checkmate"
@@ -108,6 +114,87 @@ variable Patterns {
 		{(match (position :piececount [Qq] 0 :piececount [RBNrbn] 4 12))}
 		structure
 	}
+
+	back_rank_mate {
+		"back-rank mate" "a rook or queen mates the king on its back rank"
+		{{back-rank mate} {back rank mate} {back-rank mates} {back rank} back-rank {mate on the back rank}}
+		{} event
+	}
+	boden_mate {
+		"two-bishop mate (Boden's mate)" "two bishops mate, and no other piece covers the king or its squares"
+		{{boden's mate} {bodens mate} {boden mate} boden {two-bishop mate} {two bishop mate} {mate with two bishops}}
+		{} event
+	}
+	anastasia_mate {
+		"Anastasia's mate" "a rook or queen mates the king on the edge file (not in the corner) while a knight covers its flight squares"
+		{{anastasia's mate} {anastasias mate} {anastasia mate} anastasia}
+		{} event
+	}
+	arabian_mate {
+		"Arabian mate" "a rook next to the cornered king mates it, defended by a knight"
+		{{arabian mate} {arab mate} arabian}
+		{} event
+	}
+	knight_fork {
+		"knight fork" "a knight checks the king and attacks a queen or rook at the same time"
+		{{knight fork} {knight forks} {family fork} {royal fork} fork forks}
+		{} event
+	}
+	greek_gift {
+		"Greek gift (Bxh7+)" "a bishop takes the h7 pawn with check in front of the king on g8 (h2 against g1)"
+		{{greek gift} {greek gift sacrifice} {classic bishop sacrifice} bxh7+ bxh7 bxh2+ bxh2}
+		{} event
+	}
+	rook_seventh {
+		"rook on the seventh" "a rook on the 7th rank with the enemy king on its back rank (the 2nd and 1st for Black)"
+		{{rook on the seventh} {rook on the 7th} {rook on seventh} {seventh rank} {7th rank} {rook on the seventh rank}}
+		{} structure
+	}
+	doubled_rooks_seventh {
+		"doubled rooks on the seventh" "both rooks of one side on the 7th rank (the 2nd for Black)"
+		{{doubled rooks on the seventh} {doubled rooks on the 7th} {two rooks on the seventh} {two rooks on the 7th} {rooks on the seventh} {rooks on the 7th} {pigs on the seventh}}
+		{} structure
+	}
+	knight_outpost {
+		"knight outpost" "a knight on the 5th or 6th rank, defended by a pawn, that no enemy pawn can ever attack"
+		{outpost outposts {knight outpost} {outpost knight} {knight on an outpost}}
+		{} structure
+	}
+	hanging_pawns {
+		"hanging pawns" "pawns on c4 and d4 with no own pawns on the b- and e-files and no enemy c- or d-pawns (c5 and d5 for Black)"
+		{{hanging pawns} {hanging pawn}}
+		{} structure
+	}
+	carlsbad {
+		"Carlsbad structure" "the Queen's Gambit Exchange structure: d4 and e3 against d5 and c6/c7, White without a c-pawn and Black without an e-pawn (or colours reversed, as in the Caro-Kann Exchange)"
+		{carlsbad {carlsbad structure} karlsbad {qgd exchange structure} {exchange queen's gambit structure}}
+		{} structure
+	}
+	maroczy_bind {
+		"Maroczy bind" "pawns on c4 and e4 without a d-pawn, against a d6/d7 pawn and no c-pawn (or colours reversed)"
+		{{maroczy bind} {maróczy bind} maroczy maróczy}
+		{} structure
+	}
+	stonewall {
+		"Stonewall" "pawns on c3, d4, e3 and f4 (c6, d5, e6 and f5 for Black)"
+		{stonewall {stonewall structure} {stonewall dutch} {stonewall attack}}
+		{} structure
+	}
+	queen_vs_rook {
+		"queen against rook" "king and queen against king and rook, nothing else"
+		{{queen against rook} {queen vs rook} {queen versus rook} {queen v rook} {q vs r}}
+		{} structure
+	}
+	wrong_bishop {
+		"wrong-coloured bishop" "king, bishop and rook's pawn against a lone king, the bishop not controlling the queening square"
+		{{wrong bishop} {wrong-coloured bishop} {wrong colored bishop} {wrong coloured bishop} {wrong-colored bishop} {wrong rook pawn}}
+		{} structure
+	}
+	lucena {
+		"Lucena position" "rook and pawn against rook: the pawn (not a rook's pawn) on the 7th, its king on the queening square, the defending king at least two files away"
+		{lucena {lucena position} {building a bridge}}
+		{} structure
+	}
 }
 
 variable Fields {player color result opponent eco from to event min_elo}
@@ -126,6 +213,22 @@ variable Patterns6 {
     isolated_queen_pawn {cql() flipcolor (Pd4 and not (Pc2-7 or Pe2-7))}
     opposite_bishops {cql() #B == 1 and #b == 1 and ((light B and dark b) or (dark B and light b))}
     queenless {cql() not [Qq] and #[RBNrbn] >= 4 and #[RBNrbn] <= 12}
+    back_rank_mate {cql() flipcolor (btm and mate and ka-h8 and [RQ]a-h8 attacks k)}
+    boden_mate {cql() flipcolor (btm and mate and #(B attacks (k | (. attackedby k))) == 2 and not ([KQRNP] attacks (k | (. attackedby k))))}
+    anastasia_mate {cql() flipcolor (btm and mate and N attacks (. attackedby k) and ((kh2-7 and [RQ]h1-8 attacks k) or (ka2-7 and [RQ]a1-8 attacks k)))}
+    arabian_mate {cql() flipcolor flip (btm and mate and kh8 and ((R[g8,h7] attacks k) attackedby N))}
+    knight_fork {cql() flipcolor (btm and square x in N {x attacks k x attacks [qr]})}
+    greek_gift {cql() flipcolor line --> (kg8 and move from B capture ph7) --> check}
+    rook_seventh {cql() flipcolor (Ra-h7 and ka-h8)}
+    doubled_rooks_seventh {cql() flipcolor #Ra-h7 == 2}
+    knight_outpost {cql() flipcolor square x in (Na-h5-6 attackedby P) {not (p & up horizontal 1 x)}}
+    hanging_pawns {cql() flipcolor {Pc4 Pd4 not (Pb2-7 | Pe2-7) not (pc2-7 | pd2-7)}}
+    carlsbad {cql() flipcolor {Pd4 Pe2-3 not Pc2-7 pd5 pc6-7 not pe2-7}}
+    maroczy_bind {cql() flipcolor {Pc4 Pe4 not Pd2-7 not pc2-7 pd6-7 not pd2-5}}
+    stonewall {cql() flipcolor {Pc3 Pd4 Pe3 Pf4}}
+    queen_vs_rook {cql() flipcolor {#A == 2 Q #a == 2 r}}
+    wrong_bishop {cql() {#a == 1 #A == 3 ((Pa2-7 and dark B) or (Ph2-7 and light B))} or {#A == 1 #a == 3 ((pa2-7 and light b) or (ph2-7 and dark b))}}
+    lucena {cql() flipcolor {#A == 3 #a == 2 R r square x in Pb-g7 {K & up 1 x not (k & (x | horizontal 1 x | vertical (x | horizontal 1 x)))}}}
 }
 
 # the classifier's gate for choosing a pattern (SCIDB_AI_PATTERN_SEARCH_MIN_CONFIDENCE)
@@ -162,7 +265,9 @@ proc ::ai::search::pattern6 {id} {
 proc ::ai::search::structures {fen} {
 	set found {}
 	foreach id [patternIds structure] {
-		if {![catch { ::scidb::cql::position $fen [dict get [pattern $id] cql] } hit] && $hit} {
+		set cql [dict get [pattern $id] cql]
+		if {$cql eq ""} continue
+		if {![catch { ::scidb::cql::position $fen $cql } hit] && $hit} {
 			lappend found $id
 		}
 	}

@@ -69,9 +69,11 @@ proc ::scidb::test::nls::brief {interpretation} {
 
 # --- the pattern library ------------------------------------------------------
 
-tcltest::test nls-patterns {every template finds exactly its games} -body {
+tcltest::test nls-patterns {every legacy template finds exactly its games} -body {
 	set f $::scidb::test::nls::Fixture
 	lmap id [::ai::search::patternIds] {
+		# the CQL 6.2-only patterns: tests/test_app_pattern_library.tcl
+		if {[dict get [::ai::search::pattern $id] cql] eq ""} continue
 		list $id [::scidb::cql::search $f Normal [dict get [::ai::search::pattern $id] cql]]
 	}
 } -result {{checkmate {0 1}} {smothered_mate 1} {stalemate 8} {en_passant 3} {underpromotion 4} {double_check 9} {opposite_castling 7} {rook_endgame 5} {pawn_endgame {4 6}} {isolated_queen_pawn {}} {opposite_bishops {}} {queenless {}}}
@@ -116,12 +118,12 @@ proc ::scidb::test::nls::withStub {replies body} {
 tcltest::test nls-interpret-model {model fields are validated; an unknown pattern is dropped} -body {
 	::scidb::test::nls::withStub [list \
 		{{"player":"Carlsen","color":"black","result":"loss","eco":"B90-B99","from":"2015","pattern":""}} \
-		{Sure! {"player":"Kasparov","from":"yesterday","pattern":"greek_gift"}} \
+		{Sure! {"player":"Kasparov","from":"yesterday","pattern":"minority_attack"}} \
 		{{"pattern":"smothered_mate"}} \
 		{not json at all}] {
 		lmap request {
 			{Carlsen's losses as Black in the Najdorf since 2015}
-			{Kasparov's Greek gift sacrifices}
+			{Kasparov's minority attacks}
 			{knight mates with the king boxed in}
 			{Carlsen's wins}
 		} { ::scidb::test::nls::brief [::scidb::test::nls::interpret $request -classifier 0] }
@@ -130,17 +132,17 @@ tcltest::test nls-interpret-model {model fields are validated; an unknown patter
 
 tcltest::test nls-positional {a position no library pattern covers comes back as words for the finder} -body {
 	::scidb::test::nls::withStub [list \
-		{{"player":"Kasparov","pattern":"","positional":"Greek gift bishop sacrifice on h7"}} \
+		{{"player":"Kasparov","pattern":"","positional":"minority attack on the queenside"}} \
 		{{"pattern":"smothered_mate","positional":"smothered mate"}}] {
 		lmap request {
-			{Kasparov's Greek gift sacrifices}
+			{Kasparov's minority attacks}
 			{smothered mates}
 		} {
 			set i [::scidb::test::nls::interpret $request -classifier 0]
 			list [dict get $i positional] [dict get $i pattern] [expr {[dict exists $i sources positional] ? [dict get $i sources positional] : ""}]
 		}
 	}
-} -result {{{Greek gift bishop sacrifice on h7} {} model} {{} smothered_mate {}}}
+} -result {{{minority attack on the queenside} {} model} {{} smothered_mate {}}}
 
 tcltest::test nls-find-positions {Find Positions hands the position and the fields to the assistant} -setup {
 	set dlg .__nls_handoff__
@@ -201,7 +203,7 @@ tcltest::test nls-interpret-classifier {the classifier picks a pattern only when
 
 tcltest::test nls-checkargs {search_games takes a pattern alone, refuses an unknown one} -body {
 	list [::application::assistant::CheckArgs search_games {pattern en_passant}] \
-		[catch {::application::assistant::CheckArgs search_games {pattern greek_gift}} e] \
+		[catch {::application::assistant::CheckArgs search_games {pattern minority_attack}} e] \
 		[string match "pattern must be one of: checkmate, *" $e]
 } -result {{criteria {player {} color any result {} opponent {} eco {} from {} to {} event {} min_elo {} pattern en_passant}} 1 1}
 

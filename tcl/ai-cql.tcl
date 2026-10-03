@@ -129,6 +129,7 @@ proc ::ai::cql::profile {base variant player args} {
 	set structures {}
 	foreach id [::ai::search::patternIds structure] {
 		set cql [dict get [::ai::search::pattern $id] cql]
+		if {$cql eq ""} continue
 		set n 0
 		set scored 0
 		set points 0.0
@@ -201,6 +202,7 @@ proc ::ai::cql::themes {fen {san ""}} {
 	if {$san ne ""} {
 		foreach id [::ai::search::patternIds event] {
 			set cql [dict get [::ai::search::pattern $id] cql]
+			if {$cql eq ""} continue
 			if {![catch { ::scidb::cql::position $fen $cql $san } hit] && $hit} { lappend events $id }
 		}
 		if {[catch { ::scidb::ai::moveFacts $san $fen } facts]

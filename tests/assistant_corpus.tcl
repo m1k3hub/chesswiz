@@ -29,18 +29,21 @@ set Corpus {
 	find-similar-games J2 {Find games like the one on the board.} {{similar_games} {find_similar}}
 	find-show J2 {Put those games in the game list.} {{show_search} {none}}
 
-	pos-fork J3 {Find games where a knight forks king and queen.} {{cql_help} {find_positions}}
+	pos-fork J3 {Find games where a knight forks king and queen.} {{search_games pattern knight_fork} {cql_help} {find_positions}}
 	pos-smothered J3 {Smothered mates, please.} {{search_games pattern smothered_mate} {cql_help} {find_positions}}
-	pos-rook7 J3 {Games with a rook on the seventh rank.} {{cql_help} {find_positions}}
-	pos-greek J3 {Find a Greek gift sacrifice on h7.} {{cql_help} {find_positions}}
+	pos-rook7 J3 {Games with a rook on the seventh rank.} {{search_games pattern rook_seventh} {cql_help} {find_positions}}
+	pos-greek J3 {Find a Greek gift sacrifice on h7.} {{search_games pattern greek_gift} {cql_help} {find_positions}}
 	pos-underprom J3 {Show me underpromotions.} {{search_games pattern underpromotion} {cql_help} {find_positions}}
 	pos-iqp J3 {Positions with an isolated queen's pawn.} {{search_games pattern isolated_queen_pawn} {cql_help} {find_positions}}
 	pos-oppbishops J3 {Endgames with opposite-coloured bishops.} {{search_games pattern opposite_bishops} {cql_help} {find_positions}}
 	pos-like-board J3 {Find positions like this one.} {{find_similar}}
 	pos-structure J3 {Games with the same pawn structure as on the board.} {{find_similar}}
 	pos-structure-loose J3 {Similar pawn structures, one pawn may differ.} {{find_similar tolerance 1}}
-	pos-backrank J3 {Back-rank mates in this database.} {{cql_help} {find_positions}}
+	pos-backrank J3 {Back-rank mates in this database.} {{search_games pattern back_rank_mate} {cql_help} {find_positions}}
 	pos-qsac J3 {Games where a queen was taken by a pawn.} {{cql_help} {find_positions}}
+	pos-lucena J3 {Show me Lucena positions.} {{search_games pattern lucena}}
+	pos-carlsbad J3 {Games with the Carlsbad pawn structure.} {{search_games pattern carlsbad}}
+	pos-outpost J3 {Knight outposts in my games.} {{search_games pattern knight_outpost player *thomas*}}
 
 	open-najdorf J4 {Set up the Najdorf after 6.Bg5.} {{set_position moves *bg5*}}
 	open-tree J4 {What is played in this position?} {{position_moves}}

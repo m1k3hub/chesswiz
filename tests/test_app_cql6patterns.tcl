@@ -75,7 +75,11 @@ lappend ::scidb::test::cql6patterns::Games \
 tcltest::test cql6-patterns-parity {all vetted scripts match legacy semantics with positive cases} -body {
     set fixture $::scidb::test::cql6patterns::Fixture
     set output {}
+    set legacy {}
     foreach id [::ai::search::patternIds] {
+        # the CQL 6.2-only patterns: tests/test_app_pattern_library.tcl
+        if {[dict get [::ai::search::pattern $id] cql] eq ""} continue
+        lappend legacy $id
         set expected [::scidb::cql::search $fixture Normal [dict get [::ai::search::pattern $id] cql]]
         set result [::scidb::cql6::search $fixture Normal [::ai::search::pattern6 $id] -threads 8]
         set games [lmap m [dict get $result matches] {dict get $m game}]
@@ -83,7 +87,7 @@ tcltest::test cql6-patterns-parity {all vetted scripts match legacy semantics wi
         if {![llength $games]} {error "$id has no positive fixture"}
         lappend output $id
     }
-    expr {$output eq [::ai::search::patternIds]}
+    expr {$output eq $legacy}
 } -result 1
 # Load the production query functions without the assistant's UI/provider setup.
 namespace eval ::application::assistant {}
