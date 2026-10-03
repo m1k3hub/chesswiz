@@ -609,7 +609,11 @@ cmdSetTreeFilter(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSetGames(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	CHECK_ARGS(ti, objc, objv, 5, "<database> <variant> <view> <game-indices>");
+	// "-intersect": keep only those of <game-indices> already in the view
+	CHECK_ARGS_RANGE(ti, objc, objv, 5, 6, "<database> <variant> <view> <game-indices> ?-intersect?");
+	bool intersect = objc == 6 && ::strcmp(Tcl_GetString(objv[5]), "-intersect") == 0;
+	if (objc == 6 && !intersect)
+		return error("::scidb::view::setGames", 0, 0, "expected -intersect");
 	char const* base = Tcl_GetString(objv[1]);
 	variant::Type variant = tcl::game::variantFromObj(objv[2]);
 	unsigned view = unsignedFromObj(objc, objv, 3);
@@ -626,7 +630,8 @@ cmdSetGames(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		if (Tcl_GetIntFromObj(ti, indices[i], &index) != TCL_OK) return TCL_ERROR;
 		if (index<0 || unsigned(index)>=filter.size())
 			return error("::scidb::view::setGames", 0, 0, "game index out of range");
-		filter.add(unsigned(index));
+		if (!intersect || cursor.view(view).filter(table::Games).contains(unsigned(index)))
+			filter.add(unsigned(index));
 	}
 	scidb->setGameFilter(cursor, view, filter);
 	setResult(filter.count());

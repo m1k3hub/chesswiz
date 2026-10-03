@@ -90,7 +90,7 @@ namespace eval ::application::assistant {}
 set file [open [file join [file dirname [info script]] .. tcl app-assistant.tcl]]
 set collecting 0; set code {}
 while {[gets $file line] >= 0} {
-    if {!$collecting && [regexp {^proc ::application::assistant::(BuildQuery|SearchView|Combine|PatternSearchWait|PatternSearchNotify|PatternSearchFinished) } $line]} {set collecting 1}
+    if {!$collecting && [regexp {^proc ::application::assistant::(BuildQuery|SearchView|Combine|PatternRun|PatternIndexed|PatternSearchWait|PatternSearchNotify|PatternSearchFinished) } $line]} {set collecting 1}
     if {$collecting} {
         append code $line \n
         if {[info complete $code]} {eval $code;set code {};set collecting 0}

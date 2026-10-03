@@ -20,6 +20,7 @@ set PlainSearchUnderstand		"Understand"
 set PlainSearchExample			"e.g. \"Carlsen's losses as Black in B90-B99 since 2015\" or \"smothered mates in games rated 2500+\""
 set PlainSearchUnderstood		"Understood as (edit anything before searching):"
 set PlainSearchThinking			"Reading the request..."
+set PlainSearchIndexing			"Searching... The first pattern search in a big database indexes all patterns (a few minutes); later ones take a second."
 set PlainSearchNothing			"Nothing was understood; fill in the fields yourself."
 set PlainSearchPlayer			"Player"
 set PlainSearchColor				"Colour"
@@ -279,6 +280,9 @@ proc ::application::database::PlainRun {dlg} {
 	$dlg.buttons.run configure -state disabled
 	$dlg.buttons.all configure -state disabled
 	set PlainSearchData($dlg,status) "Searching..."
+	if {[llength [info commands ::ai::patternIndex::building]] && [::ai::patternIndex::building $file]} {
+		set PlainSearchData($dlg,status) $mc::PlainSearchIndexing
+	}
 }
 
 proc ::application::database::PlainSearchAlive {dlg epoch} {

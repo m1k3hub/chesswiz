@@ -2043,10 +2043,9 @@ proc ::application::assistant::SearchView {base variant view criteria {callback 
         ::scidb::view::search $base $variant $view reset none
     } else { ::scidb::view::search $base $variant $view null none $query }
     if {$use6} {
-        set script [::ai::search::pattern6 [dict get $criteria pattern]]
+        set finished [list ::application::assistant::PatternSearchFinished $base $variant $view $query $summary]
         if {$callback ne ""} {
-            return [::scidb::cql6::search $base $variant $script -view $view -compact 1 -command \
-                [list ::application::assistant::PatternSearchFinished $base $variant $view $query $summary $callback $guard]]
+            return [PatternRun $base $variant $view [dict get $criteria pattern] [list {*}$finished $callback $guard]]
         }
         # Assistant tools keep their return-value contract while the nested event
         # loop services GUI timers and native snapshot requests.
@@ -2054,9 +2053,8 @@ proc ::application::assistant::SearchView {base variant view criteria {callback 
         variable PatternWait
         if {![info exists PatternWaitSerial]} {set PatternWaitSerial 0}
         set token [incr PatternWaitSerial]
-        set done [list ::application::assistant::PatternSearchWait $token]
-        ::scidb::cql6::search $base $variant $script -view $view -compact 1 -command \
-            [list ::application::assistant::PatternSearchFinished $base $variant $view $query $summary $done {}]
+        PatternRun $base $variant $view [dict get $criteria pattern] \
+            [list {*}$finished [list ::application::assistant::PatternSearchWait $token] {}]
         vwait [namespace current]::PatternWait($token)
         set result $PatternWait($token)
         unset PatternWait($token)
@@ -2071,6 +2069,35 @@ proc ::application::assistant::SearchView {base variant view criteria {callback 
     return [list $query $summary [::scidb::view::count games $base $variant $view]]
 }
 
+# Library pattern <id> over <view>: from the database's pattern index when it
+# has a valid one; on a big database whose view the other terms leave large,
+# by building the index (all patterns in one pass cost about one scan);
+# otherwise by scanning the view. <done> gets the CQL result either way.
+# Returns the CQL job, "" when the index answers.
+proc ::application::assistant::PatternRun {base variant view id done} {
+    if {[llength [info commands ::ai::patternIndex::has]]} {
+        if {[::ai::patternIndex::has $base $variant $id]} {
+            after 0 [list ::application::assistant::PatternIndexed $base $variant $view $id $done [dict create ok 1]]
+            return ""
+        }
+        if {[::ai::patternIndex::wanted $base $variant]
+         && 2 * [::scidb::view::count games $base $variant $view] >= [::scidb::db::count games $base $variant]} {
+            set job [::ai::patternIndex::build $base $variant \
+                [list ::application::assistant::PatternIndexed $base $variant $view $id $done]]
+            if {$job ne ""} { return $job }
+        }
+    }
+    return [::scidb::cql6::search $base $variant [::ai::search::pattern6 $id] -view $view -compact 1 -command $done]
+}
+proc ::application::assistant::PatternIndexed {base variant view id done built} {
+    if {[dict exists $built cancelled] && [dict get $built cancelled]} {
+        uplevel #0 [list {*}$done [dict create ok 1 cancelled 1 matches {}]]
+    } elseif {[dict get $built ok] && [::ai::patternIndex::has $base $variant $id]} {
+        uplevel #0 [list {*}$done [dict create ok 1 cancelled 0 matches [::ai::patternIndex::lookup $base $variant $id]]]
+    } else {
+        ::scidb::cql6::search $base $variant [::ai::search::pattern6 $id] -view $view -compact 1 -command $done
+    }
+}
 proc ::application::assistant::PatternSearchWait {token result} {
     variable PatternWait
     set PatternWait($token) $result
@@ -2087,7 +2114,8 @@ proc ::application::assistant::PatternSearchFinished {base variant view query su
         set answer [dict create ok 0 error "Pattern search cancelled"]
     } elseif {[catch {
         set games [lmap {game ply} [dict get $result matches] {set game}]
-        set count [::scidb::view::setGames $base $variant $view $games]
+        # an indexed answer covers the whole database: keep the view's games
+        set count [::scidb::view::setGames $base $variant $view $games -intersect]
     } error]} {set answer [dict create ok 0 error $error]} else {
         set answer [dict create ok 1 query $query summary $summary count $count]
     }

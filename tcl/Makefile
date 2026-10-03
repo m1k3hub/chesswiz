@@ -171,6 +171,7 @@ SOURCES = \
 	ai-search.tcl \
 	ai-cql.tcl \
 	ai-positions.tcl \
+	ai-pattern-index.tcl \
 	ai-cql-reference.tcl \
 	ai-similar-positions.tcl \
 	ai-setup-position.tcl \

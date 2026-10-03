@@ -1,7 +1,29 @@
 # Pattern Index — plan and design
 
-**Status:** proposed (2026-09-30). Nothing is implemented. It depends on the CQL 6.2 engine
-work (`src/cql6`, branch `cql6-port`), which is in progress.
+**Status:** first version built (2026-10-03), `tcl/ai-pattern-index.tcl`; the phases in §11
+remain the full design. What the first version does and what it measured:
+
+* **Measured** on `twic_complete.sci` (1,168,721 games, 47 threads): one library pattern,
+  ~180 s; all 12 in one multi-script pass, ~188 s. So the decoding dominates (as §2 predicts),
+  and building the whole index costs about one search.
+* **Build:** the first library-pattern search on a big database (≥100,000 games, unsaved
+  changes none, the other terms leaving at least half of it) builds the index for every pattern
+  in that one pass and answers from it. A narrow search is scanned as before.
+* **Store:** not beside the database (it may be read-only) but in
+  `~/.scidb-beta/ai/pattern-index/`, one file per database: an identity line, a pattern table
+  (id, script checksum, count), then the {game first_ply} pairs as 32-bit integers. 12 MB for
+  1.5 M matches; read back in ~0.75 s.
+* **Validity (§5, simplified):** file size and mtime, game count, no unsaved changes, CQL engine
+  version; per pattern, a checksum of its script. Anything else and the search scans.
+* **Use:** `SearchView` (Plain-Language Search and the assistant's `search_games`). The indexed
+  games are intersected with the header terms (`::scidb::view::setGames ... -intersect`).
+  After the build: 0.2 s for smothered mates, 0.85 s for 541,442 queenless games, 1.7 s against
+  4.7 s scanned for a narrowed search, with identical results (`tests/test_app_pattern_index.tcl`
+  checks index == scan for every pattern).
+* **Not yet:** bitmaps, incremental maintenance (any change rebuilds), the engine-side
+  multi-script/lazy-feature work, user patterns, `find_positions` (model-drafted scripts are
+  never indexed).
+
 **Companions:** `PLAIN_LANGUAGE_SEARCH.md` (the vetted pattern library and the plain-language
 front end this index would serve), `LONG_RANGE_PLAN.md` (workstream 10).
 

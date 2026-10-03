@@ -185,7 +185,7 @@ struct Job
 	std::condition_variable changed;
 	bool cancelled = false, closed = false, dead = false, done = false;
 	bool async = false;
-	bool compact = false; // -compact 1: matches as a flat {game first_ply ...} list
+	bool compact = false; // -compact 1: matches as a flat {game first_ply ...} list ({game first_ply script ...} with -scripts)
 	bool paged = false;   // -paged 1: matches stay here, read by ::scidb::cql6::matches
 	// Timer fields are accessed only by the interpreter thread.
 	Tcl_TimerToken timer = nullptr;
@@ -505,12 +505,15 @@ static Tcl_Obj* resultDict(Job const& job, bool async)
 		Tcl_Obj* matches;
 		if (job.compact)
 		{
+			// with -scripts each match is a triple {game first_ply script}
+			bool triples = !job.additionalScripts.empty();
 			std::vector<Tcl_Obj*> items;
-			items.reserve(std::size_t(job.result.nmatches) * 2);
+			items.reserve(std::size_t(job.result.nmatches) * (triples ? 3 : 2));
 			for (int i = 0; i < job.result.nmatches; ++i)
 			{
 				items.push_back(Tcl_NewIntObj(job.result.matches[i].game_number));
 				items.push_back(Tcl_NewIntObj(job.result.matches[i].first_ply));
+				if (triples) items.push_back(Tcl_NewIntObj(job.result.matches[i].script_index));
 			}
 			matches = Tcl_NewListObj(int(items.size()), items.data());
 		}
