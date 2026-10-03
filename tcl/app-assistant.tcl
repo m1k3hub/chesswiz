@@ -207,6 +207,12 @@ variable Actions {
 		{{"type":"object","properties":{"name":{"type":"string","description":"a short name, e.g. 'knight fork king and queen'"}},"required":["name"]}}
 		::application::assistant::DoSavePattern
 	}
+	set_position {
+		0 0 "set up a position"
+		"Put a position on the board in a new game (the game on the board stays as it is): from 'fen', from 'moves' played from the start (e.g. '1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6 6.Bg5'), or moves played from 'fen'. Map an opening the user names to its moves yourself. Every move is checked first; a move that is not legal comes back as an error naming it, and nothing changes."
+		{{"type":"object","properties":{"fen":{"type":"string"},"moves":{"type":"string","description":"SAN moves, with or without move numbers"}}}}
+		::application::assistant::DoSetPosition
+	}
 	open_game {
 		0 0 "open game %s"
 		"Put a game of the active database on the board, at the start or at a move. 'number' is the game number as the tools list it (#123). 'move' is a move number; with 'after' white or black the board shows the position after that side's move, without it the position before White's move."
@@ -512,6 +518,7 @@ variable ToolMenu {
 	find_positions	"Database tab > right-click the database > Maintenance > CQL 6.2 Search (with the script above)"
 	find_similar	"Database tab > right-click the database > Maintenance > CQL 6.2 Search (with the script above)"
 	open_game		"Database tab > double-click the game in the game list"
+	set_position	"Board tab > right-click the board > Set Start Board..."
 	player_stats	"Players tab > right-click the player > Show Player Card"
 	prepare_against	"Players tab > right-click the player > Show Prep Report"
 	opening_score	"Board tab > Tree pane"
@@ -1160,6 +1167,12 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			set name [string trim [Arg $cargs name]]
 			if {$name eq ""} { error "name must not be empty" }
 			return [dict create name $name]
+		}
+		set_position {
+			set fen [expr {[dict exists $cargs fen] ? [string trim [dict get $cargs fen]] : ""}]
+			set moves [expr {[dict exists $cargs moves] ? [string trim [dict get $cargs moves]] : ""}]
+			if {$fen eq "" && $moves eq ""} { error "give a fen, moves or both" }
+			return [dict create fen $fen moves $moves]
 		}
 		open_game {
 			set number [Arg $cargs number]
@@ -2271,6 +2284,20 @@ proc ::application::assistant::DoSavePattern {name} {
 	lassign $LastFind request cql fens
 	set n [::ai::positions::savePattern $name $request $cql $fens]
 	return "saved as '$name'; the user now has $n saved pattern[expr {$n == 1 ? "" : "s"}]"
+}
+
+
+proc ::application::assistant::DoSetPosition {fen moves} {
+	if {![llength [info commands ::ai::setup::position]]} {
+		return "error: setting up a position is not available in this build"
+	}
+	if {[catch { ::ai::setup::position -fen $fen -moves $moves } result]} {
+		return "error: $result; the board is unchanged"
+	}
+	::application::switchTab board
+	set sans [dict get $result sans]
+	set after [expr {[llength $sans] ? " after [llength $sans] half-moves (last [lindex $sans end])" : ""}]
+	return "a new game is on the board$after; position [dict get $result fen]"
 }
 
 
