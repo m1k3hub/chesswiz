@@ -1,7 +1,8 @@
 # Ask Scidb — coverage map and plan
 
-**Status:** adopted 2026-10-02 (decisions in §8). Phases 0–3 built on 2026-10-02
-(§7, "Progress"); phases 4 (offers) and 5 (workflows) are next.
+**Status:** adopted 2026-10-02 (decisions in §8). All five phases were built on
+2026-10-02 (§7, "Progress"). Still open: the request corpus, installing, and real
+use.
 **Question it answers:** how does a chess player get the full power of Scidb without
 learning Scidb's menus, dialogs and query languages?
 **Why:** ease of use. Every decision below is weighed by one test: can a chess player
@@ -468,6 +469,12 @@ Each phase ships on its own and is useful alone.
   - Tool replies end with "menu:" lines.
   - Reports link to positions with `scidb-ai:`.
   - The model states no chess knowledge of its own.
+- **Phase 4:**
+  - Offers: a row of up to three buttons in the assistant pane, chosen by rules: one set when a database opens, another when a game loads (one set for the user's own games, one for any other).
+  - Ways in: F2 from anywhere, and "Ask about this..." in the game list and board menus.
+- **Phase 5:**
+  - `run_job` runs the jobs prepare, review, repertoire and train.
+  - Each job is a fixed plan that the model executes and shows as a checklist.
 - **Phase 3:**
   - `open_view` opens the player card, prep report, crosstable, opening report, opening prep, repertoire report and duplicates.
   - `add_to_repertoire` and `save_working_set`, both confirmed.
