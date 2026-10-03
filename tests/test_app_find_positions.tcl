@@ -149,6 +149,24 @@ tcltest::test findpos-all {mode all filters the game list} -constraints cql6 -se
 	::scidb::test::findpos::closeFixture
 } -result {1 2}
 
+tcltest::test findpos-open-at-match {after mode all, the game list opens a game at its match} -constraints cql6 -setup {
+	::scidb::test::findpos::openFixture
+} -body {
+	::scidb::test::findpos::run find_positions {request "checkmates" cql "cql() mate" mode all}
+	set base $::scidb::test::findpos::Fixture
+	set lookup $::gamestable::PositionLookup
+	set fen [{*}$lookup $base Normal 1]
+	set none [{*}$lookup $base Normal 2]
+	# what a double-click does with it
+	::game::new .application -base $base -variant Normal -number 1 -fen $fen
+	set board [lindex [::scidb::pos::fen] 0]
+	::application::assistant::DoClearSearch
+	list $lookup [lindex $fen 0] $none $board $::gamestable::PositionLookup
+} -cleanup {
+	catch { ::scidb::view::search $::scidb::test::findpos::Fixture Normal 0 reset none }
+	::scidb::test::findpos::closeFixture
+} -result {::application::assistant::MatchPosition 1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 {} 1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 {}}
+
 tcltest::test findpos-checks {arguments are checked} -body {
 	list [catch { ::application::assistant::CheckArgs find_positions {request x cql ""} } e1] $e1 \
 		[catch { ::application::assistant::CheckArgs find_positions {request x cql "cql() mate" mode fast} } e2] $e2 \

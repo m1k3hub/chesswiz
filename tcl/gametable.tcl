@@ -297,6 +297,12 @@ array set GameFlags {}
 
 variable ratings {Elo DWZ ECF IPS USCF ICCF Rapid Rating Any}
 
+# A command that names, per game, the position to open it at: called with
+# <base> <variant> <number>, it returns a FEN or "" (the start). The AI
+# position finder sets it while the list shows its matches; a table's own
+# -positioncmd (one position for every game, the tree's) comes first.
+variable PositionLookup {}
+
 
 proc build {path getViewCmd {visibleColumns {}} {args {}}} {
 	variable Defaults
@@ -919,8 +925,15 @@ proc addGameFlagsMenuEntry {menu base variant view index} {
 }
 
 
+proc setPositionLookup {cmd} {
+	variable PositionLookup
+	set PositionLookup $cmd
+}
+
+
 proc TableSelected {path index} {
 	variable ${path}::Vars
+	variable PositionLookup
 
 	if {$index < 0} { return }
 
@@ -930,7 +943,11 @@ proc TableSelected {path index} {
 	set info [::scidb::db::get gameInfo $index $view $base $variant]
 	set number [expr {[column $info number] - 1}]
 	set fen {}
-	if {[llength $Vars(positioncmd)]} { set fen [{*}$Vars(positioncmd)] }
+	if {[llength $Vars(positioncmd)]} {
+		set fen [{*}$Vars(positioncmd)]
+	} elseif {[llength $PositionLookup]} {
+		catch { set fen [{*}$PositionLookup $base $variant $number] }
+	}
 
 	if {[llength $Vars(selectcmd)]} {
 		{*}$Vars(selectcmd) $base $variant $number $fen

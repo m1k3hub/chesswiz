@@ -1809,6 +1809,7 @@ proc ::application::assistant::DoShowSearch {} {
 	variable LastSearchCriteria
 
 	if {![llength $LastSearch]} { return "error: there is no search to show; call search_games first" }
+	ForgetMatchPositions
 	lassign $LastSearch base variant query summary
 	if {$base ne [lindex [ActiveBase] 0]} {
 		return "error: the last search was in [::util::databaseName $base no], which is no longer the active database"
@@ -1822,6 +1823,7 @@ proc ::application::assistant::DoShowSearch {} {
 
 
 proc ::application::assistant::DoClearSearch {} {
+	ForgetMatchPositions
 	lassign [ActiveBase] base variant
 	::scidb::view::search $base $variant 0 reset none
 	return "the game list shows all [::scidb::view::count games $base $variant 0] games again"
@@ -2106,6 +2108,8 @@ proc ::application::assistant::PositionsDone {token base variant view mode reque
 		if {[catch {
 			::scidb::view::search $base $variant 0 reset none
 			set count [::scidb::view::setGames $base $variant 0 $games]
+			# a double-click in the game list opens a game at its match
+			catch { ::gamestable::setPositionLookup ::application::assistant::MatchPosition }
 			::application::switchTab database
 		} err]} {
 			Resolve $token "error: $err"
@@ -2113,7 +2117,7 @@ proc ::application::assistant::PositionsDone {token base variant view mode reque
 		}
 		set lines [list "searched $where for: $request" \
 			"$count games with a matching position[expr {$complete ? "" : " (the search stopped early; there may be more)"}][expr {$exclude >= 0 ? " (the game on the board left out)" : ""}]" \
-			"the game list shows them; open_position N puts the Nth on the board at the position"]
+			"the game list shows them; a double-click opens a game at the matching position, and open_position N puts the Nth on the board there"]
 	} else {
 		set lines [list "searched $where for: $request"]
 		if {!$found} {
@@ -2143,6 +2147,27 @@ proc ::application::assistant::PositionsDone {token base variant view mode reque
 		catch { ShowPositions $request $cql $where $samples }
 	}
 	Resolve $token [join $lines \n]
+}
+
+
+# The game list's position lookup while it shows a find_positions result:
+# the FEN of <number>'s first match, or "" (open at the start).
+proc ::application::assistant::MatchPosition {base variant number} {
+	variable LastPositions
+	if {![llength $LastPositions]} { return "" }
+	lassign $LastPositions lastBase lastVariant pairs
+	if {$base ne $lastBase || $variant ne $lastVariant} { return "" }
+	foreach {game ply} $pairs {
+		if {$game == $number} {
+			return [dict get [::ai::positions::position $base $variant $game $ply] fen]
+		}
+	}
+	return ""
+}
+
+
+proc ::application::assistant::ForgetMatchPositions {} {
+	catch { ::gamestable::setPositionLookup {} }
 }
 
 
