@@ -600,6 +600,10 @@ proc openBase {parent file byUser args} {
 		::scidb::db::set readonly $file $opts(-readonly)
 		set type [::scidb::db::get type $file]
 		$Vars(switcher) add $file $type $opts(-readonly) $opts(-encoding)
+		# names spelled otherwise than in the rating lists (player-data.tcl)
+		if {[llength [info commands ::playerdata::link]]} {
+			after idle [list catch [list ::playerdata::link $file]]
+		}
 		AddRecentFile $type $file $opts(-encoding) $readonly
 		CheckEncoding $parent $file [::scidb::db::get usedencoding $file]
 	} else {

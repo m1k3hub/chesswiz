@@ -223,6 +223,16 @@ public:
 	void rename(NamebaseEntry* entry, mstl::string const& name);
 	void finishRenaming();
 
+	/// Link the players the exact lookup left without a rating-list entry
+
+	/// (Player::findVariant, by the games' federation, sex and Elo); engines
+
+	/// are left alone. Returns the number linked; <ambiguous> collects the
+
+	/// indices of the players with candidates but no clear choice.
+
+	unsigned linkPlayerVariants(mstl::vector<unsigned>* ambiguous = 0);
+
 	void update();
 	void setPrepared(unsigned maxFrequency, unsigned maxId, unsigned maxUsage);
 	void reserve(unsigned size, unsigned limit);

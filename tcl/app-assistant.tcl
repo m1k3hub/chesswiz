@@ -1980,16 +1980,24 @@ proc ::application::assistant::BuildQuery {base variant criteria {includePattern
 	set summary {}
 
 	if {$player ne ""} {
-		lassign [ResolvePlayer $base $variant $player] _ player
+		lassign [ResolvePlayer $base $variant $player] index player
+		set names [PlayerSpellings $base $variant $index $player]
 		set other ""
-		if {$opponent ne ""} { lassign [ResolvePlayer $base $variant $opponent] _ other }
+		set otherNames {}
+		if {$opponent ne ""} {
+			lassign [ResolvePlayer $base $variant $opponent] otherIndex other
+			set otherNames [PlayerSpellings $base $variant $otherIndex $other]
+		}
 		set sides {}
 		foreach side {white black} {
 			if {$color ne "any" && $color ne $side} { continue }
 			set otherSide [expr {$side eq "white" ? "black" : "white"}]
-			# resolved names are exact; a plain pattern (no wildcards) matches exactly
-			set terms [list [list playername $side [GlobQuote $player]]]
-			if {$other ne ""} { lappend terms [list playername $otherSide [GlobQuote $other]] }
+			# resolved names are exact; a plain pattern (no wildcards) matches
+			# exactly; every spelling of the player counts
+			set terms [list [Combine OR [lmap n $names { list playername $side [GlobQuote $n] }]]]
+			if {$other ne ""} {
+				lappend terms [Combine OR [lmap n $otherNames { list playername $otherSide [GlobQuote $n] }]]
+			}
 			set won [expr {$side eq "white" ? "1-0" : "0-1"}]
 			set lost [expr {$side eq "white" ? "0-1" : "1-0"}]
 			switch -- $result {
@@ -2001,6 +2009,9 @@ proc ::application::assistant::BuildQuery {base variant criteria {includePattern
 		}
 		lappend common [Combine OR $sides]
 		set text "games of $player"
+		if {[llength $names] > 1} {
+			append text " (also as [join [lrange $names 1 3] {, }][expr {[llength $names] > 4 ? ", ..." : ""}])"
+		}
 		if {$color ne "any"} { append text " with $color" }
 		if {$other ne ""} { append text " against $other" }
 		if {$result ne ""} { append text ", [dict get {win won draw drawn loss lost} $result]" }
@@ -2702,6 +2713,20 @@ proc ::application::assistant::ResolvePlayer {base variant text} {
 	foreach row $found {
 		if {[string equal -nocase [lindex $row 1] $text]} { return [lrange $row 0 1] }
 	}
+	# spellings of one player ("Ivanchuk, Vassily", "Ivanchuk, V") are one
+	# candidate: the one with the most games stands for them (BuildQuery
+	# searches them all)
+	set seen {}
+	set rows {}
+	foreach row $found {
+		set identity [lindex $row 4]
+		if {$identity ne ""} {
+			if {[dict exists $seen $identity]} { continue }
+			dict set seen $identity 1
+		}
+		lappend rows $row
+	}
+	set found $rows
 	if {[llength $found] == 1} { return [lrange [lindex $found 0] 0 1] }
 	if {![llength $found]} { error "no player matching '$text' in [::util::databaseName $base no]" }
 
@@ -2719,6 +2744,17 @@ proc ::application::assistant::ResolvePlayer {base variant text} {
 	}
 	if {[llength $found] > 10} { lappend names "..." }
 	error "several players match '$text', call again with one exact name: [join $names {; }]"
+}
+
+
+# The database's spellings of player <index> (<name>), linked to one entry of
+# the rating lists; <name> alone when there is no such command or link.
+proc ::application::assistant::PlayerSpellings {base variant index name} {
+	if {[catch { ::scidb::db::playerSpellings $base $variant $index } names] || ![llength $names]} {
+		return [list $name]
+	}
+	# the resolved name first
+	return [linsert [lsearch -all -inline -not -exact $names $name] 0 $name]
 }
 
 

@@ -17,6 +17,17 @@
 #   ::playerdata::updateFide <parent> ?-confirm 0|1? ?-done CMD?
 #       CMD gets {ok 1 players N read M} or {ok 0 error E}
 #   ::playerdata::install <zip>         filter and load a downloaded list
+#
+# Names in a database are linked to the lists' entries when the database
+# opens: exactly, or -- step 3 of the plan -- through other spellings
+# (::scidb::db::linkPlayers: extra given names or a cut patronymic,
+# initials, numbered namesakes, homonyms told apart by the games' Elo),
+# only where the evidence agrees; the rest is left alone. A link changes
+# what the player card and searches show, never the database.
+#
+#   ::playerdata::link <base>           link the names of an open database
+#   ::playerdata::linkOpen              ... of every open database
+#   ::playerdata::lastLink <base>       -> {linked N ambiguous {name ...}}
 # ======================================================================
 
 if {[llength [info commands ::util::source]]} {
@@ -37,6 +48,9 @@ set Failed			"The FIDE rating list could not be updated: %s"
 
 variable Url https://ratings.fide.com/download/players_list.zip
 variable Busy 0
+# LinkResult(<base>): what the last linking of <base> did
+variable LinkResult
+array set LinkResult {}
 
 } ;# namespace playerdata
 
@@ -113,6 +127,8 @@ proc ::playerdata::install {zip} {
 	file rename -force $file.new $file
 	::scidb::app::load fide $file
 	::scidb::app::load done
+	# the new entries may fit names the old list did not
+	linkOpen
 	set info [dict create date [clock format [clock seconds] -format %Y-%m-%d] players $kept read $read]
 	set chan [open [file join [Dir] fide-players.info] w]
 	puts -nonewline $chan $info
@@ -134,3 +150,42 @@ proc ::playerdata::Report {parent done answer} {
 	}
 	if {[llength $done]} { uplevel #0 [list {*}$done $answer] }
 }
+
+
+proc ::playerdata::link {base} {
+	variable LinkResult
+
+	if {![llength [info commands ::scidb::db::linkPlayers]]} { return }
+	set variants Normal
+	catch { set variants [::scidb::db::get variants $base] }
+	set linked 0
+	set ambiguous {}
+	foreach variant $variants {
+		if {[catch { ::scidb::db::linkPlayers $base $variant } result]} { continue }
+		incr linked [dict get $result linked]
+		lappend ambiguous {*}[dict get $result ambiguous]
+	}
+	set LinkResult($base) [dict create linked $linked ambiguous $ambiguous]
+	if {$linked} {
+		::log::info "Player data" "[::util::databaseName $base]: $linked more player name(s) linked to the rating lists"
+	}
+	return $LinkResult($base)
+}
+
+
+proc ::playerdata::linkOpen {} {
+	set bases {}
+	catch {
+		set switcher [::application::database::switcherWidget]
+		if {[string length $switcher]} { set bases [$switcher bases] }
+	}
+	foreach base $bases { catch { link $base } }
+}
+
+
+proc ::playerdata::lastLink {base} {
+	variable LinkResult
+	if {[info exists LinkResult($base)]} { return $LinkResult($base) }
+	return {}
+}
+

@@ -167,6 +167,39 @@ Namebase::beforeClear()
 }
 
 
+unsigned
+Namebase::linkPlayerVariants(mstl::vector<unsigned>* ambiguous)
+{
+	M_REQUIRE(type() == Player);
+
+	unsigned linked = 0;
+
+	for (unsigned i = 0; i < m_list.size(); ++i)
+	{
+		PlayerEntry* entry = mstl::safe_cast_ptr<PlayerEntry>(m_list[i]);
+
+		if (entry->m_player || entry->type() == species::Program)
+			continue;
+
+		bool unclear = false;
+		db::Player* p = db::Player::findVariant(entry->name(), entry->federation(), entry->sex(),
+															 entry->elo(), &unclear);
+		if (p)
+		{
+			entry->m_player = p;
+			p->incrRef(entry->frequency());
+			++linked;
+		}
+		else if (unclear && ambiguous)
+		{
+			ambiguous->push_back(i);
+		}
+	}
+
+	return linked;
+}
+
+
 void
 Namebase::reserve(unsigned size, unsigned limit)
 {

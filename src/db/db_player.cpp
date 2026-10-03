@@ -1082,6 +1082,364 @@ Player::findPlayer(mstl::string const& name, country::Code federation, sex::ID s
 }
 
 
+namespace {
+
+// The rating a candidate is compared with: highest Elo, else the latest; 0: none.
+int
+candidateElo(Player const* p)
+{
+	int r = mstl::abs(p->highestElo());
+	return r ? r : mstl::max(0, int(p->latestElo()));
+}
+
+
+// Choose among <candidates> for a player of <federation>, <sex> and <elo>.
+// <evidence>: the name alone is not enough (initials, given names dropped),
+// the games' Elo must agree with the candidate's rating.
+Player*
+chooseCandidate(mstl::vector<Player*> const& candidates,
+					 country::Code federation,
+					 sex::ID sex,
+					 unsigned elo,
+					 bool* ambiguous,
+					 bool evidence = false)
+{
+	mstl::vector<Player*> list;
+
+	for (unsigned i = 0; i < candidates.size(); ++i)
+	{
+		Player* p = candidates[i];
+		if (sex != sex::Unspecified && p->sex() != sex::Unspecified && p->sex() != sex)
+			continue;
+		if (mstl::find(list.begin(), list.end(), p) == list.end())
+			list.push_back(p);
+	}
+
+	if (federation != country::Unknown)
+	{
+		mstl::vector<Player*> same;
+		for (unsigned i = 0; i < list.size(); ++i)
+		{
+			if (list[i]->federation() == federation)
+				same.push_back(list[i]);
+		}
+		if (!same.empty())
+			list.swap(same);
+	}
+
+	if (list.empty())
+		return 0;
+
+	if (list.size() == 1)
+	{
+		int r = candidateElo(list[0]);
+		// one candidate: it must not contradict the games' rating (and agree
+		// with it when the name alone does not identify the player)
+		if (evidence ? (elo && r && mstl::abs(int(elo) - r) <= 350)
+						 : (elo == 0 || r == 0 || mstl::abs(int(elo) - r) <= 350))
+			return list[0];
+		if (ambiguous) *ambiguous = true;
+		return 0;
+	}
+
+	// several: the rating decides, clearly or not at all
+	if (elo)
+	{
+		Player* best = 0;
+		int d0 = 100000, d1 = 100000;
+		for (unsigned i = 0; i < list.size(); ++i)
+		{
+			int r = candidateElo(list[i]);
+			int d = r ? mstl::abs(int(elo) - r) : 100000;
+			if (d < d0) { d1 = d0; d0 = d; best = list[i]; }
+			else if (d < d1) { d1 = d; }
+		}
+		if (best && d0 <= 150 && d1 - d0 >= 100)
+			return best;
+	}
+
+	if (ambiguous) *ambiguous = true;
+	return 0;
+}
+
+
+// An initial ("P", "P.", "JB") or a Russian patronymic, possibly cut short
+// by a name-length limit ("Petrovich", "Aleksandrovi", "Nikolaevna"): given
+// names that can be left out without naming someone else.
+bool
+isDispensable(mstl::string const& token)
+{
+	mstl::string t(token);
+	while (!t.empty() && t.back() == '.')
+		t.set_size(t.size() - 1);
+	if (t.empty())
+		return true;
+	bool upper = true;
+	for (unsigned i = 0; i < t.size(); ++i)
+		if (!::isupper(t[i])) upper = false;
+	if (upper && t.size() <= 3)
+		return true;
+	static char const* Endings[] =
+	{
+		"ovich", "evich", "ovic", "evic", "ovi", "evi", "ovna", "evna", "ovn", "evn", "ich", "ichn", "ichna",
+	};
+	for (char const* e : Endings)
+	{
+		unsigned n = ::strlen(e);
+		if (t.size() > n + 2 && ::strcmp(t.c_str() + t.size() - n, e) == 0)
+			return true;
+	}
+	return false;
+}
+
+
+// The initials of given names: "Juan M" -> JM, "AB" -> AB, "Juan Jesus" -> JJ;
+// titles and suffixes ("Dr", "Jr") are not names.
+mstl::string
+initials(mstl::string const& given)
+{
+	mstl::string result, t;
+	for (unsigned i = 0; i <= given.size(); ++i)
+	{
+		char c = i < given.size() ? given[i] : ' ';
+		if (c == ' ' || c == ',' || c == '-')
+		{
+			while (!t.empty() && (t.back() == '.' || ::isdigit(t.back())))
+				t.set_size(t.size() - 1);
+			if (	!t.empty()
+				&& t != "Dr" && t != "Jr" && t != "Sr" && t != "jr" && t != "sr" && t != "II" && t != "III")
+			{
+				bool upper = true;
+				for (unsigned k = 0; k < t.size(); ++k)
+					if (!::isupper(t[k])) upper = false;
+				if (upper && t.size() <= 3)
+					result += t;
+				else
+					result += char(::toupper(t[0]));
+			}
+			t.clear();
+		}
+		else
+		{
+			t += c;
+		}
+	}
+	return result;
+}
+
+
+// <s> without diacritics ("Étienne" -> "Etienne"), for comparing initials.
+mstl::string
+folded(mstl::string const& s)
+{
+	if (s.is_7bit())
+		return s;
+	mstl::string buffer;
+	return sys::utf8::Codec::convertToNonDiacritics(sys::utf8::Codec::findRegion(s), s, buffer);
+}
+
+
+// The candidate's given names do not contradict the initials given.
+bool
+initialsAgree(mstl::string const& given, Player const* candidate)
+{
+	mstl::string::size_type comma = candidate->name().find(',');
+	if (comma == mstl::string::npos)
+		return true;
+	mstl::string mine(initials(folded(given)));
+	mstl::string theirs(initials(folded(candidate->name().substr(comma + 1))));
+	for (unsigned i = 0; i < mine.size() && i < theirs.size(); ++i)
+	{
+		if (mine[i] != theirs[i])
+			return false;
+	}
+	return true;
+}
+
+
+bool
+isSuffix(mstl::string const& token)
+{
+	return	token == "Jr" || token == "Jr." || token == "jr" || token == "jr."
+			|| token == "Sr" || token == "Sr." || token == "Dr" || token == "Dr.";
+}
+
+} // namespace
+
+
+Player*
+Player::findVariant(	mstl::string const& name,
+							country::Code federation,
+							sex::ID sex,
+							unsigned elo,
+							bool* ambiguous)
+{
+	if (ambiguous) *ambiguous = false;
+
+	mstl::vector<Player*> candidates;
+
+	auto exact = [&](mstl::string const& n)
+	{
+		mstl::string key(n);
+		normalize(key);
+		if (::Players const* p = ::playerLookup.find(key))
+		{
+			for (unsigned i = 0; i < p->size(); ++i)
+				candidates.push_back((*p)[i]);
+		}
+	};
+
+	// the name itself: several entries share it
+	exact(name);
+	if (!candidates.empty())
+		return chooseCandidate(candidates, federation, sex, elo, ambiguous);
+
+	mstl::string::size_type comma = name.find(',');
+	if (comma == mstl::string::npos || name.find_first_of(":;/()") != mstl::string::npos)
+		return 0;
+
+	mstl::string surname(name.substr(0, comma));
+	mstl::string given(name.substr(comma + 1));
+	while (!given.empty() && given[0] == ' ')
+		given.erase(mstl::string::size_type(0), mstl::string::size_type(1));
+
+	// the given names as tokens, without suffixes and numbers ("Zoran2"; a
+	// number marks one of several namesakes, so it needs evidence)
+	bool numbered = false;
+	mstl::vector<mstl::string> tokens;
+	{
+		mstl::string t;
+		for (unsigned i = 0; i <= given.size(); ++i)
+		{
+			char c = i < given.size() ? given[i] : ' ';
+			if (c == ' ')
+			{
+				while (!t.empty() && ::isdigit(t.back()))
+				{
+					t.set_size(t.size() - 1);
+					numbered = true;
+				}
+				if (!t.empty() && !isSuffix(t))
+					tokens.push_back(t);
+				t.clear();
+			}
+			else
+			{
+				t += c;
+			}
+		}
+	}
+	if (surname.empty() || tokens.empty())
+		return 0;
+
+	// a common surname ("Fernandez", "Fischer") leaves too many namesakes
+	// for a name to be enough
+	int commonFlag = -1;
+	auto common = [&]()
+	{
+		if (commonFlag < 0)
+		{
+			Matches namesakes;
+			commonFlag = findMatches(surname + ", ", namesakes, 8) >= 8;
+		}
+		return commonFlag == 1;
+	};
+
+	// the forms tried, and whether the games' Elo must confirm them
+	mstl::vector<mstl::string> forms;
+	mstl::vector<bool> needEvidence;
+	{
+		mstl::string all(surname + ", " + tokens[0]);
+		for (unsigned i = 1; i < tokens.size(); ++i)
+			all += " " + tokens[i];
+		forms.push_back(all);									// "Jovanovic, Zoran" (from "Zoran2", "Jr")
+		needEvidence.push_back(numbered);
+
+		bool dispensable = true;
+		for (unsigned i = 1; i < tokens.size(); ++i)
+			if (!isDispensable(tokens[i])) dispensable = false;
+		forms.push_back(surname + ", " + tokens[0]);	// "Keres, Paul" (from "Paul Petrovich")
+		needEvidence.push_back(!dispensable || numbered);	// "Nguyen, Anh" is not "Nguyen, Anh Dung"
+
+		if (tokens[0].find('-') != mstl::string::npos)
+		{
+			mstl::string spaced(tokens[0]);					// "Jan-Hein" -> "Jan Hein"
+			for (unsigned i = 0; i < spaced.size(); ++i)
+				if (spaced[i] == '-') spaced[i] = ' ';
+			forms.push_back(surname + ", " + spaced);
+			needEvidence.push_back(false);
+		}
+		else if (tokens.size() >= 2)
+		{
+			forms.push_back(surname + ", " + tokens[0] + "-" + tokens[1]);	// "Jan Hein" -> "Jan-Hein"
+			needEvidence.push_back(false);
+		}
+	}
+
+	// a candidate whose given names contradict ours is someone else
+	auto agreeing = [&]()
+	{
+		mstl::vector<Player*> keep;
+		for (unsigned k = 0; k < candidates.size(); ++k)
+			if (initialsAgree(given, candidates[k])) keep.push_back(candidates[k]);
+		candidates.swap(keep);
+	};
+
+	for (unsigned i = 0; i < forms.size(); ++i)
+	{
+		if (forms[i] == name)
+			continue;
+		exact(forms[i]);
+		agreeing();
+		if (!candidates.empty())
+		{
+			// found through another surname ("Medina" -> "Medina Romero")
+			bool other = false;
+			for (unsigned k = 0; k < candidates.size(); ++k)
+			{
+				mstl::string const& n = candidates[k]->name();
+				if (n.size() <= surname.size() || ::strncmp(n.c_str(), surname.c_str(), surname.size()) != 0
+					|| n[surname.size()] != ',')
+				{
+					other = true;
+				}
+			}
+			return chooseCandidate(candidates, federation, sex, elo, ambiguous,
+										  needEvidence[i] || other || common());
+		}
+	}
+
+	// initials ("Ivanchuk, V", "Ivanchuk, V.") or an abbreviation ("Levin, Ev"):
+	// the entries of that surname whose first given name starts so; the
+	// games' Elo must confirm the choice
+	mstl::string first(tokens[0]);
+	while (!first.empty() && first.back() == '.')
+		first.set_size(first.size() - 1);
+	if (first.size() <= 2 && !first.empty() && ::isupper(first[0]))
+	{
+		// "JB" are two initials, "Al" is the start of a name
+		mstl::string prefix = first.size() == 2 && ::islower(first[1]) ? first : first.substr(0, 1);
+		Matches matches;
+		findMatches(surname + ", " + prefix, matches, 64);
+		for (unsigned i = 0; i < matches.size(); ++i)
+		{
+			Player* p = const_cast<Player*>(matches[i]);
+			mstl::string const& n = p->name();
+			if (n.size() > surname.size() + 2 && ::strncmp(n.c_str(), surname.c_str(), surname.size()) == 0
+				&& n[surname.size()] == ',')
+			{
+				candidates.push_back(p);
+			}
+		}
+		agreeing();
+		if (!candidates.empty())
+			return chooseCandidate(candidates, federation, sex, elo, ambiguous, true);
+	}
+
+	return 0;
+}
+
+
 Player*
 Player::insertPlayer(uint32_t fideID, mstl::string const& name)
 {

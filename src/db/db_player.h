@@ -252,6 +252,17 @@ public:
 										Date const& birthDate,
 										species::ID type,
 										sex::ID sex);
+	/// The rating-list entry for a name the exact lookup does not resolve:
+	/// several entries share it (homonyms), or the spelling differs (extra
+	/// given names or a cut patronymic, initials, a numbered duplicate,
+	/// hyphens). Candidates are chosen by federation, sex and by <elo> (the
+	/// rating the games give): 0 unless exactly one fits; <ambiguous> is set
+	/// when there were candidates but none could be chosen.
+	static Player* findVariant(mstl::string const& name,
+										country::Code federation,
+										sex::ID sex,
+										unsigned elo,
+										bool* ambiguous = 0);
 	static Player* findEngine(mstl::string const& name);
 	static Player* findFidePlayer(uint32_t fideID);
 	static Player* findIccfPlayer(uint32_t iccfID);

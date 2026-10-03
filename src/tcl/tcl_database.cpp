@@ -141,6 +141,7 @@ static char const* CmdWrite			= "::scidb::db::write";
 static char const* CmdFindDuplicates	= "::scidb::db::findDuplicates";
 static char const* CmdEcoStats			= "::scidb::db::ecoStats";
 static char const* CmdFindPlayers		= "::scidb::db::findPlayers";
+static char const* CmdPlayerSpellings	= "::scidb::db::playerSpellings";
 static char const* CmdOpeningScore	= "::scidb::db::openingScore";
 static char const* CmdPlayerOpenings	= "::scidb::db::playerOpenings";
 static char const* CmdPlayerGames		= "::scidb::db::playerGames";
@@ -148,6 +149,8 @@ static char const* CmdMediaFiles		= "::scidb::db::mediaFiles";
 static char const* CmdMediaGallery	= "::scidb::db::mediaGallery";
 static char const* CmdMediaLinkReady	= "::scidb::db::mediaLinkReady";
 static char const* CmdFingerprints		= "::scidb::db::fingerprints";
+static char const* CmdPlayerLinks		= "::scidb::db::playerLinks";
+static char const* CmdLinkPlayers		= "::scidb::db::linkPlayers";
 static char const* CmdGuidingText	= "::scidb::db::guidingText";
 static char const* CmdGameAnchor	= "::scidb::db::gameAnchor";
 static char const* CmdHtmlSanitize	= "::scidb::html::sanitize";
@@ -6274,6 +6277,77 @@ cmdGuidingText(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 
 static int
+cmdLinkPlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::db::linkPlayers <database> <variant>
+	// Link the players the exact lookup left without a rating-list entry
+	// (other spellings, homonyms told apart by the games' Elo); nothing is
+	// written into the database. Returns {linked N ambiguous {name ...}}.
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant>");
+		return TCL_ERROR;
+	}
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 2);
+	Database&		db			= const_cast<Cursor&>(Scidb->cursor(database, variant)).getDatabase();
+
+	mstl::vector<unsigned> unclear;
+	unsigned linked = db.namebases()(Namebase::Player).linkPlayerVariants(&unclear);
+
+	Tcl_Obj* names = Tcl_NewListObj(0, nullptr);
+	for (unsigned i = 0; i < unclear.size(); ++i)
+	{
+		mstl::string const& name = db.player(unclear[i]).name();
+		Tcl_ListObjAppendElement(ti, names, Tcl_NewStringObj(name, name.size()));
+	}
+	Tcl_Obj* objs[4] = { Tcl_NewStringObj("linked", -1), Tcl_NewIntObj(linked),
+								Tcl_NewStringObj("ambiguous", -1), names };
+	setResult(Tcl_NewListObj(4, objs));
+	return TCL_OK;
+}
+
+
+static int
+cmdPlayerLinks(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::db::playerLinks <database> <variant>
+	// Each player of the database as {name games linked fideID elo federation entry}:
+	// whether the name is linked to a rating-list entry, that entry's FIDE ID
+	// (0: none, e.g. a player of the past), the Elo and federation as the
+	// games give them, and the entry's name ("" when not linked).
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant>");
+		return TCL_ERROR;
+	}
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 2);
+	Database const&	db		= Scidb->cursor(database, variant).database();
+
+	Tcl_Obj* list = Tcl_NewListObj(0, nullptr);
+	for (unsigned i = 0, n = db.countPlayers(); i < n; ++i)
+	{
+		NamebasePlayer const& p = db.player(i);
+		Player const* entry = p.player();
+		Tcl_Obj* row[7] =
+		{
+			Tcl_NewStringObj(p.name(), p.name().size()),
+			Tcl_NewIntObj(p.frequency()),
+			Tcl_NewBooleanObj(entry != nullptr),
+			Tcl_NewWideIntObj(entry ? entry->fideID() : 0),
+			Tcl_NewIntObj(p.elo()),
+			Tcl_NewStringObj(country::toString(p.federation()), -1),
+			entry ? Tcl_NewStringObj(entry->name(), entry->name().size()) : Tcl_NewStringObj("", 0),
+		};
+		Tcl_ListObjAppendElement(ti, list, Tcl_NewListObj(7, row));
+	}
+	setResult(list);
+	return TCL_OK;
+}
+
+
+static int
 cmdFingerprints(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	// Usage: ::scidb::db::fingerprints <database> <variant> ?<old>?
@@ -6556,6 +6630,23 @@ asciiLower(mstl::string const& s)
 
 // Players whose name contains <text> (ASCII case-insensitive), most games first:
 // {{<player-index> <name> <games> <elo>} ...}
+// Who a database player is, by the rating-list entry the name is linked to:
+// "fide:<id>", "entry:<name>" for an entry without a FIDE ID, "" when not
+// linked. Spellings of one player share it.
+static Tcl_Obj*
+identityObj(NamebasePlayer const& player)
+{
+	Player const* entry = player.player();
+	if (!entry)
+		return Tcl_NewStringObj("", 0);
+	if (entry->fideID())
+		return Tcl_ObjPrintf("fide:%u", unsigned(entry->fideID()));
+	mstl::string id("entry:");
+	id += entry->name();
+	return Tcl_NewStringObj(id, id.size());
+}
+
+
 static int
 cmdFindPlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
@@ -6602,16 +6693,71 @@ cmdFindPlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	for (unsigned i = 0; i < count; ++i)
 	{
 		NamebasePlayer const& player = db.player(found[i]);
-		Tcl_Obj* row[4];
+		Tcl_Obj* row[5];
 
 		row[0] = Tcl_NewIntObj(found[i]);
 		row[1] = Tcl_NewStringObj(player.name(), player.name().size());
 		row[2] = Tcl_NewIntObj(player.frequency());
 		row[3] = Tcl_NewIntObj(player.elo());
-		Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(4, row));
+		row[4] = identityObj(player);
+		Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(5, row));
 	}
 
 	Tcl_SetObjResult(ti, result);
+	return TCL_OK;
+}
+
+
+static int
+cmdPlayerSpellings(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::db::playerSpellings <database> <variant> <index>
+	// The names of the database's players linked to the same rating-list
+	// entry as player <index> (all spellings of one player), most games first;
+	// just its own name when it is not linked.
+	if (objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <index>");
+		return TCL_ERROR;
+	}
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 2);
+	unsigned			index		= unsignedFromObj(objc, objv, 3);
+	Database const&	db		= Scidb->cursor(database, variant).database();
+
+	if (index >= db.countPlayers())
+		return error(CmdPlayerSpellings, nullptr, nullptr, "invalid player index %u", index);
+
+	Player const* entry = db.player(index).player();
+	mstl::vector<unsigned> found;
+	if (!entry)
+	{
+		found.push_back(index);
+	}
+	else
+	{
+		for (unsigned i = 0, n = db.countPlayers(); i < n; ++i)
+		{
+			NamebasePlayer const& p = db.player(i);
+			if (p.player() == entry && (p.frequency() || i == index))
+				found.push_back(i);
+		}
+	}
+	for (unsigned i = 0; i < found.size(); ++i)
+	{
+		for (unsigned k = i + 1; k < found.size(); ++k)
+		{
+			if (db.player(found[k]).frequency() > db.player(found[i]).frequency())
+				mstl::swap(found[i], found[k]);
+		}
+	}
+	Tcl_Obj* names = Tcl_NewListObj(0, nullptr);
+	for (unsigned i = 0; i < found.size(); ++i)
+	{
+		mstl::string const& name = db.player(found[i]).name();
+		Tcl_ListObjAppendElement(ti, names, Tcl_NewStringObj(name, name.size()));
+	}
+	setResult(names);
 	return TCL_OK;
 }
 
@@ -6946,6 +7092,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdFindDuplicates,	cmdFindDuplicates);
 	createCommand(ti, CmdEcoStats,			cmdEcoStats);
 	createCommand(ti, CmdFindPlayers,		cmdFindPlayers);
+	createCommand(ti, CmdPlayerSpellings,	cmdPlayerSpellings);
 	createCommand(ti, CmdOpeningScore,		cmdOpeningScore);
 	createCommand(ti, CmdPlayerOpenings,	cmdPlayerOpenings);
 	createCommand(ti, CmdPlayerGames,		cmdPlayerGames);
@@ -6953,6 +7100,8 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdMediaGallery,	cmdMediaGallery);
 	createCommand(ti, CmdMediaLinkReady,	cmdMediaLinkReady);
 	createCommand(ti, CmdFingerprints,		cmdFingerprints);
+	createCommand(ti, CmdPlayerLinks,		cmdPlayerLinks);
+	createCommand(ti, CmdLinkPlayers,		cmdLinkPlayers);
 
 	{
 		std::lock_guard<std::mutex> lock(mediaLinkOwner.mutex);
