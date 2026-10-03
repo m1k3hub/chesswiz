@@ -248,6 +248,76 @@ variable Patterns {
 		{{weakened fianchetto} {fianchetto without the bishop} {missing fianchetto bishop} {weak fianchetto} {holes around the king}}
 		{} structure
 	}
+	pawn_fork {
+		"pawn fork" "a pawn move after which a pawn attacks two of king, queen, rook, bishop and knight"
+		{{pawn fork} {pawn forks} {fork with a pawn}}
+		{} event
+	}
+	legals_mate {
+		"Legal's mate (minor-piece mate)" "a mate given and covered by bishops and knights alone, at least three of them, as in Legal's mate"
+		{{legal's mate} {legals mate} {legal mate} {de legal} {mate with minor pieces} {minor piece mate}}
+		{} event
+	}
+	blackburne_mate {
+		"Blackburne's mate" "a bishop on h7 mates the king on g8, defended by a knight, while the other bishop covers g7 (h2, g1 and g2 for Black)"
+		{{blackburne's mate} {blackburnes mate} {blackburne mate}}
+		{} event
+	}
+	pin_attacked_by_pawn {
+		"pinned piece attacked by a pawn" "a piece pinned to its king is attacked by an enemy pawn (it usually falls)"
+		{{pin and win} {attack the pinned piece} {pinned piece attacked} {pile on the pin} {pinned piece}}
+		{} event
+	}
+	double_attack_loose {
+		"double attack on loose pieces" "a move after which one piece attacks two enemy pieces that nothing defends"
+		{{double attack} {double attacks} {loose pieces} {two loose pieces} {undefended pieces}}
+		{} event
+	}
+	philidor_position {
+		"Philidor position" "rook and pawn against rook: the pawn not beyond the 5th, the defending king on the file in front of it, the defending rook on its 3rd rank"
+		{{philidor position} {philidor defence} {philidor defense} {philidor} {third-rank defence} {third rank defence}}
+		{} structure
+	}
+	vancura_position {
+		"Vancura position" "rook and rook pawn against rook: the pawn on the 6th, its rook in front of it, the defending rook attacking the pawn from the side"
+		{{vancura position} {vancura} {vancura defence} {vancura defense}}
+		{} structure
+	}
+	backward_pawn {
+		"backward pawn" "a pawn whose neighbours have all advanced past it, on a half-open file, its stop square attacked by an enemy pawn (Nimzowitsch)"
+		{{backward pawn} {backward pawns} {backward d-pawn}}
+		{} structure
+	}
+	bad_bishop {
+		"bad bishop" "a bishop with at least three of its own pawns blocked by enemy pawns on its colour"
+		{{bad bishop} {bad bishops} {bishop behind its pawns}}
+		{} structure
+	}
+	closed_center {
+		"closed centre" "the d- and e-pawns of one side are both blocked by enemy pawns"
+		{{closed centre} {closed center} {locked centre} {locked center} {blocked centre} {blocked center} {pawn chain} {pawn chains}}
+		{} structure
+	}
+	trebuchet {
+		"trebuchet" "king and pawn each, the pawns blocking each other, and each king attacking the enemy pawn (mutual zugzwang)"
+		{{trebuchet} {mutual zugzwang}}
+		{} structure
+	}
+	boleslavsky_hole {
+		"Boleslavsky hole" "pawns on d6 and e5 without a c-pawn, against e4 without a d-pawn: the d5 square (or colours reversed)"
+		{{boleslavsky hole} {boleslavsky structure} {boleslavsky} {hole on d5}}
+		{} structure
+	}
+	botvinnik_formation {
+		"Botvinnik formation" "pawns on c4, d3, e4 and g3 (c5, d6, e5 and g6 for Black)"
+		{{botvinnik formation} {botvinnik system} {botvinnik english} {botvinnik setup} {botvinnik set-up}}
+		{} structure
+	}
+	rook_behind_passed_pawn {
+		"rook behind a passed pawn (Tarrasch)" "a rook behind its own passed pawn on the 5th rank or beyond, on the same file with nothing between"
+		{{rook behind the passed pawn} {rook behind a passed pawn} {rook behind passed pawn} {tarrasch rule} {tarrasch's rule} {rooks behind passed pawns}}
+		{} structure
+	}
 }
 
 variable Fields {player color result opponent eco from to event min_elo}
@@ -292,11 +362,25 @@ variable Patterns6 {
     hedgehog {cql() flipcolor {pa6 pb6 pd6 pe6 not pc2-7 Pc4 Pe4 not Pd2-7}}
     protected_passed_pawn {cql() flipcolor ((passedpawns & Pa-h4-7) attackedby P)}
     weakened_fianchetto {cql() flipcolor {K[g1,h1] Pf2 Pg3 Ph2 not light B (q or light b)}}
+    pawn_fork {cql() flipcolor line --> move from P --> (btm and square x in P {#([kqrbn] attackedby x) >= 2})}
+    legals_mate {cql() flipcolor (btm and mate and not ([KQRP] attacks (k | (. attackedby k))) and #([BN] attacks (k | (. attackedby k))) >= 3)}
+    blackburne_mate {cql() flipcolor (btm and mate and kg8 and ((Bh7 attacks k) attackedby N) and B attacks g7)}
+    pin_attacked_by_pawn {cql() flipcolor ((pin through [qrbn]) attackedby P)}
+    double_attack_loose {cql() flipcolor line --> move from A --> (btm and square x in A {#(([qrbn] attackedby x) & ~([qrbn] attackedby a)) >= 2})}
+    philidor_position {cql() flipcolor {#A == 3 #a == 2 R r square x in Pa-h2-5 {k & up x} ra-h6}}
+    vancura_position {cql() flipcolor {#A == 3 #a == 2 R r ((Pa6 and Ra7-8 and ra-h6 attacks Pa6) or (Ph6 and Rh7-8 and ra-h6 attacks Ph6))}}
+    backward_pawn {cql() flipcolor square x in Pa-h2-6 {not (P & (horizontal 1 x | down horizontal 1 x)) (P & up horizontal 1 x) ((up 1 x) attackedby p) not (p & up x)}}
+    bad_bishop {cql() flipcolor square x in B {(light x and #(light (P & down 1 p)) >= 3) or (dark x and #(dark (P & down 1 p)) >= 3)}}
+    closed_center {cql() #(Pd-e2-7 & down 1 p) == 2}
+    trebuchet {cql() {#A == 2 #a == 2 P p (P & down 1 p) (p attackedby K) (P attackedby k)}}
+    boleslavsky_hole {cql() flipcolor {pd6 pe5 not pc2-7 not Pd2-7 Pe4}}
+    botvinnik_formation {cql() flipcolor {Pc4 Pd3 Pe4 Pg3}}
+    rook_behind_passed_pawn {cql() flipcolor square x in (passedpawns & Pa-h5-7) {ray up (R x)}}
 }
 
 # The event patterns whose match is the position BEFORE their move (a
 # CQL "line" from the move on); the others match the position after it.
-variable MatchBefore {greek_gift discovered_check double_bishop_sacrifice}
+variable MatchBefore {greek_gift discovered_check double_bishop_sacrifice pawn_fork double_attack_loose}
 
 # the classifier's gate for choosing a pattern (SCIDB_AI_PATTERN_SEARCH_MIN_CONFIDENCE)
 variable ClassifierThreshold 0.6

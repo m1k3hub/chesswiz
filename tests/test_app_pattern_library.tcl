@@ -75,6 +75,34 @@ namespace eval ::scidb::test::plib {
 		protected_passed_pawn miss {4k3/8/8/3P4/8/8/8/4K3 b - - 0 1} {1... Kf7 *}
 		weakened_fianchetto must {3qk3/8/8/8/8/6P1/5P1P/6K1 w - - 0 1} {*}
 		weakened_fianchetto miss {3qk3/8/8/8/8/6P1/5P1P/5BK1 w - - 0 1} {*}
+		pawn_fork must {4k3/8/2n1b3/8/3P4/8/8/4K3 w - - 0 1} {1. d5 Kd7 *}
+		pawn_fork miss {4k3/8/2n5/8/3P4/8/8/4K3 w - - 0 1} {1. d5 Kd7 *}
+		legals_mate must {rn1q1bnr/ppp1kB1p/3p2p1/3NN3/4P3/8/PPPP1PPP/R1BbK2R b KQ - 0 7} {*}
+		legals_mate miss {6k1/5ppp/8/8/8/8/8/3R2K1 w - - 0 1} {1. Rd8# *}
+		philidor_position must {4k3/8/r7/4P3/4K3/8/8/1R6 b - - 0 1} {1... Kd7 *}
+		philidor_position miss {4k3/r7/8/4P3/4K3/8/8/1R6 b - - 0 1} {1... Kd7 *}
+		vancura_position must {R7/6k1/P4r2/8/8/8/8/6K1 w - - 0 1} {1. Kg2 *}
+		vancura_position miss {R7/6k1/P7/8/8/8/5r2/6K1 w - - 0 1} {1. Kh1 *}
+		backward_pawn must {4k3/pp3ppp/3p4/2P1p3/4P3/8/PP3PPP/4K3 w - - 0 1} {1. Kd2 *}
+		backward_pawn miss {4k3/pp3ppp/2pp4/4p3/4P3/8/PP3PPP/4K3 w - - 0 1} {1. Kd2 *}
+		bad_bishop must {4k3/8/4p3/3pPp2/3P1P2/2P5/3B4/4K3 b - - 0 1} {1... Kd7 *}
+		bad_bishop miss {4k3/8/4p3/3pPp2/3P1P2/2P5/8/4KB2 b - - 0 1} {1... Kd7 *}
+		closed_center must {4k3/8/4p3/3pP3/3P4/8/8/4K3 b - - 0 1} {1... Kd7 *}
+		closed_center miss {4k3/8/4p3/3p4/3P4/8/8/4K3 b - - 0 1} {1... Kd7 *}
+		blackburne_mate must {5rk1/5p1B/8/6N1/8/8/1B6/6K1 b - - 0 1} {*}
+		blackburne_mate miss {5rk1/5p1B/8/6N1/8/8/1Q6/6K1 b - - 0 1} {*}
+		trebuchet must {8/8/8/3Kp3/4Pk2/8/8/8 w - - 0 1} {*}
+		trebuchet miss {8/8/8/K3p3/4P3/8/8/k7 w - - 0 1} {*}
+		boleslavsky_hole must {r1bq1rk1/pp3ppp/2np1n2/4p3/4P3/1NN5/PPP2PPP/R1BQ1RK1 w - - 0 1} {1. Kh1 *}
+		boleslavsky_hole miss {r1bq1rk1/pp3ppp/2np1n2/2p1p3/4P3/1NN5/PPP2PPP/R1BQ1RK1 w - - 0 1} {1. Kh1 *}
+		botvinnik_formation must {r1bq1rk1/ppp2ppp/2np1n2/4p3/2P1P3/2NP2P1/PP3PBP/R1BQK1NR w KQ - 0 1} {1. Kf1 *}
+		botvinnik_formation miss {r1bq1rk1/ppp2ppp/2np1n2/4p3/2P1P3/2NP4/PP3PPP/R1BQKBNR w KQ - 0 1} {1. Be2 *}
+		rook_behind_passed_pawn must {6k1/8/P7/8/8/R7/8/6K1 w - - 0 1} {1. Kg2 *}
+		rook_behind_passed_pawn miss {6k1/R7/P7/8/8/8/8/6K1 w - - 0 1} {1. Kg2 *}
+		pin_attacked_by_pawn must {4k3/8/8/4n3/8/3P4/8/4R1K1 w - - 0 1} {1. d4 Kd7 *}
+		pin_attacked_by_pawn miss {4k3/8/8/4n3/8/3P4/8/4R1K1 w - - 0 1} {1. Kf2 Kd7 *}
+		double_attack_loose must {7k/8/8/1n3b2/8/8/8/3QK3 w - - 0 1} {1. Qd3 *}
+		double_attack_loose miss {7k/8/2p1p3/1n3b2/8/8/8/3QK3 w - - 0 1} {1. Qd3 *}
 	}
 }
 
@@ -178,10 +206,24 @@ tcltest::test plib-aliases {a request naming a pattern selects it} -body {
 		{hedgehog structures}
 		{protected passed pawns}
 		{weakened fianchetto}
+		{pawn forks}
+		{Legal's mate}
+		{Blackburne's mate}
+		{pin and win}
+		{double attacks on loose pieces}
+		{the Philidor position}
+		{Vancura position}
+		{backward pawns}
+		{bad bishop endings}
+		{closed centre}
+		{trebuchet}
+		{the Boleslavsky hole}
+		{Botvinnik formation}
+		{rook behind the passed pawn}
 		{smothered mates}
 		{rook endings}
 	} { dict get [::ai::search::extract $request] pattern }
-} -result {back_rank_mate boden_mate anastasia_mate arabian_mate knight_fork greek_gift rook_seventh doubled_rooks_seventh knight_outpost hanging_pawns carlsbad maroczy_bind stonewall queen_vs_rook wrong_bishop lucena epaulette_mate queen_pawn_mate skewer discovered_check double_bishop_sacrifice alekhines_gun minority_attack hedgehog protected_passed_pawn weakened_fianchetto smothered_mate rook_endgame}
+} -result {back_rank_mate boden_mate anastasia_mate arabian_mate knight_fork greek_gift rook_seventh doubled_rooks_seventh knight_outpost hanging_pawns carlsbad maroczy_bind stonewall queen_vs_rook wrong_bishop lucena epaulette_mate queen_pawn_mate skewer discovered_check double_bishop_sacrifice alekhines_gun minority_attack hedgehog protected_passed_pawn weakened_fianchetto pawn_fork legals_mate blackburne_mate pin_attacked_by_pawn double_attack_loose philidor_position vancura_position backward_pawn bad_bishop closed_center trebuchet boleslavsky_hole botvinnik_formation rook_behind_passed_pawn smothered_mate rook_endgame}
 
 tcltest::test plib-labels {every pattern has a label, a description, aliases and a known kind} -body {
 	lmap id [::ai::search::patternIds] {
@@ -199,9 +241,10 @@ tcltest::test plib-themes {the annotator's move themes name the new mates and ta
 		{r1bq1rk1/pppn1ppp/4p3/3pP3/1b1P4/2NB1N2/PPP2PPP/R2QK2R w KQ - 0 1} Bxh7+
 		{4k3/8/8/8/8/4N3/8/4R1K1 w - - 0 1} Nd5+
 		{q3k3/8/8/1N6/8/8/8/4K3 w - - 0 1} Nc7+
+		{4k3/8/2n1b3/8/3P4/8/8/4K3 w - - 0 1} d5
 		{4k3/8/8/8/8/8/8/4R1K1 w - - 0 1} Kf2
 	} { dict get [::ai::cql::themes $fen $san] events }
-} -result {back_rank_mate arabian_mate greek_gift discovered_check knight_fork {}}
+} -result {back_rank_mate arabian_mate greek_gift discovered_check knight_fork {pawn_fork double_attack_loose} {}}
 
 tcltest::test plib-structures {the structures of a position include the new ones (these are pawn endings; a hedgehog is also a Maroczy bind)} -constraints cql6 -body {
 	lmap fen {

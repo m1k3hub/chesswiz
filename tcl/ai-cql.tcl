@@ -63,7 +63,8 @@ variable Checks {
 variable TrainingPatterns {
 	checkmate smothered_mate back_rank_mate boden_mate anastasia_mate arabian_mate
 	epaulette_mate queen_pawn_mate double_check discovered_check knight_fork skewer
-	greek_gift double_bishop_sacrifice underpromotion
+	greek_gift double_bishop_sacrifice underpromotion legals_mate blackburne_mate
+	pawn_fork pin_attacked_by_pawn double_attack_loose
 }
 # without CQL 6.2 (variants): the legacy engine's
 variable LegacyTrainingPatterns {checkmate smothered_mate double_check underpromotion}

@@ -207,7 +207,7 @@ tcltest::test cqlf-tags {track a piece through the game (:forany / $tag / :tagma
 
 tcltest::test cqlf-kinds {events and structures} -body {
 	list [::ai::search::patternIds event] [::ai::search::patternIds structure]
-} -result {{checkmate smothered_mate stalemate en_passant underpromotion double_check back_rank_mate boden_mate anastasia_mate arabian_mate knight_fork greek_gift epaulette_mate queen_pawn_mate skewer discovered_check double_bishop_sacrifice} {opposite_castling rook_endgame pawn_endgame isolated_queen_pawn opposite_bishops queenless rook_seventh doubled_rooks_seventh knight_outpost hanging_pawns carlsbad maroczy_bind stonewall queen_vs_rook wrong_bishop lucena alekhines_gun minority_attack hedgehog protected_passed_pawn weakened_fianchetto}}
+} -result {{checkmate smothered_mate stalemate en_passant underpromotion double_check back_rank_mate boden_mate anastasia_mate arabian_mate knight_fork greek_gift epaulette_mate queen_pawn_mate skewer discovered_check double_bishop_sacrifice pawn_fork legals_mate blackburne_mate pin_attacked_by_pawn double_attack_loose} {opposite_castling rook_endgame pawn_endgame isolated_queen_pawn opposite_bishops queenless rook_seventh doubled_rooks_seventh knight_outpost hanging_pawns carlsbad maroczy_bind stonewall queen_vs_rook wrong_bishop lucena alekhines_gun minority_attack hedgehog protected_passed_pawn weakened_fianchetto philidor_position vancura_position backward_pawn bad_bishop closed_center trebuchet boleslavsky_hole botvinnik_formation rook_behind_passed_pawn}}
 
 tcltest::test cqlf-structures {each structure on positions that have it and positions that do not} -body {
 	set iqp $::scidb::test::cqlf::IQP
@@ -336,7 +336,7 @@ tcltest::test cqlf-training-args {bad requests are refused before anything runs}
 	list [catch {::ai::cql::training . -patterns {stalemate}} e] $e \
 		[::application::assistant::CheckArgs training_set {pattern double_check max 5}] \
 		[catch {::application::assistant::CheckArgs training_set {pattern en_passant}} e2] $e2
-} -result {1 {pattern must be one of: checkmate, smothered_mate, back_rank_mate, boden_mate, anastasia_mate, arabian_mate, epaulette_mate, queen_pawn_mate, double_check, discovered_check, knight_fork, skewer, greek_gift, double_bishop_sacrifice, underpromotion} {pattern double_check player {} max 5} 1 {pattern must be one of: checkmate, smothered_mate, back_rank_mate, boden_mate, anastasia_mate, arabian_mate, epaulette_mate, queen_pawn_mate, double_check, discovered_check, knight_fork, skewer, greek_gift, double_bishop_sacrifice, underpromotion}}
+} -result {1 {pattern must be one of: checkmate, smothered_mate, back_rank_mate, boden_mate, anastasia_mate, arabian_mate, epaulette_mate, queen_pawn_mate, double_check, discovered_check, knight_fork, skewer, greek_gift, double_bishop_sacrifice, underpromotion, legals_mate, blackburne_mate, pawn_fork, pin_attacked_by_pawn, double_attack_loose} {pattern double_check player {} max 5} 1 {pattern must be one of: checkmate, smothered_mate, back_rank_mate, boden_mate, anastasia_mate, arabian_mate, epaulette_mate, queen_pawn_mate, double_check, discovered_check, knight_fork, skewer, greek_gift, double_bishop_sacrifice, underpromotion, legals_mate, blackburne_mate, pawn_fork, pin_attacked_by_pawn, double_attack_loose}}
 
 tcltest::test cqlf-training {puzzles are the positions before the decisive move, certified by the engine} -constraints engine -setup {
 	set saved [info body ::application::assistant::ActiveBase]

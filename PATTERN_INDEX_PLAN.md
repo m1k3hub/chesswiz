@@ -137,7 +137,7 @@ people, with the engine's help for checking. A script a model drafted for the po
 (`ASSISTANT_COVERAGE_MAP.md` §5) is never indexed. A player may save it as a user pattern, and
 it joins the library only after a person adds fixtures.
 
-**How a pattern is added (2026-10-03, 26 patterns added this way):** pick a motif from the
+**How a pattern is added (2026-10-03, 40 patterns added this way):** pick a motif from the
 instructional literature; write its CQL 6.2 script in `Patterns6` and its entry (label,
 description, aliases, kind, an empty legacy script) in `Patterns`; add positions it must match
 and near misses it must not (`tests/test_app_pattern_library.tcl`, which also checks the
@@ -147,12 +147,19 @@ whose FEN is illegal is silently dropped on import (the test checks the count), 
 `flipcolor` maps light squares to dark ones (the board is mirrored), which is right for
 fianchetto bishops and wrong for queening squares (`wrong_bishop` spells out both colours).
 
-**Ideas not yet built** (from Kimi K3, asked for the Soviet school's systematic themes; each
-needs a definition that a script can test): absolute pin, pawn fork, windmill, clearance
-sacrifice, interference (Novotny), overloaded piece, removal of the guard, zwischenzug, two
-undefended pieces, Legal's mate, king on an open central file, Blackburne's and Pillsbury's
-mates, backward pawn, bad bishop behind its chain, locked pawn chains, the pawn breakthrough,
-triangulation, the trebuchet.
+**Batch 3 (2026-10-03):** 14 more from Kimi's list and a second opinion from Gemini 3.1 Pro
+(which also judged what the board alone can show): pawn fork, Legal's and Blackburne's mates,
+a pinned piece attacked by a pawn, a double attack on loose pieces, the Philidor and Vancura
+positions, backward pawn, bad bishop, closed centre, trebuchet, Boleslavsky hole, Botvinnik
+formation, rook behind a passed pawn (52 patterns). The delegates' example positions were
+often illegal or wrong (Gemini's Pillsbury "mate" let the king take the rook): only their
+ideas were used, every fixture was written and checked here.
+
+**Rejected or not yet built:** not decidable from the board: clearance sacrifice, zwischenzug,
+triangulation, Reti's manoeuvre, overloaded piece and removal of the guard (they need the
+idea behind a move); too common or vague to search: opposition, battery, pawn storm, king on an
+open file; not yet built: windmill (a repetition of discovered checks), Novotny interference,
+Pillsbury's mate.
 
 ## 9. Risks and open questions
 
