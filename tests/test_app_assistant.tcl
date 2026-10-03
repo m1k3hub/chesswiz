@@ -696,6 +696,44 @@ tcltest::test assistant-open-view {open_view opens the report or dialog for a pl
 		[lindex $opened 0 4] [lindex $opened 2 6]
 } -match glob -result {{0 0 0 0 0} {show * Normal * white} OpenPrepReport open ShowOpeningReport ShowDuplicates white game}
 
+tcltest::test assistant-add-to-repertoire {the line goes to the one repertoire named; none or several are explained} -body {
+	rename ::application::database::repertoireBases ::scidb::test::assistant::realBases
+	rename ::application::database::saveCurrentLineToRepertoire ::scidb::test::assistant::realSave
+	proc ::application::database::repertoireBases {args} { return $::scidb::test::assistant::Bases }
+	proc ::application::database::saveCurrentLineToRepertoire {parent base args} { lappend ::scidb::test::assistant::Saved $base }
+	set ::scidb::test::assistant::Saved {}
+	::scidb::test::assistant::setup 1
+	set ::scidb::test::assistant::Bases {}
+	set none [::application::assistant::runTool add_to_repertoire {}]
+	set ::scidb::test::assistant::Bases {/r/White-Rep.sci /r/Black-Rep.sci}
+	set several [::application::assistant::runTool add_to_repertoire {}]
+	set named [::application::assistant::runTool add_to_repertoire {repertoire black}]
+	::scidb::test::assistant::setup 0
+	set declined [::application::assistant::runTool add_to_repertoire {repertoire white}]
+	rename ::application::database::repertoireBases {}
+	rename ::application::database::saveCurrentLineToRepertoire {}
+	rename ::scidb::test::assistant::realBases ::application::database::repertoireBases
+	rename ::scidb::test::assistant::realSave ::application::database::saveCurrentLineToRepertoire
+	list [string match "error: no writable repertoire database is open*" $none] \
+		[string match "error: several repertoires are open*say which" $several] \
+		[string match "the line is being added to Black-Rep*" $named] \
+		[string match "*NOT performed*" $declined] $::scidb::test::assistant::Saved
+} -result {1 1 1 1 /r/Black-Rep.sci}
+
+tcltest::test assistant-brief-download-asks {the brief's download asks first; refused, the brief is built without it} -body {
+	rename ::ai::brief::build ::scidb::test::assistant::realBrief
+	proc ::ai::brief::build {parent name args} { set ::scidb::test::assistant::BriefArgs $args }
+	::scidb::test::assistant::setup 0
+	set reply [::application::assistant::DoOpponentBrief carlsen white 1 0]
+	set refused [dict get $::scidb::test::assistant::BriefArgs -download]
+	::scidb::test::assistant::setup 1
+	::application::assistant::DoOpponentBrief carlsen white 1 0
+	set allowed [dict get $::scidb::test::assistant::BriefArgs -download]
+	rename ::ai::brief::build {}
+	rename ::scidb::test::assistant::realBrief ::ai::brief::build
+	list [string match "*without downloading: the user declined*" $reply] $refused $allowed
+} -result {1 0 1}
+
 tcltest::test assistant-event-pattern {event names with spaces are found} -body {
 	list [::application::assistant::EventPattern "Karvina 5th"] [::application::assistant::EventPattern " Assistant "]
 } -result {*Karvina?5th* *Assistant*}

@@ -207,6 +207,12 @@ variable Actions {
 		{{"type":"object","properties":{"name":{"type":"string","description":"a short name, e.g. 'knight fork king and queen'"}},"required":["name"]}}
 		::application::assistant::DoSavePattern
 	}
+	add_to_repertoire {
+		1 0 "add the line on the board to the repertoire %s"
+		"Save the line on the board, up to the current move, into an open repertoire (opening) database; Scidb's save dialog opens for the user to check. 'repertoire' is part of the database's name when several are open. Only when the user asks to add the line."
+		{{"type":"object","properties":{"repertoire":{"type":"string","description":"part of the repertoire database's name"}}}}
+		::application::assistant::DoAddToRepertoire
+	}
 	open_view {
 		0 0 "open the %s"
 		"Open one of Scidb's reports or dialogs for the user (they only show things; nothing changes). kind: player_card (a player's card: ratings, photo, links; needs 'name'), prep_report (a player's preparation report: scores by colour, openings, recent games, gaps, the opponent dossier; needs 'name'), crosstable (an event's tournament table; needs 'event', part of the event name), opening_report (the opening report of the position on the board: statistics, main lines, fashion, plans), opening_prep (opening preparation: the moves played from the board's position), repertoire_report (the active repertoire database's report), duplicates (find duplicate games in the active database)."
@@ -1177,6 +1183,9 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			set name [string trim [Arg $cargs name]]
 			if {$name eq ""} { error "name must not be empty" }
 			return [dict create name $name]
+		}
+		add_to_repertoire {
+			return [dict create repertoire [expr {[dict exists $cargs repertoire] ? [string trim [dict get $cargs repertoire]] : ""}]]
 		}
 		open_view {
 			set kind [Arg $cargs kind]
@@ -2304,6 +2313,25 @@ proc ::application::assistant::DoSavePattern {name} {
 	lassign $LastFind request cql fens
 	set n [::ai::positions::savePattern $name $request $cql $fens]
 	return "saved as '$name'; the user now has $n saved pattern[expr {$n == 1 ? "" : "s"}]"
+}
+
+
+proc ::application::assistant::DoAddToRepertoire {repertoire} {
+	set variant [::application::database::currentVariant]
+	set bases [::application::database::repertoireBases 0 $variant]
+	if {![llength $bases]} {
+		return "error: no writable repertoire database is open. Open one, or mark a database as one: Database tab > right-click it > Maintenance > Mark As > Openings"
+	}
+	if {$repertoire ne ""} {
+		set bases [lmap b $bases { if {[string match -nocase "*$repertoire*" [::util::databaseName $b no]]} { set b } else continue }]
+		if {![llength $bases]} { return "error: no open repertoire database matches '$repertoire'" }
+	}
+	if {[llength $bases] > 1} {
+		return "error: several repertoires are open ([join [lmap b $bases { ::util::databaseName $b no }] {, }]); say which"
+	}
+	set base [lindex $bases 0]
+	::application::database::saveCurrentLineToRepertoire .application $base
+	return "the line is being added to [::util::databaseName $base no]; Scidb's save dialog shows it"
 }
 
 
@@ -3515,11 +3543,22 @@ proc ::application::assistant::AnnotateGameDone {token result} {
 # Opponent brief.
 # ----------------------------------------------------------------------
 proc ::application::assistant::DoOpponentBrief {name colour download prose} {
+	variable Priv
+	variable mc
 	if {[llength [info commands ::ai::brief::build]] == 0} {
 		return "error: the brief module is not available"
 	}
+	# downloading adds games to the active database: ask, as download_games does
+	set note ""
+	if {$download} {
+		set confirm [expr {[llength $Priv(reqconfirm)] ? $Priv(reqconfirm) : $Priv(confirm)}]
+		if {![{*}$confirm "download the latest TWIC games into the active database for the brief"]} {
+			set download 0
+			set note " (without downloading: the user declined)"
+		}
+	}
 	::ai::brief::build .application $name -colour $colour -download $download -prose $prose
-	return "brief for '$name' is being prepared; it appears in the Report pane"
+	return "brief for '$name' is being prepared$note; it appears in the Report pane"
 }
 
 
