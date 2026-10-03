@@ -64,6 +64,7 @@ static char const* CmdFinalize			= "::scidb::app::finalize";
 static char const* CmdGet					= "::scidb::app::get";
 static char const* CmdInitialized		= "::scidb::app::initialized?";
 static char const* CmdLoad					= "::scidb::app::load";
+static char const* CmdFilterFide			= "::scidb::app::filterFideList";
 static char const* CmdLookup				= "::scidb::app::lookup";
 static char const* CmdMoveList			= "::scidb::app::moveList";
 static char const* CmdVariant				= "::scidb::app::variant";
@@ -100,6 +101,59 @@ struct MyPipedProgress : public util::PipedProgress
 
 typedef mstl::map<mstl::string,MyPipedProgress*> MoveListMap;
 static MoveListMap m_moveListMap;
+
+
+// ::scidb::app::filterFideList <in> <out> ?<minElo>?
+// <in>: FIDE's players_list.zip (or the text in it). Writes the players rated at
+// least <minElo> (default: the dictionary's minimum) in standard, rapid or blitz,
+// or titled, to <out>, which ::scidb::app::load fide then reads at startup.
+// Returns {read kept}; an error when <in> is not FIDE's combined list.
+static int
+cmdFilterFideList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 3 && objc != 4)
+		return error(CmdFilterFide, 0, nullptr, "wrong # args: should be \"%s <in> <out> ?<minElo>?\"", CmdFilterFide);
+
+	char const* in = stringFromObj(objc, objv, 1);
+	char const* out = stringFromObj(objc, objv, 2);
+	unsigned minElo = objc == 4 ? unsignedFromObj(objc, objv, 3) : db::Player::minElo();
+
+	util::ZStream::Strings oldSuffixes = util::ZStream::zipFileSuffixes();
+	util::ZStream::setZipFileSuffixes(util::ZStream::Strings(1, "txt"));
+
+	unsigned read = 0, kept = 0;
+	bool ok = false;
+	try
+	{
+		util::ZStream stream(in, mstl::ios_base::in | mstl::ios_base::binary);
+		if (!stream)
+		{
+			util::ZStream::setZipFileSuffixes(oldSuffixes);
+			return error(CmdFilterFide, 0, nullptr, "cannot open file '%s'", in);
+		}
+		FILE* fp = ::fopen(out, "w");
+		if (!fp)
+		{
+			util::ZStream::setZipFileSuffixes(oldSuffixes);
+			return error(CmdFilterFide, 0, nullptr, "cannot write file '%s'", out);
+		}
+		ok = db::Player::filterFideFoaRating(stream, fp, minElo, read, kept);
+		::fclose(fp);
+	}
+	catch (...)
+	{
+		util::ZStream::setZipFileSuffixes(oldSuffixes);
+		return error(CmdFilterFide, 0, nullptr, "cannot read '%s'", in);
+	}
+	util::ZStream::setZipFileSuffixes(oldSuffixes);
+
+	if (!ok)
+		return error(CmdFilterFide, 0, nullptr, "'%s' is not FIDE's combined rating list", in);
+
+	Tcl_Obj* objs[2] = { Tcl_NewIntObj(read), Tcl_NewIntObj(kept) };
+	setResult(Tcl_NewListObj(2, objs));
+	return TCL_OK;
+}
 
 
 static int
@@ -693,6 +747,7 @@ tcl::app::init(Tcl_Interp* ti)
 	createCommand(ti, CmdGet,					cmdGet);
 	createCommand(ti, CmdInitialized,		cmdInitialized);
 	createCommand(ti, CmdLoad,					cmdLoad);
+	createCommand(ti, CmdFilterFide,			cmdFilterFideList);
 	createCommand(ti, CmdLookup,				cmdLookup);
 	createCommand(ti, CmdMoveList,			cmdMoveList);
 	createCommand(ti, CmdVariant,				cmdVariant);

@@ -195,10 +195,15 @@ load::load	[format $load::mc::Loading $load::mc::EngineFile] \
 				;
 
 # --- Load FIDE players ------------------------------------------------
+# FIDE's current list, when the user fetched it (player-data.tcl), replaces
+# the shipped one of 2012
+set fideList [file join $::scidb::dir::user ratings fide-players.txt]
+if {![file readable $fideList]} { set fideList [file join $scidb::dir::data players_list.zip] }
 load::load	[format $load::mc::Loading [format $load::mc::RatingList FIDE]] \
 				fide \
-				[file join $scidb::dir::data players_list.zip] \
+				$fideList \
 				;
+unset fideList
 
 if {![::process::testOption elo-only]} {
 

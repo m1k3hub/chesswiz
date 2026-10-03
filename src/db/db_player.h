@@ -35,6 +35,8 @@
 #include "m_vector.h"
 #include "m_pair.h"
 
+#include <stdio.h>
+
 namespace mstl { class istream; }
 namespace TeXt { class Receptacle; }
 
@@ -265,6 +267,13 @@ public:
 
 	static void parseSpellcheckFile(mstl::istream& stream);
 	static void parseFideRating(mstl::istream& stream);
+	static void parseFideFoaRating(mstl::istream& stream, mstl::string const& header);
+	/// Copy FIDE's combined list from <stream> to <out>, keeping the header and the
+	/// players rated at least <minElo> (standard, rapid or blitz) or titled.
+	/// Returns false when <stream> is not that list; <read>/<kept> count players.
+	static bool filterFideFoaRating(mstl::istream& stream, FILE* out, unsigned minElo,
+											  unsigned& read, unsigned& kept);
+	static unsigned minElo();
 	static void parseEcfRating(mstl::istream& stream);
 	static void parseDwzRating(mstl::istream& stream);
 	static void parseIpsRatingList(mstl::istream& stream);

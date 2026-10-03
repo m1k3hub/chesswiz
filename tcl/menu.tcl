@@ -621,6 +621,17 @@ proc build {menu} {
 		-state $state \
 		;
 
+	if {[llength [info commands ::playerdata::updateFide]]} {
+		lassign [::tk::UnderlineAmpersand $::playerdata::mc::UpdateFide] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [list ::playerdata::updateFide .application] \
+			;
+	}
+
 	if {[llength [info procs ::font::installChessBaseFonts]]} {
 		lassign [::tk::UnderlineAmpersand $mc::InstallChessBaseFonts] text ul
 		set cmd [list ::font::installChessBaseFonts .application]

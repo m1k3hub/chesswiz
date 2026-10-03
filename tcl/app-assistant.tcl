@@ -99,6 +99,12 @@ variable Actions {
 		{{"type":"object","properties":{"source":{"type":"string","enum":["twic","lichess","url"],"description":"where to download from, default twic"},"issues":{"type":"integer","description":"TWIC: how many weekly issues, default 1 (max 12)"},"lichess":{"type":"string","description":"lichess: game links or ids, one per line"},"url":{"type":"string","description":"url: a PGN, zipped PGN or gzipped PGN link"}}}}
 		::application::assistant::DoDownloadGames
 	}
+	update_player_data {
+		1 0 "download FIDE's current rating list (about 45 MB) and update the player data"
+		"Fetch FIDE's current rating list from ratings.fide.com and install it as Scidb's player data: names, FIDE IDs, federations, titles, birth years and standard ratings of the players rated 1800 or more (or titled). Player cards and name lookups then use it. Use it when the user asks to update ratings or player data, or when a player's federation, title or rating looks out of date. It downloads from the internet, so the user is asked first."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoUpdatePlayerData
+	}
 	export_database {
 		0 0 "open the export dialog"
 		"Open the export dialog for the games the game list shows (PGN, HTML, LaTeX, PDF, Scidb formats): after show_search or a find_positions/find_similar run in mode all, that is the selection; otherwise the whole active database. The user picks the format and file there."
@@ -1331,6 +1337,9 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			return {}
 		}
 		database_trend {
+			return {}
+		}
+		update_player_data {
 			return {}
 		}
 		similar_games {
@@ -3593,6 +3602,32 @@ proc ::application::assistant::DoDownloadGames {source issues lichess url} {
 proc ::application::assistant::DownloadGamesDone {token base result} {
 	if {[dict get $result ok]} {
 		set reply "downloaded and imported [dict get $result files] file(s) into [::util::databaseName $base]"
+	} else {
+		set reply "error: [dict get $result error]"
+	}
+	catch { Resolve $token $reply }
+	return
+}
+
+
+proc ::application::assistant::DoUpdatePlayerData {} {
+	if {[llength [info commands ::playerdata::updateFide]] == 0} {
+		return "error: updating the player data is not available"
+	}
+	set token [Later]
+	# the confirmation above was the user's go-ahead
+	if {[catch {
+		::playerdata::updateFide .application -confirm 0 -done [namespace code [list PlayerDataDone $token]]
+	} err]} {
+		after 0 [list Resolve $token "error: $err"]
+	}
+	return $token
+}
+
+
+proc ::application::assistant::PlayerDataDone {token result} {
+	if {[dict get $result ok]} {
+		set reply "installed FIDE's current rating list: [dict get $result players] players kept of [dict get $result read]"
 	} else {
 		set reply "error: [dict get $result error]"
 	}

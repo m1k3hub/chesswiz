@@ -2183,6 +2183,13 @@ Player::parseFideRating(mstl::istream& stream)
 	if (!stream.getline(line))
 		return;
 
+	// FIDE's combined list since 2012 (players_list_foa.txt): other columns
+	if (line.find("SRtng") != mstl::string::npos)
+	{
+		parseFideFoaRating(stream, line);
+		return;
+	}
+
 	TRACE(::printf("### Parse Fide Rating #########################\n"));
 
 	while (stream.getline(line))
@@ -2350,6 +2357,254 @@ Player::parseFideRating(mstl::istream& stream)
 	TRACE(::printf("Aliases total:       %u\n", ::aliasDict.used()));
 	TRACE(::printf("ASCII total:         %u\n", ::asciiDict.size()));
 	TRACE(::printf("-----------------------------------------------------\n"));
+}
+
+
+// FIDE's combined rating list (https://ratings.fide.com/download/players_list.zip,
+// players_list_foa.txt, monthly): fixed columns whose positions are read from the
+// header, so a moved column does not break the reader.
+//
+//   ID Number      Name ... Fed Sex Tit  WTit OTit           FOA SRtng SGm SK RRtng RGm Rk BRtng BGm BK B-day Flag
+//
+// Names are ASCII (FIDE's transliteration); a player new to the dictionary is
+// added like any other. Players below the minimum Elo in all of standard, rapid
+// and blitz are skipped unless they hold a title. The standard rating is the Elo.
+namespace {
+
+struct FoaColumns
+{
+	int id = 0, name = -1, fed = -1, sex = -1, tit = -1, wtit = -1, otit = -1;
+	int srtng = -1, sgm = -1, rrtng = -1, rgm = -1, brtng = -1, bgm = -1, bday = -1, flag = -1;
+	mstl::vector<int> starts;
+
+	int find(mstl::string const& header, char const* label)
+	{
+		mstl::string::size_type i = header.find(label);
+		if (i == mstl::string::npos) return -1;
+		starts.push_back(int(i));
+		return int(i);
+	}
+
+	// the field starting at <start>: up to the next column, blanks trimmed
+	mstl::string field(mstl::string const& line, int start) const
+	{
+		if (start < 0 || unsigned(start) >= line.size()) return mstl::string();
+		int end = int(line.size());
+		for (int s : starts) { if (s > start && s < end) end = s; }
+		char const* p = line.c_str() + start;
+		char const* e = line.c_str() + end;
+		while (p < e && (*p == ' ' || *p == ',')) ++p;
+		while (e > p && (e[-1] == ' ' || e[-1] == '\r' || e[-1] == '\n')) --e;
+		return mstl::string(p, e - p);
+	}
+
+	unsigned number(mstl::string const& line, int start) const
+	{
+		mstl::string f = field(line, start);
+		return f.empty() || !::isdigit(f[0]) ? 0 : ::strtoul(f.c_str(), nullptr, 10);
+	}
+};
+
+unsigned
+foaTitles(mstl::string const& t)
+{
+	if (t == "GM")  return title::Mask_GM;
+	if (t == "IM")  return title::Mask_IM;
+	if (t == "FM")  return title::Mask_FM;
+	if (t == "CM")  return title::Mask_CM;
+	if (t == "WGM") return title::Mask_WGM;
+	if (t == "WIM") return title::Mask_WIM;
+	if (t == "WFM") return title::Mask_WFM;
+	if (t == "WCM") return title::Mask_WCM;
+	return 0;
+}
+
+} // namespace
+
+
+unsigned Player::minElo() { return m_minELO; }
+
+
+bool
+Player::filterFideFoaRating(mstl::istream& stream, FILE* out, unsigned minElo,
+									 unsigned& read, unsigned& kept)
+{
+	read = kept = 0;
+	mstl::string header;
+	if (!stream.getline(header) || header.find("SRtng") == mstl::string::npos)
+		return false;
+
+	FoaColumns c;
+	c.starts.push_back(0);
+	c.find(header, "Name");
+	c.find(header, " Fed");
+	c.find(header, " Sex");
+	c.tit   = c.find(header, " Tit") + 1;
+	c.wtit  = c.find(header, "WTit");
+	c.find(header, "OTit");
+	c.find(header, " FOA");
+	c.srtng = c.find(header, "SRtng");
+	c.find(header, "SGm");
+	c.find(header, " SK");
+	c.rrtng = c.find(header, "RRtng");
+	c.find(header, "RGm");
+	c.find(header, " Rk");
+	c.brtng = c.find(header, "BRtng");
+	c.find(header, "BGm");
+	c.find(header, " BK");
+	c.find(header, "B-day");
+	c.find(header, "Flag");
+
+	::fprintf(out, "%s\n", header.c_str());
+
+	mstl::string line;
+	while (stream.getline(line))
+	{
+		if (c.number(line, c.id) == 0)
+			continue;
+		++read;
+		unsigned best = mstl::max(c.number(line, c.srtng),
+								  mstl::max(c.number(line, c.rrtng), c.number(line, c.brtng)));
+		if (best < minElo && (foaTitles(c.field(line, c.tit)) | foaTitles(c.field(line, c.wtit))) == 0)
+			continue;
+		while (!line.empty() && (line.back() == '\r' || line.back() == '\n'))
+			line.set_size(line.size() - 1);
+		::fprintf(out, "%s\n", line.c_str());
+		++kept;
+	}
+	return true;
+}
+
+
+void
+Player::parseFideFoaRating(mstl::istream& stream, mstl::string const& header)
+{
+	FoaColumns c;
+	c.starts.push_back(0);
+	c.name  = c.find(header, "Name");
+	c.fed   = c.find(header, " Fed") + 1;
+	c.sex   = c.find(header, " Sex") + 1;
+	c.tit   = c.find(header, " Tit") + 1;
+	c.wtit  = c.find(header, "WTit");
+	c.otit  = c.find(header, "OTit");
+	c.find(header, " FOA");
+	c.srtng = c.find(header, "SRtng");
+	c.sgm   = c.find(header, "SGm");
+	c.find(header, " SK");
+	c.rrtng = c.find(header, "RRtng");
+	c.rgm   = c.find(header, "RGm");
+	c.find(header, " Rk");
+	c.brtng = c.find(header, "BRtng");
+	c.bgm   = c.find(header, "BGm");
+	c.find(header, " BK");
+	c.bday  = c.find(header, "B-day");
+	c.flag  = c.find(header, "Flag");
+
+	if (c.name < 0 || c.fed <= 0 || c.srtng < 0)
+		return;
+
+	mstl::string line;
+	mstl::string name;
+
+	while (stream.getline(line))
+	{
+		unsigned fideID = c.number(line, c.id);
+		if (fideID == 0)
+			continue;
+
+		unsigned standard	= c.number(line, c.srtng);
+		unsigned rapid		= c.number(line, c.rrtng);
+		unsigned blitz		= c.number(line, c.brtng);
+		unsigned titles	= foaTitles(c.field(line, c.tit)) | foaTitles(c.field(line, c.wtit));
+		unsigned best		= mstl::max(standard, mstl::max(rapid, blitz));
+
+		if (best < m_minELO && titles == 0)
+			continue;
+
+		name = c.field(line, c.name);
+		if (name.size() < 3)
+			continue;
+
+		mstl::string fed = c.field(line, c.fed);
+		fed.toupper();
+		country::Code	country	= country::fromString(fed);
+		mstl::string	sexText	= c.field(line, c.sex);
+		sex::ID			sex		= sexText == "F" ? sex::Female : (sexText == "M" ? sex::Male : sex::Unspecified);
+
+		if (c.field(line, c.flag).find('w') != mstl::string::npos)
+			sex = sex::Female;
+
+		Player* const* playerEntry = ::fidePlayerDict.find(fideID);
+		Player* player = 0;
+
+		if (playerEntry)
+		{
+			player = *playerEntry;
+
+			if (!(	sys::utf8::Codec::matchAscii(player->name(), name)
+					|| (	country::isGermanSpeakingCountry(country)
+						&& sys::utf8::Codec::matchGerman(player->name(), name))))
+			{
+				if (!containsPlayer(name, country::Unknown, sex::Unspecified))
+					insertAlias(name, player);
+				// FIDE's current spelling ("Firoozja" became "Firouzja"); a name with
+				// diacritics is kept, FIDE's ASCII form of it is the alias
+				if (player->m_name.is_7bit())
+				{
+					standardizeNames(name);
+					player->m_name = name;
+				}
+			}
+		}
+
+		if (player == 0)
+		{
+			standardizeNames(name);
+
+			if (!(player = insertPlayer(name, country, sex)))
+				continue;
+
+			if (player->fideID() && player->fideID() != fideID)
+			{
+				if (!(player = insertPlayer(name, player->region(), country, sex, true)))
+					continue;
+			}
+
+			player->setFideID(fideID);
+			::fidePlayerDict.insert_unique(fideID, player);
+			player->setType(species::Human);
+		}
+		else
+		{
+			if (sex != sex::Unspecified && player->m_sex == sex::Unspecified)
+				player->m_sex = sex;
+
+			// FIDE's federation is the current one (Firouzja: IRI, then FRA)
+			if (country != country::Unknown && country != player->federation())
+			{
+				if (player->m_nativeCountry == country::Unknown)
+					player->m_nativeCountry = player->m_federation == country::Unknown
+						? country : player->m_federation;
+				player->m_federation = country;
+			}
+		}
+
+		// every title (an IM may also be a WGM), not just the lowest bit
+		for (unsigned t = titles; t; t &= t - 1)
+			player->addTitle(title::toID(t & (~t + 1)));
+
+		unsigned year = c.number(line, c.bday);
+		if (year && (!player->dateOfBirth() || player->dateOfBirth().month() == 0))
+			player->setDateOfBirth(Date(year));
+
+		if (0 < standard && rating::isValid(standard))
+		{
+			player->setLatestElo(standard);
+
+			if (standard > unsigned(mstl::abs(player->highestElo())))
+				player->setHighestElo(standard);
+		}
+	}
 }
 
 
