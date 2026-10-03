@@ -1847,6 +1847,16 @@ proc GetSite {path base variant view index} {
 
 # Audit B8: the games that share the most opening plies with this one,
 # narrated (ai-similar). Read-only.
+# "Ask about this...": the assistant, its entry naming the game.
+proc AskAboutGame {path base variant index} {
+	variable ${path}::Vars
+
+	set view [{*}$Vars(viewcmd) $base $variant]
+	if {[catch { ::scidb::db::get gameNumber $base $variant $index $view } number]} { return }
+	::application::assistant::offers::AskAboutGame $base $variant $number
+}
+
+
 proc SimilarGames {path base variant index} {
 	variable ${path}::Vars
 
@@ -1896,6 +1906,14 @@ proc PopupMenu {path menu base variant index column} {
 					-image $::icon::16x16::overview \
 					-label " $mc::GamesLikeThis..." \
 					-command [namespace code [list SimilarGames $path $base $variant $index]] \
+					;
+			}
+			if {[llength [info commands ::application::assistant::offers::AskAboutGame]]} {
+				$menu add command \
+					-compound left \
+					-image $::icon::16x16::none \
+					-label " $::application::assistant::offers::mc::AskAbout" \
+					-command [namespace code [list AskAboutGame $path $base $variant $index]] \
 					;
 			}
 			if {$Vars(mode) ne "merge"} {

@@ -1118,6 +1118,16 @@ proc PopupMenu {w} {
 	menu $m -tearoff false
 	catch { wm attributes $m -type popup_menu }
 
+	if {[llength [info commands ::application::assistant::offers::AskAboutBoard]]} {
+		$m add command \
+			-compound left \
+			-image $::icon::16x16::none \
+			-label " $::application::assistant::offers::mc::AskAbout" \
+			-command ::application::assistant::offers::AskAboutBoard \
+			;
+		$m add separator
+	}
+
 	$m add command \
 		-compound left \
 		-image $::icon::16x16::rotateBoard \

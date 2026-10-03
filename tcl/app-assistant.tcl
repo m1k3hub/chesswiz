@@ -37,7 +37,7 @@ set Thinking		"Thinking..."
 set Ready			"Ready"
 set Confirm			"The assistant wants to: %s"
 set Denied			"The user declined: the action was NOT performed and no dialog was opened."
-set Greeting		"Ask me to do something in Scidb, for example \"start a new game\" or \"explain the current position\"."
+set Greeting		"Ask me in your own words, for example \"games where a knight forks king and queen\", \"positions with this pawn structure\", \"set up the Najdorf after 6.Bg5\" or \"Carlsen's prep report\". F2 brings me back from anywhere."
 set DebugGreeting	"Debug mode: I can also inspect errors, procedures and variables."
 
 } ;# namespace mc
@@ -3287,6 +3287,10 @@ proc ::application::assistant::build {frame width height} {
 	pack $status -side bottom -fill x
 	pack $bottom -side bottom -fill x
 	pack $sw -fill both -expand yes
+	# the offers of the moment (app-assistant-offers.tcl)
+	if {[llength [info commands ::application::assistant::offers::attach]]} {
+		::application::assistant::offers::attach $frame
+	}
 
 	bind $entry <Return> [namespace code SendEntry]
 
