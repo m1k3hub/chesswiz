@@ -751,7 +751,7 @@ tcltest::test assistant-save-working-set {the game list's games become a working
 
 tcltest::test assistant-event-pattern {event names with spaces are found} -body {
 	list [::application::assistant::EventPattern "Karvina 5th"] [::application::assistant::EventPattern " Assistant "]
-} -result {*Karvina?5th* *Assistant*}
+} -result {{*Karvina 5th*} *Assistant*}
 
 tcltest::test assistant-open-view-errors {open_view says what is missing} -body {
 	list [::application::assistant::runTool open_view {kind player_card}] \

@@ -2414,12 +2414,9 @@ proc ::application::assistant::DoOpenView {kind name event} {
 }
 
 
-# A name pattern for part of an event name. util::Pattern (u_match.cpp)
-# compiles a space into a word delimiter that fails inside a name
-# ("*Karvina 5th*" finds nothing), so each space becomes '?' (any one
-# character), which matches the space.
+# A name pattern for part of an event name.
 proc ::application::assistant::EventPattern {text} {
-	return "*[string map {" " ?} [string trim $text]]*"
+	return "*[string trim $text]*"
 }
 
 

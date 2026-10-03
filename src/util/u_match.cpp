@@ -854,6 +854,14 @@ Pattern::normalize(char const* s, char const* e)
 						}
 						break;
 				}
+				// the spaces before an ordinary character are a delimiter too:
+				// without this "Karvina 5th" became "Karvina5th" and a name
+				// with a space inside it was never found
+				if (countSpaces)
+				{
+					m_pattern.append(' ');
+					countSpaces = 0;
+				}
 				if (utf8::isAscii(*s))
 				{
 					m_pattern.append(*s++);
