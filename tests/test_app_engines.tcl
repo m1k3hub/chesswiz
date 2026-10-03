@@ -176,9 +176,11 @@ tcltest::test engines-analysis-waits {engine_analysis with seconds answers later
 
 # --- analysis panes: shared engine start, pin, comparison -----------------
 
-tcltest::test analysis-first-move {the first move of an engine line, without its number} -body {
-	lmap pv {{1.e4 e5 2.Nf3} {12...Qxd5+ 13.Nc3} {Nf3 d5} {1. d4 Nf6}} { ::application::analysis::FirstMove $pv }
-} -result {e4 Qxd5+ Nf3 d4}
+tcltest::test analysis-first-move {the first move of an engine line, without its number, in letters} -body {
+	lmap pv [list {1.e4 e5 2.Nf3} {12...Qxd5+ 13.Nc3} {Nf3 d5} {1. d4 Nf6} "1.\u2658f3 d5" "5...\u265bxd5+"] {
+		::application::analysis::FirstMove $pv
+	}
+} -result {e4 Qxd5+ Nf3 d4 Nf3 Qxd5+}
 
 tcltest::test analysis-comparison-summary {the comparison names the most chosen move, the dissent, the score spread and the deepest search} -body {
 	::application::analysis::ComparisonSummary [list \

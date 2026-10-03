@@ -1998,11 +1998,14 @@ proc UpdatePinState {tree} {
 
 
 # "1.e4 e5 2.Nf3" -> e4, "12...Qxd5+ 13.Nc3" -> Qxd5+
+# The first move of a line, in letter SAN: lines hold figurines (shown as
+# letters or figurines by the notation setting), and ::scidb::game::move
+# takes letters only ("Pin best line" failed with figurine notation).
 proc FirstMove {pv} {
 	set move [lindex [split [string trim $pv]] 0]
 	regsub {^\d+\.+} $move "" move
 	if {$move eq ""} { set move [lindex [split [string trim $pv]] 1] }
-	return $move
+	return [string map {\u2654 K \u2655 Q \u2656 R \u2657 B \u2658 N \u265a K \u265b Q \u265c R \u265d B \u265e N} $move]
 }
 
 

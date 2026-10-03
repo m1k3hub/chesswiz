@@ -228,16 +228,23 @@ tcltest::test board3d-embed-pane {hardware 3D embeds into the main board pane} -
 # 3D move input: dragging a piece in the embedded pane plays a move on the
 # current game through the application's move machinery.
 
-proc b3dFindPixel {t sq cx} {
-	# scan the (e-file) centre column for a pixel whose pick is $sq
-	set ymax [winfo height $t]
-	for {set y 0} {$y < $ymax} {incr y 2} {
-		set got [::scidb::tk::glboard_pick $t $cx $y \
-			$::board3d::State(yaw) $::board3d::State(pitch) $::board3d::State(distance)]
-		if {$got == $sq} { return $y }
+# The centre of the pixels whose pick is $sq: {x y}, or {} when none. With
+# perspective a pixel column runs through several files, so no column is
+# safe: the scan covers the whole view.
+proc b3dFindPoint {t sq} {
+	set xs 0; set ys 0; set n 0
+	for {set y 0} {$y < [winfo height $t]} {incr y 3} {
+		for {set x 0} {$x < [winfo width $t]} {incr x 3} {
+			if {[::scidb::tk::glboard_pick $t $x $y $::board3d::State(yaw) \
+					$::board3d::State(pitch) $::board3d::State(distance)] == $sq} {
+				incr xs $x; incr ys $y; incr n
+			}
+		}
 	}
-	return -1
+	if {$n == 0} { return {} }
+	return [list [expr {$xs / $n}] [expr {$ys / $n}]]
 }
+
 
 tcltest::test board3d-3d-move-input {dragging pieces in the embedded 3D pane makes moves} -constraints embed3d -body {
 	catch { .application.nb select .application.nb.board }
@@ -249,19 +256,21 @@ tcltest::test board3d-3d-move-input {dragging pieces in the embedded 3D pane mak
 	# synthetic boards through PositionChanged)
 	::board3d::PositionChanged [::board::diagram::data $::application::board::board]
 	set t $::board3d::Priv(embed,togl)
-	set cx [expr {[winfo width $t]/2 + 30}]	;# inside the e-file (centre is the d/e seam)
 
 	set res {}
-	set y12 [b3dFindPixel $t 12 $cx]		;# e2, white pawn
-	set y28 [b3dFindPixel $t 28 $cx]		;# e4, legal pawn push
-	set y36 [b3dFindPixel $t 36 $cx]		;# e5, illegal for a pawn
-	if {$y12 < 0 || $y28 < 0 || $y36 < 0} { error "pick scan failed to find e2/e4/e5" }
+	set e2 [b3dFindPoint $t 12]		;# white pawn
+	set e4 [b3dFindPoint $t 28]		;# legal pawn push
+	set e5 [b3dFindPoint $t 36]		;# illegal for a pawn
+	if {![llength $e2] || ![llength $e4] || ![llength $e5]} { error "pick scan failed to find e2/e4/e5" }
+	lassign $e2 x12 y12
+	lassign $e4 x28 y28
+	lassign $e5 x36 y36
 
 	# 1) drag e2-e4
-	event generate $t <ButtonPress-1> -x $cx -y $y12
-	event generate $t <B1-Motion> -x $cx -y [expr {($y12+$y28)/2}]
-	event generate $t <B1-Motion> -x $cx -y [expr {$y28-2}]
-	event generate $t <ButtonRelease-1> -x $cx -y $y28
+	event generate $t <ButtonPress-1> -x $x12 -y $y12
+	event generate $t <B1-Motion> -x [expr {($x12+$x28)/2}] -y [expr {($y12+$y28)/2}]
+	event generate $t <B1-Motion> -x $x28 -y [expr {$y28-2}]
+	event generate $t <ButtonRelease-1> -x $x28 -y $y28
 	update
 	set data [::board::diagram::data $::application::board::board]
 	lappend res [expr {[string index $data 12] eq "." && [string index $data 28] eq "P"}]
@@ -269,10 +278,10 @@ tcltest::test board3d-3d-move-input {dragging pieces in the embedded 3D pane mak
 	# 2) click-click: press/release e2, press e4
 	catch { ::application::board::goto -1 }
 	update
-	event generate $t <ButtonPress-1> -x $cx -y $y12
-	event generate $t <ButtonRelease-1> -x $cx -y $y12
-	event generate $t <ButtonPress-1> -x $cx -y $y28
-	event generate $t <ButtonRelease-1> -x $cx -y $y28
+	event generate $t <ButtonPress-1> -x $x12 -y $y12
+	event generate $t <ButtonRelease-1> -x $x12 -y $y12
+	event generate $t <ButtonPress-1> -x $x28 -y $y28
+	event generate $t <ButtonRelease-1> -x $x28 -y $y28
 	update
 	set data [::board::diagram::data $::application::board::board]
 	lappend res [expr {[string index $data 12] eq "." && [string index $data 28] eq "P"}]
@@ -280,9 +289,9 @@ tcltest::test board3d-3d-move-input {dragging pieces in the embedded 3D pane mak
 	# 3) illegal drag e2-e5 is rejected
 	catch { ::application::board::goto -1 }
 	update
-	event generate $t <ButtonPress-1> -x $cx -y $y12
-	event generate $t <B1-Motion> -x $cx -y $y36
-	event generate $t <ButtonRelease-1> -x $cx -y $y36
+	event generate $t <ButtonPress-1> -x $x12 -y $y12
+	event generate $t <B1-Motion> -x $x36 -y $y36
+	event generate $t <ButtonRelease-1> -x $x36 -y $y36
 	update
 	set data [::board::diagram::data $::application::board::board]
 	lappend res [expr {[string index $data 12] eq "P" && [string index $data 36] eq "."}]
