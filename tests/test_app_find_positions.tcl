@@ -84,7 +84,7 @@ tcltest::test findpos-normalize {a script gets a cql() header; code fences go} -
 		[::ai::positions::normalize "  cql(quiet) check "]
 } -result [list "cql()\nmate" "cql() mate" "cql(quiet) check"]
 
-tcltest::test findpos-position {a match's ply maps to its position and moves} -constraints cql6 -setup {
+tcltest::test findpos-position {a match's ply maps to its position and moves ("1.e4" stays a move, not the number 10000.0)} -constraints cql6 -setup {
 	::scidb::test::findpos::openFixture
 } -body {
 	set base $::scidb::test::findpos::Fixture
@@ -93,10 +93,11 @@ tcltest::test findpos-position {a match's ply maps to its position and moves} -c
 	set start [::ai::positions::position $base Normal 0 0]
 	list [dict get $mid move] [dict get $mid next] [lindex [dict get $mid fen] 0] \
 		[dict get $end move] [dict get $end next] [lindex [dict get $end fen] 0] \
-		[dict get $start move] [dict get $start next]
+		[dict get $start move] [dict get $start next] \
+		[dict get [::ai::positions::position $base Normal 0 1] move]
 } -cleanup {
 	::scidb::test::findpos::closeFixture
-} -result {1...e5 Bc4 rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR 4.Qxf7 {} r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR {} e4}
+} -result {1...e5 Bc4 rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR 4.Qxf7 {} r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR {} e4 1.e4}
 
 tcltest::test findpos-sample {a sample finds the mates, lists them and shows them} -constraints cql6 -setup {
 	::scidb::test::findpos::openFixture

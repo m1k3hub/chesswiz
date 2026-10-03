@@ -143,9 +143,16 @@ proc ::ai::positions::position {base variant game ply} {
 	}
 	set move ""
 	if {$ply > 0} {
-		set san [lindex $plies [expr {$ply - 1}] 1]
-		set number [expr {($ply - 1) / 2 + 1}]
-		set move [expr {$ply % 2 ? "$number.$san" : "$number...$san"}]
+		# the number and the side from the position before the move (a game
+		# may start anywhere); not through expr, which reads "5.e5" as 500000.0
+		lassign [lindex $plies [expr {$ply - 1}]] _ san before
+		set number [lindex $before 5]
+		if {![string is integer -strict $number]} { set number [expr {($ply - 1) / 2 + 1}] }
+		if {[lindex $before 1] eq "b"} {
+			set move "$number...$san"
+		} else {
+			set move "$number.$san"
+		}
 	}
 	return [dict create fen $fen move $move next $next]
 }
