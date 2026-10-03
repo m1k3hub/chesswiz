@@ -111,7 +111,7 @@ set ReadWriteFailed					"Setting the database writable failed:"
 set NoExtraTagsFound					"No tags found for deletion."
 
 set FindDuplicates					"Find Duplicates"
-set EcoStats							"Opening Report"
+set EcoStats							"Opening Prep"
 set OpeningReport						"Opening Report (ChessBase 26 Style)"
 set SearchByMaterial				"Search by Material"
 set SearchByRating					"Search by Rating"

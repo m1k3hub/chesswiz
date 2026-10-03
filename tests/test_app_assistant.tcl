@@ -666,6 +666,46 @@ tcltest::test assistant-open-game {open_game puts a game on the board at a move}
 	::scidb::test::assistant::stubbed ::application::switchTab { ::menu::gameNew .application }
 } -match glob -result {1 1 1 1 {error: * has 3 games} 1 {after needs a move}}
 
+# Run <body> with the dialog openers replaced by recorders.
+proc ::scidb::test::assistant::recording {body} {
+	set cmds {::playercard::show ::application::database::player::OpenPrepReport ::crosstable::open
+		::application::database::ShowOpeningReport ::application::database::ShowEcoStats
+		::application::database::ShowDuplicates}
+	foreach cmd $cmds {
+		rename $cmd ${cmd}__rec
+		proc $cmd {args} "lappend ::scidb::test::assistant::Opened \[concat [list [namespace tail $cmd]] \$args\]"
+	}
+	set ::scidb::test::assistant::Opened {}
+	set rc [catch { uplevel 1 $body } result opts]
+	foreach cmd $cmds { rename $cmd {}; rename ${cmd}__rec $cmd }
+	return -options $opts $result
+}
+
+tcltest::test assistant-open-view {open_view opens the report or dialog for a player, an event or the board} -body {
+	::scidb::test::assistant::recording {
+		set replies [list \
+			[::application::assistant::runTool open_view {kind player_card name {Carlsen, Magnus}}] \
+			[::application::assistant::runTool open_view {kind prep_report name anand}] \
+			[::application::assistant::runTool open_view {kind crosstable event assist}] \
+			[::application::assistant::runTool open_view {kind opening_report}] \
+			[::application::assistant::runTool open_view {kind duplicates}]]
+	}
+	set opened $::scidb::test::assistant::Opened
+	list [lmap r $replies { string match "error:*" $r }] \
+		[lindex $opened 0] [lindex $opened 1 0] [lindex $opened 2 0] [lindex $opened 3 0] [lindex $opened 4 0] \
+		[lindex $opened 0 4] [lindex $opened 2 6]
+} -match glob -result {{0 0 0 0 0} {show * Normal * white} OpenPrepReport open ShowOpeningReport ShowDuplicates white game}
+
+tcltest::test assistant-event-pattern {event names with spaces are found} -body {
+	list [::application::assistant::EventPattern "Karvina 5th"] [::application::assistant::EventPattern " Assistant "]
+} -result {*Karvina?5th* *Assistant*}
+
+tcltest::test assistant-open-view-errors {open_view says what is missing} -body {
+	list [::application::assistant::runTool open_view {kind player_card}] \
+		[::application::assistant::runTool open_view {kind crosstable event nosuchevent}] \
+		[::application::assistant::runTool open_view {kind magic}]
+} -match glob -result {{error: player_card needs a player name} {error: no event matching 'nosuchevent' in *} {error: kind must be one of: *}}
+
 ::scidb::test::assistant::closeFixture
 
 tcltest::test assistant-current-game {current_game gives the board game as PGN with the position} -body {

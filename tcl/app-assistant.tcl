@@ -207,6 +207,12 @@ variable Actions {
 		{{"type":"object","properties":{"name":{"type":"string","description":"a short name, e.g. 'knight fork king and queen'"}},"required":["name"]}}
 		::application::assistant::DoSavePattern
 	}
+	open_view {
+		0 0 "open the %s"
+		"Open one of Scidb's reports or dialogs for the user (they only show things; nothing changes). kind: player_card (a player's card: ratings, photo, links; needs 'name'), prep_report (a player's preparation report: scores by colour, openings, recent games, gaps, the opponent dossier; needs 'name'), crosstable (an event's tournament table; needs 'event', part of the event name), opening_report (the opening report of the position on the board: statistics, main lines, fashion, plans), opening_prep (opening preparation: the moves played from the board's position), repertoire_report (the active repertoire database's report), duplicates (find duplicate games in the active database)."
+		{{"type":"object","properties":{"kind":{"type":"string","enum":["player_card","prep_report","crosstable","opening_report","opening_prep","repertoire_report","duplicates"]},"name":{"type":"string","description":"a player, for player_card and prep_report"},"event":{"type":"string","description":"part of an event name, for crosstable"}},"required":["kind"]}}
+		::application::assistant::DoOpenView
+	}
 	set_position {
 		0 0 "set up a position"
 		"Put a position on the board in a new game (the game on the board stays as it is): from 'fen', from 'moves' played from the start (e.g. '1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6 6.Bg5'), or moves played from 'fen'. Map an opening the user names to its moves yourself. Every move is checked first; a move that is not legal comes back as an error naming it, and nothing changes."
@@ -522,6 +528,7 @@ variable ToolMenu {
 	find_similar	"Database tab > right-click the database > Maintenance > CQL 6.2 Search (with the script above)"
 	open_game		"Database tab > double-click the game in the game list"
 	set_position	"Board tab > right-click the board > Set Start Board..."
+	open_view		"Database tab > Players/Events tabs, right-click; or right-click the database > Maintenance"
 	player_stats	"Players tab > right-click the player > Show Player Card"
 	prepare_against	"Players tab > right-click the player > Show Prep Report"
 	opening_score	"Board tab > Tree pane"
@@ -1170,6 +1177,16 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			set name [string trim [Arg $cargs name]]
 			if {$name eq ""} { error "name must not be empty" }
 			return [dict create name $name]
+		}
+		open_view {
+			set kind [Arg $cargs kind]
+			set kinds {player_card prep_report crosstable opening_report opening_prep repertoire_report duplicates}
+			if {$kind ni $kinds} { error "kind must be one of: [join $kinds {, }]" }
+			set name [expr {[dict exists $cargs name] ? [string trim [dict get $cargs name]] : ""}]
+			set event [expr {[dict exists $cargs event] ? [string trim [dict get $cargs event]] : ""}]
+			if {$kind in {player_card prep_report} && $name eq ""} { error "$kind needs a player name" }
+			if {$kind eq "crosstable" && $event eq ""} { error "crosstable needs an event" }
+			return [dict create kind $kind name $name event $event]
 		}
 		set_position {
 			set fen [expr {[dict exists $cargs fen] ? [string trim [dict get $cargs fen]] : ""}]
@@ -1938,7 +1955,7 @@ proc ::application::assistant::BuildQuery {base variant criteria {includePattern
 		}
 	}
 	if {$event ne ""} {
-		lappend common [list eventname "*$event*"]
+		lappend common [list eventname [EventPattern $event]]
 		lappend summary "event matching '$event'"
 	}
 	if {$min_elo ne ""} {
@@ -2287,6 +2304,85 @@ proc ::application::assistant::DoSavePattern {name} {
 	lassign $LastFind request cql fens
 	set n [::ai::positions::savePattern $name $request $cql $fens]
 	return "saved as '$name'; the user now has $n saved pattern[expr {$n == 1 ? "" : "s"}]"
+}
+
+
+# Scidb's reports and dialogs, opened for the user (phase 3: the features
+# that sit deep in right-click menus).
+proc ::application::assistant::DoOpenView {kind name event} {
+	lassign [ActiveBase] base variant
+	set db [::util::databaseName $base no]
+	switch -- $kind {
+		player_card {
+			lassign [ResolvePlayer $base $variant $name] index name
+			lassign [FirstGame $base $variant [list playername white [GlobQuote $name]] \
+				[list playername black [GlobQuote $name]]] game side
+			if {$game < 0} { return "error: no game of $name in $db" }
+			::playercard::show $base $variant $game $side
+			return "the player card of $name is open"
+		}
+		prep_report {
+			lassign [ResolvePlayer $base $variant $name] index name
+			::application::database::player::OpenPrepReport .application $base $variant $index
+			return "the preparation report on $name is open (its Dossier button opens the opponent dossier)"
+		}
+		crosstable {
+			set view [::scidb::view::new $base $variant unused unused unused unused master slave]
+			::scidb::view::search $base $variant $view null none [list eventname [EventPattern $event]]
+			if {[::scidb::view::count games $base $variant $view] == 0} {
+				catch { ::scidb::view::close $base $variant $view }
+				return "error: no event matching '$event' in $db"
+			}
+			# the table keeps its own view; this one only names the event
+			::crosstable::open .application $base $variant 0 $view game
+			set title [lindex [::scidb::db::fetch eventInfo [::scidb::db::get gameNumber $base $variant 0 $view] $base $variant -card] 0]
+			return "the crosstable of $title is open"
+		}
+		opening_report {
+			::application::database::ShowOpeningReport .application
+			return "the opening report of the position on the board is open"
+		}
+		opening_prep {
+			::application::database::ShowEcoStats .application $base $variant
+			return "opening preparation for $db is open"
+		}
+		repertoire_report {
+			if {[catch { ::application::database::OpenRepertoireReport .application $base $variant } err]} {
+				return "error: $err"
+			}
+			return "the repertoire report of $db is open"
+		}
+		duplicates {
+			::application::database::ShowDuplicates .application $base $variant
+			return "the duplicate search for $db is open"
+		}
+	}
+}
+
+
+# A name pattern for part of an event name. util::Pattern (u_match.cpp)
+# compiles a space into a word delimiter that fails inside a name
+# ("*Karvina 5th*" finds nothing), so each space becomes '?' (any one
+# character), which matches the space.
+proc ::application::assistant::EventPattern {text} {
+	return "*[string map {" " ?} [string trim $text]]*"
+}
+
+
+# The first game matching one of <queries> (view search terms) and the side
+# the first query that matched names: {index white|black}, or {-1 {}}.
+proc ::application::assistant::FirstGame {base variant args} {
+	set view [::scidb::view::new $base $variant unused unused unused unused master slave]
+	set found {-1 {}}
+	foreach query $args side {white black} {
+		::scidb::view::search $base $variant $view null none $query
+		if {[::scidb::view::count games $base $variant $view] > 0} {
+			set found [list [::scidb::db::get gameNumber $base $variant 0 $view] $side]
+			break
+		}
+	}
+	catch { ::scidb::view::close $base $variant $view }
+	return $found
 }
 
 
