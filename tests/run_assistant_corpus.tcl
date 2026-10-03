@@ -60,8 +60,14 @@ proc calls {} {
 	return $out
 }
 
+# Tools that only look: a request answered by asking back may use them first.
+set ReadOnly {app_state list_open_databases discover_databases current_game tool_log list_engines
+	engine_options cql_help recent_errors ui_state database_summary}
+
 proc solved {calls expect} {
-	if {{none} in $expect && ![llength $calls]} { return 1 }
+	if {{none} in $expect && ![llength [lmap {n a} $calls { if {$n in $::ReadOnly} continue; set n }]]} {
+		return 1
+	}
 	foreach want $expect {
 		set args [lassign $want tool]
 		foreach {name cargs} $calls {

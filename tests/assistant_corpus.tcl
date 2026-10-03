@@ -9,7 +9,8 @@
 #   model calls one of these tools with those arguments (each arg value
 #   matched case-insensitively as a glob); {none} means asking back is the
 #   right answer (the request refers to something the conversation does not
-#   have). A request that needs the user's name assumes remember_me has
+#   have); looking first with read-only tools is fine (ReadOnly in the
+#   runner). A request that needs the user's name assumes remember_me has
 #   "Thomas, Michael".
 # ======================================================================
 
@@ -113,7 +114,7 @@ set Corpus {
 	me-plan J6 {Make me a study plan from my recent games.} {{run_job job review} {study_plan player *thomas*}}
 	me-annotate-plain J6 {Comment this game quickly, no fancy words.} {{annotate_game}}
 	eng-stop J7 {Stop the engine.} {{stop_engine}}
-	eng-threads J7 {Let Stockfish use 8 threads.} {{set_engine_option option *thread* value 8}}
+	eng-threads J7 {Let Stockfish use 8 threads.} {{set_engine_option option *thread* value 8} {start_engine threads 8}}
 	train-forks J8 {Give me knight fork puzzles.} {{training_set pattern knight_fork} {run_job job train}}
 	play-trend J10 {What's trending in openings lately?} {{database_trend}}
 }
