@@ -270,7 +270,7 @@ variable Actions {
 	start_engine {
 		1 0 "analyse the board position with %s"
 		"Start an engine on the position on the board in an analysis pane; it follows the board as it changes. Without a pane a free one is used or a new one opened; giving the pane of a running engine replaces or restarts it (e.g. to change lines). lines = number of best lines (MultiPV), threads, hash in MB; each defaults to the pane's setting. Then read its lines with engine_analysis."
-		{{"type":"object","properties":{"engine":{"type":"string","description":"engine name or part of it"},"pane":{"type":"integer","description":"analysis pane number as in its title: 1 for 'Analysis', 2 for 'Analysis (2)'"},"lines":{"type":"integer"},"threads":{"type":"integer"},"hash":{"type":"integer","description":"hash size in MB"}},"required":["engine"]}}
+		{{"type":"object","properties":{"engine":{"type":"string","description":"engine name or part of it; without it Stockfish, or the first engine"},"pane":{"type":"integer","description":"analysis pane number as in its title: 1 for 'Analysis', 2 for 'Analysis (2)'"},"lines":{"type":"integer"},"threads":{"type":"integer"},"hash":{"type":"integer","description":"hash size in MB"}}}}
 		::application::assistant::DoStartEngine
 	}
 	engine_analysis {
@@ -505,7 +505,12 @@ variable Actions {
 
 variable System {You are the assistant of Scidb, a chess database application.
 You operate the application only through the tools you are given; call a tool
-whenever it does what the user asks. If no tool fits, say so briefly and name
+whenever it does what the user asks. Act first: call the tool right away with
+sensible defaults (a surname is enough for a player, the default engine, a
+sample before all), and ask a question only when the request is ambiguous in a
+way no default settles. Never write a tool call or its result as text, and never
+say something was done unless a tool reported it in this conversation. When the
+user tells you their name, call remember_me. If no tool fits, say so briefly and name
 the menu entry that does it if you know one. Never claim you did something a
 tool did not report. Answer in one or two short sentences. For questions
 about games, players or openings, use the numbers the tools report and never
@@ -577,6 +582,8 @@ array set Priv {
 	messages		{}
 	busy			0
 	maxRounds	8
+	nudged		0
+	nudge		"(Scidb: no tool ran in this request, so nothing was done or found. Call the tool that does it now, or say plainly that you cannot.)"
 	debug			0
 	observer		{}
 	reqconfirm	{}
@@ -626,6 +633,7 @@ proc ::application::assistant::ask {request args} {
 	set Priv(reqconfirm) $opts(-confirm)
 	# a job (run_job) raises it for its own request
 	set Priv(maxRounds) 8
+	set Priv(nudged) 0
 
 	if {![llength $Priv(messages)]} {
 		variable DebugSystem
@@ -764,7 +772,34 @@ proc ::application::assistant::OnReplyImpl {round result} {
 		return
 	}
 
+	# A first answer that claims an action although no tool ran ("I've
+	# filtered the list", "here are 3 examples") is made up: send it back
+	# once (models break the system prompt's rule against it).
+	if {$round == 1 && !$Priv(nudged) && [ClaimsAction [dict get $msg content]]} {
+		set Priv(nudged) 1
+		lappend Priv(messages) $msg [dict create role user content $Priv(nudge)]
+		Step $round
+		return
+	}
+
 	Finish [dict create ok 1 message $msg] $round
+}
+
+
+# Whether <text> says something was done or found, or writes a tool call
+# out as text instead of making it.
+proc ::application::assistant::ClaimsAction {text} {
+	variable Actions
+	if {[string match "*```json*" $text]} { return 1 }
+	# a tool named instead of called
+	foreach name [dict keys $Actions] {
+		if {[regexp "\\m$name\\M" $text]} { return 1 }
+	}
+	# numbers no tool reported ("1,234 games", "a score of 61%")
+	if {[regexp -nocase {\m[0-9][0-9,.]*\s*(games|wins|losses|draws|positions|%)} $text]} { return 1 }
+	# a refusal although a tool would do it
+	if {[regexp -nocase {(don't|do not|cannot|can't) (have )?access} $text]} { return 1 }
+	return [regexp -nocase {\m((i've|i have) (now |just |already )?(filtered|set|saved|added|opened|started|found|put|shown|created|loaded|searched|remembered|run)|i'll remember|i will remember|is (now )?(set|on the board|open|shown)|filtered|here are [0-9]|found [0-9]|[0-9]+ (games|positions) (match|with|found)|saved|added|started|opened|set up)\M} $text]
 }
 
 
@@ -1107,7 +1142,8 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			return $result
 		}
 		start_engine {
-			set result [dict create engine [EngineNamed [Arg $cargs engine]]]
+			set name [OptArg $cargs engine ""]
+			set result [dict create engine [expr {$name eq "" ? [DefaultEngine] : [EngineNamed $name]}]]
 			dict set result pane [OptArg $cargs pane ""]
 			if {[dict get $result pane] ne ""} { PaneNumber [dict get $result pane] }
 			foreach key {lines threads hash} {
@@ -2706,6 +2742,15 @@ proc ::application::assistant::Figurines {moves} {
 
 # The name of the engine <text> means: its exact name, or the only engine
 # whose name or version contains it.
+# The engine used when none is named: Stockfish when installed, else the first.
+proc ::application::assistant::DefaultEngine {} {
+	set names [lmap e $::engine::Engines { dict get $e Name }]
+	if {![llength $names]} { error "no engine is installed; add one with add_engine" }
+	set i [lsearch -nocase -glob $names *stockfish*]
+	return [lindex $names [expr {$i >= 0 ? $i : 0}]]
+}
+
+
 proc ::application::assistant::EngineNamed {text} {
 	set text [string trim $text]
 	set names [lmap e $::engine::Engines { dict get $e Name }]

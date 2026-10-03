@@ -134,7 +134,9 @@ tcltest::test route-invocations {the allowlist is derived from the Actions table
 			if {$want ni $ids} { lappend missing $want }
 		}
 		set leaked {}
-		foreach unwanted {open_database start_engine player_stats prepare_against
+		# start_engine is routable since its engine is optional (the default
+		# engine), like every all-optional tool
+		foreach unwanted {open_database player_stats prepare_against
 		                  handoff_issue eval_tcl list_procs read_variable proc_source} {
 			if {[lsearch -exact $ids $unwanted] >= 0} { lappend leaked $unwanted }
 		}

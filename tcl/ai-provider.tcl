@@ -48,7 +48,7 @@ array set Config {
 	index     0
 	system    ""
 	options   {}
-	think     false
+	think     auto
 	chatResponses {}
 	chatIndex 0
 	keys      {}
@@ -438,12 +438,50 @@ proc ::ai::provider::onOllama {script token} {
 }
 
 
+# Whether an Ollama request asks the model to think: true, false, "" (the
+# server's default), or auto -- think when the model can. Thinking made the
+# assistant call the right tool far more often (kimi-k3: 98% against 88% of
+# the request corpus, tests/run_assistant_corpus.tcl).
+proc ::ai::provider::Think {} {
+	variable Config
+	if {$Config(think) ne "auto"} { return $Config(think) }
+	return [expr {[OllamaThinks [model]] ? "true" : ""}]
+}
+
+
+# Whether Ollama says <model> can think (/api/show capabilities); asked once
+# per model, and "no" when the server does not answer.
+proc ::ai::provider::OllamaThinks {model} {
+	variable Config
+	variable Thinks
+
+	if {[info exists Thinks($model)]} { return $Thinks($model) }
+	set Thinks($model) 0
+	set base [regsub {/api/.*$} $Config(endpoint) {}]
+	if {$base eq "" || $model eq ""} { return 0 }
+	catch {
+		need http
+		need json
+		set token [::http::geturl $base/api/show -timeout 3000 -binary 1 \
+			-type application/json -query [encoding convertto utf-8 "\{\"model\":\"[jsonEscape $model]\"\}"]]
+		if {[::http::ncode $token] == 200} {
+			set d [json::json2dict [body $token]]
+			if {[dict exists $d capabilities] && "thinking" in [dict get $d capabilities]} {
+				set Thinks($model) 1
+			}
+		}
+		::http::cleanup $token
+	}
+	return $Thinks($model)
+}
+
+
 proc ::ai::provider::ollamaBody {prompt system} {
 	variable Config
 
 	set body "{\"model\":\"[jsonEscape [model]]\",\"prompt\":\"[jsonEscape $prompt]\",\"stream\":false"
-	if {[string length $Config(think)]} {
-		append body ",\"think\":$Config(think)"
+	if {[set think [Think]] ne ""} {
+		append body ",\"think\":$think"
 	}
 	if {$system ne ""} {
 		append body ",\"system\":\"[jsonEscape $system]\""
@@ -1259,8 +1297,8 @@ proc ::ai::provider::chatBody {messages tools} {
 	variable Config
 
 	set body "{\"model\":\"[jsonEscape [model]]\",\"messages\":[encodeMessages $messages],\"stream\":false"
-	if {[string length $Config(think)]} {
-		append body ",\"think\":$Config(think)"
+	if {[set think [Think]] ne ""} {
+		append body ",\"think\":$think"
 	}
 	if {$tools ne ""} {
 		append body ",\"tools\":$tools"

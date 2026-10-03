@@ -1201,6 +1201,22 @@ test aipc-strip-reasoning {reasoning markers leaked into an Ollama reply are dro
 		[::ai::provider::StripReasoning "plain answer"]
 } -result {{Done: 50 games.} {plain answer}}
 
+test aipc-think {think: explicit values pass through; auto asks the model's capabilities once} -body {
+	set saved $::ai::provider::Config(think)
+	set out {}
+	foreach v {true false {}} { set ::ai::provider::Config(think) $v; lappend out [::ai::provider::Think] }
+	set ::ai::provider::Config(think) auto
+	::ai::provider::configure -name ollama -model thinker:1b
+	set ::ai::provider::Thinks(thinker:1b) 1
+	lappend out [::ai::provider::Think]
+	::ai::provider::configure -model plain:1b
+	set ::ai::provider::Thinks(plain:1b) 0
+	lappend out [::ai::provider::Think]
+	set ::ai::provider::Config(think) $saved
+	::ai::provider::configure -name stub -model ""
+	set out
+} -result {true false {} true {}}
+
 foreach v [array names SavedEnv] { set ::env($v) $SavedEnv($v) }
 
 set failed $::tcltest::numTests(Failed)
