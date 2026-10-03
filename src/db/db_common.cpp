@@ -1440,22 +1440,24 @@ title::validate(char const* s, char const* e)
 unsigned
 title::add(unsigned titles, ID title)
 {
+	// the titles a new one supersedes; ~0u keeps them all (0 used to stand
+	// here for CM, WCM, HGM, CIM and CLIM, and erased every title)
 	static unsigned Remove[Last] =
 	{
-		/* None	*/ 0,
+		/* None	*/ ~0u,
 		/* GM		*/ ~unsigned(Mask_IM | Mask_FM | Mask_CM),
 		/* IM		*/ ~unsigned(Mask_FM | Mask_CM),
 		/* FM		*/ ~unsigned(Mask_CM),
-		/* CM		*/ 0,
+		/* CM		*/ ~0u,
 		/* WGM	*/ ~unsigned(Mask_WIM | Mask_WFM | Mask_WCM),
 		/* WIM	*/ ~unsigned(Mask_WFM | Mask_WCM),
 		/* WFM	*/ ~unsigned(Mask_WCM),
-		/* WCM	*/ 0,
-		/* HGM	*/ 0,
-		/* CGM	*/ ~unsigned(CSIM | Mask_CIM),
-		/* CIM	*/ 0,
+		/* WCM	*/ ~0u,
+		/* HGM	*/ ~0u,
+		/* CGM	*/ ~unsigned(Mask_CSIM | Mask_CIM),
+		/* CIM	*/ ~0u,
 		/* CLGM	*/ ~unsigned(Mask_CLIM),
-		/* CLIM	*/ 0,
+		/* CLIM	*/ ~0u,
 		/* CSIM	*/ ~unsigned(Mask_CIM),
 	};
 
