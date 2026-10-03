@@ -701,7 +701,8 @@ proc ::application::assistant::clear {} {
 proc ::application::assistant::MePrompt {} {
 	set name ""
 	catch { set name [string trim $::application::ai::Settings(me)] }
-	if {$name eq ""} { catch { set name [string trim $::playercard::Var(Name)] } }
+	# the private player card marked "This is me"
+	if {$name eq ""} { catch { set name [::playercard::myCard] } }
 	if {$name eq ""} {
 		return "The user's name is not known. Only when a request is about the user's own games or record (my games, how did I score), ask for their name as written in their games and call remember_me with it; other requests need no name."
 	}

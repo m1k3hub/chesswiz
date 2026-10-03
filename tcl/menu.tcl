@@ -328,7 +328,6 @@ proc build {menu} {
 		-image $::icon::16x16::filetypePGN \
 		-compound left \
 		;
-if {0} {
 	lassign [::tk::UnderlineAmpersand $mc::PrivatePlayerCard] text ul
 	set cmd [list ::playercard::setupPrivateCard .application]
 	$m add command \
@@ -338,7 +337,6 @@ if {0} {
 		-image $::icon::16x16::playercard \
 		-compound left \
 		;
-}
 
 	### tools ################################################################
 	set m [menu $menu.mTools]

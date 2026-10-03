@@ -14,19 +14,21 @@ namespace eval ::scidb::test::me {}
 
 # Run <body> with Settings(me) = <me> and the card's name = <card> ("" for
 # none); both are put back afterwards.
+# <card>: the name on the private player card marked "This is me" (kept in
+# memory here; nothing is written)
 proc ::scidb::test::me::with {me card body} {
 	set savedMe $::application::ai::Settings(me)
-	set hadCard [info exists ::playercard::Var(Name)]
-	if {$hadCard} { set savedCard $::playercard::Var(Name) }
+	set hadCards [info exists ::playercard::Private]
+	if {$hadCards} { set savedCards $::playercard::Private }
 
 	set ::application::ai::Settings(me) $me
-	if {$card eq ""} { unset -nocomplain ::playercard::Var(Name) } else { set ::playercard::Var(Name) $card }
+	set ::playercard::Private [expr {$card eq "" ? {} : [dict create $card [dict create Name $card Me 1]]}]
 
 	set rc [catch { uplevel 1 $body } result]
 
 	set ::application::ai::Settings(me) $savedMe
-	unset -nocomplain ::playercard::Var(Name)
-	if {$hadCard} { set ::playercard::Var(Name) $savedCard }
+	unset -nocomplain ::playercard::Private
+	if {$hadCards} { set ::playercard::Private $savedCards }
 	return -code $rc $result
 }
 

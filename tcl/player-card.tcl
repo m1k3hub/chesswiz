@@ -52,6 +52,14 @@ set OpenPndCatalog			"catalog of Deutsche Nationalbibliothek"
 set OpenChessgames			"chessgames.com collection"
 set SeachIn365ChessCom		"Search in 365Chess.com"
 
+set Photo						"Photo"
+set ChoosePhoto				"Choose..."
+set NoPhoto						"(none)"
+set ThisIsMe					"This is me"
+set PrivateCard				"Private card"
+set PrivateCardNote			"Entered by you; kept on this computer, never written into a database."
+set NameMissing				"A private card needs the player's name, as written in the games."
+
 }
 
 namespace import ::tcl::mathfunc::abs
@@ -162,6 +170,7 @@ proc show {base variant args} {
 proc popupInfo {path info} {
 	variable Photo
 
+	set info [WithPrivate $info]
 	lassign $info name fideID type sex rating _ _ country titles _ _ dateOfBirth dateOfDeath
 	if {[string length $name] == 0} { return }
 	if {[string index $fideID 0] eq "-"} { set fideID [string range $fideID 1 end] }
@@ -286,7 +295,10 @@ proc setupPrivateCard {parent} {
 		-padx 5 \
 		-pady 7 \
 		-selectmode browse \
+		-height 16 \
 	]
+	$list addcol text -id name -width 24
+	bind $list <<ListboxSelect>> [namespace code [list SelectPlayer $list %d]]
 
 	### right frame #######################################################
 	set f [ttk::frame $top.data -borderwidth 0 -takefocus 0]
@@ -327,6 +339,13 @@ proc setupPrivateCard {parent} {
 	ttk::entry		$f.eiccf -textvar [namespace current]::Var(IccfID)
 	ttk::label		$f.luscf -text "USCF-ID"
 	ttk::entry		$f.euscf -textvar [namespace current]::Var(UscfID)
+
+	ttk::label		$f.lphoto -textvar [namespace current]::mc::Photo
+	ttk::label		$f.vphoto -textvar [namespace current]::Var(PhotoLabel)
+	ttk::button		$f.bphoto -textvar [namespace current]::mc::ChoosePhoto \
+		-command [namespace code [list ChoosePhoto $dlg]]
+	ttk::checkbutton $f.me -textvar [namespace current]::mc::ThisIsMe \
+		-variable [namespace current]::Var(Me)
 
 	### Geometry ##########################################################
 	grid $top.select -row 1 -column 1 -sticky ns
@@ -371,16 +390,20 @@ proc setupPrivateCard {parent} {
 	grid $f.eiccf		-row 27 -column 3 -sticky w -columnspan 3
 	grid $f.luscf		-row 29 -column 1 -sticky w
 	grid $f.euscf		-row 29 -column 3 -sticky w -columnspan 3
+	grid $f.lphoto		-row 31 -column 1 -sticky w
+	grid $f.vphoto		-row 31 -column 3 -sticky w
+	grid $f.bphoto		-row 31 -column 5 -sticky w
+	grid $f.me			-row 33 -column 1 -sticky w -columnspan 5
 
 	grid columnconfigure $f {2 4} -minsize $::theme::padx
 	grid columnconfigure $f {5} -weight 1
-	grid rowconfigure $f {2 4 6 10 12 16 18 22 24 26 28} -minsize $::theme::pady
-	grid rowconfigure $f {8 14 20} -minsize $::theme::padY
+	grid rowconfigure $f {2 4 6 10 12 16 18 22 24 26 28 30} -minsize $::theme::pady
+	grid rowconfigure $f {8 14 20 32} -minsize $::theme::padY
 
 	### Buttons ###########################################################
 	::widget::dialogButtons $dlg {new save delete close help} -default close
 	$dlg.delete configure -command [namespace code [list DeletePlayer $list]]
-	$dlg.save configure -command [namespace code [list SavePlayer $list]] -state disabled
+	$dlg.save configure -command [namespace code [list SavePlayer $list]]
 	$dlg.new configure -command [namespace code [list NewPlayer $list]]
 	$dlg.close configure -command [namespace code [list CloseSetup $list]]
 
@@ -393,21 +416,273 @@ proc setupPrivateCard {parent} {
 	::util::place $dlg -parent $parent -position center
 	wm deiconify $dlg
 	focus $list
+	ClearVars
+	FillList $list
 	update idletasks
 	wm geometry $dlg [winfo width $dlg]x[winfo height $dlg]
 }
 
 
-# TODO: the private-player-card dialog is unfinished (its menu entry in
-# menu.tcl is disabled with 'if {0}'). These handlers are stubs so the
-# button commands resolve if the dialog is ever enabled.
+# --- private player cards ---------------------------------------------
+#
+# What the user knows about a player that the databases do not: their own
+# card above all ("This is me", which the assistant uses for "my games"),
+# or a club opponent missing from the rating lists. Kept in the user
+# directory, never written into a database; the player card shows it in a
+# section of its own, and the info tooltip fills in what the database lacks.
+# A photo is copied to where the photo lookup finds it (photos/<letter>/).
+#
+#   ::playercard::privateCard <name>   -> the card's fields, or {}
+#   ::playercard::privateCards         -> dict name -> fields
+#   ::playercard::myCard               -> the name marked "This is me", or ""
 
-proc NewPlayer {list} { bell }
-proc SavePlayer {list} { bell }
-proc DeletePlayer {list} { bell }
+variable PrivateFields {
+	Name Sex Birthday Nation Rating1 Score1 Rating2 Score2 Rating3 Score3
+	Title1 Title2 Title3 FideID DsbID EcfID IccfID UscfID Me
+}
+variable Private
+# the photo chosen in the dialog, copied when the card is saved
+variable PhotoSource ""
+
+
+proc PrivateFile {} {
+	return [file join $::scidb::dir::user private-players.dat]
+}
+
+
+proc privateCards {} {
+	variable Private
+	if {![info exists Private]} {
+		set Private [dict create]
+		set file [PrivateFile]
+		if {[file readable $file]} {
+			catch {
+				set chan [open $file r]
+				fconfigure $chan -encoding utf-8
+				set data [read $chan]
+				close $chan
+				if {[string is list $data] && [llength $data] % 2 == 0} { set Private $data }
+			}
+		}
+	}
+	return $Private
+}
+
+
+proc privateCard {name} {
+	set cards [privateCards]
+	if {[dict exists $cards $name]} { return [dict get $cards $name] }
+	return {}
+}
+
+
+proc myCard {} {
+	dict for {name card} [privateCards] {
+		if {[dict exists $card Me] && [dict get $card Me]} { return $name }
+	}
+	return ""
+}
+
+
+proc SavePrivate {cards} {
+	variable Private
+	set Private $cards
+	set file [PrivateFile]
+	file mkdir [file dirname $file]
+	set chan [open $file.new w]
+	fconfigure $chan -encoding utf-8
+	puts -nonewline $chan $cards
+	close $chan
+	file rename -force $file.new $file
+}
+
+
+# Where the photo lookup finds a photo of <name> in the user directory.
+proc PhotoPath {name} {
+	set key [::util::photos::NormalizeName $name]
+	set dir [string index $key 0]
+	if {![string match {[a-z]} $dir]} { return "" }
+	return [file join $::scidb::dir::user photos $dir $key]
+}
+
+
+proc ClearVars {} {
+	variable Var
+	variable PrivateFields
+	variable PhotoSource
+	foreach field $PrivateFields { set Var($field) "" }
+	set Var(Me) 0
+	set Var(PhotoLabel) $mc::NoPhoto
+	set PhotoSource ""
+}
+
+
+proc FillList {list {select ""}} {
+	$list clear
+	set names [lsort -dictionary [dict keys [privateCards]]]
+	foreach name $names { $list insert [list $name] }
+	$list resize
+	if {$select ne "" && [set i [lsearch -exact $names $select]] >= 0} { $list select $i }
+}
+
+
+proc SelectPlayer {list index} {
+	variable Var
+	variable PrivateFields
+
+	set names [lsort -dictionary [dict keys [privateCards]]]
+	if {![string is integer -strict $index] || $index < 0 || $index >= [llength $names]} { return }
+	set name [lindex $names $index]
+	set card [privateCard $name]
+	ClearVars
+	foreach field $PrivateFields {
+		if {[dict exists $card $field]} { set Var($field) [dict get $card $field] }
+	}
+	set dlg [winfo toplevel $list]
+	catch { $dlg.top.data.bbirthday set [expr {$Var(Birthday) eq "" ? "0.0.0" : $Var(Birthday)}] }
+	set path [PhotoPath $name]
+	if {$path ne "" && [file readable $path]} { set Var(PhotoLabel) [file tail $path] }
+}
+
+
+proc NewPlayer {list} {
+	ClearVars
+	set dlg [winfo toplevel $list]
+	catch { $dlg.top.data.bbirthday set 0.0.0 }
+	focus $dlg.top.data.ename
+}
+
+
+proc ChoosePhoto {dlg} {
+	variable Var
+	variable PhotoSource
+	set file [tk_getOpenFile -parent $dlg -title $mc::Photo \
+		-filetypes {{Images {.png .gif .jpg .jpeg}} {All *}}]
+	if {$file eq ""} { return }
+	if {[catch { image delete [image create photo -file $file] }]} {
+		::dialog::error -parent $dlg -message "[file tail $file]: not an image this program can read"
+		return
+	}
+	set PhotoSource $file
+	set Var(PhotoLabel) [file tail $file]
+}
+
+
+proc SavePlayer {list} {
+	variable Var
+	variable PrivateFields
+	variable PhotoSource
+
+	set dlg [winfo toplevel $list]
+	set name [string trim $Var(Name)]
+	if {$name eq ""} {
+		::dialog::error -parent $dlg -message $mc::NameMissing
+		return
+	}
+	catch {
+		set date [$dlg.top.data.bbirthday value]
+		set Var(Birthday) [expr {[string match {*\?*} $date] || $date eq "0000.00.00" ? "" : $date}]
+	}
+	set card [dict create]
+	foreach field $PrivateFields { dict set card $field [string trim $Var($field)] }
+	dict set card Name $name
+	dict set card Me [expr {$Var(Me) ? 1 : 0}]
+
+	set cards [privateCards]
+	# only one card is the user's own
+	if {[dict get $card Me]} {
+		dict for {other c} $cards { dict set cards $other Me 0 }
+		set ::application::ai::Settings(me) $name
+	}
+	dict set cards $name $card
+	SavePrivate $cards
+
+	if {$PhotoSource ne ""} {
+		set path [PhotoPath $name]
+		if {$path ne ""} {
+			file mkdir [file dirname $path]
+			file copy -force $PhotoSource $path
+		}
+		set PhotoSource ""
+	}
+	FillList $list $name
+}
+
+
+proc DeletePlayer {list} {
+	variable Var
+	set name [string trim $Var(Name)]
+	set cards [privateCards]
+	if {$name eq "" || ![dict exists $cards $name]} { bell; return }
+	if {[dict exists $cards $name Me] && [dict get $cards $name Me]
+	 && [info exists ::application::ai::Settings(me)] && $::application::ai::Settings(me) eq $name} {
+		set ::application::ai::Settings(me) ""
+	}
+	SavePrivate [dict remove $cards $name]
+	ClearVars
+	FillList $list
+}
+
 
 proc CloseSetup {list} {
 	destroy [winfo toplevel $list]
+}
+
+
+# The private card of <name> as an HTML section for the player card, or "".
+proc PrivateSection {name} {
+	set card [privateCard $name]
+	if {![llength $card]} { return "" }
+	set rows {}
+	foreach {field label} [list \
+		Birthday $::playertable::mc::DateOfBirth Nation $::playertable::mc::T_Federation \
+		FideID $::playertable::mc::F_FideID DsbID DSB-ID EcfID ECF-ID IccfID ICCF-ID UscfID USCF-ID] {
+		if {[dict exists $card $field] && [dict get $card $field] ne ""} {
+			set value [dict get $card $field]
+			if {$field eq "Nation"} { catch { set value [::country::name $value] } }
+			lappend rows $label $value
+		}
+	}
+	foreach i {1 2 3} {
+		if {[dict exists $card Title$i] && [dict get $card Title$i] ne ""} {
+			set t [dict get $card Title$i]
+			catch { set t $::titlebox::mc::Title($t) }
+			lappend rows $::playertable::mc::F_Title $t
+		}
+		if {[dict exists $card Score$i] && [dict get $card Score$i] ne "" && [dict get $card Score$i] ne "0"} {
+			lappend rows [dict get $card Rating$i] [dict get $card Score$i]
+		}
+	}
+	if {![llength $rows]} { return "" }
+	set esc {& &amp; < &lt; > &gt; \" &quot;}
+	set html "<div style='margin-top:1em'><b>[string map $esc $mc::PrivateCard]</b>"
+	append html " <small>([string map $esc $mc::PrivateCardNote])</small><table>"
+	foreach {label value} $rows {
+		append html "<tr><td>[string map $esc $label]:&nbsp;</td><td>[string map $esc $value]</td></tr>"
+	}
+	append html "</table></div>"
+	return $html
+}
+
+
+# <info> (::scidb::db::playerInfo) with the private card filling in what is
+# missing: sex, FIDE ID, federation, titles, date of birth.
+proc WithPrivate {info} {
+	set card [privateCard [lindex $info 0]]
+	if {![llength $card]} { return $info }
+	foreach {index field} {1 FideID 3 Sex 7 Nation 11 Birthday} {
+		if {[string length [lindex $info $index]] <= 1 && [dict exists $card $field] && [dict get $card $field] ne ""} {
+			lset info $index [dict get $card $field]
+		}
+	}
+	if {![llength [lindex $info 8]]} {
+		set titles {}
+		foreach i {1 2 3} {
+			if {[dict exists $card Title$i] && [dict get $card Title$i] ne ""} { lappend titles [dict get $card Title$i] }
+		}
+		if {[llength $titles]} { lset info 8 $titles }
+	}
+	return $info
 }
 
 
@@ -638,6 +913,17 @@ proc UpdateContent {w id key base variant name playerCardArgs} {
 			set html [string replace $html $i $e ""]
 		}
 		set i [string first "%code%(" $html]
+	}
+
+	# what the user entered about this player, in a section of its own
+	set private [PrivateSection $name]
+	if {$private ne ""} {
+		set i [string last "</body>" $html]
+		if {$i >= 0} {
+			set html "[string range $html 0 [expr {$i - 1}]]$private[string range $html $i end]"
+		} else {
+			append html $private
+		}
 	}
 
 	set dlg [winfo toplevel $w]
