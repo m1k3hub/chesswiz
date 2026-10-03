@@ -1,6 +1,7 @@
 # Ask Scidb — coverage map and plan
 
-**Status:** adopted 2026-10-02 (decisions in §8); phase 0 in progress.
+**Status:** adopted 2026-10-02 (decisions in §8). Phases 0–3 built on 2026-10-02
+(§7, "Progress"); phases 4 (offers) and 5 (workflows) are next.
 **Question it answers:** how does a chess player get the full power of Scidb without
 learning Scidb's menus, dialogs and query languages?
 **Why:** ease of use. Every decision below is weighed by one test: can a chess player
@@ -446,6 +447,33 @@ Each phase ships on its own and is useful alone.
 | **3 Reach the unreachable** | Tools for §3: Opening Report, Repertoire Report, player card, crosstable, dossier, material/rating fields, current-board position search, duplicates, working sets, export a selection, add to repertoire (confirmed). Fix the §3.3 defects. | M | 2 |
 | **4 Offers** | P3: contextual offer buttons, rules first and classifier-ranked later; C8 entry points (shortcut, "Ask about this…" in the right-click menus). | M | 2, 3 |
 | **5 Workflows** | P4: named jobs with a visible plan and progress (C11). Themed training sets from the position finder. | L | 1, 3 |
+
+**Progress (2026-10-02):**
+
+- **Phase 0:**
+  - Cloud models by default: `kimi-k3:cloud` through Ollama, with Fireworks, Qwen, Gemini, Claude and OpenAI as presets.
+  - API keys are kept in a private file.
+  - A first-use notice says what is sent.
+  - "Me" comes from `remember_me`.
+  - Still to do: `sudo make install`.
+- **Phase 1:**
+  - `find_positions`, with CQL drafted by the model, a sample of diagrams, then all; and `cql_help`, a validated reference card with 35 examples.
+  - `find_similar` (positions like the board's), `open_position` and `save_pattern`.
+  - The game list opens a found game at its match.
+  - Plain-Language Search hands positions that no library pattern covers to the finder.
+- **Phase 2:**
+  - Read-only view changes need no confirmation.
+  - Search results carry game numbers, and `open_game` opens one at a move.
+  - `set_position` sets up a position from a FEN or a line of moves.
+  - Tool replies end with "menu:" lines.
+  - Reports link to positions with `scidb-ai:`.
+  - The model states no chess knowledge of its own.
+- **Phase 3:**
+  - `open_view` opens the player card, prep report, crosstable, opening report, opening prep, repertoire report and duplicates.
+  - `add_to_repertoire` and `save_working_set`, both confirmed.
+  - `export_database` exports the selection.
+  - Event names with spaces are found (a workaround for `u_match.cpp`).
+  - Fixed: the "Opening Prep" label, and the brief's download now asks first.
 
 **How it is measured:** a corpus of about 150 real player requests across J1–J13,
 each with its expected outcome (tool, query or positions). It runs on every
