@@ -865,6 +865,103 @@ static int cmdSearch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[]
 	return TCL_OK;
 }
 
+// One game for cmdPosition: handed out once.
+struct OneGame
+{
+	cql6_game game;
+	bool given = false;
+};
+
+static int nextOne(void* ctx, int, cql6_game* g)
+{
+	auto* one = static_cast<OneGame*>(ctx);
+	if (one->given) return 0;
+	one->given = true;
+	*g = one->game;
+	return 1;
+}
+
+// ::scidb::cql6::position <fen> <script> ?-scripts LIST? ?-move UCI?
+// The scripts on one position (and the move played from it), on the calling
+// thread: a game that starts at <fen> and has the one move, if given.
+// Returns {script first_ply ...} for the scripts that match (0 = <script>).
+static int cmdPosition(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc < 3 || (objc - 3) % 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<fen> <script> ?-scripts LIST? ?-move UCI?");
+		return TCL_ERROR;
+	}
+	std::string fen = Tcl_GetString(objv[1]);
+	std::string script = Tcl_GetString(objv[2]);
+	std::vector<std::string> additional;
+	std::vector<cql6_move> moves;
+	for (int i = 3; i < objc; i += 2)
+	{
+		char const* key = Tcl_GetString(objv[i]);
+		if (!std::strcmp(key, "-scripts"))
+		{
+			int count; Tcl_Obj** scripts;
+			if (Tcl_ListObjGetElements(ti, objv[i + 1], &count, &scripts) != TCL_OK) return TCL_ERROR;
+			if (count > 1023) { setResult("CQL 6 accepts at most 1023 additional scripts"); return TCL_ERROR; }
+			for (int s = 0; s < count; ++s) additional.emplace_back(Tcl_GetString(scripts[s]));
+		}
+		else if (!std::strcmp(key, "-move"))
+		{
+			char const* uci = Tcl_GetString(objv[i + 1]);
+			size_t length = std::strlen(uci);
+			if (length == 0) continue;
+			auto square = [](char const* sq) {
+				return (sq[0] < 'a' || sq[0] > 'h' || sq[1] < '1' || sq[1] > '8')
+					? -1 : (sq[0] - 'a') + 8 * (sq[1] - '1');
+			};
+			int from = length >= 4 ? square(uci) : -1;
+			int to = length >= 4 ? square(uci + 2) : -1;
+			int promo = 0;
+			if (length == 5) switch (uci[4])
+			{
+				case 'q': case 'Q': promo = 'Q'; break;
+				case 'r': case 'R': promo = 'R'; break;
+				case 'b': case 'B': promo = 'B'; break;
+				case 'n': case 'N': promo = 'N'; break;
+				default: from = -1;
+			}
+			if (from < 0 || to < 0 || length > 5)
+			{
+				setResult(Tcl_ObjPrintf("invalid UCI move '%s'", uci)); return TCL_ERROR;
+			}
+			moves.push_back({0, from, to, promo, nullptr});
+		}
+		else { setResult(Tcl_ObjPrintf("invalid CQL 6 option %s", key)); return TCL_ERROR; }
+	}
+	std::vector<char const*> pointers;
+	for (auto const& a : additional) pointers.push_back(a.c_str());
+
+	cql6_options options = {};
+	options.threads = 1;
+	options.lazy_features = 1;
+	options.additional_script_count = int(pointers.size());
+	options.additional_scripts = pointers.data();
+
+	OneGame one;
+	one.game = {0, fen.c_str(), 0, nullptr, int(moves.size()), moves.data()};
+	cql6_result result = {};
+	char error[4096] = {};
+	if (cql6_search(script.c_str(), &options, nextOne, &one, &result, error, sizeof(error)))
+	{
+		setResult(error[0] ? error : "CQL 6 search failed"); return TCL_ERROR;
+	}
+	Tcl_Obj* list = Tcl_NewListObj(0, nullptr);
+	for (int i = 0; i < result.nmatches; ++i)
+	{
+		Tcl_ListObjAppendElement(ti, list, Tcl_NewIntObj(result.matches[i].script_index));
+		Tcl_ListObjAppendElement(ti, list, Tcl_NewIntObj(result.matches[i].first_ply));
+	}
+	cql6_free_result(&result);
+	setResult(list);
+	return TCL_OK;
+}
+
 } // namespace
 
 void tcl::cql6::init(Tcl_Interp* ti)
@@ -875,6 +972,7 @@ void tcl::cql6::init(Tcl_Interp* ti)
 	createCommand(ti, "::scidb::cql6::cancel", cmdCancel);
 	createCommand(ti, "::scidb::cql6::matches", cmdMatches);
 	createCommand(ti, "::scidb::cql6::release", cmdRelease);
+	createCommand(ti, "::scidb::cql6::position", cmdPosition);
 	Tcl_CreateObjTrace(ti, 0, 0, closeTrace, nullptr, nullptr);
 	Tcl_CallWhenDeleted(ti, deleteInterp, nullptr);
 }

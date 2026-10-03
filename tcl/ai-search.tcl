@@ -18,6 +18,9 @@
 #       (cql is the legacy engine's template, "" for the CQL 6.2-only ones)
 #   ::ai::search::pattern6 <id>          -> the CQL 6.2 template
 #   ::ai::search::structures <fen>       -> the structure patterns a position shows
+#   ::ai::search::match6 <fen> <ids> ?<uci>? -> the patterns of <ids> a position
+#       (or the move from it) shows, by the CQL 6.2 engine
+#   ::ai::search::engine6                -> whether CQL 6.2 runs in this build
 #
 # The query is built by ::application::assistant::BuildQuery, which appends
 # the template as a `cql` term last in the AND, so the header terms narrow
@@ -291,6 +294,10 @@ variable Patterns6 {
     weakened_fianchetto {cql() flipcolor {K[g1,h1] Pf2 Pg3 Ph2 not light B (q or light b)}}
 }
 
+# The event patterns whose match is the position BEFORE their move (a
+# CQL "line" from the move on); the others match the position after it.
+variable MatchBefore {greek_gift discovered_check double_bishop_sacrifice}
+
 # the classifier's gate for choosing a pattern (SCIDB_AI_PATTERN_SEARCH_MIN_CONFIDENCE)
 variable ClassifierThreshold 0.6
 
@@ -321,8 +328,45 @@ proc ::ai::search::pattern6 {id} {
 }
 
 
+# Whether the CQL 6.2 engine runs here (not the stub of a build without it).
+proc ::ai::search::engine6 {} {
+	expr {[llength [info commands ::scidb::cql6::position]] && [::scidb::cql6::version] ne "cql6 stub 6.2"}
+}
+
+
+# Whether event pattern <id> matches the position before its move.
+proc ::ai::search::matchBefore {id} {
+	variable MatchBefore
+	return [expr {$id in $MatchBefore}]
+}
+
+
+# The patterns of <ids> whose CQL 6.2 template matches <fen>, in library
+# order. With <uci>, the move played from <fen>: an event counts only when
+# it is that move's (the position after it, or the position before it for
+# the patterns in MatchBefore).
+proc ::ai::search::match6 {fen ids {uci ""}} {
+	if {![llength $ids]} { return {} }
+	set scripts [lmap id $ids { pattern6 $id }]
+	set opts {}
+	if {[llength $scripts] > 1} { lappend opts -scripts [lrange $scripts 1 end] }
+	if {$uci ne ""} { lappend opts -move $uci }
+	set found {}
+	foreach {i ply} [::scidb::cql6::position $fen [lindex $scripts 0] {*}$opts] {
+		set id [lindex $ids $i]
+		if {$uci ne "" && $ply != ([matchBefore $id] ? 0 : 1)} { continue }
+		lappend found $id
+	}
+	return [lmap id $ids { if {$id ni $found} continue; set id }]
+}
+
+
 # The ids of the structure patterns <fen> shows (the position alone).
 proc ::ai::search::structures {fen} {
+	if {[engine6]} {
+		if {[catch { match6 $fen [patternIds structure] } found]} { return {} }
+		return $found
+	}
 	set found {}
 	foreach id [patternIds structure] {
 		set cql [dict get [pattern $id] cql]

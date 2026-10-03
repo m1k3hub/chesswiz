@@ -4,6 +4,14 @@
 quality modules), with hooks in `tcl/ai-brief.tcl`, `tcl/ai-studyplan.tcl`,
 `tcl/ai-annotate.tcl`, the Extras menu and the assistant. The tests are in
 `tests/test_app_cqlfeatures.tcl`.
+**Update (2026-10-03):** in standard chess the profile, the move themes, the structures of
+a position (study plan) and the training sets now run on the CQL 6.2 engine and the whole
+pattern library (38 patterns, `tests/test_app_pattern_library.tcl`): a player's games in one
+multi-script pass (`::ai::cql::Matches6`), one position with `::scidb::cql6::position`
+(`src/tcl/tcl_cql6.cpp`, ~11 ms for all event patterns), training candidates from the pattern
+index when the database has one. Variants keep the legacy engine and its 12 patterns. Patterns
+in `::ai::search::MatchBefore` match the position before their move (a CQL line from the move
+on); training and themes take the move from there.
 **Builds on:** `::scidb::cql::*` (`src/tcl/tcl_cql.cpp`), the pattern library in
 `tcl/ai-search.tcl`, and `PLAIN_LANGUAGE_SEARCH.md`.
 

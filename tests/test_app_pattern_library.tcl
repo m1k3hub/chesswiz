@@ -192,4 +192,61 @@ tcltest::test plib-labels {every pattern has a label, a description, aliases and
 	}
 } -result {}
 
+tcltest::test plib-themes {the annotator's move themes name the new mates and tactics} -constraints cql6 -body {
+	lmap {fen san} {
+		{6k1/5ppp/8/8/8/8/8/3R2K1 w - - 0 1} Rd8#
+		{7k/R7/5N2/8/8/8/8/6K1 w - - 0 1} Rh7#
+		{r1bq1rk1/pppn1ppp/4p3/3pP3/1b1P4/2NB1N2/PPP2PPP/R2QK2R w KQ - 0 1} Bxh7+
+		{4k3/8/8/8/8/4N3/8/4R1K1 w - - 0 1} Nd5+
+		{q3k3/8/8/1N6/8/8/8/4K3 w - - 0 1} Nc7+
+		{4k3/8/8/8/8/8/8/4R1K1 w - - 0 1} Kf2
+	} { dict get [::ai::cql::themes $fen $san] events }
+} -result {back_rank_mate arabian_mate greek_gift discovered_check knight_fork {}}
+
+tcltest::test plib-structures {the structures of a position include the new ones (these are pawn endings; a hedgehog is also a Maroczy bind)} -constraints cql6 -body {
+	lmap fen {
+		{4k3/pp3ppp/2p5/3p4/3P4/4P3/PP3PPP/4K3 b - - 0 1}
+		{4k3/5ppp/pp1pp3/8/2P1P3/8/PP3PPP/4K3 b - - 0 1}
+		{3K4/3P2k1/8/8/8/8/2r5/4R3 w - - 0 1}
+	} { ::ai::search::structures $fen }
+} -result {{pawn_endgame carlsbad} {pawn_endgame maroczy_bind hedgehog} {rook_endgame lucena}}
+
+tcltest::testConstraint engine [expr {[llength [info commands ::ai::engine::available]] && [::ai::engine::available]}]
+
+# A back-rank mate (matched after the move) and a discovered check that
+# wins the queen (matched before it): both puzzles must be the right move.
+tcltest::test plib-training {training sets take the new patterns, and the right move for each} -constraints {cql6 engine} -setup {
+	set ::scidb::test::plib::TrainFixture [file join [file dirname $::scidb::test::plib::Fixture] plib-train-[pid].pgn]
+	set ::scidb::test::plib::TrainFile [file join [file dirname $::scidb::test::plib::Fixture] plib-train-[pid]-out.pgn]
+	set fh [open $::scidb::test::plib::TrainFixture w]
+	set n 0
+	foreach {fen moves} {
+		{6k1/5ppp/8/8/8/8/8/3R2K1 w - - 0 1} {1. Rd8# 1-0}
+		{4k3/2q5/8/8/8/4N3/8/4R1K1 w - - 0 1} {1. Nd5+ Kd8 2. Nxc7 *}
+	} {
+		puts $fh "\[Event \"T\"\]\n\[Site \"X\"\]\n\[Date \"2020.01.0[incr n]\"\]\n\[Round \"$n\"\]"
+		puts $fh "\[White \"W\"\]\n\[Black \"B\"\]\n\[Result \"*\"\]\n\[SetUp \"1\"\]\n\[FEN \"$fen\"\]\n\n$moves\n"
+	}
+	close $fh
+	::scidb::db::open $::scidb::test::plib::TrainFixture ::scidb::test::plib::nop {} ::scidb::test::plib::nop {}
+	set saved [info body ::application::assistant::ActiveBase]
+	proc ::application::assistant::ActiveBase {} { return [list $::scidb::test::plib::TrainFixture Normal] }
+} -body {
+	set ::scidb::test::plib::Done {}
+	::ai::cql::training . -patterns {back_rank_mate discovered_check} -depth 8 \
+		-file $::scidb::test::plib::TrainFile -done {set ::scidb::test::plib::Done}
+	set timer [after 120000 {set ::scidb::test::plib::Done timeout}]
+	vwait ::scidb::test::plib::Done
+	after cancel $timer
+	set pgn ""
+	catch { set fh [open $::scidb::test::plib::TrainFile]; set pgn [read $fh]; close $fh }
+	list [dict get $::scidb::test::plib::Done puzzles] \
+		[string match "*find the back-rank mate*1. Rd8 *" $pgn] \
+		[string match "*find the discovered check*1. Nd5 *" $pgn]
+} -cleanup {
+	proc ::application::assistant::ActiveBase {} $saved
+	catch { ::scidb::db::close $::scidb::test::plib::TrainFixture }
+	catch { file delete $::scidb::test::plib::TrainFixture $::scidb::test::plib::TrainFile }
+} -result {2 1 1}
+
 tcltest::cleanupTests

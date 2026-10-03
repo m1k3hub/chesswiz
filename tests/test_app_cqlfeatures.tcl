@@ -269,12 +269,12 @@ tcltest::test cqlf-themes {what a move does, and where it leads} -body {
 	list [::ai::cql::themes $ep exf6] [::ai::cql::themes $dchk Nd6+] \
 		[::ai::cql::themesText [::ai::cql::themes $iqp]] [::ai::cql::themes $iqp Nc3] \
 		[::ai::cql::themesText [::ai::cql::themes $smother Nd6#]]
-} -result {{events en_passant structures {}} {events double_check structures {}} {THEMES (found by CQL, exact): isolated queen's pawn} {events {} structures isolated_queen_pawn} {THEMES (found by CQL, exact): smothered mate}}
+} -result {{events en_passant structures {}} {events {double_check discovered_check} structures {}} {THEMES (found by CQL, exact): isolated queen's pawn} {events {} structures isolated_queen_pawn} {THEMES (found by CQL, exact): smothered mate}}
 
 tcltest::test cqlf-annotate-prompt {the annotator's grounded prompt names the themes} -body {
 	set dchk $::scidb::test::cqlf::DCHK
 	set p [::ai::annotate::prompt Nd6+ Best [dict create classification Best fen $dchk cpLoss 0]]
-	list [string match "*\nTHEMES (found by CQL, exact): double check" $p] [string match "*THEMES block*" [::ai::annotate::rules]]
+	list [string match "*\nTHEMES (found by CQL, exact): double check, discovered check" $p] [string match "*THEMES block*" [::ai::annotate::rules]]
 } -result {1 1}
 
 tcltest::test cqlf-studyplan {mistakes carry their structures; the plan has a By structure section} -setup {
@@ -336,7 +336,7 @@ tcltest::test cqlf-training-args {bad requests are refused before anything runs}
 	list [catch {::ai::cql::training . -patterns {stalemate}} e] $e \
 		[::application::assistant::CheckArgs training_set {pattern double_check max 5}] \
 		[catch {::application::assistant::CheckArgs training_set {pattern en_passant}} e2] $e2
-} -result {1 {pattern must be one of: checkmate, smothered_mate, double_check, underpromotion} {pattern double_check player {} max 5} 1 {pattern must be checkmate, smothered_mate, double_check or underpromotion}}
+} -result {1 {pattern must be one of: checkmate, smothered_mate, back_rank_mate, boden_mate, anastasia_mate, arabian_mate, epaulette_mate, queen_pawn_mate, double_check, discovered_check, knight_fork, skewer, greek_gift, double_bishop_sacrifice, underpromotion} {pattern double_check player {} max 5} 1 {pattern must be one of: checkmate, smothered_mate, back_rank_mate, boden_mate, anastasia_mate, arabian_mate, epaulette_mate, queen_pawn_mate, double_check, discovered_check, knight_fork, skewer, greek_gift, double_bishop_sacrifice, underpromotion}}
 
 tcltest::test cqlf-training {puzzles are the positions before the decisive move, certified by the engine} -constraints engine -setup {
 	set saved [info body ::application::assistant::ActiveBase]

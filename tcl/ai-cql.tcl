@@ -19,6 +19,10 @@
 #       ?-scan 300? ?-depth 14? ?-done CMD?
 #       puzzles from the database's games, each solution certified by the
 #       engine, written as a PGN file under the user directory
+#
+# In standard chess all of this runs on the CQL 6.2 engine and the whole
+# pattern library (one pass per set of games, ::ai::search::match6 for one
+# position); other variants keep the legacy engine and its 12 patterns.
 # ======================================================================
 
 if {[llength [info commands ::util::source]]} {
@@ -55,8 +59,18 @@ variable Checks {
 	}
 }
 
-# the events a puzzle can be made of: each ends in one decisive move
-variable TrainingPatterns {checkmate smothered_mate double_check underpromotion}
+# the events a puzzle can be made of: each turns on one decisive move
+variable TrainingPatterns {
+	checkmate smothered_mate back_rank_mate boden_mate anastasia_mate arabian_mate
+	epaulette_mate queen_pawn_mate double_check discovered_check knight_fork skewer
+	greek_gift double_bishop_sacrifice underpromotion
+}
+# without CQL 6.2 (variants): the legacy engine's
+variable LegacyTrainingPatterns {checkmate smothered_mate double_check underpromotion}
+
+# the latest games of a view searched for training positions when the
+# database has no pattern index
+variable TrainingScanGames 20000
 
 # the game slot candidates are read into, so the user's board is untouched
 # (the merge dialog uses 20 and 21, the study plan 30)
@@ -117,6 +131,47 @@ proc ::ai::cql::PlayerGames {base variant player colour max} {
 }
 
 
+# Whether <variant> searches with CQL 6.2.
+proc ::ai::cql::Engine6 {variant} {
+	return [expr {$variant eq "Normal" && [::ai::search::engine6]}]
+}
+
+
+# Library patterns <ids> over the games <numbers>, in one CQL 6.2 pass
+# (waiting for it in a nested event loop): dict id -> {game first_ply ...}.
+proc ::ai::cql::Matches6 {base variant numbers ids} {
+	variable Wait
+	variable WaitSerial
+
+	set out [dict create]
+	foreach id $ids { dict set out $id {} }
+	if {![llength $numbers] || ![llength $ids]} { return $out }
+	set scripts [lmap id $ids { ::ai::search::pattern6 $id }]
+	set more [expr {[llength $scripts] > 1 ? [list -scripts [lrange $scripts 1 end]] : {}}]
+	if {![info exists WaitSerial]} { set WaitSerial 0 }
+	set token [incr WaitSerial]
+	set view [::scidb::view::new $base $variant unused unused unused unused master slave]
+	try {
+		::scidb::view::setGames $base $variant $view $numbers
+		::scidb::cql6::search $base $variant [lindex $scripts 0] {*}$more -view $view -compact 1 \
+			-command [list set [namespace current]::Wait($token)]
+		vwait [namespace current]::Wait($token)
+		set result $Wait($token)
+	} finally {
+		unset -nocomplain Wait($token)
+		catch { ::scidb::view::close $base $variant $view }
+	}
+	if {![dict get $result ok]} { error [dict get $result error] }
+	if {[dict get $result cancelled]} { error "the CQL search was cancelled" }
+	if {[llength $scripts] > 1} {
+		foreach {game ply i} [dict get $result matches] { dict lappend out [lindex $ids $i] $game $ply }
+	} else {
+		dict set out [lindex $ids 0] [dict get $result matches]
+	}
+	return $out
+}
+
+
 # ======================================================================
 # 1. Structure profile
 # ======================================================================
@@ -126,17 +181,30 @@ proc ::ai::cql::profile {base variant player args} {
 
 	lassign [PlayerGames $base $variant $player $opts(-colour) $opts(-games)] name games
 
+	set ids [::ai::search::patternIds structure]
+	if {[Engine6 $variant]} {
+		set found [Matches6 $base $variant [lmap g $games { lindex $g 0 }] $ids]
+		set hit [dict create]
+		dict for {id pairs} $found {
+			foreach {game ply} $pairs { dict set hit $id $game 1 }
+		}
+	}
+
 	set structures {}
-	foreach id [::ai::search::patternIds structure] {
+	foreach id $ids {
 		set cql [dict get [::ai::search::pattern $id] cql]
-		if {$cql eq ""} continue
+		if {![info exists hit] && $cql eq ""} continue
 		set n 0
 		set scored 0
 		set points 0.0
 		set numbers {}
 		foreach g $games {
 			lassign $g number side score
-			if {[catch { ::scidb::cql::match $base $variant $number $cql } ply] || $ply < 0} { continue }
+			if {[info exists hit]} {
+				if {![dict exists $hit $id $number]} { continue }
+			} elseif {[catch { ::scidb::cql::match $base $variant $number $cql } ply] || $ply < 0} {
+				continue
+			}
 			incr n
 			lappend numbers $number
 			if {$score ne ""} {
@@ -197,6 +265,25 @@ proc ::ai::cql::profileText {profile args} {
 # 2. Themes of a move or a position
 # ======================================================================
 proc ::ai::cql::themes {fen {san ""}} {
+	if {[::ai::search::engine6]} {
+		set events {}
+		set after $fen
+		if {$san ne ""} {
+			if {[catch { ::scidb::ai::moveFacts $san $fen } facts]
+			 || ![regexp {"fenAfter":"([^"]+)"} $facts -> after]
+			 || ![regexp {"uci":"([^"]+)"} $facts -> uci]} {
+				return [dict create events {} structures {}]
+			}
+			if {[catch { ::ai::search::match6 $fen [::ai::search::patternIds event] $uci } events]} {
+				set events {}
+			}
+			# a named mate says more than "checkmate"
+			if {"checkmate" in $events && [llength [lsearch -all -glob $events *_mate]]} {
+				set events [lsearch -all -inline -not -exact $events checkmate]
+			}
+		}
+		return [dict create events $events structures [::ai::search::structures $after]]
+	}
 	set events {}
 	set after $fen
 	if {$san ne ""} {
@@ -307,41 +394,47 @@ proc ::ai::cql::cancel {} {
 proc ::ai::cql::training {parent args} {
 	variable Priv
 	variable TrainingPatterns
+	variable LegacyTrainingPatterns
 
-	array set opts [list -patterns $TrainingPatterns -player "" -max 20 -scan 300 -depth 14 \
-		-done {} -file ""]
+	array set opts [list -patterns {} -player "" -max 20 -scan 300 -depth 14 -done {} -file ""]
 	array set opts $args
 
 	if {$Priv(running)} { error "a training set is already being built" }
 	if {[llength [info commands ::ai::engine::available]] == 0 || ![::ai::engine::available]} {
 		error "no chess engine is available to certify the solutions"
 	}
+	lassign [::application::assistant::ActiveBase] base variant
+	set allowed [expr {[Engine6 $variant] ? $TrainingPatterns : $LegacyTrainingPatterns}]
+	if {![llength $opts(-patterns)]} { set opts(-patterns) $allowed }
 	foreach id $opts(-patterns) {
-		if {$id ni $TrainingPatterns} {
-			error "pattern must be one of: [join $TrainingPatterns {, }]"
+		if {$id ni $allowed} {
+			error "pattern must be one of: [join $allowed {, }]"
 		}
 	}
 
-	lassign [::application::assistant::ActiveBase] base variant
 	set candidates {}
-	foreach id $opts(-patterns) {
-		set criteria [dict create pattern $id]
-		if {$opts(-player) ne ""} {
-			lassign [::application::assistant::ResolvePlayer $base $variant $opts(-player)] _ name
-			dict set criteria player $name
-		}
-		set criteria [dict get [::application::assistant::CheckArgs search_games $criteria] criteria]
-		lassign [::application::assistant::BuildQuery $base $variant $criteria] query
-		set view [::scidb::view::new $base $variant unused unused unused unused master slave]
-		catch {
-			::scidb::view::search $base $variant $view null none $query
-			set count [::scidb::view::count games $base $variant $view]
-			# the latest games first
-			for {set row [expr {$count - 1}]} {$row >= max(0, $count - $opts(-scan))} {incr row -1} {
-				lappend candidates [list $id [::scidb::db::get gameNumber $base $variant $row $view]]
+	if {[Engine6 $variant]} {
+		set candidates [Candidates6 $base $variant $opts(-patterns) $opts(-player) $opts(-scan)]
+	} else {
+		foreach id $opts(-patterns) {
+			set criteria [dict create pattern $id]
+			if {$opts(-player) ne ""} {
+				lassign [::application::assistant::ResolvePlayer $base $variant $opts(-player)] _ name
+				dict set criteria player $name
 			}
+			set criteria [dict get [::application::assistant::CheckArgs search_games $criteria] criteria]
+			lassign [::application::assistant::BuildQuery $base $variant $criteria] query
+			set view [::scidb::view::new $base $variant unused unused unused unused master slave]
+			catch {
+				::scidb::view::search $base $variant $view null none $query
+				set count [::scidb::view::count games $base $variant $view]
+				# the latest games first
+				for {set row [expr {$count - 1}]} {$row >= max(0, $count - $opts(-scan))} {incr row -1} {
+					lappend candidates [list $id [::scidb::db::get gameNumber $base $variant $row $view]]
+				}
+			}
+			catch { ::scidb::view::close $base $variant $view }
 		}
-		catch { ::scidb::view::close $base $variant $view }
 	}
 
 	set file $opts(-file)
@@ -357,6 +450,73 @@ proc ::ai::cql::training {parent args} {
 	Progress "Looking for positions in [llength $candidates] candidate game(s)..."
 	after 50 [namespace code NextCandidate]
 	return $file
+}
+
+
+# Training candidates {id number ply} for the patterns <ids>: the latest
+# <scan> matches of each in the player's games (or the whole database),
+# taken in turns so that a set mixes the patterns. From the pattern index
+# when the database has one, otherwise from the latest TrainingScanGames
+# games.
+proc ::ai::cql::Candidates6 {base variant ids player scan} {
+	variable TrainingScanGames
+
+	set view [::scidb::view::new $base $variant unused unused unused unused master slave]
+	try {
+		if {$player ne ""} {
+			lassign [::application::assistant::ResolvePlayer $base $variant $player] _ name
+			set criteria [dict get [::application::assistant::CheckArgs search_games \
+				[dict create player $name]] criteria]
+			lassign [::application::assistant::BuildQuery $base $variant $criteria] query
+			::scidb::view::search $base $variant $view null none $query
+		} else {
+			::scidb::view::search $base $variant $view reset none
+		}
+		set count [::scidb::view::count games $base $variant $view]
+		set all [expr {$count == [::scidb::db::count games $base $variant]}]
+		set indexed [expr {[llength [info commands ::ai::patternIndex::has]] > 0}]
+		foreach id $ids {
+			if {!$indexed || ![::ai::patternIndex::has $base $variant $id]} { set indexed 0; break }
+		}
+		if {$indexed} {
+			set inView [dict create]
+			if {!$all} {
+				for {set row 0} {$row < $count} {incr row} {
+					dict set inView [::scidb::db::get gameNumber $base $variant $row $view] 1
+				}
+			}
+			set found [dict create]
+			foreach id $ids {
+				set pairs {}
+				foreach {game ply} [::ai::patternIndex::lookup $base $variant $id] {
+					if {$all || [dict exists $inView $game]} { lappend pairs $game $ply }
+				}
+				dict set found $id $pairs
+			}
+		} else {
+			set numbers {}
+			for {set row [expr {max(0, $count - $TrainingScanGames)}]} {$row < $count} {incr row} {
+				lappend numbers [::scidb::db::get gameNumber $base $variant $row $view]
+			}
+			set found [Matches6 $base $variant $numbers $ids]
+		}
+	} finally {
+		catch { ::scidb::view::close $base $variant $view }
+	}
+
+	# per pattern the latest games first, then in turns
+	set lists {}
+	foreach id $ids {
+		set games [lsort -integer -decreasing -stride 2 -index 0 [dict get $found $id]]
+		lappend lists [lmap {game ply} [lrange $games 0 [expr {2 * $scan - 1}]] { list $id $game $ply }]
+	}
+	set candidates {}
+	for {set i 0} {$i < $scan} {incr i} {
+		foreach list $lists {
+			if {$i < [llength $list]} { lappend candidates [lindex $list $i] }
+		}
+	}
+	return $candidates
 }
 
 
@@ -385,13 +545,13 @@ proc ::ai::cql::NextCandidate {} {
 		return
 	}
 
-	lassign [lindex $Priv(candidates) $Priv(index)] id number
+	lassign [lindex $Priv(candidates) $Priv(index)] id number ply
 	incr Priv(index)
 	Progress [format "Candidate %d of %d (game #%d), %d puzzle(s) so far." \
 		$Priv(index) [llength $Priv(candidates)] [expr {$number + 1}] [llength $Priv(puzzles)]]
 	update idletasks
 
-	if {[catch { MakePuzzle $id $number } puzzle]} {
+	if {[catch { MakePuzzle $id $number $ply } puzzle]} {
 		Reject "failed: $puzzle"
 	} elseif {[dict exists $puzzle rejected]} {
 		Reject [dict get $puzzle rejected]
@@ -406,13 +566,20 @@ proc ::ai::cql::NextCandidate {} {
 
 
 # The position before the pattern's decisive move, and that move, certified
-# by the engine; or {rejected WHY}.
-proc ::ai::cql::MakePuzzle {id number} {
+# by the engine; or {rejected WHY}. <ply> is the CQL 6.2 match (the
+# position after the move, or before it for the MatchBefore patterns); ""
+# asks the legacy engine.
+proc ::ai::cql::MakePuzzle {id number {ply ""}} {
 	variable Priv
 	variable UniqueGapCp
 
-	set cql [dict get [::ai::search::pattern $id] cql]
-	set ply [::scidb::cql::match $Priv(base) $Priv(variant) $number $cql]
+	if {$ply eq ""} {
+		set cql [dict get [::ai::search::pattern $id] cql]
+		set ply [::scidb::cql::match $Priv(base) $Priv(variant) $number $cql]
+	} elseif {[::ai::search::matchBefore $id]} {
+		# the move is the one played from the matched position
+		incr ply
+	}
 	if {$ply < 1} { return [dict create rejected "no decisive move"] }
 
 	variable Slot

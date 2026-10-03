@@ -395,8 +395,8 @@ variable Actions {
 	}
 	training_set {
 		1 0 "build a training set from the games of the database"
-		"Build puzzles from the active database's games: Scidb's CQL matcher finds positions just before a checkmate, a smothered mate, a double check or an underpromotion, and the chess engine keeps only those whose solution is its best move and clearly the only good one. The puzzles are written to a PGN file under the user directory, which the user can open as a database to train. 'pattern' limits it to one kind; 'player' to one player's games; 'max' bounds the number of puzzles (default 20). It runs in the background; the Report pane shows the progress and the result."
-		{{"type":"object","properties":{"pattern":{"type":"string","enum":["checkmate","smothered_mate","double_check","underpromotion"]},"player":{"type":"string"},"max":{"type":"integer","description":"at most this many puzzles, default 20"}}}}
+		"Build puzzles from the active database's games: Scidb's CQL matcher finds positions just before a decisive move: a checkmate (any, or a smothered, back-rank, Boden's, Anastasia's, Arabian, epaulette or queen-and-pawn mate), a double or discovered check, a knight fork, a skewer, a Greek gift or double bishop sacrifice, or an underpromotion; by default a mix of all. The chess engine keeps only those whose solution is its best move and clearly the only good one. The puzzles are written to a PGN file under the user directory, which the user can open as a database to train. 'pattern' limits it to one kind; 'player' to one player's games; 'max' bounds the number of puzzles (default 20). It runs in the background; the Report pane shows the progress and the result."
+		{{"type":"object","properties":{"pattern":{"type":"string","enum":["checkmate","smothered_mate","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","epaulette_mate","queen_pawn_mate","double_check","discovered_check","knight_fork","skewer","greek_gift","double_bishop_sacrifice","underpromotion"]},"player":{"type":"string"},"max":{"type":"integer","description":"at most this many puzzles, default 20"}}}}
 		::application::assistant::DoTrainingSet
 	}
 	check_results {
@@ -1385,8 +1385,8 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		}
 		training_set {
 			set pattern [OptArg $cargs pattern ""]
-			if {$pattern ni {"" checkmate smothered_mate double_check underpromotion}} {
-				error "pattern must be checkmate, smothered_mate, double_check or underpromotion"
+			if {$pattern ne "" && $pattern ni $::ai::cql::TrainingPatterns} {
+				error "pattern must be one of: [join $::ai::cql::TrainingPatterns {, }]"
 			}
 			set max [OptArg $cargs max 20]
 			if {![string is integer -strict $max] || $max < 1 || $max > 200} {
