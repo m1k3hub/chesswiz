@@ -201,6 +201,7 @@ SOURCES = \
 	app-assistant-route.tcl \
 	app-assistant-args.tcl \
 	app-assistant-offers.tcl \
+	app-assistant-jobs.tcl \
 	app-diagnose.tcl \
 	app-voice.tcl \
 	app-error-triage.tcl \

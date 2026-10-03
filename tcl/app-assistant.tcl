@@ -624,6 +624,8 @@ proc ::application::assistant::ask {request args} {
 	if {![string length $request] || $Priv(busy)} { return 0 }
 	set Priv(observer) $opts(-observer)
 	set Priv(reqconfirm) $opts(-confirm)
+	# a job (run_job) raises it for its own request
+	set Priv(maxRounds) 8
 
 	if {![llength $Priv(messages)]} {
 		variable DebugSystem
@@ -693,7 +695,7 @@ proc ::application::assistant::MePrompt {} {
 	catch { set name [string trim $::application::ai::Settings(me)] }
 	if {$name eq ""} { catch { set name [string trim $::playercard::Var(Name)] } }
 	if {$name eq ""} {
-		return "The user's name is not known. If the user says I, me or my games, ask for their name as written in their games and call remember_me with it."
+		return "The user's name is not known. Only when a request is about the user's own games or record (my games, how did I score), ask for their name as written in their games and call remember_me with it; other requests need no name."
 	}
 	return "The user is $name. When the user says I, me or my games, use the player name $name in tool arguments."
 }
@@ -1378,6 +1380,10 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			}
 			return [dict create prose $prose marks $marks depth $depth max_plies $maxPlies]
 		}
+	}
+	# a tool defined in another module brings its own check
+	if {[llength [info commands ::application::assistant::CheckArgs_$name]]} {
+		return [CheckArgs_$name $cargs]
 	}
 	return {}
 }
