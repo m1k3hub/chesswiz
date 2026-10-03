@@ -131,6 +131,102 @@ tcltest::test pattern-index-intersect {setGames -intersect keeps only the view's
 	list $n $bad
 } -result {2 1}
 
+# --- keeping the index current --------------------------------------------------
+
+# A Scidb database of the fixture's games <from>..<to> (so that fingerprints
+# exist), and a PGN file of games to add later.
+proc ::scidb::test::patternIndex::pgn {file first last} {
+	variable Games
+	set fh [open $file w]
+	set n 0
+	foreach {fen result moves} $Games {
+		incr n
+		if {$n < $first || $n > $last} continue
+		puts $fh "\[Event \"PI\"\]\n\[Site \"X\"\]\n\[Date \"2020.01.01\"\]\n\[Round \"$n\"\]"
+		puts $fh "\[White \"W$n\"\]\n\[Black \"B$n\"\]\n\[Result \"$result\"\]"
+		if {$fen ne ""} { puts $fh "\[SetUp \"1\"\]\n\[FEN \"$fen\"\]" }
+		puts $fh "\n$moves\n"
+	}
+	close $fh
+}
+proc ::scidb::test::patternIndex::append {sci pgn} {
+	::scidb::db::open $pgn ::scidb::test::patternIndex::nop {} ::scidb::test::patternIndex::nop {}
+	::scidb::db::copy $pgn $sci {} ::scidb::test::patternIndex::nop {} ::scidb::test::patternIndex::nop {}
+	::scidb::db::save $sci ::scidb::test::patternIndex::nop {}
+	::scidb::db::close $pgn
+}
+proc ::scidb::test::patternIndex::allEqualScan {base} {
+	set differ {}
+	foreach id [::ai::search::patternIds] {
+		if {[::ai::patternIndex::lookup $base Normal $id] ne [scan $base $id]} { lappend differ $id }
+	}
+	return $differ
+}
+
+tcltest::test pattern-index-update {added games, and a changed game, are searched alone; the index stays a scan} -setup {
+	set dir [file dirname $::scidb::test::patternIndex::Fixture]
+	set sci [file join $dir pindex-upd-[pid].sci]
+	set first [file join $dir pindex-upd-[pid]-a.pgn]
+	set more [file join $dir pindex-upd-[pid]-b.pgn]
+	::scidb::test::patternIndex::pgn $first 1 6
+	::scidb::test::patternIndex::pgn $more 7 10
+	::scidb::db::new $sci Normal [::application::database::lookupType Unspecific]
+	::scidb::db::attach $sci $sci
+	::scidb::test::patternIndex::append $sci $first
+	array unset ::ai::patternIndex::Loaded
+	array unset ::ai::patternIndex::Plans
+	catch { file delete [::ai::patternIndex::File $sci] }
+} -body {
+	::ai::patternIndex::build $sci Normal {set ::scidb::test::patternIndex::Built}
+	set full [dict get [::scidb::test::patternIndex::wait ::scidb::test::patternIndex::Built] ok]
+	set fingerprinted [expr {[string length [lindex [::ai::patternIndex::Load $sci] 2]] == 24}]
+
+	# four games added and saved: only they are searched
+	after 1100
+	::scidb::test::patternIndex::append $sci $more
+	set stale [::ai::patternIndex::has $sci Normal checkmate]
+	set planned [dict get [::ai::patternIndex::Plan $sci Normal] games]
+	::ai::patternIndex::build $sci Normal {set ::scidb::test::patternIndex::Built}
+	set added [dict get [::scidb::test::patternIndex::wait ::scidb::test::patternIndex::Built] ok]
+	set afterAdd [::scidb::test::patternIndex::allEqualScan $sci]
+
+	# a game whose record changed (its stored CRC no longer agrees) and a
+	# file that changed: that game alone is searched again
+	lassign [::ai::patternIndex::Load $sci] identity patterns fingerprints
+	dict set identity mtime 0
+	set fingerprints [string replace $fingerprints 4 7 "\0\0\0\0"]
+	set ::ai::patternIndex::Loaded([file normalize $sci]) [list $identity $patterns $fingerprints]
+	array unset ::ai::patternIndex::Plans
+	set replanned [dict get [::ai::patternIndex::Plan $sci Normal] games]
+	::ai::patternIndex::build $sci Normal {set ::scidb::test::patternIndex::Built}
+	set changed [dict get [::scidb::test::patternIndex::wait ::scidb::test::patternIndex::Built] ok]
+	set afterChange [::scidb::test::patternIndex::allEqualScan $sci]
+
+	# a library script that changed needs a full build
+	lassign [::ai::patternIndex::Load $sci] identity patterns fingerprints
+	dict set identity mtime 0
+	set ::ai::patternIndex::Loaded([file normalize $sci]) [list $identity $patterns $fingerprints]
+	array unset ::ai::patternIndex::Plans
+	set saved $::ai::search::Patterns6
+	dict set ::ai::search::Patterns6 checkmate {cql() mate}
+	set library [::ai::patternIndex::updatable $sci Normal]
+	set ::ai::search::Patterns6 $saved
+
+	list $full $fingerprinted $stale $planned $added $afterAdd $replanned $changed $afterChange $library
+} -cleanup {
+	catch { file delete [::ai::patternIndex::File $sci] }
+	array unset ::ai::patternIndex::Loaded
+	array unset ::ai::patternIndex::Plans
+	catch { ::scidb::db::close $sci }
+	foreach f [glob -nocomplain [file rootname $sci].*] { catch { file delete $f } }
+	catch { file delete $first $more }
+} -result {1 1 0 {6 7 8 9} 1 {} 1 1 {} 0}
+
+tcltest::test pattern-index-format {a format without game records (PGN) has no fingerprints and is not updated} -body {
+	set base $::scidb::test::patternIndex::Fixture
+	list [::ai::patternIndex::Fingerprints $base Normal] [::ai::patternIndex::updatable $base Normal]
+} -result {{} 0}
+
 catch { file delete [::ai::patternIndex::File $::scidb::test::patternIndex::Fixture] }
 array unset ::ai::patternIndex::Loaded
 unset -nocomplain ::env(SCIDB_AI_PATTERN_INDEX_MIN_GAMES)

@@ -20,9 +20,14 @@ remain the full design. What the first version does and what it measured:
   After the build: 0.2 s for smothered mates, 0.85 s for 541,442 queenless games, 1.7 s against
   4.7 s scanned for a narrowed search, with identical results (`tests/test_app_pattern_index.tcl`
   checks index == scan for every pattern).
-* **Not yet:** bitmaps, incremental maintenance (any change rebuilds), the engine-side
-  multi-script/lazy-feature work, user patterns, `find_positions` (model-drafted scripts are
-  never indexed).
+* **Kept current (2026-10-03):** the index stores a CRC-32 of every game's record
+  (`::scidb::db::fingerprints`: computed from the stored records on demand, ~0.5 s for
+  1.17M games; nothing is added to the database files). When the database file changed,
+  only the added games and the games whose record changed are searched and merged; fewer
+  games than before (compaction), more than a quarter changed, a changed library, or a format
+  without raw records (ChessBase, PGN) means a full build. Index file format 2.
+* **Not yet:** bitmaps, the engine-side multi-script/lazy-feature work, user patterns,
+  `find_positions` (model-drafted scripts are never indexed).
 
 **Companions:** `PLAIN_LANGUAGE_SEARCH.md` (the vetted pattern library and the plain-language
 front end this index would serve), `LONG_RANGE_PLAN.md` (workstream 10).

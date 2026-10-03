@@ -2076,9 +2076,9 @@ proc ::application::assistant::SearchView {base variant view criteria {callback 
 }
 
 # Library pattern <id> over <view>: from the database's pattern index when it
-# has a valid one; on a big database whose view the other terms leave large,
-# by building the index (all patterns in one pass cost about one scan);
-# otherwise by scanning the view. <done> gets the CQL result either way.
+# has a valid one; by updating an out-of-date index; on a big database whose
+# view the other terms leave large, by building the index (all patterns in
+# one pass cost about one scan); otherwise by scanning the view. <done> gets the CQL result either way.
 # Returns the CQL job, "" when the index answers.
 proc ::application::assistant::PatternRun {base variant view id done} {
     if {[llength [info commands ::ai::patternIndex::has]]} {
@@ -2086,8 +2086,10 @@ proc ::application::assistant::PatternRun {base variant view id done} {
             after 0 [list ::application::assistant::PatternIndexed $base $variant $view $id $done [dict create ok 1]]
             return ""
         }
-        if {[::ai::patternIndex::wanted $base $variant]
-         && 2 * [::scidb::view::count games $base $variant $view] >= [::scidb::db::count games $base $variant]} {
+        # an out-of-date index is brought up to date (seconds for added games)
+        if {[::ai::patternIndex::updatable $base $variant]
+         || ([::ai::patternIndex::wanted $base $variant]
+          && 2 * [::scidb::view::count games $base $variant $view] >= [::scidb::db::count games $base $variant])} {
             set job [::ai::patternIndex::build $base $variant \
                 [list ::application::assistant::PatternIndexed $base $variant $view $id $done]]
             if {$job ne ""} { return $job }

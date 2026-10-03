@@ -73,6 +73,8 @@
 #include "u_zstream.h"
 #include "u_zlib_ostream.h"
 #include "u_misc.h"
+#include "u_crc.h"
+#include "u_byte_stream.h"
 
 #include "sys_utf8_codec.h"
 #include "sys_file.h"
@@ -145,6 +147,7 @@ static char const* CmdPlayerGames		= "::scidb::db::playerGames";
 static char const* CmdMediaFiles		= "::scidb::db::mediaFiles";
 static char const* CmdMediaGallery	= "::scidb::db::mediaGallery";
 static char const* CmdMediaLinkReady	= "::scidb::db::mediaLinkReady";
+static char const* CmdFingerprints		= "::scidb::db::fingerprints";
 static char const* CmdGuidingText	= "::scidb::db::guidingText";
 static char const* CmdGameAnchor	= "::scidb::db::gameAnchor";
 static char const* CmdHtmlSanitize	= "::scidb::html::sanitize";
@@ -6271,6 +6274,67 @@ cmdGuidingText(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 
 static int
+cmdFingerprints(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::db::fingerprints <database> <variant> ?<old>?
+	// A CRC-32 of every game's stored record (start position, moves,
+	// comments), as a byte array of 32-bit little-endian words, one per game.
+	// Edits that leave the record where it was still change the CRC. With
+	// <old> (an earlier result) returns {<fingerprints> <changed>}: <changed>
+	// the games below both counts whose record differs. Scidb and Scid
+	// formats only (an error otherwise): their codecs read raw records.
+	if (objc != 3 && objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> ?<old>?");
+		return TCL_ERROR;
+	}
+
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant		= tcl::game::variantFromObj(objc, objv, 2);
+	Database&		db			= const_cast<Cursor&>(Scidb->cursor(database, variant)).getDatabase();
+
+	if (db.isMemoryOnly() || !(db.format() == format::Scidb || isScidFormat(db.format())))
+		return error(CmdFingerprints, nullptr, nullptr, "game records cannot be read from this format");
+
+	unsigned count = db.countGames();
+	mstl::vector<unsigned char> bytes(count*4);
+
+	for (unsigned i = 0; i < count; ++i)
+	{
+		util::ByteStream record = db.codec().getGame(db.gameInfo(i));
+		uint32_t crc = util::crc::compute(0, record.data(), record.size());
+		bytes[4*i + 0] = crc & 0xff;
+		bytes[4*i + 1] = (crc >> 8) & 0xff;
+		bytes[4*i + 2] = (crc >> 16) & 0xff;
+		bytes[4*i + 3] = (crc >> 24) & 0xff;
+	}
+
+	Tcl_Obj* fingerprints = Tcl_NewByteArrayObj(bytes.data(), int(bytes.size()));
+
+	if (objc == 3)
+	{
+		setResult(fingerprints);
+		return TCL_OK;
+	}
+
+	int oldLength;
+	unsigned char const* old = Tcl_GetByteArrayFromObj(objv[3], &oldLength);
+	unsigned common = mstl::min(count, unsigned(oldLength)/4);
+	Tcl_Obj* changed = Tcl_NewListObj(0, nullptr);
+
+	for (unsigned i = 0; i < common; ++i)
+	{
+		if (::memcmp(old + 4*i, bytes.data() + 4*i, 4) != 0)
+			Tcl_ListObjAppendElement(ti, changed, Tcl_NewIntObj(i));
+	}
+
+	Tcl_Obj* objs[2] = { fingerprints, changed };
+	setResult(Tcl_NewListObj(2, objs));
+	return TCL_OK;
+}
+
+
+static int
 cmdMediaLinkReady(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	// Usage: ::scidb::db::mediaLinkReady <database> <variant> <command>
@@ -6888,6 +6952,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdMediaFiles,		cmdMediaFiles);
 	createCommand(ti, CmdMediaGallery,	cmdMediaGallery);
 	createCommand(ti, CmdMediaLinkReady,	cmdMediaLinkReady);
+	createCommand(ti, CmdFingerprints,		cmdFingerprints);
 
 	{
 		std::lock_guard<std::mutex> lock(mediaLinkOwner.mutex);
