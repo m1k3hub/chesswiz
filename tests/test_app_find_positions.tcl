@@ -167,6 +167,28 @@ tcltest::test findpos-open-at-match {after mode all, the game list opens a game 
 	::scidb::test::findpos::closeFixture
 } -result {::application::assistant::MatchPosition 1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 {} 1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 {}}
 
+tcltest::test findpos-report-links {sample reports link each position to the board; only read-only tools are followed} -constraints cql6 -setup {
+	::scidb::test::findpos::openFixture
+	rename ::application::assistant::ShowPositions {}
+	rename ::scidb::test::findpos::realShow ::application::assistant::ShowPositions
+	rename ::application::ai::showReport ::scidb::test::findpos::realReport
+	proc ::application::ai::showReport {parent title html} { set ::scidb::test::findpos::Html $html }
+} -body {
+	::scidb::test::findpos::run find_positions {request "checkmates" cql "cql() mate"}
+	set html $::scidb::test::findpos::Html
+	set kept [dict get [::scidb::html::sanitize $html ""] html]
+	set opened [::application::report::FollowAiLink "scidb-ai:open_position?index=2"]
+	set refused [::application::report::FollowAiLink "scidb-ai:clear_search"]
+	list [regexp -all {scidb-ai:open_position\?index=\d} $kept] [string match "game 2 *on the board*" $opened] \
+		[string match "*clear_search*" $refused] [::application::assistant::runTool open_position {index 1}]
+} -cleanup {
+	rename ::application::ai::showReport {}
+	rename ::scidb::test::findpos::realReport ::application::ai::showReport
+	rename ::application::assistant::ShowPositions ::scidb::test::findpos::realShow
+	proc ::application::assistant::ShowPositions {args} { set ::scidb::test::findpos::Shown $args }
+	::scidb::test::findpos::closeFixture
+} -match glob -result {2 1 1 {game 1 *on the board*}}
+
 tcltest::test findpos-checks {arguments are checked} -body {
 	list [catch { ::application::assistant::CheckArgs find_positions {request x cql ""} } e1] $e1 \
 		[catch { ::application::assistant::CheckArgs find_positions {request x cql "cql() mate" mode fast} } e2] $e2 \
@@ -230,8 +252,9 @@ tcltest::test findpos-similar-runs {find_similar builds the script from the boar
 	set ::application::assistant::Priv(cqlHelp) 0
 } -body {
 	set reply [::scidb::test::findpos::run find_similar {aspects {pawns}}]
+	# the game on the board (left out) may be one of the mates, so either
 	list [string match "*positions like the one on the board: the same mating pattern*" $reply] \
-		[string match "*Anderssen*" $reply] [expr {$::scidb::test::findpos::Board eq [::scidb::pos::fen]}]
+		[regexp {Anderssen|Morphy} $reply] [expr {$::scidb::test::findpos::Board eq [::scidb::pos::fen]}]
 } -cleanup {
 	rename ::ai::similar::script {}
 	rename ::ai::similar::describe {}

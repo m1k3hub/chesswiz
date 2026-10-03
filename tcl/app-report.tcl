@@ -295,6 +295,29 @@ proc application::report::LinkSetup {w node} {
 }
 
 
+# An action of the AI assistant (ASSISTANT_COVERAGE_MAP.md C10):
+# scidb-ai:<tool>?<arg>=<value>&... Report pages may come from outside
+# (ChessBase guiding texts), so only tools that change nothing stored are
+# followed. Returns the line for the status bar.
+proc application::report::FollowAiLink {href} {
+	variable mc
+
+	set target [string range $href 9 end]
+	set parts [split $target ?]
+	set tool [lindex $parts 0]
+	set cargs {}
+	foreach pair [split [join [lrange $parts 1 end] ?] &] {
+		if {[regexp {^([a-z_]+)=(.*)$} $pair -> key value]} {
+			dict set cargs $key [::scidb::misc::url unescape $value]
+		}
+	}
+	if {$tool ni {open_position open_game} || ![llength [info commands ::application::assistant::runTool]]} {
+		return [format $mc::IgnoredLink $href]
+	}
+	return [lindex [split [::application::assistant::runTool $tool $cargs] \n] 0]
+}
+
+
 proc application::report::LinkClick {w x y} {
 	variable Priv
 	variable mc
@@ -315,6 +338,11 @@ proc application::report::LinkClick {w x y} {
 		}
 
 		::game::new .application -base $Priv(db) -variant $Priv(variant) -number $index
+		return
+	}
+
+	if {[string match scidb-ai:* $href]} {
+		$Priv(status) configure -text [FollowAiLink $href]
 		return
 	}
 

@@ -83,7 +83,7 @@ schemeAllowed(mstl::string const& scheme)
 	return	   scheme == "http"		|| scheme == "https"
 			|| scheme == "mailto"	|| scheme == "ftp"
 			|| scheme == "file"		|| scheme == "scidb-game"
-			|| scheme == "scidb-media";
+			|| scheme == "scidb-media"	|| scheme == "scidb-ai";
 }
 
 

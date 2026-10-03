@@ -8,6 +8,11 @@
 package require Tcl 8.5
 package require tcltest 2.5
 
+# the "menu:" lines tools add are tested on their own (assistant-menu-line);
+# the replies below are checked without them
+set ::scidb::test::assistantToolMenu $::application::assistant::ToolMenu
+set ::application::assistant::ToolMenu {}
+
 namespace eval ::scidb::test::assistant {
 	variable Answer 1
 	variable Asked {}
@@ -577,7 +582,8 @@ tcltest::test assistant-repertoire-none {without an open repertoire the tool say
 proc ::scidb::test::assistant::search {criteria} {
 	set reply [::application::assistant::runTool search_games $criteria]
 	set lines [split $reply \n]
-	return [list [lindex $lines 1] [lmap line [lrange $lines 3 end] { string trim $line }]]
+	# the game number in front of each game ("#12 ...") is checked separately
+	return [list [lindex $lines 1] [lmap line [lrange $lines 3 end] { regsub {^#\d+ } [string trim $line] {} }]]
 }
 
 tcltest::test assistant-search-games {search_games combines player, colour, result, ECO and dates} -body {
@@ -614,21 +620,51 @@ tcltest::test assistant-search-terms {the new search terms reject bad arguments}
 	set result
 } -result {error error error 2 1}
 
-tcltest::test assistant-show-search {show_search filters the game list only once the user allows it} -body {
+tcltest::test assistant-show-search {show_search filters the game list without asking: it changes nothing stored} -body {
+	# a user who would refuse every confirmation
 	::scidb::test::assistant::setup 0
 	set base $::scidb::test::assistant::Fixture
 	::application::assistant::runTool search_games {player {Carlsen, Magnus} result win}
-	set denied [::application::assistant::runTool show_search {}]
 	set before [::scidb::view::count games $base Normal 0]
-	::scidb::test::assistant::setup 1
 	set calls [::scidb::test::assistant::stubbed ::application::switchTab {
 		set shown [::application::assistant::runTool show_search {}]
 	}]
 	set filtered [::scidb::view::count games $base Normal 0]
 	set cleared [::application::assistant::runTool clear_search {}]
-	list [string match "*NOT performed*" $denied] $before $shown $calls $filtered $cleared \
-		[::scidb::view::count games $base Normal 0]
-} -result {1 3 {the game list shows the 2 games of: games of Carlsen, Magnus, won} database 2 {the game list shows all 3 games again} 3}
+	list $before $shown $calls $filtered $cleared [::scidb::view::count games $base Normal 0]
+} -result {3 {the game list shows the 2 games of: games of Carlsen, Magnus, won} database 2 {the game list shows all 3 games again} 3}
+
+tcltest::test assistant-game-numbers {search results name each game's number} -body {
+	set reply [::application::assistant::runTool search_games {player {carlsen, m} result win}]
+	regexp -all -line {^  #\d+ } $reply
+} -result 2
+
+tcltest::test assistant-menu-line {a tool with a menu equivalent says where it lives; errors do not} -body {
+	set ::application::assistant::ToolMenu $::scidb::test::assistantToolMenu
+	set ok [::application::assistant::runTool search_games {player {carlsen, m} result win}]
+	set bad [::application::assistant::runTool search_games {}]
+	set ::application::assistant::ToolMenu {}
+	list [string match "*\nmenu: Database tab > right-click the database > Maintenance > Advanced Search" $ok] \
+		[string match "*menu:*" $bad]
+} -result {1 0}
+
+tcltest::test assistant-open-game {open_game puts a game on the board at a move} -body {
+	set calls [::scidb::test::assistant::stubbed ::application::switchTab {
+		set start [::application::assistant::runTool open_game {number 1}]
+		set after [::application::assistant::runTool open_game {number 1 move 2 after black}]
+		set fen [lindex [::scidb::pos::fen] 0]
+		set tooFar [::application::assistant::runTool open_game {number 1 move 400}]
+	}]
+	list [string match "game 1 (*) is on the board, at the start" $start] \
+		[string match "game 1 (*) is on the board, after Black's move 2" $after] \
+		[expr {$fen ne "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"}] \
+		[string match "error: game 1 has only * moves*" $tooFar] \
+		[::application::assistant::runTool open_game {number 9999}] \
+		[catch { ::application::assistant::CheckArgs open_game {number 1 after white} } e] $e
+} -cleanup {
+	# later files expect an empty game on the board
+	::scidb::test::assistant::stubbed ::application::switchTab { ::menu::gameNew .application }
+} -match glob -result {1 1 1 1 {error: * has 3 games} 1 {after needs a move}}
 
 ::scidb::test::assistant::closeFixture
 
@@ -665,5 +701,6 @@ set ::application::assistant::Priv(confirm) ::application::assistant::ConfirmDia
 
 # ----------------------------------------------------------------------
 
+set ::application::assistant::ToolMenu $::scidb::test::assistantToolMenu
 ::tcltest::cleanupTests
 return

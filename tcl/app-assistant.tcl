@@ -207,6 +207,12 @@ variable Actions {
 		{{"type":"object","properties":{"name":{"type":"string","description":"a short name, e.g. 'knight fork king and queen'"}},"required":["name"]}}
 		::application::assistant::DoSavePattern
 	}
+	open_game {
+		0 0 "open game %s"
+		"Put a game of the active database on the board, at the start or at a move. 'number' is the game number as the tools list it (#123). 'move' is a move number; with 'after' white or black the board shows the position after that side's move, without it the position before White's move."
+		{{"type":"object","properties":{"number":{"type":"integer"},"move":{"type":"integer"},"after":{"type":"string","enum":["white","black"]}},"required":["number"]}}
+		::application::assistant::DoOpenGame
+	}
 	open_position {
 		0 0 "open position %s of the last search"
 		"Put a game found by the last find_positions call on the board, at the matching position. 'index' counts the positions as they were listed, from 1."
@@ -214,13 +220,13 @@ variable Actions {
 		::application::assistant::DoOpenPosition
 	}
 	show_search {
-		1 0 "show the games of the last search in the game list"
+		0 0 "show the games of the last search in the game list"
 		"Filter the game list of the active database to the games of the last search_games, and switch to the database tab."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoShowSearch
 	}
 	clear_search {
-		1 0 "show all games in the game list again"
+		0 0 "show all games in the game list again"
 		"Remove the filter from the game list of the active database."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoClearSearch
@@ -479,7 +485,9 @@ whenever it does what the user asks. If no tool fits, say so briefly and name
 the menu entry that does it if you know one. Never claim you did something a
 tool did not report. Answer in one or two short sentences. For questions
 about games, players or openings, use the numbers the tools report and never
-invent statistics; a short list is fine there.}
+invent statistics; a short list is fine there. When a tool reply ends with a
+"menu:" line, end your answer with that path in parentheses, e.g. "(also in:
+Database tab > ...)", so the user learns where the feature lives.}
 
 variable DebugSystem {
 You are also a debugging aid for the developer of Scidb (Tcl/Tk front end
@@ -495,6 +503,20 @@ user asks, after the evidence shows what is stuck.}
 
 # Replies longer than this are cut, so one tool cannot flood the context.
 variable MaxReply 6000
+
+# Where a tool's feature lives in the menus: added to its reply as a
+# "menu:" line, which the model passes on (ASSISTANT_COVERAGE_MAP.md P2).
+variable ToolMenu {
+	search_games	"Database tab > right-click the database > Maintenance > Advanced Search"
+	show_search		"Database tab > right-click the database > Maintenance > Advanced Search"
+	find_positions	"Database tab > right-click the database > Maintenance > CQL 6.2 Search (with the script above)"
+	find_similar	"Database tab > right-click the database > Maintenance > CQL 6.2 Search (with the script above)"
+	open_game		"Database tab > double-click the game in the game list"
+	player_stats	"Players tab > right-click the player > Show Player Card"
+	prepare_against	"Players tab > right-click the player > Show Prep Report"
+	opening_score	"Board tab > Tree pane"
+	position_moves	"Board tab > Tree pane"
+}
 # tools whose whole reply the model needs (the CQL reference: a cut card
 # loses examples and the user's patterns)
 variable MaxReplyFor {cql_help 20000}
@@ -764,6 +786,13 @@ proc ::application::assistant::Later {} {
 }
 
 
+proc ::application::assistant::WithMenu {name reply} {
+	variable ToolMenu
+	if {![dict exists $ToolMenu $name] || [string match "error: *" $reply]} { return $reply }
+	return "$reply\nmenu: [dict get $ToolMenu $name]"
+}
+
+
 proc ::application::assistant::ReplyLimit {name} {
 	variable MaxReply
 	variable MaxReplyFor
@@ -779,7 +808,7 @@ proc ::application::assistant::Resolve {token reply} {
 	if {![info exists Priv(pending)] || [lindex $Priv(pending) 0] ne $token} { return 0 }
 	lassign $Priv(pending) _ round name cargs calls isRouted
 	set Priv(pending) {}
-	set reply [Scrub $reply]
+	set reply [WithMenu $name [Scrub $reply]]
 	set limit [ReplyLimit $name]
 	if {[string length $reply] > $limit} {
 		set reply "[string range $reply 0 $limit-1]\n... (truncated)"
@@ -867,7 +896,7 @@ proc ::application::assistant::RunTool {name cargs} {
 		return [list error $confirm "error: $err"]
 	}
 	if {[string match "\x00later:*" $reply]} { return [list later $confirm $reply] }
-	set reply [Scrub $reply]
+	set reply [WithMenu $name [Scrub $reply]]
 	set limit [ReplyLimit $name]
 	if {[string length $reply] > $limit} {
 		set reply "[string range $reply 0 $limit-1]\n... (truncated)"
@@ -1131,6 +1160,16 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			set name [string trim [Arg $cargs name]]
 			if {$name eq ""} { error "name must not be empty" }
 			return [dict create name $name]
+		}
+		open_game {
+			set number [Arg $cargs number]
+			if {![string is integer -strict $number] || $number < 1} { error "number must be a game number, 1 or more" }
+			set move [expr {[dict exists $cargs move] ? [dict get $cargs move] : ""}]
+			if {$move ne "" && (![string is integer -strict $move] || $move < 1)} { error "move must be 1 or more" }
+			set after [expr {[dict exists $cargs after] ? [string tolower [dict get $cargs after]] : ""}]
+			if {$after ni {"" white black}} { error "after must be white or black" }
+			if {$after ne "" && $move eq ""} { error "after needs a move" }
+			return [dict create number $number move $move after $after]
 		}
 		open_position {
 			set index [Arg $cargs index]
@@ -1787,7 +1826,8 @@ proc ::application::assistant::DoSearchGames {criteria} {
 		lassign [SearchView $base $variant $view $criteria] query summary count
 		set games {}
 		for {set row 0} {$row < min($count, $SearchGames)} {incr row} {
-			lappend games [GameLine [::scidb::db::get gameNumber $base $variant $row $view] $base $variant]
+			set number [::scidb::db::get gameNumber $base $variant $row $view]
+			lappend games "#[expr {$number + 1}] [GameLine $number $base $variant]"
 		}
 	} err opts]
 	catch { ::scidb::view::close $base $variant $view }
@@ -2176,6 +2216,7 @@ proc ::application::assistant::ShowPositions {request cql where samples} {
 	set esc {& &amp; < &lt; > &gt; \" &quot;}
 	set html "<html><body><h2>[string map $esc $request]</h2>"
 	append html "<p>Searched $where with this CQL 6.2 script:</p><pre>[string map $esc $cql]</pre>"
+	set n 0
 	foreach sample $samples {
 		lassign $sample line at fen
 		set caption "[string map $esc $line], $at"
@@ -2184,6 +2225,8 @@ proc ::application::assistant::ShowPositions {request cql where samples} {
 		} else {
 			append html "<p>$caption<br><tt>$fen</tt></p>"
 		}
+		# a click puts the game on the board at this position (app-report.tcl)
+		append html "<p><a href=\"scidb-ai:open_position?index=[incr n]\">Open at this position</a></p>"
 	}
 	append html "</body></html>"
 	::application::ai::showReport .application "Positions" $html
@@ -2228,6 +2271,28 @@ proc ::application::assistant::DoSavePattern {name} {
 	lassign $LastFind request cql fens
 	set n [::ai::positions::savePattern $name $request $cql $fens]
 	return "saved as '$name'; the user now has $n saved pattern[expr {$n == 1 ? "" : "s"}]"
+}
+
+
+proc ::application::assistant::DoOpenGame {number move after} {
+	lassign [ActiveBase] base variant
+	set count [::scidb::db::count games $base $variant]
+	if {$number > $count} { return "error: [::util::databaseName $base no] has $count games" }
+	set index [expr {$number - 1}]
+	::game::new .application -base $base -variant $variant -number $index
+	set where "at the start"
+	if {$move ne ""} {
+		set ply [expr {2 * ($move - 1) + ($after eq "white" ? 1 : $after eq "black" ? 2 : 0)}]
+		set plies [::scidb::game::query mainline]
+		if {$ply > [llength $plies]} {
+			return "error: game $number has only [expr {([llength $plies] + 1) / 2}] moves; it is on the board at the start"
+		}
+		# the key of a ply is the position after it
+		if {$ply > 0} { ::scidb::game::go key [lindex $plies [expr {$ply - 1}] 0] }
+		set where [expr {$after eq "" ? "before move $move" : "after [string totitle $after]'s move $move"}]
+	}
+	::application::switchTab board
+	return "game $number ([GameLine $index $base $variant]) is on the board, $where"
 }
 
 
