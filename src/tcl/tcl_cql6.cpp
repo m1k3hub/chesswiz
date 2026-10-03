@@ -627,12 +627,15 @@ static void deleteInterp(ClientData, Tcl_Interp* ti)
 	Tcl_DeleteEvents(deleteEvent, ti);
 }
 
-static int closeTrace(ClientData, Tcl_Interp* ti, int, char const*, Tcl_Command command,
-	int objc, Tcl_Obj* const objv[])
+// Running jobs on a database that is being closed stop reading it. This
+// wraps ::scidb::db::close; it was an object trace on every command, which
+// made all Tcl code in the application slower (Tcl calls such a trace for
+// each command and gives up inline bytecode compilation).
+static Tcl_CmdInfo closeCommand;
+static bool closeWrapped = false;
+
+static void markClosed(Tcl_Interp* ti, char const* base)
 {
-	if (objc != 2 || command != Tcl_FindCommand(ti, "::scidb::db::close", nullptr, TCL_GLOBAL_ONLY))
-		return TCL_OK;
-	char const* base = Tcl_GetString(objv[1]);
 	std::lock_guard<std::mutex> table(jobTable.mutex);
 	for (auto const& entry : jobTable.jobs)
 	{
@@ -647,7 +650,25 @@ static int closeTrace(ClientData, Tcl_Interp* ti, int, char const*, Tcl_Command 
 			job->changed.notify_all();
 		}
 	}
-	return TCL_OK;
+}
+
+static int closeWrapper(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc == 2) markClosed(ti, Tcl_GetString(objv[1]));
+	return closeCommand.objProc(closeCommand.objClientData, ti, objc, objv);
+}
+
+// Called before a job starts: ::scidb::db::close may be created after init.
+static void wrapClose(Tcl_Interp* ti)
+{
+	if (closeWrapped) return;
+	Tcl_CmdInfo info;
+	if (!Tcl_GetCommandInfo(ti, "::scidb::db::close", &info) || !info.isNativeObjectProc) return;
+	closeCommand = info;
+	info.objProc = closeWrapper;
+	info.objClientData = nullptr;
+	Tcl_SetCommandInfo(ti, "::scidb::db::close", &info);
+	closeWrapped = true;
 }
 
 static int cmdVersion(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
@@ -737,6 +758,7 @@ static int cmdRelease(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[
 
 static int cmdSearch(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
+	wrapClose(ti);
 	if (objc < 4 || (objc - 4) % 2)
 	{
 		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <script> ?-scripts LIST? ?-threads N? ?-variations 0|1? ?-max N? ?-pgn 0|1? ?-compact 0|1? ?-paged 0|1? ?-command CMD?");
@@ -973,7 +995,7 @@ void tcl::cql6::init(Tcl_Interp* ti)
 	createCommand(ti, "::scidb::cql6::matches", cmdMatches);
 	createCommand(ti, "::scidb::cql6::release", cmdRelease);
 	createCommand(ti, "::scidb::cql6::position", cmdPosition);
-	Tcl_CreateObjTrace(ti, 0, 0, closeTrace, nullptr, nullptr);
+	wrapClose(ti);
 	Tcl_CallWhenDeleted(ti, deleteInterp, nullptr);
 }
 
