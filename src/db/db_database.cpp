@@ -1589,6 +1589,14 @@ Database::copyGames(	Database& destination,
 									log,
 									progress);
 	}
+	else if (dstFormat == format::ChessBase)
+	{
+		// The ChessBase writer loses game data (a 24-game copy keeps 5 of
+		// 61 KB, one game unreadable); refuse rather than write a corrupt
+		// database. Before, this fell into the Scid branch below, whose
+		// cast aborted the program.
+		IO_RAISE(Game, Write_Failed, "copying games into a ChessBase database is not supported");
+	}
 	else // dstFormat == format::Scid3 || dstFormat == format::Scid4
 	{
 		si3::Consumer consumer(	srcFormat,

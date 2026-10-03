@@ -3087,16 +3087,20 @@ Codec::getGame(GameInfo const& info)
 	unsigned offset = info.gameOffset();
 	unsigned length = info.gameRecordLength();
 
-	mstl::string buffer;
-	buffer.resize(length);
+	if (length == 0)
+		return util::ByteStream();
+
+	// The stream owns its buffer: a stream over a local string would point
+	// into freed memory once this returns (exportGame copies the record).
+	util::ByteStream data(length);
 
 	if (!m_gameStream.seekg(offset, mstl::fstream::beg))
 		IO_RAISE(Game, Read_Error, "cannot seek to game offset %u", offset);
 
-	if (!m_gameStream.read(buffer.data(), length))
+	if (!m_gameStream.read(reinterpret_cast<char*>(data.base()), length))
 		IO_RAISE(Game, Read_Error, "cannot read game data");
 
-	return util::ByteStream(reinterpret_cast<Byte*>(const_cast<char*>(buffer.data())), length);
+	return data;
 }
 
 
