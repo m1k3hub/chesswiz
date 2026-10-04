@@ -192,7 +192,7 @@ proc ::ai::systemone::configure {args} {
 			default   { error "unknown option $key" }
 		}
 	}
-	if {!$Loaded} { set Loaded 1 ; catch { loadThresholds $ThresholdFile } }
+	LoadOnce
 	return
 }
 
@@ -362,7 +362,7 @@ proc ::ai::systemone::chooseSync {feature state question args} {
 	array set opts {-timeout 3000 -threshold 0.6}
 	array set opts $args
 
-	if {![enabled]} { return "" }
+	if {![enabled] || ![qualified $feature]} { return "" }
 	if {[dict get $question type] ne "choice"} { error "chooseSync needs a choice question" }
 
 	set saved $Config(timeoutMs)
@@ -485,6 +485,7 @@ namespace eval ::ai::systemone {
 	variable ThresholdFile [expr {
 		[info exists ::env(SCIDB_AI_THRESHOLDS)] ? $::env(SCIDB_AI_THRESHOLDS) :
 		[file join [file dirname [file normalize [info script]]] ai-thresholds.tsv]}]
+
 }
 
 
@@ -511,6 +512,38 @@ proc ::ai::systemone::valid {question answer} {
 	}
 	if {!$ok || ![string is double -strict $p]} { return 0 }
 	return [expr {$p >= 0.0 && $p <= 1.0}]
+}
+
+
+# Read the thresholds file once. The installed program is one script in
+# bin/, so the file is looked for in the share directory as well.
+proc ::ai::systemone::LoadOnce {} {
+	variable Loaded
+	variable ThresholdFile
+
+	if {$Loaded} { return }
+	set Loaded 1
+	if {![info exists ::env(SCIDB_AI_THRESHOLDS)] && ![file exists $ThresholdFile]
+	 && [info exists ::scidb::dir::share]} {
+		set ThresholdFile [file join $::scidb::dir::share ai-thresholds.tsv]
+	}
+	catch { loadThresholds $ThresholdFile }
+}
+
+
+# Whether the classifier in use may decide <feature>: only a task it passed
+# calibration for (an entry in the thresholds file), or one the user opened
+# with SCIDB_AI_<FEATURE>_MIN_CONFIDENCE. Every other task goes to the
+# rules or the language model; SCIDB_AI_UNCALIBRATED=1 lifts the rule.
+proc ::ai::systemone::qualified {feature} {
+	variable Thresholds
+	variable Config
+
+	LoadOnce
+	if {[info exists ::env(SCIDB_AI_UNCALIBRATED)] && $::env(SCIDB_AI_UNCALIBRATED)} { return 1 }
+	set var SCIDB_AI_[string toupper $feature]_MIN_CONFIDENCE
+	if {[info exists ::env($var)] && [string is double -strict $::env($var)]} { return 1 }
+	return [dict exists $Thresholds $feature $Config(backend)]
 }
 
 
@@ -566,7 +599,7 @@ proc ::ai::decide {feature state question script args} {
 	}
 
 	if {[llength [info commands ::ai::systemone::enabled]] == 0
-	 || ![::ai::systemone::enabled]} {
+	 || ![::ai::systemone::enabled] || ![::ai::systemone::qualified $feature]} {
 		::ai::systemone::Decided $feature $question $sink [array get opts] [list ok 0]
 		return
 	}

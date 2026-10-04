@@ -256,6 +256,11 @@ proc ::application::triage::Classify {todo keep} {
 		Escalate $keep
 		return
 	}
+	# a classifier not calibrated for triage leaves every group to the model
+	if {[llength [info commands ::ai::systemone::qualified]] && ![::ai::systemone::qualified triage]} {
+		Escalate [concat $keep $todo]
+		return
+	}
 	set g [lindex $todo 0]
 	set questions [dict create verdict [dict create type choice \
 		instructions "What does this error report from Scidb, a chess database application (Tcl/Tk front end over a C++ core), show?" \

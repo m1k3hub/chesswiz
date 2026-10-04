@@ -154,7 +154,8 @@ proc ::ai::rhetoric::coverageNotice {answer} {
 # report unchanged.
 # ----------------------------------------------------------------------
 proc ::ai::rhetoric::check {task text script} {
-	if {![llength [info commands ::ai::systemone::enabled]] || ![::ai::systemone::enabled]} {
+	if {![llength [info commands ::ai::systemone::enabled]] || ![::ai::systemone::enabled]
+	 || ([llength [info commands ::ai::systemone::qualified]] && ![::ai::systemone::qualified rhetoric])} {
 		after 0 [list {*}$script [list ok 0]]
 		return
 	}

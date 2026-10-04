@@ -396,6 +396,22 @@ tcltest::test systemone-decide-gate {confident answers decide; unsure, unknown a
 	lappend out [::scidb::test::s1::decide $q]
 } -result {{ok 1 label noise confidence 0.9 source classifier} {ok 1 label bug confidence {} source rules} {ok 1 label bug confidence {} source rules} {ok 1 label bug confidence {} source rules} {ok 1 label bug confidence {} source rules} {ok 0}}
 
+tcltest::test systemone-qualified {a classifier decides only the tasks it passed calibration for} -setup {
+	set savedEnv $::env(SCIDB_AI_UNCALIBRATED)
+	set ::env(SCIDB_AI_UNCALIBRATED) 0
+	set savedT $::ai::systemone::Thresholds
+	::scidb::test::s1::start [list [::scidb::test::s1::choice noise 0.99]]
+	::ai::systemone::LoadOnce
+	set ::ai::systemone::Thresholds {comment_kind {kev 0.85}}
+} -body {
+	list [::ai::systemone::qualified comment_kind] [::ai::systemone::qualified duplicate] \
+		[::scidb::test::s1::decide $::scidb::test::s1::Verdict -fallback {string cat bug}]
+} -cleanup {
+	::scidb::test::s1::stop
+	set ::ai::systemone::Thresholds $savedT
+	set ::env(SCIDB_AI_UNCALIBRATED) $savedEnv
+} -result {1 0 {ok 1 label bug confidence {} source rules}}
+
 tcltest::test systemone-decide-noul {a noul decides yes or no at the threshold} -setup {
 	::scidb::test::s1::start [list \
 		{200 {{"answers":{"verdict":{"type":"noul","noul":0.35}}}}}]

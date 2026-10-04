@@ -4,6 +4,10 @@
 SHELL := /bin/bash
 TCLSH := tclsh
 XVFB_RUN := xvfb-run -a </dev/null
+# The classifier-mechanics tests use a stand-in classifier with no
+# calibration; the calibration gate itself is tested with this unset
+# (systemone-qualified in tests/test_app_systemone.tcl).
+export SCIDB_AI_UNCALIBRATED := 1
 CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -O2
 

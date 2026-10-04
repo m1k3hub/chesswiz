@@ -272,11 +272,13 @@ install-scripts: $(SCRIPTS)
 	@install -m 755 -p $(SCRIPT) $(BINDIR)
 	@install -m 755 -d $(DATADIR)/scripts
 	@install -m 644 -p ../scripts/stt-transcribe.py $(DATADIR)/scripts
+	@install -m 644 -p ai-thresholds.tsv $(DATADIR)
 
 uninstall-scripts:
 	@echo "Uninstall Tcl scripts"
 	@rm -f $(BINDIR)/$(SCRIPT)
 	@rm -f $(DATADIR)/scripts/stt-transcribe.py
+	@rm -f $(DATADIR)/ai-thresholds.tsv
 
 install-pieces:
 	@echo "Install piece sets"
