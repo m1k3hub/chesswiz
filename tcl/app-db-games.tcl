@@ -309,7 +309,7 @@ proc Update {path id base variant {view -1} {index -1}} {
 		if {$Vars(codec) ne $codec} { CodecChanged $path $codec }
 
 		if {$index == -1} {
-			set n [::scidb::db::count games $base $variant]
+			set n [::scidb::view::count games $base $variant 0]
 			set Vars(after) [after idle [list ::gamestable::update $path $base $variant $n]]
 		} else {
 			set Vars(after) [after idle [list ::gamestable::fill $path $index [expr {$index + 1}]]]

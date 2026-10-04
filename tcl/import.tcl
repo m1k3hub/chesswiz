@@ -469,7 +469,8 @@ proc logResult {total illegal emptyText importText accepted rejected {unsupporte
 
 	# A4: the import doctor, rule-only (the classifier is only used by the
 	# diagnose_import tool), so the log stays synchronous.
-	if {[llength [::info commands ::ai::import::Text]]} {
+	# CopyDatabase reaches here without Open/Import, so no codes were collected
+	if {[llength [::info commands ::ai::import::Text]] && [::info exists Priv(importCodes)]} {
 		set advice [::ai::import::Text $Priv(importCodes)]
 		if {[string length $advice]} { ::log::info $advice }
 	}
@@ -1266,7 +1267,7 @@ proc Log {sink arguments} {
 	# the code is the eighth element (after the empty message slot); keep it
 	# for the import doctor
 	if {$code ne ""} {
-		if {![info exists Priv(importCodes)]} { set Priv(importCodes) {} }
+		if {![::info exists Priv(importCodes)]} { set Priv(importCodes) {} }
 		lappend Priv(importCodes) $code
 	}
 

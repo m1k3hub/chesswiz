@@ -161,7 +161,7 @@ proc ::application::database::OpenPlainSearch {parent file variant} {
 	pack $dlg.status -side top -fill x -padx 8 -pady 4
 	pack $dlg.buttons -side top -fill x -padx 8 -pady {4 8}
 
-	bind $dlg <Destroy> [list if {"%W" eq "$dlg"} [namespace code [list PlainForget $dlg]]]
+	bind $dlg <Destroy> [list if {"%W" eq $dlg} [namespace code [list PlainForget $dlg]]]
 	focus $dlg.ask.entry
 	return $dlg
 }

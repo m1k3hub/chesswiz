@@ -82,7 +82,7 @@ set MarkDeleted					"Mark as deleted"
 } ;# namespace mc
 
 proc MaintenanceDialogName {file} {
-	return .maintenance_[string map {: _ . _ / _} $file]
+	return .maintenance_[string map {: _ . _ / _ " " _} $file]
 }
 
 

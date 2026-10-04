@@ -1741,9 +1741,9 @@ proc Tooltip {table mode {id {}}} {
 
 	switch $mode {
 		show {
-			if {[llength $Vars(tooltipvar:$id)]} {
+			if {[info exists Vars(tooltipvar:$id)] && [llength $Vars(tooltipvar:$id)]} {
 				::tooltip::showvar $table.t $Vars(tooltipvar:$id)
-			} elseif {[string length $Vars(tooltip:$id)]} {
+			} elseif {[info exists Vars(tooltip:$id)] && [string length $Vars(tooltip:$id)]} {
 				::tooltip::show $table.t $Vars(tooltip:$id)
 			}
 		}

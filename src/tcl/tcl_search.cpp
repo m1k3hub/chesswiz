@@ -62,10 +62,10 @@ namespace {
 static bool
 parseRange(Tcl_Interp* ti, Tcl_Obj* obj, unsigned max, unsigned& minValue, unsigned& maxValue)
 {
-	mstl::string text(Tcl_GetString(obj));
-	mstl::string::size_type sep = text.find('-');
+	char const* text = Tcl_GetString(obj);
+	char const* sep = ::strchr(text, '-');
 
-	if (sep == mstl::string::npos)
+	if (!sep)
 	{
 		int value;
 		if (Tcl_GetIntFromObj(ti, obj, &value) != TCL_OK || value < 0 || value > int(max))
@@ -74,20 +74,13 @@ parseRange(Tcl_Interp* ti, Tcl_Obj* obj, unsigned max, unsigned& minValue, unsig
 		return true;
 	}
 
-	mstl::string lhs(text, 0, sep);
-	mstl::string rhs(text, sep + 1);
-	if (lhs.empty() || rhs.empty())
-		return false;
-
 	char* end;
-	long low = ::strtol(lhs.c_str(), &end, 10);
-	if (*end != '\0')
-		return false;
-	long high = ::strtol(rhs.c_str(), &end, 10);
-	if (*end != '\0')
+	long low = ::strtol(text, &end, 10);
+	if (end != sep || low < 0)
 		return false;
 
-	if (low < 0 || high < 0 || low > high || high > long(max))
+	long high = ::strtol(sep + 1, &end, 10);
+	if (*end != '\0' || high < 0 || low > high || high > long(max))
 		return false;
 
 	minValue = unsigned(low);

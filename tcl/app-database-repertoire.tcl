@@ -68,7 +68,7 @@ set RepertoireGamesShown			"%s recent games shown"
 } ;# namespace mc
 
 proc RepertoireReportDialogName {file variant} {
-	return .repertoire_[string map {: _ . _ / _} $file]_${variant}
+	return .repertoire_[string map {: _ . _ / _ " " _} $file]_${variant}
 }
 
 

@@ -31,7 +31,7 @@ namespace eval database {
 array set AdvancedSearchPresets {}
 
 proc AdvancedDialogName {file variant} {
-	return .advanced_[string map {: _ . _ / _} $file]_${variant}
+	return .advanced_[string map {: _ . _ / _ " " _} $file]_${variant}
 }
 
 

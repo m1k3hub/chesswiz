@@ -124,7 +124,7 @@ proc RecommendSciWorkflow {parent file variant featureLabel featureKey} {
 
 
 proc OpeningPrepDialogName {file variant} {
-	return .openingprep_[string map {: _ . _ / _} $file]_${variant}
+	return .openingprep_[string map {: _ . _ / _ " " _} $file]_${variant}
 }
 
 

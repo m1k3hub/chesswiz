@@ -31,7 +31,7 @@ namespace eval database {
 array set MaterialSearchPresets {}
 
 proc MaterialDialogName {file variant} {
-	return .material_[string map {: _ . _ / _} $file]_${variant}
+	return .material_[string map {: _ . _ / _ " " _} $file]_${variant}
 }
 
 

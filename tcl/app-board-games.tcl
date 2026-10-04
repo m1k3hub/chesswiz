@@ -96,7 +96,7 @@ proc GameListChanged {id base variant {view -1} {index -1}} {
 proc TableUpdate {table base variant} {
 	variable current
 	if {![info exists current] || [lindex $current 0] ne $base} { return }
-	::gamestable::update $table $base $variant [::scidb::db::count games $base $variant]
+	::gamestable::update $table $base $variant [::scidb::view::count games $base $variant 0]
 }
 
 

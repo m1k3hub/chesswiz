@@ -31,7 +31,7 @@ namespace eval database {
 array set RatingSearchPresets {}
 
 proc RatingDialogName {file variant} {
-	return .rating_[string map {: _ . _ / _} $file]_${variant}
+	return .rating_[string map {: _ . _ / _ " " _} $file]_${variant}
 }
 
 proc RatingModeLabel {mode} {
