@@ -106,7 +106,7 @@ set Corpus {
 	db-export-pgn J1 {Save these games as a PGN file.} {{export_database} {save_working_set}}
 	ask-back J1 {Open that one.} {{none} {open_game} {open_position}}
 	find-carlsen-black J2 {Carlsen's losses with Black.} {{search_games player *carlsen* color black result loss}}
-	find-2700 J2 {Only games where both players are above 2700.} {{search_games min_elo 27*}}
+	find-2700 J2 {Only games where both players are above 2700.} {{search_games both_min_elo 27*}}
 	find-kid J2 {All King's Indian games.} {{search_games eco E6*} {search_games eco E[6-9]*}}
 	find-like-5 J2 {Which games resemble game 5?} {{similar_games number 5}}
 	game-like-board J2 {Are there games like the one I'm looking at?} {{similar_games} {find_similar}}
