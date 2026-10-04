@@ -1251,8 +1251,13 @@ proc FillTable {table} {
 
 				ratio - score - draws {
 					set item [ComputeValue $id $item $total]
-					if {$Options($id:bar)} {
-						lappend text [list @ [MakeBar $table $id $item]]
+					# the total's ratio is always 100%: nothing to show
+					set isTotal [expr {$row == $nrows + 1}]
+					if {$isTotal && $id eq "ratio"} {
+						lappend text {}
+					} elseif {$Options($id:bar)} {
+						# solid on the total row, whose background is not the table's
+						lappend text [list @ [MakeBar $table $id $item $isTotal]]
 					} else {
 						lappend text [Format $item]
 					}
@@ -1261,7 +1266,7 @@ proc FillTable {table} {
 
 				result {
 					lassign $item white black draws lost
-					lappend text [list @ [MakeThreeBar $table $white $black $draws]]
+					lappend text [list @ [MakeThreeBar $table $white $black $draws [expr {$row == $nrows + 1}]]]
 					incr col
 				}
 
@@ -1305,28 +1310,28 @@ proc FillTable {table} {
 }
 
 
-proc MakeBar {table id item} {
+proc MakeBar {table id item {solid 0}} {
 	variable Options
 	variable Colors
 	variable Bars
 
 	set color [::colors::lookup $Colors($id:color)]
 	set width [expr {($item + 10)/20}]
-	if {[info exists Bars($width:$color)]} { return $Bars($width:$color) }
+	if {[info exists Bars($width:$color:$solid)]} { return $Bars($width:$color:$solid) }
 	set h [expr {max(8, [::table::linespace $table] - 6)}]
 	set img [image create photo -width 51 -height [expr {$h + 1}]]
 	::scidb::tk::image recolor black $img -composite set
-	if {$Options(bar:transparent)} {
+	if {$Options(bar:transparent) && !$solid} {
 		::scidb::tk::image alpha 0.0 $img -composite set -area 1 1 50 $h
 	} else {
 		::scidb::tk::image recolor white $img -composite set -area 1 1 50 $h
 	}
 	::scidb::tk::image recolor $color $img -composite set -area 1 1 $width $h 
-	return [set Bars($width:$color) $img]
+	return [set Bars($width:$color:$solid) $img]
 }
 
 
-proc MakeThreeBar {table whiteResult blackResult drawResult} {
+proc MakeThreeBar {table whiteResult blackResult drawResult {solid 0}} {
 	variable ThreeBars
 	variable Options
 	variable Colors
@@ -1336,11 +1341,11 @@ proc MakeThreeBar {table whiteResult blackResult drawResult} {
 	set black [expr {$total ? ($blackResult*49)/$total : 0.0}]
 	set white [expr {int($white + 0.5) + 1}]
 	set draws [expr {50 - int($black + 0.5)}]
-	if {[info exists ThreeBars($white:$draws)]} { return $ThreeBars($white:$draws) }
+	if {[info exists ThreeBars($white:$draws:$solid)]} { return $ThreeBars($white:$draws:$solid) }
 	set h [expr {max(8, [::table::linespace $table] - 6)}]
 	set img [image create photo -width 51 -height [expr {$h + 1}]]
 	::scidb::tk::image recolor black $img -composite set
-	if {$Options(bar:transparent)} {
+	if {$Options(bar:transparent) && !$solid} {
 		::scidb::tk::image alpha 0.0 $img -composite set -area 1 1 50 $h
 	} else {
 		::scidb::tk::image recolor white $img -composite set -area 1 1 50 $h
@@ -1352,7 +1357,7 @@ proc MakeThreeBar {table whiteResult blackResult drawResult} {
 		-composite set -area $white 1 $draws $h 
 	::scidb::tk::image recolor [::colors::lookup $Colors(result:black:$style)] $img \
 		-composite set -area $draws 1 50 $h 
-	return [set ThreeBars($white:$draws) $img]
+	return [set ThreeBars($white:$draws:$solid) $img]
 }
 
 
