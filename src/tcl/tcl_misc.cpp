@@ -71,10 +71,21 @@
 # define SCIDB_REVISION	"978"
 #endif
 
+#ifndef SCIDB_GIT_SHA
+# define SCIDB_GIT_SHA "unknown"
+#endif
+#ifndef SCIDB_COMMIT_DATE
+# define SCIDB_COMMIT_DATE "unknown"
+#endif
+#ifndef SCIDB_BUILD_DATE
+# define SCIDB_BUILD_DATE "unknown"
+#endif
+
 using namespace tcl;
 using namespace util;
 
 static char const* CmdAttributes				= "::scidb::misc::attributes";
+static char const* CmdBuildInfo				= "::scidb::misc::buildInfo";
 static char const* CmdContainsUnicodeChar	= "::scidb::misc::containsUnicodeChar";
 static char const* CmdCrc32					= "::scidb::misc::crc32";
 static char const* CmdDebug					= "::scidb::misc::debug?";
@@ -1127,6 +1138,24 @@ cmdRevision(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 
 static int
+cmdBuildInfo(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 1)
+		return error(CmdBuildInfo, 0, 0, "wrong # args: should be \"%s\"", CmdBuildInfo);
+
+	Tcl_Obj* dict = Tcl_NewDictObj();
+	Tcl_DictObjPut(ti, dict, Tcl_NewStringObj("version", -1), Tcl_NewStringObj(SCIDB_VERSION, -1));
+	Tcl_DictObjPut(ti, dict, Tcl_NewStringObj("revision", -1), Tcl_NewStringObj(SCIDB_REVISION, -1));
+	Tcl_DictObjPut(ti, dict, Tcl_NewStringObj("gitSha", -1), Tcl_NewStringObj(SCIDB_GIT_SHA, -1));
+	Tcl_DictObjPut(ti, dict, Tcl_NewStringObj("commitDate", -1), Tcl_NewStringObj(SCIDB_COMMIT_DATE, -1));
+	Tcl_DictObjPut(ti, dict, Tcl_NewStringObj("buildDate", -1), Tcl_NewStringObj(SCIDB_BUILD_DATE, -1));
+
+	setResult(dict);
+	return TCL_OK;
+}
+
+
+static int
 cmdDebug(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	if (objc != 1)
@@ -1237,14 +1266,17 @@ cmdAttributes(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	::db::type::ID			type;
 	::db::variant::Type	variant;
 
+	unsigned formatVersion = 0;
+
 	::db::DatabaseCodec::getAttributes(	stringFromObj(objc, objv, 1),
 													numGames,
 													type,
 													variant,
 													creationTime,
-													&description);
+													&description,
+													&formatVersion);
 
-	Tcl_Obj* objs[5];
+	Tcl_Obj* objs[6];
 
 	mstl::string created;
 
@@ -1256,6 +1288,7 @@ cmdAttributes(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	objs[2] = game::objFromVariant(variant);
 	objs[3] = Tcl_NewStringObj(created, created.size());
 	objs[4] = Tcl_NewStringObj(description, description.size());
+	objs[5] = Tcl_NewIntObj(formatVersion);
 
 	setResult(U_NUMBER_OF(objs), objs);
 	return TCL_OK;
@@ -1926,6 +1959,7 @@ void
 init(Tcl_Interp* ti)
 {
 	createCommand(ti, CmdAttributes,				cmdAttributes);
+	createCommand(ti, CmdBuildInfo,				cmdBuildInfo);
 	createCommand(ti, CmdContainsUnicodeChar,	cmdContainsUnicodeChar);
 	createCommand(ti, CmdCrc32,					cmdCrc32);
 	createCommand(ti, CmdDebug,					cmdDebug);

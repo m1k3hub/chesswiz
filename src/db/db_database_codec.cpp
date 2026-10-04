@@ -359,12 +359,15 @@ DatabaseCodec::getAttributes(	mstl::string const& filename,
 										type::ID& type,
 										variant::Type& variant,
 										uint32_t& creationTime,
-										mstl::string* description)
+										mstl::string* description,
+										unsigned* formatVersion)
 {
 	type = type::Unspecific;
 	variant = variant::Normal;
 	creationTime = 0;
 	numGames = -1;
+	if (formatVersion)
+		*formatVersion = 0;
 
 	if (description)
 		description->clear();
@@ -374,7 +377,7 @@ DatabaseCodec::getAttributes(	mstl::string const& filename,
 	switch (format::fromString(ext))
 	{
 		case format::Scidb:
-			return sci::Codec::getAttributes(filename, numGames, type, variant, creationTime, description);
+			return sci::Codec::getAttributes(filename, numGames, type, variant, creationTime, description, formatVersion);
 
 		case format::ChessBase:
 			return cbh::Codec::getAttributes(filename, numGames, type, description);

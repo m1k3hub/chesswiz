@@ -2711,7 +2711,8 @@ Codec::getAttributes(mstl::string const& filename,
 							db::type::ID& type,
 							variant::Type& variant,
 							uint32_t& creationTime,
-							mstl::string* description)
+							mstl::string* description,
+							unsigned* formatVersion)
 {
 	M_REQUIRE(util::misc::file::suffix(filename) == "sci");
 
@@ -2730,6 +2731,8 @@ Codec::getAttributes(mstl::string const& filename,
 	ByteStream bstrm(header, sizeof(header));
 
 	unsigned fileVersion = bstrm.uint16();
+	if (formatVersion)
+		*formatVersion = fileVersion;
 
 #ifndef CODEBLOCKS
 	switch (fileVersion)
@@ -2743,7 +2746,7 @@ Codec::getAttributes(mstl::string const& filename,
 	}
 #endif
 
-	if (fileVersion == 95)
+	if (fileVersion >= 95 && fileVersion <= Max_FileVersion)
 		numGames = (int)bstrm.uint32();
 	else
 		numGames = (int)bstrm.uint24(); // v94: 24-bit game count

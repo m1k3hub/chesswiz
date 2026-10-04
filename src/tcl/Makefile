@@ -76,7 +76,16 @@ $(LIB).a: $(OBJS)
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(CXXFLAGS:  = )]"
 	@$(CXX) -c $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(ALL_INCLUDE) $<
 
-tcl_misc.o: ../../Makefile.version
+tcl_misc.o: ../../Makefile.version .build_info
+tcl_misc.o: EXTRA_CXXFLAGS += $(SCIDB_BUILD_FLAGS)
+
+# Rewritten only when the commit/date changes, so tcl_misc.o is rebuilt
+# exactly then and buildInfo never reports a stale commit.
+.PHONY: FORCE
+FORCE:
+
+.build_info: FORCE
+	@echo '$(SCIDB_BUILD_FLAGS)' | cmp -s - $@ || echo '$(SCIDB_BUILD_FLAGS)' > $@
 
 # Snapshot conversion is on the GUI thread: optimize this adapter even in
 # the otherwise unoptimized developer build to keep each slice productive.

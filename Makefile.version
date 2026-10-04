@@ -5,4 +5,9 @@
 SCIDB_VERSION	= -DSCIDB_VERSION="\"1.0 BETA\""
 SCIDB_REVISION	= -DSCIDB_REVISION="\"1493\""
 
+SCIDB_GIT_SHA      := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+SCIDB_COMMIT_DATE  := $(shell git log -1 --format="%cd" --date=short 2>/dev/null || echo "unknown")
+SCIDB_BUILD_DATE   := $(shell date -u +%Y-%m-%d)
+SCIDB_BUILD_FLAGS   = -DSCIDB_GIT_SHA="\"$(SCIDB_GIT_SHA)\"" -DSCIDB_COMMIT_DATE="\"$(SCIDB_COMMIT_DATE)\"" -DSCIDB_BUILD_DATE="\"$(SCIDB_BUILD_DATE)\""
+
 # End of Makefile

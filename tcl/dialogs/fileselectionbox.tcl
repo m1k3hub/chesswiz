@@ -75,6 +75,7 @@ set Title(save)					"Save File"
 set Title(dir)						"Choose Directory"
 
 set Content							"Content"
+set Format								"Format"
 set Open								"Open"
 set OriginalPath					"Original Path"
 set DateOfDeletion				"Date of Deletion"
@@ -780,7 +781,7 @@ proc Inspect {parent {folder ""} {filename ""} {originalPath ""} {deletionDate "
 
 				switch $ext {
 					.sci - .si3 - .si4 - .cbh - .cbf - .pgn - .pgn.gz - .bpgn - .bpgn.gz - .zip {
-						lassign [::scidb::misc::attributes $filename] numGames type variant created descr
+						lassign [::scidb::misc::attributes $filename] numGames type variant created descr formatVersion
 						if {[string length $descr] == 0} { set descr "\u2014" }
 #						set type [set ::application::database::mc::T_$type]
 						set numGames [FormatNumGames $filename $numGames]
@@ -811,6 +812,18 @@ proc Inspect {parent {folder ""} {filename ""} {originalPath ""} {deletionDate "
 						tk::label $f.lused -text "$mc::Open:"
 						tk::label $f.tused -text $open
 						if {$ext eq ".sci"} {
+							if {[info exists formatVersion] && $formatVersion > 0} {
+								set fvText "v$formatVersion"
+								if {$formatVersion == 96} {
+									append fvText " (correspondence timings)"
+								} elseif {$formatVersion == 95} {
+									append fvText " (32-bit count)"
+								} elseif {$formatVersion == 94} {
+									append fvText " (legacy 24-bit)"
+								}
+								tk::label $f.lformat -text "$mc::Format:"
+								tk::label $f.tformat -text $fvText
+							}
 							tk::label $f.lvariant -text "$mc::Variant:"
 							tk::label $f.tvariant -text $mc::VariantName($variant)
 						}
@@ -854,7 +867,7 @@ proc Inspect {parent {folder ""} {filename ""} {originalPath ""} {deletionDate "
 
 			set r 1
 			foreach attr {name type target size created modified \
-								readonly content ngames used variant descr} {
+								readonly content ngames used format variant descr} {
 				if {[winfo exists $f.l$attr]} {
 					$f.l$attr configure -background $bg
 					$f.t$attr configure -background $bg

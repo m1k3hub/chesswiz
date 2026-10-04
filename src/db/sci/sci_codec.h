@@ -181,7 +181,8 @@ public:
 										db::type::ID& type,
 										db::variant::Type& variant,
 										uint32_t& creationTime,
-										mstl::string* description = 0);
+										mstl::string* description = 0,
+										unsigned* formatVersion = 0);
 	static void getSuffixes(mstl::string const& filename, StringList& result);
 	static bool upgradeIndexOnly();
 	static bool isExtraTag(tag::ID tag);

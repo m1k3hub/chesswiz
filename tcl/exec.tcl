@@ -62,6 +62,16 @@ if {[tk windowingsystem] ne "aqua"} {
 namespace eval scidb {
 	set app		Scidb
 	set version "1.0 BETA"
+	set gitSha "unknown"
+	set commitDate "unknown"
+	set buildDate "unknown"
+	catch {
+		set _bi [::scidb::misc::buildInfo]
+		if {[dict exists $_bi gitSha]} { set gitSha [dict get $_bi gitSha] }
+		if {[dict exists $_bi commitDate]} { set commitDate [dict get $_bi commitDate] }
+		if {[dict exists $_bi buildDate]} { set buildDate [dict get $_bi buildDate] }
+		unset _bi
+	}
 }
 
 
@@ -133,7 +143,6 @@ set ProgramOptions [list                                                        
 	[list "--single-process"        "Forcing a single process of $::scidb::app"               \
 	                                "(you shouldn't use this option; only for testing)"]      \
 	[list "--update-themes"         "Update themes (from shared directory)"]                  \
-	[list "--update-player-photos"  "Update/install player photos"]                           \
 	[list "--force-grab"            "Do not suppress grabs in debug mode"                     \
 	                                "(only for debugging)"]                                   \
 	[list "--ai-model=MODEL"        "Use MODEL for the AI features (this session only)"]      \
@@ -268,35 +277,6 @@ if {[testOption help]} {
 	puts "  -display DISPLAY        Run $::scidb::app on DISPLAY"
 	puts "  -sync                   Use synchronous mode for display server"
 	exit 0
-}
-
-# TODO: test this option
-if {0 && [testOption update-player-photos]} {
-	proc inform {what args} {
-		switch $what {
-			file {
-				puts -nonewline .
-			}
-			timeout {
-				puts ""
-				puts $::util::photos::mc::TimeOut
-				puts $::util::photos::mc::DownloadAborted
-			}
-			error {
-				lassign $args file msg
-				puts ""
-				puts [format $::util::photos::mc::Message(httperr) $msg]
-				puts $::util::photos::mc::DownloadAborted
-			}
-		}
-	}
-
-	# NOTE: the photo download server is defunct (see ::util::photos::checkForUpdate)
-	lassign [::util::photos::checkForUpdate [namespace current]::inform] state msg
-	if {$state eq "error"} {
-		puts [format $::util::photos::mc::Message(httperr) $msg]
-		puts $::util::photos::mc::DownloadAborted
-	}
 }
 
 unset ProgramOptions

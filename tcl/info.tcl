@@ -153,7 +153,7 @@ proc DisplayAbout {w} {
 		</table>
 		<br/><br/>
 		<font style='font-family: $fam; font-size: 12pt;'>
-			$mc::Version $::scidb::version<br/>
+			$mc::Version $::scidb::version (rev $::scidb::revision[expr {[info exists ::scidb::gitSha] && $::scidb::gitSha ne "unknown" ? ", $::scidb::gitSha" : ""}])<br/>
 			Copyright &#x00A9; 2008-2018 Gregor Cramer<br/><br/>
 			[Url http://scidb.sourceforge.net]<br/><br/>
 			$mc::Distributed<br/><br/>
@@ -571,10 +571,15 @@ proc BuildSystemFrame {w} {
 	$t insert end "OS Identifier:       $identity\n"
 	$t insert end "System Architecture: $tcl_platform(machine)\n"
 	$t insert end "Windowing System:    [tk windowingsystem]\n"
-	$t insert end "Vendor String:       [winfo server .]"
+	$t insert end "Vendor String:       [winfo server .]\n"
+	if {[info exists ::scidb::gitSha] && $::scidb::gitSha ne "unknown"} {
+		$t insert end "Git Commit:          $::scidb::gitSha ($::scidb::commitDate)\n"
+	}
+	if {[info exists ::scidb::buildDate] && $::scidb::buildDate ne "unknown"} {
+		$t insert end "Build Date:          $::scidb::buildDate\n"
+	}
 	if {[llength $total]} {
-	$t insert end "\n"
-	$t insert end "Total Memory:        [::locale::formatDouble [expr {$total/1048576.0}] 1] MB"
+		$t insert end "Total Memory:        [::locale::formatDouble [expr {$total/1048576.0}] 1] MB\n"
 	}
 
 	$t configure -state disabled

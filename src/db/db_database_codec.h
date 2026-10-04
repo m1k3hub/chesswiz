@@ -229,7 +229,8 @@ public:
 										type::ID& type,
 										variant::Type& variant,
 										uint32_t& creationTime,
-										mstl::string* description = 0);
+										mstl::string* description = 0,
+										unsigned* formatVersion = 0);
 	static void getSuffixes(mstl::string const& filename, StringList& result);
 
 	// public for index recovering

@@ -291,7 +291,13 @@ proc util::place::getWmWorkArea {w} { return [::scidb::tk::wm workarea $w] }
 # ------------------------------------------------------------------------------
 
 if {[::process::testOption version]} {
-	puts "$::scidb::app version $::scidb::version"
+	set _verLine "$::scidb::app version $::scidb::version (rev $::scidb::revision"
+	if {[info exists ::scidb::gitSha] && $::scidb::gitSha ne "unknown"} {
+		append _verLine ", commit $::scidb::gitSha, $::scidb::commitDate"
+	}
+	append _verLine ")"
+	puts $_verLine
+	unset _verLine
 	if {[file readable $::scidb::file::options]} {
 		puts "option file: $::scidb::file::options"
 	}
