@@ -120,7 +120,9 @@ proc ::application::ai::models::show {{parent .application}} {
 	set Priv(dialog) $dlg
 	# the saved choices (an override is shown separately)
 	set Priv(name) $::application::ai::Settings(model)
-	if {$Priv(name) eq "" || $::application::ai::Settings(provider) ne "ollama"} {
+	# never chosen: the default, whatever an older options file left behind
+	if {$Priv(name) eq "" || $::application::ai::Settings(provider) ne "ollama"
+	 || !$::application::ai::Settings(chosen)} {
 		set Priv(name) $::ai::provider::DefaultModel(ollama)
 	}
 	set Priv(classifier) [lindex [::application::ai::setting classifier] 1]
