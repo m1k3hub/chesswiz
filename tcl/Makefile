@@ -14,7 +14,6 @@ include ../Makefile.in
 
 SCRIPT = scidb$(SUFFIX)
 ARCH = arch-scidb
-UPDATE_PHOTO_FILES = update-scidb-photo-files
 
 # NOTE that the ordering is important!
 SOURCES = \
@@ -235,14 +234,13 @@ ifneq ($(USE_INLINE_TEXT),)
 SOURCES += contrib/tktext.tcl
 endif
 
-SCRIPTS = $(SCRIPT) $(UPDATE_PHOTO_FILES)
+SCRIPTS = $(SCRIPT)
 
 all: $(SCRIPTS)
 
 clean:
 	@echo "Clean `pwd`"
 	@rm -f $(SCRIPT)
-	@rm -f $(UPDATE_PHOTO_FILES)
 
 depend:
 	@# nothing to do
@@ -272,14 +270,12 @@ install-scripts: $(SCRIPTS)
 	@echo "Install Tcl scripts"
 	@install -m 755 -d $(BINDIR)
 	@install -m 755 -p $(SCRIPT) $(BINDIR)
-	@install -m 755 -p $(UPDATE_PHOTO_FILES) $(BINDIR)
 	@install -m 755 -d $(DATADIR)/scripts
 	@install -m 644 -p ../scripts/stt-transcribe.py $(DATADIR)/scripts
 
 uninstall-scripts:
 	@echo "Uninstall Tcl scripts"
 	@rm -f $(BINDIR)/$(SCRIPT)
-	@rm -f $(BINDIR)/$(UPDATE_PHOTO_FILES)
 	@rm -f $(DATADIR)/scripts/stt-transcribe.py
 
 install-pieces:
@@ -707,7 +703,6 @@ $(SCRIPT): $(SOURCES) Makefile ../Makefile.in
 		-e 's/# vi:set ts=3 sw=3:/update idletasks/'        \
 		-e 's#%SHAREDIR%#$(DATADIR)#g'                      \
 		-e 's#%%ENGINESDIR%%#$(%ENGINESDIR%)#g'             \
-		-e 's#%UPDATE_PHOTO_FILES%#$(UPDATE_PHOTO_FILES)#g' \
 		-e '/^##/d'                                         \
 		-e '/^#$$/d'                                        \
 		-e '/^[ 	]*#[ 	]\+/d'                               \
@@ -719,18 +714,6 @@ $(SCRIPT): $(SOURCES) Makefile ../Makefile.in
 		|| { echo "ERROR: $(SCRIPT) failed the syntax check"; exit 1; }; \
 	chmod 0555 "$$tmp"; \
 	mv -f "$$tmp" $(SCRIPT)
-
-$(UPDATE_PHOTO_FILES): utils/update-photos.tcl
-	@echo "Building $(UPDATE_PHOTO_FILES)"
-	@tmp="$(UPDATE_PHOTO_FILES).tmp.$$$$"; \
-	trap 'rm -f "$$tmp"' EXIT INT TERM HUP; \
-	cat utils/update-photos.tcl | sed                     \
-		-e 's/%PROGRAM%/tclscidb$(SUFFIX)/g'                \
-		-e 's#%SHAREDIR%#$(DATADIR)#g'                      \
-		-e 's/%UPDATE_PHOTO_FILES%/$(UPDATE_PHOTO_FILES)/g' \
-		> "$$tmp"; \
-	chmod 0555 "$$tmp"; \
-	mv -f "$$tmp" $(UPDATE_PHOTO_FILES)
 
 $(ARCH): utils/archive.tcl
 	@echo "Building $(ARCH)"

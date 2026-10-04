@@ -17,7 +17,7 @@
 # the exact script -- evaluating Tcl.
 #
 #   ::application::assistant::show
-#   ::application::assistant::ask "install the player photos"
+#   ::application::assistant::ask "export the database"
 # ======================================================================
 
 if {[llength [info commands ::util::source]]} {
@@ -110,12 +110,6 @@ variable Actions {
 		"Open the export dialog for the games the game list shows (PGN, HTML, LaTeX, PDF, Scidb formats): after show_search or a find_positions/find_similar run in mode all, that is the selection; otherwise the whole active database. The user picks the format and file there."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoExport
-	}
-	install_player_photos {
-		1 0 "open the player photo installer"
-		"Open the dialog that installs or updates the player photos."
-		{{"type":"object","properties":{}}}
-		::application::assistant::DoInstallPhotos
 	}
 	install_chessbase_fonts {
 		1 0 "install the ChessBase fonts"
@@ -3354,13 +3348,6 @@ proc ::application::assistant::DoOpenDatabase {path} {
 	set ok [::application::database::openBase .application $path yes \
 		-encoding $::encoding::autoEncoding -switchToBase 1]
 	return [expr {$ok ? "opened $path" : "could not open $path"}]
-}
-
-
-proc ::application::assistant::DoInstallPhotos {} {
-	if {[::util::photos::busy?]} { return "a photo installation is already running" }
-	::util::photos::openDialog .application
-	return "the photo installer dialog is open; the user completes it"
 }
 
 

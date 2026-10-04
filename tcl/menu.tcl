@@ -609,17 +609,6 @@ proc build {menu} {
 			;
 	}
 
-	if {[::util::photos::busy?]} { set state disabled } else { set state normal }
-	lassign [::tk::UnderlineAmpersand $::util::photos::mc::InstallPlayerPhotos] text ul
-	set cmd [list ::util::photos::openDialog .application]
-	$m add command \
-		-compound left \
-		-label " $text" \
-		-underline [IncrUL $ul] \
-		-image $::icon::16x16::none \
-		-command $cmd \
-		-state $state \
-		;
 
 	if {[llength [info commands ::playerdata::updateFide]]} {
 		lassign [::tk::UnderlineAmpersand $::playerdata::mc::UpdateFide] text ul

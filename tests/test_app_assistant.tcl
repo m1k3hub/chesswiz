@@ -109,24 +109,26 @@ tcltest::test assistant-read-only-needs-no-confirm {a read-only tool runs withou
 tcltest::test assistant-denied-action {a changing action does not run when the user denies it} -body {
 	::scidb::test::assistant::setup 0
 	set called 0
-	rename ::util::photos::openDialog ::scidb::test::assistant::realOpenDialog
-	proc ::util::photos::openDialog {args} { set ::called 1 }
+	set hadProc [llength [info procs ::font::installChessBaseFonts]]
+	if {$hadProc} { rename ::font::installChessBaseFonts ::scidb::test::assistant::realInstallFonts }
+	proc ::font::installChessBaseFonts {args} { set ::called 1 }
 	set ::called 0
-	set reply [::application::assistant::runTool install_player_photos {}]
-	rename ::util::photos::openDialog {}
-	rename ::scidb::test::assistant::realOpenDialog ::util::photos::openDialog
+	set reply [::application::assistant::runTool install_chessbase_fonts {}]
+	rename ::font::installChessBaseFonts {}
+	if {$hadProc} { rename ::scidb::test::assistant::realInstallFonts ::font::installChessBaseFonts }
 	list $reply $::called $::scidb::test::assistant::Asked
-} -result {{The user declined: the action was NOT performed and no dialog was opened.} 0 {{open the player photo installer}}}
+} -result {{The user declined: the action was NOT performed and no dialog was opened.} 0 {{install the ChessBase fonts}}}
 
 tcltest::test assistant-allowed-action {a changing action runs once the user allows it} -body {
 	::scidb::test::assistant::setup 1
-	rename ::util::photos::openDialog ::scidb::test::assistant::realOpenDialog
-	proc ::util::photos::openDialog {args} { set ::called 1 }
+	set hadProc [llength [info procs ::font::installChessBaseFonts]]
+	if {$hadProc} { rename ::font::installChessBaseFonts ::scidb::test::assistant::realInstallFonts }
+	proc ::font::installChessBaseFonts {args} { set ::called 1 }
 	set ::called 0
-	set reply [::application::assistant::runTool install_player_photos {}]
-	rename ::util::photos::openDialog {}
-	rename ::scidb::test::assistant::realOpenDialog ::util::photos::openDialog
-	list $::called [string match "*installer dialog is open*" $reply]
+	set reply [::application::assistant::runTool install_chessbase_fonts {}]
+	rename ::font::installChessBaseFonts {}
+	if {$hadProc} { rename ::scidb::test::assistant::realInstallFonts ::font::installChessBaseFonts }
+	list $::called [string match "*font installer ran*" $reply]
 } -result {1 1}
 
 tcltest::test assistant-tool-loop {a tool call is executed and the answer shown} -body {

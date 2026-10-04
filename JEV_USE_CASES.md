@@ -83,7 +83,7 @@ options:
 ```
 {explain_position, new_game, switch_tab_board, switch_tab_database,
  list_open_databases, discover_databases, export_database,
- install_player_photos, install_chessbase_fonts, current_game,
+ install_chessbase_fonts, current_game,
  database_summary, show_search, clear_search, list_engines, app_state,
  triage_errors, list_issues, needs_clarification, conversation}
 ```
