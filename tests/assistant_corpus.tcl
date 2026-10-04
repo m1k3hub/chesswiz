@@ -34,6 +34,7 @@ set Corpus {
 	engine-best J7 {What does Stockfish say is the best move here?} {{engine_evaluate} {engine_analysis} {start_engine}}
 	engine-check J7 {Is Nf5 a good move in this position?} {{engine_check_move move Nf5}}
 	tablebase-endgame J7 {Is this king and pawn endgame a win? Use the tablebase.} {{tablebase}}
+	pane-dock J1 {Dock the tree window.} {{pane action dock pane tree}}
 	find-draws J2 {All draws since 2020.} {{search_games result *1/2* from 2020*} {search_games result draw from 2020*}}
 	find-similar-games J2 {Find games like the one on the board.} {{similar_games} {find_similar}}
 	find-show J2 {Put those games in the game list.} {{show_search} {none}}

@@ -249,6 +249,15 @@ tcltest::test nls-tablebase-offline {the tablebase tool: piece limit and the wor
 		[::application::assistant::TablebaseWord blessed-loss]
 } -result {{error: the tablebases cover at most 7 pieces; this position has 32} wins wins {loses, but the 50-move rule saves it (a draw in practice)}}
 
+tcltest::test nls-pane-dock {undock and dock a pane; twice is harmless} -body {
+	set out {}
+	foreach a {undock undock dock dock} {
+		lappend out [::application::assistant::runTool pane [list action $a pane tree]]
+		update
+	}
+	lappend out [catch {::application::assistant::CheckArgs pane {action dock pane nonsense}}]
+} -result {{the tree pane is now a separate window} {the tree pane is already a separate window} {the tree pane is docked in the main window} {the tree pane is already docked in the main window} 1}
+
 tcltest::test nls-game-list {an interpretation filters the main game list} -body {
 	set f $::scidb::test::nls::Fixture
 	set out {}

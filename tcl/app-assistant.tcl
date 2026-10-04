@@ -71,6 +71,12 @@ variable Actions {
 		{{"type":"object","properties":{"tab":{"type":"string","enum":["board","database"]}},"required":["tab"]}}
 		::application::assistant::DoSwitchTab
 	}
+	pane {
+		0 0 "%s the %s pane"
+		"Dock or undock a pane of the board tab: 'dock' puts a floating pane back into the main window, 'undock' makes it a separate window. Panes: board, editor, games, dbgames (game list), tree, media, assistant, analysis (analysis:2 for the second), eco, report."
+		{{"type":"object","properties":{"action":{"type":"string","enum":["dock","undock"]},"pane":{"type":"string"}},"required":["action","pane"]}}
+		::application::assistant::DoPane
+	}
 	list_open_databases {
 		0 0 "list the open databases"
 		"List the databases currently open, and which one is active."
@@ -1071,6 +1077,16 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			set tab [Arg $cargs tab]
 			if {$tab ni {board database}} { error "tab must be 'board' or 'database'" }
 			return [dict create tab $tab]
+		}
+		pane {
+			set action [Arg $cargs action]
+			if {$action ni {dock undock}} { error "action must be dock or undock" }
+			set pane [string tolower [string trim [Arg $cargs pane]]]
+			if {$pane eq "analysis"} { set pane analysis:1 }
+			if {$pane in {"game list" gamelist}} { set pane dbgames }
+			set panes [[::application::twm board] leaves]
+			if {$pane ni $panes} { error "pane must be one of: [join $panes {, }]" }
+			return [dict create action $action pane $pane]
 		}
 		open_database {
 			set path [Arg $cargs path]
@@ -2648,6 +2664,30 @@ proc ::application::assistant::DoSetPosition {fen moves} {
 }
 
 
+proc ::application::assistant::DoPane {action pane} {
+	::application::switchTab board
+	set twm [::application::twm board]
+	set frame [$twm leaf $pane]
+	set floating {}
+	# every floating window (the twm's own "floats" lists the hidden ones only);
+	# undocking a pane twice crashes the twm, so this must be exact
+	foreach w [::scidb::tk::twm floats $twm] {
+		if {$pane in [::scidb::tk::twm leaves $twm $w]} {
+			set floating $w
+		}
+	}
+	if {$action eq "dock"} {
+		if {$floating eq ""} { return "the $pane pane is already docked in the main window" }
+		::twm::Dock $twm $floating
+		return "the $pane pane is docked in the main window"
+	}
+	if {$floating ne ""} { return "the $pane pane is already a separate window" }
+	if {![$twm isundockable $pane]} { return "error: the $pane pane cannot be undocked" }
+	::twm::Undock $twm $frame
+	return "the $pane pane is now a separate window"
+}
+
+
 proc ::application::assistant::DoOpenGame {number move after {player ""}} {
 	lassign [ActiveBase] base variant
 	if {$number eq ""} {
@@ -3436,7 +3476,7 @@ proc ::application::assistant::DoAppState {} {
 		set twm [::application::twm board]
 		lappend lines "board panes: [join [$twm leaves] {, }]"
 		set floats {}
-		foreach w [$twm floats] { lappend floats [$twm uid $w] }
+		foreach w [::scidb::tk::twm floats $twm] { lappend floats {*}[::scidb::tk::twm leaves $twm $w] }
 		if {[llength $floats]} { lappend lines "undocked: [join $floats {, }]" }
 	}
 	return [join $lines \n]
