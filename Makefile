@@ -14,7 +14,10 @@ include Makefile.in
 
 MAKEFLAGS += --no-print-directory
 
-.PHONY: all subdirs-man subdirs-src subdirs-engines subdirs-tcl
+.PHONY: all subdirs-man subdirs-src subdirs-engines subdirs-tcl \
+	clean-subdirs clean-man clean-src clean-engines clean-tcl \
+	install-subdirs install-man install-src install-engines install-tcl \
+	uninstall-subdirs uninstall-man uninstall-src uninstall-engines uninstall-tcl
 all: Makefile.in check-mtime subdirs-man subdirs-src subdirs-engines subdirs-tcl
 	@echo ""
 	@case $(BINDIR) in         \
@@ -76,10 +79,18 @@ depend:
 	@$(MAKE) -C engines depend
 	@$(MAKE) -C tcl depend
 
-clean-subdirs:
+clean-subdirs: clean-man clean-src clean-engines clean-tcl
+
+clean-man:
 	@$(MAKE) -C man clean
+
+clean-src:
 	@$(MAKE) -C src clean
+
+clean-engines:
 	@$(MAKE) -C engines clean
+
+clean-tcl:
 	@$(MAKE) -C tcl clean
 
 clean: clean-subdirs
@@ -112,17 +123,33 @@ Makefile.in:
 	@echo "****** Please use the 'configure' script before building Scidb ******"
 	@exit 1
 
-install-subdirs:
+install-subdirs: install-man install-src install-engines install-tcl
+
+install-man:
 	@$(MAKE) -C man install
+
+install-src:
 	@$(MAKE) -C src install
+
+install-engines:
 	@$(MAKE) -C engines install
+
+install-tcl:
 	@$(MAKE) -C tcl install
 	@$(MAKE) -C tcl setup-fonts
 
-uninstall-subdirs:
+uninstall-subdirs: uninstall-man uninstall-src uninstall-engines uninstall-tcl
+
+uninstall-man:
 	@$(MAKE) -C man uninstall
+
+uninstall-src:
 	@$(MAKE) -C src uninstall
+
+uninstall-engines:
 	@$(MAKE) -C engines uninstall
+
+uninstall-tcl:
 	@$(MAKE) -C tcl uninstall
 
 install-xdg:

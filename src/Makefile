@@ -229,34 +229,43 @@ uninstall: uninstall-executables uninstall-scripts uninstall-data uninstall-hyph
 		fi;                                                                      \
 	fi
 
-clean:
+SUBDIRS_CLEAN     = $(SUBDIRS:%=clean-%)
+SUBDIRS_DEPEND    = $(SUBDIRS:%=depend-%)
+SUBDIRS_RECURSIVE = $(SUBDIRS:%=recursive-%)
+
+.PHONY: clean $(SUBDIRS_CLEAN) clean-db clean-db-app clean-db-db \
+	depend $(SUBDIRS_DEPEND) recursive $(SUBDIRS_RECURSIVE)
+
+clean: $(SUBDIRS_CLEAN)
 	@echo "Clean `pwd`"
 	@rm -f $(TARGETS) Makefile.bak
 	@rm -f $(SRC:.cpp=.o)
-	@for dir in $(SUBDIRS); do \
-		$(MAKE) -C $$dir clean; \
-	done
 
-clean-db:
-	@for dir in app db; do \
-		$(MAKE) -C $$dir clean; \
-	done
+$(SUBDIRS_CLEAN): clean-%:
+	@$(MAKE) -C $* clean
 
-depend:
+clean-db: clean-db-app clean-db-db
+
+clean-db-app:
+	@$(MAKE) -C app clean
+
+clean-db-db:
+	@$(MAKE) -C db clean
+
+depend: $(SUBDIRS_DEPEND)
 	makedepend -fMakefile -Y -- $(INCLUDE) -- -w1 $(SRC) 2>/dev/null
 	@if [ -h Makefile.bak ]; then \
 		cp Makefile Makefile.bak;  \
 		mv Makefile.bak Makefile;  \
 	fi
-	@for dir in $(SUBDIRS); do  \
-		$(MAKE) -C $$dir depend; \
-	done
 
-recursive:
-	@for dir in $(SUBDIRS); do           \
-		$(MAKE) -C $$dir;                 \
-		if [ $$? != 0 ]; then exit 1; fi; \
-	done
+$(SUBDIRS_DEPEND): depend-%:
+	@$(MAKE) -C $* depend
+
+recursive: $(SUBDIRS_RECURSIVE)
+
+$(SUBDIRS_RECURSIVE): recursive-%:
+	@$(MAKE) -C $*
 
 mstl/libmstl.a: FORCE | recursive
 	$(MAKE) -C mstl

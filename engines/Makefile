@@ -12,30 +12,36 @@
 
 include ../Makefile.in
 
-all:
-	@for dir in $(ENGINES); do           \
-		$(MAKE) -C $$dir;                 \
-		if [ $$? != 0 ]; then exit 1; fi; \
-	done
+ENGINES_ALL       = $(ENGINES:%=all-%)
+ENGINES_CLEAN     = $(ENGINES:%=clean-%)
+ENGINES_INSTALL   = $(ENGINES:%=install-%)
+ENGINES_UNINSTALL = $(ENGINES:%=uninstall-%)
+
+.PHONY: all $(ENGINES_ALL) depend clean $(ENGINES_CLEAN) install $(ENGINES_INSTALL) uninstall $(ENGINES_UNINSTALL)
+
+all: $(ENGINES_ALL)
+
+$(ENGINES_ALL): all-%:
+	@$(MAKE) -C $*
 
 depend:
 	# no action
 
-clean:
-	@for dir in $(ENGINES); do \
-		$(MAKE) -C $$dir clean; \
-	done
+clean: $(ENGINES_CLEAN)
 
-install:
+$(ENGINES_CLEAN): clean-%:
+	@$(MAKE) -C $* clean
+
+install: $(ENGINES_INSTALL)
 	@echo "Install engines"
-	@for dir in $(ENGINES); do   \
-		$(MAKE) -C $$dir install; \
-	done
 
-uninstall:
+$(ENGINES_INSTALL): install-%:
+	@$(MAKE) -C $* install
+
+uninstall: $(ENGINES_UNINSTALL)
 	@echo "Uninstall engines"
-	@for dir in $(ENGINES); do     \
-		$(MAKE) -C $$dir uninstall; \
-	done
+
+$(ENGINES_UNINSTALL): uninstall-%:
+	@$(MAKE) -C $* uninstall
 
 # vi:set ts=3 sw=3:
