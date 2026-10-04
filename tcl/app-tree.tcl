@@ -419,8 +419,12 @@ proc build {twm parent width height} {
 	TreeCtrl::finishBindings $tb
 
 	$tb.t element create rectDivider rect -fill blue -height 1
+	# the divider row has a solid background of its own: the columns' stripes
+	# would paint it grey in some columns and plain in others
+	$tb.t element create rectDividerBg rect -fill [$tb.t cget -background]
 	$tb.t style create styLine
-	$tb.t style elements styLine {rectDivider}
+	$tb.t style elements styLine {rectDividerBg rectDivider}
+	$tb.t style layout styLine rectDividerBg -detach yes -iexpand xy
 	$tb.t style layout styLine rectDivider -pady {3 2} -iexpand x
 
 	::toolbar::setup $parent -id tree -layout board
