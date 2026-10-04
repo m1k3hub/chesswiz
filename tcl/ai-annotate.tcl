@@ -215,7 +215,7 @@ proc ::ai::annotate::annotate {parent args} {
 	variable mc
 
 	array set opts [list -prose $Settings(prose) -depth $Settings(depth) \
-		-marks $Settings(marks) -maxPlies $Settings(maxPlies) -done {}]
+		-marks $Settings(marks) -maxPlies $Settings(maxPlies) -done {} -from 0 -to end]
 	array set opts $args
 
 	if {$Priv(running)} { return 0 }
@@ -225,6 +225,12 @@ proc ::ai::annotate::annotate {parent args} {
 		return 0
 	}
 	if {[catch { set plies [::scidb::game::query mainline] }] || ![llength $plies]} {
+		::dialog::info -parent $parent -message $mc::NoGame
+		return 0
+	}
+	# -from/-to: a range of plies (0-based, inclusive), e.g. moves 20-30
+	set plies [lrange $plies $opts(-from) $opts(-to)]
+	if {![llength $plies]} {
 		::dialog::info -parent $parent -message $mc::NoGame
 		return 0
 	}

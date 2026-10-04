@@ -67,8 +67,19 @@ proc ::ai::engine::configure {args} {
 }
 
 
+# The Stockfish that ships with Scidb (stockfish-scidb in the engines
+# directory) is preferred over one on PATH, unless an engine was configured.
+proc ::ai::engine::Bundled {} {
+	variable Config
+	if {$Config(engine) ne "stockfish" || ![info exists ::scidb::dir::engines]} { return }
+	set exe [file join $::scidb::dir::engines stockfish-scidb]
+	if {[file executable $exe]} { set Config(engine) $exe }
+}
+
+
 proc ::ai::engine::available {} {
 	variable Config
+	Bundled
 	set exe $Config(engine)
 	if {[file exists $exe] && [file executable $exe]} { return 1 }
 	# bare name: search PATH
@@ -120,6 +131,22 @@ proc ::ai::engine::ensure {} {
 
 	send "uci"
 	readUntil "uciok"
+	# the engine's minimum (1 thread, 16 MB) makes every answer slow: use
+	# part of the machine, leaving cores for the GUI and analysis panes
+	set cores 2
+	catch { set cores [exec nproc] }
+	send "setoption name Threads value [expr {max(1, min(8, $cores / 2))}]"
+	send "setoption name Hash value 256"
+	# endgame tablebases: the folder set on the Stockfish profile (Engine
+	# options, SyzygyPath), so the facts are perfect in endgames too
+	if {![catch { lassign [::engine::profileOptions Stockfish Default] _ _ options }]} {
+		foreach opt $options {
+			lassign $opt name _ value
+			if {$name eq "SyzygyPath" && $value ni {"" <empty>}} {
+				send "setoption name SyzygyPath value $value"
+			}
+		}
+	}
 	send "isready"
 	readUntil "readyok"
 	return

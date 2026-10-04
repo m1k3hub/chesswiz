@@ -37,8 +37,9 @@ namespace eval ai {
 namespace eval search {
 
 # id {label description aliases cql kind} -- kind is event (something that
-# happens) or structure (a kind of position, used by the brief and the study
-# plan); every template is checked against fixture games and positions in
+# happens), structure (a kind of position, used by the brief and the study
+# plan) or phase (a stage of the game, for searches only: too broad to be a
+# fact about a position); every template is checked against fixture games and positions in
 # tests/test_app_nlsearch.tcl. The entries with an empty legacy cql run on
 # CQL 6.2 only (Patterns6; tests/test_app_pattern_library.tcl): the
 # instructional canon, beginner to master -- Renaud & Kahn's mates,
@@ -98,6 +99,12 @@ variable Patterns {
 		{{pawn ending} {pawn endings} {pawn endgame} {pawn endgames} {king and pawn}}
 		{(match (position :piececount [QRBNqrbn] 0 :piececount [Pp] 1 16))}
 		structure
+	}
+	endgame {
+		"endgame" "an endgame: each side has at most two pieces besides king and pawns"
+		{{endgame} {endgames} {ending} {endings} {end game} {end games}}
+		{(match (position :piececount [QRBN] 0 2 :piececount [qrbn] 0 2))}
+		phase
 	}
 	isolated_queen_pawn {
 		"isolated queen's pawn" "a side has an isolated d-pawn on d4 (d5 for Black): no own pawn on the c- or e-file"
@@ -333,6 +340,7 @@ variable Patterns6 {
     opposite_castling {cql() flipcolor (Ka-c1 and kg-h8)}
     rook_endgame {cql() not [QBNqbn] and R and r}
     pawn_endgame {cql() not [QRBNqrbn] and [Pp]}
+    endgame {cql() #[QRBN] <= 2 and #[qrbn] <= 2}
     isolated_queen_pawn {cql() flipcolor (Pd4 and not (Pc2-7 or Pe2-7))}
     opposite_bishops {cql() #B == 1 and #b == 1 and ((light B and dark b) or (dark B and light b))}
     queenless {cql() not [Qq] and #[RBNrbn] >= 4 and #[RBNrbn] <= 12}

@@ -81,6 +81,10 @@ set ClassifierNote	"kev, simple-jev and plumb run on this machine; jev is TypeSa
 set Recommended	"recommended on this machine (best on the calibration battery)"
 set PlumbNote		"Plumb-4B: scripts/serve-plumb-classifier.sh downloads it from Hugging Face and serves it on port 8090."
 set KeyNote			"needs %s in the environment"
+set Backups			"When the model is down, try:"
+set Backup1			"1st backup:"
+set Backup2			"2nd backup:"
+set BackupNote		"auto picks the first ready provider (Ollama, Fireworks, Qwen, Claude, Gemini, OpenAI); none tries no backup. Or enter \"provider model\"."
 
 } ;# namespace mc
 
@@ -214,6 +218,28 @@ proc ::application::ai::models::show {{parent .application}} {
 	# the cloud or the local section goes here (ProviderChanged)
 	ttk::frame $top.slot
 	pack $top.slot -fill both -expand yes
+
+	### backup models #####################################################
+	set backup [ttk::frame $top.backup]
+	ttk::label $backup.head -text $mc::Backups
+	grid $backup.head -row 0 -column 0 -columnspan 2 -sticky w -pady [list $::theme::pady 0]
+	set values [list auto none]
+	foreach provider {ollama fireworks qwen anthropic gemini openai} {
+		set model [::application::ai::Model $provider ""]
+		if {$model ne ""} { lappend values "$provider $model" }
+	}
+	foreach {n key} {1 backup1 2 backup2} {
+		set Priv($key) $::application::ai::Settings($key)
+		if {$Priv($key) eq ""} { set Priv($key) none }
+		ttk::label $backup.l$n -text [set mc::Backup$n]
+		ttk::combobox $backup.c$n -values $values -textvariable [namespace current]::Priv($key)
+		grid $backup.l$n -row $n -column 0 -sticky w
+		grid $backup.c$n -row $n -column 1 -sticky ew -padx [list $::theme::padx 0]
+	}
+	ttk::label $backup.note -text $mc::BackupNote -wraplength 460 -justify left
+	grid $backup.note -row 3 -column 0 -columnspan 2 -sticky w
+	grid columnconfigure $backup 1 -weight 1
+	pack $backup -fill x
 
 	### system one classifier ###############################################
 	set haveClassifier [llength [info commands ::ai::systemone::backends]]
@@ -656,6 +682,10 @@ proc ::application::ai::models::Apply {} {
 	}
 	if {[info exists Priv(ctree)] && [string length $Priv(classifier)]} {
 		::application::ai::chooseClassifier $Priv(classifier)
+	}
+	foreach key {backup1 backup2} {
+		set value [string trim $Priv($key)]
+		set ::application::ai::Settings($key) [expr {$value eq "none" ? "" : $value}]
 	}
 	Close
 }

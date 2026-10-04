@@ -164,6 +164,8 @@ variable Examples {
 		{cql() not [QBNqbn] and R and r}
 	pawn_endgame		"a pawn endgame"
 		{cql() not [QRBNqrbn] and [Pp]}
+	endgame			"an endgame (at most two pieces a side besides king and pawns)"
+		{cql() #[QRBN] <= 2 and #[qrbn] <= 2}
 	queen_vs_rook	"queen against rook (king and queen against king and rook)"
 		{cql() flipcolor {#A == 2 Q #a == 2 r}}
 	exchange_up		"a side is the exchange up (rook for a minor piece)"

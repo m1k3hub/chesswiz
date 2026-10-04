@@ -228,7 +228,7 @@ tcltest::test plib-aliases {a request naming a pattern selects it} -body {
 tcltest::test plib-labels {every pattern has a label, a description, aliases and a known kind} -body {
 	lmap id [::ai::search::patternIds] {
 		set p [::ai::search::pattern $id]
-		if {[dict get $p label] ne "" && [dict get $p description] ne "" && [dict get $p kind] in {event structure}
+		if {[dict get $p label] ne "" && [dict get $p description] ne "" && [dict get $p kind] in {event structure phase}
 		 && [string match "cql()*" [::ai::search::pattern6 $id]]} continue
 		set id
 	}

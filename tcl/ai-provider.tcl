@@ -227,8 +227,10 @@ proc ::ai::provider::requestAsync {url body done failed {headers {}}} {
 }
 
 
+# A request that never got a reply (no connection, timeout) means the
+# provider is down: the caller may try a backup model ("down 1").
 proc ::ai::provider::failAsync {script err} {
-	uplevel #0 [list {*}$script [list ok 0 error $err]]
+	uplevel #0 [list {*}$script [list ok 0 error $err down 1]]
 }
 
 
@@ -424,7 +426,8 @@ proc ::ai::provider::onOllama {script token} {
 	::http::cleanup $token
 
 	if {$status ne "ok" || $code != 200} {
-		uplevel #0 [list {*}$script [list ok 0 error "HTTP $code $status"]]
+		set down [expr {$status ne "ok" || $code == 429 || $code >= 500}]
+		uplevel #0 [list {*}$script [list ok 0 error "HTTP $code $status" down $down]]
 		return
 	}
 
@@ -1083,10 +1086,15 @@ proc ::ai::provider::openaiReply {data} {
 
 
 proc ::ai::provider::openaiBody {messages tools} {
+	variable Config
 	set model [model]
 	if {$model eq ""} { error "no [label [Current]] model chosen: pick one in Extras > AI: Choose Model" }
 	set body "\{\"model\":\"[jsonEscape $model]\",\"messages\":[openaiMessages $messages]"
 	if {$tools ne ""} { append body ",\"tools\":$tools" }
+	# GLM on Fireworks thinks for minutes unbounded; medium answers in seconds
+	if {[Current] eq "fireworks" && $Config(effort) ne ""} {
+		append body ",\"reasoning_effort\":\"[jsonEscape $Config(effort)]\""
+	}
 	return "$body\}"
 }
 
@@ -1226,7 +1234,9 @@ proc ::ai::provider::OnCloud {provider mode script token} {
 	set name [label $provider]
 	if {$status ne "ok" || $code != 200} {
 		set err [expr {$status ne "ok" ? "$name: $status" : [CloudError $name $code $data]}]
-		uplevel #0 [list {*}$script [list ok 0 error $err]]
+		# busy (429), a server fault (5xx) or no reply at all: a backup may serve
+		set down [expr {$status ne "ok" || $code == 429 || $code >= 500}]
+		uplevel #0 [list {*}$script [list ok 0 error $err down $down]]
 		return
 	}
 	if {[catch {
@@ -1401,7 +1411,8 @@ proc ::ai::provider::onOllamaChat {script token} {
 	::http::cleanup $token
 
 	if {$status ne "ok" || $code != 200} {
-		uplevel #0 [list {*}$script [list ok 0 error "HTTP $code $status"]]
+		set down [expr {$status ne "ok" || $code == 429 || $code >= 500}]
+		uplevel #0 [list {*}$script [list ok 0 error "HTTP $code $status" down $down]]
 		return
 	}
 

@@ -35,6 +35,8 @@ set Send				"Send"
 set Clear			"Clear"
 set Thinking		"Thinking..."
 set Ready			"Ready"
+set UsingBackup	"%s is not answering; asking %s instead."
+set AllDown			"The AI service is not answering right now (%s). Please try again in a moment."
 set Confirm			"The assistant wants to: %s"
 set Denied			"The user declined: the action was NOT performed and no dialog was opened."
 set Greeting		"Ask me in your own words, for example \"games where a knight forks king and queen\", \"positions with this pawn structure\", \"set up the Najdorf after 6.Bg5\" or \"Carlsen's prep report\". F2 brings me back from anywhere."
@@ -180,19 +182,19 @@ variable Actions {
 	search_games {
 		0 0 "search the games"
 		"Search the active database; nothing changes, the game list included. Returns the number of games found, the first of them, and the criteria as understood. Names may be partial. 'result' is win/draw/loss from the player's side, or 1-0/0-1/1/2-1/2 without a player. 'eco' is a code, class or range as for opening_score (map opening names to ECO yourself). Dates are YYYY, YYYY.MM or YYYY.MM.DD. To show the games in the game list, call show_search afterwards. 'pattern' keeps only games containing a position pattern (Scidb's CQL matcher reads their moves, which takes longer on a large database)."
-		{{"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"pattern":{"type":"string","enum":["checkmate","smothered_mate","stalemate","en_passant","underpromotion","double_check","opposite_castling","rook_endgame","pawn_endgame","isolated_queen_pawn","opposite_bishops","queenless","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","knight_fork","greek_gift","rook_seventh","doubled_rooks_seventh","knight_outpost","hanging_pawns","carlsbad","maroczy_bind","stonewall","queen_vs_rook","wrong_bishop","lucena","epaulette_mate","queen_pawn_mate","skewer","discovered_check","double_bishop_sacrifice","alekhines_gun","minority_attack","hedgehog","protected_passed_pawn","weakened_fianchetto","pawn_fork","legals_mate","blackburne_mate","pin_attacked_by_pawn","double_attack_loose","philidor_position","vancura_position","backward_pawn","bad_bishop","closed_center","trebuchet","boleslavsky_hole","botvinnik_formation","rook_behind_passed_pawn"],"description":"a position pattern the game must contain, found by Scidb's CQL matcher: the game ends in checkmate, a smothered mate, the game ends in stalemate, an en-passant capture, an underpromotion, a double check, kings on opposite wings, a rook ending, a pawn ending, an isolated queen's pawn, opposite-coloured bishops, a queenless middlegame, a back-rank mate, a two-bishop (Boden's) mate, Anastasia's mate, an Arabian mate, a knight fork of king and queen or rook, a Greek gift Bxh7+, a rook on the seventh, doubled rooks on the seventh, a knight outpost, hanging pawns, a Carlsbad structure, a Maroczy bind, a Stonewall, queen against rook, a wrong-coloured bishop, a Lucena position (building a bridge), an epaulette mate, a queen-and-pawn (Damiano's, Lolli's) mate, a skewer, a discovered check, a double bishop sacrifice (Lasker-Bauer), Alekhine's gun, a minority attack, a hedgehog, a protected passed pawn, a weakened fianchetto, a pawn fork, Legal's mate, Blackburne's mate, a pinned piece attacked by a pawn, a double attack on loose pieces, the Philidor position (third-rank defence), the Vancura position, a backward pawn, a bad bishop, a closed centre, a trebuchet, the Boleslavsky hole, the Botvinnik formation, a rook behind a passed pawn"}}}}
+		{{"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"},"pattern":{"type":"string","enum":["checkmate","smothered_mate","stalemate","en_passant","underpromotion","double_check","opposite_castling","rook_endgame","pawn_endgame","endgame","isolated_queen_pawn","opposite_bishops","queenless","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","knight_fork","greek_gift","rook_seventh","doubled_rooks_seventh","knight_outpost","hanging_pawns","carlsbad","maroczy_bind","stonewall","queen_vs_rook","wrong_bishop","lucena","epaulette_mate","queen_pawn_mate","skewer","discovered_check","double_bishop_sacrifice","alekhines_gun","minority_attack","hedgehog","protected_passed_pawn","weakened_fianchetto","pawn_fork","legals_mate","blackburne_mate","pin_attacked_by_pawn","double_attack_loose","philidor_position","vancura_position","backward_pawn","bad_bishop","closed_center","trebuchet","boleslavsky_hole","botvinnik_formation","rook_behind_passed_pawn"],"description":"a position pattern the game must contain, found by Scidb's CQL matcher: the game ends in checkmate, a smothered mate, the game ends in stalemate, an en-passant capture, an underpromotion, a double check, kings on opposite wings, a rook ending, a pawn ending, any endgame (at most two pieces a side), an isolated queen's pawn, opposite-coloured bishops, a queenless middlegame, a back-rank mate, a two-bishop (Boden's) mate, Anastasia's mate, an Arabian mate, a knight fork of king and queen or rook, a Greek gift Bxh7+, a rook on the seventh, doubled rooks on the seventh, a knight outpost, hanging pawns, a Carlsbad structure, a Maroczy bind, a Stonewall, queen against rook, a wrong-coloured bishop, a Lucena position (building a bridge), an epaulette mate, a queen-and-pawn (Damiano's, Lolli's) mate, a skewer, a discovered check, a double bishop sacrifice (Lasker-Bauer), Alekhine's gun, a minority attack, a hedgehog, a protected passed pawn, a weakened fianchetto, a pawn fork, Legal's mate, Blackburne's mate, a pinned piece attacked by a pawn, a double attack on loose pieces, the Philidor position (third-rank defence), the Vancura position, a backward pawn, a bad bishop, a closed centre, a trebuchet, the Boleslavsky hole, the Botvinnik formation, a rook behind a passed pawn"}}}}
 		::application::assistant::DoSearchGames
 	}
 	find_positions {
 		0 0 "find positions: %s"
 		"Find positions, patterns or tactics in the active database's games with Scidb's CQL 6.2 engine. When search_games has the pattern (its 'pattern' list: named mates, forks, the Greek gift, the 7th rank, outposts, pawn structures, Lucena and other endgames), use search_games instead: those searches are vetted and fast. You translate the request into a CQL 6.2 script; CQL decides what matches. Put only the positional part in 'cql', starting with cql() (e.g. 'cql() mate', 'cql() flipcolor {move from N} attacks k'); put names, colour, result, dates, event, ECO and Elo in the other fields, which narrow the games before any is read. Call cql_help first for the CQL 6.2 reference and worked examples unless the script is trivial. Step 1: mode sample (the default) returns up to 3 matching positions (the move that led there, the game, the FEN) and shows them to the user as diagrams in the Report pane; tell the user in one sentence what you searched for and ask whether these are what they meant. Step 2, only after the user agrees: call again with mode all and the same arguments; the game list then shows every matching game. If the script does not parse you get the parser's message: fix it and call again. Never describe a position's quality yourself."
-		{{"type":"object","properties":{"request":{"type":"string","description":"what the user asked for, in their words"},"cql":{"type":"string","description":"the CQL 6.2 script for the positional part, starting with cql()"},"mode":{"type":"string","enum":["sample","all"],"description":"sample (default): up to 3 positions to check with the user; all: every match, shown in the game list"},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"}},"required":["request","cql"]}}
+		{{"type":"object","properties":{"request":{"type":"string","description":"what the user asked for, in their words"},"cql":{"type":"string","description":"the CQL 6.2 script for the positional part, starting with cql()"},"mode":{"type":"string","enum":["sample","all"],"description":"sample (default): up to 3 positions to check with the user; all: every match, shown in the game list"},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"}},"required":["request","cql"]}}
 		::application::assistant::DoFindPositions
 	}
 	find_similar {
 		0 0 "find positions like the one on the board"
 		"Find games with positions like the one on the board ('games like this one', 'similar positions') in the active database; the application writes the CQL 6.2 search, so no cql_help is needed. 'aspects' says what must be alike: pawns (the pawn structure, both sides), material (the same pieces), pieces (kings and pieces on the same squares); default pawns alone. The game on the board is left out of the results. 'tolerance' lets up to 0, 1 or 2 pawns per side stand elsewhere (default 0). 'colours' both also finds the structure with the colours reversed. Same two steps as find_positions: mode sample first (the user sees diagrams and the search in the Report pane; ask whether that is what they meant), then mode all. Header fields narrow the games first."
-		{{"type":"object","properties":{"aspects":{"type":"array","items":{"type":"string","enum":["pawns","material","pieces"]}},"tolerance":{"type":"integer","description":"0, 1 or 2 pawns per side may stand elsewhere"},"colours":{"type":"string","enum":["same","both"]},"mode":{"type":"string","enum":["sample","all"]},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"}}}}
+		{{"type":"object","properties":{"aspects":{"type":"array","items":{"type":"string","enum":["pawns","material","pieces"]}},"tolerance":{"type":"integer","description":"0, 1 or 2 pawns per side may stand elsewhere"},"colours":{"type":"string","enum":["same","both"]},"mode":{"type":"string","enum":["sample","all"]},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"}}}}
 		::application::assistant::DoFindSimilar
 	}
 	cql_help {
@@ -221,8 +223,8 @@ variable Actions {
 	}
 	open_view {
 		0 0 "open the %s"
-		"Open one of Scidb's reports or dialogs for the user (they only show things; nothing changes). kind: player_card (a player's card: ratings, photo, links; needs 'name'), prep_report (a player's preparation report: scores by colour, openings, recent games, gaps, the opponent dossier; needs 'name'), crosstable (an event's tournament table; needs 'event', part of the event name), opening_report (the opening report of the position on the board: statistics, main lines, fashion, plans), opening_prep (opening preparation: the moves played from the board's position), repertoire_report (the active repertoire database's report), duplicates (find duplicate games in the active database)."
-		{{"type":"object","properties":{"kind":{"type":"string","enum":["player_card","prep_report","crosstable","opening_report","opening_prep","repertoire_report","duplicates"]},"name":{"type":"string","description":"a player, for player_card and prep_report"},"event":{"type":"string","description":"part of an event name, for crosstable"}},"required":["kind"]}}
+		"Open one of Scidb's reports or dialogs for the user (they only show things; nothing changes). kind: player_card (a player's card: ratings, photo, links; needs 'name'), prep_report (a player's preparation report: scores by colour, openings, recent games, gaps, the opponent dossier; needs 'name'), crosstable (an event's tournament table; needs 'event', part of the event name), event_report (the story of an event: standings, leaders and upsets, told from its results; needs 'event'), opening_report (the opening report of the position on the board: statistics, main lines, fashion, plans), opening_prep (opening preparation: the moves played from the board's position), repertoire_report (the active repertoire database's report), duplicates (find duplicate games in the active database)."
+		{{"type":"object","properties":{"kind":{"type":"string","enum":["player_card","prep_report","crosstable","event_report","opening_report","opening_prep","repertoire_report","duplicates"]},"name":{"type":"string","description":"a player, for player_card and prep_report"},"event":{"type":"string","description":"part of an event name, for crosstable"}},"required":["kind"]}}
 		::application::assistant::DoOpenView
 	}
 	set_position {
@@ -233,8 +235,8 @@ variable Actions {
 	}
 	open_game {
 		0 0 "open game %s"
-		"Put a game of the active database on the board, at the start or at a move. 'number' is the game number as the tools list it (#123). 'move' is a move number; with 'after' white or black the board shows the position after that side's move, without it the position before White's move."
-		{{"type":"object","properties":{"number":{"type":"integer"},"move":{"type":"integer"},"after":{"type":"string","enum":["white","black"]}},"required":["number"]}}
+		"Put a game of the active database on the board, at the start or at a move. 'number' is the game number as the tools list it (#123); or give 'player' instead for that player's most recent game ('my last game': the user's name). 'move' is a move number; with 'after' white or black the board shows the position after that side's move, without it the position before White's move."
+		{{"type":"object","properties":{"number":{"type":"integer"},"player":{"type":"string","description":"open this player's most recent game (by date) instead of a numbered one"},"move":{"type":"integer"},"after":{"type":"string","enum":["white","black"]}}}}
 		::application::assistant::DoOpenGame
 	}
 	open_position {
@@ -272,6 +274,24 @@ variable Actions {
 		"Start an engine on the position on the board in an analysis pane; it follows the board as it changes. Without a pane a free one is used or a new one opened; giving the pane of a running engine replaces or restarts it (e.g. to change lines). lines = number of best lines (MultiPV), threads, hash in MB; each defaults to the pane's setting. Then read its lines with engine_analysis."
 		{{"type":"object","properties":{"engine":{"type":"string","description":"engine name or part of it; without it Stockfish, or the first engine"},"pane":{"type":"integer","description":"analysis pane number as in its title: 1 for 'Analysis', 2 for 'Analysis (2)'"},"lines":{"type":"integer"},"threads":{"type":"integer"},"hash":{"type":"integer","description":"hash size in MB"}}}}
 		::application::assistant::DoStartEngine
+	}
+	engine_evaluate {
+		0 0 "ask Stockfish about a position"
+		"Ask Stockfish directly (no analysis pane needed) for the best moves in a position and their scores: the board position, or 'fen'. 'lines' best moves (1-5, default 3), 'depth' (default 18, at most 30). Scores are in pawns from White's side (#n = mate in n). Use it for 'what is the best move', 'who is better', 'is this winning'; quote the scores and moves as given, never invent your own."
+		{{"type":"object","properties":{"fen":{"type":"string","description":"a position; default the board"},"lines":{"type":"integer"},"depth":{"type":"integer"}}}}
+		::application::assistant::DoEngineEvaluate
+	}
+	engine_check_move {
+		0 0 "ask Stockfish about a move"
+		"Ask Stockfish how good one move is: best, excellent, good, inaccuracy, mistake or blunder, how much it loses, and the better move. 'move' in SAN (e.g. Nf5, O-O, exd5), played in the board position or in 'fen'. To judge a move of the game on the board, first put the board before that move (open_game with move)."
+		{{"type":"object","properties":{"move":{"type":"string"},"fen":{"type":"string","description":"the position before the move; default the board"},"depth":{"type":"integer"}},"required":["move"]}}
+		::application::assistant::DoEngineCheckMove
+	}
+	tablebase {
+		0 0 "look up the endgame tablebase"
+		"The exact result of an endgame with at most 7 pieces (kings included) from the Syzygy tablebases, looked up online at Lichess (only the position is sent): win, draw or loss for the side to move, mate distance, and which moves win, draw or lose. The board position, or 'fen'. Prefer it to the engine for such endgames: it is perfect play, not an estimate."
+		{{"type":"object","properties":{"fen":{"type":"string","description":"a position; default the board"}}}}
+		::application::assistant::DoTablebase
 	}
 	engine_analysis {
 		0 0 "read the engine analysis"
@@ -341,8 +361,8 @@ variable Actions {
 	}
 	annotate_game {
 		1 0 "annotate this game with engine-grounded comments"
-		"Annotate the game on the board: classify every move with the chess engine, then write a comment for the moves that deserve one (blunders, mistakes, inaccuracies, and the only move that holds). With 'prose' true (the default) the comment is written by the language model from the engine's facts and checked; with 'prose' false the comment is the engine's own verdict in words, which costs no model call. 'marks' also sets the standard annotation mark. 'max_plies' bounds the work. The game is left modified for the user to save."
-		{{"type":"object","properties":{"prose":{"type":"boolean","description":"let the language model word the comments, default true"},"depth":{"type":"integer","description":"engine depth per move, default 12"},"marks":{"type":"boolean","description":"also set the move's annotation mark, default false"},"max_plies":{"type":"integer","description":"stop after this many moves, default 60"}}}}
+		"Annotate the game on the board: classify every move with the chess engine, then write a comment for the moves that deserve one (blunders, mistakes, inaccuracies, and the only move that holds). With 'prose' true (the default) the comment is written by the language model from the engine's facts and checked; with 'prose' false the comment is the engine's own verdict in words, which costs no model call. 'marks' also sets the standard annotation mark. 'max_plies' bounds the work; 'from_move' and 'to_move' annotate only that stretch ('analyse moves 20 to 30'). The game is left modified for the user to save."
+		{{"type":"object","properties":{"prose":{"type":"boolean","description":"let the language model word the comments, default true"},"depth":{"type":"integer","description":"engine depth per move, default 12"},"marks":{"type":"boolean","description":"also set the move's annotation mark, default false"},"max_plies":{"type":"integer","description":"stop after this many moves, default 60"},"from_move":{"type":"integer","description":"annotate from this move number on ('moves 20-30': 20)"},"to_move":{"type":"integer","description":"annotate up to and including this move number"}}}}
 		::application::assistant::DoAnnotateGame
 	}
 	opponent_brief {
@@ -582,6 +602,9 @@ array set Priv {
 	messages		{}
 	busy			0
 	maxRounds	8
+	backup		0
+	histPos		-1
+	histPrefix	{}
 	nudged		0
 	nudge		"(Scidb: no tool ran in this request, so nothing was done or found. Call the tool that does it now, or say plainly that you cannot.)"
 	debug			0
@@ -722,6 +745,10 @@ proc ::application::assistant::DoRememberMe {name} {
 # ======================================================================
 proc ::application::assistant::ConfigureProvider {} {
 	variable ::application::ai::Config
+	variable Priv
+
+	# every request starts with the chosen model; TryBackup moves on from it
+	set Priv(backup) 0
 
 	::ai::provider::configure -name $Config(provider) -model $Config(model) \
 		-timeout 120000 -options {}
@@ -738,7 +765,29 @@ proc ::application::assistant::Step {round} {
 }
 
 
+# When the model in use is down, ask the next backup model the same step
+# (Extras > AI: Choose Model, backups); the chosen model is asked again
+# from the next request on. Returns 1 when a backup was asked.
+proc ::application::assistant::TryBackup {round result} {
+	variable Priv
+
+	if {![dict exists $result down] || ![dict get $result down]} { return 0 }
+	if {![llength [info commands ::application::ai::backups]]} { return 0 }
+	set backups [::application::ai::backups]
+	if {$Priv(backup) >= [llength $backups]} { return 0 }
+	lassign [lindex $backups $Priv(backup)] provider model
+	incr Priv(backup)
+	set from [::ai::provider::label [set ::ai::provider::Config(name)]]
+	::ai::provider::configure -name $provider -model $model
+	Append tool "[format $::application::assistant::mc::UsingBackup $from \
+		"[::ai::provider::label $provider] ($model)"]"
+	Step $round
+	return 1
+}
+
+
 proc ::application::assistant::OnReply {round result} {
+	if {![dict get $result ok] && [TryBackup $round $result]} { return }
 	# a failing step must still release the pane
 	if {[catch { OnReplyImpl $round $result } err]} {
 		Finish [dict create ok 0 error $err] $round
@@ -898,6 +947,7 @@ proc ::application::assistant::Resolve {token reply} {
 
 proc ::application::assistant::Finish {result round} {
 	variable Priv
+	variable mc
 
 	if {[dict get $result ok]} {
 		set msg [dict get $result message]
@@ -906,6 +956,10 @@ proc ::application::assistant::Finish {result round} {
 		lappend Priv(messages) [dict create role assistant content $text]
 		Append assistant $text
 		set event [list reply $text]
+	} elseif {[dict exists $result down] && [dict get $result down]} {
+		# the chosen model and every backup are down: say so plainly
+		Append error [format $mc::AllDown [dict get $result error]]
+		set event [list error [dict get $result error]]
 	} else {
 		Append error "Error: [dict get $result error]"
 		set event [list error [dict get $result error]]
@@ -1084,7 +1138,7 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		}
 		search_games {
 			set c {}
-			foreach key {player color result opponent eco from to event min_elo pattern} {
+			foreach key {player color result opponent eco from to event min_elo both_min_elo pattern} {
 				dict set c $key [expr {[dict exists $cargs $key] ? [string trim [dict get $cargs $key]] : ""}]
 			}
 			dict with c {
@@ -1106,8 +1160,11 @@ proc ::application::assistant::CheckArgs {name cargs} {
 						error "$bound must be YYYY, YYYY.MM or YYYY.MM.DD"
 					}
 				}
-				if {$min_elo ne "" && (![string is integer -strict $min_elo] || $min_elo < 0 || $min_elo > 4000)} {
-					error "min_elo must be a number up to 4000"
+				foreach bound {min_elo both_min_elo} {
+					set v [set $bound]
+					if {$v ne "" && (![string is integer -strict $v] || $v < 0 || $v > 4000)} {
+						error "$bound must be a number up to 4000"
+					}
 				}
 				if {$pattern ne "" && ([llength [info commands ::ai::search::patternIds]] == 0
 				 || $pattern ni [::ai::search::patternIds])} {
@@ -1155,6 +1212,26 @@ proc ::application::assistant::CheckArgs {name cargs} {
 				dict set result $key $value
 			}
 			return $result
+		}
+		tablebase {
+			return [dict create fen [string trim [OptArg $cargs fen ""]]]
+		}
+		engine_evaluate - engine_check_move {
+			set fen [string trim [OptArg $cargs fen ""]]
+			set depth [OptArg $cargs depth 18]
+			if {![string is integer -strict $depth] || $depth < 1 || $depth > 30} {
+				error "depth must be a whole number from 1 to 30"
+			}
+			if {$name eq "engine_check_move"} {
+				set move [string trim [Arg $cargs move]]
+				if {$move eq ""} { error "move must not be empty" }
+				return [dict create move $move fen $fen depth $depth]
+			}
+			set lines [OptArg $cargs lines 3]
+			if {![string is integer -strict $lines] || $lines < 1 || $lines > 5} {
+				error "lines must be a whole number from 1 to 5"
+			}
+			return [dict create fen $fen lines $lines depth $depth]
 		}
 		engine_analysis {
 			set pane [OptArg $cargs pane ""]
@@ -1237,12 +1314,12 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		}
 		open_view {
 			set kind [Arg $cargs kind]
-			set kinds {player_card prep_report crosstable opening_report opening_prep repertoire_report duplicates}
+			set kinds {player_card prep_report crosstable event_report opening_report opening_prep repertoire_report duplicates}
 			if {$kind ni $kinds} { error "kind must be one of: [join $kinds {, }]" }
 			set name [expr {[dict exists $cargs name] ? [string trim [dict get $cargs name]] : ""}]
 			set event [expr {[dict exists $cargs event] ? [string trim [dict get $cargs event]] : ""}]
 			if {$kind in {player_card prep_report} && $name eq ""} { error "$kind needs a player name" }
-			if {$kind eq "crosstable" && $event eq ""} { error "crosstable needs an event" }
+			if {$kind in {crosstable event_report} && $event eq ""} { error "$kind needs an event" }
 			return [dict create kind $kind name $name event $event]
 		}
 		set_position {
@@ -1252,14 +1329,16 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			return [dict create fen $fen moves $moves]
 		}
 		open_game {
-			set number [Arg $cargs number]
-			if {![string is integer -strict $number] || $number < 1} { error "number must be a game number, 1 or more" }
+			set player [expr {[dict exists $cargs player] ? [string trim [dict get $cargs player]] : ""}]
+			set number [expr {[dict exists $cargs number] ? [dict get $cargs number] : ""}]
+			if {$number eq "" && $player eq ""} { error "give a game number or a player" }
+			if {$number ne "" && (![string is integer -strict $number] || $number < 1)} { error "number must be a game number, 1 or more" }
 			set move [expr {[dict exists $cargs move] ? [dict get $cargs move] : ""}]
 			if {$move ne "" && (![string is integer -strict $move] || $move < 1)} { error "move must be 1 or more" }
 			set after [expr {[dict exists $cargs after] ? [string tolower [dict get $cargs after]] : ""}]
 			if {$after ni {"" white black}} { error "after must be white or black" }
 			if {$after ne "" && $move eq ""} { error "after needs a move" }
-			return [dict create number $number move $move after $after]
+			return [dict create number $number move $move after $after player $player]
 		}
 		open_position {
 			set index [Arg $cargs index]
@@ -1418,7 +1497,15 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			if {![string is integer -strict $maxPlies] || $maxPlies < 1 || $maxPlies > 200} {
 				error "max_plies must be an integer between 1 and 200"
 			}
-			return [dict create prose $prose marks $marks depth $depth max_plies $maxPlies]
+			set from [OptArg $cargs from_move ""]
+			set to [OptArg $cargs to_move ""]
+			foreach {v n} [list $from from_move $to to_move] {
+				if {$v ne "" && (![string is integer -strict $v] || $v < 1)} { error "$n must be a move number, 1 or more" }
+			}
+			if {$from ne "" && $to ne "" && $to < $from} { error "to_move must not be before from_move" }
+			# a range bounds the work itself
+			if {($from ne "" || $to ne "") && ![dict exists $cargs max_plies]} { set maxPlies 200 }
+			return [dict create prose $prose marks $marks depth $depth max_plies $maxPlies from_move $from to_move $to]
 		}
 	}
 	# a tool defined in another module brings its own check
@@ -2037,6 +2124,11 @@ proc ::application::assistant::BuildQuery {base variant criteria {includePattern
 		lappend common [list rating Elo average $min_elo-4000]
 		lappend summary "average Elo at least $min_elo"
 	}
+	# (criteria saved before this field existed have no both_min_elo)
+	if {[info exists both_min_elo] && $both_min_elo ne ""} {
+		lappend common [list rating Elo both $both_min_elo-4000 $both_min_elo-4000]
+		lappend summary "both players rated at least $both_min_elo"
+	}
 	# a position pattern last: its games are decoded, so the terms above
 	# narrow them first
 	if {[info exists pattern] && $pattern ne ""} {
@@ -2173,7 +2265,7 @@ proc ::application::assistant::GameLine {index base variant} {
 # them; {} when none is given.
 proc ::application::assistant::HeaderCriteria {cargs} {
 	set header [dict create pattern ""]
-	foreach key {player color result opponent eco from to event min_elo} {
+	foreach key {player color result opponent eco from to event min_elo both_min_elo} {
 		if {[dict exists $cargs $key] && [string trim [dict get $cargs $key]] ni {"" any}} {
 			dict set header $key [dict get $cargs $key]
 		}
@@ -2479,6 +2571,24 @@ proc ::application::assistant::DoOpenView {kind name event} {
 			set title [lindex [::scidb::db::fetch eventInfo [::scidb::db::get gameNumber $base $variant 0 $view] $base $variant -card] 0]
 			return "the crosstable of $title is open"
 		}
+		event_report {
+			if {![llength [info commands ::ai::eventreport::report]]} {
+				return "error: the event report is not available in this build"
+			}
+			set view [::scidb::view::new $base $variant unused unused unused unused master slave]
+			set rc [catch {
+				::scidb::view::search $base $variant $view null none [list eventname [EventPattern $event]]
+				if {[::scidb::view::count games $base $variant $view] == 0} {
+					error "no event matching '$event' in $db"
+				}
+				set title [lindex [::scidb::db::fetch eventInfo [::scidb::db::get gameNumber $base $variant 0 $view] $base $variant -card] 0]
+				# reads the standings now; the narrative is written in the background
+				::ai::eventreport::report .application $base $variant $view
+			} err]
+			catch { ::scidb::view::close $base $variant $view }
+			if {$rc} { return "error: $err" }
+			return "the report on $title (standings, leaders, upsets, told from the results) is opening in the Report pane"
+		}
 		opening_report {
 			::application::database::ShowOpeningReport .application
 			return "the opening report of the position on the board is open"
@@ -2538,8 +2648,11 @@ proc ::application::assistant::DoSetPosition {fen moves} {
 }
 
 
-proc ::application::assistant::DoOpenGame {number move after} {
+proc ::application::assistant::DoOpenGame {number move after {player ""}} {
 	lassign [ActiveBase] base variant
+	if {$number eq ""} {
+		if {[catch { LatestGame $base $variant $player } number]} { return "error: $number" }
+	}
 	set count [::scidb::db::count games $base $variant]
 	if {$number > $count} { return "error: [::util::databaseName $base no] has $count games" }
 	set index [expr {$number - 1}]
@@ -2557,6 +2670,39 @@ proc ::application::assistant::DoOpenGame {number move after} {
 	}
 	::application::switchTab board
 	return "game $number ([GameLine $index $base $variant]) is on the board, $where"
+}
+
+
+# The number of <player>'s most recent game by date (the last in the
+# database among games of the same date).
+proc ::application::assistant::LatestGame {base variant player} {
+	lassign [ResolvePlayer $base $variant $player] _ name
+	set criteria [dict get [CheckArgs search_games [dict create player $name]] criteria]
+	lassign [BuildQuery $base $variant $criteria] query
+	set view [::scidb::view::new $base $variant unused unused unused unused master slave]
+	set best ""
+	set bestDate ""
+	set rc [catch {
+		::scidb::view::search $base $variant $view null none $query
+		set count [::scidb::view::count games $base $variant $view]
+		for {set row 0} {$row < $count} {incr row} {
+			set number [::scidb::db::get gameNumber $base $variant $row $view]
+			set date ""
+			foreach pair [::scidb::db::get tags $number $base $variant] {
+				if {[lindex $pair 0] eq "Date"} { set date [lindex $pair 1] ; break }
+			}
+			# "????.??.??" sorts first; ties go to the later game
+			if {$best eq "" || [string compare $date $bestDate] >= 0} {
+				set best $number
+				set bestDate $date
+			}
+		}
+	} err]
+	catch { ::scidb::view::close $base $variant $view }
+	if {$rc} { error $err }
+	if {$best eq ""} { error "no games of $name in [::util::databaseName $base no]" }
+	# gameNumber is 0-based, the tools count from 1
+	return [expr {$best + 1}]
 }
 
 
@@ -2935,6 +3081,31 @@ proc ::application::assistant::DoListEngines {} {
 }
 
 
+# What the common UCI options (Stockfish's names) do and when to change them,
+# shown next to each option engine_options lists.
+set ::application::assistant::EngineOptionGuide {
+	Threads {CPU threads to search with; more is stronger and faster. About the machine's cores minus one for analysis}
+	Hash {memory for the search table in MB; 256-2048 for analysis, more for long runs. Must be a power of two on some engines}
+	{Clear Hash} {a button: forget what the engine learned, so a new analysis starts fresh}
+	Ponder {think on the opponent's time in games; no effect on analysis}
+	MultiPV {how many best lines to show; 1 is strongest, 3-5 to compare candidate moves}
+	{Skill Level} {0-20, 20 is full strength; lower makes it play weaker moves on purpose (for practice games). UCI_LimitStrength with UCI_Elo is the more accurate way}
+	UCI_LimitStrength {true makes the engine play at the rating in UCI_Elo instead of full strength (for practice games)}
+	UCI_Elo {the playing strength when UCI_LimitStrength is true, roughly a rating (Stockfish: 1320-3190)}
+	UCI_ShowWDL {also report win/draw/loss chances per line}
+	UCI_Chess960 {the engine plays Chess960 castling; set automatically for Chess960 games}
+	{Move Overhead} {milliseconds kept in reserve per move for lag in timed games}
+	nodestime {play by node counts instead of the clock (testing only); leave 0}
+	SyzygyPath {folder(s) with Syzygy endgame tablebases (separate several with :); with them endgames of up to 7 pieces are played and scored perfectly}
+	SyzygyProbeDepth {minimum depth before tablebases are probed; raise it if the tablebases are on a slow disk}
+	Syzygy50MoveRule {count the 50-move rule in tablebase results; false scores "won but past 50 moves" as a win}
+	SyzygyProbeLimit {probe tablebases only with this many pieces or fewer}
+	EvalFile {the neural network file the engine evaluates with; leave the default}
+	NumaPolicy {how threads are spread over processors on big machines; leave auto}
+	{Debug Log File} {write the engine's input and output to this file, for debugging}
+}
+
+
 proc ::application::assistant::DoEngineOptions {engine profile} {
 	lassign [::engine::profileOptions $engine $profile] protocol kind options
 	if {$kind eq "script"} {
@@ -2952,7 +3123,11 @@ proc ::application::assistant::DoEngineOptions {engine profile} {
 		}
 		set line "$name = $value ($range"
 		if {$dflt ne $value} { append line ", default $dflt" }
-		lappend lines "$line)"
+		append line ")"
+		if {[dict exists $::application::assistant::EngineOptionGuide $name]} {
+			append line ": [dict get $::application::assistant::EngineOptionGuide $name]"
+		}
+		lappend lines $line
 	}
 	if {![llength $options]} { lappend lines "(no options)" }
 	return [join $lines \n]
@@ -2972,6 +3147,176 @@ proc ::application::assistant::DoStartEngine {engine pane lines threads hash} {
 	return "$engine is analysing the board position in analysis pane [PaneLabel $number]: $n lines,\
 		$Vars(current:cores) threads, $Vars(current:memory) MB hash, profile '$Vars(current:profile)'.\
 		It follows the board. Read its lines with engine_analysis."
+}
+
+
+# --- Syzygy tablebases online (Lichess) -------------------------------------
+
+set ::application::assistant::TablebaseUrl https://tablebase.lichess.ovh/standard
+
+
+proc ::application::assistant::DoTablebase {fen} {
+	if {$fen eq ""} { set fen [::scidb::pos::fen] }
+	set pieces [regexp -all {[KQRBNPkqrbnp]} [lindex $fen 0]]
+	if {$pieces > 7} { return "error: the tablebases cover at most 7 pieces; this position has $pieces" }
+	if {[catch {
+		::ai::provider::need http
+		::ai::provider::need json
+		if {![info exists ::ai::provider::TlsRegistered]} {
+			::ai::provider::need tls
+			::http::register https 443 ::ai::provider::tlsSocket
+			set ::ai::provider::TlsRegistered 1
+		}
+	} err]} { return "error: $err" }
+	set token [Later]
+	set url "$::application::assistant::TablebaseUrl?[::http::formatQuery fen $fen]"
+	if {[catch {
+		::http::geturl $url -timeout 15000 -binary 1 \
+			-command [namespace code [list TablebaseDone $token $fen]]
+	} err]} {
+		after 0 [list ::application::assistant::Resolve $token "error: the tablebase is not reachable ($err)"]
+	}
+	return $token
+}
+
+
+# A category of the tablebase reply in words; <flip> for a move's entry,
+# which is from the opponent's side.
+proc ::application::assistant::TablebaseWord {category {flip 0}} {
+	if {$flip} {
+		set category [dict get {win loss loss win cursed-win blessed-loss blessed-loss cursed-win
+			maybe-win maybe-loss maybe-loss maybe-win syzygy-win syzygy-loss syzygy-loss syzygy-win
+			draw draw unknown unknown} $category]
+	}
+	return [dict get {win wins loss loses draw draws
+		cursed-win "wins, but only after the 50-move rule (a draw in practice)"
+		blessed-loss "loses, but the 50-move rule saves it (a draw in practice)"
+		maybe-win "probably wins" maybe-loss "probably loses"
+		syzygy-win wins syzygy-loss loses unknown "unknown"} $category]
+}
+
+
+proc ::application::assistant::TablebaseDone {token fen http} {
+	set status [::http::status $http]
+	set code [::http::ncode $http]
+	set data [encoding convertfrom utf-8 [::http::data $http]]
+	::http::cleanup $http
+	if {$status ne "ok" || $code != 200} {
+		Resolve $token "error: the tablebase did not answer (HTTP $code $status)"
+		return
+	}
+	if {[catch {
+		set d [::json::json2dict $data]
+		set side [expr {[lindex $fen 1] eq "b" ? "Black" : "White"}]
+		set reply "Syzygy tablebase (Lichess), perfect play: $side to move [TablebaseWord [dict get $d category]]"
+		if {[dict get $d checkmate] eq "true"} { set reply "Syzygy tablebase: $side is checkmated" }
+		if {[dict get $d stalemate] eq "true"} { set reply "Syzygy tablebase: stalemate" }
+		if {[dict exists $d dtm] && [dict get $d dtm] ni {"" null 0}} {
+			set n [expr {(abs([dict get $d dtm]) + 1) / 2}]
+			append reply ", mate in $n [expr {$n == 1 ? "move" : "moves"}]"
+		}
+		append reply "."
+		set groups {}
+		foreach m [dict get $d moves] {
+			set word [TablebaseWord [dict get $m category] 1]
+			set san [dict get $m san]
+			if {[dict exists $m dtm] && [dict get $m dtm] ni {"" null 0}} {
+				append san " (mate in [expr {(abs([dict get $m dtm]) + 1) / 2}])"
+			}
+			dict lappend groups $word $san
+		}
+		dict for {word moves} $groups {
+			set more [expr {[llength $moves] > 8 ? " and [expr {[llength $moves] - 8}] more" : ""}]
+			append reply "\nMoves that [string map {wins win loses lose draws draw} [lindex $word 0]][string range $word [string length [lindex $word 0]] end]: [join [lrange $moves 0 7] {, }]$more"
+		}
+	} err]} {
+		Resolve $token "error: unreadable tablebase reply ($err)"
+		return
+	}
+	Resolve $token $reply
+}
+
+
+# --- Stockfish asked directly (::ai::engine, no analysis pane) -------------
+
+proc ::application::assistant::EngineReady {} {
+	if {![llength [info commands ::ai::engine::evaluate]]} { return "error: the engine module is not available" }
+	if {![::ai::engine::available]} { return "error: Stockfish is not installed (Scidb's stockfish-scidb or stockfish on PATH)" }
+	return ""
+}
+
+
+# A score for people: pawns from White's side, or #n for a mate.
+proc ::application::assistant::EngineScore {fen kind value} {
+	# the engine scores for the side to move
+	set sign [expr {[lindex $fen 1] eq "b" ? -1 : 1}]
+	if {$kind eq "mate"} { return "#[expr {$sign * $value}]" }
+	return [format %+.2f [expr {$sign * $value / 100.0}]]
+}
+
+
+# UCI moves from <fen> as numbered SAN ("12.Nf3 Nc6 13.d4"), at most <max>.
+proc ::application::assistant::EngineLine {fen uciMoves {max 10}} {
+	set out {}
+	set side [lindex $fen 1]
+	set number [lindex $fen 5]
+	if {![string is integer -strict $number]} { set number 1 }
+	set first 1
+	foreach uci [lrange $uciMoves 0 [expr {$max - 1}]] {
+		if {[catch { ::scidb::ai::moveFacts $uci $fen } facts]
+		 || ![regexp {"san":"([^"]+)"} $facts -> san]
+		 || ![regexp {"fenAfter":"([^"]+)"} $facts -> next]} { break }
+		if {$side eq "w"} {
+			lappend out "$number.$san"
+		} elseif {$first} {
+			lappend out "$number...$san"
+		} else {
+			lappend out $san
+		}
+		if {$side eq "b"} { incr number }
+		set side [expr {$side eq "w" ? "b" : "w"}]
+		set fen $next
+		set first 0
+	}
+	return [join $out " "]
+}
+
+
+proc ::application::assistant::DoEngineEvaluate {fen lines depth} {
+	if {[set err [EngineReady]] ne ""} { return $err }
+	if {$fen eq ""} { set fen [::scidb::pos::fen] }
+	if {[catch { ::ai::engine::evaluate $fen -depth $depth -multipv $lines } e]} {
+		return "error: Stockfish could not evaluate the position: $e"
+	}
+	set out [list "Stockfish, depth $depth, position $fen:"]
+	set i 0
+	foreach line [dict get $e multipv] {
+		set score [EngineScore $fen [dict get $line kind] [dict get $line value]]
+		lappend out "[incr i]) $score [EngineLine $fen [dict get $line pv]]"
+	}
+	return [join $out \n]
+}
+
+
+proc ::application::assistant::DoEngineCheckMove {move fen depth} {
+	if {[set err [EngineReady]] ne ""} { return $err }
+	if {$fen eq ""} { set fen [::scidb::pos::fen] }
+	if {[catch { ::ai::engine::classify $fen $move -depth $depth } c]} {
+		return "error: $c"
+	}
+	set class [string tolower [dict get $c classification]]
+	set loss [format %.2f [expr {[dict get $c cpLoss] / 100.0}]]
+	set best [EngineLine $fen [list [dict get $c bestMove]] 1]
+	set what [dict get {best "the best move" excellent excellent good good
+		inaccuracy "an inaccuracy" mistake "a mistake" blunder "a blunder"} $class]
+	set reply "Stockfish, depth $depth: $move is $what"
+	if {$class ne "best" && $loss >= 0.1} {
+		append reply " (it loses $loss pawns; best was $best)"
+	} elseif {$class ne "best"} {
+		append reply " (about as good as the best move, $best)"
+	}
+	if {[dict get $c onlyMove]} { append reply "; the best move was the only good one" }
+	return "$reply."
 }
 
 
@@ -3410,6 +3755,13 @@ proc ::application::assistant::build {frame width height} {
 	}
 
 	bind $entry <Return> [namespace code SendEntry]
+	# history: Up/Down step through earlier requests that start with what
+	# is typed; Tab (or Right at the end) takes the suggested completion
+	bind $entry <Up> "[namespace code [list HistoryStep -1]]; break"
+	bind $entry <Down> "[namespace code [list HistoryStep 1]]; break"
+	bind $entry <Tab> "[namespace code HistoryAccept]; break"
+	bind $entry <Right> "if {\[[namespace code HistoryAccept]\]} break"
+	bind $entry <KeyRelease> [namespace code [list HistorySuggest %K]]
 
 	set Priv(window) $frame
 	set Priv(text) $text
@@ -3463,7 +3815,106 @@ proc ::application::assistant::SendEntry {} {
 	if {![string length [string trim $request]] || $Priv(busy)} { return }
 	if {![::application::ai::cloudReady $Priv(window)]} { return }
 	$Priv(entry) delete 0 end
+	HistoryAdd $request
 	ask $request
+}
+
+
+# ----------------------------------------------------------------------
+# Input history, newest last, saved in the options file.
+# ======================================================================
+# (the options file may have set it already)
+if {![info exists ::application::assistant::History]} { set ::application::assistant::History {} }
+variable ::application::assistant::HistoryMax 200
+
+
+proc ::application::assistant::HistoryAdd {request} {
+	variable History
+	variable HistoryMax
+	variable Priv
+
+	set request [string trim $request]
+	set i [lsearch -exact $History $request]
+	if {$i >= 0} { set History [lreplace $History $i $i] }
+	lappend History $request
+	if {[llength $History] > $HistoryMax} { set History [lrange $History end-[expr {$HistoryMax - 1}] end] }
+	set Priv(histPos) -1
+}
+
+
+# The earlier requests that start with <prefix>, newest first, no repeats.
+proc ::application::assistant::HistoryMatches {prefix} {
+	variable History
+	set result {}
+	foreach h [lreverse $History] {
+		if {[string equal -nocase -length [string length $prefix] $prefix $h] && $h ne $prefix} {
+			lappend result $h
+		}
+	}
+	return $result
+}
+
+
+# Up (-1) / Down (1): the previous / next earlier request starting with the
+# text typed before the first step; Down past the newest restores it.
+proc ::application::assistant::HistoryStep {dir} {
+	variable Priv
+
+	set e $Priv(entry)
+	if {$Priv(histPos) < 0} {
+		$e selection clear
+		set Priv(histPrefix) [string range [$e get] 0 [expr {[$e index insert] - 1}]]
+	}
+	set matches [HistoryMatches $Priv(histPrefix)]
+	set pos [expr {$Priv(histPos) - $dir}]
+	if {$pos >= [llength $matches]} { bell; return }
+	set Priv(histPos) [expr {$pos < 0 ? -1 : $pos}]
+	set text [expr {$pos < 0 ? $Priv(histPrefix) : [lindex $matches $pos]}]
+	$e delete 0 end
+	$e insert 0 $text
+	$e icursor end
+	$e xview end
+}
+
+
+# While typing at the end of the line, show the newest matching request's
+# rest as a selection; typing on simply replaces it.
+proc ::application::assistant::HistorySuggest {key} {
+	variable Priv
+
+	set e $Priv(entry)
+	if {$key in {Up Down Left Right Home End Tab Return Escape Shift_L Shift_R
+			Control_L Control_R Alt_L Alt_R BackSpace Delete}} { return }
+	set Priv(histPos) -1
+	set typed [$e get]
+	if {[$e index insert] != [$e index end] || [string length [string trim $typed]] < 2} { return }
+	set match [lindex [HistoryMatches $typed] 0]
+	if {$match eq ""} { return }
+	set n [string length $typed]
+	$e insert end [string range $match $n end]
+	$e selection range $n end
+	$e icursor $n
+}
+
+
+# Take the suggestion shown; 1 when there was one.
+proc ::application::assistant::HistoryAccept {} {
+	variable Priv
+
+	set e $Priv(entry)
+	if {![$e selection present] || [$e index sel.last] != [$e index end]} { return 0 }
+	$e selection clear
+	$e icursor end
+	$e xview end
+	return 1
+}
+
+
+proc ::application::assistant::WriteHistory {chan} {
+	puts $chan [list set ::application::assistant::History $::application::assistant::History]
+}
+if {[llength [info commands ::options::hookWriter]]} {
+	::options::hookWriter ::application::assistant::WriteHistory
 }
 
 
@@ -3675,7 +4126,7 @@ proc ::application::assistant::SetEntry {text} {
 # Annotate the current game (see tcl/ai-annotate.tcl).  The engine pass and
 # the drafting take a while, so the tool answers when the run is over.
 # ----------------------------------------------------------------------
-proc ::application::assistant::DoAnnotateGame {prose marks depth max_plies} {
+proc ::application::assistant::DoAnnotateGame {prose marks depth max_plies {from_move ""} {to_move ""}} {
 	if {[llength [info commands ::ai::annotate::annotate]] == 0} {
 		return "error: the annotation module is not available"
 	}
@@ -3686,6 +4137,8 @@ proc ::application::assistant::DoAnnotateGame {prose marks depth max_plies} {
 	if {[catch {
 		set started [::ai::annotate::annotate .application \
 			-prose $prose -marks $marks -depth $depth -maxPlies $max_plies \
+			-from [expr {$from_move eq "" ? 0 : 2 * ($from_move - 1)}] \
+			-to [expr {$to_move eq "" ? "end" : 2 * $to_move - 1}] \
 			-done [namespace code [list AnnotateGameDone $token]]]
 	} err]} {
 		after 0 [list Resolve $token "error: $err"]

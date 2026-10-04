@@ -59,6 +59,15 @@ variable Settings
 array set Settings [list provider $Config(provider) model $Config(model) classifier auto \
 	chosen 0 cloudNotice 0 me ""]
 
+# The backup models tried in turn when the chosen one is down (no reply,
+# timeout, busy, server error): each "provider ?model?", "auto" for the
+# first ready provider not already in use, or "" for none.
+array set Settings {backup1 auto backup2 auto}
+
+# The order "auto" picks backups in: a provider is ready when it needs no
+# key (Ollama) or its key is there.
+variable BackupOrder {ollama fireworks qwen anthropic gemini openai}
+
 # API keys live in their own file (mode 0600), never in the options file.
 variable Keys {}
 
@@ -115,6 +124,54 @@ proc ::application::ai::applySettings {} {
 			::ai::systemone::autostart
 		}
 	}
+}
+
+
+# The backup models in effect, as a list of {provider model} (model "" is
+# the provider's default), at most two, none the same as the chosen model.
+proc ::application::ai::backups {} {
+	variable Config
+	variable Settings
+	variable BackupOrder
+
+	set used [list [list $Config(provider) [Model $Config(provider) $Config(model)]]]
+	set result {}
+	foreach key {backup1 backup2} {
+		set value [string trim $Settings($key)]
+		if {$value eq ""} { continue }
+		if {$value eq "auto"} {
+			foreach provider $BackupOrder {
+				set pick [list $provider [Model $provider ""]]
+				if {$pick ni $used && [Ready $provider]} { break }
+				set pick {}
+			}
+		} else {
+			set provider [lindex $value 0]
+			set pick [list $provider [Model $provider [lindex $value 1]]]
+			if {![info exists ::ai::provider::Label($provider)] || $pick in $used} { set pick {} }
+		}
+		if {[llength $pick]} {
+			lappend used $pick
+			lappend result $pick
+		}
+	}
+	return $result
+}
+
+
+proc ::application::ai::Model {provider model} {
+	if {$model ne ""} { return $model }
+	if {[info exists ::ai::provider::DefaultModel($provider)]} {
+		return $::ai::provider::DefaultModel($provider)
+	}
+	return ""
+}
+
+
+proc ::application::ai::Ready {provider} {
+	if {$provider eq "ollama"} { return 1 }
+	if {[Model $provider ""] eq ""} { return 0 }
+	return [expr {[::ai::provider::apiKey $provider] ne ""}]
 }
 
 

@@ -26,6 +26,14 @@ set Corpus {
 	find-years J2 {Games from 2015 to 2018 rated over 2600.} {{search_games from 2015 to 2018 min_elo 2600}}
 	find-eco J2 {Najdorf games in this database.} {{search_games eco B9*}}
 	find-event J2 {Games from the Karvina 5th tournament.} {{search_games event *karvina*} {open_view kind crosstable}}
+	find-both-elo J2 {Games where both players are rated 2600 or more.} {{search_games both_min_elo 2600}}
+	find-endgames-opening J2 {All endgames that arise from the London System.} {{search_games eco * pattern endgame} {find_positions}}
+	open-last-game J6 {Open Carlsen's last game.} {{open_game player *carlsen*}}
+	event-story J10 {Tell me the story of the Biel tournament.} {{open_view kind event_report event *biel*}}
+	annotate-range J7 {Analyse moves 20 to 30 of this game.} {{annotate_game from_move 20 to_move 30}}
+	engine-best J7 {What does Stockfish say is the best move here?} {{engine_evaluate} {engine_analysis} {start_engine}}
+	engine-check J7 {Is Nf5 a good move in this position?} {{engine_check_move move Nf5}}
+	tablebase-endgame J7 {Is this king and pawn endgame a win? Use the tablebase.} {{tablebase}}
 	find-draws J2 {All draws since 2020.} {{search_games result *1/2* from 2020*} {search_games result draw from 2020*}}
 	find-similar-games J2 {Find games like the one on the board.} {{similar_games} {find_similar}}
 	find-show J2 {Put those games in the game list.} {{show_search} {none}}

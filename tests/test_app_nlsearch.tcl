@@ -76,7 +76,7 @@ tcltest::test nls-patterns {every legacy template finds exactly its games} -body
 		if {[dict get [::ai::search::pattern $id] cql] eq ""} continue
 		list $id [::scidb::cql::search $f Normal [dict get [::ai::search::pattern $id] cql]]
 	}
-} -result {{checkmate {0 1}} {smothered_mate 1} {stalemate 8} {en_passant 3} {underpromotion 4} {double_check 9} {opposite_castling 7} {rook_endgame 5} {pawn_endgame {4 6}} {isolated_queen_pawn {}} {opposite_bishops {}} {queenless {}}}
+} -result {{checkmate {0 1}} {smothered_mate 1} {stalemate 8} {en_passant 3} {underpromotion 4} {double_check 9} {opposite_castling 7} {rook_endgame 5} {pawn_endgame {4 6}} {endgame {4 5 6 8 9}} {isolated_queen_pawn {}} {opposite_bishops {}} {queenless {}}}
 
 tcltest::test nls-schema {the assistant's pattern enum is the library} -body {
 	set schema [lindex [dict get $::application::assistant::Actions search_games] 4]
@@ -205,7 +205,7 @@ tcltest::test nls-checkargs {search_games takes a pattern alone, refuses an unkn
 	list [::application::assistant::CheckArgs search_games {pattern en_passant}] \
 		[catch {::application::assistant::CheckArgs search_games {pattern windmill}} e] \
 		[string match "pattern must be one of: checkmate, *" $e]
-} -result {{criteria {player {} color any result {} opponent {} eco {} from {} to {} event {} min_elo {} pattern en_passant}} 1 1}
+} -result {{criteria {player {} color any result {} opponent {} eco {} from {} to {} event {} min_elo {} both_min_elo {} pattern en_passant}} 1 1}
 
 tcltest::test nls-query {the template is the last term of the AND} -body {
 	set f $::scidb::test::nls::Fixture
@@ -213,6 +213,41 @@ tcltest::test nls-query {the template is the last term of the AND} -body {
 	lassign [::application::assistant::BuildQuery $f Normal $c] query summary
 	list [lindex $query 0] [lindex $query 1] [lindex [lindex $query end] 0] $summary
 } -result {AND {result 1-0} cql {result 1-0; with checkmate}}
+
+tcltest::test nls-both-min-elo {both players rated at least N, against an average} -body {
+	set f $::scidb::test::nls::Fixture
+	set c [dict get [::application::assistant::CheckArgs search_games {both_min_elo 2600}] criteria]
+	lassign [::application::assistant::BuildQuery $f Normal $c] query summary
+	list $query $summary [catch {::application::assistant::CheckArgs search_games {both_min_elo 5000}} e] $e \
+		[::scidb::view::search $f Normal 0 null none $query]
+} -cleanup {
+	::scidb::view::search $::scidb::test::nls::Fixture Normal 0 reset none
+} -match glob -result {{rating Elo both 2600-4000 2600-4000} {both players rated at least 2600} 1 {both_min_elo must be a number up to 4000} *}
+
+tcltest::test nls-assistant-gaps {open_game by player, event_report, an annotation range} -body {
+	list [::application::assistant::CheckArgs open_game {player carlsen}] \
+		[catch {::application::assistant::CheckArgs open_game {}} e] $e \
+		[::application::assistant::CheckArgs open_view {kind event_report event Biel}] \
+		[catch {::application::assistant::CheckArgs open_view {kind event_report}} e] $e \
+		[::application::assistant::CheckArgs annotate_game {from_move 20 to_move 30}] \
+		[catch {::application::assistant::CheckArgs annotate_game {from_move 30 to_move 20}} e] $e
+} -result {{number {} move {} after {} player carlsen} 1 {give a game number or a player} {kind event_report name {} event Biel} 1 {event_report needs an event} {prose 1 marks 0 depth 12 max_plies 200 from_move 20 to_move 30} 1 {to_move must not be before from_move}}
+
+tcltest::test nls-engine-tools {Stockfish asked directly: arguments, a mate, a blunder} -body {
+	set mate {6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1}
+	set open {r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3}
+	list [::application::assistant::CheckArgs engine_evaluate {}] \
+		[catch {::application::assistant::CheckArgs engine_evaluate {lines 9}} e] $e \
+		[catch {::application::assistant::CheckArgs engine_check_move {}} e] \
+		[string match "*1) #1 1.Ra8*" [::application::assistant::DoEngineEvaluate $mate 1 12]] \
+		[string match "*Ng5 is a blunder*best was 3.*" [::application::assistant::DoEngineCheckMove Ng5 $open 12]]
+} -result {{fen {} lines 3 depth 18} 1 {lines must be a whole number from 1 to 5} 1 1 1}
+
+tcltest::test nls-tablebase-offline {the tablebase tool: piece limit and the words, without the network} -body {
+	list [::application::assistant::DoTablebase {r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3}] \
+		[::application::assistant::TablebaseWord loss 1] [::application::assistant::TablebaseWord win] \
+		[::application::assistant::TablebaseWord blessed-loss]
+} -result {{error: the tablebases cover at most 7 pieces; this position has 32} wins wins {loses, but the 50-move rule saves it (a draw in practice)}}
 
 tcltest::test nls-game-list {an interpretation filters the main game list} -body {
 	set f $::scidb::test::nls::Fixture
