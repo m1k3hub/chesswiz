@@ -233,6 +233,45 @@ tcltest::test assistant-export {export_database opens the export dialog for the 
 		[dict get $exportOpts -variant]
 } -result {1 1 Normal}
 
+tcltest::test assistant-import-games {import_games asks, checks the files, then imports into the active base} -setup {
+	set dir [file join [file dirname [file normalize [info script]]] tmp-app import_[pid]]
+	file mkdir $dir
+	set pgn [file join $dir games.pgn]
+	set fh [open $pgn w]; puts $fh {[Event "?"]}; puts $fh ""; puts $fh "1. e4 *"; close $fh
+} -body {
+	::scidb::test::assistant::setup 0
+	set denied [::scidb::test::assistant::stubbed ::import::import {
+		::application::assistant::runTool import_games [list files [list $pgn]]
+	}]
+	::scidb::test::assistant::setup 1
+	set calls [::scidb::test::assistant::stubbed ::import::import {
+		set bad [list \
+			[::application::assistant::runTool import_games [list files [list [file join $dir x.txt]]]] \
+			[::application::assistant::runTool import_games [list files [list [file join $dir missing.pgn]]]]]
+		set ok [::application::assistant::runTool import_games [list files [list $pgn]]]
+	}]
+	list [llength $denied] [lmap r $bad { string match "error:*" $r }] [string match "imported 1 file*" $ok] \
+		[llength $calls] [expr {[lindex $calls 0 1] eq [::scidb::db::get name]}] [expr {[lindex $calls 0 2] eq [list $pgn]}]
+} -cleanup {
+	file delete -force $dir
+} -result {0 {1 1} 1 1 1 1}
+
+tcltest::test assistant-maintenance {compact, convert and the maintenance report go to Scidb's own dialogs} -body {
+	set compact [::scidb::test::assistant::stubbed ::application::database::Compact {
+		::application::assistant::runTool compact_database {}
+	}]
+	set convert [::scidb::test::assistant::stubbed ::application::database::ConvertDatabase {
+		::application::assistant::runTool convert_database {}
+	}]
+	set report [::scidb::test::assistant::stubbed ::application::database::OpenMaintenanceReport {
+		::application::assistant::runTool maintenance_report {tab duplicates}
+		::application::assistant::runTool maintenance_report {}
+	}]
+	set base [::scidb::db::get name]
+	list [expr {[lindex $compact 0 1] eq $base}] [expr {[lindex $convert 0 1] eq $base}] \
+		[lindex $report 0 3] [lindex $report 1 3]
+} -result {1 1 duplicates overview}
+
 tcltest::test assistant-app-state {app_state reports versions, database and position} -body {
 	set reply [::application::assistant::runTool app_state {}]
 	list [string match "*tcl 8.*" $reply] [string match "*active database: *" $reply] \

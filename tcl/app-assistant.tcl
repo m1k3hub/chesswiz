@@ -119,6 +119,30 @@ variable Actions {
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoExport
 	}
+	import_games {
+		1 0 "import %s into the active database"
+		"Import PGN files (.pgn, .pgn.gz or .zip) the user names into the active database, which must be writable. The import log shows what was accepted and rejected; diagnose_import explains its codes."
+		{{"type":"object","properties":{"files":{"type":"array","items":{"type":"string"},"description":"full paths of the PGN files"}},"required":["files"]}}
+		::application::assistant::DoImportGames
+	}
+	compact_database {
+		0 0 "compact the active database"
+		"Compact the active database: removes deleted games and frees their space. Scidb asks the user to confirm and refuses while a game of it has unsaved changes."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoCompactDatabase
+	}
+	convert_database {
+		0 0 "convert the active database"
+		"Copy the active database into a new Scidb (.sci) database, e.g. to turn a PGN, Scid or ChessBase database into Scidb's format. Scidb asks for the format version and the new file name."
+		{{"type":"object","properties":{}}}
+		::application::assistant::DoConvertDatabase
+	}
+	maintenance_report {
+		0 0 "open the maintenance report"
+		"Open the active database's maintenance report: overview (size, deleted games, whether to compact), duplicates (groups of duplicate games, with deletion done by the user there) or openings (ECO coverage)."
+		{{"type":"object","properties":{"tab":{"type":"string","enum":["overview","duplicates","openings"]}}}}
+		::application::assistant::DoMaintenanceReport
+	}
 	install_chessbase_fonts {
 		1 0 "install the ChessBase fonts"
 		"Install the ChessBase chess fonts from a Windows font directory."
@@ -1608,6 +1632,58 @@ proc ::application::assistant::DoExport {} {
 		-view 0 \
 		;
 	return "the export dialog is open for [::util::databaseName $base no]; the user picks format and file"
+}
+
+
+proc ::application::assistant::CheckArgs_import_games {cargs} {
+	set files [expr {[dict exists $cargs files] ? [dict get $cargs files] : {}}]
+	if {![llength $files]} { error "files must name at least one PGN file" }
+	return [dict create files $files]
+}
+
+
+proc ::application::assistant::CheckArgs_maintenance_report {cargs} {
+	set tab [expr {[dict exists $cargs tab] ? [dict get $cargs tab] : "overview"}]
+	if {$tab ni {overview duplicates openings}} { error "tab must be overview, duplicates or openings" }
+	return [dict create tab $tab]
+}
+
+
+proc ::application::assistant::DoImportGames {files} {
+	lassign [ActiveBase] base variant
+	set db [::util::databaseName $base no]
+	if {[::scidb::db::get readonly? $base]} { return "error: $db is read-only" }
+	if {![llength $files]} { return "error: no files named" }
+	foreach file $files {
+		if {![regexp -nocase {\.(pgn|pgn\.gz|zip)$} $file]} {
+			return "error: '$file' is not a PGN file (.pgn, .pgn.gz or .zip)"
+		}
+		if {![file readable $file]} { return "error: cannot read '$file'" }
+	}
+	::import::import .application $base $files $::import::mc::DatabaseImport utf-8
+	if {$base eq [::scidb::db::get name]} { ::application::database::refreshBase $base }
+	return "imported [llength $files] file(s) into $db; the log window lists accepted and rejected games"
+}
+
+
+proc ::application::assistant::DoCompactDatabase {} {
+	lassign [ActiveBase] base variant
+	::application::database::Compact .application $base
+	return "the compaction of [::util::databaseName $base no] was offered to the user, who confirms it in Scidb's dialog"
+}
+
+
+proc ::application::assistant::DoConvertDatabase {} {
+	lassign [ActiveBase] base variant
+	::application::database::ConvertDatabase .application $base $variant
+	return "the conversion of [::util::databaseName $base no] was started; the user picks the version and the new file in Scidb's dialogs"
+}
+
+
+proc ::application::assistant::DoMaintenanceReport {tab} {
+	lassign [ActiveBase] base variant
+	::application::database::OpenMaintenanceReport .application $base $variant $tab
+	return "the maintenance report of [::util::databaseName $base no] is open at $tab"
 }
 
 
