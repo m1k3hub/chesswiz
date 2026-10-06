@@ -130,9 +130,13 @@ proc ::application::assistant::routeInvocations {} {
 			set def [dict get $props $prop]
 			if {[dict exists $def enum] && [llength [dict get $def enum]] in {2 3 4}} {
 				foreach value [dict get $def enum] {
+					# the value is what tells the invocations apart: cut the
+					# description, never the value
+					set suffix " -- '$value'"
+					set room [expr {109 - [string length $suffix]}]
 					lappend out [dict create id "${name}($value)" name $name \
 						cargs [dict create $prop $value] \
-						description [string range "$description -- '$value'" 0 109]]
+						description "[string range $description 0 $room]$suffix"]
 				}
 				continue
 			}

@@ -272,6 +272,53 @@ tcltest::test assistant-maintenance {compact, convert and the maintenance report
 		[lindex $report 0 3] [lindex $report 1 3]
 } -result {1 1 duplicates overview}
 
+tcltest::test assistant-correspondence {correspondence_games lists whose move it is and never sends one} -body {
+	rename ::iccf::xfcc::configured? ::scidb::test::assistant::realConfigured
+	rename ::iccf::xfcc::getGames ::scidb::test::assistant::realGetGames
+	rename ::iccf::xfcc::submitMove ::scidb::test::assistant::realSubmit
+	proc ::iccf::xfcc::submitMove {args} { set ::scidb::test::assistant::Submitted 1 }
+	set ::scidb::test::assistant::Submitted 0
+	proc ::iccf::xfcc::configured? {} { return 0 }
+	set none [::application::assistant::runTool correspondence_games {}]
+	proc ::iccf::xfcc::configured? {} { return 1 }
+	proc ::iccf::xfcc::getGames {} {
+		set base {white "" black "" event "WS/2026" result "" daysPlayer 3 hoursPlayer 4 daysOpponent 9 hoursOpponent 1}
+		list [dict merge $base {id 11 hasWhite true black "Smith, A" myTurn false}] \
+			[dict merge $base {id 12 hasWhite false white "Jones, B" myTurn true}]
+	}
+	set status [::application::assistant::runTool correspondence_games {action status}]
+	set bad [::application::assistant::runTool correspondence_games {action send}]
+	foreach p {configured? getGames submitMove} {
+		rename ::iccf::xfcc::$p {}
+	}
+	rename ::scidb::test::assistant::realConfigured ::iccf::xfcc::configured?
+	rename ::scidb::test::assistant::realGetGames ::iccf::xfcc::getGames
+	rename ::scidb::test::assistant::realSubmit ::iccf::xfcc::submitMove
+	set lines [split $status \n]
+	list [string match "error: no ICCF account*" $none] [lindex $lines 0] \
+		[string match "game 12: you are Black against Jones, B*YOUR MOVE, 3d 4h left" [lindex $lines 1]] \
+		[string match "game 11: you are White against Smith, A*opponent to move*" [lindex $lines 2]] \
+		[string match "error:*" $bad] $::scidb::test::assistant::Submitted
+} -result {1 {1 of 2 game(s) need your move} 1 1 1 0}
+
+tcltest::test assistant-find-lesson {find_lesson matches the board against interactive clips and can play one} -body {
+	set saved [array get ::application::media::Priv *Interactive]
+	set start [::scidb::pos::fen]
+	set ::application::media::Priv(dbInteractive) [list \
+		[list $start /lessons/opening.wmv 10 20 "the starting position"] \
+		[list {8/8/8/8/8/8/8/K6k w - - 0 1} /lessons/endgame.wmv {} {} ""]]
+	set ::application::media::Priv(userInteractive) {}
+	set calls [::scidb::test::assistant::stubbed ::application::media::PlayMedia {
+		set found [::application::assistant::runTool find_lesson {}]
+		set played [::application::assistant::runTool find_lesson {play true}]
+	}]
+	set ::application::media::Priv(dbInteractive) {}
+	set none [::application::assistant::runTool find_lesson {}]
+	array set ::application::media::Priv $saved
+	list [lindex [split $found \n] 0] [lindex [split $found \n] 1] [llength $calls] [lindex $calls 0] \
+		[string match "no video lesson*" $none]
+} -result {{1 lesson clip(s) cover this position:} {opening.wmv (the starting position)} 1 {/lessons/opening.wmv 10 20} 1}
+
 tcltest::test assistant-app-state {app_state reports versions, database and position} -body {
 	set reply [::application::assistant::runTool app_state {}]
 	list [string match "*tcl 8.*" $reply] [string match "*active database: *" $reply] \

@@ -137,10 +137,22 @@ variable Actions {
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoConvertDatabase
 	}
+	correspondence_games {
+		0 0 "show the correspondence games"
+		"ICCF correspondence games: status lists which games need my move and the time left; open opens the dialog. Read-only. action status: fetch the games from the ICCF server and list each with the opponent, the event, whose move it is and the time left, games needing the user's move first. action open: open the Correspondence Games dialog. The assistant never sends a move; the user does that in the dialog."
+		{{"type":"object","properties":{"action":{"type":"string","enum":["status","open"]}},"required":["action"]}}
+		::application::assistant::DoCorrespondenceGames
+	}
+	find_lesson {
+		0 0 "find a video lesson for this position"
+		"Find the video lessons that cover the board's position: interactive clips of the active database's media (ChessBase .cms lessons, Scidb .scm manifests) and the user's own interactive index. With play true, the first match plays in the media pane."
+		{{"type":"object","properties":{"play":{"type":"boolean"}}}}
+		::application::assistant::DoFindLesson
+	}
 	maintenance_report {
 		0 0 "open the maintenance report"
 		"Open the active database's maintenance report: overview (size, deleted games, whether to compact), duplicates (groups of duplicate games, with deletion done by the user there) or openings (ECO coverage)."
-		{{"type":"object","properties":{"tab":{"type":"string","enum":["overview","duplicates","openings"]}}}}
+		{{"type":"object","properties":{"tab":{"type":"string","enum":["overview","duplicates","openings"]}},"required":["tab"]}}
 		::application::assistant::DoMaintenanceReport
 	}
 	install_chessbase_fonts {
@@ -1639,6 +1651,105 @@ proc ::application::assistant::CheckArgs_import_games {cargs} {
 	set files [expr {[dict exists $cargs files] ? [dict get $cargs files] : {}}]
 	if {![llength $files]} { error "files must name at least one PGN file" }
 	return [dict create files $files]
+}
+
+
+proc ::application::assistant::CheckArgs_correspondence_games {cargs} {
+	set action [expr {[dict exists $cargs action] ? [dict get $cargs action] : "status"}]
+	if {$action ni {status open}} { error "action must be status or open" }
+	return [dict create action $action]
+}
+
+
+# Read-only: the games and whose move it is; sending a move stays the user's.
+proc ::application::assistant::DoCorrespondenceGames {action} {
+	if {$action eq "open"} {
+		::application::corr::games::open .application
+		return "the Correspondence Games dialog is open"
+	}
+	if {![::iccf::xfcc::configured?]} {
+		return "error: no ICCF account is set up; the Correspondence Games dialog (action open) has the settings"
+	}
+	if {[catch { ::iccf::xfcc::getGames } games]} { return "error: $games" }
+	if {![llength $games]} { return "no correspondence games on the ICCF server" }
+	set mine {}
+	set theirs {}
+	foreach g $games {
+		set colour [expr {[string is true -strict [dict get $g hasWhite]] ? "White" : "Black"}]
+		set opponent [dict get $g [expr {$colour eq "White" ? "black" : "white"}]]
+		set line [format "game %s: you are %s against %s, %s" [dict get $g id] $colour $opponent [dict get $g event]]
+		if {[dict get $g result] ni {"" Ongoing}} {
+			append line ", finished [dict get $g result]"
+			lappend theirs $line
+		} elseif {[string is true -strict [dict get $g myTurn]]} {
+			append line [format ", YOUR MOVE, %sd %sh left" [dict get $g daysPlayer] [dict get $g hoursPlayer]]
+			lappend mine $line
+		} else {
+			append line [format ", opponent to move (%sd %sh left for them)" [dict get $g daysOpponent] [dict get $g hoursOpponent]]
+			lappend theirs $line
+		}
+	}
+	return "[llength $mine] of [llength $games] game(s) need your move\n[join [concat $mine $theirs] \n]"
+}
+
+
+proc ::application::assistant::CheckArgs_find_lesson {cargs} {
+	set play [expr {[dict exists $cargs play] ? [dict get $cargs play] : 0}]
+	if {![string is boolean -strict $play]} { error "play must be true or false" }
+	return [dict create play [string is true $play]]
+}
+
+
+# Every interactive entry {fen file start end label ...} Scidb knows of:
+# the database's and the user's indexes, and the .cms/.scm lessons among
+# the media pane's files.
+proc ::application::assistant::LessonEntries {} {
+	set entries {}
+	foreach var {dbInteractive userInteractive} {
+		if {[info exists ::application::media::Priv($var)]} {
+			lappend entries {*}$::application::media::Priv($var)
+		}
+	}
+	set paths {}
+	if {[info exists ::application::media::Priv(tree)] && [winfo exists $::application::media::Priv(tree)]} {
+		foreach item [::application::media::MediaRows] {
+			lappend paths [lindex [$::application::media::Priv(tree) item $item -values] 2]
+		}
+	}
+	foreach path [lsort -unique $paths] {
+		if {[string tolower [file extension $path]] ne ".cms" || ![file exists $path]} { continue }
+		foreach parse {SmvEntries CmsEntries} file [list "[file rootname $path].smv" $path] {
+			if {![catch { array set r [::application::media::$parse $file] }]} {
+				lappend entries {*}$r(entries)
+			}
+			array unset r
+		}
+	}
+	return $entries
+}
+
+
+proc ::application::assistant::DoFindLesson {play} {
+	set key [::application::media::FenKey [::scidb::pos::fen]]
+	set hits {}
+	foreach e [LessonEntries] {
+		if {[::application::media::FenKey [lindex $e 0]] eq $key} { lappend hits $e }
+	}
+	if {![llength $hits]} {
+		return "no video lesson covers this position (searched the database's and your own interactive media)"
+	}
+	set lines {}
+	foreach e $hits {
+		lassign $e fen file start end label
+		lappend lines "[file tail $file][expr {$label ne "" ? " ($label)" : ""}]"
+	}
+	set reply "[llength $hits] lesson clip(s) cover this position:\n[join [lsort -unique $lines] \n]"
+	if {$play} {
+		lassign [lindex $hits 0] fen file start end
+		::application::media::PlayMedia $file $start $end
+		append reply "\nplaying [file tail $file]"
+	}
+	return $reply
 }
 
 
