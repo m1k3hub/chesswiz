@@ -80,6 +80,11 @@ proc ::scidb::test::s1::choice {name confidence} {
 	return [list 200 "{\"model\":\"kev-latest\",\"answers\":{\"verdict\":{\"type\":\"choice\",\"choice\":\"$name\",\"confidence\":$confidence,\"probabilities\":{\"$name\":0.9}}},\"latency_ms\":5}"]
 }
 
+# A choice answer with a full distribution, <probs> as {"name":p,...}.
+proc ::scidb::test::s1::choiceDist {name confidence probs} {
+	return [list 200 "{\"model\":\"kev-latest\",\"answers\":{\"verdict\":{\"type\":\"choice\",\"choice\":\"$name\",\"confidence\":$confidence,\"probabilities\":{$probs}}},\"latency_ms\":5}"]
+}
+
 proc ::scidb::test::s1::wait {var} {
 	set timer [after 5000 [list set $var timeout]]
 	vwait $var
@@ -253,6 +258,23 @@ tcltest::test systemone-triage-unsure {a low-confidence verdict only advises} -s
 	::scidb::test::s1::stop
 	::scidb::test::s1::triageCleanup
 } -result {2 0}
+
+tcltest::test systemone-triage-not-bug {not-a-bug spread over several classes still settles} -setup {
+	::scidb::test::s1::triageSetup
+	lassign [lmap g [::application::triage::groups] { lindex $g 0 }] noise bug
+	::scidb::test::s1::start [list \
+		[::scidb::test::s1::choiceDist noise 0.45 {"noise":0.45,"environment":0.40,"bug":0.15}] \
+		[::scidb::test::s1::choiceDist bug 0.35 {"bug":0.35,"environment":0.34,"user":0.31}]]
+} -body {
+	set result [::scidb::test::s1::triage "\[{\"id\":\"$bug\",\"verdict\":\"environment\"}\]"]
+	set triaged [split [::scidb::test::s1::readFile [file join $::scidb::test::s1::Dir triaged]] \n]
+	list [string match "*settled by the classifier*" [dict get $result summary]] \
+		[expr {[lsearch -inline $triaged "$noise *"] eq "$noise noise classifier 0.45"}] \
+		[expr {[lsearch -inline $triaged "$bug *"] eq "$bug environment classifier 0.35"}]
+} -cleanup {
+	::scidb::test::s1::stop
+	::scidb::test::s1::triageCleanup
+} -result {1 1 1}
 
 tcltest::test systemone-triage-down {without a reachable classifier the language model takes everything} -setup {
 	::scidb::test::s1::triageSetup

@@ -22,6 +22,8 @@ among candidates code produced*; code still owns every value.
 | 7 | [Line-by-line search](https://docs.typesafe.ai/cookbooks/semantic_find.md) / [RAG passages](https://docs.typesafe.ai/cookbooks/classifying_rag_passages.md) | comment/annotation search | keyword search misses paraphrase | safe (read-only) |
 | 8 | [Guardrails for LLMs](https://docs.typesafe.ai/cookbooks/llm_guardrails.md) | `ai-provider.tcl` egress (A9), `RunTool` | privacy leaks; malformed tool calls | safe (gates) |
 | 9 | [Parallel questions](https://docs.typesafe.ai/cookbooks/parallel_questions.md) | `ai-batch.tcl`, `ai-rhetoric.tcl` | already done — the cookbook confirms the shape | safe |
+| 10 | [Classification using confidence](https://docs.typesafe.ai/cookbooks/classification_using_confidence.md) | `app-error-triage.tcl` classifier gate | top-label confidence when the decision is bug / not bug | safe (shipped) |
+| 11 | [Skill suggestion](https://docs.typesafe.ai/cookbooks/skill_suggestion.md) / [Hierarchical classification](https://docs.typesafe.ai/cookbooks/hierarchical_classification.md) | `app-assistant-route.tcl` flat route choice | probability spreads over similar actions as the catalog grows | safe (deferred) |
 | — | [Self-consistency](https://docs.typesafe.ai/cookbooks/consistency_choice_cookbook.md), [Citation check](https://docs.typesafe.ai/cookbooks/citation_check.md) | `ai-claims.tcl`, `ai-factcheck.tcl` | **walled** — the chess-fact trust boundary stays deterministic | — |
 
 ## 1. Entity alignment → duplicate/merge arbitration (A5)
@@ -249,6 +251,49 @@ mutating tool call's intent in `RunTool` (the deferred candidate G).
 
 **Why less fragile:** the check is a fixed question with a threshold and the
 status-quo fallback, same contract as every other `::ai::decide` gate.
+
+## 10. Classification using confidence → error triage gate
+
+**Cookbook shape:** when the action depends on a broader grouping than the
+labels, add up the fine labels' probabilities and decide on the group.
+
+**Scidb before:** `OnClassifiedImpl` settled a group only when the top label
+was not `bug` *and* its own confidence was >= `MinConfidence` (0.6). An answer
+of environment 0.45 / noise 0.40 / bug 0.15 went to the language model, though
+the classifier was 85% sure it was no bug.
+
+**Shipped.** The gate settles on `1 - P(bug) >= MinConfidence`, using the
+`probabilities` the client already returns. If bug is the top label but not
+the majority, the likeliest non-bug class is recorded as the verdict. When
+the answer has no usable `P(bug)`, the old top-label rule applies. Test:
+`systemone-triage-not-bug` in `tests/test_app_systemone.tcl`.
+
+**Open:** `ai-calibrate.tcl` measures top-label accuracy against top-label
+confidence. `qualified triage` therefore still gates the feature on a slightly
+different quantity than the one the threshold now compares. Re-measure the
+0.6 against P(not bug) on the triage gold set before trusting it in the cloud
+backend.
+
+## 11. Skill suggestion / hierarchical classification → assistant router
+
+**Cookbook shape:** a large catalog is picked in two stages -- a group, then
+an item within it -- so probability is not split among near-synonyms.
+
+**Scidb today:** `routeInvocations` gives one flat `Choice` over every
+non-debug action, one entry per small enum value, descriptions cut to 110
+characters, plus a "needs the language model" sentinel. The confidence gate
+can fail because several actions look alike, not because the request is
+unclear.
+
+**Deferred.** Two stages (board / database / search / player / ... then the
+action) with the sentinel at both levels. Do this only when the corpus shows
+flat routing accuracy dropping as actions are added. `satisfied` runs in
+parallel with `route`, so it judges whether the request is generic. It must
+not be used to confirm the chosen action.
+
+**Not applicable:** SDE cascade (argument filling already is the extraction
+step), autoresearch feature discovery (no labeled outcomes collected);
+confidence-gated and intent routing are already the triage and router shapes.
 
 ## Wall
 

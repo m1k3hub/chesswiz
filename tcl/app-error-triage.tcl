@@ -301,7 +301,26 @@ proc ::application::triage::OnClassifiedImpl {todo keep result} {
 	set verdict [dict get $answer choice]
 	set confidence [dict get $answer confidence]
 	set Priv(opinion,$id) [format "%s %.2f" $verdict $confidence]
-	if {$verdict ne "bug" && $confidence >= $MinConfidence} {
+	# The decision is bug or not, so settle on P(not a bug) -- environment,
+	# user and noise together -- rather than the top label's own share.
+	# Without a usable P(bug) the top label decides, as before.
+	if {[catch { dict get $answer probabilities bug } pBug]
+	 || ![string is double -strict $pBug] || $pBug < 0.0 || $pBug > 1.0} {
+		set settle [expr {$verdict ne "bug" && $confidence >= $MinConfidence}]
+	} else {
+		set settle [expr {1.0 - $pBug >= $MinConfidence}]
+		if {$settle && $verdict eq "bug"} {
+			# not a bug, but no single class is the top label: name the likeliest
+			set best ""; set bestP -1.0
+			dict for {class p} [dict get $answer probabilities] {
+				if {$class ne "bug" && [dict exists $Classes $class] && $p > $bestP} {
+					set best $class; set bestP $p
+				}
+			}
+			if {$best eq ""} { set settle 0 } else { set verdict $best }
+		}
+	}
+	if {$settle} {
 		MarkTriaged $id $verdict classifier $confidence
 		lappend Priv(settled) [format "%s %s (classifier, confidence %.2f)" $id $verdict $confidence]
 	} else {
