@@ -572,7 +572,6 @@ sanitize(	mstl::string const& raw,
 
 			// find the end of the open tag (bounded attribute scan)
 			char const* tagEnd = q;
-			bool selfClosed = false;
 			bool unterminated = false;
 
 			while (tagEnd < end && *tagEnd != '>')

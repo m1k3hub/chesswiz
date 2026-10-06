@@ -5637,7 +5637,7 @@ cmdMediaFiles(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	int				gameIndex	= 0;
 	if (Tcl_GetIntFromObj(ti, objv[3], &gameIndex) != TCL_OK || gameIndex < 0)
 	{
-		Tcl_SetResult(ti, "expected a non-negative game index", TCL_STATIC);
+		Tcl_SetObjResult(ti, Tcl_NewStringObj("expected a non-negative game index", -1));
 		return TCL_ERROR;
 	}
 
@@ -6010,7 +6010,7 @@ cmdGameAnchor(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	if (Tcl_ListObjGetElements(ti, objv[3], &len, const_cast<Tcl_Obj***>(&fields)) != TCL_OK)
 	{
-		Tcl_SetResult(ti, "expected the anchor arguments as a list", TCL_STATIC);
+		Tcl_SetObjResult(ti, Tcl_NewStringObj("expected the anchor arguments as a list", -1));
 		return TCL_ERROR;
 	}
 
@@ -6180,7 +6180,7 @@ cmdGuidingText(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	if (Tcl_GetIntFromObj(ti, objv[3], &gameIndex) != TCL_OK || gameIndex < 0)
 	{
-		Tcl_SetResult(ti, "expected a non-negative game index", TCL_STATIC);
+		Tcl_SetObjResult(ti, Tcl_NewStringObj("expected a non-negative game index", -1));
 		return TCL_ERROR;
 	}
 
@@ -6201,7 +6201,7 @@ cmdGuidingText(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	if (mdb.loadGame(unsigned(gameIndex), game) != load::Ok)
 	{
-		Tcl_SetResult(ti, "cannot load the guiding-text record", TCL_STATIC);
+		Tcl_SetObjResult(ti, Tcl_NewStringObj("cannot load the guiding-text record", -1));
 		return TCL_ERROR;
 	}
 
