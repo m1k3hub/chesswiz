@@ -51,7 +51,25 @@ proc ::ai::calibrate::QuestionFor {feature} {
 	switch -- $feature {
 		comment_kind { return [::ai::comment::Question] }
 		language     { return [::ai::language::Question] }
+		triage       { return [::application::triage::Question] }
 		default      { error "no calibration question for feature '$feature'" }
+	}
+}
+
+
+# One scored row {gold choice confidence} for sweep. Most features measure
+# the top label. Triage acts on bug / not bug, so it measures P(not a bug)
+# against the gold label's group: the threshold it picks is the one the
+# triage gate compares.
+proc ::ai::calibrate::Score {feature gold answer} {
+	switch -- $feature {
+		triage {
+			set group [expr {$gold eq "bug" ? "bug" : "notbug"}]
+			return [list $group notbug [::application::triage::notBugProbability $answer]]
+		}
+		default {
+			return [list $gold [dict get $answer choice] [dict get $answer confidence]]
+		}
 	}
 }
 
@@ -94,8 +112,7 @@ proc ::ai::calibrate::OnMeasured {id result} {
 	foreach {key r} [dict get $result results] {
 		if {[dict get $r ok]} {
 			set answer [dict get $r answer]
-			if {[catch { list [dict get $golds $key] \
-				[dict get $answer choice] [dict get $answer confidence] } row]} {
+			if {[catch { Score [dict get $run feature] [dict get $golds $key] $answer } row]} {
 				incr errors
 			} else {
 				lappend scored $row
@@ -188,6 +205,17 @@ proc ::ai::calibrate::run {features battery script args} {
 }
 
 
+# The accuracy a feature's threshold must reach. Triage settles a group
+# for good, so a bug settled as harmless is never seen again: its "accuracy"
+# is the share of settled groups that are not bugs, and with three in four
+# groups harmless a 0.9 target still hides a quarter of the bugs. Its
+# threshold must settle no labelled bug at all.
+proc ::ai::calibrate::targetFor {feature target} {
+	if {$feature eq "triage"} { return 1.0 }
+	return $target
+}
+
+
 proc ::ai::calibrate::OnRunFeature {feature result} {
 	variable Priv
 	if {![dict get $result ok]} {
@@ -195,8 +223,10 @@ proc ::ai::calibrate::OnRunFeature {feature result} {
 		after 0 [list {*}$script [list ok 0 error "measure failed for '$feature'"]]
 		return
 	}
-	set recommendation [recommend [sweep [dict get $result scored]] $Priv(target)]
+	set target [targetFor $feature $Priv(target)]
+	set recommendation [recommend [sweep [dict get $result scored]] $target]
 	dict set Priv(report) $feature [dict create \
+		target    $target \
 		threshold [lindex $recommendation 0] \
 		coverage  [lindex $recommendation 1] \
 		accuracy  [lindex $recommendation 2] \

@@ -268,11 +268,22 @@ the majority, the likeliest non-bug class is recorded as the verdict. When
 the answer has no usable `P(bug)`, the old top-label rule applies. Test:
 `systemone-triage-not-bug` in `tests/test_app_systemone.tcl`.
 
-**Open:** `ai-calibrate.tcl` measures top-label accuracy against top-label
-confidence. `qualified triage` therefore still gates the feature on a slightly
-different quantity than the one the threshold now compares. Re-measure the
-0.6 against P(not bug) on the triage gold set before trusting it in the cloud
-backend.
+**Calibrated (2026-10-06, typesafe / jev-latest).** `ai-calibrate.tcl`
+scores triage on P(not a bug), the quantity the gate compares, and the gate
+reads `::ai::systemone::threshold triage`. Battery:
+`tests/fixtures/triage-battery.tcl`, 154 groups (30 from the error log, the
+rest hand-written; 39 bug, 39 environment, 38 user, 38 noise), labelled by
+Claude and not yet reviewed by a person. The usual 0.9 target picked 0.2,
+which settled 10 of the 39 bugs as harmless: with three groups in four
+harmless, "accuracy among settled" is easy to meet. Triage's target is
+therefore "no labelled bug settled" (`::ai::calibrate::targetFor`), which
+gives **0.8**: 110 of 115 harmless groups settled, no bug.
+
+plumb-4b-v5 **fails** on the same battery: it puts P(not a bug) at 0.8 or
+more for 34 of the 39 bugs, and even at 0.95 settles one bug (53 groups,
+98.1%). No threshold is written, so on plumb triage stays with the
+language model. The old 0.6 default, reachable with SCIDB_AI_UNCALIBRATED=1,
+would hide 38 of 39 bugs there.
 
 ## 11. Skill suggestion / hierarchical classification → assistant router
 

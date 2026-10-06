@@ -19,7 +19,9 @@
 # errors. Environment:
 #   SCIDB_AI_TRIAGE=0         no automatic triage
 #   SCIDB_AI_CLASSIFIER_MIN_CONFIDENCE   below it the classifier only advises
-#                             (default 0.6; see ai-systemone.tcl for the rest)
+#                             (default 0.6; a calibrated triage threshold in
+#                             ai-thresholds.tsv, or SCIDB_AI_TRIAGE_MIN_CONFIDENCE,
+#                             takes precedence; see ai-systemone.tcl)
 #   SCIDB_AI_HANDOFF_CMD      the coding agent, a command prefix the prompt is
 #                             appended to, e.g. "claude -p" or "agy -p"
 #   SCIDB_AI_HANDOFF_DIR      the directory it runs in (the Scidb source tree)
@@ -249,9 +251,58 @@ proc ::application::triage::run {args} {
 
 # The classifier's pass, one group per request: <todo> still to ask, <keep>
 # the groups left for the language model.
-proc ::application::triage::Classify {todo keep} {
+# The classifier's question; ::ai::calibrate asks the same one.
+proc ::application::triage::Question {} {
+	variable Classes
+	return [dict create type choice \
+		instructions "What does this error report from Scidb, a chess database application (Tcl/Tk front end over a C++ core), show?" \
+		criteria $Classes]
+}
+
+
+# P(not a bug) for a classifier answer: environment, user and noise
+# together. Without a usable P(bug) the top label stands in: its confidence
+# when it is not bug, else 0. The gate and ::ai::calibrate both read this.
+proc ::application::triage::notBugProbability {answer} {
+	if {[catch { dict get $answer probabilities bug } pBug]
+	 || ![string is double -strict $pBug] || $pBug < 0.0 || $pBug > 1.0} {
+		if {[dict get $answer choice] eq "bug"} { return 0.0 }
+		return [dict get $answer confidence]
+	}
+	return [expr {1.0 - $pBug}]
+}
+
+
+# The class a settled group is recorded as: the top label, or when that is
+# bug, the likeliest other class ("" if the answer names none).
+proc ::application::triage::SettledVerdict {answer} {
 	variable Classes
 
+	set verdict [dict get $answer choice]
+	if {$verdict ne "bug"} { return $verdict }
+	set best ""; set bestP -1.0
+	if {![catch { dict get $answer probabilities } probs]} {
+		dict for {class p} $probs {
+			if {$class ne "bug" && [dict exists $Classes $class]
+			 && [string is double -strict $p] && $p > $bestP} {
+				set best $class; set bestP $p
+			}
+		}
+	}
+	return $best
+}
+
+
+proc ::application::triage::Threshold {} {
+	variable MinConfidence
+	if {[llength [info commands ::ai::systemone::threshold]]} {
+		return [::ai::systemone::threshold triage $MinConfidence]
+	}
+	return $MinConfidence
+}
+
+
+proc ::application::triage::Classify {todo keep} {
 	if {![llength $todo]} {
 		Escalate $keep
 		return
@@ -262,9 +313,7 @@ proc ::application::triage::Classify {todo keep} {
 		return
 	}
 	set g [lindex $todo 0]
-	set questions [dict create verdict [dict create type choice \
-		instructions "What does this error report from Scidb, a chess database application (Tcl/Tk front end over a C++ core), show?" \
-		criteria $Classes]]
+	set questions [dict create verdict [Question]]
 	::ai::systemone::evaluateAsync [GroupText $g] $questions \
 		[namespace code [list OnClassified $todo $keep]]
 }
@@ -279,7 +328,6 @@ proc ::application::triage::OnClassified {todo keep result} {
 
 proc ::application::triage::OnClassifiedImpl {todo keep result} {
 	variable Priv
-	variable MinConfidence
 
 	set todo [lassign $todo g]
 	set id [lindex $g 0]
@@ -289,8 +337,7 @@ proc ::application::triage::OnClassifiedImpl {todo keep result} {
 		Escalate [concat $keep [list $g] $todo]
 		return
 	}
-	variable Classes
-	set question [dict create type choice criteria $Classes]
+	set question [Question]
 	if {[catch { dict get $result answers verdict } answer]
 	 || ![::ai::systemone::valid $question $answer]} {
 		# a malformed answer or a label we did not offer: the model decides
@@ -301,24 +348,12 @@ proc ::application::triage::OnClassifiedImpl {todo keep result} {
 	set verdict [dict get $answer choice]
 	set confidence [dict get $answer confidence]
 	set Priv(opinion,$id) [format "%s %.2f" $verdict $confidence]
-	# The decision is bug or not, so settle on P(not a bug) -- environment,
-	# user and noise together -- rather than the top label's own share.
-	# Without a usable P(bug) the top label decides, as before.
-	if {[catch { dict get $answer probabilities bug } pBug]
-	 || ![string is double -strict $pBug] || $pBug < 0.0 || $pBug > 1.0} {
-		set settle [expr {$verdict ne "bug" && $confidence >= $MinConfidence}]
-	} else {
-		set settle [expr {1.0 - $pBug >= $MinConfidence}]
-		if {$settle && $verdict eq "bug"} {
-			# not a bug, but no single class is the top label: name the likeliest
-			set best ""; set bestP -1.0
-			dict for {class p} [dict get $answer probabilities] {
-				if {$class ne "bug" && [dict exists $Classes $class] && $p > $bestP} {
-					set best $class; set bestP $p
-				}
-			}
-			if {$best eq ""} { set settle 0 } else { set verdict $best }
-		}
+	# The decision is bug or not, so settle on P(not a bug), not the top
+	# label's own share.
+	set settle 0
+	if {[notBugProbability $answer] >= [Threshold]} {
+		set verdict [SettledVerdict $answer]
+		set settle [expr {$verdict ne ""}]
 	}
 	if {$settle} {
 		MarkTriaged $id $verdict classifier $confidence

@@ -6,6 +6,8 @@
 #       --model plumb-4b-v5:latest --features comment_kind,event_type \
 #       --out tcl/ai-thresholds.tsv
 #
+# --timeout MS raises the per-request timeout for a slow local server.
+#
 # Prints, per feature, the recommended (threshold coverage accuracy) on the
 # labelled battery (tests/fixtures/systemone-battery.tcl), and with --out
 # merges one line per (feature, backend) into the thresholds file that
@@ -19,12 +21,17 @@
 
 set root [file dirname [file dirname [file normalize [info script]]]]
 
+# app-error-triage gives the triage question; it must not schedule a run
+set ::env(SCIDB_AI_TRIAGE) 0
+namespace eval ::application::assistant { variable ErrorLogFile "" }
+
 foreach module {ai-provider ai-systemone ai-batch ai-calibrate \
-	ai-comment ai-event ai-language} {
+	ai-comment ai-event ai-language app-error-triage} {
 	catch { ::util::source $module }
 	source [file join $root tcl $module.tcl]
 }
 source [file join $root tests fixtures systemone-battery.tcl]
+source [file join $root tests fixtures triage-battery.tcl]
 
 proc envOr {name default} {
 	expr {[info exists ::env($name)] && $::env($name) ne "" ? $::env($name) : $default}
@@ -38,6 +45,7 @@ set opt(-target)      [envOr SCIDB_AI_CAL_TARGET 0.9]
 set opt(-out)         [envOr SCIDB_AI_CAL_OUT ""]
 set opt(-cache)       [envOr SCIDB_AI_CAL_CACHE ""]
 set opt(-concurrency) 2
+set opt(-timeout)     ""
 foreach {flag value} $::argv {
 	switch -- $flag {
 		--backend     { set opt(-backend) $value }
@@ -48,15 +56,21 @@ foreach {flag value} $::argv {
 		--out         { set opt(-out) $value }
 		--cache       { set opt(-cache) $value }
 		--concurrency { set opt(-concurrency) $value }
+		--timeout     { set opt(-timeout) $value }
 		default       { puts stderr "unknown option $flag" ; exit 2 }
 	}
 }
 
 set features [split $opt(-features) ,]
+if {"triage" in $features && !$::scidb::calibrate::TriageReviewed} {
+	puts stderr "the triage labels are a draft (tests/fixtures/triage-battery.tcl); review them and set TriageReviewed 1"
+	exit 1
+}
 
 ::ai::systemone::configure -backend $opt(-backend)
 if {$opt(-url) ne ""}   { ::ai::systemone::configure -endpoint $opt(-url) }
 if {$opt(-model) ne ""} { ::ai::systemone::configure -model $opt(-model) }
+if {$opt(-timeout) ne ""} { ::ai::systemone::configure -timeout $opt(-timeout) }
 
 if {![::ai::systemone::enabled]} {
 	puts stderr "no System One backend configured"
@@ -68,7 +82,9 @@ puts "features=[join $features {, }] target=$opt(-target)"
 
 set ::done 0
 set ::result {}
-::ai::calibrate::run $features [::scidb::calibrate::Battery] {apply {{result} {
+set battery [::scidb::calibrate::Battery]
+dict set battery triage [::scidb::calibrate::TriageCases]
+::ai::calibrate::run $features $battery {apply {{result} {
 	set ::result $result
 	set ::done 1
 }}} -target $opt(-target) -concurrency $opt(-concurrency) -cache $opt(-cache)
@@ -92,6 +108,7 @@ set calibrated {}
 foreach feature $features {
 	set row [dict get $report $feature]
 	set accuracy [dict get $row accuracy]
+	set target [dict get $row target]
 	if {$opt(-out) eq ""} { continue }
 	if {$accuracy + 1e-9 >= $target} {
 		::ai::calibrate::write $opt(-out) $feature $opt(-backend) [dict get $row threshold]
@@ -113,6 +130,7 @@ foreach feature $features {
 puts ""
 foreach feature $features {
 	set accuracy [dict get [dict get $report $feature] accuracy]
+	set target [dict get [dict get $report $feature] target]
 	if {$accuracy + 1e-9 >= $target} {
 		puts "calibrated: $feature (accuracy [format %.3f $accuracy] >= target $target)"
 	} else {

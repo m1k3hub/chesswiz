@@ -97,5 +97,39 @@ set ::ai::systemone::Thresholds $savedThresholds
 set ::ai::systemone::Config(backend) $savedBackend
 catch { file delete $file }
 
+# --- triage: scored on P(not a bug), the quantity its gate compares -------
+namespace eval ::application::assistant { variable ErrorLogFile "" }
+source [file join $root tcl app-error-triage.tcl]
+set spread {type choice choice environment confidence 0.45 probabilities {environment 0.45 noise 0.40 bug 0.15}}
+set row [::ai::calibrate::Score triage noise $spread]
+check "triage score: gold grouped as notbug, P(not bug) summed" \
+	[expr {[lrange $row 0 1] eq {notbug notbug} && abs([lindex $row 2] - 0.85) < 1e-9}]
+check "triage score: a bug gold stays bug" \
+	[expr {[lindex [::ai::calibrate::Score triage bug $spread] 0] eq "bug"}]
+set bare {type choice choice bug confidence 0.9}
+check "triage score: no distribution, a bug top label is 0" \
+	[expr {[lindex [::ai::calibrate::Score triage bug $bare] 2] == 0.0}]
+check "triage verdict: bug on top but a minority names the likeliest other" \
+	[expr {[::application::triage::SettledVerdict {choice bug confidence 0.35 probabilities {bug 0.35 environment 0.34 user 0.31}}] eq "environment"}]
+set ::ai::systemone::Config(backend) plumb
+dict set ::ai::systemone::Thresholds triage plumb 0.75
+check "triage threshold: the calibrated value wins over the default" \
+	[expr {[::application::triage::Threshold] == 0.75}]
+dict unset ::ai::systemone::Thresholds triage
+set ::ai::systemone::Config(backend) $savedBackend
+check "triage target: no labelled bug may be settled, whatever the run's target" \
+	[expr {[::ai::calibrate::targetFor triage 0.9] == 1.0 && [::ai::calibrate::targetFor comment_kind 0.9] == 0.9}]
+check "triage target: 0.9 accuracy hiding a bug does not pass" \
+	[expr {[lindex [::ai::calibrate::recommend [::ai::calibrate::sweep \
+		{{notbug notbug 0.9} {notbug notbug 0.8} {bug notbug 0.5} {bug notbug 0.1}}] \
+		[::ai::calibrate::targetFor triage 0.9]] 0] > 0.5}]
+check "triage battery: the battery loads as {state gold} cases" [expr {![catch {
+	source [file join $root tests fixtures triage-battery.tcl]
+	set cases [::scidb::calibrate::TriageCases]
+	foreach c $cases {
+		if {[llength $c] != 2 || [lindex $c 1] ni {bug environment user noise}} { error bad }
+	}
+}]}]
+
 puts "AI-CALIBRATE-FAILURES: $failures"
 exit $failures
