@@ -351,17 +351,11 @@ proc ::application::assistant::OnRouted {gen request result} {
 # model loop would have produced (assistant tool_calls, tool reply,
 # assistant answer), so later rounds see a consistent transcript.
 # ----------------------------------------------------------------------
-proc ::application::assistant::RouteArgsJson {cargs} {
-	if {![llength $cargs]} { return "\{\}" }
-	return [::ai::provider::jsonObject $cargs]
-}
-
-
 proc ::application::assistant::DeliverRouted {name cargs round} {
 	variable Priv
 
 	lappend Priv(messages) [dict create role assistant content "" tool_calls \
-		[list [dict create function [dict create name $name arguments [RouteArgsJson $cargs]]]]]
+		[list [dict create function [dict create name $name arguments $cargs]]]]
 
 	set reply [runTool $name $cargs]
 	if {[string match "\x00later:*" $reply]} {

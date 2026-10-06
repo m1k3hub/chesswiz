@@ -415,7 +415,7 @@ variable Actions {
 	}
 	study_plan {
 		0 0 "audit the games and build a study plan"
-		"Audit a sample of games in the active database with the chess engine and turn the mistakes into a study plan: every mistake is labelled by pattern (tactics, opening, endgame, king safety, position) from the position facts, and the plan lists the evidence and what to train. 'player' studies one player's games (their moves only); without it both sides of the most recent games are studied. 'games' is how many games to audit (default 10). The report opens in the Report pane."
+		"Audit a sample of games in the active database with the chess engine and turn the mistakes into a study plan: every mistake is labelled by pattern (tactics, opening, endgame, king safety, position) from the position facts, and the plan lists the evidence and what to train. 'player' studies one player's games (their moves only); for the user's own games (my games, my recent games) it is the user's name. Without it both sides of the most recent games in the database are studied. 'games' is how many games to audit (default 10). The report opens in the Report pane."
 		{{"type":"object","properties":{"player":{"type":"string","description":"study this player's games, e.g. 'Carlsen, Magnus' or part of the name"},"games":{"type":"integer","description":"how many games to audit, default 10"},"colour":{"type":"string","enum":["white","black","both"],"description":"which side's moves to study, default both"},"depth":{"type":"integer","description":"engine depth per move, default 10"}}}}
 		::application::assistant::DoStudyPlan
 	}

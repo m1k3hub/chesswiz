@@ -209,6 +209,17 @@ tcltest::test route-active-error-falls-back {a failing routed tool hands the req
 	}
 } -result {1}
 
+tcltest::test route-active-history {a routed call keeps its arguments as a dict, as the model's calls do} -body {
+	::scidb::test::route::isolated {
+		set ::application::assistant::RouteMode active
+		set ::scidb::test::route::RouteReply [::scidb::test::route::reply switch_tab(database) 0.93 0.95]
+		::scidb::test::route::ask "switch to the database tab"
+		set call [lindex [dict get [lindex $::application::assistant::Priv(messages) 2] tool_calls] 0]
+		set args [dict get $call function arguments]
+		list $args [::ai::provider::jsonObject $args]
+	}
+} -result {{tab database} {{"tab":"database"}}}
+
 tcltest::test route-active-logs {a routed run is logged, marked as the router's} -body {
 	::scidb::test::route::isolated {
 		set ::application::assistant::RouteMode active

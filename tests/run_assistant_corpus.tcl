@@ -20,7 +20,9 @@ set argc 1
 set root [file normalize [file join [file dirname [info script]] ..]]
 set ::env(SCIDB_ERROR_LOG) [file join $root tests tmp-app corpus-errors.log]
 set ::env(SCIDB_AI_TRIAGE) 0
-set ::env(SCIDB_AI_CLASSIFIER) off
+# no System One router unless SCIDB_CORPUS_CLASSIFIER names a backend
+# (e.g. typesafe), to score the router and the model together
+set ::env(SCIDB_AI_CLASSIFIER) [expr {[info exists ::env(SCIDB_CORPUS_CLASSIFIER)] ? $::env(SCIDB_CORPUS_CLASSIFIER) : "off"}]
 source [file join $root tcl scidb-beta]
 fconfigure stdout -buffering line
 
@@ -29,6 +31,14 @@ foreach {key value} $argvCopy { if {$key eq "-match"} { set match $value } }
 source [file join $root tests assistant_corpus.tcl]
 
 proc nop {args} { return 0 }
+# Scidb's own dialogs (compact, convert, ...) would wait for a click: in
+# this headless run they answer no or cancel, so nothing changes.
+foreach dlg {question info error warning} {
+	if {[llength [info commands ::dialog::$dlg]]} {
+		proc ::dialog::$dlg {args} { return no }
+	}
+}
+if {[llength [info commands ::dialog::saveFile]]} { proc ::dialog::saveFile {args} { return {} } }
 set db [expr {[info exists ::env(SCIDB_CORPUS_DB)] ? $::env(SCIDB_CORPUS_DB) : ""}]
 if {$db eq "" || ![file exists $db]} { puts "set SCIDB_CORPUS_DB to a .sci database"; exit 2 }
 ::scidb::db::load $db nop {} -readonly yes
