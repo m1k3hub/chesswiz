@@ -151,6 +151,8 @@ static char const* CmdMediaLinkReady	= "::scidb::db::mediaLinkReady";
 static char const* CmdFingerprints		= "::scidb::db::fingerprints";
 static char const* CmdPlayerLinks		= "::scidb::db::playerLinks";
 static char const* CmdLinkPlayers		= "::scidb::db::linkPlayers";
+static char const* CmdSpellingCandidates	= "::scidb::db::spellingCandidates";
+static char const* CmdLinkPlayer		= "::scidb::db::linkPlayer";
 static char const* CmdGuidingText	= "::scidb::db::guidingText";
 static char const* CmdGameAnchor	= "::scidb::db::gameAnchor";
 static char const* CmdHtmlSanitize	= "::scidb::html::sanitize";
@@ -6309,6 +6311,91 @@ cmdLinkPlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 
 static int
+cmdSpellingCandidates(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::db::spellingCandidates <database> <variant>
+	// For each player left unlinked, the rating-list entries that may be
+	// another spelling of the name (Player::spellingCandidates), as
+	// {index name elo {{fideID name federation rating} ...}}; players
+	// without candidates are left out. Nothing is linked.
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant>");
+		return TCL_ERROR;
+	}
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 2);
+	Database const&	db		= Scidb->cursor(database, variant).database();
+
+	Tcl_Obj* list = Tcl_NewListObj(0, nullptr);
+	mstl::vector<Player*> candidates;
+	for (unsigned i = 0, n = db.countPlayers(); i < n; ++i)
+	{
+		NamebasePlayer const& p = db.player(i);
+		if (p.player() || p.type() == species::Program)
+			continue;
+		Player::spellingCandidates(p.name(), p.federation(), p.sex(), p.elo(), candidates);
+		if (candidates.empty())
+			continue;
+		Tcl_Obj* cands = Tcl_NewListObj(0, nullptr);
+		for (unsigned k = 0; k < candidates.size(); ++k)
+		{
+			Player const* c = candidates[k];
+			Tcl_Obj* row[4] =
+			{
+				Tcl_NewWideIntObj(c->fideID()),
+				Tcl_NewStringObj(c->name(), c->name().size()),
+				Tcl_NewStringObj(country::toString(c->federation()), -1),
+				Tcl_NewIntObj(mstl::abs(int(c->highestElo()))),
+			};
+			Tcl_ListObjAppendElement(ti, cands, Tcl_NewListObj(4, row));
+		}
+		Tcl_Obj* row[4] =
+		{
+			Tcl_NewIntObj(i),
+			Tcl_NewStringObj(p.name(), p.name().size()),
+			Tcl_NewIntObj(p.elo()),
+			cands,
+		};
+		Tcl_ListObjAppendElement(ti, list, Tcl_NewListObj(4, row));
+	}
+	setResult(list);
+	return TCL_OK;
+}
+
+
+static int
+cmdLinkPlayer(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::db::linkPlayer <database> <variant> <index> <fideID>
+	// Link the player at <index> to the rating-list entry of <fideID> (a
+	// link the user confirmed); nothing is written into the database.
+	// Returns 1 when linked, 0 when the player was linked already.
+	if (objc != 5)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <index> <fideID>");
+		return TCL_ERROR;
+	}
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 2);
+	unsigned			index		= unsignedFromObj(objc, objv, 3);
+	Tcl_WideInt		fideID;
+	if (Tcl_GetWideIntFromObj(ti, objv[4], &fideID) != TCL_OK)
+		return TCL_ERROR;
+	Database&		db			= const_cast<Cursor&>(Scidb->cursor(database, variant)).getDatabase();
+
+	if (index >= db.countPlayers())
+		return error(CmdLinkPlayer, nullptr, nullptr, "invalid player index %u", index);
+	Player* entry = Player::findFidePlayer(uint32_t(fideID));
+	if (!entry)
+		return error(CmdLinkPlayer, nullptr, nullptr, "no rating-list entry with FIDE ID %lld", (long long)fideID);
+
+	setResult(db.namebases()(Namebase::Player).linkPlayer(index, entry));
+	return TCL_OK;
+}
+
+
+static int
 cmdPlayerLinks(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	// Usage: ::scidb::db::playerLinks <database> <variant>
@@ -7101,6 +7188,8 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdMediaLinkReady,	cmdMediaLinkReady);
 	createCommand(ti, CmdFingerprints,		cmdFingerprints);
 	createCommand(ti, CmdPlayerLinks,		cmdPlayerLinks);
+	createCommand(ti, CmdSpellingCandidates,	cmdSpellingCandidates);
+	createCommand(ti, CmdLinkPlayer,		cmdLinkPlayer);
 	createCommand(ti, CmdLinkPlayers,		cmdLinkPlayers);
 
 	{

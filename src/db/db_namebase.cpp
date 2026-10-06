@@ -200,6 +200,24 @@ Namebase::linkPlayerVariants(mstl::vector<unsigned>* ambiguous)
 }
 
 
+bool
+Namebase::linkPlayer(unsigned index, db::Player* player)
+{
+	M_REQUIRE(type() == Player);
+	M_REQUIRE(index < m_list.size());
+	M_REQUIRE(player);
+
+	PlayerEntry* entry = mstl::safe_cast_ptr<PlayerEntry>(m_list[index]);
+
+	if (entry->m_player)
+		return false;
+
+	entry->m_player = player;
+	player->incrRef(entry->frequency());
+	return true;
+}
+
+
 void
 Namebase::reserve(unsigned size, unsigned limit)
 {

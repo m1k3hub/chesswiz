@@ -232,6 +232,9 @@ public:
 	/// indices of the players with candidates but no clear choice.
 
 	unsigned linkPlayerVariants(mstl::vector<unsigned>* ambiguous = 0);
+	/// Link the player at <index> to <player> (a link confirmed by the user;
+	/// nothing is written into the database). False when it is linked already.
+	bool linkPlayer(unsigned index, db::Player* player);
 
 	void update();
 	void setPrepared(unsigned maxFrequency, unsigned maxId, unsigned maxUsage);

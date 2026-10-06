@@ -263,6 +263,17 @@ public:
 										sex::ID sex,
 										unsigned elo,
 										bool* ambiguous = 0);
+	/// The rating-list entries of the same surname whose given names may be
+	/// another spelling of ours ("Tal, Mihail" -> "Tal, Mikhail N"), for a
+	/// name findVariant left unlinked: the initials agree, the sex does not
+	/// contradict, the entry has a FIDE ID and the games' <elo> is within 350
+	/// of its rating (so <elo> 0 gives none). Only candidates: whether the
+	/// spelling names the same person is for the caller to decide.
+	static void spellingCandidates(mstl::string const& name,
+											 country::Code federation,
+											 sex::ID sex,
+											 unsigned elo,
+											 mstl::vector<Player*>& result);
 	static Player* findEngine(mstl::string const& name);
 	static Player* findFidePlayer(uint32_t fideID);
 	static Player* findIccfPlayer(uint32_t iccfID);

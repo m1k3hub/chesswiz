@@ -1440,6 +1440,64 @@ Player::findVariant(	mstl::string const& name,
 }
 
 
+void
+Player::spellingCandidates(mstl::string const& name,
+									country::Code federation,
+									sex::ID sex,
+									unsigned elo,
+									mstl::vector<Player*>& result)
+{
+	result.clear();
+
+	mstl::string::size_type comma = name.find(',');
+	if (elo == 0 || comma == 0 || comma == mstl::string::npos || name.find_first_of(":;/()") != mstl::string::npos)
+		return;
+
+	mstl::string surname(name.substr(0, comma));
+	mstl::string given(name.substr(comma + 1));
+	while (!given.empty() && given[0] == ' ')
+		given.erase(mstl::string::size_type(0), mstl::string::size_type(1));
+	if (given.empty())
+		return;
+
+	Matches matches;
+	findMatches(surname + ", ", matches, 32);
+
+	mstl::vector<Player*> list;
+	for (unsigned i = 0; i < matches.size(); ++i)
+	{
+		Player* p = const_cast<Player*>(matches[i]);
+		mstl::string const& n = p->name();
+		if (	n.size() <= surname.size() + 2
+			|| ::strncmp(n.c_str(), surname.c_str(), surname.size()) != 0
+			|| n[surname.size()] != ','
+			|| n == name
+			|| p->fideID() == 0
+			|| !initialsAgree(given, p)
+			|| (sex != sex::Unspecified && p->sex() != sex::Unspecified && p->sex() != sex))
+		{
+			continue;
+		}
+		int r = candidateElo(p);
+		if (r == 0 || mstl::abs(int(elo) - r) > 350)
+			continue;
+		if (mstl::find(list.begin(), list.end(), p) == list.end())
+			list.push_back(p);
+	}
+
+	if (federation != country::Unknown)
+	{
+		for (unsigned i = 0; i < list.size(); ++i)
+		{
+			if (list[i]->federation() == federation)
+				result.push_back(list[i]);
+		}
+	}
+	if (result.empty())
+		result.swap(list);
+}
+
+
 Player*
 Player::insertPlayer(uint32_t fideID, mstl::string const& name)
 {
