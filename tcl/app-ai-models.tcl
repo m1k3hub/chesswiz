@@ -10,7 +10,7 @@
 # is shown. The other choices take a model, listed live from the provider
 # where it offers a list, and an API key, which is saved in its own private
 # file (::application::ai::setKey). The second picks the
-# System One classifier backend (::ai::systemone): kev, simple-jev and plumb
+# System One classifier backend (::ai::systemone): imajev, kev, simple-jev and plumb
 # serve the /v1/systemone contract on this machine, jev (TypeSafe's Jev)
 # runs in the cloud through Vercel's AI Gateway, and "off" leaves everything
 # to the language model.
@@ -76,8 +76,8 @@ set Environment	"the environment"
 set Off				"off"
 set OffNote			"No classifier: the language model classifies everything."
 set Auto			"auto (local)"
-set AutoNote		"Automatic: use the first local server that answers (kev, then simple-jev, then plumb). Off if none is running."
-set ClassifierNote	"kev, simple-jev and plumb run on this machine; jev is TypeSafe's Jev in the cloud (Vercel AI Gateway)."
+set AutoNote		"Automatic: use the first local server that answers (imajev, then kev, simple-jev, plumb). Off if none is running."
+set ClassifierNote	"imajev, kev, simple-jev and plumb run on this machine; jev is TypeSafe's Jev in the cloud (Vercel AI Gateway)."
 set Recommended	"recommended on this machine (best on the calibration battery)"
 set PlumbNote		"Plumb-4B: scripts/serve-plumb-classifier.sh downloads it from Hugging Face and serves it on port 8090."
 set KeyNote			"needs %s in the environment"

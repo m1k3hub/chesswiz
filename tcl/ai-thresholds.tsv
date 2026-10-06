@@ -2,3 +2,7 @@ comment_kind	plumb	0.8500000000000002
 language	plumb	0.7500000000000001
 comment_kind	typesafe	0.0
 language	typesafe	0.0
+triage	typesafe	0.8000000000000002
+triage	imajev	0.9000000000000002
+comment_kind	imajev	0.6
+language	imajev	0.3

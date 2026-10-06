@@ -7,14 +7,15 @@
 # (POST /v1/systemone); the open-weights servers below serve the same contract
 # on this machine, so one client talks to all of them:
 #
-#   kev         http://127.0.0.1:8009/v1/systemone, no key   (local, preferred)
+#   imajev      http://127.0.0.1:8765/v1/systemone, no key   (local, preferred)
+#   kev         http://127.0.0.1:8009/v1/systemone, no key   (local)
 #   simple-jev  http://127.0.0.1:8000/v1/systemone, no key   (local)
 #   plumb       http://127.0.0.1:8090/v1/systemone, no key   (local; see below)
 #   jev/vercel  Jev through Vercel's AI Gateway, AI_GATEWAY_API_KEY (cloud)
 #
 # When nothing is chosen -- no --ai-classifier, no SCIDB_AI_CLASSIFIER, no
 # saved setting -- the default is "auto": ::ai::systemone::autostart probes
-# the local backends in ProbeOrder (kev, simple-jev, plumb) and uses the
+# the local backends in ProbeOrder (imajev, kev, simple-jev, plumb) and uses the
 # first that answers a trivial typed question, so ::ai::systemone::enabled is
 # the truth about what is reachable, not merely what is configured. Nothing
 # answering leaves the classifier off. A cloud backend is never probed: it
@@ -58,6 +59,12 @@
 #               kev-4b/-9b need ~8/18 GB.)
 #   simple-jev: github.com/featherless-ai/simple-jev
 #               hf_server.py --model Qwen/Qwen3.5-0.8B --port 8000
+#   imajev:     github.com/mohit67890/imajev (Apache-2.0; Qwen3.5-4B + the
+#               mohit67890/imajev-4b adapter; JevBench v1.4.2.2 rank 1,
+#               67.37, ahead of Jev 1.13.0) served by its own
+#               scripts/playground/server.py --backend torch --rotations 4
+#               --calibration .../calibration-rot4.json --port 8765. In 16-bit
+#               it needs ~10 GB, so on 8 GB cards spread it over two.
 #   plumb:      scripts/serve-plumb-classifier.sh downloads the model from
 #               Hugging Face (crh225/plumb-4b-GGUF, Q8_0 ~4.5 GB; Apache-2.0;
 #               JevBench v1.4.2.1 rank 1 of the open systems) and serves it
@@ -78,6 +85,7 @@ namespace eval ai {
 namespace eval systemone {
 
 variable Backends {
+	imajev {endpoint http://127.0.0.1:8765/v1/systemone model imajev-4b}
 	kev {endpoint http://127.0.0.1:8009/v1/systemone model kev-latest key KEV_API_KEY}
 	simple-jev {endpoint http://127.0.0.1:8000/v1/systemone model Qwen/Qwen3.5-0.8B key SIMPLE_JEV_API_KEY}
 	plumb {endpoint http://127.0.0.1:8090/v1/systemone model plumb-4b-v5}
@@ -99,7 +107,7 @@ array set Config {
 # explicit configure -backend NAME (or off) sets Auto 0 for the session.
 variable Auto 1
 variable Resolved 0
-variable ProbeOrder {kev simple-jev plumb}
+variable ProbeOrder {imajev kev simple-jev plumb}
 
 } ;# namespace systemone
 } ;# namespace ai

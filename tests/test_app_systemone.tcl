@@ -136,7 +136,7 @@ tcltest::test systemone-backends {kev and simple-jev presets; off disables; bad 
 		[catch { ::ai::systemone::configure -backend gpt } err] $err \
 		[catch { ::ai::systemone::body x {q {type choice}} } err] $err \
 		[catch { ::ai::systemone::evaluate x {q {type noul}} } err] $err
-} -result {{http://127.0.0.1:8000/v1/systemone Qwen/Qwen3.5-0.8B secret} {https://ai-gateway.vercel.sh/typesafe/v1/systemone typesafe-ai/jev} {http://127.0.0.1:8009/v1/systemone kev-latest} 0 1 {unknown System One backend 'gpt' (kev, simple-jev, plumb, jev, vercel, typesafe, auto or off)} 1 {question 'q': a choice question needs criteria} 1 {no System One backend is configured}}
+} -result {{http://127.0.0.1:8000/v1/systemone Qwen/Qwen3.5-0.8B secret} {https://ai-gateway.vercel.sh/typesafe/v1/systemone typesafe-ai/jev} {http://127.0.0.1:8009/v1/systemone kev-latest} 0 1 {unknown System One backend 'gpt' (imajev, kev, simple-jev, plumb, jev, vercel, typesafe, auto or off)} 1 {question 'q': a choice question needs criteria} 1 {no System One backend is configured}}
 
 tcltest::test systemone-env-overrides {presets and probe order are overridable by the environment} -body {
 	set savedBackends $::ai::systemone::Backends
@@ -312,7 +312,7 @@ tcltest::test systemone-backends {the backend presets carry endpoint, model and 
 		[lsearch -exact $names jev] [lsearch -exact $names vercel] \
 		[lindex $rows [lsearch -exact -index 0 $rows plumb]] \
 		[lindex $rows [lsearch -exact -index 0 $rows jev]]
-} -result {0 2 3 4 {plumb 1 -} {jev 0 AI_GATEWAY_API_KEY}}
+} -result {1 3 4 5 {plumb 1 -} {jev 0 AI_GATEWAY_API_KEY}}
 
 tcltest::test systemone-plumb-configure {the plumb preset points at the local port 8090, no key} -body {
 	set config [array get ::ai::systemone::Config]
@@ -342,7 +342,8 @@ tcltest::test systemone-jev-configure {the jev preset reads its key from the env
 tcltest::test systemone-discover {auto finds the first local server that answers} -setup {
 	set ::scidb::test::s1::SavedBackends $::ai::systemone::Backends
 	::scidb::test::s1::start [list [::scidb::test::s1::choice noise 0.9]]
-	# point the preferred kev preset at the mock server
+	# nothing at imajev (probed first); kev is the mock server
+	dict set ::ai::systemone::Backends imajev endpoint http://127.0.0.1:1/v1/systemone
 	dict set ::ai::systemone::Backends kev endpoint http://127.0.0.1:$::scidb::test::s1::Port/v1/systemone
 	::ai::systemone::configure -backend auto
 } -body {
@@ -356,7 +357,7 @@ tcltest::test systemone-discover {auto finds the first local server that answers
 
 tcltest::test systemone-discover-none {auto with nothing listening is off} -setup {
 	set ::scidb::test::s1::SavedBackends $::ai::systemone::Backends
-	foreach b {kev simple-jev plumb} {
+	foreach b {imajev kev simple-jev plumb} {
 		dict set ::ai::systemone::Backends $b endpoint http://127.0.0.1:1/v1/systemone
 	}
 	::ai::systemone::configure -backend auto
