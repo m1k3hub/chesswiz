@@ -92,6 +92,19 @@ proc open? {} { return [set [namespace current]::Current] }
 
 proc changeDesktop {w type} {}
 
+
+# A font given as a description is freed with the last widget using it, so
+# every dialog would repeat the fontconfig match (~5-8 ms each). Named fonts
+# stay cached.
+proc Font {family size weight} {
+	variable Fonts
+	set key [list $family $size $weight]
+	if {![::info exists Fonts($key)]} {
+		set Fonts($key) [font create -family $family -size $size -weight $weight]
+	}
+	return $Fonts($key)
+}
+
 } ;# namespace messagebox
 
 
@@ -376,10 +389,10 @@ proc alert {args} {
 	catch { wm attributes $w -type dialog }
 
 	set alertBox [tk::frame $w.alert]
-	set infoFont [list [font configure TkDefaultFont -family] [font configure TkDefaultFont -size]]
-	set alertFont [list {*}$infoFont bold]
-	set infoFont [font actual $infoFont]
-	set alertFont [font actual $alertFont]
+	set infoFont [messagebox::Font \
+		[font configure TkDefaultFont -family] [font configure TkDefaultFont -size] normal]
+	set alertFont [messagebox::Font \
+		[font configure TkDefaultFont -family] [font configure TkDefaultFont -size] bold]
 
 	if {[llength $opts(-embed)]} {
 		set k [string first <embed> $opts(-message)]
@@ -432,7 +445,7 @@ proc alert {args} {
 				}
 			}
 
-			set font [list $family $size $weight]
+			set font [messagebox::Font $family $size $weight]
 			if {$row > 0} { grid rowconfigure $alertBox [expr {$row - 1}] -minsize 5 }
 			grid [tk::message $alertBox.m$row \
 				-font $font -text $str -justify left -padx $padx -width $opts(-width)] \
