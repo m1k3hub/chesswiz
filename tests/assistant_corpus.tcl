@@ -17,7 +17,7 @@
 set Corpus {
 	db-summary J1 {What's in this database?} {{database_summary}}
 	db-open-list J1 {Which databases are open?} {{list_open_databases}}
-	db-duplicates J1 {Are there duplicate games in here?} {{open_view kind duplicates}}
+	db-duplicates J1 {Are there duplicate games in here?} {{open_view kind duplicates} {maintenance_report tab duplicates}}
 	db-export J1 {Export the games in the list as a PDF.} {{export_database}}
 	db-download J1 {Get this week's TWIC games.} {{download_games}}
 	db-workingset J1 {Keep the games in the list as a separate database.} {{save_working_set}}
@@ -126,4 +126,15 @@ set Corpus {
 	eng-threads J7 {Let Stockfish use 8 threads.} {{set_engine_option option *thread* value 8} {start_engine threads 8}}
 	train-forks J8 {Give me knight fork puzzles.} {{training_set pattern knight_fork} {run_job job train}}
 	play-trend J10 {What's trending in openings lately?} {{database_trend}}
+
+	db-compact J1 {Compact my database.} {{compact_database}}
+	db-shrink J1 {Clean up the deleted games and shrink the file.} {{compact_database}}
+	db-convert J1 {Convert this database to Scidb's format.} {{convert_database}}
+	db-maintenance J1 {Show me the maintenance report.} {{maintenance_report}}
+	db-eco-coverage J1 {Which openings does this database cover?} {{maintenance_report tab openings} {database_summary}}
+	db-import J1 {Import /home/user/twic1650.pgn into this database.} {{import_games files *twic1650*}}
+	corr-my-move J12 {Which correspondence games need my move?} {{correspondence_games action status}}
+	corr-open J12 {Open my ICCF games.} {{correspondence_games action open}}
+	media-lesson J9 {Is there a video lesson on this position?} {{find_lesson}}
+	media-play J9 {Play the lesson for this position.} {{find_lesson play true} {find_lesson}}
 }

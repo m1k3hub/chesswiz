@@ -27,7 +27,10 @@
 # named anywhere: the router uses ::ai::systemone with whatever backend
 # the user configured, and is skipped entirely when it is off.
 #
-# Modes (SCIDB_AI_ROUTE, default "shadow"):
+# Modes (SCIDB_AI_ROUTE, default "auto"):
+#   auto     active with a backend whose router thresholds are calibrated
+#            (route and route_satisfied in ai-thresholds.tsv, written by
+#            scripts/calibrate-route.tcl), shadow with any other
 #   off      no classifier call; every request goes to the model
 #   shadow   the classifier predicts and the prediction is logged against
 #            what the model actually did (route-shadow.log next to the
@@ -55,7 +58,7 @@ package require Tcl 8.5
 namespace eval application {
 namespace eval assistant {
 
-variable RouteMode shadow
+variable RouteMode auto
 variable RouteThreshold 0.7
 # Calibrated against plumb-4b on a 10-request battery (5 satisfied-by-
 # default, 5 needing values or prose): positives >= 0.50, negatives <= 0.26
@@ -66,7 +69,7 @@ variable SatisfiedThreshold 0.4
 variable RouteTimeout 4000
 
 if {[info exists ::env(SCIDB_AI_ROUTE)]} {
-	if {$::env(SCIDB_AI_ROUTE) in {off shadow active}} {
+	if {$::env(SCIDB_AI_ROUTE) in {off shadow active auto}} {
 		set RouteMode $::env(SCIDB_AI_ROUTE)
 	}
 }
@@ -88,6 +91,42 @@ variable RouteSentinel existing_assistant
 
 } ;# namespace assistant
 } ;# namespace application
+
+
+# The mode in force for this request: auto resolves per backend.
+proc ::application::assistant::EffectiveRouteMode {} {
+	variable RouteMode
+	if {$RouteMode ne "auto"} { return $RouteMode }
+	catch { ::ai::systemone::LoadOnce }
+	if {[info exists ::ai::systemone::Thresholds] && [info exists ::ai::systemone::Config(backend)]
+	 && [dict exists $::ai::systemone::Thresholds route $::ai::systemone::Config(backend)]
+	 && [dict exists $::ai::systemone::Thresholds route_satisfied $::ai::systemone::Config(backend)]} {
+		return active
+	}
+	return shadow
+}
+
+
+# {minConfidence minSatisfied} for the backend in use: the environment,
+# else the backend's calibrated values (features route and
+# route_satisfied in ai-thresholds.tsv, scripts/calibrate-route.tcl),
+# else the defaults above.
+proc ::application::assistant::RouteThresholds {} {
+	variable RouteThreshold
+	variable SatisfiedThreshold
+
+	set conf $RouteThreshold
+	set sat $SatisfiedThreshold
+	if {[llength [info commands ::ai::systemone::threshold]]} {
+		if {![info exists ::env(SCIDB_AI_ROUTE_MIN_CONFIDENCE)]} {
+			set conf [::ai::systemone::threshold route $conf]
+		}
+		if {![info exists ::env(SCIDB_AI_ROUTE_MIN_SATISFIED)]} {
+			set sat [::ai::systemone::threshold route_satisfied $sat]
+		}
+	}
+	return [list $conf $sat]
+}
 
 
 # ----------------------------------------------------------------------
@@ -182,7 +221,7 @@ proc ::application::assistant::routeState {request} {
 # ----------------------------------------------------------------------
 proc ::application::assistant::RouteOrStep {request} {
 	variable Priv
-	variable RouteMode
+	set RouteMode [EffectiveRouteMode]
 	variable RouteTimeout
 
 	if {$RouteMode eq "off"
@@ -269,7 +308,7 @@ proc ::application::assistant::RouteDecision {result criteria} {
 
 proc ::application::assistant::OnRouted {gen request result} {
 	variable Priv
-	variable RouteMode
+	set RouteMode [EffectiveRouteMode]
 	variable RouteThreshold
 	variable SatisfiedThreshold
 	variable RouteSentinel
@@ -287,9 +326,10 @@ proc ::application::assistant::OnRouted {gen request result} {
 	set Priv(routeWait) 0
 	if {$RouteMode ne "active"} { return }
 
+	lassign [RouteThresholds] minConf minSat
 	if {![dict get $decision ok] || [dict get $decision id] eq $RouteSentinel
-	 || [dict get $decision conf] < $RouteThreshold
-	 || [dict get $decision sat] < $SatisfiedThreshold} {
+	 || [dict get $decision conf] < $minConf
+	 || [dict get $decision sat] < $minSat} {
 		Step 0
 		return
 	}
@@ -297,6 +337,8 @@ proc ::application::assistant::OnRouted {gen request result} {
 	set id [dict get $decision id]
 	set inv [lsearch -inline -index 1 $Priv(routeInvocations) $id]
 	if {![llength $inv]} { Step 0 ; return } ;# cannot happen: validated above
+	# a routed run is logged like a model's call, marked as the router's
+	RecordRouteActual "[dict get $inv name] routed"
 	DeliverRouted [dict get $inv name] [dict get $inv cargs] 1
 	return
 }
@@ -375,7 +417,7 @@ proc ::application::assistant::RecordRouteActual {what} {
 
 proc ::application::assistant::TryLogRoute {gen} {
 	variable Priv
-	variable RouteMode
+	set RouteMode [EffectiveRouteMode]
 
 	if {![info exists Priv(routePred,$gen)] || ![info exists Priv(routeActual,$gen)]} { return }
 	set pred $Priv(routePred,$gen)
@@ -388,7 +430,7 @@ proc ::application::assistant::TryLogRoute {gen} {
 	# the prediction matches when it names the tool the model actually
 	# called (an enum expansion matches on its base tool name)
 	set predName [expr {$predId eq "-" ? "-" : [lindex [split $predId (] 0]}]
-	set match [expr {$predName eq $actual ? 1 : 0}]
+	set match [expr {$predName eq [lindex $actual 0] ? 1 : 0}]
 
 	set line [format {%s | %s | pred=%s conf=%s sat=%s | actual=%s | match=%d | %s} \
 		[clock format [clock seconds] -format {%Y-%m-%d %T}] \

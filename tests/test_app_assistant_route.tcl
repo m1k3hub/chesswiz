@@ -209,6 +209,35 @@ tcltest::test route-active-error-falls-back {a failing routed tool hands the req
 	}
 } -result {1}
 
+tcltest::test route-active-logs {a routed run is logged, marked as the router's} -body {
+	::scidb::test::route::isolated {
+		set ::application::assistant::RouteMode active
+		file mkdir $::scidb::test::route::Dir
+		set ::application::assistant::ErrorLogFile [file join $::scidb::test::route::Dir errors.log]
+		file delete -force [file join $::scidb::test::route::Dir route-shadow.log]
+		set ::scidb::test::route::RouteReply [::scidb::test::route::reply switch_tab(database) 0.93 0.95]
+		::scidb::test::route::ask "switch to the database tab"
+		set ch [open [file join $::scidb::test::route::Dir route-shadow.log]]
+		set line [string trim [read $ch]]
+		close $ch
+		list $::scidb::test::route::ChatCalls [string match {*| active | pred=switch_tab(database)*actual=switch_tab routed | match=1 |*} $line]
+	}
+} -result {0 1}
+
+tcltest::test route-auto-mode {auto routes actively only with a backend calibrated for the router} -body {
+	::scidb::test::route::isolated {
+		set saved $::ai::systemone::Thresholds
+		set ::application::assistant::RouteMode auto
+		set before [::application::assistant::EffectiveRouteMode]
+		dict set ::ai::systemone::Thresholds route plumb 0.6
+		dict set ::ai::systemone::Thresholds route_satisfied plumb 0.67
+		set after [::application::assistant::EffectiveRouteMode]
+		set thresholds [::application::assistant::RouteThresholds]
+		set ::ai::systemone::Thresholds $saved
+		list $before $after $thresholds
+	}
+} -result {shadow active {0.6 0.67}}
+
 tcltest::test route-shadow-logs {shadow mode runs the model and logs the comparison} -body {
 	::scidb::test::route::isolated {
 		set ::application::assistant::RouteMode shadow
