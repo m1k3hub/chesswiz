@@ -32,6 +32,9 @@ set ::env(SCIDB_ERROR_LOG) [file join $::scidb::test::app::testDir tmp-app error
 set ::env(SCIDB_AI_TRIAGE) 0
 # and no System One classifier unless a test points at its own
 set ::env(SCIDB_AI_CLASSIFIER) off
+# the classifier tests stub a backend that has no calibration, as
+# tests/Makefile does; systemone-qualified tests the gate with this unset
+if {![info exists ::env(SCIDB_AI_UNCALIBRATED)]} { set ::env(SCIDB_AI_UNCALIBRATED) 1 }
 source [file join $::scidb::test::app::testDir .. tcl scidb-beta]
 set argv $argvCopy
 set argc $argcCopy

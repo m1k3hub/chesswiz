@@ -29,18 +29,26 @@ proc ::scidb::test::modelasync::restore {} {
 }
 
 tcltest::test modelasync-open {opening the chooser returns without waiting for model discovery} -setup {
- ::scidb::test::modelasync::stub ::ai::provider::ollamaModels {args} {after 350; return {}}
+ # discovery is asked for asynchronously and has not answered when the
+ # chooser is up; a synchronous lookup would be waiting for it (the time
+ # the dialog takes to lay itself out varies with the machine, so it is
+ # not measured)
+ set ::scidb::test::modelasync::sync 0
+ set ::scidb::test::modelasync::async 0
+ ::scidb::test::modelasync::stub ::ai::provider::ollamaModels {args} {
+  incr ::scidb::test::modelasync::sync; after 350; return {}
+ }
  ::scidb::test::modelasync::stub ::ai::provider::ollamaModelsAsync {callback args} {
+  incr ::scidb::test::modelasync::async
   lappend ::scidb::test::modelasync::Timers [after 350 [list {*}$callback {ok 1 models {}}]]
  }
 } -body {
- set began [clock milliseconds]
  set dlg [::application::ai::models::show .application]
- list [expr {[clock milliseconds]-$began < 200}] [winfo exists $dlg]
+ list $::scidb::test::modelasync::sync [expr {$::scidb::test::modelasync::async > 0}] [winfo exists $dlg]
 } -cleanup {
  ::application::ai::models::Close
  ::scidb::test::modelasync::restore
-} -result {1 1}
+} -result {0 1 1}
 
 tcltest::test modelasync-gpu-heartbeat {GPU probing leaves Tcl timers responsive} -body {
  set ::scidb::test::modelasync::heartbeat 0
