@@ -268,7 +268,9 @@ proc WidgetProc {w command args} {
 				error "wrong # args: should be \"[namespace current] clone <path>\""
 			}
 			set v [lindex $args 0]
-			Build $v -menucmd $Priv(menucmd)
+			# Build needs the colours; the clone takes the original's
+			Build $v -menucmd $Priv(menucmd) \
+				-background $Priv(background) -activebackground $Priv(activebackground)
 			foreach option [$w.m configure] {
 				set spec [lindex $option 0]
 				catch { $v.m configure $spec [$w.m cget $spec] }

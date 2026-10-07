@@ -218,4 +218,13 @@ tcltest::test audit-board3d-forward-once {a key forwarded from the focused 3D pa
 	list $rc $::board3d::Forwarding
 } -result {0 0}
 
+tcltest::test audit-dropdownbutton-clone {a dropdown button can be cloned (a toolbar made floating)} -body {
+	toplevel .auditDd
+	::dropdownbutton .auditDd.b -text x -background grey -activebackground white
+	set rc [catch { .auditDd.b clone .auditDd.c } err]
+	set exists [winfo exists .auditDd.c]
+	destroy .auditDd
+	list $rc $exists
+} -result {0 1}
+
 tcltest::cleanupTests
