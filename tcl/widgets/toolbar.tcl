@@ -1396,12 +1396,15 @@ proc PackToolbar {toolbar {before {}} {alignment {}}} {
 		if {$Specs(usehandle:$toolbar)} {
 			bind $tbf.frame.scrolled <ButtonPress-3> [namespace code [list ToolbarMenu $tbf]]
 		}
-		if {![info exists Specs(childs:$tbf)]} { set Specs(childs:$tbf) {} }
 		if {![info exists Specs(alignment:$tbf)]} {
 			if {$alignment eq ""} { set alignment $Defaults(toolbarframe:alignment) }
 			set Specs(alignment:$tbf) $alignment
 		}
 	} 
+
+	# Move drops the list of a frame its last toolbar left, but the frame
+	# stays: a toolbar coming back must find the list again
+	if {![info exists Specs(childs:$tbf)]} { set Specs(childs:$tbf) {} }
 
 	if {[llength [pack slaves $tbf.frame.scrolled]] == 0} {
 		PackToolbarFrame $tbf $Specs(side:$toolbar)

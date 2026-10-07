@@ -92,4 +92,26 @@ tcltest::test audit-game-clear-fics {game::clear sets up the FICS start position
 	list $knights [regexp {^[nNkKpP1-8/]+$} $fen] $bad [lindex [::scidb::pos::fen] 0]
 } -result {0 1 1 rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR}
 
+tcltest::test audit-toolbar-orientation {a toolbar moved round the sides and back again keeps working} -body {
+	::application::switchTab board
+	update
+	set toolbar ""
+	foreach key [array names ::toolbar::Specs side:*] {
+		set tb [string range $key 5 end]
+		if {[string match *__tb__* $tb] && [winfo exists $tb] && $::toolbar::Specs(enabled:$tb)} { set toolbar $tb; break }
+	}
+	if {$toolbar eq ""} { return "no toolbar" }
+	set home $::toolbar::Specs(side:$toolbar)
+	set errors {}
+	set side $home
+	foreach next {bottom top left right bottom top left right} {
+		if {[catch { ::toolbar::MoveCmd $toolbar $next $side } err]} { lappend errors "$side->$next: $err" }
+		set side $next
+		update
+	}
+	catch { ::toolbar::MoveCmd $toolbar $home $side }
+	update
+	set errors
+} -result {}
+
 tcltest::cleanupTests
