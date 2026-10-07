@@ -732,7 +732,8 @@ bindRedo Text { catch { %W edit redo } }
 # TODO: probably we want to override <Ctrl-A> of text/entry/ttk::entry
 
 bind TCombobox <<ComboboxSelected>> +[namespace code { ComboboxSelected %W }]
-bind TCombobox <FocusOut> {+ after idle { if {![%W cget -exportselection]} { %W selection clear } } }
+# idle: the combobox may be gone by then (its dialog closed)
+bind TCombobox <FocusOut> {+ after idle { if {[winfo exists %W] && ![%W cget -exportselection]} { %W selection clear } } }
 bind TCombobox <B1-Leave> { break }	;# avoid AutoScroll (bug in Tk)
 
 bind TEntry <FocusOut> {+ if {![%W cget -exportselection]} { %W selection clear } }

@@ -181,4 +181,41 @@ tcltest::test audit-tcombobox-icon-after-close {forgetting an icon must not rais
 	catch { destroy .auditTcb }
 } -result {}
 
+tcltest::test audit-combobox-focusout-gone {a combobox that loses the focus and is destroyed raises nothing later} -setup {
+	set ::auditBgErrors {}
+	rename ::scidb::bgerror ::scidb::auditBgErrorSaved
+	proc ::scidb::bgerror {err args} { lappend ::auditBgErrors $err }
+} -body {
+	toplevel .auditCb
+	ttk::combobox .auditCb.c -values {a b} -exportselection 0
+	pack .auditCb.c
+	update
+	focus -force .auditCb.c
+	update
+	event generate .auditCb.c <FocusOut>
+	destroy .auditCb
+	update
+	set ::auditBgErrors
+} -cleanup {
+	rename ::scidb::bgerror {}
+	rename ::scidb::auditBgErrorSaved ::scidb::bgerror
+	interp bgerror {} ::scidb::bgerror
+	catch { destroy .auditCb }
+	unset -nocomplain ::auditBgErrors
+} -result {}
+
+tcltest::test audit-board3d-forward-once {a key forwarded from the focused 3D pane is not forwarded back forever} -body {
+	toplevel .auditFwd
+	canvas .auditFwd.c
+	frame .auditFwd.w -takefocus 1 -width 50 -height 50
+	pack .auditFwd.c .auditFwd.w
+	bind .auditFwd.w <KeyPress> [list ::board3d::ForwardKey .auditFwd.c %K %s]
+	update
+	focus -force .auditFwd.w
+	update
+	set rc [catch { ::board3d::ForwardKey .auditFwd.c Escape 0 } err]
+	destroy .auditFwd
+	list $rc $::board3d::Forwarding
+} -result {0 0}
+
 tcltest::cleanupTests
