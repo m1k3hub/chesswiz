@@ -16,6 +16,21 @@ proc check {name cond} {
 set root [file join [file dirname [file normalize [info script]]] ..]
 source [file join $root tcl ai-engine.tcl]
 
+# --- positions an engine would die on are refused first (no engine needed)
+foreach {fen ok} {
+	"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" 1
+	"8/8/8/8/8/8/8/K6k w - - 0 1" 1
+	"garbage" 0
+	"8/8/8/8/8/8/8/8 w - - 0 1" 0
+	"kkkkkkkk/8/8/8/8/8/8/KKKKKKKK w - - 0 1" 0
+	"k7/8/8/8/8/8/8/K6P w - - 0 1" 0
+	"k7/8/8/8/8/8/8/K7 x - - 0 1" 0
+	"k8/8/8/8/8/8/8/K7 w - - 0 1" 0
+} {
+	check "CheckFen [expr {$ok ? "accepts" : "refuses"}] '[string range $fen 0 30]'" \
+		[expr {[catch { ::ai::engine::CheckFen $fen }] == !$ok}]
+}
+
 # App-backed: needs the tkscidb shell for ::scidb::ai::moveFacts.
 if {[llength [info commands ::scidb::ai::moveFacts]] == 0} {
 	puts "SKIP: requires the tkscidb shell (::scidb::ai::moveFacts unavailable)"

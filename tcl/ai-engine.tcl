@@ -313,9 +313,41 @@ proc ::ai::engine::cpOf {d} {
 # Public API
 # ----------------------------------------------------------------------
 
+# An engine handed something that is not a position may simply die
+# ("engine closed the pipe"): refuse it here, with the reason.
+proc ::ai::engine::CheckFen {fen} {
+	set fields [split [string trim $fen]]
+	lassign $fields board tomove
+	if {[llength $fields] < 2 || $tomove ni {w b}} { error "not a position (FEN): '$fen'" }
+	set ranks [split $board /]
+	if {[llength $ranks] != 8} { error "a position has 8 ranks, this has [llength $ranks]: '$fen'" }
+	set kings {}
+	set r 8
+	foreach row $ranks {
+		set n 0
+		foreach ch [split $row {}] {
+			if {[string is digit -strict $ch]} {
+				incr n $ch
+			} elseif {[string first $ch KQRBNPkqrbnp] >= 0} {
+				incr n
+				if {$ch in {K k}} { lappend kings $ch }
+				if {$ch in {P p} && $r in {1 8}} { error "a pawn on rank $r: '$fen'" }
+			} else {
+				error "'$ch' is not a piece: '$fen'"
+			}
+		}
+		if {$n != 8} { error "rank $r has $n squares: '$fen'" }
+		incr r -1
+	}
+	if {[lsort $kings] ne {K k}} { error "a position needs one king a side: '$fen'" }
+}
+
+
 proc ::ai::engine::evaluate {fen args} {
 	variable Config
 	variable State
+
+	CheckFen $fen
 	array set opts [list -depth $Config(depth) -multipv $Config(multipv) -timeout $Config(timeoutMs)]
 	array set opts $args
 
@@ -393,6 +425,7 @@ proc ::ai::engine::winPercent {cp} {
 
 
 proc ::ai::engine::classify {fen san args} {
+	CheckFen $fen
 	variable Config
 	array set opts [list -depth $Config(depth)]
 	array set opts $args
