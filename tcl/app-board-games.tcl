@@ -57,14 +57,20 @@ proc activate {w flag} {
 	variable Table
 	variable current
 
-	if {$flag && [info exists current]} {
+	if {$flag && [info exists current] && [info exists Table]} {
 		TableUpdate $Table [lindex $current 0] [lindex $current 1]
 	}
 }
 
 
 proc closed {w} {
-	;# nothing to release: the grid holds no external resources
+	variable Table
+
+	# the subscriptions name this pane's grid: a closed pane must not be
+	# updated (and a rebuilt one subscribes afresh)
+	::scidb::db::unsubscribe gameList [list [namespace current]::GameListChanged]
+	::scidb::db::unsubscribe databaseSwitch [list [namespace current]::DatabaseSwitched]
+	unset -nocomplain Table
 }
 
 
@@ -80,7 +86,7 @@ proc DatabaseSwitched {base variant} {
 	variable Table
 	variable current
 	set current [list $base $variant]
-	TableUpdate $Table $base $variant
+	if {[info exists Table]} { TableUpdate $Table $base $variant }
 }
 
 
@@ -88,7 +94,7 @@ proc DatabaseSwitched {base variant} {
 # but only when the affected base is the one bound to the grid.
 proc GameListChanged {id base variant {view -1} {index -1}} {
 	variable Table
-	if {[::scidb::db::get name] ne $base} { return }
+	if {[::scidb::db::get name] ne $base || ![info exists Table]} { return }
 	TableUpdate $Table $base $variant
 }
 
@@ -96,6 +102,7 @@ proc GameListChanged {id base variant {view -1} {index -1}} {
 proc TableUpdate {table base variant} {
 	variable current
 	if {![info exists current] || [lindex $current 0] ne $base} { return }
+	if {![winfo exists $table]} { return }
 	::gamestable::update $table $base $variant [::scidb::view::count games $base $variant 0]
 }
 

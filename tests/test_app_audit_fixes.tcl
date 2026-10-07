@@ -114,4 +114,20 @@ tcltest::test audit-toolbar-orientation {a toolbar moved round the sides and bac
 	set errors
 } -result {}
 
+tcltest::test audit-boardgames-gone {a game-list change after the board games pane is gone is ignored} -body {
+	set ns ::application::boardgames
+	set saved [list [info exists ${ns}::Table] [expr {[info exists ${ns}::Table] ? [set ${ns}::Table] : ""}] \
+		[expr {[info exists ${ns}::current] ? [set ${ns}::current] : ""}]]
+	set base [::scidb::db::get name]
+	set ${ns}::current [list $base Normal]
+	set ${ns}::Table .no.such.pane.table
+	set stale [catch { ${ns}::GameListChanged 0 $base Normal } err]
+	unset ${ns}::Table
+	set closed [catch { ${ns}::GameListChanged 0 $base Normal; ${ns}::DatabaseSwitched $base Normal } err]
+	lassign $saved had table current
+	if {$had} { set ${ns}::Table $table }
+	if {$current ne ""} { set ${ns}::current $current }
+	list $stale $closed
+} -result {0 0}
+
 tcltest::cleanupTests
