@@ -328,6 +328,11 @@ proc RunMaterialSearch {dlg} {
 	} result options]
 	::widget::busyCursor off
 	if {$rc} {
+		# a term the checks above let through can still be refused by the
+		# search itself: the same message as theirs, not a Tcl error
+		if {[string match "*invalid material signature*" $result]} {
+			return [::dialog::error -parent $dlg -message $mc::MaterialInvalid]
+		}
 		return -options $options $result
 	}
 }
