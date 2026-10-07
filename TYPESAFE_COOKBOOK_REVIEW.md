@@ -306,6 +306,23 @@ not be used to confirm the chosen action.
 step), autoresearch feature discovery (no labeled outcomes collected);
 confidence-gated and intent routing are already the triage and router shapes.
 
+## 12. Verify the routed action (measured, not shipped)
+
+**Idea:** the router's "satisfied" noul runs beside the route choice, so it
+cannot see the chosen tool. A second request, once the tool is known --
+"would running *this action* with no further input fully carry out the
+request?" -- should separate right from wrong default runs better.
+
+**Measured on Jev (2026-10-06, 111-request corpus, 92 non-sentinel
+predictions: 43 right tools, 49 wrong):** the verify noul separates
+(wrong <= 0.20, right 0.08-0.74), but Jev is cautious with it: with no wrong
+action allowed, confidence + verify runs 23 requests directly against 25 for
+confidence + satisfied, and the second request adds about a second to every
+routed request. Not shipped. The same corpus run put the best
+confidence/satisfied pair at 0.99/0.03 (25) where the calibration run had
+chosen 0.60/0.67 (22): with about 50 routable requests the pair is noisy,
+and more corpus requests, not a second question, are what would move it.
+
 ## Wall
 
 **Self-consistency** and **citation checking** are the cookbooks closest to
