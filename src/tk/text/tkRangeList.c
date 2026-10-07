@@ -416,6 +416,12 @@ TkRangeListAdd(
 	    /* new lower bound of current range */
 	    ranges->count += curr->low - low;
 	    curr->low = low;
+	    if (curr->high < high) {
+		/* and a new upper bound: the added range may reach past it */
+		ranges->count += high - curr->high;
+		curr->high = high;
+		Amalgamate(ranges, curr);
+	    }
 	} else {
 	    /* insert new entry before current */
 	    curr = Insert(&ranges, curr);
@@ -618,9 +624,10 @@ TkRangeListDelete(
 
     for ( ; curr != last && curr->low < low; ++curr) {
 	if (curr->high <= high) {
+	    /* the part below 'low' stays: [curr->low, low - 1] */
 	    ranges->count -= TkRangeSpan(curr);
-	    curr->high = curr->low;
-	    ranges->count += 1;
+	    curr->high = low - 1;
+	    ranges->count += TkRangeSpan(curr);
 	} else {
 	    ranges->count -= span;
 	    curr->high -= span;
@@ -664,6 +671,8 @@ TkRangeListDelete(
 		    memmove(curr, next, (last - curr)*sizeof(TkRange));
 		    ranges->size -= 1;
 		    last -= 1;
+		} else {
+		    curr += 1; /* adjusted above: the loop below must not reduce it again */
 		}
 	    } else {
 		curr += 1;
@@ -677,6 +686,24 @@ TkRangeListDelete(
 	    curr->low -= span;
 	    curr->high -= span;
 	}
+    }
+
+    /* shifting down can make neighbours touch: amalgamate them */
+    if (ranges->size > 1) {
+	TkRange *dst = ranges->items;
+	TkRange *src;
+
+	last = ranges->items + ranges->size;
+	for (src = dst + 1; src != last; ++src) {
+	    if (dst->high + 1 >= src->low) {
+		ranges->count -= TkRangeSpan(dst) + TkRangeSpan(src);
+		if (src->high > dst->high) { dst->high = src->high; }
+		ranges->count += TkRangeSpan(dst);
+	    } else {
+		*++dst = *src;
+	    }
+	}
+	ranges->size = dst - ranges->items + 1;
     }
 
     assert(CountIntegers(ranges) == ranges->count);

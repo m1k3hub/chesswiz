@@ -238,7 +238,7 @@ ai-annotations:
 		| tee /tmp/scidb-ai-annotations.log | grep -E "PASS|FAIL|SKIP|AI-ANNOTATIONS-FAILURES"
 	@grep -q "AI-ANNOTATIONS-FAILURES: 0" /tmp/scidb-ai-annotations.log
 
-cpp: $(TEST_DIR)test_cpp_backend $(TEST_DIR)test_corr_duration cpp-src
+cpp: $(TEST_DIR)test_cpp_backend $(TEST_DIR)test_corr_duration tk-rangelist cpp-src
 	@chmod +x "$(TEST_DIR)test_cpp_backend"
 	@echo "Running C++ backend tests..."
 	@"$(TEST_DIR)test_cpp_backend"
@@ -250,6 +250,16 @@ cpp: $(TEST_DIR)test_cpp_backend $(TEST_DIR)test_corr_duration cpp-src
 # Makefile (html sanitizer, .scm/.cbm manifest parsers, script-stream decoder,
 # media extraction, correspondence MoveInfo).  Each must exit non-zero on
 # failure; noisy success output is captured and only the status is reported.
+# The text widget's range lists against a model (src/tk/text/tkRangeList.c).
+TK_RANGELIST_INC := -I$(SRC_DIR)/tk/text -I$(SRC_DIR)/tk/tk8.6 -I$(SRC_DIR)/tk \
+	-I/usr/include/tcl8.6 -I/usr/include/tcl8.6/tk-private/generic -I/usr/include/tcl8.6/tk-private/unix \
+	-I/usr/include/tcl8.6/tcl-private/generic -I/usr/include/tcl8.6/tcl-private/unix
+tk-rangelist:
+	@echo "Running text widget range list tests..."
+	@gcc -std=gnu99 $(TK_RANGELIST_INC) -o /tmp/scidb-test-tk-rangelist $(TEST_DIR)test_tk_rangelist.c \
+		$(SRC_DIR)/tk/text/tkRangeList.c -ltcl8.6 -ltk8.6
+	@/tmp/scidb-test-tk-rangelist | tail -1; /tmp/scidb-test-tk-rangelist >/dev/null
+
 cpp-src:
 	@echo "Building src/ self-contained C++ tests..."
 	@$(MAKE) -C $(SRC_DIR) $(SRC_CPP_TESTS) test_sci_result >/tmp/scidb-cpp-src-build.log 2>&1 || \
