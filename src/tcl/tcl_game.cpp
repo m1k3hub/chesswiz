@@ -3625,7 +3625,8 @@ cmdSetupNags(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdTags(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc < 1 || objc > 3)
+	// up to four words: the command, a position, the option and its value
+	if (objc < 1 || objc > 4)
 		return error(::CmdTags, nullptr, nullptr, "wrong # args: should be \"%s ?<position>? ?-userSuppliedOnly <bool>?\"", ::CmdTags);
 
 	int	position				= -1;
@@ -3642,6 +3643,9 @@ cmdTags(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			++objv;
 		}
 	}
+
+	if (objc > 3)
+		return error(::CmdTags, nullptr, nullptr, "wrong # args: should be \"%s ?<position>? ?-userSuppliedOnly <bool>?\"", ::CmdTags);
 
 	if (objc > 2)
 	{

@@ -78,4 +78,10 @@ tcltest::test audit-save-line-keeps-board-game {saving the line to a repertoire 
 	unset -nocomplain ::auditSaved
 } -result [list 1 1 1 1 [::scidb::game::current]]
 
+tcltest::test audit-game-tags-position-option {game::tags takes a position and -userSuppliedOnly together} -body {
+	set pos [::scidb::game::current]
+	list [catch { ::scidb::game::tags $pos -userSuppliedOnly yes } r] [catch { ::scidb::game::tags $pos } r] \
+		[catch { ::scidb::game::tags -userSuppliedOnly no } r] [catch { ::scidb::game::tags $pos -userSuppliedOnly yes extra } r]
+} -result {0 0 0 1}
+
 tcltest::cleanupTests
