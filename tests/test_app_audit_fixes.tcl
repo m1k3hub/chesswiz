@@ -150,4 +150,35 @@ tcltest::test audit-transpose-trial {a game with castling transposes, and trial 
 	set out
 } -result {0 0 0 0 0}
 
+tcltest::test audit-tcombobox-icon-after-close {forgetting an icon must not raise when the combobox is gone} -setup {
+	set ::auditBgErrors {}
+	rename ::scidb::bgerror ::scidb::auditBgErrorSaved
+	proc ::scidb::bgerror {err args} { lappend ::auditBgErrors $err }
+	image create photo ::auditIconImg -width 8 -height 8
+} -body {
+	ttk::tcombobox .auditTcb -placeicon 1 -state readonly -showcolumns name -format "%1"
+	.auditTcb addcol image -id flag
+	.auditTcb addcol text  -id name
+	.auditTcb listinsert [list one ::auditIconImg]
+	.auditTcb resize
+	pack .auditTcb
+	update
+	# icon placed; now forget it (the figurines box does this in
+	# ShowCountry) and close the dialog before the idle timer fires
+	.auditTcb placeicon ::auditIconImg
+	update
+	.auditTcb forgeticon
+	destroy .auditTcb
+	after 1500 {set ::auditTcbDone 1}
+	vwait ::auditTcbDone
+	set ::auditBgErrors
+} -cleanup {
+	rename ::scidb::bgerror {}
+	rename ::scidb::auditBgErrorSaved ::scidb::bgerror
+	interp bgerror {} ::scidb::bgerror
+	image delete ::auditIconImg
+	unset -nocomplain ::auditBgErrors ::auditTcbDone
+	catch { destroy .auditTcb }
+} -result {}
+
 tcltest::cleanupTests

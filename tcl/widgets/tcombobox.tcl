@@ -357,7 +357,8 @@ proc WidgetProc {w command args} {
 			if {[winfo exists $w.__image__]} {
 				variable Priv
 				after cancel $Priv($w:after)
-				after idle [list place forget $w.__image__]
+				# the widget may already be destroyed when the timer fires
+				after idle [namespace code [list ForgetIcon $w]]
 			}
 			return $w
 		}
@@ -551,6 +552,12 @@ proc PlaceIconWhenMapped {w icon} {
 	update idletasks
 	PlaceIcon $w $icon
 	bind $w <Map> {#}
+}
+
+
+proc ForgetIcon {w} {
+	if {![winfo exists $w]} { return }
+	catch { place forget $w.__image__ }
 }
 
 
