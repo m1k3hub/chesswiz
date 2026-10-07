@@ -151,6 +151,23 @@ tcltest::test engines-analyse {start_engine analyses the board position; engine_
 	::scidb::test::engines::restore
 } -match glob -result {1 1 1 {Stopped * in analysis pane *; the pane stays open.} {No engine is running. Start one with start_engine.} {Removed * from the engine list; its program is still on disk.} 0}
 
+tcltest::test engines-start-twice {starting the engine that is already analysing reuses its pane} -constraints uciEngine -setup {
+	::scidb::test::engines::isolate
+	::scidb::test::engines::tool add_engine [list path $::scidb::test::engines::Program]
+	set name [dict get [lindex $::engine::Engines 0] Name]
+} -body {
+	set first [::scidb::test::engines::tool start_engine [list engine $name lines 1]]
+	::scidb::test::engines::wait 1000
+	set second [::scidb::test::engines::tool start_engine [list engine $name lines 2]]
+	regexp {analysis pane (\S+):} $first _ p1
+	regexp {analysis pane (\S+):} $second _ p2
+	set running [llength [::application::analysis::Running]]
+	::scidb::test::engines::tool stop_engine
+	list [expr {$p1 eq $p2}] $running [string match "*: 2 lines,*" $second]
+} -cleanup {
+	::scidb::test::engines::restore
+} -result {1 1 1}
+
 tcltest::test engines-analysis-waits {engine_analysis with seconds answers later, through the tool loop} -constraints uciEngine -setup {
 	::scidb::test::engines::isolate
 	::scidb::test::engines::tool add_engine [list path $::scidb::test::engines::Program]

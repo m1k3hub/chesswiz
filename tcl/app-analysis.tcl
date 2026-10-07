@@ -1884,6 +1884,18 @@ proc startEngine {name {number ""} {settings {}}} {
 		if {$value < $min || ($max > 0 && $value > $max)} { error "$label must be from $min to $max for $name" }
 	}
 
+	# the engine already analysing in a pane is reused, not started again:
+	# asking twice must not leave two copies running side by side
+	if {$number eq "" && $threads eq "" && $hash eq ""} {
+		foreach n [Running] {
+			if {[catch { set running [set ::engine::${n}::Vars(current:name)] }]} continue
+			if {$running eq $name} {
+				if {$lines ne ""} { setLines $n $lines }
+				catch { ::application::openPane analysis:[::application::mapToTerminalNumber $n] }
+				return $n
+			}
+		}
+	}
 	if {$number eq ""} { set number [FreeNumber] }
 	::engine::initVars $number
 	namespace upvar ::engine::$number Vars Vars
