@@ -7,7 +7,9 @@
 package require Tcl 8.5
 package require tcltest 2.5
 
-namespace eval ::scidb::test::aimodels {}
+namespace eval ::scidb::test::aimodels {
+	variable KeyFile [file join [file dirname [file normalize [info script]]] tmp-app ai-keys-[pid]]
+}
 
 # Run <body> with the AI settings, env and command-line options restored.
 proc ::scidb::test::aimodels::isolated {body} {
@@ -36,7 +38,16 @@ proc ::scidb::test::aimodels::isolated {body} {
 		set systemone [array get ::ai::systemone::Config]
 		set discovery [list $::ai::systemone::Auto $::ai::systemone::Resolved]
 	}
+	# the key file is the user's: keys saved by a test go to a scratch file
+	set keys $::application::ai::Keys
+	rename ::application::ai::KeyFile ::scidb::test::aimodels::realKeyFile
+	proc ::application::ai::KeyFile {} [list return $::scidb::test::aimodels::KeyFile]
 	set rc [catch { uplevel 1 $body } result]
+	catch { file delete [::application::ai::KeyFile] }
+	rename ::application::ai::KeyFile {}
+	rename ::scidb::test::aimodels::realKeyFile ::application::ai::KeyFile
+	set ::application::ai::Keys $keys
+	::ai::provider::configure -keys $keys
 	rename ::ai::provider::ollamaModelsAsync {}
 	rename ::scidb::test::aimodels::realAsyncModels ::ai::provider::ollamaModelsAsync
 	array set ::application::ai::Settings $settings
