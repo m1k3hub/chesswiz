@@ -3409,7 +3409,13 @@ cmdClear(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	if (Tcl_GetIntFromObj(interp(), objv[1], &idn) == TCL_OK)
 	{
-		if (idn < 1 || 4*960 < idn)
+		// Chess 960 and its shuffles, or the FICS start positions (LittleGame
+		// to UpsideDown), which Board::setup knows for standard chess and
+		// three-check only
+		bool fics = variant::LittleGame <= idn && idn <= variant::UpsideDown
+					&& (variant == variant::Normal || variant::isThreeCheck(variant));
+
+		if ((idn < 1 || 4*960 < idn) && !fics)
 			return error(CmdClear, nullptr, nullptr, "invalid IDN %d", idn);
 
 		board.setup(unsigned(idn), variant);

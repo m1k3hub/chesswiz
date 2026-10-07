@@ -84,4 +84,12 @@ tcltest::test audit-game-tags-position-option {game::tags takes a position and -
 		[catch { ::scidb::game::tags -userSuppliedOnly no } r] [catch { ::scidb::game::tags $pos -userSuppliedOnly yes extra } r]
 } -result {0 0 0 1}
 
+tcltest::test audit-game-clear-fics {game::clear sets up the FICS start positions the board menu offers} -body {
+	set knights [catch { ::scidb::game::clear 4005 } r]
+	set fen [lindex [::scidb::pos::fen] 0]
+	set bad [catch { ::scidb::game::clear 4016 } r]
+	::scidb::game::clear 518
+	list $knights [regexp {^[nNkKpP1-8/]+$} $fen] $bad [lindex [::scidb::pos::fen] 0]
+} -result {0 1 1 rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR}
+
 tcltest::cleanupTests
