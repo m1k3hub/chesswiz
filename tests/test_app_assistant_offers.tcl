@@ -68,6 +68,63 @@ tcltest::test offers-database {a database with games gets database offers; an em
 	list $empty $full
 } -result {{} {{What's in this database?} {Find positions...} Duplicates?}}
 
+# Run <body> with a classifier that answers <nouls> (one per offer, in
+# pool order) after <delay> ms, or never when <nouls> is empty.
+proc ::scidb::test::offers::ranked {nouls delay body} {
+	foreach p {enabled evaluateAsync} { rename ::ai::systemone::$p ::scidb::test::offers::real_$p }
+	proc ::ai::systemone::enabled {} { return 1 }
+	proc ::ai::systemone::evaluateAsync {state questions script} "[list apply {{nouls delay state questions script} {
+		set ::scidb::test::offers::State $state
+		set answers {}
+		foreach id [dict keys $questions] p $nouls { dict set answers $id [dict create type noul noul $p] }
+		if {[llength $nouls]} { after $delay [list {*}$script [dict create ok 1 answers $answers]] }
+	}} $nouls $delay] \$state \$questions \$script"
+	set rc [catch { uplevel 1 $body } result opts]
+	foreach p {enabled evaluateAsync} { rename ::ai::systemone::$p {}; rename ::scidb::test::offers::real_$p ::ai::systemone::$p }
+	return -options $opts $result
+}
+
+tcltest::test offers-ranked {the classifier's likeliest three offers replace the rules' first three} -body {
+	set saved $::application::ai::Settings(me)
+	set ::application::ai::Settings(me) {}
+	set pool {}
+	::scidb::test::offers::withTags {{White {Kasparov, G}} {Black {Karpov, A}} {ECO B90} {Result 1-0}} {
+		::scidb::test::offers::ranked {0.1 0.2 0.3 0.9 0.8 0.7} 10 {
+			::application::assistant::offers::GameSwitched 0 0
+			set first [::scidb::test::offers::labels]
+			after 100 { set ::scidb::test::offers::Done 1 }
+			vwait ::scidb::test::offers::Done
+		}
+	}
+	set ::application::ai::Settings(me) $saved
+	list $first [::scidb::test::offers::labels] [string match "game: Kasparov, G - Karpov, A, B90, 1-0*" $::scidb::test::offers::State]
+} -result {{{Explain the position} {Games with this position} {Positions like this}} {{Annotate this game} {Games like this} {Opening report}} 1}
+
+tcltest::test offers-ranked-late {a late or stale ranking keeps the offers as they are} -body {
+	set saved [list $::application::ai::Settings(me) $::application::assistant::offers::RankTimeout]
+	set ::application::ai::Settings(me) {}
+	set ::application::assistant::offers::RankTimeout 50
+	::scidb::test::offers::withTags {{White {Kasparov, G}} {Black {Karpov, A}}} {
+		::scidb::test::offers::ranked {0.1 0.2 0.3 0.9 0.8 0.7} 150 {
+			::application::assistant::offers::GameSwitched 0 0
+			after 250 { set ::scidb::test::offers::Done 1 }
+			vwait ::scidb::test::offers::Done
+		}
+		set late [::scidb::test::offers::labels]
+		set ::application::assistant::offers::RankTimeout 6000
+		::scidb::test::offers::ranked {0.1 0.2 0.3 0.9 0.8 0.7} 50 {
+			::application::assistant::offers::GameSwitched 0 0
+			::application::assistant::offers::put {A {request a}}
+			after 150 { set ::scidb::test::offers::Done 1 }
+			vwait ::scidb::test::offers::Done
+		}
+	}
+	lassign $saved ::application::ai::Settings(me) ::application::assistant::offers::RankTimeout
+	set stale [::scidb::test::offers::labels]
+	::application::assistant::offers::put {}
+	list $late $stale
+} -result {{{Explain the position} {Games with this position} {Positions like this}} A}
+
 tcltest::test offers-buttons {the pane shows one button per offer; a click on an open request fills the entry} -body {
 	::application::assistant::show
 	update
