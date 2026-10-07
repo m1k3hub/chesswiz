@@ -1411,8 +1411,14 @@ proc ::board3d::CreateTogl {w {forward {}} {movable 0}} {
 proc ::board3d::ForwardKey {canv keysym state} {
 	# replay plain key events on the hidden 2D board so the game's
 	# navigation bindings keep firing while the 3D pane has the focus
+	variable Forwarding
 	if {![winfo exists $canv]} { return }
+	# a generated key event goes to the window with the focus -- this
+	# pane -- and would come straight back here: forward it once only
+	if {[info exists Forwarding] && $Forwarding} { return }
+	set Forwarding 1
 	catch { event generate $canv <KeyPress-$keysym> -state $state }
+	set Forwarding 0
 	return
 }
 
