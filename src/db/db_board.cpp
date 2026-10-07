@@ -6358,6 +6358,12 @@ Board::checkMoveImpl(Move const& move, variant::Type variant,
 
 	uint64_t dst = set1Bit(to);
 
+	// a king is never captured (except in antichess, where it is a plain
+	// piece); a move list that no longer fits the board -- a transposed
+	// game, a damaged record -- must not take one off it
+	if ((m_kings & m_occupiedBy[m_stm ^ 1] & dst) && !variant::isAntichessExceptLosers(variant))
+		return false;
+
 	if (m_occupiedBy[m_stm] & dst)
 	{
 		if (move.action() != Move::Castle)

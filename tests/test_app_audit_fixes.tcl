@@ -130,4 +130,24 @@ tcltest::test audit-boardgames-gone {a game-list change after the board games pa
 	list $stale $closed
 } -result {0 0}
 
+tcltest::test audit-transpose-trial {a game with castling transposes, and trial mode is left cleanly} -body {
+	::application::switchTab board
+	set reply [::application::assistant::runTool set_position {moves {1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5 4.O-O Nf6 5.Re1}}]
+	if {[string match "error:*" $reply]} { return $reply }
+	update
+	set out {}
+	foreach step {
+		{::scidb::game::transpose true}
+		{::scidb::game::transpose true}
+		{::game::flipTrialMode}
+		{::application::assistant::runTool set_position {moves {1.d4}}}
+		{::game::flipTrialMode}
+	} {
+		lappend out [catch { uplevel #0 $step; update } err]
+	}
+	::scidb::game::clear 518
+	::scidb::game::modified [::scidb::game::current] no
+	set out
+} -result {0 0 0 0 0}
+
 tcltest::cleanupTests

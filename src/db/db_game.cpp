@@ -4490,6 +4490,14 @@ Game::transpose(Force flag)
 	if (!checkConsistency(root.get()->next(), board, flag))
 		return false;
 
+	// the mirrored moves lose their print and undo data: prepare them again
+	// from the mirrored start position (checkConsistency moved its board on)
+	{
+		Board start(m_startBoard);
+		start.transpose(m_variant);
+		root->finish(start, m_variant);
+	}
+
 	insertUndo(Revert_Game, Transpose, m_startNode);
 
 	m_previousKey.clear();
