@@ -227,4 +227,29 @@ tcltest::test audit-dropdownbutton-clone {a dropdown button can be cloned (a too
 	list $rc $exists
 } -result {0 1}
 
+tcltest::test audit-nested-error-not-sticky {a nested scidb error caught by a progress callback does not fail the outer command} -setup {
+	set sci [file join [::tcltest::temporaryDirectory] nested-[pid].sci]
+	proc auditNop {args} {}
+	::scidb::db::new $sci Normal [::application::database::lookupType OpeningsWhite]
+	::scidb::db::attach $sci $sci
+	::scidb::db::save $sci auditNop {}
+	::scidb::db::close $sci
+	proc auditCb {cmd args} {
+		switch -- $cmd {
+			ticks { return 100 }
+			interrupted? { return 0 }
+			start { catch {::scidb::db::count no-such-subcommand} }
+		}
+		return
+	}
+} -body {
+	# safeCall used to keep the nested error code, so the load reported its
+	# own result, the database type "OpeningsWhite", as an error message
+	list [catch {::scidb::db::load $sci auditCb .application} msg] $msg
+} -cleanup {
+	catch {::scidb::db::close $sci}
+	rename auditCb {}; rename auditNop {}
+	foreach f [glob -nocomplain [file rootname $sci].*] { file delete $f }
+} -result {0 OpeningsWhite}
+
 tcltest::cleanupTests

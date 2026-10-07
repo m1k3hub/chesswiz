@@ -1045,6 +1045,7 @@ safeCall(void* clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	Tcl_Obj* blocked = tcl::incrRef(Tcl_ObjGetVar2(ti, m_blocked, nullptr, TCL_GLOBAL_ONLY));
 	int rc;
+	bool thrown = true;
 
 	if (m_level++ == 0)
 	{
@@ -1058,6 +1059,7 @@ safeCall(void* clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	try
 	{
 		rc = Cast(clientData).proc_(nullptr, ti, objc, objv);
+		thrown = false;
 	}
 	catch (tcl::Error const& exc)
 	{
@@ -1103,7 +1105,9 @@ safeCall(void* clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	m_level -= 1;
 
-	if (rc != TCL_OK)
+	// Only a thrown failure outlives its own command; an ordinary error result
+	// belongs to the caller, which may well have caught it.
+	if (rc != TCL_OK && thrown)
 		savedRC = rc;
 	else if (savedRC != TCL_OK)
 		rc = savedRC;
