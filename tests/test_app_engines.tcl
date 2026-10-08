@@ -182,6 +182,21 @@ tcltest::test engines-lines-beyond-pane {more lines than the pane has rows are r
 	::scidb::test::engines::restore
 } -result {0 1}
 
+tcltest::test engines-winboard-dotted-pv {a WinBoard PV with "1... " move numbers is read, not looped on for ever} -setup {
+	::scidb::test::engines::isolate
+	set program [file join [file dirname [info script]] fixtures fake-xboard.tcl]
+	::scidb::test::engines::tool add_engine [list path $program]
+	set name [dict get [lindex $::engine::Engines 0] Name]
+} -body {
+	set started [::scidb::test::engines::tool start_engine [list engine $name]]
+	::scidb::test::engines::wait 5000
+	set lines [::scidb::test::engines::tool engine_analysis]
+	::scidb::test::engines::tool stop_engine
+	list [string match "*analysis pane*" $started] [string match "*e4*" $lines]
+} -cleanup {
+	::scidb::test::engines::restore
+} -result {1 1}
+
 tcltest::test engines-analysis-waits {engine_analysis with seconds answers later, through the tool loop} -constraints uciEngine -setup {
 	::scidb::test::engines::isolate
 	::scidb::test::engines::tool add_engine [list path $::scidb::test::engines::Program]

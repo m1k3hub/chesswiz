@@ -1333,7 +1333,9 @@ winboard::Engine::parseInfo(mstl::string const& msg)
 		}
 		else
 		{
-			s = skip_non_spaces(s);
+			// e.g. the dots of "6... g6": skipping the word alone would stop
+			// on the following space for ever
+			s = skip_spaces(skip_non_spaces(s));
 		}
 	}
 
