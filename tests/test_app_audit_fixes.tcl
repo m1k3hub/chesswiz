@@ -273,6 +273,25 @@ tcltest::test audit-searchentry-clone {a toolbar holding a search entry can be m
 	array unset ::toolbar::Specs clone:.auditSe:*
 } -result {0 1}
 
+tcltest::test audit-analysis-pane-beside-floating {a second analysis pane opens while the first is undocked} -setup {
+	::application::switchTab board
+	set twm [::application::twm board]
+	set uid analysis:[expr {$::application::Vars(terminal:number) + 1}]
+	::application::assistant::DoPane undock analysis:1
+	update idletasks
+} -body {
+	# the clone failed on the floating window ("bad option fullscreen") and,
+	# once past that, was never built
+	set rc [catch { ::application::newAnalysisPane 9 } msg]
+	update idletasks
+	list $rc [info exists ::application::analysis::NumberToTree(9)]
+} -cleanup {
+	catch { $twm close [$twm leaf $uid] }
+	update idletasks
+	catch { ::application::assistant::DoPane dock analysis:1 }
+	update idletasks
+} -result {0 1}
+
 tcltest::test audit-nested-error-not-sticky {a nested scidb error caught by a progress callback does not fail the outer command} -setup {
 	set sci [file join [::tcltest::temporaryDirectory] nested-[pid].sci]
 	proc auditNop {args} {}

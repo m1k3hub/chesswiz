@@ -7341,7 +7341,9 @@ Node::performBuildRecursively()
 void
 Node::performFinalizeCreateRecursively()
 {
-	if (isToplevel())
+	// only the main window has a "fullscreen" command; a floating window
+	// (e.g. a pane cloned while its original is undocked) has none
+	if (isRoot())
 		performFullscreen();
 
 	for (unsigned i = 0; i < numChilds(); ++i)
@@ -7715,6 +7717,10 @@ Node::perform(Node* toplevel)
 			if (flags & F_Build)
 			{
 				m_root->performBuildRecursively();
+				// a floating window is no child of the root: a pane cloned into
+				// it would never be built
+				if (!isRoot())
+					performBuildRecursively();
 				if (toplevel)
 					toplevel->performBuildRecursively();
 			}
