@@ -1,0 +1,21 @@
+Source: scidb-beta
+Section: games
+Priority: optional
+Maintainer: Michael Thomas <thomas.g.mike@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+ tcl8.6-dev, tk8.6-dev,
+ libx11-dev, libsm-dev, libice-dev, libxcursor-dev,
+ libgl-dev, libglu1-mesa-dev,
+ libmpv-dev, libzzip-dev, zlib1g-dev, libexpat1-dev, libfontconfig-dev,
+ cargo, rustc
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: scidb-beta
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, tk8.6, fontconfig, xdg-utils, make
+Description: chess database application (beta)
+ Scidb is a chess database application inspired by Scid. This build
+ includes the Stockfish, Reckless and Sjeng engines and the AI assistant.
+ .
+ Built on the machine that builds the package, for its own CPU.

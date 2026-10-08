@@ -1,0 +1,10 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Scidb
+
+Files: *
+License: GPL-2+
+ See /usr/share/common-licenses/GPL-2 and the COPYING file of the source.
+
+Files: engines/stockfish/* engines/reckless/*
+License: GPL-3+
+ See /usr/share/common-licenses/GPL-3.

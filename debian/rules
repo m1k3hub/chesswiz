@@ -1,0 +1,41 @@
+#!/usr/bin/make -f
+# Built for the CPU of the machine that runs dpkg-buildpackage; set
+# SCIDB_CPU (e.g. x86-64-v3) to build for other machines.
+export DEB_BUILD_MAINT_OPTIONS = hardening=-all
+# Scidb's Makefiles carry their own flags
+unexport CFLAGS CXXFLAGS CPPFLAGS LDFLAGS OBJCFLAGS OBJCXXFLAGS FFLAGS FCFLAGS
+SCIDB_CPU ?= native
+SF_ARCH = $(if $(filter native,$(SCIDB_CPU)),,$(subst x86-64-v3,x86-64-avx2,$(subst x86-64-v2,x86-64-sse41-popcnt,$(SCIDB_CPU))))
+MAKEVARS = SF_ARCH=$(SF_ARCH) RK_CPU=$(SCIDB_CPU) \
+	SCIDB_GIT_SHA=$(shell cat debian/git-sha 2>/dev/null || echo unknown) \
+	SCIDB_COMMIT_DATE=$(shell cat debian/git-date 2>/dev/null || echo unknown)
+DEST = $(CURDIR)/debian/scidb-beta
+# the Makefiles put fonts into $HOME/.fonts unless run as root; a rustup
+# toolchain still has to be found in the real home
+ORIG_HOME := $(HOME)
+export RUSTUP_HOME := $(or $(RUSTUP_HOME),$(wildcard $(ORIG_HOME)/.rustup))
+export CARGO_HOME := $(or $(CARGO_HOME),$(wildcard $(ORIG_HOME)/.cargo))
+export HOME := $(CURDIR)/debian/home
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	./configure --prefix=/usr --bindir=/usr/bin --enginesdir=/usr/games \
+		--mandir=/usr/share/man --destdir=$(DEST) --disable-symbols
+	sed -i "s/^OPTIMIZE .*/OPTIMIZE          = -O2 -march=$(SCIDB_CPU) -mtune=generic/" Makefile.in
+
+override_dh_auto_build:
+	$(MAKE) $(MAKEVARS)
+
+override_dh_auto_install:
+	$(MAKE) $(MAKEVARS) install
+	install -m 755 -d $(DEST)/usr/share/fonts/truetype/Scidb
+	install -m 644 tcl/fonts/*.ttf $(DEST)/usr/share/fonts/truetype/Scidb
+
+override_dh_auto_test:
+
+override_dh_auto_clean:
+	-[ -f Makefile.in ] && $(MAKE) clean
+	rm -f Makefile.in
+	rm -rf debian/home
