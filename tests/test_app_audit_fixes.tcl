@@ -262,6 +262,17 @@ tcltest::test audit-media-update-after-close {a game switch after the media pane
 	set ::application::media::Priv(tree) $saved
 } -result {0 {}}
 
+tcltest::test audit-searchentry-clone {a toolbar holding a search entry can be made floating} -body {
+	toplevel .auditSe
+	::searchentry .auditSe.e
+	set rc [catch { ::toolbar::MakeClone .auditSe .auditSe .auditSe.c .auditSe.e } err]
+	set exists [winfo exists .auditSe.c]
+	destroy .auditSe
+	list $rc $exists
+} -cleanup {
+	array unset ::toolbar::Specs clone:.auditSe:*
+} -result {0 1}
+
 tcltest::test audit-nested-error-not-sticky {a nested scidb error caught by a progress callback does not fail the outer command} -setup {
 	set sci [file join [::tcltest::temporaryDirectory] nested-[pid].sci]
 	proc auditNop {args} {}

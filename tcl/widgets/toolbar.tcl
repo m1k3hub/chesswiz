@@ -3262,7 +3262,8 @@ proc MakeClone {toolbar parent clone w} {
 		TTCombobox			{ ttk::tcombobox $clone; $clone clone $w }
 		TEntry				{ ttk::entry $clone }
 		TSpinbox				{ ttk::spinbox $clone; $clone set [$w get] }
-		SearchEntry			{ $w clone $clone }
+		SearchEntry -
+		TSearchEntry		{ $w clone $clone }
 		DropdownButton		{ $w clone $clone }
 		Frame					{ CloneFrame $toolbar $parent $clone $w }
 		default				{ catch {[string tolower $class] $clone} }
