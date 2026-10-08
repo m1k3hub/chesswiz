@@ -1916,7 +1916,9 @@ Codec::readHeader(mstl::string const& rootname)
 	openFile(strm, filename, Readonly);
 
 	Byte record[46];
-	strm.read(record, sizeof(record));
+
+	if (!strm.read(record, sizeof(record)))
+		IO_RAISE(Index, Corrupted, "'%s' is truncated", filename.c_str());
 
 	if (	record[0] != 0
 		|| record[1] != 0
@@ -1932,7 +1934,16 @@ Codec::readHeader(mstl::string const& rootname)
 	ByteStream bstrm(record, sizeof(record));
 
 	bstrm.skip(6);
-	return bstrm.uint32() - 1;
+
+	// the count includes the header record; a corrupt count must not
+	// claim more records than the file holds
+	unsigned count = bstrm.uint32();
+	long size = sys::file::size(filename.c_str());
+
+	if (count == 0 || size < 0 || count > unsigned(size)/sizeof(record))
+		IO_RAISE(Index, Corrupted, "'%s' is truncated or corrupt", filename.c_str());
+
+	return count - 1;
 }
 
 

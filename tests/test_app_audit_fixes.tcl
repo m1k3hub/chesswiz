@@ -292,6 +292,24 @@ tcltest::test audit-analysis-pane-beside-floating {a second analysis pane opens 
 	update idletasks
 } -result {0 1}
 
+tcltest::test audit-cbh-corrupt-count {a ChessBase index whose game count is corrupt is refused at once} -setup {
+	set root [file join [::tcltest::temporaryDirectory] corrupt-[pid]]
+	# a valid header record that claims no records at all; the count less
+	# one wrapped round to four billion games
+	set fh [open $root.cbh wb]
+	puts -nonewline $fh [binary format c6Iu1x36 {0 0 0x2c 0 0x2e 1} 0]
+	close $fh
+	foreach ext {cbg cba cbp cbt cbc cbs cbe} { close [open $root.$ext wb] }
+	proc auditCbhCb {cmd args} { switch -- $cmd { ticks { return 100 } interrupted? { return 0 } } ; return }
+} -body {
+	set rc [catch { ::scidb::db::load $root.cbh auditCbhCb progress -readonly yes } msg]
+	list $rc [string match "*Corrupted*" $msg]
+} -cleanup {
+	catch { ::scidb::db::close $root.cbh }
+	rename auditCbhCb {}
+	foreach f [glob -nocomplain $root.*] { file delete $f }
+} -result {1 1}
+
 tcltest::test audit-nested-error-not-sticky {a nested scidb error caught by a progress callback does not fail the outer command} -setup {
 	set sci [file join [::tcltest::temporaryDirectory] nested-[pid].sci]
 	proc auditNop {args} {}
