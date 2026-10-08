@@ -1870,8 +1870,11 @@ proc startEngine {name {number ""} {settings {}}} {
 	}
 
 	set lines [expr {[dict exists $settings lines] ? [dict get $settings lines] : ""}]
-	if {$lines ne "" && [dict exists $features multiPV] && $lines > [dict get $features multiPV]} {
-		error "$name shows at most [dict get $features multiPV] lines"
+	if {$lines ne ""} {
+		# the pane has rows for eight lines
+		set most 8
+		if {[dict exists $features multiPV]} { set most [expr {min($most, [dict get $features multiPV])}] }
+		if {$lines > $most} { error "$name shows at most $most lines here" }
 	}
 	foreach {key features:keys label} {threads {threads smp} threads hash {hashSize} "hash size"} {
 		set value [expr {[dict exists $settings $key] ? [dict get $settings $key] : ""}]

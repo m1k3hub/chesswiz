@@ -313,7 +313,7 @@ variable Actions {
 	}
 	start_engine {
 		1 0 "analyse the board position with %s"
-		"Start an engine on the position on the board in an analysis pane; it follows the board as it changes. Without a pane a free one is used or a new one opened; giving the pane of a running engine replaces or restarts it (e.g. to change lines). lines = number of best lines (MultiPV), threads, hash in MB; each defaults to the pane's setting. Then read its lines with engine_analysis."
+		"Start an engine on the position on the board in an analysis pane; it follows the board as it changes. Without a pane a free one is used or a new one opened; giving the pane of a running engine replaces or restarts it (e.g. to change lines). lines = number of best lines (MultiPV, 1-8), threads, hash in MB; each defaults to the pane's setting. Then read its lines with engine_analysis."
 		{{"type":"object","properties":{"engine":{"type":"string","description":"engine name or part of it; without it Stockfish, or the first engine"},"pane":{"type":"integer","description":"analysis pane number as in its title: 1 for 'Analysis', 2 for 'Analysis (2)'"},"lines":{"type":"integer"},"threads":{"type":"integer"},"hash":{"type":"integer","description":"hash size in MB"}}}}
 		::application::assistant::DoStartEngine
 	}
