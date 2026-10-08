@@ -248,6 +248,11 @@ tcltest::test audit-paste-dialog-closed-early {a paste dialog closed while it is
 	unset -nocomplain ::auditFrame
 } -result {0 {}}
 
+tcltest::test audit-uri-list-not-a-list {dropped text that is no Tcl list is read line by line} -body {
+	set r [::fsbox::parseUriList "file:///a.pgn\r\n\{b.pgn"]
+	list [lindex $r 1] [lindex $r 3]
+} -result {/a.pgn \{b.pgn}
+
 tcltest::test audit-nested-error-not-sticky {a nested scidb error caught by a progress callback does not fail the outer command} -setup {
 	set sci [file join [::tcltest::temporaryDirectory] nested-[pid].sci]
 	proc auditNop {args} {}

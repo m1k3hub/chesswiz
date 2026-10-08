@@ -972,6 +972,11 @@ proc toUriList {files} {
 proc parseUriList {uriFiles} {
 	set result {}
 
+	# dropped text arrives as it is: one URI per line, not a Tcl list
+	if {![string is list $uriFiles]} {
+		set uriFiles [split [string map {\r ""} $uriFiles] \n]
+	}
+
 	foreach file $uriFiles {
 		# according to RFC2-483 lines starting with a '#' are comment lines.
 		# should we really discard these lines?
