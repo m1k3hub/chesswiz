@@ -343,6 +343,8 @@ proc openEdit {parent position args} {
 	wm protocol $dlg WM_DELETE_WINDOW [namespace code [list Close $position $dlg]]
 	SetTitle $dlg $position
 	update idletasks
+	# the gamebar may have closed this position (and the dialog) meanwhile
+	if {![winfo exists $dlg]} { return }
 	wm minsize $dlg [winfo width $dlg] [winfo height $dlg]
 	wm resizable $dlg true true
 	wm deiconify $dlg
@@ -360,7 +362,7 @@ proc openEdit {parent position args} {
 		$edit.text insert insert [string trim $sel]
 	}
 
-	if {$used} {
+	if {$used && [winfo exists $dlg]} {
 		ttk::grabWindow $dlg
 		wm transient $dlg $parent
 		tkwait window $dlg

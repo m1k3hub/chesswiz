@@ -227,6 +227,27 @@ tcltest::test audit-dropdownbutton-clone {a dropdown button can be cloned (a too
 	list $rc $exists
 } -result {0 1}
 
+
+tcltest::test audit-paste-dialog-closed-early {a paste dialog closed while it is built does not fail} -setup {
+	::application::pgn::ensureScratchGame
+	set frame $::application::pgn::Vars(frame:$::application::pgn::Vars(position))
+	# the gamebar closing the position runs during openEdit's update
+	rename ::update ::auditRealUpdate
+	proc ::update {args} {
+		if {[lindex [info level -1] 0] eq "::import::openEdit"} {
+			foreach w [info commands $::auditFrame.importOnePgnGame*] { destroy $w }
+		}
+		uplevel 1 ::auditRealUpdate $args
+	}
+	set ::auditFrame $frame
+} -body {
+	list [catch {::import::openEdit $frame 0 -mode game -variant Normal} err] $err
+} -cleanup {
+	rename ::update {}
+	rename ::auditRealUpdate ::update
+	unset -nocomplain ::auditFrame
+} -result {0 {}}
+
 tcltest::test audit-nested-error-not-sticky {a nested scidb error caught by a progress callback does not fail the outer command} -setup {
 	set sci [file join [::tcltest::temporaryDirectory] nested-[pid].sci]
 	proc auditNop {args} {}
