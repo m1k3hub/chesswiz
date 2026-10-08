@@ -511,6 +511,8 @@ proc application::media::Update {position} {
 	set Priv(position) $position
 	set Priv(linksBase) {}
 	set tree $Priv(tree)
+	# the game and database still announce changes after the pane has closed
+	if {![winfo exists $tree]} { return }
 
 	# Stop any playing media
 	Stop

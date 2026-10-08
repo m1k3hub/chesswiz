@@ -253,6 +253,15 @@ tcltest::test audit-uri-list-not-a-list {dropped text that is no Tcl list is rea
 	list [lindex $r 1] [lindex $r 3]
 } -result {/a.pgn \{b.pgn}
 
+tcltest::test audit-media-update-after-close {a game switch after the media pane has closed does nothing} -setup {
+	set saved $::application::media::Priv(tree)
+	set ::application::media::Priv(tree) .noSuchMediaTree
+} -body {
+	list [catch {::application::media::Update 0} msg] $msg
+} -cleanup {
+	set ::application::media::Priv(tree) $saved
+} -result {0 {}}
+
 tcltest::test audit-nested-error-not-sticky {a nested scidb error caught by a progress callback does not fail the outer command} -setup {
 	set sci [file join [::tcltest::temporaryDirectory] nested-[pid].sci]
 	proc auditNop {args} {}
