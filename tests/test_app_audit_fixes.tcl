@@ -310,6 +310,10 @@ tcltest::test audit-cbh-corrupt-count {a ChessBase index whose game count is cor
 	foreach f [glob -nocomplain $root.*] { file delete $f }
 } -result {1 1}
 
+tcltest::test audit-treeview-rows-fit-font {tree rows are as tall as the font needs} -body {
+	expr {[ttk::style lookup Treeview -rowheight] >= [font metrics TkDefaultFont -linespace]}
+} -result 1
+
 tcltest::test audit-nested-error-not-sticky {a nested scidb error caught by a progress callback does not fail the outer command} -setup {
 	set sci [file join [::tcltest::temporaryDirectory] nested-[pid].sci]
 	proc auditNop {args} {}

@@ -1465,8 +1465,9 @@ proc OpenPrepReport {parent base variant playerIndex} {
 			$tree heading count -text $mc::PrepCount
 			$tree heading eco -text ECO
 			$tree heading line -text $mc::PrepLine
-			$tree column count -anchor e -width 60 -stretch 0
-			$tree column eco -anchor w -width 55 -stretch 0
+			set em [font measure TkDefaultFont "0"]
+			$tree column count -anchor e -width [expr {max(60, 7*$em)}] -stretch 0
+			$tree column eco -anchor w -width [expr {max(55, 6*$em)}] -stretch 0
 			$tree column line -anchor w -width 420 -stretch 1
 			pack $tree -fill both -expand yes
 			bind $tree <<TreeviewSelect>> [namespace code [list SetActivePrepOpeningTree $dlg ${side}Tree]]

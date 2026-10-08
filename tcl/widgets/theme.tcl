@@ -407,6 +407,9 @@ proc SetupCurrentTheme {} {
 	ttk::style configure aligned.TButton -anchor w -width -9
 	# 2b. Provide a button for icons.
 	ttk::style configure icon.TButton -padding 0
+	# 2c. Tree rows fit the font (Tk's default is a fixed 20 pixels, which
+	#     clips the rows on a high-resolution screen).
+	ttk::style configure Treeview -rowheight [expr {[font metrics TkDefaultFont -linespace] + 4}]
 
 	# 3. Provide a ttk::scale with keyboard focus.
 	ttk::style configure active.Horizontal.TScale -troughcolor [GetActiveTroughColor]
