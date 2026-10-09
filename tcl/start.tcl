@@ -60,7 +60,15 @@ if {$::tcl_platform(platform) eq "windows"} {
 
 set home		[file nativename "~"]
 set exec		[file dirname $::nameofexecutable]
-set user		[file join $home .[string range [file tail $::nameofexecutable] 2 end]]
+# Named at build time after the installation (SHAREDIR), so renaming or wrapping
+# the program does not move the user's settings; SCIDB_USERDIR overrides it.
+if {[info exists ::env(SCIDB_USERDIR)] && $::env(SCIDB_USERDIR) ne ""} {
+	set user [file normalize $::env(SCIDB_USERDIR)]
+} else {
+	set user "%USERDIRNAME%"
+	if {[string match ?USERDIRNAME? $user]} { set user .scidb-beta }
+	set user [file join $home $user]
+}
 set data		[file join $share data]
 set help		[file join $share help]
 set hyphen	[file join $share hyphen]

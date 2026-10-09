@@ -50,7 +50,8 @@ Found: `exec nproc` (ai-engine.tcl:137), `exec kill` (ai-modelfit.tcl:107, app-v
 - TTS: Windows SAPI via PowerShell, macOS `say`, Linux espeak-ng.
 
 ### D7. Per-user directories — **platform-native, decided explicitly, not from argv0**
-- Today `start.tcl:63` derives the user dir from the *executable name*: `~/.` + name minus the `tk` prefix (`tkscidb-beta` → `~/.scidb-beta`). A rename or a `.exe` suffix silently moves everyone's settings, keys and layouts. Fix this **before** the rename.
+- **Done:** the name is now set at build time (`USERDIRNAME`, default `.` + basename of `DATADIR`, i.e. `.scidb-beta`), and `SCIDB_USERDIR` overrides it. Still open: the launcher script finds its binary as `tk` + its own name, so the script and binary must be renamed together, and a symlink with another name will not start.
+- Before: `start.tcl:63` derived the user dir from the *executable name*: `~/.` + name minus the `tk` prefix (`tkscidb-beta` → `~/.scidb-beta`). A rename or a `.exe` suffix silently moves everyone's settings, keys and layouts. Fix this **before** the rename.
 - Proposed:
   - Linux: `$XDG_CONFIG_HOME/<app>` (fall back to the legacy dotdir if it exists).
   - Windows: `%APPDATA%\<App>` (config), `%LOCALAPPDATA%\<App>` (logs, caches, pattern indexes).

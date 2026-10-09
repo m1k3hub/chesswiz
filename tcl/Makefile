@@ -12,6 +12,9 @@
 
 include ../Makefile.in
 
+# the per-user directory is named after the installation, not after the program file
+USERDIRNAME ?= .$(notdir $(DATADIR))
+
 SCRIPT = scidb$(SUFFIX)
 ARCH = arch-scidb
 
@@ -704,7 +707,8 @@ $(SCRIPT): $(SOURCES) Makefile ../Makefile.in
 	for f in $(SOURCES); do cat "$$f"; echo; done | sed                  \
 		-e 's/# vi:set ts=3 sw=3:/update idletasks/'        \
 		-e 's#%SHAREDIR%#$(DATADIR)#g'                      \
-		-e 's#%%ENGINESDIR%%#$(%ENGINESDIR%)#g'             \
+		-e 's#%ENGINESDIR%#$(ENGINESDIR)#g'                 \
+		-e 's#%USERDIRNAME%#$(USERDIRNAME)#g'               \
 		-e '/^##/d'                                         \
 		-e '/^#$$/d'                                        \
 		-e '/^[ 	]*#[ 	]\+/d'                               \

@@ -511,16 +511,21 @@ set Delete							"Delete"
 
 namespace eval searchPresets {
 	variable presets {}
-	variable filename "~/.scidb/search_presets.tcl"
+	variable filename [file join $::scidb::dir::user search_presets.tcl]
+	# presets used to be saved in ~/.scidb whatever the installation
+	variable legacyFilename [file join ~ .scidb search_presets.tcl]
 }
 
 
 proc LoadSearchPresets {} {
 	variable searchPresets::presets
 	variable searchPresets::filename
+	variable searchPresets::legacyFilename
 
 	if {[file exists $filename]} {
 		catch { source $filename }
+	} elseif {[file exists $legacyFilename]} {
+		catch { source $legacyFilename }
 	}
 }
 

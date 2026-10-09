@@ -378,4 +378,10 @@ tcltest::test audit-setup-nags-negative {a negative NAG in the options is refuse
 	set r
 } -result {1 {::scidb::game::setupNags: invalid NAG '-1'}}
 
+tcltest::test audit-user-dir-not-from-program-name {the user directory is named after the installation, and search presets live in it} -body {
+	set ns ::application::database::searchPresets
+	list [expr {[info exists ::env(SCIDB_USERDIR)] || [file tail $::scidb::dir::user] eq ".scidb-beta"}] \
+		[expr {[file dirname [set ${ns}::filename]] eq $::scidb::dir::user}]
+} -result {1 1}
+
 tcltest::cleanupTests
