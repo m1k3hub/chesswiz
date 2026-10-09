@@ -55,7 +55,7 @@ namespace eval mc {
 
 set UpdateFide		"Update FIDE Rating List..."
 set Confirm			"Download FIDE's current rating list (about 45 MB) from ratings.fide.com?"
-set ConfirmDetail	"The list replaces the one Scidb ships (March 2012). Only players rated 1800 or more, or titled, are kept. Nothing is sent but the request."
+set ConfirmDetail	"The list replaces the one Chesswiz ships (March 2012). Only players rated 1800 or more, or titled, are kept. Nothing is sent but the request."
 set Downloading	"Downloading FIDE's rating list..."
 set Done				"FIDE's rating list of %s is installed: %s players."
 set Failed			"The FIDE rating list could not be updated: %s"

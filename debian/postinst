@@ -3,9 +3,9 @@ set -e
 #DEBHELPER#
 [ "$1" = configure ] || exit 0
 fontdir=/usr/share/fonts/truetype/Scidb
-xdgdir=/usr/share/scidb-beta/freedesktop.org
-if [ -d /usr/local/share/scidb-beta/freedesktop.org ]; then
-	xdgdir=/usr/local/share/scidb-beta/freedesktop.org
+xdgdir=/usr/share/chesswiz/freedesktop.org
+if [ -d /usr/local/share/chesswiz/freedesktop.org ]; then
+	xdgdir=/usr/local/share/chesswiz/freedesktop.org
 	if [ -d /usr/local/share/fonts/truetype/Scidb ]; then
 		# On Fedora /usr/local/share/fonts/truetype/ cannot be used
 		fontdir=/usr/local/share/fonts/truetype/Scidb

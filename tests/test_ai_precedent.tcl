@@ -1,7 +1,7 @@
 # ======================================================================
 # test_ai_precedent.tcl -- master-practice evidence in the narration prompt.
 #
-#   xvfb-run -a ./src/tkscidb-beta tests/test_ai_precedent.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/test_ai_precedent.tcl
 #
 # Builds a tiny corpus index from a generated PGN, then checks that
 # ::ai::precedent::lookup reads it and that the prompt carries the evidence.

@@ -9,7 +9,7 @@ case $type in
 		requires="desktop-file-utils,expat,fontconfig,freetype,gdbm,glibc,hicolor-icon-theme,libgcc,libICE,libSM,libstdc++,libX11,libXcursor,libXft,shared-mime-info,tcl,tk,xdg-utils,zlib";;
 esac
 checkinstall --type=$type \
-	--pkgname="scidb-beta" \
+	--pkgname="chesswiz" \
 	--pkgversion="1.0" \
 	--pkgrelease="r1153" \
 	--pkglicense="GPL" \

@@ -266,7 +266,7 @@
 ### menu ###############################################################
 ::menu::mc::Theme			"Téma"
 ::menu::mc::ColorScheme			"Color Scheme" ;# NEW
-::menu::mc::CustomStyleMenu		"Scidb's Style Menu" ;# NEW
+::menu::mc::CustomStyleMenu		"Chesswiz's Style Menu" ;# NEW
 ::menu::mc::DefaultStyleMenu		"Default Style Menu" ;# NEW
 ::menu::mc::OrdinaryMonitor		"Ordinary Monitor" ;# NEW
 ::menu::mc::HighQualityMonitor		"High Quality Monitor" ;# NEW
@@ -289,7 +289,7 @@
 ::menu::mc::Language			"N&yelv"
 ::menu::mc::Toolbars			"&Eszköztár"
 ::menu::mc::ShowLog			"&Log fájl mutatása"
-::menu::mc::AboutScidb			"Scidb &Névjegy"
+::menu::mc::AboutChesswiz			"Chesswiz &Névjegy"
 ::menu::mc::TipOfTheDay			"Tip of the &Day" ;# NEW
 ::menu::mc::Fullscreen			"&Teljes képernyő"
 ::menu::mc::LeaveFullscreen		"Leave &Teljes képernyő" ;# NEW "Leave Full-Screen"
@@ -332,8 +332,8 @@
 
 # Default Application
 ::menu::mc::Assign			"assign" ;# NEW
-::menu::mc::FailedSettingDefaultApp	"Failed to set Scidb as a default application for %s." ;# NEW
-::menu::mc::SuccessSettingDefaultApp	"Successfully set Scidb as a default application for %s." ;# NEW
+::menu::mc::FailedSettingDefaultApp	"Failed to set Chesswiz as a default application for %s." ;# NEW
+::menu::mc::SuccessSettingDefaultApp	"Successfully set Chesswiz as a default application for %s." ;# NEW
 ::menu::mc::CommandFailed		"Command '%s' failed." ;# NEW
 
 ### load ###############################################################
@@ -442,7 +442,7 @@
 ::tips::mc::CouldNotFindAnyTip	"Could not find any tip." ;# NEW
 ::tips::mc::RepeatAllTips	"Repeat all tips (restart from the beginning)" ;# NEW
 ::tips::mc::NextTip		"Next Tip" ;# NEW
-::tips::mc::FirstTip		"<p>The Tip-of-the-Day information serves to a better insight into the functioning of this application. Furthermore it will give useful hints that will help to know what is possible.</p><p color='darkgreen'><b>Have joy with Scidb!</b></p>" ;# NEW
+::tips::mc::FirstTip		"<p>The Tip-of-the-Day information serves to a better insight into the functioning of this application. Furthermore it will give useful hints that will help to know what is possible.</p><p color='darkgreen'><b>Have joy with Chesswiz!</b></p>" ;# NEW
 
 ::tips::mc::Choice(everytime)		"Show everytime" ;# NEW
 ::tips::mc::Choice(periodically)	"Show periodically" ;# NEW
@@ -488,7 +488,7 @@
 ::application::mc::AbortWriteOperation		"Abort write operation" ;# NEW
 ::application::mc::UpdatesAvailable		"Új frissítés érhető el"
 
-::application::mc::WriteOperationInProgress	"Write operation in progress: currently Scidb is modifying/writing database '%s'." ;# NEW
+::application::mc::WriteOperationInProgress	"Write operation in progress: currently Chesswiz is modifying/writing database '%s'." ;# NEW
 ::application::mc::LogoutNotPossible		"Logout is currently not possible, the result would be a corrupted database." ;# NEW
 ::application::mc::RestartLogout		"Aborting the write operation will restart the logout process." ;# NEW
 ::application::mc::UnsavedFiles			"The following PGN files are unsaved:" ;# NEW
@@ -614,7 +614,7 @@
 ::application::information::mc::RecentlyUsed           "Recently used" ;# NEW
 ::application::information::mc::RemoveSelectedDatabase "Remove selected database from history" ;# NEW
 ::application::information::mc::NewsAvailable          "There are updatednews available" ;# NEW
-::application::information::mc::NoInternetConnection   "Information: Scidb cannot connect to Internet." ;# NEW
+::application::information::mc::NoInternetConnection   "Information: Chesswiz cannot connect to Internet." ;# NEW
 
 ### application::database ##############################################
 ::application::database::mc::FileOpen			"Fájl megnyitása"

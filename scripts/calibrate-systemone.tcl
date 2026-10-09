@@ -1,7 +1,7 @@
 # ======================================================================
 # Calibrate the System One gates against a live backend.
 #
-#   xvfb-run -a src/tkscidb-beta scripts/calibrate-systemone.tcl \
+#   xvfb-run -a src/tkchesswiz scripts/calibrate-systemone.tcl \
 #       --backend plumb --url http://127.0.0.1:11435/v1/systemone \
 #       --model plumb-4b-v5:latest --features comment_kind,event_type \
 #       --out tcl/ai-thresholds.tsv

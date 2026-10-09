@@ -1,7 +1,7 @@
 # ======================================================================
 # test_ai_rhetoric.tcl -- the advisory rhetoric/coverage second opinion.
 #
-#   xvfb-run -a ./src/tkscidb-beta tests/test_ai_rhetoric.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/test_ai_rhetoric.tcl
 #
 # The System One classifier is stubbed in-process: ::ai::systemone::evaluateAsync
 # is replaced with a proc that answers from a queue. No network, no model.

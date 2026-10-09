@@ -143,7 +143,7 @@ proc build {top width height} {
 
 	tk::label $logo.icon -image $::icon::64x64::logo -background white
 	tk::label $logo.logo \
-		-text "Scidb" \
+		-text "Chesswiz" \
 		-foreground steelblue4 \
 		-font [list {Final Frontier} 26] \
 		-background white \

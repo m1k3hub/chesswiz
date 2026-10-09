@@ -157,10 +157,10 @@ tcltest::test cli-session-shares-the-pane {terminal requests appear in the assis
 } -result {1 1}
 
 tcltest::test cli-ask-without-instance {--ask exits 2 when no instance is running} -body {
-	set exe [file join $::scidb::test::app::testDir .. src tkscidb-beta]
-	set script [file join $::scidb::test::app::testDir .. tcl scidb-beta]
+	set exe [file join $::scidb::test::app::testDir .. src tkchesswiz]
+	set script [file join $::scidb::test::app::testDir .. tcl chesswiz]
 	# a different script path means a different port: nothing listens there
-	set copy [file join [file dirname $script] scidb-beta-cli-test]
+	set copy [file join [file dirname $script] chesswiz-cli-test]
 	file copy -force $script $copy
 	set rc [catch { exec $exe $copy --ask "hello" 2>@1 } out opts]
 	file delete $copy

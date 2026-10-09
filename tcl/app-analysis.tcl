@@ -1685,7 +1685,7 @@ proc SetupEvalEdges {tree} {
 	set values {0.45 0.75 1.75 4.00}
 	set btn [ttk::button $top.scidb \
 		-style aligned.TButton \
-		-text "Scidb" \
+		-text "Chesswiz" \
 		-command [namespace code [list SetEdgeValues $top $values]] \
 	]
 	grid $btn -row 5 -column 1 -sticky w

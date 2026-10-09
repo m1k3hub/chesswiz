@@ -1,7 +1,7 @@
 # ======================================================================
 # test_ai_calibrate.tcl -- the calibration math and the threshold file.
 #
-#   xvfb-run -a ./src/tkscidb-beta tests/test_ai_calibrate.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/test_ai_calibrate.tcl
 #
 # Pure and deterministic: sweep/recommend over synthetic scored data, and
 # the TSV write/load round-trip that feeds ::ai::systemone::threshold. The

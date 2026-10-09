@@ -35,7 +35,7 @@ set CouldNotOpenFile		"Could not open file %s."
 set CouldNotFindAnyTip	"Could not find any tip."
 set RepeatAllTips			"Repeat all tips (restart from the beginning)"
 set NextTip					"Next Tip" ;# Unused
-set FirstTip				"<p>The Tip-of-the-Day information serves to a better insight into the functioning of this application. Furthermore it will give useful hints that will help to know what is possible.</p><p color='darkgreen'><b>Have joy with Scidb!</b></p>"
+set FirstTip				"<p>The Tip-of-the-Day information serves to a better insight into the functioning of this application. Furthermore it will give useful hints that will help to know what is possible.</p><p color='darkgreen'><b>Have joy with Chesswiz!</b></p>"
 
 set Choice(everytime)				"Show everytime"
 set Choice(periodically)			"Show periodically"

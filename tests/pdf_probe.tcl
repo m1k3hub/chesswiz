@@ -6,7 +6,7 @@
 # single-game and the view printPdf paths and report the exceptions.
 #
 # Usage:
-#   xvfb-run -a ./src/tkscidb-beta tests/pdf_probe.tcl <base-file>
+#   xvfb-run -a ./src/tkchesswiz tests/pdf_probe.tcl <base-file>
 # ======================================================================
 
 if {[llength $::argv] >= 1} {

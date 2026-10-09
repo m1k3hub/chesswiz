@@ -9,7 +9,7 @@ SF_ARCH = $(if $(filter native,$(SCIDB_CPU)),,$(subst x86-64-v3,x86-64-avx2,$(su
 MAKEVARS = SF_ARCH=$(SF_ARCH) RK_CPU=$(SCIDB_CPU) \
 	SCIDB_GIT_SHA=$(shell cat debian/git-sha 2>/dev/null || echo unknown) \
 	SCIDB_COMMIT_DATE=$(shell cat debian/git-date 2>/dev/null || echo unknown)
-DEST = $(CURDIR)/debian/scidb-beta
+DEST = $(CURDIR)/debian/chesswiz
 # the Makefiles put fonts into $HOME/.fonts unless run as root; a rustup
 # toolchain still has to be found in the real home
 ORIG_HOME := $(HOME)

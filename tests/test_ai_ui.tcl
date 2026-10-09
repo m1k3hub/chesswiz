@@ -1,7 +1,7 @@
 # ======================================================================
 # test_ai_ui.tcl -- the UI rendering helpers and the async generate path.
 #
-#   xvfb-run -a ./src/tkscidb-beta tests/test_ai_ui.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/test_ai_ui.tcl
 #
 # The full `analyze` command needs the assembled application (report widget,
 # menu); here we cover the parts that are testable in isolation.

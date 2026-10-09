@@ -3,9 +3,9 @@
 # ======================================================================
 # Run via tests/Makefile target `smoke`:
 #
-#   xvfb-run -a ./src/tkscidb-beta tests/startup_smoke.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/startup_smoke.tcl
 #
-# Sources the real merged startup script (tcl/scidb-beta) under Xvfb
+# Sources the real merged startup script (tcl/chesswiz) under Xvfb
 # with an isolated throwaway HOME and fails if:
 #   * the startup script itself raises (script-level error), or
 #   * any deferred callback raises through bgerror within the soak
@@ -14,11 +14,11 @@
 #     soak window (10 s).
 #
 # The startup script registers its own dialog-based bgerror handler
-# (interp bgerror, tcl/scidb-beta ~line 1503); this wrapper retakes the
+# (interp bgerror, tcl/chesswiz ~line 1503); this wrapper retakes the
 # handler 500 ms into the event loop so deferred errors fail the test
 # headlessly instead of blocking on a dialog under Xvfb.
 #
-# The user's real ~/.scidb-beta is never touched: HOME is redirected to
+# The user's real ~/.chesswiz is never touched: HOME is redirected to
 # a throwaway directory before the startup script runs.
 # ======================================================================
 
@@ -42,7 +42,7 @@ file mkdir $::SMOKE(home)
 set env(HOME) $::SMOKE(home)
 
 set scriptDir [file dirname [file normalize [info script]]]
-set merged	[file join [file dirname $scriptDir] tcl scidb-beta]
+set merged	[file join [file dirname $scriptDir] tcl chesswiz]
 
 if {![file exists $merged]} {
 	puts stderr "STARTUP-SMOKE: merged script not found: $merged"

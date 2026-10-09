@@ -22,7 +22,7 @@ flags += ['-I' + str(root / 'src' / p) for p in ['', 'mstl', 'sys', 'db', 'db/sc
 harness = args.harness.resolve(strict=True) if args.harness else root / 'src/cql6stub/real_harness.cpp'
 subprocess.run(['g++', *flags, '-c', str(harness), '-o', str(out / 'runner.o')], check=True)
 plan = subprocess.check_output(['make', '-n', '-C', str(root / 'src'), '-W', 'tkscidb.o', 'tkscidb-only'], text=True)
-line = next(line for line in plan.splitlines() if line.startswith('g++ -o tkscidb-beta '))
+line = next(line for line in plan.splitlines() if line.startswith('g++ -o tkchesswiz '))
 link = shlex.split(line)
 if args.cql_library:
     library = args.cql_library.resolve(strict=True)

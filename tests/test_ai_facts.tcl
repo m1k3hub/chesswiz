@@ -3,7 +3,7 @@
 #
 # These bind db_chess_facts into the Tcl layer so the language layer can
 # request anatomy without knowing anything about chess itself.  Run with:
-#   xvfb-run -a ./src/tkscidb-beta tests/test_ai_facts.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/test_ai_facts.tcl
 # ======================================================================
 
 set failures 0

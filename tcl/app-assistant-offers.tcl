@@ -98,7 +98,7 @@ proc ::application::assistant::offers::offer {pool state} {
 	set i 0
 	foreach {label request} $pool {
 		dict set questions o[incr i] [dict create type noul instructions \
-			"The user of Scidb, a chess database program, has just opened what the state describes. Is this the next thing they are likely to want: \"$request\"?"]
+			"The user of Chesswiz, a chess database program, has just opened what the state describes. Is this the next thing they are likely to want: \"$request\"?"]
 	}
 	set gen $RankGen
 	set deadline [expr {[clock milliseconds] + $RankTimeout}]

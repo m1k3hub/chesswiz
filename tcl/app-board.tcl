@@ -489,7 +489,7 @@ proc show3D {flag} {
 				if {[llength [info commands tk_messageBox]]} {
 					catch {
 						tk_messageBox -parent .application -icon warning -type ok \
-							-title "Scidb" \
+							-title "Chesswiz" \
 							-message "3D in the main window is unavailable.\n\n$::board3d::Priv(embed,error)"
 					}
 				}

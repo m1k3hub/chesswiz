@@ -5,7 +5,7 @@
 # suite; run it after changing prompts, tools or the model:
 #
 #   SCIDB_CORPUS_DB=<a .sci database> HOME=$(mktemp -d) \
-#     xvfb-run -a src/tkscidb-beta tests/run_assistant_corpus.tcl ?-match GLOB?
+#     xvfb-run -a src/tkchesswiz tests/run_assistant_corpus.tcl ?-match GLOB?
 #
 # The model is ::application::ai::Config's (the app's default unless
 # SCIDB_AI_PROVIDER / SCIDB_AI_MODEL say otherwise). Every confirmation is
@@ -23,7 +23,7 @@ set ::env(SCIDB_AI_TRIAGE) 0
 # no System One router unless SCIDB_CORPUS_CLASSIFIER names a backend
 # (e.g. typesafe), to score the router and the model together
 set ::env(SCIDB_AI_CLASSIFIER) [expr {[info exists ::env(SCIDB_CORPUS_CLASSIFIER)] ? $::env(SCIDB_CORPUS_CLASSIFIER) : "off"}]
-source [file join $root tcl scidb-beta]
+source [file join $root tcl chesswiz]
 fconfigure stdout -buffering line
 
 set match *

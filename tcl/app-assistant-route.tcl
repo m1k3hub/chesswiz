@@ -203,7 +203,7 @@ proc ::application::assistant::routeCriteria {invocations} {
 proc ::application::assistant::routeQuestions {criteria} {
 	return [dict create \
 		route [dict create type choice \
-			instructions "Which single Scidb assistant action, run with its default arguments, would by itself perform this request?" \
+			instructions "Which single Chesswiz assistant action, run with its default arguments, would by itself perform this request?" \
 			criteria $criteria] \
 		satisfied [dict create type noul \
 			instructions "Does this request name a single simple action and contain no specific values -- no names, no numbers, no paths, no search criteria?"] \

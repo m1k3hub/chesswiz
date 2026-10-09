@@ -1,7 +1,7 @@
 # ======================================================================
 # test_ai_narrate.tcl -- engine-native anatomy from the custom Stockfish.
 #
-#   xvfb-run -a ./src/tkscidb-beta tests/test_ai_narrate.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/test_ai_narrate.tcl
 #
 # Requires the fork binary (engines/stockfish/src/stockfish); skips cleanly
 # if it is absent or lacks the `narrate` command.

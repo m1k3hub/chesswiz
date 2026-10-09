@@ -706,7 +706,7 @@ proc ::application::voice::OnTranscript {result} {
 proc ::application::voice::Gate {text} {
 	if {[setting gate] && [llength [info commands ::ai::decide]]} {
 		set question [dict create type noul \
-			instructions "Is this a plausible request to Scidb, a chess database assistant? Answer yes when it is something the assistant could act on (search, explain, open, annotate, ...), no when the words look scrambled or unrelated."]
+			instructions "Is this a plausible request to Chesswiz, a chess database assistant? Answer yes when it is something the assistant could act on (search, explain, open, annotate, ...), no when the words look scrambled or unrelated."]
 		if {![catch {
 			::ai::decide voice_gate $text $question \
 				[namespace code [list OnGate $text]] \

@@ -1,7 +1,7 @@
 # ======================================================================
 # test_ai_tools.tcl -- engine-as-tool grounding.
 #
-#   xvfb-run -a ./src/tkscidb-beta tests/test_ai_tools.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/test_ai_tools.tcl
 #
 # The model side is scripted (deterministic); the chess_engine tool runs the
 # real Stockfish.  Set SCIDB_AI_LIVE=1 to drive a real cloud model instead.

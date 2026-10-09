@@ -2,9 +2,9 @@
 set -e
 #DEBHELPER#
 [ "$1" = remove ] || [ "$1" = upgrade ] || exit 0
-xdgdir=/usr/share/scidb-beta/freedesktop.org
-if [ -f /usr/local/share/scidb-beta/freedesktop.org/Makefile ]; then
-	xdgdir=/usr/local/share/scidb-beta/freedesktop.org
+xdgdir=/usr/share/chesswiz/freedesktop.org
+if [ -f /usr/local/share/chesswiz/freedesktop.org/Makefile ]; then
+	xdgdir=/usr/local/share/chesswiz/freedesktop.org
 fi
 if [ -d $xdgdir ]; then
 	cd $xdgdir

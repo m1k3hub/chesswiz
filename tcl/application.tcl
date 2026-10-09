@@ -53,7 +53,7 @@ set CancelLogout				"Cancel Logout"
 set AbortWriteOperation		"Abort write operation"
 set UpdatesAvailable			"Updates available"
 
-set WriteOperationInProgress "Write operation in progress: currently Scidb is modifying/writing database '%s'."
+set WriteOperationInProgress "Write operation in progress: currently Chesswiz is modifying/writing database '%s'."
 set LogoutNotPossible		"Logout is currently not possible, the result would be a corrupted database."
 set RestartLogout				"Aborting the write operation will restart the logout process."
 set UnsavedFiles				"The following PGN files are unsaved:"

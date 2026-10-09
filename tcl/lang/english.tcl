@@ -264,7 +264,7 @@
 ### menu ###############################################################
 ::menu::mc::Theme								"Theme"
 ::menu::mc::ColorScheme						"Color Scheme"
-::menu::mc::CustomStyleMenu				"Scidb's Style Menu"
+::menu::mc::CustomStyleMenu				"Chesswiz's Style Menu"
 ::menu::mc::DefaultStyleMenu				"Default Style Menu"
 ::menu::mc::OrdinaryMonitor				"Ordinary Monitor"
 ::menu::mc::HighQualityMonitor			"High Quality Monitor"
@@ -287,7 +287,7 @@
 ::menu::mc::Language							"&Language"
 ::menu::mc::Toolbars							"&Toolbars"
 ::menu::mc::ShowLog							"Show &Log"
-::menu::mc::AboutScidb						"&About Scidb"
+::menu::mc::AboutChesswiz						"&About Chesswiz"
 ::menu::mc::TipOfTheDay						"Tip of the &Day"
 ::menu::mc::Fullscreen						"&Full-Screen"
 ::menu::mc::LeaveFullscreen				"Leave &Full-Screen"
@@ -330,8 +330,8 @@
 
 # Default Application
 ::menu::mc::Assign							"assign"
-::menu::mc::FailedSettingDefaultApp		"Failed to set Scidb as a default application for %s."
-::menu::mc::SuccessSettingDefaultApp	"Successfully set Scidb as a default application for %s."
+::menu::mc::FailedSettingDefaultApp		"Failed to set Chesswiz as a default application for %s."
+::menu::mc::SuccessSettingDefaultApp	"Successfully set Chesswiz as a default application for %s."
 ::menu::mc::CommandFailed					"Command '%s' failed."
 
 ### load ###############################################################
@@ -439,7 +439,7 @@
 ::tips::mc::CouldNotFindAnyTip	"Could not find any tip."
 ::tips::mc::RepeatAllTips			"Repeat all tips (restart from the beginning)"
 ::tips::mc::NextTip					"Next Tip"
-::tips::mc::FirstTip					"<p>The Tip-of-the-Day information serves to a better insight into the functioning of this application. Furthermore it will give useful hints that will help to know what is possible.</p><p color='darkgreen'><b>Have joy with Scidb!</b></p>"
+::tips::mc::FirstTip					"<p>The Tip-of-the-Day information serves to a better insight into the functioning of this application. Furthermore it will give useful hints that will help to know what is possible.</p><p color='darkgreen'><b>Have joy with Chesswiz!</b></p>"
 
 ::tips::mc::Choice(everytime)					"Show everytime"
 ::tips::mc::Choice(periodically)				"Show periodically"
@@ -485,7 +485,7 @@
 ::application::mc::AbortWriteOperation		"Abort write operation"
 ::application::mc::UpdatesAvailable			"Updates available"
 
-::application::mc::WriteOperationInProgress "Write operation in progress: currently Scidb is modifying/writing database '%s'."
+::application::mc::WriteOperationInProgress "Write operation in progress: currently Chesswiz is modifying/writing database '%s'."
 ::application::mc::LogoutNotPossible		"Logout is currently not possible, the result would be a corrupted database."
 ::application::mc::RestartLogout				"Aborting the write operation will restart the logout process."
 ::application::mc::UnsavedFiles				"The following PGN files are unsaved:"
@@ -611,7 +611,7 @@
 ::application::information::mc::RecentlyUsed					"Recently used"
 ::application::information::mc::RemoveSelectedDatabase	"Remove selected database from history"
 ::application::information::mc::NewsAvailable				"There are updated news available"
-::application::information::mc::NoInternetConnection		"Information: Scidb cannot connect to Internet."
+::application::information::mc::NoInternetConnection		"Information: Chesswiz cannot connect to Internet."
 
 ### application::database ##############################################
 ::application::database::mc::FileOpen							"Open Database"
@@ -2455,6 +2455,7 @@
 ::info::mc::Version					"Version"
 ::info::mc::Distributed				"This program is distributed under the terms of the GNU General Public License."
 ::info::mc::Inspired					"Scidb is inspired by Scid 3.6.1, copyrighted \u00A9 1999-2003 by Shane Hudson."
+::info::mc::BasedOnScidb			"a chess database based on Scidb"
 ::info::mc::SpecialThanks			"Special thanks to %s for his terrific work. His effort is the basis for this application."
 
 ### comment ############################################################

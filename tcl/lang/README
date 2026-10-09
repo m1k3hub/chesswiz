@@ -50,12 +50,12 @@ You have two choices:
 1. Edit the file "tcl/espanol.tcl" ("espanol" is only an example), and later
 install this file with "sudo make install-lang".
 
-2. Edit the file "/usr/local/share/scidb-beta/lang/espanol.tcl", in this way
+2. Edit the file "/usr/local/share/chesswiz/lang/espanol.tcl", in this way
 you don't need to distribute the modification. Please note that editing the file
-"/usr/local/share/scidb-beta/lang/espanol.tcl" requires super-user rights.
+"/usr/local/share/chesswiz/lang/espanol.tcl" requires super-user rights.
 
 If your language does not yet exists in
-"/usr/local/share/scidb-beta/lang/localization.tcl" (utf-8 encoded), just enter
+"/usr/local/share/chesswiz/lang/localization.tcl" (utf-8 encoded), just enter
 a new language entry:
 
 - "Language" is the local name of the language (not the English name).

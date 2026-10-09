@@ -1,7 +1,7 @@
 # ======================================================================
 # test_ai_batch.tcl -- the System One batch helper (tcl/ai-batch.tcl).
 #
-#   xvfb-run -a ./src/tkscidb-beta tests/test_ai_batch.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/test_ai_batch.tcl
 #
 # Covers the contract in SYSTEM_ONE_FEATURES.md §3.3: a concurrency cap,
 # de-duplication by state, resume from the sidecar cache, progress, and a

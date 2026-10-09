@@ -24,8 +24,8 @@ FORCE:
 
 .DEFAULT_GOAL := all
 
-TK_PROGRAM		= tkscidb$(SUFFIX)
-TCL_PROGRAM		= tclscidb$(SUFFIX)
+TK_PROGRAM		= tk$(PROGRAM)$(SUFFIX)
+TCL_PROGRAM		= tcl$(PROGRAM)$(SUFFIX)
 
 INCLUDE			= -I. -Imstl -Iutil -Idb -Idb/sci -Idb/si3 -Idb/cbv -Iutil/universalchardet -Iapp -Itcl -Itk -Isys
 ALL_INCLUDE		= $(INCLUDE) $(TCL_INCLUDE) $(TK_INCLUDE) $(X_INCLUDE) $(ZLIB_INC)

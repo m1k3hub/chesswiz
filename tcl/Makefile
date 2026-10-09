@@ -15,9 +15,9 @@ include ../Makefile.in
 # the per-user directory is named after the installation, not after the program file
 USERDIRNAME ?= .$(notdir $(DATADIR))
 # the binary the launcher script starts, whatever the script is called
-TKPROGRAM ?= tkscidb$(SUFFIX)
+TKPROGRAM ?= tk$(PROGRAM)$(SUFFIX)
 
-SCRIPT = scidb$(SUFFIX)
+SCRIPT = $(PROGRAM)$(SUFFIX)
 ARCH = arch-scidb
 
 # NOTE that the ordering is important!
@@ -729,7 +729,7 @@ $(ARCH): utils/archive.tcl
 	@tmp="$(ARCH).tmp.$$$$"; \
 	trap 'rm -f "$$tmp"' EXIT INT TERM HUP; \
 	cat utils/archive.tcl | sed            \
-		-e 's/%PROGRAM%/tclscidb$(SUFFIX)/g' \
+		-e 's/%PROGRAM%/tcl$(PROGRAM)$(SUFFIX)/g' \
 		-e 's#%SHAREDIR%#$(DATADIR)#g'       \
 		-e 's/%ARCH%/$(ARCH)/g'              \
 		> "$$tmp"; \

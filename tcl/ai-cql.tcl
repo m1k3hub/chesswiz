@@ -621,7 +621,7 @@ proc ::ai::cql::PuzzlePGN {p} {
 	append out "\[White \"[Tag $tags White]\"\]\n"
 	append out "\[Black \"[Tag $tags Black]\"\]\n"
 	append out "\[Result \"*\"\]\n"
-	append out "\[Annotator \"Scidb training set (CQL + engine)\"\]\n"
+	append out "\[Annotator \"Chesswiz training set (CQL + engine)\"\]\n"
 	append out "\[SetUp \"1\"\]\n"
 	append out "\[FEN \"$fen\"\]\n\n"
 

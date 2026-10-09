@@ -264,7 +264,7 @@
 ### menu ###############################################################
 ::menu::mc::Theme								"Thema"
 ::menu::mc::ColorScheme						"Farbschema"
-::menu::mc::CustomStyleMenu				"Scidb's Menüstil"
+::menu::mc::CustomStyleMenu				"Chesswiz's Menüstil"
 ::menu::mc::DefaultStyleMenu				"Standard-Menüstil"
 ::menu::mc::OrdinaryMonitor				"Gewöhnlicher Monitor"
 ::menu::mc::HighQualityMonitor			"Hochwertiger Monitor"
@@ -287,7 +287,7 @@
 ::menu::mc::Language							"&Sprache"
 ::menu::mc::Toolbars							"&Funktionsleisten"
 ::menu::mc::ShowLog							"&Log zeigen"
-::menu::mc::AboutScidb						"&Über Scidb"
+::menu::mc::AboutChesswiz						"&Über Chesswiz"
 ::menu::mc::TipOfTheDay						"&Tip des Tages"
 ::menu::mc::Fullscreen						"&Vollbild"
 ::menu::mc::LeaveFullscreen				"&Vollbild verlassen"
@@ -330,8 +330,8 @@
 
 # Default Application
 ::menu::mc::Assign							"zuordnen"
-::menu::mc::FailedSettingDefaultApp		"Scidb als Standardapplikation für %s zu bestimmen misslang."
-::menu::mc::SuccessSettingDefaultApp	"Scidb wurde erfolgreich als Standardapplikation für %s bestimmt."
+::menu::mc::FailedSettingDefaultApp		"Chesswiz als Standardapplikation für %s zu bestimmen misslang."
+::menu::mc::SuccessSettingDefaultApp	"Chesswiz wurde erfolgreich als Standardapplikation für %s bestimmt."
 ::menu::mc::CommandFailed					"Der Befehl '%s' schlug fehl."
 
 ### load ###############################################################
@@ -440,7 +440,7 @@
 ::tips::mc::CouldNotFindAnyTip	"Es konnte kein Tip gefunden werden."
 ::tips::mc::RepeatAllTips			"Alle Tips wiederholen (erneut von vorne starten)"
 ::tips::mc::NextTip					"Nächster Tip"
-::tips::mc::FirstTip					"<p>Die Tip-des-Tages-Informationen dienen zu einem besseren Verständnis zur Arbeitsweise mit dieser Applikation. Weiterhin werden nützliche Hinweise gegeben, um zu wissen was mit Scidb möglich ist.</p><p color='darkgreen'><b>Viel Freude mit Scidb!</b></p>"
+::tips::mc::FirstTip					"<p>Die Tip-des-Tages-Informationen dienen zu einem besseren Verständnis zur Arbeitsweise mit dieser Applikation. Weiterhin werden nützliche Hinweise gegeben, um zu wissen was mit Chesswiz möglich ist.</p><p color='darkgreen'><b>Viel Freude mit Chesswiz!</b></p>"
 
 ::tips::mc::Choice(everytime)					"Immer anzeigen"
 ::tips::mc::Choice(periodically)				"Periodisch anzeigen"
@@ -486,7 +486,7 @@
 ::application::mc::AbortWriteOperation		"Schreiboperation abbrechen"
 ::application::mc::UpdatesAvailable			"Updates verfügbar"
 
-::application::mc::WriteOperationInProgress "Eine Schreiboperation ist im Fortgang: zur Zeit modfiziert/schreibt Scidb die Datenbank '%s'."
+::application::mc::WriteOperationInProgress "Eine Schreiboperation ist im Fortgang: zur Zeit modfiziert/schreibt Chesswiz die Datenbank '%s'."
 ::application::mc::LogoutNotPossible		"Ein Logout ist jetzt nicht möglich, das Resultat wäre eine korrupte Datenbank."
 ::application::mc::RestartLogout				"Der Abbruch der Schreiboperation wird den Logout-Prozess erneut starten."
 ::application::mc::UnsavedFiles				"Die folgenden PGN-Dateien sind ungesichert:"
@@ -610,7 +610,7 @@
 ::application::information::mc::RecentlyUsed					"Zuletzt geöffnet"
 ::application::information::mc::RemoveSelectedDatabase	"Die selektierte Datenbank aus der Historie entfernen"
 ::application::information::mc::NewsAvailable				"Es sind aktuelle Informationen verfügbar"
-::application::information::mc::NoInternetConnection		"Information: Scidb kann keine Verbindung zum Internet herstellen."
+::application::information::mc::NoInternetConnection		"Information: Chesswiz kann keine Verbindung zum Internet herstellen."
 
 ### application::database ##############################################
 ::application::database::mc::FileOpen							"Datenbank öffnen"

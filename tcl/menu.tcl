@@ -31,7 +31,7 @@ namespace eval mc {
 
 set Theme							"Theme"
 set ColorScheme					"Color Scheme"
-set CustomStyleMenu				"Scidb's Style Menu"
+set CustomStyleMenu				"Chesswiz's Style Menu"
 set DefaultStyleMenu				"Default Style Menu"
 set OrdinaryMonitor				"Ordinary Monitor"
 set HighQualityMonitor			"High Quality Monitor"
@@ -55,7 +55,7 @@ set PGNArchives					"PGN archives"
 set Language						"&Language"
 set Toolbars						"&Toolbars"
 set ShowLog							"&Show Log"
-set AboutScidb						"&About Scidb"
+set AboutChesswiz						"&About Chesswiz"
 set TipOfTheDay					"Tip of the &Day"
 set Fullscreen						"&Full-Screen"
 set LeaveFullscreen				"Leave &Full-Screen"
@@ -117,8 +117,8 @@ set Data								"%s data"
 
 # Default Application
 set Assign							"assign"
-set FailedSettingDefaultApp	"Failed to set Scidb as a default application for %s."
-set SuccessSettingDefaultApp	"Successfully set Scidb as a default application for %s."
+set FailedSettingDefaultApp	"Failed to set Chesswiz as a default application for %s."
+set SuccessSettingDefaultApp	"Successfully set Chesswiz as a default application for %s."
 set CommandFailed					"Command '%s' failed."
 
 # does not need translation

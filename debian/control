@@ -1,4 +1,4 @@
-Source: scidb-beta
+Source: chesswiz
 Section: games
 Priority: optional
 Maintainer: Michael Thomas <thomas.g.mike@gmail.com>
@@ -11,11 +11,15 @@ Build-Depends: debhelper-compat (= 13),
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
 
-Package: scidb-beta
+Package: chesswiz
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, tk8.6, fontconfig, xdg-utils, make
+Provides: scidb-beta
+Replaces: scidb-beta
+Breaks: scidb-beta
 Description: chess database application (beta)
- Scidb is a chess database application inspired by Scid. This build
+ Chesswiz is a chess database application based on Scidb (by Gregor
+ Cramer), itself inspired by Scid. This build
  includes the Stockfish, Reckless and Sjeng engines and the AI assistant.
  .
  Built on the machine that builds the package, for its own CPU.

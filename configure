@@ -128,6 +128,7 @@ array set configure {
     prefix          /usr/local
     exec-prefix     /usr/local
     program-suffix  {}
+    program         {}
     tcl-shell       {}
 }
 set configure(tcl-version) [findBestTclVersion]
@@ -1971,6 +1972,7 @@ proc writeMakefile {success} {
     set option(TCL_VERSION) $configure(tcl-version)
     set option(TCL_SHELL) $configure(tcl-shell)
     set option(SUFFIX) $configure(program-suffix)
+    set option(PROGRAM) $configure(program)
 
     set basedir ""
     if {[info exists configure(destdir)]} {
@@ -1987,7 +1989,7 @@ proc writeMakefile {success} {
         }
         set option([string toupper $name]DIR) [file normalize $basedir$dir]
         if {$name eq "data"} {
-            set tail scidb$configure(program-suffix)
+            set tail $configure(program)$configure(program-suffix)
             set option(SHAREDIR) [file join $option(DATADIR) $tail]
             set option(DATADIR) [file join $dir $tail]
         }
@@ -2066,10 +2068,10 @@ proc writeMakefile {success} {
     if {$success} {
         puts "Makefile.in configured for your system was written."
         puts -nonewline "Now just type \""
-        if {[file readable tcl/tkscidb$configure(program-suffix)]} {
+        if {[file readable src/tk$configure(program)$configure(program-suffix)]} {
             puts -nonewline "make clean; "
         }
-        puts "make\" to compile Scidb."
+        puts "make\" to compile Chesswiz."
     } else {
         puts "Not all settings could be determined!"
         puts "The default Makefile.in was written."
@@ -2127,6 +2129,7 @@ proc usage {rc} {
     puts "  --destdir=DIR              installation directory for packaging"
     puts ""
     puts "Program names:"
+    puts "  --program=NAME             name of the installed programs \[chesswiz\]"
     puts "  --program-suffix=SUFFIX    append SUFFIX to installed program names"
     puts ""
     puts "Tcl/Tk features:"
@@ -2213,12 +2216,13 @@ set environment(OPTIMIZE) ""
 set feature(sse2) no ;# newer compiler versions are buggy
 set feature(symbols) yes
 set feature(assertions) yes
-set configure(program-suffix) "-beta"
+set configure(program-suffix) ""
+set configure(program) "chesswiz"
 
 if {[lsearch $argv -h] >= 0 || [lsearch $argv --help] >= 0} { usage 0 }
 set noCreate [expr {[lsearch $argv -n] >= 0 || [lsearch $argv --no-create] >= 0}]
 
-puts "configure: Makefile configuration program for Scidb"
+puts "configure: Makefile configuration program for Chesswiz"
 
 # Parse command-line arguments:
 foreach arg $argv {

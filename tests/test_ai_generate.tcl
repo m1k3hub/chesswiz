@@ -1,7 +1,7 @@
 # ======================================================================
 # test_ai_generate.tcl -- grounded generation loop.
 #
-#   xvfb-run -a ./src/tkscidb-beta tests/test_ai_generate.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/test_ai_generate.tcl
 #
 # Uses the deterministic `stub` provider by default.  Set SCIDB_AI_LIVE=1 to
 # also exercise a real local Ollama model (slower, non-deterministic).

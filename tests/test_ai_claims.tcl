@@ -1,7 +1,7 @@
 # ======================================================================
 # test_ai_claims.tcl -- the claim checker against grounded facts.
 #
-#   xvfb-run -a ./src/tkscidb-beta tests/test_ai_claims.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/test_ai_claims.tcl
 # ======================================================================
 
 set failures 0

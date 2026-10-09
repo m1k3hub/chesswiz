@@ -77,9 +77,9 @@ tcl-match:
 
 app-tcl: $(TEST_DIR)run_app_tests.tcl $(TEST_DIR)run_app_driver.tcl
 	@echo "Running app-backed Tcl test suite..."
-	@$(MAKE) -C $(ROOT_DIR)/tcl scidb-beta
+	@$(MAKE) -C $(ROOT_DIR)/tcl chesswiz
 	@rm -f $(TEST_DIR)app_test_report.txt
-	@$(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)run_app_tests.tcl -verbose 2>&1 || true
+	@$(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)run_app_tests.tcl -verbose 2>&1 || true
 	@grep -q "STATUS: PASSED" $(TEST_DIR)app_test_report.txt
 
 # ==============================================================================
@@ -88,7 +88,7 @@ app-tcl: $(TEST_DIR)run_app_tests.tcl $(TEST_DIR)run_app_driver.tcl
 
 smoke:
 	@echo "Running headless startup smoke test..."
-	@timeout 30 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)startup_smoke.tcl > /tmp/scidb-smoke.log 2>&1; \
+	@timeout 30 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)startup_smoke.tcl > /tmp/scidb-smoke.log 2>&1; \
 		rc=$$?; cat /tmp/scidb-smoke.log; \
 		if [ $$rc -eq 124 ]; then \
 			echo "STARTUP-SMOKE: FAILED (hung, killed by timeout)"; exit 1; \
@@ -112,129 +112,129 @@ chess-facts:
 # The same facts through the Tcl binding, exercised in the real app shell
 # (needs Xvfb because tcl::init pulls in the Treectrl option machinery).
 ai-facts:
-	@echo "Building tkscidb-beta..."
-	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-facts-build.log 2>&1 || \
-		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-facts-build.log; exit 1; }
-	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_facts.tcl 2>&1 \
+	@echo "Building tkchesswiz..."
+	@$(MAKE) -C $(SRC_DIR) tkchesswiz >/tmp/scidb-ai-facts-build.log 2>&1 || \
+		{ echo "FAIL: tkchesswiz build"; tail -30 /tmp/scidb-ai-facts-build.log; exit 1; }
+	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)test_ai_facts.tcl 2>&1 \
 		| tee /tmp/scidb-ai-facts.log | grep -E "PASS|FAIL|AI-FACTS-FAILURES"
 	@grep -q "AI-FACTS-FAILURES: 0" /tmp/scidb-ai-facts.log
 
 # The claim checker: generated prose vs. grounded facts.
 ai-claims:
-	@echo "Building tkscidb-beta and scidb-beta..."
-	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-claims-build.log 2>&1 || \
-		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-claims-build.log; exit 1; }
+	@echo "Building tkchesswiz and chesswiz..."
+	@$(MAKE) -C $(SRC_DIR) tkchesswiz >/tmp/scidb-ai-claims-build.log 2>&1 || \
+		{ echo "FAIL: tkchesswiz build"; tail -30 /tmp/scidb-ai-claims-build.log; exit 1; }
 	@$(MAKE) -C $(ROOT_DIR)/tcl >/tmp/scidb-ai-claims-tcl.log 2>&1 || \
-		{ echo "FAIL: scidb-beta build"; tail -30 /tmp/scidb-ai-claims-tcl.log; exit 1; }
-	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_claims.tcl 2>&1 \
+		{ echo "FAIL: chesswiz build"; tail -30 /tmp/scidb-ai-claims-tcl.log; exit 1; }
+	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)test_ai_claims.tcl 2>&1 \
 		| tee /tmp/scidb-ai-claims.log | grep -E "PASS|FAIL|AI-CLAIMS-FAILURES"
 	@grep -q "AI-CLAIMS-FAILURES: 0" /tmp/scidb-ai-claims.log
 
 # Engine facts: evaluation and move classification via a UCI engine.
 ai-engine:
-	@echo "Building tkscidb-beta..."
-	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-engine-build.log 2>&1 || \
-		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-engine-build.log; exit 1; }
-	@timeout 240 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_engine.tcl 2>&1 \
+	@echo "Building tkchesswiz..."
+	@$(MAKE) -C $(SRC_DIR) tkchesswiz >/tmp/scidb-ai-engine-build.log 2>&1 || \
+		{ echo "FAIL: tkchesswiz build"; tail -30 /tmp/scidb-ai-engine-build.log; exit 1; }
+	@timeout 240 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)test_ai_engine.tcl 2>&1 \
 		| tee /tmp/scidb-ai-engine.log | grep -E "PASS|FAIL|SKIP|AI-ENGINE-FAILURES"
 	@grep -q "AI-ENGINE-FAILURES: 0" /tmp/scidb-ai-engine.log
 
 # Opening theory: ECO identification for a move line.
 ai-eco:
-	@echo "Building tkscidb-beta..."
-	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-eco-build.log 2>&1 || \
-		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-eco-build.log; exit 1; }
-	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_eco.tcl 2>&1 \
+	@echo "Building tkchesswiz..."
+	@$(MAKE) -C $(SRC_DIR) tkchesswiz >/tmp/scidb-ai-eco-build.log 2>&1 || \
+		{ echo "FAIL: tkchesswiz build"; tail -30 /tmp/scidb-ai-eco-build.log; exit 1; }
+	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)test_ai_eco.tcl 2>&1 \
 		| tee /tmp/scidb-ai-eco.log | grep -E "PASS|FAIL|AI-ECO-FAILURES"
 	@grep -q "AI-ECO-FAILURES: 0" /tmp/scidb-ai-eco.log
 
 # Grounded generation: prompt -> provider -> claim check -> retry (stub provider).
 ai-generate:
-	@echo "Building tkscidb-beta..."
-	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-generate-build.log 2>&1 || \
-		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-generate-build.log; exit 1; }
-	@timeout 200 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_generate.tcl 2>&1 \
+	@echo "Building tkchesswiz..."
+	@$(MAKE) -C $(SRC_DIR) tkchesswiz >/tmp/scidb-ai-generate-build.log 2>&1 || \
+		{ echo "FAIL: tkchesswiz build"; tail -30 /tmp/scidb-ai-generate-build.log; exit 1; }
+	@timeout 200 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)test_ai_generate.tcl 2>&1 \
 		| tee /tmp/scidb-ai-generate.log | grep -E "PASS|FAIL|AI-GENERATE-FAILURES"
 	@grep -q "AI-GENERATE-FAILURES: 0" /tmp/scidb-ai-generate.log
 
 # UI wiring: HTML rendering and the asynchronous generate path.
 ai-ui:
-	@echo "Building tkscidb-beta..."
-	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-ui-build.log 2>&1 || \
-		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-ui-build.log; exit 1; }
-	@timeout 200 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_ui.tcl 2>&1 \
+	@echo "Building tkchesswiz..."
+	@$(MAKE) -C $(SRC_DIR) tkchesswiz >/tmp/scidb-ai-ui-build.log 2>&1 || \
+		{ echo "FAIL: tkchesswiz build"; tail -30 /tmp/scidb-ai-ui-build.log; exit 1; }
+	@timeout 200 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)test_ai_ui.tcl 2>&1 \
 		| tee /tmp/scidb-ai-ui.log | grep -E "PASS|FAIL|AI-UI-FAILURES"
 	@grep -q "AI-UI-FAILURES: 0" /tmp/scidb-ai-ui.log
 
 # Engine-as-tool grounding (model calls Stockfish during generation).
 ai-tools:
-	@echo "Building tkscidb-beta..."
-	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-tools-build.log 2>&1 || \
-		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-tools-build.log; exit 1; }
-	@timeout 250 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_tools.tcl 2>&1 \
+	@echo "Building tkchesswiz..."
+	@$(MAKE) -C $(SRC_DIR) tkchesswiz >/tmp/scidb-ai-tools-build.log 2>&1 || \
+		{ echo "FAIL: tkchesswiz build"; tail -30 /tmp/scidb-ai-tools-build.log; exit 1; }
+	@timeout 250 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)test_ai_tools.tcl 2>&1 \
 		| tee /tmp/scidb-ai-tools.log | grep -E "PASS|FAIL|SKIP|AI-TOOLS-FAILURES"
 	@grep -q "AI-TOOLS-FAILURES: 0" /tmp/scidb-ai-tools.log
 
 # Master-precedent evidence wired into the narration prompt.
 ai-precedent:
-	@echo "Building tkscidb-beta..."
-	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-precedent-build.log 2>&1 || \
-		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-precedent-build.log; exit 1; }
-	@timeout 250 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_precedent.tcl 2>&1 \
+	@echo "Building tkchesswiz..."
+	@$(MAKE) -C $(SRC_DIR) tkchesswiz >/tmp/scidb-ai-precedent-build.log 2>&1 || \
+		{ echo "FAIL: tkchesswiz build"; tail -30 /tmp/scidb-ai-precedent-build.log; exit 1; }
+	@timeout 250 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)test_ai_precedent.tcl 2>&1 \
 		| tee /tmp/scidb-ai-precedent.log | grep -E "PASS|FAIL|SKIP|AI-PRECEDENT-FAILURES"
 	@grep -q "AI-PRECEDENT-FAILURES: 0" /tmp/scidb-ai-precedent.log
 
 # Engine-native anatomy from the custom Stockfish fork (narrate).
 ai-narrate:
-	@echo "Building tkscidb-beta..."
-	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-narrate-build.log 2>&1 || \
-		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-narrate-build.log; exit 1; }
-	@timeout 250 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_narrate.tcl 2>&1 \
+	@echo "Building tkchesswiz..."
+	@$(MAKE) -C $(SRC_DIR) tkchesswiz >/tmp/scidb-ai-narrate-build.log 2>&1 || \
+		{ echo "FAIL: tkchesswiz build"; tail -30 /tmp/scidb-ai-narrate-build.log; exit 1; }
+	@timeout 250 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)test_ai_narrate.tcl 2>&1 \
 		| tee /tmp/scidb-ai-narrate.log | grep -E "PASS|FAIL|SKIP|AI-NARRATE-FAILURES"
 	@grep -q "AI-NARRATE-FAILURES: 0" /tmp/scidb-ai-narrate.log
 
 # The advisory rhetoric/coverage second opinion on generated prose.
 ai-rhetoric:
-	@echo "Building tkscidb-beta..."
-	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-rhetoric-build.log 2>&1 || \
-		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-rhetoric-build.log; exit 1; }
-	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_rhetoric.tcl 2>&1 \
+	@echo "Building tkchesswiz..."
+	@$(MAKE) -C $(SRC_DIR) tkchesswiz >/tmp/scidb-ai-rhetoric-build.log 2>&1 || \
+		{ echo "FAIL: tkchesswiz build"; tail -30 /tmp/scidb-ai-rhetoric-build.log; exit 1; }
+	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)test_ai_rhetoric.tcl 2>&1 \
 		| tee /tmp/scidb-ai-rhetoric.log | grep -E "PASS|FAIL|SKIP|AI-RHETORIC-FAILURES"
 	@grep -q "AI-RHETORIC-FAILURES: 0" /tmp/scidb-ai-rhetoric.log
 
 # The decision / override journal that feeds threshold autotune.
 ai-journal:
-	@echo "Building tkscidb-beta..."
-	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-journal-build.log 2>&1 || \
-		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-journal-build.log; exit 1; }
-	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_journal.tcl 2>&1 \
+	@echo "Building tkchesswiz..."
+	@$(MAKE) -C $(SRC_DIR) tkchesswiz >/tmp/scidb-ai-journal-build.log 2>&1 || \
+		{ echo "FAIL: tkchesswiz build"; tail -30 /tmp/scidb-ai-journal-build.log; exit 1; }
+	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)test_ai_journal.tcl 2>&1 \
 		| tee /tmp/scidb-ai-journal.log | grep -E "PASS|FAIL|AI-JOURNAL-FAILURES"
 	@grep -q "AI-JOURNAL-FAILURES: 0" /tmp/scidb-ai-journal.log
 
 # The calibration math and the per-backend threshold file.
 ai-calibrate:
-	@echo "Building tkscidb-beta..."
-	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-calibrate-build.log 2>&1 || \
-		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-calibrate-build.log; exit 1; }
-	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_calibrate.tcl 2>&1 \
+	@echo "Building tkchesswiz..."
+	@$(MAKE) -C $(SRC_DIR) tkchesswiz >/tmp/scidb-ai-calibrate-build.log 2>&1 || \
+		{ echo "FAIL: tkchesswiz build"; tail -30 /tmp/scidb-ai-calibrate-build.log; exit 1; }
+	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)test_ai_calibrate.tcl 2>&1 \
 		| tee /tmp/scidb-ai-calibrate.log | grep -E "PASS|FAIL|AI-CALIBRATE-FAILURES"
 	@grep -q "AI-CALIBRATE-FAILURES: 0" /tmp/scidb-ai-calibrate.log
 
 # The batch helper: concurrency, dedupe, resume, progress, graceful fallback.
 ai-batch:
-	@echo "Building tkscidb-beta..."
-	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-batch-build.log 2>&1 || \
-		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-batch-build.log; exit 1; }
-	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_batch.tcl 2>&1 \
+	@echo "Building tkchesswiz..."
+	@$(MAKE) -C $(SRC_DIR) tkchesswiz >/tmp/scidb-ai-batch-build.log 2>&1 || \
+		{ echo "FAIL: tkchesswiz build"; tail -30 /tmp/scidb-ai-batch-build.log; exit 1; }
+	@timeout 120 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)test_ai_batch.tcl 2>&1 \
 		| tee /tmp/scidb-ai-batch.log | grep -E "PASS|FAIL|AI-BATCH-FAILURES"
 	@grep -q "AI-BATCH-FAILURES: 0" /tmp/scidb-ai-batch.log
 
 # Annotation exemplars joined to positions by key.
 ai-annotations:
-	@echo "Building tkscidb-beta..."
-	@$(MAKE) -C $(SRC_DIR) tkscidb-beta >/tmp/scidb-ai-annotations-build.log 2>&1 || \
-		{ echo "FAIL: tkscidb-beta build"; tail -30 /tmp/scidb-ai-annotations-build.log; exit 1; }
-	@timeout 250 $(XVFB_RUN) $(SRC_DIR)/tkscidb-beta $(TEST_DIR)test_ai_annotations.tcl 2>&1 \
+	@echo "Building tkchesswiz..."
+	@$(MAKE) -C $(SRC_DIR) tkchesswiz >/tmp/scidb-ai-annotations-build.log 2>&1 || \
+		{ echo "FAIL: tkchesswiz build"; tail -30 /tmp/scidb-ai-annotations-build.log; exit 1; }
+	@timeout 250 $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)test_ai_annotations.tcl 2>&1 \
 		| tee /tmp/scidb-ai-annotations.log | grep -E "PASS|FAIL|SKIP|AI-ANNOTATIONS-FAILURES"
 	@grep -q "AI-ANNOTATIONS-FAILURES: 0" /tmp/scidb-ai-annotations.log
 

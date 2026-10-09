@@ -1,7 +1,7 @@
 # ======================================================================
 # test_ai_engine.tcl -- engine facts (eval + move classification).
 #
-#   xvfb-run -a ./src/tkscidb-beta tests/test_ai_engine.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/test_ai_engine.tcl
 #
 # Requires a UCI engine on PATH (stockfish); skips cleanly if absent.
 # ======================================================================

@@ -8,7 +8,7 @@ proc ::mylog {args} { puts "LOG: $args" }
 # Boot the full application; game slots crash without it.
 set probeDir [file dirname [file normalize [info script]]]
 set argvSave $argv; set argv {}; set argc 0
-source [file join $probeDir .. tcl scidb-beta]
+source [file join $probeDir .. tcl chesswiz]
 set argv $argvSave; set argc [llength $argv]
 
 set probePgn {[Event "Annotation probe"]

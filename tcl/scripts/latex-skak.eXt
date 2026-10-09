@@ -78,8 +78,8 @@
 	\\usepackage[colorlinks=true,urlcolor=blue,linkcolor=blue]\{hyperref\}
 
 	\\DeclareGraphicsExtensions\{.png\}
-	\\graphicspath\{\{/usr/local/share/scidb-beta/pdf/sets/Default/200\}
-						\{/usr/local/share/scidb-beta/pdf/sets/Default/200/pieces/Merida\}\}
+	\\graphicspath\{\{/usr/local/share/chesswiz/pdf/sets/Default/200\}
+						\{/usr/local/share/chesswiz/pdf/sets/Default/200/pieces/Merida\}\}
 
 	\\setlength\{\\columnsep\}\{7mm\}
 	\\setlength\{\\parindent\}\{0pt\}

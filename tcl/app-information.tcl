@@ -33,7 +33,7 @@ namespace eval mc {
 set RecentlyUsed				"Recently used"
 set RemoveSelectedDatabase	"Remove selected database from history"
 set NewsAvailable				"There are updated news available"
-set NoInternetConnection	"Information: Scidb cannot connect to Internet."
+set NoInternetConnection	"Information: Chesswiz cannot connect to Internet."
 
 }
 

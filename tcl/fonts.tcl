@@ -1370,14 +1370,14 @@ proc registerTextFonts {context {styles {normal}}} {
 			if !{[info exists TextFontAlert($fam)]} {
 				dialog::alert \
 					-message "Because of incompatibility problems of the Tk library with the font\
-						service Scidb cannot display this font\
+						service Chesswiz cannot display this font\
 						('[lindex [font actual $text($context:$style)] 1]')." \
 					-detail "See\u00a0https://groups.google.com/forum/#!topic/comp.lang.tcl/XnkRQ5TI-Nc\
 						about this problem." \
-					-title "Scidb" \
+					-title "Chesswiz" \
 					;
 				puts "Because of incompatibility problems of the Tk library with the font\
-						service Scidb cannot display this font\
+						service Chesswiz cannot display this font\
 						('[lindex [font actual $text($context:$style)] 1]').\n\
 						See https://groups.google.com/forum/#!topic/comp.lang.tcl/XnkRQ5TI-Nc\
 						about this problem."
@@ -1449,7 +1449,7 @@ proc registerSymbolFonts {context} {
 		variable NoSymbolFontAlert
 		if {![info exists NoSymbolFontAlert]} {
 			puts "Because of incompatibility problems of the Tk library with the font\
-					service Scidb is not working properly on this system. See\
+					service Chesswiz is not working properly on this system. See\
 					https://groups.google.com/forum/#!topic/comp.lang.tcl/XnkRQ5TI-Nc about\
 					this problem."
 			set NoSymbolFontAlert 1
@@ -1537,10 +1537,10 @@ proc registerFigurineFonts {context} {
 			if {!$NoFigurineAlert} {
 				dialog::alert \
 					-message "Because of incompatibility problems of the Tk library with the font\
-						service Scidb cannot use figurine fonts." \
+						service Chesswiz cannot use figurine fonts." \
 					-detail "See\u00a0https://groups.google.com/forum/#!topic/comp.lang.tcl/XnkRQ5TI-Nc\
 						about this problem." \
-					-title "Scidb" \
+					-title "Chesswiz" \
 					;
 				set NoFigurineAlert 1
 			}

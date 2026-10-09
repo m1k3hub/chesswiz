@@ -1,7 +1,7 @@
 # ======================================================================
 # test_ai_eco.tcl -- ECO opening identification via ::scidb::ai::eco.
 #
-#   xvfb-run -a ./src/tkscidb-beta tests/test_ai_eco.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/test_ai_eco.tcl
 #
 # Loads the repo's ECO table explicitly (the running app loads it at startup).
 # ======================================================================

@@ -9,7 +9,7 @@
 #
 # Usage (unique script path - scidb is single-instance per script):
 #   xvfb-run -a -s "-screen 0 1600x1000x24" \
-#       ./src/tkscidb-beta tests/corpus_html_export.tcl <release-dir>
+#       ./src/tkchesswiz tests/corpus_html_export.tcl <release-dir>
 #
 # Defaults to the local CBM168 fixture set when no argument is given.
 # Exits non-zero if any base fails.

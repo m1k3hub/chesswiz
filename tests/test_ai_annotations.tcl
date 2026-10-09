@@ -1,7 +1,7 @@
 # ======================================================================
 # test_ai_annotations.tcl -- annotation exemplars in the narration prompt.
 #
-#   xvfb-run -a ./src/tkscidb-beta tests/test_ai_annotations.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/test_ai_annotations.tcl
 #
 # Builds a tiny annotation index from a synthetic annotated PGN, then checks
 # that ::ai::annotations::lookup reads it and the prompt carries the evidence.

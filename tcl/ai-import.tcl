@@ -141,7 +141,7 @@ proc ::ai::import::diagnose {codes script} {
 	}
 
 	set question [dict create type choice \
-		instructions "Scidb, a chess database, reported these import messages. What is the most likely cause?" \
+		instructions "Chesswiz, a chess database, reported these import messages. What is the most likely cause?" \
 		criteria $::ai::import::Categories]
 
 	::ai::decide import_diagnosis [join [Codes $codes] " "] $question $script \

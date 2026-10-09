@@ -66,8 +66,30 @@ if {[info exists ::env(SCIDB_USERDIR)] && $::env(SCIDB_USERDIR) ne ""} {
 	set user [file normalize $::env(SCIDB_USERDIR)]
 } else {
 	set user "%USERDIRNAME%"
-	if {[string match ?USERDIRNAME? $user]} { set user .scidb-beta }
+	if {[string match ?USERDIRNAME? $user]} { set user .chesswiz }
 	set user [file join $home $user]
+	# Chesswiz was Scidb: a first start copies the old settings (a copy, so the
+	# old program still works) and points the paths in them at the new place
+	if {![file exists $user]} {
+		foreach legacy {.scidb-beta .scidb} {
+			set legacy [file join $home $legacy]
+			if {![file isdirectory $legacy]} { continue }
+			if {[catch {
+				file copy $legacy $user
+				foreach f [glob -nocomplain -directory [file join $user config] *.dat] {
+					set fd [open $f r]; fconfigure $fd -encoding utf-8; set text [read $fd]; close $fd
+					if {[string first $legacy $text] < 0} { continue }
+					set fd [open $f w]; fconfigure $fd -encoding utf-8
+					puts -nonewline $fd [string map [list $legacy $user] $text]; close $fd
+				}
+				set fd [open [file join $user migrated-from] w]; puts $fd $legacy; close $fd
+			} err]} {
+				puts stderr "Chesswiz: settings in '$legacy' could not be copied: $err"
+				catch { file delete -force $user }
+			}
+			break
+		}
+	}
 }
 set data		[file join $share data]
 set help		[file join $share help]

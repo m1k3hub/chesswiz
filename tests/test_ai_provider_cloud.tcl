@@ -3,7 +3,7 @@
 # tcl/ai-provider.tcl (Anthropic Messages API, OpenAI Chat Completions,
 # and the OpenAI-compatible presets: openai, fireworks, qwen, gemini).
 #
-#   xvfb-run -a src/tkscidb-beta tests/test_ai_provider_cloud.tcl
+#   xvfb-run -a src/tkchesswiz tests/test_ai_provider_cloud.tcl
 #
 # The end-to-end tests talk to a minimal HTTP/1.1 mock server bound to
 # 127.0.0.1 on an ephemeral port; no request ever leaves the machine.
@@ -36,7 +36,7 @@ namespace import tcltest::*
 catch {fconfigure stdout -buffering none}
 
 if {[catch {package require json}]} {
-	puts "SKIP: requires the tcllib 'json' package (run under src/tkscidb-beta)"
+	puts "SKIP: requires the tcllib 'json' package (run under src/tkchesswiz)"
 	puts "AI-PROVIDER-CLOUD-FAILURES: 0"
 	catch {::tcltest::cleanupTests}
 	exit 0

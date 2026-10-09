@@ -4,12 +4,12 @@
 # (position-keyed media, .scm/.smv + board-follow auto-jump).
 #
 # Shows the complete flow: a scratch game whose position equals the
-# [Interactive] Fen of ~/.scidb-beta/media/interactive.scm; landing on
+# [Interactive] Fen of ~/.chesswiz/media/interactive.scm; landing on
 # the position auto-jumps the embedded player to the keyed clip.
 #
 # Run (unique script name! scidb is single-instance per script path):
 #   xvfb-run -a -s "-screen 0 1400x900x24" \
-#       ./src/tkscidb-beta media-console/demo-interactive.tcl
+#       ./src/tkchesswiz media-console/demo-interactive.tcl
 #
 # See SCM_FORMAT_DESIGN.md §1.5 for the manifest grammar.
 # ======================================================================

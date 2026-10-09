@@ -109,7 +109,7 @@ variable Actions {
 	}
 	update_player_data {
 		1 0 "download FIDE's current rating list (about 45 MB) and update the player data"
-		"Fetch FIDE's current rating list from ratings.fide.com and install it as Scidb's player data: names, FIDE IDs, federations, titles, birth years and standard ratings of the players rated 1800 or more (or titled). Player cards and name lookups then use it. Use it when the user asks to update ratings or player data, or when a player's federation, title or rating looks out of date. It downloads from the internet, so the user is asked first."
+		"Fetch FIDE's current rating list from ratings.fide.com and install it as Chesswiz's player data: names, FIDE IDs, federations, titles, birth years and standard ratings of the players rated 1800 or more (or titled). Player cards and name lookups then use it. Use it when the user asks to update ratings or player data, or when a player's federation, title or rating looks out of date. It downloads from the internet, so the user is asked first."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoUpdatePlayerData
 	}
@@ -127,13 +127,13 @@ variable Actions {
 	}
 	compact_database {
 		0 0 "compact the active database"
-		"Compact the active database: removes deleted games and frees their space. Scidb asks the user to confirm and refuses while a game of it has unsaved changes."
+		"Compact the active database: removes deleted games and frees their space. Chesswiz asks the user to confirm and refuses while a game of it has unsaved changes."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoCompactDatabase
 	}
 	convert_database {
 		0 0 "convert the active database"
-		"Copy the active database into a new Scidb (.sci) database, e.g. to turn a PGN, Scid or ChessBase database into Scidb's format. Scidb asks for the format version and the new file name."
+		"Copy the active database into a new Scidb (.sci) database, e.g. to turn a PGN, Scid or ChessBase database into Scidb's format. Chesswiz asks for the format version and the new file name."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoConvertDatabase
 	}
@@ -181,13 +181,13 @@ variable Actions {
 	}
 	database_trend {
 		0 0 "narrate the trends of the active database"
-		"A read-only narrative of the active database's opening trends: total games, games with an ECO code, the overall results, and the most played openings with their scores and names, grounded in Scidb's own counts (::scidb::db::count and ecoStats). The numbers are read by Scidb; the model only phrases them, and the claim checker audits the phrase. Use it for questions about trends, or what is played most."
+		"A read-only narrative of the active database's opening trends: total games, games with an ECO code, the overall results, and the most played openings with their scores and names, grounded in Chesswiz's own counts (::scidb::db::count and ecoStats). The numbers are read by Chesswiz; the model only phrases them, and the claim checker audits the phrase. Use it for questions about trends, or what is played most."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoDatabaseTrend
 	}
 	similar_games {
 		0 0 "find games like game %s"
-		"Find the games of the active database that share the most opening plies with one game and narrate why they are alike. 'number' is the game's number as the game list shows it (the first game is 1); 'limit' bounds how many similar games are reported (default 10). Only games from the same starting position with the same first move qualify, and 'shared' counts the plies of the main line they have in common; transpositions are not found. The games are read by Scidb; the model only phrases the overlap, and the claim checker audits it. Read-only. The result appears in the Report pane."
+		"Find the games of the active database that share the most opening plies with one game and narrate why they are alike. 'number' is the game's number as the game list shows it (the first game is 1); 'limit' bounds how many similar games are reported (default 10). Only games from the same starting position with the same first move qualify, and 'shared' counts the plies of the main line they have in common; transpositions are not found. The games are read by Chesswiz; the model only phrases the overlap, and the claim checker audits it. Read-only. The result appears in the Report pane."
 		{{"type":"object","properties":{"number":{"type":"integer","description":"game number in the active database, as shown in the game list (1 = first game)"},"limit":{"type":"integer","description":"at most this many similar games, default 10"}},"required":["number"]}}
 		::application::assistant::DoSimilarGames
 	}
@@ -223,13 +223,13 @@ variable Actions {
 	}
 	search_games {
 		0 0 "search the games"
-		"Search the active database; nothing changes, the game list included. Returns the number of games found, the first of them, and the criteria as understood. Names may be partial. 'result' is win/draw/loss from the player's side, or 1-0/0-1/1/2-1/2 without a player. 'eco' is a code, class or range as for opening_score (map opening names to ECO yourself). Dates are YYYY, YYYY.MM or YYYY.MM.DD. To show the games in the game list, call show_search afterwards. 'pattern' keeps only games containing a position pattern (Scidb's CQL matcher reads their moves, which takes longer on a large database)."
-		{{"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"},"pattern":{"type":"string","enum":["checkmate","smothered_mate","stalemate","en_passant","underpromotion","double_check","opposite_castling","rook_endgame","pawn_endgame","endgame","isolated_queen_pawn","opposite_bishops","queenless","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","knight_fork","greek_gift","rook_seventh","doubled_rooks_seventh","knight_outpost","hanging_pawns","carlsbad","maroczy_bind","stonewall","queen_vs_rook","wrong_bishop","lucena","epaulette_mate","queen_pawn_mate","skewer","discovered_check","double_bishop_sacrifice","alekhines_gun","minority_attack","hedgehog","protected_passed_pawn","weakened_fianchetto","pawn_fork","legals_mate","blackburne_mate","pin_attacked_by_pawn","double_attack_loose","philidor_position","vancura_position","backward_pawn","bad_bishop","closed_center","trebuchet","boleslavsky_hole","botvinnik_formation","rook_behind_passed_pawn"],"description":"a position pattern the game must contain, found by Scidb's CQL matcher: the game ends in checkmate, a smothered mate, the game ends in stalemate, an en-passant capture, an underpromotion, a double check, kings on opposite wings, a rook ending, a pawn ending, any endgame (at most two pieces a side), an isolated queen's pawn, opposite-coloured bishops, a queenless middlegame, a back-rank mate, a two-bishop (Boden's) mate, Anastasia's mate, an Arabian mate, a knight fork of king and queen or rook, a Greek gift Bxh7+, a rook on the seventh, doubled rooks on the seventh, a knight outpost, hanging pawns, a Carlsbad structure, a Maroczy bind, a Stonewall, queen against rook, a wrong-coloured bishop, a Lucena position (building a bridge), an epaulette mate, a queen-and-pawn (Damiano's, Lolli's) mate, a skewer, a discovered check, a double bishop sacrifice (Lasker-Bauer), Alekhine's gun, a minority attack, a hedgehog, a protected passed pawn, a weakened fianchetto, a pawn fork, Legal's mate, Blackburne's mate, a pinned piece attacked by a pawn, a double attack on loose pieces, the Philidor position (third-rank defence), the Vancura position, a backward pawn, a bad bishop, a closed centre, a trebuchet, the Boleslavsky hole, the Botvinnik formation, a rook behind a passed pawn"}}}}
+		"Search the active database; nothing changes, the game list included. Returns the number of games found, the first of them, and the criteria as understood. Names may be partial. 'result' is win/draw/loss from the player's side, or 1-0/0-1/1/2-1/2 without a player. 'eco' is a code, class or range as for opening_score (map opening names to ECO yourself). Dates are YYYY, YYYY.MM or YYYY.MM.DD. To show the games in the game list, call show_search afterwards. 'pattern' keeps only games containing a position pattern (Chesswiz's CQL matcher reads their moves, which takes longer on a large database)."
+		{{"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"},"pattern":{"type":"string","enum":["checkmate","smothered_mate","stalemate","en_passant","underpromotion","double_check","opposite_castling","rook_endgame","pawn_endgame","endgame","isolated_queen_pawn","opposite_bishops","queenless","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","knight_fork","greek_gift","rook_seventh","doubled_rooks_seventh","knight_outpost","hanging_pawns","carlsbad","maroczy_bind","stonewall","queen_vs_rook","wrong_bishop","lucena","epaulette_mate","queen_pawn_mate","skewer","discovered_check","double_bishop_sacrifice","alekhines_gun","minority_attack","hedgehog","protected_passed_pawn","weakened_fianchetto","pawn_fork","legals_mate","blackburne_mate","pin_attacked_by_pawn","double_attack_loose","philidor_position","vancura_position","backward_pawn","bad_bishop","closed_center","trebuchet","boleslavsky_hole","botvinnik_formation","rook_behind_passed_pawn"],"description":"a position pattern the game must contain, found by Chesswiz's CQL matcher: the game ends in checkmate, a smothered mate, the game ends in stalemate, an en-passant capture, an underpromotion, a double check, kings on opposite wings, a rook ending, a pawn ending, any endgame (at most two pieces a side), an isolated queen's pawn, opposite-coloured bishops, a queenless middlegame, a back-rank mate, a two-bishop (Boden's) mate, Anastasia's mate, an Arabian mate, a knight fork of king and queen or rook, a Greek gift Bxh7+, a rook on the seventh, doubled rooks on the seventh, a knight outpost, hanging pawns, a Carlsbad structure, a Maroczy bind, a Stonewall, queen against rook, a wrong-coloured bishop, a Lucena position (building a bridge), an epaulette mate, a queen-and-pawn (Damiano's, Lolli's) mate, a skewer, a discovered check, a double bishop sacrifice (Lasker-Bauer), Alekhine's gun, a minority attack, a hedgehog, a protected passed pawn, a weakened fianchetto, a pawn fork, Legal's mate, Blackburne's mate, a pinned piece attacked by a pawn, a double attack on loose pieces, the Philidor position (third-rank defence), the Vancura position, a backward pawn, a bad bishop, a closed centre, a trebuchet, the Boleslavsky hole, the Botvinnik formation, a rook behind a passed pawn"}}}}
 		::application::assistant::DoSearchGames
 	}
 	find_positions {
 		0 0 "find positions: %s"
-		"Find positions, patterns or tactics in the active database's games with Scidb's CQL 6.2 engine. When search_games has the pattern (its 'pattern' list: named mates, forks, the Greek gift, the 7th rank, outposts, pawn structures, Lucena and other endgames), use search_games instead: those searches are vetted and fast. You translate the request into a CQL 6.2 script; CQL decides what matches. Put only the positional part in 'cql', starting with cql() (e.g. 'cql() mate', 'cql() flipcolor {move from N} attacks k'); put names, colour, result, dates, event, ECO and Elo in the other fields, which narrow the games before any is read. Call cql_help first for the CQL 6.2 reference and worked examples unless the script is trivial. Step 1: mode sample (the default) returns up to 3 matching positions (the move that led there, the game, the FEN) and shows them to the user as diagrams in the Report pane; tell the user in one sentence what you searched for and ask whether these are what they meant. Step 2, only after the user agrees: call again with mode all and the same arguments; the game list then shows every matching game. If the script does not parse you get the parser's message: fix it and call again. Never describe a position's quality yourself."
+		"Find positions, patterns or tactics in the active database's games with Chesswiz's CQL 6.2 engine. When search_games has the pattern (its 'pattern' list: named mates, forks, the Greek gift, the 7th rank, outposts, pawn structures, Lucena and other endgames), use search_games instead: those searches are vetted and fast. You translate the request into a CQL 6.2 script; CQL decides what matches. Put only the positional part in 'cql', starting with cql() (e.g. 'cql() mate', 'cql() flipcolor {move from N} attacks k'); put names, colour, result, dates, event, ECO and Elo in the other fields, which narrow the games before any is read. Call cql_help first for the CQL 6.2 reference and worked examples unless the script is trivial. Step 1: mode sample (the default) returns up to 3 matching positions (the move that led there, the game, the FEN) and shows them to the user as diagrams in the Report pane; tell the user in one sentence what you searched for and ask whether these are what they meant. Step 2, only after the user agrees: call again with mode all and the same arguments; the game list then shows every matching game. If the script does not parse you get the parser's message: fix it and call again. Never describe a position's quality yourself."
 		{{"type":"object","properties":{"request":{"type":"string","description":"what the user asked for, in their words"},"cql":{"type":"string","description":"the CQL 6.2 script for the positional part, starting with cql()"},"mode":{"type":"string","enum":["sample","all"],"description":"sample (default): up to 3 positions to check with the user; all: every match, shown in the game list"},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"}},"required":["request","cql"]}}
 		::application::assistant::DoFindPositions
 	}
@@ -253,19 +253,19 @@ variable Actions {
 	}
 	save_working_set {
 		1 0 "save the games of the game list as a new database (%s)"
-		"Save the games the game list shows (after show_search, or a find_positions/find_similar run in mode all) as a new Scidb database next to the active one, a working set, and open it. Scidb asks the user for its name; 'name' is the suggestion. Only when the user asks to keep or save the selection."
+		"Save the games the game list shows (after show_search, or a find_positions/find_similar run in mode all) as a new Scidb database next to the active one, a working set, and open it. Chesswiz asks the user for its name; 'name' is the suggestion. Only when the user asks to keep or save the selection."
 		{{"type":"object","properties":{"name":{"type":"string","description":"a suggested name, e.g. 'knight forks'"}}}}
 		::application::assistant::DoSaveWorkingSet
 	}
 	add_to_repertoire {
 		1 0 "add the line on the board to the repertoire %s"
-		"Save the line on the board, up to the current move, into an open repertoire (opening) database; Scidb's save dialog opens for the user to check. 'repertoire' is part of the database's name when several are open. Only when the user asks to add the line."
+		"Save the line on the board, up to the current move, into an open repertoire (opening) database; Chesswiz's save dialog opens for the user to check. 'repertoire' is part of the database's name when several are open. Only when the user asks to add the line."
 		{{"type":"object","properties":{"repertoire":{"type":"string","description":"part of the repertoire database's name"}}}}
 		::application::assistant::DoAddToRepertoire
 	}
 	open_view {
 		0 0 "open the %s"
-		"Open one of Scidb's reports or dialogs for the user (they only show things; nothing changes). kind: player_card (a player's card: ratings, photo, links; needs 'name'), prep_report (a player's preparation report: scores by colour, openings, recent games, gaps, the opponent dossier; needs 'name'), crosstable (an event's tournament table; needs 'event', part of the event name), event_report (the story of an event: standings, leaders and upsets, told from its results; needs 'event'), opening_report (the opening report of the position on the board: statistics, main lines, fashion, plans), opening_prep (opening preparation: the moves played from the board's position), repertoire_report (the active repertoire database's report), duplicates (find duplicate games in the active database)."
+		"Open one of Chesswiz's reports or dialogs for the user (they only show things; nothing changes). kind: player_card (a player's card: ratings, photo, links; needs 'name'), prep_report (a player's preparation report: scores by colour, openings, recent games, gaps, the opponent dossier; needs 'name'), crosstable (an event's tournament table; needs 'event', part of the event name), event_report (the story of an event: standings, leaders and upsets, told from its results; needs 'event'), opening_report (the opening report of the position on the board: statistics, main lines, fashion, plans), opening_prep (opening preparation: the moves played from the board's position), repertoire_report (the active repertoire database's report), duplicates (find duplicate games in the active database)."
 		{{"type":"object","properties":{"kind":{"type":"string","enum":["player_card","prep_report","crosstable","event_report","opening_report","opening_prep","repertoire_report","duplicates"]},"name":{"type":"string","description":"a player, for player_card and prep_report"},"event":{"type":"string","description":"part of an event name, for crosstable"}},"required":["kind"]}}
 		::application::assistant::DoOpenView
 	}
@@ -301,7 +301,7 @@ variable Actions {
 	}
 	list_engines {
 		0 0 "list the chess engines"
-		"The chess engines Scidb can run: the ones bundled with Scidb and the ones the user added. For each: name, version, protocol, variants, rating, threads, hash and line limits, its program and whether that program is there. Also which analysis panes run which engine."
+		"The chess engines Chesswiz can run: the ones bundled with Chesswiz and the ones the user added. For each: name, version, protocol, variants, rating, threads, hash and line limits, its program and whether that program is there. Also which analysis panes run which engine."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoListEngines
 	}
@@ -355,7 +355,7 @@ variable Actions {
 	}
 	add_engine {
 		1 0 "add the engine program %s to the engine list"
-		"Add a UCI or WinBoard engine program, given the full path of its executable. Scidb probes it for its name, options and features; a program already in the list is refreshed."
+		"Add a UCI or WinBoard engine program, given the full path of its executable. Chesswiz probes it for its name, options and features; a program already in the list is refreshed."
 		{{"type":"object","properties":{"path":{"type":"string","description":"absolute path of the engine executable"}},"required":["path"]}}
 		::application::assistant::DoAddEngine
 	}
@@ -421,7 +421,7 @@ variable Actions {
 	}
 	structure_profile {
 		0 0 "profile the position types of %s"
-		"Which kinds of position a player's games reach and how the player scores in them, found exactly by Scidb's CQL matcher in the active database: isolated queen's pawn, opposite-coloured bishops, queenless middlegames, rook and pawn endings, kings on opposite wings. Counts and scores come from the database. 'colour' limits it to the games with that colour; 'games' is how many of the latest games to read (default 200)."
+		"Which kinds of position a player's games reach and how the player scores in them, found exactly by Chesswiz's CQL matcher in the active database: isolated queen's pawn, opposite-coloured bishops, queenless middlegames, rook and pawn endings, kings on opposite wings. Counts and scores come from the database. 'colour' limits it to the games with that colour; 'games' is how many of the latest games to read (default 200)."
 		{{"type":"object","properties":{"player":{"type":"string","description":"the player's name or part of it"},"colour":{"type":"string","enum":["white","black"]},"games":{"type":"integer","description":"how many of the latest games to read, default 200"}},"required":["player"]}}
 		::application::assistant::DoStructureProfile
 	}
@@ -439,7 +439,7 @@ variable Actions {
 	}
 	diagnose_import {
 		0 0 "diagnose import errors"
-		"Turn the codes an import reported (for example 'InvalidMove MissingResultTag') into a likely cause and a fix. A deterministic table covers Scidb's PGN reader codes; a local classifier is asked for codes the table does not know. Read-only; the import log already shows the doctor's rule-only advice."
+		"Turn the codes an import reported (for example 'InvalidMove MissingResultTag') into a likely cause and a fix. A deterministic table covers Chesswiz's PGN reader codes; a local classifier is asked for codes the table does not know. Read-only; the import log already shows the doctor's rule-only advice."
 		{{"type":"object","properties":{"codes":{"type":"array","items":{"type":"string"},"description":"the import error/warning codes"}},"required":["codes"]}}
 		::application::assistant::DoDiagnoseImport
 	}
@@ -457,13 +457,13 @@ variable Actions {
 	}
 	training_set {
 		1 0 "build a training set from the games of the database"
-		"Build puzzles from the active database's games: Scidb's CQL matcher finds positions just before a decisive move: a checkmate (any, or a smothered, back-rank, Boden's, Anastasia's, Arabian, epaulette or queen-and-pawn mate), a Legal's or Blackburne's mate, a double or discovered check, a knight or pawn fork, a skewer, a double attack on loose pieces, a pinned piece attacked by a pawn, a Greek gift or double bishop sacrifice, or an underpromotion; by default a mix of all. The chess engine keeps only those whose solution is its best move and clearly the only good one. The puzzles are written to a PGN file under the user directory, which the user can open as a database to train. 'pattern' limits it to one kind; 'player' to one player's games; 'max' bounds the number of puzzles (default 20). It runs in the background; the Report pane shows the progress and the result."
+		"Build puzzles from the active database's games: Chesswiz's CQL matcher finds positions just before a decisive move: a checkmate (any, or a smothered, back-rank, Boden's, Anastasia's, Arabian, epaulette or queen-and-pawn mate), a Legal's or Blackburne's mate, a double or discovered check, a knight or pawn fork, a skewer, a double attack on loose pieces, a pinned piece attacked by a pawn, a Greek gift or double bishop sacrifice, or an underpromotion; by default a mix of all. The chess engine keeps only those whose solution is its best move and clearly the only good one. The puzzles are written to a PGN file under the user directory, which the user can open as a database to train. 'pattern' limits it to one kind; 'player' to one player's games; 'max' bounds the number of puzzles (default 20). It runs in the background; the Report pane shows the progress and the result."
 		{{"type":"object","properties":{"pattern":{"type":"string","enum":["checkmate","smothered_mate","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","epaulette_mate","queen_pawn_mate","double_check","discovered_check","knight_fork","skewer","greek_gift","double_bishop_sacrifice","underpromotion","legals_mate","blackburne_mate","pawn_fork","pin_attacked_by_pawn","double_attack_loose"]},"player":{"type":"string"},"max":{"type":"integer","description":"at most this many puzzles, default 20"}}}}
 		::application::assistant::DoTrainingSet
 	}
 	check_results {
 		1 0 "check the game results and show the games that contradict them"
-		"Find the games of the active database whose recorded result contradicts how the game ended: a checkmate scored as a draw or as a win for the mated side, a stalemate scored as a win. Scidb's CQL matcher reads the final positions; nothing is changed. The report lists the games, and the game list is filtered to them (clear_search shows all again)."
+		"Find the games of the active database whose recorded result contradicts how the game ended: a checkmate scored as a draw or as a win for the mated side, a stalemate scored as a win. Chesswiz's CQL matcher reads the final positions; nothing is changed. The report lists the games, and the game list is filtered to them (clear_search shows all again)."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoCheckResults
 	}
@@ -487,7 +487,7 @@ variable Actions {
 	}
 	handoff_issue {
 		1 0 "hand issue %s to the coding agent"
-		"Start the configured coding agent on an issue found by triage, to fix it in the Scidb sources. Only when the user asks for it."
+		"Start the configured coding agent on an issue found by triage, to fix it in the Chesswiz sources. Only when the user asks for it."
 		{{"type":"object","properties":{"issue":{"type":"string","description":"the issue id, 8 hex digits"}},"required":["issue"]}}
 		::application::assistant::DoHandoff
 	}
@@ -565,7 +565,7 @@ variable Actions {
 	}
 }
 
-variable System {You are the assistant of Scidb, a chess database application.
+variable System {You are the assistant of Chesswiz, a chess database application.
 You operate the application only through the tools you are given; call a tool
 whenever it does what the user asks. Act first: call the tool right away with
 sensible defaults (a surname is enough for a player, the default engine, a
@@ -584,7 +584,7 @@ tree, the database); offer to ask the tool instead. When a tool reply ends with 
 Database tab > ...)", so the user learns where the feature lives.}
 
 variable DebugSystem {
-You are also a debugging aid for the developer of Scidb (Tcl/Tk front end
+You are also a debugging aid for the developer of Chesswiz (Tcl/Tk front end
 over a C++ core). When asked about a problem, gather facts with the tools
 (app_state, recent_errors, tool_log, ui_state, timers, loop_health, media_state,
 child_processes, hang_dumps, list_procs, proc_source, read_variable) before
@@ -648,7 +648,7 @@ array set Priv {
 	histPos		-1
 	histPrefix	{}
 	nudged		0
-	nudge		"(Scidb: no tool ran in this request, so nothing was done or found. Call the tool that does it now, or say plainly that you cannot.)"
+	nudge		"(Chesswiz: no tool ran in this request, so nothing was done or found. Call the tool that does it now, or say plainly that you cannot.)"
 	debug			0
 	observer		{}
 	reqconfirm	{}
@@ -1780,14 +1780,14 @@ proc ::application::assistant::DoImportGames {files} {
 proc ::application::assistant::DoCompactDatabase {} {
 	lassign [ActiveBase] base variant
 	::application::database::Compact .application $base
-	return "the compaction of [::util::databaseName $base no] was offered to the user, who confirms it in Scidb's dialog"
+	return "the compaction of [::util::databaseName $base no] was offered to the user, who confirms it in Chesswiz's dialog"
 }
 
 
 proc ::application::assistant::DoConvertDatabase {} {
 	lassign [ActiveBase] base variant
 	::application::database::ConvertDatabase .application $base $variant
-	return "the conversion of [::util::databaseName $base no] was started; the user picks the version and the new file in Scidb's dialogs"
+	return "the conversion of [::util::databaseName $base no] was started; the user picks the version and the new file in Chesswiz's dialogs"
 }
 
 
@@ -2739,7 +2739,7 @@ proc ::application::assistant::DoAddToRepertoire {repertoire} {
 	}
 	set base [lindex $bases 0]
 	::application::database::saveCurrentLineToRepertoire .application $base
-	return "the line is being added to [::util::databaseName $base no]; Scidb's save dialog shows it"
+	return "the line is being added to [::util::databaseName $base no]; Chesswiz's save dialog shows it"
 }
 
 
@@ -3274,7 +3274,7 @@ proc ::application::assistant::DoListEngines {} {
 		if {[dict get $e Identifier] ne "" && [dict get $e Identifier] ne [dict get $e Name]} {
 			append line " [dict get $e Identifier],"
 		}
-		append line [expr {[dict get $e UserDefined] ? " added by the user" : " bundled with Scidb"}]
+		append line [expr {[dict get $e UserDefined] ? " added by the user" : " bundled with Chesswiz"}]
 		append line ", [join [dict get $e Protocol] /]"
 		if {[llength [dict get $e Variants]]} { append line ", variants [join [dict get $e Variants] /]" }
 		foreach {key label} {Elo Elo CCRL CCRL} {
@@ -3468,7 +3468,7 @@ proc ::application::assistant::TablebaseDone {token fen http} {
 
 proc ::application::assistant::EngineReady {} {
 	if {![llength [info commands ::ai::engine::evaluate]]} { return "error: the engine module is not available" }
-	if {![::ai::engine::available]} { return "error: Stockfish is not installed (Scidb's stockfish-scidb or stockfish on PATH)" }
+	if {![::ai::engine::available]} { return "error: Stockfish is not installed (Chesswiz's stockfish-scidb or stockfish on PATH)" }
 	return ""
 }
 

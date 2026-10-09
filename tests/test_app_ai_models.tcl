@@ -430,9 +430,9 @@ tcltest::test aimodels-dialog-saves-classifier {picking a classifier in the dial
 } -result {{auto off imajev kev simple-jev plumb jev typesafe} 0 plumb {plumb (plumb-4b-v5 at http://127.0.0.1:8090/v1/systemone)}}
 
 tcltest::test aimodels-help-lists-flags {--help documents the AI flags} -body {
-	set exe [file join [file dirname [info nameofexecutable]] tkscidb-beta]
+	set exe [file join [file dirname [info nameofexecutable]] tkchesswiz]
 	if {![file executable $exe]} { set exe [info nameofexecutable] }
-	set script [file join $::scidb::test::app::testDir .. tcl scidb-beta]
+	set script [file join $::scidb::test::app::testDir .. tcl chesswiz]
 	set out [exec $exe $script --help 2>@1]
 	list [string match "*--ai-model=MODEL*" $out] [string match "*--ai-provider=NAME*" $out] \
 		[string match "*--ai-classifier=NAME*" $out] [string match "*--ai-debug*" $out]

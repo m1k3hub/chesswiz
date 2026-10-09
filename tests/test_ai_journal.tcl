@@ -1,7 +1,7 @@
 # ======================================================================
 # test_ai_journal.tcl -- the decision / override journal (tcl/ai-journal.tcl).
 #
-#   xvfb-run -a ./src/tkscidb-beta tests/test_ai_journal.tcl
+#   xvfb-run -a ./src/tkchesswiz tests/test_ai_journal.tcl
 #
 # Deterministic and file-only: recording, escaping, the forwarding sink,
 # the reader, and the disabled default.

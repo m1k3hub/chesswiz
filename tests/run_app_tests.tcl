@@ -35,7 +35,7 @@ set ::env(SCIDB_AI_CLASSIFIER) off
 # the classifier tests stub a backend that has no calibration, as
 # tests/Makefile does; systemone-qualified tests the gate with this unset
 if {![info exists ::env(SCIDB_AI_UNCALIBRATED)]} { set ::env(SCIDB_AI_UNCALIBRATED) 1 }
-source [file join $::scidb::test::app::testDir .. tcl scidb-beta]
+source [file join $::scidb::test::app::testDir .. tcl chesswiz]
 set argv $argvCopy
 set argc $argcCopy
 

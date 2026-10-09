@@ -1,5 +1,5 @@
 # \
-exec "`dirname "$0"`"/../../src/tkscidb-beta "$0" ${1+"$@"}
+exec "`dirname "$0"`"/../../src/tkchesswiz "$0" ${1+"$@"}
 
 option add *Menu.tearOff 0
 option add *Menu.activeBackground #678db2
@@ -132,7 +132,7 @@ if {$theme == "" && $pieceset == ""} { ::board::setTheme Default }
 
 wm protocol $dlg WM_DELETE_WINDOW [list exit 0]
 wm resizable $dlg no no
-wm title $dlg "Scidb - Board"
+wm title $dlg "Chesswiz - Board"
 wm deiconify $dlg
 
 ::board::diagram::update $board

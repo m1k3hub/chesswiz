@@ -72,7 +72,7 @@ variable BackupOrder {ollama fireworks qwen anthropic gemini openai}
 variable Keys {}
 
 namespace eval mc {
-set CloudNotice		"Scidb's AI features use %s in the cloud."
+set CloudNotice		"Chesswiz's AI features use %s in the cloud."
 set CloudNoticeDetail	"Your requests and the facts the AI reads (game headers, moves, statistics) are sent to %s. No database is uploaded, and voice stays on this machine. To keep everything on this machine, choose a local model in Extras > AI: Choose Model."
 set NoKey				"The AI features need an API key for %s."
 set NoKeyDetail		"Enter the key in Extras > AI: Choose Model, or choose a local model there. Open it now?"

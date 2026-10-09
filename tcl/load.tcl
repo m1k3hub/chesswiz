@@ -114,7 +114,7 @@ proc load {msg type path} {
 			if {$type eq "eco"} {
 				append detail "This error may occur due to a defect executable, caused by a broken linker."
 				append detail "\n\n"
-				append detail "Please change to your installation directory of Scidb and invoke"
+				append detail "Please change to your installation directory of Chesswiz and invoke"
 				append detail "\n   > make check-build\n"
 				append detail "for further details."
 			}

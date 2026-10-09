@@ -163,7 +163,7 @@ tcltest::test triage-handoff {the coding agent is started on the issue file} -se
 	set text [::scidb::test::triage::read $out]
 	list [string match "no coding agent is configured*issues/$id1.md" $none] \
 		[string match "started sh (pid *) on issue $id1*" $started] \
-		[string match "Fix the Scidb issue described in *$id1.md.*Do not commit.\n*" $text] \
+		[string match "Fix the Chesswiz issue described in *$id1.md.*Do not commit.\n*" $text] \
 		[string match "*\n$agentDir\n" $text] \
 		[catch { ::application::triage::handoff ../../x } err] $err
 } -cleanup {

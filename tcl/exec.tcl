@@ -60,7 +60,7 @@ if {[tk windowingsystem] ne "aqua"} {
 
 
 namespace eval scidb {
-	set app		Scidb
+	set app		Chesswiz
 	set version "1.0 BETA"
 	set gitSha "unknown"
 	set commitDate "unknown"

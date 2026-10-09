@@ -380,18 +380,18 @@ tcltest::test audit-setup-nags-negative {a negative NAG in the options is refuse
 
 tcltest::test audit-user-dir-not-from-program-name {the user directory is named after the installation, and search presets live in it} -body {
 	set ns ::application::database::searchPresets
-	list [expr {[info exists ::env(SCIDB_USERDIR)] || [file tail $::scidb::dir::user] eq ".scidb-beta"}] \
+	list [expr {[info exists ::env(SCIDB_USERDIR)] || [file tail $::scidb::dir::user] eq ".chesswiz"}] \
 		[expr {[file dirname [set ${ns}::filename]] eq $::scidb::dir::user}]
 } -result {1 1}
 
 tcltest::test audit-launcher-through-renamed-symlink {the launcher starts its binary when called through a symlink of another name} -setup {
 	set dir [file join [::tcltest::temporaryDirectory] launch-[pid]]
 	file mkdir $dir
-	set script [file normalize [file join [file dirname [info script]] .. tcl scidb-beta]]
+	set script [file normalize [file join [file dirname [info script]] .. tcl chesswiz]]
 	file link -symbolic [file join $dir mychess] $script
 } -body {
 	catch {exec [file join $dir mychess] --help 2>@1} out
-	string match "Scidb version*" $out
+	string match "Chesswiz version*" $out
 } -cleanup {
 	file delete -force $dir
 } -result 1

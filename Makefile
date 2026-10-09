@@ -61,14 +61,14 @@ check-mtime:
 .PHONY: check-build
 check-build:
 	@echo "Running build check..."
-	@if [ ! -x "./src/tkscidb$(SUFFIX)" ]; then \
-		echo "Build check requires src/tkscidb$(SUFFIX); run make first." >&2; \
+	@if [ ! -x "./src/tk$(PROGRAM)$(SUFFIX)" ]; then \
+		echo "Build check requires src/tk$(PROGRAM)$(SUFFIX); run make first." >&2; \
 		exit 1; \
 	fi
 	@if [ -n "$$DISPLAY" ]; then \
-		./src/tkscidb$(SUFFIX) src/check-build.tcl; \
+		./src/tk$(PROGRAM)$(SUFFIX) src/check-build.tcl; \
 	elif command -v xvfb-run >/dev/null 2>&1; then \
-		xvfb-run -a ./src/tkscidb$(SUFFIX) src/check-build.tcl; \
+		xvfb-run -a ./src/tk$(PROGRAM)$(SUFFIX) src/check-build.tcl; \
 	else \
 		echo "Build check requires an X display or xvfb-run for headless execution." >&2; \
 		exit 1; \

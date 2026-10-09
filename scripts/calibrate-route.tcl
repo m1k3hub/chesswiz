@@ -1,7 +1,7 @@
 # ======================================================================
 # Calibrate the System One pre-router against a live backend.
 #
-#   xvfb-run -a src/tkscidb-beta scripts/calibrate-route.tcl \
+#   xvfb-run -a src/tkchesswiz scripts/calibrate-route.tcl \
 #       --backend typesafe ?--out tcl/ai-thresholds.tsv? ?--timeout MS?
 #
 # Asks the backend the router's question for every request of the Ask
@@ -21,7 +21,7 @@ set argvCopy $argv
 set argv {--single-process}; set argc 1
 set ::env(SCIDB_AI_TRIAGE) 0
 set ::env(SCIDB_ERROR_LOG) [file join $root tests tmp-app route-cal-errors.log]
-source [file join $root tcl scidb-beta]
+source [file join $root tcl chesswiz]
 source [file join $root tests assistant_corpus.tcl]
 fconfigure stdout -buffering line
 

@@ -1496,7 +1496,7 @@ proc ::board3d::MakeMove {from to state} {
 		if {[llength [info commands tk_messageBox]]} {
 			catch {
 				tk_messageBox -parent .application -icon warning -type ok \
-					-title "Scidb" \
+					-title "Chesswiz" \
 					-message "The 3D move could not be made:\n\n$err"
 			}
 		}
@@ -2009,7 +2009,7 @@ proc ::board3d::openWebGLViewer {} {
 			set parent [expr {$Priv(window) ne "" && [winfo exists $Priv(window)] ? $Priv(window) : "."}]
 			catch {
 				tk_messageBox -parent $parent -icon warning -type ok \
-					-title "Scidb" \
+					-title "Chesswiz" \
 					-message "The 3D WebGL server could not be started.\n\n$Priv(webgl,error)"
 			}
 		}
@@ -2022,7 +2022,7 @@ proc ::board3d::openWebGLViewer {} {
 			set parent [expr {$Priv(window) ne "" && [winfo exists $Priv(window)] ? $Priv(window) : "."}]
 			catch {
 				tk_messageBox -parent $parent -icon warning -type ok \
-					-title "Scidb" \
+					-title "Chesswiz" \
 					-message "A service on port $WebGLPort did not accept the board update.\n\nIs another program using port $WebGLPort?"
 			}
 		}

@@ -52,6 +52,7 @@ set TheMissingOnes		"the missing ones"
 set Version					"Version"
 set Distributed			"This program is distributed under the terms of the GNU General Public License."
 set Inspired				"Scidb is inspired by Scid 3.6.1, copyrighted \u00A9 1999-2003 by Shane Hudson."
+set BasedOnScidb			"a chess database based on Scidb"
 set SpecialThanks			"Special thanks to %s for his terrific work. His effort is the basis for this application."
 
 } ;# namespace mc
@@ -142,12 +143,8 @@ proc DisplayAbout {w} {
 				<td><img src='Scidb-Logo-128'/></td>
 				<td width='30px'></td>
 				<td align='center'>
-					<font style='font-size: 48pt;'><font color='brown'>S</font>cidb</font><br/>
-					is a
-					<font color='brown'>C</font>hess
-					<font color='brown'>I</font>nformation
-					<font color='brown'>D</font>ata
-					<font color='brown'>B</font>ase
+					<font style='font-size: 48pt;'><font color='brown'>C</font>hesswiz</font><br/>
+					$mc::BasedOnScidb
 				<td>
 			</tr>
 		</table>
