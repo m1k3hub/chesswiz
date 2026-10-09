@@ -2884,7 +2884,8 @@ tk_image(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	if (result != TCL_OK)
 		return TCL_ERROR;
 
-	if (objc < Definitions[index].min_args)
+	// min_args counts the subcommand and its arguments, not the command itself
+	if (objc < Definitions[index].min_args + 1)
 	{
 		Tcl_WrongNumArgs(ti, 1, objv, Definitions[index].usage);
 		return TCL_ERROR;

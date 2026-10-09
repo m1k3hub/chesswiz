@@ -184,7 +184,7 @@ cmdX11(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 	if (result != TCL_OK)
 		return TCL_ERROR;
 
-	if (objc < definitions[index].min_args)
+	if (objc < definitions[index].min_args + 1)	// min_args leaves out the command itself
 	{
 		Tcl_WrongNumArgs(ti, 1, objv, definitions[index].usage);
 		return TCL_ERROR;
@@ -244,7 +244,7 @@ void
 tk::x11_init(Tcl_Interp* ti)
 {
 	::xErrorHandler = XSetErrorHandler(handleXErrorMessage);
-	Tcl_CreateObjCommand(ti, ::Command, cmdX11, 0, 0);
+	tcl::createCommand(ti, ::Command, cmdX11);	// safe call: argument errors are exceptions
 }
 
 #else

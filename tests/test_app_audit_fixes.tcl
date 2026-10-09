@@ -362,4 +362,14 @@ tcltest::test audit-variation-number-out-of-range {a variation number the move d
 	}
 } -match glob -result {{*invalid variation number 3, the move has*} {*invalid variation number 3,*} {*invalid variation number 3,*} {*invalid variation number 3,*} {*invalid variation number 3,*}}
 
+tcltest::test audit-image-missing-argument {an image command missing its last argument is refused, not read past the end} -body {
+	lmap sub {border copy grayscale colorcube} {
+		list [catch {::scidb::tk::image $sub} m] [string match "wrong # args*" $m]
+	}
+} -result {{1 1} {1 1} {1 1} {1 1}}
+
+tcltest::test audit-x11-region-bad-number {a bad coordinate for x11 region is an error, not an abort} -body {
+	list [catch {::scidb::tk::x11 region {} {} nosuchphoto}] [winfo exists .]
+} -result {1 1}
+
 tcltest::cleanupTests
