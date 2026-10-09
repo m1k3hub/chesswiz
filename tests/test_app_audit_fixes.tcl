@@ -347,4 +347,11 @@ tcltest::test audit-nested-error-not-sticky {a nested scidb error caught by a pr
 	foreach f [glob -nocomplain [file rootname $sci].*] { file delete $f }
 } -result {0 OpeningsWhite}
 
+tcltest::test audit-variation-leave-on-mainline {asking for or leaving the variation on the main line answers 0 instead of failing} -body {
+	::scidb::game::moveto [::scidb::game::position startKey]
+	list [catch {::scidb::game::variation current} a] $a \
+		[catch {::scidb::game::variation leave} b] $b \
+		[::scidb::game::position isMainline?]
+} -result {0 0 0 0 1}
+
 tcltest::cleanupTests

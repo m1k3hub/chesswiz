@@ -2434,7 +2434,8 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		case Cmd_Current:
 			if (objc != 2)
 				return usage(::CmdVariation, "current", nullptr, subcommands, args);
-			setResult(game.variationNumber() + 1);
+			// on the main line there is no variation: 0
+			setResult(game.isVariation() ? game.variationNumber() + 1 : 0);
 			break;
 
 		case Cmd_New:
@@ -2499,6 +2500,11 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		case Cmd_Leave:
 			if (objc != 2)
 				return usage(::CmdVariation, "leave", nullptr, subcommands, args);
+			if (!game.isVariation())
+			{
+				setResult(0);	// on the main line already: nothing to leave
+				break;
+			}
 			setResult(game.variationNumber() + 1);
 			game.exitVariation();
 			break;

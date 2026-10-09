@@ -3190,6 +3190,7 @@ proc FirstVariation {{varno 0}} {
 		::scidb::game::position forward
 	} else {
 		set varno [::scidb::game::variation leave]
+		if {$varno == 0} { return }
 		set parts [split $key "."]
 		lset parts end-1 0
 		set key [join $parts "."]
@@ -3207,6 +3208,7 @@ proc PromoteVariation {{varno 0}} {
 		::scidb::game::position forward
 	} else {
 		set varno [::scidb::game::variation leave]
+		if {$varno == 0} { return }
 		set parts [split $key "."]
 		set parts [lreplace $parts end-2 end-1]
 		set key [join $parts "."]
@@ -3222,6 +3224,7 @@ proc RemoveVariation {{varno 0}} {
 		::scidb::game::position forward
 	} else {
 		set varno [::scidb::game::variation leave]
+		if {$varno == 0} { return }
 	}
 
 	::widget::busyOperation { ::scidb::game::variation remove $varno }
@@ -3238,6 +3241,7 @@ proc RemoveVariation {{varno 0}} {
 proc InsertMoves {parent} {
 	set key [::scidb::game::position key]
 	set varno  [::scidb::game::variation leave]
+	if {$varno == 0} { return }
 	::move::doDestructiveCommand \
 		$parent \
 		$mc::Command(variation:insert) \
@@ -3253,6 +3257,7 @@ proc ExchangeMoves {parent} {
 
 	set key [::scidb::game::position key]
 	set varno [::scidb::game::variation leave]
+	if {$varno == 0} { return }
 	set dlg [tk::toplevel $parent.exchange -class Dialog]
 	set top [::ttk::frame $dlg.top]
 	pack $dlg.top
