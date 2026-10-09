@@ -91,6 +91,35 @@ Found: `exec nproc` (ai-engine.tcl:137), `exec kill` (ai-modelfit.tcl:107, app-v
 5. macOS `.app` build; signing/notarization.
 6. Installers, CI matrix, keychain.
 
+## 6. Replace Tcl/Tk? Move C++ to Rust?
+
+Size today: **~260 k lines of Tcl** (UI and app logic), **~490 k lines of C++** (db 177 k, tk extensions 133 k, cql6 59 k, util 47 k, mstl 34 k, tcl bindings 31 k).
+
+### Tcl/Tk — recommendation: do **not** make replacing it a precondition of the port
+- Tk *is* the cross-platform layer: it already runs natively on Windows and macOS. Most port cost is in our X11 extensions (§D3), not in Tk itself.
+- Replacing Tk means rewriting all 260 k Tcl lines plus the 9 kLOC docking manager — a multi-year rewrite with nothing shippable until it's finished, and the fuzz/test corpus (all Tcl-driven) would be lost.
+- If the UI is to be replaced, the target I'd pick is **Tauri (Rust shell + web UI)**:
+  - it fits a Rust core;
+  - the repo already has `web3d/` and a web front-end plan;
+  - it gives native Win/Mac/Linux packaging and signing for free.
+  Migrate it **screen by screen** behind the same core API, not in one go.
+- So: port on Tk first (months), and make the UI replacement a separate project that can start after.
+
+### C++ → Rust — recommendation: **strangler, not rewrite**
+1. Freeze a C ABI around the core (the Tcl bindings in `src/tcl` already outline it: db, game, pos, engine).
+2. Write new code in Rust from now on, linked via `cxx`/C ABI (cargo is already in the build for Reckless).
+3. Port first the modules where Rust buys the most: **untrusted-input parsers**.
+   - These are where the fuzzers find bugs: PGN reader, CBH/CBV/CBM codecs, `.sci` index reader, zip/gzip (use the `zip`/`flate2` crates).
+   - For each module, the existing C++ tests plus the file-mutation fuzzer (`cargo-fuzz` after porting) are the acceptance gate.
+4. Leave for last, or for never:
+   - `mstl` (replaced by std as callers move);
+   - `tk` extensions (gone if the UI moves to Tauri);
+   - `cql6` (port of the upstream C++ — keep tracking upstream).
+5. Ordering with the port: the Rust work does not block the Windows/macOS port; each ported module simply drops a platform `#ifdef` set.
+
+### Combined end state (if you go all the way)
+Rust core (db, formats, engines, search) → C ABI → (a) existing Tk UI during transition, (b) Tauri web UI as the target. Both UIs run against the same core, so users are never left without a working app.
+
 ## 5. Open questions for you
 - Is MSVC a hard requirement (e.g. for a Store listing), or is MinGW acceptable?
 - Apple Developer account for notarization — yes/no?
