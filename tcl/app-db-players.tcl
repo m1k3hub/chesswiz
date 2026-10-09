@@ -50,6 +50,7 @@ set PrepCount "Count"
 set PrepLine "Line"
 set PrepRefresh "Refresh"
 set PrepNoOpenings "No openings found"
+set PrepVariousMoves "various first moves"
 set PrepUnknown "Unknown"
 set PrepRepertoires "Open Repertoires"
 set PrepNoRepertoires "No opening databases are open"
@@ -710,6 +711,8 @@ proc PopulatePrepOpenings {tree rows} {
 
 	foreach row $rows {
 		lassign $row count eco line
+		# A00 and the like have no main line: the games began differently
+		if {$line eq ""} { set line "($mc::PrepVariousMoves)" }
 		$tree insert {} end -values [list $count $eco $line]
 	}
 }
@@ -2113,6 +2116,8 @@ proc PopulateDossierOpenings {tree rows base variant} {
 
 	foreach row $rows {
 		lassign $row count eco line
+		# A00 and the like have no main line: the games began differently
+		if {$line eq ""} { set line "($mc::PrepVariousMoves)" }
 		$tree insert {} end -values [list $count $eco $line]
 	}
 }

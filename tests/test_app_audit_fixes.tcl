@@ -314,6 +314,14 @@ tcltest::test audit-treeview-rows-fit-font {tree rows are as tall as the font ne
 	expr {[ttk::style lookup Treeview -rowheight] >= [font metrics TkDefaultFont -linespace]}
 } -result 1
 
+tcltest::test audit-prep-opening-without-line {an ECO code with no main line says so instead of leaving the cell empty} -body {
+	ttk::treeview .auditPrep -columns {count eco line} -show headings
+	::application::database::player::PopulatePrepOpenings .auditPrep {{28 A00 {}} {26 A45 {1.d4 Nf6}}}
+	set lines [lmap item [.auditPrep children {}] { lindex [.auditPrep item $item -values] 2 }]
+	destroy .auditPrep
+	set lines
+} -result {{(various first moves)} {1.d4 Nf6}}
+
 tcltest::test audit-nested-error-not-sticky {a nested scidb error caught by a progress callback does not fail the outer command} -setup {
 	set sci [file join [::tcltest::temporaryDirectory] nested-[pid].sci]
 	proc auditNop {args} {}
