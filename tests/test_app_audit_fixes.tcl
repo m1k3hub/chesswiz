@@ -354,4 +354,12 @@ tcltest::test audit-variation-leave-on-mainline {asking for or leaving the varia
 		[::scidb::game::position isMainline?]
 } -result {0 0 0 0 1}
 
+tcltest::test audit-variation-number-out-of-range {a variation number the move does not have is refused, not a precondition failure} -body {
+	::scidb::game::moveto [::scidb::game::position startKey]
+	lmap sub {first promote remove insert length} {
+		catch {::scidb::game::variation $sub 3}
+		set ::scidb::intern::errmsg
+	}
+} -match glob -result {{*invalid variation number 3, the move has*} {*invalid variation number 3,*} {*invalid variation number 3,*} {*invalid variation number 3,*} {*invalid variation number 3,*}}
+
 tcltest::cleanupTests

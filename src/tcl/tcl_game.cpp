@@ -1500,12 +1500,14 @@ squareFromObj(int objc, Tcl_Obj* const objv[], unsigned index)
 
 // Variation numbers are 1-based at the Tcl level, but 0-based in db::Game.
 static unsigned
-variationFromObj(int objc, Tcl_Obj* const objv[], unsigned index)
+variationFromObj(Game const& game, int objc, Tcl_Obj* const objv[], unsigned index)
 {
 	unsigned varno = unsignedFromObj(objc, objv, index);
 
 	if (varno == 0)
 		TCL_RAISE("invalid variation number 0, expected a number >= 1");
+	if (varno > game.variationCount())
+		TCL_RAISE("invalid variation number %u, the move has %u", varno, game.variationCount());
 
 	return varno - 1;
 }
@@ -2447,7 +2449,7 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		case Cmd_Remove:
 			if (objc != 3)
 				return usage(::CmdVariation, "remove", nullptr, subcommands, args);
-			game.removeVariation(variationFromObj(objc, objv, 2));
+			game.removeVariation(variationFromObj(game, objc, objv, 2));
 			break;
 
 		case Cmd_Insert:
@@ -2460,7 +2462,7 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				if (equal(stringFromObj(objc, objv, objc - 1), "-force"))
 					flag = Game::TruncateIfNeccessary;
 
-				setResult(game.insertMoves(variationFromObj(objc, objv, 2), flag));
+				setResult(game.insertMoves(variationFromObj(game, objc, objv, 2), flag));
 			}
 			break;
 
@@ -2475,14 +2477,14 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 					flag = Game::TruncateIfNeccessary;
 
 				setResult(game.exchangeMoves(
-					variationFromObj(objc, objv, 2), unsignedFromObj(objc, objv, 3), flag));
+					variationFromObj(game, objc, objv, 2), unsignedFromObj(objc, objv, 3), flag));
 			}
 			break;
 
 		case Cmd_Promote:
 			if (objc != 3)
 				return usage(::CmdVariation, "promote", nullptr, subcommands, args);
-			game.promoteVariation(variationFromObj(objc, objv, 2));
+			game.promoteVariation(variationFromObj(game, objc, objv, 2));
 			break;
 
 		case Cmd_Mainline:
@@ -2494,7 +2496,7 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		case Cmd_First:
 			if (objc != 3)
 				return usage(::CmdVariation, "first", nullptr, subcommands, args);
-			game.firstVariation(variationFromObj(objc, objv, 2));
+			game.firstVariation(variationFromObj(game, objc, objv, 2));
 			break;
 
 		case Cmd_Leave:
@@ -2513,7 +2515,7 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			if (objc <= 2)
 				setResult(game.lengthOfCurrentLine());
 			else
-				setResult(game.countHalfMoves(variationFromObj(objc, objv, 2)));
+				setResult(game.countHalfMoves(variationFromObj(game, objc, objv, 2)));
 			break;
 
 		case Cmd_Fold:
