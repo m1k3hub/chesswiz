@@ -2006,8 +2006,12 @@ Player::insertAlias(mstl::string& name, unsigned region, Player* player)
 			region = country::toRegion(player->federation());
 	}
 
-	TRACE(if (!sys::utf8::Codec::fitsRegion(name, region))
-				return ::printf("'%s' does not fit region %u\n", name.c_str(), region) == 0);
+	// a name need not be written in its federation's script
+	if (!sys::utf8::Codec::fitsRegion(name, region) && (region = sys::utf8::Codec::findRegion(name)) == 0)
+	{
+		TRACE(::printf("'%s' fits no region\n", name.c_str()));
+		return false;
+	}
 
 	mstl::string ascii;
 	sys::utf8::Codec::convertToNonDiacritics(region, name, ascii);
@@ -2037,17 +2041,18 @@ Player::replaceName(mstl::string& name, unsigned region, Player* player)
 
 	mstl::string ascii;
 
-	if (country::isGermanSpeakingCountry(player->federation()))
+	// a name need not be written in its federation's script
+	if (country::isGermanSpeakingCountry(player->federation()) && sys::utf8::Codec::fitsRegion(name, 1))
 	{
-		TRACE(if (!sys::utf8::Codec::fitsRegion(name, 1))
-					return ::printf("'%s' does not fit region %u\n", name.c_str(), 1) == 0);
-
 		sys::utf8::Codec::mapFromGerman(name, ascii);
 	}
 	else
 	{
-		TRACE(if (!sys::utf8::Codec::fitsRegion(name, region))
-					return ::printf("'%s' does not fit region %u\n", name.c_str(), region) == 0);
+		if (!sys::utf8::Codec::fitsRegion(name, region) && (region = sys::utf8::Codec::findRegion(name)) == 0)
+		{
+			TRACE(::printf("'%s' fits no region\n", name.c_str()));
+			return false;
+		}
 
 		sys::utf8::Codec::convertToNonDiacritics(region, name, ascii);
 	}
