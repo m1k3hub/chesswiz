@@ -372,4 +372,10 @@ tcltest::test audit-x11-region-bad-number {a bad coordinate for x11 region is an
 	list [catch {::scidb::tk::x11 region {} {} nosuchphoto}] [winfo exists .]
 } -result {1 1}
 
+tcltest::test audit-setup-nags-negative {a negative NAG in the options is refused, not a bitset overrun} -body {
+	set r [list [catch {::scidb::game::setupNags {-1}} m] $m]
+	::scidb::game::setupNags {}
+	set r
+} -result {1 {::scidb::game::setupNags: invalid NAG '-1'}}
+
 tcltest::cleanupTests

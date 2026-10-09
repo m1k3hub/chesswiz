@@ -3623,7 +3623,7 @@ cmdSetupNags(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	{
 		int nag = asInt(elems[i]);
 
-		if (nag >= ::db::nag::Scidb_Last)
+		if (nag < 0 || nag >= ::db::nag::Scidb_Last)
 			return error(::CmdSetupNags, nullptr, nullptr, "invalid NAG '%s'", asString(elems[i]));
 
 		::db::Annotation::setUnusualNag(nag::ID(nag));
