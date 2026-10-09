@@ -384,4 +384,16 @@ tcltest::test audit-user-dir-not-from-program-name {the user directory is named 
 		[expr {[file dirname [set ${ns}::filename]] eq $::scidb::dir::user}]
 } -result {1 1}
 
+tcltest::test audit-launcher-through-renamed-symlink {the launcher starts its binary when called through a symlink of another name} -setup {
+	set dir [file join [::tcltest::temporaryDirectory] launch-[pid]]
+	file mkdir $dir
+	set script [file normalize [file join [file dirname [info script]] .. tcl scidb-beta]]
+	file link -symbolic [file join $dir mychess] $script
+} -body {
+	catch {exec [file join $dir mychess] --help 2>@1} out
+	string match "Scidb version*" $out
+} -cleanup {
+	file delete -force $dir
+} -result 1
+
 tcltest::cleanupTests

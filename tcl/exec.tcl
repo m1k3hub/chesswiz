@@ -27,8 +27,8 @@
 
 #! The "\" at the end of the comment line below is necessary! It means
 #! that the "exec" line is a comment to Tcl/Tk, but not to /bin/sh.
-#! The next line restarts using tkscidb: \
-exec_dir=`dirname "$0"`; exec_base=tk`basename "$0"`; if [ -x "$exec_dir/$exec_base" ]; then exec "$exec_dir/$exec_base" "$0" ${1+"$@"}; else exec "$exec_dir/../src/$exec_base" "$0" ${1+"$@"}; fi
+#! The next line restarts using the binary named at build time, found beside the real script (symlinks followed): \
+self=$0; while [ -h "$self" ]; do link=`readlink "$self"`; case $link in /*) self=$link;; *) self=`dirname "$self"`/$link;; esac; done; exec_dir=`dirname "$self"`; exec_base="%TKPROGRAM%"; case $exec_base in ?TKPROGRAM?) exec_base=tk`basename "$self"`;; esac; if [ -x "$exec_dir/$exec_base" ]; then exec "$exec_dir/$exec_base" "$self" ${1+"$@"}; else exec "$exec_dir/../src/$exec_base" "$self" ${1+"$@"}; fi
 
 package require Tcl 8.5
 package require Tk  8.5

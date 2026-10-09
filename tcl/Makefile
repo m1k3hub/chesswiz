@@ -14,6 +14,8 @@ include ../Makefile.in
 
 # the per-user directory is named after the installation, not after the program file
 USERDIRNAME ?= .$(notdir $(DATADIR))
+# the binary the launcher script starts, whatever the script is called
+TKPROGRAM ?= tkscidb$(SUFFIX)
 
 SCRIPT = scidb$(SUFFIX)
 ARCH = arch-scidb
@@ -709,6 +711,7 @@ $(SCRIPT): $(SOURCES) Makefile ../Makefile.in
 		-e 's#%SHAREDIR%#$(DATADIR)#g'                      \
 		-e 's#%ENGINESDIR%#$(ENGINESDIR)#g'                 \
 		-e 's#%USERDIRNAME%#$(USERDIRNAME)#g'               \
+		-e 's#%TKPROGRAM%#$(TKPROGRAM)#g'                   \
 		-e '/^##/d'                                         \
 		-e '/^#$$/d'                                        \
 		-e '/^[ 	]*#[ 	]\+/d'                               \
