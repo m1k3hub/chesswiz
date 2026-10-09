@@ -56,6 +56,14 @@ proc ::scidb::test::engines::wait {ms} {
 	vwait ::scidb::test::engines::Tick
 }
 
+# Waits until <cond> holds, at most <ms> milliseconds: a loaded machine is slow
+# to give the engine its first lines.
+proc ::scidb::test::engines::waitUntil {cond {ms 30000}} {
+	for {set t 0} {$t < $ms && ![uplevel 1 [list expr $cond]]} {incr t 250} {
+		::scidb::test::engines::wait 250
+	}
+}
+
 proc ::scidb::test::engines::tool {name {cargs {}}} {
 	return [::application::assistant::runTool $name $cargs]
 }
@@ -137,7 +145,7 @@ tcltest::test engines-analyse {start_engine analyses the board position; engine_
 } -body {
 	set started [::scidb::test::engines::tool start_engine [list engine $name lines 2 threads 1 hash 16]]
 	regexp {analysis pane (\d+)} $started _ pane
-	::scidb::test::engines::wait 3000
+	::scidb::test::engines::waitUntil {[regexp {\n  2\. } [::scidb::test::engines::tool engine_analysis [list pane $pane]]]}
 	set report [::scidb::test::engines::tool engine_analysis [list pane $pane]]
 	set busy [::scidb::test::engines::tool remove_engine [list engine $name]]
 	set stopped [::scidb::test::engines::tool stop_engine]
@@ -270,8 +278,8 @@ tcltest::test analysis-pin {pin is enabled by a best line and saves the game up 
 } -body {
 	set number [::application::analysis::startEngine $name "" {lines 2}]
 	set tree $::application::analysis::NumberToTree($number)
-	::scidb::test::engines::wait 2000
 	set pin [set ::application::analysis::${tree}::Vars(widget:button:pin)]
+	::scidb::test::engines::waitUntil {[::toolbar::childcget $pin -state] eq "normal"}
 	set enabled [::toolbar::childcget $pin -state]
 	lassign [::application::analysis::BestLine $tree] row line
 	set move [::application::analysis::FirstMove [lindex $line 8]]

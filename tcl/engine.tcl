@@ -3281,7 +3281,7 @@ proc ProbeEngine {parent entry protocols} {
 	wm withdraw $wait
 	pack [tk::frame $wait.f -border 2 -relief raised]
 	pack [tk::label $wait.f.text -text "$mc::Probing..."] -padx 10 -pady 10
-	set timeout 1500
+	set timeout 5000
 	if {[string first "/bin/win" [lindex $cmd 0]] >= 0} {
 		pack [tk::message $wait.f.wine -text $mc::PleaseBePatient] -padx 10 -pady 10
 		set timeout 20000
