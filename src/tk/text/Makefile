@@ -48,7 +48,7 @@ all: $(LIB).a
 
 clean:
 	@echo "Clean `pwd`"
-	@rm -f $(LIB).a $(OBJS) Makefile.bak
+	@rm -f $(LIB).a $(LIB)-raw.a $(LIB)-symbols.map $(OBJS) Makefile.bak
 
 depend:
 	makedepend -fMakefile -Y -- $(INCLUDE) -- -w1 $(SRC) 2>/dev/null
@@ -57,14 +57,30 @@ depend:
 		mv Makefile.bak Makefile; \
 	fi
 
+ifeq ($(TARGET_WINDOWS),yes)
+LLVM_NM ?= llvm-nm
+LLVM_OBJCOPY ?= llvm-objcopy
+# Static Tk contains its own text widget. Namespace all definitions in our
+# revised widget so Tk internals keep using the stock implementation.
+$(LIB).a: $(OBJS)
+	rm -f $(LIB)-raw.a
+	$(AR) $(ARFLAGS) $(LIB)-raw.a $(OBJS)
+	$(LLVM_NM) --defined-only --extern-only --format=posix $(LIB)-raw.a | \
+	    awk '$$2 ~ /^[TDBRCW]$$/ && $$1 !~ /^__/ {print $$1, "Chesswiz_" $$1}' | \
+	    sort -u > $(LIB)-symbols.map
+	$(LLVM_OBJCOPY) --redefine-syms=$(LIB)-symbols.map $(LIB)-raw.a $(LIB).a
+	$(RANLIB) $(LIB).a
+else
 $(LIB).a: $(OBJS)
 	@echo "Building $(LIB).a"
 	@$(AR) $(ARFLAGS) $(LIB).a $(OBJS)
 	@$(RANLIB) $(LIB).a
 
+endif
+
 .c.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(CFLAGS:  = )]"
-	@$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) $(ALL_INCLUDE) $<
+	@$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) $(ALL_INCLUDE) $< -o $@
 
 # vi:set ts=3 sw=3:
 # DO NOT DELETE THIS LINE -- make depend depends on it.

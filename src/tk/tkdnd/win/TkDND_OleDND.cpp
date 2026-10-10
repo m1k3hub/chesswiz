@@ -40,7 +40,7 @@
 
 #include "OleDND.h"
 #if defined(HAVE_STRSAFE_H) || !defined(NO_STRSAFE_H)
-#include "Strsafe.h"
+#include <strsafe.h>
 #endif
 
 int TkDND_RegisterDragDropObjCmd(ClientData clientData, Tcl_Interp *interp,

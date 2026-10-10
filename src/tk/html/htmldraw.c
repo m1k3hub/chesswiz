@@ -2497,7 +2497,7 @@ UnionRectWithRegion(const HtmlRectangle *rect, TkRegion srcRegion, TkRegion dest
 }
 
 int
-RectInRegion(TkRegion region, int x, int y, int width, int height)
+HtmlRectInRegion(TkRegion region, int x, int y, int width, int height)
 {
     if (region == None)
         return RectangleOut;
@@ -2506,7 +2506,7 @@ RectInRegion(TkRegion region, int x, int y, int width, int height)
 }
 
 void
-SetRect(HtmlRectangle* r, int x, int y, int width, int height)
+HtmlSetRect(HtmlRectangle* r, int x, int y, int width, int height)
 {
     r->x = x;
     r->y = y;
@@ -2515,7 +2515,7 @@ SetRect(HtmlRectangle* r, int x, int y, int width, int height)
 }
 
 int
-IntersectRect(HtmlRectangle *r3, const HtmlRectangle *r1, const HtmlRectangle *r2)
+HtmlIntersectRect(HtmlRectangle *r3, const HtmlRectangle *r1, const HtmlRectangle *r2)
 {
     HtmlRectangle result;
 
@@ -2529,7 +2529,7 @@ IntersectRect(HtmlRectangle *r3, const HtmlRectangle *r1, const HtmlRectangle *r
 }
 
 int
-SubtractRect(const HtmlRectangle *r1, const HtmlRectangle *r2, HtmlRectangle rest[4])
+HtmlSubtractRect(const HtmlRectangle *r1, const HtmlRectangle *r2, HtmlRectangle rest[4])
 {
     unsigned index = 0;
 
@@ -2597,9 +2597,9 @@ updateBuffer(HtmlTree *pTree, Pixmap pixmap, GC gc, int x, int y, int w, int h, 
         HtmlRectangle rect;
         HtmlRectangle r;
 
-        SetRect(&rect, x, y, w, h);
+        HtmlSetRect(&rect, x, y, w, h);
 
-        if (IntersectRect(&r, &pTree->bufferRect, &rect))
+        if (HtmlIntersectRect(&r, &pTree->bufferRect, &rect))
         {
             XCopyArea(
                 display, pixmap, pTree->buffer, gc,
@@ -4787,7 +4787,9 @@ HtmlWidgetSetViewport(
          * to do something generate an expose event that covers the whole
          * viewport.
          */
+#ifndef _WIN32
         XClearArea(display, Tk_WindowId(win), 0, 0, 0, 0, True);
+#endif
         // sometimes the exposure events are out of sync,
         // so we use HtmlCallbackDamage()
         HtmlCallbackDamage(pTree, 0, 0, 100000, 100000);
@@ -4811,7 +4813,7 @@ HtmlWidgetSetViewport(
             int wd = Tk_Width(win) - ABS(dx);
             int ht = Tk_Height(win) - ABS(dy);
 
-            if (RectInRegion(pTree->bufferRegion, xs, ys, wd, ht))
+            if (HtmlRectInRegion(pTree->bufferRegion, xs, ys, wd, ht))
             {
                 HtmlRectangle rect;
 
@@ -4829,7 +4831,7 @@ HtmlWidgetSetViewport(
                     gc, xs, ys, wd, ht, xd, yd);
 
                 newRegion = TkCreateRegion();
-                SetRect(&rect, xd, yd, wd, ht);
+                HtmlSetRect(&rect, xd, yd, wd, ht);
                 UnionRectWithRegion(&rect, newRegion, newRegion);
 
                 x = dx <= 0 ? 0 : wd;
@@ -4839,7 +4841,9 @@ HtmlWidgetSetViewport(
             }
         }
 
+#ifndef _WIN32
         XClearArea(display, Tk_WindowId(win), 0, 0, width, height, True);
+#endif
         // sometimes the exposure events are out of sync,
         // so we use HtmlCallbackDamage()
         HtmlCallbackDamage(pTree, x, y, width ? width : 100000, height ? height : 100000);

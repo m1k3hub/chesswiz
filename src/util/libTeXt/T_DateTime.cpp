@@ -75,7 +75,7 @@ DateTime::doRegister(Environment& env)
 	GetLocalTime(&lt);
 
 	year	= lt.wYear;
-	mon	= lt.wMon;
+	mon	= lt.wMonth;
 	day	= lt.wDay;
 	hour	= lt.wHour;
 	min	= lt.wMinute;

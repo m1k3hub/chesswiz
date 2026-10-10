@@ -17,6 +17,11 @@
  *          that can be found in COPYING.ZZIP
  */
 
+/* The legacy Win32 mapping stores HANDLE in long (LLP64 truncates it).
+ * Keep the existing buffered read path on Windows. */
+#ifdef _WIN32
+#undef _USE_MMAP
+#endif
 #ifdef _USE_MMAP
 #if    defined ZZIP_HAVE_SYS_MMAN_H
 #include <sys/mman.h>

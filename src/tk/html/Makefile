@@ -73,7 +73,7 @@ $(LIB).a: $(OBJS)
 
 .c.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(CFLAGS:  = )]"
-	@$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) $(ALL_INCLUDE) $<
+	@$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) $(ALL_INCLUDE) $< -o $@
 
 #========================================================================
 
@@ -94,11 +94,12 @@ cssprop.h: cssprop.tcl
 htmltokens.c: htmltokens.h
 cssprop.c: cssprop.h
 
+HOST_CC ?= cc
 LEMON = lemon
 
 $(LEMON): tools/lemon.c
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(LEMON_CFLAGS:  = )]"
-	@$(CC) $(LEMON_CFLAGS) $(EXTRA_CFLAGS) $< -o $(LEMON)
+	@$(HOST_CC) $(LEMON_CFLAGS) $< -o $(LEMON)
 
 cssparse.c: cssparse.lem lemon
 	@ln -sf tools/lempar.c .

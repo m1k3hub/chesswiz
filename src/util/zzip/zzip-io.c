@@ -17,6 +17,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdlib.h>
 #ifdef DEBUG
 #include <stdio.h>
@@ -42,7 +43,14 @@ zzip_filesize(int fd)
   return st.st_size;
 }
 
-#if defined ZZIP_WRAPWRAP
+#ifdef _WIN32
+static zzip_ssize_t zzip_wrap_read(int fd, void* p, zzip_size_t len)
+{
+    /* The CRT read takes a 32-bit count and returns int. */
+    return _zzip_read(fd, p, len > INT_MAX ? INT_MAX : (unsigned int)len);
+}
+#define zzip_wrap_lseek _zzip_lseek
+#elif defined ZZIP_WRAPWRAP
 int		zzip_wrap_read(int fd, void* p, unsigned int len)
 				{ return _zzip_read (fd, p, len); }
 zzip_off_t	zzip_wrap_lseek(int fd, zzip_off_t offset, int whence)

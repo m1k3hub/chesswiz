@@ -80,7 +80,9 @@
 # define __read(_dbf, _buf, _size)	read(_dbf->desc, _buf, _size)
 # define __write(_dbf, _buf, _size)	write(_dbf->desc, _buf, _size)
 # define __lseek(_dbf, _off, _whn)	lseek(_dbf->desc, _off, _whn)
-# if HAVE_FSYNC
+# ifdef _WIN32
+#  define __fsync(_dbf) _commit(_dbf->desc)
+# elif HAVE_FSYNC
 #  define __fsync(_dbf)			fsync(_dbf->desc)
 # else
 #  define __fsync(_dbf)			{ sync(); sync(); }

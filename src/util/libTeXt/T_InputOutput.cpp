@@ -29,6 +29,7 @@
 #include "m_ifstream.h"
 
 #if defined(__WIN32__)
+# include <windows.h>
 #elif defined(__unix__) || defined(__MacOSX__)
 # include <unistd.h>
 #endif
@@ -50,7 +51,7 @@ fileExists(mstl::string const& name)
 {
 #if defined(__WIN32__)
 
-	DWORD fileAttr = GetFileAttributes(name);
+	DWORD fileAttr = GetFileAttributesA(name.c_str());
 	return fileAttr != 0xffffffff;
 
 #elif defined(__unix__) || defined(__MacOSX__)

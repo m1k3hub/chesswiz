@@ -60,7 +60,7 @@ $(LIB).a: $(OBJS)
 
 .cpp.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(CXXFLAGS:  = )]"
-	@$(CXX) -c $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(ALL_INCLUDE) $<
+	@$(CXX) -c $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(ALL_INCLUDE) $< -o $@
 
 # explciit dependency is required
 sys_fam.o: sys_inotify.h

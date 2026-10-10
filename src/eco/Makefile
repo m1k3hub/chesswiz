@@ -118,7 +118,7 @@ $(LIB).a: $(OBJS)
 
 .cpp.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(ALL_CXXFLAGS:  = )]"
-	@$(CXX) -c $(ALL_CXXFLAGS) $(EXTRA_CXXFLAGS) $(EXTRA_DEBUG_FLAGS) $(ALL_INCLUDE) -DSHAREDIR=\"$(DATADIR)\" $<
+	@$(CXX) -c $(ALL_CXXFLAGS) $(EXTRA_CXXFLAGS) $(EXTRA_DEBUG_FLAGS) $(ALL_INCLUDE) -DSHAREDIR=\"$(DATADIR)\" $< -o $@
 
 # vi:set ts=3 sw=3:
 # DO NOT DELETE

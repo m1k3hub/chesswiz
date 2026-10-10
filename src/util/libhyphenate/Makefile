@@ -46,7 +46,7 @@ $(LIB).a: $(OBJS)
 
 .cpp.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(CXXFLAGS:  = )]"
-	@$(CXX) -c $(CXXFLAGS) $(EXTRA_CXXFLAGS) `pkg-config --cflags glib-2.0` $(INCLUDE) $<
+	@$(CXX) -c $(CXXFLAGS) $(EXTRA_CXXFLAGS) `pkg-config --cflags glib-2.0` $(INCLUDE) $< -o $@
 
 # vi:set ts=3 sw=3:
 # DO NOT DELETE

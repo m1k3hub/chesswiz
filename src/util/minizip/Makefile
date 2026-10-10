@@ -45,7 +45,7 @@ $(LIB).a: $(OBJS)
 
 .c.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(CFLAGS:  = )]"
-	@$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) $(INCLUDE) $<
+	@$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) $(INCLUDE) $< -o $@
 
 # vi:set ts=3 sw=3:
 # DO NOT DELETE THIS LINE -- make depend depends on it.

@@ -139,3 +139,23 @@
 
 /* Define to `long int' if <sys/types.h> does not define. */
 /* #undef off_t */
+
+
+// The checked-in configuration describes Unix. Use buffered I/O and the
+// Windows CRT for the Windows target.
+#ifdef _WIN32
+#undef HAVE_MMAP
+#define HAVE_MMAP 0
+#undef HAVE_MSYNC
+#define HAVE_MSYNC 0
+#undef HAVE_STRUCT_STAT_ST_BLKSIZE
+#define HAVE_STRUCT_STAT_ST_BLKSIZE 0
+#undef HAVE_FLOCK
+#define HAVE_FLOCK 0
+#undef HAVE_LOCKF
+#define HAVE_LOCKF 0
+#undef HAVE_FSYNC
+#define HAVE_FSYNC 0
+#undef HAVE_GETPAGESIZE
+#define HAVE_GETPAGESIZE 0
+#endif

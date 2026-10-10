@@ -26,7 +26,7 @@
 #include "hpdf_page_label.h"
 #include "hpdf.h"
 
-#ifdef LIBHPDF_HAVE_FONTCONFIG_H
+#if LIBHPDF_HAVE_FONTCONFIG_H
 # include <fontconfig/fontconfig.h>
 #endif
 

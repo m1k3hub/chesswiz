@@ -7,7 +7,7 @@ STRIP ?= strip
 # scidb: -include scidb_sink.h redirects every stdio/cout call in the library to the
 # per-search message sink (Task 3 §E1): the embedded library never writes to fd 1/2.
 # -DCQL6_LIBRARY_BUILD limits the redirection to the library's own translation units.
-BASE_FLAGS = -std=c++17 -pthread -w -DASSERTIONS -DCQL6_EMBEDDED -DCQL6_LIBRARY_BUILD -fvisibility=hidden -fno-gnu-unique -fPIC -I. -I./orig -include scidb_sink.h
+BASE_FLAGS = -std=c++17 -pthread -w -DASSERTIONS -DCQL6_EMBEDDED -DCQL6_LIBRARY_BUILD -fvisibility=hidden $(if $(TARGET_WINDOWS),,-fno-gnu-unique) -fPIC -I. -I./orig -include scidb_sink.h
 CXXFLAGS ?= $(BASE_FLAGS) -O2
 
 # Test drivers are compiled WITHOUT the sink macros (they are host code and may print),
@@ -52,7 +52,7 @@ all: lib
 
 lib: $(TARGET_LIB)
 
-ifeq ($(SAN),)
+ifeq ($(SAN)$(TARGET_WINDOWS),)
 # release build: merge, hide every symbol but the three API entry points
 $(TARGET_LIB): $(ALL_OBJS)
 	@mkdir -p $(BUILD_DIR)
@@ -67,7 +67,7 @@ $(TARGET_LIB): $(ALL_OBJS)
 	$(AR) rcs $(TARGET_LIB) $(HIDDEN_OBJ)
 DRIVER_OBJS = $(OBJ_DIR)/scidb_lockdown.o $(OBJ_DIR)/scidb_sink.o $(OBJ_DIR)/orig_pgnparse.o $(OBJ_DIR)/orig_game.o $(OBJ_DIR)/orig_position.o $(OBJ_DIR)/orig_mfile.o $(OBJ_DIR)/orig_date.o $(OBJ_DIR)/orig_misc.o $(OBJ_DIR)/orig_movelist.o $(OBJ_DIR)/orig_stralloc.o $(OBJ_DIR)/orig_dstring.o $(OBJ_DIR)/orig_bytebuf.o $(OBJ_DIR)/orig_textbuf.o $(OBJ_DIR)/orig_myassert.o $(OBJ_DIR)/orig_matsig.o $(OBJ_DIR)/orig_index.o $(OBJ_DIR)/orig_stored.o $(OBJ_DIR)/cqlexit.o $(OBJ_DIR)/origChanges.o $(OBJ_DIR)/cqluassert.o $(OBJ_DIR)/cqleassert.o
 else
-# sanitizer build: plain archive, no symbol hiding
+# sanitizer/Windows build: plain archive, no ELF symbol hiding
 $(TARGET_LIB): $(ALL_OBJS)
 	@mkdir -p $(BUILD_DIR)
 	rm -f $(TARGET_LIB)

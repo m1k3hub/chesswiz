@@ -57,7 +57,7 @@ $(LIB).a: $(OBJS)
 
 .cpp.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(CXXFLAGS:  = )]"
-	@$(CXX) -c $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(INCLUDE) $<
+	@$(CXX) -c $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(INCLUDE) $< -o $@
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 

@@ -913,7 +913,7 @@ resizeDoubleBuffer(HtmlTree *pTree, int width, int height)
         TkRegion  region  = None;
         Pixmap    buffer;
 
-        SetRect(&rect, 0, 0, width, height);
+        HtmlSetRect(&rect, 0, 0, width, height);
         buffer = Tk_GetPixmap(display, Tk_WindowId(win), width, height, Tk_Depth(win));
 
         if (buffer != None)
@@ -925,8 +925,8 @@ resizeDoubleBuffer(HtmlTree *pTree, int width, int height)
             if (   pTree->buffer != None
                 && pTree->bufferScrollX == pTree->iScrollX
                 && pTree->bufferScrollY == pTree->iScrollY
-                && IntersectRect(&saveRect, &pTree->bufferRect, &rect)
-                && RectInRegion(pTree->bufferRegion,
+                && HtmlIntersectRect(&saveRect, &pTree->bufferRect, &rect)
+                && HtmlRectInRegion(pTree->bufferRegion,
                                 saveRect.x, saveRect.y,
                                 saveRect.width, saveRect.height) == RectangleIn)
             {
@@ -975,7 +975,7 @@ damageBuffer(HtmlTree *pTree, int x, int y, int w, int h)
         TkRegion region = TkCreateRegion();
         HtmlRectangle rect;
 
-        SetRect(&rect, x, y, w, h);
+        HtmlSetRect(&rect, x, y, w, h);
         UnionRectWithRegion(&rect, region, region);
         TkSubtractRegion(pTree->bufferRegion, region, pTree->bufferRegion);
         TkDestroyRegion(region);
@@ -997,20 +997,20 @@ copyFromBuffer(HtmlTree* pTree, const XExposeEvent *e)
 
         const HtmlRectangle *buf = &pTree->bufferRect;
 
-        SetRect(&exposed, e->x, e->y, e->width, e->height);
-        SetRect(&document, buf->x, buf->y, buf->width, buf->height);
+        HtmlSetRect(&exposed, e->x, e->y, e->width, e->height);
+        HtmlSetRect(&document, buf->x, buf->y, buf->width, buf->height);
 
-        if (IntersectRect(&rect, &exposed, &document))
+        if (HtmlIntersectRect(&rect, &exposed, &document))
         {
             Display *display = Tk_Display(win);
-            int rc = RectInRegion(pTree->bufferRegion, e->x, e->y, e->width, e->height);
+            int rc = HtmlRectInRegion(pTree->bufferRegion, e->x, e->y, e->width, e->height);
 
             if (rc == RectangleIn)
             {
                 GC gc;
                 XGCValues gc_values;
                 HtmlRectangle rest[4];
-                unsigned k = SubtractRect(&exposed, &rect, rest);
+                unsigned k = HtmlSubtractRect(&exposed, &rect, rest);
                 unsigned i;
 
                 memset(&gc_values, 0, sizeof(XGCValues));
@@ -3019,7 +3019,7 @@ newWidget(
     pTree->bufferRegion = None;
     pTree->bufferScrollX = 0;
     pTree->bufferScrollY = 0;
-    SetRect(&pTree->bufferRect, 0, 0, 0, 0);
+    HtmlSetRect(&pTree->bufferRect, 0, 0, 0, 0);
 #endif
 
 #if defined(USE_LATIN_LIGATURES) && defined(HAVE_XFT)

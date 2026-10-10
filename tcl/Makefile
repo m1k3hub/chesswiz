@@ -18,6 +18,11 @@ USERDIRNAME ?= .$(notdir $(DATADIR))
 TKPROGRAM ?= tk$(PROGRAM)$(SUFFIX)
 
 SCRIPT = $(PROGRAM)$(SUFFIX)
+ifeq ($(TARGET_WINDOWS),yes)
+DND_PLATFORM = windows
+else
+DND_PLATFORM = unix
+endif
 ARCH = arch-scidb
 
 # NOTE that the ordering is important!
@@ -60,7 +65,7 @@ SOURCES = \
 	utils/clipboard.tcl \
 	utils/trash.tcl \
 	dnd/tkdnd.tcl \
-	dnd/tkdnd_unix.tcl \
+	dnd/tkdnd_$(DND_PLATFORM).tcl \
 	dialogs/fileselectionbox.tcl \
 	dialogs/help.tcl \
 	dialogs/tip-of-the-day.tcl \

@@ -30,6 +30,11 @@ extern "C"
 }
 
 
+#if defined(_WIN32) && USE_INLINE_TEXT
+extern "C" int Chesswiz_Tk_TextObjCmd(ClientData, Tcl_Interp*, int, Tcl_Obj* const[]);
+#define Tk_TextObjCmd Chesswiz_Tk_TextObjCmd
+#endif
+
 static int
 tkText_Init(Tcl_Interp *interp)
 {

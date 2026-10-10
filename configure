@@ -281,6 +281,8 @@ set MinGCCVersion "3.4"
 set MinClangVersion "3.1"
 
 
+set environment(MEDIA_BACKEND) mpv
+
 foreach name [array names environment] {
     if {[info exists env($name)]} {
         set environment($name) $env($name)
@@ -619,7 +621,7 @@ proc FindTclTkPathsWin {} {
     set package(tcl-inc) [MakeOption -I $configure(tcl-includes)]
     set package(tk-inc) [MakeOption -I $configure(tk-includes)]
     set package(tcl-lib) [MakeOption -L $configure(tcl-libraries)]
-    append package(tcl-lib) " -ltcl86"
+    append package(tcl-lib) " -ltcl86 -ltclstub86"
     set package(tk-lib) [MakeOption -L $configure(tk-libraries)]
     append package(tk-lib) " -ltk86"
 
@@ -1286,7 +1288,7 @@ int main()
 EOF
 
 __CC__ -o testzlib testzlib.c __zlib-inc__ __zlib-lib__
-if [ -f testzlib ]; then
+if [ -f testzlib ] || [ -f testzlib.exe ]; then
     exit 0
 else
     exit 1
@@ -1309,7 +1311,7 @@ int main()
 EOF
 
 __CC__ -o testzlib testzlib.c __zlib-inc__ __zlib-lib__
-if [ -f testzlib ]; then
+if [ -f testzlib ] || [ -f testzlib.exe ]; then
     exit 0
 else
     exit 1
@@ -1538,7 +1540,7 @@ int main()
 EOF
 
 __CC__ -o testexpat testexpat.c __expat-inc__ __expat-lib__
-if [ -f testexpat ]; then
+if [ -f testexpat ] || [ -f testexpat.exe ]; then
     exit 0
 else
     exit 1
@@ -2046,6 +2048,10 @@ proc writeMakefile {success} {
     set option(TCL_VERSION) $configure(tcl-version)
     set option(TCL_SHELL) $configure(tcl-shell)
     set option(SUFFIX) $configure(program-suffix)
+    if {[string match *windows* $configure(target)]} {
+        append option(SUFFIX) .exe
+        set option(TARGET_WINDOWS) yes
+    }
     set option(PROGRAM) $configure(program)
 
     set basedir ""
@@ -2335,7 +2341,9 @@ foreach arg $argv {
             exit 1
         }
         if {[string match --with-* $arg0]} {
-            set package([string range $arg0 7 end]) $arg1
+            set key [string range $arg0 7 end]
+            if {[string match *-inc $key] && ![string match -* $arg1]} { set arg1 [MakeOption -I $arg1] }
+            set package($key) $arg1
         } elseif {[string match --force-bundled-* $arg0]} {
             set force([string range $arg0 16 end]) $arg1
         } elseif {[info exists environment($arg0)]} {
@@ -2369,6 +2377,9 @@ if {$configure(toolchain) eq "zig"} {
         *windows* {
             set tcl_platform(platform) windows
             set tcl_platform(os) Windows
+            # The bundled Windows Tcl/Tk sysroot contains static archives.
+            Append environment(SYS_CFLAGS) -DSTATIC_BUILD
+            Append environment(SYS_CXXFLAGS) -DSTATIC_BUILD
             set tcl_platform(machine) x86_64
             set tcl_platform(wordSize) 8
         }

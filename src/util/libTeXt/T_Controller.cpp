@@ -430,11 +430,11 @@ Controller::processInput(	mstl::string const& inputPath,
 			SYSTEMTIME st, lt;
 
 			if (	fh != INVALID_HANDLE_VALUE
-				&& ::GetFileType(fh) != FILE_TYPE_DISK
+				&& ::GetFileType(fh) == FILE_TYPE_DISK
 				&& ::GetFileInformationByHandle(fh, &info)
-				&& ::FileTimeToSystemTime(info.ftLastWriteTime, &st))
+				&& ::FileTimeToSystemTime(&info.ftLastWriteTime, &st))
 			{
-				if (::SystemTimeToTzSpecificLocalTime(&st, &lt) == 0)
+				if (::SystemTimeToTzSpecificLocalTime(NULL, &st, &lt) == 0)
 					lt = st;
 
 				year	= lt.wYear;

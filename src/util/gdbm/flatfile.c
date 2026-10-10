@@ -20,7 +20,11 @@
 
 /* Include system configuration before all else. */
 # include "autoconf.h"
-# include <arpa/inet.h>
+# ifdef _WIN32
+#  include <winsock2.h>
+# else
+#  include <arpa/inet.h>
+# endif
 
 # include "gdbmdefs.h"
 # include "gdbm.h"

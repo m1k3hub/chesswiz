@@ -545,16 +545,16 @@ struct HtmlRectangle {
 };
 
 extern void
-SetRect(
+HtmlSetRect(
     HtmlRectangle* r,
     int x, int y, int width, int height);
 extern int
-IntersectRect(
+HtmlIntersectRect(
     HtmlRectangle *r3,
     const HtmlRectangle *r1,
     const HtmlRectangle *r2);
 extern int
-SubtractRect(
+HtmlSubtractRect(
     const HtmlRectangle *r1,
     const HtmlRectangle *r2,
     HtmlRectangle rest[4]);
@@ -564,7 +564,7 @@ UnionRectWithRegion(
     struct TkRegion_ *srcRegion,
     struct TkRegion_ *destRegion);
 extern int
-RectInRegion(
+HtmlRectInRegion(
     struct TkRegion_ *region,
     int x, int y, int width, int height);
 

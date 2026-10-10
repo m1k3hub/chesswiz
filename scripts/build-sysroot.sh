@@ -13,7 +13,7 @@
 #                                       multiword "zig cc -target ...")
 #
 # Packages: Tcl 8.6.16, Tk 8.6.16 (win|unix|macosx configure by target),
-#           zlib 1.3.1.  Tarballs are checksum-verified with sha256 pinned
+#           zlib 1.3.1, Expat 2.6.4. Tarballs are checksum-verified with sha256 pinned
 #           below; downloads are cached in build/src/.
 #
 # Currently validated:  x86_64-windows-gnu
@@ -38,21 +38,26 @@ set -euo pipefail
 TCL_VER=8.6.16
 TK_VER=8.6.16
 ZLIB_VER=1.3.1
+EXPAT_VER=2.6.4
 
 TCL_TARBALL=tcl${TCL_VER}-src.tar.gz
 TK_TARBALL=tk${TK_VER}-src.tar.gz
 ZLIB_TARBALL=zlib-${ZLIB_VER}.tar.gz
+EXPAT_TARBALL=expat-${EXPAT_VER}.tar.xz
 
 TCL_URL=https://prdownloads.sourceforge.net/tcl/${TCL_TARBALL}
 TK_URL=https://prdownloads.sourceforge.net/tcl/${TK_TARBALL}
 ZLIB_URL=https://zlib.net/fossils/${ZLIB_TARBALL}
+EXPAT_URL=https://github.com/libexpat/libexpat/releases/download/R_2_6_4/${EXPAT_TARBALL}
 
 TCL_SHA256=91cb8fa61771c63c262efb553059b7c7ad6757afa5857af6265e4b0bdc2a14a5
 TK_SHA256=be9f94d3575d4b3099d84bc3c10de8994df2d7aa405208173c709cc404a7e5fe
 ZLIB_SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
+EXPAT_SHA256=a695629dae047055b37d50a0ff4776d1d45d0a4c842cf4ccee158441f55ff7ee
 
 # Repo root = parent of scripts/; the script may be invoked from anywhere.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-$ROOT/build/zig-cache}"
 SRC_DIR="$ROOT/build/src"
 WRAPPER_DIR="$ROOT/build/bin"
 
@@ -186,6 +191,7 @@ fetch_all() {
     fetch "$TCL_TARBALL"  "$TCL_URL"  "$TCL_SHA256"
     fetch "$TK_TARBALL"   "$TK_URL"   "$TK_SHA256"
     fetch "$ZLIB_TARBALL" "$ZLIB_URL" "$ZLIB_SHA256"
+    fetch "$EXPAT_TARBALL" "$EXPAT_URL" "$EXPAT_SHA256"
 }
 
 # --------------------------------------------------------------------------
@@ -204,6 +210,7 @@ unpacked() {
 # package builders
 
 build_zlib() {
+    if [ -f "$PREFIX/include/zlib.h" ] && [ -f "$PREFIX/lib/libz.a" ]; then log "zlib already installed; skipping"; return; fi
     local srcdir objdir
     srcdir="$(unpacked "$ZLIB_TARBALL" "$BUILD_ROOT/zlib")"
     log "zlib $ZLIB_VER -> $PREFIX (static, in-source build)"
@@ -221,6 +228,7 @@ build_zlib() {
 }
 
 build_tcl() {
+    if [ -f "$PREFIX/include/tclInt.h" ] && [ -f "$PREFIX/lib/libtcl86.a" ] && [ -f "$PREFIX/lib/tcl8.6/init.tcl" ]; then log "Tcl already installed; skipping"; return; fi
     local srcdir objdir
     srcdir="$(unpacked "$TCL_TARBALL" "$BUILD_ROOT/tcl")"
     objdir="$BUILD_ROOT/tcl-obj"
@@ -279,6 +287,7 @@ build_tcl() {
 }
 
 build_tk() {
+    if [ -f "$PREFIX/include/tkWinInt.h" ] && [ -f "$PREFIX/lib/libtk86.a" ] && [ -f "$PREFIX/lib/tk8.6/tk.tcl" ]; then log "Tk already installed; skipping"; return; fi
     local srcdir objdir
     srcdir="$(unpacked "$TK_TARBALL" "$BUILD_ROOT/tk")"
     objdir="$BUILD_ROOT/tk-obj"
@@ -325,6 +334,29 @@ build_tk() {
     log "Tk $TK_VER installed (include/tk.h, tk private headers, X11 emulation headers)"
 }
 
+build_expat() {
+    if [ -f "$PREFIX/include/expat.h" ] && [ -f "$PREFIX/lib/libexpat.a" ]; then
+        log "Expat already installed; skipping"
+        return
+    fi
+    local srcdir objdir
+    srcdir="$(unpacked "$EXPAT_TARBALL" "$BUILD_ROOT/expat")"
+    objdir="$BUILD_ROOT/expat-obj"
+    mkdir -p "$objdir"
+    log "Expat $EXPAT_VER -> $PREFIX (static)"
+    (
+        cd "$objdir"
+        CC=zcc CXX=zcxx AR=zar RANLIB=zranlib "$srcdir/configure" \
+            --prefix="$PREFIX" --build=x86_64-pc-linux-gnu \
+            --host="$HOST_TRIPLE" --disable-shared --enable-static \
+            --without-xmlwf --without-examples --without-tests --without-docbook \
+            > "$LOG_DIR/expat-configure.log" 2>&1
+        make -j"$JOBS" > "$LOG_DIR/expat-make.log" 2>&1
+        make install > "$LOG_DIR/expat-install.log" 2>&1
+    )
+    [ -f "$PREFIX/lib/libexpat.a" ] || die "Expat: library missing after install"
+}
+
 # --------------------------------------------------------------------------
 # manifest
 
@@ -342,6 +374,7 @@ write_manifest() {
         echo "  tcl   $TCL_VER  sha256:$TCL_SHA256  ($TCL_URL)"
         echo "  tk    $TK_VER  sha256:$TK_SHA256  ($TK_URL)"
         echo "  zlib  $ZLIB_VER   sha256:$ZLIB_SHA256  ($ZLIB_URL)"
+        echo "  expat $EXPAT_VER sha256:$EXPAT_SHA256 ($EXPAT_URL)"
         echo
         echo "layout:"
         echo "  include/        public headers (tcl.h, tk.h, zlib.h, X11/*) + flattened private headers"
@@ -367,6 +400,14 @@ main() {
     build_zlib
     build_tcl
     build_tk
+    build_expat
+    # Tk extensions need platform widget defaults, not installed by Tk's
+    # install-private-headers target.
+    if [ "$FLAVOR" = win ]; then
+        local tk_source
+        tk_source="$(find "$BUILD_ROOT/tk" -name tkWinDefault.h -print -quit)"
+        [ -z "$tk_source" ] || cp -f "$tk_source" "$PREFIX/include/"
+    fi
     write_manifest
     log "done: $PREFIX"
 }

@@ -201,7 +201,7 @@ colorize(int channel, int value, double brighten)
 static bool
 determine_color(double x, double y, double& h, double& t)
 {
-	h = (180.0/M_PI)*::atan2(y, x);
+	h = (180.0/3.14159265358979323846)*::atan2(y, x);
 
 	if (h < 0)
 		h += 360.0;

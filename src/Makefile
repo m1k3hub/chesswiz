@@ -64,7 +64,7 @@ TCL_LIBS = \
 CQL6_LIB ?= cql6/build/libcql6.a
 
 cql6/build/libcql6.a: FORCE | recursive
-	$(MAKE) -C cql6 -f Makefile.scidb lib
+	$(MAKE) -C cql6 -f Makefile.scidb lib CXX="$(CXX)" AR="$(AR)" TARGET_WINDOWS="$(TARGET_WINDOWS)"
 
 cql6stub/libcql6stub.a: FORCE
 	$(MAKE) -C cql6stub
@@ -96,13 +96,21 @@ SRC = \
 	tkscidb.cpp \
 	tclscidb.cpp \
 
-ALL_LIBS = $(LIBS) $(TCL_LIBRARY) $(ZZIPLIB_LIB) $(MINIZIP_LIB) $(ZLIB_LIB) $(EXPAT_LIB) $(FAM_LIB) -lpthread -lfontconfig -lpng -lm
+ifeq ($(TARGET_WINDOWS),yes)
+PLATFORM_LIBS = -lws2_32 -lshlwapi -lole32 -loleaut32 -luuid -lcomdlg32 -limm32 -lcomctl32 -lgdi32 -luser32 -lkernel32 -ladvapi32 -lshell32 -lnetapi32 -luserenv
+OPENGL_LIBS =
+else
+PLATFORM_LIBS = -lpthread -lfontconfig -lpng -lm
+OPENGL_LIBS = -lGL -lGLU
+endif
+
+ALL_LIBS = $(LIBS) $(TCL_LIBRARY) $(ZZIPLIB_LIB) $(MINIZIP_LIB) $(ZLIB_LIB) $(EXPAT_LIB) $(FAM_LIB) $(PLATFORM_LIBS)
 MEDIA_BACKEND ?= mpv
 MEDIA_LIBS_mpv = -lmpv
 MEDIA_LIBS_mf  = -lmfplay -lmfplat -lole32 -luser32
 MEDIA_LIBS_avf = -framework AVFoundation -framework CoreMedia -framework QuartzCore -framework AppKit
 
-ALL_TK_LIBS = $(TCL_LIBS) $(TK_LIBS) $(TK_LIBRARY) $(X_LIBRARY) -lGL -lGLU $(MEDIA_LIBS_$(MEDIA_BACKEND))
+ALL_TK_LIBS = $(TCL_LIBS) $(TK_LIBS) $(TK_LIBRARY) $(X_LIBRARY) $(OPENGL_LIBS) $(MEDIA_LIBS_$(MEDIA_BACKEND))
 #ALL_TK_LIBS = $(TCL_LIBS) $(TK_LIBS) -L/usr/local/lib -ltk $(X_LIBRARY)
 
 SUBDIRS = db app mstl sys tcl tk/jpeg tk/svg/agg tk/svg tk/treectrl tk/html tk/text tk/tkdnd tk util util/minizip util/libTeXt util/libharu util/universalchardet util/libhyphenate util/gdbm $(LIB_SUBDIRS)
@@ -478,17 +486,17 @@ benchmark_workflows: benchmark_workflows.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_LIBS)
 
-$(TCL_PROGRAM): tclscidb.o $(TCL_LIBS) $(ZLIB_LIB)
+$(TCL_PROGRAM): tclscidb.o $(TCL_LIBS) $(filter %.a,$(ZLIB_LIB)) ../Makefile.in
 	@echo "Building $(TCL_PROGRAM)"
-	@$(CXX) -o $@ $< $(LDFLAGS) $(TCL_LIBRARY) $(ZLIB_LIB)
+	@$(CXX) -o $@ $< $(LDFLAGS) $(TCL_LIBRARY) $(ZLIB_LIB) $(if $(TARGET_WINDOWS),$(PLATFORM_LIBS))
 
-$(TK_PROGRAM): tkscidb.o $(LIBS) $(TCL_LIBS) $(TK_LIBS)
+$(TK_PROGRAM): tkscidb.o $(LIBS) $(TCL_LIBS) $(TK_LIBS) ../Makefile.in
 	@echo "Building $(TK_PROGRAM)"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_TK_LIBS) $(ALL_LIBS)
 
 .cpp.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(ALL_CXXFLAGS:  = )]"
-	@$(CXX) -c $(ALL_CXXFLAGS) $(EXTRA_CXXFLAGS) $(EXTRA_DEBUG_FLAGS) $(ALL_INCLUDE) -DSHAREDIR=\"$(DATADIR)\" $<
+	@$(CXX) -c $(ALL_CXXFLAGS) $(EXTRA_CXXFLAGS) $(EXTRA_DEBUG_FLAGS) $(ALL_INCLUDE) -DSHAREDIR=\"$(DATADIR)\" $< -o $@
 
 # vi:set ts=3 sw=3:
 # DO NOT DELETE THIS LINE -- make depend depends on it.

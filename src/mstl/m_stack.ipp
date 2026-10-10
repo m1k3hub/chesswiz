@@ -31,13 +31,13 @@ template <typename T>
 inline typename stack<T>::const_iterator stack<T>::begin() const	{ return this->m_start; }
 
 template <typename T>
-inline typename stack<T>::iterator stack<T>::end()						{ return this->m_finish + 1; }
+inline typename stack<T>::iterator stack<T>::end()						{ return this->m_finish; }
 
 template <typename T>
-inline typename stack<T>::const_iterator stack<T>::end() const		{ return this->m_finish + 1; }
+inline typename stack<T>::const_iterator stack<T>::end() const		{ return this->m_finish; }
 
 
-template <typename T> inline stack<T>::stack() : memblock<T>(static_cast<T*>(0) - 1) {}
+template <typename T> inline stack<T>::stack() : memblock<T>() {}
 
 
 template <typename T>
@@ -45,7 +45,7 @@ inline
 stack<T>::stack(size_type n)
 	:memblock<T>(n)
 {
-	this->m_finish = ::mstl::uninitialized_fill_n(this->m_start, n, T()) - 1;
+	this->m_finish = ::mstl::uninitialized_fill_n(this->m_start, n, T());
 }
 
 
@@ -54,7 +54,7 @@ inline
 stack<T>::stack(size_type n, const_reference v)
 	:memblock<T>(n)
 {
-	this->m_finish = ::mstl::uninitialized_fill_n(this->m_start, n, v) - 1;
+	this->m_finish = ::mstl::uninitialized_fill_n(this->m_start, n, v);
 }
 
 
@@ -63,7 +63,7 @@ inline
 stack<T>::stack(stack const& v)
 	:memblock<T>(v.size())
 {
-	this->m_finish = ::mstl::uninitialized_copy(pointer(v.begin()), pointer(v.end()), this->m_start) - 1;
+	this->m_finish = ::mstl::uninitialized_copy(pointer(v.begin()), pointer(v.end()), this->m_start);
 }
 
 
@@ -87,7 +87,7 @@ stack<T>::operator=(stack const& v)
 		reserve(v.size());
 		this->m_finish = ::mstl::uninitialized_copy(	const_pointer(v.begin()),
 																	const_pointer(v.end()),
-																	this->m_start) - 1;
+																	this->m_start);
 	}
 
 	return *this;
@@ -99,7 +99,7 @@ inline
 typename stack<T>::size_type
 stack<T>::size() const
 {
-	return size_type(this->m_finish - this->m_start) + 1;
+	return size_type(this->m_finish - this->m_start);
 }
 
 
@@ -167,7 +167,7 @@ typename stack<T>::reference
 stack<T>::top()
 {
 	M_REQUIRE(!empty());
-	return *this->m_finish;
+	return *(this->m_finish - 1);
 }
 
 
@@ -177,7 +177,7 @@ typename stack<T>::const_reference
 stack<T>::top() const
 {
 	M_REQUIRE(!empty());
-	return *this->m_finish;
+	return *(this->m_finish - 1);
 }
 
 
@@ -187,7 +187,8 @@ void
 stack<T>::push(const_reference value)
 {
 	reserve(size() + 1);
-	::mstl::bits::construct(++this->m_finish, value);
+	::mstl::bits::construct(this->m_finish, value);
+	++this->m_finish;
 }
 
 
@@ -199,7 +200,7 @@ stack<T>::dup()
 	M_REQUIRE(!empty());
 
 	reserve(size() + 1);
-	::mstl::bits::construct(this->m_finish + 1, *this->m_finish);
+	::mstl::bits::construct(this->m_finish, *(this->m_finish - 1));
 	++this->m_finish;
 }
 
@@ -219,7 +220,7 @@ void
 stack<T>::pop()
 {
 	M_REQUIRE(!empty());
-	::mstl::bits::destroy(this->m_finish--);
+	::mstl::bits::destroy(--this->m_finish);
 }
 
 
@@ -232,7 +233,7 @@ stack<T>::reserve(size_type n)
 		return;
 
 	memblock<T> block(memblock<T>::compute_capacity(capacity(), n, 4));
-	block.m_finish = ::mstl::uninitialized_move(this->m_start, this->m_finish + 1, block.m_start) - 1;
+	block.m_finish = ::mstl::uninitialized_move(this->m_start, this->m_finish, block.m_start);
 	block.swap(*this);
 }
 
@@ -242,8 +243,8 @@ inline
 void
 stack<T>::clear()
 {
-	::mstl::bits::destroy(this->m_start, this->m_finish + 1);
-	this->m_finish = this->m_start - 1;
+	::mstl::bits::destroy(this->m_start, this->m_finish);
+	this->m_finish = this->m_start;
 }
 
 

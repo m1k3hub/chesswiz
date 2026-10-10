@@ -20,7 +20,9 @@ DEFINES	= -DHPDF_NOPNGLIB
 ALL_INCLUDE = $(INCLUDE) $(ZLIB_INC)
 
 ifdef HAVE_XFT
+ifneq ($(TARGET_WINDOWS),yes)
 DEFINES += -DLIBHPDF_HAVE_FONTCONFIG_H=1
+endif
 endif
 
 CFLAGS	+= $(OPTIMIZE) $(C_DEBUG) $(SYS_CFLAGS) $(DEFINES)
@@ -108,7 +110,7 @@ $(LIB).a: $(OBJS)
 
 .c.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(CFLAGS:  = )]"
-	@$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) $(ALL_INCLUDE) $<
+	@$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) $(ALL_INCLUDE) $< -o $@
 
 # vi:set ts=3 sw=3:
 # DO NOT DELETE THIS LINE -- make depend depends on it.

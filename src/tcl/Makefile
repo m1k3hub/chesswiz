@@ -83,11 +83,11 @@ $(LIB).a: $(OBJS)
 
 .cpp.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(CXXFLAGS:  = )]"
-	@$(CXX) -c $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(ALL_INCLUDE) $<
+	@$(CXX) -c $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(ALL_INCLUDE) $< -o $@
 
 .mm.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(CXXFLAGS:  = )]"
-	@$(CXX) -c -x objective-c++ -fno-objc-arc $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(ALL_INCLUDE) $<
+	@$(CXX) -c -x objective-c++ -fno-objc-arc $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(ALL_INCLUDE) $< -o $@
 
 tcl_misc.o: ../../Makefile.version .build_info
 tcl_misc.o: EXTRA_CXXFLAGS += $(SCIDB_BUILD_FLAGS)

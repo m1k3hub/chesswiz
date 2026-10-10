@@ -297,7 +297,7 @@
   #define explicit
 #endif
 
-#ifndef HAVE_CPP_TYPENAME
+#if !defined(HAVE_CPP_TYPENAME) && !defined(_WIN32)
   #define typename
 #endif
 
