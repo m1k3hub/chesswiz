@@ -499,7 +499,7 @@ proc PieceSetChanged {} {
 	variable params
 	variable board_PieceSet
 
-	set pieceSet [lindex $board_PieceSet [lsearch -exact -index 0 $board_PieceSet $style(piece-set)]]
+	set pieceSet [::board::pieceset::lookup $style(piece-set)]
 	set params(stroke) -1
 	set params(strokew) -1
 	set params(strokeb) -1

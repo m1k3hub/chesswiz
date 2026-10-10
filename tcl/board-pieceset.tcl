@@ -40,6 +40,22 @@ variable RegExpBBox				{scidb:bbox=\"([+-]?[0-9]*[.]?[0-9]+),([+-]?[0-9]*[.]?[0-
 variable RegExpPieceScale		{scidb:scale=\"([0-9]*[.]?[0-9]+)\"}
 variable RegExpTranslation		{scidb:translate=\"([+-]?[0-9]*[.]?[0-9]+),([+-]?[0-9]*[.]?[0-9]+)\"}
 
+# Piece sets removed for licence reasons, and the set that takes their place.
+array set Replaced { Alpha Chessnut Berlin Chessnut Cheq Chessnut Chess7 Merida }
+
+# Returns the definition of the named piece set; a removed or unknown set
+# falls back to its replacement (or Merida) so that old settings keep working.
+proc lookup {name} {
+	variable Replaced
+
+	set i [lsearch -exact -index 0 $::board_PieceSet $name]
+	if {$i < 0 && [info exists Replaced($name)]} {
+		set i [lsearch -exact -index 0 $::board_PieceSet $Replaced($name)]
+	}
+	if {$i < 0} { set i [lsearch -exact -index 0 $::board_PieceSet Merida] }
+	return [lindex $::board_PieceSet $i]
+}
+
 array set PieceScale { k 1 q 1 r 1 b 1 n 1 p 1 }
 array set PieceMoveX { k 0 q 0 r 0 b 0 n 0 p 0 }
 array set PieceMoveY { k 0 q 0 r 0 b 0 n 0 p 0 }
@@ -58,7 +74,7 @@ proc isOutline {{fontName ""}} {
 	variable [namespace parent]::theme::style
 
 	if {[llength $fontName] == 0} { set fontName $style(piece-set) }
-	set pieceSet [lindex $::board_PieceSet [lsearch -exact -index 0 $::board_PieceSet $fontName]]
+	set pieceSet [lookup $fontName]
 	return [expr {[lindex $pieceSet 1] eq "truetype"}]
 }
 
@@ -150,7 +166,7 @@ proc makePieces {size {pieces all}} {
 	set texture [list $style(color,w,texture) $style(color,b,texture)]
 	set contour [list $style(color,w,contour) $style(color,b,contour)]
 	set gradients [list $grad(w) $grad(b)]
-	set pieceSet [lindex $::board_PieceSet [lsearch -exact -index 0 $::board_PieceSet $pieceSet]]
+	set pieceSet [lookup $pieceSet]
 
 	MakePieces               \
 		{}                    \
@@ -202,7 +218,7 @@ proc MakeFigurines {size dontUseContour} {
 	variable Figurines
 
 	set pieceList {wk bk wq wr wb wn wp bq br bb bn bp}
-	set pieceSet [lindex $::board_PieceSet [lsearch -exact -index 0 $::board_PieceSet $Figurines]]
+	set pieceSet [lookup $Figurines]
 	set prefix figurine,$dontUseContour
 	if {$dontUseContour} { set contour 0.0 } else { set contour 1.0 }
 	switch $Figurines {

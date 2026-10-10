@@ -52,16 +52,18 @@ Sources: the font list at enpassant.dk/chess/fonteng.htm, the lichess `COPYING.m
 | Fantasy, Spatial | **Keep** | lichess lists Monge's sets as MIT. |
 | Standard (Unicode) | **Keep** | Unicode glyph shapes, no design copyright claimed. |
 | Club (ex-Fritz), Aquarium, Bookup, Celtic, Chess7-style, ChessCube, Habsburg, Military, Old Style, Segoe, Standard/CMF, Zurich | **Ask** | Gorgonian (BabasChess); no licence found anywhere. "Segoe" is a Microsoft font name: rename regardless. |
-| Alpha, Berlin | **Replace** | Eric Bentzen: "Free for personal non commercial use" (enpassant.dk, and lichess says the same). |
-| Chess7 (`ScidbChessChess7`) | **Replace** | Style-7 / Sizenko: freeware but non-commercial (fontspace: "Freeware, Non-Commercial"). |
-| Cheq | **Replace** | CTAN credits it to Adobe Systems Incorporated (©1991 Atech); not freeware we can rely on. |
+| Alpha, Berlin | **Removed (2026-10-10)** | Eric Bentzen: "Free for personal non commercial use" (enpassant.dk, and lichess says the same). |
+| Chess7 (`ScidbChessChess7`) | **Removed (2026-10-10)** | Style-7 / Sizenko: freeware but non-commercial (fontspace: "Freeware, Non-Commercial"). |
+| Cheq | **Removed (2026-10-10)** | CTAN credits it to Adobe Systems Incorporated (©1991 Atech); not freeware we can rely on. |
 | Adventurer, Condal, Kingdom, Leipzig, Lucena, Magnetic, Marroquin, Maya, Mediaeval, Motif, Usual (Marroquin); Cases (Leschemelle); Good Companion (Brown); Traveller (Cowderoy); Chess Olé (Frank David); Smart (Wirth); Phoenix (Poisson) | **Ask** | Listed only as "freeware" with no terms for modification or commercial use. CTAN redistributes them under LPPL, which covers redistribution, not commercial rights. Fine for a free GPL build; a paid release needs the authors' OK. Marroquin already relicensed Merida as GPL for lichess, so asking him is realistic. |
 | Eyes, Skulls | **Ask** | Monge; lichess has only Fantasy, Spatial and Celtic under MIT. Probably the same terms; confirm. |
 | Free Staunton | **Ask** | Eran Karu / Ben Van Vlierden via PyChess; PyChess's ARTISTS file states no licence. |
 | Virtual | **Ask** | Peter Wong; permission given for Scidb only. |
 | USCF, Informant, CMF, Diagram/Symbol fonts | **Ask/Replace** | Origin unknown (foundry tags only). "Informant" and "USCF" are third-party names: rename. |
 
-Ready replacements with clear licences (lichess list): cburnett/mono (GPL-2+), merida (GPL-2+), fantasy/spatial/celtic (MIT), staunton (MIT), chessnut (Apache-2.0), rhosgfx (CC0), shapes (CC BY-SA 4.0), kiwen-suwi, Firi, totoy, papercut (CC BY 4.0). Avoid the many CC BY-NC-SA sets (horsey, california, cardinal, ...): non-commercial.
+Added 2026-10-10: **Chessnut** (Alexis Luengas, Apache-2.0) and **RhosGFX** (CC0), converted from lichess to `tcl/pieces/chessnut.tcl` and `rhosgfx.tcl`. The seven themes that used Alpha, Berlin or Cheq now use Chessnut. Saved settings that name a removed set resolve through `::board::pieceset::lookup` (Alpha, Berlin, Cheq → Chessnut; Chess7 → Merida).
+
+Other ready replacements with clear licences (lichess list): cburnett/mono (GPL-2+), merida (GPL-2+), fantasy/spatial/celtic (MIT), staunton (MIT), chessnut (Apache-2.0), rhosgfx (CC0), shapes (CC BY-SA 4.0), kiwen-suwi, Firi, totoy, papercut (CC BY 4.0). Avoid the many CC BY-NC-SA sets (horsey, california, cardinal, ...): non-commercial.
 
 ### Board textures: **Replaced (2026-10-10)**
 

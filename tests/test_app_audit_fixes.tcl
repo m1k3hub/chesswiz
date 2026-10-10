@@ -396,4 +396,12 @@ tcltest::test audit-launcher-through-renamed-symlink {the launcher starts its bi
 	file delete -force $dir
 } -result 1
 
+tcltest::test audit-removed-piece-set-falls-back {a piece set removed for licence reasons resolves to its replacement} -body {
+	list \
+		[lindex [::board::pieceset::lookup Alpha] 0] \
+		[lindex [::board::pieceset::lookup Cheq] 0] \
+		[lindex [::board::pieceset::lookup NoSuchSet] 0] \
+		[lindex [::board::pieceset::lookup Burnett] 0]
+} -result {Chessnut Chessnut Merida Burnett}
+
 tcltest::cleanupTests

@@ -371,16 +371,11 @@ proc DisplayContributions {w} {
 
 				<tr><td colspan='2'>[Name {Gorgonian}]</td></tr>
 				<tr><td>\u2001</td><td>Aquarium (GAquarium), Bookup (GBookup), Celtic (GCeltic),
-											Chess7 (GChess7), ChessCube (GChessCube), Fritz (GFritz),
+											ChessCube (GChessCube), Fritz (GFritz),
 											Habsburg (GHabsburg), Military (GMilitary), Old Style
 											(GOldStyle), Segoe (GSegoe), Standard (GCMF),
 											Zurich (GZurich)</td></tr>
 				<tr><td>\u2001</td><td>[Url http://gorgonian.weebly.com/babaschess.html]</td></tr>
-				<tr height='7'></tr>
-
-				<tr><td colspan='2'>[Name {Eric Bentzen}]</td></tr>
-				<tr><td>\u2001</td><td>Alpha, Berlin</td></tr>
-				<tr><td>\u2001</td><td>[Url http://www.enpassant.dk/chess/fonteng.htm]</td></tr>
 				<tr height='7'></tr>
 
 				<tr><td colspan='2'>[Name {David L. Brown}]</td></tr>
@@ -410,11 +405,6 @@ proc DisplayContributions {w} {
 					[Url http://christian.poisson.free.fr/problemesis/police.html]</td></tr>
 				<tr height='7'></tr>
 
-				<tr><td colspan='2'>[Name {Alastair Scott}]</td></tr>
-				<tr><td>\u2001</td><td>Cheq</td></tr>
-				<tr><td>\u2001</td><td>[Url http://www.enpassant.dk/chess/fonteng.htm]</td></tr>
-				<tr height='7'></tr>
-
 				<tr><td colspan='2'>[Name {Christoph Wirth}]</td></tr>
 				<tr><td>\u2001</td><td>Smart Regular</td></tr>
 				<tr><td>\u2001</td><td>[Url http://www.enpassant.dk/chess/fonteng.htm]</td></tr>
@@ -439,6 +429,16 @@ proc DisplayContributions {w} {
 				<tr><td colspan='2'>[Name {Maurizio Monge}]</td></tr>
 				<tr><td>\u2001</td><td>Eyes, Fantasy, Skulls, Spatial</td></tr>
 				<tr><td>\u2001</td><td>[Url http://poisson.phc.unipi.it/~monge/chess_art.php]</td></tr>
+				<tr height='7'></tr>
+
+				<tr><td colspan='2'>[Name {Alexis Luengas}]</td></tr>
+				<tr><td>\u2001</td><td>Chessnut (Apache License 2.0)</td></tr>
+				<tr><td>\u2001</td><td>[Url https://github.com/LexLuengas/chessnut-pieces]</td></tr>
+				<tr height='7'></tr>
+
+				<tr><td colspan='2'>[Name {RhosGFX}]</td></tr>
+				<tr><td>\u2001</td><td>RhosGFX (CC0)</td></tr>
+				<tr><td>\u2001</td><td>[Url https://github.com/lichess-org/lila]</td></tr>
 				<tr height='7'></tr>
 
 				<tr><td colspan='2'>[Name {Unicode Consortium}]</td></tr>
