@@ -83,7 +83,7 @@ The metadata only names Photoshop, GIMP and camera models. Replace with CC0 text
 ### Flags
 
 - The 16×11 flags embedded in `tcl/utils/countries.tcl` are famfamfam's: "available for free use for any purpose with no requirement for attribution". **Keep.**
-- The 72×72 set in `tcl/flags/` (290 PNGs) comes from addgadget.com plus "found in the internet", with no licence. **Replace**, e.g. by rendering lipis/flag-icons (MIT) SVGs.
+- The 72×72 set in `tcl/flags/` (289 PNGs) came from addgadget.com with no licence. **Replaced (2026-10-10)**: rendered from flag-icons (MIT), Noto emoji (Apache-2.0) and our own drawings; see `tcl/flags/SOURCES.txt`. The old FIDE-logo flag (FID, a trademark) is now a neutral pawn.
 
 ### Embedded UI icons (`tcl/icons.tcl`, `tcl/app-db-icons.tcl`, 520 images)
 

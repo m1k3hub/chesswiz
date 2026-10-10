@@ -1,9 +1,8 @@
-This country icon set is downloaded from http://addgadget.com/clock/.
-
-I added some missing icons (found in the internet):
-ANZ, BAS, CAT, IMN, ISL, NET, NIR, RSA, SCG, SEA, SPC, TIB, YUG, ZAM.
-
-I created some flags by myself:
-AIR, EAZ, GDR, KOS, UNK, ZZX.
-
-UMI is a copy of USA.
+Round country flags (72x72), rendered by Chesswiz from:
+  - flag-icons, Copyright (c) 2013 Panayiotis Lipiridis, MIT licence
+    (https://github.com/lipis/flag-icons)
+  - Noto Color Emoji, Copyright Google Inc., Apache License 2.0
+    (AIR, SEA, SPC, NET, EAR, FID)
+  - simple drawings made for Chesswiz (historic and federation flags:
+    AHO, BWI, GDR, NRD, SCG, URS, YUG, ZAN/EAZ, ZZG, ZZR)
+SOURCES.txt lists the source of every file.
