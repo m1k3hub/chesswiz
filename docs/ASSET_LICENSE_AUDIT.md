@@ -63,7 +63,11 @@ Sources: the font list at enpassant.dk/chess/fonteng.htm, the lichess `COPYING.m
 
 Ready replacements with clear licences (lichess list): cburnett/mono (GPL-2+), merida (GPL-2+), fantasy/spatial/celtic (MIT), staunton (MIT), chessnut (Apache-2.0), rhosgfx (CC0), shapes (CC BY-SA 4.0), kiwen-suwi, Firi, totoy, papercut (CC BY 4.0). Avoid the many CC BY-NC-SA sets (horsey, california, cardinal, ...): non-commercial.
 
-### Board textures: **Replace all**
+### Board textures: **Replaced (2026-10-10)**
+
+All 287 files now hold CC0 colour maps from ambientCG, resized to the old dimensions and recoloured to the old average colour, under the old file names, so themes and saved settings are unchanged. The provenance of each file is in `tcl/textures/SOURCES.txt`. The old images remain in git history.
+
+Original finding:
 
 No licences are recorded, and the file names point to sources whose terms forbid redistribution in original form:
 
