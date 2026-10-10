@@ -505,6 +505,9 @@ proc WidgetProc {twm command args} {
 		undock			{ return [::scidb::tk::twm undock $twm {*}$args] }
 		unpack			{ return [Unpack $twm {*}$args] }
 		visible			{ return [::scidb::tk::twm visible $twm {*}$args] }
+		zoom { return [::scidb::tk::twm zoom $twm {*}$args] }
+		zoomed { return [::scidb::tk::twm zoomed $twm] }
+		zoomsashes { return [ZoomSashes $twm {*}$args] }
 		workarea			{ return [WorkArea $twm {*}$args] }
 		default			{ return -code error "unknown command '$command'" }
 	}
@@ -674,9 +677,18 @@ proc MakePanedWindow {twm args} {
 proc MakePane {twm id} {
 	variable ${twm}::Vars
 
-	lassign [$Vars(cmd:makepane) $twm $twm pane $id] w name priority transient
+	lassign [$Vars(cmd:makepane) $twm $twm pane $id] w name priority transient close undock move zoomable
 	$w configure -borderwidth $Vars(frame:borderwidth) -relief raised
-	$twm set $w name $name priority $priority transient $transient
+	$twm set $w name $name priority $priority transient $transient zoomable [expr {$zoomable eq "1"}]
+	if {$zoomable eq "1"} {
+		set hdr [tk::frame $w.__header__]
+		pack $hdr -side top -fill x
+		ttk::label $hdr.title -textvariable $name
+		pack $hdr.title -side left
+		ttk::button $hdr.zoom -text "□" -takefocus 0 -command [list $twm zoom $w]
+		pack $hdr.zoom -side right
+		tooltip $hdr.zoom "Maximise / restore pane (Ctrl+Shift+Z)"
+	}
 	return $w
 }
 
@@ -699,7 +711,8 @@ proc MakeFrame2 {twm frame id} {
 
 	if {[$twm isframe $frame]} {
 		lassign [$Vars(cmd:makepane) $twm $frame frame $id] \
-			child name priority transient closable undockable moveable
+			child name priority transient closable undockable moveable zoomable
+		$twm set $frame zoomable [expr {$zoomable eq "1"}]
 		$child configure -borderwidth $Vars(frame:borderwidth) -relief raised
 	} elseif {[$twm iscontainer $id]} {
 		set child $id
@@ -794,6 +807,11 @@ proc MakeFrame2 {twm frame id} {
 	# ensure existence of this attribute
 	$twm set! $frame flat [$twm get! $frame flat 0]
 
+	if {[$twm get $frame zoomable 0]} {
+		ttk::button $hdr.zoom -style twm.TButton -text "□" -takefocus 0 \
+			-command [list $twm zoom $frame]
+		tooltip $hdr.zoom "Maximise / restore pane (Ctrl+Shift+Z)"
+	}
 	ShowHeaderButtons $twm $frame
 	HeaderBindings $twm $frame $hdr
 }
@@ -818,6 +836,7 @@ proc ShowHeaderButtons {twm frame} {
 	variable ${twm}::Vars
 
 	set hdr $frame.__header__
+	if {[winfo exists $hdr.zoom]} { grid $hdr.zoom -column 7 -row 0 }
 
 	if {[$twm isframe $frame] && [llength [$twm panes $twm]] == 1} {
 		catch { grid forget $hdr.close }
@@ -910,11 +929,11 @@ proc MouseWheelBindings {twm frame w} {
 			bind $w <Button-5> [list [namespace current]::PlaceLabelBar $twm $frame +5]
 		}
 		aqua {
-			bind $w <MouseWheel> [list [namespace current]::PlaceLabelBar $twm $frame [list expr {-(%D)}]]
+			bind $w <MouseWheel> "[list [namespace current]::PlaceLabelBar $twm $frame] \[expr {-(%D)}\]"
 		}
 		win32 {
 			bind $w <MouseWheel> \
-				[list [namespace current]::PlaceLabelBar $twm $frame [list expr {-(%D/120)*5)}]]
+				"[list [namespace current]::PlaceLabelBar $twm $frame] \[expr {-(%D/120)*5}\]"
 		}
 	}
 }
@@ -1089,6 +1108,19 @@ proc UpdateHeader {twm frame panes {selection ""}} {
 		if {[string match {*:label} $w]} { destroy $w }
 	}
 	$twm set $frame labels {} panes $panes
+	set zoomPane $selection
+	if {$zoomPane eq ""} { set zoomPane $frame }
+	if {[$twm iscontainer $zoomPane]} { set zoomPane [$twm leader $zoomPane] }
+	if {![$twm get $zoomPane zoomable 0] || [$twm isfloat [$twm toplevel $zoomPane]]} {
+		if {[winfo exists $hdr.zoom]} { destroy $hdr.zoom }
+	} else {
+		if {![winfo exists $hdr.zoom]} {
+			ttk::button $hdr.zoom -style twm.TButton -text "□" -takefocus 0
+			tooltip $hdr.zoom "Maximise / restore pane (Ctrl+Shift+Z)"
+		}
+		$hdr.zoom configure -command [list $twm zoom $zoomPane]
+	}
+
 
 	if {[llength $panes] == 0} {
 		if {$Vars(docking:current) ne $frame} {
@@ -3038,3 +3070,30 @@ set arrow(r) [image create photo -data {
 } ;# namespace twm
 
 # vi:set ts=3 sw=3:
+
+# Sash coordinates are session-only, never attributes in the saved layout.
+proc twm::ZoomSashes {twm action} {
+	variable ${twm}::Vars
+	if {$action eq "save"} {
+		set Vars(zoom:sashes) {}
+		set queue [winfo children $twm]
+		while {[llength $queue]} {
+			set queue [lassign $queue w]
+			lappend queue {*}[winfo children $w]
+			if {![string match *Panedwindow [winfo class $w]]} { continue }
+			set coords {}
+			for {set i 0} {$i < [llength [$w panes]] - 1} {incr i} {
+				lappend coords [$w sash coord $i]
+			}
+			lappend Vars(zoom:sashes) $w $coords
+		}
+	} else {
+		update idletasks
+		foreach {w coords} $Vars(zoom:sashes) {
+			if {![winfo exists $w]} { continue }
+			set i 0
+			foreach xy $coords { $w sash place $i {*}$xy; incr i }
+		}
+		unset Vars(zoom:sashes)
+	}
+}

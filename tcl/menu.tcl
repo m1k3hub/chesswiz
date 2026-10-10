@@ -30,6 +30,8 @@ namespace eval menu {
 namespace eval mc {
 
 set Theme							"Theme"
+set Window							"&Window"
+set MaximisePane					"&Maximise / Restore Pane"
 set ColorScheme					"Color Scheme"
 set CustomStyleMenu				"Chesswiz's Style Menu"
 set DefaultStyleMenu				"Default Style Menu"
@@ -282,6 +284,14 @@ proc build {menu} {
 	foreach parent $activeParents {
 		::toolbar::addToolbarMenu $m $parent none
 	}
+
+	set m [menu $menu.window]
+	lassign [::tk::UnderlineAmpersand $mc::Window] text ul
+	$menu add cascade -label " $text" -underline [incr ul] -menu $m
+	lassign [::tk::UnderlineAmpersand $mc::MaximisePane] text ul
+	$m add command -label " $text" -underline [incr ul] -accelerator "Ctrl+Shift+Z" \
+		-command ::application::TogglePaneZoom \
+		-state [expr {[::application::activeTab] eq "board" ? "normal" : "disabled"}]
 
 	### layout ###############################################################
 	set tab [::application::activeTab]

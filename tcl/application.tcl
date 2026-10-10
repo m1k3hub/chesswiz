@@ -105,6 +105,8 @@ set BoardLayout {
 set FontSizeActive 0
 
 array set Prios		{ analysis 200 board 500 editor 400 games 100 dbgames 110 tree 300 eco 90 media 80 report 70 assistant 60 }
+# Explicit allowlist: new panes default to off; eco is deliberately excluded.
+array set Zoomable {analysis 1 board 1 editor 1 games 1 dbgames 1 tree 1 media 1 report 1 assistant 1}
 array set Defaults	{ menu:background #c3c3c3 }
 
 array set Vars {
@@ -222,6 +224,11 @@ proc open {} {
 	# NOTE: Ctrl-Alt is problematic and cannot be used.
 	# Possible workaround: Only bind Control-minus and test whether Caps Lock is on.
 	# Possible workaround: Bind function keys instead of Control-Shift.
+	# Some editors bind Control-Z broadly for undo. A leading pane-only
+	# bindtag reserves Ctrl+Shift+Z before those widget/class bindings.
+	bind PaneZoomShortcut <Control-Shift-Z> [namespace code {TogglePaneZoom; break}]
+	bind .application <FocusIn> +[namespace code {PaneZoomFocus %W}]
+	bind .application <Control-Shift-Z> [namespace code {TogglePaneZoom; break}]
 	bind .application <Control-Shift-plus>				$incrFontSize
 	bind .application <Control-Shift-KP_Add>			$incrFontSize
 	bind .application <Control-Shift-minus>			$decrFontSize
@@ -318,7 +325,9 @@ proc MakePane {twm parent type uid} {
 	set nameVar [nameVarFromUid $uid]
 	set takefocus [expr {$uid eq "board"}]
 	set frame [tk::frame $parent.$uid -borderwidth 0 -takefocus $takefocus]
-	set result [list $frame $nameVar $prio $transient [expr {$uid ne "editor"}] yes yes]
+	variable Zoomable
+	set result [list $frame $nameVar $prio $transient [expr {$uid ne "editor"}] yes yes \
+		[expr {[info exists Zoomable($name)] && $Zoomable($name)}]]
 	switch $name {
 		games   { set ns tree::games }
 		editor  { set ns pgn }
@@ -332,6 +341,40 @@ proc MakePane {twm parent type uid} {
 	set Vars(frame:$uid) $frame
 	set Vars(align:board:$uid) 0
 	return $result
+}
+
+
+proc PaneZoomFocus {w} {
+	if {![winfo exists $w] || [catch {set manager [twm]}]} { return }
+	foreach uid [$manager leaves] {
+		set p [$manager leaf $uid]
+		if {$w eq $p || [string match "$p.*" $w]} {
+			set tags [bindtags $w]
+			if {"PaneZoomShortcut" ni $tags} { bindtags $w [linsert $tags 0 PaneZoomShortcut] }
+			return
+		}
+	}
+}
+
+
+# The explicit pane is used by header buttons; menu/key actions use focus.
+proc TogglePaneZoom {{pane ""} {manager ""}} {
+	variable Vars
+	if {$manager eq ""} {
+		if {[catch {set manager [twm]}]} { return }
+	}
+	if {$pane eq ""} {
+		set w [focus]
+		foreach uid [$manager leaves] {
+			set f [$manager leaf $uid]
+			if {$w eq $f || [string match "$f.*" $w]} { set pane $f; break }
+		}
+		if {$pane eq "" && [$manager zoomed] ne ""} { $manager zoom ""; return }
+		if {$pane eq "" && "board" in [$manager leaves]} { set pane [$manager leaf board] }
+	}
+	if {$pane eq "" || ![$manager get $pane zoomable 0]
+		|| [$manager isfloat [$manager toplevel $pane]]} { return }
+	$manager zoom $pane
 }
 
 

@@ -44,6 +44,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <vector>
 
 #undef None // defined inside tk.h
 
@@ -1245,6 +1246,12 @@ public:
 	Node const* child() const;
 	Node* child();
 
+	void zoom(Node* pane);
+	void restoreZoom();
+	void applyZoom();
+	void restoreZoomGeometry();
+	bool zoomEvent(XEvent* event);
+	Node* zoomed() const { return m_root->m_zoom; }
 	void refresh();
 	void resize(Quants const& maxHeight, bool perform = true);
 	void setState(State state);
@@ -1497,6 +1504,11 @@ private:
 
 	static void initialize();
 
+	struct ZoomGeometry { Node* node; int x, y, width, height; bool mapped; };
+	enum ZoomRestore { ZoomIdle, ZoomRestoring };
+	Node* m_zoom = nullptr;
+	ZoomRestore m_zoomRestore = ZoomIdle;
+	std::vector<ZoomGeometry> m_zoomGeometry;
 	Type			m_type;
 	State			m_state;
 	Tcl_Obj*		m_path;
@@ -1587,6 +1599,9 @@ WindowEventProc(ClientData clientData, XEvent* event)
 {
 	// Guard against stale events arriving after Tk_DeleteEventHandler.
 	if (s_liveNodes.find(static_cast<Node*>(clientData)) == s_liveNodes.end())
+		return;
+
+	if (static_cast<Node*>(clientData)->zoomEvent(event))
 		return;
 
 	switch (event->type)
@@ -3235,6 +3250,137 @@ Node::setupDimensions(Quants const& dimen)
 		m_dimen.set<Horz,Actual>(dimen.dimen<Horz,Actual>());
 	if (!canComputeDimensions<Vert,Actual>())
 		m_dimen.set<Vert,Actual>(dimen.dimen<Vert,Actual>());
+}
+
+
+// Zoom is a temporary geometry overlay. The tree, dimensions, pane options
+// and panedwindow sash positions remain the user's normal layout.
+void
+Node::zoom(Node* pane)
+{
+	Node* root = m_root;
+	if (pane && (!pane->isLeaf() || !pane->isPacked()
+		|| pane->toplevel() != root || !pane->getAttr("zoomable")
+		|| !tcl::asBoolean(pane->getAttr("zoomable"))))
+		M_THROW(tcl::Exception("pane is not zoomable or is undocked"));
+	Node* target = pane;
+	if (target)
+	{
+		// Keep the notebook and its selected tab intact, including meta frames.
+		for (Node* p = target->parent(); p && p != root; p = p->parent())
+			if (p->isNotebookOrMultiWindow()) target = p;
+	}
+	bool toggle = target && root->m_zoom == target;
+	root->restoreZoom();
+	if (!target || toggle) return;
+	for (Node* n : ::s_liveNodes)
+	{
+		if (n != root && n->m_root == root && n->toplevel() == root && n->exists())
+		{
+			Tk_Window w = n->tkwin();
+			root->m_zoomGeometry.push_back({n, Tk_X(w), Tk_Y(w),
+				Tk_Width(w), Tk_Height(w), bool(Tk_IsMapped(w))});
+		}
+	}
+	root->m_zoom = target;
+	root->m_zoomRestore = ZoomRestoring;
+	tcl::invoke(__func__, root->pathObj(), tcl::newObj("zoomsashes"),
+		tcl::newObj("save"), nullptr);
+	root->applyZoom();
+	// Drain the events queued by the zoom before normal handling takes
+	// over again (updateDimen would record the overlay sizes).
+	tcl::invoke(__func__, tcl::newObj("update"), nullptr);
+	root->m_zoomRestore = ZoomIdle;
+}
+
+void
+Node::applyZoom()
+{
+	if (!m_zoom || ::s_liveNodes.find(m_zoom) == ::s_liveNodes.end()
+		|| !m_zoom->exists()) return;
+	for (auto const& g : m_zoomGeometry)
+		if (::s_liveNodes.find(g.node) != ::s_liveNodes.end() && g.node->exists()
+			&& g.node != m_zoom && !g.node->hasAncestor(m_zoom))
+			Tk_UnmapWindow(g.node->tkwin());
+	Tk_Window w = m_zoom->tkwin();
+	if (m_zoom->parent() && m_zoom->parent() != this)
+		Tk_UnmaintainGeometry(w, m_zoom->parent()->tkwin());
+	Tk_MaintainGeometry(w, tkwin(), 0, 0, Tk_Width(tkwin()), Tk_Height(tkwin()));
+	Tk_MapWindow(w);
+	Tk_RestackWindow(w, Above, nullptr);
+}
+
+bool
+Node::zoomEvent(XEvent* event)
+{
+	Node* root = m_root;
+	if (toplevel() != root) return false;
+	if (!root->m_zoom)
+	{
+		// While a restore is running, the events queued by the zoom toggle
+		// must not reach updateDimen()/destroyed() with stale geometry.
+		if (root->m_zoomRestore == ZoomIdle) return false;
+		return event->type == ConfigureNotify || event->type == MapNotify
+			|| event->type == UnmapNotify;
+	}
+	if (event->type == ConfigureNotify && this == root) root->applyZoom();
+	if (event->type == MapNotify && this != root && this != root->m_zoom
+		&& !hasAncestor(root->m_zoom)) Tk_UnmapWindow(tkwin());
+	return event->type == ConfigureNotify || event->type == MapNotify
+		|| event->type == UnmapNotify;
+}
+
+
+void
+Node::restoreZoom()
+{
+	if (!m_zoom) return;
+	if (::s_liveNodes.find(m_zoom) != ::s_liveNodes.end() && m_zoom->exists())
+	{
+		Node* zoom = m_zoom;
+		// Dropping the geometry master unmaps the overlay; hide it first
+		// and filter the events, they would look like layout changes.
+		m_zoomRestore = ZoomRestoring;
+		Tk_UnmapWindow(zoom->tkwin());
+		Tk_UnmaintainGeometry(zoom->tkwin(), tkwin());
+		m_zoom = nullptr;
+		restoreZoomGeometry();
+		tcl::invoke(__func__, pathObj(), tcl::newObj("zoomsashes"),
+			tcl::newObj("restore"), nullptr);
+		// Drain the events queued by the zoom toggle before normal
+		// handling takes over again (updateDimen records stale sizes).
+		tcl::invoke(__func__, tcl::newObj("update"), nullptr);
+	}
+	else
+	{
+		m_zoom = nullptr;
+	}
+	m_zoomRestore = ZoomIdle;
+	m_zoomGeometry.clear();
+}
+
+void
+Node::restoreZoomGeometry()
+{
+	for (auto const& g : m_zoomGeometry)
+	{
+		if (::s_liveNodes.find(g.node) == ::s_liveNodes.end() || !g.node->exists()) continue;
+		Tk_Window w = g.node->tkwin();
+		// Reparented windows (a zoomed notebook, or panes inside one)
+		// resize via MaintainGeometry; the panedwindow repositions and
+		// remaps its own panes.
+		Tk_ResizeWindow(w, g.width, g.height);
+		if (Tk_Parent(w) == tkwin()) Tk_MoveWindow(w, g.x, g.y);
+		else if (hasAncestor(g.node)) Tk_MaintainGeometry(w, tkwin(),
+			g.x, g.y, g.width, g.height);
+		Tk_RestackWindow(w, Above, nullptr);
+		if (g.mapped && Tk_Parent(w) == tkwin()) Tk_MapWindow(w);
+	}
+	tcl::invoke(__func__, tcl::newObj("update"), tcl::newObj("idletasks"), nullptr);
+	mstl::reverse(m_zoomGeometry.begin(), m_zoomGeometry.end());
+	for (auto const& g : m_zoomGeometry)
+		if (::s_liveNodes.find(g.node) != ::s_liveNodes.end() && g.node->exists())
+			Tk_RestackWindow(g.node->tkwin(), Above, nullptr);
 }
 
 
@@ -6081,7 +6227,9 @@ Node::inspect(AttrSet const& exportList, tcl::DString& str, int horzGap, int ver
 		case Root:
 			if (m_dimen.mode<Horz,Actual>() == Abs)
 				inspectDimen<Horz,Actual>(m_objOptWidth, str, 0);
-			if (m_dimen.mode<Vert,Actual>() == Abs)
+			// inspectDimen() migrates an absolute height to a percentage, so
+			// the next inspect must print it as such (or it would be lost).
+			if (m_dimen.mode<Vert,Actual>() == Abs || m_dimen.mode<Vert,Actual>() == Rel)
 				inspectDimen<Vert,Actual>(m_objOptHeight, str, 0);
 			str.append(m_objOptX);
 			str.append(x());
@@ -7653,6 +7801,7 @@ Node::performDeiconifyFloats()
 void
 Node::perform(Node* toplevel)
 {
+	if (m_root->m_zoom) m_root->restoreZoom();
 	M_ASSERT(isToplevel());
 	M_ASSERT(!toplevel || toplevel->isToplevel());
 
@@ -7823,6 +7972,7 @@ Node::perform(Node* toplevel)
 void
 Node::adjust()
 {
+	if (m_root->m_zoom && toplevel() == m_root) return;
 	M_ASSERT(isToplevel());
 	M_ASSERT(finished());
 
@@ -8931,7 +9081,14 @@ static void
 execute(PerformFunc func, bool forLoad, int objc, Tcl_Obj* const objv[])
 {
 	M_ASSERT(objc > 2);
-	func(lookupBase(forLoad, objv[2]), objc, objv);
+	Base& base = lookupBase(forLoad, objv[2]);
+	// Structural operations must finish the overlay before changing the tree.
+	if (base.root && (forLoad || func == cmdDock || func == cmdUndock
+		|| func == cmdNew || func == cmdClone || func == cmdToggle
+		|| func == cmdShow || func == cmdClose || func == cmdResize
+		|| func == cmdChangeUid))
+		base.root->restoreZoom();
+	func(base, objc, objv);
 }
 
 
@@ -8949,7 +9106,7 @@ cmdTwm(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		"neighbors",		"new",				"orientation",		"panes",				"parent",
 		"ready",				"refresh",			"release",			"resize",			"see",
 		"selected",			"set",				"set!",				"show",				"toggle",
-		"toplevel",			"toplevels",		"uid",				"undock",			"visible",
+		"toplevel",			"toplevels",		"uid",				"undock",			"visible", "zoom", "zoomed",
 		nullptr
 	};
 	enum
@@ -8964,6 +9121,7 @@ cmdTwm(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		Cmd_Ready,				Cmd_Refresh,			Cmd_Release,			Cmd_Resize,			Cmd_See,
 		Cmd_Selected,			Cmd_Set,					Cmd_Set_,				Cmd_Show,			Cmd_Toggle,
 		Cmd_Toplevel,			Cmd_Toplevels,			Cmd_Uid,					Cmd_Undock,			Cmd_Visible,
+		Cmd_Zoom, Cmd_Zoomed,
 		Cmd_NULL
 	};
 
@@ -8981,6 +9139,26 @@ cmdTwm(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	{
 		switch (index)
 		{
+			case Cmd_Zoom:
+			{
+				Base& base = lookupBase(false, objv[2]);
+				if (objc != 4) M_THROW(tcl::Exception(3, objv, "pane"));
+				Node* pane = nullptr;
+				if (*tcl::asString(objv[3]))
+				{
+					pane = base.root->findPath(tcl::asString(objv[3]));
+					if (!pane) M_THROW(tcl::Exception("unknown pane"));
+				}
+				base.root->zoom(pane);
+				break;
+			}
+			case Cmd_Zoomed:
+			{
+				if (objc != 3) M_THROW(tcl::Exception(3, objv));
+				Node* pane = lookupBase(false, objv[2]).root->zoomed();
+				tcl::setResult(pane ? pane->pathObj() : tcl::newObj(""));
+				break;
+			}
 			case Cmd_Amalgamatable:	execute(cmdAmalgamatable, false, objc, objv); break;
 			case Cmd_Amalgamated:	execute(cmdAmalgamated, false, objc, objv); break;
 			case Cmd_Clone:			execute(cmdClone, false, objc, objv); break;

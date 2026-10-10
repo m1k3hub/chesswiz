@@ -262,6 +262,8 @@
 ::progress::mc::Message(copy-game)				"%s Partie(n) kopieren"
 
 ### menu ###############################################################
+::menu::mc::Window							"&Fenster"
+::menu::mc::MaximisePane					"Bereich &maximieren / wiederherstellen"
 ::menu::mc::Theme								"Thema"
 ::menu::mc::ColorScheme						"Farbschema"
 ::menu::mc::CustomStyleMenu				"Chesswiz's Menüstil"
