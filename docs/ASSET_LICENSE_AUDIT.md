@@ -39,6 +39,21 @@ the licence is unknown) · **Replace** (licence forbids our use, or a third part
 | Embedded UI icons | `tcl/icons.tcl`, `tcl/app-db-icons.tcl` (hundreds of base64 images) | No source recorded. Many look like stock icon sets (Crystal, Oxygen, famfamfam: LGPL/CC). Needs a pass. |
 | Font credits | `tcl/info.tcl` about box | Names the designers: Marroquin, Bentzen, Cowderoy, Leschemelle, Scott and Frank David (enpassant.dk freeware); Gorgonian (BabasChess); Brown (Good Companion); Poisson (Phoenix); Burnett (GPL); Eran Karu (PyChess, GPL); Maurizio Monge (Eyes, Fantasy, Skulls, Spatial). Check each site's terms. |
 
+## Permission-dependent assets removed (2026-10-10)
+
+Every piece set and font whose terms needed the author's permission, or whose author is unknown, has been removed:
+
+- **Piece sets:** Adventurer, Aquarium, Bookup, Cases, Celtic (Gorgonian), ChessCube, Clarity, Club, Condal, Eyes, Free Staunton, Good Companion, Habsburg, Kingdom, Leipzig, Lucena, Lucena-Thin, Magnetic, Marroquin, Maya, Mediaeval, Military, Motif, Old Style, Phoenix, Skulls, Standard (CMF), Usual, Virtual, Winboard, Zurich.
+- **Fonts:** every `Scidb Chess/Diagram/Symbol` font except Merida and S1/T1; Circled and Belfast Digits ("all rights reserved"); Designer Block, Digital Digits, Abell Cond Bold and Final Frontier.
+
+What remains:
+
+- **Piece sets:** Burnett (GPL-2+), Merida (GPL-2+, Marroquín's licence on lichess), Celtic, Fantasy and Spatial (Monge, MIT), Chessnut (Apache-2.0), RhosGFX (CC0), Firi, Kiwen-suwi and Totoy (CC BY 4.0, credited in the About box).
+- **Fonts:** Scidb Chess/Diagram Merida, Abel and Font Awesome (OFL), and Scidb Symbol S1/T1.
+- **Unverified:** S1/T1 were made in FontForge in 2009 during Scidb's development and carry no third-party copyright; most likely Gregor Cramer's own work (GPL), but this is not recorded.
+
+New defaults: the symbol font is Scidb Symbol T1, figurines use Scidb Chess Merida, the figurine piece images use Burnett, and the PDF and HTML exports use Merida and T1. The About box and the PGN window header use Abel instead of Final Frontier. Themes that used a removed set now use Merida (Chessnut for the modern-looking ones, Fantasy for Eyes and Skulls). Saved settings that name a removed set fall back the same way through `::board::pieceset::lookup`. Papercut (CC BY) was tried and dropped: its look depends on gradients the built-in renderer can't draw.
+
 ## Renames (2026-10-10)
 
 These font families and sets were named after other organisations' products and are renamed: Scidb Chess/Symbol Informant → **Annotator**, Scidb Chess USCF → **Federal**, Scidb Chess Segoe and the Segoe piece set → **Clarity** (saved settings resolve Segoe to Clarity). Kept as factual references: the USCF rating system and its PGN tags, and the "Informant" database type, which is ChessBase's label for games from Chess Informant.

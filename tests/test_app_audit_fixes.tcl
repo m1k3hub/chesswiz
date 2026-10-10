@@ -403,6 +403,6 @@ tcltest::test audit-removed-piece-set-falls-back {a piece set removed for licenc
 		[lindex [::board::pieceset::lookup NoSuchSet] 0] \
 		[lindex [::board::pieceset::lookup Segoe] 0] \
 		[lindex [::board::pieceset::lookup Burnett] 0]
-} -result {Chessnut Chessnut Merida Clarity Burnett}
+} -result {Chessnut Chessnut Merida Chessnut Burnett}
 
 tcltest::cleanupTests

@@ -1,6 +1,6 @@
 ::board::addStyle theme {
   identifier   {Virtual - Brown|1423390755270|purple|gregor}
-  piece-set    {ChessCube}
+  piece-set    {Chessnut}
   piece-style  {Default}
   square-style {Brown & Goldenrod|1355495679308|yellow.color|gregor}
   version      {1.0}

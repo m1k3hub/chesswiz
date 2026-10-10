@@ -1159,15 +1159,15 @@ array set DefaultOptions {
 	figurine:use				1
 	figurine:lang				{}
 
-	symbol:family				{Scidb Symbol Traveller}
+	symbol:family				{Scidb Symbol T1}
 	symbol:weight				normal
 
 	diagram:family				{Scidb Diagram Merida}
 
-	figurine:family:normal	{Scidb Chess Traveller}
+	figurine:family:normal	{Scidb Chess Merida}
 	figurine:weight:normal	normal
 
-	figurine:family:bold		{Scidb Chess Standard}
+	figurine:family:bold		{Scidb Chess Merida}
 	figurine:weight:bold		bold
 }
 

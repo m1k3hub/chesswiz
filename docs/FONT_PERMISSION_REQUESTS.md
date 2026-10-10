@@ -1,5 +1,7 @@
 # Permission requests for the freeware piece sets
 
+**Status (2026-10-10): these sets were removed from Chesswiz instead** (see `docs/ASSET_LICENSE_AUDIT.md`). Use this template only to bring one back with the author's written OK.
+
 These sets are distributed as "freeware" with no terms on modification or
 commercial use (see `docs/ASSET_LICENSE_AUDIT.md`). A free GPL release is
 reasonable as is. A paid Windows/macOS release needs either each author's

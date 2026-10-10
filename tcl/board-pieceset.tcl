@@ -34,14 +34,18 @@ namespace export makePieceSelectionFrame updatePieceSet
 
 variable Listbox
 variable FigurineDict [dict create]
-variable Figurines Usual ;# Burnett Cases
+variable Figurines Burnett
 
 variable RegExpBBox				{scidb:bbox=\"([+-]?[0-9]*[.]?[0-9]+),([+-]?[0-9]*[.]?[0-9]+),([+-]?[0-9]*[.]?[0-9]+),([+-]?[0-9]*[.]?[0-9]+)\"}
 variable RegExpPieceScale		{scidb:scale=\"([0-9]*[.]?[0-9]+)\"}
 variable RegExpTranslation		{scidb:translate=\"([+-]?[0-9]*[.]?[0-9]+),([+-]?[0-9]*[.]?[0-9]+)\"}
 
 # Piece sets removed for licence reasons, and the set that takes their place.
-array set Replaced { Alpha Chessnut Berlin Chessnut Cheq Chessnut Chess7 Merida Segoe Clarity }
+# Sets not listed here fall back to Merida.
+array set Replaced {
+	Alpha Chessnut Berlin Chessnut Cheq Chessnut Segoe Chessnut Clarity Chessnut
+	ChessCube Chessnut Aquarium Chessnut Eyes Fantasy Skulls Fantasy
+}
 
 # Returns the definition of the named piece set; a removed or unknown set
 # falls back to its replacement (or Merida) so that old settings keep working.
@@ -223,8 +227,6 @@ proc MakeFigurines {size dontUseContour} {
 	if {$dontUseContour} { set contour 0.0 } else { set contour 1.0 }
 	switch $Figurines {
 		Burnett	{ set boostContour no;  set shadow 0.05 }
-		Cases		{ set boostContour yes; set shadow 0.07 }
-		Usual		{ set boostContour yes; set shadow 0.07 }
 		default	{ return -code error "MakeFigurines: not designed for $Figurines" }
 	}
 	MakePieces           \

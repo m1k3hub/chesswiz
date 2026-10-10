@@ -145,7 +145,7 @@ proc build {top width height} {
 	tk::label $logo.logo \
 		-text "Chesswiz" \
 		-foreground steelblue4 \
-		-font [list {Final Frontier} 26] \
+		-font [list Abel 26] \
 		-background white \
 		;
 	grid $logo.icon -row 1 -column 1

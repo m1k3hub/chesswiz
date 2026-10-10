@@ -96,7 +96,7 @@ PdfWriter::PdfWriter(format::Type srcFormat,
 		HPDF_UseUTFEncodings(m_doc);
 
 	char const* fontName = HPDF_LoadFont(	m_doc,
-														"Scidb Chess Traveller",
+														"Scidb Chess Merida",
 														HPDF_FALSE,
 														HPDF_FALSE,
 														HPDF_TRUE);

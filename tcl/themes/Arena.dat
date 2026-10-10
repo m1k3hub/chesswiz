@@ -1,6 +1,6 @@
 ::board::addStyle theme {
   identifier   {Arena|1348599577049|yellow.color|gregor}
-  piece-set    {Winboard}
+  piece-set    {Merida}
   piece-style  {Arena|1348599563208|yellow.color|gregor}
   square-style {Arena|1348599714170|yellow.color|gregor}
   version      {1.0}

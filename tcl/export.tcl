@@ -319,7 +319,7 @@ array set Styles {
 	pdf,BasicStyle,GameText,Moves,Variation					{{} {} {} {} {}}
 	pdf,BasicStyle,GameText,Moves,Subvariation				{{} 10 {} {} {}}
 	pdf,BasicStyle,GameText,Moves,Figurines					{{Scidb Chess Merida} {} {} {} {}}
-	pdf,BasicStyle,GameText,Moves,Symbols						{{Scidb Symbol Traveller} {} {} {} {}}
+	pdf,BasicStyle,GameText,Moves,Symbols						{{Scidb Symbol T1} {} {} {} {}}
 	pdf,BasicStyle,GameText,Comments								{{} {} {} {} #000099}
 	pdf,BasicStyle,GameText,Comments,MainLine					{{} {} {} {} {}}
 	pdf,BasicStyle,GameText,Comments,Variation				{{} {} {} {} {}}
@@ -336,7 +336,7 @@ array set Styles {
 	html,BasicStyle,GameText,Moves,Variation					{{} {} {} {} {}}
 	html,BasicStyle,GameText,Moves,Subvariation				{{} 10 {} {} {}}
 	html,BasicStyle,GameText,Moves,Figurines					{{Scidb Chess Merida} {} {} {} {}}
-	html,BasicStyle,GameText,Moves,Symbols						{{Scidb Symbol Traveller} {} {} {} {}}
+	html,BasicStyle,GameText,Moves,Symbols						{{Scidb Symbol T1} {} {} {} {}}
 	html,BasicStyle,GameText,Comments							{{} {} {} {} #000099}
 	html,BasicStyle,GameText,Comments,MainLine				{{} {} {} {} {}}
 	html,BasicStyle,GameText,Comments,Variation				{{} {} {} {} {}}

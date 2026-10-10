@@ -132,7 +132,7 @@ tcltest::test apppdf-single-game-embedded-font {the figurine font is embedded (s
 	catch { ::scidb::game::printPdf $::scidb::test::apppdf::pgn Normal 0 $out 63 }
 	set data [readPdf $out]
 	list \
-		[expr {[string first "ScidbChessTraveller" $data] >= 0}] \
+		[expr {[string first "ScidbChessMerida" $data] >= 0}] \
 		[expr {[string first "/FontFile2" $data] >= 0}] \
 		;
 } -result {1 1}

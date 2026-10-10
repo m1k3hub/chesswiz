@@ -138,7 +138,7 @@ proc DisplayAbout {w} {
 
 	$w parse "
 		<link/>
-		<table border='0' style='font-family: Final Frontier, $fam; font-size: 16pt;' color='steelblue4'>
+		<table border='0' style='font-family: Abel, $fam; font-size: 16pt;' color='steelblue4'>
 			<tr>
 				<td><img src='Scidb-Logo-128'/></td>
 				<td width='30px'></td>
@@ -364,49 +364,7 @@ proc DisplayContributions {w} {
 			<hr/>
 			<table border='0'>
 				<tr><td colspan='2'>[Name {Armando Hernández Marroquín}]</td></tr>
-				<tr><td>\u2001</td><td>Adventurer, Condal, Kingdom, Leipzig, Lucena, Magnetic,
-											Marroquin, Maya, Mediaeval, Merida, Motif, Usual</td></tr>
-				<tr><td>\u2001</td><td>[Url http://www.enpassant.dk/chess/fonteng.htm]</td></tr>
-				<tr height='7'></tr>
-
-				<tr><td colspan='2'>[Name {Gorgonian}]</td></tr>
-				<tr><td>\u2001</td><td>Aquarium (GAquarium), Bookup (GBookup), Celtic (GCeltic),
-											ChessCube (GChessCube), Fritz (GFritz),
-											Habsburg (GHabsburg), Military (GMilitary), Old Style
-											(GOldStyle), Clarity (GSegoe), Standard (GCMF),
-											Zurich (GZurich)</td></tr>
-				<tr><td>\u2001</td><td>[Url http://gorgonian.weebly.com/babaschess.html]</td></tr>
-				<tr height='7'></tr>
-
-				<tr><td colspan='2'>[Name {David L. Brown}]</td></tr>
-				<tr><td>\u2001</td><td>Good Companion</td></tr>
-				<tr><td>\u2001</td><td>
-					[Url http://www.bstephen.me.uk/downloads/8-good-companion-chess-fonts]</td></tr>
-				<tr height='7'></tr>
-
-				<tr><td colspan='2'>[Name {Alan Cowderoy}]</td></tr>
-				<tr><td>\u2001</td><td>Traveller Standard</td></tr>
-				<tr><td>\u2001</td><td>[Url http://www.enpassant.dk/chess/fonteng.htm]</td></tr>
-				<tr height='7'></tr>
-
-				<tr><td colspan='2'>[Name {Frank David}]</td></tr>
-				<tr><td>\u2001</td><td>[Enc {Chess Olé}]</td></tr>
-				<tr><td>\u2001</td><td>[Url http://www.enpassant.dk/chess/fonteng.htm]</td></tr>
-				<tr height='7'></tr>
-
-				<tr><td colspan='2'>[Name {Matthieu Leschemelle}]</td></tr>
-				<tr><td>\u2001</td><td>Cases</td></tr>
-				<tr><td>\u2001</td><td>[Url http://www.enpassant.dk/chess/fonteng.htm]</td></tr>
-				<tr height='7'></tr>
-
-				<tr><td colspan='2'>[Name {Christian Poisson}]</td></tr>
-				<tr><td>\u2001</td><td>Phoenix</td></tr>
-				<tr><td>\u2001</td><td>
-					[Url http://christian.poisson.free.fr/problemesis/police.html]</td></tr>
-				<tr height='7'></tr>
-
-				<tr><td colspan='2'>[Name {Christoph Wirth}]</td></tr>
-				<tr><td>\u2001</td><td>Smart Regular</td></tr>
+				<tr><td>\u2001</td><td>Merida (GPL-2+)</td></tr>
 				<tr><td>\u2001</td><td>[Url http://www.enpassant.dk/chess/fonteng.htm]</td></tr>
 				<tr height='7'></tr>
 			</table>
@@ -416,39 +374,32 @@ proc DisplayContributions {w} {
 			<hr/>
 			<table border='0'>
 				<tr><td colspan='2'>[Name {Colin M.L. Burnett}]</td></tr>
-				<tr><td>\u2001</td><td>Burnett</td></tr>
+				<tr><td>\u2001</td><td>Burnett (GPL-2+)</td></tr>
 				<tr><td>\u2001</td><td>[Url http://en.wikipedia.org/wiki/Chess_pieces]</td></tr>
 				<tr height='7'></tr>
-
-				<tr><td colspan='2'>[Name {Eran Karu}]</td></tr>
-				<tr><td>\u2001</td><td>Free Staunton</td></tr>
-				<tr><td>\u2001</td><td>
-					[Url http://code.google.com/p/pychess/source/browse/pieces/freestaunton]</td></tr>
-				<tr height='7'></tr>
-
 				<tr><td colspan='2'>[Name {Maurizio Monge}]</td></tr>
-				<tr><td>\u2001</td><td>Eyes, Fantasy, Skulls, Spatial</td></tr>
-				<tr><td>\u2001</td><td>[Url http://poisson.phc.unipi.it/~monge/chess_art.php]</td></tr>
+				<tr><td>\u2001</td><td>Celtic, Fantasy, Spatial (MIT)</td></tr>
+				<tr><td>\u2001</td><td>[Url https://github.com/lichess-org/lila]</td></tr>
 				<tr height='7'></tr>
-
 				<tr><td colspan='2'>[Name {Alexis Luengas}]</td></tr>
 				<tr><td>\u2001</td><td>Chessnut (Apache License 2.0)</td></tr>
 				<tr><td>\u2001</td><td>[Url https://github.com/LexLuengas/chessnut-pieces]</td></tr>
 				<tr height='7'></tr>
-
 				<tr><td colspan='2'>[Name {RhosGFX}]</td></tr>
 				<tr><td>\u2001</td><td>RhosGFX (CC0)</td></tr>
 				<tr><td>\u2001</td><td>[Url https://github.com/lichess-org/lila]</td></tr>
 				<tr height='7'></tr>
-
-				<tr><td colspan='2'>[Name {Unicode Consortium}]</td></tr>
-				<tr><td>\u2001</td><td>Standard</td></tr>
-				<tr><td>\u2001</td><td>[Url http://www.fileformat.info/info/unicode]</td></tr>
+				<tr><td colspan='2'>[Name {James Faure}]</td></tr>
+				<tr><td>\u2001</td><td>Firi (CC BY 4.0)</td></tr>
+				<tr><td>\u2001</td><td>[Url https://github.com/lichess-org/lila]</td></tr>
 				<tr height='7'></tr>
-
-				<tr><td colspan='2'>[Name {Peter Wong}]</td></tr>
-				<tr><td>\u2001</td><td>Virtual</td></tr>
-				<tr><td>\u2001</td><td>[Url http://www.virtualpieces.net/diagrams]</td></tr>
+				<tr><td colspan='2'>[Name {neverRare}]</td></tr>
+				<tr><td>\u2001</td><td>Kiwen-suwi (CC BY 4.0)</td></tr>
+				<tr><td>\u2001</td><td>[Url https://github.com/lichess-org/lila]</td></tr>
+				<tr height='7'></tr>
+				<tr><td colspan='2'>[Name {Kosal Sen}]</td></tr>
+				<tr><td>\u2001</td><td>Totoy (CC BY 4.0)</td></tr>
+				<tr><td>\u2001</td><td>[Url https://github.com/lichess-org/lila]</td></tr>
 				<tr height='7'></tr>
 			</table>
 		</div>
@@ -496,10 +447,6 @@ proc DisplayContributions {w} {
 				<tr><td colspan='2'>[Name {Dave Gandy}]</td></tr>
 				<tr><td>\u2001</td><td>Font Awesome</td></tr>
 				<tr><td>\u2001</td><td>[Url http://fortawesome.github.io/Font-Awesome/]</td></tr>
-				<tr height='7'></tr>
-
-				<tr><td colspan='2'>[Name {Software Friends, Inc.}]</td></tr>
-				<tr><td>\u2001</td><td>Final Frontier</td></tr>
 				<tr height='7'></tr>
 
 				<tr><td colspan='2'>[Name {Ralph Levien}]</td></tr>
