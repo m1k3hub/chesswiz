@@ -47,6 +47,19 @@ array set Replaced {
 	ChessCube Chessnut Aquarium Chessnut Eyes Fantasy Skulls Fantasy
 }
 
+# A removed set can still have a definition lying around (an older share
+# directory, say). It must not be listed or drawn, so drop it from the list;
+# lookup then resolves it through Replaced.
+proc dropRemovedSets {} {
+	variable Replaced
+	set kept {}
+	foreach pieceSet $::board_PieceSet {
+		if {![info exists Replaced([lindex $pieceSet 0])]} { lappend kept $pieceSet }
+	}
+	set ::board_PieceSet $kept
+}
+if {[info exists ::board_PieceSet]} { dropRemovedSets }
+
 # Returns the definition of the named piece set; a removed or unknown set
 # falls back to its replacement (or Merida) so that old settings keep working.
 proc lookup {name} {

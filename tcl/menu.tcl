@@ -686,7 +686,7 @@ proc build {menu} {
 
 	### about ################################################################
 	set cmd [list ::info::openDialog .application]
-	lassign [::tk::UnderlineAmpersand $mc::AboutScidb] text ul
+	lassign [::tk::UnderlineAmpersand $mc::AboutChesswiz] text ul
 	$menu add command \
 		-compound left \
 		-label " $text..." \
