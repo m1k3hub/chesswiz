@@ -23,6 +23,7 @@ ARCH = arch-scidb
 # NOTE that the ordering is important!
 SOURCES = \
 	exec.tcl \
+	sys-platform.tcl \
 	utils/place.tcl \
 	start.tcl \
 	options.tcl \

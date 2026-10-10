@@ -2364,8 +2364,8 @@ proc DoFileOperations {w action uriFiles destination trash} {
 						while {[file type $src] eq "link"} { set src [file readlink $src] }
 						if {[catch { file copy -force $src $dst }]} {
 							set permissionDenied 1
-						} elseif {$::tcl_platform(platform) eq "unix"} {
-							catch { exec touch $dst }
+						} else {
+							catch { ::platform::sys::touch $dst }
 						}
 					}
 					link {
@@ -4986,7 +4986,7 @@ proc FinishDuplicateFile {w sel name} {
 				[namespace parent]::unbusy $dlg
 				return $srcFile
 			} else {
-				if {$::tcl_platform(platform) eq "unix"} { catch { exec touch $g } }
+				catch { ::platform::sys::touch $g }
 				lappend newFiles $g
 			}
 		}

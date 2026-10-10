@@ -197,10 +197,8 @@ proc ::application::voice::engines {} {
 
 # The python interpreter that can import faster_whisper, or {}.
 proc ::application::voice::fasterWhisperPython {} {
-	foreach py {python3 python} {
-		if {![llength [auto_execok $py]]} { continue }
-		if {![catch { exec $py -c "import faster_whisper" 2>/dev/null }]} { return $py }
-	}
+	set py [::platform::sys::hasPythonModule faster_whisper]
+	if {$py ne ""} { return $py }
 	return {}
 }
 
@@ -619,7 +617,7 @@ proc ::application::voice::Stop {} {
 
 	if {[string length $Priv(pid)]} {
 		# ask politely, so the recorder flushes what it has
-		catch { exec kill -INT $Priv(pid) }
+		catch { ::platform::sys::kill $Priv(pid) -INT }
 		after 400 [namespace code [list Finish $Priv(pid)]]
 	} else {
 		Finish {}
@@ -637,7 +635,7 @@ proc ::application::voice::Finish {pid} {
 	# wait for the recorder to be gone (at most ~1.5 s)
 	if {[string length $pid]} {
 		set waited 0
-		while {![catch { exec kill -0 $pid }] && $waited < 15} {
+		while {[::platform::sys::alive $pid] && $waited < 15} {
 			after 100
 			update
 			incr waited
@@ -998,7 +996,7 @@ proc ::application::voice::Speak {text} {
 			}
 		}
 		espeak-ng {
-			if {[catch { exec espeak-ng -w $wav -s 165 $text } err]} { return 0 }
+			if {[catch { ::platform::sys::speak $text $wav } err]} { return 0 }
 		}
 		default {
 			# a template: %t is the text

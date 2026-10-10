@@ -36,6 +36,9 @@
 if {[llength [info commands ::util::source]]} {
 	::util::source ai-modelfit
 }
+if {![namespace exists ::platform::sys]} {
+	catch { source [file join [file dirname [file normalize [info script]]] sys-platform.tcl] }
+}
 
 package require Tcl 8.5
 
@@ -103,8 +106,8 @@ proc ::ai::modelfit::FinishMemory {id {failed 0} {deliver 1}} {
 	set chan [dict get $probe chan]
 	if {$chan ne {}} {
 		fileevent $chan readable {}
-		if {$failed && $::tcl_platform(platform) eq "unix"} {
-			catch {exec kill -TERM {*}[pid $chan]}
+		if {$failed} {
+			catch {::platform::sys::kill [pid $chan] -TERM}
 		}
 		# Closing a nonblocking pipeline does not wait for child termination.
 		catch {close $chan}

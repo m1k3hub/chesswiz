@@ -1544,25 +1544,8 @@ proc application::media::CheckDecode {path} {
 proc application::media::LaunchExternal {path} {
 	variable mc
 
-	switch -- [tk windowingsystem] {
-		"aqua" {
-			catch { exec open $path & }
-		}
-		"win32" {
-			if {$::tcl_platform(os) eq "Windows NT"} {
-				catch { exec $::env(COMSPEC) /c start "" $path & }
-			} else {
-				catch { exec start "" $path & }
-			}
-		}
-		"x11" {
-			set opener [auto_execok xdg-open]
-			if {[string length $opener]} {
-				catch { exec $opener $path & }
-			} else {
-				tk_messageBox -icon error -type ok -message [format $mc::OpenError $path]
-			}
-		}
+	if {[catch { ::platform::sys::openURL $path }]} {
+		tk_messageBox -icon error -type ok -message [format $mc::OpenError $path]
 	}
 }
 

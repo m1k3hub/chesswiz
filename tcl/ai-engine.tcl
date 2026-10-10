@@ -25,6 +25,9 @@
 if {[llength [info commands ::util::source]]} {
 	::util::source ai-engine
 }
+if {![namespace exists ::platform::sys]} {
+	catch { source [file join [file dirname [file normalize [info script]]] sys-platform.tcl] }
+}
 
 package require Tcl 8.5
 
@@ -134,7 +137,7 @@ proc ::ai::engine::ensure {} {
 	# the engine's minimum (1 thread, 16 MB) makes every answer slow: use
 	# part of the machine, leaving cores for the GUI and analysis panes
 	set cores 2
-	catch { set cores [exec nproc] }
+	catch { set cores [::platform::sys::cpus] }
 	send "setoption name Threads value [expr {max(1, min(8, $cores / 2))}]"
 	send "setoption name Hash value 256"
 	# endgame tablebases: the folder set on the Stockfish profile (Engine

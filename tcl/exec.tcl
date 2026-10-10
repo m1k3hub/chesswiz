@@ -81,7 +81,14 @@ wm withdraw .
 set nameofexecutable [info nameofexecutable]
 if {[llength $nameofexecutable] == 0} {
 	if {$tcl_platform(platform) eq "unix"} {
-		catch { set nameofexecutable [exec readlink /proc/[pid]/exe] }
+		catch {
+			if {![llength [info commands ::platform::sys::readlink]]} {
+				set _spf [file join [file dirname [info script]] sys-platform.tcl]
+				if {[file exists $_spf]} { source $_spf }
+				unset -nocomplain _spf
+			}
+			set nameofexecutable [::platform::sys::readlink /proc/[pid]/exe]
+		}
 	}
 	if {[llength $nameofexecutable] == 0} {
 		# broken Tk library, e.g. 8.6b2

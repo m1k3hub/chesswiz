@@ -48,56 +48,39 @@ proc open {parent url} {
 	set url [::scidb::misc::url escape $url]
 	::widget::busyCursor on
 
-	switch -- [tk windowingsystem] {
-		"aqua" {
-			catch {exec open [list $url] &}
+	if {![regexp {^[a-z]+:} $url]} {
+		if {[string match *@* $url]} {
+			set prot mailto:
+		} elseif {![regexp {^[a-z]+://} $url]} {
+			set prot http://
 		}
+		set url ${prot}${url}
+	}
 
-		"win32" {
-			if {$::tcl_platform(os) eq "Windows NT"} {
-				catch {exec $::env(COMSPEC) /c start "" [list $url] &}
-			} else {
-				catch {exec start "" [list $url] &}
-			}
-		}
-
-		"x11" {
+	if {[catch { ::platform::sys::openURL $url }]} {
+		if {[tk windowingsystem] eq "x11"} {
 			variable DefaultBrowser
 			variable Excluded
 			variable Options
 
-			set xdgopen [auto_execok xdg-open]
-			if {[string length $xdgopen] > 0} {
-				# xdg-open always reports errors
-				if {![regexp {^[a-z]+:} $url]} {
-					if {[string match *@* $url]} {
-						set prot mailto:
-					} elseif {![regexp {^[a-z]+://} $url]} {
-						set prot http://
-					}
-					set url ${prot}${url}
+			if {![info exists DefaultBrowser]} {
+				set DefaultBrowser [FindDefaultBrowser]
+			}
+			while {[string length $DefaultBrowser]} {
+				if {[info exists Options($DefaultBrowser)]} {
+					set options [string map [list %url% $url] $Options($DefaultBrowser)]
+					if {![catch {exec $DefaultBrowser {*}$options &}]} { break }
 				}
-				catch { exec $xdgopen [list $url] & }
-			} else {
-				if {![info exists DefaultBrowser]} {
-					set DefaultBrowser [FindDefaultBrowser]
-				}
-				while {[string length $DefaultBrowser]} {
-					if {[info exists Options($DefaultBrowser)]} {
-						set options [string map [list %url% $url] $Options($DefaultBrowser)]
-						if {![catch {exec $DefaultBrowser {*}$options &}]} { break }
-					}
-					if {![catch {exec $DefaultBrowser [list $url] &}]} { break }
-					lappend Excluded $DefaultBrowser
-					set DefaultBrowser [FindDefaultBrowser]
-				}
-				if {[llength $DefaultBrowser] == 0} {
-					::dialog::error \
-						-parent $parent \
-						-message $mc::CannotFindBrowser \
-						-detail $mc::CannotFindBrowserDetail \
-						;
-				}
+				if {![catch {exec $DefaultBrowser [list $url] &}]} { break }
+				lappend Excluded $DefaultBrowser
+				set DefaultBrowser [FindDefaultBrowser]
+			}
+			if {[llength $DefaultBrowser] == 0} {
+				::dialog::error \
+					-parent $parent \
+					-message $mc::CannotFindBrowser \
+					-detail $mc::CannotFindBrowserDetail \
+					;
 			}
 		}
 	}

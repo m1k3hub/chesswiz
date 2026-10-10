@@ -341,8 +341,7 @@ proc mediaState {} {
 
 
 proc children {} {
-	if {[catch { exec pgrep -a -P [pid] } out]} { return "no child processes" }
-	return [string trim $out]
+	return [::platform::sys::children]
 }
 
 

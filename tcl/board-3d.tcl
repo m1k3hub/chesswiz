@@ -1957,12 +1957,7 @@ proc ::board3d::WebGLStartServer {} {
 		return 0
 	}
 
-	set python ""
-	if {![catch { exec python3 -c {import sys} }]} {
-		set python python3
-	} elseif {![catch { exec python -c {import sys} }]} {
-		set python python
-	}
+	set python [::platform::sys::python]
 	if {$python eq ""} {
 		set Priv(webgl,error) "neither python3 nor python was found in PATH"
 		return 0
@@ -2032,19 +2027,10 @@ proc ::board3d::openWebGLViewer {} {
 	# tests and headless use suppress the browser launch
 	if {![info exists ::env(SCIDB_WEB3D_NO_BROWSER)]} {
 		set url [WebGLUrl]
-		switch -glob -- $::tcl_platform(os) {
-			"Linux*" {
-				foreach browser {xdg-open firefox chromium chromium-browser google-chrome} {
-					if {![catch { exec $browser $url & }]} { return 1 }
-				}
-			}
-			"Darwin" {
-				if {![catch { exec open $url & }]} { return 1 }
-			}
-			default {
-				if {$::tcl_platform(platform) eq "windows"} {
-					if {![catch { exec start $url & }]} { return 1 }
-				}
+		if {![catch { ::platform::sys::openURL $url }]} { return 1 }
+		if {[tk windowingsystem] eq "x11"} {
+			foreach browser {firefox chromium chromium-browser google-chrome} {
+				if {![catch { exec $browser $url & }]} { return 1 }
 			}
 		}
 	}

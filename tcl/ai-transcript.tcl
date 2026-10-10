@@ -73,14 +73,7 @@ proc ::ai::transcript::fasterWhisperPython {} {
 	variable PythonProbed
 
 	if {!$PythonProbed} {
-		set Python {}
-		foreach py {python3 python} {
-			if {![llength [auto_execok $py]]} { continue }
-			if {![catch { exec $py -c "import faster_whisper" 2>/dev/null }]} {
-				set Python $py
-				break
-			}
-		}
+		set Python [::platform::sys::hasPythonModule faster_whisper]
 		set PythonProbed 1
 	}
 	return $Python

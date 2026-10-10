@@ -1219,7 +1219,7 @@ if {[tk windowingsystem] eq "x11" && [string length [auto_execok xdg-mime]]} {
 			set xdgcmd [list $xdgmime default scidb.desktop {*}[join $mimetypes " "]]
 			# Unluckely the pipe is swallowing any error, but we have to use pipe 'yes'
 			# because xdg-mime may ask if some files should be set writeable.
-			catch { exec yes | {*}$xdgcmd }
+			catch { ::platform::sys::execWithYes {*}$xdgcmd }
 			set update_mime_database [auto_execok update-mime-database]
 			if {[string length $update_mime_database]} {
 				set xdg_data_home ~/.local/share
