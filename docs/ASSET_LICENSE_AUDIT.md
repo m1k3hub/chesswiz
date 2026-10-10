@@ -7,7 +7,14 @@ commercial Windows/macOS release.
 Verdicts: **Keep** (licence allows it; keep notices) · **Ask** (needs written permission or
 the licence is unknown) · **Replace** (licence forbids our use, or a third party's trademark).
 
-## Must replace
+## Done (2026-10-10)
+
+- App icon: new `icons/chesswiz.svg` (Burnett knight, GPL-2+/BSD/GFDL, on a drawn tile). Rendered to `freedesktop.org/chesswiz-*.png`, `icons/chesswiz-*.png`, `icons/chesswiz.ico` (now used by `scidb.rc`), `favicon.ico`, `tcl/images/Scidb-Logo-128.png`, `tcl/help/images/scidb-logo.png` and the five embedded `::icon::NxN::logo` images. The IconDrawer files are deleted.
+- Tip-of-the-day pictures: **all** old `Motive-*` images are replaced. Besides Disney they included a Care Bear, Nintendo's Princess Daisy, Spyro, a branded dartboard and a Twitter-like bird. The new ones are rendered from Noto Color Emoji (Apache-2.0), and so is `Smiley-Cry-128x128.png`; see `tcl/images/README`.
+- OS logos and DigifaceDigits are deleted. They were unused, so no replacement was needed.
+- The Fritz set, themes and textures are renamed Club, with newly generated wood textures. Old settings are migrated. The piece outlines remain Gorgonian's GFritz design (freeware made for BabasChess).
+
+## Must replace (original findings)
 
 | Asset | Where | Why |
 |---|---|---|
@@ -25,10 +32,12 @@ the licence is unknown) · **Replace** (licence forbids our use, or a third part
 | virtualpieces.net sets (Peter Wong) | `tcl/pieces/virtual.tcl` and related | `COPYRIGHT`: permission was given by email "for the use in Scidb", so it doesn't automatically cover Chesswiz. |
 | "All rights reserved" chess fonts | `ScidbChessCheq` (Atech 1991), `ScidbChessChess7` (1999), `ScidbChessOle`/`ScidbSymbolOle` (ChessOle!, Frank David 1993), `ScidbChessSmart` (Christoph Wirth 1992), `ScidbCircled` (Roger White 1998, "see .txt for terms": that .txt is **missing**), `BelfastDigits*` (tibotanguy 2008) | Most chess fonts of that era were freeware, and freeware doesn't mean redistributable or modifiable. Find each one's original terms. |
 | Chess fonts with no notice in the file | Adventurer, Alpha, Aquarium, Berlin, Bookup, Cases, Celtic, CMF, Condal, Cube, GoodCompanion, Habsburg, Kingdom, Leipzig, Lucena, Magnetic, Marroquin, Maya, Mediaeval, Merida, Military, Motif, OldStyle, Segoe, Standard, Traveller, USCF, Winboard, Zurich; `ScidbDiagram*`, `ScidbSymbolS1/T1/Traveller`; `Abell-Cond-Bold`, `DesignerBlockDigits`, `Digital-*Digits`, `finalnew` (Final Frontier) | Many are by Armando Marroquin, Alpine/Eric Bentzen and others (freeware). `tcl/pieces/*.tcl` are Gregor Cramer's conversions of these designs, so the copyright in the design still applies. "Segoe" and "USCF" are also third-party names. |
-| Board textures | `tcl/textures/{dark,lite,tile}/{marble,misc,wood}` (≈280 jpg/png/gif) | No source recorded anywhere. |
-| Flags | `tcl/flags/` | `readme`: "downloaded from http://addgadget.com/clock/", with additions "found in the internet". No licence. |
+| Board textures | `tcl/textures/{dark,lite,tile}/{marble,misc,wood}` (≈280 jpg/png/gif) | No source recorded anywhere. Names such as `Arena-Blue.png` (Arena GUI?) and `Diamond_Ebony_Marble.15194542_std.jpg` / `11932818.jpg` (stock-photo IDs) are the most suspect. |
+| Flags | `tcl/flags/` | `readme`: "downloaded from http://addgadget.com/clock/", with additions "found in the internet". No licence. (The about box also credits famfamfam flags, which are free for any use.) |
 | Remaining tip-of-the-day images | `tcl/images/Motive-*` (animals, flowers, etc.) | No source recorded. |
 | Cursors | `tcl/cursor/` | No source recorded; probably Gregor Cramer's own. |
+| Embedded UI icons | `tcl/icons.tcl`, `tcl/app-db-icons.tcl` (hundreds of base64 images) | No source recorded. Many look like stock icon sets (Crystal, Oxygen, famfamfam: LGPL/CC). Needs a pass. |
+| Font credits | `tcl/info.tcl` about box | Names the designers: Marroquin, Bentzen, Cowderoy, Leschemelle, Scott and Frank David (enpassant.dk freeware); Gorgonian (BabasChess); Brown (Good Companion); Poisson (Phoenix); Burnett (GPL); Eran Karu (PyChess, GPL); Maurizio Monge (Eyes, Fantasy, Skulls, Spatial). Check each site's terms. |
 
 ## Keep
 
