@@ -3292,7 +3292,7 @@ normalFlowLayoutFromCache(
 
     HtmlFloatList   *pFloat = pNormal->pFloat;
     HtmlLayoutCache *pLayoutCache = pElem->pLayoutCache;
-    LayoutCache     *pCache = &pLayoutCache->aCache[pLayout->minmaxTest];
+    LayoutCache     *pCache = pLayoutCache ? &pLayoutCache->aCache[pLayout->minmaxTest] : 0;
 
     assert(pNormal->isValid == 0 || pNormal->isValid == 1);
 

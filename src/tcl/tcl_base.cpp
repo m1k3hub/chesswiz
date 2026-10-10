@@ -557,7 +557,14 @@ tcl::setResult(Tcl_Obj* obj)
 void
 tcl::setResult(int objc, Tcl_Obj* const objv[])
 {
-	M_REQUIRE(objc == 0 || objv);
+	if (objc == 0)
+	{
+		// Guard against an expression like `setResult(0, vla_of_size_0)`:
+		// Tcl_NewListObj requires a non-null pointer even when the count is 0.
+		Tcl_SetObjResult(interp(), Tcl_NewListObj(0, 0));
+		return;
+	}
+	M_REQUIRE(objv);
 	Tcl_SetObjResult(interp(), Tcl_NewListObj(objc, objv));
 
 }

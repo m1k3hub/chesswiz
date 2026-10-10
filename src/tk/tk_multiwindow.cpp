@@ -1246,8 +1246,10 @@ ConfigureSlaves(	MultiWindow* mw,			// Information about multi window
 	{
 		// If none of the existing slaves have to be moved, just copy the old
 		// and append the new.
-		memcpy(newSlaves, mw->slaves, sizeof(Slave*)*mw->numSlaves);
-		memcpy(newSlaves + mw->numSlaves, inserts, sizeof(Slave*)*numNewSlaves);
+		if (mw->numSlaves)
+			memcpy(newSlaves, mw->slaves, sizeof(Slave*)*mw->numSlaves);
+		if (numNewSlaves)
+			memcpy(newSlaves + mw->numSlaves, inserts, sizeof(Slave*)*numNewSlaves);
 	}
 	else
 	{

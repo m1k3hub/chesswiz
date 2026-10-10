@@ -75,17 +75,20 @@ public:
       mCurrentCharLen = mModel->charLenTable[byteCls];
     }
     //from byte's class and stateTable, we get its next state
-    mCurrentState=(nsSMState)GETFROMPCK(mCurrentState*(mModel->classFactor)+byteCls,
-                                       mModel->stateTable);
+    mCurrentState=GETFROMPCK(mCurrentState*(mModel->classFactor)+byteCls,
+                             mModel->stateTable);
     mCurrentBytePos++;
-    return mCurrentState;
+    return (nsSMState)mCurrentState;
   }
   PRUint32  GetCurrentCharLen(void) {return mCurrentCharLen;}
   void      Reset(void) {mCurrentState = eStart;}
   const char * GetCodingStateMachine() {return mModel->name;}
 
 protected:
-  nsSMState mCurrentState;
+  // NOTE: stored as the enum's underlying integer type. The state table can
+  // yield values outside the nsSMState enumerators (e.g. a character length),
+  // which would be UB to hold in an enum-typed object.
+  PRUint32 mCurrentState;
   PRUint32 mCurrentCharLen;
   PRUint32 mCurrentBytePos;
 

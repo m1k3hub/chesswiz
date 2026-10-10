@@ -478,7 +478,8 @@ BlockFile::resize(View& view, unsigned span)
 	{
 		unsigned char* data = view.m_buffer.m_data;
 		view.m_buffer.m_data = new Byte[capacity];
-		::memcpy(view.m_buffer.m_data, data, view.m_buffer.m_capacity);
+		if (view.m_buffer.m_capacity)
+			::memcpy(view.m_buffer.m_data, data, view.m_buffer.m_capacity);
 		view.m_buffer.m_capacity = capacity;
 		delete [] data;
 	}

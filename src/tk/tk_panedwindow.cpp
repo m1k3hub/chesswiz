@@ -1094,10 +1094,14 @@ ConfigureSlaves(
 	 * If none of the existing slaves have to be moved, just copy the old
 	 * and append the new.
 	 */
-	memcpy((void *)&(newSlaves[0]), pwPtr->slaves,
-		sizeof(Slave *) * pwPtr->numSlaves);
-	memcpy((void *)&(newSlaves[pwPtr->numSlaves]), inserts,
-		sizeof(Slave *) * numNewSlaves);
+	if (pwPtr->numSlaves != 0) {
+	    memcpy((void *)&(newSlaves[0]), pwPtr->slaves,
+		    sizeof(Slave *) * pwPtr->numSlaves);
+	}
+	if (numNewSlaves != 0) {
+	    memcpy((void *)&(newSlaves[pwPtr->numSlaves]), inserts,
+		    sizeof(Slave *) * numNewSlaves);
+	}
     } else {
 	/*
 	 * If some of the existing slaves were moved, the old slaves array

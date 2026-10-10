@@ -775,7 +775,10 @@ convertRow(	typename JPEG<N,Colorspace>::Sample const* src0,
 		{
 #ifdef HAS_UNALIGNED_WORD_ACCESS
 			// additional data overhead is granted
-			*reinterpret_cast<Pixel*>(q) = Conv<Colorspace,N,M>::map(*src0, *src1, *src2);
+			// NOTE: q is not guaranteed to be word-aligned; store through memcpy
+			// so that the access is defined (produces the same little-endian bytes).
+			Pixel pixel = Conv<Colorspace,N,M>::map(*src0, *src1, *src2);
+			::memcpy(q, &pixel, sizeof(pixel));
 #else
 			Conv<Colorspace,N,M>::map(q, *src0, *src1, *src2);
 #endif

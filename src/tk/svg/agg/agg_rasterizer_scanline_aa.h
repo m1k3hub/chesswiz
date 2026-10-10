@@ -269,7 +269,9 @@ namespace agg
 
                     if(area)
                     {
-                        alpha = calculate_alpha((cover << (poly_subpixel_shift + 1)) - area);
+                        // NOTE: cover may be negative; shift it as unsigned
+                        // (identical 2's-complement bits, no UB).
+                        alpha = calculate_alpha(int(unsigned(cover) << (poly_subpixel_shift + 1)) - area);
                         if(alpha)
                         {
                             sl.add_cell(x, alpha);
@@ -279,7 +281,7 @@ namespace agg
 
                     if(num_cells && cur_cell->x > x)
                     {
-                        alpha = calculate_alpha(cover << (poly_subpixel_shift + 1));
+                        alpha = calculate_alpha(int(unsigned(cover) << (poly_subpixel_shift + 1)));
                         if(alpha)
                         {
                             sl.add_span(x, cur_cell->x - x, alpha);

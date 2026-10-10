@@ -392,20 +392,15 @@ static struct sgEsc *apEscHash[ESC_HASH_SIZE];
 static int
 EscHash(const char *zName)
 {
-    int h = 0;                         /* The hash value to be returned */
-    char c;                            /* The next character in the name
+    unsigned h = 0;                    /* The hash value to be returned */
+    unsigned char c;                   /* The next character in the name
                                         * being hashed */
 
-    while ((c = *zName) != 0) {
-        h = h << 5 ^ h ^ c;
+    while ((c = (unsigned char)*zName) != 0) {
+        h = (h << 5) ^ h ^ c;
         zName++;
     }
-    if (h < 0) {
-        h = -h;
-    }
-    else {
-    }
-    return h % ESC_HASH_SIZE;
+    return (int)(h % ESC_HASH_SIZE);
 }
 
 #ifdef TEST

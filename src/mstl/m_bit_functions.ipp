@@ -304,7 +304,11 @@ rotate_left(T x, unsigned shift)
 	// the GNU compiler knows that the C code only rotates the bits and that
 	// this can be done with the x86 rol and ror instructions.
 	// Also see <http://gcc.gnu.org/bugzilla/show_bug.cgi?id=17886>.
-	return (x << shift) | (x >> (sizeof(T)*8 - shift));
+	// Reducing the shift modulo the type width keeps the result identical to
+	// the x86 rotate semantics while avoiding an out-of-range shift (UB).
+	unsigned mask = sizeof(T)*8 - 1;
+	shift &= mask;
+	return (x << shift) | (x >> ((sizeof(T)*8 - shift) & mask));
 }
 
 
@@ -317,7 +321,11 @@ rotate_right(T x, unsigned shift)
 	// the GNU compiler knows that the C code only rotates the bits and that
 	// this can be done with the x86 rol and ror instructions.
 	// Also see <http://gcc.gnu.org/bugzilla/show_bug.cgi?id=17886>.
-	return (x >> shift) | (x << (sizeof(T)*8 - shift));
+	// Reducing the shift modulo the type width keeps the result identical to
+	// the x86 rotate semantics while avoiding an out-of-range shift (UB).
+	unsigned mask = sizeof(T)*8 - 1;
+	shift &= mask;
+	return (x >> shift) | (x << ((sizeof(T)*8 - shift) & mask));
 }
 
 } // namespace bf

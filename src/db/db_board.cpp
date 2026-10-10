@@ -251,7 +251,7 @@ Board::diagA1H8Attacks(Square square) const
 uint64_t
 Board::diagH1A8Attacks(Square square) const
 {
-	return L45Attacks[square][(m_occupiedL45 >> ShiftL45[square]) & 63];
+	return L45Attacks[square][(m_occupiedL45 >> (ShiftL45[square] & 63)) & 63];
 }
 
 

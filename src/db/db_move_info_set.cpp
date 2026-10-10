@@ -199,7 +199,8 @@ MoveInfoSet::find(MoveInfo const& info) const
 void
 MoveInfoSet::sort()
 {
-	::qsort(m_row.begin(), m_row.size(), sizeof(Row::value_type), ::compare);
+	if (m_row.size())
+		::qsort(m_row.begin(), m_row.size(), sizeof(Row::value_type), ::compare);
 }
 
 

@@ -89,7 +89,8 @@ MarkSet::add(MarkSet const& set)
 void
 MarkSet::sort()
 {
-	::qsort(m_marks.begin(), m_marks.size(), sizeof(Marks::value_type), ::compare);
+	if (m_marks.size())
+		::qsort(m_marks.begin(), m_marks.size(), sizeof(Marks::value_type), ::compare);
 }
 
 

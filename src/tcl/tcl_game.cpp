@@ -2331,7 +2331,7 @@ cmdNext(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			}
 		}
 
-		Tcl_Obj* objs[result.size()];
+		Tcl_Obj* objs[result.size() ? result.size() : 1];
 		unsigned k = 0;
 
 		Game::StringList::const_iterator i = result.begin();
@@ -2340,7 +2340,7 @@ cmdNext(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		for ( ; i != e; ++i)
 			objs[k++] = newObj(*i);
 
-		setResult(result.size(), objs);
+		setResult(result.size(), k ? objs : 0);
 	}
 
 	return TCL_OK;

@@ -155,7 +155,8 @@ Node::createNext(Allocator& allocator, Pool& pool, Alpha alpha)
 void
 Node::sortEdges()
 {
-	::qsort(m_outgoing.begin(), m_outgoing.size(), sizeof(Edges::value_type), Edge::compare);
+	if (m_outgoing.size())
+		::qsort(m_outgoing.begin(), m_outgoing.size(), sizeof(Edges::value_type), Edge::compare);
 }
 
 

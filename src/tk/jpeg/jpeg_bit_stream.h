@@ -80,7 +80,7 @@ private:
 	// attributes
 	Stream&	m_stream;
 	int		m_bitsLeft;
-	int		m_bits;
+	unsigned	m_bits;
 	bool		m_eos;
 };
 

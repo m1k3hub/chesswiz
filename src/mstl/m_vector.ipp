@@ -765,7 +765,10 @@ void
 vector<T>::zero()
 {
 	if (mstl::is_pod<value_type>::value)
-		::memset(static_cast<void*>(this->m_start), 0, size()*sizeof(value_type));
+	{
+		if (this->m_start)
+			::memset(static_cast<void*>(this->m_start), 0, size()*sizeof(value_type));
+	}
 	else
 		mstl::fill_n(this->m_start, size(), value_type());
 }

@@ -316,7 +316,8 @@ PgnReader::setResult(int n,
 
 	if (unsupported)
 	{
-		Tcl_Obj* uns[mstl::mul2(unsupported->size())];
+		unsigned n = mstl::mul2(unsupported->size());
+		Tcl_Obj* uns[n ? n : 1];
 
 		for (unsigned i = 0; i < unsupported->size(); ++i)
 		{
@@ -325,7 +326,7 @@ PgnReader::setResult(int n,
 			uns[mstl::mul2(i) + 1] = Tcl_NewIntObj(item.second);
 		}
 
-		objs[4] = Tcl_NewListObj(mstl::mul2(unsupported->size()), uns);
+		objs[4] = Tcl_NewListObj(n, n ? uns : 0);
 	}
 	else
 	{

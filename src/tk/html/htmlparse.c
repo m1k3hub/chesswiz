@@ -496,19 +496,16 @@ static HtmlTokenMap *apMap[HTML_MARKUP_HASH_SIZE];
 static int
 HtmlHash(void *htmlPtr, const char *zName)
 {
-    int h = 0;
-    char c;
-    while ((c = *zName) != 0) {
+    unsigned h = 0;
+    unsigned char c;
+    while ((c = (unsigned char)*zName) != 0) {
         if (isupper(c)) {
-            c = tolower(c);
+            c = (unsigned char)tolower(c);
         }
-        h = h << 5 ^ h ^ c;
+        h = (h << 5) ^ h ^ c;
         zName++;
     }
-    if (h < 0) {
-        h = -h;
-    }
-    return h % HTML_MARKUP_HASH_SIZE;
+    return (int)(h % HTML_MARKUP_HASH_SIZE);
 }
 
 #ifdef TEST

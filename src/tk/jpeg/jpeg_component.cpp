@@ -381,7 +381,7 @@ Component::readExtendedBits(int n)
 
 	int s = m_bitStream.nextBits(n);
 
-	return s < (1 << (n - 1)) ? s + (-1 << n) + 1 : s;
+	return s < (1 << (n - 1)) ? s + -(1 << n) + 1 : s;
 }
 
 
