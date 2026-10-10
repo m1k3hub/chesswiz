@@ -89,6 +89,10 @@ The metadata only names Photoshop, GIMP and camera models. Replace with CC0 text
 
 ### Embedded UI icons (`tcl/icons.tcl`, `tcl/app-db-icons.tcl`, 520 images)
 
+**Replaced (2026-10-10): 365 generic icons** (file, edit and media controls, arrows, help, database types, players and the like) are now Noto Color Emoji renders (Apache-2.0) at the old pixel sizes. Bold, italic, underline, font size and alignment are drawn as letters and lines. Not replaced: icons under 12 px (tree toggles and similar), the pie charts, and the chess-specific icons (variants, game flags, annotation marks, chess file types, Informant, board and side-to-move). These are most likely Gregor Cramer's own work (GPL), but that isn't recorded. The "Informant" name still needs renaming.
+
+Original finding:
+
 No source comments; PNG metadata shows only editors (80 from Adobe ImageReady, typical of downloaded icon packs; 30 Inkscape; a few GIMP and Fireworks). Visually a mix of Crystal-style media buttons (Crystal Project, LGPL), FatCow-style database and folder icons (CC BY 3.0) and unidentified sets. One stacked-books archive icon resembles the WinRAR logo (trademark): replace it. The old IconDrawer logo also survived as `variant(Normal)` (22 px) and is now replaced. **Verdict: unknown.** For a commercial release, replace them with one licensed theme (e.g. Breeze or Oxygen, LGPL; Papirus, GPL-3; Fluent UI or Material Symbols, Apache-2.0/MIT).
 
 ## Keep
