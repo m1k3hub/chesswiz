@@ -16,7 +16,7 @@ Status: proposal, 2026-10-09. Facts below were surveyed from the tree at `bb30e5
 | X11-only Tk extensions | `tk_x11.cpp`, `tk_busy.cpp`, `tk_window_manager.cpp`, `tk_fixes.cpp`, `tk_selection.cpp`, `tk_xcursor.cpp`, `X11/` (~4 kLOC) | Biggest risk; see §3 |
 | `tk_twm.cpp` (9 kLOC docking manager) | Pure Tk C API, no Xlib | Portable; floating/undock behaviour must be retested per WM |
 | 3D board | `tk_glboard.cpp` dlopens `libTogl.so`; WebGL path runs `python3 web3d/server.py` | Togl for Win/Mac or drop to WebGL-only |
-| Reckless engine | Rust (`engines/reckless`) | cargo cross-builds fine; ship prebuilt |
+| Reckless engine | Rust (`engines/reckless`) | stays Rust (third-party engine); cargo cross-builds it, and `cargo-zigbuild` can use the Zig linker; ship prebuilt |
 | Network (assistant, downloads) | `http::geturl` + `tls::` (tcltls) | Bundle tcltls with OpenSSL (Win) / use it on Mac too |
 
 ## 2. Decisions to make (recommendation first)
@@ -25,9 +25,13 @@ Status: proposal, 2026-10-09. Facts below were surveyed from the tree at `bb30e5
 - 8.6 is what Linux builds use (`TCL_VERSION = 8.6`). 8.7/9.0 change the C API (Tcl_Size, UTF-8) and would add churn across 410 files.
 - Ship a private Tcl/Tk (not the system one): macOS system Tk is deprecated/ancient; Windows has none.
 
-### D2. Build system — **keep make, add CMake only if MSVC is required**
-- Recommended: **MSYS2/MinGW-w64 (UCRT64)** on Windows, clang + make on macOS. The existing `configure`/`Makefile.in` survive with platform blocks; GCC-isms (`__attribute__`, `-Wl,-rpath`) keep working on MinGW.
-- MSVC would need a CMake port of every Makefile — weeks of work for no user-visible gain.
+### D2. Build system — **Zig toolchain (`zig cc` / `zig c++`), cross-compiling from Linux** (decided 2026-10-10)
+- All three platforms are built from one Linux machine with Zig as the C/C++ compiler and linker: `CC="zig cc -target x86_64-windows-gnu"`, `aarch64-macos`, `x86_64-macos`, `x86_64-linux-gnu.2.31`. Zig bundles clang, libc++, the MinGW-w64 headers and import libs and the macOS libc stubs, so there is no MSYS2 install, no Xcode on a build Mac and no per-OS compiler drift.
+- The existing `configure` / `Makefile.in` stay. A `--toolchain=zig --target=<triple>` option sets `CC`/`CXX`/`AR`/`RANLIB` and the platform blocks. GCC-isms (`__attribute__`, `-Wl,-rpath`) work under clang.
+- Third-party C dependencies (Tcl/Tk 8.6, zlib, expat, OpenSSL for tcltls) are built from source with the same toolchain into a per-target sysroot, `build/<triple>/`. Prebuilt system libraries aren't used, which also makes builds reproducible.
+- Windows target is the GNU ABI (`-windows-gnu`, MinGW-compatible). MSVC ABI is only needed if a Store listing or a third-party MSVC-only library demands it (see open questions).
+- macOS: cross-compiled binaries still need **codesigning and notarization**, which run on a Mac or a macOS CI runner (`codesign`, `notarytool`); only the compile step moves to Linux.
+- Pin the Zig version (`.zig-version` plus a CI check). Zig is pre-1.0 and every release can break the build; upgrade deliberately, one release at a time.
 - Known gotcha: `configure` splits `OPTIMIZE=` at the second `=`; fix that parser while touching it.
 
 ### D3. X11-only extensions — **stub per platform, then replace feature by feature**
@@ -52,7 +56,7 @@ Found: `exec nproc` (ai-engine.tcl:137), `exec kill` (ai-modelfit.tcl:107, app-v
 - TTS: Windows SAPI via PowerShell, macOS `say`, Linux espeak-ng.
 
 ### D7. Per-user directories — **platform-native, decided explicitly, not from argv0**
-- **Done:** the name is now set at build time (`USERDIRNAME`, default `.` + basename of `DATADIR`, i.e. `.scidb-beta`), and `SCIDB_USERDIR` overrides it. The launcher no longer derives its binary from its own name either: the binary name is substituted at build time (`TKPROGRAM`, default `tkscidb$(SUFFIX)`) and symlinks are followed to the real script.
+- **Done:** the name is now set at build time (`USERDIRNAME`, default `.` + basename of `DATADIR`, i.e. `.chesswiz`), and `SCIDB_USERDIR` overrides it. The launcher no longer derives its binary from its own name either: the binary name is substituted at build time (`TKPROGRAM`, default `tkchesswiz`) and symlinks are followed to the real script.
 - Before: `start.tcl:63` derived the user dir from the *executable name*: `~/.` + name minus the `tk` prefix (`tkscidb-beta` → `~/.scidb-beta`). A rename or a `.exe` suffix silently moves everyone's settings, keys and layouts. Fix this **before** the rename.
 - Proposed:
   - Linux: `$XDG_CONFIG_HOME/<app>` (fall back to the legacy dotdir if it exists).
@@ -69,8 +73,9 @@ Found: `exec nproc` (ai-engine.tcl:137), `exec kill` (ai-modelfit.tcl:107, app-v
 ### D9. Credentials — **OS keychain**
 - API keys currently live in `user/config/ai-keys` (plain file). On Win/Mac use Credential Manager / Keychain (via a tiny C shim), file fallback on Linux (or libsecret).
 
-### D10. CI — **GitHub Actions matrix** (ubuntu, windows-latest + MSYS2, macos-14)
-- Run `make -C tests tcl cpp` on all three; app tests under Xvfb on Linux only at first, then natively.
+### D10. CI — **build on Linux with Zig, test on each OS** (GitHub Actions)
+- One Linux job cross-builds all targets with the pinned Zig. Its artifacts go to ubuntu, windows-latest and macos-14 jobs, which run `make -C tests tcl cpp` (and later the app suite) natively. The macOS job also signs and notarizes.
+- App tests run under Xvfb on Linux at first, then natively.
 - The app suite has fixed-time waits; `bb30e5e` started converting them to `waitUntil` polls — finish that before CI, slow runners will otherwise flake.
 
 ## 3. Rename — decisions
@@ -89,42 +94,58 @@ Found: `exec nproc` (ai-engine.tcl:137), `exec kill` (ai-modelfit.tcl:107, app-v
 ## 4. Suggested order
 1. D7 (user dir decoupled from argv0) + settings migration — needed by both port and rename.
 2. Rename via `APP_NAME` single source.
-3. MSYS2 build compiles with X11 stubs (D2, D3 step 1) → app starts on Windows.
+3. Zig cross-build (D2) compiles with X11 stubs (D3 step 1) → app starts on Windows, then macOS.
 4. D6 exec replacements, D5 polling, D4 WebGL server in Tcl.
 5. macOS `.app` build; signing/notarization.
 6. Installers, CI matrix, keychain.
 
-## 6. Replace Tcl/Tk? Move C++ to Rust?
+## 6. Replace Tcl/Tk? Move C++ to Zig? (decided 2026-10-10: **Zig**, not Rust)
 
 Size today: **~260 k lines of Tcl** (UI and app logic), **~490 k lines of C++** (db 177 k, tk extensions 133 k, cql6 59 k, util 47 k, mstl 34 k, tcl bindings 31 k).
 
-### Tcl/Tk — recommendation: do **not** make replacing it a precondition of the port
+### Tcl/Tk — do **not** make replacing it a precondition of the port
 - Tk *is* the cross-platform layer: it already runs natively on Windows and macOS. Most port cost is in our X11 extensions (§D3), not in Tk itself.
-- Replacing Tk means rewriting all 260 k Tcl lines plus the 9 kLOC docking manager — a multi-year rewrite with nothing shippable until it's finished, and the fuzz/test corpus (all Tcl-driven) would be lost.
-- If the UI is to be replaced, the target I'd pick is **Tauri (Rust shell + web UI)**:
-  - it fits a Rust core;
+- Replacing Tk means rewriting all 260 k Tcl lines plus the 9 kLOC docking manager. That's a multi-year rewrite with nothing shippable until it's finished, and the fuzz and test corpus (all Tcl-driven) would be lost.
+- If the UI is replaced later, the target is a **web UI in the system webview**, driven from Zig through the `webview/webview` C library (WebView2 on Windows, WKWebView on macOS, WebKitGTK on Linux):
   - the repo already has `web3d/` and a web front-end plan;
-  - it gives native Win/Mac/Linux packaging and signing for free.
+  - it adds no Rust/Tauri toolchain to a Zig project;
+  - packaging and signing reuse D8.
   Migrate it **screen by screen** behind the same core API, not in one go.
 - So: port on Tk first (months), and make the UI replacement a separate project that can start after.
 
-### C++ → Rust — recommendation: **strangler, not rewrite**
-1. Freeze a C ABI around the core (the Tcl bindings in `src/tcl` already outline it: db, game, pos, engine).
-2. Write new code in Rust from now on, linked via `cxx`/C ABI (cargo is already in the build for Reckless).
-3. Port first the modules where Rust buys the most: **untrusted-input parsers**.
-   - These are where the fuzzers find bugs: PGN reader, CBH/CBV/CBM codecs, `.sci` index reader, zip/gzip (use the `zip`/`flate2` crates).
-   - For each module, the existing C++ tests plus the file-mutation fuzzer (`cargo-fuzz` after porting) are the acceptance gate.
-4. Leave for last, or for never:
-   - `mstl` (replaced by std as callers move);
-   - `tk` extensions (gone if the UI moves to Tauri);
-   - `cql6` (port of the upstream C++ — keep tracking upstream).
-5. Ordering with the port: the Rust work does not block the Windows/macOS port; each ported module simply drops a platform `#ifdef` set.
+### C++ → Zig — **strangler, not rewrite**
+Why Zig:
+- **Interop:** `@cImport` reads the C headers directly. Zig code exports a plain C ABI that the C++ core and the Tcl bindings call with no glue layer. The same toolchain (D2) already builds the C++.
+- **One toolchain:** the language and the cross-compiler are the same install, so every ported module is cross-compiled for free.
+- **The user already works in Zig.**
+
+What Zig does *not* give, and how we cover it:
+
+| Risk | Mitigation |
+|---|---|
+| No compile-time memory safety (Rust's main advantage for untrusted-input parsers) | Ship parsers built **`ReleaseSafe`** (bounds, integer overflow, optional-unwrap and `unreachable` checks stay on in release). Use slices, never raw `[*]` pointers, in parser code. Every allocation goes through an explicit allocator; tests use `std.testing.allocator`, which fails on any leak or double free. |
+| Use-after-free isn't caught by `ReleaseSafe` | Parsers return owned, arena-allocated results (`std.heap.ArenaAllocator` per file read), so nothing is freed piecemeal. Run the fuzzer against `std.heap.DebugAllocator` (named `GeneralPurposeAllocator` before 0.14) configured with `.safety = true, .never_unmap = true, .retain_metadata = true`. That reports double frees and use-after-free during testing. |
+| Pre-1.0 language churn | Pin the version (D2); one deliberate upgrade per release; keep Zig code behind the C ABI so a breaking change never reaches the C++ or Tcl side. |
+| Thinner library ecosystem | Keep proven C libraries (zlib, expat, minizip, libharu, OpenSSL) and call them through `@cImport` rather than rewriting them. Use `std` where it suffices (`std.compress.flate`, `std.zip`, `std.unicode`). |
+
+Plan:
+1. **Freeze a C ABI around the core.** The Tcl bindings in `src/tcl` already outline it: db, game, pos, engine. Put it in one header, `src/abi/chesswiz.h`; both the C++ and the Zig side build against it.
+2. **Add a Zig build** (`build.zig`) that produces a static library (`libchesswiz_zig.a`). The existing makefiles link it into `tkchesswiz`, so new code can be written in Zig from day one.
+3. **Port the untrusted-input parsers first**, where the fuzzers have found the bugs: the PGN reader, the CBH/CBV/CBM codecs, the `.sci` index reader and zip/gzip handling.
+   - Acceptance gate per module: the existing C++ tests pass against the Zig implementation, byte-identical output on the fixture corpus (`sas_mirror/fixt/`), and a clean run of the file-mutation fuzzer.
+   - Fuzz with Zig's built-in fuzzing (`zig build test --fuzz`), feeding the existing `filefuzz/` corpus as seeds.
+   - Keep the C++ implementation behind a build flag until the Zig one has shipped one release.
+4. **Leave for last, or for never:**
+   - `mstl` (disappears as its callers move);
+   - the `tk` extensions (gone if the UI moves to a webview);
+   - `cql6` (a port of the upstream C++; keep tracking upstream).
+5. **Ordering with the port:** the Zig rewrite doesn't block the Windows/macOS port. The port starts by *compiling* the C++ with Zig (D2). Each ported module then removes a platform `#ifdef` set.
 
 ### Combined end state (if you go all the way)
-Rust core (db, formats, engines, search) → C ABI → (a) existing Tk UI during transition, (b) Tauri web UI as the target. Both UIs run against the same core, so users are never left without a working app.
+Zig core (db, formats, engines, search) → C ABI → (a) the existing Tk UI during the transition, (b) a webview UI as the target. Both UIs run against the same core, so users are never left without a working app.
 
 ## 5. Open questions for you
-- Is MSVC a hard requirement (e.g. for a Store listing), or is MinGW acceptable?
+- Is the MSVC ABI a hard requirement (e.g. for a Store listing), or is the GNU ABI that `zig cc -target x86_64-windows-gnu` produces acceptable?
 - Apple Developer account for notarization — yes/no?
 - Keep the 3D Togl board on Linux only, or drop Togl everywhere in favour of WebGL?
 - Ship Sjeng (non-free licence terms?) in Win/Mac installers?
