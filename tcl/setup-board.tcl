@@ -720,7 +720,7 @@ proc open {parent} {
 		bind $c <Button-4> [namespace code [list NextPiece $::util::shiftMask 1]]
 		bind $c <Button-5> [namespace code [list NextPiece 0 1]]
 	} else {
-		bind $c <MouseWheel> [namespace code [list NextPiece [expr {%D < 0 ? $::util::shiftMask : 0}] 1]]
+		bind $c <MouseWheel> "[namespace code NextPiece] \[expr {%D < 0 ? \$::util::shiftMask : 0}\] 1"
 	}
 
 	# panel ###################################################

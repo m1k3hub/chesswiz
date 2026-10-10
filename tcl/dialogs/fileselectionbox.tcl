@@ -31,9 +31,35 @@ namespace eval dialog {
 switch [tk windowingsystem] {
 	aqua - win32 {
 		# TODO use fsbox::verifyPath
-		proc openFile  {args} { return [tk_getOpenFile {*}[fsbox::FilterArgs $args]] }
-		proc saveFile  {args} { return [tk_getSaveFile {*}[fsbox::FilterArgs $args]] }
-		proc chooseDir {args} { return [tk_chooseDirectory {*}[fsbox::FilterArgs $args]] }
+		proc openFile  {args} { return [NativeFileDialog tk_getOpenFile $args] }
+		proc saveFile  {args} { return [NativeFileDialog tk_getSaveFile $args] }
+		proc chooseDir {args} { return [NativeFileDialog tk_chooseDirectory $args] }
+
+		# The native dialogs take a subset of the fsbox options. With
+		# -needencoding the callers expect {file encoding}, as from fsbox.
+		proc NativeFileDialog {cmd argl} {
+			array set opts {-needencoding 0 -defaultencoding {}}
+			set native {}
+			foreach {key value} $argl {
+				switch -- $key {
+					-directory { set key -initialdir }
+					-needencoding - -defaultencoding { set opts($key) $value; continue }
+				}
+				if {$key in {-parent -title -initialdir -initialfile -defaultextension
+						-multiple -filetypes -typevariable -mustexist -confirmoverwrite}} {
+					if {$cmd eq "tk_chooseDirectory" && $key ni {-parent -title -initialdir -mustexist}} {
+						continue
+					}
+					lappend native $key $value
+				}
+			}
+			set file [$cmd {*}$native]
+			if {[string length $file] == 0} { return {} }
+			if {![string is true -strict $opts(-needencoding)]} { return $file }
+			set encoding $opts(-defaultencoding)
+			if {[llength $encoding] == 0} { set encoding $::encoding::mc::AutoDetect }
+			return [list $file $encoding]
+		}
 	}
 
 	x11 {
@@ -43,7 +69,6 @@ switch [tk windowingsystem] {
 	}
 }
 
-if {[tk windowingsystem] eq "x11"} {
 
 namespace eval fsbox {
 namespace eval mc {
@@ -127,7 +152,9 @@ set FileEncodings [list                    \
 	.ZIP  	1 $::encoding::defaultEncoding \
 ]
 if {$tcl_platform(platform) eq "windows"} {
-	set FileEncodings(.cbh) [list 1 $::encoding::systemEncoding] ;# XXX ok?
+	set i [lsearch -exact $FileEncodings .cbh]
+	lset FileEncodings [expr {$i + 2}] $::encoding::systemEncoding ;# XXX ok?
+	unset i
 }
 
 array set FileType [list                       \
@@ -969,7 +996,6 @@ proc WriteOptions {chan} {
 ::options::hookWriter [namespace current]::WriteOptions
 
 } ;# namespace fsbox
-} ;# x11
 } ;# namespace dialog
 
 

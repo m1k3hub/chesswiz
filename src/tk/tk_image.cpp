@@ -604,7 +604,11 @@ struct pixbuf
 		double s = max/(max - min);
 
 		for (unsigned i = 1; i < 256; ++i)
-			map[i] = mstl::min(255, mstl::max(0, agg::iround(f*s*(i - minima))));
+			{
+				// Clamp before rounding: the product can exceed the range of int.
+				double v = f*s*(double(i) - double(minima));
+				map[i] = v <= 0.0 ? 0 : (v >= 255.0 ? 255 : agg::iround(v));
+			}
 
 		for (int r = 0; r < m_rows; ++r)
 		{

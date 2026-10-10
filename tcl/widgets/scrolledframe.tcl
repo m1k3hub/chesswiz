@@ -599,12 +599,12 @@ proc BindMouseWheel {w recv} {
 			bind $recv <Button-5> {+ break }
 		}
 		aqua {
-			bind $recv <MouseWheel> [namespace code [list Yview $w scroll [expr {-(%D)}] units]]
+			bind $recv <MouseWheel> "[namespace code [list Yview $w scroll]] \[expr {-(%D)}\] units"
 			bind $recv <MouseWheel> {+ break }
 		}
 		win32 {
 			bind $recv <MouseWheel> \
-				[namespace code [list Yview $w scroll [expr {-(%D/120)*max(1, $units - 1)}] units]]
+				"[namespace code [list Yview $w scroll]] \[expr {-(%D/120)*max(1, $units - 1)}\] units"
 			bind $recv <MouseWheel> {+ break }
 		}
 	}

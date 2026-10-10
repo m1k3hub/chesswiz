@@ -202,8 +202,8 @@ Statistic::add(GameInfo const& info)
 	if (content.minElo == 9999)
 		content.minElo = 0;
 
-	content.avgYear = uint16_t(m_counter.sumYear/m_counter.dateCount + 0.5);
-	content.avgElo = uint16_t(m_counter.sumElo/m_counter.eloCount + 0.5);
+	content.avgYear = m_counter.dateCount ? uint16_t(m_counter.sumYear/m_counter.dateCount + 0.5) : 0;
+	content.avgElo = m_counter.eloCount ? uint16_t(m_counter.sumElo/m_counter.eloCount + 0.5) : 0;
 }
 
 // vi:set ts=3 sw=3:

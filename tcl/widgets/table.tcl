@@ -336,8 +336,8 @@ proc table {args} {
 		::table::bind $table <Button-5> [namespace code [list ScrollHorz $table.t +10 %s]]
 		::table::bind $table <Button-5> {+ break }
 	} else {
-		::table::bind $table <MouseWheel> [namespace code [list \
-			[list ScrollHorz $table.t {[expr {%D < 0 ? -10 : 10}]} %s]]]
+		::table::bind $table <MouseWheel> \
+			"[namespace code [list ScrollHorz $table.t]] \[expr {%D < 0 ? -10 : 10}\] %s"
 		::table::bind $table <MouseWheel> {+ break }
 	}
 

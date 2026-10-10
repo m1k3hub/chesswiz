@@ -202,10 +202,10 @@ proc build {path columns args} {
 		::table::bind $tb <Control-Button-4> [namespace code [list MouseWheel $path back]]
 		::table::bind $tb <Control-Button-5> [namespace code [list MouseWheel $path forward]]
 	} else {
-		::table::bind $tb <MouseWheel> [namespace code [list \
-			[list MouseWheel $path {[expr {%D < 0 ? "up" : "down"}]} 10]]]
-		::table::bind $tb <Control-MouseWheel> [namespace code [list \
-			[list MouseWheel $path {[expr {%D < 0 ? "back" : "forward"}]} 10]]]
+		::table::bind $tb <MouseWheel> \
+			"[namespace code [list MouseWheel $path]] \[expr {%D < 0 ? \"up\" : \"down\"}\] 10"
+		::table::bind $tb <Control-MouseWheel> \
+			"[namespace code [list MouseWheel $path]] \[expr {%D < 0 ? \"back\" : \"forward\"}\] 10"
 		::table::bind $tb <MouseWheel> {+ break }
 	}
 

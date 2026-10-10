@@ -125,7 +125,7 @@ proc open {parent base variant info view index {fen {}}} {
 		bind $dlg <Button-4> [namespace code [list Goto $position -1]]
 		bind $dlg <Button-5> [namespace code [list Goto $position +1]]
 	} else {
-		bind $dlg <MouseWheel> [namespace code [list Goto $position [expr {%D < 0 ? +1 : -1}]]]
+		bind $dlg <MouseWheel> "[namespace code [list Goto $position]] \[expr {%D < 0 ? +1 : -1}\]"
 	}
 	namespace eval [namespace current]::${position} {}
 	variable ${position}::Vars

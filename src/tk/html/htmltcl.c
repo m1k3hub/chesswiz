@@ -2947,6 +2947,10 @@ newWidget(
     }
 #ifndef FIX_EVENT_HANDLING
     Tk_SetClass(pTree->tkwin, class);
+#else
+    /* Bindings belong to the document window, but the outer window still
+     * needs some class: Tk on Windows strcmp()s it in Tk_InitOptions(). */
+    Tk_SetClass(pTree->tkwin, "HtmlFrame");
 #endif
 
     pTree->docwin = Tk_CreateWindow(interp, pTree->tkwin, "document", NULL);

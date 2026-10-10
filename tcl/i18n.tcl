@@ -455,7 +455,12 @@ proc selectLang {{lang {}}} {
 
 		while {[gets $f line] >= 0} {
 			if {[string length $line] > 0 && [string index $line 0] ne "#"} {
-				set [lindex $line 0] [lindex $line 1]
+				set var [lindex $line 0]
+				# Skip strings of platform-specific code that isn't loaded here
+				# (e.g. the x11 file selection box on Windows and macOS).
+				if {[namespace exists [namespace qualifiers $var]]} {
+					set $var [lindex $line 1]
+				}
 			}
 		}
 

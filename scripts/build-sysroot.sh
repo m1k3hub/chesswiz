@@ -12,7 +12,7 @@
 #                                       zig wrappers (configure chokes on
 #                                       multiword "zig cc -target ...")
 #
-# Packages: Tcl 8.6.16, Tk 8.6.16 (win|unix|macosx configure by target),
+# Packages: Tcl 8.6.17, Tk 8.6.17 (win|unix|macosx configure by target),
 #           zlib 1.3.1, Expat 2.6.4. Tarballs are checksum-verified with sha256 pinned
 #           below; downloads are cached in build/src/.
 #
@@ -35,8 +35,8 @@ set -euo pipefail
 # --------------------------------------------------------------------------
 # config
 
-TCL_VER=8.6.16
-TK_VER=8.6.16
+TCL_VER=8.6.17
+TK_VER=8.6.17
 ZLIB_VER=1.3.1
 EXPAT_VER=2.6.4
 
@@ -50,8 +50,8 @@ TK_URL=https://prdownloads.sourceforge.net/tcl/${TK_TARBALL}
 ZLIB_URL=https://zlib.net/fossils/${ZLIB_TARBALL}
 EXPAT_URL=https://github.com/libexpat/libexpat/releases/download/R_2_6_4/${EXPAT_TARBALL}
 
-TCL_SHA256=91cb8fa61771c63c262efb553059b7c7ad6757afa5857af6265e4b0bdc2a14a5
-TK_SHA256=be9f94d3575d4b3099d84bc3c10de8994df2d7aa405208173c709cc404a7e5fe
+TCL_SHA256=a3903371efcce8a405c5c245d029e9f6850258a60fa3761c4d58995610949b31
+TK_SHA256=e4982df6f969c08bf9dd858a6891059b4a3f50dc6c87c10abadbbe2fc4838946
 ZLIB_SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
 EXPAT_SHA256=a695629dae047055b37d50a0ff4776d1d45d0a4c842cf4ccee158441f55ff7ee
 
@@ -331,6 +331,13 @@ build_tk() {
     for h in $want_hdrs; do
         [ -f "$PREFIX/include/$h" ] || die "Tk: include/$h missing after install"
     done
+    # A static Tk needs its resources (buttons bitmap, cursors, dialogs)
+    # linked into the executable; FindResourceW() fails at startup otherwise.
+    if [ "$FLAVOR" = win ]; then
+        zig rc /:auto-includes gnu /i "$srcdir/win/rc" /i "$srcdir/generic" /i "$srcdir/win" \
+            -- "$srcdir/win/rc/tk_base.rc" "$PREFIX/lib/tk_base.res" \
+            > "$LOG_DIR/tk-rc.log" 2>&1 || die "Tk: zig rc tk_base.rc failed"
+    fi
     log "Tk $TK_VER installed (include/tk.h, tk private headers, X11 emulation headers)"
 }
 

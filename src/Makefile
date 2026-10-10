@@ -99,6 +99,8 @@ SRC = \
 ifeq ($(TARGET_WINDOWS),yes)
 PLATFORM_LIBS = -lws2_32 -lshlwapi -lole32 -loleaut32 -luuid -lcomdlg32 -limm32 -lcomctl32 -lgdi32 -luser32 -lkernel32 -ladvapi32 -lshell32 -lnetapi32 -luserenv
 OPENGL_LIBS =
+# Static Tk's resources, built by scripts/build-sysroot.sh next to libtk86.a.
+TK_RES = $(addsuffix /tk_base.res,$(patsubst -L%,%,$(filter -L%,$(TK_LIBRARY))))
 else
 PLATFORM_LIBS = -lpthread -lfontconfig -lpng -lm
 OPENGL_LIBS = -lGL -lGLU
@@ -492,7 +494,7 @@ $(TCL_PROGRAM): tclscidb.o $(TCL_LIBS) $(filter %.a,$(ZLIB_LIB)) ../Makefile.in
 
 $(TK_PROGRAM): tkscidb.o $(LIBS) $(TCL_LIBS) $(TK_LIBS) ../Makefile.in
 	@echo "Building $(TK_PROGRAM)"
-	@$(CXX) -o $@ $< $(LDFLAGS) $(PROFILING) $(ALL_TK_LIBS) $(ALL_LIBS)
+	@$(CXX) -o $@ $< $(TK_RES) $(LDFLAGS) $(PROFILING) $(ALL_TK_LIBS) $(ALL_LIBS)
 
 .cpp.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(ALL_CXXFLAGS:  = )]"

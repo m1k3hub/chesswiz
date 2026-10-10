@@ -192,7 +192,7 @@ proc build {w width height} {
 			$bind $canvas <Button-4> [namespace code [list goto -1]]
 			$bind $canvas <Button-5> [namespace code [list goto +1]]
 		} else {
-			$bind $canvas <MouseWheel> [namespace code [list goto [expr {%D < 0 ? +1 : -1}]]]
+			$bind $canvas <MouseWheel> "[namespace code goto] \[expr {%D < 0 ? +1 : -1}\]"
 		}
 	}
 

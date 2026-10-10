@@ -65,10 +65,10 @@ proc bindMouseWheel {w {number 5} {units "units"}} {
 			bind $w <Button-5> [list %W yview scroll +$number $units]
 		}
 		aqua {
-			bind $w <MouseWheel> { %W yview scroll [expr {-(%D)}] $units }
+			bind $w <MouseWheel> "%W yview scroll \[expr {-(%D)}\] $units"
 		}
 		win32 {
-			bind $w <MouseWheel> { %W yview scroll [expr {-(%D/120)*max(1,$number - 1)}] $units }
+			bind $w <MouseWheel> "%W yview scroll \[expr {-(%D/120)*max(1,$number - 1)}\] $units"
 		}
 	}
 	if {[string first . $w] >= 0} {
