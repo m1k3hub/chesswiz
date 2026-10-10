@@ -41,7 +41,7 @@ variable RegExpPieceScale		{scidb:scale=\"([0-9]*[.]?[0-9]+)\"}
 variable RegExpTranslation		{scidb:translate=\"([+-]?[0-9]*[.]?[0-9]+),([+-]?[0-9]*[.]?[0-9]+)\"}
 
 # Piece sets removed for licence reasons, and the set that takes their place.
-array set Replaced { Alpha Chessnut Berlin Chessnut Cheq Chessnut Chess7 Merida }
+array set Replaced { Alpha Chessnut Berlin Chessnut Cheq Chessnut Chess7 Merida Segoe Clarity }
 
 # Returns the definition of the named piece set; a removed or unknown set
 # falls back to its replacement (or Merida) so that old settings keep working.

@@ -373,7 +373,7 @@ proc DisplayContributions {w} {
 				<tr><td>\u2001</td><td>Aquarium (GAquarium), Bookup (GBookup), Celtic (GCeltic),
 											ChessCube (GChessCube), Fritz (GFritz),
 											Habsburg (GHabsburg), Military (GMilitary), Old Style
-											(GOldStyle), Segoe (GSegoe), Standard (GCMF),
+											(GOldStyle), Clarity (GSegoe), Standard (GCMF),
 											Zurich (GZurich)</td></tr>
 				<tr><td>\u2001</td><td>[Url http://gorgonian.weebly.com/babaschess.html]</td></tr>
 				<tr height='7'></tr>

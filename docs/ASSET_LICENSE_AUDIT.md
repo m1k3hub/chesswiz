@@ -39,6 +39,10 @@ the licence is unknown) · **Replace** (licence forbids our use, or a third part
 | Embedded UI icons | `tcl/icons.tcl`, `tcl/app-db-icons.tcl` (hundreds of base64 images) | No source recorded. Many look like stock icon sets (Crystal, Oxygen, famfamfam: LGPL/CC). Needs a pass. |
 | Font credits | `tcl/info.tcl` about box | Names the designers: Marroquin, Bentzen, Cowderoy, Leschemelle, Scott and Frank David (enpassant.dk freeware); Gorgonian (BabasChess); Brown (Good Companion); Poisson (Phoenix); Burnett (GPL); Eran Karu (PyChess, GPL); Maurizio Monge (Eyes, Fantasy, Skulls, Spatial). Check each site's terms. |
 
+## Renames (2026-10-10)
+
+These font families and sets were named after other organisations' products and are renamed: Scidb Chess/Symbol Informant → **Annotator**, Scidb Chess USCF → **Federal**, Scidb Chess Segoe and the Segoe piece set → **Clarity** (saved settings resolve Segoe to Clarity). Kept as factual references: the USCF rating system and its PGN tags, and the "Informant" database type, which is ChessBase's label for games from Chess Informant.
+
 ## Licence checks (2026-10-10)
 
 Sources: the font list at enpassant.dk/chess/fonteng.htm, the lichess `COPYING.md` (lila repo), the CTAN `enpassant` package, the PyChess `ARTISTS` file, image metadata and file names.

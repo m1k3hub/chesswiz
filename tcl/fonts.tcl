@@ -1125,7 +1125,7 @@ SetupChessBaseFonts
 # {Scidb Chess Alpha} bold
 # {Scidb Chess Cases} bold
 # {Scidb Chess Good Companion} bold
-# {Scidb Chess Informant} bold
+# {Scidb Chess Annotator} bold
 # {Scidb Chess Merida} bold
 # {Scidb Chess Motif} bold
 # {Scidb Chess Standard} bold

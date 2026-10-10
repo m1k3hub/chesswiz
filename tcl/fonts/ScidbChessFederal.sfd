@@ -1,7 +1,7 @@
 SplineFontDB: 1.0
-FontName: ScidbChessUSCF
-FullName: Scidb Chess USCF
-FamilyName: Scidb Chess USCF
+FontName: ScidbChessFederal
+FullName: Scidb Chess Federal
+FamilyName: Scidb Chess Federal
 Weight: Book
 Version: 1.00
 ItalicAngle: 0
@@ -73,7 +73,7 @@ EndTtf
 TtfTable: maxp 32
 !!*'"!"]0"!"/fr!"/c.z!#,D5!WW;!!!*'#
 EndTtf
-LangName: 1033 "" "" "Regular" "Scidb Chess USCF" "" "Version 1.00" 
+LangName: 1033 "" "" "Regular" "Scidb Chess Federal" "" "Version 1.00" 
 Encoding: UnicodeBmp
 UnicodeInterp: none
 NameList: Adobe Glyph List
