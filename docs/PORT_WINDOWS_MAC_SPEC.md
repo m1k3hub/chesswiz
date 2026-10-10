@@ -69,6 +69,7 @@ Found: `exec nproc` (ai-engine.tcl:137), `exec kill` (ai-modelfit.tcl:107, app-v
 - Windows: Inno Setup installer (or MSIX later); bundle Tcl/Tk, tcltls+OpenSSL, fonts installed privately (`AddFontResourceEx` FR_PRIVATE at startup — no admin rights), engines (Stockfish, Reckless, Sjeng `.exe`).
 - macOS: `.app` bundle, universal2 (arm64+x86_64), codesigned + notarized (needs an Apple Developer ID — a cost/account decision for you). Fonts via `CTFontManagerRegisterFontsForURL` at startup.
 - Engines must be signed inside the bundle on macOS or Gatekeeper blocks spawn.
+- **Media codecs:** bundling libmpv/FFmpeg would make Chesswiz distribute H.264, HEVC, VC-1 and AAC decoders, which have live patent pools (`docs/PATENT_REVIEW.md`). Recommended: play media through Media Foundation (Windows) and AVFoundation (macOS) behind the existing `::media::*` transport, with libmpv kept for Linux; or ship an FFmpeg restricted to patent-free decoders. Any bundled FFmpeg must be the LGPL build.
 
 ### D9. Credentials — **OS keychain**
 - API keys currently live in `user/config/ai-keys` (plain file). On Win/Mac use Credential Manager / Keychain (via a tiny C shim), file fallback on Linux (or libsecret).
