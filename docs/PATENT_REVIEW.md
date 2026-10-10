@@ -27,6 +27,8 @@ libavcodec.
 | MP3, MPEG-1/2 video, MPEG-1/2 audio | older lessons | patents expired (MP3 2017, MPEG-2 2018) |
 | VP8/VP9, AV1, Opus, Vorbis, FLAC, Theora | rare in chess media | royalty-free (AV1/VP9 have pool claims that haven't been enforced) |
 
+**Decided (2026-10-10): option 1.** See D8 in `docs/PORT_WINDOWS_MAC_SPEC.md`: `MEDIA_BACKEND=mf` (Windows) and `MEDIA_BACKEND=avf` (macOS).
+
 Options, in order of preference:
 
 1. **Decode through the operating system** on Windows/macOS: Media Foundation and

@@ -13,7 +13,16 @@
 include ../../Makefile.in
 include ../../Makefile.version
 
-.SUFFIXES: .cpp
+.SUFFIXES: .cpp .mm
+
+# Media playback backend: mpv (libmpv, Linux), mf (Media Foundation,
+# Windows) or avf (AVFoundation, macOS). The OS backends decode with the
+# platform's own codecs; see docs/PATENT_REVIEW.md.
+MEDIA_BACKEND ?= mpv
+MEDIA_SRC_mpv = tcl_media.cpp
+MEDIA_SRC_mf  = tcl_media_mf.cpp
+MEDIA_SRC_avf =
+MEDIA_MM_avf  = tcl_media_avf.mm
 .PRECIOUS:
 
 INCLUDE	= -I. -I../util/libTeXt -I../mstl -I../sys -I../util -I../util/expat -I../util/universalchardet -I../app -I../db -I../db/si3 -I../db/sci -I../db/cql -I..
@@ -38,7 +47,7 @@ SRC_CXX = \
 	tcl_game.cpp \
 	tcl_http.cpp \
 	tcl_log.cpp \
-	tcl_media.cpp \
+	$(MEDIA_SRC_$(MEDIA_BACKEND)) \
 	tcl_misc.cpp \
 	tcl_pgn_reader.cpp \
 	tcl_player.cpp \
@@ -51,7 +60,7 @@ SRC_CXX = \
 	tcl_zlib.cpp \
 
 SRC	= $(SRC_CXX) #$(SRC_C)
-OBJS	= $(SRC_CXX:.cpp=.o) #$(SRC_C:.c=.o)
+OBJS	= $(SRC_CXX:.cpp=.o) $(MEDIA_MM_$(MEDIA_BACKEND):.mm=.o) #$(SRC_C:.c=.o)
 LIB	= libtcl
 
 all: $(LIB).a
@@ -75,6 +84,10 @@ $(LIB).a: $(OBJS)
 .cpp.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(CXXFLAGS:  = )]"
 	@$(CXX) -c $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(ALL_INCLUDE) $<
+
+.mm.o:
+	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(CXXFLAGS:  = )]"
+	@$(CXX) -c -x objective-c++ -fno-objc-arc $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(ALL_INCLUDE) $<
 
 tcl_misc.o: ../../Makefile.version .build_info
 tcl_misc.o: EXTRA_CXXFLAGS += $(SCIDB_BUILD_FLAGS)

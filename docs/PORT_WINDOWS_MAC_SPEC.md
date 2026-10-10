@@ -33,6 +33,7 @@ Status: proposal, 2026-10-09. Facts below were surveyed from the tree at `bb30e5
 - macOS: cross-compiled binaries still need **codesigning and notarization**, which run on a Mac or a macOS CI runner (`codesign`, `notarytool`); only the compile step moves to Linux.
 - Pin the Zig version (`.zig-version` plus a CI check). Zig is pre-1.0 and every release can break the build; upgrade deliberately, one release at a time.
 - Known gotcha: `configure` splits `OPTIMIZE=` at the second `=`; fix that parser while touching it.
+- Known Windows blocker: `src/mstl/m_uint128_t.h` assumes `long` is 64-bit. Windows is LLP64, so under `x86_64-windows-gnu` it fails (`no type named 'uint128' in namespace 'mstl'`, redefinitions of `numeric_limits<int>` and `is_integral<int>`). Fix it with fixed-width types (`uint64_t`, `unsigned __int128`) before the first Windows build.
 
 ### D3. X11-only extensions — **stub per platform, then replace feature by feature**
 Order of work:
@@ -69,7 +70,10 @@ Found: `exec nproc` (ai-engine.tcl:137), `exec kill` (ai-modelfit.tcl:107, app-v
 - Windows: Inno Setup installer (or MSIX later); bundle Tcl/Tk, tcltls+OpenSSL, fonts installed privately (`AddFontResourceEx` FR_PRIVATE at startup — no admin rights), engines (Stockfish, Reckless, Sjeng `.exe`).
 - macOS: `.app` bundle, universal2 (arm64+x86_64), codesigned + notarized (needs an Apple Developer ID — a cost/account decision for you). Fonts via `CTFontManagerRegisterFontsForURL` at startup.
 - Engines must be signed inside the bundle on macOS or Gatekeeper blocks spawn.
-- **Media codecs:** bundling libmpv/FFmpeg would make Chesswiz distribute H.264, HEVC, VC-1 and AAC decoders, which have live patent pools (`docs/PATENT_REVIEW.md`). Recommended: play media through Media Foundation (Windows) and AVFoundation (macOS) behind the existing `::media::*` transport, with libmpv kept for Linux; or ship an FFmpeg restricted to patent-free decoders. Any bundled FFmpeg must be the LGPL build.
+- **Media codecs — decided: the OS decoders.** Bundling libmpv/FFmpeg would make Chesswiz distribute H.264, HEVC, VC-1 and AAC decoders, which have live patent pools (`docs/PATENT_REVIEW.md`). So the build picks a backend with `MEDIA_BACKEND`, and all three implement the same `::mpv::*` commands, so the Tcl media pane is unchanged:
+  - `mpv` (default, Linux): `src/tcl/tcl_media.cpp`, `-lmpv`.
+  - `mf` (Windows): `src/tcl/tcl_media_mf.cpp`, Media Foundation MFPlay rendering into the Tk window's HWND; links `-lmfplay -lmfplat -lole32 -luser32`. Windows decodes WMV/VC-1, H.264, AAC and MP3 itself; HEVC needs Microsoft's HEVC extension. Compiles cleanly with `zig cc -target x86_64-windows-gnu -Wall -Wextra`, and every MF import resolves against Zig's MinGW import libraries. Not yet run on Windows.
+  - `avf` (macOS): `src/tcl/tcl_media_avf.mm`, AVPlayer with an AVPlayerLayer placed over the Tk window inside the toplevel's NSView; links the AVFoundation, CoreMedia, QuartzCore and AppKit frameworks. **Not compiled yet** (needs the macOS SDK). macOS has **no WMV/ASF decoder**, and those are the most common ChessBase lesson format: they report a load error, and the pane says to use "Open externally" (e.g. VLC). Revisit if WMV9/VC-1 patents are confirmed expired: a restricted FFmpeg with only the WMV decoders could then be added for macOS.
 
 ### D9. Credentials — **OS keychain**
 - API keys currently live in `user/config/ai-keys` (plain file). On Win/Mac use Credential Manager / Keychain (via a tiny C shim), file fallback on Linux (or libsecret).

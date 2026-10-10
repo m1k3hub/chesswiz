@@ -1536,7 +1536,7 @@ proc application::media::CheckDecode {path} {
 	MediaDebug "CheckDecode: state=$state"
 	if {$state eq "error"} {
 		MediaDestroy
-		set Priv(statusbar) "Cannot play: unsupported or corrupt media file."
+		set Priv(statusbar) "Cannot play here: unsupported or corrupt media file. Try \"$mc::OpenExternal\"."
 	}
 }
 
