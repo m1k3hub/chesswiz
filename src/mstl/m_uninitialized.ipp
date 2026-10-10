@@ -57,7 +57,12 @@ struct uninitialized_pod
 	template <typename InputIterator, typename T>
 	inline static T* copy(InputIterator first, InputIterator last, T* result)
 	{
-		::memmove(static_cast<void*>(result), first, NBytes*(last - first));
+		// A null 'first' with an empty range is valid (e.g. a freshly created,
+		// still empty container); avoid passing it to memmove, which requires
+		// a non-null pointer even for a zero size.
+		size_t n = NBytes*(last - first);
+		if (n)
+			::memmove(static_cast<void*>(result), first, n);
 		return result + (last - first);
 	}
 
@@ -74,7 +79,10 @@ struct uninitialized_pod<1>
 	template <typename InputIterator, typename T>
 	inline static T* copy(InputIterator first, InputIterator last, T* result)
 	{
-		::memmove(static_cast<void*>(result), first, last - first);
+		// See uninitialized_pod<NBytes>::copy() above.
+		size_t n = last - first;
+		if (n)
+			::memmove(static_cast<void*>(result), first, n);
 		return result + (last - first);
 	}
 

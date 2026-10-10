@@ -138,8 +138,11 @@ fill(T* dst, size_t n, T value)
 }
 
 
-inline static void copy(char* dst, char const* src, size_t n)	{ memcpy(dst, src, n); }
-inline static void move(char* dst, char const* src, size_t n)	{ memmove(dst, src, n); }
+// NOTE: a null source is acceptable as long as nothing is copied (e.g. an
+// empty string has a null m_data); memcpy() requires a non-null source even
+// when the size is zero, so the copy is skipped in that case.
+inline static void copy(char* dst, char const* src, size_t n)	{ if (n) memcpy(dst, src, n); }
+inline static void move(char* dst, char const* src, size_t n)	{ if (n) memmove(dst, src, n); }
 inline static void fill(char* dst, size_t n, char value)			{ memset(dst, value, n); }
 
 

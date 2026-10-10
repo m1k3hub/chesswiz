@@ -592,8 +592,13 @@ board::base::initialize()
 			if (pSqL < ppSq1 - 1)
 				IsOutside[i] &= ~(1 << pSqL);
 
+			// NOTE: pSqR is negative here because db::board::msb(uint8_t)
+			// is evaluated with a 32-bit clz and therefore offset by 24
+			// (a long-standing upstream quirk that this table depends on).
+			// Masking to 5 bits reproduces the previous x86-64 runtime
+			// result of the (undefined) negative shift exactly.
 			if (ppSq2 > pSqR + 1)
-				IsOutside[i] &= ~(1 << pSqR);
+				IsOutside[i] &= ~static_cast<uint8_t>(1 << (pSqR & 31));
 		}
 	}
 

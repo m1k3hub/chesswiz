@@ -26,8 +26,13 @@
 
 #include "m_bit_functions.h"
 
-inline constexpr uint64_t db::board::set1Bit(int s)	{ return uint64_t(1) << s; }
-inline constexpr uint64_t db::board::set2Bit(int s)	{ return uint64_t(3) << s; }
+// NOTE: the shift count is masked to the width of the operand (as done by the
+// x86 shift instructions) to make negative arguments (e.g. -1, used as a
+// sentinel by some call sites) well defined instead of undefined behaviour.
+// The result for the valid range (0..63) is unchanged; for negative counts
+// this reproduces the previous x86-64 runtime result exactly.
+inline constexpr uint64_t db::board::set1Bit(int s)	{ return uint64_t(1) << (s & 63); }
+inline constexpr uint64_t db::board::set2Bit(int s)	{ return uint64_t(3) << (s & 63); }
 
 inline uint64_t db::board::shiftDown(uint64_t m)		{ return m >> 8; }
 inline uint64_t db::board::shift2Down(uint64_t m)		{ return m >> 16; }
