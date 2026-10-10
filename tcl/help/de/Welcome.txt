@@ -16,10 +16,10 @@
 * (at your option) any later version.
 ======================================================================= -->
 
-TITLE Willkommen zu Scidb!
+TITLE Willkommen zu Chesswiz!
 
 <p>
-Dies ist eine Vorabversion von Scidb zum Ausprobieren und Testen. Die erste Vollversion
+Dies ist eine Vorabversion von Chesswiz zum Ausprobieren und Testen. Die erste Vollversion
 wird erst nach einer genügend langen Testphase erscheinen. Beim Ausprobieren dieser
 Version sollte folgendes berücksichtigt werden:
 </p>
@@ -60,7 +60,7 @@ Version sollte folgendes berücksichtigt werden:
 </ol>
 
 <p>
-Viel Freude mit Scidb, dessen Entwicklung bisher bereits neun Jahre in Anspruch genommen hat!
+Viel Freude mit Chesswiz, dessen Entwicklung bisher bereits neun Jahre in Anspruch genommen hat!
 </p>
 
 <h2>Links</h2>

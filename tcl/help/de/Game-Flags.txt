@@ -40,7 +40,7 @@ Die beiden letzten Markierungen können nicht vom Benutzer eingestellt werden,
 sie werden automatisch gesetzt wenn eine Partie ungültige Rochaden oder sogar
 andere ungültige Züge (zum Beispiel der König zieht ins Schach) in der
 Hauptvariante enthält. Sind beide Markeriungen in einer Partie enthalten
-so wird nur die Markierung für <em>%::gametable::mc::GameFlags(I)%</em> angezeigt.
+so wird nur die Markierung für <em>%::gamestable::mc::GameFlags(I)%</em> angezeigt.
 </p>
 
 <p>
@@ -66,9 +66,9 @@ auch die Applikation Scid kann diese Probleme nicht lösen.
 
 <p>
 Bei der Umwandlung von ChessBase-Datenbanken werden beide Markierungen
-<em>%::gametable::mc::GameFlags(s)%</em> und
-<em>%::gametable::mc::GameFlags(t)%</em> auf die gemeinsame
-Markierung <em>%::gametable::mc::GameFlags(?)%</em> abgebildet, Scidb
+<em>%::gamestable::mc::GameFlags(s)%</em> und
+<em>%::gamestable::mc::GameFlags(t)%</em> auf die gemeinsame
+Markierung <em>%::gamestable::mc::GameFlags(?)%</em> abgebildet, Chesswiz
 unterscheidet nicht zwischen diesen beiden Typen.
 </p>
 

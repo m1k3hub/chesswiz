@@ -16,12 +16,12 @@
 * (at your option) any later version.
 ======================================================================= -->
 
-TITLE Welcome to Scidb!
+TITLE Welcome to Chesswiz!
 
 <p>
-This is a preliminary version of Scidb for try-out and testing. The first
+This is a preliminary version of Chesswiz for try-out and testing. The first
 full version will be released after a sufficiently long test period. Please
-consider when experimenting with Scidb:
+consider when experimenting with Chesswiz:
 </p>
 
 <ol>
@@ -61,10 +61,10 @@ consider when experimenting with Scidb:
 </ol>
 
 <p>
-Have a lot of fun with Scidb, whose development has already taken nine years!
+Have a lot of fun with Chesswiz, whose development has already taken nine years!
 </p>
 
-<h2>What Scidb is good for right now</h2>
+<h2>What Chesswiz is good for right now</h2>
 
 <ul style="padding: 5px;">
   <li class="space">Managing and browsing Scidb databases with a database switcher, sortable game lists, player/event/site views, and game browser/editor workflows.</li>

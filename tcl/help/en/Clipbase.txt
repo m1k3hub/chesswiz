@@ -20,16 +20,16 @@ INDEX Clipbase
 TITLE The Clipbase database
 
 <p>
-Scidb provides an open Clipbase database at program start, which is just like any other
+Chesswiz provides an open Clipbase database at program start, which is just like any other
 database, except that it exists in memory only and has no files for permanent storage.
 This means that the capacity of this database is limited. The pre-defined name
 for this database is <b>%::application::database::mc::T_Clipbase%</b>.
 </p>
  
 <!-- p>
-Die Clipbase ist nÃ¼tzlich als eine temporÃ¤re Database, zum ZusammenfÃ¼hren von
+Die Clipbase ist nützlich als eine temporäre Database, zum Zusammenführen von
 Suchergebnissen aus der Suche in mehreren Datenbanken, oder zur Behandlung
-der Suchergebnisse als eine eigenstÃ¤ndige Database. 
+der Suchergebnisse als eine eigenständige Database. 
 </p -->
    
 <p>

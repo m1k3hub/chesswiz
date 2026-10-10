@@ -11,7 +11,7 @@ set Contents {
     {{{How to set the default browser} {How-To-Set-Default-Browser.html}}}
   }
   {
-    {{{Scidb list windows} {Overview.html} {list-windows}}}
+    {{{Chesswiz list windows} {Overview.html} {list-windows}}}
     {{{Game list} {Game-List-Window.html}}}
     {{{Player list} {Player-List-Window.html}}}
     {{{Event List} {Event-List-Window.html}}}
@@ -19,7 +19,7 @@ set Contents {
     {{{Annotator list} {Annotator-List-Window.html}}}
   }
   {
-    {{{Scidb-Windows und dialogs} {Overview.html} {windows-and-dialogs}}}
+    {{{Chesswiz-Windows und dialogs} {Overview.html} {windows-and-dialogs}}}
     {{{Database switcher} {Database-Switcher.html}}}
     {{{Game browser} {Game-Browser.html}}}
     {{{Game overview browser} {Game-Overview.html}}}
@@ -64,7 +64,7 @@ set Contents {
       {{{Contact information} {Contact-Information.html}}}
       {{{Development roadmap} {Development-Roadmap.html}}}
       {{{What's new?} {Whats-New.html}}}
-      {{{Üdvözöljük a Scidb-ben!} {Welcome.html}}}
+      {{{Üdvözöljük a Chesswiz-ben!} {Welcome.html}}}
   }
 }
 

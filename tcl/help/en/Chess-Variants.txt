@@ -29,7 +29,7 @@ INDEX %::mc::VariantName(Losers)%
 TITLE Supported chess variants
 
 <p>
-Scidb is supporting various chess variants, currently this is:
+Chesswiz is supporting various chess variants, currently this is:
 </p>
 
 <!-- Hint for translators: Please replace ::mc::VariantName(...) with the corresponding
@@ -77,7 +77,7 @@ positions are supported.
 
 <p>
 For chess variants %::mc::VariantName(Crazyhouse)% and
-%::mc::VariantName(ThreeCheck)% Scidb is using required extensions for
+%::mc::VariantName(ThreeCheck)% Chesswiz is using required extensions for
 FEN (<see/> <a href="FEN.html">Forsyth-Edwards-Notation</a>).
 </p>
 

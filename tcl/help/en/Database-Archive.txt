@@ -24,7 +24,7 @@ TITLE Database archive
 
 <p>
 Scidb's database archive is based on an independent archive format with the general
-file suffix "<abbr>.ive</abbr>". Scidb will use the special file suffix
+file suffix "<abbr>.ive</abbr>". Chesswiz will use the special file suffix
 "<abbr>.scv</abbr>". This archive format contains information about the included
 file like name, size, compression method, etc.
 </p>

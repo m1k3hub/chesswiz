@@ -20,7 +20,7 @@ TITLE CQL Technical Description
 
 <annotation>
 The technichal description is not a precondition for the usage
-of the search functions in Scidb.
+of the search functions in Chesswiz.
 </annotation>
 
 <ul class="index">
@@ -106,7 +106,7 @@ If you prefer to see piece letters, please select one of the options:
 <h2 id="standard">The CQL-S standard</h2>
 
 <p>
-The <nobr>CQL-S</nobr> standard is developed to cover all functions of Scidb also
+The <nobr>CQL-S</nobr> standard is developed to cover all functions of Chesswiz also
 inside the game search and position search. For fulfilling the <nobr>CQL-S</nobr>
 standard all keywords have to be implemented. But the features for other chess
 variants must not be supported (this means, for example, that

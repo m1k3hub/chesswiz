@@ -16,12 +16,12 @@
 * (at your option) any later version.
 *********************************************************************** -->
 
-TITLE ¡Bienvenido a Scidb!
+TITLE ¡Bienvenido a Chesswiz!
 
 <p>
-Esta es una versión preliminar de prueba de Scidb. La primera versión completa
+Esta es una versión preliminar de prueba de Chesswiz. La primera versión completa
 será liberada luego de un período de testeo suficientemente prolongado. Por favor,
-tenga en cuenta al experimentar con Scidb:
+tenga en cuenta al experimentar con Chesswiz:
 </p>
 
 <ol>
@@ -61,7 +61,7 @@ tenga en cuenta al experimentar con Scidb:
 </ol>
 
 <p>
-¡Diviértase mucho con Scidb, cuyo desarrollo ya ha tomado nueve años!
+¡Diviértase mucho con Chesswiz, cuyo desarrollo ya ha tomado nueve años!
 </p>
 
 <h2>Links</h2>

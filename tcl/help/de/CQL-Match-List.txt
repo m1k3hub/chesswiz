@@ -296,13 +296,13 @@ Beispiel:
 <verbatim>
 (match
   <keyword>match:xor</keyword> (
-    (match <cql>match:hasmarker</cql> !)   <comment>; %::gametable::mc::GameFlags(!)%</comment>
-    (match <cql>match:hasmarker</cql> ?))) <comment>; %::gametable::mc::GameFlags(?)%</comment>
+    (match <cql>match:hasmarker</cql> !)   <comment>; %::gamestable::mc::GameFlags(!)%</comment>
+    (match <cql>match:hasmarker</cql> ?))) <comment>; %::gamestable::mc::GameFlags(?)%</comment>
 </verbatim>
 
 <p>
-Suche nach Partien, die mit <i>%::gametable::mc::GameFlags(!)%</i> oder
-mit <i>%::gametable::mc::GameFlags(?)%</i> ausgezeichnet sind, aber nicht mit
+Suche nach Partien, die mit <i>%::gamestable::mc::GameFlags(!)%</i> oder
+mit <i>%::gamestable::mc::GameFlags(?)%</i> ausgezeichnet sind, aber nicht mit
 beiden Merkmalen.
 </p>
 
@@ -2217,8 +2217,8 @@ Beispiele:
 </verb>
 
 <p>
-Suche nach Partien mit den Markierung <i>%::gametable::mc::GameFlags(w)%</i>
-oder <i>%::gametable::mc::GameFlags(b)%</i> (oder beiden).
+Suche nach Partien mit den Markierung <i>%::gamestable::mc::GameFlags(w)%</i>
+oder <i>%::gamestable::mc::GameFlags(b)%</i> (oder beiden).
 </p>
 
 <verb>

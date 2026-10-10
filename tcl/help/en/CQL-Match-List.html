@@ -19,7 +19,7 @@
   <meta name="generator"
      content="scidb.sourceforge.net" />
   <meta name="description"
-     content="Scidb - Help Page" />
+     content="Chesswiz - Help Page" />
 
   <link rel="icon"
        href="http://scidb.sourceforge.net/favicon.ico"
@@ -31,7 +31,7 @@
       media="screen"
 		 href="../styles/help.css" />
 
-  <title>Scidb - Help: CQL - The match list</title>
+  <title>Chesswiz - Help: CQL - The match list</title>
 </head>
 
 <body>
@@ -386,13 +386,13 @@ Example:
 <div class='box'><pre><code><!--
 -->(match
   <span style='white-space:nowrap;'><span class='keyword'>:xor</span></span> (
-    (match <span style='white-space:nowrap;'><a href="CQL-Match-List.html#match:hasmarker">:hasmarker</span></a> !)   <span class='comment'>; ::gametable::mc::GameFlags(!)</span>
-    (match <span style='white-space:nowrap;'><a href="CQL-Match-List.html#match:hasmarker">:hasmarker</span></a> ?))) <span class='comment'>; ::gametable::mc::GameFlags(?)</span><!--
+    (match <span style='white-space:nowrap;'><a href="CQL-Match-List.html#match:hasmarker">:hasmarker</span></a> !)   <span class='comment'>; Brilliancy</span>
+    (match <span style='white-space:nowrap;'><a href="CQL-Match-List.html#match:hasmarker">:hasmarker</span></a> ?))) <span class='comment'>; Blunder</span><!--
 --></code></pre></div>
 
 <p>
-Match all games marked with <i>::gametable::mc::GameFlags(!)</i>, or
-<i>::gametable::mc::GameFlags(?)</i>, but not marked with both flags.
+Match all games marked with <i>Brilliancy</i>, or
+<i>Blunder</i>, but not marked with both flags.
 </p>
 
 <p>
@@ -2046,107 +2046,107 @@ A token is one of:
  <tr>
 	<td class="l">w</td>
 	<td class="m"><img src="../images/gameflag-White-Opening.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(w)</td>
+	<td class="r">White Opening</td>
  </tr>
  <tr>
 	<td class="l">b</td>
 	<td class="m"><img src="../images/gameflag-Black-Opening.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(b)</td>
+	<td class="r">Black Opening</td>
  </tr>
  <tr>
 	<td class="l">m</td>
 	<td class="m"><img src="../images/gameflag-Middle-Game.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(m)</td>
+	<td class="r">Middle Game</td>
  </tr>
  <tr>
 	<td class="l">e</td>
 	<td class="m"><img src="../images/gameflag-End-Game.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(e)</td>
+	<td class="r">End Game</td>
  </tr>
  <tr>
 	<td class="l">N</td>
 	<td class="m"><img src="../images/gameflag-Novelty.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(N)</td>
+	<td class="r">Novelty</td>
  </tr>
  <tr>
 	<td class="l">p</td>
 	<td class="m"><img src="../images/gameflag-Pawn-Structure.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(p)</td>
+	<td class="r">Pawn Structure</td>
  </tr>
  <tr>
 	<td class="l">T</td>
 	<td class="m"><img src="../images/gameflag-Tactics.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(T)</td>
+	<td class="r">Tactics</td>
  </tr>
  <tr>
 	<td class="l">K</td>
 	<td class="m"><img src="../images/gameflag-King-Side.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(K)</td>
+	<td class="r">King Side</td>
  </tr>
  <tr>
 	<td class="l">Q</td>
 	<td class="m"><img src="../images/gameflag-Queen-Side.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(Q)</td>
+	<td class="r">Queen Side</td>
  </tr>
  <tr>
 	<td class="l">!</td>
 	<td class="m"><img src="../images/gameflag-Brilliancy.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(!)</td>
+	<td class="r">Brilliancy</td>
  </tr>
  <tr>
 	<td class="l">?</td>
 	<td class="m"><img src="../images/gameflag-Blunder.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(?)</td>
+	<td class="r">Blunder</td>
  </tr>
  <tr>
 	<td class="l">U</td>
 	<td class="m"><img src="../images/gameflag-User.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(U)</td>
+	<td class="r">User</td>
  </tr>
  <tr>
 	<td class="l">*</td>
 	<td class="m"><img src="../images/gameflag-Best-Game.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(*)</td>
+	<td class="r">Best Game</td>
  </tr>
  <tr>
 	<td class="l">D</td>
 	<td class="m"><img src="../images/gameflag-Decided-Tournament.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(D)</td>
+	<td class="r">Decided Tournament</td>
  </tr>
  <tr>
 	<td class="l">G</td>
 	<td class="m"><img src="../images/gameflag-Model-Game.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(G)</td>
+	<td class="r">Model Game</td>
  </tr>
  <tr>
 	<td class="l">S</td>
 	<td class="m"><img src="../images/gameflag-Strategy.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(S)</td>
+	<td class="r">Strategy</td>
  </tr>
  <tr>
 	<td class="l">^</td>
 	<td class="m"><img src="../images/gameflag-With-Attack.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(^)</td>
+	<td class="r">Attack</td>
  </tr>
  <tr>
 	<td class="l">~</td>
 	<td class="m"><img src="../images/gameflag-Sacrifice.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(~)</td>
+	<td class="r">Sacrifice</td>
  </tr>
  <tr>
 	<td class="l">=</td>
 	<td class="m"><img src="../images/gameflag-Defense.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(=)</td>
+	<td class="r">Defense</td>
  </tr>
  <tr>
 	<td class="l">M</td>
 	<td class="m"><img src="../images/gameflag-Material.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(M)</td>
+	<td class="r">Material</td>
  </tr>
  <tr>
 	<td class="l">P</td>
 	<td class="m"><img src="../images/gameflag-Piece-Play.png" alt=""/></td>
-	<td class="r">::gametable::mc::GameFlags(P)</td>
+	<td class="r">Piece Play</td>
  </tr>
 </table>
 </div>
@@ -2164,8 +2164,8 @@ Examples:
 </code></div>
 
 <p>
-Search for games with marker <i>::gametable::mc::GameFlags(w)</i>
-or <i>::gametable::mc::GameFlags(b)</i> (or both).
+Search for games with marker <i>White Opening</i>
+or <i>Black Opening</i> (or both).
 </p>
 
 <div class='verb'><code>

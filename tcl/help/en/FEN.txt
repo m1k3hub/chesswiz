@@ -39,11 +39,11 @@ was repeated.  A detailed description is available online:
 </ul>
 
 <p>
-Also, it should be noted that Scidb can handle the Shredder FEN.
+Also, it should be noted that Chesswiz can handle the Shredder FEN.
 </p>
 
 <p>
-For other <a href="Chess-Variants.html">chess variants</a> Scidb is using some
+For other <a href="Chess-Variants.html">chess variants</a> Chesswiz is using some
 required extensions:
 </p>
 
@@ -55,7 +55,7 @@ required extensions:
 <h2 id="DropChess">%::mc::VariantName(DropChess)%</h2>
 
 <p>
-Scidb is using an extended FEN (X-FEN, or Shredder FEN) for %::mc::VariantName(DropChess)%,
+Chesswiz is using an extended FEN (X-FEN, or Shredder FEN) for %::mc::VariantName(DropChess)%,
 derived from BPGN standard (<see/>
 <a href="http://bughousedb.com/Lieven_BPGN_Standard.txt">
 BPGN - Bughouse Portable Game Notation</a>).

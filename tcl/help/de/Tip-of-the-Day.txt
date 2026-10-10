@@ -93,7 +93,7 @@ Dies kann mit Hilfe des Dateiauswahldialogs durchgeführt werden.
 <p>
 Soll eine Datenbank nur vorübergehend vor Verändungen geschützt werden,
 dann bietet sich der Schreibschutzschalter im Datenbankumschalter dafür
-an. Beim nächsten Start von Scidb erinnert sich die Applikation an den
+an. Beim nächsten Start von Chesswiz erinnert sich die Applikation an den
 zuletzt eingestellten Schreibschutz, sofern sich die betreffende Datenbank
 noch in der Historie befindet.
 </p>
@@ -243,7 +243,7 @@ wird.
 <TIP number="015" level="2">
 
 <p>
-Zur Versendung von Datenbanken über das Internet bietet Scidb ein
+Zur Versendung von Datenbanken über das Internet bietet Chesswiz ein
 datenbankunabhängiges Archiv-Format an (Endung .scv). Dieses Format
 eignet sich auch zur Archivierung von Datenbanken. Bei einer geöffneten
 Datenbank kann eine Archivierung im Datenbankumschalter ausgeführt werden,
@@ -273,7 +273,7 @@ umzuwandeln.
 
 <p>
 Es muß jedoch beachtet werden, daß das PGN-Format nicht alle
-Besonderheiten von Scidb unterstützt.
+Besonderheiten von Chesswiz unterstützt.
 </p>
 
 <furtherinfo href="Write-Protect-Database"/>
@@ -290,7 +290,7 @@ liegt einer der folgenden Fälle vor:
 
 <ul>
   <li><p>
-    Es ist eine ChessBase-Datenbank. Scidb kann keine ChessBase-Datenbanken
+    Es ist eine ChessBase-Datenbank. Chesswiz kann keine ChessBase-Datenbanken
     schreiben bzw. modifizieren.
   </p></li>
   <li><p>
@@ -310,8 +310,8 @@ liegt einer der folgenden Fälle vor:
 <TIP number="018" level="1">
 
 <p>
-Es ist kein Problem Scidb zu schliessen, auch wenn noch ungespeicherte Partien
-offen sind. Beim nächsten Start von Scidb werden diese Partien wiederhergestellt,
+Es ist kein Problem Chesswiz zu schliessen, auch wenn noch ungespeicherte Partien
+offen sind. Beim nächsten Start von Chesswiz werden diese Partien wiederhergestellt,
 sofern dies bei Beendigung bestätigt wird.
 </p>
 
@@ -320,7 +320,7 @@ sofern dies bei Beendigung bestätigt wird.
 <TIP number="019" level="2">
 
 <p>
-Beim Start von Scidb werden alle Partien, die beim letzten Schließen
+Beim Start von Chesswiz werden alle Partien, die beim letzten Schließen
 gesperrt waren, automatisch &ndash; nach Rückfrage &ndash; wieder geladen.
 Gleichzeitig werden die zugehörigen Datenbanken geöffnet.
 </p>
@@ -330,7 +330,7 @@ Gleichzeitig werden die zugehörigen Datenbanken geöffnet.
 <TIP number="020" level="3">
 
 <p>
-Scidb erlaubt die Eingabe bestimmter regelwidriger Züge: Rochade trotz
+Chesswiz erlaubt die Eingabe bestimmter regelwidriger Züge: Rochade trotz
 fehlender Rochaderechte, oder obwohl der König über ein schachbedrohtes
 Feld ziehen würde, sowie allgemein Königszüge ins Schach. Die Eingabe
 regelwidriger Züge kann nur durch Halten der <key>Shift</key>-Taste während
@@ -354,7 +354,7 @@ entsprechende Rochaderecht ausgewiesen sein.
 <TIP number="022" level="3">
 
 <p>
-Scidb unterstützt Schach-960-Positionen &ndash; sowie auch
+Chesswiz unterstützt Schach-960-Positionen &ndash; sowie auch
 Shuffle-Schach-Positionen &ndash; nicht nur im Normalschach, sondern auch
 in allen anderen unterstützen Schachformen: %::mc::VariantName(DropChess)%,
 %::mc::VariantName(Bughouse)%, %::mc::VariantName(Antichess)%,
@@ -366,7 +366,7 @@ in allen anderen unterstützen Schachformen: %::mc::VariantName(DropChess)%,
 <TIP number="023" level="1">
 
 <p>
-Scidb hat einen speziell angepassten Dateiauswahldialog. Alle Operationen
+Chesswiz hat einen speziell angepassten Dateiauswahldialog. Alle Operationen
 &ndash; wie das Kopieren einer Datenbank, das Löschen einer Datenbank, das
 Umbenennen, sowie die Schreibschutzvergabe &ndash; werden auf alle zu einer
 Datenbank gehörigen Dateien ausgeführt.
@@ -386,7 +386,7 @@ Weile beim ersten Start.
 
 <p>
 Die Nutzung des Windows-Programms unterscheidet sich nicht von der Nutzung
-eines Unix-Programms, Scidb erkennt selbsttätig, wie der Motor zu starten ist.
+eines Unix-Programms, Chesswiz erkennt selbsttätig, wie der Motor zu starten ist.
 </p>
 
 </TIP>
@@ -411,7 +411,7 @@ eines Unix-Programms, Scidb erkennt selbsttätig, wie der Motor zu starten ist.
 <TIP number="026" level="1">
 
 <p>
-Scidb öffnet auch ChessBase-Datenbanken, sowohl das neue Format (.cbh), als
+Chesswiz öffnet auch ChessBase-Datenbanken, sowohl das neue Format (.cbh), als
 auch das alte DOS-Format (.cbf). Jedoch können ChessBase-Datenbanken nicht
 als Referenzdatenbank verwendet werden. Deshalb wird ein Export in das
 Scidb-Format (.sci) empfohlen. Dazu kann das Zusatzprogramm <em>cdb2sci</em>
@@ -421,7 +421,7 @@ verwendet werden, es ist aber auch mit der grafischen Oberfläche möglich.
 <p>
 In seltenen Fällen kommt es vor, daß in einer ChessBase-Datenbank eine Partie
 nicht gelesen werden kann (in der <i>Mega DataBase 2014</i> sind es 11 von
-5.7 Mio. Partien). ChessBase hält sein Datenformat geheim, und Scidb kann
+5.7 Mio. Partien). ChessBase hält sein Datenformat geheim, und Chesswiz kann
 noch nicht alle Informationen lesen.
 </p>
 

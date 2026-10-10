@@ -20,7 +20,7 @@ TITLE CQL Technische Beschreibung
 
 <annotation>
 Die technische Beschreibung ist keine Voraussetzung, um die
-Suchfunktionen in Scidb verwenden zu können.
+Suchfunktionen in Chesswiz verwenden zu können.
 </annotation>
 
 <ul class="index">
@@ -107,8 +107,8 @@ folgenden Optionen auszuwählen:
 <h2 id="standard">Der CQL-S Standard</h2>
 
 <p>
-Der <nobr>CQL-S</nobr> Standard wurde für Scidb entwickelt, um alle Möglichkeiten, die
-Scidb bietet, auch in der Partiesuche bzw. Stellungssuche nutzen zu können. Um den
+Der <nobr>CQL-S</nobr> Standard wurde für Chesswiz entwickelt, um alle Möglichkeiten, die
+Chesswiz bietet, auch in der Partiesuche bzw. Stellungssuche nutzen zu können. Um den
 <nobr>CQL-S</nobr> Standard zu erfüllen müssen alle Schlüsselwörter implementiert werden,
 allerdings brauchen die Besonderheiten, die für andere Schachformen vorgesehen sind,
 nicht unterstützt zu werden (was beispielsweise bei <cql>position:mustcapture</cql> heißt,

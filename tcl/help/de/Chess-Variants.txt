@@ -29,7 +29,7 @@ INDEX %::mc::VariantName(Losers)%
 TITLE Unterstützte Schachformen
 
 <p>
-Scidb unterstützt verschiedene Schachformen, zur Zeit sind dies:
+Chesswiz unterstützt verschiedene Schachformen, zur Zeit sind dies:
 </p>
 
 <box>
@@ -81,7 +81,7 @@ unterstützt.
 
 <p>
 Für die Schachformen %::mc::VariantName(Crazyhouse)% und
-%::mc::VariantName(ThreeCheck)% verwendet Scidb notwendigerweise Erweiterungen
+%::mc::VariantName(ThreeCheck)% verwendet Chesswiz notwendigerweise Erweiterungen
 in der FEN (<see/> <a href="FEN.html">Forsyth-Edwards-Notation</a>).
 </p>
 

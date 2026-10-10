@@ -33,11 +33,11 @@ Wikipedia</a> beschrieben.
 </p>
 
 <p>
-Zu erwähnen ist, daß Scidb auch die Shredder-FEN verarbeiten kann.
+Zu erwähnen ist, daß Chesswiz auch die Shredder-FEN verarbeiten kann.
 </p>
 
 <p>
-Für einige <a href="Chess-Variants.html">Schachformen</a> benutzt Scidb
+Für einige <a href="Chess-Variants.html">Schachformen</a> benutzt Chesswiz
 notwendigerweise Erweiterungen:
 </p>
 
@@ -49,7 +49,7 @@ notwendigerweise Erweiterungen:
 <h2 id="DropChess">%::mc::VariantName(DropChess)%</h2>
 
 <p>
-Scidb benutzt eine erweiterte FEN (bzw. X-FEN, oder Shredder-FEN)
+Chesswiz benutzt eine erweiterte FEN (bzw. X-FEN, oder Shredder-FEN)
 für %::mc::VariantName(DropChess)%, die vom BPGN-Standard (<see/>
 <a href="http://bughousedb.com/Lieven_BPGN_Standard.txt">
 BPGN - Bughouse Portable Game Notation</a>)

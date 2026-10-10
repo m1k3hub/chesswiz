@@ -16,7 +16,7 @@
 * (at your option) any later version.
 ======================================================================= -->
 
-TITLE Welcome to Scidb-Help
+TITLE Welcome to Chesswiz-Help
 
 <h2 id="general">General help</h2>
 
@@ -30,7 +30,7 @@ TITLE Welcome to Scidb-Help
 </ul>
 
 <!--
-<h2 id="list-windows">Scidb list windows</h2>
+<h2 id="list-windows">Chesswiz list windows</h2>
 
 <ul class="index">
   <li><a href="Game-List-Window.html">Game list</a></li>
@@ -41,7 +41,7 @@ TITLE Welcome to Scidb-Help
 </ul>
 -->
 
-<h2 id="windows-and-dialogs">Scidb-Windows and dialogs</h2>
+<h2 id="windows-and-dialogs">Chesswiz-Windows and dialogs</h2>
 
 <ul class="index">
   <li><a href="Database-Switcher.html">Database switcher</a></li>
@@ -100,7 +100,7 @@ TITLE Welcome to Scidb-Help
   <li><a href="Contact-Information.html">Contact information</a></li>
   <li><a href="Development-Roadmap.html">Development roadmap</a></li>
   <li><a href="Whats-New.html">What's new?</a></li>
-  <li><a href="Welcome.html">Welcome to Scidb!</a></li>
+  <li><a href="Welcome.html">Welcome to Chesswiz!</a></li>
 </ul>
 
 END

@@ -144,7 +144,7 @@ On the command line the following options are available at program start:
         <code>--single-process</code>
     </td>
     <td class="standard-justification">
-      Force another instance of Scidb. This option is intented only for testing.
+      Force another instance of Chesswiz. This option is intented only for testing.
     </td>
   </tr>
   <tr>

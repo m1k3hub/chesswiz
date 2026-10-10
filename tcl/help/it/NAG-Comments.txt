@@ -66,7 +66,7 @@ Altri valori NAG proposti sono:
 </box>
 
 <p>
-Scidb definisce alcuni valori NAG in più:
+Chesswiz definisce alcuni valori NAG in più:
 </p>
 
 <box>
@@ -88,7 +88,7 @@ Per permettere la lettura dei commenti nei file ChessBase sono richiesti altri v
 </box>
 
 <p>
-Scid e ChessPad definiscono altri valori NAG (&gt; 190). Ma questi valori saranno mappati automaticamente ai valori specifici di Scidb durante l'importazione e conversione del database.
+Scid e ChessPad definiscono altri valori NAG (&gt; 190). Ma questi valori saranno mappati automaticamente ai valori specifici di Chesswiz durante l'importazione e conversione del database.
 </p>
 
 END

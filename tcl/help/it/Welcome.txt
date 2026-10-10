@@ -16,13 +16,13 @@
 * (at your option) any later version.
 *********************************************************************** -->
 
-TITLE Benvenuto su Scidb!
+TITLE Benvenuto su Chesswiz!
 
 <p>
-Questa è una versione preliminare di Scidb per prove e test. La prima
+Questa è una versione preliminare di Chesswiz per prove e test. La prima
 versione completa sarà rilasciata dopo un periodo sufficientemente
 lungo di test. Tieni a mente le seguenti cose quando fai esperimenti con
-Scidb:
+Chesswiz:
 </p>
 
 <ol>
@@ -64,7 +64,7 @@ Scidb:
 </ol>
 
 <p>
-Divertitevi con Scidb, il cui sviluppo ha richiesto già nove anni!
+Divertitevi con Chesswiz, il cui sviluppo ha richiesto già nove anni!
 </p>
 
 <h2>Links</h2>

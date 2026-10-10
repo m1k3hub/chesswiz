@@ -54,7 +54,7 @@ eine noch nicht aufgelöste Mehrdeutigkeit vor, dann wird dies beim Speichern
 <h2 id="StartPosition">%::setup::board::mc::StartPosition%</h2>
 
 <p>
-Scidb unterstützt Schach-960-Positionen. Schach-960 erlaubt 960
+Chesswiz unterstützt Schach-960-Positionen. Schach-960 erlaubt 960
 verschiedene Startpositionen, die nach einem weltweit anerkannten Schema -
 entwickelt von Reinhard Scharnagl - numeriert werden. Die Standardposition
 hat in diesem Schema die Nummer 518. Mit der Eingabe einer Nummer wird
@@ -64,7 +64,7 @@ Chess960 Startpositionen &amp; Regeln</a>.
 </p>
 
 <p>
-Scidb unterstützt zudem Shuffle-Schach-Positionen. Shuffle-Schach enthält
+Chesswiz unterstützt zudem Shuffle-Schach-Positionen. Shuffle-Schach enthält
 alle Schach-960-Positionen, mit und ohne Rochaderecht. Weiterhin erlaubt
 Shuffle-Schach Positionen, in denen eine Rochade unmöglich ist, weil
 die Schach-960-Bedingung, daß sich links und rechts vom König ein Turm
@@ -75,11 +75,11 @@ ob mit oder ohne Rochaderechte, behalten ihre Positionsnummer.
 </p>
 
 <p>
-Zudem unterstützt Scidb besondere Startpositionen, die auf dem FICS
+Zudem unterstützt Chesswiz besondere Startpositionen, die auf dem FICS
 Server angeboten werden (als besondere Schachformen). Sie können mittels
 der Schaltfläche <img src="../images/fics-start-position-menu-button.png"/>
 ausgewählt werden. Es werden nur diejenigen Positionen angeboten, die auch von
-Scidb unterstützt werden können.
+Chesswiz unterstützt werden können.
 </p>
 
 <h2 id="DropChess">%::mc::VariantName(DropChess)%</h2>

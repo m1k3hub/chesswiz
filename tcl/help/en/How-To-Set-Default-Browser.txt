@@ -25,7 +25,7 @@ There exists five possibilites to set the default browser:
 
 <ol>
   <li><p>
-    Scidb will open the link in the user's preferred application with the help
+    Chesswiz will open the link in the user's preferred application with the help
     of the program <nobr><code>xdg-open</code></nobr>, if installed.
   </p></li>
 
@@ -47,7 +47,7 @@ There exists five possibilites to set the default browser:
   </p></li>
 
   <li><p>
-    Scidb looks for an entry like
+    Chesswiz looks for an entry like
     <code>"X11BROWSER=</code>&#8203;<url>/usr/bin/firefox</url><code>"</code>
     in file <url>"~/.htmlviewrc"</url>.
   </p></li>
@@ -65,7 +65,7 @@ browser. If none of these possiblities is successfull it isn't
 possible to start a browser and an error message will be shown.
 </p>
 
-<note>Terminal browsers will not be used with Scidb, this means you have
+<note>Terminal browsers will not be used with Chesswiz, this means you have
 to set an X brower (graphical browser).</note>
 
 END

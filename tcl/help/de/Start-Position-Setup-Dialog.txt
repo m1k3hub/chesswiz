@@ -21,7 +21,7 @@ TITLE Startpositionseingabe
 <p>
 Dieser Dialog vereinfacht die Eingabe einer Schach-960 bzw.
 Shuffle-Schach-Startposition. Dazu werden einfach nur die Figuren der
-weißen Grundreihe aufgestellt. Die %::widget::mc::Ok%-Schaltfläche wird
+weißen Grundreihe aufgestellt. Die %::mc::OK%-Schaltfläche wird
 nur dann freigegeben, wenn eine gültige Startposition vorliegt. Ist die
 Nummer der Startposition bekannt, so sollte der
 <a href="Board-Setup-Dialog.html">Stellungseingabe-Dialog</a>

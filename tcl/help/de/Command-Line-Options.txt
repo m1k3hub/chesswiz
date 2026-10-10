@@ -150,7 +150,7 @@ Auf der Kommandozeile stehen folgende Optionen bei Programmstart zur Verfügung:
         <code>--single-process</code>
     </td>
     <td class="standard-justification">
-      Erzwingt eine weitere Scidb-Instanz bei Programmstart. Diese Option
+      Erzwingt eine weitere Chesswiz-Instanz bei Programmstart. Diese Option
       dient nur dem Testen und sollte nicht verwendet werden.
     </td>
   </tr>

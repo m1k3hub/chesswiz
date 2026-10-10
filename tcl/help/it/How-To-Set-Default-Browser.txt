@@ -39,7 +39,7 @@ Il browser di default sarà usato per aprire link esterni. Esistono quattro poss
   </p></li>
 
   <li><p>
-    Scidb cerca per una riga come <tt>"X11BROWSER=/usr/bin/firefox"</tt>
+    Chesswiz cerca per una riga come <tt>"X11BROWSER=/usr/bin/firefox"</tt>
     nel file <tt>"~/.htmlviewrc"</tt>.
   </p></li>
 
@@ -54,7 +54,7 @@ Il browser di default sarà usato per aprire link esterni. Esistono quattro poss
 La prima possibilità che ha sucesso determinerà il browser di default. Se nessuna di queste possibilità ha successo non è possibile aprire il browser e sarà mostrato un errore.
 </p>
 
-<note>Browser da terminale non saranno usati con Scidb, questo significa che è necessario impostare un browser X (browser grafico).</note>
+<note>Browser da terminale non saranno usati con Chesswiz, questo significa che è necessario impostare un browser X (browser grafico).</note>
 
 END
 

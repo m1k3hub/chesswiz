@@ -147,7 +147,7 @@ Nella linea di comando sono disponibili le seguenti opzioni:
         <tt>--single-process</tt>
     </td>
     <td class="standard-justification">
-      Forza un'altra istanza di Scidb. Questa opzione è pensata solo per il testing.
+      Forza un'altra istanza di Chesswiz. Questa opzione è pensata solo per il testing.
     </td>
   </tr>
   <tr>

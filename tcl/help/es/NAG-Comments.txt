@@ -72,7 +72,7 @@ Otros valores <acronym>NAG</acronym> propuestos son:
 </box>
 
 <p>
-Scidb define algunos valores <acronym>NAG</acronym> más:
+Chesswiz define algunos valores <acronym>NAG</acronym> más:
 </p>
 
 <box>
@@ -98,7 +98,7 @@ valores <acronym>NAG</acronym> extra:
 
 <p>
 Scid y ChessPad definen aún más valores <acronym>NAG</acronym> (&gt; 190), pero éstos
-serán automáticamente mapeados a los valores específicos de Scidb durante
+serán automáticamente mapeados a los valores específicos de Chesswiz durante
 la importación y conversión de la base de datos.
 </p>
 

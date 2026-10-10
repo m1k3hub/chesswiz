@@ -144,7 +144,7 @@ Al inicio del programa se encuentran disponibles las siguientes opciones en la l
         <code>--single-process</code>
     </td>
     <td class="standard-justification">
-      Fuerza otra instancia de Scidb. Esta opción es sólo para pruebas.
+      Fuerza otra instancia de Chesswiz. Esta opción es sólo para pruebas.
     </td>
   </tr>
   <tr>

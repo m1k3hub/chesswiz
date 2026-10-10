@@ -16,7 +16,7 @@
 * (at your option) any later version.
 *********************************************************************** -->
 
-TITLE Bienvenido a la Ayuda de Scidb
+TITLE Bienvenido a la Ayuda de Chesswiz
 
 <h2 id="general">Generalidades</h2>
 
@@ -28,7 +28,7 @@ TITLE Bienvenido a la Ayuda de Scidb
   <li><a href="How-To-Set-Default-Browser.html">Cómo definir el explorador de Internet predeterminado</a></li>
 </ul>
 
-<h2 id="list-windows">Ventanas de listado en Scidb</h2>
+<h2 id="list-windows">Ventanas de listado en Chesswiz</h2>
 
 <ul class="index">
   <li><a href="Game-List-Window.html">Listado de partidas</a></li>
@@ -38,7 +38,7 @@ TITLE Bienvenido a la Ayuda de Scidb
   <li><a href="Annotator-List-Window.html">Listado de comentaristas</a></li>
 </ul>
 
-<h2 id="windows-and-dialogs">Ventanas y diálogos en Scidb</h2>
+<h2 id="windows-and-dialogs">Ventanas y diálogos en Chesswiz</h2>
 
 <ul class="index">
   <li><a href="Database-Switcher.html">Intercambiador de bases de datos</a></li>
@@ -93,7 +93,7 @@ TITLE Bienvenido a la Ayuda de Scidb
   <li><a href="Contact-Information.html">Información de contacto</a></li>
   <li><a href="Development-Roadmap.html">Mapa de ruta del desarrollo</a></li>
   <li><a href="Whats-New.html">Novedades</a></li>
-  <li><a href="Welcome.html">¡Bienvenido a Scidb!</a></li>
+  <li><a href="Welcome.html">¡Bienvenido a Chesswiz!</a></li>
 </ul>
 
 END

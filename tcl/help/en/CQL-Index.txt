@@ -28,10 +28,10 @@ players to search for games, problems, and studies that match specific themes (<
 </p>
 
 <p>
-Scidb is using CQL-S 1.0, an extended set of CQL, as a basis for all search
+Chesswiz is using CQL-S 1.0, an extended set of CQL, as a basis for all search
 functions. CQL-S is extended very comprehensive, to satisfy all demands of
 modern chess databases. <nobr>CQL-S</nobr> is a backwards-compatible
-enhancement, any standard CQL script should also be applicable in Scidb.
+enhancement, any standard CQL script should also be applicable in Chesswiz.
 </p>
 
 <p>
@@ -48,7 +48,7 @@ Note that some parts of this manual are taken from
 <h2 id="fundamentals">Fundamentals</h2>
 
 <p>
-All search functions in Scidb are based on <nobr>CQL-S</nobr>. For the formulation
+All search functions in Chesswiz are based on <nobr>CQL-S</nobr>. For the formulation
 of CQL queries the CQL editor is providing a comfortable, clear, and easy to use
 graphical user interface. Knowledge of the technical descriptions of CQL are
 not required in order to apply <nobr>CQL-S</nobr>. Also it is not necessary
@@ -86,7 +86,7 @@ search queries a deeper understanding is essential.
 
 <annotation>
 The technichal description is not a precondition for the usage
-of the search functions in Scidb.
+of the search functions in Chesswiz.
 </annotation>
 
 <ul class="index">
@@ -96,10 +96,10 @@ of the search functions in Scidb.
 <h2 id="file">CQL files</h2>
 
 <p>
-Scidb is writing <nobr>CQL-S</nobr> scripts with file suffix <expr>.cqls</expr>.
+Chesswiz is writing <nobr>CQL-S</nobr> scripts with file suffix <expr>.cqls</expr>.
 If a <nobr>CQL-S</nobr> script is compliant to standard CQL (which is often
 the case) this script is exportable to a CQL file with suffix <expr>.cql</expr>.
-Scidb is able to import any <expr>.cql</expr> script, written by a third-party
+Chesswiz is able to import any <expr>.cql</expr> script, written by a third-party
 product.
 </p>
 

@@ -20,7 +20,7 @@ INDEX Ablage-Datenbank
 TITLE Die Ablage-Datenbank
 
 <p>
-Scidb stellt bereits bei Programmstart eine geöffnete
+Chesswiz stellt bereits bei Programmstart eine geöffnete
 Ablage-Datenbank zur Verfügung, welche sich wie eine normale Datenbank verhält,
 mit der Ausnahme, daß sie im Hauptspeicherbereich existiert und nicht auf der
 Festplatte gespeichert wird.  Damit hat sie nur ein relative begrenztes

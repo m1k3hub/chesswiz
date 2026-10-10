@@ -23,13 +23,13 @@ INDEX Archive#Database-Archive
 TITLE Database formats
 
 <p>
-Scidb supports the following formats:
+Chesswiz supports the following formats:
 </p>
 
 <dir>
   <li>
     <img src="../images/ft-scidb.png" />
-    <a href="#Scidb">Scidb</a>
+    <a href="#Scidb">Chesswiz</a>
   </li>
   <li>
     <img src="../images/ft-scid.png" />
@@ -125,7 +125,7 @@ Scid (<abbr>.si4</abbr>, <abbr>.si3</abbr>)
 
 <p>
 Scid's database format is fully supported because of it's wide adoption.
-But with this format you cannot use the full capability of Scidb. For large databases and repeated analysis, maintenance, or preparation work, it is recommended to convert the database into Scidb's native format (<abbr>.sci</abbr>) and use that as the working copy.
+But with this format you cannot use the full capability of Chesswiz. For large databases and repeated analysis, maintenance, or preparation work, it is recommended to convert the database into Scidb's native format (<abbr>.sci</abbr>) and use that as the working copy.
 </p>
 
 <annotation>
@@ -169,7 +169,7 @@ This format resembles structurally Scidb's format:
 <note>The files with suffixes <code>.sso</code> (Scid Search Option File),
 <code>.sor</code> (Scid Repertoire File), and <code>.stm</code>
 (Scid Tree Mask File), do not belong explicitely to a database and will
-not be regarded by Scidb. Likewise any saved game list (file suffix
+not be regarded by Chesswiz. Likewise any saved game list (file suffix
 <code>.txt</code>) will be disregarded.</note>
 
 <h2 id="ChessBase">

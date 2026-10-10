@@ -290,13 +290,13 @@ Example:
 <verbatim>
 (match
   <keyword>position:xor</keyword> (
-    (match <cql>match:hasmarker</cql> !)   <comment>; %::gametable::mc::GameFlags(!)%</comment>
-    (match <cql>match:hasmarker</cql> ?))) <comment>; %::gametable::mc::GameFlags(?)%</comment>
+    (match <cql>match:hasmarker</cql> !)   <comment>; %::gamestable::mc::GameFlags(!)%</comment>
+    (match <cql>match:hasmarker</cql> ?))) <comment>; %::gamestable::mc::GameFlags(?)%</comment>
 </verbatim>
 
 <p>
-Match all games marked with <i>%::gametable::mc::GameFlags(!)%</i>, or
-<i>%::gametable::mc::GameFlags(?)%</i>, but not marked with both flags.
+Match all games marked with <i>%::gamestable::mc::GameFlags(!)%</i>, or
+<i>%::gamestable::mc::GameFlags(?)%</i>, but not marked with both flags.
 </p>
 
 <p>
@@ -1916,8 +1916,8 @@ Examples:
 </verb>
 
 <p>
-Search for games with marker <i>%::gametable::mc::GameFlags(w)%</i>
-or <i>%::gametable::mc::GameFlags(b)%</i> (or both).
+Search for games with marker <i>%::gamestable::mc::GameFlags(w)%</i>
+or <i>%::gamestable::mc::GameFlags(b)%</i> (or both).
 </p>
 
 <verb>

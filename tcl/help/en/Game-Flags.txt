@@ -39,7 +39,7 @@ INCLUDE ../Game-Flags.txt
 The last two markers are not user-settable, they will be set automatically if a
 game contains illegal castlings or even other illegal moves (for example the king
 is moving into check) within the main line. If a game is marked with both only
-the marker <em>%::gametable::mc::GameFlags(I)%</em> will be displayed.
+the marker <em>%::gamestable::mc::GameFlags(I)%</em> will be displayed.
 </p>
 
 <p>
@@ -54,7 +54,7 @@ Both markers will be lost as soon as the database is closed.
 </p>
 
 <p>
-When editing games from Scid databases (.si4) Scidb is supporting the six special
+When editing games from Scid databases (.si4) Chesswiz is supporting the six special
 user defined markers (1..6). But it is recommended not to use these markers, because
 unsolvable problems will ocurr when copying games to other databases; even the
 application Scid cannot solve these problems.
@@ -62,10 +62,10 @@ application Scid cannot solve these problems.
 
 <p>
 When reading ChessBase databases both markers
-<em>%::gametable::mc::GameFlags(s)%</em> and
-<em>%::gametable::mc::GameFlags(t)%</em>
-will be mapped to the common marker <em>%::gametable::mc::GameFlags(?)%</em>.
-Scidb does not distinguish between these two characteristics.
+<em>%::gamestable::mc::GameFlags(s)%</em> and
+<em>%::gamestable::mc::GameFlags(t)%</em>
+will be mapped to the common marker <em>%::gamestable::mc::GameFlags(?)%</em>.
+Chesswiz does not distinguish between these two characteristics.
 </p>
 
 END

@@ -30,11 +30,11 @@ Themen passen, zu erlauben (<see/>
 </p>
 
 <p>
-Scidb benutzt <nobr>CQL-S</nobr> 1.0, ein erweitertes CQL, als Basis für alle
+Chesswiz benutzt <nobr>CQL-S</nobr> 1.0, ein erweitertes CQL, als Basis für alle
 Suchfunktionen. <nobr>CQL-S</nobr> wurde sehr reichhaltig erweitert, um den
 Ansprüchen moderner Schachdatenbanken zu genügen. <nobr>CQL-S</nobr> ist eine
 abwärtskompatible Erweiterung, alle Standard-CQL-Skripte sollten auch in
-Scidb anwendbar sein.
+Chesswiz anwendbar sein.
 </p>
 
 <p>
@@ -51,7 +51,7 @@ Einige Teile dieses Handbuchs wurden der Seite
 <h2 id="fundamentals">Grundlagen</h2>
 
 <p>
-Alle Suchfunktionen in Scidb basieren auf <nobr>CQL-S</nobr>. Zur Formulierung
+Alle Suchfunktionen in Chesswiz basieren auf <nobr>CQL-S</nobr>. Zur Formulierung
 von CQL-Abfragen stellt der CQL-Editor eine komfortable, übersichtliche und leicht
 bedienbare Benutzeroberfläche zur Verfügung. Um <nobr>CQL-S</nobr> anwenden
 zu können werden keine Kenntnisse der technischen CQL-Beschreibungen vorausgesetzt.
@@ -91,7 +91,7 @@ gestalten zu können ist ein vertieftes Verständnis notwendig.
 
 <annotation>
 Die technische Beschreibung ist keine Voraussetzung, um die
-Suchfunktionen in Scidb verwenden zu können.
+Suchfunktionen in Chesswiz verwenden zu können.
 </annotation>
 
 <ul class="index">
@@ -101,10 +101,10 @@ Suchfunktionen in Scidb verwenden zu können.
 <h2 id="file">CQL-Dateien</h2>
 
 <p>
-Scidb schreibt <nobr>CQL-S</nobr>-Skripte mit der Dateiendung <expr>.cqls</expr>.
+Chesswiz schreibt <nobr>CQL-S</nobr>-Skripte mit der Dateiendung <expr>.cqls</expr>.
 Entspricht eine CQL-Abfrage noch dem CQL-Standard (was meistens der Fall sein dürfte),
 dann kann dieses <nobr>CQL-S</nobr>-Skript jederzeit auch als CQL-Datei mit der
-Dateiendung <expr>.cql</expr> exportiert werden. Scidb kann alle
+Dateiendung <expr>.cql</expr> exportiert werden. Chesswiz kann alle
 <expr>.cql</expr>-Skripte, die mit anderen Programmen erstellt wurden, importieren.
 </p>
 

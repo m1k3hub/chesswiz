@@ -11,7 +11,7 @@ set Contents {
     {{{Cómo definir el explorador de Internet predeterminado} {How-To-Set-Default-Browser.html}}}
   }
   {
-    {{{Ventanas de listado en Scidb} {Overview.html} {list-windows}}}
+    {{{Ventanas de listado en Chesswiz} {Overview.html} {list-windows}}}
     {{{Listado de partidas} {Game-List-Window.html}}}
     {{{Listado de jugadores} {Player-List-Window.html}}}
     {{{Listado de torneos} {Event-List-Window.html}}}
@@ -19,7 +19,7 @@ set Contents {
     {{{Listado de comentaristas} {Annotator-List-Window.html}}}
   }
   {
-    {{{Ventanas y diálogos en Scidb} {Overview.html} {windows-and-dialogs}}}
+    {{{Ventanas y diálogos en Chesswiz} {Overview.html} {windows-and-dialogs}}}
     {{{Intercambiador de bases de datos} {Database-Switcher.html}}}
     {{{Explorador de partidas} {Game-Browser.html}}}
     {{{Panorámica del Explorador de partidas} {Game-Overview.html}}}
@@ -64,7 +64,7 @@ set Contents {
     {{{Información de contacto} {Contact-Information.html}}}
     {{{Mapa de ruta del desarrollo} {Development-Roadmap.html}}}
     {{{Novedades} {Whats-New.html}}}
-    {{{¡Bienvenido a Scidb!} {Welcome.html}}}
+    {{{¡Bienvenido a Chesswiz!} {Welcome.html}}}
   }
 }
 

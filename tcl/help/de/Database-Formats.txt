@@ -23,13 +23,13 @@ INDEX Archiv#Database-Archive
 TITLE Datenbankformate
 
 <p>
-Scidb unterstützt folgende Formate:
+Chesswiz unterstützt folgende Formate:
 </p>
 
 <dir>
   <li>
     <img src="../images/ft-scidb.png" />
-    <a href="#Scidb">Scidb</a>
+    <a href="#Scidb">Chesswiz</a>
   </li>
   <li>
     <img src="../images/ft-scid.png" />
@@ -56,8 +56,8 @@ Scidb (<abbr>.sci</abbr>)
 
 <p>
 Dies ist Scidb's eigenes Datenbankformat und wird ausdrücklich
-zur Verwendung mit Scidb empfohlen. Nur mit diesem Format ist der volle Umfang von
-Scidb verfügbar, und es garantiert optimale Verarbeitungsgeschwindigkeit.
+zur Verwendung mit Chesswiz empfohlen. Nur mit diesem Format ist der volle Umfang von
+Chesswiz verfügbar, und es garantiert optimale Verarbeitungsgeschwindigkeit.
 </p>
 
 <p>
@@ -127,7 +127,7 @@ Scid (<abbr>.si4</abbr>, <abbr>.si3</abbr>)
 <p>
 Dies ist Scid's Datenbankformat und wird aufgrund des hohen
 Verbreitungsgrades vollständig unterstützt. Es kann mit diesem Format jedoch nicht
-der volle Umfang von Scidb genutzt werden.
+der volle Umfang von Chesswiz genutzt werden.
 </p>
 
 <annotation>
@@ -171,7 +171,7 @@ Dieses Datenbankformat ähnelt strukturell dem Scidb-Format:
 <note>Die Dateien mit den Endungen <code>.sso</code> (Scid-Suchoptionendatei),
 <code>.sor</code> (Scid-Repertoire-Datei), und <code>.stm</code>
 (Scid-Zugbaum-Masken-Datei) gehören nicht explizit zu einer Datenbank und werden
-von Scidb nicht beachtet. Ebenso bleiben auch gespeicherte Partienlisten (Endung
+von Chesswiz nicht beachtet. Ebenso bleiben auch gespeicherte Partienlisten (Endung
 <code>.txt</code>) unbeachtet.</note>
 
 <h2 id="ChessBase">

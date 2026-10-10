@@ -72,7 +72,7 @@ Other proposed <acronym>NAG</acronym> values are:
 </box>
 
 <p>
-Scidb is defining some more <acronym>NAG</acronym> values:
+Chesswiz is defining some more <acronym>NAG</acronym> values:
 </p>
 
 <box>
@@ -98,7 +98,7 @@ values are required:
 
 <p>
 Scid and ChessPad define further <acronym>NAG</acronym> values (&gt; 190). But these values
-will be automatically mapped to Scidb specific values during import
+will be automatically mapped to Chesswiz specific values during import
 and database conversion.
 </p>
 

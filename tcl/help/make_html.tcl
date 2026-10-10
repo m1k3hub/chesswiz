@@ -200,17 +200,17 @@ set PieceMapping {
 }
 
 set f [open ../../../Makefile.in r]
+set suffix ""
 while {[gets $f line] >= 0} {
-	if {[regexp {SUFFIX[ \t]*=[ \t]*([^ \t]+)} $line _ suffix]} {
-		lappend HtmlMapping %scidb% scidb$suffix
-		break
-	}
+	regexp {^PROGRAM[ \t]*=[ \t]*([^ \t]+)} $line _ program
+	regexp {^SUFFIX[ \t]*=[ \t]*([^ \t]*)} $line _ suffix
 }
 close $f
-if {"%scidb%" ni $HtmlMapping} {
-	puts stderr "Couldn't find declaration of 'SUFFIX' in ../../../Makefile.in"
+if {![info exists program]} {
+	puts stderr "Couldn't find declaration of 'PROGRAM' in ../../../Makefile.in"
 	exit 1
 }
+lappend HtmlMapping %scidb% $program$suffix
 
 proc print {chan source title head body} {
 	variable lang
@@ -225,9 +225,9 @@ proc print {chan source title head body} {
 
 	set headerMap [list \
 		%TITLE% $title \
-		%TITLE-PREFIX% "Scidb - $::help::mc::Help" \
+		%TITLE-PREFIX% "Chesswiz - $::help::mc::Help" \
 		%LANG% $lang \
-		%CONTENT% "Scidb - Help Page" \
+		%CONTENT% "Chesswiz - Help Page" \
 		%STYLE% "../styles/help.css" \
 		%HEAD% $head
 	]

@@ -54,7 +54,7 @@ automatically, and an error will be reported.
 <h2 id="StartPosition">%::setup::board::mc::StartPosition%</h2>
 
 <p>
-Scidb is supporting Chess 960 positions. Chess 960 allows 960 different
+Chesswiz is supporting Chess 960 positions. Chess 960 allows 960 different
 start positions, which are enumerated with a worldwide accepted scheme,
 developed from Reinhard Scharnagl. The standard start position has
 number 518 in this scheme. With the input of a number the corresponding
@@ -64,7 +64,7 @@ Chess960 numbering scheme</a>.
 </p>
 
 <p>
-Scidb is also supporting Shuffle Chess positions. Shuffle Chess contains
+Chesswiz is also supporting Shuffle Chess positions. Shuffle Chess contains
 all the Chess 960 positions, with or without castling rights. Furthermore
 Shuffle Chess is allowing positions where castling is not possible,
 because the rule that the king is between two rooks will not be fullfilled.
@@ -74,10 +74,10 @@ with or without castlings rights, are retaining their position numbers.
 </p>
 
 <p>
-Moreover Scidb supports special start positions, provided on the FICS
+Moreover Chesswiz supports special start positions, provided on the FICS
 server (as special chess variants). You can select a FICS start position
 with button <img src="../images/fics-start-position-menu-button.png"/>.
-But only the start positions which are supported from Scidb will be offered.
+But only the start positions which are supported from Chesswiz will be offered.
 </p>
 
 <h2 id="DropChess">%::mc::VariantName(DropChess)%</h2>

@@ -166,7 +166,7 @@ This sub-menu provides functionality for the maintenance of databases.
 </p>
 
 <p>
-For large databases and repeated analysis, <abbr>.sci</abbr> should be treated as the working format. Non-<abbr>.sci</abbr> databases can still be opened, but some heavy workflows will be slower. Use <menuitem>%::application::database::mc::FileConvertToScidb%...</menuitem> to export a working copy in Scidb's native format before intensive work.
+For large databases and repeated analysis, <abbr>.sci</abbr> should be treated as the working format. Non-<abbr>.sci</abbr> databases can still be opened, but some heavy workflows will be slower. Use <menuitem>Convert to .sci...</menuitem> to export a working copy in Scidb's native format before intensive work.
 </p>
 
 <dir><img src="images/database-switcher-menu-maintenance.png"/></dir>

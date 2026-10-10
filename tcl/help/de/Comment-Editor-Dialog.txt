@@ -671,10 +671,10 @@ Wiki-Syntax entlehnt worden:
     zur Web-Seite <code>http://scidb.sourceforge.net</code>.
   </li>
   <li style="text-align: left">
-    <code>[[http://scidb.sourceforge.net][Scidb]]</code> verlinkt das Wort
-    <a href="http://scidb.sourceforge.net">Scidb</a> zur Web-Seite
+    <code>[[http://scidb.sourceforge.net][Chesswiz]]</code> verlinkt das Wort
+    <a href="http://scidb.sourceforge.net">Chesswiz</a> zur Web-Seite
     <code>http://scidb.sourceforge.net</code>. Alternativ kann auch die
-    Syntax <code>[[http://scidb.sourceforge.net|Scidb]]</code> verwendet werden.
+    Syntax <code>[[http://scidb.sourceforge.net|Chesswiz]]</code> verwendet werden.
   </li>
   <li style="text-align: left">
     <code>[[fred@feuerstein.net][Fred Feuerstein]]</code> verweist auf die Email-Adresse
@@ -700,7 +700,7 @@ Smileys im Kommentareditor eingeschaltet sein (<see/>
 am einfachsten mit Hilfe des kontextsensitiven Menüs. Im Textfeld eingegebene
 Smiley-Codes werden nicht sofort automatisch erkannt, sondern erst nach einer
 Aktualisierung der gesamten Anzeige, wie z.B. nach einem Sprachwechsel, oder
-nach dem Speichern (mit <menuitem>%::widget::mc::Apply%</menuitem>).
+nach dem Speichern (mit <menuitem>%::mc::Apply%</menuitem>).
 </p>
 
 <p>
@@ -785,12 +785,12 @@ Den gesamten Text selektieren.
 </p>
 
 <p>
-<menuitem>%::widget::mc::Clear%</menuitem>
+<menuitem>%::mc::Clear%</menuitem>
 Den gesamten Text löschen.
 </p>
 
 <p>
-<menuitem>%::widget::mc::Revert%</menuitem>
+<menuitem>Zurückkehren</menuitem>
 Den ursprünglichen Text - entweder den Starttext,
 oder den Text nach dem letzten Speichern - wiederherstellen. Dieser
 Menüpunkt steht nur dann zur Verfügung, wenn der aktuelle Text vom
@@ -824,12 +824,12 @@ einer Stellungsbewertung, oder eines anderen Sonderzeichens.
 </p>
 
 <p>
-<menuitem>%::widget::mc::Clear%</menuitem>
+<menuitem>%::mc::Clear%</menuitem>
 Den gesamten Text (der aktuellen Sprache) löschen.
 </p>
 
 <p>
-<menuitem>%::widget::mc::Revert%</menuitem>
+<menuitem>Zurückkehren</menuitem>
 Den Originaltext für die aktuelle Sprache wiederherstellen. Diese
 Schaltfläche ist nur dann aktiv, wenn der neue Text vom Originaltext
 abweicht. Sobald eine Speicherung des Textes erfolgt, so ist dies der neue
@@ -839,21 +839,21 @@ Originaltext.
 <h2 id="Dialog">Dialogschaltflächen</h2>
 
 <p>
-<menuitem>%::widget::mc::Ok%</menuitem>
+<menuitem>%::mc::OK%</menuitem>
 Die Texte aller ausgewählten Sprachen speichern und den Dialog schliessen.
 </p>
 
 <p>
-<menuitem>%::widget::mc::Apply%</menuitem>
+<menuitem>%::mc::Apply%</menuitem>
 Die Texte aller ausgewählten Sprachen speichern ohne den Dialog zu verlassen
 (zur Voransicht im Partieeditor).
 </p>
 
 <p>
-<menuitem>%::widget::mc::Cancel%</menuitem>
+<menuitem>%::mc::Cancel%</menuitem>
 Den Dialog ohne Speicherung schliessen, d.h. das alle evt. vorhandenen
 Änderungen verworfen werden. Wurde zuvor mit
-<menuitem>%::widget::mc::Apply%</menuitem> bereits gespeichert, so bleibt
+<menuitem>%::mc::Apply%</menuitem> bereits gespeichert, so bleibt
 der zuletzt gespeicherte Text erhalten.
 </p>
 

@@ -16,12 +16,12 @@
 * (at your option) any later version.
 *********************************************************************** -->
 
-TITLE Welcome to Scidb!
+TITLE Welcome to Chesswiz!
 
 <p>
-This is a preliminary version of Scidb for try-out and testing. The first
+This is a preliminary version of Chesswiz for try-out and testing. The first
 full version will be released after a sufficiently long test period. Please
-consider while experimenting with Scidb:
+consider while experimenting with Chesswiz:
 </p>
 
 <ol>
@@ -58,7 +58,7 @@ consider while experimenting with Scidb:
 </ol>
 
 <p>
-Have a lot of fun with Scidb, whose development has already taken nine years!
+Have a lot of fun with Chesswiz, whose development has already taken nine years!
 </p>
 
 <h2>Links</h2>
