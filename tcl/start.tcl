@@ -76,11 +76,21 @@ if {[info exists ::env(SCIDB_USERDIR)] && $::env(SCIDB_USERDIR) ne ""} {
 			if {![file isdirectory $legacy]} { continue }
 			if {[catch {
 				file copy $legacy $user
-				foreach f [glob -nocomplain -directory [file join $user config] *.dat] {
+				set files {}
+				foreach dir {config themes themes/piece themes/square} {
+					lappend files {*}[glob -nocomplain -directory [file join $user $dir] *.dat]
+				}
+				foreach f $files {
 					set fd [open $f r]; fconfigure $fd -encoding utf-8; set text [read $fd]; close $fd
-					if {[string first $legacy $text] < 0} { continue }
-					set fd [open $f w]; fconfigure $fd -encoding utf-8
-					puts -nonewline $fd [string map [list $legacy $user] $text]; close $fd
+					# the Fritz piece set and theme are now called Club
+					set new [string map [list $legacy $user {Fritz|14223} {Club|14223} \
+						{{Fritz}} {{Club}} {wood Fritz.png} {wood Club.png}] $text]
+					if {$new ne $text} {
+						set fd [open $f w]; fconfigure $fd -encoding utf-8
+						puts -nonewline $fd $new; close $fd
+					}
+					set club [file join [file dirname $f] Club.dat]
+					if {[file tail $f] eq "Fritz.dat" && ![file exists $club]} { file rename $f $club }
 				}
 				set fd [open [file join $user migrated-from] w]; puts $fd $legacy; close $fd
 			} err]} {
@@ -165,7 +175,7 @@ proc update {} {
 			{Creepy|1381672489858|purple|gregor}
 			{Elegant|1534667039527|purple|gregor}
 			{Fantasy|1228820514842|yellow.color|gregor}
-			{Fritz|1422386606480|purple|gregor}
+			{Club|1422386606480|purple|gregor}
 			{Glass|1243787890671|yellow.color|gregor}
 			{Goldenrod|1243765848112|yellow.color|gregor}
 			{Gray|1248527850611|yellow.color|gregor}
@@ -197,7 +207,7 @@ proc update {} {
 			{Burly|1262881395698|yellow.color|gregor}
 			{Contrast|1322146529013|yellow.color|gregor}
 			{Contourless|1536512761722|purple|gregor}
-			{Fritz|1422386484520|purple|gregor}
+			{Club|1422386484520|purple|gregor}
 			{Glass|1243791877212|yellow.color|gregor}
 			{Golden Creme|1422459733282|purple|gregor}
 			{Goldenrod|1243765822627|yellow.color|gregor}
@@ -232,7 +242,7 @@ proc update {} {
 			{Burnt|1422299233126|purple|gregor}
 			{Contrast|1371196032342|purple|gregor}
 			{Country Style|1370798009651|INE543149|cmartins}
-			{Fritz|1422383955583|purple|gregor}
+			{Club|1422383955583|purple|gregor}
 			{Glass|1228820514871|yellow.color|gregor}
 			{Gray|1243532989423|yellow.color|gregor}
 			{Marble - Black&Beige|1243775151068|yellow.color|gregor}

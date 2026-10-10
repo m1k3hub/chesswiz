@@ -1,0 +1,7 @@
+::board::addStyle theme {
+  identifier   {Club|1422386606480|purple|gregor}
+  piece-set    {Club}
+  piece-style  {Club|1422386484520|purple|gregor}
+  square-style {Club|1422383955583|purple|gregor}
+  version      {1.0}
+}

@@ -28,11 +28,11 @@
 # dark/marble/Arena-Blue.png
 # dark/misc/GreenVinyl.jpg
 # dark/wood/EdWood4.jpg
-# dark/wood/Fritz.png
+# dark/wood/Club.png
 # dark/wood/Mahagony.jpg
 # lite/marble/Arena-Blue.png
 # lite/misc/WhiteVinyl.jpg
-# lite/wood/Fritz.png
+# lite/wood/Club.png
 # lite/wood/Sycamore.jpg
 
 ::board::addPreferences {marble 11932818.jpg} {

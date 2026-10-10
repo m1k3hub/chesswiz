@@ -5,7 +5,7 @@
   borderline,width         {0.006666666666666667}
   dark,rotation            {0}
   dark,solid               {#4682b4}
-  dark,texture             {wood Fritz.png}
+  dark,texture             {wood Club.png}
   dark,x1                  {0}
   dark,x2                  {150}
   dark,y1                  {0}
@@ -20,10 +20,10 @@
   hint,border-coords       {#ffffff}
   hint,border-rotation     {0}
   hint,border-tile         {wood DarkMaple.jpg}
-  identifier               {Fritz|1422383955583|purple|gregor}
+  identifier               {Club|1422383955583|purple|gregor}
   lite,rotation            {0}
   lite,solid               {#b0c4de}
-  lite,texture             {wood Fritz.png}
+  lite,texture             {wood Club.png}
   lite,x1                  {0}
   lite,x2                  {150}
   lite,y1                  {0}
