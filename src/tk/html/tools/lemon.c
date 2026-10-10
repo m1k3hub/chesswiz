@@ -11,6 +11,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <stddef.h>
 
 #ifndef __WIN32__
 #   if defined(_WIN32) || defined(WIN32)
@@ -1548,7 +1549,7 @@ char **argv;
 /*
 ** Return a pointer to the next structure in the linked list.
 */
-#define NEXT(A) (*(char**)(((unsigned long)A)+offset))
+#define NEXT(A) (*(char**)((char*)(A)+offset))
 
 /*
 ** Inputs:
@@ -1569,7 +1570,7 @@ static char *merge(a,b,cmp,offset)
 char *a;
 char *b;
 int (*cmp)();
-int offset;
+ptrdiff_t offset;
 {
   char *ptr, *head;
 
@@ -1622,11 +1623,11 @@ char *list;
 char **next;
 int (*cmp)();
 {
-  unsigned long offset;
+  ptrdiff_t offset;
   char *ep;
   char *set[LISTSIZE];
   int i;
-  offset = (unsigned long)next - (unsigned long)list;
+  offset = (char*)next - list;
   for(i=0; i<LISTSIZE; i++) set[i] = 0;
   while( list ){
     ep = list;
@@ -1776,7 +1777,7 @@ FILE *err;
         if( *end ){
           if( err ){
             fprintf(err,"%sillegal character in floating-point argument.\n",emsg);
-            errline(i,((unsigned long)end)-(unsigned long)argv[i],err);
+            errline(i,end - argv[i],err);
           }
           errcnt++;
         }
@@ -1787,7 +1788,7 @@ FILE *err;
         if( *end ){
           if( err ){
             fprintf(err,"%sillegal character in integer argument.\n",emsg);
-            errline(i,((unsigned long)end)-(unsigned long)argv[i],err);
+            errline(i,end - argv[i],err);
           }
           errcnt++;
         }

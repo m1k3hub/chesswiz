@@ -151,8 +151,8 @@ struct Result
 	unsigned illegalRejected;
 	unsigned errors;
 	unsigned warnings;
-	long sourceBytes;
-	long targetBytes;
+	int64_t sourceBytes;
+	int64_t targetBytes;
 };
 
 
@@ -304,13 +304,13 @@ cleanupDatabaseFiles(mstl::string const& filename)
 }
 
 
-long
+int64_t
 databaseSize(mstl::string const& filename)
 {
 	mstl::string root(::util::misc::file::rootname(filename));
-	return mstl::max(0L, sys::file::size(root + ".sci"))
-		+ mstl::max(0L, sys::file::size(root + ".scg"))
-		+ mstl::max(0L, sys::file::size(root + ".scn"));
+	return mstl::max(int64_t(0), sys::file::size(root + ".sci"))
+		+ mstl::max(int64_t(0), sys::file::size(root + ".scg"))
+		+ mstl::max(int64_t(0), sys::file::size(root + ".scn"));
 }
 
 
@@ -465,7 +465,7 @@ benchmarkPgn(mstl::string const& source,
 	result.illegalRejected = 0;
 	result.errors = 0;
 	result.warnings = 0;
-	result.sourceBytes = mstl::max(0L, sys::file::size(source));
+	result.sourceBytes = mstl::max(int64_t(0), sys::file::size(source));
 	result.targetBytes = 0;
 
 	util::ZStream stream(sys::file::internalName(source), mstl::ios_base::in);
@@ -504,7 +504,7 @@ benchmarkDatabase(mstl::string const& source,
 	result.illegalRejected = 0;
 	result.errors = 0;
 	result.warnings = 0;
-	result.sourceBytes = mstl::max(0L, sys::file::size(source));
+	result.sourceBytes = mstl::max(int64_t(0), sys::file::size(source));
 	result.targetBytes = 0;
 
 	mstl::string useEncoding(encoding);
@@ -557,7 +557,7 @@ seconds(uint64_t elapsedUsec)
 
 
 double
-mbPerSecond(long bytes, uint64_t elapsedUsec)
+mbPerSecond(int64_t bytes, uint64_t elapsedUsec)
 {
 	if (elapsedUsec == 0)
 		return 0.0;
@@ -605,7 +605,7 @@ main(int argc, char** argv)
 		uint64_t bestUsec = 0;
 		uint64_t worstUsec = 0;
 		unsigned lastGames = 0;
-		long lastTargetBytes = 0;
+		int64_t lastTargetBytes = 0;
 
 		::printf("source: %s\n", cfg.source.c_str());
 		::printf("output: %s\n", cfg.output.c_str());

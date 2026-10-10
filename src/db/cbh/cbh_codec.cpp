@@ -1938,9 +1938,9 @@ Codec::readHeader(mstl::string const& rootname)
 	// the count includes the header record; a corrupt count must not
 	// claim more records than the file holds
 	unsigned count = bstrm.uint32();
-	long size = sys::file::size(filename.c_str());
+	int64_t size = sys::file::size(filename.c_str());
 
-	if (count == 0 || size < 0 || count > unsigned(size)/sizeof(record))
+	if (count == 0 || size < 0 || count > uint64_t(size)/sizeof(record))
 		IO_RAISE(Index, Corrupted, "'%s' is truncated or corrupt", filename.c_str());
 
 	return count - 1;

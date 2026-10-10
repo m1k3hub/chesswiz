@@ -16,6 +16,7 @@
  */
 
 #include "tkTreeCtrl.h"
+#include <stdint.h>
 
 typedef struct TreeItem_ TreeItem_;
 typedef struct Column Column;
@@ -2097,7 +2098,7 @@ TreeItemList_FromObj(
 			gotId = TRUE;
 		}
 		if (gotId) {
-			hPtr = Tcl_FindHashEntry(&tree->itemHash, (char *)(long) id);
+			hPtr = Tcl_FindHashEntry(&tree->itemHash, (char *)(intptr_t) id);
 			if (hPtr != NULL) {
 				item = (TreeItem) Tcl_GetHashValue(hPtr);
 			} else {

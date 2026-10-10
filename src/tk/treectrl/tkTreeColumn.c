@@ -19,6 +19,7 @@
  */
 
 #include "tkTreeCtrl.h"
+#include <stdint.h>
 
 typedef struct TreeColumn_ TreeColumn_;
 
@@ -466,7 +467,7 @@ ColumnCO_Set(
 	int flags					/* Flags for the option, set Tk_SetOptions. */
 	)
 {
-	int cfoFlags = (long) clientData;
+	int cfoFlags = (intptr_t) clientData;
 	TreeCtrl *tree = (TreeCtrl *) ((TkWindow *) tkwin)->instanceData;
 	int objEmpty;
 	TreeColumn new = 0, *internalPtr;

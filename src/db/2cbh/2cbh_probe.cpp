@@ -9,6 +9,7 @@
 #include "2cbh_move16.h"
 
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -104,13 +105,13 @@ int main(int argc, char* argv[])
    }
 
    unsigned const recordSize = readLE16(&cbh[0x0a]);
-   unsigned long const totalCount = (unsigned long) readLE64(&cbh[0x10]);
+   uint64_t const totalCount = readLE64(&cbh[0x10]);
    unsigned const headerRecords = 256u;
    unsigned const gameCount = unsigned(cbh.size() / recordSize) - headerRecords;
    if (maxGames > gameCount)
       maxGames = gameCount;
 
-   printf("# recordSize=%u totalRecords=%lu games=%u probing=%u\n",
+   printf("# recordSize=%u totalRecords=%" PRIu64 " games=%u probing=%u\n",
           recordSize, totalCount, gameCount, maxGames);
 
    unsigned decoded = 0;
@@ -119,7 +120,7 @@ int main(int argc, char* argv[])
    for (unsigned i = 0; i < maxGames; ++i)
    {
       unsigned char const* rec = &cbh[(headerRecords + i) * recordSize];
-      unsigned long cbgOffset = (unsigned long) readLE64(rec + 0x08);
+      uint64_t cbgOffset = readLE64(rec + 0x08);
 
       if (cbgOffset + 0x1a > cbg.size())
          continue;
@@ -128,7 +129,7 @@ int main(int argc, char* argv[])
       uint64_t magic = readLE64(recg);
       if (magic != 0x1122334455667788ull)
       {
-         fprintf(stderr, "game %u: bad magic at .2cbg offset 0x%lx\n",
+         fprintf(stderr, "game %u: bad magic at .2cbg offset 0x%" PRIx64 "\n",
                  i, cbgOffset);
          continue;
       }

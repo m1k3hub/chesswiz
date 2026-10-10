@@ -15,6 +15,8 @@
  * RCS: @(#) $Id: tkTreeUtils.c,v 1.75 2008/07/21 18:35:38 treectrl Exp $
  */
 
+#include <stddef.h>
+#include <stdint.h>
 #include "tkTreeCtrl.h"
 
 #ifdef WIN32
@@ -3932,7 +3934,7 @@ struct AllocStats {
  */
 
 #define BODY_OFFSET \
-	((unsigned long) (&((AllocElem *) 0)->body))
+	offsetof(AllocElem, body)
 
 #ifdef ALLOC_STATS
 
@@ -4163,7 +4165,7 @@ TreeAlloc_Free(
 	 * word-addressed machines such as Crays (will subtract only bytes,
 	 * even though BODY_OFFSET is in words on these machines).
 	 */
-	elem = (AllocElem *) (((unsigned long) ptr) - BODY_OFFSET);
+	elem = (AllocElem *) (((char *) ptr) - BODY_OFFSET);
 
 #ifdef TREECTRL_DEBUG
 	if (elem->free)
@@ -6722,7 +6724,7 @@ BooleanFlagCO_Set(
 	int flags
 	)
 {
-	int theFlag = (long) clientData;
+	int theFlag = (intptr_t) clientData;
 	int new, *internalPtr;
 
 	if (internalOffset >= 0)
@@ -6752,7 +6754,7 @@ BooleanFlagCO_Get(
 	int internalOffset
 	)
 {
-	int theFlag = (long) clientData;
+	int theFlag = (intptr_t) clientData;
 	int value = *(int *) (recordPtr + internalOffset);
 
 	return Tcl_NewBooleanObj(value & theFlag);
@@ -6766,7 +6768,7 @@ BooleanFlagCO_Restore(
 	char *saveInternalPtr
 	)
 {
-	int theFlag = (long) clientData;
+	int theFlag = (intptr_t) clientData;
 	int value = *(int *) saveInternalPtr;
 
 	if (value & theFlag)
@@ -6798,7 +6800,7 @@ BooleanFlagCO_Init(
 	co->getProc = BooleanFlagCO_Get;
 	co->restoreProc = BooleanFlagCO_Restore;
 	co->freeProc = NULL;
-	co->clientData = (ClientData)(long) theFlag;
+	co->clientData = (ClientData)(intptr_t) theFlag;
 
 	specPtr->clientData = co;
 

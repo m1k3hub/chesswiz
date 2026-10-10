@@ -6,6 +6,7 @@ See the file copying.txt for copying permission.
 #include "xmldef.h"
 #include "xmlparse.h"
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef XML_UNICODE
 #define XML_ENCODE_MAX XML_UTF16_ENCODE_MAX
@@ -13,7 +14,7 @@ See the file copying.txt for copying permission.
 #define XmlGetInternalEncoding XmlGetUtf16InternalEncoding
 #define XmlGetInternalEncodingNS XmlGetUtf16InternalEncodingNS
 #define XmlEncode XmlUtf16Encode
-#define MUST_CONVERT(enc, s) (!(enc)->isUtf16 || (((unsigned long)s) & 1))
+#define MUST_CONVERT(enc, s) (!(enc)->isUtf16 || (((uintptr_t)s) & 1))
 typedef unsigned short ICHAR;
 #else
 #define XML_ENCODE_MAX XML_UTF8_ENCODE_MAX

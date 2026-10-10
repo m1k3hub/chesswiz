@@ -99,14 +99,14 @@ sys::file::access(char const* filename, Mode mode)
 }
 
 
-long
+int64_t
 sys::file::size(char const* filename)
 {
 	M_REQUIRE(filename);
 
 	Tcl_StatBuf*	buf		= Tcl_AllocStatBuf();
 	Tcl_Obj*			pathObj	= Tcl_NewStringObj(filename, -1);
-	long				size		= -1;
+	int64_t			size		= -1;
 
 	Tcl_IncrRefCount(pathObj);
 	int ret = Tcl_FSStat(pathObj, buf);
@@ -117,7 +117,7 @@ sys::file::size(char const* filename)
 #if !TCL_PREREQ(8,6)
 		size = buf->st_size;
 #else
-		size = long(Tcl_GetSizeFromStat(buf));
+		size = int64_t(Tcl_GetSizeFromStat(buf));
 #endif
 	}
 

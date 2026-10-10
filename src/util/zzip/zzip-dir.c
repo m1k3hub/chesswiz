@@ -25,10 +25,7 @@
 
 #include "__dirent.h"
 
-#ifndef offsetof
-#pragma warning had to DEFINE offsetof as it was not in stddef.h
-#define offsetof(T,M) ((unsigned)(& ((T*)0)->M))
-#endif
+/* Use the standard offsetof from <stddef.h>. */
 
 #ifdef ZZIP_HAVE_SYS_STAT_H
 /* MSVC does have IFbitmask but not the corresponding IStests */

@@ -94,7 +94,7 @@ char pathDelim();
 bool access(char const* filename, Mode mode);
 
 bool dirIsEmpty(char const* dirname);
-long size(char const* filename);
+int64_t size(char const* filename);
 bool changed(char const* filename, uint32_t& time);
 bool isHardLinked(char const* filename1, char const* filename2);
 Type type(char const* filename);

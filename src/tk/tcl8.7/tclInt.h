@@ -4672,11 +4672,7 @@ MODULE_SCOPE Tcl_PackageInitProc Procbodytest_SafeInit;
  * of bytes from beginning of structure to a given field.
  */
 
-#ifdef offsetof
 #define TclOffset(type, field) ((int) offsetof(type, field))
-#else
-#define TclOffset(type, field) ((int) ((char *) &((type *) 0)->field))
-#endif
 
 /*
  *----------------------------------------------------------------

@@ -94,7 +94,7 @@ istream::getline(char* buf, size_t size)
 istream&
 istream::getline(string& buf)
 {
-	long size = ::getline(&m_data, &m_size, m_fp);
+	ssize_t size = ::getline(&m_data, &m_size, m_fp);
 
 	if (size == -1)
 	{
@@ -121,7 +121,7 @@ istream::getline(string& buf)
 istream&
 istream::get(string& buf)
 {
-	long size = ::getdelim(&m_data, &m_size, '\0', m_fp);
+	ssize_t size = ::getdelim(&m_data, &m_size, '\0', m_fp);
 
 	if (size == -1)
 	{

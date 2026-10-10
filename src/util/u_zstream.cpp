@@ -100,7 +100,7 @@ read(void* cookie, char* buf, size_t len)
 {
 	M_ASSERT(IS_READABLE);
 
-	long n = ZIP_FILE ? zzip_file_read(ZIP_FILE, buf, len) : 0;
+	zzip_ssize_t n = ZIP_FILE ? zzip_file_read(ZIP_FILE, buf, len) : 0;
 
 	while (n <= 0)
 	{

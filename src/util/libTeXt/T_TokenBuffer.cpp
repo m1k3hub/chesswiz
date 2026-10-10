@@ -22,6 +22,7 @@
 
 #include "m_ostream.h"
 #include "m_assert.h"
+#include <stddef.h>
 
 using namespace TeXt;
 
@@ -155,7 +156,7 @@ TokenBuffer::bindToken(unsigned level, RefID refID, TokenP const& token)
 
 	ID				domID	= m_domainStack[level].get<idx::ID>();
 	Relations&	r		= m_relList[refID];
-	long			k		= mstl::min(long(level), long(r.size()) - 1);
+	ptrdiff_t	k		= mstl::min(ptrdiff_t(level), ptrdiff_t(r.size()) - 1);
 
 	if (k == -1 || r[k].get<idx::Level>() < level)
 	{
@@ -213,7 +214,7 @@ TokenBuffer::lookup(unsigned level, RefID refID) const
 		return 0;
 
 	Relations::const_iterator b = relations.begin();
-	Relations::const_iterator r = b + mstl::min(long(level), long(relations.size()) - 1);
+	Relations::const_iterator r = b + mstl::min(ptrdiff_t(level), ptrdiff_t(relations.size()) - 1);
 
 	while (r != b && (r - 1)->get<idx::Level>() >= level)
 		--r;
