@@ -35,7 +35,7 @@
  */
 
 #ifndef _STDIO_H_
-define	_STDIO_H_
+#define	_STDIO_H_
 
 //#include "_ansi.h"
 /* Provide support for both ANSI and non-ANSI environments.  */
@@ -350,7 +350,7 @@ typedef long ssize_t;
 typedef unsigned long long __dev_t;
 #else
 #ifndef __dev_t_defined
-#if __WORDSIZE == 64
+#if __SIZEOF_LONG__ == 8
 typedef unsigned long __dev_t;
 #else
 typedef unsigned long long __dev_t;

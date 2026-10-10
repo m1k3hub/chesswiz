@@ -21,7 +21,7 @@
 
 #include "m_types.h"
 
-#if __WORDSIZE == 64
+#if defined(__SIZEOF_INT128__)
 
 # if __GNUC_PREREQ(4,6)
 
@@ -38,7 +38,7 @@ typedef mstl::uint128 uint128_t;
 
 # endif
 
-#else // __WORDSIZE == 32
+#else // !defined(__SIZEOF_INT128__)
 
 # include "m_uint128.h"
 typedef mstl::uint128 uint128_t;

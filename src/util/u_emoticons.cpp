@@ -55,7 +55,7 @@ enum Emotion
 
 	Sw = DECODE(Sweat),
 	Ra = DECODE(Razz),
-	Sl = DECODE(Sleep),
+	Sl = DECODE(util::emoticons::Sleep),
 
 	Sa = DECODE(Saint),
 	Ev = DECODE(Evil),
@@ -290,7 +290,7 @@ emoticons::parseEmotion(char const*& first, char const* last, Emotion& emotion)
 				case 'n': if (strncmp(":neutral:",	first, 9) == 0) RETURN(Neutral, 9); break;
 				case 'o': if (strncmp(":oops:",		first, 6) == 0) RETURN(Surprise, 6); break;
 				case 'w': if (strncmp(":wunk:",		first, 6) == 0) RETURN(Wink, 6); break;
-				case 'z': if (strncmp(":zzz:",		first, 5) == 0) RETURN(Sleep, 5); break;
+				case 'z': if (strncmp(":zzz:",		first, 5) == 0) RETURN(util::emoticons::Sleep, 5); break;
 
 				case 'r':
 					switch (first[2])

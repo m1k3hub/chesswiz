@@ -31,7 +31,7 @@
 #include <stdarg.h>
 #include <ctype.h>
 
-#if __WORDSIZE == 64
+#if __SIZEOF_LONG__ == 8
 # define __PRI64_PREFIX "l"
 #else
 # define __PRI64_PREFIX "ll"

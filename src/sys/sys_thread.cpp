@@ -408,7 +408,7 @@ socketpair(SOCKET socks[2])
 	socks[0] = socks[1] = INVALID_SOCKET;
 
 	int reuse = 1;
-	socklen_t addrlen = sizeof(a.inaddr);
+	int addrlen = sizeof(addr.inaddr); // winsock2 has no socklen_t
 
 	if (setsockopt(listener,
 						SOL_SOCKET,
@@ -471,8 +471,13 @@ struct Thread::Synchonize
 	{
 		Guard::initLock(m_lock);
 
+#ifdef __WIN32__
+		if (::socketpair(m_fd) != 0) // Windows socketpair() emulation takes the array only
+			M_RAISE("cannot create sockets");
+#else
 		if (::socketpair(PF_UNIX, SOCK_STREAM, 0, m_fd) != 0)
 			M_RAISE("cannot create sockets");
+#endif
 
 		m_chan = Tcl_MakeFileChannel(reinterpret_cast<ClientData>(m_fd[0]), TCL_READABLE);
 
@@ -556,7 +561,7 @@ Thread m_mainThread(GetCurrentThreadId());
 bool Thread::insideMainThread() { return GetCurrentThreadId() == m_mainThread.threadId(); }
 
 
-unsigned
+DWORD __stdcall
 Thread::startThread(void* arg)
 {
 	startRoutine(static_cast<Thread*>(arg)->m_runnable, static_cast<Thread*>(arg)->m_exception);
@@ -568,16 +573,17 @@ Thread::startThread(void* arg)
 bool
 Thread::createThread()
 {
-	M_ASSERT((&m_cancel & 0x1f) == 0);	// must be aligned to 32-bit boundary
-	return (m_threadId = CreateThread(0, 0, &startThread, this, 0, 0)) != 0;
+	m_threadHandle = CreateThread(0, 0, &startThread, this, 0, &m_threadId);
+	return m_threadHandle != 0;
 }
 
 
 void
 Thread::joinThread()
 {
-	WaitForSingleObject(m_threadId, INFINITE);
-	CloseHandle(m_threadId);
+	WaitForSingleObject(m_threadHandle, INFINITE);
+	CloseHandle(m_threadHandle);
+	m_threadHandle = 0;
 }
 
 
@@ -585,11 +591,11 @@ void
 Thread::doSleep()
 {
 	InitializeConditionVariable(&m_condition);
-	InitializeCriticalSection(&&m_condMutex);
+	InitializeCriticalSection(&m_condMutex);
 	EnterCriticalSection(&m_condMutex);
 	m_wakeUp = false;
 	while (!m_wakeUp)
-		SleepConditionVariableCS(&m_condition, &m_condMutext);
+		SleepConditionVariableCS(&m_condition, &m_condMutex, INFINITE);
 	LeaveCriticalSection(&m_condMutex);
 }
 
@@ -685,6 +691,9 @@ Thread::initialize()
 
 Thread::Thread(ThreadId threadId)
 	:m_threadId(threadId)
+#ifdef __WIN32__
+	,m_threadHandle(0) // no handle: this is the main-thread object
+#endif
 	,m_exception(0)
 	,m_wakeUp(false)
 {

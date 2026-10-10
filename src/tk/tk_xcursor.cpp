@@ -39,6 +39,8 @@
 // =====================================================================================
 
 #include <tk.h>
+#include <stdio.h>
+#include <string.h>
 
 #if !defined(__WIN32__) && !defined(__MacOSX__)
 
@@ -134,6 +136,30 @@ cmdFreeCursor(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const ob
 #endif // !defined(__WIN32__) && !defined(__MacOSX__)
 
 
+#if defined(_WIN32) || defined(__APPLE__)
+static int
+cmdNativeCursor(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "window cursor");
+		return TCL_ERROR;
+	}
+
+	// The Tcl wrapper represents its None cursor as 0.
+	Tcl_Obj* cursor = strcmp(Tcl_GetString(objv[2]), "0") == 0
+		? Tcl_NewStringObj("", 0) : objv[2];
+	Tcl_Obj* args[] = {objv[1], Tcl_NewStringObj("configure", -1),
+		Tcl_NewStringObj("-cursor", -1), cursor};
+	for (unsigned i = 0; i < 4; ++i)
+		Tcl_IncrRefCount(args[i]);
+	int result = Tcl_EvalObjv(ti, 4, args, TCL_EVAL_GLOBAL);
+	for (unsigned i = 0; i < 4; ++i)
+		Tcl_DecrRefCount(args[i]);
+	return result;
+}
+#endif
+
 static int
 cmdIsARGBSupported(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
@@ -177,6 +203,16 @@ xcursor_init(Tcl_Interp* ti)
 	// public functions
 	Tcl_CreateObjCommand(ti, "::xcursor::getTheme", cmdGetTheme, 0, 0);
 
+#endif
+
+#if defined(_WIN32) || defined(__APPLE__)
+	static bool logged = false;
+	if (!logged)
+	{
+		fprintf(stderr, "Chesswiz: Xcursor themes unavailable; use Tk built-in cursors\n");
+		logged = true;
+	}
+	Tcl_CreateObjCommand(ti, "::xcursor::DefineCursor", cmdNativeCursor, 0, 0);
 #endif
 
 	// public functions

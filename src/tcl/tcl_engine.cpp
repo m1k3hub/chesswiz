@@ -46,6 +46,11 @@
 #include <ctype.h>
 #include <tcl.h>
 
+#if defined(_WIN32)
+# include <stdint.h>
+# include "m_stdio.h"	// provides the Windows fopencookie shim + types
+#endif
+
 using namespace db;
 using namespace tcl;
 
@@ -589,7 +594,17 @@ addMove(Game& game, MoveList const& moves, bool opponentsView)
 static EngineLog* m_log = 0;
 
 
-static __ssize_t
+// fopencookie's callback signatures are platform specific: glibc uses
+// __ssize_t / __off64_t, the mstl Windows shim (m_stdio.h) uses the
+// portable ssize_t / int64_t. Match whichever struct is in scope.
+#if defined(_WIN32)
+	typedef int64_t tcl_cookie_off_t;
+#else
+	typedef __off64_t tcl_cookie_off_t;
+#endif
+
+
+static ssize_t
 read(void* cookie, char* buf, size_t len)
 {
 	M_ASSERT(!"unexpected call");
@@ -598,7 +613,7 @@ read(void* cookie, char* buf, size_t len)
 
 
 static int
-seek(void* cookie, __off64_t* pos, int whence)
+seek(void* cookie, tcl_cookie_off_t* pos, int whence)
 {
 	M_ASSERT(!"unexpected call");
 	return -1;
@@ -612,7 +627,7 @@ close(void* cookie)
 }
 
 
-static __ssize_t
+static ssize_t
 write(void* cookie, char const* buf, size_t len)
 {
 	if (m_log)

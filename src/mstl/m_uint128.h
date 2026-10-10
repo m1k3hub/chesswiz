@@ -25,7 +25,7 @@
 
 #include "m_types.h"
 
-#if __WORDSIZE == 32 || !__GNUC_PREREQ(4,4)
+#if !defined(__SIZEOF_INT128__) || !__GNUC_PREREQ(4,4)
 
 namespace mstl {
 

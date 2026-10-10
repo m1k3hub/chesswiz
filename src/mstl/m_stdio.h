@@ -16,14 +16,14 @@
 // (at your option) any later version.
 // ======================================================================
 
-#ifdef __unix__
+#if defined(__unix__) || defined(_WIN32)
 # include <stdio.h>
 #else
 # include "m_stdio_internal.h"
 #endif // __unix__
 
 
-#if defined(IO_NO_THREADS)
+#if defined(IO_NO_THREADS) && !defined(_WIN32)
 
 # ifdef getc
 #  undef getc
@@ -53,6 +53,66 @@
 # define putc		putc_unlocked
 # define putchar	putchar_unlocked
 
+#endif
+
+#if defined(_WIN32) && !defined(_mstl_windows_stdio_included)
+# define _mstl_windows_stdio_included
+# include <io.h>
+# define flockfile _lock_file
+# define funlockfile _unlock_file
+# define fread_unlocked fread
+# define fwrite_unlocked fwrite
+# define fseeko _fseeki64
+# define ftello _ftelli64
+
+# include <stdint.h>
+# include <stdlib.h>
+# include <errno.h>
+
+// MinGW has no POSIX delimiter reader.
+inline ssize_t getdelim(char** data, size_t* capacity, int delimiter, FILE* fp)
+{
+	size_t size = 0;
+	int ch;
+	while ((ch = ::fgetc(fp)) != EOF)
+	{
+		if (size + 1 >= *capacity)
+		{
+			size_t next = *capacity ? 2*(*capacity) : 128;
+			char* buffer = static_cast<char*>(::realloc(*data, next));
+			if (!buffer) { errno = ENOMEM; return -1; }
+			*data = buffer;
+			*capacity = next;
+		}
+		(*data)[size++] = char(ch);
+		if (ch == delimiter) break;
+	}
+	if (!size) return -1;
+	(*data)[size] = '\0';
+	return ssize_t(size);
+}
+
+inline ssize_t getline(char** data, size_t* capacity, FILE* fp)
+{
+	return getdelim(data, capacity, '\n', fp);
+}
+
+// Callback-backed FILE streams need a Windows implementation.
+struct cookie_io_functions_t
+{
+	ssize_t (*read)(void*, char*, size_t);
+	ssize_t (*write)(void*, const char*, size_t);
+	int (*seek)(void*, int64_t*, int);
+	int (*close)(void*);
+};
+
+inline FILE* fopencookie(void*, const char*, cookie_io_functions_t)
+{
+	static bool const logged = (::fputs("Chesswiz: callback-backed compressed streams are unavailable on Windows\n", stderr), true);
+	(void)logged;
+	errno = ENOSYS;
+	return 0;
+}
 #endif
 
 // vi:set ts=3 sw=3:

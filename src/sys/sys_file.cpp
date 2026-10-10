@@ -155,6 +155,8 @@ sys::file::changed(char const* filename, uint32_t& time)
 #ifdef __WIN32__
 
 # include <windows.h>
+# include <shlwapi.h> // PathIsDirectoryEmpty
+# include <utime.h>   // _utimbuf, _utime
 
 
 Mapping::Mapping(char const* filename, Mode mode)
@@ -162,8 +164,8 @@ Mapping::Mapping(char const* filename, Mode mode)
 	,m_size(0)
 	,m_capacity(0)
 	,m_writeable(mode & Writeable)
-	,m_file(INVALID_HANDLE_VAlUE)
-	,m_mapping(INVALID_HANDLE_VAlUE)
+	,m_file(INVALID_HANDLE_VALUE)
+	,m_mapping(INVALID_HANDLE_VALUE)
 {
 	M_REQUIRE(filename);
 	M_REQUIRE(!(mode & Executable));
@@ -178,7 +180,7 @@ Mapping::Mapping(char const* filename, Mode mode)
 						FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS,
 						0);
 
-	if (m_file == INVALID_HANDLE_VAlUE)
+	if (m_file == INVALID_HANDLE_VALUE)
 		return;
 
 	m_mapping = CreateFileMappingA(
@@ -189,9 +191,10 @@ Mapping::Mapping(char const* filename, Mode mode)
 							0,
 							filename);
 
-	if (m_mapping == INVALID_HANDLE_VAlUE)
+	if (m_mapping == 0)
 	{
 		CloseHandle(m_file);
+		m_file = INVALID_HANDLE_VALUE;
 		return;
 	}
 
@@ -246,9 +249,9 @@ Mapping::resize(unsigned newSize)
 	else if (newSize > m_capacity)
 	{
 		UnmapViewOfFile(m_address);
-		CloseHandle(m_file);
-		m_file = CreateFileMapping(m_file, 0, PAGE_READWRITE, 0, newSize, 0);
-		m_address = MapViewOfFile(m_file, FILE_MAP_WRITE, 0, 0, 0);
+		CloseHandle(m_mapping);
+		m_mapping = CreateFileMappingA(m_file, 0, PAGE_READWRITE, 0, newSize, 0);
+		m_address = MapViewOfFile(m_mapping, FILE_MAP_WRITE, 0, 0, 0);
 		m_capacity = m_size = newSize;
 	}
 }
@@ -279,7 +282,7 @@ bool
 sys::file::dirIsEmpty(char const* dirname)
 {
 	M_REQUIRE(dirname);
-	return ::PathIsDirectoryEmpty(dirname);
+	return ::PathIsDirectoryEmptyA(dirname);
 }
 
 #else

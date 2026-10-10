@@ -3,6 +3,27 @@
 // ======================================================================
 
 #include "tk_glboard.h"
+#if defined(_WIN32) || defined(__APPLE__)
+#include <tcl.h>
+#include <stdio.h>
+static int unavailable(ClientData, Tcl_Interp* ti, int, Tcl_Obj* const[])
+{
+	Tcl_SetObjResult(ti, Tcl_NewStringObj("Togl board unavailable on this platform; use WebGL", -1));
+	return TCL_ERROR;
+}
+void tk::glboard_init(Tcl_Interp* ti)
+{
+	static bool logged = false;
+	if (!logged)
+	{
+		fprintf(stderr, "Chesswiz: Togl board unavailable; use WebGL\n");
+		logged = true;
+	}
+	Tcl_CreateObjCommand(ti, "::scidb::tk::glboard_render", unavailable, 0, 0);
+	Tcl_CreateObjCommand(ti, "::scidb::tk::glboard_pick", unavailable, 0, 0);
+	Tcl_CreateObjCommand(ti, "::scidb::tk::glboard_info", unavailable, 0, 0);
+}
+#else
 #include "tcl_base.h"
 #include "gl_piece_data.h"
 
@@ -902,3 +923,5 @@ void tk::glboard_init(Tcl_Interp* ti)
 }
 
 // vi:set ts=4 sw=4:
+
+#endif

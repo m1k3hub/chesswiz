@@ -21,8 +21,8 @@
 #include "sys_file.h"
 #include "sys_base.h"
 
-#include "tcl_exception.h"
-#include "tcl_base.h"
+#include "../tcl/tcl_exception.h" // lives in src/tcl (Makefile adds -I../tcl)
+#include "../tcl/tcl_base.h"     // lives in src/tcl (Makefile adds -I../tcl)
 
 #include "m_string.h"
 #include "m_map.h"
@@ -125,12 +125,12 @@ namespace {
 
 
 static Process::Priority
-priority(DWORD pid)
+getPriority(DWORD pid)
 {
 	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, false, pid);
 
 	if (!hProcess)
-		return Unknown;
+		return Process::Unknown;
 
 	unsigned priorityClass = GetPriorityClass(hProcess);
 
@@ -138,17 +138,17 @@ priority(DWORD pid)
 
 	switch (priorityClass)
 	{
-		case NORMAL_PRIORITY_CLASS:	return Normal;
-		case IDLE_PRIORITY_CLASS:		return Idle;
-		case HIGH_PRIORITY_CLASS:		return High;
+		case NORMAL_PRIORITY_CLASS:	return Process::Normal;
+		case IDLE_PRIORITY_CLASS:		return Process::Idle;
+		case HIGH_PRIORITY_CLASS:		return Process::High;
 	}
 
-	return Unknown;
+	return Process::Unknown;
 }
 
 
 static bool
-setPriority(DWORD pid, Priority priority)
+setPriority(DWORD pid, Process::Priority priority)
 {
 	HANDLE hProcess = OpenProcess(PROCESS_SET_INFORMATION, false, pid);
 
@@ -159,10 +159,10 @@ setPriority(DWORD pid, Priority priority)
 
 	switch (priority)
 	{
-		case Normal:	priorityClass = NORMAL_PRIORITY_CLASS; break;
-		case Idle:		priorityClass = IDLE_PRIORITY_CLASS; break;
-		case High:		priorityClass = HIGH_PRIORITY_CLASS; break;
-		case Unknown:	return false;
+		case Process::Normal:	priorityClass = NORMAL_PRIORITY_CLASS; break;
+		case Process::Idle:		priorityClass = IDLE_PRIORITY_CLASS; break;
+		case Process::High:		priorityClass = HIGH_PRIORITY_CLASS; break;
+		case Process::Unknown:	return false;
 	}
 
 	SetPriorityClass(hProcess, priorityClass);
@@ -535,7 +535,16 @@ Process::kill()
 {
 	if (m_pid != -1)
 	{
+#ifdef __WIN32__
+		// no POSIX kill(); terminate the child via its process handle
+		if (HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, false, m_pid))
+		{
+			TerminateProcess(hProcess, 1);
+			CloseHandle(hProcess);
+		}
+#else
 		::kill(m_pid, SIGKILL);
+#endif
 		m_pid = -1;
 	}
 }

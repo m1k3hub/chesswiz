@@ -24,6 +24,8 @@
 
 #include "tcl_base.h"
 
+#if defined(__unix__)
+
 #include <atomic>
 #include <execinfo.h>
 #include <fcntl.h>
@@ -218,5 +220,88 @@ init(Tcl_Interp* ti)
 
 } // namespace diag
 } // namespace tcl
+
+#else // !__unix__  — no SIGUSR1/2, execinfo or pthread watchdog off Unix
+
+#include <stdio.h>
+
+namespace {
+
+// Windows has no SIGUSR1/SIGUSR2 self-signal mechanism, no execinfo
+// backtrace and no pthread_kill; the out-of-band diagnosis is a Unix
+// feature. Keep the command surface so scripts don't break, and report
+// once that the feature is missing (D3: visible, not silent).
+void
+logOnce()
+{
+	static bool logged = false;
+
+	if (!logged)
+	{
+		logged = true;
+		::fputs("Chesswiz: ::diag hang diagnosis (SIGUSR1/SIGUSR2, native backtrace) is unavailable on this platform\n", stderr);
+	}
+}
+
+
+int
+cmdInstallStub(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "nativeFile");
+		return TCL_ERROR;
+	}
+
+	logOnce();
+	Tcl_SetObjResult(ti, Tcl_NewIntObj(0));
+	return TCL_OK;
+}
+
+
+int
+cmdTickStub(ClientData, Tcl_Interp*, int, Tcl_Obj* const[])
+{
+	return TCL_OK;
+}
+
+
+int
+cmdWatchdogStub(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	int secs = 0;
+
+	if (objc != 2)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "seconds");
+		return TCL_ERROR;
+	}
+	if (Tcl_GetIntFromObj(ti, objv[1], &secs) != TCL_OK)
+		return TCL_ERROR;
+
+	logOnce();
+	Tcl_SetObjResult(ti, Tcl_NewIntObj(0));
+	return TCL_OK;
+}
+
+} // namespace
+
+
+namespace tcl {
+namespace diag {
+
+void
+init(Tcl_Interp* ti)
+{
+	Tcl_CreateObjCommand(ti, "::diag::install",	cmdInstallStub,	0, 0);
+	Tcl_CreateObjCommand(ti, "::diag::tick",		cmdTickStub,		0, 0);
+	Tcl_CreateObjCommand(ti, "::diag::watchdog",	cmdWatchdogStub,	0, 0);
+	logOnce();
+}
+
+} // namespace diag
+} // namespace tcl
+
+#endif // __unix__
 
 // vi:set ts=3 sw=3:

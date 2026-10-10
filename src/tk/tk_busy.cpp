@@ -27,6 +27,23 @@
 
 #include "tk_init.h"
 
+#if defined(_WIN32) || defined(__APPLE__)
+#include <stdio.h>
+#include <tcl.h>
+void tk::busy_init(Tcl_Interp* ti)
+{
+	static bool logged = false;
+	if (!logged)
+	{
+		fprintf(stderr, "Chesswiz: busy uses Tk 8.6 native tk busy\n");
+		logged = true;
+	}
+	Tcl_PkgProvide(ti, "tkbusy", "1.0");
+	const char* args[] = {"busy"};
+	Tcl_CreateAlias(ti, "::scidb::tk::busy", ti, "tk", 1,
+                 args);
+}
+#else
 #include "tcl_base.h"
 
 #include "tkInt.h"
@@ -1364,3 +1381,5 @@ tk::busy_init(Tcl_Interp* ti)
 }
 
 // vi:set ts=8 sw=4 et:
+
+#endif

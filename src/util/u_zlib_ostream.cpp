@@ -27,14 +27,14 @@ using namespace util;
 
 struct ZlibOStream::Cookie
 {
-	static __ssize_t
+	static ssize_t
 	read(void* cookie, char* buf, size_t len)
 	{
 		M_RAISE("should not be called");
 	}
 
 	static int
-	seek(void* cookie, __off64_t* pos, int whence)
+	seek(void* cookie, int64_t* pos, int whence)
 	{
 		if (*pos != 0)
 			M_RAISE("should not be called");
@@ -89,7 +89,7 @@ struct ZlibOStream::Cookie
 		return 0;
 	}
 
-	static __ssize_t
+	static ssize_t
 	write(void* cookie, char const* buf, size_t len)
 	{
 		ZlibOStream*	that	= static_cast<ZlibOStream*>(cookie);
@@ -177,6 +177,14 @@ ZlibOStream::open(FILE* destination)
 
 	m_dst = destination;
 	m_fp = ::fopencookie(this, "wb", Cookie);
+#ifdef _WIN32
+	if (!m_fp)
+	{
+		::deflateEnd(m_zstrm);
+		m_dst = 0;
+		M_RAISE("compressed output streams are unavailable on Windows");
+	}
+#endif
 	::setvbuf(m_fp, 0, _IONBF, 0);
 	m_size = 0;
 	m_compressedSize = 0;

@@ -21,7 +21,7 @@
 #include "sys_base.h"
 #include "sys_lock.h"
 
-#include "tcl_base.h"
+#include "../tcl/tcl_base.h" // lives in src/tcl (Makefile adds -I../tcl)
 
 #include "m_string.h"
 #include "m_utility.h"

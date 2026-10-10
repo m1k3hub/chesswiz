@@ -1396,10 +1396,10 @@ Unlink(Slave* slave)		// Window to unlink
 	for (i = 0; i < nb->numSlaves; i++)
 	{
 		if (nb->slaves[i]->before == slave->tkwin)
-			nb->slaves[i]->before = None;
+			nb->slaves[i]->before = 0;
 
 		if (nb->slaves[i]->after == slave->tkwin)
-			nb->slaves[i]->after = None;
+			nb->slaves[i]->after = 0;
 	}
 
 	nb->flags |= REQUESTED_RELAYOUT;
@@ -1578,7 +1578,7 @@ ConfigureSlaves(	Notebook* nb,				// Information about notebook
 	index = -1;
 	haveLoc = 0;
 
-	if (options.after != None)
+	if (options.after != 0)
 	{
 		tkwin = options.after;
 		haveLoc = 1;
@@ -1592,7 +1592,7 @@ ConfigureSlaves(	Notebook* nb,				// Information about notebook
 			}
 		}
 	}
-	else if (options.before != None)
+	else if (options.before != 0)
 	{
 		tkwin = options.before;
 		haveLoc = 1;
@@ -1803,7 +1803,7 @@ NotebookWorldChanged(ClientData instanceData)	// Information about the notebook
 	gcValues.font = Tk_FontId(nb->tkfont);
 	gcValues.foreground = nb->normalFg->pixel;
 	gcValues.background = Tk_3DBorderColor(nb->background)->pixel;
-	if (nb->gc != None)
+	if (nb->gc != 0)
 		Tk_FreeGC(Tk_Display(nb->tkwin), nb->gc);
 	nb->gc = Tk_GetGC(nb->tkwin, GCForeground | GCBackground | GCFont, &gcValues);
 	Tk_SetWindowBackground(nb->tkwin, gcValues.background);
@@ -1814,12 +1814,12 @@ NotebookWorldChanged(ClientData instanceData)	// Information about the notebook
 		gcValues.foreground = nb->disabledFg->pixel;
 	else
 		gcValues.foreground = gcValues.background;
-	if (nb->disabledGC != None)
+	if (nb->disabledGC != 0)
 		Tk_FreeGC(Tk_Display(nb->tkwin), nb->disabledGC);
 	nb->disabledGC = Tk_GetGC(nb->tkwin, GCForeground | GCBackground | GCFont, &gcValues);
 
 	// Allocate the label box graphics context.
-	if (nb->tabGC != None)
+	if (nb->tabGC != 0)
 		Tk_FreeGC(Tk_Display(nb->tkwin), nb->tabGC);
 	gcValues.background = Tk_3DBorderColor(nb->tabBackground)->pixel;
 	gcValues.foreground = nb->normalFg->pixel;
@@ -1828,7 +1828,7 @@ NotebookWorldChanged(ClientData instanceData)	// Information about the notebook
 	// Allocate the highlight graphics context
 	gcValues.foreground = nb->highlightFgColor->pixel;
 	gcValues.background = nb->highlightBgColor->pixel;
-	if (nb->highlightGC != None)
+	if (nb->highlightGC != 0)
 		Tk_FreeGC(Tk_Display(nb->tkwin), nb->highlightGC);
 	nb->highlightGC = Tk_GetGC(nb->tkwin, GCForeground | GCBackground | GCFont, &gcValues);
 
@@ -2612,11 +2612,11 @@ Tk_NotebookObjCmd(ClientData clientData,	// nullptr
 	nb->optionTable = nbOptions->nbOptions;
 	nb->paneOptions = nbOptions->paneOptions;
 	nb->relief = TK_RELIEF_RAISED;
-	nb->gc = None;
-	nb->tabGC = None;
-	nb->disabledGC = None;
-	nb->highlightGC = None;
-	nb->cursor = None;
+	nb->gc = 0;
+	nb->tabGC = 0;
+	nb->disabledGC = 0;
+	nb->highlightGC = 0;
+	nb->cursor = 0;
 	nb->overlay = 0;
 	nb->normalFg = 0;
 	nb->disabledFg = 0;

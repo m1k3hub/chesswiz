@@ -51,7 +51,7 @@
 #endif
 
 #ifndef INT64_C
-# if __WORDSIZE == 64
+# if __SIZEOF_LONG__ == 8
 #  define INT64_C(c)		c ## L
 #  define UINT64_C(c)	c ## UL
 # else

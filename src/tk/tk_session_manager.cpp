@@ -718,9 +718,16 @@ tk::session_manager_init(Tcl_Interp* ti, char const* cmdName)
 
 #else
 
+#include <stdio.h>
 Tcl_Command
 tk::session_manager_init(Tcl_Interp* ti, char const* cmdName)
 {
+	static bool logged = false;
+	if (!logged)
+	{
+		fprintf(stderr, "Chesswiz: X11 session management unavailable\n");
+		logged = true;
+	}
 	return 0;
 }
 

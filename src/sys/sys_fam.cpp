@@ -160,7 +160,39 @@ Monitor::isSupported()
 
 #if defined(WIN32) //////////////////////////////////////////////////////
 
-# error "windows not yet implemented"
+#include <stdio.h>
+
+// D5 (PORT_WINDOWS_MAC_SPEC): polling fallback first. A 2 s stat-poll of
+// open database files is enough for "file changed on disk" prompts; until
+// that is implemented this is a no-op watcher which only compiles and logs
+// once (see D3 rule). ReadDirectoryChangesW may replace it later.
+
+static bool
+initFAM(mstl::string&) // no error: a no-op watcher never refuses to start
+{
+	static bool logged = false;
+
+	if (!logged)
+	{
+		logged = true;
+		fprintf(stderr, "sys_fam: file watching not yet implemented on Windows; files will not be watched\n");
+	}
+
+	return true;
+}
+
+
+static void closeFAM() {}
+
+
+static bool
+monitorFAM(mstl::string const&, Request&, file::Type, unsigned, mstl::string&)
+{
+	return false; // not watched
+}
+
+
+static void cancelMonitorFAM(Request&) {}
 
 #elif defined(__MacOSX__) && !defined(HAVE_INOTIFY) /////////////////////
 

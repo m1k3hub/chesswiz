@@ -30,6 +30,31 @@
 #include <string.h>
 
 
+struct Rect
+{
+	Rect() :left(0), right(0), width(0), height(0) {}
+
+	bool isEmpty() const { return height == 0 || width == 0 || left == 0 || right == 0; }
+	bool hasSize() const { return height > 0 && width > 0; }
+
+	void set(unsigned long const* data)
+	{
+		left		= data[0];
+		right		= data[1];
+		width		= data[2];
+		height	= data[3];
+	}
+
+	int left;
+	int right;
+	int width;
+	int height;
+};
+
+#ifdef _WIN32
+# include <tkWinInt.h>
+#endif
+
 static Tcl_Command tk_cmd = 0;
 
 
@@ -83,27 +108,6 @@ struct MWM_Hints
 	unsigned long decorations;
 	long input_mode;
 	unsigned long status;
-};
-
-struct Rect
-{
-	Rect() :left(0), right(0), width(0), height(0) {}
-
-	bool isEmpty() const { return height == 0 || width == 0 || left == 0 || right == 0; }
-	bool hasSize() const { return height > 0 && width > 0; }
-
-	void set(unsigned long const* data)
-	{
-		left		= data[0];
-		right		= data[1];
-		width		= data[2];
-		height	= data[3];
-	}
-
-	int left;
-	int right;
-	int width;
-	int height;
 };
 
 struct MyAtom
@@ -763,9 +767,19 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 		Rect result;
 
 #if defined(__WIN32__)
-# error "not yet implemented"
-#elif defined(__MacOSX__)
-# error "not yet implemented"
+		Tk_MakeWindowExist(tkwin);
+		MONITORINFO info = {};
+		info.cbSize = sizeof(info);
+		if (GetMonitorInfo(MonitorFromWindow(TkWinGetHWND(Tk_WindowId(tkwin)),
+							MONITOR_DEFAULTTONEAREST), &info))
+		{
+			result.left = info.rcWork.left;
+			result.right = info.rcWork.top;
+			result.width = info.rcWork.right - info.rcWork.left;
+			result.height = info.rcWork.bottom - info.rcWork.top;
+		}
+#elif defined(__APPLE__) || defined(__MacOSX__)
+		// Window-manager work areas are unavailable until the native Mac port.
 #else
 		Display* display = Tk_Display(tkwin);
 
@@ -782,14 +796,12 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 	{
 		Rect result;
 
-#if defined(__WIN32__)
-# error "not yet implemented"
-#elif defined(__MacOSX__)
-# error "not yet implemented"
-#endif
-
+#if !defined(_WIN32) && !defined(__APPLE__) && !defined(__MacOSX__)
 		if (!m_extents.isEmpty())
 			setResult(ti, m_extents);
+#else
+		setResult(ti, result);
+#endif
 
 		return TCL_OK;
 	}
@@ -851,6 +863,43 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 	{
 		XSynchronize(Tk_Display(tkmain), True);
 	}
+#else
+	else if (strcasecmp(subcmd, "map") == 0)
+	{
+		Tk_MapWindow(tkwin);
+	}
+	else if (strcasecmp(subcmd, "raise") == 0)
+	{
+		Tk_RestackWindow(tkwin, Above, 0);
+	}
+	else if (strcasecmp(subcmd, "sync") == 0 || strcasecmp(subcmd, "setLeader") == 0)
+	{
+		// X11 synchronization and client leaders have no native equivalent.
+	}
+	else if (strcasecmp(subcmd, "frameless") == 0 || strcasecmp(subcmd, "normal") == 0
+			|| strcasecmp(subcmd, "dialog") == 0 || strcasecmp(subcmd, "toolbar") == 0
+			|| strcasecmp(subcmd, "splash") == 0 || strcasecmp(subcmd, "notification") == 0
+			|| strcasecmp(subcmd, "menu") == 0)
+	{
+		if (!Tk_IsTopLevel(tkwin))
+			return tcl_error(ti, "'%s' isn't a top level window", path);
+#ifdef _WIN32
+		Tcl_Obj* args[] =
+		{
+			Tcl_NewStringObj("wm", -1), Tcl_NewStringObj("attributes", -1),
+			Tcl_NewStringObj(path, -1), Tcl_NewStringObj("-toolwindow", -1),
+			Tcl_NewBooleanObj(strcasecmp(subcmd, "normal") != 0)
+		};
+		for (unsigned i = 0; i < 5; ++i)
+			Tcl_IncrRefCount(args[i]);
+		int result = Tcl_EvalObjv(ti, 5, args, TCL_EVAL_GLOBAL);
+		for (unsigned i = 0; i < 5; ++i)
+			Tcl_DecrRefCount(args[i]);
+		if (result != TCL_OK)
+			return result;
+#endif
+	}
+
 #endif
 	else
 	{
@@ -866,6 +915,14 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 void
 tk::window_manager_init(Tcl_Interp* ti)
 {
+#if defined(_WIN32) || defined(__APPLE__)
+	static bool logged = false;
+	if (!logged)
+	{
+		fprintf(stderr, "Chesswiz: native window manager; X11 desktop, frame extents, leaders and synchronization unavailable\n");
+		logged = true;
+	}
+#endif
 	tk_cmd = Tcl_CreateObjCommand(ti, "::scidb::tk::wm", cmdWM, 0, 0);
 }
 

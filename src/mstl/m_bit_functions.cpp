@@ -76,7 +76,7 @@ mstl::bf::bits::reverse(uint64_t a)
 }
 
 
-#if defined(VALGRIND) && __WORDSIZE == 32
+#if defined(VALGRIND) && __SIZEOF_LONG__ == 4
 
 // Workaround for the __ctzdi2 problem with valgrind.
 unsigned

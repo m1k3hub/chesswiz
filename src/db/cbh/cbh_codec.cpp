@@ -128,7 +128,7 @@ findAnnotatorRecordIndex(Namebase const& base, NamebaseEntry const* annotator)
 
 static country::Code NationMap[] =
 {
-	Unknown,										//   0
+	country::Unknown,							//   0 (qualified: 'Unknown' collides with winioctl.h on Windows)
 	Afghanistan,								//   1 AFG
 	Albania,										//   2 ALB
 	Algeria,										//   3 ALG

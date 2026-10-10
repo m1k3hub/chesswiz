@@ -925,10 +925,10 @@ Unlink(Slave* slave)		// Window to unlink
 	for (i = 0; i < mw->numSlaves; i++)
 	{
 		if (mw->slaves[i]->before == slave->tkwin)
-			mw->slaves[i]->before = None;
+			mw->slaves[i]->before = 0;
 
 		if (mw->slaves[i]->after == slave->tkwin)
-			mw->slaves[i]->after = None;
+			mw->slaves[i]->after = 0;
 	}
 
 	mw->flags |= REQUESTED_RELAYOUT;
@@ -1101,7 +1101,7 @@ ConfigureSlaves(	MultiWindow* mw,			// Information about multi window
 	index = -1;
 	haveLoc = 0;
 
-	if (options.after != None)
+	if (options.after != 0)
 	{
 		tkwin = options.after;
 		haveLoc = 1;
@@ -1115,7 +1115,7 @@ ConfigureSlaves(	MultiWindow* mw,			// Information about multi window
 			}
 		}
 	}
-	else if (options.before != None)
+	else if (options.before != 0)
 	{
 		tkwin = options.before;
 		haveLoc = 1;
@@ -1329,7 +1329,7 @@ MultiWindowWorldChanged(ClientData instanceData)	// Information about the multi 
 
 	gcValues.background = Tk_3DBorderColor(mw->background)->pixel;
 	newGC = Tk_GetGC(mw->tkwin, GCBackground, &gcValues);
-	if (mw->gc != None)
+	if (mw->gc != 0)
 		Tk_FreeGC(Tk_Display(mw->tkwin), mw->gc);
 	mw->gc = newGC;
 	Tk_SetWindowBackground(mw->tkwin, gcValues.background);
@@ -2083,8 +2083,8 @@ Tk_MultiWindowObjCmd(	ClientData clientData,	// nullptr
 	mw->optionTable = mwOpts->mwOptions;
 	mw->slaveOpts = mwOpts->slaveOpts;
 	mw->relief = TK_RELIEF_RAISED;
-	mw->gc = None;
-	mw->cursor = None;
+	mw->gc = 0;
+	mw->cursor = 0;
 #if 0
 	mw->overlay = 0;
 #endif

@@ -21,7 +21,7 @@
 #include <tk.h>
 #include <tkInt.h>
 
-#ifndef DISCARD_TK_FIXES
+#if !defined(DISCARD_TK_FIXES) && !defined(_WIN32) && !defined(__APPLE__)
 
 #define FIX_TK_POINTER_EVENTS
 #define FIX_TK_GRAB_STATE
@@ -540,7 +540,18 @@ tk::fixes_init(Tcl_Interp*)
 
 #else // DISCARD_TK_FIXES
 
-void tk::fixes_init(Tcl_Interp*) {}
+#include <stdio.h>
+void tk::fixes_init(Tcl_Interp*)
+{
+#if defined(_WIN32) || defined(__APPLE__)
+	static bool logged = false;
+	if (!logged)
+	{
+		fprintf(stderr, "Chesswiz: X11 pointer/grab fixes unavailable; using native Tk\n");
+		logged = true;
+	}
+#endif
+}
 
 #endif // DISCARD_TK_FIXES
 

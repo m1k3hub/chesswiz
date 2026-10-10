@@ -25,7 +25,7 @@
 
 #include "m_types.h"
 
-# if __WORDSIZE == 32 || !__GNUC_PREREQ(4,4)
+# if !defined(__SIZEOF_INT128__) || !__GNUC_PREREQ(4,4)
 
 #include "m_uint128_t.h"
 
@@ -205,7 +205,7 @@ template <> struct is_pod< ::mstl::bitfield<uint128_t> >		{ enum { value = 1 }; 
 
 #include "m_bitfield128.ipp"
 
-#endif // __WORDSIZE == 32
+#endif // no native 128-bit support
 #endif // _mstl_bitfield128_included
 
 // vi:set ts=3 sw=3:

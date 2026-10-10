@@ -120,6 +120,7 @@ transpose8x8(vec const* v, int16_t** r)
 
 } // namespace i16
 
+#ifndef _WIN32
 // The version in /usr/lib/gcc/i486-linux-gnu/4.4.3/include/xmmintrin.h is not working!
 static __inline __m128
 _mm_cvtpi16_ps (__m64 __A)
@@ -141,6 +142,7 @@ _mm_cvtpi16_ps (__m64 __A)
 	return (__m128) __r;
 }
 
+#endif // !_WIN32: use the compiler intrinsic on Windows.
 
 namespace flt {
 
@@ -429,10 +431,17 @@ public:
 		char* p = new char[n + 16];
 		char* q;
 
+#ifdef _WIN32
+		uintptr_t address = reinterpret_cast<uintptr_t>(p);
+		uintptr_t mask = 15;
+		q = (address & mask) == 0 ? p + 16
+			: reinterpret_cast<char*>((address + mask) & ~mask);
+#else
 		if ((long(p) & long(~15)) == long(p))
 			q = p + 16;
 		else
 			q = reinterpret_cast<char*>((long(p) + 15) & ~15);
+#endif
 
 		q[-1] = int(q - p);	// offset to p
 

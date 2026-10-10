@@ -25,7 +25,7 @@
 #include <float.h>
 
 #ifndef UINTPTR_MAX
-# if __WORDSIZE == 64
+# if __SIZEOF_POINTER__ == 8
 #  define UINTPTR_MAX UINT64_C(18446744073709551615)
 # else
 #  define UINTPTR_MAX (4294967295U)

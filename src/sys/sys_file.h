@@ -23,6 +23,10 @@
 
 #include "m_string.h"
 
+#ifdef __WIN32__
+# include <windows.h> // HANDLE
+#endif
+
 namespace sys {
 namespace file {
 

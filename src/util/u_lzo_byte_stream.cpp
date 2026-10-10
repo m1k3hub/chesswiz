@@ -104,7 +104,7 @@ LzoByteStream::overflow(unsigned)
 		tmp.swap(dst);
 	}
 
-	char buf[2] = { dst.size() >> 8, dst.size() & 0x0f };
+	char buf[2] = { char(dst.size() >> 8), char(dst.size() & 0x0f) };
 
 	if (!m_strm.write(buf, 2) || !m_strm.write(dst.data(), dst.size()))
 		U_RAISE("LZO stream: write failed");

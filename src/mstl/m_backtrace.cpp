@@ -17,6 +17,7 @@
 // ======================================================================
 
 #include "m_backtrace.h"
+#include "m_stdio.h"
 #include "m_sstream.h"
 #include "m_chunk_allocator.h"
 
@@ -41,14 +42,23 @@ void backtrace::enable(bool flag) { m_isEnabled = flag; }
 void backtrace::disable() { m_isEnabled = false; }
 
 
-#ifdef __OPTIMIZE__
+#if defined(__OPTIMIZE__) || defined(_WIN32)
 
-backtrace::backtrace(bool) {}
+backtrace::backtrace(bool)
+{
+#ifdef _WIN32
+	static bool const logged = (::fputs("Chesswiz: backtraces are unavailable on Windows\n", stderr), true);
+	(void)logged;
+#endif
+}
 backtrace::backtrace(backtrace const&) {}
 backtrace::~backtrace() throw() {}
 
 backtrace const& backtrace::operator=(backtrace const&) { return *this; }
 bool backtrace::is_debug_mode() { return false; }
+#if defined(_WIN32) && !defined(__OPTIMIZE__)
+bool backtrace::empty() const { return true; }
+#endif
 void backtrace::text_write(ostringstream&, unsigned) const {}
 
 #else // __OPTIMIZE__
@@ -877,7 +887,7 @@ mstl::backtrace::text_write(ostringstream& os, unsigned skip) const
 void
 mstl::backtrace::clear()
 {
-#ifndef __OPTIMIZE__
+#if !defined(__OPTIMIZE__) && !defined(_WIN32)
 	if (m_allocator)
 		m_allocator->clear();
 	if (m_trace)

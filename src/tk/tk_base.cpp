@@ -29,9 +29,14 @@
 #include "tcl_exception.h"
 
 #include <tkInt.h>
+#ifdef _WIN32
+# include <tkWinInt.h>
+#endif
 
 
+#ifndef _WIN32
 extern "C" { void TkpWmSetState(TkWindow* winPtr, int state); }
+#endif
 
 
 static void
@@ -44,8 +49,8 @@ reparent(TkWindow* childPtr, TkWindow* newParentPtr = nullptr)
 #if defined(__WIN32__) || defined(__WIN64__)
 
 	// Reparent to nullptr so UpdateWrapper won't delete our original parent window
-	HWND handle = newParentPtr ? TkWinGetHWND(newParentPtr->window) : None;
-	SetParent(TkWinGetHWND(winPtr->window), hwnd);
+	HWND handle = newParentPtr ? TkWinGetHWND(newParentPtr->window) : nullptr;
+	SetParent(TkWinGetHWND(childPtr->window), handle);
 
 #elif defined(__MacOSX__)
 

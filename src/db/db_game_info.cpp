@@ -244,7 +244,7 @@ GameInfo::update(	NamebasePlayer* whitePlayer,
 	M_REQUIRE(blackPlayer);
 	M_REQUIRE(event);
 	M_REQUIRE(annotator);
-	M_REQUIRE((reinterpret_cast<long>(annotator) & 1) == 0);
+	M_REQUIRE((reinterpret_cast<uintptr_t>(annotator) & 1) == 0);
 
 	if (annotator != namebases(Namebase::Annotator).emptyAnnotator())
 	{
@@ -485,7 +485,7 @@ GameInfo::setup(	uint32_t gameOffset,
 	M_REQUIRE(blackPlayer);
 	M_REQUIRE(event);
 	M_REQUIRE(annotator);
-	M_REQUIRE((reinterpret_cast<long>(annotator) & 1) == 0);
+	M_REQUIRE((reinterpret_cast<uintptr_t>(annotator) & 1) == 0);
 
 	if (annotator == namebases(Namebase::Annotator).emptyAnnotator())
 	{

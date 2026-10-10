@@ -130,6 +130,8 @@ array set configure {
     program-suffix  {}
     program         {}
     tcl-shell       {}
+    toolchain       {}
+    target          {}
 }
 set configure(tcl-version) [findBestTclVersion]
 set configure(gcc-version) ""
@@ -545,6 +547,33 @@ proc FindTclTkPathsAqua {} {
         }
     }
     if {$both == 0} {
+        if {[info exists configure(toolchain)] && $configure(toolchain) eq "zig"} {
+            set sysroot [file join [pwd] build $configure(target)]
+            if {![info exists configure(tcl-includes)]} {
+                set configure(tcl-includes) [file join $sysroot include]
+            }
+            if {![info exists configure(tk-includes)]} {
+                set configure(tk-includes) [file join $sysroot include]
+            }
+            if {![info exists configure(tcl-libraries)]} {
+                set configure(tcl-libraries) [file join $sysroot lib]
+            }
+            if {![info exists configure(tk-libraries)]} {
+                set configure(tk-libraries) [file join $sysroot lib]
+            }
+            set package(tcl-inc) [MakeOption -I $configure(tcl-includes)]
+            set package(tk-inc) [MakeOption -I $configure(tk-includes)]
+            set package(tcl-lib) [MakeOption -L $configure(tcl-libraries)]
+            append package(tcl-lib) " -ltcl8.6"
+            set package(tk-lib) [MakeOption -L $configure(tk-libraries)]
+            append package(tk-lib) " -ltk8.6"
+            set package(x-inc) ""
+            set package(x-lib) ""
+            set package(xcursor-inc) ""
+            set package(xcursor-lib) ""
+            puts "    Location of Tcl/Tk for macOS: $sysroot"
+            return 1
+        }
         # Couldn't find Tcl and Tk frameworks, keep searching the "unix" way:
         return 0
     }
@@ -565,6 +594,45 @@ proc FindTclTkPathsAqua {} {
 }
 
 
+# FindTclTkPathsWin:
+#    Set-up paths for Windows target.
+proc FindTclTkPathsWin {} {
+    global configure package tclv
+
+    set sysroot [file join [pwd] build $configure(target)]
+    set inc [file join $sysroot include]
+    set lib [file join $sysroot lib]
+
+    if {![info exists configure(tcl-includes)]} {
+        set configure(tcl-includes) $inc
+    }
+    if {![info exists configure(tk-includes)]} {
+        set configure(tk-includes) $inc
+    }
+    if {![info exists configure(tcl-libraries)]} {
+        set configure(tcl-libraries) $lib
+    }
+    if {![info exists configure(tk-libraries)]} {
+        set configure(tk-libraries) $lib
+    }
+
+    set package(tcl-inc) [MakeOption -I $configure(tcl-includes)]
+    set package(tk-inc) [MakeOption -I $configure(tk-includes)]
+    set package(tcl-lib) [MakeOption -L $configure(tcl-libraries)]
+    append package(tcl-lib) " -ltcl86"
+    set package(tk-lib) [MakeOption -L $configure(tk-libraries)]
+    append package(tk-lib) " -ltk86"
+
+    set package(x-inc) ""
+    set package(x-lib) ""
+    set package(xcursor-inc) ""
+    set package(xcursor-lib) ""
+
+    puts "    Location of Tcl/Tk for Windows: $sysroot"
+    return 1
+}
+
+
 # findTclTkPathsAndMore:
 #    Finds all details of the Tcl/Tk installation.
 #    Returns 1 on success, 0 on failure.
@@ -574,6 +642,9 @@ proc findTclTkPathsAndMore {} {
 
     if {$tcl_platform(os) eq "Darwin" && [FindTclTkPathsAqua]} {
         # Frameworks found, stop looking for paths:
+        return 1
+    }
+    if {$tcl_platform(platform) eq "windows" && [FindTclTkPathsWin]} {
         return 1
     }
 
@@ -973,6 +1044,9 @@ proc findSMlibHeader {} {
 #   Check if your system provides the statvfs() function.
 proc checkStatVFS {} {
     variable option
+    global tcl_platform
+
+    if {$tcl_platform(platform) eq "windows"} { return }
 
     foreach path {
         /usr/include/sys/statvfs.h
@@ -995,11 +1069,11 @@ proc Probe {file script} {
     puts $f $script
     close $f
     set err ""
-    catch {exec sh $file.sh} err
+    set rc [catch {exec sh $file.sh 2> /dev/null} err]
     catch {file delete -force $file.sh}
     catch {file delete -force $file.c}
     catch {file delete -force $file}
-    if {[llength $err]} { return 0 }
+    if {$rc != 0} { return 0 }
     return 1
 }
 
@@ -1725,7 +1799,7 @@ proc checkGCC {cc} {
         puts "no,\n    '$environment($cc): command not found'"
     } else {
         set identifier ""
-        catch {exec $environment($cc) --version} identifier
+        catch {exec {*}$environment($cc) --version} identifier
         if {![regexp {[0-9]+\.[0-9]+} $identifier version]} {
             puts "yes,\n    but existing $gcc version is too old."
             set version ""
@@ -2104,6 +2178,11 @@ proc usage {rc} {
     puts "  -h, --help                display this help and exit"
     puts "  -n, --no-create           do not create output files"
     puts ""
+    puts "Toolchain options:"
+    puts "  --toolchain=TOOLCHAIN     build toolchain (e.g. 'zig')"
+    puts "  --target=TRIPLE           target platform triple: x86_64-windows-gnu,"
+    puts "                            aarch64-macos, x86_64-macos, x86_64-linux-gnu.2.31"
+    puts ""
     puts "Installation directories:"
     puts "  --prefix=PREFIX           install architecture-independent files in PREFIX"
     puts "                            \[$configure(prefix)\]"
@@ -2228,7 +2307,14 @@ puts "configure: Makefile configuration program for Chesswiz"
 foreach arg $argv {
 	if {$arg eq "-n" || $arg eq "--no-create"} { continue }
     set arg1 {}
-    lassign [split $arg =] arg0 arg1
+    set idx [string first "=" $arg]
+    if {$idx >= 0} {
+        set arg0 [string range $arg 0 [expr {$idx - 1}]]
+        set arg1 [string range $arg [expr {$idx + 1}] end]
+    } else {
+        set arg0 $arg
+        set arg1 {}
+    }
     if {[string match --enable-* $arg0]} {
         if {[string length $arg1] == 0} { set arg1 yes }
         set feature([string range $arg0 9 end]) $arg1
@@ -2263,6 +2349,51 @@ foreach arg $argv {
     }
     unset -nocomplain arg1
 }
+
+if {[string length $configure(target)] && [string length $configure(toolchain)] == 0} {
+    set configure(toolchain) zig
+}
+
+if {$configure(toolchain) eq "zig"} {
+    set validTargets {x86_64-windows-gnu aarch64-macos x86_64-macos x86_64-linux-gnu.2.31}
+    if {$configure(target) ni $validTargets} {
+        puts "Invalid or missing target: '$configure(target)'"
+        puts "Supported targets: [join $validTargets {, }]"
+        exit 1
+    }
+    set environment(CC) "zig cc -target $configure(target)"
+    set environment(CXX) "zig c++ -target $configure(target)"
+    set environment(AR) "zig ar"
+    set environment(RANLIB) "zig ranlib"
+    switch -glob -- $configure(target) {
+        *windows* {
+            set tcl_platform(platform) windows
+            set tcl_platform(os) Windows
+            set tcl_platform(machine) x86_64
+            set tcl_platform(wordSize) 8
+        }
+        *macos* {
+            set tcl_platform(platform) unix
+            set tcl_platform(os) Darwin
+            if {[string match aarch64* $configure(target)]} {
+                set tcl_platform(machine) aarch64
+            } else {
+                set tcl_platform(machine) x86_64
+            }
+            set tcl_platform(wordSize) 8
+        }
+        *linux* {
+            set tcl_platform(platform) unix
+            set tcl_platform(os) Linux
+            set tcl_platform(machine) x86_64
+            set tcl_platform(wordSize) 8
+        }
+    }
+} elseif {[string length $configure(toolchain)]} {
+    puts "Invalid toolchain: '$configure(toolchain)'. Supported toolchains: zig"
+    exit 1
+}
+
 set configure(tk-version) $configure(tcl-version)
 
 if {$configure(gcc-version) in $problematicGCCVersions} {
@@ -2322,17 +2453,17 @@ if {[string length $gxxVer]} {
 
     set success [findTclTkPathsAndMore]
 
-    if {![checkFontConfig]} { exit 1 }
+    if {$::tcl_platform(platform) eq "unix" && $tcl_platform(os) ne "Darwin"} {
+        if {![checkFontConfig]} { exit 1 }
 
-    if {![findSMlibHeader]} {
-        puts ""
-        puts "Development files for SM library not found, this is especially a problem"
-        puts "on Ubuntu systems. Please install the development package for libsm."
-        puts "On Ubuntu use: sudo apt-get install libsm-dev"
-        exit 1
-    }
+        if {![findSMlibHeader]} {
+            puts ""
+            puts "Development files for SM library not found, this is especially a problem"
+            puts "on Ubuntu systems. Please install the development package for libsm."
+            puts "On Ubuntu use: sudo apt-get install libsm-dev"
+            exit 1
+        }
 
-    if {$::tcl_platform(platform) eq "unix"} {
         if {![findFontconfig]} {
             puts ""
             puts "Development files for fontconfig not found, this is especially a problem on"

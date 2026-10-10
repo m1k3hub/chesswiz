@@ -297,7 +297,7 @@ struct IndexEntry
 
 #endif
 
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 
 // NOTE dont swap homepawns:			u64[ 0] = mstl::bo::swap(u64[ 0]);
 // NOTE dont swap pawn progression:	u32[ 5] = mstl::bo::swap(u32[ 5]);

@@ -40,7 +40,9 @@
 #include "m_auto_ptr.h"
 #include "m_pair.h"
 
-#include <iconv.h>
+#ifndef _WIN32
+# include <iconv.h>
+#endif
 
 namespace rfc_3066 { class Language; }
 namespace mstl { class ostream; }

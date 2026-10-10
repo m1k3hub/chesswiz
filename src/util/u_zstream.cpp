@@ -95,7 +95,7 @@ fileOpen(void* cookie)
 }
 
 
-static __ssize_t
+static ssize_t
 read(void* cookie, char* buf, size_t len)
 {
 	M_ASSERT(IS_READABLE);
@@ -118,7 +118,7 @@ read(void* cookie, char* buf, size_t len)
 
 
 static int
-seek(void* cookie, __off64_t* pos, int whence)
+seek(void* cookie, int64_t* pos, int whence)
 {
 	M_ASSERT(IS_READABLE);
 
@@ -145,7 +145,7 @@ close(void* cookie)
 }
 
 
-static __ssize_t
+static ssize_t
 write(void*, char const*, size_t)
 {
 	M_RAISE("unexpected call of %s", __func__);
@@ -297,7 +297,7 @@ openNewFile(void* cookie, char const* filename, mstl::ios_base::openmode mode)
 }
 
 
-static __ssize_t
+static ssize_t
 read(void*, char*, size_t)
 {
 	M_RAISE("unexpected call of %s", __func__);
@@ -306,7 +306,7 @@ read(void*, char*, size_t)
 
 
 static int
-seek(void*, __off64_t*, int)
+seek(void*, int64_t*, int)
 {
 	M_RAISE("unexpected call of %s", __func__);
 	return 0;
@@ -325,7 +325,7 @@ close(void* cookie)
 }
 
 
-static __ssize_t
+static ssize_t
 write(void* cookie, char const* buf, size_t len)
 {
 	M_ASSERT(IS_WRITEABLE);
@@ -336,20 +336,20 @@ write(void* cookie, char const* buf, size_t len)
 
 namespace gzip {
 
-static __ssize_t
+static ssize_t
 read(void* cookie, char* buf, size_t len)
 {
 	M_ASSERT(IS_READABLE);
 
-	int bytesRead = ::gzread(HANDLE, buf, len);
+	int bytesRead = ::gzread(static_cast<gzFile>(HANDLE), buf, len);
 	return bytesRead <= 0 ? 0 : bytesRead;
 }
 
 
 static int
-seek(void* cookie, __off64_t* pos, int whence)
+seek(void* cookie, int64_t* pos, int whence)
 {
-	*pos = ::gzseek(HANDLE, *pos, whence);
+	*pos = ::gzseek(static_cast<gzFile>(HANDLE), *pos, whence);
 	return *pos == -1 ? -1 : 0;
 }
 
@@ -357,15 +357,15 @@ seek(void* cookie, __off64_t* pos, int whence)
 static int
 close(void* cookie)
 {
-	return ::gzclose(HANDLE);
+	return ::gzclose(static_cast<gzFile>(HANDLE));
 }
 
 
-static __ssize_t
+static ssize_t
 write(void* cookie, char const* buf, size_t len)
 {
 	M_ASSERT(IS_WRITEABLE);
-	return ::gzwrite(HANDLE, buf, len);
+	return ::gzwrite(static_cast<gzFile>(HANDLE), buf, len);
 }
 
 
@@ -539,7 +539,7 @@ ZStream::open(char const* filename, Mode mode)
 
 		if (!m_fp)
 		{
-			::gzclose(HANDLE);
+			::gzclose(static_cast<gzFile>(HANDLE));
 			return setstate(failbit);
 		}
 
@@ -626,7 +626,7 @@ ZStream::open(char const* filename, Type type, Mode mode)
 			m_fp = ::fopencookie(cookie, fmode, ::m_gzip);
 
 			if (!m_fp)
-				::gzclose(HANDLE);
+				::gzclose(static_cast<gzFile>(HANDLE));
 			break;
 
 		case Zip:

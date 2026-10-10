@@ -16,7 +16,7 @@
 // (at your option) any later version.
 // ======================================================================
 
-#include "tcl_base.h"
+#include "../tcl/tcl_base.h" // lives in src/tcl (Makefile adds -I../tcl)
 
 namespace sys {
 namespace tcl {

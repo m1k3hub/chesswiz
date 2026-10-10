@@ -23,16 +23,25 @@
 
 #if defined(__WIN32__)
 
+#include <windows.h>
+
 int64_t
 sys::vfs::freeSize(mstl::string const& path)
 {
-	int64_t availableForUser;
-	int64_t total;
-	int64_t free;
+	// mstl::string is char based, so use the ANSI variant; wide-char
+	// paths (and conversion via MultiByteToWideChar) become relevant
+	// once paths are stored as UTF-16 on Windows.
+	ULARGE_INTEGER availableForUser;
+	ULARGE_INTEGER total;
+	ULARGE_INTEGER free;
 
-	BOOL result = GetDiskFreeSpaceExW(path, &availableForUser, &total, &free);
+	BOOL result = ::GetDiskFreeSpaceExA(
+		path.c_str(),
+		&availableForUser,
+		&total,
+		&free);
 
-	return result ? availableForUser : int64_t(-1);
+	return result ? int64_t(availableForUser.QuadPart) : int64_t(-1);
 }
 
 #elif defined(__unix__) || defined(__MacOSX__)

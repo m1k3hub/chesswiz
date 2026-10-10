@@ -50,7 +50,7 @@ inline unsigned clz(unsigned long long x)	{ return __builtin_clzll(x); }
 inline unsigned ctz(unsigned short x)		{ return __builtin_ctz(x); }
 inline unsigned ctz(unsigned int x)			{ return __builtin_ctz(x); }
 inline unsigned ctz(unsigned long x)		{ return __builtin_ctzl(x); }
-#if defined(VALGRIND) && __WORDSIZE == 32
+#if defined(VALGRIND) && __SIZEOF_LONG__ == 4
 unsigned ctz(unsigned long long x);
 #else
 inline unsigned ctz(unsigned long long x)	{ return __builtin_ctzll(x); }
@@ -95,11 +95,11 @@ popcount(uint32_t x)
 inline unsigned
 popcount(uint64_t x)
 {
-#if __WORDSIZE == 32
+#if __SIZEOF_LONG__ == 4
 
 	return popcount(uint32_t(x)) + popcount(uint32_t(x >> 32));
 
-#elif __WORDSIZE == 64
+#elif __SIZEOF_LONG__ == 8
 
 	x -=  (x >> 1) & UINT64_C(0x5555555555555555);
 	x  = ((x >> 2) & UINT64_C(0x3333333333333333)) + (x & UINT64_C(0x3333333333333333));
@@ -114,7 +114,7 @@ popcount(uint64_t x)
 }
 
 #ifdef USE_UINT128
-# if __WORDSIZE == 32 || !__GNUC_PREREQ(4,4)
+# if !defined(__SIZEOF_INT128__) || !__GNUC_PREREQ(4,4)
 
 inline
 unsigned
@@ -137,7 +137,7 @@ popcount(uint128_t const& x)
 	return popcount(x.lo()) + popcount(x.hi());
 }
 
-# else // if __WORDSIZE == 64
+# else // if __SIZEOF_LONG__ == 8
 
 inline
 unsigned
@@ -201,7 +201,7 @@ extern uint32_t reverse(uint32_t x);
 extern uint64_t reverse(uint64_t x);
 
 #ifdef USE_UINT128
-# if __WORDSIZE == 32 || !__GNUC_PREREQ(4,4)
+# if !defined(__SIZEOF_INT128__) || !__GNUC_PREREQ(4,4)
 
 inline
 uint128_t
@@ -210,7 +210,7 @@ reverse(uint128_t const& x)
 	return uint128_t(reverse(x.lo()), reverse(x.hi()));
 }
 
-# else // if __WORDSIZE == 64
+# else // if __SIZEOF_LONG__ == 8
 
 inline
 uint128_t

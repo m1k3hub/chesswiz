@@ -36,7 +36,7 @@ class Thread
 public:
 
 #ifdef __WIN32__
-	typedef HANDLE ThreadId;
+	typedef DWORD ThreadId;
 #else
 	typedef pthread_t ThreadId;
 #endif
@@ -106,10 +106,11 @@ private:
 	void initMutex();
 
 #ifdef __WIN32__
-	typedef CRITICAL_SECTION		Mutex;
-	typedef PCONDITION_VARIABLE	Condition;
+	typedef CRITICAL_SECTION	Mutex;
+	typedef CONDITION_VARIABLE	Condition;
+	typedef HANDLE				ThreadHandle;
 
-	static unsigned startThread(void*);
+	static DWORD __stdcall startThread(void*);
 #else
 	typedef pthread_mutex_t	Mutex;
 	typedef pthread_cond_t	Condition;
@@ -122,6 +123,9 @@ private:
 	Runnable		m_runnable;
 	Signal		m_signal;
 	ThreadId		m_threadId;
+#ifdef __WIN32__
+	ThreadHandle	m_threadHandle;
+#endif
 	Exception*	m_exception;
 	bool			m_wakeUp;
 	Mutex			m_condMutex;

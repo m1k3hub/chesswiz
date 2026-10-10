@@ -30,7 +30,7 @@
 #include <string.h>
 
 
-#if defined(__WIN32__) || (defined(__unix__) && !defined(__MacOSX__))
+#if defined(__unix__) && !defined(__APPLE__) && !defined(_WIN32) && !defined(__MacOSX__)
 
 extern "C" { int TclRenameCommand(Tcl_Interp* ti, char const* oldName, char const* newName); }
 
@@ -44,92 +44,6 @@ invokeTkSelection(Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 	objs[0] = m_renamedCmd;
 	return Tcl_EvalObjv(ti, objc, objs, 0);
 }
-
-# if defined(__WIN32__)
-
-#  include <windows.h>
-
-#  ifndef XA_STRING
-#   define XA_STRING CF_TEXT
-#  endif
-
-static bool
-selectionGet(Tcl_Interp* ti, Tk_Window tkwin, Atom selection, Atom target, unsigned long, long)
-{
-	bool rc = false;
-
-	if (OpenClipboard(0))
-	{
-		if (target == Tk_InternAtom(tkwin, "CF_HDROP"))
-		{
-			if (IsClipboardFormatAvailable(CF_HDROP))
-			{
-				HGLOBAL handle = GetClipboardData(CF_HDROP);
-
-				if (handle)
-				{
-					// This stuff should work due to the Windows specification,
-					// but for any reasons it isn't working. Only Microsoft
-					// knows why.
-					//
-					// It seems that DragQueryFileW(hdrop, 0, ...) gives a space
-					// separated list of file names, which are bracketed in curly
-					// spaces iff the file name contains a space; e.g:
-					// "{fst file.pgn} snd-file.pgn".
-					//
-					// Probably it is possible to interpret hdrop as a file list:
-					// Tcl_UniChar const* files = static_cast<Tcl_UniChar const*>(GlobalLock(handle));
-
-					HDROP hdrop = static_cast<HDROP>(GlobalLock(handle));
-					int count = DragQueryFileW(hdrop, static_cast<unsigned>(-1), 0, 0);
-					mstl::string result;
-
-					result.reserve(count*50);
-
-					for (int i = 0; i < count; ++i)
-					{
-						Tcl_UniChar buffer[1024];
-
-						if (int len = DragQueryFileW(	hdrop,
-																i,
-																reinterpret_cast<TCHAR*>(buffer),
-																sizeof(buffer)/sizeof(buffer[0])))
-						{
-							Tcl_UniChar const* s = buffer;
-							Tcl_UniChar const* e = s + len;
-
-							for ( ; s < e; ++s)
-							{
-								char buf[6];
-								result.append(buf, Tcl_UniCharToUtf(*s, buf));
-							}
-
-							result.append('\n'); // should we use "\r\n"?
-						}
-					}
-
-					Tcl_SetObjResult(ti, Tcl_NewStringObj(result, result.size()));
-					GlobalUnlock(handle);
-					rc = true;
-				}
-			}
-		}
-
-		CloseClipboard();
-	}
-	else
-	{
-		Tcl_AppendResult(	ti,
-								Tk_GetAtomName(tkwin, selection),
-								" selection doesn't exist or form \"",
-								Tk_GetAtomName(tkwin, target), "\" not defined",
-								nullptr);
-	}
-
-	return rc;
-}
-
-# endif // __WIN32__
 
 # if defined(__unix__)
 
@@ -835,7 +749,16 @@ tk::selection_init(Tcl_Interp* ti)
 
 #else
 
-void tk::selection_init(Tcl_Interp* ti) {}
+#include <stdio.h>
+void tk::selection_init(Tcl_Interp*)
+{
+	static bool logged = false;
+	if (!logged)
+	{
+		fprintf(stderr, "Chesswiz: selection/clipboard use native Tk; X11 selection extensions unavailable\n");
+		logged = true;
+	}
+}
 
 #endif
 

@@ -249,7 +249,28 @@ tk::x11_init(Tcl_Interp* ti)
 
 #else
 
-void tk::x11_init(Tcl_Interp* ti) {}
+static int
+unavailableX11(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 5 || strcmp(Tcl_GetString(objv[1]), "region") != 0)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "region x y photo");
+		return TCL_ERROR;
+	}
+	Tcl_SetObjResult(ti, Tcl_NewBooleanObj(0));
+	return TCL_OK;
+}
+
+void tk::x11_init(Tcl_Interp* ti)
+{
+	static bool logged = false;
+	if (!logged)
+	{
+		fprintf(stderr, "Chesswiz: X11 screen capture unavailable\n");
+		logged = true;
+	}
+	Tcl_CreateObjCommand(ti, "::scidb::tk::x11", unavailableX11, 0, 0);
+}
 
 #endif
 

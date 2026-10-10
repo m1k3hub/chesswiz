@@ -23,16 +23,27 @@
 using namespace tcl;
 
 
+// fopencookie's callback signatures are platform specific: glibc uses
+// __ssize_t / __off64_t, the mstl Windows shim (m_stdio.h) uses the
+// portable ssize_t / int64_t. Match whichever struct is in scope.
+#if defined(_WIN32)
+# include <stdint.h>
+	typedef int64_t tcl_cookie_off_t;
+#else
+	typedef __off64_t tcl_cookie_off_t;
+#endif
+
+
 struct File::Cookie
 {
-	static __ssize_t
+	static ssize_t
 	read(void* cookie, char* buf, size_t len)
 	{
 		return Tcl_Read(static_cast<File*>(cookie)->m_chan, buf, len);
 	}
 
 	static int
-	seek(void* cookie, __off64_t* pos, int whence)
+	seek(void* cookie, tcl_cookie_off_t* pos, int whence)
 	{
 		return Tcl_Seek(static_cast<File*>(cookie)->m_chan, *pos, whence);
 	}
@@ -44,7 +55,7 @@ struct File::Cookie
 		return 0;
 	}
 
-	static __ssize_t
+	static ssize_t
 	write(void* cookie, char const* buf, size_t len)
 	{
 		return Tcl_Write(static_cast<File*>(cookie)->m_chan, buf, len);

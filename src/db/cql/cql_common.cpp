@@ -319,7 +319,7 @@ cql::country::lookupIso3166_2(mstl::string const& s)
 	if (p && ::strncasecmp(s, static_cast<CountryLookup const*>(p)->code, 2))
 		return static_cast<CountryLookup const*>(p)->result;
 
-	return Unknown;
+	return db::country::Unknown; // qualified: 'Unknown' collides with winioctl.h on Windows
 }
 
 // vi:set ts=3 sw=3:

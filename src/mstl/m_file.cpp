@@ -23,7 +23,7 @@
 
 #include <sys/stat.h>
 
-#ifdef __WIN32__
+#ifdef _WIN32
 # include <fcntl.h>
 # include <io.h>
 # define ftruncate _chsize
@@ -283,7 +283,7 @@ file::set_binary()
 {
 	if (m_open && !(mode() & binary))
 	{
-#if defined(__WIN32__)
+#if defined(_WIN32)
 
 		if (::setmode(fileno(m_fp), O_BINARY) == -1)
 			M_RAISE("setmode() failed (fd=%d)", fileno(m_fp));
@@ -302,7 +302,7 @@ file::set_text()
 {
 	if (m_open && (mode() & binary))
 	{
-#if defined(__WIN32__)
+#if defined(_WIN32)
 
 		if (::setmode(fileno(m_fp), O_TEXT) == -1)
 			M_RAISE("setmode() failed (fd=%d)", fileno(m_fp));

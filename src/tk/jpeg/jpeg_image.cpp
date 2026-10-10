@@ -23,6 +23,9 @@
 #include "jpeg_base.h"
 
 #include <assert.h>
+#ifdef _WIN32
+# include <stdint.h>
+#endif
 
 using namespace JPEG;
 
@@ -159,7 +162,13 @@ Image::setupBuffer()
 
 	// need some overhead for image data alignment
 	m_buffer = new unsigned char[m_scanline.pitch()*m_rows + alignment];
+#ifdef _WIN32
+	// Windows long is 32 bits even when pointers are 64 bits.
+	uintptr_t mask = static_cast<uintptr_t>(alignment);
+	m_scanline.setup(reinterpret_cast<unsigned char*>((reinterpret_cast<uintptr_t>(m_buffer) + mask) & ~mask));
+#else
 	m_scanline.setup(reinterpret_cast<unsigned char*>((long(m_buffer) + alignment) & ~alignment));
+#endif
 }
 
 // vi:set ts=3 sw=3:

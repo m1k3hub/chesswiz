@@ -114,8 +114,13 @@ namespace
 				uint32_t dateYear				:10;
 				uint32_t dateDay				: 5;
 				uint32_t result				: 3;
-				uint16_t commentEngFlag		: 1;
-				uint16_t commentOthFlag		: 1;
+				// Note: declared as uint32_t bitfields (not uint16_t) so that all
+				// compilers pack them into the trailing 2 bits of the preceding
+				// 32-bit unit. GCC does this even for uint16_t, but MSVC starts a
+				// new allocation unit for a different declared type, which would
+				// grow the struct to 64 bytes and shift the flags out of u32[9].
+				uint32_t commentEngFlag		: 1;
+				uint32_t commentOthFlag		: 1;
 				//----------------------------- 32 bit
 			};
 			struct
@@ -129,7 +134,7 @@ namespace
 		{
 			static_assert(sizeof(IndexEntry) == 56, "error in struct");
 
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 //			u64[ 0] = mstl::bo::swap(u64[ 1]);	// dont swap homepawns
 			u64[ 1] = mstl::bo::swap(u64[ 1]);
 //			u32[ 0] = mstl::bo::swap(u32[ 0]);	// dont swap pawn progression

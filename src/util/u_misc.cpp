@@ -20,7 +20,7 @@
 
 #include <string.h>
 
-#ifdef __WIN32__
+#ifdef _WIN32
 
 # include <windows.h>
 static char Separator = '\\';
@@ -109,17 +109,17 @@ util::misc::file::suffix(mstl::string const& path)
 bool
 util::misc::time::getCurrentTime(struct tm& result)
 {
-#ifdef WI__WIN32__N32
+#ifdef _WIN32
 
 	SYSTEMTIME t;
 	::GetLocalTime(&t);
 
-	dst.year = t.wYear;	// between 1601 and 30827
-	dst.mon  = t.wMonth;
-	dst.mfay = t.wDay;
-	dst.hour = t.wHour;
-	dst.min  = t.mMinute;
-	dst.sec  = t.wMilliseconds*1000;
+	result.year = t.wYear - 1900;
+	result.mon  = t.wMonth - 1;
+	result.mday = t.wDay;
+	result.hour = t.wHour;
+	result.min  = t.wMinute;
+	result.sec  = t.wSecond;
 
 #else
 

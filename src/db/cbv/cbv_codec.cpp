@@ -51,12 +51,39 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
-#include <unistd.h>
+#ifndef _WIN32
+#  include <unistd.h>
+#else
+// Windows: no lstat()/S_ISLNK/mkdtemp (POSIX); we use stat() (symlinks require
+// special privileges and are not created by this code) and a manual mkdtemp
+// replacement. <io.h> supplies unlink/rmdir, <direct.h> supplies mkdir.
+#  include <io.h>
+#  include <direct.h>
+#endif
 
 using namespace db;
 using namespace db::cbv;
 using namespace util;
 using namespace sys;
+
+#ifdef _WIN32
+// POSIX mkdtemp() has no CRT equivalent on Windows. Emulate it with
+// _mktemp() (creates a unique name from the template) followed by _mkdir()
+// (atomically claims it). Returns the directory name on success like
+// mkdtemp(), or null on failure.
+char* mkdtemp_win(char* tmpl)
+{
+	char* name = ::_mktemp(tmpl);
+
+	if (!name || *name == '\0')
+		return nullptr;
+
+	if (::_mkdir(name) != 0)
+		return nullptr;
+
+	return name;
+}
+#endif
 
 namespace {
 
@@ -549,11 +576,18 @@ removeDirTree(mstl::string const& dirPath)
 
 		struct stat st;
 
+#ifdef _WIN32
+		// Windows has no lstat()/S_ISLNK: fall back to plain stat(). Symlinks
+		// are never created by the CBV extraction code, so nothing is skipped.
+		if (::stat(path.c_str(), &st) == 0)
+#else
 		if (::lstat(path.c_str(), &st) == 0)
+#endif
 		{
+#ifndef _WIN32
 			if (S_ISLNK(st.st_mode))
-				continue;
-
+				continue; // do not descend into symlinks
+#endif
 			if (S_ISDIR(st.st_mode))
 				removeDirTree(path);
 			else
@@ -627,8 +661,19 @@ Codec::doOpen(	mstl::string const& rootname,
 	mstl::string cbvPath(rootname + ".cbv");
 
 	// Create a temporary directory for extraction
+#ifdef _WIN32
+	char tmpTemplate[MAX_PATH + 16];
+	DWORD const tmpLen = ::GetTempPathA(MAX_PATH, tmpTemplate);
+
+	if (tmpLen == 0 || tmpLen > MAX_PATH - 16)
+		IO_RAISE(Archive, Open_Failed, "cannot determine temporary directory for CBV extraction");
+
+	::strcat(tmpTemplate, "scidb-cbv-XXXXXX");
+	char* tmpDir = mkdtemp_win(tmpTemplate);
+#else
 	char tmpTemplate[] = "/tmp/scidb-cbv-XXXXXX";
 	char* tmpDir = ::mkdtemp(tmpTemplate);
+#endif
 
 	if (!tmpDir)
 		IO_RAISE(Archive, Open_Failed, "cannot create temporary directory for CBV extraction");
@@ -751,8 +796,19 @@ Codec::getAttributes(	mstl::string const& filename,
 	if (!isCBV(filename))
 		return false;
 
+#ifdef _WIN32
+	char tmpTemplate[MAX_PATH + 16];
+	DWORD const tmpLen = ::GetTempPathA(MAX_PATH, tmpTemplate);
+
+	if (tmpLen == 0 || tmpLen > MAX_PATH - 16)
+		return false;
+
+	::strcat(tmpTemplate, "scidb-cbv-attr-XXXXXX");
+	char* tmpDir = mkdtemp_win(tmpTemplate);
+#else
 	char tmpTemplate[] = "/tmp/scidb-cbv-attr-XXXXXX";
 	char* tmpDir = ::mkdtemp(tmpTemplate);
+#endif
 
 	if (!tmpDir)
 		return false;

@@ -20,7 +20,11 @@
 #include "m_utility.h"
 #include "m_assert.h"
 
-#include <alloca.h>
+#ifdef _WIN32
+# include <malloc.h>
+#else
+# include <alloca.h>
+#endif
 #include <string.h>
 
 

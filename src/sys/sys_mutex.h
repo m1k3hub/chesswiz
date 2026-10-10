@@ -41,7 +41,7 @@ public:
 private:
 
 #ifdef __WIN32__
-	CRITICAL_SECTION mutex_t;
+	typedef CRITICAL_SECTION mutex_t;
 #else
 	typedef pthread_mutex_t mutex_t;
 #endif

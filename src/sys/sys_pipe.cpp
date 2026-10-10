@@ -81,6 +81,7 @@ Pipe::close()
 
 # include <windows.h>
 # include <io.h>
+# include <fcntl.h> // _O_BINARY
 
 int
 Pipe::createPipe()
@@ -88,7 +89,7 @@ Pipe::createPipe()
 	if (::_pipe(m_fd, 256, _O_BINARY) == -1)
 		M_RAISE("pipe() failed");
 
-	return get_osfhandle(m_fd[0]);
+	return ::_get_osfhandle(m_fd[0]);
 }
 
 #elif defined(__unix__) || defined(__MacOSX__)

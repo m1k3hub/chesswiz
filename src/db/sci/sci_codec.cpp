@@ -283,7 +283,7 @@ struct IndexEntry
 ///////////////////////////////////////////////////////////////////////////////////////////
 #endif // USE_BITFIELDS
 
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 
 // NOTE: don't swap homepawns:			u64[0]
 // NOTE: don't swap pawn progression:	u32[5]

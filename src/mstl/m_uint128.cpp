@@ -18,7 +18,7 @@
 
 #include "m_uint128_t.h"
 
-#if __WORDSIZE == 32 || !__GNUC_PREREQ(4, 4)
+#if !defined(__SIZEOF_INT128__) || !__GNUC_PREREQ(4, 4)
 
 #include "m_assert.h"
 

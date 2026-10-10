@@ -16,20 +16,19 @@
 // (at your option) any later version.
 // ======================================================================
 
-#include <byteswap.h>
-#include <endian.h>
+// GCC/Clang builtins: portable to Windows and macOS, which lack <byteswap.h> and <endian.h>.
 
 namespace mstl {
 namespace bo {
 
-inline int16_t  swap(int16_t  v) { return bswap_16(v); }
-inline int32_t  swap(int32_t  v) { return bswap_32(v); }
-inline int64_t  swap(int64_t  v) { return bswap_64(v); }
-inline uint16_t swap(uint16_t v) { return bswap_16(v); }
-inline uint32_t swap(uint32_t v) { return bswap_32(v); }
-inline uint64_t swap(uint64_t v) { return bswap_64(v); }
+inline int16_t  swap(int16_t  v) { return __builtin_bswap16(v); }
+inline int32_t  swap(int32_t  v) { return __builtin_bswap32(v); }
+inline int64_t  swap(int64_t  v) { return __builtin_bswap64(v); }
+inline uint16_t swap(uint16_t v) { return __builtin_bswap16(v); }
+inline uint32_t swap(uint32_t v) { return __builtin_bswap32(v); }
+inline uint64_t swap(uint64_t v) { return __builtin_bswap64(v); }
 
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 
 inline int16_t  swapLE(int16_t  v) { return v; }
 inline int32_t  swapLE(int32_t  v) { return v; }
@@ -38,14 +37,14 @@ inline uint16_t swapLE(uint16_t v) { return v; }
 inline uint32_t swapLE(uint32_t v) { return v; }
 inline uint64_t swapLE(uint64_t v) { return v; }
 
-inline int16_t  swapBE(int16_t  v) { return bswap_16(v); }
-inline int32_t  swapBE(int32_t  v) { return bswap_32(v); }
-inline int64_t  swapBE(int64_t  v) { return bswap_64(v); }
-inline uint16_t swapBE(uint16_t v) { return bswap_16(v); }
-inline uint32_t swapBE(uint32_t v) { return bswap_32(v); }
-inline uint64_t swapBE(uint64_t v) { return bswap_64(v); }
+inline int16_t  swapBE(int16_t  v) { return __builtin_bswap16(v); }
+inline int32_t  swapBE(int32_t  v) { return __builtin_bswap32(v); }
+inline int64_t  swapBE(int64_t  v) { return __builtin_bswap64(v); }
+inline uint16_t swapBE(uint16_t v) { return __builtin_bswap16(v); }
+inline uint32_t swapBE(uint32_t v) { return __builtin_bswap32(v); }
+inline uint64_t swapBE(uint64_t v) { return __builtin_bswap64(v); }
 
-#elif __BYTE_ORDER == __BIG_ENDIAN
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 
 inline int16_t  swapBE(int16_t  v) { return v; }
 inline int32_t  swapBE(int32_t  v) { return v; }
@@ -54,16 +53,16 @@ inline uint16_t swapBE(uint16_t v) { return v; }
 inline uint32_t swapBE(uint32_t v) { return v; }
 inline uint64_t swapBE(uint64_t v) { return v; }
 
-inline int16_t  swapLE(int16_t  v) { return bswap_16(v); }
-inline int32_t  swapLE(int32_t  v) { return bswap_32(v); }
-inline int64_t  swapLE(int64_t  v) { return bswap_64(v); }
-inline uint16_t swapLE(uint16_t v) { return bswap_16(v); }
-inline uint32_t swapLE(uint32_t v) { return bswap_32(v); }
-inline uint64_t swapLE(uint64_t v) { return bswap_64(v); }
+inline int16_t  swapLE(int16_t  v) { return __builtin_bswap16(v); }
+inline int32_t  swapLE(int32_t  v) { return __builtin_bswap32(v); }
+inline int64_t  swapLE(int64_t  v) { return __builtin_bswap64(v); }
+inline uint16_t swapLE(uint16_t v) { return __builtin_bswap16(v); }
+inline uint32_t swapLE(uint32_t v) { return __builtin_bswap32(v); }
+inline uint64_t swapLE(uint64_t v) { return __builtin_bswap64(v); }
 
 #else
 
-error "Unsupported byte order (neither Big Endian nor Little Endian)"
+#error "Unsupported byte order (neither Big Endian nor Little Endian)"
 
 #endif
 
