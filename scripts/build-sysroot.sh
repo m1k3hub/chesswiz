@@ -270,7 +270,16 @@ build_tcl() {
         rm -rf "$PREFIX/lib/tcl$tclver"
         mkdir -p "$PREFIX/lib/tcl$tclver"
         cp -R "$srcdir/library/"*.tcl "$srcdir/library/tclIndex" "$PREFIX/lib/tcl$tclver/" 2>/dev/null || true
-        for d in http1.0 opt0.4 encoding; do mkdir -p "$PREFIX/lib/tcl$tclver/$d"; cp -R "$srcdir/library/$d/"* "$PREFIX/lib/tcl$tclver/$d/" 2>/dev/null || true; done
+        for d in http1.0 opt0.4 encoding msgs tzdata; do mkdir -p "$PREFIX/lib/tcl$tclver/$d"; cp -R "$srcdir/library/$d/"* "$PREFIX/lib/tcl$tclver/$d/" 2>/dev/null || true; done
+        # Tcl Modules (msgcat, http, tcltest, platform): the install-libraries
+        # recipe copies them to lib/tcl8/<ver>/<name>-<version>.tm. Take the
+        # copy lines from the Makefile, so the versions always match.
+        sed -n 's|.*\$(COPY) \$(ROOT_DIR)/\(library/[^ ]*\) "\$(MODULE_INSTALL_DIR)/\([^"]*\)";.*|\1 \2|p' \
+            "$srcdir/win/Makefile.in" | while read -r src dst; do
+            mkdir -p "$(dirname "$PREFIX/lib/tcl8/$dst")"
+            cp -f "$srcdir/$src" "$PREFIX/lib/tcl8/$dst"
+        done
+        [ -n "$(ls "$PREFIX"/lib/tcl8/8.5/msgcat-*.tm 2>/dev/null)" ] || die "Tcl: msgcat module missing after install"
         # install-private-headers installs tclInt.h/... to include/tcl-private
         # (plain copy, no tclsh execution, so it succeeds).
         make install-private-headers > "$LOG_DIR/tcl-install-private.log" 2>&1 || true
