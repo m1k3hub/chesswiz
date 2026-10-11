@@ -2525,9 +2525,10 @@ if {[string length $gxxVer]} {
     checkExpat
     checkGdbm
 
-    # A headers-only Darwin sysroot supplies target zlib/Expat archives.
+    # The target sysroot (Windows, or headers-only Darwin) supplies the
+    # zlib/Expat archives.
     # Never select host Linux libraries while cross-compiling.
-    if {$configure(toolchain) eq "zig" && [string match *macos* $configure(target)]} {
+    if {$configure(toolchain) eq "zig" && [regexp {macos|windows} $configure(target)]} {
         set sysroot [file join [pwd] build $configure(target)]
         foreach pkg {zlib expat} lib {z expat} {
             set package($pkg-inc) "-I$sysroot/include"
