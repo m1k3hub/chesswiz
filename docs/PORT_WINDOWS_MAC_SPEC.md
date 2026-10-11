@@ -9,9 +9,9 @@ Status: proposal, 2026-10-09. Facts below were surveyed from the tree at `bb30e5
 | | Windows | macOS |
 |---|---|---|
 | Build | Zig cross build from Linux (`build/wt-win`) | native Apple clang, static Aqua Tk 8.6.17; universal2 via `scripts/build-macos-app-binary.sh` |
-| Package | folder (`make-windows-dist.sh`) + Inno Setup installer (`chesswiz.iss`) | `.app` + DMG (`make-macos-app.sh`), ad-hoc signed; Developer ID/notarization wired, needs an Apple account |
+| Package | folder (`make-windows-dist.sh`) + Inno Setup installer (`chesswiz.iss`), both built by CI | `.app` + DMG (`make-macos-app.sh`), ad-hoc signed; Developer ID/notarization wired, needs an Apple account |
 | Verified on the real OS | Win 11 VM: startup, databases, fonts (private), Stockfish, MP4/WMV playback, HTTPS, credentials, installer; CI windows-latest launch | macOS 15 Intel VM: startup, media, HTTPS, Stockfish, credentials; CI macos-14 (arm64) build + launch |
-| Open | pane-zoom glyph and native file dialogs unchecked by eye | Apple Silicon only checked by CI launch; X11-only features are logged no-ops |
+| Open | — (pane-zoom glyph and native file dialogs checked on Win 11, 2026-10-11) | Apple Silicon only checked by CI launch; X11-only features are logged no-ops |
 
 CI: `.github/workflows/port.yml` on github.com/m1k3hub/chesswiz (private); Zig comes from the
 `toolchain-zig-0.16.0-dev.3133` release (checksum `.zig-sha256`). Release blockers that remain
