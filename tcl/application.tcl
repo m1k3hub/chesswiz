@@ -1262,6 +1262,12 @@ set downArrow(black) [image create photo -data {
 	AAAASUVORK5CYII=
 }]
 
+# Aqua draws the main menu button as a native pop-up button with its own
+# arrow; ours would be drawn over the label.
+if {[tk windowingsystem] eq "aqua"} {
+	foreach color {white black} { $downArrow($color) blank; $downArrow($color) configure -width 1 -height 1 }
+}
+
 } ;# namespace 16x12
 namespace eval 32x32 {
 

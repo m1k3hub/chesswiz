@@ -1208,8 +1208,12 @@ HtmlInlineContextGetLineBox(
              * is possible due to the super-tricky way the HtmlTextNode
              * structure stores it's data (see htmltext.c).
              *
-             * This is an optimization only.
+             * This is an optimization only. Not on Aqua: CoreText draws a
+             * run of words with fractional advances and kerning, narrower
+             * than the sum of the words measured one by one, which leaves a
+             * gap before the next primitive.
              */
+#ifndef __APPLE__
             else if (
                 extra_pixels == 0 &&
                 pBox->pNode == pBox[-1].pNode &&
@@ -1220,6 +1224,7 @@ HtmlInlineContextGetLineBox(
                 HtmlDrawTextExtend(&content, nChar, 0, pBox[-1].nSpace + iWidth);
                 HtmlDrawCleanup(pContext->pTree, &pBox->canvas);
             }
+#endif
 
             /* Otherwise, if there are no borders drawn between the two
              * adjacent text boxes, stretch the previous box so that
