@@ -3041,6 +3041,10 @@ Player::parseEcfRating(mstl::istream& stream)
 {
 	mstl::string line;
 	mstl::string name;
+	mstl::string latin1;
+
+	// The ECF list is Latin-1 (e.g. "Dupr\xe9, Paul D").
+	sys::utf8::Codec codec(sys::utf8::Codec::latin1());
 
 	TRACE(unsigned count = 0);
 	TRACE(unsigned total = 0);
@@ -3078,7 +3082,8 @@ Player::parseEcfRating(mstl::istream& stream)
 
 			if (player == 0)
 			{
-				name.hook(line.data() + 23, line.size() - 23);
+				latin1.hook(line.data() + 23, line.size() - 23);
+				codec.toUtf8(latin1, name);
 				standardizeNames(name);
 				player = findPlayer(name, country::England, sex);
 
@@ -3091,7 +3096,7 @@ Player::parseEcfRating(mstl::istream& stream)
 				if (rating < m_minECF)
 					continue;
 
-				if (!(player = insertPlayer(name, country::England, sex)))
+				if (!(player = insertPlayer(name, 1, country::England, sex)))
 					continue;
 
 				TRACE(++count);

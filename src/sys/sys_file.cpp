@@ -54,9 +54,26 @@ sys::file::internalName(char const* externalName)
 	if (pathObj)
 	{
 		Tcl_IncrRefCount(pathObj);
+#ifdef _WIN32
+		// The native path is UTF-16 here, but our callers use the char*
+		// CRT functions, which take the system (ANSI) code page.
+		if (Tcl_Obj* translated = Tcl_FSGetTranslatedPath(0, pathObj))
+		{
+			Tcl_DString ds;
+			Tcl_UtfToExternalDString(0, Tcl_GetString(translated), -1, &ds);
+			result.assign(Tcl_DStringValue(&ds), Tcl_DStringLength(&ds));
+			Tcl_DStringFree(&ds);
+			Tcl_DecrRefCount(translated);
+		}
+		else
+		{
+			result.assign(externalName);
+		}
+#else
 		// Tcl version 8.6 is returning "void const*".
 		// Tcl version 8.5 is returning "char const*".
 		result.assign(static_cast<char const*>(Tcl_FSGetNativePath(pathObj)));
+#endif
 		Tcl_DecrRefCount(pathObj);
 	}
 	else

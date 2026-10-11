@@ -68,6 +68,7 @@
 # include <stdint.h>
 # include <stdlib.h>
 # include <errno.h>
+# include <string.h>
 
 // MinGW has no POSIX delimiter reader.
 inline ssize_t getdelim(char** data, size_t* capacity, int delimiter, FILE* fp)
@@ -106,9 +107,43 @@ struct cookie_io_functions_t
 	int (*close)(void*);
 };
 
-inline FILE* fopencookie(void*, const char*, cookie_io_functions_t)
+// Windows has no callback-backed FILE. A read-only stream is drained into a
+// temporary file (deleted on fclose) on the caller's thread, so the
+// callbacks may use Tcl; the close callback runs once the data is copied.
+// Write streams are still unsupported.
+inline FILE* fopencookie(void* cookie, const char* mode, cookie_io_functions_t io)
 {
-	static bool const logged = (::fputs("Chesswiz: callback-backed compressed streams are unavailable on Windows\n", stderr), true);
+	if (::strchr(mode, 'r') && !::strchr(mode, '+') && !::strchr(mode, 'w') && io.read)
+	{
+		char* path = ::_tempnam(0, "cw");
+		FILE* fp = path ? ::fopen(path, "w+bTD") : 0;
+		::free(path);
+		if (!fp)
+			return 0;
+
+		char buf[65536];
+		ssize_t n;
+		while ((n = io.read(cookie, buf, sizeof(buf))) > 0)
+		{
+			if (::fwrite(buf, 1, size_t(n), fp) != size_t(n))
+			{
+				n = -1;
+				break;
+			}
+		}
+		if (io.close)
+			io.close(cookie);
+		if (n < 0)
+		{
+			::fclose(fp);
+			errno = EIO;
+			return 0;
+		}
+		::rewind(fp);
+		return fp;
+	}
+
+	static bool const logged = (::fputs("Chesswiz: callback-backed output streams are unavailable on Windows\n", stderr), true);
 	(void)logged;
 	errno = ENOSYS;
 	return 0;

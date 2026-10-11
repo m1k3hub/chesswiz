@@ -337,7 +337,10 @@ proc SetIcon {w height} {
 	if {![info exists Icons($size:)]} {
 		foreach {state attr} {normal foreground active activeforeground disabled disabledforeground} {
 			set img [image create photo -height $size -width [expr {$size + 1}]]
-			set svg [string map [list FILL $Priv(arrow$attr)] $svg::arrow]
+			# SVG knows no Tk colour names such as SystemButtonText (Windows).
+			lassign [winfo rgb $w $Priv(arrow$attr)] r g b
+			set fill [format "#%02x%02x%02x" [expr {$r >> 8}] [expr {$g >> 8}] [expr {$b >> 8}]]
+			set svg [string map [list FILL $fill] $svg::arrow]
 			::scidb::tk::image create svg $img
 			set Icons($size:$state) $img
 		}
