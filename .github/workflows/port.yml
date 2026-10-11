@@ -102,7 +102,9 @@ jobs:
         run: |
           $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          # A release tag vX.Y.Z names the version; other builds are 0.9.<run>.
           $version = "0.9.${{ github.run_number }}"
+          if ("${{ github.ref_type }}" -eq "tag" -and "${{ github.ref_name }}" -match '^v(\d+\.\d+\.\d+)$') { $version = $Matches[1] }
           & $iscc /Q "/DSrcDir=$((Resolve-Path build/dist/Chesswiz).Path)" "/DRootDir=$PWD" "/DAppVersion=$version" "/O$PWD\build\installer" scripts\chesswiz.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed: $LASTEXITCODE" }
           Get-ChildItem build\installer
@@ -142,6 +144,13 @@ jobs:
           make -C tcl
           make -C engines/stockfish/src net   # NNUE is too big for git
           SF_ARCHS=${{ matrix.arch }} scripts/build-macos-engines.sh
+      - name: Version (release tag vX.Y.Z, else 0.9.<run>)
+        run: |
+          if [[ "$GITHUB_REF" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "CHESSWIZ_VERSION=${BASH_REMATCH[1]}" >> "$GITHUB_ENV"
+          else
+            echo "CHESSWIZ_VERSION=0.9.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          fi
       - name: Assemble ad-hoc signed app and DMG
         if: env.CHESSWIZ_SIGN_ID == ''
         run: scripts/make-macos-app.sh . "$PWD/build/dist/Chesswiz.app" "$PWD/build/macos-sysroot"
