@@ -1,0 +1,162 @@
+name: Chesswiz ports
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential tcl8.6-dev tk8.6-dev tcllib tcl-tls \
+            libfreetype6-dev libsm-dev libxcursor-dev libfontconfig1-dev libgdbm-dev \
+            libx11-dev libxft-dev libxext-dev zlib1g-dev libexpat1-dev libmpv-dev xvfb xauth
+      - run: ./configure
+      - run: make -C src -j4
+      - run: make -C tcl
+      - run: xvfb-run -a make -C tests tcl
+      # The outer Xvfb supplies DISPLAY; suppress the Makefile's nested Xvfb.
+      - run: xvfb-run -a make -C tests app-tcl XVFB_RUN=
+  windows-cross:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y tcl8.6 patch make curl xz-utils
+      - name: Install pinned Zig with upstream SHA-256
+        run: |
+          mkdir -p build/zig
+          curl -fL --retry 3 https://ziglang.org/download/index.json -o build/zig/index.json
+          python3 - <<'PY'
+          import json, pathlib
+          version = pathlib.Path('.zig-version').read_text().strip()
+          entries = json.loads(pathlib.Path('build/zig/index.json').read_text())
+          entry = next((v for k, v in entries.items() if v.get('version', k) == version), None)
+          if entry is None:
+              raise SystemExit(f'Pinned Zig {version} is absent from ziglang.org; refresh the pin deliberately')
+          package = entry['x86_64-linux']
+          if not package['tarball'].startswith('https://ziglang.org/'):
+              raise SystemExit('Unexpected Zig download host')
+          pathlib.Path('build/zig/url').write_text(package['tarball'])
+          pathlib.Path('build/zig/checksum').write_text(package['shasum'] + '  build/zig/archive.tar.xz\n')
+          PY
+          curl -fL --retry 3 "$(cat build/zig/url)" -o build/zig/archive.tar.xz
+          sha256sum -c build/zig/checksum
+          tar xf build/zig/archive.tar.xz -C build/zig --strip-components=1
+          test "$(build/zig/zig version)" = "$(cat .zig-version)"
+          echo "$PWD/build/zig" >> "$GITHUB_PATH"
+      - uses: actions/cache@v4
+        with:
+          path: build/src
+          key: sysroot-sources-${{ runner.os }}-${{ hashFiles('scripts/sysroot-pins.sh') }}
+      - run: scripts/build-sysroot.sh x86_64-windows-gnu
+      - name: Configure and build Windows
+        run: |
+          sysroot="$PWD/build/x86_64-windows-gnu"
+          ./configure --toolchain=zig --target=x86_64-windows-gnu \
+            --tcl-includes="$sysroot/include" --tk-includes="$sysroot/include" \
+            --tcl-libraries="$sysroot/lib" --tk-libraries="$sysroot/lib" MEDIA_BACKEND=mf
+          make -C src -j2
+          make -C tcl
+          scripts/build-windows-engines.sh
+          scripts/make-windows-dist.sh .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Chesswiz-windows
+          path: build/dist/Chesswiz
+          if-no-files-found: error
+  windows-test:
+    runs-on: windows-latest
+    needs: windows-cross
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Chesswiz-windows
+          path: build/dist/Chesswiz
+      - name: Launch bundled application
+        shell: pwsh
+        run: |
+          $bundle = (Resolve-Path build/dist/Chesswiz).Path
+          $script = (Resolve-Path tests/smoke/launch-smoke.tcl).Path
+          $result = Join-Path $env:RUNNER_TEMP 'smoke-ok.txt'
+          $env:SCIDB_USERDIR = Join-Path $env:RUNNER_TEMP 'chesswiz-user'
+          $env:SCIDB_SHAREDIR = $bundle
+          $env:TCL_LIBRARY = Join-Path $bundle 'lib/tcl8.6'
+          $env:TK_LIBRARY = Join-Path $bundle 'lib/tk8.6'
+          Remove-Item $result -ErrorAction SilentlyContinue
+          $arguments = '-encoding utf-8 "{0}" "{1}" "{2}"' -f $script, (Join-Path $bundle 'chesswiz.tcl'), $result
+          $process = Start-Process (Join-Path $bundle 'tkchesswiz.exe') -ArgumentList $arguments -PassThru
+          if (-not $process.WaitForExit(90000)) {
+            Stop-Process -Id $process.Id -Force
+            throw 'Application smoke test timed out'
+          }
+          if ($process.ExitCode -ne 0 -or -not (Test-Path $result)) { throw 'Application smoke test failed' }
+          if ((Get-Content $result -Raw).Trim() -ne 'OK') { throw 'Missing smoke OK' }
+  macos:
+    runs-on: macos-14
+    timeout-minutes: 90
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+      CHESSWIZ_SIGN_ID: ${{ secrets.CHESSWIZ_SIGN_ID }}
+      NOTARY_APPLE_ID: ${{ secrets.CHESSWIZ_NOTARY_APPLE_ID }}
+      NOTARY_PASSWORD: ${{ secrets.CHESSWIZ_NOTARY_PASSWORD }}
+      NOTARY_TEAM_ID: ${{ secrets.CHESSWIZ_NOTARY_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: build/src
+          key: sysroot-sources-${{ runner.os }}-${{ hashFiles('scripts/sysroot-pins.sh') }}
+      - name: Build Aqua runtime, TLS, app and engines
+        run: |
+          scripts/build-macos-runtime.sh "$PWD/build/macos-sysroot"
+          scripts/build-macos-tls.sh "$PWD/build/macos-sysroot" arm64
+          scripts/build-macos-app-binary.sh "$PWD" "$PWD/build/macos-sysroot" arm64
+          make -C tcl
+          SF_ARCHS=arm64 scripts/build-macos-engines.sh
+      - name: Assemble ad-hoc signed app and DMG
+        if: env.CHESSWIZ_SIGN_ID == ''
+        run: scripts/make-macos-app.sh . "$PWD/build/dist/Chesswiz.app" "$PWD/build/macos-sysroot"
+      # Secrets cannot be referenced directly in step if expressions.
+      # A Developer ID certificate/private key must already be in the runner keychain.
+      - name: Assemble Developer ID signed app and DMG
+        if: env.CHESSWIZ_SIGN_ID != ''
+        run: scripts/make-macos-app.sh . "$PWD/build/dist/Chesswiz.app" "$PWD/build/macos-sysroot"
+      - name: Smoke test through app launcher
+        run: |
+          export CW_STARTUP_HARNESS="$PWD/tests/smoke/launch-smoke.tcl"
+          export CW_LOGDIR="$PWD/build/smoke-logs"
+          export SCIDB_USERDIR="$RUNNER_TEMP/chesswiz-user"
+          python3 - <<'PY'
+          import os, pathlib, subprocess
+          result = pathlib.Path(os.environ['RUNNER_TEMP']) / 'smoke-ok.txt'
+          result.unlink(missing_ok=True)
+          try:
+              subprocess.run(['build/dist/Chesswiz.app/Contents/MacOS/chesswiz', str(result)],
+                             timeout=90, check=True)
+              assert result.read_text().strip() == 'OK', 'Missing smoke OK'
+          finally:
+              for log in pathlib.Path('build/smoke-logs').glob('*.log'):
+                  print(log.read_text(errors='replace'))
+          PY
+      - name: Notarize and staple DMG
+        if: env.CHESSWIZ_SIGN_ID != '' && env.NOTARY_APPLE_ID != '' && env.NOTARY_PASSWORD != '' && env.NOTARY_TEAM_ID != ''
+        run: |
+          xcrun notarytool submit build/dist/Chesswiz.dmg --apple-id "$NOTARY_APPLE_ID" \
+            --password "$NOTARY_PASSWORD" --team-id "$NOTARY_TEAM_ID" --wait --output-format json > build/notary.json
+          python3 -c 'import json; assert json.load(open("build/notary.json"))["status"] == "Accepted"'
+          xcrun stapler staple build/dist/Chesswiz.dmg
+          xcrun stapler validate build/dist/Chesswiz.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Chesswiz-macos
+          path: build/dist/Chesswiz.dmg
+          if-no-files-found: error

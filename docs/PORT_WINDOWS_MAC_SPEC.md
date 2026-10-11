@@ -78,10 +78,46 @@ Found: `exec nproc` (ai-engine.tcl:137), `exec kill` (ai-modelfit.tcl:107, app-v
 ### D9. Credentials — **OS keychain**
 - API keys currently live in `user/config/ai-keys` (plain file). On Win/Mac use Credential Manager / Keychain (via a tiny C shim), file fallback on Linux (or libsecret).
 
-### D10. CI — **build on Linux with Zig, test on each OS** (GitHub Actions)
-- One Linux job cross-builds all targets with the pinned Zig. Its artifacts go to ubuntu, windows-latest and macos-14 jobs, which run `make -C tests tcl cpp` (and later the app suite) natively. The macOS job also signs and notarizes.
-- App tests run under Xvfb on Linux at first, then natively.
-- The app suite has fixed-time waits; `bb30e5e` started converting them to `waitUntil` polls — finish that before CI, slow runners will otherwise flake.
+### D10. CI — **implemented; hosted execution pending** (GitHub Actions)
+
+`.github/workflows/port.yml` is separate from the existing opening-report CI.
+Its Linux job installs Tcl/Tk 8.6 development packages and the dependencies
+listed in `INSTALL`/`configure`, builds `src` and the Tcl bundle, and runs
+`make -C tests tcl` and `make -C tests app-tcl` under Xvfb.
+
+The Windows cross job verifies the `.zig-version` release against the upstream
+ziglang.org download index and SHA-256 before installing it, builds the pinned
+sysroot and app with static Tcl/Tk and Media Foundation, builds Stockfish, and
+uploads `build/dist/Chesswiz`. Dependency archives in `build/src` are cached
+with a key derived from `scripts/sysroot-pins.sh`; builders recheck hashes.
+`windows-test` downloads that folder and launches the packaged executable.
+
+The `macos-14` Apple Silicon job builds the Aqua runtime, arm64 TLS, app binary
+and Stockfish following `docs/MACOS_PACKAGING.md`, assembles the app/DMG, and
+runs the smoke test through the app launcher before uploading `Chesswiz.dmg`.
+Both native smoke tests use `tests/smoke/launch-smoke.tcl`: source the packaged
+bundle, poll until `.application` maps, write `OK`, and exit. A 60-second Tcl
+timer and a 90-second external process timeout fail hung launches.
+
+Developer ID signing is enabled only with `CHESSWIZ_SIGN_ID`; otherwise the
+assembler uses its normal ad-hoc signature. The signing certificate and private
+key must already be available in the runner keychain. Notarization additionally
+requires `CHESSWIZ_NOTARY_APPLE_ID`, `CHESSWIZ_NOTARY_PASSWORD` (app-specific),
+and `CHESSWIZ_NOTARY_TEAM_ID`. Step conditions use environment copies of secrets
+because GitHub does not allow direct `secrets` references in `if` expressions.
+No signing credentials or certificates are included in artifacts.
+
+**Current blocker:** the pinned development Zig
+`0.16.0-dev.3133+5ec8e45f3` is absent from the current upstream download index,
+and its ziglang.org builds URL returns HTTP 404. Windows CI fails explicitly
+until the toolchain owner deliberately updates the pin to an available version
+or supplies an immutable verified archive. CI never silently substitutes a
+new Zig version. Local validation and Linux reproduction results are recorded
+in `tests/tmp-app/d10/report.md`. The fresh Linux build and app suite pass
+(732 passed, 6 skipped); the Tcl suite has one existing audit failure because
+its `make cpp` correspondence test does not link `crc32` from system zlib
+(174 passed, 1 failed, 7 skipped). That test remains a CI gate. Hosted
+Windows/macOS execution remains pending.
 
 ## 3. Rename — decisions
 
