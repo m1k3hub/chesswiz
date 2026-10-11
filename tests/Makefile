@@ -285,7 +285,7 @@ $(TEST_DIR)test_corr_duration: $(TEST_DIR)test_corr_duration.cpp
 	@$(CXX) $(CXXFLAGS) \
 		-I$(SRC_DIR) -I$(SRC_DIR)/db -I$(SRC_DIR)/sys -I$(SRC_DIR)/util -I$(SRC_DIR)/mstl \
 		-o $@ $< \
-		$(SRC_DIR)/db/libdb.a $(SRC_DIR)/util/libutil.a $(SRC_DIR)/sys/libsys.a $(SRC_DIR)/mstl/libmstl.a
+		$(SRC_DIR)/db/libdb.a $(SRC_DIR)/util/libutil.a $(SRC_DIR)/sys/libsys.a $(SRC_DIR)/mstl/libmstl.a -lz
 
 
 $(TEST_DIR)test_cpp_backend: $(CPP_TESTS)
@@ -403,3 +403,8 @@ help:
 	@echo "  make tcl-match PATTERN=move # Run only move-related tests"
 	@echo "  make test-database          # Run database tests only"
 	@echo "  make ci                     # Full CI build"
+
+# Linux credential file backend and mocked OS-store migration.
+.PHONY: ai-credentials
+ai-credentials:
+	@$(TCLSH) $(TEST_DIR)test_ai_credentials.tcl

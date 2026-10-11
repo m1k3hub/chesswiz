@@ -53,6 +53,8 @@ extern "C" { int Treectrl_Init(Tcl_Interp*); }
 extern "C" { int Inotify_Init(Tcl_Interp *interp); }
 extern "C" { static Tcl_FreeProc* __tcl_static = TCL_STATIC; }
 
+extern void initCredentials(Tcl_Interp*);
+
 using namespace ::tcl;
 using namespace ::db;
 
@@ -1370,6 +1372,7 @@ tcl::init(Tcl_Interp* ti)
 	pos::init(ti);
 	board::init(ti);
 	misc::init(ti);
+	initCredentials(ti);
 	crosstable::init(ti);
 	zlib::init(ti);
 	fam::init(ti);

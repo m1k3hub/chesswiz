@@ -1498,3 +1498,9 @@ proc ::ai::provider::parseModels {data} {
 	}
 	return [lsort -index 1 -dictionary $models]
 }
+
+# Persisted accounts to load even when no legacy key file remains.
+proc ::ai::provider::credentialAccounts {} {
+	variable KeyEnv
+	return [array names KeyEnv]
+}

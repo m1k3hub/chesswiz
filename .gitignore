@@ -132,3 +132,4 @@ tcl/scidb-beta
 build/
 /build/
 src/win/*.res
+src/tcl/.media_backend

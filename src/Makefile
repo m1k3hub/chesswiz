@@ -106,7 +106,7 @@ TK_RES = win/chesswiz.res
 # A GUI program: no console window (stderr goes nowhere; see the log files).
 TK_GUI_LDFLAGS = -Wl,--subsystem,windows
 else ifeq ($(TARGET_MACOS),yes)
-PLATFORM_LIBS = -lpthread -lm
+PLATFORM_LIBS = -lpthread -lm -framework Security
 OPENGL_LIBS = -framework OpenGL
 # Static Aqua Tk contains Objective-C categories required by its event loop.
 TK_GUI_LDFLAGS = -ObjC

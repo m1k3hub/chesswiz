@@ -40,6 +40,7 @@ SRC_CXX = \
 	tcl_base.cpp \
 	tcl_board.cpp \
 	tcl_compare.cpp \
+	tcl_credential.cpp \
 	tcl_cql.cpp \
 	tcl_cql6.cpp \
 	tcl_crosstable.cpp \

@@ -105,7 +105,8 @@ proc ::application::ai::applySettings {} {
 		set Settings(provider) ollama
 		set Settings(model) ""
 	}
-	loadKeys
+	# A locked or unavailable credential store must not stop startup.
+	if {[catch loadKeys err]} { puts stderr "Chesswiz: AI keys not loaded: $err" }
 
 	foreach key {provider model} {
 		set Config($key) [lindex [setting $key] 1]
@@ -192,19 +193,55 @@ proc ::application::ai::KeyFile {} {
 }
 
 
-# Read the key file into the provider (a dict provider -> key).
+# Linux retains the private file. Supported platforms must use the OS store.
+proc ::application::ai::CredentialStore {} {
+	return [expr {$::tcl_platform(platform) eq "windows" || $::tcl_platform(os) eq "Darwin"}]
+}
+
+proc ::application::ai::ReadKeyFile {} {
+	set file [KeyFile]
+	if {$file eq "" || ![file readable $file]} { return {} }
+	set chan [open $file r]
+	try { set data [read $chan] } finally { close $chan }
+	if {[catch {dict size $data}]} { error "invalid AI key file" }
+	return $data
+}
+
+proc ::application::ai::WriteKeyFile {keys} {
+	set file [KeyFile]
+	if {$file eq ""} { return }
+	file mkdir [file dirname $file]
+	set chan [open $file w 0600]
+	try { puts $chan $keys } finally { close $chan }
+	catch {file attributes $file -permissions 0600}
+}
+
 proc ::application::ai::loadKeys {} {
 	variable Keys
-
-	set file [KeyFile]
-	if {$file ne "" && [file readable $file]} {
-		catch {
-			set chan [open $file r]
-			set data [read $chan]
-			close $chan
-			if {[llength $data] % 2 == 0} { set Keys $data }
+	set loaded {}
+	if {[CredentialStore]} {
+		set loaded [ReadKeyFile]
+		set accounts [lsort -unique [concat [::ai::provider::credentialAccounts] [dict keys $loaded]]]
+		set stored {}
+		foreach provider $accounts {
+			set key [::scidb::sys::credential get Chesswiz $provider]
+			if {$key eq "" && [dict exists $loaded $provider]} {
+				set key [dict get $loaded $provider]
+				if {$key ne ""} { ::scidb::sys::credential set Chesswiz $provider $key }
+			}
+			if {$key ne ""} { dict set stored $provider $key }
 		}
+		# Only remove plaintext after every migration operation succeeded.
+		set file [KeyFile]
+		if {$file ne "" && [file exists $file]} { file delete $file }
+		set loaded $stored
+	} else {
+		# Retain the Linux behavior for missing or malformed legacy files.
+		set loaded $Keys
+		set file [KeyFile]
+		if {$file ne "" && [file readable $file]} { catch {set loaded [ReadKeyFile]} }
 	}
+	set Keys $loaded
 	if {[llength [info commands ::ai::provider::configure]]} {
 		::ai::provider::configure -keys $Keys
 	}
@@ -218,20 +255,21 @@ proc ::application::ai::key {provider} {
 }
 
 
-# Save (or with "" remove) the key of <provider>; the file is private.
+# Save (or with "" remove) the key of <provider> through the platform store.
 proc ::application::ai::setKey {provider key} {
 	variable Keys
 
 	set key [string trim $key]
-	if {$key eq ""} { dict unset Keys $provider } else { dict set Keys $provider $key }
-	set file [KeyFile]
-	if {$file ne ""} {
-		file mkdir [file dirname $file]
-		set chan [open $file w 0600]
-		puts $chan $Keys
-		close $chan
-		catch { file attributes $file -permissions 0600 }
-	}
+	set updated $Keys
+	if {$key eq ""} { dict unset updated $provider } else { dict set updated $provider $key }
+	if {[CredentialStore]} {
+		if {$key eq ""} {
+			::scidb::sys::credential delete Chesswiz $provider
+		} else {
+			::scidb::sys::credential set Chesswiz $provider $key
+		}
+	} else { WriteKeyFile $updated }
+	set Keys $updated
 	::ai::provider::configure -keys $Keys
 }
 
