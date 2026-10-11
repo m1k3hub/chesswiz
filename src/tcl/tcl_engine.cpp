@@ -102,6 +102,10 @@ public:
 
 	~EngineLog()
 	{
+#ifdef _WIN32
+		// Deliver pending output while the Tcl command objects are still alive.
+		m_stream.close();
+#endif
 		Tcl_DecrRefCount(m_cmd);
 		Tcl_DecrRefCount(m_arg);
 	}

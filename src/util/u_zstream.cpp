@@ -433,7 +433,7 @@ ZStream::ZStream(char const* filename, Type type, Mode mode)
 ZStream::~ZStream() throw()
 {
 	if (m_fp)
-		::fclose(m_fp);
+		::mstl_fclose(m_fp);
 
 	delete [] m_buffer;
 }
@@ -675,7 +675,7 @@ ZStream::close()
 
 	if (m_fp)
 	{
-		rc = ::fclose(m_fp);
+		rc = ::mstl_fclose(m_fp);
 		m_fp = 0;
 	}
 

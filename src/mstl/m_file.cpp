@@ -50,7 +50,7 @@ file::~file() throw()
 {
 	if (m_open && fileno(m_fp) > 2)
 	{
-		::fclose(m_fp);
+		::mstl_fclose(m_fp);
 		m_fp = 0;
 	}
 
@@ -163,7 +163,7 @@ file::reopen(char const* mode)
 	M_REQUIRE(is_open());
 
 	if (fileno(m_fp) > 2)
-		::fclose(m_fp);
+		::mstl_fclose(m_fp);
 
 	m_open = false;
 	m_fp = ::fopen(m_filename, mode);
@@ -181,7 +181,7 @@ file::close()
 
 	if (fileno(m_fp) > 2)
 	{
-		rc = ::fclose(m_fp);
+		rc = ::mstl_fclose(m_fp);
 		m_fp = 0;
 	}
 
@@ -262,7 +262,13 @@ file::set_line_buffered()
 
 	if (m_open)
 	{
+#ifdef _WIN32
+		// The CRT has no line buffering (_IOLBF means _IOFBF) and needs a
+		// size of at least 2; ostream::write flushes cookie streams per line.
+		if (::setvbuf(m_fp, 0, _IOLBF, BUFSIZ))
+#else
 		if (::setvbuf(m_fp, 0, _IOLBF, 0))
+#endif
 			M_RAISE("setvbuf() can't be honoured (fd=%d)", fileno(m_fp));
 	}
 
@@ -304,7 +310,7 @@ file::set_text()
 	{
 #if defined(_WIN32)
 
-		if (::setmode(fileno(m_fp), O_TEXT) == -1)
+		if (!::mstl_find_cookie(m_fp) && ::setmode(fileno(m_fp), O_TEXT) == -1)
 			M_RAISE("setmode() failed (fd=%d)", fileno(m_fp));
 
 #endif

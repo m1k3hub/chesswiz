@@ -97,6 +97,11 @@ ostream::write(char const* buffer, size_t size)
 	if (size > 0 && fwrite(buffer, 1, size, m_fp) < size)
 		setstate(ferror(m_fp) ? badbit : eofbit | failbit);
 
+#ifdef _WIN32
+	// The CRT's line buffering cannot invoke a cookie callback itself.
+	if (size && ::memchr(buffer, '\n', size) && ::mstl_find_cookie(m_fp))
+		flush();
+#endif
 	return *this;
 }
 
@@ -184,7 +189,7 @@ ostream::format(char const* fmt, ...)
 ostream&
 ostream::flush() throw()
 {
-	if (fflush(m_fp) == EOF)
+	if (::mstl_fflush(m_fp) == EOF)
 		setstate(feof(m_fp) ? eofbit | failbit : badbit);
 
 	return *this;

@@ -115,7 +115,7 @@ void
 File::flush()
 {
 	M_REQUIRE(isOpen());
-	::fflush(m_fp);
+	::mstl_fflush(m_fp);
 }
 
 
@@ -124,7 +124,7 @@ File::close()
 {
 	if (m_fp)
 	{
-		::fclose(m_fp);
+		::mstl_fclose(m_fp);
 		m_fp = 0;
 	}
 }

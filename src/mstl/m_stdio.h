@@ -107,47 +107,141 @@ struct cookie_io_functions_t
 	int (*close)(void*);
 };
 
-// Windows has no callback-backed FILE. A read-only stream is drained into a
-// temporary file (deleted on fclose) on the caller's thread, so the
-// callbacks may use Tcl; the close callback runs once the data is copied.
-// Write streams are still unsupported.
-inline FILE* fopencookie(void* cookie, const char* mode, cookie_io_functions_t io)
+// One shared registry across translation units; callbacks run on the caller's thread.
+struct mstl_cookie_file
 {
-	if (::strchr(mode, 'r') && !::strchr(mode, '+') && !::strchr(mode, 'w') && io.read)
-	{
-		char* path = ::_tempnam(0, "cw");
-		FILE* fp = path ? ::fopen(path, "w+bTD") : 0;
-		::free(path);
-		if (!fp)
-			return 0;
+	FILE* fp;
+	void* cookie;
+	cookie_io_functions_t io;
+	int64_t offset;
+	mstl_cookie_file* next;
+};
 
-		char buf[65536];
-		ssize_t n;
-		while ((n = io.read(cookie, buf, sizeof(buf))) > 0)
-		{
-			if (::fwrite(buf, 1, size_t(n), fp) != size_t(n))
-			{
-				n = -1;
-				break;
-			}
-		}
-		if (io.close)
-			io.close(cookie);
-		if (n < 0)
-		{
-			::fclose(fp);
-			errno = EIO;
-			return 0;
-		}
-		::rewind(fp);
-		return fp;
-	}
+inline mstl_cookie_file*& mstl_cookie_files()
+{
+	static mstl_cookie_file* head = 0;
+	return head;
+}
 
-	static bool const logged = (::fputs("Chesswiz: callback-backed output streams are unavailable on Windows\n", stderr), true);
-	(void)logged;
-	errno = ENOSYS;
+inline mstl_cookie_file* mstl_find_cookie(FILE* fp)
+{
+	for (mstl_cookie_file* entry = mstl_cookie_files(); entry; entry = entry->next)
+		if (entry->fp == fp) return entry;
 	return 0;
 }
+
+inline int mstl_fflush(FILE* fp)
+{
+	mstl_cookie_file* entry = mstl_find_cookie(fp);
+	if (!entry) return ::fflush(fp);
+	if (::fflush(fp) == EOF) return EOF;
+	int64_t end = ::_ftelli64(fp);
+	if (end < 0) return EOF;
+	if (end < entry->offset) { errno = ESPIPE; return EOF; }
+	if (::_fseeki64(fp, entry->offset, SEEK_SET)) return EOF;
+	char buf[65536];
+	int rc = 0;
+	while (entry->offset < end)
+	{
+		size_t size = size_t(end - entry->offset > int64_t(sizeof(buf))
+			? sizeof(buf) : end - entry->offset);
+		if (::fread(buf, 1, size, fp) != size)
+		{
+			errno = EIO;
+			rc = EOF;
+			break;
+		}
+		ssize_t n = entry->io.write(entry->cookie, buf, size);
+		if (n > 0 && size_t(n) <= size) entry->offset += n;
+		if (n != ssize_t(size))
+		{
+			errno = EIO;
+			rc = EOF;
+			break;
+		}
+	}
+	int saved = errno;
+	if (::_fseeki64(fp, end, SEEK_SET)) return EOF;
+	if (rc) errno = saved;
+	return rc;
+}
+
+inline int mstl_fclose(FILE* fp)
+{
+	mstl_cookie_file* entry = mstl_find_cookie(fp);
+	if (!entry) return ::fclose(fp);
+	int rc = mstl_fflush(fp);
+	int saved = errno;
+	if (entry->io.close && entry->io.close(entry->cookie) != 0 && !rc)
+	{
+		rc = EOF;
+		saved = errno;
+	}
+	mstl_cookie_file** link = &mstl_cookie_files();
+	while (*link != entry) link = &(*link)->next;
+	*link = entry->next;
+	::free(entry);
+	if (::fclose(fp) == EOF && !rc) return EOF;
+	if (rc) errno = saved;
+	return rc;
+}
+
+// Read cookies are drained at open; write cookies are drained at explicit flush/close.
+inline FILE* fopencookie(void* cookie, const char* mode, cookie_io_functions_t io)
+{
+	bool writing = ::strchr(mode, 'w') || ::strchr(mode, '+') || ::strchr(mode, 'a');
+	if ((writing && !io.write) || (!writing && (!::strchr(mode, 'r') || !io.read)))
+	{
+		errno = EINVAL;
+		return 0;
+	}
+	char* path = ::_tempnam(0, "cw");
+	FILE* fp = path ? ::fopen(path, "w+bTD") : 0;
+	::free(path);
+	if (!fp) return 0;
+	if (writing)
+	{
+		mstl_cookie_file* entry = static_cast<mstl_cookie_file*>(::malloc(sizeof(mstl_cookie_file)));
+		if (!entry)
+		{
+			::fclose(fp);
+			errno = ENOMEM;
+			return 0;
+		}
+		entry->fp = fp;
+		entry->cookie = cookie;
+		entry->io = io;
+		entry->offset = 0;
+		entry->next = mstl_cookie_files();
+		mstl_cookie_files() = entry;
+		return fp;
+	}
+	char buf[65536];
+	ssize_t n;
+	while ((n = io.read(cookie, buf, sizeof(buf))) > 0)
+	{
+		if (::fwrite(buf, 1, size_t(n), fp) != size_t(n))
+		{
+			n = -1;
+			break;
+		}
+	}
+	if (io.close) io.close(cookie);
+	if (n < 0)
+	{
+		::fclose(fp);
+		errno = EIO;
+		return 0;
+	}
+	::rewind(fp);
+	return fp;
+}
+#endif
+
+#if !defined(_WIN32) && !defined(_mstl_stdio_wrappers_included)
+# define _mstl_stdio_wrappers_included
+inline int mstl_fflush(FILE* fp) { return ::fflush(fp); }
+inline int mstl_fclose(FILE* fp) { return ::fclose(fp); }
 #endif
 
 // vi:set ts=3 sw=3:
