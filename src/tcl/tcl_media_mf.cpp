@@ -171,8 +171,11 @@ seconds(REFGUID type, bool duration)
 	PropVariantInit(&v);
 	HRESULT hr = duration ? Player->GetDuration(type, &v) : Player->GetPosition(type, &v);
 	double result = -1.0;
+	// The position comes as VT_I8, the duration as VT_UI8.
 	if (SUCCEEDED(hr) && v.vt == VT_I8)
 		result = double(v.hVal.QuadPart)/1e7;
+	else if (SUCCEEDED(hr) && v.vt == VT_UI8)
+		result = double(v.uhVal.QuadPart)/1e7;
 	PropVariantClear(&v);
 	return result;
 }
