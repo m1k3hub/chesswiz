@@ -252,7 +252,11 @@ main(int argc, char* argv[])
 		char* script = 0;
 		int first = 1;
 
-		if (argc > 1 && argv[1][0] != '-' && isScript(argv[1]))
+		if (argc > 1 && strcmp(argv[1], "-encoding") == 0)
+		{
+			// Tk's own "-encoding name script" form: leave it to Tk_Main.
+		}
+		else if (argc > 1 && argv[1][0] != '-' && isScript(argv[1]))
 		{
 			script = argv[1];
 			first = 2;

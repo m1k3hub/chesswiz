@@ -20,6 +20,8 @@ jobs:
       - run: ./configure
       - run: make -C src -j4
       - run: make -C tcl
+      # The app tests run against the installed share files.
+      - run: sudo make install
       - run: xvfb-run -a make -C tests tcl
       # The outer Xvfb supplies DISPLAY; suppress the Makefile's nested Xvfb.
       - run: xvfb-run -a make -C tests app-tcl XVFB_RUN=
