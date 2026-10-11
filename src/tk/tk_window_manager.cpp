@@ -796,7 +796,24 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 	{
 		Rect result;
 
-#if !defined(_WIN32) && !defined(__APPLE__) && !defined(__MacOSX__)
+#if defined(__WIN32__)
+		// Border and title bar of the wrapper window Tk puts around a
+		// toplevel; same order as _NET_FRAME_EXTENTS: left right top bottom.
+		Tk_MakeWindowExist(tkwin);
+		HWND hwnd = GetParent(TkWinGetHWND(Tk_WindowId(tkwin)));
+		DWORD style = hwnd ? DWORD(GetWindowLongW(hwnd, GWL_STYLE)) : WS_OVERLAPPEDWINDOW;
+		DWORD exStyle = hwnd ? DWORD(GetWindowLongW(hwnd, GWL_EXSTYLE)) : 0;
+		RECT frame = { 0, 0, 0, 0 };
+
+		if (AdjustWindowRectEx(&frame, style, FALSE, exStyle))
+		{
+			result.left = -frame.left;
+			result.right = frame.right;
+			result.width = -frame.top;
+			result.height = frame.bottom;
+		}
+		setResult(ti, result);
+#elif !defined(__APPLE__) && !defined(__MacOSX__)
 		if (!m_extents.isEmpty())
 			setResult(ti, m_extents);
 #else

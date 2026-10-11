@@ -103,6 +103,8 @@ OPENGL_LIBS =
 # application manifest (UTF-8 code page, common controls v6).
 TK_RC_DIR = $(addsuffix /tk-rc,$(patsubst -L%,%,$(filter -L%,$(TK_LIBRARY))))
 TK_RES = win/chesswiz.res
+# A GUI program: no console window (stderr goes nowhere; see the log files).
+TK_GUI_LDFLAGS = -Wl,--subsystem,windows
 else
 PLATFORM_LIBS = -lpthread -lfontconfig -lpng -lm
 OPENGL_LIBS = -lGL -lGLU
@@ -496,7 +498,7 @@ $(TCL_PROGRAM): tclscidb.o $(TCL_LIBS) $(filter %.a,$(ZLIB_LIB)) ../Makefile.in
 
 $(TK_PROGRAM): tkscidb.o $(TK_RES) $(LIBS) $(TCL_LIBS) $(TK_LIBS) ../Makefile.in
 	@echo "Building $(TK_PROGRAM)"
-	@$(CXX) -o $@ $< $(TK_RES) $(LDFLAGS) $(PROFILING) $(ALL_TK_LIBS) $(ALL_LIBS)
+	@$(CXX) -o $@ $< $(TK_RES) $(TK_GUI_LDFLAGS) $(LDFLAGS) $(PROFILING) $(ALL_TK_LIBS) $(ALL_LIBS)
 
 win/chesswiz.res: win/chesswiz.rc win/chesswiz.manifest ../icons/chesswiz.ico
 	@echo "Compiling $<"

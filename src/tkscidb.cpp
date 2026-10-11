@@ -107,6 +107,7 @@ init(Tcl_Interp* ti)
 #ifdef _WIN32
 
 # include <windows.h>
+# include <io.h>
 # include <string.h>
 
 static bool
@@ -198,6 +199,37 @@ registerFonts()
 	FindClose(h);
 }
 
+
+// A GUI program has no stdout/stderr unless started from a console. Send
+// them to %LOCALAPPDATA%\\Chesswiz\\chesswiz.log then, so Tcl gets its
+// stdout/stderr channels and the log output isn't lost (spec D7).
+static void
+redirectStdio()
+{
+	HANDLE err = GetStdHandle(STD_ERROR_HANDLE);
+
+	if (err && err != INVALID_HANDLE_VALUE)
+		return;
+
+	char const* base = getenv("LOCALAPPDATA");
+	if (!base)
+		return;
+
+	char path[MAX_PATH + 64];
+	snprintf(path, sizeof(path), "%s\\Chesswiz", base);
+	CreateDirectoryA(path, 0);
+	strcat(path, "\\chesswiz.log");
+
+	if (!freopen(path, "w", stderr))
+		return;
+	setvbuf(stderr, 0, _IONBF, 0);
+	if (freopen(path, "a", stdout))
+		setvbuf(stdout, 0, _IONBF, 0);
+
+	SetStdHandle(STD_ERROR_HANDLE, HANDLE(_get_osfhandle(_fileno(stderr))));
+	SetStdHandle(STD_OUTPUT_HANDLE, HANDLE(_get_osfhandle(_fileno(stdout))));
+}
+
 #endif
 
 
@@ -205,6 +237,7 @@ int
 main(int argc, char* argv[])
 {
 #ifdef _WIN32
+	redirectStdio();
 	setTclLibrary();
 	registerFonts();
 
