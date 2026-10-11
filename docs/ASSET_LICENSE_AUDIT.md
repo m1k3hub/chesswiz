@@ -14,6 +14,31 @@ the licence is unknown) · **Replace** (licence forbids our use, or a third part
 - OS logos and DigifaceDigits are deleted. They were unused, so no replacement was needed.
 - The Fritz set, themes and textures are renamed Club, with newly generated wood textures. Old settings are migrated. The piece outlines remain Gorgonian's GFritz design (freeware made for BabasChess).
 
+## Done (2026-10-11): reproducible asset clean-up
+
+- **Board textures:** all 287 shipped JPG/PNG/GIF files are original procedural
+  Chesswiz artwork under the project's GPL-2 licence. `scripts/generate-textures.py`
+  is the source: seeded numpy noise and rings for wood, turbulence for marble,
+  and geometric/noise patterns for misc. Names, formats, dimensions and theme
+  palettes are preserved; no textures or theme references needed deletion.
+  This supersedes the ambientCG replacements described below.
+- **Flags:** all 289 PNGs are rebuilt by `scripts/generate-flags.sh` from
+  flag-icons **v7.5.0** (MIT), with the archive pinned by SHA256 before extraction.
+  The complete MIT notice is in `tcl/flags/LICENSE` and embedded in each MIT PNG
+  (so the existing PNG-only install target carries it); the per-file mapping is in
+  `tcl/flags/SOURCES.txt`. Historic flags and AIR/EAR/FID/NET/SEA/SPC/ANY/UNK
+  are original simplified drawings (GPL-2), including a neutral pawn for FID.
+  Tibet is drawn separately rather than mapped to China. Existing names and
+  dimensions are preserved.
+- **Tip-of-the-day:** all 29 `Motive-*.png` images are freshly rendered from Noto
+  Color Emoji, preserving names and dimensions. `scripts/generate-motives.py`
+  records each glyph and pins the font SHA256; `tcl/images/README` records the
+  font package, artwork licence (Apache-2.0) and font licence (OFL-1.1).
+- Visual previews and validation details: `tests/tmp-app/assets/report.md` and
+  the three contact sheets beside it. Work performed and tests run in the
+  isolated `build/asset-license-cleanup` worktree.
+- Splash screen (`tcl/splash.tcl`): the old picture (unknown background, IconDrawer knight) is replaced by a new one generated with FLUX.1-schnell (Black Forest Labs, Apache-2.0) through the Hugging Face inference API, seed 37; prompt and script in `icons/splash/generate.py`, full-size original `icons/splash/splash-flux-seed37.png`. Title in Abel (OFL). Purely machine-generated images are generally not copyrightable, so others may reuse it.
+
 ## Must replace (original findings)
 
 | Asset | Where | Why |
@@ -32,9 +57,9 @@ the licence is unknown) · **Replace** (licence forbids our use, or a third part
 | virtualpieces.net sets (Peter Wong) | `tcl/pieces/virtual.tcl` and related | `COPYRIGHT`: permission was given by email "for the use in Scidb", so it doesn't automatically cover Chesswiz. |
 | "All rights reserved" chess fonts | `ScidbChessCheq` (Atech 1991), `ScidbChessChess7` (1999), `ScidbChessOle`/`ScidbSymbolOle` (ChessOle!, Frank David 1993), `ScidbChessSmart` (Christoph Wirth 1992), `ScidbCircled` (Roger White 1998, "see .txt for terms": that .txt is **missing**), `BelfastDigits*` (tibotanguy 2008) | Most chess fonts of that era were freeware, and freeware doesn't mean redistributable or modifiable. Find each one's original terms. |
 | Chess fonts with no notice in the file | Adventurer, Alpha, Aquarium, Berlin, Bookup, Cases, Celtic, CMF, Condal, Cube, GoodCompanion, Habsburg, Kingdom, Leipzig, Lucena, Magnetic, Marroquin, Maya, Mediaeval, Merida, Military, Motif, OldStyle, Segoe, Standard, Traveller, USCF, Winboard, Zurich; `ScidbDiagram*`, `ScidbSymbolS1/T1/Traveller`; `Abell-Cond-Bold`, `DesignerBlockDigits`, `Digital-*Digits`, `finalnew` (Final Frontier) | Many are by Armando Marroquin, Alpine/Eric Bentzen and others (freeware). `tcl/pieces/*.tcl` are Gregor Cramer's conversions of these designs, so the copyright in the design still applies. "Segoe" and "USCF" are also third-party names. |
-| Board textures | `tcl/textures/{dark,lite,tile}/{marble,misc,wood}` (≈280 jpg/png/gif) | No source recorded anywhere. Names such as `Arena-Blue.png` (Arena GUI?) and `Diamond_Ebony_Marble.15194542_std.jpg` / `11932818.jpg` (stock-photo IDs) are the most suspect. |
-| Flags | `tcl/flags/` | `readme`: "downloaded from http://addgadget.com/clock/", with additions "found in the internet". No licence. (The about box also credits famfamfam flags, which are free for any use.) |
-| Remaining tip-of-the-day images | `tcl/images/Motive-*` (animals, flowers, etc.) | No source recorded. |
+| Board textures | `tcl/textures/{dark,lite,tile}/{marble,misc,wood}` (287 JPG/PNG/GIF) | **Done (2026-10-11):** original procedural GPL-2 artwork; see Done and `scripts/generate-textures.py`. |
+| Flags | `tcl/flags/` | **Done (2026-10-11):** pinned flag-icons (MIT) and original GPL-2 drawings; see Done and `tcl/flags/LICENSE`. |
+| Remaining tip-of-the-day images | `tcl/images/Motive-*` (animals, flowers, etc.) | **Done (2026-10-11):** all 29 freshly rendered from Noto Color Emoji; see Done and `tcl/images/README`. |
 | Cursors | `tcl/cursor/` | No source recorded; probably Gregor Cramer's own. |
 | Embedded UI icons | `tcl/icons.tcl`, `tcl/app-db-icons.tcl` (hundreds of base64 images) | No source recorded. Many look like stock icon sets (Crystal, Oxygen, famfamfam: LGPL/CC). Needs a pass. |
 | Font credits | `tcl/info.tcl` about box | Names the designers: Marroquin, Bentzen, Cowderoy, Leschemelle, Scott and Frank David (enpassant.dk freeware); Gorgonian (BabasChess); Brown (Good Companion); Poisson (Phoenix); Burnett (GPL); Eran Karu (PyChess, GPL); Maurizio Monge (Eyes, Fantasy, Skulls, Spatial). Check each site's terms. |
@@ -84,9 +109,9 @@ Added 2026-10-10: **Chessnut** (Alexis Luengas, Apache-2.0) and **RhosGFX** (CC0
 
 Other ready replacements with clear licences (lichess list): cburnett/mono (GPL-2+), merida (GPL-2+), fantasy/spatial/celtic (MIT), staunton (MIT), chessnut (Apache-2.0), rhosgfx (CC0), shapes (CC BY-SA 4.0), kiwen-suwi, Firi, totoy, papercut (CC BY 4.0). Avoid the many CC BY-NC-SA sets (horsey, california, cardinal, ...): non-commercial.
 
-### Board textures: **Replaced (2026-10-10)**
+### Board textures: **Replaced (2026-10-11)**
 
-All 287 files now hold CC0 colour maps from ambientCG, resized to the old dimensions and recoloured to the old average colour, under the old file names, so themes and saved settings are unchanged. The provenance of each file is in `tcl/textures/SOURCES.txt`. The old images remain in git history.
+The initial 2026-10-10 replacement used ambientCG CC0 colour maps. All 287 files now hold original procedural artwork generated by `scripts/generate-textures.py` (GPL-2). Names, sizes and theme palettes are unchanged; see `tcl/textures/SOURCES.txt`. The old images remain in git history.
 
 Original finding:
 
@@ -104,7 +129,7 @@ The metadata only names Photoshop, GIMP and camera models. Replace with CC0 text
 ### Flags
 
 - The 16×11 flags embedded in `tcl/utils/countries.tcl` are famfamfam's: "available for free use for any purpose with no requirement for attribution". **Keep.**
-- The 72×72 set in `tcl/flags/` (289 PNGs) came from addgadget.com with no licence. **Replaced (2026-10-10)**: rendered from flag-icons (MIT), Noto emoji (Apache-2.0) and our own drawings; see `tcl/flags/SOURCES.txt`. The old FIDE-logo flag (FID, a trademark) is now a neutral pawn.
+- The 72×72 set in `tcl/flags/` (289 PNGs) came from addgadget.com with no licence. **Replaced (2026-10-11)**: reproducibly rendered from pinned flag-icons v7.5.0 (MIT) and our own drawings (GPL-2); see `tcl/flags/SOURCES.txt`. The old FIDE-logo flag (FID, a trademark) is now a neutral pawn.
 
 ### Embedded UI icons (`tcl/icons.tcl`, `tcl/app-db-icons.tcl`, 520 images)
 

@@ -4,3 +4,24 @@ font, Copyright Google Inc., licensed under the Apache License, Version 2.0
 
 Scidb-Logo-128.png is the Chesswiz icon (icons/chesswiz.svg): the knight is by
 Colin M. L. Burnett (GPL-2+ / BSD / GFDL), the composition is GPL-2+.
+
+Rebuilding the tip-of-the-day pictures:
+  python3 scripts/generate-motives.py [path/to/NotoColorEmoji.ttf]
+All 29 Motive images are mapped explicitly to Unicode glyphs in that script.
+The default font is /usr/share/fonts/truetype/noto/NotoColorEmoji.ttf,
+from Ubuntu/Debian fonts-noto-color-emoji 2.051-1build1.
+SHA256: 9fd0a3d0ce84d77e3185dfbae77bd1abf3926aa49a032e354d076c4f17151f10
+Rendering: Pillow 12.2.0, 109 px bitmap strike, centred on transparent 180x180
+canvas, Lanczos resized to each original image size.
+
+Noto image resources are Apache-2.0; the font container is SIL OFL-1.1.
+Upstream licence documentation:
+https://github.com/googlefonts/noto-emoji#license
+Apache licence text: https://www.apache.org/licenses/LICENSE-2.0
+Font licence: https://github.com/googlefonts/noto-emoji/blob/main/LICENSE
+Copyright 2013-2017 Google Inc. and Arjen Nienhuis.
+The font is a development dependency and is not redistributed here.
+
+Contact sheets for all three asset groups:
+  python3 scripts/generate-contact-sheets.py
+Outputs: tests/tmp-app/assets/{textures,flags,motives}-contact-sheet.png
