@@ -18,7 +18,7 @@
 
 #include "tk_session_manager.h"
 
-#if !defined(__WIN32__) && !defined(__MacOSX__)
+#if !defined(__WIN32__) && !defined(__APPLE__)
 
 #include <tk.h>
 

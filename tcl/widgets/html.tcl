@@ -1581,7 +1581,7 @@ switch [tk windowingsystem] {
 		bind Html <MouseWheel> {+ break }
 	}
 	aqua {
-		bind Html <MouseWheel> [namespace code [list Scroll %W [expr {-(%D)}] %s]]
+		bind Html <MouseWheel> "[namespace current]::Scroll %W \[expr {-(%D)}\] %s"
 		bind Html <MouseWheel> {+ break }
 	}
 	x11 {

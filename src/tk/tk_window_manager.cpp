@@ -55,13 +55,17 @@ struct Rect
 # include <tkWinInt.h>
 #endif
 
+#ifdef __APPLE__
+extern "C" void chesswizAquaGeometry(Tk_Window, int, int*);
+#endif
+
 static Tcl_Command tk_cmd = 0;
 
 
 //#define GET_EXTENTS_IMMEDIATELY
 
 
-#if !defined(__WIN32__) && !defined(__MacOSX__)
+#if !defined(__WIN32__) && !defined(__APPLE__)
 
 # include <X11/Xlib.h>
 # include <X11/Xutil.h>
@@ -737,14 +741,14 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 	}
 	else if (strcasecmp(subcmd, "startup") == 0)
 	{
-#if !defined(__WIN32__) && !defined(__MacOSX__)
+#if !defined(__WIN32__) && !defined(__APPLE__)
 		getDefaultExtents(m_extents);
 		requestDesktopProperties(ti, tkwin);
 #endif
 	}
 	else if (strcasecmp(subcmd, "desktop") == 0)
 	{
-#if !defined(__WIN32__) && !defined(__MacOSX__)
+#if !defined(__WIN32__) && !defined(__APPLE__)
 		setCurrentDesktop(tkmain, getDesktop(tkwin));
 #endif
 	}
@@ -752,7 +756,7 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 	{
 		bool result = true;
 
-#if !defined(__WIN32__) && !defined(__MacOSX__)
+#if !defined(__WIN32__) && !defined(__APPLE__)
 		int desktop1 = getCurrentDesktop(Tk_Display(tkwin));
 		int desktop2 = getDesktop(tkwin);
 
@@ -778,8 +782,11 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 			result.width = info.rcWork.right - info.rcWork.left;
 			result.height = info.rcWork.bottom - info.rcWork.top;
 		}
-#elif defined(__APPLE__) || defined(__MacOSX__)
-		// Window-manager work areas are unavailable until the native Mac port.
+#elif defined(__APPLE__)
+		int geometry[4] = {};
+		chesswizAquaGeometry(tkwin, 1, geometry);
+		result.left = geometry[0]; result.right = geometry[1];
+		result.width = geometry[2]; result.height = geometry[3];
 #else
 		Display* display = Tk_Display(tkwin);
 
@@ -813,16 +820,20 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 			result.height = frame.bottom;
 		}
 		setResult(ti, result);
-#elif !defined(__APPLE__) && !defined(__MacOSX__)
+#elif !defined(__APPLE__)
 		if (!m_extents.isEmpty())
 			setResult(ti, m_extents);
 #else
+		int geometry[4] = {};
+		chesswizAquaGeometry(tkwin, 0, geometry);
+		result.left = geometry[0]; result.right = geometry[1];
+		result.width = geometry[2]; result.height = geometry[3];
 		setResult(ti, result);
 #endif
 
 		return TCL_OK;
 	}
-#if !defined(__WIN32__) && !defined(__MacOSX__)
+#if !defined(__WIN32__) && !defined(__APPLE__)
 	else if (	strcasecmp(subcmd, "frameless") == 0
 				|| strcasecmp(subcmd, "dialog") == 0
 				|| strcasecmp(subcmd, "normal") == 0
@@ -914,6 +925,18 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 			Tcl_DecrRefCount(args[i]);
 		if (result != TCL_OK)
 			return result;
+#elif defined(__APPLE__)
+		bool plain = strcasecmp(subcmd, "frameless") == 0 || strcasecmp(subcmd, "splash") == 0
+		    || strcasecmp(subcmd, "notification") == 0 || strcasecmp(subcmd, "menu") == 0;
+		const char* style = plain ? "plain" : strcasecmp(subcmd, "normal") == 0 ? "document" : "floating";
+		const char* attributes = plain ? "" : strcasecmp(subcmd, "normal") == 0 ? "standardDocument" : "standardFloating";
+		Tcl_Obj* args[] = { Tcl_NewStringObj("::tk::unsupported::MacWindowStyle", -1),
+		    Tcl_NewStringObj("style", -1), Tcl_NewStringObj(path, -1),
+		    Tcl_NewStringObj(style, -1), Tcl_NewStringObj(attributes, -1) };
+		for (unsigned i = 0; i < 5; ++i) Tcl_IncrRefCount(args[i]);
+		int result = Tcl_EvalObjv(ti, 5, args, TCL_EVAL_GLOBAL);
+		for (unsigned i = 0; i < 5; ++i) Tcl_DecrRefCount(args[i]);
+		if (result != TCL_OK) return result;
 #endif
 	}
 
@@ -936,7 +959,7 @@ tk::window_manager_init(Tcl_Interp* ti)
 	static bool logged = false;
 	if (!logged)
 	{
-		fprintf(stderr, "Chesswiz: native window manager; X11 desktop, frame extents, leaders and synchronization unavailable\n");
+		fprintf(stderr, "Chesswiz: native window manager; X11 desktop, leaders and synchronization unavailable\n");
 		logged = true;
 	}
 #endif

@@ -29,7 +29,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#if defined(__unix__) && !defined(__MacOSX__)
+#if defined(__unix__) && !defined(__APPLE__)
 
 #ifdef override
 # undef override

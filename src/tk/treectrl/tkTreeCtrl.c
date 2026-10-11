@@ -19,6 +19,10 @@
  */
 
 #include "tkTreeCtrl.h"
+#ifdef __APPLE__
+#include <ApplicationServices/ApplicationServices.h>
+#import <ScreenCaptureKit/ScreenCaptureKit.h>
+#endif
 #include <stdint.h>
 
 #ifdef WIN32
@@ -4206,80 +4210,71 @@ LoupeCmd(
 #endif /* WIN7 */
 	ReleaseDC(hwnd, hdc);
 #elif defined(MAC_OSX_TK)
-	/*
-	 * Adapted from John Anon's ScreenController demo code.
-	 */
+	/* Capture a bounded image instead of accessing the removed framebuffer API. */
 	{
-	int xx, yy;
-	unsigned char *screenBytes;
-	int bPerPixel, byPerRow, byPerPixel;
-
-	/* Gets all the screen info: */
-	CGDisplayHideCursor(kCGDirectMainDisplay);
-	bPerPixel  = CGDisplayBitsPerPixel(kCGDirectMainDisplay);
-	byPerRow   = CGDisplayBytesPerRow(kCGDirectMainDisplay);
-	byPerPixel = bPerPixel / 8;
-
-	screenBytes = (unsigned char *)CGDisplayBaseAddress(kCGDirectMainDisplay);
-
+	__block CGImageRef image = NULL;
+	__block BOOL finished = NO, cancelled = NO;
+	if (@available(macOS 14.0, *)) {
+	    [SCShareableContent getShareableContentExcludingDesktopWindows:NO onScreenWindowsOnly:YES
+	      completionHandler:^(SCShareableContent *content, NSError *error) {
+	        SCDisplay *display = content.displays.firstObject;
+	        if (!display || error) {
+	            dispatch_async(dispatch_get_main_queue(), ^{ finished = YES; });
+	            return;
+	        }
+	        SCContentFilter *filter = [[SCContentFilter alloc] initWithDisplay:display excludingWindows:@[]];
+	        SCStreamConfiguration *config = [[SCStreamConfiguration alloc] init];
+	        config.sourceRect = CGRectMake(grabX, grabY, grabW, grabH);
+	        config.width = grabW;
+	        config.height = grabH;
+	        [SCScreenshotManager captureImageWithFilter:filter configuration:config
+	          completionHandler:^(CGImageRef result, NSError *captureError) {
+	            CGImageRef retained = result ? CGImageRetain(result) : NULL;
+	            dispatch_async(dispatch_get_main_queue(), ^{
+	                if (cancelled && retained) CGImageRelease(retained);
+	                else image = retained;
+	                finished = YES;
+	            });
+	          }];
+	        [config release];
+	        [filter release];
+	      }];
+	    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
+	    while (!finished && [deadline timeIntervalSinceNow] > 0)
+	        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+	            beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+	    cancelled = !finished;
+	}
+	CGContextRef context;
+	CGColorSpaceRef colors;
+	if (!image) {
+	    Tcl_SetResult(interp, "screen capture unavailable (check Screen Recording permission)", TCL_STATIC);
+	    return TCL_ERROR;
+	}
 	pixelPtr = (unsigned char *) Tcl_Alloc(grabW * grabH * 4);
-	memset(pixelPtr, 0, (grabW * grabH * 4));
-
-	photoBlock.pixelPtr  = pixelPtr;
-	photoBlock.width     = grabW;
-	photoBlock.height    = grabH;
-	photoBlock.pitch     = grabW * 4;
+	colors = CGColorSpaceCreateDeviceRGB();
+	context = CGBitmapContextCreate(pixelPtr, grabW, grabH, 8, grabW * 4,
+	    colors, kCGImageAlphaPremultipliedLast);
+	if (!context) {
+	    CGColorSpaceRelease(colors);
+	    CGImageRelease(image);
+	    Tcl_Free((char *)pixelPtr);
+	    Tcl_SetResult(interp, "cannot allocate screen capture bitmap", TCL_STATIC);
+	    return TCL_ERROR;
+	}
+	CGContextDrawImage(context, CGRectMake(0, 0, grabW, grabH), image);
+	CGContextRelease(context);
+	CGColorSpaceRelease(colors);
+	CGImageRelease(image);
+	photoBlock.pixelPtr = pixelPtr;
+	photoBlock.width = grabW;
+	photoBlock.height = grabH;
+	photoBlock.pitch = grabW * 4;
 	photoBlock.pixelSize = 4;
 	photoBlock.offset[0] = 0;
 	photoBlock.offset[1] = 1;
 	photoBlock.offset[2] = 2;
 	photoBlock.offset[3] = 3;
-
-	for (yy = 0; yy < grabH; yy++) {
-		unsigned long newPixel = 0;
-		unsigned long stepSrc = (grabY + yy) * byPerRow;
-		unsigned long stepDest = yy * photoBlock.pitch;
-
-		for (xx = 0; xx < grabW; xx++) {
-			if (bPerPixel == 16) {
-				unsigned short thisPixel;
-
-				thisPixel = *((unsigned short*)(screenBytes + stepSrc
-									  + ((grabX + xx) * byPerPixel)));
-#ifdef WORDS_BIGENDIAN
-				/* Transform from 0xARGB (1555) to 0xR0G0B0A0 (4444) */
-				newPixel = (((thisPixel & 0x8000) >> 15) * 0xF8) | /* A */
-					((thisPixel & 0x7C00) << 17) | /* R */
-					((thisPixel & 0x03E0) << 14) | /* G */
-					((thisPixel & 0x001F) << 11);  /* B */
-#else
-				/* Transform from 0xARGB (1555) to 0xB0G0R0A0 (4444) */
-				newPixel = (((thisPixel & 0x8000) >> 15) * 0xF8) | /* A */
-					((thisPixel & 0x7C00) << 11) | /* R */
-					((thisPixel & 0x03E0) << 14) | /* G */
-					((thisPixel & 0x001F) << 17);  /* B */
-#endif
-			} else if (bPerPixel == 32) {
-				unsigned long thisPixel;
-
-				thisPixel = *((unsigned long*)(screenBytes + stepSrc
-									  + ((grabX + xx) * byPerPixel)));
-
-#ifdef WORDS_BIGENDIAN
-				/* Transformation is from 0xAARRGGBB to 0xRRGGBBAA */
-				newPixel = ((thisPixel & 0xFF000000) >> 24) |
-					((thisPixel & 0x00FFFFFF) << 8);
-#else
-				/* Transformation is from 0xAARRGGBB to 0xBBGGRRAA */
-				newPixel = (thisPixel & 0xFF00FF00) |
-					((thisPixel & 0x00FF0000) >> 16) |
-					((thisPixel & 0x000000FF) << 16);
-#endif
-			}
-			*((unsigned int *)(pixelPtr + stepDest + xx * 4)) = newPixel;
-		}
-	}
-	CGDisplayShowCursor(kCGDirectMainDisplay);
 	}
 #else
 	{

@@ -211,7 +211,7 @@ static Tk_ObjCustomOption paddingOption =
 };
 
 
-#if defined(__MacOSX__)
+#if defined(__APPLE__)
 # define NORMAL_BG	"systemWindowBody"
 #elif defined(__WIN32__)
 # define NORMAL_BG	"SystemButtonFace"
@@ -1136,6 +1136,8 @@ DisplayTabs(ClientData clientData)	// Information about window
 
 #ifdef TK_NO_DOUBLE_BUFFERING
 
+	Tk_Fill3DRectangle(tkwin, Tk_WindowId(tkwin), nb->background, x, y, width, height, 0, TK_RELIEF_FLAT);
+#if !defined(__APPLE__)
 	XClearArea(	Tk_Display(tkwin),
 					Tk_WindowId(tkwin),
 					x,
@@ -1144,7 +1146,8 @@ DisplayTabs(ClientData clientData)	// Information about window
 					height,
 					False);
 
-	DrawTabs(nb, pixmap, x, y, width, height);
+#endif
+	DrawTabs(nb, Tk_WindowId(tkwin), x, y, width, height);
 
 #else
 	{
@@ -1227,6 +1230,8 @@ DisplayNotebook(ClientData clientData)	// Information about window
 #else
 	pixmap = Tk_WindowId(tkwin);
 
+	Tk_Fill3DRectangle(tkwin, Tk_WindowId(tkwin), nb->background, x, y, width, height, 0, TK_RELIEF_FLAT);
+#if !defined(__APPLE__)
 	XClearArea(	Tk_Display(tkwin),
 					Tk_WindowId(tkwin),
 					x,
@@ -1234,6 +1239,7 @@ DisplayNotebook(ClientData clientData)	// Information about window
 					width,
 					height,
 					False);
+#endif
 #endif
 
 	// Redraw the widget's background and border.

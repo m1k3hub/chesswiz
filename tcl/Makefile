@@ -20,8 +20,15 @@ TKPROGRAM ?= tk$(PROGRAM)$(SUFFIX)
 SCRIPT = $(PROGRAM)$(SUFFIX)
 ifeq ($(TARGET_WINDOWS),yes)
 DND_PLATFORM = windows
+else ifeq ($(TARGET_MACOS),yes)
+DND_PLATFORM = macosx
 else
 DND_PLATFORM = unix
+endif
+DND_SCRIPTS = dnd/tkdnd_$(DND_PLATFORM).tcl
+ifeq ($(TARGET_MACOS),yes)
+# Cocoa adapters reuse the generic target-state routines from the Unix Tcl code.
+DND_SCRIPTS = dnd/tkdnd_unix.tcl dnd/tkdnd_macosx.tcl
 endif
 ARCH = arch-scidb
 
@@ -65,7 +72,7 @@ SOURCES = \
 	utils/clipboard.tcl \
 	utils/trash.tcl \
 	dnd/tkdnd.tcl \
-	dnd/tkdnd_$(DND_PLATFORM).tcl \
+	$(DND_SCRIPTS) \
 	dialogs/fileselectionbox.tcl \
 	dialogs/help.tcl \
 	dialogs/tip-of-the-day.tcl \
@@ -713,7 +720,7 @@ $(SCRIPT): $(SOURCES) Makefile ../Makefile.in
 	@echo "Building $(SCRIPT)"
 	@tmp="$(SCRIPT).tmp.$$$$"; \
 	trap 'rm -f "$$tmp"' EXIT INT TERM HUP; \
-	for f in $(SOURCES); do cat "$$f"; echo; done | sed                  \
+	for f in $(SOURCES); do cat "$$f"; echo; done | LC_ALL=C sed                  \
 		-e 's/# vi:set ts=3 sw=3:/update idletasks/'        \
 		-e 's#%SHAREDIR%#$(DATADIR)#g'                      \
 		-e 's#%ENGINESDIR%#$(ENGINESDIR)#g'                 \

@@ -21,7 +21,7 @@
 #   include "tk.h"
 #endif
 #if !defined(_WIN32)
-#   if defined(MAC_OSX_TK)
+#   if defined(__APPLE__) || defined(MAC_OSX_TK)
 #	include "tkMacOSXPort.h"
 #   else
 #	include "tkUnixPort.h"

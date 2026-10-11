@@ -14,6 +14,10 @@ include ../../../Makefile.in
 
 .SUFFIXES: .c
 
+ifeq ($(TARGET_MACOS),yes)
+CFLAGS += -x objective-c -DMAC_TK_COCOA
+endif
+
 INCL_PRE		= -I.
 INCL_POST	= -I../tcl$(TCL_VERSION) -I../tk$(TCL_VERSION)
 INCLUDE		= $(INCL_PRE) $(INCL_POST)

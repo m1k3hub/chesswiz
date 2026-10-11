@@ -4787,7 +4787,7 @@ HtmlWidgetSetViewport(
          * to do something generate an expose event that covers the whole
          * viewport.
          */
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
         XClearArea(display, Tk_WindowId(win), 0, 0, 0, 0, True);
 #endif
         // sometimes the exposure events are out of sync,
@@ -4841,7 +4841,7 @@ HtmlWidgetSetViewport(
             }
         }
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
         XClearArea(display, Tk_WindowId(win), 0, 0, width, height, True);
 #endif
         // sometimes the exposure events are out of sync,

@@ -27,6 +27,15 @@ struct mmsghdr; // this hacks is suppressing a gcc warning
 #include "tkInt.h"
 #include "qebind.h"
 
+#ifdef __APPLE__
+#include <Carbon/Carbon.h>
+#define MAC_OSX_HISHAPE 1
+#endif
+
+#ifndef panic
+#define panic Tcl_Panic
+#endif
+
 /*
  * Used to tag functions that are only to be visible within the module being
  * built and not outside it (where this is supported by the linker).

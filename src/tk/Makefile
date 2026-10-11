@@ -12,7 +12,11 @@
 
 include ../../Makefile.in
 
+.DEFAULT_GOAL := all
 .SUFFIXES: .cpp
+ifeq ($(TARGET_MACOS),yes)
+tk_base.o: EXTRA_CXXFLAGS += -x objective-c++
+endif
 .PRECIOUS:
 
 INCL_PRE		=  -I. -I../mstl -I../sys -I../util -I../util/zlib -I../tcl -Isvg -Isvg/agg -Ijpeg
@@ -45,6 +49,10 @@ SRC_CXX = \
 
 SRC	= $(SRC_CXX)
 OBJS	= $(SRC_CXX:.cpp=.o)
+ifeq ($(TARGET_MACOS),yes)
+OBJS += tk_aqua.o
+endif
+
 LIB	= libtk
 
 all: $(LIB).a
@@ -552,3 +560,6 @@ tk_x11.o: ../mstl/m_ostream.ipp
 tk_x11.o: ../mstl/m_istream.h
 tk_x11.o: ../mstl/m_istream.ipp
 tk_xcursor.o: ./X11/Xcursor/Xcursor.h
+
+tk_aqua.o: tk_aqua.mm
+	$(CXX) -c $(CXXFLAGS) $(ALL_INCLUDE) $< -o $@

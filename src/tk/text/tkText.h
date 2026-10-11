@@ -2165,7 +2165,7 @@ MODULE_SCOPE bool	TkTextSkipElidedRegion(TkTextIndex *indexPtr);
 
 /* Tk 8.6.16's private headers now declare TkUtfToUniChar externally.
  * Keep our backport distinct so C99 inline does not emit it in every TU. */
-# if defined(_WIN32) && TCL_UTF_MAX <= 4
+# if (defined(_WIN32) || defined(__APPLE__)) && TCL_UTF_MAX <= 4
 #  define TkUtfToUniChar TkTextUtfToUniChar
 # endif
 # if TCL_UTF_MAX > 4

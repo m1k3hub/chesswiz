@@ -26,10 +26,15 @@
 
 using namespace tcl;
 
+#ifdef __APPLE__
+// Tk Aqua maps Option to Mod2; Command is Mod1.
+static int m_altModMask = Mod2Mask;
+#else
 static int m_altModMask = Mod1Mask | Mod5Mask;
+#endif
 
 
-#if !defined(__WIN32__) && !defined(__MacOSX__)
+#if !defined(__WIN32__) && !defined(__APPLE__)
 
 # include <X11/keysym.h>
 
@@ -139,7 +144,7 @@ tkMisc(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 void
 tk::miscInit(Tcl_Interp* ti)
 {
-#if !defined(__WIN32__) && !defined(__MacOSX__)
+#if !defined(__WIN32__) && !defined(__APPLE__)
 	initKeymapInfo(ti);
 #endif
 

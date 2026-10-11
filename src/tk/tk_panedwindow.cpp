@@ -50,7 +50,7 @@ Tcl_Obj * TkNewWindowObj(Tk_Window tkwin) { return Tcl_NewStringObj(Tk_PathName(
 #define BLACK		"#000000"
 #define WHITE		"#ffffff"
 
-#if defined(__MacOSX__)
+#if defined(__APPLE__)
 # define NORMAL_BG	"systemWindowBody"
 #elif defined(__WIN32__)
 # define NORMAL_BG	"SystemButtonFace"

@@ -1049,7 +1049,7 @@ proc makeStateSpecificIcons {img} {
 switch [tk windowingsystem] {
 	x11	{ proc makeFrameless {w} { ;# XXX how to do this?  } }
 	win32	{ proc makeFrameless {w} { wm attributes $w -toolwindow } }
-	aqua	{ proc makeFrameless {w} { ::tk::unsupported::MacWindowStyle style $w plainDBox {} } }
+	aqua	{ proc makeFrameless {w} { ::tk::unsupported::MacWindowStyle style $w plain {} } }
 }
 
 

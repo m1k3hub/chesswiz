@@ -30,7 +30,7 @@ extern "C"
 }
 
 
-#if defined(_WIN32) && USE_INLINE_TEXT
+#if (defined(_WIN32) || defined(__APPLE__)) && USE_INLINE_TEXT
 extern "C" int Chesswiz_Tk_TextObjCmd(ClientData, Tcl_Interp*, int, Tcl_Obj* const[]);
 #define Tk_TextObjCmd Chesswiz_Tk_TextObjCmd
 #endif
@@ -53,9 +53,16 @@ tkText_Init(Tcl_Interp *interp)
 }
 
 
+#ifdef __APPLE__
+extern "C" void chesswizAquaRegisterFonts();
+#endif
+
 void
 tk::init(Tcl_Interp* ti)
 {
+#ifdef __APPLE__
+	chesswizAquaRegisterFonts();
+#endif
 	Tcl_Eval(ti, "namespace eval ::scidb {}");
 	Tcl_Eval(ti, "namespace eval ::scidb::tk {}");
 

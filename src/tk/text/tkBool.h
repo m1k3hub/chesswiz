@@ -87,8 +87,8 @@ enum { true = (int) 1, false = (int) 0 };
 #  define DEF_TEXT_INACTIVE_SELECT_BG_COLOR NULL
 #  define DEF_TEXT_INACTIVE_SELECT_FG_COLOR SELECT_FG
 # elif defined(MAC_OSX_TK)
-#  define DEF_TEXT_INACTIVE_SELECT_BG_COLOR SELECT_BG INACTIVE_SELECT_BG
-#  define DEF_TEXT_INACTIVE_SELECT_FG_COLOR BLACK "systemDialogActiveText"
+#  define DEF_TEXT_INACTIVE_SELECT_BG_COLOR INACTIVE_SELECT_BG
+#  define DEF_TEXT_INACTIVE_SELECT_FG_COLOR "systemDialogActiveText"
 # else
 # error "unsupported platform"
 # endif

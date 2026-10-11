@@ -511,7 +511,7 @@ proc open {parent} {
 		::util::place $dlg -parent $parent -position center
 	}
 	if {[tk windowingsystem] eq "aqua"} {
-		::tk::unsupported::MacWindowStyle style $dlg plainDBox {}
+		::tk::unsupported::MacWindowStyle style $dlg plain {}
 	} elseif {[tk windowingsystem] eq "win32"} {
 		catch { wm attributes $dlg -type utility }
 		wm attributes $dlg -toolwindow

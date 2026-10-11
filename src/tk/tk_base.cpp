@@ -29,6 +29,9 @@
 #include "tcl_exception.h"
 
 #include <tkInt.h>
+#ifdef __APPLE__
+# include <tkMacOSXInt.h>
+#endif
 #ifdef _WIN32
 # include <tkWinInt.h>
 #endif
@@ -52,9 +55,25 @@ reparent(TkWindow* childPtr, TkWindow* newParentPtr = nullptr)
 	HWND handle = newParentPtr ? TkWinGetHWND(newParentPtr->window) : nullptr;
 	SetParent(TkWinGetHWND(childPtr->window), handle);
 
-#elif defined(__MacOSX__)
+#elif defined(__APPLE__)
 
-# error "not yet implemented"
+	// Aqua child windows share their toplevel drawable and NSView.
+	if (newParentPtr) {
+		MacDrawable* draw = childPtr->privatePtr;
+		MacDrawable* top = newParentPtr->privatePtr->toplevel;
+		if (draw->toplevel != top) {
+			draw->toplevel->referenceCount--;
+			draw->toplevel = top;
+			top->referenceCount++;
+		}
+		draw->view = top->view;
+		draw->xOff = newParentPtr->privatePtr->xOff + childPtr->changes.x;
+		draw->yOff = newParentPtr->privatePtr->yOff + childPtr->changes.y;
+		TkMacOSXInvalidateWindow(draw, TK_PARENT_WINDOW);
+		for (TkWindow* child = childPtr->childList; child; child = child->nextPtr)
+			if (!(child->flags & TK_TOP_LEVEL) && child->window)
+				reparent(child, childPtr);
+	}
 
 #else // if defined(__unix__)
 
@@ -218,6 +237,20 @@ tk::reparent(Tk_Window child, Tk_Window newParent)
 }
 
 
+#ifdef __APPLE__
+static bool aquaWm(Tk_Window window, const char* operation)
+{
+	Tcl_Interp* ti = Tk_Interp(window);
+	Tcl_Obj* args[] = { Tcl_NewStringObj("wm", -1),
+	    Tcl_NewStringObj(operation, -1), Tcl_NewStringObj(Tk_PathName(window), -1) };
+	for (unsigned i = 0; i < 3; ++i) Tcl_IncrRefCount(args[i]);
+	int rc = Tcl_EvalObjv(ti, 3, args, TCL_EVAL_GLOBAL);
+	for (unsigned i = 0; i < 3; ++i) Tcl_DecrRefCount(args[i]);
+	return rc == TCL_OK;
+}
+#endif
+
+
 bool
 tk::release(Tk_Window window)
 {
@@ -225,6 +258,10 @@ tk::release(Tk_Window window)
 
 	if (isToplevel(window))
 		return false;
+
+#ifdef __APPLE__
+	return aquaWm(window, "manage");
+#endif
 
 	// detach the window from its gemoetry manager, if any
 	unmanage(window);
@@ -276,6 +313,12 @@ tk::capture(Tk_Window tkwin, Tk_Window tkparent)
 	if (!(winPtr->flags & TK_TOP_LEVEL))
 		return true; // window is already captured
 
+#ifdef __APPLE__
+	if (tkparent && tkparent != reinterpret_cast<Tk_Window>(winPtr->parentPtr))
+		::relink(winPtr, reinterpret_cast<TkWindow*>(tkparent));
+	return aquaWm(tkwin, "forget");
+#endif
+
 	// withdraw the window
 	TkpWmSetState(winPtr, WithdrawnState);
 
@@ -301,9 +344,8 @@ tk::capture(Tk_Window tkwin, Tk_Window tkparent)
 		// Dis-associate from wm
 		TkWmDeadWindow(winPtr);
 
-#elif defined(__MacOSX__)
-
-# error "not yet implemented"
+#elif defined(__APPLE__)
+	// Handled above by Tk Aqua wm forget.
 
 #else // if defined(__unix__)
 

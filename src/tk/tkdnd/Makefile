@@ -22,6 +22,10 @@ ifeq ($(TARGET_WINDOWS),yes)
 CFLAGS += -DUNICODE -D_UNICODE -DPACKAGE_NAME=\"tkDND\" -DPACKAGE_VERSION=\"3.0\"
 SRC = win/TkDND_OleDND.cpp
 OBJS = TkDND_OleDND.o
+else ifeq ($(TARGET_MACOS),yes)
+CFLAGS += -DPACKAGE_NAME=\"tkDND\" -DPACKAGE_VERSION=\"3.0\"
+SRC = macosx/macdnd.m
+OBJS = macdnd.o
 else
 SRC = unix/TkDND_XDND.c unix/Cursors.c
 OBJS = TkDND_XDND.o Cursors.o
@@ -57,3 +61,6 @@ Cursors.o: unix/Cursors.c
 
 TkDND_OleDND.o: win/TkDND_OleDND.cpp
 	$(CXX) -c $(CFLAGS) $(INCLUDE) $< -o $@
+
+macdnd.o: macosx/macdnd.m
+	$(CC) -c $(CFLAGS) $(INCLUDE) $< -o $@

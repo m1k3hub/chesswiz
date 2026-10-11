@@ -50,7 +50,7 @@ proc open {} {
 	switch [tk windowingsystem] {
 		x11	{ ::scidb::tk::wm splash .splash }
 		win32	{ wm overrideredirect .splash on }
-		aqua	{ ::tk::unsupported::MacWindowStyle style .splash plainDBox {} }
+		aqua	{ ::tk::unsupported::MacWindowStyle style .splash plain {} }
 	}
 
 	::util::place .splash -position center

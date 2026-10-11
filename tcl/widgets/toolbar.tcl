@@ -3129,7 +3129,7 @@ proc UndockToolbar {toolbar x y} {
 	set ry [expr {max(min($y, $sh - $rh), 0)}]
 	wm geometry $win +$rx+$ry
 	if {[tk windowingsystem] eq "aqua"} {
-		::tk::unsupported::MacWindowStyle style $win plainDBox {}
+		::tk::unsupported::MacWindowStyle style $win plain {}
 #		::tk::unsupported::MacWindowStyle style $win toolbar {noTitleBar}
 	} elseif {[tk windowingsystem] eq "win32"} {
 		wm attributes $win -toolwindow

@@ -19,6 +19,7 @@ include ../../Makefile.version
 # Windows) or avf (AVFoundation, macOS). The OS backends decode with the
 # platform's own codecs; see docs/PATENT_REVIEW.md.
 MEDIA_BACKEND ?= mpv
+MEDIA_SRC_none = tcl_media_none.cpp
 MEDIA_SRC_mpv = tcl_media.cpp
 MEDIA_SRC_mf  = tcl_media_mf.cpp
 MEDIA_SRC_avf =
