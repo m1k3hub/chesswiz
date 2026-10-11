@@ -4,6 +4,19 @@
 
 Status: proposal, 2026-10-09. Facts below were surveyed from the tree at `bb30e5e`.
 
+## 0. Status (2026-10-11)
+
+| | Windows | macOS |
+|---|---|---|
+| Build | Zig cross build from Linux (`build/wt-win`) | native Apple clang, static Aqua Tk 8.6.17; universal2 via `scripts/build-macos-app-binary.sh` |
+| Package | folder (`make-windows-dist.sh`) + Inno Setup installer (`chesswiz.iss`) | `.app` + DMG (`make-macos-app.sh`), ad-hoc signed; Developer ID/notarization wired, needs an Apple account |
+| Verified on the real OS | Win 11 VM: startup, databases, fonts (private), Stockfish, MP4/WMV playback, HTTPS, credentials, installer; CI windows-latest launch | macOS 15 Intel VM: startup, media, HTTPS, Stockfish, credentials; CI macos-14 (arm64) build + launch |
+| Open | pane-zoom glyph and native file dialogs unchecked by eye | Apple Silicon only checked by CI launch; X11-only features are logged no-ops |
+
+CI: `.github/workflows/port.yml` on github.com/m1k3hub/chesswiz (private); Zig comes from the
+`toolchain-zig-0.16.0-dev.3133` release (checksum `.zig-sha256`). Release blockers that remain
+are licensing, not porting: see `docs/ASSET_LICENSE_AUDIT.md` and the splash artwork.
+
 ## 1. What the tree already gives us
 
 | Area | State | Port impact |
@@ -78,7 +91,7 @@ Found: `exec nproc` (ai-engine.tcl:137), `exec kill` (ai-modelfit.tcl:107, app-v
 ### D9. Credentials — **OS keychain**
 - API keys currently live in `user/config/ai-keys` (plain file). On Win/Mac use Credential Manager / Keychain (via a tiny C shim), file fallback on Linux (or libsecret).
 
-### D10. CI — **implemented; hosted execution pending** (GitHub Actions)
+### D10. CI — **implemented, running on GitHub** (GitHub Actions)
 
 `.github/workflows/port.yml` is separate from the existing opening-report CI.
 Its Linux job installs Tcl/Tk 8.6 development packages and the dependencies

@@ -211,6 +211,11 @@ array set option {
     USE_INLINE_TEXT {}
 }
 
+# Vendored engines that aren't in git (reckless) are built only when present.
+set option(ENGINES) [lmap e $option(ENGINES) {
+    expr {[file isdirectory [file join engines $e]] ? $e : [continue]}
+}]
+
 array set defaults {
     tcl-inc     -I/usr/include
     tcl-lib     -ltcl\$(TCL_VERSION)
