@@ -31,13 +31,15 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y tcl8.6 patch make curl xz-utils
       - name: Install pinned Zig (archive checksum in .zig-sha256)
         # The pinned dev build is gone from ziglang.org; the exact archive is
-        # a release asset. Set the repository variable ZIG_ARCHIVE_URL to it.
+        # an asset of the release named by the repository variable
+        # ZIG_RELEASE_TAG (the repository is private, so fetch it with gh).
         env:
-          ZIG_ARCHIVE_URL: ${{ vars.ZIG_ARCHIVE_URL }}
+          GH_TOKEN: ${{ github.token }}
+          ZIG_RELEASE_TAG: ${{ vars.ZIG_RELEASE_TAG }}
         run: |
-          test -n "$ZIG_ARCHIVE_URL" || { echo "repository variable ZIG_ARCHIVE_URL is not set"; exit 1; }
+          test -n "$ZIG_RELEASE_TAG" || { echo "repository variable ZIG_RELEASE_TAG is not set"; exit 1; }
           mkdir -p build/zig
-          curl -fL --retry 3 "$ZIG_ARCHIVE_URL" -o build/zig/archive.tar.xz
+          gh release download "$ZIG_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern 'zig-*.tar.xz' --output build/zig/archive.tar.xz
           echo "$(cat .zig-sha256)  build/zig/archive.tar.xz" | sha256sum -c
           tar xf build/zig/archive.tar.xz -C build/zig --strip-components=1
           test "$(build/zig/zig version)" = "$(cat .zig-version)"
