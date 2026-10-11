@@ -4125,6 +4125,10 @@ proc LoadSharedConfiguration {file} {
 		array set engine $entry
 
 		set engine(Command) "[file join $::scidb::dir::engines $engine(Command)]"
+		# Windows ships the bundled engines as <name>.exe.
+		if {![file exists $engine(Command)] && [file exists $engine(Command).exe]} {
+			append engine(Command) .exe
+		}
 
 		if {[file executable $engine(Command)]} {
 			set result [::scidb::engine::info $engine(Name)]

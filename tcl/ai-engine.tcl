@@ -76,6 +76,7 @@ proc ::ai::engine::Bundled {} {
 	variable Config
 	if {$Config(engine) ne "stockfish" || ![info exists ::scidb::dir::engines]} { return }
 	set exe [file join $::scidb::dir::engines stockfish-scidb]
+	if {![file exists $exe] && [file exists $exe.exe]} { append exe .exe }
 	if {[file executable $exe]} { set Config(engine) $exe }
 }
 
