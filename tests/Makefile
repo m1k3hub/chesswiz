@@ -79,7 +79,10 @@ app-tcl: $(TEST_DIR)run_app_tests.tcl $(TEST_DIR)run_app_driver.tcl
 	@echo "Running app-backed Tcl test suite..."
 	@$(MAKE) -C $(ROOT_DIR)/tcl chesswiz
 	@rm -f $(TEST_DIR)app_test_report.txt
-	@$(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)run_app_tests.tcl -verbose 2>&1 || true
+	@# A fresh home each run: the suite must not depend on the developer's
+	@# saved layout and settings (~/.chesswiz), as on a CI machine.
+	@rm -rf $(TEST_DIR)tmp-app/app-home && mkdir -p $(TEST_DIR)tmp-app/app-home
+	@HOME=$(abspath $(TEST_DIR)tmp-app/app-home) $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)run_app_tests.tcl -verbose 2>&1 || true
 	@grep -q "STATUS: PASSED" $(TEST_DIR)app_test_report.txt
 
 # ==============================================================================

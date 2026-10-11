@@ -26,6 +26,13 @@
 
 #set tcl_traceExec 1
 
+# In a C/POSIX locale Tcl 8.6 picks ASCII or Latin-1 as the system encoding,
+# which garbles UTF-8 file names and PGN text. Linux and macOS are UTF-8
+# throughout (Tcl 9 assumes it too).
+if {$::tcl_platform(platform) eq "unix" && [encoding system] in {ascii iso8859-1 identity}} {
+	encoding system utf-8
+}
+
 namespace eval scidb {
 
 set revision 83 ;# first revision ever

@@ -35,7 +35,7 @@ set ::env(SCIDB_AI_CLASSIFIER) off
 # the classifier tests stub a backend that has no calibration, as
 # tests/Makefile does; systemone-qualified tests the gate with this unset
 if {![info exists ::env(SCIDB_AI_UNCALIBRATED)]} { set ::env(SCIDB_AI_UNCALIBRATED) 1 }
-source [file join $::scidb::test::app::testDir .. tcl chesswiz]
+source -encoding utf-8 [file join $::scidb::test::app::testDir .. tcl chesswiz]
 # A fresh user directory (CI) is a first run, whose language chooser waits for
 # a click; the tests are not one. Startup2 has not run yet: it is a timer.
 set ::scidb::dir::setup 0
@@ -101,7 +101,7 @@ foreach testFile $testFiles {
         tcltest::configure -verbose {error}
     }
 
-    set rc [catch {source $testFile} err opts]
+    set rc [catch {source -encoding utf-8 $testFile} err opts]
     if {$rc} {
         ::scidb::test::app::emit "ERROR in [file tail $testFile]: $err"
         incr ::scidb::test::app::totalFail 1
