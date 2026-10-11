@@ -11,7 +11,7 @@
 #     data/ hyphen/ lang/ pieces/ themes/ ...   share files (share dir = exe dir)
 #     fonts/              registered privately at startup (spec D8)
 #
-# Engines are not included yet; the installer comes later.
+#     engines/            engines.dat, plus build/engines-win/*.exe if built
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -46,6 +46,11 @@ cp "$BUILD/src/tkchesswiz.exe" "$DIST/"
 # Registered privately by tkchesswiz.exe at startup.
 mkdir -p "$DIST/fonts"
 cp "$ROOT"/tcl/fonts/*.ttf "$DIST/fonts/"
+
+# Engines from scripts/build-windows-engines.sh, when built.
+if [ -d "$ROOT/build/engines-win" ]; then
+	cp "$ROOT"/build/engines-win/*.exe "$DIST/engines/"
+fi
 
 for d in tcl8.6 tk8.6 tcl8; do
 	cp -R "$SYSROOT/lib/$d" "$DIST/lib/"
