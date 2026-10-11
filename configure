@@ -212,9 +212,12 @@ array set option {
 }
 
 # Vendored engines that aren't in git (reckless) are built only when present.
-set option(ENGINES) [lmap e $option(ENGINES) {
-    expr {[file isdirectory [file join engines $e]] ? $e : [continue]}
-}]
+# (No lmap: macOS's system tclsh is 8.5.)
+set present {}
+foreach e $option(ENGINES) {
+    if {[file isdirectory [file join engines $e]]} { lappend present $e }
+}
+set option(ENGINES) $present
 
 array set defaults {
     tcl-inc     -I/usr/include
