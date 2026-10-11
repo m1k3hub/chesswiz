@@ -99,8 +99,10 @@ SRC = \
 ifeq ($(TARGET_WINDOWS),yes)
 PLATFORM_LIBS = -lws2_32 -lshlwapi -lole32 -loleaut32 -luuid -lcomdlg32 -limm32 -lcomctl32 -lgdi32 -luser32 -lkernel32 -ladvapi32 -lshell32 -lnetapi32 -luserenv
 OPENGL_LIBS =
-# Static Tk's resources, built by scripts/build-sysroot.sh next to libtk86.a.
-TK_RES = $(addsuffix /tk_base.res,$(patsubst -L%,%,$(filter -L%,$(TK_LIBRARY))))
+# Windows resources: Tk's (from the sysroot's lib/tk-rc), our icon and the
+# application manifest (UTF-8 code page, common controls v6).
+TK_RC_DIR = $(addsuffix /tk-rc,$(patsubst -L%,%,$(filter -L%,$(TK_LIBRARY))))
+TK_RES = win/chesswiz.res
 else
 PLATFORM_LIBS = -lpthread -lfontconfig -lpng -lm
 OPENGL_LIBS = -lGL -lGLU
@@ -492,9 +494,13 @@ $(TCL_PROGRAM): tclscidb.o $(TCL_LIBS) $(filter %.a,$(ZLIB_LIB)) ../Makefile.in
 	@echo "Building $(TCL_PROGRAM)"
 	@$(CXX) -o $@ $< $(LDFLAGS) $(TCL_LIBRARY) $(ZLIB_LIB) $(if $(TARGET_WINDOWS),$(PLATFORM_LIBS))
 
-$(TK_PROGRAM): tkscidb.o $(LIBS) $(TCL_LIBS) $(TK_LIBS) ../Makefile.in
+$(TK_PROGRAM): tkscidb.o $(TK_RES) $(LIBS) $(TCL_LIBS) $(TK_LIBS) ../Makefile.in
 	@echo "Building $(TK_PROGRAM)"
 	@$(CXX) -o $@ $< $(TK_RES) $(LDFLAGS) $(PROFILING) $(ALL_TK_LIBS) $(ALL_LIBS)
+
+win/chesswiz.res: win/chesswiz.rc win/chesswiz.manifest ../icons/chesswiz.ico
+	@echo "Compiling $<"
+	@zig rc /:auto-includes gnu /i $(TK_RC_DIR) /i win /i ../icons -- $< $@
 
 .cpp.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(ALL_CXXFLAGS:  = )]"

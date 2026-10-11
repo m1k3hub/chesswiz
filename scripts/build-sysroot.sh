@@ -342,9 +342,13 @@ build_tk() {
     done
     # A static Tk needs its resources (buttons bitmap, cursors, dialogs)
     # linked into the executable; FindResourceW() fails at startup otherwise.
+    # The application's own .rc includes tk_base.rc from lib/tk-rc (so it can
+    # replace Tk's icon); check here that it compiles.
     if [ "$FLAVOR" = win ]; then
-        zig rc /:auto-includes gnu /i "$srcdir/win/rc" /i "$srcdir/generic" /i "$srcdir/win" \
-            -- "$srcdir/win/rc/tk_base.rc" "$PREFIX/lib/tk_base.res" \
+        rm -rf "$PREFIX/lib/tk-rc"
+        cp -R "$srcdir/win/rc" "$PREFIX/lib/tk-rc"
+        zig rc /:auto-includes gnu /i "$PREFIX/lib/tk-rc" \
+            -- "$PREFIX/lib/tk-rc/tk_base.rc" "$LOG_DIR/tk_base.res" \
             > "$LOG_DIR/tk-rc.log" 2>&1 || die "Tk: zig rc tk_base.rc failed"
     fi
     log "Tk $TK_VER installed (include/tk.h, tk private headers, X11 emulation headers)"

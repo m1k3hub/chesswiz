@@ -131,3 +131,4 @@ tcl/scidb-beta
 # sysroot build tree from scripts/build-sysroot.sh (spec D2)
 build/
 /build/
+src/win/*.res

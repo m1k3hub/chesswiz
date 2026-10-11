@@ -1,0 +1,11 @@
+// Windows resources of tkchesswiz.exe: Tk's own resources (with the
+// Chesswiz icon instead of Tk's), and the application manifest.
+
+#define BASE_NO_TK_ICON
+#include "tk_base.rc"
+
+// Tk uses the icon named "tk" for its windows; Explorer shows it too.
+tk          ICON        "chesswiz.ico"
+
+// CREATEPROCESS_MANIFEST_RESOURCE_ID, RT_MANIFEST
+1           24          "chesswiz.manifest"
