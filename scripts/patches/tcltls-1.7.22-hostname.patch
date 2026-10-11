@@ -1,0 +1,16 @@
+--- a/tls.c
++++ b/tls.c
+@@ -959,6 +959,13 @@
+ 
+ #ifndef OPENSSL_NO_TLSEXT
+     if (servername) {
++        /* SNI alone does not verify the certificate's DNS identity. */
++        if (!server && require && !SSL_set1_host(statePtr->ssl, servername)) {
++            Tcl_AppendResult(interp, "setting TLS certificate host name failed",
++                (char *) NULL);
++            Tls_Free((char *) statePtr);
++            return TCL_ERROR;
++        }
+         if (!SSL_set_tlsext_host_name(statePtr->ssl, servername) && require) {
+             Tcl_AppendResult(interp, "setting TLS host name extension failed",
+                 (char *) NULL);

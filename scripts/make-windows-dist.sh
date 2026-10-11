@@ -9,6 +9,8 @@
 #     chesswiz.tcl         the script bundle; main() starts it when present
 #     lib/tcl8.6 tk8.6 tcl8   Tcl/Tk script libraries ([info library] finds them)
 #     lib/json              tcllib modules (from the sysroot)
+#     lib/tls*              loadable TLS extension (static OpenSSL)
+#     cacert.pem            Mozilla CA roots for TLS verification
 #     data/ hyphen/ lang/ pieces/ themes/ ...   share files (share dir = exe dir)
 #     fonts/              registered privately at startup (spec D8)
 #
@@ -25,6 +27,12 @@ die() { echo "make-windows-dist: $*" >&2; exit 1; }
 [ -f "$BUILD/src/tkchesswiz.exe" ] || die "no $BUILD/src/tkchesswiz.exe; build first"
 [ -f "$BUILD/tcl/chesswiz.exe" ]   || die "no script bundle $BUILD/tcl/chesswiz.exe; run make -C tcl"
 [ -d "$SYSROOT/lib/tcl8.6" ]       || die "no sysroot at $SYSROOT; run scripts/build-sysroot.sh"
+TLS_PACKAGES=("$SYSROOT"/lib/tls*)
+[ -d "${TLS_PACKAGES[0]}" ]        || die "no TLS package; run scripts/build-sysroot.sh x86_64-windows-gnu --tls-only"
+[ -f "$SYSROOT/cacert.pem" ]      || die "no CA bundle; run scripts/build-sysroot.sh x86_64-windows-gnu --tls-only"
+
+[ -f "$SYSROOT/cacert.pem" ] || die "no CA bundle; run scripts/build-sysroot.sh x86_64-windows-gnu --tls-only"
+compgen -G "$SYSROOT/lib/tls*/pkgIndex.tcl" >/dev/null || die "no TLS package; run scripts/build-sysroot.sh x86_64-windows-gnu --tls-only"
 
 rm -rf "$DIST"
 mkdir -p "$DIST/lib"
@@ -56,5 +64,11 @@ fi
 for d in tcl8.6 tk8.6 tcl8 json; do
 	cp -R "$SYSROOT/lib/$d" "$DIST/lib/"
 done
+
+# The TLS builder installs the complete package, including pkgIndex.tcl.
+for d in "${TLS_PACKAGES[@]}"; do
+	cp -R "$d" "$DIST/lib/"
+done
+cp "$SYSROOT/cacert.pem" "$DIST/"
 
 echo "make-windows-dist: $DIST ($(du -sh "$DIST" | cut -f1))"

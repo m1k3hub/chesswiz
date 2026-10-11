@@ -3391,6 +3391,7 @@ proc ::application::assistant::DoTablebase {fen} {
 		::ai::provider::need json
 		if {![info exists ::ai::provider::TlsRegistered]} {
 			::ai::provider::need tls
+			::platform::sys::tlsInit
 			::http::register https 443 ::ai::provider::tlsSocket
 			set ::ai::provider::TlsRegistered 1
 		}

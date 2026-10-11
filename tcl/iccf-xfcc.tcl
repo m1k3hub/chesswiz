@@ -123,6 +123,7 @@ proc initTls {} {
 		return 0
 	}
 
+	::platform::sys::tlsInit
 	::http::register https 443 [list ::tls::socket -servername $Config(host)]
 	set Config(initialized) 1
 	return 1

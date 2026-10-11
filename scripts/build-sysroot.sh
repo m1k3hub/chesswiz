@@ -13,7 +13,8 @@
 #                                       multiword "zig cc -target ...")
 #
 # Packages: Tcl 8.6.17, Tk 8.6.17 (win|unix|macosx configure by target),
-#           zlib 1.3.1, Expat 2.6.4. Tarballs are checksum-verified with sha256 pinned
+#           zlib 1.3.1, Expat 2.6.4, tcllib json, OpenSSL and TclTLS.
+#           Sources and Mozilla CA roots are checksum-verified with sha256 pinned
 #           below; downloads are cached in build/src/.
 #
 # Currently validated:  x86_64-windows-gnu
@@ -40,24 +41,36 @@ TK_VER=8.6.17
 ZLIB_VER=1.3.1
 EXPAT_VER=2.6.4
 TCLLIB_VER=2.0
+OPENSSL_VER=3.5.9
+TCLTLS_VER=1.7.22
 
 TCL_TARBALL=tcl${TCL_VER}-src.tar.gz
 TK_TARBALL=tk${TK_VER}-src.tar.gz
 ZLIB_TARBALL=zlib-${ZLIB_VER}.tar.gz
 EXPAT_TARBALL=expat-${EXPAT_VER}.tar.xz
 TCLLIB_TARBALL=tcllib-${TCLLIB_VER}.tar.gz
+OPENSSL_TARBALL=openssl-${OPENSSL_VER}.tar.gz
+TCLTLS_TARBALL=tcltls-${TCLTLS_VER}.tar.gz
+CACERT_FILE=cacert.pem
 
 TCL_URL=https://prdownloads.sourceforge.net/tcl/${TCL_TARBALL}
 TK_URL=https://prdownloads.sourceforge.net/tcl/${TK_TARBALL}
 ZLIB_URL=https://zlib.net/fossils/${ZLIB_TARBALL}
 EXPAT_URL=https://github.com/libexpat/libexpat/releases/download/R_2_6_4/${EXPAT_TARBALL}
 TCLLIB_URL=https://core.tcl-lang.org/tcllib/uv/${TCLLIB_TARBALL}
+OPENSSL_URL=https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VER}/${OPENSSL_TARBALL}
+TCLTLS_URL=https://core.tcl-lang.org/tcltls/uv/${TCLTLS_TARBALL}
+CACERT_URL=https://curl.se/ca/cacert.pem
 
 TCL_SHA256=a3903371efcce8a405c5c245d029e9f6850258a60fa3761c4d58995610949b31
 TK_SHA256=e4982df6f969c08bf9dd858a6891059b4a3f50dc6c87c10abadbbe2fc4838946
 ZLIB_SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
 EXPAT_SHA256=a695629dae047055b37d50a0ff4776d1d45d0a4c842cf4ccee158441f55ff7ee
 TCLLIB_SHA256=590263de0832ac801255501d003441a85fb180b8ba96265d50c4a9f92fde2534
+
+OPENSSL_SHA256=603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a
+TCLTLS_SHA256=e84e2b7a275ec82c4aaa9d1b1f9786dbe4358c815e917539ffe7f667ff4bc3b4
+CACERT_SHA256=a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505
 
 # Repo root = parent of scripts/; the script may be invoked from anywhere.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -68,7 +81,7 @@ WRAPPER_DIR="$ROOT/build/bin"
 JOBS="$(nproc 2>/dev/null || echo 4)"
 
 usage() {
-    echo "usage: $0 <triple>" >&2
+    echo "usage: $0 <triple> [--tls-only]" >&2
     echo "  e.g. $0 x86_64-windows-gnu" >&2
     echo "  planned: x86_64-linux-gnu, aarch64-macos-none, x86_64-macos-none" >&2
     exit 2
@@ -87,6 +100,8 @@ need_tool() {
 
 TARGET="${1:-}"
 [ -n "$TARGET" ] || usage
+TLS_ONLY="${2:-}"
+[ "$#" -le 2 ] && { [ -z "$TLS_ONLY" ] || [ "$TLS_ONLY" = --tls-only ]; } || usage
 
 # Tcl/Tk configure flavor + zig flags per target.
 FLAVOR=""
@@ -382,6 +397,72 @@ build_expat() {
     [ -f "$PREFIX/lib/libexpat.a" ] || die "Expat: library missing after install"
 }
 
+build_openssl() {
+    if [ -f "$PREFIX/include/openssl/ssl.h" ] && [ -f "$PREFIX/lib/libssl.a" ] && [ -f "$PREFIX/lib/libcrypto.a" ] && [ "$(cat "$PREFIX/lib/openssl-build-version" 2>/dev/null)" = "$OPENSSL_VER" ]; then log "OpenSSL already installed; skipping"; return; fi
+    [ "$TARGET" = x86_64-windows-gnu ] || die "OpenSSL: only mingw64 (x86_64-windows-gnu) is implemented"
+    need_tool perl
+    local srcdir
+    srcdir="$(unpacked "$OPENSSL_TARBALL" "$BUILD_ROOT/openssl")"
+    log "OpenSSL $OPENSSL_VER -> $PREFIX (static, mingw64)"
+    (
+        cd "$srcdir"
+        CC=zcc AR=zar RANLIB=zranlib RC=zrc \
+            perl ./Configure mingw64 no-shared no-tests no-docs \
+                --prefix="$PREFIX" --libdir=lib \
+                > "$LOG_DIR/openssl-configure.log" 2>&1 || exit 1
+        make -j"$JOBS" > "$LOG_DIR/openssl-make.log" 2>&1 || exit 1
+        make install_dev > "$LOG_DIR/openssl-install.log" 2>&1 || exit 1
+    ) || die "OpenSSL: build failed; see $LOG_DIR/openssl-*.log"
+    [ -f "$PREFIX/lib/libssl.a" ] && [ -f "$PREFIX/lib/libcrypto.a" ] || die "OpenSSL: static libraries missing after install"
+    echo "$OPENSSL_VER" > "$PREFIX/lib/openssl-build-version"
+}
+
+build_tcltls() {
+    local pkgdir="$PREFIX/lib/tls$TCLTLS_VER" dll="tls${TCLTLS_VER//./}.dll"
+    if [ -f "$pkgdir/$dll" ] && [ -f "$pkgdir/tls.tcl" ] && [ -f "$pkgdir/pkgIndex.tcl" ] && [ "$(cat "$pkgdir/openssl-build-version" 2>/dev/null)" = "$OPENSSL_VER" ]; then log "TclTLS already installed; skipping"; return; fi
+    [ -f "$PREFIX/lib/libtclstub86.a" ] || die "TclTLS: Tcl stub library missing; build the full sysroot first"
+    local srcdir objdir
+    srcdir="$(unpacked "$TCLTLS_TARBALL" "$BUILD_ROOT/tcltls")"
+    patch -d "$srcdir" -p1 < "$ROOT/scripts/patches/tcltls-1.7.22-hostname.patch" \
+        > "$LOG_DIR/tcltls-patch.log" 2>&1 || die "TclTLS: hostname patch failed"
+    objdir="$BUILD_ROOT/tcltls-obj"
+    rm -rf "$objdir"; mkdir -p "$objdir"
+    log "TclTLS $TCLTLS_VER -> $pkgdir (loadable DLL, Tcl stubs, static OpenSSL)"
+    (
+        cd "$objdir"
+        # Absolute OpenSSL archives force static linking without the old
+        # configure script's -Bdynamic flags (which break Zig Tcl stub lookup).
+        CC=zcc AR=zar RANLIB=zranlib \
+        CPPFLAGS="-I$PREFIX/include" \
+        TCLTLS_SSL_LIBS="$PREFIX/lib/libssl.a $PREFIX/lib/libcrypto.a -lws2_32 -lcrypt32 -ladvapi32 -lbcrypt" \
+        TCLTLS_SSL_CFLAGS="-I$PREFIX/include" TCLTLS_SSL_CPPFLAGS="-I$PREFIX/include" \
+            "$srcdir/configure" --prefix="$PREFIX" --with-tcl="$PREFIX/lib" \
+                --build=x86_64-pc-linux-gnu --host=x86_64-w64-mingw32 \
+                --enable-shared --enable-stubs --enable-deterministic \
+                > "$LOG_DIR/tcltls-configure.log" 2>&1 || exit 1
+        # The extension configure keeps Tcl flags (including thread support),
+        # filters out STATIC_BUILD, and enables USE_TCL_STUBS.
+        # Zig's PE linker accepts -shared, but not GNU ld's --dll or
+        # ELF version scripts. Keep the initialization exports intact.
+        printf 'EXPORTS\nTls_Init\nTls_SafeInit\n' > tls.def
+        make -j"$JOBS" LDFLAGS="-shared $objdir/tls.def" \
+            > "$LOG_DIR/tcltls-make.log" 2>&1 || exit 1
+        mkdir -p "$pkgdir"
+        cp tcltls.dll "$pkgdir/$dll" || exit 1
+        sed "s/tcltls.dll/$dll/g" pkgIndex.tcl > "$pkgdir/pkgIndex.tcl" || exit 1
+        cp "$srcdir/tls.tcl" "$pkgdir/" || exit 1
+        echo "$OPENSSL_VER" > "$pkgdir/openssl-build-version"
+    ) || die "TclTLS: build failed; see $LOG_DIR/tcltls-*.log"
+    [ -f "$pkgdir/$dll" ] && [ -f "$pkgdir/pkgIndex.tcl" ] || die "TclTLS: package missing after install"
+}
+
+install_cacert() {
+    if [ -f "$PREFIX/$CACERT_FILE" ] && echo "$CACERT_SHA256  $PREFIX/$CACERT_FILE" | sha256sum -c - >/dev/null 2>&1; then log "CA bundle already installed; skipping"; return; fi
+    cp "$SRC_DIR/$CACERT_FILE" "$PREFIX/$CACERT_FILE" \
+        > "$LOG_DIR/cacert-install.log" 2>&1 || die "CA bundle: install failed"
+    log "Mozilla CA bundle installed (sha256:$CACERT_SHA256)"
+}
+
 # --------------------------------------------------------------------------
 # manifest
 
@@ -400,6 +481,11 @@ write_manifest() {
         echo "  tk    $TK_VER  sha256:$TK_SHA256  ($TK_URL)"
         echo "  zlib  $ZLIB_VER   sha256:$ZLIB_SHA256  ($ZLIB_URL)"
         echo "  expat $EXPAT_VER sha256:$EXPAT_SHA256 ($EXPAT_URL)"
+        echo
+        echo "  tcllib $TCLLIB_VER sha256:$TCLLIB_SHA256 ($TCLLIB_URL)"
+        echo "  openssl $OPENSSL_VER sha256:$OPENSSL_SHA256 ($OPENSSL_URL)"
+        echo "  tcltls $TCLTLS_VER sha256:$TCLTLS_SHA256 ($TCLTLS_URL)"
+        echo "  cacert 2026-09-25 sha256:$CACERT_SHA256 ($CACERT_URL)"
         echo
         echo "layout:"
         echo "  include/        public headers (tcl.h, tk.h, zlib.h, X11/*) + flattened private headers"
@@ -438,12 +524,25 @@ main() {
     log "prefix: $PREFIX"
     mkdir -p "$SRC_DIR" "$BUILD_ROOT" "$LOG_DIR"
     install_wrappers
-    fetch_all
-    build_zlib
-    build_tcl
-    build_tk
-    build_expat
-    install_tcllib
+    need_tool curl
+    need_tool sha256sum
+    need_tool tar
+    need_tool make
+    need_tool patch
+    if [ -z "$TLS_ONLY" ]; then
+        fetch_all
+        build_zlib
+        build_tcl
+        build_tk
+        build_expat
+        install_tcllib
+    fi
+    fetch "$OPENSSL_TARBALL" "$OPENSSL_URL" "$OPENSSL_SHA256"
+    fetch "$TCLTLS_TARBALL" "$TCLTLS_URL" "$TCLTLS_SHA256"
+    fetch "$CACERT_FILE" "$CACERT_URL" "$CACERT_SHA256"
+    build_openssl
+    build_tcltls
+    install_cacert
     # Tk extensions need platform widget defaults, not installed by Tk's
     # install-private-headers target.
     if [ "$FLAVOR" = win ]; then

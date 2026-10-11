@@ -195,6 +195,7 @@ proc ::ai::provider::request {url body args} {
 	need http
 	if {[string match -nocase https://* $url] && ![info exists TlsRegistered]} {
 		need tls
+		::platform::sys::tlsInit
 		::http::register https 443 ::ai::provider::tlsSocket
 		set TlsRegistered 1
 	}
@@ -1150,6 +1151,7 @@ proc ::ai::provider::modelsAsync {provider script {timeoutMs 8000}} {
 		set url [string map {/chat/completions /models} $Endpoint($provider)]
 		if {[string match -nocase https://* $url] && ![info exists TlsRegistered]} {
 			need tls
+			::platform::sys::tlsInit
 			::http::register https 443 ::ai::provider::tlsSocket
 			set TlsRegistered 1
 		}

@@ -464,6 +464,7 @@ proc ::application::download::Tls {host} {
 	if {[string match http://* $host]} { return 1 }
 	if {![info exists TlsHost] || $TlsHost ne $host} {
 		if {[catch { package require tls }]} { return 0 }
+		::platform::sys::tlsInit
 		::http::register https 443 [list ::tls::socket -servername $host]
 		set TlsHost $host
 	}
