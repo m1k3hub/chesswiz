@@ -107,6 +107,26 @@ init(Tcl_Interp* ti)
 int
 main(int argc, char* argv[])
 {
+#ifdef _WIN32
+	// The scripts are UTF-8, but Tk would read the startup script in the
+	// system code page (e.g. cp1252) on Windows.
+	if (argc > 1 && argv[1][0] != '-')
+	{
+		static char encodingOpt[] = "-encoding";
+		static char utf8[] = "utf-8";
+		char** args = new char*[argc + 3];
+
+		args[0] = argv[0];
+		args[1] = encodingOpt;
+		args[2] = utf8;
+		for (int i = 1; i <= argc; ++i)
+			args[i + 2] = argv[i];
+
+		Tk_Main(argc + 2, args, init);
+		return 0;
+	}
+#endif
+
 	Tk_Main(argc, argv, init);
 	return 0;
 }
