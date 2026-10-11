@@ -549,8 +549,15 @@ proc FindTclTkPathsAqua {} {
         }
     }
     if {$both == 0} {
-        if {[info exists configure(toolchain)] && $configure(toolchain) eq "zig"} {
-            set sysroot [file join [pwd] build $configure(target)]
+        set zig [expr {[info exists configure(toolchain)] && $configure(toolchain) eq "zig"}]
+        if {$zig || [info exists configure(tk-libraries)]} {
+            # Static Tcl/Tk built with --enable-aqua: the zig sysroot, or
+            # a native build given with --tcl-*/--tk-* options.
+            if {$zig} {
+                set sysroot [file join [pwd] build $configure(target)]
+            } else {
+                set sysroot [file dirname $configure(tk-libraries)]
+            }
             if {![info exists configure(tcl-includes)]} {
                 set configure(tcl-includes) [file join $sysroot include]
             }
@@ -569,6 +576,11 @@ proc FindTclTkPathsAqua {} {
             append package(tcl-lib) " -ltcl8.6"
             set package(tk-lib) [MakeOption -L $configure(tk-libraries)]
             append package(tk-lib) " -ltk8.6"
+            if {!$zig} {
+                append package(tk-lib) " -framework Cocoa -framework Carbon -framework IOKit"
+                append package(tk-lib) " -framework QuartzCore -weak_framework UniformTypeIdentifiers"
+                append package(tcl-lib) " -framework CoreFoundation"
+            }
             set package(x-inc) ""
             set package(x-lib) ""
             set package(xcursor-inc) ""
