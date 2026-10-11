@@ -36,6 +36,9 @@ set ::env(SCIDB_AI_CLASSIFIER) off
 # tests/Makefile does; systemone-qualified tests the gate with this unset
 if {![info exists ::env(SCIDB_AI_UNCALIBRATED)]} { set ::env(SCIDB_AI_UNCALIBRATED) 1 }
 source [file join $::scidb::test::app::testDir .. tcl chesswiz]
+# A fresh user directory (CI) is a first run, whose language chooser waits for
+# a click; the tests are not one. Startup2 has not run yet: it is a timer.
+set ::scidb::dir::setup 0
 set argv $argvCopy
 set argc $argcCopy
 
