@@ -50,7 +50,12 @@ export TK_LIBRARY="$CONTENTS/Resources/lib/tk8.6"
 export SCIDB_SHAREDIR="$CONTENTS/Resources"
 LOGDIR="${CW_LOGDIR:-$HOME/Library/Logs/Chesswiz}"
 mkdir -p "$LOGDIR"
-exec "$CONTENTS/MacOS/tkchesswiz" -encoding utf-8 "$CONTENTS/Resources/chesswiz.tcl" "$@" \
+SCRIPT="$CONTENTS/Resources/chesswiz.tcl"
+if [ -n "${CW_STARTUP_HARNESS:-}" ]; then
+    set -- "$SCRIPT" "$@"
+    SCRIPT="$CW_STARTUP_HARNESS"
+fi
+exec "$CONTENTS/MacOS/tkchesswiz" -encoding utf-8 "$SCRIPT" "$@" \
     <"$CONTENTS/Resources/empty-stdin" >>"$LOGDIR/stdout.log" 2>>"$LOGDIR/stderr.log"
 LAUNCHER
 chmod +x "$APP/Contents/MacOS/chesswiz"

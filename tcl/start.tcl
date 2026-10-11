@@ -51,7 +51,7 @@ if {[info exists ::env(SCIDB_SHAREDIR)]} {
 	}
 }
 
-if {$::tcl_platform(platform) eq "windows"} {
+if {$::tcl_platform(platform) eq "windows" || $::tcl_platform(os) eq "Darwin"} {
 	set engines $share/engines
 } else {
 	set engines "%ENGINESDIR%"

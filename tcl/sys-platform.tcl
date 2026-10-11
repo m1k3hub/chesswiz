@@ -248,12 +248,14 @@ proc touch {path} {
 	}
 }
 
-# Call after `package require tls`, before https requests. Windows has no
-# CA store OpenSSL can read: the distribution carries Mozilla's roots
-# (cacert.pem) beside the executable. Other platforms use the system's.
+# Call after `package require tls`, before https requests. Packaged Windows
+# and Aqua builds carry Mozilla roots for their private OpenSSL library.
 proc tlsInit {} {
-	if {$::tcl_platform(platform) ne "windows"} { return }
-	set cafile [file join [file dirname [info nameofexecutable]] cacert.pem]
+	if {$::tcl_platform(platform) eq "windows"} {
+		set cafile [file join [file dirname [info nameofexecutable]] cacert.pem]
+	} elseif {$::tcl_platform(os) eq "Darwin"} {
+		set cafile [file join [file dirname [info nameofexecutable]] .. Resources cacert.pem]
+	} else { return }
 	if {[file isfile $cafile]} { ::tls::init -cafile $cafile -require 1 }
 }
 

@@ -18,7 +18,11 @@ include ../../Makefile.version
 # Media playback backend: mpv (libmpv, Linux), mf (Media Foundation,
 # Windows) or avf (AVFoundation, macOS). The OS backends decode with the
 # platform's own codecs; see docs/PATENT_REVIEW.md.
+ifeq ($(TARGET_MACOS),yes)
+MEDIA_BACKEND ?= avf
+else
 MEDIA_BACKEND ?= mpv
+endif
 MEDIA_SRC_none = tcl_media_none.cpp
 MEDIA_SRC_mpv = tcl_media.cpp
 MEDIA_SRC_mf  = tcl_media_mf.cpp
@@ -77,8 +81,9 @@ depend:
 		mv Makefile.bak Makefile; \
 	fi
 
-$(LIB).a: $(OBJS)
+$(LIB).a: $(OBJS) .media_backend
 	@echo "Building $(LIB).a"
+	@rm -f $(LIB).a
 	@$(AR) $(ARFLAGS) $(LIB).a $(OBJS)
 	@$(RANLIB) $(LIB).a
 
@@ -95,6 +100,9 @@ tcl_misc.o: EXTRA_CXXFLAGS += $(SCIDB_BUILD_FLAGS)
 
 # Rewritten only when the commit/date changes, so tcl_misc.o is rebuilt
 # exactly then and buildInfo never reports a stale commit.
+.media_backend: FORCE
+	@echo $(MEDIA_BACKEND) | cmp -s - $@ || echo $(MEDIA_BACKEND) > $@
+
 .PHONY: FORCE
 FORCE:
 

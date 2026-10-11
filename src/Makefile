@@ -116,10 +116,16 @@ OPENGL_LIBS = -lGL -lGLU
 endif
 
 ALL_LIBS = $(LIBS) $(TCL_LIBRARY) $(ZZIPLIB_LIB) $(MINIZIP_LIB) $(ZLIB_LIB) $(EXPAT_LIB) $(FAM_LIB) $(PLATFORM_LIBS)
+ifeq ($(TARGET_MACOS),yes)
+MEDIA_BACKEND ?= avf
+else
 MEDIA_BACKEND ?= mpv
+endif
 MEDIA_LIBS_mpv = -lmpv
 MEDIA_LIBS_mf  = -lmfplay -lmfplat -lole32 -luser32
+ifeq ($(TARGET_MACOS),yes)
 MEDIA_LIBS_avf = -framework AVFoundation -framework CoreMedia -framework QuartzCore -framework AppKit
+endif
 
 ALL_TK_LIBS = $(TCL_LIBS) $(TK_LIBS) $(TK_LIBRARY) $(X_LIBRARY) $(OPENGL_LIBS) $(MEDIA_LIBS_$(MEDIA_BACKEND))
 #ALL_TK_LIBS = $(TCL_LIBS) $(TK_LIBS) -L/usr/local/lib -ltk $(X_LIBRARY)

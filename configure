@@ -282,6 +282,7 @@ set MinClangVersion "3.1"
 
 
 set environment(MEDIA_BACKEND) mpv
+if {$tcl_platform(os) eq "Darwin"} { set environment(MEDIA_BACKEND) avf }
 
 foreach name [array names environment] {
     if {[info exists env($name)]} {
@@ -1738,7 +1739,11 @@ proc checkClang {cc} {
     }
     if {[string length $version] > 0 && $cc eq "CXX"} {
         set option(EXTRA_CXXFLAGS) "-std=c++17"
-        if {$feature(sse2)} {
+        if {$::tcl_platform(os) eq "Darwin"} {
+            # Apple clang supports SSE2; disabling it breaks current SDK
+            # math headers, and the flag is inappropriate for arm64 slices.
+            set compiler(sse2) ""
+        } elseif {$feature(sse2)} {
             puts -nonewline "    Checking if your compiler supports SSE2: "
             flush stdout
             if {[Probe testsse2 [regsub -all __CC__ $TestSSE2 $environment($cc)]]} {
@@ -1759,8 +1764,14 @@ proc checkClang {cc} {
         Append option(EXTRA_CXXFLAGS) -Wno-mismatched-tags
         Append option(EXTRA_CXXFLAGS) -Wno-gnu
         Append option(EXTRA_CXXFLAGS) -Wno-invalid-source-encoding
-        set environment(CC) clang
-        set environment(CXX) clang++
+        if {$::tcl_platform(os) eq "Darwin"} {
+            # Preserve explicit wrappers carrying universal/deployment flags.
+            if {$environment(CC) eq "gcc"} { set environment(CC) clang }
+            if {$environment(CXX) eq "g++"} { set environment(CXX) clang++ }
+        } else {
+            set environment(CC) clang
+            set environment(CXX) clang++
+        }
     }
     return $version
 }

@@ -79,7 +79,7 @@ followWindow()
 		return;
 	}
 
-	NSView* view = Tk_MacOSXGetNSViewForDrawable(Tk_WindowId(TkWin));
+	NSView* view = static_cast<NSView*>(Tk_MacOSXGetNSViewForDrawable(Tk_WindowId(TkWin)));
 	if (!view)
 		return;
 
