@@ -1142,6 +1142,7 @@ proc Title {} {
 
 proc Exit {w} {
 	if {$w eq ".application"} {
+		::board3d::WebGLStopServer
 		set ::remote::blocking 1
 		set ::remote::postponed 0
 		exit

@@ -462,9 +462,8 @@ tcltest::test board3d-independent-redraw {simultaneous view resizes each retain 
 	expr {$ok && [lsearch -exact [after info] $first] < 0 && [lsearch -exact [after info] $second] < 0}
 } -result 1
 
-# WebGL viewer: local three.js front end served by web3d/server.py.
-# Skipped when python3 or the http package is unavailable.
-tcltest::testConstraint webgl [expr {![catch { exec python3 -c exit }] && ![catch { package require http }]}]
+# WebGL viewer: in-process Tcl server.
+tcltest::testConstraint webgl [expr {![catch { package require http }]}]
 
 tcltest::test board3d-app-webgl {WebGL server starts, serves and syncs the board} -constraints webgl -body {
 	set ::env(SCIDB_WEB3D_NO_BROWSER) 1
@@ -476,7 +475,7 @@ tcltest::test board3d-app-webgl {WebGL server starts, serves and syncs the board
 	# the GET can race the just-started server (connection refused or stale
 	# board); retry for up to ~3 s
 	for {set i 0} {$i < 10} {incr i} {
-		if {![catch { ::http::geturl http://127.0.0.1:8899/api/board -timeout 3000 } tok]} {
+		if {![catch { ::http::geturl [::board3d::WebGLUrl]/api/board -timeout 3000 } tok]} {
 			set data [::http::data $tok]
 			::http::cleanup $tok
 			if {[string match "*\"board\": \"$board\"*" $data]} { break }
@@ -489,13 +488,7 @@ tcltest::test board3d-app-webgl {WebGL server starts, serves and syncs the board
 	list $match [expr {[string length $sync] == 64}]
 } -result {1 1}
 
-# stop the WebGL server again when this suite started it, and make sure
-# the port is really free so a following run starts clean
-if {[string is integer -strict $::board3d::Priv(webgl,pid)]} {
-	catch { exec kill $::board3d::Priv(webgl,pid) }
-	for {set i 0} {$i < 20 && [::board3d::WebGLServerUp]} {incr i} { after 100 }
-	set ::board3d::Priv(webgl,pid) {}
-	set ::board3d::Priv(webgl,auto) 0
-}
+::board3d::WebGLStopServer
+unset -nocomplain ::env(SCIDB_WEB3D_NO_BROWSER)
 
 tcltest::cleanupTests

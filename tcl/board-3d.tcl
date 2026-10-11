@@ -70,7 +70,6 @@ array set Priv {
 	togl       {}
 	parent     {}
 	cacheCount 0
-	webgl,pid  {}
 	webgl,auto 0
 	webgl,error {}
 	embed,frame {}
@@ -141,7 +140,7 @@ array set Themes {
 	}
 }
 
-	variable WebGLPort 8899
+	variable WebGLPort 0
 
 	# Application root, captured at load time.  [info script] is only valid
 	# while the module is being sourced; in event callbacks (menu, toolbar)
@@ -1880,6 +1879,7 @@ proc ::board3d::InitialDraw {canv} {
 
 
 proc ::board3d::closeViewer {} {
+	WebGLStopServer
 	variable Priv
 	variable State
 
@@ -1920,8 +1920,7 @@ proc ::board3d::PositionChanged {board} {
 
 
 # ======================================================================
-# WebGL viewer (web3d/): three.js front end served by web3d/server.py.
-# The browser polls /api/board, so syncing is a single local POST.
+# WebGL viewer: the in-process server serves three.js and the polling API.
 # ======================================================================
 
 proc ::board3d::WebGLUrl {} {
@@ -1929,70 +1928,38 @@ proc ::board3d::WebGLUrl {} {
 	return "http://127.0.0.1:$WebGLPort"
 }
 
-
-# minimal JSON body for the board push API (boards are plain ASCII,
-# but escape properly anyway)
 proc ::board3d::WebGLBoardJson {board} {
 	set board [string map {\\ \\\\ \" \\\" \n \\n \r \\r \t \\t} $board]
 	return "{\"board\": \"$board\"}"
 }
 
-
 proc ::board3d::WebGLServerUp {} {
-	variable WebGLPort
-	if {[catch { socket 127.0.0.1 $WebGLPort } sock]} { return 0 }
-	catch { close $sock }
-	return 1
+	return [expr {$::board3d::webserver::listener ne ""}]
 }
-
 
 proc ::board3d::WebGLStartServer {} {
 	variable Priv
 	variable LibRoot
 	variable WebGLPort
-	if {[WebGLServerUp]} { return 1 }
-	set server [file join $LibRoot web3d server.py]
-	if {![file exists $server]} {
-		set Priv(webgl,error) "web3d/server.py not found (expected below '$LibRoot')"
+	if {[catch {::board3d::webserver::start [file join $LibRoot web3d]} port]} {
+		set Priv(webgl,error) $port
 		return 0
 	}
-
-	set python [::platform::sys::python]
-	if {$python eq ""} {
-		set Priv(webgl,error) "neither python3 nor python was found in PATH"
-		return 0
-	}
-
-	set tmp /tmp
-	if {[info exists ::env(TMPDIR)] && $::env(TMPDIR) ne ""} { set tmp $::env(TMPDIR) }
-	set log [file join $tmp scidb-web3d-server.log]
-	if {[catch { exec $python $server >& $log & } pid]} {
-		set Priv(webgl,error) "could not run '$python $server': $pid"
-		return 0
-	}
-	set Priv(webgl,pid) $pid
-
-	# wait (max ~5s) for the server to accept connections
-	for {set i 0} {$i < 50} {incr i} {
-		if {[WebGLServerUp]} { return 1 }
-		if {[llength [info commands after]]} { after 100 }
-	}
-	set Priv(webgl,error) "server did not accept connections on port $WebGLPort within 5s (log: $log)"
-	return 0
+	set WebGLPort $port
+	return 1
 }
 
+proc ::board3d::WebGLStopServer {} {
+	variable Priv
+	variable WebGLPort
+	::board3d::webserver::stop
+	set Priv(webgl,auto) 0
+	set WebGLPort 0
+}
 
 proc ::board3d::WebGLPost {board {timeout 2000}} {
-	if {[catch { package require http }]} { return 0 }
-	set body [WebGLBoardJson $board]
-	if {[catch {
-		set tok [::http::geturl [WebGLUrl]/api/board \
-			-query $body -type "application/json" -timeout $timeout]
-		set status [::http::status $tok]
-		set ncode  [::http::ncode $tok]
-		::http::cleanup $tok
-	}]} { return 0 }
-	return [expr {$status eq "ok" && $ncode == 200}]
+	::board3d::webserver::setBoard $board
+	return 1
 }
 
 
@@ -2011,18 +1978,7 @@ proc ::board3d::openWebGLViewer {} {
 		return 0
 	}
 	set board [NormalizeBoard [CurrentBoard]]
-	if {![WebGLPost $board]} {
-		# something answers on the port but is not our board API
-		if {[llength [info commands tk_messageBox]]} {
-			set parent [expr {$Priv(window) ne "" && [winfo exists $Priv(window)] ? $Priv(window) : "."}]
-			catch {
-				tk_messageBox -parent $parent -icon warning -type ok \
-					-title "Chesswiz" \
-					-message "A service on port $WebGLPort did not accept the board update.\n\nIs another program using port $WebGLPort?"
-			}
-		}
-		return 0
-	}
+	WebGLPost $board
 	set Priv(webgl,auto) 1
 	# tests and headless use suppress the browser launch
 	if {![info exists ::env(SCIDB_WEB3D_NO_BROWSER)]} {

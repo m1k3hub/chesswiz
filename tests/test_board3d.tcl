@@ -309,7 +309,7 @@ tcltest::test board3d-webgl-helpers {WebGL URL and JSON body are well formed} -b
 			[::board3d::WebGLBoardJson "rnbq"] \
 			[::board3d::WebGLBoardJson {a"b\c}]] "\n"
 	}
-} -result {http://127.0.0.1:8899
+} -result {http://127.0.0.1:0
 {"board": "rnbq"}
 {"board": "a\"b\\c"}}
 
