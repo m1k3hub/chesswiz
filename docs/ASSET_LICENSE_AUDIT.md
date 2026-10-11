@@ -34,6 +34,24 @@ the licence is unknown) · **Replace** (licence forbids our use, or a third part
   Color Emoji, preserving names and dimensions. `scripts/generate-motives.py`
   records each glyph and pins the font SHA256; `tcl/images/README` records the
   font package, artwork licence (Apache-2.0) and font licence (OFL-1.1).
+- **Embedded UI icons and controls:** 1,035 literal payloads in 47 Tcl files
+  (including inactive commented artwork) are replaced by Tabler Icons **v3.31.0**
+  (MIT) and original GPL-2+ geometric controls. `scripts/generate-icons.py`
+  contains the complete variable-to-SVG/colour mapping and verifies the pinned
+  release archive SHA256. Dimensions, variables and all Tcl bytes outside image
+  data are preserved. White/black, red/green and coloured status markers retain
+  their meaning. Original SVG exceptions are in `tcl/cursor/icon-sources/`;
+  theme backgrounds preserve their border/stretch roles. The complete MIT notice
+  is in `tcl/icons-LICENSE` and in every Tabler PNG, so merged-script installs
+  carry it. Country flag payloads (covered by the flags audit), licensed splash artwork and five app logos
+  are inventoried and retained (447 payloads).
+- **Cursors:** all 64 existing CUR/Xcursor/XBM files are original GPL-2+ drawings
+  from `scripts/generate-cursors.py`, preserving names, dimensions and intended
+  hotspots. Legacy malformed ICO-like `.cur` headers are corrected to valid
+  Windows CUR headers with the hotspots recorded by matching Xcursor/XBM files.
+- Complete embedded-image inventory (1,482 payloads), before/after contact sheets,
+  mappings, cursor inventory and test evidence: `tests/tmp-app/icons/report.md`.
+  Generated and verified in the isolated `build/icon-license-cleanup` worktree.
 - Visual previews and validation details: `tests/tmp-app/assets/report.md` and
   the three contact sheets beside it. Work performed and tests run in the
   isolated `build/asset-license-cleanup` worktree.
@@ -60,8 +78,8 @@ the licence is unknown) · **Replace** (licence forbids our use, or a third part
 | Board textures | `tcl/textures/{dark,lite,tile}/{marble,misc,wood}` (287 JPG/PNG/GIF) | **Done (2026-10-11):** original procedural GPL-2 artwork; see Done and `scripts/generate-textures.py`. |
 | Flags | `tcl/flags/` | **Done (2026-10-11):** pinned flag-icons (MIT) and original GPL-2 drawings; see Done and `tcl/flags/LICENSE`. |
 | Remaining tip-of-the-day images | `tcl/images/Motive-*` (animals, flowers, etc.) | **Done (2026-10-11):** all 29 freshly rendered from Noto Color Emoji; see Done and `tcl/images/README`. |
-| Cursors | `tcl/cursor/` | No source recorded; probably Gregor Cramer's own. |
-| Embedded UI icons | `tcl/icons.tcl`, `tcl/app-db-icons.tcl` (hundreds of base64 images) | No source recorded. Many look like stock icon sets (Crystal, Oxygen, famfamfam: LGPL/CC). Needs a pass. |
+| Cursors | `tcl/cursor/` | **Done (2026-10-11):** original GPL-2+ drawings; see Done and `scripts/generate-cursors.py`. |
+| Embedded UI icons | `tcl/icons.tcl`, `tcl/app-db-icons.tcl` and other Tcl files | **Done (2026-10-11):** pinned Tabler Icons (MIT) and original GPL-2+ controls; see Done and `tcl/icons-LICENSE`. |
 | Font credits | `tcl/info.tcl` about box | Names the designers: Marroquin, Bentzen, Cowderoy, Leschemelle, Scott and Frank David (enpassant.dk freeware); Gorgonian (BabasChess); Brown (Good Companion); Poisson (Phoenix); Burnett (GPL); Eran Karu (PyChess, GPL); Maurizio Monge (Eyes, Fantasy, Skulls, Spatial). Check each site's terms. |
 
 ## Permission-dependent assets removed (2026-10-10)
@@ -131,7 +149,14 @@ The metadata only names Photoshop, GIMP and camera models. Replace with CC0 text
 - The 16×11 flags embedded in `tcl/utils/countries.tcl` are famfamfam's: "available for free use for any purpose with no requirement for attribution". **Keep.**
 - The 72×72 set in `tcl/flags/` (289 PNGs) came from addgadget.com with no licence. **Replaced (2026-10-11)**: reproducibly rendered from pinned flag-icons v7.5.0 (MIT) and our own drawings (GPL-2); see `tcl/flags/SOURCES.txt`. The old FIDE-logo flag (FID, a trademark) is now a neutral pawn.
 
-### Embedded UI icons (`tcl/icons.tcl`, `tcl/app-db-icons.tcl`, 520 images)
+### Embedded UI icons: **Replaced (2026-10-11)**
+
+The earlier partial replacement below is superseded by the complete recursive
+UI icon/control replacement in Done. All 1,482 literal embedded payloads are
+inventoried; 1,035 are replaced and 447 country flag, licensed logo and
+splash payloads retained. See `tests/tmp-app/icons/report.md`.
+
+Earlier findings (`tcl/icons.tcl`, `tcl/app-db-icons.tcl`; historical count: 520 images):
 
 **Replaced (2026-10-10): 365 generic icons** (file, edit and media controls, arrows, help, database types, players and the like) are now Noto Color Emoji renders (Apache-2.0) at the old pixel sizes. Bold, italic, underline, font size and alignment are drawn as letters and lines. Not replaced: icons under 12 px (tree toggles and similar), the pie charts, and the chess-specific icons (variants, game flags, annotation marks, chess file types, Informant, board and side-to-move). These are most likely Gregor Cramer's own work (GPL), but that isn't recorded. The "Informant" name still needs renaming.
 
