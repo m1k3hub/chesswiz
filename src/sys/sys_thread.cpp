@@ -145,7 +145,7 @@ atomic_cmpxchg(atomic_t* v, int oldval, int newval)
 # define atomic_set(v, i)			(*v = i)
 # define atomic_cmpxchg(v, c, i)	InterlockedCompareExchange(v, c, i);
 
-#elif defined(__MacOSX__) ///////////////////////////////////////////////////////////
+#elif defined(__APPLE__) ///////////////////////////////////////////////////////////
 
 #include <libkern/OSAtomic.h>
 
@@ -304,7 +304,7 @@ Guard::destroy(lock_t& lock)
 {
 }
 
-#elif defined(__i386__) || defined(__x86_64__) || defined(__MacOSX__) ///////////////
+#elif defined(__i386__) || defined(__x86_64__) || defined(__APPLE__) ///////////////
 
 void
 Guard::acquire()
@@ -607,7 +607,7 @@ Thread::doAwake()
 	WakeConditionVariable(&m_condition);
 }
 
-#elif defined(__unix__) || defined(__MacOSX__) //////////////////////////////////////
+#elif defined(__unix__) || defined(__APPLE__) //////////////////////////////////////
 
 Thread m_mainThread(pthread_self());
 

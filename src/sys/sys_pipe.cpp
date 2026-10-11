@@ -92,7 +92,7 @@ Pipe::createPipe()
 	return ::_get_osfhandle(m_fd[0]);
 }
 
-#elif defined(__unix__) || defined(__MacOSX__)
+#elif defined(__unix__) || defined(__APPLE__)
 
 # include <unistd.h>
 

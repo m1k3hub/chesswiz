@@ -17,8 +17,9 @@
 #           Sources and Mozilla CA roots are checksum-verified with sha256 pinned
 #           below; downloads are cached in build/src/.
 #
-# Currently validated:  x86_64-windows-gnu
-# Stubbed (TODO):       x86_64-linux-gnu, aarch64-macos-none, x86_64-macos-none
+# Validated: x86_64-windows-gnu; aarch64-macos and x86_64-macos core compilation.
+# macOS installs Tcl/Tk headers only plus static zlib/Expat, not a runnable Tk.
+# Stubbed (TODO): x86_64-linux-gnu
 #
 # With x86_64-windows-gnu the sysroot ends up with (among the rest):
 #   include/tcl.h  include/tclInt.h  include/tk.h  include/zlib.h
@@ -83,7 +84,8 @@ JOBS="$(nproc 2>/dev/null || echo 4)"
 usage() {
     echo "usage: $0 <triple> [--tls-only]" >&2
     echo "  e.g. $0 x86_64-windows-gnu" >&2
-    echo "  planned: x86_64-linux-gnu, aarch64-macos-none, x86_64-macos-none" >&2
+    echo "  macOS (headers-only Tcl/Tk): aarch64-macos, x86_64-macos"
+    echo "  planned: x86_64-linux-gnu" >&2
     exit 2
 }
 
@@ -123,7 +125,8 @@ case "$TARGET" in
         die "target '$TARGET' is planned (spec D2) but not implemented yet in this script; only *-windows-gnu is wired up"
         ;;
     aarch64-macos-none|x86_64-macos-none|aarch64-macos|x86_64-macos)
-        die "target '$TARGET' is planned (spec D2) but not implemented yet in this script; only *-windows-gnu is wired up"
+        FLAVOR=macosx
+        HOST_TRIPLE="${TARGET%%-*}-apple-darwin"
         ;;
     *)
         die "unknown target '$TARGET'"
@@ -517,6 +520,28 @@ install_tcllib() {
 
 # --------------------------------------------------------------------------
 
+install_macos_headers() {
+    local tclsrc tksrc
+    tclsrc="$(unpacked "$TCL_TARBALL" "$BUILD_ROOT/tcl")"
+    tksrc="$(unpacked "$TK_TARBALL" "$BUILD_ROOT/tk")"
+    mkdir -p "$PREFIX/include/tcl-private" "$PREFIX/include/tk-private"
+    cp "$tclsrc/generic/"*.h "$PREFIX/include/"
+    cp "$tclsrc/unix/"*.h "$PREFIX/include/"
+    cp "$tksrc/generic/"*.h "$PREFIX/include/"
+    cp "$tksrc/macosx/"*.h "$PREFIX/include/"
+    local dir
+    for dir in generic unix compat libtommath; do
+        mkdir -p "$PREFIX/include/tcl-private/$dir"
+        cp "$tclsrc/$dir/"*.h "$PREFIX/include/tcl-private/$dir/"
+    done
+    for dir in generic macosx; do
+        mkdir -p "$PREFIX/include/tk-private/$dir"
+        cp "$tksrc/$dir/"*.h "$PREFIX/include/tk-private/$dir/"
+    done
+    mkdir -p "$PREFIX/include/X11"
+    cp "$tksrc/xlib/X11/"*.h "$PREFIX/include/X11/"
+}
+
 main() {
     need_tool zig
     log "root:   $ROOT"
@@ -529,6 +554,27 @@ main() {
     need_tool tar
     need_tool make
     need_tool patch
+    if [ "$FLAVOR" = macosx ]; then
+        [ -z "$TLS_ONLY" ] || die "macOS headers-only sysroot does not support --tls-only"
+        fetch "$TCL_TARBALL" "$TCL_URL" "$TCL_SHA256"
+        fetch "$TK_TARBALL" "$TK_URL" "$TK_SHA256"
+        fetch "$ZLIB_TARBALL" "$ZLIB_URL" "$ZLIB_SHA256"
+        fetch "$EXPAT_TARBALL" "$EXPAT_URL" "$EXPAT_SHA256"
+        install_macos_headers
+        build_zlib
+        build_expat
+        {
+            echo "Chesswiz compile sysroot for $TARGET"
+            echo "zig: $(zig version)"
+            echo "Tcl $TCL_VER headers only; sha256:$TCL_SHA256"
+            echo "Tk $TK_VER headers only; sha256:$TK_SHA256"
+            echo "zlib $ZLIB_VER static; sha256:$ZLIB_SHA256"
+            echo "Expat $EXPAT_VER static; sha256:$EXPAT_SHA256"
+            echo "No Tcl/Tk libraries or Apple frameworks. Link on a Mac with an SDK."
+        } > "$PREFIX/SYSROOT_MANIFEST.txt"
+        log "macOS compile sysroot ready (Tcl/Tk headers only; linking requires a Mac SDK)"
+        return
+    fi
     if [ -z "$TLS_ONLY" ]; then
         fetch_all
         build_zlib

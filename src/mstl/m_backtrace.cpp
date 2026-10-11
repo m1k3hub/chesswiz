@@ -42,11 +42,14 @@ void backtrace::enable(bool flag) { m_isEnabled = flag; }
 void backtrace::disable() { m_isEnabled = false; }
 
 
-#if defined(__OPTIMIZE__) || defined(_WIN32)
+#if defined(__OPTIMIZE__) || defined(_WIN32) || defined(__APPLE__)
 
 backtrace::backtrace(bool)
 {
-#ifdef _WIN32
+#ifdef __APPLE__
+	static bool const logged = (::fputs("Chesswiz: external debugger backtraces are unavailable on macOS\n", stderr), true);
+	(void)logged;
+#elif defined(_WIN32)
 	static bool const logged = (::fputs("Chesswiz: backtraces are unavailable on Windows\n", stderr), true);
 	(void)logged;
 #endif
@@ -56,7 +59,7 @@ backtrace::~backtrace() throw() {}
 
 backtrace const& backtrace::operator=(backtrace const&) { return *this; }
 bool backtrace::is_debug_mode() { return false; }
-#if defined(_WIN32) && !defined(__OPTIMIZE__)
+#if (defined(_WIN32) || defined(__APPLE__)) && !defined(__OPTIMIZE__)
 bool backtrace::empty() const { return true; }
 #endif
 void backtrace::text_write(ostringstream&, unsigned) const {}
@@ -887,7 +890,7 @@ mstl::backtrace::text_write(ostringstream& os, unsigned skip) const
 void
 mstl::backtrace::clear()
 {
-#if !defined(__OPTIMIZE__) && !defined(_WIN32)
+#if !defined(__OPTIMIZE__) && !defined(_WIN32) && !defined(__APPLE__)
 	if (m_allocator)
 		m_allocator->clear();
 	if (m_trace)

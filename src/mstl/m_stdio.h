@@ -16,14 +16,14 @@
 // (at your option) any later version.
 // ======================================================================
 
-#if defined(__unix__) || defined(_WIN32)
+#if (defined(__unix__) || defined(__APPLE__)) || defined(_WIN32)
 # include <stdio.h>
 #else
 # include "m_stdio_internal.h"
 #endif // __unix__
 
 
-#if defined(IO_NO_THREADS) && !defined(_WIN32)
+#if defined(IO_NO_THREADS) && !defined(_WIN32) && !defined(__APPLE__)
 
 # ifdef getc
 #  undef getc
@@ -245,3 +245,63 @@ inline int mstl_fclose(FILE* fp) { return ::fclose(fp); }
 #endif
 
 // vi:set ts=3 sw=3:
+
+#if defined(__APPLE__) && !defined(_mstl_darwin_stdio_included)
+#define _mstl_darwin_stdio_included
+#define fread_unlocked fread
+#define fwrite_unlocked fwrite
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+
+// Adapt glibc-style cookies to Darwin's native, streaming funopen API.
+struct cookie_io_functions_t
+{
+    ssize_t (*read)(void*, char*, size_t);
+    ssize_t (*write)(void*, const char*, size_t);
+    int (*seek)(void*, off_t*, int);
+    int (*close)(void*);
+};
+struct mstl_darwin_cookie
+{
+    void* cookie;
+    cookie_io_functions_t io;
+    static int read(void* data, char* buf, int size)
+    {
+        mstl_darwin_cookie* c = static_cast<mstl_darwin_cookie*>(data);
+        return int(c->io.read(c->cookie, buf, size_t(size)));
+    }
+    static int write(void* data, const char* buf, int size)
+    {
+        mstl_darwin_cookie* c = static_cast<mstl_darwin_cookie*>(data);
+        return int(c->io.write(c->cookie, buf, size_t(size)));
+    }
+    static fpos_t seek(void* data, fpos_t offset, int whence)
+    {
+        mstl_darwin_cookie* c = static_cast<mstl_darwin_cookie*>(data);
+        off_t pos = offset;
+        return c->io.seek(c->cookie, &pos, whence) == 0 ? fpos_t(pos) : fpos_t(-1);
+    }
+    static int close(void* data)
+    {
+        mstl_darwin_cookie* c = static_cast<mstl_darwin_cookie*>(data);
+        int rc = c->io.close ? c->io.close(c->cookie) : 0;
+        ::free(c);
+        return rc;
+    }
+};
+inline FILE* fopencookie(void* cookie, const char* mode, cookie_io_functions_t io)
+{
+    mstl_darwin_cookie* c = static_cast<mstl_darwin_cookie*>(::malloc(sizeof(*c)));
+    if (!c) { errno = ENOMEM; return 0; }
+    c->cookie = cookie;
+    c->io = io;
+    bool reading = mode[0] == 'r' || ::strchr(mode, '+');
+    bool writing = mode[0] == 'w' || mode[0] == 'a' || ::strchr(mode, '+');
+    FILE* fp = ::funopen(c, reading && io.read ? mstl_darwin_cookie::read : 0,
+        writing && io.write ? mstl_darwin_cookie::write : 0,
+        io.seek ? mstl_darwin_cookie::seek : 0, mstl_darwin_cookie::close);
+    if (!fp) ::free(c);
+    return fp;
+}
+#endif

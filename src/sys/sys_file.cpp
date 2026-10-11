@@ -520,7 +520,7 @@ sys::file::rename(char const* oldFilename, char const* newFilename, bool preserv
 
 		chmod(newFilename, st.st_mode);
 
-#if defined(__unix__) || defined(__MacOSX__)
+#if defined(__unix__) || defined(__APPLE__)
 		// suppress compiler warning, we do not expect errors
 		int rc __attribute__((unused)) = chown(newFilename, st.st_uid, st.st_gid);
 #endif

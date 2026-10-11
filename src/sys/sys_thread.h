@@ -47,7 +47,7 @@ public:
 #elif defined( __WIN32__)
 	typedef LONG atomic_t;
 	typedef atomic_t lock_t;
-#elif defined(__MacOSX__)
+#elif defined(__APPLE__)
 	typedef struct { volatile int32_t counter; } atomic_t;
 	typedef atomic_t lock_t;
 #elif defined(__i386__) || defined(__x86_64__)

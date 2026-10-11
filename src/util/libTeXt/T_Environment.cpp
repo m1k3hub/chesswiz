@@ -548,7 +548,7 @@ Environment::Impl::pushProducer(ProducerP const& producer, TokenP const& macro, 
 		m_errorMode = Environment::AbortMode;
 		Messages::errmessage(
 			m_env,
-			"Macro stack size exceeded (stack size=" + mstl::string::cast(Stack_Size),
+			"Macro stack size exceeded (stack size=" + mstl::string::cast(unsigned(Stack_Size)),
 			Messages::Incorrigible);
 	}
 
@@ -591,7 +591,7 @@ Environment::Impl::pushGroup()
 		m_errorMode = Environment::AbortMode;
 		Messages::errmessage(
 			m_env,
-			"Grouping level exceeded (grouping level=" + mstl::string::cast(Stack_Size),
+			"Grouping level exceeded (grouping level=" + mstl::string::cast(unsigned(Stack_Size)),
 			Messages::Incorrigible);
 	}
 
@@ -627,7 +627,7 @@ Environment::Impl::pushInput(InputP const& input)
 		m_errorMode = Environment::AbortMode;
 		Messages::errmessage(
 			m_env,
-			"Input stack size exceeded (stack size=" + mstl::string::cast(Stack_Size),
+			"Input stack size exceeded (stack size=" + mstl::string::cast(unsigned(Stack_Size)),
 			Messages::Incorrigible);
 	}
 

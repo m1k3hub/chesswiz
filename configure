@@ -1127,6 +1127,7 @@ fi
 #    Determines if the kernel supports inotify.
 #
 proc SystemHasInotify {} {
+    if {$::tcl_platform(os) ne "Linux"} { return 0 }
     global TestInotify
     global TestInotifySys
     global tcl_platform
@@ -2051,6 +2052,8 @@ proc writeMakefile {success} {
     if {[string match *windows* $configure(target)]} {
         append option(SUFFIX) .exe
         set option(TARGET_WINDOWS) yes
+    } elseif {[string match *macos* $configure(target)]} {
+        set option(TARGET_MACOS) yes
     }
     set option(PROGRAM) $configure(program)
 
@@ -2363,6 +2366,9 @@ if {[string length $configure(target)] && [string length $configure(toolchain)] 
 }
 
 if {$configure(toolchain) eq "zig"} {
+    if {![info exists ::env(ZIG_GLOBAL_CACHE_DIR)]} {
+        set ::env(ZIG_GLOBAL_CACHE_DIR) [file join [pwd] build zig-cache]
+    }
     set validTargets {x86_64-windows-gnu aarch64-macos x86_64-macos x86_64-linux-gnu.2.31}
     if {$configure(target) ni $validTargets} {
         puts "Invalid or missing target: '$configure(target)'"
@@ -2384,6 +2390,8 @@ if {$configure(toolchain) eq "zig"} {
             set tcl_platform(wordSize) 8
         }
         *macos* {
+            Append environment(SYS_CFLAGS) -DMAC_OSX_TK
+            Append environment(SYS_CXXFLAGS) -DMAC_OSX_TK
             set tcl_platform(platform) unix
             set tcl_platform(os) Darwin
             if {[string match aarch64* $configure(target)]} {
@@ -2493,6 +2501,18 @@ if {[string length $gxxVer]} {
     checkZziplib
     checkExpat
     checkGdbm
+
+    # A headers-only Darwin sysroot supplies target zlib/Expat archives.
+    # Never select host Linux libraries while cross-compiling.
+    if {$configure(toolchain) eq "zig" && [string match *macos* $configure(target)]} {
+        set sysroot [file join [pwd] build $configure(target)]
+        foreach pkg {zlib expat} lib {z expat} {
+            set package($pkg-inc) "-I$sysroot/include"
+            set package($pkg-lib) "$sysroot/lib/lib$lib.a"
+        }
+        set subdir(zlib) ""
+        set subdir(expat) ""
+    }
 
     # We will always use the broken linker hack, the newer versions
     # of the GNU linker are all broken (problems with the initialization

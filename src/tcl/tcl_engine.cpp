@@ -40,7 +40,7 @@
 #include "m_vector.h"
 #include "m_assert.h"
 
-#include <stdio.h>
+#include "m_stdio.h"
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -603,6 +603,8 @@ static EngineLog* m_log = 0;
 // portable ssize_t / int64_t. Match whichever struct is in scope.
 #if defined(_WIN32)
 	typedef int64_t tcl_cookie_off_t;
+#elif defined(__APPLE__)
+	typedef off_t tcl_cookie_off_t;
 #else
 	typedef __off64_t tcl_cookie_off_t;
 #endif

@@ -31,7 +31,7 @@ $(LIB).a: minilzo.o
 
 minilzo.o: minilzo.c
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(CFLAGS:  = )]"
-	@gcc -c $(CFLAGS) $(EXTRA_CFLAGS) $(SOURCES)
+	@$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) $(SOURCES)
 
 
 #

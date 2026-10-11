@@ -646,7 +646,7 @@ struct compare_less
 
 #if defined(__BSD__) || defined (__WIN32__) || defined (__WIN64__)
 typedef int (*Comparison)(void*, void const*, void const*);
-#elif defined(__unix__)
+#elif defined(__unix__) || defined(__APPLE__)
 typedef int (*Comparison)(void const*, void const*, void*);
 #else
 # error "qsort_r/qsort_s available?"
@@ -658,6 +658,21 @@ qsort(void* base, size_t nmemb, size_t size, Comparison compare, void* arg)
 {
 #if defined (__WIN32__) || defined (__WIN64__)
 	::qsort_s(base, nmemb, size, compare, arg);
+#elif defined(__APPLE__)
+	// Keep the internal callbacks in context-last order and adapt them once
+	// at the BSD libc boundary (including functor and function callbacks).
+	struct DarwinComparison
+	{
+		Comparison compare;
+		void* arg;
+		static int call(void* cookie, void const* lhs, void const* rhs)
+		{
+			DarwinComparison* ctx = static_cast<DarwinComparison*>(cookie);
+			return ctx->compare(lhs, rhs, ctx->arg);
+		}
+	};
+	DarwinComparison ctx = { compare, arg };
+	::qsort_r(base, nmemb, size, &ctx, DarwinComparison::call);
 #elif defined(__BSD__)
 	::qsort_r(base, nmemb, size, arg, compare);
 #elif defined(__unix__)

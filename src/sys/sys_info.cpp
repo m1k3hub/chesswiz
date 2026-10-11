@@ -188,7 +188,7 @@ sys::info::memTotal()
 	return status.ullTotalPhys;
 }
 
-#elif defined(__MacOSX__)
+#elif defined(__APPLE__)
 
 # include <sys/types.h>
 # include <sys/sysctl.h>
@@ -225,8 +225,8 @@ sys::info::memFree()
 	::vm_size_t		pageSize;
 	::mach_port_t	machPort = mach_host_self();;
 
-	::mach_msg_type_number_t	count		= sizeof(vmStats)/sizeof(natural_t);
 	::vm_statistics_data_t	vmStats;
+	::mach_msg_type_number_t	count = HOST_VM_INFO_COUNT;
 
 	if (	::host_page_size(machPort, &pageSize) != KERN_SUCCESS
 		|| ::host_statistics(machPort, HOST_VM_INFO, host_info_t(&vmStats), &count) != KERN_SUCCESS)
@@ -252,8 +252,8 @@ sys::info::memTotal()
 	int mib[2] = { CTL_HW, HW_MEMSIZE };
 
 	unsigned	namelen	= sizeof(mib)/sizeof(mib[0]);
-	size_t	len		= sizeof(size);
 	uint64_t	size;
+	size_t	len = sizeof(size);
 
 	if (::sysctl(mib, namelen, &size, &len, 0, 0) < 0)
 		return -1;

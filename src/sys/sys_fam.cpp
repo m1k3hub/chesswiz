@@ -158,7 +158,7 @@ Monitor::isSupported()
 } // namespace
 
 
-#if defined(WIN32) //////////////////////////////////////////////////////
+#if defined(WIN32) || defined(__APPLE__) /////////////////////////////////
 
 #include <stdio.h>
 
@@ -175,7 +175,11 @@ initFAM(mstl::string&) // no error: a no-op watcher never refuses to start
 	if (!logged)
 	{
 		logged = true;
+		#ifdef __APPLE__
+		fprintf(stderr, "sys_fam: file watching not yet implemented on macOS; files will not be watched\n");
+#else
 		fprintf(stderr, "sys_fam: file watching not yet implemented on Windows; files will not be watched\n");
+#endif
 	}
 
 	return true;
@@ -193,10 +197,6 @@ monitorFAM(mstl::string const&, Request&, file::Type, unsigned, mstl::string&)
 
 
 static void cancelMonitorFAM(Request&) {}
-
-#elif defined(__MacOSX__) && !defined(HAVE_INOTIFY) /////////////////////
-
-# error "Mac support not yet implemented"
 
 #elif !defined(HAVE_INOTIFY) && defined(HAVE_LIBFAM) ////////////////////
 

@@ -120,7 +120,7 @@ transpose8x8(vec const* v, int16_t** r)
 
 } // namespace i16
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
 // The version in /usr/lib/gcc/i486-linux-gnu/4.4.3/include/xmmintrin.h is not working!
 static __inline __m128
 _mm_cvtpi16_ps (__m64 __A)
@@ -142,7 +142,7 @@ _mm_cvtpi16_ps (__m64 __A)
 	return (__m128) __r;
 }
 
-#endif // !_WIN32: use the compiler intrinsic on Windows.
+#endif // Windows and Darwin use the compiler intrinsic.
 
 namespace flt {
 

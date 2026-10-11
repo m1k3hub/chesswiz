@@ -21,7 +21,7 @@
 #include "T_Messages.h"
 #include "T_Environment.h"
 
-#if defined(__unix__) || defined(__MaxOSX__)
+#if defined(__unix__) || defined(__APPLE__)
 # include <time.h>
 #elif defined(__WIN32__)
 # include <windows.h>
@@ -57,7 +57,7 @@ DateTime::doRegister(Environment& env)
 {
 	Value sec, min, hour, day, mon, year;
 
-#if defined(__unix__) || defined(__MaxOSX__)
+#if defined(__unix__) || defined(__APPLE__)
 
 	time_t t			= time(0);
 	struct tm* lt	= ::localtime(&t);

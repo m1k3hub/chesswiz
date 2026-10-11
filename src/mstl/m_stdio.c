@@ -9,7 +9,7 @@
 NOT IMPLEMENTED: pclose, popen
 */
 
-#if !defined(__unix__) && !defined(_WIN32)
+#if !(defined(__unix__) || defined(__APPLE__)) && !defined(_WIN32)
 
 #ifdef IO_NO_THREADS
 # define __SINGLE_THREAD__

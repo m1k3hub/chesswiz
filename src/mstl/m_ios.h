@@ -27,6 +27,11 @@
 extern "C" { struct _iobuf; }
 # define _IO_FILE _iobuf
 
+#elif defined(__APPLE__)
+
+extern "C" { struct __sFILE; }
+# define _IO_FILE __sFILE
+
 #else
 
 extern "C" { struct _IO_FILE; }

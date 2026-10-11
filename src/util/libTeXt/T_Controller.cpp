@@ -32,7 +32,7 @@
 #include "m_ifstream.h"
 #include "m_stdio.h"
 
-#if defined(__unix__) || defined(__MaxOSX__)
+#if defined(__unix__) || defined(__APPLE__)
 
 # include <sys/stat.h>
 # include <unistd.h>
@@ -323,7 +323,7 @@ Controller::processInput(	mstl::istream& inp,
 		mstl::string myPath(pathName);
 
 		mstl::string::size_type dot = myPath.rfind('.');
-#if defined(__unix__) || defined(__MaxOSX__)
+#if defined(__unix__) || defined(__APPLE__)
 		mstl::string::size_type sep = myPath.rfind('/');
 #elif defined (__WIN32__)
 		mstl::string::size_type sep = myPath.rfind('\\');
@@ -407,7 +407,7 @@ Controller::processInput(	mstl::string const& inputPath,
 			int	year		= -1;
 			int	fildes	= inStream.fildes();
 
-#if defined(__unix__) || defined(__MaxOSX__)
+#if defined(__unix__) || defined(__APPLE__)
 
 			struct ::stat st;
 

@@ -25,7 +25,7 @@
    making the distdir. */
 const char * gdbm_version = "GDBM version " PACKAGE_VERSION ". "
 "13/11/2011"
-#if !defined(_WIN32) && defined(__STDC__) && defined(__DATE__) && defined(__TIME__)
+#if !defined(_WIN32) && !defined(__APPLE__) && defined(__STDC__) && defined(__DATE__) && defined(__TIME__)
 		" (built " __DATE__ " " __TIME__ ")"
 #endif
 ;

@@ -4,7 +4,12 @@ See the file copying.txt for copying permission.
 */
 
 #include <string.h>
-#include <endian.h>
+#if defined(__APPLE__)
+# define __BYTE_ORDER __BYTE_ORDER__
+# define __LITTLE_ENDIAN __ORDER_LITTLE_ENDIAN__
+#else
+# include <endian.h>
+#endif
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 # define XML_BYTE_ORDER 12

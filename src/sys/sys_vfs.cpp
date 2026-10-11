@@ -44,7 +44,7 @@ sys::vfs::freeSize(mstl::string const& path)
 	return result ? int64_t(availableForUser.QuadPart) : int64_t(-1);
 }
 
-#elif defined(__unix__) || defined(__MacOSX__)
+#elif defined(__unix__) || defined(__APPLE__)
 
 # if defined(HAVE_STATVFS)
 

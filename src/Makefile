@@ -64,7 +64,7 @@ TCL_LIBS = \
 CQL6_LIB ?= cql6/build/libcql6.a
 
 cql6/build/libcql6.a: FORCE | recursive
-	$(MAKE) -C cql6 -f Makefile.scidb lib CXX="$(CXX)" AR="$(AR)" TARGET_WINDOWS="$(TARGET_WINDOWS)"
+	$(MAKE) -C cql6 -f Makefile.scidb lib CXX="$(CXX)" AR="$(AR)" TARGET_WINDOWS="$(TARGET_WINDOWS)" TARGET_MACOS="$(TARGET_MACOS)"
 
 cql6stub/libcql6stub.a: FORCE
 	$(MAKE) -C cql6stub

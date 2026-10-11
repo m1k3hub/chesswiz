@@ -29,6 +29,8 @@ using namespace tcl;
 #if defined(_WIN32)
 # include <stdint.h>
 	typedef int64_t tcl_cookie_off_t;
+#elif defined(__APPLE__)
+	typedef off_t tcl_cookie_off_t;
 #else
 	typedef __off64_t tcl_cookie_off_t;
 #endif
@@ -45,7 +47,14 @@ struct File::Cookie
 	static int
 	seek(void* cookie, tcl_cookie_off_t* pos, int whence)
 	{
+#if defined(__APPLE__)
+		Tcl_WideInt result = Tcl_Seek(static_cast<File*>(cookie)->m_chan, *pos, whence);
+		if (result < 0) return -1;
+		*pos = result;
+		return 0;
+#else
 		return Tcl_Seek(static_cast<File*>(cookie)->m_chan, *pos, whence);
+#endif
 	}
 
 	static int

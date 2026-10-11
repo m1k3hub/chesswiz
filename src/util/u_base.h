@@ -30,7 +30,11 @@
 // We want to use 'minor' and 'major' as method names.
 // Unfortunately these names are used as macros,
 // so we have to undefine these macros.
-# include "sys/sysmacros.h"
+# ifdef __APPLE__
+#  include <sys/types.h>
+# else
+#  include "sys/sysmacros.h"
+# endif
 # undef minor
 # undef major
 #endif
