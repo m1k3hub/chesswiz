@@ -18,8 +18,9 @@ jobs:
             libfreetype6-dev libsm-dev libglu1-mesa-dev libxcursor-dev libfontconfig1-dev libgdbm-dev \
             libx11-dev libxft-dev libxext-dev zlib1g-dev libexpat1-dev libmpv-dev xvfb xauth
       - run: ./configure
-      - run: make -C src -j4
-      - run: make -C tcl
+      # The full build (src, engines, man pages, Tcl bundle), as a user would.
+      - run: make -C engines/stockfish/src net   # NNUE is too big for git
+      - run: make -j4
       # The app tests run against the installed share files.
       - run: sudo make install
       - run: xvfb-run -a make -C tests tcl
