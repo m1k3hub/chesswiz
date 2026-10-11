@@ -64,6 +64,9 @@ set exec		[file dirname $::nameofexecutable]
 # the program does not move the user's settings; SCIDB_USERDIR overrides it.
 if {[info exists ::env(SCIDB_USERDIR)] && $::env(SCIDB_USERDIR) ne ""} {
 	set user [file normalize $::env(SCIDB_USERDIR)]
+} elseif {$::tcl_platform(platform) eq "windows" && [info exists ::env(APPDATA)]} {
+	# Windows keeps settings in the roaming profile (spec D7).
+	set user [file join [file normalize $::env(APPDATA)] Chesswiz]
 } else {
 	set user "%USERDIRNAME%"
 	if {[string match ?USERDIRNAME? $user]} { set user .chesswiz }

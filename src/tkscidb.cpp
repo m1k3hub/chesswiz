@@ -104,26 +104,106 @@ init(Tcl_Interp* ti)
 }
 
 
+#ifdef _WIN32
+
+# include <windows.h>
+# include <string.h>
+
+static bool
+isScript(char const* path)
+{
+	char const* ext = strrchr(path, '.');
+	// tcl/chesswiz.exe is the bundle in a build tree.
+	return ext && (_stricmp(ext, ".tcl") == 0 || _stricmp(ext, ".exe") == 0);
+}
+
+
+static bool
+findBundle(char* path, size_t size)
+{
+	DWORD n = GetModuleFileNameA(0, path, DWORD(size));
+
+	if (n == 0 || n >= size)
+		return false;
+
+	char* sep = strrchr(path, '\\');
+	if (!sep || size_t(sep - path) + sizeof("\\chesswiz.tcl") > size)
+		return false;
+
+	strcpy(sep, "\\chesswiz.tcl");
+	return GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
+}
+
+
+// A self-contained install keeps Tcl's script library in lib\tcl8.6 beside
+// the exe; Tcl itself only looks in ..\lib (Tk then finds lib\tk8.6).
+static void
+setTclLibrary()
+{
+	char path[MAX_PATH + 32];
+	DWORD n = GetModuleFileNameA(0, path, MAX_PATH);
+
+	if (n == 0 || n >= MAX_PATH || getenv("TCL_LIBRARY"))
+		return;
+
+	char* sep = strrchr(path, '\\');
+	if (!sep)
+		return;
+
+	strcpy(sep, "\\lib\\tcl8.6");
+	char init[MAX_PATH + 48];
+	strcpy(init, path);
+	strcat(init, "\\init.tcl");
+
+	if (GetFileAttributesA(init) != INVALID_FILE_ATTRIBUTES)
+		_putenv_s("TCL_LIBRARY", path);
+}
+
+#endif
+
+
 int
 main(int argc, char* argv[])
 {
 #ifdef _WIN32
-	// The scripts are UTF-8, but Tk would read the startup script in the
-	// system code page (e.g. cp1252) on Windows.
-	if (argc > 1 && argv[1][0] != '-')
+	setTclLibrary();
+
+	// Without a script (a double click, or files to open as arguments) start
+	// the bundle chesswiz.tcl beside the exe. The scripts are UTF-8, but Tk
+	// would read the startup script in the system code page.
 	{
 		static char encodingOpt[] = "-encoding";
 		static char utf8[] = "utf-8";
-		char** args = new char*[argc + 3];
+		static char bundle[MAX_PATH + 32];
 
-		args[0] = argv[0];
-		args[1] = encodingOpt;
-		args[2] = utf8;
-		for (int i = 1; i <= argc; ++i)
-			args[i + 2] = argv[i];
+		char* script = 0;
+		int first = 1;
 
-		Tk_Main(argc + 2, args, init);
-		return 0;
+		if (argc > 1 && argv[1][0] != '-' && isScript(argv[1]))
+		{
+			script = argv[1];
+			first = 2;
+		}
+		else if (findBundle(bundle, sizeof(bundle)))
+		{
+			script = bundle;
+		}
+
+		if (script)
+		{
+			char** args = new char*[argc + 4];
+			int n = 0;
+
+			args[n++] = argv[0];
+			args[n++] = encodingOpt;
+			args[n++] = utf8;
+			args[n++] = script;
+			for (int i = first; i <= argc; ++i)
+				args[n++] = argv[i];
+
+			Tk_Main(n - 1, args, init);
+			return 0;
+		}
 	}
 #endif
 

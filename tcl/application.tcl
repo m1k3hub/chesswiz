@@ -1110,6 +1110,7 @@ proc ChooseLanguage {parent} {
 		}
 	}
 	wm resizable $dlg no no
+	wm title $dlg [lindex [::tk::UnderlineAmpersand $::menu::mc::Language] 0]
 	wm transient $dlg $parent
 	::util::place $dlg -parent $parent -position center
 	update idletasks
