@@ -71,7 +71,7 @@ jobs:
   windows-test:
     runs-on: windows-latest
     needs: windows-cross
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -97,8 +97,30 @@ jobs:
           }
           if ($process.ExitCode -ne 0 -or -not (Test-Path $result)) { throw 'Application smoke test failed' }
           if ((Get-Content $result -Raw).Trim() -ne 'OK') { throw 'Missing smoke OK' }
+      - name: Build the installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          $version = "0.9.${{ github.run_number }}"
+          & $iscc /Q "/DSrcDir=$((Resolve-Path build/dist/Chesswiz).Path)" "/DRootDir=$PWD" "/DAppVersion=$version" "/O$PWD\build\installer" scripts\chesswiz.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed: $LASTEXITCODE" }
+          Get-ChildItem build\installer
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Chesswiz-windows-installer
+          path: build/installer/*.exe
+          if-no-files-found: error
   macos:
-    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14        # Apple Silicon
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
@@ -111,15 +133,15 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: build/src
-          key: sysroot-sources-${{ runner.os }}-${{ hashFiles('scripts/sysroot-pins.sh') }}
+          key: sysroot-sources-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('scripts/sysroot-pins.sh') }}
       - name: Build Aqua runtime, TLS, app and engines
         run: |
           scripts/build-macos-runtime.sh "$PWD/build/macos-sysroot"
-          scripts/build-macos-tls.sh "$PWD/build/macos-sysroot" arm64
-          scripts/build-macos-app-binary.sh "$PWD" "$PWD/build/macos-sysroot" arm64
+          scripts/build-macos-tls.sh "$PWD/build/macos-sysroot" ${{ matrix.arch }}
+          scripts/build-macos-app-binary.sh "$PWD" "$PWD/build/macos-sysroot" ${{ matrix.arch }}
           make -C tcl
           make -C engines/stockfish/src net   # NNUE is too big for git
-          SF_ARCHS=arm64 scripts/build-macos-engines.sh
+          SF_ARCHS=${{ matrix.arch }} scripts/build-macos-engines.sh
       - name: Assemble ad-hoc signed app and DMG
         if: env.CHESSWIZ_SIGN_ID == ''
         run: scripts/make-macos-app.sh . "$PWD/build/dist/Chesswiz.app" "$PWD/build/macos-sysroot"
@@ -155,6 +177,6 @@ jobs:
           xcrun stapler validate build/dist/Chesswiz.dmg
       - uses: actions/upload-artifact@v4
         with:
-          name: Chesswiz-macos
+          name: Chesswiz-macos-${{ matrix.arch }}
           path: build/dist/Chesswiz.dmg
           if-no-files-found: error
