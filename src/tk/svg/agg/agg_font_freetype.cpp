@@ -158,7 +158,7 @@ namespace agg
 
         FT_Vector*  point;
         FT_Vector*  limit;
-        unsigned char* tags;
+        decltype(FT_Outline::tags) tags;  // char* before FreeType 2.13.3
 
         int   n;         // index of contour in outline
         int   first;     // index of first point in contour

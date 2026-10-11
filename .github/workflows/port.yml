@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y tcl8.6 patch make curl xz-utils
+      - run: sudo apt-get update && sudo apt-get install -y tcl8.6 patch make curl xz-utils llvm && ls -d /usr/lib/llvm-*/bin | tail -1 >> "$GITHUB_PATH"
       - name: Install pinned Zig (archive checksum in .zig-sha256)
         # The pinned dev build is gone from ziglang.org; the exact archive is
         # an asset of the release named by the repository variable

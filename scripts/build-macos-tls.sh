@@ -29,7 +29,7 @@ case "$ARCH" in x86_64) TARGET=darwin64-x86_64-cc;; arm64) TARGET=darwin64-arm64
     ./Configure "$TARGET" no-shared no-tests no-docs --prefix="$PREFIX" --libdir=lib -mmacosx-version-min=11.0
     make -j"$JOBS" build_libs
     make install_dev
-) > "$WORK/openssl.log" 2>&1
+) > "$WORK/openssl.log" 2>&1 || { tail -40 "$WORK/openssl.log"; exit 1; }
 tar xf "$CACHE/$TCLTLS_TARBALL" -C "$WORK"
 patch -d "$WORK/tcltls-$TCLTLS_VER" -p1 < "$ROOT/scripts/patches/tcltls-1.7.22-hostname.patch"
 mkdir -p "$WORK/tls-obj"
@@ -43,10 +43,10 @@ fi
     TCLTLS_SSL_LIBS="$PREFIX/lib/libssl.a $PREFIX/lib/libcrypto.a" \
     TCLTLS_SSL_CFLAGS="-I$PREFIX/include" TCLTLS_SSL_CPPFLAGS="-I$PREFIX/include" \
         "$WORK/tcltls-$TCLTLS_VER/configure" --prefix="$PREFIX" --with-tcl="$PREFIX/lib" \
-            --enable-shared --enable-stubs --enable-deterministic "${CROSS[@]}"
+            --enable-shared --enable-stubs --enable-deterministic ${CROSS[@]+"${CROSS[@]}"}
     make -j"$JOBS"
     make install
-) > "$WORK/tcltls.log" 2>&1
+) > "$WORK/tcltls.log" 2>&1 || { tail -40 "$WORK/tcltls.log"; exit 1; }
 rm -rf "$PREFIX/lib/tls$TCLTLS_VER"
 mv "$PREFIX/lib/tcltls$TCLTLS_VER" "$PREFIX/lib/tls$TCLTLS_VER"
 tar xf "$CACHE/$TCLLIB_TARBALL" -C "$WORK"
