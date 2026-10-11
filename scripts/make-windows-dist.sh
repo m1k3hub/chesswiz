@@ -8,6 +8,7 @@
 #     tkchesswiz.exe       the program (Tcl/Tk linked in statically)
 #     chesswiz.tcl         the script bundle; main() starts it when present
 #     lib/tcl8.6 tk8.6 tcl8   Tcl/Tk script libraries ([info library] finds them)
+#     lib/json              tcllib modules (from the sysroot)
 #     data/ hyphen/ lang/ pieces/ themes/ ...   share files (share dir = exe dir)
 #     fonts/              registered privately at startup (spec D8)
 #
@@ -52,7 +53,7 @@ if [ -d "$ROOT/build/engines-win" ]; then
 	cp "$ROOT"/build/engines-win/*.exe "$DIST/engines/"
 fi
 
-for d in tcl8.6 tk8.6 tcl8; do
+for d in tcl8.6 tk8.6 tcl8 json; do
 	cp -R "$SYSROOT/lib/$d" "$DIST/lib/"
 done
 

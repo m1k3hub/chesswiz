@@ -39,21 +39,25 @@ TCL_VER=8.6.17
 TK_VER=8.6.17
 ZLIB_VER=1.3.1
 EXPAT_VER=2.6.4
+TCLLIB_VER=2.0
 
 TCL_TARBALL=tcl${TCL_VER}-src.tar.gz
 TK_TARBALL=tk${TK_VER}-src.tar.gz
 ZLIB_TARBALL=zlib-${ZLIB_VER}.tar.gz
 EXPAT_TARBALL=expat-${EXPAT_VER}.tar.xz
+TCLLIB_TARBALL=tcllib-${TCLLIB_VER}.tar.gz
 
 TCL_URL=https://prdownloads.sourceforge.net/tcl/${TCL_TARBALL}
 TK_URL=https://prdownloads.sourceforge.net/tcl/${TK_TARBALL}
 ZLIB_URL=https://zlib.net/fossils/${ZLIB_TARBALL}
 EXPAT_URL=https://github.com/libexpat/libexpat/releases/download/R_2_6_4/${EXPAT_TARBALL}
+TCLLIB_URL=https://core.tcl-lang.org/tcllib/uv/${TCLLIB_TARBALL}
 
 TCL_SHA256=a3903371efcce8a405c5c245d029e9f6850258a60fa3761c4d58995610949b31
 TK_SHA256=e4982df6f969c08bf9dd858a6891059b4a3f50dc6c87c10abadbbe2fc4838946
 ZLIB_SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
 EXPAT_SHA256=a695629dae047055b37d50a0ff4776d1d45d0a4c842cf4ccee158441f55ff7ee
+TCLLIB_SHA256=590263de0832ac801255501d003441a85fb180b8ba96265d50c4a9f92fde2534
 
 # Repo root = parent of scripts/; the script may be invoked from anywhere.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -192,6 +196,7 @@ fetch_all() {
     fetch "$TK_TARBALL"   "$TK_URL"   "$TK_SHA256"
     fetch "$ZLIB_TARBALL" "$ZLIB_URL" "$ZLIB_SHA256"
     fetch "$EXPAT_TARBALL" "$EXPAT_URL" "$EXPAT_SHA256"
+    fetch "$TCLLIB_TARBALL" "$TCLLIB_URL" "$TCLLIB_SHA256"
 }
 
 # --------------------------------------------------------------------------
@@ -407,6 +412,23 @@ write_manifest() {
     log "manifest: $mf"
 }
 
+# Pure-Tcl tcllib modules the program uses (Linux gets them from the system
+# tcllib). Installed as lib/<module>: Tcl searches the subdirectories of the
+# directory above its library.
+TCLLIB_MODULES="json"
+
+install_tcllib() {
+    local srcdir m
+    srcdir="$(unpacked "$TCLLIB_TARBALL" "$BUILD_ROOT/tcllib")"
+    for m in $TCLLIB_MODULES; do
+        rm -rf "$PREFIX/lib/$m"
+        mkdir -p "$PREFIX/lib/$m"
+        cp "$srcdir/modules/$m/"*.tcl "$PREFIX/lib/$m/"
+        [ -f "$PREFIX/lib/$m/pkgIndex.tcl" ] || die "tcllib: no pkgIndex.tcl for $m"
+    done
+    log "tcllib $TCLLIB_VER modules installed: $TCLLIB_MODULES"
+}
+
 # --------------------------------------------------------------------------
 
 main() {
@@ -421,6 +443,7 @@ main() {
     build_tcl
     build_tk
     build_expat
+    install_tcllib
     # Tk extensions need platform widget defaults, not installed by Tk's
     # install-private-headers target.
     if [ "$FLAVOR" = win ]; then
