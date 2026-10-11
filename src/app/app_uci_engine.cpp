@@ -227,7 +227,10 @@ uci::Engine::probeResult() const
 unsigned
 uci::Engine::probeTimeout() const
 {
-	return 1000;
+	// Time from start to "uciok". Engines like Stockfish load their net
+	// first; a busy machine or a virus scan of a first start (Windows) can
+	// take seconds. A responsive engine answers at once anyway.
+	return 5000;
 }
 
 
