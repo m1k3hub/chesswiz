@@ -9,9 +9,9 @@
 #     chesswiz.tcl         the script bundle; main() starts it when present
 #     lib/tcl8.6 tk8.6 tcl8   Tcl/Tk script libraries ([info library] finds them)
 #     data/ hyphen/ lang/ pieces/ themes/ ...   share files (share dir = exe dir)
+#     fonts/              registered privately at startup (spec D8)
 #
-# Fonts are not installed yet (Windows needs private registration at
-# startup, spec D8), nor engines; the installer comes later.
+# Engines are not included yet; the installer comes later.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -42,6 +42,10 @@ make -s -C "$BUILD/src" install-data install-hyphen SHAREDIR="$DIST"
 rm -f "$DIST/chesswiz.exe"
 cp "$BUILD/tcl/chesswiz.exe" "$DIST/chesswiz.tcl"
 cp "$BUILD/src/tkchesswiz.exe" "$DIST/"
+
+# Registered privately by tkchesswiz.exe at startup.
+mkdir -p "$DIST/fonts"
+cp "$ROOT"/tcl/fonts/*.ttf "$DIST/fonts/"
 
 for d in tcl8.6 tk8.6 tcl8; do
 	cp -R "$SYSROOT/lib/$d" "$DIST/lib/"

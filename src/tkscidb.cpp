@@ -159,6 +159,45 @@ setTclLibrary()
 		_putenv_s("TCL_LIBRARY", path);
 }
 
+
+// The program's fonts (chess figurines, symbols) are registered for this
+// process only (FR_PRIVATE): no installation, no admin rights (spec D8).
+static void
+registerFonts()
+{
+	char dir[MAX_PATH + 32];
+	DWORD n = GetModuleFileNameA(0, dir, MAX_PATH);
+
+	if (n == 0 || n >= MAX_PATH)
+		return;
+
+	char* sep = strrchr(dir, '\\');
+	if (!sep)
+		return;
+	strcpy(sep + 1, "fonts\\");
+
+	char pattern[MAX_PATH + 48];
+	strcpy(pattern, dir);
+	strcat(pattern, "*.ttf");
+
+	WIN32_FIND_DATAA data;
+	HANDLE h = FindFirstFileA(pattern, &data);
+
+	if (h == INVALID_HANDLE_VALUE)
+		return;
+
+	do
+	{
+		char path[2*MAX_PATH + 48];
+		strcpy(path, dir);
+		strcat(path, data.cFileName);
+		AddFontResourceExA(path, FR_PRIVATE, 0);
+	}
+	while (FindNextFileA(h, &data));
+
+	FindClose(h);
+}
+
 #endif
 
 
@@ -167,6 +206,7 @@ main(int argc, char* argv[])
 {
 #ifdef _WIN32
 	setTclLibrary();
+	registerFonts();
 
 	// Without a script (a double click, or files to open as arguments) start
 	// the bundle chesswiz.tcl beside the exe. The scripts are UTF-8, but Tk
