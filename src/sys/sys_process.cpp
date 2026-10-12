@@ -384,11 +384,10 @@ Process::setPriority(Priority priority)
 {
 	M_REQUIRE(priority != Unknown);
 
+	// Priority is a hint: unprivileged users may not raise it (EACCES), and a
+	// refusal must not stop the engine from analysing.
 	if (isAlive())
-	{
-		if (!::setPriority(m_pid, priority))
-			TCL_RAISE("setPriority() failed");
-	}
+		::setPriority(m_pid, priority);
 }
 
 
