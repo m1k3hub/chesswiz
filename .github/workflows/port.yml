@@ -1,16 +1,18 @@
 name: Chesswiz ports
 on:
   push:
+    tags: ['v*']
+    branches: ['**']
   pull_request:
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
@@ -27,10 +29,10 @@ jobs:
       # The outer Xvfb supplies DISPLAY; suppress the Makefile's nested Xvfb.
       - run: xvfb-run -a make -C tests app-tcl XVFB_RUN=
   windows-cross:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: sudo apt-get update && sudo apt-get install -y tcl8.6 patch make curl xz-utils llvm && ls -d /usr/lib/llvm-*/bin | tail -1 >> "$GITHUB_PATH"
       - name: Install pinned Zig (archive checksum in .zig-sha256)
         # The pinned dev build is gone from ziglang.org; the exact archive is
@@ -47,7 +49,7 @@ jobs:
           tar xf build/zig/archive.tar.xz -C build/zig --strip-components=1
           test "$(build/zig/zig version)" = "$(cat .zig-version)"
           echo "$PWD/build/zig" >> "$GITHUB_PATH"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: build/src
           key: sysroot-sources-${{ runner.os }}-${{ hashFiles('scripts/sysroot-pins.sh') }}
@@ -63,18 +65,20 @@ jobs:
           make -C engines/stockfish/src net   # NNUE is too big for git
           scripts/build-windows-engines.sh
           scripts/make-windows-dist.sh .
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Chesswiz-windows
           path: build/dist/Chesswiz
           if-no-files-found: error
   windows-test:
+    # costly runners (Windows 2x, macOS 10x minutes): tags, manual runs, or [full] in the commit message
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[full]')
     runs-on: windows-latest
     needs: windows-cross
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: Chesswiz-windows
           path: build/dist/Chesswiz
@@ -108,12 +112,14 @@ jobs:
           & $iscc /Q "/DSrcDir=$((Resolve-Path build/dist/Chesswiz).Path)" "/DRootDir=$PWD" "/DAppVersion=$version" "/O$PWD\build\installer" scripts\chesswiz.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed: $LASTEXITCODE" }
           Get-ChildItem build\installer
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Chesswiz-windows-installer
           path: build/installer/*.exe
           if-no-files-found: error
   macos:
+    # costly runners (Windows 2x, macOS 10x minutes): tags, manual runs, or [full] in the commit message
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[full]')
     strategy:
       fail-fast: false
       matrix:
@@ -131,8 +137,8 @@ jobs:
       NOTARY_PASSWORD: ${{ secrets.CHESSWIZ_NOTARY_PASSWORD }}
       NOTARY_TEAM_ID: ${{ secrets.CHESSWIZ_NOTARY_TEAM_ID }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
         with:
           path: build/src
           key: sysroot-sources-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('scripts/sysroot-pins.sh') }}
@@ -184,7 +190,7 @@ jobs:
           python3 -c 'import json; assert json.load(open("build/notary.json"))["status"] == "Accepted"'
           xcrun stapler staple build/dist/Chesswiz.dmg
           xcrun stapler validate build/dist/Chesswiz.dmg
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Chesswiz-macos-${{ matrix.arch }}
           path: build/dist/Chesswiz.dmg
