@@ -1251,6 +1251,7 @@ public:
 	void restoreZoom();
 	void applyZoom();
 	void restoreZoomGeometry();
+	static void raiseByDepth(std::vector<Node*>& nodes);
 	bool zoomEvent(XEvent* event);
 	Node* zoomed() const { return m_root->m_zoom; }
 	void refresh();
@@ -3309,6 +3310,14 @@ Node::applyZoom()
 	Tk_MaintainGeometry(w, tkwin(), 0, 0, Tk_Width(tkwin()), Tk_Height(tkwin()));
 	Tk_MapWindow(w);
 	Tk_RestackWindow(w, Above, nullptr);
+	// A zoomed notebook's panes are its siblings under the root window:
+	// raise them above it again, parents first.
+	std::vector<Node*> inner;
+	for (auto const& g : m_zoomGeometry)
+		if (::s_liveNodes.find(g.node) != ::s_liveNodes.end() && g.node->exists()
+			&& g.node->hasAncestor(m_zoom))
+			inner.push_back(g.node);
+	raiseByDepth(inner);
 }
 
 bool
@@ -3377,20 +3386,24 @@ Node::restoreZoomGeometry()
 		if (g.mapped && Tk_Parent(w) == tkwin()) Tk_MapWindow(w);
 	}
 	tcl::invoke(__func__, tcl::newObj("update"), tcl::newObj("idletasks"), nullptr);
-	// The nodes are siblings under the root window, collected in pointer
-	// order: raise containers before their panes, or a container covers
-	// the panes it holds (seen on Windows).
-	auto depth = [](Node* n) {
-		int d = 0;
-		if (::s_liveNodes.find(n) != ::s_liveNodes.end())
-			for (; n; n = n->parent()) ++d;
-		return d;
-	};
-	std::stable_sort(m_zoomGeometry.begin(), m_zoomGeometry.end(),
-		[&](ZoomGeometry const& a, ZoomGeometry const& b) { return depth(a.node) < depth(b.node); });
+	std::vector<Node*> nodes;
 	for (auto const& g : m_zoomGeometry)
 		if (::s_liveNodes.find(g.node) != ::s_liveNodes.end() && g.node->exists())
-			Tk_RestackWindow(g.node->tkwin(), Above, nullptr);
+			nodes.push_back(g.node);
+	raiseByDepth(nodes);
+}
+
+// The nodes are siblings under the root window, collected in pointer
+// order: raise containers before their panes, or a container covers the
+// panes it holds (seen on Windows).
+void
+Node::raiseByDepth(std::vector<Node*>& nodes)
+{
+	auto depth = [](Node const* n) { int d = 0; for (; n; n = n->parent()) ++d; return d; };
+	std::stable_sort(nodes.begin(), nodes.end(),
+		[&](Node const* a, Node const* b) { return depth(a) < depth(b); });
+	for (Node* n : nodes)
+		Tk_RestackWindow(n->tkwin(), Above, nullptr);
 }
 
 
