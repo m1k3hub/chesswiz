@@ -204,7 +204,7 @@ proc ::scidb::test::assistant::stubbed {proc body} {
 	return $Calls
 }
 
-tcltest::test assistant-new-game-confirms {new_game asks first and only then starts a game} -body {
+tcltest::test assistant-new-game-confirms {new_game is harmless: it starts a game without asking} -body {
 	::scidb::test::assistant::setup 0
 	set denied [::scidb::test::assistant::stubbed ::menu::gameNew {
 		::application::assistant::runTool new_game {}
@@ -214,7 +214,7 @@ tcltest::test assistant-new-game-confirms {new_game asks first and only then sta
 		::application::assistant::runTool new_game {}
 	}]
 	list [llength $denied] [llength $allowed] [lindex $allowed 0 1]
-} -result {0 1 Normal}
+} -result {1 1 Normal}
 
 tcltest::test assistant-open-search {open_search opens the requested dialog on the active base} -body {
 	set calls [::scidb::test::assistant::stubbed ::application::database::OpenRatingSearch {
@@ -805,8 +805,8 @@ tcltest::test assistant-add-to-repertoire {the line goes to the one repertoire n
 	list [string match "error: no writable repertoire database is open*" $none] \
 		[string match "error: several repertoires are open*say which" $several] \
 		[string match "the line is being added to Black-Rep*" $named] \
-		[string match "*NOT performed*" $declined] $::scidb::test::assistant::Saved
-} -result {1 1 1 1 /r/Black-Rep.sci}
+		[string match "the line is being added to White-Rep*" $declined] $::scidb::test::assistant::Saved
+} -result {1 1 1 1 {/r/Black-Rep.sci /r/White-Rep.sci}}
 
 tcltest::test assistant-brief-download-asks {the brief's download asks first; refused, the brief is built without it} -body {
 	rename ::ai::brief::build ::scidb::test::assistant::realBrief
@@ -867,7 +867,7 @@ tcltest::test assistant-tool-log {every tool call is logged with its outcome} -b
 	set reply [::application::assistant::runTool tool_log {count 4}]
 	set ::application::assistant::ToolLog $saved
 	lmap line [split $reply \n] { regsub {^\[[0-9:]+\] } $line "" }
-} -match glob -result {{run_shell {command ls}: error -- error: unknown tool 'run_shell'} {switch_tab {tab settings}: error -- error: tab must be*} {new_game {}, asked the user: declined -- The user declined*} {list_open_databases {}: ok -- *(active)*}}
+} -match glob -result {{run_shell {command ls}: error -- error: unknown tool 'run_shell'} {switch_tab {tab settings}: error -- error: tab must be*} {new_game {}: ok -- *} {list_open_databases {}: ok -- *(active)*}}
 
 tcltest::test assistant-tool-log-bounded {the log keeps only the latest calls} -body {
 	set saved $::application::assistant::ToolLog

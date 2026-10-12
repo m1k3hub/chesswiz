@@ -192,12 +192,12 @@ tcltest::test route-active-mutating-confirms {a routed mutating tool still asks 
 	::scidb::test::route::isolated {
 		set ::application::assistant::RouteMode active
 		set ::scidb::test::route::Answer 0 ;# decline
-		set ::scidb::test::route::RouteReply [::scidb::test::route::reply new_game 0.95 0.95]
-		set transcript [::scidb::test::route::ask "start a new game"]
+		set ::scidb::test::route::RouteReply [::scidb::test::route::reply install_chessbase_fonts 0.95 0.95]
+		set transcript [::scidb::test::route::ask "install the ChessBase fonts"]
 		list $::scidb::test::route::Asked $::scidb::test::route::ChatCalls \
 			[string match {*NOT performed*} $transcript]
 	}
-} -result {{{start a new game}} 0 1}
+} -result {{{install the ChessBase fonts}} 0 1}
 
 tcltest::test route-active-error-falls-back {a failing routed tool hands the request to the model} -body {
 	::scidb::test::route::isolated {

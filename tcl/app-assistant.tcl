@@ -60,7 +60,7 @@ variable Actions {
 		::application::assistant::DoExplainPosition
 	}
 	new_game {
-		1 0 "start a new game"
+		0 0 "start a new game"
 		"Start a new, empty game on the board."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoNewGame
@@ -90,7 +90,7 @@ variable Actions {
 		::application::assistant::DoDiscover
 	}
 	open_database {
-		1 0 "open the database %s"
+		0 0 "open the database %s"
 		"Open a database file (.sci, .si4, .cbh, .pgn, ...) given its full path."
 		{{"type":"object","properties":{"path":{"type":"string","description":"absolute path of the database file"}},"required":["path"]}}
 		::application::assistant::DoOpenDatabase
@@ -258,7 +258,7 @@ variable Actions {
 		::application::assistant::DoSaveWorkingSet
 	}
 	add_to_repertoire {
-		1 0 "add the line on the board to the repertoire %s"
+		0 0 "add the line on the board to the repertoire %s"
 		"Save the line on the board, up to the current move, into an open repertoire (opening) database; Chesswiz's save dialog opens for the user to check. 'repertoire' is part of the database's name when several are open. Only when the user asks to add the line."
 		{{"type":"object","properties":{"repertoire":{"type":"string","description":"part of the repertoire database's name"}}}}
 		::application::assistant::DoAddToRepertoire
@@ -312,7 +312,7 @@ variable Actions {
 		::application::assistant::DoEngineOptions
 	}
 	start_engine {
-		1 0 "analyse the board position with %s"
+		0 0 "analyse the board position with %s"
 		"Start an engine on the position on the board in an analysis pane; it follows the board as it changes. Without a pane a free one is used or a new one opened; giving the pane of a running engine replaces or restarts it (e.g. to change lines). lines = number of best lines (MultiPV, 1-8), threads, hash in MB; each defaults to the pane's setting. Then read its lines with engine_analysis."
 		{{"type":"object","properties":{"engine":{"type":"string","description":"engine name or part of it; without it Stockfish, or the first engine"},"pane":{"type":"integer","description":"analysis pane number as in its title: 1 for 'Analysis', 2 for 'Analysis (2)'"},"lines":{"type":"integer"},"threads":{"type":"integer"},"hash":{"type":"integer","description":"hash size in MB"}}}}
 		::application::assistant::DoStartEngine
@@ -342,13 +342,13 @@ variable Actions {
 		::application::assistant::DoEngineAnalysis
 	}
 	stop_engine {
-		1 0 "stop the engine in analysis pane %s"
+		0 0 "stop the engine in analysis pane %s"
 		"Stop the engine of an analysis pane; the pane stays open. The pane may be left out when only one engine runs."
 		{{"type":"object","properties":{"pane":{"type":"integer"}}}}
 		::application::assistant::DoStopEngine
 	}
 	set_engine_option {
-		1 0 "set option '%2$s' of %1$s to '%3$s' (profile %4$s)"
+		0 0 "set option '%2$s' of %1$s to '%3$s' (profile %4$s)"
 		"Change an option of an engine's profile (default 'Default'), checked against its type and range; engine_options lists them. Running panes of that engine restart with it. The change is saved."
 		{{"type":"object","properties":{"engine":{"type":"string"},"option":{"type":"string"},"value":{"type":"string"},"profile":{"type":"string"}},"required":["engine","option","value"]}}
 		::application::assistant::DoSetEngineOption
@@ -402,7 +402,7 @@ variable Actions {
 		::application::assistant::DoClassifierStatus
 	}
 	annotate_game {
-		1 0 "annotate this game with engine-grounded comments"
+		0 0 "annotate this game with engine-grounded comments"
 		"Annotate the game on the board: classify every move with the chess engine, then write a comment for the moves that deserve one (blunders, mistakes, inaccuracies, and the only move that holds). With 'prose' true (the default) the comment is written by the language model from the engine's facts and checked; with 'prose' false the comment is the engine's own verdict in words, which costs no model call. 'marks' also sets the standard annotation mark. 'max_plies' bounds the work; 'from_move' and 'to_move' annotate only that stretch ('analyse moves 20 to 30'). The game is left modified for the user to save."
 		{{"type":"object","properties":{"prose":{"type":"boolean","description":"let the language model word the comments, default true"},"depth":{"type":"integer","description":"engine depth per move, default 12"},"marks":{"type":"boolean","description":"also set the move's annotation mark, default false"},"max_plies":{"type":"integer","description":"stop after this many moves, default 60"},"from_move":{"type":"integer","description":"annotate from this move number on ('moves 20-30': 20)"},"to_move":{"type":"integer","description":"annotate up to and including this move number"}}}}
 		::application::assistant::DoAnnotateGame
@@ -456,13 +456,13 @@ variable Actions {
 		::application::assistant::DoNoveltyLabel
 	}
 	training_set {
-		1 0 "build a training set from the games of the database"
+		0 0 "build a training set from the games of the database"
 		"Build puzzles from the active database's games: Chesswiz's CQL matcher finds positions just before a decisive move: a checkmate (any, or a smothered, back-rank, Boden's, Anastasia's, Arabian, epaulette or queen-and-pawn mate), a Legal's or Blackburne's mate, a double or discovered check, a knight or pawn fork, a skewer, a double attack on loose pieces, a pinned piece attacked by a pawn, a Greek gift or double bishop sacrifice, or an underpromotion; by default a mix of all. The chess engine keeps only those whose solution is its best move and clearly the only good one. The puzzles are written to a PGN file under the user directory, which the user can open as a database to train. 'pattern' limits it to one kind; 'player' to one player's games; 'max' bounds the number of puzzles (default 20). It runs in the background; the Report pane shows the progress and the result."
 		{{"type":"object","properties":{"pattern":{"type":"string","enum":["checkmate","smothered_mate","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","epaulette_mate","queen_pawn_mate","double_check","discovered_check","knight_fork","skewer","greek_gift","double_bishop_sacrifice","underpromotion","legals_mate","blackburne_mate","pawn_fork","pin_attacked_by_pawn","double_attack_loose"]},"player":{"type":"string"},"max":{"type":"integer","description":"at most this many puzzles, default 20"}}}}
 		::application::assistant::DoTrainingSet
 	}
 	check_results {
-		1 0 "check the game results and show the games that contradict them"
+		0 0 "check the game results and show the games that contradict them"
 		"Find the games of the active database whose recorded result contradicts how the game ended: a checkmate scored as a draw or as a win for the mated side, a stalemate scored as a win. Chesswiz's CQL matcher reads the final positions; nothing is changed. The report lists the games, and the game list is filtered to them (clear_search shows all again)."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoCheckResults
