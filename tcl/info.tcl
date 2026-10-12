@@ -151,8 +151,8 @@ proc DisplayAbout {w} {
 		<br/><br/>
 		<font style='font-family: $fam; font-size: 12pt;'>
 			$mc::Version $::scidb::version (rev $::scidb::revision[expr {[info exists ::scidb::gitSha] && $::scidb::gitSha ne "unknown" ? ", $::scidb::gitSha" : ""}])<br/>
-			Copyright &#x00A9; 2008-2018 Gregor Cramer<br/><br/>
-			[Url http://scidb.sourceforge.net]<br/><br/>
+			Copyright &#x00A9; 2008-2018 Gregor Cramer<br/>
+			Copyright &#x00A9; 2026 Michael Thomas<br/><br/>
 			$mc::Distributed<br/><br/>
 			<font style='font-size: 10pt;'>$mc::Inspired</font>
 		</font>

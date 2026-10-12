@@ -39,6 +39,7 @@ Chesswiz should treat <abbr>.sci</abbr> as the primary working format for large 
   <li>Windows support</li>
   <li>Input of moves with keyboard</li>
   <li>Board photo</li>
+  <li>Chesswiz website (downloads, documentation, news)</li>
 </ul>
 
 <h2>Recently completed (HTML &amp; ChessBase media)</h2>
