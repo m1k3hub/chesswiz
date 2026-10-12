@@ -917,6 +917,32 @@ proc showEngineDictionary {parent} {
 }
 
 
+# Keep existing entries and their analysis profiles; only repair missing programs.
+# Windows commands retain their .exe suffix. Never replace a working old engine.
+proc MigrateEngineCommands {} {
+	variable Engines
+	set migrated {}
+	set changed 0
+	foreach entry $Engines {
+		set command [dict get $entry Command]
+		if {![file exists $command]
+				&& [regexp {^(.*)-scidb(\.exe)?$} $command -> stem extension]} {
+			set sibling "${stem}-chesswiz${extension}"
+			if {[file isfile $sibling]} {
+				set entry [dict replace $entry Command $sibling]
+				set changed 1
+			}
+		}
+		lappend migrated $entry
+	}
+	if {$changed} {
+		set Engines $migrated
+		::options::hookWriter [namespace current]::WriteEngineOptions engines
+	}
+	return $changed
+}
+
+
 proc setup {} {
 	variable EmptyEngine
 	variable Engines
@@ -934,6 +960,7 @@ proc setup {} {
 			# update local configuration file
 			set engines [LoadSharedConfiguration $shareFile]
 			::load::source $localFile -message $::load::mc::ReadingFile(engines) -encoding utf-8
+			MigrateEngineCommands
 			set changed 0
 
 			foreach newEntry $engines {
@@ -975,6 +1002,7 @@ proc setup {} {
 			if {$changed} { ::options::hookWriter [namespace current]::WriteEngineOptions engines }
 		} else {
 			::load::source $localFile -message $::load::mc::ReadingFile(engines) -encoding utf-8
+			MigrateEngineCommands
 		}
 	} elseif {$shareFiletime > 0} {
 		LoadSharedConfiguration $shareFile

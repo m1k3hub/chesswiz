@@ -14,7 +14,7 @@
 #     data/ hyphen/ lang/ pieces/ themes/ ...   share files (share dir = exe dir)
 #     fonts/              registered privately at startup (spec D8)
 #
-#     engines/            engines.dat, plus build/engines-win/*.exe if built
+#     engines/            engines.dat, plus build/engines-win/*-chesswiz.exe if built
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -58,7 +58,7 @@ cp "$ROOT"/tcl/fonts/*.ttf "$DIST/fonts/"
 
 # Engines from scripts/build-windows-engines.sh, when built.
 if [ -d "$ROOT/build/engines-win" ]; then
-	cp "$ROOT"/build/engines-win/*.exe "$DIST/engines/"
+	cp "$ROOT"/build/engines-win/*-chesswiz.exe "$DIST/engines/"
 fi
 
 for d in tcl8.6 tk8.6 tcl8 json; do

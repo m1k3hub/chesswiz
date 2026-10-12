@@ -64,6 +64,7 @@ jobs:
           make -C tcl
           make -C engines/stockfish/src net   # NNUE is too big for git
           scripts/build-windows-engines.sh
+          test -f build/engines-win/stockfish-chesswiz.exe
           scripts/make-windows-dist.sh .
       - uses: actions/upload-artifact@v7
         with:
@@ -150,6 +151,7 @@ jobs:
           make -C tcl
           make -C engines/stockfish/src net   # NNUE is too big for git
           SF_ARCHS=${{ matrix.arch }} scripts/build-macos-engines.sh
+          test -x build/engines-macos/stockfish-chesswiz
       - name: Version (release tag vX.Y.Z, else 0.9.<run>)
         run: |
           if [[ "$GITHUB_REF" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then

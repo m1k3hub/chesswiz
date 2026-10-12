@@ -2,7 +2,7 @@
 # scripts/build-windows-engines.sh [OUT_DIR]
 #
 # Cross-compiles the bundled Stockfish (engines/stockfish) for Windows with
-# zig into OUT_DIR (default build/engines-win) as stockfish-scidb.exe, the
+# zig into OUT_DIR (default build/engines-win) as stockfish-chesswiz.exe, the
 # name engines.dat expects (Windows adds .exe).
 #
 # Built in a scratch copy, so the Linux engine build is untouched. Link
@@ -31,5 +31,5 @@ make -C "$WORK/src" -j"$(nproc)" build ARCH="$ARCH" COMP=clang \
 	CXX="zig c++ -target x86_64-windows-gnu" OS=Windows_NT EXE=stockfish.exe \
 	> "$WORK/build.log" 2>&1 || { tail -20 "$WORK/build.log"; exit 1; }
 
-cp "$WORK/src/stockfish.exe" "$OUT/stockfish-scidb.exe"
-echo "build-windows-engines: $OUT/stockfish-scidb.exe ($ARCH)"
+cp "$WORK/src/stockfish.exe" "$OUT/stockfish-chesswiz.exe"
+echo "build-windows-engines: $OUT/stockfish-chesswiz.exe ($ARCH)"

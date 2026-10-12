@@ -1,5 +1,5 @@
 # ======================================================================
-# Stockfish 19 for Scidb -- the engine installed as stockfish-scidb.
+# Stockfish 19 for Scidb -- the engine installed as stockfish-chesswiz.
 #
 # The sources are the official sf_19 release (src/, scripts/) plus the
 # Scidb "narrate" UCI command (src/narration.*, see BUILD.md). Stockfish's
@@ -18,7 +18,7 @@
 
 include ../../Makefile.in
 
-EXE		= stockfish-scidb
+EXE		= stockfish-chesswiz
 SF_ARCH	=
 
 SF_MAKE	= $(MAKE) -C src $(if $(SF_ARCH),ARCH=$(SF_ARCH))
@@ -40,6 +40,7 @@ clean:
 install:
 	@install -m 755 -d $(ENGINESDIR)
 	@install -m 755 -p $(EXE) $(ENGINESDIR)
+	@rm -f $(ENGINESDIR)/$(subst -chesswiz,-scidb,$(EXE))
 
 uninstall:
 	@rm -f $(ENGINESDIR)/$(EXE)

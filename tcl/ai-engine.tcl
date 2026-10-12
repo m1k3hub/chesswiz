@@ -70,12 +70,12 @@ proc ::ai::engine::configure {args} {
 }
 
 
-# The Stockfish that ships with Scidb (stockfish-scidb in the engines
+# The Stockfish that ships with Scidb (stockfish-chesswiz in the engines
 # directory) is preferred over one on PATH, unless an engine was configured.
 proc ::ai::engine::Bundled {} {
 	variable Config
 	if {$Config(engine) ne "stockfish" || ![info exists ::scidb::dir::engines]} { return }
-	set exe [file join $::scidb::dir::engines stockfish-scidb]
+	set exe [file join $::scidb::dir::engines stockfish-chesswiz]
 	if {![file exists $exe] && [file exists $exe.exe]} { append exe .exe }
 	if {[file executable $exe]} { set Config(engine) $exe }
 }

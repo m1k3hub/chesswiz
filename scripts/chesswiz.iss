@@ -42,6 +42,12 @@ Name: desktopicon; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm
 [Files]
 Source: "{#SrcDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
+; Remove previously bundled executables on upgrade so startup can migrate commands.
+[InstallDelete]
+Type: files; Name: "{app}\engines\stockfish-scidb.exe"
+Type: files; Name: "{app}\engines\reckless-scidb.exe"
+Type: files; Name: "{app}\engines\sjeng-scidb.exe"
+
 [Icons]
 Name: "{autoprograms}\Chesswiz"; Filename: "{app}\tkchesswiz.exe"
 Name: "{autodesktop}\Chesswiz"; Filename: "{app}\tkchesswiz.exe"; Tasks: desktopicon

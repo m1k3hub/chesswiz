@@ -8,7 +8,7 @@ set ::engine::Engines {
 		Identifier "Stockfish 19"
 		Author "the Stockfish developers (see AUTHORS file)"
 		Url https://stockfishchess.org
-		Command stockfish-scidb
+		Command stockfish-chesswiz
 		Protocol UCI
 		Variants {standard chess960}
 		Features:UCI {
@@ -43,7 +43,7 @@ set ::engine::Engines {
 		Identifier "Reckless 0.9.0"
 		Author "Arseniy Surkov, Shahin M. Shahin, and Styx"
 		Url https://github.com/codedeliveryservice/Reckless
-		Command reckless-scidb
+		Command reckless-chesswiz
 		Protocol UCI
 		Variants {standard chess960}
 		Features:UCI {
@@ -70,7 +70,7 @@ set ::engine::Engines {
 		Author "Gian-Carlo Pascutto"
 		Url http://sjeng.org/index.html
 		Elo 2450
-		Command /usr/local/games/sjeng-scidb
+		Command sjeng-chesswiz
 		Protocol WB
 		Variants {standard bughouse crazyhouse suicide giveaway losers}
 		Features:WB {analyze true hashSize {}}

@@ -25,6 +25,6 @@ for cpu in ${SF_ARCHS:-x86_64 arm64}; do
     cp "$WORK/src/stockfish" "$OUT/stockfish-$cpu"
     SLICES+=("$OUT/stockfish-$cpu")
 done
-lipo -create "${SLICES[@]}" -output "$OUT/stockfish-scidb"
-chmod +x "$OUT/stockfish-scidb"
-lipo -info "$OUT/stockfish-scidb"
+lipo -create "${SLICES[@]}" -output "$OUT/stockfish-chesswiz"
+chmod +x "$OUT/stockfish-chesswiz"
+lipo -info "$OUT/stockfish-chesswiz"

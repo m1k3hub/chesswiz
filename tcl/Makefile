@@ -30,7 +30,7 @@ ifeq ($(TARGET_MACOS),yes)
 # Cocoa adapters reuse the generic target-state routines from the Unix Tcl code.
 DND_SCRIPTS = dnd/tkdnd_unix.tcl dnd/tkdnd_macosx.tcl
 endif
-ARCH = arch-scidb
+ARCH = arch-chesswiz
 
 # NOTE that the ordering is important!
 SOURCES = \

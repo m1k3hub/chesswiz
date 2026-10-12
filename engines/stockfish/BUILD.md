@@ -1,7 +1,7 @@
 # Stockfish for Scidb
 
 This directory is the engine Scidb builds and installs as
-`stockfish-scidb` (see `engines/Makefile`, `ENGINES` in `Makefile.in`).
+`stockfish-chesswiz` (see `engines/Makefile`, `ENGINES` in `Makefile.in`).
 
 ## What it is
 
@@ -23,9 +23,9 @@ The official **Stockfish 19** release (tag `sf_19`, commit `edb0d9d`,
 ## Building
 
 ```bash
-make -C engines/stockfish                    # -> engines/stockfish/stockfish-scidb (and src/stockfish)
+make -C engines/stockfish                    # -> engines/stockfish/stockfish-chesswiz (and src/stockfish)
 make -C engines/stockfish SF_ARCH=x86-64-avx2   # portable build for other machines
-sudo make -C engines/stockfish install       # -> $(ENGINESDIR)/stockfish-scidb
+sudo make -C engines/stockfish install       # -> $(ENGINESDIR)/stockfish-chesswiz
 ```
 
 The network (`nn-1a298aa575a0.nnue` for sf_19) is embedded in the binary.

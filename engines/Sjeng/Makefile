@@ -4,7 +4,7 @@
 
 include ../../Makefile.in
 
-EXE = sjeng-scidb
+EXE = sjeng-chesswiz
 
 CFLAGS = $(SYS_CFLAGS) -std=gnu11 -fcommon -O2 -Wall -Wno-uninitialized -fomit-frame-pointer $(NO_UNUSED_RESULT) -DSCIDB_VERSION=1 # -DHAVE_GETTIMEOFDAY -DHAVE_SELECT -DHAVE_SYS_TIMEB_H -DHAVE_LIBGDBM -DVERSION=\"11.2\"
 LDFLAGS += $(SYS_LDFLAGS)
@@ -27,6 +27,7 @@ clean:
 install:
 	@install -m 755 -d $(ENGINESDIR)
 	@install -m 755 -p $(EXE) $(ENGINESDIR)
+	@rm -f $(ENGINESDIR)/$(subst -chesswiz,-scidb,$(EXE))
 	@install -m 755 -d $(SHAREDIR)/engines
 	@install -m 755 -d $(SHAREDIR)/engines/$(EXE)
 	@install -m 644 -p books/* $(SHAREDIR)/engines/$(EXE)

@@ -11,7 +11,7 @@ case "$APP" in *.app) ;; *) echo 'APP_DIR must end in .app' >&2; exit 2;; esac
 SIGN_ID="${CHESSWIZ_SIGN_ID:--}"
 VERSION="${CHESSWIZ_VERSION:-1.0.1493}"
 [ -f "$SYSROOT/cacert.pem" ] && [ -f "$SYSROOT/lib/json/pkgIndex.tcl" ]
-[ -x "$ENGINE_DIR/stockfish-scidb" ]
+[ -x "$ENGINE_DIR/stockfish-chesswiz" ]
 TLS=("$SYSROOT"/lib/tls*)
 [ -f "${TLS[0]}/pkgIndex.tcl" ]
 mkdir -p "$(dirname "$APP")"
@@ -22,7 +22,7 @@ RES="$STAGE/Chesswiz.app/Contents/Resources"
 cp -R "$SYSROOT/lib/json" "${TLS[@]}" "$RES/lib/"
 cp "$SYSROOT/cacert.pem" "$RES/"
 mkdir -p "$RES/engines"
-cp "$ENGINE_DIR/stockfish-scidb" "$RES/engines/"
+cp "$ENGINE_DIR/stockfish-chesswiz" "$RES/engines/"
 # Include distribution notices and engine source licensing beside the executable.
 for f in COPYING LICENSE README; do
     [ ! -f "$ROOT/$f" ] || cp "$ROOT/$f" "$RES/"
