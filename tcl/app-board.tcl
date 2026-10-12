@@ -692,6 +692,7 @@ proc unbindGameControls {position base variant} {
 proc needBinding {w} {
 	variable Vars
 	lappend Vars(need-binding) $w
+	::application::AddShortcutTag $w
 }
 
 

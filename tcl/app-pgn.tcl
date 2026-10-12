@@ -190,6 +190,7 @@ proc build {top width height} {
 
 	for {set i 0} {$i < 9} {incr i} {
 		set pgn [::pgn::setup::buildText $edit.f$i editor]
+		::application::AddShortcutTag $pgn
 		$pgn mark set insert begin left ;# fix the position of this mark
 		bind $pgn <Button-3> [namespace code [list PopupMenu $edit $i]]
 		bind $pgn <Double-3> {#} ;# catch double clicks

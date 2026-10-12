@@ -44,6 +44,10 @@ namespace eval mc {
 set Tab(information)			"&Information"
 set Tab(database)				"&Database"
 set Tab(board)					"&Board"
+set ShortcutPreferences		"Keyboard Preferences"
+set ShortcutScheme			"Shortcut scheme:"
+set ShortcutChesswiz		"Chesswiz (default)"
+set ShortcutChessBase		"ChessBase"
 set MainMenu					"&Main Menu"
 
 set ChessInfoDatabase		"Chess Information Data Base"
@@ -101,6 +105,9 @@ set BoardLayout {
 		}
 	}
 }
+
+array set Options { shortcut:scheme chesswiz }
+array set ShortcutDefaults {}
 
 set FontSizeActive 0
 
@@ -236,7 +243,192 @@ proc open {} {
 	bind .application <<FontSizeChanged>>				[namespace code { FontSizeChanged %W %d }]
 
 	::searchentry::bindShortcuts .application
+	bind all <FocusIn> +[namespace code {ShortcutEditingFocus %W}]
+	ApplyShortcutScheme
 }
+
+
+# A leading tag overrides board/notation bindings without modifying them.
+# Emptying the tag restores the current defaults, including language changes.
+proc ApplyShortcutScheme {args} {
+	variable Options
+	variable ShortcutDefaults
+
+	foreach key [bind ChessBaseBoard] { bind ChessBaseBoard $key {} }
+	foreach key [bind ChessBaseEditing] { bind ChessBaseEditing $key {} }
+	if {![winfo exists .application]} { return }
+	foreach key [array names ShortcutDefaults] {
+		bind .application $key $ShortcutDefaults($key)
+	}
+	array unset ShortcutDefaults
+	if {$Options(shortcut:scheme) ne "chessbase"} { return }
+	foreach key {a A} {
+		bind ChessBaseEditing <Control-$key> {event generate %W <<SelectAll>>; break}
+	}
+	if {[focus] ne ""} { ShortcutEditingFocus [focus] }
+
+	foreach {key cmd} {
+		Left              {::application::board::Goto -1}
+		Right             {::application::board::Goto +1}
+		Home              {::application::board::Goto start}
+		End               {::application::board::Goto end}
+		Prior             {::application::pgn::scroll -1 pages}
+		Next              {::application::pgn::scroll +1 pages}
+		Control-f         {::application::board::Rotate $::application::board::Vars(widget:frame)}
+		Control-Alt-0     {::application::board::InsertNullMove}
+		Control-y         {::application::pgn::RemoveVariation}
+		m                 {::application::board::Goto up}
+		bracketright      {::scidb::game::strip truncate}
+		bracketleft       {::scidb::game::strip moves}
+		Control-Alt-y     {::scidb::game::strip marks}
+		Control-a         {::application::pgn::editComment after}
+		Control-Shift-A   {::application::pgn::editComment before}
+		exclam            {::annotation::addNag infix 1}
+		question          {::annotation::addNag infix 2}
+		Control-n         {::menu::gameNew .application}
+		Control-o         {::menu::dbOpen .application}
+		Control-s         {::application::board::SaveGame add}
+		Control-r         {::application::board::SaveGame replace}
+		F10               {::application::board::LoadGame(any) .application next}
+		Control-F10       {::application::board::LoadGame(any) .application prev}
+		Control-z         {::application::pgn::undo}
+		Alt-F2            {::application::ToggleShortcutEngine}
+	} {
+		# FilterKey preserves the sliding variation selector's handling.
+		set command [namespace code [list ShortcutBoardCommand %W %K %s $cmd]]
+		bind ChessBaseBoard <$key> $command
+		if {[regexp {^(.*-)([a-zA-Z])$} $key -> modifiers letter]} {
+			if {[string is lower $letter]} { set letter [string toupper $letter] } \
+			else { set letter [string tolower $letter] }
+			bind ChessBaseBoard <$modifiers$letter> $command
+		}
+	}
+	if {[info exists ::application::board::Vars(need-binding)]} {
+		foreach w $::application::board::Vars(need-binding) { AddShortcutTag $w }
+	}
+
+	foreach {key action} {n new o open f search x database} {
+		foreach letter [list $key [string toupper $key]] {
+			set event <Control-$letter>
+			set ShortcutDefaults($event) [bind .application $event]
+			bind .application $event [namespace code [list ShortcutApplicationCommand %W $action]]
+		}
+	}
+}
+
+
+proc AddShortcutTag {w} {
+	if {![winfo exists $w]} { return }
+	if {[ShortcutEditable $w]} { return }
+	set tags [bindtags $w]
+	if {"ChessBaseBoard" ni $tags} { bindtags $w [linsert $tags 0 ChessBaseBoard] }
+}
+
+
+proc ShortcutEditable {w} {
+	if {[winfo class $w] ni {Entry TEntry Text TCombobox Spinbox TSpinbox}} { return 0 }
+	# The bundled Tk supports readonly Text widgets (used by PGN notation).
+	# They need board shortcuts just like disabled Text widgets.
+	return [expr {[$w cget -state] ni {disabled readonly}}]
+}
+
+
+proc ShortcutEditingFocus {w} {
+	variable Options
+	if {$Options(shortcut:scheme) ne "chessbase" || ![ShortcutEditable $w]} { return }
+	set tags [bindtags $w]
+	if {"ChessBaseEditing" ni $tags} { bindtags $w [linsert $tags 0 ChessBaseEditing] }
+}
+
+
+proc ShortcutBoardCommand {w key state script} {
+	# Continue with widget/class editing even if an editable child inherits this tag.
+	if {[ShortcutEditable $w]} { return -code continue }
+	# Orientation is independent of the variation selector, which interprets
+	# letter keys as variation indices even when Control is pressed.
+	if {[string match {::application::board::Rotate *} $script]} {
+		uplevel #0 $script
+		return -code break
+	}
+	if {$script eq "::application::board::Goto +1"} {
+		# FilterKey recognizes this command when a variation was selected.
+		set cmd [list namespace inscope ::application::board { Goto +1 }]
+	} else {
+		set cmd [list apply [list {} $script ::]]
+	}
+	board::FilterKey $key $state $cmd
+	return -code break
+}
+
+
+proc ShortcutApplicationCommand {w action} {
+	# Dialogs and editable fields keep their own text-editing shortcuts.
+	if {[winfo class $w] in {Entry TEntry Text TCombobox Spinbox TSpinbox}} { return }
+	switch $action {
+		new  { ::menu::gameNew .application }
+		open { ::menu::dbOpen .application }
+		search - database {
+			if {[.application.nb select] ne ".application.nb.database"} {
+				if {$action eq "search"} {
+					variable ShortcutDefaults
+					set cmd $ShortcutDefaults(<Control-f>)
+					if {$cmd ne ""} { uplevel #0 $cmd }
+				}
+				return
+			}
+			if {$action eq "database"} {
+				::menu::dbNew .application Normal
+			} else {
+				database::OpenAdvancedSearch .application [::scidb::db::get name] \
+					[database::currentVariant]
+			}
+		}
+	}
+	return -code break
+}
+
+
+proc ToggleShortcutEngine {} {
+	set name [analysis::defaultEngine]
+	if {$name eq ""} { return }
+	foreach number [analysis::Running] {
+		if {[set ::engine::${number}::Vars(current:name)] eq $name} {
+			analysis::stopEngine $number
+			return
+		}
+	}
+	analysis::startEngine $name
+}
+
+
+proc ShortcutPreferences {parent} {
+	set dlg $parent.shortcutPreferences
+	if {[winfo exists $dlg]} { raise $dlg; return }
+	tk::toplevel $dlg -class Dialog
+	::widget::dialogButtons $dlg {ok}
+	$dlg.ok configure -command [list destroy $dlg]
+	set top [ttk::frame $dlg.content -padding 12]
+	ttk::label $top.label -text $mc::ShortcutScheme
+	pack $top.label -anchor w -pady 4
+	foreach {scheme label} {chesswiz ShortcutChesswiz chessbase ShortcutChessBase} {
+		ttk::radiobutton $top.$scheme -text [set mc::$label] \
+			-variable [namespace current]::Options(shortcut:scheme) -value $scheme
+		pack $top.$scheme -anchor w -pady 4
+	}
+	pack $top -fill both -expand yes
+	wm title $dlg $mc::ShortcutPreferences
+	wm transient $dlg [winfo toplevel $parent]
+	wm resizable $dlg false false
+	::util::place $dlg -parent $parent -position center
+}
+
+
+proc WriteShortcutOptions {chan} {
+	::options::writeItem $chan [namespace current]::Options
+}
+
+trace add variable Options(shortcut:scheme) write [namespace code ApplyShortcutScheme]
+::options::hookWriter [namespace current]::WriteShortcutOptions
 
 
 proc twm {{id ""}} {

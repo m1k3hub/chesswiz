@@ -469,6 +469,10 @@
 ::application::layout::mc::ReplaceTip			"Overwrite current layout with this one"
 
 ### application ########################################################
+::application::mc::ShortcutPreferences "Keyboard Preferences"
+::application::mc::ShortcutScheme "Shortcut scheme:"
+::application::mc::ShortcutChesswiz "Chesswiz (default)"
+::application::mc::ShortcutChessBase "ChessBase"
 ::application::mc::Tab(information)			"&Information"
 ::application::mc::Tab(database)				"&Database"
 ::application::mc::Tab(board)					"&Board"

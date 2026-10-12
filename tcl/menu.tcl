@@ -329,6 +329,8 @@ proc build {menu} {
 		-image $::icon::16x16::engine \
 		-compound left \
 		;
+	$m add command -label " $::application::mc::ShortcutPreferences" \
+		-command [list ::application::ShortcutPreferences .application]
 	lassign [::tk::UnderlineAmpersand $mc::PgnOptions] text ul
 	set cmd [namespace code [list setupPgnOptions .application]]
 	$m add command \
