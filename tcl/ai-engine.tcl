@@ -6,7 +6,7 @@
 # drives a UCI engine (Stockfish by default) over a bidirectional pipe and
 # returns structured facts:
 #
-#   ::ai::engine::evaluate <fen> ?-depth N? ?-multipv N?
+#   ::ai::engine::evaluate <fen> ?-depth N? ?-multipv N? ?-movetime MS?
 #       -> dict: kind/value (cp|mate), bestMove, pv, multipv lines
 #
 #   ::ai::engine::classify <fen> <san> ?-depth N?
@@ -242,7 +242,7 @@ proc ::ai::engine::onSearchLine {} {
 }
 
 
-proc ::ai::engine::search {fen depth multipv} {
+proc ::ai::engine::search {fen depth multipv {movetime 0}} {
 	variable Proc
 	variable State
 	variable Config
@@ -254,7 +254,11 @@ proc ::ai::engine::search {fen depth multipv} {
 
 	send "setoption name MultiPV value $multipv"
 	send "position fen $fen"
-	send "go depth $depth"
+	if {$movetime > 0} {
+		send "go movetime $movetime"
+	} else {
+		send "go depth $depth"
+	}
 
 	fileevent $Proc readable [namespace code {::ai::engine::onSearchLine}]
 	set token [after $Config(timeoutMs) [namespace code {::ai::engine::onTimeout}]]
@@ -352,8 +356,11 @@ proc ::ai::engine::evaluate {fen args} {
 	variable State
 
 	CheckFen $fen
-	array set opts [list -depth $Config(depth) -multipv $Config(multipv) -timeout $Config(timeoutMs)]
+	array set opts [list -depth $Config(depth) -multipv $Config(multipv) -timeout $Config(timeoutMs) -movetime 0]
 	array set opts $args
+	if {![string is integer -strict $opts(-movetime)] || $opts(-movetime) < 0} {
+		error "movetime must be a non-negative integer in milliseconds"
+	}
 
 	# evaluate() pumps the event loop (vwait on State(done)), so a second
 	# concurrent call would clobber State(done)/State(lines) and can hang or
@@ -368,7 +375,7 @@ proc ::ai::engine::evaluate {fen args} {
 	set State(busy) 1
 	set rc [catch {
 		ensure
-		search $fen $opts(-depth) $opts(-multipv)
+		search $fen $opts(-depth) $opts(-multipv) $opts(-movetime)
 	} res opts2]
 	set State(busy) 0
 	set Config(timeoutMs) $savedTimeout
@@ -408,7 +415,7 @@ proc ::ai::engine::evaluate {fen args} {
 	dict set out value [dict get $first value]
 	dict set out cpl   [dict get $first cpl]
 	dict set out pv    [dict get $first pv]
-	dict set out depth $opts(-depth)
+	dict set out depth $chosenDepth(1)
 
 	# runner-up, for the "only move" gap
 	if {[llength [dict get $out multipv]] >= 2} {

@@ -401,9 +401,15 @@ variable Actions {
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoClassifierStatus
 	}
+	explain_game_result {
+		0 0 "find this game's turning points without changing it"
+		"Quick read-only Stockfish pass over the current game's mainline. Prefer this for 'why did White/Black lose', 'why did I lose', 'where did it go wrong', and 'what was the turning point', including follow-ups. Returns up to three biggest evaluation drops for the losing side, numbered moves played, better moves and evaluations before/after. Default side is the loser from the recorded result; select white or black when requested. Evaluations are short-search estimates, not proof of a tactical cause. Answer in plain language using these facts; do not annotate or create another game."
+		{{"type":"object","properties":{"side":{"type":"string","enum":["auto","white","black"],"description":"side to explain; default auto (recorded loser)"}}}}
+		::application::assistant::DoExplainGameResult
+	}
 	annotate_game {
 		0 0 "annotate this game with engine-grounded comments"
-		"Annotate the game on the board: classify every move with the chess engine, then write a comment for the moves that deserve one (blunders, mistakes, inaccuracies, and the only move that holds). With 'prose' true (the default) the comment is written by the language model from the engine's facts and checked; with 'prose' false the comment is the engine's own verdict in words, which costs no model call. 'marks' also sets the standard annotation mark. 'max_plies' bounds the work; 'from_move' and 'to_move' annotate only that stretch ('analyse moves 20 to 30'). The game is left modified for the user to save."
+		"Use ONLY when the user asks to write comments or annotation marks into the game. For why someone lost or turning points use explain_game_result instead. Annotate the game on the board: classify every move with the chess engine, then write a comment for the moves that deserve one (blunders, mistakes, inaccuracies, and the only move that holds). With 'prose' true (the default) the comment is written by the language model from the engine's facts and checked; with 'prose' false the comment is the engine's own verdict in words, which costs no model call. 'marks' also sets the standard annotation mark. 'max_plies' bounds the work; 'from_move' and 'to_move' annotate only that stretch ('analyse moves 20 to 30'). The game is left modified for the user to save."
 		{{"type":"object","properties":{"prose":{"type":"boolean","description":"let the language model word the comments, default true"},"depth":{"type":"integer","description":"engine depth per move, default 12"},"marks":{"type":"boolean","description":"also set the move's annotation mark, default false"},"max_plies":{"type":"integer","description":"stop after this many moves, default 60"},"from_move":{"type":"integer","description":"annotate from this move number on ('moves 20-30': 20)"},"to_move":{"type":"integer","description":"annotate up to and including this move number"}}}}
 		::application::assistant::DoAnnotateGame
 	}
@@ -699,6 +705,8 @@ proc ::application::assistant::ask {request args} {
 	# a job (run_job) raises it for its own request
 	set Priv(maxRounds) 8
 	set Priv(nudged) 0
+	set Priv(lastFacts) ""
+	set Priv(resultFacts) ""
 
 	if {![llength $Priv(messages)]} {
 		variable DebugSystem
@@ -802,6 +810,14 @@ proc ::application::assistant::Step {round} {
 
 	# the last round offers no tools, so the model has to answer in prose
 	set tools [expr {$round + 1 < $Priv(maxRounds) ? [toolsJson] : ""}]
+	if {[info exists Priv(resultFacts)] && $Priv(resultFacts) ne ""} {
+		# The facts are complete: ask only for prose, with a bounded wait.
+		set tools ""
+		if {![info exists Priv(replyTimeout)]} {
+			set Priv(replyTimeout) $::ai::provider::Config(timeoutMs)
+		}
+		::ai::provider::configure -timeout 30000 -options {}
+	}
 	::ai::provider::chatAsync $Priv(messages) $tools \
 		[namespace code [list OnReply $round]]
 }
@@ -829,7 +845,10 @@ proc ::application::assistant::TryBackup {round result} {
 
 
 proc ::application::assistant::OnReply {round result} {
-	if {![dict get $result ok] && [TryBackup $round $result]} { return }
+	variable Priv
+	if {![dict get $result ok]
+	 && (![info exists Priv(resultFacts)] || $Priv(resultFacts) eq "")
+	 && [TryBackup $round $result]} { return }
 	# a failing step must still release the pane
 	if {[catch { OnReplyImpl $round $result } err]} {
 		Finish [dict create ok 0 error $err] $round
@@ -847,6 +866,13 @@ proc ::application::assistant::OnReplyImpl {round result} {
 
 	set msg [dict get $result message]
 	incr round
+	if {[info exists Priv(resultFacts)] && $Priv(resultFacts) ne ""
+	 && [dict exists $msg tool_calls] && [llength [dict get $msg tool_calls]]} {
+		# A provider may emit tools despite the tools-free final request.
+		# Do not let a read-only explanation turn into annotation/new games.
+		Finish [dict create ok 1 message [dict create content ""]] $round
+		return
+	}
 
 	# the shadow log compares the classifier's prediction with what the
 	# model actually did first (app-assistant-route.tcl)
@@ -905,12 +931,18 @@ proc ::application::assistant::RunCalls {round calls} {
 		set fn [dict get $call function]
 		set name [dict get $fn name]
 		set cargs [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
-		# closed-set arguments are more reliable from the classifier than from
-		# the model's emitted JSON (app-assistant-args.tcl)
-		if {[llength [info commands ::application::assistant::correctArgs]]} {
-			catch { set cargs [::application::assistant::correctArgs $name $cargs] }
+		if {[info exists Priv(resultFacts)] && $Priv(resultFacts) ne ""} {
+			# Complete every call's protocol reply, but do not run more actions
+			# from a batch once the read-only result facts are available.
+			set reply "error: not performed; the game result analysis is complete, answer using its facts"
+		} else {
+			# Closed-set arguments may be corrected by the classifier, only
+			# for calls that are actually going to run.
+			if {[llength [info commands ::application::assistant::correctArgs]]} {
+				catch { set cargs [::application::assistant::correctArgs $name $cargs] }
+			}
+			set reply [runTool $name $cargs]
 		}
-		set reply [runTool $name $cargs]
 		if {[string match "\x00later:*" $reply]} {
 			set Priv(pending) [list $reply $round $name $cargs $calls]
 			Append tool "$name: (working...)"
@@ -930,6 +962,8 @@ proc ::application::assistant::RunCalls {round calls} {
 proc ::application::assistant::ToolReply {name reply} {
 	variable Priv
 
+	set Priv(lastFacts) $reply
+	if {$name eq "explain_game_result"} { set Priv(resultFacts) $reply }
 	Append tool "$name: $reply"
 	Notify tool $name $reply
 	lappend Priv(messages) [dict create role tool content $reply tool_name $name]
@@ -991,10 +1025,27 @@ proc ::application::assistant::Finish {result round} {
 	variable Priv
 	variable mc
 
+	if {[info exists Priv(replyTimeout)]} {
+		::ai::provider::configure -timeout $Priv(replyTimeout)
+		unset Priv(replyTimeout)
+	}
+	if {![dict get $result ok] && [info exists Priv(resultFacts)] && $Priv(resultFacts) ne ""} {
+		set text "The model could not finish its explanation. Here are the engine's findings:\n$Priv(resultFacts)"
+		set result [dict create ok 1 message [dict create content $text]]
+	}
 	if {[dict get $result ok]} {
 		set msg [dict get $result message]
 		set text [expr {[dict exists $msg content] ? [string trim [dict get $msg content]] : ""}]
-		if {![string length $text]} { set text "(no answer)" }
+		if {![string length $text]} {
+			set text "The model returned no explanation."
+			if {[info exists Priv(resultFacts)] && $Priv(resultFacts) ne ""} {
+				append text " Here are the engine's findings:\n$Priv(resultFacts)"
+			} elseif {[info exists Priv(lastFacts)] && $Priv(lastFacts) ne ""} {
+				append text " Here is what the tool found:\n$Priv(lastFacts)"
+			} else {
+				append text " Please try your question again."
+			}
+		}
 		lappend Priv(messages) [dict create role assistant content $text]
 		Append assistant $text
 		set event [list reply $text]
@@ -1531,6 +1582,11 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		}
 		check_results {
 			return {}
+		}
+		explain_game_result {
+			set side [OptArg $cargs side auto]
+			if {$side ni {auto white black}} { error "side must be auto, white or black" }
+			return [dict create side $side]
 		}
 		annotate_game {
 			set prose 1
@@ -4351,9 +4407,143 @@ proc ::application::assistant::SetEntry {text} {
 
 
 # ----------------------------------------------------------------------
-# Annotate the current game (see tcl/ai-annotate.tcl).  The engine pass and
-# the drafting take a while, so the tool answers when the run is over.
+# Explain the result with a bounded, read-only engine pass.
 # ----------------------------------------------------------------------
+# Snapshot the mainline; all subsequent work uses FENs, never game navigation
+# or a scratch game slot. One timed search per position, shared by neighbours.
+proc ::application::assistant::DoExplainGameResult {side} {
+	variable ResultPass
+	if {[info exists ResultPass(token)] && $ResultPass(token) ne ""} {
+		return "error: a game result analysis is already running"
+	}
+	if {[set err [EngineReady]] ne ""} { return $err }
+	set plies [::scidb::game::query mainline]
+	if {![llength $plies]} { return "error: there are no moves in this game" }
+	if {[::scidb::game::query variant?] ne "Normal"} {
+		return "error: quick result analysis currently supports standard chess only"
+	}
+	set result "*"
+	foreach tag [::scidb::game::tags [::scidb::game::current]] {
+		if {[lindex $tag 0] eq "Result"} { set result [lindex $tag 1] }
+	}
+	if {$side eq "auto"} {
+		switch -- $result {
+			0-1 { set side white }
+			1-0 { set side black }
+			default { set side both }
+		}
+	}
+	set positions {}
+	foreach ply $plies { lappend positions [lindex $ply 2] }
+	lassign [lindex $plies end] _ san fen
+	set facts [::scidb::ai::moveFacts $san $fen]
+	if {![regexp {"fenAfter":"([^"]+)"} $facts -> last]} {
+		return "error: could not read the game's final position"
+	}
+	lappend positions $last
+	set token [Later]
+	array set ResultPass [list token $token plies $plies positions $positions \
+		index 0 scores {} side $side result $result \
+		ms [expr {min(200, max(1, 20000 / [llength $positions]))}] \
+		deadline [expr {[clock milliseconds] + 25000}]]
+	after 0 [namespace code ResultPassNext]
+	return $token
+}
+
+proc ::application::assistant::ResultPassNext {} {
+	variable ResultPass
+	if {[catch {ResultPassNextImpl} err]} {
+		if {[info exists ResultPass(token)] && $ResultPass(token) ne ""} {
+			ResultPassDone "Analysis stopped: $err"
+		}
+	}
+}
+
+proc ::application::assistant::ResultPassNextImpl {} {
+	variable ResultPass
+	variable Priv
+	set token $ResultPass(token)
+	# A cleared/closed conversation must not resume an obsolete request.
+	if {![info exists Priv(pending)] || [lindex $Priv(pending) 0] ne $token} {
+		set ResultPass(token) ""
+		return
+	}
+	set i $ResultPass(index)
+	if {$i >= [llength $ResultPass(positions)] || [clock milliseconds] >= $ResultPass(deadline)} {
+		ResultPassDone
+		return
+	}
+	if {$i % 10 == 0} {
+		Append tool "Finding turning points: position [expr {$i + 1}] of [llength $ResultPass(positions)]..."
+	}
+	set fen [lindex $ResultPass(positions) $i]
+	if {[catch {::ai::engine::evaluate $fen -multipv 1 -movetime $ResultPass(ms) -timeout 3000} score]} {
+		ResultPassDone "Engine stopped: $score"
+		return
+	}
+	lappend ResultPass(scores) $score
+	incr ResultPass(index)
+	after 1 [namespace code ResultPassNext]
+}
+
+proc ::application::assistant::ResultPassDone {{error ""}} {
+	variable ResultPass
+	set token $ResultPass(token)
+	set ResultPass(token) ""
+	if {[catch {ResultPassSummary $ResultPass(plies) $ResultPass(scores) \
+		$ResultPass(side) $ResultPass(result) $ResultPass(ms)} reply]} {
+		set reply "error: could not summarize the engine pass: $reply"
+	}
+	if {$error ne ""} { append reply "\n$error" }
+	Resolve $token $reply
+}
+
+# Arithmetic only: rank drops from the mover's perspective; show actual cp
+# or mate scores with an explicitly stated White perspective to the reader.
+proc ::application::assistant::ResultPassSummary {plies scores side result ms} {
+	set rows {}
+	set count [expr {max(0, min([llength $plies], [llength $scores] - 1))}]
+	for {set i 0} {$i < $count} {incr i} {
+		lassign [lindex $plies $i] key san fen
+		set colour [expr {[lindex $fen 1] eq "w" ? "white" : "black"}]
+		if {$side ne "both" && $colour ne $side} { continue }
+		set before [lindex $scores $i]
+		set after [lindex $scores [expr {$i + 1}]]
+		set loss [expr {[dict get $before cpl] + [dict get $after cpl]}]
+		if {$loss <= 0} { continue }
+		set best [dict get $before bestMove]
+		set better [EngineLine $fen [list $best] 1]
+		# The played move was the recommendation: shallow searches disagree,
+		# so that drop cannot substantiate a better-move claim.
+		if {[catch {::scidb::ai::moveFacts $san $fen} facts]
+		 || ![regexp {"uci":"([^"]+)"} $facts -> played]
+		 || $best eq $played} { continue }
+		set number [lindex $fen 5]
+		set dots [expr {$colour eq "white" ? "." : "..."}]
+		set afterFen [dict get $after fen]
+		set b [EngineScore $fen [dict get $before kind] [dict get $before value]]
+		set a [EngineScore $afterFen [dict get $after kind] [dict get $after value]]
+		set pv [EngineLine $fen [dict get $before pv] 5]
+		lappend rows [list $loss "$number$dots$san ($colour): evaluation $b -> $a; better was $better. Engine continuation: $pv."]
+	}
+	set reply "Quick Stockfish analysis: result $result; studying $side. Evaluations are in pawns from White's perspective (+ favours White, - favours Black; # means mate). Short searches of $ms ms per position are estimates."
+	if {$side eq "both"} { append reply " No losing side is recorded; these are drops by either side." }
+	append reply "\nAnalyzed $count of [llength $plies] plies."
+	if {$count < [llength $plies]} { append reply " Partial pass: later turning points may be missing." }
+	set rows [lrange [lsort -real -decreasing -index 0 $rows] 0 2]
+	if {![llength $rows]} {
+		append reply "\nNo clear evaluation drop with a better alternative was found in this quick pass; the result alone does not establish the cause of the loss."
+	} else {
+		append reply "\nLargest evaluation drops (the first is the main candidate for the turning point):"
+		foreach row $rows { append reply "\n[lindex $row 1]" }
+	}
+	append reply "\nThe game was not modified."
+	return $reply
+}
+
+
+# Annotate writes into the selected game; asynchronous prose drafting uses
+# its own provider settings, restored before AnnotateGameDone resumes chat.
 proc ::application::assistant::DoAnnotateGame {prose marks depth max_plies {from_move ""} {to_move ""}} {
 	if {[llength [info commands ::ai::annotate::annotate]] == 0} {
 		return "error: the annotation module is not available"
@@ -4367,6 +4557,7 @@ proc ::application::assistant::DoAnnotateGame {prose marks depth max_plies {from
 			-prose $prose -marks $marks -depth $depth -maxPlies $max_plies \
 			-from [expr {$from_move eq "" ? 0 : 2 * ($from_move - 1)}] \
 			-to [expr {$to_move eq "" ? "end" : 2 * $to_move - 1}] \
+			-progress [namespace code AnnotationProgress] \
 			-done [namespace code [list AnnotateGameDone $token]]]
 	} err]} {
 		after 0 [list Resolve $token "error: $err"]
@@ -4376,6 +4567,10 @@ proc ::application::assistant::DoAnnotateGame {prose marks depth max_plies {from
 	return $token
 }
 
+
+proc ::application::assistant::AnnotationProgress {text} {
+	Append tool $text
+}
 
 proc ::application::assistant::AnnotateGameDone {token result} {
 	set reply [dict get $result summary]

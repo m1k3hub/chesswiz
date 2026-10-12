@@ -215,7 +215,7 @@ proc ::ai::annotate::annotate {parent args} {
 	variable mc
 
 	array set opts [list -prose $Settings(prose) -depth $Settings(depth) \
-		-marks $Settings(marks) -maxPlies $Settings(maxPlies) -done {} -from 0 -to end]
+		-marks $Settings(marks) -maxPlies $Settings(maxPlies) -done {} -progress {} -from 0 -to end]
 	array set opts $args
 
 	if {$Priv(running)} { return 0 }
@@ -239,6 +239,12 @@ proc ::ai::annotate::annotate {parent args} {
 	}
 
 	# Capture game identity and editor state before any asynchronous work.
+	set Priv(providerSettings) {}
+	if {[array exists ::ai::provider::Config]} {
+		foreach key {name model endpoint timeoutMs options} {
+			lappend Priv(providerSettings) $key $::ai::provider::Config($key)
+		}
+	}
 	set Priv(owner) [Owner]
 	set Priv(running) 1
 	set Priv(cancel) 0
@@ -252,6 +258,7 @@ proc ::ai::annotate::annotate {parent args} {
 	set Priv(skipped) 0
 	set Priv(done) $opts(-done)
 	set Priv(parent) $parent
+	set Priv(progress) $opts(-progress)
 	set Priv(prose) $opts(-prose)
 	set Priv(marks) $opts(-marks)
 	set Priv(depth) $opts(-depth)
@@ -307,6 +314,11 @@ proc ::ai::annotate::ProgressReport {state} {
 proc ::ai::annotate::Report {html} {
 	variable Priv
 
+	if {[info exists Priv(progress)] && [llength $Priv(progress)]} {
+		# Assistant runs already have a progress surface. Do not open a pane
+		# (and renegotiate the main window layout) on every ply.
+		return
+	}
 	if {[llength [info commands ::application::ai::showReport]] == 0} { return }
 	catch { ::application::ai::showReport $Priv(parent) \
 		"AI: annotate game" [::application::ai::htmlData $html] }
@@ -331,6 +343,10 @@ proc ::ai::annotate::NextPly {} {
 
 	Report [ProgressReport [dict create text \
 		[format $mc::Progress $Priv(index) $Priv(total) $san]]]
+
+	if {[info exists Priv(progress)] && [llength $Priv(progress)]} {
+		catch { {*}$Priv(progress) [format $mc::Progress $Priv(index) $Priv(total) $san] }
+	}
 
 	# let the interface breathe between engine searches
 	update idletasks
@@ -582,6 +598,14 @@ proc ::ai::annotate::Finish {} {
 	variable Priv
 	variable mc
 
+	# Per-move drafting uses a small completion budget. Restore the caller's
+	# chat settings before handing control back to the assistant/model loop.
+	if {[info exists Priv(providerSettings)]} {
+		if {[llength $Priv(providerSettings)]} {
+			array set ::ai::provider::Config $Priv(providerSettings)
+		}
+		unset Priv(providerSettings)
+	}
 	set Priv(running) 0
 	set done $Priv(done)
 	set Priv(done) {}
