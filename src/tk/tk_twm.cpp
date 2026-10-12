@@ -45,6 +45,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <vector>
+#include <algorithm>
 
 #undef None // defined inside tk.h
 
@@ -3373,11 +3374,20 @@ Node::restoreZoomGeometry()
 		if (Tk_Parent(w) == tkwin()) Tk_MoveWindow(w, g.x, g.y);
 		else if (hasAncestor(g.node)) Tk_MaintainGeometry(w, tkwin(),
 			g.x, g.y, g.width, g.height);
-		Tk_RestackWindow(w, Above, nullptr);
 		if (g.mapped && Tk_Parent(w) == tkwin()) Tk_MapWindow(w);
 	}
 	tcl::invoke(__func__, tcl::newObj("update"), tcl::newObj("idletasks"), nullptr);
-	mstl::reverse(m_zoomGeometry.begin(), m_zoomGeometry.end());
+	// The nodes are siblings under the root window, collected in pointer
+	// order: raise containers before their panes, or a container covers
+	// the panes it holds (seen on Windows).
+	auto depth = [](Node* n) {
+		int d = 0;
+		if (::s_liveNodes.find(n) != ::s_liveNodes.end())
+			for (; n; n = n->parent()) ++d;
+		return d;
+	};
+	std::stable_sort(m_zoomGeometry.begin(), m_zoomGeometry.end(),
+		[&](ZoomGeometry const& a, ZoomGeometry const& b) { return depth(a.node) < depth(b.node); });
 	for (auto const& g : m_zoomGeometry)
 		if (::s_liveNodes.find(g.node) != ::s_liveNodes.end() && g.node->exists())
 			Tk_RestackWindow(g.node->tkwin(), Above, nullptr);
