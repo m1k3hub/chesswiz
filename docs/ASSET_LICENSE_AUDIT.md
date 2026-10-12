@@ -194,3 +194,21 @@ No source comments; PNG metadata shows only editors (80 from Adobe ImageReady, t
 4. Ask Peter Wong about the virtualpieces sets; meanwhile ship without them.
 5. For the remaining fonts, textures and flags: either trace each source, or replace them with known-licence sets. Lichess's piece sets (cburnett etc., mostly CC BY-SA/GPL/MIT, listed in the lila repo's COPYING.md) cover pieces; flag-icons (MIT) covers flags; CC0 textures (ambientCG, Poly Haven) cover textures.
 6. Add `LICENSES/` holding each kept licence text (OFL for Abel and Font Awesome), referenced from `COPYRIGHT`.
+
+### UI icon refinement (2026-10-11)
+
+The deterministic UI generator now uses a coordinated seven-ink palette and one
+soft tinted badge treatment for database categories. The 37 category families
+have separate glyph identities; aliases and interaction states keep their glyph
+across sizes. Dense small glyphs have original simplified geometry, with pixel
+hinting at 16/24px and a translucent light keyline for dark panels. Side-to-move
+markers and marbles use original shaded sphere drawings. Original opening-side
+indicators and four expression drawings are in `tcl/cursor/icon-sources/` under
+the existing GPL-2.0-or-later terms. Tabler remains pinned to v3.31.0 with the
+same verified archive digest, MIT notice and embedded PNG licence metadata.
+
+Review artifacts and the full mapping-change table are generated/reported in
+`tests/tmp-app/icons2/`: before/after contact sheets on #f6f7f9/#1f2329 and
+#f0f0f0/#2b2b2b, at native resolution and nearest-neighbour 2x. The generator
+continues to edit only embedded image payloads and its original SVG sources;
+image names, dimensions and Tcl logic remain unchanged.
