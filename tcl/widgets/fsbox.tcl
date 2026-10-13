@@ -1059,14 +1059,12 @@ switch [tk windowingsystem] {
 
 namespace eval desktop {
 
-switch [tk windowingsystem] {
-	x11 {
-		proc directory {} {
-			set dir [file join [file nativename ~] Desktop]
-			if {[file isdirectory $dir]} { return $dir }
-			return ""
-		}
-	}
+# ~/Desktop on every platform (on Windows ~ is USERPROFILE): the Tk file box
+# is also used there, embedded in the export dialog.
+proc directory {} {
+	set dir [file join [file nativename ~] Desktop]
+	if {[file isdirectory $dir]} { return $dir }
+	return ""
 }
 
 } ;# namespace desktop

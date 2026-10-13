@@ -612,7 +612,7 @@ proc FilterContents {contents exclude} {
 					lappend newGroup $entry
 				}
 			} else {
-				lappend newGroup [FilterContents $contents $exclude]
+				lappend newGroup [lindex [FilterContents [list $entry] $exclude] 0]
 			}
 		}
 		lappend result $newGroup

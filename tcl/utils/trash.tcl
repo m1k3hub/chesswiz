@@ -231,12 +231,16 @@ switch [tk windowingsystem] {
 		}
 	}
 
-	windows {
-		# TODO
-	}
-
-	aqua {
-		# TODO
+	default {
+		# No trash support yet on Windows and macOS: the file box sees an
+		# unusable trash and deletes for good, as it does on X11 without one.
+		proc usable? {} { return 0 }
+		proc isTrash? {path} { return 0 }
+		proc directory {} { return "" }
+		proc content {{filter *}} { return {} }
+		proc originalPath {file} { return "" }
+		proc move {file {extensions {}}} { error "no trash on this platform" }
+		proc restore {args} { error "no trash on this platform" }
 	}
 
 }

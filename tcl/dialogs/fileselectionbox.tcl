@@ -31,8 +31,19 @@ namespace eval dialog {
 switch [tk windowingsystem] {
 	aqua - win32 {
 		# TODO use fsbox::verifyPath
-		proc openFile  {args} { return [NativeFileDialog tk_getOpenFile $args] }
-		proc saveFile  {args} { return [NativeFileDialog tk_getSaveFile $args] }
+		# A native dialog cannot be embedded (the export dialog puts the file
+		# box in a notebook tab), so -embed gets the Tk file box here too.
+		proc openFile  {args} {
+			if {[Embedded $args]} { return [fsbox::Open open {*}$args] }
+			return [NativeFileDialog tk_getOpenFile $args]
+		}
+		proc saveFile  {args} {
+			if {[Embedded $args]} { return [fsbox::Open save {*}$args] }
+			return [NativeFileDialog tk_getSaveFile $args]
+		}
+		proc Embedded {argl} {
+			return [expr {[dict exists $argl -embed] && [string is true -strict [dict get $argl -embed]]}]
+		}
 		proc chooseDir {args} { return [NativeFileDialog tk_chooseDirectory $args] }
 
 		# The native dialogs take a subset of the fsbox options. With
@@ -44,6 +55,11 @@ switch [tk windowingsystem] {
 				switch -- $key {
 					-directory { set key -initialdir }
 					-needencoding - -defaultencoding { set opts($key) $value; continue }
+					-filetypes {
+						# The third element is fsbox's upper-case extensions; Tk reads it
+						# as Mac file types and rejects ".HTML" (more than four chars).
+						set value [lmap ft $value { lrange $ft 0 1 }]
+					}
 				}
 				if {$key in {-parent -title -initialdir -initialfile -defaultextension
 						-multiple -filetypes -typevariable -mustexist -confirmoverwrite}} {
