@@ -26,11 +26,6 @@ consider while experimenting with Chesswiz:
 
 <ol>
   <li class="space">
-    This version contains a lot of debugging information and is accordingly
-    slow in several places.
-  </li>
-
-  <li class="space">
     The support of Scid databases (.si3/.si4) is performed by a quite complex
     emulation which is not yet sufficiently tested.
 	  <annotation>
