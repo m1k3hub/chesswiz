@@ -406,6 +406,10 @@ proc WidgetProc {twm command args} {
 	variable Options
 	variable ${twm}::Vars
 
+	if {$command in {zoom undock dock destroy}} {
+		::debuglog::log twm "$twm $command $args"
+	}
+
 	switch -- $command {
 		adjacent			{ return [::scidb::tk::twm adjacent $twm {*}$args] }
 		adjust			{ return [Adjust $twm {*}$args] }
@@ -505,7 +509,13 @@ proc WidgetProc {twm command args} {
 		undock			{ return [::scidb::tk::twm undock $twm {*}$args] }
 		unpack			{ return [Unpack $twm {*}$args] }
 		visible			{ return [::scidb::tk::twm visible $twm {*}$args] }
-		zoom { return [::scidb::tk::twm zoom $twm {*}$args] }
+		zoom {
+			set result [::scidb::tk::twm zoom $twm {*}$args]
+			if {$::debuglog::enabled} {
+				::debuglog::log twm "$twm zoomed=[::scidb::tk::twm zoomed $twm]"
+			}
+			return $result
+		}
 		zoomed { return [::scidb::tk::twm zoomed $twm] }
 		zoomsashes { return [ZoomSashes $twm {*}$args] }
 		workarea			{ return [WorkArea $twm {*}$args] }
@@ -2361,6 +2371,7 @@ proc Dock {twm toplevel} {
 
 
 proc Close {twm {frame ""}} {
+	::debuglog::log twm "$twm close $frame"
 	destroy [expr {[string length $frame] ? $frame : $twm}]
 }
 
@@ -3650,6 +3661,7 @@ set arrow(r) [image create photo -data {
 
 # Sash coordinates are session-only, never attributes in the saved layout.
 proc twm::ZoomSashes {twm action} {
+	::debuglog::log twm "$twm zoom sashes $action"
 	variable ${twm}::Vars
 	if {$action eq "save"} {
 		set Vars(zoom:sashes) {}

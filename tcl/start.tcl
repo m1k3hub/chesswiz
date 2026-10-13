@@ -151,6 +151,8 @@ if {![info exists ::env(SCIDB_SHAREDIR)]} { set ::env(SCIDB_SHAREDIR) $share }
 
 } ;# namespace dir
 
+::debuglog::init
+
 namespace eval file {
 
 set options [file join [set [namespace parent]::dir::config] options.dat]
@@ -846,6 +848,11 @@ proc bgerror {err args} {
 		}
 	}
 	if {[string length $err] == 0} { set err $errmsg }
+	if {$::debuglog::enabled} {
+		set debugInfo $errorInfo
+		if {[info exists opts(-errorinfo)]} { set debugInfo $opts(-errorinfo) }
+		::debuglog::log bgerror "$err\n$debugInfo"
+	}
 
 	if {$err eq "selection owner didn't respond"} {
 		set parent [::tkdnd::get_drop_target]

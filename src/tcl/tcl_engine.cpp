@@ -92,12 +92,19 @@ public:
 		:m_stream(fp)
 		,m_cmd(cmd)
 		,m_arg(arg)
+		,m_debugCmd(0)
+		,m_debugArg(0)
 	{
 		m_stream.set_line_buffered();
+#ifdef _WIN32
+		// Cookie draining uses physical byte offsets; CRLF translation causes short reads.
+		m_stream.set_binary();
+#else
 		m_stream.set_text();
+#endif
 
-		Tcl_IncrRefCount(m_cmd);
-		Tcl_IncrRefCount(m_arg);
+		if (m_cmd) Tcl_IncrRefCount(m_cmd);
+		if (m_arg) Tcl_IncrRefCount(m_arg);
 	}
 
 	~EngineLog()
@@ -106,8 +113,33 @@ public:
 		// Deliver pending output while the Tcl command objects are still alive.
 		m_stream.close();
 #endif
-		Tcl_DecrRefCount(m_cmd);
-		Tcl_DecrRefCount(m_arg);
+		if (m_cmd) Tcl_DecrRefCount(m_cmd);
+		if (m_arg) Tcl_DecrRefCount(m_arg);
+		if (m_debugCmd) Tcl_DecrRefCount(m_debugCmd);
+		if (m_debugArg) Tcl_DecrRefCount(m_debugArg);
+	}
+
+	bool hasConsole() const { return m_cmd != 0; }
+	bool hasDebug() const { return m_debugCmd != 0; }
+
+	void setConsole(Tcl_Obj* cmd, Tcl_Obj* arg)
+	{
+		if (cmd) Tcl_IncrRefCount(cmd);
+		if (arg) Tcl_IncrRefCount(arg);
+		if (m_cmd) Tcl_DecrRefCount(m_cmd);
+		if (m_arg) Tcl_DecrRefCount(m_arg);
+		m_cmd = cmd;
+		m_arg = arg;
+	}
+
+	void setDebug(Tcl_Obj* cmd, Tcl_Obj* arg)
+	{
+		Tcl_IncrRefCount(cmd);
+		Tcl_IncrRefCount(arg);
+		if (m_debugCmd) Tcl_DecrRefCount(m_debugCmd);
+		if (m_debugArg) Tcl_DecrRefCount(m_debugArg);
+		m_debugCmd = cmd;
+		m_debugArg = arg;
 	}
 
 	void write(char const* s, size_t len)
@@ -115,7 +147,13 @@ public:
 		Tcl_Obj* str = Tcl_NewStringObj(s, len);
 
 		Tcl_IncrRefCount(str);
-		invoke(__func__, m_cmd, m_arg, str, nullptr);
+		if (m_debugCmd)
+		{
+			Tcl_InterpState state = Tcl_SaveInterpState(interp(), TCL_OK);
+			invoke(__func__, m_debugCmd, m_debugArg, str, nullptr);
+			Tcl_RestoreInterpState(interp(), state);
+		}
+		if (m_cmd) invoke(__func__, m_cmd, m_arg, str, nullptr);
 		Tcl_DecrRefCount(str);
 	}
 
@@ -126,6 +164,8 @@ private:
 	mstl::ofstream	m_stream;
 	Tcl_Obj*			m_cmd;
 	Tcl_Obj*			m_arg;
+	Tcl_Obj*			m_debugCmd;
+	Tcl_Obj*			m_debugArg;
 };
 
 
@@ -647,30 +687,44 @@ static int
 cmdLog(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	static cookie_io_functions_t Cookie = { read, write, seek, close };
-	CHECK_ARGS_MIN(ti, objc, objv, 2, "open <cmd> <arg> | close | send <message>");
+	CHECK_ARGS_MIN(ti, objc, objv, 2, "open|debug <cmd> <arg> | close | send <message>");
 
 	char const* subcmd = stringFromObj(objc, objv, 1);
 
-	if (strcmp(subcmd, "open") == 0)
+	if (strcmp(subcmd, "open") == 0 || strcmp(subcmd, "debug") == 0)
 	{
-		CHECK_ARGS(ti, objc, objv, 4, "open <cmd> <arg>");
+		CHECK_ARGS(ti, objc, objv, 4, "open|debug <cmd> <arg>");
+		bool debug = strcmp(subcmd, "debug") == 0;
 
-		if (m_log)
+		if (!debug && m_log && m_log->hasConsole())
 			return error(CmdLog, subcmd, 0, "log is already open");
 
-		m_log = new EngineLog(	fopencookie(0, "w", Cookie),
-										objectFromObj(objc, objv, 2),
-										objectFromObj(objc, objv, 3));
-
-		tcl::app::scidb->setEngineLog(m_log->stream());
+		if (!m_log)
+		{
+			FILE* fp = fopencookie(0, "w", Cookie);
+			if (!fp) return error(CmdLog, subcmd, 0, "cannot open engine log stream");
+			m_log = new EngineLog(fp, 0, 0);
+			tcl::app::scidb->setEngineLog(m_log->stream());
+		}
+		if (debug)
+			m_log->setDebug(objectFromObj(objc, objv, 2), objectFromObj(objc, objv, 3));
+		else
+			m_log->setConsole(objectFromObj(objc, objv, 2), objectFromObj(objc, objv, 3));
 	}
 	else if (strcmp(subcmd, "close") == 0)
 	{
 		CHECK_ARGS(ti, objc, objv, 2, "close");
 
-		tcl::app::scidb->setEngineLog(0);
-		delete m_log;
-		m_log = 0;
+		if (m_log && m_log->hasDebug())
+		{
+			m_log->setConsole(0, 0);
+		}
+		else
+		{
+			tcl::app::scidb->setEngineLog(0);
+			delete m_log;
+			m_log = 0;
+		}
 	}
 	else if (strcmp(subcmd, "send") == 0)
 	{

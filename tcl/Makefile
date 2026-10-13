@@ -37,6 +37,7 @@ SOURCES = \
 	exec.tcl \
 	sys-platform.tcl \
 	utils/place.tcl \
+	debuglog.tcl \
 	start.tcl \
 	options.tcl \
 	colors.tcl \
