@@ -594,13 +594,8 @@ struct argf
 
 	argf(int (*func)(T, T, Arg const& arg), Arg const& arg) :f(func), a(arg) {}
 
-#if defined(__BSD__) || defined (__WIN32__) || defined (__WIN64__)
-	static int doit(argf* arg, T const* lhs, T const* rhs) { return arg->f(*lhs, *rhs, arg->a); }
-	static int dneg(argf* arg, T const* lhs, T const* rhs) { return arg->f(*rhs, *lhs, arg->a); }
-#else
 	static int doit(T const* lhs, T const* rhs, argf* arg) { return arg->f(*lhs, *rhs, arg->a); }
 	static int dneg(T const* lhs, T const* rhs, argf* arg) { return arg->f(*rhs, *lhs, arg->a); }
-#endif
 };
 
 template <typename T>
@@ -644,37 +639,32 @@ struct compare_less
 
 } // namespace algo
 
-#if defined(__BSD__) || defined (__WIN32__) || defined (__WIN64__)
-typedef int (*Comparison)(void*, void const*, void const*);
-#elif defined(__unix__) || defined(__APPLE__)
+// Every callback takes its context last; qsort() below adapts that once to
+// the libc in use (qsort_s and BSD qsort_r want the context first).
 typedef int (*Comparison)(void const*, void const*, void*);
-#else
-# error "qsort_r/qsort_s available?"
-#endif
 
 inline
 void
 qsort(void* base, size_t nmemb, size_t size, Comparison compare, void* arg)
 {
-#if defined (__WIN32__) || defined (__WIN64__)
-	::qsort_s(base, nmemb, size, compare, arg);
-#elif defined(__APPLE__)
-	// Keep the internal callbacks in context-last order and adapt them once
-	// at the BSD libc boundary (including functor and function callbacks).
-	struct DarwinComparison
+#if defined (__WIN32__) || defined (__WIN64__) || defined(__APPLE__) || defined(__BSD__)
+	// these want the context first: adapt the context-last callbacks
+	struct ContextFirst
 	{
 		Comparison compare;
 		void* arg;
 		static int call(void* cookie, void const* lhs, void const* rhs)
 		{
-			DarwinComparison* ctx = static_cast<DarwinComparison*>(cookie);
+			ContextFirst* ctx = static_cast<ContextFirst*>(cookie);
 			return ctx->compare(lhs, rhs, ctx->arg);
 		}
 	};
-	DarwinComparison ctx = { compare, arg };
-	::qsort_r(base, nmemb, size, &ctx, DarwinComparison::call);
-#elif defined(__BSD__)
-	::qsort_r(base, nmemb, size, arg, compare);
+	ContextFirst ctx = { compare, arg };
+# if defined (__WIN32__) || defined (__WIN64__)
+	::qsort_s(base, nmemb, size, ContextFirst::call, &ctx);
+# else
+	::qsort_r(base, nmemb, size, &ctx, ContextFirst::call);
+# endif
 #elif defined(__unix__)
 	::qsort_r(base, nmemb, size, compare, arg);
 #else

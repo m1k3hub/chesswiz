@@ -1494,7 +1494,18 @@ HPDF_LoadFont (HPDF_Doc     pdf,
         strcpy (lf.lfFaceName, family_name);
 
         if (GetDataFromLPFONT (&lf, &buffer, &len))
-            ret = HPDF_LoadTTFontFromFile (pdf, &buffer, embedding);
+        {
+            /* GDI hands over the font bytes, not a file: read them from memory */
+            HPDF_Stream font_data = HPDF_MemStream_New (pdf->mmgr, len);
+
+            if (HPDF_Stream_Validate (font_data)
+                && HPDF_Stream_Write (font_data, (HPDF_BYTE*) buffer, len) == HPDF_OK
+                && HPDF_Stream_Seek (font_data, 0, HPDF_SEEK_SET) == HPDF_OK)
+                ret = LoadTTFontFromStream (pdf, font_data, embedding, family_name);
+
+            if (!ret)
+                HPDF_CheckError (&pdf->error);
+        }
         else
             HPDF_SetError (&pdf->error, HPDF_UNKOWN_FONT, 0);
 

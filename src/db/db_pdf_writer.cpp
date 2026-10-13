@@ -36,6 +36,7 @@
 #include "sys_utf8.h"
 #include "sys_utf8_codec.h"
 #include "sys_file.h"
+#include <stdlib.h>
 
 #include "hpdf.h"
 
@@ -85,6 +86,14 @@ PdfWriter::PdfWriter(format::Type srcFormat,
 	,m_pieceSet("Merida")
 {
 	M_REQUIRE(isUsable());
+
+	// the share directory of a relocatable install (Windows, macOS) is known
+	// at run time only; start.tcl exports it
+	if (char const* share = ::getenv("SCIDB_SHAREDIR"))
+	{
+		m_imagePath = share;
+		m_imagePath += "/pdf/sets";
+	}
 
 	::memset(m_font, 0, sizeof(m_font));
 	::memset(m_fontSize, 0, sizeof(m_fontSize));

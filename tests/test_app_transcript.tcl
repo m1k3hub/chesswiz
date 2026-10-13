@@ -69,7 +69,8 @@ proc ::scidb::test::transcript::envUndo {} {
 
 
 # A small shell script under this test's directory, echoing/executing
-# <body>; the STT engine of these tests (like the voice tests').
+# <body>; the STT engine of these tests (like the voice tests'), so they
+# are unix-only.
 proc ::scidb::test::transcript::shell {name body} {
 	variable Dir
 
@@ -163,7 +164,7 @@ tcltest::test transcript-available-auto-no-python {auto without an interpreter f
 	file delete -force $::scidb::test::transcript::Dir
 } -result {0 {}}
 
-tcltest::test transcript-available-template {a template with a real program is usable, others are not} -setup {
+tcltest::test transcript-available-template {a template with a real program is usable, others are not} -constraints unix -setup {
 	file mkdir $::scidb::test::transcript::Dir
 } -body {
 	set fake [::scidb::test::transcript::shell fake-stt.sh "echo not run"]
@@ -178,7 +179,7 @@ tcltest::test transcript-available-template {a template with a real program is u
 	file delete -force $::scidb::test::transcript::Dir
 } -result {0 1 1}
 
-tcltest::test transcript-argv {the one-shot command is assembled, and templates substituted} -setup {
+tcltest::test transcript-argv {the one-shot command is assembled, and templates substituted} -constraints unix -setup {
 	file mkdir $::scidb::test::transcript::Dir
 } -body {
 	# the three STT_* settings at their defaults
@@ -207,7 +208,7 @@ tcltest::test transcript-argv {the one-shot command is assembled, and templates 
 	file delete -force $::scidb::test::transcript::Dir
 } -result {/tmp/x.wav python3 {--model base.en --device cuda} {--language de /tmp/x.wav} {--model base.en --lang de /tmp/x.wav}}
 
-tcltest::test transcript-transcribe {a stubbed STT command's output is the transcript} -setup {
+tcltest::test transcript-transcribe {a stubbed STT command's output is the transcript} -constraints unix -setup {
 	file mkdir $::scidb::test::transcript::Dir
 } -body {
 	set ::scidb::test::transcript::Result {}
@@ -223,7 +224,7 @@ tcltest::test transcript-transcribe {a stubbed STT command's output is the trans
 	file delete -force $::scidb::test::transcript::Dir
 } -result {1 {switch to the database tab}}
 
-tcltest::test transcript-transcribe-fail {a failing engine reports its stderr} -setup {
+tcltest::test transcript-transcribe-fail {a failing engine reports its stderr} -constraints unix -setup {
 	file mkdir $::scidb::test::transcript::Dir
 } -body {
 	set ::scidb::test::transcript::Result {}

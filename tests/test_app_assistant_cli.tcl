@@ -156,7 +156,8 @@ tcltest::test cli-session-shares-the-pane {terminal requests appear in the assis
 	list [string match "*> hello from the terminal*" $text] [string match "*Hi from the pane.*" $text]
 } -result {1 1}
 
-tcltest::test cli-ask-without-instance {--ask exits 2 when no instance is running} -body {
+# the Windows executable loads its own script: a copied script is no other port
+tcltest::test cli-ask-without-instance {--ask exits 2 when no instance is running} -constraints unix -body {
 	set exe [file join $::scidb::test::app::testDir .. src tkchesswiz]
 	set script [file join $::scidb::test::app::testDir .. tcl chesswiz]
 	# a different script path means a different port: nothing listens there

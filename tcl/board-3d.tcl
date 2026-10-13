@@ -145,7 +145,13 @@ array set Themes {
 	# Application root, captured at load time.  [info script] is only valid
 	# while the module is being sourced; in event callbacks (menu, toolbar)
 	# it is empty, so runtime procs must resolve paths through this instead.
+	# the installed share directory holds web3d/ and img/pieces_3d; a source
+	# tree run finds them beside tcl/
 	variable LibRoot [file normalize [file dirname [file dirname [info script]]]]
+	if {[info exists ::scidb::dir::share]
+		&& [file isfile [file join $::scidb::dir::share web3d index.html]]} {
+		set LibRoot $::scidb::dir::share
+	}
 
 } ;# namespace board3d
 

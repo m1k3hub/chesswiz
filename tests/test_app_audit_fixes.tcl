@@ -7,6 +7,8 @@
 
 package require tcltest 2.5
 
+tcltest::testConstraint x11 [expr {[tk windowingsystem] eq "x11"}]
+
 tcltest::test audit-log-exists {::log::exists sees the namespace Log variable} -body {
 	expr {[::log::exists] in {0 1}}
 } -result 1
@@ -250,8 +252,12 @@ tcltest::test audit-paste-dialog-closed-early {a paste dialog closed while it is
 
 tcltest::test audit-uri-list-not-a-list {dropped text that is no Tcl list is read line by line} -body {
 	set r [::fsbox::parseUriList "file:///a.pgn\r\n\{b.pgn"]
-	list [lindex $r 1] [lindex $r 3]
-} -result {/a.pgn \{b.pgn}
+	list [expr {[lindex $r 1] eq [file normalize /a.pgn]}] [lindex $r 3]
+} -result {1 \{b.pgn}
+
+tcltest::test audit-uri-list-windows-drive {a file URI with a drive letter keeps it} -constraints win -body {
+	lindex [::fsbox::parseUriList [list file:///C:/a.pgn]] 1
+} -result {C:/a.pgn}
 
 tcltest::test audit-media-update-after-close {a game switch after the media pane has closed does nothing} -setup {
 	set saved $::application::media::Priv(tree)
@@ -368,7 +374,7 @@ tcltest::test audit-image-missing-argument {an image command missing its last ar
 	}
 } -result {{1 1} {1 1} {1 1} {1 1}}
 
-tcltest::test audit-x11-region-bad-number {a bad coordinate for x11 region is an error, not an abort} -body {
+tcltest::test audit-x11-region-bad-number {a bad coordinate for x11 region is an error, not an abort} -constraints x11 -body {
 	list [catch {::scidb::tk::x11 region {} {} nosuchphoto}] [winfo exists .]
 } -result {1 1}
 
@@ -384,7 +390,7 @@ tcltest::test audit-user-dir-not-from-program-name {the user directory is named 
 		[expr {[file dirname [set ${ns}::filename]] eq $::scidb::dir::user}]
 } -result {1 1}
 
-tcltest::test audit-launcher-through-renamed-symlink {the launcher starts its binary when called through a symlink of another name} -setup {
+tcltest::test audit-launcher-through-renamed-symlink {the launcher starts its binary when called through a symlink of another name} -constraints unix -setup {
 	set dir [file join [::tcltest::temporaryDirectory] launch-[pid]]
 	file mkdir $dir
 	set script [file normalize [file join [file dirname [info script]] .. tcl chesswiz]]

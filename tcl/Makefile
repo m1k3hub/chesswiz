@@ -497,9 +497,14 @@ install-images:
 			done;                                                        \
 		done;                                                           \
 	done
+	@install -m 755 -d $(SHAREDIR)/img/pieces_3d $(SHAREDIR)/web3d
+	@install -m 644 -p ../img/pieces_3d/*.png $(SHAREDIR)/img/pieces_3d
+	@install -m 644 -p ../web3d/index.html ../web3d/*.js $(SHAREDIR)/web3d
 
 uninstall-images:
 	@echo "Uninstall images"
+	@rm -rf $(SHAREDIR)/img/pieces_3d $(SHAREDIR)/web3d
+	@if [ -d $(SHAREDIR)/img ]; then rmdir $(SHAREDIR)/img 2>/dev/null || true; fi
 	@if [ -d $(SHAREDIR)/images ]; then                                                       \
 		for i in `ls images/*.*`; do                                                           \
 			rm -f $(SHAREDIR)/$$i;                                                              \

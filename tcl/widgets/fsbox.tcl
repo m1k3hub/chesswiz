@@ -1010,6 +1010,10 @@ proc parseUriList {uriFiles} {
 					# no slash after "file:" - what is that for a crappy program?
 					set file [string range $file 5 end]
 				}
+				# file:///C:/x.pgn on Windows: no slash before the drive letter
+				if {$::tcl_platform(platform) eq "windows" && [regexp {^/[A-Za-z]:} $file]} {
+					set file [string range $file 1 end]
+				}
 				set file [file normalize $file]
 			} elseif {[string equal -length 9 $file "trash:/0-"]} {
 				# KDE style

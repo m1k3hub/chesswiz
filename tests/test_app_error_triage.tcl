@@ -143,7 +143,7 @@ tcltest::test triage-schedule {errors schedule a run only when automatic triage 
 	::scidb::test::triage::cleanup
 } -result {{} 1}
 
-tcltest::test triage-handoff {the coding agent is started on the issue file} -setup {
+tcltest::test triage-handoff {the coding agent is started on the issue file} -constraints unix -setup {
 	::scidb::test::triage::setup
 } -body {
 	::scidb::test::triage::record
@@ -170,7 +170,7 @@ tcltest::test triage-handoff {the coding agent is started on the issue file} -se
 	::scidb::test::triage::cleanup
 } -result {1 1 1 1 1 {an issue id is 8 hex digits}}
 
-tcltest::test triage-assistant-tools {triage, issue list and a confirmed handoff through the assistant} -setup {
+tcltest::test triage-assistant-tools {triage, issue list and a confirmed handoff through the assistant} -constraints unix -setup {
 	::scidb::test::triage::setup
 	set ::scidb::test::triage::Asked {}
 	set savedConfirm $::application::assistant::Priv(confirm)

@@ -82,7 +82,8 @@ tcltest::test ni-background-error {a background error is logged and does not ope
 	set ::errorCode NONE
 	set ::errorInfo "boom\n    while executing\n\"nothing\""
 	::scidb::bgerror "boom" {}
-	list [expr {[::scidb::test::ni::toplevelsAbove] - $before}] \
+	# no dialog opened (one closing meanwhile, such as the tip of the day, is fine)
+	list [expr {[::scidb::test::ni::toplevelsAbove] - $before > 0}] \
 		[lindex [lindex $::dialog::NonInteractiveLog end] 1] \
 		[string match boom* [lindex [lindex $::dialog::NonInteractiveLog end] 2]]
 } -cleanup {

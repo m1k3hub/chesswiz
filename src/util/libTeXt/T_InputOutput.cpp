@@ -68,15 +68,22 @@ InputOutput::searchFile(mstl::string const& searchDirs, mstl::string& filename)
 	if (fileExists(filename))
 		return true;
 
+	// a list of directories, separated like PATH: "C:/x" keeps its colon on Windows
+#if defined(__WIN32__)
+	char const Separator = ';';
+#else
+	char const Separator = ':';
+#endif
+
 	mstl::string::size_type start	= 0;
-	mstl::string::size_type end	= searchDirs.find(':');
+	mstl::string::size_type end	= searchDirs.find(Separator);
 
 	if (end == mstl::string::npos)
 		end = searchDirs.size();
 
 	while (end > start)
 	{
-		mstl::string fullPathname(searchDirs.substr(start, end));
+		mstl::string fullPathname(searchDirs.substr(start, end - start));
 
 #if defined(__WIN32__)
 		fullPathname += '\\';
@@ -95,7 +102,7 @@ InputOutput::searchFile(mstl::string const& searchDirs, mstl::string& filename)
 		if ((start = end + 1) >= searchDirs.size())
 			return false;
 
-		end = searchDirs.find(':', start);
+		end = searchDirs.find(Separator, start);
 
 		if (end == mstl::string::npos)
 			end = searchDirs.size();

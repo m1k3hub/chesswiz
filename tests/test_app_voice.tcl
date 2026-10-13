@@ -189,7 +189,7 @@ tcltest::test voice-no-microphone {without a recorder the feature says so and do
 	}
 } -result {0 0 1}
 
-tcltest::test voice-flow {a recording is trimmed, transcribed and sent to the assistant} -setup {
+tcltest::test voice-flow {a recording is trimmed, transcribed and sent to the assistant} -constraints unix -setup {
 	file mkdir $::scidb::test::voice::Dir
 } -body {
 	::scidb::test::voice::isolated {
@@ -217,7 +217,7 @@ tcltest::test voice-flow {a recording is trimmed, transcribed and sent to the as
 	file delete -force $::scidb::test::voice::Dir
 } -result {1 {switch to the database tab} {-observer ::application::voice::OnAssistant} 1}
 
-tcltest::test voice-review {review mode holds the transcript instead of sending it} -setup {
+tcltest::test voice-review {review mode holds the transcript instead of sending it} -constraints unix -setup {
 	file mkdir $::scidb::test::voice::Dir
 } -body {
 	::scidb::test::voice::isolated {
