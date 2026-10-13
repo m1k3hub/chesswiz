@@ -377,6 +377,25 @@ tcltest::test systemone-autostart-explicit {an explicit backend is never discove
 	::ai::systemone::configure -backend off
 } -result {1 plumb}
 
+tcltest::test systemone-autostart-deferred {auto discovery never blocks the caller} -setup {
+	set ::scidb::test::s1::SavedBackends $::ai::systemone::Backends
+	foreach b {imajev kev simple-jev plumb} {
+		dict set ::ai::systemone::Backends $b endpoint http://127.0.0.1:1/v1/systemone
+	}
+	::ai::systemone::configure -backend auto
+} -body {
+	::ai::systemone::autostart
+	::ai::systemone::autostart
+	set pending [llength [after info]]
+	set before $::ai::systemone::Resolved
+	set ms [lindex [time { ::ai::systemone::discover }] 0]
+	list $before [expr {$ms < 1000000}] [expr {$pending >= 1}]
+} -cleanup {
+	after cancel $::ai::systemone::AutoJob
+	set ::ai::systemone::Backends $::scidb::test::s1::SavedBackends
+	::ai::systemone::configure -backend off
+} -result {0 1 1}
+
 # --- ::ai::decide: one gated decision -------------------------------------
 
 proc ::scidb::test::s1::decide {question args} {

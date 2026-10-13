@@ -107,6 +107,7 @@ array set Config {
 # explicit configure -backend NAME (or off) sets Auto 0 for the session.
 variable Auto 1
 variable Resolved 0
+variable AutoJob {}
 variable ProbeOrder {imajev kev simple-jev plumb}
 
 } ;# namespace systemone
@@ -231,10 +232,7 @@ proc ::ai::systemone::Reachable {name} {
 	variable Config
 	variable Backends
 
-	set endpoint [dict get $Backends $name endpoint]
-	if {![regexp {^https?://([^/:]+):([0-9]+)} $endpoint -> host port]} { return 0 }
-	if {[catch { set chan [socket $host $port] }]} { return 0 }
-	catch { close $chan }
+	if {$name ni [OpenPorts [list $name]]} { return 0 }
 
 	set saved [array get Config]
 	set ok 0
@@ -259,8 +257,10 @@ proc ::ai::systemone::discover {} {
 	variable Resolved
 
 	set Resolved 1
+	# One parallel connect check first: only listening backends get a probe.
+	set open [OpenPorts $ProbeOrder]
 	foreach name $ProbeOrder {
-		if {[Reachable $name]} {
+		if {$name in $open && [Reachable $name]} {
 			SetBackend $name
 			return $name
 		}
@@ -280,9 +280,56 @@ proc ::ai::systemone::autostart {} {
 	variable Auto
 	variable Resolved
 
+	variable AutoJob
+
 	if {!$Auto || $Resolved} { return }
-	discover
+	# Never during startup: the app calls this more than once while starting,
+	# and the main window should not wait for the network.
+	catch { after cancel $AutoJob }
+	set AutoJob [after 2000 {
+		if {$::ai::systemone::Auto && !$::ai::systemone::Resolved} { ::ai::systemone::discover }
+	}]
 	return
+}
+
+
+# The backends (of NAMES) whose host:port accepts a connection, all tried at
+# once within TIMEOUT ms. A closed port fails at once on Linux and macOS, but
+# Windows retries a refused connect for about 2 s, so a blocking connect per
+# backend held up the start by seconds.
+proc ::ai::systemone::OpenPorts {names {timeout 300}} {
+	variable Backends
+	variable Pending
+	variable Open
+
+	set Open {}
+	set Pending 0
+	set chans {}
+	foreach name $names {
+		set endpoint [dict get $Backends $name endpoint]
+		if {![regexp {^https?://([^/:]+):([0-9]+)} $endpoint -> host port]} { continue }
+		if {[catch { set chan [socket -async $host $port] }]} { continue }
+		lappend chans $chan
+		incr Pending
+		fileevent $chan writable [list ::ai::systemone::Connected $chan $name]
+	}
+	if {$Pending} {
+		set timer [after $timeout { set ::ai::systemone::Pending 0 }]
+		while {$Pending > 0} { vwait [namespace current]::Pending }
+		after cancel $timer
+	}
+	foreach chan $chans { catch { close $chan } }
+	return [lmap name $names { expr {$name in $Open ? $name : [continue]} }]
+}
+
+
+proc ::ai::systemone::Connected {chan name} {
+	variable Pending
+	variable Open
+
+	fileevent $chan writable {}
+	if {[catch { fconfigure $chan -error } err] == 0 && $err eq ""} { lappend Open $name }
+	if {$Pending > 0} { incr Pending -1 }
 }
 
 

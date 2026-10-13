@@ -53,9 +53,30 @@ proc toplevelTrace {command args} {
 	}
 }
 
+# Startup gaps: top-level code between two proc definitions that ran long.
+proc procTrace {command args} {
+	variable lastProc
+	variable lastProcTime
+	set now [clock milliseconds]
+	if {$now - $lastProcTime >= 250} {
+		log startup "slow [expr {$now - $lastProcTime}]ms after proc $lastProc, before proc [lindex $command 1]"
+	}
+	set lastProc [lindex $command 1]
+	set lastProcTime $now
+}
+
+proc stopProcTrace {} {
+	variable lastProc
+	variable lastProcTime
+	catch { trace remove execution ::proc enter ::debuglog::procTrace }
+	set gap [expr {[clock milliseconds] - $lastProcTime}]
+	if {$gap >= 250} { log startup "slow ${gap}ms after proc $lastProc, before the main window" }
+}
+
 proc mapped {w target} {
 	variable created
 	if {$w ne $target || ![info exists created($w)]} { return }
+	if {$w eq ".application"} { stopProcTrace }
 	log dialog "mapped $w after [expr {[clock milliseconds] - $created($w)}]ms"
 	unset created($w)
 }
@@ -98,6 +119,9 @@ proc init {} {
 			}
 		}
 	}
+	variable lastProc init
+	variable lastProcTime [clock milliseconds]
+	trace add execution ::proc enter ::debuglog::procTrace
 	if {[llength [info commands ::scidb::engine::log]]} {
 		if {[catch {::scidb::engine::log debug ::debuglog::engine {}} err]} {
 			log startup "engine logging unavailable: $err"
@@ -106,7 +130,7 @@ proc init {} {
 }
 
 if {!$enabled} {
-	foreach name {log engine toplevelTrace mapped destroyed init} {
+	foreach name {log engine toplevelTrace procTrace stopProcTrace mapped destroyed init} {
 		proc $name {args} {}
 	}
 }
