@@ -1559,9 +1559,14 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 		set Dim(offset) 0
 	}
 
+	# The coordinate letters are sized in points, so the room for them (in
+	# pixels) grows with the screen's DPI, else a 200% display clips them.
+	set dpi [expr {max(1.0, [tk scaling]*72.0/96.0)}]
 	if {$layout(border) && $layout(coordinates)} {
-		set Dim(borderthickness) [expr {int([::font::scaleFactor]*$Dim(borderthickness) + 0.5)}]
-		set Dim(offset) [expr {int([::font::scaleFactor]*$Dim(offset) + 0.5)}]
+		set Dim(borderthickness) [expr {int($dpi*[::font::scaleFactor]*$Dim(borderthickness) + 0.5)}]
+		set Dim(offset) [expr {int($dpi*[::font::scaleFactor]*$Dim(offset) + 0.5)}]
+	} elseif {$layout(coordinates)} {
+		set Dim(offset) [expr {int($dpi*$Dim(offset) + 0.5)}]
 	}
 
 	if {	$Vars(layout) eq "ThreeCheck"
@@ -1842,6 +1847,14 @@ proc ComputeCoordFont {w size} {
 		incr size [expr {min(-1, min($dx, $dy)/2)}]
 	}
 
+	# Even 6pt is too tall (a high-DPI screen): fall back to pixels (negative size).
+	set px [expr {max(6, $Dim(offset) - $delta)}]
+	while {$px > 6} {
+		set Dim(font) [list $Defaults(coords-font-family) -$px]
+		if {[font metrics $Dim(font) -linespace] <= $Dim(offset) - $delta} { break }
+		incr px -1
+	}
+	set Dim(font) [list $Defaults(coords-font-family) -$px]
 	return $Dim(font)
 }
 
