@@ -107,7 +107,8 @@ tcltest::test modelfit-gpu-sums {the gpu command's whole MiB lines are summed ov
 	set path [::scidb::test::modelfit::fixture meminfo.txt $::scidb::test::modelfit::FixtureMeminfo]
 	set gpufx [::scidb::test::modelfit::fixture gpu.csv $::scidb::test::modelfit::GpuFixture]
 } -body {
-	::ai::modelfit::memory -meminfo $path -gpu [list cat $gpufx]
+	::ai::modelfit::memory -meminfo $path -gpu [expr {$::tcl_platform(platform) eq "windows"
+		? [list cmd /c type [file nativename $gpufx]] : [list cat $gpufx]}]
 } -cleanup {
 	catch { file delete $path }
 	catch { file delete $gpufx }

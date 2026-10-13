@@ -50,7 +50,9 @@ tcltest::test modelasync-open {opening the chooser returns without waiting for m
  ::scidb::test::modelasync::restore
 } -result {0 1 1}
 
-tcltest::test modelasync-gpu-heartbeat {GPU probing leaves Tcl timers responsive} -body {
+# The fake GPU command needs a shell with sleep; on Windows, modelfit-gpu-sums
+# covers the probe's output and this would test PowerShell's pipes.
+tcltest::test modelasync-gpu-heartbeat {GPU probing leaves Tcl timers responsive} -constraints unix -body {
  set ::scidb::test::modelasync::heartbeat 0
  set ::scidb::test::modelasync::result {}
  set timer [after 30 {set ::scidb::test::modelasync::heartbeat 1}]

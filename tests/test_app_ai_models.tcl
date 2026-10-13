@@ -232,11 +232,14 @@ tcltest::test aimodels-dialog-cloud-apply {a cloud choice saves the model and th
 		set file [::application::ai::KeyFile]
 		set out [list $::application::ai::Settings(provider) $::application::ai::Settings(model) \
 			$::application::ai::Settings(chosen) [::application::ai::key anthropic] \
-			[::ai::provider::apiKey anthropic] [file attributes $file -permissions]]
+			[::ai::provider::apiKey anthropic] \
+			[expr {[::application::ai::CredentialStore]
+				? ([file exists $file] ? "key file written" : "private")
+				: ([file attributes $file -permissions] eq "00600" ? "private" : "readable")}]]
 		::application::ai::setKey anthropic [expr {[dict exists $keys anthropic] ? [dict get $keys anthropic] : ""}]
 		set out
 	}
-} -result {anthropic claude-sonnet-5-5 1 test-key-123 test-key-123 00600}
+} -result {anthropic claude-sonnet-5-5 1 test-key-123 test-key-123 private}
 
 tcltest::test aimodels-dialog-cloud-default-saved-empty {choosing the default model saves "" so a newer default applies later} -body {
 	::scidb::test::aimodels::isolated {
@@ -433,7 +436,9 @@ tcltest::test aimodels-help-lists-flags {--help documents the AI flags} -body {
 	set exe [file join [file dirname [info nameofexecutable]] tkchesswiz]
 	if {![file executable $exe]} { set exe [info nameofexecutable] }
 	set script [file join $::scidb::test::app::testDir .. tcl chesswiz]
-	set out [exec $exe $script --help 2>@1]
+	# the Windows program loads its own chesswiz.tcl: a script would be a database
+	if {$::tcl_platform(platform) eq "windows"} { set script {} }
+	set out [exec $exe {*}$script --help 2>@1]
 	list [string match "*--ai-model=MODEL*" $out] [string match "*--ai-provider=NAME*" $out] \
 		[string match "*--ai-classifier=NAME*" $out] [string match "*--ai-debug*" $out]
 } -result {1 1 1 1}

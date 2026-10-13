@@ -71,8 +71,10 @@ proc ::ai::modelfit::memoryAsync {script args} {
 	set id [incr ProbeSeq]
 	set ram [memory -meminfo $opts(-meminfo) -gpu {}]
 	set Probes($id) [dict create script $script memory $ram output {} chan {} timer {}]
+	# Windows has no /dev/null: the open failed there, so no GPU was ever seen
+	set null [expr {$::tcl_platform(platform) eq "windows" ? "NUL" : "/dev/null"}]
 	if {![llength $opts(-gpu)] || [catch {
-		set chan [open [concat [list |] $opts(-gpu) [list 2> /dev/null]] r]
+		set chan [open [concat [list |] $opts(-gpu) [list 2> $null]] r]
 	}]} {
 		dict set Probes($id) timer [after 0 [namespace code [list FinishMemory $id]]]
 		return $id
