@@ -28,6 +28,7 @@
 #define db_player_included
 
 #include "db_common.h"
+#include "db_startup_cache.h"
 #include "db_date.h"
 
 #include "m_string.h"
@@ -304,6 +305,9 @@ public:
 	static void parseChessgamesDotComLinks(mstl::istream& stream);
 	static void parseComputerList(mstl::istream& stream);
 	static void loadDone();
+
+	static void writeCache(cache::Writer& writer);
+	static std::unique_ptr<cache::State> readCache(cache::Reader& reader);
 
 	static void emitPlayerCard(TeXt::Receptacle& receptacle,
 										NamebasePlayer const& player,

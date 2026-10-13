@@ -53,6 +53,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include "db_startup_cache.h"
 
 #include <string.h>
 
@@ -210,7 +211,9 @@ insert(Player::Matches& matches, Player const* player)
 static int
 cmpAssoc(PlayerList::value_type const* lhs, PlayerList::value_type const* rhs)
 {
-	return sys::utf8::compare(lhs->first, rhs->first);
+	// Source names are valid UTF-8. Its byte order is Unicode scalar
+    // order, so avoid decoding and revalidating both strings per comparison.
+    return ::strcmp(lhs->first.c_str(), rhs->first.c_str());
 }
 
 
@@ -3908,3 +3911,237 @@ Player::dump()
 }
 
 // vi:set ts=3 sw=3:
+
+
+namespace {
+struct PlayerCacheState : db::cache::State {
+    PlayerLookup playerLookup;
+    AliasDict aliasDict;
+    PlayerDict fidePlayerDict;
+    PlayerDict iccfPlayerDict;
+    PlayerDict dsbPlayerDict;
+    PlayerDict ecfPlayerDict;
+    Lookup asciiDict;
+    Lookup chessgamesDict;
+    Lookup urlDict;
+    CAllocator charAllocator;
+    PAllocator playerAllocator;
+    PlayerList playerList;
+    PlayerRegister playerDict;
+    mstl::string exclude;
+    LangMap langMap;
+    PndDict pndMap;
+    ViafDict viafMap;
+    PlayerCacheState() : charAllocator(1024), playerAllocator(32768) {}
+    ~PlayerCacheState() { for (auto const& row : langMap) delete row.second; }
+    void commit() noexcept override {
+        playerLookup.swap(::playerLookup);
+        aliasDict.swap(::aliasDict);
+        fidePlayerDict.swap(::fidePlayerDict);
+        iccfPlayerDict.swap(::iccfPlayerDict);
+        dsbPlayerDict.swap(::dsbPlayerDict);
+        ecfPlayerDict.swap(::ecfPlayerDict);
+        asciiDict.swap(::asciiDict);
+        chessgamesDict.swap(::chessgamesDict);
+        urlDict.swap(::urlDict);
+        charAllocator.swap(::charAllocator);
+        playerAllocator.swap(::playerAllocator);
+        playerList.swap(::playerList);
+        playerDict.swap(::playerDict);
+        exclude.swap(::exclude);
+        langMap.swap(::langMap);
+        pndMap.swap(::pndMap);
+        viafMap.swap(::viafMap);
+    }
+};
+}
+
+void Player::writeCache(cache::Writer& w)
+{
+    cache::Ids<Player> ids;
+    ids.values.reserve(::playerDict.size());
+    w.bytes.reserve(w.bytes.size()+::playerDict.size()*256u+::playerList.size()*40u);
+    for (auto p : ::playerDict) ids.add(p);
+    w.string(::exclude);
+    w.u32(::playerDict.size());
+    for (auto p : ::playerDict) {
+        w.string(p->m_name);
+        w.u32(p->m_frequency);
+        w.u32(p->m_titles);
+        w.u32(p->m_birthYear);
+        w.u32(p->m_deathMonth);
+        w.u32(p->m_sex);
+        w.u32(p->m_deathYear);
+        w.u32(p->m_nativeCountry);
+        w.u32(p->m_birthDay);
+        w.u32(p->m_birthMonth);
+        w.u32(p->m_species);
+        w.u32(p->m_notUnique);
+        w.u32(p->m_federation);
+        w.u32(p->m_deathDay);
+        w.u32(p->m_ratingType);
+        w.u32(p->m_region);
+        w.u32(p->m_chess960);
+        w.u32(p->m_shuffle);
+        w.u32(p->m_bughouse);
+        w.u32(p->m_crazyhouse);
+        w.u32(p->m_losers);
+        w.u32(p->m_suicide);
+        w.u32(p->m_giveaway);
+        w.u32(p->m_threeCheck);
+        w.u32(p->m_winboard);
+        w.u32(p->m_uci);
+        w.u32(p->m_fideID);
+        w.u32(p->m_iccfID);
+        for (unsigned i=0; i<rating::Last; ++i) {
+            w.u32(uint16_t(p->m_highestRating[i])); w.u32(uint16_t(p->m_latestRating[i]));
+        }
+        w.u32(p->m_dsbId.zpsPrefix); w.u32(p->m_dsbId.zpsSuffix); w.u32(p->m_dsbId.dsbMglNr);
+        w.u32(p->m_ecfId.prefix); w.u32(p->m_ecfId.suffix);
+    }
+    w.u32(::playerLookup.used());
+    for (auto const& row : ::playerLookup) {
+        w.string(row.first); w.u32(row.second.size());
+        for (auto p : row.second) w.u32(ids(p));
+    }
+    w.u32(::aliasDict.used());
+    for (auto const& row : ::aliasDict) { w.u32(ids(row.first)); cache::writeStrings(w, row.second); }
+    w.u32(::playerList.size());
+    for (auto const& row : ::playerList) { w.string(row.first); w.u32(ids(row.second)); }
+    w.u32(::fidePlayerDict.used());
+    for (auto const& row : ::fidePlayerDict) { w.u32(row.first); w.u32(ids(row.second)); }
+    w.u32(::iccfPlayerDict.used());
+    for (auto const& row : ::iccfPlayerDict) { w.u32(row.first); w.u32(ids(row.second)); }
+    w.u32(::dsbPlayerDict.used());
+    for (auto const& row : ::dsbPlayerDict) { w.u32(row.first); w.u32(ids(row.second)); }
+    w.u32(::ecfPlayerDict.used());
+    for (auto const& row : ::ecfPlayerDict) { w.u32(row.first); w.u32(ids(row.second)); }
+    cache::writeLookup(w, ::asciiDict, ids);
+    cache::writeLookup(w, ::chessgamesDict, ids);
+    cache::writeLookup(w, ::urlDict, ids);
+    w.u32(::langMap.size()); w.u32(::langMap.used());
+    for (auto const& row : ::langMap) { w.string(row.first); cache::writeLookup(w, *row.second, ids); }
+    w.u32(::pndMap.size());
+    for (auto const& row : ::pndMap) { w.u32(ids(row.first)); w.u32(row.second.prefix); w.u32(row.second.suffix); }
+    w.u32(::viafMap.size());
+    for (auto const& row : ::viafMap) { w.u32(ids(row.first)); w.u32(row.second); }
+}
+
+std::unique_ptr<cache::State> Player::readCache(cache::Reader& r)
+{
+    std::unique_ptr<PlayerCacheState> s(new PlayerCacheState);
+    s->exclude=r.string();
+    unsigned n=r.count(4+27*4+rating::Last*8+20);
+    s->playerDict.reserve(n);
+    for (unsigned j=0; j<n; ++j) {
+        Player* p=s->playerAllocator.alloc(); s->playerDict.push_back(p);
+        p->m_name=r.string();
+        if (p->m_name.empty() || !sys::utf8::validate(p->m_name)) throw cache::Invalid();
+        p->m_frequency=r.bounded(4294967295u);
+        p->m_titles=r.bounded(16383u);
+        p->m_birthYear=r.bounded(2047u);
+        p->m_deathMonth=r.bounded(12u);
+        p->m_sex=r.bounded(sex::Female);
+        p->m_deathYear=r.bounded(2047u);
+        p->m_nativeCountry=r.bounded(country::Mixed_Team);
+        p->m_birthDay=r.bounded(31u);
+        p->m_birthMonth=r.bounded(12u);
+        p->m_species=r.bounded(species::Program);
+        p->m_notUnique=r.bounded(1u);
+        p->m_federation=r.bounded(country::Mixed_Team);
+        p->m_deathDay=r.bounded(31u);
+        p->m_ratingType=r.bounded(rating::Last);
+        p->m_region=r.bounded(7u);
+        p->m_chess960=r.bounded(1u);
+        p->m_shuffle=r.bounded(1u);
+        p->m_bughouse=r.bounded(1u);
+        p->m_crazyhouse=r.bounded(1u);
+        p->m_losers=r.bounded(1u);
+        p->m_suicide=r.bounded(1u);
+        p->m_giveaway=r.bounded(1u);
+        p->m_threeCheck=r.bounded(1u);
+        p->m_winboard=r.bounded(1u);
+        p->m_uci=r.bounded(1u);
+        p->m_fideID=r.bounded(4294967295u);
+        p->m_iccfID=r.bounded(4294967295u);
+        for (unsigned i=0; i<rating::Last; ++i) {
+            uint32_t hi=r.bounded(65535), lo=r.bounded(65535);
+            p->m_highestRating[i]=hi<32768 ? int(hi) : int(hi)-65536;
+            p->m_latestRating[i]=lo<32768 ? int(lo) : int(lo)-65536;
+        }
+        p->m_dsbId.zpsPrefix=r.bounded(31); p->m_dsbId.zpsSuffix=r.bounded(16383);
+        p->m_dsbId.dsbMglNr=r.bounded(2047);
+        p->m_ecfId.prefix=r.bounded(524287); p->m_ecfId.suffix=r.bounded(15);
+    }
+    n=r.count(8); cache::reserveEntries(s->playerLookup, n);
+    while (n--) {
+        auto key=r.string(); Players players; unsigned k=r.count(); players.reserve(k);
+        while (k--) players.push_back(const_cast<Player*>(cache::reference(r, s->playerDict)));
+        if (!s->playerLookup.insert_unique(key, players)) throw cache::Invalid();
+    }
+    n=r.count(8); cache::reserveEntries(s->aliasDict, n);
+    while (n--) {
+        Player* p=const_cast<Player*>(cache::reference(r, s->playerDict));
+        StringList strings; cache::readStrings(r, strings);
+        if (!s->aliasDict.insert_unique(p, strings)) throw cache::Invalid();
+    }
+    n=r.count(8); s->playerList.reserve(n);
+    while (n--) {
+        auto name=r.string(); auto p=cache::reference(r, s->playerDict);
+        if (!sys::utf8::validate(name)) throw cache::Invalid();
+        s->playerList.push_back(Entry(name, p));
+    }
+    n=r.count(8); cache::reserveEntries(s->fidePlayerDict, n);
+    while (n--) {
+        unsigned id=r.u32(); Player* p=const_cast<Player*>(cache::reference(r, s->playerDict));
+        if (!s->fidePlayerDict.insert_unique(id, p)) throw cache::Invalid();
+    }
+    n=r.count(8); cache::reserveEntries(s->iccfPlayerDict, n);
+    while (n--) {
+        unsigned id=r.u32(); Player* p=const_cast<Player*>(cache::reference(r, s->playerDict));
+        if (!s->iccfPlayerDict.insert_unique(id, p)) throw cache::Invalid();
+    }
+    n=r.count(8); cache::reserveEntries(s->dsbPlayerDict, n);
+    while (n--) {
+        unsigned id=r.u32(); Player* p=const_cast<Player*>(cache::reference(r, s->playerDict));
+        if (!s->dsbPlayerDict.insert_unique(id, p)) throw cache::Invalid();
+    }
+    n=r.count(8); cache::reserveEntries(s->ecfPlayerDict, n);
+    while (n--) {
+        unsigned id=r.u32(); Player* p=const_cast<Player*>(cache::reference(r, s->playerDict));
+        if (!s->ecfPlayerDict.insert_unique(id, p)) throw cache::Invalid();
+    }
+    cache::readLookup(r, s->asciiDict, s->playerDict);
+    cache::readLookup(r, s->chessgamesDict, s->playerDict);
+    cache::readLookup(r, s->urlDict, s->playerDict);
+    unsigned buckets=r.bounded(65536);
+    if (buckets<8 || (buckets & (buckets-1))) throw cache::Invalid();
+    s->langMap.reserve(buckets);
+    n=r.count(8);
+    std::vector<mstl::string> languages;
+    std::vector<std::unique_ptr<Lookup>> lookups;
+    while (n--) {
+        languages.push_back(r.string()); lookups.emplace_back(new Lookup);
+        cache::readLookup(r, *lookups.back(), s->playerDict);
+    }
+    // Hash insertion prepends bucket chains; reverse insertion preserves the
+    // public wikipediaLinks order, including collisions between languages.
+    for (size_t i=languages.size(); i>0; --i) {
+        if (!s->langMap.insert_unique(languages[i-1], lookups[i-1].get())) throw cache::Invalid();
+        lookups[i-1].release();
+    }
+    n=r.count(12);
+    while (n--) {
+        Player* p=const_cast<Player*>(cache::reference(r, s->playerDict));
+        PndID id; id.prefix=r.bounded(134217727); id.suffix=r.bounded(15);
+        if (s->pndMap.has_key(p)) throw cache::Invalid();
+        s->pndMap[p]=id;
+    }
+    n=r.count(8);
+    while (n--) {
+        Player* p=const_cast<Player*>(cache::reference(r, s->playerDict)); unsigned id=r.u32();
+        if (s->viafMap.has_key(p)) throw cache::Invalid();
+        s->viafMap[p]=id;
+    }
+    return std::unique_ptr<cache::State>(s.release());
+}

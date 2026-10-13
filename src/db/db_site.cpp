@@ -39,6 +39,7 @@
 #include "m_stdio.h"
 
 #include <ctype.h>
+#include <string.h>
 
 //#define DEBUG
 
@@ -128,7 +129,9 @@ operator<(SiteList::value_type const& lhs, mstl::string const& rhs)
 static int
 cmpAssoc(SiteList::value_type const* lhs, SiteList::value_type const* rhs)
 {
-	return sys::utf8::compare(lhs->first, rhs->first);
+	// Source names are valid UTF-8. Its byte order is Unicode scalar
+    // order, so avoid decoding and revalidating both strings per comparison.
+    return ::strcmp(lhs->first.c_str(), rhs->first.c_str());
 }
 
 
@@ -619,3 +622,89 @@ Site::parseFile(mstl::istream& stream)
 }
 
 // vi:set ts=3 sw=3:
+
+namespace {
+struct SiteCacheState : db::cache::State {
+    SiteLookup siteLookup;
+    CountryLookup countryLookup;
+    AliasDict aliasDict;
+    SiteList siteList;
+    CharAllocator charAllocator;
+    SiteAllocator siteAllocator;
+    StringList removeSites;
+    SiteCacheState() : charAllocator(1024), siteAllocator(4096) {}
+    void commit() noexcept override {
+        siteLookup.swap(::siteLookup); countryLookup.swap(::countryLookup);
+        aliasDict.swap(::aliasDict); siteList.swap(::siteList);
+        charAllocator.swap(::charAllocator); siteAllocator.swap(::siteAllocator);
+        removeSites.swap(::removeSites);
+    }
+};
+}
+
+void Site::writeCache(cache::Writer& w)
+{
+    cache::Ids<Site> ids;
+    mstl::vector<Site const*> sites;
+    auto add = [&](Site const* p) {
+        if (!ids.values.count(p)) { ids.add(p); sites.push_back(p); }
+    };
+    for (auto const& row : ::siteList) add(row.second);
+    for (auto const& row : ::siteLookup) add(row.second);
+    for (auto const& row : ::aliasDict) add(row.first.site);
+    w.u32(sites.size());
+    for (auto p : sites) {
+        w.string(p->m_name); w.u32(p->m_ascii.size());
+        for (auto const& ascii : p->m_ascii) { w.string(ascii.name); w.u32(ascii.country); }
+    }
+    w.u32(::siteLookup.used());
+    for (auto const& row : ::siteLookup) { w.string(row.first); w.u32(ids(row.second)); }
+    w.u32(::countryLookup.used());
+    for (auto const& row : ::countryLookup) { w.string(row.first); w.u32(row.second); }
+    w.u32(::aliasDict.used());
+    for (auto const& row : ::aliasDict) {
+        w.u32(ids(row.first.site)); w.u32(row.first.country); cache::writeStrings(w, row.second);
+    }
+    w.u32(::siteList.size());
+    for (auto const& row : ::siteList) { w.string(row.first); w.u32(ids(row.second)); }
+}
+
+std::unique_ptr<cache::State> Site::readCache(cache::Reader& r)
+{
+    std::unique_ptr<SiteCacheState> s(new SiteCacheState);
+    mstl::vector<Site*> sites;
+    unsigned n=r.count(8); sites.reserve(n);
+    while (n--) {
+        Site* p=s->siteAllocator.alloc(); sites.push_back(p);
+        p->m_name=r.string();
+        if (p->m_name.empty() || !sys::utf8::validate(p->m_name)) throw cache::Invalid();
+        unsigned k=r.count(8); p->m_ascii.reserve(k);
+        while (k--) {
+            NonDiacritic ascii; ascii.name=r.string(); ascii.country=country::Code(r.bounded(country::Mixed_Team));
+            p->m_ascii.push_back(ascii);
+        }
+    }
+    n=r.count(8); cache::reserveEntries(s->siteLookup, n);
+    while (n--) {
+        auto name=r.string(); Site* p=cache::reference(r, sites);
+        if (!s->siteLookup.insert_unique(name, p)) throw cache::Invalid();
+    }
+    n=r.count(8); cache::reserveEntries(s->countryLookup, n);
+    while (n--) {
+        auto name=r.string(); auto country=country::Code(r.bounded(country::Mixed_Team));
+        if (!s->countryLookup.insert_unique(name, country)) throw cache::Invalid();
+    }
+    n=r.count(12); cache::reserveEntries(s->aliasDict, n);
+    while (n--) {
+        Site* p=cache::reference(r, sites); auto country=country::Code(r.bounded(country::Mixed_Team));
+        StringList strings; cache::readStrings(r, strings);
+        if (!s->aliasDict.insert_unique(City(p, country), strings)) throw cache::Invalid();
+    }
+    n=r.count(8); s->siteList.reserve(n);
+    while (n--) {
+        auto name=r.string(); Site* p=cache::reference(r, sites);
+        if (!sys::utf8::validate(name)) throw cache::Invalid();
+        s->siteList.push_back(SiteList::value_type(name, p));
+    }
+    return std::unique_ptr<cache::State>(s.release());
+}

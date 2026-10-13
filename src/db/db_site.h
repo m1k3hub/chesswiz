@@ -28,6 +28,7 @@
 #define db_site_included
 
 #include "db_common.h"
+#include "db_startup_cache.h"
 
 #include "m_string.h"
 #include "m_pair.h"
@@ -71,6 +72,9 @@ public:
 
 	static void parseFile(mstl::istream& stream);
 	static void loadDone();
+
+	static void writeCache(cache::Writer& writer);
+	static std::unique_ptr<cache::State> readCache(cache::Reader& reader);
 
 private:
 

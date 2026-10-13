@@ -48,6 +48,9 @@
 
 #include <tcl.h>
 #include <string.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include "tcl_player_cache.h"
 
 using namespace db;
 using namespace app;
@@ -156,21 +159,38 @@ cmdFilterFideList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 }
 
 
+
 static int
 cmdLoad(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc < 2 || objc > 3)
+    using namespace tcl::startup_cache;
+	if (objc < 2 || objc > 4)
 		return error(CmdLoad, 0, nullptr, "wrong # args: should be \"%s <done>|<type> ?<path>?\"", CmdLoad);
 
 	char const* type = stringFromObj(objc, objv, 1);
 
+	if (::strcmp(type, "cache-read") == 0 || ::strcmp(type, "cache-write") == 0)
+    {
+        if (objc != 4) return error(CmdLoad, 0, nullptr,
+            "wrong # args: should be \"%s %s <path> <sources>\"", CmdLoad, type);
+        bool ok=false;
+        try {
+            ok=::strcmp(type, "cache-read")==0 ? readPlayerCache(ti, objv[2], objv[3])
+                                               : writePlayerCache(ti, objv[2], objv[3]);
+        } catch (...) { /* A cache is optional; never expose an I/O/decode exception. */ }
+        Tcl_ResetResult(ti);
+        Tcl_SetObjResult(ti, Tcl_NewBooleanObj(ok));
+        return TCL_OK;
+    }
 	if (::strcmp(type, "done") == 0)
 	{
 		if (objc != 2)
 			return error(CmdLoad, 0, nullptr, "wrong # args: should be \"%s done\"", CmdLoad);
 
-		db::Player::loadDone();
-		db::Site::loadDone();
+        if (!playerCacheRestored) {
+            db::Player::loadDone(); db::Site::loadDone();
+        }
+        playerCacheFinalized=true;
 	}
 	else
 	{
@@ -201,6 +221,7 @@ cmdLoad(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		}
 		else
 		{
+			playerCacheRestored=false; playerCacheFinalized=false;
 			util::ZStream::Strings oldSuffixes = util::ZStream::zipFileSuffixes();
 
 			try

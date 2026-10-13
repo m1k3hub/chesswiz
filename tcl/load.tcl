@@ -61,6 +61,8 @@ variable photoFile {}
 
 variable LastMsg	""
 variable Log		{}
+variable CacheWritable 1
+variable CacheHit 0
 
 
 proc source {path args} {
@@ -107,6 +109,7 @@ proc load {msg type path} {
 	set currentFile $path
 
 	if {[catch {::scidb::app::load $type $path} err]} {
+		set ::load::CacheWritable 0
 		set msg [format $mc::FileIsCorrupt $path]
 		if {$type eq "eco"} {
 			append str $mc::SevereError .\n $msg \n\n $mc::ProgramAborting
@@ -178,7 +181,38 @@ load::load	[format $load::mc::Loading $load::mc::ECOFile] \
 				[file join $scidb::dir::data eco.bin] \
 				;
 
+set ::load::CacheHit 0
+set ::load::CacheWritable 1
 if {![::process::testOption fast-load]} {
+	# Include both FIDE paths so creating/removing the user's downloaded list
+	# invalidates a cache made with the shipped list. Preserve load order and
+	# distinguish elo-only by its actual source list.
+	set ::load::CachePath [file join $::scidb::dir::user cache players.bin]
+	set ::load::CacheSources {}
+	set ::load::FideList [file join $::scidb::dir::user ratings fide-players.txt]
+	if {![file readable $::load::FideList]} {
+		set ::load::FideList [file join $::scidb::dir::data players_list.zip]
+	}
+	foreach name {ratings_utf8.ssp.zip ratings-additional.ssp engines.txt} {
+		lappend ::load::CacheSources [file join $::scidb::dir::data $name]
+	}
+	lappend ::load::CacheSources $::load::FideList
+	lappend ::load::CacheSources [file join $::scidb::dir::user ratings fide-players.txt]
+	if {![::process::testOption elo-only]} {
+		foreach name {ips-ratings.txt dwz-ratings.txt ecf-ratings.txt iccf-ratings.txt} {
+			lappend ::load::CacheSources [file join $::scidb::dir::data $name]
+		}
+	}
+	foreach name {wikipedia-de.txt wikipedia-en.txt chessgames.com.zip cities.txt} {
+		lappend ::load::CacheSources [file join $::scidb::dir::data $name]
+	}
+	set cacheStart [clock milliseconds]
+	catch { set ::load::CacheHit [::scidb::app::load cache-read $::load::CachePath $::load::CacheSources] }
+	::debuglog::log startup "player cache read hit=$::load::CacheHit [expr {[clock milliseconds]-$cacheStart}]ms"
+	unset cacheStart
+}
+
+if {![::process::testOption fast-load] && !$::load::CacheHit} {
 
 # --- Load spellcheck files --------------------------------------------
 foreach file {ratings_utf8.ssp.zip ratings-additional.ssp} {
@@ -197,8 +231,7 @@ load::load	[format $load::mc::Loading $load::mc::EngineFile] \
 # --- Load FIDE players ------------------------------------------------
 # FIDE's current list, when the user fetched it (player-data.tcl), replaces
 # the shipped one of 2012
-set fideList [file join $::scidb::dir::user ratings fide-players.txt]
-if {![file readable $fideList]} { set fideList [file join $scidb::dir::data players_list.zip] }
+set fideList $::load::FideList
 load::load	[format $load::mc::Loading [format $load::mc::RatingList FIDE]] \
 				fide \
 				$fideList \
@@ -332,7 +365,20 @@ foreach file [glob -directory [file join $::scidb::dir::share themes ttk] -nocom
 
 # --- Load done --------------------------------------------------------
 unset file subdir msg
+set cacheStart [clock milliseconds]
 ::scidb::app::load done
+::debuglog::log startup "player/site loadDone [expr {[clock milliseconds]-$cacheStart}]ms"
+if {![::process::testOption fast-load] && !$::load::CacheHit && $::load::CacheWritable} {
+	set cacheStart [clock milliseconds]
+	set cacheWritten 0
+	catch {
+		file mkdir [file dirname $::load::CachePath]
+		set cacheWritten [::scidb::app::load cache-write $::load::CachePath $::load::CacheSources]
+	}
+	::debuglog::log startup "player cache write success=$cacheWritten [expr {[clock milliseconds]-$cacheStart}]ms"
+	unset cacheWritten
+}
+unset cacheStart
 
 #puts "[expr {[clock microseconds] - $t}] micro-secs"
 #unset t
