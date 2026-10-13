@@ -68,6 +68,7 @@ proc close {} {
 
 
 proc print {msg} {
+	::debuglog::log startup "phase $msg"
 	.splash.f.text configure -text $msg
 
 	if {[tk windowingsystem] eq "x11"} {
