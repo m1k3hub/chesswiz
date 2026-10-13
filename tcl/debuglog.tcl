@@ -54,6 +54,8 @@ proc toplevelTrace {command args} {
 }
 
 # Startup gaps: top-level code between two proc definitions that ran long.
+# The trace on ::proc must survive this namespace going away (tests do that).
+variable ProcTraceCmd [list apply {args { catch { ::debuglog::procTrace {*}$args } }}]
 proc procTrace {command args} {
 	variable lastProc
 	variable lastProcTime
@@ -68,7 +70,8 @@ proc procTrace {command args} {
 proc stopProcTrace {} {
 	variable lastProc
 	variable lastProcTime
-	catch { trace remove execution ::proc enter ::debuglog::procTrace }
+	variable ProcTraceCmd
+	catch { trace remove execution ::proc enter $ProcTraceCmd }
 	set gap [expr {[clock milliseconds] - $lastProcTime}]
 	if {$gap >= 250} { log startup "slow ${gap}ms after proc $lastProc, before the main window" }
 }
@@ -121,7 +124,8 @@ proc init {} {
 	}
 	variable lastProc init
 	variable lastProcTime [clock milliseconds]
-	trace add execution ::proc enter ::debuglog::procTrace
+	variable ProcTraceCmd
+	trace add execution ::proc enter $ProcTraceCmd
 	if {[llength [info commands ::scidb::engine::log]]} {
 		if {[catch {::scidb::engine::log debug ::debuglog::engine {}} err]} {
 			log startup "engine logging unavailable: $err"

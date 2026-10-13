@@ -1076,7 +1076,8 @@ safeCall(void* clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		{
 			savedCode = GetErrorInfo(ti);
 			mstl::exception::setDisabled();
-			tcl::setGlobalVar(m_errMessage, tcl::newObj(exc.report()));
+			// Optimised builds have no report (see m_exception.cpp): fall back to the message.
+			tcl::setGlobalVar(m_errMessage, tcl::newObj(exc.report().empty() ? mstl::string(exc.what()) : exc.report()));
 			tcl::setGlobalVar(m_errResult, tcl::result());
 		}
 		rc = TCL_ERROR;
@@ -1101,7 +1102,8 @@ safeCall(void* clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	{
 		if (mstl::exception::isEnabled())
 		{
-			tcl::setGlobalVar(m_errMessage, tcl::newObj(exc.report()));
+			// Optimised builds have no report (see m_exception.cpp): fall back to the message.
+			tcl::setGlobalVar(m_errMessage, tcl::newObj(exc.report().empty() ? mstl::string(exc.what()) : exc.report()));
 			tcl::setGlobalVar(m_errResult, tcl::newObj(exc.what()));
 			savedCode = GetErrorInfo(ti);
 			mstl::exception::setDisabled();

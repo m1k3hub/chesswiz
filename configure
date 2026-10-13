@@ -2330,8 +2330,10 @@ proc usage {rc} {
 
 ##############################################################################
 
-# XXX for BETA version
-set environment(OPTIMIZE) ""
+# Optimised, but keeping assertions and symbols (below) for the beta. An
+# OPTIMIZE environment variable still overrides (OPTIMIZE="" for debugging).
+# -O0 builds made startup ~30% and the player cache 3x slower.
+if {![info exists env(OPTIMIZE)]} { set environment(OPTIMIZE) "-O2" }
 set feature(sse2) no ;# newer compiler versions are buggy
 set feature(symbols) yes
 set feature(assertions) yes

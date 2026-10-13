@@ -1256,7 +1256,7 @@ proc application::media::InteractiveFollow {position} {
 # Playback diagnostics go to the debug log (CHESSWIZ_LOG=debug), so
 # failures are traceable without a debugger.
 proc application::media::MediaDebug {msg} {
-	::debuglog::log media $msg
+	catch { ::debuglog::log media $msg }
 }
 
 
