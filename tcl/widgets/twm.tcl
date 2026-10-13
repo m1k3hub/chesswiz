@@ -685,7 +685,7 @@ proc MakePane {twm id} {
 		pack $hdr -side top -fill x
 		ttk::label $hdr.title -textvariable $name
 		pack $hdr.title -side left
-		ttk::button $hdr.zoom -text "□" -takefocus 0 -command [list $twm zoom $w]
+		ttk::button $hdr.zoom -image $icon::12x12::maximise -takefocus 0 -command [list $twm zoom $w]
 		pack $hdr.zoom -side right
 		tooltip $hdr.zoom "Maximise / restore pane (Ctrl+Shift+Z)"
 	}
@@ -808,7 +808,7 @@ proc MakeFrame2 {twm frame id} {
 	$twm set! $frame flat [$twm get! $frame flat 0]
 
 	if {[$twm get $frame zoomable 0]} {
-		ttk::button $hdr.zoom -style twm.TButton -text "□" -takefocus 0 \
+		ttk::button $hdr.zoom -style twm.TButton -image $icon::12x12::maximise -takefocus 0 \
 			-command [list $twm zoom $frame]
 		tooltip $hdr.zoom "Maximise / restore pane (Ctrl+Shift+Z)"
 	}
@@ -1115,7 +1115,7 @@ proc UpdateHeader {twm frame panes {selection ""}} {
 		if {[winfo exists $hdr.zoom]} { destroy $hdr.zoom }
 	} else {
 		if {![winfo exists $hdr.zoom]} {
-			ttk::button $hdr.zoom -style twm.TButton -text "□" -takefocus 0
+			ttk::button $hdr.zoom -style twm.TButton -image $icon::12x12::maximise -takefocus 0
 			tooltip $hdr.zoom "Maximise / restore pane (Ctrl+Shift+Z)"
 		}
 		$hdr.zoom configure -command [list $twm zoom $zoomPane]
@@ -2650,6 +2650,16 @@ proc ::ttk::notebook::ActivateTab {w tab} {
 
 namespace eval icon {
 namespace eval 12x12 {
+
+set maximise [image create photo -data {
+	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAABIElEQVR4nJ2SvUoDURCFv7n3phCC
+	oMW2CdsrgTzAFVQ0jY3mBQRfwmYfaCvBxlS7YLugLxASK9vAVsneOxaadf0pxAMDM8MczvwJLTIz
+	Ht/bfr+vdV0LwNav0jSS54H/QKbTqc3zPAxH516cm8TNegcRA4BqtK63jqF5XDw93GVZZsx8PjcA
+	il6h8RJQQQVUAFXVI0VvAIqiMK6jpqFp8pfn2W23hcHh8TViL7ZxlyAiZtd77wC3AIbQLFZ2D0V+
+	IwBQAgNg+WGDCJ/lXwmqEmrKsllC0yYPTlYiRn8QVLHGutPh6OwVtBcBg2xEzERjbG/g0jSNVVVh
+	hJlg95XoVbECIAQxdhVUZwBJkrRKf0ZnnMx4X5gS8N8XUSYK76/xBhMKdYiPFAv+AAAAAElFTkSu
+	QmCC
+}]
 
 set close [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
