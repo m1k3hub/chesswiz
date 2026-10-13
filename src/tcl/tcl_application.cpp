@@ -205,10 +205,15 @@ cmdLoad(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 			try
 			{
+				// The suffix picks the entry of a zip archive, and must be set before
+				// the stream opens: the Windows stream reads the whole entry at open.
+				util::ZStream::setZipFileSuffixes(
+					util::ZStream::Strings(1, ::strcmp(type, "ssp") == 0 ? "ssp" : "txt"));
 				util::ZStream stream(path, mstl::ios_base::in | mstl::ios_base::binary);
 
 				if (!stream)
 				{
+					util::ZStream::setZipFileSuffixes(oldSuffixes);
 					appendResult("cannot open file '%s'", path);
 					return TCL_ERROR;
 				}
