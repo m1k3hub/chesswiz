@@ -403,7 +403,7 @@ variable Actions {
 	}
 	explain_game_result {
 		0 0 "find this game's turning points without changing it"
-		"Quick read-only Stockfish pass over the current game's mainline. Prefer this for 'why did White/Black lose', 'why did I lose', 'where did it go wrong', and 'what was the turning point', including follow-ups. Returns up to three biggest evaluation drops for the losing side, numbered moves played, better moves and evaluations before/after. Default side is the loser from the recorded result; select white or black when requested. Evaluations are short-search estimates, not proof of a tactical cause. Answer in plain language using these facts; do not annotate or create another game."
+		"Quick read-only Stockfish pass over the current game's mainline. Prefer this for 'why did White/Black lose', 'why did I lose', 'where did it go wrong', and 'what was the turning point', including follow-ups. Returns up to three biggest evaluation drops for the losing side, numbered moves played, better moves and evaluations before/after. Default side is the loser from the recorded result; select white or black when requested. Evaluations are short-search estimates, not proof of a tactical cause. Give friendly coaching in at most four short sentences: lead with the turning-point story, use SAN moves and evaluations in words, omit engine numbers unless asked, and end with one useful offer. Never infer a tactical cause from an evaluation drop alone; do not annotate or create another game."
 		{{"type":"object","properties":{"side":{"type":"string","enum":["auto","white","black"],"description":"side to explain; default auto (recorded loser)"}}}}
 		::application::assistant::DoExplainGameResult
 	}
@@ -581,13 +581,41 @@ say something was done unless a tool reported it in this conversation. When the
 user tells you their name, call remember_me. If no tool fits, say so briefly and name
 the menu entry that does it if you know one. Never claim you did something a
 tool did not report. Answer in one or two short sentences. For questions
-about games, players or openings, use the numbers the tools report and never
-invent statistics; a short list is fine there. Never state chess knowledge of
+about games, players or openings, never invent statistics; use only statistics
+the tools report; a short list is fine there. Never state chess knowledge of
 your own: no best moves, main lines, plans, evaluations or opening theory
 unless a tool reported them in this conversation (the engine, the opening
-tree, the database); offer to ask the tool instead. When a tool reply ends with a
+tree, the database); offer to ask the tool instead. Speak as a friendly coach
+for beginners through grandmasters. For chess evaluations (including explaining
+a position or checking a move), use words by default, not raw centipawn or pawn
+scores. From the relevant player's perspective, magnitudes below half a pawn
+are roughly equal, below a pawn and a half slightly better/worse, below three
+pawns clearly better/worse, and larger advantages winning/losing. These are
+engine estimates, not material counts: "about a pawn worse" does not mean a
+pawn was lost. Describe mate scores as a forced mate for/against the relevant
+side, never as a pawn score. Check the score's stated perspective: engine scores
+may be for the side to move, while tool text may convert them to White's view.
+Give engine numbers or detailed lines only when asked; you can offer them.
+When a tool reply ends with a
 "menu:" line, end your answer with that path in parentheses, e.g. "(also in:
 Database tab > ...)", so the user learns where the feature lives.}
+
+# Shared by the tool result and the final prose request; facts remain numeric.
+variable ResultProseInstructions {Explain this game result as friendly coaching,
+in at most four short sentences. Lead with the story of the turning point in
+ordinary chess language, naming moves in SAN. Prefer the move that changed an
+equal or playable position into a losing one over a later, larger drop in an
+already lost position; if the facts do not establish that, call it a setback.
+Translate evaluations into words using the system guidance, from the player's
+perspective. Omit raw scores, search timings, ply counts, result codes and long
+engine lines by default; include engine numbers only if the user asks for them.
+Never invent tactics, material losses or plans from the score alone. If the
+cause is unclear, say so briefly and describe what the better move achieves
+only as far as the supplied line supports; naming the engine's preference is
+enough when the line gives no explanation. A quick or partial pass is tentative,
+and a draw or unfinished game has no recorded loser. End with exactly one
+useful offer, such as showing the position before the mistake or, when relevant,
+"Want the engine numbers?" Answer from these facts without calling more tools.}
 
 variable DebugSystem {
 You are also a debugging aid for the developer of Chesswiz (Tcl/Tk front end
@@ -807,18 +835,21 @@ proc ::application::assistant::ConfigureProvider {} {
 
 proc ::application::assistant::Step {round} {
 	variable Priv
+	variable ResultProseInstructions
+	set messages $Priv(messages)
 
 	# the last round offers no tools, so the model has to answer in prose
 	set tools [expr {$round + 1 < $Priv(maxRounds) ? [toolsJson] : ""}]
 	if {[info exists Priv(resultFacts)] && $Priv(resultFacts) ne ""} {
 		# The facts are complete: ask only for prose, with a bounded wait.
+		lappend messages [dict create role system content $ResultProseInstructions]
 		set tools ""
 		if {![info exists Priv(replyTimeout)]} {
 			set Priv(replyTimeout) $::ai::provider::Config(timeoutMs)
 		}
 		::ai::provider::configure -timeout 30000 -options {}
 	}
-	::ai::provider::chatAsync $Priv(messages) $tools \
+	::ai::provider::chatAsync $messages $tools \
 		[namespace code [list OnReply $round]]
 }
 
@@ -1030,7 +1061,7 @@ proc ::application::assistant::Finish {result round} {
 		unset Priv(replyTimeout)
 	}
 	if {![dict get $result ok] && [info exists Priv(resultFacts)] && $Priv(resultFacts) ne ""} {
-		set text "The model could not finish its explanation. Here are the engine's findings:\n$Priv(resultFacts)"
+		set text [ResultFactsProse $Priv(resultFacts)]
 		set result [dict create ok 1 message [dict create content $text]]
 	}
 	if {[dict get $result ok]} {
@@ -1039,7 +1070,7 @@ proc ::application::assistant::Finish {result round} {
 		if {![string length $text]} {
 			set text "The model returned no explanation."
 			if {[info exists Priv(resultFacts)] && $Priv(resultFacts) ne ""} {
-				append text " Here are the engine's findings:\n$Priv(resultFacts)"
+				set text [ResultFactsProse $Priv(resultFacts)]
 			} elseif {[info exists Priv(lastFacts)] && $Priv(lastFacts) ne ""} {
 				append text " Here is what the tool found:\n$Priv(lastFacts)"
 			} else {
@@ -3539,6 +3570,34 @@ proc ::application::assistant::EngineScore {fen kind value} {
 }
 
 
+# Convert a side-to-move engine score to words for the requested player.
+# Bands describe an estimated advantage, never a claim about material lost.
+proc ::application::assistant::EvalToWords {fen kind value {side white}} {
+	set stm [expr {[lindex $fen 1] eq "b" ? "black" : "white"}]
+	set score [expr {$stm eq $side ? $value : -$value}]
+	if {$kind eq "mate"} {
+		# UCI mate 0 means the side to move is already checkmated.
+		if {$value == 0} { return [expr {$stm eq $side ? "checkmated" : "giving checkmate"}] }
+		return [expr {$score > 0 ? "winning with a forced mate" : "facing a forced mate"}]
+	}
+	set magnitude [expr {abs($score)}]
+	if {$magnitude < 50} { return "roughly equal" }
+	if {$magnitude < 150} { return [expr {$score > 0 ? "slightly better" : "slightly worse"}] }
+	if {$magnitude < 300} { return [expr {$score > 0 ? "clearly better" : "clearly worse"}] }
+	return [expr {$score > 0 ? "winning" : "losing"}]
+}
+
+# Use the summary generated from the original scores, rather than exposing
+# the numeric evidence when the model returns an empty or failed final turn.
+proc ::application::assistant::ResultFactsProse {facts} {
+	foreach line [split $facts "\n"] {
+		if {[string match "Coaching summary: *" $line]} {
+			return [string range $line [string length "Coaching summary: "] end]
+		}
+	}
+	return "I couldn't find a turning point from this quick look. I can try the analysis again."
+}
+
 # UCI moves from <fen> as numbered SAN ("12.Nf3 Nc6 13.d4"), at most <max>.
 proc ::application::assistant::EngineLine {fen uciMoves {max 10}} {
 	set out {}
@@ -4501,6 +4560,7 @@ proc ::application::assistant::ResultPassDone {{error ""}} {
 # Arithmetic only: rank drops from the mover's perspective; show actual cp
 # or mate scores with an explicitly stated White perspective to the reader.
 proc ::application::assistant::ResultPassSummary {plies scores side result ms} {
+	variable ResultProseInstructions
 	set rows {}
 	set count [expr {max(0, min([llength $plies], [llength $scores] - 1))}]
 	for {set i 0} {$i < $count} {incr i} {
@@ -4524,7 +4584,16 @@ proc ::application::assistant::ResultPassSummary {plies scores side result ms} {
 		set b [EngineScore $fen [dict get $before kind] [dict get $before value]]
 		set a [EngineScore $afterFen [dict get $after kind] [dict get $after value]]
 		set pv [EngineLine $fen [dict get $before pv] 5]
-		lappend rows [list $loss "$number$dots$san ($colour): evaluation $b -> $a; better was $better. Engine continuation: $pv."]
+		set bw [EvalToWords $fen [dict get $before kind] [dict get $before value] $colour]
+		set aw [EvalToWords $afterFen [dict get $after kind] [dict get $after value] $colour]
+		set coaching "The clearest setback in this quick look was $number$dots$san: [string totitle $colour]'s position went from $bw to $aw."
+		if {$bw eq $aw} {
+			set coaching "The clearest setback in this quick look was $number$dots$san, making [string totitle $colour]'s position harder to play."
+		}
+		if {$better ne ""} { append coaching " The engine preferred $better." }
+		set wasLosing [expr {$bw in {losing {facing a forced mate} checkmated}}]
+		set nowLosing [expr {$aw in {losing {facing a forced mate} checkmated}}]
+		lappend rows [list $loss "$number$dots$san ($colour): evaluation $b -> $a; better was $better. Engine continuation: $pv." $coaching "$number$dots$san" [expr {!$wasLosing && $nowLosing}] $i]
 	}
 	set reply "Quick Stockfish analysis: result $result; studying $side. Evaluations are in pawns from White's perspective (+ favours White, - favours Black; # means mate). Short searches of $ms ms per position are estimates."
 	if {$side eq "both"} { append reply " No losing side is recorded; these are drops by either side." }
@@ -4538,6 +4607,35 @@ proc ::application::assistant::ResultPassSummary {plies scores side result ms} {
 		foreach row $rows { append reply "\n[lindex $row 1]" }
 	}
 	append reply "\nThe game was not modified."
+	if {[llength $rows]} {
+		# Keep the ranked evidence unchanged; for coaching prefer the first
+		# reported move that crossed into a losing position.
+		set focus [lindex $rows 0]
+		set turningIndex [llength $plies]
+		foreach row $rows {
+			if {[lindex $row 4] && [lindex $row 5] < $turningIndex} {
+				set focus $row
+				set turningIndex [lindex $row 5]
+			}
+		}
+		set coaching [lindex $focus 2]
+		if {$count < [llength $plies]} {
+			append coaching " This look was incomplete, so a later turning point may be missing."
+		} elseif {$side eq "both"} {
+			append coaching " There is no recorded loser in this game."
+		} else {
+			append coaching " This quick look doesn't show exactly why the move was costly."
+		}
+		append coaching " I can show you the position before [lindex $focus 3]."
+	} else {
+		set coaching "I couldn't find a clear turning point with a better alternative in this quick look."
+		if {$count < [llength $plies]} {
+			append coaching " The analysis was incomplete, so it may have missed the key moment."
+		}
+		if {$side eq "both"} { append coaching " There is no recorded loser in this game." }
+		append coaching " I can take a closer look at a position you choose."
+	}
+	append reply "\nCoaching summary: $coaching\nPresentation instructions: $ResultProseInstructions"
 	return $reply
 }
 

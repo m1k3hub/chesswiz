@@ -47,6 +47,11 @@ proc ::scidb::test::whylose::pendingResult {token} {
 proc ::scidb::test::whylose::stub {name args body} {
 	variable saved
 	set old ${name}__whylose
+	# A test may override a stub its setup already installed: keep the original.
+	if {[llength [info commands $old]]} {
+		proc $name $args $body
+		return
+	}
 	if {[llength [info commands $name]]} { rename $name $old; lappend saved [list $name $old] } else { lappend saved [list $name {}] }
 	proc $name $args $body
 }
@@ -182,8 +187,8 @@ tcltest::test whylose-empty-final {async facts survive an empty model turn as a 
 	}
 } -body {
 	set text [::scidb::test::whylose::run]
-	list [string match {*3.e4*2.e4*1.e4*} $text] \
-		[string match {*-1.50 -> -4.50*better was 3.Nc3*} $text] \
+	list [string match {*3.e4*clearly worse to losing*} $text] \
+		[string match {*preferred 3.Nc3*show you the position before 3.e4*} $text] \
 		[string match {*(no answer)*} $text] \
 		[llength $::scidb::test::whylose::searches] \
 		[lindex $::scidb::test::whylose::searches 0] \
@@ -195,7 +200,7 @@ tcltest::test whylose-black {auto selects Black from result; signs and numbering
 	set ::scidb::test::whylose::result 1-0
 } -body {
 	set text [::scidb::test::whylose::run]
-	list [string match {*studying black*1...e5*} $text] [string match {*-0.50 -> +0.50*} $text] [string match {*3.e4*} $text]
+	list [string match {*1...e5*Black*slightly better to slightly worse*} $text] [string match {*preferred 1...Nc3*} $text] [string match {*3.e4*} $text]
 } -cleanup {::scidb::test::whylose::cleanup} -result {1 1 0}
 
 tcltest::test whylose-prose {normal model final is delivered after async analysis} -setup {
@@ -210,7 +215,7 @@ tcltest::test whylose-engine-failure {engine failure still yields partial facts 
 	proc ::ai::engine::evaluate {fen args} {error {engine timed out}}
 } -body {
 	set text [::scidb::test::whylose::run]
-	list [string match {*Analyzed 0 of 6*Partial pass*engine timed out*} $text] $::application::assistant::Priv(busy)
+	list [string match {*couldn't find a clear turning point*analysis was incomplete*closer look*} $text] $::application::assistant::Priv(busy)
 } -cleanup {::scidb::test::whylose::cleanup} -result {1 0}
 
 tcltest::test whylose-arguments {only supported side values accepted} -body {
@@ -258,7 +263,7 @@ tcltest::test whylose-empty-after-annotation {a long asynchronous annotation can
 tcltest::test whylose-model-failure {failed prose request still gives the engine facts and resets timeout} -setup {
 	::scidb::test::whylose::setup
 	::scidb::test::whylose::stub ::ai::provider::chatAsync {messages tools callback} {
-		if {[dict get [lindex $messages end] role] eq "tool"} {
+		if {[info exists ::application::assistant::Priv(resultFacts)] && $::application::assistant::Priv(resultFacts) ne ""} {
 			set ::scidb::test::whylose::finalTools $tools
 			set ::scidb::test::whylose::finalTimeout $::ai::provider::Config(timeoutMs)
 			after 0 [list {*}$callback [dict create ok 0 error {model timed out}]]
@@ -268,21 +273,21 @@ tcltest::test whylose-model-failure {failed prose request still gives the engine
 	}
 } -body {
 	set text [::scidb::test::whylose::run]
-	list [string match {*engine's findings*3.e4*} $text] $::scidb::test::whylose::finalTools 		$::scidb::test::whylose::finalTimeout $::ai::provider::Config(timeoutMs)
+	list [string match {*3.e4*clearly worse to losing*} $text] $::scidb::test::whylose::finalTools 		$::scidb::test::whylose::finalTimeout $::ai::provider::Config(timeoutMs)
 } -cleanup {::scidb::test::whylose::cleanup} -result {1 {} 30000 120000}
 
 tcltest::test whylose-draw {a draw does not acquire an invented loser} -setup {
 	::scidb::test::whylose::setup
 	set ::scidb::test::whylose::result 1/2-1/2
 } -body {
-	string match {*studying both*No losing side is recorded*} [::scidb::test::whylose::run]
+	string match {*no recorded loser*} [::scidb::test::whylose::run]
 } -cleanup {::scidb::test::whylose::cleanup} -result 1
 
 tcltest::test whylose-no-drop {stable evaluations are reported honestly} -setup {
 	::scidb::test::whylose::setup
 	set ::scidb::test::whylose::scores {50 -50 50 -50 50 -50 50}
 } -body {
-	string match {*No clear evaluation drop*} [::scidb::test::whylose::run]
+	string match {*couldn't find a clear turning point*} [::scidb::test::whylose::run]
 } -cleanup {::scidb::test::whylose::cleanup} -result 1
 
 
@@ -293,8 +298,10 @@ tcltest::test whylose-mate {mate evaluations retain direction and are never prin
 	set plies [lrange $::scidb::test::whylose::plies 0 0]
 	set before [dict create fen [lindex [lindex $plies 0] 2] cpl 30 kind cp value 30 bestMove b1c3 pv b1c3]
 	set after [dict create fen {8/8/8/8/8/8/8/K6k b - - 0 1} cpl 9990 kind mate value 1 bestMove {} pv {}]
-	string match {*evaluation +0.30 -> #-1*} [::application::assistant::ResultPassSummary $plies [list $before $after] white 0-1 200]
-} -cleanup {::scidb::test::whylose::cleanup} -result 1
+	set facts [::application::assistant::ResultPassSummary $plies [list $before $after] white 0-1 200]
+	list [string match {*evaluation +0.30 -> #-1*} $facts] \
+		[string match {*roughly equal to facing a forced mate*} [::application::assistant::ResultFactsProse $facts]]
+} -cleanup {::scidb::test::whylose::cleanup} -result {1 1}
 
 tcltest::test whylose-final-tools {result facts cannot trigger an annotation or new-game follow-up} -setup {
 	::scidb::test::whylose::setup
@@ -332,8 +339,84 @@ tcltest::test whylose-deadline {a pass hitting its wall-clock budget returns par
 	::scidb::test::whylose::pendingResult $token
 	set ::application::assistant::ResultPass(deadline) 0
 	::scidb::test::whylose::waitFor ::application::assistant::Priv(busy)
-	string match {*Analyzed 0 of 6*Partial pass*} [dict get [lindex $::application::assistant::Priv(messages) end] content]
+	string match {*analysis was incomplete*} [dict get [lindex $::application::assistant::Priv(messages) end] content]
 } -cleanup {::scidb::test::whylose::cleanup} -result 1
+
+
+# Evaluation wording uses explicit player perspective; test every band edge
+# in both directions, including the side-to-move flip after a played move.
+tcltest::test whylose-eval-bands {numeric advantage bands and boundaries} -body {
+	set out {}
+	foreach cp {-300 -299 -150 -149 -50 -49 0 49 50 149 150 299 300} {
+		lappend out [::application::assistant::EvalToWords {board w - - 0 1} cp $cp white]
+	}
+	set out
+} -result {losing {clearly worse} {clearly worse} {slightly worse} {slightly worse} {roughly equal} {roughly equal} {roughly equal} {slightly better} {slightly better} {clearly better} {clearly better} winning}
+
+tcltest::test whylose-eval-perspective {side-to-move cp and mate signs for both players} -body {
+	set out {}
+	foreach stm {w b} {
+		foreach side {white black} {
+			foreach spec {{cp 150} {cp -300} {mate 3} {mate -2} {mate 0}} {
+				lappend out [::application::assistant::EvalToWords "board $stm - - 0 1" {*}$spec $side]
+			}
+		}
+	}
+	set out
+} -result {{clearly better} losing {winning with a forced mate} {facing a forced mate} checkmated {clearly worse} winning {facing a forced mate} {winning with a forced mate} {giving checkmate} {clearly worse} winning {facing a forced mate} {winning with a forced mate} {giving checkmate} {clearly better} losing {winning with a forced mate} {facing a forced mate} checkmated}
+
+tcltest::test whylose-facts-and-guidance {numeric facts survive while final prompt requests coaching} -setup {
+	::scidb::test::whylose::setup
+	::scidb::test::whylose::stub ::ai::provider::chatAsync {messages tools callback} {
+		if {[dict get [lindex $messages end] role] eq "system"} {
+			set ::scidb::test::whylose::prosePrompt [dict get [lindex $messages end] content]
+		}
+		after 0 [list {*}$callback [dict create ok 1 message [::ai::provider::stubChat]]]
+	}
+} -body {
+	set text [::scidb::test::whylose::run]
+	set facts $::application::assistant::Priv(resultFacts)
+	list [string match {*evaluation -1.50 -> -4.50*better was 3.Nc3*Engine continuation:*} $facts] \
+		[string match {*four short sentences*Never invent tactics*exactly one*offer*} $::scidb::test::whylose::prosePrompt] \
+		[regexp {[-+][0-9]+\.[0-9]+|plies| ms |Stockfish|0-1|evaluation} $text] \
+		[string match {*raw centipawn*only when asked*} $::application::assistant::System]
+} -cleanup {::scidb::test::whylose::cleanup} -result {1 1 0 1}
+
+tcltest::test whylose-same-band {small changes do not invent a category change} -setup {
+	::scidb::test::whylose::setup
+} -body {
+	set plies [lrange $::scidb::test::whylose::plies 0 0]
+	set before [dict create fen [lindex [lindex $plies 0] 2] cpl 20 kind cp value 20 bestMove b1c3 pv b1c3]
+	set after [dict create fen {board b - - 0 1} cpl 20 kind cp value 20 bestMove {} pv {}]
+	set text [::application::assistant::ResultFactsProse [::application::assistant::ResultPassSummary $plies [list $before $after] white 0-1 200]]
+	list [string match {*1.e4*harder to play*preferred 1.Nc3*} $text] [string match {*equal to roughly equal*} $text]
+} -cleanup {::scidb::test::whylose::cleanup} -result {1 0}
+
+tcltest::test whylose-turning-story {coaching prefers becoming lost over a bigger later drop} -setup {
+	::scidb::test::whylose::setup
+	::scidb::test::whylose::stub ::scidb::ai::moveFacts {move fen} {
+		return [format {{"uci":"e2e4","san":"f3","fenAfter":"%s"}} $fen]
+	}
+} -body {
+	set fw {board w - - 0 39}
+	set fb {board b - - 0 39}
+	set fw40 {board w - - 0 40}
+	set fb40 {board b - - 0 40}
+	set plies [list [list key39 Qxd6 $fw] [list key39b Qd7 $fb] [list key40 Bc5 $fw40]]
+	set scores {}
+	foreach fen [list $fw $fb $fw40 $fb40] cp {-25 351 -333 858} {
+		lappend scores [dict create fen $fen cpl $cp kind cp value $cp bestMove f2f3 pv f2f3]
+	}
+	set facts [::application::assistant::ResultPassSummary $plies $scores white 0-1 200]
+	set text [::application::assistant::ResultFactsProse $facts]
+	list [string match {*40.Bc5*39.Qxd6*} $facts] \
+		[string match {*39.Qxd6*roughly equal to losing*preferred 39.f3*position before 39.Qxd6*} $text] \
+		[regexp {pawn on d6|Black's pieces|[-+][0-9]+\.[0-9]+} $text]
+} -cleanup {::scidb::test::whylose::cleanup} -result {1 1 0}
+
+tcltest::test whylose-unavailable-facts {missing summary still has a friendly fallback} -body {
+	::application::assistant::ResultFactsProse {error: engine unavailable}
+} -result {I couldn't find a turning point from this quick look. I can try the analysis again.}
 
 # Native GUI-shell checks: the stubs above cover the model/engine seam; these
 # use the real game backend to check header identity and read-only semantics.
