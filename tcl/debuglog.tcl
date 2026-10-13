@@ -74,8 +74,13 @@ proc init {} {
 	set file [file join $::scidb::dir::user log debug.log]
 	catch { file mkdir [file dirname $file] }
 	log startup "start=$wall platform=$::tcl_platform(os) $::tcl_platform(osVersion) Tcl=[info patchlevel]"
-	foreach name {app version revision gitSha} {
+	foreach name {app version gitSha} {
 		if {[info exists ::scidb::$name]} { log startup "$name=[set ::scidb::$name]" }
+	}
+	# ::scidb::revision is still the options file's revision here (83 on a
+	# first start); the binary's own is ::scidb::misc::revision.
+	if {[llength [info commands ::scidb::misc::revision]]} {
+		log startup "revision=[::scidb::misc::revision]"
 	}
 	foreach name {user share exec engines config log} {
 		if {[info exists ::scidb::dir::$name]} { log startup "$name=[set ::scidb::dir::$name]" }

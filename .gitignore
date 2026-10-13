@@ -133,3 +133,4 @@ build/
 /build/
 src/win/*.res
 src/tcl/.media_backend
+.git-version
