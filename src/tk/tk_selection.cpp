@@ -16,6 +16,7 @@
 // (at your option) any later version.
 // ======================================================================
 
+#include <stdlib.h>
 #include "tk_init.h"
 
 #include "m_assert.h"
@@ -753,7 +754,7 @@ tk::selection_init(Tcl_Interp* ti)
 void tk::selection_init(Tcl_Interp*)
 {
 	static bool logged = false;
-	if (!logged)
+	if (!logged && ::getenv("CHESSWIZ_LOG"))
 	{
 		fprintf(stderr, "Chesswiz: selection/clipboard use native Tk; X11 selection extensions unavailable\n");
 		logged = true;

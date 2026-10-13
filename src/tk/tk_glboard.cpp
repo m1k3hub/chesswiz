@@ -2,6 +2,7 @@
 // 3D OpenGL Chessboard Renderer for Tk / Togl
 // ======================================================================
 
+#include <stdlib.h>
 #include "tk_glboard.h"
 #if defined(_WIN32) || defined(__APPLE__)
 #include <tcl.h>
@@ -14,7 +15,7 @@ static int unavailable(ClientData, Tcl_Interp* ti, int, Tcl_Obj* const[])
 void tk::glboard_init(Tcl_Interp* ti)
 {
 	static bool logged = false;
-	if (!logged)
+	if (!logged && ::getenv("CHESSWIZ_LOG"))
 	{
 		fprintf(stderr, "Chesswiz: Togl board unavailable; use WebGL\n");
 		logged = true;

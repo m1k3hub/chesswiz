@@ -16,6 +16,7 @@
 // (at your option) any later version.
 // ======================================================================
 
+#include <stdlib.h>
 #include "tk_init.h"
 
 #include <tk.h>
@@ -545,7 +546,7 @@ void tk::fixes_init(Tcl_Interp*)
 {
 #if defined(_WIN32) || defined(__APPLE__)
 	static bool logged = false;
-	if (!logged)
+	if (!logged && ::getenv("CHESSWIZ_LOG"))
 	{
 		fprintf(stderr, "Chesswiz: X11 pointer/grab fixes unavailable; using native Tk\n");
 		logged = true;

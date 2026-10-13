@@ -38,6 +38,7 @@
 //		file.
 // =====================================================================================
 
+#include <stdlib.h>
 #include <tk.h>
 #include <stdio.h>
 #include <string.h>
@@ -207,7 +208,7 @@ xcursor_init(Tcl_Interp* ti)
 
 #if defined(_WIN32) || defined(__APPLE__)
 	static bool logged = false;
-	if (!logged)
+	if (!logged && ::getenv("CHESSWIZ_LOG"))
 	{
 		fprintf(stderr, "Chesswiz: Xcursor themes unavailable; use Tk built-in cursors\n");
 		logged = true;

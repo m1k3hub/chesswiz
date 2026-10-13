@@ -16,6 +16,7 @@
 // (at your option) any later version.
 // ======================================================================
 
+#include <stdlib.h>
 #include "tk_init.h"
 
 #include "tcl_base.h"
@@ -264,7 +265,7 @@ unavailableX11(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 void tk::x11_init(Tcl_Interp* ti)
 {
 	static bool logged = false;
-	if (!logged)
+	if (!logged && ::getenv("CHESSWIZ_LOG"))
 	{
 		fprintf(stderr, "Chesswiz: X11 screen capture unavailable\n");
 		logged = true;

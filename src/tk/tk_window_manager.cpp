@@ -16,6 +16,7 @@
 // (at your option) any later version.
 // ======================================================================
 
+#include <stdlib.h>
 #include "tk_init.h"
 
 #include "u_base.h"
@@ -957,7 +958,7 @@ tk::window_manager_init(Tcl_Interp* ti)
 {
 #if defined(_WIN32) || defined(__APPLE__)
 	static bool logged = false;
-	if (!logged)
+	if (!logged && ::getenv("CHESSWIZ_LOG"))
 	{
 		fprintf(stderr, "Chesswiz: native window manager; X11 desktop, leaders and synchronization unavailable\n");
 		logged = true;

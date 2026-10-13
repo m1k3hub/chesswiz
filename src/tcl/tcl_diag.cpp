@@ -22,6 +22,7 @@
 // Nothing here does any work until a signal arrives or the watchdog fires.
 // ======================================================================
 
+#include <stdlib.h>
 #include "tcl_base.h"
 
 #if defined(__unix__)
@@ -236,7 +237,7 @@ logOnce()
 {
 	static bool logged = false;
 
-	if (!logged)
+	if (!logged && ::getenv("CHESSWIZ_LOG"))
 	{
 		logged = true;
 		::fputs("Chesswiz: ::diag hang diagnosis (SIGUSR1/SIGUSR2, native backtrace) is unavailable on this platform\n", stderr);

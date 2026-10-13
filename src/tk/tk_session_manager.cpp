@@ -18,6 +18,8 @@
 
 #include "tk_session_manager.h"
 
+#include <stdlib.h>
+
 #if !defined(__WIN32__) && !defined(__APPLE__)
 
 #include <tk.h>
@@ -723,7 +725,7 @@ Tcl_Command
 tk::session_manager_init(Tcl_Interp* ti, char const* cmdName)
 {
 	static bool logged = false;
-	if (!logged)
+	if (!logged && ::getenv("CHESSWIZ_LOG"))
 	{
 		fprintf(stderr, "Chesswiz: X11 session management unavailable\n");
 		logged = true;

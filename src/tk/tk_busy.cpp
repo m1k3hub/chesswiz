@@ -25,6 +25,7 @@
 // Adaption by Gregor Cramer, 2011
 // ======================================================================
 
+#include <stdlib.h>
 #include "tk_init.h"
 
 #if defined(_WIN32) || defined(__APPLE__)
@@ -33,7 +34,7 @@
 void tk::busy_init(Tcl_Interp* ti)
 {
 	static bool logged = false;
-	if (!logged)
+	if (!logged && ::getenv("CHESSWIZ_LOG"))
 	{
 		fprintf(stderr, "Chesswiz: busy uses Tk 8.6 native tk busy\n");
 		logged = true;
