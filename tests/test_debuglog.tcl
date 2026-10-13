@@ -39,6 +39,21 @@ foreach mode {debug trace} {
 			[regexp {\d+ms \[engine\] > uci\n$} $text]
 	} -cleanup { file delete -force $scratch } -result {1 1 1}
 }
+tcltest::test proc-trace-namespaces {defining procs in a namespace with its own apply, or after the module is gone, still works} -body {
+	loadDebug debug
+	namespace eval ::debuglogTestNs {
+		proc apply {} { return own }
+		proc later {} { return ok }
+	}
+	namespace delete ::debuglog
+	proc ::debuglogTestAfter {} { return ok }
+	list [::debuglogTestNs::later] [::debuglogTestNs::apply] [::debuglogTestAfter]
+} -cleanup {
+	namespace delete ::debuglogTestNs
+	rename ::debuglogTestAfter {}
+	file delete -force $scratch
+} -result {ok own ok}
+
 tcltest::test format-escaping {arbitrary error details stay on one physical line} -body {
 	loadDebug debug
 	::debuglog::log bgerror "bad {value}\nstack\r\\path\t雪"

@@ -55,7 +55,7 @@ proc toplevelTrace {command args} {
 
 # Startup gaps: top-level code between two proc definitions that ran long.
 # The trace on ::proc must survive this namespace going away (tests do that).
-variable ProcTraceCmd [list apply {args { catch { ::debuglog::procTrace {*}$args } }}]
+variable ProcTraceCmd [list ::apply {args { catch { ::debuglog::procTrace {*}$args } }}]
 proc procTrace {command args} {
 	variable lastProc
 	variable lastProcTime
