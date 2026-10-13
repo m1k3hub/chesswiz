@@ -48,6 +48,10 @@ Type: files; Name: "{app}\engines\stockfish-scidb.exe"
 Type: files; Name: "{app}\engines\reckless-scidb.exe"
 Type: files; Name: "{app}\engines\sjeng-scidb.exe"
 
+; The player cache is rebuilt from the rating lists; the user's settings stay.
+[UninstallDelete]
+Type: filesandordirs; Name: "{userappdata}\Chesswiz\cache"
+
 [Icons]
 Name: "{autoprograms}\Chesswiz"; Filename: "{app}\tkchesswiz.exe"
 Name: "{autodesktop}\Chesswiz"; Filename: "{app}\tkchesswiz.exe"; Tasks: desktopicon
