@@ -89,7 +89,10 @@ proc maintenanceLabels {menu} {
 
 setup
 
-tcltest::test app-db-popup-01 {Repertoire report stays hidden for non-repertoire databases} -body {
+# a native popup menu (Windows, macOS) runs its own modal loop until dismissed
+tcltest::testConstraint x11 [expr {[tk windowingsystem] eq "x11"}]
+
+tcltest::test app-db-popup-01 {Repertoire report stays hidden for non-repertoire databases} -constraints x11 -body {
     set base [createDatabase popup]
     set parent .application.nb.database.main.switcher.content
     ::application::database::PopupMenu $parent 0 0 $base

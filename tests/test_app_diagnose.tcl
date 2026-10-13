@@ -249,7 +249,10 @@ tcltest::test diag-grab-release-not-swallowed {only setting a grab on an unviewa
 	::scidb::test::diag::cleanup
 } -result {{release .diagtest}}
 
-tcltest::test diag-menu-unpost-releases-grab {a menubutton that posts and unposts its menu leaves no grab behind} -setup {
+# a native menu (Windows, macOS) runs its own modal loop until dismissed
+tcltest::testConstraint x11 [expr {[tk windowingsystem] eq "x11"}]
+
+tcltest::test diag-menu-unpost-releases-grab {a menubutton that posts and unposts its menu leaves no grab behind} -constraints x11 -setup {
 	::scidb::test::diag::setup
 } -body {
 	toplevel .diagtest
