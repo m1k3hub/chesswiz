@@ -123,3 +123,5 @@ tcltest::test args-no-enum-no-call {a tool with no closed-set args is untouched}
 		list $r $::scidb::test::args::Calls
 	}
 } -result {{} 0}
+
+tcltest::cleanupTests

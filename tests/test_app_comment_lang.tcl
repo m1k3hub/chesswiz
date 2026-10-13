@@ -59,3 +59,5 @@ tcltest::test lang-override-none {no detection marker means nothing is recorded}
 	::ai::journal::configure -file ""
 	set n
 } -result {0}
+
+tcltest::cleanupTests
