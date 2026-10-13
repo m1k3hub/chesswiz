@@ -123,7 +123,8 @@ proc SearchResultsTempFile {file suffix} {
 	set base [file rootname [file tail $file]]
 	if {![string length $base]} { set base search }
 	set stamp [clock milliseconds]
-	return [file normalize [file join /tmp "scidb-$suffix-$base-$stamp.sci"]]
+	file mkdir $::scidb::dir::temp
+	return [file join $::scidb::dir::temp "$suffix-$base-$stamp.sci"]
 }
 
 

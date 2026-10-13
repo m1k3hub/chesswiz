@@ -1253,15 +1253,10 @@ proc application::media::InteractiveFollow {position} {
 }
 
 
-# Append a diagnostic line to /tmp/scidb-media-debug.log (and stderr) so
-# playback failures are traceable without a debugger.
+# Playback diagnostics go to the debug log (CHESSWIZ_LOG=debug), so
+# failures are traceable without a debugger.
 proc application::media::MediaDebug {msg} {
-	catch {
-		set fd [open /tmp/scidb-media-debug.log a]
-		puts $fd "[clock format [clock seconds]] [pid] $msg"
-		close $fd
-	}
-	puts stderr "scidb-media: $msg"
+	::debuglog::log media $msg
 }
 
 

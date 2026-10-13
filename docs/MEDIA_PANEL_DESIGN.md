@@ -221,7 +221,7 @@ annotation renders one green; see CHESSBASE_MEDIA_RE.md), `comment`
   switching games within a base retains played-keys (deliberate:
   re-entering a position does not replay), but a database switch should
   arguably clear them too.
-- Debug log goes to `/tmp/scidb-media-debug.log` unconditionally.
+- Debug log: `CHESSWIZ_LOG=debug` writes `[media]` records to `log/debug.log` in the user directory.
 
 ## 7. Panel layout (ChessBase-style, 2026-09-11)
 

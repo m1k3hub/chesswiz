@@ -67,6 +67,16 @@ if {$::tcl_platform(platform) eq "windows" || $::tcl_platform(os) eq "Darwin"} {
 
 set home		[file nativename "~"]
 set exec		[file dirname $::nameofexecutable]
+# Scratch files of this process (voice, transcripts, search results); callers
+# create it. /tmp does not exist on Windows, and macOS has a per-user TMPDIR.
+set temp /tmp
+foreach var {TMPDIR TEMP TMP} {
+	if {[info exists ::env($var)] && [file isdirectory $::env($var)]} {
+		set temp [file normalize $::env($var)]
+		break
+	}
+}
+set temp [file join $temp chesswiz-[pid]]
 # Named at build time after the installation (SHAREDIR), so renaming or wrapping
 # the program does not move the user's settings; SCIDB_USERDIR overrides it.
 if {[info exists ::env(SCIDB_USERDIR)] && $::env(SCIDB_USERDIR) ne ""} {

@@ -835,6 +835,7 @@ proc shutdown {} {
 	::widget::busyCursor off
 	::ttk::releaseGrab $dlg
 	set Vars(shutdown) 1
+	catch { file delete -force -- $::scidb::dir::temp }
 	destroy .application
 }
 
