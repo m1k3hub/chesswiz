@@ -3677,11 +3677,17 @@ proc twm::ZoomSashes {twm action} {
 			lappend Vars(zoom:sashes) $w $coords
 		}
 	} else {
-		update idletasks
-		foreach {w coords} $Vars(zoom:sashes) {
-			if {![winfo exists $w]} { continue }
-			set i 0
-			foreach xy $coords { $w sash place $i {*}$xy; incr i }
+		# Twice: on Windows the panedwindows get their restored size only
+		# from the window system, and a sash placed in a still-shrunken
+		# panedwindow is clamped to the panes' minimum size for good.
+		foreach pass {1 2} {
+			update idletasks
+			foreach {w coords} $Vars(zoom:sashes) {
+				if {![winfo exists $w]} { continue }
+				set i 0
+				foreach xy $coords { $w sash place $i {*}$xy; incr i }
+			}
+			if {$pass == 1} { update }
 		}
 		unset Vars(zoom:sashes)
 	}

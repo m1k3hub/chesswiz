@@ -141,7 +141,7 @@ tcltest::test pane-zoom-allowlist {only the specified application panes opt in} 
 	lsort [array names ::application::Zoomable]
 } -result {analysis assistant board dbgames editor games media report tree}
 
-foreach uid {board editor analysis:1} {
+foreach uid {board editor analysis:1 tree games media} {
 	tcltest::test pane-zoom-app-$uid {application pane maximises and restores without changing the saved layout} -setup {
 		.application.nb select .application.nb.board
 		set t [::application::twm board]
