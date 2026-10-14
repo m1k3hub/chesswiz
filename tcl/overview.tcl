@@ -655,10 +655,23 @@ proc Destroy {nb} {
 proc TabChanged {nb} {
 	variable Priv
 
-	set pane [$nb select]
-	set Priv(tab) [$nb index $pane]
-	ConfigureTab $pane
-	FillTab $nb $pane
+	# Making the boards of a new size updates the display, which delivers
+	# this tab's own <<NotebookTabChanged>> again: on Windows the nested
+	# call never returned (Overview froze switching 2x4 -> 2x5). Run once,
+	# then catch up with a tab chosen meanwhile.
+	if {[info exists Priv(changing:$nb)]} { return }
+	set Priv(changing:$nb) 1
+	try {
+		set pane {}
+		while {[winfo exists $nb] && [$nb select] ne $pane} {
+			set pane [$nb select]
+			set Priv(tab) [$nb index $pane]
+			ConfigureTab $pane
+			FillTab $nb $pane
+		}
+	} finally {
+		unset -nocomplain Priv(changing:$nb)
+	}
 }
 
 
