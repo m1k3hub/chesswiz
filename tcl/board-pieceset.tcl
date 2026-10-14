@@ -653,14 +653,20 @@ proc makePieceSelectionFrame {parent visible} {
 		set source [lindex $pieceSet 1]
 		set dataName [string map {"-" "_" " " ""} $name]
 		upvar #0 ${source}_${dataName} data
-		set img [image create photo -data $data(sample,24pt,200x34)]
+		if {[info exists data(sample,24pt,200x34)]} {
+			set img [image create photo -data $data(sample,24pt,200x34)]
+		} else {
+			# the newer sets have no preview: list them by name
+			set img [image create photo -width 200 -height 34]
+		}
 		$Listbox insert [list $img $name]
+		lappend contents [list $img]
 	}
 
 	$Listbox resize
 
 	bind $Listbox <<ListboxSelect>> [namespace code [list PieceSetChanged $parent %d]]
-	bind $Listbox <Destroy> [namespace code [Cleanup %W $contents]]
+	bind $Listbox <Destroy> [namespace code [list Cleanup %W $contents]]
 
 	pack $Listbox -expand yes -fill both
 
