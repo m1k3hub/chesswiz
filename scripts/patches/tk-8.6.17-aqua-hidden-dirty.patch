@@ -1,0 +1,19 @@
+--- a/macosx/tkMacOSXNotify.c
++++ b/macosx/tkMacOSXNotify.c
+@@ -373,7 +373,15 @@
+     for (NSWindow *window in [NSApp windows]) {
+ 	if ([[window contentView] isMemberOfClass:[TKContentView class]]) {
+ 	    TKContentView *view = [window contentView];
+-	    if ([view tkNeedsDisplay]) {
++
++	    /*
++	     * AppKit never runs drawRect for a window that is not on screen
++	     * (withdrawn), so its dirty rect would never be cleared and every
++	     * pass of the event loop would reschedule this idle task: [update]
++	     * never returned. It is redrawn when it is mapped. (Chesswiz patch.)
++	     */
++
++	    if ([view tkNeedsDisplay] && [window isVisible]) {
+ 		count++;
+ 		if (dirtyCount) {
+ 		   continue;
