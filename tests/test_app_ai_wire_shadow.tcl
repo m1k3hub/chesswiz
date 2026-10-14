@@ -72,9 +72,17 @@ proc ::scidb::test::wire::Reset {} {
 # The shadow gates answer from after 0: pump the event loop before the
 # journal is read.
 proc ::scidb::test::wire::Pump {} {
-	set done 0
-	after 50 [list set done 1]
-	vwait done
+	# 50 ms is plenty on a fast machine, not on a slow VM: go on while the
+	# journal still grows (at most 3 s)
+	set size -1
+	for {set waited 0} {$waited < 3000} {incr waited 50} {
+		set ::scidb::test::wire::done 0
+		after 50 [list set ::scidb::test::wire::done 1]
+		vwait ::scidb::test::wire::done
+		set now [expr {[file exists $::scidb::test::wire::File] ? [file size $::scidb::test::wire::File] : 0}]
+		if {$now == $size && $waited >= 50} { break }
+		set size $now
+	}
 	return
 }
 
