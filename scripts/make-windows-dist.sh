@@ -44,7 +44,9 @@ make -s -C "$BUILD/tcl" \
 	install-textures install-themes install-ttk-themes install-text-scripts \
 	install-images install-help install-config install-photos \
 	SHAREDIR="$DIST" DATADIR="$DIST" BINDIR="$DIST"
-make -s -C "$BUILD/src" install-data install-hyphen SHAREDIR="$DIST"
+# install-scripts: plain.eXt, which every TeXt script (tournament tables,
+# player cards) inputs first
+make -s -C "$BUILD/src" install-data install-hyphen install-scripts SHAREDIR="$DIST"
 
 # install-scripts puts the bundle under the program's name; Windows would
 # take a file named .exe for a program.
