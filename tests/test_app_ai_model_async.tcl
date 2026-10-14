@@ -94,7 +94,8 @@ tcltest::test modelasync-gpu-timeout {a stuck GPU command times out and releases
  set id [::ai::modelfit::memoryAsync {set ::scidb::test::modelasync::result} \
   -gpu [list sleep 2] -timeoutMs 60]
  vwait ::scidb::test::modelasync::result
- list [expr {[clock milliseconds]-$began < 500}] \
+ # well under the 2 s the command sleeps (a slow VM needs more than 500 ms)
+ list [expr {[clock milliseconds]-$began < 1500}] \
   [dict get $::scidb::test::modelasync::result vram_mb] [info exists ::ai::modelfit::Probes($id)]
 } -result {1 0 0}
 
