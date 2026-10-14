@@ -42,10 +42,25 @@ proc ::scidb::test::aimodels::isolated {body} {
 	set keys $::application::ai::Keys
 	rename ::application::ai::KeyFile ::scidb::test::aimodels::realKeyFile
 	proc ::application::ai::KeyFile {} [list return $::scidb::test::aimodels::KeyFile]
+	# ... and so do keys for the platform store (Windows, macOS): never the
+	# user's keychain, which a session without a GUI cannot even unlock
+	rename ::scidb::sys::credential ::scidb::test::aimodels::realCredential
+	array unset ::scidb::test::aimodels::Credential
+	proc ::scidb::sys::credential {op service account {value ""}} {
+		upvar #0 ::scidb::test::aimodels::Credential store
+		switch $op {
+			get { return [expr {[info exists store($service,$account)] ? $store($service,$account) : ""}] }
+			set { set store($service,$account) $value }
+			delete { unset -nocomplain store($service,$account) }
+		}
+		return
+	}
 	set rc [catch { uplevel 1 $body } result]
 	catch { file delete [::application::ai::KeyFile] }
 	rename ::application::ai::KeyFile {}
 	rename ::scidb::test::aimodels::realKeyFile ::application::ai::KeyFile
+	rename ::scidb::sys::credential {}
+	rename ::scidb::test::aimodels::realCredential ::scidb::sys::credential
 	set ::application::ai::Keys $keys
 	::ai::provider::configure -keys $keys
 	rename ::ai::provider::ollamaModelsAsync {}
