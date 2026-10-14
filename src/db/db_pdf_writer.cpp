@@ -89,10 +89,14 @@ PdfWriter::PdfWriter(format::Type srcFormat,
 
 	// the share directory of a relocatable install (Windows, macOS) is known
 	// at run time only; start.tcl exports it
+	mstl::string fontPath(SHAREDIR "/fonts/ScidbChessMerida.ttf");
+
 	if (char const* share = ::getenv("SCIDB_SHAREDIR"))
 	{
 		m_imagePath = share;
 		m_imagePath += "/pdf/sets";
+		fontPath = share;
+		fontPath += "/fonts/ScidbChessMerida.ttf";
 	}
 
 	::memset(m_font, 0, sizeof(m_font));
@@ -109,6 +113,11 @@ PdfWriter::PdfWriter(format::Type srcFormat,
 														HPDF_FALSE,
 														HPDF_FALSE,
 														HPDF_TRUE);
+
+	// macOS has neither GDI nor fontconfig to find the font by its name;
+	// the program ships it, so load the file itself
+	if (fontName == nullptr)
+		fontName = HPDF_LoadTTFontFromFile(m_doc, fontPath.c_str(), HPDF_TRUE);
 
 	m_font[Move_Figurine_MainLine] =
 	m_font[Move_Figurine_Variation] =
@@ -146,7 +155,8 @@ PdfWriter::~PdfWriter() throw()
 bool
 PdfWriter::isUsable()
 {
-	return HPDF_LoadFontIsAvailable() == HPDF_TRUE;
+	// without a system font lookup the figurine font is loaded from its file
+	return true;
 }
 
 
