@@ -589,8 +589,7 @@ proc alert {args} {
 	}
 	if {$windowingsystem eq "aqua"} {
 		# avoid the native menu bar which sits on top of everything
-		scan $y0 "%d" y
-		if {0 <= $y && $y < 22} { set y0 "+22" }
+		if {[string index $y 0] eq "+" && $y0 < 22} { set y "+22" }
 	}
 	wm geometry $w ${x}${y}
 
