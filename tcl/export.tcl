@@ -1821,8 +1821,12 @@ proc BuildFrame {w} {
 		set helvetica $fontFamilies(Helvetica)
 		array set attrs [font actual $font]
 		set index 0
+		# Windows substitutes Arial for every family it lacks, so the first
+		# candidates never match: the index must advance or this never ends
 		while {$index < [llength $helvetica] && [string compare -nocase $attrs(-family) $family]} {
 			set family [lindex $helvetica $index]
+			incr index
+			font delete $font
 			set font [font create -family $family -size $size -weight $weight -slant $slant]
 			array set attrs [font actual $font]
 		}
