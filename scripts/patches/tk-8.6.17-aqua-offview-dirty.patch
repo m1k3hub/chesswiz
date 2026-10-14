@@ -1,0 +1,28 @@
+--- a/macosx/tkMacOSXDraw.c
++++ b/macosx/tkMacOSXDraw.c
+@@ -1291,6 +1291,15 @@
+ 	}
+ 
+ 	/*
++	 * What lies outside the view can never be drawn. Keeping it would make
++	 * the containment test below fail on every drawRect, re-dirtying the
++	 * view for ever, so [update] never returned (e.g. a widget placed at a
++	 * negative y in an undocked pane). (Chesswiz patch.)
++	 */
++
++	drawingBounds = NSIntersectionRect(drawingBounds, [view bounds]);
++
++	/*
+ 	 * We can only draw into the NSView which is the current focusView.
+ 	 * When the current [NSView focusView] is nil, the CGContext for
+ 	 * [NSGraphicsContext currentContext] is nil.  Otherwise the current
+@@ -1321,7 +1330,8 @@
+ 	 */
+ 
+ 	currentBounds = NSRectFromCGRect(CGContextGetClipBoundingBox(dc.context));
+-	if (!NSContainsRect(currentBounds, drawingBounds)) {
++	if (!NSIsEmptyRect(drawingBounds)
++		&& !NSContainsRect(currentBounds, drawingBounds)) {
+ 	    [view addTkDirtyRect:drawingBounds];
+ 	}
+     }

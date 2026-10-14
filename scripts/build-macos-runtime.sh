@@ -16,8 +16,10 @@ for pkg in TCL TK; do
     echo "$sha  $CACHE/$name" | shasum -a 256 -c -
     tar xf "$CACHE/$name" -C "$WORK"
 done
-# [update] never returned while a withdrawn window had something to redraw
-patch -d "$WORK/tk$TK_VER" -p1 < "$ROOT/scripts/patches/tk-8.6.17-aqua-hidden-dirty.patch"
+# [update] never returned while a view stayed dirty (hidden window, off-view drawing)
+for p in hidden-dirty offview-dirty; do
+    patch -d "$WORK/tk$TK_VER" -p1 < "$ROOT/scripts/patches/tk-8.6.17-aqua-$p.patch"
+done
 FLAGS='-arch x86_64 -arch arm64 -mmacosx-version-min=11.0'
 rm -rf "$WORK/tcl-obj" "$WORK/tk-obj"
 mkdir -p "$WORK/tcl-obj" "$WORK/tk-obj"
