@@ -71,6 +71,8 @@ tcltest::test keymap-repeat-language {language rebinding and repeated selection 
 } -cleanup { ::keymapTest::scheme chesswiz } -result {1 1 1}
 
 tcltest::test keymap-board-event {Ctrl+F flips the actual board and stops at the overlay} -setup {
+	update
+	catch { destroy .tipoftheday }
 	# GotFocus deliberately redirects focus away from an empty game editor.
 	if {[::application::pgn::empty?]} { ::menu::gameNew .application }
 	::application::switchTab board
@@ -79,6 +81,7 @@ tcltest::test keymap-board-event {Ctrl+F flips the actual board and stops at the
 	set rotated [::application::board::rotated?]
 	focus -force $w
 	update
+	catch { destroy .tipoftheday ; focus -force $w ; update }
 } -body {
 	if {[focus] ne $w} { error "board focus redirected to [focus] (tags: [bindtags [focus]])" }
 	event generate $w <Control-f>
@@ -182,6 +185,7 @@ tcltest::test keymap-new-widget {new board widgets inherit the currently selecte
 
 tcltest::test keymap-persistence {options writer serializes the scheme and loading applies it} -setup {
 	set file [file join $::scidb::test::app::testDir tmp-app keymap options.tcl]
+	file mkdir [file dirname $file]
 } -body {
 	::keymapTest::scheme chessbase
 	set fd [open $file w]
@@ -193,7 +197,7 @@ tcltest::test keymap-persistence {options writer serializes the scheme and loadi
 		[string match *editComment* [bind ChessBaseBoard <Control-a>]] \
 		[expr {"::application::WriteShortcutOptions" in $::options::WriteCallbacks(options)}]
 } -cleanup {
-	file delete $file
+	file delete -force [file dirname $file]
 	::keymapTest::scheme chesswiz
 } -result {chessbase 1 1}
 

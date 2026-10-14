@@ -79,9 +79,9 @@ proc ::scidb::test::route::isolated {body} {
 	variable Answer 1
 	variable Switched {}
 
-	# flush startup after-idle events (the app schedules switchTab/tips at
+	# flush startup events (the app schedules Startup2/switchTab/tips at
 	# startup) before the recorder replaces the real procs
-	catch { update idletasks }
+	catch { update }
 
 	::application::assistant::show
 	set ::application::assistant::Priv(confirm) ::scidb::test::route::confirm

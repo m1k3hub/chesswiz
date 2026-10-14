@@ -179,6 +179,7 @@ tcltest::test triage-assistant-tools {triage, issue list and a confirmed handoff
 } -body {
 	::scidb::test::triage::record
 	lassign [::scidb::test::triage::groupIds] id1 id2
+	::application::assistant::show
 	::application::assistant::clear
 	set cfg ::application::ai::Config
 	set saved [array get $cfg provider]

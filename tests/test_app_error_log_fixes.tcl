@@ -60,8 +60,8 @@ tcltest::test errfix-browser-options-not-created-early {nothing is created befor
 	# the load-time state of a context that was never opened: the file defines no Options for it
 	set efxF [open [file join [file dirname [file dirname [file normalize [info script]]]] tcl browser.tcl]]
 	set efxText [read $efxF]; close $efxF
-	set i [string first "namespace eval pgn \{" $text]
-	expr {[string first "array set Options" [string range $text $i end]] < 0}
+	set i [string first "namespace eval pgn \{" $efxText]
+	expr {[string first "array set Options" [string range $efxText $i end]] < 0}
 } -result 1
 
 ::tcltest::cleanupTests
