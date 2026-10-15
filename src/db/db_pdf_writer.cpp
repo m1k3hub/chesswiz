@@ -104,6 +104,10 @@ PdfWriter::PdfWriter(format::Type srcFormat,
 	::memset(m_image, 0, sizeof(m_image));
 
 	HPDF_SetCompressionMode(m_doc, HPDF_COMP_ALL);
+	// One flat page list holds at most 8191 pages (HPDF_LIMIT_MAX_ARRAY): a
+	// database of 9000 games failed from game 8191 on and no file was saved.
+	// Split the page tree into nodes of 1000 pages.
+	HPDF_SetPagesConfiguration(m_doc, 1000);
 
 	if (encoding == ::sys::utf8::Codec::utf8())
 		HPDF_UseUTFEncodings(m_doc);
