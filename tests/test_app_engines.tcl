@@ -190,7 +190,9 @@ tcltest::test engines-lines-beyond-pane {more lines than the pane has rows are r
 	::scidb::test::engines::restore
 } -result {0 1}
 
-tcltest::test engines-winboard-dotted-pv {a WinBoard PV with "1... " move numbers is read, not looped on for ever} -setup {
+# The fake engine is a Tcl script started by its path, which only works where
+# a script with a #! line is executable (Linux, macOS).
+tcltest::test engines-winboard-dotted-pv {a WinBoard PV with "1... " move numbers is read, not looped on for ever} -constraints unix -setup {
 	::scidb::test::engines::isolate
 	set program [file join [file dirname [info script]] fixtures fake-xboard.tcl]
 	::scidb::test::engines::tool add_engine [list path $program]
