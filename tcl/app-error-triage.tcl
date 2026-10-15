@@ -110,20 +110,24 @@ proc ::application::triage::readLog {} {
 		fconfigure $fh -encoding utf-8
 		set lines [split [read $fh] \n]
 		close $fh
+		# The detail of the entry being read is collected on its own and
+		# stored once: lset on every continuation line copied the whole list
+		# (quadratic), which froze the program for minutes on a large log.
+		set detail [expr {[llength $entries] ? [lindex $entries end 3] : {}}]
 		foreach line $lines {
 			if {[regexp {^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[(\w+)\] (.*)$} $line _ time source message]} {
+				if {[llength $entries]} { lset entries end 3 $detail }
+				set detail {}
 				lappend entries [list $time $source $message {}]
 			} elseif {[llength $entries] && [string length $line]} {
 				# indented continuation: the rest of the message and the detail
-				set last [lindex $entries end]
-				set detail [lindex $last 3]
-				if {[string length $detail]} { append detail \n }
-				append detail [regsub {^    } $line ""]
-				lset entries end 3 $detail
+				lappend detail [regsub {^    } $line ""]
 			}
 		}
+		if {[llength $entries]} { lset entries end 3 $detail }
 	}
-	return $entries
+	# details are kept as lists of lines while reading
+	return [lmap e $entries { lset e 3 [join [lindex $e 3] \n]; set e }]
 }
 
 
