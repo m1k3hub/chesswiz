@@ -1848,7 +1848,8 @@ proc Activate {w {exit no}} {
 	AddToHistory $w $Vars(history:folder)
 
 	foreach file $selected {
-		if {[lindex [file split $file] 0] ne [fileSeparator]} {
+		# not "starts with /": on Windows an absolute path starts with a drive
+		if {[file pathtype $file] ne "absolute"} {
 			set msg [format [Tr CannotOpenOrCreate] $file]
 			::dialog::error -parent $Vars(widget:main) -message $msg
 			return
