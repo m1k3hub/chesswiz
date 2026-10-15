@@ -262,14 +262,19 @@ proc ::application::database::discover::_visit {dir depth} {
 }
 
 # Consume up to $budget directories.  Returns 1 while work remains.
-proc ::application::database::discover::_step {budget} {
+# Visits at most <budget> folders, and with <ms> also stops after that many
+# milliseconds: listing folders can be slow (Windows: 150 folders took 10-20 s
+# with a virus scanner), and the dialog must stay responsive.
+proc ::application::database::discover::_step {budget {ms 0}} {
 	variable Priv
 
+	set deadline [expr {$ms > 0 ? [clock milliseconds] + $ms : 0}]
 	while {$budget > 0 && $Priv(qhead) < [llength $Priv(queue)]} {
 		lassign [lindex $Priv(queue) $Priv(qhead)] dir depth
 		incr Priv(qhead)
 		_visit $dir $depth
 		incr budget -1
+		if {$deadline && [clock milliseconds] >= $deadline} { break }
 	}
 	return [expr {$Priv(qhead) < [llength $Priv(queue)]}]
 }
@@ -321,7 +326,7 @@ proc ::application::database::discover::_tick {} {
 	if {!$Priv(scanning)} { return }
 	if {$Priv(cancel)} { _finish ; return }
 
-	set more [_step 150]
+	set more [_step 150 50]
 	if {[llength $Priv(progressCmd)]} {
 		uplevel #0 $Priv(progressCmd) [list $Priv(dirs) [llength $Priv(results)]]
 	}
