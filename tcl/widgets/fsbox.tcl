@@ -1831,13 +1831,7 @@ proc Activate {w {exit no}} {
 			set even [expr {1 - $even}]
 			foreach file $list {
 				if {[string length $file]} {
-					if {$Vars(type) eq "save"} {
-						set fullname $file
-						if {[string length $Vars(defaultextension)]} {
-							append fullname $Vars(defaultextension)
-						}
-						if {![CheckPath $w $fullname]} { return }
-					}
+					if {$Vars(type) eq "save" && ![CheckSaveName $w $file]} { return }
 					lappend selected [[namespace current]::$complete $w $file]
 				}
 			}
@@ -1845,11 +1839,7 @@ proc Activate {w {exit no}} {
 	} else {
 		set file [string trim $Vars(initialfile)]
 		if {[string length $file]} {
-			if {$Vars(type) eq "save"} {
-				set fullname $file
-				if {[string length $Vars(defaultextension)]} { append fullname $Vars(defaultextension) }
-				if {![CheckPath $w $fullname]} { return }
-			}
+			if {$Vars(type) eq "save" && ![CheckSaveName $w $file]} { return }
 			lappend selected [[namespace current]::$complete $w $file]
 		}
 	}
@@ -1991,6 +1981,21 @@ proc SearchLastVisited {w dir} {
 proc CheckPath {w path} {
 	variable ${w}::Vars
 	return [checkPath $Vars(widget:main) $path]
+}
+
+
+# The name typed for saving: a folder in it is not part of the name to
+# check (Windows: "C:\dir\x.pgn" failed on ':' and '\'), and an extension
+# already typed is not added a second time ("x.pgn.pgn").
+proc CheckSaveName {w file} {
+	variable ${w}::Vars
+
+	set name [file tail $file]
+	set ext $Vars(defaultextension)
+	if {[string length $ext] && ![string equal -nocase [file extension $name] $ext]} {
+		append name $ext
+	}
+	return [CheckPath $w $name]
 }
 
 
