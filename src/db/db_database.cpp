@@ -42,6 +42,8 @@
 #include "db_search.h"
 #include "db_log.h"
 
+#include <stdio.h>
+
 #include "si3_codec.h"
 #include "si3_consumer.h"
 
@@ -1483,6 +1485,9 @@ Database::exportGame(unsigned index, Consumer& consumer) const
 	catch (mstl::exception const& exc)
 	{
 		// Defensive: a malformed game must not abort the whole conversion.
+		// But keep the real cause: reporting everything as "decoding failed"
+		// hid a PDF writer failure for every game past 8191.
+		::fprintf(stderr, "export of game %u failed: %s\n", unsigned(index), exc.what());
 		rc = save::DecodingFailed;
 	}
 
