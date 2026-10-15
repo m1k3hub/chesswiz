@@ -25,7 +25,7 @@
 #include <stdlib.h>
 #include "tcl_base.h"
 
-#if defined(__unix__)
+#if defined(__unix__) || defined(__APPLE__)	// macOS has no __unix__
 
 #include <atomic>
 #include <execinfo.h>
@@ -222,7 +222,7 @@ init(Tcl_Interp* ti)
 } // namespace diag
 } // namespace tcl
 
-#else // !__unix__  — no SIGUSR1/2, execinfo or pthread watchdog off Unix
+#else // Windows: no SIGUSR1/2, execinfo or pthread watchdog
 
 #include <stdio.h>
 
@@ -303,6 +303,6 @@ init(Tcl_Interp* ti)
 } // namespace diag
 } // namespace tcl
 
-#endif // __unix__
+#endif // __unix__ || __APPLE__
 
 // vi:set ts=3 sw=3:
