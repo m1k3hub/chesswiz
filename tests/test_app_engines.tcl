@@ -311,7 +311,7 @@ tcltest::test analysis-compare {the comparison runs the chosen engines side by s
 	$dlg.top.engines selection set 0 end
 	$dlg.start invoke
 	set running [llength [::application::analysis::Running]]
-	for {set i 0} {$i < 20 && [$dlg.start cget -state] eq "disabled"} {incr i} { ::scidb::test::engines::wait 500 }
+	for {set i 0} {$i < 90 && [$dlg.start cget -state] eq "disabled"} {incr i} { ::scidb::test::engines::wait 500 }
 	set depths [lmap item [$dlg.top.results children {}] { lindex [$dlg.top.results item $item -values] 1 }]
 	set summary [$dlg.top.summary get 1.0 end-1c]
 	set after [llength [::application::analysis::Running]]

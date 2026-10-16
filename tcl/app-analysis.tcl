@@ -2178,7 +2178,7 @@ proc AppendMove {move comment} {
 
 namespace eval compare {
 	variable Seconds 10
-	array set Vars { dlg {} engines {} after {} remaining 0 }
+	array set Vars { dlg {} engines {} after {} remaining 0 startup 0 }
 }
 
 
@@ -2272,6 +2272,7 @@ proc StartComparison {lb} {
 	if {[llength $Vars(engines)] < 2} { return [FinishComparison] }
 
 	set Vars(remaining) $Seconds
+	set Vars(startup) 0
 	$dlg.start configure -state disabled
 	$dlg.stop configure -state normal
 	TickComparison
@@ -2283,6 +2284,14 @@ proc TickComparison {} {
 
 	if {![winfo exists $Vars(dlg)]} { return }
 	RefreshComparison
+	# The time counts from when every engine has a line: a big network can
+	# take seconds to load on a slow machine (4 s on the macOS VM), and that
+	# must not eat the comparison. A dead engine holds it at most 30 s.
+	set waiting [llength [lsearch -all -exact -index 2 [ComparisonLines] {}]]
+	if {$waiting && [incr Vars(startup)] <= 30} {
+		set Vars(after) [after 1000 [namespace code TickComparison]]
+		return
+	}
 	if {[incr Vars(remaining) -1] < 0} { return [FinishComparison] }
 	$Vars(dlg).top.status configure -text [format $mc::SecondsLeft [expr {$Vars(remaining) + 1}]]
 	set Vars(after) [after 1000 [namespace code TickComparison]]
