@@ -425,7 +425,11 @@ proc Goto {table number} {
 			if {$index >= 0} {
 				::gamestable::see $table $index
 				::gamestable::focus $table
-				::gamestable::activate $table [::gamestable::indexToRow $table $index]
+				set row [::gamestable::indexToRow $table $index]
+				::gamestable::activate $table $row
+				# load it the way a double-click does: select the row, then <<TableSelected>>
+				::gamestable::select $table $row
+				event generate $table <<TableSelected>> -data $index
 				return
 			}
 		}
