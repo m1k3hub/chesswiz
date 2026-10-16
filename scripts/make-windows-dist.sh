@@ -20,6 +20,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$(cd "${1:-$ROOT/build/wt-win}" && pwd)"
 DIST="${2:-$ROOT/build/dist/Chesswiz}"
+# absolute: the install targets below run make -C in other directories
+case "$DIST" in /*) ;; *) DIST="$PWD/$DIST" ;; esac
 SYSROOT="$ROOT/build/x86_64-windows-gnu"
 
 die() { echo "make-windows-dist: $*" >&2; exit 1; }
@@ -60,6 +62,7 @@ cp "$ROOT"/tcl/fonts/*.ttf "$DIST/fonts/"
 
 # Engines from scripts/build-windows-engines.sh, when built.
 if [ -d "$ROOT/build/engines-win" ]; then
+	mkdir -p "$DIST/engines"
 	cp "$ROOT"/build/engines-win/*-chesswiz.exe "$DIST/engines/"
 	# Each engine's licence beside it (GPL-3, GPL-2, AGPL-3).
 	cp "$ROOT/engines/stockfish/Copying.txt" "$DIST/engines/Stockfish-Copying.txt"
