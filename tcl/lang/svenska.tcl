@@ -296,6 +296,7 @@
 ::menu::mc::Contact						"&Kontakt (Webbläsare)"
 ::menu::mc::Quit							"&Avsluta"
 ::menu::mc::Tools							"&Verktyg"
+::menu::mc::Search							"&Sök"
 ::menu::mc::Extras						"&Tillägg"
 ::menu::mc::Setup							"&Inställningar"
 ::menu::mc::Layout						"La&yout" ;# NEW
@@ -687,6 +688,7 @@
 ::application::database::mc::RemoveSpace						"Vissa tomrum kommer att tas bort."
 ::application::database::mc::CompactionRecommended			"Det rekommenderas att komprimera databasen."
 ::application::database::mc::SearchPGNTags					"Söker efter PGN-taggar"
+::application::database::mc::Search							"Sök"
 ::application::database::mc::SelectSuperfluousTags			"Välj överflödiga taggar:"
 ::application::database::mc::WillBePermanentlyDeleted		"Observera: Denna åtgärd kommer att permanent radera berörda uppgifter från databasen."
 ::application::database::mc::ReadWriteFailed					"Sätta databasen skrivbar misslyckades:"
@@ -2445,6 +2447,8 @@
 ::info::mc::References				"Referenser"
 ::info::mc::System					"System"
 ::info::mc::FontDesign				"Design av schackfonter"
+::info::mc::BundledSoftware			"Medföljande programvara"
+::info::mc::WindowsMacOnly			"Windows och macOS"
 ::info::mc::TruetypeFonts			"Truetype fonts" ;# NEW
 ::info::mc::ChessPieceDesign		"Design av schackpjäser"
 ::info::mc::BoardThemeDesign		"Design av schackbräden"

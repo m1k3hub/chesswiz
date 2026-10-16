@@ -297,6 +297,7 @@
 ::menu::mc::Contact			"&Elérhetőség (Web böngésző)"
 ::menu::mc::Quit			"&Kilépés"
 ::menu::mc::Tools			"&Tools" ;# NEW
+::menu::mc::Search			"&Keresés"
 ::menu::mc::Extras			"E&xtras" ;# NEW
 ::menu::mc::Setup			"&Beállítások"
 ::menu::mc::Layout			"La&yout" ;# NEW
@@ -689,6 +690,7 @@
 ::application::database::mc::RemoveSpace		"Some empty spaces will be removed." ;# NEW
 ::application::database::mc::CompactionRecommended	"It is recommended to compact the database." ;# NEW
 ::application::database::mc::SearchPGNTags		"Searching for PGN tags" ;# NEW
+::application::database::mc::Search		"Keresés"
 ::application::database::mc::SelectSuperfluousTags	"Select superfluous tags:" ;# NEW
 ::application::database::mc::WillBePermanentlyDeleted	"Please note: This action will permanently delete the concerned information from database." ;# NEW
 ::application::database::mc::ReadWriteFailed		"Setting the database writable failed:" ;# NEW
@@ -2445,6 +2447,8 @@
 ::info::mc::References		"Referenciák"
 ::info::mc::System		"Rendszer"
 ::info::mc::FontDesign		"sakk betűtípus terv" ;#chess font design
+::info::mc::BundledSoftware	"Beépített szoftverek"
+::info::mc::WindowsMacOnly	"Windows és macOS"
 ::info::mc::TruetypeFonts	"Truetype fonts" ;# NEW
 ::info::mc::ChessPieceDesign	"Figurakészlet terv" ;# "chess piece design"
 ::info::mc::BoardThemeDesign	"Tábla terv" ;#"Board theme design"

@@ -297,6 +297,7 @@
 ::menu::mc::Contact							"&Contenidos (navegador web)"
 ::menu::mc::Quit								"&Salir"
 ::menu::mc::Tools								"&Tools" ;# NEW
+::menu::mc::Search								"&Buscar"
 ::menu::mc::Extras							"E&xtras" 
 ::menu::mc::Setup								"Configu&rar"
 ::menu::mc::Layout							"La&yout" ;# NEW
@@ -688,6 +689,7 @@
 ::application::database::mc::RemoveSpace						"Some empty spaces will be removed." ;# NEW
 ::application::database::mc::CompactionRecommended			"It is recommended to compact the database."
 ::application::database::mc::SearchPGNTags					"Searching for PGN tags" ;# NEW
+::application::database::mc::Search							"Buscar"
 ::application::database::mc::SelectSuperfluousTags			"Select superfluous tags:" ;# NEW
 ::application::database::mc::WillBePermanentlyDeleted		"Please note: This action will permanently delete the concerned information from database." ;# NEW
 ::application::database::mc::ReadWriteFailed					"Setting the database writable failed:" ;# NEW
@@ -2439,6 +2441,8 @@
 ::info::mc::References				"Referencias"
 ::info::mc::System					"Sistema"
 ::info::mc::FontDesign				"Diseño de fuentes"
+::info::mc::BundledSoftware			"Software incluido"
+::info::mc::WindowsMacOnly			"Windows y macOS"
 ::info::mc::TruetypeFonts			"Truetype fonts" ;# NEW
 ::info::mc::ChessPieceDesign		"Diseño de las piezas"
 ::info::mc::BoardThemeDesign		"Diseño de tema de tablero"

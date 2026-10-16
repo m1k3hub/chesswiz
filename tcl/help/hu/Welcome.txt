@@ -53,9 +53,28 @@ Ez egy előzetes verzió tesztelés és ismerkedés céljaira. Az első teljes v
   </li>
 </ol>
 
-<p><!-- NEW: replace 'three years' with 'four years' -->
-Jó szórakozást kívánunk a Chesswiz használatához, melynek fejlesztése immáron kilenc éve tart!
+<p>
+Jó szórakozást kívánunk a Chesswiz használatához, amely a Scidb-re épül, amelynek fejlesztése 2008-ban kezdődött.
 </p>
+
+<h2>Amit a Chesswiz hozzáad</h2>
+
+<ul style="padding: 5px;">
+  <li class="space">Egy asszisztens, amellyel hétköznapi nyelven beszélhetsz: kérdezd meg, miért veszett el egy játszma, mit szokott játszani egy játékos, vagy hogyan készülj egy ellenfélre, és a táblán válaszol (<b>Main Menu &gt; Extras &gt; AI: Assistant</b>). A mesterséges intelligencia funkciói egy felhőalapú modellt használnak, amelyet az <b>AI: Choose Model</b> alatt választhatsz ki.</li>
+  <li class="space">Elemzés erős programokkal: a Stockfish mellékelve azonnal használható, és további UCI- és WinBoard-modulok is hozzáadhatók (<b>Main Menu &gt; Beállítások &gt; Elemző modulok</b>).</li>
+  <li class="space">Egy 3D-s tábla a 2D-s tábla mellett (<b>Main Menu &gt; Extras &gt; Open 3D Board</b>).</li>
+  <li class="space">A gyorsbillentyűk, amelyeket esetleg már ismersz: válts a ChessBase-stílusú sémára a <b>Main Menu &gt; Beállítások &gt; Keyboard Preferences</b> alatt.</li>
+  <li class="space">Exportálás PGN, Scidb, Scid, PDF, HTML és LaTeX formátumba, valamint versenytáblák a játszmalistából.</li>
+  <li class="space">Ugyanaz a program Windows, macOS és Linux rendszereken.</li>
+</ul>
+
+<h2>Amire a Chesswiz jelenleg jó</h2>
+
+<ul style="padding: 5px;">
+  <li class="space">Chesswiz adatbázisok (<abbr>.sci</abbr>) kezelése és böngészése: adatbázis-váltóval, rendezhető játszmalistákkal, játékos-/verseny-/helyszínnézetekkel és játszma-böngésző/szerkesztő munkafolyamatokkal.</li>
+  <li class="space">Adatbázis-központú munkafolyamatok <abbr>.sci</abbr> adatbázisokon, beleértve a szűrt nézeteket, munkakészleteket, adatbázis-karbantartást, duplikátumkeresést és megnyitási statisztikákat.</li>
+  <li class="space">Keresés: a <b>Main Menu &gt; Keresés</b> (vagy a nagyító az adatbázis eszköztárán) egyszerű nyelvi keresést kínál (például „Carlsen vereségei sötéttel 2015 óta”), haladó keresést fejléc és állás szerint, keresést anyag és értékszám szerint, duplikátumkeresést, valamint CQL 6.2-es keresést speciális mintázatlekérdezésekhez.</li>
+</ul>
 
 <h2>Links</h2>
 

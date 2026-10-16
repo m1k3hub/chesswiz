@@ -296,6 +296,7 @@
 ::menu::mc::Contact							"&Contenuti (browser)"
 ::menu::mc::Quit								"&Esci"
 ::menu::mc::Tools								"&Strumenti"
+::menu::mc::Search								"&Cerca"
 ::menu::mc::Extras							"E&xtras"
 ::menu::mc::Setup								"Impos&ta"
 ::menu::mc::Layout							"La&yout" ;# NEW
@@ -687,6 +688,7 @@
 ::application::database::mc::RemoveSpace						"Alcuni spazi bianchi saranno rimossi."
 ::application::database::mc::CompactionRecommended			"Si raccomanda di comprimere il database."
 ::application::database::mc::SearchPGNTags					"Ricerca tag PNG"
+::application::database::mc::Search							"Cerca"
 ::application::database::mc::SelectSuperfluousTags			"Seleziona tag superflui:"
 ::application::database::mc::WillBePermanentlyDeleted		"Nota: questa azione eliminerà definitavamente le informazioni dal database."
 ::application::database::mc::ReadWriteFailed					"Tentativo di settare il database come scrivibile fallito:"
@@ -2448,6 +2450,8 @@
 ::info::mc::References				"Riferimenti"
 ::info::mc::System					"Sistema"
 ::info::mc::FontDesign				"Design del font di scacchi"
+::info::mc::BundledSoftware			"Software incluso"
+::info::mc::WindowsMacOnly			"Windows e macOS"
 ::info::mc::TruetypeFonts			"Truetype fonts" ;# NEW
 ::info::mc::ChessPieceDesign		"Design dei pezzi"
 ::info::mc::BoardThemeDesign		"Design della scacchiera"

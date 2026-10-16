@@ -60,8 +60,27 @@ Version sollte folgendes berücksichtigt werden:
 </ol>
 
 <p>
-Viel Freude mit Chesswiz, dessen Entwicklung bisher bereits neun Jahre in Anspruch genommen hat!
+Viel Freude mit Chesswiz, das auf Scidb aufbaut, dessen Entwicklung im Jahr 2008 begann.
 </p>
+
+<h2>Was Chesswiz hinzufügt</h2>
+
+<ul style="padding: 5px;">
+  <li class="space">Ein Assistent, mit dem du in ganz normaler Sprache sprichst: frage, warum eine Partie verloren wurde, was ein Spieler üblicherweise spielt oder wie man sich auf einen Gegner vorbereitet, und er antwortet auf dem Brett (<b>Main Menu &gt; Extras &gt; AI: Assistant</b>). Die KI-Funktionen verwenden ein Cloud-Modell, das du unter <b>AI: Choose Model</b> auswählst.</li>
+  <li class="space">Analyse mit starken Schachprogrammen: Stockfish ist enthalten und einsatzbereit, und weitere UCI- und WinBoard-Engines können hinzugefügt werden (<b>Main Menu &gt; Einstellungen &gt; Motoren (Schachprogramme)</b>).</li>
+  <li class="space">Ein 3D-Brett neben dem 2D-Brett (<b>Main Menu &gt; Extras &gt; Open 3D Board</b>).</li>
+  <li class="space">Die Tastaturkürzel, die du vielleicht schon kennst: unter <b>Main Menu &gt; Einstellungen &gt; Keyboard Preferences</b> kannst du auf das Schema im ChessBase-Stil umschalten.</li>
+  <li class="space">Export nach PGN, Scidb, Scid, PDF, HTML und LaTeX sowie Turniertabellen aus der Partienliste.</li>
+  <li class="space">Dasselbe Programm unter Windows, macOS und Linux.</li>
+</ul>
+
+<h2>Wofür Chesswiz im Moment gut ist</h2>
+
+<ul style="padding: 5px;">
+  <li class="space">Chesswiz-Datenbanken (<abbr>.sci</abbr>) verwalten und durchblättern: mit einem Datenbank-Umschalter, sortierbaren Partienlisten, Spieler-/Turnier-/Ort-Ansichten und Arbeitsabläufen im Partie-Browser und -Editor.</li>
+  <li class="space">Datenbankorientierte Arbeitsabläufe auf <abbr>.sci</abbr>-Datenbanken, einschließlich gefilterter Ansichten, Arbeitsmengen, Datenbankpflege, Duplikaterkennung und Eröffnungsstatistiken.</li>
+  <li class="space">Suchen: <b>Main Menu &gt; Suche</b> (oder die Lupe in der Datenbank-Werkzeugleiste) bietet eine Suche in natürlicher Sprache (zum Beispiel «Carlsons Niederlagen als Schwarz seit 2015»), eine erweiterte Suche nach Partiedaten und Stellung, Suchen nach Material und nach Wertungszahl, Duplikaterkennung sowie CQL 6.2 für spezialisierte Musterabfragen.</li>
+</ul>
 
 <h2>Links</h2>
 
