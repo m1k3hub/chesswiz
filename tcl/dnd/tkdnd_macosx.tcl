@@ -54,10 +54,9 @@
 
 #data retrieval mechanism: text or file paths are copied from drag clipboard to system clipboard and retrieved via [clipboard get]; array of file paths is converted to single tab-separated string, can be split into Tcl list
 
-if {[tk windowingsystem] eq "aqua" && "AppKit" ni [winfo server .]} {
-  error {TkAqua Cocoa required}
-}
 
+# Every bundle carries all platform scripts; only this one runs here.
+if {[tk windowingsystem] eq "aqua"} {
 namespace eval tkdnd {
 namespace eval macdnd {
   variable _dropped_data {}
@@ -189,5 +188,7 @@ proc xdnd::_supported_type { type } {
 }; # xdnd::_supported_type
 
 }; # namespace tkdnd
+}; # aqua
+
 
 # vi:set ts=2 sw=2 et:

@@ -43,6 +43,8 @@
 # MODIFICATIONS.
 #
 
+# Every bundle carries all platform scripts; only this one runs here.
+if {[tk windowingsystem] eq "win32"} {
 namespace eval tkdnd {
 namespace eval olednd {
   variable _types {}
@@ -382,5 +384,7 @@ proc olednd::_supported_type { type } {
 }; # olednd::_supported_type
 
 }; # namespace tkdnd
+}; # win32
+
 
 # vi:set ts=2 sw=2 et:

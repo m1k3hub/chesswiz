@@ -18,18 +18,10 @@ USERDIRNAME ?= .$(notdir $(DATADIR))
 TKPROGRAM ?= tk$(PROGRAM)$(SUFFIX)
 
 SCRIPT = $(PROGRAM)$(SUFFIX)
-ifeq ($(TARGET_WINDOWS),yes)
-DND_PLATFORM = windows
-else ifeq ($(TARGET_MACOS),yes)
-DND_PLATFORM = macosx
-else
-DND_PLATFORM = unix
-endif
-DND_SCRIPTS = dnd/tkdnd_$(DND_PLATFORM).tcl
-ifeq ($(TARGET_MACOS),yes)
-# Cocoa adapters reuse the generic target-state routines from the Unix Tcl code.
-DND_SCRIPTS = dnd/tkdnd_unix.tcl dnd/tkdnd_macosx.tcl
-endif
+# All platform scripts go into every bundle and pick themselves at run
+# time, so a bundle built without the target set still works everywhere.
+# The macOS adapters reuse the generic Unix routines, so Unix comes first.
+DND_SCRIPTS = dnd/tkdnd_unix.tcl dnd/tkdnd_macosx.tcl dnd/tkdnd_windows.tcl
 ARCH = arch-chesswiz
 
 # NOTE that the ordering is important!
