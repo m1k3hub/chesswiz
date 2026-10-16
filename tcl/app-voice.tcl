@@ -326,6 +326,8 @@ proc ::application::voice::ttsEngine {} {
 		return piper
 	}
 	if {[dict exists $have espeak-ng] && [dict get $have espeak-ng]} { return espeak-ng }
+	# Windows and macOS always have an OS voice (SAPI, say).
+	if {$::tcl_platform(platform) eq "windows" || $::tcl_platform(os) eq "Darwin"} { return system }
 	return {}
 }
 
@@ -979,6 +981,13 @@ proc ::application::voice::Speak {text} {
 
 	set engine [ttsEngine]
 	if {$engine eq ""} { return 0 }
+
+	# The OS voice plays by itself: no WAV file, no player.
+	if {$engine eq "system"} {
+		if {[catch { ::platform::sys::speakAsync $text } ok] || !$ok} { return 0 }
+		Message $mc::Speaking
+		return 1
+	}
 
 	set dir [TempDir]
 	file mkdir $dir

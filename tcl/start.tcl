@@ -839,6 +839,20 @@ proc openBases {pathList} {
 } ;# namespace remote
 
 
+# macOS: Finder (double-click, Open With, drop on the Dock icon) sends the
+# files as an Apple Event, not as arguments. Tk calls this proc for it; the
+# files are opened like command-line ones once the main window is up.
+if {[tk windowingsystem] eq "aqua"} {
+	proc ::tk::mac::OpenDocument {args} {
+		if {![winfo exists .application]} {
+			after 250 [list ::tk::mac::OpenDocument {*}$args]
+			return
+		}
+		::remote::requestOpenBases $args
+	}
+}
+
+
 namespace eval scidb {
 
 proc bgerror {err args} {

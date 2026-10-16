@@ -28,6 +28,15 @@ for f in COPYING LICENSE README; do
     [ ! -f "$ROOT/$f" ] || cp "$ROOT/$f" "$RES/"
 done
 cp "$ROOT/engines/stockfish/Copying.txt" "$RES/engines/Stockfish-Copying.txt"
+# Sjeng and Reckless when build-macos-engines.sh built them.
+if [ -x "$ENGINE_DIR/sjeng-chesswiz" ]; then
+    cp "$ENGINE_DIR/sjeng-chesswiz" "$RES/engines/"
+    cp "$ROOT/engines/Sjeng/COPYING" "$RES/engines/Sjeng-Copying.txt"
+fi
+if [ -x "$ENGINE_DIR/reckless-chesswiz" ]; then
+    cp "$ENGINE_DIR/reckless-chesswiz" "$RES/engines/"
+    cp "$ROOT/engines/reckless/LICENSE" "$RES/engines/Reckless-License.txt"
+fi
 ICONSET="$STAGE/Chesswiz.iconset"
 mkdir -p "$ICONSET"
 for size in 16 32 128 256 512; do
@@ -39,16 +48,25 @@ iconutil -c icns "$ICONSET" -o "$RES/Chesswiz.icns"
 python3 - "$STAGE/Chesswiz.app/Contents/Info.plist" "$VERSION" <<'PY'
 import plistlib, sys
 p, version = sys.argv[1:]
+# The databases Linux registers with xdg-mime (tcl/menu.tcl AssignFileTypes).
+DOCTYPES = [
+    ('pgn', 'Portable Game Notation', ['pgn'], 'public.plain-text'),
+    ('scidb', 'Scidb database', ['sci'], 'public.data'),
+    ('scid4', 'Scid database', ['si4'], 'public.data'),
+    ('scid3', 'Scid 3 database', ['si3'], 'public.data'),
+    ('cbh', 'CBH chess database', ['cbh'], 'public.data'),
+]
 with open(p, 'rb') as f: info = plistlib.load(f)
 info.update(CFBundleShortVersionString=version, CFBundleVersion=version,
             CFBundleIconFile='Chesswiz.icns', LSMinimumSystemVersion='11.0',
             NSPrincipalClass='NSApplication',
-            CFBundleDocumentTypes=[dict(CFBundleTypeName='Portable Game Notation',
-                CFBundleTypeExtensions=['pgn'], CFBundleTypeRole='Editor',
-                LSHandlerRank='Alternate', LSItemContentTypes=['org.chesswiz.pgn'])],
-            UTExportedTypeDeclarations=[dict(UTTypeIdentifier='org.chesswiz.pgn',
-                UTTypeDescription='Portable Game Notation', UTTypeConformsTo=['public.plain-text'],
-                UTTypeTagSpecification={'public.filename-extension': ['pgn']})])
+            CFBundleDocumentTypes=[dict(CFBundleTypeName=name, CFBundleTypeExtensions=exts,
+                CFBundleTypeRole='Editor', LSHandlerRank='Alternate',
+                LSItemContentTypes=['org.chesswiz.' + uti]) for uti, name, exts, _ in DOCTYPES],
+            UTExportedTypeDeclarations=[dict(UTTypeIdentifier='org.chesswiz.' + uti,
+                UTTypeDescription=name, UTTypeConformsTo=[conforms],
+                UTTypeTagSpecification={'public.filename-extension': exts})
+                for uti, name, exts, conforms in DOCTYPES])
 with open(p, 'wb') as f: plistlib.dump(info, f)
 PY
 # Sign every Mach-O leaf first (TLS and engine included), then the app envelope.

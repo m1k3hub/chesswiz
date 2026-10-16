@@ -112,8 +112,53 @@ proc openURL {x} {
 	}
 }
 
+# Windows helper scripts run by the Windows Script Host.
+#
+# tkchesswiz.exe is a GUI-subsystem program, so Tcl's exec starts console
+# programs detached (no console); powershell.exe then exits at once without
+# running anything. wscript.exe is a GUI program and cscript.exe works
+# without a console, so the Windows helpers are VBScript. Each script is
+# written once per session into the temporary directory.
+proc WinScript {name body} {
+	variable WinScripts
+	if {[info exists WinScripts($name)] && [file isfile $WinScripts($name)]} {
+		return $WinScripts($name)
+	}
+	set dir [expr {[info exists ::env(TEMP)] ? $::env(TEMP) : [pwd]}]
+	set path [file join $dir chesswiz-$name.vbs]
+	set chan [open $path w]
+	try { puts -nonewline $chan $body } finally { close $chan }
+	return [set WinScripts($name) $path]
+}
+
+# SAPI voice; the text comes from CHESSWIZ_TTS_TEXT, so no quoting can
+# break it; an optional argument is a WAV file to write instead of playing.
+variable SpeakVbs {Set v = CreateObject("SAPI.SpVoice")
+t = CreateObject("WScript.Shell").Environment("PROCESS")("CHESSWIZ_TTS_TEXT")
+If WScript.Arguments.Count > 0 Then
+	Set st = CreateObject("SAPI.SpFileStream")
+	st.Open WScript.Arguments(0), 3
+	Set v.AudioOutputStream = st
+End If
+v.Speak t
+If WScript.Arguments.Count > 0 Then st.Close
+}
+
+proc WinSpeak {text wav async} {
+	variable SpeakVbs
+	set argv [list wscript //nologo //B [file nativename [WinScript speak $SpeakVbs]]]
+	if {$wav ne ""} { lappend argv [file nativename $wav] }
+	set ::env(CHESSWIZ_TTS_TEXT) $text
+	try {
+		if {$async} { exec {*}$argv & } else { exec {*}$argv }
+	} finally {
+		unset -nocomplain ::env(CHESSWIZ_TTS_TEXT)
+	}
+	return 1
+}
+
 # Text-to-speech synthesis.
-# Windows: PowerShell System.Speech SpeechSynthesizer
+# Windows: SAPI through wscript (see WinScript)
 # macOS: say
 # Linux: espeak-ng
 # If wav is specified, writes audio to the specified WAV file.
@@ -121,16 +166,7 @@ proc speak {text {wav ""}} {
 	set text [string trim $text]
 	if {![string length $text]} { return 0 }
 	if {$::tcl_platform(platform) eq "windows"} {
-		if {$wav ne ""} {
-			exec powershell -NoProfile -Command \
-				{Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.SetOutputToWaveFile($args[0]); $s.Speak($args[1]); $s.Dispose()} \
-				$wav $text
-		} else {
-			exec powershell -NoProfile -Command \
-				{Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak($args[0]); $s.Dispose()} \
-				$text
-		}
-		return 1
+		return [WinSpeak $text $wav 0]
 	} elseif {$::tcl_platform(os) eq "Darwin"} {
 		if {$wav ne ""} {
 			exec say -o $wav --data-format=LEI16@22050 $text
@@ -149,16 +185,37 @@ proc speak {text {wav ""}} {
 	}
 }
 
+# Speak through the OS voice without blocking the GUI.
+# Windows: SAPI through wscript; macOS: say.
+# Returns 0 where there is no OS voice (Linux).
+proc speakAsync {text} {
+	set text [string trim $text]
+	if {![string length $text]} { return 0 }
+	if {$::tcl_platform(platform) eq "windows"} {
+		return [WinSpeak $text "" 1]
+	} elseif {$::tcl_platform(os) eq "Darwin"} {
+		exec say -- $text &
+		return 1
+	}
+	return 0
+}
+
+variable ChildrenVbs {Set w = GetObject("winmgmts:\\.\root\cimv2")
+For Each p In w.ExecQuery("SELECT ProcessId, CommandLine FROM Win32_Process WHERE ParentProcessId = " & WScript.Arguments(0))
+	WScript.Echo p.ProcessId & " " & p.CommandLine
+Next
+}
+
 # List child process lines for a given parent PID.
 # Linux: exec pgrep -a -P pid
 # macOS: exec pgrep -l -P pid
-# Windows: CIM query via PowerShell
+# Windows: WMI query through cscript (see WinScript)
 proc children {{pid ""}} {
+	variable ChildrenVbs
 	if {$pid eq ""} { set pid [pid] }
 	if {$::tcl_platform(platform) eq "windows"} {
 		if {[catch {
-			set out [exec powershell -NoProfile -Command \
-				"Get-CimInstance Win32_Process | Where-Object { \$_.ParentProcessId -eq $pid } | ForEach-Object { \"\$(\$_.ProcessId) \$(\$_.CommandLine)\" }"]
+			set out [exec cscript //nologo [file nativename [WinScript children $ChildrenVbs]] $pid]
 			set out [string trim $out]
 		} res] || $out eq ""} {
 			return "no child processes"

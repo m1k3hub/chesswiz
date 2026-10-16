@@ -61,6 +61,10 @@ cp "$ROOT"/tcl/fonts/*.ttf "$DIST/fonts/"
 # Engines from scripts/build-windows-engines.sh, when built.
 if [ -d "$ROOT/build/engines-win" ]; then
 	cp "$ROOT"/build/engines-win/*-chesswiz.exe "$DIST/engines/"
+	# Each engine's licence beside it (GPL-3, GPL-2, AGPL-3).
+	cp "$ROOT/engines/stockfish/Copying.txt" "$DIST/engines/Stockfish-Copying.txt"
+	[ ! -f "$DIST/engines/sjeng-chesswiz.exe" ] || cp "$ROOT/engines/Sjeng/COPYING" "$DIST/engines/Sjeng-Copying.txt"
+	[ ! -f "$DIST/engines/reckless-chesswiz.exe" ] || cp "$ROOT/engines/reckless/LICENSE" "$DIST/engines/Reckless-License.txt"
 fi
 
 for d in tcl8.6 tk8.6 tcl8 json; do

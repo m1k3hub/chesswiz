@@ -62,6 +62,15 @@ Root: HKA; Subkey: "Software\Classes\.pgn\OpenWithProgids"; ValueType: string; V
 Root: HKA; Subkey: "Software\Classes\Chesswiz.pgn"; ValueType: string; ValueData: "PGN chess database"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\Chesswiz.pgn\DefaultIcon"; ValueType: string; ValueData: "{app}\tkchesswiz.exe,0"
 Root: HKA; Subkey: "Software\Classes\Chesswiz.pgn\shell\open\command"; ValueType: string; ValueData: """{app}\tkchesswiz.exe"" ""%1"""
+; The other databases Linux registers (tcl/menu.tcl AssignFileTypes): offered
+; under Open With, without taking over the user's default program.
+Root: HKA; Subkey: "Software\Classes\.sci\OpenWithProgids"; ValueType: string; ValueName: "Chesswiz.database"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\.si4\OpenWithProgids"; ValueType: string; ValueName: "Chesswiz.database"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\.si3\OpenWithProgids"; ValueType: string; ValueName: "Chesswiz.database"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\.cbh\OpenWithProgids"; ValueType: string; ValueName: "Chesswiz.database"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\Chesswiz.database"; ValueType: string; ValueData: "Chess database"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\Chesswiz.database\DefaultIcon"; ValueType: string; ValueData: "{app}\tkchesswiz.exe,0"
+Root: HKA; Subkey: "Software\Classes\Chesswiz.database\shell\open\command"; ValueType: string; ValueData: """{app}\tkchesswiz.exe"" ""%1"""
 
 [Run]
 Filename: "{app}\tkchesswiz.exe"; Description: "{cm:LaunchProgram,Chesswiz}"; Flags: nowait postinstall skipifsilent
