@@ -567,6 +567,33 @@ sys::file::isHardLinked(char const* filename1, char const* filename2)
 	M_REQUIRE(filename1);
 	M_REQUIRE(filename2);
 
+#ifdef __WIN32__
+	// The CRT's stat() reports inode 0 for every file on Windows, so any two
+	// files looked hard-linked. The volume serial and file index identify one.
+	BY_HANDLE_FILE_INFORMATION info[2];
+	char const* names[2] = { filename1, filename2 };
+
+	for (int i = 0; i < 2; ++i)
+	{
+		HANDLE h = ::CreateFileA(	internalName(names[i]).c_str(),
+											0,
+											FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+											0,
+											OPEN_EXISTING,
+											FILE_FLAG_BACKUP_SEMANTICS,
+											0);
+		if (h == INVALID_HANDLE_VALUE)
+			return false;
+		BOOL ok = ::GetFileInformationByHandle(h, &info[i]);
+		::CloseHandle(h);
+		if (!ok)
+			return false;
+	}
+
+	return	info[0].dwVolumeSerialNumber == info[1].dwVolumeSerialNumber
+			&& info[0].nFileIndexHigh == info[1].nFileIndexHigh
+			&& info[0].nFileIndexLow == info[1].nFileIndexLow;
+#else
 	struct stat st1, st2;
 
 	if (stat(internalName(filename1), &st1) == -1)
@@ -574,7 +601,8 @@ sys::file::isHardLinked(char const* filename1, char const* filename2)
 	if (stat(internalName(filename2), &st2) == -1)
 		return false;
 
-	return st1.st_ino == st2.st_ino;
+	return st1.st_dev == st2.st_dev && st1.st_ino == st2.st_ino;
+#endif
 }
 
 
