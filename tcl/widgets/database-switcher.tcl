@@ -613,8 +613,12 @@ proc DeleteBase {w file} {
 		} else {
 			set newId [lindex $Vars(subset) [expr {$i - 1}]]
 		}
+		# Vars(subset) is computed by LayoutSwitcher, which does nothing
+		# until the switcher has a size; fall back to the clipbase
+		if {![info exists Vars(map:$newId)]} { set newId [lindex $Vars(bases) 0 0] }
 		set Vars(selection) $newId
 	}
+	set Vars(subset) [lsearch -all -inline -exact -not $Vars(subset) $id]
 
 	if {$Vars(active) == $id} { set Vars(active) $Vars(selection) }
 	LayoutSwitcher $w

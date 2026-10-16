@@ -850,7 +850,7 @@ cmdPrint(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	CHECK_ARGS(ti, objc, objv, 17,
 		"<database> <variant> <view> <file> <search-path> <script-path> <preamble> <flags> "
-		" <options> <nag-map> <languages> <trace> <progress-cmd> <progress-arg> "
+		"<options> <nag-map> <languages> <trace> <progress-cmd> <progress-arg> "
 		"<log-cmd> <log-arg>");
 
 	char const*		database			= stringFromObj(objc, objv, 1);

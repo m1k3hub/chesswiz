@@ -302,6 +302,8 @@ proc Update {path id base variant {view -1} {index -1}} {
 proc Update2 {id path base variant} {
 	variable [namespace parent]::${path}::Vars
 
+	# the base may have been closed while this update was pending
+	if {![::scidb::db::get open? $base]} { return }
 	[namespace parent]::InitBase $path $base $variant
 	if {$id <= $Vars($base:$variant:sites:lastId)} { return }
 	set Vars($base:$variant:sites:lastId) $id
@@ -356,6 +358,10 @@ proc Update {path id base variant {view -1} {index -1}} {
 proc Update2 {id path base variant} {
 	variable [namespace parent]::${path}::Vars
 
+	# the base may have been closed (or its state dropped by Close) while
+	# this update was pending
+	if {![::scidb::db::get open? $base]} { return }
+	if {![info exists Vars($base:$variant:view)]} { return }
 	if {$id <= $Vars($base:$variant:events:lastId)} { return }
 	set Vars($base:$variant:events:lastId) $id
 	set Vars($base:$variant:update:events) 1
