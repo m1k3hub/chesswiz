@@ -19,7 +19,7 @@ tcltest::test search-menu {Main Menu has a Search cascade whose entries open the
 	}
 	proc ::scidb::test::searchMenuTops {{w .}} { set r {}; foreach c [winfo children $w] { if {[winfo toplevel $c] eq $c} { lappend r $c }; lappend r {*}[::scidb::test::searchMenuTops $c] }; return $r }
 	set opened {}
-	foreach i {0 1 2 3} prefix {.advanced .material .rating .maintenance} {
+	foreach i {1 2 3 4} prefix {.advanced .material .rating .maintenance} {
 		set before [::scidb::test::searchMenuTops]
 		set rc [catch {$m.mSearch invoke $i} err]
 		update
@@ -28,5 +28,5 @@ tcltest::test search-menu {Main Menu has a Search cascade whose entries open the
 		foreach w $new { catch {destroy $w} }
 	}
 	list $labels $opened
-} -cleanup { catch {destroy .searchMenuTest} } -result {{{Advanced Search...} normal {Search by Material...} normal {Search by Rating...} normal {Find Duplicates...} normal {Discover Databases...} normal} {{0 1} {0 1} {0 1} {0 1}}}
+} -cleanup { catch {destroy .searchMenuTest} } -result {{{Plain-Language Search...} normal {Advanced Search...} normal {Search by Material...} normal {Search by Rating...} normal {Find Duplicates...} normal {CQL 6.2 Search...} normal {Discover Databases...} normal} {{0 1} {0 1} {0 1} {0 1}}}
 tcltest::cleanupTests

@@ -480,10 +480,12 @@ proc addSearchToMenu {parent m} {
 	set variant [currentVariant]
 	set state [expr {[::scidb::db::count games $base $variant] ? "normal" : "disabled"}]
 	foreach {label cmd} [list \
+		PlainSearch			OpenPlainSearch \
 		AdvancedSearch		OpenAdvancedSearch \
 		SearchByMaterial	OpenMaterialSearch \
 		SearchByRating		OpenRatingSearch \
 		FindDuplicates		ShowDuplicates \
+		Cql6Search			OpenCql6Search \
 	] {
 		$m add command \
 			-label " [set mc::$label]..." \
