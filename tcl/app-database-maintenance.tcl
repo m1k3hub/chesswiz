@@ -507,22 +507,41 @@ proc ConvertDatabase {parent file variant} {
 	}
 	::scidb::db::setcreationversion 96	;# restore default (docs §3)
 
+	# The copy takes a progress and a log callback (7 arguments); called
+	# with 3 it always failed, so every conversion aborted.
 	set cmd [list ::scidb::db::copy $file $dst {}]
+	set progressOpts [list -message $mc::ConvertTitle -interrupt yes]
+	set cmd [list ::progress::start $parent $cmd [list [namespace current]::LogConvert {}] $progressOpts 0]
 	if {[catch { ::util::catchException $cmd result } rc opts]} {
 		::log::error $::import::mc::AbortedDueToInternalError
+		::progress::close
 		return {*}$opts -rethrow 1 $rc
 	}
+	::progress::close
 
-	if {[catch { ::scidb::db::save $dst } rc opts]} {
+	# save takes a progress callback too
+	set cmd [list ::progress::start $parent [list ::scidb::db::save $dst] {} {} 1]
+	if {[catch { ::util::catchException $cmd } rc opts]} {
 		::log::error $::import::mc::AbortedDueToIoError
+		::progress::close
 		return {*}$opts -rethrow 1 $rc
 	}
+	::progress::close
 
 	lassign $result total illegal accepted rejected
 	::scidb::db::close $dst
 
 	::dialog::info -parent $parent -title $mc::ConvertTitle \
 		-message [format $mc::ConvertDone $total [::util::databaseName $dst]]
+}
+
+
+proc LogConvert {sink arguments} {
+	lassign $arguments type code gameNo
+	set var [string toupper $type 0 0]
+	append line $::import::mc::GameNumber " " [::locale::formatNumber $gameNo] ": "
+	append line [set ::import::mc::${var}($code)]
+	::log::${type} $line
 }
 
 
