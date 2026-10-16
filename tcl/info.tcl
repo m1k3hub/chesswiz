@@ -40,6 +40,8 @@ set Localization			"Localization"
 set Testing					"Testing"
 set System					"System"
 set FontDesign				"chess font design"
+set BundledSoftware		"Bundled software"
+set WindowsMacOnly			"Windows and macOS"
 set TruetypeFonts			"Truetype fonts"
 set ChessPieceDesign		"chess piece design"
 set BoardThemeDesign		"Board theme design"
@@ -140,7 +142,7 @@ proc DisplayAbout {w} {
 		<link/>
 		<table border='0' style='font-family: Abel, $fam; font-size: 16pt;' color='steelblue4'>
 			<tr>
-				<td><img src='Scidb-Logo-128'/></td>
+				<td><img src='Chesswiz-Logo-128'/></td>
 				<td width='30px'></td>
 				<td align='center'>
 					<font style='font-size: 48pt;'><font color='brown'>C</font>hesswiz</font><br/>
@@ -293,7 +295,10 @@ proc DisplayContributions {w} {
 		<div class='box'>
 			<h1>$mc::Development</h1>
 			<hr/>
-			<p>[Name {Gregor Cramer}]</p>
+			<table border='0'>
+				<tr><td>[Name {Michael Thomas}]</td><td>\u2000\u2212\u2000</td><td>Chesswiz</td></tr>
+				<tr><td>[Name {Gregor Cramer}]</td><td>\u2000\u2212\u2000</td><td>Scidb</td></tr>
+			</table>
 		</div>
 		<div class='box'>
 			<h1>$mc::DevelopmentOfUnCBV</h1>
@@ -441,23 +446,25 @@ proc DisplayContributions {w} {
 			<table border='0'>
 				<tr><td colspan='2'>[Name {Matthew Desmond}]</td></tr>
 				<tr><td>\u2001</td><td>Abel</td></tr>
-				<tr><td>\u2001</td><td>[Url https://www.google.com/fonts/specimen/Abel]</td></tr>
+				<tr><td>\u2001</td><td>[Url https://fonts.google.com/specimen/Abel]</td></tr>
 				<tr height='7'></tr>
 
 				<tr><td colspan='2'>[Name {Dave Gandy}]</td></tr>
 				<tr><td>\u2001</td><td>Font Awesome</td></tr>
-				<tr><td>\u2001</td><td>[Url http://fortawesome.github.io/Font-Awesome/]</td></tr>
+				<tr><td>\u2001</td><td>[Url https://fontawesome.com]</td></tr>
 				<tr height='7'></tr>
-
-				<tr><td colspan='2'>[Name {Ralph Levien}]</td></tr>
-				<tr><td>\u2001</td><td>Inconsolata</td></tr>
-				<tr><td>\u2001</td><td>[Url http://levien.com/type/myfonts/inconsolata.html]</td></tr>
-				<tr height='7'></tr>
-
-				<tr><td colspan='2'>[Name {Vernon Adams}]</td></tr>
-				<tr><td>\u2001</td><td>Nobile</td></tr>
-				<tr><td>\u2001</td><td>[Url https://www.google.com/fonts/specimen/Nobile]</td></tr>
-				<tr height='7'></tr>
+			</table>
+		</div>
+		<div class='box'>
+			<h1>$mc::BundledSoftware</h1>
+			<hr/>
+			<table border='0'>
+				<tr><td>Stockfish</td><td>\u2000\u2212\u2000</td><td>GPL-3 \u2000[Url https://stockfishchess.org]</td></tr>
+				<tr><td>Tcl/Tk</td><td>\u2000\u2212\u2000</td><td>BSD-style \u2000[Url https://www.tcl-lang.org]</td></tr>
+				<tr><td>libHaru</td><td>\u2000\u2212\u2000</td><td>zlib/libpng \u2000[Url http://libharu.org]</td></tr>
+				<tr><td>zlib</td><td>\u2000\u2212\u2000</td><td>zlib \u2000[Url https://zlib.net]</td></tr>
+				<tr><td>Expat</td><td>\u2000\u2212\u2000</td><td>MIT \u2000[Url https://libexpat.github.io]</td></tr>
+				<tr><td>OpenSSL, TclTLS</td><td>\u2000\u2212\u2000</td><td>Apache-2.0, BSD ($mc::WindowsMacOnly)</td></tr>
 			</table>
 		</div>
 		<div class='box'>

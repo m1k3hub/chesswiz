@@ -2446,6 +2446,8 @@
 ::info::mc::References				"References"
 ::info::mc::System					"System"
 ::info::mc::FontDesign				"chess font design"
+::info::mc::BundledSoftware			"Bundled software"
+::info::mc::WindowsMacOnly			"Windows and macOS"
 ::info::mc::TruetypeFonts			"Truetype fonts"
 ::info::mc::ChessPieceDesign		"chess piece design"
 ::info::mc::BoardThemeDesign		"Board theme design"
