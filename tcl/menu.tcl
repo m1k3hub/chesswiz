@@ -65,6 +65,7 @@ set Help								"&Help"
 set Contact							"&Contact (Web Browser)"
 set Quit								"&Quit"
 set Tools							"&Tools"
+set Search							"&Search"
 set Extras							"&Extras"
 set Setup							"Setu&p"
 set Layout							"La&yout"
@@ -349,6 +350,18 @@ proc build {menu} {
 		-image $::icon::16x16::playercard \
 		-compound left \
 		;
+
+	### search ###############################################################
+	set m [menu $menu.mSearch]
+	lassign [::tk::UnderlineAmpersand $mc::Search] text ul
+	$menu add cascade \
+		-compound left \
+		-menu $m \
+		-label " $text" \
+		-underline [IncrUL $ul] \
+		-image $::icon::16x16::search \
+		;
+	::application::database::addSearchToMenu .application $m
 
 	### tools ################################################################
 	set m [menu $menu.mTools]

@@ -111,6 +111,7 @@ set ReadWriteFailed					"Setting the database writable failed:"
 set NoExtraTagsFound					"No tags found for deletion."
 
 set FindDuplicates					"Find Duplicates"
+set Search							"Search"
 set EcoStats							"Opening Prep"
 set OpeningReport						"Opening Report (ChessBase 26 Style)"
 set SearchByMaterial				"Search by Material"
@@ -311,10 +312,12 @@ proc build {tab width height} {
 		-command [list ::menu::dbOpen $main] \
 		-menucmd [namespace current]::addRecentlyUsedToMenu \
 		;
-	::toolbar::add $tbFile button \
+	::toolbar::add $tbFile dropdownbutton \
 		-image $::icon::toolbarSearch \
-		-tooltipvar [::mc::var [namespace current]::mc::DiscoverDatabases "..."] \
-		-command [list ::application::database::discover::open $main] \
+		-tooltipvar [::mc::var [namespace current]::mc::AdvancedSearch "..."] \
+		-arrowttipvar [namespace current]::mc::Search \
+		-command [namespace code [list searchCurrent $main]] \
+		-menucmd [namespace current]::addSearchToMenu \
 		;
 	set Vars(button:close) [::toolbar::add $tbFile button \
 		-image $::icon::toolbarDocClose \
@@ -464,6 +467,47 @@ proc currentVariant {} {
 	variable Vars
 	if {[info exists Vars(variant)]} { return $Vars(variant) }
 	return Normal
+}
+
+
+# The searches of the current database, for the database toolbar and the
+# main menu (before, they were only in the database's Maintenance submenu,
+# where nobody found them).
+proc addSearchToMenu {parent m} {
+	variable mc
+
+	set base [::scidb::db::get name]
+	set variant [currentVariant]
+	set state [expr {[::scidb::db::count games $base $variant] ? "normal" : "disabled"}]
+	foreach {label cmd} [list \
+		AdvancedSearch		OpenAdvancedSearch \
+		SearchByMaterial	OpenMaterialSearch \
+		SearchByRating		OpenRatingSearch \
+		FindDuplicates		ShowDuplicates \
+	] {
+		$m add command \
+			-label " [set mc::$label]..." \
+			-image $::icon::16x16::none \
+			-compound left \
+			-command [namespace code [list $cmd $parent $base $variant]] \
+			-state $state \
+			;
+	}
+	$m add separator
+	$m add command \
+		-label " $mc::DiscoverDatabases..." \
+		-image $::icon::16x16::none \
+		-compound left \
+		-command [list ::application::database::discover::open $parent] \
+		;
+}
+
+
+proc searchCurrent {parent} {
+	set base [::scidb::db::get name]
+	set variant [currentVariant]
+	if {[::scidb::db::count games $base $variant] == 0} { return }
+	OpenAdvancedSearch $parent $base $variant
 }
 
 

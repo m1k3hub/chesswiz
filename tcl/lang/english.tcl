@@ -297,6 +297,7 @@
 ::menu::mc::Contact							"&Contact (Web Browser)"
 ::menu::mc::Quit								"&Quit"
 ::menu::mc::Tools								"&Tools"
+::menu::mc::Search								"&Search"
 ::menu::mc::Extras							"E&xtras"
 ::menu::mc::Setup								"Setu&p"
 ::menu::mc::Layout							"La&yout"
