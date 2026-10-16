@@ -75,8 +75,11 @@ proc open {parent base variant info view index {fen {}}} {
 	::tooltip::tooltip $dlg.previous ::browser::mc::LoadPrevGame
 	::tooltip::tooltip $dlg.next ::browser::mc::LoadNextGame
 
+	# The board size, and so the size of the window, is computed from the
+	# height the window may have; FitHeight below checks the result against
+	# the screen and trims the frame if the computed size was too generous.
 	set sw [expr {[winfo workareawidth $dlg] - 20}]
-	set sh [expr {[winfo workareaheight $dlg] - 110}]
+	set sh [expr {[ScreenHeight $dlg] - 110}]
 
 	set boardSize(1) [expr {($sh - 2*47)/16}]
 	set boardSize(3) [expr {($sh - 3*47)/24}]
@@ -86,6 +89,7 @@ proc open {parent base variant info view index {fen {}}} {
 	set nb [::ttk::notebook $dlg.nb -takefocus 1]
 
 	bind $dlg <F1>					[list ::help::open .application Game-Overview -parent $dlg]
+	bind $dlg <Escape>			[list destroy $dlg]
 	bind $dlg <ButtonPress-3>	[namespace code [list PopupMenu $nb]]
 	bind $dlg <Control-Home>	[namespace code [list GotoGame(first) $nb]]
 	bind $dlg <Control-End>		[namespace code [list GotoGame(last) $nb]]
@@ -126,6 +130,7 @@ proc open {parent base variant info view index {fen {}}} {
 	wm withdraw $dlg
 	wm protocol $dlg WM_DELETE_WINDOW [list destroy $dlg]
 	wm resizable $dlg false false
+	FitHeight $dlg
 	::util::place $dlg -position center
 	wm deiconify $dlg
 	focus $nb
@@ -157,6 +162,35 @@ proc closeAll {base variant} {
 
 	foreach key [array names Priv $base:$variant:*] {
 		foreach dlg $Priv($key) { destroy $dlg }
+	}
+}
+
+
+# The height the window may use: the screen work area if the window manager
+# reports one (it may not, e.g. under a bare X server), else the screen.
+proc ScreenHeight {dlg} {
+	if {[catch { winfo workareaheight $dlg } hh]} { set hh 0 }
+	if {$hh <= 0} { set hh [winfo screenheight $dlg] }
+	return $hh
+}
+
+
+# The window is not resizable and the boards of the selected tab give it its
+# height; ask the window manager for a smaller frame if it would be taller
+# than the screen, so that the button row at the bottom stays on screen.
+# The notebook (packed after the buttons) is squeezed then, the buttons are
+# not.
+proc FitHeight {dlg} {
+	update idletasks
+	set height [winfo reqheight $dlg]
+	set et 30
+	set eb 6
+	catch { lassign [winfo extents $dlg] _el _er et eb }
+	if {![string is integer -strict $et]} { set et 30 }
+	if {![string is integer -strict $eb]} { set eb 6 }
+	set maxHeight [expr {max(400, [ScreenHeight $dlg] - $et - $eb)}]
+	if {$height > $maxHeight} {
+		wm maxsize $dlg [winfo screenwidth $dlg] $maxHeight
 	}
 }
 
