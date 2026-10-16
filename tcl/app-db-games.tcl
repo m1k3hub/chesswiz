@@ -319,6 +319,10 @@ proc Update {path id base variant {view -1} {index -1}} {
 
 
 proc Close {path base variant} {
+	variable ${path}::Vars
+
+	# a pending update for this base would run on a closed database
+	if {$Vars(base) eq "$base:$variant"} { after cancel $Vars(after) }
 	::gamestable::forget $path $base $variant
 }
 
