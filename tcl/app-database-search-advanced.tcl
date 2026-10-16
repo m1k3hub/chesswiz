@@ -176,7 +176,17 @@ proc BuildAdvancedSearchQuery {dlg} {
 	set player [string trim $AdvancedSearchData($dlg,player)]
 	if {[string length $player]} {
 		set side [AdvancedPlayerModeFromLabel $AdvancedSearchData($dlg,playerModeLabel)]
-		lappend terms [list playername $side $player]
+		if {[string index $player 0] ne "=" && ![regexp {[*?\[\],]} $player]} {
+			# A plain surname also finds "Surname, First" and "Surname First":
+			# names are stored as "Carlsen, M", and an exact pattern "Carlsen"
+			# would only match a player stored as just "Carlsen".
+			lappend terms [list OR \
+				[list playername $side $player] \
+				[list playername $side "$player,*"] \
+				[list playername $side "$player *"]]
+		} else {
+			lappend terms [list playername $side $player]
+		}
 		lappend filters "player=$player"
 	}
 

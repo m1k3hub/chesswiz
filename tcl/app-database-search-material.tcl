@@ -653,19 +653,22 @@ proc OpenMaterialSearch {parent file variant} {
 		grid $dlg.controls.white -row 1 -column 3 -sticky ew
 		grid $dlg.controls.blackLabel -row 1 -column 4 -sticky w
 		grid $dlg.controls.black -row 1 -column 5 -sticky ew
-		grid $dlg.controls.search -row 1 -column 6 -sticky ew
-		grid $dlg.controls.current -row 1 -column 7 -sticky ew
-		grid $dlg.controls.selected -row 1 -column 8 -sticky ew
-		grid $dlg.controls.refineExact -row 1 -column 9 -sticky ew
-		grid $dlg.controls.refineClass -row 1 -column 10 -sticky ew
-		grid $dlg.controls.refinePawns -row 1 -column 11 -sticky ew
-		grid $dlg.controls.reset -row 1 -column 12 -sticky ew
-		grid $dlg.controls.switcher -row 1 -column 13 -sticky ew
-		grid $dlg.controls.savews -row 1 -column 14 -sticky ew
-		grid $dlg.controls.close -row 1 -column 15 -sticky ew
-		grid $dlg.controls.help -row 2 -column 0 -columnspan 16 -sticky w
-		grid $dlg.controls.query -row 3 -column 0 -columnspan 16 -sticky w
-		grid $dlg.controls.status -row 4 -column 0 -columnspan 16 -sticky w
+		# The ten action buttons get their own frame (two rows of five): in one
+		# row with the fields the window was ~1800 px wide, wider than common
+		# screens, so it opened cut off at the screen edge.
+		ttk::frame $dlg.controls.actions
+		set col 0
+		set row 0
+		foreach b {search current selected refineExact refineClass refinePawns reset switcher savews close} {
+			grid $dlg.controls.$b -in $dlg.controls.actions -row $row -column $col -sticky ew
+			raise $dlg.controls.$b $dlg.controls.actions
+			grid columnconfigure $dlg.controls.actions $col -uniform actions
+			if {[incr col] == 5} { set col 0; incr row }
+		}
+		grid $dlg.controls.actions -row 2 -column 0 -columnspan 6 -sticky w
+		grid $dlg.controls.help -row 3 -column 0 -columnspan 6 -sticky w
+		grid $dlg.controls.query -row 4 -column 0 -columnspan 6 -sticky w
+		grid $dlg.controls.status -row 5 -column 0 -columnspan 6 -sticky w
 		grid columnconfigure $dlg.controls 1 -weight 1
 		grid columnconfigure $dlg.controls 2 -weight 1
 		grid columnconfigure $dlg.controls 3 -weight 1
