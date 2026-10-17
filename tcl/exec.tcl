@@ -412,6 +412,8 @@ proc SendPath {port} {
 	}
 	
 	set chan [socket 127.0.0.1 $port]
+	# paths are Unicode; the system code page (Windows) cannot hold every one
+	fconfigure $chan -encoding utf-8
 	puts $chan $args
 	flush $chan
 	close $chan
@@ -620,7 +622,8 @@ proc IncomingAssistant {chan} {
 
 proc Incoming {chan addr port} {
 	# Non-blocking: a peer that sends a partial line must not freeze the GUI.
-	fconfigure $chan -blocking 0
+	# SendPath and assistantClient write UTF-8
+	fconfigure $chan -blocking 0 -encoding utf-8
 	fileevent $chan readable [namespace code [list IncomingOffered $chan]]
 }
 

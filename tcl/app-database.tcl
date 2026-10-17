@@ -536,6 +536,8 @@ proc openBase {parent file byUser args} {
 
 
 	if {![file readable $file]} {
+		# not silently: the entry vanishes from the recent list
+		::log::info [format $mc::CannotOpenFile $file]
 		removeRecentFile $file
 		::dialog::error -parent $parent -message [format $mc::CannotOpenFile $file]
 		return 0

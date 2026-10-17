@@ -500,7 +500,9 @@ proc Mouse3Up {nodes} {
 proc RemoveRecentFile {id} {
 	variable Priv
 
-	[namespace parent]::database::removeRecentFile $id
+	# <id> is the index into the list shown, removeRecentFile wants the file
+	set file [lindex [[namespace parent]::database::recentFiles] $id 1]
+	[namespace parent]::database::removeRecentFile [file normalize $file]
 	after idle [list $Priv(html) stimulate]
 }
 

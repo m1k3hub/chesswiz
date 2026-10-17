@@ -249,6 +249,24 @@ proc geometry {path args} {
 			}
 		}
 	}
+	# Keep the window, frame included, inside the visible screen area on
+	# every platform: on Windows the branches above pass negative or too
+	# large positions through (multi-monitor support), which put the title
+	# bar above the screen or the window off its left edge.
+	if {$frameless} {
+		lassign {0 0 0 0} el er et eb
+	} else {
+		lassign [winfo extents $path] el er et eb
+	}
+	# the window manager will not make it larger than its maximal size
+	# (overview.tcl FitHeight lowers it for windows taller than the screen)
+	lassign {0 0} mw mh
+	if {!$isPopup} { catch { lassign [wm maxsize $path] mw mh } }
+	set cw [expr {$mw > 0 ? min($w, $mw) : $w}]
+	set ch [expr {$mh > 0 ? min($h, $mh) : $h}]
+	set x [clamp $x [expr {$cw + $el + $er}] $sx $sw]
+	set y [clamp $y [expr {$ch + $et + $eb}] $sy $sh]
+
 	if {$windowingsystem eq "aqua"} {
 		# Avoid the native menu bar which sits on top of everything.
 		scan $y "%d" y0
@@ -256,6 +274,22 @@ proc geometry {path args} {
 	}
 
 	return [list $x $y $w $h]
+}
+
+
+# A geometry offset <pos> ("+N", "+-N", or "-N" from the far edge) for a
+# window <size> pixels wide/high (frame included), moved into the screen range
+# <start> .. <start>+<length>. A window larger than the range goes to <start>.
+proc clamp {pos size start length} {
+	if {![regexp {^([+-])(-?[0-9]+)$} $pos -> sign n]} { return $pos }
+	if {$sign eq "-"} {
+		# relative to the right/bottom edge; only too large windows move
+		if {$size > $length || $n < 0} { return "+$start" }
+		return $pos
+	}
+	set n [expr {min($n, $start + $length - $size)}]
+	set n [expr {max($n, $start)}]
+	return "+$n"
 }
 
 

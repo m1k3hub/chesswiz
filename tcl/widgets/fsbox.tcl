@@ -972,10 +972,22 @@ proc toUriList {files} {
 proc parseUriList {uriFiles} {
 	set result {}
 
-	# dropped text arrives as it is: one URI per line, not a Tcl list
-	if {![string is list $uriFiles]} {
-		set uriFiles [split [string map {\r ""} $uriFiles] \n]
+	# dropped text arrives as it is: one URI per line, not a Tcl list. Such a
+	# line may well parse as a list ("C:/Pfad mit Leerzeichen/x.pgn"), which
+	# would split the path into words; take lines if every line is a file.
+	set lines {}
+	foreach line [split [string map {\r ""} $uriFiles] \n] {
+		set line [string trim $line]
+		if {[string length $line]} { lappend lines $line }
 	}
+	set isLines [expr {![string is list $uriFiles]}]
+	if {!$isLines && [llength $lines] && [llength $uriFiles] > [llength $lines]} {
+		set isLines 1
+		foreach line $lines {
+			if {![string match file:* $line] && ![file exists $line]} { set isLines 0; break }
+		}
+	}
+	if {$isLines} { set uriFiles $lines }
 
 	foreach file $uriFiles {
 		# according to RFC2-483 lines starting with a '#' are comment lines.
