@@ -100,7 +100,6 @@ set BoardLayout {
 			}
 			panedwindow { -orient horz } {
 				frame tree %tree%
-				frame media %media%
 				frame analysis:1 %analysis%
 			}
 		}

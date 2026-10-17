@@ -76,7 +76,7 @@ array set Priv {
 	inprocess	0
 	checkid		{}
 	seekgrab		0
-	seeklabel	{}
+	seeklabel	{0:00 / 0:00}
 	seektick		{}
 	volumelabel	100
 	playstate	paused
@@ -88,7 +88,20 @@ array set Priv {
 } ;# namespace application
 
 
+# Keep the media model and subscriptions alive independently of pane visibility.
+proc application::media::Ensure {} {
+	if {[winfo exists .application.mediaBackend]} { return }
+	ttk::frame .application.mediaBackend
+	BuildBackend {} .application.mediaBackend 400 300
+	after 1 {::application::media::Update [::scidb::game::current]}
+}
+
 proc application::media::build {twm frame width height} {
+	Ensure
+	pack .application.mediaBackend -in $frame -fill both -expand yes
+}
+
+proc application::media::BuildBackend {twm frame width height} {
 	variable Priv
 	variable mc
 
@@ -301,6 +314,7 @@ proc application::media::_refreshTransport {} {
 		catch { if {[MediaState] eq "playing"} { set playing 1 } }
 	}
 	set Priv(playstate) [expr {$playing ? "playing" : "paused"}]
+	::mediainset::RefreshControls
 }
 
 
@@ -518,8 +532,13 @@ proc application::media::Update {position} {
 	variable Priv
 	variable mc
 
+	after idle ::mediainset::RefreshMediaButton
 	set Priv(position) $position
 	set Priv(linksBase) {}
+	set Priv(interactive) {}
+	set Priv(dbInteractive) {}
+	set Priv(userInteractive) {}
+	array unset Priv "interactive:played:*"
 	set tree $Priv(tree)
 	# the game and database still announce changes after the pane has closed
 	if {![winfo exists $tree]} { return }
@@ -652,17 +671,14 @@ proc application::media::SelectionChanged {tree} {
 
 # View the guiding-text report of the currently loaded game (if it is
 # one); the viewer itself reports "not a report entry" otherwise.
-proc application::media::ViewReport {} {
+proc application::media::ViewReport {{index {}}} {
 	variable Priv
 
+	if {$index eq ""} { set index $Priv(index) }
 	if {![string length $Priv(base)]
-		|| ![string is integer -strict $Priv(index)]
-		|| $Priv(index) < 0} {
-		return
-	}
-
+		|| ![string is integer -strict $index] || $index < 0} { return }
 	catch {
-		::application::report::show $Priv(base) $Priv(variant) $Priv(index)
+		::application::report::show $Priv(base) $Priv(variant) $index
 	}
 }
 
@@ -686,6 +702,8 @@ proc application::media::TogglePlayback {} {
 	} else {
 		SyncTransport play
 	}
+	_refreshTransport
+	_drawControlBar
 }
 
 # True when a gallery row is a game-coupled lesson: a video or audio
@@ -1146,6 +1164,10 @@ proc application::media::LoadUserInteractive {} {
 proc application::media::BoardUpdated {position} {
 	variable Priv
 
+	if {[llength [info commands ::mediainset::RefreshMediaButton]]} {
+		after idle ::mediainset::RefreshMediaButton
+	}
+
 	# Check at notification time: drive() has cleared this flag by the
 	# time the deferred seek runs. Do not cancel a pending user seek here.
 	if {[::media::sync::driving?]} { return }
@@ -1206,6 +1228,14 @@ proc application::media::PlySeek {position} {
 # Deferred body of BoardUpdated: resolve the FEN and jump to a matched
 # interactive clip. Debounced so dragging through positions does not
 # fire per ply; re-entering the same position does not replay.
+# Shared by automatic position following and the board's media menu.
+proc application::media::PlayInteractiveEntry {entry} {
+	lassign $entry fen path start end title
+	# Manifest times are seconds; the player expects milliseconds.
+	PlayMedia $path [expr {$start ne "" && [string is double -strict $start] ? $start*1000.0 : ""}] \
+		[expr {$end ne "" && [string is double -strict $end] ? $end*1000.0 : ""}]
+}
+
 proc application::media::InteractiveFollow {position} {
 	variable Priv
 
@@ -1231,9 +1261,7 @@ proc application::media::InteractiveFollow {position} {
 		set Priv(interactive:played:$key) 1
 		set Priv(statusbar) "Interactive video: $label"
 		MediaDebug "InteractiveFollow: manifest match [list $label] -> [list $file]"
-		# manifest times are seconds; the player expects milliseconds
-		PlayMedia $file [expr {$start ne "" && [string is double -strict $start] ? $start*1000.0 : ""}] \
-			[expr {$end ne "" && [string is double -strict $end] ? $end*1000.0 : ""}]
+		PlayInteractiveEntry $hit
 		return
 	}
 
@@ -1450,6 +1478,7 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	# the video may be shown inside the board window (media-inset.tcl)
 	if {[llength [info commands ::mediainset::surface]]} {
 		set canvas [::mediainset::surface $canvas]
+		::mediainset::AudioOnly [expr {[ClassifyFile $path] == 2}]
 	}
 	# Realize the canvas so winfo id names a mapped window.
 	update idletasks
@@ -1470,6 +1499,7 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 			[namespace code { catch { Stop } }]]
 	}
 	set Priv(inprocess) 1
+	_refreshTransport
 	set Priv(statusbar) "Playing: $path"
 	MediaDebug "PlayInProcess: playback started for $path"
 	StartSeekTick
@@ -1899,6 +1929,7 @@ proc application::media::SeekTick {} {
 			catch { $Priv(seekbar) set [expr {double($t) / $dur * 1000.0}] }
 		}
 		set Priv(seeklabel) "[FormatMs $t] / [FormatMs $dur]"
+		::mediainset::RefreshControls [expr {double($t) / $dur * 1000.0}]
 	}
 	if {$Priv(inprocess)} { StartSeekTick }
 }
@@ -1919,7 +1950,7 @@ proc application::media::StartSeekTick {} {
 # a 200 ms window reaches the player, so follow mode does not chase a
 # storm of intermediate positions (the sync machine's same-node no-op
 # filters the board side; this filters the media side).
-proc application::media::SeekRelease {} {
+proc application::media::SeekRelease {{slider {}}} {
 	variable Priv
 
 	set Priv(seekgrab) 0
@@ -1927,7 +1958,8 @@ proc application::media::SeekRelease {} {
 	set dur [MediaDuration]
 	if {![string is double -strict $dur] || $dur <= 0} { return }
 
-	set frac [expr {[$Priv(seekbar) get] / 1000.0}]
+	if {$slider eq ""} { set slider $Priv(seekbar) }
+	set frac [expr {[$slider get] / 1000.0}]
 
 	# coalesce: replace any pending debounced seek with this one
 	catch { after cancel $Priv(seekdebounce) }
@@ -1972,7 +2004,8 @@ proc application::media::Stop {} {
 	set Priv(checkid) {}
 	set Priv(rangeid) {}
 	set Priv(seektick) {}
-	set Priv(seeklabel) {}
+	set Priv(seeklabel) {0:00 / 0:00}
+	::mediainset::RefreshControls 0
 	catch {
 		if {[info exists Priv(seekbar)] && [winfo exists $Priv(seekbar)]} {
 			$Priv(seekbar) set 0
@@ -2013,31 +2046,18 @@ proc application::media::ClassifyFile {path} {
 
 
 proc application::media::activate {w flag} {
-	# Stop playback when the panel is unmapped/hidden so media does not
-	# keep playing (or keep its video window) once the panel is gone.
-	if {!$flag} {
-		Stop
-	}
+	# The inset owns its own visible surface when this pane is hidden.
+	if {!$flag && !$::mediainset::Shown} { Stop }
 }
-
 
 proc application::media::setActive {flag} {
-	# Stop and fully release the player when the panel loses focus (e.g. a
-	# modal dialog grabs input), so the player is not rendering into the Tk
-	# window during the dialog's window management.
-	if {$flag eq "no"} {
-		Stop
-	}
+	if {$flag eq "no" && !$::mediainset::Shown} { Stop }
 }
 
-
-# Called when the media pane frame is destroyed (bound in application.tcl).
-# Fully release the player so it never outlives its embedding window.
 proc application::media::closed {frame} {
-	variable Priv
-	catch { after cancel $Priv(afterid) }
-	set Priv(afterid) {}
-	Stop
+	# The backend belongs to the main window, so closing a pane preserves it.
+	if {[winfo exists .application.mediaBackend]} { pack forget .application.mediaBackend }
+	if {!$::mediainset::Shown} { Stop }
 }
 
 # vi:set ts=3 sw=3:
