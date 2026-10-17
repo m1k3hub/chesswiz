@@ -336,4 +336,12 @@ tcltest::test playengine-flag {a side out of time loses on the ticker} -setup {
 } -result {over 1}
 
 
+# Inside namespace ::playengine a bare "open" is ::playengine::open {parent}
+# (the dialog), so the engine pipe must use the global ::open. A real
+# engine is never started here, so check the call itself.
+tcltest::test playengine-pipe-open {Connect opens the engine pipe with the global open} -body {
+	regexp {\[::open "\|} [info body ::playengine::Connect]
+} -result 1
+
+
 tcltest::cleanupTests

@@ -605,7 +605,7 @@ proc ::playengine::Connect {} {
 		return 1
 	}
 
-	if {[catch { set pipe [open "|[list {*}$cmd]" r+] } err]} {
+	if {[catch { set pipe [::open "|[list {*}$cmd]" r+] } err]} {
 		EngineDied $err
 		return 1
 	}
