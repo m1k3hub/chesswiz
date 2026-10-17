@@ -335,7 +335,13 @@ proc ShortcutEditable {w} {
 
 proc ShortcutEditingFocus {w} {
 	variable Options
-	if {$Options(shortcut:scheme) ne "chessbase" || ![ShortcutEditable $w]} { return }
+	if {$Options(shortcut:scheme) ne "chessbase"} { return }
+	if {![ShortcutEditable $w]} {
+		# Clicking the board leaves focus where it was, often a pane's control
+		# (e.g. the media seek slider); the scheme applies there too.
+		if {[string match .application.nb.board.* $w]} { AddShortcutTag $w }
+		return
+	}
 	set tags [bindtags $w]
 	if {"ChessBaseEditing" ni $tags} { bindtags $w [linsert $tags 0 ChessBaseEditing] }
 }
