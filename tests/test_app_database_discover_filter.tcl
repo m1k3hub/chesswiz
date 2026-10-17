@@ -78,4 +78,31 @@ tcltest::test discover-filter-arrivals {progress filters new scan results and ke
     }
 } -result {1 {/Archive/World/Openings.sci /Archive/World/Finals.pgn} 1 1}
 
+tcltest::test discover-filter-spaces {rows whose paths contain spaces are removed when filtered out} -constraints filterTk -setup {
+    namespace eval ::application::database::discover {
+        set Priv(dialog) .filterTest
+        set Priv(tree) .filterTest.tree
+        set Priv(statusBase) ""
+        set Priv(filter) ""
+    }
+    toplevel .filterTest
+    ttk::treeview .filterTest.tree -columns {name games size path}
+} -body {
+    namespace eval ::application::database::discover {
+        set rows {
+            {sci Scidb {/My Games/Best Games For Training.sci} 100 12}
+            {sci Scidb {/My Games/Biel 2015.sci} 100 9}
+            {pgn PGN /Other/plain.pgn 200 -1}
+        }
+        _populate $rows
+        set all [llength [$Priv(tree) children {}]]
+        set Priv(filter) "biel"
+        _populate $rows
+        list $all [$Priv(tree) children {}]
+    }
+} -cleanup {
+    destroy .filterTest
+    namespace eval ::application::database::discover { set Priv(dialog) {}; set Priv(filter) {} }
+} -result {3 {{/My Games/Biel 2015.sci}}}
+
 tcltest::cleanupTests

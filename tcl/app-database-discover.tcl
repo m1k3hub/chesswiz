@@ -642,7 +642,7 @@ proc ::application::database::discover::_populate {results} {
 	set paths {}
 	foreach entry $visible { lappend paths [lindex $entry 2] }
 	foreach item [$tree children {}] {
-		if {$item ni $paths} { $tree delete $item }
+		if {$item ni $paths} { $tree delete [list $item] }
 	}
 	foreach entry $visible {
 		lassign $entry ext label path size games
