@@ -248,7 +248,9 @@ proc ::playengine::open {parent} {
 	$ef.engine configure -values $names
 	StrengthRows
 
-	::util::place $dlg -parent $parent -position center
+	# beside the board, never on it: the user plays on the board while the
+	# dialog is open, and clicks on the board must reach the board
+	if {![PlaceBesideBoard $dlg]} { ::util::place $dlg -parent $parent -position center }
 	wm deiconify $dlg
 	return $dlg
 }
@@ -338,6 +340,50 @@ proc ::playengine::Start {} {
 		-elo $Options(elo) \
 		-skill $Options(skill) \
 	]
+}
+
+
+# Put <dlg> next to the main board: right of it when the screen has room,
+# else left of it, else below it, kept on the screen. Returns 0 when there
+# is no board to place it by.
+proc ::playengine::PlaceBesideBoard {dlg} {
+	if {[catch { set board $::application::board::board }] || ![winfo exists $board]
+		|| ![winfo ismapped $board]} {
+		return 0
+	}
+	update idletasks
+	set dw [winfo reqwidth $dlg]
+	set dh [winfo reqheight $dlg]
+	set bx [winfo rootx $board]
+	set by [winfo rooty $board]
+	set bw [winfo width $board]
+	set bh [winfo height $board]
+	set sw [winfo screenwidth $dlg]
+	set sh [winfo screenheight $dlg]
+	lassign [BesidePosition $bx $by $bw $bh $dw $dh $sw $sh] x y
+	wm geometry $dlg +$x+$y
+	return 1
+}
+
+
+# Screen position {x y} for a dialog of <dw>x<dh> next to a board at
+# <bx>,<by> sized <bw>x<bh> on a <sw>x<sh> screen: right, else left, else
+# below, clamped to the screen (allowing for the window frame).
+proc ::playengine::BesidePosition {bx by bw bh dw dh sw sh} {
+	set gap 12
+	set fw 16
+	set fh 40
+	if {$bx + $bw + $gap + $dw + $fw <= $sw} {
+		set x [expr {$bx + $bw + $gap}]
+		set y $by
+	} elseif {$bx - $gap - $dw - $fw >= 0} {
+		set x [expr {$bx - $gap - $dw - $fw}]
+		set y $by
+	} else {
+		set x $bx
+		set y [expr {$by + $bh + $gap}]
+	}
+	list [expr {max(0, min($x, $sw - $dw - $fw))}] [expr {max(0, min($y, $sh - $dh - $fh))}]
 }
 
 
