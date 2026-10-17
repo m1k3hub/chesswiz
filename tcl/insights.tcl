@@ -1269,7 +1269,7 @@ proc ::insights::BuildWindow {dlg parent} {
 
 	bind $dlg <Destroy> [namespace code [list Destroy $dlg %W]]
 	wm minsize $dlg 780 480
-	::util::place $dlg -parent [winfo toplevel $parent] -position center
+	::util::place::besideBoard $dlg [winfo toplevel $parent]
 }
 
 
