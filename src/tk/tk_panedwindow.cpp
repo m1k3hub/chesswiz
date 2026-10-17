@@ -1,3 +1,4 @@
+/* Modified for Chesswiz, 2026; see docs/UPSTREAM.md */
 // ======================================================================
 // Author : $Author: gcramer $
 // Version: $Revision: 1453 $

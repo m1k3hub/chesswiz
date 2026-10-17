@@ -1,3 +1,4 @@
+/* Modified for Chesswiz, 2026; see docs/UPSTREAM.md */
 /* systems.h - Most of the system dependant code and defines are here. */
 
 /* This file is part of GDBM, the GNU data base manager.

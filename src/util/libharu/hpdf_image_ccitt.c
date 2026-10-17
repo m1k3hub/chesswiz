@@ -1,3 +1,4 @@
+/* Modified for Chesswiz, 2026; see docs/UPSTREAM.md */
 /*
  * << Haru Free PDF Library >> -- hpdf_image.c
  *

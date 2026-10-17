@@ -1,3 +1,4 @@
+/* Modified for Chesswiz, 2026; see docs/UPSTREAM.md */
 /* flatfile.c - Import/export a GDBM database. */
 
 /* This file is part of GDBM, the GNU data base manager.

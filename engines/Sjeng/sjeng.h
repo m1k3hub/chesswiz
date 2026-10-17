@@ -1,3 +1,4 @@
+/* Modified for Chesswiz, 2026; see docs/UPSTREAM.md */
 /*
     Sjeng - a chess variants playing program
     Copyright (C) 2000 Gian-Carlo Pascutto

@@ -1,3 +1,4 @@
+# Modified for Chesswiz, 2026; see docs/UPSTREAM.md
 # check-build.tcl
 
 set scriptDir [file dirname [file normalize [info script]]]

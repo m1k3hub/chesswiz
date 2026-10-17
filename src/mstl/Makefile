@@ -1,3 +1,4 @@
+# Modified for Chesswiz, 2026; see docs/UPSTREAM.md
 # ======================================================================
 # Makefile for Scidb for Unix operating systems
 # ======================================================================

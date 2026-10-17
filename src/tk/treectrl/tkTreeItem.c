@@ -1,3 +1,4 @@
+/* Modified for Chesswiz, 2026; see docs/UPSTREAM.md */
 // ======================================================================
 // @version $Revision: 318 $
 // @lastmodified $LastChangedDate: 2012-05-08 19:06:35 -0400 (Tue, 08 May 2012) $

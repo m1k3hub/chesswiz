@@ -1,3 +1,4 @@
+# Modified for Chesswiz, 2026; see docs/UPSTREAM.md
 # This software is copyrighted by the Regents of the University of California, Sun Microsystems, Inc., Scriptics
 # Corporation, and other parties.
 namespace eval ttk::theme::clearlooks {

@@ -15,6 +15,7 @@
 
 # ======================================================================
 # Copyright: (C) 2011-2013 Gregor Cramer
+# Modified for Chesswiz, 2026; see docs/UPSTREAM.md
 # Copyright: (C) 2011 Carlos Fernando Gonzalez
 # Copyright: (C) 2012 Juan Carlos Vasquez R.
 # ======================================================================

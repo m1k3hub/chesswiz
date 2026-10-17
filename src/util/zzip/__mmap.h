@@ -1,3 +1,4 @@
+/* Modified for Chesswiz, 2026; see docs/UPSTREAM.md */
 #ifndef __ZZIP_INTERNAL_MMAP_H
 #define __ZZIP_INTERNAL_MMAP_H
 #include <zzip/conf.h>

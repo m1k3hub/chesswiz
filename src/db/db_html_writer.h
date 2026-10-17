@@ -1,3 +1,4 @@
+/* Modified for Chesswiz, 2026; see docs/UPSTREAM.md */
 // ======================================================================
 // db_html_writer — standalone HTML export (the "publish" path)
 // ======================================================================

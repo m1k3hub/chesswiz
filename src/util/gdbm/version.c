@@ -1,3 +1,4 @@
+/* Modified for Chesswiz, 2026; see docs/UPSTREAM.md */
 /* version.c - This is file contains the version number for gdbm source. */
 
 /* This file is part of GDBM, the GNU data base manager.

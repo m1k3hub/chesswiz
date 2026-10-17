@@ -1,3 +1,4 @@
+/* Modified for Chesswiz, 2026; see docs/UPSTREAM.md */
 //----------------------------------------------------------------------------
 // Anti-Grain Geometry (AGG) - Version 2.5
 // A high quality rendering engine for C++

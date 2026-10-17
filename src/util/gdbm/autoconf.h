@@ -1,3 +1,4 @@
+/* Modified for Chesswiz, 2026; see docs/UPSTREAM.md */
 /* autoconf.h.  Generated from autoconf.h.in by configure.  */
 /* autoconf.h.in.  Generated from configure.ac by autoheader.  */
 

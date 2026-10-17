@@ -1,3 +1,4 @@
+# Modified for Chesswiz, 2026; see docs/UPSTREAM.md
 ### scidblue - Copyright (C) 2018 Uwe Klimmek
 ### Available under the BSD-like 2-clause Tcl License as described in LICENSE in this folder
 ##########################################################################################

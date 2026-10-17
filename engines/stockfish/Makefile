@@ -1,3 +1,4 @@
+# Modified for Chesswiz, 2026; see docs/UPSTREAM.md
 # ======================================================================
 # Stockfish 19 for Scidb -- the engine installed as stockfish-chesswiz.
 #

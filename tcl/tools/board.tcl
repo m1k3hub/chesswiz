@@ -1,3 +1,4 @@
+# Modified for Chesswiz, 2026; see docs/UPSTREAM.md
 # \
 exec "`dirname "$0"`"/../../src/tkchesswiz "$0" ${1+"$@"}
 

@@ -1,3 +1,4 @@
+/* Modified for Chesswiz, 2026; see docs/UPSTREAM.md */
 /*
  * TkDND_OleDND.h -- Tk OleDND Drag'n'Drop Protocol Implementation
  * 

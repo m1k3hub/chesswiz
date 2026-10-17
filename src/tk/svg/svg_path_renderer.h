@@ -18,6 +18,7 @@
 
 // ======================================================================
 // Copyright: (C) 2008-2013 Gregor Cramer
+// Modified for Chesswiz, 2026; see docs/UPSTREAM.md
 // ======================================================================
 
 #ifndef _svg_path_renderer_included

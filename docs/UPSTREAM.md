@@ -62,3 +62,16 @@ The `.sci` database format, the `::scidb::` Tcl command namespace, the C++ class
 names and the `SCIDB_*` environment variables keep their Scidb names, so Scidb
 databases and code stay compatible. User-visible text says Chesswiz, and credits
 Scidb in the About dialog and the help.
+
+## Change notices in modified files
+
+Every Scidb source file Chesswiz modified carries the line
+`Modified for Chesswiz, 2026; see docs/UPSTREAM.md` (under Gregor Cramer's
+copyright line, or at the top where a file has none), as GPL v2 §2(a) asks.
+Images, data files and third-party licence texts are not marked; the diff
+against `scidb-upstream` covers them. After modifying another Scidb file, run:
+
+```sh
+git diff --no-renames --name-only --diff-filter=M scidb-upstream HEAD |
+    python3 scripts/mark-modified-upstream.py
+```
