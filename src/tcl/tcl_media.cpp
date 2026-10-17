@@ -88,13 +88,17 @@ drainEvents()
 		else if (ev->event_id == MPV_EVENT_START_FILE)
 		{
 			Cache.erase("load-error");
+			Cache.erase("error-text");
 		}
 		else if (ev->event_id == MPV_EVENT_END_FILE)
 		{
 			mpv_event_end_file* end = static_cast<mpv_event_end_file*>(ev->data);
 
 			if (end->reason == MPV_END_FILE_REASON_ERROR)
-				Cache["load-error"] = "yes";	// the file could not be opened or decoded
+			{
+				Cache["load-error"] = "yes";
+				Cache["error-text"] = mpv_error_string(end->error);
+			}
 		}
 		else if (ev->event_id == MPV_EVENT_SHUTDOWN)
 		{
@@ -156,6 +160,7 @@ cmdOpen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	Player = mpv_create();
 	if (!Player)
 	{
+		Cache["error-text"] = "Could not create the libmpv player.";
 		Tcl_SetObjResult(ti, Tcl_NewIntObj(0));
 		return TCL_OK;
 	}
@@ -187,6 +192,7 @@ cmdOpen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			hwdec = "nvdec-copy,auto-copy-safe";
 	}
 	mpv_set_option_string(Player, "hwdec", hwdec && *hwdec ? hwdec : "auto-copy-safe");
+	mpv_set_option_string(Player, "load-scripts", "yes");
 	// stream links (YouTube, Twitch, ...) through yt-dlp, when installed
 	mpv_set_option_string(Player, "ytdl", "yes");
 	mpv_set_option_string(Player, "ytdl-format", "bestvideo[height<=?1080]+bestaudio/best");
@@ -206,9 +212,11 @@ cmdOpen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		mpv_set_option_string(Player, "start", buf);
 	}
 
-	if (mpv_initialize(Player) < 0)
+	int rc = mpv_initialize(Player);
+	if (rc < 0)
 	{
 		closePlayer();
+		Cache["error-text"] = mpv_error_string(rc);
 		Tcl_SetObjResult(ti, Tcl_NewIntObj(0));
 		return TCL_OK;
 	}
@@ -218,9 +226,11 @@ cmdOpen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	const char* args[] = { "loadfile", Tcl_GetString(objv[2]), 0 };
 
-	if (mpv_command(Player, args) < 0)
+	rc = mpv_command(Player, args);
+	if (rc < 0)
 	{
 		closePlayer();
+		Cache["error-text"] = mpv_error_string(rc);
 		Tcl_SetObjResult(ti, Tcl_NewIntObj(0));
 		return TCL_OK;
 	}
@@ -239,11 +249,12 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		return TCL_ERROR;
 	}
 
+	char const* name = Tcl_GetString(objv[1]);
+	if (!Player && strcmp(name, "error-text") == 0)
+		Tcl_SetObjResult(ti, Tcl_NewStringObj(Cache[name].c_str(), -1));
 	if (Player)
 	{
-		char const* name = Tcl_GetString(objv[1]);
-
-		if (isObserved(name) || strcmp(name, "load-error") == 0)
+		if (isObserved(name) || strcmp(name, "load-error") == 0 || strcmp(name, "error-text") == 0)
 		{
 			drainEvents();
 

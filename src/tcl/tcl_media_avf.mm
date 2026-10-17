@@ -32,6 +32,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include "media_url.h"
 
 namespace {
 
@@ -147,7 +148,12 @@ cmdOpen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	@autoreleasepool
 	{
 		NSString* path = [NSString stringWithUTF8String:Tcl_GetString(objv[2])];
-		NSURL* url = [NSURL fileURLWithPath:path];
+		NSURL* url = mediaHasUrlScheme(Tcl_GetString(objv[2]))
+            ? [NSURL URLWithString:path] : [NSURL fileURLWithPath:path];
+        if (!url) {
+            Tcl_SetObjResult(ti, Tcl_NewIntObj(0));
+            return TCL_OK;
+        }
 		AVPlayerItem* item = [AVPlayerItem playerItemWithURL:url];
 
 		Player = [[AVPlayer alloc] initWithPlayerItem:item];
@@ -222,7 +228,12 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		bool failed = !item || item.status == AVPlayerItemStatusFailed;
 		Tcl_SetObjResult(ti, Tcl_NewStringObj(failed ? "yes" : "no", -1));
 	}
-	else if (strcmp(name, "volume") == 0)
+	else if (strcmp(name, "error-text") == 0)
+    {
+        NSString* detail = item.error.localizedDescription;
+        if (detail) Tcl_SetObjResult(ti, Tcl_NewStringObj([detail UTF8String], -1));
+    }
+    else if (strcmp(name, "volume") == 0)
 	{
 		Tcl_SetObjResult(ti, Tcl_NewDoubleObj(Player.volume*100.0));
 	}
