@@ -106,7 +106,7 @@ set BoardLayout {
 	}
 }
 
-array set Options { shortcut:scheme chesswiz }
+array set Options { shortcut:scheme chesswiz window:geometry {} window:state normal }
 array set ShortcutDefaults {}
 
 set FontSizeActive 0
@@ -429,7 +429,36 @@ proc ShortcutPreferences {parent} {
 }
 
 
+proc RestoreWindowGeometry {app} {
+	variable Options
+	if {$Options(window:geometry) ne "" && ![catch {
+		::util::place::fitWindow $app $Options(window:geometry)
+	}]} {
+		# Restored geometry has already been fitted to the current monitor.
+	} else {
+		::util::place $app -position center
+		::util::place::fitWindow $app
+	}
+	wm deiconify $app
+	if {[tk windowingsystem] eq "win32" && $Options(window:state) eq "zoomed"} {
+		wm state $app zoomed
+	}
+}
+
+
+proc RememberWindowGeometry {w} {
+	variable Options
+	variable Vars
+	if {$w ne ".application" || !$Vars(ready) || [::menu::fullscreen?]} { return }
+	set state [wm state $w]
+	# Iconifying must not erase the last normal/zoomed state.
+	if {$state ni {normal zoomed}} { return }
+	set Options(window:state) $state
+	if {$state eq "normal"} { set Options(window:geometry) [wm geometry $w] }
+}
+
 proc WriteShortcutOptions {chan} {
+	RememberWindowGeometry .application
 	::options::writeItem $chan [namespace current]::Options
 }
 
@@ -1386,8 +1415,8 @@ proc Startup {main args} {
 	bind $main <Map> +[list [namespace current]::board::activate $frame 1]
 	bind $main <Unmap> +[list [namespace current]::board::activate $frame 0]
 
-	::util::place $app -position center
-	wm deiconify $app
+	RestoreWindowGeometry $app
+	bind $app <Configure> +[namespace code {RememberWindowGeometry %W}]
 	database::finish $app
 	::splash::close
 	set Vars(ready) 1
