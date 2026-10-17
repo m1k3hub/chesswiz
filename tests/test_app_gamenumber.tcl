@@ -20,6 +20,12 @@ variable openedBases {}
 proc setup {} {
     variable tmpDir
     file mkdir $tmpDir
+    # Loading a game needs a free game slot (there are nine); games other test
+    # files left open would make the load ask, which the test app answers no.
+    set current [::scidb::game::current]
+    for {set i 0} {$i < $::game::MaxPosition} {incr i} {
+        if {$i != $current} { catch { ::game::release $i } }
+    }
 }
 
 proc tempPath {stem} {
@@ -121,10 +127,20 @@ proc typeNumber {number {how return}} {
 }
 
 # Game number (0-based) of the game loaded in the editor, or -1.
+# The number of the game loaded from the current base: the current game, or
+# else the game slot holding a game of this base (which slot becomes current
+# depends on the games earlier test files left open).
 proc loadedNumber {} {
-    if {[catch { lindex [::scidb::game::link? [::scidb::game::current]] 2 } n]} { return -1 }
-    if {![string is integer -strict $n]} { return -1 }
-    return $n
+    if {![catch { ::scidb::game::link? [::scidb::game::current] } link]
+            && [lindex $link 0] eq [::scidb::db::get name]
+            && [string is integer -strict [lindex $link 2]]} {
+        return [lindex $link 2]
+    }
+    foreach entry [::game::gameList] {
+        lassign $entry name _ number
+        if {$name eq [::scidb::db::get name] && [string is integer -strict $number]} { return $number }
+    }
+    return -1
 }
 
 setup

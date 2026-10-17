@@ -119,8 +119,8 @@ tcltest::test gamereview-run {run analyses the mainline and reports classes} -se
 	::menu::gameNew .application
 	update
 	foreach m {e4 e5 Nf3 Nc6} {
-		::scidb::game::move $m
-		::scidb::game::go 1
+		::move::addMove menu $m
+		update
 	}
 	update
 	# a per-ply engine answer: {evalBeforeCp evalAfterCp uci bestMove}
