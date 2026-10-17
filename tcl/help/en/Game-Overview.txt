@@ -1,0 +1,50 @@
+<!-- ======================================================================
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+======================================================================= -->
+
+INDEX Game overview browser
+INDEX Overview browser
+TITLE The Game Overview Browser
+
+<p>
+The overview browser is opened with a game from a game list and stays
+bound to that list. If the list is closed while the browser is open,
+no further game can be loaded.
+</p>
+
+<p>
+The browser divides the game into roughly equal intervals and shows
+the positions side by side. The number of positions depends on the
+screen size and the selected tab. Below each position are the moves
+that led to it, so the last board shows the final position. When not
+all moves fit, scroll the text with the mouse wheel, or drag it with
+the left mouse button held down.
+</p>
+
+<ul><img src="../images/game-browser-scroll-text.png"/></ul>
+
+<p>
+The context menu of the overview browser offers:
+</p>
+
+<ul>
+	<li>Flip the boards</li>
+	<li>Load the current game into the game editor</li>
+	<li>Reload the game if it was changed in the meantime</li>
+	<li>Load the previous game of the game list</li>
+	<li>Load the next game of the game list</li>
+	<li>Load the first game of the game list</li>
+	<li>Load the last game of the game list</li>
+</ul>
+
+<p>
+The buttons load the previous or next game, close the browser
+(also with Esc) and open this help page (also with F1).
+</p>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html fileencoding=utf-8: -->

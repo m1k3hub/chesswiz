@@ -701,6 +701,7 @@ proc OpenAdvancedSearch {parent file variant} {
 		}
 		bind $dlg.controls.preset <<ComboboxSelected>> [namespace code [list LoadAdvancedPreset $dlg]]
 		bind $dlg <Destroy> [namespace code [list CloseAdvancedSearch %W]]
+		bind $dlg <F1> [list ::help::open .application Advanced-Search -parent $dlg]
 
 		wm transient $dlg [winfo toplevel $parent]
 		wm withdraw $dlg

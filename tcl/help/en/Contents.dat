@@ -24,6 +24,7 @@ set Contents {
     {{{Database switcher} {Database-Switcher.html}}}
     {{{Game browser} {Game-Browser.html}}}
     {{{Game overview browser} {Game-Overview.html}}}
+    {{{Advanced search} {Advanced-Search.html}}}
     {{{Game text window} {Game-Text-Window.html}}}
     {{{Game history} {Game-History-Window.html}}}
     {{{Chessboard} {Board-Window.html}}}

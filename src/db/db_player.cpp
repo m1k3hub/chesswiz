@@ -3720,10 +3720,18 @@ Player::emitPlayerCard(	TeXt::Receptacle& receptacle,
 			titles &= ~t;
 		}
 
+		// The dictionary entry can be years old (a junior rating, no title yet);
+		// the games in this database are the fresher source.
+		if (titleList->isEmpty() && player.title() != title::None)
+			titleList->append(title::toString(player.title()));
+
+		int latestElo = player.elo() ? int(player.elo()) : int(p->latestElo());
+		int highestElo = mstl::max(int(p->highestElo()), int(stats.maxRating(rating::Elo)));
+
 		List rating(new ListToken);
 		rating->append("Elo");
-		rating->append(p->latestElo());
-		rating->append(p->highestElo());
+		rating->append(latestElo);
+		rating->append(mstl::max(highestElo, latestElo));
 		ratings->append(rating);
 
 		if (p->ratingType() != rating::Any && p->ratingType() != rating::Elo)

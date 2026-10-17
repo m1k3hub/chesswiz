@@ -1,0 +1,48 @@
+<!-- ======================================================================
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+======================================================================= -->
+
+INDEX Advanced search
+INDEX Search, advanced
+TITLE Advanced Search
+
+<p>
+Advanced Search filters the games of one database. Combine any of the
+fields; an empty field is ignored. The result list below shows the
+matching games, and the title bar shows the active filter.
+</p>
+
+<ul>
+	<li><b>Player</b> and <b>Player side</b>: a player playing either
+	colour, White only or Black only. A plain surname such as
+	<i>Carlsen</i> also finds <i>Carlsen, Magnus</i>.</li>
+	<li><b>Event</b>, <b>Site</b>, <b>Annotator</b>: names of the
+	event, site and annotator.</li>
+	<li><b>Position ID</b>: the start position of the game.
+	<b>Use Start Position</b> takes it from the current game.</li>
+	<li><b>Rating</b>, <b>Mode</b>, <b>Range</b>: a rating type and
+	a range such as 2200 or 2000-2400, for White, Black, the average
+	of both, or White and Black separately (second range).</li>
+	<li><b>Material</b>: Q/R/B/N letters plus the pawn count for White
+	and Black, such as qrbn8. The mode matches exactly, the same
+	majors and minors, or a pawn count range such as 5-7.</li>
+</ul>
+
+<p>
+In name fields, * matches any text and ? one character. Prefix a name
+with = to match it literally.
+</p>
+
+<p>
+<b>Search</b> (or Return) runs the search, <b>Reset</b> clears all
+fields. <b>Open In Switcher</b> shows the matching games in the
+database switcher, and <b>Save Working Set...</b> stores them under a
+name. Presets save and reload a set of field values.
+</p>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html fileencoding=utf-8: -->

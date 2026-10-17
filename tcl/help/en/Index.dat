@@ -2,6 +2,7 @@ set Index {
   { A
     {
       {{Administrate database} {Database-Switcher.html} {Administration}}
+      {{Advanced search} {Advanced-Search.html} {}}
       {{Antichess} {Chess-Variants.html} {}}
       {{Archive} {Database-Formats.html} {Database-Archive}}
     }
@@ -58,6 +59,7 @@ set Index {
     {
       {{Game Browser} {Game-Browser.html} {}}
       {{Game markers} {Game-Flags.html} {}}
+      {{Game overview browser} {Game-Overview.html} {}}
       {{Giveaway} {Chess-Variants.html} {}}
     }
   }
@@ -89,6 +91,11 @@ set Index {
       {{Numerical annotation glyph} {NAG-Comments.html} {}}
     }
   }
+  { O
+    {
+      {{Overview browser} {Game-Overview.html} {}}
+    }
+  }
   { P
     {
       {{Pattern matching} {Pattern-Matching.html} {}}
@@ -105,6 +112,7 @@ set Index {
   }
   { S
     {
+      {{Search, advanced} {Advanced-Search.html} {}}
       {{Shredder FEN} {FEN.html} {}}
       {{Square designators (CQL)} {CQL-Square-Designators.html} {}}
       {{Suicide} {Chess-Variants.html} {}}
