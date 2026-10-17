@@ -294,6 +294,36 @@ proc clamp {pos size start length} {
 }
 
 
+# Clamp client size and outer-frame position together. Pure arithmetic so this
+# also works before mapping, when winfo width/rootx still describe an old size.
+# Work area is {x y width height}; extents are {left right top bottom}.
+proc clampGeometry {geometry workarea {extents {0 0 0 0}}} {
+	if {![regexp {^([0-9]+)x([0-9]+)([+-])(-?[0-9]+)([+-])(-?[0-9]+)$} $geometry -> w h xs x ys y]} {
+		return -code error "invalid window geometry: $geometry"
+	}
+	lassign $workarea wx wy ww wh
+	lassign $extents el er et eb
+	set w [expr {max(1, min($w, $ww - $el - $er))}]
+	set h [expr {max(1, min($h, $wh - $et - $eb))}]
+	if {$xs eq "-"} { set x [expr {$wx + $ww - $w - $el - $er - $x}] }
+	if {$ys eq "-"} { set y [expr {$wy + $wh - $h - $et - $eb - $y}] }
+	set x [expr {max($wx, min($x, $wx + $ww - $w - $el - $er))}]
+	set y [expr {max($wy, min($y, $wy + $wh - $h - $et - $eb))}]
+	return "${w}x${h}+${x}+${y}"
+}
+
+proc fitWindow {path {geometry ""}} {
+	if {$geometry eq ""} { set geometry [wm geometry $path] }
+	set geometry [clampGeometry $geometry [winfo workarea $path] [winfo extents $path]]
+	# Layout minimum sizes can exceed the laptop's current work area.
+	lassign [wm minsize $path] mw mh
+	regexp {^([0-9]+)x([0-9]+)} $geometry -> w h
+	wm minsize $path [expr {min($mw, $w)}] [expr {min($mh, $h)}]
+	wm geometry $path $geometry
+	return $geometry
+}
+
+
 proc position {path args} {
 	lassign [geometry $path {*}$args] x y _ _
 	wm geometry $path "${x}${y}"
