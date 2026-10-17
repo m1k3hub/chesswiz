@@ -4,6 +4,7 @@
 # 1. Player card: Latest/Highest Elo came from an old dictionary entry
 #    (1907/1950) below the games' own range (2767-2771); the title was
 #    blank while the games say GM.
+# 3. Advanced Search was 1943 px wide on a 1920 px screen at 200%.
 # 2. F1 in Game Overview found no English page; F1 in Advanced Search
 #    opened the general overview.
 # ======================================================================
@@ -41,5 +42,24 @@ tcltest::test run14-help {the English help has pages for Game Overview and Advan
 	set d [file join $::scidb::test::app::testDir .. .. .. .. tcl help en]
 	list [file exists $d/Game-Overview.html] [file exists $d/Advanced-Search.html]
 } -result {1 1}
+
+tcltest::test run14-advanced-width {Advanced Search fits a 1920 px screen at 200% (with room for wider Windows fonts)} -body {
+	set base /tmp/claude-1000/twic/twic1600.sci
+	if {![::scidb::db::get open? $base]} { ::application::database::openBase .application $base yes -readonly 1 }
+	set ns ::application::database
+	set dlg [${ns}::AdvancedDialogName $base Normal]
+	catch { destroy $dlg }
+	set scaling [tk scaling]
+	tk scaling [expr {2*96/72.0}]
+	${ns}::OpenAdvancedSearch .application $base Normal
+	update
+	set w [winfo reqwidth $dlg]
+	if {[info exists ::env(RUN14_SHOT)]} { exec import -window [winfo id $dlg] $::env(RUN14_SHOT) }
+	destroy $dlg
+	tk scaling $scaling
+	puts "advanced search width at 200%: $w"
+	# 1596 here was 1943 on the laptop: Windows fonts are wider
+	expr {$w <= 1400}
+} -result 1
 
 tcltest::cleanupTests

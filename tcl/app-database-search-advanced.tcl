@@ -638,6 +638,8 @@ proc OpenAdvancedSearch {parent file variant} {
 		ttk::label $dlg.controls.status \
 			-textvariable [namespace current]::AdvancedSearchData($dlg,status)
 
+		# At most four label/field pairs a row: with all fields in two rows the
+		# dialog was wider than a 1920 px screen at 200%.
 		grid $dlg.controls.presetLabel -row 0 -column 0 -sticky w
 		grid $dlg.controls.preset -row 0 -column 1 -columnspan 3 -sticky ew
 		grid $dlg.controls.savePreset -row 0 -column 4 -sticky ew
@@ -652,37 +654,40 @@ proc OpenAdvancedSearch {parent file variant} {
 		grid $dlg.controls.event -row 1 -column 5 -sticky ew
 		grid $dlg.controls.siteLabel -row 1 -column 6 -sticky w
 		grid $dlg.controls.site -row 1 -column 7 -sticky ew
-		grid $dlg.controls.annotatorLabel -row 1 -column 8 -sticky w
-		grid $dlg.controls.annotator -row 1 -column 9 -sticky ew
-		grid $dlg.controls.positionLabel -row 1 -column 10 -sticky w
-		grid $dlg.controls.position -row 1 -column 11 -sticky ew
-		grid $dlg.controls.useCurrentPosition -row 1 -column 12 -sticky ew -padx {4 0}
 
-		grid $dlg.controls.ratingTypeLabel -row 2 -column 0 -sticky w
-		grid $dlg.controls.ratingType -row 2 -column 1 -sticky ew
-		grid $dlg.controls.ratingModeLabel -row 2 -column 2 -sticky w
-		grid $dlg.controls.ratingMode -row 2 -column 3 -sticky ew
-		grid $dlg.controls.rangeALabel -row 2 -column 4 -sticky w
-		grid $dlg.controls.rangeA -row 2 -column 5 -sticky ew
-		grid $dlg.controls.rangeBLabel -row 2 -column 6 -sticky w
-		grid $dlg.controls.rangeB -row 2 -column 7 -sticky ew
-		grid $dlg.controls.materialModeLabel -row 2 -column 8 -sticky w
-		grid $dlg.controls.materialMode -row 2 -column 9 -sticky ew
-		grid $dlg.controls.whiteLabel -row 2 -column 10 -sticky w
-		grid $dlg.controls.white -row 2 -column 11 -sticky ew
-		grid $dlg.controls.blackLabel -row 2 -column 12 -sticky w
-		grid $dlg.controls.black -row 2 -column 13 -sticky ew
+		grid $dlg.controls.annotatorLabel -row 2 -column 0 -sticky w
+		grid $dlg.controls.annotator -row 2 -column 1 -sticky ew
+		grid $dlg.controls.positionLabel -row 2 -column 2 -sticky w
+		grid $dlg.controls.position -row 2 -column 3 -sticky ew
+		grid $dlg.controls.useCurrentPosition -row 2 -column 4 -columnspan 2 -sticky w -padx {4 0}
 
-		grid $dlg.controls.search -row 3 -column 8 -sticky ew
-		grid $dlg.controls.reset -row 3 -column 9 -sticky ew
-		grid $dlg.controls.switcher -row 3 -column 10 -columnspan 2 -sticky ew
-		grid $dlg.controls.savews -row 3 -column 12 -sticky ew
-		grid $dlg.controls.close -row 3 -column 13 -sticky ew
-		grid $dlg.controls.help -row 4 -column 0 -columnspan 14 -sticky w
-		grid $dlg.controls.query -row 5 -column 0 -columnspan 14 -sticky w
-		grid $dlg.controls.status -row 6 -column 0 -columnspan 14 -sticky w
+		grid $dlg.controls.ratingTypeLabel -row 3 -column 0 -sticky w
+		grid $dlg.controls.ratingType -row 3 -column 1 -sticky ew
+		grid $dlg.controls.ratingModeLabel -row 3 -column 2 -sticky w
+		grid $dlg.controls.ratingMode -row 3 -column 3 -sticky ew
+		grid $dlg.controls.rangeALabel -row 3 -column 4 -sticky w
+		grid $dlg.controls.rangeA -row 3 -column 5 -sticky ew
+		grid $dlg.controls.rangeBLabel -row 3 -column 6 -sticky w
+		grid $dlg.controls.rangeB -row 3 -column 7 -sticky ew
 
-		foreach col {1 3 5 7 9 11 13} {
+		grid $dlg.controls.materialModeLabel -row 4 -column 0 -sticky w
+		grid $dlg.controls.materialMode -row 4 -column 1 -sticky ew
+		grid $dlg.controls.whiteLabel -row 4 -column 2 -sticky w
+		grid $dlg.controls.white -row 4 -column 3 -sticky ew
+		grid $dlg.controls.blackLabel -row 4 -column 4 -sticky w
+		grid $dlg.controls.black -row 4 -column 5 -sticky ew
+
+		grid $dlg.controls.search -row 5 -column 2 -sticky ew
+		grid $dlg.controls.reset -row 5 -column 3 -sticky ew
+		grid $dlg.controls.switcher -row 5 -column 4 -columnspan 2 -sticky ew
+		grid $dlg.controls.savews -row 5 -column 6 -sticky ew
+		grid $dlg.controls.close -row 5 -column 7 -sticky ew
+		grid $dlg.controls.help -row 6 -column 0 -columnspan 8 -sticky w
+		grid $dlg.controls.query -row 7 -column 0 -columnspan 8 -sticky w
+		grid $dlg.controls.status -row 8 -column 0 -columnspan 8 -sticky w
+		$dlg.controls.help configure -wraplength [expr {[winfo screenwidth $dlg]/2}]
+
+		foreach col {1 3 5 7} {
 			grid columnconfigure $dlg.controls $col -weight 1
 		}
 
