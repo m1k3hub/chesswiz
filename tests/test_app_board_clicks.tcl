@@ -79,4 +79,19 @@ tcltest::test clicks-suggested-twice {with e4 suggested, two clicks on e2 play 1
 	list $atStart [lindex [::scidb::pos::fen] 0]
 } -result {1 rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR}
 
+# Run 23: the board ignored clicks (disabled=1) after a Ctrl release went to
+# another window, so <<ControlOff>> never re-enabled it.
+tcltest::test clicks-stale-ctrl {a click without Ctrl clears a stale Ctrl state} -setup {
+	::menu::gameNew .application
+	update
+	set ::board::hilite(show-suggested) 1
+	set ::move::Square(suggested) -1
+	set ::move::Square(current) -1
+	::move::disable
+} -body {
+	::scidb::test::clicks::click 12
+	::scidb::test::clicks::click 28
+	list $::move::Disabled [lindex [::scidb::pos::fen] 0]
+} -cleanup { ::move::enable } -result {0 rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR}
+
 tcltest::cleanupTests

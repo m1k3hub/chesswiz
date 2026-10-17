@@ -278,10 +278,16 @@ proc pressSquare {square state} {
 	variable ::board::hilite
 	variable Square
 	variable Disabled
+	variable Lock
 
 	::variation::hide
 
 	catch { ::debuglog::log board "press $square selected=$Square(selected) disabled=$Disabled" }
+	# Disabled means Ctrl is held; a Ctrl release delivered to another window
+	# (dialog, other program) never reached <<ControlOff>> and left it set.
+	if {$Disabled && !$Lock && !($state & 4)} {
+		set Disabled 0
+	}
 	if {$Disabled} { return }
 
 	if {$Square(selected) == -1} {
