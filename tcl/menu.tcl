@@ -102,6 +102,7 @@ set AIDatabaseTrend			"AI: Database &Trends"
 set DownloadGames				"Download &Games from the Internet..."
 set GuessTheMove				"Guess the &Move..."
 set PlayAgainstEngine			"Play Against &Engine..."
+set EngineMatch					"Engine Mat&ch..."
 
 # Tools
 set OpenEngineDictionary		"Open &Engine Dictionary"
@@ -671,6 +672,18 @@ proc build {menu} {
 			-underline [IncrUL $ul] \
 			-image $::icon::16x16::engine \
 			-command [list ::playengine::open .application] \
+			;
+	}
+
+	### engine matches and gauntlets ##########################################
+	if {[llength [info commands ::enginematch::open]]} {
+		lassign [::tk::UnderlineAmpersand $mc::EngineMatch] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::engine \
+			-command [list ::enginematch::open .application] \
 			;
 	}
 
