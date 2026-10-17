@@ -411,3 +411,7 @@ help:
 .PHONY: ai-credentials
 ai-credentials:
 	@$(TCLSH) $(TEST_DIR)test_ai_credentials.tcl
+
+.PHONY: tactics
+tactics:
+	$(TCLSH) $(TEST_DIR)test_tactics_trainer.tcl

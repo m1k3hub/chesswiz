@@ -544,6 +544,9 @@ proc build {menu} {
 			;
 	}
 
+	$m add command -label " Tactics Trainer..." -image $::icon::16x16::none \
+		-command [list ::tactics::open .application]
+
 	### training set from the database's games (CQL + engine) ##############
 	if {[llength [info commands ::ai::cql::training]]} {
 		lassign [::tk::UnderlineAmpersand $mc::AITrainingSet] text ul
