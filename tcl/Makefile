@@ -134,6 +134,7 @@ SOURCES = \
 	board-3d.tcl \
 	tablebase.tcl \
 	media-inset.tcl \
+	guess-move.tcl \
 	annotation.tcl \
 	comment.tcl \
 	marks.tcl \

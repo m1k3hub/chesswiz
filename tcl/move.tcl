@@ -460,6 +460,12 @@ proc addMove {confirmWindowType san args} {
 	}
 	array set opts $args
 
+	# A Guess-the-Move round scores the played move instead of changing the
+	# game; ::guessmove::guessed steps over the game move itself.
+	if {[info exists ::guessmove::active] && $::guessmove::active} {
+		return [::guessmove::guessed $san]
+	}
+
 	if {[::scidb::game::position atEnd?]} {
 		::application::pgn::ensureScratchGame
 		set action "append"

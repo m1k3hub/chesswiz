@@ -1204,6 +1204,16 @@ proc PopupMenu {w} {
 			;
 	}
 
+	if {![::application::pgn::empty?] && [llength [info commands ::guessmove::start]]} {
+		$m add separator
+		$m add command \
+			-compound left \
+			-image $::icon::16x16::none \
+			-label " $::guessmove::mc::GuessTheMove" \
+			-command [list ::guessmove::start] \
+			;
+	}
+
 	$m add separator
 
 	$m add checkbutton \

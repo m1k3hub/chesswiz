@@ -100,6 +100,7 @@ set AICheckResults			"AI: Check Game &Results"
 set AIEventTypes			"AI: Time &Controls"
 set AIDatabaseTrend			"AI: Database &Trends"
 set DownloadGames				"Download &Games from the Internet..."
+set GuessTheMove				"Guess the &Move..."
 
 # Tools
 set OpenEngineDictionary		"Open &Engine Dictionary"
@@ -650,6 +651,17 @@ proc build {menu} {
 			;
 	}
 
+	### guess the move (training) ##########################################
+	if {[llength [info commands ::guessmove::start]]} {
+		lassign [::tk::UnderlineAmpersand $mc::GuessTheMove] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [list ::guessmove::start] \
+			;
+	}
 
 	if {[llength [info commands ::playerdata::updateFide]]} {
 		lassign [::tk::UnderlineAmpersand $::playerdata::mc::UpdateFide] text ul
