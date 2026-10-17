@@ -49,6 +49,7 @@ set Stop						"Stop"
 set Close						"Close"
 set YourMove					"Play the repertoire move for %s."
 set Correct					"%s is right. How well did you know it?"
+set CorrectSuggested		"%s is right. How well did you know it? (Suggested: %s)"
 set Wrong						"%s is not in the repertoire. Expected: %s."
 set Hard						"Hard"
 set Good						"Good"
@@ -76,6 +77,24 @@ variable NewEase 250		;# starting ease 2.50, in hundredths
 variable MinEase 130		;# ease floor 1.30
 variable MaxEase 300		;# ease ceiling 3.00
 
+variable SideCriteria [dict create \
+	white	"a White opening repertoire (e.g. London System, Catalan, Queen's Gambit, Scotch, Italian, English, 1.e4 or 1.d4 for White)" \
+	black	"a Black opening defense or repertoire (e.g. Sicilian, Caro-Kann, French, King's Indian, Nimzo-Indian, Grunfeld, Slav, Pirc, Berlin)" \
+	unsure	"a general collection, both sides, or not enough information to tell" \
+]
+
+variable NoteCriteria [dict create \
+	hint			"context or line selection that is safe to show BEFORE the player moves without giving away which piece moves or where" \
+	explanation	"explains why the repertoire move is played, names or describes the move in words, or discusses what follows -- show only AFTER the player answers" \
+	noise			"clock times, engine evaluations, tournament headers, or non-instructive metadata -- do not show" \
+]
+
+variable GradeCriteria [dict create \
+	hard	"slow recall, repeated lapses, or a hesitant recovery that needs a short interval" \
+	good	"normal recall at a steady pace for this stage of learning" \
+	easy	"fast, effortless recall with a clean history that can jump to a longer interval" \
+]
+
 array set Vars {
 	running			0
 	state				{}
@@ -97,6 +116,13 @@ array set Vars {
 	sources			{}
 	sourceIndex	0
 	sourceLabel	{}
+	seq				0
+	cardSeq			0
+	shownAt			0
+	lastSan			{}
+	suggestedGrade	{}
+	noteRole		{}
+	noteText		{}
 }
 
 } ;# namespace reptrainer
@@ -114,10 +140,10 @@ proc ::reptrainer::Key {fen} {
 
 # A new, never seen card for <fen> (the full FEN of the position before
 # the move) with the expected move(s) <moves>; it is due right away.
-proc ::reptrainer::newCard {fen moves now} {
+proc ::reptrainer::newCard {fen moves now {comment ""}} {
 	variable NewEase
 
-	return [dict create \
+	set card [dict create \
 		fen $fen \
 		moves $moves \
 		interval 0 \
@@ -126,6 +152,11 @@ proc ::reptrainer::newCard {fen moves now} {
 		lapses 0 \
 		due $now \
 	]
+	set comment [string trim $comment]
+	if {$comment ne ""} {
+		dict set card comment $comment
+	}
+	return $card
 }
 
 
@@ -337,19 +368,50 @@ proc ::reptrainer::Walk {position key letter now cardsName} {
 		set fen [::scidb::game::query $position movefen $k]
 		set san [::scidb::game::query $position move $k]
 		if {$fen ne "" && $san ne "" && [lindex $fen 1] eq $letter} {
+			set comment [MoveComment $position $k]
 			set ckey [Key $fen]
 			if {[dict exists $cards $ckey]} {
 				set card [dict get $cards $ckey]
 				if {[Norm $san] ni [lmap m [dict get $card moves] { Norm $m }]} {
 					dict lappend card moves $san
-					dict set cards $ckey $card
 				}
+				if {$comment ne "" && ![dict exists $card comment]} {
+					dict set card comment $comment
+				}
+				dict set cards $ckey $card
 			} else {
-				dict set cards $ckey [newCard $fen [list $san] $now]
+				dict set cards $ckey [newCard $fen [list $san] $now $comment]
 			}
 		}
 		Walk $position $k $letter $now $cardsName
 	}
+}
+
+
+# The plain text of any comment attached before or after <key> in
+# scratch slot <position>, or "".
+proc ::reptrainer::MoveComment {position key} {
+	if {[catch { ::scidb::game::moveto $position $key }]} { return "" }
+	set parts {}
+	foreach which {before after} {
+		if {![catch { ::scidb::game::query $position comment $which } xml] && $xml ne ""} {
+			set text [PlainComment $xml]
+			if {$text ne ""} { lappend parts $text }
+		}
+	}
+	return [join $parts " "]
+}
+
+
+proc ::reptrainer::PlainComment {xml} {
+	if {[llength [info commands ::ai::factcheck::plain]]} {
+		if {![catch { ::ai::factcheck::plain $xml } text]} {
+			return [string trim $text]
+		}
+	}
+	regsub -all {<[^>]*>} $xml " " text
+	regsub -all {\s+} [string trim $text] " " text
+	return $text
 }
 
 
@@ -395,6 +457,184 @@ proc ::reptrainer::buildFromCurrentGame {side now} {
 
 
 # ----------------------------------------------------------------------
+# System One decisions (Jev).
+# ----------------------------------------------------------------------
+
+# 1. Default training side (reptrainer_side) for an opening source whose
+# database type is not already OpeningsWhite or OpeningsBlack.  Explicit
+# "white" / "black" words decide by rule; opening names ("Caro-Kann",
+# "London System") ask the classifier via chooseSync.
+proc ::reptrainer::sideRule {clue} {
+	set t [string tolower [string trim $clue]]
+	if {$t eq ""} { return "" }
+	set w [regexp {\ywhite\y} $t]
+	set b [regexp {\yblack\y} $t]
+	if {$w && !$b} { return white }
+	if {$b && !$w} { return black }
+	return ""
+}
+
+
+proc ::reptrainer::sideState {clue} {
+	return "source=[string trim $clue]"
+}
+
+
+proc ::reptrainer::sideQuestion {} {
+	variable SideCriteria
+
+	return [dict create type choice \
+		instructions "A chess player is opening a repertoire source with this name or header to drill opening moves. Which side (white or black) is this repertoire for? Answer unsure if the name does not indicate a White or Black opening repertoire." \
+		criteria $SideCriteria]
+}
+
+
+proc ::reptrainer::inferSide {clue {fallback white}} {
+	set rule [sideRule $clue]
+	if {$rule ne ""} { return $rule }
+	set clue [string trim $clue]
+	if {$clue eq ""} { return $fallback }
+	if {[llength [info commands ::ai::systemone::chooseSync]] == 0} { return $fallback }
+	set pick [::ai::systemone::chooseSync reptrainer_side [sideState $clue] [sideQuestion] \
+		-timeout 1500 -threshold 0.7]
+	if {$pick in {white black}} { return $pick }
+	return $fallback
+}
+
+
+# 2. Repertoire comment role (reptrainer_note): whether a move comment
+# is a safe pre-move hint, a post-answer explanation, or non-instructive
+# noise.  A comment that literally contains an expected move's SAN is
+# never allowed to be a pre-move hint.
+proc ::reptrainer::CleanNote {comment} {
+	regsub -all {\[%[^\]]*\]} $comment " " s
+	regsub -all {\s+} [string trim $s] " " s
+	return $s
+}
+
+
+proc ::reptrainer::noteContainsMove {comment moves} {
+	foreach m $moves {
+		set bare [Norm $m]
+		if {$bare eq ""} { continue }
+		set esc [regsub -all {([\\.*+?^$()\[\]{}|])} $bare {\\\1}]
+		set pat [format {(?:^|[^[:alnum:]])%s(?:$|[^[:alnum:]])} $esc]
+		if {[regexp $pat $comment]} {
+			return 1
+		}
+	}
+	return 0
+}
+
+
+proc ::reptrainer::noteRule {comment {moves {}}} {
+	set clean [CleanNote $comment]
+	if {$clean eq ""} { return none }
+	set rest $clean
+	regsub -all {(?:^|\s)[+-]?\d+(?:\.\d+)?/\d+(?=\s|$)} $rest " " rest
+	regsub -all {(?:^|\s)\d+:\d+(?::\d+)?(?=\s|$)} $rest " " rest
+	if {![regexp {[[:alpha:]]{3,}} $rest]} { return noise }
+	return ""
+}
+
+
+proc ::reptrainer::noteState {fen moves comment} {
+	return "fen=$fen moves=[join $moves ,] comment=[CleanNote $comment]"
+}
+
+
+proc ::reptrainer::noteQuestion {} {
+	variable NoteCriteria
+
+	return [dict create type choice \
+		instructions "A chess opening repertoire card has this comment on the repertoire move(s). Decide whether the comment is a non-spoiling pre-move hint, a post-move explanation (or anything that names or gives away the move), or non-instructive noise." \
+		criteria $NoteCriteria]
+}
+
+
+proc ::reptrainer::NoteFallback {} {
+	return none
+}
+
+
+proc ::reptrainer::decideNote {fen moves comment script} {
+	set rule [noteRule $comment $moves]
+	if {$rule ne ""} {
+		after 0 [list {*}$script [list ok 1 label $rule confidence 1.0 source rules]]
+		return
+	}
+	if {[llength [info commands ::ai::decide]] == 0} {
+		after 0 [list {*}$script [list ok 1 label [NoteFallback] confidence {} source rules]]
+		return
+	}
+	::ai::decide reptrainer_note [noteState $fen $moves $comment] [noteQuestion] \
+		[namespace code [list OnNoteDecided $comment $moves $script]] \
+		-fallback [namespace code NoteFallback]
+}
+
+
+proc ::reptrainer::OnNoteDecided {comment moves script decision} {
+	if {[dict get $decision ok] && [dict get $decision label] eq "hint"
+		&& [noteContainsMove $comment $moves]} {
+		# Hard firewall: a comment that literally names an expected move
+		# must never appear before the player answers.
+		dict set decision label explanation
+	}
+	uplevel #0 [list {*}$script $decision]
+}
+
+
+# 3. SM-2 self-grade recommendation (reptrainer_grade): after a right
+# answer, suggests hard/good/easy from response time, card history and
+# position context without taking the grade choice away from the user.
+proc ::reptrainer::gradeState {card san elapsedMs} {
+	set fen [dict get $card fen]
+	set moves [dict get $card moves]
+	set fullmove [expr {[llength $fen] >= 6 && [string is integer -strict [lindex $fen 5]] ? [lindex $fen 5] : 1}]
+	return [format "fen=%s move=%s moves=%s fullmove=%d alternatives=%d elapsed_ms=%d reps=%d lapses=%d interval=%d ease=%d" \
+		$fen [Norm $san] [join $moves ,] $fullmove [llength $moves] \
+		$elapsedMs [dict get $card reps] [dict get $card lapses] \
+		[dict get $card interval] [dict get $card ease]]
+}
+
+
+proc ::reptrainer::gradeQuestion {} {
+	variable GradeCriteria
+
+	return [dict create type choice \
+		instructions "The player answered a chess opening repertoire flashcard. Recommend the SM-2 self-grade (hard, good, or easy) from the response time, the card's review history, and the position." \
+		criteria $GradeCriteria]
+}
+
+
+proc ::reptrainer::GradeFallback {} {
+	return ""
+}
+
+
+proc ::reptrainer::decideGrade {card san elapsedMs script} {
+	if {[llength [info commands ::ai::decide]] == 0} {
+		after 0 [list {*}$script [list ok 1 label [GradeFallback] confidence {} source rules]]
+		return
+	}
+	::ai::decide reptrainer_grade [gradeState $card $san $elapsedMs] [gradeQuestion] \
+		[namespace code [list OnGradeDecided $card $script]] \
+		-fallback [namespace code GradeFallback]
+}
+
+
+proc ::reptrainer::OnGradeDecided {card script decision} {
+	if {[dict get $decision ok] && [dict get $decision label] eq "easy"
+		&& [dict get $card reps] == 0 && [dict get $card lapses] > 0} {
+		# A card that already lapsed and has not yet completed a clean
+		# repetition must not jump straight to Easy's 4-day interval.
+		dict set decision label good
+	}
+	uplevel #0 [list {*}$script $decision]
+}
+
+
+# ----------------------------------------------------------------------
 # Drill.
 # ----------------------------------------------------------------------
 
@@ -420,20 +660,99 @@ proc ::reptrainer::answered {san} {
 	set san [Norm $san]
 	if {$san eq ""} { return }
 
+	set elapsed [expr {$Vars(shownAt) > 0 ? max(0, [clock milliseconds] - $Vars(shownAt)) : 0}]
+	set Vars(lastSan) $san
 	set expected [dict get $Vars(card) moves]
 	if {$san in [lmap m $expected { Norm $m }]} {
 		set Vars(state) grade
 		GradeButtons normal
-		Instruction [format $mc::Correct $san]
+		Instruction [GradeInstruction $san $Vars(suggestedGrade) [PostNote]]
+		decideGrade $Vars(card) $san $elapsed \
+			[namespace code [list OnSuggestedGrade $Vars(cardSeq) $san]]
 	} else {
 		set Vars(state) show
 		GradeButtons disabled
 		ApplyGrade 0
 		PlayExpected [lindex $expected 0]
-		Instruction [format $mc::Wrong $san [join $expected {, }]]
+		Instruction [WrongInstruction $san $expected [PostNote]]
 		CancelPending
 		set Vars(after) [after $Delay [namespace code NextCard]]
 	}
+}
+
+
+proc ::reptrainer::OnSuggestedGrade {seq san decision} {
+	variable Vars
+
+	if {!$Vars(running) || $seq != $Vars(cardSeq) || $Vars(state) ne "grade"} { return }
+	set grade [expr {[dict get $decision ok] ? [dict get $decision label] : ""}]
+	if {$grade ni {hard good easy}} { return }
+	set Vars(suggestedGrade) $grade
+	Instruction [GradeInstruction $san $grade [PostNote]]
+	if {[winfo exists $Vars(dlg).drill.grades.$grade]} {
+		catch { focus $Vars(dlg).drill.grades.$grade }
+	}
+}
+
+
+proc ::reptrainer::OnCardNote {seq comment decision} {
+	variable Vars
+	variable mc
+
+	if {!$Vars(running) || $seq != $Vars(cardSeq)} { return }
+	set role [expr {[dict get $decision ok] ? [dict get $decision label] : "none"}]
+	set clean [CleanNote $comment]
+	if {$clean eq "" || $role ni {hint explanation}} { return }
+	set Vars(noteRole) $role
+	set Vars(noteText) $clean
+	if {$role eq "hint" && $Vars(state) eq "answer"} {
+		Instruction "[format $mc::YourMove [SideName $Vars(side)]] -- $clean"
+	} elseif {$role eq "explanation" && $Vars(state) eq "grade"} {
+		Instruction [GradeInstruction $Vars(lastSan) $Vars(suggestedGrade) $clean]
+	} elseif {$role eq "explanation" && $Vars(state) eq "show"} {
+		Instruction [WrongInstruction $Vars(lastSan) [dict get $Vars(card) moves] $clean]
+	}
+}
+
+
+proc ::reptrainer::PostNote {} {
+	variable Vars
+
+	return [expr {$Vars(noteRole) eq "explanation" ? $Vars(noteText) : ""}]
+}
+
+
+proc ::reptrainer::GradeLabel {grade} {
+	variable mc
+
+	switch -- $grade {
+		hard { return $mc::Hard }
+		good { return $mc::Good }
+		easy { return $mc::Easy }
+		default { return $grade }
+	}
+}
+
+
+proc ::reptrainer::GradeInstruction {san suggested note} {
+	variable mc
+
+	if {$suggested in {hard good easy}} {
+		set text [format $mc::CorrectSuggested $san [GradeLabel $suggested]]
+	} else {
+		set text [format $mc::Correct $san]
+	}
+	if {$note ne ""} { append text " -- $note" }
+	return $text
+}
+
+
+proc ::reptrainer::WrongInstruction {san expected note} {
+	variable mc
+
+	set text [format $mc::Wrong $san [join $expected {, }]]
+	if {$note ne ""} { append text " -- $note" }
+	return $text
 }
 
 
@@ -483,10 +802,22 @@ proc ::reptrainer::NextCard {} {
 
 	set Vars(card) [lindex $Vars(queue) $Vars(index)]
 	incr Vars(index)
+	set seq [incr Vars(seq)]
+	set Vars(cardSeq) $seq
+	set Vars(shownAt) [clock milliseconds]
+	set Vars(lastSan) {}
+	set Vars(suggestedGrade) {}
+	set Vars(noteRole) {}
+	set Vars(noteText) {}
 	set Vars(state) answer
 	GradeButtons disabled
 	if {![ShowBoard [dict get $Vars(card) fen]]} { return }
 	Instruction [format $mc::YourMove [SideName $Vars(side)]]
+	if {[dict exists $Vars(card) comment] && [dict get $Vars(card) comment] ne ""} {
+		set comment [dict get $Vars(card) comment]
+		decideNote [dict get $Vars(card) fen] [dict get $Vars(card) moves] $comment \
+			[namespace code [list OnCardNote $seq $comment]]
+	}
 }
 
 
@@ -528,7 +859,8 @@ proc ::reptrainer::stop {} {
 	variable mc
 
 	CancelPending
-	if {[info exists Vars(deck)] && [llength $Vars(deck)] && [llength $Vars(deckFile)]} {
+	incr Vars(seq)
+	if {$Vars(running) && [info exists Vars(deck)] && [llength $Vars(deck)] && [llength $Vars(deckFile)]} {
 		saveDeck $Vars(deck) $Vars(deckFile)
 	}
 	if {$Vars(state) ne {}} {
@@ -543,6 +875,8 @@ proc ::reptrainer::stop {} {
 		&& [::scidb::game::current] == $Vars(gameSlot)
 		&& [llength $Vars(startFen)]} {
 		catch { ::scidb::game::clear $Vars(startFen) }
+		catch { ::game::stateChanged $Vars(gameSlot) 0 }
+		catch { ::game::lockChanged $Vars(gameSlot) 0 }
 	}
 	if {$Options(flipBoard)
 		&& [::board::diagram::rotated? $::application::board::board] != $Vars(wasRotated)} {
@@ -630,7 +964,7 @@ proc ::reptrainer::open {parent {base ""} {variant Normal}} {
 	foreach b [::application::database::repertoireBases [expr {$base ne ""}] $variant] {
 		lappend sources [list [::util::databaseName $b] $b $variant [DefaultSide $b]]
 	}
-	lappend sources [list $mc::CurrentGame "" [::scidb::game::query variant?] $Vars(side)]
+	lappend sources [list $mc::CurrentGame "" [::scidb::game::query variant?] [DefaultGameSide]]
 	set Vars(sources) $sources
 
 	# preselect: the asked base, else the current base if it is a
@@ -759,6 +1093,7 @@ proc ::reptrainer::Close {dlg} {
 	if {$dlg ne $Vars(dlg)} { return }
 	stop
 	set Vars(dlg) {}
+	set Vars(deckFile) {}
 	set Vars(instruction) {}
 	destroy $dlg
 }
@@ -782,16 +1117,43 @@ proc ::reptrainer::SideName {side} {
 }
 
 
-# The side a repertoire database is for; plain opening databases let
-# the last choice stand.
+# The side a repertoire database is for; plain opening databases infer
+# the side from the name or let the last choice stand.
 proc ::reptrainer::DefaultSide {base} {
 	variable Vars
 
-	switch -- [::scidb::db::get type $base] {
+	set type ""
+	catch { set type [::scidb::db::get type $base] }
+	switch -- $type {
 		OpeningsWhite { return white }
 		OpeningsBlack { return black }
-		default { return $Vars(sideChoice) }
+		default {
+			set name [file rootname [file tail $base]]
+			catch { set name [::util::databaseName $base] }
+			return [inferSide $name $Vars(sideChoice)]
+		}
 	}
+}
+
+
+proc ::reptrainer::GameClue {} {
+	if {[catch { ::scidb::game::tags -userSuppliedOnly 1 } pairs]} { return "" }
+	set parts {}
+	foreach pair $pairs {
+		lassign $pair tag value
+		set value [string trim $value]
+		if {$tag in {Event Opening Variation White Black} && $value ni {"" "?"}} {
+			lappend parts "$tag=$value"
+		}
+	}
+	return [join $parts " "]
+}
+
+
+proc ::reptrainer::DefaultGameSide {} {
+	variable Vars
+
+	return [inferSide [GameClue] $Vars(side)]
 }
 
 
