@@ -355,28 +355,13 @@ proc geometry {{data {}}} {
 
 	set geometry ${width}x${height}
 	if {!$Vars(fullscreen) && ![::menu::fullscreen?]} {
-		# Keep the window, frame included, on the work area. Windows puts a new
-		# window at a cascade position, so a large layout ran off the screen.
-		lassign [winfo workarea .application] wx wy ww wh
-		lassign [winfo extents .application] el er et eb
-		set width  [expr {min($width, $ww - $el - $er)}]
-		set height [expr {min($height, $wh - $et - $eb)}]
-		set geometry ${width}x${height}
-		set x [winfo rootx .application]
-		set y [winfo rooty .application]
-		set mapped [winfo ismapped .application]
-		# A new window: only Windows needs us to place it.
-		set place [expr {!$mapped && [tk windowingsystem] eq "win32"}]
-		if {$mapped && (	$x - $el < $wx || $x + $width + $er > $wx + $ww
-							|| $y - $et < $wy || $y + $height + $eb > $wy + $wh)} {
-			set place 1
-		}
-		if {$place} {
-			set x [expr {$wx + max(0, ($ww - $width - $el - $er)/2)}]
-			set y [expr {$wy + max(0, ($wh - $height - $et - $eb)/2)}]
-			append geometry "+${x}+${y}"
-		}
+		# A later layout resize must validate the position against its NEW size,
+		# including while withdrawn. Never rely on stale winfo dimensions.
+		if {[wm state .application] eq "zoomed"} { return }
+		regexp {^[0-9]+x[0-9]+(.*)$} [wm geometry .application] -> position
+		set geometry [::util::place::fitWindow .application "${geometry}${position}"]
 	}
+
 	if {$Vars(fullscreen) && ![::menu::fullscreen?]} {
 		incr incrH +4 ;# TODO why?
 		incr incrV -2 ;# TODO why?

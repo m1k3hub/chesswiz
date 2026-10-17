@@ -143,4 +143,24 @@ tcltest::test discover-results-shape {a result carries ext, label, path, size an
     }
 } -cleanup {::discoverTest::cleanup} -result {sci {Scidb database} a.sci 1 42}
 
+tcltest::test discover-vanished-file {a file that disappears during the scan is skipped, the scan goes on} -setup {
+    ::discoverTest::setup
+} -body {
+    discover eval {
+        # classify fails for one file, as when a cache file is deleted between glob and stat
+        rename ::application::database::discover::classify ::application::database::discover::realClassify
+        proc ::application::database::discover::classify {path {includePgn 1}} {
+            if {[file tail $path] eq "a.sci"} { error "could not read $path: no such file or directory" }
+            ::application::database::discover::realClassify $path $includePgn
+        }
+        set names {}
+        foreach e [::application::database::discover::scanSync [list $root] 6 1] {
+            lappend names [file tail [lindex $e 2]]
+        }
+        rename ::application::database::discover::classify {}
+        rename ::application::database::discover::realClassify ::application::database::discover::classify
+        lsort $names
+    }
+} -cleanup {::discoverTest::cleanup} -result {b.pgn c.cbh d.si4 e.si3}
+
 tcltest::cleanupTests

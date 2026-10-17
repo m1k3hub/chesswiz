@@ -30,6 +30,8 @@ set Start				"Start scan"
 set Stop				"Stop"
 set Rescan			"Rescan"
 set Found				"Databases found"
+set Filter				"Filter databases"
+set FilterCount		"%d of %d"
 set ColumnType		"Type"
 set ColumnName		"Name"
 set ColumnGames		"Games"
@@ -70,6 +72,9 @@ array set Priv {
 	progressCmd		{}
 	doneCmd			{}
 	after				{}
+	filter			{}
+	filterAfter		{}
+	statusBase		{}
 	roots				{}
 }
 
@@ -248,14 +253,15 @@ proc ::application::database::discover::_visit {dir depth} {
 	foreach entry $entries {
 		set tail [file tail $entry]
 		if {$tail eq "." || $tail eq ".."} { continue }
-		if {[file type $entry] eq "link"} { continue }
+		# a file can vanish between glob and here (browser caches, temp files)
+		if {[catch { file type $entry } type] || $type eq "link"} { continue }
 
 		if {[file isdirectory $entry]} {
 			if {$depth < $Priv(maxdepth)} {
 				lappend Priv(queue) [list $entry [expr {$depth + 1}]]
 			}
 		} else {
-			set entryInfo [classify $entry $Priv(includePgn)]
+			if {[catch { classify $entry $Priv(includePgn) } entryInfo]} { continue }
 			if {[llength $entryInfo]} { lappend Priv(results) $entryInfo }
 		}
 	}
@@ -423,6 +429,16 @@ proc ::application::database::discover::open {parent} {
 	# --- results ------------------------------------------------------
 	set res [ttk::labelframe $dlg.results -text $mc::Found]
 	pack $res -fill both -expand yes -padx $::theme::padx -pady [list 0 $::theme::pady]
+	set Priv(filter) ""
+	set filter [ttk::frame $res.filter]
+	ttk::label $filter.label -text $mc::Filter
+	searchentry $filter.entry -textvariable [namespace current]::Priv(filter) \
+		-mode enter -usehistory 0 -buttons {erase}
+	pack $filter.label -side left -padx 2
+	pack $filter.entry -side left -fill x -expand yes
+	pack $filter -side top -fill x -pady 2
+	trace add variable Priv(filter) write [namespace code _filterChanged]
+	bind $filter.entry.e <Escape> "[namespace code [list ClearFilter $filter.entry]]; break"
 	ttk::treeview $res.tree \
 		-columns {name games size path} \
 		-displaycolumns {name games size path} \
@@ -455,7 +471,8 @@ proc ::application::database::discover::open {parent} {
 	ttk::button $dlg.add -text $mc::AddSelected -command [namespace code AddSelected]
 	::widget::dialogButtonsPack $dlg.add -side right
 
-	set Priv(status) ""
+	set Priv(statusBase) ""
+	_populate $Priv(results)
 
 	foreach root [defaultRoots] {
 		$left.list insert end $root
@@ -541,7 +558,8 @@ proc ::application::database::discover::StopScan {} {
 	variable mc
 
 	stop
-	set Priv(status) [format $mc::Stopped $Priv(dirs) [llength $Priv(results)]]
+	set Priv(statusBase) [format $mc::Stopped $Priv(dirs) [llength $Priv(results)]]
+	_populate $Priv(results)
 	$Priv(dialog).top.options.actions.start configure \
 		-text $mc::Start -command [namespace code StartScan]
 }
@@ -557,7 +575,8 @@ proc ::application::database::discover::_progress {dirs found} {
 	variable mc
 
 	if {![winfo exists $Priv(dialog)]} { return }
-	set Priv(status) [format $mc::Scanning $dirs $found]
+	set Priv(statusBase) [format $mc::Scanning $dirs $found]
+	_populate $Priv(results)
 	# The exact total is unknown; nudge the bar so it visibly moves.
 	set value [expr {[$Priv(progress) cget -value] + 2}]
 	if {$value > 95} { set value 95 }
@@ -570,36 +589,73 @@ proc ::application::database::discover::_done {results} {
 	variable mc
 
 	if {![winfo exists $Priv(dialog)]} { return }
-	_populate $results
 	$Priv(progress) configure -value 100
-	set Priv(status) [format $mc::Scanned $Priv(dirs) [llength $results]]
+	set Priv(statusBase) [format $mc::Scanned $Priv(dirs) [llength $results]]
+	_populate $results
 	$Priv(dialog).top.options.actions.start configure \
 		-text $mc::Start -command [namespace code StartScan]
 }
 
+
+# Literal, case-insensitive AND matching across the database's full path.
+proc ::application::database::discover::filterResults {results text} {
+	set words [regexp -all -inline {\S+} [string tolower $text]]
+	set visible {}
+	foreach entry $results {
+		set path [string tolower [lindex $entry 2]]
+		set matches 1
+		foreach word $words {
+			if {[string first $word $path] < 0} { set matches 0; break }
+		}
+		if {$matches} { lappend visible $entry }
+	}
+	return $visible
+}
+
+proc ::application::database::discover::_filterChanged {args} {
+	variable Priv
+	after cancel $Priv(filterAfter)
+	set Priv(filterAfter) [after 150 [namespace code ApplyFilter]]
+}
+
+proc ::application::database::discover::ApplyFilter {} {
+	variable Priv
+	set Priv(filterAfter) {}
+	if {[winfo exists $Priv(dialog)]} { _populate $Priv(results) }
+}
+
+proc ::application::database::discover::ClearFilter {entry} {
+	variable Priv
+	$entry delete 0 end
+	set Priv(filter) ""
+	after cancel $Priv(filterAfter)
+	ApplyFilter
+}
 
 proc ::application::database::discover::_populate {results} {
 	variable Priv
 	variable mc
 
 	set tree $Priv(tree)
-	$tree delete [$tree children {}]
-
-	if {![llength $results]} {
-		set Priv(status) $mc::NoneFound
-		return
+	set visible [filterResults $results $Priv(filter)]
+	set Priv(status) "$Priv(statusBase) [format $mc::FilterCount [llength $visible] [llength $results]]"
+	set paths {}
+	foreach entry $visible { lappend paths [lindex $entry 2] }
+	foreach item [$tree children {}] {
+		if {$item ni $paths} { $tree delete [list $item] }
 	}
-
-	foreach entry $results {
+	foreach entry $visible {
 		lassign $entry ext label path size games
+		if {[$tree exists $path]} { continue }
 		set icon {}
 		catch { set icon [::dialog::fsbox::fileIcon .$ext] }
 		set gameText [expr {$games >= 0 ? $games : "\u2013"}]
 		set args [list -text $label -values \
 			[list [file tail $path] $gameText [_size $size] [file dirname $path]]]
 		if {[string length $icon]} { lappend args -image $icon }
-		$tree insert {} end {*}$args
+		$tree insert {} end -id $path {*}$args
 	}
+	$tree children {} $paths
 }
 
 
@@ -696,6 +752,9 @@ proc ::application::database::discover::Close {} {
 	variable Priv
 
 	stop
+	after cancel $Priv(filterAfter)
+	set Priv(filterAfter) {}
+	trace remove variable Priv(filter) write [namespace code _filterChanged]
 	if {[winfo exists $Priv(dialog)]} { destroy $Priv(dialog) }
 	set Priv(dialog) {}
 }

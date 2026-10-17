@@ -13,8 +13,8 @@
 //
 // Decoding is done by Windows itself (WMV/VC-1, H.264, AAC, MP3, ...), so
 // Chesswiz ships no codecs of its own (see docs/legal/PATENT_REVIEW.md). The
-// MFPlay player renders into the Tk window's HWND and reports its events
-// through window messages, which Tk's event loop already pumps.
+// MFPlay (paths) and Media Engine (URLs/HLS) render into the Tk HWND. MFPlay reports events
+// through window messages; Media Engine state is read by Tcl property polls.
 // ======================================================================
 
 #include <windows.h>
@@ -24,13 +24,42 @@
 
 #include <mfapi.h>
 #include <mfplay.h>
+#include <mfmediaengine.h>
+#include <oleauto.h>
+#include "media_url.h"
 #include <propvarutil.h>
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 namespace {
 
+// Notifications run on MF threads. Playback state is read through the engine
+// on Tk's polling thread; the callback never touches Tcl or shared player state.
+class EngineNotify final : public IMFMediaEngineNotify
+{
+    long refs;
+public:
+    EngineNotify() : refs(1) {}
+    STDMETHODIMP QueryInterface(REFIID id, void** out) {
+        if (!out) return E_POINTER;
+        *out = 0;
+        if (id != __uuidof(IUnknown) && id != __uuidof(IMFMediaEngineNotify))
+            return E_NOINTERFACE;
+        *out = static_cast<IMFMediaEngineNotify*>(this); AddRef(); return S_OK;
+    }
+    STDMETHODIMP_(ULONG) AddRef() { return InterlockedIncrement(&refs); }
+    STDMETHODIMP_(ULONG) Release() {
+        ULONG n = InterlockedDecrement(&refs); if (!n) delete this; return n;
+    }
+    STDMETHODIMP EventNotify(DWORD event, DWORD_PTR param1, DWORD) {
+        if (event == MF_MEDIA_ENGINE_EVENT_NOTIFYSTABLESTATE)
+            SetEvent(reinterpret_cast<HANDLE>(param1));
+        return S_OK;
+    }
+};
+IMFMediaEngine* Engine = 0;
 class Callback;
 
 IMFPMediaPlayer*	Player = 0;
@@ -41,7 +70,13 @@ double				StartSec = 0.0;
 bool					Started = false;	// MFStartup has been called
 bool					Paused = false;	// paused on request (not merely buffering)
 bool					Ended = false;
-bool					LoadError = false;
+bool                    LoadError = false;
+char ErrorText[96] = "";
+
+void recordError(HRESULT hr)
+{
+    sprintf(ErrorText, "Media Foundation error 0x%08lx.", static_cast<unsigned long>(hr));
+}
 
 
 class Callback final : public IMFPMediaPlayerCallback
@@ -83,6 +118,7 @@ public:
 				|| ev->eEventType == MFP_EVENT_TYPE_ERROR)
 			{
 				LoadError = true;
+                recordError(ev->hrEvent);
 			}
 			return;
 		}
@@ -132,6 +168,9 @@ private:
 void
 closePlayer()
 {
+    if (Engine) {
+        Engine->Shutdown(); Engine->Release(); Engine = 0;
+    }
 	if (Player)
 	{
 		Player->Shutdown();
@@ -144,6 +183,7 @@ closePlayer()
 		Events = 0;
 	}
 	Window = 0;
+    ErrorText[0] = 0;
 	Paused = Ended = LoadError = false;
 	StartSec = 0.0;
 	SetRectEmpty(&LastRect);
@@ -155,8 +195,14 @@ closePlayer()
 void
 followWindowSize()
 {
-	RECT r;
-	if (Player && Window && GetClientRect(Window, &r) && !EqualRect(&r, &LastRect))
+    RECT r;
+    if (Engine && Window && GetClientRect(Window, &r)) {
+        IMFMediaEngineEx* ex = 0;
+        if (SUCCEEDED(Engine->QueryInterface(__uuidof(IMFMediaEngineEx), reinterpret_cast<void**>(&ex)))) {
+            ex->UpdateVideoStream(0, &r, 0); ex->Release();
+        }
+    }
+    if (Player && Window && GetClientRect(Window, &r) && !EqualRect(&r, &LastRect))
 	{
 		LastRect = r;
 		Player->UpdateVideo();
@@ -178,6 +224,77 @@ seconds(REFGUID type, bool duration)
 		result = double(v.uhVal.QuadPart)/1e7;
 	PropVariantClear(&v);
 	return result;
+}
+
+
+HRESULT openUrl(WCHAR const* url)
+{
+    IMFMediaEngineClassFactory* factory = 0;
+    IMFAttributes* attrs = 0;
+    EngineNotify* notify = new EngineNotify;
+    HRESULT hr = CoCreateInstance(CLSID_MFMediaEngineClassFactory, 0,
+        CLSCTX_INPROC_SERVER, __uuidof(IMFMediaEngineClassFactory),
+        reinterpret_cast<void**>(&factory));
+    if (SUCCEEDED(hr)) hr = MFCreateAttributes(&attrs, 2);
+    if (SUCCEEDED(hr)) hr = attrs->SetUnknown(MF_MEDIA_ENGINE_CALLBACK, notify);
+    if (SUCCEEDED(hr)) hr = attrs->SetUINT64(MF_MEDIA_ENGINE_PLAYBACK_HWND,
+        static_cast<UINT64>(reinterpret_cast<UINT_PTR>(Window)));
+    if (SUCCEEDED(hr)) hr = factory->CreateInstance(0, attrs, &Engine);
+    if (attrs) attrs->Release();
+    if (factory) factory->Release();
+    notify->Release();
+    if (SUCCEEDED(hr)) {
+        BSTR source = SysAllocString(url);
+        hr = source ? Engine->SetSource(source) : E_OUTOFMEMORY;
+        SysFreeString(source);
+        // Start after metadata is available, so startsec can be applied first.
+        if (SUCCEEDED(hr)) hr = Engine->Load();
+    }
+    return hr;
+}
+
+void pollEngine()
+{
+    if (Engine->GetReadyState() >= MF_MEDIA_ENGINE_READY_HAVE_METADATA && StartSec >= 0) {
+        if (StartSec > 0) Engine->SetCurrentTime(StartSec);
+        StartSec = -1;
+        if (!Paused) Engine->Play();
+    }
+    followWindowSize();
+}
+
+int getEngine(Tcl_Interp* ti, char const* name)
+{
+    pollEngine();
+    IMFMediaError* error = 0;
+    Engine->GetError(&error);
+    bool failed = error && error->GetErrorCode() != 0;
+    if (strcmp(name, "time-pos") == 0 || strcmp(name, "duration") == 0) {
+        double value = name[0] == 'd' ? Engine->GetDuration() : Engine->GetCurrentTime();
+        // NaN and infinite duration mean unknown/live.
+        if (value >= 0 && value < 1e15) Tcl_SetObjResult(ti, Tcl_NewDoubleObj(value));
+    } else if (strcmp(name, "volume") == 0) {
+        Tcl_SetObjResult(ti, Tcl_NewDoubleObj(Engine->GetVolume()*100));
+    } else if (strcmp(name, "error-text") == 0) {
+        if (failed) {
+            char text[96];
+            sprintf(text, "Media Foundation error %u (HRESULT 0x%08lx).",
+                unsigned(error->GetErrorCode()), static_cast<unsigned long>(error->GetExtendedErrorCode()));
+            Tcl_SetObjResult(ti, Tcl_NewStringObj(text, -1));
+        }
+    } else {
+        bool value = false;
+        if (strcmp(name, "load-error") == 0) value = failed;
+        else if (strcmp(name, "pause") == 0) value = Paused;
+        else if (strcmp(name, "eof-reached") == 0) value = Engine->IsEnded();
+        else if (strcmp(name, "core-idle") == 0)
+            value = Engine->IsPaused() || Engine->IsEnded()
+                || Engine->GetReadyState() < MF_MEDIA_ENGINE_READY_HAVE_FUTURE_DATA;
+        else { if (error) error->Release(); return TCL_OK; }
+        Tcl_SetObjResult(ti, Tcl_NewStringObj(value ? "yes" : "no", -1));
+    }
+    if (error) error->Release();
+    return TCL_OK;
 }
 
 
@@ -204,14 +321,17 @@ cmdOpen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	{
 		// Tk may already have initialised COM for its own use (drag and drop).
 		HRESULT hr = CoInitializeEx(0, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-		if (FAILED(hr) && hr != RPC_E_CHANGED_MODE)
-		{
+        if (FAILED(hr) && hr != RPC_E_CHANGED_MODE)
+        {
+            recordError(hr);
 			Tcl_SetObjResult(ti, Tcl_NewIntObj(0));
 			return TCL_OK;
 		}
-		if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_FULL)))
-		{
-			Tcl_SetObjResult(ti, Tcl_NewIntObj(0));
+        hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
+        if (FAILED(hr))
+        {
+            recordError(hr);
+            Tcl_SetObjResult(ti, Tcl_NewIntObj(0));
 			return TCL_OK;
 		}
 		Started = true;
@@ -219,7 +339,7 @@ cmdOpen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	// [winfo id] on Windows is the HWND of the Tk window.
 	Window = reinterpret_cast<HWND>(static_cast<INT_PTR>(wid));
-	StartSec = start;
+	StartSec = start > 0.0 ? start : 0.0;
 
 	int len = 0;
 	char const* path = Tcl_GetStringFromObj(objv[2], &len);
@@ -228,17 +348,22 @@ cmdOpen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	Tcl_WinUtfToTChar(path, len, &ds);
 	WCHAR const* wpath = reinterpret_cast<WCHAR const*>(Tcl_DStringValue(&ds));
 
-	Events = new Callback;
-	HRESULT hr = MFPCreateMediaPlayer(0, FALSE, 0, Events, Window, &Player);
-	if (SUCCEEDED(hr))
-		hr = Player->CreateMediaItemFromURL(wpath, FALSE, 0, 0);	// asynchronous: see MEDIAITEM_CREATED
+	HRESULT hr;
+    if (mediaHasUrlScheme(path)) {
+        hr = openUrl(wpath);
+    } else {
+        Events = new Callback;
+        hr = MFPCreateMediaPlayer(0, FALSE, 0, Events, Window, &Player);
+        if (SUCCEEDED(hr)) hr = Player->CreateMediaItemFromURL(wpath, FALSE, 0, 0);
+    } // asynchronous: MFPlay events or Media Engine state polling
 
 	Tcl_DStringFree(&ds);
 
 	if (FAILED(hr))
 	{
-		closePlayer();
-		Tcl_SetObjResult(ti, Tcl_NewIntObj(0));
+        closePlayer();
+        recordError(hr);
+        Tcl_SetObjResult(ti, Tcl_NewIntObj(0));
 		return TCL_OK;
 	}
 
@@ -256,8 +381,13 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		return TCL_ERROR;
 	}
 
-	if (!Player)
-		return TCL_OK;	// the empty result: no player
+    if (strcmp(Tcl_GetString(objv[1]), "error-text") == 0 && ErrorText[0]) {
+        Tcl_SetObjResult(ti, Tcl_NewStringObj(ErrorText, -1));
+        return TCL_OK;
+    }
+    if (Engine) return getEngine(ti, Tcl_GetString(objv[1]));
+    if (!Player)
+        return TCL_OK;	// the empty result: no player
 
 	followWindowSize();
 
@@ -310,9 +440,21 @@ cmdSet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	bool ok = false;
 
-	if (Player)
-	{
-		char const* name = Tcl_GetString(objv[1]);
+    if (Engine) {
+        char const* name = Tcl_GetString(objv[1]);
+        char const* value = Tcl_GetString(objv[2]);
+        if (strcmp(name, "pause") == 0) {
+            bool pause = strcmp(value, "yes") == 0;
+            ok = SUCCEEDED(pause ? Engine->Pause() : Engine->Play());
+            if (ok) Paused = pause;
+        } else if (strcmp(name, "time-pos") == 0)
+            ok = SUCCEEDED(Engine->SetCurrentTime(strtod(value, 0)));
+        else if (strcmp(name, "volume") == 0)
+            ok = SUCCEEDED(Engine->SetVolume(strtod(value, 0)/100.0));
+    }
+    else if (Player)
+    {
+        char const* name = Tcl_GetString(objv[1]);
 		char const* value = Tcl_GetString(objv[2]);
 
 		if (strcmp(name, "pause") == 0)

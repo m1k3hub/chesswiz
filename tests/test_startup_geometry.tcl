@@ -1,0 +1,124 @@
+# Headless regression tests: tclsh tests/test_startup_geometry.tcl
+package require tcltest
+# place.tcl wraps winfo at source time; no Tk/display is needed by clampGeometry.
+proc winfo {args} { error "unexpected Tk call: $args" }
+source [file join [file dirname [info script]] .. tcl utils place.tcl]
+foreach {name input expected} {
+    laptop 1898x964+849+382 1898x964+22+68
+    old-screen-2560x1440 2500x1380+30+40 1920x1032+0+0
+    negative 800x600+-200+-100 800x600+0+0
+    fits 800x600+100+150 800x600+100+150
+    far-edge 800x600-10-20 800x600+1110+412
+} {
+    tcltest::test geometry-$name {clamp to 1920x1032 work area} -body {
+        ::util::place::clampGeometry $input {0 0 1920 1032}
+    } -result $expected
+}
+tcltest::test geometry-frame {frame and taskbar both fit} -body {
+    ::util::place::clampGeometry 1898x1060+849+382 {0 0 1920 1032} {8 8 31 8}
+} -result 1898x993+6+0
+tcltest::test geometry-monitor {negative monitor origin is an absolute Tk offset} -body {
+    ::util::place::clampGeometry 800x600+-1800+50 {-1920 0 1920 1032}
+} -result 800x600+-1800+50
+
+# Load the real layout callback without loading the rest of the application.
+proc loadProc {file name ns} {
+    set f [open $file]; set source [read $f]; close $f
+    set start [string first "proc $name " $source]
+    set body ""
+    foreach line [split [string range $source $start end] \n] {
+        append body $line \n
+        if {[info complete $body]} { break }
+    }
+    namespace eval $ns $body
+}
+set root [file join [file dirname [info script]] ..]
+namespace eval ::application { variable Vars; array set Vars {fullscreen 0 need:maxsize 0 ready 1} }
+namespace eval ::application::twm {}
+namespace eval ::theme {
+    proc notebookBorderwidth {} { return 0 }
+    proc notebookTabPaneSize {w} { return 0 }
+}
+namespace eval ::widget { proc checkIsKDE {} { return 0 } }
+namespace eval ::menu { proc fullscreen? {} { return 0 } }
+loadProc [file join $root tcl app-twm.tcl] geometry ::application::twm
+loadProc [file join $root tcl application.tcl] RememberWindowGeometry ::application
+loadProc [file join $root tcl application.tcl] RestoreWindowGeometry ::application
+# Mock only the Tk boundary, retaining the actual callback and fitWindow.
+rename ::winfo ::wrapped_winfo
+proc ::winfo {cmd w} {
+    switch $cmd {
+        workarea { return {0 0 1920 1032} }
+        extents { return {8 8 31 8} }
+        default { error "unexpected winfo $cmd" }
+    }
+}
+proc wm {cmd w args} {
+    switch $cmd {
+        geometry {
+            if {[llength $args]} { set ::geom [lindex $args 0] }
+            return $::geom
+        }
+        state {
+            if {[llength $args]} { set ::state [lindex $args 0] }
+            return $::state
+        }
+        deiconify { set ::state normal }
+        minsize { return {300 300} }
+        default { error "unexpected wm $cmd" }
+    }
+}
+tcltest::test geometry-layout-resize {late resize uses new size, not stale mapped dimensions} -body {
+    set ::state normal
+    set ::geom 200x200+849+382
+    ::application::twm::geometry {1898 964 0 0 0 0}
+    set ::geom
+} -result 1898x964+6+29
+tcltest::test geometry-layout-zoomed {layout updates preserve maximization} -body {
+    set ::state zoomed
+    set ::geom 1898x993+0+0
+    ::application::twm::geometry {800 600 0 0 0 0}
+    set ::geom
+} -result 1898x993+0+0
+tcltest::test geometry-save-state {zoomed and iconified keep the normal restore geometry} -body {
+    set ::state normal
+    set ::geom 800x600+100+150
+    ::application::RememberWindowGeometry .application
+    set ::state zoomed
+    set ::geom 1904x993+0+0
+    ::application::RememberWindowGeometry .application
+    set ::state iconic
+    ::application::RememberWindowGeometry .application
+    list $::application::Options(window:geometry) $::application::Options(window:state)
+} -result {800x600+100+150 zoomed}
+proc tk {cmd} { return win32 }
+tcltest::test geometry-restore {saved oversized geometry is fitted before opening zoomed} -body {
+    set ::application::Options(window:geometry) 2500x1380+849+382
+    set ::application::Options(window:state) zoomed
+    set ::state withdrawn
+    ::application::RestoreWindowGeometry .application
+    list $::geom $::state
+} -result {1904x993+0+0 zoomed}
+tcltest::test geometry-restore-normal {a fitting saved geometry stays unchanged} -body {
+    set ::application::Options(window:geometry) 800x600+100+150
+    set ::application::Options(window:state) normal
+    ::application::RestoreWindowGeometry .application
+    list $::geom $::state
+} -result {800x600+100+150 normal}
+tcltest::test geometry-fresh-start {a fresh user's computed placement is clamped too} -setup {
+    rename ::util::place ::util::originalPlace
+    proc ::util::place {path args} {
+        set ::geom 1898x964+849+382
+    }
+} -body {
+    set ::application::Options(window:geometry) {}
+    set ::application::Options(window:state) normal
+    ::application::RestoreWindowGeometry .application
+    list $::geom $::state
+} -cleanup {
+    rename ::util::place {}
+    rename ::util::originalPlace ::util::place
+} -result {1898x964+6+29 normal}
+set failed $::tcltest::numTests(Failed)
+tcltest::cleanupTests
+if {$failed} { exit 1 }

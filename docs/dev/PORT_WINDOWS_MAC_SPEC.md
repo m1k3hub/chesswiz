@@ -88,6 +88,12 @@ Found: `exec nproc` (ai-engine.tcl:137), `exec kill` (ai-modelfit.tcl:107, app-v
   - `mf` (Windows): `src/tcl/tcl_media_mf.cpp`, Media Foundation MFPlay rendering into the Tk window's HWND; links `-lmfplay -lmfplat -lole32 -luser32`. Windows decodes WMV/VC-1, H.264, AAC and MP3 itself; HEVC needs Microsoft's HEVC extension. Compiles cleanly with `zig cc -target x86_64-windows-gnu -Wall -Wextra`, and every MF import resolves against Zig's MinGW import libraries. Not yet run on Windows.
   - `avf` (macOS): `src/tcl/tcl_media_avf.mm`, AVPlayer with an AVPlayerLayer placed over the Tk window inside the toplevel's NSView; links the AVFoundation, CoreMedia, QuartzCore and AppKit frameworks. **Not compiled yet** (needs the macOS SDK). macOS has **no WMV/ASF decoder**, and those are the most common ChessBase lesson format: they report a load error, and the pane says to use "Open externally" (e.g. VLC). Revisit if WMV9/VC-1 patents are confirmed expired: a restricted FFmpeg with only the WMV decoders could then be added for macOS.
 
+**Confirmed 2026-10-17:** Windows uses `MEDIA_BACKEND=mf` and macOS uses
+`MEDIA_BACKEND=avf`; never bundle libmpv, FFmpeg or libVLC. Windows uses
+Media Engine for links (including HLS), and macOS uses AVPlayer URL sources.
+YouTube/Twitch links and links the OS backend cannot play open in an installed
+VLC first, otherwise the default browser/OS handler.
+
 ### D9. Credentials — **OS keychain**
 - API keys currently live in `user/config/ai-keys` (plain file). On Win/Mac use Credential Manager / Keychain (via a tiny C shim), file fallback on Linux (or libsecret).
 
