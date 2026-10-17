@@ -172,6 +172,7 @@ SOURCES = \
 	app-tree-games.tcl \
 	app-variation.tcl \
 	app-analysis.tcl \
+	play-engine.tcl \
 	ai-claims.tcl \
 	ai-rhetoric.tcl \
 	ai-annotate.tcl \

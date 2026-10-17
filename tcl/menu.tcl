@@ -101,6 +101,7 @@ set AIEventTypes			"AI: Time &Controls"
 set AIDatabaseTrend			"AI: Database &Trends"
 set DownloadGames				"Download &Games from the Internet..."
 set GuessTheMove				"Guess the &Move..."
+set PlayAgainstEngine			"Play Against &Engine..."
 
 # Tools
 set OpenEngineDictionary		"Open &Engine Dictionary"
@@ -648,6 +649,18 @@ proc build {menu} {
 			-underline [IncrUL $ul] \
 			-image $::icon::16x16::databaseImport \
 			-command [list ::application::download::openActive .application] \
+			;
+	}
+
+	### play a training game against an engine ##############################
+	if {[llength [info commands ::playengine::open]]} {
+		lassign [::tk::UnderlineAmpersand $mc::PlayAgainstEngine] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::engine \
+			-command [list ::playengine::open .application] \
 			;
 	}
 
