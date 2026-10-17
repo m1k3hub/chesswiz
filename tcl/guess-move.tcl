@@ -25,20 +25,27 @@
 #   1. guess_hint     (choice) -- conceptual coaching cue when Hint is pressed,
 #                                 from position and move-delta facts without
 #                                 naming the target move or square.
-#   2. guess_feedback (choice) -- why a wrong guess differed from the game move
-#                                 (close_alternative, missed_tactic,
-#                                 blundered_material, missed_development,
-#                                 missed_king_safety).
+#   2. guess_feedback (choice) -- engine-first explanation theme when a guess
+#                                 differs from the game move: ::ai::engine::evaluate
+#                                 evaluates both resulting positions and
+#                                 deterministically decides the verdict from
+#                                 win-probability loss (close_alternative <= 3,
+#                                 slightly_worse 3..15, worse >= 15); Jev only
+#                                 chooses the wording/theme (tactics, material,
+#                                 king_safety, development, structure) among
+#                                 themes consistent with the engine's verdict
+#                                 and C++/engine facts.
 #   3. guess_review   (score)  -- end-of-round assessment over ordered levels
 #                                 {needs_study steady sharp master_like} from
 #                                 accuracy, hints/reveals, phase split and miss
 #                                 verdicts.
 #
-# Firewall: whether a guess matches the game move, the score, and the board's
-# from-square highlight are hard facts that a model never overrides. When the
-# classifier is off, unreachable, abstains or is below threshold, deterministic
-# rules over ::scidb::ai::facts / ::scidb::ai::moveFacts run and the UI behaves
-# identically to before.
+# Firewall: whether a guess matches the game move, the score, the engine's
+# close_alternative / slightly_worse / worse verdict, and the board's
+# from-square highlight are hard facts that a model never overrides. When no
+# engine is available, or when the classifier is off, unreachable, abstains or
+# is below threshold, deterministic rules run and the UI behaves identically
+# to before.
 #
 # tests/test_app_guess_move.tcl drives a round with stubbed guesses.
 # ======================================================================
@@ -74,11 +81,28 @@ set HintNotes [dict create \
 ]
 
 set FeedbackNotes [dict create \
-	close_alternative	"%s is a playable alternative; the game chose %s." \
-	missed_tactic		"%s missed a tactical idea in the game move (%s)." \
-	blundered_material	"%s loses material or leaves a piece loose (game: %s)." \
-	missed_development	"%s delays development compared with %s." \
-	missed_king_safety	"%s neglects king safety compared with %s." \
+	close_alternative [dict create \
+		development	"%s is about as good as %s (a close developing alternative)." \
+		king_safety	"%s is about as good as %s (a close alternative for king safety)." \
+		structure	"%s is about as good as %s (a close positional alternative)." \
+		default		"%s is about as good as the game move %s." \
+	] \
+	slightly_worse [dict create \
+		tactics		"%s is slightly worse than %s and overlooks a tactical idea." \
+		material	"%s is slightly worse than %s and concedes material." \
+		king_safety	"%s is slightly worse than %s for king safety." \
+		development	"%s is slightly worse than %s, delaying development." \
+		structure	"%s is slightly worse than %s for the centre or pawn structure." \
+		default		"%s is slightly worse than the game move %s." \
+	] \
+	worse [dict create \
+		tactics		"%s is worse than %s and misses a tactical blow." \
+		material	"%s is worse than %s and loses material." \
+		king_safety	"%s is worse than %s, leaving the king exposed." \
+		development	"%s is worse than %s, falling behind in development." \
+		structure	"%s is worse than %s, weakening the position's structure." \
+		default		"%s is worse than the game move %s." \
+	] \
 ]
 
 set ReviewNotes [dict create \
@@ -96,6 +120,8 @@ variable HintTime 2000
 variable HintThreshold 0.6
 variable FeedbackThreshold 0.6
 variable ReviewThreshold 0.6
+variable FeedbackDepth 10
+variable FeedbackEngineTimeout 2500
 
 variable HintCriteria [dict create \
 	development	"develop a minor piece from its starting square or connect the rooks" \
@@ -107,11 +133,11 @@ variable HintCriteria [dict create \
 ]
 
 variable FeedbackCriteria [dict create \
-	close_alternative	"the guessed move is a sound positional or developing alternative that does not lose material or miss a tactical blow" \
-	missed_tactic		"the game move executes or refutes a concrete tactical blow (check, mate, winning capture, fork, pin, discovered attack, removing a defender) that the guess missed" \
-	blundered_material	"the guessed move loses material in an exchange or leaves a piece or pawn undefended or en prise" \
-	missed_development	"in the opening, the game move develops a minor piece or connects rooks while the guess delays development" \
-	missed_king_safety	"the game move castles or addresses king safety while the guess leaves the king exposed" \
+	tactics		"the engine's PV and evaluation swing show a tactical refutation or missed tactical blow (check, mate, fork, pin, discovered attack, removing a defender)" \
+	material	"the C++ exchange facts (seeCp/losesMaterial) and engine evaluation show the guess loses material or misses winning material" \
+	king_safety	"the game move castles, shelters the king, or handles king safety better than the guess" \
+	development	"the game move develops a piece or activates pieces more effectively than the guess" \
+	structure	"the game move fights for the centre, open files, or better pawn structure compared with the guess" \
 ]
 
 variable ReviewLevels {needs_study steady sharp master_like}
@@ -131,6 +157,10 @@ array set Priv {
 	history			{}
 	hintKind		{}
 	hintSource		{}
+	verdict			{}
+	feedbackVerdict	{}
+	feedbackLoss	{}
+	feedbackTheme	{}
 	feedback		{}
 	feedbackSource	{}
 	review			{}
@@ -183,6 +213,10 @@ proc ::guessmove::start {{side auto}} {
 		history			{} \
 		hintKind		{} \
 		hintSource		{} \
+		verdict			{} \
+		feedbackVerdict	{} \
+		feedbackLoss	{} \
+		feedbackTheme	{} \
 		feedback		{} \
 		feedbackSource	{} \
 		review			{} \
@@ -202,6 +236,8 @@ proc ::guessmove::stop {} {
 	variable Priv
 	variable active
 
+	incr Priv(hintSeq)
+	incr Priv(feedbackSeq)
 	if {$active} {
 		Finish
 	} elseif {[winfo exists $Priv(dialog)]} {
@@ -235,30 +271,46 @@ proc ::guessmove::guessed {san} {
 	if {$san eq $move} {
 		incr Priv(score)
 		set Priv(last) $mc::Correct
+		set Priv(verdict) exact
+		set Priv(feedbackVerdict) exact
+		set Priv(feedbackLoss) 0.0
+		set Priv(feedbackTheme) correct
 		set Priv(feedback) correct
 		set Priv(feedbackSource) rules
 		lappend Priv(history) [dict create \
 			ply $Priv(total) phase $phase guess $san move $move \
-			outcome correct hint $hinted feedback correct]
+			outcome correct hint $hinted verdict exact feedback correct]
 		::application::board::goto +1
 		Advance
 	} else {
 		set Priv(last) [format $mc::NotTheGameMove $move]
 		set ruleFb [feedbackRule $fen $san $move]
+		set Priv(verdict) {}
+		set Priv(feedbackVerdict) {}
+		set Priv(feedbackLoss) {}
+		set Priv(feedbackTheme) $ruleFb
 		set Priv(feedback) $ruleFb
 		set Priv(feedbackSource) rules
 		lappend Priv(history) [dict create \
 			ply $Priv(total) phase $phase guess $san move $move \
-			outcome miss hint $hinted feedback $ruleFb]
+			outcome miss hint $hinted verdict {} feedback $ruleFb]
 		set idx [expr {[llength $Priv(history)] - 1}]
 		incr Priv(feedbackSeq)
 		set fseq $Priv(feedbackSeq)
 		::application::board::goto +1
 		Advance
-		decideFeedback $fen $san $move \
-			[namespace code [list OnFeedbackDecided $fseq $tseq $idx $san $move]]
+		after 0 [namespace code [list GuardedDecideFeedback $fseq $tseq $idx $fen $san $move]]
 	}
 	return ""
+}
+
+
+proc ::guessmove::GuardedDecideFeedback {fseq tseq idx fen guessSan gameSan} {
+	variable Priv
+
+	if {$fseq != $Priv(feedbackSeq)} { return }
+	decideFeedback $fen $guessSan $gameSan \
+		[namespace code [list OnFeedbackDecided $fseq $tseq $idx $guessSan $gameSan]]
 }
 
 
@@ -350,11 +402,36 @@ proc ::guessmove::HintQuestion {} {
 }
 
 
-proc ::guessmove::FeedbackQuestion {} {
+# Build the guess_feedback question restricted to the themes consistent with
+# the engine's verdict and facts.
+proc ::guessmove::FeedbackQuestion {{verdict worse} {themes ""}} {
 	variable FeedbackCriteria
-	return [dict create type choice \
-		instructions "The player guessed a different move than the game move in this chess position. From the position and move facts for both moves, why did the guess differ from the game move?" \
-		criteria $FeedbackCriteria]
+
+	if {$themes eq ""} {
+		if {$verdict eq "close_alternative"} {
+			set themes {development king_safety structure}
+		} else {
+			set themes {tactics material king_safety development structure}
+		}
+	}
+	set crit [dict create]
+	foreach t $themes {
+		if {[dict exists $FeedbackCriteria $t]} {
+			dict set crit $t [dict get $FeedbackCriteria $t]
+		}
+	}
+	switch -- $verdict {
+		close_alternative {
+			set instr "The chess engine evaluated the guessed move as a close_alternative (about as good as the game move). Without calling the guess a mistake, which positional theme best explains how the game move's plan differs from the guess?"
+		}
+		slightly_worse {
+			set instr "The chess engine evaluated the guessed move as slightly_worse than the game move. Which theme consistent with the engine's verdict best explains why the game move is slightly better?"
+		}
+		default {
+			set instr "The chess engine evaluated the guessed move as worse than the game move. Which theme consistent with the engine's verdict best explains why the guess is worse than the game move?"
+		}
+	}
+	return [dict create type choice instructions $instr criteria $crit]
 }
 
 
@@ -372,16 +449,209 @@ proc ::guessmove::describeHint {label} {
 }
 
 
-proc ::guessmove::describeFeedback {label guessSan gameSan} {
+# Format the coaching explanation from the engine's verdict (close_alternative,
+# slightly_worse, worse) and the chosen theme (tactics, material, king_safety,
+# development, structure). Accepts either:
+#   describeFeedback <verdict> <theme> <guessSan> <gameSan>
+#   describeFeedback <verdictOrTheme> <guessSan> <gameSan>
+proc ::guessmove::describeFeedback {verdict args} {
 	variable mc
-	if {![dict exists $mc::FeedbackNotes $label]} { return "" }
-	return [format [dict get $mc::FeedbackNotes $label] $guessSan $gameSan]
+
+	if {[llength $args] == 2} {
+		lassign $args guessSan gameSan
+		set theme default
+		if {[string first : $verdict] >= 0} {
+			lassign [split $verdict :] verdict theme
+		} elseif {![dict exists $mc::FeedbackNotes $verdict]} {
+			set theme $verdict
+			set verdict worse
+		}
+	} elseif {[llength $args] == 3} {
+		lassign $args theme guessSan gameSan
+	} else {
+		error "usage: ::guessmove::describeFeedback verdict ?theme? guessSan gameSan"
+	}
+	if {![dict exists $mc::FeedbackNotes $verdict]} { return "" }
+	set byTheme [dict get $mc::FeedbackNotes $verdict]
+	if {[dict exists $byTheme $theme]} {
+		set fmt [dict get $byTheme $theme]
+	} elseif {[dict exists $byTheme default]} {
+		set fmt [dict get $byTheme default]
+	} else {
+		return ""
+	}
+	return [format $fmt $guessSan $gameSan]
 }
 
 
 proc ::guessmove::describeReview {label} {
 	variable mc
 	return [expr {[dict exists $mc::ReviewNotes $label] ? [dict get $mc::ReviewNotes $label] : ""}]
+}
+
+
+# Lichess win-probability in [0,100] from centipawns (or #N mate marker)
+# from the mover's perspective. Delegates to ::gamereview::wp when loaded.
+proc ::guessmove::wp {score} {
+	if {[llength [info commands ::gamereview::wp]]} {
+		return [::gamereview::wp $score]
+	}
+	if {[string match "#*" $score]} {
+		set n [string range $score 1 end]
+		if {![string is integer -strict $n]} { return 50.0 }
+		return [expr {$n > 0 ? 100.0 : 0.0}]
+	}
+	if {![string is double -strict $score]} { return 50.0 }
+	set cp [expr {double($score)}]
+	if {$cp >= 9900} { return 100.0 }
+	if {$cp <= -9900} { return 0.0 }
+	return [expr {50.0 + 50.0 * (2.0 / (1.0 + exp(-0.00368208 * $cp)) - 1.0)}]
+}
+
+
+# Win-probability loss of the guess (<guessCp>) against the game move (<gameCp>),
+# both from the mover's perspective. Never negative.
+proc ::guessmove::wpLoss {gameCp guessCp} {
+	set l [expr {[wp $gameCp] - [wp $guessCp]}]
+	if {$l < 0.0} { set l 0.0 }
+	return $l
+}
+
+
+# Deterministic engine verdict from win-probability loss:
+#   loss <= 3  -> close_alternative
+#   loss >= 15 -> worse
+#   between    -> slightly_worse
+proc ::guessmove::engineVerdict {loss} {
+	if {$loss <= 3.0} { return close_alternative }
+	if {$loss >= 15.0} { return worse }
+	return slightly_worse
+}
+
+
+# Extract mover-perspective centipawns from an ::ai::engine::evaluate dict
+# on a resulting position (where the opponent is side to move).
+proc ::guessmove::EvalMoverCp {evalDict {isMate 0}} {
+	if {[dict exists $evalDict cpl]} {
+		set cp [expr {-[dict get $evalDict cpl]}]
+	} elseif {[dict exists $evalDict kind] && [dict exists $evalDict value]} {
+		if {[dict get $evalDict kind] eq "mate"} {
+			set v [dict get $evalDict value]
+			set oppCp [expr {$v > 0 ? 10000 - 10 * $v : -10000 - 10 * $v}]
+			set cp [expr {-$oppCp}]
+		} else {
+			set cp [expr {-[dict get $evalDict value]}]
+		}
+	} elseif {[dict exists $evalDict score]} {
+		set cp [expr {-[dict get $evalDict score]}]
+	} else {
+		set cp 0
+	}
+	if {$isMate && $cp < 9900} { set cp 10000 }
+	return $cp
+}
+
+
+# Evaluate the resulting positions of <guessSan> and <gameSan> from <fen>
+# with ::ai::engine::evaluate, compute the win-probability loss and the
+# deterministic engine verdict, and filter the candidate themes consistent
+# with the verdict, C++ material facts, and engine PV/eval swing.
+proc ::guessmove::evaluateFeedback {fen guessSan gameSan} {
+	variable FeedbackDepth
+	variable FeedbackEngineTimeout
+
+	if {[llength [info commands ::ai::engine::evaluate]] == 0} {
+		return [dict create ok 0]
+	}
+	set pf [PosFacts $fen]
+	set gmf [MoveFacts $fen $guessSan]
+	set tmf [MoveFacts $fen $gameSan]
+	set guessFen [Fact $gmf fenAfter]
+	set gameFen  [Fact $tmf fenAfter]
+	if {$guessFen eq "" || $gameFen eq ""} {
+		return [dict create ok 0]
+	}
+	if {[catch {
+		set guessEval [::ai::engine::evaluate $guessFen -depth $FeedbackDepth -timeout $FeedbackEngineTimeout]
+		set gameEval  [::ai::engine::evaluate $gameFen  -depth $FeedbackDepth -timeout $FeedbackEngineTimeout]
+	}]} {
+		return [dict create ok 0]
+	}
+
+	set side [expr {[Fact $pf sideToMove] ne "" ? [Fact $pf sideToMove] : "white"}]
+	set opp  [expr {$side eq "white" ? "black" : "white"}]
+
+	set guessCp [EvalMoverCp $guessEval [Bool [Fact $gmf mate]]]
+	set gameCp  [EvalMoverCp $gameEval  [Bool [Fact $tmf mate]]]
+	set loss    [wpLoss $gameCp $guessCp]
+	set cpLoss  [expr {$gameCp - $guessCp}]
+	if {$cpLoss < 0} { set cpLoss 0 }
+	set verdict [engineVerdict $loss]
+
+	set guessPv [expr {[dict exists $guessEval pv] ? [dict get $guessEval pv] : {}}]
+	set gamePv  [expr {[dict exists $gameEval pv]  ? [dict get $gameEval pv]  : {}}]
+
+	set gSee [Fact $gmf seeCp]
+	set gMatDelta [expr {[Fact $gmf materialChangeCp] ne "" ? [Fact $gmf materialChangeCp] : 0}]
+	set gLoses [expr {
+		[Bool [Fact $gmf losesMaterial]]
+		|| ($gSee ne "" && $gSee ne "null" && $gSee < 0)
+		|| $gMatDelta < 0
+		|| [llength [Fact $gmf newEnPrise $side]] > 0
+	}]
+	set tSee [Fact $tmf seeCp]
+	set tMatDelta [expr {[Fact $tmf materialChangeCp] ne "" ? [Fact $tmf materialChangeCp] : 0}]
+	set tWins [expr {
+		[Bool [Fact $tmf capture]] && ![Bool [Fact $tmf mate]] && ![Bool [Fact $tmf losesMaterial]]
+		&& (($tSee ne "" && $tSee ne "null" && $tSee > 0) || $tMatDelta > 0)
+	}]
+	set cppMaterial [expr {$gLoses || ($tWins && ![Bool [Fact $gmf capture]])}]
+
+	set hasMate [expr {
+		[Bool [Fact $tmf mate]] || [Bool [Fact $gmf mate]]
+		|| abs($gameCp) >= 9900 || abs($guessCp) >= 9900
+		|| ([dict exists $gameEval kind]  && [dict get $gameEval kind]  eq "mate")
+		|| ([dict exists $guessEval kind] && [dict get $guessEval kind] eq "mate")
+	}]
+	set cppTactic [expr {
+		[Bool [Fact $tmf mate]] || [Bool [Fact $tmf check]]
+		|| [llength [Fact $tmf discoveredAttacks]] > 0
+		|| [llength [Fact $tmf removesDefender]] > 0
+		|| [llength [Fact $tmf newPins $opp]] > 0
+	}]
+
+	if {$verdict eq "close_alternative"} {
+		set materialFact 0
+		set tacticalFact 0
+		set themes {development king_safety structure}
+	} else {
+		set materialFact [expr {$cppMaterial || $cpLoss >= 100}]
+		set tacticalFact [expr {
+			$hasMate
+			|| $loss >= 15.0
+			|| (([llength $guessPv] >= 2 || [llength $gamePv] >= 2) && ($cpLoss >= 80 || $cppTactic))
+		}]
+		set themes {}
+		if {$tacticalFact} { lappend themes tactics }
+		if {$materialFact} { lappend themes material }
+		lappend themes king_safety development structure
+	}
+
+	return [dict create \
+		ok           1 \
+		verdict      $verdict \
+		loss         $loss \
+		cpLoss       $cpLoss \
+		guessCp      $guessCp \
+		gameCp       $gameCp \
+		guessPv      $guessPv \
+		gamePv       $gamePv \
+		cppMaterial  $cppMaterial \
+		materialFact $materialFact \
+		tacticalFact $tacticalFact \
+		hasMate      $hasMate \
+		themes       $themes \
+	]
 }
 
 
@@ -498,9 +768,9 @@ proc ::guessmove::MoveSummary {san mf side opp} {
 }
 
 
-# Compact state for guess_feedback: position facts plus side-by-side move
-# facts for the guessed move and the game move.
-proc ::guessmove::feedbackState {fen guessSan gameSan {comment ""}} {
+# Compact state for guess_feedback: position facts, engine verdict/evals/PVs,
+# and side-by-side move facts for the guessed move and the game move.
+proc ::guessmove::feedbackState {fen guessSan gameSan {engineFacts ""} {comment ""}} {
 	set pf [PosFacts $fen]
 	set gmf [MoveFacts $fen $guessSan]
 	set tmf [MoveFacts $fen $gameSan]
@@ -512,6 +782,18 @@ proc ::guessmove::feedbackState {fen guessSan gameSan {comment ""}} {
 
 	set out "fen=$fen\n"
 	append out "position: phase=$phase ply=$ply stm=$side inCheck=$inCheck\n"
+	if {[dict exists $engineFacts ok] && [dict get $engineFacts ok]} {
+		append out [format "engine: verdict=%s wpLoss=%.2f cpLoss=%d guessCp=%d gameCp=%d materialLoss=%d tacticalSwing=%d guessPv=%s gamePv=%s\n" \
+			[dict get $engineFacts verdict] \
+			[dict get $engineFacts loss] \
+			[dict get $engineFacts cpLoss] \
+			[dict get $engineFacts guessCp] \
+			[dict get $engineFacts gameCp] \
+			[dict get $engineFacts materialFact] \
+			[dict get $engineFacts tacticalFact] \
+			[join [dict get $engineFacts guessPv] ,] \
+			[join [dict get $engineFacts gamePv] ,]]
+	}
 	append out "guess: [MoveSummary $guessSan $gmf $side $opp]\n"
 	append out "game_move: [MoveSummary $gameSan $tmf $side $opp]"
 	if {[string trim $comment] ne ""} {
@@ -521,56 +803,124 @@ proc ::guessmove::feedbackState {fen guessSan gameSan {comment ""}} {
 }
 
 
-# Deterministic fallback for guess_feedback, comparing the two moves' facts.
-proc ::guessmove::feedbackRule {fen guessSan gameSan} {
+# Deterministic theme selection for guess_feedback, constrained by the
+# engine's verdict/facts when available and C++ facts otherwise.
+# Material is claimed only when C++ facts (seeCp/losesMaterial) and the
+# engine's eval show material loss; tactics only when the engine's PV/eval
+# swing shows them.
+proc ::guessmove::feedbackRule {fen guessSan gameSan {engineFacts ""}} {
 	set pf [PosFacts $fen]
 	set gmf [MoveFacts $fen $guessSan]
 	set tmf [MoveFacts $fen $gameSan]
 	set side [expr {[Fact $pf sideToMove] ne "" ? [Fact $pf sideToMove] : "white"}]
 	set opp [expr {$side eq "white" ? "black" : "white"}]
-	set phase [expr {[Fact $pf phase] ne "" ? [Fact $pf phase] : "middlegame"}]
 
-	set gMatDelta [expr {[Fact $gmf materialChangeCp] ne "" ? [Fact $gmf materialChangeCp] : 0}]
-	if {[Bool [Fact $gmf losesMaterial]]
-	 || $gMatDelta < 0
-	 || [llength [Fact $gmf newEnPrise $side]] > 0} {
-		return blundered_material
-	}
+	set hasEngine [expr {[dict exists $engineFacts ok] && [dict get $engineFacts ok]}]
+	set verdict   [expr {$hasEngine ? [dict get $engineFacts verdict] : ""}]
 
-	set tSee [Fact $tmf seeCp]
-	set tWinsMat [expr {[Bool [Fact $tmf capture]] && ![Bool [Fact $tmf losesMaterial]]
-		&& (($tSee ne "" && $tSee ne "null" && $tSee > 0)
-		    || ([Fact $tmf materialChangeCp] ne "" && [Fact $tmf materialChangeCp] > 0))}]
-	if {[Bool [Fact $tmf mate]] || [Bool [Fact $tmf check]]
-	 || [llength [Fact $tmf discoveredAttacks]] > 0
-	 || [llength [Fact $tmf removesDefender]] > 0
-	 || [llength [Fact $tmf newPins $opp]] > 0
-	 || ($tWinsMat && ![Bool [Fact $gmf capture]])} {
-		return missed_tactic
+	if {$verdict ne "close_alternative"} {
+		set gSee [Fact $gmf seeCp]
+		set gMatDelta [expr {[Fact $gmf materialChangeCp] ne "" ? [Fact $gmf materialChangeCp] : 0}]
+		set gLoses [expr {
+			[Bool [Fact $gmf losesMaterial]]
+			|| ($gSee ne "" && $gSee ne "null" && $gSee < 0)
+			|| $gMatDelta < 0
+			|| [llength [Fact $gmf newEnPrise $side]] > 0
+		}]
+		set tSee [Fact $tmf seeCp]
+		set tMatDelta [expr {[Fact $tmf materialChangeCp] ne "" ? [Fact $tmf materialChangeCp] : 0}]
+		set tWins [expr {
+			[Bool [Fact $tmf capture]] && ![Bool [Fact $tmf mate]] && ![Bool [Fact $tmf losesMaterial]]
+			&& (($tSee ne "" && $tSee ne "null" && $tSee > 0) || $tMatDelta > 0)
+		}]
+		set cppMaterial [expr {$gLoses || ($tWins && ![Bool [Fact $gmf capture]])}]
+
+		if {$hasEngine} {
+			if {[dict get $engineFacts hasMate]} {
+				return tactics
+			}
+			if {$cppMaterial && [dict get $engineFacts materialFact]} {
+				return material
+			}
+			if {[dict get $engineFacts tacticalFact]
+			 && ([llength [dict get $engineFacts guessPv]] >= 2
+			     || [llength [dict get $engineFacts gamePv]] >= 2
+			     || [Bool [Fact $tmf check]]
+			     || [llength [Fact $tmf discoveredAttacks]] > 0
+			     || [llength [Fact $tmf removesDefender]] > 0
+			     || [llength [Fact $tmf newPins $opp]] > 0)} {
+				return tactics
+			}
+		} else {
+			if {[Bool [Fact $tmf mate]]} {
+				return tactics
+			}
+			if {$cppMaterial} {
+				return material
+			}
+		}
 	}
 
 	if {[Bool [Fact $tmf castling]] && ![Bool [Fact $gmf castling]]} {
-		return missed_king_safety
+		return king_safety
 	}
-	if {$phase eq "opening" && [Bool [Fact $tmf developed]] && ![Bool [Fact $gmf developed]]} {
-		return missed_development
+	if {[Bool [Fact $tmf developed]] && ![Bool [Fact $gmf developed]]} {
+		return development
 	}
-	return close_alternative
+	return structure
 }
 
 
 proc ::guessmove::decideFeedback {fen guessSan gameSan script {comment ""}} {
 	variable FeedbackThreshold
 
-	set fallback [namespace code [list feedbackRule $fen $guessSan $gameSan]]
-	if {[llength [info commands ::ai::decide]] == 0} {
-		after 0 [list {*}$script [list ok 1 label [feedbackRule $fen $guessSan $gameSan] confidence {} source rules]]
+	set ef [evaluateFeedback $fen $guessSan $gameSan]
+	if {![dict get $ef ok]} {
+		set label [feedbackRule $fen $guessSan $gameSan]
+		after 0 [list {*}$script [dict create \
+			ok 1 verdict {} loss {} label $label theme $label confidence {} source rules]]
 		return
 	}
-	::ai::decide guess_feedback [feedbackState $fen $guessSan $gameSan $comment] [FeedbackQuestion] $script \
+
+	set verdict  [dict get $ef verdict]
+	set loss     [dict get $ef loss]
+	set themes   [dict get $ef themes]
+	set fallback [namespace code [list feedbackRule $fen $guessSan $gameSan $ef]]
+	if {[llength [info commands ::ai::decide]] == 0} {
+		set label [feedbackRule $fen $guessSan $gameSan $ef]
+		after 0 [list {*}$script [dict create \
+			ok 1 verdict $verdict loss $loss label $label theme $label confidence {} source rules]]
+		return
+	}
+	::ai::decide guess_feedback \
+		[feedbackState $fen $guessSan $gameSan $ef $comment] \
+		[FeedbackQuestion $verdict $themes] \
+		[namespace code [list WrapFeedbackDecision $verdict $loss $themes $fallback $script]] \
 		-threshold $FeedbackThreshold \
 		-fallback $fallback
 	return
+}
+
+
+# Enforce the engine-first firewall on Jev's feedback answer: the engine's
+# verdict and loss are preserved unconditionally, and the theme must belong
+# to the engine-validated theme list.
+proc ::guessmove::WrapFeedbackDecision {verdict loss themes fallback script decision} {
+	if {![dict exists $decision ok] || ![dict get $decision ok]} {
+		set label [uplevel #0 $fallback]
+		set out [dict create ok 1 verdict $verdict loss $loss label $label theme $label confidence {} source rules]
+	} else {
+		set label  [dict get $decision label]
+		set source [dict get $decision source]
+		set conf   [expr {[dict exists $decision confidence] ? [dict get $decision confidence] : {}}]
+		if {$label ni $themes} {
+			set label  [uplevel #0 $fallback]
+			set source rules
+			set conf   {}
+		}
+		set out [dict create ok 1 verdict $verdict loss $loss label $label theme $label confidence $conf source $source]
+	}
+	uplevel #0 [list {*}$script $out]
 }
 
 
@@ -582,12 +932,17 @@ proc ::guessmove::roundStats {} {
 	set total $Priv(total)
 	set pct [expr {$total ? int(round(100.0 * $score / $total)) : 0}]
 	set phases [dict create opening {0 0} middlegame {0 0} endgame {0 0}]
-	set misses [dict create \
+	set verdicts [dict create \
 		close_alternative	0 \
-		missed_tactic		0 \
-		blundered_material	0 \
-		missed_development	0 \
-		missed_king_safety	0 \
+		slightly_worse		0 \
+		worse				0 \
+	]
+	set misses [dict create \
+		tactics		0 \
+		material	0 \
+		king_safety	0 \
+		development	0 \
+		structure	0 \
 	]
 	foreach item $Priv(history) {
 		set ph [expr {[dict exists $item phase] ? [dict get $item phase] : "middlegame"}]
@@ -596,21 +951,28 @@ proc ::guessmove::roundStats {} {
 		incr tot
 		if {[dict get $item outcome] eq "correct"} {
 			incr hit
-		} elseif {[dict exists $item feedback]} {
-			set fb [dict get $item feedback]
-			if {[dict exists $misses $fb]} { dict incr misses $fb }
+		} else {
+			if {[dict exists $item verdict]} {
+				set v [dict get $item verdict]
+				if {[dict exists $verdicts $v]} { dict incr verdicts $v }
+			}
+			if {[dict exists $item feedback]} {
+				set fb [dict get $item feedback]
+				if {[dict exists $misses $fb]} { dict incr misses $fb }
+			}
 		}
 		dict set phases $ph [list $hit $tot]
 	}
 	return [dict create \
-		side	$Priv(side) \
-		score	$score \
-		total	$total \
-		pct		$pct \
-		hints	$Priv(hintsUsed) \
-		reveals	$Priv(showsUsed) \
-		phases	$phases \
-		misses	$misses \
+		side		$Priv(side) \
+		score		$score \
+		total		$total \
+		pct			$pct \
+		hints		$Priv(hintsUsed) \
+		reveals		$Priv(showsUsed) \
+		phases		$phases \
+		verdicts	$verdicts \
+		misses		$misses \
 	]
 }
 
@@ -630,12 +992,17 @@ proc ::guessmove::reviewState {{stats ""}} {
 		lassign $pair hit tot
 		lappend phaseParts "$ph=$hit/$tot"
 	}
+	set verdictParts {}
+	foreach v {close_alternative slightly_worse worse} {
+		set n [expr {[dict exists $stats verdicts $v] ? [dict get $stats verdicts $v] : 0}]
+		lappend verdictParts "$v=$n"
+	}
 	set missParts {}
-	foreach k {close_alternative missed_tactic blundered_material missed_development missed_king_safety} {
+	foreach k {tactics material king_safety development structure} {
 		set n [expr {[dict exists $stats misses $k] ? [dict get $stats misses $k] : 0}]
 		lappend missParts "$k=$n"
 	}
-	return "side=$side score=$score total=$total pct=$pct hints=$hints reveals=$reveals [join $phaseParts { }] [join $missParts { }]"
+	return "side=$side score=$score total=$total pct=$pct hints=$hints reveals=$reveals [join $phaseParts { }] [join $verdictParts { }] [join $missParts { }]"
 }
 
 
@@ -648,9 +1015,21 @@ proc ::guessmove::reviewRule {{stats ""}} {
 	set reveals [expr {[dict exists $stats reveals] ? [dict get $stats reveals] : 0}]
 	if {$total <= 0} { return needs_study }
 
-	set blunders [expr {[dict exists $stats misses blundered_material] ? [dict get $stats misses blundered_material] : 0}]
-	set tactics  [expr {[dict exists $stats misses missed_tactic]      ? [dict get $stats misses missed_tactic]      : 0}]
-	set eff [expr {100.0 * ($score - 0.5 * $hints - 0.25 * ($blunders + $tactics)) / $total}]
+	set matMiss 0
+	if {[dict exists $stats misses material]} {
+		incr matMiss [dict get $stats misses material]
+	}
+	if {[dict exists $stats misses blundered_material]} {
+		incr matMiss [dict get $stats misses blundered_material]
+	}
+	set tacMiss 0
+	if {[dict exists $stats misses tactics]} {
+		incr tacMiss [dict get $stats misses tactics]
+	}
+	if {[dict exists $stats misses missed_tactic]} {
+		incr tacMiss [dict get $stats misses missed_tactic]
+	}
+	set eff [expr {100.0 * ($score - 0.5 * $hints - 0.25 * ($matMiss + $tacMiss)) / $total}]
 
 	if {$eff >= 85.0 && $reveals == 0} { return master_like }
 	if {$eff >= 65.0} { return sharp }
@@ -698,17 +1077,25 @@ proc ::guessmove::OnFeedbackDecided {fseq tseq idx guessSan gameSan decision} {
 
 	if {$fseq != $Priv(feedbackSeq)} { return }
 	if {![dict exists $decision ok] || ![dict get $decision ok]} { return }
-	set label [dict get $decision label]
-	set source [dict get $decision source]
-	set Priv(feedback) $label
-	set Priv(feedbackSource) $source
+	set verdict [expr {[dict exists $decision verdict] ? [dict get $decision verdict] : ""}]
+	set loss    [expr {[dict exists $decision loss]    ? [dict get $decision loss]    : ""}]
+	set label   [dict get $decision label]
+	set source  [dict get $decision source]
+	set Priv(verdict)         $verdict
+	set Priv(feedbackVerdict) $verdict
+	set Priv(feedbackLoss)    $loss
+	set Priv(feedbackTheme)   $label
+	set Priv(feedback)        $label
+	set Priv(feedbackSource)  $source
 	if {$idx >= 0 && $idx < [llength $Priv(history)]} {
 		set item [lindex $Priv(history) $idx]
+		dict set item verdict  $verdict
+		dict set item loss     $loss
 		dict set item feedback $label
 		lset Priv(history) $idx $item
 	}
-	if {$active && $tseq == $Priv(turnSeq) && $source eq "classifier"} {
-		set Priv(note) [describeFeedback $label $guessSan $gameSan]
+	if {$active && $tseq == $Priv(turnSeq) && $source eq "classifier" && $verdict ne ""} {
+		set Priv(note) [describeFeedback $verdict $label $guessSan $gameSan]
 		Refresh
 	}
 }
