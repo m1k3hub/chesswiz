@@ -184,6 +184,9 @@ proc ::tactics::retry {} {
     set retries [expr {[dict get $session retries] + 1}]
     start [dict get $session puzzle]
     dict set session retries $retries
+    # a retry starts over: drop the "Wrong move" message
+    variable message [ToMove]
+    catch render
 }
 proc ::tactics::score {} {
     variable progress
@@ -202,8 +205,13 @@ proc ::tactics::next {} {
     if {![llength $queue]} { return }
     start [lindex $queue 0]
     set queue [lrange $queue 1 end]
-    set message "[expr {[lindex [dict get $session fen] 1] eq "w" ? "White" : "Black"}] to move. Click source and destination, then Play move; or enter SAN / UCI (append q/r/b/n to promote)."
+    set message [ToMove]
     render
+}
+# The prompt for the side to move of the current puzzle.
+proc ::tactics::ToMove {} {
+    variable session
+    return "[expr {[lindex [dict get $session fen] 1] eq "w" ? "White" : "Black"}] to move. Click source and destination, then Play move; or enter SAN / UCI (append q/r/b/n to promote)."
 }
 proc ::tactics::openPGN {} {
     variable puzzles; variable queue; variable session

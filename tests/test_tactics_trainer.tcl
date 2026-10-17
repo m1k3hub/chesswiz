@@ -97,6 +97,14 @@ test solve-2 {wrong move persists, blocks more moves, retry cannot earn first tr
     ::tactics::play Nf3
     list $a $failed $blocked [dict get $::tactics::progress [dict get $p id] status] [dict get $::tactics::progress streak]
 } -result {wrong failed 1 retry 0}
+test solve-retry-message {retry replaces the "Wrong move" message with the to-move prompt} -body {
+    set ::tactics::progress {}
+    ::tactics::start $p
+    answers 250 100
+    ::tactics::play d4
+    ::tactics::retry
+    string match {* to move.*} $::tactics::message
+} -result 1
 test solve-3 {accepted alternative uses its own reply and continuation} -body {
     ::tactics::start $p
     answers 250 240
