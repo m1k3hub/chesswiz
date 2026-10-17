@@ -41,9 +41,13 @@
 #include "sys_file.h"
 
 #include "m_ifstream.h"
+#include "m_fstream.h"
 #include "m_bit_functions.h"
 #include "m_hash.h"
+#include "m_vector.h"
 #include "m_assert.h"
+
+#include <stdlib.h>
 
 #include <ctype.h>
 
@@ -360,7 +364,7 @@ static uint64_t const* const RandomHolding		= Random64 + 781;
 static uint64_t const* const RandomThreeCheck	= Random64 + 791;
 
 
-inline static unsigned mul128(Byte b)    { return unsigned(b) << 7; }
+inline static unsigned mul64(unsigned x) { return x << 6; }
 inline static unsigned mul16(unsigned x) { return x << 4; }
 inline static unsigned div2 (unsigned x) { return x >> 1; }
 
@@ -478,7 +482,11 @@ hash(Board const& board, variant::Type variant)
 		static_assert(K == 1 && Q == 2 && R == 3 && B == 4 && N == 5 && P == 6, "piece values changed");
 		static_assert(White == 0 && Black == 1, "color values changed");
 
-		key ^= RandomPiece[mul128(6 - p + (c ^ 1)) + sq];
+		// the pieces are indexed as BP, WP, BN, WN, BB, WB, BR, WR, BQ, WQ,
+		// BK, WK (the "usual way" of polyglot's holding keys), one block of
+		// 64 squares per class; board.piece() returns the piece without the
+		// color, 6 - p is its index (pawn .. king)
+		key ^= RandomPiece[mul64(2*(6 - p) + (c ^ 1)) + sq];
 	}
 
 	castling::Rights castling = board.castlingRights();
@@ -569,17 +577,21 @@ decodeMove(Board const& board, uint16_t m, variant::Type variant)
 	// to==from must be a dropping move, where the dropped piece is given
 	// by the promotion field (quite easy).
 
-	Move move = board.makeMove(make(Fyle((m << 6) & 0x3),				// from fyle
-										Rank((m << 9) & 0x3)),					// from rank
-										make(Fyle(m & 0x3),						// to fyle
-										Rank((m << 3) & 0x3)),					// to rank
-										DecodePromoted[(m << 12) & 0x3]);	// piece type
+	Move move = board.makeMove(make(Fyle((m >> 6) & 0x7),				// from fyle
+										Rank((m >> 9) & 0x7)),					// from rank
+										make(Fyle(m & 0x7),						// to fyle
+										Rank((m >> 3) & 0x7)),					// to rank
+										DecodePromoted[(m >> 12) & 0x7]);	// piece type
 
 	return board.isValidMove(move, variant, move::DontAllowIllegalMove) ? move : Move();
 }
 
 
-#ifdef USED
+// The polyglot encoding of a move, as in the polyglot spec: the from
+// and to squares and the promoted (or dropped) piece. Castling is the king
+// moving two squares (e1g1), the form the reader's makeMove() also
+// understands; scidb's move names the rook, so the destination square is
+// translated.
 static uint16_t
 encodeMove(Move m)
 {
@@ -592,13 +604,76 @@ encodeMove(Move m)
 	// to King (in polyglot implementation).
 	static uint16_t EncodePromoted[8] = { 0, 5, 4, 3, 2, 1, 0, 0 };
 
-	return	uint16_t(fyle(m.from()) << 6)
-			 | uint16_t(rank(m.from()) << 9)
-			 | uint16_t(fyle(m.to()))
-			 | uint16_t(rank(m.to()) << 3)
-			 | uint16_t(EncodePromoted[m.capturedOrDropped()]);
+	Square from = m.from();
+	Square to = m.to();
+
+	if (m.isCastling())
+	{
+		if (fyle(to) > fyle(from))
+			to = make(FyleG, rank(from));
+		else
+			to = make(FyleC, rank(from));
+	}
+
+	uint16_t promo = 0;
+
+	if (m.isPromotion())
+		promo = EncodePromoted[m.promoted()];
+	else if (m.isPieceDrop())
+		promo = EncodePromoted[m.dropped()];
+
+	return	uint16_t(fyle(from) << 6)
+			 | uint16_t(rank(from) << 9)
+			 | uint16_t(fyle(to))
+			 | uint16_t(rank(to) << 3)
+			 | uint16_t(promo << 12);
 }
-#endif
+
+
+// The first entry of <entries> whose key is not smaller than <key>; the
+// entries are sorted by key (and move), so this is the start of the run of
+// the position's entries.
+static void
+lowerBound(app::polyglot::Book::RawEntries const& entries, uint64_t key, unsigned& index)
+{
+	unsigned left = 0;
+	unsigned right = entries.size();
+
+	while (left < right)
+	{
+		unsigned mid = ::div2(left + right);
+
+		if (entries[mid].key < key)
+			left = mid + 1;
+		else
+			right = mid;
+	}
+
+	index = left;
+}
+
+
+static int
+compareRawEntries(void const* lhs, void const* rhs)
+{
+	app::polyglot::Book::RawEntry const* l = static_cast<app::polyglot::Book::RawEntry const*>(lhs);
+	app::polyglot::Book::RawEntry const* r = static_cast<app::polyglot::Book::RawEntry const*>(rhs);
+
+	if (l->key != r->key)
+		return l->key < r->key ? -1 : 1;
+
+	if (l->move != r->move)
+		return l->move < r->move ? -1 : 1;
+
+	// a position and move written twice: the heaviest entry wins
+	if (l->weight != r->weight)
+		return l->weight < r->weight ? 1 : -1;
+
+	if (l->learn != r->learn)
+		return l->learn < r->learn ? 1 : -1;
+
+	return 0;
+}
 
 
 void
@@ -636,6 +711,8 @@ Book::Book(mstl::string const& filename)
 	,m_someRemoved(false)
 	,m_someModified(false)
 	,m_used(0)
+	,m_modelLoaded(false)
+	,m_modelModified(false)
 {
 #ifdef CHECK_HASH_KEYS
 	static bool doCheck = true;
@@ -667,15 +744,25 @@ Book::Book(mstl::string const& filename)
 	if (sys::file::size(filename) % 16)
 		IO_RAISE(BookFile, Open_Failed, "'%s' has invalid file size", filename.c_str());
 
-	sys::file::Mode mode = sys::file::Readable;
+	// An empty file is an empty book: there is nothing to map, the editor
+	// works on the in-memory model until the book is saved.
+	if (sys::file::size(filename) > 0)
+	{
+		sys::file::Mode mode = sys::file::Readable;
 
-	if (sys::file::access(filename, sys::file::Writeable))
-		mode = sys::file::Mode(mode | sys::file::Writeable);
+		if (sys::file::access(filename, sys::file::Writeable))
+			mode = sys::file::Mode(mode | sys::file::Writeable);
 
-	m_mapping = new Mapping(filename, mode);
+		m_mapping = new Mapping(filename, mode);
 
-	if (!m_mapping->isOpen())
-		IO_RAISE(BookFile, Open_Failed, "cannot open file: %s", filename.c_str());
+		if (!m_mapping->isOpen())
+			IO_RAISE(BookFile, Open_Failed, "cannot open file: %s", filename.c_str());
+
+		m_bookSize = m_mapping->size() / 16;
+	}
+
+	// the editor's model is the source of truth from here on
+	loadModel();
 }
 
 
@@ -695,14 +782,20 @@ Book::Format Book::format() const	{ return m_format; }
 bool
 Book::isEmpty() const
 {
-	return m_entryMap->used() == 0 && (!m_mapping || m_mapping->size() == 0);
+	if (m_modelLoaded)
+		return m_model.empty();
+
+	return (!m_entryMap || m_entryMap->used() == 0) && (!m_mapping || m_mapping->size() == 0);
 }
 
 
 bool
 Book::isModified() const
 {
-	return m_someRemoved || m_someModified || (m_entryMap && m_used != m_entryMap->used());
+	return m_modelModified
+			|| m_someRemoved
+			|| m_someModified
+			|| (m_entryMap && m_used != m_entryMap->used());
 }
 
 
@@ -715,7 +808,11 @@ Book::readEntry(unsigned offset, MyEntry& entry)
 	if (offset >= m_bookSize)
 		return false;
 
-	entry.fill(m_mapping->address() + ::mul16(offset));
+	// the const overload of address(): reading must not require a
+	// writeable mapping (a read-only book is still readable)
+	Mapping const& mapping = *m_mapping;
+
+	entry.fill(mapping.address() + ::mul16(offset));
 	return true;
 }
 
@@ -745,7 +842,7 @@ Book::findKey(uint64_t key)
 	{
 		return m_currentOffs;
 	}
-	else if (key <= m_currentOffs)
+	else if (key < m_current.key)
 	{
 		left = 0;
 		right = m_currentOffs;
@@ -779,6 +876,58 @@ Move
 Book::probeMove(Board const& position, variant::Type variant, Choice choice)
 {
 	uint64_t key = ::hash(position, variant);
+
+	// the editor's model: unsaved edits have to be visible, too
+	if (m_modelLoaded)
+	{
+		unsigned first;
+		::lowerBound(m_model, key, first);
+
+		unsigned bestIndex = 0;
+		unsigned sum			= 0;
+		bool	found			= false;
+
+		for (unsigned i = first; i < m_model.size(); ++i)
+		{
+			if (m_model[i].key != key)
+				break;
+
+			unsigned weight = m_model[i].weight;
+
+			if (!found)
+			{
+				found = true;
+				bestIndex = i;
+				sum = weight;
+				continue;
+			}
+
+			sum += weight;
+
+			switch (choice)
+			{
+				case BestFirst:
+					if (weight > m_model[bestIndex].weight)
+						bestIndex = i;
+					break;
+
+				case Best:
+					if (	weight > m_model[bestIndex].weight
+						|| (weight == m_model[bestIndex].weight && sum && m_rkiss.rand32(sum) < weight))
+					{
+						bestIndex = i;
+					}
+					break;
+
+				case Random:
+					if (sum && m_rkiss.rand32(sum) < weight)
+						bestIndex = i;
+					break;
+			}
+		}
+
+		return found ? decodeMove(position, m_model[bestIndex].move, variant) : Move();
+	}
 
 	if (m_entryMap)
 	{
@@ -867,6 +1016,36 @@ bool
 Book::probePosition(Board const& position, variant::Type variant, Entry& result)
 {
 	uint64_t key = ::hash(position, variant);
+
+	// the editor's model: unsaved edits have to be visible, too
+	if (m_modelLoaded)
+	{
+		unsigned first;
+		::lowerBound(m_model, key, first);
+
+		for (unsigned i = first; i < m_model.size(); ++i)
+		{
+			if (m_model[i].key != key)
+				break;
+
+			Move move = decodeMove(position, m_model[i].move, variant);
+
+			if (move.isEmpty())
+				continue;
+
+			result.totalWeight += m_model[i].weight;
+			result.items.push_back();
+
+			Entry::Item& item = result.items.back();
+
+			item.move = move;
+			item.weight = m_model[i].weight;
+			item.info.learnPoints = uint16_t(m_model[i].learn >> 16);
+			item.info.learnCount = uint16_t(m_model[i].learn);
+		}
+
+		return !result.items.empty();
+	}
 
 	if (m_entryMap)
 	{
@@ -970,6 +1149,271 @@ Book::add(Board const& position, variant::Type variant, Entry const& entry)
 		m_entryMap = new Map(512);
 
 	return m_entryMap->insert_unique(key, entry);
+}
+
+
+// ----------------------------------------------------------------------
+// Writing and editing (the opening book editor)
+// ----------------------------------------------------------------------
+
+Book::RawEntry::RawEntry()
+	:key(0)
+	,move(0)
+	,weight(0)
+	,learn(0)
+{
+}
+
+
+uint64_t
+Book::hashKey(Board const& position, variant::Type variant)
+{
+	return ::hash(position, variant);
+}
+
+
+uint16_t
+Book::encode(Move move)
+{
+	return ::encodeMove(move);
+}
+
+
+void
+Book::write(mstl::string const& filename, RawEntries const& entries)
+{
+	RawEntries sorted(entries);
+
+	::qsort(	sorted.begin(),
+					sorted.size(),
+					sizeof(RawEntry),
+					&::compareRawEntries);
+
+	Byte buffer[16];
+
+	mstl::fstream strm;
+
+	strm.open(	sys::file::internalName(filename),
+					mstl::ios_base::out | mstl::ios_base::binary | mstl::ios_base::trunc);
+
+	if (!strm)
+		IO_RAISE(BookFile, Open_Failed, "cannot write file: %s", filename.c_str());
+
+	for (unsigned i = 0; i < sorted.size(); ++i)
+	{
+		// merge the duplicates of a (position, move) pair: they are
+		// adjacent now, and the heaviest comes first
+		if (i > 0 && sorted[i].key == sorted[i - 1].key && sorted[i].move == sorted[i - 1].move)
+			continue;
+
+		MyEntry entry;
+
+		entry.key		= sorted[i].key;
+		entry.move		= sorted[i].move;
+		entry.weight	= sorted[i].weight;
+		entry.n			= uint16_t(sorted[i].learn >> 16);
+		entry.sum		= uint16_t(sorted[i].learn);
+
+		entry.write(buffer);
+
+		if (!strm.write(reinterpret_cast<char*>(buffer), sizeof(buffer)))
+			IO_RAISE(BookFile, Write_Failed, "cannot write file: %s", filename.c_str());
+	}
+}
+
+
+void
+Book::loadModel()
+{
+	M_ASSERT(!m_modelLoaded);
+
+	if (m_format != Polyglot)
+		return;	// the scid mask format has no raw entries
+
+	m_model.clear();
+
+	for (unsigned offset = 0; offset < m_bookSize; ++offset)
+	{
+		MyEntry entry;
+
+		readEntry(offset, entry);
+
+		if (entry.move == 0)
+			continue;	// a removed entry (weight is kept as tombstone)
+
+		RawEntry raw;
+
+		raw.key		= entry.key;
+		raw.move		= entry.move;
+		raw.weight	= entry.weight;
+		raw.learn		= (uint32_t(entry.n) << 16) | entry.sum;
+
+		m_model.push_back(raw);
+	}
+
+	m_modelLoaded = true;
+}
+
+
+bool
+Book::findEntry(uint64_t key, uint16_t move, unsigned& index) const
+{
+	::lowerBound(m_model, key, index);
+
+	for (unsigned i = index; i < m_model.size(); ++i)
+	{
+		if (m_model[i].key != key)
+			break;
+
+		if (m_model[i].move == move)
+		{
+			index = i;
+			return true;
+		}
+	}
+
+	// the insertion point: the first entry with a greater key, or a
+	// greater move at the same key
+	while (index < m_model.size() && m_model[index].key == key && m_model[index].move < move)
+		++index;
+
+	return false;
+}
+
+
+bool
+Book::addMove(	Board const& position,
+					variant::Type variant,
+					Move move,
+					unsigned weight,
+					unsigned learn)
+{
+	if (m_modelLoaded == false)
+		loadModel();
+
+	if (m_format != Polyglot)
+		return false;
+
+	uint64_t	key	= ::hash(position, variant);
+	uint16_t	enc	= ::encodeMove(move);
+	unsigned	index;
+
+	if (findEntry(key, enc, index))
+	{
+		m_model[index].weight	= uint16_t(mstl::min(weight, 0xffffu));
+		m_model[index].learn	= learn;
+	}
+	else
+	{
+		RawEntry raw;
+
+		raw.key		= key;
+		raw.move		= enc;
+		raw.weight	= uint16_t(mstl::min(weight, 0xffffu));
+		raw.learn		= learn;
+
+		m_model.insert(m_model.begin() + index, raw);
+	}
+
+	m_modelModified = true;
+
+	return true;
+}
+
+
+bool
+Book::removeMove(Board const& position, variant::Type variant, Move move)
+{
+	if (m_modelLoaded == false)
+		loadModel();
+
+	if (m_format != Polyglot)
+		return false;
+
+	uint64_t	key	= ::hash(position, variant);
+	uint16_t	enc	= ::encodeMove(move);
+	unsigned	index;
+
+	if (findEntry(key, enc, index) == false)
+		return false;
+
+	m_model.erase(m_model.begin() + index);
+	m_modelModified = true;
+
+	return true;
+}
+
+
+bool
+Book::setWeight(Board const& position, variant::Type variant, Move move, unsigned weight)
+{
+	if (m_modelLoaded == false)
+		loadModel();
+
+	if (m_format != Polyglot)
+		return false;
+
+	uint64_t	key	= ::hash(position, variant);
+	uint16_t	enc	= ::encodeMove(move);
+	unsigned	index;
+
+	if (findEntry(key, enc, index) == false)
+		return false;
+
+	m_model[index].weight = uint16_t(mstl::min(weight, 0xffffu));
+	m_modelModified = true;
+
+	return true;
+}
+
+
+bool
+Book::save()
+{
+	if (isReadonly())
+		return false;
+
+	if (m_format != Polyglot || m_modelLoaded == false)
+		return false;
+
+	// write through a plain stream: the memory mapping would have to be
+	// resized entry by entry
+	write(filename(), m_model);
+
+	// refresh the mapping on the new file
+	delete m_mapping;
+	m_mapping = 0;
+
+	unsigned size = sys::file::size(filename());
+
+	if (size > 0)
+	{
+		sys::file::Mode mode = sys::file::Readable;
+
+		if (sys::file::access(filename(), sys::file::Writeable))
+			mode = sys::file::Mode(mode | sys::file::Writeable);
+
+		m_mapping = new Mapping(filename(), mode);
+
+		if (!m_mapping->isOpen())
+			IO_RAISE(BookFile, Open_Failed, "cannot open file: %s", filename().c_str());
+	}
+
+	m_bookSize			= size / 16;
+	m_currentOffs		= 0;
+	m_current			= MyEntry();
+	m_someRemoved		= false;
+	m_someModified		= false;
+	m_modelModified	= false;
+
+	return true;
+}
+
+
+unsigned
+Book::countEntries() const
+{
+	return m_modelLoaded ? m_model.size() : 0;
 }
 
 

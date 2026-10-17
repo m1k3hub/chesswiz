@@ -134,6 +134,7 @@ SOURCES = \
 	board-3d.tcl \
 	tablebase.tcl \
 	media-inset.tcl \
+	book.tcl \
 	guess-move.tcl \
 	repertoire-trainer.tcl \
 	annotation.tcl \

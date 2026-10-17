@@ -631,6 +631,11 @@ proc update {position cmd data promoted} {
 		::tablebase::positionChanged $Vars(widget:frame)
 	}
 
+	# the opening book editor follows the board position
+	if {[llength [info commands ::book::positionChanged]]} {
+		::book::positionChanged
+	}
+
 	# 3D board view mirrors the position (no-op unless the viewer is open)
 	if {[llength [info commands ::board3d::PositionChanged]]} {
 		::board3d::PositionChanged [::board::diagram::data $board]

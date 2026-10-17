@@ -37,6 +37,7 @@ CXXFLAGS	+= $(OPTIMIZE) $(PROFILING) $(CXX_DEBUG) $(EXTRA_DEBUG_FLAGS) $(SYS_CXX
 
 SRC_CXX = \
 	tcl_ai.cpp \
+	tcl_book.cpp \
 	tcl_application.cpp \
 	tcl_base.cpp \
 	tcl_board.cpp \

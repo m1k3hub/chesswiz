@@ -1,0 +1,446 @@
+# ======================================================================
+# Scidb App Test - the polyglot opening book editor
+# (src/app/app_polyglot_book.cpp, src/tcl/tcl_book.cpp, tcl/book.tcl)
+# ======================================================================
+# Round trip (create from a small game set, write, read back with the
+# reader, same moves/weights), the editing operations (add, remove,
+# reweight, save), the polyglot byte format (the standard Zobrist keys
+# and move encodings), and the Tcl UI wiring (the editor window, the
+# create-from-database dialog, the board position hook, the menu).
+# ======================================================================
+
+package require tcltest 2.5
+
+namespace eval ::scidb::test::book {
+
+variable ::scidb::test::book::testDir [file dirname [file normalize [info script]]]
+variable ::scidb::test::book::tmpDir [file join $::scidb::test::book::testDir tmp-app book]
+
+# ======================================================================
+# Helpers
+# ======================================================================
+
+proc ::scidb::test::book::setup {} {
+	variable tmpDir
+	file mkdir $tmpDir
+}
+
+proc ::scidb::test::book::tempPath {stem ext} {
+	variable tmpDir
+	return [file normalize [file join $tmpDir "${stem}_[pid]_[clock microseconds].${ext}"]]
+}
+
+# Three small but distinct games: 1. d4 (Capablanca wins), 1. d4
+# (Lasker draws), 1. e4 (Alekhine loses as White).
+proc ::scidb::test::book::makePgn {} {
+	set path [tempPath games pgn]
+	set fh [open $path w]
+	puts $fh {[Event "London 1922"]}
+	puts $fh {[Site "London"]}
+	puts $fh {[Date "1922.??.??"]}
+	puts $fh {[Round "1"]}
+	puts $fh {[White "Capablanca"]}
+	puts $fh {[Black "Tarrasch"]}
+	puts $fh {[Result "1-0"]}
+	puts $fh ""
+	puts $fh {1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Nbd7 1-0}
+	puts $fh ""
+	puts $fh {[Event "New York 1924"]}
+	puts $fh {[Site "New York"]}
+	puts $fh {[Date "1924.??.??"]}
+	puts $fh {[Round "2"]}
+	puts $fh {[White "Lasker"]}
+	puts $fh {[Black "Reti"]}
+	puts $fh {[Result "1/2-1/2"]}
+	puts $fh ""
+	puts $fh {1. d4 Nf6 2. c4 e6 3. Nc3 d5 4. Bg5 Be7 1/2-1/2}
+	puts $fh ""
+	puts $fh {[Event "Casablanca 1921"]}
+	puts $fh {[Site "Casablanca"]}
+	puts $fh {[Date "1921.??.??"]}
+	puts $fh {[Round "3"]}
+	puts $fh {[White "Alekhine"]}
+	puts $fh {[Black "Bogoljubow"]}
+	puts $fh {[Result "0-1"]}
+	puts $fh ""
+	puts $fh {1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 0-1}
+	close $fh
+	return $path
+}
+
+proc ::scidb::test::book::openDatabase {pgn} {
+	::application::database::openBase .application $pgn no
+	# let the switch settle (progress windows, board update)
+	set ::scidb::test::book::settled 0
+	after 300 {set ::scidb::test::book::settled 1}
+	vwait ::scidb::test::book::settled
+}
+
+proc ::scidb::test::book::readFile {path} {
+	set fh [open $path r]
+	fconfigure $fh -translation binary
+	set data [read $fh]
+	close $fh
+	return $data
+}
+
+# The moves of a probe result as {san weight learn} triples, in probe
+# order (the heaviest move first).
+proc ::scidb::test::book::probeList {handle fen} {
+	set result {}
+	foreach move [::scidb::book::probe $handle $fen] {
+		lappend result [list [dict get $move san] [dict get $move weight] [dict get $move learn]]
+	}
+	return $result
+}
+
+# The encoded moves of the 16-byte records of a book file, in file order.
+proc ::scidb::test::book::readMoves {path} {
+	set data [readFile $path]
+	set moves {}
+	for {set i 0} {$i < [string length $data]} {incr i 16} {
+		binary scan [string range $data $i [expr {$i + 15}]] H16H4 k m
+		lappend moves $m
+	}
+	return $moves
+}
+
+# The entries of a table position -> move -> {count wins draws} at one
+# position, as {san weight} pairs.
+proc ::scidb::test::book::movesAt {entries fen} {
+	set result {}
+	foreach e $entries {
+		if {[lindex $e 0] eq $fen} { lappend result [list [lindex $e 1] [lindex $e 2]] }
+	}
+	return $result
+}
+
+::scidb::test::book::setup
+
+# ======================================================================
+# The polyglot byte format: the standard Zobrist keys and move
+# encodings, records sorted by key, weight and learn at their offsets.
+# ======================================================================
+
+variable ::scidb::test::book::start "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+tcltest::test book-polyglot-bytes {the writer writes the standard polyglot format} -body {
+	set path [tempPath bytes bin]
+	::scidb::book::write $path [list \
+		[list $::scidb::test::book::start e4 7 0] \
+		[list $::scidb::test::book::start d4 3 0] \
+		[list $::scidb::test::book::start Nf3 1 0] \
+		]
+	set data [readFile $path]
+	list [string length $data] \
+		[binary scan $data H16H4H4H8 key1 move1 weight1 learn1] \
+		[binary scan [string range $data 16 end] H16H4H4H8 key2 move2 weight2 learn2] \
+		[binary scan [string range $data 32 end] H16H4H4H8 key3 move3 weight3 learn3] \
+		$key1 $move1 $weight1 $learn1 \
+		$move2 $weight2 $move3 $weight3
+} -result {48 4 4 4 463b96181691fc9c 0195 0001 00000000 02db 0003 031c 0007}
+
+tcltest::test book-polyglot-castling {castling is written as the king moving two squares} -body {
+	set fen "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"
+	set path [tempPath castling bin]
+	::scidb::book::write $path [list [list $fen O-O 5] [list $fen O-O-O 3] [list $fen Rf1 1]]
+	# O-O = e1g1 = 0x0106, O-O-O = e1c1 = 0x0102, Rf1 = h1f1 = 0x01c5
+	lsort [readMoves $path]
+} -result {0102 0106 01c5}
+
+tcltest::test book-polyglot-promotion {promotions carry the piece in bits 12-14} -body {
+	set fen "7k/P7/8/8/8/8/8/K7 w - - 0 1"
+	set path [tempPath promo bin]
+	::scidb::book::write $path [list [list $fen a8=Q 2] [list $fen a8=R 1]]
+	# a7a8Q = 0x4c38, a7a8R = 0x3c38
+	lsort [readMoves $path]
+} -result {3c38 4c38}
+
+tcltest::test book-polyglot-duplicates {a position and move written twice keeps the heaviest entry} -body {
+	set path [tempPath dup bin]
+	::scidb::book::write $path [list \
+		[list $::scidb::test::book::start d4 3 0] \
+		[list $::scidb::test::book::start d4 9 0] \
+		[list $::scidb::test::book::start d4 1 0] \
+		]
+	set h [::scidb::book::open $path]
+	set result [probeList $h $::scidb::test::book::start]
+	::scidb::book::close $h
+	list [llength $result] $result [file size $path]
+} -result {1 {{d4 9 0}} 16}
+
+tcltest::test book-polyglot-empty {an empty entry list writes an empty (valid) book} -body {
+	set path [tempPath empty bin]
+	::scidb::book::write $path {}
+	set h [::scidb::book::open $path]
+	list [file size $path] [::scidb::book::count $h] [::scidb::book::probe $h $::scidb::test::book::start]
+} -cleanup {
+	::scidb::book::close $h
+} -result {0 0 {}}
+
+# ======================================================================
+# Round trip: write with the editor's writer, read back with the
+# existing reader; the same moves, weights and learn values.
+# ======================================================================
+
+tcltest::test book-roundtrip {write and read back give the same moves and weights} -body {
+	set start $::scidb::test::book::start
+	set aftere4 "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
+	set cast "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"
+	set promo "7k/P7/8/8/8/8/8/K7 w - - 0 1"
+	set path [tempPath roundtrip bin]
+	::scidb::book::write $path [list \
+		[list $start e4 7 65537] \
+		[list $start d4 3] \
+		[list $start Nf3 1] \
+		[list $aftere4 e5 5] \
+		[list $cast O-O 5] \
+		[list $cast O-O-O 3] \
+		[list $cast Rf1 1] \
+		[list $promo a8=Q 2] \
+		[list $promo a8=R 1] \
+		]
+	set h [::scidb::book::open $path]
+	list [::scidb::book::count $h] \
+		[probeList $h $start] \
+		[probeList $h $aftere4] \
+		[probeList $h $cast] \
+		[probeList $h $promo]
+} -cleanup {
+	::scidb::book::close $h
+} -result {9 {{e4 7 65537} {d4 3 0} {Nf3 1 0}} {{e5 5 0}} {{O-O 5 0} {O-O-O 3 0} {Rf1 1 0}} {{a8=Q 2 0} {a8=R 1 0}}}
+
+# ======================================================================
+# Editing: add, remove, reweight, save; reopen shows the same book.
+# ======================================================================
+
+tcltest::test book-editing {add, reweight and remove a move, save, and read it back} -body {
+	set start $::scidb::test::book::start
+	set path [tempPath edit bin]
+	::scidb::book::write $path [list \
+		[list $start e4 7] \
+		[list $start d4 3] \
+		[list $start Nf3 1] \
+		]
+	set h [::scidb::book::open $path]
+	set beforeEdit [list [::scidb::book::count $h] [::scidb::book::modified $h]]
+	# add a new move
+	::scidb::book::add $h $start c2c4 2
+	# reweight an existing one
+	::scidb::book::reweight $h $start e4 9
+	# update through add (weight and learn)
+	::scidb::book::add $h $start d4 4 5
+	# remove one
+	set removed [::scidb::book::remove $h $start g1f3]
+	set missing [::scidb::book::remove $h $start g1f3]
+	set before [probeList $h $start]
+	list $beforeEdit [::scidb::book::count $h] [::scidb::book::modified $h] $removed $missing $before \
+		[::scidb::book::save $h] [::scidb::book::modified $h] \
+		[file size $path]
+} -cleanup {
+	::scidb::book::close $h
+} -result {{3 0} 3 1 1 0 {{e4 9 0} {d4 4 5} {c4 2 0}} 1 0 48}
+
+tcltest::test book-editing-persisted {a saved book reads back the same through a fresh handle} -body {
+	set start $::scidb::test::book::start
+	set path [tempPath persisted bin]
+	::scidb::book::write $path [list [list $start e4 7] [list $start d4 3]]
+	set h [::scidb::book::open $path]
+	::scidb::book::add $h $start Nf3 1
+	::scidb::book::reweight $h $start d4 6
+	::scidb::book::remove $h $start e2e4
+	::scidb::book::save $h
+	::scidb::book::close $h
+	# a fresh handle: the reader must see the saved book
+	set h2 [::scidb::book::open $path]
+	list [::scidb::book::count $h2] [probeList $h2 $start]
+} -cleanup {
+	::scidb::book::close $h2
+} -result {2 {{d4 6 0} {Nf3 1 0}}}
+
+tcltest::test book-editing-readonly {a read-only book refuses to save} -body {
+	set path [tempPath readonly bin]
+	::scidb::book::write $path [list [list $::scidb::test::book::start e4 1]]
+	file attributes $path -permissions 0444
+	set h [::scidb::book::open $path]
+	list [::scidb::book::readonly $h] [::scidb::book::add $h $::scidb::test::book::start d2d4 1] \
+		[::scidb::book::save $h] [::scidb::book::modified $h]
+} -cleanup {
+	file attributes $path -permissions 0644
+	::scidb::book::close $h
+} -result {1 1 0 1}
+
+# ======================================================================
+# The pure helpers of the book creation.
+# ======================================================================
+
+tcltest::test book-helpers {weights, shares and score modes} -body {
+	list \
+		[::book::weightFromCounts 3 2 1 frequency] \
+		[::book::weightFromCounts 3 2 1 score] \
+		[::book::weightFromCounts 1 0 0 score] \
+		[::book::weightFromCounts 0 0 0 score] \
+		[::book::sharePercent 3 7] \
+		[::book::sharePercent 0 7] \
+		[::book::sharePercent 7 0] \
+		[::book::SideToMove {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}] \
+		[::book::SideToMove {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1}] \
+		[::book::MoveScore 1-0 w] [::book::MoveScore 1-0 b] \
+		[::book::MoveScore 0-1 w] [::book::MoveScore 1/2-1/2 b] [::book::MoveScore * w]
+} -result {3 3 1 1 43% 0% 0% w b win loss loss draw {}}
+
+tcltest::test book-entries-from-games {aggregated table entries with min games and weight modes} -body {
+	set table [dict create \
+		fen1 {d4 {2 1 1} e4 {1 0 0} Nf3 {2 0 2}} \
+		fen2 {c4 {1 1 0} e6 {1 0 1}} \
+		]
+	list \
+		[lsort [::book::entriesFromGames $table 1 frequency]] \
+		[lsort [::book::entriesFromGames $table 2 frequency]] \
+		[lsort [::book::entriesFromGames $table 2 score]]
+} -result {{{fen1 Nf3 2 0} {fen1 d4 2 0} {fen1 e4 1 0} {fen2 c4 1 0} {fen2 e6 1 0}} {{fen1 Nf3 2 0} {fen1 d4 2 0}} {{fen1 Nf3 1 0} {fen1 d4 2 0}}}
+
+# ======================================================================
+# Creating a book from a database: the aggregation of the games, and
+# the round trip through ::scidb::book::write and the reader.
+# ======================================================================
+
+variable ::scidb::test::book::pgn [::scidb::test::book::makePgn]
+::scidb::test::book::openDatabase $::scidb::test::book::pgn
+
+tcltest::test book-game-numbers {all games of the database, or the rows of a view} -body {
+	set base $::scidb::test::book::pgn
+	set all [::book::gameNumbers $base Normal {}]
+	set view [::scidb::view::new $base Normal unused unused unused unused master slave]
+	::scidb::view::setGames $base Normal $view {0 2}
+	set inView [::book::gameNumbers $base Normal $view]
+	::scidb::view::close $base Normal $view
+	list $all $inView
+} -result {{0 1 2} {0 2}}
+
+tcltest::test book-collect-entries {the creation aggregates the games' first plies} -body {
+	set base $::scidb::test::book::pgn
+	set numbers [::book::gameNumbers $base Normal {}]
+	set entries [::book::collectEntries $base Normal $numbers 4 1 frequency]
+	# d4 was played in two games (one won by White, one drawn), e4 in one lost one
+	list [llength $entries] [lsort [movesAt $entries $::scidb::test::book::start]] \
+		[movesAt [::book::collectEntries $base Normal $numbers 4 2 frequency] \
+			$::scidb::test::book::start] \
+		[lsort [movesAt [::book::collectEntries $base Normal $numbers 4 1 score] \
+			$::scidb::test::book::start]]
+} -result {11 {{d4 2} {e4 1}} {{d4 2}} {{d4 2} {e4 1}}}
+
+tcltest::test book-create-roundtrip {the created book reads back with the same moves and weights} -body {
+	set base $::scidb::test::book::pgn
+	set start $::scidb::test::book::start
+	set numbers [::book::gameNumbers $base Normal {}]
+	set entries [::book::collectEntries $base Normal $numbers 4 1 frequency]
+	set path [tempPath created bin]
+	::scidb::book::write $path $entries
+	set h [::scidb::book::open $path]
+	list [::scidb::book::count $h] [probeList $h $start] [file size $path]
+} -cleanup {
+	::scidb::book::close $h
+} -result {11 {{d4 2 0} {e4 1 0}} 176}
+
+# ======================================================================
+# The Tcl UI wiring: the editor window, its buttons and the dialog.
+# ======================================================================
+
+tcltest::test book-ui-wiring {the editor is reachable from the menu and follows the board} -body {
+	list \
+		[llength [info commands ::book::openEditor]] \
+		[info exists ::menu::mc::OpeningBookEditor] \
+		[string match {*::book::openEditor*} [info body ::menu::build]] \
+		[string match {*::book::positionChanged*} [info body ::application::board::update]]
+} -result {1 1 1 1}
+
+tcltest::test book-ui-editor {the editor window shows, edits and saves the book moves} -body {
+	set start $::scidb::test::book::start
+	set path [tempPath ui bin]
+	::scidb::book::write $path [list [list $start e4 7] [list $start d4 3] [list $start Nf3 1]]
+
+	set dlg [::book::openEditor .application]
+	set tree $dlg.top.moves.list.tree
+	::book::OpenHandle $path
+
+	# load a game and follow its position: the board at the start position
+	set curpos [::scidb::game::current]
+	::scidb::game::load $curpos $::scidb::test::book::pgn Normal 0
+	::scidb::game::go start
+	::book::Refresh
+
+	set rows {}
+	foreach id [$tree children {}] {
+		lappend rows [list $id [$tree set $id weight] [$tree set $id share]]
+	}
+
+	# reweight the selected move
+	$tree selection set d4
+	::book::SelectionChanged
+	set ::book::Priv(weight) 12
+	::book::SetWeight
+
+	# delete a move
+	$tree selection set Nf3
+	::book::SelectionChanged
+	::book::DeleteMove
+
+	# add the move just played: go to after 1. d4 d5 2. c4
+	::scidb::game::go start
+	::scidb::game::position forward
+	::scidb::game::position forward
+	::scidb::game::position forward
+	lassign [::book::LastMove] san fenBefore
+	::book::AddLastMove
+	::book::Save
+
+	set handle $::book::Priv(handle)
+	set unsaved [::scidb::book::modified $handle]
+	::scidb::book::close $handle
+	set ::book::Priv(handle) {}
+	set ::book::Options(file) ""
+
+	# the reader sees the saved book
+	set h2 [::scidb::book::open $path]
+	set atStart [probeList $h2 $start]
+	set atBefore [probeList $h2 $fenBefore]
+	::scidb::book::close $h2
+	list $rows $unsaved $atStart $atBefore
+} -cleanup {
+	catch { ::scidb::game::go start }
+	catch { ::book::Close }
+} -result {{{e4 7 64%} {d4 3 27%} {Nf3 1 9%}} 0 {{d4 12 0} {e4 7 0}} {{c4 12 0}}}
+
+tcltest::test book-ui-create-dialog {Create Book from Database writes the aggregated book} -body {
+	set path [tempPath uidialog bin]
+	set parent [::book::openEditor .application]
+	set dlg [::book::CreateDialog $parent]
+	set ::book::${dlg}::Vars(file) $path
+	set ::book::${dlg}::Vars(plies) 4
+	::book::CreateStart $dlg
+	set entries [file size $path]
+	set handle $::book::Priv(handle)
+	# the editor switched to the new book
+	set atStart [probeList $handle $::scidb::test::book::start]
+	::book::Save
+	::scidb::book::close $handle
+	set ::book::Priv(handle) {}
+	set ::book::Options(file) ""
+	# and the reader reads it back
+	set h2 [::scidb::book::open $path]
+	set readBack [probeList $h2 $::scidb::test::book::start]
+	::scidb::book::close $h2
+	list $entries $atStart $readBack
+} -cleanup {
+	catch { destroy $dlg }
+	catch { ::book::Close }
+} -result {176 {{d4 2 0} {e4 1 0}} {{d4 2 0} {e4 1 0}}}
+
+# leave the app tidy for the next test file
+catch { ::application::database::closeBase .application $::scidb::test::book::pgn }
+catch { ::scidb::game::new [::scidb::game::current] }
+
+} ;# namespace eval ::scidb::test::book
+
+# vi:set ts=3 sw=3:
