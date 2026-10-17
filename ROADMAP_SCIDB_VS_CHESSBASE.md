@@ -403,3 +403,77 @@ Status:
 - broad “ChessBase clone” goals with no scoped workflow target
 
 These features are expensive, service-heavy, and misaligned with SCIDb’s stated scope unless the project direction changes.
+
+
+## 2026-10-17 Survey: Features Other Products Have
+
+Source: a survey of ChessBase/Fritz, HIARCS Chess Explorer, Chess Assistant, SCID vs PC, En Croissant,
+Banksia, ChessX, Lichess, Chess.com, Chessable, Chess Position Trainer, Aimchess, DecodeChess, Lucas
+Chess, Arena and Nibbler (DeepSeek V4 Pro and V4.1 Flash, from model knowledge, no web), checked
+against the code. Reports: `tests/tmp-app/feature-gap/REPORT-v4.1-flash.md`, `REPORT-v4-pro.md`.
+
+Already present, so not gaps: 3D board (`tcl/board-3d.tcl`), Polyglot book reading
+(`src/app/app_polyglot_book.cpp`), ChessBase shortcut scheme, Lichess and TWIC download.
+
+This reopens three items from "Not Recommended" below, each scoped to a desktop workflow:
+training (P7), Lichess/Chess.com import (P8), and an online explorer used as a read-only
+reference (P8). Cloud database hosting and cloud engines stay out of scope.
+
+### P7: Training
+
+- Repertoire trainer with spaced repetition: drill the lines of a repertoire database
+  (`AddToRepertoire`/`MarkAsRepertoire`), with due dates per position. Effort L, value 5.
+- Tactics trainer: solve the positions `AI: Training Set from Games` extracts, with a score and
+  retries. Effort M, value 4.
+- Guess-the-move: replay a master game hiding the next move, scored by engine eval loss.
+  Effort M, value 3.
+- Endgame trainer: play standard endings against the engine, checked by tablebase (P9).
+  Effort M, value 3.
+
+### P8: Online Sources
+
+- Chess.com import: fetch a user's games by month through the public API, like the existing
+  Lichess import (`tcl/app-download-games.tcl`). Effort S, value 4.
+- Online opening explorer: a Lichess masters/online statistics column beside the local tree,
+  read-only, cached. Effort M, value 4.
+- Lichess study import and export. Effort M, value 3.
+- Live broadcasts (Lichess broadcast PGN feed into a database). Effort M, value 3.
+
+### P9: Analysis And Engines
+
+- Tablebase lookup: Syzygy probing in the board/analysis pane (local files, optional Lichess
+  tablebase API). Today only the engine's "Tablebase hits" count is shown. Effort M, value 4.
+- Play against an engine: a game mode with time controls, strength limit and takeback; design in
+  `PLAY_AGAINST_ENGINE_RESEARCH.md`. Effort M, value 4.
+- Game review with move classes (blunder/mistake/inaccuracy) and an accuracy figure, building on
+  `AI: Annotate Game`. Effort M, value 3.
+- Engine matches and gauntlets with an opening suite. Effort M, value 3.
+- Opening book editor (Polyglot write; reading exists). Effort M, value 3.
+- DGT/electronic board input. Effort L, value 3.
+
+### P10: Publishing And Formats
+
+- Multi-game PDF/TeX book export; today PDF/TeX export is single-game only (help: Development
+  Roadmap). Effort M, value 3.
+- Personal insights: a player's results by opening, phase and time across their own games,
+  extending the opponent dossier. Effort M, value 4.
+- Write ChessBase `.cbh` (reading exists). Effort L, value 3.
+
+### P11: UI
+
+- Dark theme (verify what themes cover now). Effort S/M, value 3.
+- Per-key shortcut editor beyond the two schemes. Effort S, value 3.
+- Screen-reader accessibility. Effort M, value 3.
+
+### Order For The Survey Items
+
+1. Chess.com import (P8) — small, mirrors Lichess import
+2. Tablebase lookup (P9)
+3. Play against an engine (P9)
+4. Repertoire trainer with spaced repetition (P7)
+5. Online opening explorer (P8)
+6. Tactics trainer (P7)
+7. Multi-game PDF export (P10)
+8. Personal insights (P10)
+9. Game review with move classes (P9)
+10. The rest by value
