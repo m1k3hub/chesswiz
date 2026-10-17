@@ -113,7 +113,13 @@ proc exportBook {type {index {}} {view 0}} {
 set pgn [makePgn]
 openPgn $pgn
 set savedShare $::scidb::dir::share
-set ::scidb::dir::share [file normalize [file join $testDir .. .. .. tcl]]
+# the repository's tcl/ (its scripts/latex-skak.eXt), wherever the test runs from
+set ::scidb::test::shareDir [file normalize $testDir]
+while {![file exists [file join $::scidb::test::shareDir tcl scripts latex-skak.eXt]]
+		&& [file dirname $::scidb::test::shareDir] ne $::scidb::test::shareDir} {
+	set ::scidb::test::shareDir [file dirname $::scidb::test::shareDir]
+}
+set ::scidb::dir::share [file join $::scidb::test::shareDir tcl]
 rename ::progress::start ::scidb::test::appbook::realProgress
 proc ::progress::start {parent cmd args options close} {
 	return [{*}$cmd ::scidb::test::appbook::progress {} {*}$args]

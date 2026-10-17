@@ -314,18 +314,18 @@ variable Actions {
 	start_engine {
 		0 0 "analyse the board position with %s"
 		"Start an engine on the position on the board in an analysis pane; it follows the board as it changes. Without a pane a free one is used or a new one opened; giving the pane of a running engine replaces or restarts it (e.g. to change lines). lines = number of best lines (MultiPV, 1-8), threads, hash in MB; each defaults to the pane's setting. Then read its lines with engine_analysis."
-		{{"type":"object","properties":{"engine":{"type":"string","description":"engine name or part of it; without it Stockfish, or the first engine"},"pane":{"type":"integer","description":"analysis pane number as in its title: 1 for 'Analysis', 2 for 'Analysis (2)'"},"lines":{"type":"integer"},"threads":{"type":"integer"},"hash":{"type":"integer","description":"hash size in MB"}}}}
+		{{"type":"object","properties":{"engine":{"type":"string","description":"engine name or part of it; without it the default analysis engine"},"pane":{"type":"integer","description":"analysis pane number as in its title: 1 for 'Analysis', 2 for 'Analysis (2)'"},"lines":{"type":"integer"},"threads":{"type":"integer"},"hash":{"type":"integer","description":"hash size in MB"}}}}
 		::application::assistant::DoStartEngine
 	}
 	engine_evaluate {
-		0 0 "ask Stockfish about a position"
-		"Ask Stockfish directly (no analysis pane needed) for the best moves in a position and their scores: the board position, or 'fen'. 'lines' best moves (1-5, default 3), 'depth' (default 18, at most 30). Scores are in pawns from White's side (#n = mate in n). Use it for 'what is the best move', 'who is better', 'is this winning'; quote the scores and moves as given, never invent your own."
+		0 0 "ask the chess engine about a position"
+		"Ask the chess engine directly (no analysis pane needed) for the best moves in a position and their scores: the board position, or 'fen'. 'lines' best moves (1-5, default 3), 'depth' (default 18, at most 30). Scores are in pawns from White's side (#n = mate in n). Use it for 'what is the best move', 'who is better', 'is this winning'; quote the scores and moves as given, never invent your own."
 		{{"type":"object","properties":{"fen":{"type":"string","description":"a position; default the board"},"lines":{"type":"integer"},"depth":{"type":"integer"}}}}
 		::application::assistant::DoEngineEvaluate
 	}
 	engine_check_move {
-		0 0 "ask Stockfish about a move"
-		"Ask Stockfish how good one move is: best, excellent, good, inaccuracy, mistake or blunder, how much it loses, and the better move. 'move' in SAN (e.g. Nf5, O-O, exd5), played in the board position or in 'fen'. To judge a move of the game on the board, first put the board before that move (open_game with move)."
+		0 0 "ask the chess engine about a move"
+		"Ask the chess engine how good one move is: best, excellent, good, inaccuracy, mistake or blunder, how much it loses, and the better move. 'move' in SAN (e.g. Nf5, O-O, exd5), played in the board position or in 'fen'. To judge a move of the game on the board, first put the board before that move (open_game with move)."
 		{{"type":"object","properties":{"move":{"type":"string"},"fen":{"type":"string","description":"the position before the move; default the board"},"depth":{"type":"integer"}},"required":["move"]}}
 		::application::assistant::DoEngineCheckMove
 	}
@@ -403,7 +403,7 @@ variable Actions {
 	}
 	explain_game_result {
 		0 0 "find this game's turning points without changing it"
-		"Quick read-only Stockfish pass over the current game's mainline. Prefer this for 'why did White/Black lose', 'why did I lose', 'where did it go wrong', and 'what was the turning point', including follow-ups. Returns up to three biggest evaluation drops for the losing side, numbered moves played, better moves and evaluations before/after. Default side is the loser from the recorded result; select white or black when requested. Evaluations are short-search estimates, not proof of a tactical cause. Give friendly coaching in at most four short sentences: lead with the turning-point story, use SAN moves and evaluations in words, omit engine numbers unless asked, and end with one useful offer. Never infer a tactical cause from an evaluation drop alone; do not annotate or create another game."
+		"Quick read-only chess-engine pass over the current game's mainline. Prefer this for 'why did White/Black lose', 'why did I lose', 'where did it go wrong', and 'what was the turning point', including follow-ups. Returns up to three biggest evaluation drops for the losing side, numbered moves played, better moves and evaluations before/after. Default side is the loser from the recorded result; select white or black when requested. Evaluations are short-search estimates, not proof of a tactical cause. Give friendly coaching in at most four short sentences: lead with the turning-point story, use SAN moves and evaluations in words, omit engine numbers unless asked, and end with one useful offer. Never infer a tactical cause from an evaluation drop alone; do not annotate or create another game."
 		{{"type":"object","properties":{"side":{"type":"string","enum":["auto","white","black"],"description":"side to explain; default auto (recorded loser)"}}}}
 		::application::assistant::DoExplainGameResult
 	}
@@ -3289,11 +3289,13 @@ proc ::application::assistant::Figurines {moves} {
 
 # The name of the engine <text> means: its exact name, or the only engine
 # whose name or version contains it.
-# The engine used when none is named: Stockfish when installed, else the first.
+# The engine used when none is named: the user's default analysis engine,
+# else the first one.
 proc ::application::assistant::DefaultEngine {} {
 	set names [lmap e $::engine::Engines { dict get $e Name }]
 	if {![llength $names]} { error "no engine is installed; add one with add_engine" }
-	set i [lsearch -nocase -glob $names *stockfish*]
+	set i -1
+	catch { set i [lsearch -exact $names [::application::analysis::defaultEngine]] }
 	return [lindex $names [expr {$i >= 0 ? $i : 0}]]
 }
 
@@ -3567,7 +3569,7 @@ proc ::application::assistant::TablebaseDone {token fen http} {
 
 proc ::application::assistant::EngineReady {} {
 	if {![llength [info commands ::ai::engine::evaluate]]} { return "error: the engine module is not available" }
-	if {![::ai::engine::available]} { return "error: Stockfish is not installed (Chesswiz's stockfish-scidb or stockfish on PATH)" }
+	if {![::ai::engine::available]} { return "error: no UCI chess engine is set up (add one in the engine dictionary)" }
 	return ""
 }
 
@@ -3640,9 +3642,9 @@ proc ::application::assistant::DoEngineEvaluate {fen lines depth} {
 	if {[set err [EngineReady]] ne ""} { return $err }
 	if {$fen eq ""} { set fen [::scidb::pos::fen] }
 	if {[catch { ::ai::engine::evaluate $fen -depth $depth -multipv $lines } e]} {
-		return "error: Stockfish could not evaluate the position: $e"
+		return "error: [::ai::engine::label] could not evaluate the position: $e"
 	}
-	set out [list "Stockfish, depth $depth, position $fen:"]
+	set out [list "[::ai::engine::label], depth $depth, position $fen:"]
 	set i 0
 	foreach line [dict get $e multipv] {
 		set score [EngineScore $fen [dict get $line kind] [dict get $line value]]
@@ -3663,7 +3665,7 @@ proc ::application::assistant::DoEngineCheckMove {move fen depth} {
 	set best [EngineLine $fen [list [dict get $c bestMove]] 1]
 	set what [dict get {best "the best move" excellent excellent good good
 		inaccuracy "an inaccuracy" mistake "a mistake" blunder "a blunder"} $class]
-	set reply "Stockfish, depth $depth: $move is $what"
+	set reply "[::ai::engine::label], depth $depth: $move is $what"
 	if {$class ne "best" && $loss >= 0.1} {
 		append reply " (it loses $loss pawns; best was $best)"
 	} elseif {$class ne "best"} {
@@ -4607,7 +4609,7 @@ proc ::application::assistant::ResultPassSummary {plies scores side result ms} {
 		set nowLosing [expr {$aw in {losing {facing a forced mate} checkmated}}]
 		lappend rows [list $loss "$number$dots$san ($colour): evaluation $b -> $a; better was $better. Engine continuation: $pv." $coaching "$number$dots$san" [expr {!$wasLosing && $nowLosing}] $i]
 	}
-	set reply "Quick Stockfish analysis: result $result; studying $side. Evaluations are in pawns from White's perspective (+ favours White, - favours Black; # means mate). Short searches of $ms ms per position are estimates."
+	set reply "Quick [::ai::engine::label] analysis: result $result; studying $side. Evaluations are in pawns from White's perspective (+ favours White, - favours Black; # means mate). Short searches of $ms ms per position are estimates."
 	if {$side eq "both"} { append reply " No losing side is recorded; these are drops by either side." }
 	append reply "\nAnalyzed $count of [llength $plies] plies."
 	if {$count < [llength $plies]} { append reply " Partial pass: later turning points may be missing." }

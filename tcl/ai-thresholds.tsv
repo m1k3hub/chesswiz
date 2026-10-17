@@ -11,3 +11,9 @@ route_satisfied	typesafe	0.67
 guess_hint	typesafe	0.6
 guess_feedback	typesafe	0.6
 guess_review	typesafe	0.6
+insights_focus	typesafe	0.6
+insights_weakness	typesafe	0.6
+insights_termination	typesafe	0.6
+insights_focus	jev	0.6
+insights_weakness	jev	0.6
+insights_termination	jev	0.6

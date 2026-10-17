@@ -6,11 +6,15 @@
 #
 #   Tablebase: White wins (mate in 17) - best h8=Q+, h8=R+
 #
-# The answer comes from the Lichess tablebase server
-# (https://tablebase.lichess.ovh/standard?fen=..., Syzygy and Gaviota
-# tables, no login), asynchronously, debounced while moving through a game
-# and cached per position. Only the position is sent. The board's context
-# menu turns it off (Options(enabled)).
+# The answer comes from local Syzygy tables when a folder of them is set
+# and covers the position (probed in-process through Fathom,
+# ::scidb::tb::probe), else from the Lichess tablebase server
+# (https://tablebase.lichess.ovh/standard?fen=..., no login) when online
+# lookups are allowed: asynchronously, debounced while moving through a
+# game and cached per position; only the position is sent. The board's
+# context menu turns it off (Options(enabled)), sets the folder
+# (Options(local)) and allows or forbids the server (Options(online)).
+# Local answers have distance to zeroing (DTZ), not distance to mate.
 #
 #   ::tablebase::positionChanged $canv   from ::application::board::update
 #
@@ -35,12 +39,18 @@ set Checkmate		"Checkmate"
 set Stalemate		"Stalemate"
 set Unavailable	"not available (%s)"
 set Looking			"looking up..."
-set ShowTablebase	"Show Tablebase Results (lichess.org)"
+set ShowTablebase	"Show Tablebase Results"
+set LocalFolder	"Tablebase Folder (Syzygy)..."
+set OnlineLookup	"Look Up Online (lichess.org)"
+set Local			"local"
+set Dtz			"DTZ %d"
 
 } ;# namespace mc
 
 array set Options {
 	enabled 1
+	online 1
+	local ""
 }
 
 variable MaxPieces 7
@@ -69,7 +79,43 @@ proc ::tablebase::positionChanged {canv} {
 		Show $canv ""
 		return
 	}
+	if {[pieceCount $fen] > [LocalLargest] && !$Options(online)} {
+		Show $canv ""
+		return
+	}
 	set Pending [after $Delay [list ::tablebase::Lookup $canv $fen]]
+}
+
+
+# The largest piece count the local tables cover (0 without tables); the
+# folder is loaded on first use and when it changes.
+proc ::tablebase::LocalLargest {} {
+	variable Options
+	variable LoadedFolder
+
+	if {[llength [info commands ::scidb::tb::init]] == 0} { return 0 }
+	if {![info exists LoadedFolder] || $LoadedFolder ne $Options(local)} {
+		set LoadedFolder $Options(local)
+		catch { ::scidb::tb::init $Options(local) }
+	}
+	return [::scidb::tb::largest]
+}
+
+
+# A local answer in the shape of the server's, with SAN moves; "" when the
+# local tables do not cover the position.
+proc ::tablebase::LocalAnswer {fen} {
+	if {[pieceCount $fen] > [LocalLargest]} { return "" }
+	if {[catch { ::scidb::tb::probe $fen } answer] || $answer eq ""} { return "" }
+	set moves {}
+	foreach m [dict get $answer moves] {
+		set san [dict get $m uci]
+		if {![catch { ::scidb::ai::moveFacts [dict get $m uci] $fen } facts]
+		 && [regexp {"san":"([^"]+)"} $facts -> s]} { set san $s }
+		lappend moves [dict replace $m san $san]
+	}
+	dict set answer moves $moves
+	return $answer
 }
 
 
@@ -90,8 +136,31 @@ proc ::tablebase::Lookup {canv fen} {
 		Show $canv [dict get $Cache $key] [SideToMove $fen]
 		return
 	}
+	set local [LocalAnswer $fen]
+	if {$local ne ""} {
+		set text [summary $local [SideToMove $fen] 1]
+		dict set Cache $key $text
+		Show $canv $text
+		return
+	}
+	variable Options
+	if {!$Options(online)} { Show $canv ""; return }
 	Show $canv "$mc::Tablebase: $mc::Looking"
 	::application::download::Get [url $fen] [list ::tablebase::Answer $canv $fen]
+}
+
+
+# Board menu: choose the folder of Syzygy tables.
+proc ::tablebase::chooseFolder {parent} {
+	variable Options
+	variable mc
+	set dir [tk_chooseDirectory -parent $parent -title $mc::LocalFolder -mustexist 1 \
+		-initialdir [expr {$Options(local) ne "" ? $Options(local) : [file normalize ~]}]]
+	if {$dir eq ""} { return }
+	set Options(local) $dir
+	set ::tablebase::Cache [dict create]
+	LocalLargest
+	toggle
 }
 
 
@@ -176,14 +245,15 @@ proc ::tablebase::Key {fen} {
 # to move <stm> (w/b). The verdict is the side to move's category; the best
 # moves are those that leave the opponent in the worst category, shortest
 # win (or longest loss) first.
-proc ::tablebase::summary {answer stm} {
+proc ::tablebase::summary {answer stm {local 0}} {
 	variable mc
 
+	set head [expr {$local ? "$mc::Tablebase ($mc::Local)" : $mc::Tablebase}]
 	if {[dict exists $answer checkmate] && [dict get $answer checkmate] eq "true"} {
-		return "$mc::Tablebase: $mc::Checkmate"
+		return "$head: $mc::Checkmate"
 	}
 	if {[dict exists $answer stalemate] && [dict get $answer stalemate] eq "true"} {
-		return "$mc::Tablebase: $mc::Stalemate"
+		return "$head: $mc::Stalemate"
 	}
 	set category [expr {[dict exists $answer category] ? [dict get $answer category] : "unknown"}]
 	set mover [expr {$stm eq "w" ? "White" : "Black"}]
@@ -199,6 +269,8 @@ proc ::tablebase::summary {answer stm} {
 	set dtm [expr {[dict exists $answer dtm] ? [dict get $answer dtm] : "null"}]
 	if {[string is integer -strict $dtm] && $dtm != 0 && $category in {win loss}} {
 		append verdict " ([format $mc::MateIn [expr {abs($dtm)}]])"
+	} elseif {$local && [dict exists $answer dtz] && [dict get $answer dtz] > 0 && $category in {win loss}} {
+		append verdict " ([format $mc::Dtz [dict get $answer dtz]])"
 	}
 
 	# rank moves by the opponent's resulting category, then by distance
@@ -216,7 +288,7 @@ proc ::tablebase::summary {answer stm} {
 			lappend moves [list $r [expr {$r <= 2 ? -abs($d) : abs($d)}] [dict get $m san]]
 		}
 	}
-	if {![llength $moves]} { return "$mc::Tablebase: $verdict" }
+	if {![llength $moves]} { return "$head: $verdict" }
 	set moves [lsort -integer -index 0 [lsort -integer -decreasing -index 1 $moves]]
 	set bestRank [lindex $moves 0 0]
 	set best {}
@@ -224,7 +296,7 @@ proc ::tablebase::summary {answer stm} {
 		if {[lindex $m 0] != $bestRank || [llength $best] >= 3} { break }
 		lappend best [lindex $m 2]
 	}
-	return "$mc::Tablebase: $verdict - $mc::Best [join $best {, }]"
+	return "$head: $verdict - $mc::Best [join $best {, }]"
 }
 
 

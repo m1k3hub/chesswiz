@@ -101,6 +101,7 @@ set AIEventTypes			"AI: Time &Controls"
 set AIDatabaseTrend			"AI: Database &Trends"
 set DownloadGames				"Download &Games from the Internet..."
 set GuessTheMove				"Guess the &Move..."
+set PlayAgainstEngine			"Play Against &Engine..."
 
 # Tools
 set OpenEngineDictionary		"Open &Engine Dictionary"
@@ -615,6 +616,16 @@ proc build {menu} {
 			;
 	}
 
+	### the engine for game review and the AI features ####################
+	if {[llength [info commands ::ai::engine::chooseDialog]]} {
+		$m add command \
+			-compound left \
+			-label " $::ai::engine::mc::ChooseTitle..." \
+			-image $::icon::16x16::engine \
+			-command [list ::ai::engine::chooseDialog .application] \
+			;
+	}
+
 	### game review (move classes + accuracy) #############################
 	if {[llength [info commands ::gamereview::run]]} {
 		lassign [::tk::UnderlineAmpersand $mc::GameReview] text ul
@@ -651,6 +662,18 @@ proc build {menu} {
 			;
 	}
 
+	### play a training game against an engine ##############################
+	if {[llength [info commands ::playengine::open]]} {
+		lassign [::tk::UnderlineAmpersand $mc::PlayAgainstEngine] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::engine \
+			-command [list ::playengine::open .application] \
+			;
+	}
+
 	### guess the move (training) ##########################################
 	if {[llength [info commands ::guessmove::start]]} {
 		lassign [::tk::UnderlineAmpersand $mc::GuessTheMove] text ul
@@ -660,6 +683,18 @@ proc build {menu} {
 			-underline [IncrUL $ul] \
 			-image $::icon::16x16::none \
 			-command [list ::guessmove::start] \
+			;
+	}
+
+	### repertoire trainer with spaced repetition ###########################
+	if {[llength [info commands ::reptrainer::open]]} {
+		lassign [::tk::UnderlineAmpersand $::reptrainer::mc::TrainRepertoire] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [list ::reptrainer::open .application] \
 			;
 	}
 
