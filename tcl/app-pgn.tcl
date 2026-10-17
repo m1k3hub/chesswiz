@@ -190,7 +190,8 @@ proc build {top width height} {
 
 	for {set i 0} {$i < 9} {incr i} {
 		set pgn [::pgn::setup::buildText $edit.f$i editor]
-		::application::AddShortcutTag $pgn
+		# the shortcuts the notation's context menu lists (Ctrl-A, Ctrl-Shift-C ...)
+		[namespace parent]::board::needBinding $pgn
 		$pgn mark set insert begin left ;# fix the position of this mark
 		bind $pgn <Button-3> [namespace code [list PopupMenu $edit $i]]
 		bind $pgn <Double-3> {#} ;# catch double clicks
