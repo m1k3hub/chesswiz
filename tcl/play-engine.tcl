@@ -168,7 +168,7 @@ proc ::playengine::open {parent} {
 	set cf [ttk::frame $f.color]
 	ttk::label $cf.label -text $mc::Color
 	pack $cf.label -side left
-	foreach {value text} {white [set mc::White] black [set mc::Black] random [set mc::Random]} {
+	foreach {value text} [list white $mc::White black $mc::Black random $mc::Random] {
 		ttk::radiobutton $cf.$value -text $text -value $value \
 			-variable [namespace current]::Priv(dlg:color)
 		pack $cf.$value -side left -padx [list $::theme::padx 0]
