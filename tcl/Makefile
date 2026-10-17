@@ -135,6 +135,7 @@ SOURCES = \
 	tablebase.tcl \
 	endgame-trainer.tcl \
 	media-inset.tcl \
+	book.tcl \
 	guess-move.tcl \
 	repertoire-trainer.tcl \
 	annotation.tcl \

@@ -1312,6 +1312,7 @@ tcl::removeElements(List& list, List const& toRemove)
 namespace tcl {
 
 namespace app			{ void init(Tcl_Interp* interp); }
+namespace book			{ void init(Tcl_Interp* interp); }
 namespace diag			{ void init(Tcl_Interp* interp); }
 namespace progress	{ void init(Tcl_Interp* interp); }
 namespace db			{ void init(Tcl_Interp* interp); }
@@ -1368,6 +1369,7 @@ tcl::init(Tcl_Interp* ti)
 	Tcl_ObjSetVar2(ti, m_errResult, nullptr, tcl::newObj(), TCL_GLOBAL_ONLY);
 
 	app::init(ti);
+	book::init(ti);
 	progress::init(ti);
 	db::init(ti);
 	view::init(ti);

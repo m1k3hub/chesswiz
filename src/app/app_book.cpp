@@ -59,6 +59,11 @@ Book::Entry::Item::Item()
 Book::~Book() {}
 
 
+bool Book::isWriteable() const { return !isReadonly(); }
+
+mstl::string const& Book::filename() const { return m_filename; }
+
+
 Book*
 Book::open(mstl::string const& filename)
 {

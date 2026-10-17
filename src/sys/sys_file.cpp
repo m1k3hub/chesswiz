@@ -328,9 +328,11 @@ Mapping::Mapping(char const* filename, Mode mode)
 
 	int flags = 0;
 
-	if (mode & (Writeable | Readable))
+	// open exactly as wide as the caller asked for; a read-only file
+	// must not fail with EACCES under a Readable-only request
+	if ((mode & (Readable | Writeable)) == (Readable | Writeable))
 		flags = O_RDWR;
-	else if (!(mode & Writeable))
+	else if (mode & Writeable)
 		flags = O_WRONLY;
 	else
 		flags = O_RDONLY;
@@ -350,11 +352,18 @@ Mapping::Mapping(char const* filename, Mode mode)
 
 	int length = st.st_size;
 
-	flags = 0;
-	if (flags & Readable)	flags |= PROT_READ;
-	if (flags & Writeable)	flags |= PROT_WRITE;
+	if (length == 0)
+	{
+		// nothing to map; the file stays open (an empty book is a valid one)
+		return;
+	}
 
-	m_address = ::mmap(0, length, flags, MAP_PRIVATE, m_fd, 0);
+	int prot = 0;
+	if (mode & Readable)	prot |= PROT_READ;
+	if (mode & Writeable)	prot |= PROT_WRITE;
+
+	// MAP_SHARED: writes through the mapping have to reach the file
+	m_address = ::mmap(0, length, prot, (mode & Writeable) ? MAP_SHARED : MAP_PRIVATE, m_fd, 0);
 
 	if (m_address == MAP_FAILED)
 	{

@@ -109,6 +109,7 @@ set EngineMatch					"Engine Mat&ch..."
 set OpenEngineDictionary		"Open &Engine Dictionary"
 set OpenPlayerDictionary		"Open &Player Dictionary"
 set CompareEngines				"&Compare Engines"
+set OpeningBookEditor		"Opening &Book Editor"
 set CorrespondenceGames		"&Correspondence Games"
 set ICCFSettings				"ICCF &Settings"
 
@@ -397,6 +398,14 @@ proc build {menu} {
 		;
 	lassign [::tk::UnderlineAmpersand $mc::CompareEngines] text ul
 	set cmd [list ::application::analysis::openComparison .application]
+	$m add command \
+		-label " $text..." \
+		-underline [IncrUL $ul] \
+		-command $cmd \
+		;
+
+	lassign [::tk::UnderlineAmpersand $mc::OpeningBookEditor] text ul
+	set cmd [list ::book::openEditor .application]
 	$m add command \
 		-label " $text..." \
 		-underline [IncrUL $ul] \
