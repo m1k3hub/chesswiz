@@ -369,7 +369,9 @@ proc ::enginematch::open {parent} {
 	}
 	ModeChanged
 
-	::util::place $dlg -parent $parent -position center
+	if {![::playengine::PlaceBesideBoard $dlg]} {
+		::util::place $dlg -parent $parent -position center
+	}
 	wm deiconify $dlg
 	return $dlg
 }

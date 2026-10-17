@@ -123,7 +123,7 @@ else
 MEDIA_BACKEND ?= mpv
 endif
 MEDIA_LIBS_mpv = -lmpv
-MEDIA_LIBS_mf  = -lmfplay -lmfplat -lole32 -luser32
+MEDIA_LIBS_mf  = -lmfplay -lmfplat -lmfuuid -lole32 -loleaut32 -luser32
 ifeq ($(TARGET_MACOS),yes)
 MEDIA_LIBS_avf = -framework AVFoundation -framework CoreMedia -framework QuartzCore -framework AppKit
 endif

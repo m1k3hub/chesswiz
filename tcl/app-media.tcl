@@ -38,7 +38,7 @@ set StreamTitle		"Open a Live Stream"
 set StreamPrompt		"Stream or video link (YouTube, Twitch, HLS .m3u8, RTMP, RTSP, HTTP):"
 set StreamPlaying	"Streaming: %s"
 set StreamWaiting	"Connecting to %s..."
-set StreamFailed		"The stream could not be played: %s. YouTube and Twitch links need yt-dlp installed."
+set StreamFailed		"The stream could not be played: %s. %s"
 set NotAStream		"Not a stream link: %s"
 set Group				"Media"
 set SectionReports	"Reports"
@@ -2061,6 +2061,74 @@ proc application::media::isStreamUrl {text} {
 }
 
 
+# Match the authority, never a path/query or a lookalike domain.
+proc application::media::StreamNeedsYtdlp {url} {
+	return [regexp -nocase {^https?://(?:[^/@]+@)?(?:[^/:]+\.)?(?:youtube\.com|youtu\.be|twitch\.tv)(?::[0-9]+)?(?:[/?#]|$)} $url]
+}
+
+proc application::media::StreamFailure {url {detail {}}} {
+	variable mc
+	if {$detail eq ""} { set detail [::media::mpv::_get error-text] }
+	if {$detail eq ""} { set detail "The media backend did not report an error." }
+	if {[StreamNeedsYtdlp $url]} {
+		append detail " YouTube and Twitch links need yt-dlp installed."
+	}
+	return [format $mc::StreamFailed $url $detail]
+}
+
+
+# OS backends cannot resolve hosting-site pages. Linux retains mpv/yt-dlp.
+proc application::media::UsesOsMedia {} {
+    return [expr {$::tcl_platform(platform) eq "windows" || $::tcl_platform(os) eq "Darwin"}]
+}
+
+proc application::media::VlcRegistry {key} {
+    package require registry
+    return [registry get $key InstallDir]
+}
+
+# Dependency commands make installed-player selection testable without an OS.
+proc application::media::ExternalStreamPlayer {os {exists {file isfile}} {registry VlcRegistry}} {
+    if {$os eq "Darwin"} {
+        if {[{*}$exists /Applications/VLC.app/Contents/MacOS/VLC]} {
+            return [list /usr/bin/open -a VLC]
+        }
+    } elseif {$os eq "Windows NT"} {
+        set candidates {}
+        foreach key {{HKEY_LOCAL_MACHINE\SOFTWARE\VideoLAN\VLC} {HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\VideoLAN\VLC}} {
+            if {![catch {{*}$registry $key} dir]} {
+                lappend candidates [file join $dir vlc.exe]
+            }
+        }
+        foreach var {ProgramW6432 ProgramFiles ProgramFiles(x86)} {
+            if {[info exists ::env($var)]} {
+                lappend candidates [file join $::env($var) VideoLAN VLC vlc.exe]
+            }
+        }
+        foreach path $candidates {
+            if {[{*}$exists $path]} { return [list $path] }
+        }
+        set vlc [auto_execok vlc.exe]
+        if {$vlc ne ""} { return $vlc }
+    }
+    return {}
+}
+
+proc application::media::OpenStreamExternal {url} {
+    variable Priv
+    set command [ExternalStreamPlayer $::tcl_platform(os)]
+    if {[llength $command] && ![catch {exec {*}$command $url &}]} {
+        set Priv(statusbar) "Opened in VLC"
+        return 1
+    }
+    if {![catch {::platform::sys::openURL $url}]} {
+        set Priv(statusbar) "Opened in your browser"
+        return 1
+    }
+    return 0
+}
+
+
 proc application::media::OpenStream {parent} {
 	variable StreamOptions
 	variable mc
@@ -2122,9 +2190,16 @@ proc application::media::PlayStream {url} {
 	# a stream is not coupled to the game on the board
 	::media::sync::load-timeline {}
 	::media::sync::load-events {}
-	if {![PlayInProcess $url 0]} {
-		set Priv(statusbar) [format $mc::StreamFailed $url]
-		return 0
+    if {[UsesOsMedia] && [StreamNeedsYtdlp $url]} {
+        if {[OpenStreamExternal $url]} { return 1 }
+        set Priv(statusbar) [StreamFailure $url]
+        return 0
+    }
+    if {![PlayInProcess $url 0]} {
+        set message [StreamFailure $url]
+        if {[UsesOsMedia] && [OpenStreamExternal $url]} { return 1 }
+        set Priv(statusbar) $message
+        return 0
 	}
 	set Priv(stream) $url
 	set Priv(statusbar) [format $mc::StreamWaiting $url]
@@ -2146,13 +2221,21 @@ proc application::media::CheckStream {url tries} {
 	set state [MediaState]
 	MediaDebug "CheckStream: state=$state"
 	if {$state eq "error" || ($state eq "idle" && $tries >= 8)} {
-		MediaDestroy
-		set Priv(statusbar) [format $mc::StreamFailed $url]
+		set detail [::media::mpv::_get error-text]
+		if {$state eq "idle"} { set detail "Timed out while connecting or buffering." }
+		set message [StreamFailure $url $detail]
+        MediaDestroy
+        if {[UsesOsMedia] && [OpenStreamExternal $url]} { return }
+        set Priv(statusbar) $message
 	} elseif {$state eq "idle"} {
 		set Priv(checkid) [after 5000 [namespace code [list CheckStream $url [incr tries]]]]
-	} else {
-		set Priv(statusbar) [format $mc::StreamPlaying $url]
-	}
+    } else {
+        set Priv(statusbar) [format $mc::StreamPlaying $url]
+        # Keep detecting OS decoder/network errors after playback has started.
+        if {[UsesOsMedia] && $state ne "ended"} {
+            set Priv(checkid) [after 5000 [namespace code [list CheckStream $url 0]]]
+        }
+    }
 }
 
 

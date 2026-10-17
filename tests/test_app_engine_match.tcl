@@ -379,7 +379,9 @@ tcltest::test em-match-suite {the suite's openings seed the games, both colours 
 	set savedPlies $::enginematch::DrawPlies
 	set ::enginematch::DrawMinMove 2
 	set ::enginematch::DrawPlies 2
-	set suiteFile [file join [file dirname [file normalize [info script]]] em-suite-[pid].pgn]
+	set suiteDir [file join [file dirname [file normalize [info script]]] tmp-app]
+	file mkdir $suiteDir
+	set suiteFile [file join $suiteDir em-suite-[pid].pgn]
 	set chan [open $suiteFile w]
 	puts $chan {[Event "suite"]}
 	puts $chan {1. e4 e5 *}
@@ -490,5 +492,9 @@ tcltest::test em-dialog {the dialog lists the engines; the run panel holds the t
 	catch { ::enginematch::Close }
 	::scidb::test::em::unstub
 } -result {{StubA StubB} .application.enginematch.top.run.table 1 1 StubB 1 1 Pause {New Match} 0}
+
+tcltest::test em-pipe-open {Connect opens the engine pipe with the global open} -body {
+	regexp {\[::open "\|} [info body ::enginematch::Connect]
+} -result 1
 
 tcltest::cleanupTests
