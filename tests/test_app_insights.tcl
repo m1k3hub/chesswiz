@@ -408,10 +408,264 @@ tcltest::test insights-window {the window builds and fills its sections} -setup 
 		[llength [$reasons children {}]] \
 		[string length $::insights::Data($dlg,scoreText)] \
 		[expr {[string first "%" $::insights::Data($dlg,scoreText)] > 0}]
-} -cleanup {
+	} -cleanup {
 	catch { destroy [::insights::DialogName $::scidb::test::insights::Base Normal $::scidb::test::insights::Index] }
 	::scidb::test::insights::closeFixtureDatabase $::scidb::test::insights::Base
 } -result {1 3 3 1 1 5 1}
+
+# ----------------------------------------------------------------------
+# System One (Jev) layer: focus + urgency, weakest re-ranking, termination
+# ----------------------------------------------------------------------
+
+proc ::scidb::test::insights::withStubbedSystemOne {evalReply syncChoice body} {
+	set savedBackend $::ai::systemone::Config(backend)
+	rename ::ai::systemone::evaluateAsync ::scidb::test::insights::origEvaluateAsync
+	rename ::ai::systemone::evaluate ::scidb::test::insights::origEvaluate
+	rename ::ai::systemone::chooseSync ::scidb::test::insights::origChooseSync
+
+	set ::scidb::test::insights::StubReply $evalReply
+	set ::scidb::test::insights::StubChoice $syncChoice
+	set ::scidb::test::insights::Calls {}
+
+	proc ::ai::systemone::evaluateAsync {state questions script} {
+		lappend ::scidb::test::insights::Calls [list async $state $questions]
+		after 0 [list {*}$script $::scidb::test::insights::StubReply]
+	}
+	proc ::ai::systemone::evaluate {state questions} {
+		lappend ::scidb::test::insights::Calls [list sync $state $questions]
+		if {![dict get $::scidb::test::insights::StubReply ok]} {
+			error [dict get $::scidb::test::insights::StubReply error]
+		}
+		return [dict get $::scidb::test::insights::StubReply answers]
+	}
+	proc ::ai::systemone::chooseSync {feature state question args} {
+		lappend ::scidb::test::insights::Calls [list chooseSync $feature $state $question $args]
+		return $::scidb::test::insights::StubChoice
+	}
+
+	::ai::systemone::configure -backend typesafe
+	set rc [catch { uplevel 1 $body } result options]
+	rename ::ai::systemone::evaluateAsync {}
+	rename ::ai::systemone::evaluate {}
+	rename ::ai::systemone::chooseSync {}
+	rename ::scidb::test::insights::origEvaluateAsync ::ai::systemone::evaluateAsync
+	rename ::scidb::test::insights::origEvaluate ::ai::systemone::evaluate
+	rename ::scidb::test::insights::origChooseSync ::ai::systemone::chooseSync
+	::ai::systemone::configure -backend [expr {$savedBackend eq "" ? "off" : $savedBackend}]
+	return -options $options $result
+}
+
+tcltest::test insights-jev-focus-rules {deterministic ruleFocus covers opening leak, time trouble, colour imbalance and steady} -body {
+	set timeRecs [list \
+		[::scidb::test::insights::rec Me A 0-1 C60 {Ruy Lopez} 2000 2000 2022.01.01 60 {time forfeit}] \
+		[::scidb::test::insights::rec Me B 0-1 C60 {Ruy Lopez} 2000 2000 2022.01.02 60 {time forfeit}] \
+		[::scidb::test::insights::rec Me C 1-0 C60 {Ruy Lopez} 2000 2000 2022.01.03 60 normal]]
+	set leakRecs [concat \
+		[::scidb::test::insights::games 5 B01 0-1] \
+		[::scidb::test::insights::games 5 C60 1-0]]
+	set colourRecs [list \
+		[::scidb::test::insights::rec Me A 1-0 C60 {Ruy Lopez} 2000 2000 2022.01.01 60 normal] \
+		[::scidb::test::insights::rec Me B 1-0 C60 {Ruy Lopez} 2000 2000 2022.01.02 60 normal] \
+		[::scidb::test::insights::rec Me C 1-0 C60 {Ruy Lopez} 2000 2000 2022.01.03 60 normal] \
+		[::scidb::test::insights::rec D Me 1-0 B01 {Scandinavian} 2000 2000 2022.01.04 60 normal] \
+		[::scidb::test::insights::rec E Me 1-0 B01 {Scandinavian} 2000 2000 2022.01.05 60 normal] \
+		[::scidb::test::insights::rec F Me 1-0 B01 {Scandinavian} 2000 2000 2022.01.06 60 normal]]
+	set steadyRecs [list \
+		[::scidb::test::insights::rec Me A 1/2-1/2 C60 {Ruy Lopez} 2000 2000 2022.01.01 60 normal] \
+		[::scidb::test::insights::rec B Me 1/2-1/2 C60 {Ruy Lopez} 2000 2000 2022.01.02 60 normal]]
+	set rTime [::insights::ruleFocus [::insights::aggregate $timeRecs Me]]
+	set rLeak [::insights::ruleFocus [::insights::aggregate $leakRecs Me -min-games 5]]
+	set rCol  [::insights::ruleFocus [::insights::aggregate $colourRecs Me]]
+	set rStd  [::insights::ruleFocus [::insights::aggregate $steadyRecs Me]]
+	list \
+		[dict get $rTime focus] [dict get $rTime urgency] [dict get $rTime source] \
+		[dict get $rLeak focus] [dict get $rLeak urgency] [dict get $rLeak section] \
+		[dict get $rCol focus]  [dict get $rCol urgency] \
+		[dict get $rStd focus]  [dict get $rStd urgency]
+} -result {time_trouble severe rules opening_leak severe weakest colour_imbalance severe steady mild}
+
+tcltest::test insights-jev-focus-classifier {advise uses classifier choice and score when confident} -body {
+	set report [::insights::aggregate [::scidb::test::insights::fixture] Me]
+	set reply [dict create ok 1 answers [dict create \
+		focus [dict create type choice choice endgame_length confidence 0.88] \
+		urgency [dict create type score score 0.95 confidence 0.84]]]
+	::scidb::test::insights::withStubbedSystemOne $reply "" {
+		unset -nocomplain ::scidb::test::insights::Adv
+		::insights::advise $report {set ::scidb::test::insights::Adv}
+		::scidb::test::insights::wait {[info exists ::scidb::test::insights::Adv]}
+		set adv $::scidb::test::insights::Adv
+		list \
+			[llength $::scidb::test::insights::Calls] \
+			[dict get $adv focus] \
+			[dict get $adv urgency] \
+			[dict get $adv section] \
+			[dict get $adv source] \
+			[string match "Focus (classifier, severe):*" [dict get $adv takeaway]]
+	}
+} -result {1 endgame_length severe lengths classifier 1}
+
+tcltest::test insights-jev-focus-fallback {advise falls back to rules when below threshold, invalid or errored} -body {
+	set report [::insights::aggregate [::scidb::test::insights::fixture] Me]
+	set lowReply [dict create ok 1 answers [dict create \
+		focus [dict create type choice choice colour_imbalance confidence 0.25] \
+		urgency [dict create type score score 0.9 confidence 0.20]]]
+	set badReply [dict create ok 1 answers [dict create \
+		focus [dict create type choice choice invented_label confidence 0.99]]]
+	set errReply [dict create ok 0 error "unreachable"]
+
+	set out {}
+	foreach reply [list $lowReply $badReply $errReply] {
+		::scidb::test::insights::withStubbedSystemOne $reply "" {
+			unset -nocomplain ::scidb::test::insights::Adv
+			::insights::advise $report {set ::scidb::test::insights::Adv}
+			::scidb::test::insights::wait {[info exists ::scidb::test::insights::Adv]}
+			lappend out [list [dict get $::scidb::test::insights::Adv focus] \
+				[dict get $::scidb::test::insights::Adv source]]
+		}
+	}
+	set out
+} -result {{time_trouble rules} {time_trouble rules} {time_trouble rules}}
+
+tcltest::test insights-jev-weakness-rerank {rankWeakest re-orders candidates by leak noul and priority score while preserving exact numbers} -body {
+	# B01 has 5 games (1W 2D 2L = 40.0% score), C60 has 15 games (6W 1D 8L = 43.3% score),
+	# A00 has 5 games (5W 0D 0L = 100.0% score).
+	# Deterministic order by score asc is: B01 (4000), C60 (4333), A00 (10000).
+	# Classifier promotes high-volume C60 (8 losses) ahead of B01 (2 losses) and marks A00 as non-leak.
+	set records [concat \
+		[::scidb::test::insights::games 1 B01 1-0] \
+		[::scidb::test::insights::games 2 B01 1/2-1/2] \
+		[::scidb::test::insights::games 2 B01 0-1] \
+		[::scidb::test::insights::games 6 C60 1-0] \
+		[::scidb::test::insights::games 1 C60 1/2-1/2] \
+		[::scidb::test::insights::games 8 C60 0-1] \
+		[::scidb::test::insights::games 5 A00 1-0]]
+	set report [::insights::aggregate $records Me -min-games 5 -weakest-lines 5]
+	set detOrder [lmap r [dict get $report weakest] { lindex $r 0 }]
+
+	set reply [dict create ok 1 answers [dict create \
+		leak_0 [dict create type noul noul 0.72] \
+		priority_0 [dict create type score score 0.50 confidence 0.85] \
+		leak_1 [dict create type noul noul 0.94] \
+		priority_1 [dict create type score score 0.92 confidence 0.90] \
+		leak_2 [dict create type noul noul 0.05] \
+		priority_2 [dict create type score score 0.05 confidence 0.95]]]
+
+	::scidb::test::insights::withStubbedSystemOne $reply "" {
+		unset -nocomplain ::scidb::test::insights::Ranked
+		::insights::rankWeakest $report {set ::scidb::test::insights::Ranked}
+		::scidb::test::insights::wait {[info exists ::scidb::test::insights::Ranked]}
+		set res $::scidb::test::insights::Ranked
+		set newOrder [lmap r [dict get $res weakest] { lindex $r 0 }]
+		set topRow [lindex [dict get $res weakest] 0]
+		list $detOrder $newOrder $topRow [dict get $res leaks] [dict get $res source]
+	}
+} -result {{B01 C60 A00} {C60 B01 A00} {C60 C60 6 1 8 15 4333 5333} {B01 C60} classifier}
+
+tcltest::test insights-jev-weakness-fallback {rankWeakest keeps deterministic order when classifier is off or errors} -body {
+	set records [concat \
+		[::scidb::test::insights::games 5 B01 0-1] \
+		[::scidb::test::insights::games 5 C60 1-0]]
+	set report [::insights::aggregate $records Me -min-games 5]
+	set errReply [dict create ok 0 error "down"]
+	::scidb::test::insights::withStubbedSystemOne $errReply "" {
+		unset -nocomplain ::scidb::test::insights::Ranked
+		::insights::rankWeakest $report {set ::scidb::test::insights::Ranked}
+		::scidb::test::insights::wait {[info exists ::scidb::test::insights::Ranked]}
+		set res $::scidb::test::insights::Ranked
+		list [lmap r [dict get $res weakest] { lindex $r 0 }] [dict get $res leaks] [dict get $res source]
+	}
+} -result {{B01 C60} B01 rules}
+
+tcltest::test insights-jev-termination {known terminations use rules; free-text strings use System One with fallback} -body {
+	set known [list \
+		[::insights::ruleTermination normal] \
+		[::insights::ruleTermination {time forfeit}] \
+		[::insights::ruleTermination abandoned] \
+		[::insights::ruleTermination {rules infraction}] \
+		[::insights::ruleTermination ?] \
+		[::insights::ruleTermination "Zeitueberschreitung"]]
+
+	set reply [dict create ok 1 answers [dict create \
+		insights_termination [dict create type choice choice time confidence 0.91]]]
+
+	::scidb::test::insights::withStubbedSystemOne $reply time {
+		set syncKnown [::insights::chooseTerminationSync "time forfeit"]
+		set callsAfterKnown [llength $::scidb::test::insights::Calls]
+		set syncUnknown [::insights::chooseTerminationSync "Zeitueberschreitung"]
+		set callsAfterUnknown [llength $::scidb::test::insights::Calls]
+
+		unset -nocomplain ::scidb::test::insights::Term
+		::insights::classifyTermination "Zeitueberschreitung" {set ::scidb::test::insights::Term}
+		::scidb::test::insights::wait {[info exists ::scidb::test::insights::Term]}
+		set asyncUnknown [list [dict get $::scidb::test::insights::Term label] \
+			[dict get $::scidb::test::insights::Term source]]
+	}
+
+	::scidb::test::insights::withStubbedSystemOne [dict create ok 0 error "off"] "" {
+		set fallbackSync [::insights::chooseTerminationSync "Zeitueberschreitung"]
+	}
+
+	list $known $syncKnown $callsAfterKnown $syncUnknown $callsAfterUnknown $asyncUnknown $fallbackSync
+} -result {{board time disconnect adjudicated unknown {}} time 0 time 1 {time classifier} unknown}
+
+tcltest::test insights-jev-window-async {the window updates takeaway and weakest table asynchronously from System One} -setup {
+	lassign [::scidb::test::insights::openFixtureDatabase] base index
+	set ::scidb::test::insights::Base $base
+	set ::scidb::test::insights::Index $index
+} -body {
+	set reply [dict create ok 1 answers [dict create \
+		focus [dict create type choice choice opening_leak confidence 0.93] \
+		urgency [dict create type score score 0.90 confidence 0.89]]]
+	::scidb::test::insights::withStubbedSystemOne $reply "" {
+		set ::scidb::test::insights::Dlg [::insights::show .application \
+			$::scidb::test::insights::Base Normal $::scidb::test::insights::Index]
+		::scidb::test::insights::wait {
+			[info exists ::insights::Data($::scidb::test::insights::Dlg,focus)]
+			&& [dict exists $::insights::Data($::scidb::test::insights::Dlg,focus) source]
+			&& [dict get $::insights::Data($::scidb::test::insights::Dlg,focus) source] eq "classifier"
+		}
+		set dlg $::scidb::test::insights::Dlg
+		list \
+			[winfo exists $dlg.takeaway] \
+			[dict get $::insights::Data($dlg,focus) focus] \
+			[dict get $::insights::Data($dlg,focus) urgency] \
+			[dict get $::insights::Data($dlg,focus) source] \
+			[string match "Focus (classifier, severe):*" $::insights::Data($dlg,takeawayText)]
+	}
+} -cleanup {
+	unset -nocomplain ::scidb::test::insights::Dlg
+	catch { destroy [::insights::DialogName $::scidb::test::insights::Base Normal $::scidb::test::insights::Index] }
+	::scidb::test::insights::closeFixtureDatabase $::scidb::test::insights::Base
+} -result {1 opening_leak severe classifier 1}
+
+tcltest::testConstraint typesafeLive [expr {
+	[info exists ::env(TYPESAFE_API_KEY)] && [string length $::env(TYPESAFE_API_KEY)] > 0
+}]
+
+tcltest::test insights-jev-live-typesafe {live cloud check against TypeSafe jev-latest} \
+	-constraints typesafeLive -setup {
+	set ::scidb::test::insights::SavedBackend $::ai::systemone::Config(backend)
+	::ai::systemone::configure -backend typesafe
+} -body {
+	set records [concat \
+		[::scidb::test::insights::games 6 B01 0-1] \
+		[::scidb::test::insights::games 6 C60 1-0]]
+	set report [::insights::aggregate $records Me -min-games 5]
+	unset -nocomplain ::scidb::test::insights::LiveAdv
+	::insights::advise $report {set ::scidb::test::insights::LiveAdv}
+	::scidb::test::insights::wait {[info exists ::scidb::test::insights::LiveAdv]} 10000
+	set adv $::scidb::test::insights::LiveAdv
+	set term [::insights::chooseTerminationSync "Zeitueberschreitung"]
+	list \
+		[dict get $adv ok] \
+		[expr {[dict get $adv focus] in [dict keys $::insights::FocusCriteria]}] \
+		[expr {[dict get $adv urgency] in $::insights::UrgencyLevels}] \
+		[expr {$term in [dict keys $::insights::TerminationCriteria]}]
+} -cleanup {
+	::ai::systemone::configure -backend [expr {
+		$::scidb::test::insights::SavedBackend eq "" ? "off" : $::scidb::test::insights::SavedBackend
+	}]
+} -result {1 1 1 1}
 
 tcltest::cleanupTests
 return

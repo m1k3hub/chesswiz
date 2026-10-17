@@ -88,6 +88,21 @@ set Collected				"%s games, %s decided, %s without result."
 set Refresh				"Refresh"
 set OpenInSwitcher		"Open Selected Opening In Switcher"
 set NoSelection			"Select an opening row first."
+set TakeawayFormat		"Focus (%s, %s): %s -- %s"
+set Focus(opening_leak)		"Weakest openings"
+set Focus(colour_imbalance)	"Colour imbalance"
+set Focus(endgame_length)	"Game length & stamina"
+set Focus(opponent_upsets)	"Results against weaker opponents"
+set Focus(time_trouble)		"Time and non-normal losses"
+set Focus(form_slump)		"Recent year form"
+set Focus(steady)			"Balanced results"
+set FocusAdvice(opening_leak)		"Review the lowest-scoring openings in the switcher."
+set FocusAdvice(colour_imbalance)	"Compare your repertoire and results between White and Black."
+set FocusAdvice(endgame_length)		"Check the game-length table where the score drops off."
+set FocusAdvice(opponent_upsets)	"Tighten conversion against lower-rated and equal opponents."
+set FocusAdvice(time_trouble)		"Watch the clock and reduce non-normal terminations."
+set FocusAdvice(form_slump)			"Compare the latest year's games against earlier years."
+set FocusAdvice(steady)				"No single section stands out as a glaring leak."
 
 } ;# namespace mc
 
@@ -95,6 +110,37 @@ array set Options {
 	weakest:min-games	5
 	top:openings		10
 	weakest:lines		5
+}
+
+variable FocusCriteria {
+	opening_leak		"a specific opening or ECO family with enough games scores poorly or has a high loss rate"
+	colour_imbalance	"one colour (White or Black) scores markedly worse than the other across a meaningful sample"
+	endgame_length		"results drop sharply in long games (over 60 moves) or short games (under 30 moves), pointing to phase stamina or early tactical trouble"
+	opponent_upsets		"the player drops too many points against weaker or equal-rated opponents"
+	time_trouble		"a large share of losses come from time forfeits or non-normal terminations rather than over-the-board play"
+	form_slump			"the most recent year(s) score noticeably below the player's earlier results"
+	steady				"results are balanced across colours, openings, lengths and bands with no single glaring leak"
+}
+
+variable FocusSections {
+	opening_leak		weakest
+	colour_imbalance	colour
+	endgame_length		lengths
+	opponent_upsets		bands
+	time_trouble		reasons
+	form_slump			years
+	steady				colour
+}
+
+variable UrgencyLevels {mild moderate severe}
+variable PriorityLevels {low medium high}
+
+variable TerminationCriteria {
+	board		"over-the-board defeat by checkmate or resignation"
+	time		"lost on time, clock flag, or time control forfeit"
+	disconnect	"abandoned game, connection lost, or player left"
+	adjudicated	"arbiter adjudication, rules infraction, default, or emergency"
+	unknown		"missing, unterminated, or cannot be determined"
 }
 
 # the wins / draws / losses segments of a bar (canvas -fill colors)
@@ -124,10 +170,13 @@ proc ::insights::show {parent base variant playerIndex} {
 		set Data($dlg,playerKey) $playerKey
 		set Data($dlg,playerName) $name
 		set Data($dlg,token) 0
+		set Data($dlg,aiToken) 0
 		set Data($dlg,gamesText) {}
 		set Data($dlg,scoreText) {}
 		set Data($dlg,recordText) {}
 		set Data($dlg,status) {}
+		set Data($dlg,takeawayText) {}
+		set Data($dlg,focus) {}
 		BuildWindow $dlg $parent
 	}
 
@@ -150,11 +199,14 @@ proc ::insights::Refresh {dlg} {
 	CancelCollect $Data($dlg,token)
 	set token [incr CollectCounter]
 	set Data($dlg,token) $token
+	incr Data($dlg,aiToken)
 	set Data($dlg,result) {}
 	set Data($dlg,gamesText) {}
 	set Data($dlg,scoreText) {}
 	set Data($dlg,recordText) {}
 	set Data($dlg,status) {}
+	set Data($dlg,takeawayText) {}
+	set Data($dlg,focus) {}
 
 	collect $Data($dlg,base) $Data($dlg,variant) $Data($dlg,playerIndex) \
 		-token $token \
@@ -635,6 +687,486 @@ proc ::insights::formatWdl {wins draws losses} {
 
 
 # ======================================================================
+# System One (Jev) typed judgments:
+#   1. insights_focus       primary training focus (choice) + urgency (score)
+#   2. insights_weakness    weakest-opening repair priority re-ranking (noul + score)
+#   3. insights_termination free-text loss termination normalization (choice)
+# Every decision has a deterministic rule fallback and leaves the report's
+# database numbers untouched.
+# ======================================================================
+
+proc ::insights::Qualified {feature} {
+	if {![llength [info commands ::ai::systemone::enabled]] || ![::ai::systemone::enabled]} {
+		return 0
+	}
+	if {[llength [info commands ::ai::systemone::qualified]]} {
+		return [::ai::systemone::qualified $feature]
+	}
+	return 1
+}
+
+
+proc ::insights::Threshold {feature {default 0.6}} {
+	if {[llength [info commands ::ai::systemone::threshold]]} {
+		return [::ai::systemone::threshold $feature $default]
+	}
+	return $default
+}
+
+
+proc ::insights::focusQuestions {} {
+	variable FocusCriteria
+	variable UrgencyLevels
+
+	return [dict create \
+		focus [dict create type choice \
+			instructions "Given this chess player's database report, which single area is the most actionable weakness or takeaway to focus on first?" \
+			criteria $FocusCriteria] \
+		urgency [dict create type score \
+			instructions "How pronounced and urgent is the primary weakness in this player's report?" \
+			criteria $UrgencyLevels]]
+}
+
+
+proc ::insights::focusState {report} {
+	lassign [dict get $report overall] _ w d l games score loss
+	set lines [list [format "OVERALL: games=%d decided=%d W-D-L=%s score=%s%% loss=%s%%" \
+		$games [dict get $report decided] [formatWdl $w $d $l] \
+		[formatPercent $score] [formatPercent $loss]]]
+
+	set colours {}
+	foreach side {white black} {
+		if {[dict exists $report $side]} {
+			lassign [dict get $report $side] _ sw sd sl sg sscore sloss
+			lappend colours [format "%s=%s (%d games, %s%%, loss %s%%)" \
+				$side [formatWdl $sw $sd $sl] $sg [formatPercent $sscore] [formatPercent $sloss]]
+		}
+	}
+	if {[llength $colours]} { lappend lines "COLOUR: [join $colours {; }]" }
+
+	set weak {}
+	foreach row [dict get $report weakest] {
+		lassign $row eco name rw rd rl rg rscore rloss
+		lappend weak [format "%s %s %s (%d games, score %s%%, loss %s%%)" \
+			$eco $name [formatWdl $rw $rd $rl] $rg [formatPercent $rscore] [formatPercent $rloss]]
+	}
+	if {[llength $weak]} { lappend lines "WEAKEST OPENINGS: [join $weak {; }]" }
+
+	foreach {section tag} {
+		families	FAMILIES
+		bands		"OPPONENT BANDS"
+		lengths	LENGTHS
+		years		YEARS
+	} {
+		set parts {}
+		foreach row [lrange [dict get $report $section] 0 5] {
+			lassign $row key rw rd rl rg rscore rloss
+			lappend parts [format "%s %s (%d games, score %s%%, loss %s%%)" \
+				$key [formatWdl $rw $rd $rl] $rg [formatPercent $rscore] [formatPercent $rloss]]
+		}
+		if {[llength $parts]} { lappend lines "$tag: [join $parts {; }]" }
+	}
+
+	set reasons {}
+	foreach row [dict get $report lossReasons] {
+		lassign $row reason count
+		lappend reasons "$reason=$count"
+	}
+	if {[llength $reasons]} { lappend lines "LOSS REASONS: [join $reasons {, }]" }
+
+	return [join $lines \n]
+}
+
+
+proc ::insights::formatTakeaway {focus urgency source} {
+	variable mc
+
+	set label [expr {[info exists mc::Focus($focus)] ? $mc::Focus($focus) : $focus}]
+	set advice [expr {[info exists mc::FocusAdvice($focus)] ? $mc::FocusAdvice($focus) : ""}]
+	return [format $mc::TakeawayFormat $source $urgency $label $advice]
+}
+
+
+# Deterministic fallback for the primary focus and its urgency.
+proc ::insights::ruleFocus {report} {
+	variable FocusSections
+
+	set decided [dict get $report decided]
+	if {$decided == 0} {
+		return [dict create \
+			focus steady urgency mild section colour \
+			takeaway [formatTakeaway steady mild rules] source rules]
+	}
+
+	lassign [dict get $report overall] _ _ _ totalLosses _ overallScore _
+
+	# 1. Non-normal loss terminations (time trouble / forfeits)
+	set nonNormalLosses 0
+	foreach row [dict get $report lossReasons] {
+		lassign $row reason count
+		if {[ruleTermination $reason] in {time disconnect adjudicated}} {
+			incr nonNormalLosses $count
+		}
+	}
+	if {$totalLosses >= 2 && $nonNormalLosses * 100 >= $totalLosses * 35} {
+		set urgency [expr {$nonNormalLosses * 100 >= $totalLosses * 60 ? "severe" : "moderate"}]
+		return [FocusResult time_trouble $urgency rules]
+	}
+
+	# 2. Weakest opening with enough games and a low score
+	set weakest [dict get $report weakest]
+	if {[llength $weakest]} {
+		lassign [lindex $weakest 0] _ _ w d l _ wScore wLoss
+		if {[expr {$w + $d + $l}] > 0 && ($wScore <= 3500 || $overallScore - $wScore >= 2000)} {
+			set urgency [expr {$wScore <= 2000 || $wLoss >= 6500 ? "severe" : "moderate"}]
+			return [FocusResult opening_leak $urgency rules]
+		}
+	}
+
+	# 3. Colour imbalance when both colours have a meaningful sample
+	if {[dict exists $report white] && [dict exists $report black]} {
+		lassign [dict get $report white] _ ww wd wl _ wScore _
+		lassign [dict get $report black] _ bw bd bl _ bScore _
+		if {[expr {$ww + $wd + $wl}] >= 3 && [expr {$bw + $bd + $bl}] >= 3} {
+			set gap [expr {abs($wScore - $bScore)}]
+			if {$gap >= 2000} {
+				set urgency [expr {$gap >= 3500 ? "severe" : "moderate"}]
+				return [FocusResult colour_imbalance $urgency rules]
+			}
+		}
+	}
+
+	# 4. Drop-off by game length
+	foreach row [dict get $report lengths] {
+		lassign $row key lw ld ll _ lScore _
+		if {[expr {$lw + $ld + $ll}] >= 3 && ($lScore <= 3500 || $overallScore - $lScore >= 2000)} {
+			set urgency [expr {$lScore <= 2000 ? "severe" : "moderate"}]
+			return [FocusResult endgame_length $urgency rules]
+		}
+	}
+
+	# 5. Upsets against weaker opponents
+	foreach row [dict get $report bands] {
+		lassign $row band bw bd bl _ bScore _
+		if {$band in {weaker200 weaker50} && [expr {$bw + $bd + $bl}] >= 3 && $bScore < 5500} {
+			set urgency [expr {$bScore <= 3500 ? "severe" : "moderate"}]
+			return [FocusResult opponent_upsets $urgency rules]
+		}
+	}
+
+	# 6. Recent year slump
+	set datedYears {}
+	foreach row [dict get $report years] {
+		if {[lindex $row 0] ne "?"} { lappend datedYears $row }
+	}
+	if {[llength $datedYears] >= 2} {
+		lassign [lindex $datedYears 0] _ yw yd yl _ latestScore _
+		lassign [lindex $datedYears 1] _ pw pd pl _ prevScore _
+		if {[expr {$yw + $yd + $yl}] >= 3 && [expr {$pw + $pd + $pl}] >= 2} {
+			set drop [expr {$prevScore - $latestScore}]
+			if {$drop >= 1500} {
+				set urgency [expr {$drop >= 3000 ? "severe" : "moderate"}]
+				return [FocusResult form_slump $urgency rules]
+			}
+		}
+	}
+
+	return [FocusResult steady mild rules]
+}
+
+
+proc ::insights::FocusResult {focus urgency source} {
+	variable FocusSections
+
+	set section [expr {[dict exists $FocusSections $focus] ? [dict get $FocusSections $focus] : "colour"}]
+	return [dict create \
+		focus $focus \
+		urgency $urgency \
+		section $section \
+		takeaway [formatTakeaway $focus $urgency $source] \
+		source $source]
+}
+
+
+# Async System One judgment for the report's primary focus and urgency.
+# <script> is called with {ok 1 focus F urgency U section S takeaway T source classifier|rules}.
+proc ::insights::advise {report script} {
+	set fallback [ruleFocus $report]
+	if {[dict get $report decided] == 0 || ![Qualified insights_focus]} {
+		after 0 [list {*}$script [dict merge [list ok 1] $fallback]]
+		return
+	}
+
+	if {[catch {
+		::ai::systemone::evaluateAsync [focusState $report] [focusQuestions] \
+			[namespace code [list OnAdviseReply $fallback $script]]
+	}]} {
+		after 0 [list {*}$script [dict merge [list ok 1] $fallback]]
+	}
+	return
+}
+
+
+proc ::insights::OnAdviseReply {fallback script result} {
+	variable UrgencyLevels
+
+	set focus [dict get $fallback focus]
+	set urgency [dict get $fallback urgency]
+	set source rules
+
+	if {[dict get $result ok] && [dict exists $result answers]} {
+		set answers [dict get $result answers]
+		set qs [focusQuestions]
+		set threshold [Threshold insights_focus 0.6]
+
+		if {[dict exists $answers focus]} {
+			set ans [dict get $answers focus]
+			if {[::ai::systemone::valid [dict get $qs focus] $ans]
+			 && [dict get $ans confidence] >= $threshold} {
+				set focus [dict get $ans choice]
+				set source classifier
+			}
+		}
+		if {[dict exists $answers urgency]} {
+			set ans [dict get $answers urgency]
+			if {[::ai::systemone::valid [dict get $qs urgency] $ans]
+			 && [dict get $ans confidence] >= $threshold} {
+				set n [llength $UrgencyLevels]
+				set s [dict get $ans score]
+				set idx [expr {$n > 1 ? int(round($s * ($n - 1))) : 0}]
+				if {$idx < 0} { set idx 0 }
+				if {$idx >= $n} { set idx [expr {$n - 1}] }
+				set urgency [lindex $UrgencyLevels $idx]
+			}
+		}
+	}
+
+	uplevel #0 [list {*}$script [dict merge [list ok 1] [FocusResult $focus $urgency $source]]]
+	return
+}
+
+
+# ----------------------------------------------------------------------
+# Decision 2: Weakest-opening repair priority re-ranking (insights_weakness)
+# ----------------------------------------------------------------------
+
+proc ::insights::weaknessQuestions {rows} {
+	variable PriorityLevels
+
+	set questions {}
+	set i 0
+	foreach row $rows {
+		lassign $row eco name
+		set label [string trim "$eco $name"]
+		dict set questions leak_$i [dict create type noul \
+			instructions "Is candidate $i ($label) a genuine repertoire weakness that is costing the player points (rather than a solid, drawish, or winning line)?" \
+			criteria [dict create \
+				false "solid, drawish, winning, or too minor to prioritize" \
+				true  "a real weakness costing the player points"]]
+		dict set questions priority_$i [dict create type score \
+			instructions "How high is the repair priority of candidate $i ($label), weighing both its loss rate/score and its game volume?" \
+			criteria $PriorityLevels]
+		incr i
+	}
+	return $questions
+}
+
+
+proc ::insights::weaknessState {report} {
+	lassign [dict get $report overall] _ w d l games score loss
+	set lines [list [format "OVERALL: games=%d decided=%d W-D-L=%s score=%s%% loss=%s%%" \
+		$games [dict get $report decided] [formatWdl $w $d $l] \
+		[formatPercent $score] [formatPercent $loss]]]
+
+	set i 0
+	foreach row [dict get $report weakest] {
+		lassign $row eco name rw rd rl rg rscore rloss
+		lappend lines [format "CANDIDATE %d: eco=%s name=\"%s\" W-D-L=%s games=%d score=%s%% loss=%s%% share_of_losses=%d/%d" \
+			$i $eco $name [formatWdl $rw $rd $rl] $rg \
+			[formatPercent $rscore] [formatPercent $rloss] $rl $l]
+		incr i
+	}
+	return [join $lines \n]
+}
+
+
+proc ::insights::ruleRankWeakest {report} {
+	return [dict get $report weakest]
+}
+
+
+proc ::insights::RuleWeakestLeaks {rows} {
+	set leaks {}
+	foreach row $rows {
+		lassign $row eco _ w d l _ score
+		if {[expr {$w + $d + $l}] > 0 && $score < 5000} {
+			lappend leaks $eco
+		}
+	}
+	return $leaks
+}
+
+
+# Async System One re-ranking of the weakest openings shortlist.
+# <script> gets {ok 1 weakest ROWS leaks LEAKS source classifier|rules}.
+proc ::insights::rankWeakest {report script} {
+	set rows [ruleRankWeakest $report]
+	set ruleLeaks [RuleWeakestLeaks $rows]
+	if {![llength $rows] || ![Qualified insights_weakness]} {
+		after 0 [list {*}$script [dict create ok 1 weakest $rows leaks $ruleLeaks source rules]]
+		return
+	}
+
+	if {[catch {
+		::ai::systemone::evaluateAsync [weaknessState $report] [weaknessQuestions $rows] \
+			[namespace code [list OnWeaknessReply $rows $ruleLeaks $script]]
+	}]} {
+		after 0 [list {*}$script [dict create ok 1 weakest $rows leaks $ruleLeaks source rules]]
+	}
+	return
+}
+
+
+proc ::insights::OnWeaknessReply {rows ruleLeaks script result} {
+	if {![dict get $result ok] || ![dict exists $result answers]} {
+		uplevel #0 [list {*}$script [dict create ok 1 weakest $rows leaks $ruleLeaks source rules]]
+		return
+	}
+
+	set answers [dict get $result answers]
+	set qs [weaknessQuestions $rows]
+	set threshold [Threshold insights_weakness 0.6]
+	set usedClassifier 0
+	set items {}
+	set leaks {}
+
+	set i 0
+	foreach row $rows {
+		lassign $row eco _ w d l _ score
+		set isLeak [expr {[expr {$w + $d + $l}] > 0 && $score < 5000 ? 1 : 0}]
+		set prio [expr {(10000 - $score) / 10000.0}]
+
+		if {[dict exists $answers leak_$i]} {
+			set ans [dict get $answers leak_$i]
+			if {[::ai::systemone::valid [dict get $qs leak_$i] $ans]} {
+				set isLeak [expr {[dict get $ans noul] >= $threshold ? 1 : 0}]
+				set usedClassifier 1
+			}
+		}
+		if {[dict exists $answers priority_$i]} {
+			set ans [dict get $answers priority_$i]
+			if {[::ai::systemone::valid [dict get $qs priority_$i] $ans]
+			 && [dict get $ans confidence] >= $threshold} {
+				set prio [dict get $ans score]
+				set usedClassifier 1
+			}
+		}
+		if {$isLeak} { lappend leaks $eco }
+		lappend items [list $isLeak $prio $i $row]
+		incr i
+	}
+
+	if {!$usedClassifier} {
+		uplevel #0 [list {*}$script [dict create ok 1 weakest $rows leaks $ruleLeaks source rules]]
+		return
+	}
+
+	set sorted [lsort -command [namespace code CompareWeaknessItem] $items]
+	set ranked [lmap item $sorted { lindex $item 3 }]
+	uplevel #0 [list {*}$script [dict create ok 1 weakest $ranked leaks $leaks source classifier]]
+	return
+}
+
+
+proc ::insights::CompareWeaknessItem {a b} {
+	lassign $a leakA prioA idxA
+	lassign $b leakB prioB idxB
+	if {$leakA != $leakB} { return [expr {$leakB - $leakA}] }
+	if {abs($prioA - $prioB) > 1e-9} { return [expr {$prioA < $prioB ? 1 : -1}] }
+	return [expr {$idxA - $idxB}]
+}
+
+
+# ----------------------------------------------------------------------
+# Decision 3: Free-text termination normalization (insights_termination)
+# ----------------------------------------------------------------------
+
+proc ::insights::terminationQuestion {} {
+	variable TerminationCriteria
+
+	return [dict create type choice \
+		instructions "Which loss category does this chess game termination string describe?" \
+		criteria $TerminationCriteria]
+}
+
+
+# Deterministic mapping for standard PGN Termination strings; "" when
+# the string is unfamiliar and should be handed to the classifier.
+proc ::insights::ruleTermination {reason} {
+	set r [string tolower [string trim $reason]]
+	if {$r eq "" || $r eq "?" || $r eq "unterminated"} { return unknown }
+	if {$r eq "normal" || $r eq "mate"
+	 || [string match "*checkmate*" $r] || [string match "*resign*" $r]} {
+		return board
+	}
+	if {$r eq "time forfeit" || $r eq "time"
+	 || [string match "*time*forfeit*" $r] || [string match "*forfeit*time*" $r]
+	 || [string match "*on time*" $r] || [string match "*clock*" $r]
+	 || [string match "*flag*" $r]} {
+		return time
+	}
+	if {$r eq "abandoned" || [string match "*abandon*" $r]
+	 || [string match "*disconnect*" $r] || [string match "*connection*" $r]
+	 || [string match "*left the game*" $r]} {
+		return disconnect
+	}
+	if {$r eq "rules infraction" || $r eq "emergency"
+	 || [string match "*infraction*" $r] || [string match "*adjudicat*" $r]
+	 || [string match "*arbiter*" $r] || [string match "*default*" $r]} {
+		return adjudicated
+	}
+	return ""
+}
+
+
+proc ::insights::UnknownTermination {} {
+	return unknown
+}
+
+
+# Bounded synchronous classification for callers that need a category value
+# directly (rule first, then chooseSync with a short timeout, else unknown).
+proc ::insights::chooseTerminationSync {reason} {
+	set rule [ruleTermination $reason]
+	if {$rule ne ""} { return $rule }
+	if {![llength [info commands ::ai::systemone::chooseSync]]} { return unknown }
+	set picked [::ai::systemone::chooseSync insights_termination \
+		"TERMINATION: [string trim $reason]" [terminationQuestion] \
+		-timeout 2000 -threshold [Threshold insights_termination 0.6]]
+	return [expr {$picked ne "" ? $picked : "unknown"}]
+}
+
+
+# Async classification for UI callers: rule first, then ::ai::decide.
+proc ::insights::classifyTermination {reason script} {
+	set rule [ruleTermination $reason]
+	if {$rule ne ""} {
+		after 0 [list {*}$script [list ok 1 label $rule confidence 1.0 source rules]]
+		return
+	}
+	if {![llength [info commands ::ai::decide]]} {
+		after 0 [list {*}$script [list ok 1 label unknown confidence {} source rules]]
+		return
+	}
+	::ai::decide insights_termination "TERMINATION: [string trim $reason]" \
+		[terminationQuestion] $script \
+		-fallback [namespace code UnknownTermination] \
+		-threshold [Threshold insights_termination 0.6]
+	return
+}
+
+
+# ======================================================================
 # The window.
 # ======================================================================
 
@@ -681,6 +1213,9 @@ proc ::insights::BuildWindow {dlg parent} {
 
 	ttk::label $dlg.status -textvariable [namespace current]::Data($dlg,status)
 	pack $dlg.status -side top -fill x -padx 6 -pady 3
+
+	ttk::label $dlg.takeaway -textvariable [namespace current]::Data($dlg,takeawayText)
+	pack $dlg.takeaway -side top -fill x -padx 6 -pady {0 3}
 
 	ttk::frame $dlg.controls
 	pack $dlg.controls -side top -fill x -padx 6 -pady {0 6}
@@ -828,6 +1363,48 @@ proc ::insights::Populate {dlg report} {
 		$weakest insert {} end -values [list {} \
 			[format $mc::WeakestHint [::locale::formatNumber $Options(weakest:min-games)]] \
 			{} {} {} {} {} {}]
+	}
+
+	# Deterministic focus takeaway first, then refine asynchronously via
+	# System One when a qualified classifier is enabled.
+	if {[dict get $report decided] > 0} {
+		set focusInfo [ruleFocus $report]
+		set Data($dlg,focus) $focusInfo
+		set Data($dlg,takeawayText) [dict get $focusInfo takeaway]
+		set aiToken [incr Data($dlg,aiToken)]
+		if {[Qualified insights_focus]} {
+			advise $report [namespace code [list OnWindowAdvise $dlg $aiToken]]
+		}
+		if {[llength [dict get $report weakest]] && [Qualified insights_weakness]} {
+			rankWeakest $report [namespace code [list OnWindowWeakest $dlg $aiToken]]
+		}
+	} else {
+		set Data($dlg,focus) {}
+		set Data($dlg,takeawayText) {}
+	}
+}
+
+
+proc ::insights::OnWindowAdvise {dlg aiToken result} {
+	variable Data
+
+	if {![winfo exists $dlg]} { return }
+	if {![info exists Data($dlg,aiToken)] || $aiToken != $Data($dlg,aiToken)} { return }
+	if {![dict get $result ok]} { return }
+	set Data($dlg,focus) $result
+	set Data($dlg,takeawayText) [dict get $result takeaway]
+}
+
+
+proc ::insights::OnWindowWeakest {dlg aiToken result} {
+	variable Data
+
+	if {![winfo exists $dlg]} { return }
+	if {![info exists Data($dlg,aiToken)] || $aiToken != $Data($dlg,aiToken)} { return }
+	if {![dict get $result ok] || [dict get $result source] ne "classifier"} { return }
+	set rows [dict get $result weakest]
+	if {[llength $rows]} {
+		FillSection $dlg weakest $rows {}
 	}
 }
 
