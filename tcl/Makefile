@@ -234,6 +234,7 @@ SOURCES = \
 	browser.tcl \
 	overview.tcl \
 	player-card.tcl \
+	insights.tcl \
 	player-data.tcl \
 	setup-board.tcl \
 	setup-position.tcl \

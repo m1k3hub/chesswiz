@@ -1331,6 +1331,20 @@ proc addPrepReportMenuEntry {menu parent base variant playerIndex} {
 }
 
 
+# The personal insights report (::insights) hangs off the same player
+# context menus as the prep report; the entry is a no-op when that
+# module is not loaded.
+proc addInsightsMenuEntry {menu parent base variant playerIndex} {
+	if {$playerIndex < 0} { return }
+	if {![llength [info commands ::insights::show]]} { return }
+
+	$menu add command \
+		-label " $::insights::mc::Show" \
+		-command [list ::insights::show $parent $base $variant $playerIndex] \
+		;
+}
+
+
 proc OpenPrepReport {parent base variant playerIndex} {
 	variable PrepReportData
 	variable mc
