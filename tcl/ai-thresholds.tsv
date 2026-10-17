@@ -8,3 +8,9 @@ comment_kind	imajev	0.6
 language	imajev	0.3
 route	typesafe	0.6
 route_satisfied	typesafe	0.67
+insights_focus	typesafe	0.6
+insights_weakness	typesafe	0.6
+insights_termination	typesafe	0.6
+insights_focus	jev	0.6
+insights_weakness	jev	0.6
+insights_termination	jev	0.6
