@@ -14,5 +14,6 @@ so every Chesswiz change to Scidb is visible as a diff against them. What
 Chesswiz adds and changes is summarised in docs/UPSTREAM.md.
 
 Other bundled components keep their own licences: CQL 6.2 (src/cql6,
-see src/cql6/VENDOR-NOTES.md), Stockfish (engines/stockfish, GPL-3), and the
-assets listed in docs/legal/ASSET_LICENSE_AUDIT.md.
+see src/cql6/VENDOR-NOTES.md), Stockfish (engines/stockfish, GPL-3), Fathom
+(Syzygy tablebase probing, src/tcl/fathom, MIT), and the assets listed in
+docs/legal/ASSET_LICENSE_AUDIT.md.

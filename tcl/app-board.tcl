@@ -1243,6 +1243,16 @@ proc PopupMenu {w} {
 			-command ::tablebase::toggle \
 			;
 		::theme::configureCheckEntry $m
+		$m add checkbutton \
+			-label $::tablebase::mc::OnlineLookup \
+			-variable ::tablebase::Options(online) \
+			-command ::tablebase::toggle \
+			;
+		::theme::configureCheckEntry $m
+		$m add command \
+			-label " $::tablebase::mc::LocalFolder" \
+			-command [list ::tablebase::chooseFolder .application] \
+			;
 	}
 	$m add checkbutton \
 		-label $::board::options::mc::ShowMaterialBar \

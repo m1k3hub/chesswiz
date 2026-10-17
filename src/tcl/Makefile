@@ -62,6 +62,7 @@ SRC_CXX = \
 	tcl_progress.cpp \
 	tcl_search.cpp \
 	tcl_sort.cpp \
+	tcl_tablebase.cpp \
 	tcl_tree.cpp \
 	tcl_view.cpp \
 	tcl_zlib.cpp \
@@ -121,6 +122,8 @@ endif
 tcl_cql6.o: EXTRA_CXXFLAGS += $(CQL6_FLAGS)
 tcl_cql6.o: ../cql6/cql6_api.h tcl_cql6.h
 tcl_base.o: tcl_cql6.h
+tcl_tablebase.o: EXTRA_CXXFLAGS += -Ifathom
+tcl_tablebase.o: fathom/tbprobe.c fathom/tbprobe.h fathom/tbchess.c fathom/tbconfig.h
 
 # The CQL library headers are included through -I../db/cql, which the
 # generated dependency list below does not cover (tcl_cql.o has no rules at

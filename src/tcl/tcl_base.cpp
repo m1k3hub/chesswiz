@@ -1327,6 +1327,7 @@ namespace fam			{ void init(Tcl_Interp* interp); }
 namespace engine		{ void init(Tcl_Interp* interp); }
 namespace player		{ void init(Tcl_Interp* interp); }
 namespace media			{ void init(Tcl_Interp* interp); }
+namespace tablebase		{ void init(Tcl_Interp* interp); }
 
 } // namespace tcl
 
@@ -1382,6 +1383,7 @@ tcl::init(Tcl_Interp* ti)
 	engine::init(ti);
 	player::init(ti);
 	media::init(ti);
+	tablebase::init(ti);
 	diag::init(ti);
 	ai::init(ti);
 	cql::init(ti);

@@ -71,4 +71,50 @@ tcltest::test tablebase-board {a 4-piece position shows the verdict under the bo
 	set ::tablebase::Delay $delay
 } -result {{Tablebase: White wins (mate in 17) - best h8=Q+, h8=R+} 1 {} 1}
 
+# Local Syzygy tables (tests/data/syzygy: KQvK, KRvK, KPvK) come first; the
+# server is asked only for positions they do not cover, and not at all when
+# online lookups are off.
+tcltest::test tablebase-local {local tables answer first; the server only beyond them} -setup {
+	rename ::application::download::Get ::scidb::test::tb::realGet
+	proc ::application::download::Get {url done} {
+		lappend ::scidb::test::tb::urls $url
+		after 0 [list {*}$done [list ok 1 data $::scidb::test::tb::win code 200]]
+	}
+	set ::scidb::test::tb::urls {}
+	set ::tablebase::Cache [dict create]
+	set saved [array get ::tablebase::Options]
+	set delay $::tablebase::Delay
+	set ::tablebase::Delay 0
+	set dir [file normalize [file join [file dirname [info script]] .. .. .. data syzygy]]
+	if {![file isdirectory $dir]} {
+		set dir [file normalize [file join [file dirname [info script]] data syzygy]]
+	}
+	set ::tablebase::Options(local) $dir
+	set ::tablebase::Options(online) 1
+} -body {
+	set canv $::application::board::Vars(widget:frame)
+	set out [list largest [::tablebase::LocalLargest]]
+	foreach fen {{8/8/8/4k3/8/8/8/4KQ2 w - - 0 1} {4k3/6KP/8/8/8/8/7p/8 w - - 0 1}} {
+		::scidb::game::clear $fen
+		update
+		::tablebase::positionChanged $canv
+		after 150 {set ::scidb::test::tb::w 1}; vwait ::scidb::test::tb::w
+		lappend out [$canv.tablebase cget -text]
+	}
+	lappend out [llength $::scidb::test::tb::urls]
+	# online off: a 4-piece position the local tables do not cover shows nothing
+	set ::tablebase::Options(online) 0
+	set ::tablebase::Cache [dict create]
+	::scidb::game::clear {4k3/6KP/8/8/8/8/7p/8 w - - 0 1}
+	update
+	::tablebase::positionChanged $canv
+	lappend out [winfo manager $canv.tablebase]
+} -cleanup {
+	rename ::application::download::Get {}
+	rename ::scidb::test::tb::realGet ::application::download::Get
+	array set ::tablebase::Options $saved
+	set ::tablebase::Delay $delay
+	::scidb::game::clear {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}
+} -result {largest 3 {Tablebase (local): White wins (DTZ 15) - best Qf7, Kd1, Kd2} {Tablebase: White wins (mate in 17) - best h8=Q+, h8=R+} 1 {}}
+
 tcltest::cleanupTests

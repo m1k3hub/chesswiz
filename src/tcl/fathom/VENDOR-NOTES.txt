@@ -1,0 +1,3 @@
+Fathom (Syzygy tablebase probing), https://github.com/jdart1/Fathom
+commit c9c6fef 2025-12-23, MIT licence (LICENSE). Unmodified.
+Used by tcl_tablebase.cpp (::scidb::tb::init / probe).
