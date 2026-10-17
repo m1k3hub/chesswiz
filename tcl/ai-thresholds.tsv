@@ -8,3 +8,6 @@ comment_kind	imajev	0.6
 language	imajev	0.3
 route	typesafe	0.6
 route_satisfied	typesafe	0.67
+guess_hint	typesafe	0.6
+guess_feedback	typesafe	0.6
+guess_review	typesafe	0.6

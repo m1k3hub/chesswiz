@@ -155,4 +155,220 @@ tcltest::test guess-menus {the board context menu and the Extras menu start a ro
 		$::guessmove::mc::GuessTheMove
 } -result {1 1 {Guess the Move...}}
 
+# ----------------------------------------------------------------------
+# System One (Jev) typed-judgment tests (stubbed ::ai::systemone::evaluateAsync)
+# ----------------------------------------------------------------------
+
+namespace eval ::scidb::test::guess {
+	variable Calls {}
+	variable StubReply {}
+}
+
+proc ::scidb::test::guess::stubStart {reply} {
+	variable Calls {}
+	variable StubReply $reply
+	if {[llength [info commands ::scidb::test::guess::realEvaluateAsync]] == 0} {
+		rename ::ai::systemone::evaluateAsync ::scidb::test::guess::realEvaluateAsync
+	}
+	proc ::ai::systemone::evaluateAsync {state questions script} {
+		lappend ::scidb::test::guess::Calls [list $state $questions]
+		set r $::scidb::test::guess::StubReply
+		if {[llength $r] > 1 && [lindex $r 0] eq "queue"} {
+			set next [lindex $r 1]
+			if {[llength $r] > 2} {
+				set ::scidb::test::guess::StubReply [concat queue [lrange $r 2 end]]
+			} else {
+				set ::scidb::test::guess::StubReply [list queue $next]
+			}
+			set r $next
+		}
+		after 0 [list {*}$script $r]
+	}
+	::ai::systemone::configure -backend typesafe -apiKey stub-key
+}
+
+proc ::scidb::test::guess::stubStop {} {
+	if {[llength [info commands ::scidb::test::guess::realEvaluateAsync]]} {
+		catch { rename ::ai::systemone::evaluateAsync {} }
+		rename ::scidb::test::guess::realEvaluateAsync ::ai::systemone::evaluateAsync
+	}
+	::ai::systemone::configure -backend off
+}
+
+proc ::scidb::test::guess::flushAsync {} {
+	after 30 { set ::scidb::test::guess::done 1 }
+	vwait ::scidb::test::guess::done
+	update
+}
+
+tcltest::test guess-jev-rules {deterministic rules classify hint themes, wrong guesses and round reviews from C++ facts} -body {
+	set start "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+	set castlePos "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
+	set matePos "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4"
+	set endPos "8/4k3/8/4P3/4K3/8/8/8 w - - 0 1"
+	list \
+		[::guessmove::hintRule $start e4] \
+		[::guessmove::hintRule $start Nf3] \
+		[::guessmove::hintRule $castlePos O-O] \
+		[::guessmove::hintRule $matePos Qxf7#] \
+		[::guessmove::hintRule $endPos Kd5] \
+		[::guessmove::feedbackRule $start d4 e4] \
+		[::guessmove::feedbackRule $start h3 Nf3] \
+		[::guessmove::feedbackRule $castlePos h3 O-O] \
+		[::guessmove::feedbackRule $matePos Nc3 Qxf7#] \
+		[::guessmove::feedbackRule $castlePos Bxf7+ O-O] \
+		[::guessmove::reviewRule {score 3 total 3 hints 0 reveals 0 misses {blundered_material 0 missed_tactic 0}}] \
+		[::guessmove::reviewRule {score 2 total 3 hints 0 reveals 0 misses {blundered_material 0 missed_tactic 0}}] \
+		[::guessmove::reviewRule {score 2 total 4 hints 0 reveals 1 misses {blundered_material 0 missed_tactic 0}}] \
+		[::guessmove::reviewRule {score 0 total 3 hints 2 reveals 1 misses {blundered_material 1 missed_tactic 1}}]
+} -result {structure development king_safety tactics endgame close_alternative missed_development missed_king_safety missed_tactic blundered_material master_like sharp steady needs_study}
+
+tcltest::test guess-jev-hint-classifier {Hint asks guess_hint via evaluateAsync, keeps the board square highlight and shows the coaching cue} -setup {
+	::scidb::test::guess::newGame
+	::scidb::test::guess::stubStart [list ok 1 answers [dict create \
+		guess_hint [dict create type choice choice structure confidence 0.88]]]
+} -body {
+	::guessmove::start white
+	::guessmove::hint
+	set sq $::guessmove::Priv(hintSquare)
+	::scidb::test::guess::flushAsync
+	lassign [lindex $::scidb::test::guess::Calls 0] state questions
+	list $sq \
+		$::guessmove::Priv(hintKind) \
+		$::guessmove::Priv(hintSource) \
+		$::guessmove::Priv(note) \
+		[$::guessmove::Priv(dialog).top.note cget -text] \
+		[dict exists $questions guess_hint] \
+		[string match "*fen=*" $state] \
+		[expr {[string first "e4" $state] < 0}]
+} -cleanup {
+	::scidb::test::guess::stubStop
+	::scidb::test::guess::cleanup
+} -result {12 structure classifier {Hint: fight for the centre, open files, or better pawn structure.} {Hint: fight for the centre, open files, or better pawn structure.} 1 1 1}
+
+tcltest::test guess-jev-hint-fallback {Hint falls back to hintRule and leaves the note blank on low confidence or error} -setup {
+	::scidb::test::guess::newGame
+	::scidb::test::guess::stubStart [list ok 1 answers [dict create \
+		guess_hint [dict create type choice choice endgame confidence 0.25]]]
+} -body {
+	::guessmove::start white
+	::guessmove::hint
+	::scidb::test::guess::flushAsync
+	set low [list $::guessmove::Priv(hintKind) $::guessmove::Priv(hintSource) $::guessmove::Priv(note)]
+	::scidb::test::guess::stubStop
+	::move::addMove menu e4
+	::guessmove::hint
+	::scidb::test::guess::flushAsync
+	set off [list $::guessmove::Priv(hintKind) $::guessmove::Priv(hintSource) $::guessmove::Priv(note)]
+	list $low $off
+} -cleanup {
+	::scidb::test::guess::stubStop
+	::scidb::test::guess::cleanup
+} -result {{structure rules {}} {development rules {}}}
+
+tcltest::test guess-jev-feedback-classifier {a wrong guess asks guess_feedback, never overrides the score or verdict, and shows the coaching note} -setup {
+	::scidb::test::guess::newGame
+	::scidb::test::guess::stubStart [list ok 1 answers [dict create \
+		guess_feedback [dict create type choice choice close_alternative confidence 0.91]]]
+} -body {
+	::guessmove::start white
+	::move::addMove menu d4
+	::scidb::test::guess::flushAsync
+	lassign [lindex $::scidb::test::guess::Calls 0] state questions
+	list $::guessmove::Priv(score) \
+		$::guessmove::Priv(total) \
+		$::guessmove::Priv(last) \
+		$::guessmove::Priv(feedback) \
+		$::guessmove::Priv(feedbackSource) \
+		$::guessmove::Priv(note) \
+		[$::guessmove::Priv(dialog).top.note cget -text] \
+		[dict exists $questions guess_feedback] \
+		[string match "*guess: san=d4*" $state] \
+		[string match "*game_move: san=e4*" $state]
+} -cleanup {
+	::scidb::test::guess::stubStop
+	::scidb::test::guess::cleanup
+} -result {0 1 {Not the game move (e4)} close_alternative classifier {d4 is a playable alternative; the game chose e4.} {d4 is a playable alternative; the game chose e4.} 1 1 1}
+
+tcltest::test guess-jev-feedback-fallback {a wrong guess falls back to feedbackRule when the classifier abstains or errors} -setup {
+	::scidb::test::guess::newGame
+	::scidb::test::guess::stubStart [list ok 0 error "unreachable"]
+} -body {
+	::guessmove::start white
+	::move::addMove menu e4
+	::move::addMove menu h3
+	::scidb::test::guess::flushAsync
+	list $::guessmove::Priv(score) \
+		$::guessmove::Priv(total) \
+		$::guessmove::Priv(last) \
+		$::guessmove::Priv(feedback) \
+		$::guessmove::Priv(feedbackSource) \
+		$::guessmove::Priv(note)
+} -cleanup {
+	::scidb::test::guess::stubStop
+	::scidb::test::guess::cleanup
+} -result {1 2 {Not the game move (Nf3)} missed_development rules {}}
+
+tcltest::test guess-jev-review-classifier {the end of a round asks guess_review (score) and shows the assessment note} -setup {
+	::scidb::test::guess::newGame
+	::scidb::test::guess::stubStart [list ok 1 answers [dict create \
+		guess_review [dict create type score score 0.72 confidence 0.85]]]
+} -body {
+	::guessmove::start white
+	::move::addMove menu e4
+	::move::addMove menu Nf3
+	::guessmove::stop
+	::scidb::test::guess::flushAsync
+	lassign [lindex $::scidb::test::guess::Calls end] state questions
+	list $::guessmove::Priv(summary) \
+		$::guessmove::Priv(review) \
+		$::guessmove::Priv(reviewSource) \
+		$::guessmove::Priv(note) \
+		[$::guessmove::Priv(dialog).top.last cget -text] \
+		[$::guessmove::Priv(dialog).top.note cget -text] \
+		[dict get $questions guess_review type] \
+		[string match "*score=2 total=2*" $state]
+} -cleanup {
+	::scidb::test::guess::stubStop
+	::scidb::test::guess::cleanup
+} -result {{2 of 2 moves guessed (100%)} sharp classifier {Assessment: sharp round -- found most of the game's critical moves.} {2 of 2 moves guessed (100%)} {Assessment: sharp round -- found most of the game's critical moves.} score 1}
+
+tcltest::test guess-jev-review-fallback {the round review falls back to reviewRule when confidence is below threshold} -setup {
+	::scidb::test::guess::newGame
+	::scidb::test::guess::stubStart [list ok 1 answers [dict create \
+		guess_review [dict create type score score 0.10 confidence 0.30]]]
+} -body {
+	::guessmove::start white
+	::move::addMove menu e4
+	::move::addMove menu Nf3
+	::guessmove::stop
+	::scidb::test::guess::flushAsync
+	list $::guessmove::Priv(summary) \
+		$::guessmove::Priv(review) \
+		$::guessmove::Priv(reviewSource) \
+		$::guessmove::Priv(note)
+} -cleanup {
+	::scidb::test::guess::stubStop
+	::scidb::test::guess::cleanup
+} -result {{2 of 2 moves guessed (100%)} master_like rules {}}
+
+tcltest::testConstraint typesafeLive [expr {
+	[info exists ::env(TYPESAFE_API_KEY)] && [string length $::env(TYPESAFE_API_KEY)] > 0
+}]
+
+tcltest::test guess-jev-live {live TypeSafe check for guess_hint when TYPESAFE_API_KEY is set} -constraints typesafeLive -setup {
+	::ai::systemone::configure -backend typesafe
+} -body {
+	set fen "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
+	set ::scidb::test::guess::liveDecision {}
+	::guessmove::decideHint $fen O-O {set ::scidb::test::guess::liveDecision}
+	set timer [after 15000 {set ::scidb::test::guess::liveDecision {ok 0}}]
+	vwait ::scidb::test::guess::liveDecision
+	after cancel $timer
+	set d $::scidb::test::guess::liveDecision
+	expr {[dict get $d ok] && [dict get $d label] in [dict keys $::guessmove::HintCriteria]}
+} -cleanup {
+	::ai::systemone::configure -backend off
+} -result 1
+
 tcltest::cleanupTests
