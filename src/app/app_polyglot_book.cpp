@@ -426,17 +426,12 @@ checkHashKeys()
 								if (rk) key ^= rk;
 								if (qk) key ^= qk;
 
+								// (inserted once: a duplicated insert_unique() would
+								// report every key as a collision)
 								if (!used.insert_unique(key))
 								{
 									fprintf(	stderr,
 												"hash key collision: p=%u, n=%u, b=%u, r=%u, q=%u\n",
-												p, n, b, r, q);
-								}
-
-								if (!used.insert_unique(key))
-								{
-									fprintf(	stderr,
-												"hash key collision: p=%u, n=%u, b=%u, r=%u, q=%u",
 												p, n, b, r, q);
 								}
 							}
