@@ -237,6 +237,16 @@ proc open {} {
 	bind PaneZoomShortcut <Control-Shift-Z> [namespace code {TogglePaneZoom; break}]
 	bind .application <FocusIn> +[namespace code {PaneZoomFocus %W}]
 	bind .application <Control-Shift-Z> [namespace code {TogglePaneZoom; break}]
+	# Phase 2 pane zoom (focus follows size): only real user gestures count.
+	# A click reports its widget directly; a keyboard pane switch is a Tab
+	# that moves the focus, so the key press arms the next FocusIn. Focus
+	# moved by the program (dialogs, engine output, 'focus' calls) has no
+	# arming key press and never resizes anything.
+	bind .application <ButtonPress-1> +[namespace code {focuszoom::clicked %W}]
+	foreach fzKey {<Key-Tab> <Shift-Key-Tab> <Key-ISO_Left_Tab>} {
+		bind .application $fzKey +[namespace code focuszoom::keySwitch]
+	}
+	bind .application <FocusIn> +[namespace code {focuszoom::focusIn %W}]
 	bind .application <Control-Shift-plus>				$incrFontSize
 	bind .application <Control-Shift-KP_Add>			$incrFontSize
 	bind .application <Control-Shift-minus>			$decrFontSize
@@ -569,6 +579,299 @@ proc MakePane {twm parent type uid} {
 	set Vars(frame:$uid) $frame
 	set Vars(align:board:$uid) 0
 	return $result
+}
+
+
+# Phase 2 pane zoom: focus follows size (opt-in per layout, see
+# docs/features/FEATURE_PANE_ZOOM.md). Tcl-only: the twm panedwindows are
+# plain Tk widgets, so growing a pane is an animated sash move; the layout
+# tree and the saved layout stay untouched, and switching the mode off puts
+# the saved sash coordinates back exactly.
+namespace eval focuszoom {
+	variable ratio		1.4		;# R, clamped to the spec range 1.2-1.8
+	variable pinBoard	0		;# the board never shrinks
+	variable duration	150	;# ~150 ms per the spec; 0 is instant
+	variable steps		10
+	variable enabled		;# per layout (twm) on/off
+	variable baseline	;# sash snapshot taken when switched on
+	variable lastPane	;# last grown leaf per twm
+	variable pendingKey 0	;# a Tab/Shift-Tab armed the next FocusIn
+	variable animAfter	;# pending animation timer per panedwindow
+	namespace import ::tcl::mathfunc::max ::tcl::mathfunc::min
+}
+
+
+proc focuszoom::isEnabled {twm} {
+	variable enabled
+	return [expr {[info exists enabled($twm)] && $enabled($twm)}]
+}
+
+
+proc focuszoom::setRatio {r} {
+	variable ratio
+	set ratio [expr {max(1.2, min(1.8, $r))}]
+	return $ratio
+}
+
+
+# The menu checkbutton has already flipped the variable when this runs.
+proc focuszoom::toggle {twm} {
+	variable enabled
+	if {[info exists enabled($twm)] && $enabled($twm)} { enable $twm } else { disable $twm }
+}
+
+
+proc focuszoom::enable {twm} {
+	variable enabled
+	variable baseline
+	variable lastPane
+	set enabled($twm) 1
+	set baseline($twm) [Snapshot $twm]
+	catch { unset lastPane($twm) }
+}
+
+
+proc focuszoom::disable {twm} {
+	variable enabled
+	variable baseline
+	variable lastPane
+	set enabled($twm) 0
+	if {[info exists baseline($twm)]} {
+		Restore $twm $baseline($twm)
+		unset baseline($twm)
+	}
+	catch { unset lastPane($twm) }
+}
+
+
+# Same traversal as twm::ZoomSashes; session-only, never part of the layout.
+proc focuszoom::Snapshot {twm} {
+	set result {}
+	set queue [winfo children $twm]
+	while {[llength $queue]} {
+		set queue [lassign $queue w]
+		lappend queue {*}[winfo children $w]
+		if {![string match *Panedwindow [winfo class $w]]} { continue }
+		set coords {}
+		for {set i 0} {$i < [llength [$w panes]] - 1} {incr i} {
+			lappend coords [$w sash coord $i]
+		}
+		lappend result $w $coords
+	}
+	return $result
+}
+
+
+proc focuszoom::Restore {twm snapshot} {
+	# Twice, as in twm::ZoomSashes: a sash placed in a still-shrunken
+	# panedwindow is clamped to the panes' minimum size for good.
+	foreach pass {1 2} {
+		update idletasks
+		foreach {w coords} $snapshot {
+			if {![winfo exists $w]} { continue }
+			set i 0
+			foreach xy $coords { catch { $w sash place $i {*}$xy }; incr i }
+		}
+		if {$pass == 1} { update }
+	}
+}
+
+
+proc focuszoom::clicked {w} {
+	if {![winfo exists $w]} { return }
+	lassign [PaneOfWidget $w] twm pane
+	if {$pane ne ""} { growPane $twm $pane }
+}
+
+
+proc focuszoom::keySwitch {} {
+	variable pendingKey
+	set pendingKey 1
+}
+
+
+proc focuszoom::focusIn {w} {
+	variable pendingKey
+	if {!$pendingKey} { return }
+	set pendingKey 0
+	if {![winfo exists $w]} { return }
+	lassign [PaneOfWidget $w] twm pane
+	if {$pane ne ""} { growPane $twm $pane }
+}
+
+
+# Resolve a widget to {twm leaf}; "" when the mode is off for its layout,
+# the widget is in no pane, or the pane may not zoom.
+proc focuszoom::PaneOfWidget {w} {
+	if {[catch { set twm [::application::twm] }]} { return "" }
+	if {$w ne $twm && ![string match "$twm.*" $w]} { return "" }
+	if {![isEnabled $twm]} { return "" }
+	foreach uid [$twm leaves] {
+		set f [$twm leaf $uid]
+		if {$w eq $f || [string match "$f.*" $w]} { return [list $twm $f] }
+	}
+	return ""
+}
+
+
+proc focuszoom::growPane {twm pane} {
+	variable lastPane
+	if {![$twm get $pane zoomable 0]} { return }
+	if {[$twm isfloat [$twm toplevel $pane]]} { return }
+	if {[info exists lastPane($twm)] && $lastPane($twm) eq $pane} { return }
+	# Grow the child of the enclosing panedwindow; like phase 1, a notebook
+	# (including meta frames) grows as a whole. The twm tree decides the
+	# parenting: panedwindow panes are not path-parents of their leaves.
+	set node $pane
+	while {1} {
+		set pw [$twm parent $node]
+		if {$pw eq "" || $pw eq $twm || ![winfo exists $pw]} { return }
+		if {[string match *Panedwindow [winfo class $pw]]} { break }
+		set node $pw
+	}
+	set lastPane($twm) $pane
+	set board ""
+	catch { set board [$twm leaf board] }
+	resize $pw $node $board
+}
+
+
+proc focuszoom::resize {pw node board} {
+	variable ratio
+	variable pinBoard
+	set panes [$pw panes]
+	set n [llength $panes]
+	if {$n < 2} { return }
+	set horz [expr {[$pw cget -orient] eq "horizontal"}]
+	set dim [expr {$horz ? "width" : "height"}]
+	set idx [lsearch -exact $panes $node]
+	if {$idx < 0} { return }
+	set R [expr {max(1.2, min(1.8, $ratio))}]
+	set sizes {}
+	set total 0
+	foreach p $panes {
+		set s [winfo $dim $p]
+		lappend sizes $s
+		incr total $s
+	}
+	set cur [lindex $sizes $idx]
+	if {$cur <= 0 || $total <= 0} { return }
+	# Minimums: the panedwindow -minsize of every pane; the board can be
+	# pinned so it never shrinks below its current size.
+	set mins {}
+	foreach p $panes {
+		set m [$pw panecget $p -minsize]
+		if {$pinBoard && $p ne $node && $board ne ""
+				&& ($p eq $board || [string match "$p.*" $board])} {
+			set m [expr {max($m, [winfo $dim $p])}]
+		}
+		lappend mins $m
+	}
+	# The focused pane grows by R, bounded by the siblings' minimums.
+	set avail $total
+	foreach m $mins { incr avail -$m }
+	incr avail [lindex $mins $idx]
+	set target [expr {int(round($cur * $R))}]
+	if {$target > $avail} { set target $avail }
+	if {$target <= $cur} { return }
+	# The siblings shrink in proportion, each keeping its minimum size.
+	set new [lreplace $sizes $idx $idx $target]
+	set rest [expr {$total - $target}]
+	set factor [expr {double($rest) / ($total - $cur)}]
+	set others {}
+	for {set i 0} {$i < $n} {incr i} {
+		if {$i == $idx} { continue }
+		lappend others $i
+		set ns [expr {int(round([lindex $sizes $i] * $factor))}]
+		set new [lreplace $new $i $i [expr {max($ns, [lindex $mins $i])}]]
+	}
+	# Absorb rounding and clamping drift into siblings with room to spare.
+	set drift $rest
+	foreach i $others { incr drift -[lindex $new $i] }
+	while {$drift != 0} {
+		set progressed 0
+		foreach i $others {
+			if {$drift == 0} { break }
+			set ns [lindex $new $i]
+			if {$drift < 0 && $ns > [lindex $mins $i]} {
+				set new [lreplace $new $i $i [incr ns -1]]
+				incr drift 1
+				set progressed 1
+			} elseif {$drift > 0} {
+				set new [lreplace $new $i $i [incr ns 1]]
+				incr drift -1
+				set progressed 1
+			}
+		}
+		if {!$progressed} { break }
+	}
+	# Sash offsets (sash width and padding) are taken from the live geometry,
+	# so restored and animated coordinates land exactly.
+	set offsets {}
+	for {set i 0} {$i < $n - 1} {incr i} {
+		lassign [$pw sash coord $i] x y
+		set cum 0
+		for {set j 0} {$j <= $i} {incr j} { incr cum [lindex $sizes $j] }
+		lappend offsets [expr {($horz ? $x : $y) - $cum}]
+	}
+	set final {}
+	set cum 0
+	for {set i 0} {$i < $n - 1} {incr i} {
+		incr cum [lindex $new $i]
+		lappend final [expr {$cum + [lindex $offsets $i]}]
+	}
+	animate $pw $horz $final
+}
+
+
+proc focuszoom::animate {pw horz final} {
+	variable duration
+	variable steps
+	variable animAfter
+	if {[info exists animAfter($pw)]} {
+		after cancel $animAfter($pw)
+		unset animAfter($pw)
+	}
+	set start {}
+	for {set i 0} {$i < [llength [$pw panes]] - 1} {incr i} {
+		lassign [$pw sash coord $i] x y
+		lappend start [expr {$horz ? $x : $y}]
+	}
+	# Instant when the animation cannot run or keep up.
+	if {$duration <= 0 || $steps <= 1 || [catch { AnimateStep $pw $horz $start $final 1 }]} {
+		catch { Place $pw $horz $final }
+	}
+}
+
+
+proc focuszoom::AnimateStep {pw horz start final k} {
+	variable duration
+	variable steps
+	variable animAfter
+	if {![winfo exists $pw]} { return }
+	if {$k >= $steps} {
+		Place $pw $horz $final
+		return
+	}
+	set coords {}
+	foreach a $start b $final {
+		lappend coords [expr {int(round($a + ($b - $a) * double($k) / $steps))}]
+	}
+	if {[catch { Place $pw $horz $coords }]} {
+		catch { Place $pw $horz $final }
+		return
+	}
+	set animAfter($pw) [after [expr {$duration / $steps}] \
+		[list ::application::focuszoom::AnimateStep $pw $horz $start $final [incr k]]]
+}
+
+
+proc focuszoom::Place {pw horz coords} {
+	set i 0
+	foreach c $coords {
+		if {$horz} { $pw sash place $i $c 0 } else { $pw sash place $i 0 $c }
+		incr i
+	}
 }
 
 
