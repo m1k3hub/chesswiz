@@ -32,9 +32,18 @@ proc ::scidb::test::rep::cleanup {} {
 }
 
 
+proc ::scidb::test::rep::freeGameSlots {} {
+	for {set i 0} {$i < [llength $::game::List]} {incr i} {
+		catch { ::game::stateChanged $i 0 }
+		catch { ::game::lockChanged $i 0 }
+	}
+}
+
+
 # 1. e4 e5 2. Nf3 Nc6, and 2. Bc4 as a variation at the position after
 # 1. e4 e5. The trainer's cards come out of such a game.
 proc ::scidb::test::rep::buildGame {} {
+	::scidb::test::rep::freeGameSlots
 	::menu::gameNew .application
 	update
 	set ::move::Options(addVarWithoutAsking) 1
@@ -252,5 +261,324 @@ tcltest::test reptrainer-drill {answering right and wrong updates the card} -set
 	set ::move::Options(addVarWithoutAsking) $::scidb::test::rep::addVar
 	::scidb::test::rep::cleanup
 } -result {1 1 1 show 1 1 1 3 grade 1 1 1 1 1 218 4 1 260 1 {No cards are due. Repertoire training finished.} {due: 0, new: 0, done today: 2} 1 0}
+
+
+# ----------------------------------------------------------------------
+# System One (Jev) decisions in tcl/repertoire-trainer.tcl
+# ----------------------------------------------------------------------
+
+namespace eval ::scidb::test::rep {
+	variable StubChoice ""
+	variable StubConf 0.9
+	variable StubOk 1
+	variable StubCalls 0
+}
+
+proc ::scidb::test::rep::wait {var} {
+	set timer [after 3000 [list set $var timeout]]
+	vwait $var
+	after cancel $timer
+	return [set $var]
+}
+
+# Runs <body> with ::ai::systemone::evaluate and ::ai::systemone::evaluateAsync
+# stubbed in-process (no network), with SCIDB_AI_UNCALIBRATED=1 and backend
+# set to typesafe so ::ai::systemone::chooseSync and ::ai::decide run their
+# full validation and threshold gates.
+proc ::scidb::test::rep::withStubClassifier {body} {
+	set savedBackend $::ai::systemone::Config(backend)
+	set savedKey $::ai::systemone::Config(apiKey)
+	set hadUncal [info exists ::env(SCIDB_AI_UNCALIBRATED)]
+	set savedUncal [expr {$hadUncal ? $::env(SCIDB_AI_UNCALIBRATED) : ""}]
+	set ::env(SCIDB_AI_UNCALIBRATED) 1
+	::ai::systemone::configure -backend typesafe -apiKey stub-key
+
+	rename ::ai::systemone::evaluate ::scidb::test::rep::realEvaluate
+	rename ::ai::systemone::evaluateAsync ::scidb::test::rep::realEvaluateAsync
+
+	proc ::ai::systemone::evaluate {state questions} {
+		incr ::scidb::test::rep::StubCalls
+		if {!$::scidb::test::rep::StubOk} { error "stubbed error" }
+		set out {}
+		dict for {id _} $questions {
+			dict set out $id [dict create \
+				type choice \
+				choice $::scidb::test::rep::StubChoice \
+				confidence $::scidb::test::rep::StubConf]
+		}
+		return $out
+	}
+
+	proc ::ai::systemone::evaluateAsync {state questions script} {
+		incr ::scidb::test::rep::StubCalls
+		if {!$::scidb::test::rep::StubOk} {
+			after 0 [list {*}$script [list ok 0 error "stubbed error"]]
+			return
+		}
+		set out {}
+		dict for {id _} $questions {
+			dict set out $id [dict create \
+				type choice \
+				choice $::scidb::test::rep::StubChoice \
+				confidence $::scidb::test::rep::StubConf]
+		}
+		after 0 [list {*}$script [list ok 1 answers $out]]
+	}
+
+	set rc [catch { uplevel 1 $body } result opts]
+
+	rename ::ai::systemone::evaluate {}
+	rename ::ai::systemone::evaluateAsync {}
+	rename ::scidb::test::rep::realEvaluate ::ai::systemone::evaluate
+	rename ::scidb::test::rep::realEvaluateAsync ::ai::systemone::evaluateAsync
+	::ai::systemone::configure -backend $savedBackend -apiKey $savedKey
+	if {$hadUncal} {
+		set ::env(SCIDB_AI_UNCALIBRATED) $savedUncal
+	} else {
+		unset -nocomplain ::env(SCIDB_AI_UNCALIBRATED)
+	}
+	if {$rc} { return -options $opts $result }
+	return $result
+}
+
+
+tcltest::test reptrainer-jev-side {reptrainer_side rules, classifier pick, fallback, and database-type firewall} -body {
+	::scidb::test::rep::withStubClassifier {
+		# 1. Deterministic rule settles explicit White/Black names without calling the classifier
+		set ::scidb::test::rep::StubCalls 0
+		set r1 [::reptrainer::sideRule "1.e4 White Repertoire"]
+		set r2 [::reptrainer::sideRule "Sicilian Defense for Black"]
+		set r3 [::reptrainer::sideRule "White vs Black"]
+		set r4 [::reptrainer::sideRule "Caro-Kann Mainline"]
+		set rulePick [::reptrainer::inferSide "My Black Repertoire" white]
+		set callsAfterRule $::scidb::test::rep::StubCalls
+
+		# 2. High-confidence classifier pick for an ambiguous opening name
+		set ::scidb::test::rep::StubChoice black
+		set ::scidb::test::rep::StubConf 0.92
+		set ::scidb::test::rep::StubOk 1
+		set caroPick [::reptrainer::inferSide "Caro-Kann Mainline" white]
+
+		# 3. Low-confidence, unsure, or error falls back to the caller's default
+		set ::scidb::test::rep::StubConf 0.45
+		set lowConfPick [::reptrainer::inferSide "Caro-Kann Mainline" white]
+		set ::scidb::test::rep::StubConf 0.92
+		set ::scidb::test::rep::StubChoice unsure
+		set unsurePick [::reptrainer::inferSide "Opening Notes" black]
+		set ::scidb::test::rep::StubOk 0
+		set errPick [::reptrainer::inferSide "Caro-Kann Mainline" white]
+
+		# 4. Firewall: OpeningsWhite / OpeningsBlack database types are authoritative
+		# and never overridden by the classifier even if the name or model says otherwise
+		set ::scidb::test::rep::StubOk 1
+		set ::scidb::test::rep::StubChoice black
+		set ::scidb::test::rep::StubConf 0.99
+		set callsBeforeFirewall $::scidb::test::rep::StubCalls
+		rename ::scidb::db::get ::scidb::test::rep::realDbGet
+		proc ::scidb::db::get {what args} {
+			if {$what eq "type"} {
+				::switch -- [lindex $args 0] {
+					/tmp/w.sci { return OpeningsWhite }
+					/tmp/b.sci { return OpeningsBlack }
+					/tmp/o.sci { return Openings }
+				}
+			}
+			return [::scidb::test::rep::realDbGet $what {*}$args]
+		}
+		set fwWhite [::reptrainer::DefaultSide /tmp/w.sci]
+		set ::scidb::test::rep::StubChoice white
+		set fwBlack [::reptrainer::DefaultSide /tmp/b.sci]
+		set callsAfterFirewall $::scidb::test::rep::StubCalls
+		set ::scidb::test::rep::StubChoice black
+		set genericOpenings [::reptrainer::DefaultSide /tmp/o.sci]
+		rename ::scidb::db::get {}
+		rename ::scidb::test::rep::realDbGet ::scidb::db::get
+
+		list $r1 $r2 $r3 $r4 $rulePick $callsAfterRule \
+			$caroPick $lowConfPick $unsurePick $errPick \
+			$fwWhite $fwBlack [expr {$callsAfterFirewall == $callsBeforeFirewall}] $genericOpenings
+	}
+} -result {white black {} {} black 0 black white black white white black 1 black}
+
+
+tcltest::test reptrainer-jev-note {reptrainer_note rules, classifier roles, spoiler firewall, and drill display} -setup {
+	set ::scidb::test::rep::addVar $::move::Options(addVarWithoutAsking)
+	set ::scidb::test::rep::delay $::reptrainer::Delay
+	set ::reptrainer::Delay 0
+	::scidb::test::rep::freeGameSlots
+} -body {
+	::scidb::test::rep::isolated {
+		::scidb::test::rep::withStubClassifier {
+			set fen {rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2}
+			set moves {Nf3 Bc4}
+
+			# 1. Deterministic rule: empty/clock -> none, engine eval/clock -> noise, prose -> ""
+			set nr1 [::reptrainer::noteRule ""]
+			set nr2 [::reptrainer::noteRule "\[%clk 0:05:00\]"]
+			set nr3 [::reptrainer::noteRule "\[%clk 0:05:00\] +0.34/22 0:12"]
+			set nr4 [::reptrainer::noteRule "Develops toward the center"]
+
+			# 2. High-confidence non-spoiling hint is accepted
+			set ::scidb::test::rep::StubOk 1
+			set ::scidb::test::rep::StubChoice hint
+			set ::scidb::test::rep::StubConf 0.91
+			set ::scidb::test::rep::NoteRes {}
+			::reptrainer::decideNote $fen $moves " Italian / King's Knight branch " \
+				{set ::scidb::test::rep::NoteRes}
+			set dHint [::scidb::test::rep::wait ::scidb::test::rep::NoteRes]
+
+			# 3. Spoiler firewall: classifier says hint (0.95), but comment names "Nf3"
+			# -> clamped to explanation so the move is never spoiled before answering
+			set ::scidb::test::rep::StubChoice hint
+			set ::scidb::test::rep::StubConf 0.95
+			set ::scidb::test::rep::NoteRes {}
+			::reptrainer::decideNote $fen $moves "Play Nf3 to attack e5 immediately." \
+				{set ::scidb::test::rep::NoteRes}
+			set dSpoiler [::scidb::test::rep::wait ::scidb::test::rep::NoteRes]
+
+			# 4. Low confidence falls back to none
+			set ::scidb::test::rep::StubChoice hint
+			set ::scidb::test::rep::StubConf 0.30
+			set ::scidb::test::rep::NoteRes {}
+			::reptrainer::decideNote $fen $moves "Italian / King's Knight branch" \
+				{set ::scidb::test::rep::NoteRes}
+			set dLow [::scidb::test::rep::wait ::scidb::test::rep::NoteRes]
+
+			# 5. Card building extracts comments and drill UI places hint vs explanation
+			::scidb::test::rep::buildGame
+			::scidb::game::go start
+			::scidb::game::go 1
+			set e4Key [::scidb::game::position key]
+			::scidb::game::update addcomment $e4Key after "Play e4 to claim the center"
+			set built [::reptrainer::buildFromCurrentGame white 1700000000]
+			lassign [::scidb::test::rep::gameKeys] startKey afterKey
+			set cardComment [dict get $built $startKey comment]
+
+			# Drill with classifier returning 'hint' on a spoiler comment ("Play e4..."):
+			# firewall downgrades to explanation, so pre-move instruction has no spoiler,
+			# and post-answer instruction shows the explanation.
+			set ::scidb::test::rep::StubChoice hint
+			set ::scidb::test::rep::StubConf 0.95
+			::reptrainer::open .application
+			update
+			set dlg .application.__reptrainer__
+			$dlg.setup.start invoke
+			update
+			# Wait for the async note decision to fire
+			after 20 { set ::scidb::test::rep::Tick 1 }
+			::scidb::test::rep::wait ::scidb::test::rep::Tick
+			set preMovePrompt $::reptrainer::Vars(instruction)
+
+			set ::scidb::test::rep::StubChoice good
+			set ::scidb::test::rep::StubConf 0.30
+			::reptrainer::answered e4
+			set postMovePrompt $::reptrainer::Vars(instruction)
+			::reptrainer::Close $dlg
+
+			list $nr1 $nr2 $nr3 $nr4 \
+				[dict get $dHint label] [dict get $dHint source] \
+				[dict get $dSpoiler label] [dict get $dSpoiler source] \
+				[dict get $dLow label] [dict get $dLow source] \
+				$cardComment \
+				$preMovePrompt \
+				$postMovePrompt
+		}
+	}
+} -cleanup {
+	catch { destroy .application.__reptrainer__ }
+	set ::reptrainer::Delay $::scidb::test::rep::delay
+	set ::move::Options(addVarWithoutAsking) $::scidb::test::rep::addVar
+	::scidb::test::rep::cleanup
+} -result {none none noise {} hint classifier explanation classifier none rules {Play e4 to claim the center} {Play the repertoire move for White.} {e4 is right. How well did you know it? -- Play e4 to claim the center}}
+
+
+tcltest::test reptrainer-jev-grade {reptrainer_grade suggestions, lapsed-card firewall, fallback, and user override} -setup {
+	set ::scidb::test::rep::addVar $::move::Options(addVarWithoutAsking)
+	set ::scidb::test::rep::delay $::reptrainer::Delay
+	set ::reptrainer::Delay 0
+	::scidb::test::rep::freeGameSlots
+} -body {
+	::scidb::test::rep::isolated {
+		::scidb::test::rep::withStubClassifier {
+			set fen {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}
+			set cleanCard [::reptrainer::review [::reptrainer::newCard $fen {e4} 1700000000] 2 1700086400]
+			set lapsedCard [::reptrainer::review $cleanCard 0 1700172800]
+
+			# 1. High-confidence easy on a clean card is accepted
+			set ::scidb::test::rep::StubOk 1
+			set ::scidb::test::rep::StubChoice easy
+			set ::scidb::test::rep::StubConf 0.90
+			set ::scidb::test::rep::GradeRes {}
+			::reptrainer::decideGrade $cleanCard e4 800 {set ::scidb::test::rep::GradeRes}
+			set dEasy [::scidb::test::rep::wait ::scidb::test::rep::GradeRes]
+
+			# 2. Firewall: easy on a lapsed card (reps=0, lapses=1) is clamped to good
+			set ::scidb::test::rep::GradeRes {}
+			::reptrainer::decideGrade $lapsedCard e4 700 {set ::scidb::test::rep::GradeRes}
+			set dClamped [::scidb::test::rep::wait ::scidb::test::rep::GradeRes]
+
+			# 3. Low confidence falls back to ""
+			set ::scidb::test::rep::StubConf 0.35
+			set ::scidb::test::rep::GradeRes {}
+			::reptrainer::decideGrade $cleanCard e4 2500 {set ::scidb::test::rep::GradeRes}
+			set dFallback [::scidb::test::rep::wait ::scidb::test::rep::GradeRes]
+
+			# 4. In the drill UI, a suggested grade updates the prompt, but the user's
+			# button click remains authoritative
+			::scidb::test::rep::buildGame
+			lassign [::scidb::test::rep::gameKeys] startKey
+			::reptrainer::open .application
+			update
+			set dlg .application.__reptrainer__
+			$dlg.setup.start invoke
+			update
+
+			set ::scidb::test::rep::StubChoice hard
+			set ::scidb::test::rep::StubConf 0.88
+			::reptrainer::answered e4
+			after 20 { set ::scidb::test::rep::Tick 1 }
+			::scidb::test::rep::wait ::scidb::test::rep::Tick
+			set suggestedPrompt $::reptrainer::Vars(instruction)
+			set suggestedVar $::reptrainer::Vars(suggestedGrade)
+			# User clicks Easy (grade 3) despite the Hard suggestion
+			$dlg.drill.grades.easy invoke
+			set recordedInterval [dict get $::reptrainer::Vars(deck) cards $startKey interval]
+			::reptrainer::Close $dlg
+
+			list \
+				[dict get $dEasy label] [dict get $dEasy source] \
+				[dict get $dClamped label] [dict get $dClamped source] \
+				[dict get $dFallback label] [dict get $dFallback source] \
+				$suggestedVar $suggestedPrompt $recordedInterval
+		}
+	}
+} -cleanup {
+	catch { destroy .application.__reptrainer__ }
+	set ::reptrainer::Delay $::scidb::test::rep::delay
+	set ::move::Options(addVarWithoutAsking) $::scidb::test::rep::addVar
+	::scidb::test::rep::cleanup
+} -result {easy classifier good classifier {} rules hard {e4 is right. How well did you know it? (Suggested: Hard)} 4}
+
+
+tcltest::testConstraint typesafeKey [expr {
+	[info exists ::env(TYPESAFE_API_KEY)] && [string length $::env(TYPESAFE_API_KEY)] > 0
+}]
+
+tcltest::test reptrainer-jev-live {live cloud check via SCIDB_AI_CLASSIFIER=typesafe} -constraints typesafeKey -setup {
+	set ::scidb::test::rep::savedBackend $::ai::systemone::Config(backend)
+	set ::env(SCIDB_AI_UNCALIBRATED) 1
+	::ai::systemone::configure -backend typesafe
+} -body {
+	set side [::reptrainer::inferSide "Caro-Kann Defense Repertoire" white]
+	set ::scidb::test::rep::LiveNote {}
+	::reptrainer::decideNote \
+		{rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1} \
+		{e4} "Play e4 to control d5 and f5" \
+		{set ::scidb::test::rep::LiveNote}
+	set note [::scidb::test::rep::wait ::scidb::test::rep::LiveNote]
+	list [expr {$side in {white black}}] [dict get $note label]
+} -cleanup {
+	::ai::systemone::configure -backend $::scidb::test::rep::savedBackend
+} -result {1 explanation}
 
 tcltest::cleanupTests
