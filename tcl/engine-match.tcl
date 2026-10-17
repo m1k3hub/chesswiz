@@ -944,7 +944,7 @@ proc ::enginematch::Connect {side} {
 		EngineDied $side [format $mc::EngineMissing $name [dict get $e Command]]
 		return 1
 	}
-	if {[catch { set pipe [open "|[list {*}$cmd]" r+] } err]} {
+	if {[catch { set pipe [::open "|[list {*}$cmd]" r+] } err]} {
 		EngineDied $side $err
 		return 1
 	}
