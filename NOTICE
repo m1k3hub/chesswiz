@@ -1,0 +1,18 @@
+Chesswiz
+Copyright (C) 2026 Michael Thomas
+
+Chesswiz is a derivative of Scidb, by Gregor Cramer
+(https://sourceforge.net/projects/scidb/, Subversion trunk r1531, 2018-11-24).
+Scidb is Copyright (C) 2008-2018 Gregor Cramer and is licensed under the GNU
+General Public License; see COPYING and COPYRIGHT, which also list the
+third-party components Scidb includes. Chesswiz is distributed under the same
+licence.
+
+The unmodified Scidb sources are kept on the scidb-upstream branch of this
+repository (and in the scidb-extended repository, with Scidb's full history),
+so every Chesswiz change to Scidb is visible as a diff against them. What
+Chesswiz adds and changes is summarised in docs/UPSTREAM.md.
+
+Other bundled components keep their own licences: CQL 6.2 (src/cql6,
+see src/cql6/VENDOR-NOTES.md), Stockfish (engines/stockfish, GPL-3), and the
+assets listed in docs/legal/ASSET_LICENSE_AUDIT.md.

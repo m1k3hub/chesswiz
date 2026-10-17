@@ -4,6 +4,7 @@ Project documents, grouped by topic. READMEs that describe one directory stay
 beside its code: `tests/README.md`, `opening-report/`, `media-console/`,
 `src/cql6/` (vendored CQL notes) and `engines/stockfish/`.
 
+- [UPSTREAM.md](UPSTREAM.md) — what comes from Scidb and what Chesswiz adds
 - [CHANGELOG.md](CHANGELOG.md) — release history
 - [plans/](plans/) — roadmap and long-range plans; start with
   [ROADMAP_SCIDB_VS_CHESSBASE.md](plans/ROADMAP_SCIDB_VS_CHESSBASE.md)
