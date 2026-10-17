@@ -1140,6 +1140,16 @@ proc PopupMenu {w} {
 		$m add separator
 	}
 
+	if {[llength [info commands ::gamereview::run]]} {
+		$m add command \
+			-compound left \
+			-image $::icon::16x16::none \
+			-label " $::gamereview::mc::Title..." \
+			-command [list ::gamereview::run .application] \
+			;
+		$m add separator
+	}
+
 	$m add command \
 		-compound left \
 		-image $::icon::16x16::rotateBoard \
