@@ -101,6 +101,7 @@ set AIEventTypes			"AI: Time &Controls"
 set AIDatabaseTrend			"AI: Database &Trends"
 set DownloadGames				"Download &Games from the Internet..."
 set GuessTheMove				"Guess the &Move..."
+set EndgameTrainer			"Endgame &Trainer..."
 set PlayAgainstEngine			"Play Against &Engine..."
 set EngineMatch					"Engine Mat&ch..."
 
@@ -699,6 +700,18 @@ proc build {menu} {
 			-underline [IncrUL $ul] \
 			-image $::icon::16x16::none \
 			-command [list ::guessmove::start] \
+			;
+	}
+
+	### endgame trainer ####################################################
+	if {[llength [info commands ::endtrainer::open]]} {
+		lassign [::tk::UnderlineAmpersand $mc::EndgameTrainer] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [list ::endtrainer::open .application] \
 			;
 	}
 

@@ -133,6 +133,7 @@ SOURCES = \
 	web3d-server.tcl \
 	board-3d.tcl \
 	tablebase.tcl \
+	endgame-trainer.tcl \
 	media-inset.tcl \
 	guess-move.tcl \
 	repertoire-trainer.tcl \
