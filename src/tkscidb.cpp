@@ -297,6 +297,8 @@ main(int argc, char* argv[])
 					args[n++] = wargv[i];
 				args[n] = 0;
 
+				// The wide entry leaves [info nameofexecutable] empty.
+				Tcl_FindExecutable(argv[0]);
 				Tk_MainExW(n, args, init, Tcl_CreateInterp());
 				return 0;
 			}
