@@ -127,6 +127,7 @@ array set Vars {
 	geometry			{}
 	need:maxsize	0
 	shutdown			0
+	resize:afterid	{}
 	scaling:listeners	{}
 }
 
@@ -457,6 +458,23 @@ proc RememberWindowGeometry {w} {
 	if {$state ni {normal zoomed}} { return }
 	set Options(window:state) $state
 	if {$state eq "normal"} { set Options(window:geometry) [wm geometry $w] }
+	# What tracks the settled window size (the media inset places itself
+	# against the board's margins) re-lays out once the resize ends. The
+	# board itself rebuilds on its canvas's <Configure> timers (100/300
+	# ms); this debounce lands after them and well inside the layout's
+	# 500 ms settle budget.
+	catch {after cancel $Vars(resize:afterid)}
+	set Vars(resize:afterid) [after 350 [namespace code ResizeSettled]]
+}
+
+
+proc ResizeSettled {} {
+	variable Vars
+	set Vars(resize:afterid) {}
+	if {!$Vars(ready)} { return }
+	if {[info commands ::mediainset::Relayout] ne ""} {
+		catch {::mediainset::Relayout}
+	}
 }
 
 
