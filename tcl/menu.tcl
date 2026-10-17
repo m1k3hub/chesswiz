@@ -616,6 +616,16 @@ proc build {menu} {
 			;
 	}
 
+	### the engine for game review and the AI features ####################
+	if {[llength [info commands ::ai::engine::chooseDialog]]} {
+		$m add command \
+			-compound left \
+			-label " $::ai::engine::mc::ChooseTitle..." \
+			-image $::icon::16x16::engine \
+			-command [list ::ai::engine::chooseDialog .application] \
+			;
+	}
+
 	### game review (move classes + accuracy) #############################
 	if {[llength [info commands ::gamereview::run]]} {
 		lassign [::tk::UnderlineAmpersand $mc::GameReview] text ul

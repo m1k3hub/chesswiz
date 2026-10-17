@@ -36,11 +36,17 @@ namespace eval engine {
 
 variable Config
 array set Config {
-	engine     stockfish
+	engine     auto
 	depth      16
 	multipv    1
 	timeoutMs  60000
 	onlyMoveCp 150
+}
+
+# Options(engine): the configured engine chosen for reviews and the AI
+# features; "" is the bundled Stockfish.
+array set Options {
+	engine ""
 }
 
 variable Proc ""
@@ -70,29 +76,111 @@ proc ::ai::engine::configure {args} {
 }
 
 
-# The Stockfish that ships with Scidb (stockfish-chesswiz in the engines
-# directory) is preferred over one on PATH, unless an engine was configured.
-proc ::ai::engine::Bundled {} {
+# Which engine to run. The bundled Stockfish by default; any other UCI
+# engine set up in the engine dictionary can be chosen instead
+# (Options(engine), Extras > Engine for Reviews and AI):
+#
+#   1. -engine PATH given to configure: that program;
+#   2. the engine chosen in Options(engine), if it speaks UCI and can start
+#      (Windows engines run through wine on Unix);
+#   3. the engine shipped in the engines directory (stockfish-chesswiz);
+#   4. a "stockfish" on PATH;
+#   5. the first configured engine that speaks UCI and can start.
+#
+# Returns {command profile}: the command list to start, and the engine
+# dictionary name whose options apply ("" when it is not in the dictionary).
+proc ::ai::engine::Resolve {} {
 	variable Config
-	if {$Config(engine) ne "stockfish" || ![info exists ::scidb::dir::engines]} { return }
+	variable Options
+
+	set engine $Config(engine)
+	if {$engine ni {auto stockfish ""}} {
+		if {[file executable $engine]} { return [list [list $engine] ""] }
+		set found [auto_execok $engine]
+		if {[llength $found]} { return [list $found ""] }
+		return {}
+	}
+
+	if {$Options(engine) ne ""} {
+		set cmd [DictionaryCommand $Options(engine)]
+		if {[llength $cmd]} { return [list $cmd $Options(engine)] }
+	}
+
+	set bundled [bundled]
+	if {$bundled ne ""} { return [list [list $bundled] ""] }
+	set found [auto_execok stockfish]
+	if {[llength $found]} { return [list $found ""] }
+
+	foreach name [uciEngines] {
+		set cmd [DictionaryCommand $name]
+		if {[llength $cmd]} { return [list $cmd $name] }
+	}
+	return {}
+}
+
+
+# The Stockfish shipped with Chesswiz, or "".
+proc ::ai::engine::bundled {} {
+	if {![info exists ::scidb::dir::engines]} { return "" }
 	set exe [file join $::scidb::dir::engines stockfish-chesswiz]
 	if {![file exists $exe] && [file exists $exe.exe]} { append exe .exe }
-	if {[file executable $exe]} { set Config(engine) $exe }
+	if {[file executable $exe]} { return $exe }
+	return ""
+}
+
+
+# The names of the configured engines that speak UCI.
+proc ::ai::engine::uciEngines {} {
+	if {![info exists ::engine::Engines]} { return {} }
+	set names {}
+	foreach e $::engine::Engines {
+		if {[dict exists $e Protocol] && "UCI" in [dict get $e Protocol]} { lappend names [dict get $e Name] }
+	}
+	return $names
+}
+
+
+# The start command of a configured UCI engine, or {}.
+proc ::ai::engine::DictionaryCommand {name} {
+	if {![info exists ::engine::Engines] || ![llength [info commands ::engine::Command]]} { return {} }
+	set index [::engine::FindIndex $name]
+	if {$index < 0} { return {} }
+	set e [dict merge $::engine::EmptyEngine [lindex $::engine::Engines $index]]
+	if {"UCI" ni [dict get $e Protocol]} { return {} }
+	set cmd [::engine::Command [dict get $e Command] [dict get $e Parameters]]
+	if {$cmd in {"" no-wine}} { return {} }
+	return $cmd
+}
+
+
+# Choose the engine (a configured UCI engine's name, "" for the bundled
+# Stockfish); the next evaluation starts it.
+proc ::ai::engine::choose {name} {
+	variable Options
+	if {$Options(engine) eq $name} { return }
+	set Options(engine) $name
+	kill
 }
 
 
 proc ::ai::engine::available {} {
-	variable Config
-	Bundled
-	set exe $Config(engine)
-	if {[file exists $exe] && [file executable $exe]} { return 1 }
-	# bare name: search PATH
-	if {[llength [file split $exe]] == 1} {
-		foreach dir [split $::env(PATH) :] {
-			if {[file executable [file join $dir $exe]]} { return 1 }
-		}
-	}
-	return 0
+	return [expr {[llength [Resolve]] > 0}]
+}
+
+
+# How to call the engine in text: its dictionary name, or "the chess engine".
+proc ::ai::engine::label {} {
+	set n [name]
+	if {$n eq ""} { catch { lassign [Resolve] _ n } }
+	return [expr {$n ne "" ? $n : "the chess engine"}]
+}
+
+
+# The engine dictionary name of the engine in use ("" for a plain program).
+proc ::ai::engine::name {} {
+	variable Profile
+	if {[info exists Profile]} { return $Profile }
+	return ""
 }
 
 
@@ -126,11 +214,14 @@ proc ::ai::engine::ensure {} {
 
 	if {$Proc ne "" && [catch {eof $Proc} dead] == 0 && !$dead} { return }
 	kill
-	if {![available]} {
-		error "no UCI engine: set ::ai::engine::configure -engine /path/to/stockfish"
+	set resolved [Resolve]
+	if {![llength $resolved]} {
+		error "no UCI engine: set one up in the engine dictionary, or ::ai::engine::configure -engine /path/to/engine"
 	}
+	lassign $resolved cmd profile
+	variable Profile $profile
 
-	set Proc [open "|[list $Config(engine)]" r+]
+	set Proc [open "|[list {*}$cmd]" r+]
 	fconfigure $Proc -blocking 0 -buffering line
 
 	send "uci"
@@ -141,9 +232,10 @@ proc ::ai::engine::ensure {} {
 	catch { set cores [::platform::sys::cpus] }
 	send "setoption name Threads value [expr {max(1, min(8, $cores / 2))}]"
 	send "setoption name Hash value 256"
-	# endgame tablebases: the folder set on the Stockfish profile (Engine
+	# endgame tablebases: the folder set on the engine's profile (Engine
 	# options, SyzygyPath), so the facts are perfect in endgames too
-	if {![catch { lassign [::engine::profileOptions Stockfish Default] _ _ options }]} {
+	set profileName [expr {$profile ne "" ? $profile : "Stockfish"}]
+	if {![catch { lassign [::engine::profileOptions $profileName Default] _ _ options }]} {
 		foreach opt $options {
 			lassign $opt name _ value
 			if {$name eq "SyzygyPath" && $value ni {"" <empty>}} {
@@ -489,4 +581,51 @@ proc ::ai::engine::classify {fen san args} {
 		evalBeforeCp $cpBefore evalAfterCp $cpAfter \
 		cpLoss $cpLoss winPercentLoss $wpLoss classification $class \
 		gapCp $gapCp onlyMove $onlyMove depth $opts(-depth)]
+}
+
+
+namespace eval ::ai::engine::mc {
+	set ChooseTitle	"Engine for Reviews and AI"
+	set ChooseText		"The chess engine that judges moves in Game Review, the assistant's engine questions and the AI features. Any UCI engine set up in the engine dictionary can be used."
+	set Bundled			"Chesswiz's Stockfish (default)"
+}
+
+
+# Extras > Engine for Reviews and AI.
+proc ::ai::engine::chooseDialog {parent} {
+	variable Options
+
+	set dlg [winfo toplevel $parent].__aiengine__
+	if {[winfo exists $dlg]} { raise $dlg; return }
+	toplevel $dlg -class Scidb
+	wm title $dlg $mc::ChooseTitle
+	wm transient $dlg [winfo toplevel $parent]
+	wm withdraw $dlg
+	set top [ttk::frame $dlg.top -padding 10]
+	ttk::label $top.text -text $mc::ChooseText -wraplength 380 -justify left
+	set values [linsert [uciEngines] 0 $mc::Bundled]
+	ttk::combobox $top.engine -state readonly -width 40 -values $values
+	$top.engine set [expr {$Options(engine) in [uciEngines] ? $Options(engine) : $mc::Bundled}]
+	pack $top.text -anchor w
+	pack $top.engine -fill x -pady {8 0}
+	pack $top -fill both -expand yes
+	::widget::dialogButtons $dlg {ok cancel}
+	$dlg.ok configure -command [list apply {{dlg} {
+		set v [$dlg.top.engine get]
+		::ai::engine::choose [expr {$v eq $::ai::engine::mc::Bundled ? "" : $v}]
+		destroy $dlg
+	}} $dlg]
+	$dlg.cancel configure -command [list destroy $dlg]
+	bind $dlg <Escape> [list destroy $dlg]
+	::util::place $dlg -parent [winfo toplevel $parent] -position center
+	wm deiconify $dlg
+}
+
+
+proc ::ai::engine::WriteOptions {chan} {
+	::options::writeItem $chan [namespace current]::Options
+}
+
+if {[llength [info commands ::options::hookWriter]]} {
+	::options::hookWriter ::ai::engine::WriteOptions
 }

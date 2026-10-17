@@ -334,7 +334,7 @@ tcltest::test gamereview-judge-async-classifier {async review judgment via class
 } -cleanup {
 	::scidb::test::gamereview::unstubClassifier
 	unset -nocomplain ::scidb::test::gamereview::judgeResult ::scidb::test::gamereview::judgeFlag
-} -result {1 classifier ply_2 classifier tactics classifier critical_only classifier}
+} -result {1 classifier ply_2 engine tactics classifier critical_only classifier}
 
 tcltest::test gamereview-judge-async-fallback-abstain {low confidence abstains to deterministic fallback} -setup {
 	set review [::gamereview::classify {
@@ -362,7 +362,7 @@ tcltest::test gamereview-judge-async-fallback-abstain {low confidence abstains t
 } -cleanup {
 	::scidb::test::gamereview::unstubClassifier
 	unset -nocomplain ::scidb::test::gamereview::judgeResult ::scidb::test::gamereview::judgeFlag
-} -result {1 rules rules rules rules}
+} -result {1 rules engine rules rules}
 
 tcltest::test gamereview-judge-async-disabled {disabled classifier returns rules fallback immediately} -setup {
 	set review [::gamereview::classify {
@@ -466,5 +466,61 @@ tcltest::test gamereview-live-typesafe {live typesafe cloud classifier evaluatio
 } -cleanup {
 	::ai::systemone::configure -backend off
 } -result {1 1}
+
+# Engine first: the turning point is the engine's call; a typed judgment
+# may only choose between candidates the engine rates as close.
+proc ::scidb::test::gamereview::mv {ply side san class loss before after} {
+	dict create ply $ply side $side san $san class $class loss $loss before $before after $after
+}
+
+tcltest::test gamereview-tp-engine-first {the earliest error that decided a contested game, not the biggest drop} -body {
+	# ply 10: White (0 cp) blunders into -500 (decided, never recovers);
+	# ply 30: a bigger drop later, in an already lost position
+	set moves [list \
+		[::scidb::test::gamereview::mv 10 White Qd2 Blunder 40.0 0 -500] \
+		[::scidb::test::gamereview::mv 11 Black Nf6 Best 0.0 500 500] \
+		[::scidb::test::gamereview::mv 30 White Kf1 Blunder 45.0 -500 -2000] \
+		[::scidb::test::gamereview::mv 31 Black Qh1 Best 0.0 2000 2000]]
+	set review [dict create moves $moves]
+	set c [::gamereview::turningPointCandidates $review]
+	::gamereview::turningPointEngine $review $c
+} -result {ply_10 {}}
+
+tcltest::test gamereview-tp-close-only {Jev is asked only between close engine candidates, and its other answers are ignored} -setup {
+	rename ::ai::systemone::enabled ::scidb::test::gamereview::realEnabled
+	rename ::ai::systemone::evaluateAsync ::scidb::test::gamereview::realEvalAsync
+	proc ::ai::systemone::enabled {} { return 1 }
+	proc ::ai::systemone::evaluateAsync {state questions script} {
+		set ::scidb::test::gamereview::asked [expr {[dict exists $questions review_turning_point]
+			? [dict keys [dict get $questions review_turning_point criteria]] : {}}]
+		after 0 [list {*}$script [dict create ok 1 answers [dict create \
+			review_turning_point [dict create type choice choice $::scidb::test::gamereview::answer confidence 0.9 \
+				probabilities [list $::scidb::test::gamereview::answer 0.9]]]]]
+	}
+} -body {
+	# two competitive errors 1 point apart, neither decisive: close
+	set moves [list \
+		[::scidb::test::gamereview::mv 12 White Bd3 Mistake 15.0 50 -100] \
+		[::scidb::test::gamereview::mv 13 Black Bg4 Mistake 14.0 100 -60] \
+		[::scidb::test::gamereview::mv 40 White Rd1 Inaccuracy 8.0 -60 -150]]
+	set counts {Best 0 Excellent 0 Good 0 Inaccuracy 0 Mistake 0 Blunder 0}
+	set review [dict create moves $moves white [dict create accuracy 80 n 2 counts [dict replace $counts Mistake 2]] black [dict create accuracy 80 n 1 counts [dict replace $counts Mistake 1]]]
+	set out {}
+	foreach ans {ply_13 ply_40} {
+		set ::scidb::test::gamereview::answer $ans
+		set ::scidb::test::gamereview::r {}
+		::gamereview::judgeReviewAsync $review {apply {{d} {set ::scidb::test::gamereview::r $d}}}
+		vwait ::scidb::test::gamereview::r
+		lappend out [lsort $::scidb::test::gamereview::asked] \
+			[dict get $::scidb::test::gamereview::r turning_point] \
+			[dict get $::scidb::test::gamereview::r turning_point_source]
+	}
+	set out
+} -cleanup {
+	rename ::ai::systemone::enabled {}
+	rename ::scidb::test::gamereview::realEnabled ::ai::systemone::enabled
+	rename ::ai::systemone::evaluateAsync {}
+	rename ::scidb::test::gamereview::realEvalAsync ::ai::systemone::evaluateAsync
+} -result {{ply_12 ply_13} ply_13 classifier {ply_12 ply_13} ply_12 engine}
 
 tcltest::cleanupTests

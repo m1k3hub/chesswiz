@@ -345,13 +345,15 @@ proc ::gamereview::CandidateFromMove {m} {
 
 
 # The classifier question for the decisive turning point.
-proc ::gamereview::turningPointQuestion {candidates} {
+proc ::gamereview::turningPointQuestion {candidates {allowNone 1}} {
 	set crit [dict create]
 	foreach c $candidates {
 		dict set crit [dict get $c tag] \
 			"[dict get $c move] ([dict get $c side], loss [dict get $c loss]%, [dict get $c class] in [dict get $c phase])"
 	}
-	dict set crit none "no single decisive turning point; gradual shift or clean game"
+	if {$allowNone} {
+		dict set crit none "no single decisive turning point; gradual shift or clean game"
+	}
 	return [dict create \
 		type choice \
 		instructions "Which move is the decisive turning point where the game's outcome fundamentally tilted, rather than a late blunder in an already decided position or a minor shift?" \
@@ -385,6 +387,74 @@ proc ::gamereview::turningPointFallback {candidates} {
 		}
 	}
 	return $bestTag
+}
+
+
+# The turning point decided by the engine's numbers, engine first:
+#
+#   the earliest flagged error that turned a contested game (the mover's
+#   win probability 15..85 before the move) into a decided one (below 15
+#   after it), when the mover never got back into the game (above 30)
+#   afterwards; else the turning-point fallback (largest loss in a
+#   competitive position, else largest loss).
+#
+# Returns {tag close}: close lists the other candidates whose loss is
+# within 3 points of the chosen one's in the same tier -- the only case
+# where a typed judgment (Jev) may choose, and only among {tag close}.
+proc ::gamereview::turningPointEngine {review candidates} {
+	if {![llength $candidates]} { return [list none {}] }
+	set moves [dict get $review moves]
+
+	# the mover's win probability after every ply, from each side's view
+	set wpAfter [dict create]
+	foreach m $moves {
+		set after [expr {[dict exists $m after] ? [dict get $m after] : 0}]
+		set p [wp $after]
+		dict set wpAfter [dict get $m ply] [dict get $m side] $p
+		dict set wpAfter [dict get $m ply] [expr {[dict get $m side] eq "White" ? "Black" : "White"}] [expr {100.0 - $p}]
+	}
+
+	set decisive {}
+	foreach c $candidates {
+		set before [wp [dict get $c evalBefore]]
+		set after [wp [dict get $c evalAfter]]
+		if {$before < 15.0 || $before > 85.0 || $after >= 15.0} { continue }
+		set side [dict get $c side]
+		set recovered 0
+		dict for {ply bySide} $wpAfter {
+			if {$ply > [dict get $c ply] && [dict get $bySide $side] > 30.0} { set recovered 1; break }
+		}
+		if {!$recovered} { lappend decisive $c }
+	}
+
+	if {[llength $decisive]} {
+		set pool $decisive
+		set chosen [lindex [lsort -integer -index 1 [lmap c $decisive {list [dict get $c tag] [dict get $c ply]}]] 0 0]
+	} else {
+		set chosen [turningPointFallback $candidates]
+		set pool {}
+		foreach c $candidates {
+			set b [wp [dict get $c evalBefore]]
+			if {$b >= 15.0 && $b <= 85.0} { lappend pool $c }
+		}
+		if {![llength $pool]} { set pool $candidates }
+	}
+
+	set chosenLoss 0
+	foreach c $pool { if {[dict get $c tag] eq $chosen} { set chosenLoss [dict get $c loss] } }
+	set close {}
+	foreach c $pool {
+		if {[dict get $c tag] ne $chosen && abs([dict get $c loss] - $chosenLoss) <= 3.0} {
+			lappend close [dict get $c tag]
+		}
+	}
+	return [list $chosen $close]
+}
+
+
+# The candidates among <tags>, for a question that may only choose there.
+proc ::gamereview::candidatesTagged {candidates tags} {
+	return [lmap c $candidates { expr {[dict get $c tag] in $tags ? $c : [continue]} }]
 }
 
 
@@ -568,13 +638,15 @@ proc ::gamereview::symbolGateState {review} {
 # focus, symbol gate). Calls <script> with a dictionary of outcomes.
 proc ::gamereview::judgeReviewAsync {review script} {
 	set candidates [turningPointCandidates $review]
-	set fbTP [turningPointFallback $candidates]
+	lassign [turningPointEngine $review $candidates] engineTP close
+	# Jev chooses the turning point only between close engine candidates
+	set ask [expr {[llength $close] ? [candidatesTagged $candidates [list $engineTP {*}$close]] : {}}]
 	set fbFocus [focusFallback $review]
 	set fbGate [symbolGateFallback $review]
 
 	set fallbackResult [dict create \
 		ok 1 source rules \
-		turning_point $fbTP turning_point_source rules \
+		turning_point $engineTP turning_point_source engine \
 		focus $fbFocus focus_source rules \
 		symbol_gate $fbGate symbol_gate_source rules]
 
@@ -585,19 +657,21 @@ proc ::gamereview::judgeReviewAsync {review script} {
 		return
 	}
 
-	set tpState [turningPointState $review $candidates]
+	set tpState [turningPointState $review [expr {[llength $ask] ? $ask : $candidates}]]
 	set focusState [focusState $review]
 	set gateState [symbolGateState $review]
 	set state "review_summary: $focusState\n$tpState\n$gateState"
 
 	set questions [dict create \
-		review_turning_point [turningPointQuestion $candidates] \
 		review_focus [focusQuestion] \
 		review_symbol_gate [symbolGateQuestion]]
+	if {[llength $ask]} {
+		dict set questions review_turning_point [turningPointQuestion $ask 0]
+	}
 
 	if {[catch {
 		::ai::systemone::evaluateAsync $state $questions \
-			[namespace code [list OnJudgeReply $script $candidates $review]]
+			[namespace code [list OnJudgeReply $script $ask $engineTP $review]]
 	} err]} {
 		after 0 [list {*}$script $fallbackResult]
 	}
@@ -605,28 +679,28 @@ proc ::gamereview::judgeReviewAsync {review script} {
 }
 
 
-proc ::gamereview::OnJudgeReply {script candidates review result} {
-	set fbTP [turningPointFallback $candidates]
+proc ::gamereview::OnJudgeReply {script ask engineTP review result} {
+	set fbTP $engineTP
 	set fbFocus [focusFallback $review]
 	set fbGate [symbolGateFallback $review]
 
 	if {![dict exists $result ok] || ![dict get $result ok] || ![dict exists $result answers]} {
 		uplevel #0 [list {*}$script [dict create ok 1 source rules \
-			turning_point $fbTP turning_point_source rules \
+			turning_point $fbTP turning_point_source engine \
 			focus $fbFocus focus_source rules \
 			symbol_gate $fbGate symbol_gate_source rules]]
 		return
 	}
 
 	set answers [dict get $result answers]
-	set qTP [turningPointQuestion $candidates]
+	set qTP [turningPointQuestion $ask 0]
 	set qFocus [focusQuestion]
 	set qGate [symbolGateQuestion]
 
 	set tp $fbTP
-	set tpSrc rules
+	set tpSrc engine
 	set tpConf {}
-	if {[dict exists $answers review_turning_point]} {
+	if {[llength $ask] && [dict exists $answers review_turning_point]} {
 		set a [dict get $answers review_turning_point]
 		set th [::ai::systemone::threshold review_turning_point 0.6]
 		if {[::ai::systemone::valid $qTP $a] && [dict get $a confidence] >= $th} {
@@ -676,12 +750,13 @@ proc ::gamereview::OnJudgeReply {script candidates review result} {
 # Synchronous bounded query for the review decisions.
 proc ::gamereview::judgeReviewSync {review args} {
 	set candidates [turningPointCandidates $review]
-	set fbTP [turningPointFallback $candidates]
+	lassign [turningPointEngine $review $candidates] engineTP close
+	set ask [expr {[llength $close] ? [candidatesTagged $candidates [list $engineTP {*}$close]] : {}}]
 	set fbFocus [focusFallback $review]
 	set fbGate [symbolGateFallback $review]
 
 	set out [dict create ok 1 source rules \
-		turning_point $fbTP turning_point_source rules \
+		turning_point $engineTP turning_point_source engine \
 		focus $fbFocus focus_source rules \
 		symbol_gate $fbGate symbol_gate_source rules]
 
@@ -691,15 +766,17 @@ proc ::gamereview::judgeReviewSync {review args} {
 		return $out
 	}
 
-	set tpState [turningPointState $review $candidates]
+	set tpState [turningPointState $review [expr {[llength $ask] ? $ask : $candidates}]]
 	set focusState [focusState $review]
 	set gateState [symbolGateState $review]
 	set state "review_summary: $focusState\n$tpState\n$gateState"
 
 	set questions [dict create \
-		review_turning_point [turningPointQuestion $candidates] \
 		review_focus [focusQuestion] \
 		review_symbol_gate [symbolGateQuestion]]
+	if {[llength $ask]} {
+		dict set questions review_turning_point [turningPointQuestion $ask 0]
+	}
 
 	set chosen [::ai::systemone::chooseManySync review_turning_point $state $questions {*}$args]
 	if {[dict exists $chosen review_turning_point]} {
