@@ -626,6 +626,11 @@ proc update {position cmd data promoted} {
 		::application::media::BoardUpdated $position
 	}
 
+	# endgame tablebase verdict under the board (seven pieces or fewer)
+	if {[llength [info commands ::tablebase::positionChanged]]} {
+		::tablebase::positionChanged $Vars(widget:frame)
+	}
+
 	# 3D board view mirrors the position (no-op unless the viewer is open)
 	if {[llength [info commands ::board3d::PositionChanged]]} {
 		::board3d::PositionChanged [::board::diagram::data $board]
@@ -1198,6 +1203,14 @@ proc PopupMenu {w} {
 		-command [namespace code Apply] \
 		;
 	::theme::configureCheckEntry $m
+	if {[llength [info commands ::tablebase::toggle]]} {
+		$m add checkbutton \
+			-label $::tablebase::mc::ShowTablebase \
+			-variable ::tablebase::Options(enabled) \
+			-command ::tablebase::toggle \
+			;
+		::theme::configureCheckEntry $m
+	}
 	$m add checkbutton \
 		-label $::board::options::mc::ShowMaterialBar \
 		-variable ::board::layout(material-bar) \

@@ -132,6 +132,7 @@ SOURCES = \
 	board-options.tcl \
 	web3d-server.tcl \
 	board-3d.tcl \
+	tablebase.tcl \
 	annotation.tcl \
 	comment.tcl \
 	marks.tcl \
