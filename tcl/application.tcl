@@ -85,6 +85,7 @@ array set PaneOptions {
 	media		{ -width 400 -height 300 -minwidth 250 -minheight 200 -expand y }
 	report	{ -width 500 -height 400 -minwidth 250 -minheight 150 -expand both }
 	assistant	{ -width 400 -height 400 -minwidth 250 -minheight 150 -expand both }
+	explorer	{ -width 360 -height 420 -minwidth 220 -minheight 200 -expand y }
 }
 
 set BoardLayout {
@@ -112,9 +113,9 @@ array set ShortcutDefaults {}
 
 set FontSizeActive 0
 
-array set Prios		{ analysis 200 board 500 editor 400 games 100 dbgames 110 tree 300 eco 90 media 80 report 70 assistant 60 }
+array set Prios		{ analysis 200 board 500 editor 400 games 100 dbgames 110 tree 300 eco 90 media 80 report 70 assistant 60 explorer 50 }
 # Explicit allowlist: new panes default to off; eco is deliberately excluded.
-array set Zoomable {analysis 1 board 1 editor 1 games 1 dbgames 1 tree 1 media 1 report 1 assistant 1}
+array set Zoomable {analysis 1 board 1 editor 1 games 1 dbgames 1 tree 1 media 1 report 1 assistant 1 explorer 1}
 array set Defaults	{ menu:background #c3c3c3 }
 
 array set Vars {
@@ -634,6 +635,7 @@ proc BuildPane {twm frame uid width height} {
 		media	{ media::build $twm $frame $width $height }
 		report	{ report::build $frame $width $height }
 		assistant	{ assistant::build $frame $width $height }
+		explorer	{ explorer::build $frame $width $height }
 		board		{ board::build $frame $width $height }
 		editor	{ pgn::build $frame $width $height }
 		games		{ tree::games::build $twm $frame $width $height }

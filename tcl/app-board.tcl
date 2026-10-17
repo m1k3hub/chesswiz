@@ -631,6 +631,11 @@ proc update {position cmd data promoted} {
 		::tablebase::positionChanged $Vars(widget:frame)
 	}
 
+	# online opening explorer for the board position (its own dockable pane)
+	if {[llength [info commands ::application::explorer::positionChanged]]} {
+		::application::explorer::positionChanged
+	}
+
 	# 3D board view mirrors the position (no-op unless the viewer is open)
 	if {[llength [info commands ::board3d::PositionChanged]]} {
 		::board3d::PositionChanged [::board::diagram::data $board]
