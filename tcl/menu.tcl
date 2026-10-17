@@ -91,6 +91,7 @@ set AIExplain						"AI: &Explain Position"
 set AIAssistant					"AI: A&ssistant"
 set AIChooseModel				"AI: Choose &Model..."
 set AIAnnotateGame			"AI: &Annotate Game..."
+set GameReview					"&Game Review..."
 set AIStudyPlan				"AI: &Study Plan..."
 set AIOpponentBrief			"AI: Opponent &Brief..."
 set AIFactCheck				"AI: Fact-Check &Annotations"
@@ -610,6 +611,18 @@ proc build {menu} {
 			-underline [IncrUL $ul] \
 			-image $::icon::16x16::none \
 			-command [list ::ai::annotate::toggle .application] \
+			;
+	}
+
+	### game review (move classes + accuracy) #############################
+	if {[llength [info commands ::gamereview::run]]} {
+		lassign [::tk::UnderlineAmpersand $mc::GameReview] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [list ::gamereview::run .application] \
 			;
 	}
 
