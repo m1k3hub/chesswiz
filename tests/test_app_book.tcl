@@ -443,4 +443,6 @@ catch { ::scidb::game::new [::scidb::game::current] }
 
 } ;# namespace eval ::scidb::test::book
 
+tcltest::cleanupTests
+
 # vi:set ts=3 sw=3:
