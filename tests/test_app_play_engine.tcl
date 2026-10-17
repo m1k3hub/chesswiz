@@ -442,4 +442,15 @@ tcltest::test playengine-real-uci {Start survives event dispatch and a real engi
 } -result {1 2 1 user ready 1}
 
 
+# The Run 37 layout: a maximised 1920x1080 window with the board on the right half.
+foreach {name board expected} {
+	right-has-room {300 100 600 600} {912 100}
+	board-right    {1000 200 860 860} {649 200}
+	board-fills    {0 0 1920 1000} {0 825}
+} {
+	tcltest::test playengine-beside-$name {the dialog goes beside the board, never on it} -body {
+		::playengine::BesidePosition {*}$board 323 215 1920 1080
+	} -result $expected
+}
+
 tcltest::cleanupTests
