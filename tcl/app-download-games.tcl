@@ -618,6 +618,13 @@ proc ::application::download::Get {url done} {
 		set token [string trim $Options(lichess:token)]
 		if {$token ne ""} { lappend headers Authorization "Bearer $token" }
 	}
+	# the opening explorer (explorer.lichess.ovh) also requires the token
+	if {[string match https://explorer.lichess.ovh/* $url]} {
+		variable Options
+		set headers [list User-Agent [UserAgent] Accept application/json]
+		set token [string trim $Options(lichess:token)]
+		if {$token ne ""} { lappend headers Authorization "Bearer $token" }
+	}
 	if {[catch { ::http::geturl $url \
 		-headers $headers \
 		-timeout $Timeout -binary 1 -command [namespace code [list OnHttp $done]] \
