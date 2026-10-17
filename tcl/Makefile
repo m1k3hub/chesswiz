@@ -135,6 +135,7 @@ SOURCES = \
 	tablebase.tcl \
 	media-inset.tcl \
 	guess-move.tcl \
+	repertoire-trainer.tcl \
 	annotation.tcl \
 	comment.tcl \
 	marks.tcl \
