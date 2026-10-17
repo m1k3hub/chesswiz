@@ -1,0 +1,18 @@
+[Event "AI training fixture"]
+[SetUp "1"]
+[FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"]
+[Result "*"]
+
+{White to move.} 1. e4 {engine line: e2e4 e7e5 g1f3} *
+
+[Event "Ordinary FEN puzzle"]
+[SetUp "1"]
+[FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"]
+[Result "*"]
+
+1. d4! {main line} (1. e4 (1. c4) e5) 1... d5 $1 2. c4 *
+
+[Event "Not a puzzle"]
+[Result "*"]
+
+1. e4 e5 *

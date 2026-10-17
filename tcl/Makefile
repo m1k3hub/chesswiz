@@ -180,6 +180,7 @@ SOURCES = \
 	ai-factcheck.tcl \
 	ai-brief.tcl \
 	ai-engine.tcl \
+	tactics-trainer.tcl \
 	ai-provider.tcl \
 	ai-systemone.tcl \
 	ai-batch.tcl \
