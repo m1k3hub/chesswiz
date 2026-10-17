@@ -290,6 +290,8 @@ proc pressSquare {square state} {
 		set c [::scidb::pos::stm]
 		set p [string index [::board::diagram::piece $board $square] 0]
 		if {$c eq $p} { ::board::diagram::setDragSquare $board $square }
+	} elseif {$hilite(show-suggested) && $square ne $Square(selected)} {
+		# second click of a click-click move: releaseSquare makes the move
 	} elseif {$hilite(show-suggested)} {
 		::board::diagram::setDragSquare $board
 		::board::diagram::hilite $board $Square(selected) off
@@ -323,6 +325,19 @@ proc releaseSquare {x y state} {
 	}
 
 	::application::board::setCursor
+
+	# A click on an own piece with no suggested move selects it, so that a
+	# click on the target square makes the move.
+	set clickSelect [expr {
+		$hilite(show-suggested) && !$dragged && $square == $selected && $square >= 0
+		&& $Square(suggested) == -1 && $Drop(piece) eq " "
+		&& [string index [::board::diagram::piece $board $square] 0] eq [::scidb::pos::stm]
+	}]
+
+	if {$clickSelect} {
+		::board::diagram::setDragSquare $board
+		return
+	}
 
 	if {$hilite(show-suggested) || $square != $Square(selected)} {
 		set Square(selected) -1
