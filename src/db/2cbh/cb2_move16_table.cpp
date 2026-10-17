@@ -5,7 +5,7 @@
 // Extracted from ChessBase 26 (CBase26.exe): runtime-built global decode
 // table DAT_141ad7110 (VA 0x141ad7110, 512 KiB of 8-byte move descriptors),
 // dumped from a live Wine process.  Extraction procedure: section 3.8 of
-// docs/2CBH_FORMAT_DESIGN.md.  Validated against 20,000 games of the
+// docs/formats/2CBH_FORMAT_DESIGN.md.  Validated against 20,000 games of the
 // LumbrasGigaBase fixture (100% legal move replay with python-chess).
 //
 // Packed entry layout (one uint32 per 16-bit code):

@@ -65,7 +65,7 @@ public:
 	bool encodingFailed() const override;
 	bool usingAsyncReader() const override;
 
-	/// SCI file version for writing (docs/SCI_CORRESPONDENCE_FORMAT.md §3).
+	/// SCI file version for writing (docs/formats/SCI_CORRESPONDENCE_FORMAT.md §3).
 	/// New databases are created at the static creation version (96 since
 	/// the correspondence-duration feature); opened databases pin to their
 	/// own storage version (readIndexHeader).

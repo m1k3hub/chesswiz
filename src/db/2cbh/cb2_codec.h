@@ -1,7 +1,7 @@
 // ======================================================================
 // CB2 (ChessBase 17+ "2CBH") Database Codec — read-only.
 //
-// See docs/2CBH_FORMAT_DESIGN.md for the format specification.
+// See docs/formats/2CBH_FORMAT_DESIGN.md for the format specification.
 // ======================================================================
 
 #ifndef _cb2_codec_included

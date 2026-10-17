@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/build-sysroot.sh <triple>
 #
-# Build the third-party C dependencies (spec D2, docs/PORT_WINDOWS_MAC_SPEC.md)
+# Build the third-party C dependencies (spec D2, docs/dev/PORT_WINDOWS_MAC_SPEC.md)
 # from source with `zig cc -target <triple>` into a per-target sysroot:
 #
 #   build/<triple>/{include,lib,bin}   install prefix ("sysroot")

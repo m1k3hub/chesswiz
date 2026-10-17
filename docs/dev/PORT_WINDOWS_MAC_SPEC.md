@@ -15,7 +15,7 @@ Status: proposal, 2026-10-09. Facts below were surveyed from the tree at `bb30e5
 
 CI: `.github/workflows/port.yml` on github.com/m1k3hub/chesswiz (private); Zig comes from the
 `toolchain-zig-0.16.0-dev.3133` release (checksum `.zig-sha256`). Release blockers that remain
-are licensing, not porting: see `docs/ASSET_LICENSE_AUDIT.md` and the splash artwork.
+are licensing, not porting: see `docs/legal/ASSET_LICENSE_AUDIT.md` and the splash artwork.
 
 ## 1. What the tree already gives us
 
@@ -83,7 +83,7 @@ Found: `exec nproc` (ai-engine.tcl:137), `exec kill` (ai-modelfit.tcl:107, app-v
 - Windows: Inno Setup installer (or MSIX later); bundle Tcl/Tk, tcltls+OpenSSL, fonts installed privately (`AddFontResourceEx` FR_PRIVATE at startup — no admin rights), engines (Stockfish, Reckless, Sjeng `.exe`).
 - macOS: `.app` bundle, universal2 (arm64+x86_64), codesigned + notarized (needs an Apple Developer ID — a cost/account decision for you). Fonts via `CTFontManagerRegisterFontsForURL` at startup.
 - Engines must be signed inside the bundle on macOS or Gatekeeper blocks spawn.
-- **Media codecs — decided: the OS decoders.** Bundling libmpv/FFmpeg would make Chesswiz distribute H.264, HEVC, VC-1 and AAC decoders, which have live patent pools (`docs/PATENT_REVIEW.md`). So the build picks a backend with `MEDIA_BACKEND`, and all three implement the same `::mpv::*` commands, so the Tcl media pane is unchanged:
+- **Media codecs — decided: the OS decoders.** Bundling libmpv/FFmpeg would make Chesswiz distribute H.264, HEVC, VC-1 and AAC decoders, which have live patent pools (`docs/legal/PATENT_REVIEW.md`). So the build picks a backend with `MEDIA_BACKEND`, and all three implement the same `::mpv::*` commands, so the Tcl media pane is unchanged:
   - `mpv` (default, Linux): `src/tcl/tcl_media.cpp`, `-lmpv`.
   - `mf` (Windows): `src/tcl/tcl_media_mf.cpp`, Media Foundation MFPlay rendering into the Tk window's HWND; links `-lmfplay -lmfplat -lole32 -luser32`. Windows decodes WMV/VC-1, H.264, AAC and MP3 itself; HEVC needs Microsoft's HEVC extension. Compiles cleanly with `zig cc -target x86_64-windows-gnu -Wall -Wextra`, and every MF import resolves against Zig's MinGW import libraries. Not yet run on Windows.
   - `avf` (macOS): `src/tcl/tcl_media_avf.mm`, AVPlayer with an AVPlayerLayer placed over the Tk window inside the toplevel's NSView; links the AVFoundation, CoreMedia, QuartzCore and AppKit frameworks. **Not compiled yet** (needs the macOS SDK). macOS has **no WMV/ASF decoder**, and those are the most common ChessBase lesson format: they report a load error, and the pane says to use "Open externally" (e.g. VLC). Revisit if WMV9/VC-1 patents are confirmed expired: a restricted FFmpeg with only the WMV decoders could then be added for macOS.
@@ -106,7 +106,7 @@ with a key derived from `scripts/sysroot-pins.sh`; builders recheck hashes.
 `windows-test` downloads that folder and launches the packaged executable.
 
 The `macos-14` Apple Silicon job builds the Aqua runtime, arm64 TLS, app binary
-and Stockfish following `docs/MACOS_PACKAGING.md`, assembles the app/DMG, and
+and Stockfish following `docs/dev/MACOS_PACKAGING.md`, assembles the app/DMG, and
 runs the smoke test through the app launcher before uploading `Chesswiz.dmg`.
 Both native smoke tests use `tests/smoke/launch-smoke.tcl`: source the packaged
 bundle, poll until `.application` maps, write `OK`, and exit. A 60-second Tcl

@@ -12,7 +12,7 @@
 //   ::mpv::available                  1
 //
 // Decoding is done by macOS (H.264, HEVC, AAC, MP3, ...), so Chesswiz ships
-// no codecs of its own (see docs/PATENT_REVIEW.md). macOS has no decoder for
+// no codecs of its own (see docs/legal/PATENT_REVIEW.md). macOS has no decoder for
 // WMV/ASF: such files report load-error, and the media pane offers to open
 // them externally.
 //

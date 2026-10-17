@@ -4,7 +4,7 @@
  * Holds seeks/matches/moves in memory, validates moves with chess.js, and
  * synchronises across browser tabs via BroadcastChannel so two tabs can play
  * each other without a real server. Mirrors the `/api/play/*` REST + WS `/play`
- * contract defined in docs/ONLINE_PLAY_PLAN.md; the MockScidbApiClient delegates
+ * contract defined in docs/plans/ONLINE_PLAY_PLAN.md; the MockScidbApiClient delegates
  * here, and usePlaySocket subscribes here for events.
  *
  * The "server" is the source of truth: submitMove validates against a chess.js

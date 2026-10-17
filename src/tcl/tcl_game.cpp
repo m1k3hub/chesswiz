@@ -3864,7 +3864,7 @@ cmdUpdate(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 					return error(::CmdUpdate, "moveinfo", nullptr,
 									"unknown move info type '%s' (expected ccsnt, cclk, or cemt)", type);
 
-				// docs/SCI_CORRESPONDENCE_FORMAT.md §5: require parser success
+				// docs/formats/SCI_CORRESPONDENCE_FORMAT.md §5: require parser success
 				// and full consumption of the value before accepting it
 				if (result == 0)
 					return error(::CmdUpdate, "moveinfo", nullptr,

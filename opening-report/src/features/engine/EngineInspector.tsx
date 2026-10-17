@@ -68,7 +68,7 @@ export default function EngineInspector({ visible }: { visible: boolean }) {
   const setActiveEngineJobId = useWorkspaceStore((s) => s.setActiveEngineJobId);
   const toast = window.ScidbWorkspace?.toast || console.log;
 
-  // Rated-game engine lock (docs/ONLINE_PLAY_PLAN.md §5.2, Phase 7): defense in
+  // Rated-game engine lock (docs/plans/ONLINE_PLAY_PLAN.md §5.2, Phase 7): defense in
   // depth alongside the server-side /api/analysis/start check.
   const activePlayMode = useWorkspaceStore((s) => s.activePlayMode);
   const activeMatch = useWorkspaceStore((s) => s.activeMatch);

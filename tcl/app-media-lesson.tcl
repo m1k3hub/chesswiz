@@ -12,7 +12,7 @@
 # user config dir, keyed by the normalized video path, and is
 # invalidated when the video or its adjacent text export changes.
 #
-# Lesson dict (v2, WP4 - docs/MEDIA_LESSON_V2_PLAN.md):
+# Lesson dict (v2, WP4 - docs/features/MEDIA_LESSON_V2_PLAN.md):
 #   valid      1|0
 #   reason     {} | human-readable failure reason
 #   video      normalized video path
@@ -28,7 +28,7 @@
 #              ScidB R-new2 conversion is a WP6 boundary concern.
 #              main-line nodes only: the off-mainline nodes live in
 #              patch slots whose per-slot semantics are open (see
-#              docs/CHESSBASE_MEDIA_RE.md), so positions covers the walkable
+#              docs/formats/CHESSBASE_MEDIA_RE.md), so positions covers the walkable
 #              tree; gotos beyond it are a WP5 clamp/degrade concern.
 #   timeline   list of {mediaMs nodeIndex} pairs, ascending by mediaMs,
 #              projected onto the main-line position table (see
@@ -47,7 +47,7 @@
 #              2026-09-07): script-stream annotations render green
 #              regardless of style/class byte - no colour exists in the
 #              stream, so the green fallback is provably correct; see
-#              docs/CHESSBASE_MEDIA_RE.md "Reader14 on genuine Windows".)
+#              docs/formats/CHESSBASE_MEDIA_RE.md "Reader14 on genuine Windows".)
 #   nodeTimes  list of {node mediaMs} pairs from type-37 records in the
 #              checkpoint collections ({} when the lesson has none)
 # ======================================================================
@@ -581,7 +581,7 @@ proc apply-edges {edges} {
 #
 # The opcode-03 goto cursors address the authoring tool's FULL node tree
 # - main line plus the variation "patch" slots whose per-slot semantics
-# are still open (see docs/CHESSBASE_MEDIA_RE.md, "Checkpoint node-table
+# are still open (see docs/formats/CHESSBASE_MEDIA_RE.md, "Checkpoint node-table
 # grammar").  The lesson's `positions` table, however, is main-line only
 # (the checkpoint edge stream is a legal main-line walk): a variation
 # cursor therefore either overflows the table or, worse, collides with

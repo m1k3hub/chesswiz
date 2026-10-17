@@ -1,4 +1,4 @@
-// Classic .cba quotation move replay. See docs/re/cba-quotation-format.md.
+// Classic .cba quotation move replay. See docs/formats/re/cba-quotation-format.md.
 #ifndef _cbh_quotation_included
 #define _cbh_quotation_included
 

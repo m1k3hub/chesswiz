@@ -2,7 +2,7 @@
 """Variation-walk reconstruction for the .2cbg record (.2cba alignment).
 
 Model (flat part validated at 81/81 items over 43 twin games; nested-RAV
-support is partial — see docs/2CBH_FORMAT_DESIGN.md section 4.2):
+support is partial — see docs/formats/2CBH_FORMAT_DESIGN.md section 4.2):
 
   - mainline: [0xfffc] moves [0xffff]; 0xfffd markers inside the mainline
   - the post-mainline region stores the variation blocks in REVERSE doc

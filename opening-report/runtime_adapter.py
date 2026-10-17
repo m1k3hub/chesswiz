@@ -2160,7 +2160,7 @@ async def start_analysis(request: Request, req: AnalysisStartRequest, authorizat
         _audit_log("analysis.rate_limited", ip=client_ip)
         return JSONResponse({"error": "Rate limit exceeded. Try again in a minute."}, status_code=429)
 
-    # Rated-game engine lock (docs/ONLINE_PLAY_PLAN.md §5.2, Phase 7): refuse to
+    # Rated-game engine lock (docs/plans/ONLINE_PLAY_PLAN.md §5.2, Phase 7): refuse to
     # start an engine for a user with an active rated match. Guests can never
     # be in a rated match (play_routes rejects rated seeks from guests), so
     # only an authenticated subject needs checking here.

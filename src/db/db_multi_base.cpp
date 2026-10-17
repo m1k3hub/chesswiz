@@ -444,7 +444,7 @@ MultiBase::importGames(Producer& producer, util::Progress& progress, GameCount* 
 
 		M_ASSERT(!codecs.isEmpty());
 
-		// docs/SCI_CORRESPONDENCE_FORMAT.md §3: one consumer serves several
+		// docs/formats/SCI_CORRESPONDENCE_FORMAT.md §3: one consumer serves several
 		// destination bases; use the lowest target storage version so records
 		// valid for every destination are emitted (v95 demotes correspondence
 		// to comments, which remain valid in v96 files)

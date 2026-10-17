@@ -891,7 +891,7 @@ proc application::media::FenKey {fen} {
 
 
 # Parse the interactive-video entries of a ChessBase .cms file (CBM168
-# reverse engineering, docs/CBM_FORMAT_DESIGN.md §7). Layout:
+# reverse engineering, docs/formats/CBM_FORMAT_DESIGN.md §7). Layout:
 # <db>.html/<name>.cms with a sibling <name>/ clip directory holding
 #
 #   <FEN with '/' as 'z'>x{X}y{Y}v{V}u{U}.wmv   (position-keyed hotspot)
@@ -942,7 +942,7 @@ proc application::media::CmsSquare {n} {
 
 
 # Parse interactive-video entries from a scidb media manifest (see
-# docs/SCM_FORMAT_DESIGN.md §1.5). Supported keys inside [Interactive "…"]:
+# docs/formats/SCM_FORMAT_DESIGN.md §1.5). Supported keys inside [Interactive "…"]:
 #   Fen, Kind (clip|range), Clip, Media, Start, End, Label.
 # Clip paths are relative to the manifest's directory; a Kind: range
 # entry plays the referenced [Media] id from Start to End seconds.
@@ -1070,7 +1070,7 @@ proc application::media::ResolveIndex {path position} {
 
 
 # Load the database-level media manifest (<rootname>.scm, the scidb
-# native companion format; see docs/SCM_FORMAT_DESIGN.md). Its [Interactive]
+# native companion format; see docs/formats/SCM_FORMAT_DESIGN.md). Its [Interactive]
 # entries apply to every game of the database (position-keyed).
 proc application::media::LoadDbInteractive {base} {
 	variable Priv
@@ -1610,7 +1610,7 @@ proc application::media::SyncTransport {what} {
 # ::media::sync (arrows/marks render future, comments go to the status
 # bar).  The kind and data arguments come from ::media::sync::load-events.
 # Map a style byte (from the decoded script stream) to a drawable color.
-# VISUAL-ORACLE VERDICT (Reader14 on Windows, 2026-09-07, docs/CHESSBASE_MEDIA_RE.md
+# VISUAL-ORACLE VERDICT (Reader14 on Windows, 2026-09-07, docs/formats/CHESSBASE_MEDIA_RE.md
 # "Reader14 on genuine Windows"): script-stream style bytes carry NO colour.
 # Style 2 renders green (corridor-verified 51-75%); style 4 rendered green or
 # nothing; zero red/yellow/blue overlay pixels in 136 frames across 3 videos.

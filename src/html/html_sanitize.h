@@ -7,7 +7,7 @@
 // UTF-8 fragment that the renderer (Tkhtml) and the exporter both
 // accept. Nothing downstream ever sees the input's quirks.
 //
-// The profile (see docs/SCIDB_HTML_PROFILE.md):
+// The profile (see docs/formats/SCIDB_HTML_PROFILE.md):
 //   - fragment (no html/head/body wrapper; title extracted, not emitted)
 //   - whitelisted tags only; unknown tags are unwrapped (children kept)
 //   - active content (script/style/iframe/object/embed/applet/form/

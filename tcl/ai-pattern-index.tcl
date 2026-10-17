@@ -1,6 +1,6 @@
 # ======================================================================
 # ::ai::patternIndex -- the vetted patterns' matches, precomputed per
-# database (docs/PATTERN_INDEX_PLAN.md, first version).
+# database (docs/ai/PATTERN_INDEX_PLAN.md, first version).
 #
 # A pattern search decodes every game: about three minutes for one pattern
 # on 1.2 million games. Evaluating all library patterns in one pass costs

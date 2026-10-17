@@ -1,6 +1,6 @@
 // ======================================================================
 // Unit tests for the SCI v96 correspondence-duration extended envelope.
-// Spec: docs/SCI_CORRESPONDENCE_FORMAT.md
+// Spec: docs/formats/SCI_CORRESPONDENCE_FORMAT.md
 //
 // Covers spec §6.1 (round-trip), §6.2 (corruption: truncation at every
 // byte boundary, wrong payload length, unknown info-type skip), and the

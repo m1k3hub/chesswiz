@@ -1,5 +1,5 @@
 # ======================================================================
-# ::application::assistant -- named jobs (run_job; docs/ASSISTANT_COVERAGE_MAP.md
+# ::application::assistant -- named jobs (run_job; docs/ai/ASSISTANT_COVERAGE_MAP.md
 # P4, phase 5).
 #
 # A player thinks in jobs ("prepare for Saturday's opponent"), not in tools.

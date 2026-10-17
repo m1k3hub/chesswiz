@@ -4,7 +4,7 @@
 # The language model emits a tool call's arguments as free JSON. For an
 # argument whose values are a closed set (a JSON-schema `enum`), a bounded
 # Choice question is more reliable than the model's emitted value: measured
-# against granite4.2:3b/8b and deepseek-v4.1-flash (docs/TYPESAFE_COOKBOOK_REVIEW.md
+# against granite4.2:3b/8b and deepseek-v4.1-flash (docs/ai/TYPESAFE_COOKBOOK_REVIEW.md
 # #4), every one of them made enum-argument errors (4-12%), including a
 # systematic "opponent colour" inversion, while the classifier made 0/26 and
 # its answer is always a value the schema allows.

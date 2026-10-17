@@ -3,7 +3,7 @@
 
 Parses a ChessBase media-lesson opcode-2 checkpoint (hex string from
 ::media::decoder::sidecar-parse checkpoints) and verifies the HARD GATES
-of docs/MEDIA_LESSON_V2_PLAN.md WP2:
+of docs/features/MEDIA_LESSON_V2_PLAN.md WP2:
 
   GATE 1  The main-line edge stream walks 100% legally from the standard
           start (DFS with backtracking; variations interleaved).
@@ -14,7 +14,7 @@ of docs/MEDIA_LESSON_V2_PLAN.md WP2:
           (round 08: the real MVL-Adams Biel 2015 game).
 
 Grammar (byte-verified on Biel 2015 rounds 01/06/08, all checkpoints;
-see docs/CHESSBASE_MEDIA_RE.md "Checkpoint node-table grammar"):
+see docs/formats/CHESSBASE_MEDIA_RE.md "Checkpoint node-table grammar"):
   [u32le opcode=2][u32le r][u32le cursor][u32le r]
   6 x [u8 len][cp1252 incl NUL]      identity strings
   [u32le packed_date1]               (year<<9)|(month<<5)|day

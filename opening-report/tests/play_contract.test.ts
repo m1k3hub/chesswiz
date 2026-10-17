@@ -4,7 +4,7 @@
  * Runs the same scenarios against the in-browser MockScidbApiClient (used by
  * the SPA in Phase 2 and in unit tests) and the real HTTP client talking to
  * a live runtime_adapter (FastAPI) instance, so the two stay equivalent as
- * the plan's testing strategy (docs/ONLINE_PLAY_PLAN.md §9) requires.
+ * the plan's testing strategy (docs/plans/ONLINE_PLAY_PLAN.md §9) requires.
  *
  * The FastAPI app is started as a uvicorn subprocess against an in-memory
  * store (no REDIS_URL/DATABASE_URL) — mirrors how tests/test_play.py

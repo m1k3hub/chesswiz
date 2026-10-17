@@ -7,7 +7,7 @@
 # consulted: the rule resolves every tag that carries the information, and
 # the residual's honest answer is "unclear" (naming an event's time control
 # from its name alone is world-knowledge recall; see
-# docs/TYPESAFE_API_EXPERIMENT.md). The result is a count per class over the
+# docs/ai/TYPESAFE_API_EXPERIMENT.md). The result is a count per class over the
 # latest games of the active database (or a player's games); nothing is
 # written.
 #

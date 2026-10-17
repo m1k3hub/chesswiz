@@ -527,7 +527,7 @@ Encoder::encodeNote(MoveNode const* node, TimeTable const* timeTable)
 
 			if (!info.isEncodable(m_sciVersion))
 			{
-				// docs/SCI_CORRESPONDENCE_FORMAT.md §5: never emit a Mark
+				// docs/formats/SCI_CORRESPONDENCE_FORMAT.md §5: never emit a Mark
 				// token without payload; the directive is merged into the
 				// node's serialized post-comment below (§1.1). The node
 				// itself is NOT mutated, so repeated saves stay stable.
@@ -757,7 +757,7 @@ Encoder::encodeTimeTableSection(TimeTable const& timeTable)
 
 	for (unsigned col = 0; col < MoveInfo::LAST; ++col)
 	{
-		// docs/SCI_CORRESPONDENCE_FORMAT.md §4.3.2: correspondence durations
+		// docs/formats/SCI_CORRESPONDENCE_FORMAT.md §4.3.2: correspondence durations
 		// have no time-table representation in v96 (per-node records only);
 		// MoveInfo::encode() emits nothing for them, so writing the column
 		// would desynchronize the stream (docs §1.1).

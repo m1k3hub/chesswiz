@@ -1,5 +1,5 @@
 # ======================================================================
-# ::ai::search -- plain-language game search (docs/PLAIN_LANGUAGE_SEARCH.md).
+# ::ai::search -- plain-language game search (docs/ai/PLAIN_LANGUAGE_SEARCH.md).
 #
 # A request becomes the fixed fields of the assistant's search_games tool
 # (player, color, result, opponent, eco, from, to, event, min_elo) plus an
@@ -731,7 +731,7 @@ proc ::ai::search::Finish {id} {
 	}
 
 	# a positional request no library pattern covers goes to the position
-	# finder (docs/ASSISTANT_COVERAGE_MAP.md §5): words here, never CQL
+	# finder (docs/ai/ASSISTANT_COVERAGE_MAP.md §5): words here, never CQL
 	if {[dict exists $model positional] && [dict get $result pattern] eq ""} {
 		dict set result positional [dict get $model positional]
 		dict set result sources positional model

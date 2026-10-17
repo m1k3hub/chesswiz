@@ -1,6 +1,6 @@
 # ======================================================================
 # Scidb App Test Suite - features on the CQL matcher (tcl/ai-cql.tcl,
-# docs/CQL_FEATURES.md): the position primitive, structure patterns, the
+# docs/cql6/CQL_FEATURES.md): the position primitive, structure patterns, the
 # structure profile, move themes, the study plan's structure section, the
 # result check, and engine-certified training sets.
 # ======================================================================

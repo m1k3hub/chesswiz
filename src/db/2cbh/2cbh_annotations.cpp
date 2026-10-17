@@ -209,7 +209,7 @@ flattenToMainline(	uint32_t position,
 	// Verified territory: games without variation data.  For those the
 	// flattened walk position IS the mainline ply (233/233 + 35/35 table
 	// checks).  Variation-bearing games need the subtree tree-walk, which
-	// is future work (see docs/2CBH_FORMAT_DESIGN.md section 4.1).
+	// is future work (see docs/formats/2CBH_FORMAT_DESIGN.md section 4.1).
 	if (!structure.markerPly.empty() || !structure.blockSize.empty())
 		return false;
 

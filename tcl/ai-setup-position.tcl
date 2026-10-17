@@ -1,6 +1,6 @@
 # ======================================================================
 # ::ai::setup -- put a position on the board from a FEN or a line of moves
-# (the assistant's set_position; docs/ASSISTANT_COVERAGE_MAP.md phase 2).
+# (the assistant's set_position; docs/ai/ASSISTANT_COVERAGE_MAP.md phase 2).
 #
 # Always in a NEW game: the game on the board is never changed (it may be
 # a correspondence game, whose moves are sent when made). The whole line is

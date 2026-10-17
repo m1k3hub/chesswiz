@@ -38,7 +38,7 @@ strongest workflows in the current tree are:
      direct pivots into prep reports, switcher views, and working sets
    - correspondence chess: live clock display, auto-timestamped moves,
      ICCF XFCC server sync and auto-submit, game manager panel
-     (see docs/CORRESPONDENCE_CHESS.md)
+     (see docs/features/CORRESPONDENCE_CHESS.md)
 
 For repeated search, maintenance, and preparation work, Scidb's own
 database format (.sci) is the recommended format.

@@ -103,7 +103,7 @@ TimeTable::set(unsigned index, MoveInfo const& moveInfo)
 void
 TimeTable::set(unsigned index, MoveInfoSet const& moveInfoSet)
 {
-	// docs/SCI_CORRESPONDENCE_FORMAT.md §4.3.2/§5: correspondence durations
+	// docs/formats/SCI_CORRESPONDENCE_FORMAT.md §4.3.2/§5: correspondence durations
 	// have no time-table representation in any current version; population
 	// must reject them so table serialization cannot desynchronize.
 	set(index, moveInfoSet, 95);
@@ -128,7 +128,7 @@ TimeTable::set(unsigned index, MoveInfoSet const& moveInfoSet, unsigned sciVersi
 
 		MoveInfo const&	info	= moveInfoSet[i];
 
-		// docs/SCI_CORRESPONDENCE_FORMAT.md §4.3.2/§5: correspondence
+		// docs/formats/SCI_CORRESPONDENCE_FORMAT.md §4.3.2/§5: correspondence
 		// durations have no time-table representation in ANY version; other
 		// types without a binary representation at this version never enter.
 		if (	!MoveInfo::isEncodable(info.content(), sciVersion)

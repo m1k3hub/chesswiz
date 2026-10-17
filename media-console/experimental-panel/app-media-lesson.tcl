@@ -12,7 +12,7 @@
 # user config dir, keyed by the normalized video path, and is
 # invalidated when the video's mtime passes the sidecar's.
 #
-# Lesson dict (v2, WP4 - docs/MEDIA_LESSON_V2_PLAN.md):
+# Lesson dict (v2, WP4 - docs/features/MEDIA_LESSON_V2_PLAN.md):
 #   valid      1|0
 #   reason     {} | human-readable failure reason
 #   video      normalized video path
@@ -27,7 +27,7 @@
 #              ScidB R-new2 conversion is a WP6 boundary concern.
 #              main-line nodes only: the off-mainline nodes live in
 #              patch slots whose per-slot semantics are open (see
-#              docs/CHESSBASE_MEDIA_RE.md), so positions covers the walkable
+#              docs/formats/CHESSBASE_MEDIA_RE.md), so positions covers the walkable
 #              tree; gotos beyond it are a WP5 clamp/degrade concern.
 #   timeline   list of {mediaMs nodeIndex} pairs, ascending by mediaMs
 #   events     list of {ms arrow from to class modifier} board events
@@ -40,7 +40,7 @@
 #              2026-09-07): script-stream annotations render green
 #              regardless of style/class byte - no colour exists in the
 #              stream, so the green fallback is provably correct; see
-#              docs/CHESSBASE_MEDIA_RE.md "Reader14 on genuine Windows".)
+#              docs/formats/CHESSBASE_MEDIA_RE.md "Reader14 on genuine Windows".)
 #   nodeTimes  list of {node mediaMs} pairs from type-37 records in the
 #              checkpoint collections ({} when the lesson has none)
 # ======================================================================
@@ -610,7 +610,7 @@ proc build {videoPath} {
 			return $lesson
 		}
 		# cumulative snapshots: the last is the authoritative state
-		# (Reader14 renders from checkpoints; docs/CHESSBASE_MEDIA_RE.md)
+		# (Reader14 renders from checkpoints; docs/formats/CHESSBASE_MEDIA_RE.md)
 		set lastCp [lindex $cps end]
 		set cp {}
 		if {[catch { set cp [::media::decoder::parse-checkpoint [lindex $lastCp 2]] } err]} {

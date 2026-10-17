@@ -11,7 +11,7 @@
 #   xvfb-run -a -s "-screen 0 1400x900x24" \
 #       ./src/tkchesswiz media-console/demo-interactive.tcl
 #
-# See docs/SCM_FORMAT_DESIGN.md §1.5 for the manifest grammar.
+# See docs/formats/SCM_FORMAT_DESIGN.md §1.5 for the manifest grammar.
 # ======================================================================
 
 namespace eval ::idemo {}

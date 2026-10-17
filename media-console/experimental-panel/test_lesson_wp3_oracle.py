@@ -2,7 +2,7 @@
 """WP3 oracle harness: byte-compare the pure-Tcl move applier's FENs
 against a python-chess replay of the same checkpoint edge stream.
 
-docs/MEDIA_LESSON_V2_PLAN.md WP3 acceptance: positions[N] FENs byte-match a
+docs/features/MEDIA_LESSON_V2_PLAN.md WP3 acceptance: positions[N] FENs byte-match a
 python-chess replay of the same edges for all N.
 
 Both sides emit the RAW FEN ep convention (python-chess

@@ -12,7 +12,7 @@
 //   ::mpv::available                  1
 //
 // Decoding is done by Windows itself (WMV/VC-1, H.264, AAC, MP3, ...), so
-// Chesswiz ships no codecs of its own (see docs/PATENT_REVIEW.md). The
+// Chesswiz ships no codecs of its own (see docs/legal/PATENT_REVIEW.md). The
 // MFPlay player renders into the Tk window's HWND and reports its events
 // through window messages, which Tk's event loop already pumps.
 // ======================================================================

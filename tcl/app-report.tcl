@@ -295,7 +295,7 @@ proc application::report::LinkSetup {w node} {
 }
 
 
-# An action of the AI assistant (docs/ASSISTANT_COVERAGE_MAP.md C10):
+# An action of the AI assistant (docs/ai/ASSISTANT_COVERAGE_MAP.md C10):
 # scidb-ai:<tool>?<arg>=<value>&... Report pages may come from outside
 # (ChessBase guiding texts), so only tools that change nothing stored are
 # followed. Returns the line for the status bar.

@@ -1,6 +1,6 @@
 /**
  * play.spec.ts — Playwright end-to-end test for online play (Phase 2 mock
- * backend, per docs/ONLINE_PLAY_PLAN.md §9): two players, seek creation + accept,
+ * backend, per docs/plans/ONLINE_PLAY_PLAN.md §9): two players, seek creation + accept,
  * play to mate, assert board/clock/finish.
  *
  * Two BROWSER TABS in the SAME context, not two contexts. The mock backend

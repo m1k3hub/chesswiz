@@ -56,7 +56,7 @@ public:
 	Encoder(util::ByteStream& strm, db::variant::Type variant, unsigned sciVersion = 95);
 
 	/// SCI file version for the stream being written (95 = legacy comment
-	/// mode, 96 = extended envelopes; docs/SCI_CORRESPONDENCE_FORMAT.md §3).
+	/// mode, 96 = extended envelopes; docs/formats/SCI_CORRESPONDENCE_FORMAT.md §3).
 	void setSciVersion(unsigned version);
 	unsigned sciVersion() const;
 

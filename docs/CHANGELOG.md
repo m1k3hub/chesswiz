@@ -338,7 +338,7 @@
   pushes its position through `::board3d::PositionChanged` from
   `application::board::update` (via a new `::board::diagram::data`
   accessor), so the 3D view mirrors play live.  Design and plan in
-  `docs/BOARD_3D_DESIGN.md`.
+  `docs/features/BOARD_3D_DESIGN.md`.
 - Tests: `tests/test_board3d.tcl` (headless camera/projection/hit-test
   math, themes/styles, vector pieces, pick fallback, WebGL helpers) and
   `tests/test_app_board3d.tcl` (viewer open/draw/preset/sync/click-select
@@ -416,7 +416,7 @@
   without changing the current base.
 - Tests: `tests/test_database_discover.tcl` (8 headless) and
   `tests/test_app_discover.tcl` (4 app-backed); design in
-  `docs/DATABASE_DISCOVERY.md`.
+  `docs/features/DATABASE_DISCOVERY.md`.
 
 ## Unreleased — ChessBase (.cbh) Per-Game Media via tag_game Anchors
 

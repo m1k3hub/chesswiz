@@ -1,6 +1,6 @@
 // MediaGrammarProbe.java
 // @category Analysis
-// Corroborate the WMV script-stream grammar (docs/CHESSBASE_MEDIA_RE.md):
+// Corroborate the WMV script-stream grammar (docs/formats/CHESSBASE_MEDIA_RE.md):
 // decompile the functions that reference the script-record strings.
 
 import ghidra.app.decompiler.DecompInterface;

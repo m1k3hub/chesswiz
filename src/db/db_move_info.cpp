@@ -964,7 +964,7 @@ MoveInfo::encode(ByteStream& strm) const
 		case CorrespondenceElapsed:
 			// Correspondence durations are serialized only through the v96
 			// extended envelope (encodeExtended); see
-			// docs/SCI_CORRESPONDENCE_FORMAT.md §4. Emission points must gate
+			// docs/formats/SCI_CORRESPONDENCE_FORMAT.md §4. Emission points must gate
 			// on MoveInfo::isEncodable() and never emit a Mark token for
 			// these types without a payload (docs §1.1, §5).
 			break;

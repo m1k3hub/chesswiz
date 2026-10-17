@@ -1,5 +1,5 @@
 # ======================================================================
-# The Ask Scidb request corpus (docs/ASSISTANT_COVERAGE_MAP.md §7, "How it is
+# The Ask Scidb request corpus (docs/ai/ASSISTANT_COVERAGE_MAP.md §7, "How it is
 # measured"): requests a chess player makes, by job, and what solves them.
 # tests/run_assistant_corpus.tcl asks the configured model each one and
 # scores whether a fitting tool was called.

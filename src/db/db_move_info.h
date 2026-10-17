@@ -104,7 +104,7 @@ public:
 	void decodeVersion92(util::ByteStream& strm);
 	void encode(util::ByteStream& strm) const;
 
-	/// SCI v96 extended-envelope wire support (see docs/SCI_CORRESPONDENCE_FORMAT.md §4).
+	/// SCI v96 extended-envelope wire support (see docs/formats/SCI_CORRESPONDENCE_FORMAT.md §4).
 	/// Record layout: 0x00 sentinel, full-byte info-type, payload-length byte, payload.
 	void encodeExtended(util::ByteStream& strm) const;
 	void decodeExtended(util::ByteStream& strm);
@@ -132,7 +132,7 @@ public:
 		return wireId == wireIdClock ? CorrespondenceClock : CorrespondenceElapsed;
 	}
 
-	/// Version-aware serializability (docs/SCI_CORRESPONDENCE_FORMAT.md §5):
+	/// Version-aware serializability (docs/formats/SCI_CORRESPONDENCE_FORMAT.md §5):
 	/// correspondence durations are binary-encodable only in SCI v96+.
 	static bool isEncodable(Type type, unsigned sciVersion);
 	bool isEncodable(unsigned sciVersion) const;

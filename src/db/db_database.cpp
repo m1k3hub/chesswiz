@@ -1585,7 +1585,7 @@ Database::copyGames(	Database& destination,
 		sci::Consumer::Codecs codecs(&sciCodec);
 		// XXX we need the source encoding?
 		sci::Consumer consumer(srcFormat, codecs, allowedTags, allowExtraTags);
-		consumer.setSciVersion(sciCodec.sciVersion());	// docs/SCI_CORRESPONDENCE_FORMAT.md §3
+		consumer.setSciVersion(sciCodec.sciVersion());	// docs/formats/SCI_CORRESPONDENCE_FORMAT.md §3
 		consumer.setupVariant(destination.variant());
 		count = exportGames(	consumer,
 									gameFilter,

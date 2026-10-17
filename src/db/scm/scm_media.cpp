@@ -1,7 +1,7 @@
 // ======================================================================
 // scm_media.cpp — scidb-native .scm manifest parser
 // ======================================================================
-// See scm_media.h and docs/SCM_FORMAT_DESIGN.md for the format grammar and
+// See scm_media.h and docs/formats/SCM_FORMAT_DESIGN.md for the format grammar and
 // rationale. Parsing is defensive: any error is non-fatal so a corrupt or
 // unexpected .scm never blocks database access (same principle as the
 // ChessBase .cbm parser).

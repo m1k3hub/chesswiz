@@ -3,7 +3,7 @@
 // ======================================================================
 // Self-contained decoder for the ChessBase script stream embedded in
 // WMV Chess Media files and .txt exports.  Grammar verified against
-// CBM 168 fixtures and CBase26 decompilation (docs/CHESSBASE_MEDIA_RE.md).
+// CBM 168 fixtures and CBase26 decompilation (docs/formats/CHESSBASE_MEDIA_RE.md).
 //
 // Usage:
 //   1. call decode_record_bytes(p, n, records) per transport command
@@ -12,7 +12,7 @@
 //   2. call decode_event(record, len, timestampMs, ev, &cp) per command
 //      — timestampMs = the delivery time (packet pts or .txt prefix)
 //   3. write_board_sync(out, mediaId, timeline, events) to emit the
-//      SCM 1.6 [BoardSync] section (docs/SCM_FORMAT_DESIGN.md)
+//      SCM 1.6 [BoardSync] section (docs/formats/SCM_FORMAT_DESIGN.md)
 // ======================================================================
 
 #ifndef _tcl_scriptstream_included
@@ -627,7 +627,7 @@ inline Kind decode_event(unsigned char const* record, unsigned len,
 }
 
 // ---------------------------------------------------------------------
-// SCM 1.6 [BoardSync] writer (docs/SCM_FORMAT_DESIGN.md)
+// SCM 1.6 [BoardSync] writer (docs/formats/SCM_FORMAT_DESIGN.md)
 // ---------------------------------------------------------------------
 
 inline char const* language_tag(unsigned code)

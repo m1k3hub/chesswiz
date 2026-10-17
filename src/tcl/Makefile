@@ -17,7 +17,7 @@ include ../../Makefile.version
 
 # Media playback backend: mpv (libmpv, Linux), mf (Media Foundation,
 # Windows) or avf (AVFoundation, macOS). The OS backends decode with the
-# platform's own codecs; see docs/PATENT_REVIEW.md.
+# platform's own codecs; see docs/legal/PATENT_REVIEW.md.
 ifeq ($(TARGET_MACOS),yes)
 MEDIA_BACKEND ?= avf
 else

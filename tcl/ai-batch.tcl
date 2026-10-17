@@ -5,7 +5,7 @@
 # kind, import triage) ask one bounded question over thousands of states.
 # Asking them one ::ai::decide at a time re-sends a shared state once per
 # game and has no resume story. This module is the missing foundation
-# (docs/SYSTEM_ONE_FEATURES.md §3.3): a queue over evaluateAsync with
+# (docs/ai/SYSTEM_ONE_FEATURES.md §3.3): a queue over evaluateAsync with
 #
 #   * a concurrency cap,
 #   * de-duplication by state (identical states share one request),

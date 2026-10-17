@@ -1,6 +1,6 @@
 # ======================================================================
 # ::application::assistant::offers -- the assistant offers what fits the
-# moment (docs/ASSISTANT_COVERAGE_MAP.md P3, phase 4).
+# moment (docs/ai/ASSISTANT_COVERAGE_MAP.md P3, phase 4).
 #
 # A player who does not know what Scidb can do will not ask for it. At
 # natural moments -- a database becomes active, a game is loaded -- a row

@@ -337,7 +337,7 @@ Consumer::sendMoveInfo(MoveInfoSet const& moveInfo)
 	{
 		MoveInfo const& info = moveInfo[i];
 
-		// docs/SCI_CORRESPONDENCE_FORMAT.md §5/§1.1: never emit a Mark token
+		// docs/formats/SCI_CORRESPONDENCE_FORMAT.md §5/§1.1: never emit a Mark token
 		// for a type that will not be encoded. Unencodable types are demoted
 		// to comments in preparseComment() before they can reach this point;
 		// this is a defensive invariant, not the enforcement point.
@@ -396,7 +396,7 @@ Consumer::preparseComment(mstl::string& comment)
 
 	if (InfoConsumer::preparseComment(comment))
 	{
-		// docs/SCI_CORRESPONDENCE_FORMAT.md §5: one shared eligibility rule.
+		// docs/formats/SCI_CORRESPONDENCE_FORMAT.md §5: one shared eligibility rule.
 		// Correspondence durations never enter the time table (docs §4.3.2).
 		// In legacy mode (v95) they are demoted back into the comment stream
 		// from which they were extracted; in v96 they stay in the set for

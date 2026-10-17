@@ -941,7 +941,7 @@ View::exportGames(mstl::string const& filename,
 											allowExtraTags,
 											languages,
 											significantLanguages);
-			consumer.setSciVersion(sciCodec.sciVersion());	// docs/SCI_CORRESPONDENCE_FORMAT.md §3
+			consumer.setSciVersion(sciCodec.sciVersion());	// docs/formats/SCI_CORRESPONDENCE_FORMAT.md §3
 			count = exportGames(consumer, m_cursor.m_db->variant(), illegalRejected, log, progress);
 		}
 

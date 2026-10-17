@@ -3002,6 +3002,6 @@
   "fef5": 18,
   "fefe": 230,
   "_meta": {
-    "warning": "This G table was produced with the WRONG 2-input formula. The correct model is a 3-input function f(count_prev, lc_prev, lc). See docs/2CBH_FORMAT_DESIGN.md section 3.6. This file is kept for reference but should NOT be used for decoding."
+    "warning": "This G table was produced with the WRONG 2-input formula. The correct model is a 3-input function f(count_prev, lc_prev, lc). See docs/formats/2CBH_FORMAT_DESIGN.md section 3.6. This file is kept for reference but should NOT be used for decoding."
   }
 }

@@ -1367,7 +1367,7 @@ cmdNew(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSetCreationVersion(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	// docs/SCI_CORRESPONDENCE_FORMAT.md §3: creation version for newly
+	// docs/formats/SCI_CORRESPONDENCE_FORMAT.md §3: creation version for newly
 	// created SCI databases (96 = native correspondence clock storage,
 	// 95 = legacy comment mode). Affects databases created after this call.
 	if (objc != 2)
@@ -5010,7 +5010,7 @@ cmdMarkDeleted(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 // Guiding-text records (tournament reports) carry their media in HTML
 // bodies stored in .cbg. Regular games are linked to the reports that
 // carry their media via CBLink(tag_game,White,Black,Event,Site,Year,Round)
-// anchors in the report body (docs/CBM_FORMAT_DESIGN.md §7.7). The anchors give
+// anchors in the report body (docs/formats/CBM_FORMAT_DESIGN.md §7.7). The anchors give
 // a direct game->report linkage: player lastnames + event + year + round
 // match the game headers. (The guiding-text CBH index records themselves
 // carry unusable tournament references — getEvent() yields "?" — so the

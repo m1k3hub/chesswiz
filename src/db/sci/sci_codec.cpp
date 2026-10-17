@@ -337,7 +337,7 @@ static mstl::string const MagicNamebase  ("Scidb.n\0", 8);
 static mstl::string const Extension("sci");
 
 static uint16_t const FileVersion	= 95;
-static uint16_t const Max_FileVersion	= 96;	// docs/SCI_CORRESPONDENCE_FORMAT.md
+static uint16_t const Max_FileVersion	= 96;	// docs/formats/SCI_CORRESPONDENCE_FORMAT.md
 unsigned					Codec::s_creationVersion = 96;	// default version for new databases (docs §3)
 static unsigned const HeaderSize		= 128;
 
@@ -501,7 +501,7 @@ void Codec::setSciVersion(unsigned version)
 	if (m_sciVersion == version)
 		return;
 
-	// docs/SCI_CORRESPONDENCE_FORMAT.md §3/§8: the storage version of a
+	// docs/formats/SCI_CORRESPONDENCE_FORMAT.md §3/§8: the storage version of a
 	// database with existing games is fixed; changing it would desync the
 	// index header from the game records (they are never re-encoded in
 	// place). Cross-version conversion goes through export/import.
@@ -1252,13 +1252,13 @@ Codec::readIndexHeader(mstl::fstream& fstrm, unsigned* retNumGames)
 	unsigned version  = bstrm.uint16();
 	unsigned numGames;
 
-	// docs/SCI_CORRESPONDENCE_FORMAT.md: v95 and v96 share the 32-bit game
+	// docs/formats/SCI_CORRESPONDENCE_FORMAT.md: v95 and v96 share the 32-bit game
 	// count; only the game-stream move-info encoding differs.
 	if (version >= 95 && version <= Max_FileVersion)
 	{
 		numGames = bstrm.uint32(); // 32-bit since v95
 		m_fileVersion = version;
-		// docs/SCI_CORRESPONDENCE_FORMAT.md §3: a database's storage version
+		// docs/formats/SCI_CORRESPONDENCE_FORMAT.md §3: a database's storage version
 		// persists. Appended games must use the same encoding as existing
 		// records; downgrades require export/import (spec §8), not a relabel.
 		m_sciVersion = version;

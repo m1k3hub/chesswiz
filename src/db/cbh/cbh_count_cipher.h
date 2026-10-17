@@ -8,7 +8,7 @@
 // count:  lc = Chess960MoveNumberLookup[raw] - move_index.  The H0/g
 // tables were the empirical shadow of re-deriving lc through the wrong
 // (standard) table.  The decoder now uses the LUT directly (see
-// cbh_decoder.cpp Chess960MoveNumberLookup and docs/CHESS960_STATUS.md
+// cbh_decoder.cpp Chess960MoveNumberLookup and docs/formats/CHESS960_STATUS.md
 // "RESOLVED (2026-08-16)").  This class and its JSON tables are kept
 // only as the historical record of the investigation.
 //

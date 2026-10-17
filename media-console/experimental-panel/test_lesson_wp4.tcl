@@ -1,6 +1,6 @@
 #!/usr/bin/env tclsh
 # WP4 acceptance harness: ::media::lesson v2 against the round-08
-# fixture (docs/MEDIA_LESSON_V2_PLAN.md WP4).
+# fixture (docs/features/MEDIA_LESSON_V2_PLAN.md WP4).
 #
 # Gates:
 #   - lesson::get on round 08: valid=1, source=sidecar
@@ -8,7 +8,7 @@
 #   - positions: per-node FEN list, index 0 = start; >= 114 is the
 #     plan's gate — the walkable tree provides 88 (the remaining
 #     off-mainline nodes live in patch slots whose per-slot semantics
-#     are open, see docs/CHESSBASE_MEDIA_RE.md); reported honestly below.
+#     are open, see docs/formats/CHESSBASE_MEDIA_RE.md); reported honestly below.
 #   - events: {ms arrow from to class modifier} shape, algebraic squares
 #   - cache stable (second get identical); persisted lesson round-trips
 #   - invalid video: valid=0 + reason
@@ -45,7 +45,7 @@ set positions [dict get $lesson positions]
 gate positions-gte-114 [expr {[llength $positions] >= 114}] 1
 puts "      (positions = [llength $positions]: the walkable main-line tree; \
 the 51 off-mainline nodes are patch slots with open semantics - \
-see docs/CHESSBASE_MEDIA_RE.md; gotos beyond the tree are a WP5 concern)"
+see docs/formats/CHESSBASE_MEDIA_RE.md; gotos beyond the tree are a WP5 concern)"
 
 # timeline ascending
 set asc 1

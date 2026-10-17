@@ -981,7 +981,7 @@ media data is unavailable.
 
 ## 6. Related: Media Playback Library
 
-See [`MEDIA_PLAYBACK_DESIGN.md`](MEDIA_PLAYBACK_DESIGN.md) for the design of
+See [`MEDIA_PLAYBACK_DESIGN.md`](../features/MEDIA_PLAYBACK_DESIGN.md) for the design of
 the media playback infrastructure needed for Phase 3 (media payload
 extraction and display/playback).
 

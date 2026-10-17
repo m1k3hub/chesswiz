@@ -1,7 +1,7 @@
 # ======================================================================
 # 3D chessboard renderer and viewer.
 #
-# See docs/BOARD_3D_DESIGN.md.  The module has three layers:
+# See docs/features/BOARD_3D_DESIGN.md.  The module has three layers:
 #
 #   * pure math  — orbit camera, perspective projection, unprojection and
 #                  square hit-testing (no Tk calls, unit-tested headless);

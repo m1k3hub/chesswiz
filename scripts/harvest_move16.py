@@ -5,7 +5,7 @@ Pairs each 16-bit code in the fixture's .2cbg move streams with the ground-
 truth (from, to, promo, piece) of the same ply taken from the PGN twin
 (same game order, verified via PlyCount + first-game identity).
 
-The Ghidra RE (docs/2CBH_FORMAT_DESIGN.md §3.7.2) says decoding is
+The Ghidra RE (docs/formats/2CBH_FORMAT_DESIGN.md §3.7.2) says decoding is
 `inverseTable[code] -> 8-byte descriptor (from, to, piece, promo)` through a
 static runtime-built table `s_nIndex[from][to][piece] -> code`.  If that
 model is right, harvesting MUST produce a conflict-free table; any conflict

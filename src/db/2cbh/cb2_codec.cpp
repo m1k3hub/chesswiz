@@ -5,7 +5,7 @@
 // decodes mainlines through the embedded Move16 table and feeds the
 // standard Consumer protocol.
 //
-// Format spec: docs/2CBH_FORMAT_DESIGN.md
+// Format spec: docs/formats/2CBH_FORMAT_DESIGN.md
 //  - .2cbh: 192-byte index records; games start at record #256;
 //    @0x08 = the .2cbg record offset, @0x18/@0x20 = the player IDs,
 //    @0x28 = the event ID, byte 0x58 & 3 = the result.
@@ -278,7 +278,7 @@ feedLine( db::Consumer& consumer,
 }
 
 /// Feed one .2cbg game record into a consumer: split the token stream,
-/// parse the variation tree (docs/2CBH_FORMAT_DESIGN.md section 4.2) and emit
+/// parse the variation tree (docs/formats/2CBH_FORMAT_DESIGN.md section 4.2) and emit
 /// mainline + variations in PGN order.
 ///
 /// Root marker pairing (reverse-engineered 2026-09-07 against the
@@ -795,7 +795,7 @@ Codec::doOpen(	mstl::string const& rootname,
 		// Elo: plain u16 LE, White @0x60, Black @0x70 (unencoded, same
 		// storage convention as classic .cbh); RE'd via Ghidra tracing
 		// of CBase26.exe's PGN-import tag setters (case 8/9 of the
-		// WhiteElo/BlackElo/EloW/EloB tag dispatch), see docs/2CBH_FORMAT_DESIGN.md
+		// WhiteElo/BlackElo/EloW/EloB tag dispatch), see docs/formats/2CBH_FORMAT_DESIGN.md
 		{
 			unsigned whiteElo = readLE16(rec + 0x60);
 			unsigned blackElo = readLE16(rec + 0x70);

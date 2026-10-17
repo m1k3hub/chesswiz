@@ -881,7 +881,7 @@ proc dbNew {parent variant} {
 	set ext [::util::fileExtension $base]
 	if {$ext in {.pgn .pgn.gz .bpgn .bpgn.gz}} { set variant Undetermined }
 
-	# docs/SCI_CORRESPONDENCE_FORMAT.md §3: new databases default to SCI v96
+	# docs/formats/SCI_CORRESPONDENCE_FORMAT.md §3: new databases default to SCI v96
 	# (native correspondence clock storage); offer legacy v95 explicitly.
 	set version 96
 	if {$ext eq ".sci"} {

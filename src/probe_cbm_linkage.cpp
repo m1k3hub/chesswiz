@@ -1,7 +1,7 @@
 // ======================================================================
 // probe_cbm_linkage — ChessBase .cbm bag-to-game linkage analysis tool
 // ======================================================================
-// Per docs/CBM_FORMAT_DESIGN.md §5.6 the .cbm binary region is a serialized
+// Per docs/formats/CBM_FORMAT_DESIGN.md §5.6 the .cbm binary region is a serialized
 // property store (field names like "FWSize"/"Flags0..17" at 80-byte
 // intervals with 3-byte .cbg offsets) rather than a flat offset table,
 // established on the CB Light fixture. This probe validates that

@@ -1,5 +1,5 @@
 # Validation probe: per-game media for REGULAR games via tag_game anchors
-# (docs/CBM_FORMAT_DESIGN.md §7.6). Run via:
+# (docs/formats/CBM_FORMAT_DESIGN.md §7.6). Run via:
 #   xvfb-run -a ./src/media_console media-console/probe-gamemap.tcl
 package require Tcl 8.6
 

@@ -27,7 +27,7 @@ libavcodec.
 | MP3, MPEG-1/2 video, MPEG-1/2 audio | older lessons | patents expired (MP3 2017, MPEG-2 2018) |
 | VP8/VP9, AV1, Opus, Vorbis, FLAC, Theora | rare in chess media | royalty-free (AV1/VP9 have pool claims that haven't been enforced) |
 
-**Decided (2026-10-10): option 1.** See D8 in `docs/PORT_WINDOWS_MAC_SPEC.md`: `MEDIA_BACKEND=mf` (Windows) and `MEDIA_BACKEND=avf` (macOS).
+**Decided (2026-10-10): option 1.** See D8 in `docs/dev/PORT_WINDOWS_MAC_SPEC.md`: `MEDIA_BACKEND=mf` (Windows) and `MEDIA_BACKEND=avf` (macOS).
 
 Options, in order of preference:
 
@@ -66,6 +66,6 @@ Whatever is chosen, FFmpeg must be built **LGPL**, without `--enable-gpl` or
 
 ## Follow-up
 
-- D8 in `docs/PORT_WINDOWS_MAC_SPEC.md` should record the media backend decision
+- D8 in `docs/dev/PORT_WINDOWS_MAC_SPEC.md` should record the media backend decision
   (OS decoders vs. a restricted FFmpeg) before the installers are built.
 - Re-check this list when new decoders or file formats are added.
