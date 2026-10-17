@@ -82,6 +82,8 @@ set UseColumnStyle			"Use column style"
 set MainlineStyle				"Main Line Style"
 set HideVariations			"Hide variations"
 set GameDoesNotHaveComments "This game does not contain comments."
+set ManyGamesWarning			"Exporting %s games will produce a large document and may take a while.\n\nContinue?"
+set ManyGamesWarningTitle		"Many games"
 
 set LanguageSelectionDescr	"The checkbox (right side from combo box) has the meaning 'significant'.\n\nLanguages marked as 'significant' will always be exported.\n\nIf the game includes none of the languages marked as 'significant' then the first available language will be exported."
 
@@ -447,6 +449,7 @@ namespace eval si3 { array set Tags [array get DefaultTags] }
 namespace eval sci { array set Tags [array get DefaultTags] }
 
 variable Info
+variable ManyGamesThreshold 500
 
 # NOTE: order must coincide with flags in db::DocumentWriter
 array set Options {
@@ -3212,6 +3215,7 @@ proc DoExport {parent dlg file} {
 	variable Info
 	variable Values
 	variable Trace_
+	variable ManyGamesThreshold
 
 	set file [string trim $file]
 	if {[string length $file] == 0} { return }
@@ -3224,6 +3228,18 @@ proc DoExport {parent dlg file} {
 			-message [format $mc::DatabaseIsReadonly [::util::databaseName $file]] \
 			-title $mc::Export \
 		]
+	}
+
+	# Ask while the dialog still exists; cancellation must leave it usable.
+	if {![info exists Info(index)] && $Values(Type) in {pdf tex}} {
+		set count [::scidb::view::count games $Info(base) $Info(variant) $Info(view)]
+		if {$count > $ManyGamesThreshold} {
+			set reply [::dialog::question -parent $dlg \
+				-message [format $mc::ManyGamesWarning [::locale::formatNumber $count]] \
+				-title $mc::ManyGamesWarningTitle \
+				-buttons {cancel continue} -default cancel]
+			if {$reply eq "cancel"} { return }
+		}
 	}
 
 	set useCopyOperation 0
@@ -3335,30 +3351,23 @@ proc DoExport {parent dlg file} {
 		pdf {}
 	
 		tex {
-			foreach style [array names Styles tex,BasicStyle,*] {
-				if {[llength $Styles($style)] > 1} {
-					lassign $Styles($style) family size weight slant color
-					set name [string range $style 15 end]
-					append preamble "\\def\\$name\${{$family} {$size} {$weight} {$slant} {$color}}\n"
-				} else {
-					set preamble "\\def\\MainlineStyle{[expr {$Styles($style) ? "C" : "B"}]}\n"
-				}
-			}
-			
+			set searchPath [file join $::scidb::dir::share scripts]
+			set script "latex-skak.eXt"
+
 			append preamble "\
-				\\def\\DocumentStyle{[string tolower $Values(tex,paper,document)]}
+				\\def\\DocumentStyle{scr[string map {Article artcl Report reprt Book book} $Values(tex,paper,document)]}
 				\\def\\Hyphenation{$Values(tex,comments,hyphenation)}
-				\\let\\FontSize\\[lindex $Styles(tex,BasicStyle) 1]
-				\\def\\PageStyle{$Values(tex,paper,format)}
+				\\def\\FontSize{[lindex $Styles(tex,BasicStyle) 1]}
+				\\def\\PageStyle{[string tolower $Values(tex,paper,format)]paper}
 				\\def\\ColumnStyle{[expr {$Values(tex,paper,columns) == 1 ? "onecolumn" : "twocolumn"}]}
-				\\def\\Orientation{$Values(tex,paper,orientation)}
-				\\let\\Justification\\$Values(tex,paper,justification)
+				\\def\\Orientation{[expr {$Values(tex,paper,orientation) eq "Landscape" ? "landscape" : "portrait"}]}
+				\\def\\Justification{$Values(tex,paper,justification)}
 				\\def\\NotationStyle{$Values(tex,moves,notation)}
-				\\let\\ShowCoordinates\\$Values(tex,diagram,show-coordinates)
-				\\let\\ShowMovers\\$Values(tex,diagram,show-movers)
-				\\let\\ShowArrows\\$Values(tex,diagram,show-arrows)
-				\\let\\ShowMarkers\\$Values(tex,diagram,show-markers)
-				\\let\\BoardSize\\$Values(tex,diagram,board-size)
+				\\def\\ShowCoordinates{$Values(tex,diagram,show-coordinates)}
+				\\def\\ShowMovers{$Values(tex,diagram,show-movers)}
+				\\def\\ShowArrows{$Values(tex,diagram,show-arrows)}
+				\\def\\ShowMarkers{$Values(tex,diagram,show-markers)}
+				\\def\\BoardSize{normal}
 			"
 
 			if {$Values(tex,diagram,use-images)} {
@@ -3403,7 +3412,7 @@ proc DoExport {parent dlg file} {
 			if {$Values(tex,nag,all)} {
 				set options [expr {$options | [Pow2 $Options(annotation_map_all)]}]
 			}
-			set options [expr {$options | [Pow2 $Options(moves_notation_$Values(tex,moves,notation))]}]
+			set options [expr {$options | [Pow2 $Options(moves_notation_[string map {san short lan long} $Values(tex,moves,notation)])]}]
 
 			foreach pair $Values(tex,nag,mapping) {
 				lassign $pair from to
@@ -3415,7 +3424,7 @@ proc DoExport {parent dlg file} {
 				if {[info exists map($nag)]} {
 					lappend nags [list $nag $map($nag)]
 				} else {
-					lappend nags $nag
+					lappend nags [list $nag $nag]
 				}
 			}
 		}
@@ -3457,7 +3466,7 @@ proc DoExport {parent dlg file} {
 			}
 
 			tex {
-				return [::beta::notYetImplemented .application print-game]
+				# Export by database index, preserving the game headers.
 				::scidb::game::print $Info(base) $Info(variant) $Info(index) $file \
 					$searchPath $script $preamble \
 					-flags $flags \
@@ -3466,6 +3475,7 @@ proc DoExport {parent dlg file} {
 					-languages $languages \
 					-trace [namespace current]::Trace_ \
 					;
+				return 1
 			}
 		}
 	} else {

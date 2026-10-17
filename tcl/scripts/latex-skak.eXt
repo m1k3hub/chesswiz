@@ -110,6 +110,7 @@
 
 
 	\\begin\{document\}
+	\\tableofcontents
 }
 
 \def\print-footer{%
@@ -117,6 +118,7 @@
 }
 
 \def\print-game-header{%
+	\\section\{\White{} - \Black{}, \Event{}, \Date{}\}
 	\\newgame
 	\\textbf\{\%
 		\$\\circ\$ \White\\\\

@@ -453,8 +453,8 @@ reference (P8). Cloud database hosting and cloud engines stay out of scope.
 
 ### P10: Publishing And Formats
 
-- Multi-game PDF/TeX book export; today PDF/TeX export is single-game only (help: Development
-  Roadmap). Effort M, value 3.
+- Multi-game PDF/TeX book export is available for whole databases and filtered views.
+  TeX includes game sections and a table of contents; exports above 500 games ask for confirmation.
 - Personal insights: a player's results by opening, phase and time across their own games,
   extending the opponent dossier. Effort M, value 4.
 - Write ChessBase `.cbh` (reading exists). Effort L, value 3.
