@@ -18,6 +18,7 @@
 // waits on a socket or a helper process.
 // ======================================================================
 
+#include <stdlib.h>
 #include "tcl_base.h"
 
 #include <mpv/client.h>
@@ -164,7 +165,31 @@ cmdOpen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	mpv_set_option_string(Player, "config", "no");
 	mpv_set_option_string(Player, "terminal", "no");
 	mpv_set_option_string(Player, "vo", "x11");
-	mpv_set_option_string(Player, "hwdec", "no");
+	// Decode on the GPU when there is one that works, else on the CPU; the
+	// copy modes hand the frames back, so any video output can show them.
+	// SCIDB_MEDIA_CUDA_DEVICE pins NVIDIA decoding to one GPU, numbered in
+	// PCI bus order as nvidia-smi lists them (CUDA would order fastest
+	// first); SCIDB_MEDIA_HWDEC overrides the mode.
+	char const* hwdec = getenv("SCIDB_MEDIA_HWDEC");
+	char const* device = getenv("SCIDB_MEDIA_CUDA_DEVICE");
+	if (device && *device)
+	{
+		if (!getenv("CUDA_DEVICE_ORDER"))
+		{
+#ifdef _WIN32
+			_putenv("CUDA_DEVICE_ORDER=PCI_BUS_ID");
+#else
+			setenv("CUDA_DEVICE_ORDER", "PCI_BUS_ID", 0);
+#endif
+		}
+		mpv_set_option_string(Player, "cuda-decode-device", device);
+		if (!hwdec || !*hwdec)
+			hwdec = "nvdec-copy,auto-copy-safe";
+	}
+	mpv_set_option_string(Player, "hwdec", hwdec && *hwdec ? hwdec : "auto-copy-safe");
+	// stream links (YouTube, Twitch, ...) through yt-dlp, when installed
+	mpv_set_option_string(Player, "ytdl", "yes");
+	mpv_set_option_string(Player, "ytdl-format", "bestvideo[height<=?1080]+bestaudio/best");
 	mpv_set_option_string(Player, "keep-open", "always");
 	mpv_set_option_string(Player, "osd-level", "0");
 	mpv_set_option_string(Player, "osc", "no");

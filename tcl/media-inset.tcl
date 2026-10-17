@@ -62,7 +62,15 @@ proc ::mediainset::surface {fallback} {
 	set w $pane.mediainset
 	if {![winfo exists $w]} { Build $w }
 	Show
+	# mpv embeds into the canvas's native window, which must be mapped: a
+	# window created just now is not until the server has answered
 	update idletasks
+	for {set i 0} {$i < 20 && ![winfo ismapped $w.video]} {incr i} {
+		update
+		if {![winfo ismapped $w.video]} { after 25 }
+	}
+	# the events handled above may have stopped an earlier playback
+	Show
 	return $w.video
 }
 

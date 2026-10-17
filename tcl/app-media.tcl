@@ -33,6 +33,13 @@ set NoPlayer			"No media player found (libmpv or xdg-open)"
 set SyncBoard		"Sync with board"
 set ViewReport		"View report"
 set OpenExternal		"Open externally"
+set OpenStream		"Open stream..."
+set StreamTitle		"Open a Live Stream"
+set StreamPrompt		"Stream or video link (YouTube, Twitch, HLS .m3u8, RTMP, RTSP, HTTP):"
+set StreamPlaying	"Streaming: %s"
+set StreamWaiting	"Connecting to %s..."
+set StreamFailed		"The stream could not be played: %s. YouTube and Twitch links need yt-dlp installed."
+set NotAStream		"Not a stream link: %s"
 set Group				"Media"
 set SectionReports	"Reports"
 set SectionPictures	"Pictures"
@@ -126,8 +133,11 @@ proc application::media::build {twm frame width height} {
 		-command [namespace code ViewReport]
 	ttk::button $frame.listbox.head.external -text $mc::OpenExternal \
 		-command [namespace code OpenSelectedExternal]
+	ttk::button $frame.listbox.head.stream -text $mc::OpenStream \
+		-command [namespace code [list OpenStream $frame]]
 	pack $frame.listbox.head.report -side left -padx 2 -pady 2
 	pack $frame.listbox.head.external -side left -padx 2 -pady 2
+	pack $frame.listbox.head.stream -side left -padx 2 -pady 2
 
 	ttk::treeview $tree \
 		-columns {type title path} \
@@ -1396,6 +1406,10 @@ proc application::media::PlayMedia {path {startMs {}} {endMs {}}} {
 	variable Priv
 	variable mc
 
+	if {[isStreamUrl $path]} {
+		PlayStream $path
+		return
+	}
 	if {![file exists $path]} {
 		MediaDebug "PlayMedia: file not found: $path"
 		set Priv(statusbar) "File not found: $path"
@@ -1528,6 +1542,7 @@ proc application::media::LoadSyncSidecar {path} {
 # than leaving the panel silently blank.
 proc application::media::CheckDecode {path} {
 	variable Priv
+	variable mc
 
 	if {!$Priv(inprocess)} { return }
 
@@ -2026,3 +2041,124 @@ proc application::media::closed {frame} {
 }
 
 # vi:set ts=3 sw=3:
+
+# ----------------------------------------------------------------------
+# Live streams and video links.
+#
+# mpv plays network streams directly (HLS .m3u8, RTMP, RTSP, HTTP(S)
+# video), and YouTube/Twitch/other site links through its yt-dlp hook when
+# yt-dlp is installed. A stream plays like a local video: in the Media pane
+# or, with the option on, inside the board window (media-inset.tcl). It is
+# not coupled to the game on the board. The last links are remembered.
+# ----------------------------------------------------------------------
+
+array set ::application::media::StreamOptions {
+	recent {}
+}
+
+proc application::media::isStreamUrl {text} {
+	return [regexp -nocase {^(https?|rtmps?|rtsp|srt|udp|rtp|mms)://[^\s]+$} [string trim $text]]
+}
+
+
+proc application::media::OpenStream {parent} {
+	variable StreamOptions
+	variable mc
+
+	set dlg [winfo toplevel $parent].__mediastream__
+	if {[winfo exists $dlg]} { raise $dlg; return }
+	toplevel $dlg -class Scidb
+	wm title $dlg $mc::StreamTitle
+	wm transient $dlg [winfo toplevel $parent]
+	wm withdraw $dlg
+	set top [ttk::frame $dlg.top -padding 10]
+	ttk::label $top.prompt -text $mc::StreamPrompt -wraplength 420 -justify left
+	ttk::combobox $top.url -width 60 -values $StreamOptions(recent)
+	if {[llength $StreamOptions(recent)]} { $top.url set [lindex $StreamOptions(recent) 0] }
+	pack $top.prompt -anchor w
+	pack $top.url -fill x -pady {6 0}
+	pack $top -fill both -expand yes
+	::widget::dialogButtons $dlg {ok cancel}
+	$dlg.ok configure -command [namespace code [list StreamChosen $dlg]]
+	$dlg.cancel configure -command [list destroy $dlg]
+	bind $dlg <Return> [namespace code [list StreamChosen $dlg]]
+	bind $dlg <Escape> [list destroy $dlg]
+	::util::place $dlg -parent [winfo toplevel $parent] -position center
+	wm deiconify $dlg
+	focus $top.url
+	$top.url selection range 0 end
+}
+
+
+proc application::media::StreamChosen {dlg} {
+	variable mc
+	variable Priv
+
+	set url [string trim [$dlg.top.url get]]
+	if {![isStreamUrl $url]} {
+		set Priv(statusbar) [format $mc::NotAStream $url]
+		return
+	}
+	destroy $dlg
+	PlayStream $url
+}
+
+
+# Play a stream link; returns 1 when the player took it.
+proc application::media::PlayStream {url} {
+	variable Priv
+	variable StreamOptions
+	variable mc
+
+	set url [string trim $url]
+	if {![isStreamUrl $url]} {
+		set Priv(statusbar) [format $mc::NotAStream $url]
+		return 0
+	}
+	set StreamOptions(recent) [lrange [linsert [lsearch -all -inline -not -exact \
+		$StreamOptions(recent) $url] 0 $url] 0 9]
+
+	catch { Stop }
+	# a stream is not coupled to the game on the board
+	::media::sync::load-timeline {}
+	::media::sync::load-events {}
+	if {![PlayInProcess $url 0]} {
+		set Priv(statusbar) [format $mc::StreamFailed $url]
+		return 0
+	}
+	set Priv(stream) $url
+	set Priv(statusbar) [format $mc::StreamWaiting $url]
+	# a stream needs time to connect and buffer before it reports a state:
+	# replace the file check of PlayInProcess by a later one
+	catch { after cancel $Priv(checkid) }
+	set Priv(checkid) [after 5000 [namespace code [list CheckStream $url 0]]]
+	return 1
+}
+
+
+# Every 5 s until the stream plays; it fails on a load error, or when it is
+# still connecting or buffering after 45 s.
+proc application::media::CheckStream {url tries} {
+	variable Priv
+	variable mc
+
+	if {!$Priv(inprocess) || ![info exists Priv(stream)] || $Priv(stream) ne $url} { return }
+	set state [MediaState]
+	MediaDebug "CheckStream: state=$state"
+	if {$state eq "error" || ($state eq "idle" && $tries >= 8)} {
+		MediaDestroy
+		set Priv(statusbar) [format $mc::StreamFailed $url]
+	} elseif {$state eq "idle"} {
+		set Priv(checkid) [after 5000 [namespace code [list CheckStream $url [incr tries]]]]
+	} else {
+		set Priv(statusbar) [format $mc::StreamPlaying $url]
+	}
+}
+
+
+proc application::media::WriteStreamOptions {chan} {
+	::options::writeItem $chan ::application::media::StreamOptions
+}
+
+::options::hookWriter ::application::media::WriteStreamOptions
+
