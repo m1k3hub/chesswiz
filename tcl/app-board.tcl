@@ -682,6 +682,11 @@ proc bind {key cmd} {
 	foreach w $Vars(need-binding) {
 		::bind $w $key [namespace code [list FilterKey %K %s $cmd]]
 		::bind $w $key {+ break }
+		if {[regexp {^<Key-[^>]+>$} $key]} {
+			# A plain key binding also matches the key with Control; let Ctrl+Q
+			# and the other application shortcuts through to .application.
+			::bind $w $key "if {%s & 4} continue\n[::bind $w $key]"
+		}
 	}
 }
 
