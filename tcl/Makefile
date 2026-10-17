@@ -133,6 +133,7 @@ SOURCES = \
 	web3d-server.tcl \
 	board-3d.tcl \
 	tablebase.tcl \
+	guess-move.tcl \
 	annotation.tcl \
 	comment.tcl \
 	marks.tcl \
