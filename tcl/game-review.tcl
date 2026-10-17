@@ -35,8 +35,19 @@
 #
 #   ::gamereview::classify $plies      -> {moves ... white ... black ...}
 #   ::gamereview::run $parent ?-depth N? ?-done CMD?
+#   ::gamereview::judgeReviewAsync $review $script
+#   ::gamereview::judgeReviewSync $review ?args?
 #   ::gamereview::cancel
 #   ::gamereview::running?
+#
+# System One (Jev) typed decisions:
+#   review_turning_point (choice)  the single decisive turning point
+#   review_focus         (choice)  coaching focus {tactics opening conversion endgame solid}
+#   review_symbol_gate   (choice)  symbol gating {all_errors critical_only skip}
+#
+# Each decision has a deterministic fallback used when the classifier is
+# off, unreachable, abstains, or scores below threshold. Engine facts and
+# win probabilities are never overridden.
 #
 # <plies> is a list of per-move dicts, one per ply, each with:
 #   san     the move in SAN
@@ -80,6 +91,13 @@ set Cancel			"Cancel"
 set BetterMove		"better was"
 set KeyMoves		"Mistakes and blunders"
 set NoKeyMoves		"No inaccuracies, mistakes or blunders."
+set TurningPoint	"Turning Point"
+set Focus			"Review Focus"
+set FocusTactics	"Tactics"
+set FocusOpening	"Opening"
+set FocusConversion	"Conversion"
+set FocusEndgame	"Endgame"
+set FocusSolid		"Solid"
 
 } ;# namespace mc
 
@@ -91,15 +109,20 @@ variable MaxPlies 200
 
 variable Priv
 array set Priv {
-	running	0
-	cancel	0
-	plies		{}
-	index		0
-	total		0
-	results	{}
-	done		{}
-	parent	{}
-	rows		{}
+	running			0
+	cancel			0
+	plies				{}
+	index				0
+	total				0
+	results			{}
+	done				{}
+	parent			{}
+	rows				{}
+	turning_point	{}
+	focus				{}
+	symbol_gate		all_errors
+	review			{}
+	dialog			{}
 }
 
 } ;# namespace ::gamereview
@@ -268,6 +291,433 @@ proc ::gamereview::summary {moves side} {
 	}
 	set acc [expr {$n ? [format %.2f [expr {$sum / double($n)}]] : 0.0}]
 	return [dict create accuracy $acc n $n counts $counts]
+}
+
+
+# ======================================================================
+# System One (Jev) typed decisions.
+# ======================================================================
+
+# Candidate moments for turning-point selection: Mistakes and Blunders,
+# or Inaccuracies if the game was free of mistakes and blunders.
+proc ::gamereview::turningPointCandidates {review} {
+	set candidates {}
+	set moves [expr {[dict exists $review moves] ? [dict get $review moves] : {}}]
+	foreach m $moves {
+		set cls [dict get $m class]
+		if {$cls in {Mistake Blunder}} {
+			lappend candidates [CandidateFromMove $m]
+		}
+	}
+	if {[llength $candidates] == 0} {
+		foreach m $moves {
+			if {[dict get $m class] eq "Inaccuracy"} {
+				lappend candidates [CandidateFromMove $m]
+			}
+		}
+	}
+	return $candidates
+}
+
+
+proc ::gamereview::CandidateFromMove {m} {
+	set ply [dict get $m ply]
+	set side [dict get $m side]
+	set san [dict get $m san]
+	set loss [dict get $m loss]
+	set cls [dict get $m class]
+	set before [expr {[dict exists $m before] ? [dict get $m before] : 0}]
+	set after [expr {[dict exists $m after] ? [dict get $m after] : 0}]
+	set phase [expr {$ply < 20 ? "opening" : ($ply < 60 ? "middlegame" : "endgame")}]
+	set label "[moveLabel $m] $san"
+
+	return [dict create \
+		tag "ply_$ply" \
+		ply $ply \
+		move $label \
+		side $side \
+		loss $loss \
+		class $cls \
+		evalBefore $before \
+		evalAfter $after \
+		phase $phase]
+}
+
+
+# The classifier question for the decisive turning point.
+proc ::gamereview::turningPointQuestion {candidates} {
+	set crit [dict create]
+	foreach c $candidates {
+		dict set crit [dict get $c tag] \
+			"[dict get $c move] ([dict get $c side], loss [dict get $c loss]%, [dict get $c class] in [dict get $c phase])"
+	}
+	dict set crit none "no single decisive turning point; gradual shift or clean game"
+	return [dict create \
+		type choice \
+		instructions "Which move is the decisive turning point where the game's outcome fundamentally tilted, rather than a late blunder in an already decided position or a minor shift?" \
+		criteria $crit]
+}
+
+
+# Deterministic fallback for the turning point: among moves where the game
+# was still competitive (before win probability 15%..85%), pick the largest
+# loss; otherwise the overall largest loss.
+proc ::gamereview::turningPointFallback {candidates} {
+	if {[llength $candidates] == 0} { return "none" }
+
+	set competitive {}
+	foreach c $candidates {
+		set before [dict get $c evalBefore]
+		set prob [wp $before]
+		if {$prob >= 15.0 && $prob <= 85.0} {
+			lappend competitive $c
+		}
+	}
+	set pool [expr {[llength $competitive] ? $competitive : $candidates}]
+
+	set bestTag [dict get [lindex $pool 0] tag]
+	set maxLoss [dict get [lindex $pool 0] loss]
+	foreach c [lrange $pool 1 end] {
+		set l [dict get $c loss]
+		if {$l > $maxLoss} {
+			set maxLoss $l
+			set bestTag [dict get $c tag]
+		}
+	}
+	return $bestTag
+}
+
+
+proc ::gamereview::turningPointState {review candidates} {
+	set nPlies [llength [dict get $review moves]]
+	set wacc [dict get $review white accuracy]
+	set bacc [dict get $review black accuracy]
+	set cparts {}
+	foreach c $candidates {
+		lappend cparts "[dict get $c tag]: [dict get $c move] ([dict get $c side], loss=[dict get $c loss]%, before=[dict get $c evalBefore], after=[dict get $c evalAfter], phase=[dict get $c phase])"
+	}
+	if {[llength $cparts] == 0} { set ctext "none" } else { set ctext [join $cparts "; "] }
+	return "plies=$nPlies white_acc=$wacc black_acc=$bacc candidates: $ctext"
+}
+
+
+# The classifier question for review focus / coaching takeaway.
+proc ::gamereview::focusQuestion {} {
+	return [dict create \
+		type choice \
+		instructions "What is the primary review focus or coaching takeaway for this game?" \
+		criteria [dict create \
+			tactics    "sharp tactical swings or decisive single-move tactical blunders" \
+			opening    "game was compromised or decided in the opening (first 15 moves)" \
+			conversion "one side obtained a clear winning advantage but struggled or failed to convert" \
+			endgame    "game was balanced into the endgame (move 30+) where technical execution decided the result" \
+			solid      "clean, high-accuracy play from both sides with few or no major errors" \
+		]]
+}
+
+
+# Deterministic fallback for review focus.
+proc ::gamereview::focusFallback {review} {
+	set wacc 0.0
+	set bacc 0.0
+	if {[dict exists $review white accuracy]} { set wacc [dict get $review white accuracy] }
+	if {[dict exists $review black accuracy]} { set bacc [dict get $review black accuracy] }
+
+	set wc [dict get $review white counts]
+	set bc [dict get $review black counts]
+	set totalBlunders [expr {[dict get $wc Blunder] + [dict get $bc Blunder]}]
+	set totalMistakes [expr {[dict get $wc Mistake] + [dict get $bc Mistake]}]
+	set totalInacc [expr {[dict get $wc Inaccuracy] + [dict get $bc Inaccuracy]}]
+
+	if {$wacc >= 88.0 && $bacc >= 88.0 && $totalBlunders == 0 && $totalMistakes == 0 && $totalInacc <= 2} {
+		return solid
+	}
+
+	set openLoss 0.0
+	set midLoss 0.0
+	set endLoss 0.0
+	set worstLoss 0.0
+	set worstPly 0
+	set moves [dict get $review moves]
+
+	foreach m $moves {
+		set l [dict get $m loss]
+		set p [dict get $m ply]
+		if {$l > $worstLoss} {
+			set worstLoss $l
+			set worstPly $p
+		}
+		if {$p < 20} {
+			set openLoss [expr {$openLoss + $l}]
+		} elseif {$p < 60} {
+			set midLoss [expr {$midLoss + $l}]
+		} else {
+			set endLoss [expr {$endLoss + $l}]
+		}
+	}
+
+	if {[llength $moves] >= 60 && ($worstPly >= 60 || $endLoss > $midLoss)} {
+		return endgame
+	}
+	if {$worstPly < 20 && $openLoss >= $midLoss && ($totalBlunders > 0 || $totalMistakes > 0)} {
+		return opening
+	}
+	if {$worstLoss >= 20.0} {
+		return tactics
+	}
+	return conversion
+}
+
+
+proc ::gamereview::focusState {review} {
+	set nPlies [llength [dict get $review moves]]
+	set wacc [dict get $review white accuracy]
+	set bacc [dict get $review black accuracy]
+	set wc [dict get $review white counts]
+	set bc [dict get $review black counts]
+
+	set openLoss 0.0
+	set midLoss 0.0
+	set endLoss 0.0
+	set worstLoss 0.0
+	set worstPly 0
+
+	foreach m [dict get $review moves] {
+		set l [dict get $m loss]
+		set p [dict get $m ply]
+		if {$l > $worstLoss} {
+			set worstLoss $l
+			set worstPly $p
+		}
+		if {$p < 20} {
+			set openLoss [expr {$openLoss + $l}]
+		} elseif {$p < 60} {
+			set midLoss [expr {$midLoss + $l}]
+		} else {
+			set endLoss [expr {$endLoss + $l}]
+		}
+	}
+	return [format "plies=%d white_acc=%.1f black_acc=%.1f counts: white={Best:%d Exc:%d Good:%d Inacc:%d Mist:%d Blund:%d} black={Best:%d Exc:%d Good:%d Inacc:%d Mist:%d Blund:%d} worst_loss=%.1f worst_ply=%d phase_losses: opening=%.1f middlegame=%.1f endgame=%.1f" \
+		$nPlies $wacc $bacc \
+		[dict get $wc Best] [dict get $wc Excellent] [dict get $wc Good] [dict get $wc Inaccuracy] [dict get $wc Mistake] [dict get $wc Blunder] \
+		[dict get $bc Best] [dict get $bc Excellent] [dict get $bc Good] [dict get $bc Inaccuracy] [dict get $bc Mistake] [dict get $bc Blunder] \
+		$worstLoss $worstPly $openLoss $midLoss $endLoss]
+}
+
+
+proc ::gamereview::focusLabel {focus} {
+	variable mc
+	switch -- $focus {
+		tactics    { return $mc::FocusTactics }
+		opening    { return $mc::FocusOpening }
+		conversion { return $mc::FocusConversion }
+		endgame    { return $mc::FocusEndgame }
+		solid      { return $mc::FocusSolid }
+		default    { return $focus }
+	}
+}
+
+
+# The classifier question for selective NAG annotation gating.
+proc ::gamereview::symbolGateQuestion {} {
+	return [dict create \
+		type choice \
+		instructions "When adding annotation symbols to this game, should minor inaccuracies (?!), mistakes (?), and blunders (??) all be annotated, or should symbols be restricted to critical mistakes and blunders to avoid cluttering notation?" \
+		criteria [dict create \
+			all_errors    "include inaccuracies (?!), mistakes (?), and blunders (??) because errors are sparse and informative" \
+			critical_only "include only mistakes (?) and blunders (??); skip minor inaccuracies (?!) to prevent notation clutter" \
+			skip          "do not add symbols; game is either error-free or already sufficiently annotated" \
+		]]
+}
+
+
+# Deterministic fallback for symbol gating.
+proc ::gamereview::symbolGateFallback {review} {
+	set wc [dict get $review white counts]
+	set bc [dict get $review black counts]
+	set inacc [expr {[dict get $wc Inaccuracy] + [dict get $bc Inaccuracy]}]
+	set mist [expr {[dict get $wc Mistake] + [dict get $bc Mistake]}]
+	set blund [expr {[dict get $wc Blunder] + [dict get $bc Blunder]}]
+	set totalErr [expr {$inacc + $mist + $blund}]
+	if {$totalErr == 0} { return skip }
+
+	set moves [dict get $review moves]
+	set nMoves [expr {[llength $moves] / 2 + 1}]
+	if {$inacc >= 6 && double($inacc) / $nMoves > 0.25} {
+		return critical_only
+	}
+	return all_errors
+}
+
+
+proc ::gamereview::symbolGateState {review} {
+	set nPlies [llength [dict get $review moves]]
+	set wc [dict get $review white counts]
+	set bc [dict get $review black counts]
+	set inacc [expr {[dict get $wc Inaccuracy] + [dict get $bc Inaccuracy]}]
+	set mist [expr {[dict get $wc Mistake] + [dict get $bc Mistake]}]
+	set blund [expr {[dict get $wc Blunder] + [dict get $bc Blunder]}]
+	set totalErr [expr {$inacc + $mist + $blund}]
+	set density [expr {$nPlies > 0 ? double($totalErr) / $nPlies : 0.0}]
+	return [format "plies=%d inaccuracies=%d mistakes=%d blunders=%d error_density=%.2f" \
+		$nPlies $inacc $mist $blund $density]
+}
+
+
+# Asynchronously query System One for the review decisions (turning point,
+# focus, symbol gate). Calls <script> with a dictionary of outcomes.
+proc ::gamereview::judgeReviewAsync {review script} {
+	set candidates [turningPointCandidates $review]
+	set fbTP [turningPointFallback $candidates]
+	set fbFocus [focusFallback $review]
+	set fbGate [symbolGateFallback $review]
+
+	set fallbackResult [dict create \
+		ok 1 source rules \
+		turning_point $fbTP turning_point_source rules \
+		focus $fbFocus focus_source rules \
+		symbol_gate $fbGate symbol_gate_source rules]
+
+	if {[llength [info commands ::ai::systemone::enabled]] == 0
+	 || ![::ai::systemone::enabled]
+	 || ([llength [info commands ::ai::systemone::qualified]] && ![::ai::systemone::qualified review_turning_point])} {
+		after 0 [list {*}$script $fallbackResult]
+		return
+	}
+
+	set tpState [turningPointState $review $candidates]
+	set focusState [focusState $review]
+	set gateState [symbolGateState $review]
+	set state "review_summary: $focusState\n$tpState\n$gateState"
+
+	set questions [dict create \
+		review_turning_point [turningPointQuestion $candidates] \
+		review_focus [focusQuestion] \
+		review_symbol_gate [symbolGateQuestion]]
+
+	if {[catch {
+		::ai::systemone::evaluateAsync $state $questions \
+			[namespace code [list OnJudgeReply $script $candidates $review]]
+	} err]} {
+		after 0 [list {*}$script $fallbackResult]
+	}
+	return
+}
+
+
+proc ::gamereview::OnJudgeReply {script candidates review result} {
+	set fbTP [turningPointFallback $candidates]
+	set fbFocus [focusFallback $review]
+	set fbGate [symbolGateFallback $review]
+
+	if {![dict exists $result ok] || ![dict get $result ok] || ![dict exists $result answers]} {
+		uplevel #0 [list {*}$script [dict create ok 1 source rules \
+			turning_point $fbTP turning_point_source rules \
+			focus $fbFocus focus_source rules \
+			symbol_gate $fbGate symbol_gate_source rules]]
+		return
+	}
+
+	set answers [dict get $result answers]
+	set qTP [turningPointQuestion $candidates]
+	set qFocus [focusQuestion]
+	set qGate [symbolGateQuestion]
+
+	set tp $fbTP
+	set tpSrc rules
+	set tpConf {}
+	if {[dict exists $answers review_turning_point]} {
+		set a [dict get $answers review_turning_point]
+		set th [::ai::systemone::threshold review_turning_point 0.6]
+		if {[::ai::systemone::valid $qTP $a] && [dict get $a confidence] >= $th} {
+			set tp [dict get $a choice]
+			set tpSrc classifier
+			set tpConf [dict get $a confidence]
+		}
+	}
+
+	set focus $fbFocus
+	set focusSrc rules
+	set focusConf {}
+	if {[dict exists $answers review_focus]} {
+		set a [dict get $answers review_focus]
+		set th [::ai::systemone::threshold review_focus 0.6]
+		if {[::ai::systemone::valid $qFocus $a] && [dict get $a confidence] >= $th} {
+			set focus [dict get $a choice]
+			set focusSrc classifier
+			set focusConf [dict get $a confidence]
+		}
+	}
+
+	set gate $fbGate
+	set gateSrc rules
+	set gateConf {}
+	if {[dict exists $answers review_symbol_gate]} {
+		set a [dict get $answers review_symbol_gate]
+		set th [::ai::systemone::threshold review_symbol_gate 0.6]
+		if {[::ai::systemone::valid $qGate $a] && [dict get $a confidence] >= $th} {
+			set gate [dict get $a choice]
+			set gateSrc classifier
+			set gateConf [dict get $a confidence]
+		}
+	}
+
+	set overallSource [expr {($tpSrc eq "classifier" || $focusSrc eq "classifier" || $gateSrc eq "classifier") ? "classifier" : "rules"}]
+
+	uplevel #0 [list {*}$script [dict create \
+		ok 1 source $overallSource \
+		turning_point $tp turning_point_source $tpSrc turning_point_conf $tpConf \
+		focus $focus focus_source $focusSrc focus_conf $focusConf \
+		symbol_gate $gate symbol_gate_source $gateSrc symbol_gate_conf $gateConf]]
+	return
+}
+
+
+# Synchronous bounded query for the review decisions.
+proc ::gamereview::judgeReviewSync {review args} {
+	set candidates [turningPointCandidates $review]
+	set fbTP [turningPointFallback $candidates]
+	set fbFocus [focusFallback $review]
+	set fbGate [symbolGateFallback $review]
+
+	set out [dict create ok 1 source rules \
+		turning_point $fbTP turning_point_source rules \
+		focus $fbFocus focus_source rules \
+		symbol_gate $fbGate symbol_gate_source rules]
+
+	if {[llength [info commands ::ai::systemone::chooseManySync]] == 0
+	 || ![::ai::systemone::enabled]
+	 || ([llength [info commands ::ai::systemone::qualified]] && ![::ai::systemone::qualified review_turning_point])} {
+		return $out
+	}
+
+	set tpState [turningPointState $review $candidates]
+	set focusState [focusState $review]
+	set gateState [symbolGateState $review]
+	set state "review_summary: $focusState\n$tpState\n$gateState"
+
+	set questions [dict create \
+		review_turning_point [turningPointQuestion $candidates] \
+		review_focus [focusQuestion] \
+		review_symbol_gate [symbolGateQuestion]]
+
+	set chosen [::ai::systemone::chooseManySync review_turning_point $state $questions {*}$args]
+	if {[dict exists $chosen review_turning_point]} {
+		dict set out turning_point [dict get $chosen review_turning_point]
+		dict set out turning_point_source classifier
+		dict set out source classifier
+	}
+	if {[dict exists $chosen review_focus]} {
+		dict set out focus [dict get $chosen review_focus]
+		dict set out focus_source classifier
+		dict set out source classifier
+	}
+	if {[dict exists $chosen review_symbol_gate]} {
+		dict set out symbol_gate [dict get $chosen review_symbol_gate]
+		dict set out symbol_gate_source classifier
+		dict set out source classifier
+	}
+	return $out
 }
 
 
@@ -478,6 +928,63 @@ proc ::gamereview::summaryLine {side summary} {
 }
 
 
+proc ::gamereview::PopulateListbox {lb review {turningPointTag ""}} {
+	variable Priv
+	variable mc
+
+	$lb delete 0 end
+	set rows {}
+	foreach m [dict get $review moves] {
+		set cls [dict get $m class]
+		if {$cls ni {Inaccuracy Mistake Blunder}} { continue }
+		set tag "ply_[dict get $m ply]"
+		set isTP [expr {$tag eq $turningPointTag}]
+		set prefix [expr {$isTP ? "\[$mc::TurningPoint\] " : ""}]
+		set text "$prefix[moveLabel $m] [dict get $m san] \u2014 $cls"
+		if {[dict exists $m bestSan] && [dict get $m bestSan] ne ""} {
+			append text " ($mc::BetterMove [dict get $m bestSan])"
+		}
+		$lb insert end $text
+		set key [expr {[dict exists $m key] ? [dict get $m key] : ""}]
+		lappend rows [list $key $text]
+	}
+	if {![llength $rows]} {
+		$lb insert end $mc::NoKeyMoves
+	}
+	set Priv(rows) $rows
+}
+
+
+proc ::gamereview::OnJudged {dlg lb focusLabel result} {
+	variable Priv
+	variable mc
+
+	if {![winfo exists $dlg]} { return }
+	if {![dict exists $result ok] || ![dict get $result ok]} { return }
+
+	if {[dict exists $result turning_point]} {
+		set Priv(turning_point) [dict get $result turning_point]
+	}
+	if {[dict exists $result focus]} {
+		set Priv(focus) [dict get $result focus]
+	}
+	if {[dict exists $result symbol_gate]} {
+		set Priv(symbol_gate) [dict get $result symbol_gate]
+	}
+
+	set ftext "$mc::Focus: [focusLabel $Priv(focus)]"
+	if {[dict exists $result focus_source] && [dict get $result focus_source] eq "classifier"} {
+		if {[dict exists $result focus_conf] && [dict get $result focus_conf] ne ""} {
+			set pct [expr {int([dict get $result focus_conf] * 100)}]
+			append ftext " ([::ai::systemone::describe], $pct%)"
+		}
+	}
+	$focusLabel configure -text $ftext
+
+	PopulateListbox $lb $Priv(review) $Priv(turning_point)
+}
+
+
 proc ::gamereview::ShowWindow {parent review errors cancelled} {
 	variable Priv
 	variable mc
@@ -497,6 +1004,19 @@ proc ::gamereview::ShowWindow {parent review errors cancelled} {
 	ttk::label $top.black -text [summaryLine Black [dict get $review black]] -anchor w
 	pack $top.black -fill x
 
+	set candidates [turningPointCandidates $review]
+	set fbTP [turningPointFallback $candidates]
+	set fbFocus [focusFallback $review]
+	set fbGate [symbolGateFallback $review]
+
+	set Priv(turning_point) $fbTP
+	set Priv(focus) $fbFocus
+	set Priv(symbol_gate) $fbGate
+	set Priv(review) $review
+
+	ttk::label $top.focus -text "$mc::Focus: [focusLabel $fbFocus]" -anchor w
+	pack $top.focus -fill x -pady [list $::theme::pady 0]
+
 	if {[llength $errors]} {
 		ttk::label $top.err -text [join $errors "\n"] -anchor w -wraplength 420
 		pack $top.err -fill x -pady [list $::theme::pady 0]
@@ -513,21 +1033,7 @@ proc ::gamereview::ShowWindow {parent review errors cancelled} {
 	pack $vs -side right -fill y
 	pack $frame -fill both -expand yes
 
-	set rows {}
-	foreach m [dict get $review moves] {
-		set cls [dict get $m class]
-		if {$cls ni {Inaccuracy Mistake Blunder}} { continue }
-		set text "[moveLabel $m] [dict get $m san] \u2014 $cls"
-		if {[dict exists $m bestSan] && [dict get $m bestSan] ne ""} {
-			append text " ($mc::BetterMove [dict get $m bestSan])"
-		}
-		$lb insert end $text
-		lappend rows [list [dict get $m key] $text]
-	}
-	if {![llength $rows]} {
-		$lb insert end $mc::NoKeyMoves
-	}
-	set Priv(rows) $rows
+	PopulateListbox $lb $review $fbTP
 	bind $lb <<ListboxSelect>> [namespace code [list GoTo $lb]]
 
 	set buttons [ttk::frame $top.buttons]
@@ -537,6 +1043,8 @@ proc ::gamereview::ShowWindow {parent review errors cancelled} {
 	pack $buttons.add -side left
 	pack $buttons.close -side left -padx [list $::theme::padx 0]
 	pack $buttons -fill x -pady [list $::theme::pady 0]
+
+	judgeReviewAsync $review [namespace code [list OnJudged $dlg $lb $top.focus]]
 
 	::util::place $dlg -parent $parent -position center
 }
@@ -557,12 +1065,27 @@ proc ::gamereview::GoTo {lb} {
 # Write the NAGs (?!, ?, ??) onto the game's non-good moves, merging with
 # any marks already there. The game is left *modified*; saving stays the
 # user's decision.
-proc ::gamereview::AddSymbols {moves {dlg {}}} {
+proc ::gamereview::AddSymbols {moves {dlg {}} {gate ""}} {
+	variable Priv
 	variable mc
+
+	if {$gate eq ""} {
+		set gate [expr {[info exists Priv(symbol_gate)] ? $Priv(symbol_gate) : "all_errors"}]
+	}
+	if {$gate eq "skip"} {
+		if {[string length $dlg] && [winfo exists $dlg]} {
+			::dialog::info -parent $dlg -message [format $mc::AddedSymbols 0]
+		}
+		return 0
+	}
 
 	set added 0
 	foreach m $moves {
-		set nag [nagFor [dict get $m class]]
+		set cls [dict get $m class]
+		if {$gate eq "critical_only" && $cls eq "Inaccuracy"} {
+			continue
+		}
+		set nag [nagFor $cls]
 		if {![string length $nag]} { continue }
 		if {![dict exists $m key]} { continue }
 		set key [dict get $m key]
