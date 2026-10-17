@@ -1230,6 +1230,9 @@ proc PopupMenu {key} {
 		set base [lindex $Vars($key:arguments) 3]
 		set variant [lindex $Vars($key:arguments) 4]
 		::application::database::player::addPrepReportMenuEntry $m $Vars($key) $base $variant $playerIndex
+		if {[llength [info commands ::application::database::player::addInsightsMenuEntry]]} {
+			::application::database::player::addInsightsMenuEntry $m $Vars($key) $base $variant $playerIndex
+		}
 		$m add separator
 	}
 

@@ -1287,6 +1287,10 @@ proc Mouse3Down {dlg nodes} {
 				if {$playerIndex >= 0} {
 					::application::database::player::addPrepReportMenuEntry \
 						$m $dlg $Vars(base) $Vars(variant) $playerIndex
+					if {[llength [info commands ::application::database::player::addInsightsMenuEntry]]} {
+						::application::database::player::addInsightsMenuEntry \
+							$m $dlg $Vars(base) $Vars(variant) $playerIndex
+					}
 				}
 			}
 			$m add command \
