@@ -588,6 +588,17 @@ proc alert {args} {
 		if {$y0 + $rh > $sh}	{ set y "-0"; set y0 [expr {$sh - $rh}] }
 		if {$y0 < 0}			{ set y "+0" }
 	}
+	# Keep the box, frame included, inside the work area on every platform:
+	# on Windows a box centred on a pane low on the screen put its buttons
+	# under the taskbar (laptop agent, Run 25).
+	if {[llength [info commands ::util::place::clamp]]} {
+		lassign [winfo workarea $w] ax ay aw ah
+		lassign {0 0 0 0} el er et eb
+		catch { lassign [winfo extents $w] el er et eb }
+		set x [::util::place::clamp $x [expr {$rw + $el + $er}] $ax $aw]
+		set y [::util::place::clamp $y [expr {$rh + $et + $eb}] $ay $ah]
+		scan $y "+%d" y0
+	}
 	if {$windowingsystem eq "aqua"} {
 		# avoid the native menu bar which sits on top of everything
 		if {[string index $y 0] eq "+" && $y0 < 22} { set y "+22" }
