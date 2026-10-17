@@ -5669,7 +5669,8 @@ cmdMediaFiles(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				// Resolve relative paths against the database directory so
 				// the caller (xdg-open etc.) can find the file.
 				if (!entries[i].inlineData && !resolved.empty()
-					&& resolved[0] != '/' && resolved[0] != '\\')
+					&& resolved[0] != '/' && resolved[0] != '\\'
+					&& resolved.find("://") == mstl::string::npos)
 				{
 					mstl::string dir = ::util::misc::file::dirname(database);
 					if (!dir.empty())
@@ -6604,7 +6605,8 @@ cmdMediaGallery(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			{
 				mstl::string resolved = scmTable->resolvePath(entries[i]);
 				if (!entries[i].inlineData && !resolved.empty()
-					&& resolved[0] != '/' && resolved[0] != '\\')
+					&& resolved[0] != '/' && resolved[0] != '\\'
+					&& resolved.find("://") == mstl::string::npos)
 					resolved = dir + resolved;
 
 				Tcl_Obj* row[5];

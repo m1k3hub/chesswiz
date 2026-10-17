@@ -470,6 +470,11 @@ proc application::media::InsertEntry {typeLabel title path index} {
 		set section section_$typeNum
 	}
 
+	if {($typeLabel eq "4" || $typeLabel eq "stream")
+		&& ![isStreamUrl $path]
+		&& [regexp -nocase {((?:https?|rtmps?|rtsp|srt|udp|rtp|mms)://[^\s]+)$} $path -> rawUrl]} {
+		set path $rawUrl
+	}
 	set n 0
 	while {[$tree exists "item$n"]} { incr n }
 	set dispType [TypeDisplayLabel $typeLabel]
@@ -537,6 +542,7 @@ proc application::media::Update {position} {
 	set Priv(linksBase) {}
 	set Priv(interactive) {}
 	set Priv(dbInteractive) {}
+	set Priv(dbBoardSync) {}
 	set Priv(userInteractive) {}
 	array unset Priv "interactive:played:*"
 	set tree $Priv(tree)
@@ -978,8 +984,9 @@ proc application::media::CmsSquare {n} {
 # is an ordinary [Media]/[Game] row), entryList rows =
 # {fen file start end label}.
 proc application::media::SmvEntries {path} {
-	if {![file exists $path]} { return [list baseline {} entries {}] }
+	if {![file exists $path]} { return [list baseline {} entries {} boardsync {}] }
 	set dir [file dirname $path]
+	set mediaDir $dir
 
 	# pass 1: collect sections
 	set sections {}
@@ -998,9 +1005,17 @@ proc application::media::SmvEntries {path} {
 	close $fh
 	if {[string length $cur(type)]} { lappend sections [array get cur] }
 
-	# pass 2: interpret [Media] blocks, then emit interactive entries
+	foreach s $sections {
+		array unset s_ ; array set s_ $s
+		if {$s_(type) eq "mediadir" && [string length $s_(id)]} {
+			set mediaDir [expr {[file pathtype $s_(id)] eq "absolute" ? $s_(id) : [file join $dir $s_(id)]}]
+		}
+	}
+
+	# pass 2: interpret [Media] blocks, then emit interactive and boardsync entries
 	set mp {}
 	set entries {}
+	set boardsync [dict create]
 	array set keyOf {}
 	foreach s $sections {
 		array unset s_ ; array set s_ $s
@@ -1011,7 +1026,18 @@ proc application::media::SmvEntries {path} {
 		}
 		switch -- $s_(type) {
 			"media" {
-				if {[info exists kv(path)]} { set keyOf($s_(id)) [file join $dir $kv(path)] }
+				if {[info exists kv(path)]} {
+					set rawPath $kv(path)
+					if {[isStreamUrl $rawPath] || [file pathtype $rawPath] eq "absolute"} {
+						set resolved $rawPath
+					} else {
+						set resolved [file join $mediaDir $rawPath]
+						if {![file exists $resolved] && [file exists [file join $dir $rawPath]]} {
+							set resolved [file join $dir $rawPath]
+						}
+					}
+					set keyOf($s_(id)) [file normalize $resolved]
+				}
 				if {[info exists keyOf($s_(id))]} {
 					if {![string length $mp]} {
 						set mp $keyOf($s_(id))
@@ -1030,7 +1056,12 @@ proc application::media::SmvEntries {path} {
 						if {![info exists kv(start)] || ![info exists kv(end)]} { set f {} }
 					}
 					default {
-						if {[info exists kv(clip)]} { set f [file join $dir $kv(clip)] }
+						if {[info exists kv(clip)]} {
+							set f [file join $mediaDir $kv(clip)]
+							if {![file exists $f] && [file exists [file join $dir $kv(clip)]]} {
+								set f [file join $dir $kv(clip)]
+							}
+						}
 					}
 				}
 				if {[string length $f] && [file exists $f] && [info exists kv(fen)]} {
@@ -1040,9 +1071,44 @@ proc application::media::SmvEntries {path} {
 						[expr {[info exists kv(label)] ? $kv(label) : ""}]]
 				}
 			}
+			"boardsync" {
+				if {![info exists keyOf($s_(id))]} { continue }
+				set mpath $keyOf($s_(id))
+				set steps {}
+				set evs {}
+				foreach line [split $s_(body) "\n"] {
+					if {![regexp {^([\w\.]+)\s*:\s*(.*)$} $line -> k v]} { continue }
+					set k [string tolower $k]
+					set v [string trim $v]
+					switch -- $k {
+						"step" {
+							if {[string is integer -strict $v]} { lappend steps $v }
+						}
+						"arrow" {
+							if {[regexp {^(\d+)\s*,\s*([^,]*)\s*,\s*([a-h][1-8])-([a-h][1-8])} $v -> ms style from to]} {
+								lappend evs [list $ms arrow $from $to [string trim $style]]
+							}
+						}
+						"mark" {
+							if {[regexp {^(\d+)\s*,\s*([^,]*)\s*,\s*([a-h][1-8])} $v -> ms style sq]} {
+								lappend evs [list $ms mark $sq [string trim $style]]
+							}
+						}
+						"comment" {
+							if {[regexp {^(\d+)\s*,\s*([^,]*)\s*,\s*([^,]*)\s*,\s*(.*)$} $v -> ms kind lang text]} {
+								lappend evs [list $ms comment [string trim $kind] [string trim $lang] [string trim $text "\" \t"]]
+							}
+						}
+						"reset" {
+							if {[string is integer -strict $v]} { lappend evs [list $v reset {}] }
+						}
+					}
+				}
+				dict set boardsync $mpath [dict create timeline $steps events $evs]
+			}
 		}
 	}
-	return [list baseline {} entries $entries]
+	return [list baseline {} entries $entries boardsync $boardsync]
 }
 
 
@@ -1104,6 +1170,7 @@ proc application::media::LoadDbInteractive {base} {
 	variable Priv
 
 	set Priv(dbInteractive) {}
+	set Priv(dbBoardSync) {}
 	set scm "[file rootname $base].scm"
 	if {![file exists $scm]} { return }
 	if {[catch { array set r [SmvEntries $scm] } msg]} {
@@ -1113,6 +1180,9 @@ proc application::media::LoadDbInteractive {base} {
 	if {[llength $r(entries)]} {
 		set Priv(dbInteractive) $r(entries)
 		MediaDebug "LoadDbInteractive: [llength $r(entries)] entries from [list $scm]"
+	}
+	if {[info exists r(boardsync)] && [dict size $r(boardsync)]} {
+		set Priv(dbBoardSync) $r(boardsync)
 	}
 }
 
@@ -1397,9 +1467,16 @@ proc application::media::PlayLesson {path gameIndex {startMs {}} {endMs {}}} {
 	# lesson: built once (script-stream decode), cached by ::media::lesson
 	set lesson [::media::lesson::get $path]
 	if {![dict get $lesson valid]} {
-		set Priv(statusbar) "Lesson not playable: [dict get $lesson reason]"
-		MediaDebug "PlayLesson: invalid lesson: [dict get $lesson reason]"
-		return 0
+		set normPath [file normalize $path]
+		if {[info exists Priv(dbBoardSync)] && [dict exists $Priv(dbBoardSync) $normPath]} {
+			set sync [dict get $Priv(dbBoardSync) $normPath]
+			set lesson [dict create valid 1 positions {} \
+				timeline [dict get $sync timeline] events [dict get $sync events]]
+		} else {
+			set Priv(statusbar) "Lesson not playable: [dict get $lesson reason]"
+			MediaDebug "PlayLesson: invalid lesson: [dict get $lesson reason]"
+			return 0
+		}
 	}
 	MediaDebug "PlayLesson: [llength [dict get $lesson timeline]] timeline marks, [llength [dict get $lesson events]] events"
 

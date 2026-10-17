@@ -195,7 +195,7 @@ MediaTable::resolvePath(Entry const& e) const
 {
 	if (e.inlineData) return e.path;
 	if (e.path.empty()) return mstl::string();
-	if (e.path[0] == '/' || e.path[0] == '\\') return e.path;
+	if (e.path[0] == '/' || e.path[0] == '\\' || e.path.find("://") != mstl::string::npos) return e.path;
 	if (!m_mediaDir.empty()) return m_mediaDir + "/" + e.path;
 	return e.path;
 }

@@ -200,7 +200,15 @@ proc ::mediainset::Layout {} {
 		raise $w
 	}
 	if {$Audio} {
-		place $w -relheight 0 -height [expr {[winfo reqheight $w.controls] + 8}]
+		set h [expr {[winfo reqheight $w.controls] + 8}]
+		if {$Swapped} {
+			RestoreBoard $pane
+			place $w -in $pane -x -6 -y -6 -relx 1.0 -rely 1.0 -anchor se \
+				-width [expr {max(0, min($controlWidth, [winfo width $pane] - 12) - int([winfo width $pane]*$s))}] \
+				-relwidth $s -relheight 0 -height $h
+		} else {
+			place $w -relheight 0 -height $h
+		}
 	}
 	if {[winfo exists $pane.mediaButton]} { raise $pane.mediaButton }
 	Watch $canv

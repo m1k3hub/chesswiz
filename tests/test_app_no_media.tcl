@@ -7,11 +7,24 @@ tcltest::test media-runtime {media modules are loaded together} -body {
         [namespace exists ::media::decoder]
 } -result {1 1 1 1}
 
-tcltest::test media-layout {media pane has options, priority and a default layout entry} -body {
+tcltest::test media-layout {media pane has options and priority, and is omitted from the default layout} -body {
     list [info exists ::application::PaneOptions(media)] \
         [info exists ::application::Prios(media)] \
         [string match {*frame media*} $::application::BoardLayout]
-} -result {1 1 1}
+} -result {1 1 0}
+
+tcltest::test media-saved-layout {a saved layout containing the media pane loads and docks it} -setup {
+    set twm [::application::twm board]
+    set orig [::application::twm::inspectLayout $twm]
+} -body {
+    set saved [string map {{frame tree} {frame media {-width 400 -height 300 -minwidth 250 -minheight 200 -expand y} frame tree}} $orig]
+    $twm load $saved
+    update idletasks
+    list [$twm isdocked media] [string match {*frame media*} [::application::twm::inspectLayout $twm]]
+} -cleanup {
+    $twm load $orig
+    update idletasks
+} -result {1 1}
 
 tcltest::test media-withdrawn-layout {media cannot be offered by the board layout} -body {
     list [info exists ::application::PaneOptions(gamemedia)] \
