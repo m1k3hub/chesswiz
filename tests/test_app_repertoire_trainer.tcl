@@ -34,8 +34,10 @@ proc ::scidb::test::rep::cleanup {} {
 
 # 1. e4 e5 2. Nf3 Nc6, and 2. Bc4 as a variation at the position after
 # 1. e4 e5. The trainer's cards come out of such a game.
+# The current game is reset rather than a new one opened: there are only
+# nine game slots, and earlier test files may have used them up.
 proc ::scidb::test::rep::buildGame {} {
-	::menu::gameNew .application
+	::scidb::game::clear {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}
 	update
 	set ::move::Options(addVarWithoutAsking) 1
 	::move::addMove menu e4
@@ -178,6 +180,14 @@ tcltest::test reptrainer-cards {cards come from the mainline and the variations}
 
 
 tcltest::test reptrainer-drill {answering right and wrong updates the card} -setup {
+	# The drill opens its own game; with the nine game slots used up by earlier
+	# test files that would fail (the trainer then says so and stops), so the
+	# test lends it the current game.
+	rename ::game::new ::scidb::test::rep::realGameNew
+	proc ::game::new {parent args} {
+		::scidb::game::clear {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}
+		return [::scidb::game::current]
+	}
 	set ::scidb::test::rep::addVar $::move::Options(addVarWithoutAsking)
 	set ::scidb::test::rep::delay $::reptrainer::Delay
 	set ::reptrainer::Delay 0
@@ -247,6 +257,8 @@ tcltest::test reptrainer-drill {answering right and wrong updates the card} -set
 			$playing
 	}
 } -cleanup {
+	rename ::game::new {}
+	rename ::scidb::test::rep::realGameNew ::game::new
 	catch { destroy .application.__reptrainer__ }
 	set ::reptrainer::Delay $::scidb::test::rep::delay
 	set ::move::Options(addVarWithoutAsking) $::scidb::test::rep::addVar
