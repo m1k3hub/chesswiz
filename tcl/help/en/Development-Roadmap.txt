@@ -74,16 +74,17 @@ Chesswiz should treat <abbr>.sci</abbr> as the primary working format for large 
   <li>3D chessboard</li>
 </ul>
 
-<h2>Known limitation: single-game PDF/TeX export</h2>
+<h2>Multi-game book export (PDF and LaTeX)</h2>
 
 <p>
-The export dialog's single-game PDF/TeX path is gated because the underlying
-print path dereferences an uninitialized game entry when called (crash
-reproduced in a minimal harness; the PGN export of the same loaded game
-works, so the bug is specific to the print-game game-window accessor).
-Single-game <b>HTML</b> export is unaffected and fully functional. Fixing
-this requires a game-window lifecycle fix, tracked together with the
-<abbr>.cbm</abbr> in-app linkage work.
+Export a whole database or a filtered game list to <b>PDF</b> or
+<abbr>LaTeX</abbr> from the export dialog. LaTeX output is one document
+with a table of contents and a section for each game's players, event
+and date. Compile it twice with <code>pdflatex</code> to populate the
+contents (the skak and KOMA-Script packages are required).
+Single-game TeX export is also enabled: the native writer reads the
+selected database game directly. Exports of more than 500 games ask
+for confirmation before writing a PDF or TeX book.
 </p>
 
 <h2>HTML &amp; media: next steps</h2>
