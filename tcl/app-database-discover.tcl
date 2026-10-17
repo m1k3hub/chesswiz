@@ -253,14 +253,15 @@ proc ::application::database::discover::_visit {dir depth} {
 	foreach entry $entries {
 		set tail [file tail $entry]
 		if {$tail eq "." || $tail eq ".."} { continue }
-		if {[file type $entry] eq "link"} { continue }
+		# a file can vanish between glob and here (browser caches, temp files)
+		if {[catch { file type $entry } type] || $type eq "link"} { continue }
 
 		if {[file isdirectory $entry]} {
 			if {$depth < $Priv(maxdepth)} {
 				lappend Priv(queue) [list $entry [expr {$depth + 1}]]
 			}
 		} else {
-			set entryInfo [classify $entry $Priv(includePgn)]
+			if {[catch { classify $entry $Priv(includePgn) } entryInfo]} { continue }
 			if {[llength $entryInfo]} { lappend Priv(results) $entryInfo }
 		}
 	}
