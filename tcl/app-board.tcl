@@ -1218,6 +1218,14 @@ proc PopupMenu {w} {
 		-command [namespace code Apply] \
 		;
 	::theme::configureCheckEntry $m
+	if {[llength [info commands ::mediainset::toggle]]} {
+		$m add checkbutton \
+			-label $::mediainset::mc::ShowInBoard \
+			-variable ::mediainset::Options(enabled) \
+			-command ::mediainset::toggle \
+			;
+		::theme::configureCheckEntry $m
+	}
 	if {[llength [info commands ::tablebase::toggle]]} {
 		$m add checkbutton \
 			-label $::tablebase::mc::ShowTablebase \

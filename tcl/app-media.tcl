@@ -1433,6 +1433,10 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	if {![::media::mpv::available?]} { return 0 }
 
 	set canvas $Priv(viewer).canvas
+	# the video may be shown inside the board window (media-inset.tcl)
+	if {[llength [info commands ::mediainset::surface]]} {
+		set canvas [::mediainset::surface $canvas]
+	}
 	# Realize the canvas so winfo id names a mapped window.
 	update idletasks
 	if {[catch { set wid [winfo id $canvas] }]} { return 0 }
@@ -1969,6 +1973,7 @@ proc application::media::Stop {} {
 
 	# Stop and release the player.
 	MediaDestroy
+	if {[llength [info commands ::mediainset::hide]]} { ::mediainset::hide }
 
 	# Clear canvas
 	if {[winfo exists $Priv(viewer).canvas]} {
