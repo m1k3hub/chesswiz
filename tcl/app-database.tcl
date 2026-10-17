@@ -1614,6 +1614,17 @@ proc PopupMenu {parent x y {base ""}} {
 						-command [namespace code [list OpenRepertoireReport $top $base $Vars(variant)]] \
 						-state $state \
 						;
+					if {[llength [info commands ::reptrainer::open]]} {
+						# no mnemonic in the popup: strip the ampersand of the menu label
+						lassign [::tk::UnderlineAmpersand $::reptrainer::mc::TrainRepertoire] label _
+						$maint add command \
+							-label " $label" \
+							-image $::icon::16x16::none \
+							-compound left \
+							-command [list ::reptrainer::open $top $base $Vars(variant)] \
+							-state $state \
+							;
+					}
 				}
 				$maint add command \
 					-label " $mc::SearchByMaterial..." \

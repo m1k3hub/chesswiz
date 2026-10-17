@@ -453,6 +453,13 @@ proc addMove {confirmWindowType san args} {
 	variable ::application::board::board
 	variable Variation
 
+	# While the repertoire trainer waits for the answer, the board is its
+	# input device: the move grades the card instead of entering the game.
+	if {[llength [info commands ::reptrainer::active]] && [::reptrainer::active]} {
+		::reptrainer::answered $san
+		return ""
+	}
+
 	array set opts {
 		-nomovecmd	{}
 		-actions		{}

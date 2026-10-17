@@ -637,6 +637,17 @@ proc build {menu} {
 			;
 	}
 
+	### repertoire trainer with spaced repetition ###########################
+	if {[llength [info commands ::reptrainer::open]]} {
+		lassign [::tk::UnderlineAmpersand $::reptrainer::mc::TrainRepertoire] text ul
+		$m add command \
+			-compound left \
+			-label " $text" \
+			-underline [IncrUL $ul] \
+			-image $::icon::16x16::none \
+			-command [list ::reptrainer::open .application] \
+			;
+	}
 
 	if {[llength [info commands ::playerdata::updateFide]]} {
 		lassign [::tk::UnderlineAmpersand $::playerdata::mc::UpdateFide] text ul
