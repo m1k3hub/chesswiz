@@ -53,7 +53,8 @@ tcltest::test tablebase-board {a 4-piece position shows the verdict under the bo
 	set ::tablebase::Delay 0
 } -body {
 	set canv $::application::board::Vars(widget:frame)
-	::scidb::game::new 0
+	::menu::gameNew .application
+	update
 	::scidb::pos::setup {4k3/6KP/8/8/8/8/7p/8 w - - 0 1}
 	::tablebase::positionChanged $canv
 	after 100 {set ::scidb::test::tb::w 1}; vwait ::scidb::test::tb::w
