@@ -53,14 +53,16 @@ tcltest::test tablebase-board {a 4-piece position shows the verdict under the bo
 	set ::tablebase::Delay 0
 } -body {
 	set canv $::application::board::Vars(widget:frame)
-	::menu::gameNew .application
+	# set the position up in the current game: a new game would need one of
+	# the nine game slots, which earlier test files may have used up
+	::scidb::game::clear {4k3/6KP/8/8/8/8/7p/8 w - - 0 1}
 	update
-	::scidb::pos::setup {4k3/6KP/8/8/8/8/7p/8 w - - 0 1}
 	::tablebase::positionChanged $canv
 	after 100 {set ::scidb::test::tb::w 1}; vwait ::scidb::test::tb::w
 	set shown [$canv.tablebase cget -text]
 	set placed [expr {[winfo manager $canv.tablebase] eq "place"}]
-	::scidb::pos::setup {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}
+	::scidb::game::clear {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}
+	update
 	::tablebase::positionChanged $canv
 	list $shown $placed [winfo manager $canv.tablebase] [string match *4k3/6KP* $::scidb::test::tb::asked]
 } -cleanup {

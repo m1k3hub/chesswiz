@@ -20,12 +20,6 @@ variable openedBases {}
 proc setup {} {
     variable tmpDir
     file mkdir $tmpDir
-    # Loading a game needs a free game slot (there are nine); games other test
-    # files left open would make the load ask, which the test app answers no.
-    set current [::scidb::game::current]
-    for {set i 0} {$i < $::game::MaxPosition} {incr i} {
-        if {$i != $current} { catch { ::game::release $i } }
-    }
 }
 
 proc tempPath {stem} {
