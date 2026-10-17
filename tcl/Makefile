@@ -142,6 +142,7 @@ SOURCES = \
 	engine.tcl \
 	player-dict.tcl \
 	application.tcl \
+	app-key-editor.tcl \
 	app-information.tcl \
 	app-board.tcl \
 	app-database.tcl \

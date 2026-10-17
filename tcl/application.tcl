@@ -262,7 +262,11 @@ proc ApplyShortcutScheme {args} {
 		bind .application $key $ShortcutDefaults($key)
 	}
 	array unset ShortcutDefaults
-	if {$Options(shortcut:scheme) ne "chessbase"} { return }
+	if {$Options(shortcut:scheme) ne "chessbase"} {
+		# the user key overrides come last: they replace the scheme bindings
+		::application::keyEditor::ApplyOverrides
+		return
+	}
 	foreach key {a A} {
 		bind ChessBaseEditing <Control-$key> {event generate %W <<SelectAll>>; break}
 	}
@@ -315,6 +319,9 @@ proc ApplyShortcutScheme {args} {
 			bind .application $event [namespace code [list ShortcutApplicationCommand %W $action]]
 		}
 	}
+
+	# the user key overrides come last: they replace the scheme bindings
+	::application::keyEditor::ApplyOverrides
 }
 
 
@@ -422,6 +429,9 @@ proc ShortcutPreferences {parent} {
 			-variable [namespace current]::Options(shortcut:scheme) -value $scheme
 		pack $top.$scheme -anchor w -pady 4
 	}
+	# the per-key editor: a table of actions with their current key, a
+	# capture field for the new key, conflict reporting and reset
+	::application::keyEditor::ExtendDialog $dlg $top
 	pack $top -fill both -expand yes
 	wm title $dlg $mc::ShortcutPreferences
 	wm transient $dlg [winfo toplevel $parent]

@@ -70,3 +70,28 @@ Proc names below are relative to ::application unless prefixed with ::.
 
 Other database indexes, photos, correspondence/training, Fritz-only controls,
 and commentary-font figurines have no equivalent in this compatibility subset.
+
+## Per-key overrides
+
+The schemes are the starting point; single keys are editable in Setup ->
+Keyboard Preferences ("Key Bindings"). Each action in tcl/app-key-editor.tcl
+(variable Actions) carries the key of BOTH schemes (the Chesswiz key and the
+ChessBase key), because an override persists across scheme switches: a key
+the other scheme still needs is refused ("Ctrl+F is already used by Flip
+board"). Keys bound outside the action table (font size, select-all, the
+search field's find-next) are refused too.
+
+- Overrides are stored as ::application::keyEditor::Options(shortcut:keys,
+  <action>) and written via ::options::hookWriter; they are re-applied after
+  every ApplyShortcutScheme, on the tag the scheme itself uses (.application,
+  the board widgets through board::bind/FilterKey, or ChessBaseBoard), so the
+  focus rules keep working.
+- Moving an action away from its scheme key removes the old scheme binding
+  on the same tag, so exactly one key runs the action.
+- ChessBase-only actions (board flip, the ! / ? NAG keys, new game) override
+  on the ChessBaseBoard tag, which only carries bindings while the ChessBase
+  scheme is active; their overrides apply whenever that scheme is active.
+- Letter keys are bound in both cases, so Ctrl+Q keeps working with Caps
+  Lock on.
+- "Reset to scheme" (per row and for all rows) re-installs the scheme keys;
+  the search field's find-next and the menu bindings come back as they were.

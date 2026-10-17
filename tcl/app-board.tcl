@@ -2349,6 +2349,8 @@ proc SaveGame {{mode ""}} {
 
 proc LanguageChanged {} {
 	bindKeys
+	# bindKeys re-bound the scheme keys over the user overrides' places
+	::application::keyEditor::ApplyOverrides
 	SetupToolbar
 	UpdateSaveButton
 }
