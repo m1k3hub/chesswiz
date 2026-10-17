@@ -1,7 +1,7 @@
 #!/usr/bin/env tclsh
 # WP2 acceptance harness: checkpoint node-table decoder gates.
 #
-# Gates (MEDIA_LESSON_V2_PLAN.md WP2, byte-verified on the round-08
+# Gates (docs/MEDIA_LESSON_V2_PLAN.md WP2, byte-verified on the round-08
 # fixture, all 79 checkpoints):
 #   1. parse-checkpoint consumes the node table completely:
 #      walked edges == the u32le entry-count word (83 first snapshot,

@@ -16,7 +16,7 @@
 // Layout (reverse-engineered and validated end-to-end against a real
 // media-rich fixture — "CB Light Database.cbm" (10 bags × 1024 bytes,
 // 57 manifest file references, all images present in the database's
-// .html folder). See CBM_FORMAT_DESIGN.md §5.5 and probe_cbm.)
+// .html folder). See docs/CBM_FORMAT_DESIGN.md §5.5 and probe_cbm.)
 //
 //   28-byte header (little-endian uint32 fields); some files add a 4-byte
 //   trailer making 32 bytes. read() accepts either form (28-byte fallback):

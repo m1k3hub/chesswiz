@@ -37,7 +37,7 @@ tcltest::test media-cms-square-file-major {x/y selectors decode file-major} -set
     }
 } -cleanup {::mediaCmsTest::cleanup} -result {a1 a2 b1 h8}
 
-# CHESSBASE_MEDIA_RE.md worked example: clip
+# docs/CHESSBASE_MEDIA_RE.md worked example: clip
 # "...8 b - - 0 1x46y54v3u2.wmv" is the key move f7-g7.
 tcltest::test media-cms-square-corpus-example {CBM168 x46y54 -> f7-g7} -setup {
     ::mediaCmsTest::setup

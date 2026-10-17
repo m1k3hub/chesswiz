@@ -1,4 +1,4 @@
-// Classic .cba quotation move replay. See doc/re/cba-quotation-format.md.
+// Classic .cba quotation move replay. See docs/re/cba-quotation-format.md.
 #include "cbh_quotation.h"
 
 #include "db_board.h"

@@ -8,7 +8,7 @@
 #   1. returns per-game media for the documented guiding-text entries
 #   2. resolves each reference to a real file in the sibling `<DB>.html`
 #      media folder (the "per-game media linkage" solved in
-#      CBM_FORMAT_DESIGN.md §7)
+#      docs/CBM_FORMAT_DESIGN.md §7)
 #   3. reports correct media type codes and the expected reference counts.
 #
 # Run with the headless media-console under Xvfb:
@@ -23,7 +23,7 @@ package require Tcl 8.6
 # Ground truth for the bundled fixture (index -> {count, known files}).
 # A lone "<B><DB>" entry (game 0 = Intro) carries CBL_Logo.jpg; each
 # tournament report carries its tournament images. Counts + key filenames
-# verified against CBM_FORMAT_DESIGN.md §7.3 (which used 1-based "Rec N";
+# verified against docs/CBM_FORMAT_DESIGN.md §7.3 (which used 1-based "Rec N";
 # scidb's ::scidb::db::mediaFiles is 0-based, hence index = RecN - 1).
 set expected(index-0)     {1 {CBL_Logo.jpg}}
 set expected(index-12059) {7 {CBL_Logo.jpg "Bilbao Topalov-Anand.jpg" tournaments.jpg turniere.jpg}}

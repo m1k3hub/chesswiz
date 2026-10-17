@@ -12,7 +12,7 @@
 //
 //   X     flattened walk position; the comment is attached to the move
 //         that raises the document-order move count to X+1 (see
-//         2CBH_FORMAT_DESIGN.md section 4.1: positions count every move
+//         docs/2CBH_FORMAT_DESIGN.md section 4.1: positions count every move
 //         of the game tree in DFS document order, and the walk counter
 //         does NOT reset when a variation closes).
 //   ch    channel of form A: the PGN NAG paired with the text

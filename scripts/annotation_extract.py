@@ -15,7 +15,7 @@ the same position identity as scripts/corpus_precedent.py, but as a hex string.
 Deciding whether a comment is human prose (vs a clock, an engine line, a CBH
 payload, a glossary) is a bounded question, and the `is_prose` regex is wrong on
 a labelled set 33% of the time -- it drops every non-Latin prose comment and
-passes several clock/engine lines (see TYPESAFE_COOKBOOK_REVIEW.md).  With
+passes several clock/engine lines (see docs/TYPESAFE_COOKBOOK_REVIEW.md).  With
 --classifier the question goes to TypeSafe (batched, cached, opt-in because the
 comments may be private) and `is_prose` is the fallback on any error.
 """

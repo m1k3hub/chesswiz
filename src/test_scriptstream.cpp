@@ -2,7 +2,7 @@
 // decoder in tcl/tcl_scriptstream.h.
 //
 // Every assertion derives from findings verified against the CBM 168
-// fixture corpus and documented in CHESSBASE_MEDIA_RE.md.
+// fixture corpus and documented in docs/CHESSBASE_MEDIA_RE.md.
 
 #include "tcl/tcl_scriptstream.h"
 

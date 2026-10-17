@@ -81,7 +81,7 @@ GUI integration.**
   region not yet attributed to a known field) or bit-packed at a
   non-byte-aligned offset that a byte/word sweep cannot see. Recommended
   next step, matching the standard set for the quotation-blob framing
-  bug (`doc/re/cba-quotation-format.md`): trace CBase26.exe's own
+  bug (`docs/re/cba-quotation-format.md`): trace CBase26.exe's own
   2CBH Elo-rendering code path in Ghidra rather than continuing to
   guess at offsets — the decode/encode Move16 tables were already
   successfully extracted this way (`scripts/dump_cbase26_tables.py`),

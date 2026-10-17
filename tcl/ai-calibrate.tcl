@@ -4,7 +4,7 @@
 # The gates that ship (::ai::decide) have defaults calibrated on plumb-4b,
 # but `auto` discovery often resolves to a different backend, and the
 # research is emphatic that a threshold fitted elsewhere does not transfer
-# (SYSTEM_ONE_RESEARCH.md §5.6). This module measures a backend on a
+# (docs/SYSTEM_ONE_RESEARCH.md §5.6). This module measures a backend on a
 # labelled battery and writes the per-(feature, backend) threshold that
 # ::ai::systemone::threshold then reads.
 #

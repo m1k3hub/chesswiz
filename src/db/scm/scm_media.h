@@ -6,14 +6,14 @@
 // mapping games (by header fingerprint) to media entries, with payloads
 // as ordinary files in a sibling media folder.
 //
-// Lessons from the ChessBase .cbm RE (CBM_FORMAT_DESIGN.md):
+// Lessons from the ChessBase .cbm RE (docs/CBM_FORMAT_DESIGN.md):
 //   - text manifest, not opaque binary (debuggable / diffable / VCS-friendly)
 //   - fingerprint-keyed linkage, not position- or offset-keyed
 //     (scidb has no stable game id; fingerprints survive reindexing)
 //   - external payloads in a sibling folder (no duplication, large-media OK)
 //   - defensive parse: missing/corrupt .scm never blocks database access
 //
-// Format grammar (see SCM_FORMAT_DESIGN.md for the full spec):
+// Format grammar (see docs/SCM_FORMAT_DESIGN.md for the full spec):
 //
 //   [Database "MyBase"]
 //   [MediaDir "MyBase.media"]

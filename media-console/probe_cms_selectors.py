@@ -3,7 +3,7 @@
 # probe_cms_selectors.py - decode the ChessBase .cms per-clip record
 # grammar and the x/y/v/u hotspot selectors (decoded 2026-09-02).
 # ======================================================================
-# .cms layout (FULLY DECODED - see CHESSBASE_MEDIA_RE.md for the full
+# .cms layout (FULLY DECODED - see docs/CHESSBASE_MEDIA_RE.md for the full
 # write-up):
 #
 #   header: u32be body length, u32le record count, u32le base-name

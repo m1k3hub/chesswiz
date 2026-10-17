@@ -3,7 +3,7 @@
 #
 #   xvfb-run -a ./src/tkchesswiz tests/test_ai_batch.tcl
 #
-# Covers the contract in SYSTEM_ONE_FEATURES.md §3.3: a concurrency cap,
+# Covers the contract in docs/SYSTEM_ONE_FEATURES.md §3.3: a concurrency cap,
 # de-duplication by state, resume from the sidecar cache, progress, and a
 # silent drop to the per-item fallback when the classifier is off or a
 # request fails. A mock /v1/systemone answers a choice question by echoing

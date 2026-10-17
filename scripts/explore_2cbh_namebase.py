@@ -3,7 +3,7 @@
 
 Goal: reverse-engineer how the .2cbh index's whitePlayerId/blackPlayerId/eventId
 (uint64) map to player/event names, so scidb can implement index-only 2CBH
-browsing (2CBH_FORMAT_DESIGN.md §7).
+browsing (docs/2CBH_FORMAT_DESIGN.md §7).
 
 Usage:
     python3 scripts/explore_2cbh_namebase.py [base_dir]

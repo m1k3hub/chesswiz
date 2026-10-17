@@ -632,7 +632,7 @@ verifyGrenkeChess960FENs()
 	::fprintf(stderr, "step 5: GRENKE Chess960 start-position codec check...\n");
 
 	// The nine unique Chess960 start positions from the Grenke Freestyle
-	// Chess Open 2026 (see GRENKE_CHESS960_FIXTURES.md).  In the raw start
+	// Chess Open 2026 (see docs/GRENKE_CHESS960_FIXTURES.md).  In the raw start
 	// positions the squares between the king and rooks are usually occupied,
 	// so castling is not legal.  We therefore verify the CBH custom-position
 	// codec by round-tripping a simple pawn move in each position; this still

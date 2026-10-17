@@ -9,7 +9,7 @@
 # classifier can make in one pass (~0.5 s locally) instead of a full
 # language-model round (seconds on constrained hardware).
 #
-# Two gates, both must pass (JEV_USE_CASES.md §7, candidate A):
+# Two gates, both must pass (docs/JEV_USE_CASES.md §7, candidate A):
 #   route      choice over the derived allowlist of default invocations
 #              plus an existing_assistant sentinel; picking a relevant
 #              tool is not enough --

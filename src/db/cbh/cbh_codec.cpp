@@ -2562,7 +2562,7 @@ Codec::startDecoding(ByteStream& gameStream,
 			// not the standard LUT encoding. It is NOT encryption (that is
 			// the separate .cbz DES archive).
 			//
-			// RE finding (2026-09-06, doc/re/cbh-bit31-unencoded.md): scanned
+			// RE finding (2026-09-06, docs/re/cbh-bit31-unencoded.md): scanned
 			// every classic .cbh/.cbg fixture on hand (30 databases, 100+
 			// bit-31 records) - every single one is a guiding-text record
 			// (info.isGuidingText()), whose title/body text is already

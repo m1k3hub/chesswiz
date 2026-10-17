@@ -1,7 +1,7 @@
 # ======================================================================
 # Scidb App Test Suite - Annotated Game Display (layout pipeline audit)
 # ======================================================================
-# Phase 1 of doc/planning/annotated-game-display-plan.md: import
+# Phase 1 of docs/planning/annotated-game-display-plan.md: import
 # adversarial annotated PGNs and assert on the edit-node layout stream
 # the C++ core pushes to the PGN display (the same data DoLayout renders).
 

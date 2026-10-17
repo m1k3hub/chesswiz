@@ -9,7 +9,7 @@ GUI app.
 | File | Role |
 |------|------|
 | `src/media_console.cpp` | Headless console (build target `media_console`). Boots the scidb Tcl/Tk layers + `app::Application`, loads the ECO table at startup. |
-| `media-console/run-e2e.tcl` | e2e fixture test: drives `::scidb::db::mediaFiles` across every game of the media-rich `CB Light Database.cbh` and asserts the per-game **guiding-text HTML extraction** matches the ground truth in `CBM_FORMAT_DESIGN.md` §7. |
+| `media-console/run-e2e.tcl` | e2e fixture test: drives `::scidb::db::mediaFiles` across every game of the media-rich `CB Light Database.cbh` and asserts the per-game **guiding-text HTML extraction** matches the ground truth in `docs/CBM_FORMAT_DESIGN.md` §7. |
 | `media-console/fixture.tcl` | Diagnostic probe used during development (open + scan + report). |
 | `media-console/probe_chessmedia.py` | Static decoder for the ASF ChessBase script stream in `.wmv` Chess Media files (`ffprobe` + six-bit transport decode + opcode record rendering). Companion unit tests: `test_probe_chessmedia.py` |
 | `media-console/wmv2timeline.py` | Emits the machine-readable sync sidecar (JSON) for a base `.wmv`: the per-event media-time timeline the future Scidb playback will consume |
@@ -23,7 +23,7 @@ GUI app.
 - A media-rich `.cbh` corpus for the full assertion test. The bundled default
   is the local `~/Documents/ChessBase/Bases/CB Light Database.cbh` (the
   system's only media-rich sample; its `.cbm`/guiding-text linkage is fully
-  documented in `CBM_FORMAT_DESIGN.md`).
+  documented in `docs/CBM_FORMAT_DESIGN.md`).
 - [Optional] Xvfb, since `Tk_Init` needs a display:
   `xvfb-run -a ...`.
 
@@ -49,7 +49,7 @@ For the bundled `CB Light Database.cbh` (14831 games):
 
 1. The 10 guiding-text entries carry per-game media via
    `::scidb::db::mediaFiles` (indices `0, 12059, 12128, 12645, 12676,
-   12768, 12980, 13138, 13236, 13442` — the `CBM_FORMAT_DESIGN.md` §7.3
+   12768, 12980, 13138, 13236, 13442` — the `docs/CBM_FORMAT_DESIGN.md` §7.3
    "Rec N" rows, 1-based, minus one).
 2. Reference counts match the documented per-tournament image sets
    (`1/7/7/4/4/4/5/6/9/7` → 54 rows total).
@@ -70,4 +70,4 @@ database's sibling `<DB>.html` folder, and feeds them to the Tcl Media pane.
 
 - Extraction helpers (unit-tested): `src/tcl/tcl_media_extract.h`,
   `src/test_media_extract.cpp`.
-- Format/RE notes: `CBM_FORMAT_DESIGN.md`, `SCM_FORMAT_DESIGN.md`.
+- Format/RE notes: `docs/CBM_FORMAT_DESIGN.md`, `docs/SCM_FORMAT_DESIGN.md`.

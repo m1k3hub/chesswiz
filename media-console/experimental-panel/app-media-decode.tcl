@@ -5,10 +5,10 @@
 # lesson into replay/timeline entries.  This is the ONE place where raw
 # WMV script packets are parsed; the resulting lesson (timeline + board
 # events) is built/cached by ::media::lesson and, in a later phase,
-# persisted into the .cms [BoardSync] section (SCM_FORMAT_DESIGN.md
+# persisted into the .cms [BoardSync] section (docs/SCM_FORMAT_DESIGN.md
 # §1.6) so the decode never runs twice for the same entry.
 #
-# Grammar: SCM_FORMAT_DESIGN.md (script-stream RE, from the WMV/CBase26
+# Grammar: docs/SCM_FORMAT_DESIGN.md (script-stream RE, from the WMV/CBase26
 # reverse-engineering).  Six-bit transport: chars '?'..'~' (0x3F..0x7E)
 # encode 6 bits, 4 chars -> 3 bytes.
 #
@@ -135,7 +135,7 @@ proc sq0 {v} {
 # ---------------------------------------------------------------------
 # decode one packet's hex payload into a record (hex-byte list)
 #
-# Known forms (see SCM_FORMAT_DESIGN.md):
+# Known forms (see docs/SCM_FORMAT_DESIGN.md):
 #   UTF-16LE "GA" prefix: 47 00 41 00, six-bit wide chars from +6
 #   ASCII     "GA"/"GA:" prefix: 47 41 (3a), six-bit chars from +2/+3
 #   bare six-bit transport: the payload bytes are six-bit chars
@@ -254,7 +254,7 @@ proc parseRecord {rec} {
 #   checkpoints list of {ms size hex} for opcode 2 (cumulative game
 #               snapshots; the LAST one is the authoritative state -
 #               Reader renders from checkpoints, not deltas - see
-#               CHESSBASE_MEDIA_RE.md "Reader14 on genuine Windows")
+#               docs/CHESSBASE_MEDIA_RE.md "Reader14 on genuine Windows")
 #   counts      {total goto action annotation sync checkpoint other}
 # ---------------------------------------------------------------------
 
@@ -371,7 +371,7 @@ proc sidecar-parse {txtPath} {
 # string) into the lesson-tree main line.
 #
 # Grammar (byte-verified on the Biel 2015 fixtures, rounds 01/06/08;
-# see CHESSBASE_MEDIA_RE.md "Checkpoint node-table grammar"):
+# see docs/CHESSBASE_MEDIA_RE.md "Checkpoint node-table grammar"):
 #
 #   [u32le opcode=2][u32le r][u32le cursor][u32le r]
 #   6 x [u8 len][cp1252 incl NUL]   identity strings

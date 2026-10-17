@@ -2,11 +2,11 @@
 # ======================================================================
 # cms2smv — port a ChessBase interactive-video index (.cms) into the
 # scidb media manifest grammar ([Interactive] sections, see
-# SCM_FORMAT_DESIGN.md §1.5).
+# docs/SCM_FORMAT_DESIGN.md §1.5).
 #
 # Usage: tclsh cms2smv.tcl "<db>.html/<name>.cms" [out.smv] [gameId]
 #
-# The .cms layout (FULLY DECODED 2026-09-02, see CHESSBASE_MEDIA_RE.md):
+# The .cms layout (FULLY DECODED 2026-09-02, see docs/CHESSBASE_MEDIA_RE.md):
 #   header: u32be body length, u32le record count, u32le base-name length
 #   + base name.  Records (4 shapes):
 #     kind=1 (drill):  [kind][0][dur-s][0][len][FEN][len][base clip name]

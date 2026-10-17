@@ -5,7 +5,7 @@
 // "Move16" codes (0xfffc = game start, 0xffff = end of mainline,
 // 0xfffb/0xfffd = rare markers, codes < 0xfffb = moves).  Each move
 // code indexes a global decode table built by ChessBase at startup and
-// dumped from a live process (see 2CBH_FORMAT_DESIGN.md section 3.8).
+// dumped from a live process (see docs/2CBH_FORMAT_DESIGN.md section 3.8).
 //
 // Descriptor words (little endian):
 //

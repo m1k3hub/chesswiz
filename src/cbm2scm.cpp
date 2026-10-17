@@ -5,7 +5,7 @@
 // scidb-native .scm text manifest. v1 emits the gallery level only: every
 // distinct media file referenced by the .cbm becomes a [Media Mnnn] entry.
 // Per-game linkage is NOT emitted because the .cbm -> game-record linkage
-// is not yet reverse-engineered (see CBM_FORMAT_DESIGN.md §5.6). Once the
+// is not yet reverse-engineered (see docs/CBM_FORMAT_DESIGN.md §5.6). Once the
 // linkage is cracked, this tool can be extended to emit [Game HEX] blocks.
 //
 // Usage: cbm2scm <input.cbm-rootname> <output.scm> [media-dir-name]

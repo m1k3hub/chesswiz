@@ -1,6 +1,6 @@
 # ======================================================================
 # ::ai::similar -- positions like the one on the board (find_similar;
-# ASSISTANT_COVERAGE_MAP.md §5).
+# docs/ASSISTANT_COVERAGE_MAP.md §5).
 #
 # The application writes this CQL 6.2 script, not a model: from the FEN
 # and the aspects, pawn tolerance and colour choice the player picked it

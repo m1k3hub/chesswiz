@@ -14,7 +14,7 @@
 // "<DBName>.html" folder.
 //
 // Regular games are linked to the tournament reports that carry their
-// media via game anchors in the report body (CBM_FORMAT_DESIGN.md §7.6):
+// media via game anchors in the report body (docs/CBM_FORMAT_DESIGN.md §7.6):
 //   <A href="javascript:CBLink(tag_game,So,Wesley,Nakamura,Hikaru,
 //        Sinquefield Cup 3rd,Saint Louis,2015,6,0,17)">So,W - Nakamura,H 0-1</A>
 // i.e. CBLink(tag_game, WhiteLast, WhiteFirst, BlackLast, BlackFirst,

@@ -2,7 +2,7 @@
 # ::ai::provider -- provider-agnostic text completion for the language layer.
 #
 # Providers: `ollama` (local models and Ollama's cloud models; the
-# application's default is kimi-k3:cloud, ASSISTANT_COVERAGE_MAP.md
+# application's default is kimi-k3:cloud, docs/ASSISTANT_COVERAGE_MAP.md
 # P6), `anthropic`, the OpenAI-compatible presets `openai`, `fireworks`,
 # `qwen` (Qwen token plan) and `gemini`, and `stub` (deterministic, for
 # tests, and the module's own default). Every provider speaks the same

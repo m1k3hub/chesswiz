@@ -1,6 +1,6 @@
 # ======================================================================
 # Plain-Language Search: a request in words becomes an editable search
-# (PLAIN_LANGUAGE_SEARCH.md). ::ai::search interprets the request into the
+# (docs/PLAIN_LANGUAGE_SEARCH.md). ::ai::search interprets the request into the
 # fixed search_games fields and a pattern id; the form shows every field
 # with where it came from; Search validates the fields and filters the
 # main game list. No model writes query text or CQL here. A positional

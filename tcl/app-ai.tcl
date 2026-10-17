@@ -21,7 +21,7 @@ namespace eval ai {
 
 # The language model defaults to a strong cloud model, kimi-k3:cloud
 # through Ollama; a model that runs on this machine, Claude, OpenAI and the
-# other presets are a choice in AI: Choose Model (ASSISTANT_COVERAGE_MAP.md
+# other presets are a choice in AI: Choose Model (docs/ASSISTANT_COVERAGE_MAP.md
 # P6). An empty model means the provider's default (::ai::provider::model).
 variable Config
 array set Config {

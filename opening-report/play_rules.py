@@ -1,6 +1,6 @@
 """play_rules — pure-Python standard-chess rules engine (Phase 4 fallback).
 
-Per ONLINE_PLAY_PLAN.md decision 1, the canonical server-side move validator is
+Per docs/ONLINE_PLAY_PLAN.md decision 1, the canonical server-side move validator is
 the scidb C++ rules engine via a stateless `position/legal` Tcl bridge command.
 That bridge requires the scidb interpreter, which is not wired in every
 deployment (health reports `tclBridge: disabled`). This module is the

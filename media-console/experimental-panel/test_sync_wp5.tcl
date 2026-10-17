@@ -1,5 +1,5 @@
 #!/usr/bin/env tclsh
-# WP5 acceptance harness: sync v2 node-goal model (MEDIA_LESSON_V2_PLAN.md
+# WP5 acceptance harness: sync v2 node-goal model (docs/MEDIA_LESSON_V2_PLAN.md
 # WP5). Sources only app-media-sync.tcl — the state machine is UI-free and
 # runs against stub delegates.
 #

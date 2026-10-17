@@ -16,14 +16,14 @@ is a move-index count mislabeled as an H0 count.  Verified: 13,938 such
 entries merged on 2026-08-05 produced NO decode improvement (8070/501
 unchanged), and the merge was reverted.
 
-The only working oracle is ChessBase 26.8 under Wine (see CHESS960_STATUS.md
+The only working oracle is ChessBase 26.8 under Wine (see docs/CHESS960_STATUS.md
 "BREAKTHROUGH 2026-07-26"): use it to bulk-generate DAda-class games to ply
 10-40 with the fixture's actual first-move distribution, then harvest from
 those .cbg bytes.  Keep this script only as a reference for the walk/harvest
 math (scripts/harvest_h0_fverified.py has the correct TWIC-vs-scidb offset
 math).
 
-Count model (validated, see CHESS960_STATUS.md):
+Count model (validated, see docs/CHESS960_STATUS.md):
     count_0 = g(lc0); count_p = H0(count_{p-1}, lc_{p-1}, lc_p, p)
     raw_p   = InvLUT[lc_p] + count_p   (mod 256)
 

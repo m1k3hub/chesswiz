@@ -1,5 +1,5 @@
 # ======================================================================
-# ::ai::cql -- features on top of the CQL matcher (CQL_FEATURES.md).
+# ::ai::cql -- features on top of the CQL matcher (docs/CQL_FEATURES.md).
 #
 # CQL is exact: it finds and labels positions. The engine decides what a
 # move is worth, the database what happened; no model is involved here.

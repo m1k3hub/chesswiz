@@ -1,6 +1,6 @@
 #!/usr/bin/env tclsh
 # WP1 acceptance harness: sidecar-parse against the round-08 fixture.
-# Gates (MEDIA_LESSON_V2_PLAN.md WP1):
+# Gates (docs/MEDIA_LESSON_V2_PLAN.md WP1):
 #   - exactly 380 events
 #   - 99 gotos, cursors 1..114 (first 12 monotonic; then the
 #     non-monotonic pattern incl. 44->88->96 and the ~94.9s rewind to 44)

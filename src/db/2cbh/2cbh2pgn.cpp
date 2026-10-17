@@ -6,7 +6,7 @@
 // codec's variation walk (db::cb2::walkGameRaw): mainline + nested RAV
 // variations + comments/NAGs in document order, via db::PgnWriter.
 //
-// Limitations (see 2CBH_FORMAT_DESIGN.md):
+// Limitations (see docs/2CBH_FORMAT_DESIGN.md):
 //   - only standard-chess games (record type 1) are converted
 //
 // Usage: 2cbh2pgn <prefix> <out.pgn> [maxGames]
@@ -91,7 +91,7 @@ bool loadFile(char const* name, std::string& data)
 // ordinal.  Reverse-engineered in the scid-code project (GLM pass,
 // 2026-09-07); validated against the source PGN (game 0 ->
 // 'Munchen Open'/'Munchen open'); ~99.5% of games resolve (deleted slots
-// stay unnamed).  See 2CBH_FORMAT_DESIGN.md section 3.8.7.
+// stay unnamed).  See docs/2CBH_FORMAT_DESIGN.md section 3.8.7.
 void loadEvents(unsigned char const* lid, size_t size,
                 mstl::vector<std::string>& out_events,
                 mstl::vector<std::string>& out_sites)
@@ -386,7 +386,7 @@ int main(int argc, char* argv[])
       }
       // ECO: index @0x80 = 128 * (base + 1), base = 0-based ECO code
       // (A00 = 0 .. E99 = 499); low 7 bits unused.  Verified on 57146
-      // identity-matched twin pairs (see 2CBH_FORMAT_DESIGN.md section
+      // identity-matched twin pairs (see docs/2CBH_FORMAT_DESIGN.md section
       // 2.3).  ChessBase's sub-letter suffix is not stored in the index.
       char ecoBuf[8] = "";
       {
@@ -401,7 +401,7 @@ int main(int argc, char* argv[])
       // Elo: plain u16 LE, White @0x60, Black @0x70 (unencoded, same
       // storage convention as classic .cbh); RE'd via Ghidra tracing of
       // CBase26.exe's PGN-import tag setters (WhiteElo/BlackElo/EloW/EloB
-      // dispatch cases). See 2CBH_FORMAT_DESIGN.md.
+      // dispatch cases). See docs/2CBH_FORMAT_DESIGN.md.
       unsigned whiteElo = readLE16(cbh + (256u + k) * recordSize + 0x60);
       unsigned blackElo = readLE16(cbh + (256u + k) * recordSize + 0x70);
 

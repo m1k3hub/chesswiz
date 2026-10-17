@@ -10,7 +10,7 @@ Clocks are server-authoritative: the clock snapshot is updated on each move
 and the clock loop (driven by play_ws) flags timeouts. Events (match.move,
 match.finish) are emitted to sync subscribers that play_ws fans out to sockets.
 
-Identity model (ONLINE_PLAY_PLAN.md §5.3): authenticated user (OIDC subject)
+Identity model (docs/ONLINE_PLAY_PLAN.md §5.3): authenticated user (OIDC subject)
 or ephemeral guest. Rated games require authentication (enforced in play_routes).
 """
 
@@ -27,7 +27,7 @@ import metrics
 
 START_FEN = play_rules.START_FEN
 
-# Anti-cheat v1 heuristics (ONLINE_PLAY_PLAN.md Phase 7). Thresholds are not
+# Anti-cheat v1 heuristics (docs/ONLINE_PLAY_PLAN.md Phase 7). Thresholds are not
 # calibrated against a play-test dataset yet (plan §"Open questions") — these
 # are conservative placeholders that flag for review, never auto-ban.
 _INSTANT_MOVE_MS = 200
@@ -359,7 +359,7 @@ class PlayService:
         """Update move-time stats for `side`; return a flag reason, if any.
 
         Called with `self._lock` held. Heuristic only — never auto-bans, just
-        queues the match for human review (ONLINE_PLAY_PLAN.md Phase 7).
+        queues the match for human review (docs/ONLINE_PLAY_PLAN.md Phase 7).
         """
         meta = rec["anticheat"][side]
         meta["times"].append(elapsed_ms)

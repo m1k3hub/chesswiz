@@ -1,6 +1,6 @@
 # ======================================================================
 # ::ai::cqlref -- the CQL 6.2 reference the assistant reads before it
-# drafts a position-finder script (cql_help; ASSISTANT_COVERAGE_MAP.md §5).
+# drafts a position-finder script (cql_help; docs/ASSISTANT_COVERAGE_MAP.md §5).
 #
 # Models know little CQL, and their mistakes are quiet: a script that
 # parses can mean something else. The card states the semantics that

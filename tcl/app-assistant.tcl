@@ -633,7 +633,7 @@ user asks, after the evidence shows what is stuck.}
 variable MaxReply 6000
 
 # Where a tool's feature lives in the menus: added to its reply as a
-# "menu:" line, which the model passes on (ASSISTANT_COVERAGE_MAP.md P2).
+# "menu:" line, which the model passes on (docs/ASSISTANT_COVERAGE_MAP.md P2).
 variable ToolMenu {
 	search_games	"Database tab > right-click the database > Maintenance > Advanced Search"
 	show_search		"Database tab > right-click the database > Maintenance > Advanced Search"
@@ -2549,7 +2549,7 @@ proc ::application::assistant::GameLine {index base variant} {
 }
 
 
-# --- position finder (ASSISTANT_COVERAGE_MAP.md §5) ----------------------
+# --- position finder (docs/ASSISTANT_COVERAGE_MAP.md §5) ----------------------
 
 # The header fields of a position search, checked as search_games checks
 # them; {} when none is given.
@@ -3217,7 +3217,7 @@ proc ::application::assistant::PlayerSpellings {base variant index name} {
 # row, or "" when it cannot (no classifier, low confidence, or "none"). The
 # candidate names ARE the choice options, so the pick is always a real
 # database entry. The gate is 0.75, not 0.6: on a labelled set
-# (TYPESAFE_COOKBOOK_REVIEW.md), 0.75 commits every disambiguating query at
+# (docs/TYPESAFE_COOKBOOK_REVIEW.md), 0.75 commits every disambiguating query at
 # 100% accuracy and abstains on every ambiguous bare surname, where 0.6
 # committed a guess; any abstention falls back to the error below.
 proc ::application::assistant::SelectPlayer {text found} {

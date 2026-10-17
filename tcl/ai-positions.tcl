@@ -1,6 +1,6 @@
 # ======================================================================
 # ::ai::positions -- the position finder's engine side
-# (ASSISTANT_COVERAGE_MAP.md §5).
+# (docs/ASSISTANT_COVERAGE_MAP.md §5).
 #
 # A model drafts a CQL 6.2 script for a player's request; this module runs
 # it with the embedded CQL 6.2 engine over a view the caller has narrowed

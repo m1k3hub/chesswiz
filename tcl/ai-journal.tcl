@@ -1,7 +1,7 @@
 # ======================================================================
 # AI: decision / override journal (System One)
 # ======================================================================
-# The autotune half of the calibration story (SYSTEM_ONE_FEATURES.md §3.4):
+# The autotune half of the calibration story (docs/SYSTEM_ONE_FEATURES.md §3.4):
 # record what every gate decided, and what the user changed, so thresholds
 # can be refit from real labels later.
 #
