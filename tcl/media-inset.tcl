@@ -66,14 +66,33 @@ proc ::mediainset::surface {fallback} {
 	Show
 	# mpv embeds into the canvas's native window, which must be mapped: a
 	# window created just now is not until the server has answered
-	update idletasks
-	for {set i 0} {$i < 20 && ![winfo ismapped $w.video]} {incr i} {
-		update
-		if {![winfo ismapped $w.video]} { after 25 }
+	if {![SurfaceReady $w]} {
+		# an unmapped canvas (the pane is hidden, or still 1x1 before its
+		# first layout) has no usable native window for the backend to bind
+		# to: play on the Media pane's viewer instead
+		hide
+		return $fallback
 	}
 	# the events handled above may have stopped an earlier playback
 	Show
 	return $w.video
+}
+
+
+# Map $w.video through the event loop; 1 when it is on screen with a real
+# size, 0 when after about half a second it is still unmapped or 1x1 (the
+# pane cannot show it). The backends bind the canvas's native window: an
+# unmapped or 1x1 canvas is a native window nothing can ever render into.
+proc ::mediainset::SurfaceReady {w} {
+	update idletasks
+	for {set i 0} {$i < 20} {incr i} {
+		if {![winfo exists $w.video]} { return 0 }
+		if {[winfo ismapped $w.video]
+			&& [winfo width $w.video] > 1 && [winfo height $w.video] > 1} { return 1 }
+		update
+		after 25
+	}
+	return 0
 }
 
 

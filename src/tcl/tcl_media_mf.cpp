@@ -263,6 +263,19 @@ void pollEngine()
     followWindowSize();
 }
 
+// MF_MEDIA_ENGINE_ERR_* for the log (the Tcl side relays error-text).
+const char* engineErrorName(unsigned code)
+{
+    switch (code) {
+        case MF_MEDIA_ENGINE_ERR_ABORTED: return "playback-aborted";
+        case MF_MEDIA_ENGINE_ERR_NETWORK: return "network";
+        case MF_MEDIA_ENGINE_ERR_DECODE: return "decode";
+        case MF_MEDIA_ENGINE_ERR_SRC_NOT_SUPPORTED: return "source-not-supported";
+        case MF_MEDIA_ENGINE_ERR_ENCRYPTED: return "encrypted";
+        default: return "unknown";
+    }
+}
+
 int getEngine(Tcl_Interp* ti, char const* name)
 {
     pollEngine();
@@ -277,9 +290,10 @@ int getEngine(Tcl_Interp* ti, char const* name)
         Tcl_SetObjResult(ti, Tcl_NewDoubleObj(Engine->GetVolume()*100));
     } else if (strcmp(name, "error-text") == 0) {
         if (failed) {
-            char text[96];
-            sprintf(text, "Media Foundation error %u (HRESULT 0x%08lx).",
-                unsigned(error->GetErrorCode()), static_cast<unsigned long>(error->GetExtendedErrorCode()));
+            char text[128];
+            sprintf(text, "Media Foundation error %u (%s; HRESULT 0x%08lx).",
+                unsigned(error->GetErrorCode()), engineErrorName(error->GetErrorCode()),
+                static_cast<unsigned long>(error->GetExtendedErrorCode()));
             Tcl_SetObjResult(ti, Tcl_NewStringObj(text, -1));
         }
     } else {
