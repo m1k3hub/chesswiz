@@ -2,9 +2,10 @@
 # Scidb App Test — play a training game against an engine
 # (tcl/play-engine.tcl)
 # ======================================================================
-# No engine process is started: the tests stub ::playengine::RequestMove
+# Most tests stub ::playengine::RequestMove
 # (the move-request seam) with a queue of UCI replies, answered through
-# ::playengine::GotBestMove — the same entry the pipe reader uses. The
+# ::playengine::GotBestMove — the same entry the pipe reader uses. A
+# real-engine regression below exercises the dialog and UCI transport. The
 # clock ledger procs take their "now" as an argument, so clock arithmetic
 # is tested without waiting.
 # ======================================================================
@@ -312,13 +313,14 @@ tcltest::test playengine-dialog {the setup dialog lists engines; Start turns it 
 	$dlg.ok invoke
 	update
 	set status [$dlg.top.play.status cget -text]
+	set active $::playengine::Priv(active)
 	set panel [expr {[winfo manager $dlg.top.play] eq "pack"}]
 	::playengine::Close
-	list $engines [string match {*Elo*} $strength] $panel $status \
+	list $engines [string match {*Elo*} $strength] $panel $status $active \
 		$::playengine::Priv(active) [winfo exists $dlg]
 } -cleanup {
 	::scidb::test::pe::unstub
-} -result {StubEngine 1 1 {Your move.} 0 0}
+} -result {StubEngine 1 1 {Your move.} 1 0 0}
 
 
 tcltest::test playengine-flag {a side out of time loses on the ticker} -setup {
@@ -338,10 +340,106 @@ tcltest::test playengine-flag {a side out of time loses on the ticker} -setup {
 
 # Inside namespace ::playengine a bare "open" is ::playengine::open {parent}
 # (the dialog), so the engine pipe must use the global ::open. A real
-# engine is never started here, so check the call itself.
+# engine is started in playengine-real-uci below; retain this focused check.
 tcltest::test playengine-pipe-open {Connect opens the engine pipe with the global open} -body {
 	regexp {\[::open "\|} [info body ::playengine::Connect]
 } -result 1
+
+
+# Windows .exe paths are passed to Tcl as argv lists, including spaces and
+# literal backslashes in both the program name and parameters.
+tcltest::test playengine-windows-command {Windows executable paths and parameters preserve argv boundaries} -setup {
+    set savedPlatform $::tcl_platform(platform)
+    set scratch [file join $::scidb::test::app::testDir tmp-app engineplay-start]
+    set executable [file join $scratch {Program Files} Stockfish stockfish.exe]
+    file mkdir [file dirname $executable]
+    set channel [::open $executable w]
+    close $channel
+    if {$savedPlatform eq "unix"} {file attributes $executable -permissions 0700}
+} -body {
+    set ::tcl_platform(platform) windows
+    set parameters [list {--book=C:\Program Files\Chess\book.bin} {two words}]
+    expr {[::engine::Command $executable $parameters] eq [list $executable {*}$parameters]}
+} -cleanup {
+    set ::tcl_platform(platform) $savedPlatform
+    file delete $executable
+} -result 1
+
+
+# Keep a failure actionable when an application callback cancels the session.
+proc ::scidb::test::pe::recordFinish {command operation} {
+    variable finishes
+    set stack {}
+    for {set level 1} {$level < [info level]} {incr level} {
+        lappend stack [info level $level]
+    }
+    lappend finishes $stack
+}
+
+# Exercise the dialog, deferred application events, and the real UCI pipe.
+set ::scidb::test::pe::stockfish {}
+foreach entry $::engine::Engines {
+    set entry [dict merge $::engine::EmptyEngine $entry]
+    if {[string match -nocase *stockfish* [dict get $entry Name]]
+        && "UCI" in [dict get $entry Protocol]
+        && [file executable [dict get $entry Command]]} {
+        set ::scidb::test::pe::stockfish $entry
+        break
+    }
+}
+if {$::scidb::test::pe::stockfish eq ""} {
+    foreach executable {/usr/local/games/stockfish-chesswiz /usr/games/stockfish} {
+        if {[file executable $executable]} {
+            set ::scidb::test::pe::stockfish [dict merge $::engine::EmptyEngine \
+                [list Name RealStockfish Command $executable Protocol UCI \
+                    Features:UCI {limitStrength {1320 3190}}]]
+            break
+        }
+    }
+}
+tcltest::testConstraint playengineRealUCI [expr {$::scidb::test::pe::stockfish ne ""}]
+
+tcltest::test playengine-real-uci {Start survives event dispatch and a real engine replies to e4 within 10 s} \
+-constraints playengineRealUCI -setup {
+    set ::scidb::test::pe::finishes {}
+    trace add execution ::playengine::Finish enter ::scidb::test::pe::recordFinish
+    set savedEngines $::engine::Engines
+    set savedOptions [array get ::playengine::Options]
+    set ::engine::Engines [list $::scidb::test::pe::stockfish]
+    set ::playengine::Options(engine) [dict get $::scidb::test::pe::stockfish Name]
+    set ::playengine::Options(color) white
+    set ::playengine::Options(minutes) 3
+    set ::playengine::Options(increment) 2
+} -body {
+    set dlg [::playengine::open .application]
+    update
+    $dlg.ok invoke
+    update
+    if {!$::playengine::Priv(active)} {
+        error "Start lost its session: phase=$::playengine::Priv(phase), pipeState=$::playengine::Priv(pipeState); Finish stacks: $::scidb::test::pe::finishes"
+    }
+    set accepted [::playengine::UserMove e4]
+    set deadline [expr {[clock milliseconds] + 10000}]
+    while {$::playengine::Priv(active) && [clock milliseconds] < $deadline
+        && [::scidb::game::query length] < 2} {
+        after 10 {set ::scidb::test::pe::wake 1}
+        vwait ::scidb::test::pe::wake
+    }
+    if {!$::playengine::Priv(active)} {
+        error "Session ended after e4; Finish stacks: $::scidb::test::pe::finishes"
+    }
+    list $accepted [::scidb::game::query length] $::playengine::Priv(active) \
+        $::playengine::Priv(phase) $::playengine::Priv(pipeState) \
+        [expr {$::playengine::Priv(pipe) ne ""}]
+} -cleanup {
+    trace remove execution ::playengine::Finish enter ::scidb::test::pe::recordFinish
+    set pos $::playengine::Priv(pos)
+    ::playengine::Close
+    catch {::application::pgn::release $pos}
+    catch {::game::release $pos}
+    set ::engine::Engines $savedEngines
+    array set ::playengine::Options $savedOptions
+} -result {1 2 1 user ready 1}
 
 
 tcltest::cleanupTests
