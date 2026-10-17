@@ -107,6 +107,10 @@ init(Tcl_Interp* ti)
 #ifdef _WIN32
 
 # include <windows.h>
+# include <shellapi.h>
+
+// Exported by Tk on Windows, but declared only for UNICODE builds.
+extern "C" void Tk_MainExW(int argc, wchar_t** argv, Tcl_AppInitProc* appInitProc, Tcl_Interp* interp);
 # include <io.h>
 # include <string.h>
 
@@ -268,6 +272,35 @@ main(int argc, char* argv[])
 
 		if (script)
 		{
+			// The arguments from the wide command line: argv is in the system
+			// code page and loses every file name character outside it.
+			int wargc = 0;
+			wchar_t** wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+
+			if (wargv && wargc == argc)
+			{
+				wchar_t wscript[MAX_PATH + 32];
+				MultiByteToWideChar(CP_ACP, 0, script, -1, wscript, MAX_PATH + 32);
+				if (script != bundle)
+					wcsncpy(wscript, wargv[1], MAX_PATH + 31), wscript[MAX_PATH + 31] = 0;
+
+				static wchar_t wencodingOpt[] = L"-encoding";
+				static wchar_t wutf8[] = L"utf-8";
+				wchar_t** args = new wchar_t*[argc + 4];
+				int n = 0;
+
+				args[n++] = wargv[0];
+				args[n++] = wencodingOpt;
+				args[n++] = wutf8;
+				args[n++] = wscript;
+				for (int i = first; i < argc; ++i)
+					args[n++] = wargv[i];
+				args[n] = 0;
+
+				Tk_MainExW(n, args, init, Tcl_CreateInterp());
+				return 0;
+			}
+
 			char** args = new char*[argc + 4];
 			int n = 0;
 
