@@ -3416,7 +3416,8 @@ cmdClear(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	Board board;
 
-	if (Tcl_GetIntFromObj(interp(), objv[1], &idn) == TCL_OK)
+	// no interp: a FEN must not leave the integer parse error as the result
+	if (Tcl_GetIntFromObj(nullptr, objv[1], &idn) == TCL_OK)
 	{
 		// Chess 960 and its shuffles, or the FICS start positions (LittleGame
 		// to UpsideDown), which Board::setup knows for standard chess and
