@@ -591,7 +591,7 @@ proc alert {args} {
 	# Keep the box, frame included, inside the work area on every platform:
 	# on Windows a box centred on a pane low on the screen put its buttons
 	# under the taskbar (laptop agent, Run 25).
-	if {[llength [info commands ::util::place::clamp]]} {
+	if {[llength [::info commands ::util::place::clamp]]} {
 		lassign [winfo workarea $w] ax ay aw ah
 		lassign {0 0 0 0} el er et eb
 		catch { lassign [winfo extents $w] el er et eb }
