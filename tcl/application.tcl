@@ -512,28 +512,6 @@ proc KeepInWorkArea {w} {
 }
 
 
-# The board canvas keeps its pixel size when only the fonts change, so the
-# deferred <Configure> rebuild in ConfigureWindow would see unchanged
-# dimensions. Force the rebuild through the board's own entry point: it
-# recomputes every margin from the current font and scaling metrics. The
-# namespace exists only after app-board.tcl is sourced, hence the guard.
-namespace eval board {}
-proc board::Apply {} {
-	variable Vars
-
-	if {![info exists Vars(widget:frame)] || ![winfo exists $Vars(widget:frame)]} { return 0 }
-	set w $Vars(widget:frame)
-	set width [winfo width $w]
-	set height [winfo height $w]
-	if {$width <= 1} { set width $Vars(width) }
-	if {$height <= 1} { set height $Vars(height) }
-	if {$width <= 1 || $height <= 1} { return 0 }
-	after cancel $Vars(after)
-	RebuildBoard $w $width $height true
-	return 1
-}
-
-
 # ----------------------------------------------------------------------
 # Runtime DPI change: `tk scaling` got a new value while running. Tk 8.6
 # neither resizes existing fonts nor emits an event for this (Tk 9's
