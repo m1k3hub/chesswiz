@@ -433,6 +433,7 @@ proc Mouse1Up {nodes} {
 		if {[string length $id]} {
 			lassign [lindex [[namespace parent]::database::recentFiles] $id] \
 				type file name encoding readonly
+			[namespace parent]::database::LogOpen "recent list: open $file (encoding $encoding, readonly $readonly)"
 			[namespace parent]::database::openBase $Priv(html) $file no \
 				-encoding $encoding \
 				-readonly $readonly \

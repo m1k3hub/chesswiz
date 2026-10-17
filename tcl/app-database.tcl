@@ -537,7 +537,7 @@ proc openBase {parent file byUser args} {
 
 	if {![file readable $file]} {
 		# not silently: the entry vanishes from the recent list
-		::log::info [format $mc::CannotOpenFile $file]
+		LogOpen [format $mc::CannotOpenFile $file]
 		removeRecentFile $file
 		::dialog::error -parent $parent -message [format $mc::CannotOpenFile $file]
 		return 0
@@ -601,7 +601,7 @@ proc openBase {parent file byUser args} {
 				set cmd [list ::scidb::db::load $file]
 				set options [list -message $msg -interrupt yes]
 				set rc [::util::catchException { ::progress::start $parent $cmd $args $options }]
-				if {$rc != 0} { return 0 }
+				if {$rc != 0} { LogOpen "openBase: load failed (rc=$rc): $file"; return 0 }
 			}
 			bpgn - bpgn.gz {
 				return -code error "BPGN is not yet supported"
@@ -611,6 +611,7 @@ proc openBase {parent file byUser args} {
 				set cmd [list ::import::open $parent $file $msg $opts(-encoding) $type]
 				set rc [::util::catchException $cmd]
 				if {$rc != 0} {
+					LogOpen "openBase: PGN import failed (rc=$rc): $file"
 					catch { ::scidb::db::close $file }
 					return 0
 				}
@@ -620,6 +621,7 @@ proc openBase {parent file byUser args} {
 			}
 		}
 		if {![::scidb::db::get open? $file]} {
+			LogOpen [format $mc::CannotOpenFile $file]
 			::dialog::error -parent $parent -message [format $mc::CannotOpenFile $file]
 			return 0
 		}
@@ -787,6 +789,13 @@ proc recentFiles {} {
 	}
 
 	return $recentFiles
+}
+
+
+# Open failures: in the log window and in the test VMs' debug.log.
+proc LogOpen {msg} {
+	::log::info $msg
+	catch { ::debuglog::log open $msg }
 }
 
 
