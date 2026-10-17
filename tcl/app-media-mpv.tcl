@@ -14,6 +14,7 @@
 ::util::source media-mpv
 
 namespace eval ::media::mpv {
+	variable LaunchError {}
 	namespace export launch stop time duration state play pause seek available? volume setVolume
 }
 
@@ -25,13 +26,20 @@ proc ::media::mpv::available? {} {
 # Start playing path from startMs, embedded into window wid (as given by
 # winfo id). Returns 1 once the player accepted the file.
 proc ::media::mpv::launch {path wid {startMs 0}} {
-	if {![available?]} { return 0 }
+	variable LaunchError
+	set LaunchError {}
+	if {![available?]} { set LaunchError "The media backend is unavailable in this build."; return 0 }
 	if {![string is double -strict $startMs] || $startMs < 0} { set startMs 0 }
-	if {[catch { ::mpv::open $wid $path [expr {$startMs / 1000.0}] } ok]} { return 0 }
+	if {[catch { ::mpv::open $wid $path [expr {$startMs / 1000.0}] } ok]} {
+		set LaunchError $ok
+		return 0
+	}
 	return $ok
 }
 
 proc ::media::mpv::_get {property} {
+	variable LaunchError
+	if {$property eq "error-text" && $LaunchError ne ""} { return $LaunchError }
 	if {[catch { ::mpv::get $property } v]} { return {} }
 	return $v
 }
