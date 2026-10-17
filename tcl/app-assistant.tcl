@@ -103,8 +103,8 @@ variable Actions {
 	}
 	download_games {
 		1 0 "download games from the internet into this database"
-		"Download games from the internet into the active database and import them: 'twic' takes the latest weekly issues of The Week in Chess (default 1 issue, up to 12), 'lichess' takes game links or 8-character game ids given in 'lichess', 'url' takes a PGN/zip/gz link given in 'url'. The import runs like 'Import PGN files'. Ask only when the user wants games from the internet."
-		{{"type":"object","properties":{"source":{"type":"string","enum":["twic","lichess","url"],"description":"where to download from, default twic"},"issues":{"type":"integer","description":"TWIC: how many weekly issues, default 1 (max 12)"},"lichess":{"type":"string","description":"lichess: game links or ids, one per line"},"url":{"type":"string","description":"url: a PGN, zipped PGN or gzipped PGN link"}}}}
+		"Download games from the internet into the active database and import them: 'twic' takes the latest weekly issues of The Week in Chess (default 1 issue, up to 12), 'lichess' takes game links or 8-character game ids given in 'lichess', 'player' takes all games of a Chess.com or Lichess player ('site', 'player') from the last 'months' months (default 1, up to 24), 'url' takes a PGN/zip/gz link given in 'url'. The import runs like 'Import PGN files'. Ask only when the user wants games from the internet."
+		{{"type":"object","properties":{"source":{"type":"string","enum":["twic","lichess","player","url"],"description":"where to download from, default twic"},"site":{"type":"string","enum":["Chess.com","Lichess"],"description":"player: the site, default Chess.com"},"player":{"type":"string","description":"player: the user name on that site"},"months":{"type":"integer","description":"player: how many months back, default 1 (max 24)"},"issues":{"type":"integer","description":"TWIC: how many weekly issues, default 1 (max 12)"},"lichess":{"type":"string","description":"lichess: game links or ids, one per line"},"url":{"type":"string","description":"url: a PGN, zipped PGN or gzipped PGN link"}}}}
 		::application::assistant::DoDownloadGames
 	}
 	update_player_data {
@@ -1491,8 +1491,8 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		}
 		download_games {
 			set source [OptArg $cargs source twic]
-			if {$source ni {twic lichess url}} {
-				error "source must be 'twic', 'lichess' or 'url'"
+			if {$source ni {twic lichess player url}} {
+				error "source must be 'twic', 'lichess', 'player' or 'url'"
 			}
 			set issues [OptArg $cargs issues 1]
 			if {![string is integer -strict $issues] || $issues < 1 || $issues > 12} {
@@ -1506,7 +1506,18 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			if {$source eq "url" && $url eq ""} {
 				error "source 'url' needs the 'url' argument"
 			}
-			return [dict create source $source issues $issues lichess $lichess url $url]
+			set site [OptArg $cargs site Chess.com]
+			if {$site ni {Chess.com Lichess}} { error "site must be 'Chess.com' or 'Lichess'" }
+			set player [OptArg $cargs player ""]
+			if {$source eq "player" && [::application::download::playerName $player] eq ""} {
+				error "source 'player' needs the 'player' argument with a user name"
+			}
+			set months [OptArg $cargs months 1]
+			if {![string is integer -strict $months] || $months < 1 || $months > 24} {
+				error "months must be an integer between 1 and 24"
+			}
+			return [dict create source $source issues $issues lichess $lichess url $url \
+				site $site player $player months $months]
 		}
 		classifier_status {
 			return {}
@@ -4399,7 +4410,7 @@ if {[llength [info commands ::process::testOption]] && [::process::testOption ch
 # Download games from the internet (see ::application::download). The
 # download runs in the background; the reply is resolved when it is done.
 # ----------------------------------------------------------------------
-proc ::application::assistant::DoDownloadGames {source issues lichess url} {
+proc ::application::assistant::DoDownloadGames {source issues lichess url {site Chess.com} {player ""} {months 1}} {
 	if {[llength [info commands ::application::download::run]] == 0} {
 		return "error: the download module is not available"
 	}
@@ -4407,7 +4418,8 @@ proc ::application::assistant::DoDownloadGames {source issues lichess url} {
 	set token [Later]
 	if {[catch {
 		::application::download::run $base \
-			[list -source $source -issues $issues -lichess $lichess -url $url] \
+			[list -source $source -issues $issues -lichess $lichess -url $url \
+				-site $site -player $player -months $months] \
 			[namespace code [list DownloadGamesDone $token $base]]
 	} err]} {
 		after 0 [list Resolve $token "error: $err"]

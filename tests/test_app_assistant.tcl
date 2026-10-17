@@ -80,8 +80,11 @@ tcltest::test assistant-download-games-tool {the assistant can download games; t
 tcltest::test assistant-download-games-args {download_games checks its arguments} -body {
 	list [::application::assistant::runTool download_games {source dropbox}] \
 		[::application::assistant::runTool download_games {source url}] \
-		[::application::assistant::runTool download_games {source twic issues 99}]
-} -result {{error: source must be 'twic', 'lichess' or 'url'} {error: source 'url' needs the 'url' argument} {error: issues must be an integer between 1 and 12}}
+		[::application::assistant::runTool download_games {source twic issues 99}] \
+		[::application::assistant::runTool download_games {source player}] \
+		[::application::assistant::runTool download_games {source player player hikaru site ICC}] \
+		[::application::assistant::runTool download_games {source player player hikaru months 30}]
+} -result {{error: source must be 'twic', 'lichess', 'player' or 'url'} {error: source 'url' needs the 'url' argument} {error: issues must be an integer between 1 and 12} {error: source 'player' needs the 'player' argument with a user name} {error: site must be 'Chess.com' or 'Lichess'} {error: months must be an integer between 1 and 24}}
 
 tcltest::test assistant-classifier-status-tool {the assistant reports the classifier status} -body {
 	set text [::application::assistant::runTool classifier_status {}]

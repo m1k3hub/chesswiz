@@ -15,6 +15,14 @@
 #   Lichess
 #     Single games, by URL or game id, one per line
 #     (https://lichess.org/game/export/<id> answers application/x-chess-pgn).
+#   Player games
+#     A Chess.com or Lichess player's games of the last months. Chess.com
+#     lists a player's monthly archives (api.chess.com/pub/player/<p>/games/
+#     archives); each month's PGN is <archive>/pgn. Lichess sends a player's
+#     games since a time as one PGN (lichess.org/api/games/user/<p>?since=).
+#     Lichess may refuse anonymous exports (303 to /signup, 404, 401); a
+#     personal API token (lichess.org/account/oauth/token, no scopes needed)
+#     is then sent, to lichess.org only, as a Bearer header.
 #   URL
 #     Any PGN, zipped PGN or gzipped PGN file on the web.
 #
@@ -26,7 +34,8 @@
 #
 #   ::application::download::open $parent $base
 #
-# The pure helpers (twicIssues, lichessGameIds, destName) are UI-free and
+# The pure helpers (twicIssues, lichessGameIds, chessComArchives,
+# playerName, lichessUserUrl, destName) are UI-free and
 # covered by tests/test_app_download.tcl.
 # ======================================================================
 
@@ -48,6 +57,14 @@ set TwicDetail				"The latest weekly issues; each zip holds one PGN with the wee
 set Issues					"Issues to fetch:"
 set Lichess					"Lichess games"
 set LichessDetail			"One game link or game id per line:"
+set Player					"A player's games"
+set PlayerDetail			"All games of a Chess.com or Lichess player in the last months:"
+set Site					"Site:"
+set PlayerName				"Player:"
+set Months					"Months:"
+set NoPlayer				"no valid player name given"
+set NoArchives				"Chess.com has no games of %s in the last %d month(s)"
+set PlayerImport			"%s games of %s download import"
 set Url						"PGN file from URL"
 set UrlDetail				"Any PGN, zipped PGN or gzipped PGN file:"
 set Import					"Import into:"
@@ -69,8 +86,14 @@ set DownloadsDir			"downloads"
 set TwicImport					"TWIC %s download import"
 set LichessImport			"Lichess download import"
 set UrlImport					"PGN download import"
+set LichessToken			"Lichess API token (optional):"
+set NeedToken				"Lichess refused the download without a login. Create a personal API token at lichess.org/account/oauth/token (no permissions needed) and enter it in this dialog."
 
 } ;# namespace mc
+
+array set Options {
+	lichess:token ""
+}
 
 variable Timeout 120000
 variable RetryDelay 3000
@@ -106,6 +129,9 @@ proc ::application::download::open {parent base} {
 	set Priv(issues) 1
 	set Priv(lichess) ""
 	set Priv(url) ""
+	set Priv(site) Chess.com
+	set Priv(player) ""
+	set Priv(months) 1
 
 	toplevel $dlg -class Scidb
 	wm title $dlg $mc::Title
@@ -154,6 +180,37 @@ proc ::application::download::open {parent base} {
 	pack $lichess.text -side left -fill both -expand yes -pady [list 0 $::theme::pady]
 	pack $lichess.vs -side right -fill y -pady [list 0 $::theme::pady]
 	pack $lichess -fill both -expand yes -pady [list 0 $::theme::pady]
+
+	set player [ttk::frame $top.source.player]
+	ttk::radiobutton $player.choice \
+		-text $mc::Player -value player -variable [namespace current]::Priv(source) \
+		-command [namespace code SourceChanged] \
+		;
+	ttk::label $player.detail -text $mc::PlayerDetail -wraplength 360 -justify left
+	set row [ttk::frame $player.row]
+	ttk::label $row.lsite -text $mc::Site
+	ttk::combobox $row.site -state readonly -width 10 -values {Chess.com Lichess} \
+		-textvariable [namespace current]::Priv(site)
+	ttk::label $row.lname -text $mc::PlayerName
+	ttk::entry $row.name -width 18 -textvariable [namespace current]::Priv(player)
+	ttk::label $row.lmonths -text $mc::Months
+	ttk::spinbox $row.months -from 1 -to 24 -width 3 -textvariable [namespace current]::Priv(months)
+	pack $row.lsite $row.site -side left
+	pack $row.lname -side left -padx [list $::theme::padx 0]
+	pack $row.name -side left -fill x -expand yes
+	pack $row.lmonths -side left -padx [list $::theme::padx 0]
+	pack $row.months -side left
+	set trow [ttk::frame $player.token]
+	ttk::label $trow.label -text $mc::LichessToken
+	ttk::entry $trow.entry -show * -width 30 \
+		-textvariable [namespace current]::Options(lichess:token)
+	pack $trow.label -side left
+	pack $trow.entry -side left -fill x -expand yes -padx [list $::theme::padx 0]
+	pack $player.choice -anchor w
+	pack $player.detail -anchor w
+	pack $row -fill x
+	pack $trow -fill x -pady [list $::theme::pady 0]
+	pack $player -fill x -pady [list 0 $::theme::pady]
 
 	set url [ttk::frame $top.source.url]
 	ttk::radiobutton $url.choice \
@@ -268,6 +325,27 @@ proc ::application::download::Start {} {
 					[file join $dir "lichess-$id.pgn"] "lichess.org/$id"]
 			}
 		}
+		player {
+			set name [playerName $Priv(player)]
+			if {$name eq ""} {
+				Status $mc::NoPlayer
+				return
+			}
+			set months [Months]
+			set Priv(title) [format $mc::PlayerImport $Priv(site) $name]
+			if {$Priv(site) eq "Lichess"} {
+				set since [expr {([clock seconds] - $months*31*86400)*1000}]
+				lappend queue [list [lichessUserUrl $name $since] \
+					[file join $dir "lichess-$name.pgn"] "lichess.org/@/$name"]
+			} else {
+				if {[DialogExists]} { $Priv(dialog).ok configure -state disabled }
+				set Priv(running) 1
+				Status [format $mc::Fetching "chess.com/member/$name"]
+				Get [chessComArchivesUrl $name] \
+					[namespace code [list OnChessComArchives $name $months]]
+				return
+			}
+		}
 		url {
 			set url [string trim $Priv(url)]
 			if {$url eq ""} {
@@ -321,6 +399,39 @@ proc ::application::download::OnTwicIndex {result} {
 }
 
 
+proc ::application::download::OnChessComArchives {name months result} {
+	variable Priv
+	variable mc
+
+	if {![dict get $result ok]} {
+		Finish [format $mc::Failed "chess.com/member/$name" [dict get $result error]]
+		return
+	}
+	set archives [chessComArchives [dict get $result data] $months]
+	if {![llength $archives]} {
+		Finish [format $mc::NoArchives $name $months]
+		return
+	}
+	set dir [Dir]
+	set queue {}
+	foreach url $archives {
+		regexp {(\d{4})/(\d{2})$} $url _ y m
+		lappend queue [list $url/pgn [file join $dir "chesscom-$name-$y-$m.pgn"] "chess.com $name $y-$m"]
+	}
+	set Priv(queue) $queue
+	FetchNext
+}
+
+
+proc ::application::download::Months {} {
+	variable Priv
+	set months $Priv(months)
+	if {![string is integer -strict $months] || $months < 1} { set months 1 }
+	if {$months > 24} { set months 24 }
+	return $months
+}
+
+
 proc ::application::download::FetchNext {} {
 	variable Priv
 	variable mc
@@ -354,7 +465,11 @@ proc ::application::download::OnFetched {url file label retry result} {
 		return
 	}
 	if {!$ok} {
-		lappend Priv(failures) [format $mc::Failed $label [dict get $result error]]
+		set error [dict get $result error]
+		if {[string match https://lichess.org/* $url] && $code in {303 401 403 404}} {
+			set error $mc::NeedToken
+		}
+		lappend Priv(failures) [format $mc::Failed $label $error]
 	} else {
 		file mkdir [file dirname $file]
 		set chan [::open $file wb]
@@ -443,6 +558,9 @@ proc ::application::download::run {base spec doneCmd} {
 	set Priv(issues)  [expr {[dict exists $spec -issues]  ? [dict get $spec -issues]  : 1}]
 	set Priv(lichess) [expr {[dict exists $spec -lichess] ? [dict get $spec -lichess] : ""}]
 	set Priv(url)     [expr {[dict exists $spec -url]     ? [dict get $spec -url]     : ""}]
+	set Priv(site)    [expr {[dict exists $spec -site]    ? [dict get $spec -site]    : "Chess.com"}]
+	set Priv(player)  [expr {[dict exists $spec -player]  ? [dict get $spec -player]  : ""}]
+	set Priv(months)  [expr {[dict exists $spec -months]  ? [dict get $spec -months]  : 1}]
 	set Priv(base)    $base
 	set Priv(dialog)  {}
 	set Priv(doneCmd) $doneCmd
@@ -493,8 +611,15 @@ proc ::application::download::Get {url done} {
 		return
 	}
 
+	set headers [list User-Agent [UserAgent] Accept "*/*"]
+	if {[string match https://lichess.org/* $url]} {
+		variable Options
+		set headers [list User-Agent [UserAgent] Accept application/x-chess-pgn]
+		set token [string trim $Options(lichess:token)]
+		if {$token ne ""} { lappend headers Authorization "Bearer $token" }
+	}
 	if {[catch { ::http::geturl $url \
-		-headers [list User-Agent [UserAgent] Accept "*/*"] \
+		-headers $headers \
 		-timeout $Timeout -binary 1 -command [namespace code [list OnHttp $done]] \
 	} token]} {
 		# a synchronous failure (malformed url, unknown protocol);
@@ -572,6 +697,35 @@ proc ::application::download::lichessUrl {id} {
 }
 
 
+# A player name as both sites accept it (letters, digits, - and _), or "".
+proc ::application::download::playerName {text} {
+	set text [string trim $text]
+	regexp {(?:chess\.com/member/|lichess\.org/@/)([^/?#\s]+)} $text _ text
+	if {![regexp {^[A-Za-z0-9_-]{2,30}$} $text]} { return "" }
+	return $text
+}
+
+
+proc ::application::download::chessComArchivesUrl {name} {
+	return "https://api.chess.com/pub/player/[string tolower $name]/games/archives"
+}
+
+
+# The last <months> monthly archive URLs out of the Chess.com archives JSON
+# ({"archives":["https://api.chess.com/pub/player/p/games/2026/09",...]},
+# oldest first), oldest first.
+proc ::application::download::chessComArchives {json months} {
+	set urls [regexp -all -inline {https://api\.chess\.com/pub/player/[^"/]+/games/\d{4}/\d{2}} $json]
+	set urls [lsort -unique $urls]
+	return [lrange $urls end-[expr {$months - 1}] end]
+}
+
+
+proc ::application::download::lichessUserUrl {name since} {
+	return "https://lichess.org/api/games/user/$name?since=$since&clocks=false&evals=false"
+}
+
+
 # A safe file name for a URL download.
 proc ::application::download::destName {url} {
 	set path [lindex [split $url ?] 0]
@@ -594,5 +748,12 @@ proc ::application::download::size {bytes} {
 	}
 	return [format "%.0f KB" [expr {$bytes / 1024.0}]]
 }
+
+
+proc ::application::download::WriteOptions {chan} {
+	::options::writeItem $chan [namespace current]::Options
+}
+
+::options::hookWriter ::application::download::WriteOptions
 
 # vi:set ts=3 sw=3:
