@@ -19,23 +19,25 @@ proc ::scidb::test::insetState {} {
 	list $inset $insetInfo $board $boardInfo
 }
 
-tcltest::test inset-surface {the video goes to a small window inside the board pane} -setup {
+tcltest::test inset-surface {without a free margin the video goes to the board's corner} -setup {
 	set ::mediainset::Options(enabled) 1
+	set ::mediainset::Options(minWidth) 100000
 } -body {
 	set fallback .noSuchViewer
 	set c [::mediainset::surface $fallback]
 	list [string match *.mediainset.video $c] [::scidb::test::insetState]
-} -cleanup { ::mediainset::hide } -result {1 {place 0.34 pack {}}}
+} -cleanup { ::mediainset::hide; set ::mediainset::Options(minWidth) 200 } -result {1 {place 0.34 pack {}}}
 
 tcltest::test inset-swap {expand swaps size and place with the board, and back} -setup {
 	set ::mediainset::Options(enabled) 1
+	set ::mediainset::Options(minWidth) 100000
 	::mediainset::surface .noSuchViewer
 } -body {
 	::mediainset::swap
 	set a [list [::mediainset::swapped?] [::scidb::test::insetState]]
 	::mediainset::swap
 	lappend a [::mediainset::swapped?] [::scidb::test::insetState]
-} -cleanup { ::mediainset::hide } -result {1 {place 1 place 0.34} 0 {place 0.34 pack {}}}
+} -cleanup { ::mediainset::hide; set ::mediainset::Options(minWidth) 200 } -result {1 {place 1 place 0.34} 0 {place 0.34 pack {}}}
 
 tcltest::test inset-hide-restores {stopping while swapped gives the board its pane back} -setup {
 	set ::mediainset::Options(enabled) 1
@@ -51,5 +53,30 @@ tcltest::test inset-off {with the option off the Media pane's viewer is used} -s
 } -body {
 	::mediainset::surface .theViewer
 } -cleanup { set ::mediainset::Options(enabled) 1 } -result .theViewer
+
+# FreeRect on a stand-alone canvas: a 400x400 "board" item in a wide or tall pane.
+proc ::scidb::test::freeRect {cw ch bx by} {
+	set c [canvas .freeRectTest -width $cw -height $ch -highlightthickness 0 -borderwidth 0]
+	place $c -x 0 -y 0 -width $cw -height $ch
+	$c create rectangle $bx $by [expr {$bx + 400}] [expr {$by + 400}] -tags board -outline {}
+	update idletasks
+	set r [::mediainset::FreeRect $c]
+	destroy $c
+	return $r
+}
+
+tcltest::test inset-free-right {a wide pane with the board on the left: the video goes right of it} -body {
+	lassign [::scidb::test::freeRect 1000 420 10 10] x y w h
+	list [expr {$x >= 416}] [expr {$x + $w <= 1000}] [expr {abs($w*9 - $h*16) <= 16}] [expr {$w >= 200}]
+} -result {1 1 1 1}
+
+tcltest::test inset-free-below {a tall pane: the video goes below the board} -body {
+	lassign [::scidb::test::freeRect 420 900 10 10] x y w h
+	list [expr {$y >= 416}] [expr {$y + $h <= 900}] [expr {$w >= 200}]
+} -result {1 1 1}
+
+tcltest::test inset-free-none {a pane the board fills: no free rectangle} -body {
+	::scidb::test::freeRect 420 420 10 10
+} -result {}
 
 tcltest::cleanupTests
