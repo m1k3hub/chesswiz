@@ -3,7 +3,8 @@
 # ======================================================================
 # With suggested moves on (the default), releasing the button on the
 # pressed square always cleared the selection: a click on e2 and then on e4
-# did nothing when no move was suggested (no hover before the click).
+# did nothing when no move was suggested (no hover before the click), and
+# played the suggestion at once when one was (Run 18).
 # ======================================================================
 
 package require tcltest 2.5
@@ -49,5 +50,33 @@ tcltest::test clicks-reclick {a second click on the selected piece deselects it}
 	::scidb::test::clicks::click 6
 	list $a $::move::Square(selected) [::scidb::game::position atStart?]
 } -result {6 -1 1}
+
+# hovering e2 suggested e4 (enterSquare)
+proc ::scidb::test::clicks::hover {from to} {
+	::move::enterSquare $from
+	set ::move::Square(suggested) $to
+}
+
+tcltest::test clicks-suggested-other {with e4 suggested, e2 then e3 plays 1.e3} -setup {
+	::menu::gameNew .application
+	update
+} -body {
+	::scidb::test::clicks::hover 12 28
+	::scidb::test::clicks::click 12
+	set atStart [::scidb::game::position atStart?]
+	::scidb::test::clicks::click 20
+	list $atStart [lindex [::scidb::pos::fen] 0]
+} -result {1 rnbqkbnr/pppppppp/8/8/8/4P3/PPPP1PPP/RNBQKBNR}
+
+tcltest::test clicks-suggested-twice {with e4 suggested, two clicks on e2 play 1.e4} -setup {
+	::menu::gameNew .application
+	update
+} -body {
+	::scidb::test::clicks::hover 12 28
+	::scidb::test::clicks::click 12
+	set atStart [::scidb::game::position atStart?]
+	::scidb::test::clicks::click 12
+	list $atStart [lindex [::scidb::pos::fen] 0]
+} -result {1 rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR}
 
 tcltest::cleanupTests

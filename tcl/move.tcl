@@ -54,6 +54,7 @@ array set Square {
 	suggested	-1
 	origin		-1
 	hilited		-1
+	fresh			0
 }
 
 array set Drop {
@@ -280,6 +281,7 @@ proc pressSquare {square state} {
 
 	::variation::hide
 
+	catch { ::debuglog::log board "press $square selected=$Square(selected) disabled=$Disabled" }
 	if {$Disabled} { return }
 
 	if {$Square(selected) == -1} {
@@ -290,8 +292,13 @@ proc pressSquare {square state} {
 		set c [::scidb::pos::stm]
 		set p [string index [::board::diagram::piece $board $square] 0]
 		if {$c eq $p} { ::board::diagram::setDragSquare $board $square }
+		set Square(fresh) 1
 	} elseif {$hilite(show-suggested) && $square ne $Square(selected)} {
 		# second click of a click-click move: releaseSquare makes the move
+		set Square(fresh) 0
+	} elseif {$hilite(show-suggested) && $Square(suggested) != -1} {
+		# second click on the selected piece: releaseSquare plays the suggestion
+		set Square(fresh) 0
 	} elseif {$hilite(show-suggested)} {
 		::board::diagram::setDragSquare $board
 		::board::diagram::hilite $board $Square(selected) off
@@ -326,13 +333,16 @@ proc releaseSquare {x y state} {
 
 	::application::board::setCursor
 
-	# A click on an own piece with no suggested move selects it, so that a
-	# click on the target square makes the move.
+	# The first click on an own piece selects it: a click on the target square
+	# makes the move, a second click on the piece plays the suggested move.
 	set clickSelect [expr {
 		$hilite(show-suggested) && !$dragged && $square == $selected && $square >= 0
-		&& $Square(suggested) == -1 && $Drop(piece) eq " "
+		&& $Square(fresh) && $Drop(piece) eq " "
 		&& [string index [::board::diagram::piece $board $square] 0] eq [::scidb::pos::stm]
 	}]
+
+	set Square(fresh) 0
+	catch { ::debuglog::log board "release $square from $selected dragged=$dragged select=$clickSelect" }
 
 	if {$clickSelect} {
 		::board::diagram::setDragSquare $board
