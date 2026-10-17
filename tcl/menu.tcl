@@ -155,7 +155,9 @@ proc setup {} {
 	bind .application <F1> [list ::help::open .application]
 	bind .application <Control-l> [list ::log::show -force]
 	bind .application <F11> [namespace code [list viewFullscreen toggle]]
+	# Caps Lock or Shift turn the keysym into Q.
 	bind .application <Control-q> ::application::shutdown
+	bind .application <Control-Q> ::application::shutdown
 	bind .application <Configure> [namespace code { CheckFullscreen %W }]
 
 	if {[::process::testOption full-screen]} { viewFullscreen toggle }
