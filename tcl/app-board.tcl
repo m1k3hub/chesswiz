@@ -499,13 +499,18 @@ proc show3D {flag} {
 		}
 		ReplaceBoardView $Vars(widget:frame) $Vars(3dwin)
 		set Vars(3d) 1
+		bind $Vars(3dwin) <Configure> [namespace code {ConfigureReserve3D %w %h}]
+		ApplyReserve3D
 		::board3d::refresh
 	} else {
 		if {$Vars(3dwin) ne "" && [winfo exists $Vars(3dwin)]} {
 			ReplaceBoardView $Vars(3dwin) $Vars(widget:frame)
+			pack configure $Vars(widget:frame) -padx 0 -pady 0
 		}
 		set Vars(3d) 0
 	}
+	# View switches also notify inset owners when the pane dimensions match.
+	RebuildBoard $Vars(widget:frame) $Vars(width) $Vars(height) true
 	return 1
 }
 
@@ -1406,6 +1411,90 @@ proc RedrawCoordinates {} {
 }
 
 
+# Reserve dimensions are pixels in the full board-pane coordinate system.
+# Below 32 pixels per square, media must use its corner-overlay fallback.
+variable MinimumReserveSquare 32
+variable ReserveSide {}
+variable ReservePixels 0
+variable RebuildCallbacks {}
+
+proc reserveRect {} {
+	variable Dim
+	if {![info exists Dim(reserve:x)]} { return {0 0 0 0} }
+	return [list $Dim(reserve:x) $Dim(reserve:y) $Dim(reserve:w) $Dim(reserve:h)]
+}
+
+# Register command prefixes; callbacks take no additional arguments and can
+# query reserveRect. Registration is idempotent. Pass true to unregister.
+proc afterRebuild {callback {remove false}} {
+	variable RebuildCallbacks
+	set i [lsearch -exact $RebuildCallbacks $callback]
+	if {$remove} {
+		if {$i >= 0} { set RebuildCallbacks [lreplace $RebuildCallbacks $i $i] }
+	} elseif {$i < 0} {
+		lappend RebuildCallbacks $callback
+	}
+}
+
+proc setReserve {side px} {
+	variable ReserveSide
+	variable ReservePixels
+	variable MinimumReserveSquare
+	variable Vars
+	variable Dim
+	if {$side ni {right bottom left {}} || ![string is integer -strict $px] || $px < 0} {
+		error "expected reserve side right, bottom, left or {}, and nonnegative integer pixels"
+	}
+	if {$side eq {} || $px == 0} { set side {}; set px 0 }
+	if {![info exists Vars(widget:frame)]} { return 0 }
+	# Inset callbacks may request the same reserve after every rebuild.
+	if {$side eq $ReserveSide && $px == $ReservePixels} { return 1 }
+	set oldSide $ReserveSide
+	set oldPixels $ReservePixels
+	set saved [array get Dim]
+	set ReserveSide $side
+	set ReservePixels $px
+	ComputeLayout $Vars(width) $Vars(height)
+	set accepted [expr {$side eq {} || ($ReserveSide eq $side && $Dim(squaresize:$Vars(layout)) >= $MinimumReserveSquare)}]
+	array unset Dim
+	array set Dim $saved
+	if {!$accepted} {
+		set ReserveSide $oldSide
+		set ReservePixels $oldPixels
+		return 0
+	}
+	ApplyReserve3D
+	RebuildBoard $Vars(widget:frame) $Vars(width) $Vars(height) true
+	return 1
+}
+
+proc ApplyReserve3D {} {
+	variable Vars
+	variable ReserveSide
+	variable ReservePixels
+	if {![info exists Vars(3d)] || !$Vars(3d)} { return }
+	set x {0 0}
+	set y {0 0}
+	switch $ReserveSide {
+		left { set x [list $ReservePixels 0] }
+		right { set x [list 0 $ReservePixels] }
+		bottom { set y [list 0 $ReservePixels] }
+	}
+	pack configure $Vars(3dwin) -padx $x -pady $y
+}
+
+proc ConfigureReserve3D {width height} {
+	variable Vars
+	variable ReserveSide
+	variable ReservePixels
+	if {!$Vars(3d) || $width <= 1 || $height <= 1} { return }
+	if {$ReserveSide in {left right}} { incr width $ReservePixels }
+	if {$ReserveSide eq "bottom"} { incr height $ReservePixels }
+	set Vars(width) $width
+	set Vars(height) $height
+	RebuildBoard $Vars(widget:frame) $width $height
+}
+
 proc RebuildBoard {canv width height {force false}} {
 	variable ::board::layout
 	variable Layouts
@@ -1487,6 +1576,9 @@ proc RebuildBoard {canv width height {force false}} {
 	ConfigureBoard $canv
 	DrawMaterialValues $canv
 	DrawChecks $canv
+	variable RebuildCallbacks
+	ApplyReserve3D
+	foreach callback $RebuildCallbacks { uplevel #0 $callback }
 }
 
 
@@ -1591,6 +1683,35 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 		::update idletasks
 	}
 
+	variable ReserveSide
+	variable ReservePixels
+	variable MinimumReserveSquare
+	set fullWidth $canvWidth
+	set fullHeight $canvHeight
+	set originX 0
+	set Dim(reserve:x) 0
+	set Dim(reserve:y) 0
+	set Dim(reserve:w) 0
+	set Dim(reserve:h) 0
+	switch $ReserveSide {
+		right - left {
+			set canvWidth [expr {max(1, $canvWidth - $ReservePixels)}]
+			set Dim(reserve:w) $ReservePixels
+			set Dim(reserve:h) $fullHeight
+			if {$ReserveSide eq "left"} {
+				set originX $ReservePixels
+			} else {
+				set Dim(reserve:x) $canvWidth
+			}
+		}
+		bottom {
+			set canvHeight [expr {max(1, $canvHeight - $ReservePixels)}]
+			set Dim(reserve:y) $canvHeight
+			set Dim(reserve:w) $fullWidth
+			set Dim(reserve:h) $ReservePixels
+		}
+	}
+
 	set distance	[expr {max(1, min($canvWidth, $canvHeight)/150)}]
 	set width		[expr {$canvWidth - 2*$distance}]
 	set height		[expr {$canvHeight - 2*$distance}]
@@ -1678,6 +1799,14 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 		set Dim($sqsize)	[expr {($boardsize - 2*$Dim(edgethickness))/8}]
 	}
 
+	# A later pane resize may invalidate an accepted reserve as well.
+	if {$ReserveSide ne {} && $Dim($sqsize) < $MinimumReserveSquare} {
+		set ReserveSide {}
+		set ReservePixels 0
+		ComputeLayout $fullWidth $fullHeight $bordersize
+		return
+	}
+
 	set Dim(border:gap) [::board::computeGap $Dim($sqsize)]
 
 	if {$Dim(border:gap) > 0} {
@@ -1694,7 +1823,7 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 
 	set Dim(boardsize)	[expr {8*$Dim($sqsize) + 2*$Dim(edgethickness)}]
 	set Dim(bordersize)	[expr {$Dim(boardsize) + 2*$Dim(borderthickness)}]
-	set Dim(border:x1)	[expr {($canvWidth - $Dim(bordersize) + $Dim(offset:coords))/2}]
+	set Dim(border:x1)	[expr {$originX + ($canvWidth - $Dim(bordersize) + $Dim(offset:coords))/2}]
 	set Dim(border:y1)	[expr {($canvHeight - $Dim(bordersize))/2}]
 	set Dim(border:x2)	[expr {$Dim(border:x1) + $Dim(bordersize)}]
 	set Dim(border:y2)	[expr {$Dim(border:y1) + $Dim(bordersize)}]
