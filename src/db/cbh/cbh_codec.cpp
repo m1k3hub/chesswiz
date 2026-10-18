@@ -3337,6 +3337,13 @@ Codec::exportGame(GameInfo const& info, Codec& destination)
 					destination.m_sourceMap.push_back(nullptr);
 			}
 		}
+		else if (!destination.m_sourceMap.empty())
+		{
+			// Source database has no source map; pad destination with nullptr
+			// so this game does not inherit a stale source association.
+			while (destination.m_sourceMap.size() < destination.gameInfoList().size())
+				destination.m_sourceMap.push_back(nullptr);
+		}
 
 		if (!m_teamRefMap.empty() && srcIdx < m_teamRefMap.size())
 		{
@@ -3554,8 +3561,10 @@ Codec::writePlayerData(mstl::string const& rootname, util::Progress& progress)
 			mstl::string::size_type commaPos = name.find(',');
 			mstl::string lastName = (commaPos != mstl::string::npos) ? name.substr(0, commaPos) : name;
 			lastName.trim();
-			unsigned nameLen = mstl::min(lastName.size(), size_t(30));
-			bstrm.put(reinterpret_cast<Byte const*>(lastName.data()), nameLen);
+			mstl::string encLastName;
+			m_codec->fromUtf8(lastName, encLastName);
+			unsigned nameLen = mstl::min(encLastName.size(), size_t(30));
+			bstrm.put(reinterpret_cast<Byte const*>(encLastName.data()), nameLen);
 			for (unsigned j = nameLen; j < 30; ++j)
 				bstrm.put(Byte(' '));
 
@@ -3566,8 +3575,10 @@ Codec::writePlayerData(mstl::string const& rootname, util::Progress& progress)
 				firstName = name.substr(commaPos + 1);
 				firstName.trim();
 			}
-			nameLen = mstl::min(firstName.size(), size_t(20));
-			bstrm.put(reinterpret_cast<Byte const*>(firstName.data()), nameLen);
+			mstl::string encFirstName;
+			m_codec->fromUtf8(firstName, encFirstName);
+			nameLen = mstl::min(encFirstName.size(), size_t(20));
+			bstrm.put(reinterpret_cast<Byte const*>(encFirstName.data()), nameLen);
 			for (unsigned j = nameLen; j < 20; ++j)
 				bstrm.put(Byte(' '));
 
@@ -3622,8 +3633,10 @@ Codec::writeTournamentData(mstl::string const& rootname, util::Progress& progres
 
 			// Event name (40 bytes, space-padded)
 			mstl::string name = event->name();
-			unsigned nameLen = mstl::min(name.size(), size_t(40));
-			bstrm.put(reinterpret_cast<Byte const*>(name.data()), nameLen);
+			mstl::string encName;
+			m_codec->fromUtf8(name, encName);
+			unsigned nameLen = mstl::min(encName.size(), size_t(40));
+			bstrm.put(reinterpret_cast<Byte const*>(encName.data()), nameLen);
 			for (unsigned j = nameLen; j < 40; ++j)
 				bstrm.put(Byte(' '));
 
@@ -3635,8 +3648,10 @@ Codec::writeTournamentData(mstl::string const& rootname, util::Progress& progres
 				if (site == "?")
 					site.clear();
 			}
-			unsigned siteLen = mstl::min(site.size(), size_t(30));
-			bstrm.put(reinterpret_cast<Byte const*>(site.data()), siteLen);
+			mstl::string encSite;
+			m_codec->fromUtf8(site, encSite);
+			unsigned siteLen = mstl::min(encSite.size(), size_t(30));
+			bstrm.put(reinterpret_cast<Byte const*>(encSite.data()), siteLen);
 			for (unsigned j = siteLen; j < 30; ++j)
 				bstrm.put(Byte(' '));
 
@@ -3745,8 +3760,10 @@ Codec::writeAnnotatorData(mstl::string const& rootname, util::Progress& progress
 
 			// Annotator name (45 bytes, space-padded)
 			mstl::string name = annotator->name();
-			unsigned nameLen = mstl::min(name.size(), size_t(45));
-			bstrm.put(reinterpret_cast<Byte const*>(name.data()), nameLen);
+			mstl::string encName;
+			m_codec->fromUtf8(name, encName);
+			unsigned nameLen = mstl::min(encName.size(), size_t(45));
+			bstrm.put(reinterpret_cast<Byte const*>(encName.data()), nameLen);
 			for (unsigned j = nameLen; j < 45; ++j)
 				bstrm.put(Byte(' '));
 		}
@@ -3797,8 +3814,10 @@ Codec::writeSourceData(mstl::string const& rootname, util::Progress& progress)
 
 			// Source title (25 bytes, space-padded)
 			mstl::string title = src->name();
-			unsigned titleLen = mstl::min(title.size(), size_t(25));
-			bstrm.put(reinterpret_cast<Byte const*>(title.data()), titleLen);
+			mstl::string encTitle;
+			m_codec->fromUtf8(title, encTitle);
+			unsigned titleLen = mstl::min(encTitle.size(), size_t(25));
+			bstrm.put(reinterpret_cast<Byte const*>(encTitle.data()), titleLen);
 			for (unsigned j = titleLen; j < 25; ++j)
 				bstrm.put(Byte(' '));
 
@@ -3873,8 +3892,10 @@ Codec::writeTeamData(mstl::string const& rootname, util::Progress& progress)
 
 			// Team title (45 bytes, space-padded)
 			mstl::string title = m_teamBase[i]->title;
-			unsigned titleLen = mstl::min(title.size(), size_t(45));
-			bstrm.put(reinterpret_cast<Byte const*>(title.data()), titleLen);
+			mstl::string encTitle;
+			m_codec->fromUtf8(title, encTitle);
+			unsigned titleLen = mstl::min(encTitle.size(), size_t(45));
+			bstrm.put(reinterpret_cast<Byte const*>(encTitle.data()), titleLen);
 			for (unsigned j = titleLen; j < 45; ++j)
 				bstrm.put(Byte(' '));
 

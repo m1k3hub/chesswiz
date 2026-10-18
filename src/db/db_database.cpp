@@ -1617,7 +1617,7 @@ Database::copyGames(	Database& destination,
 		// Raw copy (ChessBase -> ChessBase) is handled above via exportGames(destination, ...).
 		// Re-encoding games from a non-ChessBase source into a ChessBase database is still
 		// refused until P1 (multilingual comments, NAG mapping) is complete.
-		IO_RAISE(Game, Write_Failed, "re-encoding games from a non-ChessBase source into a ChessBase database is not supported");
+		IO_RAISE(Game, Write_Failed, "Copying from this database format into a CBH database is not supported yet.");
 	}
 	else // dstFormat == format::Scid3 || dstFormat == format::Scid4
 	{

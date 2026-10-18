@@ -78,7 +78,7 @@ tcltest::test cbh-reencode-refused {::scidb::db::copy refuses non-ChessBase sour
 	::scidb::db::attach $dst $dst
 } -body {
 	set rc [catch {::scidb::db::copy $src $dst {} $nop {} $nop {}} err]
-	list $rc [expr {[string match "*ChessBase*" $err] || [string match "*Write_Failed*" $err] || [string match "*write*" [string tolower $err]]}]
+	list $rc [expr {[string match "*Write_Failed*" $err] || [string match "*not supported*" $err] || [string match "*write*" [string tolower $err]]}]
 } -cleanup {
 	catch { ::scidb::db::close $dst }
 	catch { ::scidb::db::close $src }
