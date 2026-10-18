@@ -39,6 +39,9 @@ array set Options {
 variable Swapped 0
 variable Shown 0
 variable Audio 0
+variable Aspect [expr {16.0/9}]
+variable LayingOut 0
+variable Watched {}
 
 } ;# namespace mediainset
 
@@ -116,6 +119,7 @@ proc ::mediainset::Build {w} {
 	foreach child [winfo children $w.controls] {
 		bindtags $child [linsert [bindtags $child] 1 $w]
 	}
+	bind $w <Destroy> [list ::mediainset::Teardown $w %W]
 	RefreshControls
 	# double-click on the video swaps as well
 	bind $w.video <Double-Button-1> [namespace code swap]
@@ -135,7 +139,14 @@ proc ::mediainset::hide {} {
 
 	set pane [Pane]
 	set Shown 0
-	if {$pane eq ""} { return }
+	Unwatch
+	if {$pane eq ""} {
+		# During <Destroy> the board may already have gone away.
+		set ::application::board::ReserveSide {}
+		set ::application::board::ReservePixels 0
+		return
+	}
+	::application::board::setReserve {} 0
 	if {[winfo exists $pane.mediainset]} { place forget $pane.mediainset }
 	if {$Swapped} {
 		set Swapped 0
@@ -160,58 +171,95 @@ proc ::mediainset::swapped? {} {
 }
 
 
-# Place the video and the board for the current mode.
+# The visible board presentation; the 2D canvas is unmapped in 3D mode.
+proc ::mediainset::BoardView {} {
+	upvar #0 ::application::board::Vars vars
+	if {$vars(3d) && [winfo exists $vars(3dwin)]} { return $vars(3dwin) }
+	return $vars(widget:frame)
+}
+
+# Place in board-pane coordinates. Only setReserve's minimum-square refusal
+# permits an overlay. The eight-pixel frame margin is 2*(border + highlight).
 proc ::mediainset::Layout {} {
 	variable Options
 	variable Swapped
 	variable Shown
+	variable Audio
+	variable Aspect
+	variable LayingOut
 
 	set pane [Pane]
-	if {$pane eq "" || !$Shown} { return }
+	if {$pane eq "" || !$Shown || $LayingOut} { return }
 	set w $pane.mediainset
-	set canv $pane.c
-	variable Audio
-	set s $Options(size)
-	set controlWidth [expr {[winfo reqwidth $w.controls] + 8}]
-
-	if {$Swapped} {
-		place $w -in $pane -x 0 -y 0 -relx 0 -rely 0 -anchor nw -relwidth 1 -relheight 1 \
-			-width {} -height {}
-		pack forget $canv
-		place $canv -in $pane -relx 1.0 -rely 1.0 -x -6 -y -6 -anchor se \
-			-relwidth $s -relheight $s
-		raise $canv
-	} else {
-		RestoreBoard $pane
-		set free [FreeRect $canv [expr {[winfo reqheight $w.controls] + 8}] $controlWidth]
-		if {[llength $free]} {
-			# beside the board: the largest free margin of the pane, 16:9
-			lassign $free x y fw fh
-			set x [expr {$x + [winfo x $canv]}]
-			set y [expr {$y + [winfo y $canv]}]
-			place $w -in $pane -x $x -y $y -width $fw -height $fh \
-				-relx 0 -rely 0 -anchor nw -relwidth {} -relheight {}
-		} else {
-			# no margin can hold a usable video: the board's bottom-right corner
-			set extra [expr {max(0, min($controlWidth, [winfo width $pane] - 12) - int([winfo width $pane]*$s))}]
-			place $w -in $pane -x -6 -y -6 -relx 1.0 -rely 1.0 -anchor se \
-				-width $extra -height {} -relwidth $s -relheight $s
-		}
-		raise $w
-	}
-	if {$Audio} {
-		set h [expr {[winfo reqheight $w.controls] + 8}]
-		if {$Swapped} {
+	if {![winfo exists $w]} { return }
+	set LayingOut 1
+	try {
+		Watch
+		set view [BoardView]
+		set s $Options(size)
+		set cw [expr {[winfo reqwidth $w.controls] + 8}]
+		set ch [expr {[winfo reqheight $w.controls] + 8}]
+		if {$Swapped && $Audio} {
+			::application::board::setReserve {} 0
 			RestoreBoard $pane
-			place $w -in $pane -x -6 -y -6 -relx 1.0 -rely 1.0 -anchor se \
-				-width [expr {max(0, min($controlWidth, [winfo width $pane] - 12) - int([winfo width $pane]*$s))}] \
-				-relwidth $s -relheight 0 -height $h
+			place $w -in $pane -x -6 -y -6 -relx 1 -rely 1 -anchor se \
+				-width $cw -height $ch -relwidth {} -relheight {}
+			raise $w
+		} elseif {$Swapped} {
+			::application::board::setReserve {} 0
+			place $w -in $pane -x 0 -y 0 -relx 0 -rely 0 -anchor nw \
+				-relwidth 1 -relheight 1 -width {} -height {}
+			pack forget $view
+			place $view -in $pane -relx 1 -rely 1 -x -6 -y -6 -anchor se \
+				-relwidth $s -relheight $s -width {} -height {}
+			raise $view
 		} else {
-			place $w -relheight 0 -height $h
+			RestoreBoard $pane
+			# Reconstruct the full slot from the VISIBLE 3D frame and its
+			# reserve padding, rather than consulting the hidden 2D canvas.
+			set width [winfo width $view]
+			set height [winfo height $view]
+			if {$::application::board::Vars(3d)} {
+				switch $::application::board::ReserveSide {
+					right - left { incr width $::application::board::ReservePixels }
+					bottom { incr height $::application::board::ReservePixels }
+				}
+			}
+			set side [expr {$width > $height ? "right" : "bottom"}]
+			if {$Audio} {
+				set iw $cw
+				set ih $ch
+			} else {
+				# A right-side video's height follows the slot height. Keeping
+				# its width stable during horizontal drags avoids rebuilding
+				# the board twice for two different square sizes on each drag.
+				set videoWidth [expr {$side eq "right" ? int($height*$s*$Aspect)+8 : int($width*0.66)}]
+				set iw [expr {max($cw, $Options(minWidth), $videoWidth)}]
+				# Fit the media's display aspect within the slot vertically too.
+				set iw [expr {min($iw, max(8, int(($height-$ch)*$Aspect)+8))}]
+				set ih [expr {int(round(($iw - 8)/$Aspect)) + $ch}]
+			}
+			set pixels [expr {$side eq "right" ? $iw : $ih}]
+			if {[::application::board::setReserve $side $pixels]} {
+				lassign [::application::board::reserveRect] x y rw rh
+				set x [expr {$x + [winfo x $view] + ($rw - $iw)/2}]
+				set y [expr {$y + [winfo y $view] + ($rh - $ih)/2}]
+				place $w -in $pane -x $x -y $y -width $iw -height $ih \
+					-relx 0 -rely 0 -anchor nw -relwidth {} -relheight {}
+			} else {
+				::application::board::setReserve {} 0
+				# Keep the usable transport, fitting the video to the pane.
+				set iw [expr {min($iw, max(1, [winfo width $pane] - 12))}]
+				set ih [expr {$Audio ? $ch : int(round(($iw - 8)/$Aspect)) + $ch}]
+				place $w -in $pane -x -6 -y -6 -relx 1 -rely 1 -anchor se \
+					-width $iw -height $ih -relwidth {} -relheight {}
+			}
+			raise $w
 		}
+		if {[winfo exists $pane.mediaButton]} { raise $pane.mediaButton }
+	} finally {
+		set LayingOut 0
 	}
-	if {[winfo exists $pane.mediaButton]} { raise $pane.mediaButton }
-	Watch $canv
 }
 
 
@@ -253,30 +301,57 @@ proc ::mediainset::FreeRect {canv {controlsHeight 0} {minimumWidth 0}} {
 }
 
 
-# Lay out again when the pane or the board changes size (the board is
-# rebuilt after idle, so wait for that).
-proc ::mediainset::Watch {canv} {
+# The board owns resize timing. This hook runs after decorations have their
+# final geometry; no independent 120ms timer can race the board rebuild.
+proc ::mediainset::Watch {} {
 	variable Watched
-	if {[info exists Watched($canv)]} { return }
-	set Watched($canv) 1
-	bind $canv <Configure> {+ after cancel ::mediainset::Relayout; after 120 ::mediainset::Relayout }
+	set pane [Pane]
+	if {$Watched eq $pane} { return }
+	Unwatch
+	set Watched $pane
+	::application::board::afterRebuild ::mediainset::BoardRebuilt
+	bind .application <<Fullscreen>> +[list ::mediainset::Fullscreen]
 }
 
+proc ::mediainset::Unwatch {} {
+	variable Watched
+	::application::board::afterRebuild ::mediainset::BoardRebuilt true
+	if {[winfo exists .application]} {
+		set binding [bind .application <<Fullscreen>>]
+		set lines [split $binding "\n"]
+		set i [lsearch -exact $lines ::mediainset::Fullscreen]
+		if {$i >= 0} { bind .application <<Fullscreen>> [join [lreplace $lines $i $i] "\n"] }
+	}
+	set Watched {}
+}
+
+proc ::mediainset::Teardown {w destroyed} {
+	if {$w eq $destroyed} { hide }
+}
+
+proc ::mediainset::BoardRebuilt {} {
+	variable LayingOut
+	if {!$LayingOut} { Relayout }
+}
+
+proc ::mediainset::Fullscreen {} {
+	# Tk/WM may deliver the new extent after <<Fullscreen>>. ConfigureWindow
+	# covers that resize too; this path also works when the extent is unchanged.
+	after idle ::mediainset::Relayout
+}
 
 proc ::mediainset::Relayout {} {
 	variable Shown
-	variable Swapped
-	if {$Shown && !$Swapped} { Layout }
+	if {$Shown} { Layout }
 }
 
-
 proc ::mediainset::RestoreBoard {pane} {
-	set canv $pane.c
-	if {[winfo manager $canv] eq "place"} {
-		place forget $canv
-		pack $canv -fill both -expand yes
+	set view [BoardView]
+	if {[winfo manager $view] eq "place"} {
+		place forget $view
+		pack $view -fill both -expand yes
 		if {[winfo exists $pane.mediaButton] && [winfo manager $pane.mediaButton] eq "place"} {
-			pack configure $canv -pady [list [expr {[winfo reqheight $pane.mediaButton] + 8}] 0]
+			pack configure $view -pady [list [expr {[winfo reqheight $pane.mediaButton] + 8}] 0]
 		}
 	}
 }
@@ -376,7 +451,11 @@ proc ::mediainset::Choose {row} {
 	$tree selection set $row
 	lassign [$tree item $row -values] type title path index
 	if {$type eq $::application::media::mc::SectionReports} {
-		::application::media::ViewReport $index
+		if {[file extension $path] in {.html .htm} && [file readable $path]} {
+			::application::report::showFile .application $path
+		} else {
+			::application::media::ViewReport $index
+		}
 	} elseif {[::application::media::ClassifyFile $path] == 1} {
 		# Reuse the picture renderer with a separate viewer surface.
 		::application::media::Stop
@@ -404,15 +483,20 @@ proc ::mediainset::RefreshControls {{position {}}} {
 	set state $::application::media::Priv(playstate)
 	$w.play configure -text [expr {$state eq "playing" ? "Ⅱ" : "▶"}]
 	if {$position ne "" && !$::application::media::Priv(seekgrab)} { $w.seek set $position }
-	set chapters 0
-	foreach entry [Entries] {
-		if {[lindex $entry 1] in [list $::application::media::mc::TypeAudio \
-			$::application::media::mc::TypeVideo $::application::media::mc::TypeStream]} { incr chapters }
-	}
+	set chapters [llength [::media::mpv::chapters]]
 	if {$chapters > 1} {
 		grid $w.prev; grid $w.next
 	} else {
 		grid remove $w.prev; grid remove $w.next
+	}
+}
+
+proc ::mediainset::RefreshAspect {} {
+	variable Aspect
+	set aspect [::media::mpv::aspect]
+	if {[string is double -strict $aspect] && $aspect > 0 && abs($aspect - $Aspect) > 0.001} {
+		set Aspect $aspect
+		Layout
 	}
 }
 

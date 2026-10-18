@@ -64,6 +64,8 @@ set LcdFont		"TkFixedFont"
 } ;# namespace mc
 
 array set Priv {
+	lastBase	{}
+	lastVariant	{}
 	position		-1
 	base			{}
 	variant		{}
@@ -205,7 +207,9 @@ proc application::media::BuildBackend {twm frame width height} {
 
 	# React to game switches
 	::scidb::db::subscribe gameSwitch [namespace current]::GameSwitched
+	::scidb::db::subscribe gameInfo [namespace current]::GameInfoChanged
 	::scidb::db::subscribe databaseSwitch [namespace current]::DatabaseSwitched
+	::scidb::db::subscribe dbInfo {} [namespace current]::DatabaseClosed
 
 	# Board-sync wiring (state machine in tcl/app-media-sync.tcl).
 	# The coupling is inherent: no options, always bidirectional.
@@ -318,30 +322,23 @@ proc application::media::_refreshTransport {} {
 }
 
 
-# ChessBase's two arrows jump to the previous/next game (chapter) of the
-# media.  scidb's gallery is the chapter list: move the selection and
-# play the neighbouring entry.
+# Chapters belong to the playing item. Moving between files is a media-menu
+# action and must never change lastMedia through these transport controls.
 proc application::media::ChapterStep {delta} {
 	variable Priv
-
-	set tree $Priv(tree)
-	set rows [MediaRows]
-	if {![llength $rows]} { return }
-
-	set idx 0
-	set sel [$tree selection]
-	if {[llength $sel]} {
-		set found [lsearch -exact $rows [lindex $sel 0]]
-		if {$found >= 0} { set idx $found }
+	if {!$Priv(inprocess)} { return }
+	set starts [::media::mpv::chapters]
+	if {[llength $starts] < 2} { return }
+	set time [MediaTime]
+	if {![string is double -strict $time]} { return }
+	set time [expr {$time*1000.0}]
+	set chapter 0
+	foreach start $starts {
+		if {$start > $time} { break }
+		incr chapter
 	}
-	set idx [expr {$idx + $delta}]
-	if {$idx < 0} { set idx 0 }
-	if {$idx >= [llength $rows]} { set idx [expr {[llength $rows] - 1}] }
-
-	set item [lindex $rows $idx]
-	$tree selection set $item
-	catch { $tree see $item }
-	PlaySelected $tree
+	set chapter [expr {max(0, min([llength $starts]-1, $chapter - 1 + $delta))}]
+	MediaSeek [expr {[lindex $starts $chapter]/1000.0}]
 }
 
 
@@ -489,8 +486,21 @@ proc application::media::InsertEntry {typeLabel title path index} {
 
 proc application::media::GameSwitched {oldPos newPos} {
 	variable Priv
+	# DatabaseSwitch can arrive before the deferred Update runs.
+	set Priv(position) $newPos
 	catch { after cancel $Priv(afterid) }
 	set Priv(afterid) [after 1 [namespace code [list Update $newPos]]]
+}
+
+
+proc application::media::GameInfoChanged {position} {
+	variable Priv
+	if {$position != [::scidb::game::current]} { return }
+	if {[catch {set link [::scidb::game::link? $position]}]} { return }
+	if {$position != $Priv(position) || [lrange $link 0 2] ne [list $Priv(base) $Priv(variant) $Priv(index)]} {
+		# Loading another game can reuse the current slot, without gameSwitch.
+		GameSwitched $position $position
+	}
 }
 
 
@@ -504,6 +514,25 @@ proc application::media::DatabaseSwitched {base variant} {
 	}
 }
 
+
+proc application::media::DatabaseClosed {base variant} {
+	variable Priv
+	if {$base eq $Priv(base) || $base eq $Priv(lastBase)} {
+		# The native database is still notifying its observers. Defer board
+		# and sync work until close has finished releasing the database.
+		catch {after cancel $Priv(afterid)}
+		set Priv(afterid) [after 1 [namespace code [list ClearClosedDatabase $base]]]
+	}
+}
+
+proc application::media::ClearClosedDatabase {base} {
+	variable Priv
+	if {$base ne $Priv(base) && $base ne $Priv(lastBase)} { return }
+	Stop
+	set Priv(lastBase) {}
+	set Priv(base) {}
+	Update -1
+}
 
 # Mapping a ChessBase base's games onto the media of its tournament
 # reports takes seconds on a big base, so it is built in the background;
@@ -537,116 +566,122 @@ proc application::media::Update {position} {
 	variable Priv
 	variable mc
 
-	after idle ::mediainset::RefreshMediaButton
-	set Priv(position) $position
-	set Priv(linksBase) {}
-	set Priv(interactive) {}
-	set Priv(dbInteractive) {}
-	set Priv(dbBoardSync) {}
-	set Priv(userInteractive) {}
-	array unset Priv "interactive:played:*"
-	set tree $Priv(tree)
-	# the game and database still announce changes after the pane has closed
-	if {![winfo exists $tree]} { return }
+	catch {after cancel $Priv(afterid)}
+	set Priv(afterid) {}
+	try {
+		set Priv(position) $position
+		set Priv(linksBase) {}
+		set Priv(interactive) {}
+		set Priv(dbInteractive) {}
+		set Priv(dbBoardSync) {}
+		set Priv(userInteractive) {}
+		array unset Priv "interactive:played:*"
+		set tree $Priv(tree)
+		# the game and database still announce changes after the pane has closed
+		if {![winfo exists $tree]} { return }
 
-	# Stop any playing media
-	Stop
+		# Stop any playing media
+		Stop
 
-	# Clear previous entries
-	foreach item [$tree children {}] { $tree delete $item }
+		# Clear previous entries
+		foreach item [$tree children {}] { $tree delete $item }
 
-	if {$position < 0 || $position == 9} {
-		# independent mode - no game on the board: keep the media of the
-		# last opened base playable (gallery browsing without a game).
-		set Priv(index) -1
-		if {[info exists Priv(lastBase)] && [string length $Priv(lastBase)]
-			&& [file exists $Priv(lastBase)]} {
-			array unset Priv "interactive:played:*"
-			if {![LinksReady $Priv(lastBase) $Priv(lastVariant)]} { return }
-			set gallery {}
-			catch { set gallery [::scidb::db::mediaGallery $Priv(lastBase) $Priv(lastVariant)] }
-			if {[llength $gallery]} {
-				MediaDebug "Update: independent gallery returned [llength $gallery] entries"
-				foreach gentry $gallery {
-					lassign $gentry gpath gtype gtitle gmediaId gindex
-					InsertEntry $gtype $gtitle $gpath $gindex
+		if {$position < 0 || $position == 9} {
+			# independent mode - no game on the board: keep the media of the
+			# last opened base playable (gallery browsing without a game).
+			set Priv(index) -1
+			if {[info exists Priv(lastBase)] && [string length $Priv(lastBase)]
+				&& [file exists $Priv(lastBase)]} {
+				array unset Priv "interactive:played:*"
+				if {![LinksReady $Priv(lastBase) $Priv(lastVariant)]} { return }
+				set gallery {}
+				catch { set gallery [::scidb::db::mediaGallery $Priv(lastBase) $Priv(lastVariant)] }
+				if {[llength $gallery]} {
+					MediaDebug "Update: independent gallery returned [llength $gallery] entries"
+					foreach gentry $gallery {
+						lassign $gentry gpath gtype gtitle gmediaId gindex
+						InsertEntry $gtype $gtitle $gpath $gindex
+					}
+					set Priv(base) $Priv(lastBase)
+					set Priv(variant) $Priv(lastVariant)
+					set Priv(statusbar) "Media gallery - playable without a game"
+					ShowEmptyHint "Media gallery\n\nSelect a media entry to play."
+					PrebuildLessons
+					return
 				}
-				set Priv(base) $Priv(lastBase)
-				set Priv(variant) $Priv(lastVariant)
-				set Priv(statusbar) "Media gallery - playable without a game"
-				ShowEmptyHint "Media gallery\n\nSelect a media entry to play."
+			}
+			set Priv(base) {}
+			set Priv(variant) {}
+			set Priv(statusbar) $mc::NoDatabase
+			ShowEmptyHint $mc::NoDatabase
+			return
+		}
+
+		lassign [::scidb::game::link? $position] base variant index
+		set Priv(base) $base
+		set Priv(variant) $variant
+		set Priv(index) $index
+		set Priv(lastBase) $base
+		set Priv(lastVariant) $variant
+		# database-level interactive manifest applies to every game
+		LoadDbInteractive $base
+		LoadUserInteractive
+
+		if {$base eq "" || $index < 0} {
+			set Priv(statusbar) $mc::NoMedia
+			return
+		}
+
+		if {![LinksReady $base $variant]} { return }
+
+		set entries {}
+		catch { set entries [::scidb::db::mediaFiles $base $variant $index] }
+		MediaDebug "Update: base=[list $base] index=$index mediaFiles=[llength $entries]"
+		if {![llength $entries]} {
+			# No per-game media (.scm) — try the gallery (.cbm or .scm gallery)
+			set gallery {}
+			catch { set gallery [::scidb::db::mediaGallery $base $variant] }
+			MediaDebug "Update: game gallery fallback returned [llength $gallery] entries"
+			if {[llength $gallery]} {
+				set Priv(statusbar) "Media gallery (not game-specific)"
+				foreach entry $gallery {
+					lassign $entry path type title mediaId gameIndex
+					InsertEntry $type $title $path [expr {[string is integer -strict $gameIndex] ? $gameIndex : -1}]
+				}
 				PrebuildLessons
 				return
 			}
-		}
-		set Priv(base) {}
-		set Priv(variant) {}
-		set Priv(statusbar) $mc::NoDatabase
-		ShowEmptyHint $mc::NoDatabase
-		return
-	}
-
-	lassign [::scidb::game::link? $position] base variant index
-	set Priv(base) $base
-	set Priv(variant) $variant
-	set Priv(index) $index
-	set Priv(lastBase) $base
-	set Priv(lastVariant) $variant
-	# database-level interactive manifest applies to every game
-	LoadDbInteractive $base
-	LoadUserInteractive
-
-	if {$base eq "" || $index < 0} {
-		set Priv(statusbar) $mc::NoMedia
-		return
-	}
-
-	if {![LinksReady $base $variant]} { return }
-
-	set entries {}
-	catch { set entries [::scidb::db::mediaFiles $base $variant $index] }
-	MediaDebug "Update: base=[list $base] index=$index mediaFiles=[llength $entries]"
-	if {![llength $entries]} {
-		# No per-game media (.scm) — try the gallery (.cbm or .scm gallery)
-		set gallery {}
-		catch { set gallery [::scidb::db::mediaGallery $base $variant] }
-		MediaDebug "Update: game gallery fallback returned [llength $gallery] entries"
-		if {[llength $gallery]} {
-			set Priv(statusbar) "Media gallery (not game-specific)"
-			foreach entry $gallery {
-				lassign $entry path type title mediaId gameIndex
-				InsertEntry $type $title $path [expr {[string is integer -strict $gameIndex] ? $gameIndex : -1}]
-			}
-			PrebuildLessons
+			set Priv(statusbar) $mc::NoMedia
+			ShowEmptyHint "No media for this game.\n\nMedia entries appear here when the\ndatabase has an .scm/.cbm media companion."
 			return
 		}
-		set Priv(statusbar) $mc::NoMedia
-		ShowEmptyHint "No media for this game.\n\nMedia entries appear here when the\ndatabase has an .scm/.cbm media companion."
-		return
-	}
 
-	foreach entry $entries {
-		lassign $entry path type title mediaId inline
-		if {[string is true -strict $inline]} { set path {} }	;# base64 payload: not extractable (docs §6)
-		InsertEntry $type $title $path $index
-	}
-	MediaDebug "Update: done tree=[list $tree] rows=[$tree children {}] mapped=[winfo ismapped $tree] viewable=[winfo viewable $tree]"
-
-	# collect interactive-video indexes (.cms; .scm/.smv manifests already
-	# loaded database-level) for board-position–keyed playback
-	set Priv(interactive) {}
-	array unset Priv "interactive:played:*"
-	foreach entry $entries {
-		lassign $entry path type title mediaId inline
-		if {[string equal -nocase [file extension $path] ".cms"]} {
-			lappend Priv(interactive) $path
+		foreach entry $entries {
+			lassign $entry path type title mediaId inline
+			if {[string is true -strict $inline]} { set path {} }	;# base64 payload: not extractable (docs §6)
+			InsertEntry $type $title $path $index
 		}
+		MediaDebug "Update: done tree=[list $tree] rows=[$tree children {}] mapped=[winfo ismapped $tree] viewable=[winfo viewable $tree]"
+
+		# collect interactive-video indexes (.cms; .scm/.smv manifests already
+		# loaded database-level) for board-position–keyed playback
+		set Priv(interactive) {}
+		array unset Priv "interactive:played:*"
+		foreach entry $entries {
+			lassign $entry path type title mediaId inline
+			if {[string equal -nocase [file extension $path] ".cms"]} {
+				lappend Priv(interactive) $path
+			}
+		}
+
+		PrebuildLessons
+		set Priv(statusbar) {}
+	} finally {
+		# Stop/setReserve can process idle work while rebuilding the board.
+		# Refresh only after this update has finished replacing the rows.
+		after idle ::mediainset::RefreshMediaButton
 	}
-
-	PrebuildLessons
-	set Priv(statusbar) {}
 }
-
 
 # Open the selected entry with the system default application.
 proc application::media::OpenSelectedExternal {} {
@@ -724,6 +759,16 @@ proc application::media::CoupledLesson? {type galleryIndex} {
 }
 
 
+# A gallery audio/video row is a synchronized lesson only when it has
+# timing metadata. Plain interviews and clips still play in the inset.
+proc application::media::HasLesson {path} {
+	variable Priv
+	if {[info exists Priv(dbBoardSync)] && [dict exists $Priv(dbBoardSync) [file normalize $path]]} { return 1 }
+	set lesson [::media::lesson::get $path]
+	return [dict get $lesson valid]
+}
+
+
 proc application::media::PlaySelected {tree} {
 	variable Priv
 
@@ -762,7 +807,7 @@ proc application::media::PlaySelected {tree} {
 	# Coupled lesson (video/audio owned by a game): media + game play as
 	# ONE unit — neither without the other (PlayLesson). Requires an
 	# owning database: gallery rows without one play as plain media below.
-	if {[CoupledLesson? $type $galleryIndex]} {
+	if {[CoupledLesson? $type $galleryIndex] && [HasLesson $path]} {
 		Stop
 		# the manifest's owner is sometimes the neighbouring game: let the
 		# lesson's own positions decide which game it is played with
@@ -1036,7 +1081,7 @@ proc application::media::SmvEntries {path} {
 							set resolved [file join $dir $rawPath]
 						}
 					}
-					set keyOf($s_(id)) [file normalize $resolved]
+					set keyOf($s_(id)) [expr {[isStreamUrl $resolved] ? $resolved : [file normalize $resolved]}]
 				}
 				if {[info exists keyOf($s_(id))]} {
 					if {![string length $mp]} {
@@ -1549,18 +1594,29 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	variable mc
 
 	if {$startMs eq ""} { set startMs 0 }
-	if {![::media::mpv::available?]} { return 0 }
+	if {![::media::mpv::available?]} {
+		Stop
+		set Priv(statusbar) "The media backend is unavailable."
+		return 0
+	}
 
 	set canvas $Priv(viewer).canvas
 	# the video may be shown inside the board window (media-inset.tcl)
 	if {[llength [info commands ::mediainset::surface]]} {
+		set ::mediainset::Aspect [expr {16.0/9}]
 		set canvas [::mediainset::surface $canvas]
 		::mediainset::AudioOnly [expr {[ClassifyFile $path] == 2}]
 	}
 	# Realize the canvas so winfo id names a mapped window.
 	update idletasks
-	if {[catch { set wid [winfo id $canvas] }]} { return 0 }
-	if {![::media::mpv::launch $path $wid $startMs]} {
+	if {[catch { set wid [winfo id $canvas] }]} {
+		Stop
+		set Priv(statusbar) "The media surface is unavailable."
+		return 0
+	}
+	if {[catch {::media::mpv::launch $path $wid $startMs} ok] || !$ok} {
+		Stop
+		set Priv(statusbar) "Could not open media: $path"
 		MediaDebug "PlayInProcess: libmpv refused [list $path]"
 		return 0
 	}
@@ -1576,6 +1632,7 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 			[namespace code { catch { Stop } }]]
 	}
 	set Priv(inprocess) 1
+	::mediainset::RefreshAspect
 	_refreshTransport
 	set Priv(statusbar) "Playing: $path"
 	MediaDebug "PlayInProcess: playback started for $path"
@@ -1708,6 +1765,7 @@ proc application::media::MediaDestroy {} {
 	variable Priv
 	::media::mpv::stop
 	set Priv(inprocess) 0
+	::mediainset::hide
 }
 
 # Transport delegate: play/pause the current media.
@@ -2008,7 +2066,10 @@ proc application::media::SeekTick {} {
 		set Priv(seeklabel) "[FormatMs $t] / [FormatMs $dur]"
 		::mediainset::RefreshControls [expr {double($t) / $dur * 1000.0}]
 	}
-	if {$Priv(inprocess)} { StartSeekTick }
+	if {$Priv(inprocess)} {
+		::mediainset::RefreshAspect
+		StartSeekTick
+	}
 }
 
 

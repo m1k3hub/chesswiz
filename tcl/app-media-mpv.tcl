@@ -15,7 +15,7 @@
 
 namespace eval ::media::mpv {
 	variable LaunchError {}
-	namespace export launch stop time duration state play pause seek available? volume setVolume
+	namespace export launch stop time duration state play pause seek available? volume setVolume aspect chapters
 }
 
 # Was the native player linked into this build?
@@ -55,6 +55,33 @@ proc ::media::mpv::duration {} {
 	set d [_get duration]
 	if {[string is double -strict $d]} { return $d }
 	return {}
+}
+
+# Display aspect (sample aspect ratio included), available after metadata loads.
+proc ::media::mpv::aspect {} {
+	set a [_get video-params/aspect]
+	if {[string is double -strict $a] && $a > 0} { return $a }
+	set w [_get dwidth]
+	set h [_get dheight]
+	if {[string is double -strict $w] && [string is double -strict $h] && $w > 0 && $h > 0} {
+		return [expr {double($w)/$h}]
+	}
+	return {}
+}
+
+# Chapter start boundaries in milliseconds for the currently loaded ITEM.
+# Read scalar properties so both libmpv and optional native backends can
+# report absence without a JSON parser or dependence on the game's gallery.
+proc ::media::mpv::chapters {} {
+	set count [_get chapters]
+	if {![string is integer -strict $count] || $count < 1} { return {} }
+	set starts {}
+	for {set i 0} {$i < $count} {incr i} {
+		set t [_get chapter-list/$i/time]
+		if {![string is double -strict $t] || $t < 0} { return {} }
+		lappend starts [expr {$t*1000.0}]
+	}
+	return $starts
 }
 
 proc ::media::mpv::state {} {

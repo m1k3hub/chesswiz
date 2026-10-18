@@ -1,6 +1,15 @@
 # Board transport shares the Media pane's model and playback delegates.
 package require tcltest 2.5
 
+proc ::scidb::test::foldRecord {target data} {
+    file mkdir tests/tmp-app/w1
+    set f [open tests/tmp-app/w1/$target-media.txt a]
+    puts $f $data
+    close $f
+    puts "$target $data"
+}
+
+
 proc ::scidb::test::foldStub {name args body} {
     if {[llength [info commands ::media::mpv::$name]]} {
         rename ::media::mpv::$name ::media::mpv::foldSaved_$name
@@ -44,6 +53,8 @@ tcltest::test mediafold-controls {controls live below the video and move with th
     set video [::mediainset::surface .unused]
     set w [winfo parent $video]
     update
+    ::mediainset::Layout
+    update idletasks
     list [winfo exists $w.controls.play] [winfo exists $w.controls.seek] \
         [dict get [pack info $video] -side] [dict get [pack info $w.controls] -side] \
         [expr {[winfo y $w.controls] >= [winfo y $video] + [winfo height $video]}] \
@@ -87,38 +98,51 @@ tcltest::test mediafold-transport {play pause seek stop swap and space key use t
     $w.expand invoke
     set unswapped $::mediainset::Swapped
     $controls.stop invoke
+    ::scidb::test::foldRecord VAL-MED-001B [list controls {play pause seek stop} calls $::scidb::test::foldCalls time $time fraction $fraction]
     list $::scidb::test::foldCalls $time [expr {$fraction == 250}] $swapped $unswapped $::mediainset::Shown
 } -cleanup {::scidb::test::foldCleanup} -result {{play pause play pause {seek 60000.0} stop} {0:30 / 2:00} 1 1 0 0}
 
-tcltest::test mediafold-chapters {chapter prev and next appear only with multiple chapters and step chapters} -setup {
-    rename ::mediainset::Entries ::mediainset::foldSavedChapterEntries
-    rename ::application::media::ChapterStep ::application::media::foldSavedChapterStep
-    set ::scidb::test::foldChapterEntries {{item0 Video {Chapter 1} /ch1.mp4 0}}
+tcltest::test mediafold-chapters {only the playing item supplies chapters; each button seeks within it} -setup {
+    set ::scidb::test::foldStubs {}
+    set ::scidb::test::foldChapters {}
+    set ::scidb::test::foldTime 30
+    set ::scidb::test::foldCalls {}
     set ::scidb::test::foldChapterSteps {}
-    proc ::mediainset::Entries {} {return $::scidb::test::foldChapterEntries}
-    proc ::application::media::ChapterStep {delta} {lappend ::scidb::test::foldChapterSteps $delta}
+    ::scidb::test::foldStub chapters {} {return $::scidb::test::foldChapters}
+    ::scidb::test::foldStub time {} {return $::scidb::test::foldTime}
+    ::scidb::test::foldStub seek {ms} {
+        lappend ::scidb::test::foldCalls [list seek $ms]
+        set ::scidb::test::foldTime [expr {$ms/1000.0}]
+    }
+    proc ::scidb::test::foldChapterTrace {cmd op} {
+        lappend ::scidb::test::foldChapterSteps [lindex $cmd 1]
+    }
+    trace add execution ::application::media::ChapterStep enter ::scidb::test::foldChapterTrace
 } -body {
     set video [::mediainset::surface .unused]
     set controls [winfo parent $video].controls
+    set ::application::media::Priv(inprocess) 1
+    set ::application::media::Priv(lastMedia) /same-item.mp4
     ::mediainset::RefreshControls
     set singleMgr [list [winfo manager $controls.prev] [winfo manager $controls.next]]
-    set ::scidb::test::foldChapterEntries {
-        {item0 Video {Chapter 1} /ch1.mp4 0}
-        {item1 Video {Chapter 2} /ch2.mp4 0}
-        {item2 Audio {Commentary} /ch3.mp3 0}
-    }
+    # Separate files are never chapters, irrespective of gallery size.
+    ::application::media::InsertEntry 3 One /one.mp4 -1
+    ::application::media::InsertEntry 3 Two /two.mp4 -1
     ::mediainset::RefreshControls
+    set separateMgr [list [winfo manager $controls.prev] [winfo manager $controls.next]]
+    set ::scidb::test::foldChapters {0 60000}
+    ::mediainset::RefreshControls
+    update idletasks
     set multiMgr [list [winfo manager $controls.prev] [winfo manager $controls.next]]
-    $controls.prev invoke
     $controls.next invoke
-    list $singleMgr $multiMgr $::scidb::test::foldChapterSteps
+    $controls.prev invoke
+    ::scidb::test::foldRecord VAL-MED-002 [list chapterSource ::media::mpv::chapters stubStarts $::scidb::test::foldChapters single $singleMgr separateFiles $separateMgr chaptered $multiMgr steps $::scidb::test::foldChapterSteps seekLog $::scidb::test::foldCalls lastMedia $::application::media::Priv(lastMedia)]
+    list $singleMgr $separateMgr $multiMgr $::scidb::test::foldChapterSteps \
+        $::scidb::test::foldCalls $::application::media::Priv(lastMedia)
 } -cleanup {
-    rename ::mediainset::Entries {}
-    rename ::mediainset::foldSavedChapterEntries ::mediainset::Entries
-    rename ::application::media::ChapterStep {}
-    rename ::application::media::foldSavedChapterStep ::application::media::ChapterStep
-    ::mediainset::hide
-} -result {{{} {}} {grid grid} {-1 1}}
+    trace remove execution ::application::media::ChapterStep enter ::scidb::test::foldChapterTrace
+    ::scidb::test::foldCleanup
+} -result {{{} {}} {{} {}} {grid grid} {1 -1} {{seek 60000.0} {seek 0.0}} /same-item.mp4}
 
 tcltest::test mediafold-button-menu {board button follows the shared entry list and builds a typed menu} -setup {
     rename ::mediainset::Entries ::mediainset::foldSavedEntries
@@ -247,10 +271,11 @@ tcltest::test mediafold-audio {audio hides the video through relayout and swap} 
     ::mediainset::AudioOnly 1
     ::mediainset::Layout
     ::mediainset::swap
+    update idletasks
     set w [winfo parent $video]
-    list [winfo manager $video] [dict get [place info $w] -relheight] \
+    list [winfo manager $video] [expr {[winfo height $w] == [winfo reqheight $w.controls]+8}] \
         [winfo manager $w.controls]
-} -cleanup {::mediainset::hide; ::mediainset::AudioOnly 0} -result {{} 0 pack}
+} -cleanup {::mediainset::hide; ::mediainset::AudioOnly 0} -result {{} 1 pack}
 
 tcltest::test mediafold-pane-reopen {Media pane is absent by default and reopenable via the pane menu} -body {
     .application.nb select .application.nb.board
@@ -261,12 +286,13 @@ tcltest::test mediafold-pane-reopen {Media pane is absent by default and reopena
     ::application::twm::ChangeState $twm media
     update
     set openedDocked [$twm isdocked media]
+    set openedMapped [winfo ismapped .application.mediaBackend]
     set openedInspect [regexp {frame media} [::application::twm::inspectLayout $twm]]
     ::application::twm::ChangeState $twm media
     update
     set closedDocked [$twm isdocked media]
-    list $defaultDocked $defaultInspect $openedDocked $openedInspect $closedDocked
-} -result {0 0 1 1 0}
+    list $defaultDocked $defaultInspect $openedDocked $openedInspect $closedDocked $openedMapped
+} -result {0 0 1 1 0 1}
 
 tcltest::test mediafold-interactive-menu {authored segments keep their range conversion when chosen} -setup {
     rename ::application::media::PlayMedia ::application::media::foldSavedPlayMedia
@@ -352,12 +378,13 @@ tcltest::test mediafold-mediatest-sci {MediaTest.sci drives button visibility ch
     update
     set noMediaBtn [list [winfo manager $pane.mediaButton] [winfo ismapped $pane.mediaButton]]
 
+    ::scidb::test::foldRecord VAL-MED-006 [list time7 $fenAt7 time15 $fenAt15 start $fenStart segmentLaunch $interactiveLoad]
     list $g1Btn [expr {$g1Count >= 4}] $chapterBtns \
         [expr {$fenStart ne $fenAt7}] [expr {$fenAt7 ne $fenAt15}] \
         $interactiveLoad $noMediaBtn
 } -cleanup {
     ::scidb::test::foldCleanup
-} -result {{place 1} 1 {grid grid} 1 1 {{launch analysis.mp4 10000.0}} {{} 0}}
+} -result {{place 1} 1 {{} {}} 1 1 {{launch analysis.mp4 10000.0}} {{} 0}}
 
 tcltest::test mediafold-backend {closing a Media pane leaves the shared model alive} -body {
     ttk::frame .application.foldPane
@@ -367,5 +394,174 @@ tcltest::test mediafold-backend {closing a Media pane leaves the shared model al
     destroy .application.foldPane
     list [winfo exists $tree] [winfo manager .application.mediaBackend]
 } -result {1 {}}
+
+# Contract evidence from the live widget/model surface.
+proc ::scidb::test::foldRect {w} {
+    list [winfo rootx $w] [winfo rooty $w] [winfo width $w] [winfo height $w]
+}
+proc ::scidb::test::foldWait {} {
+    set ::scidb::test::foldWaiting 0
+    after 350 {set ::scidb::test::foldWaiting 1}
+    vwait ::scidb::test::foldWaiting
+    update idletasks
+}
+tcltest::test mediafold-control-rects {MED-001A controls below video in normal and swapped modes} -body {
+    wm geometry .application 1200x720
+    ::scidb::test::foldWait
+    set video [::mediainset::surface .unused]
+    set w [winfo parent $video]
+    set results {}
+    foreach mode {normal swapped} {
+        if {$mode eq "swapped"} {$w.expand invoke}
+        ::scidb::test::foldWait
+        ::scidb::test::foldRecord VAL-MED-001A [list mode $mode inset [::scidb::test::foldRect $w] \
+            video [::scidb::test::foldRect $video] controls [::scidb::test::foldRect $w.controls] \
+            order [pack slaves $w] videoPack [pack info $video] barPack [pack info $w.controls]]
+        lappend results [expr {[winfo y $w.controls]>=[winfo y $video]+[winfo height $video]}]
+    }
+    set results
+} -cleanup {::mediainset::hide} -result {1 1}
+
+tcltest::test mediafold-focus-time {MED-001C time advances and Space is local to inset focus} -setup {
+    set ::scidb::test::foldStubs {}
+    set ::scidb::test::foldCalls {}
+    set ::scidb::test::foldTime 30
+    ::scidb::test::foldStub state {} {return playing}
+    ::scidb::test::foldStub time {} {return $::scidb::test::foldTime}
+    ::scidb::test::foldStub duration {} {return 120}
+    ::scidb::test::foldStub pause {} {lappend ::scidb::test::foldCalls pause}
+    ::scidb::test::foldStub stop {} {}
+} -body {
+    set w [winfo parent [::mediainset::surface .unused]]
+    set ::application::media::Priv(inprocess) 1
+    ::application::media::SeekTick
+    set first [$w.controls.time cget -text]
+    set ::scidb::test::foldTime 65
+    ::application::media::SeekTick
+    set second [$w.controls.time cget -text]
+    focus -force $w.controls.play
+    update
+    event generate $w.controls.play <space>
+    set inside $::scidb::test::foldCalls
+    entry .application.foldOutside
+    focus -force .application.foldOutside
+    update
+    event generate .application.foldOutside <space>
+    ::scidb::test::foldRecord VAL-MED-001C [list first $first second $second inside $inside outside $::scidb::test::foldCalls]
+    list $first $second $inside $::scidb::test::foldCalls
+} -cleanup {destroy .application.foldOutside; ::scidb::test::foldCleanup} -result {{0:30 / 2:00} {1:05 / 2:00} pause pause}
+
+tcltest::test mediafold-real-menu {MED-003/004 real MediaTest rows dispatch picture/video/stream/audio} -setup {
+    set ::scidb::test::foldStubs {}
+    set ::scidb::test::foldCalls {}
+    ::scidb::test::foldStub available? {} {return 1}
+    ::scidb::test::foldStub launch {path wid {ms 0}} {lappend ::scidb::test::foldCalls [list launch $path $wid $ms]; return 1}
+    ::scidb::test::foldStub state {} {return playing}
+    ::scidb::test::foldStub time {} {return 0}
+    ::scidb::test::foldStub duration {} {return 90}
+    ::scidb::test::foldStub stop {} {}
+} -body {
+    set base [file normalize tests/tmp-app/media-test/MediaTest.sci]
+    if {![::scidb::db::get open? $base]} {::scidb::db::load $base {apply {args {return 0}}} {} -readonly 1}
+    ::scidb::db::switch $base Normal
+    set pos [::game::new .application -base $base -variant Normal -number 1]
+    # The legacy test above simulates independent mode with Update -1 while
+    # keeping this same game open. Restore the real model before this case.
+    ::application::media::Update $pos
+    ::scidb::test::foldWait
+    set pane [::mediainset::Pane]
+    set menu $pane.mediaButton.menu
+    ::mediainset::PopulateMenu $menu
+    set labels {}; set entries [::mediainset::Entries]
+    set matches [expr {[llength [::application::media::MediaRows]] == [llength [::scidb::db::mediaFiles $base Normal 1]]}]; set index 0
+    ::scidb::test::foldRecord VAL-MED-003B [list slot $pos current [::scidb::game::current] modelPosition $::application::media::Priv(position) modelBase $::application::media::Priv(base) modelIndex $::application::media::Priv(index) link [::scidb::game::link? $pos] expected [::scidb::db::mediaFiles $base Normal 1]]
+    foreach entry $entries {
+        lassign $entry row type title path owner
+        set label [$menu entrycget $index -label]
+        lappend labels $label
+        if {$label ne "$title ($type)"} {set matches 0}
+        incr index
+    }
+    ::scidb::test::foldRecord VAL-MED-003A [list withMedia [winfo ismapped $pane.mediaButton]]
+    ::scidb::test::foldRecord VAL-MED-003B [list entries $entries menu $labels openStream [$menu entrycget end -label]]
+    set states {}
+    foreach type {Video Stream Picture} id {VAL-MED-004A VAL-MED-004B VAL-MED-004C} {
+        set index 0
+        foreach entry $entries {
+            if {[lindex $entry 1] eq $type} {break}
+            incr index
+        }
+        $menu invoke $index
+        ::scidb::test::foldWait
+        if {$type eq "Picture"} {
+            set state [list [winfo exists .mediaPicture] [expr {[llength [.mediaPicture.canvas find all]]>0}]]
+            ::scidb::test::foldRecord $id [list viewer .mediaPicture class [winfo class .mediaPicture] source [lindex $entry 3] state $state]
+            destroy .mediaPicture
+        } else {
+            set state [list $::mediainset::Shown [winfo manager $pane.mediainset.video]]
+            ::scidb::test::foldRecord $id [list state $state lastMedia $::application::media::Priv(lastMedia) calls $::scidb::test::foldCalls]
+        }
+        lappend states $state
+    }
+    ::game::new .application -base $base -variant Normal -number 0
+    ::scidb::test::foldWait
+    ::mediainset::PopulateMenu $menu
+    set index 0
+    foreach entry [::mediainset::Entries] {
+        if {[lindex $entry 1] eq "Audio"} {break}
+        incr index
+    }
+    $menu invoke $index
+    ::scidb::test::foldWait
+    set w $pane.mediainset
+    set audio [list $::mediainset::Shown $::mediainset::Audio [winfo manager $w.video] \
+        [expr {[winfo height $w]==[winfo height $w.controls]+8}]]
+    ::scidb::test::foldRecord VAL-MED-004D [list audio $audio rect [::scidb::test::foldRect $w] controls [::scidb::test::foldRect $w.controls] calls $::scidb::test::foldCalls]
+    ::game::new .application
+    ::scidb::test::foldWait
+    set hidden [winfo ismapped $pane.mediaButton]
+    ::scidb::test::foldRecord VAL-MED-003A [list noMedia $hidden current [::scidb::game::current] position $::application::media::Priv(position) entries [::mediainset::Entries]]
+    list $matches $states $audio $hidden
+} -cleanup {::scidb::test::foldCleanup} -result {1 {{1 pack} {1 pack} {1 1}} {1 1 {} 1} 0}
+
+tcltest::test mediafold-report-file {MED-004E generated report entry opens the existing HTML viewer} -body {
+    set report [file normalize tests/tmp-app/w1/report-entry.html]
+    set f [open $report w]
+    puts $f {<html><head><title>Generated opening report</title></head><body><h1>Generated opening report</h1><p>Develop the pieces and castle.</p></body></html>}
+    close $f
+    set tree $::application::media::Priv(tree)
+    set section [$tree insert {} end -text Reports]
+    set row [$tree insert $section end -values [list $::application::media::mc::SectionReports Report $report -1]]
+    ::mediainset::RefreshMediaButton
+    ::mediainset::PopulateMenu [::mediainset::Pane].mediaButton.menu
+    set index [lsearch -index 0 [::mediainset::Entries] $row]
+    [::mediainset::Pane].mediaButton.menu invoke $index
+    update
+    set win $::application::report::Priv(window)
+    ::scidb::test::foldRecord VAL-MED-004E [list fixture $report viewer $win toplevel [winfo toplevel $win] class [winfo class $win] document $::application::report::Priv(data)]
+    list [winfo ismapped $win] [string match *Generated* [dict get $::application::report::Priv(data) html]]
+} -cleanup {
+    set t [::application::twm board]
+    if {[$t isdocked report]} {::application::twm::ChangeState $t report}
+    catch {$tree delete $section}
+} -result {1 1}
+
+tcltest::test mediafold-saved-pane {MED-005 saved Media pane survives an empty game refresh} -setup {
+    set twm [::application::twm board]
+    set original [::application::twm::inspectLayout $twm]
+} -body {
+    if {![$twm isdocked media]} {::application::twm::ChangeState $twm media}
+    update
+    # A saved fixture with Media in its own pane, rather than behind a tab.
+    set saved [string map {{frame tree} {frame media {-width 400 -height 300 -minwidth 250 -minheight 200 -expand y} frame tree}} $original]
+    ::application::twm::ChangeState $twm media
+    update
+    $twm load $saved
+    update
+    ::application::media::Update -1
+    update
+    ::scidb::test::foldRecord VAL-MED-005 [list default $::application::BoardLayout saved $saved realised [::application::twm::inspectLayout $twm] docked [$twm isdocked media]]
+    list [$twm isdocked media] [winfo ismapped .application.mediaBackend]
+} -cleanup {$twm load $original; update} -result {1 1}
 
 tcltest::cleanupTests

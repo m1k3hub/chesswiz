@@ -500,7 +500,7 @@ proc show3D {flag} {
 		}
 		ReplaceBoardView $Vars(widget:frame) $Vars(3dwin)
 		set Vars(3d) 1
-		bind $Vars(3dwin) <Configure> [namespace code {ConfigureReserve3D %w %h}]
+		::bind $Vars(3dwin) <Configure> [namespace code {ConfigureReserve3D %w %h}]
 		ApplyReserve3D
 		::board3d::refresh
 	} else {
@@ -1418,6 +1418,7 @@ variable MinimumReserveSquare 32
 variable ReserveSide {}
 variable ReservePixels 0
 variable RebuildCallbacks {}
+variable NotifyingRebuild 0
 
 proc reserveRect {} {
 	variable Dim
@@ -1579,7 +1580,15 @@ proc RebuildBoard {canv width height {force false}} {
 	DrawChecks $canv
 	variable RebuildCallbacks
 	ApplyReserve3D
-	foreach callback $RebuildCallbacks { uplevel #0 $callback }
+	variable NotifyingRebuild
+	# A callback may adjust the reserve once, causing a nested rebuild.
+	# Notify owners only for the outer rebuild to avoid feedback cycles.
+	if {!$NotifyingRebuild} {
+		set NotifyingRebuild 1
+		try {
+			foreach callback $RebuildCallbacks { uplevel #0 $callback }
+		} finally { set NotifyingRebuild 0 }
+	}
 }
 
 

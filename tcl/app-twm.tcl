@@ -1488,6 +1488,7 @@ proc ChangeState {twm uid} {
 		set id $Vars($twm:id)
 		array set opts $Vars($id:init:options)
 		$twm new frame $uid $opts($uid)
+		if {$uid eq "media"} { [namespace parent]::openPane media }
 	}
 }
 

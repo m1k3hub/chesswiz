@@ -26,7 +26,7 @@ tcltest::test inset-surface {without a free margin the video goes to the board's
 	set fallback .noSuchViewer
 	set c [::mediainset::surface $fallback]
 	list [string match *.mediainset.video $c] [::scidb::test::insetState]
-} -cleanup { ::mediainset::hide; set ::mediainset::Options(minWidth) 200 } -result {1 {place 0.34 pack {}}}
+} -cleanup { ::mediainset::hide; set ::mediainset::Options(minWidth) 200 } -result {1 {place {} pack {}}}
 
 tcltest::test inset-swap {expand swaps size and place with the board, and back} -setup {
 	set ::mediainset::Options(enabled) 1
@@ -37,7 +37,7 @@ tcltest::test inset-swap {expand swaps size and place with the board, and back} 
 	set a [list [::mediainset::swapped?] [::scidb::test::insetState]]
 	::mediainset::swap
 	lappend a [::mediainset::swapped?] [::scidb::test::insetState]
-} -cleanup { ::mediainset::hide; set ::mediainset::Options(minWidth) 200 } -result {1 {place 1 place 0.34} 0 {place 0.34 pack {}}}
+} -cleanup { ::mediainset::hide; set ::mediainset::Options(minWidth) 200 } -result {1 {place 1 place 0.34} 0 {place {} pack {}}}
 
 tcltest::test inset-hide-restores {stopping while swapped gives the board its pane back} -setup {
 	set ::mediainset::Options(enabled) 1
