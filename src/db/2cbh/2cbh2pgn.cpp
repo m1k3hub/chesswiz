@@ -15,6 +15,7 @@
 #include "2cbh_move16.h"
 #include "2cbh_annotations.h"
 #include "cb2_codec.h"
+#include "cb2_elo.h"
 
 #include <string>
 #include <vector>
@@ -398,12 +399,11 @@ int main(int argc, char* argv[])
             ::snprintf(ecoBuf, sizeof(ecoBuf), "%c%02u", letter, base % 100u);
          }
       }
-      // Elo: plain u16 LE, White @0x60, Black @0x70 (unencoded, same
-      // storage convention as classic .cbh); RE'd via Ghidra tracing of
-      // CBase26.exe's PGN-import tag setters (WhiteElo/BlackElo/EloW/EloB
-      // dispatch cases). See docs/formats/2CBH_FORMAT_DESIGN.md.
-      unsigned whiteElo = readLE16(cbh + (256u + k) * recordSize + 0x60);
-      unsigned blackElo = readLE16(cbh + (256u + k) * recordSize + 0x70);
+      // Elo: plain u16 LE, White @0x60, Black @0x70 -- offsets, evidence
+      // and empirical validation: cb2_elo.h (shared with cb2::Codec).
+      unsigned char const* eloRec = cbh + (256u + k) * recordSize;
+      unsigned whiteElo = db::cb2::readIndexElo(eloRec, db::color::White);
+      unsigned blackElo = db::cb2::readIndexElo(eloRec, db::color::Black);
 
       db::TagSet tags;
       std::string const eventStr = (eid < eventNames.size() && !eventNames[eid].empty())

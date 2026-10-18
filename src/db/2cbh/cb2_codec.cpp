@@ -16,6 +16,7 @@
 // ======================================================================
 
 #include "cb2_codec.h"
+#include "cb2_elo.h"
 #include "2cbh_move16.h"
 #include "2cbh_annotations.h"
 
@@ -792,13 +793,11 @@ Codec::doOpen(	mstl::string const& rootname,
 			info.m_dateDay = dday;
 		}
 
-		// Elo: plain u16 LE, White @0x60, Black @0x70 (unencoded, same
-		// storage convention as classic .cbh); RE'd via Ghidra tracing
-		// of CBase26.exe's PGN-import tag setters (case 8/9 of the
-		// WhiteElo/BlackElo/EloW/EloB tag dispatch), see docs/formats/2CBH_FORMAT_DESIGN.md
+		// Elo: plain u16 LE, White @0x60, Black @0x70 -- offsets, evidence
+		// and empirical validation: cb2_elo.h (shared with 2cbh2pgn).
 		{
-			unsigned whiteElo = readLE16(rec + 0x60);
-			unsigned blackElo = readLE16(rec + 0x70);
+			unsigned whiteElo = readIndexElo(rec, color::White);
+			unsigned blackElo = readIndexElo(rec, color::Black);
 
 			if (rating::isValid(whiteElo))
 			{
