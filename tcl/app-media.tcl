@@ -38,6 +38,8 @@ set StreamTitle		"Open a Live Stream"
 set StreamPrompt		"Stream or video link (YouTube, Twitch, HLS .m3u8, RTMP, RTSP, HTTP):"
 set StreamPlaying	"Streaming: %s"
 set StreamWaiting	"Connecting to %s..."
+set LiveSites		"Live chess"
+set LiveSitesHint	"A channel fills in its link; a directory opens in the browser to pick a stream."
 set StreamFailed		"The stream could not be played: %s. %s"
 set NotAStream		"Not a stream link: %s"
 set Group				"Media"
@@ -2243,6 +2245,19 @@ array set ::application::media::StreamOptions {
 	recent {}
 }
 
+# Where live chess is usually streamed. kind "channel" is a playable link,
+# "browse" a directory page to pick a stream from in the browser.
+set ::application::media::LiveSites {
+	{"Twitch: chess streams"			browse	https://www.twitch.tv/directory/category/chess}
+	{"Twitch: Chess.com channel"		channel	https://www.twitch.tv/chess}
+	{"YouTube: live chess"				browse	https://www.youtube.com/results?search_query=chess&sp=EgJAAQ%253D%253D}
+	{"YouTube: FIDE channel"			channel	https://www.youtube.com/@FIDE_chess/live}
+	{"YouTube: Saint Louis Chess Club"	channel	https://www.youtube.com/@STLChessClub/live}
+	{"Lichess broadcasts"				browse	https://lichess.org/broadcast}
+	{"Lichess TV"						browse	https://lichess.org/tv}
+	{"Chess.com events"					browse	https://www.chess.com/events}
+}
+
 proc application::media::isStreamUrl {text} {
 	return [regexp -nocase {^(https?|rtmps?|rtsp|srt|udp|rtp|mms)://[^\s]+$} [string trim $text]]
 }
@@ -2332,6 +2347,19 @@ proc application::media::OpenStream {parent} {
 	if {[llength $StreamOptions(recent)]} { $top.url set [lindex $StreamOptions(recent) 0] }
 	pack $top.prompt -anchor w
 	pack $top.url -fill x -pady {6 0}
+	set sites [ttk::labelframe $top.sites -text $mc::LiveSites -padding 6]
+	ttk::label $sites.hint -text $mc::LiveSitesHint -wraplength 420 -justify left
+	grid $sites.hint -row 0 -column 0 -columnspan 2 -sticky w -pady {0 4}
+	set n 0
+	foreach site $::application::media::LiveSites {
+		lassign $site label kind url
+		set b [ttk::button $sites.s$n -text $label -command [namespace code [list LiveSite $top.url $kind $url]]]
+		catch { ::tooltip::tooltip $b $url }
+		grid $b -row [expr {$n / 2 + 1}] -column [expr {$n % 2}] -sticky ew -padx 2 -pady 1
+		incr n
+	}
+	grid columnconfigure $sites {0 1} -weight 1 -uniform sites
+	pack $sites -fill x -pady {10 0}
 	pack $top -fill both -expand yes
 	::widget::dialogButtons $dlg {ok cancel}
 	$dlg.ok configure -command [namespace code [list StreamChosen $dlg]]
@@ -2342,6 +2370,17 @@ proc application::media::OpenStream {parent} {
 	wm deiconify $dlg
 	focus $top.url
 	$top.url selection range 0 end
+}
+
+
+proc application::media::LiveSite {entry kind url} {
+	if {$kind eq "browse"} {
+		::platform::sys::openURL $url
+		return
+	}
+	$entry set $url
+	$entry icursor end
+	focus $entry
 }
 
 
