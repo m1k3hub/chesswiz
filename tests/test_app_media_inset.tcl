@@ -22,6 +22,10 @@ proc ::scidb::test::insetState {} {
 tcltest::test inset-surface {without a free margin the video goes to the board's corner} -setup {
 	set ::mediainset::Options(enabled) 1
 	set ::mediainset::Options(minWidth) 100000
+	# the inset maps only while the board tab is raised, as when the Media
+	# pane inside it is used
+	.application.nb select .application.nb.board
+	update idletasks
 } -body {
 	set fallback .noSuchViewer
 	set c [::mediainset::surface $fallback]
@@ -31,6 +35,8 @@ tcltest::test inset-surface {without a free margin the video goes to the board's
 tcltest::test inset-swap {expand swaps size and place with the board, and back} -setup {
 	set ::mediainset::Options(enabled) 1
 	set ::mediainset::Options(minWidth) 100000
+	.application.nb select .application.nb.board
+	update idletasks
 	::mediainset::surface .noSuchViewer
 } -body {
 	::mediainset::swap
@@ -41,6 +47,8 @@ tcltest::test inset-swap {expand swaps size and place with the board, and back} 
 
 tcltest::test inset-hide-restores {stopping while swapped gives the board its pane back} -setup {
 	set ::mediainset::Options(enabled) 1
+	.application.nb select .application.nb.board
+	update idletasks
 	::mediainset::surface .noSuchViewer
 	::mediainset::swap
 } -body {
@@ -53,6 +61,53 @@ tcltest::test inset-off {with the option off the Media pane's viewer is used} -s
 } -body {
 	::mediainset::surface .theViewer
 } -cleanup { set ::mediainset::Options(enabled) 1 } -result .theViewer
+
+tcltest::test inset-unmapped-fallback {an inset that never maps yields the Media pane's viewer} -setup {
+	set ::mediainset::Options(enabled) 1
+	rename ::mediainset::SurfaceReady ::mediainset::savedSurfaceReady
+	proc ::mediainset::SurfaceReady {w} { return 0 }
+} -body {
+	set c [::mediainset::surface .theMediaViewer]
+	set pane [winfo parent $::application::board::Vars(widget:frame)]
+	list $c [expr {[winfo exists $pane.mediainset] ? [winfo manager $pane.mediainset] : "none"}]
+} -cleanup {
+	rename ::mediainset::SurfaceReady {}
+	rename ::mediainset::savedSurfaceReady ::mediainset::SurfaceReady
+	::mediainset::hide
+} -result {.theMediaViewer {}}
+
+tcltest::test inset-surfaceready {1 after the video canvas maps} -setup {
+	set ::mediainset::Options(enabled) 1
+	set ::mediainset::Options(minWidth) 100000
+	.application.nb select .application.nb.board
+	update idletasks
+} -body {
+	set w [string range [::mediainset::surface .noSuchViewer] 0 end-6]
+	::mediainset::SurfaceReady $w
+} -cleanup { ::mediainset::hide; set ::mediainset::Options(minWidth) 200 } -result 1
+
+tcltest::test inset-surfaceready-withdrawn {0 when the canvas's toplevel stays withdrawn} -body {
+	toplevel .srTest
+	wm withdraw .srTest
+	canvas .srTest.video -background black
+	place .srTest.video -x 0 -y 0 -relwidth 1 -relheight 1
+	set r [::mediainset::SurfaceReady .srTest]
+	destroy .srTest
+	return $r
+} -result 0
+
+tcltest::test inset-surfaceready-tiny {0 while the canvas is mapped but still 1x1} -body {
+	toplevel .srTest
+	wm geometry .srTest 1x1+0+0
+	canvas .srTest.video -background black -highlightthickness 0 -borderwidth 0
+	place .srTest.video -x 0 -y 0 -relwidth 1 -relheight 1
+	update idletasks
+	set tiny [expr {[winfo ismapped .srTest.video] && [winfo width .srTest.video] <= 1}]
+	set r [::mediainset::SurfaceReady .srTest]
+	set diag [list [winfo geometry .srTest] [winfo width .srTest.video]x[winfo height .srTest.video] [winfo ismapped .srTest.video]]
+	destroy .srTest
+	list $tiny $r $diag
+} -result {1 0 {1x1+0+0 1x1 1}}
 
 # FreeRect on a stand-alone canvas: a 400x400 "board" item in a wide or tall pane.
 proc ::scidb::test::freeRect {cw ch bx by} {

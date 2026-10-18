@@ -2407,6 +2407,9 @@ proc application::media::CheckStream {url tries} {
 	if {$state eq "error" || ($state eq "idle" && $tries >= 8)} {
 		set detail [::media::mpv::_get error-text]
 		if {$state eq "idle"} { set detail "Timed out while connecting or buffering." }
+		# the Media Engine error code must reach the log even when an
+		# external player takes over and replaces the status line
+		MediaDebug "CheckStream: giving up on $url: $detail"
 		set message [StreamFailure $url $detail]
         MediaDestroy
         if {[UsesOsMedia] && [OpenStreamExternal $url]} { return }
