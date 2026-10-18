@@ -1,127 +1,142 @@
-# ======================================================================
-# Scidb App Test — shared beside-board dialog placement helper
-# (VAL-DLG-001..004: tcl/utils/place.tcl, tcl/play-engine.tcl,
-#  tcl/guess-move.tcl, tcl/game-review.tcl, tcl/repertoire-trainer.tcl,
-#  tcl/insights.tcl, tcl/annotation.tcl)
-# ======================================================================
-
-package require Tcl 8.5
+# Real dialog placement: run with -match 'dlg-*' on each required Xvfb screen.
 package require tcltest 2.5
-
 namespace eval ::scidb::test::dlgplace {
-	variable testDir [file dirname [file normalize [info script]]]
+    variable testDir [file dirname [file normalize [info script]]]
+    variable calls
+    variable workareaCalls 0
+    variable placing 0
 }
-
-# Rectangles are {x y w h}; returns the intersection area (0 when disjoint).
-proc ::scidb::test::dlgplace::overlapArea {r1 r2} {
-	lassign $r1 x1 y1 w1 h1
-	lassign $r2 x2 y2 w2 h2
-	set ox [expr {max(0, min($x1 + $w1, $x2 + $w2) - max($x1, $x2))}]
-	set oy [expr {max(0, min($y1 + $h1, $y2 + $h2) - max($y1, $y2))}]
-	return [expr {$ox * $oy}]
+proc ::scidb::test::dlgplace::waitFor {ms} {
+    after $ms {set ::scidb::test::dlgplace::settled 1}
+    vwait ::scidb::test::dlgplace::settled
+    update idletasks
 }
-
 proc ::scidb::test::dlgplace::widgetRect {w} {
-	update idletasks
-	return [list [winfo rootx $w] [winfo rooty $w] [winfo width $w] [winfo height $w]]
+    list [winfo rootx $w] [winfo rooty $w] [winfo width $w] [winfo height $w]
 }
-
-# Set up the application window on the board tab at a given geometry.
-proc ::scidb::test::dlgplace::setupBoardAt {geom} {
-	::application::switchTab board
-	wm state .application normal
-	wm geometry .application $geom
-	update
-	after 50 { set ::scidb::test::dlgplace::settled 1 }
-	vwait ::scidb::test::dlgplace::settled
-	update
-	update idletasks
-	return [widgetRect $::application::board::board]
+proc ::scidb::test::dlgplace::overlapArea {a b} {
+    lassign $a ax ay aw ah
+    lassign $b bx by bw bh
+    expr {max(0,min($ax+$aw,$bx+$bw)-max($ax,$bx))*max(0,min($ay+$ah,$by+$bh)-max($ay,$by))}
 }
-
-# ----------------------------------------------------------------------
-# VAL-DLG-001: Shared placement helper arithmetic (headless unit cases)
-# ----------------------------------------------------------------------
-
-tcltest::test dlgplace-001-arithmetic {besidePosition places right, else left, else below, clamped to real work area incl. negative origins and Run 37 layout} -body {
-	set out {}
-	# Run 37 layout cases (1920x1080 workarea, default extents {16 0 40 0}, dialog 323x215):
-	lappend out [::util::place::besidePosition 300 100 600 600 323 215 {0 0 1920 1080}]
-	lappend out [::util::place::besidePosition 1000 200 860 860 323 215 {0 0 1920 1080}]
-	lappend out [::util::place::besidePosition 0 0 1920 800 323 215 {0 0 1920 1080}]
-	# Taskbar excluded (workarea height 1040 vs 1080 screen; top bar 28 px):
-	lappend out [::util::place::besidePosition 100 850 500 500 323 215 {0 28 1920 1012} {6 6 30 6}]
-	# Multi-monitor negative origin (secondary monitor at -1920,0 size 1920x1040):
-	lappend out [::util::place::besidePosition -1600 120 600 600 320 220 {-1920 0 1920 1040} {6 6 30 6}]
-	lappend out [::util::place::besidePosition -900 120 860 860 320 220 {-1920 0 1920 1040} {6 6 30 6}]
-	# Play-engine BesidePosition wrapper delegates to besidePosition:
-	lappend out [::playengine::BesidePosition 1000 200 860 860 323 215 1920 1080]
-	set out
-} -result {{912 100 323 215} {649 200 323 215} {0 812 323 215} {612 789 323 215} {-988 120 320 220} {-1244 120 320 220} {649 200}}
-
-# ----------------------------------------------------------------------
-# VAL-DLG-002: Board-time dialogs open beside the board (1920x1080 & 1280x800)
-# ----------------------------------------------------------------------
-
-tcltest::testConstraint screen1920 [expr {
-	[winfo screenwidth .application] >= 1920 && [winfo screenheight .application] >= 1080
-}]
-
-foreach {label geom constraints} {
-	1920x1080 1920x1080+0+0 screen1920
-	1280x800  1280x800+0+0  {}
-} {
-	tcltest::test dlgplace-002-board-dialogs-$label "Play Against Engine, Guess the Move and Repertoire trainer avoid the board at $label" -constraints $constraints -setup {
-		set savedGeom [wm geometry .application]
-		::scidb::game::clear {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}
-		update
-		foreach san {e4 e5 Nf3 Nc6} { ::move::addMove menu $san }
-		::scidb::game::go -1 start
-		update
-		::scidb::test::dlgplace::setupBoardAt $geom
-	} -body {
-		# 1. Play Against Engine
-		set b1 [::scidb::test::dlgplace::widgetRect $::application::board::board]
-		set peDlg [::playengine::open .application]
-		update
-		set peRect [::scidb::test::dlgplace::widgetRect $peDlg]
-		set peOverlap [::scidb::test::dlgplace::overlapArea $b1 $peRect]
-		::playengine::Close
-
-		# 2. Guess the Move
-		set b2 [::scidb::test::dlgplace::widgetRect $::application::board::board]
-		::guessmove::start white
-		update
-		set gmDlg $::guessmove::Priv(dialog)
-		set gmRect [::scidb::test::dlgplace::widgetRect $gmDlg]
-		set gmOverlap [::scidb::test::dlgplace::overlapArea $b2 $gmRect]
-		::guessmove::stop
-		catch { destroy $gmDlg }
-
-		# 3. Repertoire trainer
-		set b3 [::scidb::test::dlgplace::widgetRect $::application::board::board]
-		::reptrainer::open .application
-		update
-		set rtDlg .application.__reptrainer__
-		set rtRect [::scidb::test::dlgplace::widgetRect $rtDlg]
-		set rtOverlap [::scidb::test::dlgplace::overlapArea $b3 $rtRect]
-		::reptrainer::Close $rtDlg
-
-		puts "VAL-DLG-002 ($label): board=$b1 playengine=$peRect (overlap=$peOverlap) guessmove=$gmRect (overlap=$gmOverlap) reptrainer=$rtRect (overlap=$rtOverlap)"
-		list $peOverlap $gmOverlap $rtOverlap
-	} -cleanup {
-		catch { ::playengine::Close }
-		catch { ::guessmove::stop }
-		catch { destroy $::guessmove::Priv(dialog) }
-		catch { ::reptrainer::Close .application.__reptrainer__ }
-		catch { wm geometry .application $savedGeom; update }
-	} -result {0 0 0}
+proc ::scidb::test::dlgplace::inside {a b} {
+    lassign $a x y w h
+    lassign $b bx by bw bh
+    expr {$x >= $bx && $y >= $by && $x+$w <= $bx+$bw && $y+$h <= $by+$bh}
 }
-
-# ----------------------------------------------------------------------
-# VAL-DLG-003: Review, insights, annotation avoid the board (1920x1080 & 1280x800)
-# ----------------------------------------------------------------------
-
+proc ::scidb::test::dlgplace::require {value message} {
+    if {!$value} {error $message}
+}
+# Observe production calls and their return values, without replacing geometry.
+proc ::scidb::test::dlgplace::placing {command op} {
+    variable placing 1
+    variable workareaCalls 0
+}
+proc ::scidb::test::dlgplace::placed {command code result op} {
+    variable calls
+    variable placing 0
+    variable workareaCalls
+    if {$code} {return}
+    set dlg [lindex $command 1]
+    dict set calls $dlg [dict create plan $result workareaCalls $workareaCalls board [widgetRect $::application::board::board] \
+        workarea [winfo workarea $dlg] extents [winfo extents $dlg]]
+}
+proc ::scidb::test::dlgplace::workareaTrace {command op} {
+    variable workareaCalls
+    variable placing
+    if {$placing && [lindex $command 1] eq "workarea"} {incr workareaCalls}
+}
+proc ::scidb::test::dlgplace::setupBoard {} {
+    variable calls
+    variable workareaCalls
+    ::application::switchTab board
+    wm state .application normal
+    wm geometry .application "[winfo screenwidth .]x[winfo screenheight .]+0+0"
+    waitFor 1200
+    ::scidb::game::clear {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}
+    foreach san {e4 e5 Nf3 Nc6} {::move::addMove menu $san}
+    ::scidb::game::go -1 start
+    waitFor 300
+    set calls {}
+    set workareaCalls 0
+    trace add execution ::util::place::besideBoard enter ::scidb::test::dlgplace::placing
+    trace add execution ::util::place::besideBoard leave ::scidb::test::dlgplace::placed
+    trace add execution ::winfo enter ::scidb::test::dlgplace::workareaTrace
+}
+proc ::scidb::test::dlgplace::stopTrace {} {
+    trace remove execution ::util::place::besideBoard enter ::scidb::test::dlgplace::placing
+    trace remove execution ::util::place::besideBoard leave ::scidb::test::dlgplace::placed
+    trace remove execution ::winfo enter ::scidb::test::dlgplace::workareaTrace
+}
+proc ::scidb::test::dlgplace::buttons {w} {
+    set result {}
+    foreach child [winfo children $w] {
+        if {[winfo toplevel $child] ne [winfo toplevel $w]} {continue}
+        if {[winfo class $child] in {Button TButton Checkbutton TCheckbutton Radiobutton TRadiobutton}
+            && [winfo ismapped $child]} {lappend result $child}
+        lappend result {*}[buttons $child]
+    }
+    return $result
+}
+proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
+    variable calls
+    variable workareaCalls
+    waitFor 500
+    require [dict exists $calls $dlg] "$target: shared helper did not place $dlg"
+    set call [dict get $calls $dlg]
+    set plan [dict get $call plan]
+    set board [dict get $call board]
+    set wa [dict get $call workarea]
+    set ext [dict get $call extents]
+    set rule [dict get $plan rule]
+    require [expr {[dict get $call workareaCalls] > 0}] "$target: no winfo workarea call from helper"
+    require [expr {$wa eq [winfo workarea $dlg]}] "$target: work area changed"
+    require [expr {$ext eq [winfo extents $dlg]}] "$target: frame changed after planning"
+    require [expr {$board eq [widgetRect $::application::board::board]}] "$target: board changed after planning"
+    if {$wantRule ne ""} {require [expr {$rule eq $wantRule}] "$target: expected $wantRule, got $rule"}
+    require [regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} [wm geometry $dlg] -> w h x y] "invalid geometry"
+    set actual [list $x $y [winfo width $dlg] [winfo height $dlg]]
+    foreach a $actual p [dict get $plan geometry] {
+        require [expr {abs($a-$p) <= 1}] "$target: final $actual != helper [dict get $plan geometry]"
+    }
+    require [expr {$w == [winfo width $dlg] && $h == [winfo height $dlg]}] "$target: unsettled client size"
+    lassign $ext el er et eb
+    set outer [list $x $y [expr {$w+$el+$er}] [expr {$h+$et+$eb}]]
+    require [inside $outer $wa] "$target: outer frame $outer outside $wa"
+    set area [overlapArea $outer $board]
+    # Independent candidate oracle, evaluated at FINAL dimensions, including frame.
+    lassign $board bx by bw bh
+    lassign $wa wx wy ww wh
+    set fw [expr {$w+$el+$er}]
+    set fh [expr {$h+$et+$eb}]
+    set areas {}
+    foreach {side cx cy} [list right [expr {$bx+$bw+12}] $by left [expr {$bx-12-$fw}] $by below $bx [expr {$by+$bh+12}]] {
+        set cx [expr {max($wx,min($cx,$wx+$ww-$fw))}]
+        set cy [expr {max($wy,min($cy,$wy+$wh-$fh))}]
+        dict set areas $side [overlapArea [list $cx $cy $fw $fh] $board]
+    }
+    require [expr {$area == [tcl::mathfunc::min {*}[dict values $areas]]}] "$target: overlap $area is not minimum of $areas"
+    if {$rule ne "no-room"} {require [expr {$area == 0}] "$target: $rule overlaps $area"}
+    if {$rule eq "no-room"} {require [expr {$area > 0}] "$target: spurious no-room rule"}
+    set buttonRects {}
+    foreach button [buttons $dlg] {
+        set r [widgetRect $button]
+        require [inside $r $wa] "$target: offscreen button $button $r"
+        require [inside $r [widgetRect $dlg]] "$target: clipped button $button $r"
+        for {set ancestor [winfo parent $button]} {$ancestor ne $dlg} {set ancestor [winfo parent $ancestor]} {
+            require [inside $r [widgetRect $ancestor]] "$target: button clipped by $ancestor"
+        }
+        require [expr {[winfo width $button] >= [winfo reqwidth $button] && [winfo height $button] >= [winfo reqheight $button]}] "$target: clipped label $button"
+        lappend buttonRects [list $button $r [$button cget -text]]
+    }
+    require [expr {[llength $buttonRects] > 0}] "$target: no buttons tested"
+    puts "DLG $target screen=[winfo screenwidth .]x[winfo screenheight .] main=[wm geometry .application] board=$board workarea=$wa extents=$ext rule=$rule resized=[dict get $plan resized] helper=[dict get $plan geometry] final=$actual overlap=$area candidates=$areas buttons=$buttonRects"
+    if {[info exists ::env(DLG_EVIDENCE_DIR)]} {
+        file mkdir $::env(DLG_EVIDENCE_DIR)
+        exec import -window root [file join $::env(DLG_EVIDENCE_DIR) $target.png]
+    }
+    return 1
+}
 proc ::scidb::test::dlgplace::openInsightsFixture {} {
 	variable testDir
 	set dir [file join $testDir tmp-app dlgplace_ins_[pid]]
@@ -151,133 +166,66 @@ proc ::scidb::test::dlgplace::openInsightsFixture {} {
 	return [list $pgn $meIdx]
 }
 
-foreach {label geom constraints} {
-	1920x1080 1920x1080+0+0 screen1920
-	1280x800  1280x800+0+0  {}
+foreach {target openScript dialog closeScript} {
+    002A {::playengine::open .application} {.application.playengine} {::playengine::Close}
+    002B {::guessmove::start white} {.application.__guessmove__} {::guessmove::stop; catch {destroy .application.__guessmove__}}
+    002C {::reptrainer::open .application} {.application.__reptrainer__} {::reptrainer::Close .application.__reptrainer__}
+    003A {set ::gamereview::Priv(total) 4; ::gamereview::ShowProgress .application} {.application.__gamereview_progress} {destroy .application.__gamereview_progress}
+    003B {set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]; ::gamereview::ShowWindow .application $review {} 0} {.application.__gamereview} {destroy .application.__gamereview}
+    003C {lassign [::scidb::test::dlgplace::openInsightsFixture] insBase insIdx; set insDlg [::insights::show .application $insBase Normal $insIdx]} {$insDlg} {destroy $insDlg; ::scidb::db::close $insBase; file delete -force [file dirname $insBase]}
+    003D {set savedPos $::annotation::Position; set ::annotation::Position {}; ::annotation::open .application} {.application.__annotation__} {::annotation::close; destroy .application.__annotation__; set ::annotation::Vars(dialog) {}; set ::annotation::Position $savedPos}
+    endgame {::endtrainer::open .application} {.application.__endtrainer__} {::endtrainer::Close}
+    engine-match {::enginematch::open .application} {.application.enginematch} {::enginematch::Close}
 } {
-	tcltest::test dlgplace-003-review-insights-annotation-$label "Game Review (both dialogs), Insights and Annotation popup avoid the board at $label" -constraints $constraints -setup {
-		set savedGeom [wm geometry .application]
-		set savedPos $::annotation::Position
-		set ::annotation::Position {}
-		catch { destroy .application.__annotation__ }
-		set ::annotation::Vars(dialog) {}
-		lassign [::scidb::test::dlgplace::openInsightsFixture] insBase insIdx
-		::scidb::game::clear {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}
-		update
-		foreach san {e4 e5 Nf3 Nc6} { ::move::addMove menu $san }
-		::scidb::game::go -1 start
-		update
-		::scidb::test::dlgplace::setupBoardAt $geom
-	} -body {
-		# 1. Game Review progress dialog
-		set b1 [::scidb::test::dlgplace::widgetRect $::application::board::board]
-		set ::gamereview::Priv(total) 4
-		::gamereview::ShowProgress .application
-		update
-		set grProgDlg .application.__gamereview_progress
-		set grProgRect [::scidb::test::dlgplace::widgetRect $grProgDlg]
-		set grProgOverlap [::scidb::test::dlgplace::overlapArea $b1 $grProgRect]
-		destroy $grProgDlg
-
-		# 2. Game Review results dialog
-		set b2 [::scidb::test::dlgplace::widgetRect $::application::board::board]
-		set review [::gamereview::classify {
-			{san e4 before 0 after 0 best 1}
-			{san e5 before 0 after -250 best 0}
-		}]
-		::gamereview::ShowWindow .application $review {} 0
-		update
-		set grWinDlg .application.__gamereview
-		set grWinRect [::scidb::test::dlgplace::widgetRect $grWinDlg]
-		set grWinOverlap [::scidb::test::dlgplace::overlapArea $b2 $grWinRect]
-		destroy $grWinDlg
-
-		# 3. Insights dialog
-		set b3 [::scidb::test::dlgplace::widgetRect $::application::board::board]
-		set insDlg [::insights::show .application $insBase Normal $insIdx]
-		update
-		set insRect [::scidb::test::dlgplace::widgetRect $insDlg]
-		set insOverlap [::scidb::test::dlgplace::overlapArea $b3 $insRect]
-		destroy $insDlg
-
-		# 4. Annotation popup (no saved offset)
-		set b4 [::scidb::test::dlgplace::widgetRect $::application::board::board]
-		::annotation::open .application
-		update
-		set annDlg .application.__annotation__
-		set annRect [::scidb::test::dlgplace::widgetRect $annDlg]
-		set annOverlap [::scidb::test::dlgplace::overlapArea $b4 $annRect]
-		::annotation::close
-		destroy $annDlg
-		set ::annotation::Vars(dialog) {}
-
-		puts "VAL-DLG-003 ($label): board=$b1 gr_progress=$grProgRect (overlap=$grProgOverlap) gr_window=$grWinRect (overlap=$grWinOverlap) insights=$insRect (overlap=$insOverlap) annotation=$annRect (overlap=$annOverlap)"
-		list $grProgOverlap $grWinOverlap $insOverlap $annOverlap
-	} -cleanup {
-		catch { destroy .application.__gamereview_progress }
-		catch { destroy .application.__gamereview }
-		catch { destroy [::insights::DialogName $insBase Normal $insIdx] }
-		catch { ::scidb::db::close $insBase }
-		catch { file delete -force [file dirname $insBase] }
-		catch { destroy .application.__annotation__ }
-		set ::annotation::Vars(dialog) {}
-		set ::annotation::Position $savedPos
-		catch { wm geometry .application $savedGeom; update }
-	} -result {0 0 0 0}
+    tcltest::test dlg-$target {final dialog geometry equals shared helper plan, with frame and buttons inside work area} -setup {
+        ::scidb::test::dlgplace::setupBoard
+    } -body [format {
+        %s
+        ::scidb::test::dlgplace::check %s %s
+    } $openScript $target $dialog] -cleanup [format {
+        %s
+        ::scidb::test::dlgplace::stopTrace
+    } $closeScript] -result 1
 }
-
-# ----------------------------------------------------------------------
-# VAL-DLG-004: No-room fallback keeps dialogs usable
-# ----------------------------------------------------------------------
-
-tcltest::test dlgplace-004-no-room-fallback {when neither side nor below fits, dialog is clamped fully on screen with buttons visible and board overlap minimised} -setup {
-	set savedGeom [wm geometry .application]
-	::scidb::test::dlgplace::setupBoardAt 1920x1080+0+0
+# A real content-sized dialog too large for all three strips at each screen.
+# No workarea, board, or geometry procedures are replaced.
+tcltest::test dlg-004 {no-room fallback minimises measured board overlap and exposes every button label} -setup {
+    ::scidb::test::dlgplace::setupBoard
 } -body {
-	# 1. Arithmetic no-room test: a 1024x600 screen where the board occupies
-	#    x=100..900, y=20..580 (800x560); right has 124 px, left has 100 px,
-	#    below has 20 px. Dialog 360x260 with extents {6 6 30 6} cannot fit
-	#    without overlap; rule picks right far edge (spaceRight 124 >= spaceLeft 100),
-	#    x = 1024 - 360 - 12 = 652, y = 20, clamped in {0 0 1024 600}.
-	set posRight [::util::place::besidePosition 100 20 800 560 360 260 {0 0 1024 600} {6 6 30 6}]
-	# When left has more space (board at x=200..950 -> spaceRight=74, spaceLeft=200),
-	# rule aligns to left workarea edge x=0.
-	set posLeft  [::util::place::besidePosition 200 20 750 560 360 260 {0 0 1024 600} {6 6 30 6}]
-
-	# 2. GUI test on a simulated small work area (800x500) where the board fills
-	#    most of the work area: open Play Against Engine and Repertoire Trainer,
-	#    verify the dialog and its action buttons stay completely inside the work area.
-	rename ::winfo ::scidb::test::dlgplace::orig_winfo
-	proc ::winfo {args} {
-		set cmd [lindex $args 0]
-		if {$cmd eq "workarea"} { return {0 0 800 500} }
-		if {$cmd eq "workareawidth"} { return 800 }
-		if {$cmd eq "workareaheight"} { return 500 }
-		return [uplevel 1 ::scidb::test::dlgplace::orig_winfo $args]
-	}
-
-	set peDlg [::playengine::open .application]
-	update
-	set peRect [::scidb::test::dlgplace::widgetRect $peDlg]
-	set okRect [::scidb::test::dlgplace::widgetRect $peDlg.ok]
-	set cancelRect [::scidb::test::dlgplace::widgetRect $peDlg.cancel]
-	lassign $peRect px py pw ph
-	lassign $okRect ox oy ow oh
-	lassign $cancelRect cx cy cw ch
-	set peOnScreen [expr {$px >= 0 && $py >= 0 && $px + $pw <= 800 && $py + $ph <= 500}]
-	set okVisible  [expr {[winfo ismapped $peDlg.ok] && $ox >= 0 && $oy >= 0 && $ox + $ow <= 800 && $oy + $oh <= 500}]
-	set cancelVisible [expr {[winfo ismapped $peDlg.cancel] && $cx >= 0 && $cy >= 0 && $cx + $cw <= 800 && $cy + $ch <= 500}]
-	::playengine::Close
-
-	puts "VAL-DLG-004: posRight=$posRight posLeft=$posLeft peRect=$peRect okRect=$okRect cancelRect=$cancelRect"
-	list $posRight $posLeft $peOnScreen $okVisible $cancelVisible
+    toplevel .application.dlgNoRoom
+    wm withdraw .application.dlgNoRoom
+    wm transient .application.dlgNoRoom .application
+    set b [::scidb::test::dlgplace::widgetRect $::application::board::board]
+    lassign $b bx by bw bh
+    lassign [winfo workarea .application] wx wy ww wh
+    lassign [winfo extents .application.dlgNoRoom] el er et eb
+    set cw [expr {max($bx-$wx,$wx+$ww-$bx-$bw)+20}]
+    set ch [expr {$wy+$wh-$by-$bh+20}]
+    ttk::frame .application.dlgNoRoom.content -width $cw -height $ch
+    pack .application.dlgNoRoom.content -fill both -expand yes
+    ttk::button .application.dlgNoRoom.ok -text "Keep playing"
+    ttk::button .application.dlgNoRoom.cancel -text "Close dialog"
+    pack .application.dlgNoRoom.ok .application.dlgNoRoom.cancel -side left -padx 6 -pady 6
+    ::util::place::besideBoard .application.dlgNoRoom .application
+    wm deiconify .application.dlgNoRoom
+    ::scidb::test::dlgplace::check 004 .application.dlgNoRoom no-room
 } -cleanup {
-	catch { ::playengine::Close }
-	if {[info commands ::scidb::test::dlgplace::orig_winfo] ne ""} {
-		rename ::winfo {}
-		rename ::scidb::test::dlgplace::orig_winfo ::winfo
-	}
-	catch { wm geometry .application $savedGeom; update }
-} -result {{652 20 360 260} {0 20 360 260} 1 1 1}
+    catch {destroy .application.dlgNoRoom}
+    ::scidb::test::dlgplace::stopTrace
+} -result 1
+
+tcltest::test dlg-tactics {trainer with its own board stays centred and does not use besideBoard} -setup {
+    ::scidb::test::dlgplace::setupBoard
+} -body {
+    ::tactics::open .application
+    ::scidb::test::dlgplace::waitFor 500
+    lassign [::util::place::geometry .tactics -parent .application -position center] x y w h
+    puts "DLG tactics final=[wm geometry .tactics] centered-offsets=${x}${y} own-board=[winfo ismapped .tactics.board]"
+    list [expr {![dict exists $::scidb::test::dlgplace::calls .tactics]}] \
+        [string match "*${x}${y}" [wm geometry .tactics]] [winfo ismapped .tactics.board]
+} -cleanup {
+    ::tactics::close
+    ::scidb::test::dlgplace::stopTrace
+} -result {1 1 1}
 
 tcltest::cleanupTests

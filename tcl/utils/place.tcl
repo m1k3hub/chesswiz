@@ -324,65 +324,61 @@ proc fitWindow {path {geometry ""}} {
 }
 
 
-# Screen position {x y w h} for a dialog of <dw>x<dh> next to a board at
-# <bx>,<by> sized <bw>x<bh> in <workarea> ({wx wy ww wh}) with frame
-# <extents> ({el er et eb}):
-#   1. Right of the board when the outer frame fits before wx + ww.
-#   2. Else left of the board when the outer frame fits at or after wx.
-#   3. Else below the board when the outer frame fits before wy + wh.
-#   4. No-room fallback: when neither side nor below fits without overlap,
-#      if either side of the board has free work-area margin larger than the
-#      space below, align x to that far work-area edge (right when spaceRight
-#      >= spaceLeft, else left) at y = by; otherwise place at x = bx, y =
-#      by + bh + gap (which clamps to the bottom of the work area).
-# Finally clampGeometry clamps client size and outer-frame position to the
-# real work area (taskbar excluded, negative multi-monitor origins preserved),
-# keeping all buttons visible on screen and minimising board overlap.
-proc besidePosition {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12}} {
+# Pure placement plan. Geometry is {outerX outerY clientWidth clientHeight};
+# workarea is {x y width height}, extents {left right top bottom}.
+# Prefer right, left, below at the current size, then at the requested content
+# size (the 2026-10-18 minsize decision). VAL-DLG-004: if neither size fits,
+# choose the least actual board intersection of the three CLAMPED outer
+# rectangles, including the frame. Ties retain right/left/below order.
+proc besidePlan {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12} {requested {}}} {
 	lassign $workarea wx wy ww wh
 	lassign $extents el er et eb
 	set fw [expr {$el + $er}]
 	set fh [expr {$et + $eb}]
-	set cw [expr {max(1, min($dw, $ww - $fw))}]
-	set ch [expr {max(1, min($dh, $wh - $fh))}]
-	set rightX [expr {$bx + $bw + $gap}]
-	set leftX  [expr {$bx - $gap - $cw - $fw}]
-	set belowY [expr {$by + $bh + $gap}]
-	if {$rightX + $cw + $fw <= $wx + $ww} {
-		set x $rightX
-		set y $by
-	} elseif {$leftX >= $wx} {
-		set x $leftX
-		set y $by
-	} elseif {$belowY + $ch + $fh <= $wy + $wh} {
-		set x $bx
-		set y $belowY
-	} else {
-		set spaceRight [expr {max(0, ($wx + $ww) - ($bx + $bw))}]
-		set spaceLeft  [expr {max(0, $bx - $wx)}]
-		if {$spaceRight > 0 || $spaceLeft > 0} {
-			if {$spaceRight >= $spaceLeft} {
-				set x [expr {$wx + $ww - $cw - $fw}]
-			} else {
-				set x $wx
+	set sizes [list [list $dw $dh]]
+	if {[llength $requested]} { lappend sizes $requested }
+	foreach size $sizes {
+		lassign $size cw ch
+		set cw [expr {max(1, min($cw, $ww - $fw))}]
+		set ch [expr {max(1, min($ch, $wh - $fh))}]
+		set candidates {}
+		set areas {}
+		set bestArea -1
+		foreach {side x y} [list \
+			right [expr {$bx + $bw + $gap}] $by \
+			left [expr {$bx - $gap - $cw - $fw}] $by \
+			below $bx [expr {$by + $bh + $gap}]] {
+			set clamped [clampGeometry "${cw}x${ch}+${x}+${y}" $workarea $extents]
+			regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} $clamped -> w h x y
+			set area [expr {
+				max(0, min($x + $w + $fw, $bx + $bw) - max($x, $bx)) *
+				max(0, min($y + $h + $fh, $by + $bh) - max($y, $by))}]
+			dict set candidates $side [list $x $y $w $h]
+			dict set areas $side $area
+			if {$bestArea < 0 || $area < $bestArea} {
+				set bestArea $area
+				set bestSide $side
 			}
-			set y $by
-		} else {
-			set x $bx
-			set y $belowY
 		}
+		if {$bestArea == 0} { break }
 	}
-	set clamped [clampGeometry "${cw}x${ch}+${x}+${y}" $workarea $extents]
-	regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} $clamped -> rw rh rx ry
-	return [list $rx $ry $rw $rh]
+	return [dict create geometry [dict get $candidates $bestSide] \
+		rule [expr {$bestArea == 0 ? $bestSide : "no-room"}] side $bestSide \
+		overlap $bestArea candidates $candidates areas $areas \
+		resized [expr {$cw != $dw || $ch != $dh}]]
+}
+
+proc besidePosition {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12}} {
+	return [dict get [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents $gap] geometry]
 }
 
 
 # Place <dlg> beside the main board ($::application::board::board) using
 # besidePosition and the real work area / frame extents. When the dialog's
-# requested size exceeds the work area (or shrinks on small screens), its
-# geometry and minsize are clamped so its buttons remain on screen.
-# Falls back to centered placement when the board is not mapped.
+# current size (including wm minsize) cannot fit, retry at its requested size
+# and lower minsize accordingly. Always set size AND position: a minsize or
+# previously saved geometry must not silently invalidate the plan.
+# Returns the applied plan, or {rule center} when the board is not mapped.
 proc besideBoard {dlg {parent ""}} {
 	if {$parent eq ""} {
 		set parent [wm transient $dlg]
@@ -396,11 +392,15 @@ proc besideBoard {dlg {parent ""}} {
 		} else {
 			::util::place $dlg -position center
 		}
-		return 0
+		return [dict create rule center]
 	}
 	update idletasks
-	set dw [expr {max([winfo reqwidth  $dlg], [winfo width  $dlg])}]
-	set dh [expr {max([winfo reqheight $dlg], [winfo height $dlg])}]
+	lassign [wm minsize $dlg] mw mh
+	lassign [wm maxsize $dlg] maxw maxh
+	set rw [winfo reqwidth $dlg]
+	set rh [winfo reqheight $dlg]
+	set dw [expr {min($maxw, max($rw, [winfo width  $dlg], $mw))}]
+	set dh [expr {min($maxh, max($rh, [winfo height $dlg], $mh))}]
 	set bx [winfo rootx $board]
 	set by [winfo rooty $board]
 	set bw [winfo width $board]
@@ -412,19 +412,11 @@ proc besideBoard {dlg {parent ""}} {
 	} else {
 		set extents [winfo extents $dlg]
 	}
-	lassign [besidePosition $bx $by $bw $bh $dw $dh $workarea $extents] x y w h
-	if {$w < $dw || $h < $dh} {
-		catch {
-			lassign [wm minsize $dlg] mw mh
-			if {$mw > 0 || $mh > 0} {
-				wm minsize $dlg [expr {min($mw, $w)}] [expr {min($mh, $h)}]
-			}
-		}
-		wm geometry $dlg "${w}x${h}+${x}+${y}"
-	} else {
-		wm geometry $dlg "+${x}+${y}"
-	}
-	return 1
+	set plan [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents 12 [list $rw $rh]]
+	lassign [dict get $plan geometry] x y w h
+	wm minsize $dlg [expr {min($mw, $w)}] [expr {min($mh, $h)}]
+	wm geometry $dlg "${w}x${h}+${x}+${y}"
+	return $plan
 }
 
 

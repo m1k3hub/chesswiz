@@ -346,7 +346,7 @@ proc ::playengine::Start {} {
 # Put <dlg> next to the main board via the shared ::util::place::besideBoard
 # helper.
 proc ::playengine::PlaceBesideBoard {dlg} {
-	return [::util::place::besideBoard $dlg]
+	return [expr {[dict get [::util::place::besideBoard $dlg] rule] ne "center"}]
 }
 
 
