@@ -444,6 +444,9 @@ proc application::media::InsertEntry {typeLabel title path index} {
 	variable Priv
 	set tree $Priv(tree)
 
+	# HTML companions use the existing report viewer even when an older
+	# native manifest reader reports an unknown media type.
+	if {[string tolower [file extension $path]] in {.html .htm}} { set typeLabel reports }
 	# map the type label to a section
 	set typeNum [TypeNumber $typeLabel]
 	# the CBM gallery reports the lecture WMVs as type 4 (stream): they
@@ -517,17 +520,19 @@ proc application::media::DatabaseSwitched {base variant} {
 
 proc application::media::DatabaseClosed {base variant} {
 	variable Priv
-	if {$base eq $Priv(base) || $base eq $Priv(lastBase)} {
+	if {$base eq $Priv(base) || $base eq $Priv(lastBase)
+		|| ([info exists Priv(playBase)] && $base eq $Priv(playBase))} {
 		# The native database is still notifying its observers. Defer board
 		# and sync work until close has finished releasing the database.
 		catch {after cancel $Priv(afterid)}
-		set Priv(afterid) [after 1 [namespace code [list ClearClosedDatabase $base]]]
+		after idle [namespace code [list ClearClosedDatabase $base]]
 	}
 }
 
 proc application::media::ClearClosedDatabase {base} {
 	variable Priv
-	if {$base ne $Priv(base) && $base ne $Priv(lastBase)} { return }
+	if {$base ne $Priv(base) && $base ne $Priv(lastBase)
+		&& (![info exists Priv(playBase)] || $base ne $Priv(playBase))} { return }
 	Stop
 	set Priv(lastBase) {}
 	set Priv(base) {}
@@ -571,6 +576,7 @@ proc application::media::Update {position} {
 	try {
 		set Priv(position) $position
 		set Priv(linksBase) {}
+		set Priv(selectedRow) {}
 		set Priv(interactive) {}
 		set Priv(dbInteractive) {}
 		set Priv(dbBoardSync) {}
@@ -704,6 +710,8 @@ proc application::media::SelectionChanged {tree} {
 	set sel [$tree selection]
 	if {![llength $sel]} return
 	set values [$tree item [lindex $sel 0] -values]
+	if {[info exists Priv(selectedRow)] && $Priv(selectedRow) eq [lindex $sel 0]} { return }
+	set Priv(selectedRow) [lindex $sel 0]
 	if {[llength $values] >= 3} {
 		set Priv(statusbar) [lindex $values 2]
 	}
@@ -1345,9 +1353,18 @@ proc application::media::PlySeek {position} {
 # fire per ply; re-entering the same position does not replay.
 # Shared by automatic position following and the board's media menu.
 proc application::media::PlayInteractiveEntry {entry} {
+	variable Priv
 	lassign $entry fen path start end title
+	# A range into a synchronized video is still the same coupled lesson.
+	# Plain PlayMedia would discard its BoardSync timeline.
+	set player PlayMedia
+	set args [list $path]
+	if {[CoupledLesson? [ClassifyFile $path] $Priv(index)] && [HasLesson $path]} {
+		set player PlayLesson
+		lappend args $Priv(index)
+	}
 	# Manifest times are seconds; the player expects milliseconds.
-	PlayMedia $path [expr {$start ne "" && [string is double -strict $start] ? $start*1000.0 : ""}] \
+	$player {*}$args [expr {$start ne "" && [string is double -strict $start] ? $start*1000.0 : ""}] \
 		[expr {$end ne "" && [string is double -strict $end] ? $end*1000.0 : ""}]
 }
 
@@ -1535,7 +1552,6 @@ proc application::media::PlayLesson {path gameIndex {startMs {}} {endMs {}}} {
 	# transport first: embedded playback only — a lesson never falls
 	# back to an external player (that would decouple video from board)
 	if {![PlayInProcess $path $startMs $endMs]} {
-		set Priv(statusbar) "Lesson requires embedded playback (libmpv)."
 		MediaDebug "PlayLesson: embedded playback failed for [file tail $path]"
 		::media::sync::load-timeline {}
 		::media::sync::load-events {}
@@ -1576,13 +1592,21 @@ proc application::media::PlayMedia {path {startMs {}} {endMs {}}} {
 	# An external player has no board position or transport callbacks.  Do
 	# not claim to play a game-coupled video independently of its game.
 	if {[ClassifyFile $path] == 3} {
-		set Priv(statusbar) "Cannot play video with board synchronization: embedded playback is unavailable."
 		MediaDebug "PlayMedia: refusing unsynchronized external video [list $path]"
 		return
 	}
 
 	# Fallback: xdg-open / open / start
 	LaunchExternal $path
+}
+
+
+proc application::media::PlaybackError {message} {
+	variable Priv
+	set Priv(statusbar) $message
+	if {[info commands ::dialog::notice::available] ne "" && [::dialog::notice::available]} {
+		::dialog::notice::post error $message
+	}
 }
 
 
@@ -1596,7 +1620,7 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	if {$startMs eq ""} { set startMs 0 }
 	if {![::media::mpv::available?]} {
 		Stop
-		set Priv(statusbar) "The media backend is unavailable."
+		PlaybackError "Cannot play media: the media backend is unavailable."
 		return 0
 	}
 
@@ -1611,16 +1635,17 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	update idletasks
 	if {[catch { set wid [winfo id $canvas] }]} {
 		Stop
-		set Priv(statusbar) "The media surface is unavailable."
+		PlaybackError "Cannot play media: the media surface is unavailable."
 		return 0
 	}
 	if {[catch {::media::mpv::launch $path $wid $startMs} ok] || !$ok} {
 		Stop
-		set Priv(statusbar) "Could not open media: $path"
+		PlaybackError "Could not open media: [file tail $path]"
 		MediaDebug "PlayInProcess: libmpv refused [list $path]"
 		return 0
 	}
 
+	set Priv(playBase) $Priv(base)
 	set Priv(lastMedia) $path
 	set Priv(lastStartMs) $startMs
 	set Priv(lastEndMs) $endMs
@@ -1765,6 +1790,7 @@ proc application::media::MediaDestroy {} {
 	variable Priv
 	::media::mpv::stop
 	set Priv(inprocess) 0
+	set Priv(playBase) {}
 	::mediainset::hide
 }
 
@@ -1902,7 +1928,7 @@ proc application::media::SyncBoardStart {} {
 proc application::media::SyncBoardLength {} {
 	if {[catch { set len [::scidb::game::query -1 length] }]} { return 0 }
 	if {![string is integer -strict $len]} { return 0 }
-	return $len
+	return [expr {$len + 1}]
 }
 
 # Node-goal delegate (lesson v2): jump the board directly to a lesson

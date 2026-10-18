@@ -2,8 +2,8 @@
 package require tcltest 2.5
 
 proc ::scidb::test::foldRecord {target data} {
-    file mkdir tests/tmp-app/w1
-    set f [open tests/tmp-app/w1/$target-media.txt a]
+    file mkdir tests/tmp-app/w1c
+    set f [open tests/tmp-app/w1c/$target-media.txt a]
     puts $f $data
     close $f
     puts "$target $data"
@@ -19,6 +19,27 @@ proc ::scidb::test::foldStub {name args body} {
     }
     proc ::media::mpv::$name $args $body
 }
+# Replace only a managed game slot. A fresh app is in independent slot 9,
+# which is not an entry in game::List and must use the normal add path.
+proc ::scidb::test::foldGame {args} {
+    set count [llength $::game::List]
+    set current [::scidb::game::current]
+    if {$count && ($current < 0 || $current >= $count || $current == 9)} {
+        for {set slot 0} {$slot < $count && $slot < 9} {incr slot} {
+            if {[::scidb::game::query $slot open?]} {
+                ::application::pgn::select $slot
+                ::scidb::game::switch $slot
+                set current $slot
+                break
+            }
+        }
+    }
+    set replace [expr {$current >= 0 && $current < $count && $current != 9}]
+    set pos [::game::new .application -replace $replace {*}$args]
+    if {$pos < 0 || $pos == 9} {error "could not load test game"}
+    return $pos
+}
+
 proc ::scidb::test::foldCleanup {} {
     ::application::media::Stop
     foreach item $::scidb::test::foldStubs {
@@ -29,6 +50,9 @@ proc ::scidb::test::foldCleanup {} {
         }
     }
     set ::scidb::test::foldStubs {}
+    # Tests using synthetic rows/owners must give the real model back.
+    ::application::media::Update [::scidb::game::current]
+    update
 }
 
 ::application::media::Ensure
@@ -330,7 +354,21 @@ tcltest::test mediafold-mediatest-sci {MediaTest.sci drives button visibility ch
     set pane [::mediainset::Pane]
 
     # Game 1 (Carlsen-Kramnik) has M03 (Picture), M04 (Video), M06 (Video), M07 (Stream) -> Media button placed & mapped
-    ::game::new .application -base $sciPath -variant Normal -number 1
+    set pos [::scidb::test::foldGame -base $sciPath -variant Normal -number 1]
+    if {$pos < 0 || $pos == 9} {error "could not load MediaTest game"}
+    ::application::media::Update $pos
+    # Build the independent native mainline oracle before playback. Native
+    # navigation emits board notifications, so it must not run inside ticks.
+    set slot [::game::nextGamePosition]
+    ::scidb::game::load $slot $sciPath Normal 1
+    ::scidb::game::go $slot start
+    set expectedFens [list [::scidb::game::fen $slot]]
+    for {set ply 1} {$ply <= 18} {incr ply} {
+        ::scidb::game::go $slot 1
+        lappend expectedFens [::scidb::game::fen $slot]
+    }
+    ::scidb::game::release $slot
+    ::scidb::game::go -1 end
     update
     set done 0
     after 30 {set done 1}
@@ -353,7 +391,8 @@ tcltest::test mediafold-mediatest-sci {MediaTest.sci drives button visibility ch
     set w $pane.mediainset
     set chapterBtns [list [winfo manager $w.controls.prev] [winfo manager $w.controls.next]]
 
-    # Step playback clock through BoardSync timestamps (6.0s -> 1.e4, 14.0s -> 2.Nf3)
+    # Start at the end, as when selecting a lesson after manual navigation.
+    # Bare BoardSync steps must rewind to the actual goal, not assume ply 0.
     set fenStart [lindex [split [::scidb::game::fen -1] " "] 0]
     set ::scidb::test::foldTime 7.0
     ::application::media::FollowTick
@@ -361,6 +400,18 @@ tcltest::test mediafold-mediatest-sci {MediaTest.sci drives button visibility ch
     set ::scidb::test::foldTime 15.0
     ::application::media::FollowTick
     set fenAt15 [lindex [split [::scidb::game::fen -1] " "] 0]
+    set checks {}
+    foreach time {0 6 10 14 18 22 26 30 34 38 42 46 50 54 58 62 66 70 74 7 15 31} ply {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 1 3 7} {
+        set ::scidb::test::foldTime $time
+        ::application::media::FollowTick
+        set actual [::scidb::game::fen -1]
+        set expected [lindex $expectedFens $ply]
+        # Position FEN includes board, turn, castling and en-passant. The
+        # native incremental replay does not retain halfmove clock history.
+        lappend checks [expr {[lrange $actual 0 3] eq [lrange $expected 0 3]}]
+        ::scidb::test::foldRecord VAL-MED-006 [list time $time ply $ply actual $actual expected $expected]
+    }
+    if {0 in $checks} {error "BoardSync FEN differs at a step timestamp"}
 
     # Interactive segments: step board to 3.Bb5 (ply 5) and verify InteractiveFollow triggers clip range 10000ms
     ::application::media::Stop
@@ -370,6 +421,10 @@ tcltest::test mediafold-mediatest-sci {MediaTest.sci drives button visibility ch
     set ::scidb::test::foldCalls {}
     ::application::media::InteractiveFollow $::application::media::Priv(position)
     set interactiveLoad $::scidb::test::foldCalls
+    # Range playback must retain M04's board timeline and follow the clock.
+    set ::scidb::test::foldTime 15
+    ::application::media::FollowTick
+    if {[::scidb::game::ply] != 3} {error "interactive range lost BoardSync"}
 
     # When no game/database with media is open -> Media button hidden
     ::application::media::Stop
@@ -432,7 +487,11 @@ tcltest::test mediafold-focus-time {MED-001C time advances and Space is local to
     ::scidb::test::foldStub pause {} {lappend ::scidb::test::foldCalls pause}
     ::scidb::test::foldStub stop {} {}
 } -body {
+    ::application::switchTab board
+    ::application::media::Update [::scidb::game::current]
+    ::scidb::test::foldWait
     set w [winfo parent [::mediainset::surface .unused]]
+    ::scidb::test::foldWait
     set ::application::media::Priv(inprocess) 1
     ::application::media::SeekTick
     set first [$w.controls.time cget -text]
@@ -441,12 +500,18 @@ tcltest::test mediafold-focus-time {MED-001C time advances and Space is local to
     set second [$w.controls.time cget -text]
     focus -force $w.controls.play
     update
-    event generate $w.controls.play <space>
+    if {![winfo ismapped $w.controls.play] || [focus] ne "$w.controls.play"} {error "inset focus precondition failed"}
+    event generate $w.controls.play <KeyPress-space>
+    update
     set inside $::scidb::test::foldCalls
     entry .application.foldOutside
+    place .application.foldOutside -x 0 -y 0 -width 100 -height 24
     focus -force .application.foldOutside
     update
-    event generate .application.foldOutside <space>
+    if {[focus] ne ".application.foldOutside" || ![winfo ismapped .application.foldOutside]} {error "outside focus precondition failed"}
+    event generate .application.foldOutside <KeyPress-space>
+    update
+    if {[.application.foldOutside get] ne " "} {error "outside key event was not delivered"}
     ::scidb::test::foldRecord VAL-MED-001C [list first $first second $second inside $inside outside $::scidb::test::foldCalls]
     list $first $second $inside $::scidb::test::foldCalls
 } -cleanup {destroy .application.foldOutside; ::scidb::test::foldCleanup} -result {{0:30 / 2:00} {1:05 / 2:00} pause pause}
@@ -464,9 +529,10 @@ tcltest::test mediafold-real-menu {MED-003/004 real MediaTest rows dispatch pict
     set base [file normalize tests/tmp-app/media-test/MediaTest.sci]
     if {![::scidb::db::get open? $base]} {::scidb::db::load $base {apply {args {return 0}}} {} -readonly 1}
     ::scidb::db::switch $base Normal
-    set pos [::game::new .application -base $base -variant Normal -number 1]
+    set pos [::scidb::test::foldGame -base $base -variant Normal -number 1]
     # The legacy test above simulates independent mode with Update -1 while
     # keeping this same game open. Restore the real model before this case.
+    if {$pos < 0 || $pos == 9} {error "could not load MediaTest game"}
     ::application::media::Update $pos
     ::scidb::test::foldWait
     set pane [::mediainset::Pane]
@@ -503,7 +569,7 @@ tcltest::test mediafold-real-menu {MED-003/004 real MediaTest rows dispatch pict
         }
         lappend states $state
     }
-    ::game::new .application -base $base -variant Normal -number 0
+    ::scidb::test::foldGame -base $base -variant Normal -number 0
     ::scidb::test::foldWait
     ::mediainset::PopulateMenu $menu
     set index 0
@@ -517,7 +583,7 @@ tcltest::test mediafold-real-menu {MED-003/004 real MediaTest rows dispatch pict
     set audio [list $::mediainset::Shown $::mediainset::Audio [winfo manager $w.video] \
         [expr {[winfo height $w]==[winfo height $w.controls]+8}]]
     ::scidb::test::foldRecord VAL-MED-004D [list audio $audio rect [::scidb::test::foldRect $w] controls [::scidb::test::foldRect $w.controls] calls $::scidb::test::foldCalls]
-    ::game::new .application
+    ::scidb::test::foldGame
     ::scidb::test::foldWait
     set hidden [winfo ismapped $pane.mediaButton]
     ::scidb::test::foldRecord VAL-MED-003A [list noMedia $hidden current [::scidb::game::current] position $::application::media::Priv(position) entries [::mediainset::Entries]]
@@ -525,13 +591,19 @@ tcltest::test mediafold-real-menu {MED-003/004 real MediaTest rows dispatch pict
 } -cleanup {::scidb::test::foldCleanup} -result {1 {{1 pack} {1 pack} {1 1}} {1 1 {} 1} 0}
 
 tcltest::test mediafold-report-file {MED-004E generated report entry opens the existing HTML viewer} -body {
-    set report [file normalize tests/tmp-app/w1/report-entry.html]
-    set f [open $report w]
-    puts $f {<html><head><title>Generated opening report</title></head><body><h1>Generated opening report</h1><p>Develop the pieces and castle.</p></body></html>}
-    close $f
+    set base [file normalize tests/tmp-app/media-test/MediaTest.sci]
+    if {![::scidb::db::get open? $base]} {::scidb::db::load $base {apply {args {return 0}}} {} -readonly 1}
+    set pos [::scidb::test::foldGame -base $base -variant Normal -number 1]
+    if {$pos < 0 || $pos == 9} {error "could not load MediaTest game"}
+    ::application::media::Update $pos
+    ::scidb::test::foldWait
     set tree $::application::media::Priv(tree)
-    set section [$tree insert {} end -text Reports]
-    set row [$tree insert $section end -values [list $::application::media::mc::SectionReports Report $report -1]]
+    set row {}
+    foreach item [::application::media::MediaRows] {
+        lassign [$tree item $item -values] type title path owner
+        if {$type eq $::application::media::mc::SectionReports} {set row $item; set report $path; break}
+    }
+    if {$row eq ""} {error "MediaTest HTML report fixture missing; run tests/tmp-app/media-test/make.sh"}
     ::mediainset::RefreshMediaButton
     ::mediainset::PopulateMenu [::mediainset::Pane].mediaButton.menu
     set index [lsearch -index 0 [::mediainset::Entries] $row]
@@ -543,7 +615,6 @@ tcltest::test mediafold-report-file {MED-004E generated report entry opens the e
 } -cleanup {
     set t [::application::twm board]
     if {[$t isdocked report]} {::application::twm::ChangeState $t report}
-    catch {$tree delete $section}
 } -result {1 1}
 
 tcltest::test mediafold-saved-pane {MED-005 saved Media pane survives an empty game refresh} -setup {

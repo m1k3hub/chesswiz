@@ -20,7 +20,7 @@ proc tk {args} { return 1.3333333333 }
 set f [open [file join [file dirname [info script]] .. tcl app-board.tcl]]
 set source [read $f]
 close $f
-set wanted {ComputeLayout setReserve reserveRect afterRebuild ApplyReserve3D ConfigureReserve3D}
+set wanted {ComputeLayout reserveSquare setReserve reserveRect afterRebuild ApplyReserve3D ConfigureReserve3D}
 set definition {}
 foreach line [split $source \n] {
     if {$definition eq {} && [regexp {^proc ([^ ]+) } $line -> name] && $name in $wanted} {
@@ -61,6 +61,16 @@ foreach side {right bottom left} {
         list $accepted $clear [expr {$original == $::application::board::Dim(squaresize:Normal)}]
     } -result {1 1 1}
 }
+tcltest::test board-reserve-probe {candidate measurements preserve the accepted state and fit the default canvas} -body {
+    ::application::board::setReserve right 300
+    set before [lsort [array get ::application::board::Dim]]
+    set count $::application::board::rebuildCount
+    set square [::application::board::reserveSquare right 168 500 405]
+    list [expr {$square >= 32}] \
+        [expr {$before eq [lsort [array get ::application::board::Dim]]}] \
+        [expr {$count == $::application::board::rebuildCount}] \
+        $::application::board::ReserveSide $::application::board::ReservePixels
+} -result {1 1 1 right 300}
 tcltest::test board-reserve-pure-refusal {refusal leaves dimensions and accepted reserve unchanged} -body {
     ::application::board::setReserve right 300
     set before [lsort [array get ::application::board::Dim]]

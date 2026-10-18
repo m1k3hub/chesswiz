@@ -32,7 +32,7 @@ array set Options {
 	enabled 1
 	size 0.34
 	margin 6
-	minWidth 200
+	minWidth 160
 }
 
 # swapped: the video fills the pane and the board is the small window
@@ -97,7 +97,7 @@ proc ::mediainset::Build {w} {
 	catch { ::tooltip::tooltip $w.expand [namespace current]::mc::Expand }
 	ttk::button $w.controls.stream -text "Open stream..." -command [list ::application::media::OpenStream $w]
 	ttk::label $w.controls.time -textvariable ::application::media::Priv(seeklabel)
-	ttk::scale $w.controls.seek -orient horizontal -from 0 -to 1000 -value 0
+	ttk::scale $w.controls.seek -orient horizontal -from 0 -to 1000 -value 0 -length 45
 	bind $w.controls.seek <ButtonPress-1> {+set ::application::media::Priv(seekgrab) 1}
 	bind $w.controls.seek <ButtonRelease-1> +[list ::application::media::SeekRelease $w.controls.seek]
 	bind $w.controls.seek <KeyRelease> {
@@ -105,15 +105,17 @@ proc ::mediainset::Build {w} {
 			::application::media::SeekRelease %W
 		}
 	}
-	# Two compact rows keep the transport usable in a narrow board margin.
+	# Compact rows keep the transport usable in a 160px video strip.
 	pack $w.controls -side bottom -fill x
-	grid $w.controls.play $w.controls.prev $w.controls.next $w.controls.stop $w.controls.stream -sticky ew
-	grid $w.expand -in $w.controls -row 0 -column 5
-	grid $w.controls.seek -row 1 -column 0 -columnspan 4 -sticky ew
-	grid $w.controls.time -row 1 -column 4 -columnspan 2 -sticky ew
+	grid $w.controls.play $w.controls.prev $w.controls.next $w.controls.stop -sticky ew
+	grid $w.expand -in $w.controls -row 2 -column 4
+	grid $w.controls.stream -row 2 -column 0 -columnspan 4 -sticky ew
+	grid $w.controls.seek -row 1 -column 0 -columnspan 3 -sticky ew
+	grid $w.controls.time -row 1 -column 3 -columnspan 2 -sticky ew
 	grid columnconfigure $w.controls 0 -weight 1
 	pack $w.video -side top -fill both -expand yes
 	bind $w <space> {::application::media::TogglePlayback; break}
+	bindtags $w.video [linsert [bindtags $w.video] 1 $w]
 	bind $w.video <Button-1> [list focus $w]
 	# Include the frame binding for focusable transport children, too.
 	foreach child [winfo children $w.controls] {
@@ -226,21 +228,22 @@ proc ::mediainset::Layout {} {
 				}
 			}
 			set side [expr {$width > $height ? "right" : "bottom"}]
-			if {$Audio} {
-				set iw $cw
-				set ih $ch
-			} else {
-				# A right-side video's height follows the slot height. Keeping
-				# its width stable during horizontal drags avoids rebuilding
-				# the board twice for two different square sizes on each drag.
-				set videoWidth [expr {$side eq "right" ? int($height*$s*$Aspect)+8 : int($width*0.66)}]
-				set iw [expr {max($cw, $Options(minWidth), $videoWidth)}]
-				# Fit the media's display aspect within the slot vertically too.
-				set iw [expr {min($iw, max(8, int(($height-$ch)*$Aspect)+8))}]
-				set ih [expr {int(round(($iw - 8)/$Aspect)) + $ch}]
+			set iw $cw
+			set ih $ch
+			if {!$Audio} {
+				set choice [FitStrip $width $height $ch]
+				if {[llength $choice]} {
+					lassign $choice side iw ih
+				} else {
+					# Only panes unable to fit a 160px video at the minimum
+					# board square size use the existing corner overlay.
+					set side {}
+					set iw [expr {max(168, int($height*$s*$Aspect)+8)}]
+					set ih [expr {int(round(($iw-8)/$Aspect))+$ch}]
+				}
 			}
 			set pixels [expr {$side eq "right" ? $iw : $ih}]
-			if {[::application::board::setReserve $side $pixels]} {
+			if {$side ne "" && [::application::board::setReserve $side $pixels]} {
 				lassign [::application::board::reserveRect] x y rw rh
 				set x [expr {$x + [winfo x $view] + ($rw - $iw)/2}]
 				set y [expr {$y + [winfo y $view] + ($rh - $ih)/2}]
@@ -260,6 +263,71 @@ proc ::mediainset::Layout {} {
 	} finally {
 		set LayingOut 0
 	}
+}
+
+
+# Plan the final 2D reserve before the board paints a resized extent. The
+# afterRebuild hook still places the inset; it need not repaint an obsolete
+# board size first. 3D uses its realized frame/Configure path instead.
+proc ::mediainset::reserveForLayout {width height} {
+	variable Shown
+	variable Swapped
+	variable Audio
+	if {!$Shown || $Swapped || $::application::board::Vars(3d)} { return {} }
+	set w [Pane].mediainset
+	if {![winfo exists $w.controls]} { return {} }
+	set ch [expr {[winfo reqheight $w.controls]+8}]
+	if {$Audio} {
+		set side [expr {$width > $height ? "right" : "bottom"}]
+		set pixels [expr {$side eq "right" ? [winfo reqwidth $w.controls]+8 : $ch}]
+	} else {
+		set choice [FitStrip $width $height $ch]
+		if {![llength $choice]} { return [list {} 0] }
+		lassign $choice side iw ih
+		set pixels [expr {$side eq "right" ? $iw : $ih}]
+	}
+	return [list $side $pixels]
+}
+
+
+# Fit each candidate down to the documented minimum VIDEO width (frame
+# adds eight pixels). Prefer the side leaving the larger board, with a
+# right-side tie break. Grow video only through otherwise unused space,
+# preserving that board size. Apply the winning reserve once.
+proc ::mediainset::FitStrip {width height controlsHeight} {
+	variable Options
+	variable Aspect
+	set best {}
+	set bestSquare 0
+	set minimum 168
+	foreach side {right bottom} {
+		set minimumHeight [expr {int(round(160/$Aspect))+$controlsHeight}]
+		set px [expr {$side eq "right" ? $minimum : $minimumHeight}]
+		set squareAtMinimum [::application::board::reserveSquare $side $px $width $height]
+		if {$squareAtMinimum < $::application::board::MinimumReserveSquare} { continue }
+		set desired [expr {$side eq "right" ? int($height*$Options(size)*$Aspect)+8 : int($width*0.66)}]
+		set lo $minimum
+		set hi [expr {min(max($minimum,$Options(minWidth)+8,$desired), $width, int(($height-$controlsHeight)*$Aspect)+8)}]
+		set candidate {}
+		while {$lo <= $hi} {
+			set iw [expr {($lo+$hi)/2}]
+			set ih [expr {int(round(($iw-8)/$Aspect))+$controlsHeight}]
+			set px [expr {$side eq "right" ? $iw : $ih}]
+			set square [::application::board::reserveSquare $side $px $width $height]
+			if {$square >= $squareAtMinimum} {
+				set candidate [list $side $iw $ih]
+				set candidateSquare $square
+				set lo [expr {$iw+1}]
+			} else {
+				set hi [expr {$iw-1}]
+			}
+		}
+		if {[llength $candidate] && $candidateSquare > $bestSquare} {
+			set best $candidate
+			set bestSquare $candidateSquare
+		}
+	}
+	return $best
 }
 
 
@@ -449,6 +517,7 @@ proc ::mediainset::Choose {row} {
 	}
 	set tree $::application::media::Priv(tree)
 	$tree selection set $row
+	set ::application::media::Priv(selectedRow) $row
 	lassign [$tree item $row -values] type title path index
 	if {$type eq $::application::media::mc::SectionReports} {
 		if {[file extension $path] in {.html .htm} && [file readable $path]} {

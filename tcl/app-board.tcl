@@ -1109,7 +1109,7 @@ proc ConfigureWindow {w width height} {
 			set timeout 300
 			set Vars(initialized) 2
 		} else {
-			set timeout 100
+			set timeout 50
 		}
 		set Vars(after) [after $timeout [namespace code [list RebuildBoard $w $width $height]]]
 	}
@@ -1438,6 +1438,30 @@ proc afterRebuild {callback {remove false}} {
 	}
 }
 
+# Probe using the same decoration/DPI arithmetic as the actual rebuild.
+# No widgets or accepted reserve are changed while the inset compares strips.
+proc reserveSquare {side px width height} {
+	variable Dim
+	variable Vars
+	variable ReserveSide
+	variable ReservePixels
+	set saved [array get Dim]
+	set oldSide $ReserveSide
+	set oldPixels $ReservePixels
+	try {
+		set ReserveSide $side
+		set ReservePixels $px
+		ComputeLayout $width $height
+		if {$ReserveSide ne $side} { return 0 }
+		return $Dim(squaresize:$Vars(layout))
+	} finally {
+		array unset Dim
+		array set Dim $saved
+		set ReserveSide $oldSide
+		set ReservePixels $oldPixels
+	}
+}
+
 proc setReserve {side px} {
 	variable ReserveSide
 	variable ReservePixels
@@ -1494,7 +1518,9 @@ proc ConfigureReserve3D {width height} {
 	if {$ReserveSide eq "bottom"} { incr height $ReservePixels }
 	set Vars(width) $width
 	set Vars(height) $height
-	RebuildBoard $Vars(widget:frame) $width $height
+	# Padding changes can leave the reconstructed full size unchanged.
+	# Notify inset owners anyway, now that the visible frame has moved.
+	RebuildBoard $Vars(widget:frame) $width $height true
 }
 
 proc RebuildBoard {canv width height {force false}} {
@@ -1515,6 +1541,14 @@ proc RebuildBoard {canv width height {force false}} {
 		set squareSize $Dim(squaresize:Normal)
 	}
 	set edgeThickness $Dim(edgethickness)
+	if {[info commands ::mediainset::reserveForLayout] ne ""} {
+		set reserve [::mediainset::reserveForLayout $width $height]
+		if {[llength $reserve]} {
+			variable ReserveSide
+			variable ReservePixels
+			lassign $reserve ReserveSide ReservePixels
+		}
+	}
 	ComputeLayout $width $height $Dim(bordersize)
 	SetBackground $canv window $width $height
 	$canv coords board $Dim(border:x1) $Dim(border:y1)
@@ -1780,10 +1814,14 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 		set Dim(offset:coords) [expr {(2*$Dim(offset))/3}]
 	}
 
+	# Decorations occupy one column, to the right of the board. In a
+	# reserved slot centre board + that column together, recovering the
+	# otherwise empty mirror column on the left (needed in small windows).
+	set decorationShift [expr {$ReserveSide ne {} ? $stmsize : 0}]
 	if {$layout(border)} {
-		set width [expr {$width - 2*$Dim(borderthickness) - 2*$stmsize}]
+		set width [expr {$width - 2*$Dim(borderthickness) - 2*$stmsize + $decorationShift}]
 	} else {
-		set width [expr {$width - 2*max($Dim(offset), $stmsize)}]
+		set width [expr {$width - 2*max($Dim(offset), $stmsize) + $decorationShift}]
 	}
 
 	set height [expr {$height - 2*$Dim(offset)}]
@@ -1833,7 +1871,7 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 
 	set Dim(boardsize)	[expr {8*$Dim($sqsize) + 2*$Dim(edgethickness)}]
 	set Dim(bordersize)	[expr {$Dim(boardsize) + 2*$Dim(borderthickness)}]
-	set Dim(border:x1)	[expr {$originX + ($canvWidth - $Dim(bordersize) + $Dim(offset:coords))/2}]
+	set Dim(border:x1)	[expr {$originX + ($canvWidth - $Dim(bordersize) + $Dim(offset:coords) - $decorationShift)/2}]
 	set Dim(border:y1)	[expr {($canvHeight - $Dim(bordersize))/2}]
 	set Dim(border:x2)	[expr {$Dim(border:x1) + $Dim(bordersize)}]
 	set Dim(border:y2)	[expr {$Dim(border:y1) + $Dim(bordersize)}]
