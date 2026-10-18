@@ -152,6 +152,52 @@ proc ::w1::play {{path {}}} {
 proc ::w1::rect {widget} {
     list [winfo rootx $widget] [winfo rooty $widget] [winfo width $widget] [winfo height $widget]
 }
+# VAL-MED-009: the inset frame, the video, the board view and the pane.
+proc ::w1::rects {w} {
+    list [rect $w] [rect $w.video] [rect [::mediainset::BoardView]] [rect [winfo parent $w]]
+}
+proc ::w1::near {a b} {
+    set a [concat {*}$a]
+    set b [concat {*}$b]
+    if {[llength $a] != [llength $b]} { return 0 }
+    foreach x $a y $b { if {abs($x-$y) > 1} { return 0 } }
+    return 1
+}
+# The state-aware size control: face, tooltip and the video's hover tooltip.
+proc ::w1::control {w} {
+    list [$w.expand cget -text] $::mediainset::mc::ExpandTooltip $::mediainset::mc::VideoTooltip
+}
+proc ::w1::shot {name} {
+    variable dir
+    file mkdir $dir
+    catch { exec import -window root $dir/$name-[winfo screenwidth .]x[winfo screenheight .].png }
+}
+# The inset's own visible frame, and whether it sits inside its pane (its
+# outer edge, and so the ridge border, is never clipped by the pane).
+proc ::w1::frameStyle {w} {
+    list [$w cget -relief] [$w cget -borderwidth] [$w cget -highlightthickness]
+}
+proc ::w1::inside {w} {
+    set pane [winfo parent $w]
+    expr {[winfo x $w] >= 0 && [winfo y $w] >= 0 \
+        && [winfo x $w]+[winfo width $w] <= [winfo width $pane] \
+        && [winfo y $w]+[winfo height $w] <= [winfo height $pane]}
+}
+# Each gesture that toggles the layout: the button, a double-click on the
+# video and Escape while the inset has focus.
+proc ::w1::trigger {w mode} {
+    switch -- $mode {
+        button { $w.expand invoke }
+        double {
+            event generate $w.video <ButtonPress-1>
+            event generate $w.video <ButtonRelease-1>
+            event generate $w.video <ButtonPress-1>
+            event generate $w.video <ButtonRelease-1>
+        }
+        escape { focus -force $w.video; update idletasks; event generate $w.video <Escape> }
+    }
+    wait
+}
 proc ::w1::overlap {a b} {
     lassign $a x y w h; lassign $b xx yy ww hh
     expr {max(0,min($x+$w,$xx+$ww)-max($x,$xx))*max(0,min($y+$h,$yy+$hh)-max($y,$yy))}
@@ -353,7 +399,12 @@ tcltest::test brd-swap {BRD-006 swap clears the reserve and return restores it} 
     ::w1::wait
     ::w1::measure VAL-BRD-006-swapped 1
     ::w1::assert {$::mediainset::Swapped && $::application::board::ReserveSide eq ""} "swap kept reserve"
-    ::w1::assert {[winfo width $w]==[winfo width [::mediainset::Pane]]} "video not expanded"
+    # Expanded video is inset by its frame margin so the frame is not clipped,
+    # rather than placed flush at the pane's 0,0 with relwidth 1.
+    set pane [::mediainset::Pane]
+    set m $::mediainset::FrameMargin
+    ::w1::assert {[winfo x $w]==$m && [winfo y $w]==$m} "video not inset from the pane edge"
+    ::w1::assert {[winfo width $w]==[winfo width $pane]-2*$m && [winfo height $w]==[winfo height $pane]-2*$m} "video not inset by the frame margin"
     $w.expand invoke
     ::w1::wait
     ::w1::reserved VAL-BRD-006-restored right 1
@@ -442,5 +493,124 @@ tcltest::test brd-teardown {BRD-005 inset destruction unregisters the rebuild ca
     ::w1::clear VAL-BRD-005-teardown
     return ok
 } -cleanup {::w1::cleanup} -result ok
+
+# VAL-MED-009: the size control names its state and its tooltips follow it.
+tcltest::test inset-009-control {VAL-MED-009 the control reads Expand and Restore with matching tooltips} -setup {::w1::setup} -body {
+    set w [::w1::play]
+    set normal [::w1::control $w]
+    ::w1::trigger $w button
+    set swapped [::w1::control $w]
+    ::w1::trigger $w button
+    set restored [::w1::control $w]
+    ::w1::log VAL-MED-009-control [list normal $normal swapped $swapped restored $restored \
+        margin $::mediainset::FrameMargin]
+    list \
+        [expr {[lindex $normal 0] eq $::mediainset::mc::Expand}] \
+        [string match {*Expand*} [lindex $normal 1]] \
+        [string match {*expand*} [lindex $normal 2]] \
+        [expr {[lindex $swapped 0] eq $::mediainset::mc::Restore}] \
+        [expr {[lindex $normal 0] ne [lindex $swapped 0]}] \
+        [string match {*Restore*} [lindex $swapped 1]] \
+        [string match {*restore*} [lindex $swapped 2]] \
+        [expr {$restored eq $normal}]
+} -cleanup {::w1::cleanup} -result {1 1 1 1 1 1 1 1}
+
+# VAL-MED-009: the button, a double-click and Escape each return the video and
+# the board to the geometry they had before expanding.
+tcltest::test inset-009-restore {VAL-MED-009 button, double-click and Escape restore the prior geometry} -setup {::w1::setup} -body {
+    set w [::w1::play]
+    set out {}
+    foreach mode {button double escape} {
+        if {$::mediainset::Swapped} { ::w1::trigger $w button }
+        set before [::w1::rects $w]
+        ::w1::trigger $w button
+        set expanded $::mediainset::Swapped
+        ::w1::trigger $w $mode
+        set after [::w1::rects $w]
+        set equal [::w1::near $before $after]
+        ::w1::log VAL-MED-009-restore [list mode $mode before $before expanded $expanded \
+            after $after equal $equal]
+        lappend out [list $mode $expanded $equal]
+    }
+    set out
+} -cleanup {::w1::cleanup} -result {{button 1 1} {double 1 1} {escape 1 1}}
+
+# VAL-MED-009: the ridge+highlight frame stays fully inside the pane in the
+# normal strip, the expanded layout (inset by its margin) and audio-only, and
+# the small board is framed while expanded.
+tcltest::test inset-009-frame {VAL-MED-009 the frame is visible and inside the pane in every state} -setup {::w1::setup} -body {
+    set w [::w1::play]
+    set m $::mediainset::FrameMargin
+    set view [::mediainset::BoardView]
+    set original [[set view] cget -highlightthickness]
+    set normal [list [::w1::inside $w] [::w1::frameStyle $w]]
+    ::w1::shot VAL-MED-009-2d-normal
+    ::w1::trigger $w button
+    set board [::mediainset::BoardView]
+    set swapped [list [::w1::inside $w] [::w1::frameStyle $w] \
+        [expr {[winfo x $w] == $m && [winfo y $w] == $m}] \
+        [expr {[winfo width $w] == [winfo width [winfo parent $w]] - 2*$m}] \
+        [[set board] cget -highlightthickness] [winfo manager $board]]
+    ::w1::shot VAL-MED-009-2d-expanded
+    # a resize while expanded must keep the frame
+    wm geometry .application [expr {[winfo width .application]-120}]x[expr {[winfo height .application]-60}]
+    ::w1::wait
+    set resized [list [::w1::inside $w] [expr {[winfo x $w] == $m && [winfo y $w] == $m}]]
+    ::w1::shot VAL-MED-009-2d-expanded-resized
+    ::w1::trigger $w button
+    set restored [list [::w1::inside $w] [[set board] cget -highlightthickness] $original]
+    ::w1::shot VAL-MED-009-2d-restored
+    # audio-only keeps the inset frame around the transport strip
+    set w [::w1::play [file normalize tests/tmp-app/media-test/MediaTest.media/audio/interview.wav]]
+    set audio [list [::w1::inside $w] [::w1::frameStyle $w] [winfo manager $w.video]]
+    ::w1::shot VAL-MED-009-2d-audio
+    ::w1::log VAL-MED-009-frame [list margin $m normal $normal swapped $swapped resized $resized \
+        restored $restored audio $audio]
+    list \
+        [lindex $normal 0] [lindex $normal 1] \
+        [lindex $swapped 0] [lindex $swapped 2] [lindex $swapped 3] [lindex $swapped 4] [lindex $swapped 5] \
+        [lindex $resized 0] [lindex $resized 1] \
+        [lindex $restored 0] [lindex $restored 1] [lindex $restored 2] \
+        [lindex $audio 0] [lindex $audio 1] [lindex $audio 2]
+} -cleanup {::w1::cleanup} -result {1 {ridge 3 1} 1 1 1 3 place 1 1 1 0 0 1 {ridge 3 1} {}}
+
+# VAL-MED-009: a board pane too small for a strip keeps the frame in the
+# BRD-004 corner overlay.
+tcltest::test inset-009-frame-corner {VAL-MED-009 the corner overlay keeps the inset frame inside the pane} -setup {::w1::setup; ::w1::size small} -body {
+    set w [::w1::play]
+    set inside [::w1::inside $w]
+    ::w1::log VAL-MED-009-frame-corner [list rect [::w1::rect $w] pane [::w1::rect [winfo parent $w]] \
+        style [::w1::frameStyle $w] inside $inside reserve [::application::board::reserveRect]]
+    list $inside [::w1::frameStyle $w]
+} -cleanup {::w1::cleanup} -result {1 {ridge 3 1}}
+
+# VAL-MED-009: the same state control, restore and frame hold for the 3D board.
+tcltest::test inset-009-3d {VAL-MED-009 the 3D board keeps the control, the restore and the frame} -setup {::w1::setup default} -body {
+    set w [::w1::play]
+    ::w1::assert {[::application::board::show3D 1]} "Blocked: 3D view unavailable"
+    ::w1::wait
+    set view [::mediainset::BoardView]
+    set m $::mediainset::FrameMargin
+    set normal [::w1::control $w]
+    set before [::w1::rects $w]
+    ::w1::shot VAL-MED-009-3d-normal
+    ::w1::trigger $w button
+    set expanded $::mediainset::Swapped
+    set swapped [list [::w1::inside $w] [[set view] cget -highlightthickness] \
+        [expr {[winfo x $w] == $m && [winfo y $w] == $m}] [winfo manager $view]]
+    ::w1::shot VAL-MED-009-3d-expanded
+    ::w1::trigger $w escape
+    set after [::w1::rects $w]
+    set restControl [::w1::control $w]
+    ::w1::shot VAL-MED-009-3d-restored
+    ::w1::log VAL-MED-009-3d [list view $view normal $normal before $before swapped $swapped \
+        after $after expanded $expanded restored [::w1::near $before $after]]
+    list \
+        [expr {[lindex $normal 0] eq $::mediainset::mc::Expand}] \
+        $expanded [lindex $swapped 0] [lindex $swapped 1] [lindex $swapped 2] [lindex $swapped 3] \
+        [::w1::near $before $after] \
+        [expr {[lindex $restControl 0] eq $::mediainset::mc::Expand}] \
+        [::w1::inside $w]
+} -cleanup {::w1::cleanup} -result {1 1 1 3 1 place 1 1 1}
 
 tcltest::cleanupTests

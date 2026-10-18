@@ -741,4 +741,44 @@ tcltest::test mediafold-008-no-hang {scripted button post/unpost and entry reads
     list [expr {$maxPost < 1000}] [expr {$maxRead < 1000}] $posted [grab current] [winfo ismapped $w.menu]
 } -cleanup {::scidb::test::foldCleanup} -result {1 1 20 {} 0}
 
+# VAL-MED-010: the Media pane is dropped from a pre-fold saved layout once, at
+# the fist start after the upgrade, and stays an optional library afterwards.
+# Each phase is a separate fresh app process, so the real startup path
+# (::application::twm::load -> RemoveLegacyMedia) runs.
+proc ::scidb::test::migRun {dir phase} {
+    set log [file join $dir phase$phase.log]
+    set bin [file normalize src/tkchesswiz]
+    set script [file join [file normalize tests] fixtures media-mig phase.tcl]
+    set home [file join $dir home]
+    if {[catch {
+        exec {*}[list timeout 120 env HOME=$home MIG_PHASE=$phase MIG_ROOT=[file normalize .] \
+            LIBGL_ALWAYS_SOFTWARE=1 SCIDB_AI_UNCALIBRATED=1 \
+            $bin $script] > $log 2>@1
+    } msg]} {
+        return -code error "migration phase $phase failed: $msg"
+    }
+    set f [open $log]
+    set data [read $f]
+    close $f
+    return $data
+}
+
+tcltest::test mediafold-010-migration {VAL-MED-010 a pre-fold layout loses Media once and stays an optional library} -setup {
+    set ::scidb::test::migDir [file join $::scidb::test::app::testDir tmp-app media-mig-[pid]]
+    file delete -force $::scidb::test::migDir
+    file mkdir [file join $::scidb::test::migDir home]
+} -body {
+    set dir $::scidb::test::migDir
+    set p1 [::scidb::test::migRun $dir 1]
+    set p2 [::scidb::test::migRun $dir 2]
+    set p3 [::scidb::test::migRun $dir 3]
+    ::scidb::test::foldRecord VAL-MED-010 [list phase1 $p1 phase2 $p2 phase3 $p3]
+    list \
+        [regexp {MIG P1 prefold 1 marker 0} $p1] \
+        [regexp {MIG P2 media 0 marker 1} $p2] \
+        [regexp {MIG P2 .* tree 1 analysis 1 board 1 editor 1 games 1 dbgames 1} $p2] \
+        [regexp {MIG P2 reopened 1 mapped 1} $p2] \
+        [regexp {MIG P3 media 1 docked 1 marker 1} $p3]
+} -cleanup {file delete -force $::scidb::test::migDir} -result {1 1 1 1 1}
+
 tcltest::cleanupTests

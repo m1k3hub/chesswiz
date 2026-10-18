@@ -24,7 +24,18 @@ namespace eval ::mediainset {
 namespace eval mc {
 
 set ShowInBoard	"Show Video in the Board Window"
-set Expand		"Swap video and board"
+# Button faces: the inset's size control names its state (Expand vs Restore).
+set Expand		"⤢"
+set Restore		"⤡"
+# Button tooltips mention both the state and the double-click gesture.
+set ExpandTip	"Expand (double-click the video to expand)"
+set RestoreTip	"Restore (double-click the video to restore)"
+# Hovering the video names the double-click gesture for the current state.
+set VideoExpand	"Double-click to expand"
+set VideoRestore	"Double-click to restore"
+# Live tooltip texts, registered with the tooltip module and switched by state.
+set ExpandTooltip	"Expand (double-click the video to expand)"
+set VideoTooltip	"Double-click to expand"
 
 } ;# namespace mc
 
@@ -34,6 +45,11 @@ array set Options {
 	margin 6
 	minWidth 160
 }
+
+# Gap between the inset frame and the pane edge when the video fills the pane,
+# and the inset for the small board overlay inside the video's own frame.
+variable FrameMargin 6
+variable BoardGap 10
 
 # swapped: the video fills the pane and the board is the small window
 variable Swapped 0
@@ -112,8 +128,8 @@ proc ::mediainset::Build {w} {
 	ttk::button $w.controls.prev -text "|‹" -width 2 -command {::application::media::ChapterStep -1}
 	ttk::button $w.controls.next -text "›|" -width 2 -command {::application::media::ChapterStep 1}
 	ttk::button $w.controls.stop -text Stop -width 4 -command ::application::media::Stop
-	ttk::button $w.expand -text "⤢" -width 2 -takefocus 0 -command [namespace code swap]
-	catch { ::tooltip::tooltip $w.expand [namespace current]::mc::Expand }
+	ttk::button $w.expand -text $::mediainset::mc::Expand -width 2 -takefocus 0 -command [namespace code swap]
+	catch { ::tooltip::tooltip $w.expand [namespace current]::mc::ExpandTooltip }
 	ttk::button $w.controls.stream -text "Open stream..." -command [list ::application::media::OpenStream $w]
 	ttk::label $w.controls.time -textvariable ::application::media::Priv(seeklabel)
 	ttk::scale $w.controls.seek -orient horizontal -from 0 -to 1000 -value 0 -length 45
@@ -144,6 +160,10 @@ proc ::mediainset::Build {w} {
 	RefreshControls
 	# double-click on the video swaps as well
 	bind $w.video <Double-Button-1> [namespace code swap]
+	# Escape while the inset has focus restores the previous placement
+	bind $w <Escape> [namespace code Escape]
+	# hovering the video names the double-click gesture for the current state
+	catch { ::tooltip::tooltip $w.video [namespace current]::mc::VideoTooltip }
 }
 
 
@@ -168,6 +188,7 @@ proc ::mediainset::hide {} {
 		return
 	}
 	::application::board::setReserve {} 0
+	FrameView 0
 	if {[winfo exists $pane.mediainset]} { place forget $pane.mediainset }
 	if {$Swapped} {
 		set Swapped 0
@@ -192,6 +213,66 @@ proc ::mediainset::swapped? {} {
 }
 
 
+# Escape while the inset has focus restores the video and board to their
+# previous placement. It is a no-op when the inset is not swapped, so the
+# key stays available to whatever else owns it.
+proc ::mediainset::Escape {} {
+	variable Swapped
+	if {!$Swapped} { return }
+	swap
+	return -code break
+}
+
+
+# The size control names its state: Expand (⤢) in the normal strip/corner
+# layout, Restore (⤡) once the video fills the pane. The tooltips follow the
+# state too, so they always name the gesture a click or double-click performs.
+proc ::mediainset::RefreshSwapControl {} {
+	variable Swapped
+	set pane [Pane]
+	if {$pane eq ""} { return }
+	set w $pane.mediainset
+	if {![winfo exists $w.expand]} { return }
+	if {$Swapped} {
+		$w.expand configure -text $::mediainset::mc::Restore
+		set ::mediainset::mc::ExpandTooltip $::mediainset::mc::RestoreTip
+		set ::mediainset::mc::VideoTooltip $::mediainset::mc::VideoRestore
+	} else {
+		$w.expand configure -text $::mediainset::mc::Expand
+		set ::mediainset::mc::ExpandTooltip $::mediainset::mc::ExpandTip
+		set ::mediainset::mc::VideoTooltip $::mediainset::mc::VideoExpand
+	}
+}
+
+
+# Give the small board overlay a visible frame while the video fills the pane,
+# so it reads as a window rather than a borderless fragment on the video. The
+# board view's own highlight ring is used for both the 2D canvas and the 3D
+# frame; its original options are restored when the board returns to the pane.
+proc ::mediainset::FrameView {on} {
+	variable ViewFrame
+	set view [BoardView]
+	if {$view eq "" || ![winfo exists $view]} { return }
+	if {$on} {
+		if {![info exists ViewFrame] || [dict get $ViewFrame path] ne $view} {
+			set ViewFrame [dict create path $view \
+				thickness [$view cget -highlightthickness] \
+				background [$view cget -highlightbackground] \
+				color [$view cget -highlightcolor]]
+		}
+		$view configure -highlightthickness 3 \
+			-highlightbackground #7a7a7a -highlightcolor #7a7a7a
+	} elseif {[info exists ViewFrame]} {
+		if {[winfo exists $view] && [dict get $ViewFrame path] eq $view} {
+			$view configure -highlightthickness [dict get $ViewFrame thickness] \
+				-highlightbackground [dict get $ViewFrame background] \
+				-highlightcolor [dict get $ViewFrame color]
+		}
+		unset ViewFrame
+	}
+}
+
+
 # The visible board presentation; the 2D canvas is unmapped in 3D mode.
 proc ::mediainset::BoardView {} {
 	upvar #0 ::application::board::Vars vars
@@ -208,6 +289,8 @@ proc ::mediainset::Layout {} {
 	variable Audio
 	variable Aspect
 	variable LayingOut
+	variable FrameMargin
+	variable BoardGap
 
 	set pane [Pane]
 	if {$pane eq "" || !$Shown || $LayingOut} { return }
@@ -216,25 +299,31 @@ proc ::mediainset::Layout {} {
 	set LayingOut 1
 	try {
 		Watch
+		RefreshSwapControl
 		set view [BoardView]
 		set s $Options(size)
 		set cw [expr {[winfo reqwidth $w.controls] + 8}]
 		set ch [expr {[winfo reqheight $w.controls] + 8}]
 		if {$Swapped && $Audio} {
 			::application::board::setReserve {} 0
+			FrameView 0
 			RestoreBoard $pane
-			place $w -in $pane -x -6 -y -6 -relx 1 -rely 1 -anchor se \
+			place $w -in $pane -x -$FrameMargin -y -$FrameMargin -relx 1 -rely 1 -anchor se \
 				-width $cw -height $ch -relwidth {} -relheight {}
 			raise $w
 		} elseif {$Swapped} {
 			::application::board::setReserve {} 0
-			place $w -in $pane -x 0 -y 0 -relx 0 -rely 0 -anchor nw \
-				-relwidth 1 -relheight 1 -width {} -height {}
+			# Inset the video by its own frame margin rather than placing it
+			# flush at 0,0: the ridge + highlight frame stays fully visible.
+			place $w -in $pane -x $FrameMargin -y $FrameMargin -relx 0 -rely 0 -anchor nw \
+				-relwidth 1 -relheight 1 -width [expr {-2*$FrameMargin}] -height [expr {-2*$FrameMargin}]
 			pack forget $view
-			place $view -in $pane -relx 1 -rely 1 -x -6 -y -6 -anchor se \
+			FrameView 1
+			place $view -in $pane -relx 1 -rely 1 -x -$BoardGap -y -$BoardGap -anchor se \
 				-relwidth $s -relheight $s -width {} -height {}
 			raise $view
 		} else {
+			FrameView 0
 			RestoreBoard $pane
 			# Reconstruct the full slot from the VISIBLE 3D frame and its
 			# reserve padding, rather than consulting the hidden 2D canvas.
@@ -607,6 +696,7 @@ proc ::mediainset::RefreshControls {{position {}}} {
 	if {![winfo exists $w]} { return }
 	set state $::application::media::Priv(playstate)
 	$w.play configure -text [expr {$state eq "playing" ? "Ⅱ" : "▶"}]
+	RefreshSwapControl
 	if {$position ne "" && !$::application::media::Priv(seekgrab)} { $w.seek set $position }
 	set chapters [llength [::media::mpv::chapters]]
 	if {$chapters > 1} {

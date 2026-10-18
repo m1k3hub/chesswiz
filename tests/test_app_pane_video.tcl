@@ -96,7 +96,11 @@ tcltest::test pane-video-008-zoom-swap {click focus zoom, maximise and swapped r
  wm geometry .application 1120x750
  ::paneVideo::wait 650
  set p [::mediainset::Pane]; set c $::application::board::Vars(widget:frame); set w $p.mediainset
- set fills [expr {[winfo width $w] == [winfo width $p] && [winfo height $w] == [winfo height $p]}]
+ # VAL-MED-009: the expanded video is inset by its frame margin (its ridge
+ # border stays visible), rather than placed flush at the pane's 0,0.
+ set m $::mediainset::FrameMargin
+ set fills [expr {[winfo x $w] == $m && [winfo y $w] == $m \
+     && [winfo width $w] == [winfo width $p] - 2*$m && [winfo height $w] == [winfo height $p] - 2*$m}]
  set small [expr {[winfo ismapped $c] && [winfo width $c] < [winfo width $p]/2 && [winfo height $c] < [winfo height $p]/2}]
  if {[info exists ::env(PANE_EVIDENCE)]} {catch {exec import -window root [file join $::env(PANE_EVIDENCE) swapped.png]}}
  puts "PANE-VIDEO swapped pane=[::paneVideo::rect $p] inset=[::paneVideo::rect $w] small=[::paneVideo::rect $c] fills=$fills"

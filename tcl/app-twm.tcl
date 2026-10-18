@@ -162,6 +162,10 @@ proc load {twm} {
 		set Options($id:layout:list:$layoutVariant) {}
 	}
 
+	# The marker also survives in the options file; its absence means this is
+	# the first start after the media fold.
+	set migrateMedia [expr {$id eq "board" && ![info exists Options($id:layout:media:folded)]}]
+
 	if {[llength $layout] > 0 || ![LoadLayout $twm $layoutVariant $Options($id:layout:name) load]} {
 		set Vars(loading) 1
 		$twm load $layout
@@ -170,7 +174,34 @@ proc load {twm} {
 		after idle [list ::toolbar::save $id]
 		set Vars($id:options:saved:$layoutVariant) 1
 	}
+
+	# One-time migration of pre-fold layouts (VAL-MED-010): a layout saved
+	# before the media fold still carries the experimental Media pane. Remove
+	# it once, leaving its space to the neighbouring panes, then write a marker
+	# so the migration never runs again. A layout the user saves with Media
+	# afterwards is kept, and Media stays reopenable from the pane menu.
+	if {$migrateMedia} { RemoveLegacyMedia $twm $layoutVariant }
+
 	return $twm
+}
+
+
+# Remove a Media pane left behind by a pre-fold saved layout (VAL-MED-010).
+# The pane is closed through the normal pane path, so its neighbours take the
+# freed space, and the resulting layout is kept; the marker makes this run
+# once only, whatever the layout contained.
+proc RemoveLegacyMedia {twm layoutVariant} {
+	variable [namespace parent]::Vars
+	variable Options
+
+	set id $Vars($twm:id)
+	set Options($id:layout:media:folded) 1
+	if {![$twm isdocked media]} { return }
+	ChangeState $twm media
+	set Options($id:layout:list:$layoutVariant) [inspectLayout $twm]
+	set Options($id:layout:saved:$layoutVariant) $Options($id:layout:list:$layoutVariant)
+	set Vars($id:layout:changed:$layoutVariant) 0
+	after idle [list ::options::save $twm $layoutVariant]
 }
 
 
