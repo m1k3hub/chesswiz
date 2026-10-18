@@ -112,6 +112,7 @@ private:
 	NodeStack				m_branchStack;
 	bool						m_whiteToMove;
 	bool						m_isStandardPosition;
+	bool						m_isGuidingText;
 };
 
 } // namespace cbh

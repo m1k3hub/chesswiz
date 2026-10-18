@@ -51,6 +51,8 @@
 #include "sci_codec.h"
 #include "sci_consumer.h"
 
+#include "cbh_codec.h"
+
 #include "u_block_file.h"
 #include "u_progress.h"
 #include "u_misc.h"
@@ -1067,7 +1069,12 @@ Database::loadGame(unsigned index, Game& game, mstl::string* encoding, mstl::str
 	load::State state = game.finishLoad(variant) ? load::Ok : load::Corrupted;
 	if (state == load::Ok && fen)
 		game.goToPosition(*fen);
+	mstl::string guidingTitle;
+	if (info.isGuidingText() && game.m_tags.contains(tag::Event))
+		guidingTitle = game.m_tags.value(tag::Event);
 	setupTags(index, game.m_tags);
+	if (!guidingTitle.empty())
+		game.m_tags.set(tag::Event, guidingTitle);
 
 	return state;
 }
@@ -1515,6 +1522,12 @@ Database::exportGame(unsigned index, Database& destination) const
 
 	if (srcFormat == destination.format())
 	{
+		if (srcFormat == format::ChessBase)
+		{
+			return static_cast<cbh::Codec*>(m_codec)->exportGame(
+				info, static_cast<cbh::Codec&>(destination.codec()));
+		}
+
 		ByteStream data(m_codec->getGame(info));
 		return destination.codec().addGame(data, info, DatabaseCodec::Alloc);
 	}

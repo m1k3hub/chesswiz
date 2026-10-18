@@ -162,8 +162,11 @@ public:
 							util::ByteStream& annotationData,
 							TagSet const& tags,
 							db::Consumer& consumer);
+	save::State exportGame(GameInfo const& info, Codec& destination);
 
 private:
+
+	uint32_t readGameRecordLength(uint32_t offset);
 
 	friend class Consumer;
 	friend class cbv::Codec;

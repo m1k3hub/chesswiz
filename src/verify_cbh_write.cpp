@@ -36,7 +36,15 @@
 #include "mstl/m_string.h"
 #include "mstl/m_ifstream.h"
 
+#include "db/db_game_info.h"
+#include "db/db_mark_set.h"
+#include "db/db_pgn_writer.h"
+
+#include "mstl/m_fstream.h"
+#include "mstl/m_vector.h"
+
 #include <tcl.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -862,6 +870,545 @@ verifyQuotationEdges()
 }
 
 
+static void
+compareNodeTree(	unsigned gameIdx,
+						MoveNode const* lhs,
+						MoveNode const* rhs,
+						bool& moveDiff,
+						bool& varDiff,
+						bool& commentDiff,
+						bool& nagDiff,
+						bool& markDiff)
+{
+	while (lhs && rhs)
+	{
+		if (lhs->atLineEnd() != rhs->atLineEnd())
+		{
+			moveDiff = true;
+			return;
+		}
+
+		if (lhs->move() != rhs->move())
+			moveDiff = true;
+
+		if (lhs->comment(move::Ante).content() != rhs->comment(move::Ante).content()
+			|| lhs->comment(move::Post).content() != rhs->comment(move::Post).content())
+		{
+			commentDiff = true;
+		}
+
+		Annotation lhsAnn(lhs->annotation());
+		Annotation rhsAnn(rhs->annotation());
+		lhsAnn.sort();
+		rhsAnn.sort();
+		if (lhsAnn != rhsAnn)
+			nagDiff = true;
+
+		MarkSet lhsMarks(lhs->marks());
+		MarkSet rhsMarks(rhs->marks());
+		lhsMarks.sort();
+		rhsMarks.sort();
+		if (lhsMarks != rhsMarks)
+			markDiff = true;
+
+		if (lhs->variationCount() != rhs->variationCount())
+		{
+			varDiff = true;
+		}
+		else
+		{
+			for (unsigned v = 0; v < lhs->variationCount(); ++v)
+			{
+				compareNodeTree(gameIdx, lhs->variation(v), rhs->variation(v),
+					moveDiff, varDiff, commentDiff, nagDiff, markDiff);
+			}
+		}
+
+		lhs = lhs->next();
+		rhs = rhs->next();
+	}
+
+	if ((lhs != nullptr) != (rhs != nullptr))
+		moveDiff = true;
+}
+
+
+static mstl::string
+exportToPgn(Database const& db, unsigned index)
+{
+	mstl::ostringstream oss;
+	unsigned flags = PgnWriter::Default_Flags
+		| Writer::Flag_Include_Annotation
+		| Writer::Flag_Include_Marks
+		| Writer::Flag_Include_Move_Info
+		| Writer::Flag_Use_UTF8;
+	PgnWriter writer(db.format(), oss, sys::utf8::Codec::utf8(), PgnWriter::Unix, flags);
+	writer.start();
+	db.exportGame(index, writer);
+	writer.finish();
+	return oss.str();
+}
+
+
+struct FixtureDiffCounts
+{
+	unsigned totalGames;
+	unsigned guidingTexts;
+	unsigned loadErrors;
+	unsigned headerDiffs;
+	unsigned moveDiffs;
+	unsigned variationDiffs;
+	unsigned commentDiffs;
+	unsigned nagDiffs;
+	unsigned markDiffs;
+	unsigned pgnDiffs;
+
+	FixtureDiffCounts()
+		:totalGames(0)
+		,guidingTexts(0)
+		,loadErrors(0)
+		,headerDiffs(0)
+		,moveDiffs(0)
+		,variationDiffs(0)
+		,commentDiffs(0)
+		,nagDiffs(0)
+		,markDiffs(0)
+		,pgnDiffs(0)
+	{
+	}
+
+	unsigned totalDiffs() const
+	{
+		return loadErrors + headerDiffs + moveDiffs + variationDiffs
+			+ commentDiffs + nagDiffs + markDiffs + pgnDiffs;
+	}
+};
+
+
+static void
+compareDatabases(Database& src, Database& dst, FixtureDiffCounts& counts)
+{
+	counts.totalGames = src.countGames();
+	if (dst.countGames() != src.countGames())
+		counts.loadErrors += mstl::abs(int(src.countGames()) - int(dst.countGames()));
+
+	unsigned n = mstl::min(src.countGames(), dst.countGames());
+	for (unsigned i = 0; i < n; ++i)
+	{
+		GameInfo const& sInfo = src.gameInfo(i);
+		GameInfo const& dInfo = dst.gameInfo(i);
+
+		if (sInfo.isGuidingText())
+			++counts.guidingTexts;
+
+		bool hdrDiff = (sInfo.isGuidingText() != dInfo.isGuidingText());
+
+		Game sGame, dGame;
+		load::State sLoad = src.loadGame(i, sGame);
+		load::State dLoad = dst.loadGame(i, dGame);
+		if (sLoad != load::Ok || dLoad != load::Ok)
+		{
+			++counts.loadErrors;
+			continue;
+		}
+
+		if (!sInfo.isGuidingText())
+		{
+			if (sInfo.playerName(color::White) != dInfo.playerName(color::White)
+				|| sInfo.playerName(color::Black) != dInfo.playerName(color::Black)
+				|| sInfo.event() != dInfo.event()
+				|| sInfo.site() != dInfo.site()
+				|| sInfo.annotator() != dInfo.annotator()
+				|| sInfo.date() != dInfo.date()
+				|| sInfo.eventDate() != dInfo.eventDate()
+				|| sInfo.eventCountry() != dInfo.eventCountry()
+				|| sInfo.eventType() != dInfo.eventType()
+				|| sInfo.timeMode() != dInfo.timeMode()
+				|| sInfo.round() != dInfo.round()
+				|| sInfo.subround() != dInfo.subround()
+				|| sInfo.result() != dInfo.result()
+				|| sInfo.elo(color::White) != dInfo.elo(color::White)
+				|| sInfo.elo(color::Black) != dInfo.elo(color::Black)
+				|| sInfo.eco(variant::Normal) != dInfo.eco(variant::Normal)
+				|| sInfo.flags() != dInfo.flags()
+				|| sInfo.plyCount() != dInfo.plyCount())
+			{
+				hdrDiff = true;
+			}
+		}
+		else
+		{
+			if (sGame.tags().value(tag::Event) != dGame.tags().value(tag::Event)
+				|| sInfo.annotator() != dInfo.annotator()
+				|| sInfo.round() != dInfo.round())
+			{
+				hdrDiff = true;
+			}
+			if (sGame.data().m_guidingText != dGame.data().m_guidingText)
+				++counts.commentDiffs;
+		}
+
+		if (hdrDiff)
+			++counts.headerDiffs;
+
+		if (!sInfo.isGuidingText())
+		{
+			bool moveDiff = false, varDiff = false, commentDiff = false, nagDiff = false, markDiff = false;
+			if (!sGame.startBoard().isEqualZHPosition(dGame.startBoard()))
+				moveDiff = true;
+			compareNodeTree(i, sGame.data().m_startNode, dGame.data().m_startNode,
+				moveDiff, varDiff, commentDiff, nagDiff, markDiff);
+			if (moveDiff) ++counts.moveDiffs;
+			if (varDiff) ++counts.variationDiffs;
+			if (commentDiff) ++counts.commentDiffs;
+			if (nagDiff) ++counts.nagDiffs;
+			if (markDiff) ++counts.markDiffs;
+		}
+
+		if (exportToPgn(src, i) != exportToPgn(dst, i))
+			++counts.pgnDiffs;
+	}
+}
+
+
+static bool
+verifyP0EdgeCases(mstl::string const& baseRoot, util::Progress& progress)
+{
+	::fprintf(stderr, "step 6: P0 edge cases (empty game, guiding text, index layout, raw copy)...\n");
+
+	mstl::string srcRoot(baseRoot + "-p0-src");
+	mstl::string rawRoot(baseRoot + "-p0-raw");
+	mstl::string conRoot(baseRoot + "-p0-con");
+	cleanupCbh(srcRoot);
+	cleanupCbh(rawRoot);
+	cleanupCbh(conRoot);
+
+	// 1. Build a CBH database containing:
+	//    - Record 0: Guiding text (flag 0x03, title + HTML body, annotator, round)
+	//    - Record 1: Empty (0-move) game
+	//    - Record 2: Annotated game with annotator, NAGs, comments, marks (arrows/squares), variations
+	{
+		Database db(srcRoot + ".cbh", sys::utf8::Codec::windows(), storage::OnDisk, variant::Normal);
+
+		char const* edgeCasesPgn =
+			"[Event \"Scotch Opening Survey\"]\n"
+			"[Round \"3\"]\n"
+			"[Annotator \"Kasparov, Garry\"]\n"
+			"[Remark \"GUIDING_TEXT\"]\n"
+			"[Result \"*\"]\n"
+			"\n"
+			"{<h2>Scotch Opening</h2><p>Main line introductory text.</p>} *\n"
+			"\n"
+			"[Event \"Zero Move Event\"]\n"
+			"[Site \"London\"]\n"
+			"[Date \"2024.07.01\"]\n"
+			"[Round \"1\"]\n"
+			"[White \"Alpha, Zero\"]\n"
+			"[Black \"Beta, Nil\"]\n"
+			"[Result \"*\"]\n"
+			"\n"
+			"*\n"
+			"\n"
+			"[Event \"Annotated Test\"]\n"
+			"[Site \"St Louis\"]\n"
+			"[Date \"2024.08.10\"]\n"
+			"[Round \"5.2\"]\n"
+			"[White \"Carlsen, Magnus\"]\n"
+			"[Black \"Caruana, Fabiano\"]\n"
+			"[WhiteElo \"2882\"]\n"
+			"[BlackElo \"2818\"]\n"
+			"[Result \"1-0\"]\n"
+			"[ECO \"C45\"]\n"
+			"[Annotator \"Polgar, Judit\"]\n"
+			"\n"
+			"1. e4 {[%cal Ge2e4,Rf8c5][%csl Ye4] Opening move} e5 $1 "
+			"2. Nf3 (2. Bc4 Nf6 {Bishop variation}) 2... Nc6 $14 {Slight edge} 1-0\n";
+
+		mstl::string pgnStr(edgeCasesPgn);
+		mstl::istringstream iss(pgnStr);
+		SilentPgnReader reader(iss);
+		mstl::auto_ptr<Consumer> consumer(db.codec().getConsumer(format::ChessBase));
+		reader.setConsumer(consumer.get());
+		reader.process(progress);
+
+		db.save(progress);
+		db.close();
+	}
+
+	// Verify binary layout of .cbh index and .cbg records on disk
+	{
+		mstl::fstream cbhStrm;
+		cbhStrm.open(srcRoot + ".cbh", mstl::ios_base::in | mstl::ios_base::binary);
+		if (!cbhStrm || cbhStrm.size() != 46 + 3 * 46)
+		{
+			::fprintf(stderr, "unexpected .cbh file size: %lld\n", (long long)cbhStrm.size());
+			return false;
+		}
+		Byte rec0[46], rec1[46], rec2[46];
+		cbhStrm.seekg(46, mstl::ios_base::beg);
+		cbhStrm.read(reinterpret_cast<char*>(rec0), 46);
+		cbhStrm.read(reinterpret_cast<char*>(rec1), 46);
+		cbhStrm.read(reinterpret_cast<char*>(rec2), 46);
+		cbhStrm.close();
+
+		// Record 0 is a guiding text: byte 0 must be 0x03
+		if (rec0[0] != 0x03)
+		{
+			::fprintf(stderr, "guiding text index byte 0 expected 0x03, got 0x%02x\n", unsigned(rec0[0]));
+			return false;
+		}
+		// Record 1 & 2 are normal games: byte 0 must be 0x01
+		if (rec1[0] != 0x01 || rec2[0] != 0x01)
+		{
+			::fprintf(stderr, "game index byte 0 expected 0x01, got 0x%02x / 0x%02x\n",
+						 unsigned(rec1[0]), unsigned(rec2[0]));
+			return false;
+		}
+		// Record 2 layout checks:
+		// round=5 at byte 29, subround=2 at byte 30, whiteElo=2882 at 31..32, blackElo=2818 at 33..34, moveCount=2 (4 plies) at 45
+		unsigned r2Round = rec2[29];
+		unsigned r2Subround = rec2[30];
+		unsigned r2WhiteElo = (unsigned(rec2[31]) << 8) | unsigned(rec2[32]);
+		unsigned r2BlackElo = (unsigned(rec2[33]) << 8) | unsigned(rec2[34]);
+		unsigned r2MoveCount = rec2[45];
+		if (r2Round != 5 || r2Subround != 2 || r2WhiteElo != 2882 || r2BlackElo != 2818 || r2MoveCount != 2)
+		{
+			::fprintf(stderr, "record 2 index offset mismatch: rnd=%u.%u elo=%u-%u moves=%u\n",
+						 r2Round, r2Subround, r2WhiteElo, r2BlackElo, r2MoveCount);
+			return false;
+		}
+
+		// Check .cbg header of Record 0 (bit 31 set) and Record 1 (size > 4)
+		mstl::fstream cbgStrm;
+		cbgStrm.open(srcRoot + ".cbg", mstl::ios_base::in | mstl::ios_base::binary);
+		uint32_t off0 = util::ByteStream::uint32(rec0 + 1);
+		uint32_t off1 = util::ByteStream::uint32(rec1 + 1);
+		Byte hdr0[4], hdr1[4];
+		cbgStrm.seekg(off0, mstl::ios_base::beg);
+		cbgStrm.read(reinterpret_cast<char*>(hdr0), 4);
+		cbgStrm.seekg(off1, mstl::ios_base::beg);
+		cbgStrm.read(reinterpret_cast<char*>(hdr1), 4);
+		cbgStrm.close();
+
+		uint32_t w0 = util::ByteStream::uint32(hdr0);
+		uint32_t w1 = util::ByteStream::uint32(hdr1);
+		if ((w0 & 0x80000000u) == 0)
+		{
+			::fprintf(stderr, "guiding text .cbg header missing bit 31: 0x%08x\n", w0);
+			return false;
+		}
+		if ((w1 & 0x00ffffffu) <= 4)
+		{
+			::fprintf(stderr, "empty game .cbg record length <= 4: %u\n", unsigned(w1 & 0x00ffffffu));
+			return false;
+		}
+	}
+
+	// 2. Round-trip srcRoot through both raw copy and consumer re-encode
+	{
+		Database src(srcRoot + ".cbh", sys::utf8::Codec::windows(), permission::ReadOnly, progress);
+
+		// Verify recordLength and annotator coexist on Record 2
+		GameInfo const& info2 = src.gameInfo(2);
+		if (!info2.hasGameRecordLength() || info2.gameRecordLength() <= 4 || info2.annotator() != "Polgar, Judit")
+		{
+			::fprintf(stderr, "GameInfo recordLength/annotator coexistence failed: len=%u ann='%s'\n",
+						 info2.gameRecordLength(), info2.annotator().c_str());
+			src.close();
+			return false;
+		}
+
+		// Raw copy path
+		{
+			Database dst(rawRoot + ".cbh", sys::utf8::Codec::windows(), storage::OnDisk, variant::Normal);
+			for (unsigned i = 0; i < src.countGames(); ++i)
+			{
+				if (!save::isOk(src.exportGame(i, dst)))
+				{
+					::fprintf(stderr, "raw exportGame(%u) failed\n", i);
+					return false;
+				}
+			}
+			dst.save(progress);
+			dst.close();
+		}
+
+		// Consumer re-encode path
+		{
+			Database dst(conRoot + ".cbh", sys::utf8::Codec::windows(), storage::OnDisk, variant::Normal);
+			for (unsigned i = 0; i < src.countGames(); ++i)
+			{
+				mstl::auto_ptr<Consumer> consumer(dst.codec().getConsumer(format::ChessBase));
+				if (!save::isOk(src.exportGame(i, *consumer)))
+				{
+					::fprintf(stderr, "consumer exportGame(%u) failed\n", i);
+					return false;
+				}
+			}
+			dst.save(progress);
+			dst.close();
+		}
+
+		Database rawDb(rawRoot + ".cbh", sys::utf8::Codec::windows(), permission::ReadOnly, progress);
+		Database conDb(conRoot + ".cbh", sys::utf8::Codec::windows(), permission::ReadOnly, progress);
+
+		FixtureDiffCounts rawDiffs, conDiffs;
+		compareDatabases(src, rawDb, rawDiffs);
+		compareDatabases(src, conDb, conDiffs);
+
+		rawDb.close();
+		conDb.close();
+		src.close();
+
+		if (rawDiffs.totalDiffs() != 0 || conDiffs.totalDiffs() != 0)
+		{
+			::fprintf(stderr, "P0 edge-case round-trip diffs: raw=%u con=%u\n",
+						 rawDiffs.totalDiffs(), conDiffs.totalDiffs());
+			return false;
+		}
+	}
+
+	// 3. Also test source present vs absent by appending a mock .cbs source record to rawRoot
+	//    and setting sourceId=1 in record 2's index entry, then verifying decodeIndex still
+	//    reads date/result/Elo/ECO/flags/plyCount at identical offsets.
+	{
+		mstl::fstream cbsStrm;
+		cbsStrm.open(rawRoot + ".cbs", mstl::ios_base::out | mstl::ios_base::trunc | mstl::ios_base::binary);
+		Byte cbsBuf[28 + 68];
+		::memset(cbsBuf, 0, sizeof(cbsBuf));
+		uint32_t oneLE = mstl::bo::swapLE(uint32_t(1));
+		::memcpy(cbsBuf, &oneLE, 4);
+		::memcpy(cbsBuf + 4, &oneLE, 4);
+		int32_t validLE = mstl::bo::swapLE(int32_t(0));
+		::memcpy(cbsBuf + 28, &validLE, 4);
+		::memcpy(cbsBuf + 28 + 9, "ChessBase Magazine 168", 22);
+		cbsStrm.write(reinterpret_cast<char const*>(cbsBuf), sizeof(cbsBuf));
+		cbsStrm.close();
+
+		mstl::fstream cbhStrm;
+		cbhStrm.open(rawRoot + ".cbh", mstl::ios_base::in | mstl::ios_base::out | mstl::ios_base::binary);
+		cbhStrm.seekp(46 + 2 * 46 + 21, mstl::ios_base::beg);
+		Byte srcId[3] = { 0, 0, 0 };
+		cbhStrm.write(reinterpret_cast<char const*>(srcId), 3);
+		cbhStrm.close();
+
+		Database withSourceDb(rawRoot + ".cbh", sys::utf8::Codec::windows(), permission::ReadOnly, progress);
+		GameInfo const& info = withSourceDb.gameInfo(2);
+		if (info.playerName(color::White) != "Carlsen, Magnus"
+			|| info.elo(color::White) != 2882
+			|| info.elo(color::Black) != 2818
+			|| info.round() != 5
+			|| info.subround() != 2
+			|| info.plyCount() != 3)
+		{
+			::fprintf(stderr, "decodeIndex with non-empty .cbs failed field alignment: W='%s' elo=%u-%u rnd=%u.%u ply=%u\n",
+						 info.playerName(color::White).c_str(),
+						 unsigned(info.elo(color::White)), unsigned(info.elo(color::Black)),
+						 unsigned(info.round()), unsigned(info.subround()), unsigned(info.plyCount()));
+			withSourceDb.close();
+			return false;
+		}
+		Game g;
+		if (withSourceDb.loadGame(2, g) != load::Ok
+			|| g.tags().value(tag::Source) != "ChessBase Magazine 168")
+		{
+			::fprintf(stderr, "expected Source tag 'ChessBase Magazine 168', got '%s'\n",
+						 g.tags().value(tag::Source).c_str());
+			withSourceDb.close();
+			return false;
+		}
+		withSourceDb.close();
+	}
+
+	cleanupCbh(srcRoot);
+	cleanupCbh(rawRoot);
+	cleanupCbh(conRoot);
+
+	::fprintf(stderr, "  P0 edge cases check passed\n");
+	return true;
+}
+
+
+static int
+runFixturesSuite(char const* inDirStr, char const* outDirStr, util::Progress& progress)
+{
+	mstl::string inDir(inDirStr);
+	mstl::string outDir(outDirStr);
+
+	char const* fixtures[] = {
+		"C45 Scotch Opening-168",
+		"Sinquefield Cup 2015",
+		"Tournaments168",
+		"168Tactics",
+		"168Strategy",
+		"168Endgame",
+		"168Move by Move",
+	};
+
+	::printf("| Fixture | Games (GT) | Path | Load Err | Header | Moves | Vars | Comments | NAGs | Marks | PGN | Total |\n");
+	::printf("|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n");
+
+	for (unsigned f = 0; f < sizeof(fixtures)/sizeof(fixtures[0]); ++f)
+	{
+		char const* name = fixtures[f];
+		mstl::string inRoot = inDir + "/" + name;
+		mstl::string rawRoot = outDir + "/" + name + "-raw";
+		mstl::string conRoot = outDir + "/" + name + "-con";
+		cleanupCbh(rawRoot);
+		cleanupCbh(conRoot);
+
+		Database src(inRoot + ".cbh", sys::utf8::Codec::windows(), permission::ReadOnly, progress);
+		unsigned n = src.countGames();
+
+		{
+			Database dst(rawRoot + ".cbh", sys::utf8::Codec::windows(), storage::OnDisk, variant::Normal);
+			for (unsigned i = 0; i < n; ++i)
+				src.exportGame(i, dst);
+			dst.save(progress);
+			dst.close();
+		}
+
+		{
+			Database dst(conRoot + ".cbh", sys::utf8::Codec::windows(), storage::OnDisk, variant::Normal);
+			for (unsigned i = 0; i < n; ++i)
+			{
+				mstl::auto_ptr<Consumer> consumer(dst.codec().getConsumer(format::ChessBase));
+				src.exportGame(i, *consumer);
+			}
+			dst.save(progress);
+			dst.close();
+		}
+
+		Database rawDb(rawRoot + ".cbh", sys::utf8::Codec::windows(), permission::ReadOnly, progress);
+		Database conDb(conRoot + ".cbh", sys::utf8::Codec::windows(), permission::ReadOnly, progress);
+
+		FixtureDiffCounts rawDiffs, conDiffs;
+		compareDatabases(src, rawDb, rawDiffs);
+		compareDatabases(src, conDb, conDiffs);
+
+		::printf("| `%s` | %u (%u) | Raw copy | %u | %u | %u | %u | %u | %u | %u | %u | %u |\n",
+			name, rawDiffs.totalGames, rawDiffs.guidingTexts,
+			rawDiffs.loadErrors, rawDiffs.headerDiffs, rawDiffs.moveDiffs,
+			rawDiffs.variationDiffs, rawDiffs.commentDiffs, rawDiffs.nagDiffs,
+			rawDiffs.markDiffs, rawDiffs.pgnDiffs, rawDiffs.totalDiffs());
+		::printf("| `%s` | %u (%u) | Re-encode | %u | %u | %u | %u | %u | %u | %u | %u | %u |\n",
+			name, conDiffs.totalGames, conDiffs.guidingTexts,
+			conDiffs.loadErrors, conDiffs.headerDiffs, conDiffs.moveDiffs,
+			conDiffs.variationDiffs, conDiffs.commentDiffs, conDiffs.nagDiffs,
+			conDiffs.markDiffs, conDiffs.pgnDiffs, conDiffs.totalDiffs());
+
+		rawDb.close();
+		conDb.close();
+		src.close();
+
+		cleanupCbh(rawRoot);
+		cleanupCbh(conRoot);
+	}
+
+	return 0;
+}
+
+
 int
 main(int argc, char** argv)
 {
@@ -891,6 +1438,8 @@ main(int argc, char** argv)
 		::fprintf(stderr, "loading eco...\n");
 		loadEcoFile();
 		::fprintf(stderr, "init done\n");
+		if (argc == 4 && ::strcmp(argv[1], "--fixtures") == 0)
+			return runFixturesSuite(argv[2], argv[3], progress);
 		cleanupSci(sciRoot);
 		cleanupCbh(cbhRoot);
 
@@ -954,6 +1503,14 @@ main(int argc, char** argv)
 		if (!verifyGrenkeChess960FENs())
 		{
 			::fprintf(stderr, "CBH GRENKE Chess960 FEN verification FAILED\n");
+			cleanupSci(sciRoot);
+			cleanupCbh(cbhRoot);
+			return 1;
+		}
+
+		if (!verifyP0EdgeCases(root, progress))
+		{
+			::fprintf(stderr, "CBH P0 edge-case verification FAILED\n");
 			cleanupSci(sciRoot);
 			cleanupCbh(cbhRoot);
 			return 1;

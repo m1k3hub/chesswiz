@@ -57,7 +57,7 @@ inline bool GameInfo::hasCorrHeader() const					{ return m_hasCorrHeader; }
 inline bool GameInfo::hasPromotion() const					{ return m_signature.hasPromotion(); }
 inline bool GameInfo::hasUnderPromotion() const				{ return m_signature.hasUnderPromotion(); }
 inline bool GameInfo::containsIllegalMoves() const			{ return m_gameFlags & Flag_Illegal_Move; }
-inline bool GameInfo::hasGameRecordLength() const			{ return m_recordLength & 1; }
+inline bool GameInfo::hasGameRecordLength() const			{ return m_recordLength > 0; }
 inline bool GameInfo::hasShuffleChessPosition() const		{ return m_positionId > 0; }
 inline bool GameInfo::hasChess960Position() const			{ return m_positionId <= 960; }
 inline bool GameInfo::setupBoard() const						{ return m_setup; }
@@ -107,7 +107,7 @@ inline NamebaseEvent const* GameInfo::eventEntry() const { return m_event; }
 inline NamebasePlayer* GameInfo::playerEntry(color::ID color)	{ return m_player[color]; }
 inline NamebaseEvent* GameInfo::eventEntry()							{ return m_event; }
 
-inline NamebaseEntry* GameInfo::annotatorEntry() { return hasGameRecordLength() ? 0 : m_annotator; }
+inline NamebaseEntry* GameInfo::annotatorEntry() { return m_annotator; }
 
 
 inline
@@ -220,7 +220,7 @@ inline
 NamebaseEntry const*
 GameInfo::annotatorEntry() const
 {
-	return hasGameRecordLength() ? 0 : m_annotator;
+	return m_annotator;
 }
 
 
@@ -228,7 +228,7 @@ inline
 mstl::string const&
 GameInfo::annotator() const
 {
-	return hasGameRecordLength() ? mstl::string::empty_string : m_annotator->name();
+	return m_annotator->name();
 }
 
 
@@ -245,7 +245,7 @@ inline
 uint32_t
 GameInfo::gameRecordLength() const
 {
-	return hasGameRecordLength() ? m_recordLength >> 1 : 0;
+	return m_recordLength;
 }
 
 
@@ -253,7 +253,7 @@ inline
 void
 GameInfo::setGameRecordLength(unsigned length)
 {
-	m_recordLength = (length << 1) | 1u;
+	m_recordLength = length;
 }
 
 

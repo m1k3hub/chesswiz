@@ -492,11 +492,14 @@ replaceNewlines(mstl::string& s)
 
 
 static unsigned
-strippedLen(char const* s)
+strippedLen(char const* s, unsigned maxLen)
 {
-	unsigned len = strlen(s);
+	unsigned len = 0;
 
-	while (len > 0 && ::isspace(s[len - 1]))
+	while (len < maxLen && s[len])
+		++len;
+
+	while (len > 0 && ::isspace(Byte(s[len - 1])))
 		--len;
 
 	return len;
@@ -896,12 +899,12 @@ Codec::readTournamentData(mstl::string const& rootname, util::Progress& progress
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 40);
 
-			name.set_size(::strippedLen(name));
+			name.set_size(::strippedLen(name, 40));
 			mapPlayerName(name);
 			toUtf8(name);
 
 			strm.read(city.data(), 30);
-			city.set_size(::strippedLen(city));
+			city.set_size(::strippedLen(city, 30));
 			toUtf8(city);
 
 			if (city.empty())
@@ -1033,13 +1036,13 @@ Codec::readPlayerData(mstl::string const& rootname, util::Progress& progress)
 
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(str.data(), 30);
-			str.set_size(::strippedLen(str));
+			str.set_size(::strippedLen(str, 30));
 
 			char* p = str.data() + str.size();
 
 			str.append(", ", 2);
 			strm.read(p + 2, 20);
-			str.set_size(::strippedLen(p + 2) + str.size());
+			str.set_size(::strippedLen(p + 2, 20) + str.size());
 
 			if (p + 2 == str.end())
 				str.resize(str.size() - 2);
@@ -1115,7 +1118,7 @@ Codec::readAnnotatorData(mstl::string const& rootname, util::Progress& progress)
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(str.data(), 45);
-			str.set_size(::strippedLen(str));
+			str.set_size(::strippedLen(str, 45));
 
 			if (!str.empty())
 			{
@@ -1182,7 +1185,7 @@ Codec::readSourceData(mstl::string const& rootname, util::Progress& progress)
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(str.data(), 25);
-			str.set_size(::strippedLen(str));
+			str.set_size(::strippedLen(str, 25));
 
 			strm.seekg(20, mstl::ios_base::cur);
 
@@ -1306,7 +1309,7 @@ Codec::readTeamData(mstl::string const& rootname, util::Progress& progress)
 
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(str.data(), 45);
-			str.set_size(::strippedLen(str));
+			str.set_size(::strippedLen(str, 45));
 			toUtf8(str);
 
 			unsigned char buf[10];
@@ -1433,11 +1436,13 @@ Codec::preloadTournamentData(mstl::string const& rootname, util::Progress& progr
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 40);
+			name.set_size(::strippedLen(name, 40));
 			::convPlayerName(name);
-			if (size_t n = ::strlen(name)) HandleData(name, n);
+			if (size_t n = name.size()) HandleData(name, n);
 
 			strm.read(city.data(), 30);
-			if (size_t n = ::strlen(city)) HandleData(city, n);
+			city.set_size(::strippedLen(city, 30));
+			if (size_t n = city.size()) HandleData(city, n);
 
 			strm.seekg(RecordSize - 79, mstl::ios_base::cur);
 		}
@@ -1491,12 +1496,14 @@ Codec::preloadPlayerData(mstl::string const& rootname, util::Progress& progress)
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 30);
+			name.set_size(::strippedLen(name, 30));
 			::convPlayerName(name);
-			if (size_t n = ::strlen(name)) HandleData(name, n);
+			if (size_t n = name.size()) HandleData(name, n);
 
 			strm.read(name.data(), 20);
+			name.set_size(::strippedLen(name, 20));
 			::convPlayerName(name);
-			if (size_t n = ::strlen(name)) HandleData(name, n);
+			if (size_t n = name.size()) HandleData(name, n);
 
 			strm.seekg(RecordSize - 59, mstl::ios_base::cur);
 		}
@@ -1550,7 +1557,8 @@ Codec::preloadAnnotatorData(mstl::string const& rootname, util::Progress& progre
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 45);
-			if (size_t n = ::strlen(name)) HandleData(name, n);
+			name.set_size(::strippedLen(name, 45));
+			if (size_t n = name.size()) HandleData(name, n);
 
 			strm.seekg(RecordSize - 54, mstl::ios_base::cur);
 		}
@@ -1611,7 +1619,7 @@ Codec::reloadTournamentData(mstl::string const& rootname, util::Progress& progre
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 40);
 
-			name.set_size(::strippedLen(name));
+			name.set_size(::strippedLen(name, 40));
 			m_codec->toUtf8(name);
 
 			if (!name.is_7bit())
@@ -1623,7 +1631,7 @@ Codec::reloadTournamentData(mstl::string const& rootname, util::Progress& progre
 			}
 
 			strm.read(city.data(), 30);
-			city.set_size(::strippedLen(city));
+			city.set_size(::strippedLen(city, 30));
 			m_codec->toUtf8(city);
 
 			if (!city.is_7bit())
@@ -1687,13 +1695,13 @@ Codec::reloadPlayerData(mstl::string const& rootname, util::Progress& progress)
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 30);
-			name.set_size(::strippedLen(name));
+			name.set_size(::strippedLen(name, 30));
 
 			char* p = name.data() + name.size();
 
 			name.append(", ", 2);
 			strm.read(p + 2, 20);
-			name.set_size(::strippedLen(p + 2) + name.size());
+			name.set_size(::strippedLen(p + 2, 20) + name.size());
 
 			if (p + 2 == name.end())
 				name.resize(name.size() - 2);
@@ -1753,7 +1761,7 @@ Codec::reloadAnnotatorData(mstl::string const& rootname, util::Progress& progres
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 45);
-			name.set_size(::strippedLen(name));
+			name.set_size(::strippedLen(name, 45));
 			m_codec->toUtf8(name);
 
 			if (!name.is_7bit())
@@ -1819,7 +1827,7 @@ Codec::reloadSourceData(mstl::string const& rootname, util::Progress& progress)
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 25);
-			name.set_size(::strippedLen(name));
+			name.set_size(::strippedLen(name, 25));
 			m_codec->toUtf8(name);
 
 			if (!name.is_7bit())
@@ -1885,7 +1893,7 @@ Codec::reloadTeamData(mstl::string const& rootname, util::Progress& progress)
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 45);
-			name.set_size(::strippedLen(name));
+			name.set_size(::strippedLen(name, 45));
 			m_codec->toUtf8(name);
 
 			if (!name.is_7bit())
@@ -2245,6 +2253,22 @@ Codec::getSource(uint32_t ref)
 }
 
 
+uint32_t
+Codec::readGameRecordLength(uint32_t offset)
+{
+	if (!offset || !m_gameStream.is_open())
+		return 0;
+
+	sys::Lock lock(&m_mutex);
+	Byte hdr[4];
+	if (!m_gameStream.seekg(offset, mstl::ios_base::beg) || !m_gameStream.read(hdr, sizeof(hdr)))
+		return 0;
+
+	uint32_t word = ByteStream::uint32(hdr);
+	return (word & 0x80000000u) ? (word & 0x3fffffffu) : (word & 0x00ffffffu);
+}
+
+
 void
 Codec::decodeGuidingTextIndex(ByteStream& strm, GameInfo& info)
 {
@@ -2254,6 +2278,7 @@ Codec::decodeGuidingTextIndex(ByteStream& strm, GameInfo& info)
 		info.m_gameFlags |= GameInfo::Flag_Deleted;
 
 	info.m_gameOffset = strm.uint32();
+	info.setGameRecordLength(readGameRecordLength(info.m_gameOffset));
 
 	strm.skip(3);
 
@@ -2422,6 +2447,7 @@ Codec::decodeIndex(ByteStream& strm, GameInfo& info)
 		info.m_gameFlags |= GameInfo::Flag_Deleted;
 
 	info.m_gameOffset = strm.uint32();
+	info.setGameRecordLength(readGameRecordLength(info.m_gameOffset));
 
 	if (unsigned offset = strm.uint32())
 		m_annotationMap.container().push_back(AnnotationMap::value_type(info.m_gameOffset, offset));
@@ -2436,8 +2462,9 @@ Codec::decodeIndex(ByteStream& strm, GameInfo& info)
 	if (NamebaseEntry* annotator = getAnnotator(strm.uint24()))
 		info.m_annotator = annotator;
 
+	uint32_t sourceId = strm.uint24();
 	if (!m_sourceMap2.empty())
-		m_sourceMap.push_back(getSource(strm.uint24()));
+		m_sourceMap.push_back(getSource(sourceId));
 
 	Date date;
 	::setDate(date, strm.uint24());
@@ -3090,6 +3117,55 @@ Codec::putGame(util::ByteStream const& strm, unsigned prevOffset, unsigned prevR
 }
 
 
+save::State
+Codec::exportGame(GameInfo const& info, Codec& destination)
+{
+	util::ByteStream data(getGame(info));
+	if (data.isEmpty())
+		return save::DecodingFailed;
+
+	unsigned dstGameOffset = destination.m_nextGameOffset;
+
+	AnnotationMap::const_iterator i = m_annotationMap.find(info.gameOffset());
+	if (i != m_annotationMap.end() && m_annotationStream.is_open() && destination.m_annotationStream.is_open())
+	{
+		uint32_t address = i->second;
+		Byte hdr[14];
+		{
+			sys::Lock lock(&m_mutex);
+			if (!m_annotationStream.seekg(address, mstl::ios_base::beg)
+				|| !m_annotationStream.read(hdr, sizeof(hdr)))
+			{
+				IO_RAISE(Annotation, Corrupted, "unexpected end of file");
+			}
+		}
+
+		uint32_t totalLength = ByteStream::uint32(hdr + 10);
+		if (totalLength < 14)
+			IO_RAISE(Annotation, Corrupted, "bad annotation record length");
+
+		mstl::vector<char> annotBuf(totalLength);
+		::memcpy(annotBuf.data(), hdr, sizeof(hdr));
+		if (totalLength > 14)
+		{
+			sys::Lock lock(&m_mutex);
+			if (!m_annotationStream.read(annotBuf.data() + 14, totalLength - 14))
+				IO_RAISE(Annotation, Corrupted, "unexpected end of file");
+		}
+
+		unsigned dstAnnotOffset = destination.m_nextAnnotationOffset;
+		if (!destination.m_annotationStream.write(annotBuf.data(), totalLength))
+			IO_RAISE(Game, Write_Failed, "failed to write annotation data");
+
+		destination.m_annotationMap.container().push_back(
+			AnnotationMap::value_type(dstGameOffset, dstAnnotOffset));
+		destination.m_nextAnnotationOffset += totalLength;
+	}
+
+	return destination.DatabaseCodec::addGame(data, info, DatabaseCodec::Alloc);
+}
+
+
 util::ByteStream
 Codec::getGame(GameInfo const& info)
 {
@@ -3100,11 +3176,16 @@ Codec::getGame(GameInfo const& info)
 	unsigned length = info.gameRecordLength();
 
 	if (length == 0)
+		length = readGameRecordLength(offset);
+
+	if (length == 0)
 		return util::ByteStream();
 
 	// The stream owns its buffer: a stream over a local string would point
 	// into freed memory once this returns (exportGame copies the record).
 	util::ByteStream data(length);
+
+	sys::Lock lock(&m_mutex);
 
 	if (!m_gameStream.seekg(offset, mstl::fstream::beg))
 		IO_RAISE(Game, Read_Error, "cannot seek to game offset %u", offset);
@@ -3682,10 +3763,60 @@ void
 Codec::writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& strm)
 {
 	// CBH index entries are 46 bytes
-	// Based on decodeIndex() - reverse the reading process
+	// Based on decodeIndex() / decodeGuidingTextIndex() - reverse the reading process
 
-	// Byte 0: Flags
-	Byte flags = 0;
+	if (info.isGuidingText())
+	{
+		// Byte 0: Flags (bit 0 = game/text valid, bit 1 = guiding text -> 0x03)
+		Byte flags = 0x03;
+		if (info.m_gameFlags & GameInfo::Flag_Deleted)
+			flags |= (1 << 7);
+		strm.put(flags);
+
+		// Bytes 1-4: Game offset in .cbg file
+		strm << uint32_t(info.m_gameOffset);
+
+		// Bytes 5-7: 3 zero bytes (skipped by decodeGuidingTextIndex)
+		strm.put(Byte(0));
+		strm.put(Byte(0));
+		strm.put(Byte(0));
+
+		// Bytes 8-10: Tournament/Event ID (24-bit)
+		uint32_t eventId = findEventRecordIndex(namebase(Namebase::Event), info.m_event);
+		strm << util::ByteStream::uint24_t(eventId);
+
+		// Bytes 11-13: Source ID (24-bit)
+		uint32_t sourceId = 0;
+		strm << util::ByteStream::uint24_t(sourceId);
+
+		// Bytes 14-16: Annotator ID (24-bit)
+		uint32_t annotatorId =
+			findAnnotatorRecordIndex(namebase(Namebase::Annotator), info.m_annotator);
+		strm << util::ByteStream::uint24_t(annotatorId);
+
+		// Byte 17: Round
+		strm.put(Byte(info.m_round));
+
+		// Byte 18: Stream media flags (bit 2 = video)
+		Byte mediaFlags = 0;
+		if (info.m_hasVideo)
+			mediaFlags |= (1 << 2);
+		strm.put(mediaFlags);
+
+		// Byte 19: Link flags (bit 0 = audio, bit 1 = picture, bit 2 = video)
+		Byte linkFlags = 0;
+		if (info.m_hasAudio)	linkFlags |= (1 << 0);
+		if (info.m_hasPicture)	linkFlags |= (1 << 1);
+		if (info.m_hasVideo)	linkFlags |= (1 << 2);
+		strm.put(linkFlags);
+
+		// Remaining 26 bytes (offsets 20..45) are already zero-initialized
+		strm.advance(26);
+		return;
+	}
+
+	// Byte 0: Flags (bit 0 = 1 for game records)
+	Byte flags = 0x01;
 	if (info.m_gameFlags & GameInfo::Flag_Deleted)
 		flags |= (1 << 7);
 	strm.put(flags);
@@ -3719,15 +3850,11 @@ Codec::writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& s
 		findAnnotatorRecordIndex(namebase(Namebase::Annotator), info.m_annotator);
 	strm << util::ByteStream::uint24_t(annotatorId);
 
-	// Source ID (24-bit) - only present when source data exists
-	bool hasSource = !m_sourceMap2.empty();
-	if (hasSource)
-	{
-		uint32_t sourceId = 0;
-		strm << util::ByteStream::uint24_t(sourceId);
-	}
+	// Bytes 21-23: Source ID (24-bit) - always present at offset 21 in CBH index
+	uint32_t sourceId = 0;
+	strm << util::ByteStream::uint24_t(sourceId);
 
-	// Date (year << 9 | month << 5 | day)
+	// Bytes 24-26: Date (year << 9 | month << 5 | day)
 	unsigned dateValue = (Date::decodeYearFrom10Bits(info.m_dateYear) << 9)
 						| (info.m_dateMonth << 5)
 						| info.m_dateDay;
@@ -3811,10 +3938,10 @@ Codec::writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& s
 		flags2 |= (1 << 3);
 	strm.put(flags2);
 
-	// Skip 1 byte (unknown)
+	// Byte 43: Skip 1 byte (unknown)
 	strm.put(Byte(0));
 
-	// More flags
+	// Byte 44: More flags
 	Byte flags3 = 0;
 	if (info.m_variationCount >= 15)
 		flags3 |= (2 << 0);
@@ -3822,15 +3949,10 @@ Codec::writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& s
 		flags3 |= (1 << 2);
 	strm.put(flags3);
 
-	// Ply count / 2 (rounded up)
+	// Byte 45: Ply count / 2 (rounded up)
 	unsigned plyCount2 = (info.m_plyCount + 1) / 2;
 	if (plyCount2 > 255) plyCount2 = 255;
 	strm.put(Byte(plyCount2));
-
-	// When source field is absent, record data is 43 bytes;
-	// pad to 46-byte record size
-	if (!hasSource)
-		strm.advance(3);
 }
 
 
