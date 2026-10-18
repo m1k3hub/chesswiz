@@ -1,0 +1,17 @@
+Ask about this tree row...
+---
+move actions for this continuation
+Analyze This Position (F4)
+---
+Start Search
+Search Mode ▸ (Exact / Slow / Fast)
+Automatic Search
+Search Inside Variations
+Highlight Novelties
+Opening Report…
+---
+Reference Base ▸
+Lock Reference Base
+---
+Copy Line
+Save Line to Repertoire…

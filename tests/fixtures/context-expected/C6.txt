@@ -1,0 +1,23 @@
+Ask about this engine line...
+---
+Add Move
+Add Sequence
+Add Line
+Add All
+Add Merge
+Add Include
+Insert Move as Comment
+---
+Explain Line
+Copy Line
+Copy FEN
+---
+Pause / Resume
+Close Engine
+Lock Engine
+Opponents View
+Best-First Order
+Multiple Variations ▸ (1–8)
+Lines per Variation ▸ (1–4)
+Setup Engine…
+Setup Eval Edges…

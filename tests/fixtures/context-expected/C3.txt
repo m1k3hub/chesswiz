@@ -1,0 +1,19 @@
+Ask about this game...
+---
+Load Game (Space)
+Browse Game… (W)
+Overview… (O)
+---
+Games Like This…
+Ask About This Game
+Show Tournament Table… (T)
+Open URL (U)
+---
+Merge Game…
+Edit Characteristics…
+Delete / Undelete Game
+Flags ▸
+---
+Sort by this Column ▸
+Sort Ascending ▸
+Sort Descending ▸

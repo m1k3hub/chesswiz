@@ -1,0 +1,15 @@
+Ask about this position...
+---
+Set Start Board…
+Set Start Position…
+Start Position ▸ (Standard, Chess960, Symm960, Shuffle, Set Up Position…)
+---
+Insert Null Move (Ctrl+0)
+---
+Flip Board (Ctrl+F)
+---
+Copy FEN
+Copy Diagram
+Edit Annotation… (Ctrl+A)
+---
+Board Setup…

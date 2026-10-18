@@ -1,0 +1,3 @@
+# Assistant tools additions (post-baseline)
+# This file is intentionally empty at baseline. New tools added after the
+# baseline was frozen are listed here, one per line: tool_name reason.

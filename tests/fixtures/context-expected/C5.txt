@@ -1,0 +1,25 @@
+Ask about this player/event/site...
+---
+# Player:
+Show Player Card
+---
+Prep Report…
+Insights…
+---
+Open URL ▸
+---
+Open Games in Switcher
+Save as Working Set
+
+# Event:
+Show Tournament Table…
+Open URL
+---
+Open Games in Switcher
+Save as Working Set
+
+# Site:
+Open URL
+---
+Open Games in Switcher
+Save as Working Set

@@ -1,0 +1,71 @@
+Ask about this pane...
+---
+# Board pane:
+Appearance ▸
+Board Setup…
+Show Tablebase ▸
+Flip Board
+Start Position ▸
+
+# Notation pane:
+Display ▸ (font size, spacing, numbering, markers, diagrams, emoticons, Configure Notation…)
+Move Notation ▸
+Move Info ▸
+Language Selection ▸
+
+# Game list pane:
+Columns ▸
+Sort ▸
+Filters ▸
+Save Search Presets ▸
+
+# Players / Events / Sites / Annotators / Positions panes:
+Columns ▸
+Sort ▸
+Filter ▸
+
+# Tree pane:
+Search Mode ▸
+Automatic Search
+Highlight Novelties
+Reference Base ▸
+
+# Analysis pane:
+Set Up Engine…
+Multiple Variations ▸
+Lines per Variation ▸
+Opponents View
+Best-First Order
+
+# Media pane:
+Show in Board
+Sync Options ▸
+Open Stream…
+
+# Report / Info pane:
+Font ▸ (size, family)
+Print…
+Zoom
+
+# Assistant pane:
+Clear Conversation
+Choose Model…
+Source ▸ (local / cloud)
+
+# Explorer pane:
+Online Tablebase
+Source ▸
+
+---
+# Common items (all panes):
+Maximise/Restore Pane
+Fold Title Bar
+Amalgamate
+Float/Dock
+Stay On Top
+Hide When Leaving Tab
+---
+Layout ▸
+Docking Points
+---
+Close Pane

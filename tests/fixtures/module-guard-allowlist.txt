@@ -1,0 +1,4 @@
+# Module-guard allowlist
+# Expected empty: after migration to R14 (single AI capability check), no
+# remaining `info commands` / `info procs` guards should be needed for menu
+# visibility. Any entry here requires justification.

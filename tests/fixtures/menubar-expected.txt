@@ -1,0 +1,256 @@
+# Expected menu bar structure (PROPOSAL.md section 2 + section 8)
+# Format: MENU <name> | ENTRY <label> [shortcut] | SEP | SUBMENU <name>
+# ▸ indicates a submenu cascade.
+
+MENU File
+  ENTRY New Database ▸ Ctrl+Shift+N
+    SUBMENU New Database
+      ENTRY Normal
+      ENTRY Three-check
+      ENTRY Crazyhouse
+      ENTRY variant list
+  ENTRY Open Database… Ctrl+O
+  ENTRY Open Recent ▸
+  ENTRY Close Database Ctrl+W
+  ENTRY Save Changes Ctrl+S
+  SEP
+  ENTRY Import ▸
+    SUBMENU Import
+      ENTRY PGN file(s)…
+      ENTRY Games from another database…
+  ENTRY Export ▸
+    SUBMENU Export
+      ENTRY PGN…
+      ENTRY HTML report…
+      ENTRY Portable archive (.scv)…
+  ENTRY Create Database Archive…
+  SEP
+  ENTRY Quit Ctrl+Q
+
+MENU Edit
+  ENTRY Undo Ctrl+Z
+  ENTRY Redo Ctrl+Y
+  SEP
+  ENTRY Cut Ctrl+X
+  ENTRY Copy Ctrl+C
+  ENTRY Paste Ctrl+V
+  ENTRY Select All Ctrl+A
+  ENTRY Find Ctrl+F
+  SEP
+  ENTRY Keyboard Preferences…
+  ENTRY Preferences ▸
+    SUBMENU Preferences
+      ENTRY Engines…
+      ENTRY PGN export options…
+      ENTRY Private Player Card…
+
+MENU Game
+  ENTRY New Game ▸ Ctrl+Shift+G
+  ENTRY Load Game Number…
+  ENTRY Next Game Ctrl+Down
+  ENTRY Previous Game Ctrl+Up
+  ENTRY First Game Ctrl+Home
+  ENTRY Last Game Ctrl+End
+  ENTRY Random Game
+  SEP
+  ENTRY Save Game ▸
+    SUBMENU Save Game
+      ENTRY Replace Game Ctrl+R
+      ENTRY Replace Moves Ctrl+V
+      ENTRY Add as New Game Ctrl+S
+      ENTRY Add to Repertoire ▸
+      ENTRY Add Line to Repertoire ▸
+  ENTRY Reload from Database
+  SEP
+  ENTRY Copy Game
+  ENTRY Paste Game ▸
+    SUBMENU Paste Game
+      ENTRY paste last clipbase game
+      ENTRY paste from game tab
+  ENTRY Merge Game ▸
+    SUBMENU Merge Game
+      ENTRY merge clipbase
+      ENTRY merge from game tab
+  ENTRY Export Game… Ctrl+E
+  SEP
+  ENTRY Game History ▸
+    SUBMENU Game History
+      ENTRY recent games
+      ENTRY Clear History
+  ENTRY Close Game
+
+MENU Database
+  ENTRY Search ▸
+    SUBMENU Search
+      ENTRY Plain-Language…
+      ENTRY Advanced…
+      ENTRY Material…
+      ENTRY Rating…
+      ENTRY Duplicates…
+      ENTRY Query Editor…
+  ENTRY Reports ▸
+    SUBMENU Reports
+      ENTRY ECO Statistics…
+      ENTRY Opening Report…
+      ENTRY Repertoire Report…
+      ENTRY Result Check…
+      ENTRY Time-Control Profile…
+      ENTRY Trends…
+  ENTRY Maintenance ▸
+    SUBMENU Maintenance
+      ENTRY Compact…
+      ENTRY Strip Move Information…
+      ENTRY Strip PGN Tags…
+      ENTRY Convert to Native Format…
+      ENTRY Recode…
+      ENTRY Change Icon…
+      ENTRY Repertoire Type ▸
+  SEP
+  ENTRY Discover Databases…
+  ENTRY Properties…
+  ENTRY Read-only
+  SEP
+  ENTRY Player Data ▸
+    SUBMENU Player Data
+      ENTRY Update Rating Data…
+      ENTRY Check Name Spellings…
+
+MENU Board
+  ENTRY Start Position ▸
+    SUBMENU Start Position
+      ENTRY Standard
+      ENTRY Chess960
+      ENTRY Symm960
+      ENTRY Shuffle
+      ENTRY Set Up Position…
+  ENTRY Set Start Board…
+  ENTRY Set Start Position…
+  SEP
+  ENTRY Flip Board Ctrl+F
+  ENTRY Insert Null Move Ctrl+0
+  SEP
+  ENTRY Board Setup…
+  ENTRY Appearance ▸
+    SUBMENU Appearance
+      ENTRY side to move
+      ENTRY material values/bar
+      ENTRY border
+      ENTRY coordinates
+      ENTRY small letters
+      ENTRY suggested move
+      ENTRY variation arrows
+      ENTRY annotation
+      ENTRY annotation timeout ▸
+      ENTRY sliding variation pane ▸
+      ENTRY promoted-piece mark ▸
+  SEP
+  ENTRY Show Tablebase ▸
+    SUBMENU Show Tablebase
+      ENTRY show
+      ENTRY online lookup
+      ENTRY local folder…
+
+MENU Analysis
+  ENTRY Start / Stop Engine
+  ENTRY Engines…
+  ENTRY Engine Dictionary…
+  ENTRY Compare Engines…
+  ENTRY Choose Engine for Review…
+  SEP
+  ENTRY Analyze This Position F4
+  ENTRY Game Review…
+  ENTRY Explain ▸
+    SUBMENU Explain
+      ENTRY Position
+      ENTRY Line
+      ENTRY Move
+      ENTRY Comment
+  ENTRY Fact-Check Annotations
+  SEP
+  ENTRY Tablebase ▸
+    SUBMENU Tablebase
+      ENTRY show
+      ENTRY online lookup
+      ENTRY local folder…
+  ENTRY Opening Explorer
+
+MENU Training
+  ENTRY Tactics Trainer…
+  ENTRY Endgame Trainer…
+  ENTRY Guess the Move… Ctrl+G
+  ENTRY Train Repertoire…
+  SEP
+  ENTRY Play Against Engine…
+  ENTRY Engine Match…
+  SEP
+  ENTRY Study Plan…
+  ENTRY Opponent Brief…
+  ENTRY Training Set from Games…
+  ENTRY Check Game Results…
+
+MENU Tools
+  ENTRY Book Editor…
+  SEP
+  ENTRY Player Dictionary…
+  ENTRY Player Card…
+  SEP
+  ENTRY Correspondence Games…
+  ENTRY ICCF Settings…
+  SEP
+  ENTRY Engine Console…
+  ENTRY Import Games…
+  ENTRY Download Games…
+  SEP
+  ENTRY Assistant
+  ENTRY Choose Model…
+  ENTRY Voice Assistant
+  SEP
+  ENTRY Assign File Types…
+  ENTRY Install Legacy Fonts…
+
+MENU View
+  ENTRY Panes ▸
+    SUBMENU Panes
+      ENTRY board
+      ENTRY editor
+      ENTRY game list
+      ENTRY players
+      ENTRY events
+      ENTRY sites
+      ENTRY annotators
+      ENTRY positions
+      ENTRY tree
+      ENTRY analysis
+      ENTRY media
+      ENTRY report
+      ENTRY assistant
+      ENTRY explorer
+  ENTRY Layout ▸
+    SUBMENU Layout
+      ENTRY Load Layout ▸
+      ENTRY Save Layout
+      ENTRY Save Layout As…
+      ENTRY Manage Layouts…
+  ENTRY Toolbars ▸
+    SUBMENU Toolbars
+      ENTRY per toolbar checkbuttons
+  SEP
+  ENTRY Theme ▸
+  ENTRY Colors ▸
+  ENTRY Icon Size ▸
+  ENTRY Language ▸
+  SEP
+  ENTRY Increase Font Size Ctrl+Shift++
+  ENTRY Decrease Font Size Ctrl+Shift+−
+  SEP
+  ENTRY Full-Screen F11
+  ENTRY Show Log… Ctrl+L
+  ENTRY Tip of the Day…
+
+MENU Help
+  ENTRY Help F1
+  SEP
+  ENTRY Bug Report
+  ENTRY Feature Request
+  SEP
+  ENTRY About Chesswiz…

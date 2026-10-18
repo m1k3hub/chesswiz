@@ -1,0 +1,33 @@
+Ask about this move...
+---
+Load First Game with this Continuation (L)
+---
+Replace Move (R)
+Add New Variation (V)
+New Main Line
+Try Variation (T)
+Exchange Move
+Promote Variation
+Remove Variation
+---
+Edit Comment After (Ctrl+C)
+Edit Comment Before (Ctrl+Shift+C)
+Edit Annotation… (Ctrl+A)
+Marks Palette… (Ctrl+M)
+Edit Move Information…
+Annotate ▸ (prefix/infix/suffix symbols)
+---
+Explain Move
+---
+Insert Diagram
+Insert Diagram from Black
+---
+Strip ▸ (moves, truncate, variations, annotations, info, marks, comments ▸ language)
+Copy Comments…
+Import PGN Game…
+Import PGN Variation…
+---
+Undo … (Ctrl+Z)
+Redo … (Ctrl+Y)
+Collapse Variations
+Expand Variations

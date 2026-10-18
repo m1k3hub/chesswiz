@@ -1,0 +1,785 @@
+[
+  {
+    "confirm": 1,
+    "debug": 0,
+    "description": "Add a UCI or WinBoard engine program, given the full path of its executable. Chesswiz probes it for its name, options and features; a program already in the list is refreshed.",
+    "handler": "::application::assistant::DoAddEngine",
+    "name": "add_engine",
+    "params_schema": {"type":"object","properties":{"path":{"type":"string","description":"absolute path of the engine executable"}},"required":["path"]},
+    "tool_menu_hint": "add the engine program %s to the engine list"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Save the line on the board, up to the current move, into an open repertoire (opening) database; Chesswiz's save dialog opens for the user to check. 'repertoire' is part of the database's name when several are open. Only when the user asks to add the line.",
+    "handler": "::application::assistant::DoAddToRepertoire",
+    "name": "add_to_repertoire",
+    "params_schema": {"type":"object","properties":{"repertoire":{"type":"string","description":"part of the repertoire database's name"}}},
+    "tool_menu_hint": "add the line on the board to the repertoire %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Use ONLY when the user asks to write comments or annotation marks into the game. For why someone lost or turning points use explain_game_result instead. Annotate the game on the board: classify every move with the chess engine, then write a comment for the moves that deserve one (blunders, mistakes, inaccuracies, and the only move that holds). With 'prose' true (the default) the comment is written by the language model from the engine's facts and checked; with 'prose' false the comment is the engine's own verdict in words, which costs no model call. 'marks' also sets the standard annotation mark. 'max_plies' bounds the work; 'from_move' and 'to_move' annotate only that stretch ('analyse moves 20 to 30'). The game is left modified for the user to save.",
+    "handler": "::application::assistant::DoAnnotateGame",
+    "name": "annotate_game",
+    "params_schema": {"type":"object","properties":{"prose":{"type":"boolean","description":"let the language model word the comments, default true"},"depth":{"type":"integer","description":"engine depth per move, default 12"},"marks":{"type":"boolean","description":"also set the move's annotation mark, default false"},"max_plies":{"type":"integer","description":"stop after this many moves, default 60"},"from_move":{"type":"integer","description":"annotate from this move number on ('moves 20-30': 20)"},"to_move":{"type":"integer","description":"annotate up to and including this move number"}}},
+    "tool_menu_hint": "annotate this game with engine-grounded comments"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Report the application state for diagnosis: Tcl/Tk and model versions, the selected tab, the active database and variant, game counts, the current game and position, and the panes of the board layout.",
+    "handler": "::application::assistant::DoAppState",
+    "name": "app_state",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "report the application state"
+  },
+  {
+    "confirm": 1,
+    "debug": 1,
+    "description": "Cancel a pending [after] timer by its id as listed by timers. Only when the user asks for it.",
+    "handler": "::application::assistant::DoCancelTimer",
+    "name": "cancel_timer",
+    "params_schema": {"type":"object","properties":{"id":{"type":"string","description":"the timer id, e.g. after#12"}},"required":["id"]},
+    "tool_menu_hint": "cancel the timer %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Find the games of the active database whose recorded result contradicts how the game ended: a checkmate scored as a draw or as a win for the mated side, a stalemate scored as a win. Chesswiz's CQL matcher reads the final positions; nothing is changed. The report lists the games, and the game list is filtered to them (clear_search shows all again).",
+    "handler": "::application::assistant::DoCheckResults",
+    "name": "check_results",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "check the game results and show the games that contradict them"
+  },
+  {
+    "confirm": 0,
+    "debug": 1,
+    "description": "The processes started by this program (helpers, leftover players).",
+    "handler": "::application::assistant::DoChildProcesses",
+    "name": "child_processes",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "list the child processes"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Which System One decision model is configured (and whether it answers), whether it routes simple requests, and the most recent routing decisions it made. Use it when the user asks about the classifier, the decision model, or why a request was or was not routed.",
+    "handler": "::application::assistant::DoClassifierStatus",
+    "name": "classifier_status",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "report the System One classifier status"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Remove the filter from the game list of the active database.",
+    "handler": "::application::assistant::DoClearSearch",
+    "name": "clear_search",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "show all games in the game list again"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "What a chess annotation comment is about: opening theory, a tactic, the endgame, a plan, an evaluation, a warning, or something else. A deterministic keyword rule answers the obvious cases; a local classifier the rest. Read-only.",
+    "handler": "::application::assistant::DoCommentKind",
+    "name": "comment_kind",
+    "params_schema": {"type":"object","properties":{"text":{"type":"string","description":"the comment text"}},"required":["text"]},
+    "tool_menu_hint": "classify a comment's subject"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Compact the active database: removes deleted games and frees their space. Chesswiz asks the user to confirm and refuses while a game of it has unsaved changes.",
+    "handler": "::application::assistant::DoCompactDatabase",
+    "name": "compact_database",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "compact the active database"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Copy the active database into a new Scidb (.sci) database, e.g. to turn a PGN, Scid or ChessBase database into Scidb's format. Chesswiz asks for the format version and the new file name.",
+    "handler": "::application::assistant::DoConvertDatabase",
+    "name": "convert_database",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "convert the active database"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "ICCF correspondence games: status lists which games need my move and the time left; open opens the dialog. Read-only. action status: fetch the games from the ICCF server and list each with the opponent, the event, whose move it is and the time left, games needing the user's move first. action open: open the Correspondence Games dialog. The assistant never sends a move; the user does that in the dialog.",
+    "handler": "::application::assistant::DoCorrespondenceGames",
+    "name": "correspondence_games",
+    "params_schema": {"type":"object","properties":{"action":{"type":"string","enum":["status","open"]}},"required":["action"]},
+    "tool_menu_hint": "show the correspondence games"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "The CQL 6.2 reference card and worked examples (requests a player makes and the scripts that find them). Read it before writing a find_positions script.",
+    "handler": "::application::assistant::DoCqlHelp",
+    "name": "cql_help",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "read the CQL reference"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "The game on the board: its header, moves and comments as PGN, and the current position as FEN. Use it to summarize or discuss the game.",
+    "handler": "::application::assistant::DoCurrentGame",
+    "name": "current_game",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "read the current game"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Summarize the active database: number of games and players, overall results, and the most played openings (ECO) with their scores.",
+    "handler": "::application::assistant::DoDatabaseSummary",
+    "name": "database_summary",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "summarize the active database"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "A read-only narrative of the active database's opening trends: total games, games with an ECO code, the overall results, and the most played openings with their scores and names, grounded in Chesswiz's own counts (::scidb::db::count and ecoStats). The numbers are read by Chesswiz; the model only phrases them, and the claim checker audits the phrase. Use it for questions about trends, or what is played most.",
+    "handler": "::application::assistant::DoDatabaseTrend",
+    "name": "database_trend",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "narrate the trends of the active database"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Which language a chess comment is written in: a local classifier over a fixed set (English, German, French, Spanish, Italian, Russian, ... plus 'language independent' for notation-only text). Read-only; it does not change the comment, and the comment editor's Detect button applies the result to the current comment.",
+    "handler": "::application::assistant::DoDetectLanguage",
+    "name": "detect_language",
+    "params_schema": {"type":"object","properties":{"text":{"type":"string","description":"the comment text"}},"required":["text"]},
+    "tool_menu_hint": "detect the language of a comment"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Turn the codes an import reported (for example 'InvalidMove MissingResultTag') into a likely cause and a fix. A deterministic table covers Chesswiz's PGN reader codes; a local classifier is asked for codes the table does not know. Read-only; the import log already shows the doctor's rule-only advice.",
+    "handler": "::application::assistant::DoDiagnoseImport",
+    "name": "diagnose_import",
+    "params_schema": {"type":"object","properties":{"codes":{"type":"array","items":{"type":"string"},"description":"the import error/warning codes"}},"required":["codes"]},
+    "tool_menu_hint": "diagnose import errors"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Open the dialog that scans the disk for chess databases.",
+    "handler": "::application::assistant::DoDiscover",
+    "name": "discover_databases",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "open the database discovery dialog"
+  },
+  {
+    "confirm": 1,
+    "debug": 0,
+    "description": "Download games from the internet into the active database and import them: 'twic' takes the latest weekly issues of The Week in Chess (default 1 issue, up to 12), 'lichess' takes game links or 8-character game ids given in 'lichess', 'player' takes all games of a Chess.com or Lichess player ('site', 'player') from the last 'months' months (default 1, up to 24), 'url' takes a PGN/zip/gz link given in 'url'. The import runs like 'Import PGN files'. Ask only when the user wants games from the internet.",
+    "handler": "::application::assistant::DoDownloadGames",
+    "name": "download_games",
+    "params_schema": {"type":"object","properties":{"source":{"type":"string","enum":["twic","lichess","player","url"],"description":"where to download from, default twic"},"site":{"type":"string","enum":["Chess.com","Lichess"],"description":"player: the site, default Chess.com"},"player":{"type":"string","description":"player: the user name on that site"},"months":{"type":"integer","description":"player: how many months back, default 1 (max 24)"},"issues":{"type":"integer","description":"TWIC: how many weekly issues, default 1 (max 12)"},"lichess":{"type":"string","description":"lichess: game links or ids, one per line"},"url":{"type":"string","description":"url: a PGN, zipped PGN or gzipped PGN link"}}},
+    "tool_menu_hint": "download games from the internet into this database"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "The lines the running engines show for the board position: per pane the engine, depth and for each line the score (pawns from White's side, #n = mate in n) and the moves. 'seconds' waits that long first (at most 60) so the engine can search deeper; the result comes when the wait is over.",
+    "handler": "::application::assistant::DoEngineAnalysis",
+    "name": "engine_analysis",
+    "params_schema": {"type":"object","properties":{"pane":{"type":"integer"},"seconds":{"type":"integer"}}},
+    "tool_menu_hint": "read the engine analysis"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Ask the chess engine how good one move is: best, excellent, good, inaccuracy, mistake or blunder, how much it loses, and the better move. 'move' in SAN (e.g. Nf5, O-O, exd5), played in the board position or in 'fen'. To judge a move of the game on the board, first put the board before that move (open_game with move).",
+    "handler": "::application::assistant::DoEngineCheckMove",
+    "name": "engine_check_move",
+    "params_schema": {"type":"object","properties":{"move":{"type":"string"},"fen":{"type":"string","description":"the position before the move; default the board"},"depth":{"type":"integer"}},"required":["move"]},
+    "tool_menu_hint": "ask the chess engine about a move"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Ask the chess engine directly (no analysis pane needed) for the best moves in a position and their scores: the board position, or 'fen'. 'lines' best moves (1-5, default 3), 'depth' (default 18, at most 30). Scores are in pawns from White's side (#n = mate in n). Use it for 'what is the best move', 'who is better', 'is this winning'; quote the scores and moves as given, never invent your own.",
+    "handler": "::application::assistant::DoEngineEvaluate",
+    "name": "engine_evaluate",
+    "params_schema": {"type":"object","properties":{"fen":{"type":"string","description":"a position; default the board"},"lines":{"type":"integer"},"depth":{"type":"integer"}}},
+    "tool_menu_hint": "ask the chess engine about a position"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "The options of an engine's profile (default 'Default') as the Options dialog shows them: name, type, value, default and range or choices. Threads, hash and the number of lines are not options here; start_engine sets them.",
+    "handler": "::application::assistant::DoEngineOptions",
+    "name": "engine_options",
+    "params_schema": {"type":"object","properties":{"engine":{"type":"string","description":"engine name or part of it"},"profile":{"type":"string"}},"required":["engine"]},
+    "tool_menu_hint": "read the options of %s"
+  },
+  {
+    "confirm": 1,
+    "debug": 1,
+    "description": "Evaluate a Tcl script at global level and return its result. The user reviews the exact script first; prefer the read-only tools.",
+    "handler": "::application::assistant::DoEvalTcl",
+    "name": "eval_tcl",
+    "params_schema": {"type":"object","properties":{"script":{"type":"string"}},"required":["script"]},
+    "tool_menu_hint": "evaluate this Tcl script:\n\n%s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "The kinds of time control (classical, rapid, blitz, bullet, correspondence, simul, training) of the latest games in the active database, or of one player's games. A deterministic rule reads the TimeControl tag and the event name; games the rule cannot place are counted as 'unclear' (no model is consulted). Read-only. 'player' limits it to one player; 'games' is how many of the latest games to read (default 500).",
+    "handler": "::application::assistant::DoEventTypes",
+    "name": "event_types",
+    "params_schema": {"type":"object","properties":{"player":{"type":"string","description":"the player's name or part of it"},"games":{"type":"integer","description":"how many of the latest games to read, default 500"}}},
+    "tool_menu_hint": "what time controls are the games in"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Quick read-only chess-engine pass over the current game's mainline. Prefer this for 'why did White/Black lose', 'why did I lose', 'where did it go wrong', and 'what was the turning point', including follow-ups. Returns up to three biggest evaluation drops for the losing side, numbered moves played, better moves and evaluations before/after. Default side is the loser from the recorded result; select white or black when requested. Evaluations are short-search estimates, not proof of a tactical cause. Give friendly coaching in at most four short sentences: lead with the turning-point story, use SAN moves and evaluations in words, omit engine numbers unless asked, and end with one useful offer. Never infer a tactical cause from an evaluation drop alone; do not annotate or create another game.",
+    "handler": "::application::assistant::DoExplainGameResult",
+    "name": "explain_game_result",
+    "params_schema": {"type":"object","properties":{"side":{"type":"string","enum":["auto","white","black"],"description":"side to explain; default auto (recorded loser)"}}},
+    "tool_menu_hint": "find this game's turning points without changing it"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Explain the chess position currently on the board. The assessment appears in the Report pane.",
+    "handler": "::application::assistant::DoExplainPosition",
+    "name": "explain_position",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "explain the current position"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Open the export dialog for the games the game list shows (PGN, HTML, LaTeX, PDF, Scidb formats): after show_search or a find_positions/find_similar run in mode all, that is the selection; otherwise the whole active database. The user picks the format and file there.",
+    "handler": "::application::assistant::DoExport",
+    "name": "export_database",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "open the export dialog"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Check the comments already stored in the game on the board against the positions they describe: an annotation is reported only when the facts (move legality, piece placement, pawn structure) positively contradict it. Use it for the user's own notes, or for annotations that came from a book or another program.",
+    "handler": "::application::assistant::DoFactCheck",
+    "name": "factcheck_annotations",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "fact-check the annotations of this game"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Find the video lessons that cover the board's position: interactive clips of the active database's media (ChessBase .cms lessons, Scidb .scm manifests) and the user's own interactive index. With play true, the first match plays in the media pane.",
+    "handler": "::application::assistant::DoFindLesson",
+    "name": "find_lesson",
+    "params_schema": {"type":"object","properties":{"play":{"type":"boolean"}}},
+    "tool_menu_hint": "find a video lesson for this position"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Find positions, patterns or tactics in the active database's games with Chesswiz's CQL 6.2 engine. When search_games has the pattern (its 'pattern' list: named mates, forks, the Greek gift, the 7th rank, outposts, pawn structures, Lucena and other endgames), use search_games instead: those searches are vetted and fast. You translate the request into a CQL 6.2 script; CQL decides what matches. Put only the positional part in 'cql', starting with cql() (e.g. 'cql() mate', 'cql() flipcolor {move from N} attacks k'); put names, colour, result, dates, event, ECO and Elo in the other fields, which narrow the games before any is read. Call cql_help first for the CQL 6.2 reference and worked examples unless the script is trivial. Step 1: mode sample (the default) returns up to 3 matching positions (the move that led there, the game, the FEN) and shows them to the user as diagrams in the Report pane; tell the user in one sentence what you searched for and ask whether these are what they meant. Step 2, only after the user agrees: call again with mode all and the same arguments; the game list then shows every matching game. If the script does not parse you get the parser's message: fix it and call again. Never describe a position's quality yourself.",
+    "handler": "::application::assistant::DoFindPositions",
+    "name": "find_positions",
+    "params_schema": {"type":"object","properties":{"request":{"type":"string","description":"what the user asked for, in their words"},"cql":{"type":"string","description":"the CQL 6.2 script for the positional part, starting with cql()"},"mode":{"type":"string","enum":["sample","all"],"description":"sample (default): up to 3 positions to check with the user; all: every match, shown in the game list"},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"}},"required":["request","cql"]},
+    "tool_menu_hint": "find positions: %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Find games with positions like the one on the board ('games like this one', 'similar positions') in the active database; the application writes the CQL 6.2 search, so no cql_help is needed. 'aspects' says what must be alike: pawns (the pawn structure, both sides), material (the same pieces), pieces (kings and pieces on the same squares); default pawns alone. The game on the board is left out of the results. 'tolerance' lets up to 0, 1 or 2 pawns per side stand elsewhere (default 0). 'colours' both also finds the structure with the colours reversed. Same two steps as find_positions: mode sample first (the user sees diagrams and the search in the Report pane; ask whether that is what they meant), then mode all. Header fields narrow the games first.",
+    "handler": "::application::assistant::DoFindSimilar",
+    "name": "find_similar",
+    "params_schema": {"type":"object","properties":{"aspects":{"type":"array","items":{"type":"string","enum":["pawns","material","pieces"]}},"tolerance":{"type":"integer","description":"0, 1 or 2 pawns per side may stand elsewhere"},"colours":{"type":"string","enum":["same","both"]},"mode":{"type":"string","enum":["sample","all"]},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"}}},
+    "tool_menu_hint": "find positions like the one on the board"
+  },
+  {
+    "confirm": 1,
+    "debug": 0,
+    "description": "Start the configured coding agent on an issue found by triage, to fix it in the Chesswiz sources. Only when the user asks for it.",
+    "handler": "::application::assistant::DoHandoff",
+    "name": "handoff_issue",
+    "params_schema": {"type":"object","properties":{"issue":{"type":"string","description":"the issue id, 8 hex digits"}},"required":["issue"]},
+    "tool_menu_hint": "hand issue %s to the coding agent"
+  },
+  {
+    "confirm": 0,
+    "debug": 1,
+    "description": "The stack dumps written when the program stalled (kill -USR1, or the watchdog started by debug mode): the Tcl stack of the stalled code, the pending timers and the window state. Read the newest first.",
+    "handler": "::application::assistant::DoHangDumps",
+    "name": "hang_dumps",
+    "params_schema": {"type":"object","properties":{"count":{"type":"integer","description":"how many files to list, default 3"}}},
+    "tool_menu_hint": "read the hang dumps"
+  },
+  {
+    "confirm": 1,
+    "debug": 0,
+    "description": "Import PGN files (.pgn, .pgn.gz or .zip) the user names into the active database, which must be writable. The import log shows what was accepted and rejected; diagnose_import explains its codes.",
+    "handler": "::application::assistant::DoImportGames",
+    "name": "import_games",
+    "params_schema": {"type":"object","properties":{"files":{"type":"array","items":{"type":"string"},"description":"full paths of the PGN files"}},"required":["files"]},
+    "tool_menu_hint": "import %s into the active database"
+  },
+  {
+    "confirm": 1,
+    "debug": 0,
+    "description": "Install the ChessBase chess fonts from a Windows font directory.",
+    "handler": "::application::assistant::DoInstallFonts",
+    "name": "install_chessbase_fonts",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "install the ChessBase fonts"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "The chess engines Chesswiz can run: the ones bundled with Chesswiz and the ones the user added. For each: name, version, protocol, variants, rating, threads, hash and line limits, its program and whether that program is there. Also which analysis panes run which engine.",
+    "handler": "::application::assistant::DoListEngines",
+    "name": "list_engines",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "list the chess engines"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "The bugs found by error triage, newest first: issue id, severity, summary and file.",
+    "handler": "::application::assistant::DoListIssues",
+    "name": "list_issues",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "list the issues"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "List the databases currently open, and which one is active.",
+    "handler": "::application::assistant::DoListDatabases",
+    "name": "list_open_databases",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "list the open databases"
+  },
+  {
+    "confirm": 0,
+    "debug": 1,
+    "description": "List Tcl procedures whose fully qualified name matches a glob pattern, e.g. ::application::report::*.",
+    "handler": "::application::assistant::DoListProcs",
+    "name": "list_procs",
+    "params_schema": {"type":"object","properties":{"pattern":{"type":"string"}},"required":["pattern"]},
+    "tool_menu_hint": "list procedures matching %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 1,
+    "description": "How long the GUI was unresponsive: the heartbeat of the event loop, the worst stall seen and the recent stalls with their times.",
+    "handler": "::application::assistant::DoLoopHealth",
+    "name": "loop_health",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "report the event-loop health"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Open the active database's maintenance report: overview (size, deleted games, whether to compact), duplicates (groups of duplicate games, with deletion done by the user there) or openings (ECO coverage).",
+    "handler": "::application::assistant::DoMaintenanceReport",
+    "name": "maintenance_report",
+    "params_schema": {"type":"object","properties":{"tab":{"type":"string","enum":["overview","duplicates","openings"]}},"required":["tab"]},
+    "tool_menu_hint": "open the maintenance report"
+  },
+  {
+    "confirm": 0,
+    "debug": 1,
+    "description": "The media panel and the libmpv player: whether it plays, its state, position, duration and volume, and the last media file.",
+    "handler": "::application::assistant::DoMediaState",
+    "name": "media_state",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "report the media player state"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Start a new, empty game on the board.",
+    "handler": "::application::assistant::DoNewGame",
+    "name": "new_game",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "start a new game"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Label a move in a position against master practice, grounded in the precedent index: a position the index knows is labelled 'known' without the classifier, and the rest (novelty, side line or transposition) is decided by the local System One classifier; an unsettled move stays 'unknown'. Read-only.",
+    "handler": "::application::assistant::DoNoveltyLabel",
+    "name": "novelty_label",
+    "params_schema": {"type":"object","properties":{"fen":{"type":"string","description":"the FEN of the position"},"san":{"type":"string","description":"the move in SAN"}},"required":["fen","san"]},
+    "tool_menu_hint": "label a move's novelty in the position"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Open a database file (.sci, .si4, .cbh, .pgn, ...) given its full path.",
+    "handler": "::application::assistant::DoOpenDatabase",
+    "name": "open_database",
+    "params_schema": {"type":"object","properties":{"path":{"type":"string","description":"absolute path of the database file"}},"required":["path"]},
+    "tool_menu_hint": "open the database %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Put a game of the active database on the board, at the start or at a move. 'number' is the game number as the tools list it (#123); or give 'player' instead for that player's most recent game ('my last game': the user's name). 'move' is a move number; with 'after' white or black the board shows the position after that side's move, without it the position before White's move.",
+    "handler": "::application::assistant::DoOpenGame",
+    "name": "open_game",
+    "params_schema": {"type":"object","properties":{"number":{"type":"integer"},"player":{"type":"string","description":"open this player's most recent game (by date) instead of a numbered one"},"move":{"type":"integer"},"after":{"type":"string","enum":["white","black"]}}},
+    "tool_menu_hint": "open game %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Put a game found by the last find_positions call on the board, at the matching position. 'index' counts the positions as they were listed, from 1.",
+    "handler": "::application::assistant::DoOpenPosition",
+    "name": "open_position",
+    "params_schema": {"type":"object","properties":{"index":{"type":"integer","description":"1 for the first position listed"}},"required":["index"]},
+    "tool_menu_hint": "open position %s of the last search"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Open a search dialog on the active database: 'advanced' (header fields such as player, event, date, ECO), 'material' (material balance) or 'rating' (Elo ranges).",
+    "handler": "::application::assistant::DoOpenSearch",
+    "name": "open_search",
+    "params_schema": {"type":"object","properties":{"kind":{"type":"string","enum":["advanced","material","rating"]}},"required":["kind"]},
+    "tool_menu_hint": "open the %s search"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Open one of Chesswiz's reports or dialogs for the user (they only show things; nothing changes). kind: player_card (a player's card: ratings, photo, links; needs 'name'), prep_report (a player's preparation report: scores by colour, openings, recent games, gaps, the opponent dossier; needs 'name'), crosstable (an event's tournament table; needs 'event', part of the event name), event_report (the story of an event: standings, leaders and upsets, told from its results; needs 'event'), opening_report (the opening report of the position on the board: statistics, main lines, fashion, plans), opening_prep (opening preparation: the moves played from the board's position), repertoire_report (the active repertoire database's report), duplicates (find duplicate games in the active database).",
+    "handler": "::application::assistant::DoOpenView",
+    "name": "open_view",
+    "params_schema": {"type":"object","properties":{"kind":{"type":"string","enum":["player_card","prep_report","crosstable","event_report","opening_report","opening_prep","repertoire_report","duplicates"]},"name":{"type":"string","description":"a player, for player_card and prep_report"},"event":{"type":"string","description":"part of an event name, for crosstable"}},"required":["kind"]},
+    "tool_menu_hint": "open the %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Results of an opening in the active database, by ECO code: 'B90' (one code), 'B9' (B90-B99), 'B' (B00-B99) or a range 'B90-B99'. Without a player: white wins, draws, black wins. With a player: that player's wins/draws/losses with White and with Black. Map opening names to ECO codes yourself (e.g. Najdorf = B90-B99).",
+    "handler": "::application::assistant::DoOpeningScore",
+    "name": "opening_score",
+    "params_schema": {"type":"object","properties":{"eco":{"type":"string"},"player":{"type":"string","description":"optional player name or part of it"}},"required":["eco"]},
+    "tool_menu_hint": "report the score of the opening %s %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Preparation brief for one opponent from the active database: their openings with both colours and how they score in each, their weakest lines and their latest games, plus a stance for the game (punish their weak line, avoid their theory, out-prepare them, or stay neutral). With 'download' above zero the latest The Week in Chess games are fetched first. The brief opens in the Report pane.",
+    "handler": "::application::assistant::DoOpponentBrief",
+    "name": "opponent_brief",
+    "params_schema": {"type":"object","properties":{"name":{"type":"string","description":"the opponent's name or part of it"},"colour":{"type":"string","enum":["white","black"],"description":"the colour the opponent will play"},"download":{"type":"integer","description":"fetch this many latest TWIC issues first, default 0"},"prose":{"type":"boolean","description":"let the language model write the brief, default true"}},"required":["name"]},
+    "tool_menu_hint": "build a preparation brief for an opponent"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Dock or undock a pane of the board tab: 'dock' puts a floating pane back into the main window, 'undock' makes it a separate window. Panes: board, editor, games, dbgames (game list), tree, media, assistant, analysis (analysis:2 for the second), eco, report.",
+    "handler": "::application::assistant::DoPane",
+    "name": "pane",
+    "params_schema": {"type":"object","properties":{"action":{"type":"string","enum":["dock","undock"]},"pane":{"type":"string"}},"required":["action","pane"]},
+    "tool_menu_hint": "%s the %s pane"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Statistics of a player in the active database: games, wins/draws/losses with White and with Black, score, first and last game, Elo range, most played openings. The name may be partial ('carlsen'); if several players match, the candidates are listed and you call again with the exact name.",
+    "handler": "::application::assistant::DoPlayerStats",
+    "name": "player_stats",
+    "params_schema": {"type":"object","properties":{"name":{"type":"string","description":"player name or part of it, e.g. 'Carlsen, Magnus' or 'carlsen'"}},"required":["name"]},
+    "tool_menu_hint": "report the statistics of %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "The moves played from the position on the board in the tree's database (if none is set, the active database becomes it): for each move the games, share, score for the side to move, draws, average Elo, last year played and best player. Answers 'what is played here', 'what scores best' and 'is this move a novelty' (a move missing from the list is new to that database).",
+    "handler": "::application::assistant::DoPositionMoves",
+    "name": "position_moves",
+    "params_schema": {"type":"object","properties":{"limit":{"type":"integer","description":"how many moves, default 10"}}},
+    "tool_menu_hint": "report the moves played in this position"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Preparation against an opponent from the active database: the openings they play with White and with Black and how they score in each, their weakest lines, and their latest games. 'color' is the colour the opponent will have; without it both are shown. The name may be partial, as for player_stats.",
+    "handler": "::application::assistant::DoPrepareAgainst",
+    "name": "prepare_against",
+    "params_schema": {"type":"object","properties":{"name":{"type":"string","description":"the opponent's name or part of it"},"color":{"type":"string","enum":["white","black"],"description":"the colour the opponent will play"}},"required":["name"]},
+    "tool_menu_hint": "prepare against %s %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 1,
+    "description": "The argument list and body of a Tcl procedure, by fully qualified name.",
+    "handler": "::application::assistant::DoProcSource",
+    "name": "proc_source",
+    "params_schema": {"type":"object","properties":{"name":{"type":"string"}},"required":["name"]},
+    "tool_menu_hint": "read the source of %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 1,
+    "description": "The value of a Tcl variable by fully qualified name; for an array, its elements (optionally only those matching a glob pattern).",
+    "handler": "::application::assistant::DoReadVariable",
+    "name": "read_variable",
+    "params_schema": {"type":"object","properties":{"name":{"type":"string"},"pattern":{"type":"string"}},"required":["name"]},
+    "tool_menu_hint": "read the variable %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "The most recent errors of this session, newest last: background Tcl errors (with stack), error messages of the log window and of error dialogs, and failing assistant tools.",
+    "handler": "::application::assistant::DoRecentErrors",
+    "name": "recent_errors",
+    "params_schema": {"type":"object","properties":{"count":{"type":"integer","description":"how many, default 3"}}},
+    "tool_menu_hint": "report recent errors"
+  },
+  {
+    "confirm": 1,
+    "debug": 1,
+    "description": "Release the grab held by a window, which frees a GUI that ignores clicks. Only for a holder ui_state flagged as stuck, and only when the user asks for it.",
+    "handler": "::application::assistant::DoReleaseGrab",
+    "name": "release_grab",
+    "params_schema": {"type":"object","properties":{"window":{"type":"string","description":"the grab holder's window path"}},"required":["window"]},
+    "tool_menu_hint": "release the input grab held by %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Remember who the user is: their name as it is written in their games, e.g. 'Thomas, Michael'. Call it when the user tells you their name; from then on I, me and my games mean that player. An empty name forgets it.",
+    "handler": "::application::assistant::DoRememberMe",
+    "name": "remember_me",
+    "params_schema": {"type":"object","properties":{"name":{"type":"string","description":"the user's name as written in their games"}},"required":["name"]},
+    "tool_menu_hint": "remember that the user is %s"
+  },
+  {
+    "confirm": 1,
+    "debug": 0,
+    "description": "Remove an engine from the engine list (its program stays on disk). Not while it runs in a pane. Only when the user asks for it.",
+    "handler": "::application::assistant::DoRemoveEngine",
+    "name": "remove_engine",
+    "params_schema": {"type":"object","properties":{"engine":{"type":"string"}},"required":["engine"]},
+    "tool_menu_hint": "remove %s from the engine list"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Check an opening repertoire (an open database of type Openings, Openings White or Openings Black) against practice, by ECO code: its lines that score below average, openings often reached but not covered, and repertoire lines never reached. Practice is the given player's own games in the active database, else all games there. 'color' is the repertoire's side, needed only for a repertoire of both colours.",
+    "handler": "::application::assistant::DoRepertoireCheck",
+    "name": "repertoire_check",
+    "params_schema": {"type":"object","properties":{"repertoire":{"type":"string","description":"name or part of the name of the repertoire database; needed only when several are open"},"player":{"type":"string","description":"whose games to check against, e.g. the user's own name"},"color":{"type":"string","enum":["white","black"]}}},
+    "tool_menu_hint": "check the repertoire %s %s %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Run one of Chesswiz's jobs, a fixed series of steps: prepare (for a game against 'name', who plays 'colour': statistics, openings and weak lines, the brief, the prep report, their games in the list), review (the user's own last 'games' games: record, engine audit and study plan, the games in the list), repertoire (the user's repertoire against their games: gaps and the report; 'colour' optional), train (puzzles from the user's games; 'pattern' optional). Returns the plan: then call its tools in order with exactly those arguments, and finish with a short checklist of what is done. review, repertoire and train need the user's name (remember_me).",
+    "handler": "::application::assistant::DoRunJob",
+    "name": "run_job",
+    "params_schema": {"type":"object","properties":{"job":{"type":"string","enum":["prepare","review","repertoire","train"]},"name":{"type":"string","description":"the opponent, for prepare"},"colour":{"type":"string","enum":["white","black"],"description":"prepare: the colour the opponent plays; repertoire: your colour"},"games":{"type":"integer","description":"review: how many of your latest games, default 10"},"pattern":{"type":"string","enum":["checkmate","smothered_mate","double_check","underpromotion"]}},"required":["job"]},
+    "tool_menu_hint": "run the job '%s'"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Save the last find_positions search (the user's request, its CQL script and the sample positions the user accepted) as one of the user's own patterns, under a short name. Only when the user asks to keep or save the search. Saved patterns appear in cql_help as worked examples.",
+    "handler": "::application::assistant::DoSavePattern",
+    "name": "save_pattern",
+    "params_schema": {"type":"object","properties":{"name":{"type":"string","description":"a short name, e.g. 'knight fork king and queen'"}},"required":["name"]},
+    "tool_menu_hint": "save the last position search as pattern '%s'"
+  },
+  {
+    "confirm": 1,
+    "debug": 0,
+    "description": "Save the games the game list shows (after show_search, or a find_positions/find_similar run in mode all) as a new Scidb database next to the active one, a working set, and open it. Chesswiz asks the user for its name; 'name' is the suggestion. Only when the user asks to keep or save the selection.",
+    "handler": "::application::assistant::DoSaveWorkingSet",
+    "name": "save_working_set",
+    "params_schema": {"type":"object","properties":{"name":{"type":"string","description":"a suggested name, e.g. 'knight forks'"}}},
+    "tool_menu_hint": "save the games of the game list as a new database (%s)"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Search the active database; nothing changes, the game list included. Returns the number of games found, the first of them, and the criteria as understood. Names may be partial. 'result' is win/draw/loss from the player's side, or 1-0/0-1/1/2-1/2 without a player. 'eco' is a code, class or range as for opening_score (map opening names to ECO yourself). Dates are YYYY, YYYY.MM or YYYY.MM.DD. To show the games in the game list, call show_search afterwards. 'pattern' keeps only games containing a position pattern (Chesswiz's CQL matcher reads their moves, which takes longer on a large database).",
+    "handler": "::application::assistant::DoSearchGames",
+    "name": "search_games",
+    "params_schema": {"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"},"pattern":{"type":"string","enum":["checkmate","smothered_mate","stalemate","en_passant","underpromotion","double_check","opposite_castling","rook_endgame","pawn_endgame","endgame","isolated_queen_pawn","opposite_bishops","queenless","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","knight_fork","greek_gift","rook_seventh","doubled_rooks_seventh","knight_outpost","hanging_pawns","carlsbad","maroczy_bind","stonewall","queen_vs_rook","wrong_bishop","lucena","epaulette_mate","queen_pawn_mate","skewer","discovered_check","double_bishop_sacrifice","alekhines_gun","minority_attack","hedgehog","protected_passed_pawn","weakened_fianchetto","pawn_fork","legals_mate","blackburne_mate","pin_attacked_by_pawn","double_attack_loose","philidor_position","vancura_position","backward_pawn","bad_bishop","closed_center","trebuchet","boleslavsky_hole","botvinnik_formation","rook_behind_passed_pawn"],"description":"a position pattern the game must contain, found by Chesswiz's CQL matcher: the game ends in checkmate, a smothered mate, the game ends in stalemate, an en-passant capture, an underpromotion, a double check, kings on opposite wings, a rook ending, a pawn ending, any endgame (at most two pieces a side), an isolated queen's pawn, opposite-coloured bishops, a queenless middlegame, a back-rank mate, a two-bishop (Boden's) mate, Anastasia's mate, an Arabian mate, a knight fork of king and queen or rook, a Greek gift Bxh7+, a rook on the seventh, doubled rooks on the seventh, a knight outpost, hanging pawns, a Carlsbad structure, a Maroczy bind, a Stonewall, queen against rook, a wrong-coloured bishop, a Lucena position (building a bridge), an epaulette mate, a queen-and-pawn (Damiano's, Lolli's) mate, a skewer, a discovered check, a double bishop sacrifice (Lasker-Bauer), Alekhine's gun, a minority attack, a hedgehog, a protected passed pawn, a weakened fianchetto, a pawn fork, Legal's mate, Blackburne's mate, a pinned piece attacked by a pawn, a double attack on loose pieces, the Philidor position (third-rank defence), the Vancura position, a backward pawn, a bad bishop, a closed centre, a trebuchet, the Boleslavsky hole, the Botvinnik formation, a rook behind a passed pawn"}}},
+    "tool_menu_hint": "search the games"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Change an option of an engine's profile (default 'Default'), checked against its type and range; engine_options lists them. Running panes of that engine restart with it. The change is saved.",
+    "handler": "::application::assistant::DoSetEngineOption",
+    "name": "set_engine_option",
+    "params_schema": {"type":"object","properties":{"engine":{"type":"string"},"option":{"type":"string"},"value":{"type":"string"},"profile":{"type":"string"}},"required":["engine","option","value"]},
+    "tool_menu_hint": "set option '%2$s' of %1$s to '%3$s' (profile %4$s)"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Put a position on the board in a new game (the game on the board stays as it is): from 'fen', from 'moves' played from the start (e.g. '1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6 6.Bg5'), or moves played from 'fen'. Map an opening the user names to its moves yourself. Every move is checked first; a move that is not legal comes back as an error naming it, and nothing changes.",
+    "handler": "::application::assistant::DoSetPosition",
+    "name": "set_position",
+    "params_schema": {"type":"object","properties":{"fen":{"type":"string"},"moves":{"type":"string","description":"SAN moves, with or without move numbers"}}},
+    "tool_menu_hint": "set up a position"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Filter the game list of the active database to the games of the last search_games, and switch to the database tab.",
+    "handler": "::application::assistant::DoShowSearch",
+    "name": "show_search",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "show the games of the last search in the game list"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Find the games of the active database that share the most opening plies with one game and narrate why they are alike. 'number' is the game's number as the game list shows it (the first game is 1); 'limit' bounds how many similar games are reported (default 10). Only games from the same starting position with the same first move qualify, and 'shared' counts the plies of the main line they have in common; transpositions are not found. The games are read by Chesswiz; the model only phrases the overlap, and the claim checker audits it. Read-only. The result appears in the Report pane.",
+    "handler": "::application::assistant::DoSimilarGames",
+    "name": "similar_games",
+    "params_schema": {"type":"object","properties":{"number":{"type":"integer","description":"game number in the active database, as shown in the game list (1 = first game)"},"limit":{"type":"integer","description":"at most this many similar games, default 10"}},"required":["number"]},
+    "tool_menu_hint": "find games like game %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Start an engine on the position on the board in an analysis pane; it follows the board as it changes. Without a pane a free one is used or a new one opened; giving the pane of a running engine replaces or restarts it (e.g. to change lines). lines = number of best lines (MultiPV, 1-8), threads, hash in MB; each defaults to the pane's setting. Then read its lines with engine_analysis.",
+    "handler": "::application::assistant::DoStartEngine",
+    "name": "start_engine",
+    "params_schema": {"type":"object","properties":{"engine":{"type":"string","description":"engine name or part of it; without it the default analysis engine"},"pane":{"type":"integer","description":"analysis pane number as in its title: 1 for 'Analysis', 2 for 'Analysis (2)'"},"lines":{"type":"integer"},"threads":{"type":"integer"},"hash":{"type":"integer","description":"hash size in MB"}}},
+    "tool_menu_hint": "analyse the board position with %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Stop the engine of an analysis pane; the pane stays open. The pane may be left out when only one engine runs.",
+    "handler": "::application::assistant::DoStopEngine",
+    "name": "stop_engine",
+    "params_schema": {"type":"object","properties":{"pane":{"type":"integer"}}},
+    "tool_menu_hint": "stop the engine in analysis pane %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Which kinds of position a player's games reach and how the player scores in them, found exactly by Chesswiz's CQL matcher in the active database: isolated queen's pawn, opposite-coloured bishops, queenless middlegames, rook and pawn endings, kings on opposite wings. Counts and scores come from the database. 'colour' limits it to the games with that colour; 'games' is how many of the latest games to read (default 200).",
+    "handler": "::application::assistant::DoStructureProfile",
+    "name": "structure_profile",
+    "params_schema": {"type":"object","properties":{"player":{"type":"string","description":"the player's name or part of it"},"colour":{"type":"string","enum":["white","black"]},"games":{"type":"integer","description":"how many of the latest games to read, default 200"}},"required":["player"]},
+    "tool_menu_hint": "profile the position types of %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Audit a sample of games in the active database with the chess engine and turn the mistakes into a study plan: every mistake is labelled by pattern (tactics, opening, endgame, king safety, position) from the position facts, and the plan lists the evidence and what to train. 'player' studies one player's games (their moves only); for the user's own games (my games, my recent games) it is the user's name. Without it both sides of the most recent games in the database are studied. 'games' is how many games to audit (default 10). The report opens in the Report pane.",
+    "handler": "::application::assistant::DoStudyPlan",
+    "name": "study_plan",
+    "params_schema": {"type":"object","properties":{"player":{"type":"string","description":"study this player's games, e.g. 'Carlsen, Magnus' or part of the name"},"games":{"type":"integer","description":"how many games to audit, default 10"},"colour":{"type":"string","enum":["white","black","both"],"description":"which side's moves to study, default both"},"depth":{"type":"integer","description":"engine depth per move, default 10"}}},
+    "tool_menu_hint": "audit the games and build a study plan"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Switch the main window to the board tab or the database tab.",
+    "handler": "::application::assistant::DoSwitchTab",
+    "name": "switch_tab",
+    "params_schema": {"type":"object","properties":{"tab":{"type":"string","enum":["board","database"]}},"required":["tab"]},
+    "tool_menu_hint": "switch to the %s tab"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "The exact result of an endgame with at most 7 pieces (kings included) from the Syzygy tablebases, looked up online at Lichess (only the position is sent): win, draw or loss for the side to move, mate distance, and which moves win, draw or lose. The board position, or 'fen'. Prefer it to the engine for such endgames: it is perfect play, not an estimate.",
+    "handler": "::application::assistant::DoTablebase",
+    "name": "tablebase",
+    "params_schema": {"type":"object","properties":{"fen":{"type":"string","description":"a position; default the board"}}},
+    "tool_menu_hint": "look up the endgame tablebase"
+  },
+  {
+    "confirm": 0,
+    "debug": 1,
+    "description": "The pending [after] timers (id, kind, script) and the open channels of the interpreter. Use it for a busy or frozen GUI and for leaked timers.",
+    "handler": "::application::assistant::DoTimers",
+    "name": "timers",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "list pending timers and open channels"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "The most recent assistant tool calls of this session, newest last: time, tool, arguments, whether the user was asked, outcome (ok, error, declined) and the start of the reply. Use it to explain what the assistant did or why something failed.",
+    "handler": "::application::assistant::DoToolLog",
+    "name": "tool_log",
+    "params_schema": {"type":"object","properties":{"count":{"type":"integer","description":"how many, default 10"}}},
+    "tool_menu_hint": "report recent tool calls"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Build puzzles from the active database's games: Chesswiz's CQL matcher finds positions just before a decisive move: a checkmate (any, or a smothered, back-rank, Boden's, Anastasia's, Arabian, epaulette or queen-and-pawn mate), a Legal's or Blackburne's mate, a double or discovered check, a knight or pawn fork, a skewer, a double attack on loose pieces, a pinned piece attacked by a pawn, a Greek gift or double bishop sacrifice, or an underpromotion; by default a mix of all. The chess engine keeps only those whose solution is its best move and clearly the only good one. The puzzles are written to a PGN file under the user directory, which the user can open as a database to train. 'pattern' limits it to one kind; 'player' to one player's games; 'max' bounds the number of puzzles (default 20). It runs in the background; the Report pane shows the progress and the result.",
+    "handler": "::application::assistant::DoTrainingSet",
+    "name": "training_set",
+    "params_schema": {"type":"object","properties":{"pattern":{"type":"string","enum":["checkmate","smothered_mate","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","epaulette_mate","queen_pawn_mate","double_check","discovered_check","knight_fork","skewer","greek_gift","double_bishop_sacrifice","underpromotion","legals_mate","blackburne_mate","pawn_fork","pin_attacked_by_pawn","double_attack_loose"]},"player":{"type":"string"},"max":{"type":"integer","description":"at most this many puzzles, default 20"}}},
+    "tool_menu_hint": "build a training set from the games of the database"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "The transcript of a media file (the speech of an audio lesson or a video), as plain text, from the local speech-to-text engine. Read-only; nothing is stored. Use it when the user asks what is said in a lesson, or wants its text. Long transcripts are cut; the answer starts with a short summary.",
+    "handler": "::application::assistant::DoTranscribeMedia",
+    "name": "transcribe_media",
+    "params_schema": {"type":"object","properties":{"path":{"type":"string","description":"the media file"}},"required":["path"]},
+    "tool_menu_hint": "transcribe the audio of %s"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Have the error log triaged now: new error groups are classified (bug, environment, user, noise) and every bug gets an issue file. Runs in the background; the result is posted here when it is done.",
+    "handler": "::application::assistant::DoTriage",
+    "name": "triage_errors",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "triage the error log"
+  },
+  {
+    "confirm": 0,
+    "debug": 1,
+    "description": "The toplevel windows (state, geometry, title), the focus and the grab holder. A grab held by a window that is not showing or by a menu button whose menu is not posted is flagged as stuck: that is what makes a GUI ignore mouse clicks while menus still work.",
+    "handler": "::application::assistant::DoUiState",
+    "name": "ui_state",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "inspect the windows, focus and grab"
+  },
+  {
+    "confirm": 1,
+    "debug": 0,
+    "description": "Fetch FIDE's current rating list from ratings.fide.com and install it as Chesswiz's player data: names, FIDE IDs, federations, titles, birth years and standard ratings of the players rated 1800 or more (or titled). Player cards and name lookups then use it. Use it when the user asks to update ratings or player data, or when a player's federation, title or rating looks out of date. It downloads from the internet, so the user is asked first.",
+    "handler": "::application::assistant::DoUpdatePlayerData",
+    "name": "update_player_data",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "download FIDE's current rating list (about 45 MB) and update the player data"
+  },
+  {
+    "confirm": 0,
+    "debug": 0,
+    "description": "Whether speaking to the assistant is available: the recorder, the local speech-to-text engine and model, and how replies are spoken. Use it when the user asks about voice input, dictation, or why the microphone button is not there.",
+    "handler": "::application::assistant::DoVoiceStatus",
+    "name": "voice_status",
+    "params_schema": {"type":"object","properties":{}},
+    "tool_menu_hint": "report the voice assistant status"
+  }
+]

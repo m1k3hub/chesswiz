@@ -1,0 +1,20 @@
+Ask about this game tab...
+---
+<history list>
+Clear History
+---
+New Game ▸
+Load Game Number…
+Import PGN Game…
+---
+Save Game ▸ (replace / replace moves / add as new / add to repertoire / add line)
+Reload from Database
+---
+Copy Game
+Copy Game to Clipboard
+Paste ▸
+Merge ▸
+Export Game…
+---
+Remove from History
+Close Game Tab

@@ -1,0 +1,37 @@
+# Menu mapping exempt list
+# Dynamic rows (populated at runtime, not statically mappable) and
+# PROPOSAL section-6 removals. Each entry has its PROPOSAL line number.
+#
+# Base counts (INVENTORY-2026-10-18.md section 1):
+#   590 live menu entries + 75 actionable toolbar buttons
+#
+# Format: TYPE | description | PROPOSAL line
+
+# --- Dynamic rows (populated at runtime) ---
+DYNAMIC | File ▸ Open Recent ▸ (recent database files list) | PROPOSAL:68
+DYNAMIC | Game ▸ Game History ▸ recent games (history list) | PROPOSAL:111
+DYNAMIC | View ▸ Layout ▸ Load Layout ▸ (saved layout names) | PROPOSAL:204
+DYNAMIC | View ▸ Language ▸ (language/country/variant list from tcl/lang/) | PROPOSAL:210,475
+DYNAMIC | Board ▸ Start Position ▸ variant list (chess variants) | PROPOSAL:66
+DYNAMIC | C4 database switcher context ▸ Open Recent ▸ | PROPOSAL:327
+DYNAMIC | C12 game bar ▸ <history list> | PROPOSAL:428
+DYNAMIC | View ▸ Toolbars ▸ per toolbar checkbuttons | PROPOSAL:205
+DYNAMIC | View ▸ Panes ▸ checkbutton per dockable pane | PROPOSAL:203
+
+# --- Section 6 removals (no new home; removed by design) ---
+REMOVED | Extras menu (catch-all, 30 unrelated features) | PROPOSAL:649
+REMOVED | Setup menu (mixed dialog-kind items) | PROPOSAL:650
+REMOVED | Search as a top-level menu | PROPOSAL:651
+REMOVED | second Discover Databases… (duplicate in Search) | PROPOSAL:652
+REMOVED | six searches inside DB Maintenance (duplicate of Database ▸ Search) | PROPOSAL:653
+REMOVED | Game History in two builders (consolidated) | PROPOSAL:654
+REMOVED | per-pane font size in notation Display cascade | PROPOSAL:655
+REMOVED | board display toggles in board context menu | PROPOSAL:656
+REMOVED | tablebase toggles in board context menu | PROPOSAL:657
+REMOVED | AI: prefix on ten labels | PROPOSAL:658
+REMOVED | Tactics Trainer… hard-coded label (now translated) | PROPOSAL:659
+REMOVED | Open Engine Console… vs Show Log… distinction | PROPOSAL:660
+REMOVED | &Maximise / Restore Pane wording variant | PROPOSAL:661
+REMOVED | Full-Screen / Leave Full-Screen variants | PROPOSAL:662
+REMOVED | Query-language product naming in labels | PROPOSAL:663
+REMOVED | vendor-format names in labels | PROPOSAL:664

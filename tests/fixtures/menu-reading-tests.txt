@@ -1,0 +1,20 @@
+# Test files that read menus by label/index
+# Source: INVESTIGATION-menus.md section 3 (§7), filtered to actual menu reads.
+# These tests use entrycget, invoke by index, -label on menu widgets, or
+# match menu widget paths (.mSearch, .mSetup, .mExtras, etc.).
+
+tests/test_app_board3d.tcl
+tests/test_app_book.tcl
+tests/test_app_database.tcl
+tests/test_app_discover.tcl
+tests/test_app_guess_move.tcl
+tests/test_app_insights.tcl
+tests/test_app_key_editor.tcl
+tests/test_app_keymap.tcl
+tests/test_app_media_fold.tcl
+tests/test_app_pane_zoom.tcl
+tests/test_app_pane_zoom2.tcl
+tests/test_app_run13b.tcl
+tests/test_app_search_menu.tcl
+tests/test_app_theme_persist.tcl
+tests/test_app_variation_menu.tcl

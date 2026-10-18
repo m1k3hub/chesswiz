@@ -1,0 +1,25 @@
+Ask about this comment...
+---
+Copy
+Cut
+Paste
+Insert Symbol ▸
+Insert Emoticon ▸
+Format ▸
+Copy Text ▸ (language)
+---
+Explain Comment
+Draft Comment
+Translate Comment ▸
+Classify Comment
+Detect Language
+---
+Undo
+Redo
+Select All
+Clear
+Revert
+---
+Switch Language ▸
+Add Language ▸
+Display Emoticons

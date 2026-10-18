@@ -1,0 +1,13 @@
+Ask about this column...
+---
+<column name> (disabled)
+---
+Show Column ▸
+Fill Column
+Hide
+Auto Stretch Column
+---
+Optimize Columns
+Fit Columns
+Squeeze Columns
+Configure…

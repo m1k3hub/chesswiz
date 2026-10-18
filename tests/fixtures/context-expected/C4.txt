@@ -1,0 +1,22 @@
+Ask about this database...
+---
+<database name> (disabled)
+Properties…
+Open in New Tab
+Close
+---
+Search ▸
+Maintenance ▸
+Reports ▸
+Import ▸
+Export ▸
+Download Games…
+Save Changes
+Read-only
+---
+New Database ▸
+Open Database…
+Open Recent ▸
+---
+Symbol Size ▸
+Help…
