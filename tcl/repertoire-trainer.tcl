@@ -1045,7 +1045,7 @@ proc ::reptrainer::open {parent {base ""} {variant Normal}} {
 	pack $drill.instruction -side top -fill x -pady [list 0 6]
 	pack $grades -side left
 
-	::util::place $dlg -parent [winfo toplevel $parent] -position center
+	::util::place::besideBoard $dlg [winfo toplevel $parent]
 	wm deiconify $dlg
 	raise $dlg
 	focus $dlg

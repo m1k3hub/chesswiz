@@ -21,6 +21,25 @@ tcltest::test geometry-monitor {negative monitor origin is an absolute Tk offset
     ::util::place::clampGeometry 800x600+-1800+50 {-1920 0 1920 1032}
 } -result 800x600+-1800+50
 
+# VAL-DLG-001: Shared placement helper arithmetic (right, else left, else below,
+# clamped to real work area incl. taskbar and multi-monitor negative origins;
+# includes Run 37 layout).
+foreach {name args expected} {
+    run37-right-has-room {300 100 600 600 323 215 {0 0 1920 1080}}              {912 100 323 215}
+    run37-board-right    {1000 200 860 860 323 215 {0 0 1920 1080}}             {649 200 323 215}
+    run37-board-fills    {0 0 1920 1000 323 215 {0 0 1920 1080}}                {0 825 323 215}
+    below-board          {0 0 1920 800 323 215 {0 0 1920 1080}}                 {0 812 323 215}
+    taskbar-clamp        {100 850 500 500 323 215 {0 28 1920 1012} {6 6 30 6}}  {612 789 323 215}
+    multimon-right       {-1600 120 600 600 320 220 {-1920 0 1920 1040} {6 6 30 6}} {-988 120 320 220}
+    multimon-left        {-900 120 860 860 320 220 {-1920 0 1920 1040} {6 6 30 6}}  {-1244 120 320 220}
+    no-room-right-wider  {100 20 800 560 360 260 {0 0 1024 600} {6 6 30 6}}     {652 20 360 260}
+    no-room-left-wider   {200 20 750 560 360 260 {0 0 1024 600} {6 6 30 6}}     {0 20 360 260}
+} {
+    tcltest::test beside-$name {besidePosition arithmetic} -body {
+        ::util::place::besidePosition {*}$args
+    } -result $expected
+}
+
 # Load the real layout callback without loading the rest of the application.
 proc loadProc {file name ns} {
     set f [open $file]; set source [read $f]; close $f

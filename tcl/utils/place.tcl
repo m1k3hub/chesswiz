@@ -324,6 +324,110 @@ proc fitWindow {path {geometry ""}} {
 }
 
 
+# Screen position {x y w h} for a dialog of <dw>x<dh> next to a board at
+# <bx>,<by> sized <bw>x<bh> in <workarea> ({wx wy ww wh}) with frame
+# <extents> ({el er et eb}):
+#   1. Right of the board when the outer frame fits before wx + ww.
+#   2. Else left of the board when the outer frame fits at or after wx.
+#   3. Else below the board when the outer frame fits before wy + wh.
+#   4. No-room fallback: when neither side nor below fits without overlap,
+#      if either side of the board has free work-area margin larger than the
+#      space below, align x to that far work-area edge (right when spaceRight
+#      >= spaceLeft, else left) at y = by; otherwise place at x = bx, y =
+#      by + bh + gap (which clamps to the bottom of the work area).
+# Finally clampGeometry clamps client size and outer-frame position to the
+# real work area (taskbar excluded, negative multi-monitor origins preserved),
+# keeping all buttons visible on screen and minimising board overlap.
+proc besidePosition {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12}} {
+	lassign $workarea wx wy ww wh
+	lassign $extents el er et eb
+	set fw [expr {$el + $er}]
+	set fh [expr {$et + $eb}]
+	set cw [expr {max(1, min($dw, $ww - $fw))}]
+	set ch [expr {max(1, min($dh, $wh - $fh))}]
+	set rightX [expr {$bx + $bw + $gap}]
+	set leftX  [expr {$bx - $gap - $cw - $fw}]
+	set belowY [expr {$by + $bh + $gap}]
+	if {$rightX + $cw + $fw <= $wx + $ww} {
+		set x $rightX
+		set y $by
+	} elseif {$leftX >= $wx} {
+		set x $leftX
+		set y $by
+	} elseif {$belowY + $ch + $fh <= $wy + $wh} {
+		set x $bx
+		set y $belowY
+	} else {
+		set spaceRight [expr {max(0, ($wx + $ww) - ($bx + $bw))}]
+		set spaceLeft  [expr {max(0, $bx - $wx)}]
+		if {$spaceRight > 0 || $spaceLeft > 0} {
+			if {$spaceRight >= $spaceLeft} {
+				set x [expr {$wx + $ww - $cw - $fw}]
+			} else {
+				set x $wx
+			}
+			set y $by
+		} else {
+			set x $bx
+			set y $belowY
+		}
+	}
+	set clamped [clampGeometry "${cw}x${ch}+${x}+${y}" $workarea $extents]
+	regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} $clamped -> rw rh rx ry
+	return [list $rx $ry $rw $rh]
+}
+
+
+# Place <dlg> beside the main board ($::application::board::board) using
+# besidePosition and the real work area / frame extents. When the dialog's
+# requested size exceeds the work area (or shrinks on small screens), its
+# geometry and minsize are clamped so its buttons remain on screen.
+# Falls back to centered placement when the board is not mapped.
+proc besideBoard {dlg {parent ""}} {
+	if {$parent eq ""} {
+		set parent [wm transient $dlg]
+		if {$parent eq ""} { set parent .application }
+	}
+	if {[catch { set board $::application::board::board }]
+		|| ![winfo exists $board]
+		|| ![winfo ismapped $board]} {
+		if {[winfo exists $parent]} {
+			::util::place $dlg -parent [winfo toplevel $parent] -position center
+		} else {
+			::util::place $dlg -position center
+		}
+		return 0
+	}
+	update idletasks
+	set dw [expr {max([winfo reqwidth  $dlg], [winfo width  $dlg])}]
+	set dh [expr {max([winfo reqheight $dlg], [winfo height $dlg])}]
+	set bx [winfo rootx $board]
+	set by [winfo rooty $board]
+	set bw [winfo width $board]
+	set bh [winfo height $board]
+	set workarea [winfo workarea $dlg]
+	set cls [winfo class $dlg]
+	if {$cls eq "Menu" || $cls eq "OptionMenu" || [wm overrideredirect $dlg]} {
+		set extents {0 0 0 0}
+	} else {
+		set extents [winfo extents $dlg]
+	}
+	lassign [besidePosition $bx $by $bw $bh $dw $dh $workarea $extents] x y w h
+	if {$w < $dw || $h < $dh} {
+		catch {
+			lassign [wm minsize $dlg] mw mh
+			if {$mw > 0 || $mh > 0} {
+				wm minsize $dlg [expr {min($mw, $w)}] [expr {min($mh, $h)}]
+			}
+		}
+		wm geometry $dlg "${w}x${h}+${x}+${y}"
+	} else {
+		wm geometry $dlg "+${x}+${y}"
+	}
+	return 1
+}
+
+
 proc position {path args} {
 	lassign [geometry $path {*}$args] x y _ _
 	wm geometry $path "${x}${y}"

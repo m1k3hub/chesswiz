@@ -509,7 +509,7 @@ proc open {parent} {
 			wm geometry $dlg +$rx+$ry
 		}
 	} else {
-		::util::place $dlg -parent $parent -position center
+		::util::place::besideBoard $dlg $parent
 	}
 	if {[tk windowingsystem] eq "aqua"} {
 		::tk::unsupported::MacWindowStyle style $dlg plain {}
