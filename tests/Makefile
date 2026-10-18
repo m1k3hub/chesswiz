@@ -35,7 +35,7 @@ COVERAGE_DIR := $(TEST_DIR)coverage
 # job relinking or deleting what another is executing.  Run serially.
 .NOTPARALLEL:
 
-.PHONY: all test tcl app-tcl cpp cpp-src ai-tests chess-facts ai-facts ai-claims ai-engine ai-eco ai-generate ai-ui ai-tools ai-precedent ai-narrate ai-annotations ai-rhetoric corpus-tests clean help report
+.PHONY: all test tcl app-tcl cpp cpp-src 2cbh-elo ai-tests chess-facts ai-facts ai-claims ai-engine ai-eco ai-generate ai-ui ai-tools ai-precedent ai-narrate ai-annotations ai-rhetoric corpus-tests clean help report
 
 all: tcl app-tcl cpp ai-tests corpus-tests
 
@@ -241,13 +241,34 @@ ai-annotations:
 		| tee /tmp/scidb-ai-annotations.log | grep -E "PASS|FAIL|SKIP|AI-ANNOTATIONS-FAILURES"
 	@grep -q "AI-ANNOTATIONS-FAILURES: 0" /tmp/scidb-ai-annotations.log
 
-cpp: $(TEST_DIR)test_cpp_backend $(TEST_DIR)test_corr_duration tk-rangelist cpp-src
+cpp: $(TEST_DIR)test_cpp_backend $(TEST_DIR)test_corr_duration tk-rangelist cpp-src 2cbh-elo
 	@chmod +x "$(TEST_DIR)test_cpp_backend"
 	@echo "Running C++ backend tests..."
 	@"$(TEST_DIR)test_cpp_backend"
 	@echo "Running correspondence-duration tests..."
 	@chmod +x "$(TEST_DIR)test_corr_duration"
 	@"$(TEST_DIR)test_corr_duration"
+
+# 2CBH (ChessBase 17+) index-record Elo decode, checked against ground truth
+# taken from the fixture's own source PGN.  Header-only: it exercises
+# db::cb2::readIndexElo (src/db/2cbh/cb2_elo.h), the one helper shared by
+# cb2::Codec and the 2cbh2pgn converter, so it needs no library link.
+# The expected values are checked in, so the 763 MB PGN is never parsed at
+# test time; regenerate them with tests/tmp-app/2cbh-elo/gen_elo_sample.py.
+# The fixture itself is read-only and machine-local, so the test reports SKIP
+# and exits 0 when CBH_FIXTURE_DIR does not hold it (CI without the fixture).
+CBH_FIXTURE_DIR ?= /media/michael-g-thomas/sas_mirror/chess/pgn
+
+$(TEST_DIR)2cbh_elo_validation: $(TEST_DIR)2cbh_elo_validation.cpp $(SRC_DIR)/db/2cbh/cb2_elo.h
+	@echo "Compiling 2CBH Elo validation..."
+	@$(CXX) $(CXXFLAGS) \
+		-I$(SRC_DIR) -I$(SRC_DIR)/db -I$(SRC_DIR)/sys -I$(SRC_DIR)/util -I$(SRC_DIR)/mstl \
+		-o $@ $<
+
+2cbh-elo: $(TEST_DIR)2cbh_elo_validation
+	@echo "Running 2CBH Elo validation..."
+	@chmod +x "$(TEST_DIR)2cbh_elo_validation"
+	@"$(TEST_DIR)2cbh_elo_validation" "$(TEST_DIR)fixtures/2cbh_elo_sample.tsv" "$(CBH_FIXTURE_DIR)"
 
 # Self-contained C++ unit tests that live in src/ and build through the main
 # Makefile (html sanitizer, .scm/.cbm manifest parsers, script-stream decoder,
@@ -366,6 +387,7 @@ clean:
 	@echo "Cleaning test artifacts..."
 	@rm -rf $(TEST_DIR)tmp/*
 	@rm -f $(TEST_DIR)test_cpp_backend
+	@rm -f $(TEST_DIR)2cbh_elo_validation
 	@rm -f $(TEST_REPORT)
 	@rm -rf $(COVERAGE_DIR)
 	@find $(TEST_DIR) -name "*.tcl~" -delete
@@ -387,6 +409,7 @@ help:
 	@echo "  all          - Run all tests (Tcl + C++)"
 	@echo "  tcl          - Run Tcl tests only"
 	@echo "  cpp          - Run C++ tests only"
+	@echo "  2cbh-elo     - Run the 2CBH Elo decode validation (SKIPs without the fixture)"
 	@echo "  test-core    - Run core utility tests"
 	@echo "  test-database- Run database operation tests"
 	@echo "  test-widgets - Run widget tests (requires X11)"

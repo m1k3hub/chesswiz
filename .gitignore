@@ -90,6 +90,7 @@ tests/tmp/
 tests/tmp-app/
 tests/tmp-pdf/
 tests/test_cpp_backend
+tests/2cbh_elo_validation
 src/probe_dump_moves
 2cbh2pgn
 win32

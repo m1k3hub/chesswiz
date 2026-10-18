@@ -164,10 +164,17 @@ GUI integration.**
   check at offset `0x2` (`== 0x101`), which is why an earlier full
   byte/u16 injectivity sweep of the on-disk 192-byte index record found
   *nothing*: that sweep never had ground-truth Elo values to correlate
-  against for its fixture (`LumbrasGigaBase_OTB_ELO2400`'s derived PGN
-  export carries no `WhiteElo`/`BlackElo` tags), so the injectivity
-  method had no signal at these offsets to detect — the field was
-  always there, just outside what that sweep could actually test against.
+  against for the PGN edition it used (which carried no
+  `WhiteElo`/`BlackElo` tags), so the injectivity method had no signal
+  at these offsets to detect — the field was always there, just outside
+  what that sweep could actually test against.
+  **Correction (2026-10-18):** the fixture's *source* PGN,
+  `LumbrasGigaBase_OTB_ELO2400.pgn` (863,790 games), does carry both
+  tags — every one of the 826,737 identity-matched twin games used for
+  the validation below has them.  So "no ground truth" was never true of
+  the source PGN, only of the derived export that sweep ran against;
+  injectivity would still have failed there (many players share a
+  rating), but a direct correlation was always possible.
   Confirmed against the real on-disk 192-byte `.2cbh` index record
   itself (not just CBase26's in-memory object) two ways: (1) a 2,000-record
   random sample from `LumbrasGigaBase_OTB_ELO2400` — every one of the
@@ -187,6 +194,34 @@ GUI integration.**
   plain-`u16` convention (`cbh_codec.cpp:2451-2465`); also added
   `[WhiteElo]`/`[BlackElo]` tag output to the `2cbh2pgn` verification
   tool (`src/db/2cbh/2cbh2pgn.cpp`) for validation and future RE use.
+- **Elo: EMPIRICALLY VALIDATED (2026-10-18) and now unit-tested.**
+  The decode both call sites share lives in `src/db/2cbh/cb2_elo.h`
+  (`db::cb2::readIndexElo`); `cb2::Codec` and `2cbh2pgn` no longer carry
+  their own copy of the offsets.
+  Validation was an identity join, not a positional one: the `.2cbh`
+  index is sorted by opening key, so record *k* is **not** source-PGN
+  game *k* (positional agreement measures 0.05% — a test that pairs
+  them by position would be meaningless).  Games were matched on
+  `(White, Black, Round, Result, ECO-base)`, with the player names
+  resolved through the `.2lid` slot array (player ID == slot ordinal,
+  stride `0x108a` from `0xb8`); `Date` was deliberately left out of the
+  join key because the PGN carries partial dates (`1996.??.??`) and
+  ~0.7% of index dates differ (see the Date entry above), and was
+  reported separately instead.
+  Result: **1,653,474 of 1,653,474 compared values exact (100.0000%,
+  zero mismatches)** over 826,737 twin games of the 863,538 in the
+  index; 14,699 records were dropped as ambiguous (several index records
+  or several PGN candidates sharing one identity key) and 1,273 had no
+  resolvable name.  A separate full-file census of all 863,538 records
+  found all 1,727,076 values inside `[2400, 2894]` with no zeros and
+  nothing outside the plausible rating range, and every record carried
+  the `0x0101` type word the setter itself tests.
+  The regression test is `tests/2cbh_elo_validation.cpp`
+  (`make -C tests 2cbh-elo`): 578 games spread evenly over the whole
+  index (game 0 .. 863537), expected values checked in at
+  `tests/fixtures/2cbh_elo_sample.tsv` so the 763 MB PGN is never parsed
+  at test time.  It runs in ~6 ms, links no library, reports the exact
+  match rate, and SKIPs (exit 0) when the read-only fixture is absent.
 - **Chess960 start positions: STILL OPEN in 2CBH.**  The LUT-960 /
   36-byte position-block solution (CHESS960_STATUS.md) was for classic
   CBH; the equivalent 2CBH representation is not yet decoded.
