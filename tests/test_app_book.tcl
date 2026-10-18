@@ -437,8 +437,11 @@ tcltest::test book-ui-create-dialog {Create Book from Database writes the aggreg
 	catch { ::book::Close }
 } -result {176 {{d4 2 0} {e4 1 0}} {{d4 2 0} {e4 1 0}}}
 
-# leave the app tidy for the next test file
-catch { ::application::database::closeBase .application $::scidb::test::book::pgn }
+# leave the app tidy for the next test file. Close the base the low-level
+# way: closeBase would ask about the still open game (a modal dialog,
+# which blocks the headless test run).
+catch { $::application::database::Vars(switcher) remove $::scidb::test::book::pgn }
+catch { ::scidb::db::close $::scidb::test::book::pgn }
 catch { ::scidb::game::new [::scidb::game::current] }
 
 } ;# namespace eval ::scidb::test::book
