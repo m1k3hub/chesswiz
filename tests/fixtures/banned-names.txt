@@ -1,0 +1,7 @@
+# one per line, case-insensitive
+ChessBase
+Fritz
+Mega Database
+Chess Assistant
+CQL
+Chess Query Language

@@ -1,0 +1,40 @@
+{"id": "dev-001", "q": "How do I open a database file I downloaded?", "group": "File", "acceptable": ["open_database"], "absent": false}
+{"id": "dev-002", "q": "can i import a pgn file into my database", "group": "File", "acceptable": ["import_games"], "absent": false}
+{"id": "dev-003", "q": "Where's the option to export my games to PGN?", "group": "File", "acceptable": ["export_database"], "absent": false}
+{"id": "dev-004", "q": "How do I add a comment after a move?", "group": "Edit", "acceptable": ["annot-comment-after"], "absent": false}
+{"id": "dev-005", "q": "where do i put a ! or ?? on a move", "group": "Edit", "acceptable": ["annot-palette", "annot-good-move", "annot-bad-move"], "absent": false}
+{"id": "dev-006", "q": "Can I draw arrows and colored squares on the board for my notes?", "group": "Edit", "acceptable": ["annot-marks"], "absent": false}
+{"id": "dev-007", "q": "how do i start a new game from scratch", "group": "Game", "acceptable": ["game-new", "new_game"], "absent": false}
+{"id": "dev-008", "q": "Save this game as a new one in the database \u2014 how?", "group": "Game", "acceptable": ["game-save"], "absent": false}
+{"id": "dev-009", "q": "How can I overwrite the game I loaded with my edited version?", "group": "Game", "acceptable": ["game-replace"], "absent": false}
+{"id": "dev-010", "q": "How do I search my database for all games by a player?", "group": "Database", "acceptable": ["search_games", "open_search"], "absent": false}
+{"id": "dev-011", "q": "my database got huge and slow, can i compact it?", "group": "Database", "acceptable": ["compact_database"], "absent": false}
+{"id": "dev-012", "q": "Can Chesswiz update FIDE ratings for the players in my database?", "group": "Database", "acceptable": ["update_player_data"], "absent": false}
+{"id": "dev-013", "q": "How do I flip the board so black is at the bottom?", "group": "Board", "acceptable": ["board-flip"], "absent": false}
+{"id": "dev-014", "q": "how to set up a position from a diagram in a book", "group": "Board", "acceptable": ["set_position"], "absent": false}
+{"id": "dev-015", "q": "Is there a key to go back one move?", "group": "Board", "acceptable": ["nav-back"], "absent": false}
+{"id": "dev-016", "q": "How do I turn on the engine to analyse this position?", "group": "Analysis", "acceptable": ["start_engine"], "absent": false}
+{"id": "dev-017", "q": "Is my move here good or bad? can the engine check it", "group": "Analysis", "acceptable": ["engine_check_move"], "absent": false}
+{"id": "dev-018", "q": "Can Chesswiz explain the position in plain english?", "group": "Analysis", "acceptable": ["explain_position"], "absent": false}
+{"id": "dev-019", "q": "Can it make me a study plan from my games?", "group": "Training", "acceptable": ["study_plan"], "absent": false}
+{"id": "dev-020", "q": "how do I make a training set of positions from a database", "group": "Training", "acceptable": ["training_set"], "absent": false}
+{"id": "dev-021", "q": "Is there a way to check whether game results in the database are wrong?", "group": "Training", "acceptable": ["check_results"], "absent": false}
+{"id": "dev-022", "q": "How do I manage my correspondence games?", "group": "Tools", "acceptable": ["correspondence_games"], "absent": false}
+{"id": "dev-023", "q": "can i talk to the app with my voice?", "group": "Tools", "acceptable": ["voice_status"], "absent": false}
+{"id": "dev-024", "q": "Is there a video lesson for this opening position?", "group": "Tools", "acceptable": ["find_lesson"], "absent": false}
+{"id": "dev-025", "q": "How do I show the analysis pane again, I closed it", "group": "View", "acceptable": ["pane"], "absent": false}
+{"id": "dev-026", "q": "full screen mode?", "group": "View", "acceptable": ["app-fullscreen"], "absent": false}
+{"id": "dev-027", "q": "Where can I see the log window?", "group": "View", "acceptable": ["app-log"], "absent": false}
+{"id": "dev-028", "q": "where's the help manual", "group": "Help", "acceptable": ["app-help"], "absent": false}
+{"id": "dev-029", "q": "Something went wrong just now \u2014 can I see the recent errors?", "group": "Help", "acceptable": ["recent_errors"], "absent": false}
+{"id": "dev-030", "q": "what's the app doing right now / which database and game are open?", "group": "Help", "acceptable": ["app_state"], "absent": false}
+{"id": "dev-031", "q": "I play Smith next round, how do I prepare against him?", "group": "topic", "acceptable": ["topic:prepare-against-opponent", "prepare_against", "opponent_brief"], "absent": false}
+{"id": "dev-032", "q": "help me build an opening repertoire for white", "group": "topic", "acceptable": ["topic:build-repertoire", "add_to_repertoire", "repertoire_check"], "absent": false}
+{"id": "dev-033", "q": "How can I review my own games and find my mistakes?", "group": "topic", "acceptable": ["topic:review-my-games", "annotate_game", "explain_game_result"], "absent": false}
+{"id": "dev-034", "q": "can I follow a live tournament broadcast in chesswiz", "group": "topic", "acceptable": ["topic:follow-live-broadcast"], "absent": false}
+{"id": "dev-035", "q": "Find all positions in my database with a rook on the seventh", "group": "topic", "acceptable": ["topic:find-positions", "find_positions"], "absent": false}
+{"id": "dev-036", "q": "i want to practice rook endgames", "group": "topic", "acceptable": ["topic:train-endgames", "tablebase"], "absent": false}
+{"id": "dev-037", "q": "Can I play blitz online against other people in Chesswiz?", "group": "Tools", "acceptable": [], "absent": true}
+{"id": "dev-038", "q": "does chesswiz have a video call with a coach", "group": "Tools", "acceptable": [], "absent": true}
+{"id": "dev-039", "q": "Can I run Swiss pairings for my club tournament?", "group": "Tools", "acceptable": [], "absent": true}
+{"id": "dev-040", "q": "is there an iphone version that syncs my databases", "group": "Help", "acceptable": [], "absent": true}

@@ -1,0 +1,4 @@
+# first is large; the others are small/flash models
+kimi-k3
+deepseek-v4.1-flash
+glm-5.3-flash
