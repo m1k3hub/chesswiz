@@ -78,11 +78,14 @@ tcltest::test stream-live-sites {live chess sites: a channel fills the link, a d
 	list [expr {[llength $buttons] - 1 == [llength $::application::media::LiveSites]}] $kinds \
 		[expr {$filled eq $channel}] [expr {$::scidb::test::opened eq $browse}] \
 		[expr {[$dlg.top.url get] eq $channel}] \
+		[lsort -unique [lmap b [lrange $buttons 1 end] s $::application::media::LiveSites {
+			expr {[string match "* ↗" [$b cget -text]] == ([lindex $s 1] eq "browse")}
+		}]] \
 		[lsort -unique [lmap s $::application::media::LiveSites { ::application::media::isStreamUrl [lindex $s 2] }]]
 } -cleanup {
 	destroy $dlg
 	rename ::platform::sys::openURL {}
 	rename ::scidb::test::realOpenURL ::platform::sys::openURL
-} -result {1 {browse channel} 1 1 1 1}
+} -result {1 {browse channel} 1 1 1 1 1}
 
 tcltest::cleanupTests

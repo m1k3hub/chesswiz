@@ -39,7 +39,8 @@ set StreamPrompt		"Stream or video link (YouTube, Twitch, HLS .m3u8, RTMP, RTSP,
 set StreamPlaying	"Streaming: %s"
 set StreamWaiting	"Connecting to %s..."
 set LiveSites		"Live chess"
-set LiveSitesHint	"A channel fills in its link; a directory opens in the browser to pick a stream."
+set LiveSitesHint	"A channel fills in its link and plays here; a directory (↗) opens in your web browser to pick a stream, then paste its link above."
+set OpensBrowser		"Opens in your web browser"
 set StreamFailed		"The stream could not be played: %s. %s"
 set NotAStream		"Not a stream link: %s"
 set Group				"Media"
@@ -2353,8 +2354,13 @@ proc application::media::OpenStream {parent} {
 	set n 0
 	foreach site $::application::media::LiveSites {
 		lassign $site label kind url
+		set tip $url
+		if {$kind eq "browse"} {
+			append label " ↗"
+			set tip "$mc::OpensBrowser: $url"
+		}
 		set b [ttk::button $sites.s$n -text $label -command [namespace code [list LiveSite $top.url $kind $url]]]
-		catch { ::tooltip::tooltip $b $url }
+		catch { ::tooltip::tooltip $b $tip }
 		grid $b -row [expr {$n / 2 + 1}] -column [expr {$n % 2}] -sticky ew -padx 2 -pady 1
 		incr n
 	}
