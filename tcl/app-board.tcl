@@ -1107,6 +1107,7 @@ proc ConfigureWindow {w width height} {
 
 	if {[::twm::frozen?]} {
 		if {$Vars(initialized)} { SetBackground $Vars(widget:frame) window $width $height }
+		set Vars(deferred) 1
 		return
 	}
 
@@ -1404,6 +1405,17 @@ proc Apply {} {
 }
 
 
+# A layout load freezes the twm, so a resize landing then skips its rebuild
+# (and the afterRebuild owners). The loader calls this once it is done.
+proc rebuildDeferred {} {
+	variable Vars
+	if {[info exists Vars(deferred)] && $Vars(deferred)} {
+		set Vars(deferred) 0
+		Apply
+	}
+}
+
+
 proc Redraw {} {
 	Apply
 	RedrawCoordinates
@@ -1555,6 +1567,7 @@ proc RebuildBoard {canv width height {force false}} {
 	set dimensions ${width}x${height}
 	if {!$force && $dimensions eq $Vars(dimensions)} { return }
 	set Vars(dimensions) $dimensions
+	set Vars(deferred) 0
 	set sqsize squaresize:$Vars(layout)
 
 	if {[info exists Dim($sqsize)]} {

@@ -89,4 +89,38 @@ tcltest::test pane-video-008-zoom-swap {click focus zoom, maximise and swapped r
  set result
 } -cleanup {::paneVideo::cleanup} -result {0 0 1 1 0 1 1}
 
+tcltest::test pane-video-008-tall-strip {wide->tall->wide reflow keeps a real reserve strip: bottom on a tall canvas, right when wide, overlap 0 with board and decorations} -setup {
+ set t [::paneVideo::setup]
+ set c $::application::board::Vars(widget:frame)
+ proc ::paneVideo::check {tag} {
+  set c $::application::board::Vars(widget:frame); set w [::mediainset::Pane].mediainset
+  set over [::paneVideo::geometry $tag]
+  foreach tag {stm material} {
+   set box [$c bbox $tag]
+   if {[llength $box] != 4} {continue}
+   lassign $box x y xx yy
+   lassign [::paneVideo::rect $w] vx vy vw vh
+   set rx [expr {$x+[winfo rootx $c]}]; set ry [expr {$y+[winfo rooty $c]}]
+   incr over [expr {max(0,min($rx+$xx-$x,$vx+$vw)-max($rx,$vx))*max(0,min($ry+$yy-$y,$vy+$vh)-max($ry,$vy))}]
+  }
+  lassign [::application::board::reserveRect] rx ry rw rh
+  set side $::application::board::ReserveSide
+  set tallCanvas [expr {[winfo height $c] > 1.1*[winfo width $c]}]
+  puts "PANE-VIDEO-STRIP mode=[::application::reflow::mode] side=$side canvas=[winfo width $c]x[winfo height $c] tallCanvas=$tallCanvas"
+  list $over [expr {$rw*$rh > 0 && [winfo ismapped $w]}] [expr {$side eq "bottom" || !$tallCanvas}]
+ }
+} -body {
+ set sw [winfo screenwidth .]; set sh [winfo screenheight .]
+ set result [::paneVideo::check strip-wide]
+ lappend result $::application::board::ReserveSide
+ set wideWidth [winfo width $c]
+ wm geometry .application [expr {min(720,$sw-40)}]x[expr {min(1750,$sh-60)}]
+ ::paneVideo::wait 1000; update idletasks
+ lappend result [::application::reflow::mode] {*}[::paneVideo::check strip-tall]
+ wm geometry .application 1200x780
+ ::paneVideo::wait 1000; update idletasks
+ lappend result [::application::reflow::mode] {*}[::paneVideo::check strip-wide-return] $::application::board::ReserveSide [expr {[winfo width $c] == $wideWidth}]
+ lappend result [llength $::paneVideo::calls]
+} -cleanup {::paneVideo::cleanup} -result {0 1 1 right tall 0 1 1 wide 0 1 1 right 1 1}
+
 tcltest::cleanupTests

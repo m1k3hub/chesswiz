@@ -418,7 +418,13 @@ proc ::mediainset::Teardown {w destroyed} {
 
 proc ::mediainset::BoardRebuilt {} {
 	variable LayingOut
-	if {!$LayingOut} { Relayout }
+	variable Pending
+	if {!$LayingOut} { Relayout; return }
+	# A rebuild inside Layout (e.g. a reflow's layout load reached through
+	# an idle update) may have re-planned the reserve; place again after.
+	if {![info exists Pending] || $Pending eq ""} {
+		set Pending [after idle {set ::mediainset::Pending {}; ::mediainset::Relayout}]
+	}
 }
 
 proc ::mediainset::Fullscreen {} {
@@ -499,33 +505,64 @@ proc ::mediainset::Entries {} {
 	return $entries
 }
 
+# The board button is the always-visible route to the game's media and to
+# "Open stream..." (VAL-MED-008), with or without media or a game. It is a
+# plain button posting its own menu, filled before posting: a ttk
+# menubutton's -postcommand runs inside the native menu loop on Windows,
+# where a script that reads or posts the menu (laptop Run 53/55) blocks
+# the event loop until the menu is dismissed.
 proc ::mediainset::RefreshMediaButton {} {
 	set pane [Pane]
 	if {$pane eq ""} { return }
 	set w $pane.mediaButton
 	if {![winfo exists $w]} {
-		ttk::menubutton $w -text Media -menu $w.menu
-		menu $w.menu -tearoff 0 -postcommand [list ::mediainset::PopulateMenu $w.menu]
+		ttk::button $w -text Media -command [list ::mediainset::PostMediaMenu $w]
+		menu $w.menu -tearoff 0
 	}
-	if {[llength [Entries]]} {
+	PopulateMenu $w.menu
+	if {[winfo manager $w] ne "place"} {
 		place $w -relx 1 -x -4 -y 4 -anchor ne
-		if {[winfo manager $pane.c] eq "pack"} { pack configure $pane.c -pady [list [expr {[winfo reqheight $w] + 8}] 0] }
-		raise $w
-	} else {
-		place forget $w
-		if {[winfo manager $pane.c] eq "pack"} { pack configure $pane.c -pady 0 }
 	}
+	if {[winfo manager $pane.c] eq "pack"} { pack configure $pane.c -pady [list [expr {[winfo reqheight $w] + 8}] 0] }
+	raise $w
 	RefreshControls
 	Relayout
 }
 
+# Post below the button after the click has returned to the event loop,
+# so no binding is still running while a (possibly modal) menu is up.
+proc ::mediainset::PostMediaMenu {w} {
+	if {![winfo exists $w.menu]} { return }
+	PopulateMenu $w.menu
+	after idle [list ::mediainset::PostMenuAt $w]
+}
+
+proc ::mediainset::PostMenuAt {w} {
+	if {![winfo exists $w.menu] || ![winfo ismapped $w]} { return }
+	set x [expr {[winfo rootx $w] + [winfo width $w] - [winfo reqwidth $w.menu]}]
+	tk_popup $w.menu [expr {max(0, $x)}] [expr {[winfo rooty $w] + [winfo height $w]}]
+}
+
+# Labels in menu order, without touching the menu widget (for scripts).
+proc ::mediainset::MediaMenuLabels {} {
+	set labels {}
+	foreach entry [Entries] {
+		lassign $entry row type title
+		lappend labels "$title ($type)"
+	}
+	lappend labels "Open stream..."
+	return $labels
+}
+
 proc ::mediainset::PopulateMenu {menu} {
 	$menu delete 0 end
-	foreach entry [Entries] {
+	set entries {}
+	catch { set entries [Entries] }
+	foreach entry $entries {
 		lassign $entry row type title path index
 		$menu add command -label "$title ($type)" -command [list ::mediainset::Choose $row]
 	}
-	$menu add separator
+	if {[llength $entries]} { $menu add separator }
 	$menu add command -label "Open stream..." -command [list ::application::media::OpenStream [Pane]]
 }
 

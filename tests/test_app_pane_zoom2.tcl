@@ -429,4 +429,58 @@ tcltest::test pane-zoom2-production-minimum-pin {small-window production board k
  ::application::reflow::reset
 } -result {1 1}
 
+proc ::zoom2Test::settle {ms} {after $ms {set ::zoom2Test::tick 1}; vwait ::zoom2Test::tick; update idletasks}
+proc ::zoom2Test::boardSize {t} {list [winfo width [$t leaf board]] [winfo height [$t leaf board]]}
+tcltest::test pane-zoom2-007c-stale-off {VAL-PANE-007C: on at one size, resize, off without any zoom changes nothing; resize after a zoom never restores old-size sashes; a zoom at the new size restores byte-identically} -setup {
+ .application.nb select .application.nb.board
+ ::application::reflow::reset
+ set t [::application::twm board]
+ wm geometry .application 820x620+0+0
+ ::zoom2Test::settle 450
+ set ::application::focuszoom::duration 0
+} -body {
+ # 1: switch on, resize, switch off: no zoom happened, nothing moves.
+ ::application::focuszoom::enable $t
+ wm geometry .application 1400x900
+ ::zoom2Test::settle 450
+ set before [::zoom2Test::sashes $t]; set bsize [::zoom2Test::boardSize $t]
+ ::application::focuszoom::disable $t
+ ::zoom2Test::settle 200
+ set offNoZoom [expr {$before eq [::zoom2Test::sashes $t] && $bsize eq [::zoom2Test::boardSize $t]}]
+ puts "PANE-ZOOM 007C off-without-zoom board $bsize -> [::zoom2Test::boardSize $t] square $::application::board::Dim(squaresize:Normal)"
+ wm geometry .application 820x620
+ ::zoom2Test::settle 450
+ set square [expr {$::application::board::Dim(squaresize:Normal) >= $::application::board::MinimumReserveSquare}]
+ puts "PANE-ZOOM 007C back at 820x620 square $::application::board::Dim(squaresize:Normal)"
+ wm geometry .application 1400x900
+ ::zoom2Test::settle 450
+ # 2: zoom at 1400x900, resize to 820x620, switch off: no stale restore.
+ ::application::focuszoom::enable $t
+ event generate [$t leaf editor] <ButtonPress-1>
+ update
+ wm geometry .application 820x620
+ ::zoom2Test::settle 450
+ set before2 [::zoom2Test::sashes $t]
+ ::application::focuszoom::disable $t
+ ::zoom2Test::settle 200
+ set offAfterResize [expr {$before2 eq [::zoom2Test::sashes $t]}]
+ # 3: a real zoom at the current size still restores exactly.
+ wm geometry .application 1400x900
+ ::zoom2Test::settle 450
+ ::application::focuszoom::enable $t
+ wm geometry .application 1300x860
+ ::zoom2Test::settle 450
+ set base [::zoom2Test::sashes $t]; set inspect [::application::twm::inspectLayout $t]
+ event generate [$t leaf board] <ButtonPress-1>
+ update
+ set zoomed [expr {$base ne [::zoom2Test::sashes $t]}]
+ ::application::focuszoom::disable $t
+ set exact [expr {$base eq [::zoom2Test::sashes $t] && $inspect eq [::application::twm::inspectLayout $t]}]
+ puts "PANE-ZOOM 007C offNoZoom=$offNoZoom offAfterResize=$offAfterResize square=$square zoomed=$zoomed exact=$exact"
+ list $offNoZoom $offAfterResize $square $zoomed $exact
+} -cleanup {
+ ::application::focuszoom::disable $t
+ ::application::reflow::reset
+} -result {1 1 1 1 1}
+
 tcltest::cleanupTests

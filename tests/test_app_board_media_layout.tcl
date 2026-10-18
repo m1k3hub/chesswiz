@@ -116,6 +116,7 @@ proc ::w1::cleanup {} {
     array set ::board::layout $::w1::layout
     wm minsize .application {*}$::w1::minimum
     place forget [::mediainset::Pane]
+    ::application::reflow::reset
     $::w1::twm load $::w1::paneLayout
     wm geometry .application $::w1::geometry
     wait
@@ -133,6 +134,9 @@ proc ::w1::size {shape} {
         }
     }
     wm geometry .application ${w}x${h}+0+0
+    # Let the session reflow (debounced) settle first: its layout load
+    # re-manages the board pane and would drop the forced placement below.
+    wait
     # A forced pane size is an allowed contract precondition. Preserve every
     # other live pane and its subscriptions, temporarily placing the board
     # over the workspace; its production canvas still packs normally.
@@ -316,7 +320,9 @@ tcltest::test brd-resize {BRD-005 rebuild hook settles once without the old time
         foreach fraction {0.83 0.90 0.95} {
             array set ::w1::count {Relayout 0 RebuildBoard 0}
             set width [expr {int([winfo screenwidth .]*$fraction)}]
-            set height [expr {int(min(950,[winfo screenheight .]*0.85))}]
+            # Stay wide of the reflow threshold: BRD-005 times a plain
+            # resize; a wide/tall reflow is a layout load (pane-video-*).
+            set height [expr {int(min(950,[winfo screenheight .]*0.85,$width/1.3))}]
             set ::w1::configuredAt 0
             set ::w1::settledAt 0
             wm geometry .application ${width}x${height}

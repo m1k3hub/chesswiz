@@ -632,13 +632,16 @@ proc focuszoom::toggle {twm} {
 }
 
 
+# The baseline is taken at the first actual zoom, not here: a window resize
+# between switching on and zooming must not leave a stale arrangement to
+# restore. Switching off with no zoom taken therefore changes nothing.
 proc focuszoom::enable {twm} {
-	if {[isEnabled $twm] && [info exists ::application::focuszoom::baseline($twm)]} {return}
+	if {[isEnabled $twm]} {return}
 	variable enabled
 	variable baseline
 	variable lastPane
 	set enabled($twm) 1
-	set baseline($twm) [Snapshot $twm]
+	catch { unset baseline($twm) }
 	catch { unset lastPane($twm) }
 }
 
@@ -651,9 +654,30 @@ proc focuszoom::disable {twm} {
 	variable lastPane
 	set enabled($twm) 0
 	if {[info exists baseline($twm)]} {
-		Restore $twm $baseline($twm)
+		# Only at the size the snapshot belongs to; after a window resize
+		# the old coordinates would squeeze the board (VAL-PANE-007C).
+		lassign $baseline($twm) size snapshot
+		if {$size eq [WindowSize $twm]} { Restore $twm $snapshot }
 		unset baseline($twm)
 	}
+	catch { unset lastPane($twm) }
+}
+
+
+proc focuszoom::WindowSize {twm} {
+	set top [winfo toplevel $twm]
+	return [list [winfo width $top] [winfo height $top]]
+}
+
+
+# A window resize between zooms re-bases the arrangement: the user's
+# sashes at the new size are what switching off returns to.
+proc focuszoom::windowResized {twm} {
+	variable baseline
+	variable lastPane
+	if {![isEnabled $twm] || ![info exists baseline($twm)]} { return }
+	if {[lindex $baseline($twm) 0] eq [WindowSize $twm]} { return }
+	unset baseline($twm)
 	catch { unset lastPane($twm) }
 }
 
@@ -747,6 +771,8 @@ proc focuszoom::growPane {twm pane} {
 		if {[string match *Panedwindow [winfo class $pw]]} { break }
 		set node $pw
 	}
+	variable baseline
+	if {![info exists baseline($twm)]} { set baseline($twm) [list [WindowSize $twm] [Snapshot $twm]] }
 	set lastPane($twm) $pane
 	set board ""
 	catch { set board [$twm leaf board] }
@@ -2023,9 +2049,42 @@ proc tallFrom {wide} {
  lassign $outer type options rows
  # The default top row is board + notation notebook. Promote its two
  # children into the outer vertical panedwindow, retaining every leaf/attr.
- set top [lrange $rows 0 2]
- set rows [concat [lindex $top 2] [lrange $rows 3 end]]
+ # The notation shares one horizontal row with the bottom row's panes, so
+ # the board keeps most of the height: a tall window gives a tall canvas
+ # with room for a bottom media strip (VAL-BRD-002 on the reflowed layout).
+ set top [lindex [lrange $rows 0 2] 2]
+ set below [lrange $top 3 end]
+ set rest [lrange $rows 3 end]
+ if {[llength $rest] == 3 && [lindex $rest 0] eq "panedwindow"
+  && [string match h* [dict get [lindex $rest 1] -orient]]} {
+  set below [concat $below [lindex $rest 2]]
+  set rows [concat [lrange $top 0 2] [list panedwindow [lindex $rest 1] $below]]
+ } else {
+  set rows [concat $top $rest]
+ }
  return [list $root $attrs [list $type $options $rows]]
+}
+# Give the board the height left once the row below is at its minimum,
+# capped where the canvas would be clearly taller than wide.
+proc tallSashes {t} {
+ set board [$t leaf board]
+ set node $board
+ while {1} {
+  set pw [$t parent $node]
+  if {$pw eq {} || $pw eq $t} {return}
+  if {[$t ispanedwindow $pw]} {break}
+  set node $pw
+ }
+ if {[$pw cget -orient] ne "vertical" || [lindex [$pw panes] 0] ne $node || [llength [$pw panes]] < 2} {return}
+ update idletasks
+ set below 0
+ foreach p [lrange [$pw panes] 1 end] {
+  set h [$pw panecget $p -minsize]
+  if {![string is integer -strict $h] || $h < 1} {set h [winfo reqheight $p]}
+  incr below [expr {$h+[$pw cget -sashwidth]+2*[$pw cget -sashpad]}]
+ }
+ set y [expr {min([winfo height $pw]-$below, int([winfo width $node]*1.35))}]
+ if {$y > [winfo height $node]} {$pw sash place 0 0 $y}
 }
 proc reflowable? {t} {
  variable S
@@ -2071,6 +2130,7 @@ proc setMode {t target} {
    set S(tallShape) [shapeOf $layout]
   } else {set layout $S(base)}
   $t load $layout
+  if {$target eq "tall"} {tallSashes $t}
   incr S(loadCount)
   set S(mode) $target
   array unset S expanded*
@@ -2079,6 +2139,25 @@ proc setMode {t target} {
   wm minsize .application {*}$minimum
   wm geometry .application $geometry
   update idletasks
+  # Back at the size the wide shape was left at: put its sashes back too.
+  if {$target eq "wide" && [info exists S(wideSashes)]} {
+   lassign $S(wideSashes) w h snapshot
+   if {$w == [winfo width .application] && $h == [winfo height .application]} {
+    # The load rebuilds the panedwindows under new paths, in the same
+    # traversal order; map the old coordinates onto the new widgets.
+    set live [::application::focuszoom::Snapshot $t]
+    if {[llength $live] == [llength $snapshot]} {
+     set mapped {}
+     foreach {pw -} $live {- coords} $snapshot {lappend mapped $pw $coords}
+     ::application::focuszoom::Restore $t $mapped
+    }
+   }
+   unset S(wideSashes)
+  }
+  # The board's Configure may land while the twm is frozen by the load,
+  # which skips its rebuild; rebuild once so afterRebuild owners (the media
+  # inset reserve) re-plan for the reflowed extent.
+  ::application::board::rebuildDeferred
  } error options]
  set ::application::Vars(loading) $loading
  set S(busy) 0
@@ -2100,8 +2179,14 @@ proc onConfigure {W w h} {
 }
 proc onDebounced {w h} {
  variable S; set S(afterId) {}
+ if {[set t [boardTwm]] ne {}} {::application::focuszoom::windowResized $t}
  evaluate $w $h
  updateCollapse
+ # The last settled wide arrangement, put back when a tall excursion
+ # returns to this window size (see setMode).
+ if {$S(mode) eq "wide" && $S(collapsed) eq {} && [reflowable? [set t [boardTwm]]]} {
+  set S(wideSashes) [list [winfo width .application] [winfo height .application] [::application::focuszoom::Snapshot $t]]
+ }
 }
 proc cancelPending {} {
  variable S
@@ -2269,6 +2354,7 @@ proc reset {} {
  }
  array unset S expanded*
  array unset S return*
+ array unset S wideSashes
  array set S {mode wide base {} busy 0 loadCount 0 collapsed {} override {} snapshot {}}
  update idletasks
 }
