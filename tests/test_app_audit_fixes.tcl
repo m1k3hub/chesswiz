@@ -313,7 +313,7 @@ tcltest::test audit-cbh-corrupt-count {a ChessBase index whose game count is cor
 } -cleanup {
 	catch { ::scidb::db::close $root.cbh }
 	rename auditCbhCb {}
-	foreach f [glob -nocomplain $root.*] { file delete $f }
+	foreach gl [glob -nocomplain $root.*] { file delete $gl }
 } -result {1 1}
 
 tcltest::test audit-treeview-rows-fit-font {tree rows are as tall as the font needs} -body {
@@ -350,7 +350,7 @@ tcltest::test audit-nested-error-not-sticky {a nested scidb error caught by a pr
 } -cleanup {
 	catch {::scidb::db::close $sci}
 	rename auditCb {}; rename auditNop {}
-	foreach f [glob -nocomplain [file rootname $sci].*] { file delete $f }
+	foreach gl [glob -nocomplain [file rootname $sci].*] { file delete $gl }
 } -result {0 OpeningsWhite}
 
 tcltest::test audit-variation-leave-on-mainline {asking for or leaving the variation on the main line answers 0 instead of failing} -body {

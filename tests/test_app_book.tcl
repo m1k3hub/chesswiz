@@ -476,7 +476,20 @@ tcltest::test book-ui-create-dialog {Create Book from Database writes the aggreg
 # which blocks the headless test run).
 catch { $::application::database::Vars(switcher) remove $::scidb::test::book::pgn }
 catch { ::scidb::db::close $::scidb::test::book::pgn }
-catch { ::scidb::game::new [::scidb::game::current] }
+# Free one game slot so the app's nine-slot pool is not full for the files
+# after this one: test_app_convert's database copy needs a scratch game and
+# fails with a bare "Clipbase" error when every slot is taken.  Do not call
+# ::scidb::game::new here (as this file used to): it allocates a slot rather
+# than freeing one.  Release through both bookkeeping layers -- the gamebar
+# row and the game slot -- or the gamebar's digit badges (1..9) desynchronise.
+foreach ::scidb::test::book::slot {8 7 6 5 4 3 2 1 0} {
+	if {[lindex [::game::gameList] $::scidb::test::book::slot 0] ne ""} {
+		catch { ::application::pgn::release $::scidb::test::book::slot }
+		catch { ::game::release $::scidb::test::book::slot }
+		break
+	}
+}
+unset -nocomplain ::scidb::test::book::slot
 
 } ;# namespace eval ::scidb::test::book
 

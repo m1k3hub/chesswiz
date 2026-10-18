@@ -11,6 +11,7 @@ variable testDir [file dirname [file normalize [info script]]]
 variable tmpDir [file join $testDir tmp-app]
 variable mockSerial 0
 variable busyCalls {}
+variable createdBases {}
 
 proc setup {} {
     variable tmpDir
@@ -18,6 +19,15 @@ proc setup {} {
 }
 
 proc cleanup {} {
+    # Close every base this file created (and its games); otherwise the
+    # databases pile up in the switcher for the files that follow.
+    variable createdBases
+    foreach base $createdBases {
+        catch { $::application::database::Vars(switcher) remove $base }
+        catch { ::scidb::db::close $base }
+        catch { file delete -force $base }
+    }
+    set createdBases {}
     foreach w [winfo children .] {
         if {$w ne ".application"} {
             catch { destroy $w }
@@ -40,9 +50,11 @@ proc makeDialog {name} {
 }
 
 proc createDatabase {stem} {
+    variable createdBases
     set base [tempPath $stem sci]
     ::application::database::newBase .application Normal $base
     update idletasks
+    lappend createdBases $base
     return $base
 }
 

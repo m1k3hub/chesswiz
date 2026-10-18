@@ -20,6 +20,37 @@ proc ::scidb::test::app::emit {line} {
     flush $reportHandle
 }
 
+# Report the state a test file leaves behind.  A file that leaves game slots
+# occupied (the app has only nine), opens databases it does not close, leaves
+# after-handlers running or a grab held is not order-independent: the files
+# that follow can then fail though they pass alone.  This is a report, not a
+# reset -- the leaks are fixed where they are made.
+proc ::scidb::test::app::checkCleanup {file} {
+    set slots {}
+    catch { set slots [::game::gameList] }
+    set occupied {}
+    foreach entry $slots {
+        if {[lindex $entry 0] ne ""} { lappend occupied $entry }
+    }
+    set bases {}
+    catch { set bases [$::application::database::Vars(switcher) bases] }
+    set leaked {}
+    foreach b $bases {
+        catch {
+            if {$b ne $::scidb::clipbaseName} { lappend leaked $b }
+        }
+    }
+    set afters {}
+    catch { set afters [after info] }
+    set grab {}
+    catch { set grab [grab current] }
+    ::scidb::test::app::emit [format "  cleanup [file tail $file]: slots=%d bases=%s afters=%s grab={%s}" \
+        [llength $occupied] \
+        [expr {[llength $leaked] ? $leaked : "none"}] \
+        [expr {[llength $afters] ? $afters : "none"}] \
+        $grab]
+}
+
 set argvCopy $argv
 set argcCopy $argc
 # --single-process: no single-instance check, so test runs (several at a
@@ -106,6 +137,7 @@ foreach testFile $testFiles {
         ::scidb::test::app::emit "ERROR in [file tail $testFile]: $err"
         incr ::scidb::test::app::totalFail 1
     }
+    catch { ::scidb::test::app::checkCleanup $testFile }
 }
 
 set duration [expr {[clock seconds] - $startTime}]
