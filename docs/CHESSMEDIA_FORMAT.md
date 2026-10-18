@@ -218,7 +218,7 @@ Schema: [`docs/chessmedia/schema/game.schema.json`](chessmedia/schema/game.schem
 3. **Explicit Parent/Child Links**: Every non-root node MUST specify `parent_id` referencing an existing node `id` in the same game, a non-empty `uci` move string, and its resulting 6-field `fen`. The node graph MUST be a single connected directed tree rooted at the root node (no cycles, no orphan subtrees).
 4. **Move Legality and FEN Verification**:
    - In `standard` chess, `uci` uses standard UCI coordinate notation (`e2e4`, `e7e8q`, castling as king-to-destination `e1g1`/`e1c1`/`e8g8`/`e8c8`).
-   - In `chess960`, `fen_encoding` is `"shredder-fen"` (or `"xfen"`) and `uci` castling uses king-captures-own-rook notation.
+   - In `chess960`, `fen_encoding` is `"shredder-fen"` or `"xfen"` and `uci` castling uses king-captures-own-rook notation.
    - Applying `node.uci` to `parent.fen` MUST be a legal move and MUST produce a position matching `node.fen` across all 6 FEN fields (piece placement, active color, castling availability, en-passant target square, halfmove clock, and fullmove number; for en-passant, standard FEN and X-FEN legal-ep conventions are accepted if consistent).
    - If `node.san` is non-null, it MUST match the canonical SAN of `node.uci` in `parent.fen`.
 
@@ -297,30 +297,33 @@ Schema: [`docs/chessmedia/schema/timeline.schema.json`](chessmedia/schema/timeli
 ```
 
 ### 4.1 Single-Clock Contract
-- All timestamps (`duration_ms`, `at_ms`, `end_ms`, `start_ms`, `offset_ms`) are integer milliseconds (`0 <= t <= 9007199254740991`,except `offset_ms` which may be signed integer ms).
+- All non-offset timestamps (`duration_ms`, `at_ms`, `end_ms`, `start_ms`) are nonnegative integer milliseconds (`0 <= t <= 9007199254740991`); `offset_ms` is a signed integer in milliseconds (`-9007199254740991 <= offset_ms <= 9007199254740991`, default `0`).
 - A timeline's master clock is the media presentation timestamp (`pts`) of `clock_asset_id` on `clock_track` (`"presentation"`, `"audio"`, or `"video"`), normalized to container presentation origin `0` and shifted by the asset's `offset_ms`:
   ```text
   timeline_ms = asset_pts_ms + asset.offset_ms
   ```
+- **Clock Track Agreement**: If both the timeline (`timeline.clock_track`) and its bound asset (`asset.clock_track`) explicitly specify `clock_track`, they MUST agree (`E_SCHEMA_VIOLATION` if they conflict). If one omits `clock_track`, the other's value applies; if both omit it, `"presentation"` is the default.
 - Container packet send-time (`dts`/preroll send timestamps) and wall-clock timers elapsed since pressing Play MUST NOT be used as the timeline clock.
 
-### 4.2 Full Scene Evaluation (`scene_at`)
+### 4.2 Full Scene Evaluation (`scene_at`) and Prepared Index Complexity
 - `cues` MUST be non-empty, start with `cues[0].at_ms == 0`, have strictly increasing `at_ms` (`cues[i].at_ms > cues[i-1].at_ms`), and satisfy `cues[i].at_ms <= duration_ms`.
 - Every cue's `scene.boards` object MUST include an entry for every board `id` declared in `manifest.boards`. Each board state is either `{"hidden": true}` or a complete state `{ "game_id": ..., "node_id": ..., "orientation": "white"|"black", "overlays": [...] }`.
 - Overlays start at `cue.at_ms` and expire at `overlay.end_ms` (if specified, where `cue.at_ms < overlay.end_ms <= duration_ms`) or at the next cue's `at_ms`, whichever comes first (half-open interval `[at_ms, min(end_ms, next_cue_at_ms))`).
-- Overlay kinds:
+- Overlay kinds (enforced by discriminated schema constraints):
   - `"arrow"`: requires `from` and `to` (`a1`–`h8`), `color` (`#RRGGBBAA`).
   - `"square"`: requires `square` (`a1`–`h8`), `color` (`#RRGGBBAA`).
   - `"label"`: requires `square` (`a1`–`h8`), `text` (non-empty UTF-8 string, max 64 chars), `color` (`#RRGGBBAA`).
 - Scene captions in `scene.captions` are self-contained timeline annotations (`lang`, `text`, optional `placement` in `{"pre", "post", "subtitle"}`, optional `end_ms` with half-open interval `[at_ms, min(end_ms, next_cue_at_ms))`).
-- Given any target time `0 <= t_ms <= duration_ms`, `scene_at(timeline, t_ms)` selects the latest cue `c` with `c.at_ms <= t_ms` via `O(log N)` binary search and filters out overlays and captions whose `end_ms <= t_ms`.
+- **Prepared Index & Complexity Contract**:
+  - Opening/preparing a lesson (`PreparedTimeline` / `PreparedLesson`) builds the sorted cue-timestamp array, per-game `node_id -> node` maps, `(game_id, node_id) -> cue occurrences` index, and FEN-indexed trigger lookup tables once in `O(N + V + T)` time (`N` cues, `V` game nodes, `T` triggers).
+  - Given a prepared timeline and target time `0 <= t_ms <= duration_ms`, `scene_at(prepared, t_ms)` selects the latest cue `c` with `c.at_ms <= t_ms` via `O(log N)` binary search, resolves board nodes in `O(B)` via pre-built hash maps, filters active overlays/captions in `O(K)` (`K` overlays/captions on that single cue), and looks up position-matched triggers in `O(B + M)` (`M` matched triggers). It never scans all `N` cues, all `V` nodes, or all `T` triggers on playback ticks.
 
 ---
 
 ## 5. Interactive Clips and Streams
 
 ### 5.1 Position-Keyed Interactive Triggers (`interactive_triggers`)
-Interactive lessons (such as position-triggered video clips, time-range segments, or move-keyed tactical drills) are represented as `interactive_triggers` in `timelines/*.json` (or package-wide in `manifest.json`):
+Interactive lessons (such as position-triggered video clips, time-range segments, or move-keyed tactical drills) are represented as `interactive_triggers` in `timelines/*.json` or package-wide in `manifest.json`:
 
 ```json
 {
@@ -354,20 +357,25 @@ Interactive lessons (such as position-triggered video clips, time-range segments
 }
 ```
 
-Rules for `interactive_triggers`:
+Rules for `interactive_triggers` (both in `timelines/*.json` and `manifest.interactive_triggers`):
 1. `fen` MUST be a valid 6-field FEN. `match_mode` is `"board_turn"` (default: matches piece placement + side to move, ignoring castling/ep/clocks so transpositions match) or `"exact"` (matches all 6 FEN fields).
-2. If `game_id` and `node_id` are specified, `node_id` MUST exist in `game_id` and its FEN MUST match `trigger.fen` under `match_mode`.
+2. If `game_id` and `node_id` are specified, `node_id` MUST exist in `game_id` and its FEN MUST match `trigger.fen` under `match_mode`. If `at_ms` is specified on a timeline trigger, `0 <= at_ms <= timeline.duration_ms`.
 3. `kind` is one of:
-   - `"clip"`: plays `asset_id` (and optional `timeline_id`) from the beginning.
-   - `"range"`: plays `asset_id` over `[start_ms, end_ms]` where `0 <= start_ms < end_ms <= asset.duration_ms`.
-   - `"branch_prompt"`: pauses or plays optional prompt `asset_id` when reached (`at_ms` or position match), then dispatches to one of `branches` when the learner plays a move on the board.
-4. Every entry in `branches` MUST have a `uci` move that is **strictly legal** in `trigger.fen` (and matching `san` if provided), a `role` (`"primary"` or `"alternative"`), and a valid target `asset_id` (plus `start_ms`/`end_ms` if `range`).
+   - `"clip"`: requires `asset_id` (and optional `timeline_id`); plays from the beginning.
+   - `"range"`: requires `asset_id`, `start_ms`, and `end_ms` where `0 <= start_ms < end_ms <= asset.duration_ms`.
+   - `"branch_prompt"`: requires non-empty `branches`; pauses or plays optional prompt `asset_id` when reached (`at_ms` or position match), then dispatches to one of `branches` when the learner plays a move on the board.
+4. Every entry in `branches` MUST have:
+   - a `uci` move that is **strictly legal** in `trigger.fen` (and matching canonical `san` if provided),
+   - a `role` (`"primary"` or `"alternative"`),
+   - a valid target `asset_id` in `manifest.assets`,
+   - if `timeline_id` is present, it MUST reference a valid timeline ID in `manifest.timelines`,
+   - if either `start_ms` or `end_ms` is present on a branch, **both** `start_ms` and `end_ms` MUST be present and satisfy `0 <= start_ms < end_ms <= target_asset.duration_ms`.
 
 ### 5.2 Stream Assets (`kind: "stream"`)
 Stream assets are first-class citizens in `manifest.assets`:
 - `kind`: `"stream"`
-- `uri`: MUST be a valid `https://` (or `http://`) URI (e.g. `https://.../master.m3u8` with `media_type: "application/vnd.apple.mpegurl"`, DASH `application/dash+xml`, or progressive `video/mp4` / `video/webm`).
-- `live`: boolean (`false` for VOD streams synchronized to a fixed timeline; `true` for live streams).
+- `uri`: required; MUST be a valid `https://` (or `http://`) URI (e.g. `https://.../master.m3u8` with `media_type: "application/vnd.apple.mpegurl"`, DASH `application/dash+xml`, or progressive `video/mp4` / `video/webm`).
+- `live`: required boolean (`false` for VOD streams synchronized to a fixed timeline; `true` for live streams).
 - `duration_ms`: required nonnegative integer for VOD streams (`live: false`).
 - `fallback_path`: optional package-relative file path for offline playback; if present, `fallback_path` MUST be listed in `manifest.members`.
 
@@ -386,7 +394,7 @@ flowchart TD
 ```
 
 ### 6.1 Validator Error Codes
-A conforming validator MUST report errors with the following machine-readable codes and exact JSON pointer / file paths:
+A conforming validator MUST report errors with the following machine-readable codes and exact JSON pointer / file paths (using array indices such as `/games/0/fingerprint`, never object IDs in place of array indices):
 
 | Stage | Error Code | Condition |
 |---|---|---|
@@ -402,7 +410,7 @@ A conforming validator MUST report errors with the following machine-readable co
 | 3 (Refs) | `E_DUPLICATE_ID` | Duplicate ID within `boards`, `games`, `assets`, `timelines`, `nodes`, `cues`, or `triggers` |
 | 3 (Refs) | `E_REF_UNKNOWN` | Reference to unknown `board_id`, `game_id`, `node_id`, `asset_id`, or `timeline_id` |
 | 3 (Refs) | `E_GALLERY_INVALID` | `gallery_order` references an unknown `asset_id` or contains duplicates |
-| 3 (Refs) | `E_STREAM_URI_INVALID` | Stream asset `uri` is missing or does not use `https://` / `http://` |
+| 3 (Refs) | `E_STREAM_URI_INVALID` | Stream asset `uri` is missing or does not use `https://` / `http://`, or VOD stream missing `duration_ms` |
 | 4 (Chess) | `E_START_FEN_INVALID` | Missing or illegal `start_fen`, or `root.fen != start_fen` |
 | 4 (Chess) | `E_TREE_STRUCTURE` | Zero or multiple roots, dangling `parent_id`, cycle, unreachable node, or invalid `main_child_id` |
 | 4 (Chess) | `E_ILLEGAL_MOVE` | Node `uci` is not a legal move from `parent.fen` under `variant` |
@@ -416,14 +424,27 @@ A conforming validator MUST report errors with the following machine-readable co
 | 5 (Timeline) | `E_OVERLAY_INVALID` | Invalid square (`a1`–`h8`), color (`#RRGGBBAA`), or `end_ms <= at_ms` |
 | 5 (Timeline) | `E_TRIGGER_INVALID` | Invalid trigger `fen`, illegal branch `uci` in `trigger.fen`, or invalid `start_ms`/`end_ms` range |
 
-### 6.2 Player Synchronization & Diagnostic Surface Contract
-A conforming player MUST maintain and display an explicit synchronization status:
-- `synced`: Master presentation clock is advancing and scenes are applied within target latency (≤ 75 ms local qualification target).
-- `unsynced_manual_preview`: User manually navigated the demo board away from the active video scene; player MUST offer a one-click "Follow video" action to return to the current scene without mutating any database game.
-- `unsynced_no_timeline`: Media asset has no associated timeline (pure video/audio asset); player MUST display `"Unsynchronized media (no board timeline)"`.
-- `unsynced_incomplete_import`: Current time interval falls in a region flagged as `incomplete` in `provenance/import.json`; player MUST surface the provenance warning.
-- `unsynced_clock_stalled`: Media backend has not reported a fresh presentation timestamp within the uncertainty bound (100 ms max extrapolation).
-- `error_validation_failed`: Package failed validation; player MUST surface the validator error code(s) and message(s).
+### 6.2 Player Synchronization, Seek Generation, Origin Token & Occurrence Contract
+A conforming player MUST implement the following playback and diagnostic rules:
+1. **Clock Sampling (`ClockSample`)**:
+   ```text
+   ClockSample(session_id, media_ms, sampled_monotonic_ms,
+               rate, state, uncertainty_ms, seek_generation)
+   ```
+   `media_ms` is nullable when unknown; unknown never means zero. `state` is one of `loading`, `playing`, `paused`, `buffering`, `seeking`, `ended`, or `error`. Hold the last scene through buffering/startup states. Any monotonic extrapolation between fresh samples is bounded by `uncertainty_ms` and a maximum of `100 ms`.
+2. **Confirmed Seek Generation Handling**:
+   On seek, increment the session's `seek_generation`, request the transport seek, and apply the scene at the **confirmed actual** media position (`media_ms`) reported for that generation. Older command responses and stale samples with an earlier `seek_generation` MUST NOT overwrite a newer seek. A requested target time may be shown as a separate UI preview, never conflated with confirmed playback state.
+3. **Origin Tokens (No Feedback Loops)**:
+   Every programmatic board/orientation/overlay update carries an `origin_token` (`"timeline_sync"` vs `"user_explore"`), preventing a video-driven board update from triggering a reverse board-to-video seek.
+4. **Repeated-Node Occurrence Selection**:
+   Board-to-video navigation uses `(game_id, node_id, cue_id)` occurrences (`occurrences(timeline, game_id, node_id)`), never a bare FEN lookup. When the same node is visited across multiple cues (e.g., returning from a sideline to the main line), the player selects the occurrence nearest the current `media_ms` (ties choose the earlier occurrence) and offers an occurrence picker when multiple explanations exist. A node with zero occurrences has no implied video timestamp.
+5. **Mandatory Synchronization Status Surface**:
+   - `synced`: Master presentation clock is proven and advancing, and scenes are applied within target latency (≤ 75 ms local qualification target).
+   - `unsynced_manual_preview`: User manually navigated the demo board away from the active video scene; player MUST offer a one-click "Follow video" action to return to the current scene without mutating any database game.
+   - `unsynced_no_timeline`: Media asset has no associated timeline (pure video/audio asset); player MUST display `"Unsynchronized media (no board timeline)"`.
+   - `unsynced_incomplete_import`: Current time interval falls in a region flagged in `provenance/import.json` `incomplete_intervals` (including unresolved dual-clock mapping or unresolved legacy cursors); player MUST surface the provenance warning and never claim verified synchronization.
+   - `unsynced_clock_stalled`: Media backend has not reported a fresh presentation timestamp within the uncertainty bound (100 ms max extrapolation).
+   - `error_validation_failed`: Package failed validation; player MUST surface the validator error code(s) and message(s).
 
 ---
 
@@ -432,9 +453,13 @@ A conforming player MUST maintain and display an explicit synchronization status
 Schema: [`docs/chessmedia/schema/provenance.schema.json`](chessmedia/schema/provenance.schema.json)
 
 When importing legacy multimedia lessons (`.wmv` script streams, `.txt` command sidecars, `.cms` interactive hotspot indexes, and companion `.pgn` files):
-1. **No Fabricated Precision**: Never invent frame-accurate move timestamps by dividing video duration by ply count. Never relabel an unresolvable cursor as a main-line ply.
-2. **Explicit Inferred Markers**: Every value that required inference or disambiguation MUST be recorded in `provenance/import.json` (and marked with `"inferred": true` on the node or cue when applicable):
-   - **Clock source selection**: When both a `.txt` sidecar and an embedded `.wmv` script stream exist and their timestamps differ, `provenance/import.json` records `clock_source` (`"sidecar_txt"`, `"wmv_pts"`, or `"checkpoint_type37"`), the measured discrepancy (`clock_drift_stats`), and why the authoritative clock was chosen.
+1. **No Fabricated Precision**: Never invent frame-accurate move timestamps by dividing video duration by ply count. Never relabel an unresolvable cursor or a PGN traversal index as a legacy authoring-node ID.
+2. **Unresolved Dual-Clock Preservation**: When both a `.txt` sidecar and an embedded `.wmv` script stream exist and their timestamps disagree (or when only an uncalibrated `.txt` sidecar or unverified `.wmv` script stream is available without a measured audio/video calibration report), the importer MUST:
+   - preserve both source timestamp series (`sidecar_events` and `wmv_pts_events`, plus paired `paired_clock_comparison`) in `provenance/import.json`,
+   - set `clock_mapping_status: "unresolved"` and `clock_source: "unresolved_dual"` (or mark single-source uncalibrated timing as `"unresolved"` with `inferred_clock_choice: true`),
+   - mark the timeline as covered by an `incomplete_intervals` entry (`sync_status: "unsynced_incomplete_import"`) and cap `confidence` at `"medium"` or `"low"` (never `"high"` or `"synced"` until a measured calibration proves presentation alignment).
+3. **Unknown Board State Intervals**: When an unresolved `goto` cursor or failed checkpoint/annotation record is encountered at `t_ms`, the importer opens an `incomplete_intervals` span starting at `t_ms` and keeps it open until a subsequent checkpoint or `goto` explicitly restores a known board node (or until `duration_ms` if never restored). It MUST NOT close the interval after a fixed arbitrary timeout.
+4. **Explicit Inferred Markers**: Every value that required inference or disambiguation MUST be recorded in `provenance/import.json` (and marked with `"inferred": true` on the node or cue when applicable):
    - **Set-position start FEN**: Whether `start_fen` came from an explicit PGN `[FEN]` tag, a `.cms` chapter record, a filename selector, or a decoded 64-byte checkpoint board array.
    - **Promotion piece**: When a legacy edge encodes a promotion without an explicit non-queen flag (or defaults to queen), mark the node `"inferred": true` with `"inferred_fields": ["uci_promotion"]`.
    - **Multi-game or partial epochs**: When a legacy stream switches games mid-video or contains checkpoints with 0 moves (pure video lectures), record each game epoch and confidence level (`"high"`, `"medium"`, `"low"`, or `"unsynchronized_media_only"`).

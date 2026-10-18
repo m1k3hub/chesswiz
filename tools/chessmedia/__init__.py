@@ -18,15 +18,20 @@ from .package import (
     unpack_package,
 )
 from .validator import (
+    PreparedLesson,
+    PreparedTimeline,
     ValidationErrorItem,
     ValidationReport,
     evaluate_timeline_scene_at,
+    prepare_timeline,
     scene_at_package,
     validate_package,
 )
 
 __all__ = [
     "HAS_PYTHON_CHESS",
+    "PreparedLesson",
+    "PreparedTimeline",
     "STANDARD_START_FEN",
     "ValidationErrorItem",
     "ValidationReport",
@@ -40,6 +45,7 @@ __all__ = [
     "parse_checkpoint_payload",
     "parse_pgn_text",
     "parse_sidecar_txt",
+    "prepare_timeline",
     "refresh_manifest_members",
     "san_to_uci",
     "scene_at_package",

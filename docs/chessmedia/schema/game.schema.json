@@ -20,7 +20,7 @@
     "schema_version": { "const": "1.1" },
     "id": { "$ref": "#/$defs/id" },
     "variant": { "enum": ["standard", "chess960"] },
-    "fen_encoding": { "enum": ["fen", "shredder-fen"] },
+    "fen_encoding": { "enum": ["fen", "shredder-fen", "xfen"] },
     "start_fen": { "type": "string", "minLength": 15 },
     "setup": { "type": "boolean" },
     "tags": {

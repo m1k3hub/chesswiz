@@ -97,14 +97,17 @@ def fen_board_turn_key(fen: str) -> str:
 
 @dataclass
 class PureBoard:
-    """Minimal complete 8x8 chess board state for standard chess & FEN/SAN/UCI."""
+    """Minimal complete 8x8 chess board state for standard chess & Chess960 (FEN/Shredder-FEN/X-FEN/SAN/UCI)."""
     # squares[rank 0..7 (1..8)][file 0..7 (a..h)], None or 'P','N','B','R','Q','K','p',...
     squares: List[List[Optional[str]]]
     turn: str  # 'w' or 'b'
-    castling: str  # '-' or subset of 'KQkq'
+    castling: str  # '-' or subset of 'KQkqA-Ha-h'
     ep: str  # '-' or e.g. 'e3'
     halfmove: int
     fullmove: int
+    chess960: bool = False
+    # Map of castling rook file (0..7) for ('w', 'k'), ('w', 'q'), ('b', 'k'), ('b', 'q')
+    castling_rook_files: Dict[Tuple[str, str], int] = field(default_factory=dict)
 
     def copy(self) -> "PureBoard":
         return PureBoard(
@@ -114,10 +117,12 @@ class PureBoard:
             ep=self.ep,
             halfmove=self.halfmove,
             fullmove=self.fullmove,
+            chess960=self.chess960,
+            castling_rook_files=dict(self.castling_rook_files),
         )
 
     @staticmethod
-    def from_fen(fen: str) -> "PureBoard":
+    def from_fen(fen: str, chess960: bool = False) -> "PureBoard":
         if not isinstance(fen, str):
             raise ValueError("FEN must be a string")
         parts = fen.strip().split()
@@ -130,6 +135,8 @@ class PureBoard:
         squares: List[List[Optional[str]]] = [[None] * 8 for _ in range(8)]
         w_kings = 0
         b_kings = 0
+        w_king_pos: Optional[Tuple[int, int]] = None
+        b_king_pos: Optional[Tuple[int, int]] = None
         for r_idx, r_str in enumerate(ranks):
             rank = 7 - r_idx
             file_idx = 0
@@ -143,21 +150,70 @@ class PureBoard:
                         raise ValueError(f"Pawn on back rank {rank + 1} in FEN")
                     if ch == "K":
                         w_kings += 1
+                        w_king_pos = (rank, file_idx)
                     elif ch == "k":
                         b_kings += 1
+                        b_king_pos = (rank, file_idx)
                     squares[rank][file_idx] = ch
                     file_idx += 1
                 else:
                     raise ValueError(f"Invalid FEN piece character {ch!r}")
             if file_idx != 8:
                 raise ValueError(f"Rank {rank + 1} has {file_idx} squares instead of 8")
-        if w_kings != 1 or b_kings != 1:
+        if w_kings != 1 or b_kings != 1 or w_king_pos is None or b_king_pos is None:
             raise ValueError(f"FEN must have 1 white king and 1 black king (got {w_kings}, {b_kings})")
         if turn not in ("w", "b"):
             raise ValueError(f"Invalid active color {turn!r}")
+
+        castling_rook_files: Dict[Tuple[str, str], int] = {}
         if castling != "-":
             if not re.match(r"^[KQkqA-Ha-h]{1,4}$", castling) or len(set(castling)) != len(castling):
                 raise ValueError(f"Invalid castling rights {castling!r}")
+            if any(ch in "ABCDEFGHabcdefgh" for ch in castling):
+                chess960 = True
+            for ch in castling:
+                is_w = ch.isupper()
+                color_c = "w" if is_w else "b"
+                back_r = 0 if is_w else 7
+                rook_piece = "R" if is_w else "r"
+                k_r, k_f = w_king_pos if is_w else b_king_pos
+                if k_r != back_r:
+                    raise ValueError(f"Castling rights {ch!r} invalid when king is not on back rank")
+                if ch in ("K", "k"):
+                    if not chess960:
+                        if k_f != 4 or squares[back_r][7] != rook_piece:
+                            # Standard chess requires king on e-file and rook on h-file
+                            if squares[back_r][7] != rook_piece:
+                                raise ValueError(f"Missing kingside rook for castling right {ch!r}")
+                        castling_rook_files[(color_c, "k")] = 7
+                    else:
+                        # Outermost rook to the h-side of the king
+                        r_files = [f for f in range(k_f + 1, 8) if squares[back_r][f] == rook_piece]
+                        if not r_files:
+                            raise ValueError(f"No kingside rook found for castling right {ch!r}")
+                        castling_rook_files[(color_c, "k")] = r_files[-1]
+                elif ch in ("Q", "q"):
+                    if not chess960:
+                        if squares[back_r][0] != rook_piece:
+                            raise ValueError(f"Missing queenside rook for castling right {ch!r}")
+                        castling_rook_files[(color_c, "q")] = 0
+                    else:
+                        # Outermost rook to the a-side of the king
+                        r_files = [f for f in range(0, k_f) if squares[back_r][f] == rook_piece]
+                        if not r_files:
+                            raise ValueError(f"No queenside rook found for castling right {ch!r}")
+                        castling_rook_files[(color_c, "q")] = r_files[0]
+                else:
+                    rf = FILES.index(ch.lower())
+                    if squares[back_r][rf] != rook_piece:
+                        raise ValueError(f"No rook on file {ch!r} for Shredder-FEN castling right")
+                    if rf > k_f:
+                        castling_rook_files[(color_c, "k")] = rf
+                    elif rf < k_f:
+                        castling_rook_files[(color_c, "q")] = rf
+                    else:
+                        raise ValueError(f"Castling rook file {ch!r} cannot equal king file")
+
         if ep != "-":
             if not re.match(r"^[a-h][36]$", ep):
                 raise ValueError(f"Invalid en-passant square {ep!r}")
@@ -179,7 +235,10 @@ class PureBoard:
             ep=ep,
             halfmove=halfmove,
             fullmove=fullmove,
+            chess960=chess960,
+            castling_rook_files=castling_rook_files,
         )
+        board._sync_castling_str("shredder-fen" if chess960 else "fen")
         # Opponent king cannot already be under attack by the side to move
         opp_color = "b" if turn == "w" else "w"
         opp_king = board.find_king(opp_color)
@@ -187,7 +246,58 @@ class PureBoard:
             raise ValueError("Illegal FEN: side not to move is already in check")
         return board
 
-    def to_fen(self, legal_ep_only: bool = True) -> str:
+    def _sync_castling_str(self, fen_encoding: str = "fen") -> str:
+        if not self.castling_rook_files:
+            self.castling = "-"
+            return "-"
+        parts: List[str] = []
+        if fen_encoding == "shredder-fen" or (self.chess960 and fen_encoding != "xfen" and fen_encoding != "fen"):
+            # Shredder-FEN orders h-side to a-side (descending file index: H..A then h..a), matching python-chess
+            w_files = sorted(
+                [rf for (c, _), rf in self.castling_rook_files.items() if c == "w"],
+                reverse=True,
+            )
+            b_files = sorted(
+                [rf for (c, _), rf in self.castling_rook_files.items() if c == "b"],
+                reverse=True,
+            )
+            for rf in w_files:
+                parts.append(FILES[rf].upper())
+            for rf in b_files:
+                parts.append(FILES[rf])
+        elif fen_encoding == "xfen":
+            for color_c, is_w in (("w", True), ("b", False)):
+                back_r = 0 if is_w else 7
+                rook_piece = "R" if is_w else "r"
+                kpos = self.find_king(color_c)
+                kf = kpos[1] if kpos else 4
+                for side, std_ch in (("k", "K" if is_w else "k"), ("q", "Q" if is_w else "q")):
+                    if (color_c, side) not in self.castling_rook_files:
+                        continue
+                    rf = self.castling_rook_files[(color_c, side)]
+                    if side == "k":
+                        outer = [f for f in range(kf + 1, 8) if self.squares[back_r][f] == rook_piece]
+                        use_std = bool(outer and outer[-1] == rf)
+                    else:
+                        outer = [f for f in range(0, kf) if self.squares[back_r][f] == rook_piece]
+                        use_std = bool(outer and outer[0] == rf)
+                    if use_std:
+                        parts.append(std_ch)
+                    else:
+                        parts.append(FILES[rf].upper() if is_w else FILES[rf])
+        else:
+            for key, ch in ((("w", "k"), "K"), (("w", "q"), "Q"), (("b", "k"), "k"), (("b", "q"), "q")):
+                if key in self.castling_rook_files:
+                    if self.chess960 and self.castling_rook_files[key] not in (0, 7):
+                        rf = self.castling_rook_files[key]
+                        parts.append(FILES[rf].upper() if key[0] == "w" else FILES[rf])
+                    else:
+                        parts.append(ch)
+        s = "".join(parts) if parts else "-"
+        self.castling = s
+        return s
+
+    def to_fen(self, legal_ep_only: bool = True, fen_encoding: str = "fen") -> str:
         rank_strs = []
         for rank in range(7, -1, -1):
             empty = 0
@@ -209,7 +319,10 @@ class PureBoard:
         if legal_ep_only and ep_field != "-":
             if not self._has_legal_ep_capture():
                 ep_field = "-"
-        castling_field = self.castling if self.castling else "-"
+        eff_enc = fen_encoding
+        if self.chess960 and fen_encoding == "fen":
+            eff_enc = "shredder-fen"
+        castling_field = self._sync_castling_str(eff_enc)
         return f"{placement} {self.turn} {castling_field} {ep_field} {self.halfmove} {self.fullmove}"
 
     def _has_legal_ep_capture(self) -> bool:
@@ -302,6 +415,45 @@ class PureBoard:
             return False
         return self.is_square_attacked(kpos[0], kpos[1], by_color=opp)
 
+    def _can_castle(self, color: str, side: str) -> Optional[str]:
+        if (color, side) not in self.castling_rook_files:
+            return None
+        is_white = color == "w"
+        back_r = 0 if is_white else 7
+        opp = "b" if is_white else "w"
+        kpos = self.find_king(color)
+        if kpos is None or kpos[0] != back_r:
+            return None
+        kf = kpos[1]
+        rf = self.castling_rook_files[(color, side)]
+        rook_piece = "R" if is_white else "r"
+        if self.squares[back_r][rf] != rook_piece:
+            return None
+        dst_kf = 6 if side == "k" else 2
+        dst_rf = 5 if side == "k" else 3
+
+        # Every square between king's start and destination (inclusive) and between rook's start and destination (inclusive)
+        # must be empty except for the castling king and castling rook themselves.
+        min_k, max_k = min(kf, dst_kf), max(kf, dst_kf)
+        min_r, max_r = min(rf, dst_rf), max(rf, dst_rf)
+        for f_chk in set(range(min_k, max_k + 1)) | set(range(min_r, max_r + 1)):
+            if f_chk in (kf, rf):
+                continue
+            if self.squares[back_r][f_chk] is not None:
+                return None
+
+        # King cannot start in check, pass through check, or land in check
+        for f_chk in range(min_k, max_k + 1):
+            if self.is_square_attacked(back_r, f_chk, opp):
+                return None
+
+        src_sq = f"{FILES[kf]}{back_r + 1}"
+        if self.chess960:
+            dst_sq = f"{FILES[rf]}{back_r + 1}"
+        else:
+            dst_sq = f"{FILES[dst_kf]}{back_r + 1}"
+        return f"{src_sq}{dst_sq}"
+
     def generate_pseudo_legal_ucis(self) -> List[str]:
         moves: List[str] = []
         is_white = self.turn == "w"
@@ -378,23 +530,28 @@ class PureBoard:
                                 target = self.squares[nr][nf]
                                 if target is None or target.isupper() != is_white:
                                     moves.append(f"{src_sq}{FILES[nf]}{nr + 1}")
-                    # Castling
-                    opp = "b" if is_white else "w"
-                    if is_white and r == 0 and f == 4 and not self.is_square_attacked(0, 4, opp):
-                        if "K" in self.castling and self.squares[0][5] is None and self.squares[0][6] is None and self.squares[0][7] == "R":
-                            if not self.is_square_attacked(0, 5, opp) and not self.is_square_attacked(0, 6, opp):
-                                moves.append("e1g1")
-                        if "Q" in self.castling and self.squares[0][3] is None and self.squares[0][2] is None and self.squares[0][1] is None and self.squares[0][0] == "R":
-                            if not self.is_square_attacked(0, 3, opp) and not self.is_square_attacked(0, 2, opp):
-                                moves.append("e1c1")
-                    elif not is_white and r == 7 and f == 4 and not self.is_square_attacked(7, 4, opp):
-                        if "k" in self.castling and self.squares[7][5] is None and self.squares[7][6] is None and self.squares[7][7] == "r":
-                            if not self.is_square_attacked(7, 5, opp) and not self.is_square_attacked(7, 6, opp):
-                                moves.append("e8g8")
-                        if "q" in self.castling and self.squares[7][3] is None and self.squares[7][2] is None and self.squares[7][1] is None and self.squares[7][0] == "r":
-                            if not self.is_square_attacked(7, 3, opp) and not self.is_square_attacked(7, 2, opp):
-                                moves.append("e8c8")
+                    for side in ("k", "q"):
+                        c_uci = self._can_castle(self.turn, side)
+                        if c_uci:
+                            moves.append(c_uci)
         return moves
+
+    def _is_castling_move(self, sf: int, sr: int, df: int, dr: int) -> Optional[Tuple[str, int]]:
+        piece = self.squares[sr][sf]
+        if piece not in ("K", "k") or sr != dr:
+            return None
+        color = "w" if piece == "K" else "b"
+        target = self.squares[dr][df]
+        own_rook = "R" if color == "w" else "r"
+        if self.chess960 and target == own_rook:
+            for side in ("k", "q"):
+                if self.castling_rook_files.get((color, side)) == df:
+                    return side, df
+        if not self.chess960 and abs(df - sf) == 2:
+            side = "k" if df == 6 else "q"
+            rf = self.castling_rook_files.get((color, side), 7 if side == "k" else 0)
+            return side, rf
+        return None
 
     def _apply_unchecked(self, uci: str) -> "PureBoard":
         m = UCI_RE.match(uci)
@@ -408,8 +565,31 @@ class PureBoard:
         if piece is None:
             raise ValueError(f"No piece on source square {src}")
         is_white = piece.isupper()
+        color = "w" if is_white else "b"
+        opp_color = "b" if is_white else "w"
         pt = piece.upper()
         target = nxt.squares[dr][df]
+
+        castle_info = self._is_castling_move(sf, sr, df, dr)
+        if castle_info is not None:
+            side, rf = castle_info
+            dst_kf = 6 if side == "k" else 2
+            dst_rf = 5 if side == "k" else 3
+            own_rook = "R" if is_white else "r"
+            nxt.squares[sr][sf] = None
+            nxt.squares[sr][rf] = None
+            nxt.squares[sr][dst_kf] = piece
+            nxt.squares[sr][dst_rf] = own_rook
+            nxt.castling_rook_files.pop((color, "k"), None)
+            nxt.castling_rook_files.pop((color, "q"), None)
+            nxt._sync_castling_str("shredder-fen" if nxt.chess960 else "fen")
+            nxt.ep = "-"
+            nxt.halfmove = self.halfmove + 1
+            if not is_white:
+                nxt.fullmove = self.fullmove + 1
+            nxt.turn = opp_color
+            return nxt
+
         is_ep_capture = (pt == "P" and dst == self.ep and target is None and sf != df)
         is_capture = (target is not None) or is_ep_capture
 
@@ -424,29 +604,21 @@ class PureBoard:
             placed = piece
         nxt.squares[dr][df] = placed
 
-        # Castling rook movement
-        if pt == "K" and abs(df - sf) == 2:
-            if df == 6:  # kingside
-                nxt.squares[sr][5] = nxt.squares[sr][7]
-                nxt.squares[sr][7] = None
-            elif df == 2:  # queenside
-                nxt.squares[sr][3] = nxt.squares[sr][0]
-                nxt.squares[sr][0] = None
-
         # Update castling rights
-        castling = nxt.castling if nxt.castling != "-" else ""
         if pt == "K":
-            for ch in ("K", "Q") if is_white else ("k", "q"):
-                castling = castling.replace(ch, "")
-        if (sr, sf) == (0, 0) or (dr, df) == (0, 0):
-            castling = castling.replace("Q", "")
-        if (sr, sf) == (0, 7) or (dr, df) == (0, 7):
-            castling = castling.replace("K", "")
-        if (sr, sf) == (7, 0) or (dr, df) == (7, 0):
-            castling = castling.replace("q", "")
-        if (sr, sf) == (7, 7) or (dr, df) == (7, 7):
-            castling = castling.replace("k", "")
-        nxt.castling = castling if castling else "-"
+            nxt.castling_rook_files.pop((color, "k"), None)
+            nxt.castling_rook_files.pop((color, "q"), None)
+        back_own = 0 if is_white else 7
+        if sr == back_own:
+            for side in ("k", "q"):
+                if nxt.castling_rook_files.get((color, side)) == sf:
+                    nxt.castling_rook_files.pop((color, side), None)
+        back_opp = 7 if is_white else 0
+        if dr == back_opp:
+            for side in ("k", "q"):
+                if nxt.castling_rook_files.get((opp_color, side)) == df:
+                    nxt.castling_rook_files.pop((opp_color, side), None)
+        nxt._sync_castling_str("shredder-fen" if nxt.chess960 else "fen")
 
         # Update ep square
         if pt == "P" and abs(dr - sr) == 2:
@@ -462,7 +634,7 @@ class PureBoard:
             nxt.halfmove = self.halfmove + 1
         if not is_white:
             nxt.fullmove = self.fullmove + 1
-        nxt.turn = "b" if is_white else "w"
+        nxt.turn = opp_color
         return nxt
 
     def _is_uci_legal_After_apply(self, uci: str) -> bool:
@@ -484,12 +656,14 @@ class PureBoard:
         assert piece is not None
         pt = piece.upper()
         target = self.squares[dr][df]
-        is_ep = (pt == "P" and dst == self.ep and target is None and sf != df)
-        is_capture = (target is not None) or is_ep
 
-        if pt == "K" and abs(df - sf) == 2:
-            base = "O-O" if df == 6 else "O-O-O"
+        castle_info = self._is_castling_move(sf, sr, df, dr)
+        if castle_info is not None:
+            side, _ = castle_info
+            base = "O-O" if side == "k" else "O-O-O"
         elif pt == "P":
+            is_ep = (dst == self.ep and target is None and sf != df)
+            is_capture = (target is not None) or is_ep
             if is_capture:
                 base = f"{src[0]}x{dst}"
             else:
@@ -497,6 +671,7 @@ class PureBoard:
             if promo:
                 base += f"={promo.upper()}"
         else:
+            is_capture = target is not None
             # Disambiguation among other legal moves of the same piece type to dst
             ambig = []
             for other in legal_moves:
@@ -534,9 +709,9 @@ def validate_fen(fen: str, variant: str = "standard") -> Tuple[bool, Optional[st
     """Validate a 6-field FEN string. Returns (is_valid, error_reason)."""
     if not isinstance(fen, str) or len(fen.strip().split()) != 6:
         return False, f"FEN must contain 6 space-separated fields: {fen!r}"
+    chess960 = (variant == "chess960")
     if _use_pychess():
         try:
-            chess960 = (variant == "chess960")
             board = _pychess.Board(fen, chess960=chess960)
             status = board.status()
             if status != _pychess.STATUS_VALID:
@@ -546,7 +721,7 @@ def validate_fen(fen: str, variant: str = "standard") -> Tuple[bool, Optional[st
             return False, str(exc)
     else:
         try:
-            PureBoard.from_fen(fen)
+            PureBoard.from_fen(fen, chess960=chess960)
             return True, None
         except Exception as exc:
             return False, str(exc)
@@ -565,8 +740,8 @@ def apply_uci_move(
     """
     if not isinstance(uci, str) or not UCI_RE.match(uci):
         raise ValueError(f"Invalid UCI move syntax: {uci!r}")
+    chess960 = (variant == "chess960")
     if _use_pychess():
-        chess960 = (variant == "chess960")
         board = _pychess.Board(fen, chess960=chess960)
         if not board.is_valid():
             raise ValueError(f"Invalid parent FEN: {fen!r}")
@@ -575,21 +750,36 @@ def apply_uci_move(
             raise ValueError(f"Illegal move {uci!r} in position {fen!r}")
         san = board.san(move)
         board.push(move)
-        shredder = (fen_encoding == "shredder-fen")
-        fen_legal = board.fen(shredder=shredder, en_passant="legal")
-        fen_always = board.fen(shredder=shredder, en_passant="fen")
+        if fen_encoding == "xfen":
+            shredder_fen_str = board.fen(shredder=True, en_passant="fen")
+            pb = PureBoard.from_fen(shredder_fen_str, chess960=chess960)
+            fen_legal = pb.to_fen(legal_ep_only=True, fen_encoding="xfen")
+            fen_always = pb.to_fen(legal_ep_only=False, fen_encoding="xfen")
+        else:
+            shredder = (fen_encoding == "shredder-fen") or (chess960 and fen_encoding == "fen")
+            fen_legal = board.fen(shredder=shredder, en_passant="legal")
+            fen_always = board.fen(shredder=shredder, en_passant="fen")
         return fen_legal, fen_always, san
     else:
-        board = PureBoard.from_fen(fen)
+        board = PureBoard.from_fen(fen, chess960=chess960)
         legal = board.generate_legal_ucis()
         if uci not in legal:
             raise ValueError(f"Illegal move {uci!r} in position {fen!r}")
         san = board.uci_to_san(uci, legal)
         nxt = board._apply_unchecked(uci)
-        return nxt.to_fen(legal_ep_only=True), nxt.to_fen(legal_ep_only=False), san
+        return (
+            nxt.to_fen(legal_ep_only=True, fen_encoding=fen_encoding),
+            nxt.to_fen(legal_ep_only=False, fen_encoding=fen_encoding),
+            san,
+        )
 
 
-def fens_equivalent(fen_a: str, fen_b: str, variant: str = "standard") -> bool:
+def fens_equivalent(
+    fen_a: str,
+    fen_b: str,
+    variant: str = "standard",
+    fen_encoding: str = "fen",
+) -> bool:
     """Compare two 6-field FENs, accepting either legal-only or always-ep convention."""
     if fen_a.strip() == fen_b.strip():
         return True
@@ -597,45 +787,57 @@ def fens_equivalent(fen_a: str, fen_b: str, variant: str = "standard") -> bool:
     pb = fen_b.strip().split()
     if len(pa) != 6 or len(pb) != 6:
         return False
-    # Placement, turn, castling, halfmove, fullmove must match
-    if pa[0] != pb[0] or pa[1] != pb[1] or pa[2] != pb[2] or pa[4] != pb[4] or pa[5] != pb[5]:
-        return False
-    # If only en-passant differs because one uses legal-ep ('-') and one uses pseudo-ep
-    if _use_pychess():
+    chess960 = (variant == "chess960")
+    if _use_pychess() and fen_encoding != "xfen":
         try:
-            ba = _pychess.Board(fen_a, chess960=(variant == "chess960"))
-            bb = _pychess.Board(fen_b, chess960=(variant == "chess960"))
-            return ba.fen(en_passant="legal") == bb.fen(en_passant="legal")
+            ba = _pychess.Board(fen_a, chess960=chess960)
+            bb = _pychess.Board(fen_b, chess960=chess960)
+            shredder = (fen_encoding == "shredder-fen") or chess960
+            return ba.fen(shredder=shredder, en_passant="legal") == bb.fen(shredder=shredder, en_passant="legal")
         except Exception:
             return False
     else:
         try:
-            ba = PureBoard.from_fen(fen_a)
-            bb = PureBoard.from_fen(fen_b)
-            return ba.to_fen(legal_ep_only=True) == bb.to_fen(legal_ep_only=True)
+            ba = PureBoard.from_fen(fen_a, chess960=chess960)
+            bb = PureBoard.from_fen(fen_b, chess960=chess960)
+            return ba.to_fen(legal_ep_only=True, fen_encoding=fen_encoding) == bb.to_fen(
+                legal_ep_only=True, fen_encoding=fen_encoding
+            )
         except Exception:
             return False
 
 
-def san_to_uci(fen: str, san_str: str, variant: str = "standard") -> Tuple[str, str, str]:
+def san_to_uci(
+    fen: str,
+    san_str: str,
+    variant: str = "standard",
+    fen_encoding: str = "fen",
+) -> Tuple[str, str, str]:
     """Resolve SAN string in `fen` to `(uci, next_fen_legal_ep, canonical_san)`."""
     cleaned = san_str.strip().rstrip("!?")
+    chess960 = (variant == "chess960")
     if _use_pychess():
-        board = _pychess.Board(fen, chess960=(variant == "chess960"))
+        board = _pychess.Board(fen, chess960=chess960)
         move = board.parse_san(cleaned)
         canon_san = board.san(move)
         uci = move.uci()
         board.push(move)
-        return uci, board.fen(en_passant="legal"), canon_san
+        if fen_encoding == "xfen":
+            pb = PureBoard.from_fen(board.fen(shredder=True, en_passant="fen"), chess960=chess960)
+            next_fen = pb.to_fen(legal_ep_only=True, fen_encoding="xfen")
+        else:
+            shredder = (fen_encoding == "shredder-fen") or (chess960 and fen_encoding == "fen")
+            next_fen = board.fen(shredder=shredder, en_passant="legal")
+        return uci, next_fen, canon_san
     else:
-        board = PureBoard.from_fen(fen)
+        board = PureBoard.from_fen(fen, chess960=chess960)
         legal = board.generate_legal_ucis()
         norm_target = cleaned.replace("0-0-0", "O-O-O").replace("0-0", "O-O").rstrip("+#")
         for uci in legal:
             cand_san = board.uci_to_san(uci, legal)
             if cand_san == cleaned or cand_san.rstrip("+#") == norm_target:
                 nxt = board._apply_unchecked(uci)
-                return uci, nxt.to_fen(legal_ep_only=True), cand_san
+                return uci, nxt.to_fen(legal_ep_only=True, fen_encoding=fen_encoding), cand_san
         raise ValueError(f"Cannot resolve SAN {san_str!r} in position {fen!r}")
 
 
@@ -655,7 +857,7 @@ def find_moves_between_squares(
         board = _pychess.Board(fen, chess960=(variant == "chess960"))
         candidates = [m.uci() for m in board.legal_moves if m.uci().startswith(prefix)]
     else:
-        board = PureBoard.from_fen(fen)
+        board = PureBoard.from_fen(fen, chess960=(variant == "chess960"))
         candidates = [u for u in board.generate_legal_ucis() if u.startswith(prefix)]
 
     if not candidates:

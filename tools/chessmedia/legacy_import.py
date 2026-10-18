@@ -203,9 +203,9 @@ def probe_wmv_info(wmv_path: Path, extract_packets: bool = True) -> Dict[str, An
         with open(wmv_path, "rb") as f:
             header_chunk = f.read(65536)
         idx = header_chunk.find(ASF_FILE_PROPS_GUID)
-        if idx != -1 and idx + 80 <= len(header_chunk):
-            play_dur_100ns = struct.unpack_from("<Q", header_chunk, idx + 48)[0]
-            preroll_ms = struct.unpack_from("<Q", header_chunk, idx + 64)[0]
+        if idx != -1 and idx + 88 <= len(header_chunk):
+            play_dur_100ns = struct.unpack_from("<Q", header_chunk, idx + 64)[0]
+            preroll_ms = struct.unpack_from("<Q", header_chunk, idx + 80)[0]
             play_ms = int(play_dur_100ns // 10000)
             eff_ms = max(0, play_ms - int(preroll_ms))
             info["duration_ms"] = eff_ms if eff_ms > 0 else play_ms
@@ -227,7 +227,7 @@ def probe_wmv_info(wmv_path: Path, extract_packets: bool = True) -> Dict[str, An
                 "json",
                 str(wmv_path),
             ]
-            out = subprocess.check_output(cmd, text=True, timeout=15)
+            out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL, timeout=15)
             doc = json.loads(out)
             hex_re = re.compile(r"(?m)^........: ((?:[0-9a-f]{4} ?)+)")
             pkts: List[Tuple[int, bytes]] = []
@@ -244,6 +244,36 @@ def probe_wmv_info(wmv_path: Path, extract_packets: bool = True) -> Dict[str, An
                     if len(payload) >= 4:
                         pkts.append((t_ms, payload))
             info["packets"] = pkts
+        except Exception:
+            pass
+
+    # Fallback binary scan for UTF-16LE "GA\x00" records when ffprobe is unavailable or synthetic ASF test files are used
+    if extract_packets and not info["packets"]:
+        try:
+            raw_data = wmv_path.read_bytes()
+            marker = b"G\x00A\x00\x00\x00"
+            pos = 0
+            pkts_fb: List[Tuple[int, bytes]] = []
+            while True:
+                found = raw_data.find(marker, pos)
+                if found == -1:
+                    break
+                # Read 32-bit PTS ms at found - 10 if present
+                pts_ms = struct.unpack_from("<I", raw_data, found - 10)[0] if found >= 10 else 0
+                end_nul = raw_data.find(b"\x00\x00", found + 6)
+                if end_nul != -1:
+                    # Align to 2-byte UTF-16LE boundary
+                    if (end_nul - (found + 6)) % 2 == 1:
+                        end_nul += 1
+                    ga_txt = raw_data[found + 6 : end_nul].decode("utf-16le", errors="replace").rstrip("\x00")
+                    try:
+                        payload = decode_ga6bit(ga_txt)
+                        if len(payload) >= 4:
+                            pkts_fb.append((pts_ms, payload))
+                    except Exception:
+                        pass
+                pos = found + 6
+            info["packets"] = pkts_fb
         except Exception:
             pass
     return info
@@ -799,6 +829,39 @@ def _write_placeholder_mp4(target_path: Path, duration_ms: int) -> None:
     os.chmod(target_path, 0o644)
 
 
+def _summarize_raw_events(events: List[Tuple[int, bytes]]) -> List[Dict[str, Any]]:
+    """Summarize raw `(timestamp_ms, payload)` events for dual-clock provenance preservation."""
+    summary: List[Dict[str, Any]] = []
+    for idx, (t_ms, pay) in enumerate(events):
+        opcode = struct.unpack_from("<I", pay, 0)[0] if len(pay) >= 4 else -1
+        arg: Optional[int] = None
+        if opcode in (3, 14) and len(pay) >= 6:
+            arg = struct.unpack_from("<H", pay, 4)[0]
+        elif opcode == 2 and len(pay) >= 12:
+            arg = struct.unpack_from("<I", pay, 8)[0]
+        entry: Dict[str, Any] = {
+            "index": idx,
+            "at_ms": t_ms,
+            "opcode": opcode,
+            "bytes": len(pay),
+        }
+        if arg is not None:
+            entry["arg"] = arg
+        summary.append(entry)
+    return summary
+
+
+def _part_c_report_verified() -> bool:
+    """Return True only when delegates/media-sync-list/PART-C-REPORT.md exists with a measured calibration."""
+    here = Path(__file__).resolve()
+    # Check both worktree and main repo delegates/media-sync-list/PART-C-REPORT.md
+    candidates = [
+        here.parent.parent.parent / "tests" / "tmp-app" / "delegates" / "media-sync-list" / "PART-C-REPORT.md",
+        here.parent.parent.parent.parent.parent / "tests" / "tmp-app" / "delegates" / "media-sync-list" / "PART-C-REPORT.md",
+    ]
+    return any(p.is_file() and p.stat().st_size > 0 for p in candidates)
+
+
 # ---------------------------------------------------------------------------
 # Main Legacy Importer Entry Point
 # ---------------------------------------------------------------------------
@@ -806,9 +869,11 @@ def _write_placeholder_mp4(target_path: Path, duration_ms: int) -> None:
 def import_legacy_lesson(
     source_path: Union[str, Path],
     pgn_path: Optional[Union[str, Path]] = None,
+    wmv_path: Optional[Union[str, Path]] = None,
     out_target: Optional[Union[str, Path]] = None,
     media_mode: str = "copy",
     compute_source_digests: bool = True,
+    allow_part_c_calibration: bool = False,
 ) -> Tuple[Dict[str, Any], ValidationReport]:
     """Convert a legacy `.wmv` or `.txt` lesson (plus optional `.pgn`) into ChessMedia 1.1.
 
@@ -816,9 +881,12 @@ def import_legacy_lesson(
     ----------
     source_path : path to `.wmv` or `.txt`
     pgn_path : optional path to companion `.pgn`
+    wmv_path : optional explicit path to companion `.wmv`
     out_target : output directory or `.chessmedia` file path
     media_mode : `'copy'` (copies source `.wmv` into `assets/`) or `'stub'` (writes tiny placeholder mp4)
     compute_source_digests : whether to compute SHA-256 over source files
+    allow_part_c_calibration : if True and PART-C-REPORT.md exists AND initial Sync counters match within 2s,
+        apply the measured Sync(0) offset; defaults to False so the importer never claims proven sync on its own.
     """
     src_p = Path(source_path)
     if not src_p.exists():
@@ -830,8 +898,11 @@ def import_legacy_lesson(
         txt_p: Optional[Path] = cand_txt if cand_txt.is_file() else None
     elif src_p.suffix.lower() == ".txt":
         txt_p = src_p
-        cand_wmv = src_p.with_suffix(".wmv")
-        wmv_p = cand_wmv if cand_wmv.is_file() else None
+        if wmv_path is not None:
+            wmv_p = Path(wmv_path)
+        else:
+            cand_wmv = src_p.with_suffix(".wmv")
+            wmv_p = cand_wmv if cand_wmv.is_file() else None
     else:
         raise ValueError(f"Expected .wmv or .txt input, got {src_p}")
 
@@ -878,43 +949,148 @@ def import_legacy_lesson(
     )
     wmv_events: List[Tuple[int, bytes]] = wmv_info.get("packets", [])
 
-    # Determine clock source & measure clock drift when both exist
+    # Preserve both source timestamp series and evaluate clock mapping status.
+    # Per user instruction & REVIEW Finding 2: do NOT pick one clock as proven; keep both source
+    # timestamp series in provenance, mark the mapping as "unresolved", and lower confidence.
+    part_c_verified = bool(allow_part_c_calibration and _part_c_report_verified())
     clock_drift_stats: Dict[str, Any] = {}
+    source_clock_timestamps: Dict[str, Any] = {
+        "sidecar_events": _summarize_raw_events(txt_events),
+        "wmv_pts_events": _summarize_raw_events(wmv_events),
+        "paired_clock_comparison": [],
+    }
     inferred_clock_choice = False
+
     if txt_events and wmv_events:
         inferred_clock_choice = True
-        clock_source = "sidecar_txt"
-        # Compare matching (opcode, arg) events between txt and wmv
-        txt_op14 = {
-            struct.unpack_from("<H", pay, 4)[0]: t_ms
+
+        # Check initial Sync (opcode 14) counter in both sources
+        txt_syncs = [
+            (struct.unpack_from("<H", pay, 4)[0], t_ms)
             for t_ms, pay in txt_events
-            if len(pay) == 6 and struct.unpack_from("<I", pay, 0)[0] == 14
-        }
-        wmv_op14 = {
-            struct.unpack_from("<H", pay, 4)[0]: t_ms
+            if len(pay) >= 6 and struct.unpack_from("<I", pay, 0)[0] == 14
+        ]
+        wmv_syncs = [
+            (struct.unpack_from("<H", pay, 4)[0], t_ms)
             for t_ms, pay in wmv_events
-            if len(pay) == 6 and struct.unpack_from("<I", pay, 0)[0] == 14
-        }
-        common_k = sorted(set(txt_op14.keys()) & set(wmv_op14.keys()))
-        deltas = [txt_op14[k] - wmv_op14[k] for k in common_k]
+            if len(pay) >= 6 and struct.unpack_from("<I", pay, 0)[0] == 14
+        ]
+        initial_sync_offset_ms: Optional[int] = None
+        if txt_syncs and wmv_syncs and txt_syncs[0][0] == wmv_syncs[0][0]:
+            initial_sync_offset_ms = txt_syncs[0][1] - wmv_syncs[0][1]
+
+        # Compare matching (opcode, arg) events between txt and wmv (both op 14 markers and op 3 gotos)
+        paired_comp: List[Dict[str, Any]] = []
+        txt_by_op_arg: Dict[Tuple[int, int], int] = {}
+        wmv_by_op_arg: Dict[Tuple[int, int], int] = {}
+        for t_ms, pay in txt_events:
+            if len(pay) >= 6:
+                op = struct.unpack_from("<I", pay, 0)[0]
+                if op in (3, 14):
+                    arg = struct.unpack_from("<H", pay, 4)[0]
+                    txt_by_op_arg.setdefault((op, arg), t_ms)
+        for t_ms, pay in wmv_events:
+            if len(pay) >= 6:
+                op = struct.unpack_from("<I", pay, 0)[0]
+                if op in (3, 14):
+                    arg = struct.unpack_from("<H", pay, 4)[0]
+                    wmv_by_op_arg.setdefault((op, arg), t_ms)
+
+        common_keys = sorted(set(txt_by_op_arg.keys()) & set(wmv_by_op_arg.keys()))
+        deltas: List[int] = []
+        ratios: List[float] = []
+        for op, arg in common_keys:
+            s_ms = txt_by_op_arg[(op, arg)]
+            w_ms = wmv_by_op_arg[(op, arg)]
+            diff = s_ms - w_ms
+            deltas.append(diff)
+            ratio = round(w_ms / s_ms, 4) if s_ms > 0 else None
+            if ratio is not None:
+                ratios.append(ratio)
+            paired_comp.append(
+                {
+                    "opcode": op,
+                    "arg": arg,
+                    "sidecar_ms": s_ms,
+                    "wmv_pts_ms": w_ms,
+                    "delta_ms": diff,
+                    "wmv_over_sidecar_ratio": ratio,
+                }
+            )
+        source_clock_timestamps["paired_clock_comparison"] = paired_comp
+        source_clock_timestamps["initial_sync_offset_ms"] = initial_sync_offset_ms
+
+        clock_source = "unresolved_dual" if not part_c_verified else "sidecar_txt"
+        clock_mapping_status = "verified_part_c" if part_c_verified else "unresolved"
         clock_drift_stats = {
             "sidecar_event_count": len(txt_events),
             "wmv_packet_count": len(wmv_events),
             "wmv_preroll_ms": wmv_info.get("preroll_ms", 0),
-            "matched_op14_markers": len(common_k),
+            "matched_event_pairs": len(common_keys),
+            "initial_sync_offset_ms": initial_sync_offset_ms,
             "mean_txt_minus_wmv_ms": round(sum(deltas) / len(deltas), 1) if deltas else None,
+            "max_abs_delta_ms": max((abs(d) for d in deltas), default=None),
+            "mean_wmv_over_sidecar_ratio": round(sum(ratios) / len(ratios), 4) if ratios else None,
+            "mapping_status": clock_mapping_status,
             "rationale": (
-                "Selected sidecar_txt because ASF script stream packets are coalesced/dropped on keyframes "
-                f"({len(wmv_events)} ASF packets vs {len(txt_events)} sidecar events)."
+                "Both sidecar .txt and WMV script-stream PTS timestamps are preserved in source_clock_timestamps; "
+                "mapping between authoring clock and media presentation time is marked unresolved so the importer "
+                "never claims synchronization it has not proven."
             ),
         }
+        if not part_c_verified:
+            warnings.append(
+                "Unresolved dual-clock discrepancy between sidecar .txt and WMV data-stream PTS; "
+                "both timestamp series preserved in provenance and timeline marked incomplete."
+            )
     elif txt_events:
+        inferred_clock_choice = True
         clock_source = "sidecar_txt"
+        clock_mapping_status = "verified_part_c" if part_c_verified else "unresolved"
+        clock_drift_stats = {
+            "sidecar_event_count": len(txt_events),
+            "wmv_packet_count": 0,
+            "wmv_preroll_ms": wmv_info.get("preroll_ms", 0),
+            "mapping_status": clock_mapping_status,
+            "rationale": (
+                "Sidecar .txt timestamps used as provisional cue times; presentation clock relationship "
+                "is unverified without companion media Sync(0) calibration."
+            ),
+        }
+        if not part_c_verified:
+            warnings.append(
+                "Sidecar .txt authoring timestamps have no measured media presentation clock calibration."
+            )
     elif wmv_events:
         clock_source = "wmv_pts"
         inferred_clock_choice = True
+        clock_mapping_status = "verified_part_c" if part_c_verified else "unresolved"
+        clock_drift_stats = {
+            "sidecar_event_count": 0,
+            "wmv_packet_count": len(wmv_events),
+            "wmv_preroll_ms": wmv_info.get("preroll_ms", 0),
+            "mapping_status": clock_mapping_status,
+            "rationale": "Embedded WMV script-stream packet timestamps used provisionally; mapping unverified.",
+        }
+        if not part_c_verified:
+            warnings.append(
+                "Embedded WMV script-stream timestamps have no measured presentation clock calibration."
+            )
     else:
         clock_source = "none"
+        clock_mapping_status = "not_applicable"
+
+    # Build indexed lookup of WMV timestamps by (opcode, arg) so each cue can also record both source timestamps
+    wmv_ms_by_op_arg: Dict[Tuple[int, int], List[int]] = {}
+    for w_ms, w_pay in wmv_events:
+        if len(w_pay) >= 4:
+            w_op = struct.unpack_from("<I", w_pay, 0)[0]
+            w_arg = -1
+            if w_op in (3, 14) and len(w_pay) >= 6:
+                w_arg = struct.unpack_from("<H", w_pay, 4)[0]
+            elif w_op == 2 and len(w_pay) >= 12:
+                w_arg = struct.unpack_from("<I", w_pay, 8)[0]
+            wmv_ms_by_op_arg.setdefault((w_op, w_arg), []).append(w_ms)
 
     active_events = txt_events if txt_events else wmv_events
 
@@ -977,8 +1153,10 @@ def import_legacy_lesson(
             start_fen = pgn_g.start_fen
             nodes_out = []
             nid_to_fen = {}
-            leg_map = {}
-            for idx_n, pn in enumerate(pgn_g.nodes):
+            # Spec §7: Never fabricate opaque legacy authoring-node IDs from PGN traversal order.
+            # Only root cursor 0 -> "n0" is known without a decoded checkpoint tree.
+            leg_map = {0: "n0"}
+            for pn in pgn_g.nodes:
                 nd: Dict[str, Any] = {
                     "id": pn.id,
                     "parent_id": pn.parent_id,
@@ -994,7 +1172,6 @@ def import_legacy_lesson(
                     nd["nags"] = pn.nags
                 nodes_out.append(nd)
                 nid_to_fen[pn.id] = pn.fen
-                leg_map[idx_n] = pn.id
             main_ucis = []
             mc = nodes_out[0]["main_child_id"]
             by_id = {n["id"]: n for n in nodes_out}
@@ -1090,7 +1267,10 @@ def import_legacy_lesson(
             start_fen_source_str = ep.start_fen_source
 
     # Walk event stream to build full replacement timeline cues
-    max_event_ms = max((t for t, _ in active_events), default=0)
+    max_event_ms = max(
+        max((t for t, _ in active_events), default=0),
+        max((t for t, _ in wmv_events), default=0),
+    )
     wmv_dur = wmv_info.get("duration_ms")
     duration_ms = max(max_event_ms + 1000, int(wmv_dur) if wmv_dur else max_event_ms + 1000, 1000)
 
@@ -1120,8 +1300,36 @@ def import_legacy_lesson(
 
     total_gotos = 0
     unresolved_gotos = 0
+    failed_state_records = 0
     incomplete_intervals: List[Dict[str, Any]] = []
+    open_unknown_start_ms: Optional[int] = None
+    open_unknown_reasons: List[str] = []
     dyn_node_seq = 0
+    cue_dual_timestamps: List[Dict[str, Any]] = []
+
+    def _open_unknown_interval(at_ms: int, reason: str) -> None:
+        nonlocal open_unknown_start_ms, open_unknown_reasons
+        clamped = max(0, min(at_ms, duration_ms))
+        if open_unknown_start_ms is None:
+            open_unknown_start_ms = clamped
+            open_unknown_reasons = [reason]
+        else:
+            if reason not in open_unknown_reasons:
+                open_unknown_reasons.append(reason)
+
+    def _close_unknown_interval(recovery_ms: int) -> None:
+        nonlocal open_unknown_start_ms, open_unknown_reasons
+        if open_unknown_start_ms is not None:
+            end_val = max(open_unknown_start_ms, min(recovery_ms, duration_ms))
+            incomplete_intervals.append(
+                {
+                    "start_ms": open_unknown_start_ms,
+                    "end_ms": end_val,
+                    "reason": "; ".join(open_unknown_reasons),
+                }
+            )
+            open_unknown_start_ms = None
+            open_unknown_reasons = []
 
     for ev_ms, pay in active_events:
         # Switch active epoch if we reached a new game checkpoint timestamp
@@ -1132,19 +1340,49 @@ def import_legacy_lesson(
 
         kind = struct.unpack_from("<I", pay, 0)[0]
         state_changed = False
+        board_position_recovered = False
         cue_inferred = False
         cue_inferred_fields: List[str] = []
+        ev_arg: Optional[int] = None
 
-        if kind == 2 and len(pay) >= 12:
-            target_leg = struct.unpack_from("<I", pay, 8)[0]
-            if target_leg in cur_epoch.legacy_id_to_node_id:
-                cur_node_id = cur_epoch.legacy_id_to_node_id[target_leg]
-                cur_overlays = []
-                cur_captions = []
-                state_changed = True
+        if kind == 2:
+            if len(pay) < 24:
+                failed_state_records += 1
+                msg = f"Truncated opcode-02 checkpoint at {ev_ms} ms"
+                warnings.append(msg)
+                _open_unknown_interval(ev_ms, msg)
+            else:
+                target_leg = struct.unpack_from("<I", pay, 8)[0]
+                ev_arg = target_leg
+                cp_valid = True
+                try:
+                    cp_chk = parse_checkpoint_payload(pay)
+                    if cp_chk.main_nodes:
+                        # Ensure its moves also resolve cleanly
+                        build_game_from_checkpoint(cp_chk, game_id="chk")
+                except Exception as exc:
+                    cp_valid = False
+                    failed_state_records += 1
+                    msg = f"Failed checkpoint at {ev_ms} ms: {exc}"
+                    warnings.append(msg)
+                    _open_unknown_interval(ev_ms, msg)
+
+                if cp_valid:
+                    if target_leg in cur_epoch.legacy_id_to_node_id:
+                        cur_node_id = cur_epoch.legacy_id_to_node_id[target_leg]
+                        cur_overlays = []
+                        cur_captions = []
+                        state_changed = True
+                        board_position_recovered = True
+                    else:
+                        failed_state_records += 1
+                        msg = f"Unresolved checkpoint state_id={target_leg} at {ev_ms} ms"
+                        warnings.append(msg)
+                        _open_unknown_interval(ev_ms, msg)
         elif kind == 3 and len(pay) >= 6:
             total_gotos += 1
             target_leg = struct.unpack_from("<H", pay, 4)[0]
+            ev_arg = target_leg
             resolved_nid = cur_epoch.legacy_id_to_node_id.get(target_leg)
             if resolved_nid is None:
                 # Search across all epochs in case lecture jumped back to an earlier game
@@ -1159,84 +1397,100 @@ def import_legacy_lesson(
                 cur_overlays = []
                 cur_captions = []
                 state_changed = True
+                board_position_recovered = True
             else:
                 unresolved_gotos += 1
+                msg = f"Unresolved legacy cursor id {target_leg}"
                 warnings.append(f"Unresolved opcode-03 goto legacy_id={target_leg} at {ev_ms} ms")
-                incomplete_intervals.append(
-                    {
-                        "start_ms": ev_ms,
-                        "end_ms": min(duration_ms, ev_ms + 5000),
-                        "reason": f"Unresolved legacy cursor id {target_leg}",
-                    }
-                )
+                _open_unknown_interval(ev_ms, msg)
         elif kind == 4 and len(pay) == 12:
             action = struct.unpack_from("<I", pay, 4)[0]
             s1 = sq_0based(pay[8] & 0x3F)
             s2 = sq_0based(pay[9] & 0x3F)
             if action == 0 and s1 and s2:
-                # Transient move or arrow on board: check if legal move from cur_node_id
-                cur_fen = cur_epoch.node_id_to_fen.get(cur_node_id, STANDARD_START_FEN)
-                try:
-                    uci, next_fen, san, inf_p = find_moves_between_squares(cur_fen, s1, s2)
-                    # Check if already a child of cur_node_id
-                    g_nodes = cur_epoch.game_json["nodes"]
-                    existing_child = None
-                    for n in g_nodes:
-                        if n.get("parent_id") == cur_node_id and n.get("uci") == uci:
-                            existing_child = n["id"]
-                            break
-                    if existing_child:
-                        cur_node_id = existing_child
-                    else:
-                        dyn_node_seq += 1
-                        new_nid = f"n_dyn_{dyn_node_seq}"
-                        new_node: Dict[str, Any] = {
-                            "id": new_nid,
-                            "parent_id": cur_node_id,
-                            "uci": uci,
-                            "san": san,
-                            "fen": next_fen,
-                            "main_child_id": None,
-                            "children_ids": [],
-                            "inferred": True,
-                            "inferred_fields": ["dynamic_opcode04_move"],
-                        }
-                        g_nodes.append(new_node)
+                if open_unknown_start_ms is not None:
+                    failed_state_records += 1
+                    msg = f"Cannot apply transient opcode-04 move {s1}->{s2} at {ev_ms} ms while board state is unknown"
+                    warnings.append(msg)
+                    _open_unknown_interval(ev_ms, msg)
+                else:
+                    # Transient move on board: check if legal move from cur_node_id
+                    cur_fen = cur_epoch.node_id_to_fen.get(cur_node_id, STANDARD_START_FEN)
+                    try:
+                        uci, next_fen, san, inf_p = find_moves_between_squares(cur_fen, s1, s2)
+                        # Check if already a child of cur_node_id
+                        g_nodes = cur_epoch.game_json["nodes"]
+                        existing_child = None
                         for n in g_nodes:
-                            if n["id"] == cur_node_id:
-                                if n["main_child_id"] is None:
-                                    n["main_child_id"] = new_nid
-                                n["children_ids"].append(new_nid)
+                            if n.get("parent_id") == cur_node_id and n.get("uci") == uci:
+                                existing_child = n["id"]
                                 break
-                        cur_epoch.node_id_to_fen[new_nid] = next_fen
-                        # Recompute fingerprint if mainline changed
-                        cur_node_id = new_nid
-                    cur_overlays = []
-                    state_changed = True
-                    cue_inferred = True
-                    cue_inferred_fields.append("dynamic_opcode04_move")
-                except ValueError:
-                    pass
-        elif kind == 6 and len(pay) >= 10:
-            rec_cnt = struct.unpack_from("<H", pay, 8)[0]
-            try:
-                recs, _ = parse_annotation_records(pay, 10, rec_cnt)
-                ovs, caps, _, _, inf_c = extract_overlays_and_captions_from_records(recs, len(cues_by_ms))
-                if ovs or caps:
-                    inferred_colors_total += inf_c
-                    cur_overlays = ovs
-                    cur_captions = caps
-                    state_changed = True
-                    if inf_c > 0:
+                        if existing_child:
+                            cur_node_id = existing_child
+                        else:
+                            dyn_node_seq += 1
+                            new_nid = f"n_dyn_{dyn_node_seq}"
+                            new_node: Dict[str, Any] = {
+                                "id": new_nid,
+                                "parent_id": cur_node_id,
+                                "uci": uci,
+                                "san": san,
+                                "fen": next_fen,
+                                "main_child_id": None,
+                                "children_ids": [],
+                                "inferred": True,
+                                "inferred_fields": ["dynamic_opcode04_move"],
+                            }
+                            g_nodes.append(new_node)
+                            for n in g_nodes:
+                                if n["id"] == cur_node_id:
+                                    if n["main_child_id"] is None:
+                                        n["main_child_id"] = new_nid
+                                    n["children_ids"].append(new_nid)
+                                    break
+                            cur_epoch.node_id_to_fen[new_nid] = next_fen
+                            cur_node_id = new_nid
+                        cur_overlays = []
+                        state_changed = True
                         cue_inferred = True
-                        cue_inferred_fields.append("overlay_colors")
-            except Exception:
-                pass
+                        cue_inferred_fields.append("dynamic_opcode04_move")
+                    except ValueError as exc:
+                        failed_state_records += 1
+                        msg = f"Failed opcode-04 move {s1}->{s2} at {ev_ms} ms: {exc}"
+                        warnings.append(msg)
+                        _open_unknown_interval(ev_ms, msg)
+        elif kind == 6:
+            if len(pay) < 10:
+                failed_state_records += 1
+                msg = f"Truncated opcode-06 annotation record at {ev_ms} ms"
+                warnings.append(msg)
+                _open_unknown_interval(ev_ms, msg)
+            else:
+                rec_cnt = struct.unpack_from("<H", pay, 8)[0]
+                try:
+                    recs, _ = parse_annotation_records(pay, 10, rec_cnt)
+                    ovs, caps, _, _, inf_c = extract_overlays_and_captions_from_records(recs, len(cues_by_ms))
+                    if ovs or caps:
+                        inferred_colors_total += inf_c
+                        cur_overlays = ovs
+                        cur_captions = caps
+                        state_changed = True
+                        if inf_c > 0:
+                            cue_inferred = True
+                            cue_inferred_fields.append("overlay_colors")
+                except Exception as exc:
+                    failed_state_records += 1
+                    msg = f"Malformed opcode-06 annotation record at {ev_ms} ms: {exc}"
+                    warnings.append(msg)
+                    _open_unknown_interval(ev_ms, msg)
         elif kind == 8:
             if cur_overlays or cur_captions:
                 cur_overlays = []
                 cur_captions = []
                 state_changed = True
+
+        if board_position_recovered:
+            _close_unknown_interval(ev_ms)
 
         if state_changed:
             clamped_ev_ms = max(0, min(ev_ms, duration_ms))
@@ -1255,13 +1509,34 @@ def import_legacy_lesson(
                     "captions": [dict(c) for c in cur_captions],
                 },
             }
-            if cue_inferred or inferred_clock_choice:
+            if cue_inferred or inferred_clock_choice or clock_mapping_status == "unresolved":
                 cue_obj["inferred"] = True
                 fields_list = list(cue_inferred_fields)
-                if inferred_clock_choice and "clock_source" not in fields_list:
+                if (inferred_clock_choice or clock_mapping_status == "unresolved") and "clock_source" not in fields_list:
                     fields_list.append("clock_source")
                 cue_obj["inferred_fields"] = fields_list
             cues_by_ms[clamped_ev_ms] = cue_obj
+
+            # Record both source timestamps for this cue in provenance
+            matched_wmv_ms: Optional[int] = None
+            if ev_arg is not None and (kind, ev_arg) in wmv_ms_by_op_arg and wmv_ms_by_op_arg[(kind, ev_arg)]:
+                matched_wmv_ms = wmv_ms_by_op_arg[(kind, ev_arg)][0]
+            cue_dual_timestamps.append(
+                {
+                    "at_ms": clamped_ev_ms,
+                    "opcode": kind,
+                    "arg": ev_arg,
+                    "node_id": cur_node_id,
+                    "sidecar_ms": ev_ms if txt_events else None,
+                    "wmv_pts_ms": matched_wmv_ms if txt_events else (ev_ms if wmv_events else None),
+                }
+            )
+
+    # If an unknown board-state interval is still open at the end of the event stream, close it at duration_ms
+    if open_unknown_start_ms is not None:
+        _close_unknown_interval(duration_ms)
+
+    source_clock_timestamps["cue_source_timestamps"] = cue_dual_timestamps
 
     # Recompute game fingerprints in case dynamic opcode-04 moves extended a mainline
     for gid, ep in games_by_id.items():
@@ -1311,17 +1586,37 @@ def import_legacy_lesson(
                 pass
         interactive_triggers.append(trig)
 
-    # Determine overall confidence level
+    # If clock_mapping_status is unresolved and there are active board events, record an incomplete interval
+    # covering the timeline so neither the importer nor the validator claims verified synchronization.
     total_nodes_all = sum(len(ep.game_json["nodes"]) for ep in games_by_id.values())
-    if not active_events or (total_nodes_all <= 1 and total_gotos == 0 and not fn_interactive):
+    has_board_activity = bool(active_events) and (total_nodes_all > 1 or total_gotos > 0 or bool(fn_interactive))
+
+    if has_board_activity and clock_mapping_status == "unresolved":
+        incomplete_intervals.append(
+            {
+                "start_ms": 0,
+                "end_ms": duration_ms,
+                "reason": (
+                    "Unresolved clock mapping between legacy sidecar (.txt) authoring times and WMV presentation "
+                    "timestamps (awaiting measured calibration in delegates/media-sync-list/PART-C-REPORT.md)."
+                ),
+            }
+        )
+
+    # Determine overall confidence level (never claim "high" when clock mapping is unresolved or intervals are incomplete)
+    if not has_board_activity:
         confidence = "unsynchronized_media_only"
         warnings.append("Source media contains no synchronized board events or game tree checkpoints.")
-    elif unresolved_gotos == 0 and not incomplete_intervals:
-        confidence = "high"
-    elif total_gotos > 0 and (unresolved_gotos / total_gotos) < 0.05:
-        confidence = "medium"
+    elif unresolved_gotos > 0 or failed_state_records > 0:
+        if total_gotos > 0 and (unresolved_gotos / total_gotos) < 0.05 and failed_state_records == 0 and clock_mapping_status == "verified_part_c":
+            confidence = "medium"
+        else:
+            confidence = "low"
+    elif clock_mapping_status != "verified_part_c" or incomplete_intervals:
+        # Board tree and cursors decoded cleanly, but media clock mapping is not yet proven
+        confidence = "medium" if not (txt_events and wmv_events) else "low"
     else:
-        confidence = "low"
+        confidence = "high"
 
     # Renumber cues sequentially by sorted at_ms
     sorted_cues = []
@@ -1335,7 +1630,9 @@ def import_legacy_lesson(
         "importer": {"name": IMPORTER_NAME, "version": IMPORTER_VERSION},
         "confidence": confidence,
         "clock_source": clock_source,
+        "clock_mapping_status": clock_mapping_status,
         "clock_drift_stats": clock_drift_stats,
+        "source_clock_timestamps": source_clock_timestamps,
         "sources": sources_audit,
         "inferred_summary": {
             "inferred_start_fen": inferred_start_fen_any,
@@ -1344,6 +1641,7 @@ def import_legacy_lesson(
             "inferred_promotions": inferred_promotions_total,
             "inferred_overlay_colors": inferred_colors_total,
             "unresolved_goto_count": unresolved_gotos,
+            "failed_state_record_count": failed_state_records,
             "total_goto_count": total_gotos,
             "checkpoint_header_layouts": header_layouts,
             "game_epoch_count": len(games_by_id),
@@ -1484,12 +1782,18 @@ def import_legacy_lesson(
         else:
             report = validate_package(work_dir)
     else:
+        if confidence == "unsynchronized_media_only":
+            dry_sync = "unsynced_no_timeline"
+        elif incomplete_intervals or clock_mapping_status == "unresolved":
+            dry_sync = "unsynced_incomplete_import"
+        else:
+            dry_sync = "synced"
         report = ValidationReport(
             target=str(src_p),
             structurally_valid=True,
             chess_valid=True,
             playable_here=True,
-            sync_status="unsynced_no_timeline" if confidence == "unsynchronized_media_only" else "synced",
+            sync_status=dry_sync,
         )
 
     return provenance_json, report

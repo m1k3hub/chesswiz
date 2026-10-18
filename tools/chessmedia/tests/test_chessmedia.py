@@ -46,7 +46,12 @@ from chessmedia.package import (  # noqa: E402
     pack_package,
     unpack_package,
 )
-from chessmedia.validator import scene_at_package, validate_package  # noqa: E402
+from chessmedia.validator import (  # noqa: E402
+    PreparedLesson,
+    prepare_timeline,
+    scene_at_package,
+    validate_package,
+)
 
 
 def _encode_ga6bit(raw: bytes) -> str:
@@ -649,9 +654,6 @@ class ChessMediaTestSuite(unittest.TestCase):
         str_block = b"".join(bytes([len(s)]) + s for s in strings)
         date_word = (2025 << 9) | (7 << 5) | 20
         meta_tail = struct.pack("<IBBBB", date_word, 1, 0, 0, 1)
-        # 3-byte no-TC gap: 01 00 00, then 2 mainline plies: e2e4 (from=33, to=35) and e7e5 (from=38, to=36)
-        # Wait: file-major 0-based: e2 is file 4 * 8 + rank 1 = 33; e4 is 4 * 8 + 3 = 35
-        # e7 is file 4 * 8 + rank 6 = 38; e5 is 4 * 8 + 4 = 36
         node1 = struct.pack("<BBHB", 33, 35, 0, 0)
         node2 = struct.pack("<BBHB", 38, 36, 0, 0)
         cp_payload = (
@@ -666,7 +668,6 @@ class ChessMediaTestSuite(unittest.TestCase):
         )
         op3_n1 = struct.pack("<IH", 3, 1)
         op3_n2 = struct.pack("<IH", 3, 2)
-        # Opcode 6 square mark on e4 (1-based file-major: 35 + 1 = 36, green=2)
         val_mark = bytes([2, 36])
         rec_mark = struct.pack("<H", 6 + len(val_mark)) + struct.pack(">IH", 4, len(val_mark)) + val_mark
         op6_mark = struct.pack("<IIH", 6, 0, 1) + rec_mark
@@ -692,7 +693,11 @@ class ChessMediaTestSuite(unittest.TestCase):
         out_pkg = self.tmpdir / "synth_imported.chessmedia"
         prov, rep = import_legacy_lesson(txt_file, pgn_path=pgn_file, out_target=out_pkg, media_mode="stub")
         self.assertTrue(rep.valid, f"Imported package invalid: {rep.errors}")
-        self.assertEqual(prov["confidence"], "high")
+        # Without PART-C-REPORT.md, clock mapping is unresolved and confidence is lowered (never 'high'/'synced')
+        self.assertEqual(prov["clock_mapping_status"], "unresolved")
+        self.assertEqual(prov["confidence"], "medium")
+        self.assertEqual(rep.sync_status, "unsynced_incomplete_import")
+        self.assertTrue(prov["inferred_summary"]["inferred_clock_choice"])
         self.assertEqual(prov["inferred_summary"]["unresolved_goto_count"], 0)
         self.assertEqual(prov["inferred_summary"]["total_goto_count"], 2)
         self.assertGreater(prov["inferred_summary"]["inferred_overlay_colors"], 0)
@@ -828,6 +833,414 @@ class ChessMediaTestSuite(unittest.TestCase):
         rep_bad = validate_package(bad_fixt)
         self.assertFalse(rep_bad.valid)
         self.assertIn("E_ILLEGAL_MOVE", [e.code for e in rep_bad.errors])
+
+    # ------------------------------------------------------------------
+    # Review Finding Regression Tests (Findings 1 through 11)
+    # ------------------------------------------------------------------
+
+    def test_08_finding_01_unpack_symlink_and_collision_containment(self) -> None:
+        """Finding 1: unpack_package must reject symlinked parent/file targets and existing collisions."""
+        pkg_dir = self._materialize_pkg("f01_pkg", self._build_base_package_dict())
+        zip_path = self.tmpdir / "f01_pkg.chessmedia"
+        self.assertTrue(pack_package(pkg_dir, zip_path).valid)
+
+        # Case A: Pre-existing directory symlink `games -> outside_dir`
+        outside_dir = self.tmpdir / "f01_outside_dir"
+        outside_dir.mkdir(parents=True, exist_ok=True)
+        sentinel = outside_dir / "main.json"
+        sentinel.write_text("OUTSIDE_SENTINEL", encoding="utf-8")
+
+        dest_symlink_dir = self.tmpdir / "f01_dest_symlink_dir"
+        dest_symlink_dir.mkdir(parents=True, exist_ok=True)
+        os.symlink(outside_dir, dest_symlink_dir / "games")
+
+        rep_sym_dir = unpack_package(zip_path, dest_symlink_dir)
+        self.assertFalse(rep_sym_dir.valid)
+        self.assertIn("E_ARCHIVE_UNSAFE_PATH", [e.code for e in rep_sym_dir.errors])
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "OUTSIDE_SENTINEL")
+
+        # Case B: Pre-existing file symlink `manifest.json -> outside_file`
+        outside_file = self.tmpdir / "f01_outside_manifest.json"
+        outside_file.write_text("OUTSIDE_MANIFEST", encoding="utf-8")
+        dest_symlink_file = self.tmpdir / "f01_dest_symlink_file"
+        dest_symlink_file.mkdir(parents=True, exist_ok=True)
+        os.symlink(outside_file, dest_symlink_file / "manifest.json")
+
+        rep_sym_file = unpack_package(zip_path, dest_symlink_file)
+        self.assertFalse(rep_sym_file.valid)
+        self.assertIn("E_ARCHIVE_UNSAFE_PATH", [e.code for e in rep_sym_file.errors])
+        self.assertEqual(outside_file.read_text(encoding="utf-8"), "OUTSIDE_MANIFEST")
+
+        # Case C: Existing regular file collision without overwrite=True must fail
+        dest_collision = self.tmpdir / "f01_dest_collision"
+        dest_collision.mkdir(parents=True, exist_ok=True)
+        existing_manifest = dest_collision / "manifest.json"
+        existing_manifest.write_text("KEEP_EXISTING", encoding="utf-8")
+
+        rep_coll = unpack_package(zip_path, dest_collision, overwrite=False)
+        self.assertFalse(rep_coll.valid)
+        self.assertIn("E_ARCHIVE_UNSAFE_PATH", [e.code for e in rep_coll.errors])
+        self.assertEqual(existing_manifest.read_text(encoding="utf-8"), "KEEP_EXISTING")
+
+        # With overwrite=True on a clean (non-symlink) destination, overwrite succeeds
+        rep_overwrite = unpack_package(zip_path, dest_collision, overwrite=True)
+        self.assertTrue(rep_overwrite.valid, f"Expected overwrite=True to succeed, got: {rep_overwrite.errors}")
+
+    def test_09_finding_02_dual_clock_disagreement_unresolved(self) -> None:
+        """Finding 2: When both .txt and .wmv clocks exist and PART-C-REPORT.md is absent, keep both and mark unresolved."""
+        # Build synthetic .txt and synthetic .wmv with ~1.67x clock ratio
+        op3_n0 = struct.pack("<IH", 3, 0)
+        op14_m1 = struct.pack("<II", 14, 1)
+        op14_m2 = struct.pack("<II", 14, 2)
+        txt_file = self.tmpdir / "f02_dual.txt"
+        txt_file.write_text(
+            f"1.0 GA {_encode_ga6bit(op3_n0)}\n"
+            f"6.0 GA {_encode_ga6bit(op14_m1)}\n"
+            f"12.0 GA {_encode_ga6bit(op14_m2)}\n",
+            encoding="utf-8",
+        )
+
+        # Build a synthetic ASF/WMV binary containing the File Properties GUID + two GA script commands at 1.67x PTS
+        fp_guid = bytes.fromhex("a1dcab8c47a9cf118ee400c00c205365")
+        # 104-byte File Properties Object: play_dur_100ns at +64 (35s = 350_000_000 100ns), preroll_ms at +80 (5000ms)
+        fpo = bytearray(104)
+        fpo[0:16] = fp_guid
+        struct.pack_into("<Q", fpo, 16, 104)
+        struct.pack_into("<Q", fpo, 64, 350_000_000)
+        struct.pack_into("<Q", fpo, 80, 5000)
+
+        def _make_wmv_ga_record(pts_ms: int, payload: bytes) -> bytes:
+            ga_str = _encode_ga6bit(payload).encode("utf-16le") + b"\x00\x00"
+            return struct.pack("<I", pts_ms) + b"\x00\x00\x03\x00" + struct.pack("<H", len(ga_str) // 2) + b"G\x00A\x00\x00\x00" + ga_str
+
+        wmv_bytes = (
+            bytes(fpo)
+            + b"\x00" * 32
+            + _make_wmv_ga_record(1670, op3_n0)
+            + _make_wmv_ga_record(10020, op14_m1)
+            + _make_wmv_ga_record(20040, op14_m2)
+        )
+        wmv_file = self.tmpdir / "f02_dual.wmv"
+        wmv_file.write_bytes(wmv_bytes)
+
+        out_dir = self.tmpdir / "f02_dual_out"
+        prov, rep = import_legacy_lesson(txt_file, wmv_path=wmv_file, out_target=out_dir, media_mode="stub")
+        self.assertTrue(rep.valid, f"Validation failed: {rep.errors}")
+        self.assertEqual(prov["clock_source"], "unresolved_dual")
+        self.assertEqual(prov["clock_mapping_status"], "unresolved")
+        self.assertEqual(prov["confidence"], "low")
+        self.assertEqual(rep.sync_status, "unsynced_incomplete_import")
+        self.assertTrue(prov["inferred_summary"]["inferred_clock_choice"])
+
+        # Both timestamp series and paired clock comparison must be preserved in provenance
+        sct = prov["source_clock_timestamps"]
+        self.assertEqual(len(sct["sidecar_events"]), 3)
+        self.assertEqual(len(sct["wmv_pts_events"]), 3)
+        self.assertGreaterEqual(len(sct["paired_clock_comparison"]), 2)
+        self.assertAlmostEqual(sct["paired_clock_comparison"][0]["wmv_over_sidecar_ratio"], 1.67, places=2)
+        self.assertGreaterEqual(len(sct["cue_source_timestamps"]), 1)
+
+    def test_10_finding_03_pgn_fallback_does_not_fabricate_cursors(self) -> None:
+        """Finding 3: Without a decoded opcode-02 checkpoint, PGN-only fallback must not map non-zero cursors."""
+        op3_n1 = struct.pack("<IH", 3, 1)
+        txt_file = self.tmpdir / "f03_no_cp.txt"
+        txt_file.write_text(f"12.0 GA {_encode_ga6bit(op3_n1)}\n", encoding="utf-8")
+
+        # PGN with a sideline so DFS order vs legacy pool index is ambiguous
+        pgn_file = self.tmpdir / "f03_no_cp.pgn"
+        pgn_file.write_text(
+            '[Event "Ambiguous"]\n[White "A"]\n[Black "B"]\n[Result "*"]\n\n'
+            "1. e4 (1. d4) 1... e5 *\n",
+            encoding="utf-8",
+        )
+
+        out_dir = self.tmpdir / "f03_no_cp_out"
+        prov, rep = import_legacy_lesson(txt_file, pgn_path=pgn_file, out_target=out_dir, media_mode="stub")
+        self.assertTrue(rep.valid, f"Validation failed: {rep.errors}")
+        self.assertEqual(prov["inferred_summary"]["unresolved_goto_count"], 1)
+        self.assertEqual(prov["confidence"], "low")
+        self.assertEqual(rep.sync_status, "unsynced_incomplete_import")
+
+        # Verify cue at 12000ms stayed at n0 rather than jumping to n1
+        sc = scene_at_package(out_dir, 12000)
+        self.assertEqual(sc["boards"]["demo"]["node_id"], "n0")
+
+    def test_11_finding_04_schema_invalid_no_crash_and_json_report(self) -> None:
+        """Finding 4: Non-scalar / malformed fields must never raise uncaught TypeError/AttributeError."""
+        d = self._build_base_package_dict()
+        d["games/main.json"]["nodes"][0]["children_ids"] = [{}]
+        pkg_dir = self._materialize_pkg("f04_malformed", d)
+
+        rep = validate_package(pkg_dir)
+        self.assertFalse(rep.valid)
+        self.assertIn("E_SCHEMA_VIOLATION", [e.code for e in rep.errors])
+        self.assertTrue(any(e.pointer == "/nodes/0/children_ids/0" for e in rep.errors))
+
+        # Verify CLI `validate --json` returns exit code 1 and prints valid JSON without traceback
+        import io
+        import contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = cli_main(["validate", str(pkg_dir), "--json"])
+        self.assertEqual(rc, 1)
+        parsed = json.loads(buf.getvalue())
+        self.assertFalse(parsed["valid"])
+        self.assertIn("E_SCHEMA_VIOLATION", [e["code"] for e in parsed["errors"]])
+
+    def test_12_finding_05_unknown_board_state_interval_until_recovery_or_end(self) -> None:
+        """Finding 5: Unknown-board-state intervals remain open until a valid checkpoint/goto or duration_ms."""
+        # Case A: Unresolved goto at 12000 ms, unrelated opcode-14 at 60000 ms -> interval is [12000, 61000]
+        op3_unresolved = struct.pack("<IH", 3, 99)
+        op14_marker = struct.pack("<II", 14, 1)
+        txt_a = self.tmpdir / "f05_unrecovered.txt"
+        txt_a.write_text(
+            f"12.0 GA {_encode_ga6bit(op3_unresolved)}\n"
+            f"60.0 GA {_encode_ga6bit(op14_marker)}\n",
+            encoding="utf-8",
+        )
+        out_a = self.tmpdir / "f05_unrecovered_out"
+        prov_a, rep_a = import_legacy_lesson(txt_a, out_target=out_a, media_mode="stub")
+        self.assertTrue(rep_a.valid)
+        self.assertEqual(rep_a.sync_status, "unsynced_incomplete_import")
+        unknown_spans_a = [
+            iv for iv in prov_a["incomplete_intervals"]
+            if "Unresolved legacy cursor id" in iv["reason"]
+        ]
+        self.assertEqual(len(unknown_spans_a), 1)
+        self.assertEqual(unknown_spans_a[0]["start_ms"], 12000)
+        self.assertEqual(unknown_spans_a[0]["end_ms"], 61000)
+
+        # Case B: Unresolved goto at 12000 ms, then resolved goto to cursor 0 at 45000 ms, marker at 60000 ms -> [12000, 45000]
+        op3_root = struct.pack("<IH", 3, 0)
+        txt_b = self.tmpdir / "f05_recovered.txt"
+        txt_b.write_text(
+            f"12.0 GA {_encode_ga6bit(op3_unresolved)}\n"
+            f"45.0 GA {_encode_ga6bit(op3_root)}\n"
+            f"60.0 GA {_encode_ga6bit(op14_marker)}\n",
+            encoding="utf-8",
+        )
+        out_b = self.tmpdir / "f05_recovered_out"
+        prov_b, rep_b = import_legacy_lesson(txt_b, out_target=out_b, media_mode="stub")
+        self.assertTrue(rep_b.valid)
+        unknown_spans_b = [
+            iv for iv in prov_b["incomplete_intervals"]
+            if "Unresolved legacy cursor id" in iv["reason"]
+        ]
+        self.assertEqual(len(unknown_spans_b), 1)
+        self.assertEqual(unknown_spans_b[0]["start_ms"], 12000)
+        self.assertEqual(unknown_spans_b[0]["end_ms"], 45000)
+
+    def test_13_finding_06_invalid_interactive_branch_targets_rejected(self) -> None:
+        """Finding 6: Invalid branch timeline_id or invalid branch start_ms/end_ms must be rejected."""
+        d = self._build_base_package_dict()
+        # Branch 0: nonexistent timeline_id and reversed start_ms > end_ms
+        d["timelines/main.json"]["interactive_triggers"][0]["branches"][0]["timeline_id"] = "nonexistent"
+        d["timelines/main.json"]["interactive_triggers"][0]["branches"][0]["start_ms"] = 19000
+        d["timelines/main.json"]["interactive_triggers"][0]["branches"][0]["end_ms"] = 5000
+        # Branch 1: end_ms exceeding clip-reply duration (5000ms)
+        d["timelines/main.json"]["interactive_triggers"][0]["branches"][1]["start_ms"] = 1000
+        d["timelines/main.json"]["interactive_triggers"][0]["branches"][1]["end_ms"] = 99000
+
+        pkg_dir = self._materialize_pkg("f06_bad_branches", d)
+        rep = validate_package(pkg_dir)
+        self.assertFalse(rep.valid)
+        codes = {e.code for e in rep.errors}
+        self.assertIn("E_REF_UNKNOWN", codes)
+        self.assertIn("E_TRIGGER_INVALID", codes)
+
+    def test_14_finding_07_chess960_pure_python_and_pychess_parity(self) -> None:
+        """Finding 7: Chess960 castling (king-captures-rook UCI, Shredder-FEN, X-FEN) works in both engines."""
+        shredder_start = "r3k2r/8/8/8/8/8/8/R3K2R w HAha - 0 1"
+        xfen_start = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"
+
+        for env_val in (None, "1"):
+            old_env = os.environ.get("CHESSMEDIA_PURE_PYTHON")
+            try:
+                if env_val is None:
+                    os.environ.pop("CHESSMEDIA_PURE_PYTHON", None)
+                else:
+                    os.environ["CHESSMEDIA_PURE_PYTHON"] = env_val
+
+                ok_s, err_s = validate_fen(shredder_start, "chess960")
+                self.assertTrue(ok_s, f"env={env_val}: {err_s}")
+                f_ks, _, san_ks = apply_uci_move(shredder_start, "e1h1", "chess960", "shredder-fen")
+                self.assertEqual(san_ks, "O-O")
+                self.assertEqual(f_ks, "r3k2r/8/8/8/8/8/8/R4RK1 b ha - 1 1")
+                self.assertEqual(san_to_uci(shredder_start, "O-O", "chess960", "shredder-fen")[0], "e1h1")
+                self.assertEqual(san_to_uci(shredder_start, "O-O-O", "chess960", "shredder-fen")[0], "e1a1")
+
+                ok_x, err_x = validate_fen(xfen_start, "chess960")
+                self.assertTrue(ok_x, f"env={env_val}: {err_x}")
+                f_qs, _, san_qs = apply_uci_move(xfen_start, "e1a1", "chess960", "xfen")
+                self.assertEqual(san_qs, "O-O-O")
+                self.assertEqual(f_qs, "r3k2r/8/8/8/8/8/8/2KR3R b kq - 1 1")
+
+                # Validate a full Chess960 package
+                d = self._build_base_package_dict()
+                tags = d["games/main.json"]["tags"]
+                fp960 = compute_fingerprint(tags, shredder_start, ["e1h1"], include_normalized_header=True)
+                d["manifest"]["required_features"] = ["scene-timeline/1", "chess-960/1"]
+                d["manifest"]["games"][0]["fingerprint"] = {
+                    "header_hash": fp960["header_hash"],
+                    "move_hash": fp960["move_hash"],
+                    "combined": fp960["combined"],
+                }
+                d["games/main.json"] = {
+                    "schema_version": "1.1",
+                    "id": "main",
+                    "variant": "chess960",
+                    "fen_encoding": "shredder-fen",
+                    "start_fen": shredder_start,
+                    "setup": True,
+                    "tags": tags,
+                    "fingerprint": fp960,
+                    "nodes": [
+                        {
+                            "id": "n0",
+                            "parent_id": None,
+                            "uci": None,
+                            "san": None,
+                            "fen": shredder_start,
+                            "main_child_id": "n1",
+                            "children_ids": ["n1"],
+                        },
+                        {
+                            "id": "n1",
+                            "parent_id": "n0",
+                            "uci": "e1h1",
+                            "san": "O-O",
+                            "fen": f_ks,
+                            "main_child_id": None,
+                            "children_ids": [],
+                        },
+                    ],
+                }
+                d["timelines/main.json"]["cues"] = d["timelines/main.json"]["cues"][:2]
+                d["timelines/main.json"]["interactive_triggers"] = []
+                pkg960 = self._materialize_pkg(f"f07_chess960_{env_val or 'default'}", d)
+                rep960 = validate_package(pkg960)
+                self.assertTrue(rep960.valid, f"Chess960 package failed (env={env_val}): {rep960.errors}")
+            finally:
+                if old_env is None:
+                    os.environ.pop("CHESSMEDIA_PURE_PYTHON", None)
+                else:
+                    os.environ["CHESSMEDIA_PURE_PYTHON"] = old_env
+
+    def test_15_findings_08_09_normative_alternatives_and_discriminated_schemas(self) -> None:
+        """Findings 8 & 9: Normative alternatives (xfen, manifest triggers, offset_ms, clock_track) & discriminated schemas."""
+        # 1. Valid package using manifest.interactive_triggers and large signed safe-integer offset_ms
+        d = self._build_base_package_dict()
+        d["manifest"]["interactive_triggers"] = d["timelines/main.json"].pop("interactive_triggers")
+        d["manifest"]["assets"][0]["offset_ms"] = 100_000_000
+        pkg_valid = self._materialize_pkg("f08_manifest_triggers", d)
+        rep_valid = validate_package(pkg_valid)
+        self.assertTrue(rep_valid.valid, f"Expected valid manifest triggers & offset_ms, got: {rep_valid.errors}")
+        sc = scene_at_package(pkg_valid, 6000)
+        self.assertIn("trig-after-e4", sc["matched_triggers"])
+
+        # 2. clock_track mismatch between timeline ("audio") and clock asset ("presentation") must fail with E_SCHEMA_VIOLATION on /clock_track
+        d_ct = self._build_base_package_dict()
+        d_ct["timelines/main.json"]["clock_track"] = "audio"
+        d_ct["manifest"]["assets"][0]["clock_track"] = "presentation"
+        rep_ct = validate_package(self._materialize_pkg("f08_clock_track_mismatch", d_ct))
+        self.assertFalse(rep_ct.valid)
+        self.assertTrue(
+            any(e.code == "E_SCHEMA_VIOLATION" and e.pointer == "/clock_track" for e in rep_ct.errors),
+            f"Expected E_SCHEMA_VIOLATION at /clock_track, got: {rep_ct.errors}",
+        )
+
+        # 3. Discriminated JSON Schema enforcement (Finding 9):
+        #    - file asset missing `path`
+        #    - VOD stream missing `duration_ms`
+        #    - arrow overlay missing `from`/`to`
+        #    - range trigger missing `start_ms`/`end_ms`
+        d_schema = self._build_base_package_dict()
+        del d_schema["manifest"]["assets"][1]["path"]
+        del d_schema["manifest"]["assets"][2]["duration_ms"]
+        del d_schema["timelines/main.json"]["cues"][1]["scene"]["boards"]["demo"]["overlays"][0]["from"]
+        d_schema["timelines/main.json"]["interactive_triggers"].append(
+            {
+                "id": "trig-bad-range",
+                "fen": STANDARD_START_FEN,
+                "kind": "range",
+                "asset_id": "clip-reply",
+            }
+        )
+        rep_schema = validate_package(self._materialize_pkg("f09_discriminated_schema", d_schema))
+        self.assertFalse(rep_schema.valid)
+        err_by_ptr = {e.pointer: e.code for e in rep_schema.errors}
+        self.assertIn("/assets/1", err_by_ptr)
+        self.assertEqual(err_by_ptr["/assets/1"], "E_SCHEMA_VIOLATION")
+        self.assertIn("/assets/2", err_by_ptr)
+        self.assertIn(err_by_ptr["/assets/2"], ("E_SCHEMA_VIOLATION", "E_STREAM_URI_INVALID"))
+        self.assertTrue(
+            any(p.startswith("/cues/1/scene/boards/demo") for p in err_by_ptr),
+            f"Expected overlay error pointer, got: {err_by_ptr}",
+        )
+        self.assertIn("/interactive_triggers/1", err_by_ptr)
+        self.assertIn(err_by_ptr["/interactive_triggers/1"], ("E_SCHEMA_VIOLATION", "E_TRIGGER_INVALID"))
+
+    def test_16_finding_10_manifest_fingerprint_json_pointer_resolves(self) -> None:
+        """Finding 10: Manifest fingerprint mismatch must emit valid RFC 6901 pointer /games/<idx>/fingerprint."""
+        d = self._build_base_package_dict()
+        d["manifest"]["games"][0]["fingerprint"]["header_hash"] = "ffffffffffffffff"
+        pkg_dir = self._materialize_pkg("f10_manifest_fp_ptr", d)
+        rep = validate_package(pkg_dir)
+        self.assertFalse(rep.valid)
+
+        fp_errs = [e for e in rep.errors if e.code == "E_FINGERPRINT_MISMATCH" and e.path == "manifest.json"]
+        self.assertEqual(len(fp_errs), 1)
+        self.assertEqual(fp_errs[0].pointer, "/games/0/fingerprint")
+
+        # Verify the RFC 6901 pointer resolves cleanly against manifest.json
+        manifest_doc = json.loads((pkg_dir / "manifest.json").read_text(encoding="utf-8"))
+        cur: Any = manifest_doc
+        for token in fp_errs[0].pointer.lstrip("/").split("/"):
+            cur = cur[int(token)] if isinstance(cur, list) else cur[token]
+        self.assertEqual(cur["header_hash"], "ffffffffffffffff")
+
+    def test_17_finding_11_prepared_timeline_logarithmic_seek_and_occurrences(self) -> None:
+        """Finding 11: PreparedLesson / PreparedTimeline reuses precomputed indices across seeks and resolves occurrences."""
+        d = self._build_base_package_dict()
+        # Add another cue revisiting n1 at 25000ms to test repeated-node occurrence disambiguation (§6.2)
+        d["timelines/main.json"]["cues"].append(
+            {
+                "id": "cue-0004",
+                "at_ms": 25000,
+                "scene": {
+                    "boards": {
+                        "demo": {
+                            "game_id": "main",
+                            "node_id": "n1",
+                            "orientation": "white",
+                            "overlays": [],
+                        }
+                    },
+                    "captions": [],
+                },
+            }
+        )
+        pkg_dir = self._materialize_pkg("f11_prepared_seek", d)
+        lesson = PreparedLesson(pkg_dir)
+        prep_tl = lesson.timelines["lecture"]
+        cue_times_id = id(prep_tl.cue_times)
+        node_maps_id = id(prep_tl.node_maps_by_game)
+
+        for seek_t in (0, 5000, 6500, 12500, 21000, 26000):
+            sc = lesson.scene_at(seek_t)
+            self.assertIsNotNone(sc["cue_id"])
+
+        self.assertEqual(prep_tl.eval_call_count, 6)
+        self.assertEqual(id(prep_tl.cue_times), cue_times_id)
+        self.assertEqual(id(prep_tl.node_maps_by_game), node_maps_id)
+
+        # Verify §6.2 occurrences(timeline, game_id, node_id) disambiguation
+        occ_all = lesson.occurrences("main", "n1")
+        self.assertEqual([o["at_ms"] for o in occ_all["occurrences"]], [5000, 25000])
+        occ_near_early = lesson.occurrences("main", "n1", nearest_ms=7000)
+        self.assertEqual(occ_near_early["selected"]["at_ms"], 5000)
+        occ_near_late = lesson.occurrences("main", "n1", nearest_ms=22000)
+        self.assertEqual(occ_near_late["selected"]["at_ms"], 25000)
 
 
 if __name__ == "__main__":

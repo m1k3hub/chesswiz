@@ -72,25 +72,7 @@
     "assets": {
       "type": "array",
       "minItems": 1,
-      "items": {
-        "type": "object",
-        "required": ["id", "kind", "media_type"],
-        "additionalProperties": false,
-        "properties": {
-          "id": { "$ref": "#/$defs/id" },
-          "kind": { "enum": ["file", "stream"] },
-          "path": { "$ref": "#/$defs/relpath" },
-          "uri": { "type": "string", "pattern": "^https?://.+" },
-          "fallback_path": { "$ref": "#/$defs/relpath" },
-          "media_type": { "type": "string", "minLength": 3 },
-          "duration_ms": { "$ref": "#/$defs/ms_nonneg" },
-          "offset_ms": { "type": "integer", "minimum": -86400000, "maximum": 86400000 },
-          "clock_track": { "enum": ["presentation", "audio", "video"] },
-          "live": { "type": "boolean" },
-          "title": { "type": "string" },
-          "language": { "type": "string" }
-        }
-      }
+      "items": { "$ref": "#/$defs/asset" }
     },
     "timelines": {
       "type": "array",
@@ -142,6 +124,10 @@
         "asset_id": { "$ref": "#/$defs/id" }
       }
     },
+    "interactive_triggers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/trigger" }
+    },
     "provenance": {
       "type": "object",
       "required": ["path"],
@@ -182,6 +168,15 @@
       "minimum": 0,
       "maximum": 9007199254740991
     },
+    "ms_signed": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "square": {
+      "type": "string",
+      "pattern": "^[a-h][1-8]$"
+    },
     "fingerprint": {
       "type": "object",
       "required": ["header_hash", "move_hash", "combined"],
@@ -191,6 +186,182 @@
         "move_hash": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
         "combined": { "type": "string", "pattern": "^[0-9a-f]{16}:[0-9a-f]{16}$" }
       }
+    },
+    "asset": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["id", "kind", "path", "media_type"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "kind": { "const": "file" },
+            "path": { "$ref": "#/$defs/relpath" },
+            "media_type": { "type": "string", "minLength": 3 },
+            "duration_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "offset_ms": { "$ref": "#/$defs/ms_signed" },
+            "clock_track": { "enum": ["presentation", "audio", "video"] },
+            "title": { "type": "string" },
+            "language": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "kind", "uri", "media_type", "live", "duration_ms"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "kind": { "const": "stream" },
+            "uri": { "type": "string", "pattern": "^https?://.+" },
+            "fallback_path": { "$ref": "#/$defs/relpath" },
+            "media_type": { "type": "string", "minLength": 3 },
+            "duration_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "offset_ms": { "$ref": "#/$defs/ms_signed" },
+            "clock_track": { "enum": ["presentation", "audio", "video"] },
+            "live": { "const": false },
+            "title": { "type": "string" },
+            "language": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "kind", "uri", "media_type", "live"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "kind": { "const": "stream" },
+            "uri": { "type": "string", "pattern": "^https?://.+" },
+            "fallback_path": { "$ref": "#/$defs/relpath" },
+            "media_type": { "type": "string", "minLength": 3 },
+            "duration_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "offset_ms": { "$ref": "#/$defs/ms_signed" },
+            "clock_track": { "enum": ["presentation", "audio", "video"] },
+            "live": { "const": true },
+            "title": { "type": "string" },
+            "language": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "branch": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["id", "uci", "role", "asset_id"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "uci": { "type": "string", "pattern": "^[a-h][1-8][a-h][1-8][qrbn]?$" },
+            "san": { "type": "string" },
+            "role": { "enum": ["primary", "alternative"] },
+            "asset_id": { "$ref": "#/$defs/id" },
+            "timeline_id": { "$ref": "#/$defs/id" },
+            "overlay_arrow": {
+              "type": "object",
+              "required": ["from", "to"],
+              "additionalProperties": false,
+              "properties": {
+                "from": { "$ref": "#/$defs/square" },
+                "to": { "$ref": "#/$defs/square" }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "uci", "role", "asset_id", "start_ms", "end_ms"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "uci": { "type": "string", "pattern": "^[a-h][1-8][a-h][1-8][qrbn]?$" },
+            "san": { "type": "string" },
+            "role": { "enum": ["primary", "alternative"] },
+            "asset_id": { "$ref": "#/$defs/id" },
+            "timeline_id": { "$ref": "#/$defs/id" },
+            "start_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "end_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "overlay_arrow": {
+              "type": "object",
+              "required": ["from", "to"],
+              "additionalProperties": false,
+              "properties": {
+                "from": { "$ref": "#/$defs/square" },
+                "to": { "$ref": "#/$defs/square" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "trigger": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["id", "fen", "kind", "asset_id"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "fen": { "type": "string", "minLength": 15 },
+            "match_mode": { "enum": ["board_turn", "exact"] },
+            "game_id": { "$ref": "#/$defs/id" },
+            "node_id": { "$ref": "#/$defs/id" },
+            "at_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "kind": { "const": "clip" },
+            "asset_id": { "$ref": "#/$defs/id" },
+            "timeline_id": { "$ref": "#/$defs/id" },
+            "prompt": { "type": "string" },
+            "branches": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/branch" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "fen", "kind", "asset_id", "start_ms", "end_ms"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "fen": { "type": "string", "minLength": 15 },
+            "match_mode": { "enum": ["board_turn", "exact"] },
+            "game_id": { "$ref": "#/$defs/id" },
+            "node_id": { "$ref": "#/$defs/id" },
+            "at_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "kind": { "const": "range" },
+            "asset_id": { "$ref": "#/$defs/id" },
+            "timeline_id": { "$ref": "#/$defs/id" },
+            "start_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "end_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "prompt": { "type": "string" },
+            "branches": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/branch" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "fen", "kind", "branches"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "fen": { "type": "string", "minLength": 15 },
+            "match_mode": { "enum": ["board_turn", "exact"] },
+            "game_id": { "$ref": "#/$defs/id" },
+            "node_id": { "$ref": "#/$defs/id" },
+            "at_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "kind": { "const": "branch_prompt" },
+            "asset_id": { "$ref": "#/$defs/id" },
+            "timeline_id": { "$ref": "#/$defs/id" },
+            "prompt": { "type": "string" },
+            "branches": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/branch" }
+            }
+          }
+        }
+      ]
     }
   }
 }

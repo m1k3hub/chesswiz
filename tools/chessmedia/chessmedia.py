@@ -78,6 +78,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_unpack = sub.add_parser("unpack", help="Unpack a .chessmedia ZIP archive into a directory")
     p_unpack.add_argument("src_zip", help="Source .chessmedia archive")
     p_unpack.add_argument("out_dir", help="Destination directory")
+    p_unpack.add_argument("--overwrite", action="store_true", help="Allow overwriting existing regular files in out_dir")
     p_unpack.add_argument("--json", action="store_true", help="Emit JSON report")
 
     # info
@@ -127,7 +128,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0 if report.valid else 1
 
     if args.subcommand == "unpack":
-        report = unpack_package(args.src_zip, args.out_dir, validate=True)
+        report = unpack_package(args.src_zip, args.out_dir, validate=True, overwrite=args.overwrite)
         if args.json:
             print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
         else:

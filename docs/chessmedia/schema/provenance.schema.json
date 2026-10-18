@@ -9,6 +9,7 @@
     "importer",
     "confidence",
     "clock_source",
+    "clock_mapping_status",
     "sources",
     "inferred_summary",
     "warnings"
@@ -29,9 +30,16 @@
       "enum": ["high", "medium", "low", "unsynchronized_media_only"]
     },
     "clock_source": {
-      "enum": ["sidecar_txt", "wmv_pts", "checkpoint_type37", "none"]
+      "enum": ["unresolved_dual", "sidecar_txt", "wmv_pts", "checkpoint_type37", "none"]
+    },
+    "clock_mapping_status": {
+      "enum": ["unresolved", "verified_part_c", "not_applicable"]
     },
     "clock_drift_stats": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "source_clock_timestamps": {
       "type": "object",
       "additionalProperties": true
     },

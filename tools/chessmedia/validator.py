@@ -189,6 +189,19 @@ def _validate_against_json_schema(
             else:
                 sub_errs.extend(errs)
         if matches != 1:
+            # If instance is a dict with a discriminator like "kind" or "live", prefer errors from the matching branch
+            if isinstance(instance, dict):
+                for sub in schema["oneOf"]:
+                    props = sub.get("properties", {}) if isinstance(sub, dict) else {}
+                    kind_prop = props.get("kind", {})
+                    if isinstance(kind_prop, dict) and "const" in kind_prop and instance.get("kind") == kind_prop["const"]:
+                        live_prop = props.get("live", {})
+                        if isinstance(live_prop, dict) and "const" in live_prop and "live" in instance:
+                            if instance.get("live") != live_prop["const"]:
+                                continue
+                        branch_errs = _validate_against_json_schema(instance, sub, root_schema, pointer)
+                        if branch_errs:
+                            return branch_errs
             return [f"{pointer}: failed oneOf constraint"]
         return []
 
@@ -596,12 +609,17 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
                 if "/version" in s_err or "/format" in s_err:
                     if any(e.code == "E_UNSUPPORTED_VERSION" for e in errors):
                         continue
-                if "pattern '^https?://" in s_err:
-                    add_err(3, "E_STREAM_URI_INVALID", "manifest.json", s_err.split(":")[0], s_err)
-                elif "/gallery_order" in s_err and "unique" in s_err:
+                ptr_part = s_err.split(":")[0]
+                if "pattern '^https?://" in s_err or (
+                    ptr_part.startswith("/assets/") and ("'uri'" in s_err or "'duration_ms'" in s_err)
+                ):
+                    add_err(3, "E_STREAM_URI_INVALID", "manifest.json", ptr_part, s_err)
+                elif "/gallery_order" in s_err and ("unique" in s_err or "at least 1" in s_err):
                     add_err(3, "E_GALLERY_INVALID", "manifest.json", "/gallery_order", s_err)
+                elif "/interactive_triggers" in ptr_part:
+                    add_err(5, "E_TRIGGER_INVALID", "manifest.json", ptr_part, s_err)
                 else:
-                    add_err(2, "E_SCHEMA_VIOLATION", "manifest.json", s_err.split(":")[0], s_err)
+                    add_err(2, "E_SCHEMA_VIOLATION", "manifest.json", ptr_part, s_err)
 
         # Stage 1: Check manifest.members against package files
         members_list = manifest.get("members")
@@ -656,12 +674,14 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
                 board_ids.add(bid)
 
         game_entries: Dict[str, Dict[str, Any]] = {}
+        game_manifest_idx: Dict[str, int] = {}
         for idx, g in enumerate(manifest.get("games", []) if isinstance(manifest.get("games"), list) else []):
             if isinstance(g, dict) and isinstance(g.get("id"), str):
                 gid = g["id"]
                 if gid in game_entries:
                     add_err(3, "E_DUPLICATE_ID", "manifest.json", f"/games/{idx}/id", f"Duplicate game id {gid!r}")
                 game_entries[gid] = g
+                game_manifest_idx[gid] = idx
                 gpath = g.get("path")
                 if isinstance(gpath, str):
                     if not _is_safe_relpath(gpath):
@@ -683,7 +703,8 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
             if kind == "file":
                 apath = a.get("path")
                 if not isinstance(apath, str) or not apath:
-                    add_err(2, "E_SCHEMA_VIOLATION", "manifest.json", f"{ptr}/path", "File asset requires 'path'")
+                    if not any(e.path == "manifest.json" and e.pointer.startswith(ptr) for e in errors):
+                        add_err(2, "E_SCHEMA_VIOLATION", "manifest.json", f"{ptr}/path", "File asset requires 'path'")
                 elif not _is_safe_relpath(apath):
                     add_err(1, "E_ARCHIVE_UNSAFE_PATH", "manifest.json", f"{ptr}/path", f"Unsafe asset path {apath!r}")
                 elif apath not in file_set:
@@ -691,21 +712,23 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
             elif kind == "stream":
                 uri = a.get("uri")
                 if not isinstance(uri, str) or not URI_RE.match(uri):
-                    add_err(
-                        3,
-                        "E_STREAM_URI_INVALID",
-                        "manifest.json",
-                        f"{ptr}/uri",
-                        f"Stream asset requires valid http(s) URI, got {uri!r}",
-                    )
+                    if not any(e.code == "E_STREAM_URI_INVALID" and e.pointer.startswith(ptr) for e in errors):
+                        add_err(
+                            3,
+                            "E_STREAM_URI_INVALID",
+                            "manifest.json",
+                            f"{ptr}/uri",
+                            f"Stream asset requires valid http(s) URI, got {uri!r}",
+                        )
                 if a.get("live") is False and not _is_int_not_bool(a.get("duration_ms")):
-                    add_err(
-                        3,
-                        "E_STREAM_URI_INVALID",
-                        "manifest.json",
-                        f"{ptr}/duration_ms",
-                        "Non-live VOD stream asset requires integer duration_ms",
-                    )
+                    if not any(e.code == "E_STREAM_URI_INVALID" and e.pointer.startswith(ptr) for e in errors):
+                        add_err(
+                            3,
+                            "E_STREAM_URI_INVALID",
+                            "manifest.json",
+                            f"{ptr}/duration_ms",
+                            "Non-live VOD stream asset requires integer duration_ms",
+                        )
                 fb = a.get("fallback_path")
                 if fb is not None:
                     if not isinstance(fb, str) or not _is_safe_relpath(fb):
@@ -752,7 +775,8 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
         gallery = manifest.get("gallery_order")
         if isinstance(gallery, list):
             if not gallery:
-                add_err(3, "E_GALLERY_INVALID", "manifest.json", "/gallery_order", "gallery_order cannot be empty")
+                if not any(e.code == "E_GALLERY_INVALID" for e in errors):
+                    add_err(3, "E_GALLERY_INVALID", "manifest.json", "/gallery_order", "gallery_order cannot be empty")
             seen_gal: Set[str] = set()
             for idx, aid in enumerate(gallery):
                 if not isinstance(aid, str) or aid not in asset_entries:
@@ -820,7 +844,11 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
                 add_err(3, "E_REF_UNKNOWN", gpath, "/id", f"Game id {gdata.get('id')!r} does not match manifest game id {gid!r}")
 
             variant = gdata.get("variant", "standard")
+            if not isinstance(variant, str) or variant not in ("standard", "chess960"):
+                variant = "standard"
             fen_enc = gdata.get("fen_encoding", "fen")
+            if not isinstance(fen_enc, str) or fen_enc not in ("fen", "shredder-fen", "xfen"):
+                fen_enc = "fen"
             start_fen = gdata.get("start_fen")
             setup_flag = gdata.get("setup")
 
@@ -873,13 +901,14 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
             root_ptr = f"/nodes/{node_idx_by_id[root_id]}"
             if root_node.get("uci") is not None or root_node.get("san") is not None:
                 add_err(4, "E_TREE_STRUCTURE", gpath, root_ptr, "Root node must have uci=null and san=null")
-            if not fens_equivalent(str(root_node.get("fen", "")), start_fen, variant=variant):
+            root_fen_val = root_node.get("fen")
+            if not isinstance(root_fen_val, str) or not fens_equivalent(root_fen_val, start_fen, variant=variant, fen_encoding=fen_enc):
                 add_err(
                     4,
                     "E_START_FEN_INVALID",
                     gpath,
                     f"{root_ptr}/fen",
-                    f"Root node FEN {root_node.get('fen')!r} does not match start_fen {start_fen!r}",
+                    f"Root node FEN {root_fen_val!r} does not match start_fen {start_fen!r}",
                 )
 
             # Check parent links, children_ids, main_child_id, and tree connectivity (no cycles)
@@ -932,7 +961,7 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
                 mc = n.get("main_child_id")
                 actual_children = children_map.get(nid, [])
                 if mc is not None:
-                    if mc not in actual_children:
+                    if not isinstance(mc, str) or mc not in actual_children:
                         add_err(
                             4,
                             "E_TREE_STRUCTURE",
@@ -953,7 +982,9 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
                     structure_ok = False
                 decl_children = n.get("children_ids")
                 if isinstance(decl_children, list):
-                    if set(decl_children) != set(actual_children) or len(decl_children) != len(actual_children):
+                    if not all(isinstance(c_item, str) for c_item in decl_children):
+                        structure_ok = False
+                    elif set(decl_children) != set(actual_children) or len(decl_children) != len(actual_children):
                         add_err(
                             4,
                             "E_TREE_STRUCTURE",
@@ -968,14 +999,21 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
                 bfs = [root_id]
                 while bfs:
                     cur = bfs.pop(0)
-                    parent_fen = str(node_by_id[cur].get("fen", ""))
+                    parent_fen_raw = node_by_id[cur].get("fen")
+                    if not isinstance(parent_fen_raw, str):
+                        continue
+                    parent_fen = parent_fen_raw
                     for ch_id in children_map.get(cur, []):
                         bfs.append(ch_id)
                         ch_node = node_by_id[ch_id]
                         ch_idx = node_idx_by_id[ch_id]
                         ch_ptr = f"/nodes/{ch_idx}"
-                        uci = str(ch_node.get("uci", ""))
-                        node_fen = str(ch_node.get("fen", ""))
+                        uci_raw = ch_node.get("uci")
+                        node_fen_raw = ch_node.get("fen")
+                        if not isinstance(uci_raw, str) or not isinstance(node_fen_raw, str):
+                            continue
+                        uci = uci_raw
+                        node_fen = node_fen_raw
                         node_san = ch_node.get("san")
                         try:
                             fen_legal, fen_always, canon_san = apply_uci_move(
@@ -990,7 +1028,9 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
                                 f"Illegal move {uci!r} from node {cur!r}: {exc}",
                             )
                             continue
-                        if node_fen.strip() not in (fen_legal, fen_always) and not fens_equivalent(node_fen, fen_legal, variant=variant):
+                        if node_fen.strip() not in (fen_legal, fen_always) and not fens_equivalent(
+                            node_fen, fen_legal, variant=variant, fen_encoding=fen_enc
+                        ):
                             add_err(
                                 4,
                                 "E_FEN_MISMATCH",
@@ -998,7 +1038,7 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
                                 f"{ch_ptr}/fen",
                                 f"FEN mismatch after {uci!r}: expected {fen_legal!r}, got {node_fen!r}",
                             )
-                        if node_san is not None and node_san != canon_san:
+                        if node_san is not None and (not isinstance(node_san, str) or node_san != canon_san):
                             add_err(
                                 4,
                                 "E_SAN_MISMATCH",
@@ -1018,7 +1058,8 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
                         mainline_ucis.append(u)
                     cur_mc = node_by_id[cur_mc].get("main_child_id")
 
-                tags = gdata.get("tags") if isinstance(gdata.get("tags"), dict) else {}
+                raw_tags = gdata.get("tags")
+                tags = {str(k): str(v) for k, v in raw_tags.items() if isinstance(k, str) and isinstance(v, str)} if isinstance(raw_tags, dict) else {}
                 expected_fp = compute_fingerprint(tags, start_fen, mainline_ucis)
                 actual_fp = gdata.get("fingerprint")
                 if not isinstance(actual_fp, dict) or (
@@ -1034,6 +1075,7 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
                         f"Game fingerprint mismatch: expected {expected_fp}, got {actual_fp}",
                     )
                 manifest_fp = g_entry.get("fingerprint")
+                g_idx = game_manifest_idx[gid]
                 if not isinstance(manifest_fp, dict) or (
                     manifest_fp.get("header_hash") != expected_fp["header_hash"]
                     or manifest_fp.get("move_hash") != expected_fp["move_hash"]
@@ -1043,12 +1085,165 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
                         4,
                         "E_FINGERPRINT_MISMATCH",
                         "manifest.json",
-                        f"/games/{gid}/fingerprint",
+                        f"/games/{g_idx}/fingerprint",
                         f"Manifest game fingerprint mismatch for {gid!r}: expected {expected_fp}, got {manifest_fp}",
                     )
 
             parsed_games[gid] = gdata
             game_node_maps[gid] = node_by_id
+
+        def _validate_triggers_list(
+            triggers_list: Any,
+            doc_path: str,
+            base_ptr: str,
+            tl_duration_ms: Optional[int],
+            seen_trig_ids: Set[str],
+        ) -> None:
+            if not isinstance(triggers_list, list):
+                return
+            for tr_idx, tr in enumerate(triggers_list):
+                if not isinstance(tr, dict):
+                    continue
+                t_ptr = f"{base_ptr}/{tr_idx}"
+                tr_id = tr.get("id")
+                if isinstance(tr_id, str):
+                    if tr_id in seen_trig_ids:
+                        add_err(3, "E_DUPLICATE_ID", doc_path, f"{t_ptr}/id", f"Duplicate trigger id {tr_id!r}")
+                    seen_trig_ids.add(tr_id)
+
+                tr_at_ms = tr.get("at_ms")
+                if tr_at_ms is not None and tl_duration_ms is not None:
+                    if not _is_int_not_bool(tr_at_ms) or tr_at_ms < 0 or tr_at_ms > tl_duration_ms:
+                        add_err(
+                            5,
+                            "E_CUE_PAST_DURATION",
+                            doc_path,
+                            f"{t_ptr}/at_ms",
+                            f"Trigger at_ms={tr_at_ms!r} out of timeline duration bounds [0, {tl_duration_ms}]",
+                        )
+
+                tr_fen = tr.get("fen")
+                if not isinstance(tr_fen, str):
+                    add_err(5, "E_TRIGGER_INVALID", doc_path, f"{t_ptr}/fen", "Trigger requires valid 6-field FEN")
+                    continue
+                tgid = tr.get("game_id")
+                tr_variant = "standard"
+                if isinstance(tgid, str) and tgid in parsed_games:
+                    gv = parsed_games[tgid].get("variant")
+                    if gv in ("standard", "chess960"):
+                        tr_variant = gv
+                fen_ok, fen_err = validate_fen(tr_fen, variant=tr_variant)
+                if not fen_ok:
+                    add_err(5, "E_TRIGGER_INVALID", doc_path, f"{t_ptr}/fen", f"Invalid trigger FEN: {fen_err}")
+                    continue
+
+                match_mode = tr.get("match_mode", "board_turn")
+                tnid = tr.get("node_id")
+                if tgid is not None:
+                    if not isinstance(tgid, str) or tgid not in game_entries:
+                        add_err(3, "E_REF_UNKNOWN", doc_path, f"{t_ptr}/game_id", f"Trigger references unknown game_id {tgid!r}")
+                    elif tnid is not None:
+                        if not isinstance(tnid, str) or (tgid in game_node_maps and tnid not in game_node_maps[tgid]):
+                            add_err(3, "E_REF_UNKNOWN", doc_path, f"{t_ptr}/node_id", f"Trigger references unknown node_id {tnid!r}")
+                        elif tgid in game_node_maps:
+                            node_fen = str(game_node_maps[tgid][tnid].get("fen", ""))
+                            if match_mode == "exact":
+                                matched = fens_equivalent(node_fen, tr_fen, variant=tr_variant)
+                            else:
+                                matched = (fen_board_turn_key(node_fen) == fen_board_turn_key(tr_fen))
+                            if not matched:
+                                add_err(
+                                    5,
+                                    "E_TRIGGER_INVALID",
+                                    doc_path,
+                                    f"{t_ptr}/fen",
+                                    f"Trigger FEN {tr_fen!r} does not match node ({tgid}, {tnid}) FEN {node_fen!r} under {match_mode!r}",
+                                )
+
+                tkind = tr.get("kind")
+                taid = tr.get("asset_id")
+                ttid = tr.get("timeline_id")
+                if taid is not None and (not isinstance(taid, str) or taid not in asset_entries):
+                    add_err(3, "E_REF_UNKNOWN", doc_path, f"{t_ptr}/asset_id", f"Trigger references unknown asset_id {taid!r}")
+                if ttid is not None and (not isinstance(ttid, str) or ttid not in timeline_entries):
+                    add_err(3, "E_REF_UNKNOWN", doc_path, f"{t_ptr}/timeline_id", f"Trigger references unknown timeline_id {ttid!r}")
+
+                if tkind in ("clip", "range") and not isinstance(taid, str):
+                    add_err(5, "E_TRIGGER_INVALID", doc_path, f"{t_ptr}/asset_id", f"Trigger kind={tkind!r} requires asset_id")
+
+                if tkind == "range":
+                    s_ms = tr.get("start_ms")
+                    e_ms = tr.get("end_ms")
+                    if not (_is_int_not_bool(s_ms) and _is_int_not_bool(e_ms) and 0 <= s_ms < e_ms):
+                        add_err(5, "E_TRIGGER_INVALID", doc_path, t_ptr, f"Range trigger requires 0 <= start_ms < end_ms, got ({s_ms}, {e_ms})")
+                    elif isinstance(taid, str) and taid in asset_entries:
+                        adur = asset_entries[taid].get("duration_ms")
+                        if _is_int_not_bool(adur) and e_ms > adur:
+                            add_err(5, "E_TRIGGER_INVALID", doc_path, f"{t_ptr}/end_ms", f"Range trigger end_ms={e_ms} exceeds asset duration_ms={adur}")
+
+                branches = tr.get("branches")
+                if tkind == "branch_prompt" and (not isinstance(branches, list) or len(branches) == 0):
+                    add_err(5, "E_TRIGGER_INVALID", doc_path, f"{t_ptr}/branches", "branch_prompt trigger requires non-empty branches")
+                if isinstance(branches, list):
+                    seen_br: Set[str] = set()
+                    for b_idx, br in enumerate(branches):
+                        if not isinstance(br, dict):
+                            continue
+                        br_ptr = f"{t_ptr}/branches/{b_idx}"
+                        brid = br.get("id")
+                        if isinstance(brid, str):
+                            if brid in seen_br:
+                                add_err(3, "E_DUPLICATE_ID", doc_path, f"{br_ptr}/id", f"Duplicate branch id {brid!r}")
+                            seen_br.add(brid)
+                        baid = br.get("asset_id")
+                        if not isinstance(baid, str) or baid not in asset_entries:
+                            add_err(3, "E_REF_UNKNOWN", doc_path, f"{br_ptr}/asset_id", f"Branch references unknown asset_id {baid!r}")
+                        btid = br.get("timeline_id")
+                        if btid is not None and (not isinstance(btid, str) or btid not in timeline_entries):
+                            add_err(3, "E_REF_UNKNOWN", doc_path, f"{br_ptr}/timeline_id", f"Branch references unknown timeline_id {btid!r}")
+                        bs_ms = br.get("start_ms")
+                        be_ms = br.get("end_ms")
+                        if bs_ms is not None or be_ms is not None:
+                            if not (_is_int_not_bool(bs_ms) and _is_int_not_bool(be_ms) and 0 <= bs_ms < be_ms):
+                                add_err(
+                                    5,
+                                    "E_TRIGGER_INVALID",
+                                    doc_path,
+                                    br_ptr,
+                                    f"Branch interval requires paired 0 <= start_ms < end_ms, got ({bs_ms}, {be_ms})",
+                                )
+                            elif isinstance(baid, str) and baid in asset_entries:
+                                badur = asset_entries[baid].get("duration_ms")
+                                if _is_int_not_bool(badur) and be_ms > badur:
+                                    add_err(
+                                        5,
+                                        "E_TRIGGER_INVALID",
+                                        doc_path,
+                                        f"{br_ptr}/end_ms",
+                                        f"Branch end_ms={be_ms} exceeds target asset duration_ms={badur}",
+                                    )
+                        buci = br.get("uci")
+                        bsan = br.get("san")
+                        if not isinstance(buci, str):
+                            add_err(5, "E_TRIGGER_INVALID", doc_path, f"{br_ptr}/uci", "Branch requires UCI move")
+                        else:
+                            try:
+                                _, _, canon_san = apply_uci_move(tr_fen, buci, variant=tr_variant)
+                                if bsan is not None and (not isinstance(bsan, str) or bsan != canon_san):
+                                    add_err(5, "E_TRIGGER_INVALID", doc_path, f"{br_ptr}/san", f"Branch SAN {bsan!r} != canonical {canon_san!r}")
+                            except ValueError as exc:
+                                add_err(5, "E_TRIGGER_INVALID", doc_path, f"{br_ptr}/uci", f"Illegal branch move {buci!r} in trigger FEN: {exc}")
+
+        # Validate package-wide interactive_triggers in manifest.json (if present)
+        global_seen_trig: Set[str] = set()
+        if "interactive_triggers" in manifest:
+            _validate_triggers_list(
+                manifest.get("interactive_triggers"),
+                "manifest.json",
+                "/interactive_triggers",
+                None,
+                global_seen_trig,
+            )
 
         # Stage 5: Validate each timeline file
         timeline_schema = _load_builtin_schema("timeline")
@@ -1092,14 +1287,25 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
             clock_aid = tdata.get("clock_asset_id")
             if not isinstance(clock_aid, str) or clock_aid not in asset_entries:
                 add_err(3, "E_REF_UNKNOWN", tpath, "/clock_asset_id", f"Timeline references unknown clock_asset_id {clock_aid!r}")
-            elif clock_aid != tl_entry.get("clock_asset_id"):
-                add_err(
-                    3,
-                    "E_REF_UNKNOWN",
-                    tpath,
-                    "/clock_asset_id",
-                    f"Timeline clock_asset_id {clock_aid!r} disagrees with manifest {tl_entry.get('clock_asset_id')!r}",
-                )
+            else:
+                if clock_aid != tl_entry.get("clock_asset_id"):
+                    add_err(
+                        3,
+                        "E_REF_UNKNOWN",
+                        tpath,
+                        "/clock_asset_id",
+                        f"Timeline clock_asset_id {clock_aid!r} disagrees with manifest {tl_entry.get('clock_asset_id')!r}",
+                    )
+                tl_track = tdata.get("clock_track")
+                as_track = asset_entries[clock_aid].get("clock_track")
+                if isinstance(tl_track, str) and isinstance(as_track, str) and tl_track != as_track:
+                    add_err(
+                        2,
+                        "E_SCHEMA_VIOLATION",
+                        tpath,
+                        "/clock_track",
+                        f"Timeline clock_track {tl_track!r} conflicts with asset {clock_aid!r} clock_track {as_track!r}",
+                    )
 
             duration_ms = tdata.get("duration_ms")
             if not _is_int_not_bool(duration_ms) or duration_ms < 0:
@@ -1205,21 +1411,26 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
                             okind = ov.get("kind")
                             ocolor = ov.get("color")
                             if not isinstance(ocolor, str) or not RGBA_RE.match(ocolor):
-                                add_err(5, "E_OVERLAY_INVALID", tpath, f"{o_ptr}/color", f"Invalid overlay color {ocolor!r}")
+                                if not any(e.path == tpath and e.pointer.startswith(o_ptr) for e in errors):
+                                    add_err(5, "E_OVERLAY_INVALID", tpath, f"{o_ptr}/color", f"Invalid overlay color {ocolor!r}")
                             if okind == "arrow":
                                 frm, to = ov.get("from"), ov.get("to")
                                 if not (isinstance(frm, str) and SQUARE_RE.match(frm) and isinstance(to, str) and SQUARE_RE.match(to)):
-                                    add_err(5, "E_OVERLAY_INVALID", tpath, o_ptr, f"Arrow overlay requires valid 'from' and 'to' squares, got {frm!r}->{to!r}")
+                                    if not any(e.path == tpath and e.pointer.startswith(o_ptr) for e in errors):
+                                        add_err(5, "E_OVERLAY_INVALID", tpath, o_ptr, f"Arrow overlay requires valid 'from' and 'to' squares, got {frm!r}->{to!r}")
                             elif okind == "square":
                                 sq = ov.get("square")
                                 if not (isinstance(sq, str) and SQUARE_RE.match(sq)):
-                                    add_err(5, "E_OVERLAY_INVALID", tpath, f"{o_ptr}/square", f"Square overlay requires valid 'square', got {sq!r}")
+                                    if not any(e.path == tpath and e.pointer.startswith(o_ptr) for e in errors):
+                                        add_err(5, "E_OVERLAY_INVALID", tpath, f"{o_ptr}/square", f"Square overlay requires valid 'square', got {sq!r}")
                             elif okind == "label":
                                 sq, txt = ov.get("square"), ov.get("text")
                                 if not (isinstance(sq, str) and SQUARE_RE.match(sq) and isinstance(txt, str) and 1 <= len(txt) <= 64):
-                                    add_err(5, "E_OVERLAY_INVALID", tpath, o_ptr, "Label overlay requires valid 'square' and non-empty 'text'")
+                                    if not any(e.path == tpath and e.pointer.startswith(o_ptr) for e in errors):
+                                        add_err(5, "E_OVERLAY_INVALID", tpath, o_ptr, "Label overlay requires valid 'square' and non-empty 'text'")
                             else:
-                                add_err(5, "E_OVERLAY_INVALID", tpath, f"{o_ptr}/kind", f"Invalid overlay kind {okind!r}")
+                                if not any(e.path == tpath and e.pointer.startswith(o_ptr) for e in errors):
+                                    add_err(5, "E_OVERLAY_INVALID", tpath, f"{o_ptr}/kind", f"Invalid overlay kind {okind!r}")
 
                             end_ms = ov.get("end_ms")
                             if end_ms is not None:
@@ -1286,102 +1497,14 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
                             f"Chapter at_ms={ch_ms} exceeds timeline duration_ms={duration_ms}",
                         )
 
-            # Check interactive_triggers
-            triggers = tdata.get("interactive_triggers")
-            if isinstance(triggers, list):
-                seen_trig: Set[str] = set()
-                for tr_idx, tr in enumerate(triggers):
-                    if not isinstance(tr, dict):
-                        continue
-                    t_ptr = f"/interactive_triggers/{tr_idx}"
-                    tr_id = tr.get("id")
-                    if isinstance(tr_id, str):
-                        if tr_id in seen_trig:
-                            add_err(3, "E_DUPLICATE_ID", tpath, f"{t_ptr}/id", f"Duplicate trigger id {tr_id!r}")
-                        seen_trig.add(tr_id)
-
-                    tr_fen = tr.get("fen")
-                    if not isinstance(tr_fen, str):
-                        add_err(5, "E_TRIGGER_INVALID", tpath, f"{t_ptr}/fen", "Trigger requires valid 6-field FEN")
-                        continue
-                    fen_ok, fen_err = validate_fen(tr_fen)
-                    if not fen_ok:
-                        add_err(5, "E_TRIGGER_INVALID", tpath, f"{t_ptr}/fen", f"Invalid trigger FEN: {fen_err}")
-                        continue
-
-                    match_mode = tr.get("match_mode", "board_turn")
-                    tgid = tr.get("game_id")
-                    tnid = tr.get("node_id")
-                    if tgid is not None:
-                        if not isinstance(tgid, str) or tgid not in game_entries:
-                            add_err(3, "E_REF_UNKNOWN", tpath, f"{t_ptr}/game_id", f"Trigger references unknown game_id {tgid!r}")
-                        elif tnid is not None:
-                            if not isinstance(tnid, str) or (tgid in game_node_maps and tnid not in game_node_maps[tgid]):
-                                add_err(3, "E_REF_UNKNOWN", tpath, f"{t_ptr}/node_id", f"Trigger references unknown node_id {tnid!r}")
-                            elif tgid in game_node_maps:
-                                node_fen = str(game_node_maps[tgid][tnid].get("fen", ""))
-                                if match_mode == "exact":
-                                    matched = fens_equivalent(node_fen, tr_fen)
-                                else:
-                                    matched = (fen_board_turn_key(node_fen) == fen_board_turn_key(tr_fen))
-                                if not matched:
-                                    add_err(
-                                        5,
-                                        "E_TRIGGER_INVALID",
-                                        tpath,
-                                        f"{t_ptr}/fen",
-                                        f"Trigger FEN {tr_fen!r} does not match node ({tgid}, {tnid}) FEN {node_fen!r} under {match_mode!r}",
-                                    )
-
-                    tkind = tr.get("kind")
-                    taid = tr.get("asset_id")
-                    ttid = tr.get("timeline_id")
-                    if taid is not None and (not isinstance(taid, str) or taid not in asset_entries):
-                        add_err(3, "E_REF_UNKNOWN", tpath, f"{t_ptr}/asset_id", f"Trigger references unknown asset_id {taid!r}")
-                    if ttid is not None and (not isinstance(ttid, str) or ttid not in timeline_entries):
-                        add_err(3, "E_REF_UNKNOWN", tpath, f"{t_ptr}/timeline_id", f"Trigger references unknown timeline_id {ttid!r}")
-
-                    if tkind in ("clip", "range") and not isinstance(taid, str):
-                        add_err(5, "E_TRIGGER_INVALID", tpath, f"{t_ptr}/asset_id", f"Trigger kind={tkind!r} requires asset_id")
-
-                    if tkind == "range":
-                        s_ms = tr.get("start_ms")
-                        e_ms = tr.get("end_ms")
-                        if not (_is_int_not_bool(s_ms) and _is_int_not_bool(e_ms) and 0 <= s_ms < e_ms):
-                            add_err(5, "E_TRIGGER_INVALID", tpath, t_ptr, f"Range trigger requires 0 <= start_ms < end_ms, got ({s_ms}, {e_ms})")
-                        elif isinstance(taid, str) and taid in asset_entries:
-                            adur = asset_entries[taid].get("duration_ms")
-                            if _is_int_not_bool(adur) and e_ms > adur:
-                                add_err(5, "E_TRIGGER_INVALID", tpath, f"{t_ptr}/end_ms", f"Range trigger end_ms={e_ms} exceeds asset duration_ms={adur}")
-
-                    branches = tr.get("branches")
-                    if tkind == "branch_prompt" and (not isinstance(branches, list) or len(branches) == 0):
-                        add_err(5, "E_TRIGGER_INVALID", tpath, f"{t_ptr}/branches", "branch_prompt trigger requires non-empty branches")
-                    if isinstance(branches, list):
-                        seen_br: Set[str] = set()
-                        for b_idx, br in enumerate(branches):
-                            if not isinstance(br, dict):
-                                continue
-                            br_ptr = f"{t_ptr}/branches/{b_idx}"
-                            brid = br.get("id")
-                            if isinstance(brid, str):
-                                if brid in seen_br:
-                                    add_err(3, "E_DUPLICATE_ID", tpath, f"{br_ptr}/id", f"Duplicate branch id {brid!r}")
-                                seen_br.add(brid)
-                            baid = br.get("asset_id")
-                            if not isinstance(baid, str) or baid not in asset_entries:
-                                add_err(3, "E_REF_UNKNOWN", tpath, f"{br_ptr}/asset_id", f"Branch references unknown asset_id {baid!r}")
-                            buci = br.get("uci")
-                            bsan = br.get("san")
-                            if not isinstance(buci, str):
-                                add_err(5, "E_TRIGGER_INVALID", tpath, f"{br_ptr}/uci", "Branch requires UCI move")
-                            else:
-                                try:
-                                    _, _, canon_san = apply_uci_move(tr_fen, buci)
-                                    if bsan is not None and bsan != canon_san:
-                                        add_err(5, "E_TRIGGER_INVALID", tpath, f"{br_ptr}/san", f"Branch SAN {bsan!r} != canonical {canon_san!r}")
-                                except ValueError as exc:
-                                    add_err(5, "E_TRIGGER_INVALID", tpath, f"{br_ptr}/uci", f"Illegal branch move {buci!r} in trigger FEN: {exc}")
+            # Check interactive_triggers on timeline
+            _validate_triggers_list(
+                tdata.get("interactive_triggers"),
+                tpath,
+                "/interactive_triggers",
+                duration_ms,
+                set(global_seen_trig),
+            )
 
             parsed_timelines[tid] = tdata
 
@@ -1400,20 +1523,34 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
         elif isinstance(prov_obj, dict) and prov_obj.get("confidence") == "unsynchronized_media_only":
             sync_status = "unsynced_no_timeline"
             warnings.append("Provenance indicates unsynchronized media only (no board events in source)")
-        elif isinstance(prov_obj, dict) and prov_obj.get("incomplete_intervals"):
+        elif isinstance(prov_obj, dict) and (
+            prov_obj.get("incomplete_intervals") or prov_obj.get("clock_mapping_status") == "unresolved"
+        ):
             sync_status = "unsynced_incomplete_import"
-            warnings.append("Provenance contains incomplete import intervals")
+            warnings.append("Provenance contains incomplete import intervals or unresolved clock mapping")
         else:
             sync_status = "synced"
 
-        if isinstance(prov_obj, dict):
+        if isinstance(prov_obj, dict) and isinstance(prov_obj.get("warnings"), list):
             for w in prov_obj.get("warnings", []):
                 if isinstance(w, str) and w not in warnings:
                     warnings.append(w)
 
         total_nodes = sum(len(m) for m in game_node_maps.values())
-        total_cues = sum(len(tl.get("cues", [])) for tl in parsed_timelines.values())
-        total_triggers = sum(len(tl.get("interactive_triggers", [])) for tl in parsed_timelines.values())
+        total_cues = sum(
+            len(tl.get("cues", [])) if isinstance(tl.get("cues"), list) else 0
+            for tl in parsed_timelines.values()
+        )
+        total_triggers = (
+            len(manifest.get("interactive_triggers", []))
+            if isinstance(manifest.get("interactive_triggers"), list)
+            else 0
+        ) + sum(
+            len(tl.get("interactive_triggers", []))
+            if isinstance(tl.get("interactive_triggers"), list)
+            else 0
+            for tl in parsed_timelines.values()
+        )
 
         summary = {
             "id": manifest.get("id"),
@@ -1441,123 +1578,252 @@ def validate_package(target: Union[str, Path]) -> ValidationReport:
 
 
 # ---------------------------------------------------------------------------
-# O(log N) Scene Evaluator (`scene_at`)
+# Prepared O(log N) Scene Evaluator (`PreparedTimeline`, `PreparedLesson`, `scene_at`)
 # ---------------------------------------------------------------------------
 
-def evaluate_timeline_scene_at(
-    timeline_data: Dict[str, Any],
-    games_by_id: Dict[str, Dict[str, Any]],
-    t_ms: int,
-) -> Dict[str, Any]:
-    """Evaluate complete scene state at `t_ms` in O(log N) time via binary search."""
-    cues = timeline_data.get("cues", [])
-    if not cues:
-        raise ValueError("Timeline has no cues")
-    dur = int(timeline_data.get("duration_ms", 0))
-    clamped_ms = max(0, min(int(t_ms), dur))
+class PreparedTimeline:
+    """Pre-indexed timeline and game node lookup tables for true O(log N) scene evaluation.
 
-    cue_times = [int(c["at_ms"]) for c in cues]
-    idx = bisect.bisect_right(cue_times, clamped_ms) - 1
-    if idx < 0:
-        idx = 0
-    cue = cues[idx]
-    cue_at_ms = int(cue["at_ms"])
-    next_cue_ms = cue_times[idx + 1] if (idx + 1) < len(cue_times) else dur + 1
+    Preparation (`__init__`) runs once in O(N + V + T) time (`N` cues, `V` game nodes, `T` triggers).
+    Each subsequent `scene_at(t_ms)` call performs:
+      - O(log N) binary search (`bisect.bisect_right`) on the cached `cue_times` tuple,
+      - O(B) dictionary lookup in `node_maps_by_game[game_id][node_id]` (`B` declared boards),
+      - O(K) expiry filter over the overlays and captions attached to that single cue,
+      - O(B + M) hash lookup in `triggers_by_exact_fen` and `triggers_by_board_turn`.
+    """
 
-    boards_out: Dict[str, Any] = {}
-    for bid, bstate in cue.get("scene", {}).get("boards", {}).items():
-        if bstate.get("hidden") is True:
-            boards_out[bid] = {"hidden": True}
-            continue
-        gid = bstate["game_id"]
-        nid = bstate["node_id"]
-        gdata = games_by_id.get(gid, {})
-        node_obj = None
-        for n in gdata.get("nodes", []):
-            if n.get("id") == nid:
-                node_obj = n
-                break
+    def __init__(
+        self,
+        timeline_data: Dict[str, Any],
+        games_by_id: Dict[str, Dict[str, Any]],
+        package_triggers: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
+        cues = timeline_data.get("cues", [])
+        if not isinstance(cues, list) or not cues:
+            raise ValueError("Timeline has no cues")
+        self.timeline_id: Optional[str] = timeline_data.get("id")
+        self.duration_ms: int = int(timeline_data.get("duration_ms", 0))
+        self.cues: Tuple[Dict[str, Any], ...] = tuple(cues)
+        self.cue_times: Tuple[int, ...] = tuple(int(c["at_ms"]) for c in self.cues)
 
-        active_overlays = []
-        for ov in bstate.get("overlays", []):
-            end_ms = ov.get("end_ms")
-            eff_end = min(int(end_ms), next_cue_ms) if end_ms is not None else next_cue_ms
-            if clamped_ms < eff_end:
-                active_overlays.append(dict(ov))
+        # Build O(1) per-game node_id -> node dict map
+        self.node_maps_by_game: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        for gid, gdata in games_by_id.items():
+            nmap: Dict[str, Dict[str, Any]] = {}
+            for n in gdata.get("nodes", []):
+                if isinstance(n, dict) and isinstance(n.get("id"), str):
+                    nmap[n["id"]] = n
+            self.node_maps_by_game[gid] = nmap
 
-        boards_out[bid] = {
-            "game_id": gid,
-            "node_id": nid,
-            "fen": node_obj.get("fen") if node_obj else None,
-            "uci": node_obj.get("uci") if node_obj else None,
-            "san": node_obj.get("san") if node_obj else None,
-            "orientation": bstate.get("orientation", "white"),
-            "overlays": active_overlays,
+        # Build (game_id, node_id) -> sorted list of cue occurrence dicts for board-to-video navigation
+        occ_map: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+        for c_idx, cue in enumerate(self.cues):
+            at_ms = self.cue_times[c_idx]
+            cid = cue.get("id")
+            for bid, bstate in cue.get("scene", {}).get("boards", {}).items():
+                if isinstance(bstate, dict) and not bstate.get("hidden"):
+                    gid = bstate.get("game_id")
+                    nid = bstate.get("node_id")
+                    if isinstance(gid, str) and isinstance(nid, str):
+                        occ_map.setdefault((gid, nid), []).append(
+                            {
+                                "cue_id": cid,
+                                "cue_index": c_idx,
+                                "at_ms": at_ms,
+                                "board_id": bid,
+                            }
+                        )
+        self.occurrences_by_game_node: Dict[Tuple[str, str], Tuple[Dict[str, Any], ...]] = {
+            k: tuple(v) for k, v in occ_map.items()
         }
 
-    active_captions = []
-    for cap in cue.get("scene", {}).get("captions", []):
-        end_ms = cap.get("end_ms")
-        eff_end = min(int(end_ms), next_cue_ms) if end_ms is not None else next_cue_ms
-        if clamped_ms < eff_end:
-            active_captions.append(dict(cap))
+        # Build O(1) hash maps for interactive triggers by exact FEN and board_turn key
+        self.triggers_by_exact_fen: Dict[str, List[str]] = {}
+        self.triggers_by_board_turn: Dict[str, List[str]] = {}
+        all_triggers = list(package_triggers or []) + list(timeline_data.get("interactive_triggers", []))
+        for tr in all_triggers:
+            if not isinstance(tr, dict):
+                continue
+            tr_id = tr.get("id")
+            tr_fen = tr.get("fen")
+            if not isinstance(tr_id, str) or not isinstance(tr_fen, str):
+                continue
+            mode = tr.get("match_mode", "board_turn")
+            if mode == "exact":
+                self.triggers_by_exact_fen.setdefault(tr_fen.strip(), []).append(tr_id)
+            else:
+                self.triggers_by_board_turn.setdefault(fen_board_turn_key(tr_fen), []).append(tr_id)
 
-    # Match active interactive triggers at clamped_ms or active board FENs
-    active_fens = {
-        b["fen"] for b in boards_out.values() if isinstance(b, dict) and b.get("fen")
-    }
-    active_board_turns = {fen_board_turn_key(f) for f in active_fens}
-    matched_triggers = []
-    for tr in timeline_data.get("interactive_triggers", []):
-        tr_fen = tr.get("fen", "")
-        mode = tr.get("match_mode", "board_turn")
-        pos_match = (tr_fen in active_fens) if mode == "exact" else (fen_board_turn_key(tr_fen) in active_board_turns)
-        if pos_match:
-            matched_triggers.append(tr["id"])
+        self.eval_call_count: int = 0
 
-    return {
-        "timeline_id": timeline_data.get("id"),
-        "requested_ms": int(t_ms),
-        "clamped_ms": clamped_ms,
-        "cue_id": cue.get("id"),
-        "cue_at_ms": cue_at_ms,
-        "boards": boards_out,
-        "captions": active_captions,
-        "matched_triggers": matched_triggers,
-    }
+    def scene_at(self, t_ms: int) -> Dict[str, Any]:
+        """Evaluate complete scene state at `t_ms` in O(log N) cue lookup + O(B + K + M) board/overlay work."""
+        self.eval_call_count += 1
+        clamped_ms = max(0, min(int(t_ms), self.duration_ms))
+
+        idx = bisect.bisect_right(self.cue_times, clamped_ms) - 1
+        if idx < 0:
+            idx = 0
+        cue = self.cues[idx]
+        cue_at_ms = self.cue_times[idx]
+        next_cue_ms = self.cue_times[idx + 1] if (idx + 1) < len(self.cue_times) else self.duration_ms + 1
+
+        boards_out: Dict[str, Any] = {}
+        matched_triggers: List[str] = []
+        seen_trig: Set[str] = set()
+
+        for bid, bstate in cue.get("scene", {}).get("boards", {}).items():
+            if bstate.get("hidden") is True:
+                boards_out[bid] = {"hidden": True}
+                continue
+            gid = bstate["game_id"]
+            nid = bstate["node_id"]
+            node_obj = self.node_maps_by_game.get(gid, {}).get(nid)
+
+            active_overlays = []
+            for ov in bstate.get("overlays", []):
+                end_ms = ov.get("end_ms")
+                eff_end = min(int(end_ms), next_cue_ms) if end_ms is not None else next_cue_ms
+                if clamped_ms < eff_end:
+                    active_overlays.append(dict(ov))
+
+            fen_val = node_obj.get("fen") if node_obj else None
+            boards_out[bid] = {
+                "game_id": gid,
+                "node_id": nid,
+                "fen": fen_val,
+                "uci": node_obj.get("uci") if node_obj else None,
+                "san": node_obj.get("san") if node_obj else None,
+                "orientation": bstate.get("orientation", "white"),
+                "overlays": active_overlays,
+            }
+            if isinstance(fen_val, str):
+                for tid in self.triggers_by_exact_fen.get(fen_val.strip(), ()):
+                    if tid not in seen_trig:
+                        seen_trig.add(tid)
+                        matched_triggers.append(tid)
+                for tid in self.triggers_by_board_turn.get(fen_board_turn_key(fen_val), ()):
+                    if tid not in seen_trig:
+                        seen_trig.add(tid)
+                        matched_triggers.append(tid)
+
+        active_captions = []
+        for cap in cue.get("scene", {}).get("captions", []):
+            end_ms = cap.get("end_ms")
+            eff_end = min(int(end_ms), next_cue_ms) if end_ms is not None else next_cue_ms
+            if clamped_ms < eff_end:
+                active_captions.append(dict(cap))
+
+        return {
+            "timeline_id": self.timeline_id,
+            "requested_ms": int(t_ms),
+            "clamped_ms": clamped_ms,
+            "cue_id": cue.get("id"),
+            "cue_at_ms": cue_at_ms,
+            "boards": boards_out,
+            "captions": active_captions,
+            "matched_triggers": matched_triggers,
+        }
+
+    def occurrences(self, game_id: str, node_id: str, nearest_ms: Optional[int] = None) -> Dict[str, Any]:
+        """Return all timeline cue occurrences for `(game_id, node_id)` and optional nearest occurrence."""
+        occs = list(self.occurrences_by_game_node.get((game_id, node_id), ()))
+        selected = None
+        if occs and nearest_ms is not None:
+            # Prefer occurrence nearest current media_ms; ties choose earlier occurrence
+            selected = min(occs, key=lambda o: (abs(int(o["at_ms"]) - int(nearest_ms)), int(o["at_ms"])))
+        elif occs:
+            selected = occs[0]
+        return {
+            "game_id": game_id,
+            "node_id": node_id,
+            "occurrences": occs,
+            "selected": selected,
+        }
+
+
+class PreparedLesson:
+    """Loaded and pre-indexed ChessMedia package for repeated O(log N) playback queries."""
+
+    def __init__(self, target: Union[str, Path]) -> None:
+        self.target = Path(target)
+        with PackageReader(self.target) as pkg:
+            self.manifest = strict_json_loads(pkg.read_bytes("manifest.json"), "manifest.json")
+            self.games_by_id: Dict[str, Dict[str, Any]] = {}
+            for g in self.manifest.get("games", []):
+                self.games_by_id[g["id"]] = strict_json_loads(pkg.read_bytes(g["path"]), g["path"])
+            pkg_triggers = self.manifest.get("interactive_triggers", [])
+            self.timelines: Dict[str, PreparedTimeline] = {}
+            for tl in self.manifest.get("timelines", []):
+                tdata = strict_json_loads(pkg.read_bytes(tl["path"]), tl["path"])
+                self.timelines[tl["id"]] = PreparedTimeline(
+                    tdata,
+                    self.games_by_id,
+                    package_triggers=pkg_triggers if isinstance(pkg_triggers, list) else None,
+                )
+            prim_tid = self.manifest.get("primary", {}).get("timeline_id")
+            if isinstance(prim_tid, str) and prim_tid in self.timelines:
+                self.primary_timeline_id: Optional[str] = prim_tid
+            elif self.timelines:
+                self.primary_timeline_id = next(iter(self.timelines.keys()))
+            else:
+                self.primary_timeline_id = None
+
+    def get_timeline(self, timeline_id: Optional[str] = None) -> PreparedTimeline:
+        if timeline_id is not None:
+            if timeline_id not in self.timelines:
+                raise ValueError(f"Timeline {timeline_id!r} not found in package")
+            return self.timelines[timeline_id]
+        if self.primary_timeline_id is None:
+            raise ValueError("Package has no timelines")
+        return self.timelines[self.primary_timeline_id]
+
+    def scene_at(self, t_ms: int, timeline_id: Optional[str] = None) -> Dict[str, Any]:
+        return self.get_timeline(timeline_id).scene_at(t_ms)
+
+    def occurrences(
+        self,
+        game_id: str,
+        node_id: str,
+        nearest_ms: Optional[int] = None,
+        timeline_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return self.get_timeline(timeline_id).occurrences(game_id, node_id, nearest_ms=nearest_ms)
+
+
+def prepare_timeline(
+    timeline_data: Dict[str, Any],
+    games_by_id: Dict[str, Dict[str, Any]],
+    package_triggers: Optional[List[Dict[str, Any]]] = None,
+) -> PreparedTimeline:
+    """Build and cache a `PreparedTimeline` index on `timeline_data`."""
+    cached = timeline_data.get("_prepared_index")
+    if isinstance(cached, PreparedTimeline):
+        return cached
+    prepared = PreparedTimeline(timeline_data, games_by_id, package_triggers=package_triggers)
+    timeline_data["_prepared_index"] = prepared
+    return prepared
+
+
+def evaluate_timeline_scene_at(
+    timeline_data: Union[PreparedTimeline, Dict[str, Any]],
+    games_by_id: Optional[Dict[str, Dict[str, Any]]] = None,
+    t_ms: int = 0,
+) -> Dict[str, Any]:
+    """Evaluate complete scene state at `t_ms` in O(log N) time using a `PreparedTimeline`."""
+    if isinstance(timeline_data, PreparedTimeline):
+        return timeline_data.scene_at(t_ms)
+    prepared = prepare_timeline(timeline_data, games_by_id or {})
+    return prepared.scene_at(t_ms)
 
 
 def scene_at_package(
-    target: Union[str, Path],
+    target: Union[str, Path, PreparedLesson],
     t_ms: int,
     timeline_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Load a package and evaluate `scene_at` at `t_ms` ms."""
-    with PackageReader(target) as pkg:
-        manifest = strict_json_loads(pkg.read_bytes("manifest.json"), "manifest.json")
-        tl_list = manifest.get("timelines", [])
-        if not tl_list:
-            raise ValueError("Package has no timelines")
-        chosen_tl = None
-        if timeline_id:
-            for tl in tl_list:
-                if tl.get("id") == timeline_id:
-                    chosen_tl = tl
-                    break
-            if chosen_tl is None:
-                raise ValueError(f"Timeline {timeline_id!r} not found in package")
-        else:
-            prim_tid = manifest.get("primary", {}).get("timeline_id")
-            for tl in tl_list:
-                if tl.get("id") == prim_tid:
-                    chosen_tl = tl
-                    break
-            if chosen_tl is None:
-                chosen_tl = tl_list[0]
-
-        tdata = strict_json_loads(pkg.read_bytes(chosen_tl["path"]), chosen_tl["path"])
-        games_by_id: Dict[str, Dict[str, Any]] = {}
-        for g in manifest.get("games", []):
-            games_by_id[g["id"]] = strict_json_loads(pkg.read_bytes(g["path"]), g["path"])
-
-        return evaluate_timeline_scene_at(tdata, games_by_id, t_ms)
+    """Evaluate `scene_at` at `t_ms` ms on a `PreparedLesson` or one-shot package path."""
+    if isinstance(target, PreparedLesson):
+        return target.scene_at(t_ms, timeline_id=timeline_id)
+    lesson = PreparedLesson(target)
+    return lesson.scene_at(t_ms, timeline_id=timeline_id)

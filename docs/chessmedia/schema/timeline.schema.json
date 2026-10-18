@@ -116,20 +116,49 @@
       ]
     },
     "overlay": {
-      "type": "object",
-      "required": ["id", "kind", "color"],
-      "additionalProperties": false,
-      "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "kind": { "enum": ["arrow", "square", "label"] },
-        "from": { "$ref": "#/$defs/square" },
-        "to": { "$ref": "#/$defs/square" },
-        "square": { "$ref": "#/$defs/square" },
-        "text": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "color": { "$ref": "#/$defs/rgba" },
-        "end_ms": { "$ref": "#/$defs/ms_nonneg" },
-        "inferred": { "type": "boolean" }
-      }
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["id", "kind", "from", "to", "color"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "kind": { "const": "arrow" },
+            "from": { "$ref": "#/$defs/square" },
+            "to": { "$ref": "#/$defs/square" },
+            "color": { "$ref": "#/$defs/rgba" },
+            "end_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "inferred": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "kind", "square", "color"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "kind": { "const": "square" },
+            "square": { "$ref": "#/$defs/square" },
+            "color": { "$ref": "#/$defs/rgba" },
+            "end_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "inferred": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "kind", "square", "text", "color"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "kind": { "const": "label" },
+            "square": { "$ref": "#/$defs/square" },
+            "text": { "type": "string", "minLength": 1, "maxLength": 64 },
+            "color": { "$ref": "#/$defs/rgba" },
+            "end_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "inferred": { "type": "boolean" }
+          }
+        }
+      ]
     },
     "caption": {
       "type": "object",
@@ -142,51 +171,125 @@
         "end_ms": { "$ref": "#/$defs/ms_nonneg" }
       }
     },
-    "trigger": {
-      "type": "object",
-      "required": ["id", "fen", "kind"],
-      "additionalProperties": false,
-      "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "fen": { "type": "string", "minLength": 15 },
-        "match_mode": { "enum": ["board_turn", "exact"] },
-        "game_id": { "$ref": "#/$defs/id" },
-        "node_id": { "$ref": "#/$defs/id" },
-        "at_ms": { "$ref": "#/$defs/ms_nonneg" },
-        "kind": { "enum": ["clip", "range", "branch_prompt"] },
-        "asset_id": { "$ref": "#/$defs/id" },
-        "timeline_id": { "$ref": "#/$defs/id" },
-        "start_ms": { "$ref": "#/$defs/ms_nonneg" },
-        "end_ms": { "$ref": "#/$defs/ms_nonneg" },
-        "prompt": { "type": "string" },
-        "branches": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["id", "uci", "role", "asset_id"],
-            "additionalProperties": false,
-            "properties": {
-              "id": { "$ref": "#/$defs/id" },
-              "uci": { "type": "string", "pattern": "^[a-h][1-8][a-h][1-8][qrbn]?$" },
-              "san": { "type": "string" },
-              "role": { "enum": ["primary", "alternative"] },
-              "asset_id": { "$ref": "#/$defs/id" },
-              "timeline_id": { "$ref": "#/$defs/id" },
-              "start_ms": { "$ref": "#/$defs/ms_nonneg" },
-              "end_ms": { "$ref": "#/$defs/ms_nonneg" },
-              "overlay_arrow": {
-                "type": "object",
-                "required": ["from", "to"],
-                "additionalProperties": false,
-                "properties": {
-                  "from": { "$ref": "#/$defs/square" },
-                  "to": { "$ref": "#/$defs/square" }
-                }
+    "branch": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["id", "uci", "role", "asset_id"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "uci": { "type": "string", "pattern": "^[a-h][1-8][a-h][1-8][qrbn]?$" },
+            "san": { "type": "string" },
+            "role": { "enum": ["primary", "alternative"] },
+            "asset_id": { "$ref": "#/$defs/id" },
+            "timeline_id": { "$ref": "#/$defs/id" },
+            "overlay_arrow": {
+              "type": "object",
+              "required": ["from", "to"],
+              "additionalProperties": false,
+              "properties": {
+                "from": { "$ref": "#/$defs/square" },
+                "to": { "$ref": "#/$defs/square" }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "uci", "role", "asset_id", "start_ms", "end_ms"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "uci": { "type": "string", "pattern": "^[a-h][1-8][a-h][1-8][qrbn]?$" },
+            "san": { "type": "string" },
+            "role": { "enum": ["primary", "alternative"] },
+            "asset_id": { "$ref": "#/$defs/id" },
+            "timeline_id": { "$ref": "#/$defs/id" },
+            "start_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "end_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "overlay_arrow": {
+              "type": "object",
+              "required": ["from", "to"],
+              "additionalProperties": false,
+              "properties": {
+                "from": { "$ref": "#/$defs/square" },
+                "to": { "$ref": "#/$defs/square" }
               }
             }
           }
         }
-      }
+      ]
+    },
+    "trigger": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["id", "fen", "kind", "asset_id"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "fen": { "type": "string", "minLength": 15 },
+            "match_mode": { "enum": ["board_turn", "exact"] },
+            "game_id": { "$ref": "#/$defs/id" },
+            "node_id": { "$ref": "#/$defs/id" },
+            "at_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "kind": { "const": "clip" },
+            "asset_id": { "$ref": "#/$defs/id" },
+            "timeline_id": { "$ref": "#/$defs/id" },
+            "prompt": { "type": "string" },
+            "branches": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/branch" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "fen", "kind", "asset_id", "start_ms", "end_ms"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "fen": { "type": "string", "minLength": 15 },
+            "match_mode": { "enum": ["board_turn", "exact"] },
+            "game_id": { "$ref": "#/$defs/id" },
+            "node_id": { "$ref": "#/$defs/id" },
+            "at_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "kind": { "const": "range" },
+            "asset_id": { "$ref": "#/$defs/id" },
+            "timeline_id": { "$ref": "#/$defs/id" },
+            "start_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "end_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "prompt": { "type": "string" },
+            "branches": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/branch" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "fen", "kind", "branches"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "fen": { "type": "string", "minLength": 15 },
+            "match_mode": { "enum": ["board_turn", "exact"] },
+            "game_id": { "$ref": "#/$defs/id" },
+            "node_id": { "$ref": "#/$defs/id" },
+            "at_ms": { "$ref": "#/$defs/ms_nonneg" },
+            "kind": { "const": "branch_prompt" },
+            "asset_id": { "$ref": "#/$defs/id" },
+            "timeline_id": { "$ref": "#/$defs/id" },
+            "prompt": { "type": "string" },
+            "branches": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/branch" }
+            }
+          }
+        }
+      ]
     }
   }
 }
