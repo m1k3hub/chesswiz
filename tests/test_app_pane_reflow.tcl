@@ -31,6 +31,18 @@ namespace eval ::reflowTest {
 	proc yesConfirm {args} { return 1 }
 }
 
+proc ::reflowTest::enginePids {} {
+ set result {}
+ if {![file readable /proc/[pid]/task/[pid]/children]} {return {}}
+ set f [open /proc/[pid]/task/[pid]/children]; set children [read $f]; close $f
+ foreach child $children {
+  if {![file readable /proc/$child/comm]} {continue}
+  set f [open /proc/$child/comm]; set name [string trim [read $f]]; close $f
+  if {[string match -nocase *stockfish* $name]} {lappend result $child}
+ }
+ return [lsort -integer $result]
+}
+
 # ----------------------------------------------------------------------
 # VAL-PANE-001: default layout reflows wide/tall with hysteresis
 # ----------------------------------------------------------------------
@@ -221,12 +233,22 @@ tcltest::test pane-reflow-004-live-survives {a running engine keeps running and 
 	set ::application::assistant::Priv(confirm) ::reflowTest::yesConfirm
 	set ::engine::Engines {}
 	set ::scidb::file::engines [file join [tcltest::temporaryDirectory] reflow-engines-[pid].dat]
+	foreach san {e4 e5 Nf3 Nc6} {::move::addMove menu $san}
+	::reflowTest::waitMs 400
 	::application::assistant::runTool add_engine [list path $reflowEngine]
 	set name [dict get [lindex $::engine::Engines 0] Name]
 	set number [::application::analysis::startEngine $name "" {lines 1}]
 	set tries 0
 	while {[llength [::application::analysis::Running]] == 0 && $tries < 60} { after 100; update; incr tries }
 
+	set movesBefore [::scidb::game::toPGN modified]
+	set engineIdBefore [::engine::id $number]
+	set linesBefore [::application::assistant::runTool engine_analysis {}]
+ for {set tries 0} {$tries < 50 && ![regexp {depth [0-9]+} $linesBefore]} {incr tries} {
+  ::reflowTest::waitMs 100
+  set linesBefore [::application::assistant::runTool engine_analysis {}]
+ }
+ set pidsBefore [::reflowTest::enginePids]
 	set ed [$t leaf editor]
 	if {![winfo exists $ed.__reflowmark]} { ttk::label $ed.__reflowmark -text MARK }
 	set anUid analysis:1
@@ -254,8 +276,13 @@ tcltest::test pane-reflow-004-live-survives {a running engine keeps running and 
 	::application::reflow::evaluate 1400 900
 	update
 	set r7 [expr {[::application::analysis::Running] eq $runningBefore}]
-	::reflowTest::say "ENGINE pid/num=$number running=$runningBefore fenSame=$r5 plySame=$r6"
-	list $r1 $r2 $r3 $r4 $r5 $r6 $r7
+	::reflowTest::waitMs 700
+	set linesAfter [::application::assistant::runTool engine_analysis {}]
+	set r8 [expr {[::scidb::game::toPGN modified] eq $movesBefore && [::engine::id $number] eq $engineIdBefore}]
+	set r9 [expr {[regexp {depth [0-9]+} $linesBefore] && [regexp {depth [0-9]+} $linesAfter]}]
+ if {[llength $pidsBefore]} {set r8 [expr {$r8 && $pidsBefore eq [::reflowTest::enginePids]}]}
+	::reflowTest::say "ENGINE number=$number nativeId=$engineIdBefore running=$runningBefore children=$pidsBefore fenSame=$r5 plySame=$r6 moves=$movesBefore before=$linesBefore after=$linesAfter"
+	list $r1 $r2 $r3 $r4 $r5 $r6 $r7 $r8 $r9
 } -cleanup {
 	catch { set ::application::assistant::Priv(confirm) $savedConfirm }
 	catch {::application::analysis::stopEngine $number}
@@ -264,7 +291,7 @@ tcltest::test pane-reflow-004-live-survives {a running engine keeps running and 
 	set ::scidb::file::engines $savedFile
 	::options::hookWriter ::engine::WriteEngineOptions engines
 	::application::reflow::reset
-} -result {1 1 1 1 1 1 1}
+} -result {1 1 1 1 1 1 1 1 1}
 
 # ----------------------------------------------------------------------
 # VAL-PANE-005: no layout feedback loop (<=1 load per threshold crossing)
@@ -312,67 +339,200 @@ tcltest::test pane-reflow-005-real-resize {real window resizes across the thresh
 # ----------------------------------------------------------------------
 # VAL-PANE-006: empty panes collapse and return with prior size
 # ----------------------------------------------------------------------
-tcltest::test pane-reflow-006-analysis {Analysis with no engine collapses, neighbours gain space, and it returns to prior size when an engine runs} -setup {
-	set t [::reflowTest::setup]
-	set natAnalysis [::reflowTest::paneW $t analysis:1]
-	set natTree [::reflowTest::paneW $t tree]
-	set natMedia [::reflowTest::paneW $t media]
-	# Media has content so it stays put and can act as the neighbour.
-	rename ::application::media::MediaRows ::application::media::MediaRows_orig
-	proc ::application::media::MediaRows {} { return {a b} }
-	rename ::application::analysis::Running ::application::analysis::Running_orig
-	proc ::application::analysis::Running {} { return {} }
+# Direct default row with the optional Media pane. This is a production twm
+# tree with real Analysis and Media widgets, not placeholder geometry.
+proc ::reflowTest::collapseSetup {} {
+ set t [setup]
+ ::application::reflow::restoreCollapsed
+ set ::application::Vars(loading) 1
+ set layout [::application::reflow::substTpl $::application::BoardLayout]
+ lassign $layout root attrs outer
+ lassign $outer type opts rows
+ set row [lrange $rows 3 5]
+ set row [lreplace $row 2 2 [concat [lindex $row 2] [list frame media $::application::PaneOptions(media)]]]
+ set layout [list $root $attrs [list $type $opts [concat [lrange $rows 0 2] $row]]]
+ $t load $layout
+ set ::application::Vars(loading) 0
+ set ::application::reflow::S(override) {}
+ wm geometry .application 1200x800+0+0
+ waitMs 400
+ return $t
+}
+proc ::reflowTest::sashes {t} {return [::application::focuszoom::Snapshot $t]}
+
+tcltest::test pane-reflow-006-unmapped {empty panes collapse by priority only when short; explicit reopen wins; exact sash restore} -setup {
+ set t [::reflowTest::collapseSetup]
+ set a [$t leaf analysis:1]; set m [$t leaf media]
+ set ids [list [winfo id $a] [winfo id $m]]
+ set before [::reflowTest::sashes $t]
 } -body {
-	# no engine -> analysis collapses, neighbours absorb the freed width
-	::application::reflow::updateCollapse
-	update
-	set collapsed [::reflowTest::paneW $t analysis:1]
-	set neighCollapsed [expr {[::reflowTest::paneW $t tree] + [::reflowTest::paneW $t media]}]
-	# engine starts -> analysis returns to its prior size
-	proc ::application::analysis::Running {} { return {1} }
-	::application::reflow::updateCollapse
-	update
-	set expanded [::reflowTest::paneW $t analysis:1]
-	set neighExpanded [expr {[::reflowTest::paneW $t tree] + [::reflowTest::paneW $t media]}]
-	::reflowTest::say "ANALYSIS nat=$natAnalysis collapsed=$collapsed expanded=$expanded neigh($natTree+$natMedia)->$neighCollapsed->$neighExpanded"
-	list [expr {$collapsed <= 80}] [expr {$collapsed < $natAnalysis}] \
-		[expr {abs($expanded - $natAnalysis) <= 2}] \
-		[expr {$neighCollapsed > ($natTree + $natMedia)}] \
-		[expr {abs($neighExpanded - ($natTree + $natMedia)) <= 4}]
+ set wide [list [winfo ismapped $a] [winfo ismapped $m]]
+ wm geometry .application 1000x800
+ ::reflowTest::waitMs 450
+ set short [list [winfo ismapped $a] [winfo ismapped $m]]
+ # User action goes through the same pane-menu command as a real click.
+ ::application::twm::ChangeState $t analysis:1
+ ::reflowTest::waitMs 450
+ set reopened [winfo ismapped $a]
+ ::application::reflow::updateCollapse
+ set stays [winfo ismapped $a]
+ # Content makes Media come back without touching any geometry procedure.
+ ::application::media::InsertEntry 3 Lesson /generated.mp4 -1
+ ::reflowTest::waitMs 450
+ set content [winfo ismapped $m]
+ wm geometry .application 1200x800
+ ::reflowTest::waitMs 450
+ set restored [expr {[::reflowTest::sashes $t] eq $before}]
+ set live [expr {$ids eq [list [winfo id $a] [winfo id $m]]}]
+ ::reflowTest::say "COLLAPSE wide=$wide short=$short reopened=$reopened stays=$stays content=$content restored=$restored ids=$ids sashes=$before"
+ list $wide $short $reopened $stays $content $restored $live
 } -cleanup {
-	catch { rename ::application::analysis::Running {} }
-	catch { rename ::application::analysis::Running_orig ::application::analysis::Running }
-	catch { rename ::application::media::MediaRows {} }
-	catch { rename ::application::media::MediaRows_orig ::application::media::MediaRows }
-	::application::reflow::reset
+ ::application::media::Update [::scidb::game::current]
+ ::application::reflow::reset
+} -result {{1 1} {0 1} 1 1 1 1 1}
+
+tcltest::test pane-reflow-006-media-content {empty Media unmaps and content restores its prior sashes without destroying its widgets} -setup {
+ set t [::reflowTest::collapseSetup]
+ set m [$t leaf media]; set id [winfo id $m]
+ wm geometry .application 1000x800
+ ::reflowTest::waitMs 450
+ # Reopen while short of space, exactly as the contract's override rule.
+ ::application::openPane analysis:1
+ ::reflowTest::waitMs 450
+} -body {
+ set unmapped [expr {![winfo ismapped $m]}]
+ ::application::media::InsertEntry 3 Lesson /generated.mp4 -1
+ ::reflowTest::waitMs 450
+ list $unmapped [winfo ismapped $m] [expr {[winfo id $m] eq $id}]
+} -cleanup {
+ ::application::media::Update [::scidb::game::current]
+ ::application::reflow::reset
+} -result {1 1 1}
+
+tcltest::test pane-reflow-009-save-guard {explicit save while adapted is blocked with a message; original file unchanged} -setup {
+ set t [::reflowTest::setup]
+ wm geometry .application 1200x800
+ ::reflowTest::waitMs 400
+ set name pane-reflow-restart
+ ::application::twm::WriteLayout $t board $name normal
+ set file [::application::twm::makeFilename board normal $name]
+ set saved [::reflowTest::fileSnap $file]
+ rename ::dialog::info ::reflowTest::info
+ set ::reflowTest::messages {}
+ proc ::dialog::info {args} {lappend ::reflowTest::messages $args; return ok}
+} -body {
+ wm geometry .application 800x1200
+ ::reflowTest::waitMs 500
+ set adapted [::application::reflow::mode]
+ set answer [::application::twm::WriteLayout $t board $name normal]
+ set unchanged [expr {[::reflowTest::fileSnap $file] eq $saved}]
+ ::reflowTest::say "SAVE rule=block source=S(base) file=$file adapted=$adapted answer=$answer unchanged=$unchanged messages=$::reflowTest::messages"
+ # This file is loaded in a separate fresh app by the rerunnable worker
+ # verification script; the test itself also loads it through production.
+ ::application::twm::loadLayout $t $name
+ set loaded [expr {[::application::reflow::liveShape] eq [::application::reflow::wideShape]}]
+ list $adapted $answer $unchanged [llength $::reflowTest::messages] $loaded
+} -cleanup {
+ rename ::dialog::info {}; rename ::reflowTest::info ::dialog::info
+ set ::application::twm::Options(board:layout:name) {}
+ ::application::reflow::reset
+} -result {tall 0 1 1 1}
+
+proc ::reflowTest::loadTrace {cmd op} {
+ if {[lindex $cmd 1] eq [::application::twm board] && [lindex $cmd 2] eq "load"} {incr ::reflowTest::nativeLoads}
+}
+tcltest::test pane-reflow-001-threshold-sweep {actual Configure sweep cites both thresholds and counts native loads without oscillation} -setup {
+ set t [::reflowTest::setup]
+ wm geometry .application 1000x780+0+0
+ ::reflowTest::waitMs 450
+ # Establish wide without lying to the geometry evaluator.
+ wm geometry .application 1200x780
+ ::reflowTest::waitMs 450
+ set ::reflowTest::nativeLoads 0
+ trace add execution ::twm::WidgetProc enter ::reflowTest::loadTrace
+ set opts [array get ::application::twm::Options board:layout:list*]
+} -body {
+ set states {}; set counts {}
+ foreach width {1000 840 800 840 980 960 800} {
+  wm geometry .application ${width}x780
+  ::reflowTest::waitMs 450
+  set mode [::application::reflow::mode]
+  lappend states $mode; lappend counts $::reflowTest::nativeLoads
+  set inspect [::application::twm::inspectLayout $t]
+  ::reflowTest::say "SWEEP requested=${width}x780 actual=[wm geometry .application] constants=($::application::reflow::TallAspect,$::application::reflow::WideAspect) mode=$mode loads=$::reflowTest::nativeLoads inspect=$inspect"
+  if {[info exists ::env(PANE_EVIDENCE)]} {catch {exec import -window root [file join $::env(PANE_EVIDENCE) sweep-$width-$mode.png]}}
+ }
+ ::reflowTest::waitMs 700
+ list $states $counts $::reflowTest::nativeLoads [expr {$opts eq [array get ::application::twm::Options board:layout:list*]}]
+} -cleanup {
+ trace remove execution ::twm::WidgetProc enter ::reflowTest::loadTrace
+ ::application::reflow::reset
+} -result {{wide wide tall tall wide wide tall} {0 0 1 1 2 2 3} 3 1}
+
+tcltest::test pane-reflow-006-engine {real engine start restores a collapsed pane; stop makes it eligible again} -constraints reflowEngine -setup {
+ set t [::reflowTest::collapseSetup]
+ ::application::media::InsertEntry 3 Lesson /generated.mp4 -1
+ set savedEngines $::engine::Engines
+ set savedFile $::scidb::file::engines
+ set savedConfirm $::application::assistant::Priv(confirm)
+ set ::application::assistant::Priv(confirm) ::reflowTest::yesConfirm
+ set ::engine::Engines {}
+ set ::scidb::file::engines [file normalize tests/tmp-app/pane-collapse-engines-[pid].dat]
+ ::application::assistant::runTool add_engine [list path $reflowEngine]
+ set name [dict get [lindex $::engine::Engines 0] Name]
+ wm geometry .application 1000x800
+ ::reflowTest::waitMs 450
+ set a [$t leaf analysis:1]; set id [winfo id $a]
+ set before $::application::reflow::S(snapshot)
+} -body {
+ set collapsed [expr {![winfo ismapped $a]}]
+ set number [::application::analysis::startEngine $name {} {lines 1 threads 1 hash 16}]
+ ::reflowTest::waitMs 600
+ set restored [winfo ismapped $a]
+ set runningSashes [::reflowTest::sashes $t]
+ set same [expr {$before eq $runningSashes}]
+ ::application::analysis::stopEngine $number
+ ::reflowTest::waitMs 450
+ set stopped [expr {![winfo ismapped $a]}]
+ ::reflowTest::say "ENGINE COLLAPSE collapsed=$collapsed runningMapped=$restored sameSashes=$same before=$before after=$runningSashes stoppedCollapsed=$stopped id=$id"
+ list $collapsed $restored $same $stopped [expr {[winfo id $a] eq $id}]
+} -cleanup {
+ catch {::application::analysis::stopEngine $number}
+ set ::application::assistant::Priv(confirm) $savedConfirm
+ file delete -force $::scidb::file::engines
+ set ::engine::Engines $savedEngines
+ set ::scidb::file::engines $savedFile
+ ::options::hookWriter ::engine::WriteEngineOptions engines
+ ::application::media::Update [::scidb::game::current]
+ ::application::reflow::reset
 } -result {1 1 1 1 1}
 
-tcltest::test pane-reflow-006-media {Media with no media collapses and returns to prior size when media exists} -setup {
-	set t [::reflowTest::setup]
-	set natMedia [::reflowTest::paneW $t media]
-	# Analysis has an engine so it stays put (isolates the media behaviour).
-	rename ::application::analysis::Running ::application::analysis::Running_orig
-	proc ::application::analysis::Running {} { return {1} }
-	rename ::application::media::MediaRows ::application::media::MediaRows_orig
-	proc ::application::media::MediaRows {} { return {} }
+tcltest::test pane-reflow-002-save-dialog {modal shutdown processing cannot reactivate a presentation before saved-layout capture; cancel resumes adaptation} -setup {
+ set t [::reflowTest::setup]
+ wm geometry .application 800x780+0+0
+ ::reflowTest::waitMs 450
+ rename ::application::twm::saveLayouts ::application::twm::paneSavedSaveLayouts
+ rename ::game::queryCloseApplication ::reflowTest::queryCloseApplication
+ proc ::game::queryCloseApplication {args} {return cancel}
+ set ::reflowTest::captured {}
+ proc ::application::twm::saveLayouts {} {
+  # Model a modal dialog's event loop while the real shutdown is paused.
+  ::application::reflow::onConfigure .application [winfo width .application] [winfo height .application]
+  ::application::reflow::onPaneStateChange
+  ::reflowTest::waitMs 450
+  set ::reflowTest::captured [::application::reflow::liveShape]
+  ::application::twm::paneSavedSaveLayouts
+ }
 } -body {
-	# no media -> media collapses
-	::application::reflow::updateCollapse
-	update
-	set collapsed [::reflowTest::paneW $t media]
-	# media exists -> media returns to prior size
-	proc ::application::media::MediaRows {} { return {a b} }
-	::application::reflow::updateCollapse
-	update
-	set expanded [::reflowTest::paneW $t media]
-	::reflowTest::say "MEDIA nat=$natMedia collapsed=$collapsed expanded=$expanded"
-	list [expr {$collapsed <= 80}] [expr {$collapsed < $natMedia}] [expr {abs($expanded - $natMedia) <= 2}]
+ ::application::shutdown
+ set saved [::application::reflow::shapeOf $::application::twm::Options(board:layout:list:normal)]
+ ::reflowTest::waitMs 450
+ set resumed [::application::reflow::mode]
+ list [expr {$::reflowTest::captured eq [::application::reflow::wideShape]}] [expr {$saved eq [::application::reflow::wideShape]}] $resumed
 } -cleanup {
-	catch { rename ::application::media::MediaRows {} }
-	catch { rename ::application::media::MediaRows_orig ::application::media::MediaRows }
-	catch { rename ::application::analysis::Running {} }
-	catch { rename ::application::analysis::Running_orig ::application::analysis::Running }
-	::application::reflow::reset
-} -result {1 1 1}
+ rename ::application::twm::saveLayouts {}; rename ::application::twm::paneSavedSaveLayouts ::application::twm::saveLayouts
+ rename ::game::queryCloseApplication {}; rename ::reflowTest::queryCloseApplication ::game::queryCloseApplication
+ ::application::reflow::reset
+} -result {1 1 tall}
 
 tcltest::cleanupTests

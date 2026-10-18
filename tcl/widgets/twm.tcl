@@ -2372,6 +2372,7 @@ proc Dock {twm toplevel} {
 
 
 proc Close {twm {frame ""}} {
+	::application::reflow::explicitHide $twm $frame
 	::debuglog::log twm "$twm close $frame"
 	destroy [expr {[string length $frame] ? $frame : $twm}]
 }

@@ -483,6 +483,7 @@ proc application::media::InsertEntry {typeLabel title path index} {
 	} else {
 		MediaDebug "InsertEntry: section=$section item=item$n type=$typeLabel ($dispType) path=[list $path]"
 	}
+	::application::reflow::onPaneStateChange
 	return item$n
 }
 
@@ -686,6 +687,7 @@ proc application::media::Update {position} {
 		# Stop/setReserve can process idle work while rebuilding the board.
 		# Refresh only after this update has finished replacing the rows.
 		after idle ::mediainset::RefreshMediaButton
+		::application::reflow::onPaneStateChange
 	}
 }
 
@@ -1289,6 +1291,7 @@ proc application::media::BoardUpdated {position} {
 
 	if {[llength [info commands ::mediainset::RefreshMediaButton]]} {
 		after idle ::mediainset::RefreshMediaButton
+		::application::reflow::onPaneStateChange
 	}
 
 	# Check at notification time: drive() has cleared this flag by the

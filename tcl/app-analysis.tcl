@@ -1993,7 +1993,7 @@ proc startEngine {name {number ""} {settings {}}} {
 			if {[catch { set running [set ::engine::${n}::Vars(current:name)] }]} continue
 			if {$running eq $name} {
 				if {$lines ne ""} { setLines $n $lines }
-				catch { ::application::openPane analysis:[::application::mapToTerminalNumber $n] }
+				catch { ::application::openPane analysis:[::application::mapToTerminalNumber $n] false }
 				return $n
 			}
 		}
@@ -2016,7 +2016,7 @@ proc startEngine {name {number ""} {settings {}}} {
 	}
 	if {$lines ne ""} { setLines $number $lines }
 	startAnalysis $number
-	catch { ::application::openPane analysis:[::application::mapToTerminalNumber $number] }
+	catch { ::application::openPane analysis:[::application::mapToTerminalNumber $number] false }
 	if {![::engine::active? $number]} { error "$name did not start; the analysis pane says why" }
 	return $number
 }

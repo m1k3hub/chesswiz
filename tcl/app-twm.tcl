@@ -399,6 +399,8 @@ proc switchLayout {variant reason} {
 			if {$reason eq "game" ? $id ne "board" : $id eq "board"} { continue }
 			set oldLayoutVariant $Vars($id:layout:variant)
 			if {$newLayoutVariant ne $oldLayoutVariant} {
+				::application::focuszoom::disable $twm
+				if {$id eq "board"} { ::application::reflow::RevertForExit }
 				set loaded 0
 				TestLayoutStatus $twm
 				if {![compareTableOptions $twm $oldLayoutVariant]} {
@@ -539,6 +541,8 @@ proc setup {layoutVariant id layout} {
 
 
 proc loadLayout {twm name} {
+	::application::focuszoom::disable $twm
+	if {$twm eq [::application::reflow::boardTwm]} { ::application::reflow::RevertForExit }
 	variable [namespace parent]::Vars
 	variable Options
 
@@ -1480,9 +1484,20 @@ proc HideWhenLeavingTab {twm w} {
 
 
 proc ChangeState {twm uid} {
+	# A collapsed pane still belongs to the docked native tree. Reopening
+	# must unhide it, rather than interpreting this as a close request.
+	set pair {}
+	if {$uid in [$twm leaves] && $twm eq [::application::reflow::boardTwm]} {
+		set pair [::application::reflow::collapseNode $twm $uid]
+	}
+	if {[llength $pair] && [lindex $pair 1] in $::application::reflow::S(collapsed)} {
+		::application::openPane $uid
+		return
+	}
 	variable [namespace parent]::Vars
 
 	if {[$twm isdocked $uid]} {
+		::application::reflow::explicitHide $twm [$twm leaf $uid]
 		destroy [$twm leaf $uid]
 	} else {
 		set id $Vars($twm:id)
@@ -1530,6 +1545,7 @@ proc CheckLink {attr} {
 
 
 proc SaveLayout {twm parent cmd name title} {
+	if {![::application::reflow::allowSave $twm $parent]} { return 0 }
 	variable [namespace parent]::Vars
 	variable Options
 	variable name_
@@ -1640,6 +1656,7 @@ proc RenameLayout {twm oldName parent - - names} {
 
 
 proc DoSaveLayout {twm parent layoutVariant names} {
+	if {![::application::reflow::allowSave $twm $parent]} { return 0 }
 	variable [namespace parent]::Vars
 	variable Options
 	variable name_
@@ -1732,6 +1749,7 @@ proc WriteLayout_ {twm id layoutVariant} {
 
 
 proc WriteLayout {twm id name layoutVariant} {
+	if {![::application::reflow::allowSave $twm $twm]} { return 0 }
 	variable [namespace parent]::Vars
 	variable Options
 

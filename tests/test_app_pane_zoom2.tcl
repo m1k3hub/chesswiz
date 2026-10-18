@@ -190,6 +190,9 @@ tcltest::test pane-zoom2-off-default {off by default: a click resizes nothing} -
 	set t [::application::twm board]
 	set p [::application::openPane editor]
 	update
+ wm geometry .application 1200x780+0+0
+ after 400 {set ::zoom2Test::tick 1}; vwait ::zoom2Test::tick
+ update
 } -body {
 	set before [::zoom2Test::sashes $t]
 	::application::focuszoom::clicked $p
@@ -274,5 +277,156 @@ tcltest::test pane-zoom2-menu {the Window menu exposes the opt-in, the ratio and
 	destroy .z2menu
 	list [expr {$zoomIdx >= 0}] [lsort -real $ratios] [expr {$pinIdx >= 0}]
 } -result {1 {1.2 1.4 1.6 1.8} 1}
+
+foreach value {1.2 1.4 1.8 99} {
+ tcltest::test pane-zoom2-ratio-$value {R is clamped; siblings stay proportional and unrelated panedwindows retain exact sashes} -setup {
+  set t [::zoom2Test::fixture]
+  # Three siblings with room above all minima.
+  wm geometry .z2test 1400x700
+  update
+  set ::application::focuszoom::ratio $value
+  ::application::focuszoom::enable $t
+  set before [::zoom2Test::widths $t]
+  set all [::zoom2Test::sashes $t]
+  set node [$t leaf editor]; set pw [$t parent $node]
+ } -body {
+  ::application::focuszoom::growPane $t $node
+  update
+  lassign $before a b c
+  lassign [::zoom2Test::widths $t] x y z
+  set actual [expr {double($y)/$b}]
+  set wanted [expr {max(1.2,min(1.8,$value))}]
+  set rest $all
+  dict unset rest $pw
+  set after [::zoom2Test::sashes $t]
+  dict unset after $pw
+  puts "PANE-ZOOM ratio=$value clamped=$wanted actual=$actual sizes=$before->[::zoom2Test::widths $t] sashes=[::zoom2Test::sashes $t]"
+  list [expr {abs($actual-$wanted)<0.02}] [expr {abs(double($x)/$a-double($z)/$c)<0.02}] [expr {$rest eq $after}]
+ } -cleanup {::zoom2Test::cleanup $t} -result {1 1 1}
+}
+
+tcltest::test pane-zoom2-disable-during-animation {switching off cancels animation and retains byte-identical layout and sashes} -setup {
+ set t [::zoom2Test::fixture]
+ ::application::focuszoom::enable $t
+ set before [::zoom2Test::sashes $t]
+ set inspect [$t inspect]
+ set ::application::focuszoom::duration 150
+ ::application::focuszoom::growPane $t [$t leaf editor]
+} -body {
+ after 45 {set ::zoom2Test::tick 1}; vwait ::zoom2Test::tick
+ ::application::focuszoom::disable $t
+ after 250 {set ::zoom2Test::tick 1}; vwait ::zoom2Test::tick
+ list [expr {$before eq [::zoom2Test::sashes $t]}] [expr {$inspect eq [$t inspect]}]
+} -cleanup {::zoom2Test::cleanup $t} -result {1 1}
+
+proc ::zoom2Test::timedPlace {cmd op} {lappend ::zoom2Test::times [clock milliseconds]}
+tcltest::test pane-zoom2-duration {animation completes in about 150 ms measured on the actual sash placements} -setup {
+ set t [::zoom2Test::fixture]
+ ::application::focuszoom::enable $t
+ set ::application::focuszoom::duration 150
+ set ::zoom2Test::times {}
+ trace add execution ::application::focuszoom::Place enter ::zoom2Test::timedPlace
+} -body {
+ set start [clock milliseconds]
+ ::application::focuszoom::growPane $t [$t leaf editor]
+ after 300 {set ::zoom2Test::tick 1}; vwait ::zoom2Test::tick
+ set elapsed [expr {[lindex $::zoom2Test::times end]-$start}]
+ puts "PANE-ZOOM animation placementTimes=$::zoom2Test::times elapsed=$elapsed"
+ expr {$elapsed >= 130 && $elapsed < 230 && [llength $::zoom2Test::times] >= 5}
+} -cleanup {
+ trace remove execution ::application::focuszoom::Place enter ::zoom2Test::timedPlace
+ ::zoom2Test::cleanup $t
+} -result 1
+
+tcltest::test pane-zoom2-user-events {actual mouse/key events grow panes; program focus, dialogs, output and an expired Tab gesture do nothing} -setup {
+ .application.nb select .application.nb.board
+ ::application::reflow::reset
+ wm geometry .application 1200x780+0+0
+ after 400 {set ::zoom2Test::tick 1}; vwait ::zoom2Test::tick
+ set t [::application::twm board]
+ set board [$t leaf board]; set editor [$t leaf editor]
+ ::application::focuszoom::enable $t
+ set ::application::focuszoom::duration 0
+ set before [::zoom2Test::sashes $t]
+ set inspect [::application::twm::inspectLayout $t]
+ set changed [array get ::application::twm::Options board:layout:changed:*]
+} -body {
+ focus -force $editor
+ update
+ toplevel .z2dialog; entry .z2dialog.entry; pack .z2dialog.entry
+ focus -force .z2dialog.entry
+ update
+ destroy .z2dialog
+ ::application::updateAnalysisTitle 1 {Engine output}
+ update
+ set unchanged [expr {$before eq [::zoom2Test::sashes $t] && $inspect eq [::application::twm::inspectLayout $t]}]
+ event generate $board <ButtonPress-1>
+ update
+ set clicked [expr {$before ne [::zoom2Test::sashes $t]}]
+ ::application::focuszoom::disable $t
+ set clickRestore [expr {$before eq [::zoom2Test::sashes $t] && $inspect eq [::application::twm::inspectLayout $t]}]
+ puts "ZOOM RESTORE click before=$before after=[::zoom2Test::sashes $t] inspect=[::application::twm::inspectLayout $t]"
+ ::application::focuszoom::enable $t
+ focus -force $editor
+ update
+ # Use two production pane widgets as explicit Tk traversal stops.
+ set savedTags [bindtags $editor]
+ ::application::PaneZoomFocus $editor
+ bind $editor <Tab> [list focus $board]
+ event generate $editor <KeyPress-Tab>
+ update
+ set keyboard [expr {$before ne [::zoom2Test::sashes $t]}]
+ bind $editor <Tab> {}
+ bindtags $editor $savedTags
+ ::application::focuszoom::disable $t
+ set keyRestore [expr {$before eq [::zoom2Test::sashes $t] && $inspect eq [::application::twm::inspectLayout $t]}]
+ puts "ZOOM RESTORE key before=$before after=[::zoom2Test::sashes $t] inspect=[::application::twm::inspectLayout $t]"
+ ::application::focuszoom::enable $t
+ set expiredBefore [::zoom2Test::sashes $t]
+ ::application::focuszoom::keySwitch
+ update
+ puts "PANE-ZOOM expired key pending=$::application::focuszoom::pendingKey before=$expiredBefore intermediate=[::zoom2Test::sashes $t] original=$before"
+ focus -force $board
+ update
+ set expired [expr {$expiredBefore eq [::zoom2Test::sashes $t]}]
+ set unchangedOpt [expr {$changed eq [array get ::application::twm::Options board:layout:changed:*]}]
+ puts "PANE-ZOOM user program=$unchanged click=$clicked keyboard=$keyboard expired=$expired options=$unchangedOpt"
+ list $unchanged $clicked $keyboard $expired $unchangedOpt $clickRestore $keyRestore
+} -cleanup {
+ catch {destroy .z2dialog}
+ ::application::focuszoom::disable $t
+ ::application::reflow::reset
+} -result {1 1 1 1 1 1 1}
+
+tcltest::test pane-zoom2-production-minimum-pin {small-window production board keeps its minimum square size; a pin protects its actual size} -setup {
+ .application.nb select .application.nb.board
+ ::application::reflow::reset
+ wm geometry .application 1200x780+0+0
+ after 400 {set ::zoom2Test::tick 1}; vwait ::zoom2Test::tick
+ set t [::application::twm board]
+ ::application::focuszoom::enable $t
+ set ::application::focuszoom::duration 0
+ set ::application::focuszoom::ratio 1.8
+ wm geometry .application 800x780
+ after 400 {set ::zoom2Test::tick 1}; vwait ::zoom2Test::tick
+} -body {
+ event generate [$t leaf editor] <ButtonPress-1>
+ update
+ set sq $::application::board::Dim(squaresize:Normal)
+ set minimum $::application::board::MinimumReserveSquare
+ ::application::focuszoom::disable $t
+ ::application::focuszoom::enable $t
+ set ::application::focuszoom::pinBoard 1
+ set size [list [winfo width [$t leaf board]] [winfo height [$t leaf board]]]
+ event generate [$t leaf editor] <ButtonPress-1>
+ update
+ set pinned [expr {$size eq [list [winfo width [$t leaf board]] [winfo height [$t leaf board]]]}]
+ puts "PANE-ZOOM production square=$sq minimum=$minimum pinned=$pinned board=$size"
+ list [expr {$sq >= $minimum}] $pinned
+} -cleanup {
+ set ::application::focuszoom::pinBoard 0
+ ::application::focuszoom::disable $t
+ ::application::reflow::reset
+} -result {1 1}
 
 tcltest::cleanupTests
