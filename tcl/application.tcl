@@ -237,6 +237,16 @@ proc open {} {
 	bind PaneZoomShortcut <Control-Shift-Z> [namespace code {TogglePaneZoom; break}]
 	bind .application <FocusIn> +[namespace code {PaneZoomFocus %W}]
 	bind .application <Control-Shift-Z> [namespace code {TogglePaneZoom; break}]
+	# Phase 2 pane zoom (focus follows size): only real user gestures count.
+	# A click reports its widget directly; a keyboard pane switch is a Tab
+	# that moves the focus, so the key press arms the next FocusIn. Focus
+	# moved by the program (dialogs, engine output, 'focus' calls) has no
+	# arming key press and never resizes anything.
+	bind .application <ButtonPress-1> +[namespace code {focuszoom::clicked %W}]
+	foreach fzKey {<Key-Tab> <Shift-Key-Tab> <Key-ISO_Left_Tab>} {
+		bind PaneZoomShortcut $fzKey [namespace code focuszoom::keySwitch]
+	}
+	bind .application <FocusIn> +[namespace code {focuszoom::focusIn %W}]
 	bind .application <Control-Shift-plus>				$incrFontSize
 	bind .application <Control-Shift-KP_Add>			$incrFontSize
 	bind .application <Control-Shift-minus>			$decrFontSize
@@ -582,6 +592,375 @@ proc MakePane {twm parent type uid} {
 }
 
 
+# Phase 2 pane zoom: focus follows size (opt-in per layout, see
+# docs/features/FEATURE_PANE_ZOOM.md). Tcl-only: the twm panedwindows are
+# plain Tk widgets, so growing a pane is an animated sash move; the layout
+# tree and the saved layout stay untouched, and switching the mode off puts
+# the saved sash coordinates back exactly.
+namespace eval focuszoom {
+	variable ratio		1.4		;# R, clamped to the spec range 1.2-1.8
+	variable pinBoard	0		;# the board never shrinks
+	variable duration	150	;# ~150 ms per the spec; 0 is instant
+	variable steps		10
+	variable enabled		;# per layout (twm) on/off
+	variable baseline	;# sash snapshot taken when switched on
+	variable lastPane	;# last grown leaf per twm
+	variable keyAfter {}
+	variable pendingKey 0	;# a Tab/Shift-Tab armed the next FocusIn
+	variable animAfter	;# pending animation timer per panedwindow
+	namespace import ::tcl::mathfunc::max ::tcl::mathfunc::min
+}
+
+
+proc focuszoom::isEnabled {twm} {
+	variable enabled
+	return [expr {[info exists enabled($twm)] && $enabled($twm)}]
+}
+
+
+proc focuszoom::setRatio {r} {
+	variable ratio
+	set ratio [expr {max(1.2, min(1.8, $r))}]
+	return $ratio
+}
+
+
+# The menu checkbutton has already flipped the variable when this runs.
+proc focuszoom::toggle {twm} {
+	variable enabled
+	if {[info exists enabled($twm)] && $enabled($twm)} { enable $twm } else { disable $twm }
+}
+
+
+# The baseline is taken at the first actual zoom, not here: a window resize
+# between switching on and zooming must not leave a stale arrangement to
+# restore. Switching off with no zoom taken therefore changes nothing.
+proc focuszoom::enable {twm} {
+	if {[isEnabled $twm]} {return}
+	variable enabled
+	variable baseline
+	variable lastPane
+	set enabled($twm) 1
+	catch { unset baseline($twm) }
+	catch { unset lastPane($twm) }
+}
+
+
+proc focuszoom::disable {twm} {
+ variable animAfter
+ foreach pw [array names animAfter $twm.*] {after cancel $animAfter($pw); unset animAfter($pw)}
+	variable enabled
+	variable baseline
+	variable lastPane
+	set enabled($twm) 0
+	if {[info exists baseline($twm)]} {
+		# Only at the size the snapshot belongs to; after a window resize
+		# the old coordinates would squeeze the board (VAL-PANE-007C).
+		lassign $baseline($twm) size snapshot
+		if {$size eq [WindowSize $twm]} { Restore $twm $snapshot }
+		unset baseline($twm)
+	}
+	catch { unset lastPane($twm) }
+}
+
+
+proc focuszoom::WindowSize {twm} {
+	set top [winfo toplevel $twm]
+	return [list [winfo width $top] [winfo height $top]]
+}
+
+
+# A window resize between zooms re-bases the arrangement: the user's
+# sashes at the new size are what switching off returns to.
+proc focuszoom::windowResized {twm} {
+	variable baseline
+	variable lastPane
+	if {![isEnabled $twm] || ![info exists baseline($twm)]} { return }
+	if {[lindex $baseline($twm) 0] eq [WindowSize $twm]} { return }
+	unset baseline($twm)
+	catch { unset lastPane($twm) }
+}
+
+
+# Same traversal as twm::ZoomSashes; session-only, never part of the layout.
+proc focuszoom::Snapshot {twm} {
+	set result {}
+	set queue [winfo children $twm]
+	while {[llength $queue]} {
+		set queue [lassign $queue w]
+		lappend queue {*}[winfo children $w]
+		if {![string match *Panedwindow [winfo class $w]]} { continue }
+		set coords {}
+		for {set i 0} {$i < [llength [$w panes]] - 1} {incr i} {
+			lappend coords [$w sash coord $i]
+		}
+		lappend result $w $coords
+	}
+	return $result
+}
+
+
+proc focuszoom::Restore {twm snapshot} {
+	# Twice, as in twm::ZoomSashes: a sash placed in a still-shrunken
+	# panedwindow is clamped to the panes' minimum size for good.
+	foreach pass {1 2} {
+		update idletasks
+		foreach {w coords} $snapshot {
+			if {![winfo exists $w]} { continue }
+			set i 0
+			foreach xy $coords { catch { $w sash place $i {*}$xy }; incr i }
+		}
+		if {$pass == 1} { update }
+	}
+}
+
+
+proc focuszoom::clicked {w} {
+	if {![winfo exists $w]} { return }
+	lassign [PaneOfWidget $w] twm pane
+	if {$pane ne ""} { growPane $twm $pane }
+}
+
+
+proc focuszoom::keySwitch {} {
+ variable pendingKey; variable keyAfter
+ set pendingKey 1
+ if {$keyAfter ne {}} {after cancel $keyAfter}
+ # Tk traverses on idle after the key binding. Expire the gesture within
+ # this event turn; a later programmatic focus must never consume it.
+ set keyAfter [after idle [namespace code {set pendingKey 0; set keyAfter {}}]]
+}
+
+
+proc focuszoom::focusIn {w} {
+	variable pendingKey
+	if {!$pendingKey} { return }
+	set pendingKey 0
+	if {![winfo exists $w]} { return }
+	lassign [PaneOfWidget $w] twm pane
+	if {$pane ne ""} { growPane $twm $pane }
+}
+
+
+# Resolve a widget to {twm leaf}; "" when the mode is off for its layout,
+# the widget is in no pane, or the pane may not zoom.
+proc focuszoom::PaneOfWidget {w} {
+	if {[catch { set twm [::application::twm] }]} { return "" }
+	if {$w ne $twm && ![string match "$twm.*" $w]} { return "" }
+	if {![isEnabled $twm]} { return "" }
+	foreach uid [$twm leaves] {
+		set f [$twm leaf $uid]
+		if {$w eq $f || [string match "$f.*" $w]} { return [list $twm $f] }
+	}
+	return ""
+}
+
+
+proc focuszoom::growPane {twm pane} {
+	variable lastPane
+	if {![isEnabled $twm] || [$twm zoomed] ne {} || ![$twm get $pane zoomable 0]} { return }
+	if {[$twm isfloat [$twm toplevel $pane]]} { return }
+	if {[info exists lastPane($twm)] && $lastPane($twm) eq $pane} { return }
+	# Grow the child of the enclosing panedwindow; like phase 1, a notebook
+	# (including meta frames) grows as a whole. The twm tree decides the
+	# parenting: panedwindow panes are not path-parents of their leaves.
+	set node $pane
+	while {1} {
+		set pw [$twm parent $node]
+		if {$pw eq "" || $pw eq $twm || ![winfo exists $pw]} { return }
+		if {[string match *Panedwindow [winfo class $pw]]} { break }
+		set node $pw
+	}
+	variable baseline
+	if {![info exists baseline($twm)]} { set baseline($twm) [list [WindowSize $twm] [Snapshot $twm]] }
+	set lastPane($twm) $pane
+	set board ""
+	catch { set board [$twm leaf board] }
+	resize $pw $node $board
+}
+
+
+proc focuszoom::Contains {pw pane leaf} {
+ set t [winfo parent $pw]
+ while {$t ne {} && ![llength [info commands $t]]} {set t [winfo parent $t]}
+ # Panedwindows have the twm root as their Tk parent.
+ set node $leaf
+ while {$node ne {} && $node ne $t} {
+  if {$node eq $pane} {return 1}
+  if {[catch {set node [$t parent $node]}]} {break}
+ }
+ return 0
+}
+
+# The board's minimum is expressed in squares by the board renderer. Probe
+# that same arithmetic, including decorations, instead of guessing pixels.
+# While the media inset owns a strip of the board pane, the minimum must
+# also keep that reserve feasible: otherwise focus zoom squeezes the board
+# until no strip fits and the video falls back over the board (VAL-PANE-008).
+proc focuszoom::BoardMinimum {node board horizontal} {
+ set dim [expr {$horizontal ? "width" : "height"}]
+ if {$board ne [::mediainset::Pane]} {return 0}
+ set c $::application::board::Vars(widget:frame)
+ set width [winfo width $c]; set height [winfo height $c]
+ set lo 1; set hi [expr {$horizontal ? $width : $height}]
+ while {$lo < $hi} {
+  set mid [expr {($lo+$hi)/2}]
+  set sq [BoardMinSquare [expr {$horizontal ? $mid : $width}] [expr {$horizontal ? $height : $mid}]]
+  if {$sq >= $::application::board::MinimumReserveSquare} {set hi $mid} else {set lo [expr {$mid+1}]}
+ }
+ return [expr {[winfo $dim $node]-[winfo $dim $c]+$lo}]
+}
+
+# The square size a board canvas <w> x <h> would have once the media inset
+# has taken its strip, using the inset's own planner so the probe and the
+# realized reserve cannot drift. While the inset is shown its reserve is
+# mandatory here: a size at which no strip fits reports no square, so the
+# search keeps growing until the video has a place beside the board.
+proc focuszoom::BoardMinSquare {w h} {
+ set reserve [::mediainset::reserveForLayout $w $h]
+ if {![llength $reserve]} {
+  # hidden, swapped or 3D: the inset is not reserving a strip
+  return [::application::board::reserveSquare {} 0 $w $h]
+ }
+ lassign $reserve side px
+ if {$side eq {}} {return 0}
+ return [::application::board::reserveSquare $side $px $w $h]
+}
+
+proc focuszoom::resize {pw node board} {
+	variable ratio
+	variable pinBoard
+	set panes [$pw panes]
+	set n [llength $panes]
+	if {$n < 2} { return }
+	set horz [expr {[$pw cget -orient] eq "horizontal"}]
+	set dim [expr {$horz ? "width" : "height"}]
+	set idx [lsearch -exact $panes $node]
+	if {$idx < 0} { return }
+	set R [setRatio $ratio]
+	set sizes {}
+	set total 0
+	foreach p $panes {
+		set s [winfo $dim $p]
+		lappend sizes $s
+		incr total $s
+	}
+	set cur [lindex $sizes $idx]
+	if {$cur <= 0 || $total <= 0} { return }
+	# Minimums: the panedwindow -minsize of every pane; the board can be
+	# pinned so it never shrinks below its current size.
+	set mins {}
+	foreach p $panes {
+		set m [$pw panecget $p -minsize]
+		if {$board ne {} && [Contains $pw $p $board]} {
+			set m [max $m [BoardMinimum $p $board $horz]]
+		}
+		if {$pinBoard && $p ne $node && $board ne ""
+				&& [Contains $pw $p $board]} {
+			set m [expr {max($m, [winfo $dim $p])}]
+		}
+		lappend mins $m
+	}
+	# The focused pane grows by R, bounded by the siblings' minimums.
+	set avail $total
+	foreach m $mins { incr avail -$m }
+	incr avail [lindex $mins $idx]
+	set target [expr {int(round($cur * $R))}]
+	if {$target > $avail} { set target $avail }
+	if {$target <= $cur} { return }
+	# The siblings shrink in proportion, each keeping its minimum size.
+	set new [lreplace $sizes $idx $idx $target]
+	set rest [expr {$total - $target}]
+	set factor [expr {double($rest) / ($total - $cur)}]
+	set others {}
+	for {set i 0} {$i < $n} {incr i} {
+		if {$i == $idx} { continue }
+		lappend others $i
+		set ns [expr {int(round([lindex $sizes $i] * $factor))}]
+		set new [lreplace $new $i $i [expr {max($ns, [lindex $mins $i])}]]
+	}
+	# Absorb rounding and clamping drift into siblings with room to spare.
+	set drift $rest
+	foreach i $others { incr drift -[lindex $new $i] }
+	while {$drift != 0} {
+		set progressed 0
+		foreach i $others {
+			if {$drift == 0} { break }
+			set ns [lindex $new $i]
+			if {$drift < 0 && $ns > [lindex $mins $i]} {
+				set new [lreplace $new $i $i [incr ns -1]]
+				incr drift 1
+				set progressed 1
+			} elseif {$drift > 0} {
+				set new [lreplace $new $i $i [incr ns 1]]
+				incr drift -1
+				set progressed 1
+			}
+		}
+		if {!$progressed} { break }
+	}
+	# Sash offsets (sash width and padding) are taken from the live geometry,
+	# so restored and animated coordinates land exactly.
+	set offsets {}
+	for {set i 0} {$i < $n - 1} {incr i} {
+		lassign [$pw sash coord $i] x y
+		set cum 0
+		for {set j 0} {$j <= $i} {incr j} { incr cum [lindex $sizes $j] }
+		lappend offsets [expr {($horz ? $x : $y) - $cum}]
+	}
+	set final {}
+	set cum 0
+	for {set i 0} {$i < $n - 1} {incr i} {
+		incr cum [lindex $new $i]
+		lappend final [expr {$cum + [lindex $offsets $i]}]
+	}
+	animate $pw $horz $final
+}
+
+
+proc focuszoom::animate {pw horz final} {
+	variable duration
+	variable steps
+	variable animAfter
+	if {[info exists animAfter($pw)]} {
+		after cancel $animAfter($pw)
+		unset animAfter($pw)
+	}
+	set start {}
+	for {set i 0} {$i < [llength [$pw panes]] - 1} {incr i} {
+		lassign [$pw sash coord $i] x y
+		lappend start [expr {$horz ? $x : $y}]
+	}
+	# Instant when the animation cannot run or keep up.
+	if {$duration <= 0 || $steps <= 1 || [catch { AnimateStep $pw $horz $start $final [clock milliseconds] }]} {
+		catch { Place $pw $horz $final }
+	}
+}
+
+
+proc focuszoom::AnimateStep {pw horz start final began} {
+ variable duration; variable steps; variable animAfter
+ catch {unset animAfter($pw)}
+ if {![winfo exists $pw]} {return}
+ set fraction [expr {min(1.0, double([clock milliseconds]-$began)/max(1,$duration))}]
+ set coords {}
+ foreach a $start b $final {lappend coords [expr {int(round($a+($b-$a)*$fraction))}]}
+ # A delayed frame catches up immediately, rather than extending animation.
+ if {[catch {Place $pw $horz $coords}]} {catch {Place $pw $horz $final}; return}
+ if {$fraction >= 1} {return}
+ set animAfter($pw) [after [expr {max(1,$duration/max(1,$steps))}] \
+  [list ::application::focuszoom::AnimateStep $pw $horz $start $final $began]]
+}
+
+proc focuszoom::Place {pw horz coords} {
+	set i 0
+	foreach c $coords {
+		if {$horz} { $pw sash place $i $c 0 } else { $pw sash place $i 0 $c }
+		incr i
+	}
+}
+
+
 proc PaneZoomFocus {w} {
 	if {![winfo exists $w] || [catch {set manager [twm]}]} { return }
 	foreach uid [$manager leaves] {
@@ -703,6 +1082,7 @@ proc UpdateAnalysisTitle {analysisNumber {title ""}} {
 
 
 proc updateAnalysisTitle {analysisNumber {title ""}} {
+	reflow::onPaneStateChange
 	variable MapAnalysisToTerminal
 	variable NameVar
 	variable Vars
@@ -741,8 +1121,9 @@ proc newAnalysisPane {analysisNumber} {
 # Show pane <uid> of the board tab: add it to the layout when it is not
 # part of it, then bring it to the front (its tab, its multiwindow or
 # notebook page, or its toplevel when undocked). Returns the twm frame,
-# or {} when the board layout is not available.
-proc openPane {uid} {
+# or {} when the board layout is not available. Automatic content callers
+# pass explicit=false so they do not create a persistent user reopen override.
+proc openPane {uid {explicit true}} {
 	variable PaneOptions
 	variable Vars
 
@@ -759,6 +1140,8 @@ proc openPane {uid} {
 		switchTab board
 	}
 
+	if {$explicit} { reflow::explicitOpen $twm $uid }
+	reflow::onPaneStateChange
 	set parent [$twm parent $frame]
 	if {[$twm ismultiwindow $parent] || [$twm isnotebook $parent]} {
 		$twm select $parent $frame
@@ -842,7 +1225,7 @@ proc shutdown {} {
 		append msg $mc::UnsavedFiles
 		append msg <embed>
 		append msg $mc::ThrowAwayAllChanges
-	
+
 		set reply [::dialog::question \
 			-parent .application \
 			-message $msg \
@@ -853,37 +1236,50 @@ proc shutdown {} {
 		if {$reply ne "yes"} { return }
 	}
 
-	if {![twm::saveLayouts]} { return }
+	# Keep presentation suspended through modal close/save dialogs too.
+	set ::application::reflow::S(saving) 1
+	try {
+		# Session presentation must not leak into the saved layout.
+		foreach t $Vars(twm) { focuszoom::disable $t }
+		reflow::RevertForExit
 
-	switch [::game::queryCloseApplication .application] {
-		restore	{ set backup 1 }
-		discard	{ set backup 0 }
-		cancel	{ return }
+		if {![twm::saveLayouts]} { return }
+
+		switch [::game::queryCloseApplication .application] {
+			restore	{ set backup 1 }
+			discard	{ set backup 0 }
+			cancel	{ return }
+		}
+
+		foreach toplevel [winfo children .] {
+			if {$toplevel ne ".application"} { destroy $toplevel }
+		}
+
+		tk::toplevel $dlg -class Scidb
+		wm withdraw $dlg
+		pack [tk::frame $dlg.f -borderwidth 2 -relief raised]
+		pack [tk::label $dlg.f.text -compound left -image $shutdown -text " $mc::Shutdown"] -padx 10 -pady 10
+		wm resizable $dlg no no
+		wm transient $dlg .application
+		::util::place $dlg -parent .application -position center
+		update idletasks
+		::scidb::tk::wm frameless $dlg
+		wm deiconify $dlg
+		::ttk::grabWindow $dlg
+		::widget::busyCursor on
+		prepareExit $backup
+		if {[tk windowingsystem] eq "x11"} { ::scidb::tk::sm disconnect }
+		::widget::busyCursor off
+		::ttk::releaseGrab $dlg
+		set Vars(shutdown) 1
+		catch { file delete -force -- $::scidb::dir::temp }
+		destroy .application
+	} finally {
+		set ::application::reflow::S(saving) 0
+		if {[winfo exists .application]} {
+			reflow::onConfigure .application [winfo width .application] [winfo height .application]
+		}
 	}
-
-	foreach toplevel [winfo children .] {
-		if {$toplevel ne ".application"} { destroy $toplevel }
-	}
-
-	tk::toplevel $dlg -class Scidb
-	wm withdraw $dlg
-	pack [tk::frame $dlg.f -borderwidth 2 -relief raised]
-	pack [tk::label $dlg.f.text -compound left -image $shutdown -text " $mc::Shutdown"] -padx 10 -pady 10
-	wm resizable $dlg no no
-	wm transient $dlg .application
-	::util::place $dlg -parent .application -position center
-	update idletasks
-	::scidb::tk::wm frameless $dlg
-	wm deiconify $dlg
-	::ttk::grabWindow $dlg
-	::widget::busyCursor on
-	prepareExit $backup
-	if {[tk windowingsystem] eq "x11"} { ::scidb::tk::sm disconnect }
-	::widget::busyCursor off
-	::ttk::releaseGrab $dlg
-	set Vars(shutdown) 1
-	catch { file delete -force -- $::scidb::dir::temp }
-	destroy .application
 }
 
 
@@ -1472,6 +1868,7 @@ proc Startup2 {} {
 	after idle { ::tips::show .application }
 	#after idle [list ::beta::welcomeToScidb $app]
 	#::util::photos::checkForUpdate [namespace current]::InformAboutUpdates
+	reflow::Startup
 }
 
 
@@ -1628,6 +2025,368 @@ proc ::tk::PostOverPoint {menu x y {entry {}}} {
 	}
 
 	::tk::_PostOverPoint_application $menu $x $y $entry
+}
+
+# Session presentation of the DEFAULT board layout. No option or layout-file
+# writes live here. $t load reuses leaves by uid (verified with a running
+# Stockfish and native widget IDs); only the containers are rebuilt.
+namespace eval ::application::reflow {
+variable WideAspect 1.25
+variable TallAspect 1.05 ;# hysteresis: keep the current shape in [1.05,1.25]
+variable DebounceMs 140
+variable ShortWidth 1100
+variable ShortHeight 720
+variable S
+array set S {mode wide base {} busy 0 saving 0 afterId {} loadCount 0 collapsed {} override {} snapshot {}}
+
+proc boardTwm {} {
+ if {![info exists ::application::Vars(board:twm)]} {return {}}
+ set t $::application::Vars(board:twm)
+ return [expr {[winfo exists $t] ? $t : {}}]
+}
+proc substTpl {tpl} {
+ set map {}; foreach {name value} [array get ::application::PaneOptions] {lappend map %${name}% [list $value]}
+ return [string map $map $tpl]
+}
+# Fingerprint only structure; optional Media may be a sibling or a tab of
+# Analysis, as created by openPane. Single-child containers are equivalent.
+proc shapeTokens {stream} {
+ set out {}
+ foreach {type attrs children} $stream {
+  if {$type in {root panedwindow multiwindow notebook}} {
+   set kids [shapeTokens $children]
+   if {[llength $kids] == 1 && $type in {multiwindow notebook}} {lappend out {*}$kids; continue}
+   set orient {}; if {$type eq "panedwindow"} {set orient [string index [dict get $attrs -orient] 0]}
+   lappend out "${type}${orient}\[[join $kids ,]\]"
+  } elseif {$attrs ne "media"} {lappend out $type:$attrs}
+ }
+ return $out
+}
+proc shapeOf {layout} {return [lindex [shapeTokens $layout] 0]}
+proc tallFrom {wide} {
+ lassign $wide root attrs outer
+ lassign $outer type options rows
+ # The default top row is board + notation notebook. Promote its two
+ # children into the outer vertical panedwindow, retaining every leaf/attr.
+ # The notation shares one horizontal row with the bottom row's panes, so
+ # the board keeps most of the height: a tall window gives a tall canvas
+ # with room for a bottom media strip (VAL-BRD-002 on the reflowed layout).
+ set top [lindex [lrange $rows 0 2] 2]
+ set below [lrange $top 3 end]
+ set rest [lrange $rows 3 end]
+ if {[llength $rest] == 3 && [lindex $rest 0] eq "panedwindow"
+  && [string match h* [dict get [lindex $rest 1] -orient]]} {
+  set below [concat $below [lindex $rest 2]]
+  set rows [concat [lrange $top 0 2] [list panedwindow [lindex $rest 1] $below]]
+ } else {
+  set rows [concat $top $rest]
+ }
+ return [list $root $attrs [list $type $options $rows]]
+}
+# Give the board the height left once the row below is at its minimum,
+# capped where the canvas would be clearly taller than wide.
+proc tallSashes {t} {
+ set board [$t leaf board]
+ set node $board
+ while {1} {
+  set pw [$t parent $node]
+  if {$pw eq {} || $pw eq $t} {return}
+  if {[$t ispanedwindow $pw]} {break}
+  set node $pw
+ }
+ if {[$pw cget -orient] ne "vertical" || [lindex [$pw panes] 0] ne $node || [llength [$pw panes]] < 2} {return}
+ update idletasks
+ set below 0
+ foreach p [lrange [$pw panes] 1 end] {
+  set h [$pw panecget $p -minsize]
+  if {![string is integer -strict $h] || $h < 1} {set h [winfo reqheight $p]}
+  incr below [expr {$h+[$pw cget -sashwidth]+2*[$pw cget -sashpad]}]
+ }
+ set y [expr {min([winfo height $pw]-$below, int([winfo width $node]*1.35))}]
+ if {$y > [winfo height $node]} {$pw sash place 0 0 $y}
+}
+proc reflowable? {t} {
+ variable S
+ if {$t eq {} || $S(busy) || $S(saving) || ![info exists S(wideShape)]} {return 0}
+ if {$::application::twm::Options(board:layout:name) ne {}} {return 0}
+ if {[llength [$t floats]] || [$t zoomed] ne {}} {return 0}
+ if {$::application::Vars(loading) || $::application::Vars(lock:layout)} {return 0}
+ # Focus zoom owns its sash snapshot until switched off.
+ if {[::application::focuszoom::isEnabled $t]} {return 0}
+ set shape [shapeOf [::application::twm::inspectLayout $t]]
+ return [expr {$shape eq $S(wideShape) || ($S(mode) eq "tall" && $shape eq $S(tallShape))}]
+}
+proc restoreCollapsed {} {
+ variable S
+ foreach {pw node} $S(collapsed) {
+  if {[winfo exists $pw] && $node in [$pw panes]} {$pw paneconfigure $node -hide 0}
+ }
+ set S(collapsed) {}
+ if {[info exists S(stretch)]} {
+  foreach {pw node stretch} $S(stretch) {
+   if {[winfo exists $pw] && $node in [$pw panes]} {$pw paneconfigure $node -stretch $stretch}
+  }
+  unset S(stretch)
+ }
+ if {$S(snapshot) ne {}} {
+  ::application::focuszoom::Restore [boardTwm] $S(snapshot)
+  set S(snapshot) {}
+ }
+}
+proc setMode {t target} {
+ variable S
+ if {$S(busy) || $target eq $S(mode)} {return}
+ set S(busy) 1
+ set loading $::application::Vars(loading)
+ set geometry [wm geometry .application]
+ set minimum [wm minsize .application]
+ set ::application::Vars(loading) 1
+ set rc [catch {
+  restoreCollapsed
+  if {$target eq "tall"} {
+   set S(base) [::application::twm::inspectLayout $t]
+   set layout [tallFrom $S(base)]
+   set S(tallShape) [shapeOf $layout]
+  } else {set layout $S(base)}
+  $t load $layout
+  if {$target eq "tall"} {tallSashes $t}
+  incr S(loadCount)
+  set S(mode) $target
+  array unset S expanded*
+  array unset S return*
+  update idletasks
+  wm minsize .application {*}$minimum
+  wm geometry .application $geometry
+  update idletasks
+  # Back at the size the wide shape was left at: put its sashes back too.
+  if {$target eq "wide" && [info exists S(wideSashes)]} {
+   lassign $S(wideSashes) w h snapshot
+   if {$w == [winfo width .application] && $h == [winfo height .application]} {
+    # The load rebuilds the panedwindows under new paths, in the same
+    # traversal order; map the old coordinates onto the new widgets.
+    set live [::application::focuszoom::Snapshot $t]
+    if {[llength $live] == [llength $snapshot]} {
+     set mapped {}
+     foreach {pw -} $live {- coords} $snapshot {lappend mapped $pw $coords}
+     ::application::focuszoom::Restore $t $mapped
+    }
+   }
+   unset S(wideSashes)
+  }
+  # The board's Configure may land while the twm is frozen by the load,
+  # which skips its rebuild; rebuild once so afterRebuild owners (the media
+  # inset reserve) re-plan for the reflowed extent.
+  ::application::board::rebuildDeferred
+ } error options]
+ set ::application::Vars(loading) $loading
+ set S(busy) 0
+ if {$rc} {return -options $options $error}
+ updateCollapse
+}
+proc evaluate {w h} {
+ variable S; variable WideAspect; variable TallAspect
+ if {$w < 40 || $h < 40 || ![reflowable? [set t [boardTwm]]]} {return}
+ set aspect [expr {double($w)/$h}]
+ if {$S(mode) eq "wide" && $aspect < $TallAspect} {setMode $t tall}
+ if {$S(mode) eq "tall" && $aspect > $WideAspect} {setMode $t wide}
+}
+proc onConfigure {W w h} {
+ variable S; variable DebounceMs
+ if {$W ne ".application" || $S(busy)} {return}
+ cancelPending
+ set S(afterId) [after $DebounceMs [namespace code [list onDebounced $w $h]]]
+}
+proc onDebounced {w h} {
+ variable S; set S(afterId) {}
+ if {[set t [boardTwm]] ne {}} {::application::focuszoom::windowResized $t}
+ evaluate $w $h
+ updateCollapse
+ # The last settled wide arrangement, put back when a tall excursion
+ # returns to this window size (see setMode).
+ if {$S(mode) eq "wide" && [reflowable? [set t [boardTwm]]]} {
+  set S(wideSashes) [list [winfo width .application] [winfo height .application] [::application::focuszoom::Snapshot $t]]
+ }
+}
+proc cancelPending {} {
+ variable S
+ if {$S(afterId) ne {}} {after cancel $S(afterId); set S(afterId) {}}
+}
+proc shouldCollapse {uid} {
+ if {[string match analysis:* $uid]} {
+  set n [::application::analysisNumberFromUid $uid]
+  return [expr {![::application::analysis::active? $n]}]
+ }
+ if {$uid eq "media"} {return [expr {![llength [::application::media::MediaRows]]}]}
+ return 0
+}
+# A group is eligible only when ALL its tabs are empty candidates. Hiding
+# the Tk panedwindow child keeps both the native twm tree and live widgets.
+proc collapseNode {t uid} {
+ set leaf [$t leaf $uid]; set node $leaf
+ while {1} {
+  set pw [$t parent $node]
+  if {$pw eq {} || $pw eq $t} {return {}}
+  if {[$t ispanedwindow $pw]} {break}
+  set node $pw
+ }
+ foreach other [$t leaves] {
+  set p [$t leaf $other]
+  if {[::application::focuszoom::Contains $pw $node $p]} {
+   if {![shouldCollapse $other]} {return {}}
+  }
+ }
+ return [list $pw $node]
+}
+proc updateCollapse {} {
+ variable S; variable ShortWidth; variable ShortHeight
+ set t [boardTwm]
+ if {![reflowable? $t] || ![winfo ismapped [$t leaf board]]} {return}
+ set short [expr {[winfo width .application] < $ShortWidth || [winfo height .application] < $ShortHeight}]
+ if {!$short} {set S(override) {}}
+ set desired {}
+ set deficit [expr {max($ShortWidth-[winfo width .application], $ShortHeight-[winfo height .application])}]
+ # Lowest priority first. Content and an explicit reopen always win.
+ if {$short} {
+  foreach uid [concat [lsort -dictionary [lsearch -all -inline -glob [$t leaves] analysis:*]] media] {
+   if {$uid ni [$t leaves] || $uid in $S(override) || ![shouldCollapse $uid]} {continue}
+   set pair [collapseNode $t $uid]
+   if {$pair eq {} || [lindex $pair 1] in $desired} {continue}
+   # An explicitly reopened tab protects its entire container.
+   lassign $pair pw node
+   set protected 0
+   foreach keep $S(override) {
+    if {$keep ni [$t leaves]} {continue}
+    set p [$t leaf $keep]
+    if {[::application::focuszoom::Contains $pw $node $p]} {set protected 1}
+   }
+   if {!$protected && $deficit > 0} {
+    lappend desired {*}$pair
+    incr deficit -[winfo width $node]
+   }
+  }
+ }
+ if {$desired eq $S(collapsed)} {
+  if {!$short && $desired eq {}} {rememberExpanded $t}
+  return
+ }
+ set S(busy) 1
+ restoreCollapsed
+ if {$desired ne {}} {
+  set S(snapshot) [::application::focuszoom::Snapshot $t]
+  if {![info exists S(returnSnapshot)] && [info exists S(expandedSnapshot)]} {
+   set S(returnSnapshot) $S(expandedSnapshot)
+   set S(returnSize) $S(expandedSize)
+  }
+  set S(stretch) {}
+  set touched {}
+  foreach {pw node} $desired {
+   if {$pw ni $touched} {
+    lappend touched $pw
+    foreach sibling [$pw panes] {
+     lappend S(stretch) $pw $sibling [$pw panecget $sibling -stretch]
+     $pw paneconfigure $sibling -stretch always
+    }
+   }
+   $pw paneconfigure $node -hide 1
+  }
+  set S(collapsed) $desired
+ }
+ update idletasks
+ set S(busy) 0
+ if {!$short && $desired eq {}} {rememberExpanded $t}
+}
+proc rememberExpanded {t} {
+ variable S
+ set size [list [winfo width .application] [winfo height .application]]
+ if {[info exists S(returnSnapshot)]} {
+  if {$size eq $S(returnSize)} {::application::focuszoom::Restore $t $S(returnSnapshot)}
+  unset S(returnSnapshot) S(returnSize)
+ }
+ set S(expandedSnapshot) [::application::focuszoom::Snapshot $t]
+ set S(expandedSize) $size
+}
+proc explicitOpen {t uid} {
+ variable S
+ if {$t ne [boardTwm]} {return}
+ if {$uid ni $S(override)} {lappend S(override) $uid}
+ if {[llength $S(collapsed)]} {
+  set S(busy) 1; restoreCollapsed; set S(busy) 0
+  updateCollapse
+ }
+}
+proc explicitHide {t pane} {
+ variable S
+ if {$t ne [boardTwm]} {return}
+ catch {set uid [$t uid $pane]; set i [lsearch -exact $S(override) $uid]; if {$i >= 0} {set S(override) [lreplace $S(override) $i $i]}}
+}
+proc onPaneStateChange args {
+ variable S
+ if {![info exists S(contentAfter)]} {set S(contentAfter) [after 0 [namespace code contentChanged]]}
+}
+proc contentChanged {} {
+ variable S; unset S(contentAfter)
+ updateCollapse
+}
+# SAVE RULE (VAL-PANE-009): block an explicit layout save while automatic
+# reflow/collapse is active. The pre-reflow tree lives in S(base); shutdown
+# restores it before saveLayouts. Never serialize a presentation by accident.
+proc allowSave {t parent} {
+ variable S
+ if {$t ne [boardTwm] || ($S(mode) ne "tall" && $S(collapsed) eq {})} {return 1}
+ ::dialog::info -parent $parent -message "This layout is temporarily adapted to the window. Enlarge the window to restore its saved shape before saving the layout."
+ return 0
+}
+proc RevertForExit {} {
+ variable S
+ cancelPending
+ set t [boardTwm]
+ if {$t eq {}} {return}
+ set S(busy) 1
+ restoreCollapsed
+ # A user may have loaded a custom layout while adapted. Never overwrite it.
+ if {$S(mode) eq "tall" && [shapeOf [::application::twm::inspectLayout $t]] eq $S(tallShape)} {
+  set loading $::application::Vars(loading); set ::application::Vars(loading) 1
+  $t load $S(base)
+  set ::application::Vars(loading) $loading
+ }
+ set S(mode) wide; set S(base) {}; set S(busy) 0
+}
+# Test and inspection helpers.
+proc mode {} {variable S; return $S(mode)}
+proc wideShape {} {variable S; return $S(wideShape)}
+proc tallShape {} {variable S; return $S(tallShape)}
+proc liveShape {} {return [shapeOf [::application::twm::inspectLayout [boardTwm]]]}
+proc loadCount {} {variable S; return $S(loadCount)}
+proc resetLoadCount {} {variable S; set S(loadCount) 0}
+proc wideAspect {} {variable WideAspect; return $WideAspect}
+proc tallAspect {} {variable TallAspect; return $TallAspect}
+proc reset {} {
+ variable S
+ cancelPending
+ set S(busy) 1; restoreCollapsed
+ set t [boardTwm]
+ if {$t ne {}} {
+  ::application::focuszoom::disable $t
+  set ::application::Vars(loading) 1
+  $t load [substTpl $::application::BoardLayout]
+  set ::application::Vars(loading) 0
+ }
+ array unset S expanded*
+ array unset S return*
+ array unset S wideSashes
+ array set S {mode wide base {} busy 0 loadCount 0 collapsed {} override {} snapshot {}}
+ update idletasks
+}
+proc Startup {} {
+ variable S
+ set S(wideShape) [shapeOf $::application::BoardLayout]
+ set S(tallShape) [shapeOf [tallFrom $::application::BoardLayout]]
+ bind .application <Configure> +[namespace code {onConfigure %W %w %h}]
+ foreach v {::application::MapTerminalToAnalysis ::application::MapAnalysisToTerminal} {
+  trace add variable $v write [namespace code onPaneStateChange]
+ }
+ onConfigure .application [winfo width .application] [winfo height .application]
+}
 }
 
 # vi:set ts=3 sw=3:

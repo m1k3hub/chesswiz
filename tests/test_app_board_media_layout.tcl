@@ -2,7 +2,8 @@
 # drawing, reserve/rebuild and the application model run unchanged.
 package require tcltest 2.5
 namespace eval ::w1 {
-    variable dir [file normalize tests/tmp-app/w1]
+    variable dir [file normalize tests/tmp-app/w1c]
+    if {[info exists ::env(W1_EVIDENCE_DIR)]} {set dir [file normalize $::env(W1_EVIDENCE_DIR)]}
     variable stubs {}
     variable calls {}
     variable now 0
@@ -33,6 +34,27 @@ proc ::w1::stub {name args body} {
     proc ::media::mpv::$name $args $body
     lappend stubs $name
 }
+# Replace only a managed game slot. A fresh app is in independent slot 9,
+# which is not an entry in game::List and must use the normal add path.
+proc ::w1::game {args} {
+    set count [llength $::game::List]
+    set current [::scidb::game::current]
+    if {$count && ($current < 0 || $current >= $count || $current == 9)} {
+        for {set slot 0} {$slot < $count && $slot < 9} {incr slot} {
+            if {[::scidb::game::query $slot open?]} {
+                ::application::pgn::select $slot
+                ::scidb::game::switch $slot
+                set current $slot
+                break
+            }
+        }
+    }
+    set replace [expr {$current >= 0 && $current < $count && $current != 9}]
+    set pos [::game::new .application -replace $replace {*}$args]
+    if {$pos < 0 || $pos == 9} {error "could not load test game"}
+    return $pos
+}
+
 proc ::w1::setup {{shape wide}} {
     variable calls {}
     variable now 0
@@ -57,14 +79,29 @@ proc ::w1::setup {{shape wide}} {
     stub stop {} {lappend ::w1::calls stop}
     stub aspect {} {return $::w1::aspect}
     stub chapters {} {return {}}
+    set ::w1::geometry [wm geometry .application]
+    set ::w1::twm [::application::twm board]
+    set ::w1::paneLayout [::application::twm::inspectLayout $::w1::twm]
+    set ::w1::insetOptions [array get ::mediainset::Options]
     set ::w1::layout [array get ::board::layout]
     array set ::board::layout {side-to-move 1 material-values 1 material-bar 1}
     set ::w1::minimum [wm minsize .application]
     wm minsize .application 1 1
     if {$shape eq "default"} {
-        wm geometry .application 1800x950+0+0
+        set default $::application::BoardLayout
+        foreach name [array names ::application::PaneOptions] {
+            set default [string map [list %${name}% [list $::application::PaneOptions($name)]] $default]
+        }
+        $::w1::twm load $default
+        wm geometry .application 1007x718+0+0
         wait
-    } else { ::w1::size wide }
+    } else { ::w1::size $shape }
+    set base [file normalize tests/tmp-app/media-test/MediaTest.sci]
+    if {![::scidb::db::get open? $base]} {::scidb::db::load $base {apply {args {return 0}}} {} -readonly 1}
+    set pos [::w1::game -base $base -variant Normal -number 1]
+    assert {$pos >= 0 && $pos != 9} "could not load generated media game"
+    ::application::media::Update $pos
+    wait
 }
 proc ::w1::cleanup {} {
     ::menu::setFullscreen 0
@@ -75,15 +112,20 @@ proc ::w1::cleanup {} {
         rename ::w1::saved_$name ::media::mpv::$name
     }
     set ::w1::stubs {}
+    array set ::mediainset::Options $::w1::insetOptions
     array set ::board::layout $::w1::layout
     wm minsize .application {*}$::w1::minimum
-    update
+    place forget [::mediainset::Pane]
+    ::application::reflow::reset
+    $::w1::twm load $::w1::paneLayout
+    wm geometry .application $::w1::geometry
+    wait
 }
 proc ::w1::size {shape} {
     set sw [winfo screenwidth .]; set sh [winfo screenheight .]
     set t [::application::twm board]
     if {$shape eq "small"} {
-        set w [expr {min(550,$sw-40)}]; set h [expr {min(520,$sh-60)}]
+        set w [expr {min(400,$sw-40)}]; set h [expr {min(380,$sh-60)}]
     } else {
         if {$shape eq "wide"} {
             set w [expr {min(1800,$sw-40)}]; set h [expr {min(950,$sh-80)}]
@@ -92,6 +134,9 @@ proc ::w1::size {shape} {
         }
     }
     wm geometry .application ${w}x${h}+0+0
+    # Let the session reflow (debounced) settle first: its layout load
+    # re-manages the board pane and would drop the forced placement below.
+    wait
     # A forced pane size is an allowed contract precondition. Preserve every
     # other live pane and its subscriptions, temporarily placing the board
     # over the workspace; its production canvas still packs normally.
@@ -116,7 +161,7 @@ proc ::w1::measure {target {shot 0}} {
     # Non-empty material bbox from the real decoration renderer, using generated data.
     $c delete material
     ::application::board::AddMaterial 1 p $c 0 1
-    set data [dict create canvas [rect $c] inset [rect $w] controls [rect $w.controls] \
+    set data [dict create window [winfo geometry .application] square $::application::board::Dim(squaresize:Normal) canvas [rect $c] inset [rect $w] controls [rect $w.controls] \
         video [rect $w.video] mapped [winfo ismapped $w] videoManager [winfo manager $w.video] \
         reserve [::application::board::reserveRect] side $::application::board::ReserveSide]
     foreach tag {board stm material} {
@@ -129,6 +174,9 @@ proc ::w1::measure {target {shot 0}} {
     }
     dict set data allowances [list stm $::application::board::Dim(stm) material-bar $::board::layout(material-bar) gap:x $::application::board::Dim(gap:x)]
     log $target $data
+    # Required states always get screenshots, including callers that omit
+    # the optional flag. Other states keep rectangle/status evidence only.
+    if {[regexp {^VAL-BRD-00[126]} $target]} {set shot 1}
     if {$shot} {exec import -window root $::w1::dir/$target-[winfo screenwidth .]x[winfo screenheight .].png}
     return $data
 }
@@ -158,11 +206,44 @@ proc ::w1::reserved {target {side {}} {shot 0}} {
     return $d
 }
 
-tcltest::test brd-wide {BRD-001 reserves a right strip including all decorations} -setup {::w1::setup [expr {[winfo screenwidth .]>=1500 ? "default" : "wide"}]} -body {
+# Run before any other test creates the embedded view. In particular, the
+# tall, docked pane must not inherit geometry from an earlier 3D toggle.
+tcltest::test brd-3d-first {BRD-007 first 3D toggle during playback uses the realised frame including its toolbar} -setup {::w1::setup default} -body {
+    ::w1::assert {$::application::board::Vars(3dwin) eq "" || ![winfo exists $::application::board::Vars(3dwin)]} "first-toggle test requires an uncreated 3D view"
+    set sw [winfo screenwidth .]; set sh [winfo screenheight .]
+    wm geometry .application [expr {min(1800,$sw-30)}]x[expr {$sh-150}]+0+0
+    ::w1::wait
+    set w [::w1::play]
+    ::w1::assert {[::application::board::show3D 1]} "Blocked: 3D view unavailable"
+    set start [clock milliseconds]
+    set view [::mediainset::BoardView]
+    for {set ms 100} {$ms <= 3000} {incr ms 100} {
+        ::w1::wait [expr {max(1,$start+$ms-[clock milliseconds])}]
+        set overlap [::w1::overlap [::w1::rect $view] [::w1::rect $w]]
+        set toolbarOverlap [::w1::overlap [::w1::rect $view.camera] [::w1::rect $w]]
+        ::w1::log VAL-BRD-007-first [list elapsed [expr {[clock milliseconds]-$start}] view [::w1::rect $view] \
+            inset [::w1::rect $w] toolbar [::w1::rect $view.camera] reserve [::application::board::reserveRect] \
+            overlap $overlap toolbarOverlap $toolbarOverlap]
+        ::w1::assert {[winfo ismapped $view] && [winfo ismapped $view.camera] && [winfo ismapped $w] && [winfo manager $w.video] eq "pack"} "production views not mapped"
+        ::w1::assert {$overlap == 0 && $toolbarOverlap == 0} "first 3D view/toolbar overlaps inset"
+    }
+    exec import -window root $::w1::dir/VAL-BRD-007-first-[winfo screenwidth .]x[winfo screenheight .].png
+    ::application::board::show3D 0
+    ::w1::wait
+    ::w1::reserved VAL-BRD-007-first-restored
+    return ok
+} -cleanup {::w1::cleanup} -result ok
+
+tcltest::test brd-wide {BRD-001 reserves a right strip including all decorations} -setup {::w1::setup default} -body {
+    # The old saved preferred width must shrink to the 160px lower bound.
+    set ::mediainset::Options(minWidth) 200
     ::w1::play
     set c $::application::board::Vars(widget:frame)
     ::w1::assert {[winfo width $c]>[winfo height $c]} "wide precondition"
     ::w1::reserved VAL-BRD-001 right 1
+    ::w1::assert {$::application::board::Dim(squaresize:Normal) >= 32} "board below minimum square"
+    set w [::mediainset::Pane].mediainset
+    ::w1::assert {[winfo width $w.video] >= 160} "video below minimum width"
     # Exercise the media's own aspect, rather than a hard-coded 16:9 frame.
     set ::w1::aspect [expr {4.0/3}]
     ::mediainset::RefreshAspect
@@ -189,8 +270,13 @@ tcltest::test brd-stop {BRD-003A Stop restores the no-reserve board} -setup {::w
 } -cleanup {::w1::cleanup} -result ok
 
 tcltest::test brd-no-media {BRD-003B loading a generated game without media clears the inset} -setup {::w1::setup} -body {
+    set base [file normalize tests/tmp-app/media-test/MediaTest.sci]
+    if {![::scidb::db::get open? $base]} {::scidb::db::load $base {apply {args {return 0}}} {} -readonly 1}
+    ::w1::game -base $base -variant Normal -number 1
+    ::w1::wait
     ::w1::play
-    ::game::new .application
+    set pos [::w1::game]
+    ::w1::assert {$pos >= 0 && $pos != 9} "empty game switch failed"
     ::w1::wait
     ::w1::clear VAL-BRD-003B
     return ok
@@ -200,7 +286,7 @@ tcltest::test brd-close-db {BRD-003C closing the playing database restores the b
     set base [file normalize tests/tmp-app/media-test/MediaTest.sci]
     if {![::scidb::db::get open? $base]} {::scidb::db::load $base {apply {args {return 0}}} {} -readonly 1}
     ::scidb::db::switch $base Normal
-    ::game::new .application -base $base -variant Normal -number 1
+    ::w1::game -base $base -variant Normal -number 1
     ::w1::wait
     ::w1::play
     ::scidb::db::close $base
@@ -222,19 +308,23 @@ tcltest::test brd-minimum {BRD-004 refusal keeps square size and uses the corner
 
 proc ::w1::count {name cmd op} {incr ::w1::count($name)}
 proc ::w1::settled {args} {set ::w1::settledAt [clock milliseconds]}
+proc ::w1::configured {args} {set ::w1::configuredAt [clock milliseconds]}
 tcltest::test brd-resize {BRD-005 rebuild hook settles once without the old timer} -setup {::w1::setup} -body {
     ::w1::play
     foreach name {Relayout RebuildBoard} ns {::mediainset ::application::board} {
         trace add execution ${ns}::$name enter [list ::w1::count $name]
     }
     trace add execution ::mediainset::Relayout leave ::w1::settled
+    trace add execution ::application::board::ConfigureWindow enter ::w1::configured
     try {
         foreach fraction {0.83 0.90 0.95} {
             array set ::w1::count {Relayout 0 RebuildBoard 0}
             set width [expr {int([winfo screenwidth .]*$fraction)}]
-            set height [expr {int(min(950,[winfo screenheight .]*0.85))}]
-            set start [clock milliseconds]
-            set ::w1::settledAt $start
+            # Stay wide of the reflow threshold: BRD-005 times a plain
+            # resize; a wide/tall reflow is a layout load (pane-video-*).
+            set height [expr {int(min(950,[winfo screenheight .]*0.85,$width/1.3))}]
+            set ::w1::configuredAt 0
+            set ::w1::settledAt 0
             wm geometry .application ${width}x${height}
             update
             # Suppress the old independent resize timer if one is present.
@@ -242,13 +332,14 @@ tcltest::test brd-resize {BRD-005 rebuild hook settles once without the old time
                 if {[lindex [after info $id] 0] eq "::mediainset::Relayout"} {after cancel $id}
             }
             ::w1::wait 450
-            set elapsed [expr {$::w1::settledAt-$start}]
+            set elapsed [expr {$::w1::settledAt-$::w1::configuredAt}]
             ::w1::reserved VAL-BRD-005
-            ::w1::log VAL-BRD-005 [list elapsed $elapsed counts [array get ::w1::count] width $width height $height]
-            ::w1::assert {$elapsed<500 && $::w1::count(Relayout)==1 && $::w1::count(RebuildBoard)<=2} "resize callback not bounded"
+            ::w1::log VAL-BRD-005 [list configure $::w1::configuredAt settled $::w1::settledAt elapsed $elapsed counts [array get ::w1::count] width $width height $height]
+            ::w1::assert {$::w1::configuredAt>0 && $elapsed>=0 && $elapsed<500 && $::w1::count(Relayout)==1 && $::w1::count(RebuildBoard)<=2} "resize callback not bounded"
         }
     } finally {
         trace remove execution ::mediainset::Relayout leave ::w1::settled
+        trace remove execution ::application::board::ConfigureWindow enter ::w1::configured
         foreach name {Relayout RebuildBoard} ns {::mediainset ::application::board} {trace remove execution ${ns}::$name enter [list ::w1::count $name]}
     }
     ::application::media::Stop
@@ -272,12 +363,15 @@ tcltest::test brd-swap {BRD-006 swap clears the reserve and return restores it} 
 tcltest::test brd-failure {BRD-008 failed start releases the inset and a following file works} -setup {::w1::setup} -body {
     ::w1::play
     set ::w1::fail 1
-    ::w1::assert {![::application::media::PlayInProcess /bad.mp4]} "failed backend returned success"
+    set tree $::application::media::Priv(tree)
+    set row [::application::media::InsertEntry 3 Failure [file normalize tests/tmp-app/media-test/MediaTest.media/video/lecture2.mp4] -1]
+    ::mediainset::Choose $row
     ::w1::wait
     ::w1::clear VAL-BRD-008
     ::w1::assert {!$::mediainset::Shown && ![winfo ismapped [::mediainset::Pane].mediainset]} "failed inset mapped"
-    ::w1::log VAL-BRD-008 [list status $::application::media::Priv(statusbar)]
-    ::w1::assert {[string match *Could* $::application::media::Priv(statusbar)]} "failure status absent"
+    ::w1::log VAL-BRD-008 [list status $::application::media::Priv(statusbar) notices $::dialog::notice::Cards]
+    ::w1::assert {[winfo ismapped $::dialog::notice::Holder]} "failure notice invisible"
+    ::w1::assert {[string match *Cannot* $::application::media::Priv(statusbar)] || [string match *Could* $::application::media::Priv(statusbar)]} "failure status absent"
     set ::w1::fail 0
     ::w1::play
     ::w1::reserved VAL-BRD-008-recovered right
@@ -318,7 +412,7 @@ tcltest::test brd-fullscreen {BRD-009 menu fullscreen drives reserve placement} 
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
-tcltest::test brd-3d {BRD-007 and BRD-003D visible 3D geometry and toggle restoration} -setup {::w1::setup} -body {
+tcltest::test brd-3d {BRD-007 and BRD-003D visible 3D geometry and toggle restoration} -setup {::w1::setup default} -body {
     # LIBGL_ALWAYS_SOFTWARE=1 on the runner keeps the film GPUs untouched.
     ::w1::play
     ::w1::assert {[::application::board::show3D 1]} "Blocked: 3D view unavailable"
@@ -330,7 +424,7 @@ tcltest::test brd-3d {BRD-007 and BRD-003D visible 3D geometry and toggle restor
     ::w1::assert {[::w1::overlap [::w1::rect $view] [::w1::rect $w]]==0} "3D overlaps inset"
     ::application::board::show3D 0
     ::w1::wait
-    ::w1::reserved VAL-BRD-007-2d right
+    ::w1::reserved VAL-BRD-007-2d
     ::application::media::Stop
     foreach flag {1 0} {
         ::application::board::show3D $flag

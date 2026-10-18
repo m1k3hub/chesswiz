@@ -58,4 +58,31 @@ tcltest::test stream-check {a stream that never starts fails after the retries; 
 	rename ::scidb::test::realMediaDestroy ::application::media::MediaDestroy
 } -result {1 1 1}
 
+tcltest::test stream-live-sites {live chess sites: a channel fills the link, a directory opens the browser} -setup {
+	rename ::platform::sys::openURL ::scidb::test::realOpenURL
+	proc ::platform::sys::openURL {x} { set ::scidb::test::opened $x }
+	set ::scidb::test::opened {}
+	::application::media::OpenStream .application
+	set dlg .application.__mediastream__
+} -body {
+	set buttons [lsort -dictionary [winfo children $dlg.top.sites]]
+	set kinds [lsort -unique [lmap s $::application::media::LiveSites { lindex $s 1 }]]
+	foreach site $::application::media::LiveSites {
+		lassign $site label kind url
+		if {$kind eq "channel" && ![info exists channel]} { set channel $url }
+		if {$kind eq "browse" && ![info exists browse]} { set browse $url }
+	}
+	::application::media::LiveSite $dlg.top.url channel $channel
+	set filled [$dlg.top.url get]
+	::application::media::LiveSite $dlg.top.url browse $browse
+	list [expr {[llength $buttons] - 1 == [llength $::application::media::LiveSites]}] $kinds \
+		[expr {$filled eq $channel}] [expr {$::scidb::test::opened eq $browse}] \
+		[expr {[$dlg.top.url get] eq $channel}] \
+		[lsort -unique [lmap s $::application::media::LiveSites { ::application::media::isStreamUrl [lindex $s 2] }]]
+} -cleanup {
+	destroy $dlg
+	rename ::platform::sys::openURL {}
+	rename ::scidb::test::realOpenURL ::platform::sys::openURL
+} -result {1 {browse channel} 1 1 1 1}
+
 tcltest::cleanupTests

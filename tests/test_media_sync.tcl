@@ -167,5 +167,24 @@ tcltest::test media-follow-missing-clock {a missing time sample must not rewind 
     }
 } -result {0 2 1}
 
+tcltest::test media-legacy-rewind-current-board {a bare BoardSync timeline starts correctly from a later manual board position} -body {
+    syncTest eval {
+        set ply 18
+        ::media::sync::configure boardlength-cmd {expr 19} \
+            boardply-cmd {set ::ply} boardstart-cmd {::media::sync::step; set ::ply 0} \
+            boardforward-cmd {incr ::ply}
+        ::media::sync::load-timeline {6000 10000 14000 18000}
+        ::media::sync::onPlaybackStarted
+        ::media::sync::drive 7000 90000
+        set first $ply
+        ::media::sync::drive 15000 90000
+        set second $ply
+        set ply 18
+        ::media::sync::onPlaybackStarted
+        ::media::sync::drive 0 90000
+        list $first $second $ply $::media::sync::State(usertouch)
+    }
+} -result {1 3 0 0}
+
 interp delete syncTest
 tcltest::cleanupTests

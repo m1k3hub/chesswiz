@@ -38,6 +38,8 @@ set StreamTitle		"Open a Live Stream"
 set StreamPrompt		"Stream or video link (YouTube, Twitch, HLS .m3u8, RTMP, RTSP, HTTP):"
 set StreamPlaying	"Streaming: %s"
 set StreamWaiting	"Connecting to %s..."
+set LiveSites		"Live chess"
+set LiveSitesHint	"A channel fills in its link; a directory opens in the browser to pick a stream."
 set StreamFailed		"The stream could not be played: %s. %s"
 set NotAStream		"Not a stream link: %s"
 set Group				"Media"
@@ -444,6 +446,9 @@ proc application::media::InsertEntry {typeLabel title path index} {
 	variable Priv
 	set tree $Priv(tree)
 
+	# HTML companions use the existing report viewer even when an older
+	# native manifest reader reports an unknown media type.
+	if {[string tolower [file extension $path]] in {.html .htm}} { set typeLabel reports }
 	# map the type label to a section
 	set typeNum [TypeNumber $typeLabel]
 	# the CBM gallery reports the lecture WMVs as type 4 (stream): they
@@ -480,6 +485,7 @@ proc application::media::InsertEntry {typeLabel title path index} {
 	} else {
 		MediaDebug "InsertEntry: section=$section item=item$n type=$typeLabel ($dispType) path=[list $path]"
 	}
+	::application::reflow::onPaneStateChange
 	return item$n
 }
 
@@ -517,17 +523,19 @@ proc application::media::DatabaseSwitched {base variant} {
 
 proc application::media::DatabaseClosed {base variant} {
 	variable Priv
-	if {$base eq $Priv(base) || $base eq $Priv(lastBase)} {
+	if {$base eq $Priv(base) || $base eq $Priv(lastBase)
+		|| ([info exists Priv(playBase)] && $base eq $Priv(playBase))} {
 		# The native database is still notifying its observers. Defer board
 		# and sync work until close has finished releasing the database.
 		catch {after cancel $Priv(afterid)}
-		set Priv(afterid) [after 1 [namespace code [list ClearClosedDatabase $base]]]
+		after idle [namespace code [list ClearClosedDatabase $base]]
 	}
 }
 
 proc application::media::ClearClosedDatabase {base} {
 	variable Priv
-	if {$base ne $Priv(base) && $base ne $Priv(lastBase)} { return }
+	if {$base ne $Priv(base) && $base ne $Priv(lastBase)
+		&& (![info exists Priv(playBase)] || $base ne $Priv(playBase))} { return }
 	Stop
 	set Priv(lastBase) {}
 	set Priv(base) {}
@@ -571,6 +579,7 @@ proc application::media::Update {position} {
 	try {
 		set Priv(position) $position
 		set Priv(linksBase) {}
+		set Priv(selectedRow) {}
 		set Priv(interactive) {}
 		set Priv(dbInteractive) {}
 		set Priv(dbBoardSync) {}
@@ -680,6 +689,7 @@ proc application::media::Update {position} {
 		# Stop/setReserve can process idle work while rebuilding the board.
 		# Refresh only after this update has finished replacing the rows.
 		after idle ::mediainset::RefreshMediaButton
+		::application::reflow::onPaneStateChange
 	}
 }
 
@@ -704,6 +714,8 @@ proc application::media::SelectionChanged {tree} {
 	set sel [$tree selection]
 	if {![llength $sel]} return
 	set values [$tree item [lindex $sel 0] -values]
+	if {[info exists Priv(selectedRow)] && $Priv(selectedRow) eq [lindex $sel 0]} { return }
+	set Priv(selectedRow) [lindex $sel 0]
 	if {[llength $values] >= 3} {
 		set Priv(statusbar) [lindex $values 2]
 	}
@@ -1281,6 +1293,7 @@ proc application::media::BoardUpdated {position} {
 
 	if {[llength [info commands ::mediainset::RefreshMediaButton]]} {
 		after idle ::mediainset::RefreshMediaButton
+		::application::reflow::onPaneStateChange
 	}
 
 	# Check at notification time: drive() has cleared this flag by the
@@ -1345,9 +1358,18 @@ proc application::media::PlySeek {position} {
 # fire per ply; re-entering the same position does not replay.
 # Shared by automatic position following and the board's media menu.
 proc application::media::PlayInteractiveEntry {entry} {
+	variable Priv
 	lassign $entry fen path start end title
+	# A range into a synchronized video is still the same coupled lesson.
+	# Plain PlayMedia would discard its BoardSync timeline.
+	set player PlayMedia
+	set args [list $path]
+	if {[CoupledLesson? [ClassifyFile $path] $Priv(index)] && [HasLesson $path]} {
+		set player PlayLesson
+		lappend args $Priv(index)
+	}
 	# Manifest times are seconds; the player expects milliseconds.
-	PlayMedia $path [expr {$start ne "" && [string is double -strict $start] ? $start*1000.0 : ""}] \
+	$player {*}$args [expr {$start ne "" && [string is double -strict $start] ? $start*1000.0 : ""}] \
 		[expr {$end ne "" && [string is double -strict $end] ? $end*1000.0 : ""}]
 }
 
@@ -1535,7 +1557,6 @@ proc application::media::PlayLesson {path gameIndex {startMs {}} {endMs {}}} {
 	# transport first: embedded playback only — a lesson never falls
 	# back to an external player (that would decouple video from board)
 	if {![PlayInProcess $path $startMs $endMs]} {
-		set Priv(statusbar) "Lesson requires embedded playback (libmpv)."
 		MediaDebug "PlayLesson: embedded playback failed for [file tail $path]"
 		::media::sync::load-timeline {}
 		::media::sync::load-events {}
@@ -1576,13 +1597,21 @@ proc application::media::PlayMedia {path {startMs {}} {endMs {}}} {
 	# An external player has no board position or transport callbacks.  Do
 	# not claim to play a game-coupled video independently of its game.
 	if {[ClassifyFile $path] == 3} {
-		set Priv(statusbar) "Cannot play video with board synchronization: embedded playback is unavailable."
 		MediaDebug "PlayMedia: refusing unsynchronized external video [list $path]"
 		return
 	}
 
 	# Fallback: xdg-open / open / start
 	LaunchExternal $path
+}
+
+
+proc application::media::PlaybackError {message} {
+	variable Priv
+	set Priv(statusbar) $message
+	if {[info commands ::dialog::notice::available] ne "" && [::dialog::notice::available]} {
+		::dialog::notice::post error $message
+	}
 }
 
 
@@ -1596,7 +1625,7 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	if {$startMs eq ""} { set startMs 0 }
 	if {![::media::mpv::available?]} {
 		Stop
-		set Priv(statusbar) "The media backend is unavailable."
+		PlaybackError "Cannot play media: the media backend is unavailable."
 		return 0
 	}
 
@@ -1611,16 +1640,17 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 	update idletasks
 	if {[catch { set wid [winfo id $canvas] }]} {
 		Stop
-		set Priv(statusbar) "The media surface is unavailable."
+		PlaybackError "Cannot play media: the media surface is unavailable."
 		return 0
 	}
 	if {[catch {::media::mpv::launch $path $wid $startMs} ok] || !$ok} {
 		Stop
-		set Priv(statusbar) "Could not open media: $path"
+		PlaybackError "Could not open media: [file tail $path]"
 		MediaDebug "PlayInProcess: libmpv refused [list $path]"
 		return 0
 	}
 
+	set Priv(playBase) $Priv(base)
 	set Priv(lastMedia) $path
 	set Priv(lastStartMs) $startMs
 	set Priv(lastEndMs) $endMs
@@ -1765,6 +1795,7 @@ proc application::media::MediaDestroy {} {
 	variable Priv
 	::media::mpv::stop
 	set Priv(inprocess) 0
+	set Priv(playBase) {}
 	::mediainset::hide
 }
 
@@ -1902,7 +1933,7 @@ proc application::media::SyncBoardStart {} {
 proc application::media::SyncBoardLength {} {
 	if {[catch { set len [::scidb::game::query -1 length] }]} { return 0 }
 	if {![string is integer -strict $len]} { return 0 }
-	return $len
+	return [expr {$len + 1}]
 }
 
 # Node-goal delegate (lesson v2): jump the board directly to a lesson
@@ -2214,6 +2245,19 @@ array set ::application::media::StreamOptions {
 	recent {}
 }
 
+# Where live chess is usually streamed. kind "channel" is a playable link,
+# "browse" a directory page to pick a stream from in the browser.
+set ::application::media::LiveSites {
+	{"Twitch: chess streams"			browse	https://www.twitch.tv/directory/category/chess}
+	{"Twitch: Chess.com channel"		channel	https://www.twitch.tv/chess}
+	{"YouTube: live chess"				browse	https://www.youtube.com/results?search_query=chess&sp=EgJAAQ%253D%253D}
+	{"YouTube: FIDE channel"			channel	https://www.youtube.com/@FIDE_chess/live}
+	{"YouTube: Saint Louis Chess Club"	channel	https://www.youtube.com/@STLChessClub/live}
+	{"Lichess broadcasts"				browse	https://lichess.org/broadcast}
+	{"Lichess TV"						browse	https://lichess.org/tv}
+	{"Chess.com events"					browse	https://www.chess.com/events}
+}
+
 proc application::media::isStreamUrl {text} {
 	return [regexp -nocase {^(https?|rtmps?|rtsp|srt|udp|rtp|mms)://[^\s]+$} [string trim $text]]
 }
@@ -2303,6 +2347,19 @@ proc application::media::OpenStream {parent} {
 	if {[llength $StreamOptions(recent)]} { $top.url set [lindex $StreamOptions(recent) 0] }
 	pack $top.prompt -anchor w
 	pack $top.url -fill x -pady {6 0}
+	set sites [ttk::labelframe $top.sites -text $mc::LiveSites -padding 6]
+	ttk::label $sites.hint -text $mc::LiveSitesHint -wraplength 420 -justify left
+	grid $sites.hint -row 0 -column 0 -columnspan 2 -sticky w -pady {0 4}
+	set n 0
+	foreach site $::application::media::LiveSites {
+		lassign $site label kind url
+		set b [ttk::button $sites.s$n -text $label -command [namespace code [list LiveSite $top.url $kind $url]]]
+		catch { ::tooltip::tooltip $b $url }
+		grid $b -row [expr {$n / 2 + 1}] -column [expr {$n % 2}] -sticky ew -padx 2 -pady 1
+		incr n
+	}
+	grid columnconfigure $sites {0 1} -weight 1 -uniform sites
+	pack $sites -fill x -pady {10 0}
 	pack $top -fill both -expand yes
 	::widget::dialogButtons $dlg {ok cancel}
 	$dlg.ok configure -command [namespace code [list StreamChosen $dlg]]
@@ -2313,6 +2370,17 @@ proc application::media::OpenStream {parent} {
 	wm deiconify $dlg
 	focus $top.url
 	$top.url selection range 0 end
+}
+
+
+proc application::media::LiveSite {entry kind url} {
+	if {$kind eq "browse"} {
+		::platform::sys::openURL $url
+		return
+	}
+	$entry set $url
+	$entry icursor end
+	focus $entry
 }
 
 
@@ -2381,6 +2449,9 @@ proc application::media::CheckStream {url tries} {
 	if {$state eq "error" || ($state eq "idle" && $tries >= 8)} {
 		set detail [::media::mpv::_get error-text]
 		if {$state eq "idle"} { set detail "Timed out while connecting or buffering." }
+		# the Media Engine error code must reach the log even when an
+		# external player takes over and replaces the status line
+		MediaDebug "CheckStream: giving up on $url: $detail"
 		set message [StreamFailure $url $detail]
         MediaDestroy
         if {[UsesOsMedia] && [OpenStreamExternal $url]} { return }

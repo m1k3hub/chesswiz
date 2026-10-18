@@ -667,5 +667,18 @@ tcltest::test insights-jev-live-typesafe {live cloud check against TypeSafe jev-
 	}]
 } -result {1 1 1 1}
 
+tcltest::test insights-section-headings {numeric column headings are the translated labels, not variable names} -setup {
+	toplevel .insightsHeadTest
+	ttk::frame .insightsHeadTest.body
+} -body {
+	set tree [::insights::BuildSection .insightsHeadTest .insightsHeadTest.body t "Title" {eco} "Key" 3]
+	set heads [lmap c {wins draws losses games score loss} { $tree heading $c -text }]
+	list [expr {[lsearch -glob $heads {*mc*}] < 0}] \
+		[expr {[lindex $heads 0] eq $::insights::mc::ColWins}] \
+		[expr {[lindex $heads 5] eq $::insights::mc::ColLossRate}]
+} -cleanup {
+	destroy .insightsHeadTest
+} -result {1 1 1}
+
 tcltest::cleanupTests
 return

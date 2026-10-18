@@ -15,6 +15,7 @@ proc brInset {} {
         place $c.reserveTest -x $x -y $y -width $w -height $h
     } else { place forget $c.reserveTest }
     incr ::brCallbacks
+    set ::brSettledAt [clock milliseconds]
 }
 proc brSize {w h} {
     set c $::application::board::Vars(widget:frame)
@@ -43,15 +44,31 @@ proc brCheck {label} {
 proc brResize {w h} {
     set c $::application::board::Vars(widget:frame)
     set count $::brCallbacks
-    set start [clock milliseconds]
-    place configure $c -width $w -height $h
-    update
-    ::application::board::ConfigureWindow $c $w $h
-    while {$::brCallbacks == $count && [clock milliseconds]-$start < 500} {
-        update
-        after 5
+    set ::brConfiguredAt 0
+    set ::brSettledAt 0
+    set ::brRebuilds 0
+    trace add execution ::application::board::ConfigureWindow enter brConfigured
+    trace add execution ::application::board::RebuildBoard enter brRebuilding
+    try {
+        place configure $c -width $w -height $h
+        # Process the real Configure and afterRebuild paths, then observe long
+        # enough to catch an extra rebuild. Setup and the observation wait are
+        # excluded: measure last Configure -> completed afterRebuild callback.
+        set ::brWait 0
+        after 550 {set ::brWait 1}
+        vwait ::brWait
+        update idletasks
+    } finally {
+        trace remove execution ::application::board::ConfigureWindow enter brConfigured
+        trace remove execution ::application::board::RebuildBoard enter brRebuilding
     }
+    set elapsed [expr {$::brSettledAt-$::brConfiguredAt}]
+    puts "RESERVE resize=$w $h configure=$::brConfiguredAt settled=$::brSettledAt elapsed=${elapsed}ms callbacks=[expr {$::brCallbacks-$count}] rebuilds=$::brRebuilds"
+    expr {$::brConfiguredAt > 0 && $::brSettledAt >= $::brConfiguredAt && $elapsed < 500
+        && $::brCallbacks-$count == 1 && $::brRebuilds <= 2 && [brCheck resize]}
 }
+proc brConfigured {args} {set ::brConfiguredAt [clock milliseconds]}
+proc brRebuilding {args} {incr ::brRebuilds}
 proc brSquare {} { set ::application::board::Dim(squaresize:$::application::board::Vars(layout)) }
 
 # Exercise the actual canvas/diagram, temporarily giving it exact pane sizes.
@@ -96,12 +113,7 @@ tcltest::test board-reserve-contract {right/bottom/left, restore, refusal and re
         brSize 1200 800
         ::application::board::setReserve right 300
         foreach size {{1100 750} {1000 700} {1300 900}} {
-            set count $::brCallbacks
-            set start [clock milliseconds]
-            brResize {*}$size
-            set elapsed [expr {[clock milliseconds]-$start}]
-            puts "RESERVE resize=$size elapsed=${elapsed}ms callbacks=[expr {$::brCallbacks-$count}]"
-            lappend results [expr {$::brCallbacks > $count && $elapsed < 500 && [brCheck resize]}]
+            lappend results [brResize {*}$size]
         }
         ::application::board::setReserve left 300
         lappend results [brCheck left]

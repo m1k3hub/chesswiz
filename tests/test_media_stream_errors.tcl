@@ -101,6 +101,40 @@ tcltest::test os-stream-fallback {OS failure opens externally after destruction;
     rename ::application::media::savedExternal ::application::media::OpenStreamExternal
 } -result {{Opened in VLC} {The stream could not be played: https://example.test/a.mp4. loading failed}}
 
+tcltest::test stream-error-logged {the backend's error code reaches the log even when VLC takes over} -setup {
+    proc ::application::media::MediaState {} { return error }
+    proc ::application::media::MediaDebug {msg} { lappend ::medialog $msg }
+    proc ::application::media::MediaDestroy {} {}
+    rename ::application::media::UsesOsMedia ::application::media::savedOs
+    rename ::application::media::OpenStreamExternal ::application::media::savedExternal
+    proc ::application::media::UsesOsMedia {} { return 1 }
+    proc ::application::media::OpenStreamExternal {url} {
+        set ::application::media::Priv(statusbar) {Opened in VLC}
+        return 1
+    }
+    rename ::media::mpv::_get ::media::mpv::savedGet
+    proc ::media::mpv::_get {property} {
+        return {Media Foundation error 4 (source-not-supported; HRESULT 0x80070032).}
+    }
+    set ::application::media::Priv(inprocess) 1
+    set ::application::media::Priv(stream) https://example.test/a.mp4
+    set ::medialog {}
+} -body {
+    ::application::media::CheckStream https://example.test/a.mp4 0
+    set logged [join $::medialog "\n"]
+    list $::application::media::Priv(statusbar) \
+        [string match {*error 4*source-not-supported*} $logged] \
+        [string match {*giving up*https://example.test/a.mp4*} $logged]
+} -cleanup {
+    foreach name {MediaState MediaDebug MediaDestroy UsesOsMedia OpenStreamExternal} {
+        rename ::application::media::$name {}
+    }
+    rename ::application::media::savedOs ::application::media::UsesOsMedia
+    rename ::application::media::savedExternal ::application::media::OpenStreamExternal
+    rename ::media::mpv::_get {}
+    rename ::media::mpv::savedGet ::media::mpv::_get
+} -result {{Opened in VLC} 1 1}
+
 namespace eval ::media::sync {
     proc load-timeline {args} {}
     proc load-events {args} {}

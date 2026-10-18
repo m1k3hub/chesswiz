@@ -33,6 +33,9 @@ namespace eval mc {
 set Theme							"Theme"
 set Window							"&Window"
 set MaximisePane					"&Maximise / Restore Pane"
+set FocusZoom						"Focus &follows size"
+set FocusZoomRatio				"Zoom &ratio"
+set FocusZoomPinBoard			"&Pin board size"
 set ColorScheme					"Color Scheme"
 set CustomStyleMenu				"Chesswiz's Style Menu"
 set DefaultStyleMenu				"Default Style Menu"
@@ -302,6 +305,28 @@ proc build {menu} {
 	$m add command -label " $text" -underline [incr ul] -accelerator "Ctrl+Shift+Z" \
 		-command ::application::TogglePaneZoom \
 		-state [expr {[::application::activeTab] eq "board" ? "normal" : "disabled"}]
+
+	# Phase 2 pane zoom (focus follows size): opt-in per layout.
+	set fzTwm ""
+	catch { set fzTwm [::application::twm] }
+	set fzState [expr {$fzTwm ne "" ? "normal" : "disabled"}]
+	if {$fzTwm eq ""} { set fzTwm none }
+	lassign [::tk::UnderlineAmpersand $mc::FocusZoom] text ul
+	$m add checkbutton -label " $text" -underline [incr ul] \
+		-variable ::application::focuszoom::enabled($fzTwm) \
+		-command [list ::application::focuszoom::toggle $fzTwm] \
+		-state $fzState
+	set rm [menu $m.mFocusZoomRatio]
+	lassign [::tk::UnderlineAmpersand $mc::FocusZoomRatio] text ul
+	$m add cascade -label " $text" -underline [incr ul] -menu $rm -state $fzState
+	foreach r {1.2 1.4 1.6 1.8} {
+		$rm add radiobutton -label $r -value $r \
+			-variable ::application::focuszoom::ratio
+	}
+	lassign [::tk::UnderlineAmpersand $mc::FocusZoomPinBoard] text ul
+	$m add checkbutton -label " $text" -underline [incr ul] \
+		-variable ::application::focuszoom::pinBoard \
+		-state $fzState
 
 	### layout ###############################################################
 	set tab [::application::activeTab]

@@ -184,6 +184,7 @@ proc ::insights::show {parent base variant playerIndex} {
 	raise $dlg
 	focus $dlg
 	Refresh $dlg
+	::util::place::besideBoard $dlg [winfo toplevel $parent]
 	return $dlg
 }
 
@@ -260,6 +261,9 @@ proc ::insights::CollectDone {dlg token result} {
 	}
 
 	Populate $dlg $report
+	# The header and focus labels now contain the collected report. Placement
+	# must use their content request, not BuildWindow's empty placeholders.
+	::util::place::besideBoard $dlg
 }
 
 
@@ -1269,7 +1273,6 @@ proc ::insights::BuildWindow {dlg parent} {
 
 	bind $dlg <Destroy> [namespace code [list Destroy $dlg %W]]
 	wm minsize $dlg 780 480
-	::util::place $dlg -parent [winfo toplevel $parent] -position center
 }
 
 
@@ -1305,7 +1308,8 @@ proc ::insights::BuildSection {dlg body id title keyColumns keyHeading height} {
 		score		$mc::ColScore			e		80
 		loss		$mc::ColLossRate		e		80
 	} {
-		$tree heading $key -text $heading
+		# the braced list leaves the mc variable names unsubstituted
+		$tree heading $key -text [subst $heading]
 		$tree column $key -anchor $anchor -width $width -stretch 0
 	}
 	pack $tree -fill x

@@ -976,7 +976,7 @@ proc ::gamereview::ShowProgress {parent} {
 	set Priv(dialog) $dlg
 	set Priv(bar) $bar
 	set Priv(status) $top.status
-	::util::place $dlg -parent $parent -position center
+	::util::place::besideBoard $dlg $parent
 	update idletasks
 }
 
@@ -1123,7 +1123,7 @@ proc ::gamereview::ShowWindow {parent review errors cancelled} {
 
 	judgeReviewAsync $review [namespace code [list OnJudged $dlg $lb $top.focus]]
 
-	::util::place $dlg -parent $parent -position center
+	::util::place::besideBoard $dlg $parent
 }
 
 

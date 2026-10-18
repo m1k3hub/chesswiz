@@ -6,7 +6,7 @@ namespace eval ::application::board {
     variable ReservePixels 0
     variable RebuildCallbacks {}
     variable Vars
-    array set Vars {layout Normal width 1500 height 850 widget:frame .canvas}
+    array set Vars {layout Normal width 1500 height 850 widget:frame .canvas after {}}
     variable Dim
     array set Dim {}
 }
@@ -20,7 +20,7 @@ proc tk {args} { return 1.3333333333 }
 set f [open [file join [file dirname [info script]] .. tcl app-board.tcl]]
 set source [read $f]
 close $f
-set wanted {ComputeLayout setReserve reserveRect afterRebuild ApplyReserve3D ConfigureReserve3D}
+set wanted {ComputeLayout reserveSquare setReserve reserveRect afterRebuild ApplyReserve3D ConfigureReserve3D}
 set definition {}
 foreach line [split $source \n] {
     if {$definition eq {} && [regexp {^proc ([^ ]+) } $line -> name] && $name in $wanted} {
@@ -61,6 +61,16 @@ foreach side {right bottom left} {
         list $accepted $clear [expr {$original == $::application::board::Dim(squaresize:Normal)}]
     } -result {1 1 1}
 }
+tcltest::test board-reserve-probe {candidate measurements preserve the accepted state and fit the default canvas} -body {
+    ::application::board::setReserve right 300
+    set before [lsort [array get ::application::board::Dim]]
+    set count $::application::board::rebuildCount
+    set square [::application::board::reserveSquare right 168 500 405]
+    list [expr {$square >= 32}] \
+        [expr {$before eq [lsort [array get ::application::board::Dim]]}] \
+        [expr {$count == $::application::board::rebuildCount}] \
+        $::application::board::ReserveSide $::application::board::ReservePixels
+} -result {1 1 1 right 300}
 tcltest::test board-reserve-pure-refusal {refusal leaves dimensions and accepted reserve unchanged} -body {
     ::application::board::setReserve right 300
     set before [lsort [array get ::application::board::Dim]]
@@ -104,13 +114,20 @@ tcltest::test board-reserve-pure-3d {visible 3D frame reserves each side and rep
         ::application::board::ApplyReserve3D
         lappend result $::brPack
     }
+    set count $::application::board::rebuildCount
+    ::application::board::ConfigureReserve3D 900 800
     ::application::board::ConfigureReserve3D 900 800
     lappend result [list $::application::board::Vars(width) $::application::board::Vars(height)]
+    lappend result [expr {$::application::board::rebuildCount-$count}]
+    update idletasks
+    lappend result [expr {$::application::board::rebuildCount-$count}]
+    update
+    lappend result [expr {$::application::board::rebuildCount-$count}]
     set ::application::board::ReserveSide {}
     set ::application::board::ReservePixels 0
     ::application::board::ApplyReserve3D
     lappend result $::brPack
     set ::application::board::Vars(3d) 0
     set result
-} -result {{configure .visible3d -padx {0 300} -pady {0 0}} {configure .visible3d -padx {0 0} -pady {0 300}} {configure .visible3d -padx {300 0} -pady {0 0}} {1200 800} {configure .visible3d -padx {0 0} -pady {0 0}}}
+} -result {{configure .visible3d -padx {0 300} -pady {0 0}} {configure .visible3d -padx {0 0} -pady {0 300}} {configure .visible3d -padx {300 0} -pady {0 0}} {1200 800} 0 0 1 {configure .visible3d -padx {0 0} -pady {0 0}}}
 tcltest::cleanupTests

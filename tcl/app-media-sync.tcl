@@ -353,20 +353,26 @@ proc ::media::sync::drive {timeMs durationMs {force 0}} {
 		set len [BoardLength]
 		if {$len <= 0} { return }
 		set goal [expr {min($goal, $len - 1)}]
-		if {$goal < $State(lastgoal)} {
-			set State(tlidx) $goal
-			set State(evidx) 0
-			BoardStart
-			BoardClearAnnotations
-		}
-		# drive the board forward, at most 4 plies per tick
-		set guard 0
+		# Rewinds are playback-driven navigation too. Set driving before
+		# BoardStart: otherwise its board notification pauses playback and
+		# starts the manual-navigation holdoff, freezing the following tick.
 		set State(driving) 1
-		while {[BoardPly] < $goal && $guard < 4} {
-			BoardForward
-			incr guard
+		try {
+			if {[BoardPly] > $goal} {
+				set State(tlidx) $goal
+				set State(evidx) 0
+				BoardStart
+				BoardClearAnnotations
+			}
+			# Drive forward at most four plies per tick.
+			set guard 0
+			while {[BoardPly] < $goal && $guard < 4} {
+				BoardForward
+				incr guard
+			}
+		} finally {
+			set State(driving) 0
 		}
-		set State(driving) 0
 		set State(lastgoal) $goal
 		return
 	}

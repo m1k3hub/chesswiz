@@ -265,6 +265,9 @@
 ### menu ###############################################################
 ::menu::mc::Window							"&Window"
 ::menu::mc::MaximisePane					"&Maximise / Restore Pane"
+::menu::mc::FocusZoom						"Focus &follows size"
+::menu::mc::FocusZoomRatio				"Zoom &ratio"
+::menu::mc::FocusZoomPinBoard			"&Pin board size"
 ::menu::mc::Theme								"Theme"
 ::menu::mc::ColorScheme						"Color Scheme"
 ::menu::mc::CustomStyleMenu				"Chesswiz's Style Menu"

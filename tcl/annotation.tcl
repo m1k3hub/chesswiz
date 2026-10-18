@@ -508,8 +508,6 @@ proc open {parent} {
 			set ry [expr {max(min($ry, $sh - $rh), 0)}]
 			wm geometry $dlg +$rx+$ry
 		}
-	} else {
-		::util::place $dlg -parent $parent -position center
 	}
 	if {[tk windowingsystem] eq "aqua"} {
 		::tk::unsupported::MacWindowStyle style $dlg plain {}
@@ -519,6 +517,9 @@ proc open {parent} {
 		wm title $dlg $title
 	} else {
 		::scidb::tk::wm frameless $dlg
+	}
+	if {[llength $Position] != 2} {
+		::util::place::besideBoard $dlg $parent
 	}
 	wm deiconify $dlg
 	update

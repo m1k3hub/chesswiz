@@ -1089,10 +1089,7 @@ proc ::endtrainer::open {parent} {
 
 	RefreshTree
 	Status ""
-	if {[llength [info commands ::playengine::PlaceBesideBoard]] == 0
-	 || ![::playengine::PlaceBesideBoard $dlg]} {
-		::util::place $dlg -parent $parent -position center
-	}
+	::util::place::besideBoard $dlg $parent
 	wm deiconify $dlg
 	return $dlg
 }

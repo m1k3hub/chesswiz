@@ -301,4 +301,6 @@ proc ::tactics::open {{parent .application}} {
     ttk::button .tactics.next -text Next -command {::tactics::guard ::tactics::next}
     ttk::label .tactics.score -text [score]
     pack .tactics.open .tactics.build .tactics.board .tactics.status .tactics.move .tactics.play .tactics.retry .tactics.show .tactics.next .tactics.score -pady 3
+    # This trainer has its own board, so centre it on its parent.
+    ::util::place .tactics -parent $parent -position center
 }

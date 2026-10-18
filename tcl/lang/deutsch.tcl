@@ -265,6 +265,9 @@
 ### menu ###############################################################
 ::menu::mc::Window							"&Fenster"
 ::menu::mc::MaximisePane					"Bereich &maximieren / wiederherstellen"
+::menu::mc::FocusZoom						"Fokus folgt der &Größe"
+::menu::mc::FocusZoomRatio				"&Zoomfaktor"
+::menu::mc::FocusZoomPinBoard			"&Brettgröße fixieren"
 ::menu::mc::Theme								"Thema"
 ::menu::mc::ColorScheme						"Farbschema"
 ::menu::mc::CustomStyleMenu				"Chesswiz's Menüstil"

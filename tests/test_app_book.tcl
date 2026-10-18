@@ -258,6 +258,40 @@ tcltest::test book-editing-persisted {a saved book reads back the same through a
 	::scidb::book::close $h2
 } -result {2 {{d4 6 0} {Nf3 1 0}}}
 
+# Regression: saving twice to the same file on the same open handle, then
+# reopening. On Windows Book::save() used to reopen the file for writing
+# while the book's memory mapping still held an exclusive handle
+# (CreateFile with no sharing), so the write failed with a sharing
+# violation -> IO-Error Open_Failed "cannot write file". The fix releases
+# the mapping before writing; Linux never noticed because mmap does not
+# lock the file. The first save() of an already non-empty book and the
+# second save() after an edit are both exercised here.
+tcltest::test book-save-twice {saving twice to the same open handle works and reopens} -body {
+	set start $::scidb::test::book::start
+	set path [tempPath savetwice bin]
+	# a non-empty book: opening it establishes the file mapping that save
+	# has to let go of before it rewrites the file
+	::scidb::book::write $path [list [list $start e4 7] [list $start d4 3]]
+	set h [::scidb::book::open $path]
+	# first save on the open handle: rewrites the model and re-establishes
+	# the mapping on the new file
+	set save1 [::scidb::book::save $h]
+	# edit, then save again to the same handle: the second write must not
+	# collide with the mapping from the first save
+	::scidb::book::add $h $start Nf3 1
+	set modified [::scidb::book::modified $h]
+	set save2 [::scidb::book::save $h]
+	set afterSave [::scidb::book::modified $h]
+	set size [file size $path]
+	::scidb::book::close $h
+	# reopen: a fresh handle must see both saves' result
+	set h2 [::scidb::book::open $path]
+	set count [::scidb::book::count $h2]
+	set at [probeList $h2 $start]
+	::scidb::book::close $h2
+	list $save1 $modified $save2 $afterSave $size $count $at
+} -result {1 1 1 0 48 3 {{e4 7 0} {d4 3 0} {Nf3 1 0}}}
+
 tcltest::test book-editing-readonly {a read-only book refuses to save} -body {
 	set path [tempPath readonly bin]
 	::scidb::book::write $path [list [list $::scidb::test::book::start e4 1]]

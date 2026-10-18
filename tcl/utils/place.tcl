@@ -324,6 +324,145 @@ proc fitWindow {path {geometry ""}} {
 }
 
 
+# Pure placement plan. Geometry is {outerX outerY clientWidth clientHeight};
+# workarea is {x y width height}, extents {left right top bottom}.
+# Prefer right, left, below at the current size, then at the requested content
+# size (the 2026-10-18 minsize decision). VAL-DLG-004: if neither size fits,
+# choose the least actual board intersection of the three CLAMPED outer
+# rectangles, including the frame. Ties retain right/left/below order.
+proc besidePlan {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12} {requested {}}} {
+	lassign $workarea wx wy ww wh
+	lassign $extents el er et eb
+	set fw [expr {$el + $er}]
+	set fh [expr {$et + $eb}]
+	set sizes [list [list $dw $dh]]
+	if {[llength $requested]} { lappend sizes $requested }
+	foreach size $sizes {
+		lassign $size cw ch
+		set cw [expr {max(1, min($cw, $ww - $fw))}]
+		set ch [expr {max(1, min($ch, $wh - $fh))}]
+		set candidates {}
+		set areas {}
+		set bestArea -1
+		foreach {side x y} [list \
+			right [expr {$bx + $bw + $gap}] $by \
+			left [expr {$bx - $gap - $cw - $fw}] $by \
+			below $bx [expr {$by + $bh + $gap}]] {
+			set clamped [clampGeometry "${cw}x${ch}+${x}+${y}" $workarea $extents]
+			regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} $clamped -> w h x y
+			set area [expr {
+				max(0, min($x + $w + $fw, $bx + $bw) - max($x, $bx)) *
+				max(0, min($y + $h + $fh, $by + $bh) - max($y, $by))}]
+			dict set candidates $side [list $x $y $w $h]
+			dict set areas $side $area
+			if {$bestArea < 0 || $area < $bestArea} {
+				set bestArea $area
+				set bestSide $side
+			}
+		}
+		if {$bestArea == 0} { break }
+	}
+	return [dict create geometry [dict get $candidates $bestSide] \
+		rule [expr {$bestArea == 0 ? $bestSide : "no-room"}] side $bestSide \
+		overlap $bestArea candidates $candidates areas $areas \
+		resized [expr {$cw != $dw || $ch != $dh}]]
+}
+
+proc besidePosition {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12}} {
+	return [dict get [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents $gap] geometry]
+}
+
+
+# Place <dlg> beside the main board ($::application::board::board) using
+# besidePosition and the real work area / frame extents. When the dialog's
+# natural size (including wm minsize) cannot fit, retry at its requested size
+# and lower minsize accordingly. Leave Tk in charge of size so later content
+# can grow; re-plan on requested-size changes to keep the final frame in place.
+# Returns the applied plan, or {rule center} when the board is not mapped.
+proc besideBoard {dlg {parent ""}} {
+	variable BesideRequests
+	if {$parent eq ""} {
+		set parent [wm transient $dlg]
+		if {$parent eq ""} { set parent .application }
+	}
+	if {[catch { set board $::application::board::board }]
+		|| ![winfo exists $board]
+		|| ![winfo ismapped $board]} {
+		if {[winfo exists $parent]} {
+			::util::place $dlg -parent [winfo toplevel $parent] -position center
+		} else {
+			::util::place $dlg -position center
+		}
+		return [dict create rule center]
+	}
+	update idletasks
+	lassign [wm minsize $dlg] mw mh
+	lassign [wm maxsize $dlg] maxw maxh
+	set rw [winfo reqwidth $dlg]
+	set rh [winfo reqheight $dlg]
+	set dw [expr {min($maxw, max($rw, $mw))}]
+	set dh [expr {min($maxh, max($rh, $mh))}]
+	set bx [winfo rootx $board]
+	set by [winfo rooty $board]
+	set bw [winfo width $board]
+	set bh [winfo height $board]
+	set workarea [winfo workarea $dlg]
+	set cls [winfo class $dlg]
+	if {$cls eq "Menu" || $cls eq "OptionMenu" || [wm overrideredirect $dlg]} {
+		set extents {0 0 0 0}
+	} else {
+		set extents [winfo extents $dlg]
+	}
+	set plan [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents 12 [list $rw $rh]]
+	lassign [dict get $plan geometry] x y w h
+	wm minsize $dlg [expr {min($mw, $w)}] [expr {min($mh, $h)}]
+	if {![info exists BesideRequests($dlg)]} {
+		bind $dlg <Configure> +[namespace code [list BesideConfigure $dlg $parent]]
+		bind $dlg <Destroy> +[namespace code [list BesideDestroy $dlg %W]]
+	}
+	set BesideRequests($dlg) [list $rw $rh]
+	# Clear any old explicit size, including saved geometry. Lowering minsize
+	# alone suffices for the requested-size retry. Only content larger than the
+	# entire work area needs an explicit cap (VAL-DLG-004).
+	wm geometry $dlg ""
+	if {$w < $rw || $h < $rh} {
+		wm geometry $dlg "${w}x${h}+${x}+${y}"
+	} else {
+		wm geometry $dlg "+${x}+${y}"
+	}
+	return $plan
+}
+
+
+# The toplevel bind tag also receives descendants' Configure events. Coalesce
+# them, and react only to a changed content request, not to user moves/resizes.
+proc BesideConfigure {dlg parent} {
+	variable BesideRequests
+	variable BesidePending
+	if {![info exists BesideRequests($dlg)] || [info exists BesidePending($dlg)]} { return }
+	if {$BesideRequests($dlg) eq [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]} { return }
+	# A timer avoids re-entering placement from a caller's update idletasks.
+	set BesidePending($dlg) [after 0 [namespace code [list BesideReflow $dlg $parent]]]
+}
+
+proc BesideReflow {dlg parent} {
+	variable BesidePending
+	unset BesidePending($dlg)
+	if {[winfo exists $dlg]} { besideBoard $dlg $parent }
+}
+
+proc BesideDestroy {dlg window} {
+	variable BesideRequests
+	variable BesidePending
+	if {$window ne $dlg} { return }
+	unset -nocomplain BesideRequests($dlg)
+	if {[info exists BesidePending($dlg)]} {
+		after cancel $BesidePending($dlg)
+		unset BesidePending($dlg)
+	}
+}
+
+
 proc position {path args} {
 	lassign [geometry $path {*}$args] x y _ _
 	wm geometry $path "${x}${y}"

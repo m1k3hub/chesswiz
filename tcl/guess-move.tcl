@@ -1296,7 +1296,7 @@ proc ::guessmove::BuildWindow {parent} {
 	pack $buttons -anchor e -pady [list $::theme::pady 0]
 
 	set Priv(dialog) $dlg
-	::util::place $dlg -parent $parent -position center
+	::util::place::besideBoard $dlg $parent
 	wm deiconify $dlg
 	return $dlg
 }
