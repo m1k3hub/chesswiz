@@ -1371,16 +1371,24 @@ Book::save()
 	if (m_format != Polyglot || m_modelLoaded == false)
 		return false;
 
+	// Close the memory mapping before opening the file for writing. On
+	// Windows the mapping holds an exclusive file handle (sys::file::Mapping
+	// calls CreateFile without sharing, see sys_file.cpp), so opening the
+	// same file for writing while the mapping is alive fails with a sharing
+	// violation -> IO-Error Open_Failed "cannot write file". Linux does not
+	// lock the file, which is why the bug only showed up on Windows. write()
+	// truncates and rewrites the whole file, so the old mapping was about to
+	// go stale anyway; it is recreated on the new content below.
+	delete m_mapping;
+	m_mapping = 0;
+
 	// write through a plain stream: the memory mapping would have to be
 	// resized entry by entry
 	write(filename(), m_model);
 
-	// refresh the mapping on the new file
-	delete m_mapping;
-	m_mapping = 0;
-
 	unsigned size = sys::file::size(filename());
 
+	// refresh the mapping on the new file
 	if (size > 0)
 	{
 		sys::file::Mode mode = sys::file::Readable;
