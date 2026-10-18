@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.1",
+  "id": "main",
+  "variant": "standard",
+  "fen_encoding": "fen",
+  "start_fen": "8/8/4k3/8/4P3/4K3/8/8 w - - 0 1",
+  "setup": true,
+  "tags": {
+    "Event": "Opposition Endgame Drill",
+    "Site": "Training",
+    "Date": "2026.10.18",
+    "Round": "1",
+    "White": "Study, White",
+    "Black": "Study, Black",
+    "Result": "1-0"
+  },
+  "fingerprint": {
+    "header_hash": "33481222a39b4196",
+    "move_hash": "8def51cc9f536efd",
+    "combined": "33481222a39b4196:8def51cc9f536efd"
+  },
+  "nodes": [
+    {
+      "id": "n0",
+      "parent_id": null,
+      "uci": null,
+      "san": null,
+      "fen": "8/8/4k3/8/4P3/4K3/8/8 w - - 0 1",
+      "main_child_id": "n1",
+      "children_ids": [
+        "n1",
+        "n1_blunder"
+      ]
+    },
+    {
+      "id": "n1",
+      "parent_id": "n0",
+      "uci": "e3e5",
+      "san": "Kd4",
+      "fen": "8/8/4k3/8/3KP3/8/8/8 b - - 1 1",
+      "main_child_id": "n2",
+      "children_ids": [
+        "n2"
+      ]
+    },
+    {
+      "id": "n2",
+      "parent_id": "n1",
+      "uci": "e6d6",
+      "san": "Kd6",
+      "fen": "8/8/3k4/8/3KP3/8/8/8 w - - 2 2",
+      "main_child_id": null,
+      "children_ids": []
+    },
+    {
+      "id": "n1_blunder",
+      "parent_id": "n0",
+      "uci": "e4e5",
+      "san": "e5",
+      "fen": "8/8/4k3/4P3/8/4K3/8/8 b - - 0 1",
+      "main_child_id": null,
+      "children_ids": [],
+      "comment": "Premature pawn advance allows 1...Kxe5="
+    }
+  ]
+}

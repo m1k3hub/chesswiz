@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chesswiz.org/schemas/chessmedia/1.1/manifest.schema.json",
+  "title": "ChessMedia 1.1 Manifest",
+  "description": "Package manifest for a ChessMedia 1.1 multimedia chess lesson.",
+  "type": "object",
+  "required": [
+    "format",
+    "version",
+    "id",
+    "title",
+    "required_features",
+    "boards",
+    "games",
+    "assets",
+    "timelines",
+    "links",
+    "gallery_order",
+    "primary",
+    "members"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "chessmedia"
+    },
+    "version": {
+      "type": "object",
+      "required": ["major", "minor"],
+      "additionalProperties": false,
+      "properties": {
+        "major": { "const": 1 },
+        "minor": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "id": { "$ref": "#/$defs/id" },
+    "title": { "type": "string", "minLength": 1 },
+    "language": { "type": "string", "minLength": 2, "maxLength": 35 },
+    "required_features": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "boards": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "title": { "type": "string" }
+        }
+      }
+    },
+    "games": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "fingerprint"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "path": { "$ref": "#/$defs/relpath" },
+          "title": { "type": "string" },
+          "fingerprint": { "$ref": "#/$defs/fingerprint" }
+        }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "media_type"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "kind": { "enum": ["file", "stream"] },
+          "path": { "$ref": "#/$defs/relpath" },
+          "uri": { "type": "string", "pattern": "^https?://.+" },
+          "fallback_path": { "$ref": "#/$defs/relpath" },
+          "media_type": { "type": "string", "minLength": 3 },
+          "duration_ms": { "$ref": "#/$defs/ms_nonneg" },
+          "offset_ms": { "type": "integer", "minimum": -86400000, "maximum": 86400000 },
+          "clock_track": { "enum": ["presentation", "audio", "video"] },
+          "live": { "type": "boolean" },
+          "title": { "type": "string" },
+          "language": { "type": "string" }
+        }
+      }
+    },
+    "timelines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "clock_asset_id"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "path": { "$ref": "#/$defs/relpath" },
+          "clock_asset_id": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["game_id", "asset_id"],
+        "additionalProperties": false,
+        "properties": {
+          "game_id": { "$ref": "#/$defs/id" },
+          "asset_id": { "$ref": "#/$defs/id" },
+          "timeline_id": { "$ref": "#/$defs/id" },
+          "role": {
+            "enum": [
+              "primary",
+              "alternate-stream",
+              "interactive-clip",
+              "commentary",
+              "supplemental"
+            ]
+          }
+        }
+      }
+    },
+    "gallery_order": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/id" },
+      "uniqueItems": true
+    },
+    "primary": {
+      "type": "object",
+      "required": ["asset_id"],
+      "additionalProperties": false,
+      "properties": {
+        "timeline_id": { "$ref": "#/$defs/id" },
+        "asset_id": { "$ref": "#/$defs/id" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["path"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "$ref": "#/$defs/relpath" }
+      }
+    },
+    "members": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "bytes", "sha256"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "$ref": "#/$defs/relpath" },
+          "bytes": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "relpath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*//)(?!.*(^|/)\\.\\.?($|/))[A-Za-z0-9._ /+-]+$"
+    },
+    "ms_nonneg": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "fingerprint": {
+      "type": "object",
+      "required": ["header_hash", "move_hash", "combined"],
+      "additionalProperties": false,
+      "properties": {
+        "header_hash": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+        "move_hash": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+        "combined": { "type": "string", "pattern": "^[0-9a-f]{16}:[0-9a-f]{16}$" }
+      }
+    }
+  }
+}

@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chesswiz.org/schemas/chessmedia/1.1/timeline.schema.json",
+  "title": "ChessMedia 1.1 Scene Timeline",
+  "description": "Single-clock presentation timeline of complete board scenes, overlays, captions, and position-keyed interactive triggers.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "clock_asset_id",
+    "duration_ms",
+    "cues"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1.1" },
+    "id": { "$ref": "#/$defs/id" },
+    "clock_asset_id": { "$ref": "#/$defs/id" },
+    "clock_track": { "enum": ["presentation", "audio", "video"] },
+    "duration_ms": { "$ref": "#/$defs/ms_nonneg" },
+    "cues": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/cue" }
+    },
+    "chapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "at_ms"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "title": { "type": "string", "minLength": 1 },
+          "at_ms": { "$ref": "#/$defs/ms_nonneg" }
+        }
+      }
+    },
+    "interactive_triggers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/trigger" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "ms_nonneg": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "square": {
+      "type": "string",
+      "pattern": "^[a-h][1-8]$"
+    },
+    "rgba": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{8}$"
+    },
+    "cue": {
+      "type": "object",
+      "required": ["id", "at_ms", "scene"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "at_ms": { "$ref": "#/$defs/ms_nonneg" },
+        "inferred": { "type": "boolean" },
+        "inferred_fields": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "scene": {
+          "type": "object",
+          "required": ["boards"],
+          "additionalProperties": false,
+          "properties": {
+            "boards": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": { "$ref": "#/$defs/board_state" }
+            },
+            "captions": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/caption" }
+            }
+          }
+        }
+      }
+    },
+    "board_state": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["hidden"],
+          "additionalProperties": false,
+          "properties": {
+            "hidden": { "const": true }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["game_id", "node_id", "orientation", "overlays"],
+          "additionalProperties": false,
+          "properties": {
+            "game_id": { "$ref": "#/$defs/id" },
+            "node_id": { "$ref": "#/$defs/id" },
+            "orientation": { "enum": ["white", "black"] },
+            "overlays": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/overlay" }
+            }
+          }
+        }
+      ]
+    },
+    "overlay": {
+      "type": "object",
+      "required": ["id", "kind", "color"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["arrow", "square", "label"] },
+        "from": { "$ref": "#/$defs/square" },
+        "to": { "$ref": "#/$defs/square" },
+        "square": { "$ref": "#/$defs/square" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "color": { "$ref": "#/$defs/rgba" },
+        "end_ms": { "$ref": "#/$defs/ms_nonneg" },
+        "inferred": { "type": "boolean" }
+      }
+    },
+    "caption": {
+      "type": "object",
+      "required": ["text"],
+      "additionalProperties": false,
+      "properties": {
+        "lang": { "type": "string" },
+        "placement": { "enum": ["pre", "post", "subtitle"] },
+        "text": { "type": "string", "minLength": 1 },
+        "end_ms": { "$ref": "#/$defs/ms_nonneg" }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "required": ["id", "fen", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "fen": { "type": "string", "minLength": 15 },
+        "match_mode": { "enum": ["board_turn", "exact"] },
+        "game_id": { "$ref": "#/$defs/id" },
+        "node_id": { "$ref": "#/$defs/id" },
+        "at_ms": { "$ref": "#/$defs/ms_nonneg" },
+        "kind": { "enum": ["clip", "range", "branch_prompt"] },
+        "asset_id": { "$ref": "#/$defs/id" },
+        "timeline_id": { "$ref": "#/$defs/id" },
+        "start_ms": { "$ref": "#/$defs/ms_nonneg" },
+        "end_ms": { "$ref": "#/$defs/ms_nonneg" },
+        "prompt": { "type": "string" },
+        "branches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "uci", "role", "asset_id"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "uci": { "type": "string", "pattern": "^[a-h][1-8][a-h][1-8][qrbn]?$" },
+              "san": { "type": "string" },
+              "role": { "enum": ["primary", "alternative"] },
+              "asset_id": { "$ref": "#/$defs/id" },
+              "timeline_id": { "$ref": "#/$defs/id" },
+              "start_ms": { "$ref": "#/$defs/ms_nonneg" },
+              "end_ms": { "$ref": "#/$defs/ms_nonneg" },
+              "overlay_arrow": {
+                "type": "object",
+                "required": ["from", "to"],
+                "additionalProperties": false,
+                "properties": {
+                  "from": { "$ref": "#/$defs/square" },
+                  "to": { "$ref": "#/$defs/square" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

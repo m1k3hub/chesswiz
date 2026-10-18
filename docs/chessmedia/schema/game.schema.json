@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chesswiz.org/schemas/chessmedia/1.1/game.schema.json",
+  "title": "ChessMedia 1.1 Game Tree",
+  "description": "Explicit node-addressed game tree with mandatory start_fen and per-node FENs.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "variant",
+    "fen_encoding",
+    "start_fen",
+    "setup",
+    "tags",
+    "fingerprint",
+    "nodes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1.1" },
+    "id": { "$ref": "#/$defs/id" },
+    "variant": { "enum": ["standard", "chess960"] },
+    "fen_encoding": { "enum": ["fen", "shredder-fen"] },
+    "start_fen": { "type": "string", "minLength": 15 },
+    "setup": { "type": "boolean" },
+    "tags": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "fingerprint": {
+      "type": "object",
+      "required": ["header_hash", "move_hash", "combined"],
+      "additionalProperties": false,
+      "properties": {
+        "header_hash": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+        "move_hash": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+        "combined": { "type": "string", "pattern": "^[0-9a-f]{16}:[0-9a-f]{16}$" },
+        "normalized_header": { "type": "string" }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/node" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "parent_id", "uci", "fen"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "parent_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/id" }
+          ]
+        },
+        "uci": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^[a-h][1-8][a-h][1-8][qrbn]?$" }
+          ]
+        },
+        "san": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 2, "maxLength": 16 }
+          ]
+        },
+        "fen": { "type": "string", "minLength": 15 },
+        "main_child_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/id" }
+          ]
+        },
+        "children_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "uniqueItems": true
+        },
+        "comment": { "type": "string" },
+        "nags": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1, "maximum": 255 }
+        },
+        "inferred": { "type": "boolean" },
+        "inferred_fields": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}
