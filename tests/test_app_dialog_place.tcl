@@ -5,10 +5,14 @@ namespace eval ::scidb::test::dlgplace {
     variable calls
     variable workareaCalls 0
     variable placing 0
+    variable waitSerial 0
 }
 proc ::scidb::test::dlgplace::waitFor {ms} {
-    after $ms {set ::scidb::test::dlgplace::settled 1}
-    vwait ::scidb::test::dlgplace::settled
+    variable waitSerial
+    set flag [namespace current]::settled[incr waitSerial]
+    after $ms [list set $flag 1]
+    vwait $flag
+    unset $flag
     update idletasks
 }
 proc ::scidb::test::dlgplace::widgetRect {w} {
@@ -100,6 +104,9 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
         require [expr {abs($a-$p) <= 1}] "$target: final $actual != helper [dict get $plan geometry]"
     }
     require [expr {$w == [winfo width $dlg] && $h == [winfo height $dlg]}] "$target: unsettled client size"
+    set requested [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]
+    require [expr {$w >= [lindex $requested 0] && $h >= [lindex $requested 1]}] \
+        "$target: final ${w}x${h} clips requested $requested"
     lassign $ext el er et eb
     set outer [list $x $y [expr {$w+$el+$er}] [expr {$h+$et+$eb}]]
     require [inside $outer $wa] "$target: outer frame $outer outside $wa"
@@ -130,7 +137,7 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
         lappend buttonRects [list $button $r [$button cget -text]]
     }
     require [expr {[llength $buttonRects] > 0}] "$target: no buttons tested"
-    puts "DLG $target screen=[winfo screenwidth .]x[winfo screenheight .] main=[wm geometry .application] board=$board workarea=$wa extents=$ext rule=$rule resized=[dict get $plan resized] helper=[dict get $plan geometry] final=$actual overlap=$area candidates=$areas buttons=$buttonRects"
+    puts "DLG $target screen=[winfo screenwidth .]x[winfo screenheight .] main=[wm geometry .application] board=$board workarea=$wa extents=$ext rule=$rule resized=[dict get $plan resized] helper=[dict get $plan geometry] final=$actual requested=$requested minsize=[wm minsize $dlg] overlap=$area candidates=$areas buttons=$buttonRects"
     if {[info exists ::env(DLG_EVIDENCE_DIR)]} {
         file mkdir $::env(DLG_EVIDENCE_DIR)
         exec import -window root [file join $::env(DLG_EVIDENCE_DIR) $target.png]
@@ -170,7 +177,6 @@ foreach {target openScript dialog closeScript} {
     002A {::playengine::open .application} {.application.playengine} {::playengine::Close}
     002B {::guessmove::start white} {.application.__guessmove__} {::guessmove::stop; catch {destroy .application.__guessmove__}}
     002C {::reptrainer::open .application} {.application.__reptrainer__} {::reptrainer::Close .application.__reptrainer__}
-    003A {set ::gamereview::Priv(total) 4; ::gamereview::ShowProgress .application} {.application.__gamereview_progress} {destroy .application.__gamereview_progress}
     003B {set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]; ::gamereview::ShowWindow .application $review {} 0} {.application.__gamereview} {destroy .application.__gamereview}
     003C {lassign [::scidb::test::dlgplace::openInsightsFixture] insBase insIdx; set insDlg [::insights::show .application $insBase Normal $insIdx]} {$insDlg} {destroy $insDlg; ::scidb::db::close $insBase; file delete -force [file dirname $insBase]}
     003D {set savedPos $::annotation::Position; set ::annotation::Position {}; ::annotation::open .application} {.application.__annotation__} {::annotation::close; destroy .application.__annotation__; set ::annotation::Vars(dialog) {}; set ::annotation::Position $savedPos}
@@ -187,6 +193,48 @@ foreach {target openScript dialog closeScript} {
         ::scidb::test::dlgplace::stopTrace
     } $closeScript] -result 1
 }
+# Use the normal review entry and NextPly/Progress/Finish lifecycle. Only the
+# engine is replaced, so measurement is independent of engine speed/availability.
+proc ::scidb::test::dlgplace::reviewMove {args} {
+    variable reviewCheck
+    set reviewCheck [catch {
+        set dlg .application.__gamereview_progress
+        require [expr {[$dlg.top.status cget -text] ne ""}] "review did not populate its status"
+        check 003A $dlg
+        # A later, longer status must grow the same window and update its plan.
+        set before [winfo reqwidth $dlg]
+        ::gamereview::Progress "Reviewing move 100 of 120: O-O-O+"
+        check 003A-growth $dlg
+        require [expr {[winfo reqwidth $dlg] > $before}] "status did not exercise content growth"
+    } ::scidb::test::dlgplace::reviewError]
+    ::gamereview::cancel
+    return {evalBeforeCp 0 evalAfterCp 0 uci e2e4 bestMove e2e4}
+}
+tcltest::test dlg-003A {normal review status and later growth fit, then results use the shared plan} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    rename ::ai::engine::available ::scidb::test::dlgplace::realAvailable
+    rename ::ai::engine::classify ::scidb::test::dlgplace::realClassify
+    proc ::ai::engine::available {} {return 1}
+    proc ::ai::engine::classify {args} {::scidb::test::dlgplace::reviewMove {*}$args}
+    set ::scidb::test::dlgplace::reviewCheck -1
+} -body {
+    ::scidb::test::dlgplace::require [::gamereview::run .application -depth 6] "review did not start"
+    for {set i 0} {$i < 50 && $::gamereview::Priv(running)} {incr i} {
+        ::scidb::test::dlgplace::waitFor 100
+    }
+    ::scidb::test::dlgplace::require [expr {$::scidb::test::dlgplace::reviewCheck == 0}] \
+        "review status check failed: $::scidb::test::dlgplace::reviewError"
+    ::scidb::test::dlgplace::check 003B-run .application.__gamereview
+} -cleanup {
+    ::gamereview::cancel
+    catch {destroy .application.__gamereview_progress}
+    catch {destroy .application.__gamereview}
+    rename ::ai::engine::available {}
+    rename ::ai::engine::classify {}
+    rename ::scidb::test::dlgplace::realAvailable ::ai::engine::available
+    rename ::scidb::test::dlgplace::realClassify ::ai::engine::classify
+    ::scidb::test::dlgplace::stopTrace
+} -result 1
 # A real content-sized dialog too large for all three strips at each screen.
 # No workarea, board, or geometry procedures are replaced.
 tcltest::test dlg-004 {no-room fallback minimises measured board overlap and exposes every button label} -setup {
@@ -209,6 +257,8 @@ tcltest::test dlg-004 {no-room fallback minimises measured board overlap and exp
     ::util::place::besideBoard .application.dlgNoRoom .application
     wm deiconify .application.dlgNoRoom
     ::scidb::test::dlgplace::check 004 .application.dlgNoRoom no-room
+    .application.dlgNoRoom.content configure -width [expr {$cw+30}] -height [expr {$ch+30}]
+    ::scidb::test::dlgplace::check 004-growth .application.dlgNoRoom no-room
 } -cleanup {
     catch {destroy .application.dlgNoRoom}
     ::scidb::test::dlgplace::stopTrace
@@ -219,6 +269,8 @@ tcltest::test dlg-tactics {trainer with its own board stays centred and does not
 } -body {
     ::tactics::open .application
     ::scidb::test::dlgplace::waitFor 500
+    ::scidb::test::dlgplace::require [expr {[winfo width .tactics] >= [winfo reqwidth .tactics]
+        && [winfo height .tactics] >= [winfo reqheight .tactics]}] "tactics clips its requested size"
     lassign [::util::place::geometry .tactics -parent .application -position center] x y w h
     puts "DLG tactics final=[wm geometry .tactics] centered-offsets=${x}${y} own-board=[winfo ismapped .tactics.board]"
     list [expr {![dict exists $::scidb::test::dlgplace::calls .tactics]}] \
