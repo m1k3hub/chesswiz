@@ -70,6 +70,23 @@ proc flushEvents {{ms 400}} {
 
 proc ignore {args} { return 0 }
 
+# The files that run before this one leave games in the app's nine slots, so a
+# new game cannot be loaded and the Game Number box selects a row but never
+# loads it.  Release every game, then give the board one fresh empty game so
+# the current slot stays valid while the freed slots are reused by the test.
+# Release through ::application::pgn::release as well as ::game::release: the
+# former removes the gamebar row, the latter blanks the game slot; releasing
+# only the slot desynchronises the gamebar (its digit badge array holds 1..9).
+proc resetGames {} {
+    for {set i 0} {$i < 9} {incr i} {
+        catch { ::application::pgn::release $i }
+        catch { ::game::release $i }
+    }
+    catch { ::menu::gameNew .application }
+    update idletasks
+    update
+}
+
 # Close every base this suite opened and remove its file, so re-runs start clean.
 proc closeBases {} {
     variable openedBases
@@ -83,6 +100,7 @@ proc closeBases {} {
 
 # Open $stem as a database and make it current, then return the games table.
 proc useBase {stem {count 40}} {
+    resetGames
     set file [createGameBase $stem $count]
     $::application::database::Vars(switcher) add $file [::scidb::db::get type $file] 1 {}
     ::application::database::switchToBase $file
