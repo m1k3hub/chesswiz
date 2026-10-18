@@ -51,6 +51,8 @@
 #include "sci_codec.h"
 #include "sci_consumer.h"
 
+#include "cbh_codec.h"
+
 #include "u_block_file.h"
 #include "u_progress.h"
 #include "u_misc.h"
@@ -1067,7 +1069,12 @@ Database::loadGame(unsigned index, Game& game, mstl::string* encoding, mstl::str
 	load::State state = game.finishLoad(variant) ? load::Ok : load::Corrupted;
 	if (state == load::Ok && fen)
 		game.goToPosition(*fen);
+	mstl::string guidingTitle;
+	if (info.isGuidingText() && game.m_tags.contains(tag::Event))
+		guidingTitle = game.m_tags.value(tag::Event);
 	setupTags(index, game.m_tags);
+	if (!guidingTitle.empty())
+		game.m_tags.set(tag::Event, guidingTitle);
 
 	return state;
 }
@@ -1515,6 +1522,12 @@ Database::exportGame(unsigned index, Database& destination) const
 
 	if (srcFormat == destination.format())
 	{
+		if (srcFormat == format::ChessBase)
+		{
+			return static_cast<cbh::Codec*>(m_codec)->exportGame(
+				info, static_cast<cbh::Codec&>(destination.codec()));
+		}
+
 		ByteStream data(m_codec->getGame(info));
 		return destination.codec().addGame(data, info, DatabaseCodec::Alloc);
 	}
@@ -1565,11 +1578,15 @@ Database::copyGames(	Database& destination,
 		case format::Scidb:
 			useConsumer = srcFormat != format::Scidb;
 			break;
+
+		case format::ChessBase:
+			useConsumer = srcFormat != format::ChessBase;
+			break;
 	}
 
 	unsigned count;
 
-	if (!useConsumer && allowedTags.complete() && allowExtraTags)
+	if (!useConsumer && (dstFormat == format::ChessBase || (allowedTags.complete() && allowExtraTags)))
 	{
 		// TODO: use this in any case (but !useConsumer), with
 		// exportGames(..., allowedTags, allowExtraTags, ...)
@@ -1597,11 +1614,10 @@ Database::copyGames(	Database& destination,
 	}
 	else if (dstFormat == format::ChessBase)
 	{
-		// The ChessBase writer loses game data (a 24-game copy keeps 5 of
-		// 61 KB, one game unreadable); refuse rather than write a corrupt
-		// database. Before, this fell into the Scid branch below, whose
-		// cast aborted the program.
-		IO_RAISE(Game, Write_Failed, "copying games into a ChessBase database is not supported");
+		// Raw copy (ChessBase -> ChessBase) is handled above via exportGames(destination, ...).
+		// Re-encoding games from a non-ChessBase source into a ChessBase database is still
+		// refused until P1 (multilingual comments, NAG mapping) is complete.
+		IO_RAISE(Game, Write_Failed, "Copying from this database format into a CBH database is not supported yet.");
 	}
 	else // dstFormat == format::Scid3 || dstFormat == format::Scid4
 	{

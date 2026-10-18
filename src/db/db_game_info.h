@@ -336,13 +336,8 @@ private:
 	NamebaseEvent*		m_event;
 	NamebasePlayer*	m_player[2];
 
-	// .sci, .cbh, .cbf:	contains pointer to namebase entry (address is always even)
-	// .si3, .si4: contains game record length
-	union
-	{
-		NamebaseEntry*	m_annotator;	// Scid: n/a
-		unsigned long	m_recordLength;
-	};
+	NamebaseEntry*		m_annotator;
+	uint32_t				m_recordLength;
 
 	PlayerData	m_pd[2];
 	Signature	m_signature;

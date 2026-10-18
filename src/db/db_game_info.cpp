@@ -142,6 +142,7 @@ GameInfo const GameInfo::m_initializer((Initializer()));
 GameInfo::GameInfo(Initializer const&)
 	:m_event(&g_event)
 	,m_annotator(&g_empty)
+	,m_recordLength(0)
 	,m_signature()
 	,m_variationCount(0)
 	,m_annotationCount(0)
@@ -170,9 +171,6 @@ GameInfo::GameInfo(Initializer const&)
 	,m_hasCriticalPos(false)
 	,m_hasCorrHeader(false)
 {
-#if defined(__i386__)
-	static_assert(sizeof(GameInfo) == 64, "should be 64 bytes");
-#endif
 
 	m_pd[White].value = m_pd[Black].value = 0;
 	m_player[White] = m_player[Black] = &g_player;
@@ -467,9 +465,7 @@ void
 GameInfo::setup(uint32_t gameOffset, uint32_t gameRecordLength)
 {
 	m_gameOffset = gameOffset;
-
-	if (hasGameRecordLength())
-		setGameRecordLength(gameRecordLength);
+	setGameRecordLength(gameRecordLength);
 }
 
 
@@ -486,13 +482,10 @@ GameInfo::setup(	uint32_t gameOffset,
 	M_REQUIRE(blackPlayer);
 	M_REQUIRE(event);
 	M_REQUIRE(annotator);
-	M_REQUIRE((reinterpret_cast<uintptr_t>(annotator) & 1) == 0);
 
-	if (annotator == namebases(Namebase::Annotator).emptyAnnotator())
-	{
-		setGameRecordLength(gameRecordLength);
-	}
-	else
+	setGameRecordLength(gameRecordLength);
+
+	if (annotator != namebases(Namebase::Annotator).emptyAnnotator())
 	{
 		m_annotator = annotator;
 		namebases(Namebase::Annotator).incrRef(m_annotator);
@@ -714,17 +707,12 @@ GameInfo::reset(Namebases& namebases)
 			namebases(Namebase::Site).decrRef(m_event->site());
 
 		unsigned gameOffset = m_gameOffset;
+		unsigned recordLength = gameRecordLength();
 
-		if (unsigned recordLength = gameRecordLength())
-		{
-			*this = m_initializer;
-			setGameRecordLength(recordLength);
-		}
-		else
-		{
+		if (m_annotator->frequency() > 0)
 			namebases(Namebase::Annotator).decrRef(m_annotator);
-			*this = m_initializer;
-		}
+		*this = m_initializer;
+		setGameRecordLength(recordLength);
 
 		m_gameFlags |= specialFlags;
 		m_gameOffset = gameOffset;
@@ -744,7 +732,7 @@ GameInfo::resetCharacteristics(Namebases& namebases)
 	if (m_event->frequency() == 0)
 		namebases(Namebase::Site).decrRef(m_event->site());
 
-	if (!hasGameRecordLength())
+	if (m_annotator->frequency() > 0)
 		namebases(Namebase::Annotator).decrRef(m_annotator);
 
 	m_dateYear		= Date::Zero10Bits;
@@ -771,8 +759,7 @@ GameInfo::restore(GameInfo& oldInfo, Namebases& namebases)
 	namebases(Namebase::Player).incrRef(m_player[White]);
 	namebases(Namebase::Player).incrRef(m_player[Black]);
 	namebases(Namebase::Event ).incrRef(m_event);
-
-	if (!hasGameRecordLength())
+	if (m_annotator->frequency() > 0)
 		namebases(Namebase::Annotator).incrRef(m_annotator);
 }
 
@@ -827,7 +814,6 @@ GameInfo::reallocate(Namebases& namebases) const
 		namebase.insertEvent(
 			name, entry->date(), entry->type(), entry->timeMode(), entry->eventMode(), Limit, site);
 	}
-	if (!hasGameRecordLength())
 	{
 		Namebase& namebase = namebases(Namebase::Annotator);
 		NamebaseEntry* entry = m_annotator;
@@ -906,8 +892,7 @@ GameInfo::setupTags(TagSet& tags, variant::Type variant) const
 	tags.set(tag::Black, m_player[Black]->name());
 	tags.set(tag::Result, result::toString(result()));
 
-	if (!hasGameRecordLength())
-		tags.set(tag::Annotator, m_annotator->name());
+	tags.set(tag::Annotator, m_annotator->name());
 
 	if (m_event->type() != event::Unknown)
 		tags.set(tag::EventType, event::toString(m_event->type()));
@@ -1055,9 +1040,7 @@ void
 GameInfo::setRecord(uint32_t offset, uint32_t length)
 {
 	m_gameOffset = offset;
-
-	if (hasGameRecordLength())
-		setGameRecordLength(length);
+	setGameRecordLength(length);
 }
 
 
@@ -1269,9 +1252,7 @@ GameInfo::computeChecksum(util::crc::checksum_t crc) const
 	crc = ::computeCRC(crc, m_event->site()->name());
 	crc = ::computeCRC(crc, m_player[White]->name());
 	crc = ::computeCRC(crc, m_player[Black]->name());
-
-	if (!hasGameRecordLength())
-		crc = ::computeCRC(crc, m_annotator->name());
+	crc = ::computeCRC(crc, m_annotator->name());
 
 	crc = ::util::crc::compute(crc, uint32_t(m_pd[White].ratingValue));
 	crc = ::util::crc::compute(crc, uint32_t(m_pd[Black].ratingValue));

@@ -492,19 +492,22 @@ replaceNewlines(mstl::string& s)
 
 
 static unsigned
-strippedLen(char const* s)
+strippedLen(char const* s, unsigned maxLen)
 {
-	unsigned len = strlen(s);
+	unsigned len = 0;
 
-	while (len > 0 && ::isspace(s[len - 1]))
+	while (len < maxLen && s[len])
+		++len;
+
+	while (len > 0 && ::isspace(Byte(s[len - 1])))
 		--len;
 
 	return len;
 }
 
 
-Codec::Tournament::Tournament() :category(0) ,rounds(0) {}
-Codec::Tournament::Tournament(Byte cat, Byte nrounds) :category(cat) ,rounds(nrounds) {}
+Codec::Tournament::Tournament() :category(0) ,rounds(0) ,complete(0) {}
+Codec::Tournament::Tournament(Byte cat, Byte nrounds, Byte comp) :category(cat) ,rounds(nrounds) ,complete(comp) {}
 
 
 struct Codec::Source : public NamebaseEntry
@@ -896,12 +899,12 @@ Codec::readTournamentData(mstl::string const& rootname, util::Progress& progress
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 40);
 
-			name.set_size(::strippedLen(name));
+			name.set_size(::strippedLen(name, 40));
 			mapPlayerName(name);
 			toUtf8(name);
 
 			strm.read(city.data(), 30);
-			city.set_size(::strippedLen(city));
+			city.set_size(::strippedLen(city, 30));
 			toUtf8(city);
 
 			if (city.empty())
@@ -918,7 +921,7 @@ Codec::readTournamentData(mstl::string const& rootname, util::Progress& progress
 			time::Mode	timeMode		= time::Unknown;
 			event::Mode	eventMode	= event::Undetermined;
 
-			switch ((eventType >> 5) & 3)
+			switch ((eventType >> 5) & 7)
 			{
 				case 0: timeMode = time::Normal; break;
 				case 1: timeMode = time::Blitz; break;
@@ -950,8 +953,9 @@ Codec::readTournamentData(mstl::string const& rootname, util::Progress& progress
 			if (countryCode == country::Unknown)
 				countryCode = Reader::extractCountryFromSite(city);
 
+			strm.get();	// skip byte 86 (always 0)
 			Byte category = strm.get();
-			strm.get();	// skip
+			Byte complete = strm.get();
 			Byte rounds = strm.get();
 
 			NamebaseSite* site = siteBase.insertSite(city, countryCode, nrecs);
@@ -970,9 +974,9 @@ Codec::readTournamentData(mstl::string const& rootname, util::Progress& progress
 			m_eventMap.container().push_back(BaseMap::value_type(i, event));
 
 			m_tournamentMap.container().push_back(
-				TournamentMap::value_type(event, Tournament(category, rounds)));
+				TournamentMap::value_type(event, Tournament(category, rounds, complete)));
 
-			strm.seekg(RecordSize - 89, mstl::ios_base::cur);
+			strm.seekg(RecordSize - 90, mstl::ios_base::cur);
 		}
 	}
 
@@ -1033,13 +1037,13 @@ Codec::readPlayerData(mstl::string const& rootname, util::Progress& progress)
 
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(str.data(), 30);
-			str.set_size(::strippedLen(str));
+			str.set_size(::strippedLen(str, 30));
 
 			char* p = str.data() + str.size();
 
 			str.append(", ", 2);
 			strm.read(p + 2, 20);
-			str.set_size(::strippedLen(p + 2) + str.size());
+			str.set_size(::strippedLen(p + 2, 20) + str.size());
 
 			if (p + 2 == str.end())
 				str.resize(str.size() - 2);
@@ -1115,7 +1119,7 @@ Codec::readAnnotatorData(mstl::string const& rootname, util::Progress& progress)
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(str.data(), 45);
-			str.set_size(::strippedLen(str));
+			str.set_size(::strippedLen(str, 45));
 
 			if (!str.empty())
 			{
@@ -1182,7 +1186,7 @@ Codec::readSourceData(mstl::string const& rootname, util::Progress& progress)
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(str.data(), 25);
-			str.set_size(::strippedLen(str));
+			str.set_size(::strippedLen(str, 25));
 
 			strm.seekg(20, mstl::ios_base::cur);
 
@@ -1306,7 +1310,7 @@ Codec::readTeamData(mstl::string const& rootname, util::Progress& progress)
 
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(str.data(), 45);
-			str.set_size(::strippedLen(str));
+			str.set_size(::strippedLen(str, 45));
 			toUtf8(str);
 
 			unsigned char buf[10];
@@ -1354,6 +1358,19 @@ Codec::readTeamData(mstl::string const& rootname, util::Progress& progress)
 	}
 
 	strm.close();
+
+	m_teamRefMap.reserve(m_teamRecords);
+	unsigned rem = m_teamStream.size() % m_teamRecordSize;
+	for (unsigned i = 0; i < m_teamRecords; ++i)
+	{
+		uint32_t buf[2] = { 0xffffffffu, 0xffffffffu };
+		unsigned offset = rem + i * m_teamRecordSize;
+		if (m_teamStream.seekg(offset, mstl::ios_base::beg))
+			m_teamStream.read(reinterpret_cast<Byte*>(buf), sizeof(buf));
+		m_teamRefMap.push_back(
+			TeamRefPair(ByteStream::uint32(reinterpret_cast<Byte const*>(&buf[0])),
+							ByteStream::uint32(reinterpret_cast<Byte const*>(&buf[1]))));
+	}
 }
 
 
@@ -1433,11 +1450,13 @@ Codec::preloadTournamentData(mstl::string const& rootname, util::Progress& progr
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 40);
+			name.set_size(::strippedLen(name, 40));
 			::convPlayerName(name);
-			if (size_t n = ::strlen(name)) HandleData(name, n);
+			if (size_t n = name.size()) HandleData(name, n);
 
 			strm.read(city.data(), 30);
-			if (size_t n = ::strlen(city)) HandleData(city, n);
+			city.set_size(::strippedLen(city, 30));
+			if (size_t n = city.size()) HandleData(city, n);
 
 			strm.seekg(RecordSize - 79, mstl::ios_base::cur);
 		}
@@ -1491,12 +1510,14 @@ Codec::preloadPlayerData(mstl::string const& rootname, util::Progress& progress)
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 30);
+			name.set_size(::strippedLen(name, 30));
 			::convPlayerName(name);
-			if (size_t n = ::strlen(name)) HandleData(name, n);
+			if (size_t n = name.size()) HandleData(name, n);
 
 			strm.read(name.data(), 20);
+			name.set_size(::strippedLen(name, 20));
 			::convPlayerName(name);
-			if (size_t n = ::strlen(name)) HandleData(name, n);
+			if (size_t n = name.size()) HandleData(name, n);
 
 			strm.seekg(RecordSize - 59, mstl::ios_base::cur);
 		}
@@ -1550,7 +1571,8 @@ Codec::preloadAnnotatorData(mstl::string const& rootname, util::Progress& progre
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 45);
-			if (size_t n = ::strlen(name)) HandleData(name, n);
+			name.set_size(::strippedLen(name, 45));
+			if (size_t n = name.size()) HandleData(name, n);
 
 			strm.seekg(RecordSize - 54, mstl::ios_base::cur);
 		}
@@ -1611,7 +1633,7 @@ Codec::reloadTournamentData(mstl::string const& rootname, util::Progress& progre
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 40);
 
-			name.set_size(::strippedLen(name));
+			name.set_size(::strippedLen(name, 40));
 			m_codec->toUtf8(name);
 
 			if (!name.is_7bit())
@@ -1623,7 +1645,7 @@ Codec::reloadTournamentData(mstl::string const& rootname, util::Progress& progre
 			}
 
 			strm.read(city.data(), 30);
-			city.set_size(::strippedLen(city));
+			city.set_size(::strippedLen(city, 30));
 			m_codec->toUtf8(city);
 
 			if (!city.is_7bit())
@@ -1687,13 +1709,13 @@ Codec::reloadPlayerData(mstl::string const& rootname, util::Progress& progress)
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 30);
-			name.set_size(::strippedLen(name));
+			name.set_size(::strippedLen(name, 30));
 
 			char* p = name.data() + name.size();
 
 			name.append(", ", 2);
 			strm.read(p + 2, 20);
-			name.set_size(::strippedLen(p + 2) + name.size());
+			name.set_size(::strippedLen(p + 2, 20) + name.size());
 
 			if (p + 2 == name.end())
 				name.resize(name.size() - 2);
@@ -1753,7 +1775,7 @@ Codec::reloadAnnotatorData(mstl::string const& rootname, util::Progress& progres
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 45);
-			name.set_size(::strippedLen(name));
+			name.set_size(::strippedLen(name, 45));
 			m_codec->toUtf8(name);
 
 			if (!name.is_7bit())
@@ -1819,7 +1841,7 @@ Codec::reloadSourceData(mstl::string const& rootname, util::Progress& progress)
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 25);
-			name.set_size(::strippedLen(name));
+			name.set_size(::strippedLen(name, 25));
 			m_codec->toUtf8(name);
 
 			if (!name.is_7bit())
@@ -1885,7 +1907,7 @@ Codec::reloadTeamData(mstl::string const& rootname, util::Progress& progress)
 		{
 			strm.seekg(5, mstl::ios_base::cur);
 			strm.read(name.data(), 45);
-			name.set_size(::strippedLen(name));
+			name.set_size(::strippedLen(name, 45));
 			m_codec->toUtf8(name);
 
 			if (!name.is_7bit())
@@ -2245,6 +2267,22 @@ Codec::getSource(uint32_t ref)
 }
 
 
+uint32_t
+Codec::readGameRecordLength(uint32_t offset)
+{
+	if (!offset || !m_gameStream.is_open())
+		return 0;
+
+	sys::Lock lock(&m_mutex);
+	Byte hdr[4];
+	if (!m_gameStream.seekg(offset, mstl::ios_base::beg) || !m_gameStream.read(hdr, sizeof(hdr)))
+		return 0;
+
+	uint32_t word = ByteStream::uint32(hdr);
+	return (word & 0x80000000u) ? (word & 0x3fffffffu) : (word & 0x00ffffffu);
+}
+
+
 void
 Codec::decodeGuidingTextIndex(ByteStream& strm, GameInfo& info)
 {
@@ -2254,6 +2292,7 @@ Codec::decodeGuidingTextIndex(ByteStream& strm, GameInfo& info)
 		info.m_gameFlags |= GameInfo::Flag_Deleted;
 
 	info.m_gameOffset = strm.uint32();
+	info.setGameRecordLength(readGameRecordLength(info.m_gameOffset));
 
 	strm.skip(3);
 
@@ -2422,6 +2461,7 @@ Codec::decodeIndex(ByteStream& strm, GameInfo& info)
 		info.m_gameFlags |= GameInfo::Flag_Deleted;
 
 	info.m_gameOffset = strm.uint32();
+	info.setGameRecordLength(readGameRecordLength(info.m_gameOffset));
 
 	if (unsigned offset = strm.uint32())
 		m_annotationMap.container().push_back(AnnotationMap::value_type(info.m_gameOffset, offset));
@@ -2436,8 +2476,9 @@ Codec::decodeIndex(ByteStream& strm, GameInfo& info)
 	if (NamebaseEntry* annotator = getAnnotator(strm.uint24()))
 		info.m_annotator = annotator;
 
+	uint32_t sourceId = strm.uint24();
 	if (!m_sourceMap2.empty())
-		m_sourceMap.push_back(getSource(strm.uint24()));
+		m_sourceMap.push_back(getSource(sourceId));
 
 	Date date;
 	::setDate(date, strm.uint24());
@@ -2694,8 +2735,8 @@ Codec::addTeamTags(TagSet& tags, GameInfo const& info)
 	if (!m_teamStream.read(reinterpret_cast<Byte*>(buf), sizeof(buf)))
 		IO_RAISE(Index, Read_Error, "unexpected end of file");
 
-	unsigned whiteTeamRef = mstl::bo::swapLE(buf[0]);
-	unsigned blackTeamRef = mstl::bo::swapLE(buf[1]);
+	unsigned whiteTeamRef = ByteStream::uint32(reinterpret_cast<Byte const*>(&buf[0]));
+	unsigned blackTeamRef = ByteStream::uint32(reinterpret_cast<Byte const*>(&buf[1]));
 
 	if (whiteTeamRef < m_teamBase.size())
 	{
@@ -2976,7 +3017,109 @@ Codec::addGame(ByteStream& gameData, ByteStream& annotationData, TagSet const& t
 	}
 
 	// Delegate to base class addGame for namebase/index handling
-	return DatabaseCodec::addGame(gameData, tags, consumer);
+	save::State state = DatabaseCodec::addGame(gameData, tags, consumer);
+	if (save::isOk(state) && !gameInfoList().empty())
+	{
+		NamebaseEvent const* dstEvent = gameInfoList().back().eventEntry();
+		if (dstEvent)
+		{
+			Byte cat = tags.contains(tag::EventCategory) ? Byte(tags.asInt(tag::EventCategory)) : 0;
+			Byte rnd = tags.contains(tag::EventRounds) ? Byte(tags.asInt(tag::EventRounds)) : 0;
+			if (cat || rnd)
+			{
+				TournamentMap::iterator t = m_tournamentMap.find(dstEvent);
+				if (t == m_tournamentMap.end())
+				{
+					m_tournamentMap.container().push_back(
+						TournamentMap::value_type(dstEvent, Tournament(cat, rnd)));
+					m_tournamentMap.qsort();
+				}
+				else
+				{
+					if (cat) t->second.category = cat;
+					if (rnd) t->second.rounds = rnd;
+				}
+			}
+		}
+
+		if (tags.contains(tag::Source) && !tags.value(tag::Source).empty())
+		{
+			mstl::string srcName = tags.value(tag::Source);
+			Date srcDate;
+			if (tags.contains(tag::SourceDate))
+				srcDate.fromString(tags.value(tag::SourceDate));
+
+			Source* found = nullptr;
+			BaseMap::container_type const& list = m_sourceMap2.container();
+			for (unsigned s = 0; s < list.size(); ++s)
+			{
+				Source* cand = static_cast<Source*>(list[s].second);
+				if (cand && cand->name() == srcName && cand->date == srcDate)
+				{
+					found = cand;
+					break;
+				}
+			}
+			if (!found)
+			{
+				uint32_t newId = list.size();
+				found = new Source(srcName, srcDate);
+				m_sourceMap2.container().push_back(BaseMap::value_type(newId, found));
+				m_sourceMap2.qsort();
+			}
+			while (m_sourceMap.size() < gameInfoList().size() - 1)
+				m_sourceMap.push_back(nullptr);
+			m_sourceMap.push_back(found);
+		}
+		else if (!m_sourceMap.empty())
+		{
+			while (m_sourceMap.size() < gameInfoList().size())
+				m_sourceMap.push_back(nullptr);
+		}
+
+		if (tags.contains(tag::WhiteTeam) || tags.contains(tag::BlackTeam))
+		{
+			auto findOrAddTeam = [this](mstl::string const& title, country::Code nation) -> uint32_t
+			{
+				if (title.empty())
+					return 0xffffffffu;
+				for (unsigned t = 0; t < m_teamBase.size(); ++t)
+				{
+					if (m_teamBase[t] && m_teamBase[t]->title == title && m_teamBase[t]->nation == nation)
+						return t;
+				}
+				Team* team = new Team;
+				char* p = m_sourceBase.alloc(title.size() + 1);
+				::memcpy(p, title.c_str(), title.size());
+				p[title.size()] = '\0';
+				team->title.hook(p, title.size());
+				team->nation = nation;
+				uint32_t id = m_teamBase.size();
+				m_teamBase.push_back(team);
+				return id;
+			};
+
+			country::Code wNation = tags.contains(tag::WhiteTeamCountry)
+				? country::fromString(tags.value(tag::WhiteTeamCountry)) : country::Unknown;
+			country::Code bNation = tags.contains(tag::BlackTeamCountry)
+				? country::fromString(tags.value(tag::BlackTeamCountry)) : country::Unknown;
+			uint32_t wRef = tags.contains(tag::WhiteTeam)
+				? findOrAddTeam(tags.value(tag::WhiteTeam), wNation) : 0xffffffffu;
+			uint32_t bRef = tags.contains(tag::BlackTeam)
+				? findOrAddTeam(tags.value(tag::BlackTeam), bNation) : 0xffffffffu;
+
+			while (m_teamRefMap.size() < gameInfoList().size() - 1)
+				m_teamRefMap.push_back(TeamRefPair(0xffffffffu, 0xffffffffu));
+			m_teamRefMap.push_back(TeamRefPair(wRef, bRef));
+		}
+		else if (!m_teamRefMap.empty())
+		{
+			while (m_teamRefMap.size() < gameInfoList().size())
+				m_teamRefMap.push_back(TeamRefPair(0xffffffffu, 0xffffffffu));
+		}
+	}
+
+	return state;
 }
 
 
@@ -3090,6 +3233,169 @@ Codec::putGame(util::ByteStream const& strm, unsigned prevOffset, unsigned prevR
 }
 
 
+save::State
+Codec::exportGame(GameInfo const& info, Codec& destination)
+{
+	util::ByteStream data(getGame(info));
+	if (data.isEmpty())
+		return save::DecodingFailed;
+
+	unsigned dstGameOffset = destination.m_nextGameOffset;
+
+	AnnotationMap::const_iterator i = m_annotationMap.find(info.gameOffset());
+	if (i != m_annotationMap.end() && m_annotationStream.is_open() && destination.m_annotationStream.is_open())
+	{
+		uint32_t address = i->second;
+		Byte hdr[14];
+		{
+			sys::Lock lock(&m_mutex);
+			if (!m_annotationStream.seekg(address, mstl::ios_base::beg)
+				|| !m_annotationStream.read(hdr, sizeof(hdr)))
+			{
+				IO_RAISE(Annotation, Corrupted, "unexpected end of file");
+			}
+		}
+
+		uint32_t totalLength = ByteStream::uint32(hdr + 10);
+		if (totalLength < 14)
+			IO_RAISE(Annotation, Corrupted, "bad annotation record length");
+
+		mstl::vector<char> annotBuf(totalLength);
+		::memcpy(annotBuf.data(), hdr, sizeof(hdr));
+		if (totalLength > 14)
+		{
+			sys::Lock lock(&m_mutex);
+			if (!m_annotationStream.read(annotBuf.data() + 14, totalLength - 14))
+				IO_RAISE(Annotation, Corrupted, "unexpected end of file");
+		}
+
+		unsigned dstAnnotOffset = destination.m_nextAnnotationOffset;
+		if (!destination.m_annotationStream.write(annotBuf.data(), totalLength))
+			IO_RAISE(Game, Write_Failed, "failed to write annotation data");
+
+		destination.m_annotationMap.container().push_back(
+			AnnotationMap::value_type(dstGameOffset, dstAnnotOffset));
+		destination.m_nextAnnotationOffset += totalLength;
+	}
+
+	save::State state = destination.DatabaseCodec::addGame(data, info, DatabaseCodec::Alloc);
+	if (save::isOk(state))
+	{
+		TournamentMap::const_iterator t = m_tournamentMap.find(info.eventEntry());
+		if (t != m_tournamentMap.end() && !destination.gameInfoList().empty())
+		{
+			NamebaseEvent const* dstEvent = destination.gameInfoList().back().eventEntry();
+			if (dstEvent && destination.m_tournamentMap.find(dstEvent) == destination.m_tournamentMap.end())
+			{
+				destination.m_tournamentMap.container().push_back(
+					TournamentMap::value_type(dstEvent, t->second));
+				destination.m_tournamentMap.qsort();
+			}
+		}
+
+		GameInfoList const& srcList = gameInfoList();
+		unsigned srcIdx = srcList.size();
+		for (unsigned idx = 0, n = srcList.size(); idx < n; ++idx)
+		{
+			if (&srcList[idx] == &info || srcList[idx].gameOffset() == info.gameOffset())
+			{
+				srcIdx = idx;
+				break;
+			}
+		}
+
+		if (!m_sourceMap.empty())
+		{
+			Source const* src = (srcIdx < m_sourceMap.size()) ? m_sourceMap[srcIdx] : nullptr;
+			if (src)
+			{
+				Source* dstSrc = nullptr;
+				BaseMap::container_type const& dstList = destination.m_sourceMap2.container();
+				for (unsigned s = 0; s < dstList.size(); ++s)
+				{
+					Source* cand = static_cast<Source*>(dstList[s].second);
+					if (cand && cand->name() == src->name() && cand->date == src->date)
+					{
+						dstSrc = cand;
+						break;
+					}
+				}
+				if (!dstSrc)
+				{
+					uint32_t newId = dstList.size();
+					dstSrc = new Source(src->name(), src->date);
+					destination.m_sourceMap2.container().push_back(BaseMap::value_type(newId, dstSrc));
+					destination.m_sourceMap2.qsort();
+				}
+				while (destination.m_sourceMap.size() < destination.gameInfoList().size() - 1)
+					destination.m_sourceMap.push_back(nullptr);
+				destination.m_sourceMap.push_back(dstSrc);
+			}
+			else if (!destination.m_sourceMap.empty())
+			{
+				while (destination.m_sourceMap.size() < destination.gameInfoList().size())
+					destination.m_sourceMap.push_back(nullptr);
+			}
+		}
+		else if (!destination.m_sourceMap.empty())
+		{
+			// Source database has no source map; pad destination with nullptr
+			// so this game does not inherit a stale source association.
+			while (destination.m_sourceMap.size() < destination.gameInfoList().size())
+				destination.m_sourceMap.push_back(nullptr);
+		}
+
+		if (!m_teamRefMap.empty() && srcIdx < m_teamRefMap.size())
+		{
+			TeamRefPair refs = m_teamRefMap[srcIdx];
+			auto copyTeamRef = [this, &destination](uint32_t srcRef) -> uint32_t
+			{
+				if (srcRef >= m_teamBase.size() || !m_teamBase[srcRef])
+					return 0xffffffffu;
+				Team const* srcTeam = m_teamBase[srcRef];
+				for (unsigned dt = 0; dt < destination.m_teamBase.size(); ++dt)
+				{
+					if (destination.m_teamBase[dt]
+						&& destination.m_teamBase[dt]->title == srcTeam->title
+						&& destination.m_teamBase[dt]->nation == srcTeam->nation)
+					{
+						return dt;
+					}
+				}
+				Team* dstTeam = new Team;
+				char* p = destination.m_sourceBase.alloc(srcTeam->title.size() + 1);
+				::memcpy(p, srcTeam->title.c_str(), srcTeam->title.size());
+				p[srcTeam->title.size()] = '\0';
+				dstTeam->title.hook(p, srcTeam->title.size());
+				dstTeam->nation = srcTeam->nation;
+				uint32_t newId = destination.m_teamBase.size();
+				destination.m_teamBase.push_back(dstTeam);
+				return newId;
+			};
+
+			uint32_t wDst = copyTeamRef(refs.first);
+			uint32_t bDst = copyTeamRef(refs.second);
+			if (wDst != 0xffffffffu || bDst != 0xffffffffu || !destination.m_teamRefMap.empty())
+			{
+				while (destination.m_teamRefMap.size() < destination.gameInfoList().size() - 1)
+					destination.m_teamRefMap.push_back(TeamRefPair(0xffffffffu, 0xffffffffu));
+				destination.m_teamRefMap.push_back(TeamRefPair(wDst, bDst));
+			}
+		}
+		else if (!destination.m_teamRefMap.empty())
+		{
+			while (destination.m_teamRefMap.size() < destination.gameInfoList().size())
+				destination.m_teamRefMap.push_back(TeamRefPair(0xffffffffu, 0xffffffffu));
+		}
+
+		if (m_highQuality)
+			destination.m_highQuality = true;
+	}
+
+	return state;
+}
+
+
 util::ByteStream
 Codec::getGame(GameInfo const& info)
 {
@@ -3100,11 +3406,16 @@ Codec::getGame(GameInfo const& info)
 	unsigned length = info.gameRecordLength();
 
 	if (length == 0)
+		length = readGameRecordLength(offset);
+
+	if (length == 0)
 		return util::ByteStream();
 
 	// The stream owns its buffer: a stream over a local string would point
 	// into freed memory once this returns (exportGame copies the record).
 	util::ByteStream data(length);
+
+	sys::Lock lock(&m_mutex);
 
 	if (!m_gameStream.seekg(offset, mstl::fstream::beg))
 		IO_RAISE(Game, Read_Error, "cannot seek to game offset %u", offset);
@@ -3250,8 +3561,10 @@ Codec::writePlayerData(mstl::string const& rootname, util::Progress& progress)
 			mstl::string::size_type commaPos = name.find(',');
 			mstl::string lastName = (commaPos != mstl::string::npos) ? name.substr(0, commaPos) : name;
 			lastName.trim();
-			unsigned nameLen = mstl::min(lastName.size(), size_t(30));
-			bstrm.put(reinterpret_cast<Byte const*>(lastName.data()), nameLen);
+			mstl::string encLastName;
+			m_codec->fromUtf8(lastName, encLastName);
+			unsigned nameLen = mstl::min(encLastName.size(), size_t(30));
+			bstrm.put(reinterpret_cast<Byte const*>(encLastName.data()), nameLen);
 			for (unsigned j = nameLen; j < 30; ++j)
 				bstrm.put(Byte(' '));
 
@@ -3262,8 +3575,10 @@ Codec::writePlayerData(mstl::string const& rootname, util::Progress& progress)
 				firstName = name.substr(commaPos + 1);
 				firstName.trim();
 			}
-			nameLen = mstl::min(firstName.size(), size_t(20));
-			bstrm.put(reinterpret_cast<Byte const*>(firstName.data()), nameLen);
+			mstl::string encFirstName;
+			m_codec->fromUtf8(firstName, encFirstName);
+			nameLen = mstl::min(encFirstName.size(), size_t(20));
+			bstrm.put(reinterpret_cast<Byte const*>(encFirstName.data()), nameLen);
 			for (unsigned j = nameLen; j < 20; ++j)
 				bstrm.put(Byte(' '));
 
@@ -3318,8 +3633,10 @@ Codec::writeTournamentData(mstl::string const& rootname, util::Progress& progres
 
 			// Event name (40 bytes, space-padded)
 			mstl::string name = event->name();
-			unsigned nameLen = mstl::min(name.size(), size_t(40));
-			bstrm.put(reinterpret_cast<Byte const*>(name.data()), nameLen);
+			mstl::string encName;
+			m_codec->fromUtf8(name, encName);
+			unsigned nameLen = mstl::min(encName.size(), size_t(40));
+			bstrm.put(reinterpret_cast<Byte const*>(encName.data()), nameLen);
 			for (unsigned j = nameLen; j < 40; ++j)
 				bstrm.put(Byte(' '));
 
@@ -3331,8 +3648,10 @@ Codec::writeTournamentData(mstl::string const& rootname, util::Progress& progres
 				if (site == "?")
 					site.clear();
 			}
-			unsigned siteLen = mstl::min(site.size(), size_t(30));
-			bstrm.put(reinterpret_cast<Byte const*>(site.data()), siteLen);
+			mstl::string encSite;
+			m_codec->fromUtf8(site, encSite);
+			unsigned siteLen = mstl::min(encSite.size(), size_t(30));
+			bstrm.put(reinterpret_cast<Byte const*>(encSite.data()), siteLen);
 			for (unsigned j = siteLen; j < 30; ++j)
 				bstrm.put(Byte(' '));
 
@@ -3347,20 +3666,19 @@ Codec::writeTournamentData(mstl::string const& rootname, util::Progress& progres
 			// Byte after date (position buf[3] in readTournamentData, unknown)
 			bstrm.put(Byte(0));
 
-			// Event type + time mode
-			Byte eventType = 0; // Default event type
+			// Event type (low 4 bits, 0..8) + time mode (bits 5..7)
+			Byte eventType = Byte(mstl::min(unsigned(event->type()), 8u)) & 0x0f;
 			switch (event->timeMode())
 			{
 				case time::Blitz: eventType |= (1 << 5); break;
 				case time::Rapid: eventType |= (2 << 5); break;
-				case time::Corr:  eventType |= (3 << 5); break;
+				case time::Corr:  eventType |= (4 << 5); break;
 				default: break;
 			}
 			bstrm.put(eventType);
 
-			// Byte after eventType (position buf[5] in readTournamentData, unknown)
-			bstrm.put(Byte(0));
-
+			// Byte after eventType (position buf[5] in readTournamentData, team flag)
+			bstrm.put(event->type() == event::Team ? Byte(1) : Byte(0));
 
 			// Nation code (1 byte) - find from site country
 			Byte nationCode = 0;
@@ -3378,15 +3696,19 @@ Codec::writeTournamentData(mstl::string const& rootname, util::Progress& progres
 			}
 			bstrm.put(nationCode);
 
-			// Category (1 byte)
+			// Byte 86 (always 0, skipped before category in readTournamentData)
+			bstrm.put(Byte(0));
+
+			// Category (1 byte, offset 87)
 			TournamentMap::const_iterator t = m_tournamentMap.find(event);
 			Byte category = (t != m_tournamentMap.end()) ? t->second.category : 0;
 			bstrm.put(category);
 
-			// Skip 1 byte
-			bstrm.put(Byte(0));
+			// Complete flag (1 byte, offset 88)
+			Byte complete = (t != m_tournamentMap.end()) ? t->second.complete : 0;
+			bstrm.put(complete);
 
-			// Rounds (1 byte)
+			// Rounds (1 byte, offset 89)
 			Byte rounds = (t != m_tournamentMap.end()) ? t->second.rounds : 0;
 			bstrm.put(rounds);
 		}
@@ -3438,8 +3760,10 @@ Codec::writeAnnotatorData(mstl::string const& rootname, util::Progress& progress
 
 			// Annotator name (45 bytes, space-padded)
 			mstl::string name = annotator->name();
-			unsigned nameLen = mstl::min(name.size(), size_t(45));
-			bstrm.put(reinterpret_cast<Byte const*>(name.data()), nameLen);
+			mstl::string encName;
+			m_codec->fromUtf8(name, encName);
+			unsigned nameLen = mstl::min(encName.size(), size_t(45));
+			bstrm.put(reinterpret_cast<Byte const*>(encName.data()), nameLen);
 			for (unsigned j = nameLen; j < 45; ++j)
 				bstrm.put(Byte(' '));
 		}
@@ -3463,7 +3787,7 @@ Codec::writeSourceData(mstl::string const& rootname, util::Progress& progress)
 	if (!strm)
 		IO_RAISE(Namebase, Open_Failed, "cannot create source file '%s'", filename.c_str());
 
-	uint32_t nrecs = m_sourceBase.size();
+	uint32_t nrecs = m_sourceMap2.size();
 
 	// Write header (28 bytes)
 	uint32_t hdr[7] = {0};
@@ -3482,17 +3806,18 @@ Codec::writeSourceData(mstl::string const& rootname, util::Progress& progress)
 		// Offset to record data
 		bstrm << uint32_t(0);
 
-		if (i < m_sourceMap2.size())
+		Source const* src = getSource(i);
+		if (src)
 		{
 			// Skip 5 bytes
 			bstrm.advance(5);
 
 			// Source title (25 bytes, space-padded)
-			mstl::string title;
-			if (Source const* src = getSource(i))
-				title = src->name();
-			unsigned titleLen = mstl::min(title.size(), size_t(25));
-			bstrm.put(reinterpret_cast<Byte const*>(title.data()), titleLen);
+			mstl::string title = src->name();
+			mstl::string encTitle;
+			m_codec->fromUtf8(title, encTitle);
+			unsigned titleLen = mstl::min(encTitle.size(), size_t(25));
+			bstrm.put(reinterpret_cast<Byte const*>(encTitle.data()), titleLen);
 			for (unsigned j = titleLen; j < 25; ++j)
 				bstrm.put(Byte(' '));
 
@@ -3500,11 +3825,15 @@ Codec::writeSourceData(mstl::string const& rootname, util::Progress& progress)
 			for (unsigned j = 0; j < 20; ++j)
 				bstrm.put(Byte(' '));
 
-			// Date (3 bytes)
-			bstrm << util::ByteStream::uint24_t(0);
+			// Date (3 bytes, little-endian in .cbs)
+			Date const& date = src->date;
+			unsigned dateValue = (date.year() << 9) | (date.month() << 5) | date.day();
+			bstrm.put(Byte(dateValue));
+			bstrm.put(Byte(dateValue >> 8));
+			bstrm.put(Byte(dateValue >> 16));
 
-			// Version (1 byte)
-			bstrm.put(Byte(0));
+			// Skip 4 bytes (readSourceData seeks +4 after reading 3-byte date before reading quality byte)
+			bstrm.advance(4);
 
 			// Quality flag (1 byte)
 			bstrm.put(m_highQuality ? Byte(1) : Byte(0));
@@ -3563,8 +3892,10 @@ Codec::writeTeamData(mstl::string const& rootname, util::Progress& progress)
 
 			// Team title (45 bytes, space-padded)
 			mstl::string title = m_teamBase[i]->title;
-			unsigned titleLen = mstl::min(title.size(), size_t(45));
-			bstrm.put(reinterpret_cast<Byte const*>(title.data()), titleLen);
+			mstl::string encTitle;
+			m_codec->fromUtf8(title, encTitle);
+			unsigned titleLen = mstl::min(encTitle.size(), size_t(45));
+			bstrm.put(reinterpret_cast<Byte const*>(encTitle.data()), titleLen);
 			for (unsigned j = titleLen; j < 45; ++j)
 				bstrm.put(Byte(' '));
 
@@ -3612,21 +3943,23 @@ Codec::writeTeamData(mstl::string const& rootname, util::Progress& progress)
 	if (!strmJ)
 		IO_RAISE(Namebase, Open_Failed, "cannot create team index file '%s'", filenameJ.c_str());
 
-	// The reader treats the 12-byte header as 4 bytes of remainder plus
-	// fixed-size 8-byte records, so the stored count includes that slot.
+	static unsigned const RecordSizeJ = 120;
 	unsigned numGames = gameInfoList().size();
-	char hdrJ[12] = {0};
-	hdrJ[4] = 8;  // record size
-	*reinterpret_cast<uint32_t*>(hdrJ + 8) = mstl::bo::swapLE(uint32_t(numGames + 1));
+	char hdrJ[32] = {0};
+	hdrJ[0] = 0x0b;
+	hdrJ[4] = RecordSizeJ;
+	*reinterpret_cast<uint32_t*>(hdrJ + 8) = mstl::bo::swapLE(uint32_t(numGames));
 	strmJ.write(hdrJ, sizeof(hdrJ));
 
-	// Write team references for each game
+	// Write team references for each game (120-byte records; first 8 bytes are BE uint32 whiteRef, blackRef)
+	unsigned char entry[RecordSizeJ];
 	for (unsigned i = 0; i < numGames; ++i)
 	{
-		// Each entry is 8 bytes: team ID + unknown
-		unsigned char entry[8] = {0};
-		if (i < m_teamBase.size())
-			entry[0] = static_cast<Byte>(i);
+		::memset(entry, 0, sizeof(entry));
+		uint32_t wRef = (i < m_teamRefMap.size()) ? m_teamRefMap[i].first : 0xffffffffu;
+		uint32_t bRef = (i < m_teamRefMap.size()) ? m_teamRefMap[i].second : 0xffffffffu;
+		ByteStream::set(entry + 0, wRef);
+		ByteStream::set(entry + 4, bRef);
 		strmJ.write(reinterpret_cast<char const*>(entry), sizeof(entry));
 	}
 
@@ -3682,10 +4015,80 @@ void
 Codec::writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& strm)
 {
 	// CBH index entries are 46 bytes
-	// Based on decodeIndex() - reverse the reading process
+	// Based on decodeIndex() / decodeGuidingTextIndex() - reverse the reading process
 
-	// Byte 0: Flags
-	Byte flags = 0;
+	uint32_t sourceId = 0;
+	if (index < m_sourceMap.size())
+	{
+		if (Source const* src = m_sourceMap[index])
+		{
+			BaseMap::container_type const& list = m_sourceMap2.container();
+			for (unsigned s = 0; s < list.size(); ++s)
+			{
+				if (list[s].second == src)
+				{
+					sourceId = list[s].first;
+					break;
+				}
+			}
+		}
+		else if (!m_sourceMap2.empty())
+		{
+			sourceId = m_sourceMap2.size();
+		}
+	}
+
+	if (info.isGuidingText())
+	{
+		// Byte 0: Flags (bit 0 = game/text valid, bit 1 = guiding text -> 0x03)
+		Byte flags = 0x03;
+		if (info.m_gameFlags & GameInfo::Flag_Deleted)
+			flags |= (1 << 7);
+		strm.put(flags);
+
+		// Bytes 1-4: Game offset in .cbg file
+		strm << uint32_t(info.m_gameOffset);
+
+		// Bytes 5-7: 3 zero bytes (skipped by decodeGuidingTextIndex)
+		strm.put(Byte(0));
+		strm.put(Byte(0));
+		strm.put(Byte(0));
+
+		// Bytes 8-10: Tournament/Event ID (24-bit)
+		uint32_t eventId = findEventRecordIndex(namebase(Namebase::Event), info.m_event);
+		strm << util::ByteStream::uint24_t(eventId);
+
+		// Bytes 11-13: Source ID (24-bit)
+		strm << util::ByteStream::uint24_t(sourceId);
+
+		// Bytes 14-16: Annotator ID (24-bit)
+		uint32_t annotatorId =
+			findAnnotatorRecordIndex(namebase(Namebase::Annotator), info.m_annotator);
+		strm << util::ByteStream::uint24_t(annotatorId);
+
+		// Byte 17: Round
+		strm.put(Byte(info.m_round));
+
+		// Byte 18: Stream media flags (bit 2 = video)
+		Byte mediaFlags = 0;
+		if (info.m_hasVideo)
+			mediaFlags |= (1 << 2);
+		strm.put(mediaFlags);
+
+		// Byte 19: Link flags (bit 0 = audio, bit 1 = picture, bit 2 = video)
+		Byte linkFlags = 0;
+		if (info.m_hasAudio)	linkFlags |= (1 << 0);
+		if (info.m_hasPicture)	linkFlags |= (1 << 1);
+		if (info.m_hasVideo)	linkFlags |= (1 << 2);
+		strm.put(linkFlags);
+
+		// Remaining 26 bytes (offsets 20..45) are already zero-initialized
+		strm.advance(26);
+		return;
+	}
+
+	// Byte 0: Flags (bit 0 = 1 for game records)
+	Byte flags = 0x01;
 	if (info.m_gameFlags & GameInfo::Flag_Deleted)
 		flags |= (1 << 7);
 	strm.put(flags);
@@ -3719,15 +4122,10 @@ Codec::writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& s
 		findAnnotatorRecordIndex(namebase(Namebase::Annotator), info.m_annotator);
 	strm << util::ByteStream::uint24_t(annotatorId);
 
-	// Source ID (24-bit) - only present when source data exists
-	bool hasSource = !m_sourceMap2.empty();
-	if (hasSource)
-	{
-		uint32_t sourceId = 0;
-		strm << util::ByteStream::uint24_t(sourceId);
-	}
+	// Bytes 21-23: Source ID (24-bit) - always present at offset 21 in CBH index
+	strm << util::ByteStream::uint24_t(sourceId);
 
-	// Date (year << 9 | month << 5 | day)
+	// Bytes 24-26: Date (year << 9 | month << 5 | day)
 	unsigned dateValue = (Date::decodeYearFrom10Bits(info.m_dateYear) << 9)
 						| (info.m_dateMonth << 5)
 						| info.m_dateDay;
@@ -3811,26 +4209,23 @@ Codec::writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& s
 		flags2 |= (1 << 3);
 	strm.put(flags2);
 
-	// Skip 1 byte (unknown)
+	// Byte 43: Skip 1 byte (unknown)
 	strm.put(Byte(0));
 
-	// More flags
+	// Byte 44: More flags
 	Byte flags3 = 0;
 	if (info.m_variationCount >= 15)
 		flags3 |= (2 << 0);
 	if (info.m_commentCount >= 15)
 		flags3 |= (1 << 2);
+	if (info.m_annotationCount >= 15)
+		flags3 |= (1 << 3);
 	strm.put(flags3);
 
-	// Ply count / 2 (rounded up)
+	// Byte 45: Ply count / 2 (rounded up)
 	unsigned plyCount2 = (info.m_plyCount + 1) / 2;
 	if (plyCount2 > 255) plyCount2 = 255;
 	strm.put(Byte(plyCount2));
-
-	// When source field is absent, record data is 43 bytes;
-	// pad to 46-byte record size
-	if (!hasSource)
-		strm.advance(3);
 }
 
 

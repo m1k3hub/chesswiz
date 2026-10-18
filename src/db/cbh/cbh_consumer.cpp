@@ -61,6 +61,7 @@ Consumer::Consumer(	format::Type srcFormat,
 	,m_current(0)
 	,m_whiteToMove(true)
 	,m_isStandardPosition(true)
+	,m_isGuidingText(false)
 {
 }
 
@@ -103,9 +104,12 @@ Consumer::beginGame(TagSet const& tags)
 	m_annotationStream.reset(sizeof(m_annotationBuffer));
 	m_annotationStream.resetp();
 
+	m_isGuidingText = tags.contains(tag::Remark) && tags.value(tag::Remark) == "GUIDING_TEXT";
+
 	bool isStandard = startBoard().isStandardPosition(variant::Normal);
 	m_isStandardPosition = isStandard;
-	Encoder::startEncoding(board(), isStandard);
+	if (!m_isGuidingText)
+		Encoder::startEncoding(board(), isStandard);
 
 	m_count = 0;
 	deleteTree();
@@ -120,6 +124,81 @@ Consumer::beginGame(TagSet const& tags)
 save::State
 Consumer::endGame(TagSet const& tags)
 {
+	if (m_isGuidingText)
+	{
+		m_gameStream.reset(sizeof(m_gameBuffer));
+		m_gameStream.resetp();
+		m_annotationStream.reset(sizeof(m_annotationBuffer));
+		m_annotationStream.resetp();
+
+		mstl::string title = tags.value(tag::Event);
+		mstl::string body;
+		if (m_root)
+		{
+			body = m_root->comment(move::Post).content();
+			deleteTree();
+		}
+
+		if (m_codec.m_codec)
+		{
+			m_codec.m_codec->fromUtf8(title);
+			m_codec.m_codec->fromUtf8(body);
+		}
+
+		// Write guiding-text .cbg record (type 1) matching decodeGuidingTextBody():
+		// 8-byte header:
+		//   uint32 BE: 0x80000000 | totalSize
+		//   uint8:     1 (type 1)
+		//   uint8:     0
+		//   uint16 LE: numTitles (1 if title non-empty, else 0)
+		// Title (if numTitles == 1):
+		//   uint16 LE: 0 (English)
+		//   uint16 LE: titleLen
+		//   bytes:     title
+		// Body (type 1):
+		//   uint8:     0 (language)
+		//   uint32 LE: 0 (id)
+		//   uint16 LE: bodyLen
+		//   bytes:     body
+		//   uint8:     0 (trailing padding so remaining() > 7 before body even when bodyLen == 0)
+		unsigned titleLen = mstl::min(unsigned(title.size()), 65535u);
+		unsigned maxBody = sizeof(m_gameBuffer) - 32 - titleLen;
+		unsigned bodyLen = mstl::min(unsigned(body.size()), mstl::min(65535u, maxBody));
+		unsigned numTitles = titleLen > 0 ? 1u : 0u;
+		unsigned totalSize = 8 + (numTitles ? (4 + titleLen) : 0) + 7 + bodyLen + 1;
+
+		m_gameStream << uint32_t(0x80000000u | totalSize);
+		m_gameStream.put(Byte(1));
+		m_gameStream.put(Byte(0));
+		m_gameStream.put(Byte(numTitles & 0xff));
+		m_gameStream.put(Byte((numTitles >> 8) & 0xff));
+
+		if (numTitles)
+		{
+			m_gameStream.put(Byte(0));
+			m_gameStream.put(Byte(0));
+			m_gameStream.put(Byte(titleLen & 0xff));
+			m_gameStream.put(Byte((titleLen >> 8) & 0xff));
+			m_gameStream.put(reinterpret_cast<Byte const*>(title.data()), titleLen);
+		}
+
+		m_gameStream.put(Byte(0));
+		m_gameStream.put(Byte(0));
+		m_gameStream.put(Byte(0));
+		m_gameStream.put(Byte(0));
+		m_gameStream.put(Byte(0));
+		m_gameStream.put(Byte(bodyLen & 0xff));
+		m_gameStream.put(Byte((bodyLen >> 8) & 0xff));
+		if (bodyLen > 0)
+			m_gameStream.put(reinterpret_cast<Byte const*>(body.data()), bodyLen);
+		m_gameStream.put(Byte(0));
+
+		m_gameStream.provide();
+		m_annotationStream.provide();
+
+		return m_codec.addGame(m_gameStream, m_annotationStream, tags, *this);
+	}
+
 	m_gameStream.provide();
 	m_annotationStream.provide();
 
@@ -155,9 +234,9 @@ Consumer::endMoveSection(result::ID)
 	// line, main line is last variation" — see GameDecoder::decodeMoves).
 	// The consumer callbacks arrive in source order (variations after the
 	// mainline move), so the game is buffered as a tree and emitted here
-	// in ChessBase order. CBH has no explicit end-of-game marker; the game
-	// size in the header determines where to stop.
-	if (m_root)
+	// in ChessBase order. Every CBH game move stream ends with a final
+	// Token_Pop (which also guarantees size > 4 for zero-move games).
+	if (m_root && !m_isGuidingText)
 	{
 		// Game-level records use the 0xffffff sentinel (decoder maps it to -1).
 		m_annotationEncoder.encodeComment(0xffffff, m_root->comment(move::Post), move::Ante);
@@ -165,6 +244,7 @@ Consumer::endMoveSection(result::ID)
 		m_annotationEncoder.encodeMarks(0xffffff, m_root->marks());
 
 		emitLine(m_root->next());
+		Encoder::encodePop(m_count);
 		deleteTree();
 	}
 }
