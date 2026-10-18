@@ -261,20 +261,98 @@ tcltest::test key-editor-override-chessbase-tag {a ChessBase-only action overrid
 	::application::ApplyShortcutScheme
 } -result {1 1 {} 1}
 
-tcltest::test key-editor-chessbase-tag-inactive {a ChessBase-only action override applies only while that scheme is active} -setup {
+tcltest::test key-editor-chessbase-override-chesswiz {a ChessBase-only action override is bound and fires in the Chesswiz scheme} -setup {
+	update
+	catch { destroy .tipoftheday }
+	if {[::application::pgn::empty?]} { ::menu::gameNew .application }
+	set tab [.application.nb select]
+	::application::switchTab board
+	::keyEditorTest::scheme chesswiz
+	set w $::application::board::Vars(widget:frame)
+	set rotated [::application::board::rotated?]
+} -body {
+	::application::keyEditor::SetKey board-flip F5
+	set bound [string match *Rotate* [::keyEditorTest::effective $w <F5>]]
+	focus -force $w
+	update
+	event generate $w <KeyPress> -keysym F5
+	update
+	list $bound \
+		[expr {[::application::board::rotated?] != $rotated}] \
+		[bind ChessBaseBoard <Control-f>]
+} -cleanup {
+	if {[::application::board::rotated?] != $rotated} {
+		::application::board::Rotate $w
+	}
+	.application.nb select $tab
+	::application::ApplyShortcutScheme
+	::keyEditorTest::restore
+} -result {1 1 {}}
+
+tcltest::test key-editor-chessbase-override-switch {a ChessBase-only override survives a scheme switch} -setup {
+	::keyEditorTest::scheme chesswiz
+	set w $::application::board::Vars(widget:frame)
+} -body {
+	::application::keyEditor::SetKey board-flip F5
+	set inChesswiz [string match *Rotate* [::keyEditorTest::effective $w <F5>]]
+	::keyEditorTest::scheme chessbase
+	set inChessbase [string match *Rotate* [::keyEditorTest::effective $w <F5>]]
+	set default [bind ChessBaseBoard <Control-f>]
+	::keyEditorTest::scheme chesswiz
+	list $inChesswiz $inChessbase $default \
+		[string match *Rotate* [::keyEditorTest::effective $w <F5>]] \
+		$::application::keyEditor::Options(shortcut:keys,board-flip)
+} -cleanup {
+	::application::ApplyShortcutScheme
+	::keyEditorTest::restore
+} -result {1 1 {} 1 F5}
+
+tcltest::test key-editor-chessbase-override-reset {reset removes a ChessBase-only override and restores the scheme default} -setup {
+	::keyEditorTest::scheme chesswiz
+	set w $::application::board::Vars(widget:frame)
+} -body {
+	::application::keyEditor::SetKey board-flip F5
+	set overridden [string match *Rotate* [::keyEditorTest::effective $w <F5>]]
+	::application::keyEditor::ResetAction board-flip
+	set removed [expr {![string match *Rotate* [::keyEditorTest::effective $w <F5>]]}]
+	set stored [info exists ::application::keyEditor::Options(shortcut:keys,board-flip)]
+	::keyEditorTest::scheme chessbase
+	list $overridden $removed $stored \
+		[string match *Rotate* [::keyEditorTest::effective $w <F5>]] \
+		[string match *ShortcutBoardCommand* [bind ChessBaseBoard <Control-f>]]
+} -cleanup {
+	::application::ApplyShortcutScheme
+	::keyEditorTest::restore
+} -result {1 1 0 0 1}
+
+tcltest::test key-editor-chessbase-override-conflict {a taken key is reported for a ChessBase-only action} -setup {
 	::keyEditorTest::scheme chesswiz
 } -body {
-	::application::keyEditor::SetKey annot-good-move Control-Key-8
-	set inChesswiz [bind ChessBaseBoard <Control-Key-8>]
-	::keyEditorTest::scheme chessbase
-	set inChessbase [string match *addNag* [bind ChessBaseBoard <Control-Key-8>]]
-	::keyEditorTest::scheme chesswiz
-	list $inChesswiz $inChessbase \
-		[bind ChessBaseBoard <Control-Key-8>] \
-		$::application::keyEditor::Options(shortcut:keys,annot-good-move)
+	catch {::application::keyEditor::SetKey board-flip Control-s} error
+	list $error \
+		[info exists ::application::keyEditor::Options(shortcut:keys,board-flip)]
 } -cleanup {
 	::keyEditorTest::restore
-} -result {{} 1 {} Control-Key-8}
+} -result {{Ctrl+S is already used by Save as new game} 0}
+
+tcltest::test key-editor-capture-click-focus {clicking the read-only capture field focuses it} -setup {
+	::application::ShortcutPreferences .application
+	set dlg .application.shortcutPreferences
+	set tree $dlg.content.keys.list.tree
+	set entry $dlg.content.keys.capture.entry
+	update
+	focus -force $tree
+	update
+} -body {
+	event generate $entry <Button-1> -x 5 -y 5
+	update
+	list \
+		[expr {[bind $entry <Button-1>] ne ""}] \
+		[expr {[focus] eq $entry}] \
+		[$entry cget -state]
+} -cleanup {
+	catch {destroy .application.shortcutPreferences}
+} -result {1 1 readonly}
 
 tcltest::test key-editor-set-same {the scheme key itself drops an existing override} -setup {
 	::keyEditorTest::scheme chesswiz
