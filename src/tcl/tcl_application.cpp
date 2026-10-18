@@ -69,6 +69,7 @@ static char const* CmdGet					= "::scidb::app::get";
 static char const* CmdInitialized		= "::scidb::app::initialized?";
 static char const* CmdLoad					= "::scidb::app::load";
 static char const* CmdFilterFide			= "::scidb::app::filterFideList";
+static char const* CmdFilterRating		= "::scidb::app::filterRatingList";
 static char const* CmdLookup				= "::scidb::app::lookup";
 static char const* CmdMoveList			= "::scidb::app::moveList";
 static char const* CmdVariant				= "::scidb::app::variant";
@@ -153,6 +154,67 @@ cmdFilterFideList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	if (!ok)
 		return error(CmdFilterFide, 0, nullptr, "'%s' is not FIDE's combined rating list", in);
+
+	Tcl_Obj* objs[2] = { Tcl_NewIntObj(read), Tcl_NewIntObj(kept) };
+	setResult(Tcl_NewListObj(2, objs));
+	return TCL_OK;
+}
+
+
+
+// ::scidb::app::filterRatingList <dwz|ecf|iccf> <in> <out> ?<min>?
+// <in>: the federation's download -- the DSB's zip (or the spieler.csv in it),
+// the ECF's and ICCF's CSV. Writes the players the dictionary keeps, rated at
+// least <min> (default: the list's minimum) or with a FIDE ID or titled, to
+// <out> as an installed list of Chesswiz' own format, which
+// ::scidb::app::load installed then reads at startup.
+// Returns {read kept}; an error when <in> is not that federation's list.
+static int
+cmdFilterRatingList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc != 4 && objc != 5)
+		return error(	CmdFilterRating, 0, nullptr,
+						"wrong # args: should be \"%s <dwz|ecf|iccf> <in> <out> ?<min>?\"", CmdFilterRating);
+
+	char const*	kind	= stringFromObj(objc, objv, 1);
+	char const*	in		= stringFromObj(objc, objv, 2);
+	char const*	out		= stringFromObj(objc, objv, 3);
+	unsigned		min	= objc == 5 ? unsignedFromObj(objc, objv, 4) : db::Player::listMinimum(kind);
+
+	// The DSB publishes a zip of four CSV files, and the players are the ones
+	// of spieler.csv; a plain file is read whatever it is named.
+	util::ZStream::Strings oldSuffixes = util::ZStream::zipFileSuffixes();
+	util::ZStream::setZipFileSuffixes(
+		util::ZStream::Strings(1, ::strcmp(kind, "dwz") == 0 ? "spieler.csv" : "csv"));
+
+	unsigned read = 0, kept = 0;
+	bool ok = false;
+	try
+	{
+		util::ZStream stream(in, mstl::ios_base::in | mstl::ios_base::binary);
+		if (!stream)
+		{
+			util::ZStream::setZipFileSuffixes(oldSuffixes);
+			return error(CmdFilterRating, 0, nullptr, "cannot open file '%s'", in);
+		}
+		FILE* fp = ::fopen(out, "w");
+		if (!fp)
+		{
+			util::ZStream::setZipFileSuffixes(oldSuffixes);
+			return error(CmdFilterRating, 0, nullptr, "cannot write file '%s'", out);
+		}
+		ok = db::Player::convertRatingList(kind, stream, fp, in, min, read, kept);
+		::fclose(fp);
+	}
+	catch (...)
+	{
+		util::ZStream::setZipFileSuffixes(oldSuffixes);
+		return error(CmdFilterRating, 0, nullptr, "cannot read '%s'", in);
+	}
+	util::ZStream::setZipFileSuffixes(oldSuffixes);
+
+	if (!ok)
+		return error(CmdFilterRating, 0, nullptr, "'%s' is not the %s rating list", in, kind);
 
 	Tcl_Obj* objs[2] = { Tcl_NewIntObj(read), Tcl_NewIntObj(kept) };
 	setResult(Tcl_NewListObj(2, objs));
@@ -269,6 +331,13 @@ cmdLoad(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				{
 					util::ZStream::setZipFileSuffixes(util::ZStream::Strings(1, "txt"));
 					db::Player::parseIccfRating(stream);
+				}
+				else if (::strcmp(type, "installed") == 0)
+				{
+					// a national rating list of Chesswiz' own format (see
+					// filterRatingList): the file says which federation's it is
+					util::ZStream::setZipFileSuffixes(util::ZStream::Strings(1, "txt"));
+					db::Player::parseInstalledRatingList(stream);
 				}
 				else if (::strcmp(type, "wiki") == 0)
 				{
@@ -775,6 +844,7 @@ tcl::app::init(Tcl_Interp* ti)
 	createCommand(ti, CmdInitialized,		cmdInitialized);
 	createCommand(ti, CmdLoad,					cmdLoad);
 	createCommand(ti, CmdFilterFide,			cmdFilterFideList);
+	createCommand(ti, CmdFilterRating,		cmdFilterRatingList);
 	createCommand(ti, CmdLookup,				cmdLookup);
 	createCommand(ti, CmdMoveList,			cmdMoveList);
 	createCommand(ti, CmdVariant,				cmdVariant);

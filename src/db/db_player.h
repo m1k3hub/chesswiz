@@ -76,7 +76,7 @@ public:
 			{
 				uint32_t zpsPrefix:5;	// 1. digit (0-9, A-L)
 				uint32_t zpsSuffix:14;	// 4 digits
-				uint32_t dsbMglNr	:11;	// 0..2000
+				uint32_t dsbMglNr	:13;	// 0..8191 (the DSB counts past 2000 since)
 			};
 
 			uint32_t value;
@@ -281,6 +281,13 @@ public:
 	static Player* findIccfPlayer(uint32_t iccfID);
 	static Player* findDsbPlayer(DsbID dsbID);
 	static Player* findEcfPlayer(EcfID ecfID);
+	/// The identity of a player in the rating lists: "fide:1503014",
+	/// "iccf:220015", "dsb:10614-1081" or "ecf:100011B" -- FIDE's ID when the
+	/// dictionary has one, else a national list's; "" when it has none. It names
+	/// the entry a link or a proposed name comes from.
+	static mstl::string identity(Player const* player);
+	/// The player an identity (see identity()) names, 0 when there is none.
+	static Player* findPlayerByIdentity(mstl::string const& identity);
 	static mstl::string& normalize(mstl::string& name);
 	static mstl::string& normalize(mstl::string const& name, mstl::string& result);
 	static void standardizeNames(mstl::string& name);
@@ -298,10 +305,44 @@ public:
 	static bool filterFideFoaRating(mstl::istream& stream, FILE* out, unsigned minElo,
 											  unsigned& read, unsigned& kept);
 	static unsigned minElo();
+	/// The installed national rating lists ("dwz", "ecf", "iccf") in Chesswiz' own
+	/// text format: national ID, FIDE ID, sex, birth year, rating, federation,
+	/// titles and name, '|' separated, one player per line. The entries join the
+	/// same dictionary as FIDE's list, and a row with a FIDE ID is attached to
+	/// that entry instead of becoming a player of its own.
+	static void parseInstalledRatingList(mstl::istream& stream);
+	/// Copy the official download of a national list from <stream> to <out> as an
+	/// installed list, keeping the players rated at least <minRating> or listed
+	/// with a FIDE ID or a title. <source> names where the download came from.
+	/// Returns false when <stream> is not that list; <read>/<kept> count the rows.
+	/// Columns are found by name (ICCF's list has none, and is read by the shape
+	/// of its records).
+	static bool convertRatingList(	mstl::string const& kind,
+										mstl::istream& stream,
+										FILE* out,
+										mstl::string const& source,
+										unsigned minRating,
+										unsigned& read,
+										unsigned& kept);
+	/// The rating an installed list of <kind> keeps by default ("dwz" 1800,
+	/// "ecf" 1600 - the Elo-like scale ECF publishes since 2020 -, "iccf" 1800).
+	static unsigned listMinimum(mstl::string const& kind);
 	static void parseEcfRating(mstl::istream& stream);
 	static void parseDwzRating(mstl::istream& stream);
 	static void parseIpsRatingList(mstl::istream& stream);
 	static void parseIccfRating(mstl::istream& stream);
+	/// Copy the current national rating list from <stream> to <out>, keeping
+	/// the header (if any) and the players the parser keeps (a strong national
+	/// rating, or a FIDE title). Return false when <stream> is not that list;
+	/// <read>/<kept> count players. The current downloads (player data plan,
+	/// step 4; docs/PLAYER_DATA_SOURCES.md): the German federation's DEWIS
+	/// export (windows-1252 quoted CSV with header), the ECF rating system's
+	/// full-list CSV (UTF-8, header row), and ICCF's ratings page CSV
+	/// (UTF-8, semicolon-separated, no header). The shipped lists of 2012
+	/// (fixed columns) are rejected: they are not re-downloadable.
+	static bool filterDwzDownload(mstl::istream& stream, FILE* out, unsigned& read, unsigned& kept);
+	static bool filterEcfDownload(mstl::istream& stream, FILE* out, unsigned& read, unsigned& kept);
+	static bool filterIccfDownload(mstl::istream& stream, FILE* out, unsigned& read, unsigned& kept);
 	static void parseWikipediaLinks(mstl::istream& stream);
 	static void parseChessgamesDotComLinks(mstl::istream& stream);
 	static void parseComputerList(mstl::istream& stream);

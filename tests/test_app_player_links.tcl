@@ -132,7 +132,7 @@ tcltest::test plink-spelling-check {a name is linked when exactly one entry reac
 } -cleanup {
 	rename ::ai::systemone::evaluateAsync {}
 	rename ::scidb::test::plink::evaluateAsync ::ai::systemone::evaluateAsync
-} -result {{{{Translit, Mihail} 999000606 {Translit, Mikhail}}} - 1 999000606 0}
+} -result {{{{Translit, Mihail} fide:999000606 {Translit, Mikhail}}} - 1 999000606 0}
 
 catch { ::scidb::db::close $::scidb::test::plink::Pgn }
 catch { file delete -force $::scidb::test::plink::Dir }

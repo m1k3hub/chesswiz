@@ -77,6 +77,7 @@
 #include "u_crc.h"
 #include "u_byte_stream.h"
 
+#include "sys_utf8.h"
 #include "sys_utf8_codec.h"
 #include "sys_file.h"
 
@@ -154,6 +155,7 @@ static char const* CmdPlayerLinks		= "::scidb::db::playerLinks";
 static char const* CmdLinkPlayers		= "::scidb::db::linkPlayers";
 static char const* CmdSpellingCandidates	= "::scidb::db::spellingCandidates";
 static char const* CmdLinkPlayer		= "::scidb::db::linkPlayer";
+static char const* CmdRenamePlayers	= "::scidb::db::renamePlayers";
 static char const* CmdGuidingText	= "::scidb::db::guidingText";
 static char const* CmdGameAnchor	= "::scidb::db::gameAnchor";
 static char const* CmdHtmlSanitize	= "::scidb::html::sanitize";
@@ -6318,8 +6320,10 @@ cmdSpellingCandidates(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[
 	// Usage: ::scidb::db::spellingCandidates <database> <variant>
 	// For each player left unlinked, the rating-list entries that may be
 	// another spelling of the name (Player::spellingCandidates), as
-	// {index name elo {{fideID name federation rating} ...}}; players
-	// without candidates are left out. Nothing is linked.
+	// {index name elo {{identity name federation rating} ...}}; players
+	// without candidates are left out. Nothing is linked. <identity> names
+	// the list the entry comes from ("fide:1503014", "dsb:10614-1081",
+	// "ecf:100011B", "iccf:220015"), and is what ::scidb::db::linkPlayer takes.
 	if (objc != 3)
 	{
 		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant>");
@@ -6343,9 +6347,10 @@ cmdSpellingCandidates(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[
 		for (unsigned k = 0; k < candidates.size(); ++k)
 		{
 			Player const* c = candidates[k];
+			mstl::string id(Player::identity(c));
 			Tcl_Obj* row[4] =
 			{
-				Tcl_NewWideIntObj(c->fideID()),
+				Tcl_NewStringObj(id.c_str(), int(id.size())),
 				Tcl_NewStringObj(c->name(), c->name().size()),
 				Tcl_NewStringObj(country::toString(c->federation()), -1),
 				Tcl_NewIntObj(mstl::abs(int(c->highestElo()))),
@@ -6369,30 +6374,187 @@ cmdSpellingCandidates(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[
 static int
 cmdLinkPlayer(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	// Usage: ::scidb::db::linkPlayer <database> <variant> <index> <fideID>
-	// Link the player at <index> to the rating-list entry of <fideID> (a
-	// link the user confirmed); nothing is written into the database.
+	// Usage: ::scidb::db::linkPlayer <database> <variant> <index> <identity>
+	// Link the player at <index> to the rating-list entry <identity> names
+	// ("fide:1503014", "dsb:10614-1081", ... -- a plain number is a FIDE ID),
+	// a link the user confirmed; nothing is written into the database.
 	// Returns 1 when linked, 0 when the player was linked already.
 	if (objc != 5)
 	{
-		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <index> <fideID>");
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <index> <identity>");
 		return TCL_ERROR;
 	}
 	char const*		database	= stringFromObj(objc, objv, 1);
 	variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 2);
 	unsigned			index		= unsignedFromObj(objc, objv, 3);
-	Tcl_WideInt		fideID;
-	if (Tcl_GetWideIntFromObj(ti, objv[4], &fideID) != TCL_OK)
-		return TCL_ERROR;
+	char const*		identity	= stringFromObj(objc, objv, 4);
 	Database&		db			= const_cast<Cursor&>(Scidb->cursor(database, variant)).getDatabase();
 
 	if (index >= db.countPlayers())
 		return error(CmdLinkPlayer, nullptr, nullptr, "invalid player index %u", index);
-	Player* entry = Player::findFidePlayer(uint32_t(fideID));
+
+	// a bare number is the FIDE ID of the earlier form of this command
+	mstl::string id(identity);
+	if (id.find(':') == mstl::string::npos)
+	{
+		id = "fide:";
+		id += identity;
+	}
+
+	Player* entry = Player::findPlayerByIdentity(id);
 	if (!entry)
-		return error(CmdLinkPlayer, nullptr, nullptr, "no rating-list entry with FIDE ID %lld", (long long)fideID);
+		return error(CmdLinkPlayer, nullptr, nullptr, "no rating-list entry '%s'", identity);
 
 	setResult(db.namebases()(Namebase::Player).linkPlayer(index, entry));
+	return TCL_OK;
+}
+
+
+namespace {
+
+// One row of the reply of ::scidb::db::renamePlayers that was not renamed.
+void
+appendSkipped(Tcl_Interp* ti, Tcl_Obj* skipped, Tcl_Obj* index, Tcl_Obj* name, char const* reason)
+{
+	Tcl_Obj* row[3] = { index, name, Tcl_NewStringObj(reason, -1) };
+	Tcl_ListObjAppendElement(ti, skipped, Tcl_NewListObj(3, row));
+}
+
+} // namespace
+
+
+static int
+cmdRenamePlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	// Usage: ::scidb::db::renamePlayers <database> <variant> {<index> <name> ...}
+	// Rename players of a database, all of them in one step: renaming sorts the
+	// namebase, so an index is only valid until then. The games keep pointing at
+	// their entry, so every game of a renamed player shows the new name; nothing
+	// is written until the database is saved, and closing it without saving
+	// leaves the old names.
+	// Returns {renamed N skipped {{index name reason} ...}}. A rename is skipped
+	// when the database has a player of that name already (two entries of one
+	// name are not merged), when the index is not a player of this database, or
+	// when the name is not a name the namebase can hold.
+	if (objc != 4)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant> <renames>");
+		return TCL_ERROR;
+	}
+	char const*		database	= stringFromObj(objc, objv, 1);
+	variant::Type	variant	= tcl::game::variantFromObj(objc, objv, 2);
+
+	int			count	= 0;
+	Tcl_Obj**	pairs	= nullptr;
+
+	if (Tcl_ListObjGetElements(ti, objv[3], &count, &pairs) != TCL_OK)
+		return TCL_ERROR;
+
+	if (count%2)
+		return error(	CmdRenamePlayers, nullptr, nullptr,
+						"<renames> needs an <index> and a <name> for each player");
+
+	Database&	db		= const_cast<Cursor&>(Scidb->cursor(database, variant)).getDatabase();
+	Namebase&	base	= db.namebases()(Namebase::Player);
+
+	if (base.isReadonly())
+		return error(CmdRenamePlayers, nullptr, nullptr, "the database is read-only");
+
+	// The names are looked up before the first rename: a renamed entry is out
+	// of order until the namebase is sorted again, and the lookup is a binary
+	// search of that order.
+	struct Rename { unsigned index; mstl::string name; };
+
+	mstl::vector<Rename>	renames;
+	mstl::vector<mstl::string>	planned;
+	Tcl_Obj*					skipped = Tcl_NewListObj(0, nullptr);
+	unsigned					limit = db.countPlayers();
+
+	for (int i = 0; i < count; i += 2)
+	{
+		int index = 0;
+
+		if (	Tcl_GetIntFromObj(ti, pairs[i], &index) != TCL_OK
+			|| index < 0
+			|| unsigned(index) >= limit)
+		{
+			appendSkipped(ti, skipped, pairs[i], pairs[i + 1], "no player of that index");
+			continue;
+		}
+
+		int length = 0;
+		char const* text = Tcl_GetStringFromObj(pairs[i + 1], &length);
+		mstl::string name(text, unsigned(length));
+
+		// the codec writes a name's length in one byte, and the namebase wants
+		// a name in UTF-8 that is not a line of its own
+		if (	name.empty()
+			|| name.size() > 255
+			|| !sys::utf8::validate(name)
+			|| name.find_first_of("\r\n") != mstl::string::npos)
+		{
+			appendSkipped(ti, skipped, pairs[i], pairs[i + 1], "not a name a database can hold");
+			continue;
+		}
+
+		NamebasePlayer const* entry = base.player(unsigned(index));
+
+		if (entry == nullptr)
+		{
+			appendSkipped(ti, skipped, pairs[i], pairs[i + 1], "no player of that index");
+			continue;
+		}
+
+		if (entry->name() == name)
+			continue;	// the name it has
+
+		// a name the database has would become a second entry of it
+		int k = base.search(name);
+
+		if (k >= 0 && base.player(unsigned(k))->name() == name)
+		{
+			appendSkipped(ti, skipped, pairs[i], pairs[i + 1], "the database has a player of that name");
+			continue;
+		}
+
+		// ... and so would a name this call gives two players
+		bool twice = false;
+
+		for (unsigned n = 0; n < planned.size(); ++n)
+		{
+			if (planned[n] == name)
+			{
+				appendSkipped(	ti, skipped, pairs[i], pairs[i + 1],
+								"another player of this database is renamed to it");
+				twice = true;
+				break;
+			}
+		}
+
+		if (twice)
+			continue;
+
+		planned.push_back(name);
+		renames.push_back(Rename{ unsigned(index), name });
+	}
+
+	for (unsigned i = 0; i < renames.size(); ++i)
+		base.rename(base.player(renames[i].index), renames[i].name);
+
+	if (!renames.empty())
+	{
+		base.finishRenaming();
+		base.setModified(true);
+	}
+
+	Tcl_Obj* objs[4] =
+	{
+		Tcl_NewStringObj("renamed", -1),
+		Tcl_NewIntObj(int(renames.size())),
+		Tcl_NewStringObj("skipped", -1),
+		skipped,
+	};
+	setResult(Tcl_NewListObj(4, objs));
 	return TCL_OK;
 }
 
@@ -6401,10 +6563,13 @@ static int
 cmdPlayerLinks(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	// Usage: ::scidb::db::playerLinks <database> <variant>
-	// Each player of the database as {name games linked fideID elo federation entry}:
+	// Each player of the database as
+	// {name games linked fideID elo federation entry identity}:
 	// whether the name is linked to a rating-list entry, that entry's FIDE ID
 	// (0: none, e.g. a player of the past), the Elo and federation as the
-	// games give them, and the entry's name ("" when not linked).
+	// games give them, the entry's name ("" when not linked), and the identity
+	// of the list the entry comes from ("" when not linked, or when the entry
+	// has no ID: see Player::identity).
 	if (objc != 3)
 	{
 		Tcl_WrongNumArgs(ti, 1, objv, "<database> <variant>");
@@ -6419,7 +6584,8 @@ cmdPlayerLinks(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	{
 		NamebasePlayer const& p = db.player(i);
 		Player const* entry = p.player();
-		Tcl_Obj* row[7] =
+		mstl::string id(entry ? Player::identity(entry) : mstl::string());
+		Tcl_Obj* row[8] =
 		{
 			Tcl_NewStringObj(p.name(), p.name().size()),
 			Tcl_NewIntObj(p.frequency()),
@@ -6428,8 +6594,9 @@ cmdPlayerLinks(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			Tcl_NewIntObj(p.elo()),
 			Tcl_NewStringObj(country::toString(p.federation()), -1),
 			entry ? Tcl_NewStringObj(entry->name(), entry->name().size()) : Tcl_NewStringObj("", 0),
+			Tcl_NewStringObj(id.c_str(), int(id.size())),
 		};
-		Tcl_ListObjAppendElement(ti, list, Tcl_NewListObj(7, row));
+		Tcl_ListObjAppendElement(ti, list, Tcl_NewListObj(8, row));
 	}
 	setResult(list);
 	return TCL_OK;
@@ -7193,6 +7360,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdPlayerLinks,		cmdPlayerLinks);
 	createCommand(ti, CmdSpellingCandidates,	cmdSpellingCandidates);
 	createCommand(ti, CmdLinkPlayer,		cmdLinkPlayer);
+	createCommand(ti, CmdRenamePlayers,	cmdRenamePlayers);
 	createCommand(ti, CmdLinkPlayers,		cmdLinkPlayers);
 
 	{

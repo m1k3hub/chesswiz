@@ -294,6 +294,12 @@ if {![::process::testOption fast-load]} {
 		foreach name {ips-ratings.txt dwz-ratings.txt ecf-ratings.txt iccf-ratings.txt} {
 			lappend ::load::CacheSources [file join $::scidb::dir::data $name]
 		}
+		# A list the user fetched from its federation replaces the shipped one
+		# (player-data.tcl), so both paths are watched: installing a list, or
+		# removing one, invalidates a cache that was made without it.
+		foreach name {dwz-ratings.txt ecf-ratings.txt iccf-ratings.txt} {
+			lappend ::load::CacheSources [file join $::scidb::dir::user ratings $name]
+		}
 	}
 	foreach name {wikipedia-de.txt wikipedia-en.txt chessgames.com.zip cities.txt} {
 		lappend ::load::CacheSources [file join $::scidb::dir::data $name]
@@ -333,11 +339,20 @@ unset fideList
 if {![::process::testOption elo-only]} {
 
 # --- Load rating lists ------------------------------------------------
+# A national list the user fetched from its federation (player-data.tcl)
+# replaces the shipped one; the file says whose list it is, so all of them
+# are read the same way.
 foreach rating {IPS DWZ ECF ICCF} {
 	set type [string tolower $rating]
+	set file [file join $scidb::dir::data $type-ratings.txt]
+	set installed [file join $::scidb::dir::user ratings $type-ratings.txt]
+	if {$type ne "ips" && [file readable $installed]} {
+		set file $installed
+		set type installed
+	}
 	load::load	[format $load::mc::Loading [format $load::mc::RatingList $rating]] \
 					$type \
-					[file join $scidb::dir::data $type-ratings.txt] \
+					$file \
 					;
 }
 

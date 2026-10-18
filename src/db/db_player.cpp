@@ -40,6 +40,8 @@
 #include "sys_utf8.h"
 #include "sys_utf8_codec.h"
 
+#include "sys_time.h"
+
 #include "m_hash.h"
 #include "m_map.h"
 #include "m_vector.h"
@@ -1088,12 +1090,47 @@ Player::findPlayer(mstl::string const& name, country::Code federation, sex::ID s
 
 namespace {
 
-// The rating a candidate is compared with: highest Elo, else the latest; 0: none.
+// The rating a candidate is compared with: the highest Elo, else the latest. A
+// player only a national list has is compared with that list's rating, which is
+// on the Elo scale as well -- the DWZ and the ICCF's are, and the ECF's is since
+// 2020 (an older ECF grade is converted). 0: no rating to compare with.
 int
 candidateElo(Player const* p)
 {
 	int r = mstl::abs(p->highestElo());
-	return r ? r : mstl::max(0, int(p->latestElo()));
+
+	if (r == 0)
+		r = mstl::max(0, int(p->latestElo()));
+
+	if (r)
+		return r;
+
+	static rating::Type const National[] = { rating::DWZ, rating::ICCF, rating::ECF };
+
+	for (unsigned i = 0; i < U_NUMBER_OF(National); ++i)
+	{
+		r = mstl::abs(int(p->highestRating(National[i])));
+
+		if (r == 0)
+			r = mstl::abs(int(p->latestRating(National[i])));
+
+		if (r == 0)
+			continue;
+
+		// an ECF rating below 600 is a grade of the scale the ECF used until 2020
+		return National[i] == rating::ECF && r < 600 ? int(rating::convertEcfToElo(unsigned(r))) : r;
+	}
+
+	return 0;
+}
+
+
+// Whether the dictionary knows a player by an ID of its own: FIDE's, or a
+// national list's. An entry without one is a name, not a person.
+bool
+isIdentified(Player const* p)
+{
+	return p->fideID() || p->iccfID() || p->dsbID() || p->ecfID();
 }
 
 
@@ -1476,7 +1513,7 @@ Player::spellingCandidates(mstl::string const& name,
 			|| ::strncmp(n.c_str(), surname.c_str(), surname.size()) != 0
 			|| n[surname.size()] != ','
 			|| n == name
-			|| p->fideID() == 0
+			|| !isIdentified(p)
 			|| !initialsAgree(given, p)
 			|| (sex != sex::Unspecified && p->sex() != sex::Unspecified && p->sex() != sex))
 		{
@@ -3326,6 +3363,1158 @@ Player::parseIccfRating(mstl::istream& stream)
 	TRACE(::printf("Player map entries:  %u\n", ::fidePlayerDict.used()));
 	TRACE(::printf("Player list entries: %u\n", ::playerList.size()));
 	TRACE(::printf("-----------------------------------------------------\n"));
+}
+
+
+// ======================================================================
+// The national rating lists: DWZ (Deutscher Schachbund), ECF (English Chess
+// Federation) and ICCF (International Correspondence Chess Federation).
+//
+// The federations publish their lists in formats of their own, and change
+// them: the DSB's CSV grew five columns since 2012, the ECF's grades became
+// Elo-like ratings in 2020, ICCF's list has no header at all. Chesswiz
+// therefore does not read a download as it comes; it converts one -- when the
+// user asks for it -- into an installed list of its own format, which is what
+// the dictionary reads at startup:
+//
+//   #chesswiz-rating-list v1 kind=dwz date=2026-10-18 read=101248 kept=45552
+//   #source https://www.schachbund.de/download-dwz-daten.html
+//   10614-1081|1503014|M|1990|2841|NOR|GM|Carlsen, Magnus
+//
+//   <national id>|<FIDE id>|<sex>|<birth year>|<rating>|<federation>|<titles>|<name>
+//   "-" in a field the source list does not have.
+//
+// A row with a FIDE ID joins that entry of the dictionary; the other rows
+// become entries of their own. Nothing is written into a database, and no
+// list is shipped with Chesswiz: the DSB asks that its data not be published
+// without agreement (docs/PLAYER_DATA_SOURCES.md).
+// ======================================================================
+
+namespace {
+
+// The marker of an installed list, and the version of the format.
+char const* const ListMarker = "#chesswiz-rating-list";
+unsigned const ListVersion = 1;
+
+enum ListKind
+{
+	List_None,
+	List_Dwz,		// Deutscher Schachbund (DWZ)
+	List_Ecf,		// English Chess Federation
+	List_Iccf,		// International Correspondence Chess Federation
+};
+
+
+ListKind
+listKindOf(mstl::string const& kind)
+{
+	if (kind == "dwz")
+		return List_Dwz;
+
+	if (kind == "ecf")
+		return List_Ecf;
+
+	if (kind == "iccf")
+		return List_Iccf;
+
+	return List_None;
+}
+
+
+mstl::string const&
+listName(ListKind kind)
+{
+	static mstl::string const None("none"), Dwz("dwz"), Ecf("ecf"), Iccf("iccf");
+
+	return kind == List_Dwz ? Dwz : kind == List_Ecf ? Ecf : kind == List_Iccf ? Iccf : None;
+}
+
+
+// One record of an installed list; a field a source list may not have.
+struct ListRecord
+{
+	mstl::string	id;			// the federation's own player number
+	unsigned			fideID;
+	sex::ID			sex;
+	unsigned			birthYear;
+	unsigned			rating;		// on the Elo scale
+	country::Code	federation;
+	unsigned			titles;		// db::title mask
+	mstl::string	name;		// "Surname, Forename"
+
+	ListRecord()
+		:	fideID(0)
+		,	sex(sex::Unspecified)
+		,	birthYear(0)
+		,	rating(0)
+		,	federation(country::Unknown)
+		,	titles(0)
+	{
+	}
+};
+
+
+// A field an installed list does not have.
+char const* const ListNone = "-";
+
+
+bool
+isBlank(char c)
+{
+	return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+
+mstl::string
+trimmed(mstl::string const& s)
+{
+	mstl::string::size_type b = 0, e = s.size();
+
+	while (b < e && isBlank(s[b]))
+		++b;
+
+	while (e > b && isBlank(s[e - 1]))
+		--e;
+
+	return b == 0 && e == s.size() ? s : s.substr(b, e - b);
+}
+
+
+// <s> without its line ends: the lists come from servers of three kinds.
+mstl::string
+stripped(mstl::string const& s)
+{
+	mstl::string::size_type n = s.size();
+
+	while (n && (s[n - 1] == '\r' || s[n - 1] == '\n'))
+		--n;
+
+	return n == s.size() ? s : s.substr(0, n);
+}
+
+
+bool
+isNumber(mstl::string const& s)
+{
+	if (s.empty())
+		return false;
+
+	for (unsigned i = 0; i < s.size(); ++i)
+		if (!::isdigit(static_cast<unsigned char>(s[i])))
+			return false;
+
+	return true;
+}
+
+
+// The number a field holds, 0 when it holds none: the lists leave a cell empty
+// or fill it with "-", "0" or "0000".
+unsigned
+numberOf(mstl::string const& field)
+{
+	mstl::string s(trimmed(field));
+	unsigned n = 0;
+
+	if (s.empty() || s == ListNone)
+		return 0;
+
+	for (unsigned i = 0; i < s.size(); ++i)
+	{
+		if (!::isdigit(static_cast<unsigned char>(s[i])))
+			return 0;
+
+		n = n*10 + unsigned(s[i] - '0');
+	}
+
+	return n;
+}
+
+
+// "m", "w" and "f" are the spellings of the three lists; "-" and "n" are none.
+sex::ID
+sexOf(mstl::string const& field)
+{
+	mstl::string s(trimmed(field));
+
+	if (s.empty())
+		return sex::Unspecified;
+
+	switch (::toupper(static_cast<unsigned char>(s[0])))
+	{
+		case 'M':	return sex::Male;
+		case 'F':
+		case 'W':	return sex::Female;
+	}
+
+	return sex::Unspecified;
+}
+
+
+// The titles of a list: "GM", "IM/WGM" and ICCF's "SIM" or "LGM" are tokens,
+// separated by a slash, a comma, a semicolon or a blank.
+unsigned
+titlesOf(mstl::string const& field)
+{
+	unsigned titles = 0;
+	mstl::string token;
+
+	for (unsigned i = 0; i <= field.size(); ++i)
+	{
+		char c = i < field.size() ? field[i] : ' ';
+
+		if (c == '/' || c == ',' || c == ';' || c == ' ' || c == '\t' || i == field.size())
+		{
+			if (!token.empty() && token != ListNone)
+				titles |= title::fromID(title::fromString(token.c_str()));
+
+			token.clear();
+		}
+		else if (token.size() < 8)
+		{
+			token += c;
+		}
+	}
+
+	return titles;
+}
+
+
+mstl::string
+titlesString(unsigned titles)
+{
+	mstl::string s;
+
+	for (unsigned t = titles; t; t &= t - 1)
+	{
+		if (!s.empty())
+			s += '/';
+
+		s += title::toString(title::toID(t & (~t + 1)));
+	}
+
+	return s;
+}
+
+
+// A federation as a list spells it. The DSB publishes FIDE's codes and "-" for
+// a member it cannot place; the ECF's "ENG" is FIDE's code for England.
+country::Code
+federationOf(mstl::string const& field)
+{
+	mstl::string s(trimmed(field));
+
+	if (s.size() != 3 || s == ListNone)
+		return country::Unknown;
+
+	return country::fromString(s);
+}
+
+
+// "Nachname,Vorname" (the DSB's order) becomes the dictionary's "Nachname, Vorname".
+mstl::string
+personName(mstl::string const& field)
+{
+	mstl::string name(trimmed(field));
+	mstl::string::size_type comma = name.find(',');
+
+	if (comma == mstl::string::npos)
+		return name;
+
+	mstl::string first(trimmed(name.substr(comma + 1)));
+
+	name = trimmed(name.substr(0, comma));
+
+	if (!first.empty())
+	{
+		name += ", ";
+		name += first;
+	}
+
+	return name;
+}
+
+
+// Whether <line> is the header of an installed list.
+bool
+isListHeader(mstl::string const& line)
+{
+	mstl::string s(stripped(line));
+	unsigned n = unsigned(::strlen(ListMarker));
+
+	return s.size() > n + 1 && ::strncmp(s.data(), ListMarker, n) == 0 && s[n] == ' ';
+}
+
+
+// The value of "<key>=" in a header line.
+mstl::string
+headerValue(mstl::string const& header, char const* key)
+{
+	mstl::string s(stripped(header));
+	mstl::string k(key);
+
+	k += '=';
+
+	mstl::string::size_type b = s.find(k);
+
+	if (b == mstl::string::npos)
+		return mstl::string();
+
+	b += k.size();
+
+	mstl::string::size_type e = s.find(' ', b);
+	return s.substr(b, e == mstl::string::npos ? e : e - b);
+}
+
+
+// The fields of a comma-separated line: a field in double quotes may hold the
+// separator ("Carlsen,Magnus"), and "" inside it is a quote.
+void
+csvFields(mstl::string const& line, mstl::vector<mstl::string>& fields)
+{
+	fields.clear();
+
+	mstl::string field;
+	bool quoted = false;
+
+	for (unsigned i = 0; i < line.size(); ++i)
+	{
+		char c = line[i];
+
+		if (quoted)
+		{
+			if (c == '"')
+			{
+				if (i + 1 < line.size() && line[i + 1] == '"')
+				{
+					field += '"';
+					++i;
+				}
+				else
+				{
+					quoted = false;
+				}
+			}
+			else
+			{
+				field += c;
+			}
+		}
+		else if (c == '"' && field.empty())
+		{
+			quoted = true;
+		}
+		else if (c == ',')
+		{
+			fields.push_back(field);
+			field.clear();
+		}
+		else
+		{
+			field += c;
+		}
+	}
+
+	fields.push_back(field);
+}
+
+
+// The columns of a CSV, looked up by the names of its header. The federations
+// rename and move their columns, so no column number is trusted.
+struct CsvColumns
+{
+	mstl::vector<mstl::string> names;	// lower case, trimmed
+
+	CsvColumns() {}
+
+	explicit CsvColumns(mstl::string const& header)
+	{
+		csvFields(header, names);
+
+		for (unsigned i = 0; i < names.size(); ++i)
+		{
+			names[i] = trimmed(names[i]);
+
+			for (unsigned k = 0; k < names[i].size(); ++k)
+				names[i][k] = static_cast<char>(::tolower(static_cast<unsigned char>(names[i][k])));
+		}
+	}
+
+	// The number of the column named <a> (or <b>, or <c>), -1 when there is none.
+	int find(char const* a, char const* b = nullptr, char const* c = nullptr) const
+	{
+		for (unsigned i = 0; i < names.size(); ++i)
+			if (names[i] == a || (b && names[i] == b) || (c && names[i] == c))
+				return int(i);
+
+		return -1;
+	}
+};
+
+
+// The field <column> of <fields>, or "" when the list does not have it.
+mstl::string
+fieldOf(mstl::vector<mstl::string> const& fields, int column)
+{
+	return column >= 0 && unsigned(column) < fields.size() ? fields[column] : mstl::string();
+}
+
+
+// One line of an installed list into a record.
+bool
+readListRecord(mstl::string const& text, ListRecord& r)
+{
+	mstl::string line(stripped(text));
+
+	if (line.empty() || line[0] == '#')
+		return false;
+
+	// '|' separates the fields, and no field of a list holds one
+	mstl::vector<mstl::string> f;
+	f.reserve(8);
+
+	unsigned b = 0;
+	for (unsigned i = 0; i <= line.size(); ++i)
+	{
+		if (i != line.size() && line[i] != '|')
+			continue;
+
+		f.push_back(line.substr(b, i - b));
+		b = i + 1;
+	}
+
+	if (f.size() < 8)
+		return false;
+
+	r = ListRecord();
+
+	if (trimmed(f[0]) != ListNone)
+		r.id = trimmed(f[0]);
+
+	r.fideID		= numberOf(f[1]);
+	r.sex			= sexOf(f[2]);
+	r.birthYear	= numberOf(f[3]);
+	r.rating		= numberOf(f[4]);
+	r.federation	= federationOf(f[5]);
+	r.titles		= titlesOf(f[6]);
+	r.name			= personName(f[7]);
+
+	return !r.name.empty() && sys::utf8::validate(r.name);
+}
+
+
+// One record of an installed list, appended to the file's body.
+void
+appendListRecord(mstl::string& body, ListRecord const& r)
+{
+	mstl::string line;
+
+	line.reserve(96);
+	line.format(	"%s|%u|%c|%u|%u|%s|%s|%s\n",
+					r.id.empty() ? ListNone : r.id.c_str(),
+					r.fideID,
+					r.sex == sex::Male ? 'M' : r.sex == sex::Female ? 'F' : '-',
+					r.birthYear,
+					r.rating,
+					r.federation == country::Unknown ? ListNone : country::toString(r.federation),
+					r.titles ? titlesString(r.titles).c_str() : ListNone,
+					r.name.c_str());
+
+	body += line;
+}
+
+
+// The header of an installed list. It names the counts of the rows, so it goes
+// in front of a body that is complete.
+void
+prependListHeader(mstl::string& body, ListKind kind, mstl::string const& source, unsigned read, unsigned kept)
+{
+	sys::time::Time tm;
+	sys::time::localtime(sys::time::time(), tm);
+
+	mstl::string text;
+
+	text.format(	"%s v%u kind=%s date=%04u-%02u-%02u read=%u kept=%u\n#source %s\n",
+					ListMarker,
+					ListVersion,
+					listName(kind).c_str(),
+					unsigned(tm.year),
+					unsigned(tm.month),
+					unsigned(tm.day),
+					read,
+					kept,
+					source.empty() ? ListNone : source.c_str());
+	text += body;
+	body.swap(text);
+}
+
+
+// The surnames agree (diacritics apart): "Müller" is "Mueller". Two spellings
+// that differ more are left to the dictionary's own variant search.
+bool
+sameSurname(mstl::string const& a, mstl::string const& b)
+{
+	mstl::string::size_type ca = a.find(','), cb = b.find(',');
+	mstl::string x(folded(ca == mstl::string::npos ? a : a.substr(0, ca)));
+	mstl::string y(folded(cb == mstl::string::npos ? b : b.substr(0, cb)));
+
+	if (x.size() != y.size() || x.empty())
+		return false;
+
+	for (unsigned i = 0; i < x.size(); ++i)
+		if (::tolower(static_cast<unsigned char>(x[i])) != ::tolower(static_cast<unsigned char>(y[i])))
+			return false;
+
+	return true;
+}
+
+
+// The DWZ list: the DSB's ZIP holds spieler.csv, one row per club a member
+// plays for. The rows are found by their column names (the layout of 2012 has
+// since changed), the encoding is cp1252, and a member appears once per club --
+// the dictionary keeps one entry per player, the first row of a member (the
+// file is sorted by DWZ, so that is a member's best rating).
+bool
+convertDwzList(	mstl::istream& stream,
+					mstl::string& body,
+					unsigned minRating,
+					unsigned& read,
+					unsigned& kept)
+{
+	sys::utf8::Codec codec(sys::utf8::Codec::windows());
+
+	mstl::string line, header;
+
+	if (!stream.getline(header))
+		return false;
+
+	CsvColumns columns(stripped(header));
+	int	zps		= columns.find("zps");
+	int	nr		= columns.find("mitgliedsnummer", "mgl-nr");
+	int	name		= columns.find("name,vorname", "spielername");
+	int	sex		= columns.find("geschlecht");
+	int	birth		= columns.find("geburtsjahr");
+	int	rating	= columns.find("dwz");
+	int	fideID	= columns.find("fide-id");
+	int	fideLand	= columns.find("fide-land");
+	int	titles	= columns.find("fide-titel");
+	int	wTitles	= columns.find("fide-frauentitel");
+
+	if (zps < 0 || nr < 0 || name < 0 || rating < 0)
+		return false;
+
+	mstl::hash<mstl::string,char> members(131072);
+	mstl::vector<mstl::string> f;
+	mstl::string utf8;
+
+	while (stream.getline(line))
+	{
+		line = stripped(line);
+
+		if (line.empty())
+			continue;
+
+		++read;
+
+		if (sys::utf8::validate(line))
+			utf8 = line;
+		else
+			codec.convertFromWindows(line, utf8);
+
+		csvFields(utf8, f);
+
+		ListRecord r;
+		r.name = personName(fieldOf(f, name));
+
+		if (r.name.empty() || !sys::utf8::validate(r.name))
+			continue;
+
+		// the federation's player number: the club's ZPS and the member's number
+		mstl::string member(trimmed(fieldOf(f, zps)));
+		member += '-';
+		member += trimmed(fieldOf(f, nr));
+
+		if (members.has_key(member))
+			continue;
+
+		r.id			= member;
+		r.sex			= sexOf(fieldOf(f, sex));
+		r.birthYear	= numberOf(fieldOf(f, birth));
+		r.rating		= numberOf(fieldOf(f, rating));
+		r.fideID		= numberOf(fieldOf(f, fideID));
+		r.federation	= federationOf(fieldOf(f, fideLand));
+		r.titles		= titlesOf(fieldOf(f, titles)) | titlesOf(fieldOf(f, wTitles));
+
+		if (r.rating < minRating && r.fideID == 0 && r.titles == 0)
+			continue;
+
+		members.insert_unique(member, 1);
+		appendListRecord(body, r);
+		++kept;
+	}
+
+	return kept != 0;
+}
+
+
+// The ECF list: rating.englishchess.org.uk publishes one CSV of all rated
+// players, in UTF-8 and with a header. The API answers with an HTML page when
+// it does not know a column, so a page is not a list.
+bool
+convertEcfList(	mstl::istream& stream,
+					mstl::string& body,
+					unsigned minRating,
+					unsigned& read,
+					unsigned& kept)
+{
+	mstl::string line, header;
+
+	if (!stream.getline(header))
+		return false;
+
+	header = stripped(header);
+
+	if (header.find('<') != mstl::string::npos)
+		return false;
+
+	CsvColumns columns(header);
+	int	code		= columns.find("ecf_code", "ref", "code");
+	int	name		= columns.find("full_name", "player", "name");
+	int	fideID	= columns.find("fide_no", "fidecode", "fide_id");
+	int	sex		= columns.find("gender", "sex");
+	int	nation	= columns.find("nation");
+	int	club		= columns.find("club_code");
+	int	titles	= columns.find("title", "titles");
+	int	rating	= columns.find("revised_standard", "original_standard", "standard");
+	int	rating2	= columns.find("original_standard", "standard");
+	int	grade		= columns.find("grade");
+
+	if (code < 0 || name < 0)
+		return false;
+
+	sys::utf8::Codec codec(sys::utf8::Codec::windows());
+	mstl::vector<mstl::string> f;
+	mstl::string utf8;
+
+	while (stream.getline(line))
+	{
+		line = stripped(line);
+
+		if (line.empty())
+			continue;
+
+		++read;
+
+		if (sys::utf8::validate(line))
+			utf8 = line;
+		else
+			codec.convertFromWindows(line, utf8);
+
+		csvFields(utf8, f);
+
+		ListRecord r;
+		r.id			= trimmed(fieldOf(f, code));
+		r.name		= personName(fieldOf(f, name));
+
+		if (r.name.empty() || !sys::utf8::validate(r.name))
+			continue;
+
+		r.sex			= sexOf(fieldOf(f, sex));
+		r.fideID		= numberOf(fieldOf(f, fideID));
+		r.titles		= titlesOf(fieldOf(f, titles));
+
+		if (rating >= 0)
+		{
+			// since 2020 the ECF publishes Elo-like ratings, recalculated nightly
+			r.rating = numberOf(fieldOf(f, rating));
+
+			if (r.rating == 0 && rating2 >= 0)
+				r.rating = numberOf(fieldOf(f, rating2));
+		}
+		else if (grade >= 0)
+		{
+			// the export until 2020 published grades: convert them to Elo
+			r.rating = rating::convertEcfToElo(numberOf(fieldOf(f, grade)));
+		}
+
+		// the nation a player plays for; the API marks a foreign club with an 'F'
+		// followed by the federation, and leaves the nation empty for an English one
+		r.federation = federationOf(fieldOf(f, nation));
+
+		if (r.federation == country::Unknown)
+		{
+			mstl::string clubCode(trimmed(fieldOf(f, club)));
+
+			if (clubCode.size() == 4 && clubCode[0] == 'F')
+				r.federation = federationOf(clubCode.substr(1));
+		}
+
+		if (r.rating < minRating && r.fideID == 0 && r.titles == 0)
+			continue;
+
+		appendListRecord(body, r);
+		++kept;
+	}
+
+	return kept != 0;
+}
+
+
+// The ICCF list: iccf.com offers its rating grid as a CSV without a header --
+// <place> <id> <federation> <titles> <name> <games> <rating> <sex>, the place
+// column optional, separated by a semicolon or a tab. Without a header the
+// shape of a record has to be recognised, and a line that is not a player is
+// not written.
+bool
+convertIccfList(	mstl::istream& stream,
+						mstl::string& body,
+						unsigned minRating,
+						unsigned& read,
+						unsigned& kept)
+{
+	sys::utf8::Codec codec(sys::utf8::Codec::windows());
+
+	mstl::string line;
+	mstl::vector<mstl::string> f;
+	mstl::string utf8;
+	unsigned failed = 0;
+
+	while (stream.getline(line))
+	{
+		line = stripped(line);
+
+		if (line.empty())
+			continue;
+
+		++read;
+
+		if (sys::utf8::validate(line))
+			utf8 = line;
+		else
+			codec.convertFromWindows(line, utf8);
+
+		f.clear();
+
+		unsigned b = 0;
+		for (unsigned i = 0; i <= utf8.size(); ++i)
+		{
+			if (i != utf8.size() && utf8[i] != ';' && utf8[i] != '\t')
+				continue;
+
+			f.push_back(trimmed(utf8.substr(b, i - b)));
+			b = i + 1;
+		}
+
+		// the place column of the grid is there or not
+		int o = -1;
+
+		if (f.size() >= 7 && isNumber(f[0]) && isNumber(f[1]) && f[2].size() == 3)
+			o = 1;
+		else if (f.size() >= 6 && isNumber(f[0]) && f[1].size() == 3)
+			o = 0;
+
+		ListRecord r;
+
+		if (o >= 0)
+		{
+			r.id			= f[o];
+			r.federation	= federationOf(f[o + 1]);
+			r.titles		= titlesOf(f[o + 2]);
+			r.name		= personName(f[o + 3]);
+			r.rating		= numberOf(f[o + 5]);
+
+			if (f.size() > unsigned(o) + 6)
+				r.sex = sexOf(f[o + 6]);
+		}
+
+		if (	o < 0
+			|| r.federation == country::Unknown
+			|| !isNumber(r.id)
+			|| r.id.size() > 7
+			|| r.name.size() < 3
+			|| !sys::utf8::validate(r.name)
+			|| r.rating == 0
+			|| r.rating > rating::Max_Value)
+		{
+			// a heading, a total, or a file of another shape
+			if (++failed == 100 && kept == 0)
+				return false;
+
+			continue;
+		}
+
+		if (r.sex == sex::Unspecified && title::containsFemaleTitle(r.titles))
+			r.sex = sex::Female;
+
+		if (r.rating < minRating && r.titles == 0)
+			continue;
+
+		appendListRecord(body, r);
+		++kept;
+	}
+
+	return kept != 0;
+}
+
+} // namespace
+
+
+// See the comment above the namespace: an official download becomes an
+// installed list of Chesswiz' own format.
+bool
+Player::convertRatingList(	mstl::string const& kind,
+									mstl::istream& stream,
+									FILE* out,
+									mstl::string const& source,
+									unsigned minRating,
+									unsigned& read,
+									unsigned& kept)
+{
+	read = kept = 0;
+
+	ListKind list = listKindOf(kind);
+
+	if (list == List_None)
+		return false;
+
+	// The header counts the rows, so the records are collected first.
+	mstl::string body;
+	body.reserve(4 << 20);
+
+	switch (list)
+	{
+		case List_Dwz:	convertDwzList(stream, body, minRating, read, kept); break;
+		case List_Ecf:	convertEcfList(stream, body, minRating, read, kept); break;
+		case List_Iccf:	convertIccfList(stream, body, minRating, read, kept); break;
+		default:			break;
+	}
+
+	if (kept == 0)
+		return false;
+
+	if (out == nullptr)
+		return true;
+
+	prependListHeader(body, list, source, read, kept);
+
+	return ::fwrite(body.data(), 1, body.size(), out) == body.size();
+}
+
+
+unsigned
+Player::listMinimum(mstl::string const& kind)
+{
+	switch (listKindOf(kind))
+	{
+		case List_Dwz:	return m_minDWZ;
+		// an installed ECF list carries the Elo-like ratings of since 2020, while
+		// m_minECF is a grade of the scale the ECF used until then
+		case List_Ecf:	return rating::convertEcfToElo(m_minECF);
+		case List_Iccf:	return m_minICCF;
+		default:			break;
+	}
+
+	return 0;
+}
+
+
+void
+Player::parseInstalledRatingList(mstl::istream& stream)
+{
+	mstl::string header;
+
+	if (!stream.getline(header) || !isListHeader(header))
+	{
+		TRACE(::printf("not an installed rating list\n"));
+		return;
+	}
+
+	ListKind list = listKindOf(headerValue(header, "kind"));
+
+	if (list == List_None)
+	{
+		TRACE(::printf("unknown rating list: %s\n", header.c_str()));
+		return;
+	}
+
+	TRACE(::printf("-----------------------------------------------------\n"));
+	TRACE(::printf("Reading installed rating list: %s\n", listName(list).c_str()));
+	TRACE(::printf("-----------------------------------------------------\n"));
+
+	TRACE(unsigned count = 0;)
+	TRACE(unsigned total = 0;)
+
+	// A national list is written in Latin script; ICCF's covers the world and
+	// lets the federation decide how to fold a name's diacritics.
+	unsigned const region = list == List_Iccf ? 0 : 1;
+
+	// The federation a list is the list of, for a row that names none.
+	country::Code const home = list == List_Dwz ? country::Germany
+															 : list == List_Ecf ? country::England
+															 : country::Unknown;
+
+	mstl::string line, name;
+
+	while (stream.getline(line))
+	{
+		ListRecord r;
+
+		if (!readListRecord(line, r))
+			continue;
+
+		TRACE(++total);
+
+		if (r.federation == country::Unknown)
+			r.federation = home;
+
+		Player* player = 0;
+
+		// A row with a FIDE ID joins the entry FIDE's list has: the federation's
+		// number, rating, birth year and titles are what FIDE's list lacks.
+		if (r.fideID)
+			if (Player* const* e = ::fidePlayerDict.find(r.fideID))
+				player = *e;
+
+		name = r.name;
+
+		if (player)
+		{
+			if (player->federation() == country::Unknown && r.federation != country::Unknown)
+				player->setFederation(r.federation);
+
+			// The federation's spelling of a FIDE entry becomes an alias of it, so
+			// that a database with that spelling finds the entry -- unless the
+			// spelling already belongs to a player of its own, or the surnames
+			// differ by more than their diacritics (then the ID is not trusted).
+			if (	sameSurname(player->name(), name)
+				&& !sys::utf8::Codec::matchAscii(player->name(), name)
+				&& !containsPlayer(name, country::Unknown, sex::Unspecified))
+			{
+				insertAlias(name, region, player);
+			}
+		}
+		else
+		{
+			if (!(player = insertPlayer(name, region, r.federation, r.sex)))
+				continue;
+
+			if (r.fideID && player->fideID() && player->fideID() != r.fideID)
+			{
+				// The name belongs to another player: this one is its own entry.
+				if (!(player = insertPlayer(name, region, r.federation, r.sex, true)))
+					continue;
+			}
+
+			if (r.fideID && player->fideID() == 0)
+			{
+				player->setFideID(r.fideID);
+				player->setType(species::Human);
+				::fidePlayerDict.insert_unique(r.fideID, player);
+			}
+
+			if (r.federation != country::Unknown && player->nativeCountry() == country::Unknown)
+				player->setNativeCountry(r.federation);
+
+			TRACE(++count);
+		}
+
+		M_ASSERT(player);
+
+		// The federation's own number, and the rating of its list. An ID is used
+		// only when it survives the packing into 32 bits: a number that does not
+		// ("B000A") would make two clubs one.
+		switch (list)
+		{
+			case List_Dwz:
+			{
+				mstl::string::size_type dash = r.id.find('-');
+
+				if (dash != mstl::string::npos)
+				{
+					mstl::string zps(r.id.substr(0, dash));
+					mstl::string nr(r.id.substr(dash + 1));
+
+					if (	zps.size() == 5
+						&& isNumber(nr)
+						&& (('0' <= zps[0] && zps[0] <= '9') || ('A' <= zps[0] && zps[0] <= 'L')))
+					{
+						DsbID dsbID(zps.c_str(), nr.c_str());
+
+						if (dsbID && dsbID.asString() == r.id)
+						{
+							player->setDsbID(dsbID);
+							::dsbPlayerDict[dsbID] = player;
+						}
+					}
+				}
+
+				if (r.rating)
+				{
+					player->setLatestRating(rating::DWZ, r.rating);
+					player->setHighestRating(rating::DWZ, r.rating);
+				}
+				break;
+			}
+
+			case List_Ecf:
+			{
+				if (	r.id.size() == 7
+					&& isNumber(r.id.substr(0, 6))
+					&& 'A' <= r.id[6] && r.id[6] <= 'L')
+				{
+					EcfID ecfID(r.id.c_str());
+
+					if (ecfID && ecfID.asString() == r.id)
+					{
+						player->setEcfID(ecfID);
+						::ecfPlayerDict[ecfID] = player;
+					}
+				}
+
+				if (r.rating)
+				{
+					player->setLatestRating(rating::ECF, r.rating);
+					player->setHighestRating(rating::ECF, r.rating);
+				}
+				break;
+			}
+
+			case List_Iccf:
+			{
+				if (isNumber(r.id))
+				{
+					unsigned iccfID = ::strtoul(r.id.c_str(), nullptr, 10);
+
+					if (iccfID && (!player->iccfID() || player->iccfID() == iccfID))
+					{
+						player->setIccfID(iccfID);
+						::iccfPlayerDict.insert_unique(iccfID, player);
+					}
+				}
+
+				if (r.rating)
+				{
+					player->setLatestRating(rating::ICCF, r.rating);
+					player->setHighestRating(rating::ICCF, r.rating);
+				}
+				break;
+			}
+
+			default:
+				break;
+		}
+
+		// What a national list has and FIDE's list does not.
+		if (r.birthYear && player->dateOfBirth().year() == 0)
+			player->setDateOfBirth(Date(r.birthYear));
+
+		if (r.sex != sex::Unspecified && player->sex() == sex::Unspecified)
+		{
+			player->setSex(r.sex);
+			player->setType(species::Human);
+		}
+
+		for (unsigned t = r.titles; t; t &= t - 1)
+			player->addTitle(title::toID(t & (~t + 1)));
+	}
+
+	TRACE(::printf("New entries:         %u (%u)\n", count, total));
+	TRACE(::printf("Players total:       %u\n", ::playerLookup.used()));
+	TRACE(::printf("Player list entries: %u\n", ::playerList.size()));
+	TRACE(::printf("-----------------------------------------------------\n"));
+}
+
+
+// See the declarations: one string names the entry of the rating lists a link,
+// a proposed name or a player card comes from. FIDE's ID wins -- it is the one
+// the federations' own lists refer to.
+mstl::string
+Player::identity(Player const* player)
+{
+	mstl::string id;
+
+	if (player == nullptr)
+		return id;
+
+	if (player->fideID())
+	{
+		id.format("fide:%u", player->fideID());
+	}
+	else if (player->iccfID())
+	{
+		id.format("iccf:%u", player->iccfID());
+	}
+	else if (player->dsbID())
+	{
+		id = "dsb:";
+		id += player->dsbID().asString();
+	}
+	else if (player->ecfID())
+	{
+		id = "ecf:";
+		id += player->ecfID().asString();
+	}
+
+	return id;
+}
+
+
+Player*
+Player::findPlayerByIdentity(mstl::string const& identity)
+{
+	mstl::string::size_type colon = identity.find(':');
+
+	if (colon == mstl::string::npos || colon + 1 >= identity.size())
+		return 0;
+
+	mstl::string kind(identity.substr(0, colon));
+	mstl::string number(identity.substr(colon + 1));
+
+	if (kind == "fide" || kind == "iccf")
+	{
+		if (!isNumber(number) || number.size() > 9)
+			return 0;
+
+		unsigned id = ::strtoul(number.c_str(), nullptr, 10);
+		return kind == "fide" ? findFidePlayer(id) : findIccfPlayer(id);
+	}
+
+	if (kind == "dsb")
+	{
+		mstl::string::size_type dash = number.find('-');
+
+		if (dash == mstl::string::npos)
+			return 0;
+
+		mstl::string zps(number.substr(0, dash));
+		mstl::string nr(number.substr(dash + 1));
+
+		// DsbID's setup() requires this shape
+		if (	zps.size() != 5
+			|| !isNumber(nr)
+			|| !(('0' <= zps[0] && zps[0] <= '9') || ('A' <= zps[0] && zps[0] <= 'L')))
+		{
+			return 0;
+		}
+
+		DsbID dsbID(zps.c_str(), nr.c_str());
+		return dsbID ? findDsbPlayer(dsbID) : 0;
+	}
+
+	if (kind == "ecf")
+	{
+		// EcfID's setup() requires six digits and a letter A-L
+		if (	number.size() != 7
+			|| !isNumber(number.substr(0, 6))
+			|| !('A' <= number[6] && number[6] <= 'L'))
+		{
+			return 0;
+		}
+
+		EcfID ecfID(number.c_str());
+		return ecfID ? findEcfPlayer(ecfID) : 0;
+	}
+
+	return 0;
 }
 
 
