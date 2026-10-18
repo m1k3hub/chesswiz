@@ -298,6 +298,22 @@ tcltest::test em-tb-local {local Syzygy verdicts; uncovered positions stay with 
 # Whole matches with stub engines
 # ----------------------------------------------------------------------
 
+tcltest::test em-match-selfplay {an engine can play itself; the second entry is labelled "#2"} -setup {
+	set clipBefore [::scidb::test::em::clipCount]
+	::scidb::test::em::stub {StubA} \
+		{e2e4 d1h5 f1c4 h5f7 e2e4 d1h5 f1c4 h5f7} \
+		{e7e5 b8c6 g8f6 e7e5 b8c6 g8f6}
+} -body {
+	set ok [::enginematch::StartMatch {-engines {StubA StubA} -minutes 5 -increment 2}]
+	set engines $::enginematch::Priv(engines)
+	::scidb::test::em::pump
+	lassign [::scidb::test::em::clipGame $clipBefore] pgn0
+	list $ok $engines [expr {[string first {[White "StubA"]} $pgn0] >= 0}] \
+		[expr {[string first {[Black "StubA #2"]} $pgn0] >= 0}] [::enginematch::EngineBase {StubA #2}]
+} -cleanup {
+	::scidb::test::em::unstub
+} -result {1 {StubA {StubA #2}} 1 1 StubA}
+
 tcltest::test em-match-mate {a scripted mate ends each game; headers name the engines} -setup {
 	set clipBefore [::scidb::test::em::clipCount]
 	# two games: the per-side queues hold the Scholar's mate line twice

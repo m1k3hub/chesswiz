@@ -566,7 +566,11 @@ proc ::enginematch::StartMatch {spec} {
 	set engines {}
 	foreach name $opts(-engines) {
 		set name [string trim $name]
-		if {$name ne "" && $name ni $engines} { lappend engines $name }
+		if {$name eq ""} { continue }
+		# the same engine may play itself: later entries get a " #2" label
+		set label $name
+		for {set n 2} {$label in $engines} {incr n} { set label "$name #$n" }
+		lappend engines $label
 	}
 	if {$mode eq "match"} { set engines [lrange $engines 0 1] }
 	if {($mode eq "match" && [llength $engines] != 2)
@@ -580,7 +584,7 @@ proc ::enginematch::StartMatch {spec} {
 	}
 	set known [EngineNames]
 	foreach name $engines {
-		if {$name ni $known} {
+		if {[EngineBase $name] ni $known} {
 			Fail [format $mc::NoSuchEngine $name]
 			return 0
 		}
@@ -678,6 +682,13 @@ proc ::enginematch::Normalize {v low high dflt} {
 
 # A spec problem: into the dialog's status line when there is one, an
 # error otherwise (the programmatic path, the tests).
+# The configured engine behind a match label ("Stockfish #2" -> "Stockfish").
+proc ::enginematch::EngineBase {label} {
+	regsub { #[0-9]+$} $label {} base
+	return $base
+}
+
+
 proc ::enginematch::Fail {why} {
 	if {[DialogExists]} {
 		Status $why
@@ -939,7 +950,7 @@ proc ::enginematch::Connect {side} {
 	if {$Priv(pipeState:$side) eq "starting"} { return 1 }
 
 	set name [EngineName $side]
-	set index [::engine::FindIndex $name]
+	set index [::engine::FindIndex [EngineBase $name]]
 	set e [dict merge $::engine::EmptyEngine [lindex $::engine::Engines $index]]
 	set cmd [::engine::Command [dict get $e Command] [dict get $e Parameters]]
 	if {$cmd eq "" || $cmd eq "no-wine"} {
