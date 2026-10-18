@@ -794,6 +794,9 @@ proc focuszoom::Contains {pw pane leaf} {
 
 # The board's minimum is expressed in squares by the board renderer. Probe
 # that same arithmetic, including decorations, instead of guessing pixels.
+# While the media inset owns a strip of the board pane, the minimum must
+# also keep that reserve feasible: otherwise focus zoom squeezes the board
+# until no strip fits and the video falls back over the board (VAL-PANE-008).
 proc focuszoom::BoardMinimum {node board horizontal} {
  set dim [expr {$horizontal ? "width" : "height"}]
  if {$board ne [::mediainset::Pane]} {return 0}
@@ -802,10 +805,26 @@ proc focuszoom::BoardMinimum {node board horizontal} {
  set lo 1; set hi [expr {$horizontal ? $width : $height}]
  while {$lo < $hi} {
   set mid [expr {($lo+$hi)/2}]
-  set sq [::application::board::reserveSquare {} 0 [expr {$horizontal ? $mid : $width}] [expr {$horizontal ? $height : $mid}]]
+  set sq [BoardMinSquare [expr {$horizontal ? $mid : $width}] [expr {$horizontal ? $height : $mid}]]
   if {$sq >= $::application::board::MinimumReserveSquare} {set hi $mid} else {set lo [expr {$mid+1}]}
  }
  return [expr {[winfo $dim $node]-[winfo $dim $c]+$lo}]
+}
+
+# The square size a board canvas <w> x <h> would have once the media inset
+# has taken its strip, using the inset's own planner so the probe and the
+# realized reserve cannot drift. While the inset is shown its reserve is
+# mandatory here: a size at which no strip fits reports no square, so the
+# search keeps growing until the video has a place beside the board.
+proc focuszoom::BoardMinSquare {w h} {
+ set reserve [::mediainset::reserveForLayout $w $h]
+ if {![llength $reserve]} {
+  # hidden, swapped or 3D: the inset is not reserving a strip
+  return [::application::board::reserveSquare {} 0 $w $h]
+ }
+ lassign $reserve side px
+ if {$side eq {}} {return 0}
+ return [::application::board::reserveSquare $side $px $w $h]
 }
 
 proc focuszoom::resize {pw node board} {
@@ -2184,7 +2203,7 @@ proc onDebounced {w h} {
  updateCollapse
  # The last settled wide arrangement, put back when a tall excursion
  # returns to this window size (see setMode).
- if {$S(mode) eq "wide" && $S(collapsed) eq {} && [reflowable? [set t [boardTwm]]]} {
+ if {$S(mode) eq "wide" && [reflowable? [set t [boardTwm]]]} {
   set S(wideSashes) [list [winfo width .application] [winfo height .application] [::application::focuszoom::Snapshot $t]]
  }
 }

@@ -44,6 +44,23 @@ proc ::paneVideo::geometry {tag} {
  if {[info exists ::env(PANE_EVIDENCE)]} {catch {exec import -window root [file join $::env(PANE_EVIDENCE) $tag.png]}}
  return $overlap
 }
+
+# Full overlap of the inset with the board plus its side-to-move and
+# material decorations, the metric VAL-PANE-008 is stated in.
+proc ::paneVideo::overlapAll {tag} {
+ set c $::application::board::Vars(widget:frame)
+ set w [::mediainset::Pane].mediainset
+ set over [::paneVideo::geometry $tag]
+ foreach tg {stm material} {
+  set box [$c bbox $tg]
+  if {[llength $box] != 4} {continue}
+  lassign $box x y xx yy
+  lassign [::paneVideo::rect $w] vx vy vw vh
+  set rx [expr {$x+[winfo rootx $c]}]; set ry [expr {$y+[winfo rooty $c]}]
+  incr over [expr {max(0,min($rx+$xx-$x,$vx+$vw)-max($rx,$vx))*max(0,min($ry+$yy-$y,$vy+$vh)-max($ry,$vy))}]
+ }
+ return $over
+}
 tcltest::test pane-video-008-reflow {inset native surface and playback survive actual wide/tall reflow with zero overlap} -setup {
  set t [::paneVideo::setup]
  set w [::mediainset::Pane].mediainset.video; set id [winfo id $w]
@@ -122,5 +139,51 @@ tcltest::test pane-video-008-tall-strip {wide->tall->wide reflow keeps a real re
  lappend result [::application::reflow::mode] {*}[::paneVideo::check strip-wide-return] $::application::board::ReserveSide [expr {[winfo width $c] == $wideWidth}]
  lappend result [llength $::paneVideo::calls]
 } -cleanup {::paneVideo::cleanup} -result {0 1 1 right tall 0 1 1 wide 0 1 1 right 1 1}
+
+# Regression VAL-PANE-008: on a short (collapsing) window the wide sash
+# snapshot used to be skipped, so a tall excursion came back to a squeezed
+# board canvas with no feasible reserve and the video fell over the board.
+tcltest::test pane-video-008-short-reflow {a short (collapsing) window keeps the reserve and its wide size through wide->tall->wide} -setup {
+ set t [::paneVideo::setup]
+ wm geometry .application 1040x740
+ ::paneVideo::wait 800; update idletasks
+ set c $::application::board::Vars(widget:frame)
+ set wideWidth [winfo width $c]
+} -body {
+ set sh [winfo screenheight .]
+ set result [list [::paneVideo::overlapAll short-wide]]
+ wm geometry .application 620x[expr {min(1000,$sh-60)}]
+ ::paneVideo::wait 1000; update idletasks
+ lappend result [::application::reflow::mode] [::paneVideo::overlapAll short-tall]
+ wm geometry .application 1040x740
+ ::paneVideo::wait 1000; update idletasks
+ lappend result [::application::reflow::mode] [::paneVideo::overlapAll short-wide-return]
+ lassign [::application::board::reserveRect] rx ry rw rh
+ lappend result [expr {$rw*$rh > 0}] [expr {[winfo width $c] == $wideWidth}]
+ set result
+} -cleanup {::paneVideo::cleanup} -result {0 tall 0 wide 0 1 1}
+
+# Regression VAL-PANE-008: focus zoom must not squeeze the board pane below
+# the point where the media reserve still fits, or the inset overlays it.
+tcltest::test pane-video-008-short-zoom {focus zoom on a short window keeps the media reserve beside the board} -setup {
+ set t [::paneVideo::setup]
+ wm geometry .application 1040x740
+ ::paneVideo::wait 800; update idletasks
+ set ::application::focuszoom::duration 0
+ ::application::focuszoom::enable $t
+} -body {
+ set leaf [$t leaf editor]
+ foreach w [concat [list $leaf] [winfo children $leaf]] {
+  if {![winfo exists $w] || ![winfo ismapped $w]} {continue}
+  event generate $w <ButtonPress-1> -x 5 -y 5
+  event generate $w <ButtonRelease-1> -x 5 -y 5
+  break
+ }
+ ::paneVideo::wait 600; update idletasks
+ set over [::paneVideo::overlapAll short-zoom-editor]
+ lassign [::application::board::reserveRect] rx ry rw rh
+ set over [list $over [expr {$rw*$rh > 0}]]
+ set over
+} -cleanup {::paneVideo::cleanup} -result {0 1}
 
 tcltest::cleanupTests
