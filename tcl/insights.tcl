@@ -1308,7 +1308,8 @@ proc ::insights::BuildSection {dlg body id title keyColumns keyHeading height} {
 		score		$mc::ColScore			e		80
 		loss		$mc::ColLossRate		e		80
 	} {
-		$tree heading $key -text $heading
+		# the braced list leaves the mc variable names unsubstituted
+		$tree heading $key -text [subst $heading]
 		$tree column $key -anchor $anchor -width $width -stretch 0
 	}
 	pack $tree -fill x
