@@ -21,6 +21,12 @@
 #     ChessBaseBoard tag, .application), so the focus rules
 #     (ShortcutBoardCommand, ShortcutEditingFocus, editable widgets)
 #     keep working,
+#   - an override is bound in every scheme: the schemes decide only the
+#     DEFAULT keys. In particular an override of a ChessBase-only action
+#     (board flip, the NAG keys) is installed on the ChessBaseBoard tag
+#     even while the Chesswiz scheme is active; that tag is added to the
+#     board widgets when such an override exists, and the scheme's
+#     defaults are cleared there, so it carries only user overrides.
 #   - both letter cases are bound, so Ctrl+Q keeps working with
 #     Caps Lock.
 #
@@ -79,9 +85,10 @@ set Find					"&Find"
 #                 app        .application (application-wide actions)
 #                 board      the board widgets, through
 #                            ::application::board::bind (FilterKey)
-#                 chessbase  the ChessBaseBoard tag; such overrides are
-#                            only installed while the ChessBase scheme is
-#                            active (the tag is inert otherwise)
+#                 chessbase  a ChessBase-only action, bound on the
+#                            ChessBaseBoard tag; the tag is added to the
+#                            board widgets for an override and carries
+#                            only overrides in the Chesswiz scheme
 #   key-spec    the key the CHESSWIZ scheme binds the action to,
 #               without <...>; "" when the Chesswiz scheme has no key
 #   cb-spec     the key the CHESSBASE scheme binds the action to;
@@ -492,9 +499,18 @@ proc ::application::keyEditor::BindAction {action} {
 				RemoveSchemeKey cb $action $cbSpec
 			}
 			chessbase {
-				# the ChessBaseBoard tag is only in effect while the
-				# ChessBase scheme is active
-				if {![SchemeActive?]} { return }
+				# An override runs in every scheme; the schemes decide only
+				# the DEFAULT keys. The ChessBaseBoard tag is added to the
+				# board widgets only while the ChessBase scheme is active, so
+				# make sure it is present; ApplyShortcutScheme clears the
+				# tag in the Chesswiz scheme, where it then carries just the
+				# user's overrides. The action's ChessBase-scheme default is
+				# swallowed, so exactly one key runs it.
+				if {[info exists ::application::board::Vars(need-binding)]} {
+					foreach w $::application::board::Vars(need-binding) {
+						::application::AddShortcutTag $w
+					}
+				}
 				foreach s [BindSpecs $spec] {
 					bind ChessBaseBoard <$s> [list ::application::ShortcutBoardCommand %W %K %s $cmd]
 				}
@@ -741,6 +757,12 @@ proc ::application::keyEditor::BuildTable {top} {
 	pack $entry -side left -fill x -expand yes -padx [list $::theme::padx 0]
 	bind $entry <KeyPress> [namespace code [list CaptureKey $entry %K %s]]
 	bind $entry <FocusIn> [namespace code [list CaptureFocus $entry]]
+	# A read-only entry does not take the focus from a click on every
+	# platform (notably Windows); clicking the capture field focuses it
+	# explicitly, so it is reachable without Shift-Tab.
+	bind $entry <Button-1> [namespace code [list CaptureClick $entry]]
+	bind $capture.label <Button-1> [namespace code [list CaptureClick $entry]]
+	bind $capture <Button-1> [namespace code [list CaptureClick $entry]]
 	pack $capture -fill x -pady [list $::theme::pady 0]
 
 	set buttons [ttk::frame $frame.buttons]
@@ -821,6 +843,14 @@ proc ::application::keyEditor::CaptureKey {entry keysym state} {
 	$entry delete 0 end
 	$entry insert 0 [format $mc::KeyCaptured [DescribeKey $spec]]
 	$entry configure -state readonly
+	return "break"
+}
+
+
+# Clicking the read-only capture field gives it the keyboard focus; the
+# class binding does not focus a read-only entry on every platform.
+proc ::application::keyEditor::CaptureClick {entry} {
+	focus -force $entry
 	return "break"
 }
 
