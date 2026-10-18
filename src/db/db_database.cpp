@@ -1578,11 +1578,15 @@ Database::copyGames(	Database& destination,
 		case format::Scidb:
 			useConsumer = srcFormat != format::Scidb;
 			break;
+
+		case format::ChessBase:
+			useConsumer = srcFormat != format::ChessBase;
+			break;
 	}
 
 	unsigned count;
 
-	if (!useConsumer && allowedTags.complete() && allowExtraTags)
+	if (!useConsumer && (dstFormat == format::ChessBase || (allowedTags.complete() && allowExtraTags)))
 	{
 		// TODO: use this in any case (but !useConsumer), with
 		// exportGames(..., allowedTags, allowExtraTags, ...)
@@ -1610,11 +1614,10 @@ Database::copyGames(	Database& destination,
 	}
 	else if (dstFormat == format::ChessBase)
 	{
-		// The ChessBase writer loses game data (a 24-game copy keeps 5 of
-		// 61 KB, one game unreadable); refuse rather than write a corrupt
-		// database. Before, this fell into the Scid branch below, whose
-		// cast aborted the program.
-		IO_RAISE(Game, Write_Failed, "copying games into a ChessBase database is not supported");
+		// Raw copy (ChessBase -> ChessBase) is handled above via exportGames(destination, ...).
+		// Re-encoding games from a non-ChessBase source into a ChessBase database is still
+		// refused until P1 (multilingual comments, NAG mapping) is complete.
+		IO_RAISE(Game, Write_Failed, "re-encoding games from a non-ChessBase source into a ChessBase database is not supported");
 	}
 	else // dstFormat == format::Scid3 || dstFormat == format::Scid4
 	{

@@ -506,8 +506,8 @@ strippedLen(char const* s, unsigned maxLen)
 }
 
 
-Codec::Tournament::Tournament() :category(0) ,rounds(0) {}
-Codec::Tournament::Tournament(Byte cat, Byte nrounds) :category(cat) ,rounds(nrounds) {}
+Codec::Tournament::Tournament() :category(0) ,rounds(0) ,complete(0) {}
+Codec::Tournament::Tournament(Byte cat, Byte nrounds, Byte comp) :category(cat) ,rounds(nrounds) ,complete(comp) {}
 
 
 struct Codec::Source : public NamebaseEntry
@@ -921,7 +921,7 @@ Codec::readTournamentData(mstl::string const& rootname, util::Progress& progress
 			time::Mode	timeMode		= time::Unknown;
 			event::Mode	eventMode	= event::Undetermined;
 
-			switch ((eventType >> 5) & 3)
+			switch ((eventType >> 5) & 7)
 			{
 				case 0: timeMode = time::Normal; break;
 				case 1: timeMode = time::Blitz; break;
@@ -953,8 +953,9 @@ Codec::readTournamentData(mstl::string const& rootname, util::Progress& progress
 			if (countryCode == country::Unknown)
 				countryCode = Reader::extractCountryFromSite(city);
 
+			strm.get();	// skip byte 86 (always 0)
 			Byte category = strm.get();
-			strm.get();	// skip
+			Byte complete = strm.get();
 			Byte rounds = strm.get();
 
 			NamebaseSite* site = siteBase.insertSite(city, countryCode, nrecs);
@@ -973,9 +974,9 @@ Codec::readTournamentData(mstl::string const& rootname, util::Progress& progress
 			m_eventMap.container().push_back(BaseMap::value_type(i, event));
 
 			m_tournamentMap.container().push_back(
-				TournamentMap::value_type(event, Tournament(category, rounds)));
+				TournamentMap::value_type(event, Tournament(category, rounds, complete)));
 
-			strm.seekg(RecordSize - 89, mstl::ios_base::cur);
+			strm.seekg(RecordSize - 90, mstl::ios_base::cur);
 		}
 	}
 
@@ -1357,6 +1358,19 @@ Codec::readTeamData(mstl::string const& rootname, util::Progress& progress)
 	}
 
 	strm.close();
+
+	m_teamRefMap.reserve(m_teamRecords);
+	unsigned rem = m_teamStream.size() % m_teamRecordSize;
+	for (unsigned i = 0; i < m_teamRecords; ++i)
+	{
+		uint32_t buf[2] = { 0xffffffffu, 0xffffffffu };
+		unsigned offset = rem + i * m_teamRecordSize;
+		if (m_teamStream.seekg(offset, mstl::ios_base::beg))
+			m_teamStream.read(reinterpret_cast<Byte*>(buf), sizeof(buf));
+		m_teamRefMap.push_back(
+			TeamRefPair(ByteStream::uint32(reinterpret_cast<Byte const*>(&buf[0])),
+							ByteStream::uint32(reinterpret_cast<Byte const*>(&buf[1]))));
+	}
 }
 
 
@@ -2721,8 +2735,8 @@ Codec::addTeamTags(TagSet& tags, GameInfo const& info)
 	if (!m_teamStream.read(reinterpret_cast<Byte*>(buf), sizeof(buf)))
 		IO_RAISE(Index, Read_Error, "unexpected end of file");
 
-	unsigned whiteTeamRef = mstl::bo::swapLE(buf[0]);
-	unsigned blackTeamRef = mstl::bo::swapLE(buf[1]);
+	unsigned whiteTeamRef = ByteStream::uint32(reinterpret_cast<Byte const*>(&buf[0]));
+	unsigned blackTeamRef = ByteStream::uint32(reinterpret_cast<Byte const*>(&buf[1]));
 
 	if (whiteTeamRef < m_teamBase.size())
 	{
@@ -3003,7 +3017,109 @@ Codec::addGame(ByteStream& gameData, ByteStream& annotationData, TagSet const& t
 	}
 
 	// Delegate to base class addGame for namebase/index handling
-	return DatabaseCodec::addGame(gameData, tags, consumer);
+	save::State state = DatabaseCodec::addGame(gameData, tags, consumer);
+	if (save::isOk(state) && !gameInfoList().empty())
+	{
+		NamebaseEvent const* dstEvent = gameInfoList().back().eventEntry();
+		if (dstEvent)
+		{
+			Byte cat = tags.contains(tag::EventCategory) ? Byte(tags.asInt(tag::EventCategory)) : 0;
+			Byte rnd = tags.contains(tag::EventRounds) ? Byte(tags.asInt(tag::EventRounds)) : 0;
+			if (cat || rnd)
+			{
+				TournamentMap::iterator t = m_tournamentMap.find(dstEvent);
+				if (t == m_tournamentMap.end())
+				{
+					m_tournamentMap.container().push_back(
+						TournamentMap::value_type(dstEvent, Tournament(cat, rnd)));
+					m_tournamentMap.qsort();
+				}
+				else
+				{
+					if (cat) t->second.category = cat;
+					if (rnd) t->second.rounds = rnd;
+				}
+			}
+		}
+
+		if (tags.contains(tag::Source) && !tags.value(tag::Source).empty())
+		{
+			mstl::string srcName = tags.value(tag::Source);
+			Date srcDate;
+			if (tags.contains(tag::SourceDate))
+				srcDate.fromString(tags.value(tag::SourceDate));
+
+			Source* found = nullptr;
+			BaseMap::container_type const& list = m_sourceMap2.container();
+			for (unsigned s = 0; s < list.size(); ++s)
+			{
+				Source* cand = static_cast<Source*>(list[s].second);
+				if (cand && cand->name() == srcName && cand->date == srcDate)
+				{
+					found = cand;
+					break;
+				}
+			}
+			if (!found)
+			{
+				uint32_t newId = list.size();
+				found = new Source(srcName, srcDate);
+				m_sourceMap2.container().push_back(BaseMap::value_type(newId, found));
+				m_sourceMap2.qsort();
+			}
+			while (m_sourceMap.size() < gameInfoList().size() - 1)
+				m_sourceMap.push_back(nullptr);
+			m_sourceMap.push_back(found);
+		}
+		else if (!m_sourceMap.empty())
+		{
+			while (m_sourceMap.size() < gameInfoList().size())
+				m_sourceMap.push_back(nullptr);
+		}
+
+		if (tags.contains(tag::WhiteTeam) || tags.contains(tag::BlackTeam))
+		{
+			auto findOrAddTeam = [this](mstl::string const& title, country::Code nation) -> uint32_t
+			{
+				if (title.empty())
+					return 0xffffffffu;
+				for (unsigned t = 0; t < m_teamBase.size(); ++t)
+				{
+					if (m_teamBase[t] && m_teamBase[t]->title == title && m_teamBase[t]->nation == nation)
+						return t;
+				}
+				Team* team = new Team;
+				char* p = m_sourceBase.alloc(title.size() + 1);
+				::memcpy(p, title.c_str(), title.size());
+				p[title.size()] = '\0';
+				team->title.hook(p, title.size());
+				team->nation = nation;
+				uint32_t id = m_teamBase.size();
+				m_teamBase.push_back(team);
+				return id;
+			};
+
+			country::Code wNation = tags.contains(tag::WhiteTeamCountry)
+				? country::fromString(tags.value(tag::WhiteTeamCountry)) : country::Unknown;
+			country::Code bNation = tags.contains(tag::BlackTeamCountry)
+				? country::fromString(tags.value(tag::BlackTeamCountry)) : country::Unknown;
+			uint32_t wRef = tags.contains(tag::WhiteTeam)
+				? findOrAddTeam(tags.value(tag::WhiteTeam), wNation) : 0xffffffffu;
+			uint32_t bRef = tags.contains(tag::BlackTeam)
+				? findOrAddTeam(tags.value(tag::BlackTeam), bNation) : 0xffffffffu;
+
+			while (m_teamRefMap.size() < gameInfoList().size() - 1)
+				m_teamRefMap.push_back(TeamRefPair(0xffffffffu, 0xffffffffu));
+			m_teamRefMap.push_back(TeamRefPair(wRef, bRef));
+		}
+		else if (!m_teamRefMap.empty())
+		{
+			while (m_teamRefMap.size() < gameInfoList().size())
+				m_teamRefMap.push_back(TeamRefPair(0xffffffffu, 0xffffffffu));
+		}
+	}
+
+	return state;
 }
 
 
@@ -3162,7 +3278,114 @@ Codec::exportGame(GameInfo const& info, Codec& destination)
 		destination.m_nextAnnotationOffset += totalLength;
 	}
 
-	return destination.DatabaseCodec::addGame(data, info, DatabaseCodec::Alloc);
+	save::State state = destination.DatabaseCodec::addGame(data, info, DatabaseCodec::Alloc);
+	if (save::isOk(state))
+	{
+		TournamentMap::const_iterator t = m_tournamentMap.find(info.eventEntry());
+		if (t != m_tournamentMap.end() && !destination.gameInfoList().empty())
+		{
+			NamebaseEvent const* dstEvent = destination.gameInfoList().back().eventEntry();
+			if (dstEvent && destination.m_tournamentMap.find(dstEvent) == destination.m_tournamentMap.end())
+			{
+				destination.m_tournamentMap.container().push_back(
+					TournamentMap::value_type(dstEvent, t->second));
+				destination.m_tournamentMap.qsort();
+			}
+		}
+
+		GameInfoList const& srcList = gameInfoList();
+		unsigned srcIdx = srcList.size();
+		for (unsigned idx = 0, n = srcList.size(); idx < n; ++idx)
+		{
+			if (&srcList[idx] == &info || srcList[idx].gameOffset() == info.gameOffset())
+			{
+				srcIdx = idx;
+				break;
+			}
+		}
+
+		if (!m_sourceMap.empty())
+		{
+			Source const* src = (srcIdx < m_sourceMap.size()) ? m_sourceMap[srcIdx] : nullptr;
+			if (src)
+			{
+				Source* dstSrc = nullptr;
+				BaseMap::container_type const& dstList = destination.m_sourceMap2.container();
+				for (unsigned s = 0; s < dstList.size(); ++s)
+				{
+					Source* cand = static_cast<Source*>(dstList[s].second);
+					if (cand && cand->name() == src->name() && cand->date == src->date)
+					{
+						dstSrc = cand;
+						break;
+					}
+				}
+				if (!dstSrc)
+				{
+					uint32_t newId = dstList.size();
+					dstSrc = new Source(src->name(), src->date);
+					destination.m_sourceMap2.container().push_back(BaseMap::value_type(newId, dstSrc));
+					destination.m_sourceMap2.qsort();
+				}
+				while (destination.m_sourceMap.size() < destination.gameInfoList().size() - 1)
+					destination.m_sourceMap.push_back(nullptr);
+				destination.m_sourceMap.push_back(dstSrc);
+			}
+			else if (!destination.m_sourceMap.empty())
+			{
+				while (destination.m_sourceMap.size() < destination.gameInfoList().size())
+					destination.m_sourceMap.push_back(nullptr);
+			}
+		}
+
+		if (!m_teamRefMap.empty() && srcIdx < m_teamRefMap.size())
+		{
+			TeamRefPair refs = m_teamRefMap[srcIdx];
+			auto copyTeamRef = [this, &destination](uint32_t srcRef) -> uint32_t
+			{
+				if (srcRef >= m_teamBase.size() || !m_teamBase[srcRef])
+					return 0xffffffffu;
+				Team const* srcTeam = m_teamBase[srcRef];
+				for (unsigned dt = 0; dt < destination.m_teamBase.size(); ++dt)
+				{
+					if (destination.m_teamBase[dt]
+						&& destination.m_teamBase[dt]->title == srcTeam->title
+						&& destination.m_teamBase[dt]->nation == srcTeam->nation)
+					{
+						return dt;
+					}
+				}
+				Team* dstTeam = new Team;
+				char* p = destination.m_sourceBase.alloc(srcTeam->title.size() + 1);
+				::memcpy(p, srcTeam->title.c_str(), srcTeam->title.size());
+				p[srcTeam->title.size()] = '\0';
+				dstTeam->title.hook(p, srcTeam->title.size());
+				dstTeam->nation = srcTeam->nation;
+				uint32_t newId = destination.m_teamBase.size();
+				destination.m_teamBase.push_back(dstTeam);
+				return newId;
+			};
+
+			uint32_t wDst = copyTeamRef(refs.first);
+			uint32_t bDst = copyTeamRef(refs.second);
+			if (wDst != 0xffffffffu || bDst != 0xffffffffu || !destination.m_teamRefMap.empty())
+			{
+				while (destination.m_teamRefMap.size() < destination.gameInfoList().size() - 1)
+					destination.m_teamRefMap.push_back(TeamRefPair(0xffffffffu, 0xffffffffu));
+				destination.m_teamRefMap.push_back(TeamRefPair(wDst, bDst));
+			}
+		}
+		else if (!destination.m_teamRefMap.empty())
+		{
+			while (destination.m_teamRefMap.size() < destination.gameInfoList().size())
+				destination.m_teamRefMap.push_back(TeamRefPair(0xffffffffu, 0xffffffffu));
+		}
+
+		if (m_highQuality)
+			destination.m_highQuality = true;
+	}
+
+	return state;
 }
 
 
@@ -3428,20 +3651,19 @@ Codec::writeTournamentData(mstl::string const& rootname, util::Progress& progres
 			// Byte after date (position buf[3] in readTournamentData, unknown)
 			bstrm.put(Byte(0));
 
-			// Event type + time mode
-			Byte eventType = 0; // Default event type
+			// Event type (low 4 bits, 0..8) + time mode (bits 5..7)
+			Byte eventType = Byte(mstl::min(unsigned(event->type()), 8u)) & 0x0f;
 			switch (event->timeMode())
 			{
 				case time::Blitz: eventType |= (1 << 5); break;
 				case time::Rapid: eventType |= (2 << 5); break;
-				case time::Corr:  eventType |= (3 << 5); break;
+				case time::Corr:  eventType |= (4 << 5); break;
 				default: break;
 			}
 			bstrm.put(eventType);
 
-			// Byte after eventType (position buf[5] in readTournamentData, unknown)
-			bstrm.put(Byte(0));
-
+			// Byte after eventType (position buf[5] in readTournamentData, team flag)
+			bstrm.put(event->type() == event::Team ? Byte(1) : Byte(0));
 
 			// Nation code (1 byte) - find from site country
 			Byte nationCode = 0;
@@ -3459,15 +3681,19 @@ Codec::writeTournamentData(mstl::string const& rootname, util::Progress& progres
 			}
 			bstrm.put(nationCode);
 
-			// Category (1 byte)
+			// Byte 86 (always 0, skipped before category in readTournamentData)
+			bstrm.put(Byte(0));
+
+			// Category (1 byte, offset 87)
 			TournamentMap::const_iterator t = m_tournamentMap.find(event);
 			Byte category = (t != m_tournamentMap.end()) ? t->second.category : 0;
 			bstrm.put(category);
 
-			// Skip 1 byte
-			bstrm.put(Byte(0));
+			// Complete flag (1 byte, offset 88)
+			Byte complete = (t != m_tournamentMap.end()) ? t->second.complete : 0;
+			bstrm.put(complete);
 
-			// Rounds (1 byte)
+			// Rounds (1 byte, offset 89)
 			Byte rounds = (t != m_tournamentMap.end()) ? t->second.rounds : 0;
 			bstrm.put(rounds);
 		}
@@ -3544,7 +3770,7 @@ Codec::writeSourceData(mstl::string const& rootname, util::Progress& progress)
 	if (!strm)
 		IO_RAISE(Namebase, Open_Failed, "cannot create source file '%s'", filename.c_str());
 
-	uint32_t nrecs = m_sourceBase.size();
+	uint32_t nrecs = m_sourceMap2.size();
 
 	// Write header (28 bytes)
 	uint32_t hdr[7] = {0};
@@ -3563,15 +3789,14 @@ Codec::writeSourceData(mstl::string const& rootname, util::Progress& progress)
 		// Offset to record data
 		bstrm << uint32_t(0);
 
-		if (i < m_sourceMap2.size())
+		Source const* src = getSource(i);
+		if (src)
 		{
 			// Skip 5 bytes
 			bstrm.advance(5);
 
 			// Source title (25 bytes, space-padded)
-			mstl::string title;
-			if (Source const* src = getSource(i))
-				title = src->name();
+			mstl::string title = src->name();
 			unsigned titleLen = mstl::min(title.size(), size_t(25));
 			bstrm.put(reinterpret_cast<Byte const*>(title.data()), titleLen);
 			for (unsigned j = titleLen; j < 25; ++j)
@@ -3581,11 +3806,15 @@ Codec::writeSourceData(mstl::string const& rootname, util::Progress& progress)
 			for (unsigned j = 0; j < 20; ++j)
 				bstrm.put(Byte(' '));
 
-			// Date (3 bytes)
-			bstrm << util::ByteStream::uint24_t(0);
+			// Date (3 bytes, little-endian in .cbs)
+			Date const& date = src->date;
+			unsigned dateValue = (date.year() << 9) | (date.month() << 5) | date.day();
+			bstrm.put(Byte(dateValue));
+			bstrm.put(Byte(dateValue >> 8));
+			bstrm.put(Byte(dateValue >> 16));
 
-			// Version (1 byte)
-			bstrm.put(Byte(0));
+			// Skip 4 bytes (readSourceData seeks +4 after reading 3-byte date before reading quality byte)
+			bstrm.advance(4);
 
 			// Quality flag (1 byte)
 			bstrm.put(m_highQuality ? Byte(1) : Byte(0));
@@ -3693,21 +3922,23 @@ Codec::writeTeamData(mstl::string const& rootname, util::Progress& progress)
 	if (!strmJ)
 		IO_RAISE(Namebase, Open_Failed, "cannot create team index file '%s'", filenameJ.c_str());
 
-	// The reader treats the 12-byte header as 4 bytes of remainder plus
-	// fixed-size 8-byte records, so the stored count includes that slot.
+	static unsigned const RecordSizeJ = 120;
 	unsigned numGames = gameInfoList().size();
-	char hdrJ[12] = {0};
-	hdrJ[4] = 8;  // record size
-	*reinterpret_cast<uint32_t*>(hdrJ + 8) = mstl::bo::swapLE(uint32_t(numGames + 1));
+	char hdrJ[32] = {0};
+	hdrJ[0] = 0x0b;
+	hdrJ[4] = RecordSizeJ;
+	*reinterpret_cast<uint32_t*>(hdrJ + 8) = mstl::bo::swapLE(uint32_t(numGames));
 	strmJ.write(hdrJ, sizeof(hdrJ));
 
-	// Write team references for each game
+	// Write team references for each game (120-byte records; first 8 bytes are BE uint32 whiteRef, blackRef)
+	unsigned char entry[RecordSizeJ];
 	for (unsigned i = 0; i < numGames; ++i)
 	{
-		// Each entry is 8 bytes: team ID + unknown
-		unsigned char entry[8] = {0};
-		if (i < m_teamBase.size())
-			entry[0] = static_cast<Byte>(i);
+		::memset(entry, 0, sizeof(entry));
+		uint32_t wRef = (i < m_teamRefMap.size()) ? m_teamRefMap[i].first : 0xffffffffu;
+		uint32_t bRef = (i < m_teamRefMap.size()) ? m_teamRefMap[i].second : 0xffffffffu;
+		ByteStream::set(entry + 0, wRef);
+		ByteStream::set(entry + 4, bRef);
 		strmJ.write(reinterpret_cast<char const*>(entry), sizeof(entry));
 	}
 
@@ -3765,6 +3996,27 @@ Codec::writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& s
 	// CBH index entries are 46 bytes
 	// Based on decodeIndex() / decodeGuidingTextIndex() - reverse the reading process
 
+	uint32_t sourceId = 0;
+	if (index < m_sourceMap.size())
+	{
+		if (Source const* src = m_sourceMap[index])
+		{
+			BaseMap::container_type const& list = m_sourceMap2.container();
+			for (unsigned s = 0; s < list.size(); ++s)
+			{
+				if (list[s].second == src)
+				{
+					sourceId = list[s].first;
+					break;
+				}
+			}
+		}
+		else if (!m_sourceMap2.empty())
+		{
+			sourceId = m_sourceMap2.size();
+		}
+	}
+
 	if (info.isGuidingText())
 	{
 		// Byte 0: Flags (bit 0 = game/text valid, bit 1 = guiding text -> 0x03)
@@ -3786,7 +4038,6 @@ Codec::writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& s
 		strm << util::ByteStream::uint24_t(eventId);
 
 		// Bytes 11-13: Source ID (24-bit)
-		uint32_t sourceId = 0;
 		strm << util::ByteStream::uint24_t(sourceId);
 
 		// Bytes 14-16: Annotator ID (24-bit)
@@ -3851,7 +4102,6 @@ Codec::writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& s
 	strm << util::ByteStream::uint24_t(annotatorId);
 
 	// Bytes 21-23: Source ID (24-bit) - always present at offset 21 in CBH index
-	uint32_t sourceId = 0;
 	strm << util::ByteStream::uint24_t(sourceId);
 
 	// Bytes 24-26: Date (year << 9 | month << 5 | day)
@@ -3947,6 +4197,8 @@ Codec::writeIndexEntry(GameInfo const& info, unsigned index, util::ByteStream& s
 		flags3 |= (2 << 0);
 	if (info.m_commentCount >= 15)
 		flags3 |= (1 << 2);
+	if (info.m_annotationCount >= 15)
+		flags3 |= (1 << 3);
 	strm.put(flags3);
 
 	// Byte 45: Ply count / 2 (rounded up)

@@ -151,10 +151,11 @@ public:
 	struct Tournament
 	{
 		Tournament();
-		Tournament(Byte cat, Byte nrounds);
+		Tournament(Byte cat, Byte nrounds, Byte comp = 0);
 
 		Byte category;
 		Byte rounds;
+		Byte complete;
 	}
 	__attribute__((packed));
 
@@ -185,6 +186,8 @@ private:
 	typedef mstl::map<NamebaseEvent const*,Tournament>	TournamentMap;
 	typedef mstl::chunk_allocator<NamebaseEvent>			Allocator;
 	typedef mstl::vector<Team*>								TeamBase;
+	typedef mstl::pair<uint32_t,uint32_t>					TeamRefPair;
+	typedef mstl::vector<TeamRefPair>						TeamRefMap;
 	typedef mstl::map<GameInfo const*,unsigned>			GameIndexLookup;
 	typedef mstl::fixed_size_allocator<db::MoveNode>	MoveNodeAllocator;
 
@@ -261,6 +264,7 @@ private:
 	BaseMap				m_sourceMap2;
 	TournamentMap		m_tournamentMap;
 	TeamBase				m_teamBase;
+	TeamRefMap			m_teamRefMap;
 	GameIndexLookup	m_gameIndexLookup;
 	MediaTable			m_mediaTable;
 	scm::MediaTable	m_scmMedia;		///< optional scidb media manifest (.scm)

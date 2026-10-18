@@ -1115,11 +1115,21 @@ verifyP0EdgeCases(mstl::string const& baseRoot, util::Progress& progress)
 			"[Round \"5.2\"]\n"
 			"[White \"Carlsen, Magnus\"]\n"
 			"[Black \"Caruana, Fabiano\"]\n"
+			"[Result \"1-0\"]\n"
+			"[EventDate \"2024.08.05\"]\n"
+			"[EventCountry \"USA\"]\n"
+			"[EventType \"tourn\"]\n"
+			"[EventRounds \"9\"]\n"
+			"[EventCategory \"22\"]\n"
+			"[TimeMode \"rapid\"]\n"
+			"[ECO \"C45\"]\n"
 			"[WhiteElo \"2882\"]\n"
 			"[BlackElo \"2818\"]\n"
-			"[Result \"1-0\"]\n"
-			"[ECO \"C45\"]\n"
+			"[WhiteTeam \"Norway\"]\n"
+			"[WhiteTeamCountry \"NOR\"]\n"
 			"[Annotator \"Polgar, Judit\"]\n"
+			"[Source \"CBM 168\"]\n"
+			"[SourceDate \"2024.09.01\"]\n"
 			"\n"
 			"1. e4 {[%cal Ge2e4,Rf8c5][%csl Ye4] Opening move} e5 $1 "
 			"2. Nf3 (2. Bc4 Nf6 {Bishop variation}) 2... Nc6 $14 {Slight edge} 1-0\n";
@@ -1208,12 +1218,19 @@ verifyP0EdgeCases(mstl::string const& baseRoot, util::Progress& progress)
 	{
 		Database src(srcRoot + ".cbh", sys::utf8::Codec::windows(), permission::ReadOnly, progress);
 
-		// Verify recordLength and annotator coexist on Record 2
+		// Verify recordLength, annotator, and .cbt tournament fields coexist on Record 2
 		GameInfo const& info2 = src.gameInfo(2);
-		if (!info2.hasGameRecordLength() || info2.gameRecordLength() <= 4 || info2.annotator() != "Polgar, Judit")
+		if (!info2.hasGameRecordLength()
+			|| info2.gameRecordLength() <= 4
+			|| info2.annotator() != "Polgar, Judit"
+			|| info2.eventType() != event::Tournament
+			|| info2.timeMode() != time::Rapid
+			|| info2.eventCountry() != country::United_States_of_America
+			|| info2.eventDate() != Date(2024, 8, 5))
 		{
-			::fprintf(stderr, "GameInfo recordLength/annotator coexistence failed: len=%u ann='%s'\n",
-						 info2.gameRecordLength(), info2.annotator().c_str());
+			::fprintf(stderr, "GameInfo recordLength/annotator/tournament check failed: len=%u ann='%s' evType=%u timeMode=%u country=%u\n",
+						 info2.gameRecordLength(), info2.annotator().c_str(),
+						 unsigned(info2.eventType()), unsigned(info2.timeMode()), unsigned(info2.eventCountry()));
 			src.close();
 			return false;
 		}
