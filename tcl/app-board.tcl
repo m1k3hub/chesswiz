@@ -498,20 +498,28 @@ proc show3D {flag} {
 				return 0
 			}
 		}
-		ReplaceBoardView $Vars(widget:frame) $Vars(3dwin)
+		after cancel $Vars(after)
 		set Vars(3d) 1
 		::bind $Vars(3dwin) <Configure> [namespace code {ConfigureReserve3D %w %h}]
+		::bind $Vars(3dwin) <Map> [namespace code {ConfigureReserve3D [winfo width %W] [winfo height %W]}]
+		ReplaceBoardView $Vars(widget:frame) $Vars(3dwin)
 		ApplyReserve3D
 		::board3d::refresh
+		# Configure/Map supplies the realised frame, including its camera bar.
+		# Rebuilding here uses the old canvas height and can overwrite the
+		# correct reserve during a nested geometry update on the first toggle.
 	} else {
+		after cancel $Vars(after)
 		if {$Vars(3dwin) ne "" && [winfo exists $Vars(3dwin)]} {
 			ReplaceBoardView $Vars(3dwin) $Vars(widget:frame)
 			pack configure $Vars(widget:frame) -padx 0 -pady 0
 		}
 		set Vars(3d) 0
+		# Let packing restore the canvas before notifying inset owners.
+		set Vars(after) [after 0 [namespace code {
+			RebuildBoard $Vars(widget:frame) $Vars(width) $Vars(height) true
+		}]]
 	}
-	# View switches also notify inset owners when the pane dimensions match.
-	RebuildBoard $Vars(widget:frame) $Vars(width) $Vars(height) true
 	return 1
 }
 
@@ -1090,8 +1098,9 @@ proc Preload {width height} {
 
 proc ConfigureWindow {w width height} {
 	variable Vars
+	variable RebuildCallbacks
 
-	if {$width <= 1 || $height <= 1} { return }
+	if {$Vars(3d) || $width <= 1 || $height <= 1} { return }
 
 	set Vars(width) $width
 	set Vars(height) $height
@@ -1111,7 +1120,16 @@ proc ConfigureWindow {w width height} {
 		} else {
 			set timeout 50
 		}
-		set Vars(after) [after $timeout [namespace code [list RebuildBoard $w $width $height]]]
+		set rebuild [namespace code [list RebuildBoard $w $width $height]]
+		if {[llength $RebuildCallbacks]} {
+			# Reserve owners need the settled board promptly. Coalesce the
+			# Configure burst without adding the startup/drag delay. A zero
+			# timer also stays outside a rebuild's update idletasks, which
+			# may be realising a restored or newly packed board view.
+			set Vars(after) [after 0 $rebuild]
+		} else {
+			set Vars(after) [after $timeout $rebuild]
+		}
 	}
 }
 
@@ -1518,9 +1536,13 @@ proc ConfigureReserve3D {width height} {
 	if {$ReserveSide eq "bottom"} { incr height $ReservePixels }
 	set Vars(width) $width
 	set Vars(height) $height
-	# Padding changes can leave the reconstructed full size unchanged.
-	# Notify inset owners anyway, now that the visible frame has moved.
-	RebuildBoard $Vars(widget:frame) $width $height true
+	# Coalesce Configure/Map and padding changes outside the packer's idle
+	# callback. A synchronous rebuild here can nest inside an older rebuild,
+	# whose saved layout then overwrites this frame's reserve.
+	after cancel $Vars(after)
+	set Vars(after) [after 0 [namespace code {
+		RebuildBoard $Vars(widget:frame) $Vars(width) $Vars(height) true
+	}]]
 }
 
 proc RebuildBoard {canv width height {force false}} {

@@ -3,6 +3,7 @@
 package require tcltest 2.5
 namespace eval ::w1 {
     variable dir [file normalize tests/tmp-app/w1c]
+    if {[info exists ::env(W1_EVIDENCE_DIR)]} {set dir [file normalize $::env(W1_EVIDENCE_DIR)]}
     variable stubs {}
     variable calls {}
     variable now 0
@@ -201,6 +202,34 @@ proc ::w1::reserved {target {side {}} {shot 0}} {
     return $d
 }
 
+# Run before any other test creates the embedded view. In particular, the
+# tall, docked pane must not inherit geometry from an earlier 3D toggle.
+tcltest::test brd-3d-first {BRD-007 first 3D toggle during playback uses the realised frame including its toolbar} -setup {::w1::setup default} -body {
+    ::w1::assert {$::application::board::Vars(3dwin) eq "" || ![winfo exists $::application::board::Vars(3dwin)]} "first-toggle test requires an uncreated 3D view"
+    set sw [winfo screenwidth .]; set sh [winfo screenheight .]
+    wm geometry .application [expr {min(1800,$sw-30)}]x[expr {$sh-150}]+0+0
+    ::w1::wait
+    set w [::w1::play]
+    ::w1::assert {[::application::board::show3D 1]} "Blocked: 3D view unavailable"
+    set start [clock milliseconds]
+    set view [::mediainset::BoardView]
+    for {set ms 100} {$ms <= 3000} {incr ms 100} {
+        ::w1::wait [expr {max(1,$start+$ms-[clock milliseconds])}]
+        set overlap [::w1::overlap [::w1::rect $view] [::w1::rect $w]]
+        set toolbarOverlap [::w1::overlap [::w1::rect $view.camera] [::w1::rect $w]]
+        ::w1::log VAL-BRD-007-first [list elapsed [expr {[clock milliseconds]-$start}] view [::w1::rect $view] \
+            inset [::w1::rect $w] toolbar [::w1::rect $view.camera] reserve [::application::board::reserveRect] \
+            overlap $overlap toolbarOverlap $toolbarOverlap]
+        ::w1::assert {[winfo ismapped $view] && [winfo ismapped $view.camera] && [winfo ismapped $w] && [winfo manager $w.video] eq "pack"} "production views not mapped"
+        ::w1::assert {$overlap == 0 && $toolbarOverlap == 0} "first 3D view/toolbar overlaps inset"
+    }
+    exec import -window root $::w1::dir/VAL-BRD-007-first-[winfo screenwidth .]x[winfo screenheight .].png
+    ::application::board::show3D 0
+    ::w1::wait
+    ::w1::reserved VAL-BRD-007-first-restored
+    return ok
+} -cleanup {::w1::cleanup} -result ok
+
 tcltest::test brd-wide {BRD-001 reserves a right strip including all decorations} -setup {::w1::setup default} -body {
     # The old saved preferred width must shrink to the 160px lower bound.
     set ::mediainset::Options(minWidth) 200
@@ -275,19 +304,21 @@ tcltest::test brd-minimum {BRD-004 refusal keeps square size and uses the corner
 
 proc ::w1::count {name cmd op} {incr ::w1::count($name)}
 proc ::w1::settled {args} {set ::w1::settledAt [clock milliseconds]}
+proc ::w1::configured {args} {set ::w1::configuredAt [clock milliseconds]}
 tcltest::test brd-resize {BRD-005 rebuild hook settles once without the old timer} -setup {::w1::setup} -body {
     ::w1::play
     foreach name {Relayout RebuildBoard} ns {::mediainset ::application::board} {
         trace add execution ${ns}::$name enter [list ::w1::count $name]
     }
     trace add execution ::mediainset::Relayout leave ::w1::settled
+    trace add execution ::application::board::ConfigureWindow enter ::w1::configured
     try {
         foreach fraction {0.83 0.90 0.95} {
             array set ::w1::count {Relayout 0 RebuildBoard 0}
             set width [expr {int([winfo screenwidth .]*$fraction)}]
             set height [expr {int(min(950,[winfo screenheight .]*0.85))}]
-            set start [clock milliseconds]
-            set ::w1::settledAt $start
+            set ::w1::configuredAt 0
+            set ::w1::settledAt 0
             wm geometry .application ${width}x${height}
             update
             # Suppress the old independent resize timer if one is present.
@@ -295,13 +326,14 @@ tcltest::test brd-resize {BRD-005 rebuild hook settles once without the old time
                 if {[lindex [after info $id] 0] eq "::mediainset::Relayout"} {after cancel $id}
             }
             ::w1::wait 450
-            set elapsed [expr {$::w1::settledAt-$start}]
+            set elapsed [expr {$::w1::settledAt-$::w1::configuredAt}]
             ::w1::reserved VAL-BRD-005
-            ::w1::log VAL-BRD-005 [list elapsed $elapsed counts [array get ::w1::count] width $width height $height]
-            ::w1::assert {$elapsed<500 && $::w1::count(Relayout)==1 && $::w1::count(RebuildBoard)<=2} "resize callback not bounded"
+            ::w1::log VAL-BRD-005 [list configure $::w1::configuredAt settled $::w1::settledAt elapsed $elapsed counts [array get ::w1::count] width $width height $height]
+            ::w1::assert {$::w1::configuredAt>0 && $elapsed>=0 && $elapsed<500 && $::w1::count(Relayout)==1 && $::w1::count(RebuildBoard)<=2} "resize callback not bounded"
         }
     } finally {
         trace remove execution ::mediainset::Relayout leave ::w1::settled
+        trace remove execution ::application::board::ConfigureWindow enter ::w1::configured
         foreach name {Relayout RebuildBoard} ns {::mediainset ::application::board} {trace remove execution ${ns}::$name enter [list ::w1::count $name]}
     }
     ::application::media::Stop

@@ -6,7 +6,7 @@ namespace eval ::application::board {
     variable ReservePixels 0
     variable RebuildCallbacks {}
     variable Vars
-    array set Vars {layout Normal width 1500 height 850 widget:frame .canvas}
+    array set Vars {layout Normal width 1500 height 850 widget:frame .canvas after {}}
     variable Dim
     array set Dim {}
 }
@@ -114,13 +114,20 @@ tcltest::test board-reserve-pure-3d {visible 3D frame reserves each side and rep
         ::application::board::ApplyReserve3D
         lappend result $::brPack
     }
+    set count $::application::board::rebuildCount
+    ::application::board::ConfigureReserve3D 900 800
     ::application::board::ConfigureReserve3D 900 800
     lappend result [list $::application::board::Vars(width) $::application::board::Vars(height)]
+    lappend result [expr {$::application::board::rebuildCount-$count}]
+    update idletasks
+    lappend result [expr {$::application::board::rebuildCount-$count}]
+    update
+    lappend result [expr {$::application::board::rebuildCount-$count}]
     set ::application::board::ReserveSide {}
     set ::application::board::ReservePixels 0
     ::application::board::ApplyReserve3D
     lappend result $::brPack
     set ::application::board::Vars(3d) 0
     set result
-} -result {{configure .visible3d -padx {0 300} -pady {0 0}} {configure .visible3d -padx {0 0} -pady {0 300}} {configure .visible3d -padx {300 0} -pady {0 0}} {1200 800} {configure .visible3d -padx {0 0} -pady {0 0}}}
+} -result {{configure .visible3d -padx {0 300} -pady {0 0}} {configure .visible3d -padx {0 0} -pady {0 300}} {configure .visible3d -padx {300 0} -pady {0 0}} {1200 800} 0 0 1 {configure .visible3d -padx {0 0} -pady {0 0}}}
 tcltest::cleanupTests
