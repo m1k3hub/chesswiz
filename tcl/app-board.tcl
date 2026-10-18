@@ -159,6 +159,7 @@ proc build {w width height} {
 	$border create window 0 0 -window $board -anchor nw -tag board
 	set Vars(widget:border) $border
 	set Vars(widget:frame) $canv
+	after idle ::mediainset::InitMedia
 	set Vars(3d) 0
 	set Vars(3dwin) {}
 	set Vars(autoplay) 0

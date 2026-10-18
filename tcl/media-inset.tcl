@@ -38,6 +38,7 @@ array set Options {
 # swapped: the video fills the pane and the board is the small window
 variable Swapped 0
 variable Shown 0
+variable Audio 0
 
 } ;# namespace mediainset
 
@@ -63,6 +64,7 @@ proc ::mediainset::surface {fallback} {
 	}
 	set w $pane.mediainset
 	if {![winfo exists $w]} { Build $w }
+	AudioOnly 0
 	Show
 	# mpv embeds into the canvas's native window, which must be mapped: a
 	# window created just now is not until the server has answered
@@ -78,17 +80,43 @@ proc ::mediainset::surface {fallback} {
 
 
 proc ::mediainset::Build {w} {
-	variable mc
 
 	# a visible frame, so the video reads as a window of its own over or beside the board
 	tk::frame $w -background black -borderwidth 3 -relief ridge \
 		-highlightthickness 1 -highlightbackground #7a7a7a -highlightcolor #7a7a7a
 	canvas $w.video -background black -highlightthickness 0 -borderwidth 0
-	ttk::button $w.expand -text "⤢" -width 2 -takefocus 0 \
-		-command [namespace code swap]
+	ttk::frame $w.controls
+	ttk::button $w.controls.play -text "▶" -width 2 -command ::application::media::TogglePlayback
+	ttk::button $w.controls.prev -text "|‹" -width 2 -command {::application::media::ChapterStep -1}
+	ttk::button $w.controls.next -text "›|" -width 2 -command {::application::media::ChapterStep 1}
+	ttk::button $w.controls.stop -text Stop -width 4 -command ::application::media::Stop
+	ttk::button $w.expand -text "⤢" -width 2 -takefocus 0 -command [namespace code swap]
 	catch { ::tooltip::tooltip $w.expand [namespace current]::mc::Expand }
-	place $w.video -x 0 -y 0 -relwidth 1 -relheight 1
-	place $w.expand -relx 0 -rely 0 -anchor nw -x 2 -y 2
+	ttk::button $w.controls.stream -text "Open stream..." -command [list ::application::media::OpenStream $w]
+	ttk::label $w.controls.time -textvariable ::application::media::Priv(seeklabel)
+	ttk::scale $w.controls.seek -orient horizontal -from 0 -to 1000 -value 0
+	bind $w.controls.seek <ButtonPress-1> {+set ::application::media::Priv(seekgrab) 1}
+	bind $w.controls.seek <ButtonRelease-1> +[list ::application::media::SeekRelease $w.controls.seek]
+	bind $w.controls.seek <KeyRelease> {
+		if {%K in {Left Right Up Down Prior Next Home End}} {
+			::application::media::SeekRelease %W
+		}
+	}
+	# Two compact rows keep the transport usable in a narrow board margin.
+	pack $w.controls -side bottom -fill x
+	grid $w.controls.play $w.controls.prev $w.controls.next $w.controls.stop $w.controls.stream -sticky ew
+	grid $w.expand -in $w.controls -row 0 -column 5
+	grid $w.controls.seek -row 1 -column 0 -columnspan 4 -sticky ew
+	grid $w.controls.time -row 1 -column 4 -columnspan 2 -sticky ew
+	grid columnconfigure $w.controls 0 -weight 1
+	pack $w.video -side top -fill both -expand yes
+	bind $w <space> {::application::media::TogglePlayback; break}
+	bind $w.video <Button-1> [list focus $w]
+	# Include the frame binding for focusable transport children, too.
+	foreach child [winfo children $w.controls] {
+		bindtags $child [linsert [bindtags $child] 1 $w]
+	}
+	RefreshControls
 	# double-click on the video swaps as well
 	bind $w.video <Double-Button-1> [namespace code swap]
 }
@@ -142,7 +170,9 @@ proc ::mediainset::Layout {} {
 	if {$pane eq "" || !$Shown} { return }
 	set w $pane.mediainset
 	set canv $pane.c
+	variable Audio
 	set s $Options(size)
+	set controlWidth [expr {[winfo reqwidth $w.controls] + 8}]
 
 	if {$Swapped} {
 		place $w -in $pane -x 0 -y 0 -relx 0 -rely 0 -anchor nw -relwidth 1 -relheight 1 \
@@ -153,19 +183,34 @@ proc ::mediainset::Layout {} {
 		raise $canv
 	} else {
 		RestoreBoard $pane
-		set free [FreeRect $canv]
+		set free [FreeRect $canv [expr {[winfo reqheight $w.controls] + 8}] $controlWidth]
 		if {[llength $free]} {
 			# beside the board: the largest free margin of the pane, 16:9
 			lassign $free x y fw fh
+			set x [expr {$x + [winfo x $canv]}]
+			set y [expr {$y + [winfo y $canv]}]
 			place $w -in $pane -x $x -y $y -width $fw -height $fh \
 				-relx 0 -rely 0 -anchor nw -relwidth {} -relheight {}
 		} else {
 			# no margin can hold a usable video: the board's bottom-right corner
+			set extra [expr {max(0, min($controlWidth, [winfo width $pane] - 12) - int([winfo width $pane]*$s))}]
 			place $w -in $pane -x -6 -y -6 -relx 1.0 -rely 1.0 -anchor se \
-				-width {} -height {} -relwidth $s -relheight $s
+				-width $extra -height {} -relwidth $s -relheight $s
 		}
 		raise $w
 	}
+	if {$Audio} {
+		set h [expr {[winfo reqheight $w.controls] + 8}]
+		if {$Swapped} {
+			RestoreBoard $pane
+			place $w -in $pane -x -6 -y -6 -relx 1.0 -rely 1.0 -anchor se \
+				-width [expr {max(0, min($controlWidth, [winfo width $pane] - 12) - int([winfo width $pane]*$s))}] \
+				-relwidth $s -relheight 0 -height $h
+		} else {
+			place $w -relheight 0 -height $h
+		}
+	}
+	if {[winfo exists $pane.mediaButton]} { raise $pane.mediaButton }
 	Watch $canv
 }
 
@@ -173,7 +218,7 @@ proc ::mediainset::Layout {} {
 # The largest 16:9 rectangle {x y width height} that fits in a free margin
 # of the board canvas (left, right, above or below the board), centred in
 # that margin; "" when none is at least MinWidth wide.
-proc ::mediainset::FreeRect {canv} {
+proc ::mediainset::FreeRect {canv {controlsHeight 0} {minimumWidth 0}} {
 	variable Options
 
 	set cw [winfo width $canv]
@@ -195,9 +240,9 @@ proc ::mediainset::FreeRect {canv} {
 		set rw [expr {$rw - 2*$m}]
 		set rh [expr {$rh - 2*$m}]
 		if {$rw <= 0 || $rh <= 0} { continue }
-		set vw [expr {min($rw, $rh*16/9)}]
-		set vh [expr {$vw*9/16}]
-		if {$vw < $Options(minWidth)} { continue }
+		set vw [expr {min($rw, ($rh - $controlsHeight)*16/9)}]
+		set vh [expr {$vw*9/16 + $controlsHeight}]
+		if {$vw < max($Options(minWidth), $minimumWidth)} { continue }
 		if {$vw*$vh > $bestArea} {
 			set bestArea [expr {$vw*$vh}]
 			set best [list \
@@ -230,6 +275,9 @@ proc ::mediainset::RestoreBoard {pane} {
 	if {[winfo manager $canv] eq "place"} {
 		place forget $canv
 		pack $canv -fill both -expand yes
+		if {[winfo exists $pane.mediaButton] && [winfo manager $pane.mediaButton] eq "place"} {
+			pack configure $canv -pady [list [expr {[winfo reqheight $pane.mediaButton] + 8}] 0]
+		}
 	}
 }
 
@@ -254,5 +302,128 @@ proc ::mediainset::WriteOptions {chan} {
 }
 
 ::options::hookWriter ::mediainset::WriteOptions
+
+
+# Build the persistent model even when the Media pane is absent.
+proc ::mediainset::InitMedia {} {
+	::application::media::Ensure
+	RefreshMediaButton
+}
+
+# Entries are the pane's resolved rows: per-game media, gallery and indexes
+# all keep their existing ownership and interactive playback handling.
+proc ::mediainset::Entries {} {
+	set entries {}
+	set tree $::application::media::Priv(tree)
+	if {![winfo exists $tree]} { return {} }
+	foreach row [::application::media::MediaRows] {
+		lappend entries [linsert [$tree item $row -values] 0 $row]
+	}
+	# Authored position-keyed segments need no ordinary mediaFiles row.
+	upvar #0 ::application::media::Priv priv
+	set fen {}
+	if {$priv(position) >= 0 && $priv(position) != 9} {
+		catch { set fen [::scidb::game::fen $priv(position)] }
+	}
+	if {$fen ne ""} {
+		foreach source {userInteractive dbInteractive} {
+			if {![info exists priv($source)]} { continue }
+			set hit [::application::media::InteractiveMatch $priv($source) $fen]
+			if {![llength $hit]} { continue }
+			lassign $hit key path start end title
+			lappend entries [list [list interactive $hit] $::application::media::mc::TypeVideo $title $path $priv(index)]
+		}
+	}
+	return $entries
+}
+
+proc ::mediainset::RefreshMediaButton {} {
+	set pane [Pane]
+	if {$pane eq ""} { return }
+	set w $pane.mediaButton
+	if {![winfo exists $w]} {
+		ttk::menubutton $w -text Media -menu $w.menu
+		menu $w.menu -tearoff 0 -postcommand [list ::mediainset::PopulateMenu $w.menu]
+	}
+	if {[llength [Entries]]} {
+		place $w -relx 1 -x -4 -y 4 -anchor ne
+		if {[winfo manager $pane.c] eq "pack"} { pack configure $pane.c -pady [list [expr {[winfo reqheight $w] + 8}] 0] }
+		raise $w
+	} else {
+		place forget $w
+		if {[winfo manager $pane.c] eq "pack"} { pack configure $pane.c -pady 0 }
+	}
+	RefreshControls
+	Relayout
+}
+
+proc ::mediainset::PopulateMenu {menu} {
+	$menu delete 0 end
+	foreach entry [Entries] {
+		lassign $entry row type title path index
+		$menu add command -label "$title ($type)" -command [list ::mediainset::Choose $row]
+	}
+	$menu add separator
+	$menu add command -label "Open stream..." -command [list ::application::media::OpenStream [Pane]]
+}
+
+proc ::mediainset::Choose {row} {
+	if {[lindex $row 0] eq "interactive"} {
+		::application::media::PlayInteractiveEntry [lindex $row 1]
+		return
+	}
+	set tree $::application::media::Priv(tree)
+	$tree selection set $row
+	lassign [$tree item $row -values] type title path index
+	if {$type eq $::application::media::mc::SectionReports} {
+		::application::media::ViewReport $index
+	} elseif {[::application::media::ClassifyFile $path] == 1} {
+		# Reuse the picture renderer with a separate viewer surface.
+		::application::media::Stop
+		set viewer $::application::media::Priv(viewer)
+		if {[winfo exists .mediaPicture]} { destroy .mediaPicture }
+		toplevel .mediaPicture
+		wm title .mediaPicture $title
+		canvas .mediaPicture.canvas -width 640 -height 480 -background black
+		pack .mediaPicture.canvas -fill both -expand yes
+		set ::application::media::Priv(viewer) .mediaPicture
+		try { ::application::media::ShowImage $path } finally {
+			set ::application::media::Priv(viewer) $viewer
+		}
+	} elseif {[::application::media::isStreamUrl $path]} {
+		::application::media::PlayStream $path
+	} else {
+		::application::media::PlaySelected $tree
+	}
+}
+
+proc ::mediainset::RefreshControls {{position {}}} {
+	set pane [Pane]
+	set w $pane.mediainset.controls
+	if {![winfo exists $w]} { return }
+	set state $::application::media::Priv(playstate)
+	$w.play configure -text [expr {$state eq "playing" ? "Ⅱ" : "▶"}]
+	if {$position ne "" && !$::application::media::Priv(seekgrab)} { $w.seek set $position }
+	set chapters 0
+	foreach entry [Entries] {
+		if {[lindex $entry 1] in [list $::application::media::mc::TypeAudio \
+			$::application::media::mc::TypeVideo $::application::media::mc::TypeStream]} { incr chapters }
+	}
+	if {$chapters > 1} {
+		grid $w.prev; grid $w.next
+	} else {
+		grid remove $w.prev; grid remove $w.next
+	}
+}
+
+proc ::mediainset::AudioOnly {audio} {
+	variable Audio
+	set Audio $audio
+	set pane [Pane]
+	set w $pane.mediainset
+	if {![winfo exists $w]} { return }
+	if {$audio} { pack forget $w.video } else { pack $w.video -side top -fill both -expand yes }
+	Layout
+}
 
 # vi:set ts=3 sw=3:
