@@ -379,6 +379,15 @@ proc besidePosition {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12}} 
 # and lower minsize accordingly. Leave Tk in charge of size so later content
 # can grow; re-plan on requested-size changes to keep the final frame in place.
 # Returns the applied plan, or {rule center} when the board is not mapped.
+#
+# Fallback behavior (VAL-DLG-005): When no position can fit the dialog without
+# overlapping the board (rule "no-room"), besidePlan selects the candidate
+# position (right/left/below) with the MINIMUM overlap area. This places the
+# dialog as far from the board as possible while staying within the work area.
+# The overlap is recorded in the plan's "overlap" field for diagnostic purposes.
+# Dialogs should set an appropriate wm minsize to define their usable minimum;
+# besideBoard will lower minsize to fit available space but not below the
+# content's requested size (which represents the minimum needed for proper display).
 proc besideBoard {dlg {parent ""}} {
 	variable BesideRequests
 	if {$parent eq ""} {
