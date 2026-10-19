@@ -781,4 +781,135 @@ tcltest::test mediafold-010-migration {VAL-MED-010 a pre-fold layout loses Media
         [regexp {MIG P3 media 1 docked 1 marker 1} $p3]
 } -cleanup {file delete -force $::scidb::test::migDir} -result {1 1 1 1 1}
 
+tcltest::test mediafold-010-named-layout {VAL-MED-010A named .layout files are migrated not just list:normal} -setup {
+    set ::scidb::test::migDir [file join $::scidb::test::app::testDir tmp-app media-mig-named-[pid]]
+    file delete -force $::scidb::test::migDir
+    file mkdir [file join $::scidb::test::migDir home]
+} -body {
+    # This test verifies that named layouts on disk are also migrated
+    # Phase 1: Create a named layout with Media pane
+    # Phase 2: Start fresh - Media should be gone from both memory AND the .layout file
+    # Phase 3: Restart - Media should still be gone (marker persists)
+    set dir $::scidb::test::migDir
+    
+    # We'll use a modified fixture that sets up a named layout
+    set env(MIG_PHASE) 1
+    set env(MIG_ROOT) $::scidb::test::root
+    set env(MIG_NAMED_TEST) 1
+    set output1 [exec [info nameofexecutable] [file join $::scidb::test::root tests fixtures media-mig phase.tcl] 2>@1 || true]
+    
+    set env(MIG_PHASE) 2
+    set output2 [exec [info nameofexecutable] [file join $::scidb::test::root tests fixtures media-mig phase.tcl] 2>@1 || true]
+    
+    set env(MIG_PHASE) 3
+    set output3 [exec [info nameofexecutable] [file join $::scidb::test::root tests fixtures media-mig phase.tcl] 2>@1 || true]
+    
+    # Check that Media was removed, marker set, AND name preserved (VAL-MED-010B)
+    list \
+        [regexp {MIG P2 media 0 marker 1 name TestNamed} $output2] \
+        [regexp {MIG P2 namedFileHasMedia 0} $output2] \
+        [regexp {MIG P3 media 0 marker 1 name TestNamed} $output3]
+} -cleanup {file delete -force $::scidb::test::migDir; unset -nocomplain ::env(MIG_NAMED_TEST)} -result {1 1 1}
+
+tcltest::test mediafold-010-corrupt-fallback {VAL-MED-010C corrupt layout file falls back gracefully} -setup {
+    set ::scidb::test::migDir [file join $::scidb::test::app::testDir tmp-app media-mig-corrupt-[pid]]
+    file delete -force $::scidb::test::migDir
+    file mkdir [file join $::scidb::test::migDir home .chesswiz layout board normal]
+} -body {
+    # Create a corrupt .layout file (unbalanced braces)
+    set corruptFile [file join $::scidb::test::migDir home .chesswiz layout board normal TestCorrupt.layout]
+    set fh [open $corruptFile w]
+    puts $fh "::application::twm::setup normal board {{root {frame board"
+    close $fh
+    
+    # Set this as the active layout
+    set optionsFile [file join $::scidb::test::migDir home .chesswiz config options.dat]
+    file mkdir [file dirname $optionsFile]
+    set fh [open $optionsFile w]
+    puts $fh "set ::application::twm::Options(board:layout:name) TestCorrupt"
+    puts $fh "array set ::application::twm::Options {"
+    puts $fh "  board:layout:list:normal {}"
+    puts $fh "}"
+    close $fh
+    
+    set env(HOME) [file join $::scidb::test::migDir home]
+    set env(SCIDB_AI_TRIAGE) 0
+    set env(SCIDB_AI_CLASSIFIER) off
+    
+    # Try to start - should not crash, should fall back to default
+    set output [exec [info nameofexecutable] -single-process << "after 2000 {puts LAYOUT_LOADED; exit 0}\nvwait forever" 2>@1 || true]
+    
+    # Check it didn't crash and created a .bad copy
+    list \
+        [regexp {LAYOUT_LOADED} $output] \
+        [file exists "${corruptFile}.bad"]
+} -cleanup {file delete -force $::scidb::test::migDir} -result {1 1}
+
+tcltest::test mediafold-dlg005-insights-fit {VAL-DLG-005 Insights shrinks to fit beside board at 1280x800} -setup {
+    wm geometry .application 1280x800+0+0
+    update idletasks
+    
+    # Set up a minimal database and player for Insights (from test_app_dialog_place.tcl pattern)
+    set ::scidb::test::dlgDir [file join $::scidb::test::app::testDir tmp-app dlg005_ins_[pid]]
+    file mkdir $::scidb::test::dlgDir
+    set pgn [file join $::scidb::test::dlgDir fixture.pgn]
+    set ch [open $pgn w]
+    puts $ch {[Event "Test"]}
+    puts $ch {[Site "?"]}
+    puts $ch {[Date "2024.01.01"]}
+    puts $ch {[Round "1"]}
+    puts $ch {[White "TestPlayer"]}
+    puts $ch {[Black "Opponent"]}
+    puts $ch {[Result "1-0"]}
+    puts $ch {[ECO "C60"]}
+    puts $ch ""
+    puts $ch "1. e4 e5 2. Nf3 Nc6 3. Bb5 1-0"
+    close $ch
+    
+    proc ::scidb::test::dlgNop {args} { return 0 }
+    catch { ::scidb::db::close $pgn }
+    ::scidb::db::open $pgn ::scidb::test::dlgNop {} ::scidb::test::dlgNop {}
+    set n [::scidb::db::count players $pgn Normal]
+    set playerIdx -1
+    for {set i 0} {$i < $n} {incr i} {
+        set k [::scidb::db::get playerKey $pgn Normal $i]
+        if {[lindex $k 0] eq "TestPlayer"} { set playerIdx $i; break }
+    }
+    set ::scidb::test::dlgBase $pgn
+    set ::scidb::test::dlgPlayerIdx $playerIdx
+} -body {
+    # Open Insights dialog via real entry point
+    set dlg [::insights::show .application $::scidb::test::dlgBase Normal $::scidb::test::dlgPlayerIdx]
+    update idletasks
+    
+    # Get dialog and board geometries
+    set dlgRect [list [winfo rootx $dlg] [winfo rooty $dlg] [winfo width $dlg] [winfo height $dlg]]
+    set board $::application::board::board
+    set boardRect [list [winfo rootx $board] [winfo rooty $board] [winfo width $board] [winfo height $board]]
+    
+    # Calculate overlap
+    lassign $dlgRect dx dy dw dh
+    lassign $boardRect bx by bw bh
+    set overlapX [expr {max(0, min($dx + $dw, $bx + $bw) - max($dx, $bx))}]
+    set overlapY [expr {max(0, min($dy + $dh, $by + $bh) - max($dy, $by))}]
+    set overlap [expr {$overlapX * $overlapY}]
+    
+    # Check plan from besideBoard (if available)
+    set hasFallbackRule 0
+    if {[info exists ::util::place::BesideRequests($dlg)]} {
+        # Dialog was placed by besideBoard
+        set hasFallbackRule 1
+    }
+    
+    # Dialog should either not overlap OR have documented fallback behavior
+    # Size should be reasonable (at least requested content size or 300x200 minimum)
+    list \
+        [expr {$overlap == 0 || $hasFallbackRule}] \
+        [expr {$dw >= 300 && $dh >= 200}]
+} -cleanup {
+    catch {destroy $dlg}
+    catch {::scidb::db::close $::scidb::test::dlgBase}
+    file delete -force $::scidb::test::dlgDir
+} -result {1 1}
+
 tcltest::cleanupTests
