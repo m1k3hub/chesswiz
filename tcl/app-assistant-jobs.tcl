@@ -104,3 +104,49 @@ proc ::application::assistant::DoRunJob {job name colour games pattern} {
 	set Priv(maxRounds) [expr {max($Priv(maxRounds), $JobRounds)}]
 	return "plan of the job '$job'; call these tools in order with exactly these arguments, then end with a short checklist of what was done:\n[join $lines \n]"
 }
+
+
+# ----------------------------------------------------------------------
+# Adapter for assistant tools registered in the action registry.
+# Bridges from the registry's dict-based calling convention to the
+# existing positional-arg Do* handlers via CheckArgs.
+# ----------------------------------------------------------------------
+proc ::application::assistant::_actionAdapter {name handler argsDict} {
+	if {[catch { set checked [CheckArgs $name $argsDict] } err]} {
+		return "error: $err"
+	}
+	if {[catch { set reply [{*}$handler {*}[dict values $checked]] } err opts]} {
+		RecordError assistant "$name: $err" [dict get $opts -errorinfo]
+		return "error: $err"
+	}
+	return $reply
+}
+
+
+# ----------------------------------------------------------------------
+# Register all assistant tools as actions. ONE generator loop over the
+# Actions table (86 tools) plus run_job (added above = 87 total).
+# Uses passthrough schema (no re-generation) and the adapter handler.
+# ----------------------------------------------------------------------
+namespace eval application {
+namespace eval assistant {
+
+variable Actions
+dict for {name entry} $Actions {
+	lassign $entry confirm debug what description parameters handler
+	set aiFlag [expr {$debug ? "debug" : ($confirm ? 1 : 0)}]
+	set label [string map {" " "_"} $name]
+	::action::register $name [dict create \
+		label    $label \
+		schema   $parameters \
+		handler  [list ::application::assistant::_actionAdapter $name $handler] \
+		confirm  $confirm \
+		ai       $aiFlag \
+		what     $what \
+		doc      $description \
+		toolmenu $what \
+	]
+}
+
+} ;# namespace assistant
+} ;# namespace application

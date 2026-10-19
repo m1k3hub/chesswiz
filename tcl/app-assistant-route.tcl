@@ -135,42 +135,37 @@ proc ::application::assistant::RouteThresholds {} {
 # "tool" for a bare invocation or "tool(value)" for an enum expansion.
 # ----------------------------------------------------------------------
 proc ::application::assistant::routeInvocations {} {
-	variable Actions
-	variable Priv
 	variable RouteSentinel
 
 	if {[catch { package require json }]} { return {} }
 
 	set out {}
-	dict for {name entry} $Actions {
-		lassign $entry confirm debug what description parameters handler
-		if {$debug} { continue }
-		if {[catch { set schema [::json::json2dict $parameters] }]} { continue }
+	foreach name [::action::list] {
+		set record [::action::get $name]
+		set ai [dict get $record ai]
+		if {$ai eq "debug"} { continue }
+		set description [dict get $record doc]
+		set schemaStr [dict get $record schema]
+		if {$schemaStr eq ""} { continue }
+		if {[catch { set schema [::json::json2dict $schemaStr] }]} { continue }
 		set props [expr {[dict exists $schema properties] ? [dict get $schema properties] : {}}]
 		set required [expr {[dict exists $schema required] ? [dict get $schema required] : {}}]
 
 		if {[dict size $props] == 0} {
-			# a bare invocation: no arguments at all
 			lappend out [dict create id $name name $name cargs {} \
 				description [string range $description 0 109]]
 			continue
 		}
 		if {[llength $required] == 0} {
-			# all arguments optional: the defaults must satisfy the
-			# request, which the second gate decides
 			lappend out [dict create id $name name $name cargs {} \
 				description [string range "$description (with its default arguments)" 0 109]]
 			continue
 		}
-		# exactly one required small enum: expand into one invocation
-		# per value, so the classifier picks the destination directly
 		if {[dict size $props] == 1 && [llength $required] == 1} {
 			set prop [lindex $required 0]
 			set def [dict get $props $prop]
 			if {[dict exists $def enum] && [llength [dict get $def enum]] in {2 3 4}} {
 				foreach value [dict get $def enum] {
-					# the value is what tells the invocations apart: cut the
-					# description, never the value
 					set suffix " -- '$value'"
 					set room [expr {109 - [string length $suffix]}]
 					lappend out [dict create id "${name}($value)" name $name \
@@ -180,8 +175,6 @@ proc ::application::assistant::routeInvocations {} {
 				continue
 			}
 		}
-		# required free-text arguments: the language model must extract
-		# them; not fast-pathable
 	}
 	return $out
 }

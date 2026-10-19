@@ -50,13 +50,12 @@ if {[info exists ::env(SCIDB_AI_ARGS_MIN_CONFIDENCE)]
 
 # The closed-set arguments of a tool, from its JSON schema: arg -> enum values.
 proc ::application::assistant::enumArgs {name} {
-	variable Actions
-
-	if {![dict exists $Actions $name]} { return {} }
+	if {[catch {::action::get $name} record]} { return {} }
 	if {[catch { package require json }]} { return {} }
 
-	lassign [dict get $Actions $name] _ _ _ _ parameters _
-	if {[catch { set schema [::json::json2dict $parameters] }]} { return {} }
+	set schemaStr [dict get $record schema]
+	if {$schemaStr eq ""} { return {} }
+	if {[catch { set schema [::json::json2dict $schemaStr] }]} { return {} }
 	set props [expr {[dict exists $schema properties] ? [dict get $schema properties] : {}}]
 	set out {}
 	dict for {arg def} $props {
@@ -70,13 +69,12 @@ proc ::application::assistant::enumArgs {name} {
 # value is meant ("the colour the opponent will play"), which the argument
 # name alone does not: without it the classifier answers the user's colour.
 proc ::application::assistant::argDescriptions {name} {
-	variable Actions
-
-	if {![dict exists $Actions $name]} { return {} }
+	if {[catch {::action::get $name} record]} { return {} }
 	if {[catch { package require json }]} { return {} }
 
-	lassign [dict get $Actions $name] _ _ _ _ parameters _
-	if {[catch { set schema [::json::json2dict $parameters] }]} { return {} }
+	set schemaStr [dict get $record schema]
+	if {$schemaStr eq ""} { return {} }
+	if {[catch { set schema [::json::json2dict $schemaStr] }]} { return {} }
 	set props [expr {[dict exists $schema properties] ? [dict get $schema properties] : {}}]
 	set out {}
 	dict for {arg def} $props {

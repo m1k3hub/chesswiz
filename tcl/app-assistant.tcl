@@ -1174,15 +1174,23 @@ proc ::application::assistant::LogToolCall {name cargs asked outcome reply} {
 
 # The tool definitions offered to the model in the current mode.
 proc ::application::assistant::toolsJson {} {
-	variable Actions
 	variable Priv
 
 	set defs {}
-	dict for {name entry} $Actions {
-		lassign $entry _ debug _ description parameters
-		if {$debug && !$Priv(debug)} { continue }
+	foreach name [::action::list] {
+		set record [::action::get $name]
+		set ai [dict get $record ai]
+		if {$ai eq "debug" && !$Priv(debug)} { continue }
+		set description [dict get $record doc]
+		set schema [dict get $record schema]
+		if {$schema eq ""} {
+			set schema [::action::argsToSchema [dict get $record args]]
+			if {[catch { package require json }] == 0} {
+				set schema [::json::dict2json $schema]
+			}
+		}
 		lappend defs [format {{"type":"function","function":{"name":"%s","description":"%s","parameters":%s}}} \
-			$name [::ai::provider::jsonEscape $description] $parameters]
+			$name [::ai::provider::jsonEscape $description] $schema]
 	}
 	return "\[[join $defs ,]\]"
 }
