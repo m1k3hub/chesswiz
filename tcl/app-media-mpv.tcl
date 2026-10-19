@@ -86,7 +86,10 @@ proc ::media::mpv::chapters {} {
 
 proc ::media::mpv::state {} {
 	set paused [_get pause]
-	if {$paused eq ""} { return error }	;# no player
+	# No player handle: never started, or ::mpv::close after Stop. That is the
+	# stopped state, not a failure; genuine open/decode failures keep the
+	# player alive and report load-error yes (checked below).
+	if {$paused eq ""} { return idle }
 	if {[_get load-error] eq "yes"} { return error }	;# the file would not open or decode
 	if {$paused eq "yes"} { return paused }
 	if {[_get eof-reached] eq "yes"} { return ended }
