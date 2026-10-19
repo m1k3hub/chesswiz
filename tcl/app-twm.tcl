@@ -166,13 +166,29 @@ proc load {twm} {
 	# the first start after the media fold.
 	set migrateMedia [expr {$id eq "board" && ![info exists Options($id:layout:media:folded)]}]
 
-	if {[llength $layout] > 0 || ![LoadLayout $twm $layoutVariant $Options($id:layout:name) load]} {
-		set Vars(loading) 1
-		$twm load $layout
-		set Vars(loading) 0
-		after idle [list ::options::save $twm $layoutVariant]
-		after idle [list ::toolbar::save $id]
-		set Vars($id:options:saved:$layoutVariant) 1
+	# If a named layout is active, try to load it from disk first (VAL-MED-010B).
+	# Only fall back to list:normal if no name is set or LoadLayout fails.
+	set loadedNamed false
+	if {[string length $Options($id:layout:name)] > 0} {
+		if {[LoadLayout $twm $layoutVariant $Options($id:layout:name) load]} {
+			set loadedNamed true
+		}
+	}
+	
+	if {!$loadedNamed} {
+		if {[llength $layout] > 0} {
+			set Vars(loading) 1
+			$twm load $layout
+			set Vars(loading) 0
+			after idle [list ::options::save $twm $layoutVariant]
+			after idle [list ::toolbar::save $id]
+			set Vars($id:options:saved:$layoutVariant) 1
+		} else {
+			# No named layout and no saved layout - use default
+			set Vars(loading) 1
+			$twm load {}
+			set Vars(loading) 0
+		}
 	}
 
 	# One-time migration of pre-fold layouts (VAL-MED-010): a layout saved
@@ -189,7 +205,8 @@ proc load {twm} {
 # Remove a Media pane left behind by a pre-fold saved layout (VAL-MED-010).
 # The pane is closed through the normal pane path, so its neighbours take the
 # freed space, and the resulting layout is kept; the marker makes this run
-# once only, whatever the layout contained.
+# once only, whatever the layout contained. Named .layout files are also
+# rewritten so the migration persists across restarts.
 proc RemoveLegacyMedia {twm layoutVariant} {
 	variable [namespace parent]::Vars
 	variable Options
@@ -198,9 +215,28 @@ proc RemoveLegacyMedia {twm layoutVariant} {
 	set Options($id:layout:media:folded) 1
 	if {![$twm isdocked media]} { return }
 	ChangeState $twm media
-	set Options($id:layout:list:$layoutVariant) [inspectLayout $twm]
-	set Options($id:layout:saved:$layoutVariant) $Options($id:layout:list:$layoutVariant)
+	set newLayout [inspectLayout $twm]
+	set Options($id:layout:list:$layoutVariant) $newLayout
+	set Options($id:layout:saved:$layoutVariant) $newLayout
 	set Vars($id:layout:changed:$layoutVariant) 0
+	
+	# Also update the named .layout file on disk if one is active
+	set name $Options($id:layout:name)
+	if {[string length $name] > 0} {
+		set file [makeFilename $id $layoutVariant $name]
+		if {[file exists $file]} {
+			# Rewrite the layout file with the migrated layout
+			if {[catch {
+				set fh [::open $file "w"]
+				fconfigure $fh -encoding utf-8
+				puts $fh "::application::twm::setup $layoutVariant $id {$newLayout}"
+				close $fh
+			} err]} {
+				puts stderr "RemoveLegacyMedia: failed to rewrite $file: $err"
+			}
+		}
+	}
+	
 	after idle [list ::options::save $twm $layoutVariant]
 }
 
@@ -1218,9 +1254,18 @@ proc LoadLayout {twm layoutVariant name mode} {
 	if {[file exists $file]} {
 		if {[catch { ::load::source $file -encoding utf-8 -throw 1 } -> opts]} {
 			puts stderr "error while loading $file"
-			if {$mode ne "load"} { return false }
 			puts stderr $opts
-			return {*}$opts -rethrow 1
+			
+			# Keep a .bad copy for diagnosis and fall back to default
+			catch { file copy -force $file "${file}.bad" }
+			
+			if {$mode eq "load"} {
+				# During startup, clear the bad layout name so we use default
+				set Options($id:layout:name) ""
+				# Don't rethrow - let startup continue with default layout
+				return false
+			}
+			return false
 		}
 	} elseif {$mode ne "load"} {
 		return false
@@ -1784,20 +1829,68 @@ proc WriteLayout {twm id name layoutVariant} {
 	variable [namespace parent]::Vars
 	variable Options
 
+	# Prevent saving layouts with floating (undocked) panes that would
+	# serialize as orphan leaves and crash the loader (VAL-MED-010D).
+	# Auto-dock any floating panes before inspection.
+	foreach leaf [$twm leaves] {
+		if {[$twm isfloat [$twm toplevel $leaf]]} {
+			# This pane is currently undocked (floating) - dock it back
+			catch { ::scidb::tk::twm dock $twm $leaf }
+		}
+	}
+
 	set dir [makeDir $id $layoutVariant]
 	file mkdir $dir
-	set fh [::open [makeFilename $id $layoutVariant $name] "w"]
-	fconfigure $fh -encoding utf-8
+	set targetFile [makeFilename $id $layoutVariant $name]
+	set tempFile "${targetFile}.tmp"
+	
 	set Options($id:layout:list:$layoutVariant) [inspectLayout $twm]
 	set Options($id:layout:saved:$layoutVariant) $Options($id:layout:list:$layoutVariant)
 	set Options($id:layout:changed:$layoutVariant) 0
 	array unset Vars $id:layout:changed:$layoutVariant
-	puts $fh "::application::twm::setup $layoutVariant $id {$Options($id:layout:list:$layoutVariant)}"
+	
+	# Atomic write: write to temp file first, then rename
+	if {[catch {
+		set fh [::open $tempFile "w"]
+		fconfigure $fh -encoding utf-8
+		set layoutLine "::application::twm::setup $layoutVariant $id {$Options($id:layout:list:$layoutVariant)}"
+		puts $fh $layoutLine
+		::options::writeTableOptions $fh $id $layoutVariant
+		close $fh
+		
+		# Validate the temp file is complete and balanced
+		set validateFh [::open $tempFile "r"]
+		fconfigure $validateFh -encoding utf-8
+		set content [read $validateFh]
+		close $validateFh
+		
+		# Check braces are balanced
+		set braceCount 0
+		foreach char [split $content {}] {
+			if {$char eq "\{"} { incr braceCount }
+			if {$char eq "\}"} { incr braceCount -1 }
+			if {$braceCount < 0} { error "Unbalanced braces: extra closing brace" }
+		}
+		if {$braceCount != 0} { error "Unbalanced braces: $braceCount unclosed opening braces" }
+		
+		# Check the setup command is present
+		if {[string first "::application::twm::setup" $content] < 0} {
+			error "Missing setup command in layout file"
+		}
+		
+		# All checks passed, atomically replace the target
+		file rename -force $tempFile $targetFile
+	} err]} {
+		# Cleanup temp file on failure
+		catch { file delete $tempFile }
+		puts stderr "WriteLayout: failed to write $targetFile: $err"
+		return 0
+	}
+	
 	::options::save $twm $layoutVariant
 	::toolbar::save $id
 	set Vars($id:options:saved:$layoutVariant) 1
-	::options::writeTableOptions $fh $id $layoutVariant
-	close $fh
+	return 1
 }
 
 
