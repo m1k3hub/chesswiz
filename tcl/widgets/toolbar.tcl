@@ -54,6 +54,7 @@ variable Initialize 1
 variable HaveTooltips 1
 variable Lookup [dict create]
 variable Map [dict create]
+variable Keyed
 
 set Specs(toolbars) {}
 set Specs(repeat) {}
@@ -428,6 +429,7 @@ proc childconfigure {w args} {
 
 			-image {
 				SetupIcons $toolbar $w $val
+				KeyIconStates $toolbar $w
 				set size $Specs(iconsize:$toolbar)
 				if {$size eq "default"} { set size $Specs(default:$toolbar) }
 				if {[info exists Specs($size:$w:$toolbar)] && [llength $Specs($size:$w:$toolbar)]} {
@@ -1069,6 +1071,7 @@ proc Add {toolbar widgetCommand args} {
 		}
 	}
 
+	KeyIconStates $toolbar $w
 	PackWidget $toolbar $w {*}$packOpts
 	if {[winfo exists $toolbar.floating.frame]} { CloneWidget $toolbar $w }
 
@@ -2019,6 +2022,88 @@ proc SetState {toolbar v w state} {
 		default {
 			$w configure -state $state
 		}
+	}
+}
+
+
+# A toolbar button paints the icon itself with its own background behind it.
+# Tk has no RGBA renderer on Windows (tkImgPhInstance.c defines
+# TK_CAN_RENDER_RGBA for X11 only), so a photo with partial transparency is
+# composited against a copy of the screen read back from the widget
+# (XGetImage in tkImgPhInstance.c): where that read-back fails - the window is
+# not visible yet, and that is what happens to the first toolbar painted while
+# the application is still starting up - Tk leaves black behind, and the
+# button shows a black square instead of its icon (G27: the first button of
+# the board toolbar, -image image462).  A photo whose alpha is only 0 or 255
+# is drawn with a clip mask instead, which reads nothing back on any platform.
+# The icon is therefore keyed once: the semi-transparent edge pixels are
+# composited here with the colour the button paints behind them, everything
+# else stays transparent, so the active, checked and disabled backgrounds
+# still shine through the icon as before.
+proc IsIconPhoto {img} {
+	if {[llength $img] != 1} { return 0 }
+	if {[catch {image type $img} type]} { return 0 }
+	if {$type ne "photo"} { return 0 }
+	return [expr {[image width $img] > 0 && [image height $img] > 0}]
+}
+
+
+proc KeyIcon {w img bg} {
+	variable Keyed
+
+	if {![IsIconPhoto $img]} { return $img }
+
+	# winfo rgb, not the name: the background may be a system colour name
+	# such as SystemButtonFace, which the image helper does not know
+	if {[catch {winfo rgb $w $bg} rgb]} { return $img }
+	lassign $rgb r g b
+	set bg [format "#%02x%02x%02x" [expr {$r >> 8}] [expr {$g >> 8}] [expr {$b >> 8}]]
+
+	set key [list $img $bg]
+
+	if {[info exists Keyed($key)]} {
+		if {![catch {image width $Keyed($key)}]} { return $Keyed($key) }
+		unset Keyed($key)
+	}
+
+	if {![info exists Keyed($key)]} {
+		set width [image width $img]
+		set height [image height $img]
+		set keyed [image create photo -width $width -height $height]
+		$keyed copy $img -to 0 0 $width $height
+
+		if {[catch {::scidb::tk::image keyalpha $bg $keyed}]} {
+			image delete $keyed
+			return $img
+		}
+
+		set Keyed($key) $keyed
+	}
+
+	return $Keyed($key)
+}
+
+
+# Key the icons of one toolbar widget: the one it is showing now, and the ones
+# it switches to for another icon size or state (see SetupIcons, SetState).
+proc KeyIconStates {toolbar w} {
+	variable Specs
+	variable iconSizes
+
+	if {[catch {set image [$w cget -image]}]} { return }
+	if {[catch {set bg [$w cget -background]}]} { return }
+
+	foreach size $iconSizes {
+		foreach state {"" -normal -disabled} {
+			set key $size$state:$w:$toolbar
+			if {[info exists Specs($key)] && [llength $Specs($key)]} {
+				set Specs($key) [KeyIcon $w $Specs($key) $bg]
+			}
+		}
+	}
+
+	if {[llength $image]} {
+		catch { $w configure -image [KeyIcon $w $image $bg] }
 	}
 }
 

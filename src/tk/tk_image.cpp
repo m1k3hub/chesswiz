@@ -464,6 +464,46 @@ struct pixbuf
 		}
 	}
 
+	// Make the transparency binary: a pixel which is at least `threshold`
+	// opaque keeps its colour, composited with `color` (the background it
+	// will be drawn on), and becomes fully opaque; every other pixel becomes
+	// fully transparent.  Tk draws a photo with binary transparency with a
+	// clip mask, while a photo with partial transparency has to be
+	// composited against a copy of the screen read back from the widget
+	// (TkImgPhotoDisplay), which is black where the widget is not visible.
+	void keyAlpha(agg::rgba8 const& color, double threshold)
+	{
+		if (!Alpha)
+			return;
+
+		int const limit = agg::iround(threshold*255.0);
+
+		for (int r = 0; r < m_rows; ++r)
+		{
+			unsigned char* p = scanline(r);
+			unsigned char* e = p + N*m_cols;
+
+			for ( ; p < e; p += N)
+			{
+				int const alpha = p[A];
+
+				if (alpha < limit)
+				{
+					p[A] = 0;
+				}
+				else if (alpha < 255)
+				{
+					int const unalpha = 255 - alpha;
+
+					p[R] = (p[R]*alpha + color.r*unalpha + 127)/255;
+					p[G] = (p[G]*alpha + color.g*unalpha + 127)/255;
+					p[B] = (p[B]*alpha + color.b*unalpha + 127)/255;
+					p[A] = 255;
+				}
+			}
+		}
+	}
+
 	void paintOver(agg::rgba8 const& color, double opacity)
 	{
 		agg::rgba8 lookup[256];
@@ -995,6 +1035,17 @@ struct Recolor
 
 	template <typename PixBuf>
 	void operator()(PixBuf& pixbuf) { pixbuf.recolor(m_fillcolor, m_overlay); }
+};
+
+
+struct KeyAlpha
+{
+	KeyAlpha(agg::rgba8 const& fillcolor, double threshold) :m_color(fillcolor), m_threshold(threshold) {}
+	agg::rgba8 m_color;
+	double m_threshold;
+
+	template <typename PixBuf>
+	void operator()(PixBuf& pixbuf) { pixbuf.keyAlpha(m_color, m_threshold); }
 };
 
 
@@ -2733,6 +2784,35 @@ tk_lighten_image(	char const* subcmd,
 
 
 static int
+tk_key_alpha(	char const* subcmd,
+					Tcl_Interp* ti,
+					char const* color,
+					char const* photo,
+					int objc, Tcl_Obj* const objv[])
+{
+	agg::rgba8 fillcolor;
+
+	if (!parse_color(color, fillcolor))
+		return tcl_error(subcmd, "invalid color name '%s'", color);
+
+	Tk_PhotoHandle handle = Tk_FindPhoto(ti, photo);
+
+	if (!handle)
+		return tcl_error(subcmd, "invalid argument: '%s' is not a photo image", photo);
+
+	Tk_PhotoImageBlock block;
+	Tk_PhotoGetImage(handle, &block);
+
+	int rc = check_image_format(subcmd, ti, block);
+	if (rc != TCL_OK)
+		return rc;
+
+	processImage(block, KeyAlpha(fillcolor, 0.5));
+	return Tk_PhotoPutBlock(ti, handle, &block, 0, 0, block.width, block.height, TK_PHOTO_COMPOSITE_SET);
+}
+
+
+static int
 tk_recolor_image(	char const* subcmd,
 						Tcl_Interp* ti,
 						char const* color,
@@ -2848,7 +2928,7 @@ tk_image(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		"border", "copy", "create", "recolor", "disable",
 		"alpha", "diffuse", "boost", "colorize", "paintover",
 		"grayscale", "blur", "shadow", "darken", "lighten",
-		"colorcube", 0,
+		"colorcube", "keyalpha", 0,
 	};
 	struct { char const* usage; int min_args; } const Definitions[] =
 	{
@@ -2868,13 +2948,14 @@ tk_image(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		{ "darken <alpha> <photo>", 3 },
 		{ "lighten <alpha> <photo>", 3 },
 		{ "colorcube <photo> <sectors> <rings>", 4 },
+		{ "keyalpha <color> <photo>", 3 },
 	};
 	enum
 	{
 		Cmd_Border, Cmd_Copy, Cmd_Create, Cmd_Recolor, Cmd_Disable,
 		Cmd_Alpha, Cmd_Diffuse, Cmd_Boost, Cmd_Colorize, Cmd_PaintOver,
 		Cmd_GrayScale, Cmd_Blur, Cmd_Shadow, Cmd_Darken, Cmd_Lighten,
-		Cmd_ColorCube,
+		Cmd_ColorCube, Cmd_KeyAlpha,
 	};
 
 	if (objc < 2)
@@ -3069,6 +3150,9 @@ tk_image(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				return tcl_error(Subcommands[index], "positive integer expected for number of rings");
 			return tk_color_cube(Subcommands[index], ti, Tcl_GetString(objv[0]), rings, sectors);
 		}
+
+		case Cmd_KeyAlpha:
+			return tk_key_alpha(Subcommands[index], ti, Tcl_GetString(objv[0]), Tcl_GetString(objv[1]), objc - 2, objv + 2);
 	}
 
 	return TCL_OK;	// not reached
