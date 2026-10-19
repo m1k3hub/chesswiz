@@ -1230,7 +1230,7 @@ proc ScanDrag {table x y} {
 
 	if {$(drag:motion)} {
 		set x [expr {[$table.t canvasx $x] - $(drag:x)}]
-		set y [expr {[$table.t canvasx $y] - $(drag:y)}]
+		set y [expr {[$table.t canvasy $y] - $(drag:y)}]
 
 		$table.t dragimage offset $x $y
 	}
@@ -1248,6 +1248,10 @@ proc MoveRow {table x y} {
 
 		lassign [::table::identify $table $x $y] row _
 		event generate [winfo parent $table] <<TableDropRow>> -data [list $(drag:row) $row]
+
+		# The dragimage borrows the dragged row's border elements; redraw the
+		# table so the row is restored instead of left as a blank ghost row.
+		TableFill $table
 	}
 
 	array unset drag:*
