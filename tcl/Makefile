@@ -222,6 +222,7 @@ SOURCES = \
 	ai-diagram.tcl \
 	app-ai.tcl \
 	app-ai-models.tcl \
+	actions.tcl \
 	app-assistant.tcl \
 	app-assistant-route.tcl \
 	app-assistant-args.tcl \

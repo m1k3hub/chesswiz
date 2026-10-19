@@ -58,6 +58,9 @@ set LoadMessage						"Opening database '%s'"
 set UpgradeMessage					"Upgrading database '%s'"
 set CompactMessage					"Compacting database '%s'"
 set CannotOpenFile					"Cannot open file '%s'."
+set CannotReadFile					"Cannot read file '%s': it exists, but is locked or not readable (open in another program, or lacking permission)."
+set MaintenanceReadOnlyPgn			"PGN files open read-only; use Convert to .sci to edit"
+set MaintenanceReadOnly				"This database is read-only; maintenance needs a writable database"
 set EncodingFailed					"Character decoding %s failed."
 set DatabaseAlreadyOpen				"Database '%s' is already open."
 set Properties							"Properties"
@@ -537,10 +540,20 @@ proc openBase {parent file byUser args} {
 
 
 	if {![file readable $file]} {
-		# not silently: the entry vanishes from the recent list
-		LogOpen [format $mc::CannotOpenFile $file]
-		removeRecentFile $file
-		::dialog::error -parent $parent -message [format $mc::CannotOpenFile $file]
+		if {[file exists $file]} {
+			# the file is there and only unreadable (locked, or no
+			# permission): keeping the entry is what lets the user retry
+			# after closing the other program
+			set msg [format $mc::CannotReadFile $file]
+			LogOpen $msg
+			::dialog::error -parent $parent -message $msg
+		} else {
+			# not silently: the entry vanishes from the recent list
+			set msg [format $mc::CannotOpenFile $file]
+			LogOpen $msg
+			removeRecentFile $file
+			::dialog::error -parent $parent -message $msg
+		}
 		return 0
 	}
 
@@ -1499,12 +1512,31 @@ proc PopupMenu {parent x y {base ""}} {
 		$menu add separator
 
 		set maint [menu $menu.maintenance -tearoff no]
+		# A disabled cascade cannot be opened and Tk shows no tooltip on a
+		# disabled entry, so a read-only database explains itself as the
+		# first (greyed) line of Maintenance instead of a menu that only
+		# refuses to open (REPORT.md G23).
+		set maintState $readonlyState
+		if {$readonly} {
+			if {$ext eq "pgn" || $ext eq "pgn.gz" || $ext eq "zip"} {
+				set hint $mc::MaintenanceReadOnlyPgn
+			} else {
+				set hint $mc::MaintenanceReadOnly
+			}
+			$maint add command \
+				-label " $hint" \
+				-image $::icon::16x16::info \
+				-compound left \
+				-state disabled \
+				;
+			set maintState normal
+		}
 		$menu add cascade \
 			-menu $maint \
 			-label " $mc::FileMaintenance" \
 			-image $::icon::16x16::setup \
 			-compound left \
-			-state $readonlyState \
+			-state $maintState \
 			;
 
 		if {!$readonly} {
@@ -2554,7 +2586,20 @@ proc GetRecentState {} {
 
 proc FindRecentFile {file} {
 	variable RecentFiles
-	return [lsearch -index 1 $RecentFiles $file]
+
+	set index [lsearch -exact -index 1 $RecentFiles $file]
+	if {$index >= 0} { return $index }
+
+	# The history may spell the same file differently (drive letter case,
+	# separators, a link, an options file from an older build). Without
+	# this, Remove does nothing and opening a file again adds a second
+	# entry for it.
+	set index 0
+	foreach entry $RecentFiles {
+		if {[::platform::sys::sameFile [lindex $entry 1] $file]} { return $index }
+		incr index
+	}
+	return -1
 }
 
 
