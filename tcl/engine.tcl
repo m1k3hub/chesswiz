@@ -1180,12 +1180,16 @@ proc startAnalysis {number} {
 }
 
 
+# Sends "stop" to the engine of pane <number>: it answers with its last
+# lines and "bestmove". Returns true when the engine was searching, i.e.
+# when an answer is to be expected.
 proc stopAnalysis {number} {
 	variable ${number}::Vars
 
 	if {$Vars(engine:id) != -1} {
-		::scidb::engine::analyze stop $Vars(engine:id)
+		return [::scidb::engine::analyze stop $Vars(engine:id)]
 	}
+	return 0
 }
 
 

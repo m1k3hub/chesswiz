@@ -56,6 +56,10 @@ set SearchMateNotSupported	"This engine is not supporting search for mate."
 set EngineIsPausing			"This engine is currently pausing."
 set PressEngineButton		"Use the locomotive for starting a motor."
 set Stopped						"stopped"
+set StopSearch					"Stop the search"
+set StopSearchTip				"Stop the search (the engine keeps running)"
+set StopTimedOut				"The engine did not stop within %s seconds and was powered down."
+set NumberOfLines				"Number of lines the engine shows"
 set OpponentsView				"Opponents view"
 set InsertMoveAsComment		"Insert move as comment"
 set SetupEvalEdges			"Setup evaluation edges"
@@ -159,6 +163,7 @@ array set GlobalOptions {
 	error:foreground	analysis,error:foreground
 	active:background	analysis,active:background
 	engine:delay		250
+	engine:stopTimeout	10000
 	eval:edges			{ 45 75 175 400 }
 	engine:font			TkTextFont
 }
@@ -196,6 +201,7 @@ proc build {parent number patternNumber} {
 
 	array set Vars {
 		after:id				{}
+		after:stop			{}
 		best:0				black
 		best:1				black
 		current:item		0
@@ -204,9 +210,11 @@ proc build {parent number patternNumber} {
 		engine:opponent	0
 		engine:pause		0
 		engine:state		normal
+		engine:stopped		0
 		info:height			0
 		keep:active			0
 		moves:max			0
+		multiPV			1
 		state:paused		0
 		toolbar:childs		{}
 		toolbar:height		0
@@ -452,8 +460,18 @@ proc build {parent number patternNumber} {
 		-command [namespace code [list Setup $tree $number]] \
 		-tooltipvar [::mc::var [namespace current]::mc::SetupEngine "..."] \
 		;
-	set Vars(widget:button:close) [::toolbar::add $tbControl button \
+	# The square (stop) button stops the search, it does not power the engine
+	# down: "stop" is sent and the engine answers with its last lines and
+	# "bestmove". Powering down is the separate "close" of the context menu.
+	set Vars(widget:button:stop) [::toolbar::add $tbControl button \
 		-image $::icon::toolbarStop \
+		-tooltipvar [namespace current]::mc::StopSearchTip \
+		-command [namespace code [list Stop $tree]] \
+		-state disabled \
+	]
+	lappend Vars(widget:toolbar:childs) $Vars(widget:button:stop)
+	set Vars(widget:button:close) [::toolbar::add $tbControl button \
+		-image $::icon::16x16::close \
 		-tooltipvar [namespace current]::mc::CloseEngine \
 		-command [namespace code [list CloseEngine $tree]] \
 		-state disabled \
@@ -483,21 +501,25 @@ proc build {parent number patternNumber} {
 	]
 	#lappend Vars(widget:toolbar:childs) $Vars(widget:ordering)
 	::toolbar::addSeparator $tbControl
+	# The Lines spinner shows the number of lines the engine is asked for
+	# (MultiPV), which is what the pane renders; changing it changes MultiPV.
+	# "Lines per variation" (how many plies of each line are wrapped) stays in
+	# the context menu.
 	::toolbar::add $tbControl label -textvar [namespace current]::mc::Lines
+	set Vars(multiPV) [expr {$Options(engine:singlePV) ? 1 : $Options(engine:multiPV)}]
 	set lpv [::toolbar::add $tbControl ::ttk::spinbox \
-		-tooltipvar [namespace current]::mc::LinesPerVariation \
+		-tooltipvar [namespace current]::mc::NumberOfLines \
 		-from 1 \
-		-to 4 \
+		-to 8 \
 		-width 2 \
 		-justify right \
 		-state readonly \
 		-cursor {} \
 		-takefocus 0 \
-		-textvar [namespace current]::${number}::Options(engine:nlines) \
+		-textvar [namespace current]::${tree}::Vars(multiPV) \
 		-exportselection no \
-		-command [namespace code [list SetLinesPerPV $tree]] \
+		-command [namespace code [list SetLines $tree]] \
 	]
-	$lpv set $Options(engine:nlines)
 	::theme::configureSpinbox $lpv
 	set Vars(widget:linesPerPV) $lpv
 	::toolbar::add $tbControl frame -width 3
@@ -589,7 +611,8 @@ proc update {args} {
 		if {[info exists Vars(after:id)]} {
 			after cancel $Vars(after:id)
 		}
-		if {[::engine::active? $number] && !$Vars(engine:locked)} {
+		# a stopped pane does not follow the board with a new search
+		if {[::engine::active? $number] && !$Vars(engine:locked) && !$Vars(engine:stopped)} {
 			set Vars(after:id) [after $GlobalOptions(engine:delay) [list ::engine::startAnalysis $number]]
 		}
 	}
@@ -610,6 +633,9 @@ proc startAnalysis {number} {
 	$Vars(widget:mesg) configure -text ""
 	::engine::kill $number
 	after cancel $Vars(after:id)
+	after cancel $Vars(after:stop)
+	set Vars(after:stop) {}
+	set Vars(engine:stopped) 0
 
 	set isReadyCmd [namespace current]::IsReady
 	set signalCmd [namespace current]::Signal
@@ -631,7 +657,8 @@ proc startAnalysis {number} {
 	if {!$Vars(engine:pause)} {
 		if {$Options(engine:bestFirst)} { set order bestFirst } else { set order unordered }
 		::scidb::engine::ordering [::engine::id $number] $order
-		if {$Options(engine:singlePV)} { set multiPV 1 } else { set multiPV $Options(engine:multiPV) }
+		set multiPV [MultiPV $number]
+		set Vars(multiPV) $multiPV
 		::engine::activateEngine $number [list multiPV $multiPV]
 	}
 }
@@ -648,6 +675,8 @@ proc lines {number} {
 	variable ${number}::Options
 
 	if {$Options(engine:singlePV)} { set n 1 } else { set n $Options(engine:multiPV) }
+	set most [MaxMultiPV $number]
+	if {$n > $most} { set n $most }
 	set result {}
 	for {set row 0} {$row < $n} {incr row} {
 		if {[info exists Vars(lines:$row)]} { lappend result $Vars(lines:$row) }
@@ -675,8 +704,14 @@ proc restartAnalysis {number} {
 	variable ${Vars(number)}::Options
 
 	after cancel $Vars(after:id)
-	if {$Options(engine:singlePV)} { set multiPV 1 } else { set multiPV $Options(engine:multiPV) }
-	::engine::restartAnalysis $number $Vars(engine:opponent) [list multiPV $multiPV]
+	# the opponent view is asked for by the user: it searches again
+	after cancel $Vars(after:stop)
+	set Vars(after:stop) {}
+	if {$Vars(engine:stopped)} {
+		set Vars(engine:stopped) 0
+		set Vars(engine:pause) 0
+	}
+	::engine::restartAnalysis $number $Vars(engine:opponent) [list multiPV [MultiPV $number]]
 	::application::updateAnalysisTitle $number [::engine::engineName $number]
 }
 
@@ -694,12 +729,16 @@ proc closed {w} {
 	variable ${tree}::Vars
 
 	after cancel $Vars(after:id)
+	after cancel $Vars(after:stop)
 	array unset NumberToTree $Vars(number)
 	lappend FreeNumbers $Vars(number)
 	::engine::forget $Vars(number)
 
 	if {[winfo exists $Vars(widget:button:close)]} {
 		::toolbar::childconfigure $Vars(widget:button:close) -state disabled
+	}
+	if {[winfo exists $Vars(widget:button:stop)]} {
+		::toolbar::childconfigure $Vars(widget:button:stop) -state disabled
 	}
 }
 
@@ -709,11 +748,111 @@ proc clearHash {number} {
 }
 
 
+# Stops the search of the pane's engine but keeps the engine: "stop" goes to
+# the engine, which answers with its last lines and "bestmove". Nothing here
+# waits for that answer -- waiting would block the Tk event loop, and an
+# engine which does not answer at all would freeze the application (F-11).
+# The timeout powers the engine down instead.
+proc Stop {tree} {
+	variable GlobalOptions
+	variable ${tree}::Vars
+
+	if {![::engine::active? $Vars(number)]} { return }
+	if {$Vars(engine:stopped)} { return }
+
+	after cancel $Vars(after:id)
+	set Vars(engine:stopped) 1
+	set Vars(engine:pause) 1
+	ShowMessage $tree info $mc::Stopped
+	UpdatePinState $tree
+	StopSearch $tree
+}
+
+
+# Sends "stop" and arms the timeout of the pane's stopped search. The engine
+# may be between two searches (an "isready" of a restart is still in flight),
+# in which case there is nothing to stop now and nothing to wait for.
+proc StopSearch {tree} {
+	variable GlobalOptions
+	variable ${tree}::Vars
+
+	if {[string length $Vars(after:stop)]} {
+		after cancel $Vars(after:stop)
+		set Vars(after:stop) {}
+	}
+	if {![::engine::stopAnalysis $Vars(number)]} { return }
+
+	set Vars(after:stop) [after $GlobalOptions(engine:stopTimeout) \
+		[namespace code [list StopTimedOut $tree [::engine::id $Vars(number)]]]]
+}
+
+
+# A search started although the user stopped it: an "isready" of a restart was
+# still in flight, or the board was changed. The stop wins, so stop it again.
+proc StopAgain {tree} {
+	variable ${tree}::Vars
+
+	if {![winfo exists $tree]} { return }
+	if {!$Vars(engine:stopped) || ![::engine::active? $Vars(number)]} { return }
+	StopSearch $tree
+}
+
+
+# The Lines spinner: what it shows is the number of lines (MultiPV) the engine
+# is asked for, so a change of it changes the MultiPV of the engine.
+proc SetLines {tree} {
+	variable ${tree}::Vars
+
+	set n $Vars(multiPV)
+	if {![string is integer -strict $n] || $n < 1} {
+		# the spinner is readonly, but a script may have put nonsense in it
+		Layout $tree
+		return
+	}
+	SetMultiPV $tree $n
+}
+
+
+# Called when the engine answered "stop" with its last best move.
+proc StopFinished {tree} {
+	variable ${tree}::Vars
+
+	set Vars(after:stop) {}
+	if {$Vars(engine:stopped)} { ShowMessage $tree info $mc::Stopped }
+}
+
+
+# The engine did not answer "stop": it is gone, or it is hung. Power it
+# down, exactly as "close" does, instead of waiting for it for ever.
+proc StopTimedOut {tree engineId} {
+	variable GlobalOptions
+	variable ${tree}::Vars
+
+	set Vars(after:stop) {}
+	if {![winfo exists $tree]} { return }
+	if {[::engine::id $Vars(number)] != $engineId} { return }
+
+	set seconds [expr {$GlobalOptions(engine:stopTimeout)/1000}]
+	set msg [format $mc::StopTimedOut $seconds]
+	set Vars(current:message) [list [namespace current]::ShowMessage $tree error $msg]
+	CloseEngine $tree
+	# close asks for the engine button in an idle callback: the reason why the
+	# engine went away has to be what the user sees
+	after idle [namespace code [list ShowMessage $tree error $msg]]
+}
+
+
 proc CloseEngine {tree} {
 	variable ${tree}::Vars
 
+	# a pending stop timer refers to an engine which is about to go away
+	after cancel $Vars(after:stop)
+	set Vars(after:stop) {}
+	set Vars(engine:stopped) 0
+
 	::engine::kill $Vars(number)
 	::toolbar::childconfigure $Vars(widget:button:close) -state disabled
+	::toolbar::childconfigure $Vars(widget:button:stop) -state disabled
 	UpdatePinState $tree
 	::application::updateAnalysisTitle $Vars(number)
 	after idle [namespace code [list DisplayPressEngineButton $tree]]
@@ -728,6 +867,11 @@ proc Pause {tree} {
 	if {$Vars(engine:pause)} {
 		after cancel $Vars(after:id)
 		::engine::pause $Vars(number)
+	} elseif {$Vars(engine:stopped)} {
+		# the search was stopped, not paused: start it again
+		set Vars(engine:stopped) 0
+		::engine::startAnalysis $Vars(number)
+		ConfigurePause $tree
 	} else {
 		::engine::resume $Vars(number)
 	}
@@ -740,7 +884,11 @@ proc ConfigurePause {tree args} {
 
 	if {$Vars(engine:pause)} {
 		set icon $::icon::toolbarStart
-		set tip [namespace current]::mc::Resume
+		if {$Vars(engine:stopped)} {
+			set tip [namespace current]::mc::StartMotor
+		} else {
+			set tip [namespace current]::mc::Resume
+		}
 	} else {
 		set icon $::icon::toolbarPause
 		set tip [namespace current]::mc::Pause
@@ -844,6 +992,53 @@ proc ClearLines {tree args} {
 }
 
 
+# The number of lines the engine of pane <number> can be asked for: the pane
+# has rows for eight lines, and the engine may support fewer.
+proc MaxMultiPV {number} {
+	set most 8
+
+	if {![namespace exists ::engine::$number]} { return $most }
+	variable ::engine::${number}::Vars
+	if {![info exists Vars(current:name)] || ![info exists Vars(current:protocol)]} {
+		return $most
+	}
+
+	set index [::engine::FindIndex $Vars(current:name)]
+	if {$index < 0} { return $most }
+	# the protocol the pane's engine is running with (probed features differ)
+	set protocol $Vars(current:protocol)
+	if {$protocol ne "UCI" && $protocol ne "WinBoard"} { return $most }
+
+	set engine [lindex $::engine::Engines $index]
+	if {![dict exists $engine Features:$protocol]} { return $most }
+	set features [dict get $engine Features:$protocol]
+	if {[dict exists $features multiPV]} {
+		set value [dict get $features multiPV]
+		if {[string is integer -strict $value] && $value > 0} {
+			set most [expr {min($most, $value)}]
+		}
+	}
+	return $most
+}
+
+
+# The number of lines the engine of pane <number> is asked for right now, i.e.
+# the MultiPV it runs with (one line while "multiple variations" is off).
+proc MultiPV {number} {
+	variable NumberToTree
+
+	if {![exists? $number]} { return 1 }
+	variable ${number}::Options
+
+	# an engine may support fewer lines than the pane has rows
+	set most [MaxMultiPV $number]
+	if {$Options(engine:multiPV) > $most} { set Options(engine:multiPV) $most }
+	if {$Options(engine:multiPV) < 1} { set Options(engine:multiPV) 1 }
+
+	return [expr {$Options(engine:singlePV) ? 1 : $Options(engine:multiPV)}]
+}
+
+
 proc SetMultiPV {tree {number 0}} {
 	variable GlobalOptions
 	variable ${tree}::Vars
@@ -858,7 +1053,9 @@ proc SetMultiPV {tree {number 0}} {
 		}
 	}
 
-	if {$Options(engine:singlePV)} { set multiPV 1 } else { set multiPV $Options(engine:multiPV) }
+	# the engine may support fewer lines than the pane has rows (MultiPV
+	# clamps the request, and the spinner shows the value which resulted)
+	set multiPV [MultiPV $Vars(number)]
 	if {[::engine::active? $Vars(number)]} {
 		::scidb::engine::multiPV [::engine::id $Vars(number)] $multiPV
 	}
@@ -873,9 +1070,8 @@ proc SetMultiPV {tree {number 0}} {
 
 proc SetLinesPerPV {tree} {
 	variable ${tree}::Vars
-	variable ${Vars(number)}::Options
 
-	set Options(engine:nlines) [$Vars(widget:linesPerPV) get]
+	# the radio buttons of the context menu write Options(engine:nlines)
 	Layout $tree
 }
 
@@ -893,6 +1089,9 @@ proc Layout {tree} {
 		set nlines $Options(engine:nlines)
 		set state readonly
 	}
+
+	# the spinner always shows the MultiPV the engine runs with
+	set Vars(multiPV) $pvcount
 
 	if {$nlines == 1} {
 		set lines 0
@@ -920,6 +1119,9 @@ proc Layout {tree} {
 	$tree style layout styleFig elemTextFig -minheight $lheight
 	$tree style layout styleSym elemTextSym -minheight $lheight
 	::toolbar::childconfigure $Vars(widget:linesPerPV) -state $state
+	set most [MaxMultiPV $Vars(number)]
+	if {$most < $Vars(multiPV)} { set most $Vars(multiPV) }
+	catch { [::toolbar::lookupChild $Vars(widget:linesPerPV)] configure -to $most }
 #	::toolbar::childconfigure $Vars(widget:ordering) -state $state
 	after idle [namespace code [list ResizePane $tree $theight]]
 }
@@ -928,6 +1130,8 @@ proc Layout {tree} {
 proc ResizePane {tree height} {
 	variable ${tree}::Vars
 
+	# an idle callback may still run when the pane has been closed
+	if {![winfo exists $tree] || ![winfo exists $Vars(widget:info)]} { return }
 	if {$height <= 1 || $Vars(toolbar:height) <= 1} { return }
 	incr height $Vars(toolbar:height)
 	incr height [winfo height $Vars(widget:info)]
@@ -1001,6 +1205,9 @@ proc ShowMessage {tree type txt} {
 	variable ${tree}::Vars
 	variable GlobalOptions
 
+	# an idle callback may still run when the pane has been closed
+	if {![winfo exists $tree] || ![winfo exists $Vars(widget:mw)]} { return }
+
 	set width [expr {[winfo width $Vars(widget:mw)] - 50}]
 	$Vars(widget:mesg) configure \
 		-text $txt \
@@ -1040,14 +1247,31 @@ proc Display(state) {tree state} {
 
 	switch $state {
 		stop	{
-			SetState $tree disabled
-			::toolbar::childconfigure $Vars(widget:button:close) -state disabled
-			Display(clear) $tree
+			if {$Vars(engine:stopped)} {
+				# a stop by the user: the engine keeps running and the lines it
+				# found stay on screen; the start button restarts the search
+				SetState $tree disabled
+				::toolbar::childconfigure $Vars(widget:button:close) -state normal
+				set Vars(engine:pause) 1
+				::toolbar::childconfigure $Vars(widget:button:pause) -state normal
+				ShowMessage $tree info $mc::Stopped
+			} else {
+				SetState $tree disabled
+				::toolbar::childconfigure $Vars(widget:button:close) -state disabled
+				Display(clear) $tree
+			}
 		}
 
 		start	{
 			SetState $tree normal
 			::toolbar::childconfigure $Vars(widget:button:close) -state normal
+			if {$Vars(engine:stopped)} {
+				# the stop wins over a search which was already on its way
+				::toolbar::childconfigure $Vars(widget:button:stop) -state disabled
+				after idle [namespace code [list StopAgain $tree]]
+			} else {
+				::toolbar::childconfigure $Vars(widget:button:stop) -state normal
+			}
 		}
 
 		pause {
@@ -1224,7 +1448,13 @@ proc Display(time) {tree time depth seldepth nodes nps tbhits} {
 
 
 proc Display(bestmove) {tree move} {
-	# not yet used
+	variable ${tree}::Vars
+
+	# the engine answered "stop" (see Stop): no need to power it down
+	if {[string length $Vars(after:stop)]} {
+		after cancel $Vars(after:stop)
+		StopFinished $tree
+	}
 }
 
 
@@ -1285,6 +1515,10 @@ proc UpdateInfo {tree id type info} {
 proc IsReady {tree id} {
 	if {![winfo exists $tree]} { return }
 	variable ${tree}::Vars
+
+	# a stop must not be undone by the answer to an earlier "isready"
+	if {$Vars(engine:stopped)} { return }
+
 	after idle [list ::engine::startAnalysis $Vars(number)]
 }
 
@@ -1294,6 +1528,9 @@ proc Signal {tree id code} {
 	variable ${tree}::Vars
 
 	after cancel $Vars(after:id)
+	after cancel $Vars(after:stop)
+	set Vars(after:stop) {}
+	set Vars(engine:stopped) 0
 	set parent [winfo toplevel $tree]
 	SetState $tree disabled
 
@@ -1519,6 +1756,14 @@ proc PopupMenu {tree number args} {
 		;
 
 	if {[::engine::id $Vars(number)] >= 0} {
+		if {!$Vars(engine:stopped)} {
+			$menu add command \
+				-label " $mc::StopSearch" \
+				-image $::icon::16x16::stop \
+				-compound left \
+				-command [namespace code [list Stop $tree]] \
+				;
+		}
 		if {$Vars(engine:pause)} {
 			set txt $mc::Resume
 			set img $::icon::16x16::start
@@ -1533,9 +1778,10 @@ proc PopupMenu {tree number args} {
 			-command [namespace code [list Pause $tree]] \
 			;
 		if {$Vars(number) >= 0} {
+			# powering down is a separate action, it does not stop the search
 			$menu add command \
 				-label " $mc::CloseEngine" \
-				-image $::icon::16x16::stop \
+				-image $::icon::16x16::close \
 				-compound left \
 				-command [namespace code [list CloseEngine $tree]] \
 				;

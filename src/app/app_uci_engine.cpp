@@ -1227,6 +1227,13 @@ uci::Engine::sendOptions()
 		if (opt.name == m_threads || opt.name == m_minThreads || opt.name == m_maxThreads)
 			continue; // should not be sent here
 
+		// The number of lines belongs to the analysis pane, which sets it with
+		// changeNumberOfVariations(). A profile carrying its own MultiPV would
+		// otherwise leave the engine showing a number of lines the pane does not
+		// know about (its Lines spinner showed 1 while the engine ran 4).
+		if (id == "multipv")
+			continue;
+
 		mstl::string val = opt.val;
 
 		switch (id[0])
