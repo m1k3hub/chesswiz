@@ -1,0 +1,7 @@
+::board::addStyle theme {
+  version      {1.0}
+  piece-style  {Lapis|1792400006002|yellow.color|chesswiz}
+  identifier   {Lapis|1792400006000|yellow.color|chesswiz}
+  piece-set    {Merida}
+  square-style {Lapis|1792400006001|yellow.color|chesswiz}
+}

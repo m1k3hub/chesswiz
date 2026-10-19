@@ -1,0 +1,7 @@
+::board::addStyle theme {
+  version      {1.0}
+  piece-style  {Rosewood Dusk|1792400003002|yellow.color|chesswiz}
+  identifier   {Rosewood Dusk|1792400003000|yellow.color|chesswiz}
+  piece-set    {Merida}
+  square-style {Rosewood Dusk|1792400003001|yellow.color|chesswiz}
+}

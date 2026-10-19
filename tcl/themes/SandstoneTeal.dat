@@ -1,0 +1,7 @@
+::board::addStyle theme {
+  version      {1.0}
+  piece-style  {Sandstone Teal|1792400005002|yellow.color|chesswiz}
+  identifier   {Sandstone Teal|1792400005000|yellow.color|chesswiz}
+  piece-set    {Merida}
+  square-style {Sandstone Teal|1792400005001|yellow.color|chesswiz}
+}

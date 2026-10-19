@@ -1,0 +1,7 @@
+::board::addStyle theme {
+  version      {1.0}
+  piece-style  {Graphite|1792400004002|yellow.color|chesswiz}
+  identifier   {Graphite|1792400004000|yellow.color|chesswiz}
+  piece-set    {Merida}
+  square-style {Graphite|1792400004001|yellow.color|chesswiz}
+}

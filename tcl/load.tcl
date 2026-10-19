@@ -329,7 +329,8 @@ if {	![file exists [file join $::scidb::dir::user themes Primus.dat]]
 	|| ![file exists [file join $::scidb::dir::user themes Blackjack.dat]]
 	|| ![file exists [file join $::scidb::dir::user themes VirtualBlue.dat]]
 	|| ![file exists [file join $::scidb::dir::user themes Burnt.dat]]
-	|| ![file exists [file join $::scidb::dir::user themes Creepy.dat]]} {
+	|| ![file exists [file join $::scidb::dir::user themes Creepy.dat]]
+	|| ![file exists [file join $::scidb::dir::user themes NordicFrost.dat]]} {
 	set update 1
 }
 if {[::process::testOption first-time]} {
