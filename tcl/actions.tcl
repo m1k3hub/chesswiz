@@ -25,6 +25,8 @@ package require Tcl 8.5
 namespace eval ::action {
 	variable Registry [dict create]
 	variable ObjectResolvers [dict create]
+	variable ConfirmHook {}
+	variable BulkHook {}
 
 	namespace export register run list get labels invoke
 }
@@ -321,9 +323,12 @@ proc ::action::resolver::resolve {objectType} {
 # ----------------------------------------------------------------------
 # run: validate args and call the handler.
 # Returns the handler result or an error: text (never raises).
+# Enforces confirm and bulk gates when hooks are configured.
 # ----------------------------------------------------------------------
 proc ::action::run {id args} {
 	variable Registry
+	variable ConfirmHook
+	variable BulkHook
 
 	if {![dict exists $Registry $id]} {
 		return "error: unknown action id '$id'"
@@ -363,6 +368,35 @@ proc ::action::run {id args} {
 		}
 	}
 
+	set isConfirm [dict get $record confirm]
+	set isBulk [dict get $record bulk]
+	set what [dict get $record what]
+
+	if {$isConfirm || $isBulk} {
+		if {$what eq ""} {
+			set what "perform action '$id'"
+		} else {
+			if {[catch { set what [format $what {*}[dict values $validatedArgs]] }]} {
+				set what "perform action '$id'"
+			}
+		}
+		if {$isBulk && $BulkHook ne ""} {
+			if {[catch { uplevel #0 [::list $BulkHook $what] } answer]} {
+				set answer 0
+			}
+			if {!$answer} {
+				return "declined"
+			}
+		} elseif {$isConfirm && $ConfirmHook ne ""} {
+			if {[catch { uplevel #0 [::list $ConfirmHook $what] } answer]} {
+				set answer 0
+			}
+			if {!$answer} {
+				return "declined"
+			}
+		}
+	}
+
 	set objectType [dict get $record object]
 	if {$objectType ne ""} {
 		if {![catch {::action::resolver::resolve $objectType} resolvedObj]} {
@@ -382,6 +416,7 @@ proc ::action::run {id args} {
 # ----------------------------------------------------------------------
 # labels: return {id label accelerator enabled visible} rows for a surface.
 # Surface: bar, context:<id>, palette
+# Debug actions are excluded from all surfaces.
 # ----------------------------------------------------------------------
 proc ::action::labels {surface} {
 	variable Registry
@@ -389,6 +424,9 @@ proc ::action::labels {surface} {
 	set output {}
 	foreach id [dict keys $Registry] {
 		set record [dict get $Registry $id]
+		
+		if {[dict get $record ai] eq "debug"} { continue }
+		
 		set include 0
 
 		if {$surface eq "bar"} {

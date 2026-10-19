@@ -132,15 +132,27 @@ namespace eval application {
 namespace eval assistant {
 
 variable Actions
+
+# Bulk actions: change more than one game or a whole database/file in one call.
+variable BulkActions {
+	download_games
+	update_player_data
+	import_games
+	compact_database
+	convert_database
+	save_working_set
+}
 dict for {name entry} $Actions {
 	lassign $entry confirm debug what description parameters handler
 	set aiFlag [expr {$debug ? "debug" : ($confirm ? 1 : 0)}]
+	set isBulk [expr {$name in $BulkActions ? 1 : 0}]
 	set label [string map {" " "_"} $name]
 	::action::register $name [dict create \
 		label    $label \
 		schema   $parameters \
 		handler  [list ::application::assistant::_actionAdapter $name $handler] \
 		confirm  $confirm \
+		bulk     $isBulk \
 		ai       $aiFlag \
 		what     $what \
 		doc      $description \
