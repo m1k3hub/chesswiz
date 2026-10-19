@@ -94,6 +94,7 @@ array set Options {
 }
 
 variable MoveTimeout 2000			;# grace added to a move's clock, ms
+variable ConnectTimeout 10000		;# handshake (uci -> readyok) budget, ms
 variable TickInterval 250			;# clock display update, ms
 variable DrawMinPly 60				;# draw offers only after move 30
 variable DrawMaxCp 50				;# "near zero" in centipawns
@@ -119,6 +120,7 @@ array set Priv {
 	pipeState	off
 	pending		0
 	watchdog		{}
+	handshake	{}
 	tick			{}
 	eval:cp		{}
 	eval:mate	{}
@@ -431,7 +433,16 @@ proc ::playengine::StartGame {spec} {
 		[format {[Black "%s"]} [expr {$color eq "white" ? $name : $mc::You}]] \
 		{[Result "*"]} \
 	]
-	ImportGame $pos "[join $tags \n]\n\n*\n"
+	# a thrown import (e.g. a C++ assertion in the backend) arrives with an
+	# empty message via the command dispatcher; the dispatcher keeps the
+	# original exception text in ::scidb::intern::errmsg
+	if {[catch { ImportGame $pos "[join $tags \n]\n\n*\n" } err]} {
+		if {$err eq "" && [info exists ::scidb::intern::errmsg]} {
+			set err $::scidb::intern::errmsg
+		}
+		catch { ::debuglog::log playengine "header import failed: $err" }
+		return -code error $err
+	}
 
 	::scidb::game::subscribe board $pos [namespace current]::Update
 	::scidb::db::subscribe gameClose [namespace current]::GameClosed
@@ -610,6 +621,7 @@ proc ::playengine::DriveMove {} {
 proc ::playengine::Connect {} {
 	variable Priv
 	variable mc
+	variable ConnectTimeout
 
 	if {$Priv(pipe) ne ""} { return 0 }
 	if {$Priv(pipeState) eq "starting"} { return 1 }
@@ -632,8 +644,24 @@ proc ::playengine::Connect {} {
 	set Priv(pipeState) starting
 	set Priv(pending) 1
 	fileevent $pipe readable [namespace code OnReadable]
+	# an engine that never completes the handshake (crashed wrapper,
+	# speaks no UCI) must not wedge the board in input-off state forever
+	set Priv(handshake) [after $ConnectTimeout [namespace code OnConnectTimeout]]
 	Send uci
 	return 1
+}
+
+
+# The handshake deadline: the engine answered neither "uciok" nor
+# "readyok" in time, so the game cannot be saved from this side.
+proc ::playengine::OnConnectTimeout {} {
+	variable Priv
+	variable mc
+	variable ConnectTimeout
+
+	set Priv(handshake) {}
+	if {!$Priv(active) || $Priv(pipeState) eq "ready"} { return }
+	EngineDied [format $mc::EngineSlow $Priv(engine) [expr {$ConnectTimeout / 1000}]s]
 }
 
 
@@ -683,6 +711,8 @@ proc ::playengine::OnEngineLine {line} {
 		}
 		readyok {
 			if {$Priv(pipeState) eq "starting"} {
+				after cancel $Priv(handshake)
+				set Priv(handshake) {}
 				set Priv(pipeState) ready
 				if {$Priv(pending)} {
 					set Priv(pending) 0
@@ -712,7 +742,9 @@ proc ::playengine::GotBestMove {move} {
 	variable mc
 
 	after cancel $Priv(watchdog)
+	after cancel $Priv(handshake)
 	set Priv(watchdog) {}
+	set Priv(handshake) {}
 	if {!$Priv(active) || $Priv(phase) ne "engine"} { return } ;# stale answer
 	set Priv(pipeState) ready
 
@@ -776,6 +808,8 @@ proc ::playengine::EngineDied {{why ""}} {
 proc ::playengine::Shutdown {} {
 	variable Priv
 
+	after cancel $Priv(handshake)
+	set Priv(handshake) {}
 	if {$Priv(pipe) ne ""} {
 		catch { fileevent $Priv(pipe) readable {} }
 		catch { puts $Priv(pipe) "quit"; flush $Priv(pipe) }
@@ -975,14 +1009,20 @@ proc ::playengine::EndGame {result reason} {
 	if {!$Priv(active) || $Priv(phase) eq "over"} { return }
 	after cancel $Priv(tick)
 	after cancel $Priv(watchdog)
+	after cancel $Priv(handshake)
 	set Priv(tick) {}
 	set Priv(watchdog) {}
+	set Priv(handshake) {}
 	set Priv(phase) over
 	unset -nocomplain Priv(side:user) Priv(side:engine)
 	BoardInput on
 
 	if {$result ne "*"} {
-		catch { StoreResult $result }
+		if {[catch { StoreResult $result } err]} {
+			# the outcome stands in the panel either way, but a lost result
+			# header must be traceable in the debug log
+			catch { ::debuglog::log playengine "StoreResult $result failed: $err" }
+		}
 		Status [format $mc::GameOver $mc::Result($result) $reason]
 	} else {
 		Status $reason
@@ -1004,13 +1044,20 @@ proc ::playengine::StoreResult {result} {
 
 	set pos $Priv(pos)
 	set pgn [::scidb::game::toPGN modified -position $pos]
-	if {![regsub {\[Result "[^"]*"\]} $pgn [format {[Result "%s"]} $result] pgn]} {
-		# no Result tag at all: add it after the first header line
-		set eol [string first \n $pgn]
-		set pgn [string replace $pgn $eol $eol "\n[format {[Result "%s"]} $result]"]
+	if {![regsub -- {\[Result "[^"]*"\]} $pgn [format {[Result "%s"]} $result] pgn]} {
+		# no Result tag at all: add it at the end of the header block
+		set gap [string first "\n\n" $pgn]
+		if {$gap < 0} {
+			set gap [string length $pgn]
+			append pgn "\n"
+		}
+		set pgn [string replace $pgn $gap $gap "\n[format {[Result "%s"]} $result]"]
 	}
-	# the movetext terminator matches the header
-	regsub {\*\s*$} $pgn $result pgn
+	# the movetext terminator matches the header; a missing terminator
+	# (an odd toPGN edge) gets appended instead of silently disagreeing
+	if {![regsub -- {(\*|1-0|0-1|1/2-1/2)\s*$} $pgn $result pgn]} {
+		set pgn "[string trimright $pgn]\n$result\n"
+	}
 	set Priv(busy) 1
 	ImportGame $pos $pgn
 	set Priv(busy) 0

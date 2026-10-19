@@ -504,7 +504,6 @@ unsigned
 Codec::putGame(ByteStream const& strm, unsigned prevOffset, unsigned prevRecordLength)
 {
 	M_ASSERT(m_gameData);
-	M_ASSERT(prevRecordLength == 0);
 
 	return m_gameData->put(strm, prevOffset, prevRecordLength);
 }
