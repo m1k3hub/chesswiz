@@ -453,4 +453,129 @@ foreach {name board expected} {
 	} -result $expected
 }
 
+
+# ----------------------------------------------------------------------
+# G07 regressions: the laptop loop saw the engine never launch and the
+# Result tag stay "*" after Resign
+# ----------------------------------------------------------------------
+
+tcltest::test playengine-real-resign {real engine answers e4; Resign stores the 0-1 result tag} \
+-constraints playengineRealUCI -setup {
+	set savedEngines $::engine::Engines
+	set ::engine::Engines [list $::scidb::test::pe::stockfish]
+} -body {
+	::playengine::StartGame [list -engine [dict get $::scidb::test::pe::stockfish Name] -color white -minutes 1 -increment 0]
+	set headers [::scidb::game::tags]
+	set accepted [::playengine::UserMove e4]
+	set deadline [expr {[clock milliseconds] + 10000}]
+	while {$::playengine::Priv(active) && [clock milliseconds] < $deadline && [::scidb::game::query length] < 2} {
+		after 10 {set ::scidb::test::pe::wake 1}
+		vwait ::scidb::test::pe::wake
+	}
+	set answered [::scidb::game::query length]
+	::playengine::Resign
+	set tags [::scidb::game::tags]
+	list \
+		[expr {[lsearch -exact $headers {White You}] >= 0}] \
+		[expr {[lsearch -exact $headers [list Black [dict get $::scidb::test::pe::stockfish Name]]] >= 0}] \
+		$accepted $answered \
+		$::playengine::Priv(phase) \
+		[expr {[lsearch -exact $tags {Result 0-1}] >= 0}] \
+		[expr {[lsearch -exact $tags {Result *}] >= 0}]
+} -cleanup {
+	set pos $::playengine::Priv(pos)
+	::playengine::Finish
+	catch {::application::pgn::release $pos}
+	catch {::game::release $pos}
+	set ::engine::Engines $savedEngines
+} -result {1 1 1 2 over 1 0}
+
+
+# The stored Command is one argv element, so a binary in a directory with
+# spaces (the normal case for a Windows .exe under "Program Files") must
+# launch intact -- Tcl's pipe parses "|[list {*}$cmd]" back to that argv.
+tcltest::test playengine-spaced-path {an engine in a directory with spaces launches and answers} \
+-constraints playengineRealUCI -setup {
+	set scratch [file join $::scidb::test::app::testDir tmp-app spaced-engine]
+	set exe [file join $scratch {engine dir} {my stockfish}]
+	file delete -force $scratch
+	file mkdir [file dirname $exe]
+	file copy [dict get $::scidb::test::pe::stockfish Command] $exe
+	file attributes $exe -permissions 0755
+	set savedEngines $::engine::Engines
+	set entry [dict replace [dict merge $::engine::EmptyEngine $::scidb::test::pe::stockfish] \
+		Name SpacedEngine Command $exe]
+	set ::engine::Engines [list $entry]
+} -body {
+	::playengine::StartGame [list -engine SpacedEngine -color white -minutes 1 -increment 0]
+	set accepted [::playengine::UserMove e4]
+	set deadline [expr {[clock milliseconds] + 10000}]
+	while {$::playengine::Priv(active) && [clock milliseconds] < $deadline && [::scidb::game::query length] < 2} {
+		after 10 {set ::scidb::test::pe::wake 1}
+		vwait ::scidb::test::pe::wake
+	}
+	set answered [::scidb::game::query length]
+	set pipeState $::playengine::Priv(pipeState)
+	::playengine::Resign
+	set tags [::scidb::game::tags]
+	list $accepted $answered $pipeState $::playengine::Priv(phase) \
+		[expr {[lsearch -exact $tags {Result 0-1}] >= 0}]
+} -cleanup {
+	set pos $::playengine::Priv(pos)
+	::playengine::Finish
+	catch {::application::pgn::release $pos}
+	catch {::game::release $pos}
+	set ::engine::Engines $savedEngines
+	file delete -force [file join $::scidb::test::app::testDir tmp-app spaced-engine]
+} -result {1 2 ready over 1}
+
+
+# An engine process that never speaks UCI (crashed wrapper, wrong binary)
+# must not leave the board input-off forever: the handshake deadline ends
+# the game with an explanatory status and the result stays "*".
+tcltest::test playengine-handshake-timeout {an engine that never answers the handshake ends the game} -setup {
+	set savedEngines $::engine::Engines
+	set ::engine::Engines [list [dict merge $::engine::EmptyEngine [list \
+		Name		HangEngine \
+		Command		/bin/cat \
+		Protocol		{UCI} \
+	]]]
+	set savedTimeout $::playengine::ConnectTimeout
+	set ::playengine::ConnectTimeout 1500
+} -body {
+	::playengine::StartGame {-engine HangEngine -color white -minutes 10 -increment 2}
+	set accepted [::playengine::UserMove e4]
+	after 3500 {set ::scidb::test::pe::hung 1}
+	vwait ::scidb::test::pe::hung
+	list $accepted $::playengine::Priv(phase) $::playengine::Priv(pipeState) \
+		$::playengine::Priv(handshake) \
+		[expr {[lsearch -exact [::scidb::game::tags] {Result *}] >= 0}]
+} -cleanup {
+	set pos $::playengine::Priv(pos)
+	::playengine::Finish
+	catch {::application::pgn::release $pos}
+	catch {::game::release $pos}
+	set ::engine::Engines $savedEngines
+	set ::playengine::ConnectTimeout $savedTimeout
+} -result {1 over off {} 1}
+
+
+# The engine side of the time-out wiring: its flag falls while it is
+# thinking, and that result reaches the header like any other.
+tcltest::test playengine-flag-engine {an engine flag fall ends the game 1-0 with the result stored} -setup {
+	::scidb::test::pe::stub {}
+} -body {
+	::playengine::StartGame {-engine StubEngine -color white -minutes 10 -increment 2}
+	::playengine::UserMove e4
+	::playengine::FlagFall b
+	set pgn [::scidb::test::pe::pgn]
+	list $::playengine::Priv(phase) \
+		[expr {[lsearch -exact [::scidb::game::tags] {Result 1-0}] >= 0}] \
+		[expr {[string first {[Result "1-0"]} $pgn] >= 0}] \
+		[string match {*1-0*} [string range $pgn end-4 end]]
+} -cleanup {
+	::scidb::test::pe::unstub
+} -result {over 1 1 1}
+
+
 tcltest::cleanupTests
