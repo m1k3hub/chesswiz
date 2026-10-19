@@ -553,7 +553,8 @@ proc doAction {action san {noMoveCmd {}}} {
 	}
 
 	# Auto-timestamp correspondence chess moves with ccsnt.
-	set tags [::scidb::game::tags 0]
+	set tags {}
+	catch { set tags [::scidb::game::tags] }
 	if {[IsCorrespondenceGame $tags]} {
 		set key [::scidb::game::query current]
 		set timestamp [clock format [clock seconds] -format {%Y.%m.%d, %H:%M:%S}]
@@ -578,7 +579,7 @@ proc doAction {action san {noMoveCmd {}}} {
 
 
 proc IsCorrespondenceGame {{tags {}}} {
-	if {[llength $tags] == 0} { if {[catch { set tags [::scidb::game::tags 0] } err]} { puts stderr "move: $err"; return 0 } }
+	if {[llength $tags] == 0} { if {[catch { set tags [::scidb::game::tags] } err]} { puts stderr "move: $err"; return 0 } }
 	foreach pair $tags {
 		lassign $pair name value
 		if {$name eq "TimeMode" && [string tolower $value] eq "corr"} {
