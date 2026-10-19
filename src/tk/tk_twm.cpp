@@ -8890,10 +8890,11 @@ cmdUndock(Base& base, int objc, Tcl_Obj* const objv[])
 
 	char const* path = tcl::asString(objv[pathIndex]);
 	Node* node = base.root->findPath(path);
-	Node* toplevel = node->toplevel();
 
 	if (!node)
 		M_THROW(tcl::Exception("cannot find window '%s'", path));
+
+	Node* toplevel = node->toplevel();
 
 	if (!node->isFrameOrMetaFrame())
 		M_THROW(tcl::Exception("cannot undock '%s', it's not a frame", path));

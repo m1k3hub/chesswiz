@@ -170,7 +170,7 @@ proc load {twm} {
 	# Only fall back to list:normal if no name is set or LoadLayout fails.
 	set loadedNamed false
 	if {[string length $Options($id:layout:name)] > 0} {
-		if {[LoadLayout $twm $layoutVariant $Options($id:layout:name) load]} {
+		if {[LoadLayout $twm $layoutVariant $Options($id:layout:name) load true]} {
 			set loadedNamed true
 		}
 	}
@@ -220,23 +220,15 @@ proc RemoveLegacyMedia {twm layoutVariant} {
 	set Options($id:layout:saved:$layoutVariant) $newLayout
 	set Vars($id:layout:changed:$layoutVariant) 0
 	
-	# Also update the named .layout file on disk if one is active
+	# Use the same atomic writer as an explicit save, including table options.
 	set name $Options($id:layout:name)
 	if {[string length $name] > 0} {
-		set file [makeFilename $id $layoutVariant $name]
-		if {[file exists $file]} {
-			# Rewrite the layout file with the migrated layout
-			if {[catch {
-				set fh [::open $file "w"]
-				fconfigure $fh -encoding utf-8
-				puts $fh "::application::twm::setup $layoutVariant $id {$newLayout}"
-				close $fh
-			} err]} {
-				puts stderr "RemoveLegacyMedia: failed to rewrite $file: $err"
-			}
+		if {![WriteLayout $twm $id $name $layoutVariant]} {
+			array unset Options $id:layout:media:folded
+			error "could not migrate named layout $name"
 		}
 	}
-	
+
 	after idle [list ::options::save $twm $layoutVariant]
 }
 
@@ -1235,7 +1227,7 @@ proc Fullscreen {twm flag} {
 }
 
 
-proc LoadLayout {twm layoutVariant name mode} {
+proc LoadLayout {twm layoutVariant name mode {initial false}} {
 	variable [namespace parent]::Vars
 	variable layoutVariants
 	variable Options
@@ -1287,7 +1279,8 @@ proc LoadLayout {twm layoutVariant name mode} {
 	set preserve {}
 	set unused ""
 
-	if {$id eq "board"} {
+	# Startup has only the setup tree; there are no live leaves to preserve yet.
+	if {$id eq "board" && !$initial} {
 		foreach uid [$twm leaves] {
 			if {[string match {analysis:*} $uid]} {
 				set number [[namespace parent]::analysisNumberFromUid $uid]
@@ -1833,9 +1826,10 @@ proc WriteLayout {twm id name layoutVariant} {
 	# serialize as orphan leaves and crash the loader (VAL-MED-010D).
 	# Auto-dock any floating panes before inspection.
 	foreach leaf [$twm leaves] {
-		if {[$twm isfloat [$twm toplevel $leaf]]} {
+		set path [$twm leaf $leaf]
+		if {[$twm isfloat [$twm toplevel $path]]} {
 			# This pane is currently undocked (floating) - dock it back
-			catch { ::scidb::tk::twm dock $twm $leaf }
+			$twm dock [$twm toplevel $path]
 		}
 	}
 
@@ -1853,7 +1847,7 @@ proc WriteLayout {twm id name layoutVariant} {
 	if {[catch {
 		set fh [::open $tempFile "w"]
 		fconfigure $fh -encoding utf-8
-		set layoutLine "::application::twm::setup $layoutVariant $id {$Options($id:layout:list:$layoutVariant)}"
+		set layoutLine [list ::application::twm::setup $layoutVariant $id $Options($id:layout:list:$layoutVariant)]
 		puts $fh $layoutLine
 		::options::writeTableOptions $fh $id $layoutVariant
 		close $fh
@@ -1864,15 +1858,8 @@ proc WriteLayout {twm id name layoutVariant} {
 		set content [read $validateFh]
 		close $validateFh
 		
-		# Check braces are balanced
-		set braceCount 0
-		foreach char [split $content {}] {
-			if {$char eq "\{"} { incr braceCount }
-			if {$char eq "\}"} { incr braceCount -1 }
-			if {$braceCount < 0} { error "Unbalanced braces: extra closing brace" }
-		}
-		if {$braceCount != 0} { error "Unbalanced braces: $braceCount unclosed opening braces" }
-		
+		if {![info complete $content]} { error "Incomplete layout script" }
+
 		# Check the setup command is present
 		if {[string first "::application::twm::setup" $content] < 0} {
 			error "Missing setup command in layout file"
