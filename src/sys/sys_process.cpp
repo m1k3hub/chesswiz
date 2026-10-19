@@ -457,7 +457,23 @@ Process::close()
 	{
 		Tcl_DeleteChannelHandler(m_chan, ::readHandler, this);
 		Tcl_DeleteCloseHandler(m_chan, closeHandler, this);
-		Tcl_UnregisterChannel(::sys::tcl::interp(), m_chan);
+
+		// Unregistering a command pipeline channel waits for the child process
+		// to exit (Tcl cleans up the children of the pipeline). An engine which
+		// is still searching, or one which never received "quit", therefore
+		// blocked the application in close() for as long as it kept running
+		// (the analysis pane froze for minutes with "go infinite" still
+		// running, F-11). Kill the child first: what was written for it has
+		// already been handed to the pipe (the channel is blocking), and after
+		// the kill the channel cannot wait for it any more. The interpreter
+		// state is restored because closing a pipeline may leave the reason
+		// for the abnormal end of the child in the result.
+		Tcl_Interp* interp = ::sys::tcl::interp();
+		Tcl_InterpState state = Tcl_SaveInterpState(interp, TCL_OK);
+
+		kill();
+		Tcl_UnregisterChannel(interp, m_chan);
+		Tcl_RestoreInterpState(interp, state);
 		m_chan = 0;
 	}
 
