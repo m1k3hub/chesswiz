@@ -37,22 +37,51 @@ after 2000 {
             set base [::application::twm::inspectLayout $twm]
             set prefold [string map {{frame tree} {frame media {-width 400 -height 300 -minwidth 250 -minheight 200 -expand y} frame tree}} $base]
             set ::application::twm::Options(board:layout:list:normal) $prefold
-            set ::application::twm::Options(board:layout:name) ""
+            
+            # Support named layout testing (VAL-MED-010B)
+            if {[info exists ::env(MIG_NAMED_TEST)] && $::env(MIG_NAMED_TEST) eq "1"} {
+                set ::application::twm::Options(board:layout:name) TestNamed
+                # Write the named .layout file
+                set nameFile [::application::twm::makeFilename board normal TestNamed]
+                file mkdir [file dirname $nameFile]
+                set fh [open $nameFile w]
+                puts $fh "::application::twm::setup normal board {$prefold}"
+                close $fh
+            } else {
+                set ::application::twm::Options(board:layout:name) ""
+            }
+            
             array unset ::application::twm::Options board:layout:media:folded
             ::options::startTransaction
             ::options::saveOptionsFile
             ::options::endTransaction
             migOut P1 prefold [regexp {frame media} $prefold] \
                 marker [info exists ::application::twm::Options(board:layout:media:folded)] \
+                name $::application::twm::Options(board:layout:name) \
                 leaves [lsort [$twm leaves]]
         }
         2 {
             set after [::application::twm::inspectLayout $twm]
             migOut P2 media [regexp {frame media} $after] \
                 marker [info exists ::application::twm::Options(board:layout:media:folded)] \
+                name $::application::twm::Options(board:layout:name) \
                 leaves [lsort [$twm leaves]] \
                 tree [$twm isdocked tree] analysis [$twm isdocked analysis:1] board [$twm isdocked board] \
                 editor [$twm isdocked editor] games [$twm isdocked games] dbgames [$twm isdocked dbgames]
+            
+            # Check if named .layout file was rewritten (for named test)
+            if {[info exists ::env(MIG_NAMED_TEST)] && $::env(MIG_NAMED_TEST) eq "1"} {
+                set nameFile [::application::twm::makeFilename board normal TestNamed]
+                if {[file exists $nameFile]} {
+                    set fh [open $nameFile r]
+                    set content [read $fh]
+                    close $fh
+                    migOut P2 namedFileHasMedia [regexp {frame media} $content]
+                } else {
+                    migOut P2 namedFileExists 0
+                }
+            }
+            
             # reopen the Media library from the pane menu and save the layout
             ::application::twm::ChangeState $twm media
             update
@@ -66,6 +95,7 @@ after 2000 {
             set after [::application::twm::inspectLayout $twm]
             migOut P3 media [regexp {frame media} $after] docked [$twm isdocked media] \
                 marker [info exists ::application::twm::Options(board:layout:media:folded)] \
+                name $::application::twm::Options(board:layout:name) \
                 leaves [lsort [$twm leaves]]
         }
     }
