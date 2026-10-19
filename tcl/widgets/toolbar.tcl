@@ -2148,11 +2148,18 @@ proc CreateHandle {toolbar handle {size 0}} {
 
 	tk::frame $handle -class ToolbarHandle -borderwidth 0
 
+	# The canvas shows the handle's dot pattern once it is configured (see
+	# ConfigureHandle). Until then it has no content: with the widget
+	# default background it would show as a foreign rectangle at the left
+	# end of the toolbar strip (run 2 report: cosmetic black rectangle), so
+	# the canvas has the toolbar's own background color from the start.
+	set bg $Defaults(handle:color:gray)
+
 	if {$Specs(orientation:[winfo parent $handle]) eq "horz"} {
-		set decor [tk::canvas $handle.c -width $Defaults(handle:size) -height $size -borderwidth 0]
+		set decor [tk::canvas $handle.c -width $Defaults(handle:size) -height $size -borderwidth 0 -background $bg]
 		pack $decor -fill y -side left -expand yes
 	} else {
-		set decor [tk::canvas $handle.c -width $size -height $Defaults(handle:size) -borderwidth 0]
+		set decor [tk::canvas $handle.c -width $size -height $Defaults(handle:size) -borderwidth 0 -background $bg]
 		pack $decor -fill x -side top -expand yes
 	}
 
