@@ -184,6 +184,8 @@ proc ::insights::show {parent base variant playerIndex} {
 	raise $dlg
 	focus $dlg
 	Refresh $dlg
+	# Ensure all widgets have computed their requested sizes before placement
+	update idletasks
 	::util::place::besideBoard $dlg [winfo toplevel $parent]
 	return $dlg
 }
