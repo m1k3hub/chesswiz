@@ -12,7 +12,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 out=$(mkdir -p "$1" && cd "$1" && pwd)
 sha=$(git -C "$root" rev-parse --short HEAD)
 date=$(git -C "$root" log -1 --format=%cd --date=short)
-version="1.0~beta.r1493+git$(echo $date | tr -d -).$sha"
+version="1.0.r1493+git$(echo $date | tr -d -).$sha"
 tree=$out/chesswiz-$version
 rm -rf "$tree"; mkdir -p "$tree"
 

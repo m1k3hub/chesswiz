@@ -1,2 +1,2 @@
 [InternetShortcut]
-URL=http://scidb.sourceforge.net
+URL=https://chesswizapp.com
