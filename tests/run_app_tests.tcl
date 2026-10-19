@@ -75,13 +75,15 @@ set argc $argcCopy
 
 set matchPattern "*"
 set verbose 0
+set filePattern "test_app_*.tcl"
 
 for {set i 0} {$i < [llength $argv]} {incr i} {
     switch -glob -- [lindex $argv $i] {
         -match { incr i; set matchPattern [lindex $argv $i] }
+        -file { incr i; set filePattern [lindex $argv $i] }
         -verbose { set verbose 1 }
         -help {
-            puts "Usage: tests/run_app_tests.tcl [-match PATTERN] [-verbose]"
+            puts "Usage: tests/run_app_tests.tcl [-match PATTERN] [-file GLOB] [-verbose]"
             catch { destroy .application }
             catch { destroy . }
             return
@@ -89,7 +91,7 @@ for {set i 0} {$i < [llength $argv]} {incr i} {
     }
 }
 
-set testFiles [lsort [glob -nocomplain -directory $::scidb::test::app::testDir test_app_*.tcl]]
+set testFiles [lsort [glob -nocomplain -directory $::scidb::test::app::testDir $filePattern]]
 
 set ::scidb::test::app::reportHandle [open $::scidb::test::app::reportFile w]
 
