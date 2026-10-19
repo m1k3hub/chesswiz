@@ -50,6 +50,7 @@ array set Priv {
 	stimulated	{}
 	connection	1
 	welcome		0
+	recent		{}
 }
 
 array set Options {
@@ -137,6 +138,9 @@ proc activate {w flag} {
 	set maxWidth [expr {int((600.0*[::font::html::fontSize info])/11.0) + 400}]
 	$html configure -fixedwidth [expr {min($maxWidth, $width - 40)}]
 	set recentFiles [[namespace parent]::database::recentFiles]
+	# the row ids below refer to this list, not to whatever the list holds
+	# when a row is clicked (see RecentEntry)
+	set Priv(recent) $recentFiles
 	append content "<html><body style='color:${color-color};'>"
 	append css [::font::html::defaultTextFonts info] \n
 	append css [::font::html::defaultFixedFonts info] \n
@@ -424,6 +428,21 @@ proc Mouse1Down {nodes} {
 }
 
 
+# The row ids in the page are indexes into the list the page was built
+# from. Indexing the current list would open, or remove, another entry as
+# soon as one was opened or removed while the page stays visible.
+proc RecentEntry {id} {
+	variable Priv
+
+	set list $Priv(recent)
+	if {![llength $list]} { set list [[namespace parent]::database::recentFiles] }
+	if {![string is integer -strict $id] || $id < 0 || $id >= [llength $list]} {
+		return {}
+	}
+	return [lindex $list $id]
+}
+
+
 proc Mouse1Up {nodes} {
 	variable Priv
 
@@ -432,8 +451,14 @@ proc Mouse1Up {nodes} {
 
 		# NOTE: we must use mouse up because the progress window is grabbing the mouse
 		if {[string length $id]} {
-			lassign [lindex [[namespace parent]::database::recentFiles] $id] \
-				type file name encoding readonly
+			set entry [RecentEntry $id]
+			if {![llength $entry]} {
+				[namespace parent]::database::LogOpen \
+					"recent list: entry $id is no longer in the list (stale page)"
+				after idle [namespace code update]
+				return
+			}
+			lassign $entry type file name encoding readonly
 			[namespace parent]::database::LogOpen "recent list: open $file (encoding $encoding, readonly $readonly)"
 			[namespace parent]::database::openBase $Priv(html) $file no \
 				-encoding $encoding \
@@ -503,8 +528,15 @@ proc RemoveRecentFile {id} {
 	variable Priv
 
 	# <id> is the index into the list shown, removeRecentFile wants the file
-	set file [lindex [[namespace parent]::database::recentFiles] $id 1]
-	[namespace parent]::database::removeRecentFile [file normalize $file]
+	set entry [RecentEntry $id]
+	if {![llength $entry]} {
+		[namespace parent]::database::LogOpen \
+			"recent list: entry $id is no longer in the list (stale page)"
+		after idle [list $Priv(html) stimulate]
+		return
+	}
+	set file [lindex $entry 1]
+	[namespace parent]::database::removeRecentFile $file
 	after idle [list $Priv(html) stimulate]
 }
 

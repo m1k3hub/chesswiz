@@ -292,6 +292,47 @@ proc pipeYes {args} {
 	execWithYes {*}$args
 }
 
+# Are file names case-insensitive on this system?
+# Windows always is; macOS' default volumes are, but a volume may be
+# case-sensitive, so the answer is only a first step (see sameFile).
+proc caseInsensitivePaths? {} {
+	if {$::tcl_platform(platform) eq "windows"} { return 1 }
+	if {$::tcl_platform(os) eq "Darwin"} { return 1 }
+	return 0
+}
+
+# Do two spellings name the same file?
+# Paths reach the application in whatever form the source gave them: the
+# file dialog, a drop, the single-instance hand-off, an options file
+# written by an older build. On Windows the drive letter's case and the
+# separators are not part of the name, and a link or a hard link is the
+# same database. Used by the recent list, which must not lose an entry
+# because it was written down differently.
+proc sameFile {a b} {
+	if {[string equal $a $b]} { return 1 }
+	if {![string length $a] || ![string length $b]} { return 0 }
+
+	if {[catch { set a [file normalize $a]; set b [file normalize $b] }]} {
+		return 0
+	}
+	if {[string equal $a $b]} { return 1 }
+
+	if {[caseInsensitivePaths?] && [string equal -nocase $a $b]} {
+		# Same name up to case: the same file, unless the volume is
+		# case-sensitive and both spellings really exist (two files).
+		if {[catch { file stat $a sa }] || [catch { file stat $b sb }]} {
+			return 1
+		}
+		return [expr {$sa(dev) == $sb(dev) && $sa(ino) == $sb(ino)}]
+	}
+
+	# Different spelling of one path (a link, a hard link, "x/../x"):
+	# the disk decides, one inode is one database.
+	if {[catch { file stat $a sa }] || [catch { file stat $b sb }]} { return 0 }
+	if {!$sa(ino) || !$sb(ino)} { return 0 } ;# no usable identity here
+	return [expr {$sa(dev) == $sb(dev) && $sa(ino) == $sb(ino)}]
+}
+
 # Touch a file (update mtime or create if absent).
 proc touch {path} {
 	if {$::tcl_platform(platform) eq "unix"} {
