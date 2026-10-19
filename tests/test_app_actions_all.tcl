@@ -11,59 +11,69 @@ package require tcltest 2.5
 
 namespace eval ::scidb::test::actions_all {
 	variable HandlerCalls {}
-	variable HandlerResults {}
 }
 
-# Stub handler that records the call and returns ok
-proc ::scidb::test::actions_all::stubHandler {name argsDict} {
-	variable HandlerCalls
-	variable HandlerResults
-	lappend HandlerCalls [list $name $argsDict]
-	if {[dict exists $::scidb::test::actions_all::HandlerResults $name]} {
-		return [dict get $::scidb::test::actions_all::HandlerResults $name]
-	}
-	return "ok: $name executed"
+source [file join [file dirname [info script]] app_actions_support.tcl]
+
+# Replace the actual Do* command, so both the assistant and the registry's
+# adapter still run their real validation/gates before reaching the stub.
+proc ::scidb::test::actions_all::stubHandler {name args} {
+    variable HandlerCalls
+    lappend HandlerCalls [list $name $args]
+    return "reached:$name"
 }
 
-# Get valid sample args for a tool based on its schema
-proc ::scidb::test::actions_all::sampleArgs {name schemaStr} {
-	if {$schemaStr eq ""} { return {} }
-	if {[catch { package require json }]} { return {} }
-	if {[catch { set schema [::json::json2dict $schemaStr] }]} { return {} }
-	
-	set props [expr {[dict exists $schema properties] ? [dict get $schema properties] : {}}]
-	set required [expr {[dict exists $schema required] ? [dict get $schema required] : {}}]
-	
-	set result [dict create]
-	dict for {propName propDef} $props {
-		set type [expr {[dict exists $propDef type] ? [dict get $propDef type] : "string"}]
-		if {[dict exists $propDef enum]} {
-			dict set result $propName [lindex [dict get $propDef enum] 0]
-		} elseif {$type eq "integer"} {
-			if {[dict exists $propDef minimum]} {
-				dict set result $propName [dict get $propDef minimum]
-			} else {
-				dict set result $propName 1
-			}
-		} elseif {$type eq "boolean"} {
-			dict set result $propName 0
-		} elseif {$type eq "number"} {
-			dict set result $propName 1.0
-		} else {
-			# string or other
-			dict set result $propName "test_value"
-		}
-	}
-	return $result
-}
-
-# Check if action is available (enabled predicate passes)
-proc ::scidb::test::actions_all::isAvailable {name} {
-	if {[catch { set record [::action::get $name] }]} { return 0 }
-	set enabledPred [dict get $record enabled]
-	if {$enabledPred eq ""} { return 1 }
-	if {[catch { uplevel #0 $enabledPred } result]} { return 0 }
-	return $result
+proc ::scidb::test::actions_all::reach {name} {
+    variable HandlerCalls {}
+    set savedLog $::application::assistant::ErrorLogFile
+    set ::application::assistant::ErrorLogFile [file join $::scidb::test::actions::Dir errors.log]
+    set args [::scidb::test::actions::sampleArgs $name]
+    set command [lindex [dict get $::application::assistant::Actions $name] 5]
+    if {[llength $command] != 1} { error "unsupported handler prefix: $command" }
+    set savedDebug $::application::assistant::Priv(debug)
+    set ::application::assistant::Priv(debug) 0
+    set savedConfirm $::application::assistant::Priv(confirm)
+    set savedReqConfirm $::application::assistant::Priv(reqconfirm)
+    set savedHooks [list $::action::ConfirmHook $::action::BulkHook]
+    set ::application::assistant::Priv(confirm) ::scidb::test::actions::yes
+    set ::application::assistant::Priv(reqconfirm) {}
+    set ::action::ConfirmHook ::scidb::test::actions::yes
+    set ::action::BulkHook ::scidb::test::actions::yes
+    rename $command ${command}__reach_original
+    interp alias {} $command {} ::scidb::test::actions_all::stubHandler $name
+    set code [catch {
+        set reply [::application::assistant::runTool $name $args]
+        set debug [expr {[dict get [::action::get $name] ai] eq "debug"}]
+        if {$debug} {
+            if {![string match "error:*only available in debug mode*" $reply]
+                || [llength $HandlerCalls]} { error "$name: $reply; calls=$HandlerCalls" }
+        } elseif {$name eq "stop_engine"} {
+            # Fresh process has no running engine. This is an asserted gate,
+            # not a skip or an arbitrary error accepted as handler reachability.
+            if {$reply ne "error: no engine is running" || [llength $HandlerCalls]} {
+                error "$name: $reply; calls=$HandlerCalls"
+            }
+        } else {
+            set checked [::application::assistant::CheckArgs $name $args]
+            set expected [list $name [dict values $checked]]
+            if {$HandlerCalls ne [list $expected] || ![string match "reached:$name*" $reply]} {
+                error "$name: $reply; calls=$HandlerCalls; expected=$expected"
+            }
+            set registryReply [::action::run $name $args]
+            if {$registryReply ne "reached:$name" || $HandlerCalls ne [list $expected $expected]} {
+                error "$name registry: $registryReply; calls=$HandlerCalls"
+            }
+        }
+        set result 1
+    } result options]
+    rename $command {}
+    rename ${command}__reach_original $command
+    set ::application::assistant::ErrorLogFile $savedLog
+    set ::application::assistant::Priv(debug) $savedDebug
+    set ::application::assistant::Priv(confirm) $savedConfirm
+    set ::application::assistant::Priv(reqconfirm) $savedReqConfirm
+    lassign $savedHooks ::action::ConfirmHook ::action::BulkHook
+    return -options $options $result
 }
 
 # ----------------------------------------------------------------------
@@ -99,48 +109,51 @@ tcltest::test all-actions-have-schemas {every action has a schema (passthrough o
 # Test: Each action can be invoked through runTool with stubbed handler
 # This test requires the full app context (runTool uses Actions dict)
 # ----------------------------------------------------------------------
-tcltest::test all-actions-runnable-through-assistant {every non-debug action reaches handler via runTool} -body {
-	variable HandlerCalls {}
-	variable HandlerResults {}
-	
-	set failures {}
-	set skipped {}
-	
-	foreach name [::action::list] {
-		set record [::action::get $name]
-		set ai [dict get $record ai]
-		
-		# Skip debug actions unless in debug mode
-		if {$ai eq "debug"} { continue }
-		
-		# Check if action is available
-		if {![::scidb::test::actions_all::isAvailable $name]} {
-			lappend skipped $name
-			continue
-		}
-		
-		# Get schema and generate sample args
-		set schemaStr [dict get $record schema]
-		set args [::scidb::test::actions_all::sampleArgs $name $schemaStr]
-		
-		# Try to call through runTool (which uses Actions dict + CheckArgs)
-		set result [::application::assistant::runTool $name $args]
-		
-		# Check result - should not be "error: unknown tool"
-		if {[string match "error: unknown tool*" $result]} {
-			lappend failures [list $name "not in Actions dict"]
-		} elseif {[string match "error:*missing*" $result] || [string match "error:*required*" $result]} {
-			# Missing required arg - try to find better args from baseline
-			lappend failures [list $name "args issue: $result"]
-		}
-		# Other errors (like file not found) are acceptable - means it reached the handler
-	}
-	
-	list [llength $failures] [llength $skipped] $failures
+tcltest::test all-actions-runnable-through-assistant {every action reaches its handler or its explicit state/debug gate} -setup {
+    ::scidb::test::actions::ready
+    set savedEngines $::engine::Engines
+    ::scidb::test::actions::stubEngine
+} -body {
+    set count 0
+    foreach name [::action::list] {
+        incr count [::scidb::test::actions_all::reach $name]
+    }
+    set count
 } -cleanup {
-	variable HandlerCalls {}
-	variable HandlerResults {}
-} -match glob -result {0 * *}
+    set ::engine::Engines $savedEngines
+    file delete -force $::scidb::test::actions::Dir
+} -result 87
+
+# Individually selectable legs for timeout 30 process isolation.
+foreach name [::action::list] {
+    tcltest::test action-handler-$name {assistant and registry dispatch retain real gates} -setup {
+        ::scidb::test::actions::ready
+        set savedEngines $::engine::Engines
+        ::scidb::test::actions::stubEngine
+    } -body [list ::scidb::test::actions_all::reach $name] -cleanup {
+        set ::engine::Engines $savedEngines
+        file delete -force $::scidb::test::actions::Dir
+    } -result 1
+}
+
+tcltest::test all-actions-confirm-without-pane {confirmation has a live parent before the assistant pane is built} -setup {
+    ::scidb::test::actions::ready
+    set savedWindow $::application::assistant::Priv(window)
+    set ::application::assistant::Priv(window) {}
+    rename ::dialog::question ::scidb::test::actions_all::originalQuestion
+    proc ::dialog::question {args} {
+        set ::scidb::test::actions_all::questionParent [dict get $args -parent]
+        return yes
+    }
+} -body {
+    list [::application::assistant::ConfirmDialog {generated test action}] \
+        $::scidb::test::actions_all::questionParent
+} -cleanup {
+    rename ::dialog::question {}
+    rename ::scidb::test::actions_all::originalQuestion ::dialog::question
+    set ::application::assistant::Priv(window) $savedWindow
+    unset -nocomplain ::scidb::test::actions_all::questionParent
+} -result {1 .application}
 
 # ----------------------------------------------------------------------
 # Test: Unavailable actions return proper error text
@@ -221,3 +234,6 @@ tcltest::test all-actions-bulk-marked {bulk actions have bulk flag set} -body {
 	}
 	set missing
 } -result {}
+
+file delete -force $::scidb::test::actions::Dir
+::tcltest::cleanupTests

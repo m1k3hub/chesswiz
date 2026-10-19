@@ -265,7 +265,11 @@ proc ::ai::studyplan::GamesToStudy {player games} {
 	set view [::scidb::view::new $base $variant unused unused unused unused master slave]
 	set numbers {}
 	set rc [catch {
-		::scidb::view::search $base $variant $view null none $query
+		if {[llength $query]} {
+			::scidb::view::search $base $variant $view null none $query
+		} else {
+			::scidb::view::search $base $variant $view reset none
+		}
 		set count [::scidb::view::count games $base $variant $view]
 		set from [expr {$count > $games ? $count - $games : 0}]
 		for {set row $from} {$row < $count} {incr row} {

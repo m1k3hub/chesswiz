@@ -1705,8 +1705,12 @@ proc ::application::assistant::ConfirmDialog {what} {
 	variable Priv
 	variable mc
 
+	set parent [expr {[winfo exists .application] ? ".application" : "."}]
+	if {$Priv(window) ne "" && [winfo exists $Priv(window)]} {
+		set parent [winfo toplevel $Priv(window)]
+	}
 	set reply [::dialog::question \
-		-parent [winfo toplevel $Priv(window)] \
+		-parent $parent \
 		-message [format $mc::Confirm $what] \
 		-default no \
 	]
@@ -2943,7 +2947,7 @@ proc ::application::assistant::FirstGame {base variant args} {
 }
 
 
-proc ::application::assistant::DoSetPosition {fen moves} {
+proc ::application::assistant::DoSetPosition {fen {moves ""}} {
 	if {![llength [info commands ::ai::setup::position]]} {
 		return "error: setting up a position is not available in this build"
 	}
@@ -3048,6 +3052,8 @@ proc ::application::assistant::DoOpenPosition {index} {
 	set game [lindex $pairs [expr {2 * ($index - 1)}]]
 	set ply [lindex $pairs [expr {2 * ($index - 1) + 1}]]
 	::game::new .application -base $base -variant $variant -number $game
+	# A previously open game may still be at its last visited move.
+	::scidb::game::go start
 	set plies [::scidb::game::query mainline]
 	if {$ply > 0 && $ply <= [llength $plies]} {
 		# the key of a ply is the position after it

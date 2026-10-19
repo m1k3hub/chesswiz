@@ -47,11 +47,11 @@ proc ::ai::setup::Tokens {moves} {
 
 proc ::ai::setup::validate {args} {
 	variable Start
-	array set opts [list -fen $Start -moves {}]
+	array set opts [list -fen $Start -moves {} -variant Normal]
 	array set opts $args
 	set fen [expr {[string trim $opts(-fen)] eq "" ? $Start : [string trim $opts(-fen)]}]
 
-	if {[catch { ::scidb::board::isValidFen $fen } valid] || !$valid} {
+	if {[catch { ::scidb::board::isValidFen $fen $opts(-variant) } valid] || !$valid} {
 		error "not a valid position: '$fen'"
 	}
 	set sans [Tokens $opts(-moves)]
@@ -59,7 +59,7 @@ proc ::ai::setup::validate {args} {
 	foreach san $sans {
 		set number [expr {[lindex $fen 5] eq "" ? 1 : [lindex $fen 5]}]
 		set dots [expr {[lindex $fen 1] eq "b" ? "..." : "."}]
-		if {[catch { ::scidb::ai::moveFacts $san $fen } facts]
+		if {[catch { ::scidb::ai::moveFacts $san $fen $opts(-variant) } facts]
 		 || ![regexp {"fenAfter":"([^"]+)"} $facts -> after]} {
 			error "move $number$dots$san is not legal here"
 		}
@@ -74,15 +74,26 @@ proc ::ai::setup::validate {args} {
 proc ::ai::setup::position {args} {
 	array set opts {-variant Normal}
 	array set opts $args
-	set checked [validate {*}[array get opts -fen] {*}[array get opts -moves]]
+	set checked [validate {*}[array get opts]]
 
-	if {[::game::new .application -variant $opts(-variant)] < 0} {
+	if {[set position [::game::new .application -variant $opts(-variant)]] < 0} {
 		error "no free game slot on the board"
 	}
-	::scidb::game::clear [dict get $checked start]
+	# setStartPosition (pos::setup) installs the board before resetting the
+	# navigation key. clear(FEN) resets that key against the previous board.
+	# Avoid the scratch-database import round trip, whose compact encoding can
+	# replace a recognized starting position with its id and lose FEN counters.
+	::scidb::pos::setup [dict get $checked start]
+	::scidb::game::refresh $position -immediate
 	foreach san [dict get $checked sans] {
 		::scidb::game::move $san
 		::scidb::game::go 1
 	}
+	# The setup line is the baseline, not a sequence of user edits. Clearing
+	# modified also clears the engine Undo/Redo history (Game::setIsModified).
+	::scidb::game::modified $position false
+	lset ::game::List $position 5 [::scidb::game::query $position checksum]
+	::application::pgn::unlock $position
+	::game::lockChanged $position 0
 	return $checked
 }

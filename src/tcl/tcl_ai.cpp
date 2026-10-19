@@ -11,6 +11,7 @@
 // ======================================================================
 
 #include "tcl_ai.h"
+#include "tcl_game.h"
 #include "tcl_application.h"
 #include "tcl_base.h"
 
@@ -121,26 +122,27 @@ cmdText(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdMoveFacts(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc < 2 || objc > 3)
+	if (objc < 2 || objc > 4)
 	{
-		Tcl_WrongNumArgs(ti, 1, objv, "move ?fen?");
+		Tcl_WrongNumArgs(ti, 1, objv, "move ?fen? ?variant?");
 		return TCL_ERROR;
 	}
 
 	char const* const	token = stringFromObj(objc, objv, 1);
 	mstl::string		result;
 
-	if (objc == 3)
+	if (objc >= 3)
 	{
 		Board board;
+		variant::Type const variant = objc == 4 ? tcl::game::variantFromObj(objv[3]) : variant::Normal;
 
-		if (!setupBoard(board, stringFromObj(objc, objv, 2)))
+		if (!board.setup(stringFromObj(objc, objv, 2), variant))
 		{
 			setResult("invalid FEN");
 			return TCL_ERROR;
 		}
 
-		Move move = board.parseMove(token, variant::Normal);
+		Move move = board.parseMove(token, variant);
 
 		if (move.isEmpty() || !move.isValid())
 		{
@@ -148,7 +150,7 @@ cmdMoveFacts(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			return TCL_ERROR;
 		}
 
-		ChessFacts::toMoveJson(board, move, variant::Normal, result);
+		ChessFacts::toMoveJson(board, move, variant, result);
 	}
 	else
 	{

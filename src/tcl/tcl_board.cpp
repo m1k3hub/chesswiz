@@ -26,6 +26,7 @@
 // ======================================================================
 
 #include "tcl_board.h"
+#include "tcl_game.h"
 #include "tcl_application.h"
 #include "tcl_base.h"
 
@@ -424,14 +425,14 @@ cmdMakeFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdIsValidFen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc != 2)
+	if (objc != 2 && objc != 3)
 	{
-		Tcl_WrongNumArgs(ti, 1, objv, "<fen>");
+		Tcl_WrongNumArgs(ti, 1, objv, "<fen> ?<variant>?");
 		return TCL_ERROR;
 	}
 
 	// TODO: we need some flags: allowHandicap, allowIllegalPosition (king in check)
-	setResult(Board::isValidFen(stringFromObj(objc, objv, 1), Scidb->game().variant()));
+	setResult(Board::isValidFen(stringFromObj(objc, objv, 1), (objc == 3 ? tcl::game::variantFromObj(objv[2]) : Scidb->game().variant())));
 	return TCL_OK;
 }
 
