@@ -74,6 +74,29 @@ proc ::action::register {id record} {
 		return -code error "error: action '$id' missing required field 'label'"
 	}
 
+	if {[dict exists $record ai]} {
+		set aiVal [dict get $record ai]
+		if {$aiVal ni {0 1 debug}} {
+			return -code error "error: action '$id' field 'ai' must be 0, 1, or debug"
+		}
+	}
+
+	foreach boolField {confirm bulk async ends-in-dialog} {
+		if {[dict exists $record $boolField]} {
+			set bval [dict get $record $boolField]
+			if {$bval ni {0 1 true false yes no}} {
+				return -code error "error: action '$id' field '$boolField' must be boolean"
+			}
+		}
+	}
+
+	if {[dict exists $record maxreply]} {
+		set mrval [dict get $record maxreply]
+		if {![string is integer -strict $mrval]} {
+			return -code error "error: action '$id' field 'maxreply' must be an integer"
+		}
+	}
+
 	set normalized [dict create \
 		label    [dict get $record label] \
 		object   [_dg $record object {}] \
@@ -404,9 +427,7 @@ proc ::action::run {id args} {
 		}
 	}
 
-	set cmd [::list $handler $validatedArgs]
-
-	set code [catch {uplevel #0 $cmd} result options]
+	set code [catch {uplevel #0 [::list {*}$handler $validatedArgs]} result options]
 	if {$code != 0} {
 		return "error: [string trim $result]"
 	}
