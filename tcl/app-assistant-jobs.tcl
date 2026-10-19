@@ -160,5 +160,17 @@ dict for {name entry} $Actions {
 	]
 }
 
+# Wire registry hooks for confirm/bulk/debug gates.
+# Assistant path uses ConfirmDialog; menu path uses ::dialog::question directly.
+set ::action::ConfirmHook ::application::assistant::ConfirmDialog
+set ::action::BulkHook ::application::assistant::ConfirmDialog
+set ::action::DebugGate [list expr {$::application::assistant::Priv(debug)}]
+
+# Register production object resolvers.
+# Resolvers return typed references without widget paths.
+::action::resolver::register game {::scidb::game::current}
+::action::resolver::register database {::scidb::db::get name}
+::action::resolver::register move {{return [::scidb::game::query position]}}
+
 } ;# namespace assistant
 } ;# namespace application

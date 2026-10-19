@@ -27,6 +27,7 @@ namespace eval ::action {
 	variable ObjectResolvers [dict create]
 	variable ConfirmHook {}
 	variable BulkHook {}
+	variable DebugGate {}
 
 	namespace export register run list get labels invoke
 }
@@ -45,6 +46,7 @@ proc ::action::_dg {d key def} {
 #   object     app|board|game|move|db|player|engine-line|media|pane|...
 #   args       Tcl-native args spec -> JSON schema generated
 #   schema     pre-built JSON schema string (passthrough, no generation)
+#   validate   cross-arg validation hook (command prefix, receives validated dict)
 #   handler    command prefix (validated args dict appended)
 #   enabled    predicate command (returns 1/0)
 #   visible    predicate command (returns 1/0)
@@ -102,6 +104,7 @@ proc ::action::register {id record} {
 		object   [_dg $record object {}] \
 		args     [_dg $record args {}] \
 		schema   [_dg $record schema {}] \
+		validate [_dg $record validate {}] \
 		handler  [_dg $record handler {}] \
 		enabled  [_dg $record enabled {}] \
 		visible  [_dg $record visible {}] \
@@ -194,8 +197,20 @@ proc ::action::argsToSchema {spec} {
 			set type enum
 		}
 
-		if {[dict exists $opts required]} {
-			lappend required $name
+		set explicitRequired 0
+		if {[lsearch -exact $opts required] >= 0} {
+			if {[dict exists $opts required]} {
+				set reqVal [dict get $opts required]
+				if {$reqVal in {1 true yes}} {
+					set explicitRequired 1
+				} elseif {$reqVal in {0 false no}} {
+					set explicitRequired 0
+				} else {
+					set explicitRequired 1
+				}
+			} else {
+				set explicitRequired 1
+			}
 		}
 
 		set prop [dict create]
@@ -220,8 +235,10 @@ proc ::action::argsToSchema {spec} {
 
 		dict set properties $name $prop
 
-		if {!$hasDefault && ![lsearch -exact $required $name]} {
-			lappend required $name
+		if {$explicitRequired || (!$hasDefault && ![lsearch -exact $required $name])} {
+			if {[lsearch -exact $required $name] < 0} {
+				lappend required $name
+			}
 		}
 	}
 
@@ -263,7 +280,22 @@ proc ::action::validateArgs {id argsDict} {
 		set type [_dg $opts type string]
 		set defaultVal [_dg $opts default {}]
 		set hasDefault [dict exists $opts default]
-		set isRequired [expr {!$hasDefault}]
+		set explicitRequired 0
+		if {[lsearch -exact $opts required] >= 0} {
+			if {[dict exists $opts required]} {
+				set reqVal [dict get $opts required]
+				if {$reqVal in {1 true yes}} {
+					set explicitRequired 1
+				} elseif {$reqVal in {0 false no}} {
+					set explicitRequired 0
+				} else {
+					set explicitRequired 1
+				}
+			} else {
+				set explicitRequired 1
+			}
+		}
+		set isRequired [expr {$explicitRequired || !$hasDefault}]
 		set enumVals [_dg $opts enum {}]
 		set rangeVals [_dg $opts range {}]
 
@@ -273,10 +305,10 @@ proc ::action::validateArgs {id argsDict} {
 
 		if {[dict exists $argsDict $name]} {
 			set value [dict get $argsDict $name]
-		} elseif {$hasDefault} {
-			set value $defaultVal
 		} elseif {$isRequired} {
 			return [::list error "missing required argument '$name' for action '$id'"]
+		} elseif {$hasDefault} {
+			set value $defaultVal
 		} else {
 			continue
 		}
@@ -321,6 +353,19 @@ proc ::action::validateArgs {id argsDict} {
 		dict set validated $name $value
 	}
 
+	set validateHook [dict get $record validate]
+	if {$validateHook ne ""} {
+		if {[catch {uplevel #0 [::list $validateHook $validated]} hookResult]} {
+			return [::list error "cross-argument validation failed: $hookResult"]
+		}
+		if {$hookResult eq "error" || ([llength $hookResult] >= 2 && [lindex $hookResult 0] eq "error")} {
+			if {[llength $hookResult] >= 2} {
+				return [::list error [lindex $hookResult 1]]
+			}
+			return [::list error "cross-argument validation failed"]
+		}
+	}
+
 	return [::list ok $validated]
 }
 
@@ -330,17 +375,17 @@ proc ::action::validateArgs {id argsDict} {
 # without depending on widget paths.
 # ----------------------------------------------------------------------
 proc ::action::resolver::register {objectType command} {
-	variable ::action::ObjectResolvers
-	dict set ::action::ObjectResolvers $objectType $command
+	namespace upvar ::action ObjectResolvers resolvers
+	dict set resolvers $objectType $command
 	return
 }
 
 proc ::action::resolver::resolve {objectType} {
-	variable ::action::ObjectResolvers
-	if {![dict exists $::action::ObjectResolvers $objectType]} {
+	namespace upvar ::action ObjectResolvers resolvers
+	if {![dict exists $resolvers $objectType]} {
 		return -code error "no resolver for object type '$objectType'"
 	}
-	return [uplevel #0 [dict get $::action::ObjectResolvers $objectType]]
+	return [uplevel #0 [dict get $resolvers $objectType]]
 }
 
 # ----------------------------------------------------------------------
@@ -364,6 +409,21 @@ proc ::action::run {id args} {
 		return "error: action '$id' has no handler"
 	}
 
+	set aiFlag [dict get $record ai]
+	if {$aiFlag eq "debug"} {
+		variable DebugGate
+		if {$DebugGate ne ""} {
+			if {[catch {uplevel #0 $DebugGate} debugEnabled]} {
+				set debugEnabled 0
+			}
+		} else {
+			set debugEnabled 0
+		}
+		if {!$debugEnabled} {
+			return "error: '$id' is only available in debug mode (--ai-debug or SCIDB_AI_DEBUG=1)"
+		}
+	}
+
 	set argsDict {}
 	if {[llength $args] == 1 && [string match "{*}" [lindex $args 0]]} {
 		set argsDict [lindex $args 0]
@@ -371,8 +431,9 @@ proc ::action::run {id args} {
 		set argsDict [lindex $args 0]
 	}
 
+	set argsSpec [dict get $record args]
 	set passthrough [dict get $record schema]
-	if {$passthrough ne ""} {
+	if {$passthrough ne "" && $argsSpec eq ""} {
 		set validatedArgs $argsDict
 	} else {
 		set validation [::action::validateArgs $id $argsDict]
@@ -493,6 +554,22 @@ proc ::action::invoke {id args} {
 	}
 
 	set record [dict get $Registry $id]
+	
+	set aiFlag [dict get $record ai]
+	if {$aiFlag eq "debug"} {
+		variable DebugGate
+		if {$DebugGate ne ""} {
+			if {[catch {uplevel #0 $DebugGate} debugEnabled]} {
+				set debugEnabled 0
+			}
+		} else {
+			set debugEnabled 0
+		}
+		if {!$debugEnabled} {
+			return "error: '$id' is only available in debug mode (--ai-debug or SCIDB_AI_DEBUG=1)"
+		}
+	}
+	
 	if {[dict get $record confirm]} {
 		set what [dict get $record what]
 		if {$what eq ""} {
