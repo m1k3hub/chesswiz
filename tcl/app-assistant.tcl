@@ -691,7 +691,9 @@ array set Priv {
 	laterCount	0
 	routeGen		0
 	routeWait	0
+	routeTimer	{}
 	routeInvocations {}
+	routeClarify	{}
 }
 
 if {   ([info exists ::env(SCIDB_AI_DEBUG)] && [string is true -strict $::env(SCIDB_AI_DEBUG)])
@@ -784,7 +786,11 @@ proc ::application::assistant::clear {} {
 	set Priv(cqlHelp) 0
 	# invalidate any in-flight pre-route prediction for the old conversation
 	if {[info exists Priv(routeGen)]} { incr Priv(routeGen) }
+	if {[llength [info commands ::application::assistant::CancelRouteTimer]]} {
+		CancelRouteTimer
+	}
 	set Priv(routeWait) 0
+	set Priv(routeClarify) {}
 	if {[winfo exists $Priv(text)]} {
 		$Priv(text) configure -state normal
 		$Priv(text) delete 1.0 end
