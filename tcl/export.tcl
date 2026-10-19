@@ -534,7 +534,7 @@ array set Defaults {
 	pgn,flag,use_chessbase_format					0
 	pgn,flag,comment_to_html						0
 	pgn,flag,use_scidb_import_format				0
-	pgn,flag,use_utf8_encoding						0
+	pgn,flag,use_utf8_encoding						1
 	pgn,flag,use_strict_pgn_standard				0
 	pgn,flag,write_any_rating_as_elo				0
 	pgn,flag,exclude_games_with_illegal_moves	0

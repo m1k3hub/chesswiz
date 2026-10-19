@@ -1,15 +1,15 @@
 [Desktop Entry]
-Version=1.0 BETA
+Version=1.0
 Type=Application
 Name=Chesswiz
 Comment=Chesswiz is a chess database application, based on Scidb
-GenericName[de]=Chess Database (beta version)
-GenericName[en]=Schachdatenbank (Beta-Version)
-GenericName[es]=Base de Datos de Ajedrez (Versión Beta)
+GenericName[de]=Chess Database
+GenericName[en]=Schachdatenbank
+GenericName[es]=Base de Datos de Ajedrez
 #GenericName[hu]=<hungarian>
 #GenericName[it]=<italian>
 #GenericName[sv]=<svedish>
-GenericName=Chess Database (beta version)
+GenericName=Chess Database
 Exec=chesswiz %F
 Path=
 Icon=chesswiz

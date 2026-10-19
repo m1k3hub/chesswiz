@@ -1,5 +1,5 @@
 # Scidb engines file
-# Version: 1.0 BETA
+# Version: 1.0
 # Syntax: Tcl language format
 
 set ::engine::Engines {

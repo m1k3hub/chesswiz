@@ -17,7 +17,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, tk8.6, fontconfig, xdg-utils, make
 Provides: scidb-beta
 Replaces: scidb-beta
 Breaks: scidb-beta
-Description: chess database application (beta)
+Description: chess database application
  Chesswiz is a chess database application based on Scidb (by Gregor
  Cramer), itself inspired by Scid. This build
  includes the Stockfish, Reckless and Sjeng engines and the AI assistant.
