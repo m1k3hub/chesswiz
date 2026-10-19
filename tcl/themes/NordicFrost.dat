@@ -1,0 +1,7 @@
+::board::addStyle theme {
+  version      {1.0}
+  piece-style  {Nordic Frost|1792400000002|yellow.color|chesswiz}
+  identifier   {Nordic Frost|1792400000000|yellow.color|chesswiz}
+  piece-set    {Merida}
+  square-style {Nordic Frost|1792400000001|yellow.color|chesswiz}
+}

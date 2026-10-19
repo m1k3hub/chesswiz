@@ -1,0 +1,7 @@
+::board::addStyle theme {
+  version      {1.0}
+  piece-style  {Midnight Jade|1792400002002|yellow.color|chesswiz}
+  identifier   {Midnight Jade|1792400002000|yellow.color|chesswiz}
+  piece-set    {Merida}
+  square-style {Midnight Jade|1792400002001|yellow.color|chesswiz}
+}

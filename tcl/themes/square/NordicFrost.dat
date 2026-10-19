@@ -1,0 +1,32 @@
+::board::addStyle square {
+  borderline,color         {#2e3d4a}
+  borderline,gap           {0}
+  borderline,opacity       {0}
+  borderline,width         {0}
+  dark,rotation            {0}
+  dark,solid               {#8fa6b9}
+  dark,texture             {}
+  dark,x1                  {0}
+  dark,x2                  {0}
+  dark,y1                  {0}
+  dark,y2                  {0}
+  hilite,selected          {#5f9ccf}
+  hilite,suggested         {#e3b55a}
+  hint,background-color    {}
+  hint,background-coords   {#dfe7ee}
+  hint,background-tile     {}
+  hint,background-rotation {0}
+  hint,border-color        {#2e3d4a}
+  hint,border-coords       {#dfe7ee}
+  hint,border-tile         {}
+  hint,border-rotation     {0}
+  identifier               {Nordic Frost|1792400000001|yellow.color|chesswiz}
+  lite,rotation            {0}
+  lite,solid               {#e9eef2}
+  lite,texture             {}
+  lite,x1                  {0}
+  lite,x2                  {0}
+  lite,y1                  {0}
+  lite,y2                  {0}
+  version                  {1.0}
+}

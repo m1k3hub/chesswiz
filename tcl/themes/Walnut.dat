@@ -1,0 +1,7 @@
+::board::addStyle theme {
+  version      {1.0}
+  piece-style  {Walnut|1792400001002|yellow.color|chesswiz}
+  identifier   {Walnut|1792400001000|yellow.color|chesswiz}
+  piece-set    {Celtic}
+  square-style {Walnut|1792400001001|yellow.color|chesswiz}
+}
