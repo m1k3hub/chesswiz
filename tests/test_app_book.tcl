@@ -471,6 +471,56 @@ tcltest::test book-ui-create-dialog {Create Book from Database writes the aggreg
 	catch { ::book::Close }
 } -result {176 {{d4 2 0} {e4 1 0}} {{d4 2 0} {e4 1 0}}}
 
+# Regression (G03): writing a book while it is open in the editor must
+# not fail with a sharing violation. On Windows the memory mapping holds
+# an exclusive handle; the fix closes the handle before writing and
+# reopens after. Also exercises rewrite and delete of an open book.
+# Note: Linux does not enforce the same file locking as Windows, so this
+# test verifies the close/write/reopen logic but cannot reproduce the
+# original Windows-only sharing violation. The laptop loop should retest
+# on real Windows hardware.
+tcltest::test book-write-while-open {write to a book file that is open in the editor succeeds} -body {
+	set start $::scidb::test::book::start
+	set path [tempPath writeopen bin]
+	# Create an initial book and open it in the editor.
+	::scidb::book::write $path [list [list $start e4 5] [list $start d4 3]]
+	::book::OpenHandle $path
+	set handleBefore $::book::Priv(handle)
+	set countBefore [::scidb::book::count $handleBefore]
+	# Now create a new book at the SAME path via CreateStart (the path
+	# that failed on Windows with %IO-Error% OpenFailed).
+	set parent [::book::openEditor .application]
+	set dlg [::book::CreateDialog $parent]
+	set ::book::${dlg}::Vars(file) $path
+	set ::book::${dlg}::Vars(plies) 4
+	::book::CreateStart $dlg
+	# After CreateStart the editor should have reopened the book.
+	set handleAfter $::book::Priv(handle)
+	set countAfter [::scidb::book::count $handleAfter]
+	set atStart [probeList $handleAfter $start]
+	# Rewrite via NewBook path (also had the same issue).
+	set ::book::Priv(handle) $handleAfter
+	set ::book::Options(file) $path
+	set ::book::Priv(file) [file normalize $path]
+	# Direct write while open: should succeed with the temp+rename fix.
+	::scidb::book::write $path [list [list $start Nf3 8]]
+	# Reopen to verify the content.
+	catch { ::scidb::book::close $handleAfter }
+	set ::book::Priv(handle) {}
+	set h3 [::scidb::book::open $path]
+	set finalCount [::scidb::book::count $h3]
+	set finalAt [probeList $h3 $start]
+	::scidb::book::close $h3
+	# Clean up the temp file if any was left behind.
+	catch { file delete "$path.tmp" }
+	list $countBefore $countAfter $atStart $finalCount $finalAt
+} -cleanup {
+	catch { destroy $dlg }
+	catch { ::book::Close }
+	catch { file delete $path }
+	catch { file delete "$path.tmp" }
+} -result {2 11 {{d4 2 0} {e4 1 0}} 1 {{Nf3 8 0}}}
+
 # leave the app tidy for the next test file. Close the base the low-level
 # way: closeBase would ask about the still open game (a modal dialog,
 # which blocks the headless test run).

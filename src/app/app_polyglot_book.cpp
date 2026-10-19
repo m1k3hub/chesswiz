@@ -1184,15 +1184,24 @@ Book::write(mstl::string const& filename, RawEntries const& entries)
 					sizeof(RawEntry),
 					&::compareRawEntries);
 
+	// Write through a temporary file and rename over the target. On
+	// Windows an open memory mapping holds an exclusive handle on the
+	// book file (CreateFile without sharing), so opening the same path
+	// for writing fails with a sharing violation. Writing to a separate
+	// temp file and renaming avoids the collision; the caller (Tcl or
+	// save()) is responsible for closing and reopening the mapping
+	// around this call when needed.
+	mstl::string tempFilename(filename + ".tmp");
+
 	Byte buffer[16];
 
 	mstl::fstream strm;
 
-	strm.open(	sys::file::internalName(filename),
+	strm.open(	sys::file::internalName(tempFilename),
 					mstl::ios_base::out | mstl::ios_base::binary | mstl::ios_base::trunc);
 
 	if (!strm)
-		IO_RAISE(BookFile, Open_Failed, "cannot write file: %s", filename.c_str());
+		IO_RAISE(BookFile, Open_Failed, "cannot write file: %s", tempFilename.c_str());
 
 	for (unsigned i = 0; i < sorted.size(); ++i)
 	{
@@ -1212,8 +1221,12 @@ Book::write(mstl::string const& filename, RawEntries const& entries)
 		entry.write(buffer);
 
 		if (!strm.write(reinterpret_cast<char*>(buffer), sizeof(buffer)))
-			IO_RAISE(BookFile, Write_Failed, "cannot write file: %s", filename.c_str());
+			IO_RAISE(BookFile, Write_Failed, "cannot write file: %s", tempFilename.c_str());
 	}
+
+	strm.close();
+
+	sys::file::rename(tempFilename.c_str(), filename.c_str());
 }
 
 
@@ -1371,14 +1384,12 @@ Book::save()
 	if (m_format != Polyglot || m_modelLoaded == false)
 		return false;
 
-	// Close the memory mapping before opening the file for writing. On
-	// Windows the mapping holds an exclusive file handle (sys::file::Mapping
-	// calls CreateFile without sharing, see sys_file.cpp), so opening the
-	// same file for writing while the mapping is alive fails with a sharing
-	// violation -> IO-Error Open_Failed "cannot write file". Linux does not
-	// lock the file, which is why the bug only showed up on Windows. write()
-	// truncates and rewrites the whole file, so the old mapping was about to
-	// go stale anyway; it is recreated on the new content below.
+	// Close the memory mapping before rewriting the file. On Windows the
+	// mapping holds an exclusive file handle (sys::file::Mapping calls
+	// CreateFile without sharing, see sys_file.cpp). Although write() now
+	// uses a temp file and rename, we still close the mapping first so that
+	// the rename can replace the target without a sharing violation on
+	// Windows. The mapping is recreated on the new content below.
 	delete m_mapping;
 	m_mapping = 0;
 

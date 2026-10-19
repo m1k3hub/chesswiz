@@ -79,6 +79,7 @@ set Cancel				"Cancel"
 set NoDatabase			"no database open"
 set NoFile				"choose a book file"
 set Created				"%d entr%s from %d game(s) written to %s"
+set WriteFailed			"could not write the book file (it may be open elsewhere)"
 
 set Plural				"ies"
 set Singular			"y"
@@ -296,8 +297,14 @@ proc ::book::NewBook {} {
 		]
 	if {[llength $result] == 0} { return }
 	set file [lindex $result 0]
+	# Close any open book on the same path before writing, so Windows
+	# does not block with a sharing violation.
+	if {$Priv(handle) ne "" && [file normalize $file] eq $Priv(file)} {
+		catch { ::scidb::book::close $Priv(handle) }
+		set Priv(handle) {}
+	}
 	if {[catch { ::scidb::book::write $file {} } msg]} {
-		Status $msg
+		Status $mc::WriteFailed
 		return
 	}
 	OpenHandle $file
@@ -659,7 +666,21 @@ proc ::book::CreateStart {dlg} {
 	set numbers [gameNumbers $Vars(base) $Vars(variant) $view]
 	set entries [collectEntries $Vars(base) $Vars(variant) $numbers $Vars(plies) $Vars(minGames) $Vars(weightMode)]
 
-	::scidb::book::write $file $entries
+	# Close any open book on the same path before writing. On Windows
+	# the memory mapping holds an exclusive handle that blocks the write.
+	set normalizedFile [file normalize $file]
+	if {$Priv(handle) ne "" && $normalizedFile eq $Priv(file)} {
+		catch { ::scidb::book::close $Priv(handle) }
+		set Priv(handle) {}
+	}
+
+	if {[catch { ::scidb::book::write $file $entries } msg]} {
+		CreateClose $dlg
+		if {$Priv(dialog) ne "" && [winfo exists $Priv(dialog)]} {
+			Status $mc::WriteFailed
+		}
+		return
+	}
 	CreateClose $dlg
 	if {$Priv(dialog) ne "" && [winfo exists $Priv(dialog)]} {
 		OpenHandle $file
