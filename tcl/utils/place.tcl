@@ -380,14 +380,13 @@ proc besidePosition {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12}} 
 # can grow; re-plan on requested-size changes to keep the final frame in place.
 # Returns the applied plan, or {rule center} when the board is not mapped.
 #
-# Fallback behavior (VAL-DLG-005): When no position can fit the dialog without
-# overlapping the board (rule "no-room"), besidePlan selects the candidate
-# position (right/left/below) with the MINIMUM overlap area. This places the
-# dialog as far from the board as possible while staying within the work area.
-# The overlap is recorded in the plan's "overlap" field for diagnostic purposes.
-# Dialogs should set an appropriate wm minsize to define their usable minimum;
-# besideBoard will lower minsize to fit available space but not below the
-# content's requested size (which represents the minimum needed for proper display).
+# VAL-DLG-005: content larger than the work area already needs a size cap.
+# In that case cap into a free right/left/below strip first, retaining at least
+# 320x160 client pixels (or the smaller natural request). Ordinary content keeps
+# its requested size, so labels/buttons are not silently clipped. If no strip
+# accommodates that usable floor, retain the work-area cap and use no-room:
+# overlap is allowed only at the minimum measured intersection of the three
+# clamped candidates, never more than the plan's recorded minimum area.
 proc besideBoard {dlg {parent ""}} {
 	variable BesideRequests
 	if {$parent eq ""} {
@@ -423,6 +422,28 @@ proc besideBoard {dlg {parent ""}} {
 		set extents [winfo extents $dlg]
 	}
 	set plan [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents 12 [list $rw $rh]]
+	lassign $workarea wx wy ww wh
+	lassign $extents el er et eb
+	set fw [expr {$el+$er}]
+	set fh [expr {$et+$eb}]
+	if {[dict get $plan overlap] > 0 && ($rw > $ww-$fw || $rh > $wh-$fh)} {
+		set minw [expr {min(320,$rw)}]
+		set minh [expr {min(160,$rh)}]
+		foreach {aw ah} [list \
+			[expr {$wx+$ww-$bx-$bw-12-$fw}] [expr {$wh-$fh}] \
+			[expr {$bx-$wx-12-$fw}] [expr {$wh-$fh}] \
+			[expr {$ww-$fw}] [expr {$wy+$wh-$by-$bh-12-$fh}]] {
+			set cw [expr {min($rw,$aw)}]
+			set ch [expr {min($rh,$ah)}]
+			if {$cw < $minw || $ch < $minh} { continue }
+			set capped [besidePlan $bx $by $bw $bh $cw $ch $workarea $extents]
+			if {[dict get $capped overlap] == 0} {
+				set plan $capped
+				dict set plan resized 1
+				break
+			}
+		}
+	}
 	lassign [dict get $plan geometry] x y w h
 	wm minsize $dlg [expr {min($mw, $w)}] [expr {min($mh, $h)}]
 	if {![info exists BesideRequests($dlg)]} {

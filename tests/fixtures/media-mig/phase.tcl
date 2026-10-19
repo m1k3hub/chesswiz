@@ -25,6 +25,8 @@ source -encoding utf-8 [file join $root tcl chesswiz]
 set ::scidb::dir::setup 0
 set ::tips::Options(mode) neverShow
 
+proc bgerror {message} { puts stderr $::errorInfo; exit 1 }
+
 proc migOut {args} { puts "MIG [join $args { }]"; flush stdout }
 
 after 2000 {
@@ -32,6 +34,37 @@ after 2000 {
     .application.nb select .application.nb.board
     update
     switch -- $::env(MIG_PHASE) {
+        invalid-undock {
+            set rc [catch {$twm undock media}]
+            migOut invalid-undock rejected $rc board [$twm isdocked board]
+        }
+        float-save {
+            if {![$twm isdocked media]} {::application::twm::ChangeState $twm media; update}
+            $twm undock [$twm leaf media]
+            update idletasks
+            migOut floated [llength [$twm floats]]
+            if {![::application::twm::WriteLayout $twm board TestNamed normal]} {error "float save failed"}
+            set ::application::twm::Options(board:layout:name) TestNamed
+            ::options::startTransaction
+            ::options::saveOptionsFile
+            ::options::endTransaction
+            migOut float-saved docked [$twm isdocked media] floats [llength [$twm floats]]
+        }
+        corrupt-seed {
+            set f [::application::twm::makeFilename board normal TestCorrupt]
+            file mkdir [file dirname $f]
+            set ch [open $f w]
+            puts $ch "::application::twm::setup normal board \{"
+            close $ch
+            set ::application::twm::Options(board:layout:name) TestCorrupt
+            ::options::startTransaction
+            ::options::saveOptionsFile
+            ::options::endTransaction
+        }
+        corrupt-check {
+            set f [::application::twm::makeFilename board normal TestCorrupt]
+            migOut corrupt name [list $::application::twm::Options(board:layout:name)] bad [file exists ${f}.bad] board [$twm isdocked board]
+        }
         1 {
             if {[$twm isdocked media]} { ::application::twm::ChangeState $twm media; update }
             set base [::application::twm::inspectLayout $twm]
@@ -87,6 +120,9 @@ after 2000 {
             update
             migOut P2 reopened [$twm isdocked media] mapped [winfo ismapped .application.mediaBackend]
             set ::application::twm::Options(board:layout:list:normal) [::application::twm::inspectLayout $twm]
+            if {[info exists ::env(MIG_NAMED_TEST)] && $::env(MIG_NAMED_TEST)} {
+                if {![::application::twm::WriteLayout $twm board TestNamed normal]} {error "named save failed"}
+            }
             ::options::startTransaction
             ::options::saveOptionsFile
             ::options::endTransaction

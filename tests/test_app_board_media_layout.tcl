@@ -2,7 +2,9 @@
 # drawing, reserve/rebuild and the application model run unchanged.
 package require tcltest 2.5
 namespace eval ::w1 {
-    variable dir [file normalize tests/tmp-app/w1c]
+    # Resolve fixtures from the runner, rather than an undefined global root.
+    variable root [file dirname $::scidb::test::app::testDir]
+    variable dir [file normalize $::w1::root/tests/tmp-app/w1c]
     if {[info exists ::env(W1_EVIDENCE_DIR)]} {set dir [file normalize $::env(W1_EVIDENCE_DIR)]}
     variable stubs {}
     variable calls {}
@@ -96,7 +98,7 @@ proc ::w1::setup {{shape wide}} {
         wm geometry .application 1007x718+0+0
         wait
     } else { ::w1::size $shape }
-    set base [file normalize tests/tmp-app/media-test/MediaTest.sci]
+    set base [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.sci]
     if {![::scidb::db::get open? $base]} {::scidb::db::load $base {apply {args {return 0}}} {} -readonly 1}
     set pos [::w1::game -base $base -variant Normal -number 1]
     assert {$pos >= 0 && $pos != 9} "could not load generated media game"
@@ -144,7 +146,7 @@ proc ::w1::size {shape} {
     wait
 }
 proc ::w1::play {{path {}}} {
-    if {$path eq ""} {set path [file normalize tests/tmp-app/media-test/MediaTest.media/video/analysis.mp4]}
+    if {$path eq ""} {set path [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.media/video/analysis.mp4]}
     assert {[::application::media::PlayInProcess $path]} "player start failed"
     wait
     return [::mediainset::Pane].mediainset
@@ -316,7 +318,7 @@ tcltest::test brd-stop {BRD-003A Stop restores the no-reserve board} -setup {::w
 } -cleanup {::w1::cleanup} -result ok
 
 tcltest::test brd-no-media {BRD-003B loading a generated game without media clears the inset} -setup {::w1::setup} -body {
-    set base [file normalize tests/tmp-app/media-test/MediaTest.sci]
+    set base [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.sci]
     if {![::scidb::db::get open? $base]} {::scidb::db::load $base {apply {args {return 0}}} {} -readonly 1}
     ::w1::game -base $base -variant Normal -number 1
     ::w1::wait
@@ -329,7 +331,7 @@ tcltest::test brd-no-media {BRD-003B loading a generated game without media clea
 } -cleanup {::w1::cleanup} -result ok
 
 tcltest::test brd-close-db {BRD-003C closing the playing database restores the board} -setup {::w1::setup} -body {
-    set base [file normalize tests/tmp-app/media-test/MediaTest.sci]
+    set base [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.sci]
     if {![::scidb::db::get open? $base]} {::scidb::db::load $base {apply {args {return 0}}} {} -readonly 1}
     ::scidb::db::switch $base Normal
     ::w1::game -base $base -variant Normal -number 1
@@ -415,7 +417,7 @@ tcltest::test brd-failure {BRD-008 failed start releases the inset and a followi
     ::w1::play
     set ::w1::fail 1
     set tree $::application::media::Priv(tree)
-    set row [::application::media::InsertEntry 3 Failure [file normalize tests/tmp-app/media-test/MediaTest.media/video/lecture2.mp4] -1]
+    set row [::application::media::InsertEntry 3 Failure [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.media/video/lecture2.mp4] -1]
     ::mediainset::Choose $row
     ::w1::wait
     ::w1::clear VAL-BRD-008
@@ -434,7 +436,7 @@ tcltest::test brd-failure {BRD-008 failed start releases the inset and a followi
 } -cleanup {::w1::cleanup} -result ok
 
 tcltest::test brd-types {BRD-010 reserve follows audio and video surfaces} -setup {::w1::setup} -body {
-    set w [::w1::play [file normalize tests/tmp-app/media-test/MediaTest.media/audio/interview.wav]]
+    set w [::w1::play [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.media/audio/interview.wav]]
     set aw [winfo width $w]
     ::w1::measure VAL-BRD-010-audio
     ::w1::assert {$::mediainset::Audio && [winfo manager $w.video] eq ""} "audio has video"
@@ -442,7 +444,7 @@ tcltest::test brd-types {BRD-010 reserve follows audio and video surfaces} -setu
     ::w1::play
     ::w1::reserved VAL-BRD-010-video right
     ::w1::assert {[winfo width $w]>=$aw && [winfo height $w]>[winfo reqheight $w.controls]+8} "video did not grow strip"
-    ::w1::play [file normalize tests/tmp-app/media-test/MediaTest.media/audio/interview.wav]
+    ::w1::play [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.media/audio/interview.wav]
     ::w1::assert {[winfo height $w]==[winfo reqheight $w.controls]+8} "audio did not shrink strip"
     return ok
 } -cleanup {::w1::cleanup} -result ok
@@ -561,7 +563,7 @@ tcltest::test inset-009-frame {VAL-MED-009 the frame is visible and inside the p
     set restored [list [::w1::inside $w] [[set board] cget -highlightthickness] $original]
     ::w1::shot VAL-MED-009-2d-restored
     # audio-only keeps the inset frame around the transport strip
-    set w [::w1::play [file normalize tests/tmp-app/media-test/MediaTest.media/audio/interview.wav]]
+    set w [::w1::play [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.media/audio/interview.wav]]
     set audio [list [::w1::inside $w] [::w1::frameStyle $w] [winfo manager $w.video]]
     ::w1::shot VAL-MED-009-2d-audio
     ::w1::log VAL-MED-009-frame [list margin $m normal $normal swapped $swapped resized $resized \

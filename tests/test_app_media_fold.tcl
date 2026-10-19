@@ -745,17 +745,22 @@ tcltest::test mediafold-008-no-hang {scripted button post/unpost and entry reads
 # the fist start after the upgrade, and stays an optional library afterwards.
 # Each phase is a separate fresh app process, so the real startup path
 # (::application::twm::load -> RemoveLegacyMedia) runs.
-proc ::scidb::test::migRun {dir phase} {
+proc ::scidb::test::migRun {dir phase {named 0}} {
     set log [file join $dir phase$phase.log]
-    set bin [file normalize src/tkchesswiz]
-    set script [file join [file normalize tests] fixtures media-mig phase.tcl]
+    set bin [info nameofexecutable]
+    set root [file dirname $::scidb::test::app::testDir]
+    set script [file join $root tests fixtures media-mig phase.tcl]
     set home [file join $dir home]
     if {[catch {
-        exec {*}[list timeout 120 env HOME=$home MIG_PHASE=$phase MIG_ROOT=[file normalize .] \
+        exec {*}[list timeout 120 env HOME=$home MIG_PHASE=$phase MIG_ROOT=$root \
+            SCIDB_USERDIR=$home/.chesswiz MIG_NAMED_TEST=$named \
             LIBGL_ALWAYS_SOFTWARE=1 SCIDB_AI_UNCALIBRATED=1 \
             $bin $script] > $log 2>@1
     } msg]} {
-        return -code error "migration phase $phase failed: $msg"
+        set f [open $log]
+        set detail [read $f]
+        close $f
+        return -code error "migration phase $phase failed: $msg\n$detail"
     }
     set f [open $log]
     set data [read $f]
@@ -786,64 +791,67 @@ tcltest::test mediafold-010-named-layout {VAL-MED-010A named .layout files are m
     file delete -force $::scidb::test::migDir
     file mkdir [file join $::scidb::test::migDir home]
 } -body {
-    # This test verifies that named layouts on disk are also migrated
-    # Phase 1: Create a named layout with Media pane
-    # Phase 2: Start fresh - Media should be gone from both memory AND the .layout file
-    # Phase 3: Restart - Media should still be gone (marker persists)
     set dir $::scidb::test::migDir
-    
-    # We'll use a modified fixture that sets up a named layout
-    set env(MIG_PHASE) 1
-    set env(MIG_ROOT) $::scidb::test::root
-    set env(MIG_NAMED_TEST) 1
-    set output1 [exec [info nameofexecutable] [file join $::scidb::test::root tests fixtures media-mig phase.tcl] 2>@1 || true]
-    
-    set env(MIG_PHASE) 2
-    set output2 [exec [info nameofexecutable] [file join $::scidb::test::root tests fixtures media-mig phase.tcl] 2>@1 || true]
-    
-    set env(MIG_PHASE) 3
-    set output3 [exec [info nameofexecutable] [file join $::scidb::test::root tests fixtures media-mig phase.tcl] 2>@1 || true]
-    
-    # Check that Media was removed, marker set, AND name preserved (VAL-MED-010B)
-    list \
-        [regexp {MIG P2 media 0 marker 1 name TestNamed} $output2] \
-        [regexp {MIG P2 namedFileHasMedia 0} $output2] \
-        [regexp {MIG P3 media 0 marker 1 name TestNamed} $output3]
-} -cleanup {file delete -force $::scidb::test::migDir; unset -nocomplain ::env(MIG_NAMED_TEST)} -result {1 1 1}
+    set p1 [::scidb::test::migRun $dir 1 1]
+    set p2 [::scidb::test::migRun $dir 2 1]
+    set p3 [::scidb::test::migRun $dir 3 1]
+    ::scidb::test::foldRecord VAL-MED-010-named [list seed $p1 migrated $p2 restart $p3]
+    list [regexp {MIG P2 media 0 marker 1 name TestNamed} $p2] \
+        [regexp {MIG P2 namedFileHasMedia 0} $p2] \
+        [regexp {MIG P2 .* tree 1 analysis 1 board 1 editor 1 games 1 dbgames 1} $p2] \
+        [regexp {MIG P3 media 1 docked 1 marker 1 name TestNamed} $p3]
+} -cleanup {file delete -force $::scidb::test::migDir} -result {1 1 1 1}
 
-tcltest::test mediafold-010-corrupt-fallback {VAL-MED-010C corrupt layout file falls back gracefully} -setup {
+tcltest::test mediafold-010-corrupt-fallback {corrupt named layout reaches startup fallback and preserves a .bad copy} -setup {
     set ::scidb::test::migDir [file join $::scidb::test::app::testDir tmp-app media-mig-corrupt-[pid]]
-    file delete -force $::scidb::test::migDir
-    file mkdir [file join $::scidb::test::migDir home .chesswiz layout board normal]
+    file mkdir [file join $::scidb::test::migDir home]
 } -body {
-    # Create a corrupt .layout file (unbalanced braces)
-    set corruptFile [file join $::scidb::test::migDir home .chesswiz layout board normal TestCorrupt.layout]
-    set fh [open $corruptFile w]
-    puts $fh "::application::twm::setup normal board {{root {frame board"
-    close $fh
-    
-    # Set this as the active layout
-    set optionsFile [file join $::scidb::test::migDir home .chesswiz config options.dat]
-    file mkdir [file dirname $optionsFile]
-    set fh [open $optionsFile w]
-    puts $fh "set ::application::twm::Options(board:layout:name) TestCorrupt"
-    puts $fh "array set ::application::twm::Options {"
-    puts $fh "  board:layout:list:normal {}"
-    puts $fh "}"
-    close $fh
-    
-    set env(HOME) [file join $::scidb::test::migDir home]
-    set env(SCIDB_AI_TRIAGE) 0
-    set env(SCIDB_AI_CLASSIFIER) off
-    
-    # Try to start - should not crash, should fall back to default
-    set output [exec [info nameofexecutable] -single-process << "after 2000 {puts LAYOUT_LOADED; exit 0}\nvwait forever" 2>@1 || true]
-    
-    # Check it didn't crash and created a .bad copy
-    list \
-        [regexp {LAYOUT_LOADED} $output] \
-        [file exists "${corruptFile}.bad"]
-} -cleanup {file delete -force $::scidb::test::migDir} -result {1 1}
+    set dir $::scidb::test::migDir
+    ::scidb::test::migRun $dir corrupt-seed
+    set output [::scidb::test::migRun $dir corrupt-check]
+    ::scidb::test::foldRecord VAL-MED-010-corrupt $output
+    list [regexp {MIG corrupt name \{\} bad 1 board 1} $output]
+} -cleanup {file delete -force $::scidb::test::migDir} -result 1
+
+tcltest::test mediafold-010-float-save {floating Media is docked before named save and survives restart} -setup {
+    set ::scidb::test::migDir [file join $::scidb::test::app::testDir tmp-app media-mig-float-[pid]]
+    file mkdir [file join $::scidb::test::migDir home]
+} -body {
+    set first [::scidb::test::migRun $::scidb::test::migDir float-save]
+    set restart [::scidb::test::migRun $::scidb::test::migDir 3]
+    ::scidb::test::foldRecord VAL-MED-010-float [list save $first restart $restart]
+    list [regexp {MIG floated 1} $first] \
+        [regexp {MIG float-saved docked 1 floats 0} $first] \
+        [regexp {MIG P3 media 1 docked 1 marker 1 name TestNamed} $restart]
+} -cleanup {file delete -force $::scidb::test::migDir} -result {1 1 1}
+
+tcltest::test mediafold-dlg005-capflow {oversized content is capped outside the board at a usable size} -setup {
+    update
+    ::application::switchTab board
+    wm geometry .application 1280x800+0+0
+    ::scidb::test::foldWait
+    toplevel .layoutCapFlow
+    ttk::frame .layoutCapFlow.content -width 2000 -height 1400
+    pack .layoutCapFlow.content -fill both -expand yes
+    wm minsize .layoutCapFlow 780 480
+    update idletasks
+} -body {
+    set plan [::util::place::besideBoard .layoutCapFlow .application]
+    update idletasks
+    lassign [dict get $plan geometry] x y w h
+    set board $::application::board::board
+    set bx [winfo rootx $board]; set by [winfo rooty $board]
+    set bw [winfo width $board]; set bh [winfo height $board]
+    lassign [winfo extents .layoutCapFlow] el er et eb
+    set dx [expr {[winfo rootx .layoutCapFlow]-$el}]
+    set dy [expr {[winfo rooty .layoutCapFlow]-$et}]
+    set dw [expr {[winfo width .layoutCapFlow]+$el+$er}]
+    set dh [expr {[winfo height .layoutCapFlow]+$et+$eb}]
+    set overlap [expr {max(0,min($dx+$dw,$bx+$bw)-max($dx,$bx))*max(0,min($dy+$dh,$by+$bh)-max($dy,$by))}]
+    puts "CAPFLOW plan=$plan actual=[wm geometry .layoutCapFlow] overlap=$overlap"
+    list [dict get $plan overlap] $overlap [expr {$w >= 320 && $h >= 160}] \
+        [expr {abs([winfo width .layoutCapFlow]-$w) <= 1 && abs([winfo height .layoutCapFlow]-$h) <= 1}]
+} -cleanup {destroy .layoutCapFlow} -result {0 0 1 1}
 
 tcltest::test mediafold-dlg005-insights-fit {VAL-DLG-005 Insights shrinks to fit beside board at 1280x800} -setup {
     wm geometry .application 1280x800+0+0
