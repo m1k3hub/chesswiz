@@ -151,13 +151,18 @@ proc ::application::assistant::routeInvocations {} {
 		set props [expr {[dict exists $schema properties] ? [dict get $schema properties] : {}}]
 		set required [expr {[dict exists $schema required] ? [dict get $schema required] : {}}]
 
+		set what [expr {[dict exists $record what] ? [dict get $record what] : ""}]
 		if {[dict size $props] == 0} {
+			set label [expr {[string length $what] ? $what : [string map {_ " "} $name]}]
 			lappend out [dict create id $name name $name cargs {} \
+				label $label \
 				description [string range $description 0 109]]
 			continue
 		}
 		if {[llength $required] == 0} {
+			set label [expr {[string length $what] && ![string match *%* $what] ? $what : [string map {_ " "} $name]}]
 			lappend out [dict create id $name name $name cargs {} \
+				label $label \
 				description [string range "$description (with its default arguments)" 0 109]]
 			continue
 		}
@@ -168,8 +173,16 @@ proc ::application::assistant::routeInvocations {} {
 				foreach value [dict get $def enum] {
 					set suffix " -- '$value'"
 					set room [expr {109 - [string length $suffix]}]
+					if {[string length $what] && [string match *%s* $what]} {
+						set label [format $what $value]
+					} elseif {[string length $what]} {
+						set label "$what ($value)"
+					} else {
+						set label "[string map {_ " "} $name] ($value)"
+					}
 					lappend out [dict create id "${name}($value)" name $name \
 						cargs [dict create $prop $value] \
+						label $label \
 						description "[string range $description 0 $room]$suffix"]
 				}
 				continue
@@ -209,6 +222,191 @@ proc ::application::assistant::routeState {request} {
 }
 
 
+proc ::application::assistant::CancelRouteTimer {} {
+	variable Priv
+
+	if {[info exists Priv(routeTimer)] && $Priv(routeTimer) ne ""} {
+		catch { after cancel $Priv(routeTimer) }
+		set Priv(routeTimer) ""
+	}
+	return
+}
+
+
+# Extract a requested position (FEN and/or SAN move line) from a chess
+# judgment question and resolve it on a scratch board via ::ai::setup::validate
+# without touching the user's board.
+# Returns:
+#   {status default}   when the request asks about the current board position
+#   {status ok fen F}  when an explicit FEN and/or move sequence resolves cleanly
+#   {status abstain}   when the request names position/game/opening context that
+#                      cannot be resolved deterministically here
+proc ::application::assistant::ExtractRequestedFen {request {targetMove ""}} {
+	set req [string trim $request]
+
+	# Explicit FEN string (6 space-separated fields starting with 8 slash-separated ranks)
+	set fenPat {([rnbqkpRNBQKP1-8]{1,8}(?:/[rnbqkpRNBQKP1-8]{1,8}){7}\s+[wb]\s+(?:[KQkq]+|-)\s+(?:[a-h][36]|-)(?:\s+\d+\s+\d+)?)}
+	set explicitFen ""
+	if {[regexp $fenPat $req -> f]} {
+		set explicitFen [string trim $f]
+		regsub [string map {. \\. / \\/ + \\+ * \\* ? \\? [ \\[ ] \\] ( \\( ) \\)} $f] $req " " req
+	}
+
+	# Check for "after <moves>" or "in/from <moves>" move sequences
+	set movesStr ""
+	# Keep annotations (1.e4! e5?): the move tokenizer accepts them, and a
+	# move line cut at the first ! or ? would silently drop moves.
+	if {[regexp -nocase {\m(?:after|following)\s+([^;]+)} $req -> tail]} {
+		set movesStr [string trim $tail ".?!,;: '\""]
+	}
+
+	if {$movesStr ne ""} {
+		set valArgs [list -moves $movesStr]
+		if {$explicitFen ne ""} { lappend valArgs -fen $explicitFen }
+		if {[catch { ::ai::setup::validate {*}$valArgs } validated]} {
+			return [dict create status abstain]
+		}
+		if {[llength [dict get $validated sans]] == 0} {
+			return [dict create status abstain]
+		}
+		return [dict create status ok fen [dict get $validated fen]]
+	}
+
+	if {$explicitFen ne ""} {
+		if {[catch { ::ai::setup::validate -fen $explicitFen } validated]} {
+			return [dict create status abstain]
+		}
+		return [dict create status ok fen [dict get $validated fen]]
+	}
+
+	# No explicit FEN or valid "after <moves>". Check whether the request
+	# qualifies the position with moves, a game/move number, an opening, or
+	# another clause beyond the current board.
+	if {[regexp -nocase {\m(?:after|following|before|in\s+move|on\s+move|at\s+move|move\s+\d+|game\s+\d+|in\s+the\s+[a-z]+\s+(?:opening|defense|defence|gambit|variation|attack|system)|in\s+fen|from\s+fen|if\s+i\s+play|if\s+white\s+plays|if\s+black\s+plays|when\s+playing)\M} $req]} {
+		return [dict create status abstain]
+	}
+	# Any numbered move token like "1.e4" or "1...e5" in the request means a
+	# specific line was named.
+	if {[regexp {\m\d+\.(?:\.\.)?[a-hKQRBNO]} $req]} {
+		return [dict create status abstain]
+	}
+
+	return [dict create status default]
+}
+
+
+# Deterministic engine-owned path for chess position and move judgments:
+# chess truth belongs to the engine, never the classifier or language model.
+# Returns {name cargs} (engine_evaluate or engine_check_move), or {} when
+# the request is not a chess judgment question (or needs model orchestration).
+proc ::application::assistant::RouteChessJudgment {request} {
+	set req [string trim $request]
+	if {![string length $req]} { return {} }
+
+	# Do not match negated commands ("do not evaluate this position, ...")
+	if {[regexp -nocase {\m(?:do\s+not|don't|dont|never|instead\s+of|without)\s+(?:evaluate|evaluating|check|checking|analyse|analyze|analysing|analyzing|ask|asking)\M} $req]} {
+		return {}
+	}
+
+	# Move judgment: "is Nf3 a blunder?", "how good is O-O?", etc.
+	set sanPat {(?:O-O(?:-O)?|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?)}
+	if {[regexp -nocase "\\m(?:is|was)\\s+($sanPat)\\s+(?:a\\s+|an\\s+|the\\s+)?(?:blunder|mistake|inaccuracy|good(?:\\s+move)?|bad(?:\\s+move)?|best(?:\\s+move)?|excellent|ok|okay|sound|correct|winning|losing)\\M" $req -> move]
+	 || [regexp -nocase "\\mhow\\s+good\\s+is\\s+($sanPat)\\M" $req -> move]} {
+		set pos [ExtractRequestedFen $req $move]
+		switch -- [dict get $pos status] {
+			default { return [list engine_check_move [dict create move $move]] }
+			ok      { return [list engine_check_move [dict create move $move fen [dict get $pos fen]]] }
+			default { return {} }
+		}
+	}
+
+	# Position judgment: "what's the best move here?", "who is better?",
+	# "is this winning?", "evaluate this position", etc.
+	if {[regexp -nocase {\m(?:what(?:'s|\s+is)\s+the\s+best\s+move|best\s+move\s+here|who\s+(?:is|stands)\s+better|is\s+(?:white|black|this)\s+(?:winning|better|worse|losing|lost|won|equal)|evaluate\s+(?:this|the)\s+position|what(?:'s|\s+is)\s+the\s+evaluation)\M} $req]} {
+		set pos [ExtractRequestedFen $req]
+		switch -- [dict get $pos status] {
+			default { return [list engine_evaluate {}] }
+			ok      { return [list engine_evaluate [dict create fen [dict get $pos fen]]] }
+			default { return {} }
+		}
+	}
+
+	return {}
+}
+
+
+# Resolve a user reply against pending clarification candidates (each a
+# routeInvocations dict {id name cargs label description}). Returns the
+# chosen invocation dict, or {} when the reply does not affirmatively and
+# unambiguously select one of the candidates.
+proc ::application::assistant::ResolveClarification {reply candidates} {
+	set n [llength $candidates]
+	if {$n == 0} { return {} }
+
+	set raw [string trim $reply]
+	if {[string match "*\\?*" $raw]} { return {} }
+
+	set norm [string tolower $raw]
+	set norm [string trim $norm ".!,;: '\""]
+	if {![string length $norm]} { return {} }
+
+	# Reject negated, rejecting, or uncertain replies so "not board",
+	# "neither", "maybe board", "don't switch to board", etc. never select
+	# a candidate.
+	if {[regexp {\m(?:not|no|neither|none|never|nothing|don't|dont|do\s+not|cancel|stop|skip|other|something\s+else|anything\s+else|maybe|perhaps|unsure|not\s+sure|idk|either|both|instead|except|without|wrong)\M} $norm]} {
+		return {}
+	}
+
+	# Strip optional polite affirmative wrapper ("please", "the ... one", "option:")
+	regsub {^(?:yes\s*,?\s*)?(?:please\s+)?} $norm {} norm
+	regsub {\s*,?\s*please$} $norm {} norm
+	set norm [string trim $norm ".!,;: '\""]
+	if {![string length $norm]} { return {} }
+
+	# 1. Ordinal or numeric selection ("1", "first", "the second one", "option 2", "last")
+	if {[regexp {^(?:the\s+)?(?:first(?:\s+one|\s+option)?|option\s+1|1st|#?1)$} $norm]} {
+		return [lindex $candidates 0]
+	}
+	if {$n >= 2 && [regexp {^(?:the\s+)?(?:second(?:\s+one|\s+option)?|option\s+2|2nd|#?2)$} $norm]} {
+		return [lindex $candidates 1]
+	}
+	if {$n >= 3 && [regexp {^(?:the\s+)?(?:third(?:\s+one|\s+option)?|option\s+3|3rd|#?3)$} $norm]} {
+		return [lindex $candidates 2]
+	}
+	if {[regexp {^(?:the\s+)?last(?:\s+one|\s+option)?$} $norm]} {
+		return [lindex $candidates end]
+	}
+
+	# Also allow "the <x> tab/option/one" -> "<x>" for exact candidate matching
+	set stripped $norm
+	regsub {^the\s+} $stripped {} stripped
+	regsub {\s+(?:tab|option|one|action)$} $stripped {} stripped
+	set stripped [string trim $stripped]
+
+	# 2. Affirmative exact match on candidate id, label, action name, or
+	#    single argument value.
+	set matched {}
+	foreach inv $candidates {
+		set id [string tolower [dict get $inv id]]
+		set name [string tolower [dict get $inv name]]
+		set nameSp [string map {_ " "} $name]
+		set label [expr {[dict exists $inv label] ? [string tolower [dict get $inv label]] : ""}]
+		set argVals [lmap v [dict values [dict get $inv cargs]] { string tolower $v }]
+		if {$norm eq $id || $norm eq $label || $norm eq "$label ($id)"
+		 || $norm in $argVals || $norm eq $name || $norm eq $nameSp
+		 || $stripped eq $id || $stripped eq $label
+		 || $stripped in $argVals || $stripped eq $name || $stripped eq $nameSp} {
+			lappend matched $inv
+		}
+	}
+	if {[llength $matched] == 1} {
+		return [lindex $matched 0]
+	}
+
+	return {}
+}
+
+
 # ----------------------------------------------------------------------
 # The gate in front of Step. Called from ask in place of Step 0.
 # ----------------------------------------------------------------------
@@ -216,6 +414,43 @@ proc ::application::assistant::RouteOrStep {request} {
 	variable Priv
 	set RouteMode [EffectiveRouteMode]
 	variable RouteTimeout
+
+	CancelRouteTimer
+	set Priv(routeWait) 0
+
+	# If the previous turn asked a clarifying question, consume the pending
+	# clarification state and execute the chosen candidate directly if matched;
+	# any other reply clears it and routes normally.
+	if {[info exists Priv(routeClarify)] && [dict size $Priv(routeClarify)]} {
+		set clarify $Priv(routeClarify)
+		set Priv(routeClarify) {}
+		set picked [ResolveClarification $request [dict get $clarify candidates]]
+		if {[dict size $picked]} {
+			incr Priv(routeGen)
+			set gen $Priv(routeGen)
+			array unset Priv routePred,*
+			array unset Priv routeActual,*
+			RecordRouteActual "[dict get $picked name] routed"
+			DeliverRouted [dict get $picked name] [dict get $picked cargs] 1
+			return
+		}
+	}
+
+	# Chess judgment questions belong to the chess engine, even offline and
+	# without consulting the classifier or language model.
+	if {$RouteMode ne "off"} {
+		set engineCall [RouteChessJudgment $request]
+		if {[llength $engineCall]} {
+			lassign $engineCall engName engArgs
+			incr Priv(routeGen)
+			set gen $Priv(routeGen)
+			array unset Priv routePred,*
+			array unset Priv routeActual,*
+			RecordRouteActual "$engName routed"
+			DeliverRouted $engName $engArgs 1
+			return
+		}
+	}
 
 	if {$RouteMode eq "off"
 	 || [llength [info commands ::ai::systemone::evaluateAsync]] == 0
@@ -242,7 +477,7 @@ proc ::application::assistant::RouteOrStep {request} {
 	# no-ops once the reply consumed it.
 	if {$RouteMode eq "active"} {
 		set Priv(routeWait) $gen
-		after $RouteTimeout [namespace code [list RouteTimeoutFired $gen]]
+		set Priv(routeTimer) [after $RouteTimeout [namespace code [list RouteTimeoutFired $gen]]]
 	}
 
 	if {[catch {
@@ -250,6 +485,7 @@ proc ::application::assistant::RouteOrStep {request} {
 			[routeQuestions [routeCriteria $invocations]] \
 			[namespace code [list OnRouted $gen $request]]
 	}]} {
+		CancelRouteTimer
 		set Priv(routeWait) 0 ;# the watchdog must not wait for a reply that never comes
 		Step 0
 		return
@@ -268,6 +504,7 @@ proc ::application::assistant::RouteOrStep {request} {
 proc ::application::assistant::RouteTimeoutFired {gen} {
 	variable Priv
 
+	CancelRouteTimer
 	if {[expr {[info exists Priv(routeWait)] ? $Priv(routeWait) : 0}] != $gen} { return }
 	set Priv(routeWait) 0
 	Step 0
@@ -275,7 +512,7 @@ proc ::application::assistant::RouteTimeoutFired {gen} {
 }
 
 
-# The classifier's answer, validated: {ok 1 id ID conf C sat S} or {ok 0}.
+# The classifier's answer, validated: {ok 1 id ID conf C sat S probs DICT} or {ok 0}.
 proc ::application::assistant::RouteDecision {result criteria} {
 	variable RouteSentinel
 
@@ -295,7 +532,101 @@ proc ::application::assistant::RouteDecision {result criteria} {
 	if {$id ni [dict keys $criteria] && $id ne $RouteSentinel} { return [dict create ok 0] }
 	if {![string is double -strict $conf] || $conf < 0 || $conf > 1} { return [dict create ok 0] }
 	if {![string is double -strict $p] || $p < 0 || $p > 1} { return [dict create ok 0] }
-	return [dict create ok 1 id $id conf $conf sat $p]
+
+	set probs {}
+	if {[dict exists $route probabilities]} {
+		catch {
+			dict for {k v} [dict get $route probabilities] {
+				if {($k in [dict keys $criteria] || $k eq $RouteSentinel)
+				 && [string is double -strict $v] && $v >= 0 && $v <= 1} {
+					dict set probs $k $v
+				}
+			}
+		}
+	}
+	return [dict create ok 1 id $id conf $conf sat $p probs $probs]
+}
+
+
+proc ::application::assistant::RouteCandidateLabel {id invocations} {
+	foreach inv $invocations {
+		if {[dict get $inv id] eq $id} {
+			if {[dict exists $inv label] && [string length [dict get $inv label]]} {
+				return "[dict get $inv label] ($id)"
+			}
+			return $id
+		}
+	}
+	return $id
+}
+
+
+# Detect when a request matches several actions with no clear winner.
+# Distinguishes ambiguity from low-confidence abstention: requires at least
+# two supported real action candidates (p >= 0.15) whose top two probabilities
+# are close (lead < 0.15). Never invents candidates not supported by probs.
+# Returns 2..3 candidate invocation IDs when ambiguous, or {} when not.
+proc ::application::assistant::RouteAmbiguousCandidates {decision invocations minConf minSat} {
+	variable RouteSentinel
+
+	if {![dict get $decision ok]} { return {} }
+	set id [dict get $decision id]
+	if {$id eq $RouteSentinel} { return {} }
+	set probs [expr {[dict exists $decision probs] ? [dict get $decision probs] : {}}]
+
+	set validIds [lmap inv $invocations { dict get $inv id }]
+
+	set scored {}
+	dict for {cid p} $probs {
+		if {$cid ne $RouteSentinel && $cid in $validIds && $p >= 0.15} {
+			lappend scored [list $cid $p]
+		}
+	}
+	set scored [lsort -real -decreasing -index 1 $scored]
+	if {[llength $scored] >= 2} {
+		set topP [lindex $scored 0 1]
+		set secP [lindex $scored 1 1]
+		if {($topP - $secP) < 0.15} {
+			set out {}
+			foreach pair [lrange $scored 0 2] {
+				if {($topP - [lindex $pair 1]) < 0.15} {
+					lappend out [lindex $pair 0]
+				}
+			}
+			if {[llength $out] >= 2} {
+				return $out
+			}
+		}
+	}
+
+	return {}
+}
+
+
+proc ::application::assistant::ClarifyRouted {request candidates invocations round} {
+	variable Priv
+
+	set candInvocations {}
+	set labels {}
+	foreach cid $candidates {
+		foreach inv $invocations {
+			if {[dict get $inv id] eq $cid} {
+				lappend candInvocations $inv
+				break
+			}
+		}
+		lappend labels [RouteCandidateLabel $cid $invocations]
+	}
+	set Priv(routeClarify) [dict create request $request candidates $candInvocations]
+
+	if {[llength $labels] == 2} {
+		set joined "[lindex $labels 0] or [lindex $labels 1]"
+	} else {
+		set joined "[join [lrange $labels 0 end-1] {, }], or [lindex $labels end]"
+	}
+	set question "Your request matches several actions. Which did you mean: $joined?"
+	Finish [dict create ok 1 message [dict create role assistant content $question]] $round
+	return
 }
 
 
@@ -316,10 +647,18 @@ proc ::application::assistant::OnRouted {gen request result} {
 
 	# act only when this generation is still waiting for the classifier
 	if {[expr {[info exists Priv(routeWait)] ? $Priv(routeWait) : 0}] != $gen} { return }
+	CancelRouteTimer
 	set Priv(routeWait) 0
 	if {$RouteMode ne "active"} { return }
 
 	lassign [RouteThresholds] minConf minSat
+	set candidates [RouteAmbiguousCandidates $decision $Priv(routeInvocations) $minConf $minSat]
+	if {[llength $candidates] >= 2} {
+		RecordRouteActual "clarify"
+		ClarifyRouted $request $candidates $Priv(routeInvocations) 1
+		return
+	}
+
 	if {![dict get $decision ok] || [dict get $decision id] eq $RouteSentinel
 	 || [dict get $decision conf] < $minConf
 	 || [dict get $decision sat] < $minSat} {
@@ -328,7 +667,13 @@ proc ::application::assistant::OnRouted {gen request result} {
 	}
 
 	set id [dict get $decision id]
-	set inv [lsearch -inline -index 1 $Priv(routeInvocations) $id]
+	set inv {}
+	foreach item $Priv(routeInvocations) {
+		if {[dict get $item id] eq $id} {
+			set inv $item
+			break
+		}
+	}
 	if {![llength $inv]} { Step 0 ; return } ;# cannot happen: validated above
 	# a routed run is logged like a model's call, marked as the router's
 	RecordRouteActual "[dict get $inv name] routed"
