@@ -89,6 +89,33 @@ tcltest::test key-editor-capture-alt-mask {Alt is decoded from the platform's ow
 		[::application::keyEditor::ModifierOnlyKeysym? J]
 } -result {Control-Alt-J Control-J Control-J Control-Alt-J Control-J Control-Alt-J 131072 8 0 1 1 0}
 
+tcltest::test key-editor-native-alt-mask {the C++ mask and native event decoder agree with Tk's platform} -body {
+	set mask $::util::altMask
+	switch -- [tk windowingsystem] {
+		win32 { set valid [expr {$mask == 0x20000}] }
+		aqua  { set valid [expr {$mask == 0x10}] }
+		x11 {
+			# X11 discovers physical Alt bits from the modifier map. Mod1
+			# is the normal mapping; remapped Alt_R can add other bits.
+			set valid [expr {($mask & 0x8) && !($mask & ~0xff)}]
+		}
+	}
+	set decoded {}
+	foreach bit {0x8 0x10 0x80 0x20000} {
+		lappend decoded [expr {
+			[::application::keyEditor::SpecFromEvent J [expr {0x4 | $bit}]] eq
+			[expr {$mask & $bit ? "Control-Alt-J" : "Control-J"}]
+		}]
+	}
+	list $valid \
+		[expr {$mask == [::scidb::tk::misc altMask?]}] \
+		[expr {$mask == [::application::keyEditor::AltStateMask]}] \
+		[::util::altIsHeldDown? $mask] \
+		[::util::altIsHeldDown? 0x4] \
+		[::application::keyEditor::SpecFromEvent J [expr {$mask | 0x4}]] \
+		[::application::keyEditor::SpecFromEvent J 0x4] $decoded
+} -result {1 1 1 1 0 Control-Alt-J Control-J {1 1 1 1}}
+
 tcltest::test key-editor-dialog-alt {the capture keeps Alt on Windows and X11 and Apply binds Control-Alt-j} -setup {
 	::application::ShortcutPreferences .application
 	set dlg .application.shortcutPreferences

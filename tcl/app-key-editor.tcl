@@ -936,27 +936,18 @@ proc ::application::keyEditor::ModifierOnlyKeysym? {keysym} {
 }
 
 
-# The state bit(s) Tk puts in %s for Alt on <platform> (default: the
-# running windowing system). The bit is platform specific and Mod1 only
-# means Alt on X11:
-#   X11   Alt is Mod1 (ALT_MASK in a bind pattern is resolved through the
-#         modifier map; ::util::altMask has the physical bits, Mod1 and
-#         Mod5 when Alt_R is mapped there)
-#   win32 Alt is ALT_MASK = 0x20000 (NOT Mod1; Tk's Windows key handler
-#         translates VK_MENU to this bit)
-#   aqua  Option is Mod2 = 0x10 (Command is Mod1)
+# Native events share the C++ mask used by ::util::altIsHeldDown?. An
+# explicit platform lets tests simulate another windowing system.
 proc ::application::keyEditor::AltStateMask {{platform ""}} {
-	if {$platform eq ""} { set platform [tk windowingsystem] }
+	if {$platform eq "" || $platform eq [tk windowingsystem]} {
+		return $::util::altMask
+	}
 	switch -- $platform {
 		win32 { return [expr {0x20000}] }
 		aqua  { return [expr {0x10}] }
 	}
-	# X11: the C helper computed the physical modifier bits of Alt_L/Alt_R
-	# from the keymap; Mod1 (and Mod5) is the fallback
-	if {[info exists ::util::altMask] && $::util::altMask} {
-		return $::util::altMask
-	}
-	return [expr {0x8 | 0x20}]
+	# Simulated X11: Mod1 for Alt_L, Mod5 for a remapped Alt_R.
+	return [expr {0x8 | 0x80}]
 }
 
 
