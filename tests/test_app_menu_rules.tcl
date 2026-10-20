@@ -383,7 +383,14 @@ tcltest::test rules-engine-group {R6/R7 label and engine group follow a real eng
 		[::context::Visible c6.best_first $object] \
 		[::context::Visible c6.multiple_variations $object] \
 		[::context::Visible c6.lines_per_variation $object]]
-	::application::analysis::stopEngine $engineNumber
+	# stop through the posted row's action, as a user would
+	::action::invoke menu.analysis.engine_toggle
+	for {set i 0} {$i < 40 && [llength [::application::analysis::Running]]} {incr i} {
+		after 50 {set ::scidb::test::rules::wake 1}
+		vwait ::scidb::test::rules::wake
+		unset -nocomplain ::scidb::test::rules::wake
+	}
+	lappend result_stop [llength [::application::analysis::Running]]
 	update
 	set labelStopped [::menu::EngineLabel]
 	set stopped [list \
@@ -393,7 +400,7 @@ tcltest::test rules-engine-group {R6/R7 label and engine group follow a real eng
 	set result [list \
 		[expr {$labelRunning eq [::menu::MC StopEngine] ? 1 : 0}] \
 		$running $shown \
-		[expr {$labelStopped eq [::menu::MC StartEngine] ? 1 : 0}] $stopped]
+		[expr {$labelStopped eq [::menu::MC StartEngine] ? 1 : 0}] $stopped $result_stop]
 	puts "  R6/R7 [join $result { }]"
 	return $result
 } -cleanup {
@@ -406,7 +413,7 @@ tcltest::test rules-engine-group {R6/R7 label and engine group follow a real eng
 	set ::action::ConfirmHook $savedActionConfirm
 	set ::action::BulkHook $savedBulk
 	::options::hookWriter ::engine::WriteEngineOptions engines
-} -result {1 1 {1 1 1 1 1 1 1} 1 {0 0 0}}
+} -result {1 1 {1 1 1 1 1 1 1} 1 {0 0 0} 0}
 
 tcltest::test rules-module-absent-all-surfaces {no surface shows an action of an absent module} -body {
 	set rows [::scidb::test::rules::ModuleGatedRows]

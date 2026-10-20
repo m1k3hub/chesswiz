@@ -164,6 +164,11 @@ tcltest::test pane-rows-posted-state {every View > Panes row is a stateful check
 		} else {
 			if {$state ne "disabled"} { lappend bad [list $suffix state $state] }
 			if {$reason eq ""} { lappend bad [list $suffix no-reason] }
+			# the reason must reach the user: the row's own tooltip, looked
+			# up by the menu's motion handler under the numeric row index
+			if {![info exists ::tooltip::tooltip($sub,$index)]} {
+				lappend bad [list $suffix no-tooltip]
+			}
 		}
 		set want [expr {[::menu::PaneChecked $suffix] ? 1 : 0}]
 		if {$checked ne $want} { lappend bad [list $suffix checked $checked $want] }

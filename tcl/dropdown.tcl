@@ -1125,7 +1125,9 @@ proc ::menu::FillNodes {nodes menu level} {
 					set var ::menu::PaneVisible($paneSuffix)
 					set $var [PaneChecked $paneSuffix]
 					lappend opts -variable $var -onvalue 1 -offvalue 0
-					set index [eval [list $menu add checkbutton] $opts]
+					eval [list $menu add checkbutton] $opts
+					# "menu add" returns nothing: the new row is the last one
+					set index [$menu index end]
 					if {!$DropdownForceAll} {
 						set reason [PaneReason $paneSuffix]
 						if {$reason ne "" && [llength [info commands ::tooltip::tooltip]]} {
@@ -1834,7 +1836,9 @@ proc ::menu::Do {id} {
 
 		menu.analysis.engine_toggle {
 			if {[EngineRunning]} {
-				catch { ::application::analysis::CloseEngine [lindex [array names ::application::analysis::NumberToTree] 0] }
+				# CloseEngine takes the pane's tree, not the engine number
+				set number [lindex [::application::analysis::Running] 0]
+				catch { ::application::analysis::CloseEngine $::application::analysis::NumberToTree($number) }
 			} else {
 				catch { ::application::analysis::startEngine [::application::analysis::defaultEngine] }
 			}
