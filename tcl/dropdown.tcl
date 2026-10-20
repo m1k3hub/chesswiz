@@ -1118,6 +1118,12 @@ proc ::menu::FillNodes {nodes menu level} {
 				} else {
 					lappend opts -state disabled
 				}
+				if {$paneSuffix ne "" && !$DropdownForceAll && [PaneReason $paneSuffix] ne ""} {
+					# A pane this layout cannot open is not posted: Tk never
+					# activates a disabled menu row, so a reason attached to
+					# one could never be shown (::action::run still says why).
+					continue
+				}
 				if {$paneSuffix ne ""} {
 					# A checkbutton shows the pane's current state; the
 					# command always asks the layout, never the mark, so a
@@ -1126,14 +1132,6 @@ proc ::menu::FillNodes {nodes menu level} {
 					set $var [PaneChecked $paneSuffix]
 					lappend opts -variable $var -onvalue 1 -offvalue 0
 					eval [list $menu add checkbutton] $opts
-					# "menu add" returns nothing: the new row is the last one
-					set index [$menu index end]
-					if {!$DropdownForceAll} {
-						set reason [PaneReason $paneSuffix]
-						if {$reason ne "" && [llength [info commands ::tooltip::tooltip]]} {
-							catch { ::tooltip::tooltip $menu -index $index $reason }
-						}
-					}
 				} else {
 					eval [list $menu add command] $opts
 				}

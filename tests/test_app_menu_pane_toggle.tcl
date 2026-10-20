@@ -152,23 +152,27 @@ tcltest::test pane-rows-posted-state {every View > Panes row is a stateful check
 	foreach suffix [::scidb::test::pane::Suffixes] {
 		set id menu.view.panes.$suffix
 		set index [::scidb::test::pane::FindRow $sub $id]
-		if {$index eq ""} { lappend bad [list $suffix missing]; continue }
-		lassign [::scidb::test::pane::RowState $sub $index] type state var checked
 		set openable [::menu::PaneOpenable $suffix]
 		set reason [::menu::PaneReason $suffix]
+		if {!$openable} {
+			# a pane this layout cannot open is not posted (a disabled Tk
+			# menu row can never show its reason); the action says why
+			if {$index ne ""} { lappend bad [list $suffix posted-unopenable] }
+			if {$reason eq ""} { lappend bad [list $suffix no-reason] }
+			set msg [::action::run $id]
+			if {![string match "*$reason*" $msg] && ![string match "*not enabled*" $msg]} {
+				lappend bad [list $suffix run-msg $msg]
+			}
+			lappend dump [list $suffix not-posted $reason]
+			continue
+		}
+		if {$index eq ""} { lappend bad [list $suffix missing]; continue }
+		lassign [::scidb::test::pane::RowState $sub $index] type state var checked
 		lappend dump [list $suffix $type $state $checked $openable]
 		if {$type ne "checkbutton"} { lappend bad [list $suffix type $type] }
 		if {$openable} {
 			if {$state ne "normal"} { lappend bad [list $suffix state $state] }
 			if {$reason ne ""} { lappend bad [list $suffix reason $reason] }
-		} else {
-			if {$state ne "disabled"} { lappend bad [list $suffix state $state] }
-			if {$reason eq ""} { lappend bad [list $suffix no-reason] }
-			# the reason must reach the user: the row's own tooltip, looked
-			# up by the menu's motion handler under the numeric row index
-			if {![info exists ::tooltip::tooltip($sub,$index)]} {
-				lappend bad [list $suffix no-tooltip]
-			}
 		}
 		set want [expr {[::menu::PaneChecked $suffix] ? 1 : 0}]
 		if {$checked ne $want} { lappend bad [list $suffix checked $checked $want] }
@@ -247,6 +251,11 @@ tcltest::test pane-toggles-by-click {posted pane rows toggle twice and the check
 	foreach suffix [::scidb::test::pane::Suffixes] {
 		set id menu.view.panes.$suffix
 		set index [::scidb::test::pane::FindRow $sub $id]
+		if {![::menu::PaneOpenable $suffix]} {
+			# not posted: nothing to click (see pane-rows-posted-state)
+			if {$index ne ""} { lappend bad [list $suffix posted-unopenable] }
+			continue
+		}
 		if {$index eq ""} { lappend bad [list $suffix missing]; continue }
 		set cmd [string trim [$sub entrycget $index -command]]
 		set uid [::menu::PaneLayoutUid $suffix]
