@@ -457,7 +457,7 @@ proc build {parent number patternNumber} {
 	lappend Vars(widget:toolbar:childs) $Vars(widget:button:opponent)
 	::toolbar::add $tbControl button \
 		-image $::icon::toolbarEngine \
-		-command [namespace code [list Setup $tree $number]] \
+		-command [namespace code [list StartMotor $tree $number]] \
 		-tooltipvar [::mc::var [namespace current]::mc::SetupEngine "..."] \
 		;
 	# The square (stop) button stops the search, it does not power the engine
@@ -900,6 +900,23 @@ proc ConfigurePause {tree args} {
 		set tip [namespace current]::mc::Pause
 	}
 	::toolbar::childconfigure $Vars(widget:button:pause) -image $icon -tooltipvar $tip
+}
+
+
+proc StartMotor {tree number} {
+	# A fresh pane has no engine process to resume or restart. Load its
+	# selected engine first; without a selection, use the usual default.
+	if {![::engine::active? $number]} {
+		::engine::initVars $number
+		namespace upvar ::engine::$number Vars engine
+		set name $engine(current:name)
+		if {![CanAnalyse $name]} { set name [defaultEngine] }
+		if {$name ne ""} {
+			startEngine $name $number
+			return
+		}
+	}
+	Setup $tree $number
 }
 
 
