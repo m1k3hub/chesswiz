@@ -87,6 +87,10 @@ proc build {dlg} {
 	variable Vars
 
 	set Vars(dlg) $dlg
+	# a window built now lists what its status box shows: after a window is
+	# closed with a filter set, the next one would otherwise open empty while
+	# its box reads "All" (see test_app_corr)
+	set Vars(filter) all
 
 	# Toolbar -----------------------------------------------------------------
 	set tb [ttk::frame $dlg.tb -borderwidth 0]

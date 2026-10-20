@@ -522,8 +522,9 @@ proc Find {path mode name} {
 	}
 	set i [::scidb::player::search "${name}*" $lastIndex]
 	if {$i >= 0} {
+		# see scrolls to the player's row and activates it; activate takes a
+		# row of the visible window, not the player's index (see test_app_playerdict)
 		::scrolledtable::see $path $i
-		::scrolledtable::activate $path $i
 	}
 }
 
@@ -553,7 +554,9 @@ proc SortColumn {table id dir} {
 		}
 	}
 	::widget::busyCursor off
-	::scrolledtable::updateColumn $table -1
+	# the rows on screen still show the old order: updateColumn -1 does not
+	# redraw (see test_app_playerdict)
+	::scrolledtable::refresh $table
 }
 
 
