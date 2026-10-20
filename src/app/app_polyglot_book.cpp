@@ -708,6 +708,7 @@ Book::Book(mstl::string const& filename)
 	,m_used(0)
 	,m_modelLoaded(false)
 	,m_modelModified(false)
+	,m_readonly(false)
 {
 #ifdef CHECK_HASH_KEYS
 	static bool doCheck = true;
@@ -758,6 +759,11 @@ Book::Book(mstl::string const& filename)
 
 	// the editor's model is the source of truth from here on
 	loadModel();
+	// All probes and edits use the loaded model. Keep each handle as an
+	// independent snapshot without holding a Windows file mapping open.
+	m_readonly = m_mapping && m_mapping->isReadonly();
+	delete m_mapping;
+	m_mapping = 0;
 }
 
 
@@ -768,8 +774,8 @@ Book::~Book()
 }
 
 
-bool Book::isReadonly() const			{ return m_mapping && m_mapping->isReadonly(); }
-bool Book::isPersistent() const		{ return m_mapping; }
+bool Book::isReadonly() const			{ return m_readonly; }
+bool Book::isPersistent() const		{ return m_modelLoaded || m_mapping; }
 bool Book::isOpen() const				{ return true; }
 Book::Format Book::format() const	{ return m_format; }
 
@@ -1184,13 +1190,7 @@ Book::write(mstl::string const& filename, RawEntries const& entries)
 					sizeof(RawEntry),
 					&::compareRawEntries);
 
-	// Write through a temporary file and rename over the target. On
-	// Windows an open memory mapping holds an exclusive handle on the
-	// book file (CreateFile without sharing), so opening the same path
-	// for writing fails with a sharing violation. Writing to a separate
-	// temp file and renaming avoids the collision; the caller (Tcl or
-	// save()) is responsible for closing and reopening the mapping
-	// around this call when needed.
+	// Replace only after the complete new book has been written.
 	mstl::string tempFilename(filename + ".tmp");
 
 	Byte buffer[16];
@@ -1226,7 +1226,11 @@ Book::write(mstl::string const& filename, RawEntries const& entries)
 
 	strm.close();
 
-	sys::file::rename(tempFilename.c_str(), filename.c_str());
+	if (!sys::file::renameChecked(tempFilename.c_str(), filename.c_str()))
+	{
+		sys::file::deleteIt(tempFilename.c_str());
+		IO_RAISE(BookFile, Write_Failed, "cannot replace file: %s", filename.c_str());
+	}
 }
 
 
@@ -1384,34 +1388,9 @@ Book::save()
 	if (m_format != Polyglot || m_modelLoaded == false)
 		return false;
 
-	// Close the memory mapping before rewriting the file. On Windows the
-	// mapping holds an exclusive file handle (sys::file::Mapping calls
-	// CreateFile without sharing, see sys_file.cpp). Although write() now
-	// uses a temp file and rename, we still close the mapping first so that
-	// the rename can replace the target without a sharing violation on
-	// Windows. The mapping is recreated on the new content below.
-	delete m_mapping;
-	m_mapping = 0;
-
-	// write through a plain stream: the memory mapping would have to be
-	// resized entry by entry
+	// Other handles retain their own models and have no live mappings.
 	write(filename(), m_model);
-
 	unsigned size = sys::file::size(filename());
-
-	// refresh the mapping on the new file
-	if (size > 0)
-	{
-		sys::file::Mode mode = sys::file::Readable;
-
-		if (sys::file::access(filename(), sys::file::Writeable))
-			mode = sys::file::Mode(mode | sys::file::Writeable);
-
-		m_mapping = new Mapping(filename(), mode);
-
-		if (!m_mapping->isOpen())
-			IO_RAISE(BookFile, Open_Failed, "cannot open file: %s", filename().c_str());
-	}
 
 	m_bookSize			= size / 16;
 	m_currentOffs		= 0;

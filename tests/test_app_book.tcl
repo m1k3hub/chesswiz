@@ -292,6 +292,53 @@ tcltest::test book-save-twice {saving twice to the same open handle works and re
 	list $save1 $modified $save2 $afterSave $size $count $at
 } -result {1 1 1 0 48 3 {{e4 7 0} {d4 3 0} {Nf3 1 0}}}
 
+tcltest::test book-second-handle {saving preserves another handle's unsaved model} -body {
+	set start $::scidb::test::book::start
+	set path [tempPath second bin]
+	::scidb::book::write $path [list [list $start e4 7]]
+	set h [::scidb::book::open $path]
+	set h2 [::scidb::book::open $path]
+	::scidb::book::add $h2 $start d4 3
+	::scidb::book::add $h $start Nf3 2
+	set saved [::scidb::book::save $h]
+	set other [probeList $h2 $start]
+	set dirty [::scidb::book::modified $h2]
+	::scidb::book::write $path [list [list $start c4 9]]
+	set h3 [::scidb::book::open $path]
+	list $saved $other $dirty [probeList $h $start] [probeList $h3 $start] [file exists "$path.tmp"]
+} -cleanup {
+	foreach handle [list $h $h2 $h3] { catch {::scidb::book::close $handle} }
+} -result {1 {{e4 7 0} {d4 3 0}} 1 {{e4 7 0} {Nf3 2 0}} {{c4 9 0}} 0}
+
+tcltest::test book-rename-failure {failed replacement raises WriteFailed and removes temporary file} -body {
+	set path [tempPath renamefail bin]
+	file mkdir $path
+	set failed [catch {::scidb::book::write $path [list [list $::scidb::test::book::start e4 1]]} msg]
+	list $failed [string match {*WriteFailed*} $msg] [file isdirectory $path] [file exists "$path.tmp"]
+} -cleanup {
+	file delete -force $path
+} -result {1 1 1 0}
+
+tcltest::test book-save-rename-failure {failed save keeps edits for retry} -body {
+	set start $::scidb::test::book::start
+	set path [tempPath savefail bin]
+	::scidb::book::write $path [list [list $start e4 7]]
+	set h [::scidb::book::open $path]
+	::scidb::book::add $h $start d4 3
+	file delete $path
+	file mkdir $path
+	set failed [catch {::scidb::book::save $h} msg]
+	set result [list $failed [string match {*WriteFailed*} $msg] [file exists "$path.tmp"] [::scidb::book::modified $h]]
+	file delete $path
+	lappend result [::scidb::book::save $h]
+	set h2 [::scidb::book::open $path]
+	lappend result [probeList $h2 $start]
+	set result
+} -cleanup {
+	catch {::scidb::book::close $h}
+	catch {::scidb::book::close $h2}
+} -result {1 1 0 1 1 {{e4 7 0} {d4 3 0}}}
+
 tcltest::test book-editing-readonly {a read-only book refuses to save} -body {
 	set path [tempPath readonly bin]
 	::scidb::book::write $path [list [list $::scidb::test::book::start e4 1]]

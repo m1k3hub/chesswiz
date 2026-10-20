@@ -156,6 +156,7 @@ private:
 	RawEntries		m_model;			// the raw entries, sorted by key and move
 	bool				m_modelLoaded;
 	bool				m_modelModified;
+	bool				m_readonly;
 };
 
 } // namespace polyglot

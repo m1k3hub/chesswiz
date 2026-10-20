@@ -494,6 +494,20 @@ sys::file::dirIsEmpty(char const* dirname)
 #endif
 
 
+bool
+sys::file::renameChecked(char const* oldFilename, char const* newFilename)
+{
+	Tcl_Obj* src = Tcl_NewStringObj(oldFilename, -1);
+	Tcl_Obj* dst = Tcl_NewStringObj(newFilename, -1);
+	Tcl_IncrRefCount(src);
+	Tcl_IncrRefCount(dst);
+	int result = Tcl_FSRenameFile(src, dst);
+	Tcl_DecrRefCount(dst);
+	Tcl_DecrRefCount(src);
+	return result == TCL_OK;
+}
+
+
 void
 sys::file::rename(char const* oldFilename, char const* newFilename, bool preserveOldAttrs)
 {
