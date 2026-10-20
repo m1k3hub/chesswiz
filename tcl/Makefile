@@ -241,6 +241,7 @@ SOURCES = \
 	pgn-setup.tcl \
 	save-replace.tcl \
 	export.tcl \
+	print.tcl \
 	import.tcl \
 	merge.tcl \
 	browser.tcl \
