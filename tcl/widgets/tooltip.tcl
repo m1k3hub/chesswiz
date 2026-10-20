@@ -149,6 +149,7 @@ array set G {
 	fadeId			{}
 	exposureId		{}
 	afterId			{}
+	showing			{}
 	last				-1
 	toplevel			.__tooltip__
 }
@@ -182,10 +183,10 @@ bind Tooltip <Enter> [namespace code {
 
 bind Menu <<MenuSelect>> [namespace code { MenuMotion %W }]
 bind Tooltip <Leave> [namespace code { hide 1 }] ;# fade ok
-bind Tooltip <Any-KeyPress> [namespace code hide]
+bind Tooltip <Any-KeyPress> [namespace code { hide 0 1 }]
 # NOTE: don't use this binding, because double clicks are not working anymore
-#bind Tooltip <Any-Button> [namespace code hide]
-bind . <Any-Button> [namespace code hide]
+#bind Tooltip <Any-Button> [namespace code { hide 0 1 }]
+bind . <Any-Button> [namespace code { hide 0 1 }]
 
 ::shadow::addBindings TooltipPopup no
 
@@ -369,7 +370,7 @@ proc show {w msg {i cursor} {font {}}} {
 		after cancel $G(exposureId)
 
 		if {[llength $font] == 0} { set font $G(font) }
-		set G(afterId) [after $G(delay) [namespace code [list Show $w {} $msg $i $font]]]
+		Arm $w [namespace code [list Show $w {} $msg $i $font]]
 	}
 }
 
@@ -382,7 +383,7 @@ proc showvar {w var {i cursor} {font {}}} {
 		after cancel $G(exposureId)
 
 		if {[llength $font] == 0} { set font $G(font) }
-		set G(afterId) [after $G(delay) [namespace code [list Show $w $var {} $i $font]]]
+		Arm $w [namespace code [list Show $w $var {} $i $font]]
 	}
 }
 
@@ -493,12 +494,45 @@ proc popdown {w} {
 }
 
 
-proc hide {{fadeOk 0}} {
+# A pending Show is armed with the widget it belongs to. A <Leave> arrives
+# late on Windows (after the <Enter> of the next widget), the handler of a
+# widget the pointer has already left hides, a menu unposts and a deferred
+# "after ... hide" runs: each of them took the tooltip away from a widget it
+# was never meant for, and nobody asks for it again while the pointer stays
+# where it is. That is how a tooltip went missing for a whole session, and the
+# one map that survived then showed up minutes after the (already created,
+# withdrawn) tooltip window had been made.
+proc Arm {w cmd} {
 	variable G
+
+	set G(showing) $w
+	set G(afterId) [after $G(delay) $cmd]
+}
+
+
+# Is the pointer still on the widget that asked for the tooltip?
+proc Keep {w} {
+	if {$w eq "" || ![winfo exists $w]} { return 0 }
+	if {[winfo class $w] eq "Menu"} { return 0 }
+
+	set containing [winfo containing {*}[winfo pointerxy $w]]
+	return [expr {$containing ne "" && [string match $w* $containing]}]
+}
+
+
+# force: take the tooltip away whatever the pointer is on. Only a pending Show
+# is kept without it, and only for the widget the pointer is still on: a tooltip
+# that is already up is the caller's to take away (exposure time, a pressed
+# button, an unposted menu).
+proc hide {{fadeOk 0} {force 0}} {
+	variable G
+
+	if {!$force && $G(afterId) ne "" && [Keep $G(showing)]} { return }
 
 	after cancel $G(afterId)
 	after cancel $G(exposureId)
 	after cancel $G(fadeId)
+	set G(afterId) {}
 
 	if {$fadeOk && $G(fade)} {
 		set w $G(toplevel)
@@ -521,7 +555,7 @@ proc disable {{fadeOk 0}} {
 	variable G
 
 	set G(enabled) 0
-	hide $fadeOk
+	hide $fadeOk 1
 }
 
 
@@ -531,7 +565,7 @@ proc wname {{w {}}} {
 	if {[llength [info level 0]] > 1} {
 		# $w specified
 		if {$w ne $G(toplevel)} {
-			hide
+			hide 0 1
 			destroy $G(toplevel)
 			set G(toplevel) $w
 		}
@@ -682,7 +716,7 @@ proc Clear {{pattern .*}} {
 			## might be other indices that use it
 
 			# Withdraw the tooltip if we clear the current contained item
-			if {$ptrw eq $w} { hide }
+			if {$ptrw eq $w} { hide 0 1 }
 		}
 	}
 }
@@ -690,6 +724,8 @@ proc Clear {{pattern .*}} {
 
 proc Show {w var msg {i {}} {font {}}} {
 	variable G
+
+	set G(afterId) {}
 
 	if {![winfo exists $w]} { return }
 	if {!$G(enabled)} { return }
@@ -795,7 +831,10 @@ proc MenuMotion {w} {
 		} elseif {[info exists tooltip($w,$lbl)]} {
 			set cmd [namespace code [list show $w $tooltip($w,$lbl) $cur]]
 		}
-		if {[llength $cmd]} { set G(afterId) [after $G(delayMenu) $cmd] }
+		if {[llength $cmd]} {
+			set G(showing) $w
+			set G(afterId) [after $G(delayMenu) $cmd]
+		}
 	}
 }
 
@@ -820,7 +859,7 @@ proc ListItemTip {w x y} {
 	set item [$w index @$x,$y]
 
 	if {$G(enabled) && [info exists tooltip($w,$item)]} {
-		set G(afterId) [after $G(delay) [namespace code [list show $w $tooltip($w,$item) cursor]]]
+		Arm $w [namespace code [list show $w $tooltip($w,$item) cursor]]
 	}
 }
 
@@ -838,7 +877,7 @@ proc ListItemMotion {w x y} {
 		catch {wm withdraw $G(toplevel)}
 
 		if {[info exists tooltip($w,$item)]} {
-			set G(afterId) [after $G(delay) [namespace code [list show $w $tooltip($w,$item) cursor]]]
+			Arm $w [namespace code [list show $w $tooltip($w,$item) cursor]]
 		}
 	}
 }
@@ -869,9 +908,9 @@ proc EnableListbox {w args} {
 	bind $w <Enter> +[namespace code [list ListItemTip %W %x %y]]
 	bind $w <Motion> +[namespace code [list ListItemMotion %W %x %y]]
 	bind $w <Leave> +[namespace code [list hide 1]] ; # fade ok
-	bind $w <Any-KeyPress> +[namespace code hide]
+	bind $w <Any-KeyPress> +[namespace code { hide 0 1 }]
 #	NOTE: don't use this binding, because double clicks are not working anymore
-#	bind $w <Any-Button> +[namespace code hide]
+#	bind $w <Any-Button> +[namespace code { hide 0 1 }]
 }
 
 
@@ -880,9 +919,9 @@ proc EnableCanvas {w args} {
 
 	$w bind all <Enter> +[namespace code [list ItemTip $w]]
 	$w bind all <Leave> +[namespace code [list hide 1]] ;# fade ok
-	$w bind all <Any-KeyPress> +[namespace code hide]
+	$w bind all <Any-KeyPress> +[namespace code { hide 0 1 }]
 #	NOTE: don't use this binding, because double clicks are not working anymore
-#	$w bind all <Any-Button> +[namespace code hide]
+#	$w bind all <Any-Button> +[namespace code { hide 0 1 }]
 }
 
 
@@ -911,9 +950,9 @@ proc EnableTag {w tag} {
 
 	$w tag bind $tag <Enter> +[namespace code [list TagTip $w $tag]]
 	$w tag bind $tag <Leave> +[namespace code [list hide 1]] ;# fade ok
-	$w tag bind $tag <Any-KeyPress> +[namespace code hide]
+	$w tag bind $tag <Any-KeyPress> +[namespace code { hide 0 1 }]
 #	NOTE: don't use this binding, because double clicks are not working anymore
-#	$w tag bind $tag <Any-Button> +[namespace code hide]
+#	$w tag bind $tag <Any-Button> +[namespace code { hide 0 1 }]
 }
 
 } ;# namespace tooltip
