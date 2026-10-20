@@ -131,6 +131,10 @@ proc open {parent {file ""} args} {
 	if {$Priv(check:lang) eq "none"} { return "" }
 	set Priv(current:status) ok
 
+	set fragment ""
+	if {[string match "*#*" $file]} {
+		lassign [split $file \#] file fragment
+	}
 	if {[string length $file] == 0} {
 		set Priv(current:file) ""
 		set Priv(current:lang) [helpLanguage]
@@ -147,6 +151,9 @@ proc open {parent {file ""} args} {
 		set Priv(current:file) [FullPath $file]
 		set Priv(current:lang) [helpLanguage]
 		ReloadCurrentPage no
+		if {[string length $fragment] > 0} {
+			Goto $fragment
+		}
 		return $dlg
 	}
 
@@ -247,16 +254,24 @@ proc open {parent {file ""} args} {
 	bind $nb <Configure> [namespace code [list RecordTreeWidth $nb %w]]
 	contents::BuildFrame $nb.contents
 	index::BuildFrame $nb.index index
-	index::BuildFrame $nb.cql cql
 	search::BuildFrame $nb.search
 	$nb add $nb.contents -sticky nsew -padding $::theme::padding
 	$nb add $nb.index -sticky nsew -padding $::theme::padding
-	$nb add $nb.cql -sticky nsew -padding $::theme::padding
-	$nb add $nb.search -sticky nsew -padding $::theme::padding
-	::widget::notebookTextvarHook $nb 0 [namespace current]::mc::Contents
-	::widget::notebookTextvarHook $nb 1 [namespace current]::mc::Index
-	::widget::notebookTextvarHook $nb 2 [namespace current]::mc::CQL
-	::widget::notebookTextvarHook $nb 3 [namespace current]::mc::Search
+	set cqlFile [FullPath CQL.dat]
+	if {[file exists $cqlFile] && [file size $cqlFile] > 30} {
+		index::BuildFrame $nb.cql cql
+		$nb add $nb.cql -sticky nsew -padding $::theme::padding
+		$nb add $nb.search -sticky nsew -padding $::theme::padding
+		::widget::notebookTextvarHook $nb 0 [namespace current]::mc::Contents
+		::widget::notebookTextvarHook $nb 1 [namespace current]::mc::Index
+		::widget::notebookTextvarHook $nb 2 [namespace current]::mc::CQL
+		::widget::notebookTextvarHook $nb 3 [namespace current]::mc::Search
+	} else {
+		$nb add $nb.search -sticky nsew -padding $::theme::padding
+		::widget::notebookTextvarHook $nb 0 [namespace current]::mc::Contents
+		::widget::notebookTextvarHook $nb 1 [namespace current]::mc::Index
+		::widget::notebookTextvarHook $nb 2 [namespace current]::mc::Search
+	}
 
 	grid $buttons -row 1 -column 1 -sticky we
 	grid $nb      -row 3 -column 1 -sticky nsew
@@ -333,6 +348,9 @@ proc open {parent {file ""} args} {
 	}
 
 	ReloadCurrentPage no
+	if {[string length $fragment] > 0} {
+		Goto $fragment
+	}
 	if {$opts(-center)} {
 		::util::place $dlg -parent $parent -position center
 	}

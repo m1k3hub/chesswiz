@@ -15,17 +15,17 @@
            content="text/css" />
 
   <meta name="author"
-     content="scidb.sourceforge.net" />
+     content="https://chesswizapp.com" />
   <meta name="generator"
-     content="scidb.sourceforge.net" />
+     content="Chesswiz" />
   <meta name="description"
      content="Chesswiz - Help Page" />
 
   <link rel="icon"
-       href="http://scidb.sourceforge.net/favicon.ico"
+       href="https://chesswizapp.com/favicon.ico"
        type="image/x-icon" />
   <link rel="shortcut icon"
-       href="http://scidb.sourceforge.net/favicon.ico" />
+       href="https://chesswizapp.com/favicon.ico" />
   <link rel="stylesheet"
        type="text/css"
       media="screen"
@@ -48,8 +48,6 @@ Many window areas are providing a context-sensitive menu. This menu will
 be activated by pressing the right mouse button.
 </p>
 
-<!--<p><a href='Context-Sensitive-Menu'>Further information...</a></p>
--->
 
 </TIP>
 <!-- NEXT TIP ========================================================= -->
@@ -60,7 +58,7 @@ Inside the database switcher games can be copied with Drag&#x2009;&amp;&#x2009;D
 from one database to another.
 </p>
 
-<p><a href='Database-Switcher#DND'>Further information...</a></p>
+<p><a href='Database-Switcher.html#DND'>Further information...</a></p>
 
 
 </TIP>
@@ -72,7 +70,7 @@ Game flags are useful for marking games with particular characteristics,
 at a later point you may specifically search for them.
 </p>
 
-<p><a href='Game-Flags'>Further information...</a></p>
+<p><a href='Game-Flags.html'>Further information...</a></p>
 
 
 </TIP>
@@ -169,8 +167,6 @@ shortcut
 <kbd class='key'>Ctrl</kbd>+<kbd class='key'>V</kbd>.
 </p>
 
-<!--<p><a href='Game-Editor#ReplaceMoves'>Further information...</a></p>
--->
 
 </TIP>
 <!-- NEXT TIP ========================================================= -->
@@ -182,7 +178,7 @@ attributes. The ribbed bar inside the toolbar provides drag &amp;
 drop of the toolbar, and additionally a context-sensitive menu.
 </p>
 
-<p><a href='Toolbar-Usage'>Further information...</a></p>
+<p><a href='Toolbar-Usage.html'>Further information...</a></p>
 
 
 </TIP>
@@ -287,7 +283,7 @@ recommended to convert PGN files into Scidb's format, especially if the
 archive is large.
 </p>
 
-<p><a href='Write-Protect-Database'>Further information...</a></p>
+<p><a href='Write-Protect-Database.html'>Further information...</a></p>
 
 
 </TIP>
@@ -301,7 +297,7 @@ option to set the permissions, then one of the following cases applies:
 
 <ul>
   <li><p>
-    It is a ChessBase database, Chesswiz cannot write nor modify these bases.
+    It is an external proprietary database (<abbr>.cbh</abbr>), Chesswiz cannot write nor modify these bases.
   </p></li>
   <li><p>
     It is a zip file, this can be opened, but cannot be modified.
@@ -397,37 +393,36 @@ Chesswiz is detecting automatically how to start an executable.
 
 </TIP>
 <!-- NEXT TIP ========================================================= -->
-#<TIP number="025" level="3">
-#
-#<p>
-#Der Partieeditor unterstützt Hyperlinks (Web-Links, oder Email-Adressen).
-#Mit <kbd class='key'>Shift</kbd>+Mausklick wird der Link geöffnet (ein Mausklick ohne
-#gehaltener <kbd class='key'>Shift</kbd>-Taste öffnet hingegen den Kommentareditor).
-#</p>
-#
-#<p>
-#Hyperlinks können im Kommentareditor bearbeitet werden. Die Syntax ist
-#der Wiki-Syntax entlehnt worden.
-#</p>
-#
-#<p><a href='Comment-Editor-Dialog#Text:Hyperlinks'>Further information...</a></p>
+<TIP number="025" level="3">
 
-#
-#</TIP>
+<p>
+The game editor supports hyperlinks (web links or email addresses).
+With <kbd class='key'>Shift</kbd>+click the link is opened (clicking without
+holding the <kbd class='key'>Shift</kbd> key opens the comment editor instead).
+</p>
+
+<p>
+Hyperlinks can be edited in the comment editor using wiki syntax.
+</p>
+
+<p><a href='Comment-Editor-Dialog.html#Text:Hyperlinks'>Further information...</a></p>
+
+
+</TIP>
 <!-- NEXT TIP ========================================================= -->
 <TIP number="026" level="1">
 
 <p>
-Chesswiz is also reading ChessBase files, the new format (.cbh), as well as
-the old DOS format (.cbf). Though it's not possible to use ChessBase databases
-as reference bases it is recommended to export into Scidb's format (.sci).
-For this purpose you may use the additional program <em>cdb2sci</em>, but the graphical interface is also possible. In general, heavy workflows such as maintenance, reports, and preparation should use a converted <abbr>.sci</abbr> working copy.
+Chesswiz can also read proprietary external database files (.cbh/.cbf).
+To use them as reference databases, it is recommended to export them into
+Chesswiz native format (.sci). For this purpose you may use the additional program
+<em>cdb2sci</em> or the graphical interface. In general, heavy workflows such as maintenance,
+reports, and preparation should use a converted <abbr>.sci</abbr> working copy.
 </p>
 
 <p>
-In seldom cases a game in a ChessBase database cannot be decoded (in MegaBase 2014
-there a 11 games from 5.7 millions). ChessBase is keeping the format secret, and
-Chesswiz cannot decode the complete information.
+In rare cases an external database record may use proprietary features that cannot
+be decoded completely. Converting to <abbr>.sci</abbr> ensures full feature availability.
 </p>
 
 </TIP>
@@ -435,14 +430,11 @@ Chesswiz cannot decode the complete information.
 #<TIP number="027" level="3">
 #
 #<p>
-#In Partieeditor werden Züge, die &ndash; mölicherweise aufgrund einer Zugumstellung
-#&ndash; zu einer bereits vorhandenen Stellung in der Hauptvariante führen, mit einem
-#Verknüpfungssymbol <span class='awesome'>&#xf14c;</span> versehen. Wenn die
-#Maus über diesem Symbol gehalten wird erfolgt eine Hervorhebung des Zuges in der
-#Hauptvariante, der zur gleichen Stellung führt &ndash; sofern dieser Zug sichtbar
-#ist. Ein Mausklick auf dieses Symbol positioniert auf den hervogehobenen Zug (auch
-#wenn sieser nicht sichtbar ist). Dies erleichtert u.a. das Erkennen von
-#Zugumstellungen bei der Eingabe von Varianten.
+#In the game editor, moves that transpose to an existing position in the mainline
+#are marked with a link symbol <span class='awesome'>&#xf14c;</span>. Hovering
+#over this symbol highlights the corresponding move in the mainline. Clicking it
+#jumps to the transposed move. This makes it easy to recognize transpositions when
+#entering variations.
 #</p>
 #
 #</TIP>

@@ -1,0 +1,35 @@
+<!-- ======================================================================
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+======================================================================= -->
+
+<!-- ======================================================================
+* Copyright: (C) 2013 Gregor Cramer
+* Modified for Chesswiz, 2026; see docs/UPSTREAM.md
+======================================================================= -->
+<!-- ======================================================================
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+======================================================================= -->
+
+INDEX Start position setup
+INDEX Edit start position
+TITLE Edit start position
+
+<p>
+This dialog simplifies setting up a Chess 960 (Fischer Random) or
+Shuffle Chess starting position. You simply place the pieces along
+White's back rank. The %::mc::OK% button is enabled only when a valid
+starting position has been entered. If the identification number of
+the start position is already known, the
+<a href="Board-Setup-Dialog.html">Board Setup dialog</a> can be used
+instead to enter the position number directly.
+</p>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html: -->

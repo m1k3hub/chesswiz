@@ -20,16 +20,16 @@
 TITLE What's new?
 
 <h3>
-Current development snapshot (HTML &amp; ChessBase media)
+Release features (HTML &amp; multimedia)
 </h3>
 
 <ul style="padding: 5px;">
-  <li class="space">ChessBase magazine reports come alive: guiding texts are rendered in a built-in HTML viewer with navigation, diagrams, and video stills. Game links jump to games, media links play in the media panel.</li>
+  <li class="space">Multimedia magazine reports come alive: guiding texts are rendered in a built-in HTML viewer with navigation, diagrams, and video stills. Game links jump to games, media links play in the media panel.</li>
   <li class="space">The media panel has been redesigned: entries are grouped (reports, pictures, audio, video), playback controls and document actions sit in a toolbar, and the player sits beside the list.</li>
   <li class="space">Board-synced playback: the board follows the video and the video follows the board (Chess Media System semantics), including interactive <abbr>.cms</abbr> lessons where entering a position jumps to the matching clip.</li>
   <li class="space">Native HTML publishing: export games (whole views or single games) as standalone HTML with tag tables, variations, comments in the selected language, and inline-SVG diagrams - no external assets needed.</li>
   <li class="space">HTML documents can be opened directly (File &gt; Open &gt; HTML documents); all foreign markup is sanitized before display (no scripts, no event handlers, scheme-checked links).</li>
-  <li class="space">ChessBase media manifests (<abbr>.cbm</abbr>) are parsed and surfaced in the media gallery; interactive indexes (<abbr>.cms</abbr>) drive the board-follow.</li>
+  <li class="space">External media manifests (<abbr>.cbm</abbr>) are parsed and surfaced in the media gallery; interactive indexes (<abbr>.cms</abbr>) drive the board-follow.</li>
 </ul>
 
 <h3>
@@ -78,9 +78,9 @@ Fifth public preview version
   <li class="space">Info tab showing news integrated.</li>
   <li class="space">Additional tournament type "Simultan" in tournament dialog.</li>
   <li class="space">Improvements in piece renderer.</li>
-  <li class="space">New piece sets:  Aquarium, Bookup, Chess7, ChessCube, Celtic, Fritz, Habsburg, Military, Old Style, Segoe, and Zurich.</li>
+  <li class="space">New piece sets:  Aquarium, Bookup, Chess7, ChessCube, Celtic, Club, Habsburg, Military, Old Style, Segoe, and Zurich.</li>
   <li class="space">Piece set "Standard" replaced by another version, the previous one has deficiencies.</li>
-  <li class="space">New board themes: Burnt, Fritz, Kitsch, Navajo, Marmorate, Melamine und Military.</li>
+  <li class="space">New board themes: Burnt, Club, Kitsch, Navajo, Marmorate, Melamine und Military.</li>
   <li class="space">Board theme "Virtual" overworked and renamed into "Virtual - Brown".</li>
   <li class="space">Board theme "Virtual - Colored" renamed into "Virtual - Blue".</li>
   <li class="space">Board themes "Marble - Brown" and "Marble - Red": piece set "Merida" replaced with "Habsburg".</li>
@@ -95,13 +95,13 @@ Fourth public preview version
 <ul style="padding: 5px;">
   <li class="space">Installation problems with Ubuntu fixed (Ubuntu is quite unfriendly to self-installed software packages)</li>
   <li class="space">PGN archives now can be modified and saved (.pgn and .pgn.gz)</li>
-  <li class="space">Important fixes in ChessBase decoder</li>
+  <li class="space">Important fixes in external format decoder</li>
   <li class="space">Color scheme for ordinary displays as default added, until now the color scheme was designed for high quality display</li>
   <li class="space">File selection dialog is finished, especially Drag &amp; Drop</li>
   <li class="space">Merge dialog extended: now any number of games can be merged with the help of a preview display</li>
   <li class="space">PGN setup for export options now is a separate dialog; this is important for PGN export, which is available in different menues</li>
   <li class="space">Language dependent sorting implemented</li>
-  <li class="space">New themes added: "Blackjack" and "Country Style" (thanks to JosÈ Carlos Martins)</li>
+  <li class="space">New themes added: "Blackjack" and "Country Style" (thanks to Jos√© Carlos Martins)</li>
   <li class="space">Problem with slow down in game editor eliminated</li>
   <li class="space">Upgrade of engine Stockfish to version 4</li>
   <li class="space">Session management implemented: now Chesswiz will intervene if the user is doing a session shutdown while Chesswiz is writing/updating a database</li>
@@ -136,8 +136,8 @@ Third public preview version
   <li class="space">Command line tool cdb2sci added for conversion of databases to Scidb format (.sci)</li>
   <li class="space">HTML widget reworked: saving resources in a highly significant way</li>
   <li class="space">Swedish localization integrated (thanks to Lars Ekman)</li>
-  <li class="space">Spanish translation reactivated (thanks to Juan Carlos V·squez)</li>
-  <li class="space">Spanish help pages added (thanks to Carlos Fernando Gonz·lez)</li>
+  <li class="space">Spanish translation reactivated (thanks to Juan Carlos V√°squez)</li>
+  <li class="space">Spanish help pages added (thanks to Carlos Fernando Gonz√°lez)</li>
   <li class="space">HTML file export of tournament table</li>
   <li class="space">New piece sets: "Free Staunton", and "Virtual"</li>
   <li class="space">New board themes: "Blue Theme", "Staunton", and "Virtual"</li>
@@ -146,7 +146,7 @@ Third public preview version
   <li class="space">File selection dialog improved; Drag&amp;Drop among other things</li>
   <li class="space">Game-Save/Replace dialog improved</li>
   <li class="space">Merge of games including move transpositions (optional)</li>
-  <li class="space">Old ChessBase format (.cbf) is now supported as well</li>
+  <li class="space">Legacy external format (.cbf) is now supported as well</li>
   <li class="space">Player notecards implemented</li>
   <li class="space">Archiving databases integrated</li>
   <li class="space">Setup dialog for game browser/editor</li>
@@ -160,13 +160,13 @@ Third public preview version
       and the layout will be improved</li>
   <li class="space">Compacting database (.sci only) integrated</li>
   <li class="space">Installation/update via Internet of player photo files integrated</li>
-  <li class="space">Installation of ChessBase fonts integrated</li>
+  <li class="space">Installation of external chess fonts integrated</li>
   <li class="space">Tournament table: optional display of win/draw/loss</li>
   <li class="space">Mouse wheel support for all lists and the chess board</li>
   <li class="space">Algebraic (normal, short, and long), English, Correspondence, and Telegraphic move notations available</li>
   <li class="space">Game editor has a new optional feature: show NAG comment instead of NAG symbol if the annotation is more unusual</li>
   <li class="space">Now it is possible to import databases without to open beforehand</li>
-  <li class="space">Performance problem when opening ChessBase databases solved</li>
+  <li class="space">Performance problem when opening external databases solved</li>
   <li class="space">Export of tournament tables to HTML file</li>
   <li class="space">Severe problem with Tcl version 8.6 solved</li>
   <li class="space">Some icons newly designed</li>

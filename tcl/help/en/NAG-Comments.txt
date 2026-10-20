@@ -86,7 +86,7 @@ Chesswiz is defining some more <acronym>NAG</acronym> values:
 </box>
 
 <p>
-For the support of commentaries in ChessBase files some more <acronym>NAG</acronym>
+For the support of commentaries in external proprietary databases (<abbr>.cbh</abbr>) some more <acronym>NAG</acronym>
 values are required:
 </p>
 
@@ -98,8 +98,8 @@ values are required:
 </box>
 
 <p>
-Scid and ChessPad define further <acronym>NAG</acronym> values (&gt; 190). But these values
-will be automatically mapped to Chesswiz specific values during import
+Other legacy formats define further <acronym>NAG</acronym> values (&gt; 190). But these values
+will be automatically mapped to standard values during import
 and database conversion.
 </p>
 
