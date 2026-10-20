@@ -76,6 +76,9 @@ proc execSafe {args} {
 		if {$had2at1 || (!$hasStderrRedir && !("-ignorestderr" in $switches))} {
 			lappend cmdArgs "2>@1"
 		}
+	} elseif {$had2at1} {
+		# the caller redirects stdout itself: keep its stderr redirection
+		lappend cmdArgs "2>@1"
 	}
 
 	try {

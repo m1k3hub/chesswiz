@@ -82,4 +82,11 @@ tcltest::test execsafe-preserves-enoent {non-existent executable raises POSIX EN
     list $rc [lindex $ec 0] [lindex $ec 1]
 } -result {1 POSIX ENOENT}
 
+tcltest::test execsafe-keeps-caller-redirects {a caller's own "> file 2>@1" keeps stderr in the file and raises nothing} -body {
+    set f [file join [tcltest::temporaryDirectory] execsafe-redir.log]
+    set rc [catch {::util::execSafe /bin/sh -c "echo std_out; echo std_err >&2" > $f 2>@1} out]
+    set fh [open $f]; set text [read $fh]; close $fh; file delete $f
+    list $rc [string match "*std_out*" $text] [string match "*std_err*" $text]
+} -result {0 1 1}
+
 tcltest::cleanupTests
