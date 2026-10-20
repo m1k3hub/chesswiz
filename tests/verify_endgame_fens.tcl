@@ -49,7 +49,12 @@ if {!$::verify::useCurl} {
 # The body of <url>, over Tcl http or curl.
 proc ::verify::fetch {url} {
 	if {$::verify::useCurl} {
-		if {[catch { exec curl -s --fail --max-time 30 $url } data]} {
+		if {![llength [info commands ::util::execSafe]]} {
+			set _sysPlatform [file normalize [file join [file dirname [file normalize [info script]]] .. tcl sys-platform.tcl]]
+			if {[file exists $_sysPlatform]} { catch { source -encoding utf-8 $_sysPlatform } }
+		}
+		set _execCmd [expr {[llength [info commands ::util::execSafe]] ? "::util::execSafe" : "exec"}]
+		if {[catch { $_execCmd curl -s --fail --max-time 30 $url } data]} {
 			error "curl could not fetch $url: $data"
 		}
 		return $data

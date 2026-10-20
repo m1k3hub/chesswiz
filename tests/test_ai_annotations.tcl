@@ -43,8 +43,12 @@ puts $fh {[Event "a"]
 1. e4 {A strong first move.} $14 e5 {Symmetric.} 2. Nf3 $36 Nc6 1-0}
 close $fh
 
-exec python3 $extract --pgn $pgn --out $jsonl --max-games 10
-exec python3 $index build --jsonl $jsonl --db $db
+if {![llength [info commands ::util::execSafe]]} {
+	set _sysPlatform [file normalize [file join $root tcl sys-platform.tcl]]
+	if {[file exists $_sysPlatform]} { catch { source -encoding utf-8 $_sysPlatform } }
+}
+::util::execSafe python3 $extract --pgn $pgn --out $jsonl --max-games 10
+::util::execSafe python3 $index build --jsonl $jsonl --db $db
 
 ::ai::annotations::configure -index $db -script $index
 

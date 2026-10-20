@@ -123,29 +123,26 @@ test show-1 {show solution marks failure and draws final position} -constraints 
     ::tactics::showSolution
     list [dict get $::tactics::session state] [dict get $::tactics::progress [dict get $p id] status] [expr {[llength [.tactics.board find all]] > 64}]
 } -cleanup {destroy .tactics} -result {done failed 1}
-# Anonymous pipes exercise the actual persistence reader without scratch files.
-# Linux fd paths permit readProgress's normal file-open path to read the pipe.
+# A regular temporary file exercises the persistence reader on every platform.
+# /proc/self/fd pipe paths are Linux-only; macOS has no proc filesystem.
 rename ::tactics::progressFile ::tactics::diskProgressFile
-proc ::tactics::progressFile {} { return $::progressPipe }
+proc ::tactics::progressFile {} { return $::progressFixture }
 proc progressInput {data} {
-    lassign [chan pipe] r w
-    puts $w $data
-    close $w
-    set ::progressPipe /proc/self/fd/[string range $r 4 end]
-    return $r
+    set ::progressFixture [::tcltest::makeFile $data tactics-progress-[pid]]
+    return $::progressFixture
 }
 test persistence-read-1 {saved failure and streak survive serialization and reload} -body {
     set expected [dict create [dict get $p id] [dict create status failed attempts 2] streak 3]
     set r [progressInput $expected]
     ::tactics::readProgress
-    close $r
+    ::tcltest::removeFile $r
     list [expr {$::tactics::progress eq $expected}] [string match {*Failed: 1*Streak: 3} [::tactics::score]]
 } -result {1 1}
 test persistence-read-2 {progress data is never evaluated as Tcl} -body {
     set ::executed 0
     set r [progressInput {streak {[set ::executed 1]}}]
     set rejected [catch {::tactics::readProgress}]
-    close $r
+    ::tcltest::removeFile $r
     list $rejected $::executed
 } -result {1 0}
 rename ::tactics::progressFile {}

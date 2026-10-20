@@ -27,6 +27,9 @@
 
 ::util::source initialization
 
+# Application/session commands are now defined; exit/destroy were traced at init.
+::debuglog::installShutdownTraces
+
 # --- Special popups for BETA version only -----------------------------
 
 namespace eval beta {

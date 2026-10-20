@@ -396,7 +396,7 @@ tcltest::test audit-launcher-through-renamed-symlink {the launcher starts its bi
 	set script [file normalize [file join [file dirname [info script]] .. tcl chesswiz]]
 	file link -symbolic [file join $dir mychess] $script
 } -body {
-	catch {exec [file join $dir mychess] --help 2>@1} out
+	catch {::util::execSafe [file join $dir mychess] --help 2>@1} out
 	string match "Chesswiz version*" $out
 } -cleanup {
 	file delete -force $dir

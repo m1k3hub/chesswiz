@@ -27,7 +27,10 @@
 
 using namespace tcl;
 
-#ifdef __APPLE__
+#ifdef _WIN32
+// Tk Windows reports VK_MENU as its logical ALT_MASK in event state.
+static int m_altModMask = 0x20000;
+#elif defined(__APPLE__)
 // Tk Aqua maps Option to Mod2; Command is Mod1.
 static int m_altModMask = Mod2Mask;
 #else
@@ -35,7 +38,7 @@ static int m_altModMask = Mod1Mask | Mod5Mask;
 #endif
 
 
-#if !defined(__WIN32__) && !defined(__APPLE__)
+#if !defined(_WIN32) && !defined(__APPLE__)
 
 # include <X11/keysym.h>
 
@@ -145,7 +148,7 @@ tkMisc(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 void
 tk::miscInit(Tcl_Interp* ti)
 {
-#if !defined(__WIN32__) && !defined(__APPLE__)
+#if !defined(_WIN32) && !defined(__APPLE__)
 	initKeymapInfo(ti);
 #endif
 

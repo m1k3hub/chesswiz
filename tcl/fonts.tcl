@@ -2403,7 +2403,7 @@ if {$tcl_platform(platform) ne "windows"} {
 			if {$::tcl_platform(platform) eq "unix"} {
 				::dialog::progressbar::setInformation $parent.progress ${mc::UpdateFontCache}...
 				update idletasks
-				catch { exec fc-cache -f $dstDir }
+				catch { ::util::execSafe fc-cache -f $dstDir }
 			}
 
 			::dialog::choosefont::resetFonts

@@ -5,6 +5,133 @@
 # commands across Linux, Windows, and macOS based on tcl_platform.
 # ======================================================================
 
+namespace eval ::util {
+
+# Robust foreground exec wrapper.
+# When background pipeline children (such as an engine, media stream, or AI
+# process) terminate during a foreground exec, Tcl's waitpid wait can be
+# reaped by the SIGCHLD handler or event loop, causing Tcl's exec to raise
+# a spurious "child process lost" error with errorCode POSIX ECHILD {no children}.
+#
+# ::util::execSafe runs foreground commands redirecting output to a temporary file
+# (> $tmp 2>@1). This avoids pipe buffering races in Tcl, and if ECHILD occurs
+# while the command completed, returns the captured output rather than raising.
+# Real non-zero exit statuses (CHILDSTATUS), signals (CHILDKILLED), and missing
+# commands (POSIX ENOENT) are preserved and raised normally.
+proc execSafe {args} {
+	set switches {}
+	set cmdArgs {}
+	set parsingSwitches 1
+	for {set i 0} {$i < [llength $args]} {incr i} {
+		set a [lindex $args $i]
+		if {$parsingSwitches && [string match "-*" $a]} {
+			if {$a eq "--"} {
+				set parsingSwitches 0
+				continue
+			} elseif {$a in {-keepnewline -ignorestderr}} {
+				lappend switches $a
+				continue
+			}
+		}
+		set parsingSwitches 0
+		lappend cmdArgs $a
+	}
+
+	# Background commands (& at end) return PID list immediately; run directly
+	if {[lindex $cmdArgs end] eq "&"} {
+		return [exec {*}$switches {*}$cmdArgs]
+	}
+
+	# Check if caller already specified 2>@1 at the end
+	set had2at1 0
+	if {[lindex $cmdArgs end] eq "2>@1"} {
+		set had2at1 1
+		set cmdArgs [lrange $cmdArgs 0 end-1]
+	}
+
+	# Check if caller already has stdout redirection (> or >& or >>)
+	set hasStdoutRedir 0
+	foreach token $cmdArgs {
+		if {[string match ">*" $token]} {
+			set hasStdoutRedir 1
+			break
+		}
+	}
+
+	# Check if caller already has stderr redirection (2> or 2>>)
+	set hasStderrRedir 0
+	foreach token $cmdArgs {
+		if {[string match "2>*" $token]} {
+			set hasStderrRedir 1
+			break
+		}
+	}
+
+	set tmp {}
+	if {!$hasStdoutRedir} {
+		if {[catch { close [file tempfile tmp] }]} {
+			set tmp [file join [expr {[info exists ::env(TEMP)] ? $::env(TEMP) : "/tmp"}] "exec_[pid]_[clock microseconds]"]
+		}
+		lappend cmdArgs ">" $tmp
+		if {$had2at1 || (!$hasStderrRedir && !("-ignorestderr" in $switches))} {
+			lappend cmdArgs "2>@1"
+		}
+	} elseif {$had2at1} {
+		# the caller redirects stdout itself: keep its stderr redirection
+		lappend cmdArgs "2>@1"
+	}
+
+	try {
+		set rc [catch {exec {*}$switches {*}$cmdArgs} out opts]
+		set captured ""
+		if {$tmp ne ""} {
+			if {[file exists $tmp]} {
+				set fh [open $tmp r]
+				if {"-keepnewline" in $switches} {
+					set captured [read $fh]
+				} else {
+					set captured [read -nonewline $fh]
+				}
+				close $fh
+			}
+		} else {
+			set captured $out
+		}
+
+		if {$rc == 0} {
+			return $captured
+		}
+
+		set ec {}
+		if {[dict exists $opts -errorcode]} {
+			set ec [dict get $opts -errorcode]
+		}
+
+		# ECHILD: child process wait was reaped by SIGCHLD trap or event loop.
+		# The process executed to completion and its output was captured in $tmp.
+		if {[lindex $ec 0] eq "POSIX" && [lindex $ec 1] eq "ECHILD"} {
+			return $captured
+		}
+
+		# Real failure: preserve CHILDSTATUS, CHILDKILLED, POSIX ENOENT, etc.
+		if {$tmp ne "" && $captured ne ""} {
+			dict set opts -errorinfo $captured
+			return -options $opts $captured
+		}
+		return -options $opts $out
+	} finally {
+		if {$tmp ne ""} {
+			catch {file delete -force $tmp}
+		}
+	}
+}
+
+} ;# namespace ::util
+
+namespace eval util {
+	namespace export execSafe
+}
+
 namespace eval ::platform::sys {
 
 # Number of available logical processor cores.
@@ -18,13 +145,13 @@ proc cpus {} {
 		}
 		return 2
 	} elseif {$::tcl_platform(os) eq "Darwin"} {
-		if {![catch { exec sysctl -n hw.ncpu } out] && [string is integer -strict [string trim $out]]} {
+		if {![catch { ::util::execSafe sysctl -n hw.ncpu } out] && [string is integer -strict [string trim $out]]} {
 			return [string trim $out]
 		}
 		return 2
 	} else {
 		# Linux as now
-		return [string trim [exec nproc]]
+		return [string trim [::util::execSafe nproc]]
 	}
 }
 
@@ -37,7 +164,7 @@ proc kill {pid {signal ""}} {
 		if {$cmd eq {}} { set cmd "taskkill" }
 		foreach p $pid {
 			if {[string length $p]} {
-				catch { exec {*}$cmd /PID $p /F }
+				catch { ::util::execSafe {*}$cmd /PID $p /F }
 			}
 		}
 	} else {
@@ -56,7 +183,7 @@ proc kill {pid {signal ""}} {
 			}
 		}
 		if {[llength $pids]} {
-			exec kill {*}$sigArgs {*}$pids
+			::util::execSafe kill {*}$sigArgs {*}$pids
 		}
 	}
 }
@@ -70,7 +197,7 @@ proc alive {pid} {
 	if {$::tcl_platform(platform) eq "windows"} {
 		set cmd [auto_execok tasklist]
 		if {$cmd eq {}} { set cmd "tasklist" }
-		if {[catch { exec {*}$cmd /FI "PID eq $pid" /NH } out]} {
+		if {[catch { ::util::execSafe {*}$cmd /FI "PID eq $pid" /NH } out]} {
 			return 0
 		}
 		if {[string match "*INFO:*" $out]} {
@@ -85,7 +212,7 @@ proc alive {pid} {
 		return 0
 	} else {
 		# Linux / Unix as now
-		return [expr {![catch { exec kill -0 $pid }]}]
+		return [expr {![catch { ::util::execSafe kill -0 $pid }]}]
 	}
 }
 
@@ -150,7 +277,7 @@ proc WinSpeak {text wav async} {
 	if {$wav ne ""} { lappend argv [file nativename $wav] }
 	set ::env(CHESSWIZ_TTS_TEXT) $text
 	try {
-		if {$async} { exec {*}$argv & } else { exec {*}$argv }
+		if {$async} { exec {*}$argv & } else { ::util::execSafe {*}$argv }
 	} finally {
 		unset -nocomplain ::env(CHESSWIZ_TTS_TEXT)
 	}
@@ -169,17 +296,17 @@ proc speak {text {wav ""}} {
 		return [WinSpeak $text $wav 0]
 	} elseif {$::tcl_platform(os) eq "Darwin"} {
 		if {$wav ne ""} {
-			exec say -o $wav --data-format=LEI16@22050 $text
+			::util::execSafe say -o $wav --data-format=LEI16@22050 $text
 		} else {
-			exec say $text
+			::util::execSafe say $text
 		}
 		return 1
 	} else {
 		# Linux as now
 		if {$wav ne ""} {
-			exec espeak-ng -w $wav -s 165 $text
+			::util::execSafe espeak-ng -w $wav -s 165 $text
 		} else {
-			exec espeak-ng -s 165 $text
+			::util::execSafe espeak-ng -s 165 $text
 		}
 		return 1
 	}
@@ -215,18 +342,18 @@ proc children {{pid ""}} {
 	if {$pid eq ""} { set pid [pid] }
 	if {$::tcl_platform(platform) eq "windows"} {
 		if {[catch {
-			set out [exec cscript //nologo [file nativename [WinScript children $ChildrenVbs]] $pid]
+			set out [::util::execSafe cscript //nologo [file nativename [WinScript children $ChildrenVbs]] $pid]
 			set out [string trim $out]
 		} res] || $out eq ""} {
 			return "no child processes"
 		}
 		return $out
 	} elseif {$::tcl_platform(os) eq "Darwin"} {
-		if {[catch { exec pgrep -l -P $pid } out]} { return "no child processes" }
+		if {[catch { ::util::execSafe pgrep -l -P $pid } out]} { return "no child processes" }
 		return [string trim $out]
 	} else {
 		# Linux as now
-		if {[catch { exec pgrep -a -P $pid } out]} { return "no child processes" }
+		if {[catch { ::util::execSafe pgrep -a -P $pid } out]} { return "no child processes" }
 		return [string trim $out]
 	}
 }
@@ -239,19 +366,19 @@ proc readlink {path} {
 		return [file readlink $path]
 	} else {
 		# Linux / Unix as now
-		return [exec readlink $path]
+		return [::util::execSafe readlink $path]
 	}
 }
 
 # Find a working Python interpreter binary (python3, python, py).
 proc python {} {
-	if {![catch { exec python3 -c {import sys} }]} {
+	if {![catch { ::util::execSafe python3 -c {import sys} }]} {
 		return "python3"
-	} elseif {![catch { exec python -c {import sys} }]} {
+	} elseif {![catch { ::util::execSafe python -c {import sys} }]} {
 		return "python"
 	}
 	if {$::tcl_platform(platform) eq "windows"} {
-		if {![catch { exec py -c {import sys} }]} {
+		if {![catch { ::util::execSafe py -c {import sys} }]} {
 			return "py"
 		}
 	}
@@ -265,7 +392,7 @@ proc hasPythonModule {module} {
 	set null [expr {$::tcl_platform(platform) eq "windows" ? "NUL" : "/dev/null"}]
 	foreach py $candidates {
 		if {![llength [auto_execok $py]]} { continue }
-		if {![catch { exec $py -c "import $module" 2> $null }]} {
+		if {![catch { ::util::execSafe $py -c "import $module" 2> $null }]} {
 			return $py
 		}
 	}
@@ -275,16 +402,16 @@ proc hasPythonModule {module} {
 # Probe if a Python interpreter has an importable module without leaking stderr.
 proc pythonHasModule {py module} {
 	set null [expr {$::tcl_platform(platform) eq "windows" ? "NUL" : "/dev/null"}]
-	return [expr {![catch { exec $py -c "import $module" 2> $null }]}]
+	return [expr {![catch { ::util::execSafe $py -c "import $module" 2> $null }]}]
 }
 
 # Run a command piping 'yes' on stdin for confirmations (such as xdg-mime).
 proc execWithYes {args} {
 	if {$::tcl_platform(platform) eq "windows"} {
-		catch { exec cmd /c "echo y | {*}$args" }
+		catch { ::util::execSafe cmd /c "echo y | {*}$args" }
 	} else {
 		# Linux as now
-		exec yes | {*}$args
+		::util::execSafe yes | {*}$args
 	}
 }
 
@@ -336,7 +463,7 @@ proc sameFile {a b} {
 # Touch a file (update mtime or create if absent).
 proc touch {path} {
 	if {$::tcl_platform(platform) eq "unix"} {
-		exec touch $path
+		::util::execSafe touch $path
 	} else {
 		if {[file exists $path]} {
 			file mtime $path [clock seconds]

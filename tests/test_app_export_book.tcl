@@ -16,7 +16,7 @@ proc setup {} {
 	variable haveTexEngine
 	file mkdir $tmpDir
 	foreach bin {pdflatex lualatex} {
-		if {![catch {exec which $bin} out]} {
+		if {![catch {::util::execSafe which $bin} out]} {
 			set out [string trim $out]
 			if {$out ne "" && [file executable $out]} {
 				set haveTexEngine $bin
@@ -139,7 +139,7 @@ tcltest::test appbook-view-tex {dialog exports one complete document with three 
 tcltest::test appbook-tex-compiles {the unmodified dialog export compiles with a populated contents page} -constraints tex -body {
 	set book [exportBook tex]
 	for {set i 0} {$i < 2} {incr i} {
-		exec $haveTexEngine -interaction=nonstopmode -halt-on-error \
+		::util::execSafe $haveTexEngine -interaction=nonstopmode -halt-on-error \
 			-output-directory [file dirname $book] $book
 	}
 	list [file exists [file rootname $book].pdf] \

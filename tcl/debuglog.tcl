@@ -41,11 +41,56 @@ proc engine {unused message} {
 	}
 }
 
+# Called only at lifecycle boundaries, never on an engine or timer hot path.
+# Keep this helper even after G01 is diagnosed: the final log must explain
+# whether a quit request, main-window destruction, or direct exit came first.
+proc shutdown {message} {
+	variable enabled
+	if {!$enabled} { return }
+	catch {
+		set stack {}
+		set depth [info level]
+		for {set level 1} {$level < $depth} {incr level} {
+			lappend stack [info level $level]
+		}
+		log shutdown "$message depth=$depth stack=$stack"
+	}
+}
+
+# Execution traces preserve the original commands, bindings and return codes.
+# The catch also makes a trace harmless if this namespace is removed by tests.
+variable ShutdownTraceCmd [list ::apply {args { catch { ::debuglog::shutdownTrace {*}$args } }}]
+proc shutdownTrace {command op} {
+	set name [namespace tail [lindex $command 0]]
+	if {$name eq "destroy"} {
+		if {"." ni [lrange $command 1 end] && ".application" ni [lrange $command 1 end]} { return }
+	} elseif {$name eq "Exit" && [lindex $command 1] ne ".application"} {
+		return
+	}
+	shutdown "enter $command"
+}
+
+proc installShutdownTraces {} {
+	variable ShutdownTraceCmd
+	foreach command {
+		::exit ::destroy ::application::shutdown ::application::prepareExit
+		::application::Exit ::application::WmSaveYourself
+		::application::SmSaveYourself ::application::SmInteractRequest
+		::application::SmCallSaveYourself ::tk::mac::Quit
+	} {
+		if {[llength [info commands $command]]
+			&& [list enter $ShutdownTraceCmd] ni [trace info execution $command]} {
+			trace add execution $command enter $ShutdownTraceCmd
+		}
+	}
+}
+
 proc toplevelTrace {command args} {
 	variable opening
 	variable created
 	set w [lindex $command 1]
 	if {[lindex $args end] eq "enter"} {
+		if {$w eq ".application.shutdown"} { shutdown "create $command" }
 		set opening($w) [clock milliseconds]
 	} elseif {[lindex $args 0] == 0 && [info exists opening($w)]} {
 		set created($w) $opening($w)
@@ -99,6 +144,7 @@ proc init {} {
 	variable wall
 	if {$initialized || ![info exists ::scidb::dir::user]} { return }
 	set initialized 1
+	installShutdownTraces
 	set file [file join $::scidb::dir::user log debug.log]
 	catch { file mkdir [file dirname $file] }
 	variable queue
@@ -146,7 +192,7 @@ proc init {} {
 }
 
 if {!$enabled} {
-	foreach name {log engine toplevelTrace procTrace stopProcTrace mapped destroyed init} {
+	foreach name {log engine shutdown shutdownTrace installShutdownTraces toplevelTrace procTrace stopProcTrace mapped destroyed init} {
 		proc $name {args} {}
 	}
 }

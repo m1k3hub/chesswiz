@@ -41,7 +41,11 @@ tcltest::test audit-cpp-test-banner-valid-03 {C++ backend test file should begin
 
 tcltest::test audit-cpp-test-syntax-04 {C++ backend test file should pass syntax-only compilation} -body {
     variable repoRoot
-    if {[catch {exec g++ --version}]} {
+    if {![llength [info commands ::util::execSafe]]} {
+        set _sysPlatform [file normalize [file join $repoRoot tcl sys-platform.tcl]]
+        if {[file exists $_sysPlatform]} { catch { source -encoding utf-8 $_sysPlatform } }
+    }
+    if {[catch {::util::execSafe g++ --version}]} {
         return 1
     }
     set testFile [file join $repoRoot tests test_cpp_backend.cpp]
@@ -53,7 +57,9 @@ tcltest::test audit-cpp-test-syntax-04 {C++ backend test file should pass syntax
         -I[file join $repoRoot src mstl] \
         -I/usr/include/tcl8.6 \
         $testFile]
-    set rc [catch {exec {*}$cmd} output]
+    # Clang on macOS emits header warnings on stderr even on success.
+    # The compiler exit status, rather than an empty stderr, is the check.
+    set rc [catch {::util::execSafe -ignorestderr {*}$cmd} output]
     if {$rc} {
         puts stderr $output
     }
@@ -62,12 +68,12 @@ tcltest::test audit-cpp-test-syntax-04 {C++ backend test file should pass syntax
 
 tcltest::test audit-make-cpp-target-05 {Documented C++ test target should work from tests directory} -body {
     variable repoRoot
-    if {[catch {exec make --version}]} {
+    if {[catch {::util::execSafe make --version}]} {
         return 1
     }
     # -ignorestderr: the corr-duration truncation tests throw on purpose and
     # the exception logger writes to stderr; only the exit status matters here
-    set rc [catch {exec -ignorestderr make -C [file join $repoRoot tests] cpp} output]
+    set rc [catch {::util::execSafe -ignorestderr make -C [file join $repoRoot tests] cpp} output]
     if {$rc} {
         puts stderr $output
     }

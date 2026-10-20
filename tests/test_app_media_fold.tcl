@@ -721,7 +721,7 @@ tcltest::test mediafold-008-stream {choosing Open stream... and entering a URL p
     lassign $board bx by bw bh; lassign [::scidb::test::foldRect $inset] ix iy iw ih
     set overlap [expr {max(0,min($bx+$bw,$ix+$iw)-max($bx,$ix))*max(0,min($by+$bh,$iy+$ih)-max($by,$iy))}]
     ::scidb::test::foldRecord VAL-MED-008 [list stream calls $::scidb::test::foldCalls shown $::mediainset::Shown inset [::scidb::test::foldRect $inset] canvas [::scidb::test::foldRect $c] window [wm geometry .application] board $board overlap $overlap reserve [::application::board::reserveRect] status $::application::media::Priv(statusbar)]
-    if {[info exists ::env(W1_EVIDENCE_DIR)]} {catch {exec import -window root [file join $::env(W1_EVIDENCE_DIR) VAL-MED-008-stream.png]}}
+    if {[info exists ::env(W1_EVIDENCE_DIR)]} {catch {::util::execSafe import -window root [file join $::env(W1_EVIDENCE_DIR) VAL-MED-008-stream.png]}}
     # A board pane too small for a strip uses the BRD-004 corner overlay.
     list $opened [winfo exists $dlg] $::scidb::test::foldCalls $::mediainset::Shown [winfo ismapped $inset] [expr {$overlap == 0 || [::application::board::reserveRect] eq {0 0 0 0}}]
 } -cleanup {
@@ -772,7 +772,7 @@ proc ::scidb::test::migRun {dir phase {named 0}} {
     set script [file join $root tests fixtures media-mig phase.tcl]
     set home [file join $dir home]
     if {[catch {
-        exec {*}[list timeout 120 env HOME=$home MIG_PHASE=$phase MIG_ROOT=$root \
+        ::util::execSafe {*}[list timeout 120 env HOME=$home MIG_PHASE=$phase MIG_ROOT=$root \
             SCIDB_USERDIR=$home/.chesswiz MIG_NAMED_TEST=$named \
             LIBGL_ALWAYS_SOFTWARE=1 SCIDB_AI_UNCALIBRATED=1 \
             $bin $script] > $log 2>@1

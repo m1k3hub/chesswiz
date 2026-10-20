@@ -140,7 +140,7 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
     puts "DLG $target screen=[winfo screenwidth .]x[winfo screenheight .] main=[wm geometry .application] board=$board workarea=$wa extents=$ext rule=$rule resized=[dict get $plan resized] helper=[dict get $plan geometry] final=$actual requested=$requested minsize=[wm minsize $dlg] overlap=$area candidates=$areas buttons=$buttonRects"
     if {[info exists ::env(DLG_EVIDENCE_DIR)]} {
         file mkdir $::env(DLG_EVIDENCE_DIR)
-        exec import -window root [file join $::env(DLG_EVIDENCE_DIR) $target.png]
+        ::util::execSafe import -window root [file join $::env(DLG_EVIDENCE_DIR) $target.png]
     }
     return 1
 }

@@ -148,7 +148,15 @@ proc createTestDatabase {{filename ""}} {
     set cbh2si4 [file join [file dirname $tmpDir] src cbh2si4]
     if {[file executable $cbh2si4]} {
         set pgn [createTestPgn]
-        catch { exec $cbh2si4 $pgn $filename }
+        if {![llength [info commands ::util::execSafe]]} {
+            set _sysPlatform [file normalize [file join [file dirname [file normalize [info script]]] .. tcl sys-platform.tcl]]
+            if {[file exists $_sysPlatform]} { catch { source -encoding utf-8 $_sysPlatform } }
+        }
+        if {[llength [info commands ::util::execSafe]]} {
+            catch { ::util::execSafe $cbh2si4 $pgn $filename }
+        } else {
+            catch { exec $cbh2si4 $pgn $filename }
+        }
     }
     
     return $filename
