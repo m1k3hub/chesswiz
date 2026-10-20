@@ -1122,8 +1122,17 @@ proc GotFocus {w} {
 }
 
 
+# The board lost the focus: drop the selection and the variation list. This
+# runs from a <FocusOut> binding on .application and the board canvas, and a
+# queued FocusOut still runs after View > Panes > Board off destroyed the
+# canvas. `::variation::hide` then asked the diagram to clear its alternatives
+# with the dead path ("can't access ...::Board: parent namespace doesn't
+# exist"). Nothing is focused on a board that is gone, so there is nothing to
+# drop either.
 proc LostFocus {} {
 	variable Vars
+
+	if {![info exists Vars(widget:frame)] || ![winfo exists $Vars(widget:frame)]} { return }
 
 	set Vars(select-var-is-pending) 0
 	::variation::hide 0
