@@ -111,6 +111,7 @@ proc ::application::ask::Build {notebook} {
 	bind $entry <Return> [namespace code Choose]
 	bind $entry <KP_Enter> [namespace code Choose]
 	bind $entry <Escape> [namespace code Escape]
+	bind $entry <F1> [namespace code Help]
 	bind $entry <FocusIn> [namespace code [list EnterField $entry $placeholder]]
 	bind $entry <FocusOut> [namespace code [list LeaveField $entry $placeholder]]
 	bind $entry <Button-1> +[namespace code { after idle ::application::ask::Typed {} }]
@@ -258,6 +259,11 @@ proc ::application::ask::Escape {} {
 		focus -force [BoardWidget]
 	}
 	return "break"
+}
+
+proc ::application::ask::Help {} {
+	::help::open .application Ask-Field
+	return -code break
 }
 
 # Ctrl+K and Ctrl+Shift+K are bound on the main window. On Text/Script
@@ -1061,6 +1067,7 @@ proc ::application::ask::Preferences {args} {
 	pack $buttons -fill x -pady {8 0}
 
 	bind $dlg <Escape> [list destroy $dlg]
+	bind $dlg <F1> [list ::help::open .application Ask-Field -parent $dlg]
 	::util::place $dlg -parent .application -position center
 	focus -force $top.whisperCli.entry
 }
