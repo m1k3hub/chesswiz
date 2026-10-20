@@ -195,7 +195,7 @@ tcltest::test mapping-dropdown-old-to-new {every moved drop-down entry has a rea
 	if {$::scidb::test::map::lastError ne ""} { puts "  FIRST ERROR $::scidb::test::map::lastError" }
 	list [dict get $counts action] [dict get $counts cascade] [llength $gaps] \
 		[dict get $counts invoke-failed]
-} -result {68 7 0 0}
+} -result {70 5 0 0}
 
 tcltest::test mapping-section6-removals {only PROPOSAL section 6 rows are gone, each replacement is present} -body {
 	catch { destroy .mapmenu }

@@ -1200,15 +1200,48 @@ proc ::menu::FillDynamic {labelName menu} {
 	return
 }
 
+proc ::menu::PaneSuffix {name} {
+	# The layout uses the singular uid; the public action id keeps the old
+	# plural spelling from the pre-redesign menu (and from the fixture).
+	set aliases {
+		player players event events site sites annotator annotators
+		position positions dbgames games
+	}
+	if {[dict exists $aliases $name]} { return [dict get $aliases $name] }
+	return $name
+}
+
+proc ::menu::PaneUid {twm suffix} {
+	# Exact dispatch: the public id names a pane kind, the layout leaf is the
+	# uid (analysis panes carry a number: analysis:1).
+	set aliases {
+		players player
+		events event
+		sites site
+		annotators annotator
+		positions position
+		games games
+	}
+	set wanted $suffix
+	if {[dict exists $aliases $suffix]} { set wanted [dict get $aliases $suffix] }
+	foreach uid [$twm leaves] {
+		if {[::application::NameFromUid $uid] eq $wanted} { return $uid }
+	}
+	return ""
+}
+
 proc ::menu::FillPanes {menu} {
-	if {[catch { ::application::twm } twm]} { return }
+	set twm [CurrentTWM]
 	if {$twm eq ""} { return }
-	set names [array names ::application::Pane]
-	foreach name [lsort $names] {
+	set seen {}
+	foreach uid [$twm leaves] {
+		set suffix [PaneSuffix [::application::NameFromUid $uid]]
+		if {$suffix in $seen} { continue }
+		lappend seen $suffix
 		catch {
-			lassign [AmpText [set ::application::Pane($name)]] text ul
+			lassign [AmpText [::application::twm::PaneLabel $uid]] text ul
 			$menu add command -label $text -underline $ul \
-				-command [list ::menu::TogglePane $twm $name]
+				-command [list ::action::run menu.view.panes.$suffix]
 		}
 	}
 }
@@ -1216,12 +1249,19 @@ proc ::menu::FillPanes {menu} {
 proc ::menu::TogglePane {twm uid} {
 	# Pane headers own visibility; the View cascade offers the same names.
 	if {[llength [info commands ::context::Post]]} {
-		set frame ""
-		catch { set frame [$twm pane $uid] }
-		if {$frame ne ""} {
+		if {$uid in [$twm leaves]} {
 			catch { ::application::twm::ChangeState $twm $uid }
 		}
 	}
+}
+
+proc ::menu::TogglePaneId {suffix} {
+	set twm [PaneTWM]
+	if {$twm eq ""} { return 0 }
+	set uid [PaneUid $twm $suffix]
+	if {$uid eq ""} { return 0 }
+	TogglePane $twm $uid
+	return 1
 }
 
 proc ::menu::FillTheme {menu} {
@@ -1438,15 +1478,53 @@ proc ::menu::RegisterExtras {} {
 	Register view.board3d.open [MC Open3DBoard] "" {::capability::present board3d} "" "09.910"
 	Register view.board3d.webgl [MC OpenWebGL3DBoard] "" {::capability::present webgl3d} "" "09.911"
 	Register view.board3d.embed [MC Embed3DBoard] "" {::capability::present embed3d} "" "09.912"
-	foreach pair {
-		board board editor editor games "game list" players players
-		events events sites sites annotators annotators positions positions
-		tree tree analysis analysis media media report report
-		assistant assistant explorer explorer
+	# Rows reached from the dynamic Game submenus. They have a dedicated
+	# branch in Do, but the rows themselves are generated from DynId, so the
+	# registry walk only sees the ids when they are registered here as well.
+	set i 0
+	foreach {id labelName} {
+		menu.game.paste_clip PasteClipbase
+		menu.game.paste_tab PasteGameTab
+		menu.game.merge_clip MergeClipbase
+		menu.game.merge_tab MergeGameTab
+		menu.game.history.recent RecentGames
 	} {
-		set uid [lindex $pair 0]
-		set label [lindex $pair 1]
-		Register menu.view.panes.$uid $label "" "" "" "09.900"
+		incr i
+		Register $id [MC $labelName] "" "" "" [format "03.%03d" [expr {850 + $i}]]
+	}
+	# "Clipbase" is the game clipboard: reuse game.paste's handler so the
+	# posted row and the assistant paste the same remembered games.
+	if {[dict exists $::action::Registry game.paste]} {
+		set rec [::action::get menu.game.paste_clip]
+		set paste [::action::get game.paste]
+		dict set rec handler [dict get $paste handler]
+		dict set rec args [dict get $paste args]
+		dict set ::action::Registry menu.game.paste_clip $rec
+	}
+	# Engine toggle is posted from the static Analysis cascade as a toggle;
+	# RegisterNodes gives toggles no order, so give it one here.
+	Register menu.analysis.engine_toggle [MC StartStopEngine] "" "" "" "06.001"
+	# One row per pane, with the same label the posted row shows. The list is
+	# id -> label key, never a flat word list: "game list" is one label.
+	set order 890
+	foreach {uid labelName} {
+		board PaneBoard
+		editor PaneEditor
+		games PaneGameList
+		players PanePlayers
+		events PaneEvents
+		sites PaneSites
+		annotators PaneAnnotators
+		positions PanePositions
+		tree PaneTree
+		analysis PaneAnalysis
+		media PaneMedia
+		report PaneReport
+		assistant PaneAssistant
+		explorer PaneExplorer
+	} {
+		incr order
+		Register menu.view.panes.$uid [MC $labelName] "" "" "" [format "09.%03d" $order]
 	}
 }
 
@@ -1472,6 +1550,17 @@ proc ::menu::CurrentBase {} {
 proc ::menu::CurrentTWM {} {
 	if {[llength [info commands ::application::twm]] == 0} { return "" }
 	if {[catch { set twm [::application::twm] }]} { return "" }
+	return $twm
+}
+
+# Panes belong to the board layout even when the notebook is showing another
+# page. Called by-id (script, palette), a pane toggle still has an obvious
+# target; fall back to the board twm instead of silently doing nothing.
+proc ::menu::PaneTWM {} {
+	set twm [CurrentTWM]
+	if {$twm ne ""} { return $twm }
+	if {[llength [info commands ::application::twm]] == 0} { return "" }
+	catch { set twm [::application::twm board] }
 	return $twm
 }
 
@@ -1582,7 +1671,7 @@ proc ::menu::Do {id} {
 			return
 		}
 		menu.game.paste_clip { catch { ::application::pgn::PasteClipboardGame }; return }
-		menu.game.paste_tab { catch { ::gamebar::PasteClipboardContent .application }; return }
+		menu.game.paste_tab { catch { ::application::pgn::PasteClipboardGame }; return }
 		menu.game.merge_clip { catch { ::gamebar::mergeGame .application -1 }; return }
 		menu.game.merge_tab { catch { ::gamebar::mergeGame .application -1 }; return }
 		game-export { return [::gamebar::exportGame .application] }
@@ -1716,7 +1805,20 @@ proc ::menu::Do {id} {
 			return [::info::openDialog .application]
 		}
 
-		menu.view.panes.* { ::menu::TogglePane [lindex [split $id .] end]; return }
+		menu.view.panes.board { return [::menu::TogglePaneId board] }
+		menu.view.panes.editor { return [::menu::TogglePaneId editor] }
+		menu.view.panes.games { return [::menu::TogglePaneId games] }
+		menu.view.panes.players { return [::menu::TogglePaneId players] }
+		menu.view.panes.events { return [::menu::TogglePaneId events] }
+		menu.view.panes.sites { return [::menu::TogglePaneId sites] }
+		menu.view.panes.annotators { return [::menu::TogglePaneId annotators] }
+		menu.view.panes.positions { return [::menu::TogglePaneId positions] }
+		menu.view.panes.tree { return [::menu::TogglePaneId tree] }
+		menu.view.panes.analysis { return [::menu::TogglePaneId analysis] }
+		menu.view.panes.media { return [::menu::TogglePaneId media] }
+		menu.view.panes.report { return [::menu::TogglePaneId report] }
+		menu.view.panes.assistant { return [::menu::TogglePaneId assistant] }
+		menu.view.panes.explorer { return [::menu::TogglePaneId explorer] }
 		view.pane_zoom { catch { ::application::TogglePaneZoom }; return }
 		view.focus_zoom {
 			set twm [CurrentTWM]

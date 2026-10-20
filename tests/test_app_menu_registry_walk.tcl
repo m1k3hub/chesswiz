@@ -123,6 +123,29 @@ proc ::scidb::test::rgw::BadCommands {rows} {
 	return $bad
 }
 
+# Resolve every posted id through ::action::get. Rows with no command, or
+# with a command that is not ::action::run (data rows built by Fill*-style
+# helpers), are the contract's dynamic exemptions and are counted, not
+# resolved.
+proc ::scidb::test::rgw::ResolveRows {rows} {
+	set resolved 0
+	set exempt {}
+	set unresolved {}
+	foreach row $rows {
+		set cmd [string trim [lindex $row 4]]
+		if {$cmd eq "" || ![regexp {^::action::run ([^\s]+)} $cmd -> id]} {
+			lappend exempt $row
+			continue
+		}
+		if {[catch { ::action::get $id }]} {
+			lappend unresolved [list [lindex $row 0] [lindex $row 3] $id]
+		} else {
+			incr resolved
+		}
+	}
+	return [list $resolved $exempt $unresolved]
+}
+
 tcltest::test registry-walk-dropdown {every drop-down command is ::action::run} -body {
 	catch { destroy .rgwdd }
 	menu .rgwdd -tearoff 0
@@ -135,10 +158,12 @@ tcltest::test registry-walk-dropdown {every drop-down command is ::action::run} 
 	foreach row $rows {
 		if {[regexp {^::action::run (\S+)$} [lindex $row 4] -> id]} { lappend ids $id }
 	}
+	lassign [::scidb::test::rgw::ResolveRows $rows] resolved exempt unresolved
 	destroy .rgwdd
-	puts "REG-002 dropdown: [llength $rows] rows, [llength [lsort -unique $ids]] actions, [llength $bad] bad"
-	list $bad [expr {[llength [lsort -unique $ids]] > 100}]
-} -result {{} 1}
+	puts "REG-002 dropdown: [llength $rows] rows, [llength [lsort -unique $ids]] actions, [llength $bad] bad, ${resolved} resolved, [llength $exempt] exempt, [llength $unresolved] unresolved"
+	foreach u $unresolved { puts "  unresolved: $u" }
+	list $bad [expr {[llength [lsort -unique $ids]] > 100}] $unresolved
+} -result {{} 1 {}}
 
 tcltest::test registry-walk-contexts {every C1-C12 command is ::action::run} -body {
 	set rows [::scidb::test::rgw::WalkContexts]
@@ -148,10 +173,12 @@ tcltest::test registry-walk-contexts {every C1-C12 command is ::action::run} -bo
 		set s [lindex $row 0]
 		dict incr per $s
 	}
-	puts "REG-002 contexts: [dict size $per] objects, [llength $rows] rows, [llength $bad] bad"
+	lassign [::scidb::test::rgw::ResolveRows $rows] resolved exempt unresolved
+	puts "REG-002 contexts: [dict size $per] objects, [llength $rows] rows, [llength $bad] bad, ${resolved} resolved, [llength $exempt] exempt, [llength $unresolved] unresolved"
 	foreach key [lsort [dict keys $per]] { puts "  $key: [dict get $per $key]" }
-	list $bad [expr {[llength $rows] > 150}]
-} -result {{} 1}
+	foreach u $unresolved { puts "  unresolved: $u" }
+	list $bad [expr {[llength $rows] > 150}] $unresolved
+} -result {{} 1 {}}
 
 tcltest::test registry-walk-toolbars {every toolbar button command is ::action::run} -body {
 	set rows {}
@@ -164,10 +191,12 @@ tcltest::test registry-walk-toolbars {every toolbar button command is ::action::
 		incr seen
 		if {[regexp {^::action::run (\S+)$} [lindex $row 4] -> id]} { lappend ids $id }
 	}
-	puts "REG-002 toolbars: $seen actionable buttons, [llength [lsort -unique $ids]] actions, [llength $bad] bad"
+	lassign [::scidb::test::rgw::ResolveRows $rows] resolved exempt unresolved
+	puts "REG-002 toolbars: $seen actionable buttons, [llength [lsort -unique $ids]] actions, [llength $bad] bad, ${resolved} resolved, [llength $exempt] exempt, [llength $unresolved] unresolved"
 	foreach row $bad { puts "  bad: $row" }
-	list $bad [expr {$seen > 20}]
-} -result {{} 1}
+	foreach u $unresolved { puts "  unresolved: $u" }
+	list $bad [expr {$seen > 20}] $unresolved
+} -result {{} 1 {}}
 
 tcltest::test registry-walk-ask-is-action {the assistant row is a registry action, not a direct callback} -body {
 	set rows [::scidb::test::rgw::WalkContexts]
