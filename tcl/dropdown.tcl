@@ -14,6 +14,9 @@ namespace eval menu {
 	variable DropdownOrder 0
 	variable DropdownCounter 0
 	variable DropdownWidget ""
+	# Check marks on the View > Panes rows: one scalar per pane kind.
+	variable PaneVisible
+	array set PaneVisible {}
 }
 
 namespace eval menu::mc {
@@ -1101,6 +1104,10 @@ proc ::menu::FillNodes {nodes menu level} {
 				set id [::menu::DynId $labelName]
 				lassign [AmpText [MC $labelName]] text ul
 				set opts [list -label $text -underline $ul]
+				set paneSuffix ""
+				if {[string match {menu.view.panes.*} $id]} {
+					set paneSuffix [string range $id 16 end]
+				}
 				if {$id ne ""} {
 					if {!$DropdownForceAll && ![dict get [state $id] visible]} { continue }
 					lappend opts -command [list ::action::run $id]
@@ -1111,7 +1118,23 @@ proc ::menu::FillNodes {nodes menu level} {
 				} else {
 					lappend opts -state disabled
 				}
-				eval [list $menu add command] $opts
+				if {$paneSuffix ne ""} {
+					# A checkbutton shows the pane's current state; the
+					# command always asks the layout, never the mark, so a
+					# click can only ever perform the real toggle.
+					set var ::menu::PaneVisible($paneSuffix)
+					set $var [PaneChecked $paneSuffix]
+					lappend opts -variable $var -onvalue 1 -offvalue 0
+					set index [eval [list $menu add checkbutton] $opts]
+					if {!$DropdownForceAll} {
+						set reason [PaneReason $paneSuffix]
+						if {$reason ne "" && [llength [info commands ::tooltip::tooltip]]} {
+							catch { ::tooltip::tooltip $menu -index $index $reason }
+						}
+					}
+				} else {
+					eval [list $menu add command] $opts
+				}
 				set lastSep 0
 			}
 		}
@@ -1246,22 +1269,90 @@ proc ::menu::FillPanes {menu} {
 	}
 }
 
-proc ::menu::TogglePane {twm uid} {
-	# Pane headers own visibility; the View cascade offers the same names.
-	if {[llength [info commands ::context::Post]]} {
-		if {$uid in [$twm leaves]} {
-			catch { ::application::twm::ChangeState $twm $uid }
+# The layout leaf a public pane id names. A pane that is already in the
+# layout keeps its exact uid (analysis panes carry a number); an absent one
+# resolves to the uid the layout uses when it creates the pane.
+proc ::menu::PaneLayoutUid {suffix} {
+	set twm [PaneTWM]
+	if {$twm ne ""} {
+		set uid [PaneUid $twm $suffix]
+		if {$uid ne ""} { return $uid }
+	}
+	switch -- $suffix {
+		board		{ return board }
+		editor		{ return editor }
+		games		{ return games }
+		tree		{ return tree }
+		analysis	{ return analysis:1 }
+		media		{ return media }
+		report		{ return report }
+		assistant	{ return assistant }
+		explorer	{ return explorer }
+	}
+	return ""
+}
+
+# Empty when the pane can be toggled now. A non-empty text is the reason the
+# posted row is disabled: either the build has no such pane, or the optional
+# module that owns it is absent.
+proc ::menu::PaneReason {suffix} {
+	set twm [PaneTWM]
+	if {$twm eq ""} { return "The board layout is not available." }
+	if {[PaneLayoutUid $suffix] eq ""} {
+		return "This pane is not available in this build."
+	}
+	if {[llength [info commands ::capability::present]]} {
+		switch -- $suffix {
+			report		{ if {![::capability::present report]} { return "The report module is not available." } }
+			assistant	{ if {![::capability::present assistant]} { return "The assistant module is not available." } }
+			explorer	{ if {![::capability::present explorer]} { return "The opening explorer module is not available." } }
 		}
 	}
+	return ""
+}
+
+proc ::menu::PaneOpenable {suffix} {
+	return [expr {[PaneReason $suffix] eq ""}]
+}
+
+proc ::menu::PaneChecked {suffix} {
+	set twm [PaneTWM]
+	if {$twm eq ""} { return 0 }
+	return [expr {[PaneUid $twm $suffix] ne ""}]
+}
+
+proc ::menu::SyncPaneCheck {suffix} {
+	if {[info exists ::menu::PaneVisible($suffix)]} {
+		set ::menu::PaneVisible($suffix) [PaneChecked $suffix]
+	}
+}
+
+proc ::menu::TogglePane {twm uid} {
+	# A pane that is part of the layout is hidden (or restored from the
+	# collapsed presentation by ChangeState). A pane that is absent is
+	# reopened through the layout's show API, which creates the leaf and
+	# brings its tab/parent to the front.
+	if {$uid eq ""} { return 0 }
+	if {$uid in [$twm leaves]} {
+		catch { ::application::twm::ChangeState $twm $uid }
+	} elseif {[llength [info commands ::application::openPane]]} {
+		::application::openPane $uid
+	} else {
+		catch { ::application::twm::ChangeState $twm $uid }
+	}
+	return 1
 }
 
 proc ::menu::TogglePaneId {suffix} {
 	set twm [PaneTWM]
 	if {$twm eq ""} { return 0 }
-	set uid [PaneUid $twm $suffix]
+	if {![PaneOpenable $suffix]} { return "error: [PaneReason $suffix]" }
+	set uid [PaneLayoutUid $suffix]
 	if {$uid eq ""} { return 0 }
-	TogglePane $twm $uid
-	return 1
+	set result [TogglePane $twm $uid]
+	update idletasks
+	SyncPaneCheck $suffix
+	return $result
 }
 
 proc ::menu::FillTheme {menu} {
@@ -1524,7 +1615,11 @@ proc ::menu::RegisterExtras {} {
 		explorer PaneExplorer
 	} {
 		incr order
-		Register menu.view.panes.$uid [MC $labelName] "" "" "" [format "09.%03d" $order]
+		# A pane that cannot be opened in this state is posted disabled, with
+		# the reason attached as the row's tooltip; it is never an enabled
+		# no-op. The enabled predicate is also what ::action::run enforces.
+		Register menu.view.panes.$uid [MC $labelName] "" "" \
+			[list ::menu::PaneOpenable $uid] [format "09.%03d" $order]
 	}
 }
 
@@ -1557,6 +1652,14 @@ proc ::menu::CurrentTWM {} {
 # page. Called by-id (script, palette), a pane toggle still has an obvious
 # target; fall back to the board twm instead of silently doing nothing.
 proc ::menu::PaneTWM {} {
+	# View > Panes always controls the board layout, also while another
+	# notebook page is shown; fall back to the current layout only when the
+	# board layout has not been built yet.
+	if {[llength [info commands ::application::reflow::boardTwm]]} {
+		if {![catch { set twm [::application::reflow::boardTwm] }] && $twm ne ""} {
+			return $twm
+		}
+	}
 	set twm [CurrentTWM]
 	if {$twm ne ""} { return $twm }
 	if {[llength [info commands ::application::twm]] == 0} { return "" }
