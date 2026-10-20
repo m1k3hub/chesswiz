@@ -184,6 +184,7 @@ proc build {parent number patternNumber} {
 	variable GlobalOptions
 	variable Defaults
 	variable NumberToTree
+	variable FreeNumbers
 
 	namespace eval ${number} {}
 	variable ${number}::Options
@@ -565,6 +566,9 @@ proc build {parent number patternNumber} {
 	]
 
 	set NumberToTree($number) $tree
+	# Explicit-number callers can reopen a closed pane without newNumber.
+	# Its number is occupied again, including any repeated free-list entries.
+	set FreeNumbers [lsearch -all -inline -not -exact $FreeNumbers $number]
 	ConfigureInfo $tree
 	SetState $tree disabled
 	Layout $tree
