@@ -21,11 +21,14 @@ proc ::scidb::test::mac::Quit {} { set ::scidb::test::mac::called quit }
 
 tcltest::test mac-about-uses-standard-panel {About calls the Tk application panel} -body {
 	set ::scidb::test::mac::called ""
+	# on Aqua the real panel exists: set it aside so the test sees the call
 	set had [llength [info commands ::tk::mac::standardAboutPanel]]
-	if {!$had} { proc ::tk::mac::standardAboutPanel {} { ::scidb::test::mac::About } }
+	if {$had} { rename ::tk::mac::standardAboutPanel ::scidb::test::mac::RealAbout }
+	proc ::tk::mac::standardAboutPanel {} { ::scidb::test::mac::About }
 	::menu::MacAbout
 	set got [::scidb::test::mac::Called]
-	if {!$had} { rename ::tk::mac::standardAboutPanel {} }
+	rename ::tk::mac::standardAboutPanel {}
+	if {$had} { rename ::scidb::test::mac::RealAbout ::tk::mac::standardAboutPanel }
 	list $got
 } -result {about}
 
