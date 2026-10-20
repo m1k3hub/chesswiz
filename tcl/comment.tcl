@@ -824,6 +824,13 @@ proc UpdateAttrs {w fmt {code ""}} {
 }
 
 
+# Ctrl+Shift+U inserts the king: Ctrl+Shift+K belongs to the Ask field
+# (D-2 / D-7). The other pieces keep the letters of the comment language.
+proc FigurineKey {lang index} {
+	if {$index == 0} { return U }
+	return [lindex $::figurines::langSet($lang) $index]
+}
+
 proc InsertFigurine {w fig {boldFlag {}}} {
 	variable Vars
 
@@ -1137,9 +1144,13 @@ proc LanguageChanged {dlg dialog} {
 	foreach fig $langSet($Vars(mc)) {
 		bind $w <Control-Shift-$fig> {#}
 	}
+	bind $w <Control-Shift-U> {#}
+	set i 0
 	foreach fig $langSet($::mc::langID) eng $langSet(en) {
-		bind $w <Control-Shift-$fig> [namespace code [list InsertFigurine $w $eng]]
-		bind $w <Control-Shift-$fig> {+ break }
+		set key [FigurineKey $::mc::langID $i]
+		bind $w <Control-Shift-$key> [namespace code [list InsertFigurine $w $eng]]
+		bind $w <Control-Shift-$key> {+ break }
+		incr i
 	}
 	set Vars(mc) $::mc::langID
 
@@ -1877,7 +1888,7 @@ proc MakeSymbolMenu {w menu} {
 	set i 0
 	foreach {fig} {K Q R B N P} {
 		# TODO: only use accelerator if piece is ASCII symbols
-		set piece [lindex $::figurines::langSet($Vars(mc)) $i]
+		set piece [FigurineKey $Vars(mc) $i]
 		$m add command \
 			-font $::font::figurine(text:normal) \
 			-label [string map $::figurines::pieceMap $fig] \

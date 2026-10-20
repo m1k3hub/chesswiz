@@ -2423,8 +2423,13 @@ proc PopupMenu {parent position} {
 	# C2: the one move context menu. No game -> nothing posted (R1/R8).
 	if {[llength [info commands ::context::Build]]} {
 		lassign [::scidb::game::link? $position] base variant index
+		set over 0
+		catch { set over [::scidb::game::position atEnd?] }
+		set mainline 1
+		catch { set mainline [::scidb::game::position isMainline?] }
 		set object [dict create parent $parent base $base variant $variant \
-			index $index ply [::scidb::game::ply] san "" position $position]
+			index $index ply [::scidb::game::ply] san "" position $position \
+			over $over mainline $mainline]
 		if {[::context::Build C2 $menu $object]} {
 			tk_popup $menu {*}[winfo pointerxy $parent]
 			return
