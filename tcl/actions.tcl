@@ -28,6 +28,9 @@ namespace eval ::action {
 	variable ConfirmHook {}
 	variable BulkHook {}
 	variable DebugGate {}
+	# Set while a multi-step plan is running: the plan itself already asked
+	# for one confirmation, so the per-step gate stays out of the way.
+	variable PlanGate 0
 
 	namespace export register run list get labels invoke
 }
@@ -588,7 +591,7 @@ proc ::action::run {id args} {
 	set isBulk [dict get $record bulk]
 	set what [dict get $record what]
 
-	if {$isConfirm || $isBulk} {
+	if {($isConfirm || $isBulk) && !$::action::PlanGate} {
 		if {$what eq ""} {
 			set what "perform action '$id'"
 		} else {
@@ -629,20 +632,94 @@ proc ::action::run {id args} {
 }
 
 # ----------------------------------------------------------------------
+# fuzzyScore: rank <query> against <text>.
+#
+# Returns -1 when the query is not a subsequence of the text; otherwise a
+# score (bigger is better). Substring and word-boundary matches beat a
+# subsequence spread over the text. Kept allocation-light: the Ask field
+# calls it for every registry row on every keystroke.
+# ----------------------------------------------------------------------
+proc ::action::fuzzyScore {query text} {
+	if {$query eq ""} { return 0 }
+	set q [string tolower $query]
+	set t [string tolower $text]
+	set pos [string first $q $t]
+	if {$pos >= 0} {
+		set score [expr {1000 - [string length $t] - $pos}]
+		if {$pos == 0} {
+			incr score 400
+		} elseif {[regexp {(^|[ _./-])} [string index $t [expr {$pos - 1}]]]} {
+			incr score 200
+		}
+		return $score
+	}
+	set i 0
+	set first -1
+	set last -1
+	set gaps 0
+	foreach ch [split $q ""] {
+		set j [string first $ch $t $i]
+		if {$j < 0} { return -1 }
+		if {$first < 0} { set first $j }
+		if {$last >= 0} { incr gaps [expr {$j - $last - 1}] }
+		set last $j
+		set i [expr {$j + 1}]
+	}
+	return [expr {500 - $gaps - ($last - $first + 1) - [string length $t]}]
+}
+
+# The registry stores human labels for menu actions but bare tool ids
+# (open_game) for assistant tools. Show the latter as words.
+proc ::action::displayLabel {label} {
+	if {[regexp {^[a-z0-9_]+$} $label] && [string match "*_*" $label]} {
+		return [join [split $label _] " "]
+	}
+	return $label
+}
+
+# The text a query is matched against: label, doc and accelerator.
+proc ::action::searchText {id} {
+	variable Registry
+	set record [dict get $Registry $id]
+	set text "[displayLabel [dict get $record label]] [dict get $record doc]"
+	set ks [dict get $record keys]
+	if {[llength $ks] >= 2 && [lindex $ks 1] ne ""} { append text " " [lindex $ks 1] }
+	return $text
+}
+
+# The display accelerator of an action, honouring a key-editor override.
+proc ::action::labelAccel {id} {
+	if {[llength [info commands ::menu::Accel]]} {
+		if {![catch { set a [::menu::Accel $id] }]} { return $a }
+	}
+	set ks [dict get [get $id] keys]
+	if {[llength $ks] >= 2} { return [lindex $ks 1] }
+	return ""
+}
+
+# ----------------------------------------------------------------------
 # labels: return {id label accelerator enabled visible} rows for a surface.
-# Surface: bar, context:<id>, palette
+# Surface: bar, context:<id>, palette, asklist ?query?
+#
+# asklist is the Ask field's result list: only runnable rows (enabled AND
+# visible, the same predicates as the drop-down), filtered and ranked by
+# the fuzzy match over label, doc and accelerator. With no query every
+# runnable row is returned. The caller adds the trailing assistant row.
 # Debug actions are excluded from all surfaces.
 # ----------------------------------------------------------------------
-proc ::action::labels {surface} {
+proc ::action::labels {surface args} {
 	variable Registry
+
+	set query ""
+	if {$surface eq "asklist" && [llength $args]} { set query [lindex $args 0] }
 
 	set output {}
 	set keyed {}
 	foreach id [dict keys $Registry] {
 		set record [dict get $Registry $id]
-		
+
 		if {[dict get $record ai] eq "debug"} { continue }
-		
+
 		set include 0
 		set order ""
 
@@ -654,9 +731,15 @@ proc ::action::labels {surface} {
 		} elseif {[string match "context:*" $surface]} {
 			set ctxId [string range $surface 8 end]
 			if {$ctxId in [dict get $record context]} { set include 1 }
-		} elseif {$surface eq "palette"} {
+		} elseif {$surface eq "palette" || $surface eq "asklist"} {
 			set vp [dict get $record visible]
-			if {$vp eq "" || [uplevel #0 $vp]} { set include 1 }
+			if {$vp eq ""} {
+				set include 1
+			} elseif {[catch { uplevel #0 $vp } shown]} {
+				set include 1
+			} elseif {$shown} {
+				set include 1
+			}
 		} else {
 			set include 1
 		}
@@ -665,17 +748,43 @@ proc ::action::labels {surface} {
 
 		set ep [dict get $record enabled]
 		set en 1
-		if {$ep ne ""} { set en [uplevel #0 $ep] }
+		if {$ep ne ""} {
+			if {[catch { uplevel #0 $ep } state]} { set en 0 } else { set en [expr {$state ? 1 : 0}] }
+		}
 
 		set vp [dict get $record visible]
 		set vis 1
-		if {$vp ne ""} { set vis [uplevel #0 $vp] }
+		if {$vp ne ""} {
+			if {[catch { uplevel #0 $vp } state]} { set vis 0 } else { set vis [expr {$state ? 1 : 0}] }
+		}
 
-		set ks [dict get $record keys]
-		set ac ""
-		if {[llength $ks] >= 2} { set ac [lindex $ks 1] }
+		set label [displayLabel [dict get $record label]]
+		set ac [labelAccel $id]
 
-		set row [::list $id [dict get $record label] $ac $en $vis]
+		if {$surface eq "asklist"} {
+			# The list shows only actions the user can run now. Ask the same
+			# state function the drop-down and context menus use, so R1-R16,
+			# absent optional modules and context predicates agree exactly
+			# (VAL-RULE-004).
+			if {[llength [info commands ::menu::state]]} {
+				if {![catch {::menu::state $id} state]} {
+					set en [dict get $state enabled]
+					set vis [dict get $state visible]
+				}
+			}
+			if {!$en || !$vis} { continue }
+			if {$query ne ""} {
+				set score [fuzzyScore $query [searchText $id]]
+				if {$score < 0} { continue }
+			} else {
+				set score 0
+			}
+			set row [::list $id $label $ac $en $vis]
+			lappend output [::list $score $label $row]
+			continue
+		}
+
+		set row [::list $id $label $ac $en $vis]
 		lappend output $row
 		if {$surface eq "dropdown"} { lappend keyed [::list $order $row] }
 	}
@@ -684,6 +793,10 @@ proc ::action::labels {surface} {
 		set sorted [lsort -index 0 $keyed]
 		set output {}
 		foreach pair $sorted { lappend output [lindex $pair 1] }
+	} elseif {$surface eq "asklist"} {
+		set sorted [lsort -integer -decreasing -index 0 $output]
+		set output {}
+		foreach entry $sorted { lappend output [lindex $entry 2] }
 	}
 	return $output
 }

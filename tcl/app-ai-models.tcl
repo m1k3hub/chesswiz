@@ -278,6 +278,22 @@ proc ::application::ai::models::show {{parent .application}} {
 	ttk::label $top.override -wraplength 460 -justify left -foreground darkred
 	pack $top.override -fill x
 
+	# Speech input (VAL-AI-005): the microphone lives in the Ask field; this
+	# is the Preferences side that says what to install when it is hidden.
+	if {[llength [info commands ::application::speech::hint]]} {
+		ttk::separator $top.speechsep
+		pack $top.speechsep -fill x -pady $::theme::pady
+		ttk::label $top.speechhead -text "Speech input"
+		pack $top.speechhead -anchor w
+		set speechHint [::application::speech::hint]
+		if {$speechHint eq ""} { set speechHint "The Ask field can take dictation locally." }
+		ttk::label $top.speechhint -text $speechHint -wraplength 460 -justify left
+		pack $top.speechhint -fill x -pady [list 0 $::theme::pady]
+		ttk::button $top.speechprefs -text "Assistant Preferences…" \
+			-command ::application::ask::Preferences
+		pack $top.speechprefs -anchor w
+	}
+
 	::widget::dialogButtons $dlg {ok cancel}
 	$dlg.ok configure -command [namespace code Apply]
 	$dlg.cancel configure -command [namespace code Close]

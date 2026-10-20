@@ -1,0 +1,11 @@
+# Local whisper.cpp speech path for VAL-AI-006.
+# The binaries and model are built/downloaded into tests/tmp-app/speech/
+# (git-ignored); this file records the paths, the model checksum, the
+# recorder and the offline fixture. CPU only: the app runs whisper-cli
+# with CUDA_VISIBLE_DEVICES="".
+whisper_cli=tests/tmp-app/speech/build/bin/whisper-cli
+model=tests/tmp-app/speech/ggml-base.en.bin
+model_sha256=a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002
+recorder=arecord
+fixture_wav=tests/fixtures/speech-open-last-game.wav
+fixture_text=open the last game

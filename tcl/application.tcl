@@ -152,6 +152,11 @@ proc open {} {
 	::widget::dialogSetTitle $app [namespace code Title]
 	wm protocol $app WM_DELETE_WINDOW [namespace code shutdown]
 	set nb [::ttk::notebook $app.nb -takefocus 0] ;# otherwise board does not have focus
+	# The Ask field is created before the other children so it is first in
+	# Tab order (VAL-PAL-002); it lives in the notebook's top strip.
+	if {[llength [info commands ::application::ask::Build]]} {
+		::application::ask::Build $nb
+	}
 	set Vars(control) [::widget::dialogFullscreenButtons $nb]
 	set Vars(notebook) $nb
 	bind $nb <Configure> [namespace code PlaceMenues]
@@ -1975,6 +1980,12 @@ proc PlaceMenues {} {
 	$m configure -height $height
 	place $m -x $x -y 0
 
+	# the Ask field sits immediately left of the drop-down, in the top
+	# strip, in every layout including fullscreen (VAL-PAL-002)
+	if {[llength [info commands ::application::ask::Place]]} {
+		::application::ask::Place $x $height
+	}
+
 	# place update menu
 	set m $Vars(menu:updates)
 	if {[winfo exists $m]} {
@@ -2145,6 +2156,12 @@ proc Startup2 {} {
 
 	after idle [namespace code [list switchTab $tab]]
 	after idle { ::tips::show .application }
+	# the Ask field owns the keyboard after startup unless a dialog is up
+	after idle {
+		if {[llength [info commands ::application::ask::StartupFocus]]} {
+			::application::ask::StartupFocus
+		}
+	}
 	#after idle [list ::beta::welcomeToScidb $app]
 	#::util::photos::checkForUpdate [namespace current]::InformAboutUpdates
 	reflow::Startup
