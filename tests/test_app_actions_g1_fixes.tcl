@@ -329,6 +329,126 @@ test g1-resolver-injects-object {
 	rename ::testObjHandler {}
 } -result 1
 
+test g1-production-move-resolver {
+	the production move resolver returns the current move reference
+} -body {
+	set resolved [::action::resolver::resolve move]
+	list [expr {$resolved ne ""}] [expr {$resolved eq [::scidb::game::query current]}]
+} -result {1 1}
+
+test g1-production-move-resolver-injects {
+	an action with object move receives the resolved reference as _object
+} -setup {
+	variable ::capturedMoveArgs {}
+	proc ::testMoveObjHandler {argsDict} {
+		variable ::capturedMoveArgs
+		set ::capturedMoveArgs $argsDict
+		return ok
+	}
+	::action::register test.obj.move [dict create \
+		label TestMoveObj \
+		object move \
+		handler ::testMoveObjHandler \
+		what {} \
+		doc {} \
+	]
+} -body {
+	set reply [::action::run test.obj.move]
+	list $reply [dict exists $::capturedMoveArgs _object] \
+		[expr {[dict get $::capturedMoveArgs _object] eq [::action::resolver::resolve move]}]
+} -cleanup {
+	rename ::testMoveObjHandler {}
+} -result {ok 1 1}
+
+test g1-resolver-failure-errors {
+	a failing resolver returns error: and never calls the handler
+} -setup {
+	variable ::failedResolverHandlerRan 0
+	::action::resolver::register test.broken {return -code error "resolver boom"}
+	proc ::brokenObjHandler {argsDict} {
+		variable ::failedResolverHandlerRan
+		incr ::failedResolverHandlerRan
+		return ok
+	}
+	::action::register test.obj.broken [dict create \
+		label TestBrokenObj \
+		object test.broken \
+		handler ::brokenObjHandler \
+		what {} \
+		doc {} \
+	]
+} -body {
+	set reply [::action::run test.obj.broken]
+	list [string match "error:*resolver boom*" $reply] $::failedResolverHandlerRan
+} -cleanup {
+	rename ::brokenObjHandler {}
+} -result {1 0}
+
+test g1-missing-resolver-errors {
+	an unregistered object type returns error: and never calls the handler
+} -setup {
+	variable ::missingResolverHandlerRan 0
+	proc ::missingObjHandler {argsDict} {
+		variable ::missingResolverHandlerRan
+		incr ::missingResolverHandlerRan
+		return ok
+	}
+	::action::register test.obj.missing [dict create \
+		label TestMissingObj \
+		object test.not.registered \
+		handler ::missingObjHandler \
+		what {} \
+		doc {} \
+	]
+} -body {
+	set reply [::action::run test.obj.missing]
+	list [string match "error:*no resolver*" $reply] $::missingResolverHandlerRan
+} -cleanup {
+	rename ::missingObjHandler {}
+} -result {1 0}
+
+test g1-required-legacy-default-not-applied {
+	a schema-required argument is not silently filled from a legacy default
+} -setup {
+	::action::register test.req.legacy [dict create \
+		label TestRequiredLegacy \
+		args {{mode {type enum required 1 enum {auto manual} legacy-default auto}}} \
+		handler [list return ok] \
+		what {} \
+		object {} \
+		doc {} \
+	]
+} -body {
+	set result [::action::validateArgs test.req.legacy [dict create]]
+	list [lindex $result 0] [lindex $result 1]
+} -result {error {missing argument 'mode'}}
+
+test g1-required-tools-no-silent-default {
+	correspondence_games and maintenance_report reject their missing required arg
+} -body {
+	set c [::action::validateArgs correspondence_games {}]
+	set m [::action::validateArgs maintenance_report {}]
+	set cok [::action::validateArgs correspondence_games {action status}]
+	set mok [::action::validateArgs maintenance_report {tab overview}]
+	list [lindex $c 0] [lindex $c 1] [lindex $m 0] [lindex $m 1] \
+		[lindex $cok 0] [lindex $mok 0]
+} -result {error {missing argument 'action'} error {missing argument 'tab'} ok ok}
+
+test g1-no-other-required-default-mismatch {
+	no shipped tool carries a legacy default for a schema-required argument
+} -body {
+	set bad {}
+	foreach name [dict keys $::application::assistant::Actions] {
+		foreach param [dict get [::action::get $name] args] {
+			set opts [lindex $param 1]
+			if {[dict exists $opts legacy-default] && [::action::_requiredState $opts] == 1} {
+				lappend bad $name
+			}
+		}
+	}
+	set bad
+} -result {}
+
 # ----------------------------------------------------------------------
 # VAL-REG-005 on the production path: the real tools carry args specs,
 # so run/runTool/invoke all use the one shared validator.

@@ -271,12 +271,12 @@ tcltest::test assistant-maintenance {compact, convert and the maintenance report
 	}]
 	set report [::scidb::test::assistant::stubbed ::application::database::OpenMaintenanceReport {
 		::application::assistant::runTool maintenance_report {tab duplicates}
-		::application::assistant::runTool maintenance_report {}
 	}]
+	set missing [::application::assistant::runTool maintenance_report {}]
 	set base [::scidb::db::get name]
 	list [expr {[lindex $compact 0 1] eq $base}] [expr {[lindex $convert 0 1] eq $base}] \
-		[lindex $report 0 3] [lindex $report 1 3]
-} -result {1 1 duplicates overview}
+		[lindex $report 0 3] $missing
+} -result {1 1 duplicates {error: missing argument 'tab'}}
 
 tcltest::test assistant-correspondence {correspondence_games lists whose move it is and never sends one} -body {
 	rename ::iccf::xfcc::configured? ::scidb::test::assistant::realConfigured
@@ -284,8 +284,9 @@ tcltest::test assistant-correspondence {correspondence_games lists whose move it
 	rename ::iccf::xfcc::submitMove ::scidb::test::assistant::realSubmit
 	proc ::iccf::xfcc::submitMove {args} { set ::scidb::test::assistant::Submitted 1 }
 	set ::scidb::test::assistant::Submitted 0
+	set missing [::application::assistant::runTool correspondence_games {}]
 	proc ::iccf::xfcc::configured? {} { return 0 }
-	set none [::application::assistant::runTool correspondence_games {}]
+	set none [::application::assistant::runTool correspondence_games {action status}]
 	proc ::iccf::xfcc::configured? {} { return 1 }
 	proc ::iccf::xfcc::getGames {} {
 		set base {white "" black "" event "WS/2026" result "" daysPlayer 3 hoursPlayer 4 daysOpponent 9 hoursOpponent 1}
@@ -301,11 +302,11 @@ tcltest::test assistant-correspondence {correspondence_games lists whose move it
 	rename ::scidb::test::assistant::realGetGames ::iccf::xfcc::getGames
 	rename ::scidb::test::assistant::realSubmit ::iccf::xfcc::submitMove
 	set lines [split $status \n]
-	list [string match "error: no ICCF account*" $none] [lindex $lines 0] \
+	list $missing [string match "error: no ICCF account*" $none] [lindex $lines 0] \
 		[string match "game 12: you are Black against Jones, B*YOUR MOVE, 3d 4h left" [lindex $lines 1]] \
 		[string match "game 11: you are White against Smith, A*opponent to move*" [lindex $lines 2]] \
 		[string match "error:*" $bad] $::scidb::test::assistant::Submitted
-} -result {1 {1 of 2 game(s) need your move} 1 1 1 0}
+} -result {{error: missing argument 'action'} 1 {1 of 2 game(s) need your move} 1 1 1 0}
 
 tcltest::test assistant-find-lesson {find_lesson matches the board against interactive clips and can play one} -body {
 	set saved [array get ::application::media::Priv *Interactive]

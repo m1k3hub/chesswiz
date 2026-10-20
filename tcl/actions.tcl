@@ -420,10 +420,10 @@ proc ::action::validateArgs {id argsDict} {
 
 		if {[dict exists $argsDict $name]} {
 			set value [dict get $argsDict $name]
-		} elseif {$hasLegacyDefault} {
-			set value [dict get $opts legacy-default]
 		} elseif {$isRequired} {
 			return [::list error "missing argument '$name'"]
+		} elseif {$hasLegacyDefault} {
+			set value [dict get $opts legacy-default]
 		} elseif {$hasDefault} {
 			set value $defaultVal
 		} else {
@@ -614,9 +614,10 @@ proc ::action::run {id args} {
 
 	set objectType [dict get $record object]
 	if {$objectType ne ""} {
-		if {![catch {::action::resolver::resolve $objectType} resolvedObj]} {
-			set validatedArgs [dict set validatedArgs _object $resolvedObj]
+		if {[catch {::action::resolver::resolve $objectType} resolvedObj]} {
+			return "error: cannot resolve object '$objectType': [string trim $resolvedObj]"
 		}
+		set validatedArgs [dict set validatedArgs _object $resolvedObj]
 	}
 
 	set code [catch {uplevel #0 [::list {*}$handler $validatedArgs]} result options]
