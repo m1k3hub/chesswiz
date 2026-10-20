@@ -321,7 +321,7 @@
 ::menu::mc::ContactFeatureRequest		"&Feature Request"
 
 # Extras
-::menu::mc::InstallChessBaseFonts		"Install ChessBase Fonts"
+::menu::mc::InstallChessBaseFonts		"Install Figurine Fonts"
 ::menu::mc::OpenEngineLog					"Open Engine &Console"
 ::menu::mc::AssignFileTypes				"&Assign File Types"
 
@@ -1617,12 +1617,12 @@
 ::playercard::mc::SeachIn365ChessCom		"Search in 365Chess.com"
 
 ### fonts ##############################################################
-::font::mc::ChessBaseFontsInstalled				"ChessBase fonts successfully installed."
-::font::mc::ChessBaseFontsInstallationFailed	"Installation of ChessBase fonts failed."
-::font::mc::NoChessBaseFontFound					"No ChessBase font found in folder '%s'."
-::font::mc::ChessBaseFontsAlreadyInstalled	"ChessBase fonts already installed. Install anyway?"
+::font::mc::ChessBaseFontsInstalled				"Figurine chess fonts successfully installed."
+::font::mc::ChessBaseFontsInstallationFailed	"Installation of figurine chess fonts failed."
+::font::mc::NoChessBaseFontFound					"No figurine chess font found in folder '%s'."
+::font::mc::ChessBaseFontsAlreadyInstalled	"Figurine chess fonts already installed. Install anyway?"
 ::font::mc::ChooseMountPoint						"Mount point of Windows installation partition"
-::font::mc::CopyingChessBaseFonts				"Copying ChessBase fonts"
+::font::mc::CopyingChessBaseFonts				"Copying figurine chess fonts"
 ::font::mc::CopyFile									"Copy file %s"
 ::font::mc::UpdateFontCache						"Updating font cache"
 

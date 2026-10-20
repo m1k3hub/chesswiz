@@ -301,6 +301,61 @@ tcltest::test helppages-other-languages-links-07 {other languages have no broken
     join $missingAll ", "
 } -result ""
 
+# 8. Ask-Field help page is present, indexed, and linked in Contents.dat
+tcltest::test helppages-askfield-present-08 {Ask-Field help page exists and is linked in Contents and Index} -body {
+    variable helpDir
+    set enDir [file join $helpDir en]
+    set missing {}
+    foreach ext {html txt} {
+        set p [file join $enDir "Ask-Field.$ext"]
+        if {![file exists $p] || [file size $p] == 0} {
+            lappend missing "Ask-Field.$ext"
+        }
+    }
+    set contentsData [slurp [file join $enDir Contents.dat]]
+    if {![string match "*Ask-Field.html*" $contentsData]} {
+        lappend missing "Contents.dat:Ask-Field.html"
+    }
+    set indexData [slurp [file join $enDir Index.dat]]
+    if {![string match "*Ask-Field.html*" $indexData]} {
+        lappend missing "Index.dat:Ask-Field.html"
+    }
+    join $missing ", "
+} -result ""
+
+# 9. Ask-Field content coverage and negative checks (no competitor names, no CQL)
+tcltest::test helppages-askfield-content-09 {Ask-Field help page covers required features and has no forbidden words} -body {
+    variable helpDir
+    set htmlFile [file join $helpDir en "Ask-Field.html"]
+    if {![file exists $htmlFile]} {
+        return "missing Ask-Field.html"
+    }
+    set content [slurp $htmlFile]
+    set issues {}
+    if {![regexp -nocase {Ask field|palette} $content]} {
+        lappend issues "missing: ask field/palette"
+    }
+    if {![regexp -nocase {result list} $content]} {
+        lappend issues "missing: result list"
+    }
+    if {![regexp -nocase {speech|microphone|whisper} $content]} {
+        lappend issues "missing: speech input"
+    }
+    if {![regexp -nocase {Ctrl\+K} $content] || ![regexp -nocase {Ctrl\+Shift\+K} $content]} {
+        lappend issues "missing: Ctrl+K/Ctrl+Shift+K"
+    }
+    if {![regexp -nocase {assistant} $content] || ![regexp -nocase {plan} $content] || ![regexp -nocase {confirm} $content]} {
+        lappend issues "missing: assistant/plan/confirmation"
+    }
+    if {![regexp -nocase {menu} $content] || ![regexp -nocase {key} $content]} {
+        lappend issues "missing: menu/key availability"
+    }
+    if {[regexp -nocase {\m(cql|chessbase|fritz|arena)\M} $content m]} {
+        lappend issues "forbidden word: $m"
+    }
+    join $issues ", "
+} -result ""
+
 tcltest::cleanupTests
 
 } ;# namespace ::scidb::test::helppages

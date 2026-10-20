@@ -26,7 +26,7 @@ namespace eval ::ai::import {
 	# category -> the concrete fix
 	variable Fix [dict create \
 		encoding      "pick the source's character encoding in the import dialog" \
-		not-pgn       "if it is a Scid, CBH or ChessBase file, open it as a database instead of importing it" \
+		not-pgn       "if it is a Scid or CBH database file, open it as a database instead of importing it" \
 		illegal-moves "the PGN is corrupt, or the game is a variant; check the moves" \
 		bad-fen       "check the FEN and SetUp tags of the affected games" \
 		missing-tags  "add the missing tags at the source, or accept empty tags" \

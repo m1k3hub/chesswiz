@@ -163,7 +163,7 @@ proc ::ai::cql::Matches6 {base variant numbers ids} {
 		catch { ::scidb::view::close $base $variant $view }
 	}
 	if {![dict get $result ok]} { error [dict get $result error] }
-	if {[dict get $result cancelled]} { error "the CQL search was cancelled" }
+	if {[dict get $result cancelled]} { error "the pattern search was cancelled" }
 	if {[llength $scripts] > 1} {
 		foreach {game ply i} [dict get $result matches] { dict lappend out [lindex $ids $i] $game $ply }
 	} else {
@@ -248,7 +248,7 @@ proc ::ai::cql::profileText {profile args} {
 	}
 
 	set colour [dict get $profile colour]
-	set lines [list [format "POSITION TYPES in %s's latest %d games%s (found by CQL):" \
+	set lines [list [format "POSITION TYPES in %s's latest %d games%s (found by pattern search):" \
 		[dict get $profile player] $total [expr {$colour ne "" ? " with $colour" : ""}]]]
 	foreach row [lsort -integer -decreasing -index 1 $rows] {
 		lassign $row id n scored score
@@ -310,7 +310,7 @@ proc ::ai::cql::themesText {themes} {
 		lappend labels [dict get [::ai::search::pattern $id] label]
 	}
 	if {![llength $labels]} { return "" }
-	return "THEMES (found by CQL, exact): [join $labels {, }]"
+	return "THEMES (found by pattern matcher, exact): [join $labels {, }]"
 }
 
 

@@ -139,7 +139,7 @@ variable Actions {
 	}
 	convert_database {
 		0 0 "convert the active database"
-		"Copy the active database into a new Scidb (.sci) database, e.g. to turn a PGN, Scid or ChessBase database into Scidb's format. Chesswiz asks for the format version and the new file name."
+		"Copy the active database into a new Scidb (.sci) database, e.g. to turn a PGN, Scid or proprietary database into Scidb's format. Chesswiz asks for the format version and the new file name."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoConvertDatabase
 	}
@@ -151,7 +151,7 @@ variable Actions {
 	}
 	find_lesson {
 		0 0 "find a video lesson for this position"
-		"Find the video lessons that cover the board's position: interactive clips of the active database's media (ChessBase .cms lessons, Scidb .scm manifests) and the user's own interactive index. With play true, the first match plays in the media pane."
+		"Find the video lessons that cover the board's position: interactive clips of the active database's media (.cms lessons, Scidb .scm manifests) and the user's own interactive index. With play true, the first match plays in the media pane."
 		{{"type":"object","properties":{"play":{"type":"boolean"}}}}
 		::application::assistant::DoFindLesson
 	}
@@ -162,8 +162,8 @@ variable Actions {
 		::application::assistant::DoMaintenanceReport
 	}
 	install_chessbase_fonts {
-		1 0 "install the ChessBase fonts"
-		"Install the ChessBase chess fonts from a Windows font directory."
+		1 0 "install the figurine chess fonts"
+		"Install the figurine chess fonts from a Windows font directory."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoInstallFonts
 	}
@@ -229,31 +229,31 @@ variable Actions {
 	}
 	search_games {
 		0 0 "search the games"
-		"Search the active database; nothing changes, the game list included. Returns the number of games found, the first of them, and the criteria as understood. Names may be partial. 'result' is win/draw/loss from the player's side, or 1-0/0-1/1/2-1/2 without a player. 'eco' is a code, class or range as for opening_score (map opening names to ECO yourself). Dates are YYYY, YYYY.MM or YYYY.MM.DD. To show the games in the game list, call show_search afterwards. 'pattern' keeps only games containing a position pattern (Chesswiz's CQL matcher reads their moves, which takes longer on a large database)."
-		{{"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"},"pattern":{"type":"string","enum":["checkmate","smothered_mate","stalemate","en_passant","underpromotion","double_check","opposite_castling","rook_endgame","pawn_endgame","endgame","isolated_queen_pawn","opposite_bishops","queenless","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","knight_fork","greek_gift","rook_seventh","doubled_rooks_seventh","knight_outpost","hanging_pawns","carlsbad","maroczy_bind","stonewall","queen_vs_rook","wrong_bishop","lucena","epaulette_mate","queen_pawn_mate","skewer","discovered_check","double_bishop_sacrifice","alekhines_gun","minority_attack","hedgehog","protected_passed_pawn","weakened_fianchetto","pawn_fork","legals_mate","blackburne_mate","pin_attacked_by_pawn","double_attack_loose","philidor_position","vancura_position","backward_pawn","bad_bishop","closed_center","trebuchet","boleslavsky_hole","botvinnik_formation","rook_behind_passed_pawn"],"description":"a position pattern the game must contain, found by Chesswiz's CQL matcher: the game ends in checkmate, a smothered mate, the game ends in stalemate, an en-passant capture, an underpromotion, a double check, kings on opposite wings, a rook ending, a pawn ending, any endgame (at most two pieces a side), an isolated queen's pawn, opposite-coloured bishops, a queenless middlegame, a back-rank mate, a two-bishop (Boden's) mate, Anastasia's mate, an Arabian mate, a knight fork of king and queen or rook, a Greek gift Bxh7+, a rook on the seventh, doubled rooks on the seventh, a knight outpost, hanging pawns, a Carlsbad structure, a Maroczy bind, a Stonewall, queen against rook, a wrong-coloured bishop, a Lucena position (building a bridge), an epaulette mate, a queen-and-pawn (Damiano's, Lolli's) mate, a skewer, a discovered check, a double bishop sacrifice (Lasker-Bauer), Alekhine's gun, a minority attack, a hedgehog, a protected passed pawn, a weakened fianchetto, a pawn fork, Legal's mate, Blackburne's mate, a pinned piece attacked by a pawn, a double attack on loose pieces, the Philidor position (third-rank defence), the Vancura position, a backward pawn, a bad bishop, a closed centre, a trebuchet, the Boleslavsky hole, the Botvinnik formation, a rook behind a passed pawn"}}}}
+		"Search the active database; nothing changes, the game list included. Returns the number of games found, the first of them, and the criteria as understood. Names may be partial. 'result' is win/draw/loss from the player's side, or 1-0/0-1/1/2-1/2 without a player. 'eco' is a code, class or range as for opening_score (map opening names to ECO yourself). Dates are YYYY, YYYY.MM or YYYY.MM.DD. To show the games in the game list, call show_search afterwards. 'pattern' keeps only games containing a position pattern (Chesswiz's pattern matcher reads their moves, which takes longer on a large database)."
+		{{"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"},"pattern":{"type":"string","enum":["checkmate","smothered_mate","stalemate","en_passant","underpromotion","double_check","opposite_castling","rook_endgame","pawn_endgame","endgame","isolated_queen_pawn","opposite_bishops","queenless","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","knight_fork","greek_gift","rook_seventh","doubled_rooks_seventh","knight_outpost","hanging_pawns","carlsbad","maroczy_bind","stonewall","queen_vs_rook","wrong_bishop","lucena","epaulette_mate","queen_pawn_mate","skewer","discovered_check","double_bishop_sacrifice","alekhines_gun","minority_attack","hedgehog","protected_passed_pawn","weakened_fianchetto","pawn_fork","legals_mate","blackburne_mate","pin_attacked_by_pawn","double_attack_loose","philidor_position","vancura_position","backward_pawn","bad_bishop","closed_center","trebuchet","boleslavsky_hole","botvinnik_formation","rook_behind_passed_pawn"],"description":"a position pattern the game must contain, found by Chesswiz's pattern matcher: the game ends in checkmate, a smothered mate, the game ends in stalemate, an en-passant capture, an underpromotion, a double check, kings on opposite wings, a rook ending, a pawn ending, any endgame (at most two pieces a side), an isolated queen's pawn, opposite-coloured bishops, a queenless middlegame, a back-rank mate, a two-bishop (Boden's) mate, Anastasia's mate, an Arabian mate, a knight fork of king and queen or rook, a Greek gift Bxh7+, a rook on the seventh, doubled rooks on the seventh, a knight outpost, hanging pawns, a Carlsbad structure, a Maroczy bind, a Stonewall, queen against rook, a wrong-coloured bishop, a Lucena position (building a bridge), an epaulette mate, a queen-and-pawn (Damiano's, Lolli's) mate, a skewer, a discovered check, a double bishop sacrifice (Lasker-Bauer), Alekhine's gun, a minority attack, a hedgehog, a protected passed pawn, a weakened fianchetto, a pawn fork, Legal's mate, Blackburne's mate, a pinned piece attacked by a pawn, a double attack on loose pieces, the Philidor position (third-rank defence), the Vancura position, a backward pawn, a bad bishop, a closed centre, a trebuchet, the Boleslavsky hole, the Botvinnik formation, a rook behind a passed pawn"}}}}
 		::application::assistant::DoSearchGames
 	}
 	find_positions {
 		0 0 "find positions: %s"
-		"Find positions, patterns or tactics in the active database's games with Chesswiz's CQL 6.2 engine. When search_games has the pattern (its 'pattern' list: named mates, forks, the Greek gift, the 7th rank, outposts, pawn structures, Lucena and other endgames), use search_games instead: those searches are vetted and fast. You translate the request into a CQL 6.2 script; CQL decides what matches. Put only the positional part in 'cql', starting with cql() (e.g. 'cql() mate', 'cql() flipcolor {move from N} attacks k'); put names, colour, result, dates, event, ECO and Elo in the other fields, which narrow the games before any is read. Call cql_help first for the CQL 6.2 reference and worked examples unless the script is trivial. Step 1: mode sample (the default) returns up to 3 matching positions (the move that led there, the game, the FEN) and shows them to the user as diagrams in the Report pane; tell the user in one sentence what you searched for and ask whether these are what they meant. Step 2, only after the user agrees: call again with mode all and the same arguments; the game list then shows every matching game. If the script does not parse you get the parser's message: fix it and call again. Never describe a position's quality yourself."
-		{{"type":"object","properties":{"request":{"type":"string","description":"what the user asked for, in their words"},"cql":{"type":"string","description":"the CQL 6.2 script for the positional part, starting with cql()"},"mode":{"type":"string","enum":["sample","all"],"description":"sample (default): up to 3 positions to check with the user; all: every match, shown in the game list"},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"}},"required":["request","cql"]}}
+		"Find positions, patterns or tactics in the active database's games with Chesswiz's pattern search engine. When search_games has the pattern (its 'pattern' list: named mates, forks, the Greek gift, the 7th rank, outposts, pawn structures, Lucena and other endgames), use search_games instead: those searches are vetted and fast. You translate the request into a pattern search script; the pattern engine decides what matches. Put only the positional pattern expression in the script argument (e.g. 'mate', 'flipcolor {move from N} attacks k'); put names, colour, result, dates, event, ECO and Elo in the other fields, which narrow the games before any is read. Call cql_help first for the pattern search reference and worked examples unless the script is trivial. Step 1: mode sample (the default) returns up to 3 matching positions (the move that led there, the game, the FEN) and shows them to the user as diagrams in the Report pane; tell the user in one sentence what you searched for and ask whether these are what they meant. Step 2, only after the user agrees: call again with mode all and the same arguments; the game list then shows every matching game. If the script does not parse you get the parser's message: fix it and call again. Never describe a position's quality yourself."
+		{{"type":"object","properties":{"request":{"type":"string","description":"what the user asked for, in their words"},"cql":{"type":"string","description":"the pattern search script for the positional part (e.g. 'mate', 'flipcolor {move from N} attacks k')"},"mode":{"type":"string","enum":["sample","all"],"description":"sample (default): up to 3 positions to check with the user; all: every match, shown in the game list"},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"}},"required":["request","cql"]}}
 		::application::assistant::DoFindPositions
 	}
 	find_similar {
 		0 0 "find positions like the one on the board"
-		"Find games with positions like the one on the board ('games like this one', 'similar positions') in the active database; the application writes the CQL 6.2 search, so no cql_help is needed. 'aspects' says what must be alike: pawns (the pawn structure, both sides), material (the same pieces), pieces (kings and pieces on the same squares); default pawns alone. The game on the board is left out of the results. 'tolerance' lets up to 0, 1 or 2 pawns per side stand elsewhere (default 0). 'colours' both also finds the structure with the colours reversed. Same two steps as find_positions: mode sample first (the user sees diagrams and the search in the Report pane; ask whether that is what they meant), then mode all. Header fields narrow the games first."
+		"Find games with positions like the one on the board ('games like this one', 'similar positions') in the active database; the application writes the pattern search, so no cql_help is needed. 'aspects' says what must be alike: pawns (the pawn structure, both sides), material (the same pieces), pieces (kings and pieces on the same squares); default pawns alone. The game on the board is left out of the results. 'tolerance' lets up to 0, 1 or 2 pawns per side stand elsewhere (default 0). 'colours' both also finds the structure with the colours reversed. Same two steps as find_positions: mode sample first (the user sees diagrams and the search in the Report pane; ask whether that is what they meant), then mode all. Header fields narrow the games first."
 		{{"type":"object","properties":{"aspects":{"type":"array","items":{"type":"string","enum":["pawns","material","pieces"]}},"tolerance":{"type":"integer","description":"0, 1 or 2 pawns per side may stand elsewhere"},"colours":{"type":"string","enum":["same","both"]},"mode":{"type":"string","enum":["sample","all"]},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"}}}}
 		::application::assistant::DoFindSimilar
 	}
 	cql_help {
-		0 0 "read the CQL reference"
-		"The CQL 6.2 reference card and worked examples (requests a player makes and the scripts that find them). Read it before writing a find_positions script."
+		0 0 "read the pattern search reference"
+		"The pattern search reference card and worked examples (requests a player makes and the scripts that find them). Read it before writing a find_positions script."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoCqlHelp
 	}
 	save_pattern {
 		0 0 "save the last position search as pattern '%s'"
-		"Save the last find_positions search (the user's request, its CQL script and the sample positions the user accepted) as one of the user's own patterns, under a short name. Only when the user asks to keep or save the search. Saved patterns appear in cql_help as worked examples."
+		"Save the last find_positions search (the user's request, its pattern script and the sample positions the user accepted) as one of the user's own patterns, under a short name. Only when the user asks to keep or save the search. Saved patterns appear in cql_help as worked examples."
 		{{"type":"object","properties":{"name":{"type":"string","description":"a short name, e.g. 'knight fork king and queen'"}},"required":["name"]}}
 		::application::assistant::DoSavePattern
 	}
@@ -433,7 +433,7 @@ variable Actions {
 	}
 	structure_profile {
 		0 0 "profile the position types of %s"
-		"Which kinds of position a player's games reach and how the player scores in them, found exactly by Chesswiz's CQL matcher in the active database: isolated queen's pawn, opposite-coloured bishops, queenless middlegames, rook and pawn endings, kings on opposite wings. Counts and scores come from the database. 'colour' limits it to the games with that colour; 'games' is how many of the latest games to read (default 200)."
+		"Which kinds of position a player's games reach and how the player scores in them, found exactly by Chesswiz's pattern matcher in the active database: isolated queen's pawn, opposite-coloured bishops, queenless middlegames, rook and pawn endings, kings on opposite wings. Counts and scores come from the database. 'colour' limits it to the games with that colour; 'games' is how many of the latest games to read (default 200)."
 		{{"type":"object","properties":{"player":{"type":"string","description":"the player's name or part of it"},"colour":{"type":"string","enum":["white","black"]},"games":{"type":"integer","description":"how many of the latest games to read, default 200"}},"required":["player"]}}
 		::application::assistant::DoStructureProfile
 	}
@@ -469,13 +469,13 @@ variable Actions {
 	}
 	training_set {
 		0 0 "build a training set from the games of the database"
-		"Build puzzles from the active database's games: Chesswiz's CQL matcher finds positions just before a decisive move: a checkmate (any, or a smothered, back-rank, Boden's, Anastasia's, Arabian, epaulette or queen-and-pawn mate), a Legal's or Blackburne's mate, a double or discovered check, a knight or pawn fork, a skewer, a double attack on loose pieces, a pinned piece attacked by a pawn, a Greek gift or double bishop sacrifice, or an underpromotion; by default a mix of all. The chess engine keeps only those whose solution is its best move and clearly the only good one. The puzzles are written to a PGN file under the user directory, which the user can open as a database to train. 'pattern' limits it to one kind; 'player' to one player's games; 'max' bounds the number of puzzles (default 20). It runs in the background; the Report pane shows the progress and the result."
+		"Build puzzles from the active database's games: Chesswiz's pattern matcher finds positions just before a decisive move: a checkmate (any, or a smothered, back-rank, Boden's, Anastasia's, Arabian, epaulette or queen-and-pawn mate), a Legal's or Blackburne's mate, a double or discovered check, a knight or pawn fork, a skewer, a double attack on loose pieces, a pinned piece attacked by a pawn, a Greek gift or double bishop sacrifice, or an underpromotion; by default a mix of all. The chess engine keeps only those whose solution is its best move and clearly the only good one. The puzzles are written to a PGN file under the user directory, which the user can open as a database to train. 'pattern' limits it to one kind; 'player' to one player's games; 'max' bounds the number of puzzles (default 20). It runs in the background; the Report pane shows the progress and the result."
 		{{"type":"object","properties":{"pattern":{"type":"string","enum":["checkmate","smothered_mate","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","epaulette_mate","queen_pawn_mate","double_check","discovered_check","knight_fork","skewer","greek_gift","double_bishop_sacrifice","underpromotion","legals_mate","blackburne_mate","pawn_fork","pin_attacked_by_pawn","double_attack_loose"]},"player":{"type":"string"},"max":{"type":"integer","description":"at most this many puzzles, default 20"}}}}
 		::application::assistant::DoTrainingSet
 	}
 	check_results {
 		0 0 "check the game results and show the games that contradict them"
-		"Find the games of the active database whose recorded result contradicts how the game ended: a checkmate scored as a draw or as a win for the mated side, a stalemate scored as a win. Chesswiz's CQL matcher reads the final positions; nothing is changed. The report lists the games, and the game list is filtered to them (clear_search shows all again)."
+		"Find the games of the active database whose recorded result contradicts how the game ended: a checkmate scored as a draw or as a win for the mated side, a stalemate scored as a win. Chesswiz's pattern matcher reads the final positions; nothing is changed. The report lists the games, and the game list is filtered to them (clear_search shows all again)."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoCheckResults
 	}
@@ -643,8 +643,8 @@ variable MaxReply 6000
 variable ToolMenu {
 	search_games	"Database tab > right-click the database > Maintenance > Advanced Search"
 	show_search		"Database tab > right-click the database > Maintenance > Advanced Search"
-	find_positions	"Database tab > right-click the database > Maintenance > CQL 6.2 Search (with the script above)"
-	find_similar	"Database tab > right-click the database > Maintenance > CQL 6.2 Search (with the script above)"
+	find_positions	"Database tab > right-click the database > Maintenance > Pattern Search (with the script above)"
+	find_similar	"Database tab > right-click the database > Maintenance > Pattern Search (with the script above)"
 	open_game		"Database tab > double-click the game in the game list"
 	set_position	"Board tab > right-click the board > Set Start Board..."
 	open_view		"Database tab > Players/Events tabs, right-click; or right-click the database > Maintenance"
@@ -984,6 +984,34 @@ proc ::application::assistant::PlanLabel {name cargs} {
 	return $name
 }
 
+proc ::application::assistant::PreparePlan {calls} {
+	variable Actions
+	variable Priv
+	set prepared {}
+	foreach call $calls {
+		set fn [dict get $call function]
+		set name [dict get $fn name]
+		if {![dict exists $::action::Registry $name]} { error "unknown tool '$name'" }
+		set record [::action::get $name]
+		if {[dict get $record ai] eq "debug" && !$Priv(debug)} { error "'$name' requires debug mode" }
+		set cargs [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
+		if {[llength [info commands ::application::assistant::correctArgs]]} {
+			catch {set cargs [correctArgs $name $cargs]}
+		}
+		if {[dict get $record schema] eq "" || [dict get $record args] ne ""} {
+			set validation [::action::validateArgs $name $cargs]
+			if {[lindex $validation 0] eq "error"} { error [lindex $validation 1] }
+			set cargs [lindex $validation 1]
+		} else {
+			dict size $cargs
+		}
+		if {[dict exists $Actions $name]} { set cargs [CheckArgs $name $cargs] }
+		dict set call function arguments $cargs
+		lappend prepared $call
+	}
+	return $prepared
+}
+
 proc ::application::assistant::PlanText {calls} {
 	set lines {}
 	set i 0
@@ -991,7 +1019,13 @@ proc ::application::assistant::PlanText {calls} {
 		set fn [dict get $call function]
 		set name [dict get $fn name]
 		set cargs [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
-		lappend lines "[incr i]. [PlanLabel $name $cargs] ($name)"
+		set what [dict get [::action::get $name] what]
+		if {$what eq "" || [catch {set what [format $what {*}[dict values $cargs]]}]} {
+			set what "perform action '$name'"
+		}
+		# Always include every checked argument, including the entire
+		# script for eval_tcl, even when the label/what omits it.
+		lappend lines "[incr i]. [PlanLabel $name $cargs] ($name): $what\n   Arguments: $cargs"
 	}
 	return [join $lines \n]
 }
@@ -1039,6 +1073,12 @@ proc ::application::assistant::RunPlan {round calls} {
 	variable Priv
 	variable mc
 
+	# Correct and validate the whole plan before displaying or running it.
+	# The local calls value is immutable across the confirmation dialog.
+	if {[catch {set calls [PreparePlan $calls]} err]} {
+		Finish [dict create ok 0 error $err] $round
+		return
+	}
 	set text [PlanText $calls]
 	Append info "$mc::Plan\n$text"
 	Notify plan $text
@@ -1063,7 +1103,7 @@ proc ::application::assistant::RunPlan {round calls} {
 
 	set Priv(plan) [dict create step 0 text $text]
 	set Priv(planConfirmed) [expr {$needsConfirm ? 1 : 0}]
-	set ::action::PlanGate [expr {$needsConfirm ? 1 : 0}]
+	set ::action::PlanGate 0
 	return [ContinuePlan $round $calls 0]
 }
 
@@ -1082,42 +1122,18 @@ proc ::application::assistant::ContinuePlan {round calls step} {
 		if {[info exists Priv(resultFacts)] && $Priv(resultFacts) ne ""} {
 			set reply "error: not performed; the game result analysis is complete, answer using its facts"
 		} else {
-			if {[llength [info commands ::application::assistant::correctArgs]]} {
-				catch { set cargs [::application::assistant::correctArgs $name $cargs] }
-			}
-			set reply [runTool $name $cargs]
+			set approval [expr {$Priv(planConfirmed) ? [list $name $cargs] : {}}]
+			set reply [runTool $name $cargs $approval]
 		}
 
 		if {[string match "\x00later:*" $reply]} {
-			set Priv(plan) [dict create step $step text $Priv(plan) calls $calls]
+			set Priv(plan) [dict create step $step before $before calls $calls]
 			set Priv(pending) [list $reply $round $name $cargs $calls "" plan]
 			Append tool "$name: (working...)"
 			return
 		}
 
-		ToolReply $name $reply
-		if {[string match "error:*" $reply] || $reply eq "declined"} {
-			# The failed step and the steps before it stay visible; the
-			# rest is not run.
-			foreach rest $calls {
-				set restName [dict get [dict get $rest function] name]
-				ToolReply $restName "error: $mc::PlanStepSkipped"
-			}
-			set message [format $mc::PlanStepFailed $step $name $reply]
-			set Priv(plan) {}
-			set Priv(planConfirmed) 0
-			set ::action::PlanGate 0
-			Append error $message
-			Finish [dict create ok 0 error $message] $round
-			return
-		}
-
-		# A step that ends in a dialog pauses the chain until it closes.
-		set ends 0
-		if {[dict exists $::action::Registry $name]} {
-			set ends [dict get [::action::get $name] ends-in-dialog]
-		}
-		PlanWaitForDialog $before $ends
+		if {![PlanStepResult $round $calls $step $name $reply $before]} { return }
 	}
 
 	set Priv(plan) {}
@@ -1129,6 +1145,35 @@ proc ::application::assistant::ContinuePlan {round calls step} {
 		Append error [format $mc::TooManyRounds $Priv(maxRounds)]
 		Finish [dict create ok 0 error [format $mc::TooManyRounds $Priv(maxRounds)]] $round
 	}
+}
+
+proc ::application::assistant::PlanStepResult {round calls step name reply before} {
+	variable Priv
+	variable mc
+	ToolReply $name $reply
+	if {[string match "error:*" $reply] || [string match "declined*" $reply] || $reply eq $mc::Denied} {
+		# The failed step and the steps before it stay visible; the
+		# rest is not run.
+		foreach rest $calls {
+			set restName [dict get [dict get $rest function] name]
+			ToolReply $restName "error: $mc::PlanStepSkipped"
+		}
+		set message [format $mc::PlanStepFailed $step $name $reply]
+		set Priv(plan) {}
+		set Priv(planConfirmed) 0
+		set ::action::PlanGate 0
+		Append error $message
+		Finish [dict create ok 0 error $message] $round
+		return 0
+	}
+
+	# A step that ends in a dialog pauses the chain until it closes.
+	set ends 0
+	if {[dict exists $::action::Registry $name]} {
+		set ends [dict get [::action::get $name] ends-in-dialog]
+	}
+	PlanWaitForDialog $before $ends
+	return 1
 }
 
 # Run the tool calls of one reply in order, then ask the model again. A tool
@@ -1227,7 +1272,12 @@ proc ::application::assistant::Resolve {token reply} {
 	LogToolCall $name $cargs 0 [expr {[string match "error: *" $reply] ? "error" : "ok"}] $reply
 	if {$planMode eq "plan"} {
 		# a plan step answered later: record it and run the rest of the plan
-		if {[catch { ToolReply $name $reply; ContinuePlan $round $calls [expr {[dict exists $Priv(plan) step] ? [dict get $Priv(plan) step] : 0}] } err]} {
+		if {[catch {
+			set step [dict get $Priv(plan) step]
+			if {[PlanStepResult $round $calls $step $name $reply [dict get $Priv(plan) before]]} {
+				ContinuePlan $round $calls $step
+			}
+		} err]} {
 			Finish [dict create ok 0 error $err] $round
 		}
 		return 1
@@ -1299,8 +1349,8 @@ proc ::application::assistant::Finish {result round} {
 # Tool dispatch. Unknown tools and bad arguments are reported back to the
 # model as text, never raised: the model can correct itself.
 # ======================================================================
-proc ::application::assistant::runTool {name cargs} {
-	lassign [RunTool $name $cargs] outcome asked reply
+proc ::application::assistant::runTool {name cargs {approval {}}} {
+	lassign [RunTool $name $cargs $approval] outcome asked reply
 	# a later answer is logged when it arrives (Resolve)
 	if {$outcome ne "later"} { LogToolCall $name $cargs $asked $outcome $reply }
 	return $reply
@@ -1309,7 +1359,7 @@ proc ::application::assistant::runTool {name cargs} {
 
 # Returns {outcome asked reply}: outcome is ok, error or declined; asked
 # tells whether the user was asked to confirm.
-proc ::application::assistant::RunTool {name cargs} {
+proc ::application::assistant::RunTool {name cargs {approval {}}} {
 	variable Actions
 	variable MaxReply
 	variable Priv
@@ -1321,7 +1371,11 @@ proc ::application::assistant::RunTool {name cargs} {
 	# Post-baseline tools live only in the registry (game.copy, game.paste).
 	# They go through the same shared validator and gates in ::action::run.
 	if {![dict exists $Actions $name]} {
-		set reply [::action::run $name $cargs]
+		if {$approval eq [list $name $cargs]} {
+			set reply [::action::RunApproved $name $cargs]
+		} else {
+			set reply [::action::run $name $cargs]
+		}
 		if {[string match "error:*" $reply]} {
 			return [list error 0 $reply]
 		}
@@ -1355,7 +1409,10 @@ proc ::application::assistant::RunTool {name cargs} {
 	set isConfirm [dict get $record confirm]
 	set isBulk [dict get $record bulk]
 	set asked 0
-	set planApproved [expr {[info exists Priv(planConfirmed)] && $Priv(planConfirmed)}]
+	if {$approval ne "" && $approval ne [list $name $checked]} {
+		return [list error 0 "error: approved tool arguments changed"]
+	}
+	set planApproved [expr {$approval eq [list $name $checked]}]
 	if {($isConfirm || $isBulk) && !$planApproved} {
 		set what [dict get $record what]
 		if {$what eq ""} {
@@ -2847,6 +2904,8 @@ proc ::application::assistant::DoFindPositions {request cql mode criteria} {
 	if {![info exists Priv(cqlHelp)] || !$Priv(cqlHelp)} {
 		return "error: call cql_help first and write the script from its reference and examples; then call find_positions again"
 	}
+	# the tool description asks for the pattern expression only: add the header the parser needs
+	if {![regexp {^\s*cql\s*\(} $cql]} { set cql "cql() $cql" }
 	return [FindPositions $request $cql $mode $criteria]
 }
 
@@ -3004,7 +3063,7 @@ proc ::application::assistant::ForgetMatchPositions {} {
 proc ::application::assistant::ShowPositions {request cql where samples} {
 	set esc {& &amp; < &lt; > &gt; \" &quot;}
 	set html "<html><body><h2>[string map $esc $request]</h2>"
-	append html "<p>Searched $where with this CQL 6.2 script:</p><pre>[string map $esc $cql]</pre>"
+	append html "<p>Searched $where with this position pattern script:</p><pre>[string map $esc $cql]</pre>"
 	set n 0
 	foreach sample $samples {
 		lassign $sample line at fen
@@ -3044,7 +3103,7 @@ proc ::application::assistant::DoCqlHelp {} {
 		return $text
 	}
 	# the vetted library as worked examples when the card is not there
-	set text "CQL 6.2: a script starts with cql() and is a filter run on every position; a game matches when some position passes."
+	set text "Position pattern search: a script starts with cql() and is a filter run on every position; a game matches when some position passes."
 	foreach id [::ai::search::patternIds] {
 		set p [::ai::search::pattern $id]
 		append text "\n\nRequest: [dict get $p description]\n[::ai::search::pattern6 $id]"
