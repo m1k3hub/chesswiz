@@ -115,21 +115,21 @@ List all usual tags, this includes the mandatory tags.
 Gregor Cramer
 .br
 .ul
-http://scidb.sourceforge.net
+https://chesswizapp.com
 .\" ==========================================================================
 .SH BUGS
 .\" --------------------------------------------------------------------------
 For bug reports visit
 .br
 .ul
-http://sourceforge.net/p/scidb/bugs
+https://chesswizapp.com
 .\" ==========================================================================
 .SH FEATURE REQUESTS
 .\" --------------------------------------------------------------------------
 For feature requests visit
 .br
 .ul
-http://sourceforge.net/p/scidb/feature-requests
+https://chesswizapp.com
 .\" ==========================================================================
 .SH FILES
 .\" --------------------------------------------------------------------------

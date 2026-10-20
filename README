@@ -12,67 +12,130 @@
 
 Website: https://chesswizapp.com
 
-Chesswiz is a chess database application for Linux, Windows and macOS,
-version 1.0. It is built on Scidb (by Gregor Cramer), itself inspired
-by Scid, and keeps Scidb's fast native database engine (.sci) with a
-Tcl/Tk interface.
-
-What Chesswiz can do:
-
-   - browsing and editing games in chess databases
-   - database switching, filtered views, and working sets
-   - database maintenance, duplicate detection, and opening statistics
-   - material search and CQL/pattern-based search
-   - player preparation reports from the players list
-   - opponent dossiers with recent games, opening tendencies, and
-     direct pivots into prep reports, switcher views, and working sets
-   - correspondence chess: live clock display, auto-timestamped moves,
-     ICCF XFCC server sync and auto-submit, game manager panel
-     (see docs/features/CORRESPONDENCE_CHESS.md)
-   - an AI assistant, analysis with bundled engines (Stockfish,
-     Reckless, Sjeng), and Syzygy tablebase probing
-
-For repeated search, maintenance, and preparation work, the native
-database format (.sci) is the recommended format. PGN export uses
-UTF-8 encoding by default.
+Chesswiz is an advanced, high-performance chess database application
+for Linux, Windows, and macOS, version 1.0. It provides a complete
+desktop environment for chess players, coaches, and researchers to
+manage game archives, analyze positions with powerful chess engines,
+train openings, and review games.
 
 ---------------------------------------------------------------------
-Build on Linux
+Key Features
 ---------------------------------------------------------------------
 
-Requirements: a C++ compiler, Tcl/Tk 8.6 development files, and the
-libraries listed in INSTALL (freetype, SM, Xcursor, fontconfig, gdbm,
-zlib, expat, mpv, zzip). On Debian/Ubuntu/Mint:
+* Databases
+  - High-performance native database engine (.sci) handling collections
+    of millions of games with instant search, filtering, and database
+    switching.
+  - Comprehensive PGN (Portable Game Notation) support with UTF-8
+    encoding enabled by default.
+  - Rich game browsing and editing with variation trees, text
+    annotations, and standard evaluation marks.
+  - Database maintenance suite: duplicate game detection, integrity
+    verification, opening tree statistics, and database compacting.
+  - Flexible search capabilities: header filters, material search,
+    positional and pattern searches, and rating criteria.
+  - Player preparation reports and opponent dossiers featuring opening
+    tendencies, recent games, and tailored prep working sets.
+  - Correspondence chess management: live clock displays, automated
+    move timestamping, game list manager, and ICCF XFCC server sync.
 
-   sudo apt-get install tcl8.6 tk8.6 tcl8.6-dev tk8.6-dev \
+* Engines
+  - Bundled high-performance chess engines: Stockfish, Reckless, and
+    Sjeng.
+  - Full support for external UCI and WinBoard protocol engines with
+    customizable thread, memory, and search profiles.
+  - Automated engine matches and tournament testing.
+
+* Analysis
+  - Real-time interactive analysis with multi-PV line evaluation and
+    search depth indicators.
+  - Automated game review and tactical blunder alerts highlighting
+    mistakes and missed opportunities.
+  - Integrated endgame tablebase probing with Syzygy 3-4-5-6 piece
+    tablebases.
+  - Visual evaluation charts and score progression graphs.
+
+* 3D Board
+  - Interactive hardware-accelerated 3D board view with photorealistic
+    materials (Classic Woodcraft and Photorealistic Walnut & Maple).
+  - Customizable piece sets, square styles, camera angles, lighting,
+    and smooth board rotation.
+
+* Media
+  - Integrated multimedia playback panel supporting synchronized audio
+    and video streams (MP4 and web streams).
+  - Interactive training lessons linking video timestamps directly to
+    moves and board positions.
+
+* Assistant That Runs the App for You
+  - Built-in AI assistant that operates application features for you:
+    executes queries, loads games, sets up board positions, annotates
+    moves, and generates study plans from natural language requests.
+  - Keyboard-accessible drawer with intelligent command routing.
+
+---------------------------------------------------------------------
+Installation
+---------------------------------------------------------------------
+
+Linux:
+   Install the official Debian/Ubuntu package:
+
+      sudo dpkg -i chesswiz_1.0_*.deb
+
+   or run portable builds directly from the source tree.
+
+Windows:
+   Run the Windows installer setup:
+
+      Chesswiz-1.0-setup.exe
+
+   The installer registers file associations for .sci and .pgn files
+   and creates Start Menu and desktop shortcuts. Portable ZIP archives
+   are also available; extract and launch tkchesswiz.exe.
+
+macOS:
+   Download the Chesswiz.app application bundle (macOS 11.0 or later,
+   Universal binary supporting Apple Silicon and Intel):
+
+      Drag Chesswiz.app into your /Applications folder and launch.
+
+---------------------------------------------------------------------
+Build from Source
+---------------------------------------------------------------------
+
+Requirements: a C++11 compiler, Tcl/Tk 8.6 development files, and the
+system libraries listed below. On Debian/Ubuntu/Mint:
+
+   sudo apt-get install build-essential tcl8.6 tk8.6 tcl8.6-dev tk8.6-dev \
      libfreetype6-dev libsm-dev libxcursor-dev libfontconfig1-dev \
-     libgdbm-dev libmpv-dev libzzip-dev
+     libgdbm-dev libexpat1-dev libmpv-dev libzzip-dev zlib1g-dev
 
-Then, from this directory:
+Then, from the root of this source tree:
 
    ./configure
    make
 
-This builds the C++ interpreter in src/ and bundles the Tcl sources
-into tcl/chesswiz. To run it straight from the build tree, without
-installing:
+This compiles the C++ backend in src/ and bundles the Tcl interface into
+tcl/chesswiz.
+
+To run immediately from the build tree:
 
    src/tkchesswiz -encoding utf-8 tcl/chesswiz
 
-To install system-wide (use --prefix to install elsewhere):
+To install system-wide (use --prefix with configure to customize):
 
    sudo make install
 
-Windows and macOS builds are packaged by the scripts in scripts/
-(see docs/dev/PORT_WINDOWS_MAC_SPEC.md).
+Windows and macOS packaging scripts are located in scripts/ (see
+docs/dev/PORT_WINDOWS_MAC_SPEC.md).
 
 ---------------------------------------------------------------------
 Documentation
 ---------------------------------------------------------------------
 
-   INSTALL          detailed build instructions
-   docs/README.md   index of project documentation
-   man/             user manual (installed as man1 pages)
+   INSTALL          detailed build requirements and configuration flags
+   docs/README.md   index of architecture and feature documentation
+   man/             manual pages (installed as man1 pages)
 
 ---------------------------------------------------------------------
 Licence
@@ -80,7 +143,7 @@ Licence
 
 Chesswiz is free software, licensed under the GNU General Public
 License (version 2 or later); see COPYING and NOTICE. Third-party
-components keep their own licences; see COPYRIGHT.
+components retain their own licences; see COPYRIGHT.
 
 ---------------------------------------------------------------------
 Credits

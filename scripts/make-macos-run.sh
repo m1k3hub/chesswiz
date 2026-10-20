@@ -39,7 +39,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>org.chesswiz.Chesswiz</string>
 <key>CFBundleName</key><string>Chesswiz</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>1</string>
+<key>CFBundleVersion</key><string>1.0</string>
+<key>CFBundleShortVersionString</key><string>1.0</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST

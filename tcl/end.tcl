@@ -280,6 +280,7 @@ options::sourceFile
 # START OF MIGRATION ################################################################
 if {[catch {
 	file mkdir [file join $::scidb::dir::user layout] ;# this is new
+	::export::migrateOptions
 
 	if {![array exists ::setup::board::History]} {
 		set history_ $::setup::board::History
