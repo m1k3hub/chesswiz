@@ -190,6 +190,17 @@ proc open {} {
 	bind $m <Configure> [namespace code PlaceMenues]
 	set Vars(menu:main) $m
 	set Vars(menu:updates) $nb.menu_updates
+	# The drop-down rows are actions in the registry; register them now, not on
+	# the first post, so ::action::run and the assistant reach them from startup.
+	after idle {
+		catch {
+			if {![info exists ::menu::DropdownTree] || [llength $::menu::DropdownTree] == 0} {
+				::menu::DefineTree
+			}
+			::menu::RegisterTree
+			::menu::RegisterExtras
+		}
+	}
 
 	::ttk::notebook::enableTraversal $nb
 	bind $nb <<NotebookTabChanged>> [namespace code [list TabChanged $nb]]
