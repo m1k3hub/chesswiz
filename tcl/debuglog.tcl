@@ -15,7 +15,11 @@ proc log {category message} {
 	variable file
 	variable started
 	variable maxSize
-	if {$file eq ""} { return }
+	variable queue
+	if {$file eq ""} {
+		lappend queue [list $category $message]
+		return
+	}
 	# Diagnostics must never cause a background error or interrupt engine I/O.
 	catch {
 		if {[file exists $file] && [file size $file] >= $maxSize} {
@@ -97,6 +101,14 @@ proc init {} {
 	set initialized 1
 	set file [file join $::scidb::dir::user log debug.log]
 	catch { file mkdir [file dirname $file] }
+	variable queue
+	if {[info exists queue]} {
+		set oldQueue $queue
+		unset queue
+		foreach entry $oldQueue {
+			log [lindex $entry 0] [lindex $entry 1]
+		}
+	}
 	log startup "start=$wall platform=$::tcl_platform(os) $::tcl_platform(osVersion) Tcl=[info patchlevel]"
 	foreach name {app version gitSha} {
 		if {[info exists ::scidb::$name]} { log startup "$name=[set ::scidb::$name]" }

@@ -31,16 +31,216 @@
 #! The next line restarts using the binary named at build time, found beside the real script (symlinks followed): \
 self=$0; while [ -h "$self" ]; do link=`readlink "$self"`; case $link in /*) self=$link;; *) self=`dirname "$self"`/$link;; esac; done; exec_dir=`dirname "$self"`; exec_base="%TKPROGRAM%"; case $exec_base in ?TKPROGRAM?) exec_base=tk`basename "$self"`;; esac; if [ -x "$exec_dir/$exec_base" ]; then exec "$exec_dir/$exec_base" -encoding utf-8 "$self" ${1+"$@"}; else exec "$exec_dir/../src/$exec_base" -encoding utf-8 "$self" ${1+"$@"}; fi
 
-package require Tcl 8.5
-package require Tk  8.5
-package require Ttk
-package require tkscidb
+namespace eval ::debuglog {
+	variable queue
+	if {![info exists queue]} { set queue {} }
+	if {![llength [info commands log]]} {
+		proc log {category message} {
+			variable queue
+			lappend queue [list $category $message]
+		}
+	}
+}
+
+namespace eval ::scidb::startup {
+	variable testing
+	if {![info exists testing]} { set testing 0 }
+
+	proc fatal {missing detail} {
+		variable testing
+		set app "Chesswiz"
+		if {[info exists ::scidb::app]} { set app $::scidb::app }
+		set msg "$app startup error: cannot load required $missing.\n$detail"
+		catch {
+			puts stderr $msg
+			flush stderr
+		}
+		catch {
+			if {[llength [info commands tk_messageBox]] && [winfo exists .]} {
+				tk_messageBox -type ok -icon error -title "$app: startup error" -message $msg
+			}
+		}
+		if {$testing} {
+			return -code error -errorcode [list SCIDB STARTUP_FATAL $missing] $msg
+		}
+		exit 1
+	}
+
+	proc loadCorePackage {pkg {version ""}} {
+		set cmd [list package require $pkg]
+		if {$version ne ""} { lappend cmd $version }
+		if {[catch {uplevel #0 $cmd} err]} {
+			fatal "core package '$pkg'" $err
+		}
+	}
+
+	proc checkOptionalPackage {pkg {version ""}} {
+		set cmd [list package require $pkg]
+		if {$version ne ""} { lappend cmd $version }
+		if {[catch {uplevel #0 $cmd} err]} {
+			::debuglog::log startup "warning: optional package '$pkg' not available: $err; continuing"
+			return 0
+		}
+		return 1
+	}
+
+	proc checkTkVersion {{ver ""}} {
+		if {$ver eq ""} { set ver [info patchlevel] }
+		if {$ver eq "8.5.10"} {
+			::debuglog::log startup "warning: Tk patch level 8.5.10 has known upstream bugs (e.g. Ubuntu 11.10); consider upgrading Tk"
+		}
+	}
+
+	proc probeExecutable {args} {
+		set startMs [clock milliseconds]
+		set exe ""
+		set delay 0
+
+		for {set i 0} {$i < [llength $args]} {incr i} {
+			set arg [lindex $args $i]
+			if {$arg eq "-delay"} {
+				incr i; set delay [lindex $args $i]
+			} elseif {$arg eq "-path"} {
+				incr i; set exe [lindex $args $i]
+			} else {
+				set exe $arg
+			}
+		}
+
+		if {$delay > 0} {
+			after $delay
+		}
+
+		if {[llength $args] == 0} {
+			catch { set exe [info nameofexecutable] }
+		}
+
+		if {[string trim $exe] eq ""} {
+			# Fallback 1: Linux /proc/pid/exe
+			if {$::tcl_platform(platform) eq "unix"} {
+				catch {
+					if {![llength [info commands ::platform::sys::readlink]]} {
+						set spf [file join [file dirname [info script]] sys-platform.tcl]
+						if {[file exists $spf]} { source $spf }
+					}
+					if {[llength [info commands ::platform::sys::readlink]]} {
+						set exe [::platform::sys::readlink /proc/[pid]/exe]
+					}
+				}
+				if {[string trim $exe] eq "" && [file exists /proc/curproc/file]} {
+					catch { set exe [file normalize /proc/curproc/file] }
+				}
+			}
+
+			# Fallback 2: argv0 if set and exists on disk
+			if {[string trim $exe] eq "" && [info exists ::argv0] && $::argv0 ne ""} {
+				if {[file exists $::argv0]} {
+					set exe $::argv0
+				}
+			}
+
+			# Fallback 3: locate relative to info script
+			if {[string trim $exe] eq ""} {
+				set sDir [file dirname [info script]]
+				set binName "tkchesswiz"
+				if {$::tcl_platform(platform) eq "windows"} { append binName ".exe" }
+				foreach cand [list \
+					[file join $sDir $binName] \
+					[file join $sDir .. src $binName] \
+					[file join $sDir ../../src $binName]] {
+					if {[file exists $cand]} {
+						set exe $cand
+						break
+					}
+				}
+			}
+
+			# Fallback 4: PATH lookup
+			if {[string trim $exe] eq ""} {
+				set binName [expr {[info exists ::argv0] && $::argv0 ne "" ? [file tail $::argv0] : "tkchesswiz"}]
+				catch { set exe [auto_execok $binName] }
+			}
+
+			# Fallback 5: sensible default name
+			if {[string trim $exe] eq ""} {
+				set exe [expr {[info exists ::argv0] && $::argv0 ne "" ? $::argv0 : "tkchesswiz"}]
+				::debuglog::log startup "warning: executable path probe returned empty; falling back to '$exe'"
+			} else {
+				::debuglog::log startup "warning: info nameofexecutable was empty; resolved executable via fallback: '$exe'"
+			}
+		}
+
+		set elapsed [expr {[clock milliseconds] - $startMs}]
+		if {$elapsed >= 250} {
+			::debuglog::log startup "warning: executable probe took ${elapsed}ms (slow probe)"
+		}
+
+		if {[catch { file normalize $exe } norm]} {
+			::debuglog::log startup "warning: path normalization failed for '$exe': $norm; using raw path"
+			set norm $exe
+		}
+
+		if {[regexp {[\[\]\{\}\$*?~#&;]|(?:^//)} $norm] || [string match "* *" $norm]} {
+			::debuglog::log startup "warning: unusual path detected for executable: '$norm'"
+		}
+
+		if {[regexp {[^\x00-\x7F]} $norm]} {
+			::debuglog::log startup "warning: non-ASCII characters in executable path: '$norm'"
+		}
+
+		return $norm
+	}
+
+	proc checkInstallDir {exePath} {
+		set dir [file dirname $exePath]
+		if {[file exists $dir] && ![file writable $dir]} {
+			::debuglog::log startup "warning: install directory '$dir' is read-only; mutable data must reside in user/temp directory"
+			return 0
+		}
+		return 1
+	}
+
+	proc checkLayout {exePath {targetOs ""}} {
+		if {$targetOs eq ""} { set targetOs $::tcl_platform(os) }
+		set exeDir [file dirname $exePath]
+
+		if {$targetOs eq "Darwin"} {
+			if {[string match -nocase "*.app/Contents/MacOS*" $exeDir]} {
+				set resDir [file normalize [file join $exeDir .. Resources]]
+				if {![file isdirectory $resDir]} {
+					::debuglog::log startup "warning: macOS app bundle layout detected but Resources directory missing at '$resDir'"
+					return "macos-bundle-incomplete"
+				}
+				return "macos-bundle"
+			}
+		} elseif {$targetOs eq "windows" || $::tcl_platform(platform) eq "windows"} {
+			set enginesDir [file join $exeDir engines]
+			if {![file isdirectory $enginesDir]} {
+				::debuglog::log startup "warning: Windows layout detected but engines directory not found at '$enginesDir'"
+				return "windows-custom"
+			}
+			return "windows-standard"
+		} else {
+			if {[file exists [file join $exeDir ../src]] || [file exists [file join $exeDir ../tcl]]} {
+				return "unix-dev"
+			}
+		}
+		return "standard"
+	}
+}
+
+if {!$::scidb::startup::testing} {
+	::scidb::startup::loadCorePackage Tcl 8.5
+	::scidb::startup::loadCorePackage Tk  8.5
+	::scidb::startup::loadCorePackage Ttk
+	::scidb::startup::loadCorePackage tkscidb
+}
 
 # ----------------------------------------------------------------------
 # Dynamic HiDPI / Retina display scaling calibration:
 # Calculate true monitor DPI and calibrate Tk's font/geometry scaling.
 # ----------------------------------------------------------------------
-if {[tk windowingsystem] ne "aqua"} {
+if {[llength [info commands tk]] && [tk windowingsystem] ne "aqua"} {
 	catch {
 		set _sWidth [winfo screenwidth .]
 		set _sMmWidth [winfo screenmmwidth .]
@@ -76,54 +276,30 @@ namespace eval scidb {
 }
 
 
-wm withdraw .
+catch { wm withdraw . }
 
 
-set nameofexecutable [info nameofexecutable]
-if {[llength $nameofexecutable] == 0} {
-	if {$tcl_platform(platform) eq "unix"} {
-		catch {
-			if {![llength [info commands ::platform::sys::readlink]]} {
-				set _spf [file join [file dirname [info script]] sys-platform.tcl]
-				if {[file exists $_spf]} { source $_spf }
-				unset -nocomplain _spf
-			}
-			set nameofexecutable [::platform::sys::readlink /proc/[pid]/exe]
+if {!$::scidb::startup::testing} {
+	set nameofexecutable [::scidb::startup::probeExecutable]
+	::scidb::startup::checkInstallDir $nameofexecutable
+	::scidb::startup::checkLayout $nameofexecutable
+	::scidb::startup::checkTkVersion
+
+
+	if {[::scidb::misc::version] ne $scidb::version} {
+		catch { wm withdraw . }
+		if {$tcl_platform(platform) eq "windows"} {
+			append msg "This is $scidb::app version [::scidb::misc::version], but the scidb.gui "
+			append msg "data file has the version number $scidb::version."
+		} else {
+			append msg "This is $scidb::app version '$scidb::version', but the "
+			append msg "[file tail $nameofexecutable] program it uses is "
+			append msg "version '[::scidb::misc::version]'."
 		}
-	}
-	if {[llength $nameofexecutable] == 0} {
-		# broken Tk library, e.g. 8.6b2
-		append msg "You've installed a broken Tcl/Tk library (version [info patchlevel]). "
-		append msg "Please change the version (8.5.6 is recommended)."
-		tk_messageBox -type ok -icon error -title "$scidb::app: broken library" -message $msg
+		puts stderr $msg
+		catch { tk_messageBox -type ok -icon error -title "$scidb::app: version error" -message $msg }
 		exit 1
 	}
-}
-set nameofexecutable [file normalize $nameofexecutable]
-
-
-if {[::scidb::misc::version] ne $scidb::version} {
-	wm withdraw .
-	if {$tcl_platform(platform) eq "windows"} {
-		append msg "This is $scidb::app version [::scidb::misc::version], but the scidb.gui "
-		append msg "data file has the version number $scidb::version."
-	} else {
-		append msg "This is $scidb::app version '$scidb::version', but the "
-		append msg "[file tail $nameofexecutable] program it uses is "
-		append msg "version '[::scidb::misc::version]'."
-	}
-	tk_messageBox -type ok -icon error -title "$scidb::app: version error" -message $msg
-	exit 1
-}
-
-
-if {[info patchlevel] eq "8.5.10"} {
-	# broken Tk library (e.g. Ubuntu 11.10)
-	append msg "You've installed a broken Tk library (patch level [info patchlevel]). "
-	append msg "Some crashes may occur with this Tk library.\n\n"
-	append msg "It is recommended to use a different patch level of this library."
-	append msg "(Version 8.5.6 is recommended.)"
-	tk_messageBox -type ok -icon error -title "$scidb::app: broken library" -message $msg
 }
 
 
