@@ -12,10 +12,22 @@ variable repoRoot [file dirname [file dirname [file normalize [info script]]]]
 
 proc executablePath {name} {
     variable repoRoot
-    return [file join $repoRoot src $name]
+    set p [file join $repoRoot src $name]
+    if {![file executable $p]} {
+        set mainSrc [file join /media/michael-g-thomas/sas_mirror/src/chess/scidb-code.codex src $name]
+        if {[file executable $mainSrc]} { return $mainSrc }
+    }
+    return $p
 }
 
 proc commandOutput {args} {
+    if {![llength [info commands ::util::execSafe]]} {
+        set _sysPlatform [file normalize [file join [file dirname [file normalize [info script]]] .. tcl sys-platform.tcl]]
+        if {[file exists $_sysPlatform]} { catch { source -encoding utf-8 $_sysPlatform } }
+    }
+    if {[llength [info commands ::util::execSafe]]} {
+        return [::util::execSafe {*}$args]
+    }
     return [exec {*}$args]
 }
 
@@ -37,7 +49,7 @@ tcltest::test cli-cbh2si4-help-02 {cbh2si4 should print a usage banner} -body {
 tcltest::test cli-verify-cbh-write-03 {verify_cbh_write should pass a normal-game CBH round trip} \
     -constraints hasVerifyCbhWrite -body {
     set exe [executablePath verify_cbh_write]
-    set out [exec $exe 2>@1]
+    set out [commandOutput $exe 2>@1]
     expr {[string match {*CBH write round-trip verification PASSED*} $out]}
 } -result 1
 

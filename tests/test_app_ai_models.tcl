@@ -453,7 +453,7 @@ tcltest::test aimodels-help-lists-flags {--help documents the AI flags} -body {
 	set script [file join $::scidb::test::app::testDir .. tcl chesswiz]
 	# the Windows program loads its own chesswiz.tcl: a script would be a database
 	if {$::tcl_platform(platform) eq "windows"} { set script {} }
-	set out [exec $exe {*}$script --help 2>@1]
+	set out [::util::execSafe $exe {*}$script --help 2>@1]
 	list [string match "*--ai-model=MODEL*" $out] [string match "*--ai-provider=NAME*" $out] \
 		[string match "*--ai-classifier=NAME*" $out] [string match "*--ai-debug*" $out]
 } -result {1 1 1 1}

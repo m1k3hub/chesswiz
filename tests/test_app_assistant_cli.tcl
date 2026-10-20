@@ -159,11 +159,12 @@ tcltest::test cli-session-shares-the-pane {terminal requests appear in the assis
 # the Windows executable loads its own script: a copied script is no other port
 tcltest::test cli-ask-without-instance {--ask exits 2 when no instance is running} -constraints unix -body {
 	set exe [file join $::scidb::test::app::testDir .. src tkchesswiz]
+	if {![file executable $exe]} { set exe [info nameofexecutable] }
 	set script [file join $::scidb::test::app::testDir .. tcl chesswiz]
 	# a different script path means a different port: nothing listens there
 	set copy [file join [file dirname $script] chesswiz-cli-test]
 	file copy -force $script $copy
-	set rc [catch { exec $exe $copy --ask "hello" 2>@1 } out opts]
+	set rc [catch { ::util::execSafe $exe $copy --ask "hello" 2>@1 } out opts]
 	file delete $copy
 	set code [expr {$rc ? [lindex [dict get $opts -errorcode] 2] : 0}]
 	list $code [string match "*is not running*" $out]

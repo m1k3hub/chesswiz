@@ -212,7 +212,7 @@ proc ::w1::unoccluded {tag w} {
 proc ::w1::shot {name} {
     variable dir
     file mkdir $dir
-    catch { exec import -window root $dir/$name-[winfo screenwidth .]x[winfo screenheight .].png }
+    catch { ::util::execSafe import -window root $dir/$name-[winfo screenwidth .]x[winfo screenheight .].png }
 }
 # The inset's own visible frame, and whether it sits inside its pane (its
 # outer edge, and so the ridge border, is never clipped by the pane).
@@ -265,7 +265,7 @@ proc ::w1::measure {target {shot 0}} {
     # Required states always get screenshots, including callers that omit
     # the optional flag. Other states keep rectangle/status evidence only.
     if {[regexp {^VAL-BRD-00[126]} $target]} {set shot 1}
-    if {$shot} {exec import -window root $::w1::dir/$target-[winfo screenwidth .]x[winfo screenheight .].png}
+    if {$shot} {::util::execSafe import -window root $::w1::dir/$target-[winfo screenwidth .]x[winfo screenheight .].png}
     return $data
 }
 proc ::w1::clear {target} {
@@ -315,7 +315,7 @@ tcltest::test brd-3d-first {BRD-007 first 3D toggle during playback uses the rea
         ::w1::assert {[winfo ismapped $view] && [winfo ismapped $view.camera] && [winfo ismapped $w] && [winfo manager $w.video] eq "pack"} "production views not mapped"
         ::w1::assert {$overlap == 0 && $toolbarOverlap == 0} "first 3D view/toolbar overlaps inset"
     }
-    exec import -window root $::w1::dir/VAL-BRD-007-first-[winfo screenwidth .]x[winfo screenheight .].png
+    ::util::execSafe import -window root $::w1::dir/VAL-BRD-007-first-[winfo screenwidth .]x[winfo screenheight .].png
     ::application::board::show3D 0
     ::w1::wait
     ::w1::reserved VAL-BRD-007-first-restored
@@ -654,7 +654,7 @@ tcltest::test inset-009-real-pointer {VAL-MED-009 a real pointer click on Restor
     lassign [::w1::topAtControl $w] cx cy top
     set control [set w].expand
     ::w1::assert {$top eq $control} "Restore control is covered by $top"
-    set rc [catch {exec xdotool mousemove $cx $cy click 1} err]
+    set rc [catch {::util::execSafe xdotool mousemove $cx $cy click 1} err]
     ::w1::assert {$rc == 0} "xdotool click failed: $err"
     ::w1::wait 500
     set restored [expr {!$::mediainset::Swapped}]

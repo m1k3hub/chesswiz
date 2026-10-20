@@ -1010,7 +1010,7 @@ proc ::application::voice::Speak {text} {
 		default {
 			# a template: %t is the text
 			set argv [SplitTemplate $engine $text]
-			if {[catch { exec {*}$argv } err]} { return 0 }
+			if {[catch { ::util::execSafe {*}$argv } err]} { return 0 }
 			return 1
 		}
 	}

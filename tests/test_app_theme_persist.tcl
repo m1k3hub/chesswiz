@@ -22,7 +22,7 @@ namespace eval ::themePersistTest {
 
 proc ::themePersistTest::run {home which theme} {
 	catch {
-		exec timeout 180 env \
+		::util::execSafe timeout 180 env \
 			HOME=$home \
 			TH_ROOT=$::themePersistTest::root \
 			TH_PHASE=$which \

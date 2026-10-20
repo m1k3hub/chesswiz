@@ -128,7 +128,11 @@ tcltest::test version-runtime-cli-09 {runtime --version reports 1.0 without beta
         return "no-executable"
     }
     set bundle [file join $repoRoot tcl chesswiz]
-    set out [exec $exe -encoding utf-8 $bundle --version]
+    if {![llength [info commands ::util::execSafe]]} {
+        set _sysPlatform [file normalize [file join $repoRoot tcl sys-platform.tcl]]
+        if {[file exists $_sysPlatform]} { catch { source -encoding utf-8 $_sysPlatform } }
+    }
+    set out [::util::execSafe $exe -encoding utf-8 $bundle --version]
     set is10 [regexp {Chesswiz version 1\.0} $out]
     set hasBeta [regexp -nocase {beta} $out]
     list $is10 $hasBeta

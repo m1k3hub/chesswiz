@@ -72,7 +72,7 @@ proc ::paneVideo::geometry {tag} {
  lassign [rect $w] vx vy vw vh
  set overlap [expr {max(0,min($bx+$x1-$x0,$vx+$vw)-max($bx,$vx))*max(0,min($by+$y1-$y0,$vy+$vh)-max($by,$vy))}]
  puts "PANE-VIDEO $tag board=[list $bx $by [expr {$x1-$x0}] [expr {$y1-$y0}]] inset=[rect $w] canvas=[rect $c] reserve=[::application::board::reserveRect] overlap=$overlap time=[::media::mpv::time]"
- if {[info exists ::env(PANE_EVIDENCE)]} {catch {exec import -window root [file join $::env(PANE_EVIDENCE) $tag.png]}}
+ if {[info exists ::env(PANE_EVIDENCE)]} {catch {::util::execSafe import -window root [file join $::env(PANE_EVIDENCE) $tag.png]}}
  return $overlap
 }
 
@@ -133,7 +133,7 @@ tcltest::test pane-video-008-zoom-swap {click focus zoom, maximise and swapped r
  set fills [expr {[winfo x $w] == $m && [winfo y $w] == $m \
      && [winfo width $w] == [winfo width $p] - 2*$m && [winfo height $w] == [winfo height $p] - 2*$m}]
  set small [expr {[winfo ismapped $c] && [winfo width $c] < [winfo width $p]/2 && [winfo height $c] < [winfo height $p]/2}]
- if {[info exists ::env(PANE_EVIDENCE)]} {catch {exec import -window root [file join $::env(PANE_EVIDENCE) swapped.png]}}
+ if {[info exists ::env(PANE_EVIDENCE)]} {catch {::util::execSafe import -window root [file join $::env(PANE_EVIDENCE) swapped.png]}}
  puts "PANE-VIDEO swapped pane=[::paneVideo::rect $p] inset=[::paneVideo::rect $w] small=[::paneVideo::rect $c] fills=$fills"
  ::mediainset::swap
  ::paneVideo::wait 650

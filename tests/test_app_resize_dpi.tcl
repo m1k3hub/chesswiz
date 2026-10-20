@@ -506,7 +506,7 @@ tcltest::test rsz-scaling-notifies {scalingChanged notifies registered listeners
 
 tcltest::test rsz-startup-geometry {headless startup geometry regression stays green} -body {
 	set script [file join [file dirname [info script]] test_startup_geometry.tcl]
-	set rc [catch {exec [auto_execok tclsh] $script} out opts]
+	set rc [catch {::util::execSafe [auto_execok tclsh] $script} out opts]
 	puts "EVIDENCE rsz-startup-geometry rc=$rc [string trim [lindex [split $out \n] end-1]]"
 	list $rc [regexp {Failed\s+0} $out]
 } -result {0 1}

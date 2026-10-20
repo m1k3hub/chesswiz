@@ -460,7 +460,7 @@ tcltest::test pane-reflow-001-threshold-sweep {actual Configure sweep cites both
   lappend states $mode; lappend counts $::reflowTest::nativeLoads
   set inspect [::application::twm::inspectLayout $t]
   ::reflowTest::say "SWEEP requested=${width}x780 actual=[wm geometry .application] constants=($::application::reflow::TallAspect,$::application::reflow::WideAspect) mode=$mode loads=$::reflowTest::nativeLoads inspect=$inspect"
-  if {[info exists ::env(PANE_EVIDENCE)]} {catch {exec import -window root [file join $::env(PANE_EVIDENCE) sweep-$width-$mode.png]}}
+  if {[info exists ::env(PANE_EVIDENCE)]} {catch {::util::execSafe import -window root [file join $::env(PANE_EVIDENCE) sweep-$width-$mode.png]}}
  }
  ::reflowTest::waitMs 700
  list $states $counts $::reflowTest::nativeLoads [expr {$opts eq [array get ::application::twm::Options board:layout:list*]}]
