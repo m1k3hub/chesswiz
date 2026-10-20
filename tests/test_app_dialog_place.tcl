@@ -373,8 +373,9 @@ tcltest::test dlg-follow-user-move {user-moved dialog is respected until it cove
     set dlg .application.playengine
     lassign [winfo workarea $dlg] wx wy ww wh
     set h [winfo height $dlg]
-    # Bottom-left corner, clear of the board.
-    wm geometry $dlg "+[expr {$wx+10}]+[expr {$wy+$wh-$h-10}]"
+    lassign [winfo extents $dlg] el er et eb
+    # Bottom-left corner, with the entire decorated frame inside the area.
+    wm geometry $dlg "+[expr {$wx+10}]+[expr {$wy+$wh-$h-$et-$eb-10}]"
     ::scidb::test::dlgplace::waitFor 800
     set moved [::scidb::test::dlgplace::widgetRect $dlg]
     ::scidb::test::dlgplace::noOverlap user-move-safe $dlg
@@ -402,5 +403,96 @@ tcltest::test dlg-follow-user-move {user-moved dialog is respected until it cove
     ::util::place::besideResetReplaceCount
     set ::application::Vars(loading) 0
 } -result 1
+
+# Exercise real widgets with only OS work-area/frame reports substituted.
+proc ::scidb::test::dlgplace::areaSetup {} {
+ update
+ waitFor 200
+ ::application::switchTab board
+ ::application::reflow::reset
+ set ::application::reflow::S(override) {}
+ wm geometry .application 800x900+10+10
+ waitFor 1600
+ ::application::scalingChanged
+ waitFor 500
+ set dlg .application.areaDialog
+ toplevel $dlg
+ wm withdraw $dlg
+ wm transient $dlg .application
+ ttk::frame $dlg.content -width 700 -height 100
+ pack $dlg.content
+ ::util::place::besideBoard $dlg .application
+ wm deiconify $dlg
+ waitFor 700
+ return $dlg
+}
+proc ::scidb::test::dlgplace::outerRect {dlg} {
+ lassign [widgetRect $dlg] x y w h
+ lassign [winfo extents $dlg] l r t b
+ list [expr {$x-$l}] [expr {$y-$t}] [expr {$w+$l+$r}] [expr {$h+$t+$b}]
+}
+tcltest::test dlg-display-workarea {watcher repositions on area-only change and preserves safe user placement} -setup {
+ set dlg [::scidb::test::dlgplace::areaSetup]
+ set board [::util::place::besideBoardRect]
+ rename ::util::place::getWmWorkArea ::scidb::test::dlgplace::realArea
+ proc ::util::place::getWmWorkArea {w} {return $::scidb::test::dlgplace::area}
+ set ::scidb::test::dlgplace::area {0 0 1200 1080}
+} -body {
+ ::util::place::besideResetReplaceCount
+ ::application::displayWatch
+ ::scidb::test::dlgplace::waitFor 1500
+ set results [list [expr {$board eq [::util::place::besideBoardRect]}] \
+  [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::outerRect $dlg] $::scidb::test::dlgplace::area] \
+  [::util::place::besideReplaceCount]]
+ # A user move clear of the board remains safe in the next area.
+ wm geometry $dlg +20+850
+ ::scidb::test::dlgplace::waitFor 500
+ set moved [::util::place::besideRect $dlg]
+ ::util::place::besideResetReplaceCount
+ set ::scidb::test::dlgplace::area {0 0 1100 1080}
+ ::application::displayWatch
+ ::scidb::test::dlgplace::waitFor 1500
+ lappend results [expr {$moved eq [::util::place::besideRect $dlg]}] [::util::place::besideReplaceCount]
+ # The same user position must be recovered when the area excludes it.
+ set ::scidb::test::dlgplace::area {0 0 1100 800}
+ ::application::displayWatch
+ ::scidb::test::dlgplace::waitFor 1500
+ lappend results [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::outerRect $dlg] $::scidb::test::dlgplace::area]
+ set results
+} -cleanup {
+ destroy $dlg
+ rename ::util::place::getWmWorkArea {}
+ rename ::scidb::test::dlgplace::realArea ::util::place::getWmWorkArea
+ ::application::displayWatch
+ ::application::reflow::reset
+} -result {1 1 1 1 0 1}
+
+tcltest::test dlg-frame-request-invalidation {unchanged board still replans for frame and requested-size changes} -setup {
+ set dlg [::scidb::test::dlgplace::areaSetup]
+ rename ::util::place::getWmFrameExtents ::scidb::test::dlgplace::realExtents
+ set ::scidb::test::dlgplace::extents [::scidb::test::dlgplace::realExtents $dlg]
+ proc ::util::place::getWmFrameExtents {w} {return $::scidb::test::dlgplace::extents}
+} -body {
+ set board [::util::place::besideBoardRect]
+ lassign $::scidb::test::dlgplace::extents l r t b
+ set ::scidb::test::dlgplace::extents [list $l [expr {$r+20}] $t $b]
+ ::util::place::besideResetReplaceCount
+ ::util::place::besideSchedule
+ ::scidb::test::dlgplace::waitFor 700
+ set frameCount [::util::place::besideReplaceCount]
+ # Suppress only the Configure callback to exercise settle's size key.
+ bind $dlg <Configure> {}
+ $dlg.content configure -width 750
+ update idletasks
+ ::util::place::besideResetReplaceCount
+ ::util::place::besideSchedule
+ ::scidb::test::dlgplace::waitFor 700
+ list $frameCount [::util::place::besideReplaceCount] [expr {$board eq [::util::place::besideBoardRect]}]
+} -cleanup {
+ destroy $dlg
+ rename ::util::place::getWmFrameExtents {}
+ rename ::scidb::test::dlgplace::realExtents ::util::place::getWmFrameExtents
+ ::application::reflow::reset
+} -result {1 1 1}
 
 tcltest::cleanupTests

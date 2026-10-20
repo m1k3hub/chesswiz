@@ -1860,7 +1860,7 @@ proc WriteLayout {twm id name layoutVariant} {
 	set targetFile [makeFilename $id $layoutVariant $name]
 	set tempFile "${targetFile}.tmp"
 	
-	set Options($id:layout:list:$layoutVariant) [inspectLayout $twm]
+	set Options($id:layout:list:$layoutVariant) [::application::reflow::inspectForSave $twm]
 	set Options($id:layout:saved:$layoutVariant) $Options($id:layout:list:$layoutVariant)
 	set Options($id:layout:changed:$layoutVariant) 0
 	array unset Vars $id:layout:changed:$layoutVariant

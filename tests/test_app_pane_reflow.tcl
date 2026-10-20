@@ -585,4 +585,53 @@ tcltest::test pane-reflow-002-save-dialog {modal shutdown processing cannot reac
  ::application::reflow::reset
 } -result {1 1 tall}
 
+# Saving an empty Analysis must capture the expanded tree at every size.
+tcltest::test pane-reflow-011-save-collapsed {content collapse permits save without persisting automatic hides} -setup {
+ # Let the startup tab selection finish before selecting Board.
+ ::reflowTest::waitMs 200
+ set t [::reflowTest::setup]
+ set oldGeometry [wm geometry .application]
+ set ::application::reflow::S(override) {}
+ rename ::dialog::info ::reflowTest::info
+ set ::reflowTest::messages {}
+ proc ::dialog::info {args} {lappend ::reflowTest::messages $args}
+ set files {}
+} -body {
+ set results {}
+ foreach size {1200x800 1850x1000} {
+  wm geometry .application $size+10+10
+  ::reflowTest::waitMs 650
+  set a [$t leaf analysis:1]
+  set collapsed [expr {![winfo ismapped $a]}]
+  if {$::application::reflow::S(collapsed) eq {}} {error "Analysis was not content-collapsed"}
+  set name collapsed-$size
+  set file [::application::twm::makeFilename board normal $name]
+  lappend files $file
+  set saved [::application::twm::WriteLayout $t board $name normal]
+  set stillCollapsed [expr {![winfo ismapped $a]}]
+  if {!$saved} {lappend results [list $collapsed $saved $stillCollapsed 0]; continue}
+  # Read the actual serialized setup command and load its tree with
+  # adaptation suspended. An automatically hidden Analysis must be visible.
+  set ch [open $file]; set line [gets $ch]; close $ch
+  set layout [lindex $line 3]
+  ::application::reflow::restoreCollapsed
+  set ::application::reflow::S(busy) 1
+  set ::application::Vars(loading) 1
+  $t load $layout
+  set ::application::Vars(loading) 0
+  update
+  set visible [winfo ismapped [$t leaf analysis:1]]
+  set ::application::reflow::S(busy) 0
+  lappend results [list $collapsed $saved $stillCollapsed $visible]
+ }
+ list $results [llength $::reflowTest::messages]
+} -cleanup {
+ rename ::dialog::info {}; rename ::reflowTest::info ::dialog::info
+ foreach file $files {file delete -force $file}
+ set ::application::reflow::S(busy) 0
+ set ::application::Vars(loading) 0
+ ::application::reflow::reset
+ wm geometry .application $oldGeometry
+} -result {{{1 1 1 1} {1 1 1 1}} 0}
+
 tcltest::cleanupTests

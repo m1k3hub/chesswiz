@@ -435,6 +435,28 @@ proc besideSchedule {{delay ""}} {
 	set BesideTimer [after $delay [namespace code besideSettle]]
 }
 
+# Every input that can invalidate a placement with an unchanged board.
+proc besideContext {dlg} {
+	set cls [winfo class $dlg]
+	set extents {0 0 0 0}
+	if {$cls ni {Menu OptionMenu} && ![wm overrideredirect $dlg]} {
+	 set extents [winfo extents $dlg]
+	}
+	return [list [winfo workarea $dlg] $extents \
+	 [list [winfo reqwidth $dlg] [winfo reqheight $dlg]] \
+	 [wm minsize $dlg] [wm maxsize $dlg]]
+}
+proc besideOuterRect {dlg} {
+	lassign [besideRect $dlg] x y w h
+	lassign [lindex [besideContext $dlg] 1] l r t b
+	return [list [expr {$x-$l}] [expr {$y-$t}] [expr {$w+$l+$r}] [expr {$h+$t+$b}]]
+}
+proc besideInside {rect area} {
+	lassign $rect x y w h
+	lassign $area ax ay aw ah
+	return [expr {$x >= $ax && $y >= $ay && $x+$w <= $ax+$aw && $y+$h <= $ay+$ah}]
+}
+
 # Record the rectangle a placement actually produced. Runs on idle because
 # the WM applies wm geometry asynchronously and callers deiconify after
 # besideBoard returns.
@@ -443,6 +465,7 @@ proc besideCapture {dlg} {
 	if {![winfo exists $dlg] || ![winfo ismapped $dlg]} { return }
 	set BesideState($dlg,last) [besideRect $dlg]
 	set BesideState($dlg,board) [besideBoardRect]
+	set BesideState($dlg,context) [besideContext $dlg]
 	set BesideState($dlg,user) 0
 }
 
@@ -465,6 +488,7 @@ proc besideRegistryAdd {dlg parent} {
 	# than reading a half-applied one and mistaking it for a user move.
 	set BesideState($dlg,last) {}
 	set BesideState($dlg,board) [besideBoardRect]
+	set BesideState($dlg,context) [besideContext $dlg]
 	set BesideState($dlg,user) 0
 	after idle [namespace code [list besideCapture $dlg]]
 }
@@ -498,24 +522,34 @@ proc besideSettle {} {
 		if {![winfo exists $dlg]} { besideRegistryRemove $dlg; continue }
 		if {![winfo ismapped $dlg]} { continue }
 		set current [besideRect $dlg]
+		set context [besideContext $dlg]
+		set unchanged [expr {$boardRect eq $BesideState($dlg,board)
+			&& $context eq $BesideState($dlg,context)}]
 		if {![info exists BesideState($dlg,last)] || $BesideState($dlg,last) eq {}} {
 			# Waiting for the idle capture of the rectangle the placement
-			# produced: not a user move. If the board moved in between,
-			# fall through and re-plan against the new rectangle.
-			if {$boardRect eq $BesideState($dlg,board)} {
+			# produced: not a user move. If a placement input changed in
+			# between, fall through and re-plan.
+			if {$unchanged} {
 				set BesideState($dlg,last) $current
 				set BesideState($dlg,user) 0
 				continue
 			}
 			set BesideState($dlg,user) 0
 		} elseif {[besideRectDiffers $current $BesideState($dlg,last)]} {
-			set BesideState($dlg,user) 1
+			# Content growth changes client size without a user resize.
+			if {[lindex $context 2] eq [lindex $BesideState($dlg,context) 2]
+				|| [besideRectDiffers [concat [lrange $current 0 1] {0 0}] \
+					[concat [lrange $BesideState($dlg,last) 0 1] {0 0}]]} {
+				set BesideState($dlg,user) 1
+			}
 		}
 		if {$BesideState($dlg,user)} {
-			# Respect a user move unless it now covers the board.
-			if {[besideOverlap $current $boardRect] == 0} { continue }
-		} elseif {$boardRect eq $BesideState($dlg,board)} {
-			# Board did not move; the trigger was unrelated to placement.
+			# Respect user placement while its whole frame remains usable.
+			set outer [besideOuterRect $dlg]
+			if {[besideOverlap $outer $boardRect] == 0
+				&& [besideInside $outer [lindex $context 0]]} { continue }
+		} elseif {$unchanged} {
+			# No placement input changed.
 			continue
 		}
 		lappend replan $dlg
@@ -527,7 +561,7 @@ proc besideSettle {} {
 	}
 }
 
-# Number of re-placements caused by board motion, for tests/evidence. Opening
+# Number of re-placements caused by changed inputs, for tests/evidence. Opening
 # a dialog calls besideBoard directly and does not count here.
 proc besideReplaceCount {} {
 	variable BesideReplacements
@@ -652,7 +686,7 @@ proc BesideConfigure {dlg parent} {
 proc BesideReflow {dlg parent} {
 	variable BesidePending
 	unset BesidePending($dlg)
-	if {[winfo exists $dlg]} { besideBoard $dlg $parent }
+	if {[winfo exists $dlg]} { besideSchedule }
 }
 
 proc BesideDestroy {dlg window} {

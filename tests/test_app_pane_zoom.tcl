@@ -2,6 +2,8 @@
 package require tcltest 2.5
 
 namespace eval ::paneZoomTest { variable Title "Pane" }
+# Match the reflow suite: approve engine registration without a modal UI.
+proc ::paneZoomTest::yesConfirm {args} {return 1}
 
 proc ::paneZoomTest::makePane {twm parent type uid} {
 	set w [tk::frame $parent.$uid]
@@ -201,6 +203,8 @@ if {[info exists ::env(SCIDB_TEST_ENGINE)]} {
 } else { set zoomEngine [lindex [auto_execok stockfish] 0] }
 tcltest::testConstraint paneZoomEngine [expr {$zoomEngine ne "" && [file executable $zoomEngine]}]
 tcltest::test pane-zoom-engine {a hidden analysis pane keeps its real engine running} -constraints paneZoomEngine -setup {
+	set savedConfirm $::application::assistant::Priv(confirm)
+	set ::application::assistant::Priv(confirm) ::paneZoomTest::yesConfirm
 	set savedEngines $::engine::Engines
 	set savedFile $::scidb::file::engines
 	set ::engine::Engines {}
@@ -224,6 +228,7 @@ tcltest::test pane-zoom-engine {a hidden analysis pane keeps its real engine run
 	list $hidden [expr {$running eq [::application::analysis::Running] && [llength $running] > 0}] \
 		[winfo exists $analysis]
 } -cleanup {
+	set ::application::assistant::Priv(confirm) $savedConfirm
 	catch {$t zoom ""}
 	catch {::application::analysis::stopEngine $number}
 	file delete -force $::scidb::file::engines

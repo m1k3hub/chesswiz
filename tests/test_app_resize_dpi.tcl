@@ -933,4 +933,42 @@ tcltest::test rsz-zoomed-normal {VAL-RSZ-006 a 200x200 normal geometry saved whi
 	::rsz::wait 250
 } -result {1 1 1 1 1 1 1 1 1}
 
+proc ::rsz::displayWait {ms} {
+ after $ms {set ::rsz::displayDone 1}
+ vwait ::rsz::displayDone
+ unset ::rsz::displayDone
+ update
+}
+tcltest::test rsz-display-watch-fullscreen {display changes in fullscreen replay once after exit, including wrapper changes} -setup {
+ ::rsz::saveScaling
+ ::rsz::showBoard
+ ::rsz::settle [list ::rsz::setScaling 1.0]
+ set ::rsz::Ticks {}
+ ::application::addScalingListener {::rsz::noteListener}
+} -body {
+ set results {}
+ foreach setter {::rsz::rawScaling ::rsz::setScaling} {
+  ::menu::viewFullscreen toggle
+  ::rsz::displayWait 1800
+  set ::rsz::Ticks {}
+  ::application::resetDisplayChangeCount
+  $setter 1.3
+  ::application::displayWatch
+  ::rsz::displayWait 1200
+  set during [llength $::rsz::Ticks]
+  ::menu::viewFullscreen toggle
+  ::rsz::displayWait 2200
+  set replay [llength $::rsz::Ticks]
+  ::application::displayWatch
+  update
+  lappend results [list $during $replay [llength $::rsz::Ticks]]
+  ::rsz::settle [list ::rsz::setScaling 1.0]
+ }
+ set results
+} -cleanup {
+ if {[::menu::fullscreen?]} {::menu::viewFullscreen toggle}
+ ::application::removeScalingListener {::rsz::noteListener}
+ ::rsz::restoreScaling
+} -result {{0 1 1} {0 1 1}}
+
 tcltest::cleanupTests

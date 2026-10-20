@@ -679,12 +679,20 @@ proc KeepInWorkArea {w} {
 proc scalingChanged {} {
 	variable Vars
 
+	# Fullscreen suppresses the refresh, but must not consume the change.
+	# The display watch replays it after fullscreen has ended.
+	if {!$Vars(ready)} { return }
+	if {[::menu::fullscreen?]} {
+		set Vars(display:pending) 1
+		return
+	}
+	set Vars(display:pending) 0
+
 	# A wrapper-driven change is already handled here; synchronise the
 	# display watch so its next poll does not repeat the same relayout.
 	if {[info exists Vars(display:signature)]} {
 		set Vars(display:signature) [displaySignature]
 	}
-	if {!$Vars(ready) || [::menu::fullscreen?]} { return }
 
 	if {[info exists Vars(twm)]} {
 		foreach twm $Vars(twm) {
@@ -799,6 +807,12 @@ proc displayWatch {} {
 		incr Vars(display:changes)
 		scalingChanged
 		KeepInWorkArea .application
+		::util::place::besideSchedule
+	} elseif {[info exists Vars(display:pending)] && $Vars(display:pending)
+		&& ![::menu::fullscreen?]} {
+		scalingChanged
+		KeepInWorkArea .application
+		::util::place::besideSchedule
 	}
 	set Vars(display:after) [after 1000 [namespace code displayWatch]]
 }
@@ -2714,14 +2728,33 @@ proc contentChanged {} {
  variable S; unset S(contentAfter)
  updateCollapse
 }
-# SAVE RULE (VAL-PANE-009): block an explicit layout save while automatic
-# reflow/collapse is active. The pre-reflow tree lives in S(base); shutdown
-# restores it before saveLayouts. Never serialize a presentation by accident.
+# SAVE RULE (VAL-PANE-009): tall reflow remains temporary; enlarge to
+# restore its saved shape. Content collapse can persist at every size, so
+# capture its underlying expanded layout instead of blocking the save.
 proc allowSave {t parent} {
  variable S
- if {$t ne [boardTwm] || ($S(mode) ne "tall" && $S(collapsed) eq {})} {return 1}
+ if {$t ne [boardTwm] || $S(mode) ne "tall"} {return 1}
  ::dialog::info -parent $parent -message "This layout is temporarily adapted to the window. Enlarge the window to restore its saved shape before saving the layout."
  return 0
+}
+# Only the layout writer uses this capture: ordinary inspection must keep
+# describing the live presentation (for shape and change detection).
+proc inspectForSave {t} {
+ variable S
+ if {$t ne [boardTwm] || $S(collapsed) eq {}} {
+  return [::application::twm::inspectLayout $t]
+ }
+ set busy $S(busy)
+ set S(busy) 1
+ set rc [catch {
+  restoreCollapsed
+  update idletasks
+  ::application::twm::inspectLayout $t
+ } layout options]
+ set S(busy) $busy
+ updateCollapse
+ if {$rc} {return -options $options $layout}
+ return $layout
 }
 proc RevertForExit {} {
  variable S
