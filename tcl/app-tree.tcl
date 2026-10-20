@@ -1679,6 +1679,21 @@ proc PopupMenu {table x y} {
 	catch { wm attributes $m -type popup_menu }
 	set row [FindIndex $table $x $y]
 
+	# C8: the one tree-row context menu.
+	if {[llength [info commands ::context::Build]]} {
+		set move ""
+		if {$row >= 0} { catch { set move [::scidb::tree::move $row] } }
+		set fen ""
+		catch { set fen [::scidb::game::query fen] }
+		set object [dict create table $table x $x y $y row $row move $move fen $fen]
+		if {[::context::Build C8 $m $object]} {
+			tk_popup $m $x $y
+			return
+		}
+		destroy $m
+		return
+	}
+
 	if {$row >= 0} {
 		::table::activate $table $row true
 		after idle [list ::table::activate $table $row true]

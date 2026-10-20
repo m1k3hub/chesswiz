@@ -455,6 +455,13 @@ proc SaveEventGamesWorkingSet {parent base variant view index {menu ""}} {
 
 
 proc popupMenu {parent menu base variant view index source} {
+	# C5: the one event context menu.
+	if {[llength [info commands ::context::Build]]} {
+		set object [dict create kind event name $source base $base \
+			parent $parent variant $variant view $view index $index]
+		if {[::context::Build C5 $menu $object]} { return }
+		return
+	}
 	set accel $::gamestable::mc::Accel(tourntable)
 	$menu add command \
 		-compound left \

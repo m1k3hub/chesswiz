@@ -330,6 +330,12 @@ proc see {path position} {
 
 
 proc popupMenu {parent menu site} {
+	# C5: the one site context menu.
+	if {[llength [info commands ::context::Build]]} {
+		set object [dict create kind site name $site parent $parent]
+		if {[::context::Build C5 $menu $object]} { return }
+		return
+	}
 	set accel [set [namespace parent]::gamestable::mc::Accel(openurl)]
 	set cmd [namespace code [list ::web::open $parent $site]]
 	$menu add command \

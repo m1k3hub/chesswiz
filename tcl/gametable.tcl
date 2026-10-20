@@ -608,6 +608,8 @@ proc build {path getViewCmd {visibleColumns {}} {args {}}} {
 	bind $path <ButtonPress-3>			+[namespace code [list hideGame $path]]
 
 	BindAccelerators $path
+	bind $path <Control-c> [namespace code [list CopySelection $path]]
+	bind $path <Control-v> [namespace code [list PasteSelection $path]]
 	::bind $path <<LanguageChanged>>  [namespace code [list BindAccelerators $path]]
 	::bind $path <<LanguageChanged>> +[namespace code [list RefreshHeader $path 1]]
 	::bind $path <<LanguageChanged>> +[namespace code [list RefreshHeader $path 2]]
@@ -1881,6 +1883,19 @@ proc PopupMenu {path menu base variant index column} {
 	if {[scidb::view::count games $base $variant $view] == 0} { return }
 	set Vars(menu) $menu
 
+	# C3: the one game-row context menu.
+	if {[llength [info commands ::context::Build]]} {
+		set numbers {}
+		if {$index ne "outside" && [string is integer -strict $index]} {
+			set numbers [::game::clipboard::selection $path $base $variant $view]
+		}
+		set object [dict create path $path base $base variant $variant view $view \
+			index $index column $column count [llength $numbers] \
+			sortable [expr {[info exists Vars(sortable)] ? $Vars(sortable) : 1}]]
+		if {[::context::Build C3 $menu $object]} { return }
+		return
+	}
+
 	if {$index ne "outside"} {
 		if {$Vars(mode) eq "list"} {
 			$menu add command \
@@ -2137,6 +2152,26 @@ proc PopupMenu {path menu base variant index column} {
 			}
 		}
 	}
+}
+
+
+# Ctrl+C / Ctrl+V in the game list (VAL-CTX-005).
+proc CopySelection {path} {
+	variable ${path}::Vars
+	set base [base $path]
+	set variant [::scidb::db::get variant?]
+	set view [{*}$Vars(viewcmd) $base $variant]
+	set numbers [::game::clipboard::selection $path $base $variant $view]
+	if {![llength $numbers]} { return }
+	catch { ::game::clipboard::copy $base $variant $numbers }
+	return
+}
+
+proc PasteSelection {path} {
+	set base [base $path]
+	set variant [::scidb::db::get variant?]
+	catch { ::game::clipboard::paste $base $variant }
+	return
 }
 
 

@@ -1165,6 +1165,19 @@ proc PopupMenu {w} {
 	menu $m -tearoff false
 	catch { wm attributes $m -type popup_menu }
 
+	# C1: the one board/position context menu (PROPOSAL section 3).
+	set fen ""
+	catch { set fen [::scidb::game::query fen] }
+	set square ""
+	catch {
+		set sq [::board::getSquare $w [winfo pointerx $w] [winfo pointery $w]]
+		if {$sq >= 0} { set square [lindex $::board::squareIndex $sq] }
+	}
+	if {[llength [info commands ::context::Post]]
+	 && [::context::Post C1 $m [dict create widget $w square $square fen $fen]]} {
+		return
+	}
+
 	if {[llength [info commands ::application::assistant::offers::AskAboutBoard]]} {
 		$m add command \
 			-compound left \
