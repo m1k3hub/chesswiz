@@ -45,7 +45,9 @@ set Logo							"Logo"
 set Protocol					"Protocol"
 set Parameters					"Parameters"
 set Command						"Command"
-set Directory					"Directory"
+set Directory					"Working / Data Folder"
+set CommandHint				"Path to the engine executable file"
+set DirectoryHint				"Chesswiz's per-engine data and working folder (used for opening books, logs, and engine files)"
 set Variants					"Variants"
 set LastUsed					"Last used"
 
@@ -112,6 +114,8 @@ set NoFeaturesAvailable		"This engine does not provide any feature, not even an 
 set NoStandardChess			"This engine does not support standard chess."
 set NoEngineAvailable		"No engine available."
 set FailedToCreateDir		"Failed to create directory '%s'."
+set InvalidCommand			"'%s' is not an existing executable file.\n\nThe 'Command' field must point to the engine executable."
+set NotADirectory				"'%s' is not a folder.\n\nThe '%s' field is Chesswiz's per-engine data and working folder. Please choose a folder, not a file."
 set ScriptErrors				"Any errors while saving will be displayed here."
 set CommandNotAllowed		"Usage of command '%s' is not allowed here."
 set ResetToDefaultContent	"Reset to default content"
@@ -327,6 +331,10 @@ proc openAdmininstration {parent} {
 	::tooltip::tooltip $setup.burl [namespace current]::mc::OpenUrl
 	::tooltip::tooltip $setup.blastused $::mc::Clear
 	::tooltip::tooltip $setup.blogo $mc::OpenFsbox
+	::tooltip::tooltip $setup.lcommand [namespace current]::mc::CommandHint
+	::tooltip::tooltip $setup.tcommand [namespace current]::mc::CommandHint
+	::tooltip::tooltip $setup.ldirectory [namespace current]::mc::DirectoryHint
+	::tooltip::tooltip $setup.edirectory [namespace current]::mc::DirectoryHint
 	::tooltip::tooltip $setup.bdirectory $::dialog::fsbox::mc::Title(dir)
 	::theme::configureSpinbox $setup.frating.selo
 	::theme::configureSpinbox $setup.frating.sccrl
@@ -3286,6 +3294,7 @@ proc RebuildEngineList {list} {
 		after cancel $Priv(after)
 		set Priv(after) [after 100 [namespace code [list LoadPhotoFiles $list]]]
 	}
+	bind $list <Destroy> +[namespace code { after cancel $Priv(after) }]
 }
 
 
@@ -3472,6 +3481,45 @@ proc ProbeEngine {parent entry protocols} {
 }
 
 
+# Validation of the Command entry: must be an existing executable file.
+# Returns "" when acceptable, or an error message.
+proc CheckCommand {command} {
+	set cmd [string trim $command]
+	if {![string length $cmd]} {
+		return [format $mc::InvalidCommand $cmd]
+	}
+	set path [file normalize $cmd]
+	if {![file exists $path] || ![file isfile $path]} {
+		return [format $mc::InvalidCommand $cmd]
+	}
+	if {![file executable $path] && !($::tcl_platform(platform) eq "unix" && [info commands ::fsbox::isWindowsExecutable] ne "" && [::fsbox::isWindowsExecutable $path])} {
+		return [format $mc::InvalidCommand $cmd]
+	}
+	return {}
+}
+
+
+# Validation of the Directory entry (Chesswiz's per-engine data/working folder):
+# must be a folder, not an existing file or a path that looks like a file.
+# Returns "" when acceptable, or a warning/error message without rewriting.
+proc CheckDirectory {directory} {
+	set raw [string trim $directory]
+	if {![string length $raw]} { return {} }
+	set dir [file normalize $raw]
+	if {[file exists $dir]} {
+		if {![file isdirectory $dir]} {
+			return [format $mc::NotADirectory $raw $mc::Directory]
+		}
+		return {}
+	}
+	set ext [string tolower [file extension [file tail $dir]]]
+	if {$ext in {.exe .com .bat .cmd .sh .bin .app .py .tcl .jar .msi .dll .so .dylib .txt .pgn .sci .scv .si4 .cbh .ctg .abk .epd .fen .dat .log .ini .cfg .json .xml}} {
+		return [format $mc::NotADirectory $raw $mc::Directory]
+	}
+	return {}
+}
+
+
 proc SaveEngine {list} {
 	variable Engines
 	variable Opt
@@ -3498,6 +3546,19 @@ proc SaveEngine {list} {
 		array unset engine
 		array set engine [lindex $Engines $sel]
 
+		set cmdToCheck [expr {[info exists Data(Command)] ? $Data(Command) : $engine(Command)}]
+		set msg [CheckCommand $cmdToCheck]
+		if {[string length $msg]} {
+			return [::dialog::error -parent [winfo toplevel $list] -message $msg]
+		}
+
+		if {[info exists Data(Directory)] && [string length [string trim $Data(Directory)]] > 0} {
+			set msg [CheckDirectory $Data(Directory)]
+			if {[string length $msg]} {
+				return [::dialog::error -parent [winfo toplevel $list] -message $msg]
+			}
+		}
+
 		foreach attr [array names engine] {
 			switch $attr {
 				Country {
@@ -3507,9 +3568,9 @@ proc SaveEngine {list} {
 					;# alreay set
 				}
 				Directory {
-					if {[info exists Data(Directory)] && [string length $Data(Directory)] > 0} {
-						set failed 0
-						set Data(Directory) [file normalize $Data(Directory)]
+					set failed 0
+					if {[info exists Data(Directory)] && [string length [string trim $Data(Directory)]] > 0} {
+						set Data(Directory) [file normalize [string trim $Data(Directory)]]
 						if {	[string length $engine(Directory)] > 0
 							&& [file isdirectory $engine(Directory)]
 							&& ![file isdirectory $Data(Directory)]} {
@@ -3536,6 +3597,8 @@ proc SaveEngine {list} {
 				}
 			}
 		}
+
+		lset Engines $sel [array get engine]
 	}
 
 	SaveEngineList

@@ -1161,7 +1161,9 @@
 ::engine::mc::Protocol					"Protokoll"
 ::engine::mc::Parameters				"Parametrar"
 ::engine::mc::Command					"Kommand"
-::engine::mc::Directory					"Folder"
+::engine::mc::Directory					"Arbets- /datamapp"
+::engine::mc::CommandHint				"Sökväg till motorns körbara fil"
+::engine::mc::DirectoryHint				"Chesswiz data- och arbetsmapp för denna motor (används för öppningsböcker, loggar och motorfiler)"
 ::engine::mc::Variants					"Varianter"
 ::engine::mc::LastUsed					"Senast använd"
 
@@ -1232,6 +1234,8 @@
 ::engine::mc::NoStandardChess			"This engine does not support standard chess." ;# NEW
 ::engine::mc::NoEngineAvailable		"No engine available." ;# NEW
 ::engine::mc::FailedToCreateDir		"Failed to create directory '%s'." ;# NEW
+::engine::mc::InvalidCommand			"'%s' är inte en befintlig körbar fil.\n\nFältet 'Kommand' måste peka på motorns körbara fil."
+::engine::mc::NotADirectory				"'%s' är inte en mapp.\n\nFältet '%s' är Chesswiz data- och arbetsmapp för motorn. Välj en mapp, inte en fil."
 ::engine::mc::ScriptErrors				"Any errors while saving will be displayed here." ;# NEW
 ::engine::mc::CommandNotAllowed		"Usage of command '%s' is not allowed here." ;# NEW
 ::engine::mc::ResetToDefaultContent	"Reset to default content" ;# NEW
