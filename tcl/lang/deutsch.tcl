@@ -3358,6 +3358,7 @@
 ::menu::mc::AppSuggestedMove "Zugvorschlag"
 ::menu::mc::AppAnnotation "&Anmerkungen"
 ::menu::mc::EngineDictionary "Motorenlexikon"
+::menu::mc::AnnotateGameWithAI "Partie mit KI kommentieren..."
 ::menu::mc::ExplainLine "Zeile"
 ::menu::mc::ExplainMove "Zug"
 ::menu::mc::PlayerDictionary "Spielerlexikon"

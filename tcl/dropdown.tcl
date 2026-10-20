@@ -153,6 +153,7 @@ namespace eval menu::mc {
 	set ExplainLine					"Line"
 	set ExplainMove					"Move"
 	set ExplainComment					"Comment"
+	set AnnotateGameWithAI			"Annotate Game with AI…"
 	set FactCheckAnnotations		"Fact-Check Annotations"
 	set Tablebase						"Tablebase"
 	set OpeningExplorer				"Opening Explorer"
@@ -226,6 +227,7 @@ namespace eval menu::mc {
 	set CompareEngines				"Compare Engines…"
 	set MenuEngines					"Engines…"
 	set GameReview						"Game Review…"
+	set AnnotateGameWithAI			"Annotate Game with AI…"
 	set FactCheckAnnotations		"Fact-Check Annotations"
 	set Tablebase						"Tablebase"
 	set OpeningExplorer				"Opening Explorer"
@@ -458,6 +460,7 @@ proc ::menu::DefineTree {} {
 				[list cmd menu.analysis.explain.move ExplainMove] \
 				[list cmd menu.analysis.explain.comment ExplainComment "" {::menu::ModulePresent ai}] \
 			]] \
+			[list cmd menu.analysis.annotate AnnotateGameWithAI "" {::menu::ModulePresent annotate}] \
 			[list cmd menu.analysis.factcheck FactCheckAnnotations "" {::menu::ModulePresent factcheck}] \
 			[list sep] \
 			[list cascade Tablebase "" [list \
@@ -1618,6 +1621,7 @@ proc ::menu::Do {id} {
 		menu.analysis.explain.line { catch { ::application::ai::explainLine .application }; return }
 		menu.analysis.explain.move { catch { ::application::pgn::ExplainMove .application::pgn "" }; return }
 		menu.analysis.explain.comment { return [::application::ai::analyze .application] }
+		menu.analysis.annotate { return [::ai::annotate::toggle .application] }
 		menu.analysis.factcheck { return [::ai::factcheck::current .application] }
 		menu.analysis.tablebase.show { catch { ::tablebase::toggle }; return }
 		menu.analysis.tablebase.online { catch { ::tablebase::toggle }; return }

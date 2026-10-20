@@ -3353,6 +3353,7 @@
 ::menu::mc::AppSuggestedMove "Jugada sugerida"
 ::menu::mc::AppAnnotation "Not&as"
 ::menu::mc::ExplainPosition "Posición"
+::menu::mc::AnnotateGameWithAI "Anotar partida con IA…"
 ::menu::mc::ExplainLine "Línea"
 ::menu::mc::ExplainMove "Mover"
 ::menu::mc::PlayerCard "Tarjeta del Jugador"

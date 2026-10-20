@@ -3361,6 +3361,7 @@
 ::menu::mc::AppSuggestedMove "Ajánlott lépés"
 ::menu::mc::AppAnnotation "&Értékelés"
 ::menu::mc::ExplainPosition "Pozíció"
+::menu::mc::AnnotateGameWithAI "Játszma elemzése MI-vel…"
 ::menu::mc::ExplainLine "Sor"
 ::menu::mc::ExplainMove "Lépés"
 ::menu::mc::EngineConsole "Elemző modul terminál"

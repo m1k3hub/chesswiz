@@ -431,6 +431,6 @@ tcltest::test rules-module-absent-all-surfaces {no surface shows an action of an
 	puts "VAL-RULE-003: [llength [dict keys $::capability::Modules]] declared modules, [llength $rows] gated rows in [llength $modules] modules, [llength $leaks] leaks"
 	foreach l $leaks { puts "  LEAK [join $l { }]" }
 	list [llength $leaks] [llength $rows]
-} -result {0 43}
+} -result {0 44}
 
 tcltest::cleanupTests

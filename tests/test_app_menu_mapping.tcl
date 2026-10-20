@@ -8,10 +8,8 @@
 # handler. Dynamic lists are exempt (tests/fixtures/menu-mapping-exempt.txt)
 # but their cascade must still exist.
 #
-# The fixture is curated from PROPOSAL.md; one entry is known to have no
-# implementation ("AI: Annotate Game…", PROPOSAL 5.1). It is reported as
-# a gap and asserted as such, so the evidence names it instead of hiding
-# it. Section 6 removals are checked in the second test.
+# Every curated mapping must resolve without gaps or invocation failures.
+# Section 6 removals are checked in the second test.
 # ======================================================================
 
 package require Tcl 8.5
@@ -197,7 +195,7 @@ tcltest::test mapping-dropdown-old-to-new {every moved drop-down entry has a rea
 	if {$::scidb::test::map::lastError ne ""} { puts "  FIRST ERROR $::scidb::test::map::lastError" }
 	list [dict get $counts action] [dict get $counts cascade] [llength $gaps] \
 		[dict get $counts invoke-failed]
-} -result {67 7 1 0}
+} -result {68 7 0 0}
 
 tcltest::test mapping-section6-removals {only PROPOSAL section 6 rows are gone, each replacement is present} -body {
 	catch { destroy .mapmenu }

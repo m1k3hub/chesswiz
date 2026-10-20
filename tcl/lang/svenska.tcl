@@ -3367,6 +3367,7 @@
 ::menu::mc::AppCoordinates "Kordinater"
 ::menu::mc::AppSuggestedMove "Föreslagit drag"
 ::menu::mc::AppAnnotation "&Schacktecken"
+::menu::mc::AnnotateGameWithAI "Kommentera partiet med AI…"
 ::menu::mc::ExplainLine "Rad"
 ::menu::mc::ExplainMove "Drag"
 ::menu::mc::PlayerCard "Spelarkort"

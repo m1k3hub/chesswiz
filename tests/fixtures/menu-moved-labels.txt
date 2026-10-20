@@ -1,6 +1,7 @@
 # Labels moved into the redesigned drop-down/context menus that
 # keep a translation in every language file (VAL-BAR-007).
 # generated 2026-10-20 from the menu redesign block; do not edit
+menu menu::mc::AnnotateGameWithAI
 menu menu::mc::AppAnnotation
 menu menu::mc::AppBorder
 menu menu::mc::AppCoordinates

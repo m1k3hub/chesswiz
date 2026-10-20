@@ -3374,6 +3374,7 @@
 ::menu::mc::AppAnnotation "&Annotazione"
 ::menu::mc::EngineDictionary "Dizionario Motore"
 ::menu::mc::ExplainPosition "Posizione"
+::menu::mc::AnnotateGameWithAI "Annota la partita con IA…"
 ::menu::mc::ExplainLine "Linea"
 ::menu::mc::ExplainMove "Mossa"
 ::menu::mc::PlayerDictionary "Dizionario Giocatore"
