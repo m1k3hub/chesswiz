@@ -1,7 +1,7 @@
 # Run headless: xvfb-run -a tclsh tests/test_sample_startup.tcl
 package require tcltest 2.5
 set root [file normalize [file join [file dirname [info script]] ..]]
-set work [file join $root tests tmp-app sample-startup]
+set work [file join $root tests tmp-app sample-startup-[pid]]
 file mkdir $work
 set binary [expr {[info exists ::env(CHESSWIZ_TEST_BINARY)] ? $::env(CHESSWIZ_TEST_BINARY) : [file join $root src tkchesswiz]}]
 set shared [file join $work share]

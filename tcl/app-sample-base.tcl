@@ -37,10 +37,6 @@ proc maybeOpen {parent} {
 	variable Removed
 
 	if {$Removed || [llength [::process::arguments]]} { return }
-	# the automatic open is a first-run thing (::scidb::dir::setup); the
-	# test harness sets that flag to 0 ("not interactive"), so tests
-	# drive an automatic open themselves
-	if {![info exists ::scidb::dir::setup] || !$::scidb::dir::setup} { return }
 	set path [location]
 	if {![file readable $path] || [::scidb::db::get open? $path]} { return }
 
