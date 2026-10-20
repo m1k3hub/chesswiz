@@ -645,6 +645,8 @@
 ::application::database::mc::UpgradeMessage					"Datenbank '%s' aktualisieren"
 ::application::database::mc::CompactMessage					"Datenbank '%s' kompaktieren"
 ::application::database::mc::CannotOpenFile					"Die Datei '%s' kann nicht geöffnet werden."
+::application::database::mc::MaintenanceReadOnlyPgn			"PGN-Dateien öffnen schreibgeschützt; zum Bearbeiten nach .sci konvertieren"
+::application::database::mc::MaintenanceReadOnly				"Diese Datenbank ist schreibgeschützt; die Verwaltung benötigt eine beschreibbare Datenbank"
 ::application::database::mc::EncodingFailed					"Die Zeichendekodierung %s ist fehlgeschlagen."
 ::application::database::mc::DatabaseAlreadyOpen			"Die Datenbank '%s' ist bereits geöffnet."
 ::application::database::mc::Properties						"Eigenschaften"
