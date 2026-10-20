@@ -590,6 +590,121 @@ tcltest::test mediafold-real-menu {MED-003/004 real MediaTest rows dispatch pict
     list $matches $states $audio $hidden
 } -cleanup {::scidb::test::foldCleanup} -result {1 {{1 pack} {1 pack} {1 1}} {1 1 {} 1} 1}
 
+proc ::scidb::test::foldMenuLabels {menu} {
+    set labels {}
+    for {set k 0} {$k <= [$menu index end]} {incr k} {
+        set type [$menu type $k]
+        if {$type eq "separator"} { continue }
+        lappend labels [$menu entrycget $k -label]
+    }
+    return $labels
+}
+
+# VAL-MED-011: choosing an entry selects it in the hidden Media pane, but the
+# board's Media button must keep listing the game's entries (never C7).
+tcltest::test mediafold-real-menu-repost {board Media menu lists the entries again after a choice} -setup {
+    set ::scidb::test::foldStubs {}
+    set ::scidb::test::foldCalls {}
+    ::scidb::test::foldStub available? {} {return 1}
+    ::scidb::test::foldStub launch {path wid {ms 0}} {lappend ::scidb::test::foldCalls [list launch $path $wid $ms]; return 1}
+    ::scidb::test::foldStub state {} {return playing}
+    ::scidb::test::foldStub time {} {return 0}
+    ::scidb::test::foldStub duration {} {return 90}
+    ::scidb::test::foldStub stop {} {}
+} -body {
+    set base [file normalize tests/tmp-app/media-test/MediaTest.sci]
+    if {![::scidb::db::get open? $base]} {::scidb::db::load $base {apply {args {return 0}}} {} -readonly 1}
+    ::scidb::db::switch $base Normal
+    set pos [::scidb::test::foldGame -base $base -variant Normal -number 1]
+    if {$pos < 0 || $pos == 9} {error "could not load MediaTest game"}
+    ::application::media::Update $pos
+    ::scidb::test::foldWait
+    set pane [::mediainset::Pane]
+    set menu $pane.mediaButton.menu
+    ::mediainset::RefreshMediaButton
+    update
+    ::mediainset::PostMediaMenu $pane.mediaButton
+    update
+    set before [::scidb::test::foldMenuLabels $menu]
+    set postedBefore [winfo ismapped $menu]
+    catch { ::tk::MenuUnpost $menu }
+    update
+
+    set entries [::mediainset::Entries]
+    set index 0
+    foreach entry $entries {
+        if {[lindex $entry 1] eq "Video"} { break }
+        incr index
+    }
+    if {$index >= [llength $entries]} { error "no Video entry in MediaTest" }
+    $menu invoke $index
+    ::scidb::test::foldWait
+
+    ::mediainset::PostMediaMenu $pane.mediaButton
+    update
+    set after [::scidb::test::foldMenuLabels $menu]
+    set postedAfter [winfo ismapped $menu]
+    catch { ::tk::MenuUnpost $menu }
+    update
+    set c7 [expr {[lsearch -exact $after " $::context::mc::WhatCanIDo"] >= 0}]
+
+    set index 0
+    foreach entry $entries {
+        if {[lindex $entry 1] eq "Picture"} { break }
+        incr index
+    }
+    if {$index >= [llength $entries]} { error "no Picture entry in MediaTest" }
+    $menu invoke $index
+    ::scidb::test::foldWait
+    set picture [list [winfo exists .mediaPicture] \
+        [expr {[winfo exists .mediaPicture] && [llength [.mediaPicture.canvas find all]] > 0}]]
+    if {[winfo exists .mediaPicture]} { destroy .mediaPicture }
+    ::scidb::test::foldRecord VAL-MED-011 [list before $before after $after \
+        posted $postedBefore $postedAfter c7 $c7 picture $picture calls $::scidb::test::foldCalls]
+    list [expr {$before eq $after}] $c7 $postedBefore $postedAfter \
+        [lindex $picture 0] [lindex $picture 1]
+} -cleanup {::scidb::test::foldCleanup} -result {1 0 1 1 1 1}
+
+# C7 stays reachable where it belongs: right-click on an entry in the Media pane.
+tcltest::test mediafold-real-menu-c7 {right-click in the Media pane posts the C7 entry menu} -body {
+    set base [file normalize tests/tmp-app/media-test/MediaTest.sci]
+    if {![::scidb::db::get open? $base]} {::scidb::db::load $base {apply {args {return 0}}} {} -readonly 1}
+    ::scidb::db::switch $base Normal
+    set pos [::scidb::test::foldGame -base $base -variant Normal -number 1]
+    if {$pos < 0 || $pos == 9} {error "could not load MediaTest game"}
+    ::application::media::Update $pos
+    ::scidb::test::foldWait
+    set tree $::application::media::Priv(tree)
+    set entries [::mediainset::Entries]
+    if {![llength $entries]} { error "MediaTest has no media entries" }
+    set row [lindex [lindex $entries 0] 0]
+    $tree see $row
+    update
+    set box [$tree bbox $row]
+    if {![llength $box]} { error "Media pane row $row has no bbox" }
+    lassign $box x y
+    set menu $tree.__entryMenu__
+    catch { destroy $menu }
+    event generate $tree <Button-3> -x [expr {$x + 2}] -y [expr {$y + 2}]
+    update
+    set posted [expr {[winfo exists $menu] && [winfo ismapped $menu]}]
+    set labels {}
+    if {[winfo exists $menu]} {
+        set labels [::scidb::test::foldMenuLabels $menu]
+        catch { ::tk::MenuUnpost $menu }
+        destroy $menu
+    }
+    set ask [expr {[lsearch -exact $labels " $::context::mc::WhatCanIDo"] >= 0}]
+    set play [expr {[lsearch -exact $labels " Play"] >= 0}]
+    set bound [string match *EntryMenu* [bind $tree <Button-3>]]
+    ::scidb::test::foldRecord VAL-MED-011 [list right-click posted $posted labels $labels bound $bound]
+    list $posted $ask $play $bound
+} -cleanup {
+    set tree $::application::media::Priv(tree)
+    if {[info exists tree]} { catch { destroy $tree.__entryMenu__ } }
+    ::scidb::test::foldCleanup
+} -result {1 1 1 1}
+
 tcltest::test mediafold-report-file {MED-004E generated report entry opens the existing HTML viewer} -body {
     set base [file normalize tests/tmp-app/media-test/MediaTest.sci]
     if {![::scidb::db::get open? $base]} {::scidb::db::load $base {apply {args {return 0}}} {} -readonly 1}

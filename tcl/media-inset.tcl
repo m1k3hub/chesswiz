@@ -782,29 +782,44 @@ proc ::mediainset::MediaMenuLabels {} {
 	return $labels
 }
 
+# The board button always lists the current game's entries and the stream
+# command, whether or not an entry is selected in the hidden Media pane.
 proc ::mediainset::PopulateMenu {menu} {
 	$menu delete 0 end
 	set entries {}
 	catch { set entries [Entries] }
-
-	# C7: the one media-entry context menu.
-	if {[llength [info commands ::context::Build]] && [llength $entries]} {
-		set tree $::application::media::Priv(tree)
-		set row [$tree selection]
-		if {$row ne ""} {
-			lassign [$tree item $row -values] type title path index
-			set base ""
-			catch { set base [::scidb::db::get name] }
-			set object [dict create base $base mediaId $index path $path title $title type $type]
-			if {[::context::Build C7 $menu $object]} { return }
-		}
-	}
 	foreach entry $entries {
 		lassign $entry row type title path index
 		$menu add command -label "$title ($type)" -command [list ::mediainset::Choose $row]
 	}
 	if {[llength $entries]} { $menu add separator }
 	$menu add command -label "Open stream..." -command [list ::application::media::OpenStream [Pane]]
+}
+
+# C7 is the Media pane's own entry context menu. It is posted on right-click
+# over an entry, never by the board's Media button.
+proc ::mediainset::EntryMenu {tree x y} {
+	if {![winfo exists $tree]} { return }
+	set row [$tree identify item $x $y]
+	if {$row eq ""} { return }
+	lassign [$tree item $row -values] type title path index
+	if {$path eq ""} { return }
+	if {![llength [info commands ::context::Build]]} { return }
+
+	$tree selection set $row
+	set menu $tree.__entryMenu__
+	catch { destroy $menu }
+	menu $menu -tearoff 0
+	catch { wm attributes $menu -type popup_menu }
+	set base ""
+	catch { set base [::scidb::db::get name] }
+	set object [dict create base $base mediaId $index path $path title $title type $type]
+	if {![::context::Build C7 $menu $object]} {
+		destroy $menu
+		return
+	}
+	bind $menu <<MenuUnpost>> +[list after idle [list catch [list destroy $menu]]]
+	tk_popup $menu [expr {[winfo rootx $tree] + $x}] [expr {[winfo rooty $tree] + $y}]
 }
 
 proc ::mediainset::Choose {row} {

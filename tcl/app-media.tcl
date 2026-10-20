@@ -189,6 +189,7 @@ proc application::media::BuildBackend {twm frame width height} {
 
 	bind $tree <Double-Button-1> [namespace code [list PlaySelected $tree]]
 	bind $tree <<TreeviewSelect>> [namespace code [list SelectionChanged $tree]]
+	bind $tree <Button-3> [list ::mediainset::EntryMenu $tree %x %y]
 
 	set Priv(tree) $tree
 	MediaDebug "build: pane twm=[list $twm] frame=[list $frame] tree=[list $tree] mapped=[winfo ismapped $tree]"
