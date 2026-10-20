@@ -55,8 +55,14 @@ proc createGameBase {stem count} {
 
 # The games table + its Game Number entry on the database notebook page.
 proc gamesTable {} { return .application.nb.database.contents.games.twm.games.table }
+# The toolbar rebuilds its children when the games pane is rebuilt (a new
+# __tbw__<n>), so find the entry by structure instead of a fixed counter.
 proc gameNumberEntry {} {
-    return .application.nb.database.contents.games.twm.games.__tb__games-gameno.__tbw__68.e
+    set tb .application.nb.database.contents.games.twm.games.__tb__games-gameno
+    foreach w [winfo children $tb] {
+        if {[winfo class $w] eq "TSearchEntry"} { return $w.e }
+    }
+    error "game number entry not found under $tb"
 }
 
 # Drain pending idle/timer callbacks so a virtual-event dispatch chain completes.

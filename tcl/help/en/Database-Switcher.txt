@@ -62,7 +62,7 @@ Opens a box displaying various database information.
 
 <p>
 <menuitem>%::export::mc::Export%</menuitem>
-Opens a dialog for <a href="Database-Export-Dialog.html">database export</a>
+Opens a dialog for database export
 into other database formats or document formats.
 <note/>If this database contains several
 <a href="Chess-Variants.html">chess variants</a> (only possible
@@ -109,10 +109,10 @@ which are not yet saved, a security prompt will be done before closing the datab
 <p>
 <menuitem>%::database::switcher::mc::ReadOnly%</menuitem>
 Set this database read-only or writeable.
-This is possibly only for Scidb and Scid databases
-(<abbr>.sci</abbr>, <abbr>.si4</abbr>, <abbr>.si3</abbr>),
+This is possible for Chesswiz databases (<abbr>.sci</abbr>),
+legacy formats (<abbr>.si4</abbr>, <abbr>.si3</abbr>),
 and PGN archives (<abbr>.pgn</abbr>, <abbr>.pgn.gz</abbr>).
-<note/>ChessBase databases and Zip archives (<abbr>.zip</abbr>)
+<note/>External proprietary databases (<abbr>.cbh</abbr>) and Zip archives (<abbr>.zip</abbr>)
 are always read-only.
 <note/>The <a href="Clipbase.html">Clipbase</a> cannot be set
 read-only.
@@ -130,9 +130,8 @@ Open a database via the database history.
 
 <p>
 <menuitem>%::application::database::mc::FileNew% (%::mc::VariantName(Normal)%)</menuitem>
-Create a new database. Only Scidb and Scid databases
-(<abbr>.sci</abbr>, <abbr>.si4</abbr>, <abbr>.si3</abbr>)
-can be created.
+Create a new database. Native Chesswiz (<abbr>.sci</abbr>) and legacy
+(<abbr>.si4</abbr>, <abbr>.si3</abbr>) databases can be created.
 If the database should store games of any
 <a href="Chess-Variants.html">chess variant</a> please use the next menu item.
 </p>
@@ -140,7 +139,7 @@ If the database should store games of any
 <p>
 <menuitem>%::application::database::mc::FileNew%</menuitem>
 Create a new database of any <a href="Chess-Variants.html">chess variant</a>.
-Only Scidb databases can be created in this case.
+Only native Chesswiz databases (<abbr>.sci</abbr>) can be created in this case.
 </p>
 
 <p>
@@ -167,7 +166,7 @@ This sub-menu provides functionality for the maintenance of databases.
 </p>
 
 <p>
-For large databases and repeated analysis, <abbr>.sci</abbr> should be treated as the working format. Non-<abbr>.sci</abbr> databases can still be opened, but some heavy workflows will be slower. Use <menuitem>Convert to .sci...</menuitem> to export a working copy in Scidb's native format before intensive work.
+For large databases and repeated analysis, <abbr>.sci</abbr> should be treated as the working format. Non-<abbr>.sci</abbr> databases can still be opened, but some heavy workflows will be slower. Use <menuitem>Convert to .sci...</menuitem> to export a working copy in Chesswiz native format (<abbr>.sci</abbr>) before intensive work.
 </p>
 
 <dir><img src="images/database-switcher-menu-maintenance.png"/></dir>
@@ -175,7 +174,7 @@ For large databases and repeated analysis, <abbr>.sci</abbr> should be treated a
 <p id="ChangeIcon">
 <menuitem>%::application::database::mc::ChangeIcon%</menuitem>
 Select an icon for this database. A selection dialog will be opened
-which allows also the selection of image files (Scidb databases only).
+which allows also the selection of image files (<abbr>.sci</abbr> databases only).
 The image files must be PNG files in the resolutions of 16x16, 24x24,
 32x32, and 48x48.
 <note/>This is not possible for the <a href="Clipbase.html">Clipbase</a>.

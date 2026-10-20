@@ -1172,6 +1172,7 @@
 ::engine::mc::Parameters				"Parametrar"
 ::engine::mc::Command					"Kommand"
 ::engine::mc::Directory					"Arbets- /datamapp"
+::engine::mc::ChooseConfigured "Välj en konfigurerad UCI-motor i listan. Lägg först till sökvägar till körbara filer i motorhanteringen."
 ::engine::mc::CommandHint				"Sökväg till motorns körbara fil"
 ::engine::mc::DirectoryHint				"Chesswiz data- och arbetsmapp för denna motor (används för öppningsböcker, loggar och motorfiler)"
 ::engine::mc::Variants					"Varianter"

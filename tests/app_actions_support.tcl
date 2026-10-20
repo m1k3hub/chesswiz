@@ -195,6 +195,24 @@ namespace eval ::scidb::test::actions {
     }
 
     proc yes {args} { return 1 }
+
+    # Network actions must not make the suite depend on the internet. The
+    # handler path (confirmation, token, completion) is still exercised; the
+    # transport fails immediately, exactly as it does offline.
+    proc stubDownload {} {
+        if {[llength [info commands ::scidb::test::actions::realDownloadGet]] == 0} {
+            rename ::application::download::Get ::scidb::test::actions::realDownloadGet
+        }
+        proc ::application::download::Get {url done} {
+            after 0 [list {*}$done [list ok 0 error {network disabled by the test suite} code 0]]
+        }
+    }
+    proc unstubDownload {} {
+        if {[llength [info commands ::scidb::test::actions::realDownloadGet]]} {
+            catch { rename ::application::download::Get {} }
+            rename ::scidb::test::actions::realDownloadGet ::application::download::Get
+        }
+    }
     proc boardMatches {fen} {
         set expected [::scidb::board::fenToBoard [lindex $fen 0]]
         expr {[::scidb::pos::fen] eq $fen &&

@@ -36,9 +36,7 @@ nur wenn auch eine Partie im Partieeditor berabeitet wird.
 
 <p>
 Die Palette erlaubt die Auswahl der Farbe der Markierung,
-sowie den Markierungstyp. Die Farb- und Typauswahl wurde
-identisch zur Schachdatenbankapplikation
-<a href="http://scid.sourceforge.net">Scid</a> gehalten.
+sowie den Markierungstyp.
 </p>
 
 <note>

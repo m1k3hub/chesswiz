@@ -398,7 +398,6 @@ INCLUDE ../ECO-Codes.txt
   <li><a href="http://www.geocities.com/siliconvalley/lab/7378/eco.htm">List of ECO codes</a></li>
   <li><a href="http://www.chessarch.com/library/0000_eco/index.shtml">Chess Archaeology - Library: Openings</a></li>
   <li><a href="http://en.wikipedia.org/wiki/List_of_chess_openings">List of chess openings</a></li>
-  <li><a href="http://sourceforge.net/apps/mediawiki/oeco/index.php?title=ECO_Classification_Code_Index">ECO Classification Code Index</a></li>
 </ul>
 
 END

@@ -46,6 +46,7 @@ set Protocol					"Protocol"
 set Parameters					"Parameters"
 set Command						"Command"
 set Directory					"Working / Data Folder"
+set ChooseConfigured "Choose a configured UCI engine from the list. Add executable paths in Manage Engines first."
 set CommandHint				"Path to the engine executable file"
 set DirectoryHint				"Chesswiz's per-engine data and working folder (used for opening books, logs, and engine files)"
 set Variants					"Variants"
@@ -3487,12 +3488,19 @@ proc CheckCommand {command} {
 	if {![string length $cmd]} {
 		return [format $mc::InvalidCommand $cmd]
 	}
-	set path [file normalize $cmd]
-	if {![file exists $path] || ![file isfile $path]} {
+	if {[catch {file normalize $cmd} path] || ![file isfile $path]} {
 		return [format $mc::InvalidCommand $cmd]
 	}
-	if {![file executable $path] && !($::tcl_platform(platform) eq "unix" && [info commands ::fsbox::isWindowsExecutable] ne "" && [::fsbox::isWindowsExecutable $path])} {
+	if {![file executable $path]} {
 		return [format $mc::InvalidCommand $cmd]
+	}
+	if {$::tcl_platform(platform) eq "unix" && [info commands ::fsbox::isWindowsExecutable] ne ""} {
+		if {[catch {::fsbox::isWindowsExecutable $path} windowsExecutable]} {
+			return [format $mc::InvalidCommand $cmd]
+		}
+		if {$windowsExecutable && [auto_execok wine] eq ""} {
+			return "$mc::CannotUseWindowsExe\n\n$mc::InstallWine"
+		}
 	}
 	return {}
 }
@@ -4463,13 +4471,15 @@ bind Script <Meta-b> {#}
 bind Script <Meta-f> {#}
 bind Script <Meta-d> {#}
 
-# --- Setup engines ----------------------------------------------------
-if {[catch {::engine::setup} err]} {
-	set msg $::load::mc::EngineSetupFailed
-	lappend ::load::Log error "$msg: $err"
-	puts "$msg -- $err"
-	unset msg
+# --- Setup engines on first use ----------------------------------------
+proc ::engine::SetupOnRead {name index op} {
+	trace remove variable ::engine::Engines read ::engine::SetupOnRead
+	if {[catch {::engine::setup} err]} {
+		set msg $::load::mc::EngineSetupFailed
+		lappend ::load::Log error "$msg: $err"
+		puts "$msg -- $err"
+	}
 }
-unset -nocomplain err
+trace add variable ::engine::Engines read ::engine::SetupOnRead
 
 # vi:set ts=3 sw=3:

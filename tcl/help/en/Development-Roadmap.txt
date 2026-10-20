@@ -30,7 +30,7 @@ Chesswiz should treat <abbr>.sci</abbr> as the primary working format for large 
 <ul>
   <li>Download/upload/update/load databases via the internet</li>
   <li>Supporting attachments of documents to a database. The main reason
-      is that Chessbase databases have attached documents.</li>
+      is that some external databases have attached documents.</li>
   <li>Search functions: search by header, position search, etc. based on CQL</li>
   <li>Filter functions: game filter, player filter</li>
   <li>Flexible window layout</li>
@@ -44,7 +44,7 @@ Chesswiz should treat <abbr>.sci</abbr> as the primary working format for large 
   <li>The .sci format: a written specification of the format as it is, and faster, more robust algorithms for reading, writing and searching it</li>
 </ul>
 
-<h2>Recently completed (HTML &amp; ChessBase media)</h2>
+<h2>Recently completed (HTML &amp; multimedia)</h2>
 
 <ul>
   <li>Native HTML stack: safe intake (sanitizer), built-in report viewer on
@@ -52,10 +52,10 @@ Chesswiz should treat <abbr>.sci</abbr> as the primary working format for large 
       tag tables, variations, comments, and inline-SVG diagrams. HTML files
       can be opened directly (File &gt; Open &gt; HTML documents) - all
       foreign markup is sanitized before display.</li>
-  <li>ChessBase media: <abbr>.cbm</abbr> manifests, the media panel (grouped
+  <li>External multimedia: <abbr>.cbm</abbr> manifests, the media panel (grouped
       pictures/audio/video), embedded playback, and board-synced lessons
       (Chess Media System semantics).</li>
-  <li>Interactive ChessBase lessons: <abbr>.cms</abbr> indexes and
+  <li>Interactive media lessons: <abbr>.cms</abbr> indexes and
       position-keyed clips, driven by the board.</li>
   <li>Chess 960: move-exact decoding of real <abbr>.cbh</abbr>/<abbr>.cbv</abbr>
       archives (Chess960 lookup table).</li>
@@ -91,8 +91,8 @@ for confirmation before writing a PDF or TeX book.
 
 <ul>
   <li class="space"><b>Done:</b> cross-database links in reports
-      (<abbr>scidb-open:</abbr>) now open the linked magazine section.</li>
-  <li class="space"><b>Done:</b> ChessBase rich-text comments are rendered
+      (<abbr>chesswiz-open:</abbr>) now open the linked magazine section.</li>
+  <li class="space"><b>Done:</b> external rich-text comments are rendered
       through the sanitizer in HTML exports (no more plain-text
       flattening).</li>
   <li class="space"><b>Done:</b> decoded lesson timelines persist in a

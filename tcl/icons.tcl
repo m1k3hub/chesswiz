@@ -75,11 +75,25 @@ proc makeToolbarIcon {img {ns {}}} {
 
 ::splash::print "[format $::load::mc::Loading $::load::mc::Icons]..."
 
+# Keep the asset script until its variable is first read. This also defers
+# toolbar variants and disabled images that no visible control needs yet.
+proc lazy {name script} {
+	set ns [uplevel 1 {namespace current}]
+	set var ${ns}::$name
+	set $var {}
+	trace add variable $var read [list ::icon::LoadLazy $var $ns $script]
+}
+
+proc LoadLazy {var ns script name index op} {
+	namespace eval $ns $script
+	trace remove variable $var read [list ::icon::LoadLazy $var $ns $script]
+}
+
 namespace eval 12x12 {
 
-	set none [image create photo -width 12 -height 12]
+	::icon::lazy none {set none [image create photo -width 12 -height 12]}
 
-	set yinyang [image create photo -data {
+	::icon::lazy yinyang {set yinyang [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -114,7 +128,7 @@ namespace eval 12x12 {
 	kNvg5A5LRTzXLiomB+rt7g+xtb4O6OruBSooI/KajX5wGxsXnwEAAAAB////Bejo612CjJlszNHV
 	MP39/gD6+voAFRMRADYyLd9xaFyGFxcVogEBAfsB////AQEBAf8CAgIA/f39Ktve4kff4eRK////
 	CSUiH84iIByjAgIBy///AAD///8BDDQWoJRoiM4AAAAASUVORK5CYII=
-}]
+}]}
 
 #	set male [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -185,7 +199,7 @@ namespace eval 12x12 {
 # YII=
 # }]
 
-	set male [image create photo -data {
+	::icon::lazy male {set male [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -217,9 +231,9 @@ namespace eval 12x12 {
 	NVIsyNiN6cdnz5xuRd108fWzxdrXDb00mF8JAntSuq/vXNV1nWoQ2Ju5/l4qq5/GAHL9vaRSZmNy
 	ovTO2pD/V1JVR0TaQNP3PRva0AXwfc8CLWtDUdWkiITxWTuAAgeHR43fly/kDcDhUSMADiKt0/2H
 	GO2UMdZ1kgKQMsYC7W5DHNCI9x7MTi9k0mkH4M/xcQjsdXv+AdWHurSw3fLgAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set female [image create photo -data {
+	::icon::lazy female {set female [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -252,7 +266,7 @@ namespace eval 12x12 {
 	FtJzY375vL1sFM/tfPH8AQBoQb/d+ay97EicP0h3uiCiP8yc+Lm3n2pqbGAAKF9c0qf3bxNuTxCR
 	LXEfBpivlLo6FU70LQDDK6gZ2OXS1Md337WgXwLA36tKFUDJq/kHnWzVCbIq0cAAAAAASUVORK5C
 	YII=
-}]
+}]}
 
 #	set program [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -324,7 +338,7 @@ namespace eval 12x12 {
 # rkJggg==
 # }]
 
-	set program [image create photo -data {
+	::icon::lazy program {set program [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -357,9 +371,9 @@ namespace eval 12x12 {
 	ZjJW3D2KkRDl3u+iNJxZ+xzVCzvuUOBhw6qdXQLA3WaXQ89vOwOPO89Gnw+se+97Vm9YGGZl7NXb
 	qZ8+OcL9avyiX41f+OUIvxibsEql8jtmdvwJjvR8ceFf4H47+p9qXAE+lRMWgWbykAAAAABJRU5E
 	rkJggg==
-}]
+}]}
 
-	set computer $program
+	::icon::lazy computer {set computer $program}
 
 #	set human [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -396,7 +410,7 @@ namespace eval 12x12 {
 # Af4A5J7QUAZf1hUAAAAASUVORK5CYII=
 # }]
 
-	set human [image create photo -data {
+	::icon::lazy human {set human [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -429,9 +443,9 @@ namespace eval 12x12 {
 	UVUNj09NjyznfoQGB87ORjrDNkChUIo8m3t1PpV+POK6XkZEnMboYG7FjnS1t/6+nYgnW6zAIsBm
 	dSv6dmGxN5cv7AaCwD9DzbJ2eIIo4FW3thtQ3BYr4CkqQK0Zqz02PJSmXgcoNr4KFBPXLj3A5wOw
 	Af4A5J7QUAZf1hUAAAAASUVORK5CYII=
-}]
+}]}
 
-	set whitePawn [image create photo -data {
+	::icon::lazy whitePawn {set whitePawn [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -463,9 +477,9 @@ namespace eval 12x12 {
 	p5YkqbRZ2S1tVnYl6cWryeX+wZFhx3ECQgZjgHBH91xuflWScvnFcu7b9+bkF8uSNJfLrxLu6DYG
 	bARY/mB7rDUK0OIPBOr1fQBs2w9Ae6w1iuUPIrAxBqora+MvMxM3rl2+Go6ELITP677xY7lQTb2Z
 	zlBdWcMY/iQXECPadQrqYt9r1A9gG2pLP4EKYH4D/0PdNyBjDVEAAAAASUVORK5CYII=
-}]
+}]}
 
-	set blackPawn [image create photo -data {
+	::icon::lazy blackPawn {set blackPawn [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -498,9 +512,9 @@ namespace eval 12x12 {
 	3Po+cPuWvVdeezclIttKr9Wq1w+CyqfQbLX8yuylO24HyufD7/pBEIAFAF6Bk3/ysPTm7cc7jaNj
 	k+htTiDd9NUrjce5uS8AHAAQkiIiJBkBkADw7wX0UQH8EpG/JOUCsSPd9DodpZoAAAAASUVORK5C
 	YII=
-}]
+}]}
 
-	set gameflag(m) [image create photo -data {
+	::icon::lazy gameflag(m) {set gameflag(m) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -533,9 +547,9 @@ namespace eval 12x12 {
 	37O5aKk8F83lZo+Q9AOgJjUCq/uSg6dT6Yxv757tMyEz6ICwd2zt+DWdm5XLV6+fABAXETZyMC2r
 	EAZEq1QqhohoepOOuWpVV0rp1u/CYgDmwuDyu3dt+Tj+bmJd/o8tVNRqSETFVi5zdm7blAKQBwAv
 	c5LtAJoBzC+Ys340LyJpAPgPGHzR8wZUyn8AAAAASUVORK5CYII=
-}]
+}]}
 
-	set gameflag(e) [image create photo -data {
+	::icon::lazy gameflag(e) {set gameflag(e) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -568,9 +582,9 @@ namespace eval 12x12 {
 	Mjk7EQwGXzMAdHYGcpFwqOZ5nnUcpyZMh8J06DhOzfM8eyp8/FcgENj8/wcAulUoCrOIGBGyJADA
 	wpZZZKtQFADaLti/HB9aXf6y1lfZq5L6ygBATH70dHcxPjS4CWAfwL8dmqftBdAF4E9bXpume0SU
 	B4C/sbnSi+6O/JAAAAAASUVORK5CYII=
-}]
+}]}
 
-	set gameflag(K) [image create photo -data {
+	::icon::lazy gameflag(K) {set gameflag(K) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -602,9 +616,9 @@ namespace eval 12x12 {
 	BMB7r90JphEw7xWABsAhSeXUqzQ1NXkQ0P5iMXLOpalPA8BCoD8xceD36rvm9MXqrccS2UwQ8mcw
 	GI/j2O7eWzzzZatTqJSOtoC+AzZuz1aXT1RKH5E5Zy4eJklcKOT7p09VBvl8LqmUj60v3Lx+H2jZ
 	f1xjw8yGfwFZUsGT953cTgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set gameflag(Q) [image create photo -data {
+	::icon::lazy gameflag(Q) {set gameflag(Q) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -638,12 +652,12 @@ namespace eval 12x12 {
 	Q/b3JsuelD88IX729ybL9cPfcqbwZAJAkoiUjhZWpVLrEFJqwhOcCAQAwhNcCKlVKrUOANa/aQDV
 	TDq1nYhHS9X9A0f5KqB8FajuHziJeLSUSae2AVQBtEoAoJQ6ASAEQOB/dABVIvoMAH8BNfTRYhYj
 	FeIAAAAASUVORK5CYII=
-}]
+}]}
 
-	set gameflag(w) $whitePawn
-	set gameflag(b) $blackPawn
+	::icon::lazy gameflag(w) {set gameflag(w) $whitePawn}
+	::icon::lazy gameflag(b) {set gameflag(b) $blackPawn}
 
-	set gameflag(N) [image create photo -data {
+	::icon::lazy gameflag(N) {set gameflag(N) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -675,9 +689,9 @@ namespace eval 12x12 {
 	wt0xRtykV/6+kwCG/0eyVfVIRL4AWyNDA9dmnr28ffNG7xvnYuu7+w+f5Jberw/WAFGTBUYNoIVC
 	wbIsi85L4U8D17t+drQ7JRGphprONNWgTqxonTx4XKAh4ArQHOyRVCa3/CiTXQHaG7Xi1Gr8ARmO
 	3ndiz0SbAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set gameflag(!) [image create photo -data {
+	::icon::lazy gameflag(!) {set gameflag(!) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -705,9 +719,9 @@ namespace eval 12x12 {
 	hISQFsJ7qqokqara3h+OCwDo97prkjfPKklVleKN4iTN4iTNVDUqMwBoWhvd84fzvg6tABpi72/+
 	8E9WA51zvuKjygo8W0GQe/8r4M92nU/HJ+9rrBJgAcLNdtcBgNFwEAK4lJjZcF7OJivv6w2mRAj5
 	ctoXuGY7wj1ahr8AAAAASUVORK5CYII=
-}]
+}]}
 
-	set gameflag(?) [image create photo -data {
+	::icon::lazy gameflag(?) {set gameflag(?) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -737,9 +751,9 @@ namespace eval 12x12 {
 	nKlRlG5Q1B3h4KNTXbvy7ahZVyL6QIejyca3HYANg0AySHLWOCtktJlkU59KsJa7OCLp7kTqEVvR
 	Anoyff88ufpjFG72SE70ipU+BwWAnzXDI6HpF3c0khMRjaQiIgQAe6/e/No3bzp1x1ZLAHyYl2mJ
 	ehcswl/Nns4DgGdzySciZdP5r4P5lny7qX2r7+P+gU1p1wD8Akp/rAp/+93mAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set gameflag(*) [image create photo -data {
+	::icon::lazy gameflag(*) {set gameflag(*) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -773,9 +787,9 @@ namespace eval 12x12 {
 	lz+YjMrOn9WEGcAuSdGLCElaVuKJoq10xnDvYV/7/ry8XYC4/6jfAxCx+FoRgEIRSem1uuZ0Op2/
 	Lzc3U1tjD93xuJ+rEHny7EVb4NNXx3Z6Ox+AGQD2ArO32288NRiN/86fK30tIvPaXYJj45OtmWw2
 	F8AvAPgPiJwFQWxDvxwAAAAASUVORK5CYII=
-}]
+}]}
 
-	set gameflag(^) [image create photo -data {
+	::icon::lazy gameflag(^) {set gameflag(^) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -809,9 +823,9 @@ namespace eval 12x12 {
 	db0EKV9fd+XmXY/H+9y1rd6W7nC1joBUQqNv2xOfZjZ0HzkQvnC2t1tEvkn5rSTpuHbrXr9vOOIu
 	LBQ1AKiyaKWu/a6RvtM9/SISIymVhoqp7mcm0/EqOtEAAG2tTQlrbW1IRL5WmL+frf+4UX4QRAAA
 	AABJRU5ErkJggg==
-}]
+}]}
 
-	set gameflag(=) [image create photo -data {
+	::icon::lazy gameflag(=) {set gameflag(=) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -845,9 +859,9 @@ namespace eval 12x12 {
 	I1Gnvbnjt63RIflmPncyM1H+WYNPRru7em+0E8AH7fUvAGDk5fgBgMh1vv16y2H7BSJKEjMTETEz
 	b5v0+M72Xrt7MjQf3QEA5WWlkXOn227ts+3uI6LEeof8kRyAbfTNZJMgEO+v3/scgJuI/uZ3/gHX
 	dvUYybiEfwAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set gameflag(G) [image create photo -data {
+	::icon::lazy gameflag(G) {set gameflag(G) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -880,9 +894,9 @@ namespace eval 12x12 {
 	VgcgC7droqPGFQOOQ6WqFqluGssAFAAz1VrzSamiKY7jUCqhGB63qzPeHwzZtrudM9NTh5/Lema9
 	amRS8XCWiLBltKMns0ZmznV6/QGfHOexuwe3muZuuGa0Lm7qVhIEujyr1OdmlUZMvtCRpMB7Zu6d
 	Kuf3eQlAuFjRCsWKVgAQ9vu8p5jfgHXqXuWz69IAAAAASUVORK5CYII=
-}]
+}]}
 
-	set gameflag(D) [image create photo -data {
+	::icon::lazy gameflag(D) {set gameflag(D) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -916,9 +930,9 @@ namespace eval 12x12 {
 	F1ccHfbR/YqGTlY0dLLDPrrvW1odJ5mZNgKSkq5lLbA55plf8rd2Dxqt3YOG1/dtcS2wOUbS8t9J
 	eukUyev3RsY/ehe+F1myzACA6Mkp6qpvhqaePbotIqskFQ0A0zfQ7/fdedFUX1Vmzc6+AgDhSGTj
 	2tXLawD0tOFfTK4VE3Ie0KcAAAAASUVORK5CYII=
-}]
+}]}
 
-	set gameflag(M) [image create photo -data {
+	::icon::lazy gameflag(M) {set gameflag(M) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -950,9 +964,9 @@ namespace eval 12x12 {
 	7lU6vUierb54B9DpRXK3VKqEYXdNVTeAoSUiCky/3txeOTltWXOz1VaSJO0kSdpzs9XWyWnLerW5
 	vQJMi4haWUrF3tlFWdXY8WCQR8RCxIoHg7yqsXtnF2WgCDAaiBbmZw6nJv1m//IqVmNKakypf3kV
 	T036zYX5mUMguvV6Va1k5hJuwwEiEfkO8AdLLskF44dw4AAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set gameflag(S) [image create photo -data {
+	::icon::lazy gameflag(S) {set gameflag(S) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -986,9 +1000,9 @@ namespace eval 12x12 {
 	kN39vC/Sedcr+/wzFE9YmpKRkYzFrZy1ja3M4kJnGMC2+PR5qmpuYTm7wJEbMiPrzo+jvrbe/mGH
 	Zf2GJBOSO0k4HblWW8u5ZwCWxPFjFb4378fq5xeDztJix6qnrubpHns2WVZClYhYtolUbXXlzO6s
 	rCEiSoGZjRVztflF/2DXihm9xMyqothg6Bp0TYWqKviPiPAHd8D8gN+vVAMAAAAASUVORK5CYII=
-}]
+}]}
 
-	set gameflag(T) [image create photo -data {
+	::icon::lazy gameflag(T) {set gameflag(T) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1020,9 +1034,9 @@ namespace eval 12x12 {
 	OHE7PR4O7t+IRU/VF6qfhgEgFu3+GQ62eftaWztePSuPAahYJH9Imrx4/kyi/LjSd3WoWHI9LwKB
 	4dCBtfl3i4cHr12aAzBJ0m3G6koqUNTsi9e27zcIAL9X/3RkM85c7vrlgmECzZZpvF1SPuVkd1JO
 	dsckc2gvYwEASZlLK5Jmuk8cS5kfZ0iuNssFgH+pXvNH9Qf1NgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set gameflag(p) [image create photo -data {
+	::icon::lazy gameflag(p) {set gameflag(p) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1054,9 +1068,9 @@ namespace eval 12x12 {
 	Y8hda2vl84Wpx9fXyxV5X/ycEWD9V0UKU09ura7+3OO6LdNAIKbOrgtX8jMfv5TSR7JdZRHb/Cbi
 	a2kx2duTXX56f3JQRBYdU2vTRmUzYds2QRDudowahiGObbNR2UwATQAxsHLuzOmXr2b8gdpW3dZt
 	bRRvyfahA6nfw4Mn3wIrAKKqIiKqqnuBTlPxf08FfohIVVXlH+9gyIutB8HLAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set gameflag(~) [image create photo -data {
+	::icon::lazy gameflag(~) {set gameflag(~) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1090,9 +1104,9 @@ namespace eval 12x12 {
 	qqrydqGwBmDBtGTJtGQJwMJ2obCmqipnsrm802FnASLYNFFmGAal06v+eCJ1RFqWGwDiidTAUnrV
 	YxgGaWU2DQQQEeH7xmbvvQeDz1bWNqpUVQXA+J9hWRaOHvYVnj56eMfn844QADCzK5v9dTM686Ve
 	UUCV7vJjALDze3dZSskXzp2aP1TrHSGiP/8ACcMTPukvJmkAAAAASUVORK5CYII=
-}]
+}]}
 
-	set gameflag(P) [image create photo -data {
+	::icon::lazy gameflag(P) {set gameflag(P) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1125,9 +1139,9 @@ namespace eval 12x12 {
 	BwkEu3b2eKbZ3KAxG3v6d3gkm9nc/WEAff8cAERd14v7fkMbw4jWWgGAMUb5jYZVdL04AAcAWgfe
 	oeGBhVdvFveWyutCQ4W/lZhU7/ZfQ4P7PwPw0FYpSO4GsAVA0MYzfOqJyBcA+APEAt9JZ4hlCgAA
 	AABJRU5ErkJggg==
-}]
+}]}
 
-	set gameflag(C) [image create photo -data {
+	::icon::lazy gameflag(C) {set gameflag(C) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1161,9 +1175,9 @@ namespace eval 12x12 {
 	3HH52g3nQI/aevyw/1elQtUqiIhIRkQZt9M2t/Lx8+SQZ6Lf2KLPriVTklK5g1QqRd2P8k9mZsaf
 	o8C1laKxhHv6+StbKrO+W9I2513OswGzqfUxM28CIGbG9tNILpcRAH0Nh3pR/A+Xmn4D39r8OuOn
 	ZdEAAAAASUVORK5CYII=
-}]
+}]}
 
-	set gameflag(I) [image create photo -data {
+	::icon::lazy gameflag(I) {set gameflag(I) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1196,9 +1210,9 @@ namespace eval 12x12 {
 	E2J42B7LZXIAVABRz9VI7cKVcA1AFIA6lsvkhNdjNzOvEuLXteVS73s5JMLBkpBSJdGTI6oHAHrt
 	079CQLLXO2WpHhaXQ2VhF749+b35+m7XbGoUwiEg4DgEACiKEAAFqQyNj5741+/lBEkPgEsAfADo
 	Hr//CoNzB8CPf4XcAmsPUdneAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set gameflag(1) [image create photo -data {
+	::icon::lazy gameflag(1) {set gameflag(1) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1228,9 +1242,9 @@ namespace eval 12x12 {
 	1Ppbqb7gv5HMHQ9z5Zk1f3jorXlzW5T9o0SUGDBDAG1A6rmsKxvbe+tKKQlTHGJXAEIKOq/vsC07
 	RdoDkBQRYS7rEgABhGmR+veCiNah8/H5pbQOHcE/AEkEgZaSX2hNjo/cl/xCKwh0+ksbIOr5v77G
 	DwnfktUaZDBtAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set gameflag(2) [image create photo -data {
+	::icon::lazy gameflag(2) {set gameflag(2) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1261,9 +1275,9 @@ namespace eval 12x12 {
 	xcWl9bWrvSme+fMfIzu+77ty2ICK3c9fZjoH7jP0cPwHMHhmcslbBaRSY5P7PcmRo18Hhz7QBbRI
 	+tdggDOzIhB/Oj27sf3+w42mSzX5hvq6nydBobb7Ztvei8z4IzPLlX/JGuvrjtqvXf7mTC4IgqoC
 	xRMZQambU96AuKRGSQVJRUmepEMz+xoxfwEUmdbGQftoHwAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set gameflag(3) [image create photo -data {
+	::icon::lazy gameflag(3) {set gameflag(3) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1294,9 +1308,9 @@ namespace eval 12x12 {
 	0spGbnl145RkmORsZ2CyODQxd+324Fbwnp3nG1InuXZdX4kIDcP4cYUCQP2+GB7oTb68vld0haf2
 	zZB1cP9Q9AX7zDSAS+cgj85A9D/HyrbNRCprQoTTkcFMZDgQczIQEX55cwcIoFErF9xkAPgE2XHV
 	6vhMgSoAAAAASUVORK5CYII=
-}]
+}]}
 
-	set gameflag(4) [image create photo -data {
+	::icon::lazy gameflag(4) {set gameflag(4) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1327,9 +1341,9 @@ namespace eval 12x12 {
 	ZWR4yb/uFabk4OSiPnhw3qYUuLiyNlDsKbzXSs0AEA1AtFKSTFmsrCh/jMcTsO1knmVZgAjl56T7
 	JZlPspZkHcmazZ3QfFVzD7d2QgskM5EMAPyoCDEA1wCuAEQ8he7bjta6O7fbfQPgLf3rNyeSBknl
 	8/kMki6S9SRdIoJ0kndBPc0fQGzdyQAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set gameflag(5) [image create photo -data {
+	::icon::lazy gameflag(5) {set gameflag(5) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1360,9 +1374,9 @@ namespace eval 12x12 {
 	P65tzimEsu0lSf9sK0PGdqvtF7af254ZnVj4O/3qzW/bvdV4ZksArirVOwBK+zJ36Hr7YXXj6+73
 	7ny+Nrq4vHp8c3tXtzg/9Rk4SQqmZ3BslyzfVcqV+FlLc3F8bGR7bnrifcJfUnYI253cf40YKAHH
 	6WSA/7AVreQQUnMKAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set gameflag(6) [image create photo -data {
+	::icon::lazy gameflag(6) {set gameflag(6) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1394,9 +1408,9 @@ namespace eval 12x12 {
 	2ZxVX1tTGLzZ9RhYXfy8dHHr224NcBzYAbA8gkQwUFr4vhcHqMa2G+I/k75Svz8N5FzIAgpOv3i+
 	8ezkXjxpNbX2xc5duTH+O5UJtF4KzwGbbr7GyUBEJKWqI3n7b2pqZiEMcL376nx39HLMm7b7YW/a
 	AeAEoMBG8Wr8A/ju0cxSsCI1AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set gameflag(U) $human
+	::icon::lazy gameflag(U) {set gameflag(U) $human}
 
 #	set filetypeScidbBase [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -1434,7 +1448,7 @@ namespace eval 12x12 {
 # XSPgN3u6Wg2v16sJgrBORPgPZ2v1ROymsiMAAAAASUVORK5CYII=
 # }]
 
-	set filetypeScidbBase [image create photo -data {
+	::icon::lazy filetypeScidbBase {set filetypeScidbBase [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1468,9 +1482,9 @@ namespace eval 12x12 {
 	dVZrc0S8dXfooWUdEIATAcDhpcYLeT2VDvQPDPdNz2rRcvlYKpePpW+zWrR/YLhPT6UDkcbwLoBD
 	RkRiJmPeHns5+WR+Ue8sHZdFhxMAgigIkGtcTk/X1aVnj+Mv6kP+TwwAGGPgnEcLhUJsbnG1ydw9
 	XSPgN3u6Wg2v16sJgrBORPgPZ2v1ROymsiMAAAAASUVORK5CYII=
-}]
+}]}
 	
-	set close [image create photo -data {
+	::icon::lazy close {set close [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1500,9 +1514,9 @@ namespace eval 12x12 {
 	+vnTpO158O1yJK2zwuXTynqcRjjGXOHimeRq0KPM3MIM+ZFIcu04W6o2nI6xvxt9UaDwun5jDF+H
 	NZI2gPtgJD2VKfaWzS2mM8UeSYuk5bPUF9MnaxURmdfUj/h25DGfTSYAPHiNDgEpa6rq/vvhphX+
 	+TU+ATnOwZHwhhzKAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set plus [image create photo -data {
+	::icon::lazy plus {set plus [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1532,9 +1546,9 @@ namespace eval 12x12 {
 	+vY+DwBLiwtfWZYXURSx39s92t5aH3iNUUwBm0bqxMkpAFyeD/YBPNdHqpZOAdybuczyvFr6keRT
 	/YZqaQLwLY3WbDjjG9+S5AHwAJQkNYlVUmnnsN/bOzTDkORYfy8n/IdpX+MXrzmI4QBoIfMAAAAA
 	SUVORK5CYII=
-}]
+}]}
 
-	set deleted [image create photo -data {
+	::icon::lazy deleted {set deleted [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1564,9 +1578,9 @@ namespace eval 12x12 {
 	jYv+sFTlsFSlqrcGJNeKGmNhCgtgkgQAkvTSoNmR67uyfbD9AsNg3rktj94/LkkeA3goWnISP4zf
 	Vja0Z5ekq7lkP4x1tNOUYFvjr72tp9Wr0xqAx8lDJ6kggm3m/17cvMY/T+MbPlvNeb9SXccAAAAA
 	SUVORK5CYII=
-}]
+}]}
 
-	set reset [image create photo -data {
+	::icon::lazy reset {set reset [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1600,9 +1614,9 @@ namespace eval 12x12 {
 	28PrY+NTN0keAbAn4C8J6TarYZomkoaxDYBFAIBk7sDgSNu9x92NxmoKroLcn5smzfjCkj0/x766
 	vrEhhS7nSk/7nZPa34IJki0HvO7pzt6hmg+Rz24RyKHKwOTlc6f6fhkpSzJpWADM/SOIiFAAmKTj
 	v2vMKyWL2FIG0yT+AOCN7+0bhEfgAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set text-bold [image create photo -data {
+	::icon::lazy text-bold {set text-bold [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1638,9 +1652,9 @@ namespace eval 12x12 {
 	LwivVysOvB+KDI+MtgghpPpg3delIisAlmNJtm1TzlhwnYxeviCErJTAxAsFU5rL5rC1ZeOvE8eO
 	PCUiMxaLSUsuSETkWJZ1YNUpo9S5IoS5uSmcjJ5p72kKN97/e86LgP/KBJSEqta0QqgkVHylUGue
 	cqX/APBwJvzm4ttEAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set text-italic [image create photo -data {
+	::icon::lazy text-italic {set text-italic [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1674,9 +1688,9 @@ namespace eval 12x12 {
 	i9GpM74nVi5XKgdIJld+XxNM09QAQCk1ceL8leLm0UPcljjM0dQpZ+e+496xc5d/KKUmGrktFuoQ
 	z3OrvT1h6noHPc/TRQRS25nWyv7jiiXa+3Eu36cHxK0RRNu4Yd03AC9FRPncdjP5Z/wGFdwHjNhX
 	CMcAAAAASUVORK5CYII=
-}]
+}]}
 
-	set text-underline [image create photo -data {
+	::icon::lazy text-underline {set text-underline [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1710,9 +1724,9 @@ namespace eval 12x12 {
 	etnb0/1IRDYauAUNzQBO5vKFTlW1W65biba1satr7y4ALQA2v6yvfy8Wf5hEvLcEIC0iWyTFAIDr
 	ugMXr03dzxc+RY1xKFAlLbyK71taqqiEQo76vpWe7v3Fe3dvXQDwBIAEEB0QEFRXAAQBETSFQg6k
 	hphkFbX4vi/bWTiRX13rINiwgY1+RWOHDnwF8KJmYafaf45f9TEsvx26WkkAAAAASUVORK5CYII=
-}]
+}]}
 
-	set eraser [image create photo -data {
+	::icon::lazy eraser {set eraser [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1745,9 +1759,9 @@ namespace eval 12x12 {
 	UNdwcS6bzTUAcGueK+mDlcez0cSbIIBaAHk+n0+wEfhhaKj3Xv/TM8VbC38JZkovfi0oKtyyus1i
 	njWZ1IJr7S13qo6W3lYBCGaeB9BF0GXiddIpSOjW7eZvOSlFJrtatDlvk07EOSIiw8H4lpWIdhGR
 	JCJBRFhrIqJJZv75FzAeDeYrpCDOAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set dictionary [image create photo -data {
+	::icon::lazy dictionary {set dictionary [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1780,9 +1794,9 @@ namespace eval 12x12 {
 	QjAAh4koFYsNRo0xMMZobjsiAsDcffDs7I3ZR5M9fr/ertYcAEhfvHxvx/OY33E0AGM7IsJCA/0J
 	zjlTqh0Ih4KbUogWLCZgMSGlaIZDwU2l2gHOOQsN9CdQc93symp+yfO8aSKKE1Hya6E4ly8U54go
 	SUTxuudNr6zml2qum+1ewLdLFFIKSCF2o3+dv5hs47mCfzYHAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set check [image create photo -data {
+	::icon::lazy check {set check [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1812,9 +1826,9 @@ namespace eval 12x12 {
 	PAD7RESkKC2K4tVNt9fPdeHIKFmPomQ9MoQjdWFLP4xdAFotBADtIExcQziZaTmpaTmpIZysMNdg
 	qg44C969s/OLr1NrkG+Fq7H+Rbi8IiI66hw8MnNa3jWWVHRUMzc12/gNfgA8K8Qn3jJXRQAAAABJ
 	RU5ErkJggg==
-}]
+}]}
 
-	set edit [image create photo -data {
+	::icon::lazy edit {set edit [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1846,9 +1860,9 @@ namespace eval 12x12 {
 	+AVgUlojAD2ms1EKDsaRnHfKAIzkglMKhONImavbAFSvagIwMHrf2Ivena4BmE0uOKUrYQ1pK7cl
 	YWlPNoS0B4n6taExNzo2XQsOxjFnrnyTsG3bpybl4Ro3Qr3fhRBXm80j37h2q/xoMbHEzF+lPW+D
 	NHSJiPxEBCJqMHMVADMzzn/CMVN63VxCF4FYAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set info [image create photo -data {
+	::icon::lazy info {set info [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1883,7 +1897,7 @@ namespace eval 12x12 {
 	vr31KZVKVXz/4cCmR6FhaeuW8oXrVy62lGk1PQgASERFipI9HLx8zReWY47ff3LAOUFxsYrqauzy
 	hdamLrW6tBcR87iihjU5M++VJ+MmDoi1VeaEYXNFSBCE2P8afwFrGQ6XOn82uAAAAABJRU5ErkJg
 	gg==
-}]
+}]}
 
 } ;# namespace 12x12
 
@@ -1927,9 +1941,9 @@ namespace eval 12x12 {
 
 namespace eval 15x15 {
 
-	set none [image create photo -width 15 -height 15]
+	::icon::lazy none {set none [image create photo -width 15 -height 15]}
 
-	set circle [image create photo -data {
+	::icon::lazy circle {set circle [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAA8AAAAPCAYAAAA71pVKAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -1967,9 +1981,9 @@ namespace eval 15x15 {
 	gcGhOYVVlGVLSuyzM4bpSCTTNgC0Yc3q0UsXT59y2O33c/k8Fw9T1HbD1Vs9h3r73zb8o21vZXRz
 	YF3/kYO7u0RR6CsUfjMRgf/jqtpIJFoTn9KdFa7S6WV+32ciGvrrKgJA9Adb0JQ8yQOD0wAAAABJ
 	RU5ErkJggg==
-}]
+}]}
 
-	set ring [image create photo -data {
+	::icon::lazy ring {set ring [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAA8AAAAPCAYAAAA71pVKAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2007,9 +2021,9 @@ namespace eval 15x15 {
 	gcGhOYVVlGVLSuyzM4bpSCTTNgC0Yc3q0UsXT59y2O33c/k8Fw9T1HbD1Vs9h3r73zb8o21vZXRz
 	YF3/kYO7u0RR6CsUfjMRgf/jqtpIJFoTn9KdFa7S6WV+32ciGvrrKgJA9Adb0JQ8yQOD0wAAAABJ
 	RU5ErkJggg==
-}]
+}]}
 
-	set ringWhite [image create photo -data {
+	::icon::lazy ringWhite {set ringWhite [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAA8AAAAPCAYAAAA71pVKAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2045,9 +2059,9 @@ namespace eval 15x15 {
 	9uTU7mna9hXXKgAYgBACtXSX2e3hw4iIezFRmrM5lix9Y4ONzT1mS9+Lwdl5blm151At3VHY8xlh
 	bd1Dw988vIqw5LFwibCvnm2hrUDYuU/FdnunfcW1yu8EQyk5W2BbzipevyDYV1yrlfUX2T5P9cJV
 	3Wy99+QR03TDWEqlU7K88WnTnz34/uvyVf0DGpSbLNJNYLoAAAAASUVORK5CYII=
-}]
+}]}
 
-	set ringBW [image create photo -data {
+	::icon::lazy ringBW {set ringBW [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAA8AAAAPCAYAAAA71pVKAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2087,9 +2101,9 @@ namespace eval 15x15 {
 	cfTE6XOu2Z+r8/kCTJXlQlmZmt5/sChbSaTAcZvQUL910f5+z0mZVDqYy+c3DAPwr9sX+4c6b0zP
 	WMORmInns5AXc6g2Vq493VQ3drij/TzLMs5C4U8CgJL/eRUHwBxajtpWk6nakmL5I51O4wRwnRCy
 	9h8O/AVVPZqBZ+GnFAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set close [image create photo -data {
+	::icon::lazy close {set close [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAA8AAAAPCAYAAAA71pVKAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2121,15 +2135,15 @@ namespace eval 15x15 {
 	y2vO05fFjT/ZnPN01WieGItNH0gPRPQMgCulnB1x8F0qzT+OjnyIlOY7u4crv5VyAXAien4xLoAh
 	HcfugOYjU3PiwlCquZcoxtptuWWX/HBmIQfLq7S63cgFMNztRq7tVVozCzlYRf++3ZZbRKyfuMTn
 	Xz2fbc8PtY7dt/j8v4SR2f+VsLTene0B8Lt+1V/NTFouEVtvTwAAAABJRU5ErkJggg==
-}]
+}]}
 
 } ;# namespace 15x15
 
 namespace eval 16x16 {
 
-	set none [image create photo -width 16 -height 16]
+	::icon::lazy none {set none [image create photo -width 16 -height 16]}
 
-	set clock [image create photo -data {
+	::icon::lazy clock {set clock [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2169,9 +2183,9 @@ namespace eval 16x16 {
 	iEfHvR0//xKw+wOyfWtRIUDA+q0sMlkF20uMWs+htnPuY90n8gz9p0y/zs73fj1xoSMS/d2xupY2
 	AYRtJuOaw/ag/Gxn6/nG+n+V6X/q7IzFF8oBwGKuWAQQkkTxuqr9s85/A3jJu/MrKLpDAAAAAElF
 	TkSuQmCC
-}]
+}]}
 
-	set delete [image create photo -data {
+	::icon::lazy delete {set delete [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2203,9 +2217,9 @@ namespace eval 16x16 {
 	cF/MU+s44dJRbNEv9PODpy3cpSwU9yMLW99b6AdRxxDH85BLjq9rD90QkzkA1mVuN2iMLse0D+Mk
 	c+dVpL3tN0aXoXKlAMB67xwYw5wZpPeF+WDq4rQ6ODdzRsxEzDQwO30+dXFafV+YDzgzDDImgfj/
 	Ue4HNr1PK5305+/8AdqGhl46QWaBAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set remove [image create photo -data {
+	::icon::lazy remove {set remove [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2238,9 +2252,9 @@ namespace eval 16x16 {
 	f9rYfv3xqD1TvJW7KBYWfhwetWeeNV7tfHN6JoCpKJeTIrr9kYhrRl0OPO9KEUdzAGC1XLXk/NIK
 	9IoZdLv9F3GS6/YtvWIG80srKFctCWA1MQdKKda0a1TM5+Te7padzc4eMDMxM2Uys+/2drfsYj4n
 	pzUNSqmROP8/ypea8LfLNJH0z+v8G/sgdSgXvemuAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set flag [image create photo -data {
+	::icon::lazy flag {set flag [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2279,9 +2293,9 @@ namespace eval 16x16 {
 	HcDNYjLvC4AgCaFBMU0TJHUikTBJFgCMKWWPbW46ZlDZvuMWUEwvSUoxB2IWPJ8QYUFrEwAmJyel
 	yAlJ6i2QRMQAICRl24OG+li2rrYqBwHi+2N/bZN2f0j+f5GkfoDGYvMhx3HaAEApNUpyY2thJ747
 	619XRY0JeyMMTQAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set lines [image create photo -data {
+	::icon::lazy lines {set lines [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2311,9 +2325,9 @@ namespace eval 16x16 {
 	BsQAImKMZPilN2xJ4OVHmANWg0jugOVeb1BSY9Iodz4FvPdRJS49ATciMjYUhM3W9c3t3YvRyA27
 	naOz2s5+oz94WbCRoPmHEnAuZbESv7dPDurAZWEF/8CDryChHg/qw0Teq6qq8jNIoKoqaODlPZg5
 	ykUt+FYw83f+BFvButUo/Gd3AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set lock [image create photo -data {
+	::icon::lazy lock {set lock [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2352,7 +2366,7 @@ namespace eval 16x16 {
 	I1tQLDPkKopQa/X7rSVDb2Pfl41K1dF67B3ewqeXjoXD4RQzCwEAVii0OH3khfmYHa2qqkJE5LVb
 	pttMIvJUVaGYHa1OTb44b1nWj9tspm0jMTPHNjc3D+bvlgyhCJb+A5nN3u7uqpqm+T0RrTdn/wLz
 	gXoyPu93hwAAAABJRU5ErkJggg==
-}]
+}]}
 
 #	set pause [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -2389,7 +2403,7 @@ namespace eval 16x16 {
 # 1vk34NXwovaGD44AAAAASUVORK5CYII=
 # }]
 
-	set pause [image create photo -data {
+	::icon::lazy pause {set pause [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2422,9 +2436,9 @@ namespace eval 16x16 {
 	iQS01gAAIoGbTjcLAMyMmdaPUV4M0pvjau3qjyC5DDCrdijmQSr67rS+GCQADABSyubh/st6sejF
 	hmGYvudOKm/LjcrJ0YXvuRMjY5ilYmFSPnj1TVpW8+EBvKRM0W5LhU7J9wZSWj+BJ2VqEpF6Ysb/
 	1vk34NXwovaGD44AAAAASUVORK5CYII=
-}]
+}]}
 
-	set search [image create photo -data {
+	::icon::lazy search {set search [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2463,9 +2477,9 @@ namespace eval 16x16 {
 	WX1OJhBaG18c3rd7+8WdPeqW8cn405FQTfL7Lz/bITEzCSEuOI6zI/rFV+9d+PW3pgeJ2fLUQjog
 	ewqc2qqKxGvNay/ueqfrCIBr0U/fH9174NBBxePJSTYcygfOtawUQP2lyzdeeKjr/jK/X29cu+Z3
 	AJeJKOWqlW3bXp8DHEWSzv8Fs4uSbY1GkJ4AAAAASUVORK5CYII=
-}]
+}]}
 
-	set fast [image create photo -data {
+	::icon::lazy fast {set fast [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2502,9 +2516,9 @@ namespace eval 16x16 {
 	IzLmKCl6tTlrQ6tBC06nE8JDBIOAjKq60+nUdZ04TQtx8wGV7dqe03/mZPFdRPQa6IsXuOIvhCMz
 	I/1PWmryRNIaK96rv9SIiP2yTIvoKy4x0oqBaZpXlIMccCCKfCciqkQEy+//H9tOUZZxQvlWAAAA
 	AElFTkSuQmCC
-}]
+}]}
 
-	set slow [image create photo -data {
+	::icon::lazy slow {set slow [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2541,9 +2555,9 @@ namespace eval 16x16 {
 	zlzY/NPfJ645OU/Wr8o7JiKdc3KzHxm6rj1ra5/h9wdyAMBrTV+L3SilzERHQihrWkb3gaqyOhF5
 	C0CK8hffmDppfLczJdnvcNhDsTOIOhD9hfFKqaUDAwMSFxd3XUTCAtAk40Oh0DJd12kYxg0R6Y9i
 	fgOPbm2sX2uEtgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set quick [image create photo -data {
+	::icon::lazy quick {set quick [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2581,9 +2595,9 @@ namespace eval 16x16 {
 	WmFk0p3KDV9tJqKfotEoAxAAYAAoCOe1jc/NSRiGQSOzR6QWlBTdrK1af4GZyU46nJX5obNm1bLT
 	AO4NZkX+nT5DREqbb99ZZZpmhYjkisjCL1dXtn+2ZK35y9WGXSKSAYBE5I3+vK1Mhm3bpQBI1/Xv
 	iah/qCOvz70EpsNb66G/eYgAAAAASUVORK5CYII=
-}]
+}]}
 
-	set run [image create photo -data {
+	::icon::lazy run {set run [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2619,7 +2633,7 @@ namespace eval 16x16 {
 	1ozXpYW72rIyN7Yz8xjRr1DV1dWJKIOQpimaLqS5YEgKayJu84bUQMFu+w2nI/ea0Rg/pKohIiIG
 	QJEgRRmkp6z7kJy05uPk9Ezc3vw8X1nxHi8R9TFzeMFGMP9Jc+QXMjMDgElV1R2yLLOiKPeY+du8
 	/ju6sfUTMfVA7VEmVokAAAAASUVORK5CYII=
-}]
+}]}
 
 #	set start [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -2659,7 +2673,7 @@ namespace eval 16x16 {
 # /ju6sfUTMfVA7VEmVokAAAAASUVORK5CYII=
 # }]
 
-	set start [image create photo -data {
+	::icon::lazy start {set start [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2695,9 +2709,9 @@ namespace eval 16x16 {
 	1ozXpYW72rIyN7Yz8xjRr1DV1dWJKIOQpimaLqS5YEgKayJu84bUQMFu+w2nI/ea0Rg/pKohIiIG
 	QJEgRRmkp6z7kJy05uPk9Ezc3vw8X1nxHi8R9TFzeMFGMP9Jc+QXMjMDgElV1R2yLLOiKPeY+du8
 	/ju6sfUTMfVA7VEmVokAAAAASUVORK5CYII=
-}]
+}]}
 
-	set stop [image create photo -data {
+	::icon::lazy stop {set stop [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2730,7 +2744,7 @@ namespace eval 16x16 {
 	bbQ+ZF1o93tLWptYKmlpc6NGAUClWLywc7mkf9rN1Ta2NqUUUw3T2sT/gvPc03IxLpcL58CVjQIA
 	XNc5evdmZbdaKQ2VkjO7rZS0qk9Kw/dvV366jnM4hvnWLARB8KLdO52b9PlagTFULjy+cF339+Qs
 	AACI7jWMt6cxA5Lv+3cSx2dMRNcK/wOvff3rU6kupwAAAABJRU5ErkJggg==
-}]
+}]}
 
 #	set trash [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -2772,7 +2786,7 @@ namespace eval 16x16 {
 # ZhAa5aleWb5DRHvHNf8CBO2BO3uFQdAAAAAASUVORK5CYII=
 # }]
 
-	set trash [image create photo -data {
+	::icon::lazy trash {set trash [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2810,9 +2824,9 @@ namespace eval 16x16 {
 	5ffXkfVg1uoB4gQCKALYYEOANsE8e6rDy36qH/bywQtvfwyQCFsmIgAiehwu8cl66p5+ZhcAsLEB
 	tNugYw1sjC9/d2l2deusDeMMk6j/iiIkxs9E/rn1rcK7r35ARMFC90SZRKQ5H4zOoHuQhdFydGWG
 	ZhAa5aleWb5DRHvHNf8CBO2BO3uFQdAAAAAASUVORK5CYII=
-}]
+}]}
 
-	set bug [image create photo -data {
+	::icon::lazy bug {set bug [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2851,9 +2865,9 @@ namespace eval 16x16 {
 	ECCXc7Cyekn20Gdvbw6Hw10SAAwDLEBi/ry5UzWrVv7d3duX+Pm3P6KmKSGlgXhJid+0peFHIpo6
 	2tlVi1tHATPjdnFCWuuHfd9ny7Kunb9wefXJ3r7am5N2ZUV5mb2m9oFvl969sBNA3vO8OsuyfAC9
 	ROTOWClmDgOIAMgTkTOT7l87ZZIeWMoWCAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set question [image create photo -data {
+	::icon::lazy question {set question [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2893,9 +2907,9 @@ namespace eval 16x16 {
 	eCn01dWnforGnJRSvHbkxZFjR3vfJISkufKV04yxfkII84fCHTd+nHKORWNOsygoYEBRUQRV1XFf
 	rcXwHnJfOna090SZIf8p03BwtGPm9pwjm12tAQHWStUrjgdbp3s8z13e/tA/ZPofnV2JZKoBAFqa
 	bH/qbDIt6Mbfdf4D9XzHxQi25EEAAAAASUVORK5CYII=
-}]
+}]}
 
-	set internet [image create photo -data {
+	::icon::lazy internet {set internet [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2932,9 +2946,9 @@ namespace eval 16x16 {
 	uEF619XrIwmvZwIBYGjYEoggUFzQ3xjZebQ04B8NkoyJsss0zdDJc83VHbF48P2HvlwAmFmUP1g2
 	J9BWvyN81e12386McqaRmY+VR3LXxpp9iY01+xIkd5HMG2927DUkGo2qv7VhWVbIsqwQSQMAotGo
 	Grv8B5gYi+pk7zUzAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set eraser [image create photo -data {
+	::icon::lazy eraser {set eraser [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -2971,9 +2985,9 @@ namespace eval 16x16 {
 	jxfj8fi+90OBvQB2AdATEfEvFp7o6hgNyjkGvQ6JRJKZmTQadVylUikCk4GIhfy85TN3Lnftz8jM
 	eCCkYGbmuVUrc69fOdfeuaG4cNqg11P24qzkooWZpM/Q6TQadaZKrRKSABExUyrInJ7ElJiWiHaM
 	BseWCoKQTCSSTESkUgkgIkomWShckzdFRE+ZOfbbX/if+g5c9bKVvyePsQAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set sideToMove [image create photo -data {
+	::icon::lazy sideToMove {set sideToMove [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3014,9 +3028,9 @@ namespace eval 16x16 {
 	PmCTBkedUvIjibCyEoXZ4DwIggC6JC3UmSo73zxY17DK4MMypQ7axvZetvS8NOGaejwSWdSRSpCi
 	18m5Utad3ZUVrQV5Uut9GJHwYZ15ngNFiaUBQGFgZq5UjcXiNqamjAHANY7DcSL4n87/Amz9zo7b
 	1213AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set rotateBoard [image create photo -data {
+	::icon::lazy rotateBoard {set rotateBoard [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3054,9 +3068,9 @@ namespace eval 16x16 {
 	3+dTXZd69vzzcqw0OfrLRgAwDB0Li0NorN/wZDA+XGmaZvGK6orMfF4IAmi42n27KT40Um1btj8c
 	Lsts3lT365rVNXeVUlUiYvr9/n4RmZ7XjUWhIEguIFlS6Ma58T+p04rh+cSK3AAAAABJRU5ErkJg
 	gg==
-}]
+}]}
 
-	set clear [image create photo -data {
+	::icon::lazy clear {set clear [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3093,9 +3107,9 @@ namespace eval 16x16 {
 	jxfj8fi+90OBvQB2AdATEfEvFp7o6hgNyjkGvQ6JRJKZmTQadVylUikCk4GIhfy85TN3Lnftz8jM
 	eCCkYGbmuVUrc69fOdfeuaG4cNqg11P24qzkooWZpM/Q6TQadaZKrRKSABExUyrInJ7ElJiWiHaM
 	BseWCoKQTCSSTESkUgkgIkomWShckzdFRE+ZOfbbX/if+g5c9bKVvyePsQAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set selectAll [image create photo -data {
+	::icon::lazy selectAll {set selectAll [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3131,9 +3145,9 @@ namespace eval 16x16 {
 	E2XOOJTv+8r3fc44mtKJcmaofzMej5mMWam9VdYYGIbhu27ZXFxebY5Fo2pxZnwt2RD1Eg1Rb3Fm
 	fC0Wjao3y6vNrls2DcPwaz7g37a19qVhELhumSEM3cZ0YoNz5tqcuY3pxAbC0HXdMjMMAq19qbVW
 	+3dw4Gc6bIv4C2+ATI0/CWHwAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set home [image create photo -data {
+	::icon::lazy home {set home [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3171,9 +3185,9 @@ namespace eval 16x16 {
 	g4O/js/oc/OC1+duWFaNAwG43U4wTQsAAZxOuVEumTy0qaNx79ZfEZ/Pd5eIGAMA8Lpcr0aG+6ZD
 	oWBZ5Bw6g+2wMdgOIue0MdgOnct3CIWC5ejwL9Ner/flqkXwiz3YXCxWfpxfLPidkrMLqAVLzUZS
 	FPgPgAws20p0BDYYbW2eF4iYW9XjM2R1nvvn/QtoAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set scrollbarBottom [image create photo -data {
+	::icon::lazy scrollbarBottom {set scrollbarBottom [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3207,9 +3221,9 @@ namespace eval 16x16 {
 	dHToSWPMQwBQSm2LyJ9BfV3bwwCu5gvFc6JUJIC0wzBURBMAjMBN2bYdmQhKWaQx1sR4pgLgow0A
 	Wuvp2/e3coVi+axtWwQhIiKiOkeiMSDJeCXD0Mh4Jl179fzRvfgoFggIICIQUCCMhT2vnbhxZiFF
 	EEH6I1wpHH4bJdinGgxjaF3sRPh0XO+x+A/0OS7aatmi2QAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set scrollbarRight [image create photo -data {
+	::icon::lazy scrollbarRight {set scrollbarRight [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3244,9 +3258,9 @@ namespace eval 16x16 {
 	3NSw9PDWgFlTUz0aLAhsO7tRPoyACCRLHcfpJNlJsiTIRQAgnc7Fm9vjXnNHt29n5k4CoU0UEQZx
 	DcCLMLFpmgSAgutox/MURFB0Xb2BIES0qZksy0JjQ22ubs/uBQjQWF/7BdjEjX8qb92NhTYAMAzj
 	pYjkfwBZoD1BCJ/g6wAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set dot [image create photo -data {
+	::icon::lazy dot {set dot [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3280,9 +3294,9 @@ namespace eval 16x16 {
 	kQjgVHGt5OZ5Dg6btQJANQKEuv9M4HnlYy4/M/XmbSSzuHxsdOzG7Z7urrkPc7nu+YVC+wGnnYYG
 	+1KCwCvGHOgWGoN060+QGAeNNDjtVlwZGX52KXZ+jDH23QgQAEDfop6y68ePej5NvU4N/ChvuJpd
 	TeWhgfB0f19PwizeVaZjaqkfU4soND6mhpD/7f8GhxIttb/h6ygAAAAASUVORK5CYII=
-}]
+}]}
 
-	set scid3 [image create photo -data {
+	::icon::lazy scid3 {set scid3 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3322,10 +3336,10 @@ namespace eval 16x16 {
 	Pjs+eKBkOYjoKmJ1kTAaNSyFcyF8X7ErTqxsV6VqzUM8ZuCl5/q/evngwBtrZWq5MDb+wunh0d03
 	ZvLZZbOU9ISQgzCELElQFSVYl4ybd7e1TA/0Pf79tocf+IIx9udqgrU6twLouHx1KruwuJjxvFBV
 	VclrymQWt2zumAYwpeva7G2d2T/mb86zbd49IAAAAABJRU5ErkJggg==
-}]
-	set si3 $scid3
+}]}
+	::icon::lazy si3 {set si3 $scid3}
 
-	set pgn [image create photo -data {
+	::icon::lazy pgn {set pgn [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3362,9 +3376,9 @@ namespace eval 16x16 {
 	aKlULtdmZz6/8bBY6lVMVqwlzY5VTO7IqfF3ReBZa+gFgDDsq7uua1YrT/3RMxfOCQBWymaZ0jSV
 	eiPyBsO+dPvAthoATE5OtmZQCIK/hg8f+nEw7K+5rqM819HM7GaP53vuUNi/Nnz40HwQBH+2+85u
 	42C1Wj1YelLJKVb/W21rLIX9W9fy+fwfRPSo7X8G7shb0f/wVzoAAAAASUVORK5CYII=
-}]
+}]}
 
-	set fileExport [image create photo -data {
+	::icon::lazy fileExport {set fileExport [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3402,9 +3416,9 @@ namespace eval 16x16 {
 	VkIbRo2xMjaSbioABIBUKvHDc8ePfpXdN/a31hEQ6NNaE485WLlSnP3i07kTVy9d8IaH05td38gD
 	ufH6pY9mZ3a3MdtsNh+7u7GV1ErbgIwcnMjVAXwvIl2STz49dWqx3fHl8sezbj6XvfgPl8uIPYCm
 	quIAAAAASUVORK5CYII=
-}]
+}]}
 
-	set enter [image create photo -data {
+	::icon::lazy enter {set enter [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3435,9 +3449,9 @@ namespace eval 16x16 {
 	4ug0u/zwpI9Epic/rrInN8HxMRUA3hEAoNFoxJK7ym1ZN0YlyUdAreYiItq2TYwxLgQxq9lkn1/f
 	uDA/B9cX6qEsy1nmWUOnMi68awkAAm3ORTAQkKqmGXcroW8TazVzZ5Am9sgI+bxQFCW2mjy4KxQf
 	/bORqXruPKOFwyFHRnSV8S+D9D+j7IaBl6nrg+c6/wD0/PnBywZK5QAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set marble1 [image create photo -data {
+	::icon::lazy marble1 {set marble1 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAMESURBVHicfZPNb1RlFMaf8847d2ZqCpjppEE2SEJsrEjTSqAFYpQEDA26kMQFUdzAXwDB
@@ -3454,9 +3468,9 @@ namespace eval 16x16 {
 	0q7rgoiiQi04+2EjuJ7/4Ua3WGu1kxRDRCEYq8JSbYfUJEoOPT9Uef+9kTeJyGx4ISIKAGaX/d6L
 	59+aOL7/uPTvGpCe3D7ZnXtGdj3RJz37X5TXz1+YuLfs9wKAu85oAHgkyN6d2byIHP3k8vjLkz9O
 	Dper1T0xgFyua+7okaErZ06/NLYhExFja7aqmsmkkcmk/7fzL9Hot8Ilip/JAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set marble2 [image create photo -data {
+	::icon::lazy marble2 {set marble2 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAMZSURBVHicfZNLaB11GMXP95//zJ2bmIDQckmx1RYjbSOUoFLT9gqhFEpKtAsXovhAdK+L
@@ -3474,9 +3488,9 @@ namespace eval 16x16 {
 	j5SPNc6+M/MKEaktLphZAMBKzRs788abCyfKx3h8/wF+ZO/D/ODuUd6151Hef2iSX3ztzMJabWMM
 	AKzNjgSAu4Bs/nj548/mn76y8OOpetPZlzKwc8eOW+Xyka9eePbk3BZMRDnu1b2oFosmikXzfzP/
 	AOpis+Hg6HuqAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set marble3 [image create photo -data {
+	::icon::lazy marble3 {set marble3 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAMhSURBVHicfZNLaFxlFMf/5/u+e+fOhGYq1sYEY21ppG2kVqzUtB0klEJJiRZ04QMf+Njr
@@ -3494,9 +3508,9 @@ namespace eval 16x16 {
 	iNj2MnJiXTtcObpy5u2xl4go2fCCmQUAzDfcwdOvvzF5vHKUH9qzl+/fuZt39A9w370P8J4Hh/n5
 	V09PLjZuDAKAeZNRAHBLkJs/Xvnks4nHf5n8+aTVtHelDNy1bdu1SuXwl889dWJ8QyaiHLfndlWL
 	RQPFovG/nX8ACayd8ibWZ6QAAAAASUVORK5CYII=
-}]
+}]}
 
-	set marble4 [image create photo -data {
+	::icon::lazy marble4 {set marble4 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAMTSURBVHicfZPPa1xVFMe/57775kciGDVkmo1tUurCtLal1prWBK3gj4bYhYKFEnVR/4HS
@@ -3514,9 +3528,9 @@ namespace eval 16x16 {
 	DZYuXRr/hIj0Nhe8CdHGhj8wduHizL6TI9x14Bh37jvMnX0v8TN7DvMLh07yR+cuzKxu+AM7wZMA
 	sAXI5o8PffPd1Hs3bs2OlIuVfjAj1929fGLo+A9nP3hnchsmIosn9SSq2WwG2WzmfzOPATdQukiz
 	6RGTAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set marble5 [image create photo -data {
+	::icon::lazy marble5 {set marble5 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAMJSURBVHicfZPPaxxlGMe/z7vvzO6WCA1ujAFp49q01ChKMaTVRlIPVRuiIhYr0upB/4Pc
@@ -3534,9 +3548,9 @@ namespace eval 16x16 {
 	Bd+XaLXWHDw3MTl38MQ73P38CHcNDHFX/xHu7j/CB198jc99MjG3WmsO7hZPAsADQfZv//jIN9/P
 	vjV3ZWGssV4vgxk9pVJldOTlH86898bMjkxEGR6tR1UtFgsoFgv/y/wHJNKv32xBElMAAAAASUVO
 	RK5CYII=
-}]
+}]}
 
-	set marble6 [image create photo -data {
+	::icon::lazy marble6 {set marble6 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAMUSURBVHicfZNPaBx1FMe/7zczu7NdraZpCAElNYdKG7QVW9K0RPwHSmMUQVAsWAWFnjyI
@@ -3554,9 +3568,9 @@ namespace eval 16x16 {
 	XjB3BFmuVAbfend88vDJs9xz8AW+r/9p3vvAKd734BAfPPIMv/H2+5PLlfogAHh3MjYAdATxRH9f
 	301mHvnqm0sv/jI5Pbq+Xh1gNujZv39hZOTkD2deeb60wxapI9P/VPX+o2ou5yKXc+/K/ANXBtj2
 	YqqeLAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set marble7 [image create photo -data {
+	::icon::lazy marble7 {set marble7 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAMZSURBVHicfZNNaFxVGIbf79x758faltK0MVaIxkWoQYSYMsQ6QnWhNEa76E7aulGK61Jc
@@ -3574,9 +3588,9 @@ namespace eval 16x16 {
 	bxOR9n2/7wVzX5BSuTz23tkLC7mJMzwy/DofGnqZDz52lA8eyvHoc6/wqXfPLZTK9TEA8P/duADQ
 	F8QXw0NDRWbOf/HNj28sXFmcqtSqIwyDAwMDK/n8C9+/dfK12ftsgfoyPaSq/4Cq2WwG2Wzmf5l/
 	AJ/x4gpwxjTRAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set marble8 [image create photo -data {
+	::icon::lazy marble8 {set marble8 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAL9SURBVHicfVPda1R3ED3z29/u3W2q0SQlRAqtUqxkiUpIEE2jti8VQ1qhgVIKthT1QV98
@@ -3593,9 +3607,9 @@ namespace eval 16x16 {
 	Eam5wuJ3xcdP/v63/3otO2vjiTgDIH61BoelEjlGfNfOHfPnz3Z+T0R62RfMLABgKhekfzh8ciDd
 	vIdr1zfz2nWbubKugavf38ofb/mM9x86NjCVC9IA4Jc5EgCWDFL+8dZfL/71Rf/AtbaF+cIGBuO9
 	mpqJ1tYdPd927OleNhORw5vxplVTqSRSqeRbMS8BdlTV/x8iTUMAAAAASUVORK5CYII=
-}]
+}]}
 
-	set marble9 [image create photo -data {
+	::icon::lazy marble9 {set marble9 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAJUSURBVHicpZM7bxNREIXP3L3rXTvBARFhsAQiERKQ/IooZRTIT6Gi3fyVtDQIAqmQ6FxA
@@ -3609,9 +3623,9 @@ namespace eval 16x16 {
 	8dGmmS0rF0rnUFW/m12IKCsfalluJbgPCw/aW0VRmHGQ9o+6j/v93nsyptW/7DEZoypCLILIot57
 	yvJGYg2dtm61luZGQRple67d3CGYZWbpZPVGYtPMKtlEjU1sLbeN6WaS1Wzn5o3p5ZGZiOSPY1JV
 	8+ng9El/UK447+dFgZpN9pozM28e3pvd/Osx/c85/wCZkM1OV/vxWAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set controlForward [image create photo -data {
+	::icon::lazy controlForward {set controlForward [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3642,9 +3656,9 @@ namespace eval 16x16 {
 	c1jWASCLiCSlDAf8RUJVdMEFRCDP8/h24XTFfG0m57R0+7yULwLAvW+fdF1XO2AMiCF6XceJNt4+
 	krNaqn1ZLkhtKnWDiDYAQJAJJcBxPN51Xf751YHMdKp1dXZUzGjpa0TsDgzUgCAJv/4jSP8b5TAN
 	PUx9F4Ya52+j2tSs448wwAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set controlBackward [image create photo -data {
+	::icon::lazy controlBackward {set controlBackward [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3675,9 +3689,9 @@ namespace eval 16x16 {
 	njFldqgrsDrCgDwZt1dWrrCaiL0+PNrJzGlpT7quhggkQWnB5wX+XhGxn4hHK+XL/NlaMuZ0Xpx5
 	IYTOEF3GNCWfoQRvA4iIIh6NVMoX+cLyUtTpvfVhIKUmxEBtwjfZf3xI//+Ux5lMikDQb77zB+gp
 	2Rzvw1eDAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set controlFastForward [image create photo -data {
+	::icon::lazy controlFastForward {set controlFastForward [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3714,9 +3728,9 @@ namespace eval 16x16 {
 	09alBCfjf8iKkv3NJQf23FBKfnAcA2YWLS0tRESGmSfSUtcECaCM9NRv8x//p+OhUMgjpcR882YA
 	EDODiJiZaX6NC4VCHgBwuVydRDS7OJVwJ0RUI4rCN6DwHgATEUcbjjb3Gzh4V9yGEiRVAAAAAElF
 	TkSuQmCC
-}]
+}]}
 
-	set controlFastBackward [image create photo -data {
+	::icon::lazy controlFastBackward {set controlFastBackward [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3752,9 +3766,9 @@ namespace eval 16x16 {
 	xsYz338MXYACmeYmrAEIEdWFkEwAK6E0AMzMIKJ+AO+8RwvKb7V2VA+PvN2zbP0lp9MkERW6Dcj2
 	ZHz3pKdFQISsrPQZZsbKV9aYOaJpWquUcvBx9/Oaew+fVSRt2ypzsj0zceMJQIJlWcWxXTBfxXch
 	DmKOy5AohCiSUto62mgAWHcb42iOn4kIK/2vB/lP9w9D7FqSMvH1VgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set controlGotoStart [image create photo -data {
+	::icon::lazy controlGotoStart {set controlGotoStart [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3791,9 +3805,9 @@ namespace eval 16x16 {
 	WaCkqCAYjcYonpBaPBbX/5hzAPqnic/1uz0Nwf2Hm6YBbGVmIiLO2IGGoKcmOYm/fY7USwDAkFJW
 	KKXINM2nzBwBIDg5rYaUsiKmFBym+ey/ftxitmhwKjBtYGb8zX4AW3CYENItxjIAAAAASUVORK5C
 	YII=
-}]
+}]}
 
-	set controlGotoEnd [image create photo -data {
+	::icon::lazy controlGotoEnd {set controlGotoEnd [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3829,9 +3843,9 @@ namespace eval 16x16 {
 	wuGEaRpIOsllGwi0dhb68m4xcxIAi4SdUImkIy3Lpi0FedHB3rau4gLfIDPDa2R4EglHxK3Esm1J
 	+8zMWNzEsy1TldX10bHxUD0Ag4iYmQnAgeNnmmcq/StsxU0wAO8f297rkZKVUk+ZOQFAMLMG4LVt
 	e5+UktJssfN/XdwaxkvJFCC9+lqWir/lU5PTtikiRgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set controlStop [image create photo -data {
+	::icon::lazy controlStop {set controlStop [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3864,9 +3878,9 @@ namespace eval 16x16 {
 	bbQ+ZF1o93tLWptYKmlpc6NGAUClWLywc7mkf9rN1Ta2NqUUUw3T2sT/gvPc03IxLpcL58CVjQIA
 	XNc5evdmZbdaKQ2VkjO7rZS0qk9Kw/dvV366jnM4hvnWLARB8KLdO52b9PlagTFULjy+cF339+Qs
 	AACI7jWMt6cxA5Lv+3cSx2dMRNcK/wOvff3rU6kupwAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set controlDown [image create photo -data {
+	::icon::lazy controlDown {set controlDown [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3898,9 +3912,9 @@ namespace eval 16x16 {
 	8NnWR8/Pv3r5hWQ7YW62aR0hyVTrR0tv54vBxOSsJiZn9Wa+GBxU6iuSTGdvlzpNKtX68tzC6unc
 	wuqphVO94C6njnHSCDETGsAAOyRbXbHvUq+Id8XuPYsFfFv3H/J0b+savnrLmfeAMSEAAAAASUVO
 	RK5CYII=
-}]
+}]}
 
-	set controlUp [image create photo -data {
+	::icon::lazy controlUp {set controlUp [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3931,9 +3945,9 @@ namespace eval 16x16 {
 	PLl0Fx2dRiKllU2rmAag1ngMQDCzC2B8aiF9cJk1uzp8KqSUVUUIh4jIcV3Ftm31+aXKI+GBx8P9
 	vXlmPgIgZG2Wp0pFBAP+177ebkcqggC0w3tvlYmYfU5np0vBgP/1qVIR9TW+m99HRGPZG7MfBJdI
 	IcUrcrybiUV4cOCeiE6Y+aXhRlqJuoKnxrquNyV4eGtf+3/HG7Wn4H3W8pLtAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set playerStart [image create photo -data {
+	::icon::lazy playerStart {set playerStart [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -3969,9 +3983,9 @@ namespace eval 16x16 {
 	1ozXpYW72rIyN7Yz8xjRr1DV1dWJKIOQpimaLqS5YEgKayJu84bUQMFu+w2nI/ea0Rg/pKohIiIG
 	QJEgRRmkp6z7kJy05uPk9Ezc3vw8X1nxHi8R9TFzeMFGMP9Jc+QXMjMDgElV1R2yLLOiKPeY+du8
 	/ju6sfUTMfVA7VEmVokAAAAASUVORK5CYII=
-}]
+}]}
 
-	set playerStop [image create photo -data {
+	::icon::lazy playerStop {set playerStop [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4004,9 +4018,9 @@ namespace eval 16x16 {
 	bbQ+ZF1o93tLWptYKmlpc6NGAUClWLywc7mkf9rN1Ta2NqUUUw3T2sT/gvPc03IxLpcL58CVjQIA
 	XNc5evdmZbdaKQ2VkjO7rZS0qk9Kw/dvV366jnM4hvnWLARB8KLdO52b9PlagTFULjy+cF339+Qs
 	AACI7jWMt6cxA5Lv+3cSx2dMRNcK/wOvff3rU6kupwAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set engine [image create photo -data {
+	::icon::lazy engine {set engine [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4043,9 +4057,9 @@ namespace eval 16x16 {
 	aOMAXslEVAbwkpnf7Nm2sf7W2ONYxswquULBrT5S2jQ9QYJaQ832zu71D0It2nEi+v5nvxodNCZm
 	Uuci0Rh3RWM8Mfl5ZGLy80hXNMaRaIzj06nzzBysrZEBQNd11zAMiYi+MfOjtnCoRxBo2dK2UQBY
 	0hbq9hgcbm15WKsDAKjVwj/J+TdTJHUk6BaawAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set diagram [image create photo -data {
+	::icon::lazy diagram {set diagram [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4084,9 +4098,9 @@ namespace eval 16x16 {
 	il600PP9paXlGz+5zWM9Z2eETsSFkDIMR3S6RNNMSc6JYilFbxDw8uR4+PMPm59oAGBnMn9def/d
 	rYpTGhDpgFKCSEfFKfU+WHz7oOKUei/5k6XBh5fee5i3rD/++8ZKt9t9q9XuZIlTIqXSCwW7W8jn
 	D7xu95zn9fNELJZCaqVi0c/nrd8ZY41/AK3+wbYAq16GAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set chart [image create photo -data {
+	::icon::lazy chart {set chart [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4125,9 +4139,9 @@ namespace eval 16x16 {
 	tQ0pFYQlkKYGQdbndleR7zmamLn8xWT9w2/rC5U4SRwi7JI4dvzGa6O/v3pq+Nevb8wPfjk1+4TW
 	2t0111A268vKyNAc7aXuSLMZPdfY3MwJCDYwVCoW24VCsEhEq/vvvdcnI0r9xZ1CIfj5X4Vsrdxq
 	582bAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set archive [image create photo -data {
+	::icon::lazy archive {set archive [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4163,9 +4177,9 @@ namespace eval 16x16 {
 	ECx7rlub/VF2r1y/fUtr5Ww3kLVxtFBZclvyQZTP71oCgGKxCAUA6bT/6UzH0YGW5qYVY7S7xUFr
 	YYx2W5qbVjpPtvWnfX94fWiKCEmKiBQqlerBUrmc0nrnQlkbsxAEy+m0P0xyatvf/dtKb37/Gwuz
 	EHewDJ+5AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set steeltool [image create photo -data {
+	::icon::lazy steeltool {set steeltool [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4207,9 +4221,9 @@ namespace eval 16x16 {
 	NEtLMVpq0Ec/Hu53FBVu+JwQkoJUCncfOHKCr9vZnNzeaEnW7WxO7mnpDM/5eBsiEkQkfFBobzrQ
 	ETFbOiI+PmRFRMXjFSNipiTBjjk/r1OyrCQhskaDPgIA19fmDIioBICGNeA/EkJWH13Af1K67BU0
 	JgknAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set notepad [image create photo -data {
+	::icon::lazy notepad {set notepad [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4245,7 +4259,7 @@ namespace eval 16x16 {
 	2o7rKIBQNA7p8qVeY+nN1PSFaGSFiFxmJgEcPUsoFPo6PnpzqyfcaUqlKQCQUvNVqzYKRYOvXhlE
 	YuHFah0ZRORRvXdmDhuGMZTK5EMBn7R8ft/1Zy+XHppWFQuzE6vdXe1PiMio5ccDajmokYmI+JRg
 	qFKx7gspoCv1gYhKp3En/6CWSAJAx/kgIgPA/P+a/APyn0uDpUzXGgAAAABJRU5ErkJggg==
-}]
+}]}
 
 #	set overview [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -4288,7 +4302,7 @@ namespace eval 16x16 {
 # l/YjIu79CUnQlFc05uMkAAAAAElFTkSuQmCC
 # }]
 
-	set overview [image create photo -data {
+	::icon::lazy overview {set overview [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4327,9 +4341,9 @@ namespace eval 16x16 {
 	DQC6YZSplBxmBmx4PtjSUkREiVJxN4zERLk4uPf5tTlNyszP1Venv5osu6FOJAxBQicSZXc8WDhf
 	vbcwX71bdscDQcTAMCLSYbLshjNnXrqbl/Knv75xotMJX/B8P0uCUhUrzXWcXj4vHwIAdMLwlNf8
 	l/YjIu79CUnQlFc05uMkAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set document [image create photo -data {
+	::icon::lazy document {set document [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4366,9 +4380,9 @@ namespace eval 16x16 {
 	aKlULtdmZz6/8bBY6lVMVqwlzY5VTO7IqfF3ReBZa+gFgDDsq7uua1YrT/3RMxfOCQBWymaZ0jSV
 	eiPyBsO+dPvAthoATE5OtmZQCIK/hg8f+nEw7K+5rqM819HM7GaP53vuUNi/Nnz40HwQBH+2+85u
 	42C1Wj1YelLJKVb/W21rLIX9W9fy+fwfRPSo7X8G7shb0f/wVzoAAAAASUVORK5CYII=
-}]
+}]}
 
-	set documentNew [image create photo -data {
+	::icon::lazy documentNew {set documentNew [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4406,9 +4420,9 @@ namespace eval 16x16 {
 	29u3vfXj2PikzufCRBvjOWuZWhsBgDEmoHNppVr32gotaf/pL17J5/M/kVQKAHJh+EfH5me/byu0
 	1IzRAJkorVLf8z3f9z2tJNXasFhorXVsfq4vl8v93ph88TW2VSqVDROlcrPS6n+n7ayTQuvyWjab
 	vSoitxvv/wLngHroWwCXNwAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set documentNewAlt [image create photo -data {
+	::icon::lazy documentNewAlt {set documentNewAlt [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4446,9 +4460,9 @@ namespace eval 16x16 {
 	29u3vfXj2PikzufCRBvjOWuZWhsBgDEmoHNppVr32gotaf/pL17J5/M/kVQKAHJh+EfH5me/byu0
 	1IzRAJkorVLf8z3f9z2tJNXasFhorXVsfq4vl8v93ph88TW2VSqVDROlcrPS6n+n7ayTQuvyWjab
 	vSoitxvv/wLngHroWwCXNwAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set databaseNew [image create photo -data {
+	::icon::lazy databaseNew {set databaseNew [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4488,9 +4502,9 @@ namespace eval 16x16 {
 	2YQkb6hSsQVAAIiYmB59Jv/f0firP/08c2Bu8V57OvPQt75eMFpbGtMTYyPDAFI3YwtDb33w6RsA
 	8PWXp0c7d4enlM0wEVGSgK8E8zkAoVwu12KaGV8o1JoEcIGIisys1nk9L4CAzt3hSSKa/RexwJNS
 	L+YzXAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set databaseNewAlt [image create photo -data {
+	::icon::lazy databaseNewAlt {set databaseNewAlt [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4530,9 +4544,9 @@ namespace eval 16x16 {
 	2YQkb6hSsQVAAIiYmB59Jv/f0firP/08c2Bu8V57OvPQt75eMFpbGtMTYyPDAFI3YwtDb33w6RsA
 	8PWXp0c7d4enlM0wEVGSgK8E8zkAoVwu12KaGV8o1JoEcIGIisys1nk9L4CAzt3hSSKa/RexwJNS
 	L+YzXAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set databaseOpen [image create photo -data {
+	::icon::lazy databaseOpen {set databaseOpen [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4572,9 +4586,9 @@ namespace eval 16x16 {
 	BZ/shW3b2NWb1MKtodqHn34dDvhlGIaJWs1A785u+uC9kZN8o0x5Inqhd0d89pNL0wcW/1hK5gta
 	cK1ckYulsn7u9ZfGi6W1PTfmUrvCrc2C2+0WFUnKcMaWNx2sVxOAQ9QCIK7peiSf15risWgWwDSA
 	WDqdvUv0ugVF8imcs2XO+eV/AZyOpXZV4KwVAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set exit [image create photo -data {
+	::icon::lazy exit {set exit [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4610,9 +4624,9 @@ namespace eval 16x16 {
 	LiwempmJXsrF+PnL17LJqdmwoqj8a3ouNjzw8KqUMm8jRgBQRDgUMjS3W8aWk/q1mx0tqqq4cr+S
 	0rYymTWOhIPZQL5/npnfb7PMzOwoXq/+4WJ15atIcdAUQnWvx7HeLpfQiotDZk115XDA5/sEQAGg
 	bjxGLn4CULSSTpcndlimcDD42+fzjDNzfMeU/ned/wIpHF6BMZjG7gAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set checkGreen [image create photo -data {
+	::icon::lazy checkGreen {set checkGreen [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4643,9 +4657,9 @@ namespace eval 16x16 {
 	9igMAyO33fvUyvlJ4XptdwgA+fqh0xx4KSuZ0Rer2441PXMqIsEom5FNATDR7Hc2lmtHxcbAS88n
 	My0Rodt/yFjJWV3PbxfnU7MnX+GPAaOkm/3OZq52WGwOWmkA+Akec2vPzlacx2zFeXzPY+JTYF8v
 	FnHzRAAsvgd0KSIvY5XHOfmpF+kgDDj//XH/qVdXthi/a+gwiwAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set checkBlue [image create photo -data {
+	::icon::lazy checkBlue {set checkBlue [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4676,9 +4690,9 @@ namespace eval 16x16 {
 	BKpdEVYNU8rVec7jmExEqafXz+rhxdv5Qyed2VofdYkJ98/p7GbuQ16fLp9v5FJXzBxGi1WeyemF
 	J4YpRbYyQLYywLYphd3x68rY825daHr9QtPrj+HUPFh1cz0k2iMi0ohumNmfij1LKpeZsX8niAPt
 	cb296I/7j74Au6IrvKS7qMkAAAAASUVORK5CYII=
-}]
+}]}
 
-	set crossHand [image create photo -data {
+	::icon::lazy crossHand {set crossHand [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4716,7 +4730,7 @@ namespace eval 16x16 {
 	xx+7tdTGooqsiHQPX7j03F83bod3vv1+rG/wfF3D6pob09mZ8Cf7v9p68vRwq9YGN7U0DwO4CgBL
 	u1BMZA2P/P7Bx/sOvjs+MRV4KOiH37I813ON6WwOisSWzet/+/TDPe+Q/GNpF4rDRJLzIrIvGg7N
 	Hzh0tOPa9ZsNmZmZoM8wnJXVValtrRsvvfXGKwdKYJLyL3k1eXCsqKJhAAAAAElFTkSuQmCC
-}]
+}]}
 
 #	set redo [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -4757,7 +4771,7 @@ namespace eval 16x16 {
 # YII=
 # }]
 
-	set reset [image create photo -data {
+	::icon::lazy reset {set reset [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4797,9 +4811,9 @@ namespace eval 16x16 {
 	+zq/vXp4cOjB3m1O+xgT0UQoUjE6Hi6WJAEWc8GTEmtxZnuZc2a9BSIiZubdbV92nrnWN+BOPp77
 	z5gs5sKV2gOu3g8a3/leVdUlvV4fIKI0rdP1FGILh2P1vf0/vzIRilgBYKvTnqg7sH/A4bBdIaL4
 	+vn/A8ACmKYcsUa5AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set refresh [image create photo -data {
+	::icon::lazy refresh {set refresh [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4839,9 +4853,9 @@ namespace eval 16x16 {
 	+zq/vXp4cOjB3m1O+xgT0UQoUjE6Hi6WJAEWc8GTEmtxZnuZc2a9BSIiZubdbV92nrnWN+BOPp77
 	z5gs5sKV2gOu3g8a3/leVdUlvV4fIKI0rdP1FGILh2P1vf0/vzIRilgBYKvTnqg7sH/A4bBdIaL4
 	+vn/A8ACmKYcsUa5AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set exchange [image create photo -data {
+	::icon::lazy exchange {set exchange [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4875,9 +4889,9 @@ namespace eval 16x16 {
 	UCj4mojeboszc2Alm5+YvLawkMrk9nZ27F+9O3/1+aFQ8MPGZqlSbySBlKM94VUAy7Ztb0UiERod
 	Ha3Wmycy2fzlkbHJtd6+YT4XnSow82ArIxY1oiQzLz26dxNXrt+xA4YecKVsi8ViCgYGFCQSVQCo
 	AfbHLlCdwBqyupTyDAAWQrwjoq16rhXaWsOyKZpB+u+1/QW0XxweeTZ/HgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set goNext [image create photo -data {
+	::icon::lazy goNext {set goNext [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4908,9 +4922,9 @@ namespace eval 16x16 {
 	4ug0u/zwpI9Epic/rrInN8HxMRUA3hEAoNFoxJK7ym1ZN0YlyUdAreYiItq2TYwxLgQxq9lkn1/f
 	uDA/B9cX6qEsy1nmWUOnMi68awkAAm3ORTAQkKqmGXcroW8TazVzZ5Am9sgI+bxQFCW2mjy4KxQf
 	/bORqXruPKOFwyFHRnSV8S+D9D+j7IaBl6nrg+c6/wD0/PnBywZK5QAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set disk [image create photo -data {
+	::icon::lazy disk {set disk [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4948,9 +4962,9 @@ namespace eval 16x16 {
 	IhFRRMTLy6t797z65tfFUtV0pZOhtdaGoRPnPRutlbGGRATeuXC50bSDA72ts2dOHVAABADS6cSl
 	/Xt3f5Pd0N8wRoOZQ22Uj0Yjoo3ywhxCJDRGIzvQ13h5z+5vM6nUr7TOgUi2Xq8/XV28m1R6ve2O
 	ZM/U19OzmsmkLhBR8W8PlH2tATLTgAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set save [image create photo -data {
+	::icon::lazy save {set save [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -4988,9 +5002,9 @@ namespace eval 16x16 {
 	IhFRRMTLy6t797z65tfFUtV0pZOhtdaGoRPnPRutlbGGRATeuXC50bSDA72ts2dOHVAABADS6cSl
 	/Xt3f5Pd0N8wRoOZQ22Uj0Yjoo3ywhxCJDRGIzvQ13h5z+5vM6nUr7TOgUi2Xq8/XV28m1R6ve2O
 	ZM/U19OzmsmkLhBR8W8PlH2tATLTgAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set saveAs [image create photo -data {
+	::icon::lazy saveAs {set saveAs [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5028,9 +5042,9 @@ namespace eval 16x16 {
 	Z4eFWq2//62Prs7er6iOgpcA0IpVZKzREEBrNs0wlnqj6fR0dyWjF0a2FQqFayLCDAB51/1tx5uv
 	XVlRKgaKWbTiWCCsFRut2VgBZdIOlbuXB9s3vX4ln8//2nLe/hvL8/PzGyoPqjlWLICCNTEBACsW
 	ayyVis8Gnuf9TESzLQv/A3Ddf1yQNRtbAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set folder [image create photo -data {
+	::icon::lazy folder {set folder [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5065,7 +5079,7 @@ namespace eval 16x16 {
 	KK32KN/3DGnA93whASAWjW7aluWX1opWYmTitmEIc7/q9WLeerlqdrZHtjq7YhsCABwn+H5woG+m
 	K9a2LaVxoBkApDTMro7o9tDApVfNgcA7YmYiImbmWLlcPl9YXQsZQvBBAKU1tUdaNx3HmSOiAoCd
 	3/U/wcwNZ/1sKZVKHWqsa5iI+BdI8Q/9Bl5eHQAAAABJRU5ErkJggg==
-}]
+}]}
 
 #	set folderOpen [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -5147,7 +5161,7 @@ namespace eval 16x16 {
 # bH/qbDIt6Mbfdf4D9XzHxQi25EEAAAAASUVORK5CYII=
 # }]
 
-	set help [image create photo -data {
+	::icon::lazy help {set help [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5187,9 +5201,9 @@ namespace eval 16x16 {
 	eCn01dWnforGnJRSvHbkxZFjR3vfJISkufKV04yxfkII84fCHTd+nHKORWNOsygoYEBRUQRV1XFf
 	rcXwHnJfOna090SZIf8p03BwtGPm9pwjm12tAQHWStUrjgdbp3s8z13e/tA/ZPofnV2JZKoBAFqa
 	bH/qbDIt6Mbfdf4D9XzHxQi25EEAAAAASUVORK5CYII=
-}]
+}]}
 
-	set close [image create photo -data {
+	::icon::lazy close {set close [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5222,9 +5236,9 @@ namespace eval 16x16 {
 	f9rYfv3xqD1TvJW7KBYWfhwetWeeNV7tfHN6JoCpKJeTIrr9kYhrRl0OPO9KEUdzAGC1XLXk/NIK
 	9IoZdLv9F3GS6/YtvWIG80srKFctCWA1MQdKKda0a1TM5+Te7padzc4eMDMxM2Uys+/2drfsYj4n
 	pzUNSqmROP8/ypea8LfLNJH0z+v8G/sgdSgXvemuAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set forward [image create photo -data {
+	::icon::lazy forward {set forward [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5255,9 +5269,9 @@ namespace eval 16x16 {
 	4ug0u/zwpI9Epic/rrInN8HxMRUA3hEAoNFoxJK7ym1ZN0YlyUdAreYiItq2TYwxLgQxq9lkn1/f
 	uDA/B9cX6qEsy1nmWUOnMi68awkAAm3ORTAQkKqmGXcroW8TazVzZ5Am9sgI+bxQFCW2mjy4KxQf
 	/bORqXruPKOFwyFHRnSV8S+D9D+j7IaBl6nrg+c6/wD0/PnBywZK5QAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set backward [image create photo -data {
+	::icon::lazy backward {set backward [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5288,9 +5302,9 @@ namespace eval 16x16 {
 	M2tCCA+ep/V0Ry0iOvrUhYioWHzdMlY3l49PTtHS3ES6LqEJ8e55ntQ0jQGAmOC679wd7Xza39uY
 	0XU9A0B8CVOXeQEjWA9PO/NL6fHz3FVdI1SImP+DiGUnhN+NzOdNY3Rq0e4dGEZi2nh2HCeulBIq
 	m5WBNn4rErhIDpyqi/R/q/yzk1oRmFzPOX8ACgoE5R3gGKcAAAAASUVORK5CYII=
-}]
+}]}
 
-	set first [image create photo -data {
+	::icon::lazy first {set first [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5327,9 +5341,9 @@ namespace eval 16x16 {
 	WaCkqCAYjcYonpBaPBbX/5hzAPqnic/1uz0Nwf2Hm6YBbGVmIiLO2IGGoKcmOYm/fY7USwDAkFJW
 	KKXINM2nzBwBIDg5rYaUsiKmFBym+ey/ftxitmhwKjBtYGb8zX4AW3CYENItxjIAAAAASUVORK5C
 	YII=
-}]
+}]}
 
-	set last [image create photo -data {
+	::icon::lazy last {set last [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5365,9 +5379,9 @@ namespace eval 16x16 {
 	wuGEaRpIOsllGwi0dhb68m4xcxIAi4SdUImkIy3Lpi0FedHB3rau4gLfIDPDa2R4EglHxK3Esm1J
 	+8zMWNzEsy1TldX10bHxUD0Ag4iYmQnAgeNnmmcq/StsxU0wAO8f297rkZKVUk+ZOQFAMLMG4LVt
 	e5+UktJssfN/XdwaxkvJFCC9+lqWir/lU5PTtikiRgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set info [image create photo -data {
+	::icon::lazy info {set info [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5407,9 +5421,9 @@ namespace eval 16x16 {
 	txljMzxn5RkiOsgYo97+obqLwfGS4FioRLJYFgSBUSp9X9QNwoplstG0Y8upfbsbD+UY9p8wXfkt
 	9PrXJ8/WTdy85U2q8/lExPIdcqKkuCj0an3N6fJ1/wrT/8TZF43FCwDA7SqcBqBwk+kP3fhnnP8C
 	U3O+OKf2QWMAAAAASUVORK5CYII=
-}]
+}]}
 
-	set plus [image create photo -data {
+	::icon::lazy plus {set plus [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5440,9 +5454,9 @@ namespace eval 16x16 {
 	z+JmzfOmhDDAulkOwMy0D0Zx1+vbm9cL7R8HX7YqlcqhJDfS1afCxkm47WTLux/DPYDvXz9/ezE7
 	e/qQBA/AzDLgqBy5lVz2nbELUKvOnbxaePlrJLuZHhwjUNyknWqv13cAN2mnOhxjFEUFk8b4zybu
 	1K+CnfrVpE185BbyNQDf94//+xaeipEKypWU+LGa/wCXk9fXQhnIDgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set minus [image create photo -data {
+	::icon::lazy minus {set minus [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5469,9 +5483,9 @@ namespace eval 16x16 {
 	MQrCUBBE3/z8wtbKQggELyJeROw9gsXvPIK9nsHei0ggYGFjbSDJWGghWFgoKOIrl53hLQt/BGBb
 	gFJKTwO3HUvyWw16wHhfVgOF0Kq7zu9xwO66bFTkR2An6WxbEaCu68lsvtiU1aEfY2b8WIBw07Qq
 	8uFpvVpOgS2g8PETXhX4gjf+ABd4ZUf0/Q7XyQAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set add [image create photo -data {
+	::icon::lazy add {set add [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5502,7 +5516,7 @@ namespace eval 16x16 {
 	z+JmzfOmhDDAulkOwMy0D0Zx1+vbm9cL7R8HX7YqlcqhJDfS1afCxkm47WTLux/DPYDvXz9/ezE7
 	e/qQBA/AzDLgqBy5lVz2nbELUKvOnbxaePlrJLuZHhwjUNyknWqv13cAN2mnOhxjFEUFk8b4zybu
 	1K+CnfrVpE185BbyNQDf94//+xaeipEKypWU+LGa/wCXk9fXQhnIDgAAAABJRU5ErkJggg==
-}]
+}]}
 
 #	set filetypeScid3Base [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -5546,7 +5560,7 @@ namespace eval 16x16 {
 # nmQneotvAAAAAElFTkSuQmCC
 # }]
 
-	set filetypeScid3Base [image create photo -data {
+	::icon::lazy filetypeScid3Base {set filetypeScid3Base [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5586,51 +5600,9 @@ namespace eval 16x16 {
 	9x872et57FMVpQIAlm1XEQFi/Uw5Zj7e0Ra/8dWlsZ6pv+ZacoWV6GppTStXLDNaHcrKsgzLtkgR
 	UAEmz2MiIoj1JxIRpQn4wGMeARA3DKNBzxVi8abG2wC02lhk/1rZLJ1686UhADj+2ulBx3X5H3o/
 	nmQneotvAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set filetypeScid4Base $filetypeScid3Base
-
-#	set filetypeScidbBase [image create photo -data {
-# iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
-# ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
-# ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
-# MjY3OTQ1ZmM0ODFjODExYzNkODg3ZjMzYTU1MWE2MmI2ZjBlYTdhNDFiNWEzZWYxZgoKTUlUIExp
-# Y2Vuc2UKCkNvcHlyaWdodCAoYykgMjAyMC0yMDI0IFBhd2XFgiBLdW5hCgpQZXJtaXNzaW9uIGlz
-# IGhlcmVieSBncmFudGVkLCBmcmVlIG9mIGNoYXJnZSwgdG8gYW55IHBlcnNvbiBvYnRhaW5pbmcg
-# YSBjb3B5Cm9mIHRoaXMgc29mdHdhcmUgYW5kIGFzc29jaWF0ZWQgZG9jdW1lbnRhdGlvbiBmaWxl
-# cyAodGhlICJTb2Z0d2FyZSIpLCB0byBkZWFsCmluIHRoZSBTb2Z0d2FyZSB3aXRob3V0IHJlc3Ry
-# aWN0aW9uLCBpbmNsdWRpbmcgd2l0aG91dCBsaW1pdGF0aW9uIHRoZSByaWdodHMKdG8gdXNlLCBj
-# b3B5LCBtb2RpZnksIG1lcmdlLCBwdWJsaXNoLCBkaXN0cmlidXRlLCBzdWJsaWNlbnNlLCBhbmQv
-# b3Igc2VsbApjb3BpZXMgb2YgdGhlIFNvZnR3YXJlLCBhbmQgdG8gcGVybWl0IHBlcnNvbnMgdG8g
-# d2hvbSB0aGUgU29mdHdhcmUgaXMKZnVybmlzaGVkIHRvIGRvIHNvLCBzdWJqZWN0IHRvIHRoZSBm
-# b2xsb3dpbmcgY29uZGl0aW9uczoKClRoZSBhYm92ZSBjb3B5cmlnaHQgbm90aWNlIGFuZCB0aGlz
-# IHBlcm1pc3Npb24gbm90aWNlIHNoYWxsIGJlIGluY2x1ZGVkIGluIGFsbApjb3BpZXMgb3Igc3Vi
-# c3RhbnRpYWwgcG9ydGlvbnMgb2YgdGhlIFNvZnR3YXJlLgoKVEhFIFNPRlRXQVJFIElTIFBST1ZJ
-# REVEICJBUyBJUyIsIFdJVEhPVVQgV0FSUkFOVFkgT0YgQU5ZIEtJTkQsIEVYUFJFU1MgT1IKSU1Q
-# TElFRCwgSU5DTFVESU5HIEJVVCBOT1QgTElNSVRFRCBUTyBUSEUgV0FSUkFOVElFUyBPRiBNRVJD
-# SEFOVEFCSUxJVFksCkZJVE5FU1MgRk9SIEEgUEFSVElDVUxBUiBQVVJQT1NFIEFORCBOT05JTkZS
-# SU5HRU1FTlQuIElOIE5PIEVWRU5UIFNIQUxMIFRIRQpBVVRIT1JTIE9SIENPUFlSSUdIVCBIT0xE
-# RVJTIEJFIExJQUJMRSBGT1IgQU5ZIENMQUlNLCBEQU1BR0VTIE9SIE9USEVSCkxJQUJJTElUWSwg
-# V0hFVEhFUiBJTiBBTiBBQ1RJT04gT0YgQ09OVFJBQ1QsIFRPUlQgT1IgT1RIRVJXSVNFLCBBUklT
-# SU5HIEZST00sCk9VVCBPRiBPUiBJTiBDT05ORUNUSU9OIFdJVEggVEhFIFNPRlRXQVJFIE9SIFRI
-# RSBVU0UgT1IgT1RIRVIgREVBTElOR1MgSU4gVEhFClNPRlRXQVJFLgp7oPpaAAADc0lEQVR4nF2T
-# T2wUZRjGn2/mmz873e3ust1tbWKRdo3Y2oAViabBwqoghQppQ+I/oqgxysGDcvJgIh486EkTY4zo
-# QYgmSJHYYmwoEZImkpICqVUJba1rxW7Zdro7O7M7883M60EaG9/Le3qT5/nl/TEAICLGGCNNU1Gr
-# uW2+73dc/fl628JiMePWPE3TVbcp07C4+b6OGc4xpevajOt6ICKJrR4T0Z0XxsZfHBw61zs9m29b
-# NksJ1xNySASJMWiqEqxLxleyrS0z/XsfO9vT/eAxxtg8u51g/YmTQ59/+OmJnFmyYER0JOOxsD5W
-# V1EU7gvh87JlR81SRXKcKpKJerz+yjMjzx7Y+yoHANu2n/7mu3M5q+Jgf29uan9v7lRb611XGhsS
-# CwBcAFqhuNI0Mzd3/7dDowNDIxc7Tp4Z2blvT+4QBwCzZEUdxwlVhTMQSfhv2NpNQchAkFTOyXYc
-# lErlGAcA4ft5IpKIiE4Pn7935Mef3k7Go8G/FRRfCLFaQbZtB4ahgQiBJ/w5DgBBENZcV6DOiNDO
-# Hd35yV+v11uVavJmYSkehiEkSYKqcDRlkmZn+0PlsUsTLZ4QhABVDgB1emSDonIwBun9o2+eBfD1
-# tcnfsrP5+ZTjuJphRNz1Lc1LXZ0bpwE8tf3JQ6/JEuO6rmU5ABAjrnCOW8VlOnzkaG7Xju6Fnu6t
-# k5s6N95YhbhiWQ1nhke3/3B+LLeyUkZjJgVixDkAuJ43HwQBQMDoxfF7Lk1MvRP75HgQrYtYiiIL
-# IQKlYldjlu3IlYoDXVcQBEHoeV5eAgDyyarVXBiGTn27eubSqbgpfF8uFM1E/q9b6ULRTAjfl9Op
-# hNn3RM+cEYmQ5wlf+FTmABCyUCYAkiSFH7x75GMAlyeu/bLhj/mbaxg0LXV1tv8OYEv37oPvEREj
-# FsocAJob05auqeLvQpE/f/itgf49j0Z6Htk62bWp/f8Mtg0Oj/aWrIp0RyblNqcz5dVXbjz25amP
-# Pjs+eKBkOYjoKmJ1kTAaNSyFcyF8X7ErTqxsV6VqzUM8ZuCl5/q/evngwBtrZWq5MDb+wunh0d03
-# ZvLZZbOU9ISQgzCELElQFSVYl4ybd7e1TA/0Pf79tocf+IIx9udqgrU6twLouHx1KruwuJjxvFBV
-# VclrymQWt2zumAYwpeva7G2d2T/mb86zbd49IAAAAABJRU5ErkJggg==
-# }]
+	::icon::lazy filetypeScid4Base {set filetypeScid4Base $filetypeScid3Base}
 
 #	set filetypeScidbBase [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -5674,7 +5646,49 @@ namespace eval 16x16 {
 # VclrymQWt2zumAYwpeva7G2d2T/mb86zbd49IAAAAABJRU5ErkJggg==
 # }]
 
-	set filetypeScidbBase [image create photo -data {
+#	set filetypeScidbBase [image create photo -data {
+# iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
+# ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
+# ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
+# MjY3OTQ1ZmM0ODFjODExYzNkODg3ZjMzYTU1MWE2MmI2ZjBlYTdhNDFiNWEzZWYxZgoKTUlUIExp
+# Y2Vuc2UKCkNvcHlyaWdodCAoYykgMjAyMC0yMDI0IFBhd2XFgiBLdW5hCgpQZXJtaXNzaW9uIGlz
+# IGhlcmVieSBncmFudGVkLCBmcmVlIG9mIGNoYXJnZSwgdG8gYW55IHBlcnNvbiBvYnRhaW5pbmcg
+# YSBjb3B5Cm9mIHRoaXMgc29mdHdhcmUgYW5kIGFzc29jaWF0ZWQgZG9jdW1lbnRhdGlvbiBmaWxl
+# cyAodGhlICJTb2Z0d2FyZSIpLCB0byBkZWFsCmluIHRoZSBTb2Z0d2FyZSB3aXRob3V0IHJlc3Ry
+# aWN0aW9uLCBpbmNsdWRpbmcgd2l0aG91dCBsaW1pdGF0aW9uIHRoZSByaWdodHMKdG8gdXNlLCBj
+# b3B5LCBtb2RpZnksIG1lcmdlLCBwdWJsaXNoLCBkaXN0cmlidXRlLCBzdWJsaWNlbnNlLCBhbmQv
+# b3Igc2VsbApjb3BpZXMgb2YgdGhlIFNvZnR3YXJlLCBhbmQgdG8gcGVybWl0IHBlcnNvbnMgdG8g
+# d2hvbSB0aGUgU29mdHdhcmUgaXMKZnVybmlzaGVkIHRvIGRvIHNvLCBzdWJqZWN0IHRvIHRoZSBm
+# b2xsb3dpbmcgY29uZGl0aW9uczoKClRoZSBhYm92ZSBjb3B5cmlnaHQgbm90aWNlIGFuZCB0aGlz
+# IHBlcm1pc3Npb24gbm90aWNlIHNoYWxsIGJlIGluY2x1ZGVkIGluIGFsbApjb3BpZXMgb3Igc3Vi
+# c3RhbnRpYWwgcG9ydGlvbnMgb2YgdGhlIFNvZnR3YXJlLgoKVEhFIFNPRlRXQVJFIElTIFBST1ZJ
+# REVEICJBUyBJUyIsIFdJVEhPVVQgV0FSUkFOVFkgT0YgQU5ZIEtJTkQsIEVYUFJFU1MgT1IKSU1Q
+# TElFRCwgSU5DTFVESU5HIEJVVCBOT1QgTElNSVRFRCBUTyBUSEUgV0FSUkFOVElFUyBPRiBNRVJD
+# SEFOVEFCSUxJVFksCkZJVE5FU1MgRk9SIEEgUEFSVElDVUxBUiBQVVJQT1NFIEFORCBOT05JTkZS
+# SU5HRU1FTlQuIElOIE5PIEVWRU5UIFNIQUxMIFRIRQpBVVRIT1JTIE9SIENPUFlSSUdIVCBIT0xE
+# RVJTIEJFIExJQUJMRSBGT1IgQU5ZIENMQUlNLCBEQU1BR0VTIE9SIE9USEVSCkxJQUJJTElUWSwg
+# V0hFVEhFUiBJTiBBTiBBQ1RJT04gT0YgQ09OVFJBQ1QsIFRPUlQgT1IgT1RIRVJXSVNFLCBBUklT
+# SU5HIEZST00sCk9VVCBPRiBPUiBJTiBDT05ORUNUSU9OIFdJVEggVEhFIFNPRlRXQVJFIE9SIFRI
+# RSBVU0UgT1IgT1RIRVIgREVBTElOR1MgSU4gVEhFClNPRlRXQVJFLgp7oPpaAAADc0lEQVR4nF2T
+# T2wUZRjGn2/mmz873e3ust1tbWKRdo3Y2oAViabBwqoghQppQ+I/oqgxysGDcvJgIh486EkTY4zo
+# QYgmSJHYYmwoEZImkpICqVUJba1rxW7Zdro7O7M7883M60EaG9/Le3qT5/nl/TEAICLGGCNNU1Gr
+# uW2+73dc/fl628JiMePWPE3TVbcp07C4+b6OGc4xpevajOt6ICKJrR4T0Z0XxsZfHBw61zs9m29b
+# NksJ1xNySASJMWiqEqxLxleyrS0z/XsfO9vT/eAxxtg8u51g/YmTQ59/+OmJnFmyYER0JOOxsD5W
+# V1EU7gvh87JlR81SRXKcKpKJerz+yjMjzx7Y+yoHANu2n/7mu3M5q+Jgf29uan9v7lRb611XGhsS
+# CwBcAFqhuNI0Mzd3/7dDowNDIxc7Tp4Z2blvT+4QBwCzZEUdxwlVhTMQSfhv2NpNQchAkFTOyXYc
+# lErlGAcA4ft5IpKIiE4Pn7935Mef3k7Go8G/FRRfCLFaQbZtB4ahgQiBJ/w5DgBBENZcV6DOiNDO
+# Hd35yV+v11uVavJmYSkehiEkSYKqcDRlkmZn+0PlsUsTLZ4QhABVDgB1emSDonIwBun9o2+eBfD1
+# tcnfsrP5+ZTjuJphRNz1Lc1LXZ0bpwE8tf3JQ6/JEuO6rmU5ABAjrnCOW8VlOnzkaG7Xju6Fnu6t
+# k5s6N95YhbhiWQ1nhke3/3B+LLeyUkZjJgVixDkAuJ43HwQBQMDoxfF7Lk1MvRP75HgQrYtYiiIL
+# IQKlYldjlu3IlYoDXVcQBEHoeV5eAgDyyarVXBiGTn27eubSqbgpfF8uFM1E/q9b6ULRTAjfl9Op
+# hNn3RM+cEYmQ5wlf+FTmABCyUCYAkiSFH7x75GMAlyeu/bLhj/mbaxg0LXV1tv8OYEv37oPvEREj
+# FsocAJob05auqeLvQpE/f/itgf49j0Z6Htk62bWp/f8Mtg0Oj/aWrIp0RyblNqcz5dVXbjz25amP
+# Pjs+eKBkOYjoKmJ1kTAaNSyFcyF8X7ErTqxsV6VqzUM8ZuCl5/q/evngwBtrZWq5MDb+wunh0d03
+# ZvLZZbOU9ISQgzCELElQFSVYl4ybd7e1TA/0Pf79tocf+IIx9udqgrU6twLouHx1KruwuJjxvFBV
+# VclrymQWt2zumAYwpeva7G2d2T/mb86zbd49IAAAAABJRU5ErkJggg==
+# }]
+
+	::icon::lazy filetypeScidbBase {set filetypeScidbBase [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5714,7 +5728,7 @@ namespace eval 16x16 {
 	Pjs+eKBkOYjoKmJ1kTAaNSyFcyF8X7ErTqxsV6VqzUM8ZuCl5/q/evngwBtrZWq5MDb+wunh0d03
 	ZvLZZbOU9ISQgzCELElQFSVYl4ybd7e1TA/0Pf79tocf+IIx9udqgrU6twLouHx1KruwuJjxvFBV
 	VclrymQWt2zumAYwpeva7G2d2T/mb86zbd49IAAAAABJRU5ErkJggg==
-}]
+}]}
 
 #	set filetypeChessBase [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -5758,7 +5772,7 @@ namespace eval 16x16 {
 # kZP58cmpK0T0+L8Gv7yDw6yhugAAAABJRU5ErkJggg==
 # }]
 
-	set filetypeChessBase [image create photo -data {
+	::icon::lazy filetypeChessBase {set filetypeChessBase [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5798,7 +5812,7 @@ namespace eval 16x16 {
 	gHOOes+ujZFzn4w2PlgfiyeSdUII4lxiJARzOOyQy88UJ6L3g61Ns5evhA4uLUdb4omkK5PJqbIk
 	c85x7ZsvPvr5zNfnzwyPjPklTiAi9HR1ztw7UQYAbIfdRLQ/lUq9sLwcPUFEh4nIWu4bPHbi3Vz3
 	kZP58cmpK0T0+L8Gv7yDw6yhugAAAABJRU5ErkJggg==
-}]
+}]}
 
 #	set filetypeArchive [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -5838,7 +5852,7 @@ namespace eval 16x16 {
 # EHewDJ+5AAAAAElFTkSuQmCC
 # }]
 
-	set filetypeArchive [image create photo -data {
+	::icon::lazy filetypeArchive {set filetypeArchive [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5874,7 +5888,7 @@ namespace eval 16x16 {
 	ECx7rlub/VF2r1y/fUtr5Ww3kLVxtFBZclvyQZTP71oCgGKxCAUA6bT/6UzH0YGW5qYVY7S7xUFr
 	YYx2W5qbVjpPtvWnfX94fWiKCEmKiBQqlerBUrmc0nrnQlkbsxAEy+m0P0xyatvf/dtKb37/Gwuz
 	EHewDJ+5AAAAAElFTkSuQmCC
-}]
+}]}
 
 #	set filetypePGN [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -5915,7 +5929,7 @@ namespace eval 16x16 {
 # 42C1Wj1YelLJKVb/W21rLIX9W9fy+fwfRPSo7X8G7shb0f/wVzoAAAAASUVORK5CYII=
 # }]
 
-	set filetypePGN [image create photo -data {
+	::icon::lazy filetypePGN {set filetypePGN [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5952,11 +5966,11 @@ namespace eval 16x16 {
 	aKlULtdmZz6/8bBY6lVMVqwlzY5VTO7IqfF3ReBZa+gFgDDsq7uua1YrT/3RMxfOCQBWymaZ0jSV
 	eiPyBsO+dPvAthoATE5OtmZQCIK/hg8f+nEw7K+5rqM819HM7GaP53vuUNi/Nnz40HwQBH+2+85u
 	42C1Wj1YelLJKVb/W21rLIX9W9fy+fwfRPSo7X8G7shb0f/wVzoAAAAASUVORK5CYII=
-}]
+}]}
 
-	set filetypeBPGN $filetypePGN ;# TODO
+	::icon::lazy filetypeBPGN {set filetypeBPGN $filetypePGN ;# TODO}
 
-	set filetypePGN-1 [image create photo -data {
+	::icon::lazy filetypePGN-1 {set filetypePGN-1 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -5993,9 +6007,9 @@ namespace eval 16x16 {
 	aKlULtdmZz6/8bBY6lVMVqwlzY5VTO7IqfF3ReBZa+gFgDDsq7uua1YrT/3RMxfOCQBWymaZ0jSV
 	eiPyBsO+dPvAthoATE5OtmZQCIK/hg8f+nEw7K+5rqM819HM7GaP53vuUNi/Nnz40HwQBH+2+85u
 	42C1Wj1YelLJKVb/W21rLIX9W9fy+fwfRPSo7X8G7shb0f/wVzoAAAAASUVORK5CYII=
-}]
+}]}
 
-	set filetypeZipFile [image create photo -data {
+	::icon::lazy filetypeZipFile {set filetypeZipFile [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6033,9 +6047,9 @@ namespace eval 16x16 {
 	EYgIjmN55UrNSqeSMt2Z9O9MTBq1uqd3pzvCsZOHNsbj8fOtHMQc55dNG177Lp1KVgZeXOot6eut
 	aUJo6VSytO3tN6/rujZLgvBCd2d504b138ZisevN4y38jT2zs6V1rutaUvr+g4d5J92VKiVc9xaA
 	5eN3J3t70ql517WvEVGuucLfjGJuGJWf+igAAAAASUVORK5CYII=
-}]
+}]}
 
-	set filetypePDF [image create photo -data {
+	::icon::lazy filetypePDF {set filetypePDF [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6074,9 +6088,9 @@ namespace eval 16x16 {
 	wLD0/EBIKcXoe8NnD+3fM1ooug4AKntVEXUiBBBFHYfOnzlxSSn1U03KrABgZ0d7dmtbakGQoPa2
 	ll8K5TJ17uh4cGdqtj4Ssdx0z8GbV7/5fmfFr6pUsmmCiCprX0kAwMyO53l7AMC27XEAFATBU1Mz
 	86mWZMM/8Xj8V9d1u6SU0rbtawDcmvj4X196lI8XWFGkAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set filetypeHTML [image create photo -data {
+	::icon::lazy filetypeHTML {set filetypeHTML [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6115,9 +6129,9 @@ namespace eval 16x16 {
 	kmZGGs0mm42kbK0J08z4xticyazOMivGWpWkqcqMkX8rNf+1N98/bYx52u/v6VzqKLVHjlTVSnVj
 	eO+eiYH+3n0A8MDewan+3q4VUQJnafNx1K4Dnf4xMd0ahgGstZRarfZcHMc+AKnX6804jq8lSXIA
 	AMIw/LleTw7EcegAOAB5AGZieqbz/sF7FwD8+B+vUq1TgWQJmwAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set filetypeTeX [image create photo -data {
+	::icon::lazy filetypeTeX {set filetypeTeX [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6155,9 +6169,9 @@ namespace eval 16x16 {
 	DLKJ1p5yIuh0u5zzs2ClnDHGtjub3tOlp8zCT9+9mc/nfxGRLabQ9/86fuy16+XSWMfzNABxSsHt
 	GcnHzCoBYD3PQ7k01jl+7PB8GIZ3BuqGf2O52Wy+XFtv5BQrcXYHc7AujRc7QRDcJqKVwd5jpU91
 	WAeRZ54AAAAASUVORK5CYII=
-}]
+}]}
 
-	set texture [image create photo -data {
+	::icon::lazy texture {set texture [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6197,9 +6211,9 @@ namespace eval 16x16 {
 	HMeRRDonuJzSH2dP+QMA8C0FANLQIHDdbkfu/OnA5R3bt8ldnY6bFyIffWg27bxCKXAPdzmz50KT
 	l3ds3yZ3d+6Sz56c8Le22C4QQu4RROQ1TXsWAJAx9rOiqE/xvIFjjF0FAKJp2iAAaFtNFAUKANcI
 	IRuISP4EHTLtBIuG64IAAAAASUVORK5CYII=
-}]
+}]}
 
-	set logo [image create photo -data {
+	::icon::lazy logo {set logo [image create photo -data {
 		iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAHYAAAB2AH6XKZy
 		AAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAohJREFUOI1tk21IU1EY
 		x//33HunVyYbacVyGhUtCykLX9BejYKkIoaJH6WgIPBL+EktMgrEb+GHcmVELwSJNAiTUtMR
@@ -6215,10 +6229,10 @@ namespace eval 16x16 {
 		ZzvbmNtcWzl68IBNSloHoLT27XrXUANLcuDX571k6tWNye4Bj2Ng9IscDqtJg5RSfaoKQiuL
 		suL/3ertb5rmot85t/z6LkFKOUHBpScCfP7Amh7JVjUNLm9/0zQA/AMAeTPx0h76dQAAAABJ
 		RU5ErkJggg==
-	}]
-	set sci $logo
+	}]}
+	::icon::lazy sci {set sci $logo}
 
-	set dice [image create photo -data {
+	::icon::lazy dice {set dice [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6251,9 +6265,9 @@ namespace eval 16x16 {
 	wc2vHf9p3j/oDQcbWptYKWml26hGvR7alpV8OxsWW7vtPSnFwqkyEuPzUWg1G7WkUVseA4BwnOKn
 	Jw82j5prtUgpaYGI8lIpaTXX6tH21uZBuVw+AQACAGZe/T4a3Q6C09Lvbp01uVGrjcvl0gkR+cxM
 	YOYFZ/8m0r4fpmPdaEinKdsAAAAASUVORK5CYII=
-}]
+}]}
 
-	set clipboardIn [image create photo -data {
+	::icon::lazy clipboardIn {set clipboardIn [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6292,9 +6306,9 @@ namespace eval 16x16 {
 	wMzs3KHiwmKy0XRl2kpj5rTj1A8sLtu6QlJgmh3ZnsG3L5aXlrW4prkZM1UBgGJpcYfretFoTG0q
 	W46JiCwAE1t2yd4jh/YMj04eqzeaLatVhwGg0WhG4y3a2um+w1P/AnSIhnH1b5JsAAAAAElFTkSu
 	QmCC
-}]
+}]}
 
-	set clipboardOut [image create photo -data {
+	::icon::lazy clipboardOut {set clipboardOut [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6331,9 +6345,9 @@ namespace eval 16x16 {
 	TG6IYkpJbQwAkBSCwzAyQojoZ9mL53MN0cDT+6fS6fRLAYABwHGcofaWowOZTJ0fU0oyM0khSAoB
 	ZiYVU1JIEc/nM35b85F+x3GGgUqMV+Ug63lL+91SKbXWGykFa02UbahddJzkEBEVmZlWL6/94v+q
 	Ov8L6nxTgwMu5lYAAAAASUVORK5CYII=
-}]
+}]}
 
-	set repeat [image create photo -data {
+	::icon::lazy repeat {set repeat [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6371,9 +6385,9 @@ namespace eval 16x16 {
 	dCcnC71HB4YuTWSn6nbtTBQ/u3rhmgntpIEVrRSrlo57XnnbtvpfROQu1u1fFdHJ5vJ9B7v7iusi
 	tj3Kiv+hRlJEhCSjlUql0xgD13W/8X2Uk8kRyWQyG2j58H1ARGw18wCB5GlsVnMhbQAAAABJRU5E
 	rkJggg==
-}]
+}]}
 
-	set blackPawn [image create photo -data {
+	::icon::lazy blackPawn {set blackPawn [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAAA8AAAAQCAYAAADJViUEAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6408,7 +6422,7 @@ namespace eval 16x16 {
 	crvdqwABCKLRqPnl67d5S0tx9c7t61fPnmkPGcaq/E1bTEJRFKSSKfPHT5/3ACLZZYBMJlNmUQRi
 	2vivouu6GMYqgoG2D00NdeMup5Ox2KJ9IRazL2R6LLZodzmdbG48MR4MtL03jFXoui6ZSxGQaQFQ
 	NTf3+6BiUdawho0rMoFpI23Kz9/7E8CoiMJ1V/+BPxMAMqocmfyVAAAAAElFTkSuQmCC
-}]
+}]}
 
 #	set crossTable [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -6450,7 +6464,7 @@ namespace eval 16x16 {
 # dJqmT48ieN+RzP8N9Lbvd0sWbg7Ny62nAAAAAElFTkSuQmCC
 # }]
 
-	set crossTable [image create photo -data {
+	::icon::lazy crossTable {set crossTable [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6488,11 +6502,11 @@ namespace eval 16x16 {
 	x4NCY6KWr3x68cVqtXpFVSqltVeeO3alMVlLXa0LIKkcxSw3zHJDpRRBEiS1dgqNyXr68vFjy0EQ
 	3AD+yCQid23F8UNR1Pe1lqxc8u8/fe78DABcmj+70N+Ob5J0jDGYqNV2gqB8g2RTREgRIcl/VEBE
 	dJqmT48ieN+RzP8N9Lbvd0sWbg7Ny62nAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set browse $filetypeScidbBase
+	::icon::lazy browse {set browse $filetypeScidbBase}
 
-	set paragraphSpacing [image create photo -data {
+	::icon::lazy paragraphSpacing {set paragraphSpacing [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6526,9 +6540,9 @@ namespace eval 16x16 {
 	dT1gyKFFCAC/QYm0WTdvjKTfkrwrIrYBAI7jDL6eej+8bm+1sNHwW0LBsFLKMk3TMtW+KmVaKmCo
 	jc1t69Xku2slxxk8uIOl1Y1opVI1W8Ih/fTxw0cnY50LRx3S1uZ28nZu7EG5UjVXVzeiBwD9yT77
 	TG/3DkBcGDj/WUQ+HjU/kqlzfb0lQNCf7LObA8d7puPITwGvW6n9FUwjAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set columnLayout [image create photo -data {
+	::icon::lazy columnLayout {set columnLayout [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6561,9 +6575,9 @@ namespace eval 16x16 {
 	UwqATtwlG2RGTmg95A0aY99C1DxsHQwHmr4F3/e9dthuNJthox22G9lA676FlEp5zVb74GcYdv7P
 	ETudzszcwtK1na+1nErJ4xjP5E/X3rx8krpy486lb/vfC1L+jrE0PlZ/vfJwQwEIIaSf9rVKKd0v
 	khCWtO9rpTzVQ6X7RQJDOu1rKaU3cJUHDeH4mf75nX8BeasTBnZChkcAAAAASUVORK5CYII=
-}]
+}]}
 
-	set togglePlus [image create photo -data {
+	::icon::lazy togglePlus {set togglePlus [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6599,9 +6613,9 @@ namespace eval 16x16 {
 	0iyuByoaiWQs03S/LaX8Xd19vVIKAwA8z2NXew4AKClOCSHI1bqwks6asWjYjYarsgAggkH/m45D
 	LU9idWFHKWkWv4OklMJnmX6fZfqllAJEZChlxuoiTntry2goFJoEitIwc+1yOr07mVwMlAz7W7T2
 	KBoOZ0OhwCQRJZiZSsr+c0q9n3dKJydQ1aMnAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set toggleMinus [image create photo -data {
+	::icon::lazy toggleMinus {set toggleMinus [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6636,9 +6650,9 @@ namespace eval 16x16 {
 	rXU00N+3mXv6cMVGNgRBekoyGOQcQwgSKp3u+DgzPfFyZe3d5IE50MwcAgAzMbMjpaRIJBKfXj1/
 	9Hrja36IBEUA4JwTI8NDpfg3nt3bq18rV6udomXXzpEYGT6/DeADEZnTNvQby5As9mumE6EAAAAA
 	SUVORK5CYII=
-}]
+}]}
 
-	set undo [image create photo -data {
+	::icon::lazy undo {set undo [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6674,9 +6688,9 @@ namespace eval 16x16 {
 	JiJSALQAgGd2dnfFqdrGQbtzeXxc7ERGemqX3eE0vuvuWx8dFek/WLzLJkPHCwiKbDabxmw2+73e
 	OU1gPBqwu1b09jvMQhBi9THq8SOFTXk52Xd+a54QdUYA2NI/aF/7pPVljmN4JCk6eulUqA7+2X3M
 	HAZgCQCFiLzBRn8DETMLWK1iUWnBC98BXVteLnF7ThAAAAAASUVORK5CYII=
-}]
+}]}
 
-	set redo [image create photo -data {
+	::icon::lazy redo {set redo [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6713,9 +6727,9 @@ namespace eval 16x16 {
 	0tP23ss/feJxsDZI6eweiH/yrPnQ6Pj0ZqzyQTJUzCy0tLSIf0P4Nwefewdymprb0ufnF4J1MZFj
 	hzP2vTPE6icBvCGi5XX5X0NisC+J/yTvLviemUwmgZmFteu7Vr8AFMRqC7Bj12kAAAAASUVORK5C
 	YII=
-}]
+}]}
 
-	set checker [image create photo -data {
+	::icon::lazy checker {set checker [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6751,7 +6765,7 @@ namespace eval 16x16 {
 	v3zrBoiUMbbHzjEAkBDkKTnBzKbV/u4NJ7FJ4nrnpwZRVFk+PXZsYXjPYC6l9KQQ1Bf4YRiGlTAM
 	K32BHwohSErpDe8ZzMfHjs9HUbT8R5iyrDvaSNNquSQ7y1pHSRx3oqiyXIZp07X/iPMPLvZU1wLN
 	ZGIAAAAASUVORK5CYII=
-}]
+}]}
 
 #	set setup [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -6796,7 +6810,7 @@ namespace eval 16x16 {
 # HxxcWPIbgACyMvVLAxc726PhmNdgyBgHgHFETCAi/A+oUMx/5AMF7QAAAABJRU5ErkJggg==
 # }]
 
-	set setup [image create photo -data {
+	::icon::lazy setup {set setup [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6837,9 +6851,9 @@ namespace eval 16x16 {
 	/PrK0A45FOEBEA64T2xIEOHMnDsLiIDnWIjGVsCSuy76eHnZRCy2glwyVBP799Z+6XCKLaJnUWu1
 	ZDv8y5J+1u42ACDodYJsyNAvBmQlq8hq+e/1Pa9c2lCUfxURCdeSSETpk1Mz9bd/Gy955smK2foD
 	HxxcWPIbgACyMvVLAxc726PhmNdgyBgHgHFETCAi/A+oUMx/5AMF7QAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set edit [image create photo -data {
+	::icon::lazy edit {set edit [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6875,7 +6889,7 @@ namespace eval 16x16 {
 	fzZcWFN9Sh598bi/orzsLWNM2f6WljNAURRBVTW+sbHJH7iePNdA4upahvaAkZ0dTkRUVVm+VF1Z
 	njYcPECiKIqCToezJuPym+G+gXwwEdFfQ/YrinI1GIoW7xP0ioJfujOnK5aI6DNjbGsv+L+U4/Yu
 	+g3HxYnv8ChjGwAAAABJRU5ErkJggg==
-}]
+}]}
 
 #	set view [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -6914,7 +6928,7 @@ namespace eval 16x16 {
 # X7U9d/fKAAAAAElFTkSuQmCC
 # }]
 
-	set fullscreen [image create photo -data {
+	::icon::lazy fullscreen {set fullscreen [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6952,9 +6966,9 @@ namespace eval 16x16 {
 	nSDBTR53HREVKVmnhpSiWl0UVtXyIAKT0Mg0WzKI6KxQnhRCI0Tg/wvFJocZm5vXgpJ1oo5YtNQV
 	a6+sUEbbroGSTs2ybEZEWKHMSqra+oBf93p1bDQUhM1gpSMWLa36TKtdET4B8juIrZ3RYykAAAAA
 	SUVORK5CYII=
-}]
+}]}
 
-	set log [image create photo -data {
+	::icon::lazy log {set log [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -6991,9 +7005,9 @@ namespace eval 16x16 {
 	xsz02R/m5suDSoun92J04JUW++7+iTdIhN47eQqQJENNa61bqNaj9w4cP0IAWinfmynPczZbaTic
 	DOUb1q9rAMDU1NRyD4px/Ov42OhXw0mpYW2gQhsYrbXt3WEU2pGktDg+Njobx/Ev3bp7p3G4Vqu9
 	XH5Y7VNa/W+0vfOSlNYuFgqFn0Tkftf+CF2gXU7WFn5ZAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set copy [image create photo -data {
+	::icon::lazy copy {set copy [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7031,9 +7045,9 @@ namespace eval 16x16 {
 	DwBcnJ6egWY+Uq035PLY9U2Pyh7PVHyL1ZxjJiZa2pONLn93fWOj0RSlVUzzDFQ+n5d8Pv9M7tSZ
 	L8eu/bahq8uGY9tGRAgdwgIQkTSCJgdhC5ufXz+uAYCIYhEhrdQ/1VpwuhEEJ/66PbHGn60lF1FA
 	Wutw04vr7o588M7Iv5AKcppmzJ2DAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set plan [image create photo -data {
+	::icon::lazy plan {set plan [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7071,9 +7085,9 @@ namespace eval 16x16 {
 	N7dsq3bfv/c7IRXHL3xxx1RlpqjUyrerf13J79xxU3Xv3XeWn3+m730AF0Gyq3fwxbnOnoGlkZPn
 	zmdZ9hDJLSS3ZFm2r3R2fKLnwJDvOTDkS2fHJ0g+QLJu3TiSBWPMg8aYbpLFzVMh2ZwkydEkSY6S
 	bF7Lx3EshRD4BwH5hSi6MGukAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set news [image create photo -data {
+	::icon::lazy news {set news [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7111,9 +7125,9 @@ namespace eval 16x16 {
 	f5fN5g4jwsGeV/2zbOnoE0r8VDwDUEoJYCgmlPopk81rz170LtJ1DVbULH0UCJR2Y7GRiGhGfGho
 	fiqVcf9r+x6PG+49eLrs/cdPM2bPrBzcvH7tGUR8+V8KiUgjojIiEiNW/wDMNWUeOfy7AwAAAABJ
 	RU5ErkJggg==
-}]
+}]}
 
-	set contact [image create photo -data {
+	::icon::lazy contact {set contact [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7150,9 +7164,9 @@ namespace eval 16x16 {
 	JZ8PnDAMwp5MXwAAhXx+a2//Q4yOjS/UodGOkq4xlgBAladS2YjrhgNjI7F9Hx77WErh/E0eopnx
 	wMxsjNUTftZNlyfD8mQiBwAiHo9d37xxfUu6IhkoJV1MA4mLazEzZuiolHTTFangnQ3rL3ie1zVb
 	C/PHff/l4eHREinF7BX/qQVjqTyZzHleSRcRDTIz/R81EgA8AX+DZ4OWIOIZAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set languages [image create photo -data {
+	::icon::lazy languages {set languages [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7190,7 +7204,7 @@ namespace eval 16x16 {
 	ZYfWORS5bkgWqZWida6hcho/X+3bppTaaa60MDw8zNra2kBr7bsFBZkXny/Up08c+SGr1G0AsC3r
 	pc+ONzcEQaAsy/JXYbm0MCRtz/O25+G5JiJ+/jzked4u3/dpWVb/qgqWtk1EsgC6l/J5cJAX+i//
 	L3psea9WsgRKAAAAAElFTkSuQmCC
-}]
+}]}
 
 #	set minimize [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -7272,7 +7286,7 @@ namespace eval 16x16 {
 # SUVORK5CYII=
 # }]
 
-	set minimize [image create photo -data {
+	::icon::lazy minimize {set minimize [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7310,9 +7324,9 @@ namespace eval 16x16 {
 	Y6VorDTc246RAQIzkntFSYeZGUwMZkBKw3LHR9XhyWcXHce5DgDk+/0XD71y9FuvuZkfcvIaAO76
 	Xct9qDT47fLZ0/X67ZsRJ1IIkcRxQmOlUs9xcte3y1QoZK9NVp9Z+n5+abLXD7IAkMtmB89Xn16y
 	LOvzfft2b9yvmWmL/wET/pxqlsOvKAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set maximize [image create photo -data {
+	::icon::lazy maximize {set maximize [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7350,9 +7364,9 @@ namespace eval 16x16 {
 	nSDBTR53HREVKVmnhpSiWl0UVtXyIAKT0Mg0WzKI6KxQnhRCI0Tg/wvFJocZm5vXgpJ1oo5YtNQV
 	a6+sUEbbroGSTs2ybEZEWKHMSqra+oBf93p1bDQUhM1gpSMWLa36TKtdET4B8juIrZ3RYykAAAAA
 	SUVORK5CYII=
-}]
+}]}
 
-	set fonts [image create photo -data {
+	::icon::lazy fonts {set fonts [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7389,9 +7403,9 @@ namespace eval 16x16 {
 	zzMCEdCSSim9tCB/6NSxIzUOACil7OxZufjxM6GNMQDU5KTnZaaymRQKBXV4cjYAgYhg9LeBJUVr
 	PRYgySxjzO6BwXiW8fzYwrxZAwAepAiKu3v6ZgYDGXNEtAIsAMjM3JzmtJn/xx8i/ViQ7H4FTwAA
 	AABJRU5ErkJggg==
-}]
+}]}
 
-	set playercard [image create photo -data {
+	::icon::lazy playercard {set playercard [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7430,9 +7444,9 @@ namespace eval 16x16 {
 	4NsnRscn7or5Gr6nQyICgXg1IQaTIOJyperXjRN7Huy/cOzNl59SSspspVodBvDa5OVclzHGB4Pw
 	b0Pg9W1rw56tmezR1w8OKylzq9uYyecLvZWw5v9XdZ0FJYN4mE6v/4WIsgDoHxQLdrV8dDCvAAAA
 	AElFTkSuQmCC
-}]
+}]}
 
-	set board [image create photo -data {
+	::icon::lazy board {set board [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7470,9 +7484,9 @@ namespace eval 16x16 {
 	M79/DkFEOgiCDes27bwwOjZhOq5dEkSCiAThvUKlFbGGCKNItvjN6sq5kxtd170sADAAOI7zx9df
 	rr2QbkmVElLalmUlTMO0DMOQhmHIhJSWbUtKL0iVvtm49mfHcf7C3M9i5nShUFg1PjntCkN8kDcA
 	aAVq8eeXPM+7TUSjzEzvAAQ2XACGc81/AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set annotation(infix) [image create photo -data {
+	::icon::lazy annotation(infix) {set annotation(infix) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7510,9 +7524,9 @@ namespace eval 16x16 {
 	u3OD2V2ZqG2PPPgFAsSIdF7P/bW5b0d/1vcryrZtvNGbvvxJ35ZhFrh1YzjhOJVUqmWciG4CmGUA
 	QPZlMkxEf4rIpa4Xny8U786oj7dtOv7uW6uPNIofZ0IPIhFq/EzUq1bXRpSC1vo8EfmZTGbOcWWR
 	zQJEZADgf9HMVDTGfFfrAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set annotation(prefix) [image create photo -data {
+	::icon::lazy annotation(prefix) {set annotation(prefix) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7551,9 +7565,9 @@ namespace eval 16x16 {
 	s9mc5TgOdjz52A/HXn/lCAClLWsvQCFAgFixEgDQ09OjsPxRTXtePBx/amdHcnDoah/JukLdIdl8
 	c2z89JaWdm5paedI7NYpks0oNAhJRTKczuXaXNdtIxlaBqcqmASSTdt2daa27e5MkWwEgL8AJ1qN
 	NKePgSwAAAAASUVORK5CYII=
-}]
+}]}
 
-	set annotation(suffix) [image create photo -data {
+	::icon::lazy annotation(suffix) {set annotation(suffix) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7592,9 +7606,9 @@ namespace eval 16x16 {
 	SiZtRykVuZ6PqenZNYKZWpsbl0aGB7JN69YeZmZNRESDg4OCqh/V2fvca1fu2/ls4dB7x08EwHYA
 	6UuXZvofe+ql+Ud3vzj/2+XZvQCMWn/VTFT9ZiKyXdfvkpLYsqxTzLxcq1u+1g9KIlJKjTFzBQAz
 	M/4EbLyK2LlZbw8AAAAASUVORK5CYII=
-}]
+}]}
 
-	set annotation(all) [image create photo -data {
+	::icon::lazy annotation(all) {set annotation(all) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7632,7 +7646,7 @@ namespace eval 16x16 {
 	bhEBRBQA+KbPEYLAsbWJ5caNgjGBwKqwAABaK6dY2Ozv2f302YzrXmJe/ZlpZjE9zYKZiXY+uZuj
 	OMbW0ULr+GsH3hsZztc7nlFaCRtbSyNDm7qZTOYHImpuJCw1tqXQlFLKU28fqjwwWvqIiKKNiP1v
 	/b+ful1/0nEkK6UWiShYWFiQS0tL94jlchkAeKNkAPgX0Oh2ZpSXJXEAAAAASUVORK5CYII=
-}]
+}]}
 
 #	set transpose [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -7673,7 +7687,7 @@ namespace eval 16x16 {
 # RYEEIFYIUSKEKAEgR+ssem1q9BpVlVQiYozN/2s4Yww/AVmclNKRCxoFAAAAAElFTkSuQmCC
 # }]
 
-	set trial [image create photo -data {
+	::icon::lazy trial {set trial [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7710,9 +7724,9 @@ namespace eval 16x16 {
 	+zhj8OpNd3VbZ88NRIZEghKqtskZw5XV6N7JmYXcrcps6ZCIGCKKRCJR2dDoaZ2emc/mHBkJSuZE
 	hqhpJOxH8iKtTx42mEymPkOHKW9sVVX1UnDuV64kofZ/YVSVeFHBoZAkSf2IuG7o/gLIk2VBBdFo
 	RAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set mark [image create photo -data {
+	::icon::lazy mark {set mark [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7751,9 +7765,9 @@ namespace eval 16x16 {
 	ss1e+aL/9u6uSRQEvVQqSULbgeb0wZbmrNViIVEUTSAS3a72wicX357dV2udVxRJstfZUF1lhqlC
 	USTOqy1VZnK07s862g+oDEClpmlPRmLJBlnhWunOHd7uaM0S0Q9EJBDR06Fw1M4FrutkMFEUYJQh
 	Ohz7U0T0017f/L/1J+9Sorf7P+JTAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set font(incr) [image create photo -data {
+	::icon::lazy font(incr) {set font(incr) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7789,9 +7803,9 @@ namespace eval 16x16 {
 	miZc2ep62e71Pkql0pomGK3VaqSiDcDbe7cuH+LPFK/rbFAHAKWoK1UTkDJfKDij0ag2Xyg4q9Wa
 	BgCaJitEpALg6V8gAUD3Br+5rsM3H/D78ls2dqbj8bi1ZWNnOuD35QN+X76ry28CQCKR0H8DCIDU
 	cXaUyyqkUIPLMF6IyBJJR6FcDgForknjD/wv/QAFyGCVVjS8XgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set font(decr) [image create photo -data {
+	::icon::lazy font(decr) {set font(decr) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7826,9 +7840,9 @@ namespace eval 16x16 {
 	d+erPSEyKU8pxUIQ72uJzXUkk69XV9eEIFxVSrHv+TAMQwAQABQAmKYJACwAQErWpPTJ86TYLJeb
 	DcMQm+Vys+f5QkpfKKKQZVkKgLIsS1mWpYhI/X2ZzHx6KHN7I50ZLzLzQOANpDPjxcA7G3iijlUw
 	iLquTEn4iEUis0RUZeZo2XVTAHZ7Df/Df+kXsTtPNeyoHKIAAAAASUVORK5CYII=
-}]
+}]}
 
-	set databaseImport [image create photo -data {
+	::icon::lazy databaseImport {set databaseImport [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7868,9 +7882,9 @@ namespace eval 16x16 {
 	8ySlAofNCiEEgn7v2hdjH17qGzzba5poXNM0BUwIBXxV3TBK/x2T/8Zc/JVvvp/ak1j6uz2Te+gp
 	Fh/ZI+FA5tKFkSEAmZV7D3p6+08PEUCTn38yGg76f5SbZiKiFAGjJvMEgGihUAhrWs4TjUZSAKaJ
 	aIOZLR6362UCKBz0f0dEM/8AYzOXjQ5v72sAAAAASUVORK5CYII=
-}]
+}]}
 
-	set databaseFilter [image create photo -data {
+	::icon::lazy databaseFilter {set databaseFilter [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7907,9 +7921,9 @@ namespace eval 16x16 {
 	jPh+mPz35q3eew8nNmlbq67O9rlMeu0cAIyNjf2cINvV5nV2tHszXm1ZV2dH+c9Mx5MN2T+KPbu3
 	3QNwpwkKLGzjIjopIkKSy6Io2vPhw6dES8vKxwCqjq3nG9H3i/oZRChfGWuGqbAAAAAASUVORK5C
 	YII=
-}]
+}]}
 
-	set piechart(complete) [image create photo -data {
+	::icon::lazy piechart(complete) {set piechart(complete) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7948,9 +7962,9 @@ namespace eval 16x16 {
 	ierHihcBBYseb/Xk1ev10zOeMqEIvP7Ki6MdJ1veIKKgmnjlIDOfIyIeGB5v/O7H+bLp+eWyDFMa
 	AOAvLYxIJIo95izZ1txwpeNky/kEQ/8J008LP7cNjUw2elfWykPbO9kAwZydsV1eUrz8krNu7EDN
 	A2F6MM6KIhCP63sBVPj8gQIAKLJaNgF4VEXZ0OW/4/w3T5CmsWEmjSUAAAAASUVORK5CYII=
-}]
+}]}
 
-	set piechart(all) [image create photo -data {
+	::icon::lazy piechart(all) {set piechart(all) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -7991,9 +8005,9 @@ namespace eval 16x16 {
 	hmCFbXAcBzLTU2JPVpd9vffpmtcRcfxfB/FmxZ8kBkKh8o5PeqpHrvqLb91aSteaWPKGpBVvQd74
 	E5Wl3xZuye1GxMX/NLi2nohI8X09AOQrpbKjUYe73XIBACYQ8eb/uf8AAc/Tvl7IznYAAAAASUVO
 	RK5CYII=
-}]
+}]}
 
-	set piechart(filter) [image create photo -data {
+	::icon::lazy piechart(filter) {set piechart(filter) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8034,9 +8048,9 @@ namespace eval 16x16 {
 	IqL0js6uA8c+O1V5fWLKQUSg2DgQEBiGAAKAdGeKUV5a9PWeF3a/iYj9RIR4u1nxI4mLkchOX/OF
 	0u6eYN7c/Pwqsogl3+FY8G5w9T1d8kSbx531JSLevL2Dy+uJiBSfHQCQY5pmhq4LyW5XZgBgCBFn
 	/8/+Bz+i184mclPNAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set sort(descending) [image create photo -data {
+	::icon::lazy sort(descending) {set sort(descending) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8071,9 +8085,9 @@ namespace eval 16x16 {
 	+YUWEUGqr3ft3vXRCQCzNQUCESsVbGWxloAEQRBpa2159fju1anDB/fz0IEUH9wan0kkOqdIeo2/
 	sgUsrEr2di0DeAMgVvK8SwoQY8xDkqsi8m8LGlFNcD1MDeOcTqdB0ooIM5mMAoCBgQFbi/MfmD8Y
 	qS6uyEIAAAAASUVORK5CYII=
-}]
+}]}
 
-	set next [image create photo -data {
+	::icon::lazy next {set next [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8104,9 +8118,9 @@ namespace eval 16x16 {
 	4ug0u/zwpI9Epic/rrInN8HxMRUA3hEAoNFoxJK7ym1ZN0YlyUdAreYiItq2TYwxLgQxq9lkn1/f
 	uDA/B9cX6qEsy1nmWUOnMi68awkAAm3ORTAQkKqmGXcroW8TazVzZ5Am9sgI+bxQFCW2mjy4KxQf
 	/bORqXruPKOFwyFHRnSV8S+D9D+j7IaBl6nrg+c6/wD0/PnBywZK5QAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set previous [image create photo -data {
+	::icon::lazy previous {set previous [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8137,9 +8151,9 @@ namespace eval 16x16 {
 	M2tCCA+ep/V0Ry0iOvrUhYioWHzdMlY3l49PTtHS3ES6LqEJ8e55ntQ0jQGAmOC679wd7Xza39uY
 	0XU9A0B8CVOXeQEjWA9PO/NL6fHz3FVdI1SImP+DiGUnhN+NzOdNY3Rq0e4dGEZi2nh2HCeulBIq
 	m5WBNn4rErhIDpyqi/R/q/yzk1oRmFzPOX8ACgoE5R3gGKcAAAAASUVORK5CYII=
-}]
+}]}
 
-	set front [image create photo -data {
+	::icon::lazy front {set front [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8176,9 +8190,9 @@ namespace eval 16x16 {
 	WaCkqCAYjcYonpBaPBbX/5hzAPqnic/1uz0Nwf2Hm6YBbGVmIiLO2IGGoKcmOYm/fY7USwDAkFJW
 	KKXINM2nzBwBIDg5rYaUsiKmFBym+ey/ftxitmhwKjBtYGb8zX4AW3CYENItxjIAAAAASUVORK5C
 	YII=
-}]
+}]}
 
-	set back [image create photo -data {
+	::icon::lazy back {set back [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8214,9 +8228,9 @@ namespace eval 16x16 {
 	wuGEaRpIOsllGwi0dhb68m4xcxIAi4SdUImkIy3Lpi0FedHB3rau4gLfIDPDa2R4EglHxK3Esm1J
 	+8zMWNzEsy1TldX10bHxUD0Ag4iYmQnAgeNnmmcq/StsxU0wAO8f297rkZKVUk+ZOQFAMLMG4LVt
 	e5+UktJssfN/XdwaxkvJFCC9+lqWir/lU5PTtikiRgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set suggestion [image create photo -data {
+	::icon::lazy suggestion {set suggestion [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8255,11 +8269,11 @@ namespace eval 16x16 {
 	7Xb1Jg4yc57Hmz+/BAAi4kgkIogol85kEgt0zX06MS0P//LH0qkpQxYGfG4ouHSAiGaZWRCRO7/C
 	HGhpaWEiQsDn66x8+80OBstbd+JvMFhu3lRxzecruOtN5ufMNAc8QxERDTPzoeXBJV/e7U4s2/Da
 	qgef7K79zcsTET3X4Bmrm59jkZSrCwAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set variant(Normal) $logo
+	::icon::lazy variant(Normal) {set variant(Normal) $logo}
 
-	set variant(ThreeCheck) [image create photo -data {
+	::icon::lazy variant(ThreeCheck) {set variant(ThreeCheck) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8293,9 +8307,9 @@ namespace eval 16x16 {
 	eTVXjyWyumtqFpKsWOXKTroH7txU3a0lg7Jidcyqm1bJP7e67/FJ8PhEiPPJDjzaA3c5LlQqWrr7
 	XBVVW4klslZkKW0Og3lAYN4QEWzb9pMgQCB6x8yHg5L5+0oDktlvzt2CzaO+yNxmZsq32w4iok0i
 	9P35f9Qv2NNK2uwS56gAAAAASUVORK5CYII=
-}]
+}]}
 
-	set variant(Bughouse) [image create photo -data {
+	::icon::lazy variant(Bughouse) {set variant(Bughouse) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8334,9 +8348,9 @@ namespace eval 16x16 {
 	94tNTdsXiYhaWlqIiOiRHU35hu3bVv262gKIbbkceEAkCUB7V//Ra/v7Bq8DeAEaezY3y88DiP8X
 	oEpPaK3bwjA89NJrb2UPHDy6AKCdASRKpeBZxyGhlDrNzMHdY0YEQJVKpXYixyYS6sd/ATBoq1Jw
 	1UmmAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set variant(DropChess) [image create photo -data {
+	::icon::lazy variant(DropChess) {set variant(DropChess) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8375,11 +8389,11 @@ namespace eval 16x16 {
 	yaihftXXe3ZuPaaU3QfAn/vK5UPDVza0pTu3DAz+tDgypuCxbaG2eunPzZvXp2uql3QQ0W+YW62t
 	rYUwORLMXN3bd66rccvuuHHzrrjrbH83My9XjvOf2f8L0+w4l+SD4CUA8JQ6RkS3p1cGEfEdzb8g
 	vob/iy53cQAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set variant(Crazyhouse) $variant(DropChess)
+	::icon::lazy variant(Crazyhouse) {set variant(Crazyhouse) $variant(DropChess)}
 
-	set variant(Antichess) [image create photo -data {
+	::icon::lazy variant(Antichess) {set variant(Antichess) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8417,12 +8431,12 @@ namespace eval 16x16 {
 	7j39K0HEYCYmMIFAREalUrVNUyLU+g1EquVAB0HwZVdP76l7448bDUMIMAuAGKjFlqDDkHV7W2vh
 	1PGDXaZpXmVmQZFfmFBKrb4/8XSBlBTODQwAKMXGknTLlJRykIjKzEyvAGEadeodGZF4AAAAAElF
 	TkSuQmCC
-}]
+}]}
 
-	set variant(Suicide) $variant(Antichess)
-	set variant(Giveaway) $variant(Antichess)
+	::icon::lazy variant(Suicide) {set variant(Suicide) $variant(Antichess)}
+	::icon::lazy variant(Giveaway) {set variant(Giveaway) $variant(Antichess)}
 
-	set variant(Losers) [image create photo -data {
+	::icon::lazy variant(Losers) {set variant(Losers) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8462,9 +8476,9 @@ namespace eval 16x16 {
 	pQP7n7sYDq0Vtq0wNT3riieSwrYVlNL0a/eVzA+aj3VsyM+d6RsYvavmRHODgnpaAEAkEgEz02oy
 	GfVlem8G/D4rFAzYOeEgwuuC5PdnqcXYModDwXOftEbqHiwunPe4XZZUcNI3pmt4AZQPDI6FDYNE
 	hsddCACridTIhoK8SQCdABwAz6aUctxS/vgPYBHP+pz9GP4AAAAASUVORK5CYII=
-}]
+}]}
 
-	set softwareUpdate [image create photo -data {
+	::icon::lazy softwareUpdate {set softwareUpdate [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8500,9 +8514,9 @@ namespace eval 16x16 {
 	wGPJstTCDKcRoyxJIIKw7frW+kZF7Qr4a29ePL3S1uZ5LwDA7XbPRS8NvAsGOy1FkVUiIhIktSiK
 	1KIoEgmSiIgURVaDwU4revnCW6/XPQcA1PSIAuvrm70rq6seSRIMAPW6QwDQvA/4/RWv1/2FiH4w
 	M+38AfwjGprfYhRNMGZaHFYAAAAASUVORK5CYII=
-}]
+}]}
 
-	set compress [image create photo -data {
+	::icon::lazy compress {set compress [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8540,9 +8554,9 @@ namespace eval 16x16 {
 	EYgIjmN55UrNSqeSMt2Z9O9MTBq1uqd3pzvCsZOHNsbj8fOtHMQc55dNG177Lp1KVgZeXOot6eut
 	aUJo6VSytO3tN6/rujZLgvBCd2d504b138ZisevN4y38jT2zs6V1rutaUvr+g4d5J92VKiVc9xaA
 	5eN3J3t70ql517WvEVGuucLfjGJuGJWf+igAAAAASUVORK5CYII=
-}]
+}]}
 
-	set filter(inactive) [image create photo -data {
+	::icon::lazy filter(inactive) {set filter(inactive) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8578,9 +8592,9 @@ namespace eval 16x16 {
 	ksmYIyKmmWuui3p7JVotS4QAPK0bI2++nJrPl9bXPS1OwLYsi9ZS7YrUG2NsAWkMQhOTM0fmS/Wt
 	juNYqXh0NhYJzgLAwMAKNxgAcB5AKhmfduOR6XK1HmlPRKdSbmwinUpkN2/MjAN40ZILFo1ZjCU8
 	RHzggFdrBMNh5xOAb4qsLPtaAICfrU46jW68r0EAAAAASUVORK5CYII=
-}]
+}]}
 
-	set filter(active) [image create photo -data {
+	::icon::lazy filter(active) {set filter(active) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8617,9 +8631,9 @@ namespace eval 16x16 {
 	svl1pcxYOGJVAv8tyrcpAADX+NqjkbJxI4Mz94/+tfrsSyukrf3xT3Lp2Mc5AOjv799BQT+AX4C2
 	hqbldH1y+UXRqUnHU8/bPto981ViT+a7lq8fA3hQrd580v/7q1aSZE3F94+89krhxmjdFIDFiNLF
 	CoNtav8F5A5gOiC+1GQAAAAASUVORK5CYII=
-}]
+}]}
 
-	set diceGreen [image create photo -data {
+	::icon::lazy diceGreen {set diceGreen [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8652,9 +8666,9 @@ namespace eval 16x16 {
 	Z81O9/Dq1sGPh6P+wU63M5c7Z7SU3jEPULPBROJLne9mib/YXFlWQpZOVSB31iTmyGt4E3mjcrEH
 	AKLu+R+X5hfezdQmM62UByIaFVopb6Y2mT2dv/12PAg2AIAAgJmn99PujVaWBALM8pzuFoAD0WxQ
 	741Xgg0i2mNmAjOXnP0bFLxfEyncyfNAp+kAAAAASUVORK5CYII=
-}]
+}]}
 
-	set database [image create photo -data {
+	::icon::lazy database {set database [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8694,9 +8708,9 @@ namespace eval 16x16 {
 	Pjs+eKBkOYjoKmJ1kTAaNSyFcyF8X7ErTqxsV6VqzUM8ZuCl5/q/evngwBtrZWq5MDb+wunh0d03
 	ZvLZZbOU9ISQgzCELElQFSVYl4ybd7e1TA/0Pf79tocf+IIx9udqgrU6twLouHx1KruwuJjxvFBV
 	VclrymQWt2zumAYwpeva7G2d2T/mb86zbd49IAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set list [image create photo -data {
+	::icon::lazy list {set list [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8726,9 +8740,9 @@ namespace eval 16x16 {
 	BsQAImKMZPilN2xJ4OVHmANWg0jugOVeb1BSY9Iodz4FvPdRJS49ATciMjYUhM3W9c3t3YvRyA27
 	naOz2s5+oz94WbCRoPmHEnAuZbESv7dPDurAZWEF/8CDryChHg/qw0Teq6qq8jNIoKoqaODlPZg5
 	ykUt+FYw83f+BFvButUo/Gd3AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set arrowUp [image create photo -data {
+	::icon::lazy arrowUp {set arrowUp [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8762,9 +8776,9 @@ namespace eval 16x16 {
 	9OeYuW8MAAxAeJ5nMTMJkGYiMBGEiGlmJs/zLKA/eCIiEc3GzNr3fQ2AFHRMqjsh1Z1QSsYAkO/7
 	mpm1qXqYoYyVF1e3Cu3VrUIbwGIUu9fGgATGVA+63e4CEZHjOBfMHBpsqPr/xNAVNYtlrsOUfwM1
 	Jj12DgZlGQAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set promote [image create photo -data {
+	::icon::lazy promote {set promote [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8802,9 +8816,9 @@ namespace eval 16x16 {
 	ABQKBTZuAcaI8ryq6uk9vVkpbgHJWprEGDG+H+hMJt0oAWs5MGEYbtt/+NTlFyOjLZallBjhew8V
 	JY6Naf+kbfLyhb79tm3fFhFFESFJEZGmKIq2DL8eW6w1Y/wPokis5cs+nNBa360lkf8AmLVo/tAl
 	FiYAAAAASUVORK5CYII=
-}]
+}]}
 
-	set reload [image create photo -data {
+	::icon::lazy reload {set reload [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8844,9 +8858,9 @@ namespace eval 16x16 {
 	+zq/vXp4cOjB3m1O+xgT0UQoUjE6Hi6WJAEWc8GTEmtxZnuZc2a9BSIiZubdbV92nrnWN+BOPp77
 	z5gs5sKV2gOu3g8a3/leVdUlvV4fIKI0rdP1FGILh2P1vf0/vzIRilgBYKvTnqg7sH/A4bBdIaL4
 	+vn/A8ACmKYcsUa5AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set merge [image create photo -data {
+	::icon::lazy merge {set merge [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8882,9 +8896,9 @@ namespace eval 16x16 {
 	W5ICp9OpAcDU1Fx+8tGzy7Eped6SKze6Y1PzPKnZ54yJqakCk1abb42me1lF2SQBImIhqCCyQpIA
 	lcViUyZIHgCz/uiv4cDhCOrMSE5oVwrWV2+6E5WCNT3pQLsjaHOXjz5f+KOsm/2Lyfulndu3FX/q
 	HdgTvTd8sOhUdqWZFxFRf+5grf7rO/8EoJpvXXPW6D8AAAAASUVORK5CYII=
-}]
+}]}
 
-	set leftalign [image create photo -data {
+	::icon::lazy leftalign {set leftalign [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8915,9 +8929,9 @@ namespace eval 16x16 {
 	Xw0/jMfHsOeybC8A9pjfrXSyLGN3d2qSgiRb6cECkOQGL561SuhsYlEUFsT6TrI9BU4k3ZiZVnvQ
 	dJIo5xVJ3L/8dDQeAseAmikYZsFqtC2SYQZ2L959lQME5NJkcHFXQkvm/6Fh0PmcmzOWZAB/AOiQ
 	vTivbOa/AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set fullalign [image create photo -data {
+	::icon::lazy fullalign {set fullalign [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8948,9 +8962,9 @@ namespace eval 16x16 {
 	kop+r7wAvhcP1P6BBlDOetErr9bWOsfz+a+7u3YZCOq6obfVnU6nP18fHHz8VlVVqqqqWSowdniB
 	BwbJtmWInInRaBQAg8HA7UY5IFDq9zavgGNJN7Yl6f8tU6t1Xq7w/c6/AbV8rREU5ynhAAAAAElF
 	TkSuQmCC
-}]
+}]}
 
-	set arrowDivide [image create photo -data {
+	::icon::lazy arrowDivide {set arrowDivide [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -8986,9 +9000,9 @@ namespace eval 16x16 {
 	Fr6+AuDIZzwcDvNw/n5OAefm/hSTu+mJ5vZeNLf3IrmbnjieHZc4OejoIDDGSEllAiAiIqWUyRij
 	jg7CPwGRSIQAkGmqaC6XAxGReaSiACgSiZza+BSgINuGsm0bBX9W70wAYIucZfGC/29ATY0v4fdW
 	Jgv+rN6pZwDAGGPIf7AbRES6rr9ljGUL2fH+b5ZVboGiSxzjAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set postIt [image create photo -data {
+	::icon::lazy postIt {set postIt [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9024,9 +9038,9 @@ namespace eval 16x16 {
 	2o7rKIBQNA7p8qVeY+nN1PSFaGSFiFxmJgEcPUsoFPo6PnpzqyfcaUqlKQCQUvNVqzYKRYOvXhlE
 	YuHFah0ZRORRvXdmDhuGMZTK5EMBn7R8ft/1Zy+XHppWFQuzE6vdXe1PiMio5ccDajmokYmI+JRg
 	qFKx7gspoCv1gYhKp3En/6CWSAJAx/kgIgPA/P+a/APyn0uDpUzXGgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set layout [image create photo -data {
+	::icon::lazy layout {set layout [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9065,15 +9079,15 @@ namespace eval 16x16 {
 	DQC6YZSplBxmBmx4PtjSUkREiVJxN4zERLk4uPf5tTlNyszP1Venv5osu6FOJAxBQicSZXc8WDhf
 	vbcwX71bdscDQcTAMCLSYbLshjNnXrqbl/Knv75xotMJX/B8P0uCUhUrzXWcXj4vHwIAdMLwlNf8
 	l/YjIu79CUnQlFc05uMkAAAAAElFTkSuQmCC
-}]
+}]}
 
 } ;# namespace 16x16
 
 namespace eval 22x22 {
 
-	set none [image create photo -width 22 -height 22]
+	::icon::lazy none {set none [image create photo -width 22 -height 22]}
 
-	set clock [image create photo -data {
+	::icon::lazy clock {set clock [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9120,9 +9134,9 @@ namespace eval 22x22 {
 	2WQYLyvd1PT+u9bD88pmaPqa0Hcz84cbN+Rdrj7XXNre0ZM15PYZB4Y8sQCgC5ORaDZ5slaktu/c
 	trkhKTFxWuiJaK7Qz0au+UYAaV137yc/7h+MA4CExfHujGVLQ1+TZ3bOf9q8n6kQkMT//0z/BY79
 	m/P09M5cAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set remove [image create photo -data {
+	::icon::lazy remove {set remove [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9155,9 +9169,9 @@ namespace eval 22x22 {
 	rY1iMpmoXF7+YQB0K9f+zj9ofm75VytrzfT0PNLT87CX3zd990xEWq9ctf9+ZUDcJYqNg/rRo2cz
 	mRYNGkWcxev6AykFKU9Fj9Tgx20oFySYACBL25VaKrsAs+CL6jf9IhyVp5RlFhw3lV1AabtSAyDD
 	Wl2O42pCvWKJr22GMNRGP5SnKRb8Bc3fulN50YqVAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set dice [image create photo -data {
+	::icon::lazy dice {set dice [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9198,9 +9212,9 @@ namespace eval 22x22 {
 	a9fHw969/qOn6u+yba5ks+br42Gv7ti69nhPVzhvsCCF3b750pEDT3/56fDZgT8n5zruutEL4HTa
 	s/79vQGrdfNlAKgYTcn0/O6r/3M0PdzTOWG3Wi8XR1OxGO75MP0XV1LN2+/b2woAAAAASUVORK5C
 	YII=
-}]
+}]}
 
-	set lines [image create photo -data {
+	::icon::lazy lines {set lines [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9233,9 +9247,9 @@ namespace eval 22x22 {
 	quTN5F9kR8ceZPtOHp8keePa8K2bzwpve43ynAO92Ns5cOOGdns1O3RdKzUiIlixmYSAEIACQNw6
 	WrGjyoqPa7EiNuJak6frECaN0YvLN2i63HRFXaWlx+5NDcy9LjbV0l8XFv7U0hP/X0u3a62+W+vg
 	+wZB0NyzWYuWPvQt+ZrWDT8ByfJh9sUfQ6QAAAAASUVORK5CYII=
-}]
+}]}
 
-	set lock [image create photo -data {
+	::icon::lazy lock {set lock [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9278,7 +9292,7 @@ namespace eval 22x22 {
 	Rk38PjruyrClyQNlpaMWwzChjRQAaG5uVq2trSbJwo7O/R8f6Dqy2TcbSNBPJLbUTerOsNusfHJL
 	/fcvP7f1dRG5HOe6kzzn18i/dGVi48Wxy/kQUkFhfgdXAEyYAEVKSwqvr3I5e0Tkr7m/SUJVcwOG
 	kQIwqS9zj4FIJLogFwD+BV5oHv+HLDhqAAAAAElFTkSuQmCC
-}]
+}]}
 
 #	set pause [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -9318,7 +9332,7 @@ namespace eval 22x22 {
 # AElFTkSuQmCC
 # }]
 
-	set pause [image create photo -data {
+	::icon::lazy pause {set pause [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9354,9 +9368,9 @@ namespace eval 22x22 {
 	RoQAmhurv9ZFzy8CYOTc2c2PC8vhJ2MTVwlB+FRQt7bE4gB2c6hc9d6yOZ+sEYGUl5aaN29cenMk
 	m9sdz15MXt7d2zNIsLmhLtUcqx0luZUvm8UIvfa4mhTgLfQO+6dXUyHgJJfpH7w1PJzGVdrsAAAA
 	AElFTkSuQmCC
-}]
+}]}
 
-	set slow [image create photo -data {
+	::icon::lazy slow {set slow [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9397,9 +9411,9 @@ namespace eval 22x22 {
 	V/peKazynrt0dR8AecAZQHa13jCSlFWCgy3t7QBUoVSHeklx6869VOIC37FVe1rzamYzY+yx0Wgk
 	EBgR/VldUXxy5cooemi3P0dEUZJf+HQEfkIul2vDld//2g0gdV40gXXdZWt//eTkdNET9W6oFAUQ
 	Kct//S4bCE+BXjsAAAAASUVORK5CYII=
-}]
+}]}
 
-	set fast [image create photo -data {
+	::icon::lazy fast {set fast [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9439,9 +9453,9 @@ namespace eval 22x22 {
 	LAcm7HQCH3OSVoKITCJSmEUiGo1mffPdT286FIWq39lwOifnmTMJw2BKc2889gvMDPuIEpGdIQk2
 	TRNSKBx1rnlj6ZViz8omZh63N35ScJpg0zA5HI3Ryy/MHd63a+t+Zr6dToInAYemTctMzJyRDX3H
 	+0eI6KKu64KmcHVOGMlO6entq7zR3VMDYHpy7X+NqT6sjwC2FBRiUoLVFAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set search [image create photo -data {
+	::icon::lazy search {set search [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9484,9 +9498,9 @@ namespace eval 22x22 {
 	5DqSESSDJOnfDyQpFEUpK62uM23OLmBpdZ3J4XCUex20VuXFGn8J4bUgAKFRq+GFJ2zfw9LqupnZ
 	2flCwKfR+ysXvMn3P1kIQW9xPD1chAQHdy3Y7Sg70NA2NWONM05MJAsRWPB/Dq9ykmJ+fr7wx19+
 	e55k/P+jemItdf8AKMxah1Q1rxEAAAAASUVORK5CYII=
-}]
+}]}
 
-	set quick [image create photo -data {
+	::icon::lazy quick {set quick [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9532,7 +9546,7 @@ namespace eval 22x22 {
 	K5wcuaYW87RnrW2kclP2LwkN/H3/nrSba1LSt/W86FetXbns4vbUpAzGWOsrDhgNbEtd7Iqw74gk
 	MlvanSeqVJYQrf89pdK5hIi6P0pN6nnxom98xOKgE4yxOv0YEoxagiAj53EKEmSvDj3GiHiHITeN
 	5oAxy24B0+vBDUfYttex14H+BYWfehDB3UslAAAAAElFTkSuQmCC
-}]
+}]}
 
 #	set start [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -9574,7 +9588,7 @@ namespace eval 22x22 {
 # CScA1Acq+4/qOOgvFV/bQzLxnwd9Z/3XX1NnkKbxr13+BFV+oBtWHiQ2AAAAAElFTkSuQmCC
 # }]
 
-	set start [image create photo -data {
+	::icon::lazy start {set start [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9612,9 +9626,9 @@ namespace eval 22x22 {
 	q1OPjYkccQrAq45R+VstIJiGrhREysorJx7Lv7Ds5Zv3ocOGDGxIXTj7/PIlc3ODg22+5uYW0TRN
 	OZ1O+vPvKFNwS6sBQFhdWxcdYrfLojmJFVmbMs2GkOFyuUyLNgMb/fuF/VAWK8aMiniWsWJRXuzU
 	CScA1Acq+4/qOOgvFV/bQzLxnwd9Z/3XX1NnkKbxr13+BFV+oBtWHiQ2AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set stop [image create photo -data {
+	::icon::lazy stop {set stop [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9648,9 +9662,9 @@ namespace eval 22x22 {
 	vf3ZxuLSyiRKi0SUtkwD1er0N8s0QonJApFIhBzHiUVo+eVGp3vld0ToTr328VnjUaoIJWTz3daH
 	e4eHg0oR2bw4XRnM37y+CuBgVDYzhF4Tzw8KCr0e+kE4zM0M/FdP09D+9DH9CYHF/5QSOp8pAAAA
 	AElFTkSuQmCC
-}]
+}]}
 
-	set sideToMove [image create photo -data {
+	::icon::lazy sideToMove {set sideToMove [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9700,9 +9714,9 @@ namespace eval 22x22 {
 	vz7/2afLs34oSqg5Uzepy2LXN7ea0dfnhE77GKaGTXA+GRRYvdQQnRng71dIRNb+IzGI6Ad27tL1
 	AILr6htDrHZ7uMNx193P1+dKUKD/cQBHicg8MOZ/5VHHVCGJUKncBrr+5zH9B7R+6HHMBSbZAAAA
 	AElFTkSuQmCC
-}]
+}]}
 
-	set rotateBoard [image create photo -data {
+	::icon::lazy rotateBoard {set rotateBoard [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9747,7 +9761,7 @@ namespace eval 22x22 {
 	5Xpe679X8wBAI0vINk6+s+Qpe+MbK17aN+ORPO+RYycP69LSyJRtjCjKIOkHPfTWSCS+oLrWO8cX
 	CFkAwGIyBZ6wF7YZDAYvEd1gZrp85drrl690zHtuyeKDRNQ63lYZ2nXqvyQIBr0OBr0OUrLqScsh
 	m5Fr676S3GmpDxWQ8tql6lIIAQD+BxlGaLu6572jAAAAAElFTkSuQmCC
-}]
+}]}
 
 #	set trash [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -9843,7 +9857,7 @@ namespace eval 22x22 {
 # B9xmLdAsGYf2AAAAAElFTkSuQmCC
 # }]
 
-	set clear [image create photo -data {
+	::icon::lazy clear {set clear [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9886,9 +9900,9 @@ namespace eval 22x22 {
 	/DPZSCVUFBUZMeB0ykfcWvC8sekFHwFQHRYSPDg+MXmfJEmKrChCcbmYiEgtSXOjUVYUun/lCpcx
 	LfGEB8rMd35WPE5JUpFGrSYACwvETIrLRTOzzkV19BV0ye+Z76j8G27ijEdioCEdAAAAAElFTkSu
 	QmCC
-}]
+}]}
 
-	set scrollbarBottom [image create photo -data {
+	::icon::lazy scrollbarBottom {set scrollbarBottom [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9924,9 +9938,9 @@ namespace eval 22x22 {
 	AwCwSIpWil9Gx2pa2h83zM0v+LTWyASO4yA3Jzs5OjrRebLgeMwxRiwRYZbPh9Fv4+devvlwPpFI
 	QElmxTY0CPgDKC05O2hZVkxEaKX68HLlxR6B2L9n57KUylDYGOQdzF2pqix9vpJMrp4Dr0OWz4Jl
 	WSAz+zGICGzbxkpyiwtvL9rFq/EfNuR3/5FJeMsAAAAASUVORK5CYII=
-}]
+}]}
 
-	set scrollbarRight [image create photo -data {
+	::icon::lazy scrollbarRight {set scrollbarRight [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9962,9 +9976,9 @@ namespace eval 22x22 {
 	+kDfu8El2zdv7DkTCuwTkdaGhgYV/xNGb4Ocv9x0qaq6rsNtEEQbhKTi2viXmx/YE57PJMsAJIrI
 	FwASDAadYDAYO3vp/W9WsOcAiMgEgIk4Q0hs21FI0rKsP+GJC3aHkO/Y9CiSmpIcMQxDMtLTJh3H
 	mcXsHxRv0M+f7mpBn6ao/B7T39TQbHB339tvAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set enter [image create photo -data {
+	::icon::lazy enter {set enter [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -9998,9 +10012,9 @@ namespace eval 22x22 {
 	hAuZ9/MikFQ0TVM0jfnH1cZHnoy+eNd49iJb2i9Zxpv5MMmDzpzqVaGrQeLJ49sbJAf17pWmaYqI
 	SCqVutJ64RqbznVzt67zqrg+NjUXSbxdfPxXSn+TpOhj0wv0nx70pb+avMYPpddnANtQ5WgAAAAA
 	SUVORK5CYII=
-}]
+}]}
 
-	set marble1 [image create photo -data {
+	::icon::lazy marble1 {set marble1 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAToSURBVHichZVbbNRFFMa/M/PfLUvtFqH0glCNGgU3klKQeAGDCRiNJj4IDWLQ+OIlEaNi
@@ -10026,9 +10040,9 @@ namespace eval 22x22 {
 	RF5ViqREaqN23XXrgnu2bn5xy5237BCRirL9p9Anc/61b7++e9tPnYc3DA2NLMwWCghIVM2dg8am
 	xtHV17Tuf+j+e16urQ4f+jeh/0fMtGXGBkjWd/WcXvvJ54c2fvL5oY09/SNrSC6UypH+3ZpmjWmj
 	nNVM8T9m+icY+g9Mpfo/2wAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set marble2 [image create photo -data {
+	::icon::lazy marble2 {set marble2 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAUTSURBVHichZVfiNRVFMe/59w7M5v7xz+r22q6bpMmuoZpqCUIGmvWUw/mokLSS0FQURkV
@@ -10055,9 +10069,9 @@ namespace eval 22x22 {
 	8PT7RDShbPcU+nxNHv/m892vnv7t93WDw9kZ1ZqHyBISDfehfWZ7bsXyZYdffmnrrsmN8ZP3FPrb
 	4b1E1AfY8XHbuf6hBZmBofsBgwXJB7PJjra/mCknAgAOi/TK7dB72nijvGszxf80078BDMMD622R
 	+aIAAAAASUVORK5CYII=
-}]
+}]}
 
-	set marble3 [image create photo -data {
+	::icon::lazy marble3 {set marble3 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAUtSURBVHichZVbjJXVFcf/a+39fWfs3ICZgXGi4zhCCQ4tMFVsSUjADKK++KBMgETii01I
@@ -10084,9 +10098,9 @@ namespace eval 22x22 {
 	xAlLYhlhaigyTA3Ny9S27VvMvn27/7z36cf/SERLynZHoS/Ny0/fefONF858/c8d45OFjrn5CMYR
 	Mg13ofPuzuLmh/s/2//zfa+1Nvon7yj0t8KHiGgYcIvvlRevTazNj02sAizW9t5f6O1e+W9mKooA
 	QMAiQ3Ir9I62eChve0zxf47pfwFYrAVBNc5cBAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set marble4 [image create photo -data {
+	::icon::lazy marble4 {set marble4 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAATnSURBVHicfZVdbBRVFMf/587stvRjF+gHpZgWauXDphC+KiDEYEpCTEhMhAok9Mn4kUCi
@@ -10112,9 +10126,9 @@ namespace eval 22x22 {
 	4GkKlpQbBw6/JtvbT148/dbRL4ho0dlWNPp0mvdd7vzhXM+de0cmxyerclkb0IyS4iLU1tTE9+7d
 	9ds777Zfqiz131zR6J+FhwgIawKgmasHhie2PBx7tA4AGhs2xRrqqvuFoDgzAFiCOcRLoSvGwqBc
 	fphi5WH6P0We9gIbZJLuAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set marble5 [image create photo -data {
+	::icon::lazy marble5 {set marble5 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAATlSURBVHicfZVdbFRFFMf/Z+Zuv5Zut/aDUpFCUUgtSKgBi9ogWhJfTDBIAyg8GXwBo2LU
@@ -10140,9 +10154,9 @@ namespace eval 22x22 {
 	l8ltO7b7Bw/u/Xj/7mffI6I5Z1vS6Kem3ObPzpw9cqnrys6R0USVZVqA1igpKkJtzfLUli1N518+
 	dPBEZbDgjyWNfiG8nYCoJgCaubp/YGT94PCt5QDwYP2aRP2q6j4hKMUMABHB3M7zoUvGbKNcvJkC
 	SzbT/wAuJvZXmv87RQAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set marble6 [image create photo -data {
+	::icon::lazy marble6 {set marble6 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAT5SURBVHicfZVLbJVVEMf/c853b5+U1j5AQB4FabBBQdFIBDei0bBwoRRKApJoYCNGxahR
@@ -10168,9 +10182,9 @@ namespace eval 22x22 {
 	7/zlXquQtQFhIbAI++DQJTEe1dVW6U3PbAh37uj8bPtLz39IRDPKNqvQp8v+k0e+/GHv+b8vP5sc
 	SzWXyyVADKoqo1iwoGXi8XWP/fra7lcPN9XQ6VmF/k54nIAuJgKYpaVvcKRtaGRsHgCsaF2Wal3c
 	0qsUTYgAQEyJxOV26Kw2vShnWaaYdZn+D2ksUnTBTsE3AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set marble7 [image create photo -data {
+	::icon::lazy marble7 {set marble7 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAUISURBVHicfZVfaNxVFse/597fTDKdtLGbNE37EGvsVmrQKi6lstYHtwsLIj5kG02hFVTq
@@ -10197,9 +10211,9 @@ namespace eval 22x22 {
 	Wjfe9drf//Hof06c/O3FSnWD53tgschk0hjdPLK481e3ffzwwYcOD2fpi1WF/nJ4joA8EwHMMvLd
 	+dIN5VJlIwBsHb+uOj42MqMULYoAgKtEcvJz6Kq2vChXWaZYdZn+BEkGY8RaSxrlAAAAAElFTkSu
 	QmCC
-}]
+}]}
 
-	set marble8 [image create photo -data {
+	::icon::lazy marble8 {set marble8 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAATXSURBVHicnZVbbJRVEMf/c76vW1raQi+7vUgqFCyhS0gKFC8RQ2JJjD6gQRpKUhITlRcx
@@ -10225,9 +10239,9 @@ namespace eval 22x22 {
 	dj73IREtKNtDhT41M//E0WPH9/91rnP70MiN4OzsLFQVBQVLUFNdNdbUtPGnV1/fe6RiaeDsQ4X+
 	XniEgKgQASIautQ3vDYxMFgJAGvqVo3W1YauGENjWaHzjGpEF0MfarmP8n9/pv8AHa1Wa+l5WbcA
 	AAAASUVORK5CYII=
-}]
+}]}
 
-	set marble9 [image create photo -data {
+	::icon::lazy marble9 {set marble9 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAPuSURBVHicpZXLblxFEIb/qj7jGU98iZVJYgkRsTNZhAWLiOzDG2CJLHgEFhAkkNgSiSzI
@@ -10249,9 +10263,9 @@ namespace eval 22x22 {
 	f/rwg+vfi4iThNQF/x/1cw4HgJe9w0+OxuMvT8aTT+m8KiGAJFJKUMHB0tKl39eWl39+f331j3/L
 	vgWu8VIpFgeA42Ne2x8ebBh5HQCai43ejWtr2yJycPo+//U1nW//9zP9G7kQOZ29F0JnAAAAAElF
 	TkSuQmCC
-}]
+}]}
 
-	set controlForward [image create photo -data {
+	::icon::lazy controlForward {set controlForward [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10284,9 +10298,9 @@ namespace eval 22x22 {
 	aiu5snZ9di7RmkfHhvsH7Wb8hbqClVKWJvEiEr19+P2Ht7MQLb1uIkJLaxz9zHo72loy4y5QN7A2
 	TcOwLMGd1pZ34yN3XaHFI9rVIelbSq+GXkZir0les9fO0aTCTUp6Nk+df/3Ql/9rOs8cA2uKDohq
 	wvvDAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set controlBackward [image create photo -data {
+	::icon::lazy controlBackward {set controlBackward [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10319,9 +10333,9 @@ namespace eval 22x22 {
 	gV+ei6sKrsn3O/vFvvWtj881CaWUEwh2cW3grwFkcgdFW1NTRDyLV/PlVeGTCkh/+HTUb4UsS0Rq
 	tpznEKrC33S0tcSj0faSiJTcI/4HkBl+x2YgXKSOg97E6/5r8hO3JAUKmxUKkXQAAAAASUVORK5C
 	YII=
-}]
+}]}
 
-	set controlFastForward [image create photo -data {
+	::icon::lazy controlFastForward {set controlFastForward [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10360,9 +10374,9 @@ namespace eval 22x22 {
 	suU+f3nbe476nJXLm5j55uStJn8QZjaAWbkPweFwWDEJIa9cu7Fce6DT0iVP/f6u/dXjjuKXa5NV
 	9UJY08jlcomKigpM7Yjp1gGSAEgpZSxYSpDVmqYzC5GRnjZRVGjz7dnhnG0JSbfbPTM5mZKSAkVR
 	RJo11ZCRJkavzYbm1pr/am3GOUa+//Win8Xw/z5Nc5WZZ/8EokbPIKlSG7cAAAAASUVORK5CYII=
-}]
+}]}
 
-	set controlFastBackward [image create photo -data {
+	::icon::lazy controlFastBackward {set controlFastBackward [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10401,9 +10415,9 @@ namespace eval 22x22 {
 	evsQnrgYsGVZIGmREY9MEbFsI/1E05y7dd1oKP+1zltWUZN75frtpPBI67ruiABbFuFOHGM6HA4l
 	ISGBiGohEaGtPBCRFpIdud8sOLvnwNG1NXWXsl729o9KTHQPWBb/LuZ/XZsfDq7N6ti1aTv0/y36
 	YRzv99f0Lu1rqdPRaij/n+MAAAAASUVORK5CYII=
-}]
+}]}
 
-	set controlGotoStart [image create photo -data {
+	::icon::lazy controlGotoStart {set controlGotoStart [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10447,9 +10461,9 @@ namespace eval 22x22 {
 	2O3SMk0xJhyr6JUWRPQzM+eledy9O6qC6wHoKSkuEwB8Ph+iOSGIqIeZt6S53b2xEHK5k005zs8T
 	anxsnjvfnt909OQHU4rNljuxOWn9L0F/96S73yfhpvZrmmyBqXL/AJAEUL0tIT9sAAAAAElFTkSu
 	QmCC
-}]
+}]}
 
-	set controlGotoEnd [image create photo -data {
+	::icon::lazy controlGotoEnd {set controlGotoEnd [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10492,9 +10506,9 @@ namespace eval 22x22 {
 	pqenCwDkspvmcAhm1h/02qd7enroyfGRh2K3bopn5iYAwmKxgIhIVVXBzLD3PZomSZISvy28PHnH
 	1lhmbhx90sw87JnhELrkCqGz/y2E/Mby/gYAC8urTpZevdESN1lsVh4/XdRw/krSpLE5tvhJBP2T
 	/Zr+T96fbbhXSuPK82YAAAAASUVORK5CYII=
-}]
+}]}
 
-	set controlStop [image create photo -data {
+	::icon::lazy controlStop {set controlStop [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10528,9 +10542,9 @@ namespace eval 22x22 {
 	vf3ZxuLSyiRKi0SUtkwD1er0N8s0QonJApFIhBzHiUVo+eVGp3vld0ToTr328VnjUaoIJWTz3daH
 	e4eHg0oR2bw4XRnM37y+CuBgVDYzhF4Tzw8KCr0e+kE4zM0M/FdP09D+9DH9CYHF/5QSOp8pAAAA
 	AElFTkSuQmCC
-}]
+}]}
 
-	set controlDown [image create photo -data {
+	::icon::lazy controlDown {set controlDown [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10563,9 +10577,9 @@ namespace eval 22x22 {
 	nr8YdJaWB6xUWz5+qpk9QyNhqIpyCk4hGSwscSczenfy0UzD4UOV30QE61++HrjQ0rjQ3Xnjpoi8
 	CXp/abubed9w1qmzWlhr2UVNg0R/xc+n7Bgr3+rW/op9fRpAR/vV7j8yLWAeLLSKZFW49tcJg0oG
 	DQNLDv038h2bFg0rkMVE3wAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set controlUp [image create photo -data {
+	::icon::lazy controlUp {set controlUp [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10598,9 +10612,9 @@ namespace eval 22x22 {
 	gKxnJcd6FgcWGHnQPz88dPc+yVzJqizPCwYbd261tfzK5XIUYGRtqcjCJIUJDI2xBKzrugoGG3cA
 	eH6o7EQVp64H0HRiy+X5SXLfvxXnlkNHs9hutfeBzn3Si/y//APzkA1Tqf0+iwAAAABJRU5ErkJg
 	gg==
-}]
+}]}
 
-	set playerStart [image create photo -data {
+	::icon::lazy playerStart {set playerStart [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10638,9 +10652,9 @@ namespace eval 22x22 {
 	q1OPjYkccQrAq45R+VstIJiGrhREysorJx7Lv7Ds5Zv3ocOGDGxIXTj7/PIlc3ODg22+5uYW0TRN
 	OZ1O+vPvKFNwS6sBQFhdWxcdYrfLojmJFVmbMs2GkOFyuUyLNgMb/fuF/VAWK8aMiniWsWJRXuzU
 	CScA1Acq+4/qOOgvFV/bQzLxnwd9Z/3XX1NnkKbxr13+BFV+oBtWHiQ2AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set playerStop [image create photo -data {
+	::icon::lazy playerStop {set playerStop [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10674,9 +10688,9 @@ namespace eval 22x22 {
 	vf3ZxuLSyiRKi0SUtkwD1er0N8s0QonJApFIhBzHiUVo+eVGp3vld0ToTr328VnjUaoIJWTz3daH
 	e4eHg0oR2bw4XRnM37y+CuBgVDYzhF4Tzw8KCr0e+kE4zM0M/FdP09D+9DH9CYHF/5QSOp8pAAAA
 	AElFTkSuQmCC
-}]
+}]}
 
-	set engine [image create photo -data {
+	::icon::lazy engine {set engine [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10720,9 +10734,9 @@ namespace eval 22x22 {
 	9ZvvLuz0+ns9Xn+fZ54JrQYWNqGkJQnGpqeyfpbSZv7N3ebaZsuPbX/a5hf157b2Dw5HvVyQewkA
 	TlbXP7liaeJUfu728wO6rmtS057esK7t8Xm2ueAb/C+Mfn7A//1r+tef6R/R8aZfTzm3RgAAAABJ
 	RU5ErkJggg==
-}]
+}]}
 
-	set diagram [image create photo -data {
+	::icon::lazy diagram {set diagram [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10767,9 +10781,9 @@ namespace eval 22x22 {
 	f31NpKZy3xgA1L1YEQmGwt5fbtzxb14UqCz3Pmx649WbiYSdGpAco4+tHQpcf6rRDwMYTNdp+faH
 	4eZE0lZyjP71hltFhYUDGaP/12ryeAxkL67/spoYQPyJ1ZSjiP9zmf4Dp05Yvr9j8IoAAAAASUVO
 	RK5CYII=
-}]
+}]}
 
-	set chart [image create photo -data {
+	::icon::lazy chart {set chart [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10811,9 +10825,9 @@ namespace eval 22x22 {
 	vNz1Xd9gzC/4gAhoiVjMhWMMprM5BLZoTK0UquIxFHwfuZwHUQJjDIzWuKOl+eK7b+7a6jjO4dIT
 	o7PZfMeJ/sHHrbUUCUVJGhbL5anwmLa43hXAB+BDKclmc+MzXj716EP3H4/H458D8CsKTlID0CgX
 	frF36DmXHoQXLwBQFY8VAmvhFV1YGaXu9n8ikUioEtN/AK45CMLly/nbAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set steeltool [image create photo -data {
+	::icon::lazy steeltool {set steeltool [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10863,9 +10877,9 @@ namespace eval 22x22 {
 	Vqs8U31xjo+n+w1l6lYZpbTGuCxAiHG1AXC8dPlqVNfTZ4OtBlnqdToDM9R6MDtX6H2WUnoNAEMp
 	ZU0OjY6ONgBwb2huDxP6zGiglNbL5XImJSWFBUw+MwsLLodwOQzhcjmEof3m+egyNUsMwPwHax5J
 	uPKO61kAAAAASUVORK5CYII=
-}]
+}]}
 
-	set notepad [image create photo -data {
+	::icon::lazy notepad {set notepad [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10905,9 +10919,9 @@ namespace eval 22x22 {
 	PXEkd8/mJPS662dHp8Wm7PpTj/Ztu39w+PSOL86Ob71eIIYQAsaEaGttgvfMnhNd2fWHiKgQpW+w
 	yBYP+qbxiUs7L17+sSUpfsjMKSkdJ+XcuaG99bdMe/OBqFBVoQvgJByo/jQxM/ygaFlChIYZ1dJf
 	0mp8TCsezmr2L7iS5BVIBIR+AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set archive [image create photo -data {
+	::icon::lazy archive {set archive [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10947,9 +10961,9 @@ namespace eval 22x22 {
 	fxUAJjC4OHalNRYJc2PLuusVoZABkNvHANAnot4gjYhsePfIx/1fnx7elXY9/EcKC/hYNII9nTuH
 	e3u6XySZEBFF0hQiixZ+849jl7uS1yYbnKUWkDUjwvVNq6e2b900RDJZfBOVSCq5oqIRQJZZ9yRc
 	11sUW/7nci22XA5K8DamxP4Gy3mksNkLpYkAAAAASUVORK5CYII=
-}]
+}]}
 
-	set close [image create photo -data {
+	::icon::lazy close {set close [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -10982,9 +10996,9 @@ namespace eval 22x22 {
 	rY1iMpmoXF7+YQB0K9f+zj9ofm75VytrzfT0PNLT87CX3zd990xEWq9ctf9+ZUDcJYqNg/rRo2cz
 	mRYNGkWcxev6AykFKU9Fj9Tgx20oFySYACBL25VaKrsAs+CL6jf9IhyVp5RlFhw3lV1AabtSAyDD
 	Wl2O42pCvWKJr22GMNRGP5SnKRb8Bc3fulN50YqVAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set disk [image create photo -data {
+	::icon::lazy disk {set disk [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11027,9 +11041,9 @@ namespace eval 22x22 {
 	jqPYtm0HAHRdl1IKUhwPBcdxqavndJ4R9NNdS3NGo9EYwuGwkIluUZif275+XeXyltYDjx7t7Cue
 	OZ/UiOKBPsu1RtCPJ9dVfnNvfm67SkTb7KBf1DcwtPrn30YW/5cPUyMEkLcke6wwP7ediM4lWamZ
 	zH6abkSmFb2CMUM3+phOE81+WP8B35v6s17QJI0AAAAASUVORK5CYII=
-}]
+}]}
 
-	set save [image create photo -data {
+	::icon::lazy save {set save [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11072,9 +11086,9 @@ namespace eval 22x22 {
 	jqPYtm0HAHRdl1IKUhwPBcdxqavndJ4R9NNdS3NGo9EYwuGwkIluUZif275+XeXyltYDjx7t7Cue
 	OZ/UiOKBPsu1RtCPJ9dVfnNvfm67SkTb7KBf1DcwtPrn30YW/5cPUyMEkLcke6wwP7ediM4lWamZ
 	zH6abkSmFb2CMUM3+phOE81+WP8B35v6s17QJI0AAAAASUVORK5CYII=
-}]
+}]}
 
-	set saveAs [image create photo -data {
+	::icon::lazy saveAs {set saveAs [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11116,9 +11130,9 @@ namespace eval 22x22 {
 	TfFKfePZhY9u3PKpcsTUSqBCVtgCAK/b5daEBgAd1Whqac2cOsUrt/ryW5yGoWOHlNhL5Pf7VWVl
 	pSaZ9db+A2989sU3RRMfevs+ofX4k6dO8bB41bKjTz6+ZpOIdMRZSVtTW2f3vc2BjtmIt6aJdwBA
 	QwMUyc/N6s3OvOlrEekb20nGuZq8mSYJEYyMRBPWAsC/cSQF53YdxG4AAAAASUVORK5CYII=
-}]
+}]}
 
-	set databaseOpen [image create photo -data {
+	::icon::lazy databaseOpen {set databaseOpen [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11168,9 +11182,9 @@ namespace eval 22x22 {
 	kZaShBRzktrU7BBTJ5d4dmzd8OIIbhwTDwL4hZn3P/X4g/GrydfZNcYfHDRZC/IvAzgd4/ixZrtz
 	rqPdk1FaXOAbbxlrfnL52ureXn9Gl6/b8t94/u9lqpHEDeuuYzocQiEIoVDoIVe7dxkzp/8L9Wze
 	5gcIcCYAAAAASUVORK5CYII=
-}]
+}]}
 
-	set document [image create photo -data {
+	::icon::lazy document {set document [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11214,9 +11228,9 @@ namespace eval 22x22 {
 	V1VVpaqrqzXJ3Pc//eLdr7/9YdXgUFREvNnBOKUiAEmQQGooyMceWXFg7bNPviQi7aOspKupraNr
 	eXNLezZGV1MSHzQ0QJGigtzuvJzph0XkythNMk7jfy/TJCECx3ETagHgH/2PGezDdJi0AAAAAElF
 	TkSuQmCC
-}]
+}]}
 
-	set documentNew [image create photo -data {
+	::icon::lazy documentNew {set documentNew [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11259,9 +11273,9 @@ namespace eval 22x22 {
 	PAKBgKqqqtIk/e8eP/HO51/9sHFmoxe3pGZ+qPS0FD6+ef03z5VtfV5EuuOsWUdTZ0/fA23B7kWI
 	j6YZ+VMANDRAkaICf39e7pLvRWQgcZJMczX3MJ0lROBmKGmw/g9EYQFVAHatxAAAAABJRU5ErkJg
 	gg==
-}]
+}]}
 
-	set databaseNew [image create photo -data {
+	::icon::lazy databaseNew {set databaseNew [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11310,9 +11324,9 @@ namespace eval 22x22 {
 	Uj8aCCY3N7f9HFFhn5yW2vDqhpI3DXoptD4kx7MiBh4AcIaZz23euDY+mnr7BpK8Xp/RbDFhkTO/
 	4pUN/tgIGk1KtPVPSB4XtlpM/TpJF1JkBWPME3ff/w9TUYBAj78lIjCzs/V2x/vMnAuAYkP1H7B1
 	uC7d5GTJAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set add [image create photo -data {
+	::icon::lazy add {set add [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11345,7 +11359,7 @@ namespace eval 22x22 {
 	TUXkAMDn07Pnw7yqwKcAEM/pr9euzH2ZudJGa8rHjWUkyzIAGVDbsSrNcexqSlPFzm4AKiBDXQ96
 	X/FGAIeDwbqz2+FgsN7mZsHr5llrBQQnuQc6Z3XvwUKSmDDQQRjoYCFJTJubhfNW7Hr2Y+fhvVcu
 	P8VdDnEUwT32fw0X+Zr+Gf4A6oUJNJDZgzMAAAAASUVORK5CYII=
-}]
+}]}
 
 #	set crossTable [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -11391,7 +11405,7 @@ namespace eval 22x22 {
 # SUVORK5CYII=
 # }]
 
-	set crossTable [image create photo -data {
+	::icon::lazy crossTable {set crossTable [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11433,9 +11447,9 @@ namespace eval 22x22 {
 	MXx6PFFDmw+KjxqMNvbCpU+HQR7bjTZLYejenslnWlvSlTeP9uWNZZQbkg3Xv78x9sXX3777v4he
 	gFRDRPTH3xqIiL52NBUXlwZ+mZrO2Dh9/2U0vX60t9CUSv1YHU3ViF/4MP0H7pkkOOjVZacAAAAA
 	SUVORK5CYII=
-}]
+}]}
 
-	set paragraphSpacing [image create photo -data {
+	::icon::lazy paragraphSpacing {set paragraphSpacing [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11472,9 +11486,9 @@ namespace eval 22x22 {
 	PMktihY5eD3wrjfe1GY7uxLTJOMkj5M8EXz/NrK+eGdXYjp+uc32DbzrjRY5AHbJzff933pTIYBv
 	IvK1oFKQvlEhLUnfl+wOfx9pa1F2tNRznIjGSop9ABLcqYp/q8ICkFhJse84ES07Wur51uYy/r+L
 	PmuH+jTtzh5MDuUx/QUN7ulQFzf09gAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set columnLayout [image create photo -data {
+	::icon::lazy columnLayout {set columnLayout [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11512,9 +11526,9 @@ namespace eval 22x22 {
 	tLWenz2rZWZc8dLTmy/6yFcvnNR2I4Gro6MrPjjy5cvjGUTSQQA40//Tpt6+gViDbN34fDeJ3tsa
 	37b0c0e+OLElztLXizeWrFz+6McAcOzr73aMZ+l5Dz1QCJzrrVuapDqy7T2vbFo3a7whhJqlX1y/
 	9lDrjBmxQ6izo71nrFKzdGOLTOTYbMSkDvpJ+ZomFLcAHWjBaQjQw3sAAAAASUVORK5CYII=
-}]
+}]}
 
-	set togglePlus [image create photo -data {
+	::icon::lazy togglePlus {set togglePlus [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11551,9 +11565,9 @@ namespace eval 22x22 {
 	3sAaaQwgSkQSv01NIlpK8i2mUr0sqnJ3gJObJiwiOoATSoKMhpDKhboIuikZZ6qrFnKPHo7OzQc9
 	zV7fkDPDsRkWQp+bD3oK8/OidTVVQVNyXAq3O8ffcfXS/cEHD6+8WwyVZTzoCSgocAtvW+OIy5Uz
 	AcQLlVhNX1bWGl7/5Wo6XVOx4Ha5JqzVREqT/75MfwGOonE4BmWkhwAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set toggleMinus [image create photo -data {
+	::icon::lazy toggleMinus {set toggleMinus [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11589,9 +11603,9 @@ namespace eval 22x22 {
 	W4cnw9gUEbjdFi6ea3h4tv5Ub3hl1Rv6tWwZpAAECYnb2iguKlz0Hyp5Tccp70XfQPujpz2XNh/0
 	AlKh9eqFZ60tgUB4ZZVOjNPR3O1xJyLRGDasprmFYN3IJqspYdvc483RtTXV/QBHnGmbWYIImTpk
 	W6YktNbQWlLOmUideMtv/ipKTLKzkdsAAAAASUVORK5CYII=
-}]
+}]}
 
-	set help [image create photo -data {
+	::icon::lazy help {set help [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11639,9 +11653,9 @@ namespace eval 22x22 {
 	PdoAoLu7x7/ZbFF3dvciSOvXn2FILV79tv7LEWUTAIiIHUJvYub3k+fHlx06XmKouV0f3drWrmk2
 	W9TAoNCHBGot0VPDa95ZkVYYGhLyXOiJyFXoh0fuGGsA6Oru3At73PTEHwCCggPaIidPdLYmy/Az
 	/2kjNlMhoBD/v5n+A9f8ryrzYfEzAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set filetypePGN [image create photo -data {
+	::icon::lazy filetypePGN {set filetypePGN [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11685,7 +11699,7 @@ namespace eval 22x22 {
 	V1VVpaqrqzXJ3Pc//eLdr7/9YdXgUFREvNnBOKUiAEmQQGooyMceWXFg7bNPviQi7aOspKupraNr
 	eXNLezZGV1MSHzQ0QJGigtzuvJzph0XkythNMk7jfy/TJCECx3ETagHgH/2PGezDdJi0AAAAAElF
 	TkSuQmCC
-}]
+}]}
 
 #	set setup [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -11736,7 +11750,7 @@ namespace eval 22x22 {
 # q8bXTOz923jRaqqort//UqvpRfF/l+kf/3DJ2SPeGXQAAAAASUVORK5CYII=
 # }]
 
-	set setup [image create photo -data {
+	::icon::lazy setup {set setup [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11783,9 +11797,9 @@ namespace eval 22x22 {
 	CKmsMiZc1xsSS0org0dHrWaZy5TBFlOXHGBu6jVhV5f5+ZaIokiCILBn7jbRNmsbbq7t7u59bZM6
 	slabp9vwyemLcbOnT+sDiPX2/zY9ecem87vfib10sag0YK7HrF8C/ZcUM8Y6xtvm85T9R6PPmGj0
 	q8bXTOz923jRaqqort//UqvpRfF/l+kf/3DJ2SPeGXQAAAAASUVORK5CYII=
-}]
+}]}
 
-	set sort(descending) [image create photo -data {
+	::icon::lazy sort(descending) {set sort(descending) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11823,9 +11837,9 @@ namespace eval 22x22 {
 	ZTvIyhiGBfNm3fN6vc0iUnHt7FFXybbSEzV36/rNm10YOHNs9x6P233Zsu1uVSSztAZKyBEtx5fZ
 	lp6eXkcSPcK/uL906+iC23fWLCmee0XX9YuWbTMshlSvTQIIkgz11EUudxEZTvJz7PfY5oQRbeXY
 	GzAu/1tjX9EXmlR+Tf80fgM5ZZJCec7ESgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set first [image create photo -data {
+	::icon::lazy first {set first [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11869,9 +11883,9 @@ namespace eval 22x22 {
 	2O3SMk0xJhyr6JUWRPQzM+eledy9O6qC6wHoKSkuEwB8Ph+iOSGIqIeZt6S53b2xEHK5k005zs8T
 	anxsnjvfnt909OQHU4rNljuxOWn9L0F/96S73yfhpvZrmmyBqXL/AJAEUL0tIT9sAAAAAElFTkSu
 	QmCC
-}]
+}]}
 
-	set last [image create photo -data {
+	::icon::lazy last {set last [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11914,9 +11928,9 @@ namespace eval 22x22 {
 	pqenCwDkspvmcAhm1h/02qd7enroyfGRh2K3bopn5iYAwmKxgIhIVVXBzLD3PZomSZISvy28PHnH
 	1lhmbhx90sw87JnhELrkCqGz/y2E/Mby/gYAC8urTpZevdESN1lsVh4/XdRw/krSpLE5tvhJBP2T
 	/Zr+T96fbbhXSuPK82YAAAAASUVORK5CYII=
-}]
+}]}
 
-	set next [image create photo -data {
+	::icon::lazy next {set next [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11950,9 +11964,9 @@ namespace eval 22x22 {
 	hAuZ9/MikFQ0TVM0jfnH1cZHnoy+eNd49iJb2i9Zxpv5MMmDzpzqVaGrQeLJ49sbJAf17pWmaYqI
 	SCqVutJ64RqbznVzt67zqrg+NjUXSbxdfPxXSn+TpOhj0wv0nx70pb+avMYPpddnANtQ5WgAAAAA
 	SUVORK5CYII=
-}]
+}]}
 
-	set previous [image create photo -data {
+	::icon::lazy previous {set previous [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -11985,9 +11999,9 @@ namespace eval 22x22 {
 	12uXYutECZv3O3llbRxV/QpcKwkyem/m4oPZ+XPGdfYAQ6r6CXB8XyJ6++L7vogI26bxnwSkEjwa
 	6SD43i8SM9IV4C1Pnr0am3k0NwUcqKnjCDz2tblj+J91YvDEoXHHL1xCaI/Uztg0AAAAAElFTkSu
 	QmCC
-}]
+}]}
 
-	set front [image create photo -data {
+	::icon::lazy front {set front [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12031,9 +12045,9 @@ namespace eval 22x22 {
 	2O3SMk0xJhyr6JUWRPQzM+eledy9O6qC6wHoKSkuEwB8Ph+iOSGIqIeZt6S53b2xEHK5k005zs8T
 	anxsnjvfnt909OQHU4rNljuxOWn9L0F/96S73yfhpvZrmmyBqXL/AJAEUL0tIT9sAAAAAElFTkSu
 	QmCC
-}]
+}]}
 
-	set back [image create photo -data {
+	::icon::lazy back {set back [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12076,9 +12090,9 @@ namespace eval 22x22 {
 	pqenCwDkspvmcAhm1h/02qd7enroyfGRh2K3bopn5iYAwmKxgIhIVVXBzLD3PZomSZISvy28PHnH
 	1lhmbhx90sw87JnhELrkCqGz/y2E/Mby/gYAC8urTpZevdESN1lsVh4/XdRw/krSpLE5tvhJBP2T
 	/Zr+T96fbbhXSuPK82YAAAAASUVORK5CYII=
-}]
+}]}
 
-	set suggestion [image create photo -data {
+	::icon::lazy suggestion {set suggestion [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12121,9 +12135,9 @@ namespace eval 22x22 {
 	L/Kx9dHrbvZct0am55kKwExT03dofXTUTQCyYqNaa6rEvtdDo9EM2+3OY7LsiOw1D0QDwJYn439/
 	Z2/hMY1GM6Joq/pyrFDZi+dKRAnf/nA1EQCeSdr8I4BuJVnqw+a/YKE77hJ/Abn4MF080Rn5AAAA
 	AElFTkSuQmCC
-}]
+}]}
 
-	set variant(Normal) [image create photo -data {
+	::icon::lazy variant(Normal) {set variant(Normal) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12165,9 +12179,9 @@ namespace eval 22x22 {
 	7MZmz8uhYEhBfIIxk2JRQj7/9XtkSQAm2RkPNtLSU8KKoohRz0T+iHsi/46RPmcPFEVBWnpKGLfH
 	7jY4tnlCCE1V1Y+zHBnXNC3IiiSZp3j0hCIRslotVFVR5hJCaAsfz1SPNcECouVjFphzQdODKypc
 	GXGZnv8A6/71PZhBPLIAAAAASUVORK5CYII=
-}]
+}]}
 
-	set variant(ThreeCheck) [image create photo -data {
+	::icon::lazy variant(ThreeCheck) {set variant(ThreeCheck) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12204,9 +12218,9 @@ namespace eval 22x22 {
 	dZvDZVmIT8pbS0jKW5VIN6/plsPvhk/PWKtTWPVSaEImuoymdgAhjW09AxFHTuBwYhaaDTd9ggr4
 	4QW/WQ4ArfU1Fc6R8acpidL4Sb4p1YGBe5YJCCktYi9uaNSv5LlpAIIopZ4+fwD+nud2pM2C/vhL
 	3O6Cv/WJ/7v6DoUaA5+99BsdAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set variant(Bughouse) [image create photo -data {
+	::icon::lazy variant(Bughouse) {set variant(Bughouse) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12253,9 +12267,9 @@ namespace eval 22x22 {
 	/IrwPM8U/S8HAxgynp6a9Ff6B8m5ACCIGPevZRXftJ/t0fYNvFwBAAoAGFvoN4PFa3qFv2pKqVQw
 	5ZuKSYboREQHIjoYolPxpmJSqVSwFf6qKQBw/YvG60VEOGi1plTVN54iIh3AXHOJiInvuqr6xlOD
 	VmvKwn/d/17/AAtBrnxq1XC4AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set variant(DropChess) [image create photo -data {
+	::icon::lazy variant(DropChess) {set variant(DropChess) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12302,11 +12316,11 @@ namespace eval 22x22 {
 	G1moVqkuyxbLvyI0rNTI+Y9DspldcCiltLwq7o8bbe5PatQOAOg3Dwj+vj5GXZz2WNqGxHwAF4jI
 	gkHZHEHgCHOVkHPtJsty0qd7Cy5qV6axVpfKu/bk15pMcjIzuz8qZlRjZsoamcC/sbnlS33T9b3M
 	PNXl/5+z778N038AdDKmgVO7BREAAAAASUVORK5CYII=
-}]
+}]}
 
-	set variant(Crazyhouse) $variant(DropChess)
+	::icon::lazy variant(Crazyhouse) {set variant(Crazyhouse) $variant(DropChess)}
 
-	set variant(Antichess) [image create photo -data {
+	::icon::lazy variant(Antichess) {set variant(Antichess) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12348,12 +12362,12 @@ namespace eval 22x22 {
 	b9whBDHzrbc5FmxmZKbrisUi/rw64bwyOuEkiv+AMTMEAYrFgozMdB3AEroMzE8EM5MQQpudna1f
 	dXv2uKaF2CJJCf8QABA2DLJaFXqivKRDCKEtPry4cqyqgkRK4ynXgqEVJa6MuEzN/98w4MTLchvE
 	AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set variant(Suicide) $variant(Antichess)
-	set variant(Giveaway) $variant(Antichess)
+	::icon::lazy variant(Suicide) {set variant(Suicide) $variant(Antichess)}
+	::icon::lazy variant(Giveaway) {set variant(Giveaway) $variant(Antichess)}
 
-	set variant(Losers) [image create photo -data {
+	::icon::lazy variant(Losers) {set variant(Losers) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12403,9 +12417,9 @@ namespace eval 22x22 {
 	tdX3H3lXVFUFM/PrxXMpF6xW66DcgpJI2eZwajSSRqvRBBARyQ7HDYdDcWj1GjEqPCzfZDKd1Ggk
 	evq0dviV65XBke+H/szMd/73w5REgYiZoKokNnkEORWFWBCIAFKc6hv3/gO8cN2WMxNIhwAAAABJ
 	RU5ErkJggg==
-}]
+}]}
 
-	set compress [image create photo -data {
+	::icon::lazy compress {set compress [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12450,9 +12464,9 @@ namespace eval 22x22 {
 	cWUVVbGVNfUTTSY/n+VLUk4kxM04oqgq7HY7Ad6fprGKokRLknTzxKmz6XsKj67q7PrbH0Tw9zMO
 	pC1KPpzxRureC5euJHb39pmip05sCg2x/UxELZ6X/ROn+vQrwMxWR2fnK7W3moIADbagoJ7QUNtp
 	ImoQRNDpxLAP6z/djiStZmXllAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set diceGreen [image create photo -data {
+	::icon::lazy diceGreen {set diceGreen [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12492,9 +12506,9 @@ namespace eval 22x22 {
 	tOXYroLpqpTF4rIKIEHSB9cQcvZuKQOwScac0OmLpeUVJwlCtUDsSbRO6OpmKzUz1dL1/cBnax6b
 	VlFNzUy16KGotSfRdtsCK6GIBSMXj3fu/6r/xrneG/PGrv8z6LeHty4f69g3GAtqlwBg3a6mJ/XW
 	iZgWuVS9mqrNsO6X6T8okLT+CBPLYAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set database [image create photo -data {
+	::icon::lazy database {set database [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12541,9 +12555,9 @@ namespace eval 22x22 {
 	dNOb/sCoAwCsFtN/Wzo6d1eJa0XowFu7v6ytqfokHZtM+6XMoH++sal559WeO88MjzxYGY5EbUpS
 	hapmWFrPw26zTBetyAtuXL/26r5Xd50D0LYo6DPwWmo0rfT5gs6RhxPZMzMJEwCYzaaEsyBnstS1
 	chTAIICRpUbTk2T8b8P0X2kanRUnEP6dAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set list [image create photo -data {
+	::icon::lazy list {set list [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12576,7 +12590,7 @@ namespace eval 22x22 {
 	quTN5F9kR8ceZPtOHp8keePa8K2bzwpve43ynAO92Ns5cOOGdns1O3RdKzUiIlixmYSAEIACQNw6
 	WrGjyoqPa7EiNuJak6frECaN0YvLN2i63HRFXaWlx+5NDcy9LjbV0l8XFv7U0hP/X0u3a62+W+vg
 	+wZB0NyzWYuWPvQt+ZrWDT8ByfJh9sUfQ6QAAAAASUVORK5CYII=
-}]
+}]}
 
 #	set leftalign [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -12645,7 +12659,7 @@ namespace eval 22x22 {
 # AAAASUVORK5CYII=
 # }]
 
-	set arrowDivide [image create photo -data {
+	::icon::lazy arrowDivide {set arrowDivide [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12687,13 +12701,13 @@ namespace eval 22x22 {
 	+rI/3o8ceGrqFQYAxbyYSCYT/n4j98gVp0GMTJnb67CDwCDQ9vffaWDP80h6nvD3O0mwKZhZpNea
 	4+GWB8fDLQ+YuWYjtxUemp2ZKf0U5VyfulUPAPuf3TdIRDGf+9/V7xT/Aiog7bCOxTP/AAAAAElF
 	TkSuQmCC
-}]
+}]}
 
 } ;# namespace 22x22
 
 namespace eval 24x24 {
 
-	set logo [image create photo -data {
+	::icon::lazy logo {set logo [image create photo -data {
 		iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAACXBIWXMAAALEAAACxAFbkZ0L
 		AAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAA/xJREFUSImFlm1sFEUc
 		xp/dnd176fW4u0IqIrbQaxEpxhBiY6JGAieF8sGIadJIgtVoTdQa4wej1ERCP0DUCJhgQgLB
@@ -12716,14 +12730,14 @@ namespace eval 24x24 {
 		GtH2fnK4464atR7BTBW68Vgygdjd0VkY7HUg7dJ/uuFwucdL2kq8bv9yr1tRiJR1X37onYpk
 		BXMqcqpTgSanwMXX7nTtCy0BpMu75X2P27ALBe2kKddvy38llisDHNDHBQAAAABJRU5ErkJg
 		gg==
-	}]
-	set sci $logo
+	}]}
+	::icon::lazy sci {set sci $logo}
 
 } ;# namespace 24x24
 
 namespace eval 32x32 {
 
-	set clock [image create photo -data {
+	::icon::lazy clock {set clock [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12782,9 +12796,9 @@ namespace eval 32x32 {
 	Z1v20apTz1+ua5jffacnemBgMEQxBhNZEmG1hgxGR0V0p6fNuvRS3nNfJiZOP05EN0frmrADpiDw
 	wGg2GUDyzZu3UuudrfYet8cGABFhNk9qUkJ7nK/C3Xic0WxCiwMMp8D94TTAmvBw+tiO8P95PP8f
 	kz2yIAfrL7YAAAAASUVORK5CYII=
-}]
+}]}
 
-	set remove [image create photo -data {
+	::icon::lazy remove {set remove [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12821,9 +12835,9 @@ namespace eval 32x32 {
 	48l4WLqrm4QquHSq2atDltuo9AmlYxoFV7dihclomZWChOH/wC78jKoj8WcfcPX4xOb2Xk1wLRLN
 	7b3k6vGJVe8DFosZ7QfraPiS/0Wf50REy+HK2faTZ4mLFotZU/WeXMnUCv+VpbRSkb2zlu/Hfxu/
 	ACoJyoUBVoq6AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set dice [image create photo -data {
+	::icon::lazy dice {set dice [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -12873,7 +12887,7 @@ namespace eval 32x32 {
 	zUP5vHB/wvVg27bIiLa8pLpm98EjJ1uWTnlbrjXchAtXa2xaV3m2pvqlLem23Hcu/h/VAGpaz56r
 	GI7fCGSpordkhmEgLzcn8ciyiu9r3nxxm+9LRESPdjUr6ezureroihaB3tSEQAy9YH64v6x0bpOI
 	9Iy8g/4rNUamViBgZhfxW7Bsl9Obwf/z9fxv5yAXsrGLHm4AAAAASUVORK5CYII=
-}]
+}]}
 
 #	set trash [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -12989,7 +13003,7 @@ namespace eval 32x32 {
 # upLjfzFmFlyprHklX2tlU9G6GfsvjR6cRvc+cO4AAAAASUVORK5CYII=
 # }]
 
-	set clear [image create photo -data {
+	::icon::lazy clear {set clear [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13039,9 +13053,9 @@ namespace eval 32x32 {
 	q9d9qq7U+hATAY/OJAIztZgtZLGYVckrFhUy8317LeBUgIOIHwEkurkp15edr/BXKgVJsi8qCQIe
 	tQcz4W/HIRBUKjcpaIjmDBE129t2OANyEUajUWDmswCmE5FPS0sLlErXa9m2NiJ3d6VIROXM3Cof
 	vcvmcho9hbns2KXNpBMX/+mB1VX7C2rlNiv/fMf5AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set lines [image create photo -data {
+	::icon::lazy lines {set lines [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13071,9 +13085,9 @@ namespace eval 32x32 {
 	+WTl+GTPP61trSzOvvjVgzYR3Teawc7ufuXo7f2Dtcrd5EDCMKaLq/qrXz1sE1EjLR7WSAAYICJ8
 	968w+rVg/bJ+V16anwk8zz1j5s+iWtA3iuNoiqI4p//3I7TSHTljjGLOaqMs2xgOfE1DFvtnxAfE
 	B8QHrIgPEIkPiA+ID/x8y4v2AUH4AjcBoO0ZPiC+AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set lock [image create photo -data {
+	::icon::lazy lock {set lock [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13126,7 +13140,7 @@ namespace eval 32x32 {
 	fvXSH586PzC4RCknT/Pe7gwdt9+2ZPDZp3780vKK8iYBMvQ2m5PAFDI6gDVHO7ruuRQbnqfr+Z3t
 	HYdSWjp/6L61X+sE0CUiOXeRk4B//PLFT758JWOraTFvSgCYPMt//lvN9TicDuf/TEJYVACSpMIA
 	AAAASUVORK5CYII=
-}]
+}]}
 
 #	set pause [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -13170,7 +13184,7 @@ namespace eval 32x32 {
 # S7rZpHEo5FkAAAAASUVORK5CYII=
 # }]
 
-	set pause [image create photo -data {
+	::icon::lazy pause {set pause [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13210,9 +13224,9 @@ namespace eval 32x32 {
 	fbGto708W5iPjU9Mbb05Ot6WyU5vWfCd7dm1c6yrc+9AELj6tn218tfaHnvz7Y+OTkz+1uEZ/jSl
 	h5/Yf2n3A8tN6ZVr149d6Pvm0aWm9J677pg68fyz59DAlK6fLScRuL9vy9fq/H/xMPnvnma3RfwB
 	S7rZpHEo5FkAAAAASUVORK5CYII=
-}]
+}]}
 
-	set search [image create photo -data {
+	::icon::lazy search {set search [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13266,9 +13280,9 @@ namespace eval 32x32 {
 	fglZxGDmASIaCLfcmhmCs0EPgN1ERM+//JdwSjAzIyzABBBzgiKhqhEW4Pj6qRBl20Y1rwgFMVP8
 	L2z435xpHcd3DcfaR7Huwe+b1Zeu/lIIQUTEMyrwRS2UEi+88vp2VVVYZjHelr80gBAQexITYhuZ
 	BO5d7ThpmiYBc7nt/w/7Us96jhBMgYoZB/ovN+3k5iVg8aEAAAAASUVORK5CYII=
-}]
+}]}
 
-	set fast [image create photo -data {
+	::icon::lazy fast {set fast [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13317,9 +13331,9 @@ namespace eval 32x32 {
 	qomZqz0NTuTtkaydaUJTHKpGIf37WU3Zi9fqdbpjubmeB+8FgLYtJWRJ5vnJM0oGhodudagqG43e
 	HUx7AoAdDlUBAJutRZk4bvSJOTOmrvb2PtAbANZHIiOu63R6HhY1qKYgd+nbXbXaf9XcflYx+w/9
 	YDKbb8wGoLiuavc0eHv7zy+k7uZ+Jede5v0PxTUThTMYGEAAAAAASUVORK5CYII=
-}]
+}]}
 
-	set slow [image create photo -data {
+	::icon::lazy slow {set slow [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13371,9 +13385,9 @@ namespace eval 32x32 {
 	nbsKNwEIpctXrEGS/f/NuTt25Yy9MxkjJ92LlfbsXQDCAzfUll21DS3dusFsDqEFcxP33zc70c7M
 	7sCpx0gzM/sA5BUdLE06/n3VwPDwMK3TOw/IQOuhU1t7LqVwv2MlgNjA7PzX3/8L9B8XiNUlkyTx
 	L2LB+l8X838LsvFNeL39/wH6bGx9QqzjuwAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set quick [image create photo -data {
+	::icon::lazy quick {set quick [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13433,7 +13447,7 @@ namespace eval 32x32 {
 	s+Hoqbzoe3VNoaEhQeVbNqza7uwszSYiq6NK97R4gjEzh3V0mCLa29ud/P1V7QC0AKqJqEPMYWYf
 	AL+2/19mz+s1eK/CfuYdSSx+HT03IIn4rSdeO+h+JD57fsi/UPwX9EglTTw2I7gAAAAASUVORK5C
 	YII=
-}]
+}]}
 
 #	set start [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -13482,7 +13496,7 @@ namespace eval 32x32 {
 # NC5tuSNk/v2HyWAYj6fZ/+txOh74E8xEeOdaWuTNAAAAAElFTkSuQmCC
 # }]
 
-	set start [image create photo -data {
+	::icon::lazy start {set start [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13527,9 +13541,9 @@ namespace eval 32x32 {
 	24x3nJmZHvdwv7MiPPRE7Mrle5VKRaXJ1Es6nU5ITk7GcFo0+wSYIRMENLca3XtMvfSQ8wQpMGBu
 	RdJ7b2a6uAxoySS9Xu/o3vYJyOVyFkXRqafHxCqVknyentG4dnVETkjgwKbUEXc7jAFtebTWmGY4
 	NC5tuSNk/v2HyWAYj6fZ/+txOh74E8xEeOdaWuTNAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set stop [image create photo -data {
+	::icon::lazy stop {set stop [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13565,9 +13579,9 @@ namespace eval 32x32 {
 	HQC2mgJU+zMqCuPvP35ZXlr9cF4vcuX+bHL66bPMNbfqGBHpZy7v52JTDvg1Co6eXlYUxreHdhRR
 	Q9B6SfY4kYrOzi2E9JKQKlalK0UqMxkCPtWeilxJ3giP33GSZC1FaXZtffL5q7cjOucD3YrSsdFT
 	K8PHjiSaidJdl+VNbVcvJg4g3Wfv9mq2Z+w35MBkhD52kEwAAAAASUVORK5CYII=
-}]
+}]}
 
-	set sideToMove [image create photo -data {
+	::icon::lazy sideToMove {set sideToMove [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13634,9 +13648,9 @@ namespace eval 32x32 {
 	404hovOe2/LpkVB/z6pvaltVVHz+0ara+oTe/oEgu8OpczolkBUZPPQ68DZ4QXCg30hMZFjZY6uW
 	F0aFm0oQsXM61j0TcBsCfONoFtXW2RNzu7UzxuVyJjglWfT1MfRFmWbXBQT4lcNEhzw2k/0PHjMd
 	TgEAtFrxTvVMn9j/7ZRMRMxsNjOY2tLfObZ/X8f/BbbgJps4GiNiAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set rotateBoard [image create photo -data {
+	::icon::lazy rotateBoard {set rotateBoard [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13692,9 +13706,9 @@ namespace eval 32x32 {
 	//arqzPSTiUtuuOETic0yDKDmfFA2tIzza3tCWkp954F0KxADP+TmoyAKpoer2Z8GIB4AHHdPT2R
 	AGCNiOgB0A6gjYh61Tto3hkOAIsBXCei/06HORkRYSaEFeBp/8KNKH8LIiN9Vh0RmlHBEz1cNDYT
 	7n+n8j8NvdKuuihQlAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set scrollbarBottom [image create photo -data {
+	::icon::lazy scrollbarBottom {set scrollbarBottom [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13734,9 +13748,9 @@ namespace eval 32x32 {
 	L3LfDMzNL8TjzTH4DfLAIFBcdTD3+50X33rj1fMApkLOjbfh4u50708geyzTkN+gmjBIuZ7P3ene
 	WQCL5Wub1UASQEexWJRl1T+zlsN1XcTjcQK4TXK+IUkbhc0ceKiT8v/SKaPgP8Kfz67aI+6jAAAA
 	AElFTkSuQmCC
-}]
+}]}
 
-	set scrollbarRight [image create photo -data {
+	::icon::lazy scrollbarRight {set scrollbarRight [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13776,9 +13790,9 @@ namespace eval 32x32 {
 	7apPj+cFg43/BjxtAq5yERkguXXZxxVTlFID7nWcKXjaBFxxwEwAAw6hjC13JZOGJNmSpdkNAQBF
 	hCJC6JELnpvSTCy2bRpDcVO0TviNScaI6jYeXfFfH7y34PLdrofF784taQPQNQ6YL2RCHyavlbzW
 	j9PnuGbhygFC/T8AAAAASUVORK5CYII=
-}]
+}]}
 
-	set scid3 [image create photo -data {
+	::icon::lazy scid3 {set scid3 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13833,10 +13847,10 @@ namespace eval 32x32 {
 	vrF8vYvJrvaOnobO3v6990fHn1yLA8sXk9Uc2FpdNbS/tubm4fo9bXjUi0mGiZWRWXAO07JWODA8
 	8lnFg6mZsrmFeWc8nlzmgK4uFW8oMjZ5SsPbtzwxgRQHFCEMS8qcnOsaSO8E1rmcZpcgT6x7OX2k
 	+F9ez/8NLOGgpfKwLTkAAAAASUVORK5CYII=
-}]
-	set si3 $scid3
+}]}
+	::icon::lazy si3 {set si3 $scid3}
 
-	set enter [image create photo -data {
+	::icon::lazy enter {set enter [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -13871,9 +13885,9 @@ namespace eval 32x32 {
 	otW33xYpBamqQqpiqbusqkqKRdKhrk4CELgSuLt+4rxft7t9CEefxgC4iRpoVrtOw3gyVJGG0fpp
 	aApjIUpqWsg7PJYsF6KoiULUgHMCILV0urIf7IXzUjNKbNOMmuLcaBiAcyh070dvnwcOt29XNzc9
 	D6iqAqu1gy5ddH169PD2nabPAkT7YCSrZs+HUiP7Yixv81/zB9agxGR3jrY9AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set marble1 [image create photo -data {
+	::icon::lazy marble1 {set marble1 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAgnSURBVHictVdbbFzVFV37nDsPP7HHOATbCS0OwoEGG7WCCtpqCrRVWyH6YxMCaVBV1Kqk
@@ -13914,9 +13928,9 @@ namespace eval 32x32 {
 	SA0N4qpNo+6NU5OH01//6r7rxkf+ICJFAOpC2i8KQDQ6RUPSAXD9icXC5PLK0tXV8FTr6+8tjo1s
 	+mDL5qEjuMSr2UUNkpL5P11OL2pSJxCE1/N8Ps/IS0xPBwfL/3I9/y9IP586oytp8wAAAABJRU5E
 	rkJggg==
-}]
+}]}
 
-	set marble2 [image create photo -data {
+	::icon::lazy marble2 {set marble2 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAh2SURBVHictVddbBzVFf7OuTPr9c8aex2HkGxpgiPREIgNFOgDqG4DfaClVSvZmJ+QqhJC
@@ -13958,9 +13972,9 @@ namespace eval 32x32 {
 	p0dmTs+lFxaW0GiGsAJ0pDuRzfbji1fmwutHth0Z/dpt+64ZWv9HIioD4AtpvyQA7bFaNCLiAdj6
 	/szi8OyZuatq1WoWADK9PeXc+i98sPnKgaP4nEezSxoiQvn/0+H0kiatBoLkeF4qlaQQtxIYG4sL
 	y/9yPP8vvJ2oNzNbDfkAAAAASUVORK5CYII=
-}]
+}]}
 
-	set marble3 [image create photo -data {
+	::icon::lazy marble3 {set marble3 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAihSURBVHictVdrbBzVFf7OuTO7a6/XjzUOEJY0xJFoCMQGClQCVJdAK9HSqpVsDCGkqoSQ
@@ -14003,9 +14017,9 @@ namespace eval 32x32 {
 	JFMdyGb78IV1Of/q4S2HR756894rBtf+gYiWAfDZtJ8XgJXRLhoRcQBsfm9maWh2fm5DrVrNAkCm
 	u2s5t/bS9zeu6z+Cz3k1O68hIpT/P11Oz2tTOxC0rufFYlEKcSuB0dG4sPwv1/P/AKQbd8XCKSC3
 	AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set marble4 [image create photo -data {
+	::icon::lazy marble4 {set marble4 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAgiSURBVHictVdbjFXVGf7+tfacOXNmzjgzMOIggsg0IiozSGqb3pyK0UabGpMOImBJmzQ+
@@ -14045,9 +14059,9 @@ namespace eval 32x32 {
 	MFRPdzeGhtbioQfvO7V1y6ZdS3raX7wmW34ZCAIiq3by7MTW1woHHjty7Njw2LmJdKlUhtdyARak
 	02ks7uvF8uU3euuGhw6PfPXLe9asWvo8EZUBqMtpvyoASZsvGhFxANx++tylofGJiVsatUafAMh2
 	d5WXLb3pzODyaz+aXVX7fx5Or+qj+UCQHM+L847no//78fy/+3KfBLyZeMoAAAAASUVORK5CYII=
-}]
+}]}
 
-	set marble5 [image create photo -data {
+	::icon::lazy marble5 {set marble5 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAgSSURBVHictVddbFzFFf7OzN312t7d2I5NUicxDXEFSUrstOqfKGIhbfmTSnlwCCGQqlKF
@@ -14087,9 +14101,9 @@ namespace eval 32x32 {
 	fav6ul68Jll+GQgCQql28mxh18H84Qenjx4bnzlfSCwslOE1XcAyEokuDA70Y2Rkjbd1fGwqc/ut
 	BzZtGP4DEZUBiMvTflUAWqOTNMzsANh8emZ+bLZQuKFeawwAQCqdLK8dXndmdOTar2ZXNf6fl9Or
 	eqkTCFrX82KRo9s5Jib+9+v5fwFIoKJm3JK+EgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set marble6 [image create photo -data {
+	::icon::lazy marble6 {set marble6 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAhbSURBVHicnVdrjF1VFf7W3uc+5tXOTDul9CWlU5GWOoMvJKJeqU9INGqmlFJsMDH8aIk/
@@ -14130,9 +14144,9 @@ namespace eval 32x32 {
 	1/a9V/XmnuAlNj8WwGJ3AEljcuzUuZ3PH3jpzonJI8Nn3jmbn50twfcbAB3y+SyW9/dh3brVwY3D
 	Q68VvvblfZs2rPqTiJQAmEtpvywArbE4aJLWDJtPTE0PTU2du7a6UOsHgJ4l3aU1q9aeHFy37Ipb
 	s8saSXNavILmtHjZzellbVoMBO32fIZjaX8+MpIUlv+nPf8fhkQiSzEThXAAAAAASUVORK5CYII=
-}]
+}]}
 
-	set marble7 [image create photo -data {
+	::icon::lazy marble7 {set marble7 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAhBSURBVHicnVdbjF1VGf7+tfa5zK3TmXE6ZRhLS6tAS+ggBo1oHK0ahUSjScehFJAHw0Pr
@@ -14173,9 +14187,9 @@ namespace eval 32x32 {
 	t74x89boyVPvFsvlJbT8FhQOxWIe/f19uGLD5cH1o9tfH/vC5/Zt3Tz8WxFZAmDOp/2iALTHatGQ
 	9ABsO3Zyfvvs6dNX1rOq1rume2l4+KPHt2wYuOSj2UWN9HBauoTDaemiD6cXddNqIFg5ni9wKm0l
 	sHNnWlg+zPH8v4rVUJf+9FiBAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set marble8 [image create photo -data {
+	::icon::lazy marble8 {set marble8 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAfoSURBVHictVdrbBTXFf7OndmXvWvsNY6xMSQECMZA2ShSmzZt4uC0adOqD1U2DoFSVapS
@@ -14214,9 +14228,9 @@ namespace eval 32x32 {
 	Cl995ql/bX9u+KXOVs9+WTTnHQHU0wGnVRubuL798OGRZ0dHz4b+c3XKG48nUCgUIRB4vV4sbW/D
 	yhXLiw+HNp/sf/ILB/tWd/+JiBK4w8bktjsj5wNxtmYJAK+KyK8BbBi/Gt88ef3ag5l0NggAgRZ/
 	oqd7xZU1K2+9NbP9+B+O/+fm9J6gLd6eR5xmYnDwk2/P/wsoGm4y8KO2DAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set marble9 [image create photo -data {
+	::icon::lazy marble9 {set marble9 [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAR3RFWHRMaWNlbnNlAE9yaWdpbmFs
 	IENoZXNzd2l6IGFydHdvcmssIDIwMjYuIEdQTC0yLjAtb3ItbGF0ZXI7IHNlZSBDT1BZSU5HLoC6
 	vgkAAAbFSURBVHictVdNj1THFT331uuv+ewZJjMkxiAMwXEsBVbJdv7ETDCxlB8AkRf20koPSras
@@ -14250,9 +14264,9 @@ namespace eval 32x32 {
 	OTTr4Z+r7cXLL623rz5tc3Y882ZUKiA7Ozty/OiRq33yz/17+28GlTeC4Jxo0cydCTHtlgG4Deda
 	c3+bn299cPIHK38UkV6n09GdnR0+C/wbFZgd3W5uVsuvKB7sP3798XB81qK9Yp5PtVCEXj2EW83m
 	/CfrK/Xp1Wxm73ca/8/L6f9CZHI975bzu1zP/wuO3yIIKB5EWgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set controlForward [image create photo -data {
+	::icon::lazy controlForward {set controlForward [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14287,9 +14301,9 @@ namespace eval 32x32 {
 	mQN+ciBzOI49C6D+REtnWyI5sUaUQmjvjnhXuHnBXMkSssDPGIpAMD09W3zw2JmmRHJirYj4Mgd8
 	VICGYtsKL16+qnZdigC+zQE/PSCSmSkx2nUR2lPr29wzgNZa6bS2DA2//0hb++pq410R/+aeAQoK
 	Cr4EystSStlyILT7eS5/7knLvpL9rr++lC7WP7GWr+i/0k+/02/s6EOZwgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set controlBackward [image create photo -data {
+	::icon::lazy controlBackward {set controlBackward [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14324,9 +14338,9 @@ namespace eval 32x32 {
 	86f3blVV/oCcHUNNs8AqwzKJzPrGqTv3nz/znvDkCAR24FDzMKookdC11GomlJYiqCgCbNpvxbam
 	YSWJxYSuSSlNAiTIfiu2PY4PkgCYjYIhDcOwVdqO3gP7JPqllLGFJf1qwH96x+Vy5Zys6ShNfZIV
 	09RHaTFNfZa38t/nL5pobt5Wabo1AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set controlFastForward [image create photo -data {
+	::icon::lazy controlFastForward {set controlFastForward [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14372,9 +14386,9 @@ namespace eval 32x32 {
 	fXrVToy37k6bMrG1C4lwOp3tBhFCgIgEGKzruo9MPgBms9mtKjLddbmlnj2CtdEx0T/Mn5OWoapq
 	02x/CLk9QYGBnga3JsmyLJnNZndrAI29WjJ1csL6gp9KLUkvx2VbwgdtJaLLzQL7JbfRPQSg7vXU
 	CRs9AmQJDysEUNIspq89kmu5V/B/xY/Jo/s1+0/aXyiIvENndPogAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set controlFastBackward [image create photo -data {
+	::icon::lazy controlFastBackward {set controlFastBackward [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14421,9 +14435,9 @@ namespace eval 32x32 {
 	yStLd2/ITln4qnPoEKty1+MV5hCJZVn29uYBXz2rT1+6aLurrjHmjSWJO4noVsDw2D+IbzISRto6
 	AJxIiJ+9zHHAuXBa9MQaIqrvZjNQHsdYbupjLO+hNCirQewZ1N/RE/s1+0/Kv0zuxCrXU5xtAAAA
 	AElFTkSuQmCC
-}]
+}]}
 
-	set controlGotoStart [image create photo -data {
+	::icon::lazy controlGotoStart {set controlGotoStart [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14477,9 +14491,9 @@ namespace eval 32x32 {
 	mJmlrml/7PV6L89Pcxa8f/TUqNDQEIoYPOh6fwkENXMcEwDHrtp3i7OcJYcuNDbNAiBudWKb33xX
 	6cOrNmypLdxYUQtgHNG/783bsm/oLL8j8Cz/Wvat/pj4O39rv2bfSfsXLm62fZ6SHQYAAAAASUVO
 	RK5CYII=
-}]
+}]}
 
-	set controlGotoEnd [image create photo -data {
+	::icon::lazy controlGotoEnd {set controlGotoEnd [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14531,9 +14545,9 @@ namespace eval 32x32 {
 	XC4mIsVCKHurXbst+MaK7HSrtRcLCSkF0jNUTKyFThj3XlJcZO8XEqVAvv372QESNptDGztm5Mm9
 	r6RG+fXz2aWDXyFdB3N5eXq6bHan0DSpzXtqyv6kuMgIZj6mt3L0BE5EVy6lL2duL/jdS2lZeVjC
 	qo3FBwqK/tBS2jGgGUBfN/jfspZ3AP9XfJj8c59m/1n7BcpDqadBxQdJAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set controlStop [image create photo -data {
+	::icon::lazy controlStop {set controlStop [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14569,9 +14583,9 @@ namespace eval 32x32 {
 	HQC2mgJU+zMqCuPvP35ZXlr9cF4vcuX+bHL66bPMNbfqGBHpZy7v52JTDvg1Co6eXlYUxreHdhRR
 	Q9B6SfY4kYrOzi2E9JKQKlalK0UqMxkCPtWeilxJ3giP33GSZC1FaXZtffL5q7cjOucD3YrSsdFT
 	K8PHjiSaidJdl+VNbVcvJg4g3Wfv9mq2Z+w35MBkhD52kEwAAAAASUVORK5CYII=
-}]
+}]}
 
-	set controlDown [image create photo -data {
+	::icon::lazy controlDown {set controlDown [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14607,9 +14621,9 @@ namespace eval 32x32 {
 	PMZM9OXr9ypmprNNdZOD1t0+Zp5w9/wt9qZXkNdlRlww8ySAO0T0dOzVeODbfKwqk8XuxHeM9zhC
 	4eHMnWgIIhQeju72zLdVAZfcSlRUlD9kJtzr7ni0r5nn4ukTpQBKvWMHhlfwwMW9wocmXqTIf8Mf
 	yfGF4U725bMAAAAASUVORK5CYII=
-}]
+}]}
 
-	set controlUp [image create photo -data {
+	::icon::lazy controlUp {set controlUp [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14645,9 +14659,9 @@ namespace eval 32x32 {
 	AIcOlKZjZLD70eVLjYOW7QiAvIE7OkASSgk8dbXzvvpz3xeWf7hdukaSIkoowDZ0fjUEhA5FRJiy
 	bKmurEh66mrnbccByU3RvTqQFdEBnLcsyw3oDmAVeNbrBCyl63oSwAcRsQobf0zZsyoedA9vhxzm
 	MCqmmGKKOer8AeMtjJNqhVZHAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set playerStart [image create photo -data {
+	::icon::lazy playerStart {set playerStart [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14692,9 +14706,9 @@ namespace eval 32x32 {
 	24x3nJmZHvdwv7MiPPRE7Mrle5VKRaXJ1Es6nU5ITk7GcFo0+wSYIRMENLca3XtMvfSQ8wQpMGBu
 	RdJ7b2a6uAxoySS9Xu/o3vYJyOVyFkXRqafHxCqVknyentG4dnVETkjgwKbUEXc7jAFtebTWmGY4
 	NC5tuSNk/v2HyWAYj6fZ/+txOh74E8xEeOdaWuTNAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set playerStop [image create photo -data {
+	::icon::lazy playerStop {set playerStop [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14730,9 +14744,9 @@ namespace eval 32x32 {
 	HQC2mgJU+zMqCuPvP35ZXlr9cF4vcuX+bHL66bPMNbfqGBHpZy7v52JTDvg1Co6eXlYUxreHdhRR
 	Q9B6SfY4kYrOzi2E9JKQKlalK0UqMxkCPtWeilxJ3giP33GSZC1FaXZtffL5q7cjOucD3YrSsdFT
 	K8PHjiSaidJdl+VNbVcvJg4g3Wfv9mq2Z+w35MBkhD52kEwAAAAASUVORK5CYII=
-}]
+}]}
 
-	set engine [image create photo -data {
+	::icon::lazy engine {set engine [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14789,9 +14803,9 @@ namespace eval 32x32 {
 	krNJlpOcSbJ+/WNPDlfWrbPPvtBwimQlycpnX2g4VVm3zq5/7MlhkvW5veU53aiahpJPh4HxTEBE
 	Bqesd9w1a+atD3v6i8tnlXUBuAoA5bPKuiKRolV3zZp5C0CHiNycYlJI4hOdfGog/5er2Z3kC7uc
 	5pPP+3r+by3Non23FVY+AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set diagram [image create photo -data {
+	::icon::lazy diagram {set diagram [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14843,9 +14857,9 @@ namespace eval 32x32 {
 	PTY/Eh1IQXAScdx68+J+FNc1/GLp4r4PDxy67WJmYs6+3o9vr7aUGmNww4KmUQAjFQDCHq2kHL00
 	ObkdoC3ftJZvWLu6m4gMADBz94Xx8Z/s7/3kjtnW8s4tj3UqKdNBE7LA7A+T5vIF8od5mHxn+aGe
 	ZqHBH//j9PuS/wLDWaVhs5mFbgAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set chart [image create photo -data {
+	::icon::lazy chart {set chart [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14893,9 +14907,9 @@ namespace eval 32x32 {
 	Svo0jfFjx09ltu346o3Gy9ciSvXfMhKIRlwAQHfBw8BbuyROwHFseL7f4XuBn6ysyK1a+dKWxx99
 	uLdtDyMo3oYRAE+3trbPImGssJ/S6Ok+o1E3DwDd3V6s+O1WePhdYq7bFbXdS91BoKNRuxnhjwsG
 	ykh+p8YqfX1JCUBls9mShqlUCgAwUjyVSvW7XP+Vn9fRyj+tcww9VwS+RAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set steeltool [image create photo -data {
+	::icon::lazy steeltool {set steeltool [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -14963,9 +14977,9 @@ namespace eval 32x32 {
 	YAQiQQTz9Bo18HRc9B7G2Lk7we8QNIdWTK85ckoVEhx4yUfu9ZV9UhoGTkQ0rDe7yKSDp7cfjwRB
 	IEEQ6W5O7iBhSy6eI6sgDvl2r30Oabzrz6Fa97PsWs/sKntP2/8DJx4XK2dnKMAAAAAASUVORK5C
 	YII=
-}]
+}]}
 
-	set notepad [image create photo -data {
+	::icon::lazy notepad {set notepad [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15009,9 +15023,9 @@ namespace eval 32x32 {
 	KDxTNPrH+KGNujkBMARBKaVLvMWiq6P12skTR3Mmd3ws7+bpWO6OTD9q+fybwfZQeLp6o7FckCDT
 	lLsMw6C3zzSNHD9y+M1UnudEvkpAmggmImitKwH4Nn4xkax1oszlcu0GcJOIrM2QZ0XaDLhV250B
 	M4tcPkNDQwYzGzv9Mvu/4V8nhGrUH0k1FwAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set archive [image create photo -data {
+	::icon::lazy archive {set archive [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15057,9 +15071,9 @@ namespace eval 32x32 {
 	Z56afmbBy89uIyLjc/TxDnxJRIiZxRgze8Pm+pVHjp+elkr1Fgnld2khIQkGC5IzH598YuXSxRuY
 	eb8xpu8+MKiAfuMiIqMAPOg4TqnjADrHU8Ofq7WOAzhPRF1+zJwzGM5rWrZYWUmG6aKa/UJ6p/Ev
 	a+dz0LFDIewAAAAASUVORK5CYII=
-}]
+}]}
 
-	set close [image create photo -data {
+	::icon::lazy close {set close [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15096,9 +15110,9 @@ namespace eval 32x32 {
 	48l4WLqrm4QquHSq2atDltuo9AmlYxoFV7dihclomZWChOH/wC78jKoj8WcfcPX4xOb2Xk1wLRLN
 	7b3k6vGJVe8DFosZ7QfraPiS/0Wf50REy+HK2faTZ4mLFotZU/WeXMnUCv+VpbRSkb2zlu/Hfxu/
 	ACoJyoUBVoq6AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set save [image create photo -data {
+	::icon::lazy save {set save [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15149,9 +15163,9 @@ namespace eval 32x32 {
 	WXe8um5DpT+YH6g9kfbHgb/G8sV/WnQTIoBAyMvJbiteULTB55N1XkJroEuCdLmWW8H6k0XvffjV
 	XH9tfa7rKjmwmnYBYUBKw83NGREoXvDUpyNHXP0FEXVyzH09MzTeyYgIWuuRAPJc1zX/6+4BQErp
 	APALIYLMjAt0ywToLsfuMgtdqEsO6OP0sqzex+fZFZV/AVu2MnGHvJojAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set saveAs [image create photo -data {
+	::icon::lazy saveAs {set saveAs [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15203,9 +15217,9 @@ namespace eval 32x32 {
 	iOKuj9Sf8me44xuTE1+ffLBx05bV3ae+nZ2tMckkuq6hZO7sb9euvn/T/CuKNxNgMfCzK3q21mzR
 	3v0dS/r6B6drWm69XlIch2nGjD9Eli0uPQigg4jSriItAbejSc3d4stbLFtmxJyUAJA6UnPucrPg
 	cCacnwApVyM6v7aTOQAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set disk [image create photo -data {
+	::icon::lazy disk {set disk [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15256,9 +15270,9 @@ namespace eval 32x32 {
 	WXe8um5DpT+YH6g9kfbHgb/G8sV/WnQTIoBAyMvJbiteULTB55N1XkJroEuCdLmWW8H6k0XvffjV
 	XH9tfa7rKjmwmnYBYUBKw83NGREoXvDUpyNHXP0FEXVyzH09MzTeyYgIWuuRAPJc1zX/6+4BQErp
 	APALIYLMjAt0ywToLsfuMgtdqEsO6OP0sqzex+fZFZV/AVu2MnGHvJojAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set databaseOpen [image create photo -data {
+	::icon::lazy databaseOpen {set databaseOpen [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15322,9 +15336,9 @@ namespace eval 32x32 {
 	3dPnHhtXXaFg1L50Uf7A6lXL3kW8/zMAvMPM1R1dvaUNJ5oXEUm0fGnB6cUF+W0H3z/04P4Db39z
 	cNgv1TU0r916y81pKXUg0SNcaE6JKIC4BkzRAYGYpk9iMTGnHUC7LEsAcEExmfmcxWpR6xqa1zxw
 	z9bXAYymwp82/lN7PrUVn2BHAChRJyR7Dwszu5PFzL8BG8oPy4F7m9QAAAAASUVORK5CYII=
-}]
+}]}
 
-	set document [image create photo -data {
+	::icon::lazy document {set document [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15375,9 +15389,9 @@ namespace eval 32x32 {
 	804iSvp9jP/FSboTLybdv/Tc39L2ysrI70dnTnYxyWVKSVTPnnm0ceU9bTUXzdlMgM3+z2YFyICR
 	AGr37g9f2T8wVCxlYXe9tLkuU1nZOdGr6xZ0AAhPOEOeZFkB/BvNeNsInNnByXZ0Ts28AMD4ybXg
 	W+4kOpxL518TCfvkSlFAWAAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set documentNew [image create photo -data {
+	::icon::lazy documentNew {set documentNew [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15429,9 +15443,9 @@ namespace eval 32x32 {
 	A0SUSM+RzRE/wp16Mfn6Qv+TzS1/29T37ffzC11MZhLLkqirnf/9lk2PtSz82U2vEpBk4EcleqGr
 	2dLTZ7tXDA2PzMnEfLGiNVNV1fXhu5fXdwLoTmfL/5OcBNI3mmx/6gErRZJq8k80HTMvASBbcBZ9
 	yy2AwzPh/A89jDKyjV5bZQAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set databaseNew [image create photo -data {
+	::icon::lazy databaseNew {set databaseNew [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15492,9 +15506,9 @@ namespace eval 32x32 {
 	+4eNiGErUtqBYd0A4COioVmzIAGEiAlqkIIaTMtOQ3Q0K2rr6Cro7unzDI+Ou8PhsCaEkA8/VH4Z
 	wNWYFeNyLQCsaaoMRUyRnp7KAOJDK30WRU9OxJhlgJVSQFUVaOpMKolXQ2bO/vt7Z4++eOTXtbdb
 	O37weabmpGBmG89jz2a7qzFzTpy0pq//AqoG0tI8yudEAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set logo [image create photo -data {
+	::icon::lazy logo {set logo [image create photo -data {
 		iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAOwAAADsAEnxA+t
 		AAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAABRRJREFUWIXFl2tM01cU
 		wH//tv9KW1pgvofOMFHniC+cGw6nSzSMbSofNGTTLQTjI1MXn/PDMsdc5hJHxGnmBwzxEd3I
@@ -15522,10 +15536,10 @@ namespace eval 32x32 {
 		4Gqq9SLE4cbinFro9zRLWb13vyxrM1YsmWecNnkcFlPQpyEvbzgdAqQHxdmBu73OLgnlsLUo
 		a53PJvU/cXzqjvjIKHmLu8szE4gMtnlbh90RlADpiaLRlIPjG9/JVQH+a/kHjCEVL5CAn7sA
 		AAAASUVORK5CYII=
-	}]
-	set sci $logo
+	}]}
+	::icon::lazy sci {set sci $logo}
 
-	set add [image create photo -data {
+	::icon::lazy add {set add [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15559,7 +15573,7 @@ namespace eval 32x32 {
 	obVqaK0BDsaO6zqovdt9Fm/79asL+6v37z7udMLBTxSBMQbG2D6NVIAed5eyN+nsku1OyJdvPvTc
 	F5ycqtbpLxERAZAa7SQHxIEhaRgtlNrmXIcqEaFKCeZcZ+icrDScehDOAMauB4wxAnQLkqg/OQBr
 	Cd/3QsvuDvq+FyZ/TudqF6Eo7dlUyvKE+IW4mEzvavbf2G+H7TwSWalW7QAAAABJRU5ErkJggg==
-}]
+}]}
 
 #	set crossTable [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -15614,7 +15628,7 @@ namespace eval 32x32 {
 # f83j+X8BswZrBwmiRNgAAAAASUVORK5CYII=
 # }]
 
-	set crossTable [image create photo -data {
+	::icon::lazy crossTable {set crossTable [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15665,9 +15679,9 @@ namespace eval 32x32 {
 	4Kk9k8NDLzy33JY3wKXxYgjA8KnJs49XarFtJi8C0FpDRCkfPCK7+sFEa41iZ0fyox88/u/hA8+/
 	1MASEQlZo9nGzy5c6js/Nf0I6JdL8L+MZhAdtm/pubJ106MfisjF5hn0vgI2D47WGrRW96sYTlc6
 	f83j+X8BswZrBwmiRNgAAAAASUVORK5CYII=
-}]
+}]}
 
-	set paragraphSpacing [image create photo -data {
+	::icon::lazy paragraphSpacing {set paragraphSpacing [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15709,9 +15723,9 @@ namespace eval 32x32 {
 	ukRAfGOU53kNpe8rOWCCZUTX8xSAhpLdUCsbQhvbeJ4K/Vb6qUxAuZ5rF4trAsBCcDgpXZ/bRWhD
 	kgawisU1cT3X1lqXqW8lB9LdXe/c1pb9dk93100Aq7UErYLVnu6um9OzuYPvdb75J4D0Vpk/+4PJ
 	88T/h9P/AMoTWmQgZX/zAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set columnLayout [image create photo -data {
+	::icon::lazy columnLayout {set columnLayout [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15745,9 +15759,9 @@ namespace eval 32x32 {
 	RJZJ7gWrfXPuzGgrvnrt9oPVbsl0Nn/679uXK9dJvg/4vrl2VbBbLs1tgOxYTheKBR/A7hC48Tei
 	sWvsP6O280DW07GCJoBGl3mgV67rPJDUTdp1mEG4ozGSRTXKoTSmUY/lE030H/5NIWMh4QYNAAAA
 	AElFTkSuQmCC
-}]
+}]}
 
-	set togglePlus [image create photo -data {
+	::icon::lazy togglePlus {set togglePlus [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15792,9 +15806,9 @@ namespace eval 32x32 {
 	1vcbx/ydHe3PZXksOMX+6ATgvz82UbsZjujYQZala1JK5O3PMd97p/Y3//nPvozFIiJS213NyqZm
 	HzdPTgcPg+29KQFJVXXcM1fxxusjRBSKv4P+h7nxmk7XtdRDPANLdTl90fl/vp7/C7hgXDz22bAw
 	AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set toggleMinus [image create photo -data {
+	::icon::lazy toggleMinus {set toggleMinus [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15834,9 +15848,9 @@ namespace eval 32x32 {
 	yycA3OIaW94xnB7//PTkVF/dtpxAseCwd0/n9U8+ePcwyWkRiQNoq5E2AnBa65vee5iInJFPHwaQ
 	vjg9+9y9fMGiTltWfs0oTgHAH3VdRNQFpVlNGE0sS1cXllJz89ntEFczBQKIUtT9B3pnUKpqkVLh
 	PbB4y/PhuoNrB0drTX0tAKAQDZ5NQSPjeXS+IfwFbUKZ5GsEsrEAAAAASUVORK5CYII=
-}]
+}]}
 
-	set help [image create photo -data {
+	::icon::lazy help {set help [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15900,9 +15914,9 @@ namespace eval 32x32 {
 	ausmdXQ64z2evggNFcuSiMjIiL74UXEdOeMzzy5f+MCh9PSkwyGJe2uDSagSwDWjWRSAcS0t7VkX
 	rLZkp8utB4C4GL07KyPVnpg4+gKAi7cymg2LeIjhFPhpOB2Chj2c3rIi/H8ez/8L/9AOnuSMjF8A
 	AAAASUVORK5CYII=
-}]
+}]}
 
-	set filetypePGN [image create photo -data {
+	::icon::lazy filetypePGN {set filetypePGN [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -15953,7 +15967,7 @@ namespace eval 32x32 {
 	804iSvp9jP/FSboTLybdv/Tc39L2ysrI70dnTnYxyWVKSVTPnnm0ceU9bTUXzdlMgM3+z2YFyICR
 	AGr37g9f2T8wVCxlYXe9tLkuU1nZOdGr6xZ0AAhPOEOeZFkB/BvNeNsInNnByXZ0Ts28AMD4ybXg
 	W+4kOpxL518TCfvkSlFAWAAAAABJRU5ErkJggg==
-}]
+}]}
 
 #	set setup [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -16024,7 +16038,7 @@ namespace eval 32x32 {
 # TkSuQmCC
 # }]
 
-	set setup [image create photo -data {
+	::icon::lazy setup {set setup [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16091,9 +16105,9 @@ namespace eval 32x32 {
 	8SIiR2ZmpsDMwpDwkNwVGQu3RYYPtijkCijkCkSGh1peeSl9a0TY4FxmFlZnZgpE5OjF/F7O75mB
 	u7PhGVRvawYg4cuvS2MAIGVKfCWAkp/Tmv3Po29zKvzyzel9gvi/tOf/AXyVPgJbxyfqAAAAAElF
 	TkSuQmCC
-}]
+}]}
 
-	set sort(descending) [image create photo -data {
+	::icon::lazy sort(descending) {set sort(descending) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16132,9 +16146,9 @@ namespace eval 32x32 {
 	0NqYVMdzGPnwwLcD/b1jJJ9EMdviAyRnRcQm+aeIjFEpnv3qu+FKpWIAINWRUiMfHZgc2FMNrkga
 	oL33ARMSPxGRzzY9n9p2+ovJjAD49MjQrd7MrrrgUeZtteLYlWx7Yb40CgDpHdtPkSzVBq8KqEUL
 	i/B/iMRY4YVEG4PEZ0WzPrAWj4hUecLnDWygIZ4CxbYwOIREQloAAAAASUVORK5CYII=
-}]
+}]}
 
-	set first [image create photo -data {
+	::icon::lazy first {set first [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16188,9 +16202,9 @@ namespace eval 32x32 {
 	mJmlrml/7PV6L89Pcxa8f/TUqNDQEIoYPOh6fwkENXMcEwDHrtp3i7OcJYcuNDbNAiBudWKb33xX
 	6cOrNmypLdxYUQtgHNG/783bsm/oLL8j8Cz/Wvat/pj4O39rv2bfSfsXLm62fZ6SHQYAAAAASUVO
 	RK5CYII=
-}]
+}]}
 
-	set last [image create photo -data {
+	::icon::lazy last {set last [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16242,9 +16256,9 @@ namespace eval 32x32 {
 	XC4mIsVCKHurXbst+MaK7HSrtRcLCSkF0jNUTKyFThj3XlJcZO8XEqVAvv372QESNptDGztm5Mm9
 	r6RG+fXz2aWDXyFdB3N5eXq6bHan0DSpzXtqyv6kuMgIZj6mt3L0BE5EVy6lL2duL/jdS2lZeVjC
 	qo3FBwqK/tBS2jGgGUBfN/jfspZ3AP9XfJj8c59m/1n7BcpDqadBxQdJAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set next [image create photo -data {
+	::icon::lazy next {set next [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16279,9 +16293,9 @@ namespace eval 32x32 {
 	otW33xYpBamqQqpiqbusqkqKRdKhrk4CELgSuLt+4rxft7t9CEefxgC4iRpoVrtOw3gyVJGG0fpp
 	aApjIUpqWsg7PJYsF6KoiULUgHMCILV0urIf7IXzUjNKbNOMmuLcaBiAcyh070dvnwcOt29XNzc9
 	D6iqAqu1gy5ddH169PD2nabPAkT7YCSrZs+HUiP7Yixv81/zB9agxGR3jrY9AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set previous [image create photo -data {
+	::icon::lazy previous {set previous [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16315,9 +16329,9 @@ namespace eval 32x32 {
 	5DRR4W7ca/HnjagUvWDmnwBmCoU/5ykI+JvuKwVHl1Nw9YjLRVhWnj5Dx01414iuNeFWK65mwpWf
 	URkToen5xb327hhaO3uRHE4duDIPOJ7oHoAJWZGXPm9td6qqcruOdFd5OpLZ8nQoteXpWF7Xf6dT
 	bQDBvScqQMcAAAAASUVORK5CYII=
-}]
+}]}
 
-	set front [image create photo -data {
+	::icon::lazy front {set front [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16371,9 +16385,9 @@ namespace eval 32x32 {
 	mJmlrml/7PV6L89Pcxa8f/TUqNDQEIoYPOh6fwkENXMcEwDHrtp3i7OcJYcuNDbNAiBudWKb33xX
 	6cOrNmypLdxYUQtgHNG/783bsm/oLL8j8Cz/Wvat/pj4O39rv2bfSfsXLm62fZ6SHQYAAAAASUVO
 	RK5CYII=
-}]
+}]}
 
-	set back [image create photo -data {
+	::icon::lazy back {set back [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16425,9 +16439,9 @@ namespace eval 32x32 {
 	XC4mIsVCKHurXbst+MaK7HSrtRcLCSkF0jNUTKyFThj3XlJcZO8XEqVAvv372QESNptDGztm5Mm9
 	r6RG+fXz2aWDXyFdB3N5eXq6bHan0DSpzXtqyv6kuMgIZj6mt3L0BE5EVy6lL2duL/jdS2lZeVjC
 	qo3FBwqK/tBS2jGgGUBfN/jfspZ3AP9XfJj8c59m/1n7BcpDqadBxQdJAAAAAElFTkSuQmCC
-}]
+}]}
 
-	set suggestion [image create photo -data {
+	::icon::lazy suggestion {set suggestion [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16483,11 +16497,11 @@ namespace eval 32x32 {
 	qQFOb66mP554ovlaW25v38Dcd/5Y/BQAjNvt8PL0hHFz0nEALVN4vrkBzrGciMaZ+e3BoWHfj4pP
 	pfX1WbxBgCHIf2hbekrJpqS1+4nIPpvpZ1ZXM5e+oLdarQmV1RdiIICkhDV1Hh4e1URk+VavZ19n
 	hPNZlgRkSbjdmynd17XaeW44PdX+8/14/l9VkfPpzCgiHQAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set variant(Normal) $logo
+	::icon::lazy variant(Normal) {set variant(Normal) $logo}
 
-	set variant(ThreeCheck) [image create photo -data {
+	::icon::lazy variant(ThreeCheck) {set variant(ThreeCheck) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16529,9 +16543,9 @@ namespace eval 32x32 {
 	rte1JKJG+zL6Pf4rUptlQip1wGRx8Fu2G7FluxHGv7fa8uD5RCy1T3sycC7kBbBeAqh4XrDtfds5
 	b+lyzsfixa950Saf/YoLhFoJAKACoJeelYXLVihgdsMq9F8x9o9fPegSKfuyL55rtmb/K/sLNe07
 	sGRCxcsAAAAASUVORK5CYII=
-}]
+}]}
 
-	set variant(Bughouse) [image create photo -data {
+	::icon::lazy variant(Bughouse) {set variant(Bughouse) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16593,9 +16607,9 @@ namespace eval 32x32 {
 	WEoJM56wDMX+UAKIjS8t6XU4HDRqZFHQ5XL1A+BVq1YxUpQsPXa5XP2jRhYFHQ4HjS8t6UUOEvqN
 	JI1bZq5Y37y1rqurdy4zWzPnstZZu7p6565v3lrHzBXZ6/4v0bShJOubrx2SpK/bPp9PnG07lLV2
 	KLb/BwDf3jISo+g8AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set variant(DropChess) [image create photo -data {
+	::icon::lazy variant(DropChess) {set variant(DropChess) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16655,11 +16669,11 @@ namespace eval 32x32 {
 	hyj9qbJ80af7jxky8orCnjQ2O2g1kgIAZosseIx07woLnpsTt8VwBEA2EXX09zGQvfZgcvxUalx2
 	weU3mIHQoFn3DbFRe341ZlSq/WAiCILCPOim+EoS/UezGVfLKhOv3qhMZOYA2/WfOpq9FhGgF0AU
 	Bdi0I37p4XQAIj/LeP5fvh8vPNeLCHAAAAAASUVORK5CYII=
-}]
+}]}
 
-	set variant(Crazyhouse) $variant(DropChess)
+	::icon::lazy variant(Crazyhouse) {set variant(Crazyhouse) $variant(DropChess)}
 
-	set variant(Antichess) [image create photo -data {
+	::icon::lazy variant(Antichess) {set variant(Antichess) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16710,12 +16724,12 @@ namespace eval 32x32 {
 	32+SNE06c/7KQCkvNR35qfUCqiBIJghBlsPoKQLMDEGE5KSh54YeySkpKatsr2mK2aroAei6qcR1
 	ia1NThp6TtcNMDOokYSW0jCzBmCQz+frqKohJmC08i9KZcPwKSEhIdUAzhOR3oYcXj6aO5S+kL9e
 	IpIvws9LwX9iuOCcAzSDdQAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set variant(Suicide) $variant(Antichess)
-	set variant(Giveaway) $variant(Antichess)
+	::icon::lazy variant(Suicide) {set variant(Suicide) $variant(Antichess)}
+	::icon::lazy variant(Giveaway) {set variant(Giveaway) $variant(Antichess)}
 
-	set variant(Losers) [image create photo -data {
+	::icon::lazy variant(Losers) {set variant(Losers) [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16777,9 +16791,9 @@ namespace eval 32x32 {
 	TzabIbqojlNxtEW9Dc0kC/tde81ep8tlaJpG0wJtNsMeF2vvCQAer//nQCDo1xTENE1xJCUFR9w9
 	uFxEnCylFin5r7yi+08CxYE33bDGsiyQvPAfTk1T0DStNegBkISut+IPhUKICBIiME0Tpnkm0rr6
 	NbsgC4ehdNDaCDu7hde0AxEZi35L/gOgjPURAoKngQAAAABJRU5ErkJggg==
-}]
+}]}
 
-	set compress [image create photo -data {
+	::icon::lazy compress {set compress [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16835,9 +16849,9 @@ namespace eval 32x32 {
 	b9WY+Lgd19vaZpSfOz9G13XjscEOd/r4lHIAFUSkB4oTEMDsaO4HEgBkbN15YG5L639+IhAxAxhg
 	s8m/mvbS8cTRT+4jIg8ASNbuyvqb1d589pUB6jHO/kskM4cCCANgmOOqxSK4DYPvNDc9W3T/zthb
 	Z/Rf7iyuWBc46uYAAAAASUVORK5CYII=
-}]
+}]}
 
-	set diceGreen [image create photo -data {
+	::icon::lazy diceGreen {set diceGreen [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16888,9 +16902,9 @@ namespace eval 32x32 {
 	rsfyUBZhGAAEttzVfvj5DVsfmRnLY+OMH+wAsHPv2LGPXQ4KyTlZTAQkaFCXqSk+1PyR/uc7Hn/S
 	RLZI0pZbzZa8Pj7aceTCWItVaOZiNTN0bPvC1tEVDYt6Zq9mFZfTNJ3qTfwWRAD8Csvp9cr/5/X8
 	f3aMWRTWNCO/AAAAAElFTkSuQmCC
-}]
+}]}
 
-	set database [image create photo -data {
+	::icon::lazy database {set database [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16945,9 +16959,9 @@ namespace eval 32x32 {
 	vrF8vYvJrvaOnobO3v6990fHn1yLA8sXk9Uc2FpdNbS/tubm4fo9bXjUi0mGiZWRWXAO07JWODA8
 	8lnFg6mZsrmFeWc8nlzmgK4uFW8oMjZ5SsPbtzwxgRQHFCEMS8qcnOsaSO8E1rmcZpcgT6x7OX2k
 	+F9ez/8NLOGgpfKwLTkAAAAASUVORK5CYII=
-}]
+}]}
 
-	set list [image create photo -data {
+	::icon::lazy list {set list [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -16977,7 +16991,7 @@ namespace eval 32x32 {
 	+WTl+GTPP61trSzOvvjVgzYR3Teawc7ufuXo7f2Dtcrd5EDCMKaLq/qrXz1sE1EjLR7WSAAYICJ8
 	968w+rVg/bJ+V16anwk8zz1j5s+iWtA3iuNoiqI4p//3I7TSHTljjGLOaqMs2xgOfE1DFvtnxAfE
 	B8QHrIgPEIkPiA+ID/x8y4v2AUH4AjcBoO0ZPiC+AAAAAElFTkSuQmCC
-}]
+}]}
 
 #	set leftalign [image create photo -data {
 # iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
@@ -17044,7 +17058,7 @@ namespace eval 32x32 {
 # UzwwSPoAAAAASUVORK5CYII=
 # }]
 
-	set arrowDivide [image create photo -data {
+	::icon::lazy arrowDivide {set arrowDivide [image create photo -data {
 	iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE5mlUWHRMaWNlbnNlAAAAAABUYWJs
 	ZXIgSWNvbnMgdjMuMzEuMDogaHR0cHM6Ly9jb2RlbG9hZC5naXRodWIuY29tL3RhYmxlci90YWJs
 	ZXItaWNvbnMvdGFyLmd6L3JlZnMvdGFncy92My4zMS4wClNIQTI1NjogNmNhZTU3YzFjMTdmNjIz
@@ -17093,13 +17107,13 @@ namespace eval 32x32 {
 	dsnQHdzT23eVKNjAenr7rob6e2SbHgpG5AEiQsBUPrYPCAFT+SjGIXYoGHEOgCI2McKIc2DkBvxD
 	+O8aQCQ4ljxcjLQMYZrSoZQKy/+qAQHLwuT0STcfSEkGAExOn3QzYA15+4/CsLM34ho27tRP55cB
 	wKyZ0w4T0c3I69r/H3bTIQQvuCPeB/4CVvMTWORWJNsAAAAASUVORK5CYII=
-}]
+}]}
 
 } ;# namespace 32x32
 
 namespace eval 48x48 {
 
-	set logo [image create photo -data {
+	::icon::lazy logo {set logo [image create photo -data {
 		iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAWJAAAFiQFtaJ36
 		AAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAB+lJREFUaIHVWntQVNcd
 		/u7u3n3A8hJYnoLZWKVkGAlOGjo+KpZoEzKgJsXgo5kmo45mRp0JRlEUmEpiUScdazQZW6kO
@@ -17140,14 +17154,14 @@ namespace eval 48x48 {
 		zX1GT768+FkU5GYjKT529HFBCn6y+dxkVEPgaPCUE5zbDI5yMgSp2j2efFABAJC2cHNyik5X
 		Q9HMcofLmyYIwpT+1AAgeEKm6CPkxFmCpevHLhu/WmICJqK8XJ50/6kUOcGoI84zADiBpAbT
 		vzULp06FPVlFCXiS8X/t1qzM3BLn+gAAAABJRU5ErkJggg==
-	}]
-	set sci $logo
+	}]}
+	::icon::lazy sci {set sci $logo}
 
 } ;# namespace 48x48
 
 namespace eval 64x64 {
 
-	set logo [image create photo -data {
+	::icon::lazy logo {set logo [image create photo -data {
 		iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAACXBIWXMAAAdhAAAHYQGVw7i2
 		AAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAADidJREFUeJzlm3t0VdWd
 		xz/73JuEhCQkAQIBlDeogJYupwJalyxbKbQUX4WRsqSKLisoU+ikqIN0gaI8psLiWRkYW7EM
@@ -17218,108 +17232,108 @@ namespace eval 64x64 {
 		/goyVAuaVqdJZlV8sjS1v8250XNccee8jKx5SqkZtXUNvZos/NcCLe28QG1SafqyVv1xMh6F
 		Y+cOEso3QqD6IEQPkO0eUGketBhKXVKIc0roZZV7XzvR3JopEfD/EX/z/x7/P0Ey7dRsCfVf
 		AAAAAElFTkSuQmCC
-	}]
-	set sci $logo
+	}]}
+	::icon::lazy sci {set sci $logo}
 
 } ;# namespace 64x64
 
 
-set iconOk			[makeStateSpecificIcons [set [namespace current]::16x16::checkGreen]]
-set iconCancel		[makeStateSpecificIcons [set [namespace current]::16x16::crossHand]]
-set iconApply		[makeStateSpecificIcons [set [namespace current]::16x16::checkBlue]]
-set iconReset		[makeStateSpecificIcons [set [namespace current]::16x16::reset]]
-set iconUpdate		[makeStateSpecificIcons [set [namespace current]::16x16::refresh]]
-set iconGoNext		[makeStateSpecificIcons [set [namespace current]::16x16::goNext]]
-set iconSave		[makeStateSpecificIcons [set [namespace current]::16x16::disk]]
-set iconAdd			[makeStateSpecificIcons [set [namespace current]::16x16::plus]]
-set iconRemove		[makeStateSpecificIcons [set [namespace current]::16x16::minus]]
-set iconClear		[makeStateSpecificIcons [set [namespace current]::16x16::clear]]
-set iconForward	[makeStateSpecificIcons [set [namespace current]::16x16::forward]]
-set iconBackward	[makeStateSpecificIcons [set [namespace current]::16x16::backward]]
-set iconFirst		[makeStateSpecificIcons [set [namespace current]::16x16::first]]
-set iconLast		[makeStateSpecificIcons [set [namespace current]::16x16::last]]
-set iconClose		[makeStateSpecificIcons [set [namespace current]::16x16::close]]
-set iconEraser		[makeStateSpecificIcons [set [namespace current]::16x16::eraser]]
-set iconRepeat		[makeStateSpecificIcons [set [namespace current]::16x16::repeat]]
-set iconBlackPawn	[makeStateSpecificIcons [set [namespace current]::16x16::blackPawn]]
-set iconSetup		[makeStateSpecificIcons [set [namespace current]::16x16::setup]]
+::icon::lazy iconOk {set iconOk			[makeStateSpecificIcons [set [namespace current]::16x16::checkGreen]]}
+::icon::lazy iconCancel {set iconCancel		[makeStateSpecificIcons [set [namespace current]::16x16::crossHand]]}
+::icon::lazy iconApply {set iconApply		[makeStateSpecificIcons [set [namespace current]::16x16::checkBlue]]}
+::icon::lazy iconReset {set iconReset		[makeStateSpecificIcons [set [namespace current]::16x16::reset]]}
+::icon::lazy iconUpdate {set iconUpdate		[makeStateSpecificIcons [set [namespace current]::16x16::refresh]]}
+::icon::lazy iconGoNext {set iconGoNext		[makeStateSpecificIcons [set [namespace current]::16x16::goNext]]}
+::icon::lazy iconSave {set iconSave		[makeStateSpecificIcons [set [namespace current]::16x16::disk]]}
+::icon::lazy iconAdd {set iconAdd			[makeStateSpecificIcons [set [namespace current]::16x16::plus]]}
+::icon::lazy iconRemove {set iconRemove		[makeStateSpecificIcons [set [namespace current]::16x16::minus]]}
+::icon::lazy iconClear {set iconClear		[makeStateSpecificIcons [set [namespace current]::16x16::clear]]}
+::icon::lazy iconForward {set iconForward	[makeStateSpecificIcons [set [namespace current]::16x16::forward]]}
+::icon::lazy iconBackward {set iconBackward	[makeStateSpecificIcons [set [namespace current]::16x16::backward]]}
+::icon::lazy iconFirst {set iconFirst		[makeStateSpecificIcons [set [namespace current]::16x16::first]]}
+::icon::lazy iconLast {set iconLast		[makeStateSpecificIcons [set [namespace current]::16x16::last]]}
+::icon::lazy iconClose {set iconClose		[makeStateSpecificIcons [set [namespace current]::16x16::close]]}
+::icon::lazy iconEraser {set iconEraser		[makeStateSpecificIcons [set [namespace current]::16x16::eraser]]}
+::icon::lazy iconRepeat {set iconRepeat		[makeStateSpecificIcons [set [namespace current]::16x16::repeat]]}
+::icon::lazy iconBlackPawn {set iconBlackPawn	[makeStateSpecificIcons [set [namespace current]::16x16::blackPawn]]}
+::icon::lazy iconSetup {set iconSetup		[makeStateSpecificIcons [set [namespace current]::16x16::setup]]}
 
-set toolbarDocNew						[makeToolbarIcon databaseNew]
-set toolbarDocOpen					[makeToolbarIcon databaseOpen]
-set toolbarDocSave					[makeToolbarIcon disk]
-set toolbarDocClose					[makeToolbarIcon close]
-set toolbarDocumentNew				[makeToolbarIcon documentNew]
-set toolbarGameList					[makeToolbarIcon archive]
-set toolbarGameNotation				[makeToolbarIcon notepad]
-set toolbarMaintenance				[makeToolbarIcon steeltool]
-set toolbarEcoBrowser				[makeToolbarIcon chart]
-set toolbarTreeWindow				[makeToolbarIcon diagram]
-set toolbarEngine						[makeToolbarIcon engine]
-set toolbarCtrlFwd					[makeToolbarIcon controlForward]
-set toolbarCtrlBack					[makeToolbarIcon controlBackward]
-set toolbarCtrlFastFwd				[makeToolbarIcon controlFastForward]
-set toolbarCtrlFastBack				[makeToolbarIcon controlFastBackward]
-set toolbarCtrlGotoStart			[makeToolbarIcon controlGotoStart]
-set toolbarCtrlGotoEnd				[makeToolbarIcon controlGotoEnd]
-set toolbarCtrlEnterVar				[makeToolbarIcon controlDown]
-set toolbarCtrlLeaveVar				[makeToolbarIcon controlUp]
-set toolbarCtrlStop					[makeToolbarIcon controlStop]
-set toolbarAutoPlay					[makeToolbarIcon playerStart]
-set toolbarAutoStop					[makeToolbarIcon playerStop]
-set toolbarMarble1					[makeToolbarIcon marble1]
-set toolbarMarble2					[makeToolbarIcon marble2]
-set toolbarMarble3					[makeToolbarIcon marble3]
-set toolbarMarble4					[makeToolbarIcon marble4]
-set toolbarMarble5					[makeToolbarIcon marble5]
-set toolbarMarble6					[makeToolbarIcon marble6]
-set toolbarMarble7					[makeToolbarIcon marble7]
-set toolbarMarble8					[makeToolbarIcon marble8]
-set toolbarMarble9					[makeToolbarIcon marble9]
-set toolbarScrollbarBottom			[makeToolbarIcon scrollbarBottom]
-set toolbarScrollbarRight			[makeToolbarIcon scrollbarRight]
-set toolbarRotateBoard				[makeToolbarIcon rotateBoard]
-set toolbarSideToMove				[makeToolbarIcon sideToMove]
-set toolbarSearch						[makeToolbarIcon search]
-set toolbarStart						[makeToolbarIcon start]
-set toolbarStop						[makeToolbarIcon stop]
-set toolbarExact						[makeToolbarIcon slow]
-set toolbarFast						[makeToolbarIcon fast]
-set toolbarQuick						[makeToolbarIcon quick]
-set toolbarPause						[makeToolbarIcon pause]
-set toolbarLock						[makeToolbarIcon lock]
-set toolbarLines						[makeToolbarIcon lines]
-set toolbarPlus						[makeToolbarIcon add]
-set toolbarCrossTable				[makeToolbarIcon crossTable]
-set toolbarParagraphSpacing		[makeToolbarIcon paragraphSpacing]
-set toolbarColumnLayout				[makeToolbarIcon columnLayout]
-set toolbarTogglePlus				[makeToolbarIcon togglePlus]
-set toolbarToggleMinus				[makeToolbarIcon toggleMinus]
-set toolbarDice						[makeToolbarIcon dice]
-set toolbarClear						[makeToolbarIcon clear]
-set toolbarRemove						[makeToolbarIcon remove]
-set toolbarClock						[makeToolbarIcon clock]
-set toolbarHelp						[makeToolbarIcon help]
-set toolbarPGN							[makeToolbarIcon filetypePGN]
-set toolbarSetup						[makeToolbarIcon setup]
-set toolbarSort(descending)		[makeToolbarIcon sort(descending)]
-set toolbarNext						[makeToolbarIcon next]
-set toolbarPrev						[makeToolbarIcon previous]
-set toolbarFront						[makeToolbarIcon front]
-set toolbarBack						[makeToolbarIcon back]
-set toolbarResume						$toolbarStart
-set toolbarSuggestion				[makeToolbarIcon suggestion]
-set toolbarVariant(Normal)			[makeToolbarIcon variant(Normal)]
-set toolbarVariant(ThreeCheck)	[makeToolbarIcon variant(ThreeCheck)]
-set toolbarVariant(Bughouse)		[makeToolbarIcon variant(Bughouse)]
-set toolbarVariant(Crazyhouse)	[makeToolbarIcon variant(Crazyhouse)]
-set toolbarVariant(Antichess)		[makeToolbarIcon variant(Antichess)]
-set toolbarVariant(Losers)			[makeToolbarIcon variant(Losers)]
-set toolbarSave						[makeToolbarIcon save]
-set toolbarSaveAs						[makeToolbarIcon saveAs]
-set toolbarDiceGreen					[makeToolbarIcon diceGreen]
-set toolbarDatabase					[makeToolbarIcon database]
-set toolbarList						[makeToolbarIcon list]
-set toolbarArrowDivide				[makeToolbarIcon arrowDivide]
+::icon::lazy toolbarDocNew {set toolbarDocNew						[makeToolbarIcon databaseNew]}
+::icon::lazy toolbarDocOpen {set toolbarDocOpen					[makeToolbarIcon databaseOpen]}
+::icon::lazy toolbarDocSave {set toolbarDocSave					[makeToolbarIcon disk]}
+::icon::lazy toolbarDocClose {set toolbarDocClose					[makeToolbarIcon close]}
+::icon::lazy toolbarDocumentNew {set toolbarDocumentNew				[makeToolbarIcon documentNew]}
+::icon::lazy toolbarGameList {set toolbarGameList					[makeToolbarIcon archive]}
+::icon::lazy toolbarGameNotation {set toolbarGameNotation				[makeToolbarIcon notepad]}
+::icon::lazy toolbarMaintenance {set toolbarMaintenance				[makeToolbarIcon steeltool]}
+::icon::lazy toolbarEcoBrowser {set toolbarEcoBrowser				[makeToolbarIcon chart]}
+::icon::lazy toolbarTreeWindow {set toolbarTreeWindow				[makeToolbarIcon diagram]}
+::icon::lazy toolbarEngine {set toolbarEngine						[makeToolbarIcon engine]}
+::icon::lazy toolbarCtrlFwd {set toolbarCtrlFwd					[makeToolbarIcon controlForward]}
+::icon::lazy toolbarCtrlBack {set toolbarCtrlBack					[makeToolbarIcon controlBackward]}
+::icon::lazy toolbarCtrlFastFwd {set toolbarCtrlFastFwd				[makeToolbarIcon controlFastForward]}
+::icon::lazy toolbarCtrlFastBack {set toolbarCtrlFastBack				[makeToolbarIcon controlFastBackward]}
+::icon::lazy toolbarCtrlGotoStart {set toolbarCtrlGotoStart			[makeToolbarIcon controlGotoStart]}
+::icon::lazy toolbarCtrlGotoEnd {set toolbarCtrlGotoEnd				[makeToolbarIcon controlGotoEnd]}
+::icon::lazy toolbarCtrlEnterVar {set toolbarCtrlEnterVar				[makeToolbarIcon controlDown]}
+::icon::lazy toolbarCtrlLeaveVar {set toolbarCtrlLeaveVar				[makeToolbarIcon controlUp]}
+::icon::lazy toolbarCtrlStop {set toolbarCtrlStop					[makeToolbarIcon controlStop]}
+::icon::lazy toolbarAutoPlay {set toolbarAutoPlay					[makeToolbarIcon playerStart]}
+::icon::lazy toolbarAutoStop {set toolbarAutoStop					[makeToolbarIcon playerStop]}
+::icon::lazy toolbarMarble1 {set toolbarMarble1					[makeToolbarIcon marble1]}
+::icon::lazy toolbarMarble2 {set toolbarMarble2					[makeToolbarIcon marble2]}
+::icon::lazy toolbarMarble3 {set toolbarMarble3					[makeToolbarIcon marble3]}
+::icon::lazy toolbarMarble4 {set toolbarMarble4					[makeToolbarIcon marble4]}
+::icon::lazy toolbarMarble5 {set toolbarMarble5					[makeToolbarIcon marble5]}
+::icon::lazy toolbarMarble6 {set toolbarMarble6					[makeToolbarIcon marble6]}
+::icon::lazy toolbarMarble7 {set toolbarMarble7					[makeToolbarIcon marble7]}
+::icon::lazy toolbarMarble8 {set toolbarMarble8					[makeToolbarIcon marble8]}
+::icon::lazy toolbarMarble9 {set toolbarMarble9					[makeToolbarIcon marble9]}
+::icon::lazy toolbarScrollbarBottom {set toolbarScrollbarBottom			[makeToolbarIcon scrollbarBottom]}
+::icon::lazy toolbarScrollbarRight {set toolbarScrollbarRight			[makeToolbarIcon scrollbarRight]}
+::icon::lazy toolbarRotateBoard {set toolbarRotateBoard				[makeToolbarIcon rotateBoard]}
+::icon::lazy toolbarSideToMove {set toolbarSideToMove				[makeToolbarIcon sideToMove]}
+::icon::lazy toolbarSearch {set toolbarSearch						[makeToolbarIcon search]}
+::icon::lazy toolbarStart {set toolbarStart						[makeToolbarIcon start]}
+::icon::lazy toolbarStop {set toolbarStop						[makeToolbarIcon stop]}
+::icon::lazy toolbarExact {set toolbarExact						[makeToolbarIcon slow]}
+::icon::lazy toolbarFast {set toolbarFast						[makeToolbarIcon fast]}
+::icon::lazy toolbarQuick {set toolbarQuick						[makeToolbarIcon quick]}
+::icon::lazy toolbarPause {set toolbarPause						[makeToolbarIcon pause]}
+::icon::lazy toolbarLock {set toolbarLock						[makeToolbarIcon lock]}
+::icon::lazy toolbarLines {set toolbarLines						[makeToolbarIcon lines]}
+::icon::lazy toolbarPlus {set toolbarPlus						[makeToolbarIcon add]}
+::icon::lazy toolbarCrossTable {set toolbarCrossTable				[makeToolbarIcon crossTable]}
+::icon::lazy toolbarParagraphSpacing {set toolbarParagraphSpacing		[makeToolbarIcon paragraphSpacing]}
+::icon::lazy toolbarColumnLayout {set toolbarColumnLayout				[makeToolbarIcon columnLayout]}
+::icon::lazy toolbarTogglePlus {set toolbarTogglePlus				[makeToolbarIcon togglePlus]}
+::icon::lazy toolbarToggleMinus {set toolbarToggleMinus				[makeToolbarIcon toggleMinus]}
+::icon::lazy toolbarDice {set toolbarDice						[makeToolbarIcon dice]}
+::icon::lazy toolbarClear {set toolbarClear						[makeToolbarIcon clear]}
+::icon::lazy toolbarRemove {set toolbarRemove						[makeToolbarIcon remove]}
+::icon::lazy toolbarClock {set toolbarClock						[makeToolbarIcon clock]}
+::icon::lazy toolbarHelp {set toolbarHelp						[makeToolbarIcon help]}
+::icon::lazy toolbarPGN {set toolbarPGN							[makeToolbarIcon filetypePGN]}
+::icon::lazy toolbarSetup {set toolbarSetup						[makeToolbarIcon setup]}
+::icon::lazy toolbarSort(descending) {set toolbarSort(descending)		[makeToolbarIcon sort(descending)]}
+::icon::lazy toolbarNext {set toolbarNext						[makeToolbarIcon next]}
+::icon::lazy toolbarPrev {set toolbarPrev						[makeToolbarIcon previous]}
+::icon::lazy toolbarFront {set toolbarFront						[makeToolbarIcon front]}
+::icon::lazy toolbarBack {set toolbarBack						[makeToolbarIcon back]}
+::icon::lazy toolbarResume {set toolbarResume						$toolbarStart}
+::icon::lazy toolbarSuggestion {set toolbarSuggestion				[makeToolbarIcon suggestion]}
+::icon::lazy toolbarVariant(Normal) {set toolbarVariant(Normal)			[makeToolbarIcon variant(Normal)]}
+::icon::lazy toolbarVariant(ThreeCheck) {set toolbarVariant(ThreeCheck)	[makeToolbarIcon variant(ThreeCheck)]}
+::icon::lazy toolbarVariant(Bughouse) {set toolbarVariant(Bughouse)		[makeToolbarIcon variant(Bughouse)]}
+::icon::lazy toolbarVariant(Crazyhouse) {set toolbarVariant(Crazyhouse)	[makeToolbarIcon variant(Crazyhouse)]}
+::icon::lazy toolbarVariant(Antichess) {set toolbarVariant(Antichess)		[makeToolbarIcon variant(Antichess)]}
+::icon::lazy toolbarVariant(Losers) {set toolbarVariant(Losers)			[makeToolbarIcon variant(Losers)]}
+::icon::lazy toolbarSave {set toolbarSave						[makeToolbarIcon save]}
+::icon::lazy toolbarSaveAs {set toolbarSaveAs						[makeToolbarIcon saveAs]}
+::icon::lazy toolbarDiceGreen {set toolbarDiceGreen					[makeToolbarIcon diceGreen]}
+::icon::lazy toolbarDatabase {set toolbarDatabase					[makeToolbarIcon database]}
+::icon::lazy toolbarList {set toolbarList						[makeToolbarIcon list]}
+::icon::lazy toolbarArrowDivide {set toolbarArrowDivide				[makeToolbarIcon arrowDivide]}
 
 } ;# namespace icon
 

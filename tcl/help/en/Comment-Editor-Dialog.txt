@@ -1,0 +1,377 @@
+<!-- ======================================================================
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+======================================================================= -->
+
+<!-- ======================================================================
+* Copyright: (C) 2013 Gregor Cramer
+* Modified for Chesswiz, 2026; see docs/UPSTREAM.md
+======================================================================= -->
+<!-- ======================================================================
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+======================================================================= -->
+
+INDEX Comment editor
+INDEX Edit comments
+INDEX Comment formatting
+INDEX Hyperlinks#Text:Hyperlinks
+
+TITLE Comment editor
+
+<p>
+The comment editor allows entering and editing move comments, text annotations,
+and evaluations. The dialog can be opened in several ways:
+</p>
+
+<ul>
+  <li style="margin-bottom:0.5em;">
+    With the keyboard shortcut
+    <key>Ctrl</key>+<key>%::application::board::mc::Accel(edit-comment)%</key>
+    to edit the comment after the current move.
+  </li>
+  <li style="margin-bottom:0.5em;">
+    With the keyboard shortcut
+    <key>Ctrl</key>+<key>Shift</key>+<key>%::application::board::mc::Accel(edit-comment)%</key>
+    to edit a comment before the move, or a leading comment of a variation when the
+    cursor is at the start of a variation.
+  </li>
+  <li style="margin-bottom:0.5em;">
+    Via the context menu of the game editor.
+  </li>
+  <li>
+    By clicking on an existing comment in the notation view. In this case, the editor
+    automatically switches to the language of the selected comment.
+  </li>
+</ul>
+
+<p>
+The comment editor is available whenever a game is open for editing.
+</p>
+
+<p>
+The dialog is organized into five main areas:
+</p>
+
+<dir><img src="images/comment-editor.png" /></dir>
+
+<ul>
+  <li><a href="#Language">Language selection</a> (top toolbar)</li>
+  <li><a href="#Formatting">Text formatting</a> (left toolbar)</li>
+  <li><a href="#Text">Text field</a></li>
+  <li><a href="#Buttons">Text control buttons</a> (buttons to the right of the text field)</li>
+  <li><a href="#Dialog">Dialog buttons</a> (bottom buttons)</li>
+</ul>
+
+<h2 id="Language">Language selection</h2>
+
+<p>
+The comment editor supports multi-language commentary in games. You can maintain
+commentaries in multiple languages within the same game. Click
+<img src="../images/green-plus.png" /> to add another language tab.
+</p>
+
+<h2 id="Formatting">Text formatting</h2>
+
+<p>
+Comments can be formatted with rich text styles:
+</p>
+
+<ul>
+  <li><img src="../images/format-bold.png" />&ensp;Bold</li>
+  <li><img src="../images/format-italic.png" />&ensp;Italic</li>
+  <li><img src="../images/format-underline.png" />&ensp;Underline</li>
+</ul>
+
+<p>
+Any combination of these styles can be applied. Select a text region (<see/>
+<a href="#Text:Control">Text navigation &amp; control</a>) and click the desired
+style button. The style applies to the entire selection. When typing, new characters
+continue the style of the text immediately preceding the insertion cursor.
+</p>
+
+<p>
+Figurines (graphical piece symbols such as &King;) and evaluation marks (such as &#x00b1;)
+are not affected by italic or underline formatting.
+</p>
+
+<annotation>
+Rich text styles are preserved in native <abbr>.sci</abbr> databases. When exporting to
+standard <a href="Database-Formats.html#PGN">PGN format</a> or plain text, text styling
+is converted or stripped according to the selected export options.
+</annotation>
+
+<p>
+Recognized <a href="NAG-Comments.html">NAG annotation symbols</a> are highlighted in dark
+red. Hovering the mouse over a symbol displays a tooltip with its meaning.
+</p>
+
+<h2 id="Text">Text field</h2>
+
+<ul>
+  <li><a href="#Text:Control">Text navigation &amp; control</a></li>
+  <li><a href="#Text:Hyperlinks">Hyperlinks</a></li>
+  <li><a href="#Text:Emoticons">Smileys</a></li>
+  <li><a href="#Text:Menu">Context menu</a></li>
+</ul>
+
+<h3 id="Text:Control">Text navigation &amp; control</h3>
+
+<ul>
+  <li><a href="#Control:Mouse">Mouse navigation</a></li>
+  <li><a href="#Control:Keyboard">Keyboard navigation</a></li>
+  <li><a href="#Control:Select">Text selection</a></li>
+  <li><a href="#Control:Delete">Deleting text</a></li>
+  <li><a href="#Control:Undo">Undo &amp; Redo</a></li>
+  <li><a href="#Control:Misc">Additional shortcuts</a></li>
+  <li><a href="#Control:Special">Special characters</a></li>
+  <li><a href="#Control:Figurine">Inserting figurines</a></li>
+</ul>
+
+<h4 id="Control:Mouse">Mouse navigation</h4>
+
+<p>
+Clicking with the left mouse button places the insertion cursor at the clicked position,
+focuses the text field, and clears any existing selection. Dragging with the left button
+held down selects the text between the anchor and the cursor.
+</p>
+
+<p>
+Double-clicking selects the word under the pointer. Dragging after a double click
+extends the selection by whole words.
+</p>
+
+<p>
+Triple-clicking selects the entire line. Dragging after a triple click extends the
+selection by whole lines.
+</p>
+
+<p>
+Clicking the left mouse button while holding <key>Ctrl</key> moves the insertion
+cursor without modifying the current text selection.
+</p>
+
+<p>
+Dragging with the middle mouse button scrolls the text view. Clicking the middle
+mouse button pastes the primary selection (X11 / Linux).
+</p>
+
+<h4 id="Control:Keyboard">Keyboard navigation</h4>
+
+<table>
+  <tr valign="top">
+    <td nowrap="nowrap">
+      <key>Left</key> or <key>Ctrl</key>+<key>B</key><br/>
+      <key>Right</key> or <key>Ctrl</key>+<key>F</key>
+    </td>
+    <td class='justification' style="padding-left: 0.5em;">
+      Move cursor one character left or right; clears any active selection.
+    </td>
+  </tr>
+
+  <tr valign="top">
+    <td style="padding-top: 1em;" nowrap="nowrap">
+      <key>Shift</key>+<key>Left</key><br/>
+      <key>Shift</key>+<key>Right</key>
+    </td>
+    <td class='justification' style="padding-top: 1em; padding-left: 0.5em;">
+      Move cursor one character left or right and extend text selection.
+    </td>
+  </tr>
+
+  <tr valign="top">
+    <td style="padding-top: 1em;" nowrap="nowrap">
+      <key>Ctrl</key>+<key>Left</key><br/>
+      <aqua><key>Option</key>+<key>Left</key><br/></aqua>
+      <key>Ctrl</key>+<key>Right</key><br/>
+      <aqua><key>Option</key>+<key>Right</key><br/></aqua>
+    </td>
+    <td class='justification' style="padding-top: 1em; padding-left: 0.5em;">
+      Move cursor by whole words; clears selection.
+    </td>
+  </tr>
+
+  <tr valign="top">
+    <td style="padding-top: 1em;" nowrap="nowrap">
+      <key>Ctrl</key>+<key>Shift</key>+<key>Left</key><br/>
+      <key>Ctrl</key>+<key>Shift</key>+<key>Right</key>
+    </td>
+    <td class='justification' style="padding-top: 1em; padding-left: 0.5em;">
+      Move cursor by whole words and extend text selection.
+    </td>
+  </tr>
+
+  <tr valign="top">
+    <td style="padding-top: 1em;" nowrap="nowrap">
+      <key>Up</key> or <key>Ctrl</key>+<key>P</key><br/>
+      <key>Down</key> or <key>Ctrl</key>+<key>N</key>
+    </td>
+    <td class='justification' style="padding-top: 1em; padding-left: 0.5em;">
+      Move cursor one line up or down; clears selection.
+    </td>
+  </tr>
+
+  <tr valign="top">
+    <td style="padding-top: 1em;" nowrap="nowrap">
+      <key>Shift</key>+<key>Up</key><br/>
+      <key>Shift</key>+<key>Down</key>
+    </td>
+    <td class='justification' style="padding-top: 1em; padding-left: 0.5em;">
+      Move cursor one line up or down and extend selection.
+    </td>
+  </tr>
+
+  <tr valign="top">
+    <td style="padding-top: 1em;" nowrap="nowrap">
+      <key>Home</key> or <key>Ctrl</key>+<key>A</key><br/>
+      <key>End</key> or <key>Ctrl</key>+<key>E</key>
+    </td>
+    <td class='justification' style="padding-top: 1em; padding-left: 0.5em;">
+      Move cursor to start or end of the current line.
+    </td>
+  </tr>
+
+  <tr valign="top">
+    <td style="padding-top: 1em;" nowrap="nowrap">
+      <key>Ctrl</key>+<key>Home</key><br/>
+      <key>Ctrl</key>+<key>End</key>
+    </td>
+    <td class='justification' style="padding-top: 1em; padding-left: 0.5em;">
+      Move cursor to start or end of the entire text.
+    </td>
+  </tr>
+</table>
+
+<h4 id="Control:Select">Text selection</h4>
+
+<p>
+Standard selection shortcuts are supported:
+<key>Ctrl</key>+<key>A</key> selects all text in the editor.
+Holding <key>Shift</key> while moving the cursor extends the selection.
+</p>
+
+<h4 id="Control:Delete">Deleting text</h4>
+
+<p>
+<key>BS</key> deletes the character before the cursor; <key>Del</key>
+or <key>Ctrl</key>+<key>D</key> deletes the character after the cursor.
+<key>Ctrl</key>+<key>BS</key> or <key>Ctrl</key>+<key>Del</key> deletes
+the word before or after the cursor. When text is selected, pressing any deletion
+key removes the selected range.
+</p>
+
+<h4 id="Control:Undo">Undo &amp; Redo</h4>
+
+<p>
+<key>Ctrl</key>+<key>Z</key> undoes the last editing action.
+<key>Ctrl</key>+<key>Y</key> or <key>Ctrl</key>+<key>Shift</key>+<key>Z</key>
+redoes previously undone changes.
+</p>
+
+<h4 id="Control:Misc">Additional shortcuts</h4>
+
+<p>
+Standard clipboard shortcuts <key>Ctrl</key>+<key>C</key> (copy),
+<key>Ctrl</key>+<key>X</key> (cut), and <key>Ctrl</key>+<key>V</key> (paste)
+are supported throughout the editor.
+</p>
+
+<h4 id="Control:Special">Special characters</h4>
+
+<p>
+Special chess evaluation marks (such as !?, =+, &#x00b1;) can be entered quickly
+via the context menu or using the symbol insertion button.
+</p>
+
+<h4 id="Control:Figurine">Inserting figurines</h4>
+
+<p>
+Chess piece figurines can be entered directly into comments using the following
+keyboard shortcuts:
+</p>
+
+INCLUDE ../Comment-Editor-Pieces.txt
+
+<h3 id="Text:Hyperlinks">Hyperlinks</h3>
+
+<p>
+The comment editor allows inserting web hyperlinks and clickable email addresses
+using simple wiki-style syntax:
+</p>
+
+<ol>
+  <li style="text-align: left">
+    <code>[[https://chesswizapp.com]]</code> creates a link displaying the URL
+    <a href="https://chesswizapp.com">https://chesswizapp.com</a>.
+  </li>
+  <li style="text-align: left">
+    <code>[[https://chesswizapp.com][Chesswiz]]</code> creates a link with custom text:
+    <a href="https://chesswizapp.com">Chesswiz</a>. Alternatively, the syntax
+    <code>[[https://chesswizapp.com|Chesswiz]]</code> can be used.
+  </li>
+  <li style="text-align: left">
+    <code>[[mailto:user@example.com][Contact]]</code> creates an email link to
+    <a href="mailto:user@example.com">Contact</a>.
+  </li>
+</ol>
+
+<p>
+A helper tool for inserting links is also available in the context menu.
+</p>
+
+<h3 id="Text:Emoticons">Smileys</h3>
+
+<p>
+When emoticon display is enabled, standard text smilies (such as <expr>:-)</expr>)
+are rendered as graphical pictograms (<img src="../images/smiley.png" />).
+Emoticons can be inserted directly from the context menu.
+</p>
+
+<h3 id="Text:Menu">Context menu</h3>
+
+<p>
+Right-clicking in the text field opens the context menu with shortcuts for:
+</p>
+
+<dir><img src="images/comment-editor-menu.png" /></dir>
+
+<ul>
+  <li><b>Cut / Copy / Paste</b> &ndash; Standard clipboard actions.</li>
+  <li><b>Insert Symbol</b> &ndash; Insert evaluation marks and special annotations.</li>
+  <li><b>Insert Emoticon</b> &ndash; Insert graphical smilies.</li>
+  <li><b>Insert Link</b> &ndash; Insert a formatted hyperlink.</li>
+  <li><b>Format Text</b> &ndash; Apply bold, italic, or underline to selected text.</li>
+  <li><b>Copy Text to Language</b> &ndash; Copy commentary to another language tab.</li>
+  <li><b>Undo / Redo</b> &ndash; History navigation.</li>
+  <li><b>Select All / Clear</b> &ndash; Select or clear entire text.</li>
+  <li><b>Revert</b> &ndash; Discard unsaved changes and restore initial text.</li>
+  <li><b>Switch / Add Language</b> &ndash; Manage multi-language commentary.</li>
+</ul>
+
+<h2 id="Buttons">Text control buttons</h2>
+
+<p>
+Buttons located to the right of the text field provide quick access to:
+</p>
+
+<ul>
+  <li><b>Insert Symbol</b> &ndash; Open the symbol picker.</li>
+  <li><b>Clear</b> &ndash; Clear all text in the active language tab.</li>
+  <li><b>Revert</b> &ndash; Restore original text since last save.</li>
+</ul>
+
+<h2 id="Dialog">Dialog buttons</h2>
+
+<ul>
+  <li><menuitem>%::mc::OK%</menuitem> &ndash; Save commentary across all languages and close dialog.</li>
+  <li><menuitem>%::mc::Apply%</menuitem> &ndash; Save commentary immediately to preview changes in notation without closing.</li>
+  <li><menuitem>%::mc::Cancel%</menuitem> &ndash; Close dialog discarding unapplied changes.</li>
+</ul>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html: -->

@@ -1168,8 +1168,9 @@ proc ::menu::FillDynamic {labelName menu} {
 			FillLanguage $menu
 		}
 		LoadLayout {
-			if {[llength [info commands ::application::twm]] && [::application::twm] ne ""} {
-				catch { ::application::twm::makeLayoutMenu [::application::twm] $menu }
+			set twm [CurrentTWM]
+			if {$twm ne ""} {
+				catch { ::application::twm::makeLayoutMenu $twm $menu }
 			}
 		}
 		RecentGames {
@@ -1438,6 +1439,22 @@ proc ::menu::CurrentBase {} {
 	return $base
 }
 
+# The layout (twm) of the notebook page the user is looking at, or "" when
+# that page has none. The main drop-down is global: it can be posted on the
+# Information page, which owns no panes, so the View > Layout cascade is
+# filled with nothing there. ::application::twm reports that case by raising
+# "no twm selected" -- a menu is not the place to report it, and the error
+# used to escape from the cascade's -postcommand while the menu was posted,
+# which aborted the cascade and made bgerror drop the menu's grab (the main
+# menu then posted and unposted erratically). Ask under catch, like
+# CurrentBase and the callers in application.tcl and media-inset.tcl do, and
+# let every caller decide what "no layout here" means.
+proc ::menu::CurrentTWM {} {
+	if {[llength [info commands ::application::twm]] == 0} { return "" }
+	if {[catch { set twm [::application::twm] }]} { return "" }
+	return $twm
+}
+
 proc ::menu::CurrentVariant {} {
 	set variant Normal
 	catch { set variant [::scidb::db::get variant?] }
@@ -1653,15 +1670,18 @@ proc ::menu::Do {id} {
 		menu.tools.file_types { return [::menu::AssignFileTypes .application] }
 		menu.tools.legacy_fonts { return [::font::installChessBaseFonts .application] }
 
-		menu.view.layout.save {
-			catch { ::application::twm::SaveLayout [::application::twm] .application {} {} }
+		menu.view.layout.save - menu.view.layout.save_as {
+			set twm [CurrentTWM]
+			if {$twm ne ""} {
+				catch { ::application::twm::SaveLayout $twm .application {} {} }
+			}
 			return
 		}
-		menu.view.layout.save_as {
-			catch { ::application::twm::SaveLayout [::application::twm] .application {} {} }
+		menu.view.layout.manage {
+			set twm [CurrentTWM]
+			if {$twm ne ""} { catch { ::application::twm::Menu $twm .application 0 0 } }
 			return
 		}
-		menu.view.layout.manage { catch { ::application::twm::Menu [::application::twm] .application 0 0 }; return }
 		menu.view.font_inc { after idle { ::font::changeFontSize +1 }; return }
 		menu.view.font_dec { after idle { ::font::changeFontSize -1 }; return }
 		app-fullscreen { catch { ::menu::viewFullscreen toggle }; return }
@@ -1679,7 +1699,8 @@ proc ::menu::Do {id} {
 		menu.view.panes.* { ::menu::TogglePane [lindex [split $id .] end]; return }
 		view.pane_zoom { catch { ::application::TogglePaneZoom }; return }
 		view.focus_zoom {
-			set twm [::application::twm]
+			set twm [CurrentTWM]
+			if {$twm eq ""} { return 0 }
 			set ::application::focuszoom::enabled($twm) \
 				[expr {![::application::focuszoom::isEnabled $twm]}]
 			::application::focuszoom::toggle $twm

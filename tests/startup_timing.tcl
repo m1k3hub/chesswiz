@@ -1,6 +1,6 @@
 # Run headlessly with the app interpreter:
 # xvfb-run -a /path/to/tkchesswiz tests/startup_timing.tcl
-# Optional STARTUP_BUDGET_MS overrides the generous CI budget.
+# Optional STARTUP_BUDGET_MS overrides the CI budget.
 set startupTimingRoot [file normalize [file join [file dirname [info script]] ..]]
 set startupTimingHome [file join $startupTimingRoot tests tmp-app startup-timing-[pid]]
 file mkdir $startupTimingHome
@@ -11,7 +11,7 @@ set env(SCIDB_AI_CLASSIFIER) off
 set env(SCIDB_AI_TRIAGE) 0
 set argv {--single-process}
 set argc 1
-set startupTimingBudget 5000
+set startupTimingBudget 2600
 if {[info exists env(STARTUP_BUDGET_MS)]} {
     set startupTimingBudget $env(STARTUP_BUDGET_MS)
 }
@@ -24,6 +24,20 @@ proc startupTimingBgerror {msg} {
     puts stderr "STARTUP-TIMING background error: $msg"
 }
 proc startupTimingFinish {} {
+    # The post-map chain must finish, and deferred engine configuration must
+    # still be available to a first consumer after the splash has gone away.
+    if {[catch {
+        if {!$::load::DataLoaded || !$::load::EcoLoaded} {
+            error {deferred dictionaries did not finish}
+        }
+        set engines $::engine::Engines
+        if {[llength [trace info variable ::engine::Engines]]} {
+            error {engine first-use initialization did not finish}
+        }
+    } msg]} {
+        set ::startupTimingError $msg
+        puts stderr "STARTUP-TIMING resource error: $msg"
+    }
     set elapsed $::startupTimingMapped
     set failed [expr {$elapsed < 0 || $elapsed > $::startupTimingBudget
         || $::startupTimingError ne {}}]
@@ -34,6 +48,10 @@ proc startupTimingFinish {} {
 proc startupTimingMap {w} {
     if {$w ne {.application} || $::startupTimingMapped >= 0} {return}
     set ::startupTimingMapped [expr {[clock milliseconds] - $::startupTimingStarted}]
+    if {![info exists ::load::DataLoaded] || $::load::DataLoaded} {
+        set ::startupTimingError {player data was loaded before the first map}
+        puts stderr "STARTUP-TIMING resource error: $::startupTimingError"
+    }
     # Include deferred startup work in the background-error check.
     after 2000 startupTimingFinish
 }

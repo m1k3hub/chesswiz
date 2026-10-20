@@ -15,17 +15,17 @@
            content="text/css" />
 
   <meta name="author"
-     content="scidb.sourceforge.net" />
+     content="https://chesswizapp.com" />
   <meta name="generator"
-     content="scidb.sourceforge.net" />
+     content="Chesswiz" />
   <meta name="description"
      content="Chesswiz - Help Page" />
 
   <link rel="icon"
-       href="http://scidb.sourceforge.net/favicon.ico"
+       href="https://chesswizapp.com/favicon.ico"
        type="image/x-icon" />
   <link rel="shortcut icon"
-       href="http://scidb.sourceforge.net/favicon.ico" />
+       href="https://chesswizapp.com/favicon.ico" />
   <link rel="stylesheet"
        type="text/css"
       media="screen"
@@ -50,12 +50,12 @@ Chesswiz supports the following formats:
     <a href="#Scidb">Chesswiz</a>
   </li>
   <li>
-    <img src="../images/ft-scid.png" alt="" />
-    <a href="#Scid">Scid</a>
+    <img src="../images/ft-si4.png" alt="" />
+    <a href="#Format-si4">Legacy format (.si4, .si3)</a>
   </li>
   <li>
-    <img src="../images/ft-chessbase.png" alt="" />
-    <a href="#ChessBase">ChessBase</a>
+    <img src="../images/ft-cbh.png" alt="" />
+    <a href="#Format-cbh">External proprietary format (.cbh, .cbf)</a>
   </li>
   <li>
     <img src="../images/ft-pgn.png" alt="" />
@@ -136,31 +136,30 @@ The icon set (.scj) will be created when image files are selected inside the sel
 for the database icon (&#x21d2; <a href="Database-Switcher.html#ChangeIcon">database switcher</a>
 </p>
 
-<h2 id="Scid">
-<img src="../images/ft-scid.png" alt="" />
-Scid (<abbr>.si4</abbr>, <abbr>.si3</abbr>)
+<h2 id="Format-si4">
+<img src="../images/ft-si4.png" alt="" />
+Legacy format (<abbr>.si4</abbr>, <abbr>.si3</abbr>)
 </h2>
 
 <p>
-Scid's database format is fully supported because of it's wide adoption.
-But with this format you cannot use the full capability of Chesswiz. For large databases and repeated analysis, maintenance, or preparation work, it is recommended to convert the database into Scidb's native format (<abbr>.sci</abbr>) and use that as the working copy.
+The legacy database format (<abbr>.si4</abbr>, <abbr>.si3</abbr>) is supported for compatibility.
+For large databases and repeated analysis, maintenance, or preparation work, it is recommended to convert the database into native format (<abbr>.sci</abbr>) and use that as the working copy.
 </p>
 
 <div class='annotation'><img src='../images/annotation.png' style='float:left; margin:0 1em 0 0' alt='annotation' />
-Scid databases will be opened only in read-only mode.
+Legacy databases will be opened only in read-only mode.
 </div>
 
 <p>
 In some cases the user has to choose the appropriate encoding when opening
 the database, to ensure a correct display of names and other text. Newer
 databases may be <span style='white-space:nowrap;'>UTF-8</span> encoded, older database may be written with <span style='white-space:nowrap;'>Latin-1</span>
-(ISO-<span style='white-space:nowrap;'>8859-1</span>) character set, the Scid format does not provide information
-about this. But in many cases the automatic detection of the character set
-should be successful.
+(ISO-<span style='white-space:nowrap;'>8859-1</span>) character set, as the file format does not provide encoding metadata.
+In most cases the automatic detection of the character set should be successful.
 </p>
 
 <p>
-This format resembles structurally Scidb's format:
+This format is divided into multiple component files:
 </p>
 
 <div class='box'>
@@ -184,40 +183,39 @@ This format resembles structurally Scidb's format:
   </table>
 </div>
 
-<p><img src='../images/note.png' alt='note' /> The files with suffixes <code>.sso</code> (Scid Search Option File),
-<code>.sor</code> (Scid Repertoire File), and <code>.stm</code>
-(Scid Tree Mask File), do not belong explicitely to a database and will
+<p><img src='../images/note.png' alt='note' /> Auxiliary files with suffixes <code>.sso</code>,
+<code>.sor</code>, and <code>.stm</code>
+do not belong explicitly to a database and will
 not be regarded by Chesswiz. Likewise any saved game list (file suffix
 <code>.txt</code>) will be disregarded.</p>
 
-<h2 id="ChessBase">
-<img src="../images/ft-chessbase.png" alt="" />
-ChessBase (<abbr>.cbh</abbr>, <abbr>.cbf</abbr>)
+<h2 id="Format-cbh">
+<img src="../images/ft-cbh.png" alt="" />
+External proprietary format (<abbr>.cbh</abbr>, <abbr>.cbf</abbr>)
 </h2>
 
 <p>
-Both formats will be supported; the new format <abbr>.cbh</abbr> and the old format <abbr>.cbf</abbr>. For repeated work it is recommended to convert ChessBase databases into Scidb's native format (<abbr>.sci</abbr>) and use that as the working copy.
+Both formats are supported: the <abbr>.cbh</abbr> format and the legacy <abbr>.cbf</abbr> format. For repeated work it is recommended to convert external proprietary databases into native format (<abbr>.sci</abbr>) and use that as the working copy.
 </p>
 
 <p>
-The company <a href="http://www.chessbase.de" target="blank_">ChessBase&nbsp;<span class="awesome">&#xf08e;</span></a> keeps this format secret,
-therefore only the reading mode is supported. Not all game data can be read correctly,
-with some games the message of failed decoding will appear.
+These formats are proprietary and closed;
+therefore only read mode is supported.
 </p>
 
 <div class='annotation'><img src='../images/annotation.png' style='float:left; margin:0 1em 0 0' alt='annotation' />
-ChessBase databases cannot be used as reference database.
+External proprietary databases cannot be used as reference databases.
 </div>
 
 <p>
 Usually this database is encoded with character set CP1252 (or CP850 with
-old format), but in some cases a manual selection of the the character set
+old format), but in some cases a manual selection of the character set
 when opening the database may be required, to ensure a correct display of
 names and other text.
 </p>
 
 <p>
-A database in ChessBase format is divided into many separate files, the important ones are:
+A database in this format is divided into several separate files, the important ones are:
 </p>
 
 <div class='box'>

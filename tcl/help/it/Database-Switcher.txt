@@ -62,7 +62,7 @@ Apre una finestra che mostra diverse informazioni sul database.
 
 <p>
 <menuitem>%::export::mc::Export%</menuitem>
-Apre un'interfaccia per <a href="Database-Export-Dialog.html">l'esporazione del database</a>
+Apre un'interfaccia per l'esporazione del database
 in altri formati database o documenti.
 <note/>Se il database contiene diverse
 <a href="Chess-Variants.html">varianti di scacchi</a> (solo possibile nel caso

@@ -502,6 +502,14 @@ proc show3D {flag} {
 		set Vars(3d) 1
 		::bind $Vars(3dwin) <Configure> [namespace code {ConfigureReserve3D %w %h}]
 		::bind $Vars(3dwin) <Map> [namespace code {ConfigureReserve3D [winfo width %W] [winfo height %W]}]
+		# The 3D view inherits the board's slot and then gets reserve padding
+		# of its own; keep the 2D padding so it can be restored exactly (the
+		# dynamic layout reserves a top toolbar strip).
+		if {[winfo manager $Vars(widget:frame)] eq "pack"} {
+			set Vars(pack:2d) [pack info $Vars(widget:frame)]
+		} else {
+			unset -nocomplain Vars(pack:2d)
+		}
 		ReplaceBoardView $Vars(widget:frame) $Vars(3dwin)
 		ApplyReserve3D
 		::board3d::refresh
@@ -512,12 +520,25 @@ proc show3D {flag} {
 		after cancel $Vars(after)
 		if {$Vars(3dwin) ne "" && [winfo exists $Vars(3dwin)]} {
 			ReplaceBoardView $Vars(3dwin) $Vars(widget:frame)
-			pack configure $Vars(widget:frame) -padx 0 -pady 0
+			# ReplaceBoardView copies the 3D view's options, including any
+			# reserve padding; put the 2D slot's own options back.
+			if {[info exists Vars(pack:2d)]} {
+				catch { pack configure $Vars(widget:frame) {*}$Vars(pack:2d) }
+				unset -nocomplain Vars(pack:2d)
+			} else {
+				pack configure $Vars(widget:frame) -padx 0 -pady 0
+			}
 		}
 		set Vars(3d) 0
-		# Let packing restore the canvas before notifying inset owners.
+		# Let packing restore the canvas before notifying inset owners. Use
+		# the restored slot size: the 3D view's reserve-adjusted height is
+		# not the 2D canvas height (no Configure follows when the unmapped
+		# canvas kept its size).
 		set Vars(after) [after 0 [namespace code {
-			RebuildBoard $Vars(widget:frame) $Vars(width) $Vars(height) true
+			set f $Vars(widget:frame)
+			set Vars(width) [winfo width $f]
+			set Vars(height) [winfo height $f]
+			RebuildBoard $f $Vars(width) $Vars(height) true
 		}]]
 	}
 	return 1

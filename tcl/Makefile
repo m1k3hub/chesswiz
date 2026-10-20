@@ -148,6 +148,7 @@ SOURCES = \
 	app-information.tcl \
 	app-board.tcl \
 	app-database.tcl \
+	app-sample-base.tcl \
 	app-database-search.tcl \
 	app-database-search-material.tcl \
 	app-database-search-rating.tcl \
@@ -288,6 +289,17 @@ install-config:
 	@echo "Install configuration files"
 	@install -m 755 -d $(SHAREDIR)/engines
 	@install -m 644 -p engines/*.dat $(SHAREDIR)/engines
+
+install-sample:
+	@echo "Install sample database"
+	@install -m 755 -d $(SHAREDIR)/sample
+	@install -m 644 -p ../share/sample/*.sci ../share/sample/*.scg ../share/sample/*.scn ../share/sample/README.txt $(SHAREDIR)/sample
+
+uninstall-sample:
+	@echo "Uninstall sample database"
+	@rm -f "$(SHAREDIR)/sample/Sample games.sci" "$(SHAREDIR)/sample/Sample games.scg" "$(SHAREDIR)/sample/Sample games.scn"
+	@rm -f $(SHAREDIR)/sample/README.txt
+	@rmdir $(SHAREDIR)/sample 2>/dev/null || true
 
 uninstall-config:
 	@echo "Uninstall configuration files"
@@ -712,11 +724,11 @@ uninstall-photos:
 		fi;                                                                               \
 	fi
 
-install: install-scripts install-pieces install-cursors install-flags install-localizations \
+install: install-scripts install-sample install-pieces install-cursors install-flags install-localizations \
 				install-textures install-themes install-ttk-themes install-text-scripts install-images \
 				install-help install-config install-photos install-fonts
 
-uninstall: uninstall-scripts uninstall-pieces uninstall-cursors uninstall-flags uninstall-localizations \
+uninstall: uninstall-scripts uninstall-sample uninstall-pieces uninstall-cursors uninstall-flags uninstall-localizations \
 				uninstall-ttk-themes uninstall-themes uninstall-text-scripts uninstall-textures \
 				uninstall-images uninstall-help uninstall-config uninstall-fonts
 	@if [ -d $(SHAREDIR) ]; then                                                             \

@@ -93,8 +93,22 @@ puts "  \{"
 puts "     {{{$title} {$file}}}"
 
 set indent 4
+set inComment 0
 
 while {[gets $src line] >= 0} {
+	set trimmed [string trim $line]
+	if {[string match "<!--*" $trimmed]} {
+		if {![string match "*-->*" $trimmed]} {
+			set inComment 1
+		}
+		continue
+	}
+	if {$inComment} {
+		if {[string match "*-->*" $trimmed]} {
+			set inComment 0
+		}
+		continue
+	}
 	if {[regexp {<h[1-6] id=\"(.*)\">(.*)</h[1-6]>} $line _ href section]} {
 		puts "  \}"
 		puts "  \{"

@@ -9,6 +9,7 @@ set Index {
   }
   { B
     {
+      {{Board markers} {Mark-Palette-Dialog.html} {}}
       {{Board Setup} {Board-Setup-Dialog.html} {}}
       {{Browsing games} {Game-Browser.html} {}}
     }
@@ -19,6 +20,8 @@ set Index {
       {{Chess variants} {Chess-Variants.html} {}}
       {{Clipbase} {Clipbase.html} {}}
       {{Command line options} {Command-Line-Options.html} {}}
+      {{Comment editor} {Comment-Editor-Dialog.html} {}}
+      {{Comment formatting} {Comment-Editor-Dialog.html} {}}
       {{Compact database} {Database-Switcher.html} {Compact}}
       {{Compound square designators (CQL)} {CQL-Square-Designators.html} {compound}}
       {{Contact information} {Contact-Information.html} {}}
@@ -45,6 +48,8 @@ set Index {
   { E
     {
       {{ECO-Code} {ECO-Code.html} {}}
+      {{Edit comments} {Comment-Editor-Dialog.html} {}}
+      {{Edit start position} {Start-Position-Setup-Dialog.html} {}}
       {{Encyclopedia of Chess Openings} {ECO-Code.html} {}}
     }
   }
@@ -66,6 +71,7 @@ set Index {
   { H
     {
       {{Homepage} {Contact-Information.html} {Homepage}}
+      {{Hyperlinks} {Comment-Editor-Dialog.html} {Text:Hyperlinks}}
     }
   }
   { K
@@ -82,6 +88,7 @@ set Index {
     {
       {{Markers} {Game-Flags.html} {}}
       {{Match List (CQL)} {CQL-Match-List.html} {}}
+      {{Move markers} {Mark-Palette-Dialog.html} {}}
     }
   }
   { N
@@ -98,6 +105,7 @@ set Index {
   }
   { P
     {
+      {{Palette - Square markers} {Mark-Palette-Dialog.html} {}}
       {{Pattern matching} {Pattern-Matching.html} {}}
       {{Percentage range specifiers (CQL)} {CQL-Percentage-Specifiers.html} {}}
       {{Piece designators (CQL)} {CQL-Piece-Designators.html} {}}
@@ -115,6 +123,9 @@ set Index {
       {{Search, advanced} {Advanced-Search.html} {}}
       {{Shredder FEN} {FEN.html} {}}
       {{Square designators (CQL)} {CQL-Square-Designators.html} {}}
+      {{Square marker palette} {Mark-Palette-Dialog.html} {}}
+      {{Square markers} {Mark-Palette-Dialog.html} {}}
+      {{Start position setup} {Start-Position-Setup-Dialog.html} {}}
       {{Suicide} {Chess-Variants.html} {}}
     }
   }

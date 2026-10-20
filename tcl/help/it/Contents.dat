@@ -11,30 +11,14 @@ set Contents {
     {{{Come ipostare il browser di default} {How-To-Set-Default-Browser.html}}}
   }
   {
-    {{{Finestre di liste in Chesswiz} {Overview.html} {list-windows}}}
-    {{{Lista Partite} {Game-List-Window.html}}}
-    {{{Lista Giocatori} {Player-List-Window.html}}}
-    {{{Lista Eventi} {Event-List-Window.html}}}
-    {{{Lista Siti} {Site-List-Window.html}}}
-    {{{Lista Commentatori} {Annotator-List-Window.html}}}
-  }
-  {
     {{{Chesswiz- finestre e interfacce} {Overview.html} {windows-and-dialogs}}}
     {{{Cambio Database} {Database-Switcher.html}}}
     {{{Browser Partite} {Game-Browser.html}}}
     {{{Browser di panoramica fama} {Game-Overview.html}}}
-    {{{Finestra di Testo della Partita} {Game-Text-Window.html}}}
-    {{{Storia Partita} {Game-History-Window.html}}}
-    {{{Scacchiera} {Board-Window.html}}}
-    {{{Finestre dell'Albero} {Tree-Window.html}}}
-    {{{Finestra dell'Albero delle Partite} {Tree-Games-Window.html}}}
     {{{Editor Commenti} {Comment-Editor-Dialog.html}}}
     {{{Tavolozza Simboli Quadrati} {Mark-Palette-Dialog.html}}}
     {{{Modifica Posizione} {Board-Setup-Dialog.html}}}
     {{{Modifica Posizione Iniziale} {Start-Position-Setup-Dialog.html}}}
-    {{{Tabellone} {Crosstable-Window.html}}}
-    {{{Importa Partita} {PGN-Import-Dialog.html}}}
-    {{{Esporta Database} {Database-Export-Dialog.html}}}
   }
   {
     {{{CQL (Chess Query Language)} {Overview.html} {cql-manual}}}
@@ -56,7 +40,6 @@ set Contents {
   {
     {{{Ulteriori Informazioni} {Overview.html} {further-information}}}
     {{{Codici Partita} {Game-Flags.html}}}
-    {{{Supported chess variants} {Chess-Variants.html}}}
     {{{Specifiche sull'archivio database (Inglese)} {../en/Database-Archive.html}}}
     {{{Opzioni nella Linea di Comando} {Command-Line-Options.html}}}
     {{{Valori delle annotazioni in NAG} {NAG-Comments.html}}}

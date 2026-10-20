@@ -1393,6 +1393,9 @@ proc Update {position} {
 	variable MaxPosition
 
 	if {$position < $MaxPosition} {
+		while {[llength $List] <= $position} {
+			lappend List {{} 0 0 0 {{} {} {} {} {}} {0 0} {} {} {}}
+		}
 		set key    [lindex $List $position 4]
 		set tags   [::scidb::game::tags $position]
 

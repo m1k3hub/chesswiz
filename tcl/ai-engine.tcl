@@ -608,17 +608,42 @@ proc ::ai::engine::chooseDialog {parent} {
 	$top.engine set [expr {$Options(engine) in [uciEngines] ? $Options(engine) : $mc::Bundled}]
 	pack $top.text -anchor w
 	pack $top.engine -fill x -pady {8 0}
+	ttk::label $top.error -wraplength 380 -justify left -foreground [::colors::lookup analysis,error:foreground]
 	pack $top -fill both -expand yes
 	::widget::dialogButtons $dlg {ok cancel}
-	$dlg.ok configure -command [list apply {{dlg} {
-		set v [$dlg.top.engine get]
-		::ai::engine::choose [expr {$v eq $::ai::engine::mc::Bundled ? "" : $v}]
-		destroy $dlg
-	}} $dlg]
+	$dlg.ok configure -command [list ::ai::engine::AcceptChoice $dlg]
 	$dlg.cancel configure -command [list destroy $dlg]
 	bind $dlg <Escape> [list destroy $dlg]
 	::util::place $dlg -parent [winfo toplevel $parent] -position center
 	wm deiconify $dlg
+}
+
+
+# Validate before changing the preference or closing the chooser (run146).
+proc ::ai::engine::AcceptChoice {dlg} {
+	set value [$dlg.top.engine get]
+	set name $value
+	set message ""
+	if {$value eq $mc::Bundled} {
+		set name ""
+		set command [bundled]
+	} elseif {$value in [uciEngines]} {
+		set entry [lindex $::engine::Engines [::engine::FindIndex $value]]
+		set command [dict get $entry Command]
+	} else {
+		set command $value
+		set message $::engine::mc::ChooseConfigured
+	}
+	set invalid [::engine::CheckCommand $command]
+	if {$invalid ne ""} { set message $invalid }
+	if {$message ne ""} {
+		$dlg.top.error configure -text $message
+		pack $dlg.top.error -fill x -pady {8 0}
+		focus $dlg.top.engine
+		return
+	}
+	choose $name
+	destroy $dlg
 }
 
 
