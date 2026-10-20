@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Usage: make-macos-app.sh [BUILD_DIR] [APP_DIR] [SYSROOT] [ENGINE_DIR]
-# CHESSWIZ_SIGN_ID defaults to ad-hoc '-'; CHESSWIZ_VERSION defaults to 1.0.1493.
+# CHESSWIZ_SIGN_ID defaults to ad-hoc '-'; CHESSWIZ_VERSION defaults to 1.0.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$(cd "${1:-$ROOT}" && pwd)"
@@ -9,7 +9,7 @@ SYSROOT="${3:-$HOME/cw/sysroot}"
 ENGINE_DIR="${4:-$BUILD/build/engines-macos}"
 case "$APP" in *.app) ;; *) echo 'APP_DIR must end in .app' >&2; exit 2;; esac
 SIGN_ID="${CHESSWIZ_SIGN_ID:--}"
-VERSION="${CHESSWIZ_VERSION:-1.0.1493}"
+VERSION="${CHESSWIZ_VERSION:-1.0}"
 [ -f "$SYSROOT/cacert.pem" ] && [ -f "$SYSROOT/lib/json/pkgIndex.tcl" ]
 [ -x "$ENGINE_DIR/stockfish-chesswiz" ]
 TLS=("$SYSROOT"/lib/tls*)

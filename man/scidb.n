@@ -1,8 +1,8 @@
-.TH Scidb 1 "February 1, 2012" scidb "Linux User's Manual"
+.TH Chesswiz 1 "2026" "Chesswiz 1.0" "Chesswiz User Manual"
 .\" ==========================================================================
 .SH NAME
 .\" --------------------------------------------------------------------------
-Scidb - chess database application
+chesswiz - chess database application
 .\" ==========================================================================
 .SH SYNOPSIS
 .\" --------------------------------------------------------------------------
@@ -11,13 +11,13 @@ Scidb - chess database application
 .\" ==========================================================================
 .SH DESCRIPTION
 .\" --------------------------------------------------------------------------
-.B Scidb
-is a Chess Information Data Base.
+.B Chesswiz
+is a chess database application.
 .\" ==========================================================================
 .SH USAGE
 .\" --------------------------------------------------------------------------
 If there is a
-.B Scidb
+.B Chesswiz
 application already running, the currently running process will be used.
 .\" ==========================================================================
 .SH OPTIONS
@@ -149,21 +149,21 @@ initialization, and change to the board tab.
 Gregor Cramer
 .br
 .ul
-http://scidb.sourceforge.net
+https://chesswizapp.com
 .\" ==========================================================================
 .SH BUGS
 .\" --------------------------------------------------------------------------
 For bug reports visit
 .br
 .ul
-http://sourceforge.net/p/scidb/bugs
+https://chesswizapp.com
 .\" ==========================================================================
 .SH FEATURE REQUESTS
 .\" --------------------------------------------------------------------------
 For feature requests visit
 .br
 .ul
-http://sourceforge.net/p/scidb/feature-requests
+https://chesswizapp.com
 .\" ==========================================================================
 .SH FILES
 .\" --------------------------------------------------------------------------
@@ -178,7 +178,7 @@ C++ executable, will be invoked by the script.
 .TP 9
 %SHAREDIR%/data/eco.bin
 Compressed ECO file.
-.B Scidb
+.B Chesswiz
 is not working without this file.
 .\" --------------------------------------------------------------------------
 .TP 9

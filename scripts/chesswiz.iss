@@ -12,7 +12,7 @@
   #define RootDir ".."
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.0.0"
+  #define AppVersion "1.0"
 #endif
 
 [Setup]
