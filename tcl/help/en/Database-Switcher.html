@@ -15,17 +15,17 @@
            content="text/css" />
 
   <meta name="author"
-     content="scidb.sourceforge.net" />
+     content="https://chesswizapp.com" />
   <meta name="generator"
-     content="scidb.sourceforge.net" />
+     content="Chesswiz" />
   <meta name="description"
      content="Chesswiz - Help Page" />
 
   <link rel="icon"
-       href="http://scidb.sourceforge.net/favicon.ico"
+       href="https://chesswizapp.com/favicon.ico"
        type="image/x-icon" />
   <link rel="shortcut icon"
-       href="http://scidb.sourceforge.net/favicon.ico" />
+       href="https://chesswizapp.com/favicon.ico" />
   <link rel="stylesheet"
        type="text/css"
       media="screen"
@@ -80,7 +80,7 @@ Opens a box displaying various database information.
 
 <p>
 <span class='menuitem'>Export</span>
-Opens a dialog for <a href="Database-Export-Dialog.html">database export</a>
+Opens a dialog for database export
 into other database formats or document formats.
 <br/><img src='../images/note.png' alt='note' /> If this database contains several
 <a href="Chess-Variants.html">chess variants</a> (only possible
@@ -127,10 +127,10 @@ which are not yet saved, a security prompt will be done before closing the datab
 <p>
 <span class='menuitem'>Read only</span>
 Set this database read-only or writeable.
-This is possibly only for Scidb and Scid databases
-(<abbr>.sci</abbr>, <abbr>.si4</abbr>, <abbr>.si3</abbr>),
+This is possible for Chesswiz databases (<abbr>.sci</abbr>),
+legacy formats (<abbr>.si4</abbr>, <abbr>.si3</abbr>),
 and PGN archives (<abbr>.pgn</abbr>, <abbr>.pgn.gz</abbr>).
-<br/><img src='../images/note.png' alt='note' /> ChessBase databases and Zip archives (<abbr>.zip</abbr>)
+<br/><img src='../images/note.png' alt='note' /> External proprietary databases (<abbr>.cbh</abbr>) and Zip archives (<abbr>.zip</abbr>)
 are always read-only.
 <br/><img src='../images/note.png' alt='note' /> The <a href="Clipbase.html">Clipbase</a> cannot be set
 read-only.
@@ -148,9 +148,8 @@ Open a database via the database history.
 
 <p>
 <span class='menuitem'>New Database (Normal Chess)</span>
-Create a new database. Only Scidb and Scid databases
-(<abbr>.sci</abbr>, <abbr>.si4</abbr>, <abbr>.si3</abbr>)
-can be created.
+Create a new database. Native Chesswiz (<abbr>.sci</abbr>) and legacy
+(<abbr>.si4</abbr>, <abbr>.si3</abbr>) databases can be created.
 If the database should store games of any
 <a href="Chess-Variants.html">chess variant</a> please use the next menu item.
 </p>
@@ -158,7 +157,7 @@ If the database should store games of any
 <p>
 <span class='menuitem'>New Database</span>
 Create a new database of any <a href="Chess-Variants.html">chess variant</a>.
-Only Scidb databases can be created in this case.
+Only native Chesswiz databases (<abbr>.sci</abbr>) can be created in this case.
 </p>
 
 <p>
@@ -185,7 +184,7 @@ This sub-menu provides functionality for the maintenance of databases.
 </p>
 
 <p>
-For large databases and repeated analysis, <abbr>.sci</abbr> should be treated as the working format. Non-<abbr>.sci</abbr> databases can still be opened, but some heavy workflows will be slower. Use <span class='menuitem'>Convert to .sci...</span> to export a working copy in Scidb's native format before intensive work.
+For large databases and repeated analysis, <abbr>.sci</abbr> should be treated as the working format. Non-<abbr>.sci</abbr> databases can still be opened, but some heavy workflows will be slower. Use <span class='menuitem'>Convert to .sci...</span> to export a working copy in Chesswiz native format (<abbr>.sci</abbr>) before intensive work.
 </p>
 
 <ul style='list-style-type: none'><li><img src="images/database-switcher-menu-maintenance.png" alt=""/></li></ul>
@@ -193,7 +192,7 @@ For large databases and repeated analysis, <abbr>.sci</abbr> should be treated a
 <p id="ChangeIcon">
 <span class='menuitem'>Change Icon</span>
 Select an icon for this database. A selection dialog will be opened
-which allows also the selection of image files (Scidb databases only).
+which allows also the selection of image files (<abbr>.sci</abbr> databases only).
 The image files must be PNG files in the resolutions of 16x16, 24x24,
 32x32, and 48x48.
 <br/><img src='../images/note.png' alt='note' /> This is not possible for the <a href="Clipbase.html">Clipbase</a>.

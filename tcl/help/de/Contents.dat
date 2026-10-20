@@ -12,30 +12,14 @@ set Contents {
     {{{Festlegung des Standard-Browsers} {How-To-Set-Default-Browser.html}}}
   }
   {
-    {{{Chesswiz-Listenfenster} {Overview.html} {list-windows}}}
-    {{{Partienliste} {Game-List-Window.html}}}
-    {{{Spielerliste} {Player-List-Window.html}}}
-    {{{Veranstaltungsliste} {Event-List-Window.html}}}
-    {{{Orteliste} {Site-List-Window.html}}}
-    {{{Kommentatorenliste} {Annotator-List-Window.html}}}
-  }
-  {
     {{{Chesswiz-Fenster und Dialoge} {Overview.html} {windows-and-dialogs}}}
     {{{Datenbankumschalter} {Database-Switcher.html}}}
     {{{Partien-Browser} {Game-Browser.html}}}
     {{{Partien-Übersichts-Browser} {Game-Overview.html}}}
-    {{{Partietext-Fenster} {Game-Text-Window.html}}}
-    {{{Partienhistorie} {Game-History-Window.html}}}
-    {{{Schachbrett} {Board-Window.html}}}
-    {{{Zugbaum} {Tree-Window.html}}}
-    {{{Zugbaumpartienliste} {Tree-Games-Window.html}}}
     {{{Kommentareditor} {Comment-Editor-Dialog.html}}}
     {{{Feldmarkierungspalette} {Mark-Palette-Dialog.html}}}
     {{{Stellungseingabe} {Board-Setup-Dialog.html}}}
     {{{Startpositionseingabe} {Start-Position-Setup-Dialog.html}}}
-    {{{Kreuztabelle} {Crosstable-Window.html}}}
-    {{{Partienimport} {PGN-Import-Dialog.html}}}
-    {{{Datenbankenexport} {Database-Export-Dialog.html}}}
   }
   {
     {{{CQL (Chess Query Language)} {Overview.html} {cql-manual}}}

@@ -230,12 +230,12 @@ iveArch
 &lt;Type&gt; multi
 &lt;-- H E A D --&gt;
 &lt;FileName&gt; tiny-1.pgn
-&lt;URI&gt; http://scidb.sf.net/bases/tiny-1.pgn
+&lt;URI&gt; https://chesswizapp.com/bases/tiny-1.pgn
 &lt;-- D A T A --&gt;
 
 &lt;-- H E A D --&gt;
 &lt;FileName&gt; tiny-2.pgn
-&lt;URI&gt; http://scidb.sf.net/bases/tiny-2.pgn
+&lt;URI&gt; https://chesswizapp.com/bases/tiny-2.pgn
 &lt;-- D A T A --&gt;
 </verbatim>
 

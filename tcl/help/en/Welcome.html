@@ -15,17 +15,17 @@
            content="text/css" />
 
   <meta name="author"
-     content="scidb.sourceforge.net" />
+     content="https://chesswizapp.com" />
   <meta name="generator"
-     content="scidb.sourceforge.net" />
+     content="Chesswiz" />
   <meta name="description"
      content="Chesswiz - Help Page" />
 
   <link rel="icon"
-       href="http://scidb.sourceforge.net/favicon.ico"
+       href="https://chesswizapp.com/favicon.ico"
        type="image/x-icon" />
   <link rel="shortcut icon"
-       href="http://scidb.sourceforge.net/favicon.ico" />
+       href="https://chesswizapp.com/favicon.ico" />
   <link rel="stylesheet"
        type="text/css"
       media="screen"
@@ -41,38 +41,18 @@
 </div>
 
 <p>
-This is a preliminary version of Chesswiz for try-out and testing. The first
-full version will be released after a sufficiently long test period. Please
-consider when experimenting with Chesswiz:
+Welcome to Chesswiz 1.0! Here are a few important things to know:
 </p>
 
 <ol>
-<!--
   <li class="space">
-    The support of Scid databases (.si3/.si4) is performed by a quite complex
-    emulation which is not yet sufficiently tested.
-	  <div class='annotation'><img src='../images/annotation.png' style='float:left; margin:0 1em 0 0' alt='annotation' />
-    Therefore please do not edit your original Scid databases with this program.
-    </div>
-    Per default the Scid databases will be opened in read-only mode, which is
-    of course uncritical.
-  </li>
--->
-
-  <li class="space">
-    The database format (.sci) is Scidb's, designed by Gregor Cramer; its
-    versions are his to define, and no specification of it was published.
-    What Chesswiz adds on top of Scidb is called the Chesswiz extensions.
+    The native database format (.sci) was designed by Gregor Cramer for Scidb;
+    Chesswiz adds modern features, AI capabilities, and expanded multimedia support.
   </li>
 
   <li class="space">
-    The support of the ChessBase format (.cbh/.cbg) is not yet finished, but
-    games are read with annotations, and Chess 960 archives are decoded
-    move-exact (verified against real magazine fixtures).
-  </li>
-
-  <li class="space">
-    From time to time a newer test version will be released.
+    Support for proprietary external formats (<abbr>.cbh</abbr>/<abbr>.cbg</abbr>) includes
+    reading games with annotations, media playback, and move-exact Chess 960 decoding.
   </li>
 </ol>
 
@@ -86,8 +66,8 @@ Have a lot of fun with Chesswiz, which is built on Scidb, whose development bega
   <li class="space">An assistant you talk to in plain language: ask why a game was lost, what a player usually plays, or how to prepare for an opponent, and it answers on the board (<b>Main Menu &gt; Extras &gt; AI: Assistant</b>). The AI features use a cloud model you choose under <b>AI: Choose Model</b>.</li>
   <li class="space">Analysis with strong engines: Stockfish is included and ready to use, and further UCI and WinBoard engines can be added (<b>Main Menu &gt; Setup &gt; Engines</b>).</li>
   <li class="space">A 3D board alongside the 2D board (<b>Main Menu &gt; Extras &gt; Open 3D Board</b>).</li>
-  <li class="space">The keyboard shortcuts you may already know: switch to the ChessBase-style scheme under <b>Main Menu &gt; Setup &gt; Keyboard Preferences</b>.</li>
-  <li class="space">Export to PGN, Scidb, Scid, PDF, HTML and LaTeX, and tournament tables from the game list.</li>
+  <li class="space">The keyboard shortcuts you may already know: switch to the traditional shortcut scheme under <b>Main Menu &gt; Setup &gt; Keyboard Preferences</b>.</li>
+  <li class="space">Export to PGN, native (.sci), legacy formats, PDF, HTML and LaTeX, and tournament tables from the game list.</li>
   <li class="space">The same program on Windows, macOS and Linux.</li>
 </ul>
 
@@ -96,14 +76,14 @@ Have a lot of fun with Chesswiz, which is built on Scidb, whose development bega
 <ul style="padding: 5px;">
   <li class="space">Managing and browsing Chesswiz databases (<abbr>.sci</abbr>) with a database switcher, sortable game lists, player/event/site views, and game browser/editor workflows.</li>
   <li class="space">Running database-first workflows on <abbr>.sci</abbr> databases, including filtered views, working sets, database maintenance, duplicate detection, and opening statistics.</li>
-  <li class="space">Searching: <b>Main Menu &gt; Search</b> (or the magnifier on the database toolbar) offers a plain-language search (for example "Carlsen's losses as Black since 2015"), advanced search by header and position, searches by material and by rating, duplicate detection, and CQL 6.2 for specialised pattern queries.</li>
+  <li class="space">Searching: <b>Main Menu &gt; Search</b> (or the magnifier on the database toolbar) offers a plain-language search (for example "Carlsen's losses as Black since 2015"), advanced search by header and position, searches by material and by rating, duplicate detection, and advanced pattern search for specialised queries.</li>
   <li class="space">Opening preparation from the players list: player prep reports summarize recent games, white/black opening tendencies, and repertoire coverage.</li>
   <li class="space">Opponent preparation with an opponent dossier: recent games, opening tendencies, filtered prep pivots, switcher views, and working-set creation are available directly from the dossier.</li>
   <li class="space">Importing and exporting practical formats such as PGN, FEN, and EPD, with <abbr>.sci</abbr> conversion recommended for repeated analysis and maintenance work.</li>
-  <li class="space">Reading ChessBase databases (<abbr>.cbh</abbr>/<abbr>.cbg</abbr>) with annotations, Chess 960 archives, and media manifests (<abbr>.cbm</abbr>): the media panel lists each magazine section's pictures, audio, and videos.</li>
+  <li class="space">Reading external multimedia databases (<abbr>.cbh</abbr>/<abbr>.cbg</abbr>) with annotations, Chess 960 archives, and media manifests (<abbr>.cbm</abbr>): the media panel lists each magazine section's pictures, audio, and videos.</li>
   <li class="space">The media panel plays media embedded in the application (images via the built-in viewer, audio/video via an in-process player), with the board following the video and the video following the board (Chess Media System semantics).</li>
-  <li class="space">Interactive ChessBase lessons (<abbr>.cms</abbr> indexes plus position-keyed clips) are supported: entering a position on the board jumps to the matching video clip.</li>
-  <li class="space">ChessBase magazine reports (guiding texts) are rendered in a built-in HTML viewer - navigation, diagrams, and video stills included - with game links and media links clickable.</li>
+  <li class="space">Interactive multimedia lessons (<abbr>.cms</abbr> indexes plus position-keyed clips) are supported: entering a position on the board jumps to the matching video clip.</li>
+  <li class="space">Multimedia magazine reports (guiding texts) are rendered in a built-in HTML viewer - navigation, diagrams, and video stills included - with game links and media links clickable.</li>
   <li class="space">Native HTML support: open HTML documents directly (safely sanitized before display), and publish games as standalone HTML files with tag tables, variations, comments, and inline SVG diagrams - viewable in any browser.</li>
 </ul>
 
@@ -112,7 +92,7 @@ Have a lot of fun with Chesswiz, which is built on Scidb, whose development bega
 <h3>Watch a magazine section with its videos</h3>
 
 <ol>
-  <li class="space">Open a ChessBase magazine database (for example a CBM section with its <abbr>.cbm</abbr> manifest and <abbr>.html</abbr> media folder).</li>
+  <li class="space">Open an external multimedia database (for example a section with its <abbr>.cbm</abbr> manifest and <abbr>.html</abbr> media folder).</li>
   <li class="space">Load the section's report game (the guiding-text entry) - the media panel fills with that section's media.</li>
   <li class="space">Double-click a video to play it with the board following the narration; step the board to jump inside the lesson.</li>
   <li class="space">Open the section report with "View report" to browse the magazine page; clicking a game link loads that game.</li>

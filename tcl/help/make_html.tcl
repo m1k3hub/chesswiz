@@ -57,17 +57,17 @@ set HtmlHead {<head>
            content="text/css" />
 
   <meta name="author"
-     content="scidb.sourceforge.net" />
+     content="https://chesswizapp.com" />
   <meta name="generator"
-     content="scidb.sourceforge.net" />
+     content="Chesswiz" />
   <meta name="description"
      content="%CONTENT%" />
 
   <link rel="icon"
-       href="http://scidb.sourceforge.net/favicon.ico"
+       href="https://chesswizapp.com/favicon.ico"
        type="image/x-icon" />
   <link rel="shortcut icon"
-       href="http://scidb.sourceforge.net/favicon.ico" />
+       href="https://chesswizapp.com/favicon.ico" />
   <link rel="stylesheet"
        type="text/css"
       media="screen"
@@ -597,19 +597,26 @@ proc readContents {chan file} {
 			set insideVerbatim 1
 		}
 
-		while {[regexp -indices {<furtherinfo href=.*/>} $line location]} {
-			lassign $location i k
-			set file [string trim [string range $line [expr {$i + 18}] [expr {$k - 2}]]]
-			set file [string trim [string range $file 1 end-1]]
-#			set content "<div style='text-align: center'>\n"
-#			append content "  <div embed='$file'>\n"
-#			append content "  </div>\n"
-#			append content "</div>"
-			set content "<p><a href='$file'>$::tips::mc::FurtherInformation...</a></p>\n"
-			set newline [string range $line 0 [expr {$i - 1}]]
-			append newline $content
-			append newline [string range $line [expr {$k + 1}] end]
-			set line $newline
+		if {![string match "<!--*" [string trim $line]] && ![string match "#*" [string trim $line]]} {
+			while {[regexp -indices {<furtherinfo href=.*/>} $line location]} {
+				lassign $location i k
+				set file [string trim [string range $line [expr {$i + 18}] [expr {$k - 2}]]]
+				set file [string trim [string range $file 1 end-1]]
+				if {[string match "*#*" $file]} {
+					lassign [split $file #] targetBase targetFrag
+					if {[file extension $targetBase] ne ".html"} {
+						append targetBase ".html"
+					}
+					set file "$targetBase#$targetFrag"
+				} elseif {[file extension $file] ne ".html"} {
+					append file ".html"
+				}
+				set content "<p><a href='$file'>$::tips::mc::FurtherInformation...</a></p>\n"
+				set newline [string range $line 0 [expr {$i - 1}]]
+				append newline $content
+				append newline [string range $line [expr {$k + 1}] end]
+				set line $newline
+			}
 		}
 
 		while {[regexp -indices {<url>.*</url>} $line location]} {

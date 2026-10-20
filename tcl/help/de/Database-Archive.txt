@@ -250,11 +250,11 @@ iveArch
 &lt;Format&gt; pgn, cif
 &lt;-- H E A D --&gt;
 &lt;FileName&gt; tiny.pgn
-&lt;URI&gt; http://scidb.sf.net/bases/tiny-1.pgn
+&lt;URI&gt; https://chesswizapp.com/bases/tiny-1.pgn
 &lt;-- N O D A T A --&gt;
 &lt;-- H E A D --&gt;
 &lt;FileName&gt; tiny-2.cif
-&lt;URI&gt; http://scidb.sf.net/bases/tiny-2.cif
+&lt;URI&gt; https://chesswizapp.com/bases/tiny-2.cif
 &lt;-- N O D A T A --&gt;
 </verbatim>
 

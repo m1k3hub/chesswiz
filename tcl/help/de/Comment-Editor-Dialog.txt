@@ -667,15 +667,15 @@ Wiki-Syntax entlehnt worden:
 
 <ol>
   <li style="text-align: left">
-    <code>[[http://scidb.sourceforge.net]]</code> verlinkt die Url
-    <a href="http://scidb.sourceforge.net">http://scidb.sourceforge.net</a>
-    zur Web-Seite <code>http://scidb.sourceforge.net</code>.
+    <code>[[https://chesswizapp.com]]</code> verlinkt die Url
+    <a href="https://chesswizapp.com">https://chesswizapp.com</a>
+    zur Web-Seite <code>https://chesswizapp.com</code>.
   </li>
   <li style="text-align: left">
-    <code>[[http://scidb.sourceforge.net][Chesswiz]]</code> verlinkt das Wort
-    <a href="http://scidb.sourceforge.net">Chesswiz</a> zur Web-Seite
-    <code>http://scidb.sourceforge.net</code>. Alternativ kann auch die
-    Syntax <code>[[http://scidb.sourceforge.net|Chesswiz]]</code> verwendet werden.
+    <code>[[https://chesswizapp.com][Chesswiz]]</code> verlinkt das Wort
+    <a href="https://chesswizapp.com">Chesswiz</a> zur Web-Seite
+    <code>https://chesswizapp.com</code>. Alternativ kann auch die
+    Syntax <code>[[https://chesswizapp.com|Chesswiz]]</code> verwendet werden.
   </li>
   <li style="text-align: left">
     <code>[[fred@feuerstein.net][Fred Feuerstein]]</code> verweist auf die Email-Adresse

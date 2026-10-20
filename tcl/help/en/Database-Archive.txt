@@ -180,11 +180,11 @@ Attributes  =
   "&lt;Format&gt;" { Space } Formats
   [ "&lt;Count&gt;" { Space } Number ] ;
 Type        = 'single' | 'multi' ;
-Format      = 'sci'  |                   # Scidb Database
-              'si3'  | 'si4'  |          # Scid Database
-              'cbh'  | 'cbf'  |          # ChessBase Database
-              'cdp'  |                   # Chess Assistant Database
-              'dsn'  |                   # Rybka-Aquarium Database
+Format      = 'sci'  |                   # Chesswiz Database (.sci)
+              'si3'  | 'si4'  |          # Legacy Format Database (.si3, .si4)
+              'cbh'  | 'cbf'  |          # Proprietary External Database (.cbh, .cbf)
+              'cdp'  |                   # External Format Database (.cdp)
+              'dsn'  |                   # External Format Database (.dsn)
               'cif'  | 'ccif' |          # C/CIF Archiv
               'pgn'  |                   # PGN Archiv
               'bpgn' ;                   # BPGN Archiv
@@ -265,11 +265,11 @@ iveArch
 &lt;Type&gt; multi
 &lt;-- H E A D --&gt;
 &lt;FileName&gt; tiny.pgn
-&lt;URI&gt; http://scidb.sf.net/bases/tiny-1.pgn
+&lt;URI&gt; https://chesswizapp.com/bases/tiny-1.pgn
 &lt;-- N O D A T A --&gt;
 &lt;-- H E A D --&gt;
 &lt;FileName&gt; tiny-2.cif
-&lt;URI&gt; http://scidb.sf.net/bases/tiny-2.cif
+&lt;URI&gt; https://chesswizapp.com/bases/tiny-2.cif
 &lt;-- N O D A T A --&gt;
 </verbatim>
 
