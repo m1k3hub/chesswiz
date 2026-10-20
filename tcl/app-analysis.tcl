@@ -34,6 +34,7 @@ namespace eval mc {
 set Control						"Control"
 set Information				"Information"
 set SetupEngine				"Setup engine"
+set StartEngine				"Start engine"
 set Pause						"Pause"
 set Resume						"Resume"
 set LockEngine					"Lock engine to current position"
@@ -458,7 +459,7 @@ proc build {parent number patternNumber} {
 	::toolbar::add $tbControl button \
 		-image $::icon::toolbarEngine \
 		-command [namespace code [list StartMotor $tree $number]] \
-		-tooltipvar [::mc::var [namespace current]::mc::SetupEngine "..."] \
+		-tooltipvar [namespace current]::mc::StartEngine \
 		;
 	# The square (stop) button stops the search, it does not power the engine
 	# down: "stop" is sent and the engine answers with its last lines and

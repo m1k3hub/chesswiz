@@ -1280,6 +1280,7 @@
 ::application::analysis::mc::Control						"Kontroll"
 ::application::analysis::mc::Information					"Information" ;# NEW
 ::application::analysis::mc::SetupEngine					"Setup engine" ;# NEW
+::application::analysis::mc::StartEngine					"Starta motor"
 ::application::analysis::mc::Pause							"Pause" ;# NEW
 ::application::analysis::mc::Resume							"Återuppta"
 ::application::analysis::mc::LockEngine					"Lås motor på aktuell position"
