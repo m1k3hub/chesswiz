@@ -475,6 +475,17 @@ proc see {path position} {
 proc popupMenu {menu base variant info {playerCard {}} {playerIndex {}}} {
 	set parent [winfo toplevel $menu]
 
+	# C5: the one player context menu (players table, game list, game bar,
+	# browser, crosstable and player card all call this builder).
+	if {[llength [info commands ::context::Build]]} {
+		set name [lindex $info 0]
+		if {$name eq ""} { set name $playerIndex }
+		set object [dict create kind player name $name base $base \
+			parent $parent playerIndex $playerIndex playerCard $playerCard info $info]
+		if {[::context::Build C5 $menu $object]} { return }
+		return
+	}
+
 	if {[llength $playerCard]} {
 		$menu add command \
 			-compound left \

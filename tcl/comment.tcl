@@ -1576,6 +1576,22 @@ proc PopupMenu {parent} {
 	catch { wm attributes $m -type popup_menu }
 	SetUndoPoint $w
 
+	# C11: the one comment context menu.
+	if {[llength [info commands ::context::Build]]} {
+		set base ""
+		set index ""
+		set ply ""
+		catch { lassign [::scidb::game::link? [::scidb::game::current]] base variant index }
+		catch { set ply [::scidb::game::ply] }
+		set object [dict create widget $w base $base index $index ply $ply]
+		if {[::context::Build C11 $m $object]} {
+			tk_popup $m {*}[winfo pointerxy $w]
+			return
+		}
+		destroy $m
+		return
+	}
+
 	if {![info exists Vars(content:xx)]} {
 		set Vars(content:xx) ""
 	}

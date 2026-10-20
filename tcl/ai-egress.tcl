@@ -219,4 +219,39 @@ proc ::ai::egress::Hold {} {
 }
 
 
+# ----------------------------------------------------------------------
+# Context objects ("What can I do here?"). A structured record is turned
+# into the prompt shape the classifier already knows, then the ordinary
+# decide path runs. Every object kind is screened -- a stubbed
+# ::ai::decide answers for all of them, and a 'private' answer withholds
+# the whole record (the caller sends nothing).
+# ----------------------------------------------------------------------
+proc ::ai::egress::ContextText {record} {
+	set fields {}
+	foreach key [dict keys $record] {
+		lappend fields "$key: [dict get $record $key]"
+	}
+	return "Context object: [join $fields {; }]"
+}
+
+
+proc ::ai::egress::ContextDecide {record script} {
+	set prompt [ContextText $record]
+
+	# A classifier, when configured, answers for every object kind. The
+	# deterministic rule is only the fallback below.
+	if {[llength [info commands ::ai::decide]]} {
+		::ai::decide egress $prompt [Question] \
+			[namespace code [list OnClassified $script]]
+		return
+	}
+
+	set verdict [rule $prompt]
+	if {$verdict eq ""} { set verdict public }
+	set label [expr {$verdict eq "private" ? [Hold] : [Send]}]
+	after 0 [list {*}$script [list ok 1 label $label confidence 1.0 source rules]]
+	return
+}
+
+
 # vi:set ts=3 sw=3:

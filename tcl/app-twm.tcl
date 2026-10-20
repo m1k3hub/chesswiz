@@ -1951,6 +1951,23 @@ proc Menu {twm w x y} {
 	if {[winfo exists $menu]} { return }
 	menu $menu
 	catch { wm attributes $menu -type popup_menu }
+
+	# C9: the one pane-header menu. The pane uid is the same uid the
+	# layout file stores, so saved layouts are unaffected.
+	if {[llength [info commands ::context::Post]]} {
+		set uid ""
+		catch { set uid [$twm get $w id] }
+		if {$uid eq ""} { catch { set uid [$twm get! $w id ""] } }
+		if {$uid eq ""} {
+			set name [winfo name $w]
+			regexp {__[^_]+__(.+?)__} $name -> uid
+		}
+		if {$uid ne "" && [::context::Post C9 $menu [dict create paneUid $uid twm $twm frame $w] $x $y]} {
+			bind $menu <<MenuUnpost>> +[list after idle [list catch [list destroy $menu]]]
+			return
+		}
+	}
+
 	makeLayoutMenu $twm $menu $w
 	bind $menu <<MenuUnpost>> +[list after idle [list catch [list destroy $menu]]]
 	tk_popup $menu $x $y

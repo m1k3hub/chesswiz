@@ -2416,6 +2416,19 @@ proc PopupMenu {parent position} {
 	menu $menu
 	catch { wm attributes $menu -type popup_menu }
 
+	# C2: the one move context menu. No game -> nothing posted (R1/R8).
+	if {[llength [info commands ::context::Build]]} {
+		lassign [::scidb::game::link? $position] base variant index
+		set object [dict create parent $parent base $base variant $variant \
+			index $index ply [::scidb::game::ply] san "" position $position]
+		if {[::context::Build C2 $menu $object]} {
+			tk_popup $menu {*}[winfo pointerxy $parent]
+			return
+		}
+		destroy $menu
+		return
+	}
+
 	if {[::game::trialMode?]} {
 		$menu add command \
 			-label " $mc::StopTrialMode" \

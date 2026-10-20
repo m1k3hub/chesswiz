@@ -223,6 +223,8 @@ SOURCES = \
 	app-ai.tcl \
 	app-ai-models.tcl \
 	actions.tcl \
+	game-clipboard.tcl \
+	context.tcl \
 	app-assistant.tcl \
 	app-assistant-route.tcl \
 	app-assistant-args.tcl \

@@ -651,6 +651,19 @@ proc ::mediainset::PopulateMenu {menu} {
 	$menu delete 0 end
 	set entries {}
 	catch { set entries [Entries] }
+
+	# C7: the one media-entry context menu.
+	if {[llength [info commands ::context::Build]] && [llength $entries]} {
+		set tree $::application::media::Priv(tree)
+		set row [$tree selection]
+		if {$row ne ""} {
+			lassign [$tree item $row -values] type title path index
+			set base ""
+			catch { set base [::scidb::db::get name] }
+			set object [dict create base $base mediaId $index path $path title $title type $type]
+			if {[::context::Build C7 $menu $object]} { return }
+		}
+	}
 	foreach entry $entries {
 		lassign $entry row type title path index
 		$menu add command -label "$title ($type)" -command [list ::mediainset::Choose $row]

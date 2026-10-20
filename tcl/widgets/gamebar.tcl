@@ -2014,6 +2014,16 @@ proc PopupMenu {gamebar {id -1}} {
 	set menu $gamebar.menu
 	catch { destroy $menu }
 	menu $menu -tearoff 0
+	# C12: the one game-tab context menu.
+	if {[llength [info commands ::context::Build]]} {
+		set object [dict create parent $gamebar id $id gameSlot $id]
+		if {[::context::Build C12 $menu $object]} {
+			tk_popup $menu {*}[winfo pointerxy $gamebar]
+			return
+		}
+		destroy $menu
+		return
+	}
 	BuildMenu $gamebar $id {} $menu
 }
 

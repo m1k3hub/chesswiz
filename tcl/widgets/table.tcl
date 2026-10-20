@@ -1862,6 +1862,17 @@ proc PopupMenu {table x y X Y} {
 	menu $menu -tearoff 0 -disabledforeground [lookupColor $options(menu:headerforeground)]
 	::tooltip::hide
 
+	# C10: the one table-column context menu.
+	if {[llength [info commands ::context::Build]]} {
+		set object [dict create table $table column $header sortable [expr {[info exists Vars(sortable)] ? $Vars(sortable) : 1}]]
+		if {[::context::Build C10 $menu $object]} {
+			tk_popup $menu $X $Y
+			return
+		}
+		destroy $menu
+		return
+	}
+
 	array unset Visible_
 	set tail 0
 	set optimize 0

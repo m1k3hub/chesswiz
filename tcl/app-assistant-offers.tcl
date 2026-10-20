@@ -285,3 +285,19 @@ if {[llength [info commands ::scidb::db::subscribe]]} {
 	::scidb::db::subscribe gameSwitch ::application::assistant::offers::GameSwitched
 	::scidb::db::subscribe databaseSwitch ::application::assistant::offers::DatabaseSwitched
 }
+
+
+# ----------------------------------------------------------------------
+# The "What can I do here?" context object (decision 004). The record is
+# already past the egress gate when it arrives; open the pane with the
+# object in the entry, so the user can finish the request.
+# ----------------------------------------------------------------------
+proc ::application::assistant::askContext {record} {
+	set fields {}
+	foreach key [dict keys $record] {
+		lappend fields "$key=[dict get $record $key]"
+	}
+	set text "What can I do here? ([join $fields {; }])"
+	askAbout $text
+	return $text
+}

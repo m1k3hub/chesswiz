@@ -1435,6 +1435,11 @@ proc PopupMenu {parent x y {base ""}} {
 	catch { destroy $menu }
 	menu $menu -tearoff 0
 	catch { wm attributes $menu -type popup_menu }
+	# C4: the one database context menu.
+	if {[llength [info commands ::context::Post]]
+	 && [::context::Post C4 $menu [dict create parent $parent base $base]]} {
+		return
+	}
 	set top [winfo toplevel $parent]
 	set readonly 0
 	set isSciFormat 1

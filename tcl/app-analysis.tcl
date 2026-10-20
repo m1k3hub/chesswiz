@@ -1663,6 +1663,29 @@ proc PopupMenu {tree number args} {
 	menu $menu -tearoff no
 	catch { wm attributes $menu -type popup_menu }
 
+	# C6: the one engine-line context menu.
+	if {[llength [info commands ::context::Build]]} {
+		set engineID -1
+		catch { set engineID [::engine::id $Vars(number)] }
+		set lineId ""
+		set pv ""
+		if {[llength $args]} {
+			set ident [$tree identify {*}$args]
+			if {[lindex $ident 0] eq "item"} {
+				set lineId [lindex $ident 1]
+				catch { set pv [$tree item [lindex $ident 1] -text] }
+			}
+		}
+		set object [dict create tree $tree number $Vars(number) engine $engineID \
+			lineId $lineId pv $pv]
+		if {[::context::Build C6 $menu $object]} {
+			tk_popup $menu {*}[winfo pointerxy $tree]
+			return
+		}
+		destroy $menu
+		return
+	}
+
 	if {[llength $args] && [::engine::id $Vars(number)] >= 0} {
 		set id [$tree identify {*}$args]
 

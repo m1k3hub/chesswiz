@@ -1123,8 +1123,20 @@ proc ::application::assistant::RunTool {name cargs} {
 	variable Priv
 	variable mc
 
-	if {![dict exists $Actions $name] || ![dict exists $::action::Registry $name]} {
+	if {![dict exists $::action::Registry $name]} {
 		return [list error 0 "error: unknown tool '$name'"]
+	}
+	# Post-baseline tools live only in the registry (game.copy, game.paste).
+	# They go through the same shared validator and gates in ::action::run.
+	if {![dict exists $Actions $name]} {
+		set reply [::action::run $name $cargs]
+		if {[string match "error:*" $reply]} {
+			return [list error 0 $reply]
+		}
+		if {$reply eq "declined"} {
+			return [list declined 1 $mc::Denied]
+		}
+		return [list ok 0 $reply]
 	}
 	lassign [dict get $Actions $name] _ debug what _ _ handler
 	set record [::action::get $name]
