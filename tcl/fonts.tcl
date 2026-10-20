@@ -30,12 +30,12 @@
 namespace eval font {
 namespace eval mc {
 
-set ChessBaseFontsInstalled				"ChessBase fonts successfully installed."
-set ChessBaseFontsInstallationFailed	"Installation of ChessBase fonts failed."
-set NoChessBaseFontFound					"No ChessBase font found in folder '%s'."
-set ChessBaseFontsAlreadyInstalled		"ChessBase fonts already installed. Install anyway?"
+set ChessBaseFontsInstalled				"Figurine chess fonts successfully installed."
+set ChessBaseFontsInstallationFailed	"Installation of figurine chess fonts failed."
+set NoChessBaseFontFound					"No figurine chess font found in folder '%s'."
+set ChessBaseFontsAlreadyInstalled		"Figurine chess fonts already installed. Install anyway?"
 set ChooseMountPoint							"Mount point of Windows installation partition"
-set CopyingChessBaseFonts					"Copying ChessBase fonts"
+set CopyingChessBaseFonts					"Copying figurine chess fonts"
 set CopyFile									"Copy file %s"
 set UpdateFontCache							"Updating font cache"
 set CannotCreateDirectory				"Cannot create directory '%s'."
