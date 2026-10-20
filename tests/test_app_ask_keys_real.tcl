@@ -13,6 +13,8 @@ package require tcltest 2.5
 namespace eval ::scidb::test::askkeys {
 	variable Ran {}
 	variable ids {}
+	variable Added {}
+	variable CommentResult {}
 }
 
 proc ::scidb::test::askkeys::ran {tag args} {
@@ -42,9 +44,14 @@ proc ::scidb::test::askkeys::cleanup {} {
 	unset -nocomplain ::application::ask::Priv(filtered)
 	catch { ::application::ask::PlaceholderState }
 	foreach w {.application.__asktest_comment__ .application.__asktest_engine__
-		.application.__asktest_pgn_text} {
+		.application.__asktest_pgn_text .application.__comment__} {
 		catch { destroy $w }
 	}
+	foreach id $::scidb::test::askkeys::Added {
+		catch { ::gamebar::remove $::application::pgn::Vars(gamebar) $id }
+	}
+	set ::scidb::test::askkeys::Added {}
+	update
 	return
 }
 
@@ -130,6 +137,88 @@ tcltest::test ask-real-enter-runs-selected-row {real Down then Enter runs the se
 	set result
 } -result {1 1}
 
+proc ::scidb::test::askkeys::FocusX {w} {
+	focus -force $w
+	update
+	set top [winfo toplevel $w]
+	set id [winfo id $top]
+	catch { exec xdotool windowfocus $id }
+	update
+	focus -force $w
+	update
+	# The KeyRelease/selection idles of the previous shortcut may run after
+	# the first update; settle them and put the focus back.
+	after 50
+	update
+	focus -force $w
+	update
+	return [focus]
+}
+
+proc ::scidb::test::askkeys::NewGame {} {
+	::menu::gameNew .application
+	update
+	set gb $::application::pgn::Vars(gamebar)
+	set id [::gamebar::selected $gb]
+	lappend ::scidb::test::askkeys::Added $id
+	set slot [::scidb::game::current]
+	::scidb::game::import $slot "1. e4 e5 2. Nf3 Nc6 *" {} {} -encoding utf-8 -variation 0
+	::scidb::game::go 2
+	update
+	return $id
+}
+
+proc ::scidb::test::askkeys::FindClass {w class} {
+	foreach child [winfo children $w] {
+		if {[winfo class $child] eq $class} { return $child }
+		set found [::scidb::test::askkeys::FindClass $child $class]
+		if {$found ne ""} { return $found }
+	}
+	return ""
+}
+
+# Runs inside ::comment::open's tkwait: real dialog, real X keys.
+proc ::scidb::test::askkeys::CommentProbe {} {
+	variable CommentResult
+	set result {}
+	catch {
+		set dlg .application.__comment__
+		set t [::scidb::test::askkeys::FindClass $dlg Comment]
+		if {$t eq ""} { set result {nodialog}; error nodialog }
+		$t configure -state normal
+		$t delete 1.0 end
+		$t insert 1.0 "hello world"
+		$t mark set insert 1.5
+		set ::application::ask::Query "prior query"
+		set f0 [::scidb::test::askkeys::FocusX $t]
+		::scidb::test::askkeys::Key {ctrl+shift+k}
+		set afterShift [focus]
+		set textShift [$t get 1.0 end-1c]
+		::scidb::test::askkeys::FocusX $t
+		$t mark set insert 1.5
+		::scidb::test::askkeys::Key {ctrl+k}
+		set afterK [focus]
+		set textK [$t get 1.0 end-1c]
+		::scidb::test::askkeys::FocusX $t
+		$t delete 1.0 end
+		$t insert 1.0 "king"
+		$t mark set insert end
+		::scidb::test::askkeys::Key {ctrl+shift+u}
+		set textKing [$t get 1.0 end-1c]
+		catch { destroy .application.__asktest_figmenu }
+		menu .application.__asktest_figmenu -tearoff 0
+		::comment::MakeSymbolMenu $t .application.__asktest_figmenu
+		set accel ""
+		catch { set accel [.application.__asktest_figmenu.figurine entrycget 0 -accelerator] }
+		set prec [::application::keyEditor::Conflict game-new Control-Shift-K]
+		set result [list [winfo class $t] 			[expr {[lindex $f0 0] eq $t}] 			[expr {$afterShift eq [::application::ask::Entry]}] $textShift 			[expr {$afterK eq $t}] $textK $textKing $accel 			[expr {$prec eq $::application::keyEditor::mc::KeyAskPrecedence}]]
+	} err
+	catch { destroy .application.__asktest_figmenu }
+	catch { destroy .application.__comment__ }
+	set CommentResult $result
+	return
+}
+
 # ----------------------------------------------------------------------
 # Ctrl+Shift+K from every kind of application toplevel; Ctrl+K keeps
 # kill-line in the multi-line editors.
@@ -193,5 +282,19 @@ tcltest::test ask-real-ctrl-shift-k-pgn-text {Ctrl+Shift+K focuses Ask from the 
 	::scidb::test::askkeys::cleanup
 	set result
 } -result {Text .application.__asktest_pgn_text .application.nb.ask.entry .application.__asktest_pgn_text {pgn }}
+
+
+# The real dialog: ::application::pgn::editComment opens
+# .application.__comment__ itself, with the editor's own figurine bindings.
+tcltest::test ask-real-comment-dialog-ask-wins {real comment dialog: Ctrl+Shift+K focuses Ask, Ctrl+K kill-lines, Ctrl+Shift+U inserts the king} -body {
+	::scidb::test::askkeys::cleanup
+	::scidb::test::askkeys::NewGame
+	set ::scidb::test::askkeys::CommentResult {}
+	after 700 ::scidb::test::askkeys::CommentProbe
+	catch { ::application::pgn::editComment before }
+	set result $::scidb::test::askkeys::CommentResult
+	::scidb::test::askkeys::cleanup
+	set result
+} -result {Comment 1 1 {hello world} 1 hello king♔ Ctrl-Shift-U 1}
 
 ::tcltest::cleanupTests

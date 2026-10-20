@@ -64,7 +64,7 @@ set KeyResetRow			"Reset to &scheme"
 set KeyResetAll			"Reset &all to scheme"
 set KeyConflict			"%s is already used by %s"
 set KeyConflictOther	"%s is already used by another binding"
-set KeyAskPrecedence	"Ctrl+K focuses the Ask field (Ctrl+Shift+K always does); inside the comment editor, the PGN text and the engine console Ctrl+K keeps kill-line"
+set KeyAskPrecedence	"Ctrl+K focuses the Ask field (Ctrl+Shift+K always does); inside the comment editor, the PGN text and the engine console Ctrl+K keeps kill-line, and Ctrl+Shift+U inserts the king"
 set KeyCaptured			"New key: %s"
 set KeyNeedsSelection	"Select an action in the table first."
 set KeySameScheme		"This key is already assigned in the active scheme."
@@ -389,7 +389,9 @@ proc ::application::keyEditor::Conflict {action spec} {
 	# D-2 / D-7: Ctrl+K belongs to the Ask field, with the kill-line
 	# exception inside the multi-line text editors. Report the precedence
 	# instead of silently replacing it.
-	if {[SameKey $spec Control-k]} { return $mc::KeyAskPrecedence }
+	if {[SameKey $spec Control-k] || [SameKey $spec Control-Shift-K]} {
+		return $mc::KeyAskPrecedence
+	}
 
 	# other user overrides
 	set found [OverrideConflict $action $spec]

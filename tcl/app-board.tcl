@@ -1106,6 +1106,9 @@ proc GotFocus {w} {
 proc LostFocus {} {
 	variable Vars
 
+	if {![info exists Vars(widget:frame)] || ![winfo exists $Vars(widget:frame)]} {
+		return
+	}
 	set Vars(select-var-is-pending) 0
 	::variation::hide 0
 	::move::cancelVariation
@@ -1610,6 +1613,7 @@ proc RebuildBoard {canv width height {force false}} {
 	variable Vars
 	variable board
 
+	if {![winfo exists $canv]} { return }
 	set dimensions ${width}x${height}
 	if {!$force && $dimensions eq $Vars(dimensions)} { return }
 	set Vars(dimensions) $dimensions
@@ -2296,7 +2300,7 @@ proc UpdateSideToMove {canv} {
 	variable ::board::layout
 	variable Vars
 
-	if {$layout(side-to-move)} {
+	if {$layout(side-to-move) && [::scidb::game::query open?]} {
 		if {[::scidb::game::ply] % 2} { set color b } else { set color w }
 		if {$color eq "w"} { set other b} else { set other w }
 		$canv itemconfigure stm$color -state normal

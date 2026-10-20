@@ -1172,6 +1172,38 @@ proc ::context::WhyDisabled {id object} {
 }
 
 # ----------------------------------------------------------------------
+# The action ids the menu for <cid> would post for <object>, in row order.
+# Walks the same declared rows and visibility predicates as BuildRows, so
+# the Ask list can scope C9 rows to the current pane's own menu. Cascade
+# ids are included (a posted cascade is a row), separators, headers and
+# the assistant row are not.
+# ----------------------------------------------------------------------
+proc ::context::MenuIds {cid object} {
+	set ids {}
+	foreach row [Rows $cid $object] {
+		lappend ids {*}[MenuRowIds $cid $row $object]
+	}
+	return $ids
+}
+
+proc ::context::MenuRowIds {cid row object} {
+	if {![llength $row] || $row eq "-"} { return {} }
+	set kind [lindex $row 0]
+	if {$kind eq "ask" || $kind eq "header"} { return {} }
+	if {$kind eq "cascade"} {
+		set id [lindex $row 1]
+		if {![Visible $id $object]} { return {} }
+		set ids [list $id]
+		foreach sub [lindex $row 2] {
+			lappend ids {*}[MenuRowIds $cid $sub $object]
+		}
+		return $ids
+	}
+	if {![Visible $row $object]} { return {} }
+	return [list $row]
+}
+
+# ----------------------------------------------------------------------
 # Build one context menu. <menu> must be a fresh Tk menu. Returns 1 when
 # at least one row was added, 0 when the menu must not be posted (R8).
 # ----------------------------------------------------------------------
@@ -1723,6 +1755,16 @@ proc ::context::Invoke {id {object {}}} {
 
 proc ::context::Command {id object} {
 	switch -- $id {
+		c9.pane.board { catch { ::menu::TogglePaneId board } }
+		c9.pane.notation { catch { ::menu::TogglePaneId editor } }
+		c9.pane.games { catch { ::menu::TogglePaneId games } }
+		c9.pane.people { catch { ::menu::TogglePaneId players } }
+		c9.pane.tree { catch { ::menu::TogglePaneId tree } }
+		c9.pane.analysis { catch { ::menu::TogglePaneId analysis } }
+		c9.pane.media { catch { ::menu::TogglePaneId media } }
+		c9.pane.report { catch { ::menu::TogglePaneId report } }
+		c9.pane.assistant { catch { ::menu::TogglePaneId assistant } }
+		c9.pane.explorer { catch { ::menu::TogglePaneId explorer } }
 		c1.set_start_board {
 			set w [expr {[dict exists $object widget] ? [dict get $object widget] : ""}]
 			if {$w ne "" && [info commands ::application::board::SetStartBoard] ne ""} {

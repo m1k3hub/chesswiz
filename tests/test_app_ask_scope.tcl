@@ -153,6 +153,126 @@ proc ::scidb::test::askscope::Diff {a b} {
 	return [list $missing $extra]
 }
 
+proc ::scidb::test::askscope::PaneUid {kind} {
+	set twm ""
+	catch { set twm [::application::twm board] }
+	if {$twm eq ""} { return $kind }
+	if {$kind eq "analysis"} {
+		foreach uid [$twm leaves] {
+			if {[string match {analysis:*} $uid]} { return $uid }
+		}
+		return analysis:1
+	}
+	return $kind
+}
+
+proc ::scidb::test::askscope::FocusPane {kind} {
+	set twm ""
+	catch { set twm [::application::twm board] }
+	if {$twm eq ""} { return "" }
+	set uid [PaneUid $kind]
+	catch { ::application::openPane $uid }
+	update
+	set leaf ""
+	catch { set leaf [$twm leaf $uid] }
+	if {$leaf eq "" || ![winfo exists $leaf]} { return "" }
+	focus -force $leaf
+	update
+	return [dict get [::context::CurrentObject C9] paneUid]
+}
+
+# Ids a built menu really posts: command rows by their own ::action::run
+# argument (no label guessing), cascades by their label. The Ask opener is
+# not a menu row for parity purposes.
+proc ::scidb::test::askscope::PostedIds {menu {cid ""}} {
+	set ids {}
+	set last ""
+	catch { set last [$menu index end] }
+	if {$last eq "" || $last eq "none"} { return $ids }
+	for {set i 0} {$i <= $last} {incr i} {
+		set type [$menu type $i]
+		if {$type eq "cascade"} {
+			set label ""
+			catch { set label [$menu entrycget $i -label] }
+			set id [LabelId $label $cid]
+			if {$id ne "" && $id ne "context.ask"} { lappend ids $id }
+			set sub ""
+			catch { set sub [$menu entrycget $i -menu] }
+			if {$sub ne ""} { lappend ids {*}[PostedIds $sub $cid] }
+			continue
+		}
+		if {$type ne "command"} { continue }
+		set cmd ""
+		catch { set cmd [$menu entrycget $i -command] }
+		if {![regexp {::action::run (\S+)} $cmd -> id]} { continue }
+		if {$id ne "context.ask"} { lappend ids $id }
+	}
+	return [lsort -unique $ids]
+}
+
+proc ::scidb::test::askscope::C9MenuIds {} {
+	set object [::context::CurrentObject C9]
+	if {![dict size $object]} { return {} }
+	set menu .askscopec9[incr ::scidb::test::askscope::Menus]
+	catch { destroy $menu }
+	menu $menu -tearoff 0
+	set built [::context::Build C9 $menu $object]
+	set ids {}
+	if {$built} { set ids [PostedIds $menu C9] }
+	destroy $menu
+	return $ids
+}
+
+proc ::scidb::test::askscope::C9Diff {} {
+	set posted [C9MenuIds]
+	set askC9 [AskContextIds C9]
+	set askAll {}
+	foreach row [::action::labels asklist ""] { lappend askAll [lindex $row 0] }
+	set missing {}
+	foreach id $posted {
+		if {$id ni $askAll} { lappend missing $id }
+	}
+	set extra {}
+	foreach id $askC9 {
+		if {$id ni $posted} { lappend extra $id }
+	}
+	return [list $missing $extra]
+}
+
+proc ::scidb::test::askscope::Present {suffix} {
+	set twm ""
+	catch { set twm [::application::twm board] }
+	if {$twm eq ""} { return 0 }
+	foreach uid [$twm leaves] {
+		if {$uid eq $suffix || [string match "$suffix:*" $uid]} { return 1 }
+	}
+	return 0
+}
+
+proc ::scidb::test::askscope::InitialLeaves {} {
+	set twm ""
+	catch { set twm [::application::twm board] }
+	if {$twm eq ""} { return {} }
+	return [$twm leaves]
+}
+
+proc ::scidb::test::askscope::RestoreLayout {initial} {
+	set twm ""
+	catch { set twm [::application::twm board] }
+	if {$twm eq ""} { return }
+	foreach uid [$twm leaves] {
+		if {$uid ni $initial} { catch { ::application::twm::ChangeState $twm $uid } }
+	}
+	foreach uid $initial {
+		if {$uid ni [$twm leaves]} { catch { ::application::openPane $uid } }
+	}
+	update idletasks
+	# Let deferred board rebuilds settle while the panes still exist, so a
+	# later NoGame reset cannot run one against a removed game.
+	after 450
+	update
+}
+
 namespace eval ::scidb::test::askscope {
 	variable Menus 0
 }
@@ -294,5 +414,113 @@ tcltest::test ask-scope-objects-are-shared {ask rows follow ::context::CurrentOb
 } -cleanup {
 	::scidb::test::askscope::Reset
 } -result {0 0}
+
+# ----------------------------------------------------------------------
+# C9 parity: the Ask rows equal the current pane's own header menu, for
+# the board, notation, games and analysis panes in every game state.
+# ----------------------------------------------------------------------
+tcltest::test ask-scope-c9-pane-parity {C9 rows follow the current pane's own menu in every state} -setup {
+	::scidb::test::askscope::Reset
+} -body {
+	set initial [::scidb::test::askscope::InitialLeaves]
+	set totalMissing 0
+	set totalExtra 0
+	set detail {}
+	foreach state {nogame start mid end} {
+		::scidb::test::askscope::Reset
+		switch -- $state {
+			nogame {}
+			start {
+				::scidb::test::askscope::NewGame
+				::scidb::game::go start
+			}
+			mid {
+				::scidb::test::askscope::NewGame
+				::scidb::game::go 2
+			}
+			end {
+				::scidb::test::askscope::NewGame
+				::scidb::game::go end
+			}
+		}
+		update
+		foreach pane {board editor games analysis} {
+			set seen [::scidb::test::askscope::FocusPane $pane]
+			if {$seen eq ""} {
+				lappend detail [list $state $pane missing extra]
+				incr totalMissing
+				continue
+			}
+			lassign [::scidb::test::askscope::C9Diff] missing extra
+			incr totalMissing [llength $missing]
+			incr totalExtra [llength $extra]
+			lappend detail [list $state $seen [llength $missing] [llength $extra]]
+		}
+	}
+	::scidb::test::askscope::Reset
+	::scidb::test::askscope::RestoreLayout $initial
+	puts "C9PARITY $detail"
+	list $totalMissing $totalExtra [llength $detail]
+} -cleanup {
+	::scidb::test::askscope::Reset
+} -result {0 0 16}
+
+# The ten c9.pane.* rows no menu posts are not listed, and each one has a
+# real effect (the same toggle as its menu.view.panes.* row).
+tcltest::test ask-scope-c9-pane-rows {unposted c9.pane rows are absent from Ask and still act} -setup {
+	::scidb::test::askscope::Reset
+	# Panes are toggled with a game open: that is the state the board's
+	# deferred rebuild expects.
+	::scidb::test::askscope::NewGame
+	set ::scidb::test::askscope::savedLeaves [::scidb::test::askscope::InitialLeaves]
+} -body {
+	set listed {}
+	foreach row [::action::labels asklist ""] {
+		if {[string match {c9.pane.*} [lindex $row 0]]} { lappend listed [lindex $row 0] }
+	}
+	set effects {}
+	foreach {id suffix} {
+		c9.pane.board board
+		c9.pane.notation editor
+		c9.pane.games games
+		c9.pane.people players
+		c9.pane.tree tree
+		c9.pane.analysis analysis
+		c9.pane.media media
+		c9.pane.report report
+		c9.pane.assistant assistant
+		c9.pane.explorer explorer
+	} {
+		set before [::scidb::test::askscope::Present $suffix]
+		set rc [catch { ::action::run $id } err]
+		update
+		set after [::scidb::test::askscope::Present $suffix]
+		catch { ::action::run $id }
+		update
+		set back [::scidb::test::askscope::Present $suffix]
+		set sameBefore [::scidb::test::askscope::Present $suffix]
+		set mrc [catch { ::menu::TogglePaneId $suffix } merr]
+		update
+		set menuAfter [::scidb::test::askscope::Present $suffix]
+		catch { ::menu::TogglePaneId $suffix }
+		update
+		set menuBack [::scidb::test::askscope::Present $suffix]
+		set openable [expr {[llength [info commands ::menu::PaneOpenable]] \
+			&& [::menu::PaneOpenable $suffix]}]
+		set acted [expr {$rc == 0 && $back == $before \
+			&& $after == $menuAfter && $sameBefore == $before \
+			&& $menuBack == $before && (!$openable || $after != $before)}]
+		lappend effects [list $id $before $after $back $menuAfter $menuBack $openable $acted $mrc $merr]
+	}
+	set failed {}
+	foreach effect $effects {
+		if {![lindex $effect 7]} { lappend failed $effect }
+	}
+	puts "C9EFFECTS $effects"
+	list [llength $listed] [llength $failed] [llength $effects]
+} -cleanup {
+	::scidb::test::askscope::RestoreLayout $::scidb::test::askscope::savedLeaves
+	::scidb::test::askscope::Reset
+} -result {0 0 10}
 
 ::tcltest::cleanupTests

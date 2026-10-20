@@ -454,9 +454,6 @@ proc ::application::ask::Choose {} {
 	if {$index < [llength $Priv(rows)]} {
 		lassign [lindex $Priv(rows) $index] id
 		HideList
-		set Query ""
-		set Priv(filtered) ""
-		PlaceholderState
 		catch { focus -force [Entry] }
 		set failed [catch { ::action::run $id } result]
 		if {$failed || [string match "error:*" $result] || [string match "declined*" $result]} {
@@ -484,10 +481,6 @@ proc ::application::ask::SendToAssistant {} {
 		catch {::ui::message "Assistant is unavailable."}
 		return "break"
 	}
-	set Query ""
-	set Priv(filtered) ""
-	[::application::ask::Entry] delete 0 end
-	PlaceholderState
 	if {[llength [info commands ::application::assistant::show]]} {
 		catch { ::application::assistant::show }
 	}

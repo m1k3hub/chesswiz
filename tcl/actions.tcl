@@ -738,6 +738,18 @@ proc ::action::labels {surface args} {
 
 	set output {}
 	set keyed {}
+	set c9Ids {}
+	if {$surface eq "asklist"} {
+		# C9 rows belong to the pane the user is in: list only the rows
+		# that pane's own header menu would post (VAL-RULE-006).
+		if {[llength [info commands ::context::MenuIds]] \
+		 && [llength [info commands ::context::CurrentObject]]} {
+			if {![catch { set c9Object [::context::CurrentObject C9] }] \
+			 && [dict size $c9Object]} {
+				catch { set c9Ids [::context::MenuIds C9 $c9Object] }
+			}
+		}
+	}
 	foreach id [dict keys $Registry] {
 		set record [dict get $Registry $id]
 
@@ -768,6 +780,13 @@ proc ::action::labels {surface args} {
 		}
 
 		if {!$include} continue
+
+		if {$surface eq "asklist"} {
+			# The context menus' assistant row is not a runnable action.
+			if {$id eq "context.ask"} continue
+			set ctx [dict get $record context]
+			if {"C9" in $ctx && [lsearch -exact $c9Ids $id] < 0} { continue }
+		}
 
 		set ep [dict get $record enabled]
 		set en 1
