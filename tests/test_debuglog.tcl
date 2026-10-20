@@ -118,6 +118,43 @@ tcltest::test append-session {starting again preserves prior records and adds on
 		[file exists $::debuglog::file.1]
 } -cleanup { file delete -force $scratch } -result {2 1 0}
 
+proc shutdownOuter {} { shutdownInner }
+proc shutdownInner {} { ::debuglog::shutdown {entry test} }
+tcltest::test shutdown-stack {lifecycle helper records the caller stack and depth} -body {
+	loadDebug debug
+	shutdownOuter
+	set text [readLog]
+	list [regexp {\[shutdown\] entry test depth=[0-9]+ stack=} $text] \
+		[expr {[string first shutdownOuter $text] >= 0}] \
+		[expr {[string first shutdownInner $text] >= 0}]
+} -cleanup { file delete -force $scratch } -result {1 1 1}
+
+tcltest::test shutdown-trace {trace records a direct exit without changing its behavior} -body {
+	loadDebug debug
+	# Isolate the exit stand-in from the test runner's real exit command.
+	set child [interp create]
+	$child eval [list set ::env(CHESSWIZ_LOG) debug]
+	$child eval [list source $script]
+	$child eval {namespace eval ::scidb::dir {}}
+	$child eval [list set ::scidb::dir::user $scratch]
+	$child eval {rename exit realExit; proc exit {{status 0}} {return $status}}
+	$child eval {::debuglog::init; ::debuglog::installShutdownTraces}
+	set status [$child eval {exit 7}]
+	list $status [regexp {\[shutdown\] enter exit 7 depth=.*stack=} [readLog]]
+} -cleanup {
+	interp delete $child
+	file delete -force $scratch
+} -result {7 1}
+
+tcltest::test shutdown-disabled {disabled lifecycle logging installs no traces} -body {
+	loadDebug absent
+	::debuglog::shutdown ignored
+	::debuglog::installShutdownTraces
+	list [file exists $scratch] [info body ::debuglog::shutdown]
+} -result {0 {}}
+
+rename shutdownOuter {}
+rename shutdownInner {}
 unset -nocomplain ::env(CHESSWIZ_LOG)
 array set ::env $savedEnv
 ::tcltest::cleanupTests
