@@ -130,7 +130,7 @@ set Corpus {
 	db-compact J1 {Compact my database.} {{compact_database}}
 	db-shrink J1 {Clean up the deleted games and shrink the file.} {{compact_database}}
 	db-convert J1 {Convert this database to Scidb's format.} {{convert_database}}
-	db-maintenance J1 {Show me the maintenance report.} {{maintenance_report}}
+	db-maintenance J1 {Show me the maintenance report.} {{maintenance_report tab overview}}
 	db-eco-coverage J1 {Which openings does this database cover?} {{maintenance_report tab openings} {database_summary}}
 	db-import J1 {Import /home/user/twic1650.pgn into this database.} {{import_games files *twic1650*}}
 	corr-my-move J12 {Which correspondence games need my move?} {{correspondence_games action status}}

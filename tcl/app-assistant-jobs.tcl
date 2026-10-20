@@ -152,10 +152,9 @@ set ::application::assistant::ArgEnumStyles {
 	training_set {pattern oneof}
 	run_job {job bare colour bare pattern oneof}
 }
-set ::application::assistant::LegacyArgDefaults {
-	correspondence_games {action status}
-	maintenance_report {tab overview}
-}
+# No tool defaults a schema-required argument: correspondence_games.action
+# and maintenance_report.tab used to be required and silently defaulted.
+set ::application::assistant::LegacyArgDefaults {}
 
 proc ::application::assistant::ParametersToArgsSpec {schema {action ""}} {
 	variable ArgEnumStyles
@@ -256,7 +255,7 @@ set ::action::DebugGate [list expr {$::application::assistant::Priv(debug)}]
 # Resolvers return typed references without widget paths.
 ::action::resolver::register game {::scidb::game::current}
 ::action::resolver::register database {::scidb::db::get name}
-::action::resolver::register move {{return [::scidb::game::query position]}}
+::action::resolver::register move {return [::scidb::game::query current]}
 
 } ;# namespace assistant
 } ;# namespace application

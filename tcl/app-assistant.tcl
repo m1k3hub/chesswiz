@@ -1800,7 +1800,7 @@ proc ::application::assistant::CheckArgs_import_games {cargs} {
 
 
 proc ::application::assistant::CheckArgs_correspondence_games {cargs} {
-	set action [expr {[dict exists $cargs action] ? [dict get $cargs action] : "status"}]
+	set action [Arg $cargs action]
 	if {$action ni {status open}} { error "action must be status or open" }
 	return [dict create action $action]
 }
@@ -1899,7 +1899,7 @@ proc ::application::assistant::DoFindLesson {play} {
 
 
 proc ::application::assistant::CheckArgs_maintenance_report {cargs} {
-	set tab [expr {[dict exists $cargs tab] ? [dict get $cargs tab] : "overview"}]
+	set tab [Arg $cargs tab]
 	if {$tab ni {overview duplicates openings}} { error "tab must be overview, duplicates or openings" }
 	return [dict create tab $tab]
 }
