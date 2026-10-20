@@ -663,6 +663,8 @@ proc open {parent args} {
 	variable Info
 	variable Values
 
+	migrateOptions
+
 	array set opts $args
 	array unset Info
 	set Info(base) $opts(-base)
@@ -819,7 +821,27 @@ proc open {parent args} {
 }
 
 
+proc migrateOptions {} {
+	variable Values
+
+	if {![info exists Values(pgn,encoding:migrated)]} {
+		set explicitOther 0
+		if {[info exists Values(pgn,encoding)] && $Values(pgn,encoding) ni {iso8859-1 utf-8 ""}} {
+			set explicitOther 1
+		}
+		if {[info exists Values(pgn,flag,use_strict_pgn_standard)] && $Values(pgn,flag,use_strict_pgn_standard)} {
+			set explicitOther 1
+		}
+		if {!$explicitOther} {
+			set Values(pgn,flag,use_utf8_encoding) 1
+		}
+		set Values(pgn,encoding:migrated) 1
+	}
+}
+
+
 proc buildPgnOptionsFrame {parent} {
+	migrateOptions
 	return [options::BuildFrame $parent.options]
 }
 
@@ -828,6 +850,7 @@ proc getPgnFlags {} {
 	variable Flags
 	variable Values
 
+	migrateOptions
 	set flags 0
 	foreach attr [array names Flags] {
 		if {$Values(pgn,flag,[lindex [split $attr ,] 1])} {
@@ -840,6 +863,8 @@ proc getPgnFlags {} {
 
 proc testUTF8Flag {} {
 	variable Values
+
+	migrateOptions
 	return $Values(pgn,flag,use_utf8_encoding)
 }
 
@@ -3217,6 +3242,8 @@ proc DoExport {parent dlg file} {
 	variable Trace_
 	variable ManyGamesThreshold
 
+	migrateOptions
+
 	set file [string trim $file]
 	if {[string length $file] == 0} { return }
 	set file [file normalize $file]
@@ -3430,16 +3457,22 @@ proc DoExport {parent dlg file} {
 		}
 	}
 
-	destroy $dlg
+	catch { destroy $dlg }
 	set Trace_ {}
 	set close 1
 
 	if {[info exists Info(index)]} {
 		switch $Values(Type) {
 			pgn {
-				switch [::dialog::fsbox::saveMode $Info(fsbox)] {
-					append		{ set mode append }
-					overwrite	{ set mode create }
+				set mode create
+				if {[info exists Info(fsbox)]} {
+					switch [::dialog::fsbox::saveMode $Info(fsbox)] {
+						append		{ set mode append }
+						overwrite	{ set mode create }
+					}
+				}
+				if {![info exists Info($Values(Type),flags)]} {
+					set Info($Values(Type),flags) [getPgnFlags]
 				}
 				::scidb::game::export $file \
 					-flags $Info($Values(Type),flags) \
@@ -3481,9 +3514,15 @@ proc DoExport {parent dlg file} {
 	} else {
 		switch $Values(Type) {
 			scid - scidb - pgn {
-				switch [::dialog::fsbox::saveMode $Info(fsbox)] {
-					append		{ set append 1 }
-					overwrite	{ set append 0 }
+				set append 0
+				if {[info exists Info(fsbox)]} {
+					switch [::dialog::fsbox::saveMode $Info(fsbox)] {
+						append		{ set append 1 }
+						overwrite	{ set append 0 }
+					}
+				}
+				if {![info exists Info($Values(Type),flags)]} {
+					set Info($Values(Type),flags) [getPgnFlags]
 				}
 
 				if {$useCopyOperation} {
@@ -3579,11 +3618,12 @@ proc DoExport {parent dlg file} {
 		::log::open "$formatName $mc::Export"
 		::log::delay
 
+		set srcName [expr {[info exists Info(name)] ? $Info(name) : [::util::databaseName $Info(base)]}]
 		if {$useCopyOperation} {
 			set dst [::util::databaseName $file]
-			set msg [string map [list %src $Info(name) %dst $dst] $mc::ExportGamesFromTo]
+			set msg [string map [list %src $srcName %dst $dst] $mc::ExportGamesFromTo]
 		} else {
-			set msg [format $mc::ExportingDatabase $Info(name) $file]
+			set msg [format $mc::ExportingDatabase $srcName $file]
 		}
 		::log::info $msg
 
