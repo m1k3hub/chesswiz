@@ -17,6 +17,19 @@ ROOT_DIR := $(abspath $(TEST_DIR)/..)
 SRC_DIR := $(ROOT_DIR)/src
 TCL_DIR := $(ROOT_DIR)/tcl
 
+# Native Mac tests must use the same static Tcl/Tk sysroot as the app.
+# The system Tcl is older and the Linux include/library paths do not exist.
+TEST_TCL_INCLUDE := -I/usr/include/tcl8.6
+TEST_TCL_LIBS := -ltcl8.6
+TEST_TK_LIBS := -ltk8.6
+ifeq ($(shell uname -s),Darwin)
+include $(ROOT_DIR)/Makefile.in
+CXXFLAGS += -std=c++17 -Wextra $(OPTIMIZE)
+TEST_TCL_INCLUDE := $(TCL_INCLUDE)
+TEST_TCL_LIBS := $(TCL_LIBRARY) $(ZLIB_LIB)
+TEST_TK_LIBS := $(TK_LIBRARY)
+endif
+
 # Test files
 TCL_TESTS := $(wildcard $(TEST_DIR)test_*.tcl)
 CPP_TESTS := $(TEST_DIR)test_cpp_backend.cpp
@@ -278,11 +291,16 @@ $(TEST_DIR)2cbh_elo_validation: $(TEST_DIR)2cbh_elo_validation.cpp $(SRC_DIR)/db
 TK_RANGELIST_INC := -I$(SRC_DIR)/tk/text -I$(SRC_DIR)/tk/tk8.6 -I$(SRC_DIR)/tk \
 	-I/usr/include/tcl8.6 -I/usr/include/tcl8.6/tk-private/generic -I/usr/include/tcl8.6/tk-private/unix \
 	-I/usr/include/tcl8.6/tcl-private/generic -I/usr/include/tcl8.6/tcl-private/unix
+ifeq ($(shell uname -s),Darwin)
+TK_RANGELIST_INC := -DMAC_OSX_TK -I$(SRC_DIR)/tk/text -I$(SRC_DIR)/tk/tk8.6 -I$(SRC_DIR)/tk \
+	$(TCL_INCLUDE) $(TK_INCLUDE)
+endif
 tk-rangelist:
 	@echo "Running text widget range list tests..."
-	@gcc -std=gnu99 $(TK_RANGELIST_INC) -o /tmp/scidb-test-tk-rangelist $(TEST_DIR)test_tk_rangelist.c \
-		$(SRC_DIR)/tk/text/tkRangeList.c -ltcl8.6 -ltk8.6
-	@/tmp/scidb-test-tk-rangelist | tail -1; /tmp/scidb-test-tk-rangelist >/dev/null
+	@binary=$$(mktemp "$${TMPDIR:-/tmp}/scidb-test-tk-rangelist.XXXXXX") || exit 1; \
+	trap 'rm -f "$$binary"' EXIT; \
+	$(CC) -std=gnu99 $(TK_RANGELIST_INC) -o "$$binary" $(TEST_DIR)test_tk_rangelist.c \
+		$(SRC_DIR)/tk/text/tkRangeList.c $(TEST_TCL_LIBS) $(TEST_TK_LIBS) && "$$binary"
 
 cpp-src:
 	@echo "Building src/ self-contained C++ tests..."
@@ -320,7 +338,7 @@ $(TEST_DIR)test_cpp_backend: $(CPP_TESTS)
 		-I$(SRC_DIR)/sys \
 		-I$(SRC_DIR)/util \
 		-I$(SRC_DIR)/mstl \
-		-I/usr/include/tcl8.6 \
+		$(TEST_TCL_INCLUDE) \
 		-o $@ $< \
 		$(SRC_DIR)/db/libdb.a \
 		$(SRC_DIR)/util/libutil.a \
@@ -331,7 +349,7 @@ $(TEST_DIR)test_cpp_backend: $(CPP_TESTS)
 		$(SRC_DIR)/util/libhyphenate/libhyphenate.a \
 		$(SRC_DIR)/util/universalchardet/libchardet.a \
 		$(SRC_DIR)/util/minizip/libminizip.a \
-		-ltcl8.6 -lexpat -lz -lpthread
+		$(TEST_TCL_LIBS) -lexpat -lz -lpthread
 
 # ==============================================================================
 # Individual Test Targets
