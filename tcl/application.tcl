@@ -128,6 +128,9 @@ array set Vars {
 	need:maxsize	0
 	shutdown			0
 	scaling:listeners	{}
+	window:state:last		""
+	last:normal:geometry	""
+	restoring:normal		0
 }
 
 array set MapTerminalToAnalysis {}
@@ -451,15 +454,107 @@ proc ShortcutPreferences {parent} {
 }
 
 
+# RULE (VAL-RSZ-006): the computed layout minimum of the main window is the
+# board layout's own minimum plus the notebook chrome, the same arithmetic as
+# ::application::twm::geometry. wm minsize is not authoritative here: fitWindow
+# lowers it to fit a smaller saved geometry, so a stale 200x200 save would
+# otherwise become the floor.
+proc LayoutMinimum {} {
+	variable Vars
+	if {[info exists Vars(board:twm)] && $Vars(board:twm) ne ""} {
+		if {![catch {$Vars(board:twm) dimension} dim] && [llength $dim] >= 4} {
+			lassign $dim _ _ minwidth minheight
+			if {$minwidth > 0 && $minheight > 0} {
+				set bd [expr {2*[::theme::notebookBorderwidth]}]
+				return [list [expr {$minwidth + $bd}] \
+					[expr {$minheight + $bd + [::theme::notebookTabPaneSize .application.nb]}]]
+			}
+		}
+	}
+	lassign [wm minsize .application] minwidth minheight
+	return [list $minwidth $minheight]
+}
+
+
+proc GeometrySize {geometry} {
+	if {![regexp {^([0-9]+)x([0-9]+)} $geometry -> width height]} { return {} }
+	return [list $width $height]
+}
+
+
+proc BelowMinimum? {geometry} {
+	lassign [LayoutMinimum] minwidth minheight
+	lassign [GeometrySize $geometry] width height
+	if {$width eq "" || $height eq ""} { return 1 }
+	return [expr {$width < $minwidth || $height < $minheight}]
+}
+
+
+# A normal geometry derived from the work area (80%, centred) for a session
+# that starts zoomed without a sane saved normal geometry.
+proc DefaultNormalGeometry {app} {
+	lassign [winfo workarea $app] wx wy ww wh
+	set width [expr {int($ww * 0.8)}]
+	set height [expr {int($wh * 0.8)}]
+	set x [expr {$wx + ($ww - $width) / 2}]
+	set y [expr {$wy + ($wh - $height) / 2}]
+	return "${width}x${height}+${x}+${y}"
+}
+
+
+# fitWindow lowers wm minsize to the fitted size; put the real layout minimum
+# back so the window manager cannot restore a smaller normal window.
+proc ApplyLayoutMinimum {app} {
+	lassign [LayoutMinimum] minwidth minheight
+	if {$minwidth > 0 && $minheight > 0} {
+		lassign [winfo workarea $app] _ _ ww wh
+		wm minsize $app [expr {min($minwidth, $ww)}] [expr {min($minheight, $wh)}]
+	}
+}
+
+
+proc RestoreNormalGeometry {w} {
+	variable Options
+	variable Vars
+	set geometry $Vars(last:normal:geometry)
+	if {[BelowMinimum? $geometry]} { set geometry [DefaultNormalGeometry $w] }
+	set geometry [::util::place::fitWindow $w $geometry]
+	ApplyLayoutMinimum $w
+	if {[BelowMinimum? $geometry]} {
+		set geometry [::util::place::fitWindow $w [DefaultNormalGeometry $w]]
+		ApplyLayoutMinimum $w
+	}
+	set Vars(last:normal:geometry) $geometry
+	set Options(window:geometry) $geometry
+}
+
+
 proc RestoreWindowGeometry {app} {
 	variable Options
-	if {$Options(window:geometry) ne "" && ![catch {
-		::util::place::fitWindow $app $Options(window:geometry)
-	}]} {
-		# Restored geometry has already been fitted to the current monitor.
+	variable Vars
+	set geometry $Options(window:geometry)
+	if {$geometry ne "" && ![BelowMinimum? $geometry]} {
+		set geometry [::util::place::fitWindow $app $geometry]
+	} elseif {$geometry ne "" && $Options(window:state) eq "zoomed"} {
+		# A legacy save made while maximised (e.g. 200x200): derive a usable
+		# normal geometry from the work area instead of restoring it.
+		set geometry [::util::place::fitWindow $app [DefaultNormalGeometry $app]]
 	} else {
 		::util::place $app -position center
-		::util::place::fitWindow $app
+		set geometry [::util::place::fitWindow $app]
+		if {[BelowMinimum? $geometry]} {
+			set geometry [::util::place::fitWindow $app [DefaultNormalGeometry $app]]
+		}
+	}
+	ApplyLayoutMinimum $app
+	if {[BelowMinimum? $geometry]} {
+		set geometry [::util::place::fitWindow $app [DefaultNormalGeometry $app]]
+		ApplyLayoutMinimum $app
+	}
+	set Vars(last:normal:geometry) $geometry
+	# Never persist a normal geometry below the layout minimum.
+	if {$Options(window:geometry) eq "" || [BelowMinimum? $Options(window:geometry)]} {
+		set Options(window:geometry) $geometry
 	}
 	wm deiconify $app
 	if {[tk windowingsystem] eq "win32" && $Options(window:state) eq "zoomed"} {
@@ -475,8 +570,28 @@ proc RememberWindowGeometry {w} {
 	set state [wm state $w]
 	# Iconifying must not erase the last normal/zoomed state.
 	if {$state ni {normal zoomed}} { return }
+	set previous $Vars(window:state:last)
+	set Vars(window:state:last) $state
 	set Options(window:state) $state
-	if {$state eq "normal"} { set Options(window:geometry) [wm geometry $w] }
+	if {$state eq "normal"} {
+		set geometry [wm geometry $w]
+		if {[BelowMinimum? $geometry]} {
+			# A zoomed -> normal restore can hand back a stale pre-maximise
+			# rect below the layout minimum (Windows 200x200). Re-apply the
+			# remembered normal geometry rather than save the degenerate one.
+			if {!$Vars(restoring:normal) && $previous eq "zoomed"} {
+				set Vars(restoring:normal) 1
+				try {
+					RestoreNormalGeometry $w
+				} finally {
+					set Vars(restoring:normal) 0
+				}
+			}
+			return
+		}
+		set Vars(last:normal:geometry) $geometry
+		set Options(window:geometry) $geometry
+	}
 	# The media inset follows the board's own settled rebuild (the
 	# afterRebuild hook in media-inset.tcl), so no independent resize timer
 	# is needed here: one would fire after the layout settled and make a

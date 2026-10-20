@@ -538,6 +538,8 @@ tcltest::test rsz-startup-offscreen {a saved oversized/off-screen geometry opens
 	::rsz::wait 200
 } -result {1 1 1}
 
+# ---------------------------------------------------------------- VAL-RSZ-006
+
 # ------------------------------------------------- VAL-RSZ-001 (5 sizes, no-op)
 
 # Five different sizes must each settle within 500 ms, with the board, the
@@ -749,5 +751,74 @@ tcltest::test rsz-expanded-resize {VAL-RSZ-001/MED-009 resize and fullscreen whi
 	::rsz::hideInset
 	::rsz::settle [list wm geometry .application $::rsz::ExpandedGeometry]
 } -result {1 1 3 place 1 1 1 1 1 1 1}
+
+# Windows keeps the pre-maximise normal rect, so an options file written while
+# zoomed can carry 200x200 as the normal geometry. Restoring it must give a
+# window at least the computed layout minimum with coherent panes and a sane
+# board square; a zoomed -> normal restore below the minimum must re-apply the
+# remembered normal geometry, and the saved value must never stay below it.
+tcltest::test rsz-zoomed-normal {VAL-RSZ-006 a 200x200 normal geometry saved while zoomed restores at least the layout minimum} -setup {
+	::rsz::showBoard
+	set ::rsz::SavedGeometry [wm geometry .application]
+	set ::rsz::SavedOption $::application::Options(window:geometry)
+	set ::rsz::SavedState $::application::Options(window:state)
+	set ::rsz::SavedStateLast $::application::Vars(window:state:last)
+	set ::rsz::SavedNormal $::application::Vars(last:normal:geometry)
+	set ::rsz::SavedMin [wm minsize .application]
+} -body {
+	set ::application::Options(window:geometry) 200x200+849+382
+	set ::application::Options(window:state) zoomed
+	::application::RestoreWindowGeometry .application
+	::rsz::wait 350
+	lassign [::application::LayoutMinimum] minw minh
+	regexp {^([0-9]+)x([0-9]+)} [wm geometry .application] -> rw rh
+	set restored [expr {$rw >= $minw && $rh >= $minh}]
+	regexp {^([0-9]+)x([0-9]+)} $::application::Options(window:geometry) -> ow oh
+	set savedSane [expr {$ow >= $minw && $oh >= $minh}]
+	set panes [::rsz::paneMins]
+	set square $::application::board::Dim(squaresize:Normal)
+	set minimum $::application::board::MinimumReserveSquare
+	set boardOk [expr {$square >= $minimum || $::application::board::ReserveSide eq ""}]
+	set coherent [::rsz::coherent?]
+	# A known normal geometry is remembered while the window is not zoomed.
+	wm minsize .application {*}$::rsz::SavedMin
+	wm geometry .application 1200x800+150+120
+	::rsz::wait 500
+	regexp {^([0-9]+)x([0-9]+)} [wm geometry .application] -> mw mh
+	# Real maximize/restore round trip where the WM supports it.
+	set zoomSupported [expr {![catch {wm attributes .application -zoomed 1}]}]
+	::rsz::wait 500
+	set zoomed [expr {$zoomSupported && [wm attributes .application -zoomed]}]
+	if {$zoomed} {
+		wm attributes .application -zoomed 0
+		::rsz::wait 500
+	}
+	regexp {^([0-9]+)x([0-9]+)} [wm geometry .application] -> zw zh
+	set zoomRoundTrip [expr {!$zoomed || ($zw >= $minw && $zh >= $minh)}]
+	# Simulate the Windows Restore: the WM hands back the stale pre-maximise
+	# rect (200x200) as the normal size. The remembered normal geometry must
+	# come back, not the degenerate rect or a derived default.
+	set lastBefore $::application::Vars(last:normal:geometry)
+	set ::application::Vars(window:state:last) zoomed
+	wm minsize .application 1 1
+	wm geometry .application 200x200+120+120
+	::rsz::wait 600
+	regexp {^([0-9]+)x([0-9]+)} [wm geometry .application] -> nw nh
+	set reApplied [expr {$nw == $mw && $nh == $mh && $nw >= $minw && $nh >= $minh}]
+	set panesAfter [::rsz::paneMins]
+	set coherentAfter [::rsz::coherent?]
+	puts "EVIDENCE rsz-zoomed-normal min=${minw}x${minh} restored=${rw}x${rh} savedSane=$savedSane panes=$panes square=$square/$minimum board=$boardOk coherent=$coherent remembered=${mw}x${mh} lastBefore=$lastBefore lastAfter=$::application::Vars(last:normal:geometry) zoomed=$zoomed zoomRoundTrip=$zoomRoundTrip normal=${nw}x${nh} reApplied=$reApplied panesAfter=$panesAfter coherentAfter=$coherentAfter"
+	list $restored $savedSane [expr {[llength $panes] == 0}] $boardOk $coherent \
+		$zoomRoundTrip $reApplied [expr {[llength $panesAfter] == 0}] $coherentAfter
+} -cleanup {
+	catch {wm attributes .application -zoomed 0}
+	wm minsize .application {*}$::rsz::SavedMin
+	set ::application::Options(window:geometry) $::rsz::SavedOption
+	set ::application::Options(window:state) $::rsz::SavedState
+	set ::application::Vars(window:state:last) $::rsz::SavedStateLast
+	set ::application::Vars(last:normal:geometry) $::rsz::SavedNormal
+	wm geometry .application $::rsz::SavedGeometry
+	::rsz::wait 250
+} -result {1 1 1 1 1 1 1 1 1}
 
 tcltest::cleanupTests
