@@ -12,7 +12,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/lib"
 APP="$(cd "$APP" && pwd)"
 RES="$APP/Contents/Resources"
 export LC_ALL=C
-make -C "$BUILD/tcl" install-scripts install-pieces install-cursors install-flags \
+make -C "$BUILD/tcl" install-scripts install-sample install-pieces install-cursors install-flags \
     install-localizations install-textures install-themes install-ttk-themes \
     install-text-scripts install-images install-help install-config install-photos \
     BINDIR="$RES" SHAREDIR="$RES" DATADIR="$RES"

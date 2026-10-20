@@ -418,6 +418,9 @@ proc preOpen {parent} {
 	variable RecentFiles
 	variable PreOpen
 
+	# a profile without databases gets the sample base opened read-only
+	::application::sample::maybeOpen $parent
+
 	if {![::process::testOption re-open]} { return }
 
 	foreach file $PreOpen {
@@ -815,6 +818,8 @@ proc LogOpen {msg} {
 
 proc removeRecentFile {file} {
 	variable RecentFiles
+
+	::application::sample::noteRecentFileRemoved $file
 
 	if {[set index [FindRecentFile $file]] >= 0} {
 		set RecentFiles [lreplace $RecentFiles $index $index]
