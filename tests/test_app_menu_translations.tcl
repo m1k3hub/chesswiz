@@ -215,6 +215,16 @@ proc ::scidb::test::trn::Untranslatable {} {
 	return $exempt
 }
 
+proc ::scidb::test::trn::AskLabel {} {
+	catch { destroy .trnask }
+	menu .trnask -tearoff 0
+	::context::Build C1 .trnask [dict create]
+	set label ""
+	catch { set label [string trim [.trnask entrycget 0 -label]] }
+	destroy .trnask
+	return $label
+}
+
 tcltest::test translations-live-dropdown-coverage {at most 5% of the live drop-down stays English per language} -body {
 	set exempt [::scidb::test::trn::Untranslatable]
 	if {[llength $exempt] > 15} { return "too-many-exemptions [llength $exempt]" }
@@ -222,12 +232,18 @@ tcltest::test translations-live-dropdown-coverage {at most 5% of the live drop-d
 	::menu::SwitchLanguage en
 	set english [::scidb::test::trn::DropdownLabels]
 	if {[llength $english] < 100} { return "short-dropdown [llength $english]" }
+	set englishAsk [::scidb::test::trn::AskLabel]
 
 	set ok 1
 	set report {}
 	foreach lang {de es it hu sv} {
 		::menu::SwitchLanguage $lang
 		set labels [::scidb::test::trn::DropdownLabels]
+		set ask [::scidb::test::trn::AskLabel]
+		if {$ask eq "" || $ask eq $englishAsk} {
+			puts "VAL-BAR-009 $lang: ask row not translated: {$ask}"
+			set ok 0
+		}
 		if {[llength $labels] != [llength $english]} {
 			puts "VAL-BAR-009 $lang: label count [llength $labels] != [llength $english]"
 			set ok 0
