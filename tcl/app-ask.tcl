@@ -406,14 +406,16 @@ proc ::application::ask::Choose {} {
 	if {$index < [llength $Priv(rows)]} {
 		lassign [lindex $Priv(rows) $index] id
 		HideList
-		set Query ""
-		PlaceholderState
 		catch { focus -force [Entry] }
-		if {[catch { ::action::run $id } result]} {
+		set failed [catch { ::action::run $id } result]
+		if {$failed || [string match "error:*" $result] || [string match "declined*" $result]} {
 			# ::action::run reports errors as text; a raising handler is
 			# reported the same way, never as a Tk background error.
-			catch { ::ui::message "error: $result" }
+			catch { ::ui::message $result }
+		} else {
+			set Query ""
 		}
+		PlaceholderState
 		return "break"
 	}
 	return [SendToAssistant]
@@ -423,21 +425,30 @@ proc ::application::ask::SendToAssistant {} {
 	variable Priv
 	variable Query
 
-	set text [string trim [[::application::ask::Entry] get]]
+	set submitted [[::application::ask::Entry] get]
+	set text [string trim $submitted]
 	if {$text eq ""} { return "break" }
 	HideList
-	set Query ""
-	PlaceholderState
-	[::application::ask::Entry] delete 0 end
-	if {[llength [info commands ::application::assistant::HistoryAdd]]} {
-		catch { ::application::assistant::HistoryAdd $text }
+	if {![llength [info commands ::application::assistant::ask]]} {
+		catch {::ui::message "Assistant is unavailable."}
+		return "break"
 	}
 	if {[llength [info commands ::application::assistant::show]]} {
 		catch { ::application::assistant::show }
 	}
-	if {[llength [info commands ::application::assistant::ask]]} {
-		catch { ::application::assistant::ask $text }
+	if {[catch {::application::assistant::ask $text} accepted]} {
+		catch {::ui::message "error: $accepted"}
+		return "break"
 	}
+	if {$accepted ne "1"} {
+		catch {::ui::message "Assistant is busy. Try again when it finishes."}
+		return "break"
+	}
+	if {[llength [info commands ::application::assistant::HistoryAdd]]} {
+		catch { ::application::assistant::HistoryAdd $text }
+	}
+	if {$Query eq $submitted} { set Query "" }
+	PlaceholderState
 	return "break"
 }
 
@@ -557,7 +568,7 @@ proc ::application::speech::which {name} {
 	if {[file isdirectory $name]} { return "" }
 	if {[file exists $name]} { return $name }
 	if {[catch { set found [auto_execok $name] }]} { set found "" }
-	if {$found ne ""} { return $found }
+	if {$found ne ""} { return [lindex $found 0] }
 	return ""
 }
 
@@ -704,11 +715,19 @@ proc ::application::speech::Start {} {
 	if {$mode eq "windows"} { ::application::speech::WindowsDictation; return }
 	if {$mode eq "mac"} { ShowHint; return }
 
-	file mkdir [TempDir]
-	set file [file join [TempDir] "ask-[pid]-[clock seconds]-[clock clicks].wav"]
+	Cancel
+	if {[catch {set file [TempFile .wav]} err]} {
+		SetHint [format $::application::speech::mc::Failed $err]
+		return
+	}
+	if {[winfo exists [::application::ask::Entry]]} {
+		set entry [::application::ask::Entry]
+		if {[string first ::application::speech::Cancel [bind $entry <Destroy>]] < 0} {
+			bind $entry <Destroy> +::application::speech::Cancel
+		}
+	}
 	SetState recording
 	SetMicText $::application::speech::mc::Listening
-	lappend Priv(tempFiles) $file
 	set Priv(recordFile) $file
 	if {$mode eq "stub"} {
 		# The deterministic path: no recorder, the stub supplies the text.
@@ -719,6 +738,7 @@ proc ::application::speech::Start {} {
 	if {[catch {
 		set pids [exec {*}[RecorderArgv $d $file] > /dev/null 2>@1 &]
 	} err]} {
+		Cleanup
 		SetState idle
 		SetMicText $::application::ask::mc::Mic
 		SetHint [format $::application::speech::mc::Failed $err]
@@ -726,7 +746,7 @@ proc ::application::speech::Start {} {
 	}
 	set Priv(recordPids) $pids
 	# A recording is never longer than maxSeconds; guard against a lost stop.
-	after [expr {1000 * $Settings(maxSeconds)}] [namespace code [list RecordTimeout $file]]
+	Schedule [expr {1000 * $Settings(maxSeconds)}] [list RecordTimeout $file]
 }
 
 proc ::application::speech::RecordTimeout {file} {
@@ -755,7 +775,7 @@ proc ::application::speech::StopRecording {} {
 	SetState transcribing
 	SetMicText $::application::speech::mc::Working
 	# give the recorder a moment to flush its header
-	after 200 [namespace code [list StartTranscribe $file]]
+	Schedule 200 [list StartTranscribe $file]
 }
 
 # Cancel (button while transcribing, Esc, or the API): insert nothing.
@@ -799,31 +819,36 @@ proc ::application::speech::StartTranscribe {file} {
 		set Priv(transcribeOut) ""
 		set Priv(transcribeFile) $file
 		# a short wait makes cancel observable
-		after 120 [namespace code [list FinishStub $text]]
+		Schedule 120 [list FinishStub $text]
 		return
 	}
 
-	set out [file join [TempDir] "ask-[pid]-[clock seconds]-transcript.txt"]
-	lappend Priv(tempFiles) $out
+	if {[catch {set output [TempOutput .txt out]} err]} {
+		Cancel
+		SetHint [format $::application::speech::mc::Failed $err]
+		return
+	}
 	set cli [dict get $d cli]
 	set model [dict get $d model]
 	set argv [list $cli -m $model -f $file -nt -np]
 	set cmd [list env CUDA_VISIBLE_DEVICES= {*}$argv]
 	set pids {}
-	if {[catch { set pids [exec {*}$cmd > $out 2> /dev/null &] } err]} {
+	if {[catch { set pids [exec {*}$cmd >@ $output 2> /dev/null &] } err]} {
+		close $output
 		Cleanup
 		SetState idle
 		SetMicText $::application::ask::mc::Mic
 		SetHint [format $::application::speech::mc::Failed $err]
 		return
 	}
+	close $output
 	set Priv(transcribeFile) $file
 	set Priv(transcribeOut) $out
 	set Priv(transcribePids) $pids
 	set Priv(transcribeStart) [clock milliseconds]
 	set Priv(lastSize) -1
 	set Priv(stable) 0
-	after 120 [namespace code PollTranscribe]
+	Schedule 120 PollTranscribe
 }
 
 proc ::application::speech::FinishStub {text} {
@@ -852,8 +877,7 @@ proc ::application::speech::PollTranscribe {} {
 	if {$Priv(state) ne "transcribing"} { Cleanup; return }
 	set out $Priv(transcribeOut)
 	if {$out eq "" || ![file exists $out]} {
-		if {![Alive? $Priv(transcribePids)]} { FinishTranscribe }
-		else { after 120 [namespace code PollTranscribe] }
+		if {![Alive? $Priv(transcribePids)]} { FinishTranscribe } else { Schedule 120 PollTranscribe }
 		return
 	}
 	set size [file size $out]
@@ -863,7 +887,7 @@ proc ::application::speech::PollTranscribe {} {
 		Cancel
 		return
 	}
-	after 120 [namespace code PollTranscribe]
+	Schedule 120 PollTranscribe
 }
 
 proc ::application::speech::FinishTranscribe {} {
@@ -899,7 +923,7 @@ proc ::application::speech::InsertTranscript {text} {
 	set entry [::application::ask::Entry]
 	$entry insert insert $text
 	focus -force $entry
-	after idle ::application::ask::Typed
+	Schedule idle ::application::ask::Typed
 	SetHint [format $::application::ask::mc::Heard $text]
 	return 1
 }
@@ -917,10 +941,41 @@ proc ::application::speech::transcribeFile {file} {
 	return [string trim [exec {*}$cmd 2> /dev/null]]
 }
 
+# A directory is created atomically with private permissions. Existing
+# paths must be real directories owned by this user and remain private.
 proc ::application::speech::TempDir {} {
 	set base /tmp
 	if {[info exists ::env(TMPDIR)] && $::env(TMPDIR) ne ""} { set base $::env(TMPDIR) }
-	return [file join $base chesswiz-ask]
+	set dir [file join [file normalize $base] chesswiz-ask-[exec id -u]]
+	catch {exec mkdir -m 0700 -- $dir}
+	if {[file type $dir] ne "directory" || ![file owned $dir]
+		|| ([file attributes $dir -permissions] & 0077) != 0} {
+		error "speech temporary directory is not private"
+	}
+	return $dir
+}
+
+# All timers carry ownership of the current session, including idle work.
+proc ::application::speech::Schedule {delay script} {
+	variable Priv
+	if {![info exists Priv(generation)]} { set Priv(generation) 0 }
+	lappend Priv(timers) [after $delay [namespace code [list Timer $Priv(generation) $script]]]
+}
+
+proc ::application::speech::Timer {generation script} {
+	variable Priv
+	if {$generation != $Priv(generation)} { return }
+	{*}$script
+}
+
+proc ::application::speech::CancelTimers {} {
+	variable Priv
+	if {[info exists Priv(timers)]} {
+		foreach timer $Priv(timers) { after cancel $timer }
+	}
+	set Priv(timers) {}
+	if {![info exists Priv(generation)]} { set Priv(generation) 0 }
+	incr Priv(generation)
 }
 
 # Run the test stub: an executable (script) or, when that is not a
@@ -934,24 +989,26 @@ proc ::application::speech::RunStub {stub} {
 	return $text
 }
 
+# file tempfile creates exclusively; transcription redirects the open
+# channel rather than opening a predictable output filename in the child.
+proc ::application::speech::TempOutput {suffix nameVar} {
+	variable Priv
+	upvar 1 $nameVar path
+	set channel [file tempfile path [file join [TempDir] ask-XXXXXX$suffix]]
+	lappend Priv(tempFiles) $path
+	return $channel
+}
+
 proc ::application::speech::TempFile {suffix} {
-	file mkdir [TempDir]
-	return [file join [TempDir] "ask-[pid]-[clock clicks]$suffix"]
+	set channel [TempOutput $suffix path]
+	close $channel
+	return $path
 }
 
 proc ::application::speech::Cleanup {} {
 	variable Priv
-
-	# Only files this module created are removed: a recording from Start
-	# lives in TempDir (and is listed in tempFiles); a transcript passed in
-	# by tooling is not ours to delete.
-	set ours $Priv(tempFiles)
-	set tempDir [TempDir]
-	foreach file [list $Priv(recordFile) $Priv(transcribeFile)] {
-		if {$file ne "" && [string first $tempDir $file] == 0} { lappend ours $file }
-	}
-	lappend ours $Priv(transcribeOut)
-	foreach file $ours {
+	CancelTimers
+	foreach file $Priv(tempFiles) {
 		if {$file ne ""} { catch { file delete -force $file } }
 	}
 	set Priv(recordFile) ""

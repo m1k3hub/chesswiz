@@ -984,6 +984,34 @@ proc ::application::assistant::PlanLabel {name cargs} {
 	return $name
 }
 
+proc ::application::assistant::PreparePlan {calls} {
+	variable Actions
+	variable Priv
+	set prepared {}
+	foreach call $calls {
+		set fn [dict get $call function]
+		set name [dict get $fn name]
+		if {![dict exists $::action::Registry $name]} { error "unknown tool '$name'" }
+		set record [::action::get $name]
+		if {[dict get $record ai] eq "debug" && !$Priv(debug)} { error "'$name' requires debug mode" }
+		set cargs [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
+		if {[llength [info commands ::application::assistant::correctArgs]]} {
+			catch {set cargs [correctArgs $name $cargs]}
+		}
+		if {[dict get $record schema] eq "" || [dict get $record args] ne ""} {
+			set validation [::action::validateArgs $name $cargs]
+			if {[lindex $validation 0] eq "error"} { error [lindex $validation 1] }
+			set cargs [lindex $validation 1]
+		} else {
+			dict size $cargs
+		}
+		if {[dict exists $Actions $name]} { set cargs [CheckArgs $name $cargs] }
+		dict set call function arguments $cargs
+		lappend prepared $call
+	}
+	return $prepared
+}
+
 proc ::application::assistant::PlanText {calls} {
 	set lines {}
 	set i 0
@@ -991,7 +1019,13 @@ proc ::application::assistant::PlanText {calls} {
 		set fn [dict get $call function]
 		set name [dict get $fn name]
 		set cargs [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
-		lappend lines "[incr i]. [PlanLabel $name $cargs] ($name)"
+		set what [dict get [::action::get $name] what]
+		if {$what eq "" || [catch {set what [format $what {*}[dict values $cargs]]}]} {
+			set what "perform action '$name'"
+		}
+		# Always include every checked argument, including the entire
+		# script for eval_tcl, even when the label/what omits it.
+		lappend lines "[incr i]. [PlanLabel $name $cargs] ($name): $what\n   Arguments: $cargs"
 	}
 	return [join $lines \n]
 }
@@ -1039,6 +1073,12 @@ proc ::application::assistant::RunPlan {round calls} {
 	variable Priv
 	variable mc
 
+	# Correct and validate the whole plan before displaying or running it.
+	# The local calls value is immutable across the confirmation dialog.
+	if {[catch {set calls [PreparePlan $calls]} err]} {
+		Finish [dict create ok 0 error $err] $round
+		return
+	}
 	set text [PlanText $calls]
 	Append info "$mc::Plan\n$text"
 	Notify plan $text
@@ -1063,7 +1103,7 @@ proc ::application::assistant::RunPlan {round calls} {
 
 	set Priv(plan) [dict create step 0 text $text]
 	set Priv(planConfirmed) [expr {$needsConfirm ? 1 : 0}]
-	set ::action::PlanGate [expr {$needsConfirm ? 1 : 0}]
+	set ::action::PlanGate 0
 	return [ContinuePlan $round $calls 0]
 }
 
@@ -1082,42 +1122,18 @@ proc ::application::assistant::ContinuePlan {round calls step} {
 		if {[info exists Priv(resultFacts)] && $Priv(resultFacts) ne ""} {
 			set reply "error: not performed; the game result analysis is complete, answer using its facts"
 		} else {
-			if {[llength [info commands ::application::assistant::correctArgs]]} {
-				catch { set cargs [::application::assistant::correctArgs $name $cargs] }
-			}
-			set reply [runTool $name $cargs]
+			set approval [expr {$Priv(planConfirmed) ? [list $name $cargs] : {}}]
+			set reply [runTool $name $cargs $approval]
 		}
 
 		if {[string match "\x00later:*" $reply]} {
-			set Priv(plan) [dict create step $step text $Priv(plan) calls $calls]
+			set Priv(plan) [dict create step $step before $before calls $calls]
 			set Priv(pending) [list $reply $round $name $cargs $calls "" plan]
 			Append tool "$name: (working...)"
 			return
 		}
 
-		ToolReply $name $reply
-		if {[string match "error:*" $reply] || $reply eq "declined"} {
-			# The failed step and the steps before it stay visible; the
-			# rest is not run.
-			foreach rest $calls {
-				set restName [dict get [dict get $rest function] name]
-				ToolReply $restName "error: $mc::PlanStepSkipped"
-			}
-			set message [format $mc::PlanStepFailed $step $name $reply]
-			set Priv(plan) {}
-			set Priv(planConfirmed) 0
-			set ::action::PlanGate 0
-			Append error $message
-			Finish [dict create ok 0 error $message] $round
-			return
-		}
-
-		# A step that ends in a dialog pauses the chain until it closes.
-		set ends 0
-		if {[dict exists $::action::Registry $name]} {
-			set ends [dict get [::action::get $name] ends-in-dialog]
-		}
-		PlanWaitForDialog $before $ends
+		if {![PlanStepResult $round $calls $step $name $reply $before]} { return }
 	}
 
 	set Priv(plan) {}
@@ -1129,6 +1145,35 @@ proc ::application::assistant::ContinuePlan {round calls step} {
 		Append error [format $mc::TooManyRounds $Priv(maxRounds)]
 		Finish [dict create ok 0 error [format $mc::TooManyRounds $Priv(maxRounds)]] $round
 	}
+}
+
+proc ::application::assistant::PlanStepResult {round calls step name reply before} {
+	variable Priv
+	variable mc
+	ToolReply $name $reply
+	if {[string match "error:*" $reply] || [string match "declined*" $reply] || $reply eq $mc::Denied} {
+		# The failed step and the steps before it stay visible; the
+		# rest is not run.
+		foreach rest $calls {
+			set restName [dict get [dict get $rest function] name]
+			ToolReply $restName "error: $mc::PlanStepSkipped"
+		}
+		set message [format $mc::PlanStepFailed $step $name $reply]
+		set Priv(plan) {}
+		set Priv(planConfirmed) 0
+		set ::action::PlanGate 0
+		Append error $message
+		Finish [dict create ok 0 error $message] $round
+		return 0
+	}
+
+	# A step that ends in a dialog pauses the chain until it closes.
+	set ends 0
+	if {[dict exists $::action::Registry $name]} {
+		set ends [dict get [::action::get $name] ends-in-dialog]
+	}
+	PlanWaitForDialog $before $ends
+	return 1
 }
 
 # Run the tool calls of one reply in order, then ask the model again. A tool
@@ -1227,7 +1272,12 @@ proc ::application::assistant::Resolve {token reply} {
 	LogToolCall $name $cargs 0 [expr {[string match "error: *" $reply] ? "error" : "ok"}] $reply
 	if {$planMode eq "plan"} {
 		# a plan step answered later: record it and run the rest of the plan
-		if {[catch { ToolReply $name $reply; ContinuePlan $round $calls [expr {[dict exists $Priv(plan) step] ? [dict get $Priv(plan) step] : 0}] } err]} {
+		if {[catch {
+			set step [dict get $Priv(plan) step]
+			if {[PlanStepResult $round $calls $step $name $reply [dict get $Priv(plan) before]]} {
+				ContinuePlan $round $calls $step
+			}
+		} err]} {
 			Finish [dict create ok 0 error $err] $round
 		}
 		return 1
@@ -1299,8 +1349,8 @@ proc ::application::assistant::Finish {result round} {
 # Tool dispatch. Unknown tools and bad arguments are reported back to the
 # model as text, never raised: the model can correct itself.
 # ======================================================================
-proc ::application::assistant::runTool {name cargs} {
-	lassign [RunTool $name $cargs] outcome asked reply
+proc ::application::assistant::runTool {name cargs {approval {}}} {
+	lassign [RunTool $name $cargs $approval] outcome asked reply
 	# a later answer is logged when it arrives (Resolve)
 	if {$outcome ne "later"} { LogToolCall $name $cargs $asked $outcome $reply }
 	return $reply
@@ -1309,7 +1359,7 @@ proc ::application::assistant::runTool {name cargs} {
 
 # Returns {outcome asked reply}: outcome is ok, error or declined; asked
 # tells whether the user was asked to confirm.
-proc ::application::assistant::RunTool {name cargs} {
+proc ::application::assistant::RunTool {name cargs {approval {}}} {
 	variable Actions
 	variable MaxReply
 	variable Priv
@@ -1321,7 +1371,11 @@ proc ::application::assistant::RunTool {name cargs} {
 	# Post-baseline tools live only in the registry (game.copy, game.paste).
 	# They go through the same shared validator and gates in ::action::run.
 	if {![dict exists $Actions $name]} {
-		set reply [::action::run $name $cargs]
+		if {$approval eq [list $name $cargs]} {
+			set reply [::action::RunApproved $name $cargs]
+		} else {
+			set reply [::action::run $name $cargs]
+		}
 		if {[string match "error:*" $reply]} {
 			return [list error 0 $reply]
 		}
@@ -1355,7 +1409,10 @@ proc ::application::assistant::RunTool {name cargs} {
 	set isConfirm [dict get $record confirm]
 	set isBulk [dict get $record bulk]
 	set asked 0
-	set planApproved [expr {[info exists Priv(planConfirmed)] && $Priv(planConfirmed)}]
+	if {$approval ne "" && $approval ne [list $name $checked]} {
+		return [list error 0 "error: approved tool arguments changed"]
+	}
+	set planApproved [expr {$approval eq [list $name $checked]}]
 	if {($isConfirm || $isBulk) && !$planApproved} {
 		set what [dict get $record what]
 		if {$what eq ""} {
