@@ -3294,7 +3294,6 @@ proc RebuildEngineList {list} {
 		after cancel $Priv(after)
 		set Priv(after) [after 100 [namespace code [list LoadPhotoFiles $list]]]
 	}
-	bind $list <Destroy> +[namespace code { after cancel $Priv(after) }]
 }
 
 
