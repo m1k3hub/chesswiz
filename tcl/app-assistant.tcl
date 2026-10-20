@@ -41,6 +41,12 @@ set Confirm			"The assistant wants to: %s"
 set Denied			"The user declined: the action was NOT performed and no dialog was opened."
 set Greeting		"Ask me in your own words, for example \"games where a knight forks king and queen\", \"positions with this pawn structure\", \"set up the Najdorf after 6.Bg5\" or \"Carlsen's prep report\". F2 brings me back from anywhere."
 set DebugGreeting	"Debug mode: I can also inspect errors, procedures and variables."
+set Plan			"Plan:"
+set PlanConfirm	"Run this plan?\n%s"
+set PlanDeclined	"Nothing was run: the plan was declined."
+set PlanStepFailed	"Stopped at step %d (%s): %s The steps before it were run."
+set PlanStepSkipped	"not run: the plan stopped at an earlier step"
+set TooManyRounds	"Stopped: the request needed more steps than the assistant allows (%d rounds)."
 
 } ;# namespace mc
 
@@ -694,6 +700,8 @@ array set Priv {
 	routeTimer	{}
 	routeInvocations {}
 	routeClarify	{}
+	plan			{}
+	planConfirmed	0
 }
 
 if {   ([info exists ::env(SCIDB_AI_DEBUG)] && [string is true -strict $::env(SCIDB_AI_DEBUG)])
@@ -958,10 +966,182 @@ proc ::application::assistant::ClaimsAction {text} {
 }
 
 
+
+# ----------------------------------------------------------------------
+# Plans (VAL-AI-002): a reply with several tool calls is shown as one
+# plan. One confirmation covers every step when any step is confirm/bulk;
+# declining runs no handler. Steps run in order: a step that ends in a
+# dialog pauses the chain until it is closed, an asynchronous (Later)
+# step is awaited, and a failure stops the chain while keeping the
+# effects and the report of the steps already run.
+# ----------------------------------------------------------------------
+proc ::application::assistant::PlanLabel {name cargs} {
+	if {[dict exists $::action::Registry $name]} {
+		set record [::action::get $name]
+		set label [::action::displayLabel [dict get $record label]]
+		if {$label ne "" && $label ne $name} { return $label }
+	}
+	return $name
+}
+
+proc ::application::assistant::PlanText {calls} {
+	set lines {}
+	set i 0
+	foreach call $calls {
+		set fn [dict get $call function]
+		set name [dict get $fn name]
+		set cargs [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
+		lappend lines "[incr i]. [PlanLabel $name $cargs] ($name)"
+	}
+	return [join $lines \n]
+}
+
+proc ::application::assistant::PlanNeedsConfirm {calls} {
+	foreach call $calls {
+		set name [dict get [dict get $call function] name]
+		if {![dict exists $::action::Registry $name]} { continue }
+		set record [::action::get $name]
+		if {[dict get $record confirm] || [dict get $record bulk]} { return 1 }
+	}
+	return 0
+}
+
+proc ::application::assistant::PlanWindows {} {
+	set out {}
+	foreach parent {. .application} {
+		foreach w [winfo children $parent] {
+			if {$w eq ".application"} { continue }
+			if {[catch { winfo toplevel $w } top]} { continue }
+			if {$top eq $w} { lappend out $w }
+		}
+	}
+	return $out
+}
+
+# Wait for the dialog a step opened (the contract's modal pause). Only
+# windows that appeared during the step are waited for, so an unrelated
+# open dialog never stalls a plan.
+proc ::application::assistant::PlanWaitForDialog {before {forced 0}} {
+	set now [PlanWindows]
+	set opened {}
+	foreach w $now {
+		if {$w ni $before} { lappend opened $w }
+	}
+	if {![llength $opened] && $forced} {
+		foreach w $now { if {[winfo ismapped $w]} { lappend opened $w } }
+	}
+	foreach w $opened {
+		if {[catch { tkwait window $w }]} { }
+	}
+}
+
+proc ::application::assistant::RunPlan {round calls} {
+	variable Priv
+	variable mc
+
+	set text [PlanText $calls]
+	Append info "$mc::Plan\n$text"
+	Notify plan $text
+
+	set needsConfirm [PlanNeedsConfirm $calls]
+	if {$needsConfirm} {
+		set ask [expr {[llength $Priv(reqconfirm)] ? $Priv(reqconfirm) : $Priv(confirm)}]
+		set answer 0
+		if {[catch { {*}$ask [format $mc::PlanConfirm $text] } answer]} { set answer 0 }
+		if {$answer ne "yes" && $answer ne "1"} {
+			foreach call $calls {
+				set name [dict get [dict get $call function] name]
+				ToolReply $name "declined: $mc::PlanDeclined"
+			}
+			set Priv(plan) {}
+			set Priv(planConfirmed) 0
+			set ::action::PlanGate 0
+			Finish [dict create ok 1 message [dict create role assistant content $mc::PlanDeclined]] $round
+			return
+		}
+	}
+
+	set Priv(plan) [dict create step 0 text $text]
+	set Priv(planConfirmed) [expr {$needsConfirm ? 1 : 0}]
+	set ::action::PlanGate [expr {$needsConfirm ? 1 : 0}]
+	return [ContinuePlan $round $calls 0]
+}
+
+proc ::application::assistant::ContinuePlan {round calls step} {
+	variable Priv
+	variable mc
+
+	while {[llength $calls]} {
+		set calls [lassign $calls call]
+		incr step
+		set fn [dict get $call function]
+		set name [dict get $fn name]
+		set cargs [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
+
+		set before [PlanWindows]
+		if {[info exists Priv(resultFacts)] && $Priv(resultFacts) ne ""} {
+			set reply "error: not performed; the game result analysis is complete, answer using its facts"
+		} else {
+			if {[llength [info commands ::application::assistant::correctArgs]]} {
+				catch { set cargs [::application::assistant::correctArgs $name $cargs] }
+			}
+			set reply [runTool $name $cargs]
+		}
+
+		if {[string match "\x00later:*" $reply]} {
+			set Priv(plan) [dict create step $step text $Priv(plan) calls $calls]
+			set Priv(pending) [list $reply $round $name $cargs $calls "" plan]
+			Append tool "$name: (working...)"
+			return
+		}
+
+		ToolReply $name $reply
+		if {[string match "error:*" $reply] || $reply eq "declined"} {
+			# The failed step and the steps before it stay visible; the
+			# rest is not run.
+			foreach rest $calls {
+				set restName [dict get [dict get $rest function] name]
+				ToolReply $restName "error: $mc::PlanStepSkipped"
+			}
+			set message [format $mc::PlanStepFailed $step $name $reply]
+			set Priv(plan) {}
+			set Priv(planConfirmed) 0
+			set ::action::PlanGate 0
+			Append error $message
+			Finish [dict create ok 0 error $message] $round
+			return
+		}
+
+		# A step that ends in a dialog pauses the chain until it closes.
+		set ends 0
+		if {[dict exists $::action::Registry $name]} {
+			set ends [dict get [::action::get $name] ends-in-dialog]
+		}
+		PlanWaitForDialog $before $ends
+	}
+
+	set Priv(plan) {}
+	set Priv(planConfirmed) 0
+	set ::action::PlanGate 0
+	if {$round < $Priv(maxRounds)} {
+		Step $round
+	} else {
+		Append error [format $mc::TooManyRounds $Priv(maxRounds)]
+		Finish [dict create ok 0 error [format $mc::TooManyRounds $Priv(maxRounds)]] $round
+	}
+}
+
 # Run the tool calls of one reply in order, then ask the model again. A tool
 # that answers later (see Later) parks the rest until Resolve.
 proc ::application::assistant::RunCalls {round calls} {
 	variable Priv
+
+	# A reply with several tool calls is a plan (VAL-AI-002). It is shown,
+	# confirmed once when any step is confirm/bulk, and then run step by
+	# step. A failure stops the chain and keeps the earlier effects.
+	if {[llength $calls] > 1} {
+		return [RunPlan $round $calls]
+	}
 
 	while {[llength $calls]} {
 		set calls [lassign $calls call]
@@ -991,7 +1171,9 @@ proc ::application::assistant::RunCalls {round calls} {
 	if {$round < $Priv(maxRounds)} {
 		Step $round
 	} else {
-		Finish [dict create ok 1 message [dict create role assistant content ""]] $round
+		# Say plainly that the limit stopped the request (VAL-AI-002).
+		Append error [format $::application::assistant::mc::TooManyRounds $Priv(maxRounds)]
+		Finish [dict create ok 0 error [format $::application::assistant::mc::TooManyRounds $Priv(maxRounds)]] $round
 	}
 }
 
@@ -1035,7 +1217,7 @@ proc ::application::assistant::Resolve {token reply} {
 	variable MaxReply
 
 	if {![info exists Priv(pending)] || [lindex $Priv(pending) 0] ne $token} { return 0 }
-	lassign $Priv(pending) _ round name cargs calls isRouted
+	lassign $Priv(pending) _ round name cargs calls isRouted planMode
 	set Priv(pending) {}
 	set reply [WithMenu $name [Scrub $reply]]
 	set limit [ReplyLimit $name]
@@ -1043,6 +1225,13 @@ proc ::application::assistant::Resolve {token reply} {
 		set reply "[string range $reply 0 $limit-1]\n... (truncated)"
 	}
 	LogToolCall $name $cargs 0 [expr {[string match "error: *" $reply] ? "error" : "ok"}] $reply
+	if {$planMode eq "plan"} {
+		# a plan step answered later: record it and run the rest of the plan
+		if {[catch { ToolReply $name $reply; ContinuePlan $round $calls [expr {[dict exists $Priv(plan) step] ? [dict get $Priv(plan) step] : 0}] } err]} {
+			Finish [dict create ok 0 error $err] $round
+		}
+		return 1
+	}
 	if {[llength $isRouted]} {
 		# a pre-routed asynchronous tool: deliver its reply directly,
 		# never re-enter the model loop
@@ -1099,6 +1288,9 @@ proc ::application::assistant::Finish {result round} {
 	set Priv(observer) {}
 	set Priv(reqconfirm) {}
 	set Priv(pending) {}
+	set Priv(plan) {}
+	set Priv(planConfirmed) 0
+	set ::action::PlanGate 0
 	if {[llength $observer]} { catch { {*}$observer {*}$event } }
 }
 
@@ -1163,7 +1355,8 @@ proc ::application::assistant::RunTool {name cargs} {
 	set isConfirm [dict get $record confirm]
 	set isBulk [dict get $record bulk]
 	set asked 0
-	if {$isConfirm || $isBulk} {
+	set planApproved [expr {[info exists Priv(planConfirmed)] && $Priv(planConfirmed)}]
+	if {($isConfirm || $isBulk) && !$planApproved} {
 		set what [dict get $record what]
 		if {$what eq ""} {
 			set what "perform action '$name'"
@@ -4139,9 +4332,12 @@ proc ::application::assistant::build {frame width height} {
 	pack $clear -side right -padx {2 4} -pady 4
 	pack $send -side right -padx 2 -pady 4
 	pack $entry -side left -fill x -expand yes -padx {4 2} -pady 4
-	# push to talk, when the machine can actually do it
+	# Speech input enters only through the Ask field (VAL-AI-005); the
+	# assistant pane keeps no microphone of its own. Older builds without
+	# the Ask field still get the voice button.
 	set mic {}
-	if {[llength [info commands ::application::voice::toggle]]} {
+	if {[llength [info commands ::application::ask::Entry]] == 0 \
+	 && [llength [info commands ::application::voice::toggle]]} {
 		set mic [ttk::button $bottom.mic -text $::application::voice::mc::Speak \
 			-command ::application::voice::toggle]
 		pack $mic -side right -padx 2 -pady 4

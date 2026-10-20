@@ -234,6 +234,7 @@ SOURCES = \
 	app-assistant-jobs.tcl \
 	app-diagnose.tcl \
 	app-voice.tcl \
+	app-ask.tcl \
 	app-error-triage.tcl \
 	app-media-decode.tcl \
 	app-media-lesson.tcl \
