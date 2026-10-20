@@ -828,13 +828,13 @@ proc besideResetReplaceCount {} {
 # can grow; re-plan on requested-size changes to keep the final frame in place.
 # Returns the applied plan, or {rule center} when the board is not mapped.
 #
-# VAL-DLG-005: content larger than the work area already needs a size cap.
-# In that case cap into a free right/left/below strip first, retaining at least
-# 320x160 client pixels (or the smaller natural request). Ordinary content keeps
-# its requested size, so labels/buttons are not silently clipped. If no strip
-# accommodates that usable floor, retain the work-area cap and use no-room:
-# overlap is allowed only at the minimum measured intersection of the three
-# clamped candidates, never more than the plan's recorded minimum area.
+# VAL-DLG-011: no placement accepts board overlap. When no free strip holds the
+# requested size, besidePlan returns a zero-overlap shrink and besideBoard first
+# tries to reserve board room (the same board-reserve mechanism as the video
+# inset), keeping the requested size. Only when reserving is impossible does it
+# apply the shrink. VAL-DLG-005 still caps content larger than the whole work
+# area into a strip, retaining at least 320x160 (or the natural request) when
+# possible. The reservation is released on close/unregister.
 proc besideBoard {dlg {parent ""}} {
 	variable BesideRequests
 	if {$parent eq ""} {
