@@ -239,11 +239,11 @@ tcltest::test cqlf-profile-text {the facts as text: small samples hidden, the we
 	dict set weak games 8
 	list [::ai::cql::profileText $p] [::ai::cql::profileText $p -min 1] [dict get $white games] \
 		[::ai::cql::profileText $weak]
-} -result {{POSITION TYPES in Kovac, Anna's latest 5 games (found by CQL):
-  isolated queen's pawn: 3 games (60%), scores 17%} {POSITION TYPES in Kovac, Anna's latest 5 games (found by CQL):
+} -result {{POSITION TYPES in Kovac, Anna's latest 5 games (found by pattern search):
+  isolated queen's pawn: 3 games (60%), scores 17%} {POSITION TYPES in Kovac, Anna's latest 5 games (found by pattern search):
   isolated queen's pawn: 3 games (60%), scores 17%
   opposite-coloured bishops: 1 games (20%), scores 50%
-  queenless middlegame: 1 games (20%), scores 100%} 3 {POSITION TYPES in Kovac, Anna's latest 8 games (found by CQL):
+  queenless middlegame: 1 games (20%), scores 100%} 3 {POSITION TYPES in Kovac, Anna's latest 8 games (found by pattern search):
   isolated queen's pawn: 6 games (75%), scores 17% -- their weakest structure}}
 
 tcltest::test cqlf-brief-facts {the brief's facts carry the profile, so the rule stance can use it} -setup {
@@ -269,12 +269,12 @@ tcltest::test cqlf-themes {what a move does, and where it leads} -body {
 	list [::ai::cql::themes $ep exf6] [::ai::cql::themes $dchk Nd6+] \
 		[::ai::cql::themesText [::ai::cql::themes $iqp]] [::ai::cql::themes $iqp Nc3] \
 		[::ai::cql::themesText [::ai::cql::themes $smother Nd6#]]
-} -result {{events en_passant structures {}} {events {double_check discovered_check} structures {}} {THEMES (found by CQL, exact): isolated queen's pawn} {events {} structures isolated_queen_pawn} {THEMES (found by CQL, exact): smothered mate}}
+} -result {{events en_passant structures {}} {events {double_check discovered_check} structures {}} {THEMES (found by pattern matcher, exact): isolated queen's pawn} {events {} structures isolated_queen_pawn} {THEMES (found by pattern matcher, exact): smothered mate}}
 
 tcltest::test cqlf-annotate-prompt {the annotator's grounded prompt names the themes} -body {
 	set dchk $::scidb::test::cqlf::DCHK
 	set p [::ai::annotate::prompt Nd6+ Best [dict create classification Best fen $dchk cpLoss 0]]
-	list [string match "*\nTHEMES (found by CQL, exact): double check, discovered check" $p] [string match "*THEMES block*" [::ai::annotate::rules]]
+	list [string match "*\nTHEMES (found by pattern matcher, exact): double check, discovered check" $p] [string match "*THEMES block*" [::ai::annotate::rules]]
 } -result {1 1}
 
 tcltest::test cqlf-studyplan {mistakes carry their structures; the plan has a By structure section} -setup {
@@ -291,7 +291,7 @@ tcltest::test cqlf-studyplan {mistakes carry their structures; the plan has a By
 	set ::ai::studyplan::Priv(mistakes) [list $m1 $m2 $m3]
 	set text [::ai::studyplan::PlanText]
 	list [string match "*positional: 2 mistake(s)*\n   positions: 2 in isolated queen's pawn\n*" $text] \
-		[string match "*By structure (found by CQL in the position before the move):\n   isolated queen's pawn: 2 of 3 mistake(s), about 4.5 pawns" $text]
+		[string match "*By structure (found by pattern search in the position before the move):\n   isolated queen's pawn: 2 of 3 mistake(s), about 4.5 pawns" $text]
 } -cleanup {
 	set ::ai::studyplan::Priv(mistakes) $saved
 } -result {1 1}
