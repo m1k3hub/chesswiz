@@ -903,6 +903,40 @@ proc totalWidth {parent} {
 }
 
 
+# Every toolbar button is a registry action (VAL-REG-002). The command
+# stays the handler, and the widget's -command becomes ::action::run so
+# the static walk sees one dispatch contract for menus and toolbars.
+proc ::toolbar::InvokeCommand {command argsDict} {
+	return [uplevel #0 $command]
+}
+
+proc ::toolbar::RegistryCommand {toolbar w command {label ""}} {
+	if {![info exists ::action::Registry]} { return $command }
+	set command [string trim $command]
+	if {$command eq "" || [string match "::action::run *" $command]} {
+		return $command
+	}
+	set id "toolbar."
+	append id [string map {. _ - _ : _ / _ { } _} $w]
+	set base $id
+	set n 0
+	while {[dict exists $::action::Registry $id]} {
+		incr n
+		set id "${base}_$n"
+	}
+	if {$label eq ""} { set label "Toolbar action" }
+	::action::register $id [dict create \
+		label $label \
+		object {} \
+		args {} \
+		handler [list ::toolbar::InvokeCommand $command] \
+		what $label \
+		ai 0 \
+		doc $label \
+	]
+	return [list ::action::run $id]
+}
+
 proc Add {toolbar widgetCommand args} {
 	variable Counter
 	variable Defaults
@@ -983,6 +1017,16 @@ proc Add {toolbar widgetCommand args} {
 	}
 	if {[string match *entry $widgetCommand]} { set Specs(takefocus:$toolbar) 1 }
 	if {[string match *spinbox $widgetCommand]} { set variable {} }
+
+	if {[info exists options(-command)] && [string trim $options(-command)] ne ""} {
+		set label ""
+		if {[info exists options(-text)]} { set label $options(-text) }
+		if {$label eq "" && [info exists options(-tooltip)]} {
+			set label $options(-tooltip)
+		}
+		set options(-command) \
+			[::toolbar::RegistryCommand $toolbar $w $options(-command) $label]
+	}
 
 	eval $widgetCommand $w [array get options]
 	lappend Specs(children:$toolbar) $w

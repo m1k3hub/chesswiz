@@ -306,6 +306,8 @@ tcltest::test insights-menu-entry {the player context menu offers the insights w
 	catch { destroy $m }
 	menu $m -tearoff 0
 } -body {
+	# Deliberately positional: the legacy helper appends exactly one row
+	# to the caller's menu; this checks that row's label, not menu wiring.
 	::application::database::player::addInsightsMenuEntry $m .application /nonexistent Normal 0
 	set last [$m index end]
 	list [expr {$last >= 0}] [string trim [$m entrycget $last -label]]

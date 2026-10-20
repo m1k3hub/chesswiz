@@ -193,6 +193,24 @@ proc ::menu::MacAbout {} {
 	catch { ::tk::mac::standardAboutPanel }
 }
 
+# Preferences and Quit keep one implementation for the system menu and the
+# in-window menu; the Tk hook wins when the platform provides one.
+proc ::menu::MacPreferences {} {
+	if {[llength [info commands ::tk::mac::ShowPreferences]]} {
+		catch { ::tk::mac::ShowPreferences }
+		return
+	}
+	catch { ::application::ShortcutPreferences .application }
+}
+
+proc ::menu::MacQuit {} {
+	if {[llength [info commands ::tk::mac::Quit]]} {
+		catch { ::tk::mac::Quit }
+		return
+	}
+	catch { ::application::shutdown }
+}
+
 
 proc build {menu} {
 	# Decision 003: the button stays; its entries are the task cascades

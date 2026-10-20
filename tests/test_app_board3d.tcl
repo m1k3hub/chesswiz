@@ -37,15 +37,16 @@ tcltest::test board3d-app-menu {the 3D viewer actions are registry actions, not 
 	# Decision 003/PROPOSAL section 5: the former Extras 3D rows are
 	# registry actions (board pane header / View > Panes when the module is
 	# present), so no Extras cascade is built.
+	# Build once so the drop-down registry (including extras) is populated,
+	# then address the surface by action id (no label/index reads).
 	catch { destroy .testmenu3d }
 	menu .testmenu3d
 	::menu::build .testmenu3d
-	set extras 0
-	for {set i 0} {$i <= [.testmenu3d index end]} {incr i} {
-		if {[.testmenu3d type $i] eq "cascade"
-			&& [string match "*Extras*" [.testmenu3d entrycget $i -label]]} { set extras 1 }
-	}
 	destroy .testmenu3d
+	set extras 0
+	foreach row [::action::labels dropdown] {
+		if {[string match "*Extras*" [lindex $row 1]]} { set extras 1 }
+	}
 	set ids {view.board3d.open view.board3d.webgl view.board3d.embed}
 	set found {}
 	foreach id $ids {

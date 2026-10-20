@@ -1,0 +1,7 @@
+# Labels that are legitimately identical in a language and English.
+# Format: <label><TAB><justification>. At most 15 entries.
+# The translation test removes these from the "identical to English" count.
+Training	German loanword; spelled exactly like the English menu word
+Standard	Same word in German, Italian and Swedish chess terminology
+Tablebase	Technical term kept unchanged in Italian
+Crazyhouse	Name of the chess variant, not translated in any language

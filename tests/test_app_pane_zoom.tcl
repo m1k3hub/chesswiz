@@ -200,9 +200,23 @@ if {[info exists ::env(SCIDB_TEST_ENGINE)]} {
 	set zoomEngine $::env(SCIDB_TEST_ENGINE)
 } else { set zoomEngine [lindex [auto_execok stockfish] 0] }
 tcltest::testConstraint paneZoomEngine [expr {$zoomEngine ne "" && [file executable $zoomEngine]}]
+# The assistant answers confirmations through its own hook, not
+# ::action::ConfirmHook.
+namespace eval ::scidb::test::pz {}
+proc ::scidb::test::pz::Yes {args} { return 1 }
 tcltest::test pane-zoom-engine {a hidden analysis pane keeps its real engine running} -constraints paneZoomEngine -setup {
 	set savedEngines $::engine::Engines
 	set savedFile $::scidb::file::engines
+	set savedConfirm $::application::assistant::Priv(confirm)
+	set savedReqConfirm $::application::assistant::Priv(reqconfirm)
+	set savedActionConfirm $::action::ConfirmHook
+	set savedBulk $::action::BulkHook
+	# Registering an engine is a confirm-gated tool; a scripted test
+	# answers the confirmation instead of opening a modal dialog.
+	set ::application::assistant::Priv(confirm) ::scidb::test::pz::Yes
+	set ::application::assistant::Priv(reqconfirm) {}
+	set ::action::ConfirmHook {list 1}
+	set ::action::BulkHook {list 1}
 	set ::engine::Engines {}
 	set ::scidb::file::engines [file join [tcltest::temporaryDirectory] pane-zoom-engines-[pid].dat]
 	::application::assistant::runTool add_engine [list path $zoomEngine]
@@ -229,6 +243,10 @@ tcltest::test pane-zoom-engine {a hidden analysis pane keeps its real engine run
 	file delete -force $::scidb::file::engines
 	set ::engine::Engines $savedEngines
 	set ::scidb::file::engines $savedFile
+	set ::application::assistant::Priv(confirm) $savedConfirm
+	set ::application::assistant::Priv(reqconfirm) $savedReqConfirm
+	set ::action::ConfirmHook $savedActionConfirm
+	set ::action::BulkHook $savedBulk
 	::options::hookWriter ::engine::WriteEngineOptions engines
 } -result {1 1 1}
 

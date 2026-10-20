@@ -1290,6 +1290,10 @@ proc BuildPane {twm frame uid width height} {
 		dbgames		{ boardgames::build $frame $width $height }
 		default	{ return -code error "BuildPane: unknown pane $uid" }
 	}
+	# Re-apply a pane font size saved in the layout (C9); only this pane.
+	if {[llength [info commands ::context::PaneFontApply]]} {
+		catch { ::context::PaneFontApply $frame $uid }
+	}
 }
 
 
@@ -1386,12 +1390,21 @@ proc newAnalysisPane {analysisNumber} {
 proc openPane {uid {explicit true}} {
 	variable PaneOptions
 	variable Vars
+	variable MapTerminalToAnalysis
 
 	if {![info exists Vars(board:twm)]} { return {} }
 	set twm $Vars(board:twm)
 
 	if {$uid ni [$twm leaves]} {
-		$twm new frame $uid $PaneOptions($uid)
+		set name [NameFromUid $uid]
+		if {$name eq "analysis" \
+			&& ![info exists MapTerminalToAnalysis([NumberFromUid $uid])]} {
+			# A destroyed analysis pane is recreated with its number mapping,
+			# otherwise BuildPane has no analysis number to build.
+			newAnalysisPane [NumberFromUid $uid]
+		} else {
+			$twm new frame $uid $PaneOptions($name)
+		}
 		update idletasks
 	}
 	if {[catch { set frame [$twm leaf $uid] }] || ![winfo exists $frame]} { return {} }
