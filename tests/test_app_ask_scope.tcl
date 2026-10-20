@@ -467,7 +467,7 @@ tcltest::test ask-scope-c9-pane-parity {C9 rows follow the current pane's own me
 
 # The ten c9.pane.* rows no menu posts are not listed, and each one has a
 # real effect (the same toggle as its menu.view.panes.* row).
-tcltest::test ask-scope-c9-pane-rows {unposted c9.pane rows are absent from Ask and still act} -setup {
+tcltest::test ask-scope-c9-pane-rows {unposted c9.pane.* rows are absent from Ask and still act} -setup {
 	::scidb::test::askscope::Reset
 	# Panes are toggled with a game open: that is the state the board's
 	# deferred rebuild expects.
