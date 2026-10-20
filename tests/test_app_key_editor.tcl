@@ -73,6 +73,58 @@ tcltest::test key-editor-capture-spec {a captured key event becomes a key spec} 
 		[::application::keyEditor::SpecFromEvent {exclam} 0x1]
 } -result {Control-g Control-Shift-G Control-F5 Control-Left Control-space Return Control-Delete Shift-exclam}
 
+tcltest::test key-editor-capture-alt-mask {Alt is decoded from the platform's own state bit} -body {
+	list \
+		[::application::keyEditor::SpecFromEvent J 0x20004 win32] \
+		[::application::keyEditor::SpecFromEvent J 0x4 win32] \
+		[::application::keyEditor::SpecFromEvent J 0x0c win32] \
+		[::application::keyEditor::SpecFromEvent J 0x0c x11] \
+		[::application::keyEditor::SpecFromEvent J 0x4 x11] \
+		[::application::keyEditor::SpecFromEvent J 0x14 aqua] \
+		[::application::keyEditor::AltStateMask win32] \
+		[expr {[::application::keyEditor::AltStateMask x11] & 0x8}] \
+		[expr {[::application::keyEditor::AltStateMask x11] & 0x20000}] \
+		[::application::keyEditor::ModifierOnlyKeysym? Alt_L] \
+		[::application::keyEditor::ModifierOnlyKeysym? Meta_L] \
+		[::application::keyEditor::ModifierOnlyKeysym? J]
+} -result {Control-Alt-J Control-J Control-J Control-Alt-J Control-J Control-Alt-J 131072 8 0 1 1 0}
+
+tcltest::test key-editor-dialog-alt {the capture keeps Alt on Windows and X11 and Apply binds Control-Alt-j} -setup {
+	::application::ShortcutPreferences .application
+	set dlg .application.shortcutPreferences
+	set tree $dlg.content.keys.list.tree
+	set entry $dlg.content.keys.capture.entry
+	::keyEditorTest::scheme chesswiz
+	update
+	$tree selection set app-log
+	update
+	focus -force $entry
+	update
+} -body {
+	# Windows: Ctrl+Alt+J arrives with ALT_MASK (0x20000), not with Mod1
+	::application::keyEditor::CaptureKey $entry J 0x20004 win32
+	set windows [$entry get]
+	set winSpec $::application::keyEditor::Dialog(captured)
+	# X11: the same combination arrives with Mod1 (0x8)
+	::application::keyEditor::CaptureKey $entry J 0x0c x11
+	set x11 [$entry get]
+	set x11Spec $::application::keyEditor::Dialog(captured)
+	# a lone Alt KeyPress must not replace the captured combination
+	::application::keyEditor::CaptureKey $entry Alt_L 0x20004 win32
+	set afterAlt $::application::keyEditor::Dialog(captured)
+	$dlg.content.keys.buttons.apply invoke
+	update
+	list $windows $winSpec $x11 $x11Spec $afterAlt \
+		$::application::keyEditor::Options(shortcut:keys,app-log) \
+		[string match *log::show* [bind .application <Control-Alt-J>]] \
+		[string match *log::show* [bind .application <Control-Alt-j>]] \
+		[bind .application <Control-j>] \
+		[string match *log::show* [bind .application <Control-l>]]
+} -cleanup {
+	::keyEditorTest::restore
+	catch {destroy .application.shortcutPreferences}
+} -result {{New key: Ctrl+Alt+J} Control-Alt-J {New key: Ctrl+Alt+J} Control-Alt-J Control-Alt-J Control-Alt-J 1 1 {} 0}
+
 tcltest::test key-editor-actions {the action table lists the expected actions} -setup {
 	set actions {}
 	foreach entry $::application::keyEditor::Actions {

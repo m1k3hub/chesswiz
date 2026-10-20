@@ -869,18 +869,23 @@ proc ::application::keyEditor::SelectAction {tree} {
 
 
 # The capture field shows the pressed combination; Return applies it.
-proc ::application::keyEditor::CaptureKey {entry keysym state} {
+# <platform> is only passed by tests, to drive the state decoding of
+# another windowing system; real key events use the running platform.
+proc ::application::keyEditor::CaptureKey {entry keysym state {platform ""}} {
 	variable Dialog
 
 	if {$keysym eq "Return"} { ApplyCapture $Dialog(tree) $entry; return "break" }
-	if {$keysym in {Shift_L Shift_R Control_L Control_R Alt_L Alt_R Caps_Lock Super_L Super_R}} {
+	if {[ModifierOnlyKeysym? $keysym]} {
+		# A modifier alone is not a key. Windows delivers a KeyPress for
+		# Alt_L/Meta_L when Alt goes down; it must not clear or replace
+		# the combination being captured.
 		return "break"
 	}
 	if {$Dialog(action) eq ""} {
 		SetStatus $mc::KeyNeedsSelection
 		return "break"
 	}
-	set spec [SpecFromEvent $keysym $state]
+	set spec [SpecFromEvent $keysym $state $platform]
 	if {$spec eq ""} { return "break" }
 	if {[SameKey $spec [CurrentKey $Dialog(action)]]} {
 		# the key already in effect needs no override
@@ -917,9 +922,48 @@ proc ::application::keyEditor::CaptureFocus {entry} {
 }
 
 
+# Is <keysym> a modifier key (pressed alone)? Caps Lock and Num Lock are
+# included: Tk reports them as plain KeyPresses too.
+proc ::application::keyEditor::ModifierOnlyKeysym? {keysym} {
+	set modifierKeysyms {
+		Shift_L Shift_R Control_L Control_R
+		Alt_L Alt_R Meta_L Meta_R
+		Super_L Super_R Hyper_L Hyper_R
+		Caps_Lock Num_Lock Mode_switch
+	}
+	if {[lsearch -exact $modifierKeysyms $keysym] >= 0} { return 1 }
+	return [ModifierOnly? $keysym]
+}
+
+
+# The state bit(s) Tk puts in %s for Alt on <platform> (default: the
+# running windowing system). The bit is platform specific and Mod1 only
+# means Alt on X11:
+#   X11   Alt is Mod1 (ALT_MASK in a bind pattern is resolved through the
+#         modifier map; ::util::altMask has the physical bits, Mod1 and
+#         Mod5 when Alt_R is mapped there)
+#   win32 Alt is ALT_MASK = 0x20000 (NOT Mod1; Tk's Windows key handler
+#         translates VK_MENU to this bit)
+#   aqua  Option is Mod2 = 0x10 (Command is Mod1)
+proc ::application::keyEditor::AltStateMask {{platform ""}} {
+	if {$platform eq ""} { set platform [tk windowingsystem] }
+	switch -- $platform {
+		win32 { return [expr {0x20000}] }
+		aqua  { return [expr {0x10}] }
+	}
+	# X11: the C helper computed the physical modifier bits of Alt_L/Alt_R
+	# from the keymap; Mod1 (and Mod5) is the fallback
+	if {[info exists ::util::altMask] && $::util::altMask} {
+		return $::util::altMask
+	}
+	return [expr {0x8 | 0x20}]
+}
+
+
 # With Caps Lock on, Tk reports the other case of a letter keysym; the
-# binding must not depend on it (see BindSpecs).
-proc ::application::keyEditor::SpecFromEvent {keysym state} {
+# binding must not depend on it (see BindSpecs). <platform> is only
+# passed by tests (see AltStateMask).
+proc ::application::keyEditor::SpecFromEvent {keysym state {platform ""}} {
 	if {$state & $::util::lockMask && [string length $keysym] == 1 && [string is alpha $keysym]} {
 		if {[string is lower $keysym]} {
 			set keysym [string toupper $keysym]
@@ -929,7 +973,7 @@ proc ::application::keyEditor::SpecFromEvent {keysym state} {
 	}
 	set mods {}
 	if {$state & 0x4} { lappend mods Control }
-	if {$state & 0x8} { lappend mods Alt }
+	if {$state & [AltStateMask $platform]} { lappend mods Alt }
 	if {$state & 0x1} { lappend mods Shift }
 	set keysym [NormalizeKeysym $keysym]
 	if {$keysym eq ""} { return "" }
