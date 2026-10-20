@@ -578,6 +578,8 @@ tcltest::test assistant-prepare-both-colours {without a colour both are shown; b
 
 
 tcltest::test assistant-position-moves {position_moves reports the tree of the board position; without a tree base the active one becomes it} -setup {
+	# This test also runs alone with -match; do not depend on the pane test.
+	::application::assistant::show
 	# the Clipbase stands in for a Scidb base; the tree needs a saved one
 	::scidb::db::copy $::scidb::test::assistant::Fixture Clipbase {} \
 		::scidb::test::assistant::nop {} ::scidb::test::assistant::nop {}
