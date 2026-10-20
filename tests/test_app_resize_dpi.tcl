@@ -98,6 +98,7 @@ proc ::rsz::snapshot {} {
 		$::application::board::Dim(borderthickness)]
 }
 
+
 # Run <action>, pump events until nothing changed for Quiet ms, and return
 # {lastChangeMs snapshot}. The board rebuild is scheduled 100 ms after the
 # canvas <Configure> and the inset 120 ms after, so a sampler that stops at
@@ -107,19 +108,21 @@ proc ::rsz::settle {action {timeout 2500} {quiet 260}} {
 	set t0 [clock milliseconds]
 	set prev [::rsz::snapshot]
 	uplevel 1 $action
-	set lastChange 0
+	# Distinguish a synchronous change that lands inside the first
+	# millisecond (report 1, "changed") from no change at all (report 0).
+	set lastChange -1
 	while {[clock milliseconds] - $t0 < $timeout} {
 		update
 		set now [::rsz::snapshot]
 		set t [expr {[clock milliseconds] - $t0}]
 		if {$now ne $prev} {
 			set prev $now
-			set lastChange $t
+			set lastChange [expr {max($t, 1)}]
 		}
-		if {$t - $lastChange >= $quiet} { break }
+		if {$lastChange >= 0 && $t - $lastChange >= $quiet} { break }
 		after 10
 	}
-	return [list $lastChange $prev]
+	return [list [expr {$lastChange < 0 ? 0 : $lastChange}] $prev]
 }
 
 proc ::rsz::setScaling {scale} {
@@ -164,9 +167,56 @@ proc ::rsz::overlap? {} {
 	return [expr {$bx0 < $ix1 && $ix0 < $bx1 && $by0 < $iy1 && $iy0 < $by1}]
 }
 
+# BRD-004 arithmetic, computed here rather than trusting FitStrip: the
+# minimum strip on a side carries a >=160 px video (frame adds 8 px) and
+# must still leave squares >= MinimumReserveSquare. reserveSquare uses the
+# board renderer's own decoration/DPI arithmetic, so this holds at every
+# tk scaling.
+proc ::rsz::minimumStripSquare {side} {
+	set view [::mediainset::BoardView]
+	set pane [winfo parent $view]
+	set w $pane.mediainset
+	set ch [expr {[winfo reqheight $w.controls] + 8}]
+	set width [winfo width $view]
+	set height [winfo height $view]
+	if {$side eq "right"} {
+		return [::application::board::reserveSquare right 168 $width $height]
+	}
+	set aspect $::mediainset::Aspect
+	set px [expr {int(round(160/$aspect)) + $ch}]
+	return [::application::board::reserveSquare bottom $px $width $height]
+}
+
+# True only when the documented BRD-004 condition holds: no strip (right
+# or bottom) with a >=160 px video fits with squares >= the minimum.
+proc ::rsz::brd004? {} {
+	set view [::mediainset::BoardView]
+	set pane [winfo parent $view]
+	set w $pane.mediainset
+	set ch [expr {[winfo reqheight $w.controls] + 8}]
+	set choice [::mediainset::FitStrip [winfo width $view] [winfo height $view] $ch]
+	set minimum $::application::board::MinimumReserveSquare
+	return [expr {![llength $choice]
+		&& [::rsz::minimumStripSquare right] < $minimum
+		&& [::rsz::minimumStripSquare bottom] < $minimum}]
+}
+
+# Zero overlap, or exactly the BRD-004 corner overlay when the arithmetic
+# proves no minimum strip fits at the current scaling. A reserved strip
+# must never overlap.
+proc ::rsz::overlapOk? {tag} {
+	set overlap [::rsz::overlap?]
+	if {!$overlap} { return 1 }
+	set brd [::rsz::brd004?]
+	set reserve $::application::board::ReserveSide
+	set corner [::rsz::insetCorner?]
+	set minimum $::application::board::MinimumReserveSquare
+	puts "EVIDENCE $tag overlap=1 brd004=$brd reserve={$reserve} corner=$corner right=[::rsz::minimumStripSquare right] bottom=[::rsz::minimumStripSquare bottom] min=$minimum"
+	return [expr {$brd && $reserve eq "" && $corner}]
+}
+
 # Pump events for <ms> without changing the geometry.
-proc ::rsz::wait {ms} {
-	set ::rsz::Waiting 0
+proc ::rsz::wait {ms} {	set ::rsz::Waiting 0
 	after $ms {set ::rsz::Waiting 1}
 	vwait ::rsz::Waiting
 	update idletasks
@@ -338,7 +388,7 @@ tcltest::test rsz-resize-recomputes {a resize relays out board, pane and inset w
 	set panesBefore [::rsz::panes]
 	lassign [::rsz::settle [list wm geometry .application [::rsz::wideGeometry 0.90]]] ms after
 	set changed [expr {[::rsz::rects] ne $before && [::rsz::panes] ne $panesBefore}]
-	set overlapOk [expr {![::rsz::overlap?] || $::application::board::ReserveSide eq ""}]
+	set overlapOk [::rsz::overlapOk? rsz-resize]
 	puts "EVIDENCE rsz-resize settleMs=$ms changed=$changed inside=[::rsz::inside .application] overlap=$overlapOk rects=[::rsz::rects]"
 	list [expr {$ms > 0 && $ms <= 500}] $changed [::rsz::inside .application] $overlapOk
 } -cleanup {
@@ -380,6 +430,10 @@ tcltest::test rsz-scaling-roundtrip {tk scaling 1.0 -> 2.0 -> 1.0 relays out and
 	::rsz::showBoard
 	::rsz::showInset
 } -body {
+	# Normalise to the contract's 1.0 baseline first: the app's startup
+	# scaling (screen DPI) can already render the same border margin as
+	# 1.0, making the first loop step a genuine no-op.
+	::rsz::settle [list ::rsz::setScaling 1.0]
 	::rsz::settle [list wm geometry .application [::rsz::wideGeometry 1.0 1.3 10]]
 	# Make the 1.0 baseline a board rebuilt for the settled canvas: the
 	# first paint can predate the notebook page size.
@@ -396,10 +450,12 @@ tcltest::test rsz-scaling-roundtrip {tk scaling 1.0 -> 2.0 -> 1.0 relays out and
 	set panes {}
 	foreach scale {1.0 2.0 1.0} {
 		lassign [::rsz::settle [list ::rsz::setScaling $scale]] ms after
-		lappend times [expr {$ms > 0 && $ms <= 500}]
+		# Step 1.0 is the no-op baseline; a synchronous relayout may
+		# legitimately complete inside the first millisecond.
+		lappend times [expr {$ms >= 0 && $ms <= 500}]
 		lappend boards [::rsz::boardRect]
 		lappend insets [::rsz::insetRect]
-		lappend overlaps [expr {![::rsz::overlap?] || $::application::board::ReserveSide eq ""}]
+		lappend overlaps [::rsz::overlapOk? "rsz-scaling-$scale"]
 		lappend inside [::rsz::inside .application]
 		lappend borders $::application::board::Dim(borderthickness)
 		lappend panes [::rsz::panes]
@@ -407,8 +463,10 @@ tcltest::test rsz-scaling-roundtrip {tk scaling 1.0 -> 2.0 -> 1.0 relays out and
 	}
 	# 2.0 relayout must differ (border margins follow tk scaling) and 1.0
 	# must restore the 1.0 geometry. No scaling may overlap board/inset
-	# (unless the pane falls back to the BRD-004 corner overlay). The rule
-	# in ::application::scalingChanged says a fitting window keeps its size.
+	# except the BRD-004 corner overlay, and only when ::rsz::overlapOk?
+	# recomputes that condition (no >=160 px strip at the minimum square).
+	# The rule in ::application::scalingChanged says a fitting window keeps
+	# its size.
 	set g2 [wm geometry .application]
 	# A relayout may show as a board/inset move, a scaling-dependent border
 	# margin, or a pane size change (small screens keep the pane sizes).
@@ -506,7 +564,7 @@ tcltest::test rsz-resize-five-sizes {VAL-RSZ-001 five resizes settle within 500 
 		set paneChanged [expr {$afterPanes ne $beforePanes}]
 		set settled [expr {$ms > 0 && $ms <= 500}]
 		set inside [::rsz::inside .application]
-		set overlap [expr {![::rsz::overlap?] || $::application::board::ReserveSide eq ""}]
+		set overlap [::rsz::overlapOk? "rsz-five-$size"]
 		set c1 [::rsz::counterSnapshot]
 		::rsz::wait 550
 		set c2 [::rsz::counterSnapshot]
@@ -623,7 +681,7 @@ tcltest::test rsz-window-minimum {VAL-RSZ-005 the window minimum keeps pane and 
 	set minimum $::application::board::MinimumReserveSquare
 	set boardOk [expr {$square >= $minimum || $::application::board::ReserveSide eq ""}]
 	set overlap [::rsz::overlap?]
-	set overlay [expr {$overlap == 0 || ($::application::board::ReserveSide eq "" && [::rsz::insetCorner?])}]
+	set overlay [::rsz::overlapOk? rsz-minimum]
 	# 640x400 when the layout allows it (a floor below the layout minimum is
 	# not a legal window size, so it is deliberately not attempted).
 	set floorTried 0

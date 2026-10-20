@@ -2183,6 +2183,18 @@ proc shapeTokens {stream} {
  return $out
 }
 proc shapeOf {layout} {return [lindex [shapeTokens $layout] 0]}
+# Fullscreen is window state, not pane layout. A shape captured while the
+# window is fullscreen must not replay that stale flag later: stamp the flag
+# in force at load time, or leaving fullscreen at a tall aspect re-enters it
+# and keeps the screen rectangle as the normal geometry.
+proc withFullscreen {layout flag} {
+ lassign $layout root attrs children
+ set rootAttrs {}
+ if {[dict exists $attrs -attrs]} {set rootAttrs [dict get $attrs -attrs]}
+ dict set rootAttrs fullscreen $flag
+ dict set attrs -attrs $rootAttrs
+ return [list $root $attrs $children]
+}
 proc tallFrom {wide} {
  lassign $wide root attrs outer
  lassign $outer type options rows
@@ -2268,7 +2280,7 @@ proc setMode {t target} {
    set layout [tallFrom $S(base)]
    set S(tallShape) [shapeOf $layout]
   } else {set layout $S(base)}
-  $t load $layout
+  $t load [withFullscreen $layout [::menu::fullscreen?]]
   if {$target eq "tall"} {tallSashes $t}
   incr S(loadCount)
   set S(mode) $target

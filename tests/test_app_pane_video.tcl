@@ -7,11 +7,33 @@ proc ::paneVideo::stub {name args body} {
  if {[llength [info commands ::media::mpv::$name]]} {rename ::media::mpv::$name ::paneVideo::saved_$name; lappend saved $name}
  proc ::media::mpv::$name $args $body
 }
+# The harness opens on Information and Startup2 (an after-1 timer) selects
+# that tab once: select the board until the choice sticks and the page is
+# mapped and sized. Otherwise every geometry below measures the unmapped
+# board, whose panedwindow keeps the pre-reflow extents and never resizes.
+proc ::paneVideo::showBoard {{ms 6000}} {
+ set nb .application.nb
+ update
+ after 40
+ update
+ set deadline [expr {[clock milliseconds] + $ms}]
+ while {[clock milliseconds] < $deadline} {
+  catch { $nb select .application.nb.board }
+  update
+  if {[$nb select] eq ".application.nb.board" && [winfo exists $nb.board] \
+   && [winfo ismapped $nb.board] && [winfo width $nb.board] > 100} {
+   update
+   if {[$nb select] eq ".application.nb.board"} {return 1}
+  }
+  after 25
+ }
+ return 0
+}
 proc ::paneVideo::setup {} {
- .application.nb select .application.nb.board
  set ::application::twm::Options(board:layout:name) {}
  ::application::reflow::reset
- wm geometry .application 1200x780+0+0
+ if {![::paneVideo::showBoard]} {error {board tab did not become visible}}
+ wm geometry .application [::paneVideo::wideGeometry]
  wait 450
  variable saved {}; variable calls {}; variable began [clock milliseconds]
  stub available? {} {return 1}
@@ -33,6 +55,15 @@ proc ::paneVideo::cleanup {} {
  ::application::reflow::reset
 }
 proc ::paneVideo::rect {w} {return [list [winfo rootx $w] [winfo rooty $w] [winfo width $w] [winfo height $w]]}
+# A wide window that really fits the screen: a hardcoded 1200x780 is
+# clamped by the WM on a 1080 px screen (1060x815, then 1074x780 on the
+# return), so the reflow cannot return to the size the wide-sash snapshot
+# was keyed to and the board pane is left squeezed.
+proc ::paneVideo::wideGeometry {} {
+ set w [expr {min(1200, [winfo screenwidth .] - 40)}]
+ set h [expr {min(780, [winfo screenheight .] - 40)}]
+ return "${w}x${h}+0+0"
+}
 proc ::paneVideo::geometry {tag} {
  set pane [::mediainset::Pane]; set c $::application::board::Vars(widget:frame)
  set w $pane.mediainset
@@ -70,7 +101,7 @@ tcltest::test pane-video-008-reflow {inset native surface and playback survive a
  wm geometry .application 740x780
  ::paneVideo::wait 650
  lappend result [::application::reflow::mode] [::paneVideo::geometry tall]
- wm geometry .application 1200x780
+ wm geometry .application [::paneVideo::wideGeometry]
  ::paneVideo::wait 650
  lappend result [::application::reflow::mode] [::paneVideo::geometry wide-return]
  lappend result [expr {[winfo id $w] eq $id}] [expr {[::media::mpv::time] > $time}] [llength $::paneVideo::calls]
@@ -138,7 +169,7 @@ tcltest::test pane-video-008-tall-strip {wide->tall->wide reflow keeps a real re
  wm geometry .application [expr {min(720,$sw-40)}]x[expr {min(1750,$sh-60)}]
  ::paneVideo::wait 1000; update idletasks
  lappend result [::application::reflow::mode] {*}[::paneVideo::check strip-tall]
- wm geometry .application 1200x780
+ wm geometry .application [::paneVideo::wideGeometry]
  ::paneVideo::wait 1000; update idletasks
  lappend result [::application::reflow::mode] {*}[::paneVideo::check strip-wide-return] $::application::board::ReserveSide [expr {[winfo width $c] == $wideWidth}]
  lappend result [llength $::paneVideo::calls]

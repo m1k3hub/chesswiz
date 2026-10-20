@@ -104,10 +104,14 @@ tcltest::test inset-surfaceready-tiny {0 while the canvas is mapped but still 1x
 	update idletasks
 	set tiny [expr {[winfo ismapped .srTest.video] && [winfo width .srTest.video] <= 1}]
 	set r [::mediainset::SurfaceReady .srTest]
-	set diag [list [winfo geometry .srTest] [winfo width .srTest.video]x[winfo height .srTest.video] [winfo ismapped .srTest.video]]
+	# The window manager may decorate or move the 1x1 toplevel (+1+22
+	# under openbox); SurfaceReady must judge the canvas size, not its
+	# origin, so assert only the mapped 1x1 surface and the refusal.
+	set diag [list [winfo width .srTest.video] [winfo height .srTest.video] \
+		[winfo ismapped .srTest.video]]
 	destroy .srTest
 	list $tiny $r $diag
-} -result {1 0 {1x1+0+0 1x1 1}}
+} -result {1 0 {1 1 1}}
 
 # FreeRect on a stand-alone canvas: a 400x400 "board" item in a wide or tall pane.
 proc ::scidb::test::freeRect {cw ch bx by} {
