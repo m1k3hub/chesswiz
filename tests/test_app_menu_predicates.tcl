@@ -24,12 +24,28 @@ namespace eval ::scidb::test::menupred {
 	variable Saved {}
 	variable Program ""
 	variable Tick 0
+	variable FixtureDir ""
+}
+
+# Keep the checked-in fixture readable (0644); only its private copy executes.
+proc ::scidb::test::menupred::fixtureProgram {fixture} {
+	variable FixtureDir
+	set FixtureDir [file join [file dirname [info script]] tmp-app menupred-engine-[pid]]
+	file mkdir $FixtureDir
+	set program [file join $FixtureDir engine]
+	file copy -force $fixture $program
+	file attributes $program -permissions 0755
+	return $program
 }
 
 # The UCI engine for the live test: SCIDB_TEST_ENGINE first (as the other
 # engine tests), then stockfish where it is installed, then the fixture.
 proc ::scidb::test::menupred::findProgram {} {
-	if {[info exists ::env(SCIDB_TEST_ENGINE)]} { return $::env(SCIDB_TEST_ENGINE) }
+	if {[info exists ::env(SCIDB_TEST_ENGINE)]} {
+		set program $::env(SCIDB_TEST_ENGINE)
+		if {[file executable $program]} { return $program }
+		return [fixtureProgram $program]
+	}
 	set repoRoot [file normalize [file join [file dirname [info script]] ..]]
 	set mainRoot [file normalize [file join [file dirname [file normalize [file join $repoRoot .git]]] ..]]
 	foreach root [list $repoRoot $mainRoot] {
@@ -44,7 +60,7 @@ proc ::scidb::test::menupred::findProgram {} {
 		if {[file executable $path]} { return $path }
 	}
 	set fixture [file join [file dirname [info script]] fixtures fake-uci-engine.tcl]
-	if {[file executable $fixture]} { return $fixture }
+	if {[file readable $fixture]} { return [fixtureProgram $fixture] }
 	return ""
 }
 
@@ -217,4 +233,7 @@ tcltest::test menupred-report-module {NoHtmlReport is 1 only when the report mod
 	::capability::ClearOverrides
 } -result {1 1 0 1 0 1 0 0}
 
+if {$::scidb::test::menupred::FixtureDir ne ""} {
+	file delete -force $::scidb::test::menupred::FixtureDir
+}
 tcltest::cleanupTests

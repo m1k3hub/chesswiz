@@ -76,6 +76,16 @@ namespace eval ::scidb::test::reachability {
     }
     # Modal dialogs enter nested event loops. Observe first, then cancel via
     # their window-manager close protocol, just as closing the dialog would.
+    proc cancelButton {w wanted} {
+        foreach c [winfo children $w] {
+            if {[winfo class $c] in {TButton Button} && [winfo name $c] in [list $wanted bt-$wanted]} {
+                if {[$c cget -state] ne {disabled}} { return $c }
+            }
+            set button [cancelButton $c $wanted]
+            if {$button ne {}} { return $button }
+        }
+        return {}
+    }
     proc cancelDialogs {} {
         variable baseline
         variable seen
@@ -84,7 +94,14 @@ namespace eval ::scidb::test::reachability {
         foreach w [windows] {
             if {$w in $baseline || ![winfo exists $w] || ![winfo ismapped $w]} { continue }
             set command [wm protocol $w WM_DELETE_WINDOW]
-            if {$command ne {}} { catch {uplevel #0 $command} } else { catch {destroy $w} }
+            if {[string trim $command] eq {#}} {
+                # Question boxes intentionally disable the window close button.
+                # Use their real Cancel/No control to leave the nested loop.
+                foreach wanted {cancel no ok} {
+                    set button [cancelButton $w $wanted]
+                    if {$button ne {}} { catch {$button invoke}; break }
+                }
+            } elseif {$command ne {}} { catch {uplevel #0 $command} } else { catch {destroy $w} }
         }
         after 150 ::scidb::test::reachability::cancelDialogs
     }
@@ -129,19 +146,28 @@ namespace eval ::scidb::test::reachability {
         variable output
         set serial 0
         foreach case $cases {
-            while {$running >= 3} { vwait ::scidb::test::reachability::running }
             lassign $case id argv kind
+            # X11 selections belong to the display, not the process/HOME.
+            # Clipboard/import/comment probes must not affect a neighbour's
+            # before/after snapshot or selection ownership.
+            set exclusive [regexp {^c11\.|\.(copy|cut|paste|import)} $id]
+            while {$running >= 3 || ($exclusive && $running)} {
+                vwait ::scidb::test::reachability::running
+            }
             set home [file join $root tests tmp-app reachability-[pid]-[incr serial]]
             file mkdir $home
             puts "REACHABILITY $id $argv"; flush stdout
             set command [list env HOME=$home SCIDB_REACHABILITY_CASE=$case \
                 timeout 35 [info nameofexecutable] [file join $root tests run_app_tests.tcl] \
-                -file [file tail $file] -match reachability-probe]
+                -file [file tail $file] -match *-probe]
             set pipe [open [list | {*}$command 2>@1] r]
             fconfigure $pipe -blocking 0
             set output($pipe) {}
             incr running
             fileevent $pipe readable [list ::scidb::test::reachability::finished $pipe $home $id]
+            if {$exclusive} {
+                while {$running} { vwait ::scidb::test::reachability::running }
+            }
         }
         while {$running} { vwait ::scidb::test::reachability::running }
         return $bad
@@ -236,6 +262,7 @@ namespace eval ::scidb::test::reachability {
         return [lsort -unique $ids]
     }
 }
+if {[info exists ::env(SCIDB_REACHABILITY_LIBRARY)]} { return }
 if {[info exists ::env(SCIDB_REACHABILITY_CASE)]} {
     ::scidb::test::reachability::ready
     lassign $::env(SCIDB_REACHABILITY_CASE) id argv kind

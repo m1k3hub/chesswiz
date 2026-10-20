@@ -197,6 +197,7 @@ proc ::context::DefineObject {cid key rows} {
 #   <id>                    one action row
 # ----------------------------------------------------------------------
 proc ::context::Declare {} {
+	variable Flags {}
 	# --- C1: board square / position -------------------------------
 	Item c1.set_start_board		"Set Start Board…"			C1
 	Item c1.set_start_position	"Set Start Position…"		C1
@@ -325,7 +326,7 @@ proc ::context::Declare {} {
 				set text $flag
 			}
 			set id c3.flag.[incr flagId]
-			set Flags($id) $flag
+			dict set Flags $id $flag
 			Item $id $text C3
 			lappend flagRows $id
 		}
@@ -1326,6 +1327,7 @@ proc ::context::Header {kind object} {
 			return $base
 		}
 		column {
+			if {[dict exists $object header]} { return [dict get $object header] }
 			if {[dict exists $object column]} { return [dict get $object column] }
 			return ""
 		}
@@ -1754,7 +1756,24 @@ proc ::context::Invoke {id {object {}}} {
 }
 
 proc ::context::Command {id object} {
-	switch -- $id {
+	if {![dict exists $object parent]} { dict set object parent .application }
+	if {![dict exists $object view]} { dict set object view 0 }
+	if {![dict exists $object variant]} {
+		set variant Normal
+		if {[dict exists $object base]} { catch { set variant [::scidb::db::get variant? [dict get $object base]] } }
+		dict set object variant $variant
+	}
+	if {[string match c9.analysis.* $id] && ![dict exists $object tree]} {
+		if {[dict exists $object paneUid] && [regexp {^analysis:(\d+)$} [dict get $object paneUid] -> number]} {
+			if {[info exists ::application::MapTerminalToAnalysis($number)]} { set number $::application::MapTerminalToAnalysis($number) }
+			dict set object number $number
+			dict set object tree $::application::analysis::NumberToTree($number)
+		}
+	}
+	if {[string match c9.tree.* $id] && ![dict exists $object table]} {
+		dict set object table $::application::tree::Vars(table)
+	}
+	switch -glob -- $id {
 		c9.pane.board { catch { ::menu::TogglePaneId board } }
 		c9.pane.notation { catch { ::menu::TogglePaneId editor } }
 		c9.pane.games { catch { ::menu::TogglePaneId games } }
@@ -1781,17 +1800,15 @@ proc ::context::Command {id object} {
 		c1.start.chess960 { catch { ::application::pgn::Shuffle Chess960 } }
 		c1.start.symm960 { catch { ::application::pgn::Shuffle Symm960 } }
 		c1.start.shuffle { catch { ::application::pgn::Shuffle Shuffle } }
-		c1.start.setup {
-			catch { ::setup::setupPositionMenu ::application::pgn [dict get $object menu] }
-		}
+		c1.start.setup { ::setup::board::open [dict get $object parent] }
 		c1.insert_null { catch { ::move::addMove dialog -- } }
 		c1.flip_board {
 			set w [expr {[dict exists $object widget] ? [dict get $object widget] : ""}]
 			if {$w ne ""} { catch { ::application::board::Rotate $w } }
 		}
-		c1.copy_fen { catch { ::setup::board::CopyFen } }
+		c1.copy_fen { clipboard clear; clipboard append [::scidb::pos::fen] }
 		c1.copy_diagram { catch { ::context::CopyDiagram $object } }
-		c1.edit_annotation { catch { ::application::pgn::EditAnnotation } }
+		c1.edit_annotation { catch { ::application::pgn::editAnnotation } }
 		c1.board_setup {
 			set w [expr {[dict exists $object widget] ? [dict get $object widget] : ".application"}]
 			catch { ::board::options::openConfigDialog $w ::application::board::Redraw }
@@ -1800,7 +1817,7 @@ proc ::context::Command {id object} {
 		c2.replace_move { catch { ::context::MoveAction replace $object } }
 		c2.add_variation { catch { ::context::MoveAction variation $object } }
 		c2.new_main_line { catch { ::context::MoveAction mainline $object } }
-		c2.try_variation { catch { ::context::MoveAction trial $object } }
+		c2.try_variation { ::application::pgn::flipTrialMode }
 		c2.exchange_move { catch { ::context::MoveAction exchange $object } }
 		c2.promote_variation { catch { ::application::pgn::PromoteVariation } }
 		c2.remove_variation { catch { ::application::pgn::RemoveVariation } }
@@ -1808,6 +1825,7 @@ proc ::context::Command {id object} {
 		c2.comment_before { catch { ::application::pgn::editComment before } }
 		c2.marks_palette { catch { ::application::pgn::openMarksPalette } }
 		c2.move_info { catch { ::application::pgn::EditInfo .application } }
+		c2.annot.prefix - c2.annot.infix - c2.annot.suffix { ::application::pgn::editAnnotation }
 		c2.explain_move { catch { ::application::pgn::ExplainMove ::application::pgn "" } }
 		c2.insert_diagram { catch { ::annotation::addNag suffix 155 } }
 		c2.insert_diagram_black { catch { ::annotation::addNag suffix 156 } }
@@ -1834,10 +1852,7 @@ proc ::context::Command {id object} {
 		c3.overview {
 			catch { ::gamestable::Open(overview) [dict get $object path] [dict get $object index] }
 		}
-		c3.games_like {
-			catch { ::gamestable::SimilarGames [dict get $object path] [dict get $object base] \
-				[dict get $object variant] [dict get $object index] }
-		}
+		c3.games_like { return [::gamestable::SimilarGames [dict get $object path] [dict get $object base] [dict get $object variant] [dict get $object index]] }
 		c3.ask_about_game {
 			catch { ::gamestable::AskAboutGame [dict get $object path] [dict get $object base] \
 				[dict get $object variant] [dict get $object index] }
@@ -1854,7 +1869,7 @@ proc ::context::Command {id object} {
 				[dict get $object variant] [dict get $object view] [dict get $object index]] }
 		}
 		c3.delete {
-			catch { ::gamestable::deleteGame [dict get $object base] [dict get $object variant] [dict get $object index] }
+			catch { ::gamestable::deleteGame [dict get $object base] [dict get $object variant] [dict get $object index] [dict get $object view] }
 		}
 		c3.flag.* {
 			return [GameFlag $object $id]
@@ -1869,41 +1884,210 @@ proc ::context::Command {id object} {
 			set variant [expr {[dict exists $object variant] ? [dict get $object variant] : ""}]
 			return [::game::clipboard::paste $base $variant]
 		}
-		c3.sort_column - c3.sort_asc - c3.sort_desc {
-			catch { ::gamestable::SortColumn [dict get $object path] [dict get $object column] asc }
+		c3.sort_column - c3.sort_asc - c3.sort_desc - c3.sort.column - c3.sort.asc - c3.sort.desc {
+			set dir [expr {$id in {c3.sort_desc c3.sort.desc} ? "descending" : "ascending"}]
+			::gamestable::SortColumn [dict get $object path] [dict get $object column] $dir
 		}
-		c4.properties { catch { ::application::database::Properties [dict get $object parent] } }
-		c4.open_new_tab { catch { ::application::database::OpenBase [dict get $object base] 0 } }
+		c3.edit_characteristics {
+			set info [::scidb::db::get gameInfo [dict get $object index] [dict get $object view] [dict get $object base] [dict get $object variant]]
+			::dialog::save::open [dict get $object parent] [dict get $object base] [dict get $object variant] {} [::gamestable::column $info number]
+		}
+		c4.readonly {
+			set base [dict get $object base]
+			::scidb::db::set readonly $base [expr {![::scidb::db::get readonly? $base]}]
+		}
+		c4.search.current { ::application::database::searchCurrent [dict get $object parent] }
+		c4.reports.opening { ::application::database::ShowOpeningReport [dict get $object parent] }
+		c5.event_table { ::crosstable::open [dict get $object parent] [dict get $object base] [dict get $object variant] [dict get $object index] [dict get $object view] event }
+		c9.not.spacing - c9.not.numbering - c9.not.markers - c9.not.diagrams - c9.not.emoticons {
+			set key [dict get {c9.not.spacing spacing:paragraph c9.not.numbering show:varnumbers c9.not.markers show:markers c9.not.diagrams show:diagram c9.not.emoticons show:emoticon} $id]
+			set ::pgn::editor::Options($key) [expr {!$::pgn::editor::Options($key)}]
+			::application::pgn::Refresh $key
+		}
+		c12.copy_clipboard { ::gamebar::CopyThisGameToClipboard [dict get $object parent] [dict get $object id] }
+		c4.properties { $::application::database::Vars(switcher) show [dict get $object base] }
+		c4.open_new_tab {
+			set base [dict get $object base]
+			set variant [::scidb::db::get variant? $base]
+			set view [::scidb::view::new $base $variant unused unused unused unused master slave]
+			set code [catch {
+				::scidb::view::search $base $variant $view reset none
+				::application::database::OpenFilteredViewInSwitcher [dict get $object parent] $base $variant $view tab [::util::databaseName $base]
+			} result options]
+			::scidb::view::close $base $variant $view
+			return -options $options $result
+		}
 		c4.close { catch { ::application::database::CloseBase [dict get $object parent] [dict get $object base] } }
-		c4.download_games { catch { ::application::download::open [dict get $object parent] } }
-		c4.save_changes { catch { ::application::database::Save [dict get $object base] } }
+		c4.download_games { return [::action::run menu.tools.download] }
+		c4.save_changes {
+			set base [dict get $object base]
+			if {[file extension $base] eq ".pgn"} {
+				::application::database::SaveChanges [dict get $object parent] $base
+			} else { ::progress::start [dict get $object parent] [list ::scidb::db::save $base] {} {} }
+		}
+		c4.maintenance.compact { ::application::database::Compact [dict get $object parent] [dict get $object base] }
+		c4.export.pgn { ::export::open [dict get $object parent] -base [dict get $object base] -variant [dict get $object variant] -view [dict get $object view] -extension pgn -name [::util::databaseName [dict get $object base]] }
+		c4.import.pgn { return [::action::run menu.file.import.pgn] }
+		c4.symbol.small - c4.symbol.normal - c4.symbol.large {
+			set ::database::switcher::Options(iconsize) [dict get {c4.symbol.small 24 c4.symbol.normal 32 c4.symbol.large 48} $id]
+		}
 		c4.new.scid { catch { ::application::database::newBase [dict get $object parent] Normal "" } }
 		c4.new.pgn { catch { ::application::database::newBase [dict get $object parent] Normal {} pgn } }
 		c4.open_database { return [::action::run menu.file.open] }
 		c4.help { return [::action::run app-help] }
-		c5.player_card { catch { ::player::card::open [dict get $object name] [dict get $object base] } }
-		c5.prep_report { catch { ::application::report::prep [dict get $object name] } }
+		c5.player_card { return [::action::run open_view [list kind player_card name [dict get $object name]]] }
+		c5.prep_report { return [::action::run open_view [list kind prep_report name [dict get $object name]]] }
 		c5.insights { catch { ::insights::show [dict get $object name] } }
-		c5.open_switcher { catch { ::application::database::searchCurrent [dict get $object parent] } }
-		c5.save_working_set { catch { ::application::assistant::runTool save_working_set {} } }
-		c6.add_move { catch { ::application::analysis::AddMove [dict get $object tree] 0 0 } }
+		c5.open_switcher - c5.save_working_set {
+			set base [dict get $object base]
+			set variant [dict get $object variant]
+			set kind [dict get $object kind]
+			set name [dict get $object name]
+			set view [::scidb::view::new $base $variant unused unused unused unused master slave]
+			switch $kind {
+				player { set query [list playername white $name]; set other [list playername black $name]; set query [list or $query $other] }
+				event { set query [list eventname $name] }
+				site { set query [list sitename $name] }
+			}
+			set code [catch {
+				::scidb::view::search $base $variant $view null none $query
+				if {$id eq "c5.open_switcher"} {
+					::application::database::OpenFilteredViewInSwitcher [dict get $object parent] $base $variant $view $kind $name
+				} else {
+					::application::database::SaveFilteredViewAsWorkingSet [dict get $object parent] $base $variant $view $kind $name
+				}
+			} result options]
+			::scidb::view::close $base $variant $view
+			return -options $options $result
+		}
+		c6.add_move - c6.add_sequence - c6.add_line - c6.add_all - c6.add_merge - c6.add_include {
+			set what [dict get {c6.add_move var c6.add_sequence seq c6.add_line line c6.add_all all c6.add_merge merge c6.add_include incl} $id]
+			return [::application::analysis::InsertMoves [dict get $object tree] $what [EngineLine $object]]
+		}
+		c6.insert_comment { return [::application::analysis::InsertComment [dict get $object tree] [EngineLine $object]] }
+		c6.copy_line { clipboard clear; clipboard append [dict get $object pv] }
+		c6.copy_fen { clipboard clear; clipboard append [::scidb::pos::fen] }
+		c6.lock_engine - c6.opponents_view - c6.best_first {
+			set tree [dict get $object tree]
+			set number [dict get $object number]
+			switch $id {
+				c6.lock_engine { set var ::application::analysis::${tree}::Vars(engine:locked); set cmd [list ::application::analysis::EngineLock $tree] }
+				c6.opponents_view { set var ::application::analysis::${tree}::Vars(engine:opponent); set cmd [list ::application::analysis::restartAnalysis $number] }
+				c6.best_first { set var ::application::analysis::${number}::Options(engine:bestFirst); set cmd [list ::application::analysis::SetOrdering $tree] }
+			}
+			set $var [expr {![set $var]}]
+			return [{*}$cmd]
+		}
+		c6.multi.1 - c6.multi.2 - c6.multi.3 - c6.multi.4 - c6.multi.5 - c6.multi.6 - c6.multi.7 - c6.multi.8 {
+			return [::application::analysis::SetMultiPV [dict get $object tree] [lindex [split $id .] end]]
+		}
+		c6.lines.1 - c6.lines.2 - c6.lines.3 - c6.lines.4 {
+			set ::application::analysis::[dict get $object number]::Options(engine:nlines) [lindex [split $id .] end]
+			return [::application::analysis::SetLinesPerPV [dict get $object tree]]
+		}
 		c6.close_engine { catch { ::application::analysis::CloseEngine [dict get $object tree] } }
 		c6.pause_resume { catch { ::application::analysis::Pause [dict get $object tree] } }
 		c6.setup_engine { catch { ::application::analysis::Setup [dict get $object tree] [dict get $object number] } }
 		c6.setup_eval_edges { catch { ::application::analysis::SetupEvalEdges [dict get $object tree] } }
-		c7.play { catch { ::mediainset::play [dict get $object mediaId] } }
-		c7.open_stream { catch { ::mediainset::OpenStream [dict get $object base] } }
-		c7.show_in_board { catch { ::mediainset::toggle } }
-		c8.start_search { catch { ::application::tree::startSearch [dict get $object table] } }
-		c8.analyze { catch { ::application::analysis::AnalyzePosition [dict get $object fen] } }
-		c8.copy_line { catch { ::application::tree::CopyLine } }
-		c8.save_line { catch { ::application::tree::SaveLine } }
-		c10.optimize - c10.fit - c10.squeeze - c10.configure {
-			catch { ::table::ConfigureColumns [dict get $object table] }
+		c7.play - c7.open_report {
+			set row ""
+			if {[dict exists $object row]} {
+				set row [dict get $object row]
+			} else {
+				# The live popup supplies a media index/path rather than a row.
+				foreach entry [::mediainset::Entries] {
+					lassign $entry candidate type title path index
+					if {$index eq [dict get $object mediaId] && $path eq [dict get $object path]} { set row $candidate; break }
+				}
+			}
+			if {$row eq ""} { error "media entry is no longer available" }
+			::mediainset::Choose $row
 		}
-		c11.copy { catch { ::tk_textCopy [dict get $object widget] } }
-		c11.cut { catch { ::tk_textCut [dict get $object widget] } }
-		c11.paste { catch { ::tk_textPaste [dict get $object widget] } }
+		c7.open_stream { catch { ::application::media::OpenStream [dict get $object parent] } }
+		c7.show_in_board - c9.media.show {
+			set ::mediainset::Options(enabled) [expr {!$::mediainset::Options(enabled)}]
+			::mediainset::toggle
+		}
+		c7.sync.position - c7.sync.timeline {
+			lassign [::mediasync::config] transport follow
+			if {$id eq "c7.sync.position"} { set follow [expr {!$follow}] } else { set transport [expr {!$transport}] }
+			::mediasync::set-config $transport $follow
+			::media::sync::set-config $transport $follow
+		}
+		c8.start_search { ::application::tree::startSearch }
+		c8.search.exact - c8.search.slow - c8.search.fast {
+			set ::application::tree::Options(search:mode) [lindex [split $id .] end]
+		}
+		c8.automatic - c9.tree.automatic - c8.inside_variations - c8.highlight - c9.tree.novelties - c8.lock_reference {
+			set key [dict get {c8.automatic search:automatic c9.tree.automatic search:automatic c8.inside_variations search:variations c8.highlight novelty:highlight c9.tree.novelties novelty:highlight c8.lock_reference base:lock} $id]
+			set ::application::tree::Options($key) [expr {!$::application::tree::Options($key)}]
+			if {$key eq "search:variations"} { ::application::tree::InvalidateSearch [dict get $object table] }
+			if {$key eq "novelty:highlight"} { ::application::tree::ToggleNoveltyHighlighting [dict get $object table] }
+		}
+		c8.opening_report { ::application::tree::openingreport::show [dict get $object parent] }
+		c8.reference.none { ::scidb::tree::set $::scidb::clipbaseName }
+		c8.move_actions {
+			set m .contextMoveActions
+			catch {destroy $m}
+			menu $m -tearoff 0
+			::move::addActionsToMenu $m [list ::application::tree::DoAction [dict get $object table] [dict get $object row] [dict get $object move]] {append load}
+			tk_popup $m {*}[winfo pointerxy .application]
+		}
+		c8.analyze { ::application::analysis::AnalyzePosition [dict get $object table] [dict get $object row] }
+		c8.copy_line { clipboard clear; clipboard append [TreeLine $object] }
+		c8.save_line { catch { ::application::tree::SaveLine } }
+		c10.fill_column {
+			set tree [dict get $object table].t
+			$tree column configure tail -visible [expr {![$tree column cget tail -visible]}]
+		}
+		c10.hide { ::table::hideColumn [dict get $object table] [dict get $object column] }
+		c10.auto_stretch {
+			set table [dict get $object table]
+			set column [dict get $object column]
+			set var ::table::$::table::IdMap($table)::Options(-stretch:$column)
+			set $var [expr {![set $var]}]
+			::table::ToggleStretchable $table $column
+		}
+		c10.optimize - c10.fit - c10.squeeze {
+			set op [dict get {c10.optimize optimize c10.fit fit c10.squeeze squeeze} $id]
+			::table::FitColumns [dict get $object table] $op
+		}
+		c10.configure { ::table::OpenConfigureDialog [dict get $object table] [dict get $object column] [Header column $object] }
+		c11.copy { ::comment::TextCopy [dict get $object widget] }
+		c11.cut { ::comment::TextCut [dict get $object widget] }
+		c11.paste { ::comment::TextPaste [dict get $object widget] }
+		c9.flip_board { ::application::board::Rotate $::application::board::Vars(widget:frame) }
+		c9.analysis.setup { return [Command c6.setup_engine $object] }
+		c9.analysis.best { return [Command c6.best_first $object] }
+		c9.analysis.opponents { return [Command c6.opponents_view $object] }
+		c9.media.stream { return [Command c7.open_stream $object] }
+		c9.assistant.clear { ::application::assistant::clear }
+		c9.maximise { ::application::TogglePaneZoom [dict get $object frame] [dict get $object twm] }
+		c9.fold { [dict get $object twm] togglebar [dict get $object frame] }
+		c9.amalgamate {
+			set twm [dict get $object twm]
+			set frame [dict get $object frame]
+			$twm [expr {[$twm get! $frame amalgamate 0] ? "separate" : "amalgamate"}] $frame
+		}
+		c9.float {
+			set twm [dict get $object twm]
+			set frame [dict get $object frame]
+			if {[::menu::PaneFloating [dict get $object paneUid] $twm]} { ::twm::Dock $twm [$twm toplevel $frame] } else { ::twm::Undock $twm $frame }
+		}
+		c9.stay_on_top - c9.hide_leaving {
+			set twm [dict get $object twm]
+			set frame [$twm toplevel [dict get $object frame]]
+			set key [expr {$id eq "c9.stay_on_top" ? "stayontop" : "hide"}]
+			set value [expr {![$twm get! $frame $key 0]}]
+			if {$key eq "stayontop"} { $twm stayontop $frame $value } else { $twm set! $frame hide $value }
+		}
+		c9.close { [dict get $object twm] close [dict get $object frame] }
+		c9.docking {
+			set twm [dict get $object twm]
+			set key $::application::Vars($twm:id):docking:showall
+			set ::application::twm::Options($key) [expr {!$::application::twm::Options($key)}]
+			::application::twm::ShowAllDockingPoints $twm
+		}
 		c9.board_setup { return [::action::run menu.board.setup] }
 		c9.tablebase { return [::action::run menu.analysis.tablebase.show] }
 		c9.not.configure { return [::action::run menu.edit.preferences.pgn] }
@@ -1917,16 +2101,36 @@ proc ::context::Command {id object} {
 		c9.not.font_reset {
 			return [::context::PaneFont $object reset]
 		}
-		c11.undo { catch { [dict get $object widget] edit undo } }
-		c11.redo { catch { [dict get $object widget] edit redo } }
+		c11.undo { ::comment::EditUndo }
+		c11.redo { ::comment::EditRedo }
+		c11.revert { ::comment::Revert [winfo toplevel [dict get $object widget]] }
+		c11.display_emoticons {
+			set ::comment::Options(showEmoticons) [expr {!$::comment::Options(showEmoticons)}]
+			::comment::DisplayEmoticons
+		}
 		c11.select_all { catch { [dict get $object widget] tag add sel 1.0 end } }
-		c11.clear { catch { [dict get $object widget] delete 1.0 end } }
+		c11.clear { ::comment::Clear }
 		c12.load_number { catch { ::gamebar::LoadGameNumber [dict get $object parent] } }
-		c12.import_game { catch { ::gamebar::ImportPgnGame [dict get $object parent] } }
-		c12.reload { catch { ::gamebar::Reload [dict get $object parent] } }
-		c12.copy_game { catch { ::gamebar::CopyGame [dict get $object parent] [dict get $object id] } }
-		c12.export { catch { ::gamebar::ExportGame [dict get $object parent] [dict get $object id] } }
-		c12.close_tab { catch { ::gamebar::CloseTab [dict get $object parent] [dict get $object id] } }
+		c12.import_game { ::application::pgn::importGame }
+		c12.reload { catch { ::gamebar::ReloadCurrentGame [dict get $object parent] } }
+		c12.copy_game { catch { ::gamebar::CopyThisGameToClipbase [dict get $object parent] [dict get $object id] } }
+		c12.export { catch { ::gamebar::exportGame [dict get $object parent] [dict get $object id] } }
+		c12.close_tab {
+			set pos [dict get $object gameSlot]
+			if {[::gamebar::CheckIfModified [dict get $object parent] $pos]} { return }
+			::application::pgn::release $pos
+			::game::release $pos
+		}
+		c12.clear_history { ::game::clearHistory }
+		c12.remove_history { ::game::removeHistoryEntry [dict get $object historyIndex] }
+		c12.new.standard { ::menu::gameNew [dict get $object parent] }
+		c12.new.chess960 { ::menu::gameNew [dict get $object parent] Chess960 }
+		c12.save.replace { ::application::pgn::saveGame replace [dict get $object base] }
+		c12.save.replace_moves { ::application::pgn::saveGame moves [dict get $object base] }
+		c12.save.new { ::application::pgn::saveGame add [dict get $object base] }
+		c12.paste.variation { ::application::pgn::PasteClipboardVariation }
+		c12.paste.game { ::application::pgn::PasteClipboardGame }
+		c12.merge.game { ::gamebar::mergeGame [dict get $object parent] [dict get $object gameSlot] }
 	}
 	return
 }
@@ -1949,6 +2153,43 @@ proc ::context::GameFlag {object id} {
 		catch { ::gamestable::Refresh [dict get $object path] }
 	}
 	return
+}
+
+# Read the branch on a temporary game. Per-key SAN queries navigate internally
+# and can change the halfmove clock when returning to a variation, so they
+# must not run on the user's board. Release the duplicate even after an error.
+proc ::context::TreeLine {object} {
+	set key [::scidb::game::position key]
+	set slot 32
+	while {[::scidb::game::query $slot open?]} { incr slot }
+	set rc [catch {
+		::scidb::game::duplicate $slot [::scidb::game::current] modified
+		set line {}
+		while {1} {
+			set parts [split $key .]
+			set ply [lindex $parts end]
+			if {![string is integer -strict $ply] || $ply == 0} { break }
+			set san [::scidb::game::query $slot move $key]
+			if {$san ne ""} { set line [linsert $line 0 $san] }
+			# A variation key embeds its first ply and variation number.
+			# At its first move, continue in the parent one ply earlier.
+			if {[llength $parts] > 2 && $ply == [lindex $parts end-2]} {
+				set parts [lreplace $parts end-2 end-1]
+			}
+			lset parts end [expr {$ply - 1}]
+			set key [join $parts .]
+		}
+	} err opts]
+	catch { ::scidb::game::release $slot }
+	if {$rc} { return -options $opts $err }
+	if {[dict exists $object move] && [dict get $object move] ne ""} { lappend line [dict get $object move] }
+	return [join $line " "]
+}
+
+proc ::context::EngineLine {object} {
+	set row [dict get $object lineId]
+	if {[string is integer -strict $row]} { return $row }
+	return [[dict get $object tree] item order $row -visible]
 }
 
 proc ::context::MoveAction {action object} {
