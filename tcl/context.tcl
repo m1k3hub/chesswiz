@@ -41,7 +41,23 @@ namespace eval ::context::mc {
 	set WhatCanIDo		"What can I do here?"
 	set Withheld		"Not sent: this request would carry private data. Withheld: %s."
 	set NothingToPost	"There is nothing to show for this object."
+
+	# English defaults, restored before every language load.
+	set ::context::DefaultMC {}
+	foreach _name [lsort [info vars]] {
+		if {[array exists $_name] || [string index [namespace tail $_name] 0] eq "_"} { continue }
+		lappend ::context::DefaultMC [namespace tail $_name] [set $_name]
+	}
+	unset _name
 }
+
+proc ::context::ResetMC {} {
+	foreach {name value} $::context::DefaultMC {
+		set ::context::mc::$name $value
+	}
+	return
+}
+::mc::addDefaultReset ::context::ResetMC
 
 # ----------------------------------------------------------------------
 # Small helpers (Tcl 8.5: no dict get?).
@@ -1710,46 +1726,147 @@ proc ::context::CopyDiagram {object} {
 
 # ----------------------------------------------------------------------
 # Per-pane font size (C9). A pane has its own font context, so changing
-# it never changes the app-wide base size.
+# it never changes the app-wide base size. The pane's widgets are bound
+# to private clones of the fonts they already use, and only those clones
+# are resized: the notation text (widget -font and the tag fonts) of this
+# pane changes, every other pane keeps its font.
 # ----------------------------------------------------------------------
 proc ::context::PaneFontContext {uid} {
-	return "pane:[lindex [split $uid :] 0]"
+	return "pane:$uid"
+}
+
+proc ::context::PaneFontBaseSize {} {
+	set base 11
+	if {![catch { set size [::font::currentFontSize text] }]} {
+		set base [expr {abs($size)}]
+	} else {
+		catch { set base [expr {abs($::font::Options(text:size))}] }
+	}
+	if {$base < 1} { set base 11 }
+	return $base
+}
+
+# Every descendant that has a font of its own (Text, Entry, list-like
+# widgets), including nested panes.
+proc ::context::PaneFontWidgets {w} {
+	set out {}
+	foreach child [winfo children $w] {
+		lappend out {*}[PaneFontWidgets $child]
+		if {![catch { $child cget -font }]} { lappend out $child }
+	}
+	return $out
+}
+
+# Private clone of <font> for one pane widget or text tag. The clone keeps
+# the family/style of the font the widget really uses and remembers its
+# original size, so every later pane size is applied to that base.
+proc ::context::PaneFontClone {key font} {
+	variable PaneFontBase
+	variable PaneFontOf
+	variable PaneFontSerial
+
+	if {[info exists PaneFontOf($key)]} {
+		set name $PaneFontOf($key)
+		if {![catch { font configure $name }]} { return $name }
+	}
+	if {[catch { array set a [font actual $font] }]} { return "" }
+	if {![info exists a(-family)]} { return "" }
+
+	incr PaneFontSerial
+	set name "::context::paneFont$PaneFontSerial"
+	catch { font delete $name }
+	set size 10
+	if {[info exists a(-size)]} { set size [expr {abs($a(-size))}] }
+	set weight normal
+	set slant roman
+	set underline 0
+	set overstrike 0
+	foreach attr {-weight -slant -underline -overstrike} {
+		set var [string range $attr 1 end]
+		if {[info exists a($attr)]} { set $var $a($attr) }
+	}
+	if {[catch {
+		font create $name -family $a(-family) -size $size \
+			-weight $weight -slant $slant \
+			-underline $underline -overstrike $overstrike
+	}]} { return "" }
+
+	set PaneFontBase($name) $size
+	set PaneFontOf($key) $name
+	return $name
+}
+
+proc ::context::PaneFontBind {frame uid} {
+	foreach w [PaneFontWidgets $frame] {
+		set font ""
+		if {![catch { set font [$w cget -font] }] && $font ne ""} {
+			set clone [PaneFontClone "$uid|w|$w" $font]
+			if {$clone ne ""} { catch { $w configure -font $clone } }
+		}
+		if {[winfo class $w] ne "Text"} { continue }
+		foreach tag [$w tag names] {
+			set tagfont ""
+			if {[catch { set tagfont [$w tag cget $tag -font] }]} { continue }
+			if {$tagfont eq ""} { continue }
+			set clone [PaneFontClone "$uid|t|$w|$tag" $tagfont]
+			if {$clone ne ""} { catch { $w tag configure $tag -font $clone } }
+		}
+	}
+	return
+}
+
+# Apply one absolute pane size to all fonts already bound to the pane.
+proc ::context::PaneFontApplySize {uid size} {
+	variable PaneFontBase
+	variable PaneFontOf
+
+	set delta [expr {$size - [PaneFontBaseSize]}]
+	foreach key [array names PaneFontOf "$uid|*"] {
+		set name $PaneFontOf($key)
+		if {![info exists PaneFontBase($name)]} { continue }
+		catch { font configure $name -size [expr {$PaneFontBase($name) + $delta}] }
+	}
+	return
+}
+
+# Called after a pane has been built: re-apply a size stored in the
+# options file (the saved layout), without changing the global size.
+proc ::context::PaneFontApply {frame uid} {
+	set ctx [PaneFontContext $uid]
+	if {![info exists ::font::Options($ctx:size)]} { return }
+	if {$frame eq "" || ![winfo exists $frame]} { return }
+	PaneFontBind $frame $uid
+	PaneFontApplySize $uid $::font::Options($ctx:size)
+	return
 }
 
 proc ::context::PaneFont {object delta} {
 	set uid [expr {[dict exists $object paneUid] ? [dict get $object paneUid] : "board"}]
 	set ctx [PaneFontContext $uid]
-	set base 11
-	if {![catch { set base [::font::currentFontSize text] }]} {
-		set base [expr {abs($base)}]
-	} else {
-		catch { set base [expr {abs($::font::Options(text:size))}] }
-	}
-	# A pane context starts from the global base, so its first change is
-	# relative to what the user sees; the global size is never touched.
+	set base [PaneFontBaseSize]
+	# A pane starts at the global base, so its first change is relative to
+	# what the user sees; the global size is never touched.
 	if {![info exists ::font::Options($ctx:size)]} {
-		catch {
-			::font::registerTextFonts $ctx {normal bold}
-			set current $::font::Options($ctx:size)
-			if {$current != $base} {
-				::font::changeSize $ctx [expr {$base - $current}]
-			}
-		}
+		set ::font::Options($ctx:size) $base
 	}
+	set current $::font::Options($ctx:size)
 	if {$delta eq "reset"} {
-		set current [PaneFontSize $uid]
-		if {$current != $base} {
-			catch { ::font::changeSize $ctx [expr {$base - $current}] }
-		}
+		set value $base
+	} elseif {[llength [info commands ::html::incrFontSize]]} {
+		set value [::html::incrFontSize $current $delta]
+	} elseif {$delta < 0} {
+		set value [expr {max(1, $current + $delta)}]
 	} else {
-		catch { ::font::changeSize $ctx $delta }
+		set value [expr {$current + $delta}]
 	}
+	set ::font::Options($ctx:size) $value
+
 	set frame [expr {[dict exists $object frame] ? [dict get $object frame] : ""}]
-	if {$frame ne ""} {
+	if {$frame ne "" && [winfo exists $frame]} {
+		PaneFontBind $frame $uid
+		PaneFontApplySize $uid $value
 		catch { event generate $frame <<FontSizeChanged>> -data $delta }
 	}
-	set value $base
-	catch { set value $::font::Options($ctx:size) }
 	return $value
 }
 
@@ -1757,10 +1874,7 @@ proc ::context::PaneFont {object delta} {
 proc ::context::PaneFontSize {uid} {
 	set ctx [PaneFontContext $uid]
 	if {[info exists ::font::Options($ctx:size)]} { return $::font::Options($ctx:size) }
-	if {![catch { set size [::font::currentFontSize text] }]} {
-		return [expr {abs($size)}]
-	}
-	return 11
+	return [PaneFontBaseSize]
 }
 
 ::context::RegisterCore

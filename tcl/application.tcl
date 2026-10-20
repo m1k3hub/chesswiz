@@ -1290,6 +1290,10 @@ proc BuildPane {twm frame uid width height} {
 		dbgames		{ boardgames::build $frame $width $height }
 		default	{ return -code error "BuildPane: unknown pane $uid" }
 	}
+	# Re-apply a pane font size saved in the layout (C9); only this pane.
+	if {[llength [info commands ::context::PaneFontApply]]} {
+		catch { ::context::PaneFontApply $frame $uid }
+	}
 }
 
 

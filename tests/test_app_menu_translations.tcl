@@ -162,6 +162,96 @@ tcltest::test translations-switch-relabels-menus {a language switch relabels the
 		$beforeDrop $afterDrop $beforeCtxLabel $afterCtxLabel
 } -result {1 1 &Tools &Werkzeuge Close Schliessen}
 
+# --- the live drop-down label set, per language -----------------------
+# The old list above is the moved-label set. This test derives its expected
+# labels from the menu that ::menu::BuildDropdown actually builds (and the
+# static cascades ::menu::Dump fills), so a label that moves into the new
+# ::menu::mc namespace without a translation is counted as English.
+
+set ::scidb::test::trn::untranslatable [file join \
+	[file dirname [file normalize [info script]]] fixtures menu-untranslatable.txt]
+
+
+proc ::scidb::test::trn::Collect {menu var} {
+	upvar 1 $var out
+	if {[catch {$menu index end} last] || $last eq "none" || $last eq ""} { return }
+	for {set i 0} {$i <= $last} {incr i} {
+		set type [$menu type $i]
+		if {$type eq "separator"} { continue }
+		set label ""
+		catch { set label [string trim [$menu entrycget $i -label]] }
+		lappend out $label
+		if {$type eq "cascade"} {
+			set sub ""
+			catch { set sub [$menu entrycget $i -menu] }
+			if {$sub ne "" && [winfo exists $sub]} { ::scidb::test::trn::Collect $sub out }
+		}
+	}
+	return
+}
+
+proc ::scidb::test::trn::DropdownLabels {} {
+	catch { destroy .trncover }
+	menu .trncover -tearoff 0
+	::menu::BuildDropdown .trncover
+	::menu::Dump .trncover
+	set labels {}
+	::scidb::test::trn::Collect .trncover labels
+	destroy .trncover
+	return $labels
+}
+
+proc ::scidb::test::trn::Untranslatable {} {
+	set exempt {}
+	if {![file exists $::scidb::test::trn::untranslatable]} { return $exempt }
+	set fh [open $::scidb::test::trn::untranslatable r]
+	set data [read $fh]
+	close $fh
+	foreach line [split $data \n] {
+		set line [string trim $line]
+		if {$line eq "" || [string index $line 0] eq "#"} { continue }
+		lappend exempt [string trim [lindex [split $line \t] 0]]
+	}
+	return $exempt
+}
+
+tcltest::test translations-live-dropdown-coverage {at most 5% of the live drop-down stays English per language} -body {
+	set exempt [::scidb::test::trn::Untranslatable]
+	if {[llength $exempt] > 15} { return "too-many-exemptions [llength $exempt]" }
+
+	::menu::SwitchLanguage en
+	set english [::scidb::test::trn::DropdownLabels]
+	if {[llength $english] < 100} { return "short-dropdown [llength $english]" }
+
+	set ok 1
+	set report {}
+	foreach lang {de es it hu sv} {
+		::menu::SwitchLanguage $lang
+		set labels [::scidb::test::trn::DropdownLabels]
+		if {[llength $labels] != [llength $english]} {
+			puts "VAL-BAR-009 $lang: label count [llength $labels] != [llength $english]"
+			set ok 0
+			continue
+		}
+		set identical {}
+		foreach en $english loc $labels {
+			if {$en eq $loc && [lsearch -exact $exempt $en] < 0} {
+				lappend identical $en
+			}
+		}
+		set count [llength $identical]
+		set total [llength $english]
+		puts "VAL-BAR-009 $lang: [llength $identical] of $total labels identical to English"
+		if {$count} { puts "  IDENTICAL $lang: $identical" }
+		if {$count * 20 > $total} { set ok 0 }
+		lappend report [list $lang $count $total]
+	}
+
+	::menu::SwitchLanguage en
+	if {!$ok} { return [list fail $report] }
+	return ok
+} -result ok
+
 # Put the installed share directory back for the test files that follow.
 if {[info exists ::scidb::test::trn::savedShare]} {
 	set ::scidb::dir::share $::scidb::test::trn::savedShare

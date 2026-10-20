@@ -266,7 +266,24 @@ namespace eval menu::mc {
 
 	# Help
 	set Help							"Help"
+
+	# The English defaults, restored before every language load (a
+	# language file only overrides the ids it defines).
+	set ::menu::DefaultMC {}
+	foreach _name [lsort [info vars]] {
+		if {[array exists $_name] || [string index [namespace tail $_name] 0] eq "_"} { continue }
+		lappend ::menu::DefaultMC [namespace tail $_name] [set $_name]
+	}
+	unset _name
 }
+
+proc ::menu::ResetLabels {} {
+	foreach {name value} $::menu::DefaultMC {
+		set ::menu::mc::$name $value
+	}
+	return
+}
+::mc::addDefaultReset ::menu::ResetLabels
 
 # Node constructors (kept tiny so the tree below reads like the fixture).
 proc ::menu::MC {name} {
@@ -959,9 +976,12 @@ proc ::menu::BuildDropdown {menu} {
 
 	if {[llength $DropdownTree] == 0} {
 		DefineTree
-		RegisterTree
-		RegisterExtras
 	}
+	# (Re-)register every row so the built menu always carries the labels
+	# of the current language; a language load only overrides variables,
+	# so a stale label would otherwise survive until the app is restarted.
+	RegisterTree
+	RegisterExtras
 	set DropdownFilled [dict create]
 	catch { $menu delete 0 end }
 	foreach top $DropdownTree {

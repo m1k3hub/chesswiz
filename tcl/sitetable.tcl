@@ -330,23 +330,10 @@ proc see {path position} {
 
 
 proc popupMenu {parent menu site} {
-	# C5: the one site context menu.
-	if {[llength [info commands ::context::Build]]} {
-		set object [dict create kind site name $site parent $parent]
-		if {[::context::Build C5 $menu $object]} { return }
-		return
-	}
-	set accel [set [namespace parent]::gamestable::mc::Accel(openurl)]
-	set cmd [namespace code [list ::web::open $parent $site]]
-	$menu add command \
-		-compound left \
-		-image $::icon::16x16::internet \
-		-label " $::engine::mc::OpenUrl" \
-		-accelerator $accel \
-		-command $cmd \
-		;
-	::bind $menu <Key-$accel> $cmd
-	::bind $menu <Key-[string tolower $accel]> $cmd
+	# C5: the one site context menu; the rows live in ::context.
+	if {[llength [info commands ::context::Build]] == 0} { return }
+	set object [dict create kind site name $site parent $parent]
+	::context::Build C5 $menu $object
 }
 
 
@@ -569,36 +556,19 @@ proc SaveSiteGamesWorkingSet {path base variant view index {menu ""}} {
 
 
 proc PopupMenu {path menu base variant index column} {
+	# C5: the live -popupcmd of the Sites table. The one C5 builder lives in
+	# ::context; this proc only passes the clicked row's site to it (there is
+	# no second hand-written C5 menu here anymore).
+	if {[llength [info commands ::context::Build]] == 0} { return }
+
 	variable ${path}::Vars
 
 	set view [{*}$Vars(viewcmd) $base $variant]
 	set site [GetSite $path $base $variant $view $index]
+	if {$site eq ""} { return }
 
-	if {[::web::isWebLink $site]} {
-		set accel $::gamestable::mc::Accel(openurl)
-		$menu add command \
-			-compound left \
-			-image $::icon::16x16::internet \
-			-label " $::engine::mc::OpenUrl" \
-			-accelerator $accel \
-			-command [namespace code [list ::web::open $path $site]] \
-			;
-		set cmd [namespace code [list ::web::open $path $site]]
-		::bind $menu <Key-$accel> $cmd
-		::bind $menu <Key-[string tolower $accel]> $cmd
-	}
-
-	if {[$menu index end] ne "none"} {
-		$menu add separator
-	}
-	$menu add command \
-		-label " $::application::database::mc::RepertoireOpenInSwitcher" \
-		-command [namespace code [list OpenSiteGamesInSwitcher $path $base $variant $view $index $menu]] \
-		;
-	$menu add command \
-		-label " $::application::database::mc::SaveWorkingSet" \
-		-command [namespace code [list SaveSiteGamesWorkingSet $path $base $variant $view $index $menu]] \
-		;
+	set object [dict create kind site name $site parent $path base $base variant $variant]
+	::context::Build C5 $menu $object
 }
 
 } ;# namespace sitetable

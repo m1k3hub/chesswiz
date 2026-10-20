@@ -353,8 +353,29 @@ proc setLang {id} {
 	}
 
 	set langID $id
+	::mc::ResetDefaults
 	::font::useLanguage $id
 	selectLang [lindex $languages $n 0]
+}
+
+
+# A language file only overrides the ids it defines, so switching back to
+# English must first restore the English defaults of labels that are
+# declared in their own modules rather than in english.tcl (the
+# redesigned menus and the context ask row).
+proc ::mc::addDefaultReset {cmd} {
+	variable DefaultResets
+	lappend DefaultResets $cmd
+	return
+}
+
+proc ::mc::ResetDefaults {} {
+	variable DefaultResets
+	if {![info exists DefaultResets]} { return }
+	foreach cmd $DefaultResets {
+		catch { {*}$cmd }
+	}
+	return
 }
 
 
