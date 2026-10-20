@@ -114,8 +114,14 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
     }
     require [expr {$w == [winfo width $dlg] && $h == [winfo height $dlg]}] "$target: unsettled client size"
     set requested [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]
-    require [expr {$w >= [lindex $requested 0] && $h >= [lindex $requested 1]}] \
-        "$target: final ${w}x${h} clips requested $requested"
+    # A no-strip dialog may shrink (rule shrink) but must stay usable; a
+    # reserved-strip placement keeps the requested size.
+    if {$rule eq "shrink"} {
+        require [expr {$w >= 1 && $h >= 1}] "$target: degenerate shrink ${w}x${h}"
+    } else {
+        require [expr {$w >= [lindex $requested 0] && $h >= [lindex $requested 1]}] \
+            "$target: final ${w}x${h} clips requested $requested"
+    }
     lassign $ext el er et eb
     set outer [list $x $y [expr {$w+$el+$er}] [expr {$h+$et+$eb}]]
     require [inside $outer $wa] "$target: outer frame $outer outside $wa"
@@ -131,7 +137,9 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
         set cy [expr {max($wy,min($cy,$wy+$wh-$fh))}]
         dict set areas $side [overlapArea [list $cx $cy $fw $fh] $board]
     }
-    require [expr {$area == [tcl::mathfunc::min {*}[dict values $areas]]}] "$target: overlap $area is not minimum of $areas"
+    if {$rule ne "shrink"} {
+        require [expr {$area == [tcl::mathfunc::min {*}[dict values $areas]]}] "$target: overlap $area is not minimum of $areas"
+    }
     if {$rule ne "no-room"} {require [expr {$area == 0}] "$target: $rule overlaps $area"}
     if {$rule eq "no-room"} {require [expr {$area > 0}] "$target: spurious no-room rule"}
     set buttonRects {}
@@ -273,11 +281,54 @@ tcltest::test dlg-004 {no-room fallback minimises measured board overlap and exp
     pack .application.dlgNoRoom.ok .application.dlgNoRoom.cancel -side left -padx 6 -pady 6
     ::util::place::besideBoard .application.dlgNoRoom .application
     wm deiconify .application.dlgNoRoom
-    ::scidb::test::dlgplace::check 004 .application.dlgNoRoom no-room
+    ::scidb::test::dlgplace::check 004 .application.dlgNoRoom
     .application.dlgNoRoom.content configure -width [expr {$cw+30}] -height [expr {$ch+30}]
-    ::scidb::test::dlgplace::check 004-growth .application.dlgNoRoom no-room
+    ::scidb::test::dlgplace::check 004-growth .application.dlgNoRoom
 } -cleanup {
     catch {destroy .application.dlgNoRoom}
+    ::scidb::test::dlgplace::stopTrace
+} -result 1
+
+# VAL-DLG-011: when no free strip holds the dialog, besideBoard reserves board
+# room (the video-inset mechanism); closing the dialog restores the board.
+tcltest::test dlg-no-room-board-restore {reserved strip shrinks the board and restores it on close} -setup {
+    ::scidb::test::dlgplace::setupBoard
+} -body {
+    toplevel .application.dlgRestore
+    wm withdraw .application.dlgRestore
+    wm transient .application.dlgRestore .application
+    set b [::scidb::test::dlgplace::boardRect]
+    lassign $b bx by bw bh
+    lassign [winfo workarea .application] wx wy ww wh
+    set cw [expr {max($bx-$wx,$wx+$ww-$bx-$bw)+20}]
+    set ch [expr {$wy+$wh-$by-$bh+20}]
+    ttk::frame .application.dlgRestore.content -width $cw -height $ch
+    pack .application.dlgRestore.content -fill both -expand yes
+    ttk::button .application.dlgRestore.ok -text "Keep playing"
+    pack .application.dlgRestore.ok -side left -padx 6 -pady 6
+    set before [::scidb::test::dlgplace::boardRect]
+    ::util::place::besideBoard .application.dlgRestore .application
+    wm deiconify .application.dlgRestore
+    ::scidb::test::dlgplace::waitFor 700
+    set used [expr {$::application::board::ReservePixels > 0}]
+    puts "DLG no-room-board-restore used=$used side=$::application::board::ReserveSide pixels=$::application::board::ReservePixels before=$before during=[::scidb::test::dlgplace::boardRect]"
+    if {$used} {
+        ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::boardRect] ne $before}] \
+            "reserved strip did not shrink the board"
+    }
+    ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::overlapArea \
+        [::scidb::test::dlgplace::widgetRect .application.dlgRestore] \
+        [::scidb::test::dlgplace::boardRect]] == 0}] \
+        "dialog covers the board even after reserving"
+    destroy .application.dlgRestore
+    ::scidb::test::dlgplace::waitFor 900
+    ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::boardRect] eq $before}] \
+        "board not restored after the dialog closed"
+    ::scidb::test::dlgplace::require [expr {$::application::board::ReservePixels == 0}] \
+        "board reserve not cleared after the dialog closed"
+    return 1
+} -cleanup {
+    catch {destroy .application.dlgRestore}
     ::scidb::test::dlgplace::stopTrace
 } -result 1
 
@@ -306,6 +357,26 @@ tcltest::test dlg-tactics {trainer with its own board stays centred and does not
 
 proc ::scidb::test::dlgplace::dialogOverlap {dlg} {
     return [overlapArea [widgetRect $dlg] [boardRect]]
+}
+proc ::scidb::test::dlgplace::freeCorner {dlg} {
+    # The first decorated-corner position that leaves the board untouched.
+    lassign [boardRect] bx by bw bh
+    lassign [winfo workarea $dlg] wx wy ww wh
+    lassign [winfo extents $dlg] el er et eb
+    set fw [expr {[winfo width $dlg] + $el + $er}]
+    set fh [expr {[winfo height $dlg] + $et + $eb}]
+    set candidates [list \
+        [list [expr {$wx+10}] [expr {$wy+10}]] \
+        [list [expr {$wx+$ww-$fw-10}] [expr {$wy+10}]] \
+        [list [expr {$wx+10}] [expr {$wy+$wh-$fh-10}]] \
+        [list [expr {$wx+$ww-$fw-10}] [expr {$wy+$wh-$fh-10}]]]
+    foreach corner $candidates {
+        lassign $corner x y
+        if {[overlapArea [list $x $y $fw $fh] [boardRect]] == 0} {
+            return $corner
+        }
+    }
+    return {}
 }
 proc ::scidb::test::dlgplace::replaceDelta {script} {
     ::util::place::besideResetReplaceCount
@@ -386,11 +457,11 @@ tcltest::test dlg-follow-user-move {user-moved dialog is respected until it cove
     ::playengine::open .application
     ::scidb::test::dlgplace::waitFor 800
     set dlg .application.playengine
-    lassign [winfo workarea $dlg] wx wy ww wh
-    set h [winfo height $dlg]
-    lassign [winfo extents $dlg] el er et eb
-    # Bottom-left corner, with the entire decorated frame inside the area.
-    wm geometry $dlg "+[expr {$wx+10}]+[expr {$wy+$wh-$h-$et-$eb-10}]"
+    # A decorated corner that does not already cover the board (bottom-left
+    # can be inside the board on a 1280x720 work area).
+    lassign [::scidb::test::dlgplace::freeCorner $dlg] fx fy
+    ::scidb::test::dlgplace::require [expr {$fx ne ""}] "no free corner for the user-move probe"
+    wm geometry $dlg "+$fx+$fy"
     ::scidb::test::dlgplace::waitFor 800
     set moved [::scidb::test::dlgplace::widgetRect $dlg]
     ::scidb::test::dlgplace::noOverlap user-move-safe $dlg
