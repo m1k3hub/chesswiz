@@ -1172,6 +1172,7 @@
 ::engine::mc::Parameters		"Paraméterek"
 ::engine::mc::Command			"Parancs"
 ::engine::mc::Directory			"Munka- / adatmappa"
+::engine::mc::ChooseConfigured "Válasszon egy beállított UCI-modult a listából. A futtatható fájlok útvonalát előbb a modulkezelőben adja meg."
 ::engine::mc::CommandHint		"A sakkprogram futtatható fájljának elérési útja"
 ::engine::mc::DirectoryHint		"A Chesswiz modulhoz tartozó adat- és munkamappája (megnyitási könyvekhez, naplókhoz és modulfájlokhoz)"
 ::engine::mc::Variants			"Sakkváltozatok"

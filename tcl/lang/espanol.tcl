@@ -1167,6 +1167,7 @@
 ::engine::mc::Parameters				"Parámetros"
 ::engine::mc::Command					"Comandos"
 ::engine::mc::Directory					"Carpeta de trabajo / datos"
+::engine::mc::ChooseConfigured "Elija un motor UCI configurado de la lista. Añada primero las rutas de los ejecutables en la administración de motores."
 ::engine::mc::CommandHint				"Ruta al archivo ejecutable del motor"
 ::engine::mc::DirectoryHint				"Carpeta de datos y de trabajo de Chesswiz para este motor (usada para libros de aperturas, registros y archivos del motor)"
 ::engine::mc::Variants					"Variantes"

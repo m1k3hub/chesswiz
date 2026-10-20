@@ -1168,6 +1168,7 @@
 ::engine::mc::Parameters				"Parameter"
 ::engine::mc::Command					"Befehl"
 ::engine::mc::Directory					"Arbeits- / Datenordner"
+::engine::mc::ChooseConfigured "Wählen Sie einen eingerichteten UCI-Motor aus der Liste. Fügen Sie Programmpfade zuerst in der Motorenverwaltung hinzu."
 ::engine::mc::CommandHint				"Pfad zur ausführbaren Programmdatei des Motors"
 ::engine::mc::DirectoryHint				"Chesswiz-eigener Daten- und Arbeitsordner für diesen Motor (für Eröffnungsbücher, Protokolle und Motordateien)"
 ::engine::mc::Variants					"Schachformen"

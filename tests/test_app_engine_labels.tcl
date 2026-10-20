@@ -137,7 +137,7 @@ tcltest::test app-engine-labels-dialog-01 {Manage Engines dialog displays Workin
 		set ::scidb::test::englabels::dialogResult [list \
 			[expr {$lcmdText eq "Command"}] \
 			[expr {[string match "*Working*" $ldirText] && [string match "*Data*" $ldirText]}] \
-			[expr {$tipLcmd ne "" && $tipTcmd ne "" && $tipLdir ne "" && $tipEdir ne ""}] \
+			[expr {[string match "*engine executable*" [set $tipLcmd]] && $tipLcmd eq $tipTcmd && [string match "*Chesswiz*per-engine data*" [set $tipLdir]] && $tipLdir eq $tipEdir}] \
 			[expr {$initialDir eq $storedDir}] \
 			$errsAfterBadDir \
 			[expr {$storedAfterBadDir eq $storedDir}] \
