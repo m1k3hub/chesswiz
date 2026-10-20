@@ -10,6 +10,36 @@ namespace eval ::scidb::test::boardsync {
 
 	proc nop {args} { return 0 }
 
+	# The long game the tester reported with: 600 moves, a long comment on
+	# every White move and a side line after every tenth Black move.  It is
+	# scratch (tests/tmp-app is not tracked), so the test writes it.
+	proc writeFixture {path} {
+		file mkdir [file dirname $path]
+		set tokens {}
+		for {set i 1} {$i <= 600} {incr i} {
+			set white [expr {$i % 2 ? "Nf3" : "Ng1"}]
+			set black [expr {$i % 2 ? "Nf6" : "Ng8"}]
+			lappend tokens "$i. $white {Move $i: a long comment [string repeat x 80]}"
+			lappend tokens $black
+			if {$i % 10 == 1} {
+				lappend tokens "($i... Nc6 [expr {$i + 1}]. Nc3 {side line})"
+			}
+		}
+		# written aside and renamed, so two test runs cannot read half a file
+		set tmp "$path.[pid].tmp"
+		set fh [open $tmp w]
+		fconfigure $fh -encoding utf-8
+		puts $fh "\[Event \"Huge\"\]"
+		puts $fh "\[White \"Long\"\]"
+		puts $fh "\[Black \"Game\"\]"
+		puts $fh "\[Result \"1/2-1/2\"\]"
+		puts $fh ""
+		puts $fh "[join $tokens { }] 1/2-1/2"
+		puts $fh ""
+		close $fh
+		file rename -force $tmp $path
+	}
+
 	proc findFixture {} {
 		variable testDir
 		set candidates [list \
@@ -23,7 +53,9 @@ namespace eval ::scidb::test::boardsync {
 				return [file normalize $path]
 			}
 		}
-		error "Could not find huge.pgn in candidates: $candidates"
+		set path [lindex $candidates 0]
+		writeFixture $path
+		return [file normalize $path]
 	}
 
 	proc canvasBoard {w} {
