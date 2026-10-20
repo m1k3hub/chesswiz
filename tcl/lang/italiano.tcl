@@ -1395,6 +1395,7 @@
 ::application::analysis::mc::Control						"Controllo"
 ::application::analysis::mc::Information					"Informazioni"
 ::application::analysis::mc::SetupEngine					"Impostazioni" ;# NEW changed to "Setup engine"
+::application::analysis::mc::StartEngine					"Avvia motore"
 ::application::analysis::mc::Pause							"Pausa"
 ::application::analysis::mc::Resume							"Riattiva"
 ::application::analysis::mc::LockEngine					"Blocca motore sulla posizione attuale"

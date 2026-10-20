@@ -1385,6 +1385,7 @@
 ::application::analysis::mc::Control						"Steuerung"
 ::application::analysis::mc::Information					"Informationen"
 ::application::analysis::mc::SetupEngine					"Motoreinstellungen"
+::application::analysis::mc::StartEngine					"Motor starten"
 ::application::analysis::mc::Pause							"Pause"
 ::application::analysis::mc::Resume							"Fortsetzen"
 ::application::analysis::mc::LockEngine					"Motor an aktuelle Position binden"

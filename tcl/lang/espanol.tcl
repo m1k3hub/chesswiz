@@ -1401,6 +1401,7 @@
 ::application::analysis::mc::Control						"Control"
 ::application::analysis::mc::Information					"Información"
 ::application::analysis::mc::SetupEngine					"Configuración" ;# NEW changed to "Setup engine"
+::application::analysis::mc::StartEngine					"Iniciar motor"
 ::application::analysis::mc::Pause							"Pausa"
 ::application::analysis::mc::Resume							"Continuar"
 ::application::analysis::mc::LockEngine					"Fijar el motor de análisis a esta posición"

@@ -1409,6 +1409,7 @@
 ::application::analysis::mc::Control			"Control" ;# NEW
 ::application::analysis::mc::Information		"Information" ;# NEW
 ::application::analysis::mc::SetupEngine		"Setup engine" ;# NEW
+::application::analysis::mc::StartEngine		"Modul indítása"
 ::application::analysis::mc::Pause			"Pause" ;# NEW
 ::application::analysis::mc::Resume			"Resume" ;# NEW
 ::application::analysis::mc::LockEngine			"Lock engine to current position" ;# NEW

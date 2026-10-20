@@ -1279,6 +1279,7 @@
 ::application::analysis::mc::Control						"Control"
 ::application::analysis::mc::Information					"Information"
 ::application::analysis::mc::SetupEngine					"Setup engine"
+::application::analysis::mc::StartEngine					"Start engine"
 ::application::analysis::mc::Pause							"Pause"
 ::application::analysis::mc::Resume							"Resume"
 ::application::analysis::mc::LockEngine					"Lock engine to current position"
