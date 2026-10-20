@@ -116,7 +116,12 @@ proc build {w width height} {
 	set border [tk::canvas $canv.border -takefocus 0 -borderwidth 0]
 	$border xview moveto 0
 	$border yview moveto 0
-	Preload $width [expr {$height - [[winfo parent $w] get $w Extent 74]}]
+	# The square images are already built when a hidden board is reopened;
+	# refreshing them must not abort the pane build if the theme marks the
+	# border as texture-only (zero width/opacity). A reopened pane sits in a
+	# metaframe, so the layout's header height is not reachable through the
+	# parent; use the same 74 pixel default the layout API falls back to.
+	Preload $width [expr {$height - 74}]
 	set board [::board::diagram::new $border.diagram $Dim(squaresize:Normal) \
 		-bordersize $Dim(edgethickness) \
 		-bordertype lines \
@@ -183,7 +188,7 @@ proc build {w width height} {
 
 	$board configure -cursor crosshair
 	::bind $canv <Configure> [namespace code { ConfigureWindow %W %w %h }]
-	::bind $canv <Destroy> [namespace code [list activate $w 0]]
+	::bind $canv <Destroy> [namespace code [list CanvasDestroyed $w]]
 	::bind $canv <FocusIn> [namespace code { GotFocus %W }]
 	::bind $canv <FocusOut> [namespace code LostFocus]
 	::bind $canv <Any-Button> { ::variation::hide; ::move::cancelVariation }
@@ -348,13 +353,19 @@ proc build {w width height} {
 		-image [set ::icon::toolbarCtrlLeaveVar] \
 		-command [namespace code { Goto up }]]
 
+	# The list is per build: a rebuilt pane must not bind the widgets of the
+	# pane it replaced (they no longer exist).
+	set Vars(need-binding) {}
 	needBinding $Vars(widget:border)
 	needBinding $Vars(widget:frame)
 	needBinding $Vars(holding:w)
 	needBinding $Vars(holding:b)
 	needBinding [::board::diagram::canvas $board]
 
+	# The notation pane shares this list. A rebuilt pane can leave the widgets
+	# of the pane it replaced behind; they are gone, so skip them.
 	foreach w $Vars(need-binding) {
+		if {![winfo exists $w]} { continue }
 		::font::addChangeFontSizeBindings editor $w ::application::pgn::fontSizeChanged
 	}
 	
@@ -550,6 +561,25 @@ proc closed {w} {
 }
 
 
+# The board canvas is going away. A Configure queued a delayed RebuildBoard
+# for it (50-300 ms, to coalesce a resize burst), and that timer holds the
+# canvas path: firing it after View > Panes > Board off raised "invalid
+# command name ...board.c" as a background error. Cancel the queued rebuild
+# with the canvas it was queued for, so a closed pane leaves no timer behind
+# (and none can land on a reopened pane that happens to reuse the path).
+proc CanvasDestroyed {w} {
+	variable Vars
+
+	if {[info exists Vars(widget:frame)] && ![winfo exists $Vars(widget:frame)]} {
+		if {[info exists Vars(after)] && $Vars(after) ne ""} {
+			after cancel $Vars(after)
+			set Vars(after) ""
+		}
+	}
+	activate $w 0
+}
+
+
 proc setActive {flag} {
 	variable Vars
 
@@ -725,6 +755,7 @@ proc bind {key cmd} {
 	variable Vars
 
 	foreach w $Vars(need-binding) {
+		if {![winfo exists $w]} { continue }
 		::bind $w $key [namespace code [list FilterKey %K %s $cmd]]
 		::bind $w $key {+ break }
 		if {[regexp {^<Key-[^>]+>$} $key]} {
@@ -1134,7 +1165,7 @@ proc ConfigureWindow {w width height} {
 
 	if {$Vars(initialized)} {
 		set parent [winfo parent $w]
-		[winfo parent $parent] set $parent Extent [expr {[winfo height $parent] - $height}]
+		catch { [winfo parent $parent] set $parent Extent [expr {[winfo height $parent] - $height}] }
 		after cancel $Vars(after)
 		if {$Vars(initialized) == 1} {
 			set timeout 300
@@ -1597,6 +1628,11 @@ proc RebuildBoard {canv width height {force false}} {
 	variable Dim
 	variable Vars
 	variable board
+
+	# A queued rebuild can outlive its canvas (a pane hidden before the
+	# coalescing delay elapsed). There is nothing to lay out for a widget
+	# that no longer exists.
+	if {![winfo exists $canv]} { return }
 
 	set dimensions ${width}x${height}
 	if {!$force && $dimensions eq $Vars(dimensions)} { return }

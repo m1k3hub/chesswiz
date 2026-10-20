@@ -36,7 +36,8 @@ proc ::scidb::test::locomotive::logLine {arg line} {
 }
 proc ::scidb::test::locomotive::locomotiveButton {parent} {
     foreach child [winfo children $parent] {
-        if {![catch {::toolbar::childcget $child -tooltipvar} value] && [string match "*SetupEngine*" $value]} { return $child }
+        if {![catch {$child cget -image} img] && $img eq $::icon::toolbarEngine} { return $child }
+        if {![catch {::toolbar::childcget $child -tooltipvar} value] && ([string match "*StartEngine*" $value] || [string match "*SetupEngine*" $value])} { return $child }
         set found [locomotiveButton $child]
         if {$found ne ""} { return $found }
     }
@@ -62,6 +63,21 @@ proc ::scidb::test::locomotive::dismissSetup {number} {
 }
 
 namespace eval ::scidb::test::locomotive {
+tcltest::test analysis-locomotive-tooltip {the Board locomotive toolbar button has the Start engine tooltip} -setup {
+    if {![::scidb::test::locomotive::until {$::application::Vars(ready)}]} { error "application startup timed out" }
+    catch {destroy .tipoftheday}
+    ::application::switchTab board
+    update
+    set number [lindex [lsort -integer [array names ::application::analysis::NumberToTree]] 0]
+    set tree $::application::analysis::NumberToTree($number)
+    ::application::openPane analysis:[::application::mapToTerminalNumber $number] false
+    update
+    set start [::scidb::test::locomotive::locomotiveButton [winfo parent [winfo parent [winfo parent $tree]]]]
+} -body {
+    set tipVar [::toolbar::childcget $start -tooltipvar]
+    list $tipVar [set $tipVar]
+} -result {::application::analysis::mc::StartEngine {Start engine}}
+
 foreach useSelected {1 0} {
 tcltest::test analysis-locomotive-first-click-$useSelected {the Board locomotive starts its configured engine, live lines update, and a real Stop click freezes them} \
         -constraints locomotiveEngine -setup {
@@ -102,6 +118,8 @@ tcltest::test analysis-locomotive-first-click-$useSelected {the Board locomotive
     set ::scidb::test::locomotive::setupOpened 0
     ::scidb::engine::log open ::scidb::test::locomotive::logLine {}
 } -body {
+    set tipVar [::toolbar::childcget $start -tooltipvar]
+    set tipText [set $tipVar]
     set fresh [list [::engine::active? $number] $pane(engine:state) [llength [::application::analysis::lines $number]]]
     set watchdog [after 1000 [list ::scidb::test::locomotive::dismissSetup $number]]
     ::scidb::test::locomotive::click $start
@@ -122,7 +140,8 @@ tcltest::test analysis-locomotive-first-click-$useSelected {the Board locomotive
         [expr {$engine(engine:name) eq $name}] $updating $answered \
         [::engine::active? $number] $pane(engine:stopped) \
         [expr {[llength $stopped] > 0 && $stopped eq [::application::analysis::lines $number]}] \
-        [expr {[string first "< info " $::scidb::test::locomotive::log] == -1}]
+        [expr {[string first "< info " $::scidb::test::locomotive::log] == -1}] \
+        $tipText
 } -cleanup {
     catch {after cancel $watchdog}
     ::application::analysis::stopEngine $number
@@ -143,7 +162,7 @@ tcltest::test analysis-locomotive-first-click-$useSelected {the Board locomotive
     set ::engine::Options(engine) $savedDefault
     set ::application::assistant::Priv(confirm) $savedConfirm
     ::options::hookWriter ::engine::WriteEngineOptions engines
-} -result {{0 disabled 0} 0 1 1 1 1 1 1 1}
+} -result {{0 disabled 0} 0 1 1 1 1 1 1 1 {Start engine}}
 }
 } ;# namespace ::scidb::test::locomotive
 

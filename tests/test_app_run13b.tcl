@@ -259,4 +259,36 @@ tcltest::test run13b-handoff-utf8 {a second instance hands over the path in UTF-
 	set ::argc $saveArgc
 } -result 1
 
+# --- 3. menu steps replay through action ids ----------------------------
+
+tcltest::test run13b-menu-by-id {menu steps are action ids and replay by id} -setup {
+	catch { destroy .application.infoDialog }
+	catch { destroy .run13bMenu }
+} -body {
+	menu .run13bMenu -tearoff 0
+	::menu::BuildDropdown .run13bMenu
+	set ids {
+		menu.game.paste_clip menu.game.paste_tab
+		menu.game.merge_clip menu.game.merge_tab
+		menu.game.history.recent
+		menu.view.panes.board menu.view.panes.players
+		menu.analysis.engine_toggle
+	}
+	set unresolved {}
+	foreach id $ids {
+		if {[catch { ::action::get $id }]} { lappend unresolved $id }
+	}
+	set labels [::action::labels dropdown]
+	set labelIds {}
+	foreach row $labels { lappend labelIds [lindex $row 0] }
+	set listed [expr {"menu.analysis.engine_toggle" in $labelIds}]
+	# Replay one posted menu row by id, as the laptop instructions do.
+	set ran [::action::run menu.help.about]
+	update
+	set opened [winfo exists .application.infoDialog]
+	catch { destroy .application.infoDialog }
+	destroy .run13bMenu
+	list $unresolved $listed $opened
+} -result {{} 1 1}
+
 tcltest::cleanupTests

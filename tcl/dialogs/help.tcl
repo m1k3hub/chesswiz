@@ -32,7 +32,7 @@ namespace eval mc {
 
 set Contents					"&Contents"
 set Index						"&Index"
-set CQL							"C&QL"
+set CQL							"&Pattern Search"
 set Search						"&Search"
 
 set Help							"Help"

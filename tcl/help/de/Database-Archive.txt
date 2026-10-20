@@ -169,7 +169,7 @@ Attributes  =
   [ "&lt;Count&gt;" { Space } Number ] ;
 Format      = 'sci'  |                   # Scidb-Datenbank
               'si3'  | 'si4'  |          # Scid-Datenbank
-              'cbh'  | 'cbf'  |          # ChessBase-Datenbank
+              'cbh'  | 'cbf'  |          # CBH-Datenbank (.cbh, .cbf)
               'cdp'  |                   # Chess Assistant-Datenbank
               'dsn'  |                   # Rybka-Aquarium-Datenbank
               'cif'  | 'ccif' |          # C/CIF-Archive

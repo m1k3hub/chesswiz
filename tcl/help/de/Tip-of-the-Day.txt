@@ -291,8 +291,8 @@ liegt einer der folgenden Fälle vor:
 
 <ul>
   <li><p>
-    Es ist eine ChessBase-Datenbank. Chesswiz kann keine ChessBase-Datenbanken
-    schreiben bzw. modifizieren.
+    Es ist eine externe proprietäre Datenbank (<abbr>.cbh</abbr>). Chesswiz kann solche Datenbanken
+    nicht schreiben bzw. modifizieren.
   </p></li>
   <li><p>
     Es ist eine Zip-Datei, diese können geöffnet, aber nicht modifiziert
@@ -412,17 +412,15 @@ eines Unix-Programms, Chesswiz erkennt selbsttätig, wie der Motor zu starten ist
 <TIP number="026" level="1">
 
 <p>
-Chesswiz öffnet auch ChessBase-Datenbanken, sowohl das neue Format (.cbh), als
-auch das alte DOS-Format (.cbf). Jedoch können ChessBase-Datenbanken nicht
-als Referenzdatenbank verwendet werden. Deshalb wird ein Export in das
-Scidb-Format (.sci) empfohlen. Dazu kann das Zusatzprogramm <em>cdb2sci</em>
+Chesswiz öffnet auch externe proprietäre Datenbanken (.cbh/.cbf). Jedoch können
+solche Datenbanken nicht als Referenzdatenbank verwendet werden. Deshalb wird ein
+Export in das native Format (.sci) empfohlen. Dazu kann das Zusatzprogramm <em>cdb2sci</em>
 verwendet werden, es ist aber auch mit der grafischen Oberfläche möglich.
 </p>
 
 <p>
-In seltenen Fällen kommt es vor, daß in einer ChessBase-Datenbank eine Partie
-nicht gelesen werden kann (in der <i>Mega DataBase 2014</i> sind es 11 von
-5.7 Mio. Partien). ChessBase hält sein Datenformat geheim, und Chesswiz kann
+In seltenen Fällen kommt es vor, daß in einer solchen Datenbank eine Partie
+nicht gelesen werden kann. Dieses Datenformat ist proprietär, und Chesswiz kann
 noch nicht alle Informationen lesen.
 </p>
 

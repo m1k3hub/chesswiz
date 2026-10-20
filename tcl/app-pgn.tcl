@@ -413,6 +413,10 @@ proc activate {w flag} {
 
 proc closed {w} {
 	::scidb::db::unsubscribe gameSwitch [namespace current]::GameSwitched
+	# The scratch game lives in slot 9 for the lifetime of this pane. A
+	# rebuilt editor takes the same slot, so it must be free again or the
+	# next build fails in InitScratchGame.
+	catch { ::scidb::game::release 9 }
 }
 
 

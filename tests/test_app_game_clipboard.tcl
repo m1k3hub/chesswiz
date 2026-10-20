@@ -232,3 +232,6 @@ tcltest::test clipboard-status-count {the status message says how many were past
 } -cleanup {
 	::scidb::test::clip::cleanup $dir
 } -result {3 1}
+
+
+tcltest::cleanupTests

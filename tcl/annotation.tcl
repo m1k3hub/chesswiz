@@ -39,7 +39,7 @@ set MoveAssesments				"Move Assessments"
 set PositionalAssessments		"Positional Assessments"
 set TimePressureCommentaries	"Time Pressure Commentaries"
 set AdditionalCommentaries		"Additional Commentaries"
-set ChessBaseCommentaries		"ChessBase Commentaries"
+set ChessBaseCommentaries		"Classic Commentaries"
 
 set Nag(0)		"Null annotation"
 # infix annotation

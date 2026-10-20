@@ -44,6 +44,8 @@ proc ::variationMenuTest::choose {} {
 	variable selected
 	set m $::application::board::board.popup_confirm
 	if {[winfo exists $m] && [winfo ismapped $m]} {
+		# Deliberately positional: the board's transient confirm popup is
+		# clicked at its row geometry, so the row is found by label here.
 		for {set i 0} {$i <= [$m index end]} {incr i} {
 			if {[$m type $i] eq "command" && [string trim [$m entrycget $i -label]] eq $::move::mc::Action(variation)} {
 				set selected 1

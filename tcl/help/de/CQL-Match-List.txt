@@ -420,7 +420,7 @@ Der CQL-Editor biete eine Hilfe zur Unterstützung der Eingabe von Ländercodes.
 </p>
 
 <note>
-Der ChessBase-Ländercode ist kein IOC-Ländercode, und deshalb nicht verwendbar.
+Der externe Ländercode ist kein IOC-Ländercode, und deshalb nicht verwendbar.
 </note>
 
 <p>
@@ -952,7 +952,7 @@ Der CQL-Editor biete eine Hilfe zur Unterstützung der Eingabe von Ländercodes.
 </p>
 
 <note>
-Der ChessBase-Ländercode ist kein IOC-Ländercode, und deshalb nicht verwendbar.
+Der externe Ländercode ist kein IOC-Ländercode, und deshalb nicht verwendbar.
 </note>
 
 <p>
@@ -1158,7 +1158,7 @@ Der CQL-Editor biete eine Hilfe zur Unterstützung der Eingabe von Ländercodes.
 </p>
 
 <note>
-Der ChessBase-Ländercode ist kein IOC-Ländercode, und deshalb nicht verwendbar.
+Der externe Ländercode ist kein IOC-Ländercode, und deshalb nicht verwendbar.
 </note>
 
 <p>
@@ -1454,7 +1454,7 @@ Folgende Organizationen werden erkannt:
 		<tr>
 			<td class="l">Playchess</td>
       <td class="r">
-        Internet-Schachserver von ChessBase
+        Klassischer Internet-Schachserver
         (<a href="playchess.com">playchess.com</a>)
       </td>
 		</tr>
@@ -1675,7 +1675,7 @@ Der CQL-Editor biete eine Hilfe zur Unterstützung der Eingabe von Ländercodes.
 </p>
 
 <note>
-Der ChessBase-Ländercode ist kein IOC-Ländercode, und deshalb nicht verwendbar.
+Der externe Ländercode ist kein IOC-Ländercode, und deshalb nicht verwendbar.
 </note>
 
 <p>
@@ -2587,8 +2587,8 @@ Siehe auch:
 <h3 id="match:error">:error<extension/>&emsp;<n>(Fehler)</n></h3>
 
 <p>
-Suche nach Datenfehlern, die beim Importieren von Partien einer Scid- oder
-ChessBase-Datenbank auftraten.
+Suche nach Datenfehlern, die beim Importieren von Partien einer älteren oder
+CBH-Datenbank auftraten.
 </p>
 
 <div class="dir">
@@ -2602,7 +2602,7 @@ ChessBase-Datenbank auftraten.
     <tr>
       <td class="l" valign="top" style="white-space:nowrap">DecodingFailed</td>
       <td class="r" valign="top">
-        Dieses Problem kann bei ChessBase-Datenbanken auftreten, in seltenen Fällen
+        Dieses Problem kann bei CBH-Datenbanken auftreten, in seltenen Fällen
         ist eine Dekodierung der Partiezüge nicht möglich.
       </td>
     </tr>
@@ -2615,7 +2615,7 @@ ChessBase-Datenbank auftraten.
     <tr>
       <td class="l" valign="top" style="white-space:nowrap">ChecksumError</td>
       <td class="r" valign="top">
-        Es lag ein Datenfehler beim Dekodieren einer ChessBase-Datenbank im alten
+        Es lag ein Datenfehler beim Dekodieren einer CBH-Datenbank im alten
         DOS-Format vor, die Prüfsumme stimmte nicht.
       </td>
     </tr>
@@ -2650,7 +2650,7 @@ Applikation eine private Definition zur Suche nach Datenbankfehlern.
 <h3 id="match:goodgame">:goodgame<extension/>&emsp;<n>(Gute Partie)</n></h3>
 
 <p>
-Dies entspricht in etwa der ChessBase-Einschätzung qualitativ guter Partien, und
+Dies entspricht in etwa der klassischen Einschätzung qualitativ guter Partien, und
 ist äquivalent zu:
 </p>
 
