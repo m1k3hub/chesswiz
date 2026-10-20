@@ -164,6 +164,31 @@ proc write {} {
 	close $chan
 }
 
+# The dictionaries were rebuilt (first start, or a rating/link file changed) and
+# the cache for the next start is missing. Writing it costs seconds on a slow
+# disk, and only the next start needs it, so it is not part of the startup path:
+# wait until the main window is up and drawn, then write it.
+proc writeCacheWhenUp {start {tries 50}} {
+	# Without Tk (plain tclsh) or after five seconds (headless runs) there is no
+	# window to wait for, and the write must not be lost.
+	if {[llength [info commands winfo]] && $tries > 0
+			&& (![winfo exists .application] || ![winfo ismapped .application])} {
+		after 100 [list ::load::writeCacheWhenUp $start [expr {$tries - 1}]]
+	} else {
+		after idle [list ::load::writeCacheNow $start]
+	}
+}
+
+proc writeCacheNow {start} {
+	set written 0
+	set begin [clock milliseconds]
+	catch {
+		file mkdir [file dirname $::load::CachePath]
+		set written [::scidb::app::load cache-write $::load::CachePath $::load::CacheSources]
+	}
+	::debuglog::log startup "player cache write success=$written [expr {[clock milliseconds]-$begin}]ms deferred=[expr {$begin-$start}]ms"
+}
+
 } ;# namespace load
 
 
@@ -372,15 +397,10 @@ set cacheStart [clock milliseconds]
 ::debuglog::log startup "player/site loadDone [expr {[clock milliseconds]-$cacheStart}]ms"
 if {![::process::testOption fast-load] && !$::load::CacheHit && $::load::CacheWritable} {
 	set cacheStart [clock milliseconds]
-	set cacheWritten 0
-	catch {
-		file mkdir [file dirname $::load::CachePath]
-		set cacheWritten [::scidb::app::load cache-write $::load::CachePath $::load::CacheSources]
-	}
-	::debuglog::log startup "player cache write success=$cacheWritten [expr {[clock milliseconds]-$cacheStart}]ms"
-	unset cacheWritten
+	# Deferred: the window must not wait for the cache write (see writeCacheWhenUp).
+	after 0 [list ::load::writeCacheWhenUp $cacheStart]
+	unset cacheStart
 }
-unset cacheStart
 
 #puts "[expr {[clock microseconds] - $t}] micro-secs"
 #unset t
