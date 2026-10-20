@@ -1019,10 +1019,29 @@ proc SetupBorders {w} {
 }
 
 
+# The diagram is going away: the widget is destroyed, its per-widget namespace
+# holds everything the diagram knows about it, and every deferred script still
+# holding the widget path has to die with the widget (see AnimateMove and
+# DrawFadingPiece).
+#
+# A move animation is scheduled a few milliseconds apart and reads the Board
+# array through `variable ${w}::Board`: a pane hidden while a piece is still
+# fading fired that timer into the namespace deleted below and surfaced as
+# "can't access ...::Board: parent namespace doesn't exist" in ::scidb::bgerror.
+# Cancelling here stops the next tick; the callbacks' own namespace-exists
+# guard stops a tick that is already queued in the event loop, which
+# `after cancel` can no longer reach.
 proc Destroy {w} {
+	# <Destroy> can arrive more than once for the same widget (the binding
+	# carries this path), so do not resurrect a namespace already deleted.
+	if {![namespace exists $w]} { return }
 	variable ${w}::Board
 
 	after cancel $Board(afterid)
+	if {[info exists Board(animate,afterid)]} {
+		after cancel $Board(animate,afterid)
+		unset Board(animate,afterid)
+	}
 	DeleteImages $w
 	[namespace parent]::unregisterSize $Board(size)
 	namespace delete [namespace current]::${w}
@@ -1101,6 +1120,9 @@ proc DoMove {w list} {
 
 
 proc DrawFadingPiece {w sq piece dir} {
+	# Same guard as AnimateMove: this runs from an `after` script holding the
+	# widget path, and the widget (with its namespace) may already be gone.
+	if {![namespace exists $w]} { return }
 	variable ${w}::Board
 	variable pieceToLetter
 

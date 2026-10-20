@@ -435,4 +435,87 @@ tcltest::test pane-hide-drops-queued-board-rebuild {hiding the Board pane cancel
 	::scidb::test::pane::ReleaseBgErrors
 } -result {1 0 0 {}}
 
+# The board pane's own deferred work was not the only owner of that user
+# action. The 2D board inside the pane is a ::board::diagram, which keeps a
+# per-widget namespace (::board::diagram::<canvas path>) holding the Board
+# array, and animates moves with `after` scripts that hold the canvas path and
+# read that array through `variable ${w}::Board`. Hiding the pane during an
+# animation let one of those run against the namespace the <Destroy> handler
+# had just deleted: a background error notice
+#   can't access "...board.c.border.diagram::Board": parent namespace doesn't
+#   exist
+# on the same resize-then-turn-the-pane-off gesture. A queued <FocusOut> that
+# survived the destroyed canvas produced the same notice a second time, through
+# LostFocus -> ::variation::hide -> ::board::diagram::clearAlternatives.
+# The test starts a real animation (the notification a piece placement/drop
+# sends to ::board::diagram::move: from == to, the branch that fades a piece
+# instead of moving it), resizes the canvas so a rebuild is queued too, then
+# hides the pane and lets every delay elapse. Nothing may be left: no timer
+# holding the dead path, and no background error of any kind.
+tcltest::test pane-hide-cancels-board-diagram-timers {hiding the Board pane cancels the diagram's own deferred work} -setup {
+	set ::scidb::test::pane::initial [::scidb::test::pane::Leaves]
+	set ::scidb::test::pane::errors {}
+	::scidb::test::pane::CaptureBgErrors
+	::application::openPane board
+	update
+	set ::scidb::test::pane::errors {}
+} -body {
+	set frame [set ::application::board::Vars(widget:frame)]
+	if {![winfo exists $frame]} { return "no board canvas" }
+	set board [set ::application::board::board]
+	if {![namespace exists ::board::diagram::${board}]} { return "no board diagram" }
+
+	# A window resize queues the canvas rebuild (the sibling test's subject).
+	::application::board::ConfigureWindow $frame \
+		[expr {[winfo width $frame] + 11}] [expr {[winfo height $frame] + 7}]
+	set pending {}
+	if {[set ::application::board::Vars(after)] ne ""} {
+		lappend pending [set ::application::board::Vars(after)]
+	}
+
+	# The animation: a piece placement (from == to), the list
+	# ::application::board::update receives for a drop. It fades the piece in
+	# place and schedules the next step a few milliseconds later.
+	::board::diagram::move $board {w 28 28 -1 P . . . -1 -1 1}
+	foreach name {afterid animate,afterid} {
+		if {[info exists ::board::diagram::${board}::Board($name)]} {
+			set id [set ::board::diagram::${board}::Board($name)]
+			if {$id ne ""} { lappend pending $id }
+		}
+	}
+	if {![llength $pending]} { return "nothing queued for the board" }
+
+	::action::run menu.view.panes.board
+	update idletasks
+	set hidden [expr {"board" ni [[::menu::PaneTWM] leaves]}]
+
+	# Immediately after the teardown, before any delay can elapse: none of the
+	# ids captured for the dead board may still be scheduled.
+	set kept {}
+	foreach id $pending {
+		if {![catch { after info $id } info] && [llength $info]} { lappend kept $id }
+	}
+
+	# Every delay elapses with nothing for the dead path to do.
+	after 400
+	update
+
+	set fired {}
+	foreach id $pending {
+		if {![catch { after info $id } info] && [llength $info]} { lappend fired $id }
+	}
+	set strays {}
+	foreach id [after info] {
+		catch {
+			if {[string match "*${board}*" [after info $id]]} { lappend strays $id }
+		}
+	}
+	puts "REG-010 hide board during a diagram animation: hidden=$hidden pending={$pending} kept={$kept} fired={$fired} strays={$strays} checked=[::menu::PaneChecked board] errors={$::scidb::test::pane::errors}"
+	list $hidden $kept $fired $strays $::scidb::test::pane::errors
+} -cleanup {
+	::scidb::test::pane::Restore $::scidb::test::pane::initial
+	update idletasks
+	::scidb::test::pane::ReleaseBgErrors
+} -result {1 {} {} {} {}}
+
 tcltest::cleanupTests

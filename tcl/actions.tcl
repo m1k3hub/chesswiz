@@ -600,6 +600,16 @@ proc ::action::Dispatch {id args approval} {
 		}
 	}
 
+	# Context-only actions act on the object they are listed for. With no
+	# object (or an object whose R10 rule hides the row) they must not run.
+	if {[llength [dict get $record context]] && [dict get $record dropdown] eq "" \
+	 && [llength [info commands ::menu::state]]} {
+		set state [::menu::state $id]
+		if {![dict get $state visible] || ![dict get $state enabled]} {
+			return "error: action '$id' is not available here"
+		}
+	}
+
 	set isConfirm [dict get $record confirm]
 	set isBulk [dict get $record bulk]
 	set what [dict get $record what]
@@ -728,6 +738,18 @@ proc ::action::labels {surface args} {
 
 	set output {}
 	set keyed {}
+	set c9Ids {}
+	if {$surface eq "asklist"} {
+		# C9 rows belong to the pane the user is in: list only the rows
+		# that pane's own header menu would post (VAL-RULE-006).
+		if {[llength [info commands ::context::MenuIds]] \
+		 && [llength [info commands ::context::CurrentObject]]} {
+			if {![catch { set c9Object [::context::CurrentObject C9] }] \
+			 && [dict size $c9Object]} {
+				catch { set c9Ids [::context::MenuIds C9 $c9Object] }
+			}
+		}
+	}
 	foreach id [dict keys $Registry] {
 		set record [dict get $Registry $id]
 
@@ -758,6 +780,13 @@ proc ::action::labels {surface args} {
 		}
 
 		if {!$include} continue
+
+		if {$surface eq "asklist"} {
+			# The context menus' assistant row is not a runnable action.
+			if {$id eq "context.ask"} continue
+			set ctx [dict get $record context]
+			if {"C9" in $ctx && [lsearch -exact $c9Ids $id] < 0} { continue }
+		}
 
 		set ep [dict get $record enabled]
 		set en 1
