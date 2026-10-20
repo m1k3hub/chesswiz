@@ -75,7 +75,7 @@ proc ::ai::precedent::lookup {fen args} {
 	if {[catch {package require json}]} { return {} }
 
 	if {[catch {
-		exec -ignorestderr $Config(python) $Config(script) query \
+		::util::execSafe -ignorestderr $Config(python) $Config(script) query \
 			--db $Config(index) --fen $fen --limit $opts(-limit)
 	} out]} {
 		return {}

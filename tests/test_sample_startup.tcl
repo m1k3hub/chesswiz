@@ -13,7 +13,15 @@ foreach f [glob -directory /usr/local/share/chesswiz *] {
         file link -symbolic [file join $shared [file tail $f]] $f
     }
 }
-exec make -s -C [file join $root tcl] install-sample SHAREDIR=$shared
+if {![llength [info commands ::util::execSafe]]} {
+    set _sysPlatform [file normalize [file join $root tcl sys-platform.tcl]]
+    if {[file exists $_sysPlatform]} { catch { source -encoding utf-8 $_sysPlatform } }
+}
+if {[llength [info commands ::util::execSafe]]} {
+    ::util::execSafe make -s -C [file join $root tcl] install-sample SHAREDIR=$shared
+} else {
+    exec make -s -C [file join $root tcl] install-sample SHAREDIR=$shared
+}
 set probe [file join $work probe.tcl]
 set ch [open $probe w]
 puts $ch {
@@ -96,7 +104,7 @@ close $ch
 proc launch {home mode} {
     global binary probe shared root
     file mkdir $home
-    set output [exec env HOME=$home SCIDB_USERDIR=[file join $home profile] SCIDB_SHAREDIR=$shared \
+    set output [::util::execSafe env HOME=$home SCIDB_USERDIR=[file join $home profile] SCIDB_SHAREDIR=$shared \
         SCIDB_AI_CLASSIFIER=off SCIDB_AI_TRIAGE=0 SAMPLE_ROOT=$root SAMPLE_MODE=$mode \
         CHESSWIZ_LOG=debug SCIDB_ERROR_LOG=[file join $home errors.log] \
         timeout 35 $binary $probe 2>@1]

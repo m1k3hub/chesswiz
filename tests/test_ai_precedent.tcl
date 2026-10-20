@@ -50,7 +50,11 @@ puts $fh {[Event "t1"]
 1. d4 Nf6 2. c4 e6 3. Nc3 Bb4 4. Qc2 1/2-1/2}
 close $fh
 
-exec python3 $script build --pgn $pgn --db $db --max-games 10
+if {![llength [info commands ::util::execSafe]]} {
+	set _sysPlatform [file normalize [file join $root tcl sys-platform.tcl]]
+	if {[file exists $_sysPlatform]} { catch { source -encoding utf-8 $_sysPlatform } }
+}
+::util::execSafe python3 $script build --pgn $pgn --db $db --max-games 10
 
 # FEN after 1.d4 Nf6 2.c4 e6 3.Nc3 Bb4 -- White to move
 set fen "rnbqk2r/pppp1ppp/4pn2/8/1bPP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 4"

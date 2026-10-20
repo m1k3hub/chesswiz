@@ -96,13 +96,13 @@ tcltest::test board-reserve-contract {right/bottom/left, restore, refusal and re
         set before [brSquare]
         lappend results [::application::board::setReserve right 420] [brCheck wide]
         set during [brSquare]
-        catch {exec import -window root tests/tmp-app/board-reserve-wide.png}
+        catch {::util::execSafe import -window root tests/tmp-app/board-reserve-wide.png}
         ::application::board::setReserve {} 0
         lappend results [expr {[brSquare] == $before}]
         puts "RESERVE restore before=$before during=$during after=[brSquare]"
         brSize 650 1000
         lappend results [::application::board::setReserve bottom 300] [brCheck tall]
-        catch {exec import -window root tests/tmp-app/board-reserve-tall.png}
+        catch {::util::execSafe import -window root tests/tmp-app/board-reserve-tall.png}
         ::application::board::setReserve {} 0
         brSize 420 400
         set before [brSquare]

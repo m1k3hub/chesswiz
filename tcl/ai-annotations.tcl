@@ -73,7 +73,7 @@ proc ::ai::annotations::lookup {fen args} {
 		set cmd [list $Config(python) $Config(script) query \
 			--db $Config(index) --fen $fen --limit $opts(-limit)]
 		if {$Config(english)} { lappend cmd --english }
-		exec -ignorestderr {*}$cmd
+		::util::execSafe -ignorestderr {*}$cmd
 	} out]} {
 		return {}
 	}

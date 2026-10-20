@@ -54,7 +54,7 @@ tcltest::test run14-advanced-width {Advanced Search fits a 1920 px screen at 200
 	${ns}::OpenAdvancedSearch .application $base Normal
 	update
 	set w [winfo reqwidth $dlg]
-	if {[info exists ::env(RUN14_SHOT)]} { exec import -window [winfo id $dlg] $::env(RUN14_SHOT) }
+	if {[info exists ::env(RUN14_SHOT)]} { ::util::execSafe import -window [winfo id $dlg] $::env(RUN14_SHOT) }
 	destroy $dlg
 	tk scaling $scaling
 	puts "advanced search width at 200%: $w"

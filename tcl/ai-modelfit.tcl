@@ -158,7 +158,7 @@ proc ::ai::modelfit::memory {args} {
 
 	if {[llength $opts(-gpu)]} {
 		set output ""
-		if {[catch { exec {*}$opts(-gpu) } output]} { set output "" }
+		if {[catch { ::util::execSafe {*}$opts(-gpu) } output]} { set output "" }
 		foreach line [split [string trimright $output] "\n"] {
 			foreach token [split [string trim $line] " ,\t"] {
 				if {[catch { expr { int($token) } } value]} { continue }

@@ -48,7 +48,7 @@ proc RunCommand {cmdList {async 1}} {
 	if {$async} {
 		exec {*}$cmdList &
 	} else {
-		exec {*}$cmdList
+		::util::execSafe {*}$cmdList
 	}
 	return 1
 }
