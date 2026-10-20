@@ -1171,6 +1171,7 @@
 ::engine::mc::Parameters				"Parametri"
 ::engine::mc::Command					"Comando"
 ::engine::mc::Directory					"Cartella di lavoro / dati"
+::engine::mc::ChooseConfigured "Scegli un motore UCI configurato dalla lista. Aggiungi prima i percorsi degli eseguibili nella gestione dei motori."
 ::engine::mc::CommandHint				"Percorso del file eseguibile del motore"
 ::engine::mc::DirectoryHint				"Cartella dati e di lavoro di Chesswiz per questo motore (usata per libri di apertura, log e file del motore)"
 ::engine::mc::Variants					"Varianti"

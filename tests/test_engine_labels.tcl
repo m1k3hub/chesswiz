@@ -237,7 +237,7 @@ tcltest::test engine-labels-translations-07 {all language files define updated D
 		fconfigure $fh -encoding $enc
 		set content [read $fh]
 		close $fh
-		foreach key {Command Directory CommandHint DirectoryHint InvalidCommand NotADirectory} {
+		foreach key {Command Directory CommandHint DirectoryHint InvalidCommand NotADirectory ChooseConfigured} {
 			if {![regexp "::engine::mc::$key\\s+\"\[^\"]+\"" $content]} {
 				lappend missing "$fname:$key"
 			}

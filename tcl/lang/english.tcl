@@ -1173,6 +1173,7 @@
 ::engine::mc::Parameters				"Parameters"
 ::engine::mc::Command					"Command"
 ::engine::mc::Directory					"Working / Data Folder"
+::engine::mc::ChooseConfigured "Choose a configured UCI engine from the list. Add executable paths in Manage Engines first."
 ::engine::mc::CommandHint				"Path to the engine executable file"
 ::engine::mc::DirectoryHint				"Chesswiz's per-engine data and working folder (used for opening books, logs, and engine files)"
 ::engine::mc::Variants					"Variants"
