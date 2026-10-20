@@ -158,12 +158,6 @@
       tex.wrapT = THREE.RepeatWrapping;
       pbrTextures[key] = tex;
     });
-    // Frame grain repeats gently along the border
-    const frameWalnutAlbedo = pbrTextures.walnutAlbedo.clone();
-    frameWalnutAlbedo.wrapS = THREE.RepeatWrapping;
-    frameWalnutAlbedo.wrapT = THREE.RepeatWrapping;
-    frameWalnutAlbedo.repeat.set(2, 2);
-    pbrTextures.walnutAlbedo.onUpdate = () => { frameWalnutAlbedo.image = pbrTextures.walnutAlbedo.image; frameWalnutAlbedo.needsUpdate = true; };
 
     // Board Slab & Squares
     const boardGroup = new THREE.Group();
