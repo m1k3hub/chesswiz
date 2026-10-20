@@ -964,6 +964,13 @@ proc ::reptrainer::open {parent {base ""} {variant Normal}} {
 	foreach b [::application::database::repertoireBases [expr {$base ne ""}] $variant] {
 		lappend sources [list [::util::databaseName $b] $b $variant [DefaultSide $b]]
 	}
+	# The read-only sample also supplies positions for a first training session.
+	set sample [::application::sample::location]
+	if {$sample ne $base && [::scidb::db::get open? $sample]
+		&& $variant in [::scidb::db::get variants $sample]
+		&& [::scidb::db::count games $sample $variant] > 0} {
+		lappend sources [list [::util::databaseName $sample] $sample $variant white]
+	}
 	lappend sources [list $mc::CurrentGame "" [::scidb::game::query variant?] [DefaultGameSide]]
 	set Vars(sources) $sources
 
