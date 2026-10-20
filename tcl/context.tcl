@@ -46,8 +46,19 @@ namespace eval ::context::mc {
 # ----------------------------------------------------------------------
 # Small helpers (Tcl 8.5: no dict get?).
 # ----------------------------------------------------------------------
+proc ::context::LabelVar {id} {
+	return [string map {. _ : _ - _} $id]
+}
+
 proc ::context::L {id} {
 	variable Labels
+	set var [LabelVar $id]
+	# English is the source language: use the defaults in this file, so
+	# switching back to English clears a previous translation.
+	if {[info exists ::mc::langID] && $::mc::langID eq "en"} {
+		if {[info exists Labels($id)]} { return $Labels($id) }
+	}
+	if {[info exists ::context::mc::$var]} { return [set ::context::mc::$var] }
 	if {[info exists Labels($id)]} { return $Labels($id) }
 	return $id
 }
@@ -69,13 +80,18 @@ proc ::context::Item {id text contexts {keys {}} {visible {}} {enabled {}}} {
 	set Labels($id) $text
 	set Keys($id) $keys
 	set Contexts($id) $contexts
+	# One translateable variable per row; language files override it.
+	set var [LabelVar $id]
+	if {![info exists ::context::mc::$var]} {
+		namespace eval ::context::mc [list set $var $text]
+	}
 
 	if {![dict exists $::action::Registry $id]} {
 		::action::register $id [dict create \
 			label $text \
 			object {} \
 			args {{object {type string default {}}}} \
-			handler [list ::context::Invoke $id] \
+			handler [list ::context::InvokeArgs $id] \
 			what $text \
 			ai 0 \
 			context $contexts \
@@ -93,6 +109,41 @@ proc ::context::Item {id text contexts {keys {}} {visible {}} {enabled {}}} {
 		dict set ::context::Predicates $id enabled $enabled
 	}
 	return $id
+}
+
+# The assistant row is a registry action too (VAL-REG-002): the context id
+# and the object travel as action arguments, so the menu command can stay
+# exactly [::action::run context.ask <args>].
+proc ::context::RegisterCore {} {
+	variable CoreRegistered
+
+	if {[info exists CoreRegistered]} { return }
+	set CoreRegistered 1
+	if {[dict exists $::action::Registry context.ask]} { return }
+	::action::register context.ask [dict create \
+		label $::context::mc::WhatCanIDo \
+		object {} \
+		args {{object {type string default {}}} {cid {type string default C1}}} \
+		handler ::context::AskArgs \
+		what {} \
+		ai 0 \
+		context {C1 C2 C3 C4 C5 C6 C7 C8 C9 C10 C11 C12} \
+		doc "Ask the assistant about this position" \
+	]
+}
+
+proc ::context::InvokeArgs {id argsDict} {
+	set object {}
+	if {[dict exists $argsDict object]} { set object [dict get $argsDict object] }
+	return [Invoke $id $object]
+}
+
+proc ::context::AskArgs {argsDict} {
+	set cid C1
+	if {[dict exists $argsDict cid]} { set cid [dict get $argsDict cid] }
+	set object {}
+	if {[dict exists $argsDict object]} { set object [dict get $argsDict object] }
+	return [Ask $cid $object]
 }
 
 namespace eval ::context {
@@ -1025,6 +1076,49 @@ proc ::context::Visible {id object} {
 			set visible [expr {$visible && [dict get $object sortable] ? 1 : 0}]
 		}
 	}
+	# R2: trial mode hides the save/replace/strip rows.
+	if {$id in {c4.save_changes} && [::menu::TrialMode]} { set visible 0 }
+	# R6/R7: the engine group belongs to a running line engine.
+	if {$id in {c6.pause_resume c6.close_engine c6.lock_engine c6.opponents_view
+			c6.best_first c6.multiple_variations c6.lines_per_variation}} {
+		set running [::menu::EngineRunning]
+		if {[dict exists $object engine]} {
+			set engine [dict get $object engine]
+			set running [expr {[string is integer -strict $engine]
+				? ($engine >= 0 ? 1 : 0)
+				: ($engine ne "" && $engine ne "-1" ? 1 : 0)}]
+		}
+		if {!$running} { set visible 0 }
+	}
+	# R10: strip and comment-before need a move; truncate needs mid-game.
+	if {$id in {c2.comment_before c2.strip.moves c2.strip.truncate}} {
+		set ply 0
+		if {[dict exists $object ply]} {
+			set ply [dict get $object ply]
+		} else {
+			catch { set ply [::scidb::game::ply] }
+		}
+		if {$ply <= 0} { set visible 0 }
+	}
+	if {$id eq "c2.strip.truncate" && $visible} {
+		set over 0
+		if {[dict exists $object over]} {
+			set over [dict get $object over]
+		} else {
+			catch { set over [::scidb::game::query over] }
+		}
+		if {$over} { set visible 0 }
+	}
+	# R12: dock-only rows only while docked.
+	if {$id in {c9.fold c9.amalgamate c9.docking}} {
+		set uid [expr {[dict exists $object paneUid] ? [dict get $object paneUid] : ""}]
+		set twm [expr {[dict exists $object twm] ? [dict get $object twm] : ""}]
+		if {[::menu::PaneFloating $uid $twm]} { set visible 0 }
+	}
+	# R13: the report font/print group needs the HTML report surface.
+	if {$id in {c9.report.font c9.report.size c9.report.family c9.report.print c9.report.zoom}} {
+		if {[::menu::NoHtmlReport]} { set visible 0 }
+	}
 	return $visible
 }
 
@@ -1088,7 +1182,7 @@ proc ::context::BuildRows {cid menu rows object} {
 			if {$separator} { $menu add separator; set separator 0 }
 			$menu add command \
 				-label " $mc::WhatCanIDo" \
-				-command [list ::context::Ask $cid $object]
+				-command [list ::action::run context.ask [dict create cid $cid object $object]]
 			incr shown
 			continue
 		}
@@ -1166,7 +1260,8 @@ proc ::context::AddRow {menu id object} {
 		set why [WhyDisabled $id $object]
 		if {$why ne ""} { append label " ($why)" }
 	}
-	set opts [list -label " $label" -state $state -command [list ::context::Invoke $id $object]]
+	set opts [list -label " $label" -state $state \
+		-command [list ::action::run $id [dict create object $object]]]
 	if {$accel ne ""} { lappend opts -accelerator $accel }
 	eval [list $menu add command] $opts
 	return
@@ -1668,4 +1763,5 @@ proc ::context::PaneFontSize {uid} {
 	return 11
 }
 
+::context::RegisterCore
 ::context::Declare

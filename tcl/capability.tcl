@@ -56,6 +56,7 @@ proc ::capability::DefineAll {} {
 	Define explorer    {expr {[llength [info commands ::application::explorer::positionChanged]] > 0}}
 	Define tablebase   {expr {[llength [info commands ::tablebase::toggle]] > 0}}
 	Define print       {expr {[llength [info commands ::print::open]] > 0}}
+	Define report      {expr {[llength [info commands ::application::report::show]] > 0}}
 	return
 }
 

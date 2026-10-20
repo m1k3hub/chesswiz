@@ -198,6 +198,8 @@ tcltest::test mediafold-button-menu {board button follows the shared entry list 
         $btnX < $bx1 && ($btnX + $btnW) > $bx0 &&
         $btnY < $by1 && ($btnY + $btnH) > $by0
     }]
+    # Deliberately positional: the media menu is a dynamic media-file list
+    # (a REG-002 exemption class), so rows are read back by index.
     list $hidden [list [winfo manager $pane.mediaButton] [winfo ismapped $pane.mediaButton]] \
         $overlapsSquares \
         [$pane.mediaButton.menu entrycget 0 -label] \
@@ -517,6 +519,10 @@ tcltest::test mediafold-focus-time {MED-001C time advances and Space is local to
 } -cleanup {destroy .application.foldOutside; ::scidb::test::foldCleanup} -result {{0:30 / 2:00} {1:05 / 2:00} pause pause}
 
 tcltest::test mediafold-real-menu {MED-003/004 real MediaTest rows dispatch picture/video/stream/audio} -setup {
+    # The preceding cases open a picture viewer; start this one from a
+    # clean viewer so its canvas exists when the Picture row is chosen.
+    catch { destroy .mediaPicture }
+    catch { ::application::media::Stop }
     set ::scidb::test::foldStubs {}
     set ::scidb::test::foldCalls {}
     ::scidb::test::foldStub available? {} {return 1}
@@ -538,6 +544,9 @@ tcltest::test mediafold-real-menu {MED-003/004 real MediaTest rows dispatch pict
     set pane [::mediainset::Pane]
     set menu $pane.mediaButton.menu
     ::mediainset::PopulateMenu $menu
+    # Deliberately positional: the Media button lists the game's media files
+    # (the dynamic list is a REG-002 exemption), so rows are read and chosen
+    # by index; the model is compared with ::mediainset::Entries.
     set labels {}; set entries [::mediainset::Entries]
     set matches [expr {[llength [::application::media::MediaRows]] == [llength [::scidb::db::mediaFiles $base Normal 1]]}]; set index 0
     ::scidb::test::foldRecord VAL-MED-003B [list slot $pos current [::scidb::game::current] modelPosition $::application::media::Priv(position) modelBase $::application::media::Priv(base) modelIndex $::application::media::Priv(index) link [::scidb::game::link? $pos] expected [::scidb::db::mediaFiles $base Normal 1]]
@@ -552,6 +561,11 @@ tcltest::test mediafold-real-menu {MED-003/004 real MediaTest rows dispatch pict
     ::scidb::test::foldRecord VAL-MED-003B [list entries $entries menu $labels openStream [$menu entrycget end -label]]
     set states {}
     foreach type {Video Stream Picture} id {VAL-MED-004A VAL-MED-004B VAL-MED-004C} {
+        # Earlier rows may rebuild the media model, so refresh both the
+        # dynamic list and the menu before choosing this type's row.
+        set entries [::mediainset::Entries]
+        catch { $::application::media::Priv(tree) selection set {} }
+        ::mediainset::PopulateMenu $menu
         set index 0
         foreach entry $entries {
             if {[lindex $entry 1] eq $type} {break}
@@ -638,6 +652,8 @@ tcltest::test mediafold-saved-pane {MED-005 saved Media pane survives an empty g
 # VAL-MED-008: Open stream is reachable with the Media pane hidden, for a
 # game without media and with no game, and the menu never blocks a script.
 proc ::scidb::test::med008State {tag} {
+    # Deliberately positional: media rows are a dynamic file list and are
+    # compared with ::mediainset::MediaMenuLabels (REG-002 exemption).
     set w [::mediainset::Pane].mediaButton
     set labels {}
     for {set i 0} {$i <= [$w.menu index end]} {incr i} {
@@ -688,6 +704,8 @@ tcltest::test mediafold-008-stream {choosing Open stream... and entering a URL p
 } -body {
     set w [::mediainset::Pane].mediaButton
     set url https://test-videos.example/vids/bigbuckbunny.mp4
+    # Deliberately positional: Open stream... is the fixed last row of the
+    # dynamic media menu (REG-002 exemption), not a registry action row.
     $w.menu invoke [$w.menu index end]
     update
     set dlg .application.__mediastream__
@@ -730,6 +748,8 @@ tcltest::test mediafold-008-no-hang {scripted button post/unpost and entry reads
         lappend posts [expr {[clock milliseconds]-$t0}]
         set t0 [clock milliseconds]
         set labels {}
+        # Deliberately positional: this measures the cost of reading the
+        # dynamic media menu (REG-002 exemption), so it walks every row.
         for {set k 0} {$k <= [$w.menu index end]} {incr k} {
             if {[$w.menu type $k] eq "command"} {lappend labels [$w.menu entrycget $k -label]}
         }

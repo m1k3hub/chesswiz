@@ -143,6 +143,8 @@ namespace eval menu::mc {
 
 	# Analysis
 	set StartStopEngine				"Start / Stop Engine"
+	set StartEngine					"Start Engine"
+	set StopEngine					"Stop Engine"
 	set EngineDictionary				"Engine Dictionary…"
 	set ChooseReviewEngine			"Choose Engine for Review…"
 	set AnalyzePosition				"Analyze This Position"
@@ -884,8 +886,8 @@ proc ::menu::DbWritable {} {
 	return [expr {!$ro}]
 }
 proc ::menu::EngineRunning {} {
-	if {[catch { ::engine::id } id]} { return 0 }
-	return [expr {$id >= 0 ? 1 : 0}]
+	if {[catch { set running [::application::analysis::Running] }]} { return 0 }
+	return [expr {[llength $running] ? 1 : 0}]
 }
 proc ::menu::GameOver {} {
 	if {[catch { ::scidb::game::query over } over]} { return 0 }
@@ -904,19 +906,33 @@ proc ::menu::BoardSetupOpen {} {
 	catch { set open [::board::options::isOpen] }
 	return [expr {$open ? 1 : 0}]
 }
-proc ::menu::PaneFloating {uid} {
-	return 0
+proc ::menu::PaneFloating {uid {twm ""}} {
+	# R12: true only for a pane that exists and is currently undocked.
+	# A pane's leaf lives in a metaframe; the metaframe's toplevel is the
+	# floating window when the pane is undocked (same test the app uses).
+	if {$uid eq ""} { return 0 }
+	if {$twm eq ""} {
+		if {[catch { set twm [::application::twm] }]} { return 0 }
+	}
+	if {$twm eq ""} { return 0 }
+	if {[catch { set leaf [$twm leaf $uid] }] || $leaf eq ""} { return 0 }
+	if {[catch { set top [$twm toplevel $leaf] }]} { return 0 }
+	if {[catch { set floating [$twm isfloat $top] }]} { return 0 }
+	return [expr {$floating ? 1 : 0}]
 }
 proc ::menu::NoHtmlReport {} {
-	return 0
+	# R13: the HTML report surface is the report renderer; a build without
+	# it has no report font/print group. Opening a report builds the pane,
+	# so "pane not yet created" is not the same as "surface absent".
+	return [expr {[::capability::present report] ? 0 : 1}]
 }
 proc ::menu::Sortable {} {
 	if {[catch { set v $::gamestable::Vars(sortable) }]} { return 1 }
 	return [expr {$v ? 1 : 0}]
 }
 proc ::menu::EngineLabel {} {
-	if {[EngineRunning]} { return [MC StartStopEngine] }
-	return [MC StartStopEngine]
+	if {[EngineRunning]} { return [MC StopEngine] }
+	return [MC StartEngine]
 }
 
 # ----------------------------------------------------------------------
@@ -1344,6 +1360,12 @@ proc ::menu::DumpNodes {menu nodes indent topLevel} {
 				set lastSep 0
 				if {$index > [$menu index end]} { continue }
 				set label [NormLabel [$menu entrycget $index -label]]
+				# A toggle with a label script (Start / Stop Engine) shows
+				# state at runtime; the structural fixture records its
+				# registered label.
+				if {$kind eq "toggle" && [catch { ::action::get [lindex $node 1] } rec] == 0} {
+					if {[dict exists $rec label]} { set label [NormLabel [dict get $rec label]] }
+				}
 				set accel ""
 				catch { set accel [$menu entrycget $index -accelerator] }
 				lappend out "[string repeat " " $indent]ENTRY $label[expr {$accel ne "" ? " $accel" : ""}]"
@@ -1645,7 +1667,10 @@ proc ::menu::Do {id} {
 		app-help { return [::help::open .application] }
 		menu.help.bug { return [::menu::bugReport .application] }
 		menu.help.feature { return [::menu::featureRequest .application] }
-		menu.help.about { return [::info::openDialog .application] }
+		menu.help.about {
+			if {[tk windowingsystem] eq "aqua"} { return [::menu::MacAbout] }
+			return [::info::openDialog .application]
+		}
 
 		menu.view.panes.* { ::menu::TogglePane [lindex [split $id .] end]; return }
 		view.pane_zoom { catch { ::application::TogglePaneZoom }; return }
