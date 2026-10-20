@@ -253,6 +253,8 @@ tcltest::test board3d-themes-and-styles {theme and pieceStyle configuration work
 		set res {}
 		::board3d::setTheme "Rosewood & Boxwood"
 		lappend res $::board3d::State(theme) $::board3d::State(darkColor)
+		::board3d::setTheme "Photorealistic Walnut & Maple"
+		lappend res $::board3d::State(theme) $::board3d::State(darkColor)
 		::board3d::setPieceStyle "realistic3d"
 		lappend res $::board3d::State(pieceStyle)
 		::board3d::setPieceStyle "vector"
@@ -263,7 +265,7 @@ tcltest::test board3d-themes-and-styles {theme and pieceStyle configuration work
 		lappend res $::board3d::State(theme)
 		set res
 	}
-} -result [list "Rosewood & Boxwood" "#8b2500" "realistic3d" "vector" "photos" "Classic Woodcraft"]
+} -result [list "Rosewood & Boxwood" "#8b2500" "Photorealistic Walnut & Maple" "#683e23" "realistic3d" "vector" "photos" "Classic Woodcraft"]
 
 tcltest::test board3d-vector-piece-render {vector piece draws baize felt base, polygons, and finials} -body {
 	b3dEval {

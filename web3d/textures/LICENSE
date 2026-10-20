@@ -1,0 +1,17 @@
+Photorealistic 3D Wood PBR Textures (Walnut & Maple)
+====================================================
+
+Files in this directory:
+- walnut_albedo.jpg     (512x512 RGB, seamless American Black Walnut grain albedo)
+- walnut_roughness.jpg  (512x512 grayscale, surface & pore roughness map)
+- maple_albedo.jpg      (512x512 RGB, seamless Rock Maple / Sycamore grain albedo)
+- maple_roughness.jpg   (512x512 grayscale, fine close-grain roughness map)
+
+Licence: CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
+Licence URL: https://creativecommons.org/publicdomain/zero/1.0/
+Source / Provenance:
+Procedurally synthesized in-repo by `web3d/generate_wood_textures.py` (deterministic
+anisotropic fBm wood-ring and vessel-pore synthesis, inspired by CC0 PBR wood sets
+at https://ambientcg.com/view?id=Wood066 and https://polyhaven.com/a/walnut_veneer).
+Dedicated to the public domain under CC0 1.0 Universal; no attribution required,
+free for commercial and open-source distribution.

@@ -205,6 +205,9 @@ proc ::board3d::webserver::ServeFile {sock target} {
 		.js { set type application/javascript }
 		.css { set type text/css }
 		.json { set type application/json }
+		.jpg - .jpeg { set type image/jpeg }
+		.png { set type image/png }
+		.webp { set type image/webp }
 		default { set type application/octet-stream }
 	}
 	Reply $sock 200 $type $body 1
