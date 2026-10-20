@@ -296,8 +296,17 @@ tcltest::test analysis-stop-stops-the-search {Stop sends "stop", keeps the engin
 	set stop $Vars(widget:button:stop)
 	set enabled [::scidb::test::pane::enabled $stop]
 	# the square button stops the search, the separate button closes the engine
-	set wired [list [string match "*Stop *" [$stop cget -command]] \
-		[string match "*CloseEngine *" [$Vars(widget:button:close) cget -command]]]
+	# toolbar buttons dispatch through the action registry: compare the
+	# handler the button's action runs, not the ::action::run wrapper
+	proc ::scidb::test::pane::handler {w} {
+		set cmd [$w cget -command]
+		if {[string match "::action::run *" $cmd]} {
+			set cmd [dict get [::action::get [lindex $cmd 1]] handler]
+		}
+		return $cmd
+	}
+	set wired [list [string match "*Stop *" [::scidb::test::pane::handler $stop]] \
+		[string match "*CloseEngine *" [::scidb::test::pane::handler $Vars(widget:button:close)]]]
 	variable ::scidb::test::pane::Log {}
 } -body {
 	::scidb::test::pane::waitUntil {[::scidb::test::pane::lineCount $number] == 4}
