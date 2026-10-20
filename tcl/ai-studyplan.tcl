@@ -459,7 +459,7 @@ proc ::ai::studyplan::PlanText {} {
 		}
 	}
 	if {[dict size $by]} {
-		lappend lines "By structure (found by CQL in the position before the move):"
+		lappend lines "By structure (found by pattern search in the position before the move):"
 		foreach id [lsort -command [list apply {{by a b} {
 				expr {[lindex [dict get $by $b] 0] - [lindex [dict get $by $a] 0]}
 			}} $by] [dict keys $by]] {

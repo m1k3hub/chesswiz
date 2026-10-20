@@ -123,7 +123,7 @@ tcltest::test assistant-denied-action {a changing action does not run when the u
 	rename ::font::installChessBaseFonts {}
 	if {$hadProc} { rename ::scidb::test::assistant::realInstallFonts ::font::installChessBaseFonts }
 	list $reply $::called $::scidb::test::assistant::Asked
-} -result {{The user declined: the action was NOT performed and no dialog was opened.} 0 {{install the ChessBase fonts}}}
+} -result {{The user declined: the action was NOT performed and no dialog was opened.} 0 {{install the figurine chess fonts}}}
 
 tcltest::test assistant-allowed-action {a changing action runs once the user allows it} -body {
 	::scidb::test::assistant::setup 1

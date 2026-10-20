@@ -1,0 +1,153 @@
+<!-- ======================================================================
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+======================================================================= -->
+
+INDEX Ask field
+INDEX Command palette#Result-List
+INDEX Assistant#Assistant
+INDEX Speech input#Speech-Input
+INDEX Microphone#Speech-Input
+INDEX Shortcuts#Shortcuts
+TITLE The Ask Field and Assistant
+
+<p>
+The Ask field in the top strip provides quick access to actions and commands
+across Chesswiz. It combines a fast action palette, natural language requests,
+and optional local speech input in a single field.
+</p>
+
+<ul>
+  <li><a href="#Ask-Field">The Ask field</a></li>
+  <li><a href="#Result-List">Action palette and result list</a></li>
+  <li><a href="#Speech-Input">Speech input</a></li>
+  <li><a href="#Shortcuts">Keyboard shortcuts</a></li>
+  <li><a href="#Assistant">The Assistant</a></li>
+</ul>
+
+<h3 id="Ask-Field">The Ask field</h3>
+
+<p>
+The Ask field is located in the top strip of the main window notebook,
+immediately to the left of the main drop-down menu. It functions as the
+application's action palette directly within the main window, with no need
+for a separate palette dialog.
+</p>
+
+<p>
+When the field is empty, a light gray placeholder text displays:
+<i>"Ask or tell Chesswiz what to do (Ctrl+K)"</i>. As soon as you begin typing,
+the placeholder disappears and the result list opens below the field.
+When the field is empty, pressing <nobr><b>Up</b></nobr> or <nobr><b>Down</b></nobr>
+steps through your recent request history.
+</p>
+
+<h3 id="Result-List">Action palette and result list</h3>
+
+<p>
+Typing in the Ask field filters Chesswiz's action registry on every keystroke.
+Only runnable actions are displayed: an action appears only if it is currently
+both enabled and visible according to the active application state (matching the
+same rules as the main drop-down menu).
+</p>
+
+<p>
+Matching actions are ranked by fuzzy matching across their labels, documentation,
+and keyboard shortcuts. Each entry displays:
+</p>
+
+<ul>
+  <li>The descriptive action label.</li>
+  <li>The keyboard shortcut assigned to that action, if any.</li>
+</ul>
+
+<p>
+You can navigate and execute items from the result list:
+</p>
+
+<ul>
+  <li><nobr><b>Up</b></nobr> and <nobr><b>Down</b></nobr> arrows move the selection up and down the list.</li>
+  <li><nobr><b>Return</b></nobr> or <nobr><b>KP_Enter</b></nobr> (or a mouse click) executes the selected action. The command runs through the action runner, which ensures all safety gates and confirmation prompts apply.</li>
+  <li><nobr><b>Escape</b></nobr> closes the result list and restores focus to the widget that had focus previously (such as the chessboard).</li>
+</ul>
+
+<p>
+The final entry in the result list is always <b>Ask the assistant</b>. Selecting this entry,
+or pressing <nobr><b>Return</b></nobr> on any query that does not match a registered action,
+sends the query text directly to the Assistant.
+</p>
+
+<h3 id="Speech-Input">Speech input</h3>
+
+<p>
+A microphone button labeled <b>Speak</b> sits on the right side of the Ask field.
+Clicking the button records speech, transcribes it locally, and inserts the
+transcribed text directly at the cursor in the Ask field.
+</p>
+
+<note>
+Speech is strictly an input mechanism: Chesswiz never generates speech output.
+The transcribed text remains completely editable in the field and is never sent or
+executed until you explicitly press <nobr><b>Return</b></nobr>.
+</note>
+
+<p>
+All speech processing is performed locally using external tools without external network
+services or linked audio libraries:
+</p>
+
+<ul>
+  <li><b>Linux</b>: Uses whisper.cpp's <nobr><tt>whisper-cli</tt></nobr> (CPU-only execution) along with <nobr><tt>arecord</tt></nobr> or <nobr><tt>ffmpeg</tt></nobr>.</li>
+  <li><b>Windows</b>: Uses the operating system's built-in dictation (<nobr>Win+H</nobr>).</li>
+  <li><b>macOS</b>: Uses system dictation (configured in System Settings &gt; Keyboard &gt; Dictation).</li>
+</ul>
+
+<p>
+If no speech tool or model is detected, the microphone button is automatically hidden
+from the interface. You can configure local speech paths in
+<menuitem>Preferences &gt; Assistant</menuitem> (or action <nobr><tt>app.preferences.assistant</tt></nobr>),
+which provides settings for the <nobr><tt>whisper-cli</tt></nobr> path, model file, and recording tool,
+along with a <b>Detect</b> button to verify the configuration.
+</p>
+
+<h3 id="Shortcuts">Keyboard shortcuts</h3>
+
+<p>
+The Ask field is easily accessible from anywhere in Chesswiz using keyboard shortcuts:
+</p>
+
+<ul>
+  <li><nobr><b>Ctrl+K</b></nobr>: Focuses the Ask field and selects all its text, ready for immediate typing. In multi-line text editing widgets (such as the Comment Editor, PGN text, or engine console), <nobr><b>Ctrl+K</b></nobr> preserves the standard editing command to delete from the cursor to the end of the line.</li>
+  <li><nobr><b>Ctrl+Shift+K</b></nobr>: Unconditionally focuses the Ask field from anywhere in the application, including from within multi-line text editors.</li>
+  <li><nobr><b>Escape</b></nobr>: Dismisses the result list and returns focus to the previous control or chessboard.</li>
+</ul>
+
+<h3 id="Assistant">The Assistant</h3>
+
+<p>
+The Assistant is an automated operator that drives Chesswiz's registered actions from
+plain language requests. It is docked in the Assistant pane of the Board tab (and can be
+docked or undocked like any board pane; pressing <nobr><b>F2</b></nobr> brings it into view).
+</p>
+
+<p>
+You can ask the Assistant to perform operations in your own words, such as finding games,
+setting up board positions, generating player preparation reports, opening searches, or
+explaining the current position.
+</p>
+
+<p>
+Key design principles of the Assistant include:
+</p>
+
+<ul>
+  <li><b>Drives registered actions</b>: The Assistant cannot execute arbitrary operations. It is constrained to Chesswiz's fixed registry of actions and tools, and all parameters are validated against formal schemas before any command is called.</li>
+  <li><b>Multi-step plans with one confirmation</b>: When a complex request requires multiple steps, the Assistant presents them as a unified plan. If any step modifies data, imports games, or performs bulk changes, Chesswiz asks for one confirmation covering the entire plan. If declined, no actions are run. If any step encounters an error, execution stops immediately while preserving earlier successful steps. Any dialog opened during a plan pauses execution until dismissed.</li>
+  <li><b>Never required</b>: The Assistant is strictly a convenience operator. Every single action, search, dialog, and tool in Chesswiz is directly reachable through the application menus, toolbars, and keyboard shortcuts. Proficient users can operate every feature of Chesswiz without ever opening or using the Assistant.</li>
+</ul>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html fileencoding=utf-8: -->

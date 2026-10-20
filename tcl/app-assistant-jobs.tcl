@@ -227,6 +227,8 @@ dict for {name entry} $Actions {
 	set aiFlag [expr {$debug ? "debug" : 1}]
 	set isBulk [expr {$name in $BulkActions ? 1 : 0}]
 	set label [string map {" " "_"} $name]
+	if {$name eq "install_chessbase_fonts"} { set label "install_figurine_fonts" }
+	if {$name eq "cql_help"} { set label "pattern_search_help" }
 	set spec [::application::assistant::_specFor $parameters $name]
 	set schemaStr [::application::assistant::_schemaFor $parameters $spec]
 	if {$spec eq "{}"} { set spec {} }

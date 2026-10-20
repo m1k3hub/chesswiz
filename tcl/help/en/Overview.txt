@@ -26,6 +26,7 @@ TITLE Welcome to Chesswiz-Help
   <li><a href="Write-Protect-Database.html">Write protection of databases</a></li>
   <li><a href="File-Selection-Dialog.html">Usage of the file selection dialog</a></li>
   <li><a href="Toolbar-Usage.html">Usage of the toolbars</a></li>
+  <li><a href="Ask-Field.html">The Ask field and Assistant</a></li>
   <li><a href="Clipbase.html">The Clipbase</a></li>
   <li><a href="How-To-Set-Default-Browser.html">How to set the default browser</a></li>
 </ul>
