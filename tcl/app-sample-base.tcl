@@ -37,6 +37,10 @@ proc maybeOpen {parent} {
 	variable Removed
 
 	if {$Removed || [llength [::process::arguments]]} { return }
+	# the app-test harness (tests/run_app_tests.tcl) opens no sample
+	# automatically: its many in-process test files must not see a
+	# surprise database; the tests drive an automatic open themselves
+	if {[namespace exist ::scidb::test::app]} { return }
 	set path [location]
 	if {![file readable $path] || [::scidb::db::get open? $path]} { return }
 
