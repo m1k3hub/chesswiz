@@ -647,6 +647,9 @@ proc WindowResized {w} {
 	if {$w ne ".application" || !$Vars(ready)} { return }
 	if {[info exists Vars(after:fit)]} { after cancel $Vars(after:fit) }
 	set Vars(after:fit) [after 20 [namespace code [list KeepInWorkArea $w]]]
+	# A move sends the same event as a resize; open dialogs are re-planned
+	# against the board's settled rectangle (debounced in place.tcl).
+	::util::place::besideSchedule
 }
 
 
@@ -660,6 +663,7 @@ proc KeepInWorkArea {w} {
 	# is also the "a pure move inside the work area is not yanked" rule.
 	if {$fitted eq $geometry} { return 0 }
 	::util::place::fitWindow $w $geometry
+	::util::place::besideSchedule
 	return 1
 }
 
@@ -2102,6 +2106,10 @@ proc Startup {main args} {
 	RestoreWindowGeometry $app
 	bind $app <Configure> +[namespace code {RememberWindowGeometry %W}]
 	bind $app <Configure> +[namespace code {WindowResized %W}]
+	# Fullscreen changes the board extent; the resize hook normally sees it
+	# too, but the explicit event makes the dialog follow deterministic on
+	# window managers that apply the state without a Configure.
+	bind $app <<Fullscreen>> +[namespace code {::util::place::besideSchedule}]
 	database::finish $app
 	::splash::close
 	set Vars(ready) 1
@@ -2486,6 +2494,9 @@ proc setMode {t target} {
  set S(busy) 0
  if {$rc} {return -options $options $error}
  updateCollapse
+ # The load rebuilt the panes under the board; re-plan placed dialogs once
+ # the resulting Configure burst has settled.
+ ::util::place::besideSchedule
 }
 proc evaluate {w h} {
  variable S; variable WideAspect; variable TallAspect
@@ -2510,6 +2521,9 @@ proc onDebounced {w h} {
  if {$S(mode) eq "wide" && [reflowable? [set t [boardTwm]]]} {
   set S(wideSashes) [list [winfo width .application] [winfo height .application] [::application::focuszoom::Snapshot $t]]
  }
+ # A wide/tall switch moves and resizes the board; open playing dialogs
+ # follow its settled rectangle.
+ ::util::place::besideSchedule
 }
 proc cancelPending {} {
  variable S

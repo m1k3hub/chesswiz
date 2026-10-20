@@ -280,4 +280,127 @@ tcltest::test dlg-tactics {trainer with its own board stays centred and does not
     ::scidb::test::dlgplace::stopTrace
 } -result {1 1 1}
 
+# --- VAL-DLG-010: placed dialogs follow the board --------------------
+# While a dialog is open, a main-window resize (including the wide/tall
+# reflow), a pure window move and fullscreen all move/resize the board; the
+# shared helper must re-plan the dialog so it never covers the board, with
+# one debounced re-place per settle.
+
+proc ::scidb::test::dlgplace::boardRect {} {
+    return [widgetRect $::application::board::board]
+}
+proc ::scidb::test::dlgplace::dialogOverlap {dlg} {
+    return [overlapArea [widgetRect $dlg] [boardRect]]
+}
+proc ::scidb::test::dlgplace::replaceDelta {script} {
+    ::util::place::besideResetReplaceCount
+    uplevel 1 $script
+    return [::util::place::besideReplaceCount]
+}
+proc ::scidb::test::dlgplace::noOverlap {target dlg} {
+    set area [dialogOverlap $dlg]
+    puts "DLG $target main=[wm geometry .application] board=[boardRect] dlg=[widgetRect $dlg] overlap=$area replaces=[::util::place::besideReplaceCount]"
+    require [expr {$area == 0}] "$target: dialog covers board by $area px2"
+    return 1
+}
+proc ::scidb::test::dlgplace::follow {target dlg} {
+    # Start wide enough to open normally, then force the tall reflow with the
+    # contract's 1274x900 -> 800x900 resize.
+    wm geometry .application 1274x900+10+10
+    waitFor 1200
+    noOverlap $target-open $dlg
+    set before [widgetRect $dlg]
+
+    set delta [replaceDelta {wm geometry .application 800x900+10+10; waitFor 1300}]
+    require [expr {$delta == 1}] "$target-resize: expected 1 re-place, got $delta"
+    require [expr {[widgetRect $dlg] ne $before}] "$target-resize: dialog did not follow the board"
+    noOverlap $target-resize $dlg
+
+    set before [widgetRect $dlg]
+    set delta [replaceDelta {wm geometry .application +180+120; waitFor 1300}]
+    require [expr {$delta == 1}] "$target-move: expected 1 re-place, got $delta"
+    require [expr {[widgetRect $dlg] ne $before}] "$target-move: dialog did not follow the board"
+    noOverlap $target-move $dlg
+
+    set delta [replaceDelta {::menu::viewFullscreen toggle; waitFor 1800}]
+    require [expr {$delta == 1}] "$target-fullscreen: expected 1 re-place, got $delta"
+    noOverlap $target-fullscreen $dlg
+    # Leaving fullscreen moves the board back; the dialog follows again.
+    set delta [replaceDelta {::menu::viewFullscreen toggle; waitFor 1500}]
+    require [expr {$delta == 1}] "$target-unfullscreen: expected 1 re-place, got $delta"
+    noOverlap $target-unfullscreen $dlg
+
+    # Nothing else moves once settled: no repeated re-place/jitter.
+    set count [::util::place::besideReplaceCount]
+    waitFor 900
+    require [expr {[::util::place::besideReplaceCount] == $count}] "$target: re-placed on an idle window"
+    return 1
+}
+proc ::scidb::test::dlgplace::followCleanup {dlg closeScript} {
+    catch {wm attributes .application -fullscreen 0}
+    catch {uplevel 1 $closeScript}
+    catch {destroy $dlg}
+    ::util::place::besideResetReplaceCount
+    set ::application::Vars(loading) 0
+    waitFor 200
+}
+
+foreach {target openScript dialog closeScript} {
+    follow-playengine {::playengine::open .application} {.application.playengine} {::playengine::Close}
+    follow-guessmove {::guessmove::start white} {.application.__guessmove__} {::guessmove::stop}
+    follow-gamereview {set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]; ::gamereview::ShowWindow .application $review {} 0} {.application.__gamereview} {destroy .application.__gamereview}
+    follow-trainer {::endtrainer::open .application} {.application.__endtrainer__} {::endtrainer::Close}
+} {
+    tcltest::test dlg-$target {dialog follows board on resize, move and fullscreen without covering it} -setup {
+        ::scidb::test::dlgplace::setupBoard
+    } -body [format {
+        %s
+        ::scidb::test::dlgplace::waitFor 700
+        ::scidb::test::dlgplace::follow %s %s
+    } $openScript $target $dialog] -cleanup [format {
+        ::scidb::test::dlgplace::followCleanup %s {%s}
+    } $dialog $closeScript] -result 1
+}
+
+# A dialog the user moved away from the board is left where it is, even when
+# the board moves; once that move puts it over the board it is re-placed.
+tcltest::test dlg-follow-user-move {user-moved dialog is respected until it covers the board} -setup {
+    ::scidb::test::dlgplace::setupBoard
+} -body {
+    wm geometry .application 1274x900+10+10
+    ::playengine::open .application
+    ::scidb::test::dlgplace::waitFor 800
+    set dlg .application.playengine
+    lassign [winfo workarea $dlg] wx wy ww wh
+    set h [winfo height $dlg]
+    # Bottom-left corner, clear of the board.
+    wm geometry $dlg "+[expr {$wx+10}]+[expr {$wy+$wh-$h-10}]"
+    ::scidb::test::dlgplace::waitFor 800
+    set moved [::scidb::test::dlgplace::widgetRect $dlg]
+    ::scidb::test::dlgplace::noOverlap user-move-safe $dlg
+
+    set delta [::scidb::test::dlgplace::replaceDelta {
+        wm geometry .application 900x1000+10+10
+        ::scidb::test::dlgplace::waitFor 1400
+    }]
+    ::scidb::test::dlgplace::require [expr {$delta == 0}] "user-moved dialog was re-placed ($delta)"
+    ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::widgetRect $dlg] eq $moved}] \
+        "user-moved dialog changed position"
+    ::scidb::test::dlgplace::noOverlap user-move-respected $dlg
+
+    # Now drag it onto the board; it must be re-planned off the board.
+    lassign [::scidb::test::dlgplace::boardRect] bx by bw bh
+    wm geometry $dlg "+[expr {$bx+20}]+[expr {$by+20}]"
+    ::scidb::test::dlgplace::waitFor 1200
+    ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::dialogOverlap $dlg] == 0}] \
+        "dialog covering the board was not re-placed"
+    return 1
+} -cleanup {
+    catch {::playengine::Close}
+    catch {destroy .application.playengine}
+    catch {wm attributes .application -fullscreen 0}
+    ::util::place::besideResetReplaceCount
+    set ::application::Vars(loading) 0
+} -result 1
+
 tcltest::cleanupTests

@@ -42,6 +42,20 @@ variable PlaceList	{	"at" "center" "top-center" "left" "right"
 								"above" "below" "above-or-below" "left-or-right" }
 variable ShiftLeft	8
 
+# Dialogs currently placed by besideBoard. The board can move or resize
+# without the dialog's own requested size changing (window resize, a pure
+# window move, wide/tall reflow, fullscreen, pane zoom, a changed media
+# reserve), so besideBoard registers each placed dialog and a single
+# debounced settle re-plans them against the board's current root rectangle.
+# A dialog the user dragged away from its planned rectangle is left alone
+# unless that move puts it over the board.
+variable BesideDelay		260
+variable BesideTimer		{}
+variable BesideDialogs		{}
+variable BesideState
+variable BesideReplacements	0
+variable BesideBoardBound	{}
+
 
 # Notes:
 #  For Windows systems with more than one monitor the available screen area may
@@ -373,6 +387,159 @@ proc besidePosition {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12}} 
 }
 
 
+# Root rectangle {x y width height} of a mapped board, or {} when the board
+# cannot be placed against yet.
+proc besideBoardRect {} {
+	if {[catch { set board $::application::board::board }]} { return {} }
+	if {![winfo exists $board] || ![winfo ismapped $board]} { return {} }
+	if {[winfo width $board] < 2 || [winfo height $board] < 2} { return {} }
+	return [list [winfo rootx $board] [winfo rooty $board] \
+		[winfo width $board] [winfo height $board]]
+}
+
+proc besideRect {w} {
+	return [list [winfo rootx $w] [winfo rooty $w] \
+		[winfo width $w] [winfo height $w]]
+}
+
+# A one-pixel tolerance absorbs WM round-off; anything larger is a move or
+# resize we did not make.
+proc besideRectDiffers {a b} {
+	if {[llength $a] != 4 || [llength $b] != 4} { return 1 }
+	foreach x $a y $b {
+		if {abs($x - $y) > 1} { return 1 }
+	}
+	return 0
+}
+
+proc besideOverlap {a b} {
+	lassign $a ax ay aw ah
+	lassign $b bx by bw bh
+	return [expr {
+		max(0, min($ax + $aw, $bx + $bw) - max($ax, $bx)) *
+		max(0, min($ay + $ah, $by + $bh) - max($ay, $by))}]
+}
+
+# Coalesce board motion and window/reflow events into a single settle. A
+# trailing debounce means a drag or a reflow does not re-place on every
+# intermediate rectangle; the last event restarts the timer, so the dialog
+# moves at most once per settle.
+proc besideSchedule {{delay ""}} {
+	variable BesideTimer
+	variable BesideDelay
+	variable BesideDialogs
+
+	if {![llength $BesideDialogs]} { return }
+	if {$BesideTimer ne {}} { after cancel $BesideTimer }
+	if {$delay eq ""} { set delay $BesideDelay }
+	set BesideTimer [after $delay [namespace code besideSettle]]
+}
+
+# Record the rectangle a placement actually produced. Runs on idle because
+# the WM applies wm geometry asynchronously and callers deiconify after
+# besideBoard returns.
+proc besideCapture {dlg} {
+	variable BesideState
+	if {![winfo exists $dlg] || ![winfo ismapped $dlg]} { return }
+	set BesideState($dlg,last) [besideRect $dlg]
+	set BesideState($dlg,board) [besideBoardRect]
+	set BesideState($dlg,user) 0
+}
+
+proc besideRegistryAdd {dlg parent} {
+	variable BesideDialogs
+	variable BesideState
+	variable BesideBoardBound
+
+	set BesideState($dlg,parent) $parent
+	if {$dlg ni $BesideDialogs} { lappend BesideDialogs $dlg }
+
+	if {[catch { set board $::application::board::board }]} { set board {} }
+	if {$board ne {} && [winfo exists $board] && $BesideBoardBound ne $board} {
+		bind $board <Configure> +[namespace code besideSchedule]
+		set BesideBoardBound $board
+	}
+
+	# The WM applies wm geometry asynchronously (and callers deiconify after
+	# besideBoard returns), so record the produced rectangle on idle rather
+	# than reading a half-applied one and mistaking it for a user move.
+	set BesideState($dlg,last) {}
+	set BesideState($dlg,board) [besideBoardRect]
+	set BesideState($dlg,user) 0
+	after idle [namespace code [list besideCapture $dlg]]
+}
+
+proc besideRegistryRemove {dlg} {
+	variable BesideDialogs
+	variable BesideState
+	set i [lsearch -exact $BesideDialogs $dlg]
+	if {$i >= 0} { set BesideDialogs [lreplace $BesideDialogs $i $i] }
+	array unset BesideState ${dlg},*
+}
+
+proc besideSettle {} {
+	variable BesideTimer
+	variable BesideDialogs
+	variable BesideState
+	variable BesideReplacements
+
+	set BesideTimer {}
+	set boardRect [besideBoardRect]
+	if {$boardRect eq {}} { return }
+	# A reflow freezes the twm while it loads; placing against an
+	# intermediate rectangle would be visible. Wait for the load to finish.
+	if {[info exists ::application::Vars(loading)] && $::application::Vars(loading)} {
+		besideSchedule 80
+		return
+	}
+
+	set replan {}
+	foreach dlg $BesideDialogs {
+		if {![winfo exists $dlg]} { besideRegistryRemove $dlg; continue }
+		if {![winfo ismapped $dlg]} { continue }
+		set current [besideRect $dlg]
+		if {![info exists BesideState($dlg,last)] || $BesideState($dlg,last) eq {}} {
+			# Waiting for the idle capture of the rectangle the placement
+			# produced: not a user move. If the board moved in between,
+			# fall through and re-plan against the new rectangle.
+			if {$boardRect eq $BesideState($dlg,board)} {
+				set BesideState($dlg,last) $current
+				set BesideState($dlg,user) 0
+				continue
+			}
+			set BesideState($dlg,user) 0
+		} elseif {[besideRectDiffers $current $BesideState($dlg,last)]} {
+			set BesideState($dlg,user) 1
+		}
+		if {$BesideState($dlg,user)} {
+			# Respect a user move unless it now covers the board.
+			if {[besideOverlap $current $boardRect] == 0} { continue }
+		} elseif {$boardRect eq $BesideState($dlg,board)} {
+			# Board did not move; the trigger was unrelated to placement.
+			continue
+		}
+		lappend replan $dlg
+	}
+
+	foreach dlg $replan {
+		if {[catch { besideBoard $dlg $BesideState($dlg,parent) }]} { continue }
+		incr BesideReplacements
+	}
+}
+
+# Number of re-placements caused by board motion, for tests/evidence. Opening
+# a dialog calls besideBoard directly and does not count here.
+proc besideReplaceCount {} {
+	variable BesideReplacements
+	return $BesideReplacements
+}
+
+proc besideResetReplaceCount {} {
+	variable BesideReplacements
+	set BesideReplacements 0
+}
+
+
 # Place <dlg> beside the main board ($::application::board::board) using
 # besidePosition and the real work area / frame extents. When the dialog's
 # natural size (including wm minsize) cannot fit, retry at its requested size
@@ -460,6 +627,7 @@ proc besideBoard {dlg {parent ""}} {
 	} else {
 		wm geometry $dlg "+${x}+${y}"
 	}
+	besideRegistryAdd $dlg $parent
 	return $plan
 }
 
@@ -470,7 +638,13 @@ proc BesideConfigure {dlg parent} {
 	variable BesideRequests
 	variable BesidePending
 	if {![info exists BesideRequests($dlg)] || [info exists BesidePending($dlg)]} { return }
-	if {$BesideRequests($dlg) eq [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]} { return }
+	if {$BesideRequests($dlg) eq [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]} {
+		# Same content size: this is a move or a user resize. Let the
+		# debounced settle notice it (and re-place only if it covers the
+		# board); the board motion itself is scheduled from its own hooks.
+		besideSchedule
+		return
+	}
 	# A timer avoids re-entering placement from a caller's update idletasks.
 	set BesidePending($dlg) [after 0 [namespace code [list BesideReflow $dlg $parent]]]
 }
@@ -490,6 +664,7 @@ proc BesideDestroy {dlg window} {
 		after cancel $BesidePending($dlg)
 		unset BesidePending($dlg)
 	}
+	besideRegistryRemove $dlg
 }
 
 
