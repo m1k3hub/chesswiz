@@ -1344,6 +1344,10 @@ proc ::menu::TogglePane {twm uid} {
 }
 
 proc ::menu::TogglePaneId {suffix} {
+	# Selecting the page must not focus the board canvas: that leaf may
+	# have just been hidden by the preceding toggle.
+	.application.nb select .application.nb.board
+	update idletasks
 	set twm [PaneTWM]
 	if {$twm eq ""} { return 0 }
 	if {![PaneOpenable $suffix]} { return "error: [PaneReason $suffix]" }
@@ -1705,10 +1709,10 @@ proc ::menu::Do {id} {
 		menu.file.import.pgn { return [::menu::dbImport .application [CurrentBase] pgn] }
 		menu.file.import.db { return [::menu::dbImport .application [CurrentBase] db] }
 		menu.file.export.pgn {
-			return [::export::open .application -base [CurrentBase] -variant [CurrentVariant] -extension pgn]
+			return [::export::open .application -base [CurrentBase] -variant [CurrentVariant] -view 0 -name [::util::databaseName [CurrentBase] no] -extension pgn]
 		}
 		menu.file.export.html {
-			return [::export::open .application -base [CurrentBase] -variant [CurrentVariant] -extension html]
+			return [::export::open .application -base [CurrentBase] -variant [CurrentVariant] -view 0 -name [::util::databaseName [CurrentBase] no] -extension html]
 		}
 		menu.file.export.archive { return [::menu::dbCreateArchive .application [CurrentBase]] }
 		menu.file.archive_create { return [::menu::dbCreateArchive .application [CurrentBase]] }
@@ -1798,14 +1802,14 @@ proc ::menu::Do {id} {
 		menu.db.reports.eco { return [::application::database::searchCurrent .application] }
 		menu.db.reports.opening { return [::application::database::searchCurrent .application] }
 		menu.db.reports.repertoire { return [::application::database::searchCurrent .application] }
-		menu.db.reports.result { return [::application::assistant::runTool check_game_results {}] }
-		menu.db.reports.timecontrol { return [::application::assistant::runTool time_controls {}] }
-		menu.db.reports.trends { return [::application::assistant::runTool database_trends {}] }
+		menu.db.reports.result { return [::application::assistant::runTool check_results {}] }
+		menu.db.reports.timecontrol { return [::application::assistant::runTool event_types {}] }
+		menu.db.reports.trends { return [::application::assistant::runTool database_trend {}] }
 		menu.db.maintenance.compact { return [::application::assistant::runTool compact_database {}] }
 		menu.db.maintenance.strip_moves { catch { ::scidb::game::strip moves }; return }
 		menu.db.maintenance.strip_tags { catch { ::scidb::game::strip tags }; return }
 		menu.db.maintenance.convert { return [::application::assistant::runTool convert_database {}] }
-		menu.db.maintenance.recode { return [::application::assistant::runTool recode_database {}] }
+		menu.db.maintenance.recode { return [::application::database::Recode [CurrentBase] .application] }
 		menu.db.maintenance.change_icon { catch { ::menu::DbProperties }; return }
 		menu.db.discover { return [::application::database::discover::open .application] }
 		menu.db.properties { return [::menu::DbProperties] }
@@ -1827,12 +1831,12 @@ proc ::menu::Do {id} {
 		menu.board.appearance.material { ::menu::ToggleBoardOption material-values; return }
 		menu.board.appearance.border { ::menu::ToggleBoardOption border; return }
 		menu.board.appearance.coordinates { ::menu::ToggleBoardOption coordinates; return }
-		menu.board.appearance.small_letters { ::menu::ToggleBoardOption small-letters; return }
-		menu.board.appearance.suggested { ::menu::ToggleBoardOption suggested-move; return }
-		menu.board.appearance.arrows { ::menu::ToggleBoardOption variation-arrows; return }
-		menu.board.appearance.annotation { ::menu::ToggleBoardOption annotation; return }
-		menu.board.tablebase.show { catch { ::tablebase::toggle }; return }
-		menu.board.tablebase.online { catch { ::tablebase::toggle }; return }
+		menu.board.appearance.small_letters { ::menu::ToggleBoardOption coords-small; return }
+		menu.board.appearance.suggested { ::menu::ToggleBoardOption show-suggested ::board::hilite; return }
+		menu.board.appearance.arrows { ::menu::ToggleBoardOption variations:arrows ::application::board::Options; return }
+		menu.board.appearance.annotation { ::menu::ToggleBoardOption show:annotation ::application::board::Options; return }
+		menu.board.tablebase.show { ::menu::ToggleTablebase enabled; return }
+		menu.board.tablebase.online { ::menu::ToggleTablebase online; return }
 		menu.board.tablebase.local { catch { ::tablebase::chooseFolder .application }; return }
 
 		menu.analysis.engine_toggle {
@@ -1857,10 +1861,10 @@ proc ::menu::Do {id} {
 		menu.analysis.explain.comment { return [::application::ai::analyze .application] }
 		menu.analysis.annotate { return [::ai::annotate::toggle .application] }
 		menu.analysis.factcheck { return [::ai::factcheck::current .application] }
-		menu.analysis.tablebase.show { catch { ::tablebase::toggle }; return }
-		menu.analysis.tablebase.online { catch { ::tablebase::toggle }; return }
+		menu.analysis.tablebase.show { ::menu::ToggleTablebase enabled; return }
+		menu.analysis.tablebase.online { ::menu::ToggleTablebase online; return }
 		menu.analysis.tablebase.local { catch { ::tablebase::chooseFolder .application }; return }
-		menu.analysis.explorer { catch { ::application::explorer::toggle }; return }
+		menu.analysis.explorer { return [::menu::TogglePaneId explorer] }
 
 		menu.training.tactics { return [::tactics::open .application] }
 		menu.training.endgame { return [::endtrainer::open .application] }
@@ -1875,7 +1879,7 @@ proc ::menu::Do {id} {
 
 		menu.tools.book { return [::book::openEditor .application] }
 		menu.tools.player_dictionary { return [::playerdict::open .application] }
-		menu.tools.player_card { catch { ::player::card::open }; return }
+		menu.tools.player_card { return [::playercard::setupPrivateCard .application] }
 		menu.tools.correspondence { return [::application::corr::games::open .application] }
 		menu.tools.iccf { return [::iccf::xfcc::openSettings .application] }
 		menu.tools.engine_console { return [::engine::openEngineLog .application] }
@@ -1927,9 +1931,12 @@ proc ::menu::Do {id} {
 		menu.view.panes.report { return [::menu::TogglePaneId report] }
 		menu.view.panes.assistant { return [::menu::TogglePaneId assistant] }
 		menu.view.panes.explorer { return [::menu::TogglePaneId explorer] }
-		view.pane_zoom { catch { ::application::TogglePaneZoom }; return }
+		view.pane_zoom {
+			::application::switchTab board
+			return [::application::TogglePaneZoom {} [PaneTWM]]
+		}
 		view.focus_zoom {
-			set twm [CurrentTWM]
+			set twm [PaneTWM]
 			if {$twm eq ""} { return 0 }
 			set ::application::focuszoom::enabled($twm) \
 				[expr {![::application::focuszoom::isEnabled $twm]}]
@@ -1962,11 +1969,17 @@ proc ::menu::DbProperties {} {
 	return
 }
 
-proc ::menu::ToggleBoardOption {option} {
-	variable ::board::layout
-	if {[info exists ::board::layout($option)]} {
-		set ::board::layout($option) [expr {!$::board::layout($option)}]
-	}
+# The board header uses checkbuttons, which change the variable before
+# invoking the callback. Registry actions must perform that change themselves.
+proc ::menu::ToggleTablebase {option} {
+	set ::tablebase::Options($option) [expr {!$::tablebase::Options($option)}]
+	::tablebase::toggle
+	return
+}
+
+proc ::menu::ToggleBoardOption {option {arrayName ::board::layout}} {
+	upvar #0 $arrayName options
+	set options($option) [expr {!$options($option)}]
 	catch { ::application::board::Redraw }
 	return
 }

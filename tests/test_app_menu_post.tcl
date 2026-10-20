@@ -246,7 +246,7 @@ tcltest::test main-menu-every-cascade {every drop-down cascade opens on the Info
 	::scidb::test::mainmenu::ReleaseBgErrors
 } -result {{} {}}
 
-tcltest::test main-menu-focus-zoom-without-layout {focus-follows-size reports no error on a page without a layout and still toggles on the board} -setup {
+tcltest::test main-menu-focus-zoom-without-layout {focus-follows-size targets the board layout from Information and keeps toggling on the board} -setup {
 	::scidb::test::mainmenu::CaptureBgErrors
 	::scidb::test::mainmenu::SelectPage information
 } -body {
@@ -260,6 +260,6 @@ tcltest::test main-menu-focus-zoom-without-layout {focus-follows-size reports no
 	::scidb::test::mainmenu::Unpost
 	::scidb::test::mainmenu::SelectPage information
 	::scidb::test::mainmenu::ReleaseBgErrors
-} -result [list 0 1 0 {}]
+} -result [list 1 0 1 {}]
 
 tcltest::cleanupTests

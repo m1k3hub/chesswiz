@@ -1636,8 +1636,8 @@ proc ::context::Command {id object} {
 		c4.save_changes { catch { ::application::database::Save [dict get $object base] } }
 		c4.new.scid { catch { ::application::database::newBase [dict get $object parent] Normal "" } }
 		c4.new.pgn { catch { ::application::database::newBase [dict get $object parent] Normal {} pgn } }
-		c4.open_database { catch { ::application::database::OpenBases [dict get $object parent] . {} 1 } }
-		c4.help { catch { ::help::open } }
+		c4.open_database { return [::action::run menu.file.open] }
+		c4.help { return [::action::run app-help] }
 		c5.player_card { catch { ::player::card::open [dict get $object name] [dict get $object base] } }
 		c5.prep_report { catch { ::application::report::prep [dict get $object name] } }
 		c5.insights { catch { ::insights::show [dict get $object name] } }
@@ -1661,6 +1661,10 @@ proc ::context::Command {id object} {
 		c11.copy { catch { ::tk_textCopy [dict get $object widget] } }
 		c11.cut { catch { ::tk_textCut [dict get $object widget] } }
 		c11.paste { catch { ::tk_textPaste [dict get $object widget] } }
+		c9.board_setup { return [::action::run menu.board.setup] }
+		c9.tablebase { return [::action::run menu.analysis.tablebase.show] }
+		c9.not.configure { return [::action::run menu.edit.preferences.pgn] }
+		c9.assistant.model { return [::action::run menu.tools.choose_model] }
 		c9.not.font_inc {
 			return [::context::PaneFont $object +1]
 		}
