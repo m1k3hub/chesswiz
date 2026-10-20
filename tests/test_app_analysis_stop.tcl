@@ -28,6 +28,14 @@ namespace eval ::scidb::test::pane {
 # PATH, so the usual installation directories are checked as well.
 proc ::scidb::test::pane::findProgram {} {
 	if {[info exists ::env(SCIDB_TEST_ENGINE)]} { return $::env(SCIDB_TEST_ENGINE) }
+	set repoRoot [file normalize [file join [file dirname [info script]] ..]]
+	set mainRoot [file normalize [file join [file dirname [file normalize [file join $repoRoot .git]]] ..]]
+	foreach root [list $repoRoot $mainRoot] {
+		foreach bin {stockfish-chesswiz stockfish-scidb stockfish.exe stockfish-chesswiz.exe stockfish} {
+			set path [file join $root engines stockfish $bin]
+			if {[file executable $path]} { return $path }
+		}
+	}
 	if {[llength [auto_execok stockfish]]} { return [lindex [auto_execok stockfish] 0] }
 	foreach dir {/usr/games /usr/local/games /usr/local/bin /usr/bin /opt/homebrew/bin} {
 		set path [file join $dir stockfish]
@@ -304,8 +312,14 @@ tcltest::test analysis-stop-stops-the-search {Stop sends "stop", keeps the engin
 	::scidb::test::pane::wait 100
 	set answered [::scidb::test::pane::waitUntil {
 		[::scidb::test::pane::logged "< bestmove"]} 10000]
-	list $enabled $wired [expr {$elapsed < 1000}] $::scidb::test::pane::Alive $answered \
+	set logAfterStop $::scidb::test::pane::Log
+	set ::scidb::test::pane::Log {}
+	::scidb::test::pane::wait 250
+	set noFurtherInfo [expr {![::scidb::test::pane::logged "< info "]}]
+	set ::scidb::test::pane::Log $logAfterStop
+	list $enabled $wired [expr {$elapsed < 500}] $::scidb::test::pane::Alive $answered \
 		[::scidb::test::pane::logged "> stop"] \
+		$noFurtherInfo \
 		[::engine::active? $number] $Vars(engine:stopped) $Vars(after:stop) \
 		[::scidb::test::pane::lineCount $number] $before \
 		[::toolbar::childcget $stop -state] \
@@ -313,7 +327,7 @@ tcltest::test analysis-stop-stops-the-search {Stop sends "stop", keeps the engin
 		[$Vars(widget:mesg) cget -text]
 } -cleanup {
 	::scidb::test::pane::restore
-} -result {1 {1 1} 1 1 1 1 1 1 {} 4 4 disabled normal stopped}
+} -result {1 {1 1} 1 1 1 1 1 1 1 {} 4 4 disabled normal stopped}
 
 tcltest::test analysis-stop-start-again {the start button starts the stopped search again} \
 		-constraints uciEngine -setup {
@@ -390,5 +404,34 @@ tcltest::test analysis-stop-timeout-powers-down {an engine which does not answer
 } -cleanup {
 	::scidb::test::pane::restore
 } -result {1 1 1 1 0 {} 1}
+
+tcltest::test analysis-stop-winboard-keeps-engine {Stop on a WinBoard engine sends "exit", keeps the engine, and does not arm the UCI bestmove timeout} \
+		-constraints unix -setup {
+	::scidb::test::pane::isolate
+	set program [file join [file dirname [info script]] fixtures fake-wb.tcl]
+	set name [::scidb::test::pane::addEngine $program]
+	lassign [::scidb::test::pane::start $name 1] number tree
+	namespace upvar ::application::analysis ${tree}::Vars Vars
+	set ::application::analysis::GlobalOptions(engine:stopTimeout) 300
+	variable ::scidb::test::pane::Log {}
+} -body {
+	set stop $Vars(widget:button:stop)
+	set t0 [clock milliseconds]
+	$stop invoke
+	set elapsed [expr {[clock milliseconds] - $t0}]
+	# wait past stopTimeout: a WinBoard engine never sends UCI "bestmove", so
+	# StopSearch must not arm StopTimedOut and power the engine down.
+	::scidb::test::pane::wait 450
+	list [expr {$elapsed < 500}] \
+		[::scidb::test::pane::logged "> exit"] \
+		[::engine::active? $number] \
+		$Vars(engine:stopped) \
+		$Vars(after:stop) \
+		[::toolbar::childcget $stop -state] \
+		[::toolbar::childcget $Vars(widget:button:close) -state] \
+		[$Vars(widget:mesg) cget -text]
+} -cleanup {
+	::scidb::test::pane::restore
+} -result {1 1 1 1 {} disabled normal stopped}
 
 tcltest::cleanupTests

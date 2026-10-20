@@ -781,6 +781,12 @@ proc StopSearch {tree} {
 		set Vars(after:stop) {}
 	}
 	if {![::engine::stopAnalysis $Vars(number)]} { return }
+	# Only UCI sends "bestmove" in answer to "stop"; WinBoard engines send "exit"
+	# (and handle their own ping/pong timeout in C++).
+	if {[info exists ::engine::$Vars(number)::Vars(current:protocol)]
+		&& [set ::engine::$Vars(number)::Vars(current:protocol)] ne "UCI"} {
+		return
+	}
 
 	set Vars(after:stop) [after $GlobalOptions(engine:stopTimeout) \
 		[namespace code [list StopTimedOut $tree [::engine::id $Vars(number)]]]]
