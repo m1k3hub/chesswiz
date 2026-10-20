@@ -39,6 +39,19 @@ proc ::action::_dg {d key def} {
 	return $def
 }
 
+# Tri-state required option: 1 = explicitly required, 0 = explicitly
+# optional, -1 = not specified (required only when there is no default).
+proc ::action::_requiredState {opts} {
+	if {[dict exists $opts required]} {
+		set val [dict get $opts required]
+		if {$val in {1 true yes}} { return 1 }
+		if {$val in {0 false no}} { return 0 }
+		return 1
+	}
+	if {[lsearch -exact $opts required] >= 0} { return 1 }
+	return -1
+}
+
 # ----------------------------------------------------------------------
 # register: store an action record after validation.
 # Record fields (all optional except label):
@@ -74,6 +87,17 @@ proc ::action::register {id record} {
 	}
 	if {![dict exists $record label]} {
 		return -code error "error: action '$id' missing required field 'label'"
+	}
+	# Every record must declare these fields explicitly. Empty values are
+	# allowed for what/object/doc ("none"), but the key must be present so a
+	# forgotten field is a registration error, not a runtime surprise.
+	foreach requiredField {handler what object doc} {
+		if {![dict exists $record $requiredField]} {
+			return -code error "error: action '$id' missing required field '$requiredField'"
+		}
+	}
+	if {[dict get $record handler] eq ""} {
+		return -code error "error: action '$id' missing required field 'handler'"
 	}
 
 	if {[dict exists $record ai]} {
@@ -172,8 +196,10 @@ proc ::action::schemaOf {id} {
 
 # ----------------------------------------------------------------------
 # Args spec -> JSON schema generator.
-# Spec format: {name {type <type> ?default <val>? ?enum <list>? ?range {min max}?}}
-# Types: string, integer, number, boolean, enum
+# Spec format: {name {type <type> ?default <val>? ?enum <list>?
+#                     ?range {min max}? ?description <text>?
+#                     ?items <type>? ?item-enum <list>? ?required <bool>?}}
+# Types: string, integer, number, boolean, enum, array
 # ----------------------------------------------------------------------
 proc ::action::argsToSchema {spec} {
 	if {$spec eq ""} {
@@ -192,26 +218,13 @@ proc ::action::argsToSchema {spec} {
 		set hasDefault [dict exists $opts default]
 		set enumVals [_dg $opts enum {}]
 		set rangeVals [_dg $opts range {}]
+		set description [_dg $opts description {}]
 
 		if {[llength $enumVals]} {
 			set type enum
 		}
 
-		set explicitRequired 0
-		if {[lsearch -exact $opts required] >= 0} {
-			if {[dict exists $opts required]} {
-				set reqVal [dict get $opts required]
-				if {$reqVal in {1 true yes}} {
-					set explicitRequired 1
-				} elseif {$reqVal in {0 false no}} {
-					set explicitRequired 0
-				} else {
-					set explicitRequired 1
-				}
-			} else {
-				set explicitRequired 1
-			}
-		}
+		set reqState [_requiredState $opts]
 
 		set prop [dict create]
 		if {$type eq "enum" && [llength $enumVals]} {
@@ -225,6 +238,14 @@ proc ::action::argsToSchema {spec} {
 			}
 		} elseif {$type eq "boolean"} {
 			dict set prop type boolean
+		} elseif {$type eq "array"} {
+			dict set prop type array
+			set items [dict create type [_dg $opts items string]]
+			set itemEnum [_dg $opts item-enum {}]
+			if {[llength $itemEnum]} {
+				dict set items enum $itemEnum
+			}
+			dict set prop items $items
 		} else {
 			dict set prop type string
 		}
@@ -232,13 +253,14 @@ proc ::action::argsToSchema {spec} {
 		if {$hasDefault} {
 			dict set prop default $defaultVal
 		}
+		if {$description ne ""} {
+			dict set prop description $description
+		}
 
 		dict set properties $name $prop
 
-		if {$explicitRequired || (!$hasDefault && ![lsearch -exact $required $name])} {
-			if {[lsearch -exact $required $name] < 0} {
-				lappend required $name
-			}
+		if {($reqState == 1 || ($reqState < 0 && !$hasDefault)) && [lsearch -exact $required $name] < 0} {
+			lappend required $name
 		}
 	}
 
@@ -247,6 +269,111 @@ proc ::action::argsToSchema {spec} {
 		dict set schema required $required
 	}
 	return $schema
+}
+
+proc ::action::_jsonString {s} {
+	set s [string map [::list "\\" "\\\\" "\"" "\\\"" "\n" "\\n" "\r" "\\r" "\t" "\\t"] $s]
+	return "\"$s\""
+}
+
+proc ::action::_jsonScalar {v} {
+	if {[string is integer -strict $v] || [string is double -strict $v]} { return $v }
+	if {$v in {true false}} { return $v }
+	return [_jsonString $v]
+}
+
+# ----------------------------------------------------------------------
+# Compact JSON schema generated from a Tcl args spec. Property order and
+# key order follow the spec so the output matches the documented tool
+# schema byte for byte (the assistant baseline in tests/fixtures).
+# ----------------------------------------------------------------------
+proc ::action::schemaJson {spec} {
+	set props {}
+	set required {}
+	foreach param $spec {
+		set name [lindex $param 0]
+		set opts [lindex $param 1]
+		set type [_dg $opts type string]
+		set enumVals [_dg $opts enum {}]
+		set rangeVals [_dg $opts range {}]
+		set description [_dg $opts description {}]
+
+		if {[llength $enumVals]} { set type enum }
+
+		set reqState [_requiredState $opts]
+		set hasDefault [dict exists $opts default]
+		if {($reqState == 1 || ($reqState < 0 && !$hasDefault)) && [lsearch -exact $required $name] < 0} {
+			lappend required $name
+		}
+
+		set p "\{\"type\":"
+		if {$type eq "enum" && [llength $enumVals]} {
+			set vals {}
+			foreach v $enumVals { lappend vals [_jsonScalar $v] }
+			append p "\"string\",\"enum\":\[[join $vals ,]\]"
+		} elseif {$type eq "integer" || $type eq "number"} {
+			append p [_jsonString $type]
+			if {[llength $rangeVals] == 2} {
+				append p ",\"minimum\":[lindex $rangeVals 0],\"maximum\":[lindex $rangeVals 1]"
+			}
+		} elseif {$type eq "boolean"} {
+			append p "\"boolean\""
+		} elseif {$type eq "array"} {
+			set items [_dg $opts items string]
+			set itemEnum [_dg $opts item-enum {}]
+			append p "\"array\",\"items\":\{\"type\":[_jsonString $items]"
+			if {[llength $itemEnum]} {
+				set vals {}
+				foreach v $itemEnum { lappend vals [_jsonScalar $v] }
+				append p ",\"enum\":\[[join $vals ,]\]"
+			}
+			append p "\}"
+		} else {
+			append p "\"string\""
+		}
+		if {[dict exists $opts default]} {
+			append p ",\"default\":[_jsonScalar [dict get $opts default]]"
+		}
+		if {$description ne ""} {
+			append p ",\"description\":[_jsonString $description]"
+		}
+		append p "\}"
+		lappend props "[_jsonString $name]:$p"
+	}
+
+	set reqJson {}
+	foreach v $required { lappend reqJson [_jsonString $v] }
+	set out "\{\"type\":\"object\",\"properties\":\{[join $props ,]\}"
+	if {[llength $required]} {
+		append out ",\"required\":\[[join $reqJson ,]\]"
+	}
+	append out "\}"
+	return $out
+}
+
+# ----------------------------------------------------------------------
+# Enum error text. The default is the validator's own wording; generated
+# assistant tools carry a style so their messages stay identical to the
+# texts the assistant has always returned ("quoted", "bare" or "oneof").
+# ----------------------------------------------------------------------
+proc ::action::_enumText {name vals style} {
+	set n [llength $vals]
+	switch -- $style {
+		oneof {
+			return "$name must be one of: [join $vals {, }]"
+		}
+		bare {
+			if {$n <= 1} { return "$name must be [join $vals {, }]" }
+			return "$name must be [join [lrange $vals 0 end-1] {, }] or [lindex $vals end]"
+		}
+		quoted {
+			set quoted {}
+			foreach v $vals { lappend quoted "'$v'" }
+			if {$n <= 1} { return "$name must be [join $quoted {, }]" }
+			return "$name must be [join [lrange $quoted 0 end-1] {, }] or [lindex $quoted end]"
+		}
+	}
+	return "argument '$name' must be one of: [join $vals {, }]"
 }
 
 # ----------------------------------------------------------------------
@@ -280,24 +407,12 @@ proc ::action::validateArgs {id argsDict} {
 		set type [_dg $opts type string]
 		set defaultVal [_dg $opts default {}]
 		set hasDefault [dict exists $opts default]
-		set explicitRequired 0
-		if {[lsearch -exact $opts required] >= 0} {
-			if {[dict exists $opts required]} {
-				set reqVal [dict get $opts required]
-				if {$reqVal in {1 true yes}} {
-					set explicitRequired 1
-				} elseif {$reqVal in {0 false no}} {
-					set explicitRequired 0
-				} else {
-					set explicitRequired 1
-				}
-			} else {
-				set explicitRequired 1
-			}
-		}
-		set isRequired [expr {$explicitRequired || !$hasDefault}]
+		set reqState [_requiredState $opts]
+		set isRequired [expr {$reqState == 1 || ($reqState < 0 && !$hasDefault)}]
 		set enumVals [_dg $opts enum {}]
+		set enumStyle [_dg $opts enum-style {}]
 		set rangeVals [_dg $opts range {}]
+		set hasLegacyDefault [dict exists $opts legacy-default]
 
 		if {[llength $enumVals]} {
 			set type enum
@@ -305,8 +420,10 @@ proc ::action::validateArgs {id argsDict} {
 
 		if {[dict exists $argsDict $name]} {
 			set value [dict get $argsDict $name]
+		} elseif {$hasLegacyDefault} {
+			set value [dict get $opts legacy-default]
 		} elseif {$isRequired} {
-			return [::list error "missing required argument '$name' for action '$id'"]
+			return [::list error "missing argument '$name'"]
 		} elseif {$hasDefault} {
 			set value $defaultVal
 		} else {
@@ -315,7 +432,7 @@ proc ::action::validateArgs {id argsDict} {
 
 		if {$type eq "enum" && [llength $enumVals]} {
 			if {[lsearch -exact $enumVals $value] < 0} {
-				return [::list error "argument '$name' must be one of: [join $enumVals {, }]"]
+				return [::list error [_enumText $name $enumVals $enumStyle]]
 			}
 		} elseif {$type eq "integer"} {
 			if {![string is integer -strict $value]} {
@@ -347,6 +464,20 @@ proc ::action::validateArgs {id argsDict} {
 				set value 1
 			} else {
 				set value 0
+			}
+		} elseif {$type eq "array"} {
+			set items [_dg $opts items string]
+			set itemEnum [_dg $opts item-enum {}]
+			if {[catch { llength $value }]} {
+				return [::list error "argument '$name' must be an array"]
+			}
+			foreach item $value {
+				if {[llength $itemEnum] && [lsearch -exact $itemEnum $item] < 0} {
+					return [::list error "argument '$name' items must be one of: [join $itemEnum {, }]"]
+				}
+				if {$items eq "integer" && ![string is integer -strict $item]} {
+					return [::list error "argument '$name' items must be integers"]
+				}
 			}
 		}
 

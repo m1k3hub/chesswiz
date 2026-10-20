@@ -124,9 +124,77 @@ proc ::application::assistant::_actionAdapter {name handler argsDict} {
 
 
 # ----------------------------------------------------------------------
+# Convert a documented JSON parameters schema into the registry's Tcl
+# args spec. The registry then owns validation and can regenerate the
+# same JSON schema (see ::action::schemaJson).
+#
+# enum-style / legacy-default only affect validation text and defaults:
+# schemaJson ignores them, so the documented schema stays byte-identical.
+# ----------------------------------------------------------------------
+set ::application::assistant::ArgEnumStyles {
+	pane {action bare}
+	open_search {kind quoted}
+	download_games {source quoted site quoted}
+	correspondence_games {action bare}
+	maintenance_report {tab bare}
+	prepare_against {color quoted}
+	repertoire_check {color quoted}
+	search_games {color bare result bare pattern oneof}
+	find_positions {mode bare color bare result bare}
+	find_similar {colours bare mode bare color bare result bare}
+	open_view {kind oneof}
+	goto_move {after bare}
+	explain_side {side bare}
+	explain_game_result {side bare}
+	opponent_brief {colour quoted}
+	study_plan {colour quoted}
+	position_types {colour quoted}
+	training_set {pattern oneof}
+	run_job {job bare colour bare pattern oneof}
+}
+set ::application::assistant::LegacyArgDefaults {
+	correspondence_games {action status}
+	maintenance_report {tab overview}
+}
+
+proc ::application::assistant::ParametersToArgsSpec {schema {action ""}} {
+	variable ArgEnumStyles
+	variable LegacyArgDefaults
+
+	set spec {}
+	set props [expr {[dict exists $schema properties] ? [dict get $schema properties] : {}}]
+	set required [expr {[dict exists $schema required] ? [dict get $schema required] : {}}]
+	set styles [expr {[dict exists $ArgEnumStyles $action] ? [dict get $ArgEnumStyles $action] : {}}]
+	set legacy [expr {[dict exists $LegacyArgDefaults $action] ? [dict get $LegacyArgDefaults $action] : {}}]
+	foreach name [dict keys $props] {
+		set prop [dict get $props $name]
+		set opts [dict create]
+		set type [expr {[dict exists $prop type] ? [dict get $prop type] : "string"}]
+		dict set opts type $type
+		if {[dict exists $prop enum]} {
+			dict set opts enum [dict get $prop enum]
+			dict set opts enum-style [expr {[dict exists $styles $name] ? [dict get $styles $name] : "quoted"}]
+		}
+		if {[dict exists $prop description]} { dict set opts description [dict get $prop description] }
+		if {$type eq "array"} {
+			set items [expr {[dict exists $prop items] ? [dict get $prop items] : [dict create type string]}]
+			dict set opts items [expr {[dict exists $items type] ? [dict get $items type] : "string"}]
+			if {[dict exists $items enum]} { dict set opts item-enum [dict get $items enum] }
+		}
+		dict set opts required [expr {[lsearch -exact $required $name] >= 0 ? 1 : 0}]
+		if {[dict exists $legacy $name]} { dict set opts legacy-default [dict get $legacy $name] }
+		lappend spec [::list $name $opts]
+	}
+	return $spec
+}
+
+# ----------------------------------------------------------------------
 # Register all assistant tools as actions. ONE generator loop over the
 # Actions table (86 tools) plus run_job (added above = 87 total).
-# Uses passthrough schema (no re-generation) and the adapter handler.
+# The args spec is the single validation source; the model schema is
+# generated from it and is byte-identical to the documented baseline.
+# ai is the exposure flag: 1 = offered in normal mode, debug = only in
+# debug mode. Confirm is a separate, independent gate flag.
 # ----------------------------------------------------------------------
 namespace eval application {
 namespace eval assistant {
@@ -142,19 +210,37 @@ variable BulkActions {
 	convert_database
 	save_working_set
 }
+if {[catch { package require json }]} {
+	# Without tcllib json the assistant cannot talk to a provider anyway;
+	# keep the documented schema so the registry stays usable.
+	proc ::application::assistant::_specFor {parameters {action ""}} { return {} }
+	proc ::application::assistant::_schemaFor {parameters spec} { return $parameters }
+} else {
+	proc ::application::assistant::_specFor {parameters {action ""}} {
+		return [ParametersToArgsSpec [::json::json2dict $parameters] $action]
+	}
+	proc ::application::assistant::_schemaFor {parameters spec} {
+		return [::action::schemaJson $spec]
+	}
+}
 dict for {name entry} $Actions {
 	lassign $entry confirm debug what description parameters handler
-	set aiFlag [expr {$debug ? "debug" : ($confirm ? 1 : 0)}]
+	set aiFlag [expr {$debug ? "debug" : 1}]
 	set isBulk [expr {$name in $BulkActions ? 1 : 0}]
 	set label [string map {" " "_"} $name]
+	set spec [::application::assistant::_specFor $parameters $name]
+	set schemaStr [::application::assistant::_schemaFor $parameters $spec]
+	if {$spec eq "{}"} { set spec {} }
 	::action::register $name [dict create \
 		label    $label \
-		schema   $parameters \
+		args     $spec \
+		schema   $schemaStr \
 		handler  [list ::application::assistant::_actionAdapter $name $handler] \
 		confirm  $confirm \
 		bulk     $isBulk \
 		ai       $aiFlag \
 		what     $what \
+		object   {} \
 		doc      $description \
 		toolmenu $what \
 	]

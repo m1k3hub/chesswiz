@@ -75,6 +75,7 @@ proc ::scidb::test::route::isolated {body} {
 	set mode $::application::assistant::RouteMode
 	set s1 [array get ::ai::systemone::Config]
 	set confirm $::application::assistant::Priv(confirm)
+	set bulkHook $::action::BulkHook
 	set messages $::application::assistant::Priv(messages)
 	set errlog $::application::assistant::ErrorLogFile
 	set pending $::application::assistant::Priv(pending)
@@ -94,6 +95,7 @@ proc ::scidb::test::route::isolated {body} {
 	set ::application::assistant::Priv(routeClarify) {}
 	::application::assistant::SetBusy 0
 	set ::application::assistant::Priv(confirm) ::scidb::test::route::confirm
+	set ::action::BulkHook ::scidb::test::route::confirm
 	set ::application::assistant::Priv(messages) {}
 	::ai::systemone::configure -backend plumb
 	::scidb::test::route::install
@@ -119,6 +121,7 @@ proc ::scidb::test::route::isolated {body} {
 	set ::application::assistant::RouteMode $mode
 	array set ::ai::systemone::Config $s1
 	set ::application::assistant::Priv(confirm) $confirm
+	set ::action::BulkHook $bulkHook
 	set ::application::assistant::Priv(messages) $messages
 	set ::application::assistant::Priv(pending) $pending
 	set ::application::assistant::ErrorLogFile $errlog

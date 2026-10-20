@@ -1123,36 +1123,62 @@ proc ::application::assistant::RunTool {name cargs} {
 	variable Priv
 	variable mc
 
-	if {![dict exists $Actions $name]} {
+	if {![dict exists $Actions $name] || ![dict exists $::action::Registry $name]} {
 		return [list error 0 "error: unknown tool '$name'"]
 	}
-	lassign [dict get $Actions $name] confirm debug what _ _ handler
+	lassign [dict get $Actions $name] _ debug what _ _ handler
+	set record [::action::get $name]
+	if {[dict get $record ai] eq "debug"} { set debug 1 }
 	if {$debug && !$Priv(debug)} {
 		return [list error 0 "error: '$name' is only available in debug mode (--ai-debug or SCIDB_AI_DEBUG=1)"]
+	}
+
+	# ONE shared validator, from the registry args spec. Bad args never
+	# reach CheckArgs, the confirm gate or the handler. CheckArgs stays
+	# only for cross-argument rules and normalisation, after this check.
+	set validation [::action::validateArgs $name $cargs]
+	if {[lindex $validation 0] eq "error"} {
+		return [list error 0 "error: [lindex $validation 1]"]
 	}
 
 	if {[catch { set checked [CheckArgs $name $cargs] } err]} {
 		return [list error 0 "error: $err"]
 	}
 
-	if {$confirm} {
-		set what [format $what {*}[dict values $checked]]
-		set confirm [expr {[llength $Priv(reqconfirm)] ? $Priv(reqconfirm) : $Priv(confirm)}]
-		if {![{*}$confirm $what]} { return [list declined 1 $mc::Denied] }
-		set confirm 1
+	# Confirm and bulk are independent registry flags; both always pass
+	# the user gate, on the assistant path exactly as on the menu path.
+	# Bulk uses the wired BulkHook (the assistant and the router share it).
+	set isConfirm [dict get $record confirm]
+	set isBulk [dict get $record bulk]
+	set asked 0
+	if {$isConfirm || $isBulk} {
+		set what [dict get $record what]
+		if {$what eq ""} {
+			set what "perform action '$name'"
+		} elseif {[catch { set what [format $what {*}[dict values $checked]] }]} {
+			set what "perform action '$name'"
+		}
+		if {$isBulk && $::action::BulkHook ne ""} {
+			set ask $::action::BulkHook
+		} else {
+			set ask [expr {[llength $Priv(reqconfirm)] ? $Priv(reqconfirm) : $Priv(confirm)}]
+		}
+		if {[catch { {*}$ask $what } answer]} { set answer 0 }
+		if {!$answer} { return [list declined 1 $mc::Denied] }
+		set asked 1
 	}
 
 	if {[catch { set reply [{*}$handler {*}[dict values $checked]] } err opts]} {
 		RecordError assistant "$name: $err" [dict get $opts -errorinfo]
-		return [list error $confirm "error: $err"]
+		return [list error $asked "error: $err"]
 	}
-	if {[string match "\x00later:*" $reply]} { return [list later $confirm $reply] }
+	if {[string match "\x00later:*" $reply]} { return [list later $asked $reply] }
 	set reply [WithMenu $name [Scrub $reply]]
 	set limit [ReplyLimit $name]
 	if {[string length $reply] > $limit} {
 		set reply "[string range $reply 0 $limit-1]\n... (truncated)"
 	}
-	return [list ok $confirm $reply]
+	return [list ok $asked $reply]
 }
 
 
@@ -1182,18 +1208,21 @@ proc ::application::assistant::LogToolCall {name cargs asked outcome reply} {
 proc ::application::assistant::toolsJson {} {
 	variable Priv
 
+	# ai-exposed means exactly this set: ai=1 in normal mode, ai=1 or
+	# ai=debug when the user turned debug mode on. Anything else stays out.
 	set defs {}
 	foreach name [::action::list] {
 		set record [::action::get $name]
 		set ai [dict get $record ai]
-		if {$ai eq "debug" && !$Priv(debug)} { continue }
+		if {$ai eq "debug"} {
+			if {!$Priv(debug)} { continue }
+		} elseif {$ai ne "1"} {
+			continue
+		}
 		set description [dict get $record doc]
 		set schema [dict get $record schema]
 		if {$schema eq ""} {
-			set schema [::action::argsToSchema [dict get $record args]]
-			if {[catch { package require json }] == 0} {
-				set schema [::json::dict2json $schema]
-			}
+			set schema [::action::schemaJson [dict get $record args]]
 		}
 		lappend defs [format {{"type":"function","function":{"name":"%s","description":"%s","parameters":%s}}} \
 			$name [::ai::provider::jsonEscape $description] $schema]

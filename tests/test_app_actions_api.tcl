@@ -20,16 +20,28 @@ tcltest::test api-labels-bar {labels bar surface returns menu actions} -setup {
 		menu {Game 10}
 		keys {chesswiz Control-n}
 		handler {list ok}
+
+		what {}
+		object {}
+		doc {}
 	}
 	::action::register test.bar.open {
 		label ::menu::mc::Open
 		menu {File 1}
 		handler {list ok}
+
+		what {}
+		object {}
+		doc {}
 	}
 	::action::register test.ctx.only {
 		label ::ctx::mc::Only
 		context {C3}
 		handler {list ok}
+
+		what {}
+		object {}
+		doc {}
 	}
 } -body {
 	set rows [::action::labels bar]
@@ -45,16 +57,28 @@ tcltest::test api-labels-context {labels context:<id> returns matching context a
 		label ::ctx::mc::C1A
 		context {C1}
 		handler {list ok}
+
+		what {}
+		object {}
+		doc {}
 	}
 	::action::register test.ctx.c1b {
 		label ::ctx::mc::C1B
 		context {C1 C2}
 		handler {list ok}
+
+		what {}
+		object {}
+		doc {}
 	}
 	::action::register test.ctx.c2only {
 		label ::ctx::mc::C2Only
 		context {C2}
 		handler {list ok}
+
+		what {}
+		object {}
+		doc {}
 	}
 } -body {
 	set c1rows [::action::labels context:C1]
@@ -75,6 +99,10 @@ tcltest::test api-labels-row-format {each row has id label accelerator enabled v
 		menu {Edit 5}
 		keys {chesswiz Shift-F5}
 		handler {list ok}
+
+		what {}
+		object {}
+		doc {}
 	}
 } -body {
 	set rows [::action::labels bar]
@@ -96,6 +124,10 @@ tcltest::test api-invoke-runs-action {invoke calls the action like run} -setup {
 	::action::register test.invoke.me {
 		label ::inv::mc::Me
 		handler ::scidb::test::actions_api::invStub
+
+		what {}
+		object {}
+		doc {}
 	}
 } -body {
 	set r [::action::invoke test.invoke.me]
@@ -113,6 +145,10 @@ tcltest::test api-invoke-with-args {invoke passes args through} -setup {
 		label ::inv::mc::Args
 		args {{x {type integer}}}
 		handler ::scidb::test::actions_api::argInvStub
+
+		what {}
+		object {}
+		doc {}
 	}
 } -body {
 	::action::invoke test.invoke.args {x 7}
@@ -129,6 +165,9 @@ tcltest::test api-labels-palette {palette surface returns visible actions} -setu
 		label ::pal::mc::Vis
 		handler {list ok}
 		doc "visible in palette"
+
+		what {}
+		object {}
 	}
 } -body {
 	set rows [::action::labels palette]
@@ -149,6 +188,9 @@ tcltest::test api-invoke-multiword-handler {invoke works with multi-word handler
 	::action::register test.multiword.adapter [dict create \
 		label ::multi::mc::Adapter \
 		handler [list ::scidb::test::actions_api::adapterProc switch_tab DoSwitchTab] \
+		what {} \
+		object {} \
+		doc {} \
 	]
 } -body {
 	set r [::action::invoke test.multiword.adapter]
@@ -168,6 +210,9 @@ tcltest::test api-run-multiword-handler-with-args {run passes args to multi-word
 		label ::mw::mc::Args \
 		args {{tab {type string}}} \
 		handler [list ::scidb::test::actions_api::mwArgProc pre suf] \
+		what {} \
+		object {} \
+		doc {} \
 	]
 } -body {
 	::action::run test.mw.args {tab board}
