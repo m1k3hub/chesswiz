@@ -138,8 +138,9 @@ tcltest::test pane-zoom-undocked {floating panes refuse to maximise} -setup {
 } -cleanup { ::paneZoomTest::cleanup $t } -result {1 {}}
 
 tcltest::test pane-zoom-allowlist {only the specified application panes opt in} -body {
+	# explorer joined the dockable panes with the context-menu work.
 	lsort [array names ::application::Zoomable]
-} -result {analysis assistant board dbgames editor games media report tree}
+} -result {analysis assistant board dbgames editor explorer games media report tree}
 
 foreach uid {board editor analysis:1 tree games media} {
 	tcltest::test pane-zoom-app-$uid {application pane maximises and restores without changing the saved layout} -setup {
@@ -162,15 +163,21 @@ foreach uid {board editor analysis:1 tree games media} {
 	} -cleanup { catch {$t zoom ""} } -result {1 1 1 1}
 }
 
-tcltest::test pane-zoom-triggers {Window menu and shortcut expose the toggle} -body {
+tcltest::test pane-zoom-triggers {the registry action and the shortcut expose the toggle} -body {
+	# Decision 003: there is no Window menu; the toggle is a registry action
+	# reachable from the drop-down surfaces and bound to Ctrl+Shift+Z.
+	catch { destroy .panezoommenu }
 	menu .panezoommenu
-	::menu::build .panezoommenu
-	set m .panezoommenu.window
+	::menu::BuildDropdown .panezoommenu
+	set rec [::action::get view.pane_zoom]
+	set ids {}
+	foreach row [::action::labels dropdown] { lappend ids [lindex $row 0] }
 	set result [list [string match *TogglePaneZoom* [bind .application <Control-Shift-Z>]] \
-		[$m entrycget 0 -command] [$m entrycget 0 -accelerator]]
+		[expr {"view.pane_zoom" in $ids}] \
+		[lindex [dict get $rec keys] 1]]
 	destroy .panezoommenu
 	set result
-} -result {1 ::application::TogglePaneZoom Ctrl+Shift+Z}
+} -result {1 1 Ctrl+Shift+Z}
 
 tcltest::test pane-zoom-shortcut-precedence {pane shortcut runs before broad widget undo bindings} -body {
 	.application.nb select .application.nb.board

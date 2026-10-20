@@ -263,6 +263,9 @@ tcltest::test key-editor-override-chessbase-tag {a ChessBase-only action overrid
 
 tcltest::test key-editor-chessbase-override-chesswiz {a ChessBase-only action override is bound and fires in the Chesswiz scheme} -setup {
 	update
+	# A pending "after idle" tip-of-the-day would steal focus from the
+	# board and block the synthetic key event.
+	set ::tips::Options(mode) neverShow
 	catch { destroy .tipoftheday }
 	if {[::application::pgn::empty?]} { ::menu::gameNew .application }
 	set tab [.application.nb select]
@@ -273,8 +276,10 @@ tcltest::test key-editor-chessbase-override-chesswiz {a ChessBase-only action ov
 } -body {
 	::application::keyEditor::SetKey board-flip F5
 	set bound [string match *Rotate* [::keyEditorTest::effective $w <F5>]]
-	focus -force $w
+	# Let pending idle focus changes settle, then focus the board directly
+	# before the synthetic key: key events follow the focus at send time.
 	update
+	focus -force $w
 	event generate $w <KeyPress> -keysym F5
 	update
 	list $bound \

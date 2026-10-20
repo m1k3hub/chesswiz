@@ -31,12 +31,26 @@ proc themeRadio {menu theme} {
 	return -1
 }
 
+proc themeCascade {menu label} {
+	for {set i 0} {$i <= [$menu index end]} {incr i} {
+		if {[$menu type $i] eq "cascade"
+			&& [string trim [$menu entrycget $i -label]] eq $label} {
+			return [$menu entrycget $i -menu]
+		}
+	}
+	return ""
+}
+
 after 2500 {
 	switch -- $::env(TH_PHASE) {
 		set {
 			set mb .application.nb.menu_main
 			::application::BuildSettingsMenu $mb
-			set m $mb.entries.mTheme
+			# Decision 003: the drop-down is the settings menu; View fills
+			# lazily and Theme is one of its dynamic cascades.
+			::menu::FillTop View $mb.entries.view
+			set m [themeCascade $mb.entries.view [::menu::MC Theme]]
+			::menu::FillDynamic Theme $m
 			set idx [themeRadio $m $::env(TH_THEME)]
 			themeOut found $idx
 			if {$idx >= 0} { $m invoke $idx }

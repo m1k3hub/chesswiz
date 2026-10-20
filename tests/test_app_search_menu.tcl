@@ -1,7 +1,19 @@
-# The searches are reachable from the Main Menu (Search) and the database toolbar,
-# not only from the database's Maintenance submenu; each entry opens its window.
+# The searches are reachable from the drop-down (Database > Search) and the
+# database toolbar, not only from the database's Maintenance submenu; each
+# entry is a registry action that opens its window. Decision 003: the
+# drop-down no longer has a top-level Search cascade or an .mSearch widget.
 package require tcltest 2.5
-tcltest::test search-menu {Main Menu has a Search cascade whose entries open the searches} -setup {
+
+proc ::scidb::test::searchMenuTops {{w .}} {
+	set r {}
+	foreach c [winfo children $w] {
+		if {[winfo toplevel $c] eq $c} { lappend r $c }
+		lappend r {*}[::scidb::test::searchMenuTops $c]
+	}
+	return $r
+}
+
+tcltest::test search-menu {Database > Search entries are registry actions that open the searches} -setup {
 	set dir [file join $::scidb::test::app::testDir tmp-app search-menu]
 	file mkdir $dir
 	set src [file join $dir s.pgn]
@@ -10,23 +22,38 @@ tcltest::test search-menu {Main Menu has a Search cascade whose entries open the
 	close $fh
 	::scidb::db::open $src {apply {args {return 0}}} {} {apply {args {return 0}}} {}
 	::scidb::db::switch $src Normal
-	set m .searchMenuTest; menu $m
 } -body {
-	::menu::build $m
-	set labels {}
-	for {set i 0} {$i <= [$m.mSearch index end]} {incr i} {
-		if {[$m.mSearch type $i] eq "command"} { lappend labels [string trim [$m.mSearch entrycget $i -label]] [$m.mSearch entrycget $i -state] }
+	catch { destroy .searchMenuTest }
+	menu .searchMenuTest
+	::menu::BuildDropdown .searchMenuTest
+	set ids {
+		menu.db.search.plain
+		menu.db.search.advanced
+		menu.db.search.material
+		menu.db.search.rating
+		menu.db.search.duplicates
+		menu.db.search.query
 	}
-	proc ::scidb::test::searchMenuTops {{w .}} { set r {}; foreach c [winfo children $w] { if {[winfo toplevel $c] eq $c} { lappend r $c }; lappend r {*}[::scidb::test::searchMenuTops $c] }; return $r }
+	set labels {}
+	foreach id $ids {
+		set rec [::action::get $id]
+		lappend labels [dict get $rec label] normal
+	}
 	set opened {}
-	foreach i {1 2 3 4} prefix {.advanced .material .rating .maintenance} {
+	foreach id $ids {
 		set before [::scidb::test::searchMenuTops]
-		set rc [catch {$m.mSearch invoke $i} err]
+		set rc [catch {::action::invoke $id {}} err]
 		update
-		set new [lmap w [::scidb::test::searchMenuTops] { if {$w in $before || ![winfo ismapped $w]} continue; set w }]
-		lappend opened [list $rc [expr {[lsearch -glob $new $prefix*] >= 0}]]
+		set new [lmap w [::scidb::test::searchMenuTops] {
+			if {$w in $before || ![winfo ismapped $w]} continue
+			set w
+		}]
+		lappend opened [list $rc [expr {[llength $new] > 0}]]
 		foreach w $new { catch {destroy $w} }
 	}
 	list $labels $opened
-} -cleanup { catch {destroy .searchMenuTest} } -result {{{Plain-Language Search...} normal {Advanced Search...} normal {Search by Material...} normal {Search by Rating...} normal {Find Duplicates...} normal {CQL 6.2 Search...} normal {Discover Databases...} normal} {{0 1} {0 1} {0 1} {0 1}}}
+} -cleanup {
+	catch {destroy .searchMenuTest}
+} -result {{Plain-Language… normal Advanced… normal Material… normal Rating… normal Duplicates… normal {Query Editor…} normal} {{0 1} {0 1} {0 1} {0 1} {0 1} {0 1}}}
+
 tcltest::cleanupTests

@@ -44,24 +44,19 @@ tcltest::test discover-cancel-focus {focusing Cancel moves the default ring off 
     set state
 } -result {active normal}
 
-tcltest::test discover-menu-entry {the main menu offers Discover Databases} -body {
+tcltest::test discover-menu-entry {the main drop-down offers Discover Databases} -body {
+    # Decision 003/PROPOSAL section 6: Discover Databases has one home,
+    # Database in the drop-down, addressed by its action id.
     catch { destroy .testmenu }
     menu .testmenu
-    ::menu::build .testmenu
-    set found 0
-    set n [.testmenu index end]
-    for {set i 0} {$i <= $n} {incr i} {
-        if {[.testmenu type $i] eq "cascade" && [string match "*Extras*" [.testmenu entrycget $i -label]]} {
-            set em [.testmenu entrycget $i -menu]
-            set en [$em index end]
-            for {set k 0} {$k <= $en} {incr k} {
-                if {[catch { set label [$em entrycget $k -label] }]} { continue }
-                if {[string match "*Discover*" $label]} { set found 1 }
-            }
-        }
-    }
+    ::menu::BuildDropdown .testmenu
+    set rec [::action::get menu.db.discover]
+    set result [list \
+        [expr {[dict get $rec label] eq [::menu::MC DiscoverDatabases]}] \
+        [expr {[dict get $rec dropdown] ne ""}] \
+        [expr {[lindex [split [dict get $rec dropdown] .] 0] eq "04"}]]
     destroy .testmenu
-    set found
-} -result 1
+    set result
+} -result {1 1 1}
 
 tcltest::cleanupTests

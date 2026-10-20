@@ -21,22 +21,20 @@ proc ::keymapTest::effective {w key} {
 tcltest::test keymap-preferences {the Setup menu exposes both persisted choices} -body {
 	::application::ShortcutPreferences .application
 	set dlg .application.shortcutPreferences
-	set menu .keymapMenu
-	menu $menu
-	::menu::build $menu
-	set found 0
-	for {set i 0} {$i <= [$menu.mSetup index end]} {incr i} {
-		if {[$menu.mSetup type $i] eq "command" &&
-			[$menu.mSetup entrycget $i -command] eq "::application::ShortcutPreferences .application"} {
-			set found 1
-		}
-	}
+	# Decision 003: the drop-down is registry-generated; the entry point is
+	# the registered action, not a mSetup widget in the old menu tree.
+	catch { destroy .keymapMenu }
+	menu .keymapMenu
+	::menu::BuildDropdown .keymapMenu
+	set rec [::action::get menu.edit.keyboard]
+	set found [expr {[dict get $rec label] eq [::menu::MC KeyboardPreferences]
+		&& [string match *ShortcutPreferences* [info body ::menu::Do]]}]
+	destroy .keymapMenu
 	list $found [$dlg.content.chesswiz cget -value] \
 		[$dlg.content.chessbase cget -value] \
 		[$dlg.content.chessbase cget -variable]
 } -cleanup {
 	catch {destroy .application.shortcutPreferences}
-	catch {destroy .keymapMenu}
 } -result {1 chesswiz chessbase ::application::Options(shortcut:scheme)}
 
 tcltest::test keymap-roundtrip {overrides restore defaults without a restart} -setup {

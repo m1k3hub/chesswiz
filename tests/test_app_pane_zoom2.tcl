@@ -250,33 +250,37 @@ tcltest::test pane-zoom2-program-focus {focus moved by the program never resizes
 	catch {::application::focuszoom::disable [::application::twm board]}
 } -result {1 1 1}
 
-tcltest::test pane-zoom2-menu {the Window menu exposes the opt-in, the ratio and the board pin} -setup {
+tcltest::test pane-zoom2-menu {the registry exposes the opt-in, the ratio and the board pin} -setup {
 	.application.nb select .application.nb.board
+	set ::application::focuszoom::enabled([::application::twm board]) 0
+	set ::application::focuszoom::pinBoard 0
 } -body {
+	# Decision 003: there is no Window menu. The controls are registry
+	# actions (palette/assistant) with the same behaviour as the old menu.
+	catch { destroy .z2menu }
 	menu .z2menu
-	::menu::build .z2menu
-	set m .z2menu.window
+	::menu::BuildDropdown .z2menu
+	set ids {view.focus_zoom view.focus_ratio view.focus_pin}
 	set found {}
-	for {set i 0} {$i <= [$m index end]} {incr i} {
-		set type [$m type $i]
-		if {$type eq "tearoff"} { continue }
-		if {$type eq "cascade"} {
-			lappend found [$m entrycget $i -menu]
-			continue
-		}
-		lappend found [expr {[catch {$m entrycget $i -variable} v] ? $type : $v}]
+	foreach id $ids {
+		set ok [expr {![catch { ::action::get $id } rec]}]
+		lappend found [expr {$ok && [dict get $rec dropdown] ne ""}]
 	}
-	set zoomIdx [lsearch -exact $found ::application::focuszoom::enabled([::application::twm board])]
-	set ratioIdx [lsearch -glob $found *.mFocusZoomRatio]
-	set pinIdx [lsearch -exact $found ::application::focuszoom::pinBoard]
-	set ratios {}
-	if {$ratioIdx >= 0} {
-		set rm [lindex $found $ratioIdx]
-		for {set i 0} {$i <= [$rm index end]} {incr i} { lappend ratios [$rm entrycget $i -value] }
-	}
+	::action::invoke view.focus_zoom {}
+	set toggled [::application::focuszoom::isEnabled [::application::twm board]]
+	set ratios [list \
+		[::application::focuszoom::setRatio 1.2] \
+		[::application::focuszoom::setRatio 1.4] \
+		[::application::focuszoom::setRatio 1.8] \
+		[::application::focuszoom::setRatio 99]]
+	::action::invoke view.focus_pin {}
+	set pinned [set ::application::focuszoom::pinBoard]
 	destroy .z2menu
-	list [expr {$zoomIdx >= 0}] [lsort -real $ratios] [expr {$pinIdx >= 0}]
-} -result {1 {1.2 1.4 1.6 1.8} 1}
+	list $found $toggled $ratios $pinned
+} -cleanup {
+	catch { set ::application::focuszoom::enabled([::application::twm board]) 0 }
+	set ::application::focuszoom::pinBoard 0
+} -result {{1 1 1} 1 {1.2 1.4 1.8 1.8} 1}
 
 foreach value {1.2 1.4 1.8 99} {
  tcltest::test pane-zoom2-ratio-$value {R is clamped; siblings stay proportional and unrelated panedwindows retain exact sashes} -setup {

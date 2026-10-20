@@ -149,11 +149,20 @@ tcltest::test guess-inactive {without a round moves still change the game} -setu
 	::scidb::test::guess::cleanup
 } -result {0 d4}
 
-tcltest::test guess-menus {the board context menu and the Extras menu start a round} -body {
-	list [string match *::guessmove::start* [info body ::application::board::PopupMenu]] \
-		[string match *::guessmove::start* [info body ::menu::build]] \
-		$::guessmove::mc::GuessTheMove
-} -result {1 1 {Guess the Move...}}
+tcltest::test guess-menus {the Training action starts a round} -body {
+	# Decision 003/PROPOSAL section 6: Guess the Move has one home,
+	# Training in the drop-down, addressed by its action id.
+	catch { destroy .guesstestmenu }
+	menu .guesstestmenu
+	::menu::BuildDropdown .guesstestmenu
+	set rec [::action::get menu.training.guess]
+	set result [list \
+		[expr {[string match *guessmove* [dict get $rec handler]] || [string match *guessmove* [info body ::menu::Do]]}] \
+		[expr {[dict get $rec label] eq [::menu::MC GuessTheMove]}] \
+		[expr {[dict get $rec keys] eq [list {} "Ctrl+G"]}]]
+	destroy .guesstestmenu
+	set result
+} -result {1 1 1}
 
 # ----------------------------------------------------------------------
 # System One (Jev) and engine-first tests (stubbed ::ai::engine::evaluate

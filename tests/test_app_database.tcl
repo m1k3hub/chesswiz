@@ -91,9 +91,19 @@ proc withBusyRecorder {body} {
 }
 
 proc maintenanceLabels {menu} {
+    # Decision 003: C4 is registry-generated, so walk its cascades rather
+    # than the old .maintenance widget path.
     set labels {}
-    for {set i 0} {$i <= [$menu index end]} {incr i} {
-        if {[$menu type $i] ne "command"} { continue }
+    set n [$menu index end]
+    if {$n eq "" || $n eq "none"} { return $labels }
+    for {set i 0} {$i <= $n} {incr i} {
+        set type [$menu type $i]
+        if {$type eq "cascade"} {
+            lappend labels [string trim [$menu entrycget $i -label]]
+            lappend labels {*}[maintenanceLabels [$menu entrycget $i -menu]]
+            continue
+        }
+        if {$type ne "command"} { continue }
         lappend labels [string trim [$menu entrycget $i -label]]
     }
     return $labels
@@ -108,8 +118,9 @@ tcltest::test app-db-popup-01 {Repertoire report stays hidden for non-repertoire
     set base [createDatabase popup]
     set parent .application.nb.database.main.switcher.content
     ::application::database::PopupMenu $parent 0 0 $base
-    set labels [maintenanceLabels ${parent}.__menu__.maintenance]
-    expr {[lsearch -exact $labels "Repertoire Report..."] == -1}
+    set labels [maintenanceLabels ${parent}.__menu__]
+    expr {[lsearch -glob $labels *Maintenance*] >= 0
+        && [lsearch -glob $labels *Repertoire*] == -1}
 } -cleanup {
     set parent .application.nb.database.main.switcher.content
     catch { destroy ${parent}.__menu__ }

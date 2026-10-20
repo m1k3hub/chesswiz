@@ -366,9 +366,9 @@ proc ::context::Declare {} {
 	}
 
 	# --- C5: player / event / site --------------------------------
-	Item c5.player_card		"Show Player Card"			C5
+	Item c5.player_card		"Show Player Card"			C5 {} {[::capability::present playercard]}
 	Item c5.prep_report		"Prep Report…"				C5
-	Item c5.insights			"Insights…"					C5
+	Item c5.insights			"Insights…"					C5 {} {[::capability::present insights]}
 	Item c5.player_url		"Open URL"					C5
 	Item c5.event_table		"Show Tournament Table…"	C5
 	Item c5.event_url			"Open URL"					C5
@@ -376,7 +376,7 @@ proc ::context::Declare {} {
 	Item c5.open_switcher		"Open Games in Switcher"	C5
 	Item c5.save_working_set	"Save as Working Set"		C5
 	Item c5.player.prep		"Prep Report"				C5
-	Item c5.player.insights	"Insights"					C5
+	Item c5.player.insights	"Insights"					C5 {} {[::capability::present insights]}
 	DefineObject C5 player {
 		ask
 		-
@@ -469,7 +469,7 @@ proc ::context::Declare {} {
 	# --- C7: a media entry ----------------------------------------
 	Item c7.play			"Play"						C7
 	Item c7.open_report		"Open Report"				C7
-	Item c7.open_stream		"Open Stream…"				C7
+	Item c7.open_stream		"Open Stream…"				C7 {} {[::capability::present stream]}
 	Item c7.external			"Open in External Player"	C7
 	Item c7.show_in_board	"Show in Board"				C7
 	Item c7.sync_options	"Sync Options"				C7
@@ -528,7 +528,7 @@ proc ::context::Declare {} {
 	# --- C9: a pane header (per-pane table) -----------------------
 	Item c9.appearance		"Appearance"				C9
 	Item c9.board_setup		"Board Setup…"				C9
-	Item c9.tablebase		"Show Tablebase"			C9
+	Item c9.tablebase		"Show Tablebase"			C9 {} {[::capability::present tablebase]}
 	Item c9.flip_board		"Flip Board"				C9
 	Item c9.start_position	"Start Position"			C9
 	Item c9.not.display		"Display"					C9
@@ -572,8 +572,8 @@ proc ::context::Declare {} {
 	Item c9.assistant.source	"Source"					C9
 	Item c9.assistant.local	"Local"						C9
 	Item c9.assistant.cloud	"Cloud"						C9
-	Item c9.explorer.tablebase "Online Tablebase"		C9
-	Item c9.explorer.source	"Source"					C9
+	Item c9.explorer.tablebase "Online Tablebase"		C9 {} {[::capability::present explorer]}
+	Item c9.explorer.source	"Source"					C9 {} {[::capability::present explorer]}
 	Item c9.maximise			"Maximise/Restore Pane"		C9
 	Item c9.fold				"Fold Title Bar"			C9
 	Item c9.amalgamate		"Amalgamate"				C9
@@ -592,7 +592,7 @@ proc ::context::Declare {} {
 	Item c9.pane.media		"Media pane"				C9
 	Item c9.pane.report		"Report / Info pane"		C9
 	Item c9.pane.assistant	"Assistant pane"			C9
-	Item c9.pane.explorer	"Explorer pane"				C9
+	Item c9.pane.explorer	"Explorer pane"				C9 {} {[::capability::present explorer]}
 
 	DefineObject C9 board {
 		ask
@@ -1018,45 +1018,36 @@ proc ::context::ClipboardCanPaste {} {
 }
 
 proc ::context::Visible {id object} {
-	variable Predicates
-	if {[dict exists $Predicates $id visible]} {
-		set expr [dict get $Predicates $id visible]
-		if {[catch { namespace eval ::context [list expr $expr] } answer]} { return 1 }
-		return $answer
-	}
-	switch -- $id {
-		c3.sort_column - c3.sort_asc - c3.sort_desc {
-			if {[dict exists $object sortable]} {
-				return [expr {[dict get $object sortable] ? 1 : 0}]
-			}
+	set st [::menu::state $id $object]
+	set visible [dict get $st visible]
+	if {$id in {c3.sort_column c3.sort_asc c3.sort_desc}} {
+		if {[dict exists $object sortable]} {
+			set visible [expr {$visible && [dict get $object sortable] ? 1 : 0}]
 		}
 	}
-	return 1
+	return $visible
 }
 
 proc ::context::Enabled {id object} {
-	variable Predicates
-	if {[dict exists $Predicates $id enabled]} {
-		set expr [dict get $Predicates $id enabled]
-		if {[catch { namespace eval ::context [list expr $expr] } answer]} { return 1 }
-		return $answer
-	}
+	set st [::menu::state $id $object]
+	set enabled [dict get $st enabled]
 	switch -- $id {
 		c3.paste_games {
 			set base [expr {[dict exists $object base] ? [dict get $object base] : ""}]
 			set variant [expr {[dict exists $object variant] ? [dict get $object variant] : ""}]
 			if {$base eq ""} { catch { set base [::scidb::db::get name] } }
 			if {$variant eq ""} { catch { set variant [::scidb::db::get variant?] } }
-			return [expr {[::game::clipboard::reason $base $variant] eq "" ? 1 : 0}]
+			set enabled [expr {$enabled && [::game::clipboard::reason $base $variant] eq "" ? 1 : 0}]
 		}
 		c4.save_changes {
-			if {[dict exists $object modified]} { return [expr {[dict get $object modified] ? 1 : 0}] }
+			if {[dict exists $object modified]} {
+				set enabled [expr {$enabled && [dict get $object modified] ? 1 : 0}]
+			}
 		}
 	}
-	return 1
+	return $enabled
 }
 
-# A short explanation for a disabled row (the menu tooltip/status text).
 proc ::context::WhyDisabled {id object} {
 	switch -- $id {
 		c3.paste_games {

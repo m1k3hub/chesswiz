@@ -381,12 +381,20 @@ tcltest::test book-create-roundtrip {the created book reads back with the same m
 # The Tcl UI wiring: the editor window, its buttons and the dialog.
 # ======================================================================
 
-tcltest::test book-ui-wiring {the editor is reachable from the menu and follows the board} -body {
-	list \
+tcltest::test book-ui-wiring {the editor is reachable from the registry and follows the board} -body {
+	# Decision 003: the drop-down is generated from the action registry, so
+	# the entry point is the registered action, not text in ::menu::build.
+	catch { destroy .booktestmenu }
+	menu .booktestmenu
+	::menu::BuildDropdown .booktestmenu
+	set rec [::action::get menu.tools.book]
+	set result [list \
 		[llength [info commands ::book::openEditor]] \
-		[info exists ::menu::mc::OpeningBookEditor] \
-		[string match {*::book::openEditor*} [info body ::menu::build]] \
-		[string match {*::book::positionChanged*} [info body ::application::board::update]]
+		[expr {[dict get $rec label] eq [::menu::MC OpeningBookEditor]}] \
+		[expr {[dict get $rec dropdown] ne ""}] \
+		[string match {*::book::positionChanged*} [info body ::application::board::update]]]
+	destroy .booktestmenu
+	set result
 } -result {1 1 1 1}
 
 tcltest::test book-ui-editor {the editor window shows, edits and saves the book moves} -body {

@@ -222,6 +222,7 @@ SOURCES = \
 	ai-diagram.tcl \
 	app-ai.tcl \
 	app-ai-models.tcl \
+	capability.tcl \
 	actions.tcl \
 	game-clipboard.tcl \
 	context.tcl \
@@ -258,6 +259,7 @@ SOURCES = \
 	move.tcl \
 	game.tcl \
 	menu.tcl \
+	dropdown.tcl \
 	end.tcl \
 
 ifneq ($(USE_INLINE_TEXT),)

@@ -1570,9 +1570,14 @@ proc LeaveSettings {w} {
 proc BuildSettingsMenu {m} {
 	variable Vars
 
-	catch { destroy $m.entries }
-	::menu $m.entries
-	::menu::build $m.entries
+	# The drop-down is built once; each cascade fills lazily on post
+	# (VAL-BAR-005). Re-posting only re-points the menubutton.
+	if {![info exists Vars(menu:entries)] || ![winfo exists $Vars(menu:entries)]} {
+		catch { destroy $m.entries }
+		::menu $m.entries
+		::menu::build $m.entries
+		set Vars(menu:entries) $m.entries
+	}
 
 	$m configure \
 		-background [::dropdownbutton::activebackground] \

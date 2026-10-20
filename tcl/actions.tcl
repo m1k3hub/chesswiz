@@ -138,6 +138,7 @@ proc ::action::register {id record} {
 		what     [_dg $record what {}] \
 		ai       [_dg $record ai 0] \
 		menu     [_dg $record menu {}] \
+		dropdown [_dg $record dropdown {}] \
 		context  [_dg $record context {}] \
 		toolmenu [_dg $record toolmenu {}] \
 		doc      [_dg $record doc {}] \
@@ -636,14 +637,19 @@ proc ::action::labels {surface} {
 	variable Registry
 
 	set output {}
+	set keyed {}
 	foreach id [dict keys $Registry] {
 		set record [dict get $Registry $id]
 		
 		if {[dict get $record ai] eq "debug"} { continue }
 		
 		set include 0
+		set order ""
 
-		if {$surface eq "bar"} {
+		if {$surface eq "dropdown"} {
+			set order [dict get $record dropdown]
+			if {$order ne ""} { set include 1 }
+		} elseif {$surface eq "bar"} {
 			if {[dict get $record menu] ne ""} { set include 1 }
 		} elseif {[string match "context:*" $surface]} {
 			set ctxId [string range $surface 8 end]
@@ -669,9 +675,16 @@ proc ::action::labels {surface} {
 		set ac ""
 		if {[llength $ks] >= 2} { set ac [lindex $ks 1] }
 
-		lappend output [::list $id [dict get $record label] $ac $en $vis]
+		set row [::list $id [dict get $record label] $ac $en $vis]
+		lappend output $row
+		if {$surface eq "dropdown"} { lappend keyed [::list $order $row] }
 	}
 
+	if {$surface eq "dropdown"} {
+		set sorted [lsort -index 0 $keyed]
+		set output {}
+		foreach pair $sorted { lappend output [lindex $pair 1] }
+	}
 	return $output
 }
 

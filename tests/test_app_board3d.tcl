@@ -33,26 +33,28 @@ tcltest::test board3d-app-module {3D board module and entry points are loaded} -
 		[llength [info commands ::board3d::squareAt]]
 } -result {1 1 1 1}
 
-tcltest::test board3d-app-menu {Extras menu offers the 3D board} -body {
+tcltest::test board3d-app-menu {the 3D viewer actions are registry actions, not an Extras catch-all} -body {
+	# Decision 003/PROPOSAL section 5: the former Extras 3D rows are
+	# registry actions (board pane header / View > Panes when the module is
+	# present), so no Extras cascade is built.
 	catch { destroy .testmenu3d }
 	menu .testmenu3d
 	::menu::build .testmenu3d
-	set found 0
-	set n [.testmenu3d index end]
-	for {set i 0} {$i <= $n} {incr i} {
+	set extras 0
+	for {set i 0} {$i <= [.testmenu3d index end]} {incr i} {
 		if {[.testmenu3d type $i] eq "cascade"
-			&& [string match "*Extras*" [.testmenu3d entrycget $i -label]]} {
-			set em [.testmenu3d entrycget $i -menu]
-			set en [$em index end]
-			for {set k 0} {$k <= $en} {incr k} {
-				if {[catch { set label [$em entrycget $k -label] }]} { continue }
-				if {[string match "*3D Board*" $label]} { set found 1 }
-			}
-		}
+			&& [string match "*Extras*" [.testmenu3d entrycget $i -label]]} { set extras 1 }
 	}
 	destroy .testmenu3d
-	set found
-} -result 1
+	set ids {view.board3d.open view.board3d.webgl view.board3d.embed}
+	set found {}
+	foreach id $ids {
+		set rec [::action::get $id]
+		lappend found [expr {[dict get $rec dropdown] ne ""
+			&& [dict get [::menu::state $id] visible]}]
+	}
+	list $extras $found
+} -result {0 {1 1 1}}
 
 tcltest::test board3d-app-open {viewer opens, draws and reports open} -body {
 	::board3d::openViewer .application
