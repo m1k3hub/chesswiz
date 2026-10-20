@@ -120,10 +120,12 @@ proc ::application::ask::Build {notebook} {
 	set Priv(placeholder) $placeholder
 	set Priv(mic) $mic
 	set Priv(notebook) $notebook
+	set Priv(filtered) ""
 
 	SyncMic
 	PlaceholderState
 	RegisterAction
+	catch { InstallShortcutTags $notebook }
 	return $frame
 }
 
@@ -251,6 +253,7 @@ proc ::application::ask::Escape {} {
 	variable Priv
 
 	HideList
+	unset -nocomplain Priv(filtered)
 	if {[info exists Priv(focusBefore)] && $Priv(focusBefore) ne "" \
 	 && $Priv(focusBefore) ne [Entry] && [winfo exists $Priv(focusBefore)]} {
 		focus -force $Priv(focusBefore)
@@ -260,8 +263,9 @@ proc ::application::ask::Escape {} {
 	return "break"
 }
 
-# Ctrl+K and Ctrl+Shift+K are bound on the main window. On Text/Script
-# widgets the class binding has already killed the line; leave it alone.
+# Ctrl+K and Ctrl+Shift+K are bound on a private tag in front of the
+# class. In Text/Script widgets Ctrl+K falls through to the class
+# kill-line binding; Ctrl+Shift+K breaks before it and focuses the field.
 proc ::application::ask::CtrlK {} {
 	if {[InMultilineEditor]} { return }
 	Focus
@@ -270,6 +274,33 @@ proc ::application::ask::CtrlK {} {
 proc ::application::ask::CtrlShiftK {} {
 	Focus
 }
+
+# Ctrl+Shift+K must be seen before the class bindings that eat Control-K
+# (the engine console's Script bindings kill the line for both cases).
+# A private bindtag placed just before the widget's class tag reserves it;
+# Ctrl+K itself still falls through to the class binding (kill-line).
+proc ::application::ask::AttachShortcutTag {w} {
+	if {![winfo exists $w]} { return }
+	set top [winfo toplevel $w]
+	if {$top ne ".application" && ![string match ".application.*" $top]} { return }
+	set tags [bindtags $w]
+	if {"AskShortcut" in $tags} { return }
+	set class [winfo class $w]
+	set pos [lsearch -exact $tags $class]
+	if {$pos < 0} { set pos 1 }
+	catch { bindtags $w [linsert $tags $pos AskShortcut] }
+	return
+}
+
+proc ::application::ask::InstallShortcutTags {{w .application}} {
+	if {![winfo exists $w]} { return }
+	AttachShortcutTag $w
+	foreach child [winfo children $w] { InstallShortcutTags $child }
+	return
+}
+
+bind AskShortcut <Control-Key-k> {::application::ask::CtrlK}
+bind AskShortcut <Control-Key-K> {::application::ask::CtrlShiftK; break}
 
 proc ::application::ask::InMultilineEditor {} {
 	set w [focus]
@@ -289,12 +320,23 @@ proc ::application::ask::Typed {{key ""}} {
 
 	PlaceholderState
 	if {![winfo exists [Entry]]} { return }
-	if {[string trim $Query] eq ""} {
+
+	# KeyRelease follows every KeyPress, including the navigation keys.
+	# Only a real text change may refilter and reset the selection.
+	if {$key in {Up Down Return KP_Enter Escape Tab ISO_Left_Tab}} { return }
+	set text [string trim $Query]
+	if {[info exists Priv(filtered)] && $Priv(filtered) eq $text \
+	 && [ListVisible]} {
+		return
+	}
+	set Priv(filtered) $text
+
+	if {$text eq ""} {
 		set Priv(rows) {}
 		HideList
 		return
 	}
-	set Priv(rows) [::action::labels asklist [string trim $Query]]
+	set Priv(rows) [::action::labels asklist $text]
 	set Priv(index) 0
 	ShowList
 }
@@ -407,6 +449,7 @@ proc ::application::ask::Choose {} {
 		lassign [lindex $Priv(rows) $index] id
 		HideList
 		set Query ""
+		set Priv(filtered) ""
 		PlaceholderState
 		catch { focus -force [Entry] }
 		if {[catch { ::action::run $id } result]} {
@@ -427,6 +470,7 @@ proc ::application::ask::SendToAssistant {} {
 	if {$text eq ""} { return "break" }
 	HideList
 	set Query ""
+	set Priv(filtered) ""
 	PlaceholderState
 	[::application::ask::Entry] delete 0 end
 	if {[llength [info commands ::application::assistant::HistoryAdd]]} {
@@ -1080,6 +1124,10 @@ if {[llength [info commands ::application::ask::Build]]} {
 	catch {
 		bind .application <Control-Key-k> {::application::ask::CtrlK}
 		bind .application <Control-Key-K> {::application::ask::CtrlShiftK}
+		# New widgets (panes, dialogs, the engine console, the comment
+		# editor) get the private tag before they can take a key.
+		bind all <Map> +[list ::application::ask::AttachShortcutTag %W]
+		bind all <FocusIn> +[list ::application::ask::AttachShortcutTag %W]
 	}
 }
 

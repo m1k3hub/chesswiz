@@ -168,7 +168,9 @@ tcltest::test ask-typing-filters {typing narrows the registry to matching action
 		set rows $::application::ask::Priv(rows)
 		set labels {}
 		foreach row $rows { lappend labels [lindex $row 1] }
-		list [expr {[llength $all] > 300}] \
+		# Context-only rows need their object (VAL-RULE-005); the global
+		# registry is still far larger than the available list.
+		list [expr {[llength $all] > 200}] \
 			[expr {[llength $rows] > 0 && [llength $rows] < [llength $all]}] \
 			[expr {[lsearch -exact $labels "New Game"] >= 0}] \
 			[::application::ask::ListVisible]
@@ -205,7 +207,7 @@ tcltest::test ask-asklist-rows-shape {asklist rows carry id, label, accelerator,
 			lassign $row id label accel enabled visible
 			if {!$enabled || !$visible || $id eq "" || $label eq ""} { lappend bad $row }
 		}
-		list [llength $bad] [expr {[llength $rows] > 300}]
+		list [llength $bad] [expr {[llength $rows] > 200}]
 	}
 } -result {0 1}
 

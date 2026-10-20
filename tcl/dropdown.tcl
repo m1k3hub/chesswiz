@@ -799,6 +799,31 @@ proc ::menu::state {id {object {}}} {
 			if {[catch { uplevel #0 $ep } answer]} { set answer 1 }
 			set enabled [expr {$answer ? 1 : 0}]
 		}
+
+		# Context-only actions exist only while their object does. With no
+		# explicit object (the Ask list, a direct ::menu::state call), use
+		# the current object the matching context menu would receive.
+		if {[llength [dict get $rec context]] && [dict get $rec dropdown] eq ""} {
+			if {![dict size $object] \
+			 && [llength [info commands ::context::CurrentObjectFor]]} {
+				set current [::context::CurrentObjectFor $id]
+				if {[llength $current]} {
+					set object [lindex $current 1]
+				} else {
+					set visible 0
+				}
+			}
+		}
+	}
+
+	# Object-scoped rules (R10): strip/truncate/comment rows follow the
+	# move the menu or the Ask list is acting on.
+	if {[llength [info commands ::context::ObjectRule]]} {
+		set rule [::context::ObjectRule $id $object]
+		if {[llength $rule]} {
+			set visible [expr {$visible && [lindex $rule 0] ? 1 : 0}]
+			set enabled [expr {$enabled && [lindex $rule 1] ? 1 : 0}]
+		}
 	}
 
 	# Context predicates live in ::context (they call helpers there).

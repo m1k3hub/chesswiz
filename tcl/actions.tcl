@@ -587,6 +587,16 @@ proc ::action::run {id args} {
 		}
 	}
 
+	# Context-only actions act on the object they are listed for. With no
+	# object (or an object whose R10 rule hides the row) they must not run.
+	if {[llength [dict get $record context]] && [dict get $record dropdown] eq "" \
+	 && [llength [info commands ::menu::state]]} {
+		set state [::menu::state $id]
+		if {![dict get $state visible] || ![dict get $state enabled]} {
+			return "error: action '$id' is not available here"
+		}
+	}
+
 	set isConfirm [dict get $record confirm]
 	set isBulk [dict get $record bulk]
 	set what [dict get $record what]

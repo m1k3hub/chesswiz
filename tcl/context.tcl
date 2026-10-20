@@ -1198,6 +1198,207 @@ proc ::context::Header {kind object} {
 }
 
 # ----------------------------------------------------------------------
+# The current object per context. The Ask list has no pointer, so it uses
+# the object the matching context menu would be posted with right now.
+# Empty means there is no such object (the menu would not post).
+# ----------------------------------------------------------------------
+proc ::context::GameInTab {} {
+	set gb ""
+	catch { set gb $::application::pgn::Vars(gamebar) }
+	if {$gb eq ""} { return 0 }
+	if {[catch { ::gamebar::size $gb } n]} { return 0 }
+	return [expr {$n > 0 ? 1 : 0}]
+}
+
+proc ::context::CurrentObject {cid} {
+	switch -- $cid {
+		C1 {
+			set fen ""
+			catch { set fen [::scidb::game::query fen] }
+			if {$fen eq ""} { return {} }
+			return [dict create fen $fen]
+		}
+		C2 {
+			if {![GameInTab]} { return {} }
+			if {[catch { set pos [::scidb::game::current] }]} { return {} }
+			if {$pos < 0} { return {} }
+			set base ""
+			set variant ""
+			set index ""
+			catch { lassign [::scidb::game::link? $pos] base variant index }
+			if {$index eq ""} { return {} }
+			set ply 0
+			catch { set ply [::scidb::game::ply] }
+			set over 0
+			catch { set over [::scidb::game::position atEnd?] }
+			set mainline 1
+			catch { set mainline [::scidb::game::position isMainline?] }
+			return [dict create base $base variant $variant index $index \
+				ply $ply san "" position $pos over $over mainline $mainline]
+		}
+		C3 {
+			if {![GameInTab]} { return {} }
+			set base ""
+			catch { set base [::scidb::db::get name] }
+			if {$base eq ""} { return {} }
+			set index 0
+			set variant Normal
+			if {[catch { set pos [::scidb::game::current] }]} { set pos "" }
+			if {$pos ne ""} {
+				catch { lassign [::scidb::game::link? $pos] b variant index }
+			}
+			if {$index eq ""} { set index 0 }
+			return [dict create base $base variant $variant index $index \
+				column -1 sortable 1]
+		}
+		C4 {
+			set base ""
+			catch { set base [::scidb::db::get name] }
+			return [dict create base $base]
+		}
+		C7 {
+			set tree ""
+			catch { set tree $::application::media::Priv(tree) }
+			if {$tree eq "" || ![winfo exists $tree]} { return {} }
+			set row ""
+			catch { set row [$tree selection] }
+			if {$row eq ""} { return {} }
+			set vals {}
+			catch { set vals [$tree item $row -values] }
+			set type ""
+			set title ""
+			set path ""
+			set index ""
+			catch { lassign $vals type title path index }
+			set base ""
+			catch { set base [::scidb::db::get name] }
+			return [dict create base $base mediaId $index path $path \
+				title $title type $type]
+		}
+		C8 {
+			if {![GameInTab]} { return {} }
+			set fen ""
+			catch { set fen [::scidb::game::query fen] }
+			if {$fen eq ""} { return {} }
+			return [dict create fen $fen move "" table "" row -1]
+		}
+		C9 {
+			set twm ""
+			catch { set twm [::application::twm board] }
+			if {$twm eq ""} { return {} }
+			set leaves {}
+			catch { set leaves [$twm leaves] }
+			if {![llength $leaves]} { return {} }
+			set uid [lindex $leaves 0]
+			set f [focus]
+			foreach u $leaves {
+				set p ""
+				catch { set p [$twm leaf $u] }
+				if {$p ne "" && ($f eq $p || [string match "$p.*" $f])} {
+					set uid $u
+					break
+				}
+			}
+			set frame ""
+			catch { set frame [$twm leaf $uid] }
+			return [dict create paneUid $uid twm $twm frame $frame]
+		}
+		C10 {
+			if {[catch { ::application::activeTab } tab]} { return {} }
+			if {$tab ne "database"} { return {} }
+			return [dict create column 0]
+		}
+		C11 {
+			set dlg ""
+			catch { set dlg $::comment::Vars(dialog) }
+			if {$dlg eq "" || ![winfo exists $dlg] || ![winfo ismapped $dlg]} {
+				return {}
+			}
+			set w $dlg
+			set f [focus]
+			if {[string match "$dlg*" $f]} { set w $f }
+			set index ""
+			catch { set index [::scidb::game::current] }
+			return [dict create widget $w index $index]
+		}
+		C12 {
+			return [dict create gameSlot 0]
+		}
+	}
+	return {}
+}
+
+# {cid object} for a context-only action, or empty. C1/C2 actions (the
+# edit-annotation row) are listed while either object exists.
+proc ::context::CurrentObjectFor {id} {
+	if {[catch { set rec [::action::get $id] }]} { return {} }
+	set contexts [dict get $rec context]
+	if {![llength $contexts] || [dict get $rec dropdown] ne ""} { return {} }
+	foreach cid $contexts {
+		set object [CurrentObject $cid]
+		if {[dict size $object] && [HasObject $cid $object]} {
+			return [list $cid $object]
+		}
+	}
+	return {}
+}
+
+proc ::context::ObjectStart {object} {
+	if {[dict exists $object ply]} {
+		return [expr {[dict get $object ply] == 0 ? 1 : 0}]
+	}
+	if {[dict exists $object index]} {
+		return [expr {[dict get $object index] == 0 ? 1 : 0}]
+	}
+	if {[catch { ::scidb::game::position atStart? } start]} { return 0 }
+	return [expr {$start ? 1 : 0}]
+}
+
+proc ::context::ObjectEnd {object} {
+	if {[dict exists $object over]} {
+		return [expr {[dict get $object over] ? 1 : 0}]
+	}
+	# Context objects built before the move query carry no `over`; a
+	# non-start position is mid-game unless it says otherwise.
+	return 0
+}
+
+# R10: strip/truncate/comment rows follow the move object. Returns
+# {visible enabled} or empty when the id has no object rule.
+proc ::context::ObjectRule {id object} {
+	switch -- $id {
+		c2.strip.moves {
+			set start [ObjectStart $object]
+			set mainline 1
+			if {[dict exists $object mainline]} {
+				set mainline [dict get $object mainline]
+			} else {
+				if {[catch { ::scidb::game::position isMainline? } main]} {
+					set main 1
+				}
+				set mainline [expr {$main ? 1 : 0}]
+			}
+			set ok [expr {$mainline && !$start ? 1 : 0}]
+			return [list $ok $ok]
+		}
+		c2.strip.truncate {
+			set start [ObjectStart $object]
+			set end [ObjectEnd $object]
+			set ok [expr {!$start && !$end ? 1 : 0}]
+			return [list $ok $ok]
+		}
+		c2.comment_before {
+			set ok [expr {![ObjectStart $object] ? 1 : 0}]
+			return [list $ok $ok]
+		}
+		c2.comment_after {
+			return [list 1 1]
+		}
+	}
+	return {}
+}
+
+# ----------------------------------------------------------------------
 # Post: no object under the pointer -> nothing is posted (R8).
 # ----------------------------------------------------------------------
 proc ::context::HasObject {cid object} {
