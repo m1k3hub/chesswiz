@@ -50,9 +50,9 @@ proc ::capability::DefineAll {} {
 	Define board3d     {expr {[llength [info commands ::board3d::openViewer]] > 0}}
 	Define webgl3d     {expr {[llength [info commands ::board3d::openWebGLViewer]] > 0}}
 	Define embed3d     {expr {[llength [info commands ::board3d::toggleEmbed]] > 0}}
-	Define stream      {expr {[llength [info commands ::mediainset::OpenStream]] > 0}}
+	Define stream      {expr {[llength [info commands ::application::media::OpenStream]] > 0}}
 	Define insights    {expr {[llength [info commands ::insights::show]] > 0}}
-	Define playercard  {expr {[llength [info commands ::player::card::open]] > 0}}
+	Define playercard  {expr {[llength [info commands ::playercard::show]] > 0}}
 	Define explorer    {expr {[llength [info commands ::application::explorer::positionChanged]] > 0}}
 	Define tablebase   {expr {[llength [info commands ::tablebase::toggle]] > 0}}
 	Define print       {expr {[llength [info commands ::print::open]] > 0}}
