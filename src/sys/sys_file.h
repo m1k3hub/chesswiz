@@ -102,6 +102,7 @@ Type type(char const* filename);
 
 void rename(char const* oldFilename, char const* newFilename, bool preserveOldAttrs = false);
 void deleteIt(char const* filename);
+bool renameChecked(char const* oldFilename, char const* newFilename);
 bool setModificationTime(char const* filename, uint32_t time);
 
 bool lock(int fd);

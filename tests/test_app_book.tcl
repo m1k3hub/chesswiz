@@ -292,6 +292,53 @@ tcltest::test book-save-twice {saving twice to the same open handle works and re
 	list $save1 $modified $save2 $afterSave $size $count $at
 } -result {1 1 1 0 48 3 {{e4 7 0} {d4 3 0} {Nf3 1 0}}}
 
+tcltest::test book-second-handle {saving preserves another handle's unsaved model} -body {
+	set start $::scidb::test::book::start
+	set path [tempPath second bin]
+	::scidb::book::write $path [list [list $start e4 7]]
+	set h [::scidb::book::open $path]
+	set h2 [::scidb::book::open $path]
+	::scidb::book::add $h2 $start d4 3
+	::scidb::book::add $h $start Nf3 2
+	set saved [::scidb::book::save $h]
+	set other [probeList $h2 $start]
+	set dirty [::scidb::book::modified $h2]
+	::scidb::book::write $path [list [list $start c4 9]]
+	set h3 [::scidb::book::open $path]
+	list $saved $other $dirty [probeList $h $start] [probeList $h3 $start] [file exists "$path.tmp"]
+} -cleanup {
+	foreach handle [list $h $h2 $h3] { catch {::scidb::book::close $handle} }
+} -result {1 {{e4 7 0} {d4 3 0}} 1 {{e4 7 0} {Nf3 2 0}} {{c4 9 0}} 0}
+
+tcltest::test book-rename-failure {failed replacement raises WriteFailed and removes temporary file} -body {
+	set path [tempPath renamefail bin]
+	file mkdir $path
+	set failed [catch {::scidb::book::write $path [list [list $::scidb::test::book::start e4 1]]} msg]
+	list $failed [string match {*WriteFailed*} $msg] [file isdirectory $path] [file exists "$path.tmp"]
+} -cleanup {
+	file delete -force $path
+} -result {1 1 1 0}
+
+tcltest::test book-save-rename-failure {failed save keeps edits for retry} -body {
+	set start $::scidb::test::book::start
+	set path [tempPath savefail bin]
+	::scidb::book::write $path [list [list $start e4 7]]
+	set h [::scidb::book::open $path]
+	::scidb::book::add $h $start d4 3
+	file delete $path
+	file mkdir $path
+	set failed [catch {::scidb::book::save $h} msg]
+	set result [list $failed [string match {*WriteFailed*} $msg] [file exists "$path.tmp"] [::scidb::book::modified $h]]
+	file delete $path
+	lappend result [::scidb::book::save $h]
+	set h2 [::scidb::book::open $path]
+	lappend result [probeList $h2 $start]
+	set result
+} -cleanup {
+	catch {::scidb::book::close $h}
+	catch {::scidb::book::close $h2}
+} -result {1 1 0 1 1 {{e4 7 0} {d4 3 0}}}
+
 tcltest::test book-editing-readonly {a read-only book refuses to save} -body {
 	set path [tempPath readonly bin]
 	::scidb::book::write $path [list [list $::scidb::test::book::start e4 1]]
@@ -478,6 +525,56 @@ tcltest::test book-ui-create-dialog {Create Book from Database writes the aggreg
 	catch { destroy $dlg }
 	catch { ::book::Close }
 } -result {176 {{d4 2 0} {e4 1 0}} {{d4 2 0} {e4 1 0}}}
+
+# Regression (G03): writing a book while it is open in the editor must
+# not fail with a sharing violation. On Windows the memory mapping holds
+# an exclusive handle; the fix closes the handle before writing and
+# reopens after. Also exercises rewrite and delete of an open book.
+# Note: Linux does not enforce the same file locking as Windows, so this
+# test verifies the close/write/reopen logic but cannot reproduce the
+# original Windows-only sharing violation. The laptop loop should retest
+# on real Windows hardware.
+tcltest::test book-write-while-open {write to a book file that is open in the editor succeeds} -body {
+	set start $::scidb::test::book::start
+	set path [tempPath writeopen bin]
+	# Create an initial book and open it in the editor.
+	::scidb::book::write $path [list [list $start e4 5] [list $start d4 3]]
+	::book::OpenHandle $path
+	set handleBefore $::book::Priv(handle)
+	set countBefore [::scidb::book::count $handleBefore]
+	# Now create a new book at the SAME path via CreateStart (the path
+	# that failed on Windows with %IO-Error% OpenFailed).
+	set parent [::book::openEditor .application]
+	set dlg [::book::CreateDialog $parent]
+	set ::book::${dlg}::Vars(file) $path
+	set ::book::${dlg}::Vars(plies) 4
+	::book::CreateStart $dlg
+	# After CreateStart the editor should have reopened the book.
+	set handleAfter $::book::Priv(handle)
+	set countAfter [::scidb::book::count $handleAfter]
+	set atStart [probeList $handleAfter $start]
+	# Rewrite via NewBook path (also had the same issue).
+	set ::book::Priv(handle) $handleAfter
+	set ::book::Options(file) $path
+	set ::book::Priv(file) [file normalize $path]
+	# Direct write while open: should succeed with the temp+rename fix.
+	::scidb::book::write $path [list [list $start Nf3 8]]
+	# Reopen to verify the content.
+	catch { ::scidb::book::close $handleAfter }
+	set ::book::Priv(handle) {}
+	set h3 [::scidb::book::open $path]
+	set finalCount [::scidb::book::count $h3]
+	set finalAt [probeList $h3 $start]
+	::scidb::book::close $h3
+	# Clean up the temp file if any was left behind.
+	catch { file delete "$path.tmp" }
+	list $countBefore $countAfter $atStart $finalCount $finalAt
+} -cleanup {
+	catch { destroy $dlg }
+	catch { ::book::Close }
+	catch { file delete $path }
+	catch { file delete "$path.tmp" }
+} -result {2 11 {{d4 2 0} {e4 1 0}} 1 {{Nf3 8 0}}}
 
 # leave the app tidy for the next test file. Close the base the low-level
 # way: closeBase would ask about the still open game (a modal dialog,

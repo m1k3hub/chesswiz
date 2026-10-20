@@ -708,6 +708,7 @@ Book::Book(mstl::string const& filename)
 	,m_used(0)
 	,m_modelLoaded(false)
 	,m_modelModified(false)
+	,m_readonly(false)
 {
 #ifdef CHECK_HASH_KEYS
 	static bool doCheck = true;
@@ -758,6 +759,11 @@ Book::Book(mstl::string const& filename)
 
 	// the editor's model is the source of truth from here on
 	loadModel();
+	// All probes and edits use the loaded model. Keep each handle as an
+	// independent snapshot without holding a Windows file mapping open.
+	m_readonly = m_mapping && m_mapping->isReadonly();
+	delete m_mapping;
+	m_mapping = 0;
 }
 
 
@@ -768,8 +774,8 @@ Book::~Book()
 }
 
 
-bool Book::isReadonly() const			{ return m_mapping && m_mapping->isReadonly(); }
-bool Book::isPersistent() const		{ return m_mapping; }
+bool Book::isReadonly() const			{ return m_readonly; }
+bool Book::isPersistent() const		{ return m_modelLoaded || m_mapping; }
 bool Book::isOpen() const				{ return true; }
 Book::Format Book::format() const	{ return m_format; }
 
@@ -1184,15 +1190,18 @@ Book::write(mstl::string const& filename, RawEntries const& entries)
 					sizeof(RawEntry),
 					&::compareRawEntries);
 
+	// Replace only after the complete new book has been written.
+	mstl::string tempFilename(filename + ".tmp");
+
 	Byte buffer[16];
 
 	mstl::fstream strm;
 
-	strm.open(	sys::file::internalName(filename),
+	strm.open(	sys::file::internalName(tempFilename),
 					mstl::ios_base::out | mstl::ios_base::binary | mstl::ios_base::trunc);
 
 	if (!strm)
-		IO_RAISE(BookFile, Open_Failed, "cannot write file: %s", filename.c_str());
+		IO_RAISE(BookFile, Open_Failed, "cannot write file: %s", tempFilename.c_str());
 
 	for (unsigned i = 0; i < sorted.size(); ++i)
 	{
@@ -1212,7 +1221,15 @@ Book::write(mstl::string const& filename, RawEntries const& entries)
 		entry.write(buffer);
 
 		if (!strm.write(reinterpret_cast<char*>(buffer), sizeof(buffer)))
-			IO_RAISE(BookFile, Write_Failed, "cannot write file: %s", filename.c_str());
+			IO_RAISE(BookFile, Write_Failed, "cannot write file: %s", tempFilename.c_str());
+	}
+
+	strm.close();
+
+	if (!sys::file::renameChecked(tempFilename.c_str(), filename.c_str()))
+	{
+		sys::file::deleteIt(tempFilename.c_str());
+		IO_RAISE(BookFile, Write_Failed, "cannot replace file: %s", filename.c_str());
 	}
 }
 
@@ -1371,36 +1388,9 @@ Book::save()
 	if (m_format != Polyglot || m_modelLoaded == false)
 		return false;
 
-	// Close the memory mapping before opening the file for writing. On
-	// Windows the mapping holds an exclusive file handle (sys::file::Mapping
-	// calls CreateFile without sharing, see sys_file.cpp), so opening the
-	// same file for writing while the mapping is alive fails with a sharing
-	// violation -> IO-Error Open_Failed "cannot write file". Linux does not
-	// lock the file, which is why the bug only showed up on Windows. write()
-	// truncates and rewrites the whole file, so the old mapping was about to
-	// go stale anyway; it is recreated on the new content below.
-	delete m_mapping;
-	m_mapping = 0;
-
-	// write through a plain stream: the memory mapping would have to be
-	// resized entry by entry
+	// Other handles retain their own models and have no live mappings.
 	write(filename(), m_model);
-
 	unsigned size = sys::file::size(filename());
-
-	// refresh the mapping on the new file
-	if (size > 0)
-	{
-		sys::file::Mode mode = sys::file::Readable;
-
-		if (sys::file::access(filename(), sys::file::Writeable))
-			mode = sys::file::Mode(mode | sys::file::Writeable);
-
-		m_mapping = new Mapping(filename(), mode);
-
-		if (!m_mapping->isOpen())
-			IO_RAISE(BookFile, Open_Failed, "cannot open file: %s", filename().c_str());
-	}
 
 	m_bookSize			= size / 16;
 	m_currentOffs		= 0;
