@@ -643,6 +643,8 @@
 ::application::database::mc::UpgradeMessage					"Actualizando base '%s'"
 ::application::database::mc::CompactMessage					"Compactando base de datos '%s'" 
 ::application::database::mc::CannotOpenFile					"No se puede abrir el archivo '%s'."
+::application::database::mc::MaintenanceReadOnlyPgn			"Los archivos PGN se abren sólo lectura; use Convert to .sci para editar"
+::application::database::mc::MaintenanceReadOnly				"Esta base de datos es de sólo lectura; el mantenimiento necesita una base grabable"
 ::application::database::mc::EncodingFailed					"Fallo en la codificación de %s." ;# "Character decoding %s failed."
 ::application::database::mc::DatabaseAlreadyOpen			"La Base '%s' ya está abierta."
 ::application::database::mc::Properties						"Propiedades"

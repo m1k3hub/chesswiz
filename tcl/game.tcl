@@ -113,6 +113,8 @@ array set Vars {
 	preload	0
 }
 
+set StartPositionFen		"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
 
 proc new {parent args} {
 	variable ::scidb::scratchbaseName
@@ -121,6 +123,7 @@ proc new {parent args} {
 	variable List
 	variable Options
 	variable Vars
+	variable StartPositionFen
 
 	array set opts {
 		-base			""
@@ -145,6 +148,23 @@ proc new {parent args} {
 
 	set lock [expr {$number == -1 ? 1 : $opts(-lock)}]
 	if {[llength $base] == 0} { set base $scratchbaseName }
+
+	# A new game must begin at the variant's start position. The scratch game
+	# that stays open in position 9 seeds every new game in the C++ layer, and
+	# ::menu::gameNew re-applies its start FEN to the fresh game; when a
+	# position setup was written into it while no game was open, that stale
+	# FEN would otherwise be stamped on every later New Game and the board
+	# could not be brought back to the start position (REPORT.md: F-16/G16).
+	if {	$base eq $scratchbaseName
+		&& $opts(-number) == -1
+		&& !$opts(-replace)
+		&& [::scidb::game::query 9 open?]
+		&& [::scidb::game::query 9 fen] ne $StartPositionFen
+		&& ![::scidb::game::query 9 trial]} {
+		::scidb::game::switch 9
+		::scidb::game::clear $StartPositionFen
+	}
+
 	set codec [::scidb::db::get codec $base $variant]
 	set id [list $base $codec $number $variant]
 	set time [clock format [clock seconds] -format {%Y.%m.%d %H:%M:%S}]

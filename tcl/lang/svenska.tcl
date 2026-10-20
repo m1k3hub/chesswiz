@@ -642,6 +642,8 @@
 ::application::database::mc::UpgradeMessage					"Upgraderar databas '%s'"
 ::application::database::mc::CompactMessage					"Komprimerar databas '%s'"
 ::application::database::mc::CannotOpenFile					"Kan inte öppna fil '%s'."
+::application::database::mc::MaintenanceReadOnlyPgn			"PGN-filer öppnas skrivskyddade; använd Convert to .sci för att redigera"
+::application::database::mc::MaintenanceReadOnly				"Denna databas är skrivskyddad; underhållet kräver en skrivbar databas"
 ::application::database::mc::EncodingFailed					"Kodning %s misslyckades." ;# "Character decoding %s failed."
 ::application::database::mc::DatabaseAlreadyOpen			"Databasen '%s' är redan öppen."
 ::application::database::mc::Properties						"Egenskaper"

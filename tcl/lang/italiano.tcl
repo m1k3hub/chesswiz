@@ -642,6 +642,8 @@
 ::application::database::mc::UpgradeMessage					"Aggiornamento database '%s'"
 ::application::database::mc::CompactMessage					"Comprimendo il database '%s'"
 ::application::database::mc::CannotOpenFile					"Non è possibile aprire il file '%s'."
+::application::database::mc::MaintenanceReadOnlyPgn			"I file PGN si aprono in sola lettura; usa Convert to .sci per modificare"
+::application::database::mc::MaintenanceReadOnly				"Questo database è in sola lettura; la manutenzione richiede un database scrivibile"
 ::application::database::mc::EncodingFailed					"Codifica di %s fallita." ;# "Character decoding %s failed."
 ::application::database::mc::DatabaseAlreadyOpen			"Il database '%s' è già aperto."
 ::application::database::mc::Properties						"Proprietà"

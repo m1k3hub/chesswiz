@@ -644,6 +644,8 @@
 ::application::database::mc::UpgradeMessage		"Adatbázis frissítése %s"
 ::application::database::mc::CompactMessage		"%s adatbázis tömörítése"
 ::application::database::mc::CannotOpenFile		"A fájl nem nyitható meg olvasásra: '%s'."
+::application::database::mc::MaintenanceReadOnlyPgn		"A PGN fájlok írásvédetten nyílnak meg; a szerkesztéshez konvertálja .sci fájlra"
+::application::database::mc::MaintenanceReadOnly			"Ez az adatbázis írásvédett; a karbantartáshoz írható adatbázis kell"
 ::application::database::mc::EncodingFailed		"%s kódolása sikertelen." ;# "Character decoding %s failed."
 ::application::database::mc::DatabaseAlreadyOpen	"Az '%s' adatbázis már meg van nyitva."
 ::application::database::mc::Properties			"Tulajdonságok"
