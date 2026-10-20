@@ -10,7 +10,13 @@
 package require Tcl 8.5
 package require tcltest 2.5
 
-tcltest::test menu-rows-registered-before-first-post {menu.* actions exist without posting the drop-down} -body {
+# The drop-down widget is created on the first post. An earlier test file in
+# the same process may have posted it already; then this file cannot prove
+# startup registration and the first case is skipped, not passed.
+tcltest::testConstraint menuNotPosted [expr {![info exists ::application::Vars(menu:entries)] \
+	|| ![winfo exists $::application::Vars(menu:entries)]}]
+
+tcltest::test menu-rows-registered-before-first-post {menu.* actions exist without posting the drop-down} -constraints menuNotPosted -body {
 	# the drop-down widget is created on the first post: make sure it was not
 	set posted [expr {[info exists ::application::Vars(menu:entries)] \
 		&& [winfo exists $::application::Vars(menu:entries)]}]
