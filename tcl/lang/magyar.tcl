@@ -1163,7 +1163,9 @@
 ::engine::mc::Protocol			"Protokol"
 ::engine::mc::Parameters		"Paraméterek"
 ::engine::mc::Command			"Parancs"
-::engine::mc::Directory			"Könyvtár"
+::engine::mc::Directory			"Munka- / adatmappa"
+::engine::mc::CommandHint		"A sakkprogram futtatható fájljának elérési útja"
+::engine::mc::DirectoryHint		"A Chesswiz modulhoz tartozó adat- és munkamappája (megnyitási könyvekhez, naplókhoz és modulfájlokhoz)"
 ::engine::mc::Variants			"Sakkváltozatok"
 ::engine::mc::LastUsed			"Utoljára használt"
 
@@ -1234,6 +1236,8 @@
 ::engine::mc::NoStandardChess		"Ez a modul nem támogatja a hagyományos sakkot."
 ::engine::mc::NoEngineAvailable		"Nincs elérhető elemző modul."
 ::engine::mc::FailedToCreateDir		"'%s' könyvtár létrehozása meghiúsult."
+::engine::mc::InvalidCommand		"'%s' nem egy létező futtatható fájl.\n\nA 'Parancs' mezőnek a modul futtatható fájljára kell mutatnia."
+::engine::mc::NotADirectory		"'%s' nem mappa.\n\nA(z) '%s' mező a Chesswiz modulhoz tartozó adat- és munkamappája. Kérjük, mappát válasszon, ne fájlt."
 ::engine::mc::ScriptErrors		"Any errors while saving will be displayed here." ;# NEW
 ::engine::mc::CommandNotAllowed		"A(z) '%s' utasítás itt nem használható."
 ::engine::mc::ResetToDefaultContent	"Alapbeállítások visszaállítása"
