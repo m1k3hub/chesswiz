@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<!-- Generated from tcl/help/en/Ask-Field.txt -->
+
+<html xmlns='http://www.w3.org/1999/xhtml' xml:lang='en' lang='en'>
+<head>
+  <meta http-equiv="content-type"
+           content="text/html; charset=utf-8" />
+  <meta http-equiv="content-language"
+           content="en" />
+  <meta http-equiv="content-style-type"
+           content="text/css" />
+
+  <meta name="author"
+     content="https://chesswizapp.com" />
+  <meta name="generator"
+     content="Chesswiz" />
+  <meta name="description"
+     content="Chesswiz - Help Page" />
+
+  <link rel="icon"
+       href="https://chesswizapp.com/favicon.ico"
+       type="image/x-icon" />
+  <link rel="shortcut icon"
+       href="https://chesswizapp.com/favicon.ico" />
+  <link rel="stylesheet"
+       type="text/css"
+      media="screen"
+		 href="../styles/help.css" />
+
+  <title>Chesswiz - Help: The Ask Field and Assistant</title>
+</head>
+
+<body>
+
+<div class="title">
+  <h1 class="title">The Ask Field and Assistant</h1>
+</div>
+
+<p>
+The Ask field in the top strip provides quick access to actions and commands
+across Chesswiz. It combines a fast action palette, natural language requests,
+and optional local speech input in a single field.
+</p>
+
+<ul>
+  <li><a href="#Ask-Field">The Ask field</a></li>
+  <li><a href="#Result-List">Action palette and result list</a></li>
+  <li><a href="#Speech-Input">Speech input</a></li>
+  <li><a href="#Shortcuts">Keyboard shortcuts</a></li>
+  <li><a href="#Assistant">The Assistant</a></li>
+</ul>
+
+<h3 id="Ask-Field">The Ask field</h3>
+
+<p>
+The Ask field is located in the top strip of the main window notebook,
+immediately to the left of the main drop-down menu. It functions as the
+application's action palette directly within the main window, with no need
+for a separate palette dialog.
+</p>
+
+<p>
+When the field is empty, a light gray placeholder text displays:
+<i>"Ask or tell Chesswiz what to do (Ctrl+K)"</i>. As soon as you begin typing,
+the placeholder disappears and the result list opens below the field.
+When the field is empty, pressing <span style='white-space:nowrap;'><b>Up</b></span> or <span style='white-space:nowrap;'><b>Down</b></span>
+steps through your recent request history.
+</p>
+
+<h3 id="Result-List">Action palette and result list</h3>
+
+<p>
+Typing in the Ask field filters Chesswiz's action registry on every keystroke.
+Only runnable actions are displayed: an action appears only if it is currently
+both enabled and visible according to the active application state (matching the
+same rules as the main drop-down menu).
+</p>
+
+<p>
+Matching actions are ranked by fuzzy matching across their labels, documentation,
+and keyboard shortcuts. Each entry displays:
+</p>
+
+<ul>
+  <li>The descriptive action label.</li>
+  <li>The keyboard shortcut assigned to that action, if any.</li>
+</ul>
+
+<p>
+You can navigate and execute items from the result list:
+</p>
+
+<ul>
+  <li><span style='white-space:nowrap;'><b>Up</b></span> and <span style='white-space:nowrap;'><b>Down</b></span> arrows move the selection up and down the list.</li>
+  <li><span style='white-space:nowrap;'><b>Return</b></span> or <span style='white-space:nowrap;'><b>KP_Enter</b></span> (or a mouse click) executes the selected action. The command runs through the action runner, which ensures all safety gates and confirmation prompts apply.</li>
+  <li><span style='white-space:nowrap;'><b>Escape</b></span> closes the result list and restores focus to the widget that had focus previously (such as the chessboard).</li>
+</ul>
+
+<p>
+The final entry in the result list is always <b>Ask the assistant</b>. Selecting this entry,
+or pressing <span style='white-space:nowrap;'><b>Return</b></span> on any query that does not match a registered action,
+sends the query text directly to the Assistant.
+</p>
+
+<h3 id="Speech-Input">Speech input</h3>
+
+<p>
+A microphone button labeled <b>Speak</b> sits on the right side of the Ask field.
+Clicking the button records speech, transcribes it locally, and inserts the
+transcribed text directly at the cursor in the Ask field.
+</p>
+
+<p><img src='../images/note.png' alt='note' /> 
+Speech is strictly an input mechanism: Chesswiz never generates speech output.
+The transcribed text remains completely editable in the field and is never sent or
+executed until you explicitly press <span style='white-space:nowrap;'><b>Return</b></span>.
+</p>
+
+<p>
+All speech processing is performed locally using external tools without external network
+services or linked audio libraries:
+</p>
+
+<ul>
+  <li><b>Linux</b>: Uses whisper.cpp's <span style='white-space:nowrap;'><tt>whisper-cli</tt></span> (CPU-only execution) along with <span style='white-space:nowrap;'><tt>arecord</tt></span> or <span style='white-space:nowrap;'><tt>ffmpeg</tt></span>.</li>
+  <li><b>Windows</b>: Uses the operating system's built-in dictation (<span style='white-space:nowrap;'>Win+H</span>).</li>
+  <li><b>macOS</b>: Uses system dictation (configured in System Settings &gt; Keyboard &gt; Dictation).</li>
+</ul>
+
+<p>
+If no speech tool or model is detected, the microphone button is automatically hidden
+from the interface. You can configure local speech paths in
+<span class='menuitem'>Preferences &gt; Assistant</span> (or action <span style='white-space:nowrap;'><tt>app.preferences.assistant</tt></span>),
+which provides settings for the <span style='white-space:nowrap;'><tt>whisper-cli</tt></span> path, model file, and recording tool,
+along with a <b>Detect</b> button to verify the configuration.
+</p>
+
+<h3 id="Shortcuts">Keyboard shortcuts</h3>
+
+<p>
+The Ask field is easily accessible from anywhere in Chesswiz using keyboard shortcuts:
+</p>
+
+<ul>
+  <li><span style='white-space:nowrap;'><b>Ctrl+K</b></span>: Focuses the Ask field and selects all its text, ready for immediate typing. In multi-line text editing widgets (such as the Comment Editor, PGN text, or engine console), <span style='white-space:nowrap;'><b>Ctrl+K</b></span> preserves the standard editing command to delete from the cursor to the end of the line.</li>
+  <li><span style='white-space:nowrap;'><b>Ctrl+Shift+K</b></span>: Unconditionally focuses the Ask field from anywhere in the application, including from within multi-line text editors.</li>
+  <li><span style='white-space:nowrap;'><b>Escape</b></span>: Dismisses the result list and returns focus to the previous control or chessboard.</li>
+</ul>
+
+<h3 id="Assistant">The Assistant</h3>
+
+<p>
+The Assistant is an automated operator that drives Chesswiz's registered actions from
+plain language requests. It is docked in the Assistant pane of the Board tab (and can be
+docked or undocked like any board pane; pressing <span style='white-space:nowrap;'><b>F2</b></span> brings it into view).
+</p>
+
+<p>
+You can ask the Assistant to perform operations in your own words, such as finding games,
+setting up board positions, generating player preparation reports, opening searches, or
+explaining the current position.
+</p>
+
+<p>
+Key design principles of the Assistant include:
+</p>
+
+<ul>
+  <li><b>Drives registered actions</b>: The Assistant cannot execute arbitrary operations. It is constrained to Chesswiz's fixed registry of actions and tools, and all parameters are validated against formal schemas before any command is called.</li>
+  <li><b>Multi-step plans with one confirmation</b>: When a complex request requires multiple steps, the Assistant presents them as a unified plan. If any step modifies data, imports games, or performs bulk changes, Chesswiz asks for one confirmation covering the entire plan. If declined, no actions are run. If any step encounters an error, execution stops immediately while preserving earlier successful steps. Any dialog opened during a plan pauses execution until dismissed.</li>
+  <li><b>Never required</b>: The Assistant is strictly a convenience operator. Every single action, search, dialog, and tool in Chesswiz is directly reachable through the application menus, toolbars, and keyboard shortcuts. Proficient users can operate every feature of Chesswiz without ever opening or using the Assistant.</li>
+</ul>
+
+</body>
+</html>

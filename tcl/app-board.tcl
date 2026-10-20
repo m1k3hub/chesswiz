@@ -116,7 +116,12 @@ proc build {w width height} {
 	set border [tk::canvas $canv.border -takefocus 0 -borderwidth 0]
 	$border xview moveto 0
 	$border yview moveto 0
-	Preload $width [expr {$height - [[winfo parent $w] get $w Extent 74]}]
+	# The square images are already built when a hidden board is reopened;
+	# refreshing them must not abort the pane build if the theme marks the
+	# border as texture-only (zero width/opacity). A reopened pane sits in a
+	# metaframe, so the layout's header height is not reachable through the
+	# parent; use the same 74 pixel default the layout API falls back to.
+	Preload $width [expr {$height - 74}]
 	set board [::board::diagram::new $border.diagram $Dim(squaresize:Normal) \
 		-bordersize $Dim(edgethickness) \
 		-bordertype lines \
@@ -348,13 +353,19 @@ proc build {w width height} {
 		-image [set ::icon::toolbarCtrlLeaveVar] \
 		-command [namespace code { Goto up }]]
 
+	# The list is per build: a rebuilt pane must not bind the widgets of the
+	# pane it replaced (they no longer exist).
+	set Vars(need-binding) {}
 	needBinding $Vars(widget:border)
 	needBinding $Vars(widget:frame)
 	needBinding $Vars(holding:w)
 	needBinding $Vars(holding:b)
 	needBinding [::board::diagram::canvas $board]
 
+	# The notation pane shares this list. A rebuilt pane can leave the widgets
+	# of the pane it replaced behind; they are gone, so skip them.
 	foreach w $Vars(need-binding) {
+		if {![winfo exists $w]} { continue }
 		::font::addChangeFontSizeBindings editor $w ::application::pgn::fontSizeChanged
 	}
 	
@@ -725,6 +736,7 @@ proc bind {key cmd} {
 	variable Vars
 
 	foreach w $Vars(need-binding) {
+		if {![winfo exists $w]} { continue }
 		::bind $w $key [namespace code [list FilterKey %K %s $cmd]]
 		::bind $w $key {+ break }
 		if {[regexp {^<Key-[^>]+>$} $key]} {
@@ -1134,7 +1146,7 @@ proc ConfigureWindow {w width height} {
 
 	if {$Vars(initialized)} {
 		set parent [winfo parent $w]
-		[winfo parent $parent] set $parent Extent [expr {[winfo height $parent] - $height}]
+		catch { [winfo parent $parent] set $parent Extent [expr {[winfo height $parent] - $height}] }
 		after cancel $Vars(after)
 		if {$Vars(initialized) == 1} {
 			set timeout 300

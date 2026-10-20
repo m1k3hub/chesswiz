@@ -606,7 +606,9 @@ proc RestoreOptions {twm variant} {
 
 	set id [::application::twm::getId $twm]
 	foreach uid {position games} {
-		::scrolledtable::setOptions db:positions:$id:$uid $TableOptions($variant:$id:$uid)
+		if {[info exists TableOptions($variant:$id:$uid)]} {
+			::scrolledtable::setOptions db:positions:$id:$uid $TableOptions($variant:$id:$uid)
+		}
 	}
 }
 
@@ -617,6 +619,8 @@ proc CompareOptions {twm variant} {
 	set id [::application::twm::getId $twm]
 	foreach uid {position games} {
 		if {[::scrolledtable::countOptions db:positions:$id:$uid] > 0} {
+			# No snapshot yet: let the caller save the current table options.
+			if {![info exists TableOptions($variant:$id:$uid)]} { return false }
 			set lhs $TableOptions($variant:$id:$uid)
 			set rhs [::scrolledtable::getOptions db:positions:$id:$uid]
 			if {![::table::equal $lhs $rhs]} { return false }

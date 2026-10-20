@@ -553,7 +553,9 @@ proc RestoreOptions {twm variant} {
 	variable TableOptions
 
 	if {[::application::twm::getId $twm] eq "board"} {
-		::scrolledtable::setOptions eco:board $TableOptions($variant:board)
+		if {[info exists TableOptions($variant:board)]} {
+			::scrolledtable::setOptions eco:board $TableOptions($variant:board)
+		}
 	}
 }
 
@@ -563,6 +565,8 @@ proc CompareOptions {twm variant} {
 
 	if {[set id [::application::twm::getId $twm]] ne "board"} { return true }
 	if {[::scrolledtable::countOptions eco:$id] == 0} { return true }
+	# No snapshot yet: let the caller save the current table options.
+	if {![info exists TableOptions($variant:$id)]} { return false }
 	set lhs $TableOptions($variant:$id)
 	set rhs [::scrolledtable::getOptions eco:$id]
 	return [::table::equal $lhs $rhs]

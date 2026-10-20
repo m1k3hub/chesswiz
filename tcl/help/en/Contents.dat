@@ -8,6 +8,7 @@ set Contents {
     {{{Write protection of databases} {Write-Protect-Database.html}}}
     {{{Usage of the file selection dialog} {File-Selection-Dialog.html}}}
     {{{Usage of the toolbars} {Toolbar-Usage.html}}}
+    {{{The Ask field and Assistant} {Ask-Field.html}}}
     {{{The Clipbase} {Clipbase.html}}}
     {{{How to set the default browser} {How-To-Set-Default-Browser.html}}}
   }

@@ -91,8 +91,9 @@ proc withBusyRecorder {body} {
 }
 
 proc maintenanceLabels {menu} {
-    # Decision 003: C4 is registry-generated, so walk its cascades rather
-    # than the old .maintenance widget path.
+    # Deliberately positional: this checks the shape of the C4 cascade
+    # (Maintenance present, Repertoire rows absent), not the command
+    # wiring. The rows themselves are registry actions.
     set labels {}
     set n [$menu index end]
     if {$n eq "" || $n eq "none"} { return $labels }

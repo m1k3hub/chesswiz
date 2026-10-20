@@ -28,8 +28,7 @@ namespace eval ::action {
 	variable ConfirmHook {}
 	variable BulkHook {}
 	variable DebugGate {}
-	# Set while a multi-step plan is running: the plan itself already asked
-	# for one confirmation, so the per-step gate stays out of the way.
+	# Compatibility state for plan observers; never grants dispatch approval.
 	variable PlanGate 0
 
 	namespace export register run list get labels invoke
@@ -529,6 +528,16 @@ proc ::action::resolver::resolve {objectType} {
 # Enforces confirm and bulk gates when hooks are configured.
 # ----------------------------------------------------------------------
 proc ::action::run {id args} {
+	return [Dispatch $id $args {}]
+}
+
+# Approval is supplied only for the concrete call displayed in a plan.
+# Ordinary run calls always enter Dispatch without approval.
+proc ::action::RunApproved {id cargs} {
+	return [Dispatch $id [::list $cargs] [::list $id $cargs]]
+}
+
+proc ::action::Dispatch {id args approval} {
 	variable Registry
 	variable ConfirmHook
 	variable BulkHook
@@ -579,6 +588,10 @@ proc ::action::run {id args} {
 		set validatedArgs [lindex $validation 1]
 	}
 
+	if {$approval ne "" && $approval ne [::list $id $validatedArgs]} {
+		return "error: approved action arguments changed"
+	}
+
 	set enabledPred [dict get $record enabled]
 	if {$enabledPred ne ""} {
 		set isEnabled [catch {uplevel #0 $enabledPred} result]
@@ -601,7 +614,7 @@ proc ::action::run {id args} {
 	set isBulk [dict get $record bulk]
 	set what [dict get $record what]
 
-	if {($isConfirm || $isBulk) && !$::action::PlanGate} {
+	if {($isConfirm || $isBulk) && $approval ne [::list $id $validatedArgs]} {
 		if {$what eq ""} {
 			set what "perform action '$id'"
 		} else {

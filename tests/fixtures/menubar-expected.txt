@@ -165,6 +165,7 @@ MENU Analysis
       ENTRY Line
       ENTRY Move
       ENTRY Comment
+  ENTRY Annotate Game with AI…
   ENTRY Fact-Check Annotations
   SEP
   ENTRY Tablebase ▸

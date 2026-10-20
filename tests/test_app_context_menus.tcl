@@ -432,6 +432,221 @@ tcltest::test context-pane-font-per-pane {a pane font change leaves the other pa
 		[expr {[::context::PaneFontSize board] == $base}]
 } -result {1 1 1 1}
 
+# --- VAL-CTX-007: PaneFont changes the pane's real text widgets ---------
+
+proc ::scidb::test::ctx::PaneDescendants {w} {
+	set out {}
+	foreach child [winfo children $w] {
+		lappend out $child
+		lappend out {*}[::scidb::test::ctx::PaneDescendants $child]
+	}
+	return $out
+}
+
+proc ::scidb::test::ctx::Ancestor {w class} {
+	while {$w ne ""} {
+		if {[winfo class $w] eq $class} { return $w }
+		set w [winfo parent $w]
+	}
+	return ""
+}
+
+proc ::scidb::test::ctx::PaneByFont {root prefix} {
+	foreach w [::scidb::test::ctx::PaneDescendants $root] {
+		if {[winfo class $w] ne "Text"} { continue }
+		set font ""
+		catch { set font [$w cget -font] }
+		if {[string match "${prefix}*" $font]} {
+			set frame [::scidb::test::ctx::Ancestor $w TwmFrame]
+			if {$frame ne ""} { return [list $w $frame] }
+		}
+	}
+	return {}
+}
+
+tcltest::test context-pane-font-live-text {C9 resizes the pane's own text widgets and no other pane} -setup {
+	set ::scidb::test::ctx::editorText ""
+	set ::scidb::test::ctx::editorFrame ""
+	set ::scidb::test::ctx::otherText ""
+	set ::scidb::test::ctx::editorUid ""
+	lassign [::scidb::test::ctx::PaneByFont .application "::font::text(editor:*"] \
+		::scidb::test::ctx::editorText ::scidb::test::ctx::editorFrame
+	lassign [::scidb::test::ctx::PaneByFont .application "::font::text(text:*"] \
+		::scidb::test::ctx::otherText
+	if {$::scidb::test::ctx::editorFrame ne ""} {
+		catch { set ::scidb::test::ctx::editorUid \
+			[.application.nb.board get $::scidb::test::ctx::editorFrame id] }
+	}
+} -body {
+	set editorText $::scidb::test::ctx::editorText
+	set editorFrame $::scidb::test::ctx::editorFrame
+	set otherText $::scidb::test::ctx::otherText
+	set editorUid $::scidb::test::ctx::editorUid
+	if {$editorText eq "" || $editorFrame eq "" || $otherText eq "" || $editorUid eq ""} {
+		return no-live-text-widgets
+	}
+	set otherFont [$otherText cget -font]
+	set beforeEditor [font actual [$editorText cget -font] -size]
+	set beforeOther [font actual $otherFont -size]
+	set object [dict create paneUid $editorUid frame $editorFrame]
+	set err [catch { ::context::PaneFont $object +1 } value]
+	set afterEditor [font actual [$editorText cget -font] -size]
+	set afterOther [font actual [$otherText cget -font] -size]
+	set otherFontSame [expr {[$otherText cget -font] eq $otherFont}]
+
+	set stored ""
+	catch { set stored $::font::Options(pane:$editorUid:size) }
+	set path [file join [file dirname [file normalize [info script]]] tmp-app \
+		"panefont_[pid].opt"]
+	catch { file delete $path }
+	set persisted 0
+	catch {
+		set fh [open $path w]
+		::font::WriteOptions $fh
+		close $fh
+		set fh [open $path r]
+		set written [read $fh]
+		close $fh
+		set persisted [expr {[string first "pane:$editorUid:size" $written] >= 0}]
+	}
+	catch { file delete $path }
+
+	set rerr [catch { ::context::PaneFont $object reset } rvalue]
+	set resetEditor [font actual [$editorText cget -font] -size]
+	set resetOther [font actual [$otherText cget -font] -size]
+	unset -nocomplain ::font::Options(pane:$editorUid:size)
+
+	list \
+		[expr {$err == 0}] \
+		[expr {$afterEditor == $beforeEditor + 1}] \
+		[expr {$afterOther == $beforeOther}] \
+		$otherFontSame \
+		[expr {$stored == $value}] \
+		$persisted \
+		[expr {$rerr == 0}] \
+		[expr {$resetEditor == $beforeEditor}] \
+		[expr {$resetOther == $beforeOther}]
+} -cleanup {
+	if {$::scidb::test::ctx::editorFrame ne "" && $::scidb::test::ctx::editorUid ne ""} {
+		catch { ::context::PaneFont [dict create paneUid $::scidb::test::ctx::editorUid \
+			frame $::scidb::test::ctx::editorFrame] reset }
+		unset -nocomplain ::font::Options(pane:$::scidb::test::ctx::editorUid:size)
+	}
+} -result {1 1 1 1 1 1 1 1 1}
+
+# --- VAL-CTX-006: the live Sites popup is the C5 builder --------------
+
+proc ::scidb::test::ctx::PopupCmd {table} {
+	if {![info exists ::scrolledtable::${table}::(popupcmd)]} { return "" }
+	return [set ::scrolledtable::${table}::(popupcmd)]
+}
+
+proc ::scidb::test::ctx::FindSiteTable {w} {
+	foreach child [winfo children $w] {
+		set popup [::scidb::test::ctx::PopupCmd $child]
+		if {[string match "*sitetable::PopupMenu*" $popup]
+			|| [string match "*::sitetable PopupMenu*" $popup]} { return $child }
+		set found [::scidb::test::ctx::FindSiteTable $child]
+		if {$found ne ""} { return $found }
+	}
+	return ""
+}
+
+proc ::scidb::test::ctx::Settle {ms} {
+	set ::scidb::test::ctx::settled 0
+	after $ms {set ::scidb::test::ctx::settled 1}
+	vwait ::scidb::test::ctx::settled
+	update
+}
+
+proc ::scidb::test::ctx::RowIds {menu} {
+	set ids {}
+	set end [$menu index end]
+	if {$end eq "" || $end eq "none"} { return $ids }
+	for {set i 0} {$i <= $end} {incr i} {
+		set type [$menu type $i]
+		if {$type eq "separator"} { lappend ids SEP; continue }
+		if {$type eq "cascade"} { lappend ids cascade; continue }
+		set cmd ""
+		catch { set cmd [$menu entrycget $i -command] }
+		if {[regexp {::action::run (\S+)} $cmd -> id]} {
+			lappend ids $id
+		} else {
+			lappend ids header
+		}
+	}
+	return $ids
+}
+
+tcltest::test context-live-site-popup {the Sites table's registered -popupcmd posts the C5 menu} -setup {
+	set dir [file join [file dirname [file normalize [info script]]] tmp-app]
+	file mkdir $dir
+	set ::scidb::test::ctx::sitePgn [file join $dir "ctxsite_[pid]_[clock microseconds].pgn"]
+	set fh [open $::scidb::test::ctx::sitePgn w]
+	puts $fh {[Event "Site Test 1"]}
+	puts $fh {[Site "https://example.com"]}
+	puts $fh {[Date "2026.10.20"]}
+	puts $fh {[Round "1"]}
+	puts $fh {[White "W1"]}
+	puts $fh {[Black "B1"]}
+	puts $fh {[Result "1-0"]}
+	puts $fh ""
+	puts $fh {1. e4 e5 1-0}
+	puts $fh ""
+	puts $fh {[Event "Site Test 2"]}
+	puts $fh {[Site "Local Club"]}
+	puts $fh {[Date "2026.10.20"]}
+	puts $fh {[Round "2"]}
+	puts $fh {[White "W2"]}
+	puts $fh {[Black "B2"]}
+	puts $fh {[Result "0-1"]}
+	puts $fh ""
+	puts $fh {1. d4 d5 0-1}
+	close $fh
+	catch { ::application::database::openBase .application $::scidb::test::ctx::sitePgn yes }
+	::scidb::test::ctx::Settle 500
+	catch { ::application::switchTab database }
+	::scidb::test::ctx::Settle 500
+	catch { ::application::database::site::InitBase \
+		.application.nb.database.contents.site.twm $::scidb::test::ctx::sitePgn Normal }
+	::scidb::test::ctx::Settle 500
+	set ::scidb::test::ctx::siteTable ""
+	set tries 0
+	while {$::scidb::test::ctx::siteTable eq "" && $tries < 20} {
+		set ::scidb::test::ctx::siteTable [::scidb::test::ctx::FindSiteTable .application]
+		if {$::scidb::test::ctx::siteTable eq ""} {
+			incr tries
+			::scidb::test::ctx::Settle 100
+		}
+	}
+} -body {
+	set table $::scidb::test::ctx::siteTable
+	if {$table eq ""} { return no-live-sites-table }
+	set popup [::scidb::test::ctx::PopupCmd $table]
+	if {[llength $popup] == 0} { return no-popupcmd }
+	set base $::scidb::test::ctx::sitePgn
+	set path [winfo parent [winfo parent $table]]
+	catch { ::sitetable::update $path $base Normal 2 }
+	::scidb::test::ctx::Settle 200
+	set menu .ctxsite
+	catch { destroy $menu }
+	menu $menu -tearoff 0
+	{*}$popup $path $menu $base Normal 0 site
+	set ids [::scidb::test::ctx::RowIds $menu]
+	set seenAsk 0
+	set labels [::scidb::test::ctx::Canon [::scidb::test::ctx::List $menu] seenAsk]
+	destroy $menu
+	set expected [::scidb::test::ctx::Expected C5 site]
+	set expectedIds {context.ask SEP c5.site_url SEP c5.open_switcher c5.save_working_set}
+	list [expr {$labels eq $expected}] [expr {$ids eq $expectedIds}] $ids
+} -cleanup {
+	catch { destroy .ctxsite }
+	catch { ::application::database::closeBase .application $::scidb::test::ctx::sitePgn }
+	catch { $::application::database::Vars(switcher) remove $::scidb::test::ctx::sitePgn }
+	catch { ::scidb::db::close $::scidb::test::ctx::sitePgn }
+	catch { file delete -force $::scidb::test::ctx::sitePgn }
+} -result {1 1 {context.ask SEP c5.site_url SEP c5.open_switcher c5.save_working_set}}
+
 # --- VAL-CTX-003: one builder per object -------------------------------
 
 tcltest::test context-one-builder {each object menu is built by ::context::Build, not a copy} -body {
@@ -447,6 +662,7 @@ tcltest::test context-one-builder {each object menu is built by ::context::Build
 		playertable.tcl ::playertable::popupMenu
 		eventtable.tcl	::eventtable::popupMenu
 		sitetable.tcl	::sitetable::popupMenu
+		sitetable.tcl	::sitetable::PopupMenu
 		app-twm.tcl		::application::twm::Menu
 	} {
 		set body ""
@@ -456,3 +672,6 @@ tcltest::test context-one-builder {each object menu is built by ::context::Build
 	}
 	set bad
 } -result {}
+
+
+tcltest::cleanupTests

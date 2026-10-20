@@ -14,6 +14,9 @@ namespace eval menu {
 	variable DropdownOrder 0
 	variable DropdownCounter 0
 	variable DropdownWidget ""
+	# Check marks on the View > Panes rows: one scalar per pane kind.
+	variable PaneVisible
+	array set PaneVisible {}
 }
 
 namespace eval menu::mc {
@@ -143,6 +146,8 @@ namespace eval menu::mc {
 
 	# Analysis
 	set StartStopEngine				"Start / Stop Engine"
+	set StartEngine					"Start Engine"
+	set StopEngine					"Stop Engine"
 	set EngineDictionary				"Engine Dictionary…"
 	set ChooseReviewEngine			"Choose Engine for Review…"
 	set AnalyzePosition				"Analyze This Position"
@@ -151,6 +156,7 @@ namespace eval menu::mc {
 	set ExplainLine					"Line"
 	set ExplainMove					"Move"
 	set ExplainComment					"Comment"
+	set AnnotateGameWithAI			"Annotate Game with AI…"
 	set FactCheckAnnotations		"Fact-Check Annotations"
 	set Tablebase						"Tablebase"
 	set OpeningExplorer				"Opening Explorer"
@@ -224,6 +230,7 @@ namespace eval menu::mc {
 	set CompareEngines				"Compare Engines…"
 	set MenuEngines					"Engines…"
 	set GameReview						"Game Review…"
+	set AnnotateGameWithAI			"Annotate Game with AI…"
 	set FactCheckAnnotations		"Fact-Check Annotations"
 	set Tablebase						"Tablebase"
 	set OpeningExplorer				"Opening Explorer"
@@ -262,7 +269,24 @@ namespace eval menu::mc {
 
 	# Help
 	set Help							"Help"
+
+	# The English defaults, restored before every language load (a
+	# language file only overrides the ids it defines).
+	set ::menu::DefaultMC {}
+	foreach _name [lsort [info vars]] {
+		if {[array exists $_name] || [string index [namespace tail $_name] 0] eq "_"} { continue }
+		lappend ::menu::DefaultMC [namespace tail $_name] [set $_name]
+	}
+	unset _name
 }
+
+proc ::menu::ResetLabels {} {
+	foreach {name value} $::menu::DefaultMC {
+		set ::menu::mc::$name $value
+	}
+	return
+}
+::mc::addDefaultReset ::menu::ResetLabels
 
 # Node constructors (kept tiny so the tree below reads like the fixture).
 proc ::menu::MC {name} {
@@ -456,6 +480,7 @@ proc ::menu::DefineTree {} {
 				[list cmd menu.analysis.explain.move ExplainMove] \
 				[list cmd menu.analysis.explain.comment ExplainComment "" {::menu::ModulePresent ai}] \
 			]] \
+			[list cmd menu.analysis.annotate AnnotateGameWithAI "" {::menu::ModulePresent annotate}] \
 			[list cmd menu.analysis.factcheck FactCheckAnnotations "" {::menu::ModulePresent factcheck}] \
 			[list sep] \
 			[list cascade Tablebase "" [list \
@@ -909,8 +934,8 @@ proc ::menu::DbWritable {} {
 	return [expr {!$ro}]
 }
 proc ::menu::EngineRunning {} {
-	if {[catch { ::engine::id } id]} { return 0 }
-	return [expr {$id >= 0 ? 1 : 0}]
+	if {[catch { set running [::application::analysis::Running] }]} { return 0 }
+	return [expr {[llength $running] ? 1 : 0}]
 }
 proc ::menu::GameOver {} {
 	if {[catch { ::scidb::game::query over } over]} { return 0 }
@@ -929,19 +954,33 @@ proc ::menu::BoardSetupOpen {} {
 	catch { set open [::board::options::isOpen] }
 	return [expr {$open ? 1 : 0}]
 }
-proc ::menu::PaneFloating {uid} {
-	return 0
+proc ::menu::PaneFloating {uid {twm ""}} {
+	# R12: true only for a pane that exists and is currently undocked.
+	# A pane's leaf lives in a metaframe; the metaframe's toplevel is the
+	# floating window when the pane is undocked (same test the app uses).
+	if {$uid eq ""} { return 0 }
+	if {$twm eq ""} {
+		if {[catch { set twm [::application::twm] }]} { return 0 }
+	}
+	if {$twm eq ""} { return 0 }
+	if {[catch { set leaf [$twm leaf $uid] }] || $leaf eq ""} { return 0 }
+	if {[catch { set top [$twm toplevel $leaf] }]} { return 0 }
+	if {[catch { set floating [$twm isfloat $top] }]} { return 0 }
+	return [expr {$floating ? 1 : 0}]
 }
 proc ::menu::NoHtmlReport {} {
-	return 0
+	# R13: the HTML report surface is the report renderer; a build without
+	# it has no report font/print group. Opening a report builds the pane,
+	# so "pane not yet created" is not the same as "surface absent".
+	return [expr {[::capability::present report] ? 0 : 1}]
 }
 proc ::menu::Sortable {} {
 	if {[catch { set v $::gamestable::Vars(sortable) }]} { return 1 }
 	return [expr {$v ? 1 : 0}]
 }
 proc ::menu::EngineLabel {} {
-	if {[EngineRunning]} { return [MC StartStopEngine] }
-	return [MC StartStopEngine]
+	if {[EngineRunning]} { return [MC StopEngine] }
+	return [MC StartEngine]
 }
 
 # ----------------------------------------------------------------------
@@ -965,9 +1004,12 @@ proc ::menu::BuildDropdown {menu} {
 
 	if {[llength $DropdownTree] == 0} {
 		DefineTree
-		RegisterTree
-		RegisterExtras
 	}
+	# (Re-)register every row so the built menu always carries the labels
+	# of the current language; a language load only overrides variables,
+	# so a stale label would otherwise survive until the app is restarted.
+	RegisterTree
+	RegisterExtras
 	set DropdownFilled [dict create]
 	catch { $menu delete 0 end }
 	foreach top $DropdownTree {
@@ -1087,6 +1129,10 @@ proc ::menu::FillNodes {nodes menu level} {
 				set id [::menu::DynId $labelName]
 				lassign [AmpText [MC $labelName]] text ul
 				set opts [list -label $text -underline $ul]
+				set paneSuffix ""
+				if {[string match {menu.view.panes.*} $id]} {
+					set paneSuffix [string range $id 16 end]
+				}
 				if {$id ne ""} {
 					if {!$DropdownForceAll && ![dict get [state $id] visible]} { continue }
 					lappend opts -command [list ::action::run $id]
@@ -1097,7 +1143,23 @@ proc ::menu::FillNodes {nodes menu level} {
 				} else {
 					lappend opts -state disabled
 				}
-				eval [list $menu add command] $opts
+				if {$paneSuffix ne "" && !$DropdownForceAll && [PaneReason $paneSuffix] ne ""} {
+					# A pane this layout cannot open is not posted: Tk never
+					# activates a disabled menu row, so a reason attached to
+					# one could never be shown (::action::run still says why).
+					continue
+				}
+				if {$paneSuffix ne ""} {
+					# A checkbutton shows the pane's current state; the
+					# command always asks the layout, never the mark, so a
+					# click can only ever perform the real toggle.
+					set var ::menu::PaneVisible($paneSuffix)
+					set $var [PaneChecked $paneSuffix]
+					lappend opts -variable $var -onvalue 1 -offvalue 0
+					eval [list $menu add checkbutton] $opts
+				} else {
+					eval [list $menu add command] $opts
+				}
 				set lastSep 0
 			}
 		}
@@ -1186,28 +1248,136 @@ proc ::menu::FillDynamic {labelName menu} {
 	return
 }
 
+proc ::menu::PaneSuffix {name} {
+	# The layout uses the singular uid; the public action id keeps the old
+	# plural spelling from the pre-redesign menu (and from the fixture).
+	set aliases {
+		player players event events site sites annotator annotators
+		position positions dbgames games
+	}
+	if {[dict exists $aliases $name]} { return [dict get $aliases $name] }
+	return $name
+}
+
+proc ::menu::PaneUid {twm suffix} {
+	# Exact dispatch: the public id names a pane kind, the layout leaf is the
+	# uid (analysis panes carry a number: analysis:1).
+	set aliases {
+		players player
+		events event
+		sites site
+		annotators annotator
+		positions position
+		games games
+	}
+	set wanted $suffix
+	if {[dict exists $aliases $suffix]} { set wanted [dict get $aliases $suffix] }
+	foreach uid [$twm leaves] {
+		if {[::application::NameFromUid $uid] eq $wanted} { return $uid }
+	}
+	return ""
+}
+
 proc ::menu::FillPanes {menu} {
-	if {[catch { ::application::twm } twm]} { return }
+	set twm [CurrentTWM]
 	if {$twm eq ""} { return }
-	set names [array names ::application::Pane]
-	foreach name [lsort $names] {
+	set seen {}
+	foreach uid [$twm leaves] {
+		set suffix [PaneSuffix [::application::NameFromUid $uid]]
+		if {$suffix in $seen} { continue }
+		lappend seen $suffix
 		catch {
-			lassign [AmpText [set ::application::Pane($name)]] text ul
+			lassign [AmpText [::application::twm::PaneLabel $uid]] text ul
 			$menu add command -label $text -underline $ul \
-				-command [list ::menu::TogglePane $twm $name]
+				-command [list ::action::run menu.view.panes.$suffix]
 		}
 	}
 }
 
-proc ::menu::TogglePane {twm uid} {
-	# Pane headers own visibility; the View cascade offers the same names.
-	if {[llength [info commands ::context::Post]]} {
-		set frame ""
-		catch { set frame [$twm pane $uid] }
-		if {$frame ne ""} {
-			catch { ::application::twm::ChangeState $twm $uid }
+# The layout leaf a public pane id names. A pane that is already in the
+# layout keeps its exact uid (analysis panes carry a number); an absent one
+# resolves to the uid the layout uses when it creates the pane.
+proc ::menu::PaneLayoutUid {suffix} {
+	set twm [PaneTWM]
+	if {$twm ne ""} {
+		set uid [PaneUid $twm $suffix]
+		if {$uid ne ""} { return $uid }
+	}
+	switch -- $suffix {
+		board		{ return board }
+		editor		{ return editor }
+		games		{ return games }
+		tree		{ return tree }
+		analysis	{ return analysis:1 }
+		media		{ return media }
+		report		{ return report }
+		assistant	{ return assistant }
+		explorer	{ return explorer }
+	}
+	return ""
+}
+
+# Empty when the pane can be toggled now. A non-empty text is the reason the
+# posted row is disabled: either the build has no such pane, or the optional
+# module that owns it is absent.
+proc ::menu::PaneReason {suffix} {
+	set twm [PaneTWM]
+	if {$twm eq ""} { return "The board layout is not available." }
+	if {[PaneLayoutUid $suffix] eq ""} {
+		return "This pane is not available in this build."
+	}
+	if {[llength [info commands ::capability::present]]} {
+		switch -- $suffix {
+			report		{ if {![::capability::present report]} { return "The report module is not available." } }
+			assistant	{ if {![::capability::present assistant]} { return "The assistant module is not available." } }
+			explorer	{ if {![::capability::present explorer]} { return "The opening explorer module is not available." } }
 		}
 	}
+	return ""
+}
+
+proc ::menu::PaneOpenable {suffix} {
+	return [expr {[PaneReason $suffix] eq ""}]
+}
+
+proc ::menu::PaneChecked {suffix} {
+	set twm [PaneTWM]
+	if {$twm eq ""} { return 0 }
+	return [expr {[PaneUid $twm $suffix] ne ""}]
+}
+
+proc ::menu::SyncPaneCheck {suffix} {
+	if {[info exists ::menu::PaneVisible($suffix)]} {
+		set ::menu::PaneVisible($suffix) [PaneChecked $suffix]
+	}
+}
+
+proc ::menu::TogglePane {twm uid} {
+	# A pane that is part of the layout is hidden (or restored from the
+	# collapsed presentation by ChangeState). A pane that is absent is
+	# reopened through the layout's show API, which creates the leaf and
+	# brings its tab/parent to the front.
+	if {$uid eq ""} { return 0 }
+	if {$uid in [$twm leaves]} {
+		catch { ::application::twm::ChangeState $twm $uid }
+	} elseif {[llength [info commands ::application::openPane]]} {
+		::application::openPane $uid
+	} else {
+		catch { ::application::twm::ChangeState $twm $uid }
+	}
+	return 1
+}
+
+proc ::menu::TogglePaneId {suffix} {
+	set twm [PaneTWM]
+	if {$twm eq ""} { return 0 }
+	if {![PaneOpenable $suffix]} { return "error: [PaneReason $suffix]" }
+	set uid [PaneLayoutUid $suffix]
+	if {$uid eq ""} { return 0 }
+	set result [TogglePane $twm $uid]
+	update idletasks
+	SyncPaneCheck $suffix
+	return $result
 }
 
 proc ::menu::FillTheme {menu} {
@@ -1370,6 +1540,12 @@ proc ::menu::DumpNodes {menu nodes indent topLevel} {
 				set lastSep 0
 				if {$index > [$menu index end]} { continue }
 				set label [NormLabel [$menu entrycget $index -label]]
+				# A toggle with a label script (Start / Stop Engine) shows
+				# state at runtime; the structural fixture records its
+				# registered label.
+				if {$kind eq "toggle" && [catch { ::action::get [lindex $node 1] } rec] == 0} {
+					if {[dict exists $rec label]} { set label [NormLabel [dict get $rec label]] }
+				}
 				set accel ""
 				catch { set accel [$menu entrycget $index -accelerator] }
 				lappend out "[string repeat " " $indent]ENTRY $label[expr {$accel ne "" ? " $accel" : ""}]"
@@ -1418,15 +1594,57 @@ proc ::menu::RegisterExtras {} {
 	Register view.board3d.open [MC Open3DBoard] "" {::capability::present board3d} "" "09.910"
 	Register view.board3d.webgl [MC OpenWebGL3DBoard] "" {::capability::present webgl3d} "" "09.911"
 	Register view.board3d.embed [MC Embed3DBoard] "" {::capability::present embed3d} "" "09.912"
-	foreach pair {
-		board board editor editor games "game list" players players
-		events events sites sites annotators annotators positions positions
-		tree tree analysis analysis media media report report
-		assistant assistant explorer explorer
+	# Rows reached from the dynamic Game submenus. They have a dedicated
+	# branch in Do, but the rows themselves are generated from DynId, so the
+	# registry walk only sees the ids when they are registered here as well.
+	set i 0
+	foreach {id labelName} {
+		menu.game.paste_clip PasteClipbase
+		menu.game.paste_tab PasteGameTab
+		menu.game.merge_clip MergeClipbase
+		menu.game.merge_tab MergeGameTab
+		menu.game.history.recent RecentGames
 	} {
-		set uid [lindex $pair 0]
-		set label [lindex $pair 1]
-		Register menu.view.panes.$uid $label "" "" "" "09.900"
+		incr i
+		Register $id [MC $labelName] "" "" "" [format "03.%03d" [expr {850 + $i}]]
+	}
+	# "Clipbase" is the game clipboard: reuse game.paste's handler so the
+	# posted row and the assistant paste the same remembered games.
+	if {[dict exists $::action::Registry game.paste]} {
+		set rec [::action::get menu.game.paste_clip]
+		set paste [::action::get game.paste]
+		dict set rec handler [dict get $paste handler]
+		dict set rec args [dict get $paste args]
+		dict set ::action::Registry menu.game.paste_clip $rec
+	}
+	# Engine toggle is posted from the static Analysis cascade as a toggle;
+	# RegisterNodes gives toggles no order, so give it one here.
+	Register menu.analysis.engine_toggle [MC StartStopEngine] "" "" "" "06.001"
+	# One row per pane, with the same label the posted row shows. The list is
+	# id -> label key, never a flat word list: "game list" is one label.
+	set order 890
+	foreach {uid labelName} {
+		board PaneBoard
+		editor PaneEditor
+		games PaneGameList
+		players PanePlayers
+		events PaneEvents
+		sites PaneSites
+		annotators PaneAnnotators
+		positions PanePositions
+		tree PaneTree
+		analysis PaneAnalysis
+		media PaneMedia
+		report PaneReport
+		assistant PaneAssistant
+		explorer PaneExplorer
+	} {
+		incr order
+		# A pane that cannot be opened in this state is posted disabled, with
+		# the reason attached as the row's tooltip; it is never an enabled
+		# no-op. The enabled predicate is also what ::action::run enforces.
+		Register menu.view.panes.$uid [MC $labelName] "" "" \
+			[list ::menu::PaneOpenable $uid] [format "09.%03d" $order]
 	}
 }
 
@@ -1452,6 +1670,25 @@ proc ::menu::CurrentBase {} {
 proc ::menu::CurrentTWM {} {
 	if {[llength [info commands ::application::twm]] == 0} { return "" }
 	if {[catch { set twm [::application::twm] }]} { return "" }
+	return $twm
+}
+
+# Panes belong to the board layout even when the notebook is showing another
+# page. Called by-id (script, palette), a pane toggle still has an obvious
+# target; fall back to the board twm instead of silently doing nothing.
+proc ::menu::PaneTWM {} {
+	# View > Panes always controls the board layout, also while another
+	# notebook page is shown; fall back to the current layout only when the
+	# board layout has not been built yet.
+	if {[llength [info commands ::application::reflow::boardTwm]]} {
+		if {![catch { set twm [::application::reflow::boardTwm] }] && $twm ne ""} {
+			return $twm
+		}
+	}
+	set twm [CurrentTWM]
+	if {$twm ne ""} { return $twm }
+	if {[llength [info commands ::application::twm]] == 0} { return "" }
+	catch { set twm [::application::twm board] }
 	return $twm
 }
 
@@ -1562,7 +1799,7 @@ proc ::menu::Do {id} {
 			return
 		}
 		menu.game.paste_clip { catch { ::application::pgn::PasteClipboardGame }; return }
-		menu.game.paste_tab { catch { ::gamebar::PasteClipboardContent .application }; return }
+		menu.game.paste_tab { catch { ::application::pgn::PasteClipboardGame }; return }
 		menu.game.merge_clip { catch { ::gamebar::mergeGame .application -1 }; return }
 		menu.game.merge_tab { catch { ::gamebar::mergeGame .application -1 }; return }
 		game-export { return [::gamebar::exportGame .application] }
@@ -1622,7 +1859,9 @@ proc ::menu::Do {id} {
 
 		menu.analysis.engine_toggle {
 			if {[EngineRunning]} {
-				catch { ::application::analysis::CloseEngine [lindex [array names ::application::analysis::NumberToTree] 0] }
+				# CloseEngine takes the pane's tree, not the engine number
+				set number [lindex [::application::analysis::Running] 0]
+				catch { ::application::analysis::CloseEngine $::application::analysis::NumberToTree($number) }
 			} else {
 				catch { ::application::analysis::startEngine [::application::analysis::defaultEngine] }
 			}
@@ -1638,6 +1877,7 @@ proc ::menu::Do {id} {
 		menu.analysis.explain.line { catch { ::application::ai::explainLine .application }; return }
 		menu.analysis.explain.move { catch { ::application::pgn::ExplainMove .application::pgn "" }; return }
 		menu.analysis.explain.comment { return [::application::ai::analyze .application] }
+		menu.analysis.annotate { return [::ai::annotate::toggle .application] }
 		menu.analysis.factcheck { return [::ai::factcheck::current .application] }
 		menu.analysis.tablebase.show { catch { ::tablebase::toggle }; return }
 		menu.analysis.tablebase.online { catch { ::tablebase::toggle }; return }
@@ -1690,9 +1930,25 @@ proc ::menu::Do {id} {
 		app-help { return [::help::open .application] }
 		menu.help.bug { return [::menu::bugReport .application] }
 		menu.help.feature { return [::menu::featureRequest .application] }
-		menu.help.about { return [::info::openDialog .application] }
+		menu.help.about {
+			if {[tk windowingsystem] eq "aqua"} { return [::menu::MacAbout] }
+			return [::info::openDialog .application]
+		}
 
-		menu.view.panes.* { ::menu::TogglePane [lindex [split $id .] end]; return }
+		menu.view.panes.board { return [::menu::TogglePaneId board] }
+		menu.view.panes.editor { return [::menu::TogglePaneId editor] }
+		menu.view.panes.games { return [::menu::TogglePaneId games] }
+		menu.view.panes.players { return [::menu::TogglePaneId players] }
+		menu.view.panes.events { return [::menu::TogglePaneId events] }
+		menu.view.panes.sites { return [::menu::TogglePaneId sites] }
+		menu.view.panes.annotators { return [::menu::TogglePaneId annotators] }
+		menu.view.panes.positions { return [::menu::TogglePaneId positions] }
+		menu.view.panes.tree { return [::menu::TogglePaneId tree] }
+		menu.view.panes.analysis { return [::menu::TogglePaneId analysis] }
+		menu.view.panes.media { return [::menu::TogglePaneId media] }
+		menu.view.panes.report { return [::menu::TogglePaneId report] }
+		menu.view.panes.assistant { return [::menu::TogglePaneId assistant] }
+		menu.view.panes.explorer { return [::menu::TogglePaneId explorer] }
 		view.pane_zoom { catch { ::application::TogglePaneZoom }; return }
 		view.focus_zoom {
 			set twm [CurrentTWM]
