@@ -44,7 +44,7 @@ mkdir -p "$DIST/lib"
 make -s -C "$BUILD/tcl" \
 	install-scripts install-pieces install-cursors install-flags install-localizations \
 	install-textures install-themes install-ttk-themes install-text-scripts \
-	install-images install-help install-config install-photos \
+	install-images install-help install-config install-photos install-sample \
 	SHAREDIR="$DIST" DATADIR="$DIST" BINDIR="$DIST"
 # install-scripts: plain.eXt, which every TeXt script (tournament tables,
 # player cards) inputs first
