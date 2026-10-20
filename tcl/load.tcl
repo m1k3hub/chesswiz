@@ -249,8 +249,17 @@ proc ::load::ensureData {args} {
 	foreach cmd $DataGuards {
 		trace remove execution $cmd enter ::load::ensureData
 	}
+	trace remove execution ::scidb::app::load enter ::load::ensureDataForLoad
 	::load::ensureEco
 	LoadData
+}
+
+proc ::load::ensureDataForLoad {command op} {
+	# Rating updates must follow startup initialization: a later cache restore
+	# would replace them. ECO alone is needed before the first window maps.
+	if {[lindex $command 1] ne {eco}} {
+		::load::ensureData
+	}
 }
 
 proc ::load::dataWhenUp {} {
@@ -372,6 +381,7 @@ if {![::process::testOption fast-load] && !$::load::CacheHit && $::load::CacheWr
 set ::load::DataLoaded 0
 set ::load::DataGuards {}
 if {[llength [info commands winfo]]} {
+	trace add execution ::scidb::app::load enter ::load::ensureDataForLoad
 	foreach pattern {::scidb::player::* ::scidb::engine::info ::scidb::engine::list
 		::scidb::app::lookup ::scidb::db::open ::scidb::db::import
 		::scidb::game::import ::scidb::game::load ::scidb::misc::lookup
