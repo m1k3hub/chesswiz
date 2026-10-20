@@ -127,6 +127,7 @@ array set Vars {
 	geometry			{}
 	need:maxsize	0
 	shutdown			0
+	scaling:listeners	{}
 }
 
 array set MapTerminalToAnalysis {}
@@ -476,6 +477,124 @@ proc RememberWindowGeometry {w} {
 	if {$state ni {normal zoomed}} { return }
 	set Options(window:state) $state
 	if {$state eq "normal"} { set Options(window:geometry) [wm geometry $w] }
+	# The media inset follows the board's own settled rebuild (the
+	# afterRebuild hook in media-inset.tcl), so no independent resize timer
+	# is needed here: one would fire after the layout settled and make a
+	# quiet window look busy (VAL-RSZ-001). Fullscreen has its own
+	# <<Fullscreen>> path. A pure move sends <Configure> too, and changes
+	# nothing.
+}
+
+
+# A user resize can push the frame past a work area edge (a moved window
+# grown in place, a smaller taskbar, a larger minimum size). Debounced so a
+# drag does not move the window on every pixel (the 20 ms debounce leaves
+# the layout inside its 500 ms settle budget); fitWindow is a no-op when
+# the frame already fits, so it cannot loop. A pure move that keeps the
+# window size and stays inside the current work area is deliberately not
+# yanked back (a monitor left of the primary one uses a negative origin);
+# a move that leaves the work area is clamped like a resize, and so is the
+# first size change after the reported work area itself changed.
+proc WindowResized {w} {
+	variable Vars
+
+	if {$w ne ".application" || !$Vars(ready)} { return }
+	if {[info exists Vars(after:fit)]} { after cancel $Vars(after:fit) }
+	set Vars(after:fit) [after 20 [namespace code [list KeepInWorkArea $w]]]
+}
+
+
+proc KeepInWorkArea {w} {
+	if {![winfo exists $w]} { return 0 }
+	if {[wm state $w] ne "normal" || [::menu::fullscreen?]} { return 0 }
+	set geometry [wm geometry $w]
+	set fitted [::util::place::clampGeometry $geometry [winfo workarea $w] [winfo extents $w]]
+	# clampGeometry returns the input unchanged when the frame (including
+	# its decorations) already lies inside the current work area, so this
+	# is also the "a pure move inside the work area is not yanked" rule.
+	if {$fitted eq $geometry} { return 0 }
+	::util::place::fitWindow $w $geometry
+	return 1
+}
+
+
+# ----------------------------------------------------------------------
+# Runtime DPI change: `tk scaling` got a new value while running. Tk 8.6
+# neither resizes existing fonts nor emits an event for this (Tk 9's
+# <<TkScalingChanged>> is not available), so the relayout is driven from
+# here: every pane layout refreshes, the board rebuilds with the new
+# factor (its border and coordinate margins follow tk scaling, see
+# ComputeLayout in app-board.tcl), the main window is kept inside the
+# work area, and registered listeners re-measure the settled layout.
+proc scalingChanged {} {
+	variable Vars
+
+	if {!$Vars(ready) || [::menu::fullscreen?]} { return }
+
+	if {[info exists Vars(twm)]} {
+		foreach twm $Vars(twm) {
+			if {[winfo exists $twm]} {
+				if {[catch {$twm refresh} err]} {
+					::log::error "scalingChanged: $twm refresh failed: $err"
+				}
+			}
+		}
+	}
+
+	# Synchronous and forced: the board canvas kept its pixel size, so it
+	# sends no <Configure> and ConfigureWindow's deferred rebuild would see
+	# unchanged dimensions. board::Apply is a no-op until the pane exists.
+	if {[catch {board::Apply} err]} {
+		::log::error "scalingChanged: board rebuild failed: $err"
+	}
+	update idletasks
+
+	# RULE (VAL-RSZ-002): a runtime scaling change relays out in place. The
+	# main window keeps its current size while that size still fits the
+	# work area; only a window that the new layout minimum (or the old
+	# geometry) no longer fits is clamped by fitWindow. A later scaling
+	# change never grows the window back, so 1.0 -> 2.0 -> 1.0 restores the
+	# board/inset rectangles at the size the window now has.
+	if {[wm state .application] eq "normal"} {
+		::util::place::fitWindow .application
+	}
+
+	# The media inset positions itself against the board's bbox; it owns no
+	# scaling hook of its own. Once it registers a listener, this call and
+	# the listener notification are the same idempotent relayout.
+	if {[info commands ::mediainset::Relayout] ne ""} {
+		after idle [list catch {::mediainset::Relayout}]
+	}
+
+	foreach listener $Vars(scaling:listeners) {
+		after idle [namespace code [list NotifyScalingListener $listener]]
+	}
+}
+
+
+# Register/unregister a command evaluated (at global level, after idle)
+# after a runtime tk scaling change. Registration is idempotent.
+proc addScalingListener {cmd} {
+	variable Vars
+	if {$cmd ni $Vars(scaling:listeners)} {
+		lappend Vars(scaling:listeners) $cmd
+	}
+}
+
+
+proc removeScalingListener {cmd} {
+	variable Vars
+	set pos [lsearch -exact $Vars(scaling:listeners) $cmd]
+	if {$pos >= 0} {
+		set Vars(scaling:listeners) [lreplace $Vars(scaling:listeners) $pos $pos]
+	}
+}
+
+
+proc NotifyScalingListener {listener} {
+	if {[catch {uplevel #0 $listener} err]} {
+		::log::error "scalingChanged: listener failed: $listener: $err"
+	}
 }
 
 proc WriteShortcutOptions {chan} {
@@ -1825,6 +1944,7 @@ proc Startup {main args} {
 
 	RestoreWindowGeometry $app
 	bind $app <Configure> +[namespace code {RememberWindowGeometry %W}]
+	bind $app <Configure> +[namespace code {WindowResized %W}]
 	database::finish $app
 	::splash::close
 	set Vars(ready) 1
@@ -2386,6 +2506,37 @@ proc Startup {} {
   trace add variable $v write [namespace code onPaneStateChange]
  }
  onConfigure .application [winfo width .application] [winfo height .application]
+}
+
+# Tk 8.6 sends no notification when `tk scaling` changes at runtime, and
+# existing fonts and widgets keep their old pixel sizes (Tk 8.6.17), so
+# without this hook nothing re-lays out until a restart. Intercept the
+# setter and drive the relayout through ::application::scalingChanged,
+# deferred to idle so bursts of changes settle in one pass. Only the
+# plain two-word form the app uses itself (see exec.tcl) is intercepted;
+# queries and the -displayof forms pass through unchanged.
+#
+# On Tk 8.6 the setter returns the empty string and stores the factor
+# quantised to whole millimetres of screen width, so the effective value
+# (re-derived by the query form) must be re-read after setting.
+if {[info commands ::__application_tk_orig] eq ""} {
+	rename ::tk ::__application_tk_orig
+
+	proc ::tk {args} {
+		if {[llength $args] == 2 && [lindex $args 0] eq "scaling"} {
+			set old [::__application_tk_orig scaling]
+			set result [::__application_tk_orig scaling [lindex $args 1]]
+			set new [::__application_tk_orig scaling]
+			if {	[info exists ::application::Vars]
+				&& $::application::Vars(ready)
+				&& $new != $old
+			} {
+				after idle ::application::scalingChanged
+			}
+			return $result
+		}
+		tailcall ::__application_tk_orig {*}$args
+	}
 }
 }
 
