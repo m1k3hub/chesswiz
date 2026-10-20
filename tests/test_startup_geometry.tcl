@@ -52,7 +52,7 @@ proc loadProc {file name ns} {
     namespace eval $ns $body
 }
 set root [file join [file dirname [info script]] ..]
-namespace eval ::application { variable Vars; array set Vars {fullscreen 0 need:maxsize 0 ready 1} }
+namespace eval ::application { variable Vars; array set Vars {fullscreen 0 need:maxsize 0 ready 1 window:state:last {} last:normal:geometry {} restoring:normal 0} }
 namespace eval ::application::twm {}
 namespace eval ::theme {
     proc notebookBorderwidth {} { return 0 }
@@ -61,6 +61,12 @@ namespace eval ::theme {
 namespace eval ::widget { proc checkIsKDE {} { return 0 } }
 namespace eval ::menu { proc fullscreen? {} { return 0 } }
 loadProc [file join $root tcl app-twm.tcl] geometry ::application::twm
+loadProc [file join $root tcl application.tcl] LayoutMinimum ::application
+loadProc [file join $root tcl application.tcl] GeometrySize ::application
+loadProc [file join $root tcl application.tcl] BelowMinimum? ::application
+loadProc [file join $root tcl application.tcl] DefaultNormalGeometry ::application
+loadProc [file join $root tcl application.tcl] ApplyLayoutMinimum ::application
+loadProc [file join $root tcl application.tcl] RestoreNormalGeometry ::application
 loadProc [file join $root tcl application.tcl] RememberWindowGeometry ::application
 loadProc [file join $root tcl application.tcl] RestoreWindowGeometry ::application
 # Mock only the Tk boundary, retaining the actual callback and fitWindow.
@@ -111,6 +117,35 @@ tcltest::test geometry-save-state {zoomed and iconified keep the normal restore 
     list $::application::Options(window:geometry) $::application::Options(window:state)
 } -result {800x600+100+150 zoomed}
 proc tk {cmd} { return win32 }
+tcltest::test geometry-layout-minimum {VAL-RSZ-006 computed layout minimum wins over a lowered wm minsize} -body {
+    set ::application::Vars(board:twm) ::fakeTwm
+    proc ::fakeTwm {cmd args} {
+        if {$cmd eq "dimension"} { return {500 400 300 250 0 0} }
+        error "unexpected $cmd"
+    }
+    ::application::LayoutMinimum
+} -cleanup {
+    unset -nocomplain ::application::Vars(board:twm)
+} -result {300 250}
+tcltest::test geometry-zoomed-small-restore {VAL-RSZ-006 a 200x200 normal geometry saved while zoomed derives a sane one} -body {
+    set ::application::Options(window:geometry) 200x200+849+382
+    set ::application::Options(window:state) zoomed
+    set ::state withdrawn
+    ::application::RestoreWindowGeometry .application
+    list [::application::GeometrySize $::geom] $::state \
+        $::application::Options(window:geometry)
+} -result {{1536 825} zoomed 1536x825+192+103}
+tcltest::test geometry-zoomed-normal-restore {VAL-RSZ-006 zoomed -> normal below the minimum re-applies the remembered geometry} -body {
+    set ::application::Options(window:geometry) 900x700+100+100
+    set ::application::Options(window:state) normal
+    set ::state normal
+    ::application::RestoreWindowGeometry .application
+    # Windows hands back the stale pre-maximise rect (200x200) on Restore.
+    set ::application::Vars(window:state:last) zoomed
+    set ::geom 200x200+100+100
+    ::application::RememberWindowGeometry .application
+    list $::geom $::application::Options(window:geometry)
+} -result {900x700+100+100 900x700+100+100}
 tcltest::test geometry-restore {saved oversized geometry is fitted before opening zoomed} -body {
     set ::application::Options(window:geometry) 2500x1380+849+382
     set ::application::Options(window:state) zoomed

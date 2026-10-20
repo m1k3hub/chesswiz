@@ -124,6 +124,15 @@ proc make {twm id prioArr options layout args} {
 		bind $twm <<TwmGeometry>> [namespace code [list geometry %d]]
 		bind $twm <<TwmFullscreen>> [namespace code [list Fullscreen $twm %d]]
 		bind $twm <<Fullscreen>> [namespace code geometry]
+		# The widget caches the fullscreen flag and re-announces it whenever
+		# its layout is rebuilt. Push every menu change into that cache, or
+		# the stale 1 of a fullscreen tall layout re-enters fullscreen after
+		# the user has left it (leaving the screen rectangle as the normal
+		# geometry).
+		if {[lsearch -exact [split [bind .application <<Fullscreen>>] "\n"] \
+			::application::twm::SyncFullscreen] < 0} {
+			bind .application <<Fullscreen>> +[namespace code SyncFullscreen]
+		}
 		set Vars(lock:layout) 0
 		set Vars(fullscreen) [::menu::fullscreen?]
 	}
@@ -1224,6 +1233,19 @@ proc Fullscreen {twm flag} {
 
 	::menu::setFullscreen $flag
 	update idletasks
+}
+
+
+# The board widget keeps its own copy of the fullscreen flag (used when a
+# layout is saved or rebuilt). It must follow the menu, otherwise a rebuild
+# after leaving fullscreen announces the stale 1 and re-enters it.
+proc SyncFullscreen {} {
+	variable [namespace parent]::Vars
+
+	if {![info exists Vars(board:twm)]} { return }
+	set twm $Vars(board:twm)
+	if {![winfo exists $twm]} { return }
+	$twm set $twm fullscreen [::menu::fullscreen?]
 }
 
 

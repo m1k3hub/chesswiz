@@ -58,6 +58,10 @@ variable Audio 0
 variable Aspect [expr {16.0/9}]
 variable LayingOut 0
 variable Watched {}
+# Sashes captured when the video fills the pane, restored by the same-size
+# swap back so a resize while expanded cannot leave the board pane at its
+# minimum (MED-009: restore returns the prior placement and sizes).
+variable SwapSashes {}
 
 } ;# namespace mediainset
 
@@ -200,10 +204,109 @@ proc ::mediainset::hide {} {
 proc ::mediainset::swap {} {
 	variable Swapped
 	variable Shown
+	variable SwapSashes
 
 	if {!$Shown} { return }
+	set was $Swapped
 	set Swapped [expr {!$Swapped}]
+	if {$Swapped && !$was} {
+		# Snapshot the pane arrangement before the board is unpacked: while
+		# the video fills the pane a window resize can squeeze the board
+		# pane to its minimum, and the restore must put the user's
+		# arrangement back (MED-009 after resize/fullscreen).
+		set SwapSashes {}
+		if {![catch { set t [::application::twm] }] && $t ne ""} {
+			set top [winfo toplevel $t]
+			set SwapSashes [list [list [winfo width $top] [winfo height $top]] \
+				[::application::focuszoom::Snapshot $t] [PaneSizes $t]]
+		}
+	}
 	Layout
+	if {!$Swapped && $was && [llength $SwapSashes] == 3} {
+		set t {}
+		if {![catch { set t [::application::twm] }] && $t ne "" && [winfo exists $t]} {
+			set top [winfo toplevel $t]
+		}
+		lassign $SwapSashes size snapshot sizes
+		# Only at the size the snapshot belongs to: after a resize the old
+		# coordinates would clamp the panes to their minima for good (the
+		# same rule focuszoom uses for its own baseline).
+		if {$t ne "" && [list [winfo width $top] [winfo height $top]] eq $size} {
+			RestoreSashes $t $snapshot $sizes
+		}
+		set SwapSashes {}
+	}
+}
+
+
+# A layout reload between the two swaps (the tall reflow a portrait
+# fullscreen takes) rebuilds the panedwindows under new paths, in the same
+# traversal order. Pair the recorded snapshot with the live panedwindows;
+# returns {} when the structures no longer correspond, so a stale snapshot
+# can never place a sash on the wrong pane.
+proc ::mediainset::MapSnapshot {snapshot live} {
+	if {[llength $live] != [llength $snapshot]} { return {} }
+	set mapped {}
+	foreach {oldPw oldCoords} $snapshot {newPw newCoords} $live {
+		if {[llength $newCoords] != [llength $oldCoords]} { return {} }
+		lappend mapped $newPw $oldCoords
+	}
+	return $mapped
+}
+
+
+# Put the recorded arrangement back. A pane may have been squeezed below its
+# -minsize at the old window size (Tk shrinks panes on a window resize
+# without moving a sash), so relax that minimum to the recorded size first,
+# by pane order (the paths change with the reload too); otherwise Tk clamps
+# the sash a few pixels short and the restore silently fails.
+proc ::mediainset::RestoreSashes {twm snapshot sizes} {
+	set live [::application::focuszoom::Snapshot $twm]
+	set mapped [MapSnapshot $snapshot $live]
+	if {![llength $mapped]} { return 0 }
+	# Already in force: nothing to place. Restoring would pump the event
+	# loop (focuszoom::Restore), and an unrelated model update (the media
+	# Stop path) would then hide the inset this swap is putting back.
+	set same 1
+	foreach {pw coords} $mapped {nowPw nowCoords} $live {
+		if {$coords ne $nowCoords} { set same 0; break }
+	}
+	if {$same} { return 0 }
+	set livePw {}
+	foreach {pw coords} $live { lappend livePw $pw }
+	array set index {}
+	set i 0
+	foreach {oldPw coords} $snapshot { set index($oldPw) $i; incr i }
+	array set ordinal {}
+	foreach {w p sz} $sizes {
+		if {![info exists index($w)]} { continue }
+		set newPw [lindex $livePw $index($w)]
+		set n [expr {[info exists ordinal($w)] ? [incr ordinal($w)] : [set ordinal($w) 0]}]
+		if {![winfo exists $newPw] || $n >= [llength [$newPw panes]]} { continue }
+		set newPane [lindex [$newPw panes] $n]
+		if {[$newPw panecget $newPane -minsize] > $sz} {
+			$newPw paneconfigure $newPane -minsize $sz
+		}
+	}
+	::application::focuszoom::Restore $twm $mapped
+	return 1
+}
+
+
+# Pane sizes at the moment of the expand snapshot, flattened as
+# {panedwindow pane size ...}. focuszoom::Snapshot records only sash
+# coordinates, which Tk refuses when a pane is below its -minsize.
+proc ::mediainset::PaneSizes {twm} {
+	set result {}
+	set queue [winfo children $twm]
+	while {[llength $queue]} {
+		set queue [lassign $queue w]
+		lappend queue {*}[winfo children $w]
+		if {![string match *Panedwindow [winfo class $w]]} { continue }
+		set dim [expr {[$w cget -orient] eq "horizontal" ? "width" : "height"}]
+		foreach p [$w panes] { lappend result $w $p [winfo $dim $p] }
+	}
+	return $result
 }
 
 
@@ -280,6 +383,22 @@ proc ::mediainset::BoardView {} {
 	return $vars(widget:frame)
 }
 
+# BRD-004 arithmetic at the current tk scaling. A strip is feasible only
+# when its minimum extent can carry a video at least 160 px wide (the
+# frame adds 8 px) while the board renderer still gives every square at
+# least MinimumReserveSquare pixels. True means no such strip fits, which
+# is the only condition under which the inset may cover the board.
+proc ::mediainset::Brd004Fallback {width height controlsHeight} {
+	variable Aspect
+	set minimumWidth 168
+	set minimumHeight [expr {int(round(160/$Aspect)) + $controlsHeight}]
+	set minimum $::application::board::MinimumReserveSquare
+	set right [::application::board::reserveSquare right $minimumWidth $width $height]
+	set bottom [::application::board::reserveSquare bottom $minimumHeight $width $height]
+	return [expr {$right < $minimum && $bottom < $minimum}]
+}
+
+
 # Place in board-pane coordinates. Only setReserve's minimum-square refusal
 # permits an overlay. The eight-pixel frame margin is 2*(border + highlight).
 proc ::mediainset::Layout {} {
@@ -346,12 +465,28 @@ proc ::mediainset::Layout {} {
 				set choice [FitStrip $width $height $ch]
 				if {[llength $choice]} {
 					lassign $choice side iw ih
-				} else {
-					# Only panes unable to fit a 160px video at the minimum
-					# board square size use the existing corner overlay.
+				} elseif {[Brd004Fallback $width $height $ch]} {
+					# BRD-004: no strip can carry a >=160 px video while
+					# keeping the documented minimum square at this scaling,
+					# so the board keeps its size and the inset overlays it.
 					set side {}
 					set iw [expr {max(168, int($height*$s*$Aspect)+8)}]
 					set ih [expr {int(round(($iw-8)/$Aspect))+$ch}]
+				} else {
+					# The arithmetic says a minimum strip is feasible even
+					# though FitStrip returned nothing (e.g. a transient
+					# canvas): reserve that strip instead of covering the
+					# board, so the overlay is never taken outside BRD-004.
+					if {[::application::board::reserveSquare right 168 $width $height] \
+						>= $::application::board::MinimumReserveSquare} {
+						set side right
+						set iw 168
+						set ih [expr {int(round(($iw-8)/$Aspect))+$ch}]
+					} else {
+						set side bottom
+						set ih [expr {int(round(160/$Aspect))+$ch}]
+						set iw [expr {int(round(($ih-$ch)*$Aspect))+8}]
+					}
 				}
 			}
 			set pixels [expr {$side eq "right" ? $iw : $ih}]
