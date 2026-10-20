@@ -8,6 +8,9 @@
 # Each id is invoked twice (hide/show or open/hide) by id and by the posted
 # row's own -command; the twm leaves and the posted check mark are asserted
 # after every call. The five dynamic Game rows are invoked as well.
+# A pane hidden while the board still had a delayed rebuild queued for its
+# canvas (a window resize) must drop that rebuild with the canvas: the last
+# test reproduces the state that made the next file fail.
 # ======================================================================
 
 package require Tcl 8.5
@@ -124,6 +127,26 @@ proc ::scidb::test::pane::Release {cmd} {
 	set stash [::scidb::test::pane::Stash $cmd]
 	rename $cmd {}
 	rename $stash $cmd
+}
+
+# Record background errors instead of showing them (a notice card in a
+# headless run), and put the application's handler back afterwards.
+proc ::scidb::test::pane::CaptureBgErrors {} {
+	if {[llength [info commands ::scidb::test::pane::SavedBg]]} { return }
+	if {[llength [info commands ::scidb::bgerror]]} {
+		rename ::scidb::bgerror ::scidb::test::pane::SavedBg
+	}
+	proc ::scidb::bgerror {err args} {
+		lappend ::scidb::test::pane::errors $err
+	}
+}
+
+proc ::scidb::test::pane::ReleaseBgErrors {} {
+	catch { rename ::scidb::bgerror {} }
+	if {[llength [info commands ::scidb::test::pane::SavedBg]]} {
+		rename ::scidb::test::pane::SavedBg ::scidb::bgerror
+	}
+	interp bgerror {} ::scidb::bgerror
 }
 
 tcltest::test pane-rows-posted-state {every View > Panes row is a stateful checkbutton} -setup {
@@ -361,5 +384,55 @@ tcltest::test dynamic-game-ids-invoke {the five dynamic Game ids dispatch with a
 	catch { destroy .paneMenu }
 	::scidb::test::pane::Restore $::scidb::test::pane::initial
 } -result {0 {}}
+
+# A window resize reaches the board canvas as <Configure> -> ConfigureWindow,
+# which queues the rebuild 50-300 ms later, holding the canvas path. Hiding the
+# pane inside that window left the timer behind: it fired in the next test file
+# as a background error ("invalid command name ...board.c") -- the notice a
+# user gets after resizing the window and then switching View > Panes > Board
+# off. The rebuild must go with the canvas it was queued for: the timer is
+# cancelled, and nothing fires at a dead widget path. (Other deferred board
+# work that a destroyed pane leaves behind is noted in tests/tmp-app/finish/
+# menupred.md; only the rebuild is this test's subject.)
+tcltest::test pane-hide-drops-queued-board-rebuild {hiding the Board pane cancels the rebuild queued for its canvas} -setup {
+	set ::scidb::test::pane::initial [::scidb::test::pane::Leaves]
+	set ::scidb::test::pane::errors {}
+	::scidb::test::pane::CaptureBgErrors
+	# Turn the event loop once while the board is still on screen: the
+	# startup timers (Startup2 and friends) belong to the running app, and
+	# this test must not be the first to run them against a hidden board.
+	# What the drain reports is not this test's business, so start clean.
+	::application::openPane board
+	update
+	set ::scidb::test::pane::errors {}
+} -body {
+	set frame [set ::application::board::Vars(widget:frame)]
+	if {![winfo exists $frame]} { return "no board canvas" }
+	set width [expr {[winfo width $frame] + 11}]
+	set height [expr {[winfo height $frame] + 7}]
+	::application::board::ConfigureWindow $frame $width $height
+	set queued [set ::application::board::Vars(after)]
+	if {$queued eq ""} { return "no rebuild queued" }
+	set rc [catch { ::action::run menu.view.panes.board } err]
+	update idletasks
+	set hidden [expr {"board" ni [[::menu::PaneTWM] leaves]}]
+	set kept 0
+	if {![catch { after info $queued } info] && [llength $info]} { set kept 1 }
+	# the coalescing delay elapses with nothing for the dead canvas to do
+	after 400
+	update
+	set dead {}
+	foreach queuedError $::scidb::test::pane::errors {
+		if {[string match {invalid command name*} $queuedError]} {
+			lappend dead $queuedError
+		}
+	}
+	puts "REG-010 hide board while rebuilding: rc={$rc $err} hidden=$hidden timer-kept=$kept checked=[::menu::PaneChecked board] dead={$dead} errors={$::scidb::test::pane::errors}"
+	list $hidden $kept [::menu::PaneChecked board] $dead
+} -cleanup {
+	::scidb::test::pane::Restore $::scidb::test::pane::initial
+	update idletasks
+	::scidb::test::pane::ReleaseBgErrors
+} -result {1 0 0 {}}
 
 tcltest::cleanupTests

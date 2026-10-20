@@ -188,7 +188,7 @@ proc build {w width height} {
 
 	$board configure -cursor crosshair
 	::bind $canv <Configure> [namespace code { ConfigureWindow %W %w %h }]
-	::bind $canv <Destroy> [namespace code [list activate $w 0]]
+	::bind $canv <Destroy> [namespace code [list CanvasDestroyed $w]]
 	::bind $canv <FocusIn> [namespace code { GotFocus %W }]
 	::bind $canv <FocusOut> [namespace code LostFocus]
 	::bind $canv <Any-Button> { ::variation::hide; ::move::cancelVariation }
@@ -558,6 +558,25 @@ proc show3D {flag} {
 
 proc closed {w} {
 	# should only happen after shutdown
+}
+
+
+# The board canvas is going away. A Configure queued a delayed RebuildBoard
+# for it (50-300 ms, to coalesce a resize burst), and that timer holds the
+# canvas path: firing it after View > Panes > Board off raised "invalid
+# command name ...board.c" as a background error. Cancel the queued rebuild
+# with the canvas it was queued for, so a closed pane leaves no timer behind
+# (and none can land on a reopened pane that happens to reuse the path).
+proc CanvasDestroyed {w} {
+	variable Vars
+
+	if {[info exists Vars(widget:frame)] && ![winfo exists $Vars(widget:frame)]} {
+		if {[info exists Vars(after)] && $Vars(after) ne ""} {
+			after cancel $Vars(after)
+			set Vars(after) ""
+		}
+	}
+	activate $w 0
 }
 
 
@@ -1609,6 +1628,11 @@ proc RebuildBoard {canv width height {force false}} {
 	variable Dim
 	variable Vars
 	variable board
+
+	# A queued rebuild can outlive its canvas (a pane hidden before the
+	# coalescing delay elapsed). There is nothing to lay out for a widget
+	# that no longer exists.
+	if {![winfo exists $canv]} { return }
 
 	set dimensions ${width}x${height}
 	if {!$force && $dimensions eq $Vars(dimensions)} { return }
