@@ -303,10 +303,9 @@ proc pressSquare {square state} {
 	} elseif {$hilite(show-suggested) && $square ne $Square(selected)} {
 		# second click of a click-click move: releaseSquare makes the move
 		set Square(fresh) 0
-	} elseif {$hilite(show-suggested) && $Square(suggested) != -1} {
-		# second click on the selected piece: releaseSquare plays the suggestion
-		set Square(fresh) 0
 	} elseif {$hilite(show-suggested)} {
+		# click on the selected piece: deselect it. A click on a piece never
+		# plays the suggested move, only a click on its target square does.
 		::board::diagram::setDragSquare $board
 		::board::diagram::hilite $board $Square(selected) off
 		::board::diagram::hilite $board $Square(suggested) off
@@ -340,8 +339,9 @@ proc releaseSquare {x y state} {
 
 	::application::board::setCursor
 
-	# The first click on an own piece selects it: a click on the target square
-	# makes the move, a second click on the piece plays the suggested move.
+	# The first click on an own piece selects it and keeps it selected: the
+	# next click on a target square makes the move (the suggested one included),
+	# a click on the piece again deselects it.
 	set clickSelect [expr {
 		$hilite(show-suggested) && !$dragged && $square == $selected && $square >= 0
 		&& $Square(fresh) && $Drop(piece) eq " "
@@ -365,27 +365,15 @@ proc releaseSquare {x y state} {
 
 		if {$square == $selected} {
 			::board::diagram::setDragSquare $board
-			if {$hilite(show-suggested)} {
-				# user pressed and released on same square, so make the suggested
-				# move if there is one and the piece was not dragged
-				set drop $Drop(piece)
-				set Square(current) -1
-				if {!$dragged} {
-					AddMove $square $Square(suggested) $allowIllegalMove
-				}
-				if {$drop ne " "} {
-					::application::board::deselectInHandPiece
-					set suggested $Square(suggested)
-				}
-				::board::diagram::hilite $board $selected off
-				enterSquare $square
-			} elseif {$Drop(piece) ne " "} {
+			if {$Drop(piece) ne " "} {
 				AddMove $square $selected $allowIllegalMove
 				::application::board::deselectInHandPiece
 				::board::diagram::hilite $board $selected off
 				set Drop(piece) " "
 			}
 			# else current square is the square user pressed the button on, so we do nothing
+			# (a click selects or deselects; the suggested move is played by
+			# clicking its target square, never by a click on the piece)
 		} else {
 			# user has dragged to another square, so try to add this as a move
 			set Square(current) -1
