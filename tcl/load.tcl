@@ -77,7 +77,9 @@ proc source {path args} {
 
 	if {[string length $msg]} {
 		if {$msg ne $LastMsg} {
-			::splash::print "${msg}..."
+			if {![llength [info commands winfo]] || [winfo exists .splash]} {
+				::splash::print "${msg}..."
+			}
 			set LastMsg $msg
 		}
 	}
@@ -103,7 +105,9 @@ proc load {msg type path} {
 	variable Log
 
 	if {$msg ne $LastMsg} {
-		::splash::print "${msg}..."
+		if {![llength [info commands winfo]] || [winfo exists .splash]} {
+			::splash::print "${msg}..."
+		}
 		set LastMsg $msg
 	}
 
@@ -138,6 +142,10 @@ proc load {msg type path} {
 
 proc writeLog {} {
 	variable Log
+	if {[info exists ::load::DataLoaded] && !$::load::DataLoaded} {
+		after 100 [namespace code writeLog]
+		return
+	}
 
 	::log::info [format $mc::SystemEncoding [encoding system]]
 	foreach {type msg} $Log { log::$type $msg }
@@ -201,12 +209,61 @@ if {[file readable [file join $scidb::dir::config load.tcl]]} {
 ::log::open "Startup" 0
 #set t [clock microseconds]
 
+# ECO is also needed by native empty-game initialization. Load it on the
+# first native game/database call, rather than postponing it past that use.
+proc ::load::ensureEco {args} {
+	variable EcoLoaded
+	variable EcoGuards
+	if {$EcoLoaded} { return }
+	set EcoLoaded 1
+	foreach cmd $EcoGuards {
+		trace remove execution $cmd enter ::load::ensureEco
+	}
+	uplevel #0 {
 # --- Load ECO file ----------------------------------------------------
 load::load	[format $load::mc::Loading $load::mc::ECOFile] \
 				eco \
 				[file join $scidb::dir::data eco.bin] \
 				;
 
+	}
+}
+set ::load::EcoLoaded 0
+set ::load::EcoGuards {}
+foreach pattern {::scidb::game::* ::scidb::db::* ::scidb::app::lookup
+	::scidb::misc::lookup ::scidb::ai::eco} {
+	foreach cmd [info commands $pattern] {
+		lappend ::load::EcoGuards $cmd
+		trace add execution $cmd enter ::load::ensureEco
+	}
+}
+
+# Native dictionary consumers can request the data before the first Map (for
+# example when restoring a database). Otherwise leave the work off the path to
+# the first visible window. Remove guards before loading to allow nested calls.
+proc ::load::ensureData {args} {
+	variable DataLoaded
+	variable DataGuards
+	if {$DataLoaded} { return }
+	set DataLoaded 1
+	foreach cmd $DataGuards {
+		trace remove execution $cmd enter ::load::ensureData
+	}
+	::load::ensureEco
+	LoadData
+}
+
+proc ::load::dataWhenUp {} {
+	if {![winfo exists .application] || ![winfo ismapped .application]} {
+		after 100 ::load::dataWhenUp
+	} else {
+		after idle ::load::ensureData
+	}
+}
+
+proc ::load::LoadData {} {
+	# These startup scripts historically execute in the global namespace.
+	uplevel #0 {
 set ::load::CacheHit 0
 set ::load::CacheWritable 1
 if {![::process::testOption fast-load]} {
@@ -298,6 +355,37 @@ load::load	[format $load::mc::Loading $load::mc::Cities] \
 				;
 
 } ;# if fast-load
+
+set cacheStart [clock milliseconds]
+::scidb::app::load done
+::debuglog::log startup "player/site loadDone [expr {[clock milliseconds]-$cacheStart}]ms"
+if {![::process::testOption fast-load] && !$::load::CacheHit && $::load::CacheWritable} {
+	set cacheStart [clock milliseconds]
+	# Deferred: the window must not wait for the cache write (see writeCacheWhenUp).
+	after 0 [list ::load::writeCacheWhenUp $cacheStart]
+	unset cacheStart
+}
+
+	}
+}
+
+set ::load::DataLoaded 0
+set ::load::DataGuards {}
+if {[llength [info commands winfo]]} {
+	foreach pattern {::scidb::player::* ::scidb::engine::info ::scidb::engine::list
+		::scidb::app::lookup ::scidb::db::open ::scidb::db::import
+		::scidb::game::import ::scidb::game::load ::scidb::misc::lookup
+		::scidb::db::match ::scidb::db::playerInfo ::scidb::db::playerSpellings
+		::scidb::db::spellingCandidates} {
+		foreach cmd [info commands $pattern] {
+			lappend ::load::DataGuards $cmd
+			trace add execution $cmd enter ::load::ensureData
+		}
+	}
+	after 100 ::load::dataWhenUp
+} else {
+	::load::ensureData
+}
 
 # --- Load localization file -------------------------------------------
 set file [file join $scidb::dir::share lang localization.tcl]
@@ -392,16 +480,6 @@ foreach file [glob -directory [file join $::scidb::dir::share themes ttk] -nocom
 
 # --- Load done --------------------------------------------------------
 unset file subdir msg
-set cacheStart [clock milliseconds]
-::scidb::app::load done
-::debuglog::log startup "player/site loadDone [expr {[clock milliseconds]-$cacheStart}]ms"
-if {![::process::testOption fast-load] && !$::load::CacheHit && $::load::CacheWritable} {
-	set cacheStart [clock milliseconds]
-	# Deferred: the window must not wait for the cache write (see writeCacheWhenUp).
-	after 0 [list ::load::writeCacheWhenUp $cacheStart]
-	unset cacheStart
-}
-
 #puts "[expr {[clock microseconds] - $t}] micro-secs"
 #unset t
 

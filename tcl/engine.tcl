@@ -4463,13 +4463,15 @@ bind Script <Meta-b> {#}
 bind Script <Meta-f> {#}
 bind Script <Meta-d> {#}
 
-# --- Setup engines ----------------------------------------------------
-if {[catch {::engine::setup} err]} {
-	set msg $::load::mc::EngineSetupFailed
-	lappend ::load::Log error "$msg: $err"
-	puts "$msg -- $err"
-	unset msg
+# --- Setup engines on first use ----------------------------------------
+proc ::engine::SetupOnRead {name index op} {
+	trace remove variable ::engine::Engines read ::engine::SetupOnRead
+	if {[catch {::engine::setup} err]} {
+		set msg $::load::mc::EngineSetupFailed
+		lappend ::load::Log error "$msg: $err"
+		puts "$msg -- $err"
+	}
 }
-unset -nocomplain err
+trace add variable ::engine::Engines read ::engine::SetupOnRead
 
 # vi:set ts=3 sw=3:
