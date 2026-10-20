@@ -92,7 +92,7 @@ namespace eval mc {
 
 set ScidbDatabase					"Scidb Database"
 set ScidDatabase					"Scid Database"
-set ChessBaseDatabase			"ChessBase Database"
+set ChessBaseDatabase			"CBH Database"
 set PortableGameFile				"Portable Game File"
 set PortableGameFileCompressed "Portable Game File (gzip compressed)"
 set BughousePortableGameFile	"Bughouse Portable Game File"

@@ -277,7 +277,7 @@
 ::menu::mc::AllScidbBases					"Todas las bases Scidb"
 ::menu::mc::ScidBases						"Bases Scid"
 ::menu::mc::ScidbBases						"Bases Scidb"
-::menu::mc::ChessBaseBases					"Bases ChessBase"
+::menu::mc::ChessBaseBases					"Bases CBH"
 ::menu::mc::ScidbArchives					"Archivos Scidb"
 ::menu::mc::PGNFilesArchives				"Archivos PGN"
 ::menu::mc::PGNFiles							"Archivos PGN"
@@ -320,7 +320,7 @@
 ::menu::mc::ContactFeatureRequest		"&Solicitud de característica"
 
 # Extras
-::menu::mc::InstallChessBaseFonts		"Instalar Fuentes de ChessBase" 
+::menu::mc::InstallChessBaseFonts		"Instalar fuentes de figuras" 
 ::menu::mc::OpenEngineLog					"Abrir bitácora d&el Motor"
 ::menu::mc::AssignFileTypes				"Assign File &Types"
 
@@ -765,6 +765,7 @@
 ::application::database::mc::FileCompact						"Compactar"
 ::application::database::mc::FileStripMoveInfo				"Strip Move Information" ;# NEW
 ::application::database::mc::FileStripPGNTags				"Strip PGN Tags" ;# NEW
+::application::database::mc::Cql6Search						"Búsqueda de patrones"
 ::application::database::mc::HelpSwitcher						"Ayuda con el Cambiador de Bases de Datos"
 
 ::application::database::mc::File								"Archivo"
@@ -1060,7 +1061,7 @@
 ::database::switcher::mc::Failed								"fallido"
 
 ::database::switcher::mc::UriRejectedDetail(open)		"Solamente pueden abrirse bases de datos Scidb:"
-::database::switcher::mc::UriRejectedDetail(import)	"Only Scidb databases, but no ChessBase databases, can be imported:" ;# NEW
+::database::switcher::mc::UriRejectedDetail(import)	"Only Scidb databases, but no CBH databases, can be imported:" ;# NEW
 ::database::switcher::mc::EmptyUriList						"Descartar contenido está vacóo."
 ::database::switcher::mc::CopyGames							"Copiar partidas"
 ::database::switcher::mc::CopyGamesFromTo					"Copiar partidas de '%src' a '%dst'"
@@ -1740,12 +1741,12 @@
 ::playercard::mc::SeachIn365ChessCom		"Buscar en 365Chess.com"
 
 ### fonts ##############################################################
-::font::mc::ChessBaseFontsInstalled				"Las fuentes de ChessBase se instalaron correctamente."
-::font::mc::ChessBaseFontsInstallationFailed	"Falló la instalación de las fuentes de ChessBase."
-::font::mc::NoChessBaseFontFound					"No se encontraron las fuentes de ChessBase en la carpeta '%s'." 
-::font::mc::ChessBaseFontsAlreadyInstalled	"Las fuentes de ChessBase ya se encuentran instaladas. ¿Instalar nuevamente?"
+::font::mc::ChessBaseFontsInstalled				"Las fuentes de figuras se instalaron correctamente."
+::font::mc::ChessBaseFontsInstallationFailed	"Falló la instalación de las fuentes de figuras."
+::font::mc::NoChessBaseFontFound					"No se encontraron fuentes de figuras en la carpeta '%s'." 
+::font::mc::ChessBaseFontsAlreadyInstalled	"Las fuentes de figuras ya se encuentran instaladas. ¿Instalar nuevamente?"
 ::font::mc::ChooseMountPoint						"Primero debe escoger el punto de montaje de la partición que contiene la instalació de Windows."
-::font::mc::CopyingChessBaseFonts				"Copiando fuentes de ChessBase"
+::font::mc::CopyingChessBaseFonts				"Copiando fuentes de figuras"
 ::font::mc::CopyFile									"Copiar archivo %s"
 ::font::mc::UpdateFontCache						"Actualizando caché de fuentes"
 
@@ -2182,7 +2183,7 @@
 ::export::mc::Option(pgn,include_moveinfo)						"Exportar información de las jugadas (como comentarios)"
 ::export::mc::Option(pgn,include_marks)							"Exportar marcadores (como comentarios)"
 ::export::mc::Option(pgn,use_scidb_import_format)				"Usar el formato de importación de Scidb"
-::export::mc::Option(pgn,use_chessbase_format)					"Usar formato ChessBase"
+::export::mc::Option(pgn,use_chessbase_format)					"Usar formato compatible con CBH"
 ::export::mc::Option(pgn,use_strict_pgn_standard				"Use PGN standard" ;# NEW
 ::export::mc::Option(pgn,include_ply_count_tag)					"Escribir la etiqueta 'PlyCount'"
 ::export::mc::Option(pgn,include_termination_tag)				"Escribir etiqueta 'Termination'"
@@ -2468,7 +2469,7 @@
 ### help ###############################################################
 ::help::mc::Contents					"&Contenido"
 ::help::mc::Index						"&Indice"
-::help::mc::CQL						"C&QL"
+::help::mc::CQL						"&Búsqueda de patrones"
 ::help::mc::Search					"Bu&scar"
 
 ::help::mc::Help						"Ayuda"
@@ -2644,7 +2645,7 @@
 ::annotation::mc::PositionalAssessments			"Evaluaciones posicionales"
 ::annotation::mc::TimePressureCommentaries		"Comentarios sobre apuros de tiempo"
 ::annotation::mc::AdditionalCommentaries			"Comentarios adicionales"
-::annotation::mc::ChessBaseCommentaries			"Comentarios de ChessBase"
+::annotation::mc::ChessBaseCommentaries			"Comentarios clásicos"
 
 ### marks ##############################################################
 ::marks::mc::MarksPalette			"Paleta de marcadores"
@@ -2758,7 +2759,7 @@
 ### fileselectionbox ###################################################
 ::dialog::fsbox::mc::ScidbDatabase			"Base de datos Scidb"
 ::dialog::fsbox::mc::ScidDatabase			"Base de datos Scid"
-::dialog::fsbox::mc::ChessBaseDatabase		"Base de datos ChessBase" 
+::dialog::fsbox::mc::ChessBaseDatabase		"Base de datos CBH" 
 ::dialog::fsbox::mc::PortableGameFile		"Archivo PGN" ;# Notación para juegos de ajedrez PGN
 ::dialog::fsbox::mc::PortableGameFileCompressed "Archivo PGN (comprimido con gzip)"
 ::dialog::fsbox::mc::BughousePortableGameFile "Archivo BPGN"

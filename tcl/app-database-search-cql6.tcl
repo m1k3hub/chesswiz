@@ -3,7 +3,7 @@
 namespace eval ::application::database {
     variable Cql6SearchData
     variable Cql6SearchSerial 0
-    namespace eval mc { set Cql6Search "CQL 6.2 Search" }
+    namespace eval mc { set Cql6Search "Pattern Search" }
 }
 
 proc ::application::database::OpenCql6Search {parent file variant} {
@@ -12,7 +12,7 @@ proc ::application::database::OpenCql6Search {parent file variant} {
     set dlg .cql6search[string map {. _ / _ " " _ : _} "$file$variant"]
     if {[winfo exists $dlg]} { raise $dlg; focus $dlg.script; return $dlg }
     if {$variant ne "Normal"} {
-        return [::dialog::error -parent $parent -message "CQL 6.2 searches standard chess games."]
+        return [::dialog::error -parent $parent -message "Pattern search searches standard chess games."]
     }
     set Cql6SearchData($dlg,file) $file
     set Cql6SearchData($dlg,variant) $variant
@@ -26,12 +26,12 @@ proc ::application::database::OpenCql6Search {parent file variant} {
     set Cql6SearchData($dlg,selected) -1
     set Cql6SearchData($dlg,variations) 0
     set Cql6SearchData($dlg,threads) 8
-    set Cql6SearchData($dlg,status) "Enter a CQL 6.2 script."
+    set Cql6SearchData($dlg,status) "Enter a pattern search script."
     tk::toplevel $dlg -class Scidb
-    wm title $dlg "CQL 6.2 — [::util::databaseName $file no]"
+    wm title $dlg "Pattern Search — [::util::databaseName $file no]"
     wm protocol $dlg WM_DELETE_WINDOW [namespace code [list Cql6Close $dlg]]
     bind $dlg <Destroy> [namespace code [list Cql6Destroyed $dlg %W]]
-    ttk::label $dlg.label -text "CQL 6.2 script"
+    ttk::label $dlg.label -text "Pattern search script"
     text $dlg.script -width 76 -height 12 -wrap word -undo 1
     $dlg.script insert 1.0 "cql() mate"
     ttk::frame $dlg.options

@@ -53,9 +53,9 @@ Fünfte öffentliche Vorschau-Version
   <li class="space">Chesswiz hat nun einen Informationsreiter mit aktuellen Neuigkeiten.</li>
   <li class="space">Zusätzlicher Turniertyp "Simultan" im Turniertabellendialog.</li>
   <li class="space">Verbessertes Figurenrendering.</li>
-  <li class="space">Neue Figurensätze:  Aquarium, Bookup, Chess7, ChessCube, Celtic, Fritz, Habsburg, Military, Old Style, Segoe und Zurich.</li>
+  <li class="space">Neue Figurensätze:  Aquarium, Bookup, Chess7, ChessCube, Celtic, Club, Habsburg, Military, Old Style, Segoe und Zurich.</li>
   <li class="space">Figurensatz "Standard" wurde ausgetauscht, der alte hatte Defizite.</li>
-  <li class="space">Neue Brettthemen: Burnt, Fritz, Kitsch, Navajo, Marmorate, Melamine und Military.</li>
+  <li class="space">Neue Brettthemen: Burnt, Club, Kitsch, Navajo, Marmorate, Melamine und Military.</li>
   <li class="space">Brettthema "Virtual" überarbeitet und umbenannt in "Virtual - Brown".</li>
   <li class="space">Brettthema "Virtual - Colored" umbenannt in "Virtual - Blue".</li>
   <li class="space">Brettthemen "Marble - Brown" und "Marble - Red": der Figurensatz "Merida" wurde durch "Habsburg" ersetzt.</li>
@@ -70,7 +70,7 @@ Vierte öffentliche Vorschau-Version
 <ul style="padding: 5px;">
   <li class="space">Installationsprobleme auf Ubuntu behoben (Ubuntu ist sehr unfreundlich zu eigeninstallierten Software-Paketen)</li>
   <li class="space">PGN-Archive können nun modifiziert und gespeichert werden (.pgn und .pgn.gz)</li>
-  <li class="space">Wesentliche Fehlerbereinigungen in der ChessBase-Dekodierung</li>
+  <li class="space">Wesentliche Fehlerbereinigungen in der externen Format-Dekodierung</li>
   <li class="space">Farbschema für gewöhnliche Monitore als Standard hinzugefügt, bisher war das Farbschema auf die hochwertigen Monitore ausgelegt</li>
   <li class="space">Der Dateiauswahldialog wurde fertiggestellt, insbesondere Drag &amp; Drop</li>
   <li class="space">Der Merge-Dialog wurde erweitert: es könne beliebige viele Partien mit Hilfe einer Vorschauanzeige eingefügt werden</li>
@@ -85,7 +85,7 @@ Vierte öffentliche Vorschau-Version
   <li class="space">Neue Option im Eröffnungsbaumfenster: den nächsten Partiezug mit Fettschrift anzeigen</li>
   <li class="space">Kommentareditor überarbeitet</li>
   <li class="space">Der Partieneditor erkennt nun Smileys und zeigt sie grafisch an (optional)</li>
-  <li class="space">Hilfedialog: Die CQL-Hilfeseiten sind nun komplett</li>
+  <li class="space">Hilfedialog: Die Mustersuche-Hilfeseiten sind nun komplett</li>
   <li class="space">Die Anforderungen von freedesktop.org wurden implementiert:
     <ul>
       <li class="space">Ein Desktopmenüeintrag für Chesswiz wird eingerichtet</li>
@@ -121,7 +121,7 @@ Dritte öffentliche Vorschau-Version
   <li class="space">Dateiauswahldialog erweitert und verbessert</li>
   <li class="space">Partie-Speichern/Ersetzen-Dialog verbessert</li>
   <li class="space">Verschmelzen von Partien mit optionaler Einbezugnahme von Zugumstellungen</li>
-  <li class="space">Das alte ChessBase-Format (.cbf) wird nun ebenfalls unterstützt</li>
+  <li class="space">Das ältere Format (.cbf) wird nun ebenfalls unterstützt</li>
   <li class="space">Spieler-Karteikarten implementiert</li>
   <li class="space">Datenbankarchivierung integriert</li>
   <li class="space">Setup-Dialog für Partie-Editor/Browser</li>
@@ -135,13 +135,13 @@ Dritte öffentliche Vorschau-Version
       dies ist zeitgemäß und verbessert das Layout</li>
   <li class="space">Kompaktieren von Datenbanken (nur .sci) integriert</li>
   <li class="space">Installation/Update der Spielerphotodateien über das Internet integriert</li>
-  <li class="space">Installation der ChessBase-Zeichensätze integriert</li>
+  <li class="space">Installation der externen Schach-Zeichensätze integriert</li>
   <li class="space">Turniertabelle: Optionale Anzeige von Gewinn/Remis/Verlust</li>
   <li class="space">Mausradunterstützung für alle Listen und das Schachbrett</li>
   <li class="space">Algebraische- (Normal-, Kurz- und Langform), Englische, Korrespondenz- und telegrafische Notation verfügbar</li>
   <li class="space">Der Partieeditor verfügt über eine neue optionale Anzeige: NAG-Kommentar anstatt dem NAG-Symbol im Fall einer ungebräuchlicheren Anmerkung</li>
   <li class="space">Es können nun ungeöffnete Datenbanken importiert werden</li>
-  <li class="space">Peformanceproblem beim Öffnen von ChessBase-Datenbanken gelöst</li>
+  <li class="space">Performanceproblem beim Öffnen externer Datenbanken gelöst</li>
   <li class="space">Export von Turniertabellen nach HTML-Datei</li>
   <li class="space">Ein schwerwiegendes Problem mit Tcl-Version 8.6 behoben</li>
   <li class="space">Einige Icons neu gestaltet</li>

@@ -276,7 +276,7 @@
 ::menu::mc::AllScidbBases					"Alla Scidb databaser"
 ::menu::mc::ScidBases						"Scid databaser"
 ::menu::mc::ScidbBases						"Scidb databaser"
-::menu::mc::ChessBaseBases					"ChessBase databaser"
+::menu::mc::ChessBaseBases					"CBH-databaser"
 ::menu::mc::ScidbArchives					"Scidb arkiv"
 ::menu::mc::PGNFilesArchives				"PGN filer/arkiv"
 ::menu::mc::PGNFiles							"PGN filer"
@@ -319,7 +319,7 @@
 ::menu::mc::ContactFeatureRequest	"Ö&nskemål"
 
 # Extras
-::menu::mc::InstallChessBaseFonts	"Installera ChessBase fonter"
+::menu::mc::InstallChessBaseFonts	"Installera figurfonter"
 ::menu::mc::OpenEngineLog				"Öppna &motorkonsol"
 ::menu::mc::AssignFileTypes			"Assign File &Types" ;# NEW
 
@@ -755,6 +755,7 @@
 ::application::database::mc::FileCompact						"Komprimera"
 ::application::database::mc::FileStripMoveInfo				"Rensa draginformation"
 ::application::database::mc::FileStripPGNTags				"Rensa PGN-taggar"
+::application::database::mc::Cql6Search						"Mönstersökning"
 ::application::database::mc::HelpSwitcher						"Hjälp om databasväljare"
 
 ::application::database::mc::File								"Fil"
@@ -1054,7 +1055,7 @@
 ::database::switcher::mc::Failed								"misslyckades"
 
 ::database::switcher::mc::UriRejectedDetail(open)		"Bara Scidb databaser kan öppnas:"
-::database::switcher::mc::UriRejectedDetail(import)	"Bara Scidb databaser, men inga ChessBase databaser, kan importeras:"
+::database::switcher::mc::UriRejectedDetail(import)	"Bara Scidb databaser, men inga CBH-databaser, kan importeras:"
 ::database::switcher::mc::EmptyUriList						"Innehåll som släpps är tomt."
 ::database::switcher::mc::CopyGames							"Kopiera partier"
 ::database::switcher::mc::CopyGamesFromTo					"Kopiera partier från '%src' till '%dst'"
@@ -1738,12 +1739,12 @@
 ::playercard::mc::SeachIn365ChessCom		"Sök i 365Chess.com"
 
 ### fonts ##############################################################
-::font::mc::ChessBaseFontsInstalled				"ChessBasefonter har installerats."
-::font::mc::ChessBaseFontsInstallationFailed	"Installationen av ChessBasefonter misslyckades."
-::font::mc::NoChessBaseFontFound					"Inga ChessBasefonter hittades i folder '%s'."
-::font::mc::ChessBaseFontsAlreadyInstalled	"ChessBasefonter redan installerade. Ska installationen fortsätta ändå?"
+::font::mc::ChessBaseFontsInstalled				"Figurfonter har installerats."
+::font::mc::ChessBaseFontsInstallationFailed	"Installationen av figurfonter misslyckades."
+::font::mc::NoChessBaseFontFound					"Inga figurfonter hittades i folder '%s'."
+::font::mc::ChessBaseFontsAlreadyInstalled	"Figurfonter redan installerade. Ska installationen fortsätta ändå?"
 ::font::mc::ChooseMountPoint						"Monteringspunkt för installationspartition av Windows"
-::font::mc::CopyingChessBaseFonts				"Kopierar ChessBasefonter"
+::font::mc::CopyingChessBaseFonts				"Kopierar figurfonter"
 ::font::mc::CopyFile									"Kopiera fil %s"
 ::font::mc::UpdateFontCache						"Updatera font cache"
 
@@ -2179,7 +2180,7 @@
 ::export::mc::Option(pgn,include_moveinfo)						"Exportera draginformationer (som kommentarer)"
 ::export::mc::Option(pgn,include_marks)							"Exportera markeringar (som kommentarer)"
 ::export::mc::Option(pgn,use_scidb_import_format)				"Använd Scidb-importformat"
-::export::mc::Option(pgn,use_chessbase_format)					"Använd ChessBase-format"
+::export::mc::Option(pgn,use_chessbase_format)					"Använd CBH-kompatibelt format"
 ::export::mc::Option(pgn,use_strict_pgn_standard				"Use PGN standard" ;# NEW
 ::export::mc::Option(pgn,include_ply_count_tag)					"Skriv tag 'PlyCount'"
 ::export::mc::Option(pgn,include_termination_tag)				"Skriv tag 'Termination'"
@@ -2465,7 +2466,7 @@
 ### help ###############################################################
 ::help::mc::Contents					"&Innehåll"
 ::help::mc::Index						"Inde&x"
-::help::mc::CQL						"C&QL"
+::help::mc::CQL						"&Mönstersökning"
 ::help::mc::Search					"&Sök"
 
 ::help::mc::Help						"Hjälp"
@@ -2641,7 +2642,7 @@
 ::annotation::mc::PositionalAssessments			"Positionella omdömen"
 ::annotation::mc::TimePressureCommentaries		"Tidsnödskommentarer"
 ::annotation::mc::AdditionalCommentaries			"Fler kommentarer"
-::annotation::mc::ChessBaseCommentaries			"ChessBase-kommentarer"
+::annotation::mc::ChessBaseCommentaries			"Klassiska kommentarer"
 
 ### marks ##############################################################
 ::marks::mc::MarksPalette			"Markeringar - Palett"
@@ -2755,7 +2756,7 @@
 ### fileselectionbox ###################################################
 ::dialog::fsbox::mc::ScidbDatabase			"Scidb databas"
 ::dialog::fsbox::mc::ScidDatabase			"Scid databas"
-::dialog::fsbox::mc::ChessBaseDatabase		"ChessBase databas"
+::dialog::fsbox::mc::ChessBaseDatabase		"CBH-databas"
 ::dialog::fsbox::mc::PortableGameFile		"Flyttbar partifil"
 ::dialog::fsbox::mc::PortableGameFileCompressed "Flyttbar partifil (gzip-komprimerat)"
 ::dialog::fsbox::mc::BughousePortableGameFile "Bughouse portabel partifil"

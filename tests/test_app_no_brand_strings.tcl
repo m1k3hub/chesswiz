@@ -33,6 +33,42 @@ namespace eval ::scidb::test::nobrands {
 		}
 		return $hits
 	}
+
+	proc getAllMcVars {{ns ::}} {
+		set vars {}
+		foreach child [namespace children $ns] {
+			if {[namespace tail $child] eq "mc"} {
+				foreach v [info vars ${child}::*] {
+					lappend vars $v
+				}
+			}
+			lappend vars {*}[getAllMcVars $child]
+		}
+		return $vars
+	}
+
+	proc scanMcCatalog {lang} {
+		variable BannedPattern
+		set violations {}
+		set allVars [getAllMcVars]
+		foreach v $allVars {
+			if {[array exists $v]} {
+				foreach elem [array names $v] {
+					if {[catch { set val [set ${v}($elem)] }]} continue
+					if {[regexp $BannedPattern $val match]} {
+						lappend violations [list $lang "${v}($elem)" $match $val]
+					}
+				}
+			} else {
+				if {![info exists $v]} continue
+				if {[catch { set val [set $v] }]} continue
+				if {[regexp $BannedPattern $val match]} {
+					lappend violations [list $lang $v $match $val]
+				}
+			}
+		}
+		return $violations
+	}
 }
 
 tcltest::test no-brands-in-action-list {registered actions contain no competitor product names or CQL in user/model facing text} -body {
@@ -121,6 +157,25 @@ tcltest::test no-brands-in-assistant-prompts {assistant system prompts and menu 
 		}
 	}
 	set violations
+} -result {}
+
+tcltest::test no-brands-in-mc-catalogs {loaded English and German mc catalogs contain no competitor names or CQL} -setup {
+	set prevShare $::scidb::dir::share
+	set wtShare [file normalize [file join [file dirname [file normalize [info script]]] .. tcl]]
+	if {[file isdirectory [file join $wtShare lang]]} {
+		set ::scidb::dir::share $wtShare
+	}
+	set prevLang $::mc::langID
+} -body {
+	set violations {}
+	foreach lang {en de} {
+		::mc::setLang $lang
+		set violations [concat $violations [::scidb::test::nobrands::scanMcCatalog $lang]]
+	}
+	set violations
+} -cleanup {
+	::mc::setLang $prevLang
+	set ::scidb::dir::share $prevShare
 } -result {}
 
 tcltest::cleanupTests

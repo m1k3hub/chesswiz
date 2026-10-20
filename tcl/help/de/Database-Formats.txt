@@ -37,8 +37,8 @@ Chesswiz unterstützt folgende Formate:
     <a href="#Scid">Scid</a>
   </li>
   <li>
-    <img src="../images/ft-chessbase.png" />
-    <a href="#ChessBase">ChessBase</a>
+    <img src="../images/ft-cbh.png" />
+    <a href="#Format-cbh">Proprietäres externes Format (.cbh, .cbf)</a>
   </li>
   <li>
     <img src="../images/ft-pgn.png" />
@@ -175,24 +175,22 @@ Dieses Datenbankformat ähnelt strukturell dem Scidb-Format:
 von Chesswiz nicht beachtet. Ebenso bleiben auch gespeicherte Partienlisten (Endung
 <code>.txt</code>) unbeachtet.</note>
 
-<h2 id="ChessBase">
-<img src="../images/ft-chessbase.png" />
-ChessBase (<abbr>.cbh</abbr>, <abbr>.cbf</abbr>)
+<h2 id="Format-cbh">
+<img src="../images/ft-cbh.png" />
+Proprietäres externes Format (<abbr>.cbh</abbr>, <abbr>.cbf</abbr>)
 </h2>
 
 <p>
-Es werden beide Formate unterstützt; das neue Format <abbr>.cbh</abbr> sowie das alte Format <abbr>.cbf</abbr>.
+Es werden beide Formate unterstützt: das Format <abbr>.cbh</abbr> sowie das ältere Format <abbr>.cbf</abbr>. Für wiederholte Arbeiten wird empfohlen, externe proprietäre Datenbanken in das native Format (<abbr>.sci</abbr>) zu konvertieren und dieses als Arbeitskopie zu verwenden.
 </p>
 
 <p>
-Die Firma <a href="http://www.chessbase.de">ChessBase</a> hält das Format dieser
-Datenbanken geheim und es wird deshalb nur im Lesemodus unterstützt. Nicht alle
-Partiedaten können korrekt gelesen werden; bei manchen Partien kommt es zur Meldung,
-daß die Partie nicht dekodiert werden konnte.
+Diese Formate sind proprietär und geschlossen;
+deshalb wird nur der Lesemodus unterstützt.
 </p>
 
 <annotation>
-ChessBase-Datenbanken können nicht als Referenzdatenbank verwendet werden.
+Externe proprietäre Datenbanken können nicht als Referenzdatenbank verwendet werden.
 </annotation>
 
 <p>
@@ -203,7 +201,7 @@ damit alle Namen und Texte korrekt dargestellt werden.
 </p>
 
 <p>
-Eine Datenbank im neuen ChessBase-Format besteht aus sehr vielen Dateien, die wichtigsten sind:
+Eine Datenbank in diesem Format besteht aus sehr vielen Dateien, die wichtigsten sind:
 </p>
 
 <box>

@@ -277,7 +277,7 @@
 ::menu::mc::AllScidbBases		"Minde Scidb adatbázis"
 ::menu::mc::ScidBases			"Scid adatbázisok"
 ::menu::mc::ScidbBases			"Scidb adatbázisok"
-::menu::mc::ChessBaseBases		"ChessBase adatbázisok"
+::menu::mc::ChessBaseBases		"CBH adatbázisok"
 ::menu::mc::ScidbArchives		"Scidb archívumok"
 ::menu::mc::PGNFilesArchives		"PGN fájlok/arhívumok"
 ::menu::mc::PGNFiles			"PGN fájlok"
@@ -320,7 +320,7 @@
 ::menu::mc::ContactFeatureRequest	"&Feature Request" ;# NEW
 
 # Extras
-::menu::mc::InstallChessBaseFonts	"ChessBase betűtípusok telepítése" ;#"Install ChessBase Fonts"  ;#NEW
+::menu::mc::InstallChessBaseFonts	"Figura betűtípusok telepítése" ;#"Install Figurine Fonts"  ;#NEW
 ::menu::mc::OpenEngineLog		"&Elemző konzol megnyitása"  ;#NEW
 ::menu::mc::AssignFileTypes		"Assign File &Types" ;# NEW
 
@@ -765,6 +765,7 @@
 ::application::database::mc::FileCompact		"Kompakt"
 ::application::database::mc::FileStripMoveInfo		"Strip Move Information" ;# NEW
 ::application::database::mc::FileStripPGNTags		"Strip PGN Tags" ;# NEW
+::application::database::mc::Cql6Search					"Mintakeresés"
 ::application::database::mc::HelpSwitcher		"Adatbázis váltó(?) Súgó"
 
 ::application::database::mc::File			"Fájl"
@@ -1064,7 +1065,7 @@
 ::database::switcher::mc::Failed			"meghiúsult"
 
 ::database::switcher::mc::UriRejectedDetail(open)	"Csak Scidb adabázisok nyithatóak meg:"
-::database::switcher::mc::UriRejectedDetail(import)	"Only Scidb databases, but no ChessBase databases, can be imported:" ;# NEW
+::database::switcher::mc::UriRejectedDetail(import)	"Only Scidb databases, but no CBH databases, can be imported:" ;# NEW
 ::database::switcher::mc::EmptyUriList			"Drop content is empty." ;# NEW
 ::database::switcher::mc::CopyGames			"Játszmák másolása"
 ::database::switcher::mc::CopyGamesFromTo		"Játszmák másolása '%src'-ból/-ből '%dst'-ba/-be"
@@ -1748,12 +1749,12 @@
 ::playercard::mc::SeachIn365ChessCom	"Keresés a 365Chess.com -on"
 
 ### fonts ##############################################################
-::font::mc::ChessBaseFontsInstalled		"ChessBase fonts successfully installed." ;# NEW
-::font::mc::ChessBaseFontsInstallationFailed	"Installation of ChessBase fonts failed." ;# NEW
-::font::mc::NoChessBaseFontFound		"No ChessBase font found in folder '%s'." ;# NEW
-::font::mc::ChessBaseFontsAlreadyInstalled	"ChessBase fonts already installed. Install anyway?" ;# NEW
+::font::mc::ChessBaseFontsInstalled		"Figura betűtípusok sikeresen telepítve." ;# NEW
+::font::mc::ChessBaseFontsInstallationFailed	"A figura betűtípusok telepítése nem sikerült." ;# NEW
+::font::mc::NoChessBaseFontFound		"Nem található figura betűtípus a(z) '%s' mappában." ;# NEW
+::font::mc::ChessBaseFontsAlreadyInstalled	"A figura betűtípusok már telepítve vannak. Mégis telepíti?" ;# NEW
 ::font::mc::ChooseMountPoint			"Mount point of Windows installation partition" ;# NEW
-::font::mc::CopyingChessBaseFonts		"Copying ChessBase fonts" ;# NEW
+::font::mc::CopyingChessBaseFonts		"Figura betűtípusok másolása" ;# NEW
 ::font::mc::CopyFile				"Copy file %s" ;# NEW
 ::font::mc::UpdateFontCache			"Updating font cache" ;# NEW
 
@@ -2188,7 +2189,7 @@
 ::export::mc::Option(pgn,include_moveinfo)		"Lépés információk exportálása (megjegyzésként)"
 ::export::mc::Option(pgn,include_marks)			"Export marks (megjegyzésként)"
 ::export::mc::Option(pgn,use_scidb_import_format)	"Scidb Import Formátum használata"
-::export::mc::Option(pgn,use_chessbase_format)		"ChessBase formátum használata"
+::export::mc::Option(pgn,use_chessbase_format)		"CBH-kompatibilis formátum használata"
 ::export::mc::Option(pgn,use_strict_pgn_standard	"Use PGN standard" ;# NEW
 ::export::mc::Option(pgn,include_ply_count_tag)		"'PlyCount' cimke írása"
 ::export::mc::Option(pgn,include_termination_tag)	"'Termination' cimke írása"
@@ -2474,7 +2475,7 @@
 ### help ###############################################################
 ::help::mc::Contents			"&Tartalom"
 ::help::mc::Index			"&Tárgymutató"
-::help::mc::CQL				"C&QL"
+::help::mc::CQL				"&Mintakeresés"
 ::help::mc::Search			"&Keresés"
 
 ::help::mc::Help			"Súgó"
@@ -2649,7 +2650,7 @@
 ::annotation::mc::PositionalAssessments		"Állás értékelések"
 ::annotation::mc::TimePressureCommentaries	"Időzavar jelölések"
 ::annotation::mc::AdditionalCommentaries	"További megjegyzések"
-::annotation::mc::ChessBaseCommentaries		"ChessBase megjegyzések"
+::annotation::mc::ChessBaseCommentaries		"Klasszikus megjegyzések"
 
 ### marks ##############################################################
 ::marks::mc::MarksPalette			"Marks - Palette"
@@ -2763,7 +2764,7 @@
 ### fileselectionbox ###################################################
 ::dialog::fsbox::mc::ScidbDatabase		"Scidb adatbázis"
 ::dialog::fsbox::mc::ScidDatabase		"Scid adatbázis"
-::dialog::fsbox::mc::ChessBaseDatabase		"ChessBase adatbázis"
+::dialog::fsbox::mc::ChessBaseDatabase		"CBH adatbázis"
 ::dialog::fsbox::mc::PortableGameFile		"PGN fájl" ;# PGN sakkfeljegyzés
 ::dialog::fsbox::mc::PortableGameFileCompressed "PGN fájl (gzip-pel tömörítve)"
 ::dialog::fsbox::mc::BughousePortableGameFile "Bughouse PGN fájl"
