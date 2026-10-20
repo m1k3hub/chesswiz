@@ -173,6 +173,44 @@ tcltest::test speech-stub-cleans-temp {the stub path leaves no recording behind 
 	}
 } -result {}
 
+tcltest::test speech-session-directory-isolated {each session has its own subdirectory and cleanup touches only its own files} -body {
+	::scidb::test::speech::isolated {
+		set sessionDir [::application::speech::TempDir]
+		set userDir [file dirname $sessionDir]
+		set sessionName [file tail $sessionDir]
+
+		# Verify the session directory is a dedicated subdirectory with pid and random token
+		set isSubdir [expr {[string match "session-[pid]-*" $sessionName] && [file isdirectory $sessionDir]}]
+
+		# Simulate a concurrent session belonging to the same user
+		set randTag [format %06x [expr {int(rand() * 0xffffff)}]]
+		set otherDir [file join $userDir "session-[pid]-sim-${randTag}"]
+		catch { exec mkdir -m 0700 -- $otherDir }
+		set otherFile [file join $otherDir "ask-other.wav"]
+		set f [open $otherFile w]; puts $f "concurrent-recording"; close $f
+
+		# ClearTemp must only clear files in its own session directory
+		::scidb::test::speech::ClearTemp
+		set otherSurvived [file exists $otherFile]
+
+		# Running speech stub must leave its own session directory empty without touching otherDir
+		::application::speech::configure stub {return "open the last game"}
+		::application::speech::toggle
+		::application::speech::toggle
+		::scidb::test::speech::WaitIdle
+
+		set ownLeftover [glob -nocomplain [file join [::application::speech::TempDir] *]]
+		set otherStillExists [file exists $otherFile]
+		set otherContent ""
+		if {$otherStillExists} {
+			set f [open $otherFile r]; set otherContent [string trim [read $f]]; close $f
+		}
+		catch { file delete -force $otherDir }
+
+		list $isSubdir $otherSurvived $ownLeftover $otherStillExists $otherContent
+	}
+} -result {1 1 {} 1 concurrent-recording}
+
 # ----------------------------------------------------------------------
 # No path: the microphone is hidden and Preferences says what to install.
 # ----------------------------------------------------------------------

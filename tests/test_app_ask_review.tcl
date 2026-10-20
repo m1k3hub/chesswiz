@@ -81,7 +81,7 @@ tcltest::test review-plan-debug-script {plan approval discloses the full Tcl scr
 } -result {1 1 1}
 
 tcltest::test review-speech-path-spaces {speech executable paths containing spaces remain usable} -body {
-    set dir [file join [pwd] tests tmp-app finish {speech path}]
+    set dir [file join [pwd] tests tmp-app finish "speech path [pid]"]
     file mkdir $dir
     set exe [file join $dir review-whisper]
     set chan [open $exe w]; puts $chan {#!/bin/sh}; puts $chan {printf 'hello\n'}; close $chan
@@ -102,7 +102,7 @@ tcltest::test review-speech-path-spaces {speech executable paths containing spac
 } -result {1 0 0 hello hello 1}
 
 tcltest::test review-speech-symlink {preplanted transcript links cannot clobber another file} -body {
-    set base [file join [pwd] tests tmp-app finish symlink-probe]
+    set base [file join [pwd] tests tmp-app finish "symlink-probe-[pid]"]
     file mkdir [file join $base chesswiz-ask]
     set victim [file join $base victim.txt]
     set chan [open $victim w]; puts $chan original; close $chan
@@ -248,7 +248,8 @@ tcltest::test review-poll-exited-missing-output {missing output from an exited c
 } -result {0 idle}
 
 tcltest::test review-speech-private-files {symlink and permissive directories are refused and files are private and exclusive} -setup {
-    set base [tcltest::makeDirectory review-private-temp]
+    set testTargetDir [file join [pwd] tests tmp-app finish]
+    set base [tcltest::makeDirectory [format "review-private-temp-%d" [pid]] $testTargetDir]
     set hadTmp [info exists ::env(TMPDIR)]
     if {$hadTmp} {set savedTmp $::env(TMPDIR)}
     set ::env(TMPDIR) $base
@@ -274,7 +275,7 @@ tcltest::test review-speech-private-files {symlink and permissive directories ar
 } -cleanup {
     ::application::speech::Cancel
     if {$hadTmp} {set ::env(TMPDIR) $savedTmp} else {unset ::env(TMPDIR)}
-    tcltest::removeDirectory review-private-temp
+    tcltest::removeDirectory [format "review-private-temp-%d" [pid]] $testTargetDir
 } -result {1 1 1 1 1 1 preserved}
 
 tcltest::test review-speech-dequeued-callback {a callback already dequeued at cancel cannot touch a replacement session} -setup {

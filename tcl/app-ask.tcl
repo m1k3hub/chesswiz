@@ -121,6 +121,7 @@ proc ::application::ask::Build {notebook} {
 	set Priv(placeholder) $placeholder
 	set Priv(mic) $mic
 	set Priv(notebook) $notebook
+	bind $frame <Destroy> +::application::speech::CleanupSession
 
 	SyncMic
 	PlaceholderState
@@ -528,6 +529,7 @@ array set Priv {
 	stable		0
 	lastSize	-1
 	tempFiles	{}
+	sessionDir	""
 }
 
 } ;# namespace speech
@@ -949,16 +951,35 @@ proc ::application::speech::transcribeFile {file} {
 
 # A directory is created atomically with private permissions. Existing
 # paths must be real directories owned by this user and remain private.
+# Each process/session has its own private subdirectory (pid + random)
+# so concurrent instances never collide or clean each other's files.
 proc ::application::speech::TempDir {} {
+	variable Priv
 	set base /tmp
 	if {[info exists ::env(TMPDIR)] && $::env(TMPDIR) ne ""} { set base $::env(TMPDIR) }
-	set dir [file join [file normalize $base] chesswiz-ask-[exec id -u]]
-	catch {exec mkdir -m 0700 -- $dir}
-	if {[file type $dir] ne "directory" || ![file owned $dir]
-		|| ([file attributes $dir -permissions] & 0077) != 0} {
+	set userDir [file join [file normalize $base] chesswiz-ask-[exec id -u]]
+	catch {exec mkdir -m 0700 -- $userDir}
+	if {[file type $userDir] ne "directory" || ![file owned $userDir]
+		|| ([file attributes $userDir -permissions] & 0077) != 0} {
 		error "speech temporary directory is not private"
 	}
-	return $dir
+	if {![info exists Priv(sessionDir)] || $Priv(sessionDir) eq ""
+		|| [file dirname $Priv(sessionDir)] ne $userDir
+		|| ![file exists $Priv(sessionDir)]} {
+		for {set attempt 0} {$attempt < 10} {incr attempt} {
+			set rand [format %06x [expr {int(rand() * 0xffffff)}]]
+			set sdir [file join $userDir "session-[pid]-$rand"]
+			if {[file exists $sdir]} { continue }
+			catch {exec mkdir -m 0700 -- $sdir}
+			if {[file exists $sdir]} { break }
+		}
+		if {![file exists $sdir] || [file type $sdir] ne "directory" || ![file owned $sdir]
+			|| ([file attributes $sdir -permissions] & 0077) != 0} {
+			error "speech session directory is not private"
+		}
+		set Priv(sessionDir) $sdir
+	}
+	return $Priv(sessionDir)
 }
 
 # All timers carry ownership of the current session, including idle work.
@@ -1022,6 +1043,15 @@ proc ::application::speech::Cleanup {} {
 	set Priv(transcribeOut) ""
 	set Priv(transcribePids) {}
 	set Priv(tempFiles) {}
+}
+
+proc ::application::speech::CleanupSession {} {
+	variable Priv
+	Cleanup
+	if {[info exists Priv(sessionDir)] && $Priv(sessionDir) ne "" && [file exists $Priv(sessionDir)]} {
+		catch { file delete -force $Priv(sessionDir) }
+		set Priv(sessionDir) ""
+	}
 }
 
 proc ::application::speech::SetState {state} {
