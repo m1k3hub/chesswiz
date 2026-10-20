@@ -549,16 +549,148 @@ proc ::menu::DefineTree {} {
 }
 
 proc ::menu::Label {id} {
+	# Focus-dependent Edit entries (PROPOSAL section 7.4): on the board the
+	# Ctrl+A/Ctrl+C pair edits the annotation/comment, in a text widget it
+	# selects/copies. With no focus the text meaning is the menu meaning, so
+	# the built drop-down keeps its default labels.
+	if {$id eq "app-select-all"} {
+		if {[::menu::BoardFocus?]} { return $::application::pgn::mc::EditAnnotation }
+		return [MC SelectAll]
+	}
+	if {$id eq "app-copy"} {
+		if {[::menu::BoardFocus?]} { return $::application::pgn::mc::EditCommentAfter }
+		return [MC EditCopy]
+	}
 	# Label of a registry action (used by the dump and the tests).
 	if {[catch { set rec [::action::get $id] }]} { return $id }
 	return [dict get $rec label]
 }
 
+# Is the focus in a board/notation pane (not in a text field)?
+proc ::menu::BoardFocus? {} {
+	set w [focus]
+	if {$w eq ""} { return 0 }
+	if {[::menu::TextWidget?]} { return 0 }
+	return [string match .application.nb.board.* $w]
+}
+
+# The focused text widget, if any (editable or read-only: copy/select still work).
+proc ::menu::TextWidget? {} {
+	set w [focus]
+	if {$w eq ""} { return 0 }
+	return [expr {[winfo class $w] in {Text Entry TEntry TCombobox Spinbox TSpinbox}}]
+}
+
+proc ::menu::TextWidget {} {
+	set w [focus]
+	if {$w ne "" && [::menu::TextWidget?]} { return $w }
+	return ""
+}
+
+# A menu accelerator in the drop-down's own spelling (Ctrl+Down, F10,
+# Ctrl+Shift+G). It is formatted from the key spec the binding uses; the
+# localised arrow glyphs of the key-editor table are not used here.
+proc ::menu::FormatAccel {spec} {
+	if {[llength [info commands ::application::keyEditor::NormalizeKeySpec]]} {
+		set spec [::application::keyEditor::NormalizeKeySpec $spec]
+	}
+	set mods {}
+	set key $spec
+	if {[regexp {^(.*-)([^<>-]+)$} $spec -> modifiers keysym]} {
+		set key $keysym
+		foreach mod [split $modifiers -] {
+			if {$mod eq ""} { continue }
+			switch -- [string tolower $mod] {
+				control { lappend mods Ctrl }
+				shift	 { lappend mods Shift }
+				alt		 { lappend mods Alt }
+				default { lappend mods [string totitle $mod] }
+			}
+		}
+	}
+	if {[string length $key] == 1 && [string is alpha $key]} {
+		set key [string toupper $key]
+	}
+	if {[llength $mods] == 0} { return $key }
+	return "[join $mods +]+$key"
+}
+
 proc ::menu::Accel {id} {
+	# The menu shows the key the binding uses, so a user override moves the
+	# accelerator with it (VAL-REG-003). Actions outside the key-editor table
+	# keep the key registered with their drop-down row.
+	if {[llength [info commands ::application::keyEditor::CurrentKey]]} {
+		if {[catch { set key [::application::keyEditor::CurrentKey $id] }]} { set key "" }
+		if {$key ne ""} { return [::menu::FormatAccel $key] }
+	}
 	if {[catch { set rec [::action::get $id] }]} { return "" }
 	set keys [dict get $rec keys]
 	if {[llength $keys] >= 2} { return [lindex $keys 1] }
 	return ""
+}
+
+# Accelerator of a cascade row (New Database / New Game). New Game reads
+# the key-editor binding; New Database is shown only while its binding
+# exists, so the advertised key is a real one.
+proc ::menu::CascadeAccel {labelName {fallback ""}} {
+	switch -- $labelName {
+		NewGame {
+			set accel [::menu::Accel game-new]
+			if {$accel ne ""} { return $accel }
+		}
+		NewDatabase {
+			foreach spec {Control-Shift-n Control-Shift-N} {
+				if {[bind .application <$spec>] ne ""} {
+					return [::menu::FormatAccel $spec]
+				}
+			}
+		}
+	}
+	return $fallback
+}
+
+# A posted drop-down keeps the accelerators of the bindings that were in
+# effect when it was filled. A rebind (or a scheme switch) calls this to
+# move the rows to the new keys without rebuilding the posted menu.
+proc ::menu::RefreshAccelerators {} {
+	variable DropdownWidget
+
+	if {$DropdownWidget eq "" || ![winfo exists $DropdownWidget]} { return }
+	::menu::UpdateAccelerators $DropdownWidget
+}
+
+proc ::menu::UpdateAccelerators {menu} {
+	set n [$menu index end]
+	if {$n eq "" || $n eq "none"} { return }
+	for {set i 0} {$i <= $n} {incr i} {
+		set type [$menu type $i]
+		if {$type eq "cascade"} {
+			set sub ""
+			catch { set sub [$menu entrycget $i -menu] }
+			if {$sub ne "" && [winfo exists $sub]} {
+				::menu::UpdateAccelerators $sub
+			}
+			set label ""
+			catch { set label [NormLabel [$menu entrycget $i -label]] }
+			if {$label ne ""} {
+				set accel ""
+				if {$label eq [NormLabel [MC NewDatabase]]} {
+					set accel [::menu::CascadeAccel NewDatabase ""]
+				} elseif {$label eq [NormLabel [MC NewGame]]} {
+					set accel [::menu::CascadeAccel NewGame ""]
+				}
+				if {$accel ne ""} {
+					catch { $menu entryconfigure $i -accelerator $accel }
+				}
+			}
+		} elseif {$type in {command checkbutton radiobutton}} {
+			set cmd ""
+			catch { set cmd [$menu entrycget $i -command] }
+			if {[regexp {::action::run (\S+)$} $cmd -> id]} {
+				catch { $menu entryconfigure $i -accelerator [::menu::Accel $id] }
+			}
+		}
+	}
 }
 
 # ----------------------------------------------------------------------
@@ -575,6 +707,7 @@ proc ::menu::Register {id label {accel ""} {visible ""} {enabled ""} {order ""}}
 		dict set rec menu $order
 		dict set rec dropdown $order
 		if {$label ne ""} { dict set rec label $label }
+		if {$accel ne ""} { dict set rec keys [list {} $accel] }
 		if {$visible ne ""} { dict set rec visible $visible }
 		if {$enabled ne ""} { dict set rec enabled $enabled }
 		dict set ::action::Registry $id $rec
@@ -815,7 +948,7 @@ proc ::menu::BuildDropdown {menu} {
 	foreach top $DropdownTree {
 		if {[lindex $top 0] ne "cascade"} { continue }
 		set labelName [lindex $top 1]
-		set accel [lindex $top 2]
+		set accel [::menu::CascadeAccel $labelName [lindex $top 2]]
 		set sub $menu.[WidgetName [MC $labelName]]
 		catch { destroy $sub }
 		menu $sub -tearoff 0
@@ -893,7 +1026,7 @@ proc ::menu::FillNodes {nodes menu level} {
 			}
 			cascade {
 				set labelName [lindex $node 1]
-				set accel [lindex $node 2]
+				set accel [::menu::CascadeAccel $labelName [lindex $node 2]]
 				set children [lindex $node 3]
 				# A static cascade whose rows are all hidden (module absent,
 				# no database, ...) would be a dead entry: drop it.
@@ -1165,7 +1298,7 @@ proc ::menu::Dump {menu} {
 		menu $sub -tearoff 0
 		$sub configure -postcommand [list ::menu::FillTop $labelName $sub]
 		lassign [AmpText [MC $labelName]] text ul
-		$menu add cascade -label $text -underline $ul -menu $sub -accelerator [lindex $top 2]
+		$menu add cascade -label $text -underline $ul -menu $sub -accelerator [::menu::CascadeAccel $labelName [lindex $top 2]]
 		::menu::FillTop $labelName $sub
 	}
 	# Keep dump mode on while the submenus are rendered: DumpNodes fills
@@ -1340,8 +1473,13 @@ proc ::menu::Do {id} {
 			return
 		}
 		app-copy {
-			set w [FocusText]
-			if {$w ne ""} { catch { ::tk_textCopy $w } }
+			# focus-dependent, like the menu label: text copies, the board
+			# edits the comment after the move (PROPOSAL section 7.4)
+			if {[::menu::TextWidget?]} {
+				catch { ::tk_textCopy [focus] }
+			} else {
+				catch { ::application::pgn::editComment after }
+			}
 			return
 		}
 		app-paste {
@@ -1350,8 +1488,11 @@ proc ::menu::Do {id} {
 			return
 		}
 		app-select-all {
-			set w [FocusText]
-			if {$w ne ""} { catch { $w tag add sel 1.0 end } }
+			if {[::menu::TextWidget?]} {
+				catch { [focus] tag add sel 1.0 end }
+			} else {
+				catch { ::application::pgn::editAnnotation }
+			}
 			return
 		}
 		app-find { return [::application::keyEditor::Find [focus]] }
@@ -1549,3 +1690,8 @@ proc ::menu::ToggleBoardOption {option} {
 	catch { ::application::board::Redraw }
 	return
 }
+
+# The key-editor ids are registry ids (VAL-REG-003). Do this after the
+# drop-down module is loaded; ::menu::Register later refreshes the
+# placement of the ids the drop-down also carries.
+catch { ::application::keyEditor::RegisterActions }

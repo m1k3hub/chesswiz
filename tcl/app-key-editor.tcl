@@ -98,9 +98,11 @@ set Find					"&Find"
 # Navigation, board and annotation keys live on the board widgets
 # (tcl/app-board.tcl bind/bindKeys); quit, log, help, fullscreen and find
 # live on .application (tcl/menu.tcl setup, tcl/widgets/searchentry.tcl);
-# the ChessBase-only actions (board flip, the NAG keys, new game) are
-# listed so their names show in a conflict message and their keys can
-# be changed for the ChessBase scheme.
+# the ChessBase-only actions (board flip, the NAG keys) are listed so
+# their names show in a conflict message and their keys can be changed
+# for the ChessBase scheme. New game is a normal app action: the menu
+# advertises Ctrl+Shift+G, and the deprecated Ctrl+N alias is bound by
+# ApplyShortcutScheme without appearing in this table (decision D-4).
 variable Actions {
 	{nav-back				::browser::mc::GoBackward					board		Left					Left					{::application::board::Goto -1}}
 	{nav-forward			::browser::mc::GoForward					board		Right					Right					{::application::board::Goto +1}}
@@ -112,7 +114,7 @@ variable Actions {
 	{nav-leave-var			::application::board::mc::GoIntPrevVar		board		Up						m						{::application::board::Goto up}}
 	{board-flip				::overview::mc::RotateBoard					chessbase	{}						Control-f			{::application::board::Rotate $::application::board::Vars(widget:frame)}}
 	{board-null-move		::application::board::mc::InsertNullMove	board		Control-0				Control-Alt-0		{::application::board::InsertNullMove}}
-	{game-new				::gamebar::mc::GameNew						app		{}						Control-n			{::menu::gameNew .application}}
+	{game-new				::gamebar::mc::GameNew						app		Control-Shift-G			{}						{::menu::gameNew .application}}
 	{game-save				mc::SaveNewGame							board		Control-s				Control-s			{::application::board::SaveGame add}}
 	{game-replace			mc::ReplaceGame							board		Control-r				Control-r			{::application::board::SaveGame replace}}
 	{game-next				::browser::mc::LoadNextGame				board		Control-Down			F10					{::application::board::LoadGame(any) .application next}}
@@ -308,6 +310,51 @@ proc ::application::keyEditor::LabelOf {action} {
 		if {$a eq $action} { return [ActionLabel $a $labelVar] }
 	}
 	return $action
+}
+
+
+# Run one of the table's commands from the action registry. The table
+# commands are the scheme's own handlers, so a menu/palette/assistant
+# invocation of the same id does exactly what the key does. Find is
+# special: its table command contains the %W substitution, which only a
+# key event provides.
+proc ::application::keyEditor::RunAction {action args} {
+	variable Actions
+
+	if {$action eq "app-find"} { return [Find [focus]] }
+	foreach entry $Actions {
+		lassign $entry a labelVar tag keySpec cbSpec cmd
+		if {$a eq $action} { return [uplevel #0 $cmd] }
+	}
+	return -code error "unknown key-editor action $action"
+}
+
+
+# Every id in the key-editor table is a registry id (VAL-REG-003). The
+# drop-down carries most of them; the board-only navigation and
+# annotation actions are registered here, so menus, the palette and the
+# assistant resolve the same ids. Existing registrations keep their
+# handler; ::menu::Register refreshes their placement and label.
+proc ::application::keyEditor::RegisterActions {} {
+	variable Actions
+
+	foreach entry $Actions {
+		lassign $entry action labelVar tag keySpec cbSpec cmd
+		if {[dict exists $::action::Registry $action]} { continue }
+		set label [ActionLabel $action $labelVar]
+		::action::register $action [dict create \
+			label    $label \
+			object   {} \
+			args     {} \
+			handler  [list ::application::keyEditor::RunAction $action] \
+			what     $label \
+			ai       0 \
+			keys     [list {} {}] \
+			menu     {} \
+			dropdown {} \
+			doc      $label \
+		]
+	}
 }
 
 
@@ -612,6 +659,8 @@ proc ::application::keyEditor::SetKey {action spec} {
 	UnbindAction $action
 	set Options(shortcut:keys,$action) $spec
 	BindAction $action
+	# menu accelerators are read from the binding, so they change with it
+	catch { ::menu::RefreshAccelerators }
 	return ""
 }
 

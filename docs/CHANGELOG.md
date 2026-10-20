@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — main drop-down shortcuts
+
+- The reorganised drop-down advertises the keys that are really bound:
+  New Database is `Ctrl+Shift+N`, New Game is `Ctrl+Shift+G`, and Game ▸ Next /
+  Previous show the active shortcut scheme's key (`Ctrl+Down` / `Ctrl+Up` in the
+  app scheme, `F10` / `Ctrl+F10` in the ChessBase scheme). Next/previous stay
+  bound to both pairs.
+- `Ctrl+N` still starts a new game as a **deprecated hidden alias**; it is no
+  longer advertised in the drop-down, the palette or the key editor. The Edit
+  menu's `Ctrl+A` / `Ctrl+C` labels follow the focus (board annotation/comment
+  versus text select-all/copy).
+
 ## Unreleased — three more audit features (A6 novelty, B4 database trends, C4 media transcript)
 
 - **A6 — move novelty** (`tcl/ai-novelty.tcl`): label a move against master

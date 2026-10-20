@@ -126,7 +126,7 @@ tcltest::test key-editor-current-key {the current key follows the scheme and the
 	list $chesswiz $chessbase
 } -cleanup {
 	::keyEditorTest::scheme $::keyEditorTest::Scheme
-} -result {{Control-s {} Control-c Up {}} {Control-a m F10 Control-f Control-s}}
+} -result {{Control-s Control-Shift-G Control-c Up {}} {Control-a m F10 Control-f Control-s}}
 
 tcltest::test key-editor-current-key-override {an override wins over the scheme key} -setup {
 	::keyEditorTest::scheme chesswiz

@@ -276,9 +276,31 @@ proc ApplyShortcutScheme {args} {
 		bind .application $key $ShortcutDefaults($key)
 	}
 	array unset ShortcutDefaults
+
+	# Shortcut collisions (PROPOSAL section 7.4, decision D-4). The menu
+	# advertises Ctrl+Shift+N (new database) and Ctrl+Shift+G (new game);
+	# the deprecated Ctrl+N is kept as a hidden alias for new game in both
+	# schemes and is shown nowhere. F10/Ctrl+F10 stay prev/next in both
+	# schemes while the menu shows the active scheme's key (Ctrl+Down and
+	# Ctrl+Up in the app scheme).
+	foreach {spec action} {
+		Control-Shift-n newdb
+		Control-Shift-N newdb
+		Control-Shift-g new
+		Control-Shift-G new
+		Control-n       new
+		Control-N       new
+		F10             next
+		Control-F10     prev
+	} {
+		bind .application <$spec> \
+			[list ::application::ShortcutApplicationCommand %W $action]
+	}
+
 	if {$Options(shortcut:scheme) ne "chessbase"} {
 		# the user key overrides come last: they replace the scheme bindings
 		::application::keyEditor::ApplyOverrides
+		catch { ::menu::RefreshAccelerators }
 		return
 	}
 	foreach key {a A} {
@@ -330,12 +352,13 @@ proc ApplyShortcutScheme {args} {
 		foreach letter [list $key [string toupper $key]] {
 			set event <Control-$letter>
 			set ShortcutDefaults($event) [bind .application $event]
-			bind .application $event [namespace code [list ShortcutApplicationCommand %W $action]]
+			bind .application $event [list ::application::ShortcutApplicationCommand %W $action]
 		}
 	}
 
 	# the user key overrides come last: they replace the scheme bindings
 	::application::keyEditor::ApplyOverrides
+	catch { ::menu::RefreshAccelerators }
 }
 
 
@@ -394,6 +417,9 @@ proc ShortcutApplicationCommand {w action} {
 	if {[winfo class $w] in {Entry TEntry Text TCombobox Spinbox TSpinbox}} { return }
 	switch $action {
 		new  { ::menu::gameNew .application }
+		newdb { ::menu::dbNew .application Normal }
+		next { ::application::board::LoadGame(any) .application next }
+		prev { ::application::board::LoadGame(any) .application prev }
 		open { ::menu::dbOpen .application }
 		search - database {
 			if {[.application.nb select] ne ".application.nb.database"} {
