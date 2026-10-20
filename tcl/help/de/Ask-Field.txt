@@ -1,0 +1,158 @@
+<!-- ======================================================================
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+======================================================================= -->
+
+INDEX Fragen-Feld
+INDEX Aktionspalette#Result-List
+INDEX Befehlspalette#Result-List
+INDEX Assistent#Assistant
+INDEX Spracheingabe#Speech-Input
+INDEX Mikrofon#Speech-Input
+INDEX Tastaturkürzel#Shortcuts
+TITLE Das Fragen-Feld und der Assistent
+
+<p>
+Das Fragen-Feld in der oberen Leiste ermöglicht den schnellen Zugriff auf Aktionen und
+Befehle in ganz Chesswiz. Es vereint eine schnelle Aktionspalette, Anfragen in
+natürlicher Sprache und eine optionale lokale Spracheingabe in einem einzigen Feld.
+</p>
+
+<ul>
+  <li><a href="#Ask-Field">Das Fragen-Feld</a></li>
+  <li><a href="#Result-List">Aktionspalette und Ergebnisliste</a></li>
+  <li><a href="#Speech-Input">Spracheingabe</a></li>
+  <li><a href="#Shortcuts">Tastaturkürzel</a></li>
+  <li><a href="#Assistant">Der Assistent</a></li>
+</ul>
+
+<h3 id="Ask-Field">Das Fragen-Feld</h3>
+
+<p>
+Das Fragen-Feld befindet sich in der oberen Leiste des Hauptfensters,
+unmittelbar links neben dem Hauptmenü. Es fungiert als Aktionspalette
+der Anwendung direkt im Hauptfenster, ohne dass ein separater Palettendialog
+erforderlich ist.
+</p>
+
+<p>
+Wenn das Feld leer ist, wird ein hellgrauer Platzhaltertext angezeigt:
+<i>"Fragen oder Chesswiz sagen, was getan werden soll (Strg+K)"</i>. Sobald Sie mit
+der Eingabe beginnen, verschwindet der Platzhalter und die Ergebnisliste öffnet sich
+unterhalb des Feldes. Wenn das Feld leer ist, blättert das Drücken der Tasten
+<nobr><b>Auf</b></nobr> oder <nobr><b>Ab</b></nobr> durch den Verlauf Ihrer letzten Anfragen.
+</p>
+
+<h3 id="Result-List">Aktionspalette und Ergebnisliste</h3>
+
+<p>
+Das Tippen im Fragen-Feld filtert das Aktionsregister von Chesswiz mit jedem Tastendruck.
+Es werden nur ausführbare Aktionen angezeigt: Eine Aktion erscheint nur dann, wenn sie
+entsprechend dem aktuellen Anwendungszustand sowohl aktiviert als auch sichtbar ist
+(nach denselben Regeln wie im Hauptmenü).
+</p>
+
+<p>
+Passende Aktionen werden mittels Fuzzy-Suche über ihre Bezeichnungen, Dokumentationen
+und Tastaturkürzel bewertet und sortiert. Jeder Eintrag zeigt:
+</p>
+
+<ul>
+  <li>Die beschreibende Aktionsbezeichnung.</li>
+  <li>Das dieser Aktion zugewiesene Tastaturkürzel, falls vorhanden.</li>
+</ul>
+
+<p>
+Sie können Einträge aus der Ergebnisliste navigieren und ausführen:
+</p>
+
+<ul>
+  <li>Die Pfeiltasten <nobr><b>Auf</b></nobr> und <nobr><b>Ab</b></nobr> bewegen die Auswahl in der Liste nach oben und unten.</li>
+  <li><nobr><b>Eingabe</b></nobr> oder <nobr><b>Num_Enter</b></nobr> (oder ein Mausklick) führt die ausgewählte Aktion aus. Der Befehl läuft über die Aktionsausführung, die sicherstellt, dass alle Sicherheitsabfragen und Bestätigungsdialoge greifen.</li>
+  <li><nobr><b>Escape</b></nobr> schließt die Ergebnisliste und gibt den Fokus an das zuvor aktive Element zurück (wie etwa das Schachbrett).</li>
+</ul>
+
+<p>
+Der letzte Eintrag in der Ergebnisliste lautet immer <b>Den Assistenten fragen</b>. Die Auswahl dieses
+Eintrags oder das Drücken der <nobr><b>Eingabetaste</b></nobr> bei einer Anfrage, die keiner registrierten
+Aktion entspricht, sendet den Anfragetext direkt an den Assistenten.
+</p>
+
+<h3 id="Speech-Input">Spracheingabe</h3>
+
+<p>
+Auf der rechten Seite des Fragen-Feldes befindet sich eine Mikrofonschaltfläche mit der
+Beschriftung <b>Sprechen</b>. Ein Klick auf diese Schaltfläche nimmt Sprache auf,
+transkribiert sie lokal und fügt den transkribierten Text direkt an der Cursorposition
+in das Fragen-Feld ein.
+</p>
+
+<note>
+Die Spracheingabe dient ausschließlich der Eingabe: Chesswiz erzeugt niemals Sprachausgaben.
+Der transkribierte Text bleibt im Feld vollständig editierbar und wird erst dann gesendet
+oder ausgeführt, wenn Sie ausdrücklich die <nobr><b>Eingabetaste</b></nobr> drücken.
+</note>
+
+<p>
+Die gesamte Sprachverarbeitung erfolgt lokal mittels externer Werkzeuge, ohne externe
+Netzwerkdienste oder eingebundene Audiobibliotheken:
+</p>
+
+<ul>
+  <li><b>Linux</b>: Verwendet whisper.cpps <nobr><tt>whisper-cli</tt></nobr> (reine CPU-Ausführung) zusammen mit <nobr><tt>arecord</tt></nobr> oder <nobr><tt>ffmpeg</tt></nobr>.</li>
+  <li><b>Windows</b>: Verwendet die integrierte Diktierfunktion des Betriebssystems (<nobr>Win+H</nobr>).</li>
+  <li><b>macOS</b>: Verwendet das Systemdiktat (konfigurierbar unter Systemeinstellungen &gt; Tastatur &gt; Diktat).</li>
+</ul>
+
+<p>
+Wird kein Sprachwerkzeug oder Sprachmodell erkannt, wird die Mikrofonschaltfläche
+automatisch in der Benutzeroberfläche ausgeblendet. Sie können die lokalen Pfade für die
+Spracheingabe unter <menuitem>Einstellungen &gt; Assistent</menuitem> (oder über die Aktion
+<nobr><tt>app.preferences.assistant</tt></nobr>) konfigurieren. Dort finden sich Einstellungen
+für den Pfad zu <nobr><tt>whisper-cli</tt></nobr>, die Modelldatei und das Aufnahmewerkzeug,
+zusammen mit einer Schaltfläche <b>Erkennen</b> zur Überprüfung der Konfiguration.
+</p>
+
+<h3 id="Shortcuts">Tastaturkürzel</h3>
+
+<p>
+Das Fragen-Feld ist über Tastaturkürzel von überall in Chesswiz bequem erreichbar:
+</p>
+
+<ul>
+  <li><nobr><b>Strg+K</b></nobr>: Setzt den Fokus auf das Fragen-Feld und wählt den gesamten Text zur sofortigen Eingabe aus. In mehrzeiligen Textfeldern (wie dem Kommentareditor, dem PGN-Textfenster oder der Engine-Konsole) behält <nobr><b>Strg+K</b></nobr> den standardmäßigen Bearbeitungsbefehl bei, um ab dem Cursor bis zum Zeilenende zu löschen.</li>
+  <li><nobr><b>Strg+Umschalt+K</b></nobr>: Setzt den Fokus bedingungslos von überall in der Anwendung auf das Fragen-Feld, auch aus mehrzeiligen Texteditoren heraus.</li>
+  <li><nobr><b>Escape</b></nobr>: Schließt die Ergebnisliste und gibt den Fokus an das vorherige Bedienelement oder das Schachbrett zurück.</li>
+</ul>
+
+<h3 id="Assistant">Der Assistent</h3>
+
+<p>
+Der Assistent ist ein automatisierter Operator, der registrierte Aktionen von Chesswiz
+aufgrund von Anfragen in natürlicher Sprache ausführt. Er ist im Assistentenbereich des
+Brett-Reiters integriert (und kann wie jeder Brettbereich an- oder abgedockt werden;
+durch Drücken von <nobr><b>F2</b></nobr> wird er in den Vordergrund geholt).
+</p>
+
+<p>
+Sie können den Assistenten in Ihren eigenen Worten bitten, Aktionen auszuführen,
+wie etwa das Finden von Partien, das Aufbauen von Brettstellungen, das Erstellen
+von Spielervorbereitungsberichten, die Mustersuche oder das Erläutern
+der aktuellen Stellung.
+</p>
+
+<p>
+Zu den wesentlichen Gestaltungsprinzipien des Assistenten gehören:
+</p>
+
+<ul>
+  <li><b>Steuert registrierte Aktionen</b>: Der Assistent kann keine beliebigen Operationen ausführen. Er ist strikt an das feste Aktions- und Werkzeugregister von Chesswiz gebunden, und sämtliche Parameter werden anhand formaler Schemata validiert, bevor ein Befehl aufgerufen wird.</li>
+  <li><b>Mehrschrittige Pläne mit einer Bestätigung</b>: Wenn eine komplexe Anfrage mehrere Schritte erfordert, stellt der Assistent diese als einheitlichen Plan dar. Falls ein Schritt Daten ändert, Partien importiert oder Massenänderungen durchführt, verlangt Chesswiz eine einzige Bestätigung für den gesamten Plan. Wird dieser abgelehnt, wird keine Aktion ausgeführt. Tritt bei einem Schritt ein Fehler auf, stoppt die Ausführung sofort, während vorherige erfolgreiche Schritte erhalten bleiben. Jeder während eines Plans geöffnete Dialog pausiert die Ausführung, bis er geschlossen wird.</li>
+  <li><b>Niemals erforderlich</b>: Der Assistent dient ausschließlich dem Bedienkomfort. Jede einzelne Aktion, Suche, jeder Dialog und jedes Werkzeug in Chesswiz ist weiterhin direkt über die Programmmenüs, Funktionsleisten und Tastaturkürzel erreichbar. Erfahrene Benutzer können sämtliche Funktionen von Chesswiz vollständig nutzen, ohne den Assistenten jemals zu öffnen oder zu verwenden.</li>
+</ul>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html fileencoding=latin1: -->
