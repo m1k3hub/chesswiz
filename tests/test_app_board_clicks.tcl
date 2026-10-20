@@ -4,7 +4,9 @@
 # With suggested moves on (the default), releasing the button on the
 # pressed square always cleared the selection: a click on e2 and then on e4
 # did nothing when no move was suggested (no hover before the click), and
-# played the suggestion at once when one was (Run 18).
+# played the suggestion at once when one was (Run 18). G22: a click on a
+# piece must never play the suggested move; the click on its target square
+# is the gesture that plays it.
 # ======================================================================
 
 package require tcltest 2.5
@@ -68,7 +70,9 @@ tcltest::test clicks-suggested-other {with e4 suggested, e2 then e3 plays 1.e3} 
 	list $atStart [lindex [::scidb::pos::fen] 0]
 } -result {1 rnbqkbnr/pppppppp/8/8/8/4P3/PPPP1PPP/RNBQKBNR}
 
-tcltest::test clicks-suggested-twice {with e4 suggested, two clicks on e2 play 1.e4} -setup {
+# G22: clicking the piece itself is not a move, however often it is done.
+# The suggested move is played by clicking its target square (the next test).
+tcltest::test clicks-suggested-reclick {with e4 suggested, a second click on e2 deselects, it does not play 1.e4} -setup {
 	::menu::gameNew .application
 	update
 } -body {
@@ -76,6 +80,17 @@ tcltest::test clicks-suggested-twice {with e4 suggested, two clicks on e2 play 1
 	::scidb::test::clicks::click 12
 	set atStart [::scidb::game::position atStart?]
 	::scidb::test::clicks::click 12
+	list $atStart [::scidb::game::position atStart?] [lindex [::scidb::pos::fen] 0]
+} -result {1 1 rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR}
+
+tcltest::test clicks-suggested-target {with e4 suggested, e2 then e4 plays 1.e4} -setup {
+	::menu::gameNew .application
+	update
+} -body {
+	::scidb::test::clicks::hover 12 28
+	::scidb::test::clicks::click 12
+	set atStart [::scidb::game::position atStart?]
+	::scidb::test::clicks::click 28
 	list $atStart [lindex [::scidb::pos::fen] 0]
 } -result {1 rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR}
 
