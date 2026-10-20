@@ -53,7 +53,9 @@ tcltest::test audit-cpp-test-syntax-04 {C++ backend test file should pass syntax
         -I[file join $repoRoot src mstl] \
         -I/usr/include/tcl8.6 \
         $testFile]
-    set rc [catch {exec {*}$cmd} output]
+    # Clang on macOS emits header warnings on stderr even on success.
+    # The compiler exit status, rather than an empty stderr, is the check.
+    set rc [catch {exec -ignorestderr {*}$cmd} output]
     if {$rc} {
         puts stderr $output
     }
