@@ -64,6 +64,7 @@ array set Priv {
 	cancel			0
 	queue				{}
 	qhead				0
+	visit				{}
 	seen				{}
 	results			{}
 	dirs				0
@@ -227,6 +228,7 @@ proc ::application::database::discover::_begin {roots maxdepth includePgn} {
 		}
 	}
 	set Priv(qhead) 0
+	set Priv(visit) {}
 	set Priv(seen) {}
 	set Priv(results) {}
 	set Priv(dirs) 0
@@ -236,11 +238,14 @@ proc ::application::database::discover::_begin {roots maxdepth includePgn} {
 	set Priv(scanning) 1
 }
 
-proc ::application::database::discover::_visit {dir depth} {
+# Pick up the next queued directory: apply the denylist and the
+# seen-set, then list the folder.  An empty or skipped folder leaves
+# Priv(visit) empty.  The listing itself stays a single glob; the
+# per-entry work (stat, header probe, game count) is chunked by _step.
+proc ::application::database::discover::_openVisit {dir depth} {
 	variable Priv
 
 	if {[_denied $dir]} { return }
-
 	set real [file normalize $dir]
 	if {[dict exists $Priv(seen) $real]} { return }
 	dict set Priv(seen) $real 1
@@ -249,40 +254,64 @@ proc ::application::database::discover::_visit {dir depth} {
 	set entries {}
 	catch { set entries [glob -nocomplain -directory $dir -types {d f} *] }
 	catch { lappend entries {*}[glob -nocomplain -directory $dir -types {d f} .*] }
+	if {![llength $entries]} { return }
+	set Priv(visit) [list $dir $depth $entries 0]
+}
 
-	foreach entry $entries {
-		set tail [file tail $entry]
-		if {$tail eq "." || $tail eq ".."} { continue }
-		# a file can vanish between glob and here (browser caches, temp files)
-		if {[catch { file type $entry } type] || $type eq "link"} { continue }
+# Classify one listed entry: sub-directories are queued, databases are
+# appended to the results.
+proc ::application::database::discover::_visitEntry {dir depth entry} {
+	variable Priv
 
-		if {[file isdirectory $entry]} {
-			if {$depth < $Priv(maxdepth)} {
-				lappend Priv(queue) [list $entry [expr {$depth + 1}]]
-			}
-		} else {
-			if {[catch { classify $entry $Priv(includePgn) } entryInfo]} { continue }
-			if {[llength $entryInfo]} { lappend Priv(results) $entryInfo }
+	set tail [file tail $entry]
+	if {$tail eq "." || $tail eq ".."} { return }
+	# a file can vanish between glob and here (browser caches, temp files)
+	if {[catch { file type $entry } type] || $type eq "link"} { return }
+
+	if {[file isdirectory $entry]} {
+		if {$depth < $Priv(maxdepth)} {
+			lappend Priv(queue) [list $entry [expr {$depth + 1}]]
 		}
+	} else {
+		if {[catch { classify $entry $Priv(includePgn) } entryInfo]} { return }
+		if {[llength $entryInfo]} { lappend Priv(results) $entryInfo }
 	}
 }
 
 # Consume up to $budget directories.  Returns 1 while work remains.
 # Visits at most <budget> folders, and with <ms> also stops after that many
 # milliseconds: listing folders can be slow (Windows: 150 folders took 10-20 s
-# with a virus scanner), and the dialog must stay responsive.
+# with a virus scanner), and the dialog must stay responsive.  The time check
+# also interrupts a single folder's entry list -- one full folder must never
+# be processed in one go, or a folder that scans slowly still freezes the UI.
+# An interrupted visit resumes at the next entry on the next tick.
 proc ::application::database::discover::_step {budget {ms 0}} {
 	variable Priv
 
 	set deadline [expr {$ms > 0 ? [clock milliseconds] + $ms : 0}]
-	while {$budget > 0 && $Priv(qhead) < [llength $Priv(queue)]} {
-		lassign [lindex $Priv(queue) $Priv(qhead)] dir depth
-		incr Priv(qhead)
-		_visit $dir $depth
-		incr budget -1
-		if {$deadline && [clock milliseconds] >= $deadline} { break }
+	while {1} {
+		if {![llength $Priv(visit)]} {
+			if {$Priv(qhead) >= [llength $Priv(queue)]} { return 0 }
+			if {$budget <= 0} { return 1 }
+			lassign [lindex $Priv(queue) $Priv(qhead)] dir depth
+			incr Priv(qhead)
+			incr budget -1
+			_openVisit $dir $depth
+			continue
+		}
+
+		if {$deadline && [clock milliseconds] >= $deadline} { return 1 }
+
+		lassign $Priv(visit) dir depth entries next
+		set entry [lindex $entries $next]
+		incr next
+		if {$next >= [llength $entries]} {
+			set Priv(visit) {}
+		} else {
+			set Priv(visit) [list $dir $depth $entries $next]
+		}
+		_visitEntry $dir $depth $entry
 	}
-	return [expr {$Priv(qhead) < [llength $Priv(queue)]}]
 }
 
 # Synchronous scan (tests, small trees).  Returns the result list.
