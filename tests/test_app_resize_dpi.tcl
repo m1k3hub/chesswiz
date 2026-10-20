@@ -1,5 +1,6 @@
 # ======================================================================
-# Scidb App Test - resize and runtime DPI change (contract VAL-RSZ-001..005)
+# Scidb App Test - resize and runtime DPI change (contract VAL-RSZ-001..005,
+# VAL-RSZ-007)
 # ======================================================================
 # VAL-RSZ-001: resizing the main window recomputes board, inset and pane
 #              layout within 500 ms and keeps the window inside the work
@@ -128,6 +129,17 @@ proc ::rsz::settle {action {timeout 2500} {quiet 260}} {
 proc ::rsz::setScaling {scale} {
 	tk scaling $scale
 	::application::scalingChanged
+}
+
+# Change tk scaling behind the application's ::tk setter wrapper, the way an
+# OS-level DPI change would (VAL-RSZ-007). The display watch, not this test,
+# must notice it and run the relayout.
+proc ::rsz::rawScaling {scale} {
+	if {[info commands ::__application_tk_orig] ne ""} {
+		::__application_tk_orig scaling $scale
+	} else {
+		tk scaling $scale
+	}
 }
 
 # Show the video inset; a low minimum width so it can sit in a free margin
@@ -655,6 +667,106 @@ tcltest::test rsz-workarea-change {VAL-RSZ-004 a changed work area re-clamps on 
 	::rsz::settle [list wm geometry .application [::rsz::wideGeometry 0.82 1.55]]
 	::rsz::hideInset
 } -result {1 0 1 0 1 1 1}
+
+# ---------------------------------------------------------------- VAL-RSZ-007
+
+# Scaling changed behind the ::tk wrapper (an OS-level update): the display
+# watch must see it and relay out once, without any window resize, and the
+# next poll must be a no-op.
+tcltest::test rsz-display-watch-scaling {VAL-RSZ-007 a scaling change bypassing the wrapper is detected by the poll and relays out once} -setup {
+	::rsz::saveScaling
+	::rsz::showBoard
+	::rsz::settle [list ::rsz::setScaling 1.0]
+	::rsz::settle [list wm geometry .application [::rsz::wideGeometry 1.0 1.3 10]]
+	set ::rsz::Ticks {}
+	::application::addScalingListener {::rsz::noteListener}
+	::application::resetDisplayChangeCount
+	set before [list [::rsz::boardRect] [::rsz::panes] $::application::board::Dim(borderthickness)]
+} -body {
+	::rsz::rawScaling 2.0
+	# Tk 8.6 emits no event for this; wait for the one-second display poll.
+	set deadline [expr {[clock milliseconds] + 2500}]
+	while {[clock milliseconds] < $deadline && [::application::displayChangeCount] == 0} {
+		after 50
+		update
+	}
+	set changes [::application::displayChangeCount]
+	update
+	set ticks [llength $::rsz::Ticks]
+	set after [list [::rsz::boardRect] [::rsz::panes] $::application::board::Dim(borderthickness)]
+	# One further poll: unchanged display, so nothing runs.
+	after 1200
+	update
+	set idleChanges [expr {[::application::displayChangeCount] - $changes}]
+	set idleTicks [expr {[llength $::rsz::Ticks] - $ticks}]
+	puts "EVIDENCE rsz-display-scaling changes=$changes ticks=$ticks idle=$idleChanges/$idleTicks border=[lindex $after 2] before=[lindex $before 2]"
+	list $changes $ticks $idleChanges $idleTicks [expr {$after ne $before}] \
+		[expr {[lindex $after 2] > [lindex $before 2]}]
+} -cleanup {
+	::application::removeScalingListener {::rsz::noteListener}
+	::rsz::restoreScaling
+} -result {1 1 0 0 1 1}
+
+# A work area shrunk without a window resize: the poll runs the same
+# relayout/re-clamp as the wrapper path and keeps the window inside it.
+tcltest::test rsz-display-watch-workarea {VAL-RSZ-007 a work-area change without a resize is detected and re-clamps} -setup {
+	::rsz::saveScaling
+	::rsz::showBoard
+	::rsz::settle [list wm geometry .application [::rsz::wideGeometry 0.98 1.55]]
+	::application::resetDisplayChangeCount
+	set before [::rsz::boardRect]
+} -body {
+	# A work area clearly smaller than the current window on every screen.
+	set size [regexp -inline {^[0-9]+x[0-9]+} [wm geometry .application]]
+	lassign [split [lindex $size 0] x] winW winH
+	set area [list 0 0 [expr {min(1100, $winW-100)}] [expr {min(700, $winH-100)}]]
+	set inside {}
+	set changed {}
+	set geometry {}
+	::rsz::withWorkArea $area {
+		# The display poll tick, executed while the reported work area is
+		# the changed one. It must not need a window resize.
+		::application::displayWatch
+		::rsz::settle {::mediainset::Relayout} 1200 150
+		set geometry [wm geometry .application]
+		lappend inside [::rsz::insideArea .application $area]
+		lappend changed [expr {[::rsz::boardRect] ne $before}]
+		lappend changed [::application::displayChangeCount]
+	}
+	# Back on the real work area: one synchronising tick, no loop.
+	::application::displayWatch
+	set synced [::application::displayChangeCount]
+	update
+	puts "EVIDENCE rsz-display-workarea geometry=$geometry inside=$inside changed=$changed synced=$synced real=[wm geometry .application]"
+	list $inside [lindex $changed 0] [lindex $changed 1] $synced
+} -cleanup {
+	::rsz::restoreScaling
+	::rsz::settle [list wm geometry .application [::rsz::wideGeometry 0.82 1.55]]
+} -result {1 1 1 2}
+
+# The poll is cheap: many unchanged ticks perform no relayout.
+tcltest::test rsz-display-watch-idle {VAL-RSZ-007 the display poll is a cheap no-op when nothing changes} -setup {
+	::rsz::saveScaling
+	::rsz::showBoard
+	set ::rsz::Ticks {}
+	::application::addScalingListener {::rsz::noteListener}
+	::application::resetDisplayChangeCount
+	set signature [::application::displaySignature]
+} -body {
+	set t0 [clock microseconds]
+	for {set i 0} {$i < 200} {incr i} {
+		::application::displayWatch
+	}
+	set us [expr {[clock microseconds] - $t0}]
+	update
+	set changes [::application::displayChangeCount]
+	set ticks [llength $::rsz::Ticks]
+	puts "EVIDENCE rsz-display-idle polls=200 us=$us changes=$changes ticks=$ticks sameSignature=[expr {[::application::displaySignature] eq $signature}]"
+	list $changes $ticks [expr {$us < 500000}] [expr {[::application::displaySignature] eq $signature}]
+} -cleanup {
+	::application::removeScalingListener {::rsz::noteListener}
+	::rsz::restoreScaling
+} -result {0 0 1 1}
 
 # ---------------------------------------------------------------- VAL-RSZ-005
 

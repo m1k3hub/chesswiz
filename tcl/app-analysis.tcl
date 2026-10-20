@@ -862,6 +862,9 @@ proc CloseEngine {tree} {
 	UpdatePinState $tree
 	::application::updateAnalysisTitle $Vars(number)
 	after idle [namespace code [list DisplayPressEngineButton $tree]]
+	# The pane is content-empty again: let the dynamic layout collapse it
+	# (VAL-PANE-010), exactly as it does for a fresh pane.
+	catch { ::application::reflow::onPaneStateChange }
 }
 
 

@@ -85,7 +85,10 @@ tcltest::test analysis-locomotive-first-click-$useSelected {the Board locomotive
     if {$useSelected} { set name "$name pane" }
     set number [lindex [lsort -integer [array names ::application::analysis::NumberToTree]] 0]
     set tree $::application::analysis::NumberToTree($number)
-    ::application::openPane analysis:[::application::mapToTerminalNumber $number] false
+    # An empty Analysis pane now collapses by content at every size
+    # (VAL-PANE-010), so open it as the user does: an explicit open keeps
+    # its locomotive visible for the click under test.
+    ::application::openPane analysis:[::application::mapToTerminalNumber $number] true
     update
     namespace upvar ::application::analysis ${tree}::Vars pane
     ::engine::initVars $number
@@ -124,6 +127,10 @@ tcltest::test analysis-locomotive-first-click-$useSelected {the Board locomotive
     catch {after cancel $watchdog}
     ::application::analysis::stopEngine $number
     ::scidb::test::locomotive::wait 100
+    # Do not leave the explicit reopen override behind for the rest of the
+    # single-process suite (the pane is engine-empty now).
+    catch { set ::application::reflow::S(override) {} }
+    catch { ::application::reflow::updateCollapse }
     # Closing hides the lines but retains their cached values. Remove the
     # lines produced by this test before testing another fresh start.
     array unset pane lines:*

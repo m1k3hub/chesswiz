@@ -679,6 +679,11 @@ proc KeepInWorkArea {w} {
 proc scalingChanged {} {
 	variable Vars
 
+	# A wrapper-driven change is already handled here; synchronise the
+	# display watch so its next poll does not repeat the same relayout.
+	if {[info exists Vars(display:signature)]} {
+		set Vars(display:signature) [displaySignature]
+	}
 	if {!$Vars(ready) || [::menu::fullscreen?]} { return }
 
 	if {[info exists Vars(twm)]} {
@@ -746,6 +751,63 @@ proc NotifyScalingListener {listener} {
 		::log::error "scalingChanged: listener failed: $listener: $err"
 	}
 }
+
+
+# RULE (VAL-RSZ-007): an OS scaling, monitor or work-area change can bypass
+# the `tk scaling` setter hook above: exec.tcl calibrates only at startup,
+# Tk 8.6 sends no event for either, and a monitor/taskbar change emits no
+# Tcl event at all. Tk 9 offers <<TkScalingChanged>>, so bind it where it
+# exists, and in every case watch the effective scaling and the screen/work
+# area with a cheap one-second poll that does nothing when they are
+# unchanged. A change runs the same relayout/re-clamp as the wrapper path.
+proc displaySignature {} {
+	if {![winfo exists .application]} { return {} }
+	return [list [tk scaling] \
+		[winfo screenwidth .application] [winfo screenheight .application] \
+		[winfo workarea .application]]
+}
+
+
+proc startDisplayWatch {} {
+	variable Vars
+
+	if {[info exists Vars(display:after)]} {
+		after cancel $Vars(display:after)
+	}
+	set Vars(display:signature) [displaySignature]
+	set Vars(display:changes) 0
+	# Tk 9 notifies scaling changes; on Tk 8.6 the poll below is the hook.
+	if {[catch {package present Tk} tkVersion] == 0
+		&& [package vcompare $tkVersion 9.0] >= 0} {
+		catch { bind .application <<TkScalingChanged>> +[namespace code {displayWatch}] }
+	}
+	set Vars(display:after) [after 1000 [namespace code displayWatch]]
+}
+
+
+proc displayWatch {} {
+	variable Vars
+
+	if {[info exists Vars(display:after)]} {
+		after cancel $Vars(display:after)
+		set Vars(display:after) {}
+	}
+	if {![winfo exists .application]} { return }
+	set signature [displaySignature]
+	if {$signature ne $Vars(display:signature)} {
+		set Vars(display:signature) $signature
+		incr Vars(display:changes)
+		scalingChanged
+		KeepInWorkArea .application
+	}
+	set Vars(display:after) [after 1000 [namespace code displayWatch]]
+}
+
+
+# Test/inspection helpers: how often the poll saw a real display change.
+proc displayChangeCount {} { variable Vars; return $Vars(display:changes) }
+proc resetDisplayChangeCount {} { variable Vars; set Vars(display:changes) 0 }
+
 
 proc WriteShortcutOptions {chan} {
 	RememberWindowGeometry .application
@@ -2160,6 +2222,7 @@ proc Startup2 {} {
 	#after idle [list ::beta::welcomeToScidb $app]
 	#::util::photos::checkForUpdate [namespace current]::InformAboutUpdates
 	reflow::Startup
+	startDisplayWatch
 }
 
 
@@ -2560,27 +2623,32 @@ proc updateCollapse {} {
  set t [boardTwm]
  if {![reflowable? $t] || ![winfo ismapped [$t leaf board]]} {return}
  set short [expr {[winfo width .application] < $ShortWidth || [winfo height .application] < $ShortHeight}]
- if {!$short} {set S(override) {}}
  set desired {}
  set deficit [expr {max($ShortWidth-[winfo width .application], $ShortHeight-[winfo height .application])}]
- # Lowest priority first. Content and an explicit reopen always win.
- if {$short} {
-  foreach uid [concat [lsort -dictionary [lsearch -all -inline -glob [$t leaves] analysis:*]] media] {
-   if {$uid ni [$t leaves] || $uid in $S(override) || ![shouldCollapse $uid]} {continue}
-   set pair [collapseNode $t $uid]
-   if {$pair eq {} || [lindex $pair 1] in $desired} {continue}
-   # An explicitly reopened tab protects its entire container.
-   lassign $pair pw node
-   set protected 0
-   foreach keep $S(override) {
-    if {$keep ni [$t leaves]} {continue}
-    set p [$t leaf $keep]
-    if {[::application::focuszoom::Contains $pw $node $p]} {set protected 1}
-   }
-   if {!$protected && $deficit > 0} {
-    lappend desired {*}$pair
-    incr deficit -[winfo width $node]
-   }
+ # VAL-PANE-010: an Analysis pane with no engine adapts to its content at
+ # every window size, not only while short of space. An explicit reopen
+ # protects it (S(override)) until the user hides it. Media still takes
+ # part in the short-window priority (VAL-PANE-006).
+ set candidates [lsort -dictionary [lsearch -all -inline -glob [$t leaves] analysis:*]]
+ if {$short} {lappend candidates media}
+ foreach uid $candidates {
+  if {$uid ni [$t leaves] || $uid in $S(override) || ![shouldCollapse $uid]} {continue}
+  set pair [collapseNode $t $uid]
+  if {$pair eq {} || [lindex $pair 1] in $desired} {continue}
+  # An explicitly reopened tab protects its entire container.
+  lassign $pair pw node
+  set protected 0
+  foreach keep $S(override) {
+   if {$keep ni [$t leaves]} {continue}
+   set p [$t leaf $keep]
+   if {[::application::focuszoom::Contains $pw $node $p]} {set protected 1}
+  }
+  # An empty Analysis pane always yields its space; the optional Media
+  # pane only competes for the space the window is missing.
+  set needed [expr {[string match analysis:* $uid] || $deficit > 0}]
+  if {!$protected && $needed} {
+   lappend desired {*}$pair
+   incr deficit -[winfo width $node]
   }
  }
  if {$desired eq $S(collapsed)} {

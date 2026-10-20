@@ -341,7 +341,7 @@ tcltest::test pane-reflow-005-real-resize {real window resizes across the thresh
 # ----------------------------------------------------------------------
 # Direct default row with the optional Media pane. This is a production twm
 # tree with real Analysis and Media widgets, not placeholder geometry.
-proc ::reflowTest::collapseSetup {} {
+proc ::reflowTest::collapseSetup {{size 1200x800}} {
  set t [setup]
  ::application::reflow::restoreCollapsed
  set ::application::Vars(loading) 1
@@ -353,18 +353,19 @@ proc ::reflowTest::collapseSetup {} {
  set layout [list $root $attrs [list $type $opts [concat [lrange $rows 0 2] $row]]]
  $t load $layout
  set ::application::Vars(loading) 0
+ # No explicit reopen override: the empty Analysis pane collapses by
+ # content (VAL-PANE-010) when this size is applied.
  set ::application::reflow::S(override) {}
- wm geometry .application 1200x800+0+0
+ wm geometry .application $size+0+0
  waitMs 400
  return $t
 }
 proc ::reflowTest::sashes {t} {return [::application::focuszoom::Snapshot $t]}
 
-tcltest::test pane-reflow-006-unmapped {empty panes collapse by priority only when short; explicit reopen wins; exact sash restore} -setup {
+tcltest::test pane-reflow-006-unmapped {empty Analysis collapses by content even at a normal size, empty Media only when short; explicit reopen wins; widgets never destroyed} -setup {
  set t [::reflowTest::collapseSetup]
  set a [$t leaf analysis:1]; set m [$t leaf media]
  set ids [list [winfo id $a] [winfo id $m]]
- set before [::reflowTest::sashes $t]
 } -body {
  set wide [list [winfo ismapped $a] [winfo ismapped $m]]
  wm geometry .application 1000x800
@@ -380,16 +381,17 @@ tcltest::test pane-reflow-006-unmapped {empty panes collapse by priority only wh
  ::application::media::InsertEntry 3 Lesson /generated.mp4 -1
  ::reflowTest::waitMs 450
  set content [winfo ismapped $m]
+ # The explicit reopen stays in force after the window grows again.
  wm geometry .application 1200x800
  ::reflowTest::waitMs 450
- set restored [expr {[::reflowTest::sashes $t] eq $before}]
+ set grown [list [winfo ismapped $a] [winfo ismapped $m]]
  set live [expr {$ids eq [list [winfo id $a] [winfo id $m]]}]
- ::reflowTest::say "COLLAPSE wide=$wide short=$short reopened=$reopened stays=$stays content=$content restored=$restored ids=$ids sashes=$before"
- list $wide $short $reopened $stays $content $restored $live
+ ::reflowTest::say "COLLAPSE wide=$wide short=$short reopened=$reopened stays=$stays content=$content grown=$grown ids=$ids"
+ list $wide $short $reopened $stays $content $grown $live
 } -cleanup {
  ::application::media::Update [::scidb::game::current]
  ::application::reflow::reset
-} -result {{1 1} {0 1} 1 1 1 1 1}
+} -result {{0 1} {0 1} 1 1 1 {1 1} 1}
 
 tcltest::test pane-reflow-006-media-content {empty Media unmaps and content restores its prior sashes without destroying its widgets} -setup {
  set t [::reflowTest::collapseSetup]
@@ -470,7 +472,7 @@ tcltest::test pane-reflow-001-threshold-sweep {actual Configure sweep cites both
 } -result {{wide wide tall tall wide wide tall} {0 0 1 1 2 2 3} 3 1}
 
 tcltest::test pane-reflow-006-engine {real engine start restores a collapsed pane; stop makes it eligible again} -constraints reflowEngine -setup {
- set t [::reflowTest::collapseSetup]
+ set t [::reflowTest::collapseSetup 1000x800]
  ::application::media::InsertEntry 3 Lesson /generated.mp4 -1
  set savedEngines $::engine::Engines
  set savedFile $::scidb::file::engines
@@ -506,6 +508,54 @@ tcltest::test pane-reflow-006-engine {real engine start restores a collapsed pan
  ::application::media::Update [::scidb::game::current]
  ::application::reflow::reset
 } -result {1 1 1 1 1}
+
+# VAL-PANE-010: with no engine the empty Analysis pane adapts to its content
+# at every window size, including the normal 1200x800 and 1920x1080 sizes
+# the reviewer probed. Starting an engine restores it at its previous size
+# and stopping collapses it again; the neighbouring Tree pane takes the space.
+tcltest::test pane-reflow-010-content-collapse {empty Analysis collapses by content at normal sizes, restores on engine start and collapses on stop} -constraints reflowEngine -setup {
+ set t [::reflowTest::setup]
+ ::application::reflow::restoreCollapsed
+ set ::application::reflow::S(override) {}
+ set savedEngines $::engine::Engines
+ set savedFile $::scidb::file::engines
+ set savedConfirm $::application::assistant::Priv(confirm)
+ set ::application::assistant::Priv(confirm) ::reflowTest::yesConfirm
+ set ::engine::Engines {}
+ set ::scidb::file::engines [file normalize tests/tmp-app/pane-content-engines-[pid].dat]
+ ::application::assistant::runTool add_engine [list path $reflowEngine]
+ set name [dict get [lindex $::engine::Engines 0] Name]
+ set a [$t leaf analysis:1]; set tree [$t leaf tree]
+ set id [winfo id $a]
+} -body {
+ set results {}
+ foreach size {1200x800 1920x1080} {
+  wm geometry .application $size+0+0
+  ::reflowTest::waitMs 500
+  set collapsed [expr {![winfo ismapped $a]}]
+  set treeFreed [winfo width $tree]
+  set number [::application::analysis::startEngine $name {} {lines 1 threads 1 hash 16}]
+  ::reflowTest::waitMs 650
+  set restored [winfo ismapped $a]
+  set treeEngine [winfo width $tree]
+  set sameId [expr {[winfo id $a] eq $id}]
+  ::application::analysis::stopEngine $number
+  ::reflowTest::waitMs 500
+  set stopped [expr {![winfo ismapped $a]}]
+  set regained [winfo width $tree]
+  ::reflowTest::say "PANE010 size=$size collapsed=$collapsed restored=$restored stopped=$stopped tree=$treeFreed/$treeEngine/$regained sameId=$sameId"
+  lappend results [list $collapsed $restored $stopped [expr {$treeFreed > $treeEngine && $regained >= $treeEngine}] $sameId]
+ }
+ list {*}$results
+} -cleanup {
+ catch {::application::analysis::stopEngine $number}
+ set ::application::assistant::Priv(confirm) $savedConfirm
+ file delete -force $::scidb::file::engines
+ set ::engine::Engines $savedEngines
+ set ::scidb::file::engines $savedFile
+ ::options::hookWriter ::engine::WriteEngineOptions engines
+ ::application::reflow::reset
+} -result {{1 1 1 1 1} {1 1 1 1 1}}
 
 tcltest::test pane-reflow-002-save-dialog {modal shutdown processing cannot reactivate a presentation before saved-layout capture; cancel resumes adaptation} -setup {
  set t [::reflowTest::setup]
