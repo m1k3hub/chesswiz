@@ -2847,6 +2847,8 @@ proc ::application::assistant::DoFindPositions {request cql mode criteria} {
 	if {![info exists Priv(cqlHelp)] || !$Priv(cqlHelp)} {
 		return "error: call cql_help first and write the script from its reference and examples; then call find_positions again"
 	}
+	# the tool description asks for the pattern expression only: add the header the parser needs
+	if {![regexp {^\s*cql\s*\(} $cql]} { set cql "cql() $cql" }
 	return [FindPositions $request $cql $mode $criteria]
 }
 
