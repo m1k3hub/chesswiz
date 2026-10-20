@@ -569,10 +569,14 @@ proc ::menu::Register {id label {accel ""} {visible ""} {enabled ""} {order ""}}
 
 	if {[dict exists $::action::Registry $id]} {
 		# Already registered (assistant tool or context action): keep its
-		# handler but record the drop-down placement.
+		# handler, but refresh the drop-down placement and the label so a
+		# language switch relabels the menu (VAL-BAR-007).
 		set rec [::action::get $id]
 		dict set rec menu $order
 		dict set rec dropdown $order
+		if {$label ne ""} { dict set rec label $label }
+		if {$visible ne ""} { dict set rec visible $visible }
+		if {$enabled ne ""} { dict set rec enabled $enabled }
 		dict set ::action::Registry $id $rec
 		return
 	}
@@ -1090,9 +1094,31 @@ proc ::menu::FillLanguage {menu} {
 			set flag $::country::icon::flag([set ::mc::langToCountry([set ::mc::lang$lang])])
 			lassign [AmpText $lang] text ul
 			$menu add command -label $text -underline $ul -image $flag -compound left \
-				-command [list ::mc::selectLang $lang]
+				-command [list ::menu::SwitchLanguage $lang]
 		}
 	}
+}
+
+# Relabel the live drop-down after a language switch (VAL-BAR-007). The
+# registry labels are refreshed from the newly loaded mc strings, then the
+# menu widget is rebuilt so the top cascades and their leaves show them.
+proc ::menu::SwitchLanguage {lang} {
+	if {[catch { ::mc::setLang $lang }]} { return }
+	::menu::RegisterTree
+	::menu::RegisterExtras
+	set menu ""
+	catch {
+		if {[winfo exists $::application::Vars(menu:entries)]} {
+			set menu $::application::Vars(menu:entries)
+		}
+	}
+	if {$menu ne ""} {
+		::menu::BuildDropdown $menu
+		if {[llength [info commands ::application::UpdateSettingsText]]} {
+			catch { ::application::UpdateSettingsText .application.nb.menu_main }
+		}
+	}
+	return $lang
 }
 
 proc ::menu::FillRecentGames {menu} {

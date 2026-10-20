@@ -297,6 +297,12 @@
 ::menu::mc::Help			"&Súgó"
 ::menu::mc::Contact			"&Elérhetőség (Web böngésző)"
 ::menu::mc::Quit			"&Kilépés"
+::menu::mc::File	"Fájl"
+::menu::mc::Edit	"Szerkeszt"
+::menu::mc::Game	"Játszma"
+::menu::mc::Database	"Adatbázis"
+::menu::mc::Analysis	"Analysis"
+::menu::mc::View	"Nézet"
 ::menu::mc::Tools			"&Tools" ;# NEW
 ::menu::mc::Search			"&Keresés"
 ::menu::mc::Extras			"E&xtras" ;# NEW

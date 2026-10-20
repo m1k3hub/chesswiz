@@ -200,6 +200,57 @@ tcltest::test dropdown-no-alt-menu {Alt and F10 do not open a hidden menu bar} -
 	list [expr {[string match *menu* $alt] ? 1 : 0}] [expr {[string match *LoadGame* $f10] ? 1 : 0}]
 } -result {0 1}
 
+tcltest::test dropdown-narrow-layout {at 1024x700 the button stays reachable and every cascade fits} -body {
+	set old [wm geometry .application]
+	wm geometry .application 1024x700+0+0
+	update
+	set button .application.nb.menu_main
+	set reachable [expr {[winfo exists $button] && [winfo ismapped $button] \
+		&& [winfo width $button] > 0 && [winfo rooty $button] < 700}]
+	set menu [::scidb::test::dd::Build]
+	::menu::Dump $menu
+	set fits 1
+	foreach top {File Edit Game Database Board Analysis Training Tools View Help} {
+		set sub $menu.[::menu::WidgetName [::menu::MC $top]]
+		if {[winfo reqwidth $sub] > 1024 || [winfo reqheight $sub] > 700} { set fits 0 }
+	}
+	destroy $menu
+	wm geometry .application $old
+	update
+	list $reachable $fits
+} -result {1 1}
+
+tcltest::test dropdown-fullscreen {the drop-down button stays reachable in fullscreen} -body {
+	set old [wm attributes .application -fullscreen]
+	wm attributes .application -fullscreen 1
+	update
+	set button .application.nb.menu_main
+	set reachable [expr {[winfo exists $button] && [winfo ismapped $button] && [winfo width $button] > 0}]
+	set menu [::scidb::test::dd::Build]
+	::menu::FillTop File $menu.file
+	set n [$menu.file index end]
+	destroy $menu
+	wm attributes .application -fullscreen $old
+	update
+	list $reachable [expr {$n ne "" && $n ne "none"}]
+} -result {1 1}
+
+tcltest::test dropdown-language-switch {a language switch relabels the drop-down} -body {
+	set menu [::scidb::test::dd::Build]
+	set before [::menu::MC Tools]
+	::mc::setLang de
+	::menu::RegisterTree
+	destroy $menu
+	menu .ddlang -tearoff 0
+	::menu::BuildDropdown .ddlang
+	set after [::menu::MC Tools]
+	set shown [string trim [.ddlang entrycget 7 -label]]
+	::menu::RegisterTree
+	::mc::setLang en
+	destroy .ddlang
+	list $before [string trim $after] $shown
+} -result {&Tools &Werkzeuge Werkzeuge}
+
 tcltest::test dropdown-build-wrapper {::menu::build still wraps the drop-down builder} -body {
 	catch { destroy .ddwrap }
 	menu .ddwrap -tearoff 0

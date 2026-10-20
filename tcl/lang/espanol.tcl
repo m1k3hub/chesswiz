@@ -297,6 +297,12 @@
 ::menu::mc::Help								"&Ayuda"
 ::menu::mc::Contact							"&Contenidos (navegador web)"
 ::menu::mc::Quit								"&Salir"
+::menu::mc::File	"Archivo"
+::menu::mc::Edit	"Editar"
+::menu::mc::Game	"Partida"
+::menu::mc::Database	"Base"
+::menu::mc::Analysis	"Análisis"
+::menu::mc::View	"Ver"
 ::menu::mc::Tools								"&Tools" ;# NEW
 ::menu::mc::Search								"&Buscar"
 ::menu::mc::Extras							"E&xtras" 
