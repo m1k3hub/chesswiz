@@ -156,6 +156,7 @@ proc new {parent args} {
 	# FEN would otherwise be stamped on every later New Game and the board
 	# could not be brought back to the start position (REPORT.md: F-16/G16).
 	if {	$base eq $scratchbaseName
+		&& $variant eq "Normal"
 		&& $opts(-number) == -1
 		&& !$opts(-replace)
 		&& [::scidb::game::query 9 open?]
