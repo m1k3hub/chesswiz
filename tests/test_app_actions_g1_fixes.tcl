@@ -41,6 +41,9 @@ test g1-validate-explicit-required-missing {
 		label TestRequired \
 		args {{mode {type enum default auto required 1 enum {auto manual}}}} \
 		handler [list return ok] \
+		what {} \
+		object {} \
+		doc {} \
 	]
 } -body {
 	set result [::action::validateArgs test.req.explicit [dict create]]
@@ -69,6 +72,9 @@ test g1-crossarg-hook-called {
 		args {{x {type integer}} {y {type integer}}} \
 		validate ::scidb::test::g1::crossArgHook \
 		handler [list return ok] \
+		what {} \
+		object {} \
+		doc {} \
 	]
 } -body {
 	set ::scidb::test::g1::hookCalled 0
@@ -92,6 +98,9 @@ test g1-crossarg-hook-rejects {
 		args {{x {type integer}} {y {type integer}}} \
 		validate ::scidb::test::g1::crossArgReject \
 		handler [list return ok] \
+		what {} \
+		object {} \
+		doc {} \
 	]
 } -body {
 	set result [::action::validateArgs test.crossarg.reject [dict create x 10 y 5]]
@@ -108,6 +117,9 @@ test g1-passthrough-with-args-validates {
 		schema {{type object properties {mode {type string}}}} \
 		args {mode {type enum enum {a b c}}} \
 		handler [list return ok] \
+		what {} \
+		doc {} \
+		object {} \
 	]
 } -body {
 	set result [::action::run test.passthrough.validate [dict create mode invalid]]
@@ -124,6 +136,9 @@ test g1-passthrough-no-args-skips {
 		label TestPassthroughNoArgs \
 		schema {{type object properties {mode {type string}}}} \
 		handler ::scidb::test::g1::passthroughHandler \
+		what {} \
+		doc {} \
+		object {} \
 	]
 } -body {
 	set result [::action::run test.passthrough.noargs [dict create anything goes]]
@@ -175,6 +190,9 @@ test g1-debug-action-blocked-without-gate {
 		label TestDebugBlocked \
 		ai debug \
 		handler [list return should-not-run] \
+		what {} \
+		object {} \
+		doc {} \
 	]
 } -body {
 	set result [::action::run test.debug.blocked]
@@ -195,6 +213,9 @@ test g1-debug-action-allowed-with-gate {
 		label TestDebugAllowed \
 		ai debug \
 		handler ::scidb::test::g1::debugHandler \
+		what {} \
+		object {} \
+		doc {} \
 	]
 } -body {
 	set result [::action::run test.debug.allowed]
@@ -225,6 +246,8 @@ test g1-confirm-gate-enforced-via-run {
 		confirm 1 \
 		what "test confirm" \
 		handler [list return should-not-run] \
+		object {} \
+		doc {} \
 	]
 } -body {
 	set result [::action::run test.confirm.decline]
@@ -245,6 +268,8 @@ test g1-bulk-gate-enforced-via-run {
 		bulk 1 \
 		what "test bulk" \
 		handler [list return should-not-run] \
+		object {} \
+		doc {} \
 	]
 } -body {
 	set result [::action::run test.bulk.decline]
@@ -294,6 +319,8 @@ test g1-resolver-injects-object {
 		label TestObjInject \
 		object testobj \
 		handler ::testObjHandler \
+		what {} \
+		doc {} \
 	]
 } -body {
 	::action::run test.obj.inject
@@ -301,5 +328,163 @@ test g1-resolver-injects-object {
 } -cleanup {
 	rename ::testObjHandler {}
 } -result 1
+
+# ----------------------------------------------------------------------
+# VAL-REG-005 on the production path: the real tools carry args specs,
+# so run/runTool/invoke all use the one shared validator.
+# ----------------------------------------------------------------------
+test g1-real-tools-have-args-specs {
+	every shipped assistant tool has a real args spec (not empty passthrough only)
+} -body {
+	package require json
+	set missing {}
+	foreach name [dict keys $::application::assistant::Actions] {
+		set record [::action::get $name]
+		if {[dict get $record args] eq "" && [dict get $record schema] ne ""} {
+			# zero-argument tools legitimately use an empty spec with a schema
+			if {[llength [::json::json2dict [dict get $record schema]]] && \
+			    [dict size [dict get [::json::json2dict [dict get $record schema]] properties]]} {
+				lappend missing $name
+			}
+		} elseif {[dict get $record args] eq ""} {
+			lappend missing $name
+		}
+	}
+	set missing
+} -result {}
+
+test g1-switch-tab-shared-validator {
+	valid arguments pass the shared validator, invalid ones return error:
+} -body {
+	set ok [::action::validateArgs switch_tab {tab database}]
+	set bad [::action::validateArgs switch_tab {tab definitely-not-a-tab}]
+	list [lindex $ok 0] [dict get [lindex $ok 1] tab] \
+		[lindex $bad 0] [string match "*must be*board*database*" [lindex $bad 1]]
+} -result {ok database error 1}
+
+test g1-switch-tab-invoke-validates {
+	invoke accepts valid args and rejects invalid args before the handler
+} -setup {
+	variable ::scidb::test::g1::invoked 0
+	rename ::application::assistant::DoSwitchTab ::scidb::test::g1::realSwitchTab
+	proc ::application::assistant::DoSwitchTab {tab} {
+		incr ::scidb::test::g1::invoked
+		return "stub:$tab"
+	}
+} -body {
+	set valid [::action::invoke switch_tab {tab database}]
+	set afterValid $::scidb::test::g1::invoked
+	set invalid [::action::invoke switch_tab {tab nonsense}]
+	set afterInvalid $::scidb::test::g1::invoked
+	list $valid $afterValid $invalid $afterInvalid
+} -cleanup {
+	rename ::application::assistant::DoSwitchTab {}
+	rename ::scidb::test::g1::realSwitchTab ::application::assistant::DoSwitchTab
+} -result {stub:database 1 {error: tab must be 'board' or 'database'} 1}
+
+test g1-assistant-run-tool-shared-validator {
+	assistant runTool rejects bad args before the handler and passes valid ones
+} -setup {
+	variable ::scidb::test::g1::toolInvoked 0
+	rename ::application::assistant::DoSwitchTab ::scidb::test::g1::realSwitchTab2
+	proc ::application::assistant::DoSwitchTab {tab} {
+		incr ::scidb::test::g1::toolInvoked
+		return "stub:$tab"
+	}
+} -body {
+	set valid [::application::assistant::runTool switch_tab {tab board}]
+	set afterValid $::scidb::test::g1::toolInvoked
+	set invalid [::application::assistant::runTool switch_tab {tab nonsense}]
+	set afterInvalid $::scidb::test::g1::toolInvoked
+	list $valid $afterValid $invalid $afterInvalid
+} -cleanup {
+	rename ::application::assistant::DoSwitchTab {}
+	rename ::scidb::test::g1::realSwitchTab2 ::application::assistant::DoSwitchTab
+} -result {stub:board 1 {error: tab must be 'board' or 'database'} 1}
+
+# ----------------------------------------------------------------------
+# VAL-REG-006 on the production path: bulk gates apply to runTool and the
+# router's DeliverRouted, not only to ::action::run.
+# ----------------------------------------------------------------------
+test g1-assistant-bulk-gate {
+	compact_database is blocked on the assistant path when BulkHook declines
+} -setup {
+	variable ::scidb::test::g1::compactRan 0
+	rename ::application::assistant::DoCompactDatabase ::scidb::test::g1::realCompact
+	proc ::application::assistant::DoCompactDatabase {} {
+		set ::scidb::test::g1::compactRan 1
+		return stub-compact
+	}
+	proc ::scidb::test::g1::bulkNo {what} { return 0 }
+	proc ::scidb::test::g1::bulkYes {what} { return 1 }
+	set savedBulk $::action::BulkHook
+	set savedConfirm $::application::assistant::Priv(confirm)
+	set ::action::BulkHook ::scidb::test::g1::bulkNo
+	set ::application::assistant::Priv(confirm) ::scidb::test::g1::bulkYes
+} -body {
+	set result [::application::assistant::runTool compact_database {}]
+	list $result $::scidb::test::g1::compactRan [string match "*NOT performed*" $result]
+} -cleanup {
+	set ::action::BulkHook $savedBulk
+	set ::application::assistant::Priv(confirm) $savedConfirm
+	rename ::application::assistant::DoCompactDatabase {}
+	rename ::scidb::test::g1::realCompact ::application::assistant::DoCompactDatabase
+} -result {{The user declined: the action was NOT performed and no dialog was opened.} 0 1}
+
+test g1-router-bulk-gate {
+	compact_database is blocked on the router DeliverRouted path when BulkHook declines
+} -setup {
+	variable ::scidb::test::g1::routedRan 0
+	rename ::application::assistant::DoCompactDatabase ::scidb::test::g1::realCompact2
+	proc ::application::assistant::DoCompactDatabase {} {
+		set ::scidb::test::g1::routedRan 1
+		return stub-compact
+	}
+	proc ::scidb::test::g1::bulkNo2 {what} { return 0 }
+	proc ::scidb::test::g1::bulkYes {what} { return 1 }
+	set savedBulk $::action::BulkHook
+	set savedConfirm $::application::assistant::Priv(confirm)
+	set savedMessages $::application::assistant::Priv(messages)
+	set ::action::BulkHook ::scidb::test::g1::bulkNo2
+	set ::application::assistant::Priv(confirm) ::scidb::test::g1::bulkYes
+} -body {
+	::application::assistant::DeliverRouted compact_database {} 0
+	list $::scidb::test::g1::routedRan \
+		[string match "*NOT performed*" [lindex $::application::assistant::Priv(messages) end]]
+} -cleanup {
+	set ::action::BulkHook $savedBulk
+	set ::application::assistant::Priv(confirm) $savedConfirm
+	set ::application::assistant::Priv(messages) $savedMessages
+	rename ::application::assistant::DoCompactDatabase {}
+	rename ::scidb::test::g1::realCompact2 ::application::assistant::DoCompactDatabase
+} -result {0 1}
+
+# ----------------------------------------------------------------------
+# VAL-REG-004: ai is the exposure flag, so ai-exposed == toolsJson.
+# ----------------------------------------------------------------------
+test g1-ai-exposed-equals-toolsjson {
+	ai-exposed ids are exactly the toolsJson names in normal and debug mode
+} -body {
+	package require json
+	set savedDebug $::application::assistant::Priv(debug)
+	set ::application::assistant::Priv(debug) 0
+	set normal [lsort [lmap t [::json::json2dict [::application::assistant::toolsJson]] {dict get $t function name}]]
+	set exposed {}
+	foreach id [::action::list] {
+		if {[dict get [::action::get $id] ai] eq "1"} { lappend exposed $id }
+	}
+	set normalOk [expr {$normal eq [lsort $exposed]}]
+	set ::application::assistant::Priv(debug) 1
+	set debugJson [lsort [lmap t [::json::json2dict [::application::assistant::toolsJson]] {dict get $t function name}]]
+	set exposedDebug {}
+	foreach id [::action::list] {
+		set ai [dict get [::action::get $id] ai]
+		if {$ai eq "1" || $ai eq "debug"} { lappend exposedDebug $id }
+	}
+	set debugOk [expr {$debugJson eq [lsort $exposedDebug]}]
+	set ::application::assistant::Priv(debug) $savedDebug
+	list $normalOk $debugOk
+} -result {1 1}
+
 
 cleanupTests

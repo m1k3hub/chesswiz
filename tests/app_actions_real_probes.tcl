@@ -11,7 +11,7 @@ set modalSkips {
     install_chessbase_fonts {Real font-directory chooser waits for user input.}
 }
 ::tcltest::testConstraint partcNonModal 0
-foreach name [::action::list] {
+foreach name [dict keys $::application::assistant::Actions] {
     set constraints {}
     if {[dict exists $modalSkips $name]} {
         set constraints partcNonModal

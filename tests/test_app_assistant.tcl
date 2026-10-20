@@ -12,6 +12,8 @@ package require tcltest 2.5
 # the replies below are checked without them
 set ::scidb::test::assistantToolMenu $::application::assistant::ToolMenu
 set ::application::assistant::ToolMenu {}
+# bulk and confirm share one gate command on the assistant path
+set ::scidb::test::assistantOrgBulkHook $::action::BulkHook
 
 namespace eval ::scidb::test::assistant {
 	variable Answer 1
@@ -29,6 +31,7 @@ proc ::scidb::test::assistant::setup {answer} {
 	variable Answer $answer
 	variable Asked {}
 	set ::application::assistant::Priv(confirm) ::scidb::test::assistant::confirm
+	set ::action::BulkHook ::scidb::test::assistant::confirm
 }
 
 proc ::scidb::test::assistant::call {name {arguments {}}} {
@@ -436,7 +439,7 @@ tcltest::test assistant-debug-inspection {in debug mode the model can read procs
 	set var [::application::assistant::runTool read_variable {name ::application::assistant::Priv pattern maxRounds}]
 	set procs [::application::assistant::runTool list_procs {pattern ::application::report::show*}]
 	set ::application::assistant::Priv(debug) 0
-	list [string match "proc ::application::openPane uid *" $src] $var [llength [split $procs \n]]
+	list [string match "proc ::application::openPane {uid {explicit true}} *" $src] $var [llength [split $procs \n]]
 } -result {1 {maxRounds = 8} 3}
 
 tcltest::test assistant-eval-needs-confirm {eval_tcl runs only the script the user allowed} -body {
@@ -882,6 +885,7 @@ tcltest::test assistant-tool-log-bounded {the log keeps only the latest calls} -
 } -result 50
 
 set ::application::assistant::Priv(confirm) ::application::assistant::ConfirmDialog
+set ::action::BulkHook $::scidb::test::assistantOrgBulkHook
 
 # ----------------------------------------------------------------------
 

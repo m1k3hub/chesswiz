@@ -22,14 +22,17 @@ tcltest::test gate-confirm-run-blocks {confirm action declines when hook returns
 	}
 	proc ::scidb::test::actions_gates::dummyHandler {argsDict} { return ok }
 	set ::action::ConfirmHook ::scidb::test::actions_gates::declineHook
-	::action::register test.confirm.decline {
+	::action::register test.gates.confirm.decline {
 		label ::test::mc::ConfirmDecline
 		confirm 1
 		what "test confirm action"
 		handler ::scidb::test::actions_gates::dummyHandler
+
+		object {}
+		doc {}
 	}
 } -body {
-	set result [::action::run test.confirm.decline]
+	set result [::action::run test.gates.confirm.decline]
 	list $result $::scidb::test::actions_gates::hookCalled
 } -cleanup {
 	set ::action::ConfirmHook {}
@@ -51,6 +54,9 @@ tcltest::test gate-confirm-run-allows {confirm action proceeds when hook returns
 		confirm 1
 		what "test confirm action"
 		handler ::scidb::test::actions_gates::dummyHandler2
+
+		object {}
+		doc {}
 	}
 } -body {
 	set result [::action::run test.confirm.allow]
@@ -70,14 +76,17 @@ tcltest::test gate-bulk-run-blocks {bulk action declines when bulk hook returns 
 	}
 	proc ::scidb::test::actions_gates::dummyHandler3 {argsDict} { return ok }
 	set ::action::BulkHook ::scidb::test::actions_gates::bulkDecline
-	::action::register test.bulk.decline {
+	::action::register test.gates.bulk.decline {
 		label ::test::mc::BulkDecline
 		bulk 1
 		what "test bulk action"
 		handler ::scidb::test::actions_gates::dummyHandler3
+
+		object {}
+		doc {}
 	}
 } -body {
-	set result [::action::run test.bulk.decline]
+	set result [::action::run test.gates.bulk.decline]
 	list $result $::scidb::test::actions_gates::bulkCalled
 } -cleanup {
 	set ::action::BulkHook {}
@@ -92,11 +101,19 @@ tcltest::test gate-debug-labels-excluded {debug actions do not appear in labels}
 		ai debug
 		menu {Test 1}
 		handler ::scidb::test::actions_gates::dummyHandler4
+
+		what {}
+		object {}
+		doc {}
 	}
 	::action::register test.normal.visible {
 		label ::test::mc::NormalVisible
 		menu {Test 2}
 		handler ::scidb::test::actions_gates::dummyHandler4
+
+		what {}
+		object {}
+		doc {}
 	}
 } -body {
 	set rows [::action::labels bar]
@@ -114,6 +131,10 @@ tcltest::test gate-debug-list-included {debug actions are in list (for non-debug
 		label ::test::mc::DebugListed
 		ai debug
 		handler ::scidb::test::actions_gates::dummyHandler5
+
+		what {}
+		object {}
+		doc {}
 	}
 } -body {
 	set ids [::action::list]
@@ -130,6 +151,9 @@ tcltest::test gate-confirm-no-hook-proceeds {confirm action proceeds when no hoo
 		confirm 1
 		what "test"
 		handler ::scidb::test::actions_gates::dummyHandler6
+
+		object {}
+		doc {}
 	}
 } -body {
 	::action::run test.confirm.nohook
@@ -153,6 +177,9 @@ tcltest::test gate-bulk-and-confirm-bulk-takes-precedence {bulk hook is called f
 		bulk 1
 		what "test both"
 		handler ::scidb::test::actions_gates::dummyHandler7
+
+		object {}
+		doc {}
 	}
 } -body {
 	set ::scidb::test::actions_gates::whichHook {}

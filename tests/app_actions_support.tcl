@@ -17,6 +17,10 @@ namespace eval ::scidb::test::actions {
         update
         catch {destroy .tipoftheday}
         ::application::switchTab board
+        # Each real-action probe owns one process: clear the previous
+        # search's positions so a probe cannot inherit another's result.
+        catch { set ::application::assistant::LastFind {} }
+        catch { set ::application::assistant::LastPositions {} }
         update
         if {![winfo viewable .application.nb.board]} { error "main board is not mapped" }
         if {![winfo exists $::application::board::board]} { error "board was not built" }

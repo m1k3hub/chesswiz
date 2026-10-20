@@ -79,14 +79,14 @@ proc ::scidb::test::actions_all::reach {name} {
 # ----------------------------------------------------------------------
 # Test: All 87 actions are registered and callable
 # ----------------------------------------------------------------------
-tcltest::test all-actions-count {exactly 87 actions are registered} -body {
-	set count [llength [::action::list]]
+tcltest::test all-actions-count {exactly 87 assistant actions are registered} -body {
+	set count [llength [dict keys $::application::assistant::Actions]]
 	expr {$count == 87}
 } -result 1
 
 tcltest::test all-actions-have-handlers {every action has a handler defined} -body {
 	set missing {}
-	foreach id [::action::list] {
+	foreach id [dict keys $::application::assistant::Actions] {
 		set record [::action::get $id]
 		set handler [dict get $record handler]
 		if {$handler eq ""} { lappend missing $id }
@@ -96,7 +96,7 @@ tcltest::test all-actions-have-handlers {every action has a handler defined} -bo
 
 tcltest::test all-actions-have-schemas {every action has a schema (passthrough or generated)} -body {
 	set missing {}
-	foreach id [::action::list] {
+	foreach id [dict keys $::application::assistant::Actions] {
 		set record [::action::get $id]
 		set schema [dict get $record schema]
 		set args [dict get $record args]
@@ -115,7 +115,7 @@ tcltest::test all-actions-runnable-through-assistant {every action reaches its h
     ::scidb::test::actions::stubEngine
 } -body {
     set count 0
-    foreach name [::action::list] {
+    foreach name [dict keys $::application::assistant::Actions] {
         incr count [::scidb::test::actions_all::reach $name]
     }
     set count
@@ -125,7 +125,7 @@ tcltest::test all-actions-runnable-through-assistant {every action reaches its h
 } -result 87
 
 # Individually selectable legs for timeout 30 process isolation.
-foreach name [::action::list] {
+foreach name [dict keys $::application::assistant::Actions] {
     tcltest::test action-handler-$name {assistant and registry dispatch retain real gates} -setup {
         ::scidb::test::actions::ready
         set savedEngines $::engine::Engines
@@ -166,17 +166,21 @@ tcltest::test all-actions-unavailable-error {unavailable actions return error: t
 		enabled {expr 0}
 		schema {{"type":"object","properties":{}}}
 		ai 1
+
+		what {}
+		object {}
+		doc {}
 	}
-	
+
 	set result [::action::run test.unavailable.action]
-	
+
 	# Clean up
 	catch {
 		set reg [dict get $::action::Registry]
 		dict unset reg test.unavailable.action
 		set ::action::Registry $reg
 	}
-	
+
 	# Should return error: text
 	string match "error:*not enabled*" $result
 } -result 1
@@ -185,12 +189,12 @@ tcltest::test all-actions-unavailable-error {unavailable actions return error: t
 # Test: Debug actions are filtered from non-debug contexts
 # ----------------------------------------------------------------------
 tcltest::test all-actions-debug-filtered {debug actions excluded from labels but present in registry} -body {
-	set allIds [::action::list]
+	set allIds [dict keys $::application::assistant::Actions]
 	set labelIds [lmap row [::action::labels palette] { lindex $row 0 }]
-	
+
 	set debugInRegistry {}
 	set debugInLabels {}
-	
+
 	foreach id $allIds {
 		set record [::action::get $id]
 		if {[dict get $record ai] eq "debug"} {
@@ -198,7 +202,7 @@ tcltest::test all-actions-debug-filtered {debug actions excluded from labels but
 			if {$id in $labelIds} { lappend debugInLabels $id }
 		}
 	}
-	
+
 	# Debug actions should be in registry but not in labels
 	list [llength $debugInRegistry] [llength $debugInLabels]
 } -result {12 0}
@@ -208,7 +212,7 @@ tcltest::test all-actions-debug-filtered {debug actions excluded from labels but
 # ----------------------------------------------------------------------
 tcltest::test all-actions-confirm-marked {confirm actions have confirm flag set} -body {
 	set confirmActions {}
-	foreach id [::action::list] {
+	foreach id [dict keys $::application::assistant::Actions] {
 		set record [::action::get $id]
 		if {[dict get $record confirm]} {
 			lappend confirmActions $id
@@ -220,7 +224,7 @@ tcltest::test all-actions-confirm-marked {confirm actions have confirm flag set}
 
 tcltest::test all-actions-bulk-marked {bulk actions have bulk flag set} -body {
 	set bulkActions {}
-	foreach id [::action::list] {
+	foreach id [dict keys $::application::assistant::Actions] {
 		set record [::action::get $id]
 		if {[dict get $record bulk]} {
 			lappend bulkActions $id
