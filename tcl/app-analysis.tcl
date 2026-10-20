@@ -1640,9 +1640,13 @@ proc InsertMoves {tree what line} {
 		::scidb::engine::bind $id
 	}
 
-	# don't care about errors, may happen if the user is
-	# double clicking or in seldom cases due to raise conditions
-	::scidb::engine::snapshot $id $what $line
+	# Registry dispatch has no preceding mouse popup to take the snapshot.
+	::scidb::engine::snapshot $id
+	if {$what in {all incl}} {
+		::scidb::engine::snapshot $id $what
+	} else {
+		::scidb::engine::snapshot $id $what $line
+	}
 }
 
 
@@ -1650,6 +1654,7 @@ proc InsertComment {tree line} {
 	variable ${tree}::Vars
 
 	set id [::engine::id $Vars(number)]
+	::scidb::engine::snapshot $id
 	set san [::scidb::engine::snapshot $id comment $line]
 
 	if {[string length $san]} {
@@ -1697,8 +1702,8 @@ proc PopupMenu {tree number args} {
 		if {[llength $args]} {
 			set ident [$tree identify {*}$args]
 			if {[lindex $ident 0] eq "item"} {
-				set lineId [lindex $ident 1]
-				catch { set pv [$tree item [lindex $ident 1] -text] }
+				set lineId [$tree item order [lindex $ident 1] -visible]
+				if {[info exists Vars(pv:$lineId)]} { set pv $Vars(pv:$lineId) }
 			}
 		}
 		set object [dict create tree $tree number $Vars(number) engine $engineID \

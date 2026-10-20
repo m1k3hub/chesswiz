@@ -1864,7 +1864,7 @@ proc PopupMenu {table x y X Y} {
 
 	# C10: the one table-column context menu.
 	if {[llength [info commands ::context::Build]]} {
-		set object [dict create table $table column $header sortable [expr {[info exists Vars(sortable)] ? $Vars(sortable) : 1}]]
+		set object [dict create table $table column $id header $header sortable [expr {[info exists Vars(sortable)] ? $Vars(sortable) : 1}]]
 		if {[::context::Build C10 $menu $object]} {
 			tk_popup $menu $X $Y
 			return

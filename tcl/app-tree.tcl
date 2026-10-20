@@ -1955,47 +1955,33 @@ proc findNovelties {repertoireDb} {
 }
 
 proc HighlightNovelties {table repertoireDb} {
-	# Configure novelty tag (yellow background)
-	$table tag configure novelty -background yellow -foreground black
-
-	# Clear existing novelty tags
-	foreach row [$table children {}] {
-		$table tag remove novelty $row
+	# This pane uses table/TreeCtrl, whose items are numeric rows. The
+	# selection rectangle supplies each row's background; clear per-item
+	# overrides before applying the current repertoire comparison.
+	set tree $table.t
+	set fill [$tree element cget elemSel -fill]
+	foreach row [$tree item children root] {
+		foreach column [$tree column list] {
+			catch { $tree item element configure $row $column elemSel -fill $fill }
+		}
 	}
-
-	# Find novelty moves
-	if {![string length $repertoireDb]} { return }
-	if {![file exists $repertoireDb]} { return }
-
-	set noveltyRows [findNovelties $repertoireDb]
-
-	# Highlight novelty rows
-	foreach row $noveltyRows {
-		$table tag add novelty $row
+	if {$repertoireDb eq "" || ![file exists $repertoireDb]} { return 0 }
+	set rows [findNovelties $repertoireDb]
+	foreach row $rows {
+		foreach column [$tree column list] {
+			catch { $tree item element configure $row $column elemSel -fill yellow }
+		}
 	}
-
-	return [llength $noveltyRows]
+	return [llength $rows]
 }
 
 
 proc ToggleNoveltyHighlighting {table} {
 	variable Options
-
-	if {$Options(novelty:highlight)} {
-		# Turn on highlighting (checkbutton was just checked); the repertoire
-		# database is whatever is configured now, none meaning nothing to compare
-		set count [HighlightNovelties $table $Options(repertoire:db)]
-		if {$count > 0} {
-			::ui::message "Highlighted $count novelty moves"
-		}
-	} else {
-		# Turn off highlighting (checkbutton was just unchecked)
-		foreach row [$table children {}] {
-			$table tag remove novelty $row
-		}
-	}
+	set base [expr {$Options(novelty:highlight) ? $Options(repertoire:db) : ""}]
+	set count [HighlightNovelties $table $base]
+	if {$count > 0} { ::ui::message "Highlighted $count novelty moves" }
 }
-
 
 # ======================================================================
 # Opening Report — ChessBase 26 Feature Clone
