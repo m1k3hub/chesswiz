@@ -1918,7 +1918,9 @@ proc RestoreOptions {twm variant} {
 	variable TableOptions
 
 	set id [::application::twm::getId $twm]
-	::table::setOptions db:tree:$id $TableOptions($variant:$id)
+	if {[info exists TableOptions($variant:$id)]} {
+		::table::setOptions db:tree:$id $TableOptions($variant:$id)
+	}
 }
 
 
@@ -1927,6 +1929,8 @@ proc CompareOptions {twm variant} {
 
 	set id [::application::twm::getId $twm]
 	if {[::table::countOptions db:tree:$id] == 0} { return true }
+	# No snapshot yet: let the caller save the current table options.
+	if {![info exists TableOptions($variant:$id)]} { return false }
 	set lhs $TableOptions($variant:$id)
 	set rhs [::table::getOptions db:tree:$id]
 	if {![::table::equal $lhs $rhs]} { return false }
