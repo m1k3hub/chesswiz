@@ -221,4 +221,42 @@ tcltest::test pane-video-008-short-zoom {focus zoom on a short window keeps the 
  set over
 } -cleanup {::paneVideo::cleanup} -result {0 1}
 
+# Regression VAL-CROSS-004: the default window (1007x718) is below
+# ShortWidth/ShortHeight, so reflow collapses a pane and snapshots the sashes
+# at that size. If the window is enlarged while a pane is collapsed, the
+# restore must not place those old absolute coordinates over the new
+# arrangement: the board pane would be left at its short-size width and
+# swapped video would have no room for its reserve strip. The debounced
+# reflow makes the race hard to hit from timing alone, so this drives the
+# stale restore directly.
+tcltest::test pane-video-008-collapse-resize {restoring a collapse snapshot from another window size leaves the board pane alone} -setup {
+ set t [::paneVideo::setup]
+ set c $::application::board::Vars(widget:frame)
+} -body {
+ wm geometry .application 1007x718
+ set deadline [expr {[clock milliseconds]+6000}]
+ while {![info exists ::application::reflow::S(snapshot)]
+  || [set ::application::reflow::S(snapshot)] eq {}} {
+  if {[clock milliseconds] > $deadline} {error {short window did not collapse a pane}}
+  ::paneVideo::wait 50; update
+ }
+ set snapshot $::application::reflow::S(snapshot)
+ set shortSize [list [winfo width .application] [winfo height .application]]
+ wm geometry .application [::paneVideo::wideGeometry]
+ set deadline [expr {[clock milliseconds]+6000}]
+ while {[winfo width .application] < 1100} {
+  if {[clock milliseconds] > $deadline} {error {window did not enlarge}}
+  ::paneVideo::wait 50; update
+ }
+ ::paneVideo::wait 300; update idletasks
+ set wide [winfo width $c]
+ set ::application::reflow::S(snapshot) $snapshot
+ set ::application::reflow::S(snapshotSize) $shortSize
+ ::application::reflow::restoreCollapsed
+ update idletasks
+ set restored [winfo width $c]
+ puts "COLLAPSE-RESIZE shortSize=$shortSize wide=$wide restored=$restored"
+ list [expr {$wide > 500}] [expr {$restored == $wide}]
+} -cleanup {::paneVideo::cleanup} -result {1 1}
+
 tcltest::cleanupTests

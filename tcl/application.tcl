@@ -2407,8 +2407,17 @@ proc restoreCollapsed {} {
   unset S(stretch)
  }
  if {$S(snapshot) ne {}} {
-  ::application::focuszoom::Restore [boardTwm] $S(snapshot)
+  # The snapshot holds absolute sash coordinates from the size at which the
+  # collapse was made. Restoring them after a window resize squeezes the
+  # pane that grew (a short default window enlarged while a pane is
+  # collapsed), so only restore at the size the snapshot belongs to; the
+  # resize has already arranged the panes for the new size.
+  if {![info exists S(snapshotSize)]
+   || $S(snapshotSize) eq [list [winfo width .application] [winfo height .application]]} {
+   ::application::focuszoom::Restore [boardTwm] $S(snapshot)
+  }
   set S(snapshot) {}
+  unset -nocomplain S(snapshotSize)
  }
 }
 proc setMode {t target} {
@@ -2551,6 +2560,7 @@ proc updateCollapse {} {
  restoreCollapsed
  if {$desired ne {}} {
   set S(snapshot) [::application::focuszoom::Snapshot $t]
+  set S(snapshotSize) [list [winfo width .application] [winfo height .application]]
   if {![info exists S(returnSnapshot)] && [info exists S(expandedSnapshot)]} {
    set S(returnSnapshot) $S(expandedSnapshot)
    set S(returnSize) $S(expandedSize)
@@ -2652,6 +2662,7 @@ proc reset {} {
  array unset S expanded*
  array unset S return*
  array unset S wideSashes
+ array unset S snapshotSize
  array set S {mode wide base {} busy 0 loadCount 0 collapsed {} override {} snapshot {}}
  update idletasks
 }
