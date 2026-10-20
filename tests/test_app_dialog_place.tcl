@@ -18,6 +18,15 @@ proc ::scidb::test::dlgplace::waitFor {ms} {
 proc ::scidb::test::dlgplace::widgetRect {w} {
     list [winfo rootx $w] [winfo rooty $w] [winfo width $w] [winfo height $w]
 }
+proc ::scidb::test::dlgplace::boardRect {} {
+    # Independent oracle: include the drawn border and coordinates, not just
+    # the inner board widget used by the old placement helper.
+    set canvas $::application::board::Vars(widget:frame)
+    lassign [$canvas bbox board] x0 y0 x1 y1
+    return [list [expr {[winfo rootx $canvas] + $x0 - int([$canvas canvasx 0])}] \
+        [expr {[winfo rooty $canvas] + $y0 - int([$canvas canvasy 0])}] \
+        [expr {$x1-$x0}] [expr {$y1-$y0}]]
+}
 proc ::scidb::test::dlgplace::overlapArea {a b} {
     lassign $a ax ay aw ah
     lassign $b bx by bw bh
@@ -42,7 +51,7 @@ proc ::scidb::test::dlgplace::placed {command code result op} {
     variable workareaCalls
     if {$code} {return}
     set dlg [lindex $command 1]
-    dict set calls $dlg [dict create plan $result workareaCalls $workareaCalls board [widgetRect $::application::board::board] \
+    dict set calls $dlg [dict create plan $result workareaCalls $workareaCalls board [boardRect] \
         workarea [winfo workarea $dlg] extents [winfo extents $dlg]]
 }
 proc ::scidb::test::dlgplace::workareaTrace {command op} {
@@ -96,7 +105,7 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
     require [expr {[dict get $call workareaCalls] > 0}] "$target: no winfo workarea call from helper"
     require [expr {$wa eq [winfo workarea $dlg]}] "$target: work area changed"
     require [expr {$ext eq [winfo extents $dlg]}] "$target: frame changed after planning"
-    require [expr {$board eq [widgetRect $::application::board::board]}] "$target: board changed after planning"
+    require [expr {$board eq [boardRect]}] "$target: board changed after planning"
     if {$wantRule ne ""} {require [expr {$rule eq $wantRule}] "$target: expected $wantRule, got $rule"}
     require [regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} [wm geometry $dlg] -> w h x y] "invalid geometry"
     set actual [list $x $y [winfo width $dlg] [winfo height $dlg]]
@@ -173,6 +182,14 @@ proc ::scidb::test::dlgplace::openInsightsFixture {} {
 	return [list $pgn $meIdx]
 }
 
+tcltest::test dlg-frame-bounds {placement rectangle includes the drawn frame and coordinates} -setup {
+    ::scidb::test::dlgplace::setupBoard
+} -body {
+    expr {[::util::place::besideBoardRect] eq [::scidb::test::dlgplace::boardRect]}
+} -cleanup {
+    ::scidb::test::dlgplace::stopTrace
+} -result 1
+
 foreach {target openScript dialog closeScript} {
     002A {::playengine::open .application} {.application.playengine} {::playengine::Close}
     002B {::guessmove::start white} {.application.__guessmove__} {::guessmove::stop; catch {destroy .application.__guessmove__}}
@@ -243,7 +260,7 @@ tcltest::test dlg-004 {no-room fallback minimises measured board overlap and exp
     toplevel .application.dlgNoRoom
     wm withdraw .application.dlgNoRoom
     wm transient .application.dlgNoRoom .application
-    set b [::scidb::test::dlgplace::widgetRect $::application::board::board]
+    set b [::scidb::test::dlgplace::boardRect]
     lassign $b bx by bw bh
     lassign [winfo workarea .application] wx wy ww wh
     lassign [winfo extents .application.dlgNoRoom] el er et eb
@@ -286,9 +303,7 @@ tcltest::test dlg-tactics {trainer with its own board stays centred and does not
 # shared helper must re-plan the dialog so it never covers the board, with
 # one debounced re-place per settle.
 
-proc ::scidb::test::dlgplace::boardRect {} {
-    return [widgetRect $::application::board::board]
-}
+
 proc ::scidb::test::dlgplace::dialogOverlap {dlg} {
     return [overlapArea [widgetRect $dlg] [boardRect]]
 }

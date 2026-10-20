@@ -393,6 +393,20 @@ proc besideBoardRect {} {
 	if {[catch { set board $::application::board::board }]} { return {} }
 	if {![winfo exists $board] || ![winfo ismapped $board]} { return {} }
 	if {[winfo width $board] < 2 || [winfo height $board] < 2} { return {} }
+	# The canvas item includes the border and coordinates outside the inner
+	# board widget. Convert canvas coordinates to root coordinates, accounting
+	# for any canvas view offset. Early startup/teardown falls back below.
+	if {![catch {
+		set frame $::application::board::Vars(widget:frame)
+		set bbox [$frame bbox board]
+	}] && [llength $bbox] == 4} {
+		lassign $bbox x0 y0 x1 y1
+		if {$x1 > $x0 && $y1 > $y0} {
+			return [list [expr {[winfo rootx $frame] + $x0 - int([$frame canvasx 0])}] \
+				[expr {[winfo rooty $frame] + $y0 - int([$frame canvasy 0])}] \
+				[expr {$x1-$x0}] [expr {$y1-$y0}]]
+		}
+	}
 	return [list [winfo rootx $board] [winfo rooty $board] \
 		[winfo width $board] [winfo height $board]]
 }
@@ -611,10 +625,7 @@ proc besideBoard {dlg {parent ""}} {
 	set rh [winfo reqheight $dlg]
 	set dw [expr {min($maxw, max($rw, $mw))}]
 	set dh [expr {min($maxh, max($rh, $mh))}]
-	set bx [winfo rootx $board]
-	set by [winfo rooty $board]
-	set bw [winfo width $board]
-	set bh [winfo height $board]
+	lassign [besideBoardRect] bx by bw bh
 	set workarea [winfo workarea $dlg]
 	set cls [winfo class $dlg]
 	if {$cls eq "Menu" || $cls eq "OptionMenu" || [wm overrideredirect $dlg]} {
