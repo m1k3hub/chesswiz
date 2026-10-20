@@ -208,27 +208,51 @@ tcltest::test engines-winboard-dotted-pv {a WinBoard PV with "1... " move number
 } -result {1 1}
 
 tcltest::test engines-analysis-waits {engine_analysis with seconds answers later, through the tool loop} -constraints uciEngine -setup {
+	# ask also serves callers without a UI; transcript assertions need a pane.
+	::application::assistant::show
+	set savedConfirm $::application::assistant::Priv(confirm)
 	::scidb::test::engines::isolate
 	::scidb::test::engines::tool add_engine [list path $::scidb::test::engines::Program]
 	set name [dict get [lindex $::engine::Engines 0] Name]
 	::scidb::test::engines::tool start_engine [list engine $name lines 1]
+	# Engine startup is asynchronous too; the one-second tool wait is not
+	# a deadline for the engine to initialise on a loaded machine.
+	::scidb::test::engines::waitUntil {[regexp {depth [1-9][0-9]*} [::scidb::test::engines::tool engine_analysis]]}
 	set cfg ::application::ai::Config
 	set saved [array get $cfg provider]
 	set ${cfg}(provider) stub
 	::ai::provider::configure -name stub -chatResponses [list \
 		[dict create role assistant content "" tool_calls [list [dict create function \
 			[dict create name engine_analysis arguments {seconds 1}]]]] \
-		[dict create role assistant content "White is slightly better."]]
+		[dict create role assistant content ""]]
 } -body {
 	::application::assistant::clear
 	::application::assistant::ask "how does the engine see it?"
+	::scidb::test::engines::waitUntil {$::application::assistant::Priv(pending) ne ""}
+	set waiting [expr {$::application::assistant::Priv(busy)
+		&& [lindex $::application::assistant::Priv(pending) 2] eq "engine_analysis"}]
 	if {$::application::assistant::Priv(busy)} { vwait ::application::assistant::Priv(busy) }
 	set text [$::application::assistant::Priv(text) get 1.0 end-1c]
-	list [string match "*engine_analysis: (working...)*engine_analysis: Board position: *depth*White is slightly better.*" $text]
+	set messages $::application::assistant::Priv(messages)
+	set tool [lindex $messages end-1]
+	set facts [dict get $tool content]
+	# An empty model answer must fall back to the actual tool result, rather
+	# than supply a chess verdict unrelated to the engine's current score.
+	list $waiting \
+		[lmap message $messages { dict get $message role }] \
+		[dict get $tool tool_name] \
+		[string match "Board position: *depth*" $facts] \
+		[expr {0 <= [string first "engine_analysis: (working...)" $text]
+			&& [string first "engine_analysis: (working...)" $text]
+			< [string first "engine_analysis: $facts" $text]}] \
+		[expr {[dict get [lindex $messages end] content]
+			eq "The model returned no explanation. Here is what the tool found:\n$facts"}]
 } -cleanup {
 	array set $cfg $saved
+	::application::assistant::clear
 	::scidb::test::engines::restore
-} -result {1}
+	set ::application::assistant::Priv(confirm) $savedConfirm
+} -result {1 {system user assistant tool assistant} engine_analysis 1 1 1}
 
 # --- analysis panes: shared engine start, pin, comparison -----------------
 
