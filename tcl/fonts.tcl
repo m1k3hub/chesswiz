@@ -2110,13 +2110,18 @@ proc textFonts {} {
 
 	if {![info exists TextFamilies_]} {
 		set TextFamilies_ {}
+		# Resolving absent generic families can be expensive (font substitution).
+		# Reuse the results while retaining the original interleaved order.
+		set fallbackFonts {}
+		foreach fam {Sans-Serif {Sans Serif} Helvetica} {
+			lappend fallbackFonts [getFontFamilyName $fam]
+		}
 		foreach fam $DefaultTextFamilies {
 			set f [getFontFamilyName $fam]
 			if {($f eq $fam || [string match Tk* $fam]) && $f ni $TextFamilies_} {
 				lappend TextFamilies_ $f
 			}
-			foreach fam {Sans-Serif {Sans Serif} Helvetica} {
-				set fam [getFontFamilyName $fam]
+			foreach fam $fallbackFonts {
 				if {$fam ni $TextFamilies_} { lappend TextFamilies_ $fam }
 			}
 		}
