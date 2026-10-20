@@ -21,6 +21,23 @@ set Contents {
     {{{Modifica Posizione Iniziale} {Start-Position-Setup-Dialog.html}}}
   }
   {
+    {{{CQL (Chess Query Language)} {Overview.html} {cql-manual}}}
+    {{{Introduzione} {CQL-Index.html}}}
+    {
+      {{{Syntassi} {CQL-Syntax.html}}}
+      {{{Indicatori di pezzi} {CQL-Piece-Designators.html}}}
+      {{{Indicatori di casa} {CQL-Square-Designators.html}}}
+      {{{Specificatori di intervallo} {CQL-Range-Specifiers.html}}}
+      {{{Pattern matching} {Pattern-Matching.html}}}
+    }
+    {{{Trasformazioni} {CQL-Transformations.html}}}
+    {{{La lista di risultati} {CQL-Match-List.html}}}
+    {{{La lista di posizioni} {CQL-Position-List.html}}}
+    {{{La lista di relazioni} {CQL-Relation-List.html}}}
+    {{{Tagging} {CQL-Tagging.html}}}
+    {{{Esempi} {CQL-Examples.html}}}
+  }
+  {
     {{{Ulteriori Informazioni} {Overview.html} {further-information}}}
     {{{Codici Partita} {Game-Flags.html}}}
     {{{Specifiche sull'archivio database (Inglese)} {../en/Database-Archive.html}}}

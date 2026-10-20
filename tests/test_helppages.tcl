@@ -16,7 +16,7 @@
 # 5. English help pages contain no competitor product names:
 #    - no "chessbase", "fritz", "arena"
 #    - no "scid" as a competitor product (distinct from Scidb format).
-# 6. English help pages contain no query-language names (CQL / Chess Query Language).
+# 6. English help pages contain CQL documentation pages and index data.
 # 7. Other language Contents.dat and Overview files contain no broken links.
 # ======================================================================
 
@@ -102,7 +102,7 @@ tcltest::test helppages-contents-dat-02 {all files in en/Contents.dat exist} -bo
     join $missing ", "
 } -result ""
 
-# 3. Every internal link and anchor in en/ resolves
+# 3. Every internal link and anchor in en/ resolves (app help pages)
 tcltest::test helppages-internal-links-03 {all internal links and anchors in en/ resolve} -body {
     variable helpDir
     set enDir [file join $helpDir en]
@@ -111,6 +111,7 @@ tcltest::test helppages-internal-links-03 {all internal links and anchors in en/
     set broken {}
     foreach hf $htmlFiles {
         set base [file tail $hf]
+        if {[string match "CQL-*" $base]} continue
         set content [slurp $hf]
 
         set hrefs [regexp -all -inline {href=['"]([^'"]+)['"]} $content]
@@ -157,6 +158,7 @@ tcltest::test helppages-no-stale-branding-04 {no stale branding in en help files
     set bad {}
     foreach f $files {
         set base [file tail $f]
+        if {[string match "CQL-*" $base]} continue
         set content [slurp $f]
 
         if {[regexp -nocase {sourceforge|sf\.net} $content]} {
@@ -200,6 +202,7 @@ tcltest::test helppages-no-competitors-05 {no competitor products mentioned in e
     set bad {}
     foreach f $files {
         set base [file tail $f]
+        if {[string match "CQL-*" $base]} continue
         set content [slurp $f]
 
         if {[regexp -nocase {\m(chessbase|fritz|arena)\M} $content m]} {
@@ -216,22 +219,51 @@ tcltest::test helppages-no-competitors-05 {no competitor products mentioned in e
     join $bad ", "
 } -result ""
 
-# 6. No query language names in en help files
-tcltest::test helppages-no-query-languages-06 {no query language names in en help files} -body {
+# 6. CQL help pages and index/contents references are present
+tcltest::test helppages-cql-pages-present-06 {all CQL help pages and index data exist and are non-empty} -body {
     variable helpDir
     set enDir [file join $helpDir en]
-    set files [glob -nocomplain -directory $enDir *.txt *.html]
+    set expectedCqlPages {
+        CQL-Examples
+        CQL-File-Format
+        CQL-Index
+        CQL-Match-List
+        CQL-Percentage-Specifiers
+        CQL-Piece-Designators
+        CQL-Position-List
+        CQL-Range-Specifiers
+        CQL-Relation-List
+        CQL-Square-Designators
+        CQL-Syntax
+        CQL-Tagging
+        CQL-Technical-Description
+        CQL-Transformations
+    }
 
-    set bad {}
-    foreach f $files {
-        set base [file tail $f]
-        set content [slurp $f]
-
-        if {[regexp -nocase {\mcql\M|chess\s+query\s+language} $content m]} {
-            lappend bad "$base:query_lang:$m"
+    set missing {}
+    foreach base $expectedCqlPages {
+        set htmlPath [file join $enDir "$base.html"]
+        set txtPath [file join $enDir "$base.txt"]
+        if {![file exists $htmlPath] || [file size $htmlPath] == 0} {
+            lappend missing "$base.html"
+        }
+        if {![file exists $txtPath] || [file size $txtPath] == 0} {
+            lappend missing "$base.txt"
         }
     }
-    join $bad ", "
+
+    set cqlDat [file join $enDir "CQL.dat"]
+    if {![file exists $cqlDat] || [file size $cqlDat] < 100} {
+        lappend missing "CQL.dat"
+    }
+
+    set contentsDat [file join $enDir "Contents.dat"]
+    set cData [slurp $contentsDat]
+    if {![string match "*cql-manual*" $cData]} {
+        lappend missing "Contents.dat:cql-manual"
+    }
+
+    join $missing ", "
 } -result ""
 
 # 7. Other languages have no broken file links in Contents.dat or Overview

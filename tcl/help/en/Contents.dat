@@ -23,6 +23,28 @@ set Contents {
     {{{Edit start position} {Start-Position-Setup-Dialog.html}}}
   }
   {
+    {{{CQL (Chess Query Language)} {Overview.html} {cql-manual}}}
+    {
+      {{{Introduction} {CQL-Index.html}}}
+      {{{Piece designators} {CQL-Piece-Designators.html}}}
+      {{{Square designators} {CQL-Square-Designators.html}}}
+      {{{Range specifiers} {CQL-Range-Specifiers.html}}}
+      {{{Percentage ranges} {CQL-Percentage-Specifiers.html}}}
+      {{{Pattern matching} {Pattern-Matching.html}}}
+    }
+    {
+      {{{Technical description} {CQL-Technical-Description.html}}}
+      {{{Syntax} {CQL-Syntax.html}}}
+      {{{Transformations} {CQL-Transformations.html}}}
+      {{{The match list} {CQL-Match-List.html}}}
+      {{{The position list} {CQL-Position-List.html}}}
+      {{{The relation list} {CQL-Relation-List.html}}}
+      {{{Tagging} {CQL-Tagging.html}}}
+      {{{Examples} {CQL-Examples.html}}}
+      {{{File format} {CQL-File-Format.html}}}
+    }
+  }
+  {
     {{{Further information} {Overview.html} {further-information}}}
     {{{Game markers} {Game-Flags.html}}}
     {{{Supported chess variants} {Chess-Variants.html}}}

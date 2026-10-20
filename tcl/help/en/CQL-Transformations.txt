@@ -1,0 +1,468 @@
+<!-- ======================================================================
+* Author : $Author$
+* Version: $Revision: 161 $
+* Date   : $Date: 2011-12-17 12:31:23 +0100 (Sat, 17 Dec 2011) $
+* Url    : $URL$
+======================================================================= -->
+
+<!-- ======================================================================
+* Copyright: (C) 2013 Gregor Cramer
+======================================================================= -->
+
+<!-- ======================================================================
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+======================================================================= -->
+
+INDEX CQL Transformations
+INDEX Transformations (CQL)
+
+TITLE CQL - Transformations
+
+<ul>
+  <li><a href="#transforms">Transforms of piece designators</a></li>
+  <li><a href="#keywords">Transformation keywords in a position list</a></li>
+  <li><a href="#examples">Examples of transformation keyword uses</a></li>
+  <li><a href="#multiple">Multiple transformation keywords</a></li>
+</ul>
+
+<h2 id="transforms">Transforms of piece designators</h2>
+
+<p>
+Certain transforms are defined on piece designators.
+</p>
+
+<p>
+A <b>diagonal flip transformation</b>, applied to a piece designator, reflects
+each square in its square set about the main diagonal.
+</p>
+
+<table width="100%" border="0">
+  <tr>
+    <td align="center">
+      <img src="../images/cql-flip-diagonal.png"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      Diagonal flip of <expr>&R;a8</expr> about the main diagonal.
+    </td>
+  </tr>
+</table>
+
+<p>
+For example, the diagonal flip of <expr>[&A;&a;][a-h1-2,f6,h7]</expr> is
+<expr>[&A;&a;][a-b1-8,f6,g8]</expr>.
+</p>
+
+<p>
+An <b>off-diagonal flip transformation</b> applied to a piece designator
+reflects each square in its square set about the a8 to h1 diagonal.
+</p>
+
+<table width="100%" border="0">
+  <tr>
+    <td align="center">
+      <img src="../images/cql-flip-off-diagonal.png"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      Off-diagonal flip of <expr>&B;b2</expr> about the a8 to h1 diagonal.
+    </td>
+  </tr>
+</table>
+
+<p>
+For example, the off-diagonal flip of <expr>&R;a8</expr> is <expr>&R;a8</expr>.
+The off-diagonal flip of <expr>[&B;&b;][a1-8]</expr>, denoting a bishop on the
+a file, is <expr>[&B;&b;][a-h8]</expr>, denoting a bishop on the eight rank.
+</p>
+
+<p>
+A <b>vertical flip transformation</b> applied to a piece designator reflects
+each square in its square set about the vertical bisector of the board. For
+example, the vertical flip of <expr>&U;f6</expr>, denoting a piece on f6, is
+<expr>&U;c6</expr>.
+</p>
+
+<table width="100%" border="0">
+  <tr>
+    <td align="center">
+      <img src="../images/cql-flip-vertical.png"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      Vertical flip of <expr>&b;f6</expr> about the vertical bisector.
+    </td>
+  </tr>
+</table>
+
+<p>
+A <b>horizontal flip transformation</b> applied to a piece designator
+reflects each square in its square set about the horizontal bisector of
+the board. For example, the horizontal flip of <expr>&U;f6</expr> is
+<expr>&U;f3</expr>.
+</p>
+
+<table width="100%" border="0">
+  <tr>
+    <td align="center">
+      <img src="../images/cql-flip-horizontal.png"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      Horizontal flip of <expr>&b;f6</expr> about the horizontal bisector.
+    </td>
+  </tr>
+</table>
+
+<p>
+A <b>dihedral transformation</b> of a piece designator is a flip transformation
+followed by a flip transformation or the identity transformation (the first
+flip transformation could be replaced by rotations by 90, 180, or 270 degrees).
+There are eight distinct dihedral transformations of the board. For example, the
+results of applying all dihedral transformations to the piece designator
+<expr>&Q;c2</expr> are the 8 piece designators <expr>&Q;c2</expr>,
+<expr>&Q;b3</expr>, <expr>&Q;b6</expr>, <expr>&Q;c7</expr>, <expr>&Q;f7</expr>,
+<expr>&Q;g6</expr>, <expr>&Q;g3</expr>, and <expr>&Q;f2</expr>.
+</p>
+
+<table width="100%" border="0">
+  <tr>
+    <td align="center">
+      <img src="../images/cql-flip-dihedral.png"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      Dihedral transformations of <expr>&Q;c2</expr>, for example:<br/>
+      diagonal flip (via b3) + diagonal flip (to c2)<br/>
+      diagonal flip (via b3) + identity transformation (to b3)<br/>
+      diagonal flip (via b3) + horizontal flip (to b6)<br/>
+      horizontal flip (via c7) + identity transformation (to c7)<br/>
+      horizontal flip (via c7) + vertical flip (to f7)<br/>
+      off-diagonal flip (via g6) + identity transformation (to g6)<br/>
+      off-diagonal flip (via g6) + horizontal flip (to g3)<br/>
+      vertical flip (via f2) + identity transformation (to f2)<br/>
+    </td>
+  </tr>
+</table>
+
+<p>
+A <b>unit right shift transformation</b>, applied to a piece designator,
+shifts each square in its square set over to the right one square. If a
+square is already at the right edge of the board, it is removed from the
+square set. If a square is at the left edge of the board, it is also added
+to the new square set.
+</p>
+
+<p>
+For example, the unit right shift transformation of <expr>&Q;d4</expr> is
+<expr>&Q;e4</expr>. The unit right shift transformation of <expr>&Q;[c2,h2]</expr>
+is <expr>&Q;d2</expr>. The unit right shift transformation of
+<expr>&Q;[a2,c2,h2]</expr> is <expr>&Q;[a2,b2,d2]</expr>.
+</p>
+
+<p>
+The definitions of <b>unit left shift transformation</b>, <b>unit up shift
+transformation</b> and <b>unit down shift transformation</b> are similar to that
+of unit right shift transformation, with of course the location of the
+appropriate board edges altering mutatis mutandis.
+</p>
+
+<p>
+A <b>right transformation</b> is a composition of zero or more unit right
+transformations. For example, the right transformation comprising three
+successive unit right transformations applied to <expr>&Q;a4</expr> is
+<expr>&Q;[a4,b4,c4,d4]</expr>, since squares on the left edge of the board are
+always included in the new set. The result of applying this right
+transformation to <expr>&Q;d4</expr> is <expr>&Q;g4</expr>.
+</p>
+
+<p>
+Similar definitions apply for <b>left transformation</b>, <b>up
+transformation</b>, and <b>down transformation</b>.
+</p>
+
+<p>
+A <b>horizontal shift transformation</b> is either a left or a right
+transformation. A <b>vertical shift transformation</b> is either a down
+or an up transformation.
+</p>
+
+<p>
+A <b>maindiagonal shift</b> is a transformation that can be be written as
+zero or more combinations of unit right shift and unit up shift transformations.
+An <b>off-diagonal shift</b> is a transformation that can be be written as
+zero or more combinations of unit right shift and unit down shift transformations.
+</p>
+
+<p>
+A <b>shift transformation</b> is a transformation that can be written as
+zero or more horizontal shift transformations followed by zero or more
+vertical shift transformations. There is exactly one shift transformation
+that sends a given square to another given square. One possible shift
+transformation of <expr>&Q;[b3,c4]</expr> is <expr>&Q;[d4,e5]</expr>.
+</p>
+
+<p>
+A <b>color flip transformation</b> of a piece designator switches the colors
+of each piecetype in the piece set of the piece designator, and then applies
+a horizontal flip to the piece designator. For example, the color flip
+transformation applied to <expr>[&R;&b;&p;][a2,c2]</expr>, either a white rook,
+a black bishop, or a black pawn on either c2 or a2, is
+<expr>[&r;&B;&P;][a7,c7]</expr>.
+</p>
+
+<h2 id="keywords">Transformation keywords in a position list</h2>
+
+<p>
+Certain keywords within a position list specify that the position list should
+match a position if some transformation of the position list matches the
+position. For example, the <cql>position:fliphorizontal</cql> keyword
+specifies that the position list matches a position if either the original
+position list matches the position, or if the position list, when flipped
+about the horizontal bisector, matches the position.
+</p>
+
+<p>
+To apply a transformation to a position list we apply the transformation to
+each piece designator that occurs in the position, and we recursively apply
+the transformation to any other position lists contained in that position
+list. If the transformation is a color flip translation, then we also flip
+interchange any <cql>position:btm</cql> keywords with <cql>position:wtm</cql>
+ones, and we flip the <cql>position:result</cql> keyword arguments
+appropriately.
+</p>
+
+<p>
+For example, consider the position list
+</p>
+
+<verb>
+(position &R;c2 &B;h8 <cql>position:wtm</cql>)
+</verb>
+
+<p>
+This matches any position with white to move that has a white rook on c2 and a
+white bishop on h8. The result of applying a unit left shift transformation to
+this position list is the new position list:
+</p>
+
+<verb>
+(position &R;b2 &B;g8 <cql>position:wtm</cql>)
+</verb>
+
+<p>
+that matches any position with white rook on b2 and white bishop on g8 with
+white to move.
+</p>
+
+<p>
+Similarly, the result of applying a horizontal flip to this position list is
+the position list:
+</p>
+
+<verb>
+(position &R;b8 &B;g1 <cql>position:wtm</cql>)
+</verb>
+
+<p>
+The result of applying a color flip transformation to the
+</p>
+
+<verb>
+(position &R;b2 &B;g8 <cql>position:wtm</cql>)
+</verb>
+
+<p>
+is thus
+</p>
+
+<verb>
+(position &R;b8 &B;g1 <cql>position:btm</cql>)
+</verb>
+
+<p>
+Remember that shifts interact specially with certain squares on the edge.
+For example the result of applying a unit up shift to this position list:
+</p>
+
+<verb>
+(position &R;[a1,a8,h1,a8])
+</verb>
+
+<p>
+is the position list:
+</p>
+
+<verb>
+(position &R;[a1,a2,h1,h2])
+</verb>
+
+<p>
+A transformation set is any set of transformations. A transformation set
+applied to a position list is the set of all position lists that result from
+applying any transformation in the transformation set to the position list.
+</p>
+
+<p>
+Each transformation keyword is associated to a transformation set, each of which
+also includes the identity transformation.
+</p>
+
+<p>
+For the transformation keywords see:
+<a href="CQL-Position-List.html#transform">The position list: transformation keywords</a>.
+</p>
+
+<h2 id="examples">Examples of transformation keyword uses</h2>
+
+<verb>
+(position &R;c3 &q;g3)
+</verb>
+
+<p>
+This position list matches any position with a white rook on c3 and a black
+queen on g3. We can add a :shifthorizontal keyword:
+</p>
+
+<verb>
+(position &R;c3 &q;g3 <keyword>position:shifthorizontal</keyword>)
+</verb>
+
+<p>
+The set of transformed position lists is:
+</p>
+
+<verb>
+(position &R;c3 &q;g3)<br/>
+(position &R;b3 &q;f3)<br/>
+(position &R;a3 &q;e3)<br/>
+(position &R;d3 &q;h3)
+</verb>
+
+<p>
+A position will match the new position list, if there is a white rook and
+black queen on the third rank and the white rook is four squares to the left
+of the black queen.
+</p>
+
+<verb>
+(position &R;c3 &q;g3 <keyword>position:shiftvertical</keyword>)
+</verb>
+
+<p>
+Similarly, this position list will match any position in which there is a
+white rook on the same rank as a black queen such that the rook is on the c
+file and the queen on the g file.
+</p>
+
+<verb>
+(position &R;c3 &q;g3 <keyword>position:shift</keyword>)
+</verb>
+
+<p>
+This position list will match any position with a white rook and a black
+queen on the same rank, in which the white rook is four squares to the left
+of the black queen.
+</p>
+
+<verb>
+(position &R;c3 &q;g3 <keyword>position:fliphorizontal</keyword>)
+</verb>
+
+<p>
+This position list will match any position in which either the white rook
+is on c3 and the black queen is on g3, or the white rook is on c6 and the
+black queen on g6.
+</p>
+
+<verb>
+(position &R;c3 &q;g3 <keyword>position:flipdiagonal</keyword>)
+</verb>
+
+<p>
+This position list will match a position in which either a white rook is on
+c3 and a black queen on g3, or in which a white rook is on c3 and a black
+queen is on c7.
+</p>
+
+<verb>
+(position &R;c3 &q;g3 <keyword>position:flip</keyword>)
+</verb>
+
+<p>
+The following position list matches any position in which a white rook is
+somewhere behind a white pawn on the c file:
+</p>
+
+<verb>
+(position &P;c2 &R;c1 <keyword>position:shiftvertical</keyword>)
+</verb>
+
+<p>
+Because of the way edge squares are treated, this will match a position in
+which, say, the white rook is on c2 and the white pawn on c7.
+</p>
+
+<p>
+To match any position in which a white rook is behind a white pawn on the
+same file, use:
+</p>
+
+<verb>
+(position &P;c2 &R;c1 <keyword>position:shift</keyword>)
+</verb>
+
+<h2 id="multiple">Multiple transformation keywords</h2>
+
+<p>
+When multiple transformation keywords occur, the associated transformation
+set is any transformation that can be expressed as a composition of
+transformations from the corresponding transformation sets. This feature
+is most often used when looking for a piece configuration that can occur
+anywhere on the board, possibly rotated or reflected: adding
+<expr>:shift</expr> <expr>:flip</expr> to the position specifier does this.
+</p>
+
+<p>
+For example, this position list
+</p>
+
+<verb>
+(position &N;d4 &k;f3 <keyword>position:shift</keyword> <keyword>position:flip</keyword>)
+</verb>
+
+<p>
+matches any position in which a white knight attacks a black king, while
+</p>
+
+<verb>
+(position &N;d4 &k;f3 <keyword>position:shift</keyword> <keyword>position:flip</keyword> <keyword>position:flipcolor</keyword>)
+</verb>
+
+<p>
+matches any position in which a knight attacks a king of the opposite color.
+</p>
+
+<p>
+Note: This example can be written much more efficiently as
+</p>
+
+<verb>
+(position <cql>position:attackcount</cql> &N; &k; 1 unlimited <keyword>position:flipcolor</keyword>)
+</verb>
+
+<p>
+however.
+</p>
+
+END
+
+<!-- vi:set ts=2 sw=2 et filetype=html: -->
