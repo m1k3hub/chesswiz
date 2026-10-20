@@ -430,7 +430,13 @@ tcltest::test recentpaths-context-remove {the context menu removes the row that 
 	::scidb::test::recentpaths::addRecent $b
 	::scidb::test::recentpaths::addRecent $a
 	::scidb::test::recentpaths::buildPage
+	# a has gone from the history while the page still shows the two rows it
+	# was drawn with.  information::update re-snapshots the page while it is
+	# mapped, so the rows the menu was built for are kept explicitly here:
+	# the click below carries the id of the drawn page, not of the live list.
+	set shown $::application::information::Priv(recent)
 	::application::database::removeRecentFile $a
+	set ::application::information::Priv(recent) $shown
 } -body {
 	# row 1 (b) is removed by the context menu; a is already gone
 	::application::information::RemoveRecentFile 1

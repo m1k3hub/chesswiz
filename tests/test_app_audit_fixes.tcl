@@ -391,10 +391,23 @@ tcltest::test audit-user-dir-not-from-program-name {the user directory is named 
 } -result {1 1}
 
 tcltest::test audit-launcher-through-renamed-symlink {the launcher starts its binary when called through a symlink of another name} -constraints unix -setup {
+	# The app tests can run where only the Tcl bundle is built
+	# (make -C tcl chesswiz), without the C++ interpreter beside it.  What
+	# is under test is the launcher's choice of binary after it follows a
+	# symlink of another name - not tkchesswiz itself, which
+	# tests/startup_smoke.tcl starts - so a stand-in interpreter stands
+	# beside a copy of the launcher.
 	set dir [file join [::tcltest::temporaryDirectory] launch-[pid]]
-	file mkdir $dir
-	set script [file normalize [file join [file dirname [info script]] .. tcl chesswiz]]
-	file link -symbolic [file join $dir mychess] $script
+	file mkdir [file join $dir tcl]
+	file copy [file normalize [file join [file dirname [info script]] .. tcl chesswiz]] \
+		[file join $dir tcl chesswiz]
+	set binary [file join $dir tcl tkchesswiz]
+	set fh [open $binary w]
+	puts $fh "#!/bin/sh"
+	puts $fh {echo "Chesswiz version (stand-in)"}
+	close $fh
+	file attributes $binary -permissions 0755
+	file link -symbolic [file join $dir mychess] [file join $dir tcl chesswiz]
 } -body {
 	catch {::util::execSafe [file join $dir mychess] --help 2>@1} out
 	string match "Chesswiz version*" $out
