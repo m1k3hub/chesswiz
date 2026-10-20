@@ -604,9 +604,20 @@ proc ::action::Dispatch {id args approval} {
 	# object (or an object whose R10 rule hides the row) they must not run.
 	if {[llength [dict get $record context]] && [dict get $record dropdown] eq "" \
 	 && [llength [info commands ::menu::state]]} {
-		set state [::menu::state $id]
-		if {![dict get $state visible] || ![dict get $state enabled]} {
-			return "error: action '$id' is not available here"
+		# A caller that supplies the object (a context menu, the assistant) is
+		# judged by that object's rule; only a bare call uses the current one.
+		set object [lindex $args 0]
+		if {[llength $args] && ![catch { dict size $object } n] && $n > 0 \
+		 && [llength [info commands ::context::ObjectRule]]} {
+			set rule [::context::ObjectRule $id $object]
+			if {[llength $rule] && (![lindex $rule 0] || ![lindex $rule 1])} {
+				return "error: action '$id' is not available here"
+			}
+		} else {
+			set state [::menu::state $id]
+			if {![dict get $state visible] || ![dict get $state enabled]} {
+				return "error: action '$id' is not available here"
+			}
 		}
 	}
 
