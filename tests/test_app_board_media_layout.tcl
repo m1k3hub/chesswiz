@@ -169,6 +169,46 @@ proc ::w1::near {a b} {
 proc ::w1::control {w} {
     list [$w.expand cget -text] $::mediainset::mc::ExpandTooltip $::mediainset::mc::VideoTooltip
 }
+# Earlier tests may leave their own toplevel log or notice cards over the
+# board pane. They are not part of the inset geometry under test.
+proc ::w1::quiet {} {
+    catch {wm withdraw .application.log}
+    if {[llength [info commands ::dialog::notice::Dismiss]]} {
+        foreach card $::dialog::notice::Cards {
+            catch {::dialog::notice::Dismiss [lindex $card 0]}
+        }
+    }
+    update idletasks
+}
+# VAL-MED-009: what Tk window is on top at the centre of the Expand/Restore
+# control, and at the centre of the small board while it is swapped in.
+proc ::w1::topAtControl {w} {
+    set cx [expr {[winfo rootx $w.expand] + [winfo width $w.expand]/2}]
+    set cy [expr {[winfo rooty $w.expand] + [winfo height $w.expand]/2}]
+    return [list $cx $cy [winfo containing $cx $cy]]
+}
+proc ::w1::topAtBoard {} {
+    set view [::mediainset::BoardView]
+    set cx [expr {[winfo rootx $view] + [winfo width $view]/2}]
+    set cy [expr {[winfo rooty $view] + [winfo height $view]/2}]
+    return [list $cx $cy [winfo containing $cx $cy]]
+}
+# The control is never underneath the board. While the board is the small
+# overlay, the transport cluster must not cover its squares either.
+proc ::w1::unoccluded {tag w} {
+    lassign [::w1::topAtControl $w] cx cy top
+    lassign [::w1::topAtBoard] bx by btop
+    set board [::mediainset::BoardView]
+    set small [expr {$::mediainset::Swapped && !$::mediainset::Audio}]
+    set control [set w].expand
+    set controlTop [expr {$top eq $control}]
+    set boardTop [expr {!$small || [string first $board $btop] == 0}]
+    set overlap [expr {!$small ? 0 : [::w1::overlap [::w1::rect $w.controls] [::w1::rect $board]]}]
+    ::w1::log VAL-MED-009-unoccluded [list state $tag button [::w1::rect $w.expand] \
+        board [::w1::rect $board] controlCentre $cx $cy controlTop $top onControl $controlTop \
+        boardCentre $bx $by boardTop $btop onBoard $boardTop controlsBoardOverlap $overlap]
+    return [expr {$controlTop && $boardTop && $overlap == 0}]
+}
 proc ::w1::shot {name} {
     variable dir
     file mkdir $dir
@@ -536,6 +576,93 @@ tcltest::test inset-009-restore {VAL-MED-009 button, double-click and Escape res
     }
     set out
 } -cleanup {::w1::cleanup} -result {{button 1 1} {double 1 1} {escape 1 1}}
+
+# VAL-MED-009: the Expand/Restore control is the topmost window at its own
+# centre in every state, including the small-board overlay after a resize.
+# The small board must be offset from the transport cluster, not merely
+# raised under it (V9 failure: the board covered the Restore control).
+tcltest::test inset-009-unoccluded {VAL-MED-009 the size control is never covered by the small board} -setup {::w1::setup} -body {
+    ::w1::quiet
+    set states {}
+    foreach {sw sh} [list 1024 700 1280 800] {
+        if {$sw > [winfo screenwidth .] || $sh > [winfo screenheight .]} { continue }
+        wm geometry .application ${sw}x${sh}+0+0
+        ::w1::wait
+        set w [::w1::play]
+        lappend states [::w1::unoccluded "$sw-$sh-normal" $w]
+        ::w1::trigger $w button
+        lappend states [::w1::unoccluded "$sw-$sh-expanded" $w]
+        wm geometry .application [expr {$sw-120}]x[expr {$sh-60}]
+        ::w1::wait
+        lappend states [::w1::unoccluded "$sw-$sh-expanded-resized" $w]
+        if {![catch {::menu::viewFullscreen toggle}]} {
+            ::w1::wait
+            lappend states [::w1::unoccluded "$sw-$sh-expanded-fullscreen" $w]
+            catch {::menu::viewFullscreen toggle}
+            ::w1::wait
+        }
+        ::w1::trigger $w button
+        lappend states [::w1::unoccluded "$sw-$sh-restored" $w]
+        # leave the next size in the normal state
+        if {$::mediainset::Swapped} { ::w1::trigger $w button }
+    }
+    ::w1::assert {[llength $states]} "no window size exercised"
+    expr {[llength [lsearch -all $states 0]] == 0}
+} -cleanup {::w1::cleanup} -result 1
+
+# VAL-MED-009: the same topmost-control guarantee holds in the corner overlay,
+# audio-only and 3D board states.
+tcltest::test inset-009-unoccluded-states {VAL-MED-009 the control is unoccluded in corner, audio and 3D states} -setup {::w1::setup; ::w1::size small} -body {
+    ::w1::quiet
+    set states {}
+    set w [::w1::play]
+    lappend states [::w1::unoccluded corner $w]
+    ::w1::trigger $w button
+    lappend states [::w1::unoccluded corner-expanded $w]
+    ::w1::trigger $w button
+    set w [::w1::play [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.media/audio/interview.wav]]
+    lappend states [::w1::unoccluded audio $w]
+    ::w1::trigger $w button
+    lappend states [::w1::unoccluded audio-expanded $w]
+    ::w1::trigger $w button
+    wm geometry .application 1024x700+0+0
+    ::w1::wait
+    set w [::w1::play]
+    lappend states [::w1::unoccluded 3d-pre $w]
+    ::w1::assert {[::application::board::show3D 1]} "Blocked: 3D view unavailable"
+    ::w1::wait
+    lappend states [::w1::unoccluded 3d-normal $w]
+    ::w1::trigger $w button
+    lappend states [::w1::unoccluded 3d-expanded $w]
+    ::w1::trigger $w button
+    ::application::board::show3D 0
+    ::w1::wait
+    expr {[llength [lsearch -all $states 0]] == 0}
+} -cleanup {::w1::cleanup} -result 1
+
+# VAL-MED-009: a real pointer (Xvfb + xdotool), not a Tcl invoke, must reach
+# the Restore control and restore the previous geometry.
+tcltest::test inset-009-real-pointer {VAL-MED-009 a real pointer click on Restore restores} -setup {::w1::setup} -body {
+    if {[auto_execok xdotool] eq ""} { error "xdotool is required for the real-pointer test" }
+    ::w1::quiet
+    wm geometry .application 1024x700+0+0
+    ::w1::wait
+    set w [::w1::play]
+    set before [::w1::rects $w]
+    ::w1::trigger $w button
+    set expanded $::mediainset::Swapped
+    lassign [::w1::topAtControl $w] cx cy top
+    set control [set w].expand
+    ::w1::assert {$top eq $control} "Restore control is covered by $top"
+    set rc [catch {exec xdotool mousemove $cx $cy click 1} err]
+    ::w1::assert {$rc == 0} "xdotool click failed: $err"
+    ::w1::wait 500
+    set restored [expr {!$::mediainset::Swapped}]
+    set equal [::w1::near $before [::w1::rects $w]]
+    ::w1::log VAL-MED-009-real-pointer [list centre $cx $cy top $top expanded $expanded \
+        restored $restored equal $equal button [::w1::rect $w.expand]]
+    list $expanded [expr {$top eq $control}] $restored $equal
+} -cleanup {::w1::cleanup} -result {1 1 1 1}
 
 # VAL-MED-009: the ridge+highlight frame stays fully inside the pane in the
 # normal strip, the expanded layout (inset by its margin) and audio-only, and

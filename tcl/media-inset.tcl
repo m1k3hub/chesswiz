@@ -319,7 +319,11 @@ proc ::mediainset::Layout {} {
 				-relwidth 1 -relheight 1 -width [expr {-2*$FrameMargin}] -height [expr {-2*$FrameMargin}]
 			pack forget $view
 			FrameView 1
-			place $view -in $pane -relx 1 -rely 1 -x -$BoardGap -y -$BoardGap -anchor se \
+			# Keep the small board away from the inset's transport cluster at
+			# the pane's bottom-right. The top-left corner is free (the Media
+			# button lives at the top-right), so the board never covers the
+			# Expand/Restore control and the controls never cover board squares.
+			place $view -in $pane -relx 0 -rely 0 -x $BoardGap -y $BoardGap -anchor nw \
 				-relwidth $s -relheight $s -width {} -height {}
 			raise $view
 		} else {
