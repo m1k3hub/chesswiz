@@ -1959,6 +1959,7 @@ proc HighlightNovelties {table repertoireDb} {
 	# selection rectangle supplies each row's background; clear per-item
 	# overrides before applying the current repertoire comparison.
 	set tree $table.t
+	if {![winfo exists $tree]} { return 0 }
 	set fill [$tree element cget elemSel -fill]
 	foreach row [$tree item children root] {
 		foreach column [$tree column list] {
