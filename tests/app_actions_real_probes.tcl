@@ -9,6 +9,7 @@ set modalSkips {
     compact_database {Real compaction confirmation waits for Yes/No.}
     convert_database {Real format confirmation and destination chooser wait for user input.}
     install_chessbase_fonts {Real font-directory chooser waits for user input.}
+    save_working_set {Real working-set name prompt waits for user input.}
 }
 ::tcltest::testConstraint partcNonModal 0
 foreach name [dict keys $::application::assistant::Actions] {
@@ -29,6 +30,10 @@ foreach name [dict keys $::application::assistant::Actions] {
         set savedProvider $::application::ai::Config(provider)
         set savedProviderConfig [array get ::ai::provider::Config]
         set runningBefore [::application::analysis::Running]
+        set savedBulkHook $::action::BulkHook
+        set savedRootChildren [winfo children .]
+        set savedAppChildren [winfo children .application]
+        ::scidb::test::actions::unstubDownload
     } -body [list apply {{name} {
         puts "PROBE startup $name"; flush stdout
         ::scidb::test::actions::ready
@@ -38,9 +43,16 @@ foreach name [dict keys $::application::assistant::Actions] {
         # assistant-level prompts; product dialogs remain real.
         set ::application::assistant::Priv(confirm) ::scidb::test::actions::yes
         set ::application::assistant::Priv(reqconfirm) {}
+        # Bulk actions would otherwise open the product confirmation dialog,
+        # which needs a user; the assistant-level gate is covered by the
+        # registry tests. Keep every probe order-independent.
+        set ::action::BulkHook ::scidb::test::actions::yes
         set ::application::ai::Config(provider) stub
         ::ai::provider::configure -name stub -chatResponses {}
         set args [::scidb::test::actions::prepareReal $name $args]
+        if {$name in {download_games update_player_data}} {
+            ::scidb::test::actions::stubDownload
+        }
         puts "PROBE handler $name $args"; flush stdout
         set reply [::application::assistant::runTool $name $args]
         puts "PROBE reply $name $reply"; flush stdout
@@ -59,12 +71,24 @@ foreach name [dict keys $::application::assistant::Actions] {
         foreach number [::application::analysis::Running] {
             if {$number ni $runningBefore} { ::application::analysis::stopEngine $number }
         }
+        # Handlers like discover_databases, correspondence_games and
+        # open_search leave real toplevels mapped; they would cover later
+        # tests and collide with their own windows. Destroy what this probe
+        # created.
+        foreach w [winfo children .] {
+            if {$w ni $savedRootChildren} { catch { destroy $w } }
+        }
+        foreach w [winfo children .application] {
+            if {$w ni $savedAppChildren} { catch { destroy $w } }
+        }
         set ::ai::annotate::Settings(classes) $savedClasses
         set ::application::assistant::Priv(confirm) $savedConfirm
         set ::application::assistant::Priv(reqconfirm) $savedReqConfirm
+        set ::action::BulkHook $savedBulkHook
         set ::application::ai::Config(provider) $savedProvider
         array unset ::ai::provider::Config
         array set ::ai::provider::Config $savedProviderConfig
+        ::scidb::test::actions::unstubDownload
         ::scidb::test::actions::cleanup
     } -result 1
 }
