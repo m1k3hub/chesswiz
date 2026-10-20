@@ -273,4 +273,24 @@ if {[info exists ::scidb::test::trn::savedShare]} {
 	set ::scidb::dir::share $::scidb::test::trn::savedShare
 }
 
+
+# Laptop run 190: View > Language > Deutsch left the app in English because
+# the menu row passes the language's name and setLang matched only ids.
+tcltest::test translations-language-row-switches {the View > Language row switches the UI language} -body {
+	set m [menu .__langtest__ -tearoff 0]
+	::menu::FillLanguage $m
+	set got {}
+	for {set i 0} {$i <= [$m index end]} {incr i} {
+		if {[$m type $i] ne "command"} continue
+		set label [string trim [$m entrycget $i -label]]
+		if {$label ni {Deutsch Español}} continue
+		$m invoke $i
+		update
+		lappend got $label $::mc::langID
+	}
+	destroy $m
+	::menu::SwitchLanguage en
+	lappend got $::mc::langID
+} -result {Deutsch de Español es en}
+
 tcltest::cleanupTests
