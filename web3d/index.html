@@ -28,6 +28,11 @@
     button:hover { background: #3b82f6; transform: translateY(-1px); }
     button.theme-btn { background: #475569; }
     button.theme-btn:hover { background: #64748b; }
+    select.mat-select {
+      background: #334155; color: #fff; border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 8px 14px; border-radius: 20px; cursor: pointer; font-weight: 600;
+      font-size: 0.85rem; outline: none;
+    }
   </style>
   <script src="three.min.js"></script>
   <script src="OrbitControls.js"></script>
@@ -43,7 +48,12 @@
     <button onclick="setCameraView('black')">Black View</button>
     <button onclick="setCameraView('side')">Side View</button>
     <button onclick="setCameraView('top')">Top View</button>
-    <button class="theme-btn" onclick="toggleTheme()">Toggle Wood/Marble</button>
+    <select id="material-select" class="mat-select" onchange="setBoardMaterial(this.value)" aria-label="Board Material">
+      <option value="classic">Classic Woodcraft</option>
+      <option value="pbr-wood">Photorealistic Walnut &amp; Maple (PBR)</option>
+      <option value="marble">Tournament Marble</option>
+    </select>
+    <button class="theme-btn" onclick="toggleTheme()">Cycle Material</button>
   </div>
   <div id="canvas-container"></div>
 
@@ -96,26 +106,64 @@
     rimLight.position.set(0, 5, -8);
     scene.add(rimLight);
 
-    // Materials
-    let isWood = true;
-    const woodLightMat = new THREE.MeshStandardMaterial({
-      color: 0xf5dfb8, roughness: 0.25, metalness: 0.05
+    // Materials (Classic Woodcraft default, plus Photorealistic PBR Walnut & Maple and Marble)
+    let currentMaterial = 'classic';
+    const woodLightMat = new THREE.MeshPhysicalMaterial({
+      color: 0xf5dfb8, roughness: 0.25, metalness: 0.05, clearcoat: 0.0, clearcoatRoughness: 0.15
     });
-    const woodDarkMat = new THREE.MeshStandardMaterial({
-      color: 0x8a4513, roughness: 0.28, metalness: 0.05
+    const woodDarkMat = new THREE.MeshPhysicalMaterial({
+      color: 0x8a4513, roughness: 0.28, metalness: 0.05, clearcoat: 0.0, clearcoatRoughness: 0.15
     });
-    const frameMat = new THREE.MeshStandardMaterial({
-      color: 0x4a2508, roughness: 0.35, metalness: 0.08
+    const frameMat = new THREE.MeshPhysicalMaterial({
+      color: 0x4a2508, roughness: 0.35, metalness: 0.08, clearcoat: 0.0, clearcoatRoughness: 0.18
     });
-    const whitePieceMat = new THREE.MeshStandardMaterial({
-      color: 0xfbf0da, roughness: 0.18, metalness: 0.08
+    const whitePieceMat = new THREE.MeshPhysicalMaterial({
+      color: 0xfbf0da, roughness: 0.18, metalness: 0.08, clearcoat: 0.0, clearcoatRoughness: 0.12
     });
-    const blackPieceMat = new THREE.MeshStandardMaterial({
-      color: 0x1e1713, roughness: 0.16, metalness: 0.12
+    const blackPieceMat = new THREE.MeshPhysicalMaterial({
+      color: 0x1e1713, roughness: 0.16, metalness: 0.12, clearcoat: 0.0, clearcoatRoughness: 0.12
     });
     const feltMat = new THREE.MeshStandardMaterial({
       color: 0x1e4620, roughness: 0.95
     });
+
+    // PBR Wood Texture Loader (CC0 Walnut & Maple Albedo + Roughness)
+    const texLoader = new THREE.TextureLoader();
+    const pbrTextures = {};
+    let pbrLoadedCount = 0;
+    let pbrErrorCount = 0;
+    const pbrFiles = {
+      walnutAlbedo: 'textures/walnut_albedo.jpg',
+      walnutRoughness: 'textures/walnut_roughness.jpg',
+      mapleAlbedo: 'textures/maple_albedo.jpg',
+      mapleRoughness: 'textures/maple_roughness.jpg'
+    };
+    Object.keys(pbrFiles).forEach(key => {
+      const tex = texLoader.load(
+        pbrFiles[key],
+        () => {
+          pbrLoadedCount++;
+          if (currentMaterial === 'pbr-wood') {
+            woodLightMat.needsUpdate = true;
+            woodDarkMat.needsUpdate = true;
+            frameMat.needsUpdate = true;
+            whitePieceMat.needsUpdate = true;
+            blackPieceMat.needsUpdate = true;
+          }
+        },
+        undefined,
+        () => { pbrErrorCount++; }
+      );
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      pbrTextures[key] = tex;
+    });
+    // Frame grain repeats gently along the border
+    const frameWalnutAlbedo = pbrTextures.walnutAlbedo.clone();
+    frameWalnutAlbedo.wrapS = THREE.RepeatWrapping;
+    frameWalnutAlbedo.wrapT = THREE.RepeatWrapping;
+    frameWalnutAlbedo.repeat.set(2, 2);
+    pbrTextures.walnutAlbedo.onUpdate = () => { frameWalnutAlbedo.image = pbrTextures.walnutAlbedo.image; frameWalnutAlbedo.needsUpdate = true; };
 
     // Board Slab & Squares
     const boardGroup = new THREE.Group();
@@ -311,17 +359,122 @@
       controls.update();
     }
 
-    window.toggleTheme = function() {
-      isWood = !isWood;
-      if (isWood) {
-        woodLightMat.color.setHex(0xf5dfb8);
-        woodDarkMat.color.setHex(0x8a4513);
-        frameMat.color.setHex(0x4a2508);
-      } else {
+    window.setBoardMaterial = function(mode) {
+      currentMaterial = mode;
+      const sel = document.getElementById('material-select');
+      if (sel && sel.value !== mode) sel.value = mode;
+      if (mode === 'pbr-wood') {
+        // Real PBR wood: walnut and maple squares & frame, grain albedo + roughness + clearcoat/lacquer gloss + piece finish
+        woodLightMat.color.setHex(0xffffff);
+        woodLightMat.map = pbrTextures.mapleAlbedo;
+        woodLightMat.roughnessMap = pbrTextures.mapleRoughness;
+        woodLightMat.roughness = 0.78;
+        woodLightMat.metalness = 0.02;
+        woodLightMat.clearcoat = 0.68;
+        woodLightMat.clearcoatRoughness = 0.12;
+
+        woodDarkMat.color.setHex(0xffffff);
+        woodDarkMat.map = pbrTextures.walnutAlbedo;
+        woodDarkMat.roughnessMap = pbrTextures.walnutRoughness;
+        woodDarkMat.roughness = 0.82;
+        woodDarkMat.metalness = 0.02;
+        woodDarkMat.clearcoat = 0.68;
+        woodDarkMat.clearcoatRoughness = 0.12;
+
+        frameMat.color.setHex(0xc8a888);
+        frameMat.map = pbrTextures.walnutAlbedo;
+        frameMat.roughnessMap = pbrTextures.walnutRoughness;
+        frameMat.roughness = 0.85;
+        frameMat.metalness = 0.04;
+        frameMat.clearcoat = 0.58;
+        frameMat.clearcoatRoughness = 0.15;
+
+        whitePieceMat.color.setHex(0xfff6e6);
+        whitePieceMat.map = pbrTextures.mapleAlbedo;
+        whitePieceMat.roughnessMap = pbrTextures.mapleRoughness;
+        whitePieceMat.roughness = 0.72;
+        whitePieceMat.clearcoat = 0.78;
+        whitePieceMat.clearcoatRoughness = 0.10;
+
+        blackPieceMat.color.setHex(0x6e4c36);
+        blackPieceMat.map = pbrTextures.walnutAlbedo;
+        blackPieceMat.roughnessMap = pbrTextures.walnutRoughness;
+        blackPieceMat.roughness = 0.72;
+        blackPieceMat.clearcoat = 0.78;
+        blackPieceMat.clearcoatRoughness = 0.10;
+      } else if (mode === 'marble') {
         woodLightMat.color.setHex(0xeaeaea);
+        woodLightMat.map = null;
+        woodLightMat.roughnessMap = null;
+        woodLightMat.roughness = 0.18;
+        woodLightMat.clearcoat = 0.35;
+
         woodDarkMat.color.setHex(0x2d3748);
+        woodDarkMat.map = null;
+        woodDarkMat.roughnessMap = null;
+        woodDarkMat.roughness = 0.22;
+        woodDarkMat.clearcoat = 0.35;
+
         frameMat.color.setHex(0x1a202c);
+        frameMat.map = null;
+        frameMat.roughnessMap = null;
+        frameMat.roughness = 0.28;
+        frameMat.clearcoat = 0.25;
+
+        whitePieceMat.color.setHex(0xfbf0da);
+        whitePieceMat.map = null;
+        whitePieceMat.roughnessMap = null;
+        whitePieceMat.roughness = 0.18;
+        whitePieceMat.clearcoat = 0.0;
+
+        blackPieceMat.color.setHex(0x1e1713);
+        blackPieceMat.map = null;
+        blackPieceMat.roughnessMap = null;
+        blackPieceMat.roughness = 0.16;
+        blackPieceMat.clearcoat = 0.0;
+      } else {
+        // Default: Classic Woodcraft
+        woodLightMat.color.setHex(0xf5dfb8);
+        woodLightMat.map = null;
+        woodLightMat.roughnessMap = null;
+        woodLightMat.roughness = 0.25;
+        woodLightMat.clearcoat = 0.0;
+
+        woodDarkMat.color.setHex(0x8a4513);
+        woodDarkMat.map = null;
+        woodDarkMat.roughnessMap = null;
+        woodDarkMat.roughness = 0.28;
+        woodDarkMat.clearcoat = 0.0;
+
+        frameMat.color.setHex(0x4a2508);
+        frameMat.map = null;
+        frameMat.roughnessMap = null;
+        frameMat.roughness = 0.35;
+        frameMat.clearcoat = 0.0;
+
+        whitePieceMat.color.setHex(0xfbf0da);
+        whitePieceMat.map = null;
+        whitePieceMat.roughnessMap = null;
+        whitePieceMat.roughness = 0.18;
+        whitePieceMat.clearcoat = 0.0;
+
+        blackPieceMat.color.setHex(0x1e1713);
+        blackPieceMat.map = null;
+        blackPieceMat.roughnessMap = null;
+        blackPieceMat.roughness = 0.16;
+        blackPieceMat.clearcoat = 0.0;
       }
+      woodLightMat.needsUpdate = true;
+      woodDarkMat.needsUpdate = true;
+      frameMat.needsUpdate = true;
+      whitePieceMat.needsUpdate = true;
+      blackPieceMat.needsUpdate = true;
+    };
+
+    window.toggleTheme = function() {
+      const order = ['classic', 'pbr-wood', 'marble'];
+      const next = order[(order.indexOf(currentMaterial) + 1) % order.length];
+      window.setBoardMaterial(next);
     };
 
     window.addEventListener('resize', () => {
@@ -351,21 +504,57 @@
       }
     }
 
-    // Poll live moves from Scidb
-    setInterval(async () => {
-      try {
-        const res = await fetch('/api/board');
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.board) {
-            updateBoardFromStr(data.board);
+    // Poll live moves from Scidb (disabled in selftest mode so virtual-time-budget can finish)
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialMat = urlParams.get('material');
+    if (initialMat && ['classic', 'pbr-wood', 'marble'].includes(initialMat)) {
+      window.setBoardMaterial(initialMat);
+    }
+
+    const isSelfTest = urlParams.get('selftest') === '1';
+    if (!isSelfTest) {
+      setInterval(async () => {
+        try {
+          const res = await fetch('/api/board');
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.board) {
+              updateBoardFromStr(data.board);
+            }
           }
+        } catch (e) {}
+      }, 400);
+    } else {
+      function checkSelfTest() {
+        if (pbrLoadedCount + pbrErrorCount >= 4) {
+          const gl = renderer.getContext();
+          const px = new Uint8Array(4);
+          // Warm up shader compilation & texture upload
+          controls.update();
+          renderer.render(scene, camera);
+          gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          const t0 = Date.now();
+          const frames = 15;
+          for (let i = 0; i < frames; i++) {
+            controls.update();
+            renderer.render(scene, camera);
+          }
+          gl.finish();
+          gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          const elapsedMs = Math.max(1.0, Date.now() - t0);
+          const fps = ((frames * 1000.0) / elapsedMs).toFixed(1);
+          const hasClearcoat = (woodLightMat.clearcoat > 0.5 && woodDarkMat.clearcoat > 0.5) ? 1 : 0;
+          console.log(`WOOD3D_SELFTEST:PASS mat=${currentMaterial} tex=${pbrLoadedCount} clearcoat=${hasClearcoat} errors=${pbrErrorCount} fps=${fps}`);
+          document.body.setAttribute('data-selftest', `WOOD3D_SELFTEST:PASS mat=${currentMaterial} tex=${pbrLoadedCount} clearcoat=${hasClearcoat} errors=${pbrErrorCount} fps=${fps}`);
+        } else {
+          setTimeout(checkSelfTest, 30);
         }
-      } catch (e) {}
-    }, 400);
+      }
+      setTimeout(checkSelfTest, 30);
+    }
 
     function animate() {
-      requestAnimationFrame(animate);
+      if (!isSelfTest) requestAnimationFrame(animate);
       controls.update();
       renderer.render(scene, camera);
     }

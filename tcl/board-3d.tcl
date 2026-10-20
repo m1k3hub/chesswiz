@@ -124,6 +124,13 @@ array set Themes {
 		coordColor  #e8d3b0
 		shadowColor #120904
 	}
+	"Photorealistic Walnut & Maple" {
+		lightColor  #ead2ac
+		darkColor   #683e23
+		woodColor   #3a2112
+		coordColor  #f3e3c6
+		shadowColor #120904
+	}
 	"Ebony & Ivory" {
 		lightColor  #f5f5f0
 		darkColor   #2b2b2b
@@ -148,7 +155,8 @@ array set Themes {
 	# the installed share directory holds web3d/ and img/pieces_3d; a source
 	# tree run finds them beside tcl/
 	variable LibRoot [file normalize [file dirname [file dirname [info script]]]]
-	if {[info exists ::scidb::dir::share]
+	if {![file isfile [file join $LibRoot web3d index.html]]
+		&& [info exists ::scidb::dir::share]
 		&& [file isfile [file join $::scidb::dir::share web3d index.html]]} {
 		set LibRoot $::scidb::dir::share
 	}
@@ -1771,7 +1779,7 @@ proc ::board3d::openViewer {parent} {
 	# Secondary appearance options stay accessible without widening the view.
 	ttk::menubutton $bar.appearance -text "Appearance" -menu $bar.appearance.menu
 	set appearance [menu $bar.appearance.menu -tearoff 0]
-	foreach theme {"Classic Woodcraft" "Rosewood & Boxwood" "Walnut & Maple" "Ebony & Ivory" "Tournament Green"} {
+	foreach theme {"Classic Woodcraft" "Photorealistic Walnut & Maple" "Rosewood & Boxwood" "Walnut & Maple" "Ebony & Ivory" "Tournament Green"} {
 		$appearance add radiobutton -label $theme -variable ::board3d::State(theme) \
 			-value $theme -command [namespace code [list setTheme $theme]]
 	}
@@ -1931,7 +1939,12 @@ proc ::board3d::PositionChanged {board} {
 
 proc ::board3d::WebGLUrl {} {
 	variable WebGLPort
-	return "http://127.0.0.1:$WebGLPort"
+	variable State
+	set base "http://127.0.0.1:$WebGLPort"
+	if {[info exists State(theme)] && $State(theme) eq "Photorealistic Walnut & Maple"} {
+		return "${base}/?material=pbr-wood"
+	}
+	return $base
 }
 
 proc ::board3d::WebGLBoardJson {board} {
