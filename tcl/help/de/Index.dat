@@ -2,11 +2,14 @@ set Index {
   { A
     {
       {{Ablage-Datenbank} {Clipbase.html} {}}
+      {{Aktionspalette} {Ask-Field.html} {Result-List}}
       {{Archiv} {Database-Formats.html} {Database-Archive}}
+      {{Assistent} {Ask-Field.html} {Assistant}}
     }
   }
   { B
     {
+      {{Befehlspalette} {Ask-Field.html} {Result-List}}
       {{Bereichsangaben (CQL)} {CQL-Range-Specifiers.html} {}}
     }
   }
@@ -52,6 +55,7 @@ set Index {
       {{Feldmarkierungspalette} {Mark-Palette-Dialog.html} {}}
       {{FEN (Forsyth-Edwards-Notation)} {FEN.html} {}}
       {{Figurenbezeichner (CQL)} {CQL-Piece-Designators.html} {}}
+      {{Fragen-Feld} {Ask-Field.html} {}}
       {{Funktionsleisten} {Toolbar-Usage.html} {}}
     }
   }
@@ -84,6 +88,7 @@ set Index {
       {{Markierung (CQL)} {CQL-Tagging.html} {}}
       {{Markierungen (Partie-Flags)} {Game-Flags.html} {}}
       {{Markierungen auf dem Schachbrett} {Mark-Palette-Dialog.html} {}}
+      {{Mikrofon} {Ask-Field.html} {Speech-Input}}
     }
   }
   { N
@@ -116,6 +121,7 @@ set Index {
       {{Schreibschutz einer Datenbank} {Write-Protect-Database.html} {}}
       {{Schreibschutz eines PGN-Archivs} {Write-Protect-Database.html} {}}
       {{Shredder-FEN} {FEN.html} {}}
+      {{Spracheingabe} {Ask-Field.html} {Speech-Input}}
       {{Startpositionseingabe} {Start-Position-Setup-Dialog.html} {}}
       {{Stellungseingabe} {Board-Setup-Dialog.html} {}}
       {{Suchliste (CQL)} {CQL-Match-List.html} {}}
@@ -125,6 +131,7 @@ set Index {
   }
   { T
     {
+      {{Tastaturkürzel} {Ask-Field.html} {Shortcuts}}
       {{Transformationen (CQL)} {CQL-Transformations.html} {}}
     }
   }

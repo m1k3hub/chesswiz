@@ -1411,6 +1411,9 @@ proc ::menu::FillLanguage {menu} {
 # registry labels are refreshed from the newly loaded mc strings, then the
 # menu widget is rebuilt so the top cascades and their leaves show them.
 proc ::menu::SwitchLanguage {lang} {
+	# the View > Language rows pass the language's name (Deutsch); setLang wants its id (de)
+	set n [lsearch -exact -index 0 $::i18n::languages $lang]
+	if {$n >= 0} { set lang [lindex $::i18n::languages $n 1] }
 	if {[catch { ::mc::setLang $lang }]} { return }
 	::menu::RegisterTree
 	::menu::RegisterExtras

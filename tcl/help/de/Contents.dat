@@ -8,6 +8,7 @@ set Contents {
     {{{Schreibschutz einer Datenbank} {Write-Protect-Database.html}}}
     {{{Umgang mit dem Dateiauswahldialog} {File-Selection-Dialog.html}}}
     {{{Umgang mit Funktionsleisten} {Toolbar-Usage.html}}}
+    {{{Das Fragen-Feld und der Assistent} {Ask-Field.html}}}
     {{{Die Ablage-Datenbank} {Clipbase.html}}}
     {{{Festlegung des Standard-Browsers} {How-To-Set-Default-Browser.html}}}
   }
