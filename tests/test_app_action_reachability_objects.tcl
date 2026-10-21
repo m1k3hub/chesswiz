@@ -139,7 +139,13 @@ namespace eval ::scidb::test::objects {
             file attributes [file join $dir engine] -permissions 0755
             set ::engine::Engines {}
             puts {OBJECT ENGINE install}; flush stdout
-            tool add_engine [list path [file join $dir engine]]
+            # This fixture is a known UCI engine. Use the production protocol-
+            # specific registration path instead of spending the whole WB
+            # discovery timeout on every unrelated context-action probe.
+            if {![::engine::ProbeNewEngine .application [list Command [file join $dir engine]] UCI]} {
+                error {fixture did not answer the real UCI probe}
+            }
+            ::engine::SaveEngineList
             set name {}
             foreach entry $::engine::Engines {
                 if {[dict get $entry Command] eq [file join $dir engine]} { set name [dict get $entry Name]; break }
