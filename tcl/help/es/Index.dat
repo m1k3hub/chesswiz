@@ -3,6 +3,8 @@ set Index {
     {
       {{Administrate database} {Database-Switcher.html} {Administration}}
       {{Archivo de base de datos} {Database-Formats.html} {Database-Archive}}
+      {{Asistente} {Ask-Field.html} {Assistant}}
+      {{Atajos de teclado} {Ask-Field.html} {Shortcuts}}
     }
   }
   { B
@@ -13,6 +15,7 @@ set Index {
   }
   { C
     {
+      {{Campo Preguntar} {Ask-Field.html} {}}
       {{Clipbase} {Clipbase.html} {}}
       {{Compress} {Database-Switcher.html} {Compact}}
       {{Compress database} {Database-Switcher.html} {Compact}}
@@ -27,6 +30,7 @@ set Index {
   { E
     {
       {{Enciclopedia de Aperturas de Ajedrez} {ECO-Code.html} {}}
+      {{Entrada de voz} {Ask-Field.html} {Speech-Input}}
       {{Explorador de partidas} {Game-Browser.html} {}}
     }
   }
@@ -50,6 +54,7 @@ set Index {
     {
       {{Marcadores} {Game-Flags.html} {}}
       {{Marcadores de partida} {Game-Flags.html} {}}
+      {{Micrófono} {Ask-Field.html} {Speech-Input}}
       {{Mirar partidas} {Game-Browser.html} {}}
     }
   }
@@ -60,6 +65,8 @@ set Index {
   }
   { P
     {
+      {{Paleta de acciones} {Ask-Field.html} {Result-List}}
+      {{Paleta de comandos} {Ask-Field.html} {Result-List}}
       {{Panorámica del Explorador de partidas} {Game-Overview.html} {}}
       {{Panorámica del Explorador de partidas} {Game-Overview.html} {}}
       {{Página de inicio} {Contact-Information.html} {}}
