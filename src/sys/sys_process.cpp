@@ -527,7 +527,7 @@ Process::stop()
 {
 	M_REQUIRE(isRunning());
 
-	if (!m_stopped)
+	if (!m_stopped && m_pid > 0)
 	{
 #ifdef __WIN32__
 #else
@@ -548,7 +548,7 @@ Process::resume()
 	// the STOP acknowledgement, and the caller may write immediately after
 	// resuming. Send CONT regardless of the cached state and accept writes
 	// as soon as the kernel accepts it.
-	if (::kill(m_pid, SIGCONT) == 0)
+	if (m_pid > 0 && ::kill(m_pid, SIGCONT) == 0)
 		m_stopped = false;
 #endif
 }
@@ -557,7 +557,8 @@ Process::resume()
 void
 Process::kill()
 {
-	if (m_pid != -1)
+	// Zero/negative POSIX selectors signal groups or multiple processes.
+	if (m_pid > 0)
 	{
 #ifdef __WIN32__
 		// no POSIX kill(); terminate the child via its process handle
@@ -569,8 +570,8 @@ Process::kill()
 #else
 		::kill(m_pid, SIGKILL);
 #endif
-		m_pid = -1;
 	}
+	m_pid = -1;
 }
 
 
