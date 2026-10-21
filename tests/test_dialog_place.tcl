@@ -5,21 +5,36 @@ source [file join [file dirname [info script]] .. tcl utils place.tcl]
 foreach {name args expected} {
     run37-right {300 100 600 600 323 215 {0 0 1920 1080}} {912 100 323 215}
     run37-left {1000 200 860 860 323 215 {0 0 1920 1080}} {649 200 323 215}
-    run37-full {0 0 1920 1000 323 215 {0 0 1920 1080}} {0 825 323 215}
+    run37-full {0 0 1920 1000 323 215 {0 0 1920 1080}} {0 1012 323 28}
     below {0 0 1920 800 323 215 {0 0 1920 1080}} {0 812 323 215}
     taskbar {100 850 500 500 323 215 {0 28 1920 1012} {6 6 30 6}} {612 789 323 215}
     negative-right {-1600 120 600 600 320 220 {-1920 0 1920 1040} {6 6 30 6}} {-988 120 320 220}
     negative-left {-900 120 860 860 320 220 {-1920 0 1920 1040} {6 6 30 6}} {-1244 120 320 220}
     negative-top {-1100 -900 1000 500 200 150 {-1280 -1024 1280 984} {6 6 30 6}} {-1100 -388 200 150}
-    no-room-right {100 20 800 560 360 260 {0 0 1024 600} {6 6 30 6}} {652 20 360 260}
-    no-room-left {200 20 750 560 360 260 {0 0 1024 600} {6 6 30 6}} {0 20 360 260}
-    below-beats-widest-margin {100 100 800 500 600 100 {0 0 1024 650} {6 6 30 6}} {100 514 600 100}
-    oversized-frame {0 0 800 500 900 600 {0 28 800 472} {6 6 30 6}} {0 28 788 436}
+    no-room-right {100 20 800 560 360 260 {0 0 1024 600} {6 6 30 6}} {912 20 100 260}
+    no-room-left {200 20 750 560 360 260 {0 0 1024 600} {6 6 30 6}} {0 20 176 260}
+    below-beats-widest-margin {100 100 800 500 600 100 {0 0 1024 650} {6 6 30 6}} {912 100 100 100}
 } {
-    tcltest::test dlg-arithmetic-$name {clamped right/left/below candidates, frames included} -body {
+    tcltest::test dlg-arithmetic-$name {clamped candidates or the largest free strip, frames included} -body {
         ::util::place::besidePosition {*}$args
     } -result $expected
 }
+# VAL-DLG-011: no-room is no longer an overlap allowance. With no free strip
+# that holds the requested size, the plan shrinks into the largest strip; with
+# no strip at all it asks the caller to reserve board room.
+foreach {name args rule} {
+    no-room-shrink-right {100 20 800 560 360 260 {0 0 1024 600} {6 6 30 6}} shrink
+    no-room-shrink-left {200 20 750 560 360 260 {0 0 1024 600} {6 6 30 6}} shrink
+} {
+    tcltest::test dlg-$name {no-room shrinks into a free strip with zero board intersection} -body {
+        set plan [::util::place::besidePlan {*}$args]
+        list [dict get $plan rule] [dict get $plan overlap] [dict get $plan side]
+    } -result [list $rule 0 [expr {[string match *left* $name] ? "left" : "right"}]]
+}
+tcltest::test dlg-no-strip-reserve {board filling the work area asks for a reserved strip, never overlap} -body {
+    set plan [::util::place::besidePlan 0 0 800 500 900 600 {0 28 800 472} {6 6 30 6}]
+    list [dict get $plan rule] [dict get $plan needsReserve]
+} -result {reserve 1}
 tcltest::test dlg-insights-1280 {requested size fits after reducing the 780x480 minimum} -body {
     set plan [::util::place::besidePlan 91 112 456 456 780 480 {0 0 1280 800} {3 3 16 6} 12 {583 177}]
     list [dict get $plan geometry] [dict get $plan rule] [dict get $plan resized] [dict get $plan overlap]
@@ -28,10 +43,22 @@ tcltest::test dlg-insights-1920 {retain current/minimum size when it fits} -body
     set plan [::util::place::besidePlan 91 112 456 456 780 480 {0 0 1920 1080} {3 3 16 6} 12 {583 177}]
     list [dict get $plan geometry] [dict get $plan rule] [dict get $plan resized]
 } -result {{559 112 780 480} right 0}
-tcltest::test dlg-requested-no-room {fallback only after retry at requested size; below beats the wider right margin} -body {
+tcltest::test dlg-requested-no-room {retry at requested size, then shrink into a strip with zero overlap} -body {
     set plan [::util::place::besidePlan 100 100 800 500 780 480 {0 0 1024 650} {6 6 30 6} 12 {600 100}]
-    list [dict get $plan geometry] [dict get $plan rule] [dict get $plan areas]
-} -result {{100 514 600 100} no-room {right 66368 left 69632 below 52632}}
+    list [dict get $plan geometry] [dict get $plan rule] [dict get $plan overlap]
+} -result {{912 100 100 480} shrink 0}
+tcltest::test dlg-shrink-minimum {a declared usable minimum restricts the shrink target but still avoids overlap} -body {
+    set plan [::util::place::besidePlan 100 20 800 560 360 260 {0 0 1024 600} {6 6 30 6} 12 {} {100 100}]
+    list [dict get $plan rule] [dict get $plan overlap] [dict get $plan geometry]
+} -result {shrink 0 {912 20 100 260}}
+tcltest::test dlg-usable-strip-beats-sliver {a usable 248x678 strip wins over a 1018x7 sliver} -body {
+    set plan [::util::place::besideShrinkPlan 250 151 508 508 248 678 {0 0 1024 700} {3 3 16 6} 12 {248 678}]
+    list [dict get $plan side] [dict get $plan usable] [dict get $plan geometry]
+} -result {right 1 {770 0 248 678}}
+tcltest::test dlg-unusable-strip-never-wins {an unusable sliver is not a shrink target, so the caller reserves} -body {
+    set plan [::util::place::besideShrinkPlan 250 151 508 508 690 328 {0 0 1024 700} {3 3 16 6} 12 {690 328}]
+    llength $plan
+} -result 0
 # Independent oracle over varied origins, taskbars, board shapes and sizes.
 tcltest::test dlg-candidate-grid {the chosen outer rectangle is contained and has minimum candidate intersection} -body {
     set checked 0
@@ -56,7 +83,27 @@ tcltest::test dlg-candidate-grid {the chosen outer rectangle is contained and ha
                     if {$area < $minimum} {set minimum $area; set expected [list $x $y $w $h]}
                 }
                 set plan [::util::place::besidePlan $bx $by $bw $bh {*}$size $wa {6 6 30 6}]
-                if {[dict get $plan geometry] ne $expected || [dict get $plan overlap] != $minimum} {error "oracle mismatch $wa $board $size: $plan vs $expected"}
+                if {$minimum == 0} {
+                    if {[dict get $plan geometry] ne $expected || [dict get $plan overlap] != 0} {
+                        error "oracle mismatch $wa $board $size: $plan vs $expected"
+                    }
+                } else {
+                    # No candidate strip holds the request: shrink, or ask for
+                    # a reserved strip. Never accept the overlapping geometry.
+                    if {[dict get $plan rule] ni {shrink no-room reserve}} {
+                        error "unexpected no-room rule $wa $board $size: $plan"
+                    }
+                    if {[dict get $plan rule] in {shrink no-room}
+                        && [dict get $plan overlap] != 0} {
+                        error "no-room plan overlaps $wa $board $size: $plan"
+                    }
+                    lassign [dict get $plan geometry] gx gy gw gh
+                    if {$gx < $wx || $gy < $wy
+                        || $gx + $gw + 12 > $wx + $ww
+                        || $gy + $gh + 36 > $wy + $wh} {
+                        error "shrink plan outside work area $wa $board $size: $plan"
+                    }
+                }
                 incr checked
             }
         }
