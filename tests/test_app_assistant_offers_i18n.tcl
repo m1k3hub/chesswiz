@@ -7,7 +7,9 @@
 # the label it had when it was chosen, and the offers are chosen before
 # the pane opens (a database switch at startup), so the pane drew labels
 # of the language in force at that earlier moment. An offer now carries
-# the name of its mc string and is labelled when it is drawn.
+# the name of its mc string and is labelled when it is drawn. The pane's
+# own labels were set once, when it was built; they too now follow a live
+# switch (offers-i18n-pane-labels).
 # ======================================================================
 
 package require Tcl 8.5
@@ -37,11 +39,21 @@ proc ::scidb::test::offersI18n::labels {} {
 	return [lmap {label request} $::application::assistant::offers::Offers { set label }]
 }
 
+# What the pane itself shows: the entry's buttons, the status line, the
+# pane's title (its name variable) and the offer buttons.
+proc ::scidb::test::offersI18n::pane {} {
+	return [list [$::application::assistant::Priv(send) cget -text] \
+		[$::application::assistant::Priv(clear) cget -text] \
+		[$::application::assistant::Priv(status) cget -text] \
+		$::application::assistant::PaneTitle \
+		[::scidb::test::offersI18n::buttons]]
+}
+
 # A language file overwrites the mc strings of every module, and only
 # some modules (::mc::addDefaultReset) restore their own English text --
-# the assistant pane and the Ask field do not. Switching back to English
-# here would therefore leave their German text for the test files that
-# follow; snapshot every mc string this file can touch, and put them back.
+# the Ask field does not. Switching back to English here would therefore
+# leave its German text for the test files that follow; snapshot every mc
+# string this file can touch, and put them back.
 proc ::scidb::test::offersI18n::snapshot {} {
 	variable Saved
 	set Saved {}
@@ -138,6 +150,23 @@ tcltest::test offers-i18n-open-pane {a language switch relabels the offers of an
 	::application::assistant::offers::put {}
 	list $english $german [expr {$again eq $english}]
 } -result {{{What's in this database?} {Find positions...} Duplicates?} {{Was enthält diese Datenbank?} {Stellungen finden...} Duplikate?} 1}
+
+tcltest::test offers-i18n-pane-labels {a live language switch relabels the open pane, conversation untouched} -body {
+	::menu::SwitchLanguage English
+	::application::assistant::show
+	::application::assistant::offers::put {Summary {r} FindPositions {r}}
+	set english [::scidb::test::offersI18n::pane]
+	set conversation [$::application::assistant::Priv(text) get 1.0 end-1c]
+	# the user switches the language with the pane open: no reopening and
+	# no rebuild of the conversation
+	::menu::SwitchLanguage Deutsch
+	set german [::scidb::test::offersI18n::pane]
+	set same [expr {[$::application::assistant::Priv(text) get 1.0 end-1c] eq $conversation}]
+	::menu::SwitchLanguage English
+	set again [::scidb::test::offersI18n::pane]
+	::application::assistant::offers::put {}
+	list $english $german [expr {$again eq $english}] $same
+} -result {{Send Clear Ready Assistant {{What's in this database?} {Find positions...}}} {Senden Leeren Bereit Assistent {{Was enthält diese Datenbank?} {Stellungen finden...}}} 1 1}
 
 tcltest::test offers-i18n-fallback {a language without offer translations falls back to English} -body {
 	::menu::SwitchLanguage English

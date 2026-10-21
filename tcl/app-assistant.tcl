@@ -48,7 +48,28 @@ set PlanStepFailed	"Stopped at step %d (%s): %s The steps before it were run."
 set PlanStepSkipped	"not run: the plan stopped at an earlier step"
 set TooManyRounds	"Stopped: the request needed more steps than the assistant allows (%d rounds)."
 
+# English defaults, restored before every language load (see i18n.tcl), so
+# switching back to English brings the pane's own text back and a language
+# that translates none of these strings shows English rather than the
+# previous language's text.
+set ::application::assistant::DefaultMC {}
+foreach _name [lsort [info vars ::application::assistant::mc::*]] {
+	if {[array exists $_name] || [string index [namespace tail $_name] 0] eq "_"} { continue }
+	lappend ::application::assistant::DefaultMC [namespace tail $_name] [set $_name]
+}
+unset _name
+
 } ;# namespace mc
+
+proc ::application::assistant::ResetMC {} {
+	foreach {name value} $::application::assistant::DefaultMC {
+		set ::application::assistant::mc::$name $value
+	}
+	return
+}
+if {[llength [info commands ::mc::addDefaultReset]]} {
+	::mc::addDefaultReset ::application::assistant::ResetMC
+}
 
 variable PaneTitle ""
 
@@ -680,6 +701,8 @@ array set Priv {
 	text			{}
 	entry			{}
 	send			{}
+	clear			{}
+	mic			{}
 	status		{}
 	messages		{}
 	busy			0
@@ -4439,6 +4462,8 @@ proc ::application::assistant::build {frame width height} {
 	set Priv(text) $text
 	set Priv(entry) $entry
 	set Priv(send) $send
+	set Priv(clear) $clear
+	set Priv(mic) $mic
 	set Priv(status) $status
 	if {[llength $mic]} { ::application::voice::attach $mic $status }
 
@@ -4456,6 +4481,9 @@ proc ::application::assistant::build {frame width height} {
 	}
 	if {!$replay} { Greet }
 	SetBusy $Priv(busy)
+	# a language switch relabels the pane in place, without rebuilding the
+	# conversation; the offers frame relabels itself (app-assistant-offers.tcl)
+	bind $frame <<LanguageChanged>> [namespace code Relabel]
 }
 
 
@@ -4466,7 +4494,7 @@ proc ::application::assistant::closed {frame} {
 	variable Priv
 
 	if {$frame ne $Priv(window)} { return }
-	foreach key {window text entry send status} { set Priv($key) {} }
+	foreach key {window text entry send clear mic status} { set Priv($key) {} }
 }
 
 
@@ -4587,6 +4615,34 @@ proc ::application::assistant::WriteHistory {chan} {
 }
 if {[llength [info commands ::options::hookWriter]]} {
 	::options::hookWriter ::application::assistant::WriteHistory
+}
+
+
+# A language switch: the pane's own widgets take their text in the new
+# language -- Send, Clear, the status line (Ready/Thinking, or the voice's
+# Listening while it records), the voice button and the pane's name, which
+# the notebook tab and the floating window are titled from (PaneTitle is
+# the pane's name variable, see ::application::nameVarFromUid). The
+# conversation is left as it is: what the model wrote stays in the
+# language it was written in.
+proc ::application::assistant::Relabel {} {
+	variable Priv
+	variable PaneTitle
+	variable mc
+
+	if {[info exists ::application::twm::mc::Pane(assistant)]} {
+		set PaneTitle $::application::twm::mc::Pane(assistant)
+	}
+	if {![winfo exists $Priv(window)]} { return }
+	if {[winfo exists $Priv(send)]} { $Priv(send) configure -text $mc::Send }
+	if {[winfo exists $Priv(clear)]} { $Priv(clear) configure -text $mc::Clear }
+	SetBusy $Priv(busy)
+	# the voice button takes its own labels and, while it records, it owns
+	# the status line the SetBusy above just wrote
+	if {[winfo exists $Priv(mic)] && [llength [info commands ::application::voice::Refresh]]} {
+		catch { ::application::voice::Refresh }
+	}
+	return
 }
 
 
