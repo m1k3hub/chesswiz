@@ -1043,6 +1043,7 @@ tcltest::test mediafold-dlg005-insights-fit {VAL-DLG-005 Insights shrinks to fit
     # Calculate overlap
     lassign $dlgRect dx dy dw dh
     lassign $boardRect bx by bw bh
+    puts "DEBUG: dlg=$dlg dlgRect=$dlgRect wm_geom=[wm geometry $dlg] boardRect=$boardRect"
     set overlapX [expr {max(0, min($dx + $dw, $bx + $bw) - max($dx, $bx))}]
     set overlapY [expr {max(0, min($dy + $dh, $by + $bh) - max($dy, $by))}]
     set overlap [expr {$overlapX * $overlapY}]

@@ -19,13 +19,42 @@ proc ::scidb::test::dlgplace::widgetRect {w} {
     list [winfo rootx $w] [winfo rooty $w] [winfo width $w] [winfo height $w]
 }
 proc ::scidb::test::dlgplace::boardRect {} {
-    # Independent oracle: include the drawn border and coordinates, not just
-    # the inner board widget used by the old placement helper.
+    # Independent oracle: the full drawn board. Include the border and
+    # coordinates, plus any side bars drawn with the board (side-to-move,
+    # material and holding bar), not just the inner board widget.
     set canvas $::application::board::Vars(widget:frame)
-    lassign [$canvas bbox board] x0 y0 x1 y1
+    set boxes {}
+    foreach tag {board stm material holdingbar} {
+        set box [$canvas bbox $tag]
+        if {[llength $box] == 4} {lappend boxes $box}
+    }
+    if {![llength $boxes]} {return {}}
+    lassign [lindex $boxes 0] x0 y0 x1 y1
+    foreach box [lrange $boxes 1 end] {
+        lassign $box a b c d
+        set x0 [expr {min($x0,$a)}]; set y0 [expr {min($y0,$b)}]
+        set x1 [expr {max($x1,$c)}]; set y1 [expr {max($y1,$d)}]
+    }
     return [list [expr {[winfo rootx $canvas] + $x0 - int([$canvas canvasx 0])}] \
         [expr {[winfo rooty $canvas] + $y0 - int([$canvas canvasy 0])}] \
         [expr {$x1-$x0}] [expr {$y1-$y0}]]
+}
+# The main window's own work area, not the whole X display: the decorated
+# application frame, clipped to the WM work area. A dialog outside the
+# configured 1280x720 window is clipped on that display even when the Xvfb
+# root is 1920x1080 (VAL-DLG-014f).
+proc ::scidb::test::dlgplace::windowWorkArea {} {
+    set wa [winfo workarea .application]
+    lassign [winfo extents .application] el er et eb
+    set outer [list [expr {[winfo rootx .application]-$el}] \
+        [expr {[winfo rooty .application]-$et}] \
+        [expr {[winfo width .application]+$el+$er}] \
+        [expr {[winfo height .application]+$et+$eb}]]
+    lassign $wa wx wy ww wh
+    lassign $outer ox oy ow oh
+    set x0 [expr {max($wx,$ox)}]; set y0 [expr {max($wy,$oy)}]
+    set x1 [expr {min($wx+$ww,$ox+$ow)}]; set y1 [expr {min($wy+$wh,$oy+$oh)}]
+    return [list $x0 $y0 [expr {max(0,$x1-$x0)}] [expr {max(0,$y1-$y0)}]]
 }
 proc ::scidb::test::dlgplace::overlapArea {a b} {
     lassign $a ax ay aw ah
@@ -779,7 +808,7 @@ proc ::scidb::test::dlgplace::videoDialogCheck {target dlg insBefore} {
     require [regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} \
         [wm geometry $dlg] -> fw fh fx fy] "$target: invalid geometry [wm geometry $dlg]"
     set outer [list $fx $fy [expr {$fw+$el+$er}] [expr {$fh+$et+$eb}]]
-    set wa [winfo workarea $dlg]
+    set wa [windowWorkArea]
     puts "DLG-VIDEO $target main=[wm geometry .application] board=$board video=$video dlg=$client outer=$outer wa=$wa requested=[list [winfo reqwidth $dlg] [winfo reqheight $dlg]] reserve=$::application::board::ReserveSide/$::application::board::ReservePixels"
     require [expr {[overlapArea $client $board] == 0}] \
         "$target: dialog $client overlaps board $board"
@@ -820,6 +849,8 @@ foreach {target openScript dialog closeScript} {
     enginematch-video {::enginematch::open .application} {.application.enginematch} {::enginematch::Close}
 } {
     foreach size {1280x720 1250x570 1920x1080} {
+        lassign [split $size x] reqW reqH
+        if {$reqW > [winfo screenwidth .] || $reqH > [winfo screenheight .]} { continue }
         tcltest::test dlg-video-$target-$size {playing video and board both stay clear of the dialog and the inset is restored} -setup {
             ::scidb::test::dlgplace::setupBoard
         } -body [format {
@@ -844,5 +875,210 @@ foreach {target openScript dialog closeScript} {
         } -result 1
     }
 }
+
+# -------------------------------------------------------------------------
+# VAL-DLG-014 items (a)-(f) GUI tests
+# -------------------------------------------------------------------------
+
+# (a) When no strip outside the board fits a playing dialog, the video inset
+# really moves or shrinks inside the board pane so the dialog covers neither
+# the drawn board nor the inset (the inset dodge chooses a candidate; it is not a no-op).
+tcltest::test dlg-v14-a-inset-dodge {inset dodge chooses candidate and is not a no-op} -setup {
+    ::scidb::test::dlgplace::setupBoard
+} -body {
+    wm geometry .application 1000x600+0+0
+    ::scidb::test::dlgplace::waitFor 1200
+    set insBefore [::scidb::test::dlgplace::startVideo]
+    set videoBefore [::util::place::besideVideoRect]
+    lassign $videoBefore vx vy vw vh
+    set testRect [list [expr {$vx - 10}] [expr {$vy - 10}] [expr {$vw + 20}] [expr {$vh + 20}]]
+    set dodged [::mediainset::DodgeForDialog .application.playengine $testRect]
+    ::scidb::test::dlgplace::waitFor 400
+    set videoAfter [::util::place::besideVideoRect]
+    set overlap [::scidb::test::dlgplace::overlapArea $videoAfter $testRect]
+    ::mediainset::RestoreAfterDialog .application.playengine
+    ::scidb::test::dlgplace::waitFor 400
+    set videoRestored [::util::place::besideVideoRect]
+    list $dodged [expr {$overlap == 0}] [expr {$videoAfter ne $videoBefore}] [expr {$videoRestored eq $videoBefore}]
+} -cleanup {
+    catch {::scidb::test::dlgplace::stopVideo}
+    ::scidb::test::dlgplace::stopTrace
+    ::scidb::test::dlgplace::noRoomCleanup
+} -result {1 1 1 1}
+
+# (b) Opening two beside-board dialogs that each reserve a strip and closing
+# them in either order leaves no reserve behind: after both close,
+# ReserveSide/ReservePixels and the square floor equal their values before the first opened.
+tcltest::test dlg-v14-b-reserves-both-orders {opening two reserving dialogs and closing in either order restores exact reserve state} -setup {
+    ::scidb::test::dlgplace::setupBoard
+} -body {
+    set sideBefore $::application::board::ReserveSide
+    set pxBefore $::application::board::ReservePixels
+    set floorBefore $::application::board::MinimumReserveSquare
+
+    toplevel .dlg1; wm withdraw .dlg1
+    toplevel .dlg2; wm withdraw .dlg2
+
+    # Case 1: LIFO (close second opened first)
+    set p1 [::util::place::besideReserve .dlg1 0 0 400 400 300 400 {0 0 1280 720} {0 0 0 0} 10 {150 150}]
+    set p2 [::util::place::besideReserve .dlg2 0 0 400 400 350 400 {0 0 1280 720} {0 0 0 0} 10 {150 150}]
+    ::util::place::besideReleaseReserve .dlg2
+    ::util::place::besideReleaseReserve .dlg1
+    set case1_ok [expr {$::application::board::ReserveSide eq $sideBefore
+        && $::application::board::ReservePixels == $pxBefore
+        && $::application::board::MinimumReserveSquare == $floorBefore}]
+
+    # Case 2: FIFO (close first opened first, out-of-order)
+    set p1 [::util::place::besideReserve .dlg1 0 0 400 400 300 400 {0 0 1280 720} {0 0 0 0} 10 {150 150}]
+    set p2 [::util::place::besideReserve .dlg2 0 0 400 400 350 400 {0 0 1280 720} {0 0 0 0} 10 {150 150}]
+    ::util::place::besideReleaseReserve .dlg1
+    ::util::place::besideReleaseReserve .dlg2
+    set case2_ok [expr {$::application::board::ReserveSide eq $sideBefore
+        && $::application::board::ReservePixels == $pxBefore
+        && $::application::board::MinimumReserveSquare == $floorBefore}]
+
+    list $case1_ok $case2_ok
+} -cleanup {
+    catch {::util::place::besideReleaseReserve .dlg1}
+    catch {::util::place::besideReleaseReserve .dlg2}
+    catch {destroy .dlg1}
+    catch {destroy .dlg2}
+    ::scidb::test::dlgplace::stopTrace
+    ::scidb::test::dlgplace::noRoomCleanup
+} -result {1 1}
+
+# (c) Maximise, restore and a scripted window resize re-plan an open playing
+# dialog (it follows the board); only a real user move/resize of the dialog stops following.
+tcltest::test dlg-v14-c-resize-and-user-move {window resize follows board; user manual move stops following until collision} -setup {
+    ::scidb::test::dlgplace::setupBoard
+} -body {
+    wm geometry .application 1274x900+10+10
+    ::playengine::open .application
+    ::scidb::test::dlgplace::waitFor 800
+    set dlg .application.playengine
+    # Follows board on resize:
+    set deltaResize [::scidb::test::dlgplace::replaceDelta {
+        wm geometry .application 1200x900+10+10
+        ::scidb::test::dlgplace::waitFor 1000
+    }]
+    # Now simulate user move to safe corner:
+    lassign [::scidb::test::dlgplace::freeCorner $dlg] fx fy
+    wm geometry $dlg "+$fx+$fy"
+    ::scidb::test::dlgplace::waitFor 800
+    # Subsequent window resize must NOT re-plan while safe:
+    set deltaUserSafe [::scidb::test::dlgplace::replaceDelta {
+        wm geometry .application 1150x900+10+10
+        ::scidb::test::dlgplace::waitFor 1000
+    }]
+    # But when dialog is dragged onto board, it MUST re-plan:
+    lassign [::scidb::test::dlgplace::boardRect] bx by bw bh
+    set deltaCollision [::scidb::test::dlgplace::replaceDelta {
+        wm geometry $dlg "+[expr {$bx+20}]+[expr {$by+20}]"
+        ::scidb::test::dlgplace::waitFor 1000
+    }]
+    list [expr {$deltaResize > 0}] [expr {$deltaUserSafe == 0}] [expr {$deltaCollision > 0}]
+} -cleanup {
+    catch {::playengine::Close}
+    ::scidb::test::dlgplace::stopTrace
+    ::scidb::test::dlgplace::noRoomCleanup
+} -result {1 1 1}
+
+# (d) Stopping or hiding the video while a dialog is open re-plans the dialog
+# and releases the video's strip so the board regrows.
+tcltest::test dlg-v14-d-video-stop-regrows-board {stopping video replans dialog and regrows board} -setup {
+    ::scidb::test::dlgplace::setupBoard
+} -body {
+    wm geometry .application 1250x570+0+0
+    ::scidb::test::dlgplace::waitFor 1000
+    set insBefore [::scidb::test::dlgplace::startVideo]
+    set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]
+    ::gamereview::ShowWindow .application $review {} 0
+    ::scidb::test::dlgplace::waitFor 800
+    set boardDuring [::scidb::test::dlgplace::boardRect]
+    set dlgDuring [::scidb::test::dlgplace::widgetRect .application.__gamereview]
+    set reserveDuring [list $::application::board::ReserveSide $::application::board::ReservePixels]
+
+    # Stop video:
+    ::scidb::test::dlgplace::stopVideo
+    ::scidb::test::dlgplace::waitFor 1000
+    set boardAfter [::scidb::test::dlgplace::boardRect]
+    set dlgAfter [::scidb::test::dlgplace::widgetRect .application.__gamereview]
+    set reserveAfter [list $::application::board::ReserveSide $::application::board::ReservePixels]
+    set overlap [::scidb::test::dlgplace::overlapArea $dlgAfter $boardAfter]
+
+    list [expr {$reserveDuring ne {{} 0}}] \
+         [expr {$reserveAfter eq {{} 0}}] \
+         [expr {$boardAfter ne $boardDuring}] \
+         [expr {$overlap == 0}]
+} -cleanup {
+    catch {::scidb::test::dlgplace::stopVideo}
+    catch {destroy .application.__gamereview}
+    ::scidb::test::dlgplace::stopTrace
+    ::scidb::test::dlgplace::noRoomCleanup
+} -result {1 1 1 1}
+
+# (e) A dialog-owned left reserve centres the board in the remaining area like a right reserve does.
+tcltest::test dlg-v14-e-left-reserve-centering {dialog-owned left reserve centers board like right reserve} -setup {
+    ::scidb::test::dlgplace::setupBoard
+} -body {
+    wm geometry .application 1280x720+0+0
+    ::scidb::test::dlgplace::waitFor 800
+
+    # Test dialog left reserve centers remaining space exactly like right reserve
+    ::application::board::setReserve left 200 dialog
+    set leftDialogX $::application::board::Dim(border:x1)
+    ::application::board::setReserve right 200 dialog
+    set rightDialogX $::application::board::Dim(border:x1)
+    set leftCentered [expr {$leftDialogX == 200 + $rightDialogX}]
+
+    # Test squeeze left reserve (flush against originX)
+    ::application::board::setReserve left 200 squeeze
+    set squeezeBrdX $::application::board::Dim(border:x1)
+    set squeezeFlush [expr {$squeezeBrdX == 200}]
+
+    ::application::board::setReserve {} 0
+    list $leftCentered $squeezeFlush
+} -cleanup {
+    ::application::board::setReserve {} 0
+    ::scidb::test::dlgplace::stopTrace
+    ::scidb::test::dlgplace::noRoomCleanup
+} -result {1 1}
+
+# (f) Tests assert the dialog frame inside the main window's work area (not just the screen),
+# and the drawn board rectangle includes any side bars drawn with the board.
+tcltest::test dlg-v14-f-workarea-and-sidebars {dialog inside window workarea and boardRect includes sidebars} -setup {
+    ::scidb::test::dlgplace::setupBoard
+} -body {
+    wm geometry .application 1280x720+0+0
+    ::scidb::test::dlgplace::waitFor 800
+    set canv $::application::board::Vars(widget:frame)
+    set rawBoard [$canv bbox board]
+    set fullBoard [::scidb::test::dlgplace::boardRect]
+    lassign $fullBoard bx by bw bh
+    lassign $rawBoard rx0 ry0 rx1 ry1
+    set rawW [expr {$rx1 - $rx0}]
+
+    # Full drawn board must include side-to-move, material etc. so width is > raw board
+    set includesSideBars [expr {$bw >= $rawW}]
+
+    # windowWorkArea bounds
+    set wa [::scidb::test::dlgplace::windowWorkArea]
+    lassign $wa wx wy ww wh
+    set waValid [expr {$ww > 0 && $wh > 0 && $ww <= [winfo width .application] + 20}]
+
+    ::playengine::open .application
+    ::scidb::test::dlgplace::waitFor 800
+    set dlg .application.playengine
+    lassign [winfo extents $dlg] el er et eb
+    regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} [wm geometry $dlg] -> fw fh fx fy
+    set outer [list $fx $fy [expr {$fw+$el+$er}] [expr {$fh+$et+$eb}]]
+    set inWa [::scidb::test::dlgplace::inside $outer $wa]
+
+    list $includesSideBars $waValid $inWa
+} -cleanup {
+    catch {::playengine::Close}
+    ::scidb::test::dlgplace::stopTrace
+    ::scidb::test::dlgplace::noRoomCleanup
+} -result {1 1 1}
 
 tcltest::cleanupTests

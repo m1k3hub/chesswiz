@@ -200,6 +200,7 @@ proc ::mediainset::hide {} {
 	variable Dodge
 	variable DodgeFor
 	variable Squeeze
+	variable SqueezeFor
 	variable Detach
 	variable DetachFor
 
@@ -208,6 +209,7 @@ proc ::mediainset::hide {} {
 	set Dodge {}
 	set DodgeFor {}
 	set Squeeze {}
+	set SqueezeFor {}
 	set Detach {}
 	set DetachFor {}
 	Unwatch
@@ -215,6 +217,7 @@ proc ::mediainset::hide {} {
 		# During <Destroy> the board may already have gone away.
 		set ::application::board::ReserveSide {}
 		set ::application::board::ReservePixels 0
+		set ::application::board::ReserveKind auto
 		return
 	}
 	::application::board::setReserve {} 0
@@ -223,6 +226,12 @@ proc ::mediainset::hide {} {
 	if {$Swapped} {
 		set Swapped 0
 		RestoreBoard $pane
+	}
+	# Stopping or hiding the video changes the protected area and releases
+	# the strip it owned. Re-plan every open dialog against the regrown
+	# board; without this it stays at its squeezed position (VAL-DLG-014d).
+	if {[llength [info commands ::util::place::besideVideoChanged]]} {
+		catch { ::util::place::besideVideoChanged }
 	}
 }
 
@@ -441,6 +450,7 @@ proc ::mediainset::Layout {} {
 	variable Dodge
 	variable DodgeFor
 	variable Squeeze
+	variable SqueezeFor
 	variable Detach
 	variable DetachFor
 
@@ -539,12 +549,22 @@ proc ::mediainset::Layout {} {
 			# A dialog can ask the inset to yield its strip: move to
 			# the other side and shrink to the documented minimum so the
 			# dialog keeps every control at its requested size.
+			set maxBoard 0
 			if {$Squeeze ne {} && !$Audio} {
-				lassign $Squeeze side iw
-				set ih [expr {int(round(($iw-8)/$Aspect))+$ch}]
+				if {![winfo exists $SqueezeFor]} {
+					set Squeeze {}
+					set SqueezeFor {}
+				} else {
+					lassign $Squeeze side iw maxBoard
+					set ih [expr {int(round(($iw-8)/$Aspect))+$ch}]
+				}
 			}
 			set pixels [expr {$side eq "right" || $side eq "left" ? $iw : $ih}]
-			if {$side ne "" && [::application::board::setReserve $side $pixels]} {
+			# A squeeze is the video yielding its strip to a dialog: it may
+			# shrink the board, unlike the ordinary strip chosen by FitStrip.
+			set kind [expr {$Squeeze ne {} && !$Audio ? "squeeze" : "auto"}]
+			set mb [expr {$Squeeze ne {} && !$Audio && [string is integer -strict $maxBoard] ? $maxBoard : 0}]
+			if {$side ne "" && [::application::board::setReserve $side $pixels $kind $mb]} {
 				lassign [::application::board::reserveRect] x y rw rh
 				set x [expr {$x + [winfo x $view] + ($rw - $iw)/2}]
 				set y [expr {$y + [winfo y $view] + ($rh - $ih)/2}]
@@ -564,7 +584,7 @@ proc ::mediainset::Layout {} {
 		# the inset move inside the pane; keep that position across rebuilds
 		# until the dialog closes or the media stops.
 		if {$Dodge ne {}} {
-			if {![winfo exists $DodgeFor] || ![winfo ismapped $DodgeFor]} {
+			if {![winfo exists $DodgeFor]} {
 				set Dodge {}
 				set DodgeFor {}
 			} else {
@@ -631,6 +651,10 @@ proc ::mediainset::FitStrip {width height controlsHeight} {
 	set best {}
 	set bestSquare 0
 	set minimum 168
+	# VAL-MED-012: the strip may not cost the drawn board a square. Compare
+	# every candidate with the unreserved square, not merely with the fixed
+	# floor, so a width-limited band cannot reserve a narrower board.
+	set unreserved [::application::board::unreservedSquare $width $height]
 	foreach side {right bottom} {
 		set minimumHeight [expr {int(round(160/$Aspect))+$controlsHeight}]
 		set px [expr {$side eq "right" ? $minimum : $minimumHeight}]
@@ -638,7 +662,7 @@ proc ::mediainset::FitStrip {width height controlsHeight} {
 		# reserveSquare returns 0 when the strip really shrinks the board.
 		# A below-floor square is still fine when the strip leaves it
 		# unchanged, which is how a small board keeps its size and shifts.
-		if {$squareAtMinimum <= 0} { continue }
+		if {$squareAtMinimum <= 0 || $squareAtMinimum < $unreserved} { continue }
 		set desired [expr {$side eq "right" ? int($height*$Options(size)*$Aspect)+8 : int($width*0.66)}]
 		set lo $minimum
 		set hi [expr {min(max($minimum,$Options(minWidth)+8,$desired), $width, int(($height-$controlsHeight)*$Aspect)+8)}]
@@ -648,7 +672,7 @@ proc ::mediainset::FitStrip {width height controlsHeight} {
 			set ih [expr {int(round(($iw-8)/$Aspect))+$controlsHeight}]
 			set px [expr {$side eq "right" ? $iw : $ih}]
 			set square [::application::board::reserveSquare $side $px $width $height]
-			if {$square >= $squareAtMinimum} {
+			if {$square >= $unreserved && $square > 0} {
 				set candidate [list $side $iw $ih]
 				set candidateSquare $square
 				set lo [expr {$iw+1}]
@@ -714,7 +738,9 @@ proc ::mediainset::DodgeForDialog {dlg rect} {
 	lassign $paneRect px py pw ph
 	set best {}
 	set bestScore -1
-	set bestCost -1
+	# No candidate has been scored yet: an area cost is always >= 0, so a
+	# sentinel of -1 can never be beaten and would make this dodge a no-op.
+	set bestCost ""
 	set iw $curW
 	while {$iw >= $minWidth} {
 		set ih [expr {int(round(($iw-8)/$Aspect)) + $ch}]
@@ -727,7 +753,8 @@ proc ::mediainset::DodgeForDialog {dlg rect} {
 					if {[Area $cand $rect] > 0} { continue }
 					set cost [expr {$boardOverlaid ? 0 : [Area $cand $board]}]
 					set score [expr {$iw*$ih}]
-					if {($cost < $bestCost)
+					if {$bestCost eq ""
+						|| $cost < $bestCost
 						|| ($cost == $bestCost && $score > $bestScore)} {
 						set best $cand
 						set bestCost $cost
@@ -756,7 +783,7 @@ proc ::mediainset::DodgeForDialog {dlg rect} {
 
 # Shrink/move the inset to <side> so a dialog can keep its usable size on
 # the other side of the drawn board. Layout keeps the request until cleared.
-proc ::mediainset::SqueezeForDialog {dlg side pixels} {
+proc ::mediainset::SqueezeForDialog {dlg side pixels {maxBoard 0}} {
 	variable Shown
 	variable Swapped
 	variable Squeeze
@@ -765,7 +792,7 @@ proc ::mediainset::SqueezeForDialog {dlg side pixels} {
 	if {![string is integer -strict $pixels] || $pixels < 1} { return 0 }
 	set pane [Pane]
 	if {$pane eq "" || ![winfo exists $pane.mediainset]} { return 0 }
-	set Squeeze [list $side $pixels]
+	set Squeeze [list $side $pixels $maxBoard]
 	set SqueezeFor $dlg
 	Layout
 	return 1
@@ -885,12 +912,19 @@ proc ::mediainset::ClearDetach {dlg} {
 proc ::mediainset::RestoreAfterDialog {dlg} {
 	variable Dodge
 	variable DodgeFor
+	variable Squeeze
+	variable SqueezeFor
 	variable Detach
 	variable DetachFor
 	set hit 0
 	if {$DodgeFor ne "" && $DodgeFor eq $dlg} {
 		set Dodge {}
 		set DodgeFor {}
+		set hit 1
+	}
+	if {$SqueezeFor ne "" && $SqueezeFor eq $dlg} {
+		set Squeeze {}
+		set SqueezeFor {}
 		set hit 1
 	}
 	if {$DetachFor ne "" && $DetachFor eq $dlg} {

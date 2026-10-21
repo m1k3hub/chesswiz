@@ -499,11 +499,26 @@ proc besideBoardRect {} {
 	if {![winfo exists $board] || ![winfo ismapped $board]} { return {} }
 	if {[winfo width $board] < 2 || [winfo height $board] < 2} { return {} }
 	# The canvas item includes the border and coordinates outside the inner
-	# board widget. Convert canvas coordinates to root coordinates, accounting
-	# for any canvas view offset. Early startup/teardown falls back below.
+	# board widget, and the side-to-move/material/holding bars are drawn as
+	# part of the board. A dialog must clear the full drawing, not only the
+	# 8x8 squares (VAL-DLG-014f). Convert canvas coordinates to root
+	# coordinates, accounting for any canvas view offset. Early
+	# startup/teardown falls back below.
 	if {![catch {
 		set frame $::application::board::Vars(widget:frame)
-		set bbox [$frame bbox board]
+		set boxes {}
+		foreach tag {board stm material holdingbar} {
+			set box [$frame bbox $tag]
+			if {[llength $box] == 4} {lappend boxes $box}
+		}
+		set bbox {}
+		foreach box $boxes {
+			if {![llength $bbox]} {set bbox $box; continue}
+			lassign $bbox x0 y0 x1 y1
+			lassign $box a b c d
+			set bbox [list [expr {min($x0,$a)}] [expr {min($y0,$b)}] \
+				[expr {max($x1,$c)}] [expr {max($y1,$d)}]]
+		}
 	}] && [llength $bbox] == 4} {
 		lassign $bbox x0 y0 x1 y1
 		if {$x1 > $x0 && $y1 > $y0} {
@@ -519,6 +534,20 @@ proc besideBoardRect {} {
 proc besideRect {w} {
 	return [list [winfo rootx $w] [winfo rooty $w] \
 		[winfo width $w] [winfo height $w]]
+}
+
+# Root rectangle of the window a dialog is transient for. A window-manager
+# move/resize (including maximise/restore) shifts the transient dialog with
+# its parent; comparing this rectangle tells settle that a changed dialog
+# position is not a user drag (VAL-DLG-014c).
+proc besideParentRect {dlg} {
+	variable BesideState
+	if {![info exists BesideState($dlg,parent)]} { return {} }
+	set parent $BesideState($dlg,parent)
+	if {$parent eq "" || ![winfo exists $parent]} { return {} }
+	set top [winfo toplevel $parent]
+	if {![winfo exists $top] || ![winfo ismapped $top]} { return {} }
+	return [besideRect $top]
 }
 
 # The visible video inset {x y width height}, or {} when media is not playing
@@ -595,8 +624,17 @@ proc besideVideoSqueeze {dlg dw dh workarea extents gap requested minimum} {
 	if {[llength [info commands ::mediainset::MinimumStrip]]} {
 		set strip [::mediainset::MinimumStrip]
 	}
+	set canvX $wx
+	if {[info exists ::application::board::Vars(widget:frame)]
+		&& [winfo exists $::application::board::Vars(widget:frame)]} {
+		set canvX [winfo rootx $::application::board::Vars(widget:frame)]
+	}
+	set maxBoardWidth [expr {($wx + $ww) - $canvX - $needW - $fw - $gap - $strip}]
 	foreach side {left right} {
-		if {[catch { ::mediainset::SqueezeForDialog $dlg $side $strip }]} { continue }
+		set mb [expr {$side eq "left" ? $maxBoardWidth : 0}]
+		if {[catch { ::mediainset::SqueezeForDialog $dlg $side $strip $mb } err]} {
+			continue
+		}
 		update idletasks
 		lassign [besideProtectedRect] px py pw ph
 		if {$pw < 2 || $ph < 2} {
@@ -727,6 +765,7 @@ proc besideCapture {dlg} {
 	set BesideState($dlg,board) [besideBoardRect]
 	set BesideState($dlg,obstacle) [besideProtectedRect]
 	set BesideState($dlg,context) [besideContext $dlg]
+	set BesideState($dlg,parentrect) [besideParentRect $dlg]
 	set BesideState($dlg,user) 0
 }
 
@@ -751,6 +790,7 @@ proc besideRegistryAdd {dlg parent} {
 	set BesideState($dlg,board) [besideBoardRect]
 	set BesideState($dlg,obstacle) [besideProtectedRect]
 	set BesideState($dlg,context) [besideContext $dlg]
+	set BesideState($dlg,parentrect) [besideParentRect $dlg]
 	set BesideState($dlg,user) 0
 	after idle [namespace code [list besideCapture $dlg]]
 }
@@ -829,36 +869,44 @@ proc besideReleaseReserve {dlg} {
 	if {$i < 0} { return 0 }
 	set entry [lindex $BesideReserves $i]
 	set BesideReserves [lreplace $BesideReserves $i $i]
-	lassign $entry _ side pixels previousSide previousPixels rootFloor activeFloor
+	lassign $entry _ side pixels previousSide previousPixels rootFloor activeFloor previousKind
 	set activeSide $::application::board::ReserveSide
 	set activePixels $::application::board::ReservePixels
-	# A stale entry no longer owns the live strip: drop it (and its floor
-	# claim) without disturbing whatever reserve is active now.
-	if {$activePixels == 0 || $side ne $activeSide || $pixels != $activePixels} {
-		besidePruneReserves
-		return 1
-	}
-	# Later reservations were made on top of this strip: rebase their saved
-	# previous state onto ours so closing them restores the right reserve.
+	# Later reservations saved their "previous" state as the strip this entry
+	# owns. Rebase those references even when the closing dialog is not the
+	# top of the stack, so an out-of-order close cannot leave a later close
+	# restoring this dialog's strip (VAL-DLG-014b).
 	set out {}
 	foreach later $BesideReserves {
-		lassign $later d sd px ps pp rf af
-		if {$sd eq $side && $px == $pixels} {
-			set later [list $d $sd $px $previousSide $previousPixels $rf $af]
+		lassign $later d sd px ps pp rf af pk
+		if {$ps eq $side && $pp == $pixels} {
+			set later [list $d $sd $px $previousSide $previousPixels $rf $af $previousKind]
 		}
 		lappend out $later
 	}
 	set BesideReserves $out
+	# A stale entry no longer owns the live strip: keep the rebased entries
+	# and drop any that no longer match what the board actually reserved,
+	# without disturbing whatever reserve is active now.
+	if {$activePixels == 0 || $side ne $activeSide || $pixels != $activePixels} {
+		besidePruneReserves
+		return 1
+	}
 	if {[llength $BesideReserves] == 0} {
 		if {$rootFloor ne ""
 			&& [info exists ::application::board::MinimumReserveSquare]} {
 			set ::application::board::MinimumReserveSquare $rootFloor
 		}
 		if {[llength [info commands ::application::board::setReserve]]
-			&& [catch { ::application::board::setReserve $previousSide $previousPixels }]} {
+			&& [catch { ::application::board::setReserve $previousSide $previousPixels \
+				[expr {$previousKind eq "" ? "auto" : $previousKind}] }]} {
 			catch { ::application::board::setReserve {} 0 }
 		}
 	} else {
+		# Restore the reserve of the top remaining entry.
+		lassign [lindex $BesideReserves end] _ remSide remPixels _ _ _ _ remKind
+		if {$remKind eq ""} { set remKind auto }
+		catch { ::application::board::setReserve $remSide $remPixels $remKind }
 		# Keep the lowest floor required by the reserves that remain.
 		set floor {}
 		foreach e $BesideReserves {
@@ -873,12 +921,12 @@ proc besideReleaseReserve {dlg} {
 }
 
 # Undo a reserve attempt that could not produce a usable plan.
-proc besideReserveRevert {previousSide previousPixels rootFloor} {
+proc besideReserveRevert {previousSide previousPixels rootFloor {previousKind auto}} {
 	if {$rootFloor ne ""
 		&& [info exists ::application::board::MinimumReserveSquare]} {
 		set ::application::board::MinimumReserveSquare $rootFloor
 	}
-	catch { ::application::board::setReserve $previousSide $previousPixels }
+	catch { ::application::board::setReserve $previousSide $previousPixels $previousKind }
 }
 
 # Make room the way the video inset does: reserve a strip in the board pane so
@@ -912,6 +960,7 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 	}
 	set previousSide $::application::board::ReserveSide
 	set previousPixels $::application::board::ReservePixels
+	set previousKind $::application::board::ReserveKind
 	if {[catch { set frame $::application::board::Vars(widget:frame) }]
 		|| ![winfo exists $frame]} {
 		return {}
@@ -957,8 +1006,10 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 		if {$need < 1} { continue }
 		if {$need >= $extent} { continue }
 		set boardSide [expr {$side eq "below" ? "bottom" : $side}]
+		# A dialog may shrink the board to make room, so probe with the
+		# dialog kind rather than the strict ordinary video-strip rule.
 		set square [::application::board::reserveSquare $boardSide $need \
-			$fullWidth $fullHeight]
+			$fullWidth $fullHeight dialog]
 		if {$square < 1} { continue }
 		lappend choices [list $side $need $square]
 	}
@@ -984,8 +1035,8 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 	# so a later board rebuild does not silently drop the reserved strip.
 	set activeFloor [expr {min($rootFloor, max(1, $square))}]
 	set ::application::board::MinimumReserveSquare $activeFloor
-	if {[catch { ::application::board::setReserve $boardSide $pixels } rv] || !$rv} {
-		besideReserveRevert $previousSide $previousPixels $rootFloor
+	if {[catch { ::application::board::setReserve $boardSide $pixels dialog } rv] || !$rv} {
+		besideReserveRevert $previousSide $previousPixels $rootFloor $previousKind
 		return {}
 	}
 	update idletasks
@@ -995,17 +1046,17 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 		$requested $minimum]
 	if {[dict get $plan rule] ni {right left below shrink}
 		|| [dict get $plan overlap] > 0} {
-		besideReserveRevert $previousSide $previousPixels $rootFloor
+		besideReserveRevert $previousSide $previousPixels $rootFloor $previousKind
 		return {}
 	}
 	lassign [dict get $plan geometry] _ _ w h
 	if {$w < $targetW || $h < $targetH} {
-		besideReserveRevert $previousSide $previousPixels $rootFloor
+		besideReserveRevert $previousSide $previousPixels $rootFloor $previousKind
 		return {}
 	}
 	lappend BesideReserves [list $dlg $::application::board::ReserveSide \
 		$::application::board::ReservePixels $previousSide $previousPixels \
-		$rootFloor $activeFloor]
+		$rootFloor $activeFloor $previousKind]
 	return $plan
 }
 
@@ -1032,6 +1083,13 @@ proc besideSettle {} {
 		if {![winfo ismapped $dlg]} { continue }
 		set current [besideRect $dlg]
 		set context [besideContext $dlg]
+		set parentRect [besideParentRect $dlg]
+		# A window-manager move/resize/maximise moves the transient dialog
+		# with the main window. Its root position changing is not a user drag.
+		set parentMoved [expr {$parentRect ne {}
+			&& [info exists BesideState($dlg,parentrect)]
+			&& $BesideState($dlg,parentrect) ne {}
+			&& [besideRectDiffers $parentRect $BesideState($dlg,parentrect)]}]
 		set unchanged [expr {$boardRect eq $BesideState($dlg,board)
 			&& $obstacle eq $BesideState($dlg,obstacle)
 			&& $context eq $BesideState($dlg,context)}]
@@ -1041,15 +1099,20 @@ proc besideSettle {} {
 			# between, fall through and re-plan.
 			if {$unchanged} {
 				set BesideState($dlg,last) $current
+				set BesideState($dlg,parentrect) $parentRect
 				set BesideState($dlg,user) 0
 				continue
 			}
 			set BesideState($dlg,user) 0
 		} elseif {[besideRectDiffers $current $BesideState($dlg,last)]} {
-			# Content growth changes client size without a user resize.
-			if {[lindex $context 2] eq [lindex $BesideState($dlg,context) 2]
+			if {$parentMoved} {
+				# The window moved; update parentrect. Do not treat the dialog
+				# shift as user placement, but preserve existing user placement.
+				set BesideState($dlg,parentrect) $parentRect
+			} elseif {[lindex $context 2] eq [lindex $BesideState($dlg,context) 2]
 				|| [besideRectDiffers [concat [lrange $current 0 1] {0 0}] \
 					[concat [lrange $BesideState($dlg,last) 0 1] {0 0}]]} {
+				# Content growth changes client size without a user resize.
 				set BesideState($dlg,user) 1
 			}
 		}
@@ -1059,7 +1122,7 @@ proc besideSettle {} {
 			set video [besideVideoRect]
 			set videoOverlap [expr {$video eq {} ? 0 : [besideOverlap $outer $video]}]
 			if {[besideOverlap $outer $boardRect] == 0 && $videoOverlap == 0
-				&& [besideInside $outer [lindex $context 0]]} { continue }
+				&& [besideInside $outer [winfo workarea $dlg]]} { continue }
 		} elseif {$unchanged} {
 			# No placement input changed.
 			continue
@@ -1070,6 +1133,9 @@ proc besideSettle {} {
 	foreach dlg $replan {
 		if {[catch { besideBoard $dlg $BesideState($dlg,parent) }]} { continue }
 		incr BesideReplacements
+		# Record the rectangle the new placement produced, including the
+		# parent's current geometry, after the WM has applied it.
+		after idle [namespace code [list besideCapture $dlg]]
 	}
 }
 
@@ -1137,6 +1203,22 @@ proc besideBoard {dlg {parent ""}} {
 	# inside the pane that the video owns are therefore not free space.
 	lassign [besideProtectedRect] bx by bw bh
 	set workarea [winfo workarea $dlg]
+	if {[winfo exists $parent]} {
+		set pTop [winfo toplevel $parent]
+		lassign [winfo extents $pTop] pel per pet peb
+		set px [expr {[winfo rootx $pTop] - $pel}]
+		set py [expr {[winfo rooty $pTop] - $pet}]
+		set pw [expr {[winfo width $pTop] + $pel + $per}]
+		set ph [expr {[winfo height $pTop] + $pet + $peb}]
+		lassign $workarea wx wy ww wh
+		set x0 [expr {max($wx, $px)}]
+		set y0 [expr {max($wy, $py)}]
+		set x1 [expr {min($wx + $ww, $px + $pw)}]
+		set y1 [expr {min($wy + $wh, $py + $ph)}]
+		if {$x1 > $x0 && $y1 > $y0} {
+			set workarea [list $x0 $y0 [expr {$x1 - $x0}] [expr {$y1 - $y0}]]
+		}
+	}
 	set cls [winfo class $dlg]
 	if {$cls eq "Menu" || $cls eq "OptionMenu" || [wm overrideredirect $dlg]} {
 		set extents {0 0 0 0}

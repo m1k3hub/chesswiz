@@ -1521,6 +1521,13 @@ proc RedrawCoordinates {} {
 variable MinimumReserveSquare 32
 variable ReserveSide {}
 variable ReservePixels 0
+# Who asked for the strip. "auto" is the ordinary video strip: it may only
+# be reserved when it costs the drawn board no square (VAL-MED-012).
+# "squeeze" is the video yielding a strip so a dialog keeps its usable size,
+# and "dialog" is a dialog reserving board room itself (VAL-DLG-012); both
+# are explicit requests to shrink the board and align it for that dialog.
+variable ReserveKind auto
+variable ReserveMaxBoard 0
 variable RebuildCallbacks {}
 variable NotifyingRebuild 0
 
@@ -1544,17 +1551,23 @@ proc afterRebuild {callback {remove false}} {
 
 # Probe using the same decoration/DPI arithmetic as the actual rebuild.
 # No widgets or accepted reserve are changed while the inset compares strips.
-proc reserveSquare {side px width height} {
+proc reserveSquare {side px width height {kind auto} {maxBoard 0}} {
 	variable Dim
 	variable Vars
 	variable ReserveSide
 	variable ReservePixels
+	variable ReserveKind
+	variable ReserveMaxBoard
 	set saved [array get Dim]
 	set oldSide $ReserveSide
 	set oldPixels $ReservePixels
+	set oldKind $ReserveKind
+	set oldMaxBoard [expr {[info exists ReserveMaxBoard] ? $ReserveMaxBoard : 0}]
 	try {
 		set ReserveSide $side
 		set ReservePixels $px
+		set ReserveKind $kind
+		set ReserveMaxBoard $maxBoard
 		ComputeLayout $width $height
 		if {$ReserveSide ne $side} { return 0 }
 		return $Dim(squaresize:$Vars(layout))
@@ -1563,6 +1576,8 @@ proc reserveSquare {side px width height} {
 		array set Dim $saved
 		set ReserveSide $oldSide
 		set ReservePixels $oldPixels
+		set ReserveKind $oldKind
+		set ReserveMaxBoard $oldMaxBoard
 	}
 }
 
@@ -1590,32 +1605,46 @@ proc unreservedSquare {width height} {
 	}
 }
 
-proc setReserve {side px} {
+proc setReserve {side px {kind auto} {maxBoard 0}} {
 	variable ReserveSide
 	variable ReservePixels
+	variable ReserveKind
+	variable ReserveMaxBoard
 	variable Vars
 	variable Dim
 	if {$side ni {right bottom left {}} || ![string is integer -strict $px] || $px < 0} {
 		error "expected reserve side right, bottom, left or {}, and nonnegative integer pixels"
 	}
-	if {$side eq {} || $px == 0} { set side {}; set px 0 }
+	if {$kind ni {auto squeeze dialog}} {
+		error "expected reserve kind auto, squeeze or dialog"
+	}
+	if {$side eq {} || $px == 0} { set side {}; set px 0; set kind auto; set maxBoard 0 }
 	if {![info exists Vars(widget:frame)]} { return 0 }
 	# Inset callbacks may request the same reserve after every rebuild.
-	if {$side eq $ReserveSide && $px == $ReservePixels} { return 1 }
+	if {$side eq $ReserveSide && $px == $ReservePixels && $kind eq $ReserveKind
+		&& [info exists ReserveMaxBoard] && $maxBoard == $ReserveMaxBoard} {
+		return 1
+	}
 	set oldSide $ReserveSide
 	set oldPixels $ReservePixels
+	set oldKind $ReserveKind
+	set oldMaxBoard [expr {[info exists ReserveMaxBoard] ? $ReserveMaxBoard : 0}]
 	set saved [array get Dim]
 	set ReserveSide $side
 	set ReservePixels $px
+	set ReserveKind $kind
+	set ReserveMaxBoard $maxBoard
 	ComputeLayout $Vars(width) $Vars(height)
-	# ComputeLayout is the single arbitrator: it keeps a below-floor reserve
-	# only when the strip does not shrink the drawn square (see below).
+	# ComputeLayout is the single arbitrator: an ordinary ("auto") reserve is
+	# kept only when the strip does not shrink the drawn square (see below).
 	set accepted [expr {$side eq {} || $ReserveSide eq $side}]
 	array unset Dim
 	array set Dim $saved
 	if {!$accepted} {
 		set ReserveSide $oldSide
 		set ReservePixels $oldPixels
+		set ReserveKind $oldKind
+		set ReserveMaxBoard $oldMaxBoard
 		return 0
 	}
 	ApplyReserve3D
@@ -1868,6 +1897,8 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 
 	variable ReserveSide
 	variable ReservePixels
+	variable ReserveKind
+	variable ReserveMaxBoard
 	variable MinimumReserveSquare
 	set fullWidth $canvWidth
 	set fullHeight $canvHeight
@@ -1970,6 +2001,16 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 	}
 
 	set boardsize				[expr {min($width, $height)}]
+	if {$ReserveSide eq "left" && $ReserveKind eq "squeeze" && [info exists ReserveMaxBoard] && $ReserveMaxBoard > 0} {
+		set extraWidth [expr {2*$Dim(borderthickness) + $stmsize + $Dim(offset:coords)}]
+		set targetBoard [expr {$ReserveMaxBoard - $extraWidth}]
+		set minBoard [expr {8 * $MinimumReserveSquare}]
+		if {$targetBoard >= $minBoard} {
+			set boardsize [expr {min($boardsize, $targetBoard)}]
+		} else {
+			set boardsize [expr {min($boardsize, $minBoard)}]
+		}
+	}
 	set Dim(edgethickness)	[expr {$Dim(borderthickness) ? 0 : ($boardsize/8 < 45 ? 1 : 2)}]
 
 	if {$Vars(layout) eq "Crazyhouse"} {
@@ -1986,16 +2027,21 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 		set Dim($sqsize)	[expr {($boardsize - 2*$Dim(edgethickness))/8}]
 	}
 
-	# A later pane resize may invalidate an accepted reserve as well. The
-	# fixed floor alone is not enough: a small board whose square the strip
-	# leaves unchanged (for example 31 px at 1250x570) is still better
-	# shifted than covered, so only a reserve that really shrinks the drawn
-	# square is dropped.
-	if {$ReserveSide ne {} && $Dim($sqsize) < $MinimumReserveSquare} {
+	# The ordinary video strip may never cost the drawn board a square
+	# (VAL-MED-012): compare the reserved square with the same layout without
+	# the reserve on every rebuild, not only below the fixed 32 px floor. A
+	# small board whose square the strip leaves unchanged (for example 31 px
+	# at 1250x570) is still better shifted than covered, so only a reserve
+	# that really shrinks the drawn square is dropped.
+	# A dialog, or the video yielding a strip to one, explicitly asks to
+	# shrink the board (VAL-DLG-012/013); the floor remains its guard.
+	if {$ReserveSide ne {} && ($ReserveKind eq "auto"
+		|| $Dim($sqsize) < $MinimumReserveSquare)} {
 		set unreserved [unreservedSquare $fullWidth $fullHeight]
 		if {$Dim($sqsize) < $unreserved} {
 			set ReserveSide {}
 			set ReservePixels 0
+			set ReserveKind auto
 			ComputeLayout $fullWidth $fullHeight $bordersize
 			return
 		}
@@ -2017,12 +2063,13 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 
 	set Dim(boardsize)	[expr {8*$Dim($sqsize) + 2*$Dim(edgethickness)}]
 	set Dim(bordersize)	[expr {$Dim(boardsize) + 2*$Dim(borderthickness)}]
-	# A left reserve is the video inset yielding its strip to a dialog that
-	# needs the work-area strip on the right (VAL-DLG-013). Put the board
-	# against that strip instead of centring it in the remainder: the free
-	# margin then falls where the dialog is placed, and the drawn square is
-	# unchanged.
-	if {$ReserveSide eq "left"} {
+	# The video inset yielding its strip to a dialog that needs the work-area
+	# strip on the right (VAL-DLG-013) sits flush against that strip: the free
+	# margin then falls where the dialog is placed. Any other reserve,
+	# including a dialog-owned left strip, centres the board in the remaining
+	# area exactly like a right reserve, so a left dialog gets the same
+	# balanced free margin instead of a hard-coded mirror column.
+	if {$ReserveSide eq "left" && $ReserveKind eq "squeeze"} {
 		set Dim(border:x1) [expr {$originX + $Dim(offset:coords)}]
 	} else {
 		set Dim(border:x1)	[expr {$originX + ($canvWidth - $Dim(bordersize) + $Dim(offset:coords) - $decorationShift)/2}]
