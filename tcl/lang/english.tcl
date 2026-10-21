@@ -955,6 +955,50 @@
 ::application::assistant::offers::mc::AskAboutGame		"About game #%d (%s): "
 ::application::assistant::offers::mc::AskAboutBoard		"About the position on the board: "
 
+### application::ask ##################################################
+# The Ask field in the top strip: its placeholder, its last result row and
+# the messages a request can bring back into the field. German uses Strg
+# where these say Ctrl.
+::application::ask::mc::Placeholder		"Ask or tell Chesswiz what to do (Ctrl+K)"
+::application::ask::mc::AskAssistant		"Ask the assistant"
+::application::ask::mc::Send				"Send to the assistant"
+::application::ask::mc::Mic				"Speak"
+::application::ask::mc::Recording		"Recording\u2026 click to stop"
+::application::ask::mc::Transcribing		"Transcribing\u2026 click to cancel"
+::application::ask::mc::Heard				"Heard: %s"
+::application::ask::mc::NothingHeard		"Nothing heard"
+::application::ask::mc::AssistantPrefs		"Assistant Preferences\u2026"
+::application::ask::mc::Unavailable		"The assistant is unavailable."
+::application::ask::mc::Busy				"The assistant is busy. Try again when it finishes."
+::application::ask::mc::Failed			"Error: %s"
+::application::ask::mc::PrefsTitle			"Assistant"
+::application::ask::mc::SpeechInput		"Speech input"
+::application::ask::mc::SpeechReady		"A local speech path is configured."
+::application::ask::mc::PathWhisper			"whisper-cli path"
+::application::ask::mc::PathModel			"ggml model path"
+::application::ask::mc::PathRecorder		"Recorder (arecord/ffmpeg)"
+::application::ask::mc::PathStub			"Test stub command (optional)"
+::application::ask::mc::Detect				"Detect"
+::application::ask::mc::Close				"Close"
+::application::ask::mc::PrefsWhat			"open the Assistant preferences"
+::application::ask::mc::PrefsDoc			"Choose the local speech tools (whisper-cli, model, recorder) and see what to install when speech input is not available."
+
+### application::speech ###############################################
+# Speech input (the Ask field's microphone). MissingCli/MissingModel/
+# MissingRecorder name the parts a missing speech path lacks.
+::application::speech::mc::Install		"Speech input needs whisper-cli (whisper.cpp), a ggml model and arecord or ffmpeg. Set them in Preferences > Assistant."
+::application::speech::mc::InstallMac		"macOS uses the system dictation: turn it on in System Settings > Keyboard > Dictation, then press the dictation key (or Fn Fn)."
+::application::speech::mc::InstallWin		"Windows uses the system dictation: press Win+H while the Ask field has focus."
+::application::speech::mc::Listening		"Recording\u2026 click to stop"
+::application::speech::mc::Working			"Transcribing\u2026 click to cancel"
+::application::speech::mc::Nothing			"Nothing heard"
+::application::speech::mc::Failed			"Speech failed: %s"
+::application::speech::mc::NoRecord		"Speech was cancelled"
+::application::speech::mc::Missing		"%s Missing: %s."
+::application::speech::mc::MissingCli		"whisper-cli"
+::application::speech::mc::MissingModel		"a ggml model"
+::application::speech::mc::MissingRecorder	"arecord or ffmpeg"
+
 ### database::switcher #################################################
 ::database::switcher::mc::Empty								"empty"
 ::database::switcher::mc::None								"none"

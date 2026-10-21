@@ -1050,7 +1050,10 @@
 ::application::tree::mc::T_FrequentPlayer					"Häufigster Spieler"
 
 ### application::ask ###################################################
-::application::ask::mc::Placeholder		"Fragen oder Chesswiz sagen, was getan werden soll (Strg+K)"
+# Das Eingabefeld in der oberen Leiste: Platzhaltertext, die letzte
+# Ergebniszeile und die Meldungen, die eine Anfrage zurück ins Feld
+# bringen kann.
+::application::ask::mc::Placeholder		"Chesswiz fragen oder sagen, was zu tun ist (Strg+K)"
 ::application::ask::mc::AskAssistant		"Den Assistenten fragen"
 ::application::ask::mc::Send				"An den Assistenten senden"
 ::application::ask::mc::Mic				"Sprechen"
@@ -1059,8 +1062,25 @@
 ::application::ask::mc::Heard			"Gehört: %s"
 ::application::ask::mc::NothingHeard	"Nichts gehört"
 ::application::ask::mc::AssistantPrefs	"Assistenten-Einstellungen\u2026"
+::application::ask::mc::Unavailable		"Der Assistent ist nicht verfügbar."
+::application::ask::mc::Busy				"Der Assistent ist beschäftigt. Versuchen Sie es noch einmal, wenn er fertig ist."
+::application::ask::mc::Failed			"Fehler: %s"
+::application::ask::mc::PrefsTitle		"Assistent"
+::application::ask::mc::SpeechInput		"Spracheingabe"
+::application::ask::mc::SpeechReady		"Ein lokaler Sprachpfad ist eingerichtet."
+::application::ask::mc::PathWhisper		"Pfad zu whisper-cli"
+::application::ask::mc::PathModel		"Pfad zum ggml-Modell"
+::application::ask::mc::PathRecorder		"Aufnahmeprogramm (arecord/ffmpeg)"
+::application::ask::mc::PathStub			"Test-Stubbefehl (optional)"
+::application::ask::mc::Detect				"Erkennen"
+::application::ask::mc::Close				"Schliessen"
+::application::ask::mc::PrefsWhat			"die Assistenten-Einstellungen öffnen"
+::application::ask::mc::PrefsDoc			"Die lokalen Sprachwerkzeuge (whisper-cli, Modell, Aufnahmeprogramm) wählen und sehen, was zu installieren ist, wenn die Spracheingabe nicht verfügbar ist."
 
 ### application::speech ################################################
+# Die Spracheingabe (Mikrofon im Eingabefeld). MissingCli/MissingModel/
+# MissingRecorder benennen die Teile, die einem unvollständigen
+# Sprachpfad fehlen.
 ::application::speech::mc::Install		"Die Spracheingabe erfordert whisper-cli (whisper.cpp), ein ggml-Modell und arecord oder ffmpeg. Richten Sie diese unter Einstellungen > Assistent ein."
 ::application::speech::mc::InstallMac	"macOS verwendet die Systemdiktatfunktion: Aktivieren Sie sie unter Systemeinstellungen > Tastatur > Diktat und drücken Sie dann die Diktattaste (oder Fn Fn)."
 ::application::speech::mc::InstallWin	"Windows verwendet die Systemdiktatfunktion: Drücken Sie Win+H, während das Eingabefeld den Fokus hat."
@@ -1069,6 +1089,10 @@
 ::application::speech::mc::Nothing		"Nichts gehört"
 ::application::speech::mc::Failed		"Spracheingabe fehlgeschlagen: %s"
 ::application::speech::mc::NoRecord	"Spracheingabe wurde abgebrochen"
+::application::speech::mc::Missing		"%s Fehlt: %s."
+::application::speech::mc::MissingCli	"whisper-cli"
+::application::speech::mc::MissingModel	"ein ggml-Modell"
+::application::speech::mc::MissingRecorder	"arecord oder ffmpeg"
 
 ### application::assistant #############################################
 ::application::assistant::mc::Send				"Senden"
