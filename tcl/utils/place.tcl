@@ -480,6 +480,7 @@ proc besideCapture {dlg} {
 	set BesideState($dlg,last) [besideRect $dlg]
 	set BesideState($dlg,board) [besideBoardRect]
 	set BesideState($dlg,context) [besideContext $dlg]
+	set BesideState($dlg,owner) [besideRect [winfo toplevel $BesideState($dlg,parent)]]
 	set BesideState($dlg,user) 0
 }
 
@@ -490,6 +491,10 @@ proc besideRegistryAdd {dlg parent} {
 
 	set BesideState($dlg,parent) $parent
 	if {$dlg ni $BesideDialogs} { lappend BesideDialogs $dlg }
+	# A rebuild moves the drawn board inside its canvas without necessarily
+	# configuring the inner board widget (notably during Aqua fullscreen).
+	# Observe the completed drawing, including after a layout replaces it.
+	::application::board::afterRebuild ::util::place::besideSchedule
 
 	if {[catch { set board $::application::board::board }]} { set board {} }
 	if {$board ne {} && [winfo exists $board] && $BesideBoardBound ne $board} {
@@ -504,6 +509,7 @@ proc besideRegistryAdd {dlg parent} {
 	set BesideState($dlg,board) [besideBoardRect]
 	set BesideState($dlg,context) [besideContext $dlg]
 	set BesideState($dlg,user) 0
+	set BesideState($dlg,owner) [besideRect [winfo toplevel $parent]]
 	after idle [namespace code [list besideCapture $dlg]]
 }
 
@@ -513,6 +519,9 @@ proc besideRegistryRemove {dlg} {
 	set i [lsearch -exact $BesideDialogs $dlg]
 	if {$i >= 0} { set BesideDialogs [lreplace $BesideDialogs $i $i] }
 	array unset BesideState ${dlg},*
+	if {![llength $BesideDialogs]} {
+		::application::board::afterRebuild ::util::place::besideSchedule true
+	}
 }
 
 proc besideSettle {} {
@@ -537,6 +546,19 @@ proc besideSettle {} {
 		if {![winfo ismapped $dlg]} { continue }
 		set current [besideRect $dlg]
 		set context [besideContext $dlg]
+		set owner [besideRect [winfo toplevel $BesideState($dlg,parent)]]
+		set nativeMove 0
+		if {[tk windowingsystem] eq "aqua" && $BesideState($dlg,last) ne {}} {
+			# Cocoa translates a transient with its owner. This is not a
+			# user drag: it must still follow subsequent board reflows.
+			lassign $current x y w h
+			lassign $BesideState($dlg,last) lx ly lw lh
+			lassign $owner ox oy
+			lassign $BesideState($dlg,owner) px py
+			set nativeMove [expr {$w == $lw && $h == $lh
+				&& abs(($x-$lx)-($ox-$px)) <= 1
+				&& abs(($y-$ly)-($oy-$py)) <= 1}]
+		}
 		set unchanged [expr {$boardRect eq $BesideState($dlg,board)
 			&& $context eq $BesideState($dlg,context)}]
 		if {![info exists BesideState($dlg,last)] || $BesideState($dlg,last) eq {}} {
@@ -549,7 +571,7 @@ proc besideSettle {} {
 				continue
 			}
 			set BesideState($dlg,user) 0
-		} elseif {[besideRectDiffers $current $BesideState($dlg,last)]} {
+		} elseif {!$nativeMove && [besideRectDiffers $current $BesideState($dlg,last)]} {
 			# Content growth changes client size without a user resize.
 			if {[lindex $context 2] eq [lindex $BesideState($dlg,context) 2]
 				|| [besideRectDiffers [concat [lrange $current 0 1] {0 0}] \

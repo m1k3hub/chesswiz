@@ -613,7 +613,15 @@ proc RememberWindowGeometry {w} {
 	# Iconifying must not erase the last normal/zoomed state.
 	if {$state ni {normal zoomed}} { return }
 	set previous $Vars(window:state:last)
-	set Vars(window:state:last) $state
+	set size [GeometrySize [wm geometry $w]]
+	# Cocoa can report the restored position before the restored size. A
+	# move-only Configure must not consume the zoomed -> normal transition:
+	# the following size notification may still carry the stale small rect.
+	if {$state ne "normal" || $previous ne "zoomed"
+		|| ![info exists Vars(window:size:last)] || $size ne $Vars(window:size:last)} {
+		set Vars(window:state:last) $state
+	}
+	set Vars(window:size:last) $size
 	set Options(window:state) $state
 	if {$state eq "normal"} {
 		set geometry [wm geometry $w]
