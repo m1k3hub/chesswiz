@@ -717,4 +717,132 @@ foreach {short openScript dialog} {
     }
 }
 
+# VAL-DLG-013: while a lesson video plays in the board inset, dialogs used
+# during play must stay clear of both the drawn board and the visible inset.
+namespace eval ::scidb::test::dlgplace {
+    variable videoSaved {}
+    variable videoStubs {}
+}
+proc ::scidb::test::dlgplace::videoStub {name args body} {
+    variable videoSaved
+    variable videoStubs
+    rename ::media::mpv::$name [namespace current]::saved_$name
+    lappend videoSaved $name
+    proc ::media::mpv::$name $args $body
+    lappend videoStubs $name
+}
+proc ::scidb::test::dlgplace::startVideo {} {
+    ::application::switchTab board
+    ::application::media::Ensure
+    ::application::media::Stop
+    ::scidb::test::dlgplace::videoStub available? {} {return 1}
+    ::scidb::test::dlgplace::videoStub launch {path wid {ms 0}} {return 1}
+    ::scidb::test::dlgplace::videoStub state {} {return playing}
+    ::scidb::test::dlgplace::videoStub time {} {return 5}
+    ::scidb::test::dlgplace::videoStub duration {} {return 120}
+    ::scidb::test::dlgplace::videoStub stop {} {}
+    ::scidb::test::dlgplace::videoStub aspect {} {return [expr {16.0/9}]}
+    ::scidb::test::dlgplace::videoStub chapters {} {return {}}
+    update
+    waitFor 300
+    set path [file normalize [file join $::scidb::test::dlgplace::testDir \
+        tmp-app media-test MediaTest.media video analysis.mp4]]
+    require [::application::media::PlayInProcess $path] "video did not start"
+    waitFor 700
+    require [expr {$::mediainset::Shown}] "video inset is not shown"
+    set pane [::mediainset::Pane]
+    require [winfo ismapped $pane.mediainset] "video inset is not mapped"
+    return [widgetRect $pane.mediainset]
+}
+proc ::scidb::test::dlgplace::stopVideo {} {
+    variable videoSaved
+    variable videoStubs
+    catch { ::application::media::Stop }
+    foreach name $videoStubs {
+        rename ::media::mpv::$name {}
+        rename [namespace current]::saved_$name ::media::mpv::$name
+    }
+    set videoStubs {}
+    set videoSaved {}
+    waitFor 300
+}
+proc ::scidb::test::dlgplace::videoDialogCheck {target dlg insBefore} {
+    waitFor 800
+    set pane [::mediainset::Pane]
+    set insetWidget $pane.mediainset
+    require [winfo exists $insetWidget] "$target: inset disappeared"
+    require [winfo ismapped $insetWidget] "$target: inset is not visible"
+    set video [widgetRect $insetWidget]
+    set board [boardRect]
+    set client [widgetRect $dlg]
+    lassign [winfo extents $dlg] el er et eb
+    require [regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} \
+        [wm geometry $dlg] -> fw fh fx fy] "$target: invalid geometry [wm geometry $dlg]"
+    set outer [list $fx $fy [expr {$fw+$el+$er}] [expr {$fh+$et+$eb}]]
+    set wa [winfo workarea $dlg]
+    puts "DLG-VIDEO $target main=[wm geometry .application] board=$board video=$video dlg=$client outer=$outer wa=$wa requested=[list [winfo reqwidth $dlg] [winfo reqheight $dlg]] reserve=$::application::board::ReserveSide/$::application::board::ReservePixels"
+    require [expr {[overlapArea $client $board] == 0}] \
+        "$target: dialog $client overlaps board $board"
+    require [expr {[overlapArea $outer $board] == 0}] \
+        "$target: frame $outer overlaps board $board"
+    require [expr {[overlapArea $client $video] == 0}] \
+        "$target: dialog $client overlaps video $video"
+    require [expr {[overlapArea $outer $video] == 0}] \
+        "$target: frame $outer overlaps video $video"
+    require [inside $outer $wa] "$target: frame $outer outside $wa"
+    # A strip narrower than the dialog's request makes besideBoard shrink it
+    # (VAL-DLG-012). What must never clip is an individual control.
+    requireControls $target $dlg
+    return [list $board $video]
+}
+proc ::scidb::test::dlgplace::videoRestoreCheck {target insBefore boardBefore} {
+    waitFor 1100
+    set pane [::mediainset::Pane]
+    set insetWidget $pane.mediainset
+    require [winfo exists $insetWidget] "$target: inset disappeared after close"
+    require [winfo ismapped $insetWidget] "$target: inset is not visible after close"
+    set video [widgetRect $insetWidget]
+    puts "DLG-VIDEO-RESTORE $target before=$insBefore after=$video boardBefore=$boardBefore boardAfter=[boardRect] reserve=$::application::board::ReserveSide/$::application::board::ReservePixels"
+    foreach a $video b $insBefore {
+        require [expr {abs($a-$b) <= 1}] \
+            "$target: inset not restored: $video != $insBefore"
+    }
+    require [expr {[boardRect] eq $boardBefore}] \
+        "$target: board not restored: [boardRect] != $boardBefore"
+    return 1
+}
+foreach {target openScript dialog closeScript} {
+    playengine-video {::playengine::open .application} {.application.playengine} {::playengine::Close}
+    guessmove-video {::guessmove::start white} {.application.__guessmove__} {::guessmove::stop; catch {destroy .application.__guessmove__}}
+    gamereview-video {set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]; ::gamereview::ShowWindow .application $review {} 0} {.application.__gamereview} {destroy .application.__gamereview}
+    reptrainer-video {::reptrainer::open .application} {.application.__reptrainer__} {::reptrainer::Close .application.__reptrainer__}
+    endtrainer-video {::endtrainer::open .application} {.application.__endtrainer__} {::endtrainer::Close}
+    enginematch-video {::enginematch::open .application} {.application.enginematch} {::enginematch::Close}
+} {
+    foreach size {1280x720 1250x570 1920x1080} {
+        tcltest::test dlg-video-$target-$size {playing video and board both stay clear of the dialog and the inset is restored} -setup {
+            ::scidb::test::dlgplace::setupBoard
+        } -body [format {
+            wm geometry .application %s+0+0
+            ::scidb::test::dlgplace::waitFor 1300
+            set insBefore [::scidb::test::dlgplace::startVideo]
+            set boardBefore [::scidb::test::dlgplace::boardRect]
+            %s
+            ::scidb::test::dlgplace::videoDialogCheck %s-%s %s $insBefore
+            %s
+            ::scidb::test::dlgplace::videoRestoreCheck %s-%s $insBefore $boardBefore
+        } $size $openScript $target $size $dialog $closeScript $target $size] -cleanup {
+            catch {::scidb::test::dlgplace::stopVideo}
+            catch {destroy .application.playengine}
+            catch {destroy .application.__guessmove__}
+            catch {destroy .application.__gamereview}
+            catch {destroy .application.__reptrainer__}
+            catch {destroy .application.__endtrainer__}
+            catch {destroy .application.enginematch}
+            ::scidb::test::dlgplace::stopTrace
+            ::scidb::test::dlgplace::noRoomCleanup
+        } -result 1
+    }
+}
+
 tcltest::cleanupTests

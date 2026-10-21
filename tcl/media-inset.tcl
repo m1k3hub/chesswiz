@@ -58,6 +58,22 @@ variable Audio 0
 variable Aspect [expr {16.0/9}]
 variable LayingOut 0
 variable Watched {}
+# A dialog too large for every strip outside the board pane can still be
+# kept off the video: the inset moves (and shrinks) within the pane. The
+# list is {paneX paneY width height}; DodgeFor names the owning dialog so a
+# close puts the inset back. VAL-DLG-013.
+variable Dodge {}
+variable DodgeFor {}
+# A dialog that cannot keep its usable size beside the current strip may
+# make the inset move to the other side of the pane and shrink there. The
+# list is {side pixels}; SqueezeFor names the owning dialog.
+variable Squeeze {}
+variable SqueezeFor {}
+# Last resort: the inset leaves the reserved strip entirely and parks in a
+# free margin of the pane, without covering the board. Detach is
+# {paneX paneY width height}; DetachFor names the owning dialog.
+variable Detach {}
+variable DetachFor {}
 # Sashes captured when the video fills the pane, restored by the same-size
 # swap back so a resize while expanded cannot leave the board pane at its
 # minimum (MED-009: restore returns the prior placement and sizes).
@@ -181,9 +197,19 @@ proc ::mediainset::Show {} {
 proc ::mediainset::hide {} {
 	variable Shown
 	variable Swapped
+	variable Dodge
+	variable DodgeFor
+	variable Squeeze
+	variable Detach
+	variable DetachFor
 
 	set pane [Pane]
 	set Shown 0
+	set Dodge {}
+	set DodgeFor {}
+	set Squeeze {}
+	set Detach {}
+	set DetachFor {}
 	Unwatch
 	if {$pane eq ""} {
 		# During <Destroy> the board may already have gone away.
@@ -412,6 +438,11 @@ proc ::mediainset::Layout {} {
 	variable LayingOut
 	variable FrameMargin
 	variable BoardGap
+	variable Dodge
+	variable DodgeFor
+	variable Squeeze
+	variable Detach
+	variable DetachFor
 
 	set pane [Pane]
 	if {$pane eq "" || !$Shown || $LayingOut} { return }
@@ -425,7 +456,21 @@ proc ::mediainset::Layout {} {
 		set s $Options(size)
 		set cw [expr {[winfo reqwidth $w.controls] + 8}]
 		set ch [expr {[winfo reqheight $w.controls] + 8}]
-		if {$Swapped && $Audio} {
+		if {$Detach ne {} && (!$Swapped)
+			&& (![winfo exists $DetachFor] || ![winfo ismapped $DetachFor])} {
+			set Detach {}
+			set DetachFor {}
+		}
+		if {$Detach ne {} && !$Swapped} {
+			# Parked in a free margin: no strip is reserved for it.
+			::application::board::setReserve {} 0
+			FrameView 0
+			RestoreBoard $pane
+			lassign $Detach dx dy dw dh
+			place $w -in $pane -x $dx -y $dy -width $dw -height $dh \
+				-relx 0 -rely 0 -anchor nw -relwidth {} -relheight {}
+			raise $w
+		} elseif {$Swapped && $Audio} {
 			::application::board::setReserve {} 0
 			FrameView 0
 			RestoreBoard $pane
@@ -491,7 +536,14 @@ proc ::mediainset::Layout {} {
 					}
 				}
 			}
-			set pixels [expr {$side eq "right" ? $iw : $ih}]
+			# A dialog can ask the inset to yield its strip: move to
+			# the other side and shrink to the documented minimum so the
+			# dialog keeps every control at its requested size.
+			if {$Squeeze ne {} && !$Audio} {
+				lassign $Squeeze side iw
+				set ih [expr {int(round(($iw-8)/$Aspect))+$ch}]
+			}
+			set pixels [expr {$side eq "right" || $side eq "left" ? $iw : $ih}]
 			if {$side ne "" && [::application::board::setReserve $side $pixels]} {
 				lassign [::application::board::reserveRect] x y rw rh
 				set x [expr {$x + [winfo x $view] + ($rw - $iw)/2}]
@@ -508,9 +560,26 @@ proc ::mediainset::Layout {} {
 			}
 			raise $w
 		}
+		# A dialog too large for the strips outside the pane may have made
+		# the inset move inside the pane; keep that position across rebuilds
+		# until the dialog closes or the media stops.
+		if {$Dodge ne {}} {
+			if {![winfo exists $DodgeFor] || ![winfo ismapped $DodgeFor]} {
+				set Dodge {}
+				set DodgeFor {}
+			} else {
+				lassign $Dodge dx dy dw dh
+				place $w -in $pane -x $dx -y $dy -width $dw -height $dh \
+					-relx 0 -rely 0 -anchor nw -relwidth {} -relheight {}
+				raise $w
+			}
+		}
 		if {[winfo exists $pane.mediaButton]} { raise $pane.mediaButton }
 	} finally {
 		set LayingOut 0
+	}
+	if {[llength [info commands ::util::place::besideVideoChanged]]} {
+		catch { ::util::place::besideVideoChanged }
 	}
 }
 
@@ -522,7 +591,13 @@ proc ::mediainset::reserveForLayout {width height} {
 	variable Shown
 	variable Swapped
 	variable Audio
+	variable Squeeze
+	variable Detach
 	if {!$Shown || $Swapped || $::application::board::Vars(3d)} { return {} }
+	# A dialog asked the inset to move to the other side; the board rebuild
+	# hook must keep that strip instead of re-planning the normal one.
+	if {$Squeeze ne {} && !$Audio} { return $Squeeze }
+	if {$Detach ne {} && !$Audio} { return [list {} 0] }
 	set w [Pane].mediainset
 	if {![winfo exists $w.controls]} { return {} }
 	set ch [expr {[winfo reqheight $w.controls]+8}]
@@ -538,6 +613,13 @@ proc ::mediainset::reserveForLayout {width height} {
 	return [list $side $pixels]
 }
 
+
+# The narrowest strip, in the same units FitStrip uses for a side reserve:
+# the documented minimum video width plus the eight-pixel frame.
+proc ::mediainset::MinimumStrip {} {
+	variable Options
+	return [expr {$Options(minWidth) + 8}]
+}
 
 # Fit each candidate down to the documented minimum VIDEO width (frame
 # adds eight pixels). Prefer the side leaving the larger board, with a
@@ -580,6 +662,244 @@ proc ::mediainset::FitStrip {width height controlsHeight} {
 		}
 	}
 	return $best
+}
+
+
+# Geometry helpers for keeping the video clear of a dialog.
+proc ::mediainset::WidgetRect {w} {
+	return [list [winfo rootx $w] [winfo rooty $w] \
+		[winfo width $w] [winfo height $w]]
+}
+proc ::mediainset::Area {a b} {
+	lassign $a ax ay aw ah
+	lassign $b bx by bw bh
+	return [expr {
+		max(0, min($ax+$aw, $bx+$bw) - max($ax, $bx)) *
+		max(0, min($ay+$ah, $by+$bh) - max($ay, $by))}]
+}
+proc ::mediainset::BoardRect {} {
+	if {[llength [info commands ::util::place::besideBoardRect]]} {
+		return [::util::place::besideBoardRect]
+	}
+	return [WidgetRect [BoardView]]
+}
+
+# Move (and if needed shrink) the visible inset to a free part of its own
+# pane so <rect> (the dialog's decorated frame) does not cover it. Prefers a
+# position that also leaves the drawn board clear; when the inset already
+# overlays the board (BRD-004), only the dialog is avoided. Returns 1 when
+# the inset was moved, 0 when it is already clear or nowhere is free.
+proc ::mediainset::DodgeForDialog {dlg rect} {
+	variable Shown
+	variable Swapped
+	variable Dodge
+	variable DodgeFor
+	variable Aspect
+
+	if {!$Shown || $Swapped} { return 0 }
+	set pane [Pane]
+	if {$pane eq ""} { return 0 }
+	set w $pane.mediainset
+	if {![winfo exists $w] || ![winfo ismapped $w]} { return 0 }
+	set video [WidgetRect $w]
+	if {[Area $video $rect] == 0} { return 0 }
+	set paneRect [WidgetRect $pane]
+	set board [BoardRect]
+	set boardOverlaid [expr {[Area $video $board] > 0}]
+	set ch [expr {[winfo reqheight $w.controls] + 8}]
+	set margin 6
+	set minWidth 168
+	set curW [winfo width $w]
+	set curH [winfo height $w]
+	lassign $paneRect px py pw ph
+	set best {}
+	set bestScore -1
+	set bestCost -1
+	set iw $curW
+	while {$iw >= $minWidth} {
+		set ih [expr {int(round(($iw-8)/$Aspect)) + $ch}]
+		if {$ih <= $ph - 2*$margin} {
+			foreach cx [list [expr {$px+$margin}] [expr {$px+$pw-$iw-$margin}]] {
+				foreach cy [list [expr {$py+$margin}] [expr {$py+$ph-$ih-$margin}]] {
+					set cand [list $cx $cy $iw $ih]
+					if {$cx < $px || $cy < $py
+						|| $cx+$iw > $px+$pw || $cy+$ih > $py+$ph} { continue }
+					if {[Area $cand $rect] > 0} { continue }
+					set cost [expr {$boardOverlaid ? 0 : [Area $cand $board]}]
+					set score [expr {$iw*$ih}]
+					if {($cost < $bestCost)
+						|| ($cost == $bestCost && $score > $bestScore)} {
+						set best $cand
+						set bestCost $cost
+						set bestScore $score
+					}
+					if {$cost == 0} { set iw 0; break }
+				}
+				if {$iw == 0} { break }
+			}
+		}
+		incr iw -16
+	}
+	if {$best eq {}} {
+		Relayout
+		return 0
+	}
+	lassign $best cx cy iw ih
+	place $w -in $pane -x [expr {$cx-$px}] -y [expr {$cy-$py}] \
+		-width $iw -height $ih -relx 0 -rely 0 -anchor nw \
+		-relwidth {} -relheight {}
+	raise $w
+	set Dodge [list [expr {$cx-$px}] [expr {$cy-$py}] $iw $ih]
+	set DodgeFor $dlg
+	return 1
+}
+
+# Shrink/move the inset to <side> so a dialog can keep its usable size on
+# the other side of the drawn board. Layout keeps the request until cleared.
+proc ::mediainset::SqueezeForDialog {dlg side pixels} {
+	variable Shown
+	variable Swapped
+	variable Squeeze
+	variable SqueezeFor
+	if {!$Shown || $Swapped || $side ni {left right}} { return 0 }
+	if {![string is integer -strict $pixels] || $pixels < 1} { return 0 }
+	set pane [Pane]
+	if {$pane eq "" || ![winfo exists $pane.mediainset]} { return 0 }
+	set Squeeze [list $side $pixels]
+	set SqueezeFor $dlg
+	Layout
+	return 1
+}
+
+proc ::mediainset::ClearSqueeze {dlg} {
+	variable Squeeze
+	variable SqueezeFor
+	if {$SqueezeFor eq "" || $SqueezeFor ne $dlg} { return 0 }
+	set Squeeze {}
+	set SqueezeFor {}
+	Relayout
+	return 1
+}
+
+# Last resort for a dialog too large for every strip: release the video's
+# reserve and park the inset in a free margin of the pane, shrinking it as
+# needed so it covers neither the drawn board nor the dialog placed on
+# <side>. <targetW>/<targetH> are the dialog's usable client size.
+proc ::mediainset::DetachForDialog {dlg side targetW targetH workarea extents gap} {
+	variable Shown
+	variable Swapped
+	variable Detach
+	variable DetachFor
+	variable Aspect
+	if {!$Shown || $Swapped || $side ni {left right below}} { return 0 }
+	set pane [Pane]
+	if {$pane eq ""} { return 0 }
+	set w $pane.mediainset
+	if {![winfo exists $w] || ![winfo ismapped $w]} { return 0 }
+	# The board reclaims the strip; mark the detach first so the board's own
+	# reserve hook does not put it straight back while we measure.
+	set DetachFor $dlg
+	set Detach {0 0 0 0}
+	::application::board::setReserve {} 0
+	update idletasks
+	set paneRect [WidgetRect $pane]
+	set board [BoardRect]
+	if {[lindex $board 2] < 2 || [lindex $board 3] < 2} {
+		set Detach {}
+		set DetachFor {}
+		Relayout
+		return 0
+	}
+	lassign $workarea wx wy ww wh
+	lassign $extents el er et eb
+	set fw [expr {$el+$er}]
+	set fh [expr {$et+$eb}]
+	set cw [expr {min($targetW, $ww - $fw)}]
+	set ch [expr {min($targetH, $wh - $fh)}]
+	lassign $board bx by bw bh
+	switch $side {
+		right { set x [expr {$bx + $bw + $gap}]; set y $by }
+		left  { set x [expr {$bx - $gap - $cw - $fw}]; set y $by }
+		below { set x $bx; set y [expr {$by + $bh + $gap}] }
+	}
+	set cx [expr {max($wx, min($x, $wx + $ww - $cw - $fw))}]
+	set cy [expr {max($wy, min($y, $wy + $wh - $ch - $fh))}]
+	set dialog [list $cx $cy [expr {$cw+$fw}] [expr {$ch+$fh}]]
+	# Shrink the inset until a pane corner is free of the board and dialog.
+	set controls [expr {[winfo reqheight $w.controls] + 8}]
+	set margin 6
+	set minWidth 96
+	set curW [winfo width $w]
+	lassign $paneRect px py pw ph
+	set best {}
+	set bestScore -1
+	set iw $curW
+	while {$iw >= $minWidth} {
+		set ih [expr {int(round(($iw-8)/$Aspect)) + $controls}]
+		if {$ih <= $ph - 2*$margin} {
+			foreach x [list [expr {$px+$margin}] [expr {$px+$pw-$iw-$margin}]] {
+				foreach y [list [expr {$py+$margin}] [expr {$py+$ph-$ih-$margin}]] {
+					set cand [list $x $y $iw $ih]
+					if {$x < $px || $y < $py
+						|| $x+$iw > $px+$pw || $y+$ih > $py+$ph} { continue }
+					if {[Area $cand $dialog] > 0 || [Area $cand $board] > 0} {
+						continue
+					}
+					set score [expr {$iw*$ih}]
+					if {$score > $bestScore} {
+						set best $cand
+						set bestScore $score
+					}
+				}
+			}
+			if {$best ne {}} { break }
+		}
+		incr iw -8
+	}
+	if {$best eq {}} {
+		set Detach {}
+		set DetachFor {}
+		Relayout
+		return 0
+	}
+	lassign $best x y iw ih
+	place $w -in $pane -x [expr {$x-$px}] -y [expr {$y-$py}] \
+		-width $iw -height $ih -relx 0 -rely 0 -anchor nw \
+		-relwidth {} -relheight {}
+	raise $w
+	set Detach [list [expr {$x-$px}] [expr {$y-$py}] $iw $ih]
+	return 1
+}
+
+proc ::mediainset::ClearDetach {dlg} {
+	variable Detach
+	variable DetachFor
+	if {$DetachFor eq "" || $DetachFor ne $dlg} { return 0 }
+	set Detach {}
+	set DetachFor {}
+	Relayout
+	return 1
+}
+
+# Put the inset back after the dialog that displaced it goes away.
+proc ::mediainset::RestoreAfterDialog {dlg} {
+	variable Dodge
+	variable DodgeFor
+	variable Detach
+	variable DetachFor
+	set hit 0
+	if {$DodgeFor ne "" && $DodgeFor eq $dlg} {
+		set Dodge {}
+		set DodgeFor {}
+		set hit 1
+	}
+	if {$DetachFor ne "" && $DetachFor eq $dlg} {
+		set Detach {}
+		set DetachFor {}
+		set hit 1
+	}
+	if {$hit} { Relayout }
+	return $hit
 }
 
 

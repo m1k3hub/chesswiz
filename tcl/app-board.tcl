@@ -2017,7 +2017,16 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 
 	set Dim(boardsize)	[expr {8*$Dim($sqsize) + 2*$Dim(edgethickness)}]
 	set Dim(bordersize)	[expr {$Dim(boardsize) + 2*$Dim(borderthickness)}]
-	set Dim(border:x1)	[expr {$originX + ($canvWidth - $Dim(bordersize) + $Dim(offset:coords) - $decorationShift)/2}]
+	# A left reserve is the video inset yielding its strip to a dialog that
+	# needs the work-area strip on the right (VAL-DLG-013). Put the board
+	# against that strip instead of centring it in the remainder: the free
+	# margin then falls where the dialog is placed, and the drawn square is
+	# unchanged.
+	if {$ReserveSide eq "left"} {
+		set Dim(border:x1) [expr {$originX + $Dim(offset:coords)}]
+	} else {
+		set Dim(border:x1)	[expr {$originX + ($canvWidth - $Dim(bordersize) + $Dim(offset:coords) - $decorationShift)/2}]
+	}
 	set Dim(border:y1)	[expr {($canvHeight - $Dim(bordersize))/2}]
 	set Dim(border:x2)	[expr {$Dim(border:x1) + $Dim(bordersize)}]
 	set Dim(border:y2)	[expr {$Dim(border:y1) + $Dim(bordersize)}]

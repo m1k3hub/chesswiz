@@ -521,6 +521,147 @@ proc besideRect {w} {
 		[winfo width $w] [winfo height $w]]
 }
 
+# The visible video inset {x y width height}, or {} when media is not playing
+# in the board inset (hidden, never shown, or playing in the Media pane).
+# VAL-DLG-013: the inset is a protected area exactly like the drawn board.
+proc besideVideoRect {} {
+	if {![info exists ::mediainset::Shown] || !$::mediainset::Shown} { return {} }
+	if {[llength [info commands ::mediainset::Pane]] == 0} { return {} }
+	if {[catch { set pane [::mediainset::Pane] }]} { return {} }
+	if {$pane eq "" || ![winfo exists $pane.mediainset]} { return {} }
+	set w $pane.mediainset
+	if {![winfo ismapped $w]} { return {} }
+	set rect [besideRect $w]
+	lassign $rect x y width height
+	if {$width < 2 || $height < 2} { return {} }
+	return $rect
+}
+
+proc besideUnionRect {a b} {
+	lassign $a ax ay aw ah
+	lassign $b bx by bw bh
+	set x [expr {min($ax, $bx)}]
+	set y [expr {min($ay, $by)}]
+	return [list $x $y [expr {max($ax+$aw, $bx+$bw) - $x}] \
+		[expr {max($ay+$ah, $by+$bh) - $y}]]
+}
+
+# The rectangle a dialog must stay outside. With a playing video inset this
+# is the union of the drawn board and the visible inset, so the strip the
+# video owns inside the board pane is not mistaken for free space (GAP-002).
+# Without a video it is exactly the drawn board, preserving every other rule.
+proc besideProtectedRect {} {
+	set board [besideBoardRect]
+	if {$board eq {}} { return {} }
+	set video [besideVideoRect]
+	if {$video eq {}} { return $board }
+	return [besideUnionRect $board $video]
+}
+
+# Ask the inset to move (or shrink) within its pane so it is not under the
+# placed dialog. Returns 1 when it did, 0 when there is nowhere to go.
+proc besideDodgeVideo {dlg x y w h extents} {
+	set video [besideVideoRect]
+	if {$video eq {}} { return 0 }
+	lassign $extents el er et eb
+	set outer [list $x $y [expr {$w+$el+$er}] [expr {$h+$et+$eb}]]
+	if {[besideOverlap $outer $video] == 0} { return 0 }
+	if {[llength [info commands ::mediainset::DodgeForDialog]] == 0} { return 0 }
+	if {[catch { ::mediainset::DodgeForDialog $dlg $outer } moved]} { return 0 }
+	return [expr {$moved == 1}]
+}
+
+# A dialog that needs more room than the strips outside the board pane can
+# keep its usable size by making the inset move to the other side and shrink
+# there (VAL-DLG-013: shrink or move the inset before covering it). The left
+# side is tried first: with the inset there the protected area ends at the
+# drawn board, leaving the whole work area on its right for the dialog. Tries
+# the smallest documented strip on each side; returns the plan or {}.
+proc besideVideoSqueeze {dlg dw dh workarea extents gap requested minimum} {
+	if {[llength [info commands ::mediainset::SqueezeForDialog]] == 0} { return {} }
+	if {[besideVideoRect] eq {}} { return {} }
+	lassign $workarea wx wy ww wh
+	lassign $extents el er et eb
+	set fw [expr {$el+$er}]
+	set fh [expr {$et+$eb}]
+	set needW $dw
+	set needH $dh
+	if {[llength $minimum]} {
+		set needW [expr {max($needW, [lindex $minimum 0])}]
+		set needH [expr {max($needH, [lindex $minimum 1])}]
+	}
+	if {$needW + $fw > $ww || $needH + $fh > $wh} { return {} }
+	set strip 168
+	if {[llength [info commands ::mediainset::MinimumStrip]]} {
+		set strip [::mediainset::MinimumStrip]
+	}
+	foreach side {left right} {
+		if {[catch { ::mediainset::SqueezeForDialog $dlg $side $strip }]} { continue }
+		update idletasks
+		lassign [besideProtectedRect] px py pw ph
+		if {$pw < 2 || $ph < 2} {
+			catch { ::mediainset::ClearSqueeze $dlg }
+			continue
+		}
+		set plan [besidePlan $px $py $pw $ph $dw $dh $workarea $extents $gap \
+			$requested $minimum]
+		lassign [dict get $plan geometry] _ _ w h
+		if {[dict get $plan rule] ni {shrink no-room reserve}
+			&& [dict get $plan overlap] == 0 && $w >= $needW && $h >= $needH} {
+			return $plan
+		}
+		catch { ::mediainset::ClearSqueeze $dlg }
+	}
+	return {}
+}
+
+# Last resort when even a squeezed strip cannot hold the dialog's usable
+# minimum: release the video's strip and park the inset in a free pane
+# margin (shrinking it), then place the dialog beside the smaller obstacle.
+proc besideVideoDetach {dlg dw dh workarea extents gap requested minimum} {
+	if {[llength [info commands ::mediainset::DetachForDialog]] == 0} { return {} }
+	if {[besideVideoRect] eq {}} { return {} }
+	lassign $workarea wx wy ww wh
+	lassign $extents el er et eb
+	set fw [expr {$el+$er}]
+	set fh [expr {$et+$eb}]
+	set needW $dw
+	set needH $dh
+	if {[llength $minimum]} {
+		set needW [expr {max($needW, [lindex $minimum 0])}]
+		set needH [expr {max($needH, [lindex $minimum 1])}]
+	}
+	if {$needW + $fw > $ww || $needH + $fh > $wh} { return {} }
+	foreach side {right left below} {
+		set derr [catch { ::mediainset::DetachForDialog $dlg $side $needW $needH \
+			$workarea $extents $gap } parked]
+		if {$derr || !$parked} { continue }
+		update idletasks
+		lassign [besideProtectedRect] px py pw ph
+		if {$pw < 2 || $ph < 2} {
+			catch { ::mediainset::ClearDetach $dlg }
+			continue
+		}
+		set plan [besidePlan $px $py $pw $ph $dw $dh $workarea $extents $gap \
+			$requested $minimum]
+		lassign [dict get $plan geometry] _ _ w h
+		if {[dict get $plan rule] eq $side && [dict get $plan overlap] == 0
+			&& $w >= $needW && $h >= $needH} {
+			return $plan
+		}
+		catch { ::mediainset::ClearDetach $dlg }
+	}
+	return {}
+}
+
+# Let a re-layout of the inset (media start/stop, resize, board rebuild)
+# re-place open dialogs: the protected area changed even when the board did
+# not.
+proc besideVideoChanged {} {
+	variable BesideDialogs
+	if {[llength $BesideDialogs]} { besideSchedule }
+}
+
 # A one-pixel tolerance absorbs WM round-off; anything larger is a move or
 # resize we did not make.
 proc besideRectDiffers {a b} {
@@ -584,6 +725,7 @@ proc besideCapture {dlg} {
 	if {![winfo exists $dlg] || ![winfo ismapped $dlg]} { return }
 	set BesideState($dlg,last) [besideRect $dlg]
 	set BesideState($dlg,board) [besideBoardRect]
+	set BesideState($dlg,obstacle) [besideProtectedRect]
 	set BesideState($dlg,context) [besideContext $dlg]
 	set BesideState($dlg,user) 0
 }
@@ -607,6 +749,7 @@ proc besideRegistryAdd {dlg parent} {
 	# than reading a half-applied one and mistaking it for a user move.
 	set BesideState($dlg,last) {}
 	set BesideState($dlg,board) [besideBoardRect]
+	set BesideState($dlg,obstacle) [besideProtectedRect]
 	set BesideState($dlg,context) [besideContext $dlg]
 	set BesideState($dlg,user) 0
 	after idle [namespace code [list besideCapture $dlg]]
@@ -619,6 +762,14 @@ proc besideRegistryRemove {dlg} {
 	if {$i >= 0} { set BesideDialogs [lreplace $BesideDialogs $i $i] }
 	array unset BesideState ${dlg},*
 	besideReleaseReserve $dlg
+	# Let the inset return to its normal place when the dialog that made it
+	# move/shrink goes away (VAL-DLG-013).
+	if {[llength [info commands ::mediainset::RestoreAfterDialog]]} {
+		catch { ::mediainset::RestoreAfterDialog $dlg }
+	}
+	if {[llength [info commands ::mediainset::ClearSqueeze]]} {
+		catch { ::mediainset::ClearSqueeze $dlg }
+	}
 }
 
 # Declare the smallest size a dialog can be shrunk to and stay usable. Pass no
@@ -838,7 +989,7 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 		return {}
 	}
 	update idletasks
-	lassign [besideBoardRect] bx by bw bh
+	lassign [besideProtectedRect] bx by bw bh
 	set requested [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]
 	set plan [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents $gap \
 		$requested $minimum]
@@ -867,6 +1018,7 @@ proc besideSettle {} {
 	set BesideTimer {}
 	set boardRect [besideBoardRect]
 	if {$boardRect eq {}} { return }
+	set obstacle [besideProtectedRect]
 	# A reflow freezes the twm while it loads; placing against an
 	# intermediate rectangle would be visible. Wait for the load to finish.
 	if {[info exists ::application::Vars(loading)] && $::application::Vars(loading)} {
@@ -881,6 +1033,7 @@ proc besideSettle {} {
 		set current [besideRect $dlg]
 		set context [besideContext $dlg]
 		set unchanged [expr {$boardRect eq $BesideState($dlg,board)
+			&& $obstacle eq $BesideState($dlg,obstacle)
 			&& $context eq $BesideState($dlg,context)}]
 		if {![info exists BesideState($dlg,last)] || $BesideState($dlg,last) eq {}} {
 			# Waiting for the idle capture of the rectangle the placement
@@ -903,7 +1056,9 @@ proc besideSettle {} {
 		if {$BesideState($dlg,user)} {
 			# Respect user placement while its whole frame remains usable.
 			set outer [besideOuterRect $dlg]
-			if {[besideOverlap $outer $boardRect] == 0
+			set video [besideVideoRect]
+			set videoOverlap [expr {$video eq {} ? 0 : [besideOverlap $outer $video]}]
+			if {[besideOverlap $outer $boardRect] == 0 && $videoOverlap == 0
 				&& [besideInside $outer [lindex $context 0]]} { continue }
 		} elseif {$unchanged} {
 			# No placement input changed.
@@ -962,13 +1117,25 @@ proc besideBoard {dlg {parent ""}} {
 		return [dict create rule center]
 	}
 	update idletasks
+	# A previous placement may have moved the inset out of this dialog's way;
+	# put it back before planning so the protected area is the normal one.
+	if {[llength [info commands ::mediainset::RestoreAfterDialog]]} {
+		catch { ::mediainset::RestoreAfterDialog $dlg }
+	}
+	if {[llength [info commands ::mediainset::ClearSqueeze]]} {
+		catch { ::mediainset::ClearSqueeze $dlg }
+	}
+	update idletasks
 	lassign [wm minsize $dlg] mw mh
 	lassign [wm maxsize $dlg] maxw maxh
 	set rw [winfo reqwidth $dlg]
 	set rh [winfo reqheight $dlg]
 	set dw [expr {min($maxw, max($rw, $mw))}]
 	set dh [expr {min($maxh, max($rh, $mh))}]
-	lassign [besideBoardRect] bx by bw bh
+	# VAL-DLG-013: with a video playing in the board inset, the protected
+	# area is the union of the drawn board and the visible inset. Strips
+	# inside the pane that the video owns are therefore not free space.
+	lassign [besideProtectedRect] bx by bw bh
 	set workarea [winfo workarea $dlg]
 	set cls [winfo class $dlg]
 	if {$cls eq "Menu" || $cls eq "OptionMenu" || [wm overrideredirect $dlg]} {
@@ -989,6 +1156,20 @@ proc besideBoard {dlg {parent ""}} {
 	}
 	set plan [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents 12 \
 		[list $rw $rh] $minimum]
+	if {[dict get $plan rule] in {no-room reserve shrink}} {
+		set squeezed [besideVideoSqueeze $dlg $dw $dh $workarea $extents 12 \
+			[list $rw $rh] $minimum]
+		if {[llength $squeezed]} {
+			set plan $squeezed
+		}
+	}
+	if {[dict get $plan rule] in {no-room reserve shrink}} {
+		set detached [besideVideoDetach $dlg $dw $dh $workarea $extents 12 \
+			[list $rw $rh] $minimum]
+		if {[llength $detached]} {
+			set plan $detached
+		}
+	}
 	if {[dict get $plan rule] in {no-room reserve}} {
 		set reserved [besideReserve $dlg $bx $by $bw $bh $dw $dh $workarea $extents 12 $minimum]
 		if {[llength $reserved]} {
@@ -1045,6 +1226,10 @@ proc besideBoard {dlg {parent ""}} {
 	} else {
 		wm geometry $dlg "+${x}+${y}"
 	}
+	# A genuinely tiny work area can still force the frame over the pane.
+	# The inset must never be the window that loses: move or shrink it
+	# inside the pane first (restored on close/media stop).
+	besideDodgeVideo $dlg $x $y $w $h $extents
 	besideRegistryAdd $dlg $parent
 	return $plan
 }
