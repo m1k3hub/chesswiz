@@ -446,8 +446,11 @@ tcltest::test playengine-real-uci {Start survives event dispatch and a real engi
 foreach {name board expected} {
 	right-has-room {300 100 600 600} {912 100}
 	board-right    {1000 200 860 860} {649 200}
-	board-fills    {0 0 1920 1000} {0 825}
+	board-fills    {0 0 1920 1000} {0 1012}
 } {
+	# board-fills: no strip has room. The position helper never puts the
+	# dialog on the board (VAL-DLG-011/012); the caller's reserve step then
+	# shrinks the board to make the strip below it fit.
 	tcltest::test playengine-beside-$name {the dialog goes beside the board, never on it} -body {
 		::playengine::BesidePosition {*}$board 323 215 1920 1080
 	} -result $expected
