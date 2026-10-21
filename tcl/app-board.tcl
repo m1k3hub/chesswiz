@@ -1566,10 +1566,33 @@ proc reserveSquare {side px width height} {
 	}
 }
 
+# The square this layout would draw if the reserve were released. ComputeLayout
+# refuses a reserve that is worse than this, so probe it with the reserve
+# cleared; the caller's dimensions and accepted reserve are restored.
+proc unreservedSquare {width height} {
+	variable Dim
+	variable Vars
+	variable ReserveSide
+	variable ReservePixels
+	set saved [array get Dim]
+	set oldSide $ReserveSide
+	set oldPixels $ReservePixels
+	try {
+		set ReserveSide {}
+		set ReservePixels 0
+		ComputeLayout $width $height
+		return $Dim(squaresize:$Vars(layout))
+	} finally {
+		array unset Dim
+		array set Dim $saved
+		set ReserveSide $oldSide
+		set ReservePixels $oldPixels
+	}
+}
+
 proc setReserve {side px} {
 	variable ReserveSide
 	variable ReservePixels
-	variable MinimumReserveSquare
 	variable Vars
 	variable Dim
 	if {$side ni {right bottom left {}} || ![string is integer -strict $px] || $px < 0} {
@@ -1585,7 +1608,9 @@ proc setReserve {side px} {
 	set ReserveSide $side
 	set ReservePixels $px
 	ComputeLayout $Vars(width) $Vars(height)
-	set accepted [expr {$side eq {} || ($ReserveSide eq $side && $Dim(squaresize:$Vars(layout)) >= $MinimumReserveSquare)}]
+	# ComputeLayout is the single arbitrator: it keeps a below-floor reserve
+	# only when the strip does not shrink the drawn square (see below).
+	set accepted [expr {$side eq {} || $ReserveSide eq $side}]
 	array unset Dim
 	array set Dim $saved
 	if {!$accepted} {
@@ -1961,12 +1986,19 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 		set Dim($sqsize)	[expr {($boardsize - 2*$Dim(edgethickness))/8}]
 	}
 
-	# A later pane resize may invalidate an accepted reserve as well.
+	# A later pane resize may invalidate an accepted reserve as well. The
+	# fixed floor alone is not enough: a small board whose square the strip
+	# leaves unchanged (for example 31 px at 1250x570) is still better
+	# shifted than covered, so only a reserve that really shrinks the drawn
+	# square is dropped.
 	if {$ReserveSide ne {} && $Dim($sqsize) < $MinimumReserveSquare} {
-		set ReserveSide {}
-		set ReservePixels 0
-		ComputeLayout $fullWidth $fullHeight $bordersize
-		return
+		set unreserved [unreservedSquare $fullWidth $fullHeight]
+		if {$Dim($sqsize) < $unreserved} {
+			set ReserveSide {}
+			set ReservePixels 0
+			ComputeLayout $fullWidth $fullHeight $bordersize
+			return
+		}
 	}
 
 	set Dim(border:gap) [::board::computeGap $Dim($sqsize)]

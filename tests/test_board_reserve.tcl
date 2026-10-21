@@ -20,7 +20,7 @@ proc tk {args} { return 1.3333333333 }
 set f [open [file join [file dirname [info script]] .. tcl app-board.tcl]]
 set source [read $f]
 close $f
-set wanted {ComputeLayout reserveSquare setReserve reserveRect afterRebuild ApplyReserve3D ConfigureReserve3D}
+set wanted {ComputeLayout reserveSquare unreservedSquare setReserve reserveRect afterRebuild ApplyReserve3D ConfigureReserve3D}
 set definition {}
 foreach line [split $source \n] {
     if {$definition eq {} && [regexp {^proc ([^ ]+) } $line -> name] && $name in $wanted} {

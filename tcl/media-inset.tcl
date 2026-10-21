@@ -383,24 +383,26 @@ proc ::mediainset::BoardView {} {
 	return $vars(widget:frame)
 }
 
-# BRD-004 arithmetic at the current tk scaling. A strip is feasible only
-# when its minimum extent can carry a video at least 160 px wide (the
-# frame adds 8 px) while the board renderer still gives every square at
-# least MinimumReserveSquare pixels. True means no such strip fits, which
-# is the only condition under which the inset may cover the board.
+# BRD-004 arithmetic at the current tk scaling. A strip is feasible when
+# its minimum extent can carry a video at least 160 px wide (the frame adds
+# 8 px) and the board renderer accepts the reserve. The reserve is accepted
+# when it costs the board no square, even below the fixed floor; only a
+# reserve that really shrinks the drawn square is refused. reserveSquare
+# therefore returns 0 exactly when the strip is unusable, and True here
+# means no strip fits at all, the only condition for the corner overlay.
 proc ::mediainset::Brd004Fallback {width height controlsHeight} {
 	variable Aspect
 	set minimumWidth 168
 	set minimumHeight [expr {int(round(160/$Aspect)) + $controlsHeight}]
-	set minimum $::application::board::MinimumReserveSquare
 	set right [::application::board::reserveSquare right $minimumWidth $width $height]
 	set bottom [::application::board::reserveSquare bottom $minimumHeight $width $height]
-	return [expr {$right < $minimum && $bottom < $minimum}]
+	return [expr {$right <= 0 && $bottom <= 0}]
 }
 
 
-# Place in board-pane coordinates. Only setReserve's minimum-square refusal
-# permits an overlay. The eight-pixel frame margin is 2*(border + highlight).
+# Place in board-pane coordinates. Only ComputeLayout's shrinking-reserve
+# refusal permits an overlay. The eight-pixel frame margin is
+# 2*(border + highlight).
 proc ::mediainset::Layout {} {
 	variable Options
 	variable Swapped
@@ -478,7 +480,7 @@ proc ::mediainset::Layout {} {
 					# canvas): reserve that strip instead of covering the
 					# board, so the overlay is never taken outside BRD-004.
 					if {[::application::board::reserveSquare right 168 $width $height] \
-						>= $::application::board::MinimumReserveSquare} {
+						> 0} {
 						set side right
 						set iw 168
 						set ih [expr {int(round(($iw-8)/$Aspect))+$ch}]
@@ -551,7 +553,10 @@ proc ::mediainset::FitStrip {width height controlsHeight} {
 		set minimumHeight [expr {int(round(160/$Aspect))+$controlsHeight}]
 		set px [expr {$side eq "right" ? $minimum : $minimumHeight}]
 		set squareAtMinimum [::application::board::reserveSquare $side $px $width $height]
-		if {$squareAtMinimum < $::application::board::MinimumReserveSquare} { continue }
+		# reserveSquare returns 0 when the strip really shrinks the board.
+		# A below-floor square is still fine when the strip leaves it
+		# unchanged, which is how a small board keeps its size and shifts.
+		if {$squareAtMinimum <= 0} { continue }
 		set desired [expr {$side eq "right" ? int($height*$Options(size)*$Aspect)+8 : int($width*0.66)}]
 		set lo $minimum
 		set hi [expr {min(max($minimum,$Options(minWidth)+8,$desired), $width, int(($height-$controlsHeight)*$Aspect)+8)}]

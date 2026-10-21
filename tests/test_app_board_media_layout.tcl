@@ -289,6 +289,42 @@ proc ::w1::clear {target} {
     log $target [list actual $actual reference $expected]
     foreach a $actual b $expected {assert {abs($a-$b)<=1} "board differs from no-reserve layout"}
 }
+proc ::w1::unreserved {} {
+    set saved [array get ::application::board::Dim]
+    set side $::application::board::ReserveSide
+    set pixels $::application::board::ReservePixels
+    set c $::application::board::Vars(widget:frame)
+    set ::application::board::ReserveSide {}
+    set ::application::board::ReservePixels 0
+    ::application::board::ComputeLayout [winfo width $c] [winfo height $c]
+    set square $::application::board::Dim(squaresize:Normal)
+    array unset ::application::board::Dim
+    array set ::application::board::Dim $saved
+    set ::application::board::ReserveSide $side
+    set ::application::board::ReservePixels $pixels
+    return $square
+}
+# What the same production layout would draw with a strip, forcing past the
+# square-floor refusal so the test can tell "no strip fits" apart from "the
+# strip fits and costs the board nothing".
+proc ::w1::squareWithReserve {side pixels} {
+    set saved [array get ::application::board::Dim]
+    set oldSide $::application::board::ReserveSide
+    set oldPixels $::application::board::ReservePixels
+    set oldFloor $::application::board::MinimumReserveSquare
+    set c $::application::board::Vars(widget:frame)
+    set ::application::board::MinimumReserveSquare -100000
+    set ::application::board::ReserveSide $side
+    set ::application::board::ReservePixels $pixels
+    ::application::board::ComputeLayout [winfo width $c] [winfo height $c]
+    set square $::application::board::Dim(squaresize:Normal)
+    array unset ::application::board::Dim
+    array set ::application::board::Dim $saved
+    set ::application::board::MinimumReserveSquare $oldFloor
+    set ::application::board::ReserveSide $oldSide
+    set ::application::board::ReservePixels $oldPixels
+    return $square
+}
 proc ::w1::reserved {target {side {}} {shot 0}} {
     set d [measure $target $shot]
     assert {[dict get $d mapped]} "production inset unmapped"
@@ -399,7 +435,65 @@ tcltest::test brd-minimum {BRD-004 refusal keeps square size and uses the corner
     ::w1::assert {$::application::board::ReserveSide eq ""} "small reserve was accepted"
     ::w1::assert {$before==$::application::board::Dim(squaresize:Normal)} "refusal resized squares"
     ::w1::assert {[dict get [place info $w] -anchor] eq "se"} "fallback is not in corner"
-    ::w1::log VAL-BRD-004 [list before $before after $::application::board::Dim(squaresize:Normal) minimum $::application::board::MinimumReserveSquare]
+    # VAL-MED-012: every candidate strip really shrinks this tiny board,
+    # so the corner overlay is the documented outcome.
+    set ch [expr {[winfo reqheight $w.controls]+8}]
+    set minHeight [expr {int(round(160/$::mediainset::Aspect))+$ch}]
+    set rightSquare [::w1::squareWithReserve right 168]
+    set bottomSquare [::w1::squareWithReserve bottom $minHeight]
+    ::w1::log VAL-BRD-004 [list before $before after $::application::board::Dim(squaresize:Normal) \
+        minimum $::application::board::MinimumReserveSquare \
+        rightSquare $rightSquare bottomSquare $bottomSquare]
+    ::w1::assert {$rightSquare < $before && $bottomSquare < $before} \
+        "overlay taken although a strip leaves the square unchanged"
+    return ok
+} -cleanup {::w1::cleanup} -result ok
+
+# VAL-MED-012: a below-floor square the strip leaves unchanged is still worth
+# reserving, so the overlay may only appear where the reserve really shrinks
+# the board. Sweep consecutive window heights (the reflow band) at each
+# required screen size while media plays.
+tcltest::test brd-height-sweep {VAL-MED-012 reserves every non-shrinking strip across window heights} -setup {::w1::setup default} -body {
+    set w [::w1::play]
+    set c $::application::board::Vars(widget:frame)
+    set reserved 0
+    set overlays 0
+    for {set h 520} {$h <= 640} {incr h 10} {
+        wm geometry .application 1250x${h}+0+0
+        ::w1::wait 450
+        set unreserved [::w1::unreserved]
+        set d [::w1::measure VAL-MED-012-$h]
+        set square [dict get $d square]
+        set side [dict get $d side]
+        set boardOverlap [dict get $d overlap:board]
+        # Forced candidate squares at the documented minimum video size,
+        # independent of the implementation's accept/refuse decision.
+        set ch [expr {[winfo reqheight $w.controls]+8}]
+        set minHeight [expr {int(round(160/$::mediainset::Aspect))+$ch}]
+        set rightSquare [::w1::squareWithReserve right 168]
+        set bottomSquare [::w1::squareWithReserve bottom $minHeight]
+        set nonShrink [expr {$rightSquare >= $unreserved || $bottomSquare >= $unreserved}]
+        ::w1::log VAL-MED-012 [list height $h square $square unreserved $unreserved \
+            side $side reserve [dict get $d reserve] overlap $boardOverlap canvas [dict get $d canvas] \
+            rightSquare $rightSquare bottomSquare $bottomSquare nonShrink $nonShrink]
+        ::w1::assert {$square >= $unreserved} \
+            "reserve shrank squares at height $h ($unreserved -> $square)"
+        if {$nonShrink} {
+            ::w1::assert {$side ne ""} \
+                "non-shrinking strip ignored at height $h"
+            foreach tag {board stm material} {
+                ::w1::assert {[dict get $d overlap:$tag] == 0} \
+                    "reserved inset covers $tag at height $h"
+            }
+        } else {
+            incr overlays
+            ::w1::assert {$side eq ""} \
+                "shrinking strip accepted at height $h"
+        }
+        if {$side ne ""} {incr reserved}
+    }
+    ::w1::log VAL-MED-012-summary [list reserved $reserved overlays $overlays]
+    ::w1::assert {$reserved > 0} "no strip was reserved across the height sweep"
     return ok
 } -cleanup {::w1::cleanup} -result ok
 

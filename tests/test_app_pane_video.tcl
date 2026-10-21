@@ -64,6 +64,16 @@ proc ::paneVideo::wideGeometry {} {
  set h [expr {min(780, [winfo screenheight .] - 40)}]
  return "${w}x${h}+0+0"
 }
+# A tall window that really fits the screen and is below the reflow
+# hysteresis (w/h < 1.05). A fixed 740x780 is clamped to ~740x698 on a
+# 720 px screen, where its aspect stays inside the wide band and the
+# reflow cannot reach the tall shape on any window manager.
+proc ::paneVideo::tallGeometry {} {
+ set sw [winfo screenwidth .]; set sh [winfo screenheight .]
+ set h [expr {min(1750, $sh - 60)}]
+ set w [expr {min(720, $sw - 40, int($h/1.2))}]
+ return "${w}x${h}+0+0"
+}
 proc ::paneVideo::geometry {tag} {
  set pane [::mediainset::Pane]; set c $::application::board::Vars(widget:frame)
  set w $pane.mediainset
@@ -117,7 +127,7 @@ tcltest::test pane-video-008-reflow {inset native surface and playback survive a
  set time [::media::mpv::time]
 } -body {
  set result [list [::paneVideo::geometry wide]]
- wm geometry .application 740x780
+ wm geometry .application [::paneVideo::tallGeometry]
  ::paneVideo::waitReflow
  lappend result [::application::reflow::mode] [::paneVideo::geometry tall]
  wm geometry .application [::paneVideo::wideGeometry]
@@ -185,7 +195,7 @@ tcltest::test pane-video-008-tall-strip {wide->tall->wide reflow keeps a real re
  set result [::paneVideo::check strip-wide]
  lappend result $::application::board::ReserveSide
  set wideWidth [winfo width $c]
- wm geometry .application [expr {min(720,$sw-40)}]x[expr {min(1750,$sh-60)}]
+ wm geometry .application [::paneVideo::tallGeometry]
  ::paneVideo::wait 1000; update idletasks
  lappend result [::application::reflow::mode] {*}[::paneVideo::check strip-tall]
  wm geometry .application [::paneVideo::wideGeometry]
