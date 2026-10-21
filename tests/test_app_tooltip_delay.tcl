@@ -64,7 +64,7 @@ proc ::scidb::test::tipdelay::startLoad {} {
 	set busy 1
 	set ticks 0
 	after 0 ::scidb::test::tipdelay::spin
-	::scidb::test::tipdelay::pump 100
+	::scidb::test::wait::until {$::scidb::test::tipdelay::ticks >= 50}
 }
 
 proc ::scidb::test::tipdelay::stopLoad {} {
@@ -96,8 +96,8 @@ proc ::scidb::test::tipdelay::hover {} {
 
 # Milliseconds until the tooltip mapped, or -1. The tooltip window is created
 # at startup, so only "is it mapped" tells whether it is on screen.
-proc ::scidb::test::tipdelay::waitMap {ms} {
-	set start [clock milliseconds]
+proc ::scidb::test::tipdelay::waitMap {ms {start {}}} {
+	if {$start eq {}} { set start [clock milliseconds] }
 	while {[clock milliseconds] - $start < $ms} {
 		after 5 {set ::scidb::test::tipdelay::dummy 1}
 		vwait ::scidb::test::tipdelay::dummy
@@ -111,9 +111,20 @@ proc ::scidb::test::tipdelay::waitMap {ms} {
 	return -1
 }
 
+proc ::scidb::test::tipdelay::request {w} {
+	# Hover dispatch can already have displayed a tooltip on slow native
+	# windows. Measure a fresh request, not that earlier mapped window.
+	::tooltip::hide 0 1
+	::scidb::test::wait::until {![winfo ismapped [::tooltip::wname]]}
+	set start [clock milliseconds]
+	::tooltip::show $w $::scidb::test::tipdelay::msg
+	return $start
+}
+
 proc ::scidb::test::tipdelay::setup {} {
 	variable delay
 	variable ticks
+	variable busy
 
 	::scidb::test::wait::ready
 	set delay [::tooltip::delay]
@@ -154,9 +165,9 @@ tcltest::test tipdelay-map {the tooltip maps within its configured delay} -setup
 	::scidb::test::tipdelay::setup
 } -body {
 	set w [::scidb::test::tipdelay::hover]
-	::tooltip::show $w $::scidb::test::tipdelay::msg
+	set start [::scidb::test::tipdelay::request $w]
 	set budget [expr {$::scidb::test::tipdelay::delay + 200}]
-	::scidb::test::tipdelay::check $budget [::scidb::test::tipdelay::waitMap $budget]
+	::scidb::test::tipdelay::check $budget [::scidb::test::tipdelay::waitMap $budget $start]
 } -cleanup {
 	::scidb::test::tipdelay::cleanup
 } -result ok
@@ -168,11 +179,11 @@ tcltest::test tipdelay-late-hide {a late hide from another widget keeps the tool
 	::scidb::test::tipdelay::setup
 } -body {
 	set w [::scidb::test::tipdelay::hover]
-	::tooltip::show $w $::scidb::test::tipdelay::msg
+	set start [::scidb::test::tipdelay::request $w]
 	::scidb::test::tipdelay::pump 100
 	::tooltip::hide
 	set budget [expr {$::scidb::test::tipdelay::delay + 200}]
-	::scidb::test::tipdelay::check $budget [::scidb::test::tipdelay::waitMap $budget]
+	::scidb::test::tipdelay::check $budget [::scidb::test::tipdelay::waitMap $budget $start]
 } -cleanup {
 	::scidb::test::tipdelay::cleanup
 } -result ok
@@ -184,14 +195,15 @@ tcltest::test tipdelay-busy {the tooltip maps on time while other after-events a
 } -body {
 	set w [::scidb::test::tipdelay::hover]
 	::scidb::test::tipdelay::startLoad
-	::tooltip::show $w $::scidb::test::tipdelay::msg
+	set start [::scidb::test::tipdelay::request $w]
 	::scidb::test::tipdelay::pump 100
 	::tooltip::hide
 	set budget [expr {$::scidb::test::tipdelay::delay + 200}]
-	set elapsed [::scidb::test::tipdelay::waitMap $budget]
+	set elapsed [::scidb::test::tipdelay::waitMap $budget $start]
 	set result [::scidb::test::tipdelay::check $budget $elapsed]
+	puts "EVIDENCE tooltip-load ticks=$::scidb::test::tipdelay::ticks"
 	if {$::scidb::test::tipdelay::ticks < 50} {
-		return "the event loop was not busy ([::scidb::test::tipdelay::ticks] other after-events)"
+		return "the event loop was not busy ($::scidb::test::tipdelay::ticks other after-events)"
 	}
 	return $result
 } -cleanup {
@@ -205,7 +217,7 @@ tcltest::test tipdelay-forced-hide {a forced hide takes the pending tooltip away
 	::scidb::test::tipdelay::setup
 } -body {
 	set w [::scidb::test::tipdelay::hover]
-	::tooltip::show $w $::scidb::test::tipdelay::msg
+	::scidb::test::tipdelay::request $w
 	::scidb::test::tipdelay::pump 100
 	::tooltip::hide 0 1
 	list [::scidb::test::tipdelay::waitMap 700] [winfo ismapped [::tooltip::wname]]
