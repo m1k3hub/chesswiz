@@ -3,10 +3,12 @@
 # ======================================================================
 package require Tcl 8.5
 package require tcltest 2.5
+source [file join [file dirname [info script]] app_wait.tcl]
 
 namespace eval ::scidb::test::boardsync {
 	variable testDir [file dirname [file normalize [info script]]]
 	variable BaseOpened ""
+	variable SavedVariationPosition
 
 	proc nop {args} { return 0 }
 
@@ -89,7 +91,14 @@ namespace eval ::scidb::test::boardsync {
 
 	proc openFixture {} {
 		variable BaseOpened
-		update
+		variable SavedVariationPosition
+		::scidb::test::wait::ready
+		set SavedVariationPosition $::variation::Options(slide:position)
+		# Right means forward in a vertical selector. In a horizontal one,
+		# once its animation completes, Right changes the selected variation
+		# instead; that made the 50-step oracle depend on event-loop speed.
+		::variation::hide 0
+		set ::variation::Options(slide:position) right
 		catch { destroy .tipoftheday }
 		::application::switchTab board
 		update
@@ -108,6 +117,11 @@ namespace eval ::scidb::test::boardsync {
 
 	proc closeFixture {} {
 		variable BaseOpened
+		variable SavedVariationPosition
+		::variation::hide 0
+		if {[info exists SavedVariationPosition]} {
+			set ::variation::Options(slide:position) $SavedVariationPosition
+		}
 		catch { ::scidb::game::go -1 start }
 		if {$BaseOpened ne ""} {
 			catch { ::scidb::db::close $BaseOpened }
