@@ -288,6 +288,30 @@ tcltest::test dlg-003A {normal review status and later growth fit, then results 
     rename ::scidb::test::dlgplace::realClassify ::ai::engine::classify
     ::scidb::test::dlgplace::stopTrace
 } -result 1
+# The report body scrolls, so its own request is a sliver; the dialog must
+# still request its declared usable minimum, and placement must keep it. This
+# is what keeps a narrow strip beside the board from shrinking Insights below
+# 780x480 (and remembering that capped size for later placements).
+tcltest::test dlg-insights-usable-minimum {the Insights report requests and keeps its usable minimum} -setup {
+    ::scidb::test::dlgplace::setupBoard
+} -body {
+    lassign [::scidb::test::dlgplace::openInsightsFixture] insBase insIdx
+    set dlg [::insights::show .application $insBase Normal $insIdx]
+    ::scidb::test::dlgplace::waitFor 500
+    set result [list \
+        [expr {[winfo reqwidth $dlg] >= 780 && [winfo reqheight $dlg] >= 480}] \
+        [expr {[wm minsize $dlg] eq {780 480}}] \
+        [expr {[winfo width $dlg] >= 780 && [winfo height $dlg] >= 480}] \
+        [expr {[::util::place::besideMinSize $dlg] eq {780 480}}]]
+    destroy $dlg
+    ::scidb::db::close $insBase
+    file delete -force [file dirname $insBase]
+    set result
+} -cleanup {
+    catch {destroy $dlg}
+    ::scidb::test::dlgplace::stopTrace
+} -result {1 1 1 1}
+
 # A real content-sized dialog too large for all three strips at each screen.
 # No workarea, board, or geometry procedures are replaced.
 tcltest::test dlg-004 {no-room fallback minimises measured board overlap and exposes every button label} -setup {

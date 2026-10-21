@@ -186,8 +186,30 @@ proc ::insights::show {parent base variant playerIndex} {
 	Refresh $dlg
 	# Ensure all widgets have computed their requested sizes before placement
 	update idletasks
-	::util::place::besideBoard $dlg [winfo toplevel $parent]
+	Place $dlg [winfo toplevel $parent]
 	return $dlg
+}
+
+
+# Place the report beside the board and keep the declared minimum authoritative.
+# When no strip beside the board can hold it, besideBoard has to cap the report
+# and records that capped size in wm minsize. Restore the usable minimum as
+# soon as a placement can hold it, so a report squeezed once does not stay
+# small after the board has made room again.
+proc ::insights::Place {dlg {parent ""}} {
+	if {$parent eq ""} {
+		set plan [::util::place::besideBoard $dlg]
+	} else {
+		set plan [::util::place::besideBoard $dlg $parent]
+	}
+	set minimum [::util::place::besideMinSize $dlg]
+	if {[llength $minimum] == 2} {
+		lassign [dict get $plan geometry] _ _ w h
+		if {$w >= [lindex $minimum 0] && $h >= [lindex $minimum 1]} {
+			wm minsize $dlg {*}$minimum
+		}
+	}
+	return $plan
 }
 
 
@@ -265,7 +287,7 @@ proc ::insights::CollectDone {dlg token result} {
 	Populate $dlg $report
 	# The header and focus labels now contain the collected report. Placement
 	# must use their content request, not BuildWindow's empty placeholders.
-	::util::place::besideBoard $dlg
+	Place $dlg
 }
 
 
@@ -1274,7 +1296,44 @@ proc ::insights::BuildWindow {dlg parent} {
 	}
 
 	bind $dlg <Destroy> [namespace code [list Destroy $dlg %W]]
+	SetUsableMinimum $dlg
 	wm minsize $dlg 780 480
+	# Declare the same minimum to the shared placement helper: a narrow strip
+	# beside the board then reserves board room for the report instead of
+	# shrinking it below the size at which its controls stay usable.
+	::util::place::besideMinSize $dlg 780 480
+}
+
+
+# The report body scrolls, so on its own it requests only a scrollbar's size
+# and the window's natural request (442x177 here) is smaller than the size at
+# which the report is usable. Placement keeps a dialog at its natural request
+# whenever the strip beside the board is narrow, and lowers (and remembers) the
+# minimum to that capped size -- Insights would then open, and stay, unusably
+# small. Make up the difference in the body's request, so the window naturally
+# wants its usable minimum and a narrow strip reserves board room instead.
+proc ::insights::SetUsableMinimum {dlg} {
+	set minWidth 780
+	set minHeight 480
+
+	update idletasks
+	set fixedWidth 0
+	foreach sibling {head status takeaway controls} {
+		set fixedWidth [expr {max($fixedWidth, [winfo reqwidth $dlg.$sibling])}]
+	}
+	set bodyWidth [winfo reqwidth $dlg.body]
+	# The padding pack adds around every row; the tallest row sets the request.
+	set padding [expr {max(0, [winfo reqwidth $dlg] - max($fixedWidth, $bodyWidth))}]
+	set bodyHeight [winfo reqheight $dlg.body]
+	# The rows above and below the body, with their padding.
+	set fixedHeight [expr {max(0, [winfo reqheight $dlg] - $bodyHeight)}]
+
+	set wantWidth [expr {max($bodyWidth, $minWidth - $padding)}]
+	set wantHeight [expr {max($bodyHeight, $minHeight - $fixedHeight)}]
+	$dlg.body configure -width $wantWidth -height $wantHeight
+	# Keep the requested size even though the scrolled content is larger.
+	grid propagate $dlg.body 0
+	update idletasks
 }
 
 
