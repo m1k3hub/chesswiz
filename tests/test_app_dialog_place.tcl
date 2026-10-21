@@ -91,6 +91,29 @@ proc ::scidb::test::dlgplace::buttons {w} {
     }
     return $result
 }
+proc ::scidb::test::dlgplace::controls {w} {
+    set result {}
+    foreach child [winfo children $w] {
+        if {[winfo toplevel $child] ne [winfo toplevel $w]} {continue}
+        if {[winfo ismapped $child]
+            && [winfo class $child] in {Button TButton Checkbutton TCheckbutton Radiobutton TRadiobutton Entry TEntry TCombobox Spinbox TSpinbox Scale TScale Listbox TListbox}} {
+            lappend result $child
+        }
+        lappend result {*}[controls $child]
+    }
+    return $result
+}
+# The contract requires every control at least its requested width and height.
+proc ::scidb::test::dlgplace::requireControls {target dlg} {
+    set found 0
+    foreach c [controls $dlg] {
+        incr found
+        require [expr {[winfo width $c] >= [winfo reqwidth $c]
+            && [winfo height $c] >= [winfo reqheight $c]}] \
+            "$target: control $c [winfo width $c]x[winfo height $c] is below requested [winfo reqwidth $c]x[winfo reqheight $c]"
+    }
+    require [expr {$found > 0}] "$target: no controls found in $dlg"
+}
 proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
     variable calls
     variable workareaCalls
@@ -114,10 +137,10 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
     }
     require [expr {$w == [winfo width $dlg] && $h == [winfo height $dlg]}] "$target: unsettled client size"
     set requested [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]
-    # A no-strip dialog may shrink (rule shrink) but must stay usable; a
-    # reserved-strip placement keeps the requested size.
-    if {$rule eq "shrink"} {
-        require [expr {$w >= 1 && $h >= 1}] "$target: degenerate shrink ${w}x${h}"
+    # A below-minimum strip (shrink/no-room) must stay usable; a reserved or
+    # fitting placement keeps the requested size.
+    if {$rule in {shrink no-room}} {
+        require [expr {$w >= 1 && $h >= 1}] "$target: degenerate ${w}x${h}"
     } else {
         require [expr {$w >= [lindex $requested 0] && $h >= [lindex $requested 1]}] \
             "$target: final ${w}x${h} clips requested $requested"
@@ -140,8 +163,12 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
     if {$rule ne "shrink"} {
         require [expr {$area == [tcl::mathfunc::min {*}[dict values $areas]]}] "$target: overlap $area is not minimum of $areas"
     }
-    if {$rule ne "no-room"} {require [expr {$area == 0}] "$target: $rule overlaps $area"}
-    if {$rule eq "no-room"} {require [expr {$area > 0}] "$target: spurious no-room rule"}
+    if {$rule ne "shrink"} {require [expr {$area == 0}] "$target: $rule overlaps $area"}
+    if {$rule eq "no-room"} {
+        # No strip holds the minimum: this is the largest overlap-free forced
+        # strip, never an overlap allowance.
+        require [expr {$area == 0}] "$target: no-room plan overlaps $area"
+    }
     set buttonRects {}
     foreach button [buttons $dlg] {
         set r [widgetRect $button]
@@ -154,6 +181,7 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
         lappend buttonRects [list $button $r [$button cget -text]]
     }
     require [expr {[llength $buttonRects] > 0}] "$target: no buttons tested"
+    requireControls $target $dlg
     puts "DLG $target screen=[winfo screenwidth .]x[winfo screenheight .] main=[wm geometry .application] board=$board workarea=$wa extents=$ext rule=$rule resized=[dict get $plan resized] helper=[dict get $plan geometry] final=$actual requested=$requested minsize=[wm minsize $dlg] overlap=$area candidates=$areas buttons=$buttonRects"
     if {[info exists ::env(DLG_EVIDENCE_DIR)]} {
         file mkdir $::env(DLG_EVIDENCE_DIR)
@@ -580,5 +608,110 @@ tcltest::test dlg-frame-request-invalidation {unchanged board still replans for 
  rename ::scidb::test::dlgplace::realExtents ::util::place::getWmFrameExtents
  ::application::reflow::reset
 } -result {1 1 1}
+
+# --- VAL-DLG-012: board-only and move-then-open no-room placement -----
+# The same six playing dialogs must keep every control usable and never touch
+# the drawn board when the board pane is zoomed or the main window was moved.
+set ::scidb::test::dlgplace::closeScripts [dict create \
+    playengine {::playengine::Close} \
+    guessmove {::guessmove::stop; catch {destroy .application.__guessmove__}} \
+    gamereview {catch {destroy .application.__gamereview}} \
+    reptrainer {::reptrainer::Close .application.__reptrainer__} \
+    endtrainer {::endtrainer::Close} \
+    enginematch {::enginematch::Close}]
+
+proc ::scidb::test::dlgplace::noRoomState {state} {
+    set t [::application::reflow::boardTwm]
+    if {$t ne ""} { catch { $t zoom "" } }
+    catch { ::application::board::setReserve {} 0 }
+    catch { wm attributes .application -fullscreen 0 }
+    catch { wm state .application normal }
+    wm geometry .application "[winfo screenwidth .]x[winfo screenheight .]+0+0"
+    waitFor 1000
+    switch -- $state {
+        board-only {
+            if {$t ne ""} { catch { $t zoom [$t leaf board] } }
+        }
+        moved {
+            lassign [winfo workarea .application] wx wy ww wh
+            set w [expr {min(1274, $ww-70)}]
+            set h [expr {min(698, $wh-60)}]
+            wm geometry .application "${w}x${h}+[expr {$wx+57}]+[expr {$wy+41}]"
+        }
+        default { error "bad no-room state: $state" }
+    }
+    waitFor 1200
+}
+proc ::scidb::test::dlgplace::noRoomCheck {target dlg before} {
+    waitFor 900
+    set during [boardRect]
+    set client [widgetRect $dlg]
+    lassign [winfo extents $dlg] el er et eb
+    # wm geometry reports the frame position, while winfo rootx/rooty report the
+    # client inside the decorations. Build the decorated frame from the former.
+    require [regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} \
+        [wm geometry $dlg] -> fw fh fx fy] "invalid geometry [wm geometry $dlg]"
+    set outer [list $fx $fy [expr {$fw+$el+$er}] [expr {$fh+$et+$eb}]]
+    set wa [winfo workarea $dlg]
+    puts "DLG-NOROOM $target boardBefore=$before boardDuring=$during dlg=$client outer=$outer wa=$wa requested=[list [winfo reqwidth $dlg] [winfo reqheight $dlg]] reserve=$::application::board::ReserveSide/$::application::board::ReservePixels"
+    require [expr {[overlapArea $client $during] == 0}] \
+        "$target: client $client overlaps board $during"
+    require [expr {[overlapArea $outer $during] == 0}] \
+        "$target: decorated frame $outer overlaps board $during"
+    require [inside $outer $wa] "$target: frame $outer outside $wa"
+    require [expr {[winfo width $dlg] >= [winfo reqwidth $dlg]
+        && [winfo height $dlg] >= [winfo reqheight $dlg]}] \
+        "$target: dialog [winfo width $dlg]x[winfo height $dlg] clips requested [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]"
+    requireControls $target $dlg
+    return 1
+}
+proc ::scidb::test::dlgplace::noRoomClose {dlg short before} {
+    variable closeScripts
+    puts "DLG-NOROOM-CLOSE $dlg before=$before board=[boardRect] reserve=$::application::board::ReserveSide/$::application::board::ReservePixels entries=$::util::place::BesideReserves"
+    uplevel 1 [dict get $closeScripts $short]
+    catch {destroy $dlg}
+    waitFor 1000
+    puts "DLG-NOROOM-CLOSE $dlg after board=[boardRect] reserve=$::application::board::ReserveSide/$::application::board::ReservePixels entries=$::util::place::BesideReserves"
+    require [expr {[boardRect] eq $before}] \
+        "board not restored after close: [boardRect] != $before"
+    require [expr {$::application::board::ReservePixels == 0}] \
+        "reserve not released after close: $::application::board::ReservePixels"
+    return 1
+}
+proc ::scidb::test::dlgplace::noRoomCleanup {} {
+    set t [::application::reflow::boardTwm]
+    if {$t ne ""} { catch { $t zoom "" } }
+    catch { ::application::board::setReserve {} 0 }
+    catch { wm attributes .application -fullscreen 0 }
+    catch { wm state .application normal }
+    wm geometry .application "[winfo screenwidth .]x[winfo screenheight .]+0+0"
+    waitFor 700
+    set ::application::Vars(loading) 0
+    ::util::place::besideResetReplaceCount
+}
+
+foreach {short openScript dialog} {
+    playengine {::playengine::open .application} {.application.playengine}
+    guessmove {::guessmove::start white} {.application.__guessmove__}
+    gamereview {set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]; ::gamereview::ShowWindow .application $review {} 0} {.application.__gamereview}
+    reptrainer {::reptrainer::open .application} {.application.__reptrainer__}
+    endtrainer {::endtrainer::open .application} {.application.__endtrainer__}
+    enginematch {::enginematch::open .application} {.application.enginematch}
+} {
+    foreach state {board-only moved} {
+        tcltest::test dlg-noroom-$state-$short {board-only and move-then-open keep controls usable and the board uncovered} -setup {
+            ::scidb::test::dlgplace::setupBoard
+        } -body [format {
+            ::scidb::test::dlgplace::noRoomState %s
+            set before [::scidb::test::dlgplace::boardRect]
+            %s
+            ::scidb::test::dlgplace::noRoomCheck dlg-noroom-%s-%s %s $before
+            ::scidb::test::dlgplace::noRoomClose %s %s $before
+        } $state $openScript $state $short $dialog $dialog $short] -cleanup {
+            ::scidb::test::dlgplace::noRoomCleanup
+            ::scidb::test::dlgplace::stopTrace
+        } -result 1
+    }
+}
 
 tcltest::cleanupTests

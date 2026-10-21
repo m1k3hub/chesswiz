@@ -362,20 +362,30 @@ proc besideStrips {bx by bw bh workarea {extents {16 0 40 0}} {gap 12}} {
 		below [list [expr {$ww - $fw}] $below]]
 }
 
-# Fit a dialog into the largest free strip. Used only when no strip holds the
-# requested size. Returns a dictionary {side geometry usable} with zero board
-# intersection, or {} when the board leaves no positive strip at all. <minimum>
-# is the dialog's usable minimum {width height}; empty means shrink freely.
+# Fit a dialog into the largest free strip that can hold its usable minimum.
+# Used only when no strip holds the requested size. Returns a dictionary
+# {side geometry usable} with zero board intersection, or {} when no strip can
+# hold the minimum at all. <minimum> is the dialog's usable minimum
+# {width height} (each control at least its requested size); empty means shrink
+# freely. An unusable strip NEVER competes: a 7 px sliver cannot beat a usable
+# taller/narrower strip just because it is smaller. When no strip is usable the
+# caller reserves board room instead (besideReserve) or uses the forced plan.
 proc besideShrinkPlan {bx by bw bh dw dh workarea extents gap minimum} {
 	lassign $extents el er et eb
 	set fw [expr {$el + $er}]
 	set fh [expr {$et + $eb}]
+	set minw 0
+	set minh 0
+	if {[llength $minimum]} { lassign $minimum minw minh }
 	set strips [besideStrips $bx $by $bw $bh $workarea $extents $gap]
 	set best {}
-	set bestArea 0
+	set bestArea -1
 	foreach side {right left below} {
 		lassign [dict get $strips $side] maxw maxh
 		if {$maxw < 1 || $maxh < 1} { continue }
+		# Filter by the minimum usable size before scoring. A strip that
+		# cannot hold it is not a shrink candidate at all.
+		if {$maxw < $minw || $maxh < $minh} { continue }
 		set cw [expr {min($dw, $maxw)}]
 		set ch [expr {min($dh, $maxh)}]
 		if {$cw < 1 || $ch < 1} { continue }
@@ -388,19 +398,16 @@ proc besideShrinkPlan {bx by bw bh dw dh workarea extents gap minimum} {
 		if {![regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} $clamped -> w h x y]} {
 			continue
 		}
+		if {$w < $minw || $h < $minh} { continue }
 		set area [expr {
 			max(0, min($x + $w + $fw, $bx + $bw) - max($x, $bx)) *
 			max(0, min($y + $h + $fh, $by + $bh) - max($y, $by))}]
 		if {$area != 0} { continue }
-		set usable [expr {[llength $minimum] == 0
-			|| ($w >= [lindex $minimum 0] && $h >= [lindex $minimum 1])}]
-		# Prefer the largest usable strip; an unusable one is only a forced
-		# fallback when reserving room is impossible.
-		set score [expr {$usable ? $w * $h : -($w * $h)}]
-		if {$best eq {} || $score > $bestArea} {
+		set size [expr {$w * $h}]
+		if {$best eq {} || $size > $bestArea} {
 			set best [dict create side $side geometry [list $x $y $w $h] \
-				usable $usable]
-			set bestArea $score
+				usable 1]
+			set bestArea $size
 		}
 	}
 	if {$best eq {}} { return {} }
@@ -411,12 +418,13 @@ proc besideShrinkPlan {bx by bw bh dw dh workarea extents gap minimum} {
 # Pure placement plan. Geometry is {outerX outerY clientWidth clientHeight};
 # workarea is {x y width height}, extents {left right top bottom}.
 # Prefer right, left, below at the current size, then at the requested content
-# size (the 2026-10-18 minsize decision). VAL-DLG-011: when no strip holds the
-# requested size, return a shrink plan with zero board intersection; the caller
-# may instead reserve a strip (besideBoard does) to keep the requested size.
-# <minimum> is the dialog's usable minimum. Result rule is "shrink" when the
-# minimum fits, "no-room" when only a forced (below-minimum) shrink fits; the
-# geometry is still overlap-free in both cases. Ties retain right/left/below.
+# size (the 2026-10-18 minsize decision). VAL-DLG-011/012: when no strip holds
+# the requested size, return a shrink plan into the LARGEST strip that can hold
+# the dialog's usable minimum; the caller may instead reserve a strip
+# (besideBoard does) to keep the requested size. <minimum> is the dialog's
+# usable minimum. When no strip holds the minimum the result asks for a reserve
+# and carries the largest overlap-free strip as "forced" (never a "shrink", even
+# if that strip is below the minimum). Ties retain right/left/below order.
 proc besidePlan {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12} {requested {}} {minimum {}}} {
 	lassign $workarea wx wy ww wh
 	lassign $extents el er et eb
@@ -456,18 +464,27 @@ proc besidePlan {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12} {requ
 	}
 	set shrink [besideShrinkPlan $bx $by $bw $bh $dw $dh $workarea $extents $gap $minimum]
 	if {[llength $shrink]} {
-		set usable [dict get $shrink usable]
 		return [dict create geometry [dict get $shrink geometry] \
-			rule [expr {$usable ? "shrink" : "no-room"}] \
-			side [dict get $shrink side] overlap 0 candidates $candidates \
-			areas $areas resized 1 minimumFits $usable shrink 1]
+			rule shrink side [dict get $shrink side] overlap 0 candidates $candidates \
+			areas $areas resized 1 minimumFits 1 shrink 1]
 	}
-	# The board leaves no positive strip (e.g. board-only): reserving board
-	# room is the only option, so mark the plan for besideBoard instead of
-	# accepting the overlapping candidate geometry.
-	return [dict create geometry [dict get $candidates $bestSide] \
+	# No strip holds the minimum. Ask besideBoard to reserve board room so the
+	# dialog keeps a usable size. The largest overlap-free strip is kept as the
+	# forced plan in case reserving is impossible (never an overlap allowance
+	# and never reported as a shrink).
+	set forced [besideShrinkPlan $bx $by $bw $bh $dw $dh $workarea $extents $gap {}]
+	set plan [dict create geometry [dict get $candidates $bestSide] \
 		rule reserve side $bestSide overlap $bestArea candidates $candidates \
 		areas $areas resized [expr {$cw != $dw || $ch != $dh}] needsReserve 1]
+	if {[llength $forced]} {
+		dict set plan geometry [dict get $forced geometry]
+		dict set plan side [dict get $forced side]
+		dict set plan overlap 0
+		# The forced geometry is the largest strip, even though it is below the
+		# minimum: keep it as a fallback, not as an accepted shrink.
+		dict set plan forced $forced
+	}
+	return $plan
 }
 
 proc besidePosition {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12}} {
@@ -616,8 +633,42 @@ proc besideMinSize {dlg {width ""} {height ""}} {
 	return [list $width $height]
 }
 
+# Drop recorded reservations that no longer describe the board's live reserve.
+# ComputeLayout clears a reserve when a later layout drops below the square
+# floor, and the video inset or another feature can take the strip, so an entry
+# may outlive the reserve it recorded. Such an entry must never pop the wrong
+# stack level on close. Valid entries (window alive and matching the live
+# reserve) are kept.
+proc besidePruneReserves {} {
+	variable BesideReserves
+	set activeSide $::application::board::ReserveSide
+	set activePixels $::application::board::ReservePixels
+	set kept {}
+	set droppedFloor {}
+	foreach entry $BesideReserves {
+		lassign $entry d sd px _ _ rootFloor _
+		set valid [expr {[winfo exists $d] && $activePixels > 0
+			&& $sd eq $activeSide && $px == $activePixels}]
+		if {$valid} {
+			lappend kept $entry
+		} elseif {$droppedFloor eq ""} {
+			set droppedFloor $rootFloor
+		}
+	}
+	set BesideReserves $kept
+	# A lowered square floor only ever belongs to a dialog reserve: recover the
+	# original floor when no valid reservation needs it any more.
+	if {![llength $kept] && $droppedFloor ne ""
+		&& [info exists ::application::board::MinimumReserveSquare]} {
+		set ::application::board::MinimumReserveSquare $droppedFloor
+	}
+	return $kept
+}
+
 # Restore the reserve a dialog owned, without touching another dialog's or the
-# video inset's strip.
+# video inset's strip. Dialog reserves may temporarily lower the board's
+# minimum-square floor (the contract requires the dialog's controls to stay at
+# their requested size); the original floor is restored here.
 proc besideReleaseReserve {dlg} {
 	variable BesideReserves
 	set i -1
@@ -627,50 +678,68 @@ proc besideReleaseReserve {dlg} {
 	if {$i < 0} { return 0 }
 	set entry [lindex $BesideReserves $i]
 	set BesideReserves [lreplace $BesideReserves $i $i]
-	lassign $entry _ side pixels previousSide previousPixels
+	lassign $entry _ side pixels previousSide previousPixels rootFloor activeFloor
+	set activeSide $::application::board::ReserveSide
+	set activePixels $::application::board::ReservePixels
+	# A stale entry no longer owns the live strip: drop it (and its floor
+	# claim) without disturbing whatever reserve is active now.
+	if {$activePixels == 0 || $side ne $activeSide || $pixels != $activePixels} {
+		besidePruneReserves
+		return 1
+	}
 	# Later reservations were made on top of this strip: rebase their saved
 	# previous state onto ours so closing them restores the right reserve.
 	set out {}
 	foreach later $BesideReserves {
-		lassign $later d sd px ps pp
+		lassign $later d sd px ps pp rf af
 		if {$sd eq $side && $px == $pixels} {
-			set later [list $d $sd $px $previousSide $previousPixels]
+			set later [list $d $sd $px $previousSide $previousPixels $rf $af]
 		}
 		lappend out $later
 	}
 	set BesideReserves $out
-	if {[llength $BesideReserves] == 0
-		&& [llength [info commands ::application::board::setReserve]]
-		&& [catch { ::application::board::setReserve $previousSide $previousPixels }]} {
-		catch { ::application::board::setReserve {} 0 }
+	if {[llength $BesideReserves] == 0} {
+		if {$rootFloor ne ""
+			&& [info exists ::application::board::MinimumReserveSquare]} {
+			set ::application::board::MinimumReserveSquare $rootFloor
+		}
+		if {[llength [info commands ::application::board::setReserve]]
+			&& [catch { ::application::board::setReserve $previousSide $previousPixels }]} {
+			catch { ::application::board::setReserve {} 0 }
+		}
+	} else {
+		# Keep the lowest floor required by the reserves that remain.
+		set floor {}
+		foreach e $BesideReserves {
+			lassign $e _ _ _ _ _ _ af
+			if {$af ne "" && ($floor eq "" || $af < $floor)} { set floor $af }
+		}
+		if {$floor ne "" && [info exists ::application::board::MinimumReserveSquare]} {
+			set ::application::board::MinimumReserveSquare $floor
+		}
 	}
 	return 1
 }
 
-proc besideReserveNeed {side bx by bw bh dw dh workarea extents gap} {
-	lassign $workarea wx wy ww wh
-	lassign $extents el er et eb
-	set fw [expr {$el + $er}]
-	set fh [expr {$et + $eb}]
-	switch $side {
-		right {
-			return [expr {max(0, $bx + $bw + $gap + $dw + $fw - ($wx + $ww))}]
-		}
-		left {
-			return [expr {max(0, $wx + $gap + $dw + $fw - $bx)}]
-		}
-		below {
-			return [expr {max(0, $by + $bh + $gap + $dh + $fh - ($wy + $wh))}]
-		}
+# Undo a reserve attempt that could not produce a usable plan.
+proc besideReserveRevert {previousSide previousPixels rootFloor} {
+	if {$rootFloor ne ""
+		&& [info exists ::application::board::MinimumReserveSquare]} {
+		set ::application::board::MinimumReserveSquare $rootFloor
 	}
-	return 0
+	catch { ::application::board::setReserve $previousSide $previousPixels }
 }
 
 # Make room the way the video inset does: reserve a strip in the board pane so
-# the board itself shrinks, then re-plan into the freed space at the requested
-# size. Returns the new plan, or {} when reserving is not possible (small
-# board squares, no board renderer, or a strip owned by another feature).
-proc besideReserve {dlg bx by bw bh dw dh workarea extents gap} {
+# the board itself shrinks, then place the dialog in the freed strip at its
+# usable size. The reserve is computed ONCE from the dialog's minimum and the
+# board pane's current allocation (the canvas width/height does not include the
+# reserve; the drawn board shrinks inside it). Reading a frame that already
+# includes an applied reserve made each retry ask for more and the second
+# reserve fail, so there is exactly one board-accepted setReserve step here.
+# Returns the new plan, or {} when reserving is not possible (no board
+# renderer, or a strip owned by another feature).
+proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 	variable BesideReserves
 	if {[llength [info commands ::application::board::setReserve]] == 0
 		|| [llength [info commands ::application::board::reserveSquare]] == 0} {
@@ -681,6 +750,7 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap} {
 		return {}
 	}
 	# A strip owned by the video inset or another dialog is left alone.
+	besidePruneReserves
 	if {$::application::board::ReservePixels > 0} {
 		set owner {}
 		foreach entry $BesideReserves { lappend owner [lindex $entry 0] }
@@ -695,56 +765,96 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap} {
 		|| ![winfo exists $frame]} {
 		return {}
 	}
-	set plan {}
-	for {set attempt 0} {$attempt < 3} {incr attempt} {
-		set plan [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents $gap {} {}]
-		if {[dict get $plan overlap] == 0
-			&& [dict get $plan rule] ne "no-room"} {
-			lassign [dict get $plan geometry] _ _ w h
-			if {$w >= $dw && $h >= $dh} { break }
-		}
-		set width [winfo width $frame]
-		set height [winfo height $frame]
-		set curSide $::application::board::ReserveSide
-		set curPixels $::application::board::ReservePixels
-		set fullWidth [expr {$width + ($curSide in {left right} ? $curPixels : 0)}]
-		set fullHeight [expr {$height + ($curSide eq "bottom" ? $curPixels : 0)}]
-		set choice {}
-		foreach side {right left below} {
-			set need [besideReserveNeed $side $bx $by $bw $bh $dw $dh $workarea $extents $gap]
-			if {$need < 1} { continue }
-			if {$side in {right left} && $need >= $fullWidth} { continue }
-			if {$side eq "below" && $need >= $fullHeight} { continue }
-			set total [expr {$side eq $curSide && $curPixels > 0 ? $curPixels + $need : $need}]
-			set boardSide [expr {$side eq "below" ? "bottom" : $side}]
-			set square [::application::board::reserveSquare $boardSide $total $fullWidth $fullHeight]
-			if {$square < $::application::board::MinimumReserveSquare} { continue }
-			if {$choice eq {} || $need < [lindex $choice 1]} {
-				set choice [list $side $total]
-			}
-		}
-		if {$choice eq {}} { set plan {}; break }
-		lassign $choice side pixels
-		set boardSide [expr {$side eq "below" ? "bottom" : $side}]
-		if {[catch {::application::board::setReserve $boardSide $pixels} rv] || !$rv} {
-			set plan {}
-			break
-		}
-		update idletasks
-		lassign [besideBoardRect] bx by bw bh
+	set fullWidth [winfo width $frame]
+	set fullHeight [winfo height $frame]
+	set frameX [winfo rootx $frame]
+	set frameY [winfo rooty $frame]
+	if {$fullWidth < 2 || $fullHeight < 2} { return {} }
+	lassign $workarea wx wy ww wh
+	lassign $extents el er et eb
+	set fw [expr {$el + $er}]
+	set fh [expr {$et + $eb}]
+	# Place at the dialog's usable size: its minimum is a floor, the requested
+	# size is the target so no control is clipped.
+	set targetW $dw
+	set targetH $dh
+	if {[llength $minimum]} {
+		set targetW [expr {max($targetW, [lindex $minimum 0])}]
+		set targetH [expr {max($targetH, [lindex $minimum 1])}]
 	}
-	if {$plan eq {}} {
-		catch { ::application::board::setReserve $previousSide $previousPixels }
+	if {$targetW + $fw > $ww || $targetH + $fh > $wh} { return {} }
+	set rootFloor $::application::board::MinimumReserveSquare
+	# reserveSquare uses ComputeLayout, which drops a reserve whose squares
+	# fall below the floor. A dialog may legitimately need that much room, so
+	# probe with the floor at 1 and decide the lifetime floor after choosing.
+	if {$rootFloor > 1} { set ::application::board::MinimumReserveSquare 1 }
+	set choices {}
+	foreach side {right left below} {
+		if {$side eq "below"} {
+			set base [expr {$wy + $wh - ($frameY + $fullHeight)}]
+			set need [expr {max(0, $targetH + $fh + $gap - $base)}]
+			set extent $fullHeight
+		} else {
+			if {$side eq "right"} {
+				set base [expr {$wx + $ww - ($frameX + $fullWidth)}]
+			} else {
+				set base [expr {$frameX - $wx}]
+			}
+			set need [expr {max(0, $targetW + $fw + $gap - $base)}]
+			set extent $fullWidth
+		}
+		if {$need < 1} { continue }
+		if {$need >= $extent} { continue }
+		set boardSide [expr {$side eq "below" ? "bottom" : $side}]
+		set square [::application::board::reserveSquare $boardSide $need \
+			$fullWidth $fullHeight]
+		if {$square < 1} { continue }
+		lappend choices [list $side $need $square]
+	}
+	if {![llength $choices]} {
+		set ::application::board::MinimumReserveSquare $rootFloor
+		return {}
+	}
+	# Prefer the strip that leaves the largest board; ties keep the smaller
+	# reserve and right/left/below order.
+	set chosen [lindex $choices 0]
+	foreach c [lrange $choices 1 end] {
+		if {[lindex $c 2] > [lindex $chosen 2]} {
+			set chosen $c
+		} elseif {[lindex $c 2] == [lindex $chosen 2]
+			&& [lindex $c 1] < [lindex $chosen 1]} {
+			set chosen $c
+		}
+	}
+	lassign $chosen side pixels square
+	set boardSide [expr {$side eq "below" ? "bottom" : $side}]
+	# A dialog may need more room than the video inset's floor allows. Lower
+	# the floor only for the lifetime of this reserve and restore it on close,
+	# so a later board rebuild does not silently drop the reserved strip.
+	set activeFloor [expr {min($rootFloor, max(1, $square))}]
+	set ::application::board::MinimumReserveSquare $activeFloor
+	if {[catch { ::application::board::setReserve $boardSide $pixels } rv] || !$rv} {
+		besideReserveRevert $previousSide $previousPixels $rootFloor
+		return {}
+	}
+	update idletasks
+	lassign [besideBoardRect] bx by bw bh
+	set requested [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]
+	set plan [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents $gap \
+		$requested $minimum]
+	if {[dict get $plan rule] ni {right left below shrink}
+		|| [dict get $plan overlap] > 0} {
+		besideReserveRevert $previousSide $previousPixels $rootFloor
 		return {}
 	}
 	lassign [dict get $plan geometry] _ _ w h
-	if {$w < $dw || $h < $dh || [dict get $plan overlap] > 0} {
-		catch { ::application::board::setReserve $previousSide $previousPixels }
+	if {$w < $targetW || $h < $targetH} {
+		besideReserveRevert $previousSide $previousPixels $rootFloor
 		return {}
 	}
-	set total [expr {$::application::board::ReservePixels}]
-	lappend BesideReserves [list $dlg $::application::board::ReserveSide $total \
-		$previousSide $previousPixels]
+	lappend BesideReserves [list $dlg $::application::board::ReserveSide \
+		$::application::board::ReservePixels $previousSide $previousPixels \
+		$rootFloor $activeFloor]
 	return $plan
 }
 
@@ -880,13 +990,21 @@ proc besideBoard {dlg {parent ""}} {
 	set plan [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents 12 \
 		[list $rw $rh] $minimum]
 	if {[dict get $plan rule] in {no-room reserve}} {
-		set reserved [besideReserve $dlg $bx $by $bw $bh $dw $dh $workarea $extents 12]
+		set reserved [besideReserve $dlg $bx $by $bw $bh $dw $dh $workarea $extents 12 $minimum]
 		if {[llength $reserved]} {
 			set plan $reserved
+		} elseif {[dict exists $plan forced]} {
+			# No strip holds the minimum and no board room can be reserved:
+			# keep the largest overlap-free forced strip, but never relabel a
+			# below-minimum result as a shrink.
+			set forced [dict get $plan forced]
+			set plan [dict create geometry [dict get $forced geometry] \
+				rule no-room side [dict get $forced side] overlap 0 \
+				forced 1 minimumFits 0]
 		} else {
-			# No board strip can be reserved (e.g. squares already below the
-			# minimum): the plan's forced shrink is still overlap-free.
-			dict set plan rule shrink
+			# Nothing positive is left beside the board; this is the genuine
+			# no-room case and the caller's overlap is reported as such.
+			dict set plan rule no-room
 		}
 	}
 	lassign $workarea wx wy ww wh

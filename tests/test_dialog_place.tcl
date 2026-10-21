@@ -51,6 +51,14 @@ tcltest::test dlg-shrink-minimum {a declared usable minimum restricts the shrink
     set plan [::util::place::besidePlan 100 20 800 560 360 260 {0 0 1024 600} {6 6 30 6} 12 {} {100 100}]
     list [dict get $plan rule] [dict get $plan overlap] [dict get $plan geometry]
 } -result {shrink 0 {912 20 100 260}}
+tcltest::test dlg-usable-strip-beats-sliver {a usable 248x678 strip wins over a 1018x7 sliver} -body {
+    set plan [::util::place::besideShrinkPlan 250 151 508 508 248 678 {0 0 1024 700} {3 3 16 6} 12 {248 678}]
+    list [dict get $plan side] [dict get $plan usable] [dict get $plan geometry]
+} -result {right 1 {770 0 248 678}}
+tcltest::test dlg-unusable-strip-never-wins {an unusable sliver is not a shrink target, so the caller reserves} -body {
+    set plan [::util::place::besideShrinkPlan 250 151 508 508 690 328 {0 0 1024 700} {3 3 16 6} 12 {690 328}]
+    llength $plan
+} -result 0
 # Independent oracle over varied origins, taskbars, board shapes and sizes.
 tcltest::test dlg-candidate-grid {the chosen outer rectangle is contained and has minimum candidate intersection} -body {
     set checked 0
