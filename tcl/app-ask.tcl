@@ -60,6 +60,37 @@ set Transcribing	"Transcribing… click to cancel"
 set Heard			"Heard: %s"
 set NothingHeard	"Nothing heard"
 set AssistantPrefs	"Assistant Preferences…"
+
+# What the field itself says: a request the assistant could not take, and
+# the Preferences > Assistant dialog.
+set Unavailable		"The assistant is unavailable."
+set Busy			"The assistant is busy. Try again when it finishes."
+set Failed			"Error: %s"
+set PrefsTitle		"Assistant"
+set SpeechInput		"Speech input"
+set SpeechReady		"A local speech path is configured."
+set PathWhisper		"whisper-cli path"
+set PathModel		"ggml model path"
+set PathRecorder	"Recorder (arecord/ffmpeg)"
+set PathStub		"Test stub command (optional)"
+set Detect			"Detect"
+set Close			"Close"
+
+# The registry row that reaches Preferences > Assistant (menus, the Ask
+# list and the assistant all show these).
+set PrefsWhat		"open the Assistant preferences"
+set PrefsDoc		"Choose the local speech tools (whisper-cli, model, recorder) and see what to install when speech input is not available."
+
+# English defaults, restored before every language load (see i18n.tcl),
+# so switching back to English brings the field's own text back and a
+# language that translates none of these strings shows English rather
+# than the previous language's text.
+set ::application::ask::DefaultMC {}
+foreach _name [lsort [info vars ::application::ask::mc::*]] {
+	if {[array exists $_name] || [string index [namespace tail $_name] 0] eq "_"} { continue }
+	lappend ::application::ask::DefaultMC [namespace tail $_name] [set $_name]
+}
+unset _name
 }
 
 variable Query ""
@@ -71,10 +102,27 @@ array set Priv {
 	histIndex	-1
 	list		{}
 	window		{}
+	prefs		{}
+	prefsTitle	{}
+	prefsHint	{}
+	prefsStatus	{}
+	prefsDetect	{}
+	prefsClose	{}
+	prefsFields	{}
 }
 
 } ;# namespace ask
 } ;# namespace application
+
+proc ::application::ask::ResetMC {} {
+	foreach {name value} $::application::ask::DefaultMC {
+		set ::application::ask::mc::$name $value
+	}
+	return
+}
+if {[llength [info commands ::mc::addDefaultReset]]} {
+	::mc::addDefaultReset ::application::ask::ResetMC
+}
 
 # ======================================================================
 # The field itself.
@@ -123,6 +171,9 @@ proc ::application::ask::Build {notebook} {
 	set Priv(notebook) $notebook
 	set Priv(filtered) ""
 	bind $frame <Destroy> +::application::speech::CleanupSession
+	# a language switch relabels the field in place (i18n.tcl generates
+	# the event for every widget); typing is never touched
+	bind $frame <<LanguageChanged>> [namespace code Relabel]
 
 	SyncMic
 	PlaceholderState
@@ -150,6 +201,42 @@ proc ::application::ask::EnterField {entry placeholder} {
 
 proc ::application::ask::LeaveField {entry placeholder} {
 	PlaceholderState
+}
+
+# The microphone button's text for the state speech input is in; the busy
+# states are how a recording or a transcription announces itself.
+proc ::application::ask::MicText {} {
+	if {[info exists ::application::speech::Priv(state)]} {
+		switch -- $::application::speech::Priv(state) {
+			recording		{ return $::application::speech::mc::Listening }
+			transcribing	{ return $::application::speech::mc::Working }
+		}
+	}
+	return $::application::ask::mc::Mic
+}
+
+# A language switch: everything the field owns follows the new language,
+# the user's own text does not. The placeholder is a separate label, so it
+# takes the new text while the field is empty and stays out of the way (and
+# never overwrites what was typed) when it is not. The microphone is
+# relabelled for the state it is in, an open result list redraws so its
+# last row -- "Ask the assistant" -- is in the new language, and a
+# Preferences > Assistant dialog left open relabels itself.
+proc ::application::ask::Relabel {} {
+	variable Priv
+	variable mc
+
+	if {[info exists Priv(placeholder)] && [winfo exists $Priv(placeholder)]} {
+		$Priv(placeholder) configure -text $mc::Placeholder
+	}
+	PlaceholderState
+	if {[info exists Priv(mic)] && [winfo exists $Priv(mic)]} {
+		$Priv(mic) configure -text [MicText]
+	}
+	if {[ListVisible]} { ShowList }
+	RegisterAction
+	RelabelPreferences
+	return
 }
 
 # Put the field in the top strip, immediately left of the main drop-down.
@@ -199,15 +286,28 @@ namespace eval ::application::ask::manager {
 # reach Preferences > Assistant without adding a drop-down row (the
 # frozen drop-down fixture stays untouched).
 proc ::application::ask::RegisterAction {} {
-	if {[dict exists $::action::Registry app.preferences.assistant]} { return }
-	::action::register app.preferences.assistant [dict create \
-		label    "Assistant Preferences…" \
+	variable mc
+
+	set record [dict create \
+		label    $mc::AssistantPrefs \
 		object   {} \
 		handler  [list ::application::ask::Preferences] \
-		what     "open the Assistant preferences" \
+		what     $mc::PrefsWhat \
 		ai       1 \
-		doc      "Choose the local speech tools (whisper-cli, model, recorder) and see what to install when speech input is not available." \
+		doc      $mc::PrefsDoc \
 	]
+	if {[dict exists $::action::Registry app.preferences.assistant]} {
+		# already registered: a language switch only refreshes the text it
+		# shows, the handler and the assistant flag stay as they are
+		set old [::action::get app.preferences.assistant]
+		foreach key {label what doc} {
+			dict set old $key [dict get $record $key]
+		}
+		dict set ::action::Registry app.preferences.assistant $old
+		return
+	}
+	::action::register app.preferences.assistant $record
+	return
 }
 
 # ======================================================================
@@ -473,24 +573,25 @@ proc ::application::ask::Choose {} {
 proc ::application::ask::SendToAssistant {} {
 	variable Priv
 	variable Query
+	variable mc
 
 	set submitted [[::application::ask::Entry] get]
 	set text [string trim $submitted]
 	if {$text eq ""} { return "break" }
 	HideList
 	if {![llength [info commands ::application::assistant::ask]]} {
-		catch {::ui::message "Assistant is unavailable."}
+		catch {::ui::message $mc::Unavailable}
 		return "break"
 	}
 	if {[llength [info commands ::application::assistant::show]]} {
 		catch { ::application::assistant::show }
 	}
 	if {[catch {::application::assistant::ask $text} accepted]} {
-		catch {::ui::message "error: $accepted"}
+		catch {::ui::message [format $mc::Failed $accepted]}
 		return "break"
 	}
 	if {$accepted ne "1"} {
-		catch {::ui::message "Assistant is busy. Try again when it finishes."}
+		catch {::ui::message $mc::Busy}
 		return "break"
 	}
 	if {[llength [info commands ::application::assistant::HistoryAdd]]} {
@@ -548,6 +649,21 @@ set Working		"Transcribing… click to cancel"
 set Nothing		"Nothing heard"
 set Failed		"Speech failed: %s"
 set NoRecord	"Speech was cancelled"
+
+# What detect() reports when the path is incomplete: the sentence and the
+# name of each missing piece.
+set Missing		"%s Missing: %s."
+set MissingCli	"whisper-cli"
+set MissingModel	"a ggml model"
+set MissingRecorder	"arecord or ffmpeg"
+
+# English defaults, restored before every language load (see i18n.tcl).
+set ::application::speech::DefaultMC {}
+foreach _name [lsort [info vars ::application::speech::mc::*]] {
+	if {[array exists $_name] || [string index [namespace tail $_name] 0] eq "_"} { continue }
+	lappend ::application::speech::DefaultMC [namespace tail $_name] [set $_name]
+}
+unset _name
 }
 
 variable Settings
@@ -576,6 +692,16 @@ array set Priv {
 
 } ;# namespace speech
 } ;# namespace application
+
+proc ::application::speech::ResetMC {} {
+	foreach {name value} $::application::speech::DefaultMC {
+		set ::application::speech::mc::$name $value
+	}
+	return
+}
+if {[llength [info commands ::mc::addDefaultReset]]} {
+	::mc::addDefaultReset ::application::speech::ResetMC
+}
 
 foreach {speechEnv speechKey} {
 	SCIDB_AI_WHISPER_CLI	whisperCli
@@ -653,6 +779,7 @@ proc ::application::speech::Fixture {} {
 # The speech path in effect: {mode available reason cli model recorder stub}.
 proc ::application::speech::detect {} {
 	variable Settings
+	variable mc
 
 	set fixture [Fixture]
 	set root [RepoRoot]
@@ -696,10 +823,10 @@ proc ::application::speech::detect {} {
 	set reason ""
 	if {!$available} {
 		set missing {}
-		if {$cliPath eq ""} { lappend missing "whisper-cli" }
-		if {$modelPath eq ""} { lappend missing "a ggml model" }
-		if {$recPath eq ""} { lappend missing "arecord or ffmpeg" }
-		set reason [format "%s Missing: %s." [string trim $::application::speech::mc::Install] [join $missing ", "]]
+		if {$cliPath eq ""} { lappend missing $mc::MissingCli }
+		if {$modelPath eq ""} { lappend missing $mc::MissingModel }
+		if {$recPath eq ""} { lappend missing $mc::MissingRecorder }
+		set reason [format $mc::Missing [string trim $mc::Install] [join $missing ", "]]
 	}
 	return [dict create mode whisper available $available reason $reason \
 		cli $cliPath model $modelPath recorder $recPath stub ""]
@@ -1148,21 +1275,24 @@ Add-Type -Namespace W -Name K -MemberDefinition '[DllImport("user32.dll")] publi
 # Preferences > Assistant.
 # ======================================================================
 proc ::application::ask::Preferences {args} {
+	variable Priv
+	variable mc
+
 	set dlg .application.assistantPreferences
 	if {[winfo exists $dlg]} { raise $dlg; return }
 	toplevel $dlg -class Dialog
-	wm title $dlg "Assistant"
+	wm title $dlg $mc::PrefsTitle
 	wm transient $dlg [winfo toplevel .application]
 	set top [ttk::frame $dlg.content -padding 12]
 	pack $top -fill both -expand yes
 
-	ttk::label $top.title -text "Speech input" -font TkHeadingFont
+	ttk::label $top.title -text $mc::SpeechInput -font TkHeadingFont
 	pack $top.title -anchor w -pady {0 4}
 	ttk::label $top.hint -text [::application::speech::hint] -wraplength 460 \
 		-justify left -foreground #7a4b00
 	pack $top.hint -anchor w -pady {0 8}
 	if {[::application::speech::hint] eq ""} {
-		$top.hint configure -text "A local speech path is configured."
+		$top.hint configure -text $mc::SpeechReady
 	}
 
 	set vars [dict create \
@@ -1170,18 +1300,22 @@ proc ::application::ask::Preferences {args} {
 		whisperModel ::application::speech::Settings(whisperModel) \
 		recorder ::application::speech::Settings(recorder) \
 		stub ::application::speech::Settings(stub)]
-	foreach {key label} {
-		whisperCli "whisper-cli path"
-		whisperModel "ggml model path"
-		recorder "Recorder (arecord/ffmpeg)"
-		stub "Test stub command (optional)"
+	# field name -> the mc string that labels it, so a language switch can
+	# relabel the open dialog in place
+	set fields {}
+	foreach {key name} {
+		whisperCli	PathWhisper
+		whisperModel	PathModel
+		recorder	PathRecorder
+		stub		PathStub
 	} {
 		set row [ttk::frame $top.$key]
-		ttk::label $row.label -text $label -width 26 -anchor w
+		ttk::label $row.label -text [set mc::$name] -width 26 -anchor w
 		ttk::entry $row.entry -textvariable ::application::speech::Settings($key) -width 46
 		pack $row.label -side left
 		pack $row.entry -side left -fill x -expand yes
 		pack $row -fill x -pady 2
+		lappend fields $row.label $name
 	}
 
 	set status [ttk::label $top.status -text [::application::speech::status] -wraplength 460 \
@@ -1189,16 +1323,62 @@ proc ::application::ask::Preferences {args} {
 	pack $status -anchor w -pady {8 4}
 
 	set buttons [ttk::frame $top.buttons]
-	ttk::button $buttons.detect -text "Detect" -command [list ::application::ask::PrefsDetect $status]
-	ttk::button $buttons.close -text "Close" -command [list destroy $dlg]
+	ttk::button $buttons.detect -text $mc::Detect -command [list ::application::ask::PrefsDetect $status]
+	ttk::button $buttons.close -text $mc::Close -command [list destroy $dlg]
 	pack $buttons.detect -side left -padx {0 6}
 	pack $buttons.close -side right
 	pack $buttons -fill x -pady {8 0}
+
+	# a language switch relabels the open dialog in place; the paths the
+	# user typed are in the settings, not in these labels
+	set Priv(prefs) $dlg
+	set Priv(prefsTitle) $top.title
+	set Priv(prefsHint) $top.hint
+	set Priv(prefsStatus) $status
+	set Priv(prefsDetect) $buttons.detect
+	set Priv(prefsClose) $buttons.close
+	set Priv(prefsFields) $fields
+	bind $dlg <<LanguageChanged>> +[namespace code RelabelPreferences]
+	bind $dlg <Destroy> +[namespace code ForgetPreferences]
 
 	bind $dlg <Escape> [list destroy $dlg]
 	bind $dlg <F1> [list ::help::open .application Ask-Field -parent $dlg]
 	::util::place $dlg -parent .application -position center
 	focus -force $top.whisperCli.entry
+}
+
+proc ::application::ask::ForgetPreferences {} {
+	variable Priv
+	foreach key {prefs prefsTitle prefsHint prefsStatus prefsDetect prefsClose prefsFields} {
+		set Priv($key) {}
+	}
+	return
+}
+
+# The dialog's labels follow the language; the status line and the hint
+# are derived text, so they are asked for again rather than translated.
+proc ::application::ask::RelabelPreferences {} {
+	variable Priv
+	variable mc
+
+	if {![info exists Priv(prefs)] || ![winfo exists $Priv(prefs)]} { return }
+	wm title $Priv(prefs) $mc::PrefsTitle
+	foreach {widget text} [list $Priv(prefsTitle) $mc::SpeechInput \
+		$Priv(prefsDetect) $mc::Detect $Priv(prefsClose) $mc::Close] {
+		if {[winfo exists $widget]} { $widget configure -text $text }
+	}
+	foreach {widget name} $Priv(prefsFields) {
+		if {[winfo exists $widget]} { $widget configure -text [set mc::$name] }
+	}
+	if {[winfo exists $Priv(prefsHint)]} {
+		set hint [::application::speech::hint]
+		if {$hint eq ""} { set hint $mc::SpeechReady }
+		$Priv(prefsHint) configure -text $hint
+	}
+	if {[winfo exists $Priv(prefsStatus)]} {
+		$Priv(prefsStatus) configure -text [::application::speech::status]
+	}
+	return
 }
 
 proc ::application::ask::PrefsDetect {status} {
