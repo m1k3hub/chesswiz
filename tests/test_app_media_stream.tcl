@@ -36,6 +36,10 @@ tcltest::test stream-play {a stream plays in process and is remembered first, wi
 } -result {1 https://b.test/2.m3u8 {https://b.test/2.m3u8 https://a.test/1.m3u8} 1 0}
 
 tcltest::test stream-check {a stream that never starts fails after the retries; a playing one is reported} -setup {
+	# Exercise the in-process failure status. Native backends may otherwise
+	# open an external player and replace it with a fallback status.
+	rename ::application::media::OpenStreamExternal ::scidb::test::realOpenStreamExternal
+	proc ::application::media::OpenStreamExternal {url} {return 0}
 	rename ::application::media::MediaState ::scidb::test::realMediaState
 	rename ::application::media::MediaDestroy ::scidb::test::realMediaDestroy
 	proc ::application::media::MediaDestroy {} { set ::scidb::test::destroyed 1 }
@@ -52,6 +56,8 @@ tcltest::test stream-check {a stream that never starts fails after the retries; 
 } -cleanup {
 	catch { after cancel $::application::media::Priv(checkid) }
 	set ::application::media::Priv(inprocess) 0
+	rename ::application::media::OpenStreamExternal {}
+	rename ::scidb::test::realOpenStreamExternal ::application::media::OpenStreamExternal
 	rename ::application::media::MediaState {}
 	rename ::scidb::test::realMediaState ::application::media::MediaState
 	rename ::application::media::MediaDestroy {}

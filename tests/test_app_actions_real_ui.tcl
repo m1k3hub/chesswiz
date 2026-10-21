@@ -99,7 +99,7 @@ tcltest::test real-start-engine-changes-state {start_engine starts a real UCI pr
     set ::engine::Engines {}
     set ::scidb::file::engines [file join $::scidb::test::actions::Dir engines.dat]
     set ::application::assistant::Priv(confirm) ::scidb::test::actions::yes
-    set program [expr {[info exists ::env(SCIDB_TEST_ENGINE)] ? $::env(SCIDB_TEST_ENGINE) : "/usr/games/stockfish"}]
+    set program [::scidb::test::actions::engineProgram]
     if {![file executable $program]} { error "real UCI engine unavailable: set SCIDB_TEST_ENGINE" }
     ::scidb::test::actions_real::tool add_engine [list path $program]
     set name [dict get [lindex $::engine::Engines 0] Name]

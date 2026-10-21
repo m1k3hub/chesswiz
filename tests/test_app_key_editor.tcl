@@ -425,6 +425,7 @@ tcltest::test key-editor-capture-click-focus {clicking the read-only capture fie
 	set tree $dlg.content.keys.list.tree
 	set entry $dlg.content.keys.capture.entry
 	update
+	if {[tk windowingsystem] eq "aqua"} {raise $dlg; update}
 	focus -force $tree
 	update
 } -body {

@@ -29,7 +29,19 @@ proc bgerror {message} { puts stderr $::errorInfo; exit 1 }
 
 proc migOut {args} { puts "MIG [join $args { }]"; flush stdout }
 
-after 2000 {
+# A fresh Aqua startup can take longer than two seconds. Do not re-enter
+# layout construction from a timer while Startup2 is still building it.
+set startupDeadline [expr {[clock milliseconds]+15000}]
+while {!$::application::Vars(ready)} {
+    update
+    if {[clock milliseconds]>$startupDeadline} {error {startup timed out}}
+    after 10
+}
+update
+
+# Startup is complete: execute the phase directly. A second timer and
+# outer vwait are unnecessary and can strand an interrupted phase.
+namespace eval :: {
     set twm [::application::twm board]
     .application.nb select .application.nb.board
     update
@@ -137,4 +149,3 @@ after 2000 {
     }
     exit 0
 }
-vwait migNever

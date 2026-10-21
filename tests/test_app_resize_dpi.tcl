@@ -518,7 +518,11 @@ tcltest::test rsz-scaling-notifies {scalingChanged notifies registered listeners
 
 tcltest::test rsz-startup-geometry {headless startup geometry regression stays green} -body {
 	set script [file join [file dirname [info script]] test_startup_geometry.tcl]
-	set rc [catch {::util::execSafe [auto_execok tclsh] $script} out opts]
+	# The system tclsh on macOS is still 8.5; use the 8.6 interpreter
+	# required by these helpers when it is available.
+	set shell [auto_execok tclsh8.6]
+	if {$shell eq {}} {set shell [auto_execok tclsh]}
+	set rc [catch {::util::execSafe {*}$shell $script} out opts]
 	puts "EVIDENCE rsz-startup-geometry rc=$rc [string trim [lindex [split $out \n] end-1]]"
 	list $rc [regexp {Failed\s+0} $out]
 } -result {0 1}

@@ -146,6 +146,7 @@ tcltest::test print-procs-exist {::print::game and ::print::preview exist} -body
 		[expr {[llength [info procs ::print::preview]] == 1}]
 } -result {1 1}
 
+# Aqua uses open; Linux uses xdg-open for preview and lp for printing.
 tcltest::test print-preview-database-game {::print::preview generates PDF with players' names and invokes xdg-open} -setup {
 	set pgn [makePgn "Capablanca, Jose Raul" "Tartakower, Saviely"]
 	::scidb::db::open $pgn ::scidb::test::appprint::log log ::scidb::test::appprint::progress progress
@@ -178,7 +179,7 @@ tcltest::test print-preview-database-game {::print::preview generates PDF with p
 	catch { ::scidb::game::release $pos }
 	catch { ::scidb::game::new $pos }
 	catch { ::scidb::db::close $pgn }
-} -result {1 1 1 1 1 1 xdg-open 1}
+} -result [expr {[tk windowingsystem] eq "aqua" ? {1 1 1 1 1 1 open 1} : {1 1 1 1 1 1 xdg-open 1}}]
 
 tcltest::test print-game-linux-lp {::print::game invokes lp on Linux when lp is available and PDF has players' names} -setup {
 	set pgn [makePgn "Morphy, Paul" "Anderssen, Adolf"]
@@ -210,7 +211,7 @@ tcltest::test print-game-linux-lp {::print::game invokes lp on Linux when lp is 
 	catch { ::scidb::game::release $pos }
 	catch { ::scidb::game::new $pos }
 	catch { ::scidb::db::close $pgn }
-} -result {1 1 1 1 1 lp 1}
+} -result [expr {[tk windowingsystem] eq "aqua" ? {1 1 1 1 1 open 1} : {1 1 1 1 1 lp 1}}]
 
 tcltest::test print-game-linux-fallback-viewer {::print::game falls back to xdg-open when lp/lpr are unavailable} -setup {
 	set pgn [makePgn "Kasparov, Garry" "Karpov, Anatoly"]
@@ -236,7 +237,7 @@ tcltest::test print-game-linux-fallback-viewer {::print::game falls back to xdg-
 	catch { ::scidb::game::release $pos }
 	catch { ::scidb::game::new $pos }
 	catch { ::scidb::db::close $pgn }
-} -result {1 1 1 xdg-open 1}
+} -result [expr {[tk windowingsystem] eq "aqua" ? {1 1 1 open 1} : {1 1 1 xdg-open 1}}]
 
 tcltest::test print-modified-scratch-game {::print::game exports unsaved/modified game tags and players to PDF} -setup {
 	set pos [::scidb::game::current]

@@ -1,6 +1,10 @@
 # Phase 2 pane zoom (focus follows size), docs/features/FEATURE_PANE_ZOOM.md.
 package require tcltest 2.5
 
+# This probe uses non-input pane frames as Tab stops. Cocoa requires a native
+# first responder; generated frame key events do not exercise that contract.
+tcltest::testConstraint frameKeyEvents [expr {[tk windowingsystem] ne "aqua"}]
+
 namespace eval ::zoom2Test {
 	variable Title "Pane"
 }
@@ -342,7 +346,7 @@ tcltest::test pane-zoom2-duration {animation completes in about 150 ms measured 
  ::zoom2Test::cleanup $t
 } -result 1
 
-tcltest::test pane-zoom2-user-events {actual mouse/key events grow panes; program focus, dialogs, output and an expired Tab gesture do nothing} -setup {
+tcltest::test pane-zoom2-user-events {actual mouse/key events grow panes; program focus, dialogs, output and an expired Tab gesture do nothing} -constraints frameKeyEvents -setup {
  .application.nb select .application.nb.board
  ::application::reflow::reset
  wm geometry .application 1200x780+0+0

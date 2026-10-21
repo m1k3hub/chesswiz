@@ -39,6 +39,21 @@ proc ::scidb::test::xfix::withBgErrors {script} {
 	return $BgErrors
 }
 
+# Wait for the modal grab, not a fixed build time: Aqua can still be
+# constructing the file list after 1500 ms. Keep the timer scoped to this test.
+proc ::scidb::test::xfix::exportWhenReady {out deadline} {
+    if {[grab current] eq ".application.export"} {
+        set ::scidb::test::xfix::rc [catch {::export::DoExport .application .application.export $out} msg]
+        lappend ::scidb::test::xfix::rc $msg
+        catch {destroy .application.export}
+    } elseif {[clock milliseconds] >= $deadline} {
+        set ::scidb::test::xfix::rc {1 {export dialog did not become modal}}
+        catch {destroy .application.export}
+    } else {
+        set ::scidb::test::xfix::exportTimer [after 20 [list ::scidb::test::xfix::exportWhenReady $out $deadline]]
+    }
+}
+
 tcltest::test xfix-export-savemode {database export to PGN reads the save mode before the dialog is gone} -setup {
 	set pgn [::scidb::test::xfix::path src pgn]
 	set out [::scidb::test::xfix::path out pgn]
@@ -47,15 +62,12 @@ tcltest::test xfix-export-savemode {database export to PGN reads the save mode b
 	set ::export::Values(Type) pgn
 } -body {
 	set ::scidb::test::xfix::rc {}
-	# run OK once the modal dialog waits (an idle callback would fire
-	# while the dialog is still being built)
-	after 1500 [list apply {{out} {
-		set ::scidb::test::xfix::rc [catch {::export::DoExport .application .application.export $out} msg]
-		lappend ::scidb::test::xfix::rc $msg
-		catch { destroy .application.export }
-	}} $out]
-	after 20000 { catch { destroy .application.export } }
-	::export::open .application -base $pgn -variant Normal -view 0 -name src -extension pgn
+	set ::scidb::test::xfix::exportTimer [after 20 [list ::scidb::test::xfix::exportWhenReady $out [expr {[clock milliseconds]+20000}]]]
+	try {
+		::export::open .application -base $pgn -variant Normal -view 0 -name src -extension pgn
+	} finally {
+		after cancel $::scidb::test::xfix::exportTimer
+	}
 	list [lindex $::scidb::test::xfix::rc 0] [file exists $out]
 } -cleanup {
 	catch { ::scidb::db::close $pgn }
@@ -70,15 +82,12 @@ tcltest::test xfix-export-savemode-game {single-game export to PGN reads the sav
 	set ::export::Values(Type) pgn
 } -body {
 	set ::scidb::test::xfix::rc {}
-	# run OK once the modal dialog waits (an idle callback would fire
-	# while the dialog is still being built)
-	after 1500 [list apply {{out} {
-		set ::scidb::test::xfix::rc [catch {::export::DoExport .application .application.export $out} msg]
-		lappend ::scidb::test::xfix::rc $msg
-		catch { destroy .application.export }
-	}} $out]
-	after 20000 { catch { destroy .application.export } }
-	::export::open .application -base $pgn -variant Normal -view 0 -index 0 -name src -extension pgn
+	set ::scidb::test::xfix::exportTimer [after 20 [list ::scidb::test::xfix::exportWhenReady $out [expr {[clock milliseconds]+20000}]]]
+	try {
+		::export::open .application -base $pgn -variant Normal -view 0 -index 0 -name src -extension pgn
+	} finally {
+		after cancel $::scidb::test::xfix::exportTimer
+	}
 	list [lindex $::scidb::test::xfix::rc 0] [file exists $out]
 } -cleanup {
 	catch { ::scidb::db::close $pgn }

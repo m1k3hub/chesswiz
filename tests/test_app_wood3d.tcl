@@ -119,7 +119,7 @@ tcltest::test wood3d-headless-webgl-viewer {WebGL viewer loads photorealistic PB
 	}
 	if {$browser eq ""} {
 		# Fallback if no headless browser binary is installed on the runner
-		set index [::wood3d::request $port /index.html]
+		set index [::wood3dTest::request $port /index.html]
 		expr {[string match {*pbr-wood*} $index] ? "PASS_OK" : "FAIL"}
 	} else {
 		set url "http://127.0.0.1:${port}/index.html?material=pbr-wood&selftest=1"

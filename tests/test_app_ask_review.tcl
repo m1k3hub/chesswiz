@@ -80,7 +80,9 @@ tcltest::test review-plan-debug-script {plan approval discloses the full Tcl scr
     }
 } -result {1 1 1}
 
-tcltest::test review-speech-path-spaces {speech executable paths containing spaces remain usable} -body {
+# Native Aqua speech bypasses the Linux Whisper/recorder CLI entirely.
+tcltest::testConstraint whisperCLI [expr {[tk windowingsystem] ne "aqua" && $::tcl_platform(platform) ne "windows"}]
+tcltest::test review-speech-path-spaces {speech executable paths containing spaces remain usable} -constraints whisperCLI -body {
     set dir [file join [pwd] tests tmp-app finish "speech path [pid]"]
     file mkdir $dir
     set exe [file join $dir review-whisper]

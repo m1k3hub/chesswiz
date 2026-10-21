@@ -62,4 +62,23 @@ tcltest::test setuppos-checks {an empty request is refused} -body {
 	::application::assistant::runTool set_position {}
 } -result {error: give a fen, moves or both}
 
+tcltest::testConstraint nativeSetupCursors [expr {[tk windowingsystem] in {aqua win32}}]
+tcltest::test setup-native-cursors {native setup initializes cursors for every piece without an undefined fig} -constraints nativeSetupCursors -setup {
+    ::util::source setup-board
+    set savedCursors [array get ::setup::board::Cursor]
+    array unset ::setup::board::Cursor
+} -body {
+    ::setup::board::SetupCursors
+    set complete [info exists ::setup::board::Cursor(.)]
+    foreach side {w b} {
+        foreach piece {k q r b n p} {
+            if {![info exists ::setup::board::Cursor($side$piece)]} {set complete 0}
+        }
+    }
+    set complete
+} -cleanup {
+    array unset ::setup::board::Cursor
+    array set ::setup::board::Cursor $savedCursors
+} -result 1
+
 tcltest::cleanupTests

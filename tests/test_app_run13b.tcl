@@ -283,9 +283,24 @@ tcltest::test run13b-menu-by-id {menu steps are action ids and replay by id} -se
 	foreach row $labels { lappend labelIds [lindex $row 0] }
 	set listed [expr {"menu.analysis.engine_toggle" in $labelIds}]
 	# Replay one posted menu row by id, as the laptop instructions do.
-	set ran [::action::run menu.help.about]
-	update
-	set opened [winfo exists .application.infoDialog]
+	if {[tk windowingsystem] eq "aqua"} {
+		# The native About panel is not a Tk infoDialog. Observe the real
+		# panel API without replacing the action or its handler.
+		set ::run13bNativeAbout 0
+		set aboutTrace [list apply {{args} {set ::run13bNativeAbout 1}}]
+		trace add execution ::tk::mac::standardAboutPanel enter $aboutTrace
+		try {
+			set ran [::action::run menu.help.about]
+			update
+			set opened $::run13bNativeAbout
+		} finally {
+			trace remove execution ::tk::mac::standardAboutPanel enter $aboutTrace
+		}
+	} else {
+		set ran [::action::run menu.help.about]
+		update
+		set opened [winfo exists .application.infoDialog]
+	}
 	catch { destroy .application.infoDialog }
 	destroy .run13bMenu
 	list $unresolved $listed $opened

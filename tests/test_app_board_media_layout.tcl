@@ -1,6 +1,12 @@
 # Production inset geometry. Only the player backend is replaced; Tk, board
 # drawing, reserve/rebuild and the application model run unchanged.
 package require tcltest 2.5
+
+# Embedded 3D requires Togl, which the Aqua bundle does not ship. Probe the
+# capability before calling show3D, whose unavailable-feature warning is modal.
+tcltest::testConstraint embedded3D [::board3d::LoadToglLib]
+tcltest::testConstraint x11Pointer [expr {
+    [tk windowingsystem] eq "x11" && [llength [auto_execok xdotool]] > 0}]
 namespace eval ::w1 {
     # Resolve fixtures from the runner, rather than an undefined global root.
     variable root [file dirname $::scidb::test::app::testDir]
@@ -210,6 +216,9 @@ proc ::w1::unoccluded {tag w} {
     return [expr {$controlTop && $boardTop && $overlap == 0}]
 }
 proc ::w1::shot {name} {
+    # Screenshot evidence uses X11 import. Aqua still records all geometry;
+    # taking desktop screenshots there requires separate OS permissions.
+    if {[tk windowingsystem] eq "aqua"} {return}
     variable dir
     file mkdir $dir
     catch { ::util::execSafe import -window root $dir/$name-[winfo screenwidth .]x[winfo screenheight .].png }
@@ -265,7 +274,7 @@ proc ::w1::measure {target {shot 0}} {
     # Required states always get screenshots, including callers that omit
     # the optional flag. Other states keep rectangle/status evidence only.
     if {[regexp {^VAL-BRD-00[126]} $target]} {set shot 1}
-    if {$shot} {::util::execSafe import -window root $::w1::dir/$target-[winfo screenwidth .]x[winfo screenheight .].png}
+    if {$shot} {::w1::shot $target}
     return $data
 }
 proc ::w1::clear {target} {
@@ -296,7 +305,7 @@ proc ::w1::reserved {target {side {}} {shot 0}} {
 
 # Run before any other test creates the embedded view. In particular, the
 # tall, docked pane must not inherit geometry from an earlier 3D toggle.
-tcltest::test brd-3d-first {BRD-007 first 3D toggle during playback uses the realised frame including its toolbar} -setup {::w1::setup default} -body {
+tcltest::test brd-3d-first {BRD-007 first 3D toggle during playback uses the realised frame including its toolbar} -constraints embedded3D -setup {::w1::setup default} -body {
     ::w1::assert {$::application::board::Vars(3dwin) eq "" || ![winfo exists $::application::board::Vars(3dwin)]} "first-toggle test requires an uncreated 3D view"
     set sw [winfo screenwidth .]; set sh [winfo screenheight .]
     wm geometry .application [expr {min(1800,$sw-30)}]x[expr {$sh-150}]+0+0
@@ -315,7 +324,7 @@ tcltest::test brd-3d-first {BRD-007 first 3D toggle during playback uses the rea
         ::w1::assert {[winfo ismapped $view] && [winfo ismapped $view.camera] && [winfo ismapped $w] && [winfo manager $w.video] eq "pack"} "production views not mapped"
         ::w1::assert {$overlap == 0 && $toolbarOverlap == 0} "first 3D view/toolbar overlaps inset"
     }
-    ::util::execSafe import -window root $::w1::dir/VAL-BRD-007-first-[winfo screenwidth .]x[winfo screenheight .].png
+    ::w1::shot VAL-BRD-007-first
     ::application::board::show3D 0
     ::w1::wait
     ::w1::reserved VAL-BRD-007-first-restored
@@ -489,23 +498,28 @@ tcltest::test brd-types {BRD-010 reserve follows audio and video surfaces} -setu
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
-tcltest::test brd-fullscreen {BRD-009 menu fullscreen drives reserve placement} -setup {::w1::setup} -body {
+# Cocoa's native fullscreen transition re-manages panes. Use the actual
+# managed board there, rather than the X11 fixture's forced place overlay.
+tcltest::test brd-fullscreen {BRD-009 menu fullscreen drives reserve placement} -setup {
+    ::w1::setup [expr {[tk windowingsystem] eq "aqua" ? "default" : "wide"}]
+} -body {
     ::w1::play
     ::w1::reserved VAL-BRD-009-windowed
     set before [winfo geometry .application]
     ::menu::viewFullscreen toggle
-    ::w1::wait
+    # Cocoa animates a native fullscreen/Space transition asynchronously.
+    ::w1::wait [expr {[tk windowingsystem] eq "aqua" ? 2000 : 350}]
     ::w1::reserved VAL-BRD-009-fullscreen
     set full [winfo geometry .application]
     ::menu::viewFullscreen toggle
-    ::w1::wait
+    ::w1::wait [expr {[tk windowingsystem] eq "aqua" ? 2000 : 350}]
     ::w1::reserved VAL-BRD-009-restored
     ::w1::log VAL-BRD-009 [list before $before full $full after [winfo geometry .application] binding [bind .application <<Fullscreen>>]]
     if {$before eq $full} {error "Blocked: WM did not realise fullscreen geometry (event path exercised)"}
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
-tcltest::test brd-3d {BRD-007 and BRD-003D visible 3D geometry and toggle restoration} -setup {::w1::setup default} -body {
+tcltest::test brd-3d {BRD-007 and BRD-003D visible 3D geometry and toggle restoration} -constraints embedded3D -setup {::w1::setup default} -body {
     # LIBGL_ALWAYS_SOFTWARE=1 on the runner keeps the film GPUs untouched.
     ::w1::play
     ::w1::assert {[::application::board::show3D 1]} "Blocked: 3D view unavailable"
@@ -615,7 +629,7 @@ tcltest::test inset-009-unoccluded {VAL-MED-009 the size control is never covere
 
 # VAL-MED-009: the same topmost-control guarantee holds in the corner overlay,
 # audio-only and 3D board states.
-tcltest::test inset-009-unoccluded-states {VAL-MED-009 the control is unoccluded in corner, audio and 3D states} -setup {::w1::setup; ::w1::size small} -body {
+tcltest::test inset-009-unoccluded-states {VAL-MED-009 the control is unoccluded in corner, audio and 3D states} -constraints embedded3D -setup {::w1::setup; ::w1::size small} -body {
     ::w1::quiet
     set states {}
     set w [::w1::play]
@@ -645,7 +659,7 @@ tcltest::test inset-009-unoccluded-states {VAL-MED-009 the control is unoccluded
 
 # VAL-MED-009: a real pointer (Xvfb + xdotool), not a Tcl invoke, must reach
 # the Restore control and restore the previous geometry.
-tcltest::test inset-009-real-pointer {VAL-MED-009 a real pointer click on Restore restores} -setup {::w1::setup} -body {
+tcltest::test inset-009-real-pointer {VAL-MED-009 a real pointer click on Restore restores} -constraints x11Pointer -setup {::w1::setup} -body {
     if {[auto_execok xdotool] eq ""} { error "xdotool is required for the real-pointer test" }
     ::w1::quiet
     wm geometry .application 1024x700+0+0
@@ -717,7 +731,7 @@ tcltest::test inset-009-frame-corner {VAL-MED-009 the corner overlay keeps the i
 } -cleanup {::w1::cleanup} -result {1 {ridge 3 1}}
 
 # VAL-MED-009: the same state control, restore and frame hold for the 3D board.
-tcltest::test inset-009-3d {VAL-MED-009 the 3D board keeps the control, the restore and the frame} -setup {::w1::setup default} -body {
+tcltest::test inset-009-3d {VAL-MED-009 the 3D board keeps the control, the restore and the frame} -constraints embedded3D -setup {::w1::setup default} -body {
     set w [::w1::play]
     ::w1::assert {[::application::board::show3D 1]} "Blocked: 3D view unavailable"
     ::w1::wait

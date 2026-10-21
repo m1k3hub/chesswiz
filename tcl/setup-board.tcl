@@ -1654,6 +1654,7 @@ proc SetupCursors {} {
 	variable Cursor
 
 	if {[info exists Cursor(bk)]} { return }
+	set Cursor(.) crosshair
 
 	switch [tk windowingsystem] {
 		x11 {
@@ -1699,14 +1700,16 @@ proc SetupCursors {} {
 
 		win32 - aqua {
 			if {[tk windowingsystem] eq "win32"} { set ext cur } else { set ext crsr }
-			set wfile [file join $::scidb::dir::share cursor igor-w${fig}-32x32.$ext]
-			set bfile [file join $::scidb::dir::share cursor igor-b${fig}-32x32.$ext]
+			foreach fig {k q r b n p} {
+				set wfile [file join $::scidb::dir::share cursor igor-w${fig}-32x32.$ext]
+				set bfile [file join $::scidb::dir::share cursor igor-b${fig}-32x32.$ext]
 
-			if {[file readable $wfile] && [file readable $bfile]} {
-				set Cursor(w$fig) [list @$wfile]
-				set Cursor(b$fig) [list @$bfile]
-			} else {
-				::log::info Setup [format $::application::pgn::mc::CannotOpenCursorFiles "$wfile $bfile"]
+				if {[file readable $wfile] && [file readable $bfile]} {
+					set Cursor(w$fig) [list @$wfile]
+					set Cursor(b$fig) [list @$bfile]
+				} else {
+					::log::info Setup [format $::application::pgn::mc::CannotOpenCursorFiles "$wfile $bfile"]
+				}
 			}
 
 			set file [file join $::scidb::dir::share cursor circle-orange-32x32.$ext]

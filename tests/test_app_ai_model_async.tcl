@@ -28,6 +28,20 @@ proc ::scidb::test::modelasync::restore {} {
  set Saved {}
 }
 
+# Measure asynchronous work after startup, not while Startup2 is still
+# building the main UI and delaying every timer on a fresh Aqua HOME.
+proc ::scidb::test::modelasync::ready {} {
+ set deadline [expr {[clock milliseconds]+15000}]
+ while {!$::application::Vars(ready)} {
+  update
+  if {[clock milliseconds]>$deadline} {error {startup timed out}}
+  after 10
+ }
+ update
+ catch {destroy .tipoftheday}
+}
+::scidb::test::modelasync::ready
+
 tcltest::test modelasync-open {opening the chooser returns without waiting for model discovery} -setup {
  # discovery is asked for asynchronously and has not answered when the
  # chooser is up; a synchronous lookup would be waiting for it (the time
