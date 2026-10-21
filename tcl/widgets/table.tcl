@@ -1838,7 +1838,10 @@ proc PopupMenu {table x y X Y} {
 	if {$action eq ""} {
 		set id [$table.t identify $x $y]
 		if {[lindex $id 0] ne "header"} {
-			focus $table
+			# A context menu belongs to its posting widget, including tables
+			# excluded from keyboard traversal (-takefocus 0). Tk saves this
+			# focus when posting and restores it on Escape or click-away.
+			::focus $table.t
 			event generate $table <<TableMenu>> -x $x -y $y -rootx $X -rooty $Y
 			return
 		}
@@ -1856,6 +1859,7 @@ proc PopupMenu {table x y X Y} {
 		}
 	}
 
+	::focus $table.t
 	keepFocus $table true
 	set menu $table.__table_menu_02763278918911__${id}__
 	catch { destroy $menu }
