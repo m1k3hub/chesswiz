@@ -310,4 +310,60 @@ tcltest::test boardsync-right-proc-50-with-update {50 calls to goto +1 WITH upda
 	::scidb::test::boardsync::closeFixture
 } -result {50 1 1 1}
 
+# A board reflow can occur with no loaded game. Keep the real canvas and
+# renderer callback; model the backend's documented empty-game precondition.
+tcltest::test boardsync-empty-side-to-move {an empty game hides both side markers without querying its ply} -setup {
+    set savedSide $::board::layout(side-to-move)
+    set ::board::layout(side-to-move) 1
+    canvas .boardsyncEmpty
+    .boardsyncEmpty create rectangle 0 0 10 10 -tags {stm stmw}
+    .boardsyncEmpty create rectangle 10 0 20 10 -tags {stm stmb}
+    rename ::scidb::game::query ::scidb::test::boardsync::realQuery
+    rename ::scidb::game::ply ::scidb::test::boardsync::realPly
+    proc ::scidb::game::query {args} {
+        if {$args eq {open?}} {return 0}
+        tailcall ::scidb::test::boardsync::realQuery {*}$args
+    }
+    proc ::scidb::game::ply {args} {error {precondition violation: containsGameAt(position)}}
+} -body {
+    ::application::board::UpdateSideToMove .boardsyncEmpty
+    list [.boardsyncEmpty itemcget stmw -state] [.boardsyncEmpty itemcget stmb -state]
+} -cleanup {
+    rename ::scidb::game::query {}
+    rename ::scidb::test::boardsync::realQuery ::scidb::game::query
+    rename ::scidb::game::ply {}
+    rename ::scidb::test::boardsync::realPly ::scidb::game::ply
+    destroy .boardsyncEmpty
+    set ::board::layout(side-to-move) $savedSide
+} -result {hidden hidden}
+
+# Aqua tk_popup may return only after MenuUnpost has already fired.
+tcltest::test boardsync-native-popup-already-unposted {move confirmation does not wait again after synchronous native unpost} -setup {
+    ::scidb::test::boardsync::openFixture
+    set savedMoveOptions [array get ::move::Options]
+    set ::move::Options(addVarWithoutAsking) 0
+    set ::move::Options(askToReplaceMoves) 1
+    rename ::tk_popup ::scidb::test::boardsync::realPopup
+    proc ::tk_popup {menu args} {
+        $menu invoke 1
+        event generate $menu <<MenuUnpost>> -when now
+    }
+    set ::scidb::test::boardsync::watchdogFired 0
+} -body {
+    set watchdog [after 1000 {
+        set ::scidb::test::boardsync::watchdogFired 1
+        set ::move::_wait 0
+    }]
+    set action [::move::ConfirmReplaceMove menu {}]
+    update idletasks
+    list $action $::scidb::test::boardsync::watchdogFired
+} -cleanup {
+    after cancel $watchdog
+    rename ::tk_popup {}
+    rename ::scidb::test::boardsync::realPopup ::tk_popup
+    catch {destroy $::application::board::board.popup_confirm}
+    array set ::move::Options $savedMoveOptions
+    ::scidb::test::boardsync::closeFixture
+} -result {variation 0}
+
 tcltest::cleanupTests

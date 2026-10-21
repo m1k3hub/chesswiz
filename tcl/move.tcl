@@ -905,7 +905,9 @@ proc ConfirmReplaceMove {confirmWindowType extraActions} {
 	variable _wait 1
 	bind $m <<MenuUnpost>> [list set [namespace current]::_wait 0]
 	tk_popup $m {*}[winfo pointerxy $board]
-	tkwait variable [namespace current]::_wait
+	# Aqua's native menu tracking can deliver MenuUnpost before tk_popup
+	# returns. Wait only while the menu is still open, not for a second event.
+	if {$_wait} { tkwait variable [namespace current]::_wait }
 	if {$Leave < 0} { leaveSquare [expr {-($Leave - 1)}] }
 	set Leave 1
 	after idle [namespace code [list Unlock $action_]]
