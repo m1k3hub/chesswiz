@@ -933,6 +933,28 @@
 ::application::tree::mc::T_AverageYear						"Average Year"
 ::application::tree::mc::T_FrequentPlayer					"Most Frequent Player"
 
+### application::assistant::offers #####################################
+# The buttons offering the assistant's next steps; the German file has
+# the terminology they share with the Ask field.
+::application::assistant::offers::mc::Summary				"What's in this database?"
+::application::assistant::offers::mc::FindPositions		"Find positions..."
+::application::assistant::offers::mc::Duplicates			"Duplicates?"
+::application::assistant::offers::mc::Review				"Review my game"
+::application::assistant::offers::mc::WentWrong			"Where did I go wrong?"
+::application::assistant::offers::mc::GamesLike			"Games like this"
+::application::assistant::offers::mc::Explain				"Explain the position"
+::application::assistant::offers::mc::SamePosition		"Games with this position"
+::application::assistant::offers::mc::PositionsLike		"Positions like this"
+::application::assistant::offers::mc::Compact				"Compact it"
+::application::assistant::offers::mc::Trend				"Opening trends"
+::application::assistant::offers::mc::Maintenance			"Maintenance report"
+::application::assistant::offers::mc::Annotate			"Annotate this game"
+::application::assistant::offers::mc::OpeningReport		"Opening report"
+::application::assistant::offers::mc::Lesson				"Video lesson"
+::application::assistant::offers::mc::AskAbout			"Ask about this..."
+::application::assistant::offers::mc::AskAboutGame		"About game #%d (%s): "
+::application::assistant::offers::mc::AskAboutBoard		"About the position on the board: "
+
 ### database::switcher #################################################
 ::database::switcher::mc::Empty								"empty"
 ::database::switcher::mc::None								"none"
