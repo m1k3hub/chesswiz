@@ -1808,7 +1808,26 @@ proc ::menu::Do {id} {
 		menu.game.paste_clip { catch { ::application::pgn::PasteClipboardGame }; return }
 		menu.game.paste_tab { catch { ::application::pgn::PasteClipboardGame }; return }
 		menu.game.merge_clip { catch { ::gamebar::mergeGame .application -1 }; return }
-		menu.game.merge_tab { catch { ::gamebar::mergeGame .application -1 }; return }
+		menu.game.merge_tab {
+			set current [::scidb::game::current]
+			set tabs {}
+			catch {
+				foreach id [::gamebar::getIdList [::application::pgn::gamebar]] {
+					if {$id != $current} { lappend tabs $id }
+				}
+			}
+			if {![llength $tabs]} {
+				for {set i 0} {$i < 9} {incr i} {
+					if {$i != $current && [::scidb::game::query $i open?]} {
+						lappend tabs $i
+					}
+				}
+			}
+			set target -1
+			if {[llength $tabs]} { set target [lindex $tabs 0] }
+			catch { ::gamebar::mergeGame .application $target }
+			return
+		}
 		game-export { return [::gamebar::exportGame .application] }
 		menu.game.history.recent {
 			if {[catch { ::game::gameList } games] || ![llength $games]} { return }
@@ -1838,7 +1857,15 @@ proc ::menu::Do {id} {
 		menu.db.maintenance.change_icon { catch { ::menu::DbProperties }; return }
 		menu.db.discover { return [::application::database::discover::open .application] }
 		menu.db.properties { return [::menu::DbProperties] }
-		menu.db.readonly { catch { ::application::database::ToggleReadOnly 0 [CurrentBase] }; return }
+		menu.db.readonly {
+			set base [CurrentBase]
+			if {$base ne ""} {
+				set var ::application::database::Vars(flag:readonly)
+				set $var [expr {![::scidb::db::get readonly? $base]}]
+				catch { ::application::database::ToggleReadOnly $var $base }
+			}
+			return
+		}
 		menu.db.player.update { return [::playerdata::updateFide .application] }
 		menu.db.player.names { return [::playerdata::checkSpellings .application] }
 
@@ -1883,7 +1910,17 @@ proc ::menu::Do {id} {
 		menu.analysis.explain.position { return [::application::ai::analyze .application] }
 		menu.analysis.explain.line { catch { ::application::ai::explainLine .application }; return }
 		menu.analysis.explain.move { catch { ::application::pgn::ExplainMove .application::pgn "" }; return }
-		menu.analysis.explain.comment { return [::application::ai::analyze .application] }
+		menu.analysis.explain.comment {
+			set pos after
+			if {[info exists ::comment::Vars(pos)]} {
+				set pos $::comment::Vars(pos)
+			} elseif {[catch {::scidb::game::query comment after} c1] || [string trim $c1] eq ""} {
+				if {![catch {::scidb::game::query comment before} c2] && [string trim $c2] ne ""} {
+					set pos before
+				}
+			}
+			return [::application::ai::explainComment .application $pos]
+		}
 		menu.analysis.annotate { return [::ai::annotate::toggle .application] }
 		menu.analysis.factcheck { return [::ai::factcheck::current .application] }
 		menu.analysis.tablebase.show { ::menu::ToggleTablebase enabled; return }

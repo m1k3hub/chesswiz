@@ -572,7 +572,13 @@ proc ::application::ai::explainComment {parent pos} {
 		::dialog::info -parent $parent -message "No comment at this position."
 		return
 	}
-	set comment [string trim [::scidb::misc::xml toText $comment]]
+	set plain ""
+	if {[llength [info commands ::ai::factcheck::plain]]} {
+		set plain [::ai::factcheck::plain $comment]
+	} else {
+		regsub -all {<[^>]+>} $comment {} plain
+	}
+	set comment [string trim $plain]
 	if {$comment eq ""} {
 		::dialog::info -parent $parent -message "No comment at this position."
 		return
