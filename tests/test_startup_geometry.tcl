@@ -146,6 +146,18 @@ tcltest::test geometry-zoomed-normal-restore {VAL-RSZ-006 zoomed -> normal below
     ::application::RememberWindowGeometry .application
     list $::geom $::application::Options(window:geometry)
 } -result {900x700+100+100 900x700+100+100}
+tcltest::test geometry-restore-move-before-size {a native move notification preserves the restore transition until its size arrives} -body {
+    set ::state normal
+    set ::application::Vars(window:size:last) {900 700}
+    set ::application::Vars(window:state:last) zoomed
+    set ::application::Vars(last:normal:geometry) 900x700+100+100
+    set ::geom 900x700+120+120
+    ::application::RememberWindowGeometry .application
+    set pending $::application::Vars(window:state:last)
+    set ::geom 200x200+120+120
+    ::application::RememberWindowGeometry .application
+    list $pending $::geom $::application::Options(window:geometry)
+} -result {zoomed 900x700+120+120 900x700+120+120}
 tcltest::test geometry-restore {saved oversized geometry is fitted before opening zoomed} -body {
     set ::application::Options(window:geometry) 2500x1380+849+382
     set ::application::Options(window:state) zoomed

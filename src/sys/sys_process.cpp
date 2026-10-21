@@ -453,6 +453,11 @@ Process::puts(mstl::string const& msg)
 void
 Process::close()
 {
+	// kill() clears m_pid. Remove the original PID now, before a late
+	// SIGCHLD could find this object after exited() deletes it.
+	m_processMap.erase(m_pid);
+	Tcl_CancelIdleCall(callStopped, this);
+	Tcl_CancelIdleCall(callResumed, this);
 	if (m_chan)
 	{
 		Tcl_DeleteChannelHandler(m_chan, ::readHandler, this);
@@ -477,13 +482,14 @@ Process::close()
 		m_chan = 0;
 	}
 
+	// exited() may delete this process (Engine::exited does). Finish all
+	// teardown before notifying the owner; never touch members afterwards.
+	kill();
 	if (!m_calledExited)
 	{
 		m_calledExited = true;
 		exited();
 	}
-
-	kill();
 }
 
 
@@ -521,7 +527,7 @@ Process::stop()
 {
 	M_REQUIRE(isRunning());
 
-	if (!m_stopped)
+	if (!m_stopped && m_pid > 0)
 	{
 #ifdef __WIN32__
 #else
@@ -536,20 +542,23 @@ Process::resume()
 {
 	M_REQUIRE(isRunning());
 
-	if (m_stopped)
-	{
 #ifdef __WIN32__
 #else
-		::kill(m_pid, SIGCONT);
+	// SIGCHLD acknowledges STOP/CONT asynchronously. A resume can precede
+	// the STOP acknowledgement, and the caller may write immediately after
+	// resuming. Send CONT regardless of the cached state and accept writes
+	// as soon as the kernel accepts it.
+	if (m_pid > 0 && ::kill(m_pid, SIGCONT) == 0)
+		m_stopped = false;
 #endif
-	}
 }
 
 
 void
 Process::kill()
 {
-	if (m_pid != -1)
+	// Zero/negative POSIX selectors signal groups or multiple processes.
+	if (m_pid > 0)
 	{
 #ifdef __WIN32__
 		// no POSIX kill(); terminate the child via its process handle
@@ -561,8 +570,8 @@ Process::kill()
 #else
 		::kill(m_pid, SIGKILL);
 #endif
-		m_pid = -1;
 	}
+	m_pid = -1;
 }
 
 

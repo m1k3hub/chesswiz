@@ -25,6 +25,33 @@ proc ::w1::wait {{ms 350}} {
     vwait ::w1::waiting
     update idletasks
 }
+# Fullscreen attributes can change before Cocoa finishes its Space animation.
+# Observe window and child geometry, rather than sampling after a fixed sleep.
+# This readiness wait is separate from BRD-005's unchanged resize measurement.
+proc ::w1::fullscreenSettled {enabled} {
+    set deadline [expr {[clock milliseconds]+10000}]
+    set previous {}
+    set quietSince [clock milliseconds]
+    while {[clock milliseconds] < $deadline} {
+        wait 50
+        set full [expr {[winfo width .application] == [winfo screenwidth .application]
+            && [winfo height .application] == [winfo screenheight .application]}]
+        set pane [::mediainset::Pane]
+        set snapshot [list [rect .application] [rect $pane] [rect [::mediainset::BoardView]]]
+        if {[winfo exists $pane.mediainset.expand]} {
+            lappend snapshot [rect $pane.mediainset.expand]
+        }
+        if {$snapshot ne $previous || $full != $enabled
+            || [wm attributes .application -fullscreen] != $enabled} {
+            set quietSince [clock milliseconds]
+            set previous $snapshot
+        } elseif {[clock milliseconds]-$quietSince >= 500} {
+            log fullscreen-settled [list enabled $enabled geometry $snapshot]
+            return
+        }
+    }
+    error "fullscreen transition did not settle: enabled=$enabled geometry=$snapshot"
+}
 proc ::w1::log {target data} {
     variable dir
     file mkdir $dir
@@ -508,11 +535,11 @@ tcltest::test brd-fullscreen {BRD-009 menu fullscreen drives reserve placement} 
     set before [winfo geometry .application]
     ::menu::viewFullscreen toggle
     # Cocoa animates a native fullscreen/Space transition asynchronously.
-    ::w1::wait [expr {[tk windowingsystem] eq "aqua" ? 2000 : 350}]
+    ::w1::fullscreenSettled 1
     ::w1::reserved VAL-BRD-009-fullscreen
     set full [winfo geometry .application]
     ::menu::viewFullscreen toggle
-    ::w1::wait [expr {[tk windowingsystem] eq "aqua" ? 2000 : 350}]
+    ::w1::fullscreenSettled 0
     ::w1::reserved VAL-BRD-009-restored
     ::w1::log VAL-BRD-009 [list before $before full $full after [winfo geometry .application] binding [bind .application <<Fullscreen>>]]
     if {$before eq $full} {error "Blocked: WM did not realise fullscreen geometry (event path exercised)"}
@@ -613,10 +640,10 @@ tcltest::test inset-009-unoccluded {VAL-MED-009 the size control is never covere
         ::w1::wait
         lappend states [::w1::unoccluded "$sw-$sh-expanded-resized" $w]
         if {![catch {::menu::viewFullscreen toggle}]} {
-            ::w1::wait
+            ::w1::fullscreenSettled 1
             lappend states [::w1::unoccluded "$sw-$sh-expanded-fullscreen" $w]
             catch {::menu::viewFullscreen toggle}
-            ::w1::wait
+            ::w1::fullscreenSettled 0
         }
         ::w1::trigger $w button
         lappend states [::w1::unoccluded "$sw-$sh-restored" $w]

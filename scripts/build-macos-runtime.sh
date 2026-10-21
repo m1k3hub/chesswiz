@@ -16,8 +16,8 @@ for pkg in TCL TK; do
     echo "$sha  $CACHE/$name" | shasum -a 256 -c -
     tar xf "$CACHE/$name" -C "$WORK"
 done
-# [update] never returned while a view stayed dirty (hidden window, off-view drawing)
-for p in hidden-dirty offview-dirty; do
+# Keep [update] finite and grabbed dialogs alive through deferred Aqua focus.
+for p in hidden-dirty offview-dirty grab-focus; do
     patch -d "$WORK/tk$TK_VER" -p1 < "$ROOT/scripts/patches/tk-8.6.17-aqua-$p.patch"
 done
 FLAGS='-arch x86_64 -arch arm64 -mmacosx-version-min=11.0'

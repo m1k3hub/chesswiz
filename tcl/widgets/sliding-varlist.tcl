@@ -192,7 +192,7 @@ proc show {moves {slide 1}} {
 		set Vars(state) open
 		set delay $Slide(open)
 		if {[vertical?]} { set delay [expr {$delay/3}] }
-		set Vars(afterid) [after $Slide(open) [namespace code [list SlideToShow $delay]]]]
+		set Vars(afterid) [after $Slide(open) [namespace code [list SlideToShow $delay]]]
 	}
 }
 

@@ -139,7 +139,13 @@ namespace eval ::scidb::test::objects {
             file attributes [file join $dir engine] -permissions 0755
             set ::engine::Engines {}
             puts {OBJECT ENGINE install}; flush stdout
-            tool add_engine [list path [file join $dir engine]]
+            # This fixture is a known UCI engine. Use the production protocol-
+            # specific registration path instead of spending the whole WB
+            # discovery timeout on every unrelated context-action probe.
+            if {![::engine::ProbeNewEngine .application [list Command [file join $dir engine]] UCI]} {
+                error {fixture did not answer the real UCI probe}
+            }
+            ::engine::SaveEngineList
             set name {}
             foreach entry $::engine::Engines {
                 if {[dict get $entry Command] eq [file join $dir engine]} { set name [dict get $entry Name]; break }
@@ -179,7 +185,11 @@ namespace eval ::scidb::test::objects {
                         break
                     }
                 }
-                ::tk::MenuUnpost $menu
+                if {[tk windowingsystem] eq "aqua"} {
+                    event generate $menu <<MenuUnpost>> -when now
+                } else {
+                    ::tk::MenuUnpost $menu
+                }
                 destroy $menu
                 if {!$found} { error {engine popup has no Copy Line command} }
             }
@@ -381,7 +391,11 @@ namespace eval ::scidb::test::objects {
         set m $::application::board::board.popup_confirm
         if {[winfo exists $m]} {
             $m invoke 1
-            ::tk::MenuUnpost $m
+            if {[tk windowingsystem] eq "aqua"} {
+                event generate $m <<MenuUnpost>> -when now
+            } else {
+                ::tk::MenuUnpost $m
+            }
         } else { after 100 [namespace current]::chooseVariation }
     }
     proc commentProbe {id} {
@@ -437,6 +451,7 @@ namespace eval ::scidb::test::objects {
         variable control
         set ::scidb::test::reachability::baseline [::scidb::test::reachability::windows]
         set ::scidb::test::reachability::seen {}
+        set ::scidb::test::reachability::nativeAccept 0
         set ::scidb::test::reachability::before [::scidb::test::reachability::snapshot]
         if {[string match c2.strip.* $id]} {
             variable base
@@ -452,14 +467,36 @@ namespace eval ::scidb::test::objects {
         set gameBefore {}
         catch {set gameBefore [::scidb::game::toPGN [expr {[::scidb::game::query modified?] ? "modified" : "original"}]]}
         set marksBefore [::scidb::game::query marks]
-        if {$id eq {c1.insert_null}} { after 100 [list [namespace current]::chooseVariation] }
+        if {$id eq {c1.insert_null} && [tk windowingsystem] ne "aqua"} {
+            after 100 [list [namespace current]::chooseVariation]
+        }
         if {$id in {c4.export.pgn c12.export}} { after 100 [namespace current]::exportFile }
         if {$id in {c12.reload c4.close c4.save_changes c5.save_working_set c4.maintenance.compact c12.save.replace c12.save.replace_moves c12.save.new}} {
+            # Match this fixture's real Yes/OK driver at Aqua's OS boundary.
+            set ::scidb::test::reachability::nativeAccept 1
             after 100 [list [namespace current]::acceptDialogs]
         } elseif {$id ni {c4.export.pgn c12.export}} { after 500 ::scidb::test::reachability::cancelDialogs }
         puts "OBJECT ACTION $id begin"; flush stdout
-        set reply [tool $id [list object $object]]
+        set reply [::scidb::test::reachability::runAction [list tool $id [list object $object]]]
         puts "OBJECT ACTION $id returned"; flush stdout
+        if {$id eq "c8.move_actions"} {
+            set menu .contextMoveActions
+            set target [list ::application::tree::DoAction [dict get $object table] \
+                [dict get $object row] [dict get $object move]]
+            set actions {}
+            for {set i 0} {$i <= [$menu index end]} {incr i} {
+                if {[$menu type $i] ne "command"} { continue }
+                set command [$menu entrycget $i -command]
+                if {[lindex $command 0] ne "eval" || [lindex $command 1] ne $target} {
+                    error {tree move menu lost its selected continuation}
+                }
+                lappend actions [lindex $command 2]
+            }
+            if {"load" ni $actions || ("replace" ni $actions && "append" ni $actions)} {
+                error {tree move menu omitted its load or move actions}
+            }
+            puts "EVIDENCE tree-move-menu actions=$actions target=$target"
+        }
         update
         if {$id in {c4.export.pgn c12.export}} {
             variable dir
@@ -517,6 +554,7 @@ namespace eval ::scidb::test::objects {
         return 1
     }
     proc cleanup {} {
+        set ::scidb::test::reachability::nativeAccept 0
         puts {OBJECT CLEANUP begin}; flush stdout
         variable dir
         catch {::application::media::Stop}

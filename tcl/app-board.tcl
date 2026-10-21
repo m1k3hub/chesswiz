@@ -2330,6 +2330,12 @@ proc UpdateSideToMove {canv} {
 	variable Vars
 
 	if {$layout(side-to-move)} {
+		# A pane rebuild can run before the first game is loaded or after
+		# the last one closes. ply requires a live game in the backend.
+		if {![::scidb::game::query open?]} {
+			$canv itemconfigure stm -state hidden
+			return
+		}
 		if {[::scidb::game::ply] % 2} { set color b } else { set color w }
 		if {$color eq "w"} { set other b} else { set other w }
 		$canv itemconfigure stm$color -state normal

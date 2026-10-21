@@ -1,0 +1,23 @@
+--- a/macosx/tkMacOSXWindowEvent.c
++++ b/macosx/tkMacOSXWindowEvent.c
+@@ -338,7 +338,11 @@
+ 
+ static void RefocusGrabWindow(void *data) {
+     TkWindow *winPtr = (TkWindow *) data;
+-    TkpChangeFocus(winPtr, 1);
++    /* The grabbed dialog may have been destroyed before this idle task. */
++    if (!(winPtr->flags & TK_ALREADY_DEAD)) {
++        TkpChangeFocus(winPtr, 1);
++    }
++    Tcl_Release(winPtr);
+ }
+ 
+ #pragma mark TKApplication(TKApplicationEvent)
+@@ -375,6 +379,7 @@
+ 	    [win orderOut:NSApp];
+ 	}
+ 	if (winPtr->dispPtr->grabWinPtr == winPtr) {
++	    Tcl_Preserve(winPtr);
+ 	    Tcl_DoWhenIdle(RefocusGrabWindow, winPtr);
+ 	}
+ 	if (iconifiedWindow == nil && [win isMiniaturized]) {

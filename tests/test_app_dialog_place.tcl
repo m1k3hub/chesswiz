@@ -1,5 +1,7 @@
 # Real dialog placement: run with -match 'dlg-*' on each required Xvfb screen.
 package require tcltest 2.5
+source [file join [file dirname [info script]] app_wait.tcl]
+::scidb::test::wait::ready
 namespace eval ::scidb::test::dlgplace {
     variable testDir [file dirname [file normalize [info script]]]
     variable calls
@@ -441,33 +443,53 @@ proc ::scidb::test::dlgplace::noOverlap {target dlg} {
     require [expr {$area == 0}] "$target: dialog covers board by $area px2"
     return 1
 }
+# Wait for the actual board/window transition and the placement debounce.
+# Cocoa fullscreen and the twm rebuild can finish after the initial Configure.
+proc ::scidb::test::dlgplace::followSettled {dlg before {timeout 6000}} {
+    set deadline [expr {[clock milliseconds] + $timeout}]
+    set previous {}
+    set changedAt [clock milliseconds]
+    while {[clock milliseconds] < $deadline} {
+        waitFor 20
+        set snapshot [list [widgetRect .application] [boardRect] [widgetRect $dlg]]
+        set now [clock milliseconds]
+        if {$snapshot ne $previous} { set previous $snapshot; set changedAt $now }
+        if {($before eq {} || [boardRect] ne $before) && !$::application::Vars(loading)
+            && $::util::place::BesideTimer eq {} && $now - $changedAt >= 300} { return }
+    }
+    error "dialog transition did not settle: before=$before final=$previous"
+}
 proc ::scidb::test::dlgplace::follow {target dlg} {
     # Start wide enough to open normally, then force the tall reflow with the
     # contract's 1274x900 -> 800x900 resize.
     wm geometry .application 1274x900+10+10
-    waitFor 1200
+    followSettled $dlg {}
     noOverlap $target-open $dlg
     # Aqua may move/resize native transients with their owner without an
     # explicit re-place. The movement and overlap checks remain mandatory.
     set nativeFollow [expr {[tk windowingsystem] eq "aqua"}]
     set before [widgetRect $dlg]
 
-    set delta [replaceDelta {wm geometry .application 800x900+10+10; waitFor 1300}]
+    set boardBefore [boardRect]
+    set delta [replaceDelta {wm geometry .application 800x900+10+10; followSettled $dlg $boardBefore}]
     require [expr {$delta == 1 || ($nativeFollow && $delta == 0)}] "$target-resize: expected 1 re-place, got $delta"
     require [expr {[widgetRect $dlg] ne $before}] "$target-resize: dialog did not follow the board"
     noOverlap $target-resize $dlg
 
     set before [widgetRect $dlg]
-    set delta [replaceDelta {wm geometry .application +180+120; waitFor 1300}]
+    set boardBefore [boardRect]
+    set delta [replaceDelta {wm geometry .application +180+120; followSettled $dlg $boardBefore}]
     require [expr {$delta == 1 || ($nativeFollow && $delta == 0)}] "$target-move: expected 1 re-place, got $delta"
     require [expr {[widgetRect $dlg] ne $before}] "$target-move: dialog did not follow the board"
     noOverlap $target-move $dlg
 
-    set delta [replaceDelta {::menu::viewFullscreen toggle; waitFor 1800}]
+    set boardBefore [boardRect]
+    set delta [replaceDelta {::menu::viewFullscreen toggle; followSettled $dlg $boardBefore}]
     require [expr {$delta == 1 || ($nativeFollow && $delta == 0)}] "$target-fullscreen: expected 1 re-place, got $delta"
     noOverlap $target-fullscreen $dlg
     # Leaving fullscreen moves the board back; the dialog follows again.
-    set delta [replaceDelta {::menu::viewFullscreen toggle; waitFor 1500}]
+    set boardBefore [boardRect]
+    set delta [replaceDelta {::menu::viewFullscreen toggle; followSettled $dlg $boardBefore}]
     require [expr {$delta == 1 || ($nativeFollow && $delta == 0)}] "$target-unfullscreen: expected 1 re-place, got $delta"
     noOverlap $target-unfullscreen $dlg
 

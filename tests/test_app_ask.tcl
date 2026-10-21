@@ -11,6 +11,8 @@
 
 package require Tcl 8.5
 package require tcltest 2.5
+source [file join [file dirname [info script]] app_wait.tcl]
+::scidb::test::wait::ready
 
 namespace eval ::scidb::test::ask {
 	variable Ran {}
