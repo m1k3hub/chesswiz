@@ -394,7 +394,14 @@ proc Accept {} {
 proc Close {dlg} {
 	variable Vars
 
-	destroy $dlg
+	if {[tk windowingsystem] eq "aqua" && [winfo exists $dlg]} {
+		# Tk 8.6.17 can queue native focus work for the grabbed window
+		# without preserving it. Stop new grab refocus requests and drain
+		# those already queued while their target is still alive.
+		grab release $dlg
+		update idletasks
+	}
+	if {[winfo exists $dlg]} { destroy $dlg }
 	array unset Vars tb:*
 	set Vars(langSet) {}
 }
