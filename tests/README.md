@@ -265,3 +265,26 @@ test:
 ## License
 
 Same license as Scidb main project (GPL v2+).
+
+## Isolated app files on Linux and macOS
+
+`python3 tests/run_app_files.py` regenerates `tcl/chesswiz` and runs each
+`test_app_*.tcl` in a fresh process and HOME. Linux requires Xvfb, xauth and
+Openbox; each file gets its own display. Aqua output is captured through a
+PTY. Set `SCIDB_SHAREDIR` to the app Resources directory when using a bundle.
+The default is serial execution with a 300-second deadline **per file**.
+
+```sh
+python3 tests/run_app_files.py --output tests/tmp-app/per-file \
+  --file-timeout test_app_action_reachability.tcl=2400 \
+  --file-timeout test_app_action_reachability_objects.tcl=3600 \
+  --file-timeout test_app_media_fold.tcl=1800
+```
+
+Use `--timeout SECONDS` for the default, or repeat `--file-timeout FILE=SECONDS`
+for expensive files. These limits do not change any assertion's timing budget.
+`--jobs N` allows independent files concurrently; use `--jobs 1` for timing
+measurements or shared Aqua sessions. `--no-build` uses a script already
+regenerated from the current sources. Logs, exit statuses and JSON results are
+written per file; a deadline never contributes partial totals. A missing final
+summary or a failed assertion fails the runner even if the PTY exits zero.
