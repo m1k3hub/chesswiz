@@ -3,6 +3,7 @@ import argparse
 import contextlib
 import importlib.util
 import io
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -16,6 +17,18 @@ spec.loader.exec_module(runner)
 
 
 class AppFilesTests(unittest.TestCase):
+    def test_reused_output_is_not_complete_while_new_run_is_active(self):
+        with tempfile.TemporaryDirectory() as directory:
+            aggregate = Path(directory) / 'results.json'
+            aggregate.write_text('[{"exit": 1}]')
+            def active_file(test, args):
+                self.assertFalse(aggregate.exists(), 'stale completion marker is visible to waiting consumers')
+                return {'exit': 0}
+            argv = ['run_app_files.py', '--no-build', '--output', directory, 'test_app_ask.tcl']
+            with patch.object(sys, 'argv', argv), patch.object(runner, 'run_file', side_effect=active_file):
+                self.assertEqual(runner.main(), 0)
+            self.assertEqual(json.loads(aggregate.read_text()), [{'exit': 0}])
+
     def test_deadlines_must_be_bounded_positive_numbers(self):
         for value in ('0', '-1', 'nan', 'inf'):
             with self.subTest(value=value), self.assertRaises(argparse.ArgumentTypeError):

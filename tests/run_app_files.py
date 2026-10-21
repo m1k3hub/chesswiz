@@ -124,6 +124,9 @@ def main():
     args.output = args.output.resolve()
     args.binary = args.binary.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
+    # Consumers use this as the whole-run completion marker, including when
+    # reusing a directory containing individual results from earlier runs.
+    (args.output / 'results.json').unlink(missing_ok=True)
     if not args.no_build:
         subprocess.run(['make', '-C', str(ROOT / 'tcl')], check=True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
