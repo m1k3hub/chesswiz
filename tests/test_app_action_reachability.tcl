@@ -1,11 +1,16 @@
 # Fresh-start operator audit. Run alone through run_app_tests.tcl under Xvfb.
 # Each UI case gets its own HOME and process; handlers are never stubbed.
+# Aqua native OS dialogs are observed/driven at the Tk-to-OS boundary,
+# since they are not windows the mapped-Tk cancellation driver can inspect.
 package require tcltest 2.5
 namespace eval ::scidb::test::reachability {
     variable file [file normalize [info script]]
     variable root [file dirname [file dirname $file]]
     variable seen {}
     variable baseline {}
+    variable inAction 0
+    variable nativeInstalled 0
+    variable nativeAccept 0
     # Exact exclusions from the UI/dialog probes, not from registry checks.
     variable skips {
         menu.view.panes.players {database pane; unavailable in the board layout}
@@ -35,6 +40,7 @@ namespace eval ::scidb::test::reachability {
         view.board3d.webgl {launches an external browser}
     }
     proc ready {} {
+        nativeDialogs
         set deadline [expr {[clock milliseconds]+10000}]
         while {!$::application::Vars(ready)} {
             update
@@ -89,10 +95,18 @@ namespace eval ::scidb::test::reachability {
     proc cancelDialogs {} {
         variable baseline
         variable seen
+        variable inAction
         set current [snapshot]
         if {$current ne $::scidb::test::reachability::before} { set seen $current }
+        # A non-modal report can map before its builder/refresh returns.
+        # Observe it, but only drive Cancel once a real modal grab is held.
+        # Destroying every mapped window after 500 ms interrupted Aqua's
+        # slower report construction and turned a successful open into error.
+        set modal [grab current]
+        if {$modal ne {}} {set modal [winfo toplevel $modal]}
         foreach w [windows] {
             if {$w in $baseline || ![winfo exists $w] || ![winfo ismapped $w]} { continue }
+            if {$inAction && $w ne $modal} {continue}
             set command [wm protocol $w WM_DELETE_WINDOW]
             if {[string trim $command] eq {#}} {
                 # Question boxes intentionally disable the window close button.
@@ -105,13 +119,76 @@ namespace eval ::scidb::test::reachability {
         }
         after 150 ::scidb::test::reachability::cancelDialogs
     }
+    proc nativeDialog {command args} {
+        variable seen
+        variable nativeAccept
+        if {[dict exists $args -parent] && ![winfo exists [dict get $args -parent]]} {
+            error "$command requested a missing parent"
+        }
+        set seen [list native-dialog $command $args]
+        if {$command eq "tk_messageBox"} {
+            set type [expr {[dict exists $args -type] ? [dict get $args -type] : "ok"}]
+            switch -- $type {
+                yesno {set reply [expr {$nativeAccept ? "yes" : "no"}]}
+                yesnocancel {set reply [expr {$nativeAccept ? "yes" : "cancel"}]}
+                okcancel {set reply [expr {$nativeAccept ? "ok" : "cancel"}]}
+                retrycancel {set reply cancel}
+                abortretryignore {set reply abort}
+                ok {set reply ok}
+                default {error "unexpected native message-box type: $type"}
+            }
+            puts "EVIDENCE native-dialog command=$command type=$type response=$reply"
+            if {[dict exists $args -icon] && [dict get $args -icon] eq "error"} {
+                puts "EVIDENCE native-error message=[dict get $args -message]"
+            }
+            return $reply
+        }
+        puts "EVIDENCE native-dialog command=$command response=cancel"
+        return {}
+    }
+    proc nativeAbout {command operation} {
+        variable seen [list native-dialog $command]
+    }
+    proc nativePopup {menu args} {
+        variable seen [list native-menu $menu $args]
+        # Reuse the object's existing selected-row driver. Cocoa's native
+        # tracking loop cannot be driven by the mapped-Tk polling timer.
+        after 0 ::scidb::test::objects::chooseVariation
+    }
+    proc nativeDialogs {} {
+        variable nativeInstalled
+        if {$nativeInstalled || [tk windowingsystem] ne "aqua"
+            || ![info exists ::env(SCIDB_REACHABILITY_CASE)]} {return}
+        # Each probe owns a process. Keep the OS boundary active through idle
+        # callbacks and cleanup too: a Cancel may prompt after the handler
+        # has returned. Application handlers and all data assertions stay real.
+        foreach command {tk_chooseDirectory tk_getOpenFile tk_getSaveFile tk_messageBox} {
+            rename ::$command [namespace current]::saved_$command
+            interp alias {} ::$command {} [namespace current]::nativeDialog $command
+        }
+        # Observe the real, non-modal AppKit About API without replacing it.
+        trace add execution ::tk::mac::standardAboutPanel enter [namespace current]::nativeAbout
+        if {[lindex $::env(SCIDB_REACHABILITY_CASE) 0] eq "c1.insert_null"
+            && [llength [info commands ::scidb::test::objects::chooseVariation]]} {
+            rename ::tk_popup [namespace current]::saved_tk_popup
+            interp alias {} ::tk_popup {} [namespace current]::nativePopup
+        }
+        set nativeInstalled 1
+    }
+    proc runAction {script} {
+        variable inAction
+        set inAction 1
+        set code [catch {uplevel 1 $script} reply options]
+        set inAction 0
+        return -options $options $reply
+    }
     proc probe {id argv kind} {
         variable baseline [windows]
         variable seen {}
         variable before [snapshot]
         # Preserve the observed modal state even after the close protocol.
         after 500 ::scidb::test::reachability::cancelDialogs
-        set reply [::action::run $id $argv]
+        set reply [runAction [list ::action::run $id $argv]]
         update
         set after [snapshot]
         if {[string match error:* $reply]} { error "$id: $reply" }

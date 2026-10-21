@@ -381,7 +381,11 @@ namespace eval ::scidb::test::objects {
         set m $::application::board::board.popup_confirm
         if {[winfo exists $m]} {
             $m invoke 1
-            ::tk::MenuUnpost $m
+            if {[tk windowingsystem] eq "aqua"} {
+                event generate $m <<MenuUnpost>> -when now
+            } else {
+                ::tk::MenuUnpost $m
+            }
         } else { after 100 [namespace current]::chooseVariation }
     }
     proc commentProbe {id} {
@@ -437,6 +441,7 @@ namespace eval ::scidb::test::objects {
         variable control
         set ::scidb::test::reachability::baseline [::scidb::test::reachability::windows]
         set ::scidb::test::reachability::seen {}
+        set ::scidb::test::reachability::nativeAccept 0
         set ::scidb::test::reachability::before [::scidb::test::reachability::snapshot]
         if {[string match c2.strip.* $id]} {
             variable base
@@ -452,13 +457,17 @@ namespace eval ::scidb::test::objects {
         set gameBefore {}
         catch {set gameBefore [::scidb::game::toPGN [expr {[::scidb::game::query modified?] ? "modified" : "original"}]]}
         set marksBefore [::scidb::game::query marks]
-        if {$id eq {c1.insert_null}} { after 100 [list [namespace current]::chooseVariation] }
+        if {$id eq {c1.insert_null} && [tk windowingsystem] ne "aqua"} {
+            after 100 [list [namespace current]::chooseVariation]
+        }
         if {$id in {c4.export.pgn c12.export}} { after 100 [namespace current]::exportFile }
         if {$id in {c12.reload c4.close c4.save_changes c5.save_working_set c4.maintenance.compact c12.save.replace c12.save.replace_moves c12.save.new}} {
+            # Match this fixture's real Yes/OK driver at Aqua's OS boundary.
+            set ::scidb::test::reachability::nativeAccept 1
             after 100 [list [namespace current]::acceptDialogs]
         } elseif {$id ni {c4.export.pgn c12.export}} { after 500 ::scidb::test::reachability::cancelDialogs }
         puts "OBJECT ACTION $id begin"; flush stdout
-        set reply [tool $id [list object $object]]
+        set reply [::scidb::test::reachability::runAction [list tool $id [list object $object]]]
         puts "OBJECT ACTION $id returned"; flush stdout
         update
         if {$id in {c4.export.pgn c12.export}} {
@@ -517,6 +526,7 @@ namespace eval ::scidb::test::objects {
         return 1
     }
     proc cleanup {} {
+        set ::scidb::test::reachability::nativeAccept 0
         puts {OBJECT CLEANUP begin}; flush stdout
         variable dir
         catch {::application::media::Stop}
