@@ -153,7 +153,9 @@ namespace eval ::scidb::test::reachability {
         variable seen [list native-menu $menu $args]
         # Reuse the object's existing selected-row driver. Cocoa's native
         # tracking loop cannot be driven by the mapped-Tk polling timer.
-        after 0 ::scidb::test::objects::chooseVariation
+        if {[lindex $::env(SCIDB_REACHABILITY_CASE) 0] eq "c1.insert_null"} {
+            after 0 ::scidb::test::objects::chooseVariation
+        }
     }
     proc nativeDialogs {} {
         variable nativeInstalled
@@ -168,7 +170,7 @@ namespace eval ::scidb::test::reachability {
         }
         # Observe the real, non-modal AppKit About API without replacing it.
         trace add execution ::tk::mac::standardAboutPanel enter [namespace current]::nativeAbout
-        if {[lindex $::env(SCIDB_REACHABILITY_CASE) 0] eq "c1.insert_null"
+        if {[lindex $::env(SCIDB_REACHABILITY_CASE) 0] in {c1.insert_null c6.copy_line}
             && [llength [info commands ::scidb::test::objects::chooseVariation]]} {
             rename ::tk_popup [namespace current]::saved_tk_popup
             interp alias {} ::tk_popup {} [namespace current]::nativePopup
@@ -206,7 +208,10 @@ namespace eval ::scidb::test::reachability {
         if {![eof $pipe]} { return }
         fileevent $pipe readable {}
         fconfigure $pipe -blocking 1
-        set code [catch {close $pipe} err]
+        set code [catch {close $pipe} err options]
+        if {$code && [dict exists $options -errorcode]} {
+            append err " (exit: [dict get $options -errorcode])"
+        }
         if {$code || ![string match {*Total Passed: 1*Total Failed: 0*} $output($pipe)]} {
             lappend bad "$id: $output($pipe) $err"
             puts "OFFENDER $id: $output($pipe) $err"
@@ -233,7 +238,11 @@ namespace eval ::scidb::test::reachability {
             # X11 selections belong to the display, not the process/HOME.
             # Clipboard/import/comment probes must not affect a neighbour's
             # before/after snapshot or selection ownership.
-            set exclusive [regexp {^c11\.|\.(copy|cut|paste|import)} $id]
+            # The 35 s child watchdog includes native startup and shutdown.
+            # Aqua engine discovery/startup must finish before another owned
+            # probe starts competing for its native GUI/event-loop service.
+            set exclusive [expr {[regexp {^c11\.|\.(copy|cut|paste|import)} $id]
+                || ([tk windowingsystem] eq "aqua" && $kind eq "engine")}]
             while {$running >= 3 || ($exclusive && $running)} {
                 vwait ::scidb::test::reachability::running
             }

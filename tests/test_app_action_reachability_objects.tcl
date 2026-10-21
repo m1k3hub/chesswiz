@@ -179,7 +179,11 @@ namespace eval ::scidb::test::objects {
                         break
                     }
                 }
-                ::tk::MenuUnpost $menu
+                if {[tk windowingsystem] eq "aqua"} {
+                    event generate $menu <<MenuUnpost>> -when now
+                } else {
+                    ::tk::MenuUnpost $menu
+                }
                 destroy $menu
                 if {!$found} { error {engine popup has no Copy Line command} }
             }
