@@ -150,7 +150,11 @@ proc ::context::RegisterCore {} {
 
 proc ::context::InvokeArgs {id argsDict} {
 	set object {}
-	if {[dict exists $argsDict object]} { set object [dict get $argsDict object] }
+	if {[dict exists $argsDict object]} {
+		set object [dict get $argsDict object]
+	} else {
+		set object $argsDict
+	}
 	return [Invoke $id $object]
 }
 
@@ -1931,8 +1935,38 @@ proc ::context::Command {id object} {
 		c4.symbol.small - c4.symbol.normal - c4.symbol.large {
 			set ::database::switcher::Options(iconsize) [dict get {c4.symbol.small 24 c4.symbol.normal 32 c4.symbol.large 48} $id]
 		}
-		c4.new.scid { catch { ::application::database::newBase [dict get $object parent] Normal "" } }
-		c4.new.pgn { catch { ::application::database::newBase [dict get $object parent] Normal {} pgn } }
+		c4.new.scid {
+			set parent [expr {[dict exists $object parent] ? [dict get $object parent] : ".application"}]
+			set file [expr {[dict exists $object file] ? [dict get $object file] : ([dict exists $object path] ? [dict get $object path] : "")}]
+			if {$file eq ""} {
+				return [::menu::dbNew $parent Normal]
+			}
+			set encoding [expr {[dict exists $object encoding] ? [dict get $object encoding] : "utf-8"}]
+			catch { ::application::database::newBase $parent Normal $file $encoding }
+		}
+		c4.new.pgn {
+			set parent [expr {[dict exists $object parent] ? [dict get $object parent] : ".application"}]
+			set file [expr {[dict exists $object file] ? [dict get $object file] : ([dict exists $object path] ? [dict get $object path] : "")}]
+			if {$file eq ""} {
+				set filetypes [list [list $::menu::mc::PGNFilesArchives {.pgn .pgn.gz}]]
+				set result [::dialog::saveFile \
+					-parent $parent \
+					-class database \
+					-filetypes $filetypes \
+					-geometry last \
+					-defaultextension .pgn \
+					-defaultencoding utf-8 \
+					-needencoding 1 \
+					-title [set ::menu::mc::NewFile]]
+				if {[llength $result]} {
+					lassign $result file encoding
+					return [::application::database::newBase $parent Undetermined $file $encoding]
+				}
+				return
+			}
+			set encoding [expr {[dict exists $object encoding] ? [dict get $object encoding] : "utf-8"}]
+			catch { ::application::database::newBase $parent Undetermined $file $encoding }
+		}
 		c4.open_database { return [::action::run menu.file.open] }
 		c4.help { return [::action::run app-help] }
 		c5.player_card { return [::action::run open_view [list kind player_card name [dict get $object name]]] }
@@ -2110,6 +2144,18 @@ proc ::context::Command {id object} {
 		}
 		c11.select_all { catch { [dict get $object widget] tag add sel 1.0 end } }
 		c11.clear { ::comment::Clear }
+		c11.detect_language {
+			set parent [expr {[dict exists $object parent] ? [dict get $object parent] : ".application"}]
+			set w [expr {[dict exists $object widget] ? [dict get $object widget] : ""}]
+			if {$w ne "" && [winfo exists $w]} { set parent [winfo toplevel $w] }
+			catch { ::comment::DetectLanguage $parent }
+		}
+		c11.explain_comment {
+			set parent [expr {[dict exists $object parent] ? [dict get $object parent] : ".application"}]
+			set w [expr {[dict exists $object widget] ? [dict get $object widget] : ""}]
+			if {$w ne "" && [winfo exists $w]} { set parent [winfo toplevel $w] }
+			catch { ::comment::ExplainComment $parent }
+		}
 		c12.load_number { catch { ::gamebar::LoadGameNumber [dict get $object parent] } }
 		c12.import_game { ::application::pgn::importGame }
 		c12.reload { catch { ::gamebar::ReloadCurrentGame [dict get $object parent] } }
@@ -2124,7 +2170,7 @@ proc ::context::Command {id object} {
 		c12.clear_history { ::game::clearHistory }
 		c12.remove_history { ::game::removeHistoryEntry [dict get $object historyIndex] }
 		c12.new.standard { ::menu::gameNew [dict get $object parent] }
-		c12.new.chess960 { ::menu::gameNew [dict get $object parent] Chess960 }
+		c12.new.chess960 { catch { ::application::pgn::Shuffle Chess960 } }
 		c12.save.replace { ::application::pgn::saveGame replace [dict get $object base] }
 		c12.save.replace_moves { ::application::pgn::saveGame moves [dict get $object base] }
 		c12.save.new { ::application::pgn::saveGame add [dict get $object base] }
@@ -2193,9 +2239,14 @@ proc ::context::EngineLine {object} {
 }
 
 proc ::context::MoveAction {action object} {
-	set parent [expr {[dict exists $object parent] ? [dict get $object parent] : "::application::pgn"}]
-	if {[llength [info commands ::application::pgn::InvokeAction]]} {
-		return [::application::pgn::InvokeAction $parent $action]
+	set san [expr {[dict exists $object san] ? [dict get $object san] : ([dict exists $object move] ? [dict get $object move] : "")}]
+	if {$san ne ""} {
+		return [::move::doAction $action $san]
+	}
+	if {$action eq "mainline"} {
+		while {![::scidb::game::position isMainline?]} {
+			::application::pgn::PromoteVariation
+		}
 	}
 	return
 }
