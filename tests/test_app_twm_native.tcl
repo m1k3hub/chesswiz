@@ -6,7 +6,12 @@ tcltest::test twm-invalid-undock {an unknown pane path raises Tcl error instead 
     file mkdir $twmHome
 } -body {
     set root [file dirname $::scidb::test::app::testDir]
-    set out [::util::execSafe timeout 120 env HOME=$twmHome SCIDB_USERDIR=$twmHome/.chesswiz \
+    set limit {timeout 120}
+    # macOS ships Perl but no GNU timeout.
+    if {[tk windowingsystem] eq "aqua"} {
+        set limit {perl -e {alarm shift; exec @ARGV} 120}
+    }
+    set out [::util::execSafe {*}$limit env HOME=$twmHome SCIDB_USERDIR=$twmHome/.chesswiz \
         MIG_ROOT=$root MIG_PHASE=invalid-undock \
         [info nameofexecutable] [file join $root tests fixtures media-mig phase.tcl] 2>@1]
     regexp {MIG invalid-undock rejected 1 board 1} $out

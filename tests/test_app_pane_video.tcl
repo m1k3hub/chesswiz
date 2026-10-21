@@ -92,6 +92,25 @@ proc ::paneVideo::overlapAll {tag} {
  }
  return $over
 }
+# Aqua reports native resize/reflow geometry asynchronously. Wait for a
+# quiet geometry snapshot, preserving the actual overlap and identity checks.
+proc ::paneVideo::waitReflow {} {
+ wait 650
+ if {[tk windowingsystem] ne "aqua"} {return}
+ set deadline [expr {[clock milliseconds]+3000}]
+ set previous {}
+ set quiet [clock milliseconds]
+ while {[clock milliseconds]<$deadline} {
+  update idletasks
+  set canvas $::application::board::Vars(widget:frame)
+  set inset [::mediainset::Pane].mediainset
+  set current [list [wm geometry .application] [rect $canvas] [$canvas bbox board] [rect $inset] [::application::board::reserveRect]]
+  if {$current ne $previous} {set previous $current; set quiet [clock milliseconds]}
+  if {[clock milliseconds]-$quiet >= 300} {return}
+  wait 40
+ }
+}
+
 tcltest::test pane-video-008-reflow {inset native surface and playback survive actual wide/tall reflow with zero overlap} -setup {
  set t [::paneVideo::setup]
  set w [::mediainset::Pane].mediainset.video; set id [winfo id $w]
@@ -99,10 +118,10 @@ tcltest::test pane-video-008-reflow {inset native surface and playback survive a
 } -body {
  set result [list [::paneVideo::geometry wide]]
  wm geometry .application 740x780
- ::paneVideo::wait 650
+ ::paneVideo::waitReflow
  lappend result [::application::reflow::mode] [::paneVideo::geometry tall]
  wm geometry .application [::paneVideo::wideGeometry]
- ::paneVideo::wait 650
+ ::paneVideo::waitReflow
  lappend result [::application::reflow::mode] [::paneVideo::geometry wide-return]
  lappend result [expr {[winfo id $w] eq $id}] [expr {[::media::mpv::time] > $time}] [llength $::paneVideo::calls]
  set result

@@ -23,6 +23,11 @@
 package require Tcl 8.5
 package require tcltest 2.5
 
+# Aqua menus use native tracking, not mapped Tk menu windows or the X11
+# posted-menubutton/grab state asserted below. test_app_mac_menu.tcl covers
+# the native menu installation; the two layout contracts still run here.
+tcltest::testConstraint tkMenuWindows [expr {[tk windowingsystem] ne "aqua"}]
+
 namespace eval ::scidb::test::mainmenu {
 	variable mb .application.nb.menu_main
 	variable nb .application.nb
@@ -148,7 +153,7 @@ proc ::scidb::test::mainmenu::SelectPage {page} {
 	return [$::scidb::test::mainmenu::nb select]
 }
 
-tcltest::test main-menu-real-click {a real click on the menubutton posts its drop-down} -setup {
+tcltest::test main-menu-real-click {a real click on the menubutton posts its drop-down} -constraints tkMenuWindows -setup {
 	::scidb::test::mainmenu::CaptureBgErrors
 	::scidb::test::mainmenu::SelectPage information
 } -body {
@@ -165,7 +170,7 @@ tcltest::test main-menu-real-click {a real click on the menubutton posts its dro
 	::scidb::test::mainmenu::ReleaseBgErrors
 } -result [list .application.nb.menu_main 1 .application.nb.menu_main .application.nb.information {}]
 
-tcltest::test main-menu-cascades-without-layout {View > Layout > Load Layout opens on a page with no layout} -setup {
+tcltest::test main-menu-cascades-without-layout {View > Layout > Load Layout opens on a page with no layout} -constraints tkMenuWindows -setup {
 	::scidb::test::mainmenu::CaptureBgErrors
 	::scidb::test::mainmenu::SelectPage information
 	::scidb::test::mainmenu::Click $::scidb::test::mainmenu::mb
@@ -183,7 +188,7 @@ tcltest::test main-menu-cascades-without-layout {View > Layout > Load Layout ope
 	::scidb::test::mainmenu::ReleaseBgErrors
 } -result [list [list 0 1] [list 0 1] [list 0 1] .application.nb.menu_main {}]
 
-tcltest::test main-menu-file-cascade {File and File > New Database open from the posted drop-down} -setup {
+tcltest::test main-menu-file-cascade {File and File > New Database open from the posted drop-down} -constraints tkMenuWindows -setup {
 	::scidb::test::mainmenu::CaptureBgErrors
 	::scidb::test::mainmenu::SelectPage information
 	::scidb::test::mainmenu::Click $::scidb::test::mainmenu::mb
@@ -207,7 +212,7 @@ tcltest::test main-menu-twm-contract {::application::twm still raises where ther
 	::scidb::test::mainmenu::Unpost
 } -result {1 1 1}
 
-tcltest::test main-menu-layouts-on-board {the same cascade lists layouts when the board page is current} -setup {
+tcltest::test main-menu-layouts-on-board {the same cascade lists layouts when the board page is current} -constraints tkMenuWindows -setup {
 	::scidb::test::mainmenu::CaptureBgErrors
 	::scidb::test::mainmenu::SelectPage board
 	::scidb::test::mainmenu::Click $::scidb::test::mainmenu::mb
@@ -229,7 +234,7 @@ tcltest::test main-menu-layouts-on-board {the same cascade lists layouts when th
 	::scidb::test::mainmenu::ReleaseBgErrors
 } -result [list [list 0 1] [list 0 1] [list 0 1] 1 1 {}]
 
-tcltest::test main-menu-every-cascade {every drop-down cascade opens on the Information page without a background error} -setup {
+tcltest::test main-menu-every-cascade {every drop-down cascade opens on the Information page without a background error} -constraints tkMenuWindows -setup {
 	::scidb::test::mainmenu::CaptureBgErrors
 	::scidb::test::mainmenu::SelectPage information
 	::scidb::test::mainmenu::Click $::scidb::test::mainmenu::mb

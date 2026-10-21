@@ -21,8 +21,13 @@ namespace eval ::themePersistTest {
 }
 
 proc ::themePersistTest::run {home which theme} {
+	set limit {timeout 180}
+	# macOS ships Perl but no GNU timeout.
+	if {[tk windowingsystem] eq "aqua"} {
+	    set limit {perl -e {alarm shift; exec @ARGV} 180}
+	}
 	catch {
-		::util::execSafe timeout 180 env \
+		::util::execSafe {*}$limit env \
 			HOME=$home \
 			TH_ROOT=$::themePersistTest::root \
 			TH_PHASE=$which \

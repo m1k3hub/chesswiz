@@ -28,6 +28,8 @@ tcltest::test app-ask-f1-binding {F1 in the Ask field entry opens Ask-Field.html
     if {![winfo exists $entry]} {
         return "entry not found"
     }
+    # Aqua restores native key-window focus asynchronously after Help closes.
+    if {[tk windowingsystem] eq "aqua"} { raise [winfo toplevel $entry] }
     focus -force $entry
     update
     event generate $entry <KeyPress-F1> -keysym F1
@@ -98,6 +100,8 @@ tcltest::test app-ask-f1-binding-de {F1 in the Ask field entry in German opens G
         ::mc::setLang $origLang
         return "entry not found"
     }
+    # Aqua restores native key-window focus asynchronously after Help closes.
+    if {[tk windowingsystem] eq "aqua"} { raise [winfo toplevel $entry] }
     focus -force $entry
     update
     event generate $entry <KeyPress-F1> -keysym F1

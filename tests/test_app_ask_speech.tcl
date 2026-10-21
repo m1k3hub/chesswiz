@@ -174,7 +174,8 @@ tcltest::test speech-stub-cleans-temp {the stub path leaves no recording behind 
 } -result {}
 
 # ----------------------------------------------------------------------
-# No path: the microphone is hidden and Preferences says what to install.
+# Without Whisper, Linux hides the microphone and shows installation help.
+# Aqua keeps its native speech path available without a Whisper installation.
 # ----------------------------------------------------------------------
 tcltest::test speech-absent-hides-mic {with no speech path the microphone button is not shown} -body {
 	::scidb::test::speech::isolated {
@@ -191,7 +192,7 @@ tcltest::test speech-absent-hides-mic {with no speech path the microphone button
 			[expr {[string match {*ggml*} $hint]}] \
 			[expr {[string match {*arecord*} $hint]}]
 	}
-} -result {0 0 1 1 1}
+} -result [expr {[tk windowingsystem] eq "aqua" ? {1 1 0 0 0} : {0 0 1 1 1}}]
 
 tcltest::test speech-preferences-says-what-to-install {Preferences > Assistant shows the speech hint and fields} -body {
 	::scidb::test::speech::isolated {
@@ -211,7 +212,7 @@ tcltest::test speech-preferences-says-what-to-install {Preferences > Assistant s
 		destroy $dlg
 		list $title [expr {[string match {*whisper-cli*} $hint]}] $hasCli $hasModel
 	}
-} -result {{Speech input} 1 1 1}
+} -result [expr {[tk windowingsystem] eq "aqua" ? {{Speech input} 0 1 1} : {{Speech input} 1 1 1}}]
 
 tcltest::test speech-present-shows-mic {a working path puts the microphone back in the field} -body {
 	::scidb::test::speech::isolated {
@@ -232,12 +233,19 @@ tcltest::test speech-present-shows-mic {a working path puts the microphone back 
 # ----------------------------------------------------------------------
 tcltest::test speech-no-linked-audio {the app binary links no audio or speech library} -body {
 	set binary [info nameofexecutable]
-	set linked [exec ldd $binary]
+	if {[tk windowingsystem] eq "aqua"} {
+		set linked [exec otool -L $binary]
+		# This build links Tk statically; AppKit is its native GUI dependency.
+		set guiLibrary *AppKit.framework*
+	} else {
+		set linked [exec ldd $binary]
+		set guiLibrary *libtk*
+	}
 	set found {}
 	foreach lib {whisper portaudio vosk pocketsphinx} {
 		if {[string match -nocase "*$lib*" $linked]} { lappend found $lib }
 	}
-	list $found [string match -nocase "*libtk*" $linked]
+	list $found [string match -nocase $guiLibrary $linked]
 } -result {{} 1}
 
 tcltest::test speech-source-has-no-cloud-call {the speech module never calls the assistant provider or the network} -body {

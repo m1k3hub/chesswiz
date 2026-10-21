@@ -10,6 +10,11 @@
 package require Tcl 8.5
 package require tcltest 2.5
 
+# These cases assert native X events and X focus, including KeyRelease.
+# Aqua/Win32 cannot run xdotool; synthetic Tk events would change that contract.
+tcltest::testConstraint x11Keys [expr {
+    [tk windowingsystem] eq "x11" && [llength [auto_execok xdotool]] > 0}]
+
 namespace eval ::scidb::test::askkeys {
 	variable Ran {}
 	variable ids {}
@@ -104,7 +109,7 @@ proc ::scidb::test::askkeys::Editor {path class} {
 # ----------------------------------------------------------------------
 # Up/Down keep the selection through the KeyRelease.
 # ----------------------------------------------------------------------
-tcltest::test ask-real-down-down-up-keeps-selection {real Down/Down/Up survive their KeyReleases} -body {
+tcltest::test ask-real-down-down-up-keeps-selection {real Down/Down/Up survive their KeyReleases} -constraints x11Keys -body {
 	::scidb::test::askkeys::cleanup
 	::scidb::test::askkeys::Typed "new"
 	set seen {}
@@ -121,7 +126,7 @@ tcltest::test ask-real-down-down-up-keeps-selection {real Down/Down/Up survive t
 	set answer
 } -result {{0 1 2 1} 1}
 
-tcltest::test ask-real-enter-runs-selected-row {real Down then Enter runs the second row} -body {
+tcltest::test ask-real-enter-runs-selected-row {real Down then Enter runs the second row} -constraints x11Keys -body {
 	::scidb::test::askkeys::cleanup
 	::scidb::test::askkeys::action test.askkeys.a "Zqx Alpha" A
 	::scidb::test::askkeys::action test.askkeys.b "Zqx Beta" B
@@ -223,7 +228,7 @@ proc ::scidb::test::askkeys::CommentProbe {} {
 # Ctrl+Shift+K from every kind of application toplevel; Ctrl+K keeps
 # kill-line in the multi-line editors.
 # ----------------------------------------------------------------------
-tcltest::test ask-real-ctrl-shift-k-comment-toplevel {Ctrl+Shift+K focuses Ask from a Comment toplevel; Ctrl+K kill-lines} -body {
+tcltest::test ask-real-ctrl-shift-k-comment-toplevel {Ctrl+Shift+K focuses Ask from a Comment toplevel; Ctrl+K kill-lines} -constraints x11Keys -body {
 	::scidb::test::askkeys::cleanup
 	set t [::scidb::test::askkeys::Editor .application.__asktest_comment__ Comment]
 	$t insert 1.0 "hello world"
@@ -242,7 +247,7 @@ tcltest::test ask-real-ctrl-shift-k-comment-toplevel {Ctrl+Shift+K focuses Ask f
 	set result
 } -result {.application.__asktest_comment__.text .application.nb.ask.entry .application.__asktest_comment__.text hello}
 
-tcltest::test ask-real-ctrl-shift-k-engine-console {Ctrl+Shift+K focuses Ask from the Script engine console; Ctrl+K kill-lines} -body {
+tcltest::test ask-real-ctrl-shift-k-engine-console {Ctrl+Shift+K focuses Ask from the Script engine console; Ctrl+K kill-lines} -constraints x11Keys -body {
 	::scidb::test::askkeys::cleanup
 	set t [::scidb::test::askkeys::Editor .application.__asktest_engine__ Script]
 	$t insert 1.0 "engine line here"
@@ -261,7 +266,7 @@ tcltest::test ask-real-ctrl-shift-k-engine-console {Ctrl+Shift+K focuses Ask fro
 	set result
 } -result {Script .application.__asktest_engine__.text .application.nb.ask.entry .application.__asktest_engine__.text {engine }}
 
-tcltest::test ask-real-ctrl-shift-k-pgn-text {Ctrl+Shift+K focuses Ask from the PGN Text; Ctrl+K kill-lines} -body {
+tcltest::test ask-real-ctrl-shift-k-pgn-text {Ctrl+Shift+K focuses Ask from the PGN Text; Ctrl+K kill-lines} -constraints x11Keys -body {
 	::scidb::test::askkeys::cleanup
 	catch { destroy .application.__asktest_pgn_text }
 	set t [text .application.__asktest_pgn_text -width 40 -height 4]
@@ -286,7 +291,7 @@ tcltest::test ask-real-ctrl-shift-k-pgn-text {Ctrl+Shift+K focuses Ask from the 
 
 # The real dialog: ::application::pgn::editComment opens
 # .application.__comment__ itself, with the editor's own figurine bindings.
-tcltest::test ask-real-comment-dialog-ask-wins {real comment dialog: Ctrl+Shift+K focuses Ask, Ctrl+K kill-lines, Ctrl+Shift+U inserts the king} -body {
+tcltest::test ask-real-comment-dialog-ask-wins {real comment dialog: Ctrl+Shift+K focuses Ask, Ctrl+K kill-lines, Ctrl+Shift+U inserts the king} -constraints x11Keys -body {
 	::scidb::test::askkeys::cleanup
 	::scidb::test::askkeys::NewGame
 	set ::scidb::test::askkeys::CommentResult {}

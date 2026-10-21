@@ -62,4 +62,34 @@ tcltest::test engine-choice-correction {a valid configured engine can be chosen 
     set ::ai::engine::Options(engine) $savedChoice
 } -result {1 0 Valid}
 
+# The bundled Mac UCI preset omits WinBoard profiles. Re-probing the same
+# command must normalize that record, and must store merged profiles under
+# the actual array key when an older profile does exist.
+tcltest::test engine-reprobe-sparse-profiles {re-probing a sparse UCI preset preserves complete profile fields} -setup {
+    set savedEngines $::engine::Engines
+    rename ::engine::ProbeEngine ::scidb::test::engineValidation::realProbe
+    proc ::engine::ProbeEngine {parent entry protocols} {
+        return $::scidb::test::engineValidation::probeResult
+    }
+    set ::scidb::test::engineValidation::probeResult [dict merge $::engine::EmptyEngine {
+        Name Reprobe Command generated-reprobe Protocol UCI
+        Profiles:UCI {Default {}}
+        Profiles:WB {Default {{Hash spin 16 16 1 64}}}
+    }]
+} -body {
+    set entry $::scidb::test::engineValidation::probeResult
+    set ::engine::Engines [list [dict remove $entry Profiles:WB]]
+    set added [::engine::ProbeNewEngine .application $entry {UCI}]
+    set sparse [lindex $::engine::Engines 0]
+    dict set entry Profiles:WB {Legacy {{Hash spin 8 8 1 64}}}
+    set ::engine::Engines [list $entry]
+    ::engine::ProbeNewEngine .application $entry {UCI}
+    set merged [dict get [lindex $::engine::Engines 0] Profiles:WB]
+    list $added [dict get $sparse Profiles:WB] [lindex $merged 0] [lindex $merged 1 0 2]
+} -cleanup {
+    rename ::engine::ProbeEngine {}
+    rename ::scidb::test::engineValidation::realProbe ::engine::ProbeEngine
+    set ::engine::Engines $savedEngines
+} -result {1 {} Default 16}
+
 tcltest::cleanupTests

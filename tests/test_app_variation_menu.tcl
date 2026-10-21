@@ -1,5 +1,9 @@
 package require tcltest 2.5
 
+# These probes select rows by mapped Tk menu geometry and synthetic mouse
+# events. Aqua native menus do not expose that mapping/tracking contract.
+tcltest::testConstraint tkMenuWindows [expr {[tk windowingsystem] ne "aqua"}]
+
 namespace eval ::variationMenuTest {
 	variable selected 0
 	variable timer {}
@@ -108,7 +112,7 @@ foreach {mode suggested result} {
 	drag 1 {1 b5 {e5 b5}}
 	suggested 1 {1 b6 {e5 b6}}
 } {
-	tcltest::test variation-menu-$mode {board action and popup command create a variation} -setup {
+	tcltest::test variation-menu-$mode {board action and popup command create a variation} -constraints tkMenuWindows -setup {
 		::variationMenuTest::setup $suggested
 	} -body {
 		::variationMenuTest::play $mode

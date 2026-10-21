@@ -3806,6 +3806,9 @@ proc ProbeNewEngine {parent entry {protocols {UCI WB}}} {
 	set numbers {}
 	set index 0
 	foreach entry $Engines {
+		# Older and bundled UCI presets can omit unused WinBoard fields.
+		array unset e
+		array set e $EmptyEngine
 		array set e $entry
 
 		# TODO the user should confirm the replacement of these attributes:
@@ -3823,7 +3826,7 @@ proc ProbeNewEngine {parent entry {protocols {UCI WB}}} {
 
 			set e(Profiles:UCI) [UpdateProfile $engine(Profiles:UCI) $e(Profiles:UCI)]
 			if {$engine(ProfileType) eq "Options"} {
-				set e(Profiles:WB [UpdateProfile $engine(Profiles:WB) $e(Profiles:WB)]
+				set e(Profiles:WB) [UpdateProfile $engine(Profiles:WB) $e(Profiles:WB)]
 			}
 
 			lset Engines $index [array get e]

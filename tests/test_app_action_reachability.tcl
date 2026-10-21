@@ -145,6 +145,12 @@ namespace eval ::scidb::test::reachability {
         variable bad {}
         variable output
         set serial 0
+        set limit {timeout 35}
+        # macOS has no GNU timeout. Tk also redirects output to its console
+        # when a pipeline supplies no terminal, so give each child a PTY.
+        if {[tk windowingsystem] eq "aqua"} {
+            set limit {/usr/bin/script -q /dev/null perl -e {alarm shift; exec @ARGV} 35}
+        }
         foreach case $cases {
             lassign $case id argv kind
             # X11 selections belong to the display, not the process/HOME.
@@ -158,7 +164,7 @@ namespace eval ::scidb::test::reachability {
             file mkdir $home
             puts "REACHABILITY $id $argv"; flush stdout
             set command [list env HOME=$home SCIDB_REACHABILITY_CASE=$case \
-                timeout 35 [info nameofexecutable] [file join $root tests run_app_tests.tcl] \
+                {*}$limit [info nameofexecutable] [file join $root tests run_app_tests.tcl] \
                 -file [file tail $file] -match *-probe]
             set pipe [open [list | {*}$command 2>@1] r]
             fconfigure $pipe -blocking 0

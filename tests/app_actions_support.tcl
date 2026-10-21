@@ -4,6 +4,16 @@ namespace eval ::scidb::test::actions {
     # The engine writes only capturable en-passant squares; after 1.e4 it is "-".
     variable Fen {rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1}
 
+    proc engineProgram {} {
+        if {[info exists ::env(SCIDB_TEST_ENGINE)]} {return $::env(SCIDB_TEST_ENGINE)}
+        # Aqua bundles ship the engine with Resources, not /usr/games.
+        if {[tk windowingsystem] eq "aqua"} {
+            set program [file join $::scidb::dir::share engines stockfish-chesswiz]
+            if {[file executable $program]} {return $program}
+        }
+        return /usr/games/stockfish
+    }
+
     proc ready {} {
         # application::open is called by the bundle, but TwmReady/Startup2
         # run from the event queue. Tests must wait for the actual widgets.
@@ -137,7 +147,7 @@ namespace eval ::scidb::test::actions {
             }
         }
         if {$name in {engine_options start_engine set_engine_option remove_engine add_engine}} {
-            set program [expr {[info exists ::env(SCIDB_TEST_ENGINE)] ? $::env(SCIDB_TEST_ENGINE) : "/usr/games/stockfish"}]
+            set program [engineProgram]
             if {![file executable $program]} { error "real UCI engine unavailable: $program" }
             if {$name eq "add_engine"} { return [list path $program] }
             set reply [::application::assistant::runTool add_engine [list path $program]]

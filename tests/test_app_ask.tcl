@@ -487,6 +487,7 @@ tcltest::test ask-keystroke-budget {p95 of one keystroke is under 100 ms on a 40
 			lappend times [expr {([clock microseconds] - $t0) / 1000.0}]
 		}
 		set p95 [::scidb::test::ask::Percentile $times 0.95]
+		puts "EVIDENCE ask-keystroke p95Ms=$p95 samplesMs=$times"
 		::scidb::test::ask::forget {*}$Synthetics
 		set Synthetics {}
 		list [expr {$p95 < 100}] [expr {[llength $times] >= 10}]

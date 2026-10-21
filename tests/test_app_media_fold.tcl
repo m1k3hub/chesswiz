@@ -1,6 +1,10 @@
 # Board transport shares the Media pane's model and playback delegates.
 package require tcltest 2.5
 
+# These posting probes require mapped Tk menu windows and scripted unpost;
+# Aqua uses native menu tracking, covered separately by the Mac menu suite.
+tcltest::testConstraint tkMenuWindows [expr {[tk windowingsystem] ne "aqua"}]
+
 proc ::scidb::test::foldRecord {target data} {
     file mkdir tests/tmp-app/w1c
     set f [open tests/tmp-app/w1c/$target-media.txt a]
@@ -500,6 +504,7 @@ tcltest::test mediafold-focus-time {MED-001C time advances and Space is local to
     set ::scidb::test::foldTime 65
     ::application::media::SeekTick
     set second [$w.controls.time cget -text]
+    if {[tk windowingsystem] eq "aqua"} {raise [winfo toplevel $w]; update}
     focus -force $w.controls.play
     update
     if {![winfo ismapped $w.controls.play] || [focus] ne "$w.controls.play"} {error "inset focus precondition failed"}
@@ -616,7 +621,7 @@ proc ::scidb::test::foldMenuLabels {menu} {
 
 # VAL-MED-011: choosing an entry selects it in the hidden Media pane, but the
 # board's Media button must keep listing the game's entries (never C7).
-tcltest::test mediafold-real-menu-repost {board Media menu lists the entries again after a choice} -setup {
+tcltest::test mediafold-real-menu-repost {board Media menu lists the entries again after a choice} -constraints tkMenuWindows -setup {
     set ::scidb::test::foldStubs {}
     set ::scidb::test::foldCalls {}
     ::scidb::test::foldStub available? {} {return 1}
@@ -680,7 +685,7 @@ tcltest::test mediafold-real-menu-repost {board Media menu lists the entries aga
 } -cleanup {::scidb::test::foldCleanup} -result {1 0 1 1 1 1}
 
 # C7 stays reachable where it belongs: right-click on an entry in the Media pane.
-tcltest::test mediafold-real-menu-c7 {right-click in the Media pane posts the C7 entry menu} -body {
+tcltest::test mediafold-real-menu-c7 {right-click in the Media pane posts the C7 entry menu} -constraints tkMenuWindows -body {
     set base [file normalize tests/tmp-app/media-test/MediaTest.sci]
     if {![::scidb::db::get open? $base]} {::scidb::db::load $base {apply {args {return 0}}} {} -readonly 1}
     ::scidb::db::switch $base Normal
@@ -845,7 +850,7 @@ tcltest::test mediafold-008-stream {choosing Open stream... and entering a URL p
     ::scidb::test::foldCleanup
 } -result {1 0 {{launch https://test-videos.example/vids/bigbuckbunny.mp4}} 1 1 1}
 
-tcltest::test mediafold-008-no-hang {scripted button post/unpost and entry reads complete within 1 s, 20 times each, leaving no grab} -setup {
+tcltest::test mediafold-008-no-hang {scripted button post/unpost and entry reads complete within 1 s, 20 times each, leaving no grab} -constraints tkMenuWindows -setup {
     set ::scidb::test::foldStubs {}
     ::application::media::Update [::scidb::test::foldGame]
     ::scidb::test::foldWait
@@ -886,8 +891,13 @@ proc ::scidb::test::migRun {dir phase {named 0}} {
     set root [file dirname $::scidb::test::app::testDir]
     set script [file join $root tests fixtures media-mig phase.tcl]
     set home [file join $dir home]
+    set limit {timeout 120}
+    # macOS ships Perl but no GNU timeout.
+    if {[tk windowingsystem] eq "aqua"} {
+        set limit {perl -e {alarm shift; exec @ARGV} 120}
+    }
     if {[catch {
-        ::util::execSafe {*}[list timeout 120 env HOME=$home MIG_PHASE=$phase MIG_ROOT=$root \
+        ::util::execSafe {*}[list {*}$limit env HOME=$home MIG_PHASE=$phase MIG_ROOT=$root \
             SCIDB_USERDIR=$home/.chesswiz MIG_NAMED_TEST=$named \
             LIBGL_ALWAYS_SOFTWARE=1 SCIDB_AI_UNCALIBRATED=1 \
             $bin $script] > $log 2>@1

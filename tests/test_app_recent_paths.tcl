@@ -290,10 +290,12 @@ tcltest::test recentpaths-case-volume {two names that differ in case follow the 
 	close $fh
 	set distinct [expr {[file size $a] != [file size $b]}]
 } -body {
-	list $distinct [expr {[::platform::sys::sameFile $a $b] == !$distinct}]
+	# APFS may be case-insensitive; assert identity against the measured
+	# volume behavior rather than requiring two distinct files.
+	expr {[::platform::sys::sameFile $a $b] == !$distinct}
 } -cleanup {
 	file delete $a $b
-} -result {1 1}
+} -result 1
 
 # --- G13: the recent list finds the entry it is given --------------------
 
