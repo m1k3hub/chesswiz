@@ -235,4 +235,19 @@ tcltest::test tipdelay-forced-hide {a forced hide takes the pending tooltip away
 	::scidb::test::tipdelay::cleanup
 } -result {-1 0}
 
+tcltest::test tipdelay-fade-interrupted {a new tooltip restores opacity after an interrupted fade} -setup {
+	::scidb::test::tipdelay::setup
+} -body {
+	set w [::scidb::test::tipdelay::hover]
+	set b [::tooltip::wname]
+	::tooltip::Show $w {} $::scidb::test::tipdelay::msg cursor
+	::tooltip::Fade $b 0.2
+	after cancel $::tooltip::G(fadeId)
+	set faded [wm attributes $b -alpha]
+	::tooltip::Show $w {} $::scidb::test::tipdelay::msg cursor
+	list [expr {$faded < 0.99}] [expr {[wm attributes $b -alpha] >= 0.99}]
+} -cleanup {
+	::scidb::test::tipdelay::cleanup
+} -result {1 1}
+
 ::tcltest::cleanupTests

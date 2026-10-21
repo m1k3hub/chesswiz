@@ -466,6 +466,7 @@ proc ::application::ask::ShowList {} {
 	lappend items [list " $mc::AskAssistant" ""]
 
 	set w $Priv(list)
+	set opening 0
 	if {$w eq "" || ![winfo exists $w]} {
 		set w .application.askList
 		catch { destroy $w }
@@ -479,16 +480,25 @@ proc ::application::ask::ShowList {} {
 		bind $w.list <ButtonRelease-1> { break }
 		bind $w.list <Double-Button-1> { break }
 		set Priv(list) $w
+		set opening 1
 	}
 	set list $w.list
-	$list delete 0 end
-	foreach item $items { $list insert end [lindex $item 0] }
+	# Consecutive prefixes often produce the same rows. Keep those rows
+	# (and their native selection) rather than repainting the entire list.
+	set texts {}
+	foreach item $items { lappend texts [lindex $item 0] }
+	if {[$list get 0 end] ne $texts} {
+		$list delete 0 end
+		$list insert end {*}$texts
+	}
 	if {[llength $items]} {
 		if {$Priv(index) < 0} { set Priv(index) 0 }
 		if {$Priv(index) >= [llength $items]} { set Priv(index) [expr {[llength $items] - 1}] }
-		$list selection clear 0 end
-		$list selection set $Priv(index)
-		$list activate $Priv(index)
+		if {[$list curselection] ne $Priv(index)} {
+			$list selection clear 0 end
+			$list selection set $Priv(index)
+		}
+		if {[$list index active] != $Priv(index)} { $list activate $Priv(index) }
 		$list see $Priv(index)
 	}
 
@@ -501,8 +511,12 @@ proc ::application::ask::ShowList {} {
 		set height [expr {min(320, max($rowHeight, [llength $items] * $rowHeight + 4))}]
 		wm geometry $w "${width}x${height}+${x}+${y}"
 	}
-	catch { wm deiconify $w }
-	catch { raise $w }
+	# Reordering an already visible Aqua window forces another native
+	# display pass on every key. Only map and raise when opening the list.
+	if {$opening || [wm state $w] ne "normal"} {
+		wm deiconify $w
+		raise $w
+	}
 	return $w
 }
 

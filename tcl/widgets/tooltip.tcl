@@ -188,7 +188,11 @@ bind Tooltip <Any-KeyPress> [namespace code { hide 0 1 }]
 #bind Tooltip <Any-Button> [namespace code { hide 0 1 }]
 bind . <Any-Button> [namespace code { hide 0 1 }]
 
-::shadow::addBindings TooltipPopup no
+# Aqua's native help window already has a shadow. Mapping two more
+# toplevels for a simulated shadow adds native display passes to each tip.
+if {[tk windowingsystem] ne "aqua"} {
+	::shadow::addBindings TooltipPopup no
+}
 
 
 proc init {} {
@@ -467,10 +471,19 @@ proc popup {w b {at {}}} {
 		set focus [focus]
 	}
 
-	# avoid the blink issue with 1 to <1 alpha on Windows, watch half-fading
-	catch { wm attributes $b -alpha 0.99 }
-	catch { wm attributes $b -type tooltip }
-	catch { wm attributes $b -topmost }
+	if {[tk windowingsystem] eq "aqua" && $b eq $G(toplevel)} {
+		# init sets this help window's attributes once. Only an interrupted
+		# fade needs its opacity restored; unchanged attributes dirty Aqua.
+		catch {
+			if {[wm attributes $b -alpha] < 0.99} { wm attributes $b -alpha 0.99 }
+		}
+	} else {
+		# Other callers supply their own popup, without going through init.
+		# Keep the Windows blink workaround and recover from half-fading.
+		catch { wm attributes $b -alpha 0.99 }
+		catch { wm attributes $b -type tooltip }
+		catch { wm attributes $b -topmost }
+	}
 	wm geometry $b +$x+$y
 	wm deiconify $b
 	raise $b
