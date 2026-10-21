@@ -538,7 +538,7 @@ array set DefaultModel {
 	openai    ""
 	fireworks accounts/fireworks/models/glm-5p3
 	qwen      qwen3.8-max
-	gemini    ""
+	gemini    gemini-3.8-flash
 }
 
 variable KeyEnv

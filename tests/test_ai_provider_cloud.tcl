@@ -918,7 +918,7 @@ test aipc-preset-model-10.2 {model falls back to the per-provider DefaultModel} 
 		ollama    kimi-k3:cloud
 		fireworks accounts/fireworks/models/glm-5p3
 		qwen      qwen3.8-max
-		gemini    ""
+		gemini    gemini-3.8-flash
 		anthropic claude-opus-5-5
 		openai    ""
 	} {
