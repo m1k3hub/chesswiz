@@ -42,6 +42,16 @@ proc ::scidb::test::tipdelay::pump {ms} {
 	set ::scidb::test::tipdelay::dummy 0
 }
 
+proc ::scidb::test::tipdelay::waitUntil {condition} {
+	set deadline [expr {[clock milliseconds] + 10000}]
+	while {![uplevel 1 [list expr $condition]]} {
+		if {[clock milliseconds] >= $deadline} { error "condition timed out: $condition" }
+		# update may never return with Aqua servicing the 1 ms load chain.
+		# A timer-bounded vwait yields without draining that entire chain.
+		::scidb::test::tipdelay::pump 5
+	}
+}
+
 # Other after-events of the application: a chain that keeps the event loop
 # busy while the tooltip is asked for. "after 0" is no good - such a chain
 # never lets "update" return.
@@ -64,7 +74,7 @@ proc ::scidb::test::tipdelay::startLoad {} {
 	set busy 1
 	set ticks 0
 	after 0 ::scidb::test::tipdelay::spin
-	::scidb::test::wait::until {$::scidb::test::tipdelay::ticks >= 50}
+	::scidb::test::tipdelay::waitUntil {$::scidb::test::tipdelay::ticks >= 50}
 }
 
 proc ::scidb::test::tipdelay::stopLoad {} {
@@ -115,7 +125,7 @@ proc ::scidb::test::tipdelay::request {w} {
 	# Hover dispatch can already have displayed a tooltip on slow native
 	# windows. Measure a fresh request, not that earlier mapped window.
 	::tooltip::hide 0 1
-	::scidb::test::wait::until {![winfo ismapped [::tooltip::wname]]}
+	::scidb::test::tipdelay::waitUntil {![winfo ismapped [::tooltip::wname]]}
 	set start [clock milliseconds]
 	::tooltip::show $w $::scidb::test::tipdelay::msg
 	return $start
