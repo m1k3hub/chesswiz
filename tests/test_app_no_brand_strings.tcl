@@ -159,7 +159,7 @@ tcltest::test no-brands-in-assistant-prompts {assistant system prompts and menu 
 	set violations
 } -result {}
 
-tcltest::test no-brands-in-mc-catalogs {loaded English and German mc catalogs contain no competitor names or CQL} -setup {
+tcltest::test no-brands-in-mc-catalogs {loaded mc catalogs contain no competitor names or CQL} -setup {
 	set prevShare $::scidb::dir::share
 	set wtShare [file normalize [file join [file dirname [file normalize [info script]]] .. tcl]]
 	if {[file isdirectory [file join $wtShare lang]]} {
@@ -168,7 +168,7 @@ tcltest::test no-brands-in-mc-catalogs {loaded English and German mc catalogs co
 	set prevLang $::mc::langID
 } -body {
 	set violations {}
-	foreach lang {en de} {
+	foreach lang {en de es it hu sv} {
 		::mc::setLang $lang
 		set violations [concat $violations [::scidb::test::nobrands::scanMcCatalog $lang]]
 	}

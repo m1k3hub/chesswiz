@@ -25,6 +25,7 @@ TITLE Bienvenido a la Ayuda de Chesswiz
   <li><a href="Database-Formats.html">Formatos de bases de datos</a></li>
   <li><a href="File-Selection-Dialog.html">Uso del diálogo Selección de archivos</a></li>
   <li><a href="Toolbar-Usage.html">Uso de las Barras de herramientas</a></li>
+  <li><a href="Ask-Field.html">El campo Preguntar y el Asistente</a></li>
   <li><a href="Clipbase.html">La base temporal (Clipbase)</a></li>
   <li><a href="How-To-Set-Default-Browser.html">Cómo definir el explorador de Internet predeterminado</a></li>
 </ul>

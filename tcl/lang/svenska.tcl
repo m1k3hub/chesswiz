@@ -264,6 +264,11 @@
 ::progress::mc::Message(copy-game)				"Kopiera %s parti(er)"
 
 ### menu ###############################################################
+::menu::mc::Window							"&Fönster"
+::menu::mc::MaximisePane					"&Maximera / återställ panel"
+::menu::mc::FocusZoom						"Fokus &följer storlek"
+::menu::mc::FocusZoomRatio				"&Zoomförhållande"
+::menu::mc::FocusZoomPinBoard			"&Lås brädstorlek"
 ::menu::mc::Theme								"Tema"
 ::menu::mc::ColorScheme						"Color Scheme" ;# NEW
 ::menu::mc::CustomStyleMenu				"Chesswiz's Style Menu" ;# NEW
@@ -595,6 +600,10 @@
 ::application::layout::mc::ReplaceTip			"Overwrite current layout with this one" ;# NEW
 
 ### application ########################################################
+::application::mc::ShortcutPreferences	"Tangentbordsinställningar"
+::application::mc::ShortcutScheme			"Genvägsschema:"
+::application::mc::ShortcutChesswiz		"Chesswiz (standard)"
+::application::mc::ShortcutChessBase		"Klassiskt"
 ::application::mc::Tab(information)			"&Information" ;# NEW
 ::application::mc::Tab(database)				"&Databas"
 ::application::mc::Tab(board)					"&Bräde"
@@ -768,6 +777,7 @@
 ::application::database::mc::UpgradeMessage					"Upgraderar databas '%s'"
 ::application::database::mc::CompactMessage					"Komprimerar databas '%s'"
 ::application::database::mc::CannotOpenFile					"Kan inte öppna fil '%s'."
+::application::database::mc::CannotReadFile						"Kan inte läsa filen '%s': den finns, men är låst eller inte läsbar (öppen i ett annat program eller behörighet saknas)."
 ::application::database::mc::MaintenanceReadOnlyPgn			"PGN-filer öppnas skrivskyddade; använd Convert to .sci för att redigera"
 ::application::database::mc::MaintenanceReadOnly				"Denna databas är skrivskyddad; underhållet kräver en skrivbar databas"
 ::application::database::mc::EncodingFailed					"Kodning %s misslyckades." ;# "Character decoding %s failed."
@@ -1048,6 +1058,88 @@
 ::application::tree::mc::T_Number							"Numeration"
 ::application::tree::mc::T_AverageYear						"Medelår"
 ::application::tree::mc::T_FrequentPlayer					"Mest frekvent spelare"
+
+### application::ask ###################################################
+::application::ask::mc::Placeholder		"Fråga eller säg åt Chesswiz vad som ska göras (Ctrl+K)"
+::application::ask::mc::AskAssistant		"Fråga assistenten"
+::application::ask::mc::Send				"Skicka till assistenten"
+::application::ask::mc::Mic				"Tala"
+::application::ask::mc::Recording		"Inspelning\u2026 klicka för att stoppa"
+::application::ask::mc::Transcribing	"Transkriberar\u2026 klicka för att avbryta"
+::application::ask::mc::Heard			"Uppfattat: %s"
+::application::ask::mc::NothingHeard	"Inget uppfattades"
+::application::ask::mc::AssistantPrefs	"Assistentinställningar\u2026"
+::application::ask::mc::Unavailable		"Assistenten är inte tillgänglig."
+::application::ask::mc::Busy				"Assistenten är upptagen. Försök igen när den är klar."
+::application::ask::mc::Failed			"Fel: %s"
+::application::ask::mc::PrefsTitle		"Assistent"
+::application::ask::mc::SpeechInput		"Röstinmatning"
+::application::ask::mc::SpeechReady		"En lokal röstsökväg är konfigurerad."
+::application::ask::mc::PathWhisper		"Sökväg till whisper-cli"
+::application::ask::mc::PathModel		"Sökväg till ggml-modell"
+::application::ask::mc::PathRecorder	"Inspelare (arecord/ffmpeg)"
+::application::ask::mc::PathStub		"Teststubbskommando (valfritt)"
+::application::ask::mc::Detect			"Identifiera"
+::application::ask::mc::Close			"Stäng"
+::application::ask::mc::PrefsWhat		"öppna assistentinställningarna"
+::application::ask::mc::PrefsDoc		"Välj de lokala röstverktygen (whisper-cli, modell, inspelare) och se vad som behöver installeras när röstinmatning inte är tillgänglig."
+
+### application::speech ################################################
+::application::speech::mc::Install		"Röstinmatning kräver whisper-cli (whisper.cpp), en ggml-modell och arecord eller ffmpeg. Ställ in dem i Inställningar > Assistent."
+::application::speech::mc::InstallMac	"macOS använder systemets diktering: aktivera den i Systeminställningar > Tangentbord > Diktering och tryck sedan på dikteringstangenten (eller Fn Fn)."
+::application::speech::mc::InstallWin	"Windows använder systemets diktering: tryck på Win+H medan Fråga-fältet har fokus."
+::application::speech::mc::Listening	"Inspelning\u2026 klicka för att stoppa"
+::application::speech::mc::Working		"Transkriberar\u2026 klicka för att avbryta"
+::application::speech::mc::Nothing		"Inget uppfattades"
+::application::speech::mc::Failed		"Röstinmatning misslyckades: %s"
+::application::speech::mc::NoRecord	"Röstinmatningen avbröts"
+::application::speech::mc::Missing		"%s Saknas: %s."
+::application::speech::mc::MissingCli	"whisper-cli"
+::application::speech::mc::MissingModel	"en ggml-modell"
+::application::speech::mc::MissingRecorder	"arecord eller ffmpeg"
+
+### application::assistant #############################################
+::application::assistant::mc::Send				"Skicka"
+::application::assistant::mc::Clear			"Rensa"
+::application::assistant::mc::Thinking			"Tänker..."
+::application::assistant::mc::Ready				"Klar"
+::application::assistant::mc::UsingBackup		"%s svarar inte; frågar %s istället."
+::application::assistant::mc::AllDown			"AI-tjänsten svarar inte just nu (%s). Försök igen om en stund."
+::application::assistant::mc::Confirm			"Assistenten vill: %s"
+::application::assistant::mc::Denied			"Användaren avböjde: åtgärden utfördes INTE och ingen dialogruta öppnades."
+::application::assistant::mc::Greeting			"Fråga mig med egna ord, till exempel \"partier där en springare gafflar kung och dam\", \"ställningar med denna bondestruktur\", \"ställ upp Najdorf efter 6.Lg5\" eller \"Carlsens förberedelserapport\". F2 tar mig tillbaka från var som helst."
+::application::assistant::mc::DebugGreeting	"Felsökningsläge: jag kan även inspektera fel, procedurer och variabler."
+::application::assistant::mc::Plan				"Plan:"
+::application::assistant::mc::PlanConfirm		"Kör denna plan?\n%s"
+::application::assistant::mc::PlanDeclined		"Inget kördes: planen avböjdes."
+::application::assistant::mc::PlanStepFailed	"Stannade vid steg %d (%s): %s Stegen före utfördes."
+::application::assistant::mc::PlanStepSkipped	"kördes inte: planen stannade vid ett tidigare steg"
+::application::assistant::mc::TooManyRounds	"Stoppad: begäran krävde fler steg än vad assistenten tillåter (%d rundor)."
+
+### application::assistant::panel ###################################
+::application::assistant::panel::mc::StartupGreeting	"Jag kan sköta Chesswiz åt dig. Välj ett förslag nedan eller fråga med egna ord."
+::application::assistant::panel::mc::Hide				"Dölj"
+::application::assistant::panel::mc::NoModelHint		"Ingen modell är ansluten än. Öppna Verktyg > Välj modell\u2026 för att ansluta en; förslagen ovan fungerar utan."
+
+### application::assistant::offers #####################################
+::application::assistant::offers::mc::Summary			"Vad finns i denna databas?"
+::application::assistant::offers::mc::FindPositions	"Hitta ställningar..."
+::application::assistant::offers::mc::Duplicates		"Dubbletter?"
+::application::assistant::offers::mc::Review			"Granska mitt parti"
+::application::assistant::offers::mc::WentWrong		"Var gjorde jag fel?"
+::application::assistant::offers::mc::GamesLike		"Partier som detta"
+::application::assistant::offers::mc::Explain			"Förklara ställningen"
+::application::assistant::offers::mc::SamePosition	"Partier med denna ställning"
+::application::assistant::offers::mc::PositionsLike	"Ställningar som denna"
+::application::assistant::offers::mc::Compact			"Komprimera den"
+::application::assistant::offers::mc::Trend			"Öppningstrender"
+::application::assistant::offers::mc::Maintenance		"Underhållsrapport"
+::application::assistant::offers::mc::Annotate		"Kommentera detta parti"
+::application::assistant::offers::mc::OpeningReport	"Öppningsrapport"
+::application::assistant::offers::mc::Lesson			"Videolektion"
+::application::assistant::offers::mc::AskAbout		"Fråga om detta..."
+::application::assistant::offers::mc::AskAboutGame	"Om parti nr %d (%s): "
+::application::assistant::offers::mc::AskAboutBoard	"Om ställningen på brädet: "
 
 ### database::switcher #################################################
 ::database::switcher::mc::Empty								"tom"
@@ -2599,6 +2691,7 @@
 ::info::mc::Version					"Version"
 ::info::mc::Distributed				"Det här programmet distribueras enligt bestämmelserna i GNU General Public License."
 ::info::mc::Inspired					"Scidb bygger på Scid 3.6.1, copyright \u00A9 1999-2003 by Shane Hudson."
+::info::mc::BasedOnScidb			"en schackdatabas baserad på Scidb"
 ::info::mc::SpecialThanks			"Särskilt tack till %s för ett fantastiska jobb. Hans insatser är grunden för detta program."
 
 ### comment ############################################################

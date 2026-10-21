@@ -4,10 +4,12 @@ set Index {
       {{Amministrazione database} {Database-Switcher.html} {Administration}}
       {{Archivio} {Database-Formats.html} {Archivio-Database}}
       {{Archivio Database} {Database-Formats.html} {Archivio-Database}}
+      {{Assistente} {Ask-Field.html} {Assistant}}
     }
   }
   { C
     {
+      {{Campo Chiedi} {Ask-Field.html} {}}
       {{Clipbase} {Clipbase.html} {}}
       {{Codici} {Game-Flags.html} {}}
       {{Codici Partita} {Game-Flags.html} {}}
@@ -27,6 +29,16 @@ set Index {
       {{Homepage} {Contact-Information.html} {Homepage}}
     }
   }
+  { I
+    {
+      {{Input vocale} {Ask-Field.html} {Speech-Input}}
+    }
+  }
+  { M
+    {
+      {{Microfono} {Ask-Field.html} {Speech-Input}}
+    }
+  }
   { O
     {
       {{Opzioni nella linea di comando} {Command-Line-Options.html} {}}
@@ -34,8 +46,15 @@ set Index {
   }
   { S
     {
+      {{Scorciatoie da tastiera} {Ask-Field.html} {Shortcuts}}
       {{Selezionatore di Database} {Database-Switcher.html} {}}
       {{Sito Internet} {Contact-Information.html} {Homepage}}
+    }
+  }
+  { T
+    {
+      {{Tavolozza dei comandi} {Ask-Field.html} {Result-List}}
+      {{Tavolozza delle azioni} {Ask-Field.html} {Result-List}}
     }
   }
   { V

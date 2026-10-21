@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<!-- Generated from tcl/help/es/Ask-Field.txt -->
+
+<html xmlns='http://www.w3.org/1999/xhtml' xml:lang='en' lang='es'>
+<head>
+  <meta http-equiv="content-type"
+           content="text/html; charset=utf-8" />
+  <meta http-equiv="content-language"
+           content="es" />
+  <meta http-equiv="content-style-type"
+           content="text/css" />
+
+  <meta name="author"
+     content="https://chesswizapp.com" />
+  <meta name="generator"
+     content="Chesswiz" />
+  <meta name="description"
+     content="Chesswiz - Help Page" />
+
+  <link rel="icon"
+       href="https://chesswizapp.com/favicon.ico"
+       type="image/x-icon" />
+  <link rel="shortcut icon"
+       href="https://chesswizapp.com/favicon.ico" />
+  <link rel="stylesheet"
+       type="text/css"
+      media="screen"
+		 href="../styles/help.css" />
+
+  <title>Chesswiz - Ayuda: El campo Preguntar y el Asistente</title>
+</head>
+
+<body>
+
+<div class="title">
+  <h1 class="title">El campo Preguntar y el Asistente</h1>
+</div>
+
+<p>
+El campo Preguntar en la franja superior proporciona un acceso rápido a acciones y
+comandos en todo Chesswiz. Combina una paleta de acciones rápida, solicitudes en
+lenguaje natural y una entrada de voz local opcional en un único campo.
+</p>
+
+<ul>
+  <li><a href="#Ask-Field">El campo Preguntar</a></li>
+  <li><a href="#Result-List">Paleta de acciones y lista de resultados</a></li>
+  <li><a href="#Speech-Input">Entrada de voz</a></li>
+  <li><a href="#Shortcuts">Atajos de teclado</a></li>
+  <li><a href="#Assistant">El Asistente</a></li>
+</ul>
+
+<h3 id="Ask-Field">El campo Preguntar</h3>
+
+<p>
+El campo Preguntar se encuentra situado en la franja superior de la ventana principal,
+inmediatamente a la izquierda del menú desplegable principal. Funciona como la paleta
+de acciones de la aplicación directamente en la ventana principal, sin necesidad de
+un diálogo de paleta independiente.
+</p>
+
+<p>
+Cuando el campo está vacío, se muestra un texto de sugerencia en gris claro:
+<i>"Preguntar o decir a Chesswiz qué hacer (Ctrl+K)"</i>. Tan pronto como empiece a escribir,
+la sugerencia desaparece y se abre la lista de resultados debajo del campo.
+Cuando el campo está vacío, pulsar <span style='white-space:nowrap;'><b>Arriba</b></span> o <span style='white-space:nowrap;'><b>Abajo</b></span>
+recorre el historial de sus solicitudes recientes.
+</p>
+
+<h3 id="Result-List">Paleta de acciones y lista de resultados</h3>
+
+<p>
+Escribir en el campo Preguntar filtra el registro de acciones de Chesswiz con cada pulsación de tecla.
+Solo se muestran las acciones ejecutables: una acción aparece únicamente si actualmente está tanto
+habilitada como visible según el estado activo de la aplicación (siguiendo las mismas reglas
+que el menú desplegable principal).
+</p>
+
+<p>
+Las acciones coincidentes se ordenan mediante coincidencia aproximada (fuzzy matching) a través
+de sus etiquetas, documentación y atajos de teclado. Cada elemento muestra:
+</p>
+
+<ul>
+  <li>La etiqueta descriptiva de la acción.</li>
+  <li>El atajo de teclado asignado a esa acción, si existe.</li>
+</ul>
+
+<p>
+Puede navegar y ejecutar elementos de la lista de resultados:
+</p>
+
+<ul>
+  <li>Las flechas <span style='white-space:nowrap;'><b>Arriba</b></span> y <span style='white-space:nowrap;'><b>Abajo</b></span> mueven la selección hacia arriba y hacia abajo en la lista.</li>
+  <li><span style='white-space:nowrap;'><b>Intro</b></span> o <span style='white-space:nowrap;'><b>Intro numérico</b></span> (o un clic del ratón) ejecuta la acción seleccionada. El comando se ejecuta a través del ejecutor de acciones, lo que garantiza que se apliquen todos los controles de seguridad y avisos de confirmación.</li>
+  <li><span style='white-space:nowrap;'><b>Escape</b></span> cierra la lista de resultados y devuelve el foco al elemento que lo tenía previamente (como el tablero de ajedrez).</li>
+</ul>
+
+<p>
+La última entrada en la lista de resultados es siempre <b>Preguntar al asistente</b>. Al seleccionar esta
+entrada, o pulsar <span style='white-space:nowrap;'><b>Intro</b></span> en cualquier consulta que no coincida con una acción registrada,
+se envía el texto de la consulta directamente al Asistente.
+</p>
+
+<h3 id="Speech-Input">Entrada de voz</h3>
+
+<p>
+Un botón de micrófono con la etiqueta <b>Hablar</b> se encuentra en el lado derecho del campo Preguntar.
+Al hacer clic en el botón se graba la voz, se transcribe localmente y se inserta el texto
+transcrito directamente en la posición del cursor en el campo Preguntar.
+</p>
+
+<p><img src='../images/note.png' alt='note' /> 
+La voz es estrictamente un mecanismo de entrada: Chesswiz nunca genera salida de voz.
+El texto transcrito permanece completamente editable en el campo y nunca se envía ni se
+ejecuta hasta que pulse explícitamente <span style='white-space:nowrap;'><b>Intro</b></span>.
+</p>
+
+<p>
+Todo el procesamiento de voz se realiza localmente mediante herramientas externas, sin servicios
+de red externos ni bibliotecas de audio vinculadas:
+</p>
+
+<ul>
+  <li><b>Linux</b>: Utiliza <span style='white-space:nowrap;'><tt>whisper-cli</tt></span> de whisper.cpp (ejecución exclusiva en CPU) junto con <span style='white-space:nowrap;'><tt>arecord</tt></span> o <span style='white-space:nowrap;'><tt>ffmpeg</tt></span>.</li>
+  <li><b>Windows</b>: Utiliza el dictado integrado del sistema operativo (<span style='white-space:nowrap;'>Win+H</span>).</li>
+  <li><b>macOS</b>: Utiliza el dictado del sistema (configurado en Ajustes del Sistema &gt; Teclado &gt; Dictado).</li>
+</ul>
+
+<p>
+Si no se detecta ninguna herramienta o modelo de voz, el botón del micrófono se oculta automáticamente
+de la interfaz. Puede configurar las rutas locales de voz en
+<span class='menuitem'>Preferencias &gt; Asistente</span> (o mediante la acción <span style='white-space:nowrap;'><tt>app.preferences.assistant</tt></span>),
+que proporciona opciones para la ruta de <span style='white-space:nowrap;'><tt>whisper-cli</tt></span>, el archivo del modelo y la herramienta de grabación,
+junto con un botón <b>Detectar</b> para comprobar la configuración.
+</p>
+
+<h3 id="Shortcuts">Atajos de teclado</h3>
+
+<p>
+El campo Preguntar es fácilmente accesible desde cualquier parte de Chesswiz mediante atajos de teclado:
+</p>
+
+<ul>
+  <li><span style='white-space:nowrap;'><b>Ctrl+K</b></span>: Lleva el foco al campo Preguntar y selecciona todo su texto, listo para escribir de inmediato. En los controles de edición de texto multilínea (como el editor de comentarios, el texto PGN o la consola del motor), <span style='white-space:nowrap;'><b>Ctrl+K</b></span> conserva la orden de edición estándar para borrar desde el cursor hasta el final de la línea.</li>
+  <li><span style='white-space:nowrap;'><b>Ctrl+Mayús+K</b></span> (o <span style='white-space:nowrap;'><b>Ctrl+Shift+K</b></span>): Lleva el foco incondicionalmente al campo Preguntar desde cualquier lugar de la aplicación, incluso desde editores de texto multilínea.</li>
+  <li><span style='white-space:nowrap;'><b>Escape</b></span>: Cierra la lista de resultados y devuelve el foco al control anterior o al tablero de ajedrez.</li>
+</ul>
+
+<h3 id="Assistant">El Asistente</h3>
+
+<p>
+El Asistente es un operador automatizado que ejecuta las acciones registradas de Chesswiz a partir
+de solicitudes en lenguaje natural. Se encuentra integrado en el panel del Asistente de la pestaña Tablero
+(y puede acoplarse o desacoplarse como cualquier panel de tablero; pulsar <span style='white-space:nowrap;'><b>F2</b></span> lo pone a la vista).
+</p>
+
+<p>
+Puede pedir al Asistente que realice operaciones con sus propias palabras, tales como buscar partidas,
+configurar posiciones en el tablero, generar informes de preparación de jugadores, búsquedas de aperturas
+o explicar la posición actual.
+</p>
+
+<p>
+Entre los principios clave de diseño del Asistente se incluyen:
+</p>
+
+<ul>
+  <li><b>Ejecuta acciones registradas</b>: El Asistente no puede ejecutar operaciones arbitrarias. Está limitado al registro fijo de acciones y herramientas de Chesswiz, y todos los parámetros se validan contra esquemas formales antes de invocar cualquier comando.</li>
+  <li><b>Planes de varios pasos con una sola confirmación</b>: Cuando una solicitud compleja requiere múltiples pasos, el Asistente los presenta como un plan unificado. Si algún paso modifica datos, importa partidas o realiza cambios masivos, Chesswiz solicita una confirmación única para todo el plan. Si se rechaza, no se ejecuta ninguna acción. Si algún paso genera un error, la ejecución se detiene de inmediato preservando los pasos previos ejecutados con éxito. Cualquier diálogo que se abra durante un plan pausa la ejecución hasta que se cierre.</li>
+  <li><b>Nunca es obligatorio</b>: El Asistente es estrictamente un operador auxiliar para mayor comodidad. Cada acción, búsqueda, diálogo y herramienta de Chesswiz sigue estando directamente disponible mediante los menús del programa, las barras de herramientas y los atajos de teclado. Los usuarios experimentados pueden manejar todas las características de Chesswiz sin necesidad de abrir ni utilizar el Asistente.</li>
+</ul>
+
+</body>
+</html>

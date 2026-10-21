@@ -7,6 +7,7 @@ set Contents {
     {{{Formato Database} {Database-Formats.html}}}
     {{{Uso dell'interfaccia di selezione dei file} {File-Selection-Dialog.html}}}
     {{{Uso delle barre degli strumenti} {Toolbar-Usage.html}}}
+    {{{Il campo Chiedi e l'Assistente} {Ask-Field.html}}}
     {{{Il Clipbase} {Clipbase.html}}}
     {{{Come ipostare il browser di default} {How-To-Set-Default-Browser.html}}}
   }

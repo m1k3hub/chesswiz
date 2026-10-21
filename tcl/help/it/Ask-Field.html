@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<!-- Generated from tcl/help/it/Ask-Field.txt -->
+
+<html xmlns='http://www.w3.org/1999/xhtml' xml:lang='en' lang='it'>
+<head>
+  <meta http-equiv="content-type"
+           content="text/html; charset=utf-8" />
+  <meta http-equiv="content-language"
+           content="it" />
+  <meta http-equiv="content-style-type"
+           content="text/css" />
+
+  <meta name="author"
+     content="https://chesswizapp.com" />
+  <meta name="generator"
+     content="Chesswiz" />
+  <meta name="description"
+     content="Chesswiz - Help Page" />
+
+  <link rel="icon"
+       href="https://chesswizapp.com/favicon.ico"
+       type="image/x-icon" />
+  <link rel="shortcut icon"
+       href="https://chesswizapp.com/favicon.ico" />
+  <link rel="stylesheet"
+       type="text/css"
+      media="screen"
+		 href="../styles/help.css" />
+
+  <title>Chesswiz - Aiuto: Il campo Chiedi e l'Assistente</title>
+</head>
+
+<body>
+
+<div class="title">
+  <h1 class="title">Il campo Chiedi e l'Assistente</h1>
+</div>
+
+<p>
+Il campo Chiedi nella barra superiore offre un accesso rapido ad azioni e comandi
+in tutta l'applicazione Chesswiz. Unisce una rapida tavolozza delle azioni, richieste in
+linguaggio naturale e un input vocale locale opzionale in un unico campo.
+</p>
+
+<ul>
+  <li><a href="#Ask-Field">Il campo Chiedi</a></li>
+  <li><a href="#Result-List">Tavolozza delle azioni ed elenco dei risultati</a></li>
+  <li><a href="#Speech-Input">Input vocale</a></li>
+  <li><a href="#Shortcuts">Scorciatoie da tastiera</a></li>
+  <li><a href="#Assistant">L'Assistente</a></li>
+</ul>
+
+<h3 id="Ask-Field">Il campo Chiedi</h3>
+
+<p>
+Il campo Chiedi si trova nella barra superiore della finestra principale,
+immediatamente a sinistra del menu a discesa principale. Funge da tavolozza delle
+azioni dell'applicazione direttamente nella finestra principale, senza la necessità
+di una finestra di dialogo separata.
+</p>
+
+<p>
+Quando il campo è vuoto, viene visualizzato un testo segnaposto in grigio chiaro:
+<i>"Chiedi o di' a Chesswiz cosa fare (Ctrl+K)"</i>. Non appena si inizia a digitare,
+il testo segnaposto scompare e l'elenco dei risultati si apre sotto il campo.
+Quando il campo è vuoto, premendo <span style='white-space:nowrap;'><b>Su</b></span> o <span style='white-space:nowrap;'><b>Giù</b></span>
+si scorre la cronologia delle richieste recenti.
+</p>
+
+<h3 id="Result-List">Tavolozza delle azioni ed elenco dei risultati</h3>
+
+<p>
+Digitare nel campo Chiedi filtra il registro delle azioni di Chesswiz a ogni pressione di tasto.
+Vengono visualizzate solo le azioni eseguibili: un'azione appare solo se è attualmente sia abilitata
+che visibile in base allo stato attivo dell'applicazione (secondo le stesse regole del menu a
+discesa principale).
+</p>
+
+<p>
+Le azioni corrispondenti vengono ordinate tramite ricerca per somiglianza (fuzzy matching)
+tra le loro etichette, documentazione e scorciatoie da tastiera. Ciascuna voce mostra:
+</p>
+
+<ul>
+  <li>L'etichetta descrittiva dell'azione.</li>
+  <li>La scorciatoia da tastiera assegnata a tale azione, se presente.</li>
+</ul>
+
+<p>
+È possibile navigare ed eseguire gli elementi dall'elenco dei risultati:
+</p>
+
+<ul>
+  <li>Le frecce <span style='white-space:nowrap;'><b>Su</b></span> e <span style='white-space:nowrap;'><b>Giù</b></span> spostano la selezione verso l'alto e verso il basso nell'elenco.</li>
+  <li><span style='white-space:nowrap;'><b>Invio</b></span> o <span style='white-space:nowrap;'><b>Invio tastierino</b></span> (oppure un clic del mouse) esegue l'azione selezionata. Il comando passa attraverso l'esecutore delle azioni, assicurando l'applicazione di tutti i controlli di sicurezza e le richieste di conferma.</li>
+  <li><span style='white-space:nowrap;'><b>Escape</b></span> chiude l'elenco dei risultati e ripristina il focus sul controllo che lo aveva in precedenza (come la scacchiera).</li>
+</ul>
+
+<p>
+L'ultima voce nell'elenco dei risultati è sempre <b>Chiedi all'assistente</b>. Selezionando questa
+voce, o premendo <span style='white-space:nowrap;'><b>Invio</b></span> per qualsiasi richiesta che non corrisponda a un'azione
+registrata, il testo della richiesta viene inviato direttamente all'Assistente.
+</p>
+
+<h3 id="Speech-Input">Input vocale</h3>
+
+<p>
+Un pulsante a forma di microfono con l'etichetta <b>Parla</b> si trova sul lato destro del campo Chiedi.
+Facendo clic sul pulsante si registra la voce, la si trascrive localmente e si inserisce il testo
+trascritto direttamente alla posizione del cursore nel campo Chiedi.
+</p>
+
+<p><img src='../images/note.png' alt='note' /> 
+La voce è esclusivamente un meccanismo di immissione: Chesswiz non genera mai sintesi vocale o output audio.
+Il testo trascritto rimane completamente modificabile nel campo e non viene mai inviato né eseguito finché
+non si preme esplicitamente <span style='white-space:nowrap;'><b>Invio</b></span>.
+</p>
+
+<p>
+Tutta l'elaborazione vocale avviene localmente mediante strumenti esterni senza servizi di rete esterni
+né librerie audio collegate:
+</p>
+
+<ul>
+  <li><b>Linux</b>: Utilizza <span style='white-space:nowrap;'><tt>whisper-cli</tt></span> di whisper.cpp (elaborazione solo su CPU) insieme a <span style='white-space:nowrap;'><tt>arecord</tt></span> o <span style='white-space:nowrap;'><tt>ffmpeg</tt></span>.</li>
+  <li><b>Windows</b>: Utilizza la dettatura integrata del sistema operativo (<span style='white-space:nowrap;'>Win+H</span>).</li>
+  <li><b>macOS</b>: Utilizza la dettatura di sistema (configurata in Impostazioni di Sistema &gt; Tastiera &gt; Dettatura).</li>
+</ul>
+
+<p>
+Se non viene rilevato alcuno strumento o modello vocale, il pulsante del microfono viene nascosto
+automaticamente dall'interfaccia. È possibile configurare i percorsi vocali locali in
+<span class='menuitem'>Preferenze &gt; Assistente</span> (oppure con l'azione <span style='white-space:nowrap;'><tt>app.preferences.assistant</tt></span>),
+che include impostazioni per il percorso di <span style='white-space:nowrap;'><tt>whisper-cli</tt></span>, il file del modello e lo strumento di registrazione,
+unitamente a un pulsante <b>Rileva</b> per verificare la configurazione.
+</p>
+
+<h3 id="Shortcuts">Scorciatoie da tastiera</h3>
+
+<p>
+Il campo Chiedi è facilmente accessibile da qualsiasi punto di Chesswiz tramite scorciatoie da tastiera:
+</p>
+
+<ul>
+  <li><span style='white-space:nowrap;'><b>Ctrl+K</b></span>: Porta il focus sul campo Chiedi e ne seleziona l'intero testo, pronto per la digitazione immediata. Nei widget di modifica testo multilinea (come l'editor dei commenti, il testo PGN o la console del motore), <span style='white-space:nowrap;'><b>Ctrl+K</b></span> mantiene il comando di modifica standard per eliminare dal cursore fino a fine riga.</li>
+  <li><span style='white-space:nowrap;'><b>Ctrl+Shift+K</b></span> (o <span style='white-space:nowrap;'><b>Ctrl+Maiusc+K</b></span>): Porta incondizionatamente il focus sul campo Chiedi da qualsiasi punto dell'applicazione, inclusi gli editor di testo multilinea.</li>
+  <li><span style='white-space:nowrap;'><b>Escape</b></span>: Chiude l'elenco dei risultati e restituisce il focus al controllo precedente o alla scacchiera.</li>
+</ul>
+
+<h3 id="Assistant">L'Assistente</h3>
+
+<p>
+L'Assistente è un operatore automatizzato che esegue le azioni registrate di Chesswiz a partire da
+richieste in linguaggio naturale. È posizionato nel riquadro Assistente della scheda Scacchiera
+(e può essere ancorato o sganciato come qualsiasi altro riquadro; premendo <span style='white-space:nowrap;'><b>F2</b></span> lo si visualizza).
+</p>
+
+<p>
+È possibile chiedere all'Assistente di compiere operazioni con le proprie parole, come cercare partite,
+impostare posizioni sulla scacchiera, generare report di preparazione giocatori, ricerche di aperture
+o spiegare la posizione corrente.
+</p>
+
+<p>
+I principi fondamentali alla base dell'Assistente includono:
+</p>
+
+<ul>
+  <li><b>Esegue azioni registrate</b>: L'Assistente non può compiere operazioni arbitrarie. È rigorosamente vincolato al registro fisso di azioni e strumenti di Chesswiz, e tutti i parametri vengono convalidati rispetto a schemi formali prima di richiamare qualsiasi comando.</li>
+  <li><b>Piani a più passaggi con un'unica conferma</b>: Quando una richiesta complessa richiede più passaggi, l'Assistente li presenta in un piano unificato. Se un passaggio modifica dati, importa partite o esegue modifiche di massa, Chesswiz richiede un'unica conferma per l'intero piano. In caso di rifiuto non viene eseguita alcuna azione. Se un passaggio riscontra un errore, l'esecuzione si interrompe immediatamente mantenendo i passaggi precedenti completati con successo. Qualsiasi finestra di dialogo aperta durante un piano mette in pausa l'esecuzione fino alla chiusura.</li>
+  <li><b>Non è mai obbligatorio</b>: L'Assistente è esclusivamente un operatore di comodità. Ogni singola azione, ricerca, dialogo e strumento in Chesswiz rimane direttamente accessibile tramite i menu dell'applicazione, le barre degli strumenti e le scorciatoie da tastiera. Gli utenti esperti possono utilizzare qualsiasi funzionalità di Chesswiz senza dover mai aprire né usare l'Assistente.</li>
+</ul>
+
+</body>
+</html>

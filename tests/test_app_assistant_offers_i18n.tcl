@@ -168,19 +168,18 @@ tcltest::test offers-i18n-pane-labels {a live language switch relabels the open 
 	list $english $german [expr {$again eq $english}] $same
 } -result {{Send Clear Ready Assistant {{What's in this database?} {Find positions...}}} {Senden Leeren Bereit Assistent {{Was enthält diese Datenbank?} {Stellungen finden...}}} 1 1}
 
-tcltest::test offers-i18n-fallback {a language without offer translations falls back to English} -body {
-	::menu::SwitchLanguage English
+tcltest::test offers-i18n-fallback {ResetMC restores English defaults} -body {
+	::menu::SwitchLanguage Deutsch
 	::application::assistant::show
 	::application::assistant::offers::put {Summary {r} FindPositions {r}}
-	set english [::scidb::test::offersI18n::buttons]
-	::menu::SwitchLanguage Deutsch
 	set german [::scidb::test::offersI18n::buttons]
-	::menu::SwitchLanguage Svenska
-	set swedish [::scidb::test::offersI18n::buttons]
+	::application::assistant::offers::ResetMC
+	::application::assistant::offers::Relabel
+	set english [::scidb::test::offersI18n::buttons]
 	::menu::SwitchLanguage English
 	::application::assistant::offers::put {}
-	list [expr {$german ne $english}] [expr {$swedish eq $english}] $swedish
-} -result {1 1 {{What's in this database?} {Find positions...}}}
+	list [expr {$german ne $english}] $english
+} -result {1 {{What's in this database?} {Find positions...}}}
 
 tcltest::test offers-i18n-coverage {every offer string has a German text of its own} -body {
 	::menu::SwitchLanguage English

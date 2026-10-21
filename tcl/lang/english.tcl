@@ -933,6 +933,29 @@
 ::application::tree::mc::T_AverageYear						"Average Year"
 ::application::tree::mc::T_FrequentPlayer					"Most Frequent Player"
 
+### application::assistant #############################################
+::application::assistant::mc::Send				"Send"
+::application::assistant::mc::Clear				"Clear"
+::application::assistant::mc::Thinking			"Thinking..."
+::application::assistant::mc::Ready				"Ready"
+::application::assistant::mc::UsingBackup		"%s is not answering; asking %s instead."
+::application::assistant::mc::AllDown			"The AI service is not answering right now (%s). Please try again in a moment."
+::application::assistant::mc::Confirm			"The assistant wants to: %s"
+::application::assistant::mc::Denied			"The user declined: the action was NOT performed and no dialog was opened."
+::application::assistant::mc::Greeting			"Ask me in your own words, for example \"games where a knight forks king and queen\", \"positions with this pawn structure\", \"set up the Najdorf after 6.Bg5\" or \"Carlsen's prep report\". F2 brings me back from anywhere."
+::application::assistant::mc::DebugGreeting	"Debug mode: I can also inspect errors, procedures and variables."
+::application::assistant::mc::Plan				"Plan:"
+::application::assistant::mc::PlanConfirm		"Run this plan?\n%s"
+::application::assistant::mc::PlanDeclined		"Nothing was run: the plan was declined."
+::application::assistant::mc::PlanStepFailed	"Stopped at step %d (%s): %s The steps before it were run."
+::application::assistant::mc::PlanStepSkipped	"not run: the plan stopped at an earlier step"
+::application::assistant::mc::TooManyRounds	"Stopped: the request needed more steps than the assistant allows (%d rounds)."
+
+### application::assistant::panel ###################################
+::application::assistant::panel::mc::StartupGreeting	"I can run Chesswiz for you. Pick a suggestion below, or ask in your own words."
+::application::assistant::panel::mc::Hide				"Hide"
+::application::assistant::panel::mc::NoModelHint		"No model is connected yet. Open Tools > Choose Model\u2026 to connect one; the suggestions above work without one."
+
 ### application::assistant::offers #####################################
 # The buttons offering the assistant's next steps; the German file has
 # the terminology they share with the Ask field.

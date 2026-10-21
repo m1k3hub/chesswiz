@@ -321,23 +321,39 @@ tcltest::test ask-i18n-german-coverage {every string of the field has a German t
 	::scidb::test::askI18n::Clean
 } -result {34 {}}
 
-tcltest::test ask-i18n-fallback {a language without Ask translations falls back to English} -body {
+tcltest::test ask-i18n-fallback {ResetMC restores English defaults} -body {
 	::menu::SwitchLanguage Deutsch
 	set german [list [set ::application::ask::mc::Placeholder] \
 		[set ::application::ask::mc::Busy] \
 		[set ::application::speech::mc::MissingModel]]
-	::menu::SwitchLanguage Svenska
-	set swedish [list [set ::application::ask::mc::Placeholder] \
-		[set ::application::ask::mc::Busy] \
-		[set ::application::speech::mc::MissingModel]]
-	::menu::SwitchLanguage English
+	::application::ask::ResetMC
+	::application::speech::ResetMC
 	set english [list [set ::application::ask::mc::Placeholder] \
 		[set ::application::ask::mc::Busy] \
 		[set ::application::speech::mc::MissingModel]]
-	list [expr {$swedish eq $english}] [expr {$german ne $english}] $swedish
+	list [expr {$german ne $english}] $english
 } -cleanup {
 	::scidb::test::askI18n::Clean
-} -result {1 1 {{Ask or tell Chesswiz what to do (Ctrl+K)} {The assistant is busy. Try again when it finishes.} {a ggml model}}}
+} -result {1 {{Ask or tell Chesswiz what to do (Ctrl+K)} {The assistant is busy. Try again when it finishes.} {a ggml model}}}
+
+tcltest::test ask-i18n-translated-languages {for es/it/hu/sv the Ask placeholder and assistant Send button differ from English} -body {
+	::menu::SwitchLanguage English
+	set enPlaceholder [set ::application::ask::mc::Placeholder]
+	set enSend [set ::application::assistant::mc::Send]
+
+	set results {}
+	foreach lang {Español Italiano Magyar Svenska} {
+		::menu::SwitchLanguage $lang
+		set ph [set ::application::ask::mc::Placeholder]
+		set snd [set ::application::assistant::mc::Send]
+		set phDiff [expr {$ph ne $enPlaceholder}]
+		set sndDiff [expr {$snd ne $enSend}]
+		lappend results $lang [list phDiff $phDiff sndDiff $sndDiff]
+	}
+	set results
+} -cleanup {
+	::scidb::test::askI18n::Clean
+} -result {Español {phDiff 1 sndDiff 1} Italiano {phDiff 1 sndDiff 1} Magyar {phDiff 1 sndDiff 1} Svenska {phDiff 1 sndDiff 1}}
 
 ::menu::SwitchLanguage English
 ::scidb::test::askI18n::Empty
