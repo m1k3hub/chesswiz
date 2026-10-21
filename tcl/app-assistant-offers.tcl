@@ -16,8 +16,13 @@
 # opens it with the entry filled in for the user to finish.
 #
 #   ::application::assistant::offers::attach <pane>
-#   ::application::assistant::offers::put <offers>     {label request ...}
+#   ::application::assistant::offers::put <offers>     {key request ...}
 #   ::application::assistant::offers::askAbout <text>  open, prefill
+#
+# The offers carry the name of an mc string, not a label: the buttons take
+# their labels in the language in force when they are drawn, so an offer
+# chosen in English and shown after the user switched to another language
+# (the pane usually opens later) is in the new language.
 # ======================================================================
 
 if {[llength [info commands ::util::source]]} {
@@ -48,11 +53,27 @@ set AskAbout		"Ask about this..."
 set AskAboutGame	"About game #%d (%s): "
 set AskAboutBoard	"About the position on the board: "
 
+# English defaults, restored before every language load (see i18n.tcl),
+# so a language without a translation of an offer falls back to English
+# instead of showing the previous language's text.
+set ::application::assistant::offers::DefaultMC {}
+foreach _name [lsort [info vars ::application::assistant::offers::mc::*]] {
+	if {[array exists $_name] || [string index [namespace tail $_name] 0] eq "_"} { continue }
+	lappend ::application::assistant::offers::DefaultMC [namespace tail $_name] [set $_name]
+}
+unset _name
+
 } ;# namespace mc
 
-# {label request ...}; a request ending in "..." is put into the entry for
-# the user to finish instead of being sent.
+# {key request ...} the offers of the moment, keyed by their mc string; a
+# request ending in "..." is put into the entry for the user to finish
+# instead of being sent.
+variable Choice {}
+# {label request ...} the same offers with the labels of the language in
+# force now -- the rules' order, and what the buttons show.
 variable Offers {}
+# the mc string of each offer's label, in step with Offers
+variable Keys {}
 variable Frame {}
 variable Shown 3
 # a ranking that arrives later than this keeps the rules' order: the
@@ -65,20 +86,60 @@ variable RankGen 0
 } ;# namespace application
 
 
+# Restore the English offer labels (i18n.tcl calls this before each
+# language load, so an untranslated language shows English).
+proc ::application::assistant::offers::ResetMC {} {
+	foreach {name value} $::application::assistant::offers::DefaultMC {
+		set ::application::assistant::offers::mc::$name $value
+	}
+	return
+}
+::mc::addDefaultReset ::application::assistant::offers::ResetMC
+
+
 proc ::application::assistant::offers::attach {pane} {
 	variable Frame
 
 	set Frame [ttk::frame $pane.offers]
 	pack $Frame -side bottom -fill x -before $pane.bottom
+	# a language switch redraws the offers of an open pane (i18n.tcl
+	# generates the event for every widget)
+	bind $Frame <<LanguageChanged>> [namespace code Relabel]
 	Render
 }
 
 
-proc ::application::assistant::offers::put {offers} {
+# The label of an offer, in the language in force now.
+proc ::application::assistant::offers::Label {key} {
+	if {[info exists ::application::assistant::offers::mc::$key]} {
+		return [set ::application::assistant::offers::mc::$key]
+	}
+	return $key
+}
+
+
+# Offers (as {key request ...}) to the labels of the current language.
+proc ::application::assistant::offers::Resolve {} {
+	variable Choice
 	variable Offers
+	variable Keys
+
+	set Offers {}
+	set Keys {}
+	foreach {key request} $Choice {
+		lappend Keys $key
+		lappend Offers [Label $key] $request
+	}
+	return
+}
+
+
+proc ::application::assistant::offers::put {offers} {
+	variable Choice
 	variable RankGen
 	incr RankGen ;# a ranking still on its way is for an older moment
-	set Offers $offers
+	set Choice $offers
+	Resolve
 	Render
 }
 
@@ -96,7 +157,7 @@ proc ::application::assistant::offers::offer {pool state} {
 
 	set questions {}
 	set i 0
-	foreach {label request} $pool {
+	foreach {key request} $pool {
 		dict set questions o[incr i] [dict create type noul instructions \
 			"The user of Chesswiz, a chess database program, has just opened what the state describes. Is this the next thing they are likely to want: \"$request\"?"]
 	}
@@ -117,18 +178,19 @@ proc ::application::assistant::offers::Ranked {gen deadline pool result} {
 	if {![dict get $result ok]} { return }
 	set scored {}
 	set i 0
-	foreach {label request} $pool {
+	foreach {key request} $pool {
 		set p 0.0
 		catch { set p [dict get $result answers o[incr i] noul] }
 		if {![string is double -strict $p]} { set p 0.0 }
-		lappend scored [list $p $label $request]
+		lappend scored [list $p $key $request]
 	}
 	set best {}
 	foreach row [lrange [lsort -real -decreasing -index 0 $scored] 0 [expr {$Shown - 1}]] {
 		lappend best [lindex $row 1] [lindex $row 2]
 	}
-	variable Offers
-	set Offers $best
+	variable Choice
+	set Choice $best
+	Resolve
 	Render
 }
 
@@ -138,6 +200,7 @@ proc ::application::assistant::offers::Render {} {
 	variable Frame
 
 	if {$Frame eq "" || ![winfo exists $Frame]} { return }
+	Resolve
 	foreach w [winfo children $Frame] { destroy $w }
 	set i 0
 	foreach {label request} $Offers {
@@ -145,6 +208,13 @@ proc ::application::assistant::offers::Render {} {
 			-command [namespace code [list Take $request]]
 		pack $Frame.o$i -side left -padx {4 0} -pady {2 0}
 	}
+}
+
+
+# A language switch: the open pane's offers are relabelled in place.
+proc ::application::assistant::offers::Relabel {} {
+	Resolve
+	Render
 }
 
 
@@ -175,7 +245,6 @@ proc ::application::assistant::offers::askAbout {text} {
 # --- the rules -------------------------------------------------------------
 
 proc ::application::assistant::offers::DatabaseSwitched {base variant} {
-	variable mc
 	if {[catch { ::scidb::db::count games $base $variant } count] || $count == 0} {
 		put {}
 		return
@@ -183,13 +252,13 @@ proc ::application::assistant::offers::DatabaseSwitched {base variant} {
 	set deleted 0
 	catch { set deleted [lindex [::scidb::db::get stats $base] 0] }
 	set pool [list \
-		$mc::Summary		"What is in the active database? A short summary, please." \
-		$mc::FindPositions	"Find positions where ..." \
-		$mc::Duplicates		"Open the duplicate search for the active database." \
-		$mc::Trend			"What is trending in the openings of the active database?" \
-		$mc::Maintenance	"Show the maintenance report of the active database."]
+		"Summary"		"What is in the active database? A short summary, please." \
+		"FindPositions"	"Find positions where ..." \
+		"Duplicates"		"Open the duplicate search for the active database." \
+		"Trend"			"What is trending in the openings of the active database?" \
+		"Maintenance"	"Show the maintenance report of the active database."]
 	if {$deleted > 0} {
-		lappend pool $mc::Compact "Compact the active database."
+		lappend pool "Compact" "Compact the active database."
 	}
 	offer $pool [format "database: %s\ngames: %d\ndeleted games: %d" \
 		[::util::databaseName $base no] $count $deleted]
@@ -197,8 +266,6 @@ proc ::application::assistant::offers::DatabaseSwitched {base variant} {
 
 
 proc ::application::assistant::offers::GameSwitched {args} {
-	variable mc
-
 	set white ""; set black ""; set eco ""; set result ""; set fen ""
 	catch { set fen [::scidb::pos::fen] }
 	catch {
@@ -215,22 +282,22 @@ proc ::application::assistant::offers::GameSwitched {args} {
 	set mine [expr {[Mine $white] || [Mine $black]}]
 	if {$mine} {
 		set pool [list \
-			$mc::Review		"Annotate the game on the board with the engine." \
-			$mc::WentWrong	"Where did I go wrong in the game on the board? Use the engine." \
-			$mc::GamesLike	"Find games like the one on the board." \
-			$mc::Explain		"Explain the position on the board." \
-			$mc::OpeningReport	"Show the opening report for the position on the board."]
+			"Review"		"Annotate the game on the board with the engine." \
+			"WentWrong"	"Where did I go wrong in the game on the board? Use the engine." \
+			"GamesLike"	"Find games like the one on the board." \
+			"Explain"		"Explain the position on the board." \
+			"OpeningReport"	"Show the opening report for the position on the board."]
 	} else {
 		set pool [list \
-			$mc::Explain		"Explain the position on the board." \
-			$mc::SamePosition	"Find games in the active database that reach the position on the board (the same pieces on the same squares)." \
-			$mc::PositionsLike	"Find positions like the one on the board, with the same pawn structure." \
-			$mc::Annotate	"Annotate the game on the board with the engine." \
-			$mc::GamesLike	"Find games like the one on the board." \
-			$mc::OpeningReport	"Show the opening report for the position on the board."]
+			"Explain"		"Explain the position on the board." \
+			"SamePosition"	"Find games in the active database that reach the position on the board (the same pieces on the same squares)." \
+			"PositionsLike"	"Find positions like the one on the board, with the same pawn structure." \
+			"Annotate"	"Annotate the game on the board with the engine." \
+			"GamesLike"	"Find games like the one on the board." \
+			"OpeningReport"	"Show the opening report for the position on the board."]
 	}
 	if {[HasLesson]} {
-		lappend pool $mc::Lesson "Is there a video lesson for the position on the board? Play it."
+		lappend pool "Lesson" "Is there a video lesson for the position on the board? Play it."
 	}
 	offer $pool [format "game: %s - %s, %s, %s\nthe user's own game: %s\nposition: %s" \
 		$white $black $eco $result [expr {$mine ? "yes" : "no"}] $fen]
