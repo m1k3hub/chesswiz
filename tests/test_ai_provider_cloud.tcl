@@ -635,7 +635,7 @@ test aipc-clouderror-6.4 {CloudError speaks about the key on 401/403} -body {
 	Assert {[string match "*API key*" $e]} "403 blames the key"
 	Assert {[string match "*busy*" [::ai::provider::CloudError OpenAI 429 "{\"error\":{\"message\":\"slow down\"}}"]]} "429 busy"
 	Assert {[::ai::provider::CloudError Anthropic 500 "{\"error\":{\"message\":\"boom\"}}"] eq "Anthropic: HTTP 500: boom"} "other codes"
-	Assert {[::ai::provider::CloudError Anthropic 500 "not json"] eq "Anthropic: HTTP 500: no details"} "unreadable body"
+	Assert {[::ai::provider::CloudError Anthropic 500 "not json"] eq "Anthropic: HTTP 500: not json"} "unreadable body retained"
 	return OK
 } -result OK
 
@@ -1126,6 +1126,89 @@ test aipc-e2e-gemini-nokey-13.3 {gemini without a key reports ok 0 and never sen
 	return OK
 } -result OK
 
+
+
+
+test aipc-gemini-array-errors {Gemini array errors retain details and redact keys in the app log} -body {
+	MockStart
+	MockReset
+	::ai::provider::configure -name gemini -keys {gemini secret-test-key} \
+		-endpoint "http://127.0.0.1:$::Mock(port)/v1/chat/completions"
+	set ::Mock(code) 400
+	set ::Mock(body) {[{"error":{"code":400,"message":"missing thought_signature secret-test-key","status":"INVALID_ARGUMENT"}}]}
+	namespace eval ::application::assistant {}
+	set ::logged {}
+	proc ::application::assistant::RecordError {args} { set ::logged $args }
+	set hist [list [dict create role user content test]]
+	set r [AsyncRun {::ai::provider::chatAsync $hist "" E2ESink}]
+	Assert {![dict get $r ok] && ![dict get $r down]} "400 is not retryable"
+	Assert {[string match *thought_signature* [dict get $r error]]} "body visible"
+	Assert {[string first secret-test-key $::logged] < 0} "key absent in log"
+	Assert {[string match *INVALID_ARGUMENT* $::logged]} "full body logged"
+	rename ::application::assistant::RecordError {}
+	return OK
+} -result OK
+
+test aipc-gemini-unavailable {503 and timeouts finish with a retryable result} -body {
+	MockStart
+	MockReset
+	::ai::provider::configure -name gemini -keys {gemini test-key} -timeout 100
+	set ::Mock(code) 503
+	set ::Mock(body) {[{"error":{"message":"high demand"}}]}
+	set hist [list [dict create role user content test]]
+	set r [AsyncRun {::ai::provider::chatAsync $hist "" E2ESink}]
+	Assert {![dict get $r ok] && [dict get $r down]} "503 retries"
+	Assert {[string match {*high demand*} [dict get $r error]]} "503 details"
+	# Accept the connection but never answer it: exercise http's timeout.
+	set sock [socket -server {apply {{chan addr port} {lappend ::silent $chan}}} -myaddr 127.0.0.1 0]
+	set ::silent {}
+	set port [lindex [fconfigure $sock -sockname] 2]
+	::ai::provider::configure -endpoint "http://127.0.0.1:$port/v1/chat/completions"
+	set r [AsyncRun {::ai::provider::chatAsync $hist "" E2ESink} 2000]
+	Assert {$r ne "TIMEOUT" && ![dict get $r ok] && [dict get $r down]} "timeout retries"
+	Assert {[string match *timeout* [dict get $r error]]} "short timeout status"
+	Assert {[dict get $r summary] eq "Gemini: timeout"} "concise display summary"
+	foreach chan $::silent {catch {close $chan}}
+	close $sock
+	::ai::provider::configure -timeout 120000
+	return OK
+} -result OK
+
+test aipc-gemini-signature-roundtrip {recorded Gemini call survives a tool round-trip on the wire} -body {
+	MockStart
+	MockReset
+	set f [open [file join $root tests fixtures gemini-tool-call.json]]
+	set ::Mock(body) [read $f]
+	close $f
+	set recorded [json::json2dict $::Mock(body)]
+	set original [lindex [dict get [lindex [dict get $recorded choices] 0] message tool_calls] 0]
+	::ai::provider::configure -name gemini -model gemini-mock \
+		-endpoint "http://127.0.0.1:$::Mock(port)/v1/chat/completions" -keys {gemini test-key}
+	set hist [list [dict create role user content "Who is playing?"]]
+	set r [AsyncRun {::ai::provider::chatAsync $hist $ToolsJson E2ESink}]
+	Assert {[dict get $r ok]} "first request"
+	set msg [dict get $r message]
+	set call [lindex [dict get $msg tool_calls] 0]
+	lappend hist $msg [dict create role tool tool_call_id [dict get $call id] content "Giri - Abdusattorov"]
+	set ::Mock(body) {{"choices":[{"message":{"role":"assistant","content":"Giri plays Abdusattorov."}}]}}
+	set r [AsyncRun {::ai::provider::chatAsync $hist $ToolsJson E2ESink}]
+	Assert {[dict get $r ok]} "second request"
+	set body [lindex [lindex $::Mock(requests) 1] 3]
+	set messages [dict get [json::json2dict $body] messages]
+	set replay [lindex [dict get [lindex $messages 1] tool_calls] 0]
+	Assert {[dict get $replay extra_content google thought_signature] eq \
+		[dict get $original extra_content google thought_signature]} "signature unchanged"
+	Assert {[dict get $replay id] eq [dict get [lindex $messages 2] tool_call_id]} "result linked"
+	Assert {[dict get [lindex $messages 2] content] eq "Giri - Abdusattorov"} "result content"
+	Assert {[dict get $replay function arguments] eq "{}"} "empty arguments remain an object"
+	foreach provider {openai fireworks qwen} {
+		::ai::provider::configure -name $provider
+		set other [json::json2dict [::ai::provider::openaiMessages $hist]]
+		set otherCall [lindex [dict get [lindex $other 1] tool_calls] 0]
+		Assert {![dict exists $otherCall extra_content]} "$provider does not receive Google's extension"
+	}
+	return OK
+} -result OK
 
 # ----------------------------------------------------------------------
 # 14. modelsAsync against the mock server

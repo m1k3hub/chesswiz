@@ -1,7 +1,7 @@
 # ======================================================================
-# Scidb App Test — All 87 assistant actions (VAL-AI-001a)
+# Scidb App Test — All 88 assistant actions (VAL-AI-001a)
 # ======================================================================
-# Generated per-action test: for all 87 ai-exposed actions, a stubbed
+# Generated per-action test: for all 88 ai-exposed actions, a stubbed
 # model tool call with valid arguments reaches the stubbed handler after
 # predicates are checked; unavailable -> error: text saying why.
 # ======================================================================
@@ -77,11 +77,11 @@ proc ::scidb::test::actions_all::reach {name} {
 }
 
 # ----------------------------------------------------------------------
-# Test: All 87 actions are registered and callable
+# Test: All 88 actions are registered and callable
 # ----------------------------------------------------------------------
-tcltest::test all-actions-count {exactly 87 assistant actions are registered} -body {
+tcltest::test all-actions-count {exactly 88 assistant actions are registered} -body {
 	set count [llength [dict keys $::application::assistant::Actions]]
-	expr {$count == 87}
+	expr {$count == 88}
 } -result 1
 
 tcltest::test all-actions-have-handlers {every action has a handler defined} -body {
@@ -122,7 +122,7 @@ tcltest::test all-actions-runnable-through-assistant {every action reaches its h
 } -cleanup {
     set ::engine::Engines $savedEngines
     file delete -force $::scidb::test::actions::Dir
-} -result 87
+} -result 88
 
 # Individually selectable legs for timeout 30 process isolation.
 foreach name [dict keys $::application::assistant::Actions] {

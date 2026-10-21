@@ -244,6 +244,7 @@ dict for {name entry} $Actions {
 		object   {} \
 		doc      $description \
 		toolmenu $what \
+		ends-in-dialog [expr {$name eq "open_play_engine"}] \
 	]
 }
 
