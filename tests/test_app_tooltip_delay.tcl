@@ -26,6 +26,7 @@
 
 package require Tcl 8.5
 package require tcltest 2.5
+source [file join [file dirname [info script]] app_wait.tcl]
 
 namespace eval ::scidb::test::tipdelay {
 	variable dummy 0
@@ -97,12 +98,14 @@ proc ::scidb::test::tipdelay::hover {} {
 # at startup, so only "is it mapped" tells whether it is on screen.
 proc ::scidb::test::tipdelay::waitMap {ms} {
 	set start [clock milliseconds]
-	for {set i 0} {$i < [expr {$ms / 5}]} {incr i} {
+	while {[clock milliseconds] - $start < $ms} {
 		after 5 {set ::scidb::test::tipdelay::dummy 1}
 		vwait ::scidb::test::tipdelay::dummy
 		set ::scidb::test::tipdelay::dummy 0
 		if {[winfo ismapped [::tooltip::wname]]} {
-			return [expr {[clock milliseconds] - $start}]
+			set elapsed [expr {[clock milliseconds] - $start}]
+			puts "EVIDENCE tooltip-map elapsedMs=$elapsed budgetMs=$ms"
+			return $elapsed
 		}
 	}
 	return -1
@@ -112,6 +115,7 @@ proc ::scidb::test::tipdelay::setup {} {
 	variable delay
 	variable ticks
 
+	::scidb::test::wait::ready
 	set delay [::tooltip::delay]
 	set busy 0
 	set ticks 0
@@ -121,7 +125,8 @@ proc ::scidb::test::tipdelay::setup {} {
 	button .tipdelay.b -text "tooltip delay"
 	pack .tipdelay.b
 	::tooltip::tooltip .tipdelay.b $::scidb::test::tipdelay::msg
-	update
+	raise .tipdelay
+	::scidb::test::wait::until {[winfo ismapped .tipdelay.b] && [winfo width .tipdelay.b] > 1}
 }
 
 proc ::scidb::test::tipdelay::cleanup {} {

@@ -11,8 +11,18 @@
 # ======================================================================
 
 package require tcltest 2.5
+source [file join [file dirname [info script]] app_wait.tcl]
+::scidb::test::wait::ready
 
 namespace eval ::scidb::test::pe {}
+
+proc ::scidb::test::pe::readyEngine {} {
+    set start [clock milliseconds]
+    ::scidb::test::wait::until {!$::playengine::Priv(active)
+        || $::playengine::Priv(pipeState) in {ready busy}}
+    if {!$::playengine::Priv(active)} { error "engine session ended during handshake" }
+    puts "EVIDENCE playengine-handshake elapsedMs=[expr {[clock milliseconds] - $start}]"
+}
 
 
 # A UCI engine entry in the configured list, and RequestMove replaced by
@@ -419,6 +429,9 @@ tcltest::test playengine-real-uci {Start survives event dispatch and a real engi
         error "Start lost its session: phase=$::playengine::Priv(phase), pipeState=$::playengine::Priv(pipeState); Finish stacks: $::scidb::test::pe::finishes"
     }
     set accepted [::playengine::UserMove e4]
+    # UserMove starts the lazy transport. readyok immediately starts search,
+    # so busy is also proof that the real UCI handshake has completed.
+    ::scidb::test::pe::readyEngine
     set deadline [expr {[clock milliseconds] + 10000}]
     while {$::playengine::Priv(active) && [clock milliseconds] < $deadline
         && [::scidb::game::query length] < 2} {
@@ -467,6 +480,7 @@ tcltest::test playengine-real-resign {real engine answers e4; Resign stores the 
 	::playengine::StartGame [list -engine [dict get $::scidb::test::pe::stockfish Name] -color white -minutes 1 -increment 0]
 	set headers [::scidb::game::tags]
 	set accepted [::playengine::UserMove e4]
+	::scidb::test::pe::readyEngine
 	set deadline [expr {[clock milliseconds] + 10000}]
 	while {$::playengine::Priv(active) && [clock milliseconds] < $deadline && [::scidb::game::query length] < 2} {
 		after 10 {set ::scidb::test::pe::wake 1}
@@ -509,6 +523,7 @@ tcltest::test playengine-spaced-path {an engine in a directory with spaces launc
 } -body {
 	::playengine::StartGame [list -engine SpacedEngine -color white -minutes 1 -increment 0]
 	set accepted [::playengine::UserMove e4]
+	::scidb::test::pe::readyEngine
 	set deadline [expr {[clock milliseconds] + 10000}]
 	while {$::playengine::Priv(active) && [clock milliseconds] < $deadline && [::scidb::game::query length] < 2} {
 		after 10 {set ::scidb::test::pe::wake 1}
