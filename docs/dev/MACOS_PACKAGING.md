@@ -49,6 +49,15 @@ runtime tests. Apple Silicon and macOS 11 runtime behavior need separate
 hardware/VM testing; the Intel macOS 15 VM can inspect the arm64 slice but
 cannot run it.
 
+The runtime builder applies the two Aqua dirty-view fixes and the grabbed-window
+focus lifetime fix in `scripts/patches/`. The focus patch backports the
+preserve/release pair from [Tk's 8.6 branch](https://github.com/tcltk/tk/blob/core-8-6-branch/macosx/tkMacOSXWindowEvent.c)
+and skips a target destroyed before its idle callback. Without it, closing a
+modal dialog during application activation can crash in `TkpChangeFocus`.
+Rebuild and relink the static executable to pick up runtime patches. On a
+shared VM, pass a private runtime prefix rather than overwriting another
+build's sysroot.
+
 ## Signing and notarization
 
 By default every Mach-O binary (including TLS and engines) is signed ad hoc,
