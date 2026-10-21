@@ -57,6 +57,10 @@ modal dialog during application activation can crash in `TkpChangeFocus`.
 Rebuild and relink the static executable to pick up runtime patches. On a
 shared VM, pass a private runtime prefix rather than overwriting another
 build's sysroot.
+The runtime builder supplies Tcl/Tk only. When using a fresh prefix for a
+relink, keep Tcllib JSON and TclTLS discoverable through `auto_path`, or link
+their package directories from a read-only dependency prefix into its `lib`.
+The assistant's argument schemas require the JSON package at startup.
 
 ## Signing and notarization
 
