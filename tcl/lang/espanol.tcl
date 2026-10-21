@@ -265,6 +265,11 @@
 ::progress::mc::Message(copy-game)				"Copiar %s partida(s)"
 
 ### menu ###############################################################
+::menu::mc::Window							"&Ventana"
+::menu::mc::MaximisePane					"&Maximizar / restaurar panel"
+::menu::mc::FocusZoom						"El foco &sigue al tamaño"
+::menu::mc::FocusZoomRatio				"&Proporción de zoom"
+::menu::mc::FocusZoomPinBoard			"F&ijar tamaño del tablero"
 ::menu::mc::Theme								"Tema"
 ::menu::mc::ColorScheme						"Color Scheme" ;# NEW
 ::menu::mc::CustomStyleMenu				"Chesswiz's Style Menu" ;# NEW
@@ -605,6 +610,10 @@
 ::application::layout::mc::ReplaceTip			"Overwrite current layout with this one" ;# NEW
 
 ### application ########################################################
+::application::mc::ShortcutPreferences	"Preferencias de teclado"
+::application::mc::ShortcutScheme			"Esquema de atajos:"
+::application::mc::ShortcutChesswiz		"Chesswiz (predeterminado)"
+::application::mc::ShortcutChessBase		"Clásico"
 ::application::mc::Tab(information)			"&Information" ;# NEW
 ::application::mc::Tab(database)				"&Base"
 ::application::mc::Tab(board)					"&Tablero"
@@ -778,6 +787,7 @@
 ::application::database::mc::UpgradeMessage					"Actualizando base '%s'"
 ::application::database::mc::CompactMessage					"Compactando base de datos '%s'" 
 ::application::database::mc::CannotOpenFile					"No se puede abrir el archivo '%s'."
+::application::database::mc::CannotReadFile						"No se puede leer el archivo '%s': existe, pero está bloqueado o no es legible (abierto en otro programa o sin permisos)."
 ::application::database::mc::MaintenanceReadOnlyPgn			"Los archivos PGN se abren sólo lectura; use Convert to .sci para editar"
 ::application::database::mc::MaintenanceReadOnly				"Esta base de datos es de sólo lectura; el mantenimiento necesita una base grabable"
 ::application::database::mc::EncodingFailed					"Fallo en la codificación de %s." ;# "Character decoding %s failed."
@@ -1054,6 +1064,88 @@
 ::application::tree::mc::T_Number							"Numeración"
 ::application::tree::mc::T_AverageYear						"Año promedio"
 ::application::tree::mc::T_FrequentPlayer					"Jugador más frecuente"
+
+### application::ask ###################################################
+::application::ask::mc::Placeholder		"Preguntar o decir a Chesswiz qué hacer (Ctrl+K)"
+::application::ask::mc::AskAssistant		"Preguntar al asistente"
+::application::ask::mc::Send				"Enviar al asistente"
+::application::ask::mc::Mic				"Hablar"
+::application::ask::mc::Recording		"Grabando\u2026 clic para detener"
+::application::ask::mc::Transcribing	"Transcribiendo\u2026 clic para cancelar"
+::application::ask::mc::Heard			"Escuchado: %s"
+::application::ask::mc::NothingHeard	"No se escuchó nada"
+::application::ask::mc::AssistantPrefs	"Preferencias del asistente\u2026"
+::application::ask::mc::Unavailable		"El asistente no está disponible."
+::application::ask::mc::Busy				"El asistente está ocupado. Inténtelo de nuevo cuando termine."
+::application::ask::mc::Failed			"Error: %s"
+::application::ask::mc::PrefsTitle		"Asistente"
+::application::ask::mc::SpeechInput		"Entrada de voz"
+::application::ask::mc::SpeechReady		"Una ruta de voz local está configurada."
+::application::ask::mc::PathWhisper		"Ruta de whisper-cli"
+::application::ask::mc::PathModel		"Ruta del modelo ggml"
+::application::ask::mc::PathRecorder	"Grabador (arecord/ffmpeg)"
+::application::ask::mc::PathStub		"Comando de prueba stub (opcional)"
+::application::ask::mc::Detect			"Detectar"
+::application::ask::mc::Close			"Cerrar"
+::application::ask::mc::PrefsWhat		"abrir las preferencias del asistente"
+::application::ask::mc::PrefsDoc		"Elegir las herramientas locales de voz (whisper-cli, modelo, grabador) y ver qué instalar si la entrada de voz no está disponible."
+
+### application::speech ################################################
+::application::speech::mc::Install		"La entrada de voz necesita whisper-cli (whisper.cpp), un modelo ggml y arecord o ffmpeg. Configúrelos en Preferencias > Asistente."
+::application::speech::mc::InstallMac	"macOS utiliza el dictado del sistema: actívelo en Ajustes del Sistema > Teclado > Dictado y pulse la tecla de dictado (o Fn Fn)."
+::application::speech::mc::InstallWin	"Windows utiliza el dictado del sistema: pulse Win+H mientras el campo Preguntar tenga el foco."
+::application::speech::mc::Listening	"Grabando\u2026 clic para detener"
+::application::speech::mc::Working		"Transcribiendo\u2026 clic para cancelar"
+::application::speech::mc::Nothing		"No se escuchó nada"
+::application::speech::mc::Failed		"Error en la entrada de voz: %s"
+::application::speech::mc::NoRecord	"La entrada de voz fue cancelada"
+::application::speech::mc::Missing		"%s Falta: %s."
+::application::speech::mc::MissingCli	"whisper-cli"
+::application::speech::mc::MissingModel	"un modelo ggml"
+::application::speech::mc::MissingRecorder	"arecord o ffmpeg"
+
+### application::assistant #############################################
+::application::assistant::mc::Send				"Enviar"
+::application::assistant::mc::Clear			"Limpiar"
+::application::assistant::mc::Thinking			"Pensando..."
+::application::assistant::mc::Ready				"Listo"
+::application::assistant::mc::UsingBackup		"%s no responde; preguntando a %s en su lugar."
+::application::assistant::mc::AllDown			"El servicio de IA no responde en este momento (%s). Por favor, inténtelo de nuevo en un momento."
+::application::assistant::mc::Confirm			"El asistente desea: %s"
+::application::assistant::mc::Denied			"El usuario lo rechazó: la acción NO se ejecutó y no se abrió ningún diálogo."
+::application::assistant::mc::Greeting			"Pregúnteme con sus propias palabras, por ejemplo \"partidas donde un caballo hace doblete a rey y dama\", \"posiciones con esta estructura de peones\", \"montar la Najdorf tras 6.Ag5\" o \"informe de preparación de Carlsen\". F2 me vuelve a abrir desde cualquier lugar."
+::application::assistant::mc::DebugGreeting	"Modo de depuración: también puedo inspeccionar errores, procedimientos y variables."
+::application::assistant::mc::Plan				"Plan:"
+::application::assistant::mc::PlanConfirm		"¿Ejecutar este plan?\n%s"
+::application::assistant::mc::PlanDeclined		"No se ejecutó nada: el plan fue rechazado."
+::application::assistant::mc::PlanStepFailed	"Detenido en el paso %d (%s): %s Los pasos anteriores sí se ejecutaron."
+::application::assistant::mc::PlanStepSkipped	"no ejecutado: el plan se detuvo en un paso anterior"
+::application::assistant::mc::TooManyRounds	"Detenido: la solicitud necesitó más pasos de los permitidos por el asistente (%d rondas)."
+
+### application::assistant::panel ###################################
+::application::assistant::panel::mc::StartupGreeting	"Puedo manejar Chesswiz por usted. Elija una sugerencia abajo o pregunte con sus propias palabras."
+::application::assistant::panel::mc::Hide				"Ocultar"
+::application::assistant::panel::mc::NoModelHint		"Todavía no hay un modelo conectado. Abra Herramientas > Elegir modelo\u2026 para conectar uno; las sugerencias de arriba funcionan sin él."
+
+### application::assistant::offers #####################################
+::application::assistant::offers::mc::Summary			"¿Qué contiene esta base de datos?"
+::application::assistant::offers::mc::FindPositions	"Buscar posiciones..."
+::application::assistant::offers::mc::Duplicates		"¿Duplicados?"
+::application::assistant::offers::mc::Review			"Revisar mi partida"
+::application::assistant::offers::mc::WentWrong		"¿Dónde me equivoqué?"
+::application::assistant::offers::mc::GamesLike		"Partidas como esta"
+::application::assistant::offers::mc::Explain			"Explicar la posición"
+::application::assistant::offers::mc::SamePosition	"Partidas con esta posición"
+::application::assistant::offers::mc::PositionsLike	"Posiciones como esta"
+::application::assistant::offers::mc::Compact			"Compactar la base de datos"
+::application::assistant::offers::mc::Trend			"Tendencias de apertura"
+::application::assistant::offers::mc::Maintenance		"Informe de mantenimiento"
+::application::assistant::offers::mc::Annotate		"Anotar esta partida"
+::application::assistant::offers::mc::OpeningReport	"Informe de apertura"
+::application::assistant::offers::mc::Lesson			"Lección en vídeo"
+::application::assistant::offers::mc::AskAbout		"Preguntar sobre esto..."
+::application::assistant::offers::mc::AskAboutGame	"Sobre la partida n.º %d (%s): "
+::application::assistant::offers::mc::AskAboutBoard	"Sobre la posición en el tablero: "
 
 ### database::switcher #################################################
 ::database::switcher::mc::Empty								"vacío"
@@ -2602,6 +2694,7 @@
 ::info::mc::Version					"Versión"
 ::info::mc::Distributed				"Este programa se distribuye bajo los términos de la Licencia Pública General GNU."
 ::info::mc::Inspired					"Scidb está inspirado en Scid 3.6.1, registrado en \u00A9 1999-2003 por Shane Hudson."
+::info::mc::BasedOnScidb			"una base de datos de ajedrez basada en Scidb"
 ::info::mc::SpecialThanks			"Un especial agradecimiento a %s por su estupendo trabajo. Su empeño constituye la base de esta aplicación."
 
 ### comment ############################################################

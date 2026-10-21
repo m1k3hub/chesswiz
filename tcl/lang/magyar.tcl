@@ -265,6 +265,11 @@
 ::progress::mc::Message(copy-game)		"%s játszná(k) másolása"
 
 ### menu ###############################################################
+::menu::mc::Window							"&Ablak"
+::menu::mc::MaximisePane					"Panel &maximalizálása / visszaállítása"
+::menu::mc::FocusZoom						"Fókusz &követi a méretet"
+::menu::mc::FocusZoomRatio				"&Nagyítási arány"
+::menu::mc::FocusZoomPinBoard			"&Tábla méretének rögzítése"
 ::menu::mc::Theme			"Téma"
 ::menu::mc::ColorScheme			"Color Scheme" ;# NEW
 ::menu::mc::CustomStyleMenu		"Chesswiz's Style Menu" ;# NEW
@@ -605,6 +610,10 @@
 ::application::layout::mc::ReplaceTip		"Overwrite current layout with this one" ;# NEW
 
 ### application ########################################################
+::application::mc::ShortcutPreferences	"Billentyűzet-beállítások"
+::application::mc::ShortcutScheme			"Gyorsbillentyű-séma:"
+::application::mc::ShortcutChesswiz		"Chesswiz (alapértelmezett)"
+::application::mc::ShortcutChessBase		"Klasszikus"
 ::application::mc::Tab(information)		"&Information" ;# NEW
 ::application::mc::Tab(database)		"&Adatbázis"
 ::application::mc::Tab(board)			"&Tábla"
@@ -778,6 +787,7 @@
 ::application::database::mc::UpgradeMessage		"Adatbázis frissítése %s"
 ::application::database::mc::CompactMessage		"%s adatbázis tömörítése"
 ::application::database::mc::CannotOpenFile		"A fájl nem nyitható meg olvasásra: '%s'."
+::application::database::mc::CannotReadFile						"A(z) '%s' fájl nem olvasható: létezik, de zárolt vagy nem olvasható (másik programban van megnyitva, vagy hiányzik a jogosultság)."
 ::application::database::mc::MaintenanceReadOnlyPgn		"A PGN fájlok írásvédetten nyílnak meg; a szerkesztéshez konvertálja .sci fájlra"
 ::application::database::mc::MaintenanceReadOnly			"Ez az adatbázis írásvédett; a karbantartáshoz írható adatbázis kell"
 ::application::database::mc::EncodingFailed		"%s kódolása sikertelen." ;# "Character decoding %s failed."
@@ -1058,6 +1068,88 @@
 ::application::tree::mc::T_Number			"Számozás"
 ::application::tree::mc::T_AverageYear			"Átlag év"
 ::application::tree::mc::T_FrequentPlayer		"Leggyakoribb játékos"
+
+### application::ask ###################################################
+::application::ask::mc::Placeholder		"Kérdezze a Chesswizt, vagy mondja meg, mit tegyen (Ctrl+K)"
+::application::ask::mc::AskAssistant		"Kérdezze az asszisztenst"
+::application::ask::mc::Send				"Küldés az asszisztensnek"
+::application::ask::mc::Mic				"Beszéd"
+::application::ask::mc::Recording		"Felvétel\u2026 kattintson a leállításhoz"
+::application::ask::mc::Transcribing	"Átírás\u2026 kattintson a megszakításhoz"
+::application::ask::mc::Heard			"Felismerve: %s"
+::application::ask::mc::NothingHeard	"Nem hallható semmi"
+::application::ask::mc::AssistantPrefs	"Asszisztens beállításai\u2026"
+::application::ask::mc::Unavailable		"Az asszisztens nem érhető el."
+::application::ask::mc::Busy				"Az asszisztens foglalt. Próbálja újra, ha befejezte."
+::application::ask::mc::Failed			"Hiba: %s"
+::application::ask::mc::PrefsTitle		"Asszisztens"
+::application::ask::mc::SpeechInput		"Hangbevitel"
+::application::ask::mc::SpeechReady		"Egy helyi hangútvonal be van állítva."
+::application::ask::mc::PathWhisper		"whisper-cli útvonala"
+::application::ask::mc::PathModel		"ggml modell útvonala"
+::application::ask::mc::PathRecorder	"Rögzítő (arecord/ffmpeg)"
+::application::ask::mc::PathStub		"Tesztcsonk parancs (opcionális)"
+::application::ask::mc::Detect			"Felismerés"
+::application::ask::mc::Close			"Bezárás"
+::application::ask::mc::PrefsWhat		"az asszisztens beállításainak megnyitása"
+::application::ask::mc::PrefsDoc		"Válassza ki a helyi hangeszközöket (whisper-cli, modell, rögzítő), és nézze meg, mit kell telepíteni, ha a hangbevitel nem érhető el."
+
+### application::speech ################################################
+::application::speech::mc::Install		"A hangbevitelhez whisper-cli (whisper.cpp), egy ggml modell és arecord vagy ffmpeg szükséges. Állítsa be őket a Beállítások > Asszisztens menüben."
+::application::speech::mc::InstallMac	"A macOS a rendszer diktálási funkcióját használja: kapcsolja be a Rendszerbeállítások > Billentyűzet > Diktálás menüben, majd nyomja meg a diktálás billentyűt (vagy Fn Fn)."
+::application::speech::mc::InstallWin	"A Windows a rendszer diktálását használja: nyomja meg a Win+H billentyűkombinációt, miközben a Kérdezés mező fókuszban van."
+::application::speech::mc::Listening	"Felvétel\u2026 kattintson a leállításhoz"
+::application::speech::mc::Working		"Átírás\u2026 kattintson a megszakításhoz"
+::application::speech::mc::Nothing		"Nem hallható semmi"
+::application::speech::mc::Failed		"A hangbevitel nem sikerült: %s"
+::application::speech::mc::NoRecord	"A hangbevitel meg lett szakítva"
+::application::speech::mc::Missing		"%s Hiányzik: %s."
+::application::speech::mc::MissingCli	"whisper-cli"
+::application::speech::mc::MissingModel	"egy ggml modell"
+::application::speech::mc::MissingRecorder	"arecord vagy ffmpeg"
+
+### application::assistant #############################################
+::application::assistant::mc::Send				"Küldés"
+::application::assistant::mc::Clear			"Törlés"
+::application::assistant::mc::Thinking			"Gondolkodom..."
+::application::assistant::mc::Ready				"Kész"
+::application::assistant::mc::UsingBackup		"%s nem válaszol; kérdezés a következő helyett: %s."
+::application::assistant::mc::AllDown			"A MI szolgáltatás jelenleg nem válaszol (%s). Kérjük, próbálja újra egy pillanat múlva."
+::application::assistant::mc::Confirm			"Az asszisztens a következőt szeretné tenni: %s"
+::application::assistant::mc::Denied			"A felhasználó elutasította: a művelet NEM lett végrehajtva, és nem nyílt meg párbeszédablak."
+::application::assistant::mc::Greeting			"Kérdezzen a saját szavaival, például \"játszmák, ahol egy huszár villát ad királynak és vezérnek\", \"állások ezzel a gyalogszerkezettel\", \"állítsa fel a Najdorfot 6.Fg5 után\" vagy \"Carlsen felkészülési jelentése\". Az F2 bárhonnan visszahoz."
+::application::assistant::mc::DebugGreeting	"Hibakereső mód: hibákat, eljárásokat és változókat is tudok vizsgálni."
+::application::assistant::mc::Plan				"Terv:"
+::application::assistant::mc::PlanConfirm		"Végrehajtja ezt a tervet?\n%s"
+::application::assistant::mc::PlanDeclined		"Semmi sem lett végrehajtva: a terv el lett utasítva."
+::application::assistant::mc::PlanStepFailed	"Leállítva a(z) %d. lépésnél (%s): %s Az előző lépések végrehajtásra kerültek."
+::application::assistant::mc::PlanStepSkipped	"nem futott le: a terv egy korábbi lépésnél leállt"
+::application::assistant::mc::TooManyRounds	"Leállítva: a kérés több lépést igényelt, mint amennyit az asszisztens engedélyez (%d forduló)."
+
+### application::assistant::panel ###################################
+::application::assistant::panel::mc::StartupGreeting	"Én tudom vezetni a Chesswizt Ön helyett. Válasszon egy javaslatot lent, vagy kérdezzen saját szavaival."
+::application::assistant::panel::mc::Hide				"Elrejtés"
+::application::assistant::panel::mc::NoModelHint		"Még nincs modell csatlakoztatva. Nyissa meg az Eszközök > Modell kiválasztása\u2026 menüpontot; a fenti javaslatok modell nélkül is működnek."
+
+### application::assistant::offers #####################################
+::application::assistant::offers::mc::Summary			"Mi található ebben az adatbázisban?"
+::application::assistant::offers::mc::FindPositions	"Állások keresése..."
+::application::assistant::offers::mc::Duplicates		"Kettőzések?"
+::application::assistant::offers::mc::Review			"Saját játszma elemzése"
+::application::assistant::offers::mc::WentWrong		"Hol rontottam el?"
+::application::assistant::offers::mc::GamesLike		"Hasonló játszmák"
+::application::assistant::offers::mc::Explain			"Állás magyarázata"
+::application::assistant::offers::mc::SamePosition	"Játszmák ezzel az állással"
+::application::assistant::offers::mc::PositionsLike	"Hasonló állások"
+::application::assistant::offers::mc::Compact			"Adatbázis tömörítése"
+::application::assistant::offers::mc::Trend			"Megnyitási trendek"
+::application::assistant::offers::mc::Maintenance		"Karbantartási jelentés"
+::application::assistant::offers::mc::Annotate		"Játszma kommentálása"
+::application::assistant::offers::mc::OpeningReport	"Megnyitási jelentés"
+::application::assistant::offers::mc::Lesson			"Videólecke"
+::application::assistant::offers::mc::AskAbout		"Kérdezzen erről..."
+::application::assistant::offers::mc::AskAboutGame	"A(z) %d. játszmáról (%s): "
+::application::assistant::offers::mc::AskAboutBoard	"A táblán lévő állásról: "
 
 ### database::switcher #################################################
 ::database::switcher::mc::Empty				"üres"
@@ -2607,6 +2699,7 @@
 ::info::mc::Version		"Verzió"
 ::info::mc::Distributed		"This program is distributed under the terms of the GNU General Public License."
 ::info::mc::Inspired		"Scidb is inspired by Scid 3.6.1, copyrighted \u00A9 1999-2003 by Shane Hudson."
+::info::mc::BasedOnScidb			"egy Scidb-alapú sakkadatbázis"
 ::info::mc::SpecialThanks	"Special thanks to %s for his terrific work. His effort is the basis for this application."
 
 ### comment ############################################################
