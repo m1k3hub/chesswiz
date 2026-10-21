@@ -155,6 +155,10 @@ namespace eval ::scidb::test::reachability {
         # tracking loop cannot be driven by the mapped-Tk polling timer.
         if {[lindex $::env(SCIDB_REACHABILITY_CASE) 0] eq "c1.insert_null"} {
             after 0 ::scidb::test::objects::chooseVariation
+        } elseif {[lindex $::env(SCIDB_REACHABILITY_CASE) 0] eq "c8.move_actions"} {
+            # Cancel at the AppKit handoff; the object probe inspects every
+            # real menu command and its selected continuation on both systems.
+            event generate $menu <<MenuUnpost>>
         }
     }
     proc nativeDialogs {} {
@@ -170,7 +174,7 @@ namespace eval ::scidb::test::reachability {
         }
         # Observe the real, non-modal AppKit About API without replacing it.
         trace add execution ::tk::mac::standardAboutPanel enter [namespace current]::nativeAbout
-        if {[lindex $::env(SCIDB_REACHABILITY_CASE) 0] in {c1.insert_null c6.copy_line}
+        if {[lindex $::env(SCIDB_REACHABILITY_CASE) 0] in {c1.insert_null c6.copy_line c8.move_actions}
             && [llength [info commands ::scidb::test::objects::chooseVariation]]} {
             rename ::tk_popup [namespace current]::saved_tk_popup
             interp alias {} ::tk_popup {} [namespace current]::nativePopup

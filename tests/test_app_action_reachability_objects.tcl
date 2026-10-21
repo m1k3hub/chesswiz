@@ -479,6 +479,24 @@ namespace eval ::scidb::test::objects {
         puts "OBJECT ACTION $id begin"; flush stdout
         set reply [::scidb::test::reachability::runAction [list tool $id [list object $object]]]
         puts "OBJECT ACTION $id returned"; flush stdout
+        if {$id eq "c8.move_actions"} {
+            set menu .contextMoveActions
+            set target [list ::application::tree::DoAction [dict get $object table] \
+                [dict get $object row] [dict get $object move]]
+            set actions {}
+            for {set i 0} {$i <= [$menu index end]} {incr i} {
+                if {[$menu type $i] ne "command"} { continue }
+                set command [$menu entrycget $i -command]
+                if {[lindex $command 0] ne "eval" || [lindex $command 1] ne $target} {
+                    error {tree move menu lost its selected continuation}
+                }
+                lappend actions [lindex $command 2]
+            }
+            if {"load" ni $actions || ("replace" ni $actions && "append" ni $actions)} {
+                error {tree move menu omitted its load or move actions}
+            }
+            puts "EVIDENCE tree-move-menu actions=$actions target=$target"
+        }
         update
         if {$id in {c4.export.pgn c12.export}} {
             variable dir
