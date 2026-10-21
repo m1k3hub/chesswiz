@@ -190,7 +190,7 @@ variable Actions {
 	}
 	current_game {
 		0 0 "read the current game"
-		"The game on the board: its header, moves and comments as PGN, and the current position as FEN. Use it to summarize or discuss the game."
+		"The game on the board: its header, moves and comments as PGN, current position as FEN, last move and the FEN before that move. For alternatives to the last move, pass the position before last move to engine_evaluate. Use it to summarize or discuss the game."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoCurrentGame
 	}
@@ -337,6 +337,12 @@ variable Actions {
 		"The options of an engine's profile (default 'Default') as the Options dialog shows them: name, type, value, default and range or choices. Threads, hash and the number of lines are not options here; start_engine sets them."
 		{{"type":"object","properties":{"engine":{"type":"string","description":"engine name or part of it"},"profile":{"type":"string"}},"required":["engine"]}}
 		::application::assistant::DoEngineOptions
+	}
+	open_play_engine {
+		0 0 "open Play Against Engine"
+		"Open the Play Against Engine setup dialog, optionally selecting the user's colour. Use for requests to open Play Against Engine or play as Black/White. This only opens the dialog; the user presses Start to begin the game."
+		{{"type":"object","properties":{"color":{"type":"string","enum":["white","black","random"],"description":"the user's colour, not the engine's; omitted keeps the dialog default"}}}}
+		::application::assistant::DoOpenPlayEngine
 	}
 	start_engine {
 		0 0 "analyse the board position with %s"
@@ -612,7 +618,9 @@ about games, players or openings, never invent statistics; use only statistics
 the tools report; a short list is fine there. Never state chess knowledge of
 your own: no best moves, main lines, plans, evaluations or opening theory
 unless a tool reported them in this conversation (the engine, the opening
-tree, the database); offer to ask the tool instead. Speak as a friendly coach
+tree, the database); offer to ask the tool instead. For alternatives to the last
+move, read current_game and call engine_evaluate with its "position before last
+move" as fen. Keep the board and game unchanged for this read-only question. Speak as a friendly coach
 for beginners through grandmasters. For chess evaluations (including explaining
 a position or checking a move), use words by default, not raw centipawn or pawn
 scores. From the relevant player's perspective, magnitudes below half a pawn
@@ -662,6 +670,7 @@ variable MaxReply 6000
 # Where a tool's feature lives in the menus: added to its reply as a
 # "menu:" line, which the model passes on (docs/ai/ASSISTANT_COVERAGE_MAP.md P2).
 variable ToolMenu {
+	open_play_engine "Main Menu > Training > Play Against Engine"
 	search_games	"Database tab > right-click the database > Maintenance > Advanced Search"
 	show_search		"Database tab > right-click the database > Maintenance > Advanced Search"
 	find_positions	"Database tab > right-click the database > Maintenance > Pattern Search (with the script above)"
@@ -875,6 +884,13 @@ proc ::application::assistant::Step {round} {
 	variable ResultProseInstructions
 	set messages $Priv(messages)
 
+	# Bound each attempt so an unavailable service reaches its backups and
+	# leaves Tk responsive. Restore the caller's timeout when this turn ends.
+	if {![info exists Priv(replyTimeout)]} {
+		set Priv(replyTimeout) $::ai::provider::Config(timeoutMs)
+	}
+	::ai::provider::configure -timeout [expr {min($Priv(replyTimeout), 30000)}]
+
 	# the last round offers no tools, so the model has to answer in prose
 	set tools [expr {$round + 1 < $Priv(maxRounds) ? [toolsJson] : ""}]
 	if {[info exists Priv(resultFacts)] && $Priv(resultFacts) ne ""} {
@@ -884,7 +900,7 @@ proc ::application::assistant::Step {round} {
 		if {![info exists Priv(replyTimeout)]} {
 			set Priv(replyTimeout) $::ai::provider::Config(timeoutMs)
 		}
-		::ai::provider::configure -timeout 30000 -options {}
+		::ai::provider::configure -options {}
 	}
 	::ai::provider::chatAsync $messages $tools \
 		[namespace code [list OnReply $round]]
@@ -905,7 +921,7 @@ proc ::application::assistant::TryBackup {round result} {
 	incr Priv(backup)
 	set from [::ai::provider::label [set ::ai::provider::Config(name)]]
 	::ai::provider::configure -name $provider -model $model
-	Append tool "[format $::application::assistant::mc::UsingBackup $from \
+	Append info "[format $::application::assistant::mc::UsingBackup $from \
 		"[::ai::provider::label $provider] ($model)"]"
 	Step $round
 	return 1
@@ -1350,7 +1366,8 @@ proc ::application::assistant::Finish {result round} {
 		set event [list reply $text]
 	} elseif {[dict exists $result down] && [dict get $result down]} {
 		# the chosen model and every backup are down: say so plainly
-		Append error [format $mc::AllDown [dict get $result error]]
+		set status [expr {[dict exists $result summary] ? [dict get $result summary] : [dict get $result error]}]
+		Append error [format $mc::AllDown $status]
 		set event [list error [dict get $result error]]
 	} else {
 		Append error "Error: [dict get $result error]"
@@ -1660,6 +1677,9 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			set result [dict create engine [EngineNamed [Arg $cargs engine]]]
 			if {$name eq "engine_options"} { dict set result profile [OptArg $cargs profile Default] }
 			return $result
+		}
+		open_play_engine {
+			return [dict create color [OptArg $cargs color ""]]
 		}
 		start_engine {
 			set name [OptArg $cargs engine ""]
@@ -2239,7 +2259,16 @@ proc ::application::assistant::DoCurrentGame {} {
 	# the saved game unless it has unsaved changes
 	set source [expr {[::scidb::game::query modified?] ? "modified" : "original"}]
 	set pgn [string trim [::scidb::game::toPGN $source]]
-	return "$pgn\n\ncurrent position: [::scidb::pos::fen]"
+	set reply "$pgn\n\ncurrent position: [::scidb::pos::fen]"
+	# The native query reads the predecessor without moving the displayed
+	# board. Give the model this fact so it evaluates the correct side.
+	set key [::scidb::game::query current]
+	set before [::scidb::game::query movefen $key]
+	if {$before ne ""} {
+		append reply "\nlast move: [::scidb::game::query move $key]"
+		append reply "\nposition before last move: $before"
+	}
+	return $reply
 }
 
 
@@ -3794,6 +3823,16 @@ proc ::application::assistant::DoEngineOptions {engine profile} {
 	}
 	if {![llength $options]} { lappend lines "(no options)" }
 	return [join $lines \n]
+}
+
+
+proc ::application::assistant::DoOpenPlayEngine {color} {
+	::playengine::open .application
+	if {$::playengine::Priv(active)} {
+		return "Play Against Engine is open with the existing game still in progress."
+	}
+	if {$color ne ""} { set ::playengine::Priv(dlg:color) $color }
+	return "Play Against Engine is open with the user's colour set to $::playengine::Priv(dlg:color). Press Start in the dialog to begin."
 }
 
 

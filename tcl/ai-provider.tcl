@@ -979,6 +979,8 @@ proc ::ai::provider::CloudError {provider code data} {
 	set text ""
 	catch {
 		set d [json::json2dict $data]
+		# Gemini can wrap an error object in an array.
+		if {[string index [string trimleft $data] 0] eq "\["} { set d [lindex $d 0] }
 		if {[dict exists $d error message]} { set text [dict get $d error message] }
 	}
 	switch -- $code {
@@ -987,6 +989,7 @@ proc ::ai::provider::CloudError {provider code data} {
 		}
 		429 { return "$provider is busy or the account's limit is reached ($text). Try again shortly." }
 	}
+	if {$text eq ""} { set text [string range [string trim $data] 0 2000] }
 	if {$text eq ""} { set text "no details" }
 	return "$provider: HTTP $code: $text"
 }
@@ -1046,8 +1049,15 @@ proc ::ai::provider::openaiMessages {messages} {
 					set id [CallId $call]
 					set fn [dict get $call function]
 					set args [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
-					lappend enc [format {{"id":"%s","type":"function","function":{"name":"%s","arguments":"%s"}}} \
+					set encoded [format {{"id":"%s","type":"function","function":{"name":"%s","arguments":"%s"}}} \
 						[jsonEscape $id] [jsonEscape [dict get $fn name]] [jsonEscape [jsonObject $args]]]
+					# Gemini signs each function call. Keep the opaque JSON span;
+					# forwarding its extension to other providers is unsupported.
+					if {[Current] eq "gemini" && [dict exists $call openai_extra_content]} {
+						set encoded [string range $encoded 0 end-1]
+						append encoded ,\"extra_content\": [dict get $call openai_extra_content] \}
+					}
+					lappend enc $encoded
 					lappend pending $id
 				}
 				if {[llength $enc]} {
@@ -1073,12 +1083,21 @@ proc ::ai::provider::openaiReply {data} {
 	set msg [dict create role assistant content $content]
 	if {[dict exists $m tool_calls] && [dict get $m tool_calls] ne "null"} {
 		set calls {}
-		foreach c [dict get $m tool_calls] {
+		# Decode arguments for tool execution, retain provider metadata as JSON.
+		set top [jsonMembers $data]
+		set choice [jsonMembers [lindex [jsonElements [dict get $top choices]] 0]]
+		set rawMessage [jsonMembers [dict get $choice message]]
+		foreach c [dict get $m tool_calls] rawCall [jsonElements [dict get $rawMessage tool_calls]] {
 			set fn [dict get $c function]
 			set args {}
 			catch { set args [json::json2dict [dict get $fn arguments]] }
-			lappend calls [dict create id [dict get $c id] \
+			set call [dict create id [dict get $c id] \
 				function [dict create name [dict get $fn name] arguments $args]]
+			set fields [jsonMembers $rawCall]
+			if {[dict exists $fields extra_content]} {
+				dict set call openai_extra_content [dict get $fields extra_content]
+			}
+			lappend calls $call
 		}
 		if {[llength $calls]} { dict set msg tool_calls $calls }
 	}
@@ -1221,9 +1240,25 @@ proc ::ai::provider::cloudChatAsync {messages tools script {mode chat}} {
 
 	requestAsync $url $body \
 		[namespace code [list ::ai::provider::OnCloud $provider $mode $script]] \
-		[namespace code [list ::ai::provider::failAsync $script]] \
+		[namespace code [list ::ai::provider::cloudUnavailable $script]] \
 		$headers
 	return
+}
+
+
+# Error bodies may quote credentials. Scrub before logging or displaying them.
+proc ::ai::provider::redactError {text} {
+	foreach provider {anthropic openai fireworks qwen gemini} {
+		set key [apiKey $provider]
+		if {$key ne ""} { set text [string map [list $key {[redacted]}] $text] }
+	}
+	return [string range $text 0 8191]
+}
+
+proc ::ai::provider::cloudUnavailable {script error} {
+	set error [redactError $error]
+	catch { ::application::assistant::RecordError provider $error }
+	uplevel #0 [list {*}$script [list ok 0 error $error down 1]]
 }
 
 
@@ -1236,9 +1271,12 @@ proc ::ai::provider::OnCloud {provider mode script token} {
 	set name [label $provider]
 	if {$status ne "ok" || $code != 200} {
 		set err [expr {$status ne "ok" ? "$name: $status" : [CloudError $name $code $data]}]
+		set err [redactError $err]
+		catch { ::application::assistant::RecordError provider $err [redactError $data] }
 		# busy (429), a server fault (5xx) or no reply at all: a backup may serve
 		set down [expr {$status ne "ok" || $code == 429 || $code >= 500}]
-		uplevel #0 [list {*}$script [list ok 0 error $err down $down]]
+		set summary [expr {$status ne "ok" ? "$name: $status" : "$name: HTTP $code"}]
+		uplevel #0 [list {*}$script [list ok 0 error $err down $down summary $summary]]
 		return
 	}
 	if {[catch {
