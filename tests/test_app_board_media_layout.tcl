@@ -727,8 +727,14 @@ tcltest::test inset-009-restore {VAL-MED-009 button, double-click and Escape res
 tcltest::test inset-009-unoccluded {VAL-MED-009 the size control is never covered by the small board} -setup {::w1::setup} -body {
     ::w1::quiet
     set states {}
+    # Sizes larger than the live screen are clamped to it, so a small
+    # (1000x600) display still exercises the control (VAL-DLG-015d).
+    set seen {}
     foreach {sw sh} [list 1024 700 1280 800] {
-        if {$sw > [winfo screenwidth .] || $sh > [winfo screenheight .]} { continue }
+        set sw [expr {min($sw, [winfo screenwidth .])}]
+        set sh [expr {min($sh, [winfo screenheight .])}]
+        if {"$sw $sh" in $seen} { continue }
+        lappend seen "$sw $sh"
         wm geometry .application ${sw}x${sh}+0+0
         ::w1::wait
         set w [::w1::play]

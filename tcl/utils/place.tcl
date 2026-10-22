@@ -51,6 +51,11 @@ variable ShiftLeft	8
 # unless that move puts it over the board.
 variable BesideDelay		260
 variable BesideTimer		{}
+# A steady stream of events (a playing video's per-frame Configure, a live
+# engine clock) would restart a pure trailing debounce forever; the settle
+# runs at the latest this long after the first deferred event.
+variable BesideMaxWait		600
+variable BesideFirst		{}
 variable BesideDialogs		{}
 variable BesideState
 variable BesideReplacements	0
@@ -589,6 +594,22 @@ proc besideProtectedRect {} {
 
 # Ask the inset to move (or shrink) within its pane so it is not under the
 # placed dialog. Returns 1 when it did, 0 when there is nowhere to go.
+# What a dialog must stay clear of: the board and the visible inset, plus
+# every dialog that took its reserved strip before this one (a later owner
+# stacks beyond them; an earlier one keeps its place next to the board).
+proc besideObstacleFor {dlg} {
+	variable BesideReserves
+	set rect [besideProtectedRect]
+	if {$rect eq {}} { return {} }
+	foreach entry $BesideReserves {
+		set other [lindex $entry 0]
+		if {$other eq $dlg} { break }
+		if {![winfo exists $other] || ![winfo ismapped $other]} { continue }
+		set rect [besideUnionRect $rect [besideOuterRect $other]]
+	}
+	return $rect
+}
+
 proc besideDodgeVideo {dlg x y w h extents} {
 	set video [besideVideoRect]
 	if {$video eq {}} { return 0 }
@@ -726,10 +747,18 @@ proc besideSchedule {{delay ""}} {
 	variable BesideTimer
 	variable BesideDelay
 	variable BesideDialogs
+	variable BesideMaxWait
+	variable BesideFirst
 
 	if {![llength $BesideDialogs]} { return }
-	if {$BesideTimer ne {}} { after cancel $BesideTimer }
+	set now [clock milliseconds]
+	if {$BesideTimer ne {}} {
+		after cancel $BesideTimer
+	} else {
+		set BesideFirst $now
+	}
 	if {$delay eq ""} { set delay $BesideDelay }
+	set delay [expr {max(0, min($delay, $BesideFirst + $BesideMaxWait - $now))}]
 	set BesideTimer [after $delay [namespace code besideSettle]]
 }
 
@@ -880,7 +909,7 @@ proc besideReleaseReserve {dlg} {
 	foreach later $BesideReserves {
 		lassign $later d sd px ps pp rf af pk
 		if {$ps eq $side && $pp == $pixels} {
-			set later [list $d $sd $px $previousSide $previousPixels $rf $af $previousKind]
+			set later [list $d $sd $px $previousSide $previousPixels $rootFloor $af $previousKind]
 		}
 		lappend out $later
 	}
@@ -950,13 +979,21 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 	}
 	# A strip owned by the video inset or another dialog is left alone.
 	besidePruneReserves
+	set stacked 0
 	if {$::application::board::ReservePixels > 0} {
 		set owner {}
 		foreach entry $BesideReserves { lappend owner [lindex $entry 0] }
-		if {$dlg ni $owner} { return {} }
-		besideReleaseReserve $dlg
-		update idletasks
-		lassign [besideBoardRect] bx by bw bh
+		if {$dlg in $owner} {
+			besideReleaseReserve $dlg
+			update idletasks
+			lassign [besideBoardRect] bx by bw bh
+		}
+		if {$::application::board::ReservePixels > 0} {
+			# The video's own strip is never extended for a dialog; another
+			# dialog's strip is: this one goes beyond it (VAL-DLG-015b).
+			if {![llength $BesideReserves]} { return {} }
+			set stacked 1
+		}
 	}
 	set previousSide $::application::board::ReserveSide
 	set previousPixels $::application::board::ReservePixels
@@ -989,7 +1026,32 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 	# probe with the floor at 1 and decide the lifetime floor after choosing.
 	if {$rootFloor > 1} { set ::application::board::MinimumReserveSquare 1 }
 	set choices {}
-	foreach side {right left below} {
+	set sides {right left below}
+	if {$stacked} {
+		# One reserve side at a time: grow the active strip by what this
+		# dialog needs beyond the dialogs already beside the board.
+		set activeSide $::application::board::ReserveSide
+		set activePixels $::application::board::ReservePixels
+		set sides [expr {$activeSide eq "bottom" ? "below" : $activeSide}]
+		# The dialogs already in the strip move up to the shrunk board, so
+		# this one needs its own full extent on top of the active strip.
+		if {$sides eq "below"} {
+			set need [expr {$activePixels + $targetH + $fh + $gap}]
+			set extent $fullHeight
+		} else {
+			set need [expr {$activePixels + $targetW + $fw + $gap}]
+			set extent $fullWidth
+		}
+		set sides {}
+		if {$need > $activePixels && $need < $extent} {
+			set square [::application::board::reserveSquare $activeSide $need \
+				$fullWidth $fullHeight dialog]
+			if {$square >= 1} {
+				lappend choices [list [expr {$activeSide eq "bottom" ? "below" : $activeSide}] $need $square]
+			}
+		}
+	}
+	foreach side $sides {
 		if {$side eq "below"} {
 			set base [expr {$wy + $wh - ($frameY + $fullHeight)}]
 			set need [expr {max(0, $targetH + $fh + $gap - $base)}]
@@ -1040,7 +1102,20 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 		return {}
 	}
 	update idletasks
-	lassign [besideProtectedRect] bx by bw bh
+	if {$stacked} {
+		# The grown strip moved the board; the dialogs already beside it
+		# follow it now, so this one is planned beyond where they settle.
+		variable BesideState
+		foreach entry $BesideReserves {
+			set other [lindex $entry 0]
+			if {![winfo exists $other] || ![winfo ismapped $other]} { continue }
+			set parent .application
+			if {[info exists BesideState($other,parent)]} { set parent $BesideState($other,parent) }
+			catch { besideBoard $other $parent }
+			update idletasks
+		}
+	}
+	lassign [besideObstacleFor $dlg] bx by bw bh
 	set requested [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]
 	set plan [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents $gap \
 		$requested $minimum]
@@ -1201,7 +1276,7 @@ proc besideBoard {dlg {parent ""}} {
 	# VAL-DLG-013: with a video playing in the board inset, the protected
 	# area is the union of the drawn board and the visible inset. Strips
 	# inside the pane that the video owns are therefore not free space.
-	lassign [besideProtectedRect] bx by bw bh
+	lassign [besideObstacleFor $dlg] bx by bw bh
 	set workarea [winfo workarea $dlg]
 	if {[winfo exists $parent]} {
 		set pTop [winfo toplevel $parent]
