@@ -492,6 +492,24 @@ proc besidePlan {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12} {requ
 	return $plan
 }
 
+# VAL-DLG-004 no-room plan at the requested size: the right/left/below
+# candidate with the smallest overlap of the protected rectangle, clamped
+# inside the work area. Carries every candidate and its area as evidence.
+proc besideNoRoomPlan {bx by bw bh rw rh workarea extents gap} {
+	set plan [besidePlan $bx $by $bw $bh $rw $rh $workarea $extents $gap]
+	set candidates [dict get $plan candidates]
+	set areas [dict get $plan areas]
+	set best {}
+	foreach side {right left below} {
+		if {$best eq {} || [dict get $areas $side] < [dict get $areas $best]} {
+			set best $side
+		}
+	}
+	return [dict create geometry [dict get $candidates $best] rule no-room \
+		side $best overlap [dict get $areas $best] candidates $candidates \
+		areas $areas resized 0 minimumFits 0 requestedFits 0]
+}
+
 proc besidePosition {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12}} {
 	return [dict get [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents $gap] geometry]
 }
@@ -769,9 +787,10 @@ proc besideContext {dlg} {
 	if {$cls ni {Menu OptionMenu} && ![wm overrideredirect $dlg]} {
 	 set extents [winfo extents $dlg]
 	}
+	variable BesideTopSlack
 	return [list [winfo workarea $dlg] $extents \
 	 [list [winfo reqwidth $dlg] [winfo reqheight $dlg]] \
-	 [wm minsize $dlg] [wm maxsize $dlg]]
+	 [wm minsize $dlg] [wm maxsize $dlg] $BesideTopSlack]
 }
 proc besideOuterRect {dlg} {
 	lassign [besideRect $dlg] x y w h
@@ -787,9 +806,33 @@ proc besideInside {rect area} {
 # Record the rectangle a placement actually produced. Runs on idle because
 # the WM applies wm geometry asynchronously and callers deiconify after
 # besideBoard returns.
+# Frame extents for planning. Some window managers (openbox) place a dialog's
+# client lower than the reported top extent; the difference observed on any
+# mapped beside dialog is added so the real frame stays in the work area.
+variable BesideTopSlack 0
+proc besideDialogExtents {dlg} {
+	variable BesideTopSlack
+	set extents [winfo extents $dlg]
+	if {[winfo ismapped $dlg]} { besideLearnSlack $dlg $extents }
+	lset extents 2 [expr {[lindex $extents 2] + $BesideTopSlack}]
+	return $extents
+}
+proc besideLearnSlack {dlg {extents {}}} {
+	variable BesideTopSlack
+	if {$extents eq {}} { set extents [winfo extents $dlg] }
+	if {![regexp {^[0-9]+x[0-9]+\+(-?[0-9]+)\+(-?[0-9]+)$} [wm geometry $dlg] -> gx gy]} { return }
+	set slack [expr {[winfo rooty $dlg] - $gy - [lindex $extents 2]}]
+	# Only a few pixels are a decoration mismatch; more is a stale geometry.
+	if {$slack > $BesideTopSlack && $slack <= 8} {
+		set BesideTopSlack $slack
+		besideSchedule
+	}
+}
+
 proc besideCapture {dlg} {
 	variable BesideState
 	if {![winfo exists $dlg] || ![winfo ismapped $dlg]} { return }
+	besideLearnSlack $dlg
 	set BesideState($dlg,last) [besideRect $dlg]
 	set BesideState($dlg,board) [besideBoardRect]
 	set BesideState($dlg,obstacle) [besideProtectedRect]
@@ -1285,6 +1328,16 @@ proc besideBoard {dlg {parent ""}} {
 		set py [expr {[winfo rooty $pTop] - $pet}]
 		set pw [expr {[winfo width $pTop] + $pel + $per}]
 		set ph [expr {[winfo height $pTop] + $pet + $peb}]
+		# Some window managers report top extents smaller than the real
+		# title bar, so the frame origin from wm geometry and the one derived
+		# from the root position disagree. Keep only the rectangle both agree
+		# on, so the dialog frame is inside the main window either way.
+		if {[regexp {^[0-9]+x[0-9]+\+(-?[0-9]+)\+(-?[0-9]+)$} [wm geometry $pTop] -> gx gy]} {
+			set pw [expr {$pw - abs($gx - $px)}]
+			set ph [expr {$ph - abs($gy - $py)}]
+			set px [expr {max($px, $gx)}]
+			set py [expr {max($py, $gy)}]
+		}
 		lassign $workarea wx wy ww wh
 		set x0 [expr {max($wx, $px)}]
 		set y0 [expr {max($wy, $py)}]
@@ -1298,17 +1351,17 @@ proc besideBoard {dlg {parent ""}} {
 	if {$cls eq "Menu" || $cls eq "OptionMenu" || [wm overrideredirect $dlg]} {
 		set extents {0 0 0 0}
 	} else {
-		set extents [winfo extents $dlg]
+		set extents [besideDialogExtents $dlg]
 	}
 	variable BesideMinimums
 	set minimum {}
 	if {[info exists BesideMinimums($dlg)]} {
 		set minimum $BesideMinimums($dlg)
-	} elseif {$mw > 1 && $mh > 1} {
-		set minimum [list [expr {min($mw, $rw)}] [expr {min($mh, $rh)}]]
 	} else {
 		# Without a declared minimum the dialog's content cannot reflow, so
-		# its natural request is the smallest usable size.
+		# its natural request is the smallest usable size (VAL-DLG-016: no
+		# control is realised below its requested size; wm minsize may only
+		# be lowered down to the request, never below it).
 		set minimum [list $rw $rh]
 	}
 	set plan [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents 12 \
@@ -1349,6 +1402,16 @@ proc besideBoard {dlg {parent ""}} {
 	lassign $extents el er et eb
 	set fw [expr {$el+$er}]
 	set fh [expr {$et+$eb}]
+	# VAL-DLG-016/VAL-DLG-004: a dialog that fits the work area at its
+	# requested size is never squeezed below it. When no strip, squeeze,
+	# detach or reserve holds that size, the no-room rule applies instead:
+	# requested size, clamped inside the work area, minimum overlap over the
+	# right/left/below candidates.
+	lassign [dict get $plan geometry] _ _ pw ph
+	if {($pw < $rw || $ph < $rh) && $rw <= $ww-$fw && $rh <= $wh-$fh
+		&& ![info exists BesideMinimums($dlg)]} {
+		set plan [besideNoRoomPlan $bx $by $bw $bh $rw $rh $workarea $extents 12]
+	}
 	if {[dict get $plan overlap] > 0 && ($rw > $ww-$fw || $rh > $wh-$fh)} {
 		set minw [expr {min(320,$rw)}]
 		set minh [expr {min(160,$rh)}]

@@ -221,9 +221,11 @@ proc ::enginematch::open {parent} {
 		-variable [namespace current]::Priv(dlg:mode) -command [namespace code ModeChanged]
 	ttk::radiobutton $mf.gauntlet -text $mc::GauntletMode -value gauntlet \
 		-variable [namespace current]::Priv(dlg:mode) -command [namespace code ModeChanged]
-	pack $mf.label -side left
-	pack $mf.match -side left -padx [list $::theme::padx 0]
-	pack $mf.gauntlet -side left -padx [list $::theme::padx 0]
+	# Stacked rows keep the dialog narrow enough for a strip beside the
+	# board, so no control is squeezed below its requested size (VAL-DLG-016).
+	grid $mf.label $mf.match -sticky w
+	grid x $mf.gauntlet -sticky w
+	grid $mf.match $mf.gauntlet -padx [list $::theme::padx 0]
 	pack $mf -anchor w -pady [list 0 $::theme::pady]
 
 	# the engine pickers, rebuilt by ModeChanged
@@ -236,9 +238,10 @@ proc ::enginematch::open {parent} {
 	ttk::spinbox $gf.count -from 2 -to 1000 -width 5 \
 		-textvariable [namespace current]::Priv(dlg:games)
 	ttk::label $gf.detail -text $mc::GamesDetail
-	pack $gf.label -side left
-	pack $gf.count -side left -padx [list $::theme::padx 0]
-	pack $gf.detail -side left -padx [list $::theme::padx 0]
+	grid $gf.label $gf.count -sticky w
+	grid $gf.count -padx [list $::theme::padx 0]
+	grid $gf.detail -columnspan 3 -sticky w
+	grid columnconfigure $gf 2 -weight 1
 	pack $gf -anchor w -pady [list 0 $::theme::pady]
 
 	set tf [ttk::frame $f.time]
@@ -258,10 +261,11 @@ proc ::enginematch::open {parent} {
 	ttk::spinbox $ncf.mt -from 10 -to 60000 -increment 100 -width 6 \
 		-textvariable [namespace current]::Priv(dlg:movetime)
 	ttk::label $ncf.ms -text $mc::MilliSeconds
-	pack $tf.label -side left
-	pack $tf.clock $tf.minutes $tf.plus $tf.increment $tf.s -side left \
+	grid $tf.label $tf.clock $tf.minutes $tf.plus $tf.increment $tf.s -sticky w
+	grid $tf.clock $tf.minutes $tf.plus $tf.increment $tf.s \
 		-padx [list $::theme::padx 0]
-	pack $tf.detail -side left
+	grid $tf.detail -columnspan 7 -sticky w
+	grid columnconfigure $tf 6 -weight 1
 	pack $ncf.choice $ncf.mt -side left
 	pack $ncf.ms -side left -padx [list $::theme::padx 0]
 	pack $tf -anchor w
@@ -290,9 +294,9 @@ proc ::enginematch::open {parent} {
 		-variable [namespace current]::Priv(dlg:tb)
 	ttk::checkbutton $af.online -text $mc::OnlineTb \
 		-variable [namespace current]::Priv(dlg:online)
-	pack $af.label -side left
-	pack $af.tb -side left -padx [list $::theme::padx 0]
-	pack $af.online -side left -padx [list $::theme::padx 0]
+	grid $af.label $af.tb -sticky w
+	grid x $af.online -sticky w
+	grid $af.tb $af.online -padx [list $::theme::padx 0]
 	pack $af -anchor w -pady [list 0 $::theme::pady]
 
 	set bf [ttk::frame $f.base]

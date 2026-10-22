@@ -1184,6 +1184,9 @@ proc ::scidb::test::dlgplace::clearOf {target dlg} {
     require [expr {$ob == 0}] "$target: frame $outer covers board $board"
     require [expr {$ov == 0}] "$target: frame $outer covers video $video"
     require [inside $outer $wa] "$target: frame $outer outside $wa"
+    # VAL-DLG-016: clear of board and inset is not enough; no control may be
+    # squeezed below its requested size to get there.
+    requireControls $target $dlg
     return 1
 }
 proc ::scidb::test::dlgplace::wmctrlMax {on} {
