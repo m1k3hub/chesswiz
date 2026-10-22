@@ -1189,6 +1189,35 @@ proc ::scidb::test::dlgplace::clearOf {target dlg} {
     requireControls $target $dlg
     return 1
 }
+# VAL-DLG-017B: one of two playing dialogs either is clear of board and inset,
+# or, when the pair cannot both fit, its last plan names the no-room rule:
+# smallest board overlap of the right/left/below candidates that do not
+# cover the peer, inside the work area, controls at requested size. Never
+# on top of the peer either way.
+proc ::scidb::test::dlgplace::pairClearOf {target dlg peer} {
+    set outer [outerRect $dlg]
+    set po [outerRect $peer]
+    require [expr {[overlapArea $outer $po] == 0}] "$target: frame $outer is under/over peer $po"
+    set plan {}
+    if {[info exists ::util::place::BesideLastPlan($dlg)]} { set plan $::util::place::BesideLastPlan($dlg) }
+    set rule [expr {[dict exists $plan rule] ? [dict get $plan rule] : ""}]
+    if {$rule ne "no-room"} { return [clearOf $target $dlg] }
+    lassign [winfo extents $dlg] l r t b
+    set allowed {}
+    dict for {side g} [dict get $plan candidates] {
+        lassign $g x y w h
+        if {[overlapArea [list $x $y [expr {$w+$l+$r}] [expr {$h+$t+$b}]] $po] == 0} {
+            lappend allowed [dict get $plan areas $side]
+        }
+    }
+    if {![llength $allowed]} { set allowed [dict values [dict get $plan areas]] }
+    puts "DLG-V17B $target rule=no-room frame=$outer peer=$po board=[boardRect] overlap=[dict get $plan overlap] allowed=$allowed"
+    require [expr {[dict get $plan overlap] == [tcl::mathfunc::min {*}$allowed]}] \
+        "$target: no-room overlap [dict get $plan overlap] is not the minimum of $allowed"
+    require [inside $outer [windowWorkArea]] "$target: frame $outer outside [windowWorkArea]"
+    requireControls $target $dlg
+    return 1
+}
 proc ::scidb::test::dlgplace::wmctrlMax {on} {
     set id [wm frame .application]
     exec wmctrl -ir $id -b [expr {$on ? "add" : "remove"}],maximized_vert,maximized_horz
@@ -1258,7 +1287,9 @@ tcltest::test dlg-v15-a-maximize-playing {real maximize and restore re-plan a pl
 } -result 1
 
 # (b) Two playing dialogs open at once, board zoomed or not: neither covers
-# the drawn board or the inset; both close orders restore reserve and board.
+# the drawn board or the inset, or the pair's named no-room rule applies
+# (VAL-DLG-017B); never one under the other; both close orders restore
+# reserve and board.
 foreach zoom {0 1} {
     tcltest::test dlg-v15-b-two-playing-zoom$zoom {two playing dialogs never cover board or inset; either close order restores} -setup {
         ::scidb::test::dlgplace::setupBoard
@@ -1276,8 +1307,8 @@ foreach zoom {0 1} {
             ::scidb::test::dlgplace::waitFor 900
             ::enginematch::open .application
             ::scidb::test::dlgplace::waitFor 1100
-            ::scidb::test::dlgplace::clearOf v15b-%d-playengine .application.playengine
-            ::scidb::test::dlgplace::clearOf v15b-%d-enginematch .application.enginematch
+            ::scidb::test::dlgplace::pairClearOf v15b-%d-playengine .application.playengine .application.enginematch
+            ::scidb::test::dlgplace::pairClearOf v15b-%d-enginematch .application.enginematch .application.playengine
             foreach short $order {
                 if {$short eq "playengine"} { ::playengine::Close } else { ::enginematch::Close }
                 catch {destroy .application.$short}

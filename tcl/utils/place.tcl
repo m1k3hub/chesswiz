@@ -67,6 +67,8 @@ variable BesideMinimums
 # Strips reserved for dialogs that cannot shrink. Entries are
 # {dialog side pixels previousSide previousPixels}, newest last.
 variable BesideReserves		{}
+# The plan besideBoard last applied to each dialog (evidence and tests).
+variable BesideLastPlan
 
 
 # Notes:
@@ -616,16 +618,146 @@ proc besideProtectedRect {} {
 # every dialog that took its reserved strip before this one (a later owner
 # stacks beyond them; an earlier one keeps its place next to the board).
 proc besideObstacleFor {dlg} {
-	variable BesideReserves
 	set rect [besideProtectedRect]
 	if {$rect eq {}} { return {} }
-	foreach entry $BesideReserves {
-		set other [lindex $entry 0]
+	# Every dialog placed before this one keeps its place: the new one is
+	# never put under it, and an earlier one is not moved for a later one
+	# (VAL-DLG-015b, VAL-DLG-017B).
+	variable BesideDialogs
+	foreach other $BesideDialogs {
 		if {$other eq $dlg} { break }
 		if {![winfo exists $other] || ![winfo ismapped $other]} { continue }
 		set rect [besideUnionRect $rect [besideOuterRect $other]]
 	}
 	return $rect
+}
+
+# The other placed, mapped dialogs beside the board.
+proc besidePeers {dlg} {
+	variable BesideDialogs
+	set peers {}
+	foreach other $BesideDialogs {
+		if {$other eq $dlg || ![winfo exists $other] || ![winfo ismapped $other]} { continue }
+		lappend peers $other
+	}
+	return $peers
+}
+
+# Record <dlg> as an owner of the live reserve it is placed beside, without
+# changing it. Releasing such an entry restores nothing of its own.
+proc besideShareReserve {dlg} {
+	variable BesideReserves
+	besidePruneReserves
+	if {[besideOwns $dlg]} { return 0 }
+	set side $::application::board::ReserveSide
+	set pixels $::application::board::ReservePixels
+	set floor $::application::board::MinimumReserveSquare
+	lappend BesideReserves [list $dlg $side $pixels $side $pixels $floor $floor \
+		$::application::board::ReserveKind]
+	return 1
+}
+
+# A requested-size place for <dlg> next to an already placed peer (below,
+# above, right or left of its frame), clear of the board, the inset and every
+# peer, fully inside the work area. Returns a plan or {}.
+proc besidePairPlan {dlg peers rw rh workarea extents gap} {
+	lassign $workarea wx wy ww wh
+	lassign $extents el er et eb
+	set fw [expr {$el + $er}]
+	set fh [expr {$et + $eb}]
+	set ow [expr {$rw + $fw}]
+	set oh [expr {$rh + $fh}]
+	set protected [besideProtectedRect]
+	set avoid [list $protected]
+	foreach other $peers { lappend avoid [besideOuterRect $other] }
+	foreach other $peers {
+		lassign [besideOuterRect $other] px py pw ph
+		foreach {side x y} [list \
+			below $px [expr {$py + $ph + $gap}] \
+			below [expr {$px + $pw - $ow}] [expr {$py + $ph + $gap}] \
+			above $px [expr {$py - $gap - $oh}] \
+			right [expr {$px + $pw + $gap}] $py \
+			left [expr {$px - $gap - $ow}] $py] {
+			set x [expr {max($wx, min($x, $wx + $ww - $ow))}]
+			set y [expr {max($wy, min($y, $wy + $wh - $oh))}]
+			set outer [list $x $y $ow $oh]
+			if {![besideInside $outer $workarea]} { continue }
+			set clear 1
+			foreach r $avoid {
+				if {[llength $r] == 4 && [besideOverlap $outer $r] > 0} { set clear 0; break }
+			}
+			if {$clear} {
+				return [dict create geometry [list $x $y $rw $rh] rule stack-$side \
+					side $side overlap 0 peer $other resized 0]
+			}
+		}
+	}
+	# Neither fits beside the other where the peer is: stack both in one
+	# column from the top of the work area, moving the peer up.
+	if {[llength $peers] != 1} { return {} }
+	set other [lindex $peers 0]
+	lassign [besideOuterRect $other] px py pw ph
+	set top $wy
+	foreach {x} [list $px [expr {$px + $pw - $ow}]] {
+		set x [expr {max($wx, min($x, $wx + $ww - $ow))}]
+		set moved [list $px $top $pw $ph]
+		set outer [list $x [expr {$top + $ph + $gap}] $ow $oh]
+		if {![besideInside $moved $workarea] || ![besideInside $outer $workarea]} { continue }
+		if {[besideOverlap $moved $protected] || [besideOverlap $outer $protected]
+			|| [besideOverlap $moved $outer]} { continue }
+		return [dict create geometry [list $x [lindex $outer 1] $rw $rh] \
+			rule stack-column side below overlap 0 peer $other \
+			peerMove [list $px $top] resized 0]
+	}
+	return {}
+}
+
+# VAL-DLG-004 for the second dialog of a pair: the requested size at the
+# right/left/below candidate beside the drawn board with the smallest board
+# overlap among those that do not cover the peer (VAL-DLG-017B: never under
+# the first; a covered inset dodges). When all three cover the peer, the
+# least board plus peer area wins.
+proc besidePairNoRoom {dlg peers rw rh workarea extents gap} {
+	lassign [besideBoardRect] bx by bw bh
+	set video [besideVideoRect]
+	lassign $extents el er et eb
+	set fw [expr {$el + $er}]
+	set fh [expr {$et + $eb}]
+	set plan [besideNoRoomPlan $bx $by $bw $bh $rw $rh $workarea $extents $gap]
+	set candidates [dict get $plan candidates]
+	set areas [dict get $plan areas]
+	set best {}
+	set bestCost {}
+	set costs {}
+	foreach side {right left below} {
+		lassign [dict get $candidates $side] x y w h
+		set outer [list $x $y [expr {$w + $fw}] [expr {$h + $fh}]]
+		set peerArea 0
+		foreach other $peers { incr peerArea [besideOverlap $outer [besideOuterRect $other]] }
+		set videoArea [expr {$video eq {} ? 0 : [besideOverlap $outer $video]}]
+		set cost [list [expr {$peerArea > 0}] \
+			[expr {[dict get $areas $side] + $peerArea}]]
+		dict set costs $side [list peer $peerArea video $videoArea]
+		if {$best eq {} || [lindex $cost 0] < [lindex $bestCost 0]
+			|| ([lindex $cost 0] == [lindex $bestCost 0]
+				&& [lindex $cost 1] < [lindex $bestCost 1])} {
+			set best $side
+			set bestCost $cost
+		}
+	}
+	dict set plan geometry [dict get $candidates $best]
+	dict set plan side $best
+	dict set plan overlap [dict get $areas $best]
+	dict set plan covers $costs
+	return $plan
+}
+
+proc besideOwns {dlg} {
+	variable BesideReserves
+	foreach entry $BesideReserves {
+		if {[lindex $entry 0] eq $dlg} { return 1 }
+	}
+	return 0
 }
 
 proc besideDodgeVideo {dlg x y w h extents} {
@@ -873,6 +1005,8 @@ proc besideRegistryRemove {dlg} {
 	set i [lsearch -exact $BesideDialogs $dlg]
 	if {$i >= 0} { set BesideDialogs [lreplace $BesideDialogs $i $i] }
 	array unset BesideState ${dlg},*
+	variable BesideLastPlan
+	unset -nocomplain BesideLastPlan($dlg)
 	besideReleaseReserve $dlg
 	# Let the inset return to its normal place when the dialog that made it
 	# move/shrink goes away (VAL-DLG-013).
@@ -907,13 +1041,25 @@ proc besidePruneReserves {} {
 	set activeSide $::application::board::ReserveSide
 	set activePixels $::application::board::ReservePixels
 	set kept {}
+	set owning 0
 	set droppedFloor {}
 	foreach entry $BesideReserves {
-		lassign $entry d sd px _ _ rootFloor _
+		lassign $entry d sd px ps pp rootFloor af pk
+		if {$ps eq $sd && $pp == $px} {
+			# A shared entry (besideShareReserve) changed nothing; it follows
+			# the live reserve for as long as its dialog is open.
+			if {[winfo exists $d]} {
+				lappend kept [list $d $activeSide $activePixels $activeSide \
+					$activePixels $rootFloor $af $::application::board::ReserveKind]
+			}
+			continue
+		}
+		# An entry lower in a grown (stacked) strip is still live.
 		set valid [expr {[winfo exists $d] && $activePixels > 0
-			&& $sd eq $activeSide && $px == $activePixels}]
+			&& $sd eq $activeSide && $px <= $activePixels}]
 		if {$valid} {
 			lappend kept $entry
+			incr owning
 		} elseif {$droppedFloor eq ""} {
 			set droppedFloor $rootFloor
 		}
@@ -921,7 +1067,7 @@ proc besidePruneReserves {} {
 	set BesideReserves $kept
 	# A lowered square floor only ever belongs to a dialog reserve: recover the
 	# original floor when no valid reservation needs it any more.
-	if {![llength $kept] && $droppedFloor ne ""
+	if {!$owning && $droppedFloor ne ""
 		&& [info exists ::application::board::MinimumReserveSquare]} {
 		set ::application::board::MinimumReserveSquare $droppedFloor
 	}
@@ -942,6 +1088,10 @@ proc besideReleaseReserve {dlg} {
 	set entry [lindex $BesideReserves $i]
 	set BesideReserves [lreplace $BesideReserves $i $i]
 	lassign $entry _ side pixels previousSide previousPixels rootFloor activeFloor previousKind
+	if {$previousSide eq $side && $previousPixels == $pixels} {
+		# A shared entry (besideShareReserve) changed nothing.
+		return 1
+	}
 	set activeSide $::application::board::ReserveSide
 	set activePixels $::application::board::ReservePixels
 	# Later reservations saved their "previous" state as the strip this entry
@@ -1310,6 +1460,19 @@ proc besideBoard {dlg {parent ""}} {
 		catch { ::mediainset::ClearSqueeze $dlg }
 	}
 	update idletasks
+	# VAL-DLG-017B: with two playing dialogs open, each owns the reserve it
+	# sits beside; the later one is stacked next to the earlier one.
+	set peers [besidePeers $dlg]
+	set earlier {}
+	foreach other $peers {
+		if {[lsearch -exact $::util::place::BesideDialogs $dlg] < 0
+			|| [lsearch -exact $::util::place::BesideDialogs $other]
+				< [lsearch -exact $::util::place::BesideDialogs $dlg]} {
+			lappend earlier $other
+		}
+	}
+	set pair [expr {[llength $earlier] > 0}]
+	foreach other $peers { besideShareReserve $other }
 	lassign [wm minsize $dlg] mw mh
 	lassign [wm maxsize $dlg] maxw maxh
 	set rw [winfo reqwidth $dlg]
@@ -1366,21 +1529,63 @@ proc besideBoard {dlg {parent ""}} {
 	}
 	set plan [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents 12 \
 		[list $rw $rh] $minimum]
-	if {[dict get $plan rule] in {no-room reserve shrink}} {
+	# A re-planned earlier dialog avoids the later ones only when its own
+	# place would cover one (the board re-flowed under it).
+	set onPeer 0
+	if {[llength $peers] && [dict get $plan rule] ni {no-room reserve shrink}} {
+		lassign [dict get $plan geometry] gx gy gw gh
+		lassign [besideDialogExtents $dlg] el er et eb
+		set outer [list $gx $gy [expr {$gw+$el+$er}] [expr {$gh+$et+$eb}]]
+		foreach other $peers {
+			if {[besideOverlap $outer [besideOuterRect $other]]} { set onPeer 1 }
+		}
+		if {$onPeer} {
+			set earlier $peers
+			set pair 1
+		}
+	}
+	if {$pair && ($onPeer || [dict get $plan rule] in {no-room reserve shrink})} {
+		# Never take the peer's squeeze or reserve away from it: place the
+		# pair together, or apply the no-room rule clear of the peer.
+		set stacked {}
+		if {!$onPeer && $::application::board::ReserveKind eq "dialog"} {
+			# The peer reserved a dialog strip: grow it for this one too
+			# (VAL-DLG-015b stacking).
+			set stacked [besideReserve $dlg $bx $by $bw $bh $dw $dh $workarea \
+				$extents 12 $minimum]
+		}
+		if {![llength $stacked]} {
+			set stacked [besidePairPlan $dlg $earlier $rw $rh $workarea $extents 12]
+		}
+		if {![llength $stacked]} {
+			set stacked [besidePairNoRoom $dlg $earlier $rw $rh $workarea $extents 12]
+		}
+		set plan $stacked
+		dict set plan pair 1
+		if {[dict exists $plan peerMove]} {
+			variable BesideState
+			set other [dict get $plan peer]
+			lassign [dict get $plan peerMove] ox oy
+			wm geometry $other "+$ox+$oy"
+			set BesideState($other,last) {}
+			after idle [namespace code [list besideCapture $other]]
+		}
+	}
+	if {[dict get $plan rule] in {no-room reserve shrink} && ![dict exists $plan pair]} {
 		set squeezed [besideVideoSqueeze $dlg $dw $dh $workarea $extents 12 \
 			[list $rw $rh] $minimum]
 		if {[llength $squeezed]} {
 			set plan $squeezed
 		}
 	}
-	if {[dict get $plan rule] in {no-room reserve shrink}} {
+	if {[dict get $plan rule] in {no-room reserve shrink} && ![dict exists $plan pair]} {
 		set detached [besideVideoDetach $dlg $dw $dh $workarea $extents 12 \
 			[list $rw $rh] $minimum]
 		if {[llength $detached]} {
 			set plan $detached
 		}
 	}
-	if {[dict get $plan rule] in {no-room reserve}} {
+	if {[dict get $plan rule] in {no-room reserve} && ![dict exists $plan pair]} {
 		set reserved [besideReserve $dlg $bx $by $bw $bh $dw $dh $workarea $extents 12 $minimum]
 		if {[llength $reserved]} {
 			set plan $reserved
@@ -1409,8 +1614,25 @@ proc besideBoard {dlg {parent ""}} {
 	# right/left/below candidates.
 	lassign [dict get $plan geometry] _ _ pw ph
 	if {($pw < $rw || $ph < $rh) && $rw <= $ww-$fw && $rh <= $wh-$fh
-		&& ![info exists BesideMinimums($dlg)]} {
+		&& ![info exists BesideMinimums($dlg)] && ![dict exists $plan pair]} {
 		set plan [besideNoRoomPlan $bx $by $bw $bh $rw $rh $workarea $extents 12]
+	}
+	if {[llength $peers] && ![dict exists $plan pair]} {
+		lassign [dict get $plan geometry] gx gy gw gh
+		set outer [list $gx $gy [expr {$gw+$fw}] [expr {$gh+$fh}]]
+		set covered 0
+		foreach other $peers {
+			if {[besideOverlap $outer [besideOuterRect $other]]} { set covered 1 }
+		}
+		if {$covered} {
+			set stacked [besidePairPlan $dlg $peers $rw $rh $workarea $extents 12]
+			if {![llength $stacked]} {
+				set stacked [besidePairNoRoom $dlg $peers $rw $rh $workarea $extents 12]
+			}
+			set plan $stacked
+			dict set plan pair 1
+			set pair 1
+		}
 	}
 	if {[dict get $plan overlap] > 0 && ($rw > $ww-$fw || $rh > $wh-$fh)} {
 		set minw [expr {min(320,$rw)}]
@@ -1431,6 +1653,11 @@ proc besideBoard {dlg {parent ""}} {
 		}
 	}
 	lassign [dict get $plan geometry] x y w h
+	# openbox applies +x to the client, not the frame: at the left edge of
+	# the work area the left border would fall outside it.
+	if {[dict exists $plan pair] && $x < $wx + $el && $x + $w + $fw + $el <= $wx + $ww} {
+		set x [expr {$wx + $el}]
+	}
 	wm minsize $dlg [expr {min($mw, $w)}] [expr {min($mh, $h)}]
 	if {![info exists BesideRequests($dlg)]} {
 		bind $dlg <Configure> +[namespace code [list BesideConfigure $dlg $parent]]
@@ -1451,6 +1678,12 @@ proc besideBoard {dlg {parent ""}} {
 	# inside the pane first (restored on close/media stop).
 	besideDodgeVideo $dlg $x $y $w $h $extents
 	besideRegistryAdd $dlg $parent
+	if {$pair} {
+		foreach other $peers { besideShareReserve $other }
+		besideShareReserve $dlg
+	}
+	variable BesideLastPlan
+	set BesideLastPlan($dlg) $plan
 	return $plan
 }
 
