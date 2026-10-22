@@ -138,6 +138,15 @@ proc ::playengine::open {parent} {
 	variable Options
 	variable mc
 
+	# Entering Play ends background analysis before mapping the dialog. This
+	# avoids the Windows stall seen with analysis running beside Play, and
+	# prevents analysis from following the training game. Use the pane's
+	# nonblocking shutdown; never wait here for quit/bestmove. The play engine
+	# still starts lazily, after the user presses Start.
+	foreach number [::application::analysis::Running] {
+		::application::analysis::stopEngine $number
+	}
+
 	set dlg $parent.playengine
 	if {[winfo exists $dlg]} {
 		raise $dlg
