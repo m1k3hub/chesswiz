@@ -29,9 +29,10 @@ proc ::w1::wait {{ms 350}} {
 # Observe window and child geometry, rather than sampling after a fixed sleep.
 # This readiness wait is separate from BRD-005's unchanged resize measurement.
 proc ::w1::fullscreenSettled {enabled} {
-    set deadline [expr {[clock milliseconds]+10000}]
+    set started [clock milliseconds]
+    set deadline [expr {$started+10000}]
     set previous {}
-    set quietSince [clock milliseconds]
+    set quietSince $started
     while {[clock milliseconds] < $deadline} {
         wait 50
         set full [expr {[winfo width .application] == [winfo screenwidth .application]
@@ -41,12 +42,17 @@ proc ::w1::fullscreenSettled {enabled} {
         if {[winfo exists $pane.mediainset.expand]} {
             lappend snapshot [rect $pane.mediainset.expand]
         }
-        if {$snapshot ne $previous || $full != $enabled
-            || [wm attributes .application -fullscreen] != $enabled} {
+        # A WM that never sets _NET_WM_STATE_FULLSCREEN (a bare Xvfb) leaves
+        # the attribute at 0 forever. Only a real transition that is still
+        # pending is waited for; after the grace period the geometry alone
+        # decides, so such a display settles instead of timing out.
+        set realised [expr {$full == $enabled
+            && [wm attributes .application -fullscreen] == $enabled}]
+        if {$snapshot ne $previous || (!$realised && [clock milliseconds]-$started < 2000)} {
             set quietSince [clock milliseconds]
             set previous $snapshot
         } elseif {[clock milliseconds]-$quietSince >= 500} {
-            log fullscreen-settled [list enabled $enabled geometry $snapshot]
+            log fullscreen-settled [list enabled $enabled realised $realised geometry $snapshot]
             return
         }
     }
@@ -165,7 +171,7 @@ proc ::w1::size {shape} {
         if {$shape eq "wide"} {
             set w [expr {min(1800,$sw-40)}]; set h [expr {min(950,$sh-80)}]
         } else {
-            set h [expr {min(1750,$sh-60)}]; set w [expr {min(720,$sw-40,$h-180)}]
+            set h [expr {min(1750,$sh-60)}]; set w [expr {min(720,$sw-40,$h-340)}]
         }
     }
     wm geometry .application ${w}x${h}+0+0
@@ -316,6 +322,47 @@ proc ::w1::clear {target} {
     log $target [list actual $actual reference $expected]
     foreach a $actual b $expected {assert {abs($a-$b)<=1} "board differs from no-reserve layout"}
 }
+proc ::w1::unreserved {} {
+    set saved [array get ::application::board::Dim]
+    set side $::application::board::ReserveSide
+    set pixels $::application::board::ReservePixels
+    set c $::application::board::Vars(widget:frame)
+    set ::application::board::ReserveSide {}
+    set ::application::board::ReservePixels 0
+    ::application::board::ComputeLayout [winfo width $c] [winfo height $c]
+    set square $::application::board::Dim(squaresize:Normal)
+    array unset ::application::board::Dim
+    array set ::application::board::Dim $saved
+    set ::application::board::ReserveSide $side
+    set ::application::board::ReservePixels $pixels
+    return $square
+}
+# What the same production layout would draw with a strip, forcing past the
+# square-floor refusal so the test can tell "no strip fits" apart from "the
+# strip fits and costs the board nothing".
+proc ::w1::squareWithReserve {side pixels} {
+    set saved [array get ::application::board::Dim]
+    set oldSide $::application::board::ReserveSide
+    set oldPixels $::application::board::ReservePixels
+    set oldKind $::application::board::ReserveKind
+    set oldFloor $::application::board::MinimumReserveSquare
+    set c $::application::board::Vars(widget:frame)
+    set ::application::board::MinimumReserveSquare -100000
+    set ::application::board::ReserveSide $side
+    set ::application::board::ReservePixels $pixels
+    # Probe as an explicit dialog reserve: it may shrink, unlike the
+    # ordinary video strip the contract measures.
+    set ::application::board::ReserveKind dialog
+    ::application::board::ComputeLayout [winfo width $c] [winfo height $c]
+    set square $::application::board::Dim(squaresize:Normal)
+    array unset ::application::board::Dim
+    array set ::application::board::Dim $saved
+    set ::application::board::MinimumReserveSquare $oldFloor
+    set ::application::board::ReserveSide $oldSide
+    set ::application::board::ReservePixels $oldPixels
+    set ::application::board::ReserveKind $oldKind
+    return $square
+}
 proc ::w1::reserved {target {side {}} {shot 0}} {
     set d [measure $target $shot]
     assert {[dict get $d mapped]} "production inset unmapped"
@@ -335,8 +382,8 @@ proc ::w1::reserved {target {side {}} {shot 0}} {
 tcltest::test brd-3d-first {BRD-007 first 3D toggle during playback uses the realised frame including its toolbar} -constraints embedded3D -setup {::w1::setup default} -body {
     ::w1::assert {$::application::board::Vars(3dwin) eq "" || ![winfo exists $::application::board::Vars(3dwin)]} "first-toggle test requires an uncreated 3D view"
     set sw [winfo screenwidth .]; set sh [winfo screenheight .]
-    wm geometry .application [expr {min(1800,$sw-30)}]x[expr {$sh-150}]+0+0
-    ::w1::wait
+    wm geometry .application [expr {min(1800,$sw-30)}]x[expr {min(570,$sh-150)}]+0+0
+    ::w1::wait 600
     set w [::w1::play]
     ::w1::assert {[::application::board::show3D 1]} "Blocked: 3D view unavailable"
     set start [clock milliseconds]
@@ -358,7 +405,7 @@ tcltest::test brd-3d-first {BRD-007 first 3D toggle during playback uses the rea
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
-tcltest::test brd-wide {BRD-001 reserves a right strip including all decorations} -setup {::w1::setup default} -body {
+tcltest::test brd-wide {BRD-001 reserves a right strip including all decorations} -setup {::w1::setup wide} -body {
     # The old saved preferred width must shrink to the 160px lower bound.
     set ::mediainset::Options(minWidth) 200
     ::w1::play
@@ -426,7 +473,92 @@ tcltest::test brd-minimum {BRD-004 refusal keeps square size and uses the corner
     ::w1::assert {$::application::board::ReserveSide eq ""} "small reserve was accepted"
     ::w1::assert {$before==$::application::board::Dim(squaresize:Normal)} "refusal resized squares"
     ::w1::assert {[dict get [place info $w] -anchor] eq "se"} "fallback is not in corner"
-    ::w1::log VAL-BRD-004 [list before $before after $::application::board::Dim(squaresize:Normal) minimum $::application::board::MinimumReserveSquare]
+    # VAL-MED-012: every candidate strip really shrinks this tiny board,
+    # so the corner overlay is the documented outcome.
+    set ch [expr {[winfo reqheight $w.controls]+8}]
+    set minHeight [expr {int(round(160/$::mediainset::Aspect))+$ch}]
+    set rightSquare [::w1::squareWithReserve right 168]
+    set bottomSquare [::w1::squareWithReserve bottom $minHeight]
+    ::w1::log VAL-BRD-004 [list before $before after $::application::board::Dim(squaresize:Normal) \
+        minimum $::application::board::MinimumReserveSquare \
+        rightSquare $rightSquare bottomSquare $bottomSquare]
+    ::w1::assert {$rightSquare < $before && $bottomSquare < $before} \
+        "overlay taken although a strip leaves the square unchanged"
+    return ok
+} -cleanup {::w1::cleanup} -result ok
+
+# VAL-MED-012: a below-floor square the strip leaves unchanged is still worth
+# reserving, so the overlay may only appear where the reserve really shrinks
+# the board. Sweep consecutive window heights (the reflow band) at each
+# required screen size while media plays.
+tcltest::test brd-height-sweep {VAL-MED-012 reserves every non-shrinking strip across window heights} -setup {::w1::setup default} -body {
+    set w [::w1::play]
+    set c $::application::board::Vars(widget:frame)
+    set reserved 0
+    set overlays 0
+    for {set h 520} {$h <= 640} {incr h 10} {
+        wm geometry .application 1250x${h}+0+0
+        ::w1::wait 450
+        set unreserved [::w1::unreserved]
+        set d [::w1::measure VAL-MED-012-$h]
+        set square [dict get $d square]
+        set side [dict get $d side]
+        set boardOverlap [dict get $d overlap:board]
+        # Forced candidate squares at the documented minimum video size,
+        # independent of the implementation's accept/refuse decision.
+        set ch [expr {[winfo reqheight $w.controls]+8}]
+        set minHeight [expr {int(round(160/$::mediainset::Aspect))+$ch}]
+        set rightSquare [::w1::squareWithReserve right 168]
+        set bottomSquare [::w1::squareWithReserve bottom $minHeight]
+        set nonShrink [expr {$rightSquare >= $unreserved || $bottomSquare >= $unreserved}]
+        ::w1::log VAL-MED-012 [list height $h square $square unreserved $unreserved \
+            side $side reserve [dict get $d reserve] overlap $boardOverlap canvas [dict get $d canvas] \
+            rightSquare $rightSquare bottomSquare $bottomSquare nonShrink $nonShrink]
+        ::w1::assert {$square >= $unreserved} \
+            "reserve shrank squares at height $h ($unreserved -> $square)"
+        if {$nonShrink} {
+            ::w1::assert {$side ne ""} \
+                "non-shrinking strip ignored at height $h"
+            foreach tag {board stm material} {
+                ::w1::assert {[dict get $d overlap:$tag] == 0} \
+                    "reserved inset covers $tag at height $h"
+            }
+        } else {
+            incr overlays
+            ::w1::assert {$side eq ""} \
+                "shrinking strip accepted at height $h"
+        }
+        if {$side ne ""} {incr reserved}
+    }
+    ::w1::log VAL-MED-012-summary [list reserved $reserved overlays $overlays]
+    ::w1::assert {$reserved > 0} "no strip was reserved across the height sweep"
+    return ok
+} -cleanup {::w1::cleanup} -result ok
+
+# VAL-MED-012: width-limited windows the 1250-wide sweep cannot see. V8 found
+# the strip accepted while the square shrank (1000x640 38->33, 1000x700
+# 43->33, 1100x700 43->39). The drawn square must equal the unreserved one;
+# the inset then overlays or takes a strip that costs nothing.
+tcltest::test brd-width-counterexamples {VAL-MED-012 a strip never shrinks a width-limited board} -setup {::w1::setup default} -body {
+    set w [::w1::play]
+    foreach geom {1000x640 1000x700 1100x700} {
+        wm geometry .application ${geom}+0+0
+        ::w1::wait 450
+        set unreserved [::w1::unreserved]
+        set d [::w1::measure VAL-MED-012-$geom]
+        set square [dict get $d square]
+        set side [dict get $d side]
+        ::w1::log VAL-MED-012-width [list geometry $geom square $square unreserved $unreserved \
+            side $side reserve [dict get $d reserve] canvas [dict get $d canvas]]
+        ::w1::assert {[dict get $d mapped]} "inset unmapped at $geom"
+        ::w1::assert {$square == $unreserved} \
+            "reserve changed squares at $geom ($unreserved -> $square)"
+        if {$side ne ""} {
+            foreach tag {board stm material} {
+                ::w1::assert {[dict get $d overlap:$tag] == 0} "reserved inset covers $tag at $geom"
+            }
+        }
+    }
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
@@ -546,7 +678,7 @@ tcltest::test brd-fullscreen {BRD-009 menu fullscreen drives reserve placement} 
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
-tcltest::test brd-3d {BRD-007 and BRD-003D visible 3D geometry and toggle restoration} -constraints embedded3D -setup {::w1::setup default} -body {
+tcltest::test brd-3d {BRD-007 and BRD-003D visible 3D geometry and toggle restoration} -constraints embedded3D -setup {::w1::setup wide} -body {
     # LIBGL_ALWAYS_SOFTWARE=1 on the runner keeps the film GPUs untouched.
     ::w1::play
     ::w1::assert {[::application::board::show3D 1]} "Blocked: 3D view unavailable"
@@ -628,8 +760,14 @@ tcltest::test inset-009-restore {VAL-MED-009 button, double-click and Escape res
 tcltest::test inset-009-unoccluded {VAL-MED-009 the size control is never covered by the small board} -setup {::w1::setup} -body {
     ::w1::quiet
     set states {}
+    # Sizes larger than the live screen are clamped to it, so a small
+    # (1000x600) display still exercises the control (VAL-DLG-015d).
+    set seen {}
     foreach {sw sh} [list 1024 700 1280 800] {
-        if {$sw > [winfo screenwidth .] || $sh > [winfo screenheight .]} { continue }
+        set sw [expr {min($sw, [winfo screenwidth .])}]
+        set sh [expr {min($sh, [winfo screenheight .])}]
+        if {"$sw $sh" in $seen} { continue }
+        lappend seen "$sw $sh"
         wm geometry .application ${sw}x${sh}+0+0
         ::w1::wait
         set w [::w1::play]

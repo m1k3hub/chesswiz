@@ -1103,7 +1103,9 @@ proc ::gamereview::ShowWindow {parent review errors cancelled} {
 	pack $top.head -fill x -pady [list $::theme::pady 0]
 
 	set frame [ttk::frame $top.list]
-	set lb [listbox $frame.list -height 10 -width 60 -exportselection false]
+	# 54 columns keep the dialog inside a strip beside a board-only pane
+	# at 1000x600, so no control is squeezed (VAL-DLG-016).
+	set lb [listbox $frame.list -height 10 -width 54 -exportselection false]
 	set vs [ttk::scrollbar $frame.vs -orient vertical -command [list $lb yview]]
 	$lb configure -yscrollcommand [list $vs set]
 	pack $lb -side left -fill both -expand yes

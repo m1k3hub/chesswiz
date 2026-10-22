@@ -4,6 +4,8 @@ namespace eval ::application::board {
     variable MinimumReserveSquare 32
     variable ReserveSide {}
     variable ReservePixels 0
+    variable ReserveKind auto
+    variable ReserveMaxBoard 0
     variable RebuildCallbacks {}
     variable Vars
     array set Vars {layout Normal width 1500 height 850 widget:frame .canvas after {}}
@@ -20,7 +22,7 @@ proc tk {args} { return 1.3333333333 }
 set f [open [file join [file dirname [info script]] .. tcl app-board.tcl]]
 set source [read $f]
 close $f
-set wanted {ComputeLayout reserveSquare setReserve reserveRect afterRebuild ApplyReserve3D ConfigureReserve3D}
+set wanted {ComputeLayout reserveSquare unreservedSquare setReserve reserveRect afterRebuild ApplyReserve3D ConfigureReserve3D}
 set definition {}
 foreach line [split $source \n] {
     if {$definition eq {} && [regexp {^proc ([^ ]+) } $line -> name] && $name in $wanted} {
@@ -54,7 +56,7 @@ foreach side {right bottom left} {
         ::application::board::ComputeLayout 1500 850
         set before [array get ::application::board::Dim]
         set original $::application::board::Dim(squaresize:Normal)
-        set accepted [::application::board::setReserve $side 360]
+        set accepted [::application::board::setReserve $side 360 dialog]
         set clear [brPureCheck]
         puts "PURE $side reserve=[::application::board::reserveRect] square=$::application::board::Dim(squaresize:Normal) overlap-free=$clear"
         ::application::board::setReserve {} 0
@@ -65,7 +67,7 @@ tcltest::test board-reserve-probe {candidate measurements preserve the accepted 
     ::application::board::setReserve right 300
     set before [lsort [array get ::application::board::Dim]]
     set count $::application::board::rebuildCount
-    set square [::application::board::reserveSquare right 168 500 405]
+    set square [::application::board::reserveSquare right 168 500 405 dialog]
     list [expr {$square >= 32}] \
         [expr {$before eq [lsort [array get ::application::board::Dim]]}] \
         [expr {$count == $::application::board::rebuildCount}] \
@@ -130,4 +132,32 @@ tcltest::test board-reserve-pure-3d {visible 3D frame reserves each side and rep
     set ::application::board::Vars(3d) 0
     set result
 } -result {{configure .visible3d -padx {0 300} -pady {0 0}} {configure .visible3d -padx {0 0} -pady {0 300}} {configure .visible3d -padx {300 0} -pady {0 0}} {1200 800} 0 0 1 {configure .visible3d -padx {0 0} -pady {0 0}}}
+
+# VAL-MED-012: compare the reserved square with unreservedSquare whenever a reserve
+# is set or considered (ComputeLayout and FitStrip), not only below MinimumReserveSquare.
+# Validator counterexamples that must keep the square equal to unreserved:
+# 1000x640 (33 vs 38), 1000x700 (33 vs 43), 1100x700 (39 vs 43).
+tcltest::test board-reserve-val-med-012-counterexamples {reserves shrinking board square are rejected} -body {
+    set results {}
+    # Case 1: 1000x640: unreserved 38 vs right reserve (which would be 33)
+    set w 497; set h 340
+    set unreserved [::application::board::unreservedSquare $w $h]
+    set reserved [::application::board::reserveSquare right 170 $w $h auto]
+    lappend results [list $unreserved $reserved]
+
+    # Case 2: 1000x700: unreserved 43 vs right reserve (which would be 33)
+    set w 497; set h 382
+    set unreserved [::application::board::unreservedSquare $w $h]
+    set reserved [::application::board::reserveSquare right 170 $w $h auto]
+    lappend results [list $unreserved $reserved]
+
+    # Case 3: 1100x700: unreserved 43 vs right reserve (which would be 39)
+    set w 547; set h 382
+    set unreserved [::application::board::unreservedSquare $w $h]
+    set reserved [::application::board::reserveSquare right 170 $w $h auto]
+    lappend results [list $unreserved $reserved]
+
+    set results
+} -result {{38 0} {43 0} {43 0}}
+
 tcltest::cleanupTests

@@ -200,8 +200,11 @@ proc ::playengine::open {parent} {
 	ttk::radiobutton $noclock.choice -text $mc::NoClock -value noclock \
 		-variable [namespace current]::Priv(dlg:clock)
 	ttk::label $noclock.detail -text [format $mc::NoClockDetail $Options(movetime)]
-	pack $tf.clock $tf.minutes $tf.plus $tf.increment $tf.s -side left
-	pack $tf.detail -side left -padx [list $::theme::padx 0]
+	# The detail goes on its own line so the dialog fits a strip beside the
+	# board and inset without squeezing a control (VAL-DLG-016).
+	grid $tf.clock $tf.minutes $tf.plus $tf.increment $tf.s -sticky w
+	grid $tf.detail -columnspan 6 -sticky w -padx [list 20 0]
+	grid columnconfigure $tf 5 -weight 1
 	pack $noclock.choice -side left
 	pack $noclock.detail -side left -padx [list $::theme::padx 0]
 	pack $tf -anchor w
