@@ -1587,6 +1587,20 @@ Perform(ClientData clientData)
 }
 
 
+// A zoomed pane stays registered with its own panedwindow, which is
+// unmapped under the overlay. When the toplevel resizes, that panedwindow
+// re-arranges at idle time and, its master being unmapped, unmaps the pane.
+// Re-apply the overlay after such arrangements.
+static void
+ApplyZoom(ClientData clientData)
+{
+	Node* root = static_cast<Node*>(clientData);
+
+	if (s_liveNodes.find(root) != s_liveNodes.end() && root->exists())
+		root->applyZoom();
+}
+
+
 static void
 Adjust(ClientData clientData)
 {
@@ -3335,6 +3349,13 @@ Node::zoomEvent(XEvent* event)
 			|| event->type == UnmapNotify;
 	}
 	if (event->type == ConfigureNotify && this == root) root->applyZoom();
+	if ((event->type == ConfigureNotify && this == root)
+		|| (event->type == UnmapNotify && this == root->m_zoom
+			&& root->m_zoomRestore == ZoomIdle))
+	{
+		Tcl_CancelIdleCall(ApplyZoom, root);
+		Tcl_DoWhenIdle(ApplyZoom, root);
+	}
 	if (event->type == MapNotify && this != root && this != root->m_zoom
 		&& !hasAncestor(root->m_zoom)) Tk_UnmapWindow(tkwin());
 	return event->type == ConfigureNotify || event->type == MapNotify
@@ -3965,7 +3986,10 @@ Node::destroyed(bool finalize)
 		m_justCreated = nullptr;
 	
 	if (isRoot())
+	{
 		Tcl_CancelIdleCall(Perform, this);
+		Tcl_CancelIdleCall(ApplyZoom, this);
+	}
 	if (isToplevel())
 		Tcl_DeleteTimerHandler(m_timerToken);
 
