@@ -496,8 +496,9 @@ proc besidePlan {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12} {requ
 
 # VAL-DLG-004 no-room plan at the requested size: the right/left/below
 # candidate with the smallest overlap of the protected rectangle, clamped
-# inside the work area. Carries every candidate and its area as evidence.
-proc besideNoRoomPlan {bx by bw bh rw rh workarea extents gap} {
+# inside the work area. Carries every candidate and its area as evidence,
+# plus a per-candidate record of board and peer overlap (VAL-DLG-017B).
+proc besideNoRoomPlan {bx by bw bh rw rh workarea extents gap {peers {}}} {
 	set plan [besidePlan $bx $by $bw $bh $rw $rh $workarea $extents $gap]
 	set candidates [dict get $plan candidates]
 	set areas [dict get $plan areas]
@@ -509,7 +510,27 @@ proc besideNoRoomPlan {bx by bw bh rw rh workarea extents gap} {
 	}
 	return [dict create geometry [dict get $candidates $best] rule no-room \
 		side $best overlap [dict get $areas $best] candidates $candidates \
-		areas $areas resized 0 minimumFits 0 requestedFits 0]
+		areas $areas resized 0 minimumFits 0 requestedFits 0 chosen $best \
+		record [besideCandidateRecord $candidates $peers $extents $best]]
+}
+
+# For each right/left/below candidate: its frame rectangle, its overlap with
+# the drawn board, its overlap with the peers' frames, and whether it is the
+# chosen one. The validator recomputes the minimum from these raw values.
+proc besideCandidateRecord {candidates peers extents chosen} {
+	lassign $extents el er et eb
+	set board [besideBoardRect]
+	set record {}
+	foreach side {right left below} {
+		lassign [dict get $candidates $side] x y w h
+		set outer [list $x $y [expr {$w + $el + $er}] [expr {$h + $et + $eb}]]
+		set boardArea [expr {$board eq {} ? 0 : [besideOverlap $outer $board]}]
+		set peerArea 0
+		foreach other $peers { incr peerArea [besideOverlap $outer [besideOuterRect $other]] }
+		dict set record $side [list rect $outer board $boardArea peer $peerArea \
+			chosen [expr {$side eq $chosen}]]
+	}
+	return $record
 }
 
 proc besidePosition {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12}} {
@@ -712,32 +733,34 @@ proc besidePairPlan {dlg peers rw rh workarea extents gap} {
 	return {}
 }
 
-# VAL-DLG-004 for the second dialog of a pair: the requested size at the
-# right/left/below candidate beside the drawn board with the smallest board
-# overlap among those that do not cover the peer (VAL-DLG-017B: never under
-# the first; a covered inset dodges). When all three cover the peer, the
-# least board plus peer area wins.
+# VAL-DLG-004 for the second dialog of a pair (decision 2026-10-23): the
+# requested size at the right/left/below candidate beside the drawn board with
+# the smallest board overlap among those whose frame does not overlap a peer
+# (never under the first). When every candidate covers a peer the pair cannot
+# be placed: the least board plus peer area is applied and the plan is marked
+# peerFree 0 so the failure is visible.
 proc besidePairNoRoom {dlg peers rw rh workarea extents gap} {
 	lassign [besideBoardRect] bx by bw bh
-	set video [besideVideoRect]
+	lassign $workarea wx wy ww wh
 	lassign $extents el er et eb
 	set fw [expr {$el + $er}]
-	set fh [expr {$et + $eb}]
 	set plan [besideNoRoomPlan $bx $by $bw $bh $rw $rh $workarea $extents $gap]
 	set candidates [dict get $plan candidates]
-	set areas [dict get $plan areas]
-	set best {}
-	set bestCost {}
-	set costs {}
+	# Measure where the frame really lands (see the openbox left-edge shift
+	# in besideBoard), so the record matches the settled geometry.
 	foreach side {right left below} {
 		lassign [dict get $candidates $side] x y w h
-		set outer [list $x $y [expr {$w + $fw}] [expr {$h + $fh}]]
-		set peerArea 0
-		foreach other $peers { incr peerArea [besideOverlap $outer [besideOuterRect $other]] }
-		set videoArea [expr {$video eq {} ? 0 : [besideOverlap $outer $video]}]
-		set cost [list [expr {$peerArea > 0}] \
-			[expr {[dict get $areas $side] + $peerArea}]]
-		dict set costs $side [list peer $peerArea video $videoArea]
+		if {$x < $wx + $el && $x + $w + $fw + $el <= $wx + $ww} {
+			dict set candidates $side [list [expr {$wx + $el}] $y $w $h]
+		}
+	}
+	set record [besideCandidateRecord $candidates $peers $extents {}]
+	set best {}
+	set bestCost {}
+	foreach side {right left below} {
+		set r [dict get $record $side]
+		set cost [list [expr {[dict get $r peer] > 0}] \
+			[expr {[dict get $r board] + [dict get $r peer]}]]
 		if {$best eq {} || [lindex $cost 0] < [lindex $bestCost 0]
 			|| ([lindex $cost 0] == [lindex $bestCost 0]
 				&& [lindex $cost 1] < [lindex $bestCost 1])} {
@@ -745,10 +768,17 @@ proc besidePairNoRoom {dlg peers rw rh workarea extents gap} {
 			set bestCost $cost
 		}
 	}
+	dict set record $best chosen 1
+	set areas {}
+	foreach side {right left below} { dict set areas $side [dict get $record $side board] }
+	dict set plan candidates $candidates
+	dict set plan areas $areas
 	dict set plan geometry [dict get $candidates $best]
 	dict set plan side $best
+	dict set plan chosen $best
 	dict set plan overlap [dict get $areas $best]
-	dict set plan covers $costs
+	dict set plan record $record
+	dict set plan peerFree [expr {[lindex $bestCost 0] == 0}]
 	return $plan
 }
 
@@ -1193,7 +1223,8 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 		if {$::application::board::ReservePixels > 0} {
 			# The video's own strip is never extended for a dialog; another
 			# dialog's strip is: this one goes beyond it (VAL-DLG-015b).
-			if {![llength $BesideReserves]} { return {} }
+			if {![llength $BesideReserves]
+				|| $::application::board::ReserveKind ne "dialog"} { return {} }
 			set stacked 1
 		}
 	}
@@ -1331,6 +1362,13 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 		besideReserveRevert $previousSide $previousPixels $rootFloor $previousKind
 		return {}
 	}
+	# A shared entry this dialog held is superseded by the reserve it owns now.
+	set kept {}
+	foreach entry $BesideReserves {
+		lassign $entry d sd px ps pp
+		if {$d ne $dlg || $ps ne $sd || $pp != $px} { lappend kept $entry }
+	}
+	set BesideReserves $kept
 	lappend BesideReserves [list $dlg $::application::board::ReserveSide \
 		$::application::board::ReservePixels $previousSide $previousPixels \
 		$rootFloor $activeFloor $previousKind]
@@ -1637,7 +1675,7 @@ proc besideBoard {dlg {parent ""}} {
 	lassign [dict get $plan geometry] _ _ pw ph
 	if {($pw < $rw || $ph < $rh) && $rw <= $ww-$fw && $rh <= $wh-$fh
 		&& ![info exists BesideMinimums($dlg)] && ![dict exists $plan pair]} {
-		set plan [besideNoRoomPlan $bx $by $bw $bh $rw $rh $workarea $extents 12]
+		set plan [besideNoRoomPlan $bx $by $bw $bh $rw $rh $workarea $extents 12 $peers]
 	}
 	if {[llength $peers] && ![dict exists $plan pair]} {
 		lassign [dict get $plan geometry] gx gy gw gh
@@ -1700,10 +1738,12 @@ proc besideBoard {dlg {parent ""}} {
 	# inside the pane first (restored on close/media stop).
 	besideDodgeVideo $dlg $x $y $w $h $extents
 	besideRegistryAdd $dlg $parent
+	# VAL-DLG-017B: every beside-board call registers a live reserve owner
+	# at once, the first dialog of a pair included.
 	if {$pair} {
 		foreach other $peers { besideShareReserve $other }
-		besideShareReserve $dlg
 	}
+	besideShareReserve $dlg
 	variable BesideLastPlan
 	set BesideLastPlan($dlg) $plan
 	return $plan

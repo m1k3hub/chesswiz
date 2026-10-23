@@ -8,6 +8,7 @@ namespace eval ::scidb::test::dlgplace {
     variable workareaCalls 0
     variable placing 0
     variable waitSerial 0
+    variable unowned {}
 }
 proc ::scidb::test::dlgplace::waitFor {ms} {
     variable waitSerial
@@ -98,6 +99,11 @@ proc ::scidb::test::dlgplace::placed {command code result op} {
     variable workareaCalls
     if {$code} {return}
     set dlg [lindex $command 1]
+    # VAL-DLG-017B: every call registers a live reserve owner at once.
+    variable unowned
+    set owners {}
+    foreach e $::util::place::BesideReserves {lappend owners [lindex $e 0]}
+    if {$dlg ni $owners} {lappend unowned [list $dlg $result]}
     dict set calls $dlg [dict create plan $result workareaCalls $workareaCalls board [boardRect] \
         workarea [winfo workarea $dlg] extents [winfo extents $dlg]]
 }
@@ -1248,18 +1254,24 @@ proc ::scidb::test::dlgplace::pairClearOf {target dlg peer} {
     if {[info exists ::util::place::BesideLastPlan($dlg)]} { set plan $::util::place::BesideLastPlan($dlg) }
     set rule [expr {[dict exists $plan rule] ? [dict get $plan rule] : ""}]
     if {$rule ne "no-room"} { return [clearOf $target $dlg] }
-    lassign [winfo extents $dlg] l r t b
+    # Recompute the minimum from the raw candidate rectangles: the second
+    # dialog of a pair takes the least board overlap among candidates clear
+    # of the peer, a first/single dialog the plain three-candidate minimum.
+    require [dict exists $plan record] "$target: no-room plan has no candidate record"
+    set board [boardRect]
     set allowed {}
-    dict for {side g} [dict get $plan candidates] {
-        lassign $g x y w h
-        if {[overlapArea [list $x $y [expr {$w+$l+$r}] [expr {$h+$t+$b}]] $po] == 0} {
-            lappend allowed [dict get $plan areas $side]
-        }
+    set chosen {}
+    dict for {side rec} [dict get $plan record] {
+        set rect [dict get $rec rect]
+        set ob [overlapArea $rect $board]
+        if {[dict get $rec chosen]} { set chosen $ob }
+        if {[dict exists $plan pair] && [overlapArea $rect $po] > 0} { continue }
+        lappend allowed $ob
     }
-    if {![llength $allowed]} { set allowed [dict values [dict get $plan areas]] }
-    puts "DLG-V17B $target rule=no-room frame=$outer peer=$po board=[boardRect] overlap=[dict get $plan overlap] allowed=$allowed"
-    require [expr {[dict get $plan overlap] == [tcl::mathfunc::min {*}$allowed]}] \
-        "$target: no-room overlap [dict get $plan overlap] is not the minimum of $allowed"
+    puts "DLG-V17B $target rule=no-room frame=$outer peer=$po board=$board record=[dict get $plan record] chosen=$chosen allowed=$allowed"
+    require [llength $allowed] "$target: no peer-free no-room candidate"
+    require [expr {$chosen ne {} && $chosen == [tcl::mathfunc::min {*}$allowed]}] \
+        "$target: no-room overlap $chosen is not the minimum of $allowed"
     require [inside $outer [windowWorkArea]] "$target: frame $outer outside [windowWorkArea]"
     requireControls $target $dlg
     return 1
@@ -1346,6 +1358,7 @@ foreach zoom {0 1} {
         ::scidb::test::dlgplace::zoomBoard %d
         ::scidb::test::dlgplace::realVideo
         set out {}
+        set ::scidb::test::dlgplace::unowned {}
         foreach order {{playengine enginematch} {enginematch playengine}} {
             set before [::scidb::test::dlgplace::reserveState]
             set boardBefore [::scidb::test::dlgplace::boardRect]
@@ -1355,6 +1368,8 @@ foreach zoom {0 1} {
             ::scidb::test::dlgplace::waitFor 1100
             ::scidb::test::dlgplace::pairClearOf v15b-%d-playengine .application.playengine .application.enginematch
             ::scidb::test::dlgplace::pairClearOf v15b-%d-enginematch .application.enginematch .application.playengine
+            ::scidb::test::dlgplace::require [expr {![llength $::scidb::test::dlgplace::unowned]}] \
+                "besideBoard returned without a live owner: $::scidb::test::dlgplace::unowned"
             foreach short $order {
                 if {$short eq "playengine"} { ::playengine::Close } else { ::enginematch::Close }
                 catch {destroy .application.$short}
