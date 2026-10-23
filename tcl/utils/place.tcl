@@ -495,22 +495,41 @@ proc besidePlan {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12} {requ
 }
 
 # VAL-DLG-004 no-room plan at the requested size: the right/left/below
-# candidate with the smallest overlap of the protected rectangle, clamped
-# inside the work area. Carries every candidate and its area as evidence,
-# plus a per-candidate record of board and peer overlap (VAL-DLG-017B).
-proc besideNoRoomPlan {bx by bw bh rw rh workarea extents gap {peers {}}} {
+# candidate with the smallest overlap of the drawn board <board> (default: the
+# protected rectangle), clamped inside the work area. The protected rectangle
+# (board plus inset and earlier dialogs) only breaks ties: the inset dodges a
+# dialog, the board cannot (VAL-DLG-016C). Carries every candidate and its
+# area as evidence, plus a per-candidate record of board and peer overlap
+# (VAL-DLG-017B).
+proc besideNoRoomPlan {bx by bw bh rw rh workarea extents gap {peers {}} {board {}}} {
 	set plan [besidePlan $bx $by $bw $bh $rw $rh $workarea $extents $gap]
 	set candidates [dict get $plan candidates]
 	set areas [dict get $plan areas]
+	if {[llength $board] == 4} {
+		lassign $board ax ay aw ah
+		lassign $extents el er et eb
+		set boardAreas {}
+		dict for {side geometry} $candidates {
+			lassign $geometry x y w h
+			dict set boardAreas $side [expr {
+				max(0, min($x + $w + $el + $er, $ax + $aw) - max($x, $ax)) *
+				max(0, min($y + $h + $et + $eb, $ay + $ah) - max($y, $ay))}]
+		}
+	} else {
+		set boardAreas $areas
+	}
 	set best {}
 	foreach side {right left below} {
-		if {$best eq {} || [dict get $areas $side] < [dict get $areas $best]} {
+		if {$best eq {}} { set best $side; continue }
+		set a [dict get $boardAreas $side]
+		set b [dict get $boardAreas $best]
+		if {$a < $b || ($a == $b && [dict get $areas $side] < [dict get $areas $best])} {
 			set best $side
 		}
 	}
 	return [dict create geometry [dict get $candidates $best] rule no-room \
 		side $best overlap [dict get $areas $best] candidates $candidates \
-		areas $areas resized 0 minimumFits 0 requestedFits 0 chosen $best \
+		areas $areas boardAreas $boardAreas resized 0 minimumFits 0 requestedFits 0 chosen $best \
 		record [besideCandidateRecord $candidates $peers $extents $best]]
 }
 
@@ -791,6 +810,10 @@ proc besideOwns {dlg} {
 }
 
 proc besideDodgeVideo {dlg x y w h extents} {
+	# A failed squeeze/detach attempt re-lays the inset out at idle time;
+	# realise it first or the inset reads as hidden and is left under the
+	# dialog (VAL-DLG-016D).
+	update idletasks
 	set video [besideVideoRect]
 	if {$video eq {}} { return 0 }
 	lassign $extents el er et eb
@@ -950,9 +973,10 @@ proc besideContext {dlg} {
 	 set extents [winfo extents $dlg]
 	}
 	variable BesideTopSlack
+	variable BesideXBorder
 	return [list [winfo workarea $dlg] $extents \
 	 [list [winfo reqwidth $dlg] [winfo reqheight $dlg]] \
-	 [wm minsize $dlg] [wm maxsize $dlg] $BesideTopSlack]
+	 [wm minsize $dlg] [wm maxsize $dlg] $BesideTopSlack $BesideXBorder]
 }
 proc besideOuterRect {dlg} {
 	lassign [besideRect $dlg] x y w h
@@ -974,10 +998,31 @@ proc besideInside {rect area} {
 variable BesideTopSlack 0
 proc besideDialogExtents {dlg} {
 	variable BesideTopSlack
+	variable BesideXBorder
 	set extents [winfo extents $dlg]
-	if {[winfo ismapped $dlg]} { besideLearnSlack $dlg $extents }
+	if {[winfo ismapped $dlg]} {
+		besideLearnSlack $dlg $extents
+		if {![wm attributes $dlg -zoomed] && [regexp {^[0-9]+x[0-9]+\+(-?[0-9]+)\+} [wm geometry $dlg] -> gx]} {
+			besideLearnBorder [lindex $extents 0] [expr {[winfo rootx $dlg] - $gx}]
+		}
+	}
 	lset extents 2 [expr {[lindex $extents 2] + $BesideTopSlack}]
 	return $extents
+}
+# Some window managers (openbox) apply a requested +x to the frame inside its
+# X border, so every requested position is that many pixels right of the
+# outer frame. The border is the reported left extent minus the client's
+# offset from the position wm geometry reports, learned on a normal
+# (unmaximized) toplevel; besideBoard plans the parent's frame in those
+# request coordinates (VAL-DLG-016C).
+variable BesideXBorder 0
+proc besideLearnBorder {left inner} {
+	variable BesideXBorder
+	set border [expr {$left - $inner}]
+	if {$border > $BesideXBorder && $border <= 4} {
+		set BesideXBorder $border
+		besideSchedule
+	}
 }
 proc besideLearnSlack {dlg {extents {}}} {
 	variable BesideTopSlack
@@ -1556,6 +1601,16 @@ proc besideBoard {dlg {parent ""}} {
 		# from the root position disagree. Keep only the rectangle both agree
 		# on, so the dialog frame is inside the main window either way.
 		if {[regexp {^[0-9]+x[0-9]+\+(-?[0-9]+)\+(-?[0-9]+)$} [wm geometry $pTop] -> gx gy]} {
+			variable BesideXBorder
+			if {![wm attributes $pTop -zoomed]} {
+				besideLearnBorder $pel [expr {[winfo rootx $pTop] - $gx}]
+			}
+			if {$BesideXBorder > 0 && $gx - $px == $BesideXBorder} {
+				# Horizontally the two origins differ by exactly the X border
+				# the WM keeps outside a requested +x: the whole frame width is
+				# usable in request coordinates, starting at gx (VAL-DLG-016C).
+				set px $gx
+			}
 			set pw [expr {$pw - abs($gx - $px)}]
 			set ph [expr {$ph - abs($gy - $py)}]
 			set px [expr {max($px, $gx)}]
@@ -1675,7 +1730,8 @@ proc besideBoard {dlg {parent ""}} {
 	lassign [dict get $plan geometry] _ _ pw ph
 	if {($pw < $rw || $ph < $rh) && $rw <= $ww-$fw && $rh <= $wh-$fh
 		&& ![info exists BesideMinimums($dlg)] && ![dict exists $plan pair]} {
-		set plan [besideNoRoomPlan $bx $by $bw $bh $rw $rh $workarea $extents 12 $peers]
+		set plan [besideNoRoomPlan $bx $by $bw $bh $rw $rh $workarea $extents 12 $peers \
+			[besideBoardRect]]
 	}
 	if {[llength $peers] && ![dict exists $plan pair]} {
 		lassign [dict get $plan geometry] gx gy gw gh
