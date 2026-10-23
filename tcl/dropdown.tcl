@@ -768,6 +768,12 @@ proc ::menu::RegisterTree {} {
 			RegisterNodes $node [format "%02d.%03d" $n $i] $topName
 		}
 	}
+
+	# The New Game variants are dispatched by ::menu::Invoke but have no
+	# drop-down row, so they are registered here for ::action::run.
+	foreach id {game.new.normal game.new.three game.new.crazy game.new.variants} {
+		Register $id [MC NewGame] "" "" "" ""
+	}
 }
 
 proc ::menu::RegisterNodes {node order top} {
