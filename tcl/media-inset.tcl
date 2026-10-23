@@ -57,6 +57,8 @@ variable Shown 0
 variable Audio 0
 variable Aspect [expr {16.0/9}]
 variable LayingOut 0
+variable Held 0
+variable HeldPlace {}
 variable Watched {}
 # A dialog too large for every strip outside the board pane can still be
 # kept off the video: the inset moves (and shrinks) within the pane. The
@@ -206,6 +208,7 @@ proc ::mediainset::hide {} {
 
 	set pane [Pane]
 	set Shown 0
+	set ::mediainset::HeldPlace {}
 	set Dodge {}
 	set DodgeFor {}
 	set Squeeze {}
@@ -453,6 +456,7 @@ proc ::mediainset::Layout {} {
 	variable SqueezeFor
 	variable Detach
 	variable DetachFor
+	variable HeldPlace
 
 	set pane [Pane]
 	if {$pane eq "" || !$Shown || $LayingOut} { return }
@@ -477,13 +481,13 @@ proc ::mediainset::Layout {} {
 			FrameView 0
 			RestoreBoard $pane
 			lassign $Detach dx dy dw dh
-			place $w -in $pane -x $dx -y $dy -width $dw -height $dh \
-				-relx 0 -rely 0 -anchor nw -relwidth {} -relheight {}
+			PlaceInset $w $pane $dx $dy $dw $dh
 			raise $w
 		} elseif {$Swapped && $Audio} {
 			::application::board::setReserve {} 0
 			FrameView 0
 			RestoreBoard $pane
+			set HeldPlace {}
 			place $w -in $pane -x -$FrameMargin -y -$FrameMargin -relx 1 -rely 1 -anchor se \
 				-width $cw -height $ch -relwidth {} -relheight {}
 			raise $w
@@ -491,6 +495,7 @@ proc ::mediainset::Layout {} {
 			::application::board::setReserve {} 0
 			# Inset the video by its own frame margin rather than placing it
 			# flush at 0,0: the ridge + highlight frame stays fully visible.
+			set HeldPlace {}
 			place $w -in $pane -x $FrameMargin -y $FrameMargin -relx 0 -rely 0 -anchor nw \
 				-relwidth 1 -relheight 1 -width [expr {-2*$FrameMargin}] -height [expr {-2*$FrameMargin}]
 			pack forget $view
@@ -568,13 +573,13 @@ proc ::mediainset::Layout {} {
 				lassign [::application::board::reserveRect] x y rw rh
 				set x [expr {$x + [winfo x $view] + ($rw - $iw)/2}]
 				set y [expr {$y + [winfo y $view] + ($rh - $ih)/2}]
-				place $w -in $pane -x $x -y $y -width $iw -height $ih \
-					-relx 0 -rely 0 -anchor nw -relwidth {} -relheight {}
+				PlaceInset $w $pane $x $y $iw $ih
 			} else {
 				::application::board::setReserve {} 0
 				# Keep the usable transport, fitting the video to the pane.
 				set iw [expr {min($iw, max(1, [winfo width $pane] - 12))}]
 				set ih [expr {$Audio ? $ch : int(round(($iw - 8)/$Aspect)) + $ch}]
+				set HeldPlace {}
 				place $w -in $pane -x -6 -y -6 -relx 1 -rely 1 -anchor se \
 					-width $iw -height $ih -relwidth {} -relheight {}
 			}
@@ -589,8 +594,7 @@ proc ::mediainset::Layout {} {
 				set DodgeFor {}
 			} else {
 				lassign $Dodge dx dy dw dh
-				place $w -in $pane -x $dx -y $dy -width $dw -height $dh \
-					-relx 0 -rely 0 -anchor nw -relwidth {} -relheight {}
+				PlaceInset $w $pane $dx $dy $dw $dh
 				raise $w
 			}
 		}
@@ -725,7 +729,7 @@ proc ::mediainset::DodgeForDialog {dlg rect} {
 	if {$pane eq ""} { return 0 }
 	set w $pane.mediainset
 	if {![winfo exists $w] || ![winfo ismapped $w]} { return 0 }
-	set video [WidgetRect $w]
+	set video [rect]
 	if {[Area $video $rect] == 0} { return 0 }
 	set paneRect [WidgetRect $pane]
 	set board [BoardRect]
@@ -733,8 +737,7 @@ proc ::mediainset::DodgeForDialog {dlg rect} {
 	set ch [expr {[winfo reqheight $w.controls] + 8}]
 	set margin 6
 	set minWidth 168
-	set curW [winfo width $w]
-	set curH [winfo height $w]
+	lassign $video - - curW curH
 	lassign $paneRect px py pw ph
 	set best {}
 	set bestScore -1
@@ -772,9 +775,7 @@ proc ::mediainset::DodgeForDialog {dlg rect} {
 		return 0
 	}
 	lassign $best cx cy iw ih
-	place $w -in $pane -x [expr {$cx-$px}] -y [expr {$cy-$py}] \
-		-width $iw -height $ih -relx 0 -rely 0 -anchor nw \
-		-relwidth {} -relheight {}
+	PlaceInset $w $pane [expr {$cx-$px}] [expr {$cy-$py}] $iw $ih
 	raise $w
 	set Dodge [list [expr {$cx-$px}] [expr {$cy-$py}] $iw $ih]
 	set DodgeFor $dlg
@@ -796,6 +797,60 @@ proc ::mediainset::SqueezeForDialog {dlg side pixels {maxBoard 0}} {
 	set SqueezeFor $dlg
 	Layout
 	return 1
+}
+
+# A dialog re-plan releases the squeeze, plans against the regrown inset and
+# squeezes again. Placing the inset at each step makes it jump to the normal
+# strip (often under the dialog) and back within milliseconds. The X server
+# drops the embedded mpv window's contents where the dialog covered it, and
+# the video is blank until mpv's next repaint. While a re-plan holds the
+# inset, Layout records the placement instead (rect reports it); release
+# applies only the final one, which is no change when the plan kept it.
+proc ::mediainset::hold {} {
+	variable Held
+	variable HeldPlace
+	if {[incr Held] > 1} { return }
+	set HeldPlace {}
+}
+
+proc ::mediainset::release {} {
+	variable Held
+	variable HeldPlace
+	variable Shown
+	if {$Held > 0 && [incr Held -1] > 0} { return }
+	set Held 0
+	set where $HeldPlace
+	set HeldPlace {}
+	set pane [Pane]
+	if {$where eq {} || !$Shown || $pane eq "" || ![winfo exists $pane.mediainset]} { return }
+	PlaceInset $pane.mediainset $pane {*}$where
+	raise $pane.mediainset
+}
+
+# Place the inset at {x y width height} in its pane, or record that while
+# a re-plan holds the visible inset.
+proc ::mediainset::PlaceInset {w pane x y width height} {
+	variable Held
+	variable HeldPlace
+	if {$Held > 0 && [winfo ismapped $w]} {
+		set HeldPlace [list $x $y $width $height]
+		return
+	}
+	place $w -in $pane -x $x -y $y -width $width -height $height \
+		-relx 0 -rely 0 -anchor nw -relwidth {} -relheight {}
+}
+
+# The inset's root rectangle {x y width height}, as placed or held.
+proc ::mediainset::rect {} {
+	variable HeldPlace
+	set pane [Pane]
+	if {$pane eq "" || ![winfo exists $pane.mediainset]} { return {} }
+	if {$HeldPlace ne {}} {
+		lassign $HeldPlace x y width height
+		return [list [expr {[winfo rootx $pane] + $x}] [expr {[winfo rooty $pane] + $y}] \
+			$width $height]
+	}
+	return [WidgetRect $pane.mediainset]
 }
 
 proc ::mediainset::ClearSqueeze {dlg} {
@@ -856,7 +911,7 @@ proc ::mediainset::DetachForDialog {dlg side targetW targetH workarea extents ga
 	set controls [expr {[winfo reqheight $w.controls] + 8}]
 	set margin 6
 	set minWidth 96
-	set curW [winfo width $w]
+	set curW [lindex [rect] 2]
 	lassign $paneRect px py pw ph
 	set best {}
 	set bestScore -1
@@ -890,9 +945,7 @@ proc ::mediainset::DetachForDialog {dlg side targetW targetH workarea extents ga
 		return 0
 	}
 	lassign $best x y iw ih
-	place $w -in $pane -x [expr {$x-$px}] -y [expr {$y-$py}] \
-		-width $iw -height $ih -relx 0 -rely 0 -anchor nw \
-		-relwidth {} -relheight {}
+	PlaceInset $w $pane [expr {$x-$px}] [expr {$y-$py}] $iw $ih
 	raise $w
 	set Detach [list [expr {$x-$px}] [expr {$y-$py}] $iw $ih]
 	return 1

@@ -625,7 +625,8 @@ proc besideVideoRect {} {
 	if {$pane eq "" || ![winfo exists $pane.mediainset]} { return {} }
 	set w $pane.mediainset
 	if {![winfo ismapped $w]} { return {} }
-	set rect [besideRect $w]
+	set rect [expr {[llength [info commands ::mediainset::rect]]
+		? [::mediainset::rect] : [besideRect $w]}]
 	lassign $rect x y width height
 	if {$width < 2 || $height < 2} { return {} }
 	return $rect
@@ -1540,6 +1541,18 @@ proc besideResetReplaceCount {} {
 # area into a strip, retaining at least 320x160 (or the natural request) when
 # possible. The reservation is released on close/unregister.
 proc besideBoard {dlg {parent ""}} {
+	# The plan releases and re-applies the inset's squeeze; the inset must
+	# not visibly jump through that transient (VAL-DLG-016D).
+	set held [llength [info commands ::mediainset::hold]]
+	if {$held} { ::mediainset::hold }
+	try {
+		return [BesideBoardPlan $dlg $parent]
+	} finally {
+		if {$held} { ::mediainset::release }
+	}
+}
+
+proc BesideBoardPlan {dlg parent} {
 	variable BesideRequests
 	if {$parent eq ""} {
 		set parent [wm transient $dlg]

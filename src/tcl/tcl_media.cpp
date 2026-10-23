@@ -108,9 +108,114 @@ drainEvents()
 }
 
 
+#if !defined(_WIN32) && !defined(__APPLE__)
+
+// mpv's X11 output selects StructureNotify on the embedding window and takes
+// any MapNotify -- the parent's too -- for its own window being mapped. When
+// Tk maps the canvas between mpv creating its child window and configuring
+// the output (a relayout during startup does), mpv never maps the child and
+// the video stays invisible for the whole playback. Watch the child until it
+// is mapped, and map it when mpv skipped that.
+Display* WatchDisplay = 0;
+Window WatchParent = 0;
+Tcl_TimerToken WatchTimer = 0;
+int WatchTicks = 0;
+
+int
+ignoreXError(ClientData, XErrorEvent*)
+{
+	return 0;
+}
+
+void
+stopWatch()
+{
+	if (WatchTimer)
+	{
+		Tcl_DeleteTimerHandler(WatchTimer);
+		WatchTimer = 0;
+	}
+}
+
+void
+watchChild(ClientData)
+{
+	WatchTimer = 0;
+
+	if (!Player || !WatchDisplay)
+		return;
+
+	bool done = false;
+	Tk_ErrorHandler handler = Tk_CreateErrorHandler(WatchDisplay, -1, -1, -1, ignoreXError, 0);
+	Window root, parent, *children = 0;
+	unsigned count = 0;
+
+	if (!XQueryTree(WatchDisplay, WatchParent, &root, &parent, &children, &count))
+	{
+		done = true;	// the embedding window is gone
+	}
+	else
+	{
+		for (unsigned i = 0; i < count && !done; ++i)
+		{
+			XWindowAttributes atts;
+
+			if (!XGetWindowAttributes(WatchDisplay, children[i], &atts))
+				continue;
+
+			if (atts.map_state != IsUnmapped)
+			{
+				done = true;
+			}
+			else if (char* configured = mpv_get_property_string(Player, "vo-configured"))
+			{
+				// mpv maps its window when it configures the output; past
+				// that point an unmapped child is the lost map
+				if (strcmp(configured, "yes") == 0)
+				{
+					XMapWindow(WatchDisplay, children[i]);
+					done = true;
+				}
+				mpv_free(configured);
+			}
+		}
+		if (children)
+			XFree(children);
+	}
+
+	XSync(WatchDisplay, False);
+	Tk_DeleteErrorHandler(handler);
+
+	if (!done && ++WatchTicks < 300)
+		WatchTimer = Tcl_CreateTimerHandler(100, watchChild, 0);
+}
+
+void
+startWatch(Tcl_Interp* ti, Window wid)
+{
+	stopWatch();
+	Tk_Window main = Tk_MainWindow(ti);
+	if (!main)
+		return;
+	WatchDisplay = Tk_Display(main);
+	WatchParent = wid;
+	WatchTicks = 0;
+	WatchTimer = Tcl_CreateTimerHandler(100, watchChild, 0);
+}
+
+#else
+
+void stopWatch() {}
+void startWatch(Tcl_Interp*, Tcl_WideInt) {}
+
+#endif
+
+
 void
 closePlayer()
 {
+	stopWatch();
+
 	if (Player)
 	{
 		// Blocks until the core has shut down, which also removes mpv's
@@ -235,6 +340,7 @@ cmdOpen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		return TCL_OK;
 	}
 
+	startWatch(ti, wid);
 	Tcl_SetObjResult(ti, Tcl_NewIntObj(1));
 	return TCL_OK;
 }
