@@ -110,7 +110,9 @@ proc ::scidb::test::dlgplace::placed {command code result op} {
 proc ::scidb::test::dlgplace::workareaTrace {command op} {
     variable workareaCalls
     variable placing
-    if {$placing && [lindex $command 1] eq "workarea"} {incr workareaCalls}
+    # A transaction can reuse its native WM query. Observe consumption of
+    # the work-area snapshot; check() independently verifies live geometry.
+    if {$placing} {incr workareaCalls}
 }
 proc ::scidb::test::dlgplace::setupBoard {} {
     variable calls
@@ -127,12 +129,12 @@ proc ::scidb::test::dlgplace::setupBoard {} {
     set workareaCalls 0
     trace add execution ::util::place::besideBoard enter ::scidb::test::dlgplace::placing
     trace add execution ::util::place::besideBoard leave ::scidb::test::dlgplace::placed
-    trace add execution ::winfo enter ::scidb::test::dlgplace::workareaTrace
+    trace add execution ::util::place::besideWorkArea enter ::scidb::test::dlgplace::workareaTrace
 }
 proc ::scidb::test::dlgplace::stopTrace {} {
     trace remove execution ::util::place::besideBoard enter ::scidb::test::dlgplace::placing
     trace remove execution ::util::place::besideBoard leave ::scidb::test::dlgplace::placed
-    trace remove execution ::winfo enter ::scidb::test::dlgplace::workareaTrace
+    trace remove execution ::util::place::besideWorkArea enter ::scidb::test::dlgplace::workareaTrace
 }
 proc ::scidb::test::dlgplace::buttons {w} {
     set result {}
@@ -178,7 +180,7 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
     set wa [dict get $call workarea]
     set ext [dict get $call extents]
     set rule [dict get $plan rule]
-    require [expr {[dict get $call workareaCalls] > 0}] "$target: no winfo workarea call from helper"
+    require [expr {[dict get $call workareaCalls] > 0}] "$target: no work-area snapshot consumed by helper"
     require [expr {$wa eq [winfo workarea $dlg]}] "$target: work area changed"
     require [expr {$ext eq [winfo extents $dlg]}] "$target: frame changed after planning"
     require [expr {$board eq [boardRect]}] "$target: board changed after planning"

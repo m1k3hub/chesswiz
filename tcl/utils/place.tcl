@@ -1319,18 +1319,18 @@ proc besideBorderRoom {side px kind maxBoard workarea fw fh gap needW needH} {
 	if {![llength [info commands ::application::board::reserveBorder]]} { return 1 }
 	if {[catch {
 		set frame $::application::board::Vars(widget:frame)
-		set border [::application::board::reserveBorder $side $px $kind $maxBoard]
+		set border [::application::board::reserveBorder $side $px $kind $maxBoard 1]
 		set ox [expr {[winfo rootx $frame] - int([$frame canvasx 0])}]
 		set oy [expr {[winfo rooty $frame] - int([$frame canvasy 0])}]
 	}]} { return 1 }
 	if {![llength $border]} { return 0 }
-	lassign $border x y size
+	lassign $border x y bw bh
 	set bx [expr {$ox + $x}]
 	set by [expr {$oy + $y}]
 	lassign $workarea wx wy ww wh
-	return [expr {$bx + $size + $gap + $needW + $fw <= $wx + $ww
+	return [expr {$bx + $bw + $gap + $needW + $fw <= $wx + $ww
 		|| $bx - $gap - $needW - $fw >= $wx
-		|| $by + $size + $gap + $needH + $fh <= $wy + $wh}]
+		|| $by + $bh + $gap + $needH + $fh <= $wy + $wh}]
 }
 
 # <dlg> holds a live squeeze; a detached inset takes precedence over it.

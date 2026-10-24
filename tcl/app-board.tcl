@@ -1583,9 +1583,10 @@ proc reserveSquare {side px width height {kind auto} {maxBoard 0}} {
 
 # The border rectangle {x y size} (canvas coordinates) the current canvas
 # would draw with this reserve, or {} when ComputeLayout refuses it; {} 0
-# probes the unreserved layout. Lets a dialog re-plan rule out an inset
+# probes the unreserved layout. With decorations=1 returns {x y w h},
+# including the always-visible side-to-move column. Lets a dialog rule out an inset
 # squeeze or detach without rebuilding the board for each attempt.
-proc reserveBorder {side px {kind auto} {maxBoard 0}} {
+proc reserveBorder {side px {kind auto} {maxBoard 0} {decorations 0}} {
 	variable Dim
 	variable Vars
 	variable ReserveSide
@@ -1606,6 +1607,17 @@ proc reserveBorder {side px {kind auto} {maxBoard 0}} {
 		set ReserveMaxBoard $maxBoard
 		ComputeLayout $Vars(width) $Vars(height)
 		if {$ReserveSide ne $side} { return {} }
+		if {$decorations} {
+			set extra 0
+			# An enabled side-to-move image is always drawn beside the
+			# border. Its column is part of the protected bounding box.
+			if {$::board::layout(side-to-move)
+				&& (![info exists Vars(3d)] || !$Vars(3d))} {
+				set extra [expr {$Dim(gap:x)+$Dim(stm)}]
+			}
+			return [list $Dim(border:x1) $Dim(border:y1) \
+				[expr {$Dim(bordersize)+$extra}] $Dim(bordersize)]
+		}
 		return [list $Dim(border:x1) $Dim(border:y1) $Dim(bordersize)]
 	} finally {
 		array unset Dim
