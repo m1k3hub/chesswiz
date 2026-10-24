@@ -285,6 +285,10 @@ proc dbNew {parent variant} {
 	if {$variant in {Normal Undetermined}} {
 		lappend filetypes [list $mc::PGNFilesArchives {.pgn .pgn.gz}]
 	}
+	# CBH (ChessBase) databases are only meaningful for the main variant.
+	if {$variant eq "Normal"} {
+		lappend filetypes [list $mc::ChessBaseBases {.cbh}]
+	}
 	set result [::dialog::saveFile \
 		-parent $parent \
 		-class database \
@@ -297,7 +301,7 @@ proc dbNew {parent variant} {
 		-customicon $::icon::16x16::filetypeArchive \
 		-customtooltip $mc::Archiving \
 		-customcommand [namespace code [list CreateArchive]] \
-		-customfiletypes {.sci .pgn .pgn.gz .bpgn .bpgn.gz} \
+		-customfiletypes {.sci .cbh .pgn .pgn.gz .bpgn .bpgn.gz} \
 	]
 	set FileSelBoxInUse 0
 
@@ -305,6 +309,18 @@ proc dbNew {parent variant} {
 	lassign $result base encoding
 	set ext [::util::fileExtension $base]
 	if {$ext in {.pgn .pgn.gz .bpgn .bpgn.gz}} { set variant Undetermined }
+
+	# A new ChessBase database is always a main-variant database and stores
+	# its text in UTF-8; do not let a stale encoding selection corrupt it.
+	if {$ext eq ".cbh"} {
+		if {$variant ne "Normal"} {
+			::dialog::error -parent $parent \
+				-title [set [namespace current]::mc::NewFile] \
+				-message "A ChessBase (.cbh) database can only be created for the normal variant."
+			return 0
+		}
+		set encoding utf-8
+	}
 
 	# docs/formats/SCI_CORRESPONDENCE_FORMAT.md §3: new databases default to SCI v96
 	# (native correspondence clock storage); offer legacy v95 explicitly.
