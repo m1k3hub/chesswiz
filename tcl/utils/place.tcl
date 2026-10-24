@@ -80,6 +80,7 @@ variable BesideRecordSeq		0
 # The trigger of the settle currently re-planning; a direct call is "open".
 variable BesideTrigger			open
 variable BesideParentBound		{}
+variable BesideWmTraceBound		0
 
 
 # Notes:
@@ -1018,6 +1019,31 @@ proc besideSchedule {{delay ""}} {
 	set BesideTimer [after $delay [namespace code besideSettle]]
 }
 
+# Work-area discovery performs synchronous WM property queries on X11.
+# A planning transaction uses one snapshot per window; rectangle arithmetic
+# and peer comparisons must not re-query the WM for every intermediate step.
+variable BesideMeasureDepth 0
+variable BesideAreas {}
+proc besideMeasureBegin {} {
+	variable BesideMeasureDepth
+	variable BesideAreas
+	if {$BesideMeasureDepth == 0} { set BesideAreas {} }
+	incr BesideMeasureDepth
+}
+proc besideMeasureEnd {} {
+	variable BesideMeasureDepth
+	incr BesideMeasureDepth -1
+}
+proc besideWorkArea {dlg} {
+	variable BesideMeasureDepth
+	variable BesideAreas
+	if {$BesideMeasureDepth == 0} { return [winfo workarea $dlg] }
+	if {![dict exists $BesideAreas $dlg]} {
+		dict set BesideAreas $dlg [winfo workarea $dlg]
+	}
+	return [dict get $BesideAreas $dlg]
+}
+
 # Every input that can invalidate a placement with an unchanged board.
 proc besideContext {dlg} {
 	set cls [winfo class $dlg]
@@ -1027,7 +1053,7 @@ proc besideContext {dlg} {
 	}
 	variable BesideTopSlack
 	variable BesideXBorder
-	return [list [winfo workarea $dlg] $extents \
+	return [list [besideWorkArea $dlg] $extents \
 	 [list [winfo reqwidth $dlg] [winfo reqheight $dlg]] \
 	 [wm minsize $dlg] [wm maxsize $dlg] $BesideTopSlack $BesideXBorder]
 }
@@ -1045,7 +1071,11 @@ proc besidePeerRect {dlg} {
 
 proc besideOuterRect {dlg} {
 	lassign [besideRect $dlg] x y w h
-	lassign [lindex [besideContext $dlg] 1] l r t b
+	set extents {0 0 0 0}
+	if {[winfo class $dlg] ni {Menu OptionMenu} && ![wm overrideredirect $dlg]} {
+		set extents [winfo extents $dlg]
+	}
+	lassign $extents l r t b
 	return [list [expr {$x-$l}] [expr {$y-$t}] [expr {$w+$l+$r}] [expr {$h+$t+$b}]]
 }
 proc besideInside {rect area} {
@@ -1154,11 +1184,41 @@ proc besideRegistryAdd {dlg parent} {
 	# dialog must stay inside: observe the toplevel itself (VAL-DLG-018A).
 	variable BesideParentBound
 	set top [winfo toplevel $parent]
+	variable BesideWmTraceBound
+	if {!$BesideWmTraceBound} {
+		trace add execution ::wm leave [namespace code BesideGeometryCommand]
+		set BesideWmTraceBound 1
+	}
+	unset -nocomplain BesideState($dlg,pendingTrigger)
 	if {$top ni $BesideParentBound} {
 		bind $top <Configure> +[list ::util::place::BesideParentConfigure $top %W]
 		lappend BesideParentBound $top
 	}
 	after idle [namespace code [list besideCapture $dlg]]
+}
+
+# An explicit geometry request can leave the native size unchanged (the
+# WM may coalesce it with a restore). It is still a placement trigger, so
+# observe successful main-window size requests as well as Configure.
+proc BesideGeometryCommand {command code result op} {
+	variable BesideDialogs
+	variable BesideState
+	variable BesideParentBound
+	if {$code != 0 || [llength $command] != 4
+		|| [lindex $command 1] ne "geometry"
+		|| ![regexp {^=?[0-9]+x[0-9]+} [lindex $command 3]]} { return }
+	set top [lindex $command 2]
+	if {$top ni $BesideParentBound || [besideVideoRect] eq {}} { return }
+	if {[info exists ::application::Vars(loading)] && $::application::Vars(loading)} { return }
+	if {[info exists ::application::reflow::S(busy)] && $::application::reflow::S(busy)} { return }
+	set changed 0
+	foreach dlg $BesideDialogs {
+		if {![winfo exists $dlg] || ![winfo ismapped $dlg]} { continue }
+		if {[winfo toplevel $BesideState($dlg,parent)] ne $top} { continue }
+		set BesideState($dlg,pendingTrigger) resize
+		set changed 1
+	}
+	if {$changed} { besideSchedule }
 }
 
 proc BesideParentConfigure {top window} {
@@ -1181,6 +1241,9 @@ proc besideTriggerFor {dlg parentRect boardRect} {
 		if {$zoomed && !$BesideState($dlg,zoomed)} { return maximize }
 		if {!$zoomed && $BesideState($dlg,zoomed)} { return restore }
 	}
+	if {[info exists BesideState($dlg,pendingTrigger)]} {
+		return $BesideState($dlg,pendingTrigger)
+	}
 	set old {}
 	if {[info exists BesideState($dlg,parentrect)]} { set old $BesideState($dlg,parentrect) }
 	if {$parentRect ne {} && $old ne {}} {
@@ -1197,7 +1260,7 @@ proc besideTriggerFor {dlg parentRect boardRect} {
 # the main window's frame (the same area BesideBoardPlan plans against).
 proc besideMainArea {dlg} {
 	variable BesideState
-	set workarea [winfo workarea $dlg]
+	set workarea [besideWorkArea $dlg]
 	if {![info exists BesideState($dlg,parent)]} { return $workarea }
 	set parent $BesideState($dlg,parent)
 	if {![winfo exists $parent]} { return $workarea }
@@ -1733,6 +1796,15 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 }
 
 proc besideSettle {} {
+	besideMeasureBegin
+	try {
+		BesideSettle
+	} finally {
+		besideMeasureEnd
+	}
+}
+
+proc BesideSettle {} {
 	variable BesideTimer
 	variable BesideDialogs
 	variable BesideState
@@ -1826,7 +1898,8 @@ proc BesideSettlePass {first} {
 		set unchanged [expr {$boardRect eq $BesideState($dlg,board)
 			&& $obstacle eq $BesideState($dlg,obstacle)
 			&& $context eq $BesideState($dlg,context)
-			&& !$parentMoved && $trigger ni {maximize restore}}]
+			&& !$parentMoved && $trigger ni {maximize restore}
+			&& ![info exists BesideState($dlg,pendingTrigger)]}]
 		if {![info exists BesideState($dlg,last)] || $BesideState($dlg,last) eq {}} {
 			# Waiting for the idle capture of the rectangle the placement
 			# produced: not a user move. If a placement input changed in
@@ -1856,7 +1929,7 @@ proc BesideSettlePass {first} {
 			# user's own edge drag can take it there). Only a display change
 			# (the screen work area itself changed) that leaves the frame
 			# outside the new area brings it back.
-			set screen [winfo workarea $dlg]
+			set screen [besideWorkArea $dlg]
 			set display [expr {[info exists BesideState($dlg,screen)]
 				&& $BesideState($dlg,screen) ne $screen}]
 			set BesideState($dlg,screen) $screen
@@ -1870,6 +1943,7 @@ proc BesideSettlePass {first} {
 			set BesideState($dlg,board) $boardRect
 			set BesideState($dlg,obstacle) $obstacle
 			set BesideState($dlg,context) $context
+			unset -nocomplain BesideState($dlg,pendingTrigger)
 			if {!$display || [besideInside [besideOuterRect $dlg] $screen]} { continue }
 		} elseif {$unchanged} {
 			# No placement input changed. A frame the WM left outside the
@@ -1939,6 +2013,7 @@ proc besideResetReplaceCount {} {
 # area into a strip, retaining at least 320x160 (or the natural request) when
 # possible. The reservation is released on close/unregister.
 proc besideBoard {dlg {parent ""}} {
+	besideMeasureBegin
 	# The plan releases and re-applies the inset's squeeze; the inset must
 	# not visibly jump through that transient (VAL-DLG-016D).
 	set held [llength [info commands ::mediainset::hold]]
@@ -1946,6 +2021,7 @@ proc besideBoard {dlg {parent ""}} {
 	try {
 		return [BesideBoardPlan $dlg $parent]
 	} finally {
+		besideMeasureEnd
 		if {$held} { ::mediainset::release }
 	}
 }
@@ -1986,7 +2062,7 @@ proc BesideBoardPlan {dlg parent} {
 	set rh [winfo reqheight $dlg]
 	set dw [expr {min($maxw, max($rw, $mw))}]
 	set dh [expr {min($maxh, max($rh, $mh))}]
-	set workarea [winfo workarea $dlg]
+	set workarea [besideWorkArea $dlg]
 	if {[winfo exists $parent]} {
 		set pTop [winfo toplevel $parent]
 		lassign [winfo extents $pTop] pel per pet peb
