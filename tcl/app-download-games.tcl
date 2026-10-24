@@ -15,6 +15,10 @@
 #   Lichess
 #     Single games, by URL or game id, one per line
 #     (https://lichess.org/game/export/<id> answers application/x-chess-pgn).
+#   Lichess study
+#     A study's PGN, by URL or id, with an optional chapter id:
+#     https://lichess.org/api/study/<id>.pgn (or .../<id>/<chapter>.pgn).
+#     The same Lichess token handling as for player games is used.
 #   Player games
 #     A Chess.com or Lichess player's games of the last months. Chess.com
 #     lists a player's monthly archives (api.chess.com/pub/player/<p>/games/
@@ -36,7 +40,9 @@
 #
 # The pure helpers (twicIssues, lichessGameIds, chessComArchives,
 # playerName, lichessUserUrl, destName) are UI-free and
-# covered by tests/test_app_download.tcl.
+# covered by tests/test_app_download.tcl. Lichess study parsing and
+# URLs live in app-lichess-study and are covered by
+# tests/test_app_lichess_study.tcl.
 # ======================================================================
 
 if {[llength [info commands ::util::source]]} {
@@ -57,6 +63,8 @@ set TwicDetail				"The latest weekly issues; each zip holds one PGN with the wee
 set Issues					"Issues to fetch:"
 set Lichess					"Lichess games"
 set LichessDetail			"One game link or game id per line:"
+set Study					"Lichess study"
+set StudyDetail				"One study link or study id per line, optionally with a chapter id:"
 set Player					"A player's games"
 set PlayerDetail			"All games of a Chess.com or Lichess player in the last months:"
 set Site					"Site:"
@@ -80,11 +88,13 @@ set Cancelled				"Cancelled; %d file(s) fetched; importing..."
 set Failed					"%s failed (%s)"
 set NoIssues				"could not find an issue number on the TWIC index page"
 set NoGames					"no Lichess game links or ids found"
+set NoStudies				"no Lichess study links or ids found"
 set NoUrl					"no URL given"
 set NoTls					"The tls package is needed for https downloads."
 set DownloadsDir			"downloads"
 set TwicImport					"TWIC %s download import"
 set LichessImport			"Lichess download import"
+set StudyImport				"Lichess study import"
 set UrlImport					"PGN download import"
 set LichessToken			"Lichess API token (optional):"
 set NeedToken				"Lichess refused the download without a login. Create a personal API token at lichess.org/account/oauth/token (no permissions needed) and enter it in this dialog."
@@ -132,6 +142,7 @@ proc ::application::download::open {parent base} {
 	set Priv(site) Chess.com
 	set Priv(player) ""
 	set Priv(months) 1
+	set Priv(studies) ""
 
 	toplevel $dlg -class Scidb
 	wm title $dlg $mc::Title
@@ -180,6 +191,25 @@ proc ::application::download::open {parent base} {
 	pack $lichess.text -side left -fill both -expand yes -pady [list 0 $::theme::pady]
 	pack $lichess.vs -side right -fill y -pady [list 0 $::theme::pady]
 	pack $lichess -fill both -expand yes -pady [list 0 $::theme::pady]
+
+	set study [ttk::frame $top.source.study]
+	ttk::radiobutton $study.choice \
+		-text $mc::Study -value study -variable [namespace current]::Priv(source) \
+		-command [namespace code SourceChanged] \
+		;
+	ttk::label $study.detail -text $mc::StudyDetail -wraplength 360 -justify left
+	tk::text $study.text \
+		-width 48 -height 4 -wrap word -undo false \
+		-highlightthickness 0 \
+		;
+	set Priv(studiesWidget) $study.text
+	ttk::scrollbar $study.vs -orient vertical -command [list $study.text yview]
+	$study.text configure -yscrollcommand [list $study.vs set]
+	pack $study.choice -anchor w
+	pack $study.detail -anchor w
+	pack $study.text -side left -fill both -expand yes -pady [list 0 $::theme::pady]
+	pack $study.vs -side right -fill y -pady [list 0 $::theme::pady]
+	pack $study -fill both -expand yes -pady [list 0 $::theme::pady]
 
 	set player [ttk::frame $top.source.player]
 	ttk::radiobutton $player.choice \
@@ -261,6 +291,16 @@ proc ::application::download::SourceChanged {} {
 }
 
 
+# The study text from the dialog, or the headless -studies value.
+proc ::application::download::StudyText {} {
+	variable Priv
+	if {[info exists Priv(studiesWidget)] && [winfo exists $Priv(studiesWidget)]} {
+		return [$Priv(studiesWidget) get 1.0 end]
+	}
+	return [expr {[info exists Priv(studies)] ? $Priv(studies) : ""}]
+}
+
+
 # The dialog path is only valid while the dialog exists: after Close it
 # is empty, and winfo errors on the empty string.
 proc ::application::download::DialogExists {} {
@@ -323,6 +363,21 @@ proc ::application::download::Start {} {
 			foreach id $ids {
 				lappend queue [list [lichessUrl $id] \
 					[file join $dir "lichess-$id.pgn"] "lichess.org/$id"]
+			}
+		}
+		study {
+			set specs [::application::lichess::study::specs [StudyText]]
+			if {![llength $specs]} {
+				Status $mc::NoStudies
+				return
+			}
+			set Priv(title) $mc::StudyImport
+			foreach entry $specs {
+				lassign $entry id chapter
+				lappend queue [list \
+					[::application::lichess::study::pgnUrl $id $chapter] \
+					[file join $dir [::application::lichess::study::fileName $id $chapter]] \
+					[::application::lichess::study::label $id $chapter]]
 			}
 		}
 		player {
@@ -557,6 +612,7 @@ proc ::application::download::run {base spec doneCmd} {
 	set Priv(source)  [expr {[dict exists $spec -source]  ? [dict get $spec -source]  : "twic"}]
 	set Priv(issues)  [expr {[dict exists $spec -issues]  ? [dict get $spec -issues]  : 1}]
 	set Priv(lichess) [expr {[dict exists $spec -lichess] ? [dict get $spec -lichess] : ""}]
+	set Priv(studies) [expr {[dict exists $spec -studies] ? [dict get $spec -studies] : ""}]
 	set Priv(url)     [expr {[dict exists $spec -url]     ? [dict get $spec -url]     : ""}]
 	set Priv(site)    [expr {[dict exists $spec -site]    ? [dict get $spec -site]    : "Chess.com"}]
 	set Priv(player)  [expr {[dict exists $spec -player]  ? [dict get $spec -player]  : ""}]

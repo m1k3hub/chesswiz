@@ -159,6 +159,7 @@ SOURCES = \
 	app-database-repertoire.tcl \
 	app-database-maintenance.tcl \
 	app-database-discover.tcl \
+	app-lichess-study.tcl \
 	app-download-games.tcl \
 	app-explorer.tcl \
 	app-db-icons.tcl \

@@ -44,6 +44,7 @@ namespace eval menu::mc {
 	set ExportPgn						"PGN…"
 	set ExportHtml						"HTML report…"
 	set ExportArchive					"Portable archive (.scv)…"
+	set ExportLichess					"Lichess study…"
 	set CreateDatabaseArchive		"Create Database Archive…"
 
 	# Edit
@@ -81,6 +82,7 @@ namespace eval menu::mc {
 	set MergeClipbase					"merge clipbase"
 	set MergeGameTab					"merge from game tab"
 	set ExportGame						"Export Game…"
+	set UploadStudy						"Upload to Lichess Study…"
 	set GameHistory					"Game History"
 	set RecentGames					"recent games"
 	set ClearHistory					"Clear History"
@@ -337,6 +339,7 @@ proc ::menu::DefineTree {} {
 				[list cmd menu.file.export.pgn ExportPgn "" {::menu::DbOpen}] \
 				[list cmd menu.file.export.html ExportHtml "" {::menu::DbOpen}] \
 				[list cmd menu.file.export.archive ExportArchive "" {::menu::DbOpen}] \
+				[list cmd menu.file.export.lichess ExportLichess "" {::menu::DbOpen}] \
 			]] \
 			[list cmd menu.file.archive_create CreateDatabaseArchive "" {::menu::DbOpen} {::menu::DbWritable}] \
 			[list sep] \
@@ -387,6 +390,7 @@ proc ::menu::DefineTree {} {
 				[list dyn MergeGameTab] \
 			]] \
 			[list cmd game-export ExportGame "Ctrl+E" {::menu::GameLoaded}] \
+			[list cmd menu.game.export.study UploadStudy "" {::menu::GameLoaded}] \
 			[list sep] \
 			[list cascade GameHistory "" [list \
 				[list dyn RecentGames] \
@@ -1746,6 +1750,10 @@ proc ::menu::Do {id} {
 			return [::export::open .application -base [CurrentBase] -variant [CurrentVariant] -view 0 -name [::util::databaseName [CurrentBase] no] -extension html]
 		}
 		menu.file.export.archive { return [::menu::dbCreateArchive .application [CurrentBase]] }
+		menu.file.export.lichess {
+			return [::application::lichess::study::open .application \
+				-base [CurrentBase] -variant [CurrentVariant] -view 0 -kind database]
+		}
 		menu.file.archive_create { return [::menu::dbCreateArchive .application [CurrentBase]] }
 
 		app-quit { return [::application::shutdown] }
@@ -1835,6 +1843,10 @@ proc ::menu::Do {id} {
 			return
 		}
 		game-export { return [::gamebar::exportGame .application] }
+		menu.game.export.study {
+			return [::application::lichess::study::open .application \
+				-base [CurrentBase] -variant [CurrentVariant] -view 0 -kind game]
+		}
 		menu.game.history.recent {
 			if {[catch { ::game::gameList } games] || ![llength $games]} { return }
 			catch { ::scidb::game::switch [lindex [lindex $games 0] 0] }
