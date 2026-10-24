@@ -50,12 +50,12 @@ variable ShiftLeft	8
 # A dialog the user moved or resized is left alone from then on, even over
 # the board (VAL-DLG-018C); only a display change that leaves it outside the
 # new screen work area re-places it.
-variable BesideDelay		260
+variable BesideDelay		80
 variable BesideTimer		{}
 # A steady stream of events (a playing video's per-frame Configure, a live
 # engine clock) would restart a pure trailing debounce forever; the settle
 # runs at the latest this long after the first deferred event.
-variable BesideMaxWait		600
+variable BesideMaxWait		120
 variable BesideFirst		{}
 variable BesideUnmappedRetries	0
 variable BesideDialogs		{}
@@ -782,6 +782,7 @@ proc besidePairPlan {dlg peers rw rh workarea extents gap} {
 # be placed: the least board plus peer area is applied and the plan is marked
 # peerFree 0 so the failure is visible.
 proc besidePairNoRoom {dlg peers rw rh workarea extents gap} {
+	variable BesideState
 	lassign [besideBoardRect] bx by bw bh
 	lassign $workarea wx wy ww wh
 	lassign $extents el er et eb
@@ -792,7 +793,8 @@ proc besidePairNoRoom {dlg peers rw rh workarea extents gap} {
 	# in besideBoard), so the record matches the settled geometry.
 	foreach side {right left below} {
 		lassign [dict get $candidates $side] x y w h
-		if {$x < $wx + $el && $x + $w + $fw + $el <= $wx + $ww} {
+		if {![info exists BesideState($dlg,extents)]
+			&& $x < $wx + $el && $x + $w + $fw + $el <= $wx + $ww} {
 			dict set candidates $side [list [expr {$wx + $el}] $y $w $h]
 		}
 	}
@@ -1019,8 +1021,8 @@ proc besideSchedule {{delay ""}} {
 	} else {
 		set BesideFirst $now
 	}
-	# Playing dialogs have a 500 ms deadline. Without an inset, retain the
-	# existing coalescing window for the WM's multi-stage fullscreen changes.
+	# Leave time within the 500 ms deadline for the board and native WM to
+	# apply the plan, including when no video inset is present.
 	set maxWait $BesideMaxWait
 	set defaultDelay $BesideDelay
 	if {[besideVideoRect] ne {}} { set maxWait 30; set defaultDelay 10 }
@@ -1034,10 +1036,12 @@ proc besideSchedule {{delay ""}} {
 # and peer comparisons must not re-query the WM for every intermediate step.
 variable BesideMeasureDepth 0
 variable BesideAreas {}
+variable BesideFrames {}
 proc besideMeasureBegin {} {
 	variable BesideMeasureDepth
 	variable BesideAreas
-	if {$BesideMeasureDepth == 0} { set BesideAreas {} }
+	variable BesideFrames
+	if {$BesideMeasureDepth == 0} { set BesideAreas {}; set BesideFrames {} }
 	incr BesideMeasureDepth
 }
 proc besideMeasureEnd {} {
@@ -1054,6 +1058,20 @@ proc besideWorkArea {dlg} {
 	return [dict get $BesideAreas $dlg]
 }
 
+# Native geometry is read once per transaction, never from an estimated
+# global decoration size. Empty on platforms without this native query.
+proc besideNativeFrame {top} {
+	variable BesideMeasureDepth
+	variable BesideFrames
+	if {$BesideMeasureDepth > 0 && [dict exists $BesideFrames $top]} {
+		return [dict get $BesideFrames $top]
+	}
+	set frame {}
+	catch {set frame [::scidb::tk::wm frame $top]}
+	if {$BesideMeasureDepth > 0} { dict set BesideFrames $top $frame }
+	return $frame
+}
+
 # Every input that can invalidate a placement with an unchanged board.
 proc besideContext {dlg} {
 	set cls [winfo class $dlg]
@@ -1065,7 +1083,8 @@ proc besideContext {dlg} {
 	variable BesideXBorder
 	return [list [besideWorkArea $dlg] $extents \
 	 [list [winfo reqwidth $dlg] [winfo reqheight $dlg]] \
-	 [wm minsize $dlg] [wm maxsize $dlg] $BesideTopSlack $BesideXBorder]
+	 [wm minsize $dlg] [wm maxsize $dlg] $BesideTopSlack $BesideXBorder \
+	 [besideDialogExtents $dlg]]
 }
 # A peer's frame as the planner last placed it: until the WM has applied that
 # request, the window still reports where it was, and a dialog planned in
@@ -1083,7 +1102,7 @@ proc besideOuterRect {dlg} {
 	lassign [besideRect $dlg] x y w h
 	set extents {0 0 0 0}
 	if {[winfo class $dlg] ni {Menu OptionMenu} && ![wm overrideredirect $dlg]} {
-		set extents [winfo extents $dlg]
+		set extents [besideDialogExtents $dlg]
 	}
 	lassign $extents l r t b
 	return [list [expr {$x-$l}] [expr {$y-$t}] [expr {$w+$l+$r}] [expr {$h+$t+$b}]]
@@ -1102,6 +1121,22 @@ proc besideInside {rect area} {
 # mapped beside dialog is added so the real frame stays in the work area.
 variable BesideTopSlack 0
 proc besideDialogExtents {dlg} {
+	variable BesideState
+	if {[info exists BesideState($dlg,extents)]} {
+		return $BesideState($dlg,extents)
+	}
+	if {[winfo ismapped $dlg] && [llength [info commands ::scidb::tk::wm]]
+		&& ![catch {::scidb::tk::wm frameextents $dlg} frame] && [llength $frame] == 4} {
+		lassign $frame left right top bottom
+		if {min($left,$right,$top,$bottom) >= 0} {
+			set BesideState($dlg,extents) [list $left $right $top $bottom]
+			# The initial unmapped plan used estimates. Replace it promptly
+			# once, then reuse this measurement for every parent re-plan.
+			set BesideState($dlg,pendingTrigger) content
+			besideSchedule 0
+			return $BesideState($dlg,extents)
+		}
+	}
 	variable BesideTopSlack
 	variable BesideXBorder
 	set extents [winfo extents $dlg]
@@ -1144,7 +1179,7 @@ proc besideLearnSlack {dlg {extents {}}} {
 proc besideCapture {dlg} {
 	variable BesideState
 	if {![winfo exists $dlg] || ![winfo ismapped $dlg]} { return }
-	besideLearnSlack $dlg
+	besideDialogExtents $dlg
 	set BesideState($dlg,last) [besideRect $dlg]
 	set BesideState($dlg,board) [besideBoardRect]
 	set BesideState($dlg,obstacle) [besideProtectedRect]
@@ -1280,6 +1315,8 @@ proc besideMainArea {dlg} {
 	set py [expr {[winfo rooty $top] - $pet}]
 	set pw [expr {[winfo width $top] + $pel + $per}]
 	set ph [expr {[winfo height $top] + $pet + $peb}]
+	set native [besideNativeFrame $top]
+	if {[llength $native] == 4} { lassign $native px py pw ph }
 	lassign $workarea wx wy ww wh
 	set x0 [expr {max($wx, $px)}]
 	set y0 [expr {max($wy, $py)}]
@@ -1421,6 +1458,11 @@ proc besideAtRequest {dlg} {
 	variable BesideState
 	if {![info exists BesideState($dlg,request)]} { return 0 }
 	lassign $BesideState($dlg,request) rx ry
+	if {[info exists BesideState($dlg,extents)]} {
+		lassign $BesideState($dlg,extents) left right top bottom
+		return [expr {abs([winfo rootx $dlg]-$left-$rx) <= 2
+			&& abs([winfo rooty $dlg]-$top-$ry) <= 2}]
+	}
 	variable BesideXBorder
 	variable BesideTopSlack
 	# wm geometry can report the new request before the WM has moved the
@@ -2131,6 +2173,8 @@ proc BesideBoardPlan {dlg parent} {
 			set px [expr {max($px, $gx)}]
 			set py [expr {max($py, $gy)}]
 		}
+		set native [besideNativeFrame $pTop]
+		if {[llength $native] == 4} { lassign $native px py pw ph }
 		lassign $workarea wx wy ww wh
 		set x0 [expr {max($wx, $px)}]
 		set y0 [expr {max($wy, $py)}]
@@ -2382,7 +2426,9 @@ proc BesideBoardPlan {dlg parent} {
 	lassign [dict get $plan geometry] x y w h
 	# openbox applies +x to the client, not the frame: at the left edge of
 	# the work area the left border would fall outside it.
-	if {[dict exists $plan pair] && $x < $wx + $el && $x + $w + $fw + $el <= $wx + $ww} {
+	variable BesideState
+	if {![info exists BesideState($dlg,extents)] && [dict exists $plan pair]
+		&& $x < $wx + $el && $x + $w + $fw + $el <= $wx + $ww} {
 		set x [expr {$wx + $el}]
 	}
 	wm minsize $dlg [expr {min($mw, $w)}] [expr {min($mh, $h)}]

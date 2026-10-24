@@ -801,6 +801,53 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 
 		return TCL_OK;
 	}
+	else if (strcasecmp(subcmd, "frame") == 0 || strcasecmp(subcmd, "frameextents") == 0)
+	{
+#if !defined(__WIN32__) && !defined(__APPLE__)
+		// Walk from Tk's client through its wrapper to the WM frame. Unlike
+		// the global default extents, this measures this window's decorations.
+		Display* display = Tk_Display(tkwin);
+		Window current = Tk_WindowId(tkwin);
+		for (int depth = 0; current != None && depth < 8; ++depth)
+		{
+			Window root, parent, *children = 0;
+			unsigned count = 0;
+			if (!XQueryTree(display, current, &root, &parent, &children, &count)) break;
+			if (children) XFree(children);
+			if (parent == root)
+			{
+				XWindowAttributes attrs;
+				Window child;
+				Rect frame;
+				if (XGetWindowAttributes(display, current, &attrs)
+					&& attrs.map_state == IsViewable
+					&& XTranslateCoordinates(display, current, root, 0, 0,
+						&frame.left, &frame.right, &child))
+				{
+					frame.width = attrs.width;
+					frame.height = attrs.height;
+					if (strcasecmp(subcmd, "frameextents") == 0)
+					{
+						XWindowAttributes client;
+						int x, y;
+						if (!XGetWindowAttributes(display, Tk_WindowId(tkwin), &client)
+							|| !XTranslateCoordinates(display, Tk_WindowId(tkwin), root,
+								0, 0, &x, &y, &child)) break;
+						int left = x - frame.left, top = y - frame.right;
+						frame.left = left;
+						frame.right = attrs.width - client.width - left;
+						frame.width = top;
+						frame.height = attrs.height - client.height - top;
+					}
+					setResult(ti, frame);
+				}
+				break;
+			}
+			current = parent;
+		}
+#endif
+		return TCL_OK;
+	}
 	else if (strcasecmp(subcmd, "extents") == 0)
 	{
 		Rect result;

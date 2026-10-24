@@ -169,6 +169,14 @@ proc ::scidb::test::dlgplace::requireControls {target dlg} {
     }
     require [expr {$found > 0}] "$target: no controls found in $dlg"
 }
+proc ::scidb::test::dlgplace::outerRect {dlg} {
+ if {![catch {::scidb::tk::wm frame $dlg} native] && [llength $native] == 4} {
+  return $native
+ }
+ lassign [widgetRect $dlg] x y w h
+ lassign [winfo extents $dlg] l r t b
+ list [expr {$x-$l}] [expr {$y-$t}] [expr {$w+$l+$r}] [expr {$h+$t+$b}]
+}
 proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
     variable calls
     variable workareaCalls
@@ -201,14 +209,13 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
             "$target: final ${w}x${h} clips requested $requested"
     }
     lassign $ext el er et eb
-    set outer [list $x $y [expr {$w+$el+$er}] [expr {$h+$et+$eb}]]
+    set outer [outerRect $dlg]
     require [inside $outer $wa] "$target: outer frame $outer outside $wa"
     set area [overlapArea $outer $board]
     # Independent candidate oracle, evaluated at FINAL dimensions, including frame.
     lassign $board bx by bw bh
     lassign $wa wx wy ww wh
-    set fw [expr {$w+$el+$er}]
-    set fh [expr {$h+$et+$eb}]
+    lassign $outer _ _ fw fh
     set areas {}
     foreach {side cx cy} [list right [expr {$bx+$bw+12}] $by left [expr {$bx-12-$fw}] $by below $bx [expr {$by+$bh+12}]] {
         set cx [expr {max($wx,min($cx,$wx+$ww-$fw))}]
@@ -652,11 +659,7 @@ proc ::scidb::test::dlgplace::areaSetup {} {
  waitFor 700
  return $dlg
 }
-proc ::scidb::test::dlgplace::outerRect {dlg} {
- lassign [widgetRect $dlg] x y w h
- lassign [winfo extents $dlg] l r t b
- list [expr {$x-$l}] [expr {$y-$t}] [expr {$w+$l+$r}] [expr {$h+$t+$b}]
-}
+
 tcltest::test dlg-display-workarea {watcher repositions on area-only change and preserves safe user placement} -setup {
  set dlg [::scidb::test::dlgplace::areaSetup]
  set board [::util::place::besideBoardRect]
@@ -1405,4 +1408,79 @@ foreach zoom {0 1} {
         ::scidb::test::dlgplace::realCleanup
     } -result {1 1}
 }
+
+# W9h: the oracle uses the measured native frame's size and independently
+# clamps all three raw candidates. It never consumes the planner's candidates.
+proc ::scidb::test::dlgplace::nativeMinimum {dlg} {
+    set frame [::scidb::tk::wm frame $dlg]
+    if {[llength $frame] != 4} {return}
+    set plan $::util::place::BesideLastPlan($dlg)
+    if {[dict get $plan rule] ne "no-room"} {return}
+    lassign $frame x y w h
+    lassign [boardRect] bx by bw bh
+    lassign [::scidb::tk::wm frame .application] ax ay aw ah
+    lassign [winfo workarea .application] sx sy sw sh
+    set rx [expr {min($ax+$aw,$sx+$sw)}]
+    set ry [expr {min($ay+$ah,$sy+$sh)}]
+    set ax [expr {max($ax,$sx)}]; set ay [expr {max($ay,$sy)}]
+    set areas {}
+    foreach {cx cy} [list [expr {$bx+$bw+12}] $by \
+        [expr {$bx-12-$w}] $by $bx [expr {$by+$bh+12}]] {
+        set cx [expr {max($ax,min($cx,$rx-$w))}]
+        set cy [expr {max($ay,min($cy,$ry-$h))}]
+        lappend areas [overlapArea [list $cx $cy $w $h] [boardRect]]
+    }
+    set minimum [tcl::mathfunc::min {*}$areas]
+    set measured [overlapArea $frame [boardRect]]
+    puts "W9H native=$frame overlap=$measured minimum=$minimum candidates=$areas"
+    require [expr {$measured == $minimum}] "native overlap $measured != minimum $minimum"
+}
+tcltest::test dlg-w9h-native-deadline {Engine Match native minimum and single settled replan by 500ms} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    catch {wm minsize .application 1 1}
+} -constraints haveWmctrl -body {
+    ::scidb::test::dlgplace::noRoomState board-only
+    ::scidb::test::dlgplace::realVideo
+    ::enginematch::open .application
+    set dlg .application.enginematch
+    ::scidb::test::dlgplace::waitFor 1200
+    set decoration $::util::place::BesideState($dlg,extents)
+    foreach {trigger script} {
+        maximize {wm attributes .application -zoomed 1}
+        restore {wm attributes .application -zoomed 0}
+        resize {wm geometry .application [::scidb::test::dlgplace::fitGeometry 0.96 0.88]}
+    } {
+        set seq $::util::place::BesideRecordSeq
+        set start [clock milliseconds]
+        eval $script
+        ::scidb::test::dlgplace::waitFor 500
+        set stable [::scidb::tk::wm frame $dlg]
+        ::scidb::test::dlgplace::require [expr {
+            $decoration eq $::util::place::BesideState($dlg,extents)}] "lost native decoration cache"
+        lassign $decoration left right top bottom
+        ::scidb::test::dlgplace::require [expr {
+            [lindex $stable 2] == [winfo width $dlg]+$left+$right
+            && [lindex $stable 3] == [winfo height $dlg]+$top+$bottom}] "cache differs from native frame"
+        set records {}
+        foreach r [::util::place::besidePlacementLog $seq] {
+            if {[dict get $r dialog] eq $dlg && [dict get $r trigger] eq $trigger
+                && [dict get $r placed_by] eq "planner"} {lappend records $r}
+        }
+        ::scidb::test::dlgplace::require [expr {[llength $records] > 0}] "$trigger missing record"
+        set elapsed [expr {[dict get [lindex $records 0] time]-$start}]
+        ::scidb::test::dlgplace::require [expr {$elapsed <= 500}] "$trigger record at $elapsed ms"
+        for {set i 0} {$i < 15} {incr i} {
+            ::scidb::test::dlgplace::waitFor 100
+            ::scidb::test::dlgplace::require [expr {[::scidb::tk::wm frame $dlg] eq $stable}] "$trigger moved after 500ms"
+            ::scidb::test::dlgplace::nativeMinimum $dlg
+        }
+        puts "W9H $trigger record=$elapsed stable=$stable"
+    }
+    return 1
+} -cleanup {
+    catch {::enginematch::Close}
+    catch {wm attributes .application -zoomed 0}
+    ::scidb::test::dlgplace::realCleanup
+} -result 1
+
 tcltest::cleanupTests
