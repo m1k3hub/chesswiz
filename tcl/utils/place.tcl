@@ -751,16 +751,26 @@ proc besidePairPlan {dlg peers rw rh workarea extents gap} {
 	set other [lindex $peers 0]
 	lassign [besidePeerRect $other] px py pw ph
 	set top $wy
-	foreach {x} [list $px [expr {$px + $pw - $ow}]] {
+	lassign $protected bx by bw bh
+	# A resize can leave the peer's old column a few pixels inside the
+	# newly drawn board/inset. Try moving the entire column to a clear
+	# edge, rather than declaring no room at that stale horizontal slot.
+	set columns [list [list $px $px] [list [expr {$px+$pw-$ow}] $px]]
+	foreach cx [list [expr {$bx+$bw+$gap}] [expr {$bx-$gap-max($ow,$pw)}]] {
+		lappend columns [list $cx $cx]
+	}
+	foreach column $columns {
+		lassign $column x peerX
 		set x [expr {max($wx, min($x, $wx + $ww - $ow))}]
-		set moved [list $px $top $pw $ph]
+		set peerX [expr {max($wx, min($peerX, $wx + $ww - $pw))}]
+		set moved [list $peerX $top $pw $ph]
 		set outer [list $x [expr {$top + $ph + $gap}] $ow $oh]
 		if {![besideInside $moved $workarea] || ![besideInside $outer $workarea]} { continue }
 		if {[besideOverlap $moved $protected] || [besideOverlap $outer $protected]
 			|| [besideOverlap $moved $outer]} { continue }
 		return [dict create geometry [list $x [lindex $outer 1] $rw $rh] \
 			rule stack-column side below overlap 0 peer $other \
-			peerMove [list $px $top] resized 0]
+			peerMove [list $peerX $top] resized 0]
 	}
 	return {}
 }
@@ -2330,9 +2340,9 @@ proc BesideBoardPlan {dlg parent} {
 	# The later dialog is re-planned against this request in the same pass.
 	if {!$follower && [llength $peers] && [dict get $plan rule] eq "no-room"
 		&& ![dict exists $plan forced] && $rw <= $ww-$fw && $rh <= $wh-$fh} {
-		lassign [besideBoardRect] ax ay aw ah
+		lassign [besideProtectedRect] ax ay aw ah
 		set plan [besideNoRoomPlan $ax $ay $aw $ah $rw $rh $workarea $extents 12 \
-			$peers [list $ax $ay $aw $ah]]
+			$peers [besideBoardRect]]
 		dict set plan pair 1
 	}
 	dict set plan first [expr {!$follower}]
