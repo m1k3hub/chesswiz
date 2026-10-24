@@ -234,7 +234,7 @@ proc ::mediainset::hide {} {
 	# the strip it owned. Re-plan every open dialog against the regrown
 	# board; without this it stays at its squeezed position (VAL-DLG-014d).
 	if {[llength [info commands ::util::place::besideVideoChanged]]} {
-		catch { ::util::place::besideVideoChanged }
+		catch { ::util::place::besideVideoChanged 1 }
 	}
 }
 
