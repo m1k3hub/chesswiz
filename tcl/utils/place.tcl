@@ -2049,7 +2049,9 @@ proc BesideBoardPlan {dlg parent} {
 		# A left squeeze's board cap was computed for the previous main
 		# window width. Refresh it directly for this width: releasing the
 		# squeeze first would paint the enlarged board only to shrink it
-		# again a moment later, costing two synchronous rebuilds.
+		# again a moment later, costing two synchronous rebuilds. Keep a
+		# tighter existing cap when the window grows: it already holds the
+		# dialog, and expanding it would add another unnecessary rebuild.
 		lassign $::mediainset::Squeeze squeezeSide strip oldCap
 		if {$squeezeSide eq "left"} {
 			set frame $::application::board::Vars(widget:frame)
@@ -2057,7 +2059,7 @@ proc BesideBoardPlan {dlg parent} {
 			lassign $workarea sx sy sw sh
 			lassign $extents sl sr st sb
 			set cap [expr {$sx+$sw-[winfo rootx $frame]-$needW-$sl-$sr-12-$strip}]
-			if {$cap > 0 && $cap != $oldCap
+			if {$cap > 0 && ($oldCap <= 0 || $cap < $oldCap)
 				&& [besideBorderRoom left $strip squeeze $cap $workarea \
 					[expr {$sl+$sr}] [expr {$st+$sb}] 12 $needW $dh]} {
 				::mediainset::SqueezeForDialog $dlg left $strip $cap
