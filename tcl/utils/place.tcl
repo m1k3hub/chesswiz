@@ -1319,7 +1319,7 @@ proc besideCovered {dlg boardRect} {
 		# A peer can change the board after this plan was computed. The
 		# no-room rule permits only the current peer-free minimum; stale
 		# candidate scores are not an overlap exemption.
-		return [expr {$best ne {} && ($chosen eq {} || $chosen > $best)}]
+		return [expr {$best eq {} || $chosen eq {} || $chosen > $best}]
 	}
 	set outer [besideOuterRect $dlg]
 	set video [besideVideoRect]
@@ -2087,6 +2087,10 @@ proc BesideBoardPlan {dlg parent} {
 			# than the single-dialog right/left/below plan. Test that
 			# before releasing and rebuilding the very same squeeze.
 			set stacked [besidePairPlan $dlg $peers $rw $rh $workarea $extents 12]
+			if {![llength $stacked]} {
+				set stacked [besidePairNoRoom $dlg $peers $rw $rh $workarea $extents 12]
+				if {![dict get $stacked peerFree]} { set stacked {} }
+			}
 			if {[llength $stacked]} {
 				set plan $stacked
 				dict set plan pair 1
