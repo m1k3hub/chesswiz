@@ -1259,7 +1259,7 @@ proc ::scidb::test::dlgplace::clearOf {target dlg} {
 # smallest board overlap of the right/left/below candidates that do not
 # cover the peer, inside the work area, controls at requested size. Never
 # on top of the peer either way.
-proc ::scidb::test::dlgplace::pairClearOf {target dlg peer} {
+proc ::scidb::test::dlgplace::pairClearOf {target dlg peer {second 1}} {
     set outer [outerRect $dlg]
     set po [outerRect $peer]
     require [expr {[overlapArea $outer $po] == 0}] "$target: frame $outer is under/over peer $po"
@@ -1278,7 +1278,7 @@ proc ::scidb::test::dlgplace::pairClearOf {target dlg peer} {
         set rect [dict get $rec rect]
         set ob [overlapArea $rect $board]
         if {[dict get $rec chosen]} { set chosen $ob }
-        if {[dict exists $plan pair] && [overlapArea $rect $po] > 0} { continue }
+        if {$second && [overlapArea $rect $po] > 0} { continue }
         lappend allowed $ob
     }
     puts "DLG-V17B $target rule=no-room frame=$outer peer=$po board=$board record=[dict get $plan record] chosen=$chosen allowed=$allowed"
@@ -1387,7 +1387,7 @@ foreach zoom {0 1} {
             ::scidb::test::dlgplace::waitFor 900
             ::enginematch::open .application
             ::scidb::test::dlgplace::waitFor 1100
-            ::scidb::test::dlgplace::pairClearOf v15b-%d-playengine .application.playengine .application.enginematch
+            ::scidb::test::dlgplace::pairClearOf v15b-%d-playengine .application.playengine .application.enginematch 0
             ::scidb::test::dlgplace::pairClearOf v15b-%d-enginematch .application.enginematch .application.playengine
             ::scidb::test::dlgplace::require [expr {![llength $::scidb::test::dlgplace::unowned]}] \
                 "besideBoard returned without a live owner: $::scidb::test::dlgplace::unowned"

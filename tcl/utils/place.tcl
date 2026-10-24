@@ -1367,7 +1367,8 @@ proc besideCovered {dlg boardRect} {
 		dict for {side candidate} [dict get $plan record] {
 			set rect [dict get $candidate rect]
 			set blocked 0
-			if {[dict exists $plan pair]} {
+			if {[dict exists $plan pair]
+				&& (![dict exists $plan first] || ![dict get $plan first])} {
 				foreach peer $peers {
 					if {[besideOverlap $rect [besidePeerRect $peer]] > 0} {
 						set blocked 1
@@ -1394,10 +1395,15 @@ proc besideCovered {dlg boardRect} {
 proc besideAtRequest {dlg} {
 	variable BesideState
 	if {![info exists BesideState($dlg,request)]} { return 0 }
-	if {![regexp {\+(-?[0-9]+)\+(-?[0-9]+)$} [wm geometry $dlg] -> x y]} { return 0 }
 	lassign $BesideState($dlg,request) rx ry
 	variable BesideXBorder
 	variable BesideTopSlack
+	# wm geometry can report the new request before the WM has moved the
+	# frame. Use the realised client root position, with the learned frame
+	# offsets, so peers avoid the new request until it is actually applied.
+	lassign [winfo extents $dlg] left right top bottom
+	set x [expr {[winfo rootx $dlg]-$left+$BesideXBorder}]
+	set y [expr {[winfo rooty $dlg]-$top-$BesideTopSlack}]
 	set tx [expr {2 + $BesideXBorder}]
 	set ty [expr {2 + $BesideTopSlack}]
 	return [expr {abs($x - $rx) <= $tx && abs($y - $ry) <= $ty}]
@@ -1838,6 +1844,15 @@ proc BesideSettle {} {
 		::application::reflow::onDebounced [winfo width .application] [winfo height .application]
 	}
 	if {[besideBoardRect] eq {}} { besideSchedule 30; return }
+	# Plan against the coalesced drawing, not the old canvas while its
+	# resize is still queued. Otherwise a squeeze forces an intermediate
+	# repaint and defeats the board's Configure coalescing.
+	if {[info exists ::application::board::Vars(after)]
+		&& $::application::board::Vars(after) ne {}
+		&& ![catch {after info $::application::board::Vars(after)}]} {
+		besideSchedule 15
+		return
+	}
 	# One dialog's re-plan can move the inset or the board under another
 	# (a pair's no-room dodge, a peer's reserve). Re-check at once, a few
 	# passes, instead of waiting for the next debounced settle, so a
@@ -2055,6 +2070,7 @@ proc BesideBoardPlan {dlg parent} {
 		}
 	}
 	set pair [expr {[llength $earlier] > 0}]
+	set follower $pair
 	foreach other $peers { besideShareReserve $other }
 	lassign [wm minsize $dlg] mw mh
 	lassign [wm maxsize $dlg] maxw maxh
@@ -2309,6 +2325,17 @@ proc BesideBoardPlan {dlg parent} {
 			set pair 1
 		}
 	}
+	# The first dialog keeps the plain three-candidate minimum. Only a
+	# later dialog filters out peer-covered candidates (017B decision).
+	# The later dialog is re-planned against this request in the same pass.
+	if {!$follower && [llength $peers] && [dict get $plan rule] eq "no-room"
+		&& ![dict exists $plan forced] && $rw <= $ww-$fw && $rh <= $wh-$fh} {
+		lassign [besideBoardRect] ax ay aw ah
+		set plan [besideNoRoomPlan $ax $ay $aw $ah $rw $rh $workarea $extents 12 \
+			$peers [list $ax $ay $aw $ah]]
+		dict set plan pair 1
+	}
+	dict set plan first [expr {!$follower}]
 	if {[dict get $plan overlap] > 0 && ($rw > $ww-$fw || $rh > $wh-$fh)} {
 		set minw [expr {min(320,$rw)}]
 		set minh [expr {min(160,$rh)}]

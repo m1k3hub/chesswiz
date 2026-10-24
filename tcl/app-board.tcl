@@ -1184,11 +1184,11 @@ proc ConfigureWindow {w width height} {
 		}
 		set rebuild [namespace code [list RebuildBoard $w $width $height]]
 		if {[llength $RebuildCallbacks]} {
-			# Reserve owners need the settled board promptly. Coalesce the
-			# Configure burst without adding the startup/drag delay. A zero
-			# timer also stays outside a rebuild's update idletasks, which
-			# may be realising a restored or newly packed board view.
-			set Vars(after) [after 0 $rebuild]
+			# Coalesce the WM's decoration/client Configure burst before
+			# painting: rendering every intermediate large board can consume
+			# the entire dialog settle budget. A timer (rather than idle)
+			# stays outside a rebuild's nested update idletasks.
+			set Vars(after) [after 20 $rebuild]
 		} else {
 			set Vars(after) [after $timeout $rebuild]
 		}
