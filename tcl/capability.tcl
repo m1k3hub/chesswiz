@@ -45,7 +45,7 @@ proc ::capability::DefineAll {} {
 	Define endtrainer  {expr {[llength [info commands ::endtrainer::open]] > 0}}
 	Define reptrainer  {expr {[llength [info commands ::reptrainer::open]] > 0}}
 	Define playerdata  {expr {[llength [info commands ::playerdata::updateFide]] > 0}}
-	Define filetypes   {expr {[llength [info procs ::menu::AssignFileTypes]] > 0}}
+	Define filetypes   {expr {[llength [info commands ::menu::AssignFileTypes]] > 0}}
 	Define legacyfonts {expr {[llength [info procs ::font::installChessBaseFonts]] > 0}}
 	Define board3d     {expr {[llength [info commands ::board3d::openViewer]] > 0}}
 	Define webgl3d     {expr {[llength [info commands ::board3d::openWebGLViewer]] > 0}}

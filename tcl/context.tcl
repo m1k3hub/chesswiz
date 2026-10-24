@@ -1281,7 +1281,57 @@ proc ::context::BuildRows {cid menu rows object} {
 # itself at the top of Maintenance instead of a cascade that only refuses to
 # open (REPORT.md G23); the fixture compares cascades by label, so the hint
 # stays inside the menu.
+# The comment editor builds its symbol, emoticon and language rows itself.
+# Re-point each row at the cascade's action (VAL-REG-002); the row's
+# ::comment call travels in the object and Command allows only those procs.
+proc ::context::RouteCommentRows {id menu object} {
+	set n [$menu index end]
+	if {$n eq "none"} { return }
+	for {set i 0} {$i <= $n} {incr i} {
+		switch -- [$menu type $i] {
+			cascade { RouteCommentRows $id [$menu entrycget $i -menu] $object }
+			command {
+				set cmd [$menu entrycget $i -command]
+				if {[lrange $cmd 0 1] eq {::namespace inscope} && [lindex $cmd 2] eq "::comment"} {
+					set call [lindex $cmd 3]
+				} elseif {[string match ::comment::* [lindex $cmd 0]]} {
+					set call [list [namespace tail [lindex $cmd 0]] {*}[lrange $cmd 1 end]]
+				} else {
+					continue
+				}
+				$menu entryconfigure $i \
+					-command [list ::action::run $id [dict create object [dict replace $object call $call]]]
+			}
+		}
+	}
+}
+
 proc ::context::CascadePrefix {id menu object} {
+	switch -- $id {
+		c10.show_column {
+			::table::MakeShowColumnMenu [dict get $object table] $menu
+			return [expr {[$menu index end] ne "none"}]
+		}
+		c11.insert_symbol - c11.insert_emoticon {
+			set builder [expr {$id eq "c11.insert_symbol" ? "::comment::MakeSymbolMenu" : "::comment::MakeEmoticonMenu"}]
+			$builder [dict get $object widget] $menu
+			RouteCommentRows $id $menu $object
+			return [expr {[$menu index end] ne "none"}]
+		}
+		c11.add_language {
+			::comment::MakeLanguageMenu $menu
+			RouteCommentRows $id $menu $object
+			return [expr {[$menu index end] ne "none"}]
+		}
+		c11.switch_language {
+			foreach lang [list xx {*}$::comment::Vars(langSet)] {
+				set label [expr {$lang eq "xx" ? $::languagebox::mc::AllLanguages : [::encoding::languageName $lang]}]
+				$menu add command -label $label -state [expr {$lang eq $::comment::Vars(lang) ? "disabled" : "normal"}] \
+					-command [list ::action::run $id [dict create object [dict replace $object call [list SwitchLanguage $lang]]]]
+			}
+			return 1
+		}
+	}
 	if {$id ne "c4.maintenance"} { return 0 }
 
 	set base [expr {[dict exists $object base] ? [dict get $object base] : ""}]
@@ -1758,7 +1808,8 @@ proc ::context::Deliver {cid record} {
 # ----------------------------------------------------------------------
 proc ::context::Invoke {id {object {}}} {
 	if {[dict size $object] == 0} { set object [dict create] }
-	if {[catch { Command $id $object } result]} {
+	if {[catch { Command $id $object } result options]} {
+		::debuglog::log context "$id: [dict get $options -errorinfo]"
 		if {[llength [info commands ::log::error]]} {
 			catch { ::log::error context "$id: $result" }
 		}
@@ -1984,7 +2035,7 @@ proc ::context::Command {id object} {
 		c4.help { return [::action::run app-help] }
 		c5.player_card { return [::action::run open_view [list kind player_card name [dict get $object name]]] }
 		c5.prep_report { return [::action::run open_view [list kind prep_report name [dict get $object name]]] }
-		c5.insights { catch { ::insights::show [dict get $object name] } }
+		c5.insights - c5.player.insights { ::insights::show [dict get $object parent] [dict get $object base] [dict get $object variant] [dict get $object index] }
 		c5.open_switcher - c5.save_working_set {
 			set base [dict get $object base]
 			set variant [dict get $object variant]
@@ -2083,7 +2134,7 @@ proc ::context::Command {id object} {
 		}
 		c8.analyze { ::application::analysis::AnalyzePosition [dict get $object table] [dict get $object row] }
 		c8.copy_line { clipboard clear; clipboard append [TreeLine $object] }
-		c8.save_line { catch { ::application::tree::SaveLine } }
+		c8.save_line { SaveTreeLine $object }
 		c10.fill_column {
 			set tree [dict get $object table].t
 			$tree column configure tail -visible [expr {![$tree column cget tail -visible]}]
@@ -2156,8 +2207,20 @@ proc ::context::Command {id object} {
 			set ::comment::Options(showEmoticons) [expr {!$::comment::Options(showEmoticons)}]
 			::comment::DisplayEmoticons
 		}
+		c11.insert_symbol - c11.insert_emoticon - c11.add_language - c11.switch_language {
+			set call [dict get $object call]
+			set allowed {
+				c11.insert_symbol {InsertFigurine InsertNag InsertText}
+				c11.insert_emoticon {InsertEmoticon}
+				c11.add_language {NewLanguage}
+				c11.switch_language {SwitchLanguage}
+			}
+			if {[lindex $call 0] ni [dict get $allowed $id]} { error "$id: unexpected row [lindex $call 0]" }
+			return [namespace inscope ::comment $call]
+		}
 		c11.select_all { catch { [dict get $object widget] tag add sel 1.0 end } }
 		c11.clear { ::comment::Clear }
+		c11.classify_comment { ::comment::ClassifyComment [winfo toplevel [dict get $object widget]] }
 		c11.detect_language {
 			set parent [expr {[dict exists $object parent] ? [dict get $object parent] : ".application"}]
 			set w [expr {[dict exists $object widget] ? [dict get $object widget] : ""}]
@@ -2218,6 +2281,26 @@ proc ::context::GameFlag {object id} {
 # Read the branch on a temporary game. Per-key SAN queries navigate internally
 # and can change the halfmove clock when returning to a variation, so they
 # must not run on the user's board. Release the duplicate even after an error.
+# Save the board line plus the tree row's next move through the existing
+# repertoire save dialog, without changing the user's board position.
+proc ::context::SaveTreeLine {object} {
+	set parent [dict get $object parent]
+	set bases [::application::database::repertoireBases 0 [dict get $object variant]]
+	if {![llength $bases]} { return [::application::database::showNoRepertoireBases $parent] }
+	set moves [list [dict get $object move]]
+	if {[llength $bases] == 1} {
+		return [::application::analysis::SaveBestLine $parent [lindex $bases 0] $moves {}]
+	}
+	set m $parent.treeRepertoireMenu
+	if {[winfo exists $m]} { destroy $m }
+	menu $m -tearoff false
+	foreach base $bases {
+		$m add command -label [::util::databaseName $base] \
+			-command [list ::application::analysis::SaveBestLine $parent $base $moves {}]
+	}
+	tk_popup $m {*}[winfo pointerxy $parent]
+}
+
 proc ::context::TreeLine {object} {
 	set key [::scidb::game::position key]
 	set slot 32

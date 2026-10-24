@@ -2771,6 +2771,12 @@ proc contentChanged {} {
 # capture its underlying expanded layout instead of blocking the save.
 proc allowSave {t parent} {
  variable S
+ # A save can arrive before the resize debounce fires. Settle that
+ # pending resize before deciding whether the visible layout is temporary.
+ if {$t eq [boardTwm] && $S(afterId) ne {}} {
+  cancelPending
+  onDebounced [winfo width .application] [winfo height .application]
+ }
  if {$t ne [boardTwm] || $S(mode) ne "tall"} {return 1}
  ::dialog::info -parent $parent -message "This layout is temporarily adapted to the window. Enlarge the window to restore its saved shape before saving the layout."
  return 0

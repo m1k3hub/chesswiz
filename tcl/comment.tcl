@@ -1895,7 +1895,7 @@ proc MakeSymbolMenu {w menu} {
 	set i 0
 	foreach {fig} {K Q R B N P} {
 		# TODO: only use accelerator if piece is ASCII symbols
-		set piece [FigurineKey $Vars(mc) $i]
+		set piece [FigurineKey $::mc::langID $i]
 		$m add command \
 			-font $::font::figurine(text:normal) \
 			-label [string map $::figurines::pieceMap $fig] \
@@ -1972,6 +1972,8 @@ proc MakeSymbolMenu {w menu} {
 proc MakeLanguageMenu {path} {
 	variable Vars
 	variable Options
+
+	MakeCountryList
 
 	set m $path
 	catch { destroy $m }

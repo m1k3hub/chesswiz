@@ -660,6 +660,9 @@ proc ::action::Dispatch {id args approval} {
 
 	set code [catch {uplevel #0 [::list {*}$handler $validatedArgs]} result options]
 	if {$code != 0} {
+		if {[llength [info commands ::debuglog::log]]} {
+			::debuglog::log action "$id: $result"
+		}
 		return "error: [string trim $result]"
 	}
 	return $result

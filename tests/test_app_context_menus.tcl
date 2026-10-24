@@ -285,6 +285,11 @@ proc ::scidb::test::ctx::CheckFixture {cid object {section default}} {
 	return 1
 }
 
+# C10 now populates its cascade from the actual registered table columns.
+# The former path-only object never created a table (IdMap(.ctxlist) missing).
+::table::table .ctxlist
+::table::addcol .ctxlist date -text Date
+
 set ::scidb::test::ctx::objects [::scidb::test::ctx::Objects]
 
 foreach cid {C1 C2 C3 C4 C6 C7 C8 C10 C11 C12} {
@@ -674,4 +679,5 @@ tcltest::test context-one-builder {each object menu is built by ::context::Build
 } -result {}
 
 
+destroy .ctxlist
 tcltest::cleanupTests

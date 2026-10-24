@@ -1143,7 +1143,7 @@ proc besideDialogExtents {dlg} {
 	set extents [winfo extents $dlg]
 	if {[winfo ismapped $dlg]} {
 		besideLearnSlack $dlg $extents
-		if {![wm attributes $dlg -zoomed] && [regexp {^[0-9]+x[0-9]+\+(-?[0-9]+)\+} [wm geometry $dlg] -> gx]} {
+		if {![windowZoomed $dlg] && [regexp {^[0-9]+x[0-9]+\+(-?[0-9]+)\+} [wm geometry $dlg] -> gx]} {
 			besideLearnBorder [lindex $extents 0] [expr {[winfo rootx $dlg] - $gx}]
 		}
 	}
@@ -1271,11 +1271,17 @@ proc BesideParentConfigure {top window} {
 	if {$window eq $top} { besideSchedule }
 }
 
+# -zoomed is an X11 attribute; native Windows/macOS use wm state.
+proc windowZoomed {top} {
+	if {[tk windowingsystem] ne "x11"} { return [expr {[wm state $top] eq "zoomed"}] }
+	if {[catch {wm attributes $top -zoomed} zoomed]} { return 0 }
+	return $zoomed
+}
+
 proc besideParentZoomed {dlg} {
 	variable BesideState
 	set top [winfo toplevel $BesideState($dlg,parent)]
-	if {[catch { set z [wm attributes $top -zoomed] }]} { return 0 }
-	return $z
+	return [windowZoomed $top]
 }
 
 # Name the event that invalidated a dialog's placement: maximize, restore,
@@ -2210,7 +2216,7 @@ proc BesideBoardPlan {dlg parent} {
 		# on, so the dialog frame is inside the main window either way.
 		if {[regexp {^[0-9]+x[0-9]+\+(-?[0-9]+)\+(-?[0-9]+)$} [wm geometry $pTop] -> gx gy]} {
 			variable BesideXBorder
-			if {![wm attributes $pTop -zoomed]} {
+			if {![windowZoomed $pTop]} {
 				besideLearnBorder $pel [expr {[winfo rootx $pTop] - $gx}]
 			}
 			if {$BesideXBorder > 0 && $gx - $px == $BesideXBorder} {

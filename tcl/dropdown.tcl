@@ -1723,7 +1723,8 @@ proc ::menu::FocusText {} {
 }
 
 proc ::menu::Invoke {id {argsDict {}}} {
-	if {[catch { ::menu::Do $id } result]} {
+	if {[catch { ::menu::Do $id } result options]} {
+		::debuglog::log menu "$id: [dict get $options -errorinfo]"
 		if {[llength [info commands ::log::error]]} {
 			catch { ::log::error menu "$id: $result" }
 		}
@@ -1776,9 +1777,9 @@ proc ::menu::Do {id} {
 			# focus-dependent, like the menu label: text copies, the board
 			# edits the comment after the move (PROPOSAL section 7.4)
 			if {[::menu::TextWidget?]} {
-				catch { ::tk_textCopy [focus] }
+				::tk_textCopy [focus]
 			} else {
-				catch { ::application::pgn::editComment after }
+				::application::pgn::editComment after
 			}
 			return
 		}
@@ -1791,7 +1792,7 @@ proc ::menu::Do {id} {
 			if {[::menu::TextWidget?]} {
 				catch { [focus] tag add sel 1.0 end }
 			} else {
-				catch { ::application::pgn::editAnnotation }
+				::application::pgn::editAnnotation
 			}
 			return
 		}
@@ -1816,12 +1817,12 @@ proc ::menu::Do {id} {
 		game-save { return [::application::board::SaveGame add] }
 		menu.game.reload { return [::gamebar::ReloadCurrentGame .application] }
 		menu.game.copy {
-			catch { ::gamebar::CopyGame .application [::gamebar::selected $::application::pgn::Vars(gamebar)] }
+			::gamebar::CopyThisGameToClipbase .application [::gamebar::selected $::application::pgn::Vars(gamebar)]
 			return
 		}
-		menu.game.paste_clip { catch { ::application::pgn::PasteClipboardGame }; return }
-		menu.game.paste_tab { catch { ::application::pgn::PasteClipboardGame }; return }
-		menu.game.merge_clip { catch { ::gamebar::mergeGame .application -1 }; return }
+		menu.game.paste_clip { return [::application::pgn::PasteClipboardGame] }
+		menu.game.paste_tab { return [::application::pgn::PasteClipboardGame] }
+		menu.game.merge_clip { return [::gamebar::mergeGame .application -1] }
 		menu.game.merge_tab {
 			set current [::scidb::game::current]
 			set tabs {}
@@ -1839,7 +1840,7 @@ proc ::menu::Do {id} {
 			}
 			set target -1
 			if {[llength $tabs]} { set target [lindex $tabs 0] }
-			catch { ::gamebar::mergeGame .application $target }
+			::gamebar::mergeGame .application $target
 			return
 		}
 		game-export { return [::gamebar::exportGame .application] }
@@ -1849,11 +1850,17 @@ proc ::menu::Do {id} {
 		}
 		menu.game.history.recent {
 			if {[catch { ::game::gameList } games] || ![llength $games]} { return }
-			catch { ::scidb::game::switch [lindex [lindex $games 0] 0] }
+			::scidb::game::switch [lindex [lindex $games 0] 0]
 			return
 		}
 		menu.game.history.clear { return [::application::database::ClearHistory] }
-		menu.game.close { return [::gamebar::CloseTab .application [::gamebar::selected $::application::pgn::Vars(gamebar)]] }
+		menu.game.close {
+			set pos [::gamebar::selected $::application::pgn::Vars(gamebar)]
+			if {$pos eq "" || [::gamebar::CheckIfModified .application $pos]} { return }
+			::application::pgn::release $pos
+			::game::release $pos
+			return
+		}
 
 		menu.db.search.plain { return [::application::database::OpenPlainSearch .application [CurrentBase] [CurrentVariant]] }
 		menu.db.search.advanced { return [::application::database::searchCurrent .application] }
@@ -1861,18 +1868,18 @@ proc ::menu::Do {id} {
 		menu.db.search.rating { return [::application::database::searchCurrent .application] }
 		menu.db.search.duplicates { return [::application::database::searchCurrent .application] }
 		menu.db.search.query { return [::application::database::OpenCql6Search .application [CurrentBase] [CurrentVariant]] }
-		menu.db.reports.eco { return [::application::database::searchCurrent .application] }
-		menu.db.reports.opening { return [::application::database::searchCurrent .application] }
+		menu.db.reports.eco { return [::application::database::ShowEcoStats .application [CurrentBase] [CurrentVariant]] }
+		menu.db.reports.opening { return [::application::database::ShowOpeningReport .application] }
 		menu.db.reports.repertoire { return [::application::database::searchCurrent .application] }
 		menu.db.reports.result { return [::application::assistant::runTool check_results {}] }
 		menu.db.reports.timecontrol { return [::application::assistant::runTool event_types {}] }
 		menu.db.reports.trends { return [::application::assistant::runTool database_trend {}] }
 		menu.db.maintenance.compact { return [::application::assistant::runTool compact_database {}] }
-		menu.db.maintenance.strip_moves { catch { ::scidb::game::strip moves }; return }
-		menu.db.maintenance.strip_tags { catch { ::scidb::game::strip tags }; return }
+		menu.db.maintenance.strip_moves { return [::scidb::game::strip moves] }
+		menu.db.maintenance.strip_tags { return [::scidb::game::strip tags] }
 		menu.db.maintenance.convert { return [::application::assistant::runTool convert_database {}] }
 		menu.db.maintenance.recode { return [::application::database::Recode [CurrentBase] .application] }
-		menu.db.maintenance.change_icon { catch { ::menu::DbProperties }; return }
+		menu.db.maintenance.change_icon { return [::menu::DbProperties] }
 		menu.db.discover { return [::application::database::discover::open .application] }
 		menu.db.properties { return [::menu::DbProperties] }
 		menu.db.readonly {
@@ -1880,7 +1887,7 @@ proc ::menu::Do {id} {
 			if {$base ne ""} {
 				set var ::application::database::Vars(flag:readonly)
 				set $var [expr {![::scidb::db::get readonly? $base]}]
-				catch { ::application::database::ToggleReadOnly $var $base }
+				::application::database::ToggleReadOnly $var $base
 			}
 			return
 		}
@@ -1891,12 +1898,12 @@ proc ::menu::Do {id} {
 		menu.board.start.chess960 { return [::application::pgn::Shuffle Chess960] }
 		menu.board.start.symm960 { return [::application::pgn::Shuffle Symm960] }
 		menu.board.start.shuffle { return [::application::pgn::Shuffle Shuffle] }
-		menu.board.start.setup { catch { ::setup::setupPositionMenu ::application::pgn }; return }
-		menu.board.set_start_board { catch { ::application::board::SetStartBoard .application }; return }
-		menu.board.set_start_position { catch { ::application::board::SetStartPosition .application }; return }
-		board-flip { catch { ::application::board::Rotate $::application::board::Vars(widget:frame) }; return }
-		board-null-move { catch { ::application::board::InsertNullMove }; return }
-		menu.board.setup { catch { ::board::options::openConfigDialog .application ::application::board::Redraw }; return }
+		menu.board.start.setup { return [::setup::popupPositionMenu ::application::pgn .application] }
+		menu.board.set_start_board { return [::application::board::SetStartBoard .application] }
+		menu.board.set_start_position { return [::application::board::SetStartPosition .application] }
+		board-flip { return [::application::board::Rotate $::application::board::Vars(widget:frame)] }
+		board-null-move { return [::application::board::InsertNullMove] }
+		menu.board.setup { return [::board::options::openConfigDialog .application ::application::board::Redraw] }
 		menu.board.appearance.side { ::menu::ToggleBoardOption side-to-move; return }
 		menu.board.appearance.material { ::menu::ToggleBoardOption material-values; return }
 		menu.board.appearance.border { ::menu::ToggleBoardOption border; return }
@@ -1907,27 +1914,37 @@ proc ::menu::Do {id} {
 		menu.board.appearance.annotation { ::menu::ToggleBoardOption show:annotation ::application::board::Options; return }
 		menu.board.tablebase.show { ::menu::ToggleTablebase enabled; return }
 		menu.board.tablebase.online { ::menu::ToggleTablebase online; return }
-		menu.board.tablebase.local { catch { ::tablebase::chooseFolder .application }; return }
+		menu.board.tablebase.local { return [::tablebase::chooseFolder .application] }
 
 		menu.analysis.engine_toggle {
 			if {[EngineRunning]} {
 				# CloseEngine takes the pane's tree, not the engine number
 				set number [lindex [::application::analysis::Running] 0]
-				catch { ::application::analysis::CloseEngine $::application::analysis::NumberToTree($number) }
+				::application::analysis::CloseEngine $::application::analysis::NumberToTree($number)
 			} else {
-				catch { ::application::analysis::startEngine [::application::analysis::defaultEngine] }
+				::application::analysis::startEngine [::application::analysis::defaultEngine]
 			}
 			return
 		}
 		menu.analysis.engines { return [::engine::openAdmininstration .application] }
 		menu.analysis.engine_dictionary { return [::engine::showEngineDictionary .application] }
 		menu.analysis.compare_engines { return [::application::analysis::openComparison .application] }
-		menu.analysis.review_engine { catch { ::ai::engine::chooseDialog .application }; return }
-		menu.analysis.analyze { catch { ::application::analysis::AnalyzePosition [::scidb::pos::fen] }; return }
+		menu.analysis.review_engine { return [::ai::engine::chooseDialog .application] }
+		menu.analysis.analyze { return [::application::analysis::AnalyzeCurrentPosition] }
 		menu.analysis.game_review { return [::gamereview::run .application] }
 		menu.analysis.explain.position { return [::application::ai::analyze .application] }
-		menu.analysis.explain.line { catch { ::application::ai::explainLine .application }; return }
-		menu.analysis.explain.move { catch { ::application::pgn::ExplainMove .application::pgn "" }; return }
+		menu.analysis.explain.line {
+			set running [::application::analysis::Running]
+			if {![llength $running]} { return [::application::analysis::AnalyzeCurrentPosition] }
+			set number [lindex $running 0]
+			set tree $::application::analysis::NumberToTree($number)
+			set best [::application::analysis::BestLine $tree]
+			if {![llength $best]} { return }
+			set row [lindex $best 0]
+			return [::application::ai::explainLine .application \
+				[set ${tree}::Vars(pv:$row)] [::scidb::pos::fen]]
+		}
+		menu.analysis.explain.move { return [::application::pgn::ExplainMove .application::pgn ""] }
 		menu.analysis.explain.comment {
 			set pos after
 			if {[info exists ::comment::Vars(pos)]} {
@@ -1943,7 +1960,7 @@ proc ::menu::Do {id} {
 		menu.analysis.factcheck { return [::ai::factcheck::current .application] }
 		menu.analysis.tablebase.show { ::menu::ToggleTablebase enabled; return }
 		menu.analysis.tablebase.online { ::menu::ToggleTablebase online; return }
-		menu.analysis.tablebase.local { catch { ::tablebase::chooseFolder .application }; return }
+		menu.analysis.tablebase.local { return [::tablebase::chooseFolder .application] }
 		menu.analysis.explorer { return [::menu::TogglePaneId explorer] }
 
 		menu.training.tactics { return [::tactics::open .application] }
@@ -1974,20 +1991,26 @@ proc ::menu::Do {id} {
 		menu.view.layout.save - menu.view.layout.save_as {
 			set twm [CurrentTWM]
 			if {$twm ne ""} {
-				catch { ::application::twm::SaveLayout $twm .application {} {} }
+				::application::twm::SaveLayout $twm $twm \
+					::application::twm::DoSaveLayout {} $::application::twm::mc::SaveLayout
 			}
 			return
 		}
 		menu.view.layout.manage {
 			set twm [CurrentTWM]
-			if {$twm ne ""} { catch { ::application::twm::Menu $twm .application 0 0 } }
+			if {$twm ne ""} {
+				set layoutId $::application::Vars($twm:id)
+				::application::layout::open $twm $layoutId \
+					$::application::Vars($layoutId:layout:variant) \
+					[::application::twm::currentLayoutName $twm]
+			}
 			return
 		}
 		menu.view.font_inc { after idle { ::font::changeFontSize +1 }; return }
 		menu.view.font_dec { after idle { ::font::changeFontSize -1 }; return }
-		app-fullscreen { catch { ::menu::viewFullscreen toggle }; return }
-		app-log { catch { ::log::show -force }; return }
-		menu.view.tip { catch { ::tips::open .application }; return }
+		app-fullscreen { return [::menu::viewFullscreen toggle] }
+		app-log { return [::log::show -force] }
+		menu.view.tip { return [::tips::open .application] }
 
 		app-help { return [::help::open .application] }
 		menu.help.bug { return [::menu::bugReport .application] }
@@ -2060,11 +2083,11 @@ proc ::menu::ToggleTablebase {option} {
 proc ::menu::ToggleBoardOption {option {arrayName ::board::layout}} {
 	upvar #0 $arrayName options
 	set options($option) [expr {!$options($option)}]
-	catch { ::application::board::Redraw }
+	::application::board::Redraw
 	return
 }
 
 # The key-editor ids are registry ids (VAL-REG-003). Do this after the
 # drop-down module is loaded; ::menu::Register later refreshes the
 # placement of the ids the drop-down also carries.
-catch { ::application::keyEditor::RegisterActions }
+::application::keyEditor::RegisterActions
