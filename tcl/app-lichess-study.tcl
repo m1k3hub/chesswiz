@@ -179,12 +179,13 @@ proc ::application::lichess::study::importRequest {id pgn {token ""} {name ""} {
 	if {$token ne ""} {
 		lappend headers Authorization "Bearer $token"
 	}
+	# http writes -query to a binary socket, so send UTF-8 bytes.
 	return [dict create \
 		url         [importUrl $id] \
 		method      POST \
 		headers     $headers \
 		contentType "multipart/form-data; boundary=$boundary" \
-		body        $body \
+		body        [encoding convertto utf-8 $body] \
 	]
 }
 
