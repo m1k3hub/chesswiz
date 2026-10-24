@@ -684,9 +684,12 @@ proc ::scidb::test::dlgplace::areaSetup {} {
 tcltest::test dlg-display-workarea {watcher repositions on area-only change and preserves safe user placement} -setup {
  set dlg [::scidb::test::dlgplace::areaSetup]
  set board [::util::place::besideBoardRect]
+ lassign [winfo workarea .application] ax ay aw ah
  rename ::util::place::getWmWorkArea ::scidb::test::dlgplace::realArea
  proc ::util::place::getWmWorkArea {w} {return $::scidb::test::dlgplace::area}
- set ::scidb::test::dlgplace::area {0 0 1200 1080}
+ set wide [expr {int($aw*0.96)}]
+ set narrow [expr {int($aw*0.88)}]
+ set ::scidb::test::dlgplace::area [list $ax $ay $wide $ah]
 } -body {
  ::util::place::besideResetReplaceCount
  ::application::displayWatch
@@ -695,16 +698,25 @@ tcltest::test dlg-display-workarea {watcher repositions on area-only change and 
   [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::outerRect $dlg] $::scidb::test::dlgplace::area] \
   [::util::place::besideReplaceCount]]
  # A user move clear of the board remains safe in the next area.
- wm geometry $dlg +20+850
+ lassign [::scidb::test::dlgplace::outerRect $dlg] dx dy dw dh
+ lassign [::util::place::getWmFrameExtents $dlg] el er et eb
+ set margin [expr {max(1,int($ah*0.02))}]
+ lassign [::scidb::test::dlgplace::windowWorkArea] mx my mw mh
+ set bottomY [expr {min($ay+$ah,$my+$mh)-$dh-$margin}]
+ lassign [::scidb::test::dlgplace::boardRect] bx by bw bh
+ ::scidb::test::dlgplace::require [expr {$bottomY >= $by+$bh}] \
+  "no space below the live board for the user-move probe"
+ wm geometry $dlg +[expr {$ax+$margin+$el}]+[expr {$bottomY+$et}]
  ::scidb::test::dlgplace::waitFor 500
  set moved [::util::place::besideRect $dlg]
  ::util::place::besideResetReplaceCount
- set ::scidb::test::dlgplace::area {0 0 1100 1080}
+ set ::scidb::test::dlgplace::area [list $ax $ay $narrow $ah]
  ::application::displayWatch
  ::scidb::test::dlgplace::waitFor 1500
  lappend results [expr {$moved eq [::util::place::besideRect $dlg]}] [::util::place::besideReplaceCount]
  # The same user position must be recovered when the area excludes it.
- set ::scidb::test::dlgplace::area {0 0 1100 800}
+ set short [expr {$bottomY-$ay+int($dh/2)}]
+ set ::scidb::test::dlgplace::area [list $ax $ay $narrow $short]
  ::application::displayWatch
  ::scidb::test::dlgplace::waitFor 1500
  lappend results [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::outerRect $dlg] $::scidb::test::dlgplace::area]
