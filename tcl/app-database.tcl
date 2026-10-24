@@ -35,6 +35,7 @@ set FileOpen							"Open Database"
 set FileOpenRecent					"Open Recent"
 set FileNew								"New Database"
 set FileExport							"Export"
+set FileUploadStudy					"Upload to Lichess study"
 set FileImport(pgn)					"Import PGN files"
 set FileImport(db)					"Import Databases"
 set FileDownload						"Download Games"
@@ -1485,6 +1486,16 @@ proc PopupMenu {parent x y {base ""}} {
 							-extension [$Vars(switcher) extension $base] \
 							-name $name \
 							-view 0] \
+			;
+		$menu add command \
+			-label " $mc::FileUploadStudy..." \
+			-image $::icon::16x16::fileExport \
+			-compound left \
+			-command [list ::application::lichess::study::open $parent \
+							-base $base \
+							-variant $Vars(variant) \
+							-view 0 \
+							-kind database] \
 			;
 		$menu add command \
 			-label " $mc::FileImport(db)..." \

@@ -55,6 +55,11 @@ proc ::context::ResetMC {} {
 	foreach {name value} $::context::DefaultMC {
 		set ::context::mc::$name $value
 	}
+	# The rows are declared after the defaults above were captured, so
+	# restore their English labels from the English text in Labels.
+	foreach id [array names ::context::Labels] {
+		set ::context::mc::[LabelVar $id] $::context::Labels($id)
+	}
 	return
 }
 ::mc::addDefaultReset ::context::ResetMC
@@ -391,6 +396,7 @@ proc ::context::Declare {} {
 	Item c4.import.pgn			"PGN file…"					C4
 	Item c4.export				"Export"					C4
 	Item c4.export.pgn			"PGN file…"					C4
+	Item c4.export.lichess		"Lichess study…"			C4
 	Item c4.download_games		"Download Games…"			C4
 	Item c4.save_changes		"Save Changes"				C4
 	Item c4.readonly			"Read-only"					C4
@@ -416,7 +422,7 @@ proc ::context::Declare {} {
 		{cascade c4.maintenance {c4.maintenance.compact}}
 		{cascade c4.reports {c4.reports.opening}}
 		{cascade c4.import {c4.import.pgn}}
-		{cascade c4.export {c4.export.pgn}}
+		{cascade c4.export {c4.export.pgn c4.export.lichess}}
 		c4.download_games
 		c4.save_changes
 		c4.readonly
@@ -1933,6 +1939,11 @@ proc ::context::Command {id object} {
 		}
 		c4.maintenance.compact { ::application::database::Compact [dict get $object parent] [dict get $object base] }
 		c4.export.pgn { ::export::open [dict get $object parent] -base [dict get $object base] -variant [dict get $object variant] -view [dict get $object view] -extension pgn -name [::util::databaseName [dict get $object base]] }
+		c4.export.lichess {
+			::application::lichess::study::open [dict get $object parent] \
+				-base [dict get $object base] -variant [dict get $object variant] \
+				-view [dict get $object view] -kind database
+		}
 		c4.import.pgn { return [::action::run menu.file.import.pgn] }
 		c4.symbol.small - c4.symbol.normal - c4.symbol.large {
 			set ::database::switcher::Options(iconsize) [dict get {c4.symbol.small 24 c4.symbol.normal 32 c4.symbol.large 48} $id]

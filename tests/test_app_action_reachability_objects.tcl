@@ -16,6 +16,7 @@ namespace eval ::scidb::test::objects {
         c2.explain_move {requires a configured language/model service; no network in this fixture}
         c3.ask_about_game {requires a configured language/model service; no network in this fixture}
         c6.explain_line {requires a configured language/model service; no network in this fixture}
+        c6.pin_repertoire {requires an open analysis tree with a candidate line; the C6 fixture is a bare engine line}
         c2.add_variation {requires a pending alternative move; fixture object is an already-played move}
         c2.exchange_move {requires a pending alternative move; fixture object is an already-played move}
         c2.new_main_line {requires a pending alternative move; fixture object is an already-played move}
@@ -45,7 +46,7 @@ namespace eval ::scidb::test::objects {
             board {c1.set_start_board c1.set_start_position c1.start.standard c1.start.chess960 c1.start.symm960 c1.start.shuffle c1.start.setup c1.board_setup c1.copy_fen c1.copy_diagram c1.edit_annotation c1.flip_board c1.insert_null}
             move {c2.try_variation c2.annot.prefix c2.annot.infix c2.annot.suffix c2.import_game c2.import_variation c2.promote_variation c2.remove_variation c2.comment_after c2.comment_before c2.marks_palette c2.move_info c2.insert_diagram c2.insert_diagram_black c2.strip.moves c2.strip.truncate c2.strip.variations c2.strip.annotations c2.strip.info c2.strip.marks c2.strip.comments c2.copy_comments c2.undo c2.redo c2.collapse c2.expand}
             game {c3.sort.column c3.sort.asc c3.sort.desc c3.paste_games c3.merge c3.load c3.browse c3.overview c3.tournament c3.games_like c3.edit_characteristics c3.delete c3.copy_game}
-            database {c4.new.scid c4.new.pgn c4.close c4.open_new_tab c4.download_games c4.import.pgn c4.open_database c4.help c4.maintenance.compact c4.export.pgn c4.symbol.small c4.symbol.normal c4.symbol.large c4.properties c4.readonly c4.search.current c4.reports.opening}
+            database {c4.new.scid c4.new.pgn c4.close c4.open_new_tab c4.download_games c4.import.pgn c4.open_database c4.help c4.maintenance.compact c4.export.pgn c4.export.lichess c4.symbol.small c4.symbol.normal c4.symbol.large c4.properties c4.readonly c4.search.current c4.reports.opening}
             player {c5.player_card c5.prep_report}
             site {c5.open_switcher c5.save_working_set}
             event {c5.event_table}

@@ -8,6 +8,7 @@ Add Merge
 Add Include
 Insert Move as Comment
 ---
+Pin to Repertoire
 Explain Line
 Copy Line
 Copy FEN
