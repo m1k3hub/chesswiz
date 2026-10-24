@@ -4474,11 +4474,8 @@ proc ::application::assistant::build {frame width height} {
 	pack $sw.sb -side right -fill y
 	pack $text -side left -fill both -expand yes
 
-	$text tag configure user -foreground #1f4e8c -spacing1 6
-	$text tag configure assistant -spacing1 2
-	$text tag configure tool -foreground #707070 -font TkFixedFont
-	$text tag configure error -foreground darkred
-	$text tag configure info -foreground #707070
+	ConfigureTags $text
+	bind $text <<ThemeChanged>> [namespace code [list ConfigureTags $text]]
 
 	pack $status -side bottom -fill x
 	pack $bottom -side bottom -fill x
@@ -4523,6 +4520,26 @@ proc ::application::assistant::build {frame width height} {
 	# a language switch relabels the pane in place, without rebuilding the
 	# conversation; the offers frame relabels itself (app-assistant-offers.tcl)
 	bind $frame <<LanguageChanged>> [namespace code Relabel]
+}
+
+
+proc ::application::assistant::ConfigureTags {text} {
+	if {![winfo exists $text]} { return }
+	if {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]} {
+		$text configure -background #1b1f27 -foreground #e6edf3
+		$text tag configure user -foreground #79c0ff -spacing1 6
+		$text tag configure assistant -foreground #e6edf3 -spacing1 2
+		$text tag configure tool -foreground #9ca3af -font TkFixedFont
+		$text tag configure error -foreground #ff7b72
+		$text tag configure info -foreground #9ca3af
+	} else {
+		$text configure -background white -foreground black
+		$text tag configure user -foreground #1f4e8c -spacing1 6
+		$text tag configure assistant -foreground black -spacing1 2
+		$text tag configure tool -foreground #707070 -font TkFixedFont
+		$text tag configure error -foreground darkred
+		$text tag configure info -foreground #707070
+	}
 }
 
 

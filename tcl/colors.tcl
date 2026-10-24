@@ -304,14 +304,311 @@ array set Colors {
 	dark:default,foreground:gray			#777777
 }
 
+# Full dark UI theme palette (used when [::theme::isDark] is true)
+array set Colors {
+	darktheme:pgn,background				#1b1f27
+	darktheme:pgn,foreground:main			#e6edf3
+	darktheme:pgn,foreground:variation	#79c0ff
+	darktheme:pgn,foreground:bracket		#79c0ff
+	darktheme:pgn,foreground:numbering	#d2a8ff
+	darktheme:pgn,foreground:nag			#ff7b72
+	darktheme:pgn,foreground:nagtext		#ffa198
+	darktheme:pgn,foreground:comment		#56d364
+	darktheme:pgn,foreground:info			#ffa657
+	darktheme:pgn,foreground:result		#e6edf3
+	darktheme:pgn,foreground:illegal		#ff7b72
+	darktheme:pgn,foreground:marks		#d2a8ff
+	darktheme:pgn,foreground:empty		#8b949e
+	darktheme:pgn,foreground:opening		#e6edf3
+	darktheme:pgn,background:current		#2f6feb
+	darktheme:pgn,foreground:current		#ffffff
+	darktheme:pgn,background:nextmove	#4d4214
+	darktheme:pgn,background:merge		#282e38
+	darktheme:pgn,hilite:comment			#f2cc60
+	darktheme:pgn,hilite:info				#ff7b72
+	darktheme:pgn,hilite:move				#2c3340
+
+	darktheme:analysis,background			#1b1f27
+	darktheme:analysis,info:background	#242a34
+	darktheme:analysis,info:foreground	#56d364
+	darktheme:analysis,best:foreground	#56d364
+	darktheme:analysis,error:foreground	#ff7b72
+	darktheme:analysis,active:background #283040
+	darktheme:analysis,layout:background #3b3518
+
+	darktheme:layout,background			#1f4d7a
+
+	darktheme:database,selected			#2f6feb
+
+	darktheme:information,html:hover		#2c3340
+	darktheme:information,hover			#2c3340
+	darktheme:information,html:color		#e6edf3
+	darktheme:information,html:header	#f2cc60
+	darktheme:information,html:link		#79c0ff
+	darktheme:information,html:visited	#d2a8ff
+	darktheme:information,html:menu		#2f6feb
+	darktheme:information,background:news #9e6a03
+	darktheme:information,background:html #162436
+
+	darktheme:tree,background				#1b1f27
+	darktheme:tree,emphasize				#283040
+	darktheme:tree,stripes					#232832
+	darktheme:tree,ratio:color				#56d364
+	darktheme:tree,score:color				#ff7b72
+	darktheme:tree,draws:color				#56d364
+	darktheme:tree,progress:color			#ff7b72
+	darktheme:tree,progress:finished		#56d364
+	darktheme:tree,result:mono:white		#e6edf3
+	darktheme:tree,result:mono:black		#1b1f27
+	darktheme:tree,result:mono:remis		#808080
+	darktheme:tree,result:color:white	#ff7b72
+	darktheme:tree,result:color:black	#56d364
+	darktheme:tree,result:color:remis	#e6edf3
+
+	darktheme:variation,background		#1b1f27
+	darktheme:variation,emphasize			#283040
+	darktheme:variation,stripes			#232832
+
+	darktheme:board,modifiedForeground	#ffffff
+	darktheme:board,modifiedBackground	#8b4513
+	darktheme:board,fixedBackground		#2d3548
+
+	darktheme:browser,background:header	#282e38
+	darktheme:browser,background:hilite	#2f6feb
+	darktheme:browser,background:modified #283040
+	darktheme:browser,foreground:hilite	#ffffff
+
+	darktheme:overview,background:normal #232832
+	darktheme:overview,background:modified #283040
+
+	darktheme:crosstable,background		#1b1f27
+	darktheme:crosstable,highlighted		#283040
+	darktheme:crosstable,mark				#2f6feb
+
+	darktheme:export,shadow					#484f58
+	darktheme:export,text					#8b949e
+
+	darktheme:import,background			#232832
+	darktheme:import,background:select	#2f6feb
+	darktheme:import,background:hilite	#283040
+
+	darktheme:switcher,background			#181b20
+	darktheme:switcher,selected:background #28354a
+	darktheme:switcher,modified:foreground #ff7b72
+	darktheme:switcher,normal:background #23272e
+	darktheme:switcher,normal:foreground #e6edf3
+	darktheme:switcher,hidden:background #1e2228
+	darktheme:switcher,hidden:foreground #9ca3af
+	darktheme:switcher,emph:foreground	#56d364
+	darktheme:switcher,drop:background	#23482c
+	darktheme:switcher,prop:background	#2d5927
+
+	darktheme:fsbox,menu:headerbackground #28354a
+	darktheme:fsbox,menu:headerforeground #e6edf3
+	darktheme:fsbox,drop:background		#2d3548
+	darktheme:fsbox,selectionbackground	#2f6feb
+	darktheme:fsbox,selectionforeground	#ffffff
+	darktheme:fsbox,inactivebackground	#2c323d
+	darktheme:fsbox,inactiveforeground	#e6edf3
+	darktheme:fsbox,activebackground		#283040
+	darktheme:fsbox,activeforeground		#e6edf3
+	darktheme:fsbox,emphasizebackground	#2d3548
+	darktheme:fsbox,background				#1b1f27
+	darktheme:fsbox,foreground				#e6edf3
+	darktheme:fsbox,stripes					#232832
+	darktheme:fsbox,disabledforeground	#8b949e
+
+	darktheme:gamebar,background:normal	#23272e
+	darktheme:gamebar,foreground:normal	#e6edf3
+	darktheme:gamebar,background:selected #2b3548
+	darktheme:gamebar,background:emphasize #283040
+	darktheme:gamebar,background:active	#303642
+	darktheme:gamebar,background:darker	#14171c
+	darktheme:gamebar,background:shadow	#1a1d24
+	darktheme:gamebar,background:lighter #383f4d
+	darktheme:gamebar,background:hilite	#2f6feb
+	darktheme:gamebar,foreground:hilite	#ffffff
+	darktheme:gamebar,background:hilite2 #2f6feb
+	darktheme:gamebar,foreground:hilite2 #ffffff
+	darktheme:gamebar,foreground:elo		#79c0ff
+
+	darktheme:scrolledtable,background	#1b1f27
+	darktheme:scrolledtable,stripes		#232832
+	darktheme:scrolledtable,highlight	#2d3548
+	darktheme:scrolledtable,separatorcolor #3d444d
+
+	darktheme:tlistbox,background			#1b1f27
+	darktheme:tlistbox,foreground			#e6edf3
+	darktheme:tlistbox,selectbackground	#2f6feb
+	darktheme:tlistbox,selectforeground	#ffffff
+	darktheme:tlistbox,disabledbackground #232832
+	darktheme:tlistbox,disabledforeground #8b949e
+	darktheme:tlistbox,highlightbackground #388bfd
+	darktheme:tlistbox,highlightforeground #ffffff
+	darktheme:tlistbox,dropbackground	#283040
+	darktheme:tlistbox,dropforeground	#e6edf3
+
+	darktheme:treetable,background		#1b1f27
+	darktheme:treetable,foreground		#e6edf3
+	darktheme:treetable,disabledforeground #8b949e
+	darktheme:treetable,selected:focus	#2f6feb
+	darktheme:treetable,selected!focus	#28354a
+	darktheme:treetable,active:focus		#283040
+	darktheme:treetable,hilite!selected	#283040
+
+	darktheme:help,foreground:gray		#8b949e
+	darktheme:help,foreground:litegray	#9ca3af
+	darktheme:help,background:gray		#282e38
+	darktheme:help,background:emphasize	#2d3548
+
+	darktheme:table,background				#1b1f27
+	darktheme:table,foreground				#e6edf3
+	darktheme:table,selectionbackground	#2f6feb
+	darktheme:table,selectionforeground	#ffffff
+	darktheme:table,disabledforeground	#8b949e
+	darktheme:table,activebackground		#283040
+	darktheme:table,labelforeground		#e6edf3
+	darktheme:table,labelbackground		#2b303b
+	darktheme:table,stripes					#232832
+	darktheme:table,highlightcolor		#58a6ff
+	darktheme:table,menu:headerbackground #28354a
+	darktheme:table,menu:headerforeground #e6edf3
+
+	darktheme:save,number					#ff7b72
+	darktheme:save,frequency				#56d364
+	darktheme:save,title						#56d364
+	darktheme:save,federation				#79c0ff
+	darktheme:save,score						#56d364
+	darktheme:save,ratingType				#79c0ff
+	darktheme:save,date						#79c0ff
+	darktheme:save,eventDate				#79c0ff
+	darktheme:save,eventCountry			#79c0ff
+	darktheme:save,taglistOutline			#484f58
+	darktheme:save,taglistBackground		#232832
+	darktheme:save,taglistHighlighting	#283040
+	darktheme:save,taglistCurrent			#58a6ff
+	darktheme:save,matchlistBackground	#1b1f27
+	darktheme:save,matchlistHeaderForeground #9ca3af
+	darktheme:save,matchlistHeaderBackground #282e38
+
+	darktheme:encoding,selection			#2f6feb
+	darktheme:encoding,active				#283040
+	darktheme:encoding,normal				#232832
+	darktheme:encoding,description		#282e38
+
+	darktheme:engine,selectbackground:dict #283040
+	darktheme:engine,selectbackground:setup #2f6feb
+	darktheme:engine,selectforeground:setup #ffffff
+	darktheme:engine,stripes				#232832
+
+	darktheme:default,disabledbackground #232832
+	darktheme:default,disabledforeground #8b949e
+	darktheme:default,foreground:gray	#9ca3af
+
+	darktheme:gamehistory,selected:focus #2f6feb
+	darktheme:gamehistory,selected:hilite #388bfd
+	darktheme:gamehistory,selected!focus #28354a
+	darktheme:gamehistory,hilite			#283040
+
+	darktheme:playerdict,stripes			#232832
+
+	darktheme:varslider,background		#2f6feb
+	darktheme:varslider,hilite				#388bfd
+
+	darktheme:comment,label:altered		#3b4252
+	darktheme:comment,label:foreground	#e6edf3
+
+	darktheme:eco,stripes					#232832
+
+	darktheme:layout-manager:normal		#e6edf3
+	darktheme:layout-manager:current		#56d364
+	darktheme:layout-manager:changed		#ff7b72
+}
+
+# Mapping for literal / named colors passed through ::colors::lookup when dark theme is active
+array set DarkColorMap {
+	black					#e6edf3
+	#000000				#e6edf3
+	white					#1b1f27
+	#ffffff				#1b1f27
+	darkblue				#79c0ff
+	darkBlue				#79c0ff
+	steelblue4			#79c0ff
+	blue					#58a6ff
+	blue2					#58a6ff
+	blue3					#58a6ff
+	#0000ee				#58a6ff
+	darkgreen			#56d364
+	darkGreen			#56d364
+	forestgreen			#56d364
+	#008b00				#56d364
+	#006300				#56d364
+	darkred				#ff7b72
+	darkRed				#ff7b72
+	red					#ff7b72
+	red2					#ff7b72
+	red3					#ff7b72
+	red4					#ff7b72
+	#ee0000				#ff7b72
+	#912a2a				#ffa198
+	#b22222				#ff7b72
+	darkviolet			#d2a8ff
+	magenta4				#d2a8ff
+	purple				#d2a8ff
+	#aa0acd				#d2a8ff
+	#6300c6				#d2a8ff
+	brown					#ffa657
+	#68480a				#ffa657
+	#8b4513				#ffa657
+	#7a5807				#f2cc60
+	gray50				#9ca3af
+	gray30				#9ca3af
+	gray25				#9ca3af
+	darkslategray		#9ca3af
+	#555555				#9ca3af
+	#666666				#9ca3af
+	#727272				#9ca3af
+	linen					#283040
+	LemonChiffon		#2d3548
+	LightYellow			#2d3548
+	BlanchedAlmond		#2d3548
+	LightGoldenrod		#2d3548
+	#ebf4f5				#232832
+	#dce4e5				#282e38
+	#f0f0f0				#282e38
+	#efefef				#282e38
+	#e5e5e5				#283040
+	#d9d9d9				#2b303b
+}
+
+# Defaults for lite mode if new keys are looked up
+array set Colors {
+	lite:pgn,foreground:current			#000000
+	lite:treetable,foreground				#000000
+	lite:table,stripes						#ebf4f5
+	lite:table,highlightcolor				darkblue
+	lite:table,menu:headerbackground		#d3d3d3
+	lite:table,menu:headerforeground		#000000
+	lite:fsbox,background					#ffffff
+	lite:fsbox,foreground					#000000
+	lite:fsbox,stripes						#ebf4f5
+	lite:fsbox,disabledforeground			#555555
+}
+
 set Scheme dark
 
 proc lookup {color} {
 	variable Colors
+	variable DarkColorMap
 	variable Scheme
 
 	if {[string match theme,* $color]} {
 		return [::theme::getColor [string range $color 6 end]]
+	}
+
+	if {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]} {
+		if {[info exists Colors(darktheme:$color)]} { return $Colors(darktheme:$color) }
+		if {[info exists DarkColorMap($color)]} { return $DarkColorMap($color) }
 	}
 
 	if {[info exists Colors($Scheme:$color)]} { return $Colors($Scheme:$color) }

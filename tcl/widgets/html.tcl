@@ -137,15 +137,19 @@ proc formatUrl {url} {
 
 
 proc defaultCSS {monoFamilies textFamilies {hoverColor none}} {
+	set isDark [expr {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]}]
+	set linkColor [expr {$isDark ? "#79c0ff" : "blue2"}]
+	set visitedColor [expr {$isDark ? "#d2a8ff" : "purple"}]
+	set bodyColor [expr {$isDark ? "#e6edf3" : "black"}]
 	append css \n
-	append css ":link    { color: blue2; text-decoration: none; }" \n
-	append css ":visited { color: purple; text-decoration: none; }" \n
-	append css ":user    { color: blue2; text-decoration: none; }   /* http link */" \n
-	append css ":user2   { color: purple; text-decoration: none; }  /* http visited */" \n
-	append css ":user3   { color: black; text-decoration: none; }   /* invalid link */" \n
+	append css ":link    { color: $linkColor; text-decoration: none; }" \n
+	append css ":visited { color: $visitedColor; text-decoration: none; }" \n
+	append css ":user    { color: $linkColor; text-decoration: none; }   /* http link */" \n
+	append css ":user2   { color: $visitedColor; text-decoration: none; }  /* http visited */" \n
+	append css ":user3   { color: $bodyColor; text-decoration: none; }   /* invalid link */" \n
 	append css ":hover   { text-decoration: underline; background: $hoverColor; }" \n
 	append css ".match   { background: yellow; color: black; }" \n
-	append css "body     { color: black; }\n"
+	append css "body     { color: $bodyColor; }\n"
 	append css [monoStyle $monoFamilies] \n
 	append css [textStyle $textFamilies] \n
 	return $css
@@ -263,7 +267,8 @@ proc Build {w args} {
 	array set opts $args
 	set preamble ""
 
-	if {[string length $opts(-background)] || [string length $opts(-background)]} {
+	set explicitBg [expr {[string length $opts(-background)] > 0}]
+	if {[string length $opts(-background)]} {
 		append preamble "html {"
 		if {[string length $opts(-background)]} {
 			append preamble "background: $opts(-background);\n"
@@ -277,7 +282,10 @@ proc Build {w args} {
 		set opts(-css) $script
 	}
 
-	if {[string length $opts(-background)] == 0} { set opts(-background) white }
+	if {[string length $opts(-background)] == 0} {
+		set isDark [expr {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]}]
+		set opts(-background) [expr {$isDark ? "#1b1f27" : "white"}]
+	}
 	if {[string length $opts(-imagecmd)] == 0} { set opts(-imagecmd) [namespace code GetImage] }
 
 	set options {}
@@ -364,6 +372,7 @@ proc Build {w args} {
 		styleCount		0
 	}
 	set Priv(preamble) $preamble
+	set Priv(has_explicit_bg) $explicitBg
 	set Priv(fixedwidth) $opts(-fixedwidth)
 
 	lappend Priv(onmouseover) [namespace code [list ShowTooltip $html]]
@@ -432,6 +441,7 @@ proc Build {w args} {
 
 	SelectionClear $html
 	selection handle $html [namespace code [list SelectionHandler $html]]
+	bind $html <<ThemeChanged>> [namespace code [list ThemeChanged $w]]
 
 	return $w
 }
@@ -815,11 +825,33 @@ proc WidgetProc {w command args} {
 }
 
 
+proc ThemeChanged {w} {
+	if {![winfo exists $w]} { return }
+	variable ${w}::Priv
+	if {![info exists Priv(script)]} { return }
+	set isDark [expr {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]}]
+	set bg [expr {$isDark ? "#1b1f27" : "white"}]
+	catch { $w.sub configure -background $bg }
+	if {[string length $Priv(script)]} {
+		catch { $w parse $Priv(script) }
+	}
+}
+
+
 proc SetupCSS {w} {
 	variable ${w}::Priv
 
+	set isDark [expr {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]}]
 	append css $Priv(preamble)
 	append css $Priv(css)
+	if {$isDark && (![info exists Priv(has_explicit_bg)] || !$Priv(has_explicit_bg))} {
+		catch { $w.sub configure -background #1b1f27 }
+		append css "\nhtml, body { background: #1b1f27; color: #e6edf3; }\n"
+		append css "a, a:link, :link, :user { color: #79c0ff; }\n"
+		append css "a:visited, :visited, :user2 { color: #d2a8ff; }\n"
+		append css "h1, h2, h3, h4, h5, h6, th, b, strong { color: #e6edf3; }\n"
+		append css "code, pre, tt { color: #f2cc60; }\n"
+	}
 	append css "\nbody { font-size: ${Priv(fontsize)}pt; }"
 	if {$Priv(textalign) ne "left"} {
 		append css "\np { text-align: $Priv(textalign); }"

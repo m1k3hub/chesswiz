@@ -834,7 +834,7 @@ proc Update {type} {
 			}
 
 			if {$count == 0} {
-				$t add 0 -text $alph -fill red4 -font $bold -enabled no -tag $alph -collapse no
+				$t add 0 -text $alph -fill [expr {[::theme::isDark] ? "#ff7b72" : "red4"}] -font $bold -enabled no -tag $alph -collapse no
 				set Priv($type:key:$alph) $alph
 			}
 
@@ -1580,6 +1580,14 @@ proc ImportHandler {parentid uri} {
 	set content [::file::read [FullPath $uri] -encoding utf-8]
 	set id "$parentid.[format %.4d [incr _StyleCount]]"
 	set handler [namespace code [list ImportHandler $id]]
+	if {[::theme::isDark]} {
+		append content "\nhtml, body { background: #1b1f27; color: #e6edf3; }\n"
+		append content "a, a:link, :link, :user { color: #79c0ff; }\n"
+		append content "a:visited, :visited, :user2 { color: #d2a8ff; }\n"
+		append content "h1, h2, h3, h4, h5, h6, th, b, strong { color: #e6edf3; }\n"
+		append content "code, pre, tt { color: #f2cc60; }\n"
+		append content "div.box, div.annotation, blockquote { background: #242933; color: #e6edf3; border-color: #444c56; }\n"
+	}
 	$Priv(html) style -id $id.9999 -importcmd $handler $content
 }
 
@@ -2062,8 +2070,11 @@ proc Parse {file {wantedFile {}} {match {}} {position {}}} {
 			set btn $Priv(html).$opts(piecelang)
 			set Priv(widget:$btn) 0
 			if {![winfo exists $btn]} {
+				set btnBg [expr {[::theme::isDark] ? "#1b1f27" : "white"}]
+				set btnFg [expr {[::theme::isDark] ? "#e6edf3" : "black"}]
 				set btn [radiobutton $btn \
-					-background white \
+					-background $btnBg \
+					-foreground $btnFg \
 					-overrelief raised \
 					-variable [namespace current]::Options(piecelang) \
 					-value $opts(piecelang) \

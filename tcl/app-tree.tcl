@@ -174,10 +174,11 @@ proc build {twm parent width height} {
 	set bg [::colors::lookup $Options(-background)]
 	set mw [tk::multiwindow $parent.mw -borderwidth 0 -background $bg]
 	set info [tk::frame $mw.info -background $bg -borderwidth 0 -takefocus 0]
-	set mesg [tk::label $mw.mesg -borderwidth 0 -background $bg -foreground darkgreen]
+	set mesg [tk::label $mw.mesg -borderwidth 0 -background $bg -foreground [::colors::lookup darkgreen]]
 	pack $mw -fill both -expand yes
 
 	bind $mw <<LanguageChanged>> [namespace code SetMessage]
+	bind $mw <<ThemeChanged>> [namespace code [list ThemeChanged $parent]]
 
 	$mw add $info
 	$mw add $mesg
@@ -204,7 +205,7 @@ proc build {twm parent width height} {
 		-fillcolumn end \
 		-stripes {} \
 		-fullstripes no \
-		-background $bg \
+		-background $Options(-background) \
 		-pady {1 0} \
 		-highlightcolor $Options(-emphasize) \
 		-id db:tree:$id \
@@ -491,7 +492,7 @@ proc build {twm parent width height} {
 		-justify right \
 		-allow {top bottom} \
 	]
-	set progress [::toolbar::add $tbProgress frame -width 130 -height 7 -borderwidth 1 -relief sunken]
+	set progress [::toolbar::add $tbProgress frame -width 130 -height 7 -borderwidth 1 -relief sunken -background [expr {[::theme::isDark] ? "#1b1f27" : "#d9d9d9"}]]
 	tk::frame $progress.bar -background [::colors::lookup $Colors(progress:color)] -height 5
 	$switcher addcol text -id name
 	bind $switcher <<LanguageChanged>> [namespace code LanguageChanged]
@@ -530,6 +531,41 @@ set Vars(switcher) $switcher
 	bind $mw <Configure> [namespace code PlaceMessage]
 	after idle [namespace code startSearch]
 	SetSwitcher [::scidb::tree::get] [::scidb::app::variant]
+}
+
+
+proc ThemeChanged {parent} {
+	variable Vars
+	variable Options
+	variable Colors
+
+	if {![info exists Vars(mw)] || ![winfo exists $Vars(mw)]} { return }
+	set bg [::colors::lookup $Options(-background)]
+	set stripes [::colors::lookup $Options(-stripes)]
+	set emph [::colors::lookup $Options(-emphasize)]
+
+	catch { $Vars(mw) configure -background $bg }
+	catch { $Vars(info) configure -background $bg }
+	catch { $Vars(mesg) configure -background $bg -foreground [::colors::lookup darkgreen] }
+	if {[info exists Vars(progress)] && [winfo exists $Vars(progress)]} {
+		catch { [winfo parent $Vars(progress)] configure -background [expr {[::theme::isDark] ? "#1b1f27" : "#d9d9d9"}] }
+		catch { $Vars(progress) configure -background [::colors::lookup $Colors(progress:color)] }
+	}
+	if {[info exists Vars(table)] && [winfo exists $Vars(table)]} {
+		set tb $Vars(table)
+		catch { $tb.t element configure elemTotal -fill $emph }
+		catch { ::table::setColumnBackground $tb tail $stripes $bg }
+		foreach col $::application::tree::Columns {
+			set cid [lindex $col 0]
+			if {$cid in {number move}} {
+				catch { ::table::setColumnBackground $tb $cid $emph }
+			} else {
+				catch { ::table::setColumnBackground $tb $cid $stripes $bg }
+			}
+		}
+		DeleteBars
+		FillTable $tb
+	}
 }
 
 

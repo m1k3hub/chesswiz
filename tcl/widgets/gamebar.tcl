@@ -116,7 +116,7 @@ proc gamebar {path} {
 	bind $gamebar <Destroy> [namespace code [list array unset Specs *:$gamebar]]
 	bind $gamebar <Configure> [namespace code { Configure %W %w }]
 	bind $gamebar <<LanguageChanged>> [namespace code [list update $gamebar]]
-	bind $gamebar <<ThemeChanged>> [namespace code [list Layout $gamebar]]
+	bind $gamebar <<ThemeChanged>> [namespace code [list ThemeChanged $gamebar]]
 
 	set Specs(height:$gamebar) 0
 	set Specs(width:$gamebar) 0
@@ -139,6 +139,51 @@ proc gamebar {path} {
 	::scidb::db::subscribe gameInfo [list [namespace current]::Update $gamebar]
 
 	return $path
+}
+
+
+proc ThemeChanged {gamebar} {
+	if {![winfo exists $gamebar]} { return }
+	variable Defaults
+	variable Specs
+
+	$gamebar configure -background [::ttk::style lookup [::theme::currentTheme] -background]
+
+	set fg [::colors::lookup $Defaults(foreground:normal)]
+	set elofg [::colors::lookup $Defaults(foreground:elo)]
+	set normal [::colors::lookup $Defaults(background:normal)]
+	set lighter [::colors::lookup $Defaults(background:lighter)]
+	set darker [::colors::lookup $Defaults(background:darker)]
+
+	set allIds [concat -1 [getIdList $gamebar]]
+	foreach id $allIds {
+		foreach tag {white black hyphen line1 line2 line3} {
+			catch { $gamebar itemconfigure ${tag}${id} -fill $fg }
+		}
+		foreach tag {whiteElo blackElo} {
+			catch { $gamebar itemconfigure ${tag}${id} -fill $elofg }
+		}
+		catch { $gamebar itemconfigure close:lighter$id -fill $lighter -outline $lighter }
+		catch { $gamebar itemconfigure close:darker$id -fill $darker -outline $darker }
+		catch { $gamebar itemconfigure close:bg$id -fill $normal -outline $normal }
+	}
+
+	set sel $Specs(selected:$gamebar)
+	foreach id [getIdList $gamebar] {
+		if {$id ne $sel} {
+			PrepareAsButton $gamebar $id
+		}
+	}
+	if {[llength $sel]} {
+		if {[UseSeparateColumn $gamebar]} {
+			PrepareAsSunkenButton $gamebar $sel
+			PrepareSeparateColumn $gamebar $sel
+			PrepareAsHeader $gamebar -1
+		} else {
+			PrepareAsHeader $gamebar $sel
+		}
+	}
+	Layout $gamebar
 }
 
 
@@ -246,6 +291,7 @@ proc insert {gamebar at id tags} {
 		-font $::font::text(text:normal) \
 		-tags [list hyphen$id all$id] \
 		-text " \u2013 " \
+		-fill $foreground \
 		-state $state \
 		;
 	$gamebar create rectangle 0 0 0 0 \
@@ -259,6 +305,7 @@ proc insert {gamebar at id tags} {
 		-font $::font::text(text:normal) \
 		-tags [list white$id all$id] \
 		-text [lindex $data 0] \
+		-fill $foreground \
 		-state $state \
 		;
 	$gamebar create rectangle 0 0 0 0 \
@@ -1046,7 +1093,11 @@ proc ShowTags {gamebar id} {
 			set name [::util::databaseName $base]
 		}
 		append name " (#[expr {$number + 1}])"
-		if {[::scidb::game::query $id modified?]} { set fg darkred } else { set fg black }
+		if {[::scidb::game::query $id modified?]} {
+			set fg [::colors::lookup darkred]
+		} else {
+			set fg [::colors::lookup gamebar,foreground:normal]
+		}
 		if {$sink eq $scratchbaseName} {
 			tk::label $f.fram.link -text "\uf08e" -background $bg -foreground $fg
 			set size [font configure [$f.fram.link cget -font] -size]
@@ -1433,10 +1484,10 @@ proc AddGameMenuEntries {gamebar m addSaveMenu addGameHistory clearHistory remov
 
 			$n add command \
 				-label [::util::databaseName $base] \
-				-background #d3d3d3 \
-				-foreground black \
-				-activebackground #d3d3d3 \
-				-activeforeground black \
+				-background [::colors::lookup table,menu:headerbackground] \
+				-foreground [::colors::lookup table,menu:headerforeground] \
+				-activebackground [::colors::lookup table,menu:headerbackground] \
+				-activeforeground [::colors::lookup table,menu:headerforeground] \
 				-font $::table::options(menu:headerfont) \
 				-state disabled \
 				;

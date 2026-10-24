@@ -150,8 +150,12 @@ proc ::application::ask::Build {notebook} {
 	pack $entry -side left -fill x -expand yes -padx {2 2} -pady 1
 
 	set placeholder [ttk::label $frame.placeholder \
-		-text $::application::ask::mc::Placeholder -foreground grey]
+		-text $::application::ask::mc::Placeholder \
+		-foreground [expr {[::theme::isDark] ? "#8b949e" : "grey"}] \
+		-background [::ttk::style lookup TEntry -fieldbackground]]
 	place $placeholder -in $entry -relx 0 -x 4 -rely 0.5 -anchor w
+	bind $placeholder <ButtonPress-1> [list ::application::ask::Focus]
+	bind $frame <<ThemeChanged>> [namespace code ThemeChanged]
 
 	bind $entry <KeyRelease> [namespace code [list Typed %K]]
 	bind $entry <Down> [namespace code [list Move 1]]
@@ -192,6 +196,15 @@ proc ::application::ask::PlaceholderState {} {
 		place forget $Priv(placeholder)
 	} else {
 		place $Priv(placeholder) -in $Priv(entry) -relx 0 -x 4 -rely 0.5 -anchor w
+	}
+}
+
+proc ::application::ask::ThemeChanged {} {
+	variable Priv
+	if {[info exists Priv(placeholder)] && [winfo exists $Priv(placeholder)]} {
+		$Priv(placeholder) configure \
+			-foreground [expr {[::theme::isDark] ? "#8b949e" : "grey"}] \
+			-background [::ttk::style lookup TEntry -fieldbackground]
 	}
 }
 

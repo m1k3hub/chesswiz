@@ -309,7 +309,13 @@ proc Build {w args} {
 	set Priv(charwidth) [font measure $opts(-font) "0"]
 	set Priv(expand) ""
 	set Priv(itembackgrounds) {}
-	set Priv(background:normal) [lookupColor $opts(-background)]
+	set Priv(background:normal) $opts(-background)
+	set Priv(foreground:normal) $opts(-foreground)
+	set Priv(selectbackground) $opts(-selectbackground)
+	set Priv(selectforeground) $opts(-selectforeground)
+	set Priv(dropbackground) $opts(-dropbackground)
+	set Priv(focusmodel) $opts(-focusmodel)
+	set Priv(sortable) $opts(-sortable)
 	set Priv(foreground:disabled) $opts(-disabledforeground)
 	set Priv(addcol) {}
 
@@ -318,6 +324,8 @@ proc Build {w args} {
 		set Priv(foreground:$attr) $opts(-${attr}foreground)
 		set Priv(font:$attr) [list $opts(-${attr}font)]
 	}
+
+	bind $t <<ThemeChanged>> [namespace code [list ThemeChanged $w]]
 
 	if {$opts(-setgrid)} {
 		wm grid [winfo toplevel $w] $opts(-width) [expr {max(1, $Priv(minheight))}] 1 $Priv(linespace)
@@ -1708,6 +1716,64 @@ proc Scroll {table dir} {
 	set Priv(drag:scroll) $dir
 	set Priv(drag:after) {}
 	ScanDrag $table $Priv(drag:scroll:x) $Priv(drag:scroll:y)
+}
+
+
+proc ThemeChanged {w} {
+	if {![winfo exists $w]} { return }
+	variable [namespace current]::${w}::Priv
+	set t $w.__tlistbox__
+	if {![winfo exists $t]} { return }
+
+	set bg [lookupColor $Priv(background:normal)]
+	set fg [lookupColor $Priv(foreground:normal)]
+	$t configure -background $bg -foreground $fg
+
+	set fill {}
+	if {$Priv(focusmodel) eq "hover"} {
+		lappend fill [lookupColor $Priv(selectbackground)] {active}
+	}
+	lappend fill \
+		[lookupColor $Priv(selectbackground)] {selected} \
+		[lookupColor $Priv(background:highlight)] {highlight} \
+		[lookupColor $Priv(background:disabled)] {!enabled}
+	if {$Priv(sortable)} {
+		lappend fill [lookupColor $Priv(dropbackground)] {droptarget}
+	}
+	foreach elem {sel.e sel.w sel.we sel} {
+		catch { $t element configure $elem -fill $fill }
+	}
+
+	set colors [list $bg]
+	if {[llength $Priv(stripes)]} {
+		set colors [list [lookupColor $Priv(stripes)] $bg]
+	}
+	catch {
+		$t column configure tail \
+			-itembackground $colors \
+			-background [lookupColor table,labelbackground] \
+			-textcolor [lookupColor table,labelforeground]
+	}
+	foreach id $Priv(columns) {
+		catch {
+			$t column configure $id \
+				-itembackground $colors \
+				-background [lookupColor table,labelbackground] \
+				-textcolor [lookupColor table,labelforeground]
+		}
+		for {set index 1} {$index <= $Priv(last)} {incr index} {
+			if {[info exists Priv(insert:$index)]} {
+				array set iopts $Priv(insert:$index)
+				if {[string length $Priv(foreground:$id)] && [llength $iopts(-span)] == 0} {
+					set ifill [list [lookupColor $Priv(foreground:$id)] enabled]
+				} else {
+					set ifill [list [lookupColor $iopts(-foreground)] enabled]
+				}
+				lappend ifill [lookupColor $Priv(foreground:disabled)] !enabled
+				catch { $t item element configure $index $id elemTxt -fill $ifill }
+			}
+		}
+	}
 }
 
 

@@ -141,6 +141,11 @@ switch $::tcl_platform(platform) {
 proc currentTheme {} { return $::ttk::currentTheme }
 
 
+proc isDark {} {
+	return [expr {[currentTheme] eq "dark"}]
+}
+
+
 proc getToplevelBackground {} {
 	return [set [namespace current]::Settings(tk:background)]
 }
@@ -153,26 +158,12 @@ proc getColor {which} {
 		}
 
 		activebackground {
+			if {[isDark]} {
+				return "#353c4a"
+			}
 			# for any reason the correct implementation is not
 			# working, so I'm using a workaround
 			return #efefef
-
-#	correct implementation
-#	set activebg [ttk::style lookup [currentTheme] -activebackground]
-#
-#	if {[string length $activebg] == 0} {
-#		variable ActiveBackground
-#
-#		if {[llength $ActiveBackground] == 0} {
-#			set btn [tk::button .__btn_activebackground__]
-#			set ActiveBackground [$btn cget -activebackground]
-#			destroy $btn
-#		}
-#
-#		set activebg $ActiveBackground
-#	}
-#
-#	return $activebg
 		}
 	}
 
@@ -329,7 +320,7 @@ proc configureBackground {w} {
 proc notebookBorderwidth {} {
 	switch [currentTheme] {
 		alt { return 1 }
-		clam - clearlooks - scidblue { return 2 }
+		clam - clearlooks - scidblue - dark { return 2 }
 	}
 	set result [ttk::style lookup TNotebook -borderwidth]
 	if {[string is integer -strict $result]} { return $result }
@@ -383,6 +374,10 @@ proc SetupCurrentTheme {} {
 									readonly white \
 									{readonly focus} [::ttk::style lookup [currentTheme] -selectbackground]] }
 		_default	{ set fbg [list readonly white disabled [ttk::style lookup [currentTheme] -background]] }
+		_dark		{ set fbg [list \
+									readonly #2b303b \
+									{readonly focus} #2f6feb \
+									disabled #1f2329] }
 	}
 	if {[llength $fbg]} {
 		ttk::style map TCombobox -fieldbackground $fbg
@@ -394,15 +389,39 @@ proc SetupCurrentTheme {} {
 
 	# adjust padding of arrows in spinbox (the default padding is quite ugly)
 	switch "_[currentTheme]" {
-		_alt - _clam - _default { ttk::style configure TSpinbox -padding {2 0 2 0} }
+		_alt - _clam - _default - _dark { ttk::style configure TSpinbox -padding {2 0 2 0} }
 		_clearlooks - _scidblue { ttk::style configure TSpinbox -padding {2 0 2 0} }
 	}
 
 	# get current settings
 	set background [::ttk::style lookup [currentTheme] -background]
-	set f [tk::frame .__hopefully_unique_widget_id__[clock milliseconds]]
-	set Settings(tk:background) [$f cget -background]
-	destroy $f
+	set foreground [::ttk::style lookup [currentTheme] -foreground]
+	if {[string length $foreground] == 0} { set foreground #000000 }
+	set selectbg [::ttk::style lookup [currentTheme] -selectbackground]
+	set selectfg [::ttk::style lookup [currentTheme] -selectforeground]
+	set disabledfg [::ttk::style lookup [currentTheme] -foreground disabled]
+	if {[string length $disabledfg] == 0} { set disabledfg #808080 }
+
+	if {[isDark]} {
+		set Settings(tk:background) $background
+		set fieldbg #1b1f27
+		set activebg #353c4a
+		set activefg $foreground
+		set controlbg #2b303b
+		set bordercol #30363d
+	} else {
+		if {![info exists Settings(tk:default_background)]} {
+			set f [tk::frame .__hopefully_unique_widget_id__[clock milliseconds]]
+			set Settings(tk:default_background) [$f cget -background]
+			destroy $f
+		}
+		set Settings(tk:background) $Settings(tk:default_background)
+		set fieldbg #ffffff
+		set activebg #ececec
+		set activefg #000000
+		set controlbg $background
+		set bordercol $background
+	}
 
 	# 2a. Provide a left aligned button.
 	ttk::style configure aligned.TButton -anchor w -width -9
@@ -416,27 +435,354 @@ proc SetupCurrentTheme {} {
 	ttk::style configure active.Horizontal.TScale -troughcolor [GetActiveTroughColor]
 	ttk::style configure active.Vertical.TScale -troughcolor [GetActiveTroughColor]
 
-	# 4. Set theme options
-#	option add *Frame.background $Settings(tk:background)
-#	option add *Button.background $background
-	option add *Spinbox.selectBackground [::ttk::style lookup [currentTheme] -selectbackground]
+	# 4. Set theme options in Tk option database for classic Tk widgets
+	option add *Spinbox.selectBackground $selectbg
+	option add *Spinbox.selectForeground $selectfg
 	option add *Spinbox.disabledBackground $background
-	option add *Entry.selectBackground [::ttk::style lookup [currentTheme] -selectbackground]
+	option add *Spinbox.disabledForeground $disabledfg
+	option add *Spinbox.background $fieldbg
+	option add *Spinbox.foreground $foreground
+	option add *Spinbox.insertBackground $foreground
+	option add *Spinbox.buttonBackground $controlbg
+
+	option add *Entry.selectBackground $selectbg
+	option add *Entry.selectForeground $selectfg
+	option add *Entry.disabledBackground $background
+	option add *Entry.disabledForeground $disabledfg
+	option add *Entry.readonlyBackground $background
+	option add *Entry.background $fieldbg
+	option add *Entry.foreground $foreground
+	option add *Entry.insertBackground $foreground
+
 	option add *Scale.highlightBackground $background
 	option add *Scale.background $background
+	option add *Scale.foreground $foreground
+	option add *Scale.activeBackground $activebg
 	option add *Scale.troughColor [GetTroughColor]
-	option add *Listbox.disabledForeground [::ttk::style lookup [currentTheme] -foreground disabled]
-#	option add *Listbox.selectBackground [::ttk::style lookup [currentTheme] -selectbackground]
-#	option add *Listbox.selectForeground [::ttk::style lookup [currentTheme] -selectforeground]
-#	option add *Panedwindow.background [GetTroughColor]
+
+	option add *Listbox.background $fieldbg
+	option add *Listbox.foreground $foreground
+	option add *Listbox.selectBackground $selectbg
+	option add *Listbox.selectForeground $selectfg
+	option add *Listbox.disabledForeground $disabledfg
+	option add *Listbox.highlightBackground $background
+
+	option add *TCombobox*Listbox.background $fieldbg
+	option add *TCombobox*Listbox.foreground $foreground
+	option add *TCombobox*Listbox.selectBackground $selectbg
+	option add *TCombobox*Listbox.selectForeground $selectfg
+
+	option add *Text.background $fieldbg
+	option add *Text.foreground $foreground
+	option add *Text.selectBackground $selectbg
+	option add *Text.selectForeground $selectfg
+	option add *Text.insertBackground $foreground
+	option add *Text.highlightBackground $background
+
+	option add *Menu.background $background
+	option add *Menu.foreground $foreground
+	option add *Menu.activeBackground $selectbg
+	option add *Menu.activeForeground $selectfg
+	option add *Menu.disabledForeground $disabledfg
+	option add *Menu.selectColor $foreground
+
+	option add *Menubutton.background $background
+	option add *Menubutton.foreground $foreground
+	option add *Menubutton.activeBackground $activebg
+	option add *Menubutton.activeForeground $activefg
+	option add *Menubutton.disabledForeground $disabledfg
+	option add *Menubutton.highlightBackground $background
+
+	option add *Button.background $controlbg
+	option add *Button.foreground $foreground
+	option add *Button.activeBackground $activebg
+	option add *Button.activeForeground $activefg
+	option add *Button.disabledForeground $disabledfg
+	option add *Button.highlightBackground $background
+
+	option add *Checkbutton.background $background
+	option add *Checkbutton.foreground $foreground
+	option add *Checkbutton.activeBackground $activebg
+	option add *Checkbutton.activeForeground $activefg
+	option add *Checkbutton.disabledForeground $disabledfg
+	option add *Checkbutton.selectColor $fieldbg
+	option add *Checkbutton.highlightBackground $background
+
+	option add *Radiobutton.background $background
+	option add *Radiobutton.foreground $foreground
+	option add *Radiobutton.activeBackground $activebg
+	option add *Radiobutton.activeForeground $activefg
+	option add *Radiobutton.disabledForeground $disabledfg
+	option add *Radiobutton.selectColor $fieldbg
+	option add *Radiobutton.highlightBackground $background
+
+	option add *Label.background $background
+	option add *Label.foreground $foreground
+	option add *Label.disabledForeground $disabledfg
+	option add *Label.highlightBackground $background
+
+	option add *Message.background $background
+	option add *Message.foreground $foreground
+	option add *Message.highlightBackground $background
+
+	option add *Labelframe.background $background
+	option add *Labelframe.foreground $foreground
+	option add *Labelframe.highlightBackground $background
+
+	option add *Frame.background $Settings(tk:background)
+	option add *Frame.highlightBackground $Settings(tk:background)
+	option add *Toplevel.background $Settings(tk:background)
+	option add *Toplevel.highlightBackground $Settings(tk:background)
+	option add *Dialog.background $Settings(tk:background)
+	option add *Dialog.highlightBackground $Settings(tk:background)
+	if {[info exists ::scidb::app] && [string length $::scidb::app]} {
+		option add *$::scidb::app.background $Settings(tk:background)
+		option add *$::scidb::app.highlightBackground $Settings(tk:background)
+	}
+	option add *Canvas.background $background
+	option add *Canvas.highlightBackground $background
+	option add *Panedwindow.background [GetTroughColor]
+	option add *TreeCtrl.background $fieldbg
+	option add *TreeCtrl.foreground $foreground
 
 	if {$strongTtk} {
 		option add *Frame.background $background
 		option add *Toplevel.background $background
 		option add *Dialog.background $background
+		if {[info exists ::scidb::app] && [string length $::scidb::app]} {
+			option add *$::scidb::app.background $background
+		}
 		option add *Label.background $background
 		option add *Canvas.background $background
 		option add *Notebook.background $background
+	}
+
+	ApplyThemeToWidgetTree .
+}
+
+
+proc ApplyThemeToWidgetTree {root} {
+	if {![winfo exists $root]} { return }
+	variable Settings
+
+	set background [::ttk::style lookup [currentTheme] -background]
+	set foreground [::ttk::style lookup [currentTheme] -foreground]
+	if {[string length $foreground] == 0} { set foreground #000000 }
+	set selectbg [::ttk::style lookup [currentTheme] -selectbackground]
+	set selectfg [::ttk::style lookup [currentTheme] -selectforeground]
+	set disabledfg [::ttk::style lookup [currentTheme] -foreground disabled]
+	if {[string length $disabledfg] == 0} { set disabledfg #808080 }
+
+	if {[isDark]} {
+		set tkbg $background
+		set fieldbg #1b1f27
+		set activebg #353c4a
+		set activefg $foreground
+		set controlbg #2b303b
+	} else {
+		set tkbg $Settings(tk:background)
+		set fieldbg #ffffff
+		set activebg #ececec
+		set activefg #000000
+		set controlbg $background
+	}
+
+	set stack [list $root]
+	while {[llength $stack]} {
+		set w [lindex $stack end]
+		set stack [lrange $stack 0 end-1]
+		if {![winfo exists $w]} { continue }
+
+		foreach child [winfo children $w] {
+			lappend stack $child
+		}
+
+		set cls [winfo class $w]
+		if {[winfo toplevel $w] eq $w && $cls ni {Toplevel Dialog Frame}} {
+			catch {
+				$w configure -background $tkbg -highlightbackground $tkbg
+			}
+		}
+		switch $cls {
+			Toplevel -
+			Dialog -
+			Toolbar -
+			ToolbarFrame -
+			ToolbarHandle -
+			ToolbarSeparator -
+			TwmFrame -
+			TwmMetaframe -
+			Frame {
+				catch {
+					set curbg [$w cget -background]
+					# Do not clobber explicit 1px border frames (#a0a0a0, gray50, black, etc.) unless they are standard light/dark backgrounds
+					if {$curbg in [list #d9d9d9 #ececec #f0f0f0 #efefef #e5e5e5 #dce4e5 #ebf4f5 #f6f6f6 #fafafa #23272e #1b1f27 #2b303b $Settings(tk:background)] || [winfo toplevel $w] eq $w || $cls in {Toolbar ToolbarFrame ToolbarHandle ToolbarSeparator} || [string match ".*.__tb*__" $w]} {
+						$w configure -background $tkbg
+					}
+					$w configure -highlightbackground $tkbg
+				}
+			}
+			TreeCtrl {
+				catch {
+					set curbg [$w cget -background]
+					if {$curbg in {white #ffffff #ffffee #f5f5f5 #f5f5e4 #d9d9d9 #ececec #1b1f27 #23272e #282e38}} {
+						$w configure -background $fieldbg
+					}
+					$w configure -foreground $foreground
+				}
+			}
+			Canvas {
+				catch {
+					if {[string match "*.handle*.c" $w]} {
+						$w configure -background $tkbg -highlightbackground $tkbg
+						::toolbar::ConfigureHandle [winfo parent $w] [winfo width $w] [winfo height $w]
+					}
+				}
+			}
+			Labelframe {
+				catch {
+					$w configure -background $background -foreground $foreground -highlightbackground $background
+				}
+			}
+			Menu {
+				catch {
+					$w configure \
+						-background $background \
+						-foreground $foreground \
+						-activebackground $selectbg \
+						-activeforeground $selectfg \
+						-disabledforeground $disabledfg \
+						-selectcolor $foreground
+					set endIdx [$w index end]
+					if {$endIdx ne "none"} {
+						for {set i 0} {$i <= $endIdx} {incr i} {
+							set etype [$w type $i]
+							if {$etype in {command checkbutton radiobutton cascade}} {
+								catch {
+									set ebg [$w entrycget $i -background]
+									if {$ebg ne ""} {
+										$w entryconfigure $i \
+											-background [::colors::lookup table,menu:headerbackground] \
+											-foreground [::colors::lookup table,menu:headerforeground] \
+											-activebackground [::colors::lookup table,menu:headerbackground] \
+											-activeforeground [::colors::lookup table,menu:headerforeground]
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			Menubutton {
+				catch {
+					$w configure \
+						-background $background \
+						-foreground $foreground \
+						-activebackground $activebg \
+						-activeforeground $activefg \
+						-disabledforeground $disabledfg \
+						-highlightbackground $background
+				}
+			}
+			Label -
+			Message {
+				catch {
+					set curbg [$w cget -background]
+					if {$curbg in [list #d9d9d9 #e0e0e0 #ececec #f0f0f0 #efefef #e5e5e5 #dce4e5 #ebf4f5 #f6f6f6 #fafafa white #ffffff #23272e #1b1f27 #2b303b $Settings(tk:background)] || [string match "*.__tb*" $w]} {
+						$w configure -background $background
+					}
+					set curfg [$w cget -foreground]
+					if {$curfg in {black #000000 #333333 #e6edf3 white #ffffff} || [string match "*.__tb*" $w]} {
+						$w configure -foreground $foreground
+					}
+					$w configure -highlightbackground $background
+				}
+			}
+			Button {
+				catch {
+					$w configure \
+						-background $controlbg \
+						-foreground $foreground \
+						-activebackground $activebg \
+						-activeforeground $activefg \
+						-disabledforeground $disabledfg \
+						-highlightbackground $background
+				}
+			}
+			Checkbutton -
+			Radiobutton {
+				catch {
+					$w configure \
+						-background $background \
+						-foreground $foreground \
+						-activebackground $activebg \
+						-activeforeground $activefg \
+						-disabledforeground $disabledfg \
+						-selectcolor $fieldbg \
+						-highlightbackground $background
+				}
+			}
+			Entry {
+				catch {
+					$w configure \
+						-background $fieldbg \
+						-foreground $foreground \
+						-insertbackground $foreground \
+						-selectbackground $selectbg \
+						-selectforeground $selectfg \
+						-disabledbackground $background \
+						-disabledforeground $disabledfg \
+						-readonlybackground $background \
+						-highlightbackground $background
+				}
+			}
+			Spinbox {
+				catch {
+					$w configure \
+						-background $fieldbg \
+						-foreground $foreground \
+						-insertbackground $foreground \
+						-buttonbackground $controlbg \
+						-selectbackground $selectbg \
+						-selectforeground $selectfg \
+						-disabledbackground $background \
+						-disabledforeground $disabledfg \
+						-readonlybackground $background \
+						-highlightbackground $background
+				}
+			}
+			Listbox {
+				catch {
+					$w configure \
+						-background $fieldbg \
+						-foreground $foreground \
+						-selectbackground $selectbg \
+						-selectforeground $selectfg \
+						-disabledforeground $disabledfg \
+						-highlightbackground $background
+				}
+			}
+			Text {
+				catch {
+					set curbg [$w cget -background]
+					if {$curbg in {white #ffffff #ffffee #f5f5f5 #f5f5e4 #d9d9d9 #ececec #1b1f27 #23272e #282e38}} {
+						$w configure -background $fieldbg
+					}
+					$w configure \
+						-foreground $foreground \
+						-insertbackground $foreground \
+						-selectbackground $selectbg \
+						-selectforeground $selectfg \
+						-highlightbackground $background
+				}
+			}
+			Scale {
+				catch { ConfigureScaleBackground $w }
+			}
+			Panedwindow {
+				catch { $w configure -background [GetTroughColor] }
+			}
+		}
 	}
 }
 

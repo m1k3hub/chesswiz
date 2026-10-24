@@ -55,6 +55,7 @@ proc treetable {path args} {
 	variable ${t}::Vars
 	set Vars(0:lastchild) root
 	set Vars(depth) 0
+	set Vars(background) $opts(-background)
 	set Vars(disabledforeground) $opts(-disabledforeground)
 
 	if {$opts(-showarrows)} {
@@ -140,6 +141,8 @@ proc treetable {path args} {
 	grid columnconfigure $f 0 -weight 1
 	grid rowconfigure $f 0 -weight 1
 
+	bind $t <<ThemeChanged>> [namespace code [list ThemeChanged $t]]
+
 	catch { rename ::$path $path.__t__ }
 	proc ::$path {command args} "[namespace current]::WidgetProc $t \$command {*}\$args"
 
@@ -180,7 +183,7 @@ proc WidgetProc {t command args} {
 			array unset opts -tags
 			array unset opts -tag
 			if {[llength $opts(-fill)] == 0} {
-				set opts(-fill) [list black enabled \
+				set opts(-fill) [list [::colors::lookup treetable,foreground] enabled \
 					[::colors::lookup $Vars(disabledforeground)] !enabled]
 			}
 			set args [array get opts]
@@ -267,6 +270,28 @@ proc WidgetProc {t command args} {
 	}
 
 	return [$t $command {*}$args]
+}
+
+
+proc ThemeChanged {t} {
+	if {![winfo exists $t]} { return }
+	variable ${t}::Vars
+	$t configure -background [::colors::lookup $Vars(background)]
+	catch {
+		$t element configure elemSel -fill [list \
+			[::colors::lookup treetable,selected:focus]  {selected focus}   \
+			[::colors::lookup treetable,selected!focus]  {selected !focus}  \
+			[::colors::lookup treetable,active:focus]    {active focus}     \
+			[::colors::lookup treetable,hilite!selected] {hilite !selected} \
+		]
+	}
+	set fill [list [::colors::lookup treetable,foreground] enabled \
+		[::colors::lookup $Vars(disabledforeground)] !enabled]
+	foreach item [$t item id all] {
+		if {$item ne [$t item id root]} {
+			catch { $t item element configure $item item elemTxt -fill $fill }
+		}
+	}
 }
 
 

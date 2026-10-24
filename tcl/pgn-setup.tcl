@@ -336,6 +336,7 @@ proc buildText {path context {forceSbSet 0}} {
 
 	if {$context eq "editor"} { InitText $path }
 	configureText $path $context
+	bind $pgn <<ThemeChanged>> [namespace code [list configureText $path $context]]
 
 	return $pgn
 }
@@ -361,7 +362,10 @@ proc configureText {path {fontContext ""}} {
 	set bold [expr {$context eq "browser" ? "normal" : $Options(weight:mainline)}]
 	set charwidth [font measure [$w cget -font] "0"]
 
-	$w configure -font $::font::text($fontContext:normal)
+	$w configure \
+		-font $::font::text($fontContext:normal) \
+		-background [::colors::lookup $Colors(background)] \
+		-foreground [::colors::lookup $Colors(foreground:main)]
 
 	if {$context ni {browser merge}} {
 		$w tag configure main        -foreground [::colors::lookup $Colors(foreground:main)]
@@ -381,7 +385,7 @@ proc configureText {path {fontContext ""}} {
 		$w tag configure m:info      -foreground [::colors::lookup $Colors(foreground:info)]
 
 		$w tag configure circled    -font [list {Scidb Circled} [::font::currentFontSize $fontContext]]
-		$w tag configure circled    -foreground #008b00
+		$w tag configure circled    -foreground [::colors::lookup #008b00]
 
 		$w tag configure h:next    -indentbackground 1 \
 										   -background [::colors::lookup $Colors(background:nextmove)]
@@ -391,7 +395,7 @@ proc configureText {path {fontContext ""}} {
 		$w tag configure h:nag     -indentbackground 1 -background [::colors::lookup $Colors(hilite:move)]
 		$w tag configure h:mark    -indentbackground 1 -background [::colors::lookup $Colors(hilite:move)]
 
-		$w tag configure h:next    -foreground black
+		$w tag configure h:next    -foreground [::colors::lookup $Colors(foreground:main)]
 		$w tag configure h:comment -foreground [::colors::lookup $Colors(hilite:comment)]
 		$w tag configure h:info    -foreground [::colors::lookup $Colors(hilite:info)]
 
@@ -407,9 +411,11 @@ proc configureText {path {fontContext ""}} {
 			-indentbackground 1 \
 			-background [::colors::lookup $Colors(background:nextmove)] \
 			;
-		$w tag configure h:move -foreground black -background [::colors::lookup $Colors(hilite:move)]
+		$w tag configure h:move \
+			-foreground [::colors::lookup $Colors(foreground:main)] \
+			-background [::colors::lookup $Colors(hilite:move)]
 		$w tag configure h:curr \
-			-foreground black \
+			-foreground [::colors::lookup pgn,foreground:current] \
 			-background [::colors::lookup $Colors(background:current)] \
 			;
 	}

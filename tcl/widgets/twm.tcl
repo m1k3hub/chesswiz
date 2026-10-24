@@ -369,9 +369,20 @@ proc Collect {twm what args} {
 
 
 proc SetupTheme {twm} {
+	variable Options
 	variable ${twm}::Vars
 
-	ttk::style configure twm.TLabel -background [ttk::style lookup TNotebook.Tab -background]
+	if {[::theme::isDark]} {
+		set Options(header:tab:foreground) #b1bac4
+		set Options(header:tab:background) #2c313a
+		set Options(header:flex:background) #2b5b84
+	} else {
+		set Options(header:tab:foreground) #333333
+		set Options(header:tab:background) #4f94cd
+		set Options(header:flex:background) #4f94cd
+	}
+
+	ttk::style configure twm.TLabel -background [ttk::style lookup TNotebook.Tab -background] -foreground [ttk::style lookup TNotebook.Tab -foreground]
 	ttk::style configure twm.TNotebook -borderwidth 0
 #	ttk::style configure twm.TNotebook.Tab -font $Vars(header:font)
 	ttk::style configure twm.TNotebook.Tab -padding {2 2}
@@ -393,12 +404,106 @@ proc SetupTheme {twm} {
 		}
 	}
 
-#	set background [ttk::style lookup $::ttk::currentTheme -background]
-#	ttk::style map twm.TNotebook.Tab -background [list active $background selected $background]
+	set themeChanged [expr {[info exists Vars(theme)] && $Vars(theme) ne $::ttk::currentTheme}]
 	set Vars(theme) $::ttk::currentTheme
 
-	if {[info exists Vars(theme)] && $Vars(theme) ne $::ttk::currentTheme} {
+	if {$themeChanged && [::scidb::tk::twm exists $twm]} {
 		$twm refresh
+		foreach f [$twm headerframes] {
+			catch { RefreshFrameHeader $twm $f }
+		}
+		foreach f [$twm leaves] {
+			if {[winfo exists $f.header]} {
+				catch { RefreshHeaderColors $twm $f }
+			}
+		}
+	}
+}
+
+
+proc RefreshFrameHeader {twm frame} {
+	variable Options
+	variable ${twm}::Vars
+
+	set hdr $frame.__header__
+	if {![winfo exists $hdr]} { return }
+	set moveable [$twm get $frame move 0]
+	if {$moveable} {
+		set bg $Options(header:flex:background)
+	} else {
+		set bg [ttk::style lookup $::ttk::currentTheme -background]
+	}
+	catch { $hdr configure -background $bg }
+	if {[winfo exists $hdr.__flat__]} {
+		catch {
+			$hdr.__flat__ configure -background $Options(header:flex:background)
+			$hdr.__flat__ delete all
+			ConfigureFlatHandle $hdr.__flat__ [winfo width $hdr.__flat__] [winfo height $hdr.__flat__]
+		}
+	}
+	set labels [$twm get $frame labels {}]
+	set mine [$twm get $frame mine ""]
+	set type [expr {$moveable ? "flex" : "fix"}]
+	set lighter [ttk::style lookup $::ttk::currentTheme -background]
+	set darker [ttk::style lookup TNotebook.Tab -background]
+	foreach lbl $labels {
+		if {![winfo exists $lbl]} { continue }
+		if {$lbl eq $mine} {
+			if {$moveable} {
+				$lbl configure \
+					-background $Options(header:$type:background) \
+					-foreground $Options(header:$type:foreground)
+			} else {
+				$lbl configure \
+					-background $Options(header:tab:background) \
+					-foreground $Options(header:$type:foreground)
+			}
+		} else {
+			if {$Vars(state) ne "disabled"} {
+				bind $lbl <Enter> [list $lbl configure -background $lighter]
+				bind $lbl <Leave> [list $lbl configure -background $darker]
+			}
+			$lbl configure \
+				-foreground $Options(header:tab:foreground) \
+				-background $darker
+		}
+	}
+}
+
+
+proc RefreshHeaderColors {twm leaf} {
+	variable Options
+	variable ${twm}::Vars
+
+	set hdr $leaf.header
+	if {![winfo exists $hdr]} { return }
+	set tabbg [ttk::style lookup TNotebook.Tab -background]
+	set darkbg [MakeDarkerColor $tabbg $Options(header:tab:darker)]
+	set tabfg $Options(header:tab:foreground)
+	set activefg [GetForeground active]
+
+	if {[$twm ismultiwindow $leaf]} {
+		set cur [$twm get $leaf current]
+		foreach uid [$twm get $leaf order] {
+			if {[winfo exists $hdr.f$uid]} {
+				if {$uid eq $cur} {
+					set bg [GetBackground active]
+					set fg $activefg
+				} else {
+					set bg $darkbg
+					set fg $tabfg
+				}
+				catch { $hdr.f$uid configure -background $bg }
+				catch { $hdr.f$uid.label configure -background $bg -foreground $fg }
+				if {[winfo exists $hdr.s$uid]} {
+					catch { $hdr.s$uid configure -background [GetBackground background] }
+				}
+			}
+		}
+	} else {
+		set bg [GetBackground active]
+		catch { $hdr.frame configure -background $bg }
+		catch { $hdr.frame.label configure -background $bg -foreground $activefg }
 	}
 }
 

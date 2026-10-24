@@ -282,6 +282,7 @@ proc toolbar {parent args} {
 	tk::frame $toolbar -relief $Defaults(toolbar:relief) -borderwidth 0 -class Toolbar {*}$options
 	set Specs(frame:background) [$toolbar cget -background]
 	bind $toolbar <Destroy> [namespace code [list Cleanup $toolbar]]
+	bind $toolbar <<ThemeChanged>> [namespace code [list ThemeChanged $toolbar]]
 
 	if {$Specs(side:$toolbar) eq "top" || $Specs(side:$toolbar) eq "bottom"} {
 		switch $Specs(justify:$toolbar) {
@@ -1032,6 +1033,15 @@ proc Add {toolbar widgetCommand args} {
 	lappend Specs(children:$toolbar) $w
 
 	set class [winfo class $w]
+	if {$class eq "Label"} {
+		if {![info exists options(-background)]} {
+			catch { $w configure -background [$toolbar cget -background] }
+		}
+		if {![info exists options(-foreground)]} {
+			set fg [::ttk::style lookup [::theme::currentTheme] -foreground]
+			if {[string length $fg]} { catch { $w configure -foreground $fg } }
+		}
+	}
 	if {$class eq "Button" || $class eq "DropdownButton"} {
 		set Specs(command:$w:$toolbar) [$w cget -command]
 		set Specs(active:$w:$toolbar) [$w cget -activebackground]
@@ -1046,6 +1056,7 @@ proc Add {toolbar widgetCommand args} {
 
 	if {[llength $variable]} {
 		if {$widgetType eq "checkbutton"} {
+			set Specs(checkvar:$w:$toolbar) $variable
 			set traceCmd [list [namespace current]::Trace(checkbutton:value) $toolbar $w $variable]
 			trace add variable $variable write $traceCmd
 			bind $w <Destroy> +[list trace remove variable $variable write $traceCmd]
@@ -1192,6 +1203,95 @@ proc PrepareToolbarOptions {toolbar frameId} {
 		for {set i 0} {$i < $n} {incr i} {
 			if {[info exists order($i)] && $order($i) in $childs} {
 				lappend Specs(childs:$tbf) $order($i)
+			}
+		}
+	}
+}
+
+
+proc ThemeChanged {toolbar} {
+	if {![winfo exists $toolbar]} { return }
+	variable Specs
+	variable Defaults
+
+	if {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]} {
+		set Defaults(toolbar:activebackground) #3b4252
+		set Defaults(button:selectcolor) #2f6feb
+		set Defaults(handle:color:dark) #0d0f13
+		set Defaults(handle:color:lite) #3d444d
+		set Defaults(handle:color:gray) #23272e
+		set Defaults(floating:frame:background) #28354a
+		set Defaults(floating:frame:foreground) #e6edf3
+	} else {
+		set Defaults(toolbar:activebackground) #cfcfda
+		set Defaults(button:selectcolor) #e0e0e0
+		set Defaults(handle:color:dark) #000000
+		set Defaults(handle:color:lite) #ffffff
+		set Defaults(handle:color:gray) #efefef
+		set Defaults(floating:frame:background) #ffdd76
+		set Defaults(floating:frame:foreground) black
+	}
+
+	set bg [::ttk::style lookup [::theme::currentTheme] -background]
+	set fg [::ttk::style lookup [::theme::currentTheme] -foreground]
+	if {[string length $fg] == 0} { set fg #000000 }
+	set Specs(frame:background) $bg
+
+	catch { $toolbar configure -background $bg }
+	catch { $toolbar.widgets configure -background $bg }
+	if {[info exists Specs(frame:$toolbar)] && [winfo exists $Specs(frame:$toolbar)]} {
+		set tbf $Specs(frame:$toolbar)
+		catch { $tbf configure -background $bg }
+		catch { $tbf.frame configure -background $bg }
+		catch { $tbf.frame.scrolled configure -background $bg }
+	}
+	if {[winfo exists $toolbar.handle]} {
+		catch { $toolbar.handle configure -background $bg }
+		if {[winfo exists $toolbar.handle.c]} {
+			catch {
+				$toolbar.handle.c configure -background $Defaults(handle:color:gray)
+				ConfigureHandle $toolbar.handle [winfo width $toolbar.handle.c] [winfo height $toolbar.handle.c]
+			}
+		}
+	}
+
+	if {[info exists Specs(children:$toolbar)]} {
+		foreach w $Specs(children:$toolbar) {
+			if {![winfo exists $w]} { continue }
+			set cls [winfo class $w]
+			if {$cls eq "Button" || $cls eq "DropdownButton"} {
+				set Specs(active:$w:$toolbar) $Defaults(toolbar:activebackground)
+				catch {
+					$w configure \
+						-background $bg \
+						-foreground $fg \
+						-activebackground $Defaults(toolbar:activebackground) \
+						-activeforeground $fg
+				}
+				KeyIconStates $toolbar $w
+				if {[info exists Specs(state:$w:$toolbar)]} {
+					SetState $toolbar $w $w $Specs(state:$w:$toolbar)
+				}
+				foreach var $Specs(variables:$toolbar) {
+					if {[info exists Specs(value:$var:$w:$toolbar)] && [info exists $var]} {
+						if {![info exists Specs(state:$w:$toolbar)] || $Specs(state:$w:$toolbar) eq "normal"} {
+							if {[set $var] eq $Specs(value:$var:$w:$toolbar)} {
+								$w configure -relief solid -background $Defaults(toolbar:activebackground)
+							} else {
+								$w configure -relief flat -background $bg
+							}
+						}
+					}
+				}
+				if {[info exists Specs(checkvar:$w:$toolbar)]} {
+					ConfigureCheckButton $toolbar $w $w $Specs(checkvar:$w:$toolbar)
+				}
+			} elseif {$cls eq "ToolbarSeparator" || $cls eq "Frame"} {
+				catch { $w configure -background $bg }
+			} elseif {$cls eq "Label"} {
+				catch {
+					$w configure -background $bg -foreground $fg
+				}
 			}
 		}
 	}
@@ -2275,6 +2375,16 @@ proc CreateHandle {toolbar handle {size 0}} {
 	variable Defaults
 	variable HaveTooltips
 
+	if {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]} {
+		set Defaults(handle:color:dark) #0d0f13
+		set Defaults(handle:color:lite) #3d444d
+		set Defaults(handle:color:gray) #23272e
+	} else {
+		set Defaults(handle:color:dark) #000000
+		set Defaults(handle:color:lite) #ffffff
+		set Defaults(handle:color:gray) #efefef
+	}
+
 	tk::frame $handle -class ToolbarHandle -borderwidth 0
 
 	# The canvas shows the handle's dot pattern once it is configured (see
@@ -2285,10 +2395,10 @@ proc CreateHandle {toolbar handle {size 0}} {
 	set bg $Defaults(handle:color:gray)
 
 	if {$Specs(orientation:[winfo parent $handle]) eq "horz"} {
-		set decor [tk::canvas $handle.c -width $Defaults(handle:size) -height $size -borderwidth 0 -background $bg]
+		set decor [tk::canvas $handle.c -width $Defaults(handle:size) -height $size -borderwidth 0 -highlightthickness 0 -background $bg]
 		pack $decor -fill y -side left -expand yes
 	} else {
-		set decor [tk::canvas $handle.c -width $size -height $Defaults(handle:size) -borderwidth 0 -background $bg]
+		set decor [tk::canvas $handle.c -width $size -height $Defaults(handle:size) -borderwidth 0 -highlightthickness 0 -background $bg]
 		pack $decor -fill x -side top -expand yes
 	}
 
@@ -2694,9 +2804,20 @@ proc ConfigureHandle {handle w h} {
 
 	if {$h <= 1 || $w <= 1} { return }
 
+	if {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]} {
+		set Defaults(handle:color:dark) #0d0f13
+		set Defaults(handle:color:lite) #3d444d
+		set Defaults(handle:color:gray) #23272e
+	} else {
+		set Defaults(handle:color:dark) #000000
+		set Defaults(handle:color:lite) #ffffff
+		set Defaults(handle:color:gray) #efefef
+	}
+
 	set toolbar [winfo parent $handle]
 	set canv $handle.c
-	$canv delete rect
+	catch { $canv configure -background $Defaults(handle:color:gray) -highlightbackground $Defaults(handle:color:gray) -highlightthickness 0 }
+	$canv delete all
 
 	if {$Specs(orientation:$toolbar) eq "horz"} {
 		set n [expr {$h/3}]

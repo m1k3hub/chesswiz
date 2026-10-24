@@ -289,12 +289,13 @@ proc Open {} {
 	grid $top.ybar -row 0 -column 1 -sticky nsew
 	grid rowconfigure $top 0 -weight 1
 	grid columnconfigure $top 0 -weight 1
-	$log tag configure Warning -foreground $colors(warning)
-	$log tag configure Error -foreground $colors(error)
-	$log tag configure Info -foreground $colors(info)
-	$log tag configure Callee -foreground #88681a
-	$log tag configure hyperlink -underline on -foreground blue
-	$log tag configure link -foreground blue
+	$log tag configure Warning -foreground [::colors::lookup $colors(warning)]
+	$log tag configure Error -foreground [::colors::lookup $colors(error)]
+	$log tag configure Info -foreground [::colors::lookup $colors(info)]
+	$log tag configure Callee -foreground [expr {[::theme::isDark] ? "#f2cc60" : "#88681a"}]
+	$log tag configure hyperlink -underline on -foreground [::colors::lookup blue]
+	$log tag configure link -foreground [::colors::lookup blue]
+	bind $log <<ThemeChanged>> [namespace code [list ThemeChanged $log]]
 	widget::dialogButtons $Log {clear close} -default close -icons no
 	$Log.close configure -command [list wm withdraw $Log]
 	$Log.clear configure -command [namespace code Clear]
@@ -312,6 +313,18 @@ proc Open {} {
 	set Priv(empty) 0
 	set Priv(open) 0
 	set Priv(transient) [expr {[tk windowingsystem] ne "win32"}]
+}
+
+
+proc ThemeChanged {log} {
+	if {![winfo exists $log]} { return }
+	variable colors
+	$log tag configure Warning -foreground [::colors::lookup $colors(warning)]
+	$log tag configure Error -foreground [::colors::lookup $colors(error)]
+	$log tag configure Info -foreground [::colors::lookup $colors(info)]
+	$log tag configure Callee -foreground [expr {[::theme::isDark] ? "#f2cc60" : "#88681a"}]
+	$log tag configure hyperlink -underline on -foreground [::colors::lookup blue]
+	$log tag configure link -foreground [::colors::lookup blue]
 }
 
 } ;# namespace log

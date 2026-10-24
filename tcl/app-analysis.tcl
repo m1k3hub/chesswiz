@@ -378,13 +378,16 @@ proc build {parent number patternNumber} {
 	$tree element create elemTextFig text \
 		-lines $Options(engine:nlines) \
 		-wrap word \
+		-fill [::colors::lookup black] \
 		-specialfont [list [list $::font::figurine(text:normal) 9812 9823]] \
 		;
 	$tree element create elemTextSym text \
 		-lines $Options(engine:nlines) \
 		-wrap word \
+		-fill [::colors::lookup black] \
 		-font $::font::symbol(text:normal) \
 		;
+	bind $tree <<ThemeChanged>> [namespace code [list ThemeChanged $tree]]
 
 	$tree style create styleFig
 	$tree style elements styleFig {elemRect elemTextFig}
@@ -536,11 +539,14 @@ proc build {parent number patternNumber} {
 		-allow {top bottom} \
 		-tooltipvar [namespace current]::mc::Information \
 	]
+	set infoLabelBg [expr {[::theme::isDark] ? "#1b1f27" : "#e0e0e0"}]
+	set infoLabelFg [expr {[::theme::isDark] ? "#e6edf3" : "#000000"}]
 	::toolbar::add $tbInfo label -textvar [namespace current]::mc::Hash
 	set Vars(widget:hashfullness) [::toolbar::add $tbInfo label \
 		-width 5 \
 		-justify center \
-		-background #e0e0e0 \
+		-background $infoLabelBg \
+		-foreground $infoLabelFg \
 		-relief raised \
 		-borderwidth 1 \
 		-tooltipvar [namespace current]::mc::HashFullness \
@@ -551,7 +557,8 @@ proc build {parent number patternNumber} {
 	set Vars(widget:nps) [::toolbar::add $tbInfo label \
 		-width 9 \
 		-justify center \
-		-background #e0e0e0 \
+		-background $infoLabelBg \
+		-foreground $infoLabelFg \
 		-relief raised \
 		-borderwidth 1 \
 		-tooltipvar [namespace current]::mc::NodesPerSecond \
@@ -560,7 +567,8 @@ proc build {parent number patternNumber} {
 	set Vars(widget:tbhits) [::toolbar::add $tbInfo label \
 		-width 5 \
 		-justify center \
-		-background #e0e0e0 \
+		-background $infoLabelBg \
+		-foreground $infoLabelFg \
 		-relief raised \
 		-borderwidth 1 \
 		-tooltipvar [namespace current]::mc::TablebaseHits \
@@ -994,9 +1002,50 @@ proc SetOrdering {tree} {
 	}
 
 	if {$Options(engine:bestFirst)} {
+		set fg [::colors::lookup black]
 		foreach i {0 1 2 3 4 5 6 7} {
-			$tree item element configure Line$i Eval  elemTextSym -fill black
-			$tree item element configure Line$i Value elemTextFig -fill black
+			$tree item element configure Line$i Eval  elemTextSym -fill $fg
+			$tree item element configure Line$i Value elemTextFig -fill $fg
+		}
+	}
+}
+
+
+proc ThemeChanged {tree} {
+	if {![winfo exists $tree]} { return }
+	variable GlobalOptions
+	variable ${tree}::Vars
+
+	set bg [::colors::lookup $GlobalOptions(background)]
+	set infobg [::colors::lookup $GlobalOptions(info:background)]
+	set infofg [::colors::lookup $GlobalOptions(info:foreground)]
+	set fg [::colors::lookup black]
+
+	catch { $tree configure -background $bg }
+	catch {
+		$tree element configure elemRect \
+			-fill [list [::colors::lookup $GlobalOptions(active:background)] active]
+		$tree element configure elemTextFig -fill $fg
+		$tree element configure elemTextSym -fill $fg
+	}
+	foreach i {0 1 2 3 4 5 6 7} {
+		catch { $tree item element configure Line$i Eval  elemTextSym -fill $fg }
+		catch { $tree item element configure Line$i Value elemTextFig -fill $fg }
+		catch { $tree item element configure Line$i Moves elemTextFig -fill $fg }
+	}
+	catch { $Vars(widget:mw) configure -background $infobg }
+	catch { $Vars(widget:main) configure -background $infobg }
+	catch { $Vars(widget:mesg) configure -background $bg -foreground $infofg }
+	catch { $Vars(widget:info) configure -background $bg }
+	foreach type {score move time depth} {
+		catch { $Vars(widget:info).$type configure -background $infobg }
+		catch { $Vars(widget:info).$type.t configure -background $infobg -foreground $infofg }
+	}
+	set infoLabelBg [expr {[::theme::isDark] ? "#1b1f27" : "#e0e0e0"}]
+	set infoLabelFg [expr {[::theme::isDark] ? "#e6edf3" : "#000000"}]
+	foreach wkey {widget:hashfullness widget:nps widget:tbhits} {
+		if {[info exists Vars($wkey)] && [winfo exists $Vars($wkey)]} {
+			catch { $Vars($wkey) configure -background $infoLabelBg -foreground $infoLabelFg }
 		}
 	}
 }
@@ -1015,10 +1064,11 @@ proc EngineLock {tree} {
 
 
 proc ClearLines {tree args} {
+	set fg [::colors::lookup black]
 	foreach i $args {
-		$tree item element configure Line$i Eval  elemTextSym -text "" -fill black
-		$tree item element configure Line$i Value elemTextFig -text "" -fill black
-		$tree item element configure Line$i Moves elemTextFig -text "" -fill black
+		$tree item element configure Line$i Eval  elemTextSym -text "" -fill $fg
+		$tree item element configure Line$i Value elemTextFig -text "" -fill $fg
+		$tree item element configure Line$i Moves elemTextFig -text "" -fill $fg
 	}
 }
 

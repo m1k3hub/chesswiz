@@ -172,6 +172,7 @@ proc Build {w args} {
 	bind $canv <Up>				 [namespace code [list Traverse $w -line]]
 	bind $canv <Down>				 [namespace code [list Traverse $w +line]]
 	bind $canv <space>			 [namespace code [list ActivateBase $w]]
+	bind $canv <<ThemeChanged>> [namespace code [list ThemeChanged $w]]
 
 	rename ::$w $w.__switcher__
 	proc ::$w {command args} "[namespace current]::WidgetProc $w \$command {*}\$args"
@@ -686,11 +687,21 @@ proc AddBase {w file type readonly {encoding {}}} {
 	set canv $w.content
 	if {$Options(iconsize) <= 16} { set fnt TkTooltipFont } else { set fnt TkTextFont }
 
-	$canv create rectangle 0 0 0 0 -tags active$id -fill black -width 0
-	$canv create rectangle 0 0 0 0 -tags filler$id -fill white -width 0
-	$canv create rectangle 0 0 0 0 -tags border1$id -fill white -width 0
-	$canv create rectangle 0 0 0 0 -tags border2$id -fill gray56 -width 0
-	$canv create rectangle 0 0 0 0 -tags border3$id -fill white -width 0
+	if {[::theme::isDark]} {
+		set b1 #383f4d
+		set b2 #14171c
+		set act #58a6ff
+	} else {
+		set b1 white
+		set b2 gray56
+		set act black
+	}
+
+	$canv create rectangle 0 0 0 0 -tags active$id -fill $act -width 0
+	$canv create rectangle 0 0 0 0 -tags filler$id -fill $b1 -width 0
+	$canv create rectangle 0 0 0 0 -tags border1$id -fill $b1 -width 0
+	$canv create rectangle 0 0 0 0 -tags border2$id -fill $b2 -width 0
+	$canv create rectangle 0 0 0 0 -tags border3$id -fill $b1 -width 0
 	$canv create rectangle 0 0 0 0 -tags content$id -fill $bg -width 0
 	$canv create text 0 0 -anchor nw -tags name$id -font $fnt -text $name
 	$canv create text 0 0 -anchor nw  -tags suff$id -font $fnt -text $ext -fill $emph
@@ -712,6 +723,38 @@ proc AddBase {w file type readonly {encoding {}}} {
 	SetType $w $id $type
 	$Vars(updatecmd) $Vars(variant)
 	UpdateBase $w $id
+	LayoutSwitcher $w
+}
+
+
+proc ThemeChanged {w} {
+	if {![winfo exists $w]} { return }
+	variable ${w}::Vars
+	variable Defaults
+
+	set canv $w.content
+	if {![winfo exists $canv]} { return }
+	$canv configure -background [::colors::lookup $Defaults(background)]
+
+	if {[::theme::isDark]} {
+		set b1 #383f4d
+		set b2 #14171c
+		set act #58a6ff
+	} else {
+		set b1 white
+		set b2 gray56
+		set act black
+	}
+
+	if {[info exists Vars(idList)]} {
+		foreach id $Vars(idList) {
+			catch { $canv itemconfigure active$id -fill $act }
+			catch { $canv itemconfigure filler$id -fill $b1 }
+			catch { $canv itemconfigure border1$id -fill $b1 }
+			catch { $canv itemconfigure border2$id -fill $b2 }
+			catch { $canv itemconfigure border3$id -fill $b1 }
+		}
+	}
 	LayoutSwitcher $w
 }
 

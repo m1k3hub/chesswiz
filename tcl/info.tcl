@@ -138,15 +138,17 @@ proc BuildAboutFrame {w} {
 proc DisplayAbout {w} {
 	array set font [font actual TkTextFont]
 	set fam $font(-family)
+	set titleColor [expr {[::theme::isDark] ? "#79c0ff" : "steelblue4"}]
+	set cColor [expr {[::theme::isDark] ? "#ff7b72" : "brown"}]
 
 	$w parse "
 		<link/>
-		<table border='0' style='font-family: Abel, $fam; font-size: 16pt;' color='steelblue4'>
+		<table border='0' style='font-family: Abel, $fam; font-size: 16pt;' color='$titleColor'>
 			<tr>
 				<td><img src='Chesswiz-Logo-128'/></td>
 				<td width='30px'></td>
 				<td align='center'>
-					<font style='font-size: 48pt;'><font color='brown'>C</font>hesswiz</font><br/>
+					<font style='font-size: 48pt;'><font color='$cColor'>C</font>hesswiz</font><br/>
 					$mc::BasedOnScidb
 				<td>
 			</tr>
@@ -183,9 +185,11 @@ proc A_NodeHandler {node} {
 
 
 proc LinkHandler {w node} {
+	set linkColor [expr {[::theme::isDark] ? "#79c0ff" : "blue2"}]
+	set visitedColor [expr {[::theme::isDark] ? "#d2a8ff" : "purple"}]
 	$w style -id user "
-		:link    { color: blue2; text-decoration: none; }
-		:visited { color: purple; text-decoration: none; }
+		:link    { color: $linkColor; text-decoration: none; }
+		:visited { color: $visitedColor; text-decoration: none; }
 		:hover   { text-decoration: underline; }
 	"
 }
@@ -226,15 +230,19 @@ proc Mouse1Up {w nodes} {
 
 proc BuildContributionsFrame {w} {
 	set css [::html::defaultCSS [::font::html::fixedFonts] [::font::html::textFonts]]
+	set isDark [::theme::isDark]
+	set boxBg [expr {$isDark ? "#242933" : "#fff8dc"}]
+	set borderColor [expr {$isDark ? "#444c56" : "black"}]
+	set htmlBg [expr {$isDark ? "#1b1f27" : "lightgoldenrod"}]
 
-	append css {
+	append css "
 		h1 {
 			font-size:		110%;
 			font-weight:	bold;
 		}
 		hr {
 			border:			0;
-			border-top:		solid 1px black;
+			border-top:		solid 1px $borderColor;
 			border-bottom:	transparent;
 		}
 		table {
@@ -242,8 +250,8 @@ proc BuildContributionsFrame {w} {
 			padding-bottom:	0.5em;
 		}
 		div.box {
-			background:			#fff8dc;
-			border:				1px solid black;
+			background:			$boxBg;
+			border:				1px solid $borderColor;
 			border-radius:		0.5em;
 			margin-top:			1em;
 			margin-bottom:		1em;
@@ -259,10 +267,10 @@ proc BuildContributionsFrame {w} {
 			text-decoration:	underline;
 			background:			none;
 		}
-	}
+	"
 
 	::html $w.t \
-		-background lightgoldenrod \
+		-background $htmlBg \
 		-imagecmd [namespace code GetImage] \
 		-center yes \
 		-fittowidth yes \
@@ -496,8 +504,11 @@ proc BuildSystemFrame {w} {
 		set identity "<cannot determine identifier>"
 	}
 
+	set isDark [::theme::isDark]
+	set frameBg [expr {$isDark ? "#1b1f27" : "white"}]
+	set labelBg [expr {$isDark ? "#242933" : "lightgray"}]
 	# TODO: use a label for the first line (ensures minimum width)
-	set f [tk::frame $w.f -background white -relief sunken -borderwidth 1]
+	set f [tk::frame $w.f -background $frameBg -relief sunken -borderwidth 1]
 	set t [tk::text $f.t \
 		-cursor left_ptr \
 		-width 0 -height [expr {6 + [llength $total]}] \
@@ -506,9 +517,9 @@ proc BuildSystemFrame {w} {
 		-borderwidth 0 \
 	]
 	ttk::setCursor $t standard
-	set l1 [tk::label $f.l1 -image [GetOSImage Linux  ] -background lightgray]
-	set l2 [tk::label $f.l2 -image [GetOSImage Windows] -background lightgray]
-	set l3 [tk::label $f.l3 -image [GetOSImage Apple  ] -background lightgray]
+	set l1 [tk::label $f.l1 -image [GetOSImage Linux  ] -background $labelBg]
+	set l2 [tk::label $f.l2 -image [GetOSImage Windows] -background $labelBg]
+	set l3 [tk::label $f.l3 -image [GetOSImage Apple  ] -background $labelBg]
 	pack $f -fill both -expand true
 	grid $l1 -row 0 -column 0 -sticky nswe
 	grid $l2 -row 1 -column 0 -sticky nswe

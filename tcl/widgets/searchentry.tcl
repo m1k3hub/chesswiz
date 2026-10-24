@@ -238,6 +238,7 @@ proc Build {w ns args} {
 	trace add {*}$args
 	bind $w.e <Destroy> [list trace remove {*}$args]
 	bind $w.e <<LanguageChanged>> [namespace code [list LanguageChanged $w]]
+	bind $w.e <<ThemeChanged>> [namespace code [list ThemeChanged $w.e]]
 
 	catch { rename ::$w $w.__search__ }
 	proc ::$w {command args} "[namespace current]::WidgetProc $w \$command {*}\$args"
@@ -370,6 +371,39 @@ proc ShowButtons {w} {
 }
 
 
+proc GetGhostColor {ns} {
+	variable ::searchentry::${ns}::Vars
+	if {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]} {
+		return #8b949e
+	}
+	return $Vars(ghostcolor)
+}
+
+
+proc GetNormalForeground {} {
+	if {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]} {
+		return #e6edf3
+	}
+	set fg [::ttk::style lookup TEntry -foreground]
+	if {[string length $fg] == 0} { set fg black }
+	return $fg
+}
+
+
+proc ThemeChanged {w} {
+	if {![winfo exists $w]} { return }
+	set parent [winfo parent $w]
+	if {![info exists ${parent}::NS]} { return }
+	set ns [set ${parent}::NS]
+	variable ::searchentry::${ns}::Priv
+	if {$Priv(empty) && [focus] ne $w} {
+		$w configure -foreground [GetGhostColor $ns]
+	} else {
+		$w configure -foreground [GetNormalForeground]
+	}
+}
+
+
 proc Clear {w} {
 	set ns [set [winfo parent $w]::NS]
 	variable ::searchentry::${ns}::Priv
@@ -384,7 +418,7 @@ proc Clear {w} {
 		set Priv(content) ""
 	} else {
 		set Priv(content) [set $Vars(ghosttextvar)]
-		$w configure -foreground $Vars(ghostcolor)
+		$w configure -foreground [GetGhostColor $ns]
 		focus $w
 	}
 	SetupButtons [winfo parent $w]
@@ -402,7 +436,7 @@ proc FocusIn {w} {
 	} else {
 		$w selection range 0 end
 	}
-	$w configure -foreground black
+	$w configure -foreground [GetNormalForeground]
 	SetupButtons [winfo parent $w]
 	set Priv(search) $Priv(content)
 }
@@ -423,7 +457,7 @@ proc FocusOut {w} {
 		set $Vars(textvar) ""
 		set Priv(search) ""
 		set Priv(content) [set $Vars(ghosttextvar)]
-		$w configure -foreground $Vars(ghostcolor)
+		$w configure -foreground [GetGhostColor $ns]
 		if {$Vars(type) eq "number"} { $w configure -validate key }
 		set Priv(lock) 0
 		SetupButtons [winfo parent $w]
@@ -431,6 +465,7 @@ proc FocusOut {w} {
 		if {![string match $w* [focus]]} {
 			UpdateHistory [winfo parent $w]
 		}
+		$w configure -foreground [GetNormalForeground]
 		set $Vars(textvar) $Priv(content)
 	}
 }

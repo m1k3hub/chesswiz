@@ -484,9 +484,23 @@ if {[file readable $file]} { load::source $file }
 ###################################################
 
 set msg [format $load::mc::Loading "Ttk $load::mc::Theme"]
-foreach file [glob -directory [file join $::scidb::dir::share themes ttk] -nocomplain *.tcl] {
-	load::source $file -message $msg
+set ttkThemeDirs [list [file join $::scidb::dir::share themes ttk]]
+set localTtkThemeDir [file join [file dirname [file dirname [file normalize [info script]]]] tcl themes ttk]
+if {![file isdirectory $localTtkThemeDir]} {
+	set localTtkThemeDir [file join [file dirname $::scidb::dir::exec] tcl themes ttk]
 }
+if {[file isdirectory $localTtkThemeDir] && $localTtkThemeDir ni $ttkThemeDirs} {
+	lappend ttkThemeDirs $localTtkThemeDir
+}
+foreach dir $ttkThemeDirs {
+	foreach file [glob -directory $dir -nocomplain *.tcl] {
+		set themeName [file rootname [file tail $file]]
+		if {$themeName ni [ttk::style theme names]} {
+			load::source $file -message $msg
+		}
+	}
+}
+unset -nocomplain dir ttkThemeDirs localTtkThemeDir themeName
 
 # --- Load done --------------------------------------------------------
 unset file subdir msg

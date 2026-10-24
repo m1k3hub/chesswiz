@@ -197,9 +197,10 @@ proc build {top width height} {
 		bind $pgn <Button-3> [namespace code [list PopupMenu $edit $i]]
 		bind $pgn <Double-3> {#} ;# catch double clicks
 		bind $pgn <Leave> [namespace code [list HidePosition $pgn]]
-		set evalStrip [tk::canvas $edit.f$i.evalstrip -width 1 -height 22 -highlightthickness 0 -background white]
+		set evalStrip [tk::canvas $edit.f$i.evalstrip -width 1 -height 22 -highlightthickness 0 -background [::colors::lookup pgn,background]]
 		grid $evalStrip -row 2 -column 1 -columnspan 2 -sticky ew
 		bind $evalStrip <Configure> [namespace code [list DrawEvalStrip $i]]
+		bind $evalStrip <<ThemeChanged>> [namespace code [list DrawEvalStrip $i]]
 		bind $evalStrip <ButtonPress-1> [namespace code [list EvalStripClick $i %x]]
 		set Vars(evalstrip:$i) $evalStrip
 
@@ -3119,6 +3120,7 @@ proc DrawEvalStrip {position} {
 	set w $Vars(evalstrip:$position)
 	if {![winfo exists $w]} { return }
 
+	$w configure -background [::colors::lookup pgn,background]
 	$w delete all
 
 	set width [winfo width $w]
@@ -3129,7 +3131,8 @@ proc DrawEvalStrip {position} {
 	catch { set profile [::scidb::game::evalProfile $position] }
 
 	set mid [expr {$height / 2.0}]
-	$w create line 0 $mid $width $mid -fill gray70
+	set midColor [expr {[::theme::isDark] ? "#3d444d" : "gray70"}]
+	$w create line 0 $mid $width $mid -fill $midColor
 
 	if {[llength $profile] == 0} { return }
 

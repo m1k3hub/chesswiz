@@ -1413,10 +1413,39 @@ proc UpdateColunnWidths {table} {
 
 proc ThemeChanged {table} {
 	variable ${table}::Vars
+	variable IdMap
+	if {![info exists IdMap($table)]} { return }
+	set optId $IdMap($table)
+	variable ${optId}::Options
+
+	set t $table.t
+	if {![winfo exists $t]} { return }
+
+	$t configure -background [lookupColor $Options(-background)]
+
+	set fill [list [lookupColor $Options(-selectionbackground)] {selected}]
+	if {[llength $Options(-highlightcolor)]} {
+		lappend fill [lookupColor $Options(-highlightcolor)] {active}
+	}
+	catch { $t element configure elemSel -fill $fill }
+	catch { $t element configure elemImg -fill $fill }
+	catch {
+		$t element configure elemBrd \
+			-background [list [lookupColor $Options(-activebackground)] {active} {} {}]
+	}
 
 	foreach id $Vars(columns) {
-		$table.t column configure $id -background [ttk::style lookup [::theme::currentTheme] -background]
+		$t column configure $id \
+			-background [lookupColor $Options(-labelbackground)] \
+			-textcolor [lookupColor $Options(-labelforeground)]
+		SetForeground $table $id
 	}
+	catch {
+		$t column configure tail \
+			-background [lookupColor $Options(-labelbackground)] \
+			-textcolor [lookupColor $Options(-labelforeground)]
+	}
+	SetBackground $table
 
 	after idle [namespace code [list GenerateTableMinSizeEvent $table]]
 }

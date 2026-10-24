@@ -236,7 +236,18 @@ proc init {} {
 }
 
 
-proc background	{} { return [set [namespace current]::G(background)] }
+proc background	{} {
+	if {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]} {
+		return #2d333b
+	}
+	return [set [namespace current]::G(background)]
+}
+proc foreground	{} {
+	if {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]} {
+		return #e6edf3
+	}
+	return black
+}
 proc delay			{} { return [set [namespace current]::G(delay)] }
 proc enabled		{} { return [set [namespace current]::G(enabled)] }
 proc disabled		{} { return [expr {![set [namespace current]::G(enabled)]}] }
@@ -766,6 +777,13 @@ proc Show {w var msg {i {}} {font {}}} {
 	after cancel $G(fadeId)
 	after cancel $G(exposureId)
 	set b $G(toplevel)
+
+	set tipbg [background]
+	set tipfg [foreground]
+	catch { $b.top configure -background $tipbg }
+	for {set k 0} {$k < 5} {incr k} {
+		catch { $b.top.label-$k configure -background $tipbg -foreground $tipfg }
+	}
 
 	set labelFont $font
 	set txt ""

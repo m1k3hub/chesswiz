@@ -122,6 +122,7 @@ proc Build {w args} {
 
 	bind $w <Destroy> [list catch [list namespace delete [namespace current]::${w}]]
 	bind $w.b <Configure> [namespace code [list SetIcon $w %h]]
+	bind $w <<ThemeChanged>> [namespace code [list ThemeChanged $w]]
 
 	catch { rename ::$w $w.__dropdownbutton__ }
 	proc ::$w {command args} "[namespace current]::WidgetProc $w \$command {*}\$args"
@@ -335,7 +336,11 @@ proc SetIcon {w height} {
 
 	set size [expr {max(1, $size/2)}]
 
-	if {![info exists Icons($size:)]} {
+	lassign [winfo rgb $w $Priv(arrowforeground)] nr ng nb
+	set nfill [format "#%02x%02x%02x" [expr {$nr >> 8}] [expr {$ng >> 8}] [expr {$nb >> 8}]]
+	set iconKey "$size:$nfill"
+
+	if {![info exists Icons($iconKey:)]} {
 		foreach {state attr} {normal foreground active activeforeground disabled disabledforeground} {
 			set img [image create photo -height $size -width [expr {$size + 1}]]
 			# SVG knows no Tk colour names such as SystemButtonText (Windows).
@@ -343,15 +348,54 @@ proc SetIcon {w height} {
 			set fill [format "#%02x%02x%02x" [expr {$r >> 8}] [expr {$g >> 8}] [expr {$b >> 8}]]
 			set svg [string map [list FILL $fill] $svg::arrow]
 			::scidb::tk::image create svg $img
-			set Icons($size:$state) $img
+			set Icons($iconKey:$state) $img
 		}
+		set Icons($iconKey:) 1
 	}
 
-	set Priv(arrow:icon:normal) $Icons($size:normal)
-	set Priv(arrow:icon:active) $Icons($size:active)
-	set Priv(arrow:icon:disabled) $Icons($size:disabled)
+	set Priv(arrow:icon:normal) $Icons($iconKey:normal)
+	set Priv(arrow:icon:active) $Icons($iconKey:active)
+	set Priv(arrow:icon:disabled) $Icons($iconKey:disabled)
 
-	$w.m configure -image $Icons($size:$Priv(arrow:state))
+	$w.m configure -image $Icons($iconKey:$Priv(arrow:state))
+}
+
+
+proc ThemeChanged {w} {
+	if {![winfo exists $w]} { return }
+	variable ${w}::Priv
+	variable ${w}::Rem
+	variable Options
+
+	set Options(activebackground) ""
+	InitColors
+
+	set bg [::ttk::style lookup [::theme::currentTheme] -background]
+	set fg [::ttk::style lookup [::theme::currentTheme] -foreground]
+	if {[string length $fg] == 0} { set fg #000000 }
+	set activebg [expr {[::theme::isDark] ? "#3b4252" : "#cfcfda"}]
+
+	foreach opt {activebackground activeforeground background foreground disabledforeground} {
+		set Priv(arrow$opt) $Options(arrow$opt)
+	}
+	set Priv(background) $bg
+	set Priv(activebackground) $activebg
+	set Priv(arrowbackground) $bg
+	set Rem(background) $bg
+	set Rem(arrowactivebackground) $Options(arrowactivebackground)
+
+	catch {
+		$w configure -background $bg
+		$w.b configure -background $bg -foreground $fg -activebackground $activebg -activeforeground $fg
+		$w.m configure \
+			-background $bg \
+			-foreground $Options(arrowforeground) \
+			-activebackground $Options(arrowactivebackground) \
+			-activeforeground $Options(arrowactiveforeground) \
+			-disabledforeground $Options(arrowdisabledforeground)
+	}
+	set Priv(arrow:size) 0
+	SetIcon $w [winfo height $w.b]
 }
 
 
