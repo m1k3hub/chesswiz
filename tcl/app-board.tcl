@@ -1763,6 +1763,12 @@ proc RebuildBoard {canv width height {force false}} {
 			variable ReserveSide
 			variable ReservePixels
 			lassign $reserve ReserveSide ReservePixels
+			if {[llength $reserve] == 3} {
+				variable ReserveKind
+				variable ReserveMaxBoard
+				set ReserveKind squeeze
+				set ReserveMaxBoard [lindex $reserve 2]
+			}
 		}
 	}
 	ComputeLayout $width $height $Dim(bordersize)

@@ -620,7 +620,30 @@ proc ::mediainset::reserveForLayout {width height} {
 	if {!$Shown || $Swapped || $::application::board::Vars(3d)} { return {} }
 	# A dialog asked the inset to move to the other side; the board rebuild
 	# hook must keep that strip instead of re-planning the normal one.
-	if {$Squeeze ne {} && !$Audio} { return $Squeeze }
+	if {$Squeeze ne {} && !$Audio} {
+		variable SqueezeFor
+		lassign $Squeeze side strip oldCap
+		if {$side eq "left" && [winfo exists $SqueezeFor]
+			&& [winfo ismapped $SqueezeFor]} {
+			# Tighten the dialog's cap before painting the new main extent.
+			# Waiting for the placement pass paints the obsolete larger
+			# board first, then immediately paints the tightened cap again.
+			lassign [::util::place::besideMainArea $SqueezeFor] sx sy sw sh
+			lassign [::util::place::besideDialogExtents $SqueezeFor] sl sr st sb
+			lassign [wm minsize $SqueezeFor] mw mh
+			lassign [wm maxsize $SqueezeFor] xw xh
+			set needW [expr {min($xw,max($mw,[winfo reqwidth $SqueezeFor]))}]
+			set needH [expr {min($xh,max($mh,[winfo reqheight $SqueezeFor]))}]
+			set frame $::application::board::Vars(widget:frame)
+			set cap [expr {$sx+$sw-[winfo rootx $frame]-$needW-$sl-$sr-12-$strip}]
+			if {$cap > 0 && ($oldCap <= 0 || $cap < $oldCap)
+				&& [::util::place::besideBorderRoom left $strip squeeze $cap \
+					[list $sx $sy $sw $sh] [expr {$sl+$sr}] [expr {$st+$sb}] 12 $needW $needH]} {
+				set Squeeze [list $side $strip $cap]
+			}
+		}
+		return $Squeeze
+	}
 	if {$Detach ne {} && !$Audio} { return [list {} 0] }
 	set w [Pane].mediainset
 	if {![winfo exists $w.controls]} { return {} }
