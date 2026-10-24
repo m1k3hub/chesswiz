@@ -12,6 +12,14 @@ namespace eval ::scidb::test::app {
     variable reportHandle {}
 }
 
+# Placement fixtures must fit the current display, including WM decorations.
+# Requested sizes retain the regression scenario on larger displays.
+proc ::scidb::test::app::fitGeometry {width height} {
+    lassign [winfo workarea .application] x y w h
+    lassign [winfo extents .application] l r t b
+    return "[expr {min($width,$w-$l-$r)}]x[expr {min($height,$h-$t-$b)}]+$x+$y"
+}
+
 proc ::scidb::test::app::emit {line} {
     variable reportHandle
     puts $line

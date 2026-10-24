@@ -57,7 +57,7 @@ tcltest::test run12-material-on-screen {Search by Material opens fully on screen
 	catch {destroy $dlg}
 	# a narrow main window near the left edge, as on the tester's screen
 	set g [wm geometry .application]
-	wm geometry .application 500x400+0+0
+	wm geometry .application [::scidb::test::app::fitGeometry 500 400]
 	update
 	${ns}::OpenMaterialSearch .application $pgn Normal
 	update
@@ -66,9 +66,10 @@ tcltest::test run12-material-on-screen {Search by Material opens fully on screen
 	set geo [wm geometry $dlg]
 	set c $dlg.controls.close
 	set btn [expr {[winfo ismapped $c] && [winfo rootx $c] + [winfo width $c] <= $r}]
+	lassign [winfo workarea $dlg] wx wy ww wh
 	destroy $dlg
 	wm geometry .application $g
-	list [expr {$x >= 0}] [expr {$r <= [winfo screenwidth .]}] [string match *+-* $geo] $btn
+	list [expr {$x >= $wx}] [expr {$r <= $wx+$ww}] [string match *+-* $geo] $btn
 } -result {1 1 0 1}
 
 tcltest::test run12-duplicates {Find Duplicates reports 1 group for two identical games} -body {

@@ -973,10 +973,11 @@ tcltest::test mediafold-010-float-save {floating Media is docked before named sa
 tcltest::test mediafold-dlg005-capflow {oversized content is capped outside the board at a usable size} -setup {
     update
     ::application::switchTab board
-    wm geometry .application 1280x800+0+0
+    wm geometry .application [::scidb::test::app::fitGeometry 1280 800]
     ::scidb::test::foldWait
     toplevel .layoutCapFlow
-    ttk::frame .layoutCapFlow.content -width 2000 -height 1400
+    lassign [winfo workarea .application] wx wy ww wh
+    ttk::frame .layoutCapFlow.content -width [expr {2*$ww}] -height [expr {2*$wh}]
     pack .layoutCapFlow.content -fill both -expand yes
     wm minsize .layoutCapFlow 780 480
     update idletasks
@@ -998,8 +999,8 @@ tcltest::test mediafold-dlg005-capflow {oversized content is capped outside the 
         [expr {abs([winfo width .layoutCapFlow]-$w) <= 1 && abs([winfo height .layoutCapFlow]-$h) <= 1}]
 } -cleanup {destroy .layoutCapFlow} -result {0 0 1 1}
 
-tcltest::test mediafold-dlg005-insights-fit {VAL-DLG-005 Insights shrinks to fit beside board at 1280x800} -setup {
-    wm geometry .application 1280x800+0+0
+tcltest::test mediafold-dlg005-insights-fit {VAL-DLG-005 Insights shrinks to fit beside board in the live work area} -setup {
+    wm geometry .application [::scidb::test::app::fitGeometry 1280 800]
     update idletasks
     
     # Set up a minimal database and player for Insights (from test_app_dialog_place.tcl pattern)
