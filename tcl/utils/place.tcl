@@ -1012,7 +1012,7 @@ proc besideSchedule {{delay ""}} {
 	# existing coalescing window for the WM's multi-stage fullscreen changes.
 	set maxWait $BesideMaxWait
 	set defaultDelay $BesideDelay
-	if {[besideVideoRect] ne {}} { set maxWait 80; set defaultDelay 30 }
+	if {[besideVideoRect] ne {}} { set maxWait 30; set defaultDelay 10 }
 	if {$delay eq ""} { set delay $defaultDelay }
 	set delay [expr {max(0, min($delay, $BesideFirst + $maxWait - $now))}]
 	set BesideTimer [after $delay [namespace code besideSettle]]
@@ -1270,7 +1270,7 @@ proc besideBorderRoom {side px kind maxBoard workarea fw fh gap needW needH} {
 		|| $by + $size + $gap + $needH + $fh <= $wy + $wh}]
 }
 
-# <dlg> holds the inset's squeeze, and nothing else moved the inset for it.
+# <dlg> holds a live squeeze; a detached inset takes precedence over it.
 proc besideKeepsSqueeze {dlg} {
 	if {[catch {
 		set squeeze [expr {$::mediainset::SqueezeFor eq $dlg}]
@@ -1290,12 +1290,37 @@ proc besideInsetHeldByPeer {dlg peers} {
 	return 0
 }
 
-# The frame overlaps the board or inset although its plan's rule allows none.
+# Recheck clearance, or the permitted no-room minimum, against the live board.
 proc besideCovered {dlg boardRect} {
 	variable BesideLastPlan
 	if {![info exists BesideLastPlan($dlg)]} { return 0 }
 	set plan $BesideLastPlan($dlg)
-	if {[dict get $plan rule] eq "no-room" || [dict exists $plan forced]} { return 0 }
+	if {[dict exists $plan forced]} { return 0 }
+	if {[dict get $plan rule] eq "no-room"} {
+		if {![dict exists $plan record]} { return 0 }
+		set best {}
+		set chosen {}
+		set peers [besidePeers $dlg]
+		dict for {side candidate} [dict get $plan record] {
+			set rect [dict get $candidate rect]
+			set blocked 0
+			if {[dict exists $plan pair]} {
+				foreach peer $peers {
+					if {[besideOverlap $rect [besidePeerRect $peer]] > 0} {
+						set blocked 1
+						break
+					}
+				}
+			}
+			set area [besideOverlap $rect $boardRect]
+			if {[dict get $candidate chosen] && !$blocked} { set chosen $area }
+			if {!$blocked && ($best eq {} || $area < $best)} { set best $area }
+		}
+		# A peer can change the board after this plan was computed. The
+		# no-room rule permits only the current peer-free minimum; stale
+		# candidate scores are not an overlap exemption.
+		return [expr {$best ne {} && ($chosen eq {} || $chosen > $best)}]
+	}
 	set outer [besideOuterRect $dlg]
 	set video [besideVideoRect]
 	return [expr {[besideOverlap $outer $boardRect] > 0
@@ -1835,7 +1860,10 @@ proc BesideSettlePass {first} {
 			set display [expr {[info exists BesideState($dlg,screen)]
 				&& $BesideState($dlg,screen) ne $screen}]
 			set BesideState($dlg,screen) $screen
-			if {$trigger ne "content"} { besideRecord $dlg user $trigger }
+			if {$trigger ne "content"
+				|| [besideRectDiffers $current $BesideState($dlg,last)]} {
+				besideRecord $dlg user $trigger
+			}
 			set BesideState($dlg,parentrect) $parentRect
 			set BesideState($dlg,zoomed) [besideParentZoomed $dlg]
 			set BesideState($dlg,last) $current
@@ -2018,6 +2046,24 @@ proc BesideBoardPlan {dlg parent} {
 	# maximize or restore cannot afford within its settle (VAL-DLG-018A).
 	set plan {}
 	if {!$pair && [besideKeepsSqueeze $dlg]} {
+		# A left squeeze's board cap was computed for the previous main
+		# window width. Refresh it directly for this width: releasing the
+		# squeeze first would paint the enlarged board only to shrink it
+		# again a moment later, costing two synchronous rebuilds.
+		lassign $::mediainset::Squeeze squeezeSide strip oldCap
+		if {$squeezeSide eq "left"} {
+			set frame $::application::board::Vars(widget:frame)
+			set needW [expr {max($dw, [lindex $minimum 0])}]
+			lassign $workarea sx sy sw sh
+			lassign $extents sl sr st sb
+			set cap [expr {$sx+$sw-[winfo rootx $frame]-$needW-$sl-$sr-12-$strip}]
+			if {$cap > 0 && $cap != $oldCap
+				&& [besideBorderRoom left $strip squeeze $cap $workarea \
+					[expr {$sl+$sr}] [expr {$st+$sb}] 12 $needW $dh]} {
+				::mediainset::SqueezeForDialog $dlg left $strip $cap
+				update idletasks
+			}
+		}
 		lassign [besideObstacleFor $dlg] bx by bw bh
 		set kept [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents 12 \
 			[list $rw $rh] $minimum]
