@@ -1038,11 +1038,17 @@ variable BesideMeasureDepth 0
 variable BesideBatch 0
 variable BesideAreas {}
 variable BesideFrames {}
+variable BesideFrameKeys {}
+variable BesideGuarded {}
 proc besideMeasureBegin {} {
 	variable BesideMeasureDepth
 	variable BesideAreas
 	variable BesideFrames
-	if {$BesideMeasureDepth == 0} { set BesideAreas {}; set BesideFrames {} }
+	variable BesideFrameKeys
+	variable BesideGuarded
+	if {$BesideMeasureDepth == 0} {
+		set BesideAreas {}; set BesideFrames {}; set BesideFrameKeys {}; set BesideGuarded {}
+	}
 	incr BesideMeasureDepth
 }
 proc besideMeasureEnd {} {
@@ -1059,17 +1065,25 @@ proc besideWorkArea {dlg} {
 	return [dict get $BesideAreas $dlg]
 }
 
-# Native geometry is read once per transaction, never from an estimated
-# global decoration size. Empty on platforms without this native query.
-proc besideNativeFrame {top} {
+# Reuse native geometry while its Tk inputs remain unchanged. An idle drain
+# inside a transaction can apply a parent Configure; the old frame is then
+# no longer a valid work-area snapshot. All four edges depend on it.
+# Empty on platforms without this native query.
+proc besideNativeFrame {top {fresh 0}} {
 	variable BesideMeasureDepth
 	variable BesideFrames
-	if {$BesideMeasureDepth > 0 && [dict exists $BesideFrames $top]} {
+	variable BesideFrameKeys
+	set key [besideRect $top]
+	if {!$fresh && $BesideMeasureDepth > 0 && [dict exists $BesideFrames $top]
+		&& [dict exists $BesideFrameKeys $top] && [dict get $BesideFrameKeys $top] eq $key} {
 		return [dict get $BesideFrames $top]
 	}
 	set frame {}
 	catch {set frame [::scidb::tk::wm frame $top]}
-	if {$BesideMeasureDepth > 0} { dict set BesideFrames $top $frame }
+	if {$BesideMeasureDepth > 0} {
+		dict set BesideFrames $top $frame
+		dict set BesideFrameKeys $top $key
+	}
 	return $frame
 }
 
@@ -1179,8 +1193,22 @@ proc besideLearnSlack {dlg {extents {}}} {
 
 proc besideCapture {dlg} {
 	variable BesideState
-	if {![winfo exists $dlg] || ![winfo ismapped $dlg]} { return }
+	if {[info exists BesideState($dlg,clampAfter)]} {
+		after cancel $BesideState($dlg,clampAfter)
+		unset BesideState($dlg,clampAfter)
+	}
+	if {![winfo exists $dlg] || ![winfo ismapped $dlg]
+		|| ([info exists BesideState($dlg,user)] && $BesideState($dlg,user))} { return }
 	besideDialogExtents $dlg
+	if {[besideClampNative $dlg]} {
+		# Capture only after the WM has applied the guard, without yielding
+		# to another debounce (the pair still has its 500 ms deadline).
+		if {![info exists BesideState($dlg,clampAfter)]} {
+			set BesideState($dlg,clampAfter) [after 10 [namespace code [list besideCapture $dlg]]]
+		}
+		return
+	}
+	unset -nocomplain BesideState($dlg,nativeClamp) BesideState($dlg,nativeClampFrame)
 	set BesideState($dlg,last) [besideRect $dlg]
 	set BesideState($dlg,board) [besideBoardRect]
 	set BesideState($dlg,obstacle) [besideProtectedRect]
@@ -1304,11 +1332,13 @@ proc besideTriggerFor {dlg parentRect boardRect} {
 
 # The area a dialog's frame must stay inside: the screen work area clipped to
 # the main window's frame (the same area BesideBoardPlan plans against).
-proc besideMainArea {dlg} {
+proc besideMainArea {dlg {fresh 0} {parent ""}} {
 	variable BesideState
-	set workarea [besideWorkArea $dlg]
-	if {![info exists BesideState($dlg,parent)]} { return $workarea }
-	set parent $BesideState($dlg,parent)
+	set workarea [expr {$fresh ? [winfo workarea $dlg] : [besideWorkArea $dlg]}]
+	if {$parent eq ""} {
+		if {![info exists BesideState($dlg,parent)]} { return $workarea }
+		set parent $BesideState($dlg,parent)
+	}
 	if {![winfo exists $parent]} { return $workarea }
 	set top [winfo toplevel $parent]
 	lassign [winfo extents $top] pel per pet peb
@@ -1316,7 +1346,7 @@ proc besideMainArea {dlg} {
 	set py [expr {[winfo rooty $top] - $pet}]
 	set pw [expr {[winfo width $top] + $pel + $per}]
 	set ph [expr {[winfo height $top] + $pet + $peb}]
-	set native [besideNativeFrame $top]
+	set native [besideNativeFrame $top $fresh]
 	if {[llength $native] == 4} { lassign $native px py pw ph }
 	lassign $workarea wx wy ww wh
 	set x0 [expr {max($wx, $px)}]
@@ -1327,17 +1357,59 @@ proc besideMainArea {dlg} {
 	return [list $x0 $y0 [expr {$x1 - $x0}] [expr {$y1 - $y0}]]
 }
 
-# The dialog's frame is inside the main window's work area, within the few
-# pixels the WM's own decoration offsets can account for.
+# Native frame rectangles and work areas are half-open: x+w and y+h may
+# equal the far edge, but may never exceed it. Decoration tolerances here
+# used to hide a persistent one-pixel escape after a resize.
 proc besideContained {dlg} {
-	variable BesideTopSlack
-	variable BesideXBorder
-	lassign [besideOuterRect $dlg] x y w h
-	lassign [besideMainArea $dlg] ax ay aw ah
-	set tx [expr {$BesideXBorder + 2}]
-	set ty [expr {$BesideTopSlack + 2}]
-	return [expr {$x >= $ax - $tx && $y >= $ay - $ty
-		&& $x + $w <= $ax + $aw + $tx && $y + $h <= $ay + $ah + $ty}]
+	set frame [besideNativeFrame $dlg]
+	if {[llength $frame] != 4} { set frame [besideOuterRect $dlg] }
+	return [besideInside $frame [besideMainArea $dlg]]
+}
+
+# Guard the frame the WM actually produced, independently of decoration
+# estimates and the transaction snapshot. Translate its measured excess on
+# every edge back to request coordinates; never use x+w-1 for containment.
+# Return 1 while a corrected native request is awaiting the WM.
+proc besideClampNative {dlg} {
+	variable BesideState
+	if {![winfo ismapped $dlg]} { return 0 }
+	variable BesideMeasureDepth
+	variable BesideGuarded
+	set area [besideMainArea $dlg]
+	set key [list [besideRect $dlg] $area]
+	# Registry/settle idle captures can repeat in the same transaction.
+	# Reuse a successful native check only while both rectangles agree.
+	if {$BesideMeasureDepth > 0 && [dict exists $BesideGuarded $dlg]
+		&& [dict get $BesideGuarded $dlg] eq $key} { return 0 }
+	set frame [besideNativeFrame $dlg 1]
+	if {[llength $frame] != 4} { set frame [besideOuterRect $dlg] }
+	if {![besideInside $frame $area]} { set area [besideMainArea $dlg 1] }
+	if {[besideInside $frame $area]} {
+		if {$BesideMeasureDepth > 0} { dict set BesideGuarded $dlg $key }
+		return 0
+	}
+	if {[info exists BesideState($dlg,nativeClampFrame)] && $BesideState($dlg,nativeClampFrame) eq $frame
+		&& [info exists BesideState($dlg,nativeClamp)]} { return 1 }
+	lassign $frame x y w h
+	set clamped [clampGeometry "${w}x${h}+${x}+${y}" $area]
+	regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} $clamped -> cw ch cx cy
+	if {![regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} [wm geometry $dlg] -> rw rh rx ry]} { return 0 }
+	set rx [expr {$rx+$cx-$x}]
+	set ry [expr {$ry+$cy-$y}]
+	set rw [expr {max(1,$rw+$cw-$w)}]
+	set rh [expr {max(1,$rh+$ch-$h)}]
+	# Do not repeatedly shift a request the WM has not applied yet.
+	set request [list $rx $ry $rw $rh]
+	if {![info exists BesideState($dlg,nativeClamp)] || $BesideState($dlg,nativeClamp) ne $request} {
+		set BesideState($dlg,nativeClamp) $request
+		set BesideState($dlg,nativeClampFrame) $frame
+		lassign [wm minsize $dlg] mw mh
+		wm minsize $dlg [expr {min($mw,$rw)}] [expr {min($mh,$rh)}]
+		wm geometry $dlg "${rw}x${rh}+${rx}+${ry}"
+		set BesideState($dlg,request) $request
+		set BesideState($dlg,planned) [list $cx $cy $cw $ch]
+	}
+	return 1
 }
 
 # A changed dialog rectangle is a user move or resize: not content growth
@@ -1532,6 +1604,7 @@ proc besideRegistryRemove {dlg} {
 	variable BesideState
 	set i [lsearch -exact $BesideDialogs $dlg]
 	if {$i >= 0} { set BesideDialogs [lreplace $BesideDialogs $i $i] }
+	if {[info exists BesideState($dlg,clampAfter)]} { after cancel $BesideState($dlg,clampAfter) }
 	array unset BesideState ${dlg},*
 	variable BesideRecords
 	unset -nocomplain BesideRecords($dlg)
@@ -2154,7 +2227,7 @@ proc besideBoard {dlg {parent ""}} {
 	}
 }
 
-proc BesideBoardPlan {dlg parent} {
+proc BesideBoardPlan {dlg parent {retry 0}} {
 	variable BesideRequests
 	# A pending Map/Unmap can be delivered by this drain. Check the board
 	# afterwards: testing it first left empty obstacle coordinates on restore.
@@ -2476,7 +2549,16 @@ proc BesideBoardPlan {dlg parent} {
 			}
 		}
 	}
+	# Idle geometry work during planning can change the live parent frame.
+	# Recompute candidates against it rather than applying a stale minimum.
+	set liveArea [besideMainArea $dlg 0 $parent]
+	if {$liveArea ne $workarea && $retry < 2} {
+		return [BesideBoardPlan $dlg $parent [expr {$retry+1}]]
+	}
 	lassign [dict get $plan geometry] x y w h
+	set bounded [clampGeometry "${w}x${h}+${x}+${y}" $liveArea $extents]
+	regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} $bounded -> w h x y
+	dict set plan geometry [list $x $y $w $h]
 	# openbox applies +x to the client, not the frame: at the left edge of
 	# the work area the left border would fall outside it.
 	variable BesideState
@@ -2490,6 +2572,9 @@ proc BesideBoardPlan {dlg parent} {
 		bind $dlg <Destroy> +[namespace code [list BesideDestroy $dlg %W]]
 	}
 	set BesideRequests($dlg) [list $rw $rh]
+	unset -nocomplain BesideState($dlg,nativeClamp) BesideState($dlg,nativeClampFrame)
+	variable BesideGuarded
+	dict unset BesideGuarded $dlg
 	# Clear any old explicit size, including saved geometry. Lowering minsize
 	# alone suffices for the requested-size retry. Only content larger than the
 	# entire work area needs an explicit cap (VAL-DLG-004).
