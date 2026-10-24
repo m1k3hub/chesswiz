@@ -578,7 +578,7 @@ foreach {target openScript dialog closeScript} {
 
 # A dialog the user moved away from the board is left where it is, even when
 # the board moves; once that move puts it over the board it is re-placed.
-tcltest::test dlg-follow-user-move {user-moved dialog is respected until it covers the board} -setup {
+tcltest::test dlg-follow-user-move {user-moved dialog is respected, even over the board (VAL-DLG-018C)} -setup {
     ::scidb::test::dlgplace::setupBoard
 } -body {
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 1274 900]
@@ -603,12 +603,22 @@ tcltest::test dlg-follow-user-move {user-moved dialog is respected until it cove
         "user-moved dialog changed position"
     ::scidb::test::dlgplace::noOverlap user-move-respected $dlg
 
-    # Now drag it onto the board; it must be re-planned off the board.
+    ::scidb::test::dlgplace::require [expr {[::util::place::besidePlacedBy $dlg] eq "user"}] \
+        "user-moved dialog reads placed_by [::util::place::besidePlacedBy $dlg]"
+    # Moving it onto the board is the user's choice too: the planner does
+    # not re-place it (decision 2026-10-21).
     lassign [::scidb::test::dlgplace::boardRect] bx by bw bh
     wm geometry $dlg "+[expr {$bx+20}]+[expr {$by+20}]"
-    ::scidb::test::dlgplace::waitFor 1200
-    ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::dialogOverlap $dlg] == 0}] \
-        "dialog covering the board was not re-placed"
+    ::scidb::test::dlgplace::waitFor 900
+    set onBoard [::scidb::test::dlgplace::widgetRect $dlg]
+    set delta [::scidb::test::dlgplace::replaceDelta {
+        wm geometry .application [::scidb::test::dlgplace::fitGeometry 1274 900]
+        ::scidb::test::dlgplace::waitFor 1400
+    }]
+    ::scidb::test::dlgplace::require [expr {$delta == 0 && [::scidb::test::dlgplace::widgetRect $dlg] eq $onBoard}] \
+        "user-placed dialog was re-placed ($delta)"
+    ::scidb::test::dlgplace::require [expr {[dict get [::util::place::besidePlacement $dlg] placed_by] eq "user"}] \
+        "placement record does not read user"
     return 1
 } -cleanup {
     catch {::playengine::Close}
@@ -1063,7 +1073,7 @@ tcltest::test dlg-v14-b-reserves-both-orders {two dialogs that each register a r
 
 # (c) Maximise, restore and a scripted window resize re-plan an open playing
 # dialog (it follows the board); only a real user move/resize of the dialog stops following.
-tcltest::test dlg-v14-c-resize-and-user-move {window resize follows board; user manual move stops following until collision} -setup {
+tcltest::test dlg-v14-c-resize-and-user-move {window resize follows board; a user move stops following, even onto the board (VAL-DLG-018C)} -setup {
     ::scidb::test::dlgplace::setupBoard
 } -body {
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
@@ -1089,13 +1099,14 @@ tcltest::test dlg-v14-c-resize-and-user-move {window resize follows board; user 
         wm geometry .application [::scidb::test::dlgplace::fitGeometry 0.85 1.0]
         ::scidb::test::dlgplace::waitFor 1000
     }]
-    # But when dialog is dragged onto board, it MUST re-plan:
+    # Dragging it onto the board is the user's choice too (decision
+    # 2026-10-21): the planner leaves it there.
     lassign [::scidb::test::dlgplace::boardRect] bx by bw bh
     set deltaCollision [::scidb::test::dlgplace::replaceDelta {
         wm geometry $dlg "+[expr {$bx+20}]+[expr {$by+20}]"
         ::scidb::test::dlgplace::waitFor 1000
     }]
-    list [expr {$deltaResize > 0}] [expr {$deltaUserSafe == 0}] [expr {$deltaCollision > 0}]
+    list [expr {$deltaResize > 0}] [expr {$deltaUserSafe == 0}] [expr {$deltaCollision == 0}]
 } -cleanup {
     catch {::playengine::Close}
     ::scidb::test::dlgplace::stopTrace
@@ -1293,7 +1304,7 @@ proc ::scidb::test::dlgplace::realCleanup {} {
 }
 
 # (a) A real maximize (Tk and WM-initiated) re-plans the playing dialog within
-# 1 s; restore re-plans again; a user's own move then stops following.
+# 500 ms; restore re-plans again; a user's own move then stops following.
 tcltest::test dlg-v15-a-maximize-playing {real maximize and restore re-plan a playing dialog clear of board and inset} -setup {
     ::scidb::test::dlgplace::setupBoard
     catch {wm minsize .application 1 1}
@@ -1306,16 +1317,26 @@ tcltest::test dlg-v15-a-maximize-playing {real maximize and restore re-plan a pl
     set dlg .application.playengine
     ::scidb::test::dlgplace::clearOf v15a-open $dlg
     set small [wm geometry .application]
-    foreach {step script} {
-        tk-maximize   {wm attributes .application -zoomed 1}
-        tk-restore    {wm attributes .application -zoomed 0}
-        wm-maximize   {::scidb::test::dlgplace::wmctrlMax 1}
-        wm-restore    {::scidb::test::dlgplace::wmctrlMax 0}
+    foreach {step trigger script} {
+        tk-maximize   maximize {wm attributes .application -zoomed 1}
+        tk-restore    restore  {wm attributes .application -zoomed 0}
+        wm-maximize   maximize {::scidb::test::dlgplace::wmctrlMax 1}
+        wm-restore    restore  {::scidb::test::dlgplace::wmctrlMax 0}
     } {
         set g [wm geometry .application]
+        set seq $::util::place::BesideRecordSeq
+        set t0 [clock milliseconds]
         set delta [::scidb::test::dlgplace::replaceDelta "$script; ::scidb::test::dlgplace::waitFor 1000"]
         ::scidb::test::dlgplace::require [expr {[wm geometry .application] ne $g}] "$step: window did not change ($g)"
         ::scidb::test::dlgplace::require [expr {$delta >= 1}] "$step: dialog was not re-planned within 1 s"
+        # VAL-DLG-018A: the helper records the re-plan with its trigger.
+        set late {}
+        foreach r [::util::place::besidePlacementLog $seq] {
+            if {[dict get $r dialog] eq $dlg && [dict get $r trigger] eq $trigger
+                && [dict get $r placed_by] eq "planner"} { lappend late [expr {[dict get $r time] - $t0}] }
+        }
+        ::scidb::test::dlgplace::require [expr {[llength $late] && [lindex $late 0] <= 500}] \
+            "$step: no $trigger placement record within 500 ms ($late)"
         ::scidb::test::dlgplace::clearOf v15a-$step $dlg
     }
     # A user's own move to a safe spot stops following.
@@ -1332,13 +1353,11 @@ tcltest::test dlg-v15-a-maximize-playing {real maximize and restore re-plan a pl
         && [::scidb::test::dlgplace::overlapArea [::scidb::test::dlgplace::outerRect $dlg] \
             [::scidb::test::dlgplace::widgetRect [::mediainset::Pane].mediainset]] == 0}]
     puts "DLG-V15 user-move moved=$moved after=[::scidb::test::dlgplace::widgetRect $dlg] delta=$delta safe=$safe"
-    # Left alone while it stays clear; re-planned only once the resize makes it collide.
-    if {$delta == 0} {
-        ::scidb::test::dlgplace::require [expr {$safe && [::scidb::test::dlgplace::widgetRect $dlg] eq $moved}] \
-            "user-moved dialog left covering board or inset"
-    } else {
-        ::scidb::test::dlgplace::clearOf v15a-user-collision $dlg
-    }
+    # VAL-DLG-018C: the user's place is kept, whatever the resize does.
+    ::scidb::test::dlgplace::require [expr {$delta == 0 && [::scidb::test::dlgplace::widgetRect $dlg] eq $moved}] \
+        "user-moved dialog was re-placed ($delta)"
+    ::scidb::test::dlgplace::require [expr {[::util::place::besidePlacedBy $dlg] eq "user"}] \
+        "user-moved dialog reads placed_by [::util::place::besidePlacedBy $dlg]"
     return 1
 } -cleanup {
     ::scidb::test::dlgplace::realCleanup

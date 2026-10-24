@@ -22,7 +22,7 @@ proc tk {args} { return 1.3333333333 }
 set f [open [file join [file dirname [info script]] .. tcl app-board.tcl]]
 set source [read $f]
 close $f
-set wanted {ComputeLayout reserveSquare unreservedSquare setReserve reserveRect afterRebuild ApplyReserve3D ConfigureReserve3D}
+set wanted {ComputeLayout reserveSquare reserveBorder unreservedSquare setReserve reserveRect afterRebuild ApplyReserve3D ConfigureReserve3D}
 set definition {}
 foreach line [split $source \n] {
     if {$definition eq {} && [regexp {^proc ([^ ]+) } $line -> name] && $name in $wanted} {
@@ -73,6 +73,21 @@ tcltest::test board-reserve-probe {candidate measurements preserve the accepted 
         [expr {$count == $::application::board::rebuildCount}] \
         $::application::board::ReserveSide $::application::board::ReservePixels
 } -result {1 1 1 right 300}
+tcltest::test board-reserve-border-probe {border probes preserve dimensions and every live reserve field} -body {
+    ::application::board::setReserve right 300
+    set before [lsort [array get ::application::board::Dim]]
+    set count $::application::board::rebuildCount
+    set state [list $::application::board::ReserveSide $::application::board::ReservePixels \
+        $::application::board::ReserveKind $::application::board::ReserveMaxBoard]
+    set border [::application::board::reserveBorder left 168 squeeze 500]
+    set absent [::application::board::reserveBorder right 1500 auto]
+    list [expr {[llength $border] == 3 && [lindex $border 2] > 0}] \
+        [expr {$absent eq {}}] \
+        [expr {$before eq [lsort [array get ::application::board::Dim]]}] \
+        [expr {$state eq [list $::application::board::ReserveSide $::application::board::ReservePixels \
+            $::application::board::ReserveKind $::application::board::ReserveMaxBoard]}] \
+        [expr {$count == $::application::board::rebuildCount}]
+} -result {1 1 1 1 1}
 tcltest::test board-reserve-pure-refusal {refusal leaves dimensions and accepted reserve unchanged} -body {
     ::application::board::setReserve right 300
     set before [lsort [array get ::application::board::Dim]]

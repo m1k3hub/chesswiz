@@ -1581,6 +1581,42 @@ proc reserveSquare {side px width height {kind auto} {maxBoard 0}} {
 	}
 }
 
+# The border rectangle {x y size} (canvas coordinates) the current canvas
+# would draw with this reserve, or {} when ComputeLayout refuses it; {} 0
+# probes the unreserved layout. Lets a dialog re-plan rule out an inset
+# squeeze or detach without rebuilding the board for each attempt.
+proc reserveBorder {side px {kind auto} {maxBoard 0}} {
+	variable Dim
+	variable Vars
+	variable ReserveSide
+	variable ReservePixels
+	variable ReserveKind
+	variable ReserveMaxBoard
+	if {![info exists Vars(width)] || ![info exists Vars(height)]} { return {} }
+	if {$side eq {} || $px == 0} { set side {}; set px 0; set kind auto; set maxBoard 0 }
+	set saved [array get Dim]
+	set oldSide $ReserveSide
+	set oldPixels $ReservePixels
+	set oldKind $ReserveKind
+	set oldMaxBoard [expr {[info exists ReserveMaxBoard] ? $ReserveMaxBoard : 0}]
+	try {
+		set ReserveSide $side
+		set ReservePixels $px
+		set ReserveKind $kind
+		set ReserveMaxBoard $maxBoard
+		ComputeLayout $Vars(width) $Vars(height)
+		if {$ReserveSide ne $side} { return {} }
+		return [list $Dim(border:x1) $Dim(border:y1) $Dim(bordersize)]
+	} finally {
+		array unset Dim
+		array set Dim $saved
+		set ReserveSide $oldSide
+		set ReservePixels $oldPixels
+		set ReserveKind $oldKind
+		set ReserveMaxBoard $oldMaxBoard
+	}
+}
+
 # The square this layout would draw if the reserve were released. ComputeLayout
 # refuses a reserve that is worse than this, so probe it with the reserve
 # cleared; the caller's dimensions and accepted reserve are restored.
