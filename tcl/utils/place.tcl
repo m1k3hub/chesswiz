@@ -50,12 +50,12 @@ variable ShiftLeft	8
 # A dialog the user moved or resized is left alone from then on, even over
 # the board (VAL-DLG-018C); only a display change that leaves it outside the
 # new screen work area re-places it.
-variable BesideDelay		15
+variable BesideDelay		260
 variable BesideTimer		{}
 # A steady stream of events (a playing video's per-frame Configure, a live
 # engine clock) would restart a pure trailing debounce forever; the settle
 # runs at the latest this long after the first deferred event.
-variable BesideMaxWait		80
+variable BesideMaxWait		600
 variable BesideFirst		{}
 variable BesideUnmappedRetries	0
 variable BesideDialogs		{}
@@ -1008,8 +1008,13 @@ proc besideSchedule {{delay ""}} {
 	} else {
 		set BesideFirst $now
 	}
-	if {$delay eq ""} { set delay $BesideDelay }
-	set delay [expr {max(0, min($delay, $BesideFirst + $BesideMaxWait - $now))}]
+	# Playing dialogs have a 500 ms deadline. Without an inset, retain the
+	# existing coalescing window for the WM's multi-stage fullscreen changes.
+	set maxWait $BesideMaxWait
+	set defaultDelay $BesideDelay
+	if {[besideVideoRect] ne {}} { set maxWait 80; set defaultDelay 30 }
+	if {$delay eq ""} { set delay $defaultDelay }
+	set delay [expr {max(0, min($delay, $BesideFirst + $maxWait - $now))}]
 	set BesideTimer [after $delay [namespace code besideSettle]]
 }
 
@@ -1269,7 +1274,7 @@ proc besideBorderRoom {side px kind maxBoard workarea fw fh gap needW needH} {
 proc besideKeepsSqueeze {dlg} {
 	if {[catch {
 		set squeeze [expr {$::mediainset::SqueezeFor eq $dlg}]
-		set other [expr {$::mediainset::DodgeFor eq $dlg || $::mediainset::DetachFor eq $dlg}]
+		set other [expr {$::mediainset::DetachFor eq $dlg}]
 	}]} { return 0 }
 	return [expr {$squeeze && !$other && [besideVideoRect] ne {}}]
 }
@@ -2031,6 +2036,16 @@ proc BesideBoardPlan {dlg parent} {
 			&& [dict get $kept overlap] == 0
 			&& $kw >= max($dw, $needW) && $kh >= max($dh, $needH)} {
 			set plan $kept
+		} elseif {[llength $peers]} {
+			# Keeping a valid shared strip may require stacking, rather
+			# than the single-dialog right/left/below plan. Test that
+			# before releasing and rebuilding the very same squeeze.
+			set stacked [besidePairPlan $dlg $peers $rw $rh $workarea $extents 12]
+			if {[llength $stacked]} {
+				set plan $stacked
+				dict set plan pair 1
+				set pair 1
+			}
 		}
 	}
 	if {![llength $plan]} {
@@ -2084,8 +2099,9 @@ proc BesideBoardPlan {dlg parent} {
 		}
 		set plan $stacked
 		dict set plan pair 1
-		variable BesideState
-		if {[dict exists $plan peerMove]
+	}
+	variable BesideState
+	if {[dict exists $plan peerMove]
 			&& !$BesideState([dict get $plan peer],user)} {
 			set other [dict get $plan peer]
 			lassign [dict get $plan peerMove] ox oy
@@ -2095,7 +2111,6 @@ proc BesideBoardPlan {dlg parent} {
 			set BesideState($other,planned) [list $ox $oy $pw $ph]
 			set BesideState($other,last) {}
 			after idle [namespace code [list besideCapture $other]]
-		}
 	}
 	# The inset is a single window: a peer that already squeezed, detached
 	# or dodged it keeps it. Taking it over would move it under that peer,
