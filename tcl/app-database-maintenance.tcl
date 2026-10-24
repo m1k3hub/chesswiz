@@ -477,20 +477,32 @@ proc ConvertDatabase {parent file variant} {
 		return
 	}
 
-	set reply [::dialog::question -parent $parent -message $mc::ConvertQuestion -default no]
-	set version [expr { $reply eq "yes" ? 95 : 96 }]
-
 	set title $mc::ConvertTitle
+	set filetypes [list \
+		[list $mc::ScidbBases {.sci}] \
+		[list $::menu::mc::ChessBaseBases {.cbh}] \
+	]
 	set dstFile [::dialog::saveFile \
 		-parent $parent \
 		-class database \
-		-filetypes [list [list $mc::ScidbBases {.sci}]] \
+		-filetypes $filetypes \
 		-geometry last \
 		-defaultextension .sci \
-		-title "$title ($version)" \
+		-title $title \
 		-customicon $::icon::16x16::filetypeArchive]
 	if {[llength $dstFile] == 0} { return }
 	lassign $dstFile dst dstEncoding
+
+	set ext [::util::fileExtension $dst]
+
+	# docs/formats/SCI_CORRESPONDENCE_FORMAT.md §3: SCI databases default to
+	# v96 (native correspondence clock storage); offer legacy v95 explicitly.
+	# The choice only applies to an SCI destination.
+	set version 96
+	if {$ext eq ".sci"} {
+		set reply [::dialog::question -parent $parent -message $mc::ConvertQuestion -default no]
+		if {$reply eq "yes"} { set version 95 }
+	}
 
 	if {[file exists $dst]} {
 		::dialog::error -parent $parent -title $title \
@@ -498,38 +510,57 @@ proc ConvertDatabase {parent file variant} {
 		return
 	}
 
-	::scidb::db::setcreationversion $version
-	if {[catch {
+	# Re-encoding games into CBH is not supported yet: only a raw copy from
+	# another ChessBase database can be written. Tell the user before the
+	# copy starts instead of failing halfway through.
+	if {$ext eq ".cbh" && [::scidb::db::get codec $file $variant] ne "cbh"} {
+		::dialog::error -parent $parent -title $title \
+			-message "Only ChessBase (.cbh) databases can be copied into a .cbh database.\n\nChoose a Scidb (.sci) destination for other formats."
+		return
+	}
+
+	if {$version != 96} { ::scidb::db::setcreationversion $version }
+	try {
 		::scidb::db::new $dst $variant [::application::database::lookupType Unspecific]
 		::scidb::db::attach $dst $dst
-	} rc opts]} {
-		::scidb::db::setcreationversion 96
-		return {*}$opts -rethrow 1 $rc
+	} finally {
+		# restore the default creation version even if db::new fails
+		if {$version != 96} { ::scidb::db::setcreationversion 96 }
 	}
-	::scidb::db::setcreationversion 96	;# restore default (docs §3)
 
 	# The copy takes a progress and a log callback (7 arguments); called
 	# with 3 it always failed, so every conversion aborted.
+	set copyResult {}
 	set cmd [list ::scidb::db::copy $file $dst {}]
 	set progressOpts [list -message $mc::ConvertTitle -interrupt yes]
 	set cmd [list ::progress::start $parent $cmd [list [namespace current]::LogConvert {}] $progressOpts 0]
-	if {[catch { ::util::catchException $cmd result } rc opts]} {
-		::log::error $::import::mc::AbortedDueToInternalError
-		::progress::close
-		return {*}$opts -rethrow 1 $rc
-	}
+	set rc [catch { ::util::catchException $cmd copyResult } err opts]
 	::progress::close
+	if {$rc != 0} {
+		::log::error $::import::mc::AbortedDueToInternalError
+		::dialog::error -parent $parent -title $title -message $err
+		catch { ::scidb::db::close $dst }
+		return
+	}
+	if {$err != 0} {
+		# catchException reported the I/O error itself (it returns 2)
+		::log::error $::import::mc::AbortedDueToIoError
+		catch { ::scidb::db::close $dst }
+		return
+	}
+	lassign $copyResult total illegal accepted rejected
 
 	# save takes a progress callback too
 	set cmd [list ::progress::start $parent [list ::scidb::db::save $dst] {} {} 1]
-	if {[catch { ::util::catchException $cmd } rc opts]} {
-		::log::error $::import::mc::AbortedDueToIoError
-		::progress::close
-		return {*}$opts -rethrow 1 $rc
-	}
+	set rc [catch { ::util::catchException $cmd } err opts]
 	::progress::close
+	if {$rc != 0 || $err != 0} {
+		::log::error $::import::mc::AbortedDueToIoError
+		if {$rc != 0} { ::dialog::error -parent $parent -title $title -message $err }
+		catch { ::scidb::db::close $dst }
+		return
+	}
 
-	lassign $result total illegal accepted rejected
 	::scidb::db::close $dst
 
 	::dialog::info -parent $parent -title $mc::ConvertTitle \

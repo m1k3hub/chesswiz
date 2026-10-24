@@ -143,6 +143,7 @@ set Book							"Book"
 
 set FormatName(scidb)		"Scidb"
 set FormatName(scid)			"Scid"
+set FormatName(cbh)			"ChessBase"
 set FormatName(pgn)			"PGN"
 set FormatName(pdf)			"PDF"
 set FormatName(html)			"HTML"
@@ -708,6 +709,7 @@ proc open {parent args} {
 	array set icons [list          \
 		scidb	$::icon::32x32::logo  \
 		scid	$::icon::32x32::scid3 \
+		cbh	$::icon::32x32::scid3 \
 		pgn	$IconPGN              \
 		tex	$IconTeX              \
 		html	$IconHtml             \
@@ -735,6 +737,12 @@ proc open {parent args} {
 	} else {
 		set Values(Type) scidb
 		set Values(Types) {scidb scid pgn pdf html tex}
+		# A .cbh destination only accepts a raw copy from another ChessBase
+		# database, so offer it exactly in that case.
+		if {![catch { ::scidb::db::get codec $Info(base) $Info(variant) } codec]
+			&& $codec eq "cbh"} {
+			set Values(Types) {cbh scidb scid pgn pdf html tex}
+		}
 		set tabs {	options OptionsSetup
 						tags_si3 TagsSetup
 						tags_sci TagsSetup
@@ -3108,6 +3116,21 @@ proc Select {nb index} {
 			set ext {.si4 .si3}
 		}
 
+		cbh {
+			HideTab $nb $nb.options
+			HideTab $nb $nb.tags_si3
+			HideTab $nb $nb.tags_sci
+			HideTab $nb $nb.page_pdf
+			HideTab $nb $nb.page_tex
+			HideTab $nb $nb.style
+			HideTab $nb $nb.notation
+			HideTab $nb $nb.diagram
+			HideTab $nb $nb.annotation
+			HideTab $nb $nb.encoding
+			set var $::menu::mc::ChessBaseBases
+			set ext .cbh
+		}
+
 		pgn {
 			ShowTab $nb $nb.options
 			HideTab $nb $nb.tags_si3
@@ -3323,7 +3346,7 @@ proc DoExport {parent dlg file} {
 				set encoding $Values($Values(Type),encoding)
 			}
 		}
-		scidb - tex - html {
+		scidb - cbh - tex - html {
 			set encoding "utf-8"
 		}
 		default {
@@ -3460,6 +3483,7 @@ proc DoExport {parent dlg file} {
 	catch { destroy $dlg }
 	set Trace_ {}
 	set close 1
+	set cbhCreated 0
 
 	if {[info exists Info(index)]} {
 		switch $Values(Type) {
@@ -3552,6 +3576,29 @@ proc DoExport {parent dlg file} {
 				}
 			}
 
+			cbh {
+				# A CBH destination is created (or cleared, if it is already
+				# open) and then receives the selected games with a raw copy;
+				# the CBH writer has no re-encoding consumer yet. The dialog
+				# only offers this format when the source is a CBH database.
+				if {[::scidb::db::get open? $file]} {
+					::scidb::db::clear $file
+				} else {
+					::scidb::db::new $file $Info(variant) [::application::database::lookupType Unspecific]
+					::scidb::db::attach $file $file
+					set cbhCreated 1
+				}
+				::scidb::db::set variant $file $Info(variant)
+				set useCopyOperation 1
+				set cmd [list ::scidb::view::copy \
+					$Info(base) \
+					$Info(view) \
+					$file \
+					$Info(variant) \
+					$tagList \
+				]
+			}
+
 			html {
 				# native HTML publish path (no TeXt machinery): standalone
 				# UTF-8 file with embedded CSS + SVG diagrams. The progress
@@ -3633,6 +3680,7 @@ proc DoExport {parent dlg file} {
 			::log::error $::import::mc::AbortedDueToInternalError
 			::progress::close
 			::log::close
+			if {$cbhCreated} { catch { ::scidb::db::close $file } }
 			return {*}$opts -rethrow 1 0
 		}
 
@@ -3646,6 +3694,7 @@ proc DoExport {parent dlg file} {
 			::log::error $::import::mc::AbortedDueToIoError
 			::progress::close
 			::log::close
+			if {$cbhCreated} { catch { ::scidb::db::close $file } }
 			# show error dialog
 			return 0
 		}
@@ -3672,6 +3721,10 @@ proc DoExport {parent dlg file} {
 			set rc [::util::catchException { ::progress::start $parent $cmd {} {} 1 } count]
 			if {$rc == 1} { ::log::error $::import::mc::AbortedDueToIoError }
 		}
+
+		# A CBH destination created by this export must be closed so the
+		# index, game and annotation files are flushed to disk.
+		if {$cbhCreated} { catch { ::scidb::db::close $file } }
 
 		::progress::close
 		::log::close
