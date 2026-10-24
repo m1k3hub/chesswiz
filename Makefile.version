@@ -9,7 +9,7 @@ SCIDB_REVISION	= -DSCIDB_REVISION="\"1493\""
 # A git archive copy (the macOS VM build) has no .git: the exporter writes
 # "<sha> <commit date>" to .git-version beside this file instead.
 SCIDB_GIT_VERSION  := $(dir $(lastword $(MAKEFILE_LIST))).git-version
-SCIDB_GIT_SHA      := $(shell git rev-parse --short HEAD 2>/dev/null || cut -d' ' -f1 $(SCIDB_GIT_VERSION) 2>/dev/null || echo "unknown")
+SCIDB_GIT_SHA      := $(shell git rev-parse --short=10 HEAD 2>/dev/null || cut -d' ' -f1 $(SCIDB_GIT_VERSION) 2>/dev/null || echo "unknown")
 SCIDB_COMMIT_DATE  := $(shell git log -1 --format="%cd" --date=short 2>/dev/null || cut -d' ' -f2 $(SCIDB_GIT_VERSION) 2>/dev/null || echo "unknown")
 SCIDB_BUILD_DATE   := $(shell date -u +%Y-%m-%d)
 SCIDB_BUILD_FLAGS   = -DSCIDB_GIT_SHA="\"$(SCIDB_GIT_SHA)\"" -DSCIDB_COMMIT_DATE="\"$(SCIDB_COMMIT_DATE)\"" -DSCIDB_BUILD_DATE="\"$(SCIDB_BUILD_DATE)\""
