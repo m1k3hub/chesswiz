@@ -1581,4 +1581,113 @@ tcltest::test dlg-w9i-pair-deadline {both playing dialogs record and settle befo
     ::scidb::test::dlgplace::realCleanup
 } -result 1
 
+# W9j: use the actual WM frames, including both borders, with no tolerance.
+# Keep a measurement transaction alive over a queued resize, as a completed
+# board callback can do when a helper's idle drain applies the parent request.
+tcltest::test dlg-w9j-native-resize-containment {Game Review and Endgame Trainer stay inside the live main frame} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    wm minsize .application 1 1
+} -constraints haveWmctrl -body {
+    wm geometry .application 1000x600+0+0
+    ::scidb::test::dlgplace::waitFor 900
+    ::scidb::test::dlgplace::zoomBoard 0
+    ::scidb::test::dlgplace::realVideo
+    set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]
+    ::gamereview::ShowWindow .application $review {} 0
+    ::scidb::test::dlgplace::waitFor 800
+    ::endtrainer::open .application
+    ::scidb::test::dlgplace::waitFor 900
+    set ds {.application.__gamereview .application.__endtrainer__}
+    set seq $::util::place::BesideRecordSeq
+    set start [clock milliseconds]
+    ::util::place::besideMeasureBegin
+    try {
+        set old [::util::place::besideNativeFrame .application]
+        wm geometry .application 930x540
+        ::scidb::test::dlgplace::waitFor 500
+        set measured [::scidb::tk::wm frame .application]
+        set cached [::util::place::besideNativeFrame .application]
+        ::scidb::test::dlgplace::require [expr {$cached eq $measured}] "stale native frame: $cached != $measured (before $old)"
+    } finally {
+        ::util::place::besideMeasureEnd
+    }
+    set stable {}
+    foreach d $ds {
+        dict set stable $d [::scidb::tk::wm frame $d]
+        set found 0
+        foreach r [::util::place::besidePlacementLog $seq] {
+            if {[dict get $r dialog] ne $d || [dict get $r trigger] ne "resize"} {continue}
+            ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside [dict get $r rect] $measured] "planned frame outside resized main: $r / $measured"
+            if {[dict get $r time]-$start <= 500} {set found 1}
+        }
+        ::scidb::test::dlgplace::require $found "$d no resize record by 500ms"
+    }
+    for {set i 0} {$i < 15} {incr i} {
+        ::scidb::test::dlgplace::waitFor 100
+        set main [::scidb::tk::wm frame .application]
+        lassign [winfo workarea .application] wx wy ww wh
+        lassign $main mx my mw mh
+        set wa [list [expr {max($wx,$mx)}] [expr {max($wy,$my)}] \
+            [expr {min($wx+$ww,$mx+$mw)-max($wx,$mx)}] \
+            [expr {min($wy+$wh,$my+$mh)-max($wy,$my)}]]
+        foreach d $ds {
+            set native [::scidb::tk::wm frame $d]
+            ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside $native $wa] "sample $i native $native outside $wa"
+            ::scidb::test::dlgplace::require [expr {$native eq [dict get $stable $d]}] "$d moved after 500ms"
+            ::scidb::test::dlgplace::requireControls w9j-resize $d
+        }
+    }
+    puts "W9J resize native=$stable workarea=$wa"
+    return 1
+} -cleanup {
+    catch {destroy .application.__gamereview}
+    catch {::endtrainer::Close}
+    ::scidb::test::dlgplace::realCleanup
+} -result 1
+
+tcltest::test dlg-w9j-native-guard-edges {native containment guard corrects a one-pixel escape on every edge} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    set dlg .application.w9jguard
+    toplevel $dlg
+    label $dlg.content -text {Native containment guard}
+    pack $dlg.content
+    wm geometry $dlg 240x100+100+100
+    set ::util::place::BesideState($dlg,parent) .application
+    ::scidb::test::dlgplace::waitFor 300
+} -constraints haveWmctrl -body {
+    set main [::scidb::tk::wm frame .application]
+    lassign [winfo workarea .application] wx wy ww wh
+    lassign $main mx my mw mh
+    set ax [expr {max($wx,$mx)}]; set ay [expr {max($wy,$my)}]
+    set right [expr {min($wx+$ww,$mx+$mw)}]; set bottom [expr {min($wy+$wh,$my+$mh)}]
+    set wa [list $ax $ay [expr {$right-$ax}] [expr {$bottom-$ay}]]
+    set results {}
+    foreach side {left top right bottom} {
+        lassign [::scidb::tk::wm frame $dlg] x y w h
+        set tx [expr {$ax+20}]; set ty [expr {$ay+30}]
+        switch $side {
+            left {set tx [expr {$ax-1}]}
+            top {set ty [expr {$ay-1}]}
+            right {set tx [expr {$right-$w+1}]}
+            bottom {set ty [expr {$bottom-$h+1}]}
+        }
+        regexp {^[0-9]+x[0-9]+\+(-?[0-9]+)\+(-?[0-9]+)$} [wm geometry $dlg] -> rx ry
+        wm geometry $dlg "+[expr {$rx+$tx-$x}]+[expr {$ry+$ty-$y}]"
+        ::scidb::test::dlgplace::waitFor 200
+        set before [::scidb::tk::wm frame $dlg]
+        ::scidb::test::dlgplace::require [expr {![::scidb::test::dlgplace::inside $before $wa]}] "$side did not escape: $before / $wa"
+        set changed [::util::place::besideClampNative $dlg]
+        ::scidb::test::dlgplace::waitFor 200
+        set after [::scidb::tk::wm frame $dlg]
+        puts "W9J guard $side before=$before after=$after workarea=$wa"
+        lappend results [expr {$changed && [::scidb::test::dlgplace::inside $after $wa]}]
+        unset -nocomplain ::util::place::BesideState($dlg,nativeClamp) ::util::place::BesideState($dlg,nativeClampFrame)
+    }
+    set results
+} -cleanup {
+    catch {destroy $dlg}
+    array unset ::util::place::BesideState ${dlg},*
+    ::scidb::test::dlgplace::realCleanup
+} -result {1 1 1 1}
+
 tcltest::cleanupTests
