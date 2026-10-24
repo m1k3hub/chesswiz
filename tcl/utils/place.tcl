@@ -980,8 +980,19 @@ proc besideVideoDetach {dlg dw dh workarea extents gap requested minimum} {
 # Let a re-layout of the inset (media start/stop, resize, board rebuild)
 # re-place open dialogs: the protected area changed even when the board did
 # not.
-proc besideVideoChanged {} {
+proc besideVideoChanged {{released 0}} {
 	variable BesideDialogs
+	variable BesideState
+	# Stopping/hiding the player is a placement input even when the board
+	# square is unchanged. A pending idle capture can already have sampled
+	# the released layout; comparing cached rectangles alone then loses the
+	# stop event and leaves no fresh plan. Ordinary per-frame Layout calls
+	# still only schedule a comparison, avoiding a placement feedback loop.
+	if {$released} {
+		foreach dlg $BesideDialogs {
+			set BesideState($dlg,pendingTrigger) video
+		}
+	}
 	if {[llength $BesideDialogs]} { besideSchedule }
 }
 
@@ -1011,6 +1022,7 @@ proc besideSchedule {{delay ""}} {
 	variable BesideTimer
 	variable BesideDelay
 	variable BesideDialogs
+	variable BesideState
 	variable BesideMaxWait
 	variable BesideFirst
 
@@ -1026,6 +1038,16 @@ proc besideSchedule {{delay ""}} {
 	set maxWait $BesideMaxWait
 	set defaultDelay $BesideDelay
 	if {[besideVideoRect] ne {}} { set maxWait 30; set defaultDelay 10 }
+	# mpv shutdown already used part of the stop event's deadline. The
+	# inset is now hidden, so do not switch to the slower no-video debounce.
+	# Keep this urgent across Configure callbacks until the plan consumes it.
+	foreach dlg $BesideDialogs {
+		if {[info exists BesideState($dlg,pendingTrigger)]
+			&& $BesideState($dlg,pendingTrigger) eq "video"} {
+			set defaultDelay 0
+			break
+		}
+	}
 	if {$delay eq ""} { set delay $defaultDelay }
 	set delay [expr {max(0, min($delay, $BesideFirst + $maxWait - $now))}]
 	set BesideTimer [after $delay [namespace code besideSettle]]
@@ -1307,7 +1329,7 @@ proc besideParentZoomed {dlg} {
 }
 
 # Name the event that invalidated a dialog's placement: maximize, restore,
-# resize (the main window changed size), move, board or content.
+# resize (the main window changed size), move, board, video or content.
 proc besideTriggerFor {dlg parentRect boardRect} {
 	variable BesideState
 	if {[info exists BesideState($dlg,zoomed)]} {

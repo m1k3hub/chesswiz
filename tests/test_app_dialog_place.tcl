@@ -75,6 +75,14 @@ proc ::scidb::test::dlgplace::fitGeometry {w h} {
     lassign [winfo workarea .application] wx wy
     return "[fitSize $w $h]+$wx+$wy"
 }
+# Move within the current work area, leaving the current client size intact.
+proc ::scidb::test::dlgplace::movedGeometry {} {
+    lassign [winfo workarea .application] x y w h
+    lassign [winfo extents .application] l r t b
+    set dx [expr {max(0,($w-[winfo width .application]-$l-$r)/2)}]
+    set dy [expr {max(0,($h-[winfo height .application]-$t-$b)/2)}]
+    return "+[expr {$x+$dx}]+[expr {$y+$dy}]"
+}
 proc ::scidb::test::dlgplace::overlapArea {a b} {
     lassign $a ax ay aw ah
     lassign $b bx by bw bh
@@ -122,7 +130,7 @@ proc ::scidb::test::dlgplace::setupBoard {} {
     stopTrace
     ::application::switchTab board
     wm state .application normal
-    wm geometry .application "[winfo screenwidth .]x[winfo screenheight .]+0+0"
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
     waitFor 1200
     ::scidb::game::clear {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}
     foreach san {e4 e5 Nf3 Nc6} {::move::addMove menu $san}
@@ -549,7 +557,7 @@ proc ::scidb::test::dlgplace::follow {target dlg} {
 
     set before [widgetRect $dlg]
     set boardBefore [boardRect]
-    set delta [replaceDelta {wm geometry .application +180+120; followSettled $dlg $boardBefore}]
+    set delta [replaceDelta {wm geometry .application [::scidb::test::dlgplace::movedGeometry]; followSettled $dlg $boardBefore}]
     require [expr {$delta == 1 || ($nativeFollow && $delta == 0)}] "$target-move: expected 1 re-place, got $delta"
     require [expr {[widgetRect $dlg] ne $before}] "$target-move: dialog did not follow the board"
     noOverlap $target-move $dlg
@@ -657,7 +665,7 @@ proc ::scidb::test::dlgplace::areaSetup {} {
  ::application::switchTab board
  ::application::reflow::reset
  set ::application::reflow::S(override) {}
- wm geometry .application 800x900+10+10
+ wm geometry .application [::scidb::test::dlgplace::fitGeometry 800 900]
  waitFor 1600
  ::application::scalingChanged
  waitFor 500
@@ -754,7 +762,7 @@ proc ::scidb::test::dlgplace::noRoomState {state} {
     catch { ::application::board::setReserve {} 0 }
     catch { wm attributes .application -fullscreen 0 }
     catch { wm state .application normal }
-    wm geometry .application "[winfo screenwidth .]x[winfo screenheight .]+0+0"
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
     waitFor 1000
     switch -- $state {
         board-only {
@@ -812,7 +820,7 @@ proc ::scidb::test::dlgplace::noRoomCleanup {} {
     catch { ::application::board::setReserve {} 0 }
     catch { wm attributes .application -fullscreen 0 }
     catch { wm state .application normal }
-    wm geometry .application "[winfo screenwidth .]x[winfo screenheight .]+0+0"
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
     waitFor 700
     set ::application::Vars(loading) 0
     ::util::place::besideResetReplaceCount
@@ -950,7 +958,7 @@ foreach {target openScript dialog closeScript} {
         tcltest::test dlg-video-$target-$size {playing video and board both stay clear of the dialog and the inset is restored} -setup {
             ::scidb::test::dlgplace::setupBoard
         } -body [format {
-            wm geometry .application %s+0+0
+            wm geometry .application [::scidb::test::dlgplace::fitGeometry {*}[split %s x]]
             ::scidb::test::dlgplace::waitFor 1300
             set insBefore [::scidb::test::dlgplace::startVideo]
             set boardBefore [::scidb::test::dlgplace::boardRect]
@@ -1177,12 +1185,18 @@ tcltest::test dlg-v14-e-left-reserve-centering {dialog-owned left reserve center
     set floor $::application::board::MinimumReserveSquare
     set ::application::board::MinimumReserveSquare 1
 
-    # Test dialog left reserve centers remaining space exactly like right reserve
-    ::scidb::test::dlgplace::require [::application::board::setReserve left $px dialog] "left $px refused"
-    set leftDialogX $::application::board::Dim(border:x1)
-    ::scidb::test::dlgplace::require [::application::board::setReserve right $px dialog] "right $px refused"
-    set rightDialogX $::application::board::Dim(border:x1)
-    set leftCentered [expr {$leftDialogX == $px + $rightDialogX}]
+    set canvas $::application::board::Vars(widget:frame)
+    set offsets {}
+    foreach side {left right} {
+        ::scidb::test::dlgplace::require [::application::board::setReserve $side $px dialog] "$side $px refused"
+        lassign [::scidb::test::dlgplace::boardRect] bx by bw bh
+        set origin [expr {$side eq "left" ? $px : 0}]
+        set offset [expr {$bx-[winfo rootx $canvas]+$bw/2.0
+            -($origin+([winfo width $canvas]-$px)/2.0)}]
+        puts "DLG-019C side=$side workarea=[winfo workarea .application] source=winfo-workarea reserve=[::scidb::test::dlgplace::reserveState] offset=$offset"
+        lappend offsets [expr {abs($offset) <= 1}]
+    }
+    set leftCentered [expr {$offsets eq {1 1}}]
 
     # Test squeeze left reserve (flush against originX)
     ::scidb::test::dlgplace::require [::application::board::setReserve left $px squeeze] "squeeze $px refused"
@@ -1193,6 +1207,7 @@ tcltest::test dlg-v14-e-left-reserve-centering {dialog-owned left reserve center
     ::application::board::setReserve {} 0
     list $leftCentered $squeezeFlush
 } -cleanup {
+    if {[info exists floor]} {set ::application::board::MinimumReserveSquare $floor}
     ::application::board::setReserve {} 0
     ::scidb::test::dlgplace::stopTrace
     ::scidb::test::dlgplace::noRoomCleanup
@@ -1588,7 +1603,7 @@ tcltest::test dlg-w9j-native-resize-containment {Game Review and Endgame Trainer
     ::scidb::test::dlgplace::setupBoard
     wm minsize .application 1 1
 } -constraints haveWmctrl -body {
-    wm geometry .application 1000x600+0+0
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 1000 600]
     ::scidb::test::dlgplace::waitFor 900
     ::scidb::test::dlgplace::zoomBoard 0
     ::scidb::test::dlgplace::realVideo
@@ -1603,7 +1618,7 @@ tcltest::test dlg-w9j-native-resize-containment {Game Review and Endgame Trainer
     ::util::place::besideMeasureBegin
     try {
         set old [::util::place::besideNativeFrame .application]
-        wm geometry .application 930x540
+        wm geometry .application [::scidb::test::dlgplace::fitGeometry 930 540]
         ::scidb::test::dlgplace::waitFor 500
         set measured [::scidb::tk::wm frame .application]
         set cached [::util::place::besideNativeFrame .application]
@@ -1651,7 +1666,8 @@ tcltest::test dlg-w9j-native-guard-edges {native containment guard corrects a on
     toplevel $dlg
     label $dlg.content -text {Native containment guard}
     pack $dlg.content
-    wm geometry $dlg 240x100+100+100
+    lassign [winfo workarea .application] wx wy ww wh
+    wm geometry $dlg "[expr {min(240,$ww/3)}]x[expr {min(100,$wh/3)}]+[expr {$wx+$ww/10}]+[expr {$wy+$wh/10}]"
     set ::util::place::BesideState($dlg,parent) .application
     ::scidb::test::dlgplace::waitFor 300
 } -constraints haveWmctrl -body {
@@ -1689,5 +1705,108 @@ tcltest::test dlg-w9j-native-guard-edges {native containment guard corrects a on
     array unset ::util::place::BesideState ${dlg},*
     ::scidb::test::dlgplace::realCleanup
 } -result {1 1 1 1}
+
+# VAL-DLG-019A: observe the real player and production geometry by the event
+# deadline. Stop/hide must release the strip and produce a fresh helper record.
+foreach event {close stop hide} {
+    tcltest::test dlg-w9d-lifecycle-$event {real playback releases dialog/inset layout within 500 ms} -setup {
+        ::scidb::test::dlgplace::setupBoard
+        wm minsize .application 1 1
+    } -body [string map [list @EVENT@ $event] {
+        wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
+        ::scidb::test::dlgplace::waitFor 700
+        ::scidb::test::dlgplace::zoomBoard 1
+        set normalSquare $::application::board::Dim(squaresize:Normal)
+        ::scidb::test::dlgplace::realVideo
+        set inset [::scidb::test::dlgplace::widgetRect [::mediainset::Pane].mediainset]
+        set before [::scidb::test::dlgplace::reserveState]
+        ::enginematch::open .application
+        ::scidb::test::dlgplace::waitFor 700
+        set during [::scidb::test::dlgplace::reserveState]
+        set seq $::util::place::BesideRecordSeq
+        set ::scidb::test::dlgplace::calls {}
+        set start [clock milliseconds]
+        switch @EVENT@ {
+            close {destroy .application.enginematch}
+            stop {::application::media::Stop}
+            hide {::mediainset::hide}
+        }
+        puts "DLG-019A-EVENT @EVENT@ returnedMs=[expr {[clock milliseconds]-$start}] pending=$::util::place::BesideTimer state=[array get ::util::place::BesideState .application.enginematch,*]"
+        ::scidb::test::dlgplace::waitFor [expr {max(1,500-([clock milliseconds]-$start))}]
+        set after [::scidb::test::dlgplace::reserveState]
+        set records [::util::place::besidePlacementLog $seq]
+        puts "DLG-019A @EVENT@ workarea=[winfo workarea .application] before=$before during=$during after=$after elapsed=[expr {[clock milliseconds]-$start}] normalSquare=$normalSquare square=$::application::board::Dim(squaresize:Normal) records=$records"
+        if {"@EVENT@" eq "close"} {
+            ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::widgetRect [::mediainset::Pane].mediainset] eq $inset}] "inset failed to restore by 500ms"
+            ::scidb::test::dlgplace::require [expr {$after eq $before}] "close left a reserve: $before -> $after"
+        } else {
+            ::scidb::test::dlgplace::require [expr {$::application::board::ReserveKind ne "squeeze" && !$::mediainset::Shown && $::application::board::Dim(squaresize:Normal) == $normalSquare}] "video strip not released/board not regrown"
+            ::scidb::test::dlgplace::require [dict exists $::scidb::test::dlgplace::calls .application.enginematch] "stop/hide did not call the placement helper"
+            set replanned 0
+            foreach r $records {
+                if {[dict get $r dialog] eq ".application.enginematch" && [dict get $r time]-$start <= 500} {set replanned 1}
+            }
+            ::scidb::test::dlgplace::require $replanned "dialog not replanned by 500ms"
+        }
+        return 1
+    }] -cleanup {
+        catch {destroy .application.enginematch}
+        ::scidb::test::dlgplace::realCleanup
+    } -result 1
+}
+
+# VAL-DLG-019B: every named pair, both opening and closing orders. The
+# original synthetic reserve test remains above to exercise actual stacking.
+tcltest::test dlg-w9d-pair-release {all playing pairs restore reserve side, pixels and floor in either close order} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    wm minsize .application 1 1
+} -body {
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
+    ::scidb::test::dlgplace::waitFor 700
+    ::scidb::test::dlgplace::zoomBoard 1
+    ::scidb::test::dlgplace::realVideo
+    set dialogs [dict create playengine .application.playengine enginematch .application.enginematch guessmove .application.__guessmove__ reptrainer .application.__reptrainer__ gamereview .application.__gamereview endtrainer .application.__endtrainer__]
+    foreach pair {{playengine enginematch} {guessmove reptrainer} {gamereview endtrainer}} {
+        foreach opening [list $pair [lreverse $pair]] {
+            foreach closing [list $pair [lreverse $pair]] {
+                set before [::scidb::test::dlgplace::reserveState]
+                foreach short $opening {
+                    switch $short {
+                        playengine {::playengine::open .application}
+                        enginematch {::enginematch::open .application}
+                        guessmove {::guessmove::start white}
+                        reptrainer {::reptrainer::open .application}
+                        gamereview {
+                            set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]
+                            ::gamereview::ShowWindow .application $review {} 0
+                        }
+                        endtrainer {::endtrainer::open .application}
+                    }
+                    ::scidb::test::dlgplace::waitFor 600
+                }
+                set during [::scidb::test::dlgplace::reserveState]
+                foreach short $closing {
+                    switch $short {
+                        playengine {::playengine::Close}
+                        enginematch {::enginematch::Close}
+                        guessmove {::guessmove::stop}
+                        reptrainer {::reptrainer::Close .application.__reptrainer__}
+                        endtrainer {::endtrainer::Close}
+                    }
+                    catch {destroy [dict get $dialogs $short]}
+                    ::scidb::test::dlgplace::waitFor 500
+                }
+                set after [::scidb::test::dlgplace::reserveState]
+                puts "DLG-019B workarea=[winfo workarea .application] opening=$opening closing=$closing before=$before during=$during after=$after"
+                ::scidb::test::dlgplace::require [expr {$before eq $after}] "reserve leak: $before -> $after"
+            }
+        }
+    }
+    return 1
+} -cleanup {
+    catch {::guessmove::stop}
+    catch {::reptrainer::Close .application.__reptrainer__}
+    ::scidb::test::dlgplace::realCleanup
+} -result 1
 
 tcltest::cleanupTests
