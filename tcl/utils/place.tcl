@@ -1329,7 +1329,9 @@ proc besideBorderRoom {side px kind maxBoard workarea fw fh gap needW needH} {
 	if {![llength [info commands ::application::board::reserveBorder]]} { return 1 }
 	if {[catch {
 		set frame $::application::board::Vars(widget:frame)
-		set border [::application::board::reserveBorder $side $px $kind $maxBoard 1]
+		set squeeze [expr {$kind eq "squeeze" && $side in {left right}}]
+		set border [::application::board::reserveBorder $side $px $kind $maxBoard 1 $squeeze]
+		if {$squeeze && [llength $border]} { lassign $border border strip }
 		set ox [expr {[winfo rootx $frame] - int([$frame canvasx 0])}]
 		set oy [expr {[winfo rooty $frame] - int([$frame canvasy 0])}]
 	}]} { return 1 }
@@ -1337,6 +1339,19 @@ proc besideBorderRoom {side px kind maxBoard workarea fw fh gap needW needH} {
 	lassign $border x y bw bh
 	set bx [expr {$ox + $x}]
 	set by [expr {$oy + $y}]
+	if {$squeeze} {
+		# A board-only feasibility check mistakes the video's own strip
+		# for free room. Include its future centred rectangle, using the
+		# same reserve dimensions and aspect as the inset layout, without
+		# rendering either speculative layout.
+		set video [::mediainset::Pane].mediainset
+		lassign $strip rx ry rw rh
+		set ih [expr {int(round(($px-8)/$::mediainset::Aspect))
+			+ [winfo reqheight $video.controls]+8}]
+		set vr [list [expr {$ox+$rx+($rw-$px)/2}] \
+			[expr {$oy+$ry+($rh-$ih)/2}] $px $ih]
+		lassign [besideUnionRect [list $bx $by $bw $bh] $vr] bx by bw bh
+	}
 	lassign $workarea wx wy ww wh
 	return [expr {$bx + $bw + $gap + $needW + $fw <= $wx + $ww
 		|| $bx - $gap - $needW - $fw >= $wx

@@ -1584,9 +1584,10 @@ proc reserveSquare {side px width height {kind auto} {maxBoard 0}} {
 # The border rectangle {x y size} (canvas coordinates) the current canvas
 # would draw with this reserve, or {} when ComputeLayout refuses it; {} 0
 # probes the unreserved layout. With decorations=1 returns {x y w h},
-# including the always-visible side-to-move column. Lets a dialog rule out an inset
-# squeeze or detach without rebuilding the board for each attempt.
-proc reserveBorder {side px {kind auto} {maxBoard 0} {decorations 0}} {
+# including the always-visible side-to-move column. With withReserve=1,
+# returns {borderRect reserveRect} so the future inset can be measured too.
+# These probes never render or change the live reserve.
+proc reserveBorder {side px {kind auto} {maxBoard 0} {decorations 0} {withReserve 0}} {
 	variable Dim
 	variable Vars
 	variable ReserveSide
@@ -1615,8 +1616,10 @@ proc reserveBorder {side px {kind auto} {maxBoard 0} {decorations 0}} {
 				&& (![info exists Vars(3d)] || !$Vars(3d))} {
 				set extra [expr {$Dim(gap:x)+$Dim(stm)}]
 			}
-			return [list $Dim(border:x1) $Dim(border:y1) \
+			set box [list $Dim(border:x1) $Dim(border:y1) \
 				[expr {$Dim(bordersize)+$extra}] $Dim(bordersize)]
+			if {$withReserve} { return [list $box [reserveRect]] }
+			return $box
 		}
 		return [list $Dim(border:x1) $Dim(border:y1) $Dim(bordersize)]
 	} finally {

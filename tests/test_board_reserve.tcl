@@ -81,15 +81,18 @@ tcltest::test board-reserve-border-probe {border probes preserve dimensions and 
         $::application::board::ReserveKind $::application::board::ReserveMaxBoard]
     set border [::application::board::reserveBorder left 168 squeeze 500]
     set footprint [::application::board::reserveBorder left 168 squeeze 500 1]
+    set geometry [::application::board::reserveBorder left 168 squeeze 500 1 1]
     set absent [::application::board::reserveBorder right 1500 auto]
     list [expr {[llength $border] == 3 && [lindex $border 2] > 0}] \
         [expr {[llength $footprint] == 4 && [lindex $footprint 2] > [lindex $footprint 3]}] \
+        [expr {[lindex $geometry 0] eq $footprint && [llength [lindex $geometry 1]] == 4
+            && [lindex $geometry 1 2] == 168}] \
         [expr {$absent eq {}}] \
         [expr {$before eq [lsort [array get ::application::board::Dim]]}] \
         [expr {$state eq [list $::application::board::ReserveSide $::application::board::ReservePixels \
             $::application::board::ReserveKind $::application::board::ReserveMaxBoard]}] \
         [expr {$count == $::application::board::rebuildCount}]
-} -result {1 1 1 1 1 1}
+} -result {1 1 1 1 1 1 1}
 tcltest::test board-reserve-pure-refusal {refusal leaves dimensions and accepted reserve unchanged} -body {
     ::application::board::setReserve right 300
     set before [lsort [array get ::application::board::Dim]]
