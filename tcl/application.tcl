@@ -2430,7 +2430,7 @@ proc ::tk::PostOverPoint {menu x y {entry {}}} {
 	::tk::_PostOverPoint_application $menu $x $y $entry
 }
 
-# Session presentation of the DEFAULT board layout. No option or layout-file
+# Session presentation of standard-structure board layouts. No option or layout-file
 # writes live here. $t load reuses leaves by uid (verified with a running
 # Stockfish and native widget IDs); only the containers are rebuilt.
 namespace eval ::application::reflow {
@@ -2523,7 +2523,8 @@ proc tallSashes {t} {
 proc reflowable? {t} {
  variable S
  if {$t eq {} || $S(busy) || $S(saving) || ![info exists S(wideShape)]} {return 0}
- if {$::application::twm::Options(board:layout:name) ne {}} {return 0}
+ # Names and pane sizes do not change structure. Saved standard-based
+ # layouts use the same temporary presentation as the unnamed standard.
  if {[llength [$t floats]] || [$t zoomed] ne {}} {return 0}
  if {$::application::Vars(loading) || $::application::Vars(lock:layout)} {return 0}
  # Focus zoom owns its sash snapshot until switched off.

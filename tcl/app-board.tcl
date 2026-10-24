@@ -1687,7 +1687,7 @@ proc setReserve {side px {kind auto} {maxBoard 0}} {
 	set ReserveMaxBoard $maxBoard
 	ComputeLayout $Vars(width) $Vars(height)
 	# ComputeLayout is the single arbitrator: an ordinary ("auto") reserve is
-	# kept only when the strip does not shrink the drawn square (see below).
+	# kept only when the reserved square stays at least 32 px (see below).
 	set accepted [expr {$side eq {} || $ReserveSide eq $side}]
 	array unset Dim
 	array set Dim $saved
@@ -2084,18 +2084,12 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 		set Dim($sqsize)	[expr {($boardsize - 2*$Dim(edgethickness))/8}]
 	}
 
-	# The ordinary video strip may never cost the drawn board a square
-	# (VAL-MED-012): compare the reserved square with the same layout without
-	# the reserve on every rebuild, not only below the fixed 32 px floor. A
-	# small board whose square the strip leaves unchanged (for example 31 px
-	# at 1250x570) is still better shifted than covered, so only a reserve
-	# that really shrinks the drawn square is dropped.
-	# A dialog, or the video yielding a strip to one, explicitly asks to
-	# shrink the board (VAL-DLG-012/013); the floor remains its guard.
-	if {$ReserveSide ne {} && ($ReserveKind eq "auto"
-		|| $Dim($sqsize) < $MinimumReserveSquare)} {
+	# Video may shrink the board down to the floor (VAL-MED-013).
+	# Preserve the dialog rule: below the floor, only a non-shrinking
+	# dialog reserve can remain. Auto reserves always require the floor.
+	if {$ReserveSide ne {} && $Dim($sqsize) < $MinimumReserveSquare} {
 		set unreserved [unreservedSquare $fullWidth $fullHeight]
-		if {$Dim($sqsize) < $unreserved} {
+		if {$ReserveKind eq "auto" || $Dim($sqsize) < $unreserved} {
 			set ReserveSide {}
 			set ReservePixels 0
 			set ReserveKind auto

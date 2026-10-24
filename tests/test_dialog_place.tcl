@@ -110,6 +110,37 @@ tcltest::test dlg-candidate-grid {the chosen outer rectangle is contained and ha
     }
     set checked
 } -result 36
+# VAL-DLG-021: joint requested-frame packing is independent of Tk/WM.
+foreach {name board sizes area fits} {
+    pair-column {8 151 331 306} {{361 219} {463 385}} {0 0 802 627} 1
+    reverse-column {8 151 331 306} {{463 385} {361 219}} {0 0 802 627} 1
+    no-room {0 0 750 550} {{463 385}} {0 0 802 627} 0
+    negative-origin {-792 -449 331 306} {{361 219} {463 385}} {-800 -600 802 627} 1
+    three-dialogs {0 0 300 300} {{400 180} {400 180} {400 180}} {0 0 800 600} 1
+} {
+    tcltest::test dlg-reserve-pack-$name {requested native frames clear drawing and one another within live bounds} -body {
+        set packed [::util::place::besidePack $board $sizes $area 12]
+        set valid [expr {[llength $packed] == [llength $sizes]}]
+        set previous {}
+        foreach rect $packed size $sizes {
+            if {![::util::place::besideInside $rect $area]
+                || [::util::place::besideOverlap $rect $board]
+                || [lrange $rect 2 3] ne $size} {set valid 0}
+            foreach peer $previous {
+                if {[::util::place::besideOverlap $rect $peer]} {set valid 0}
+            }
+            lappend previous $rect
+        }
+        set valid
+    } -result $fits
+}
+tcltest::test dlg-reserve-pack-video-bounds {joint video stays inside the canvas while the dialog can use the main work area} -body {
+    set board {8 153 315 290}
+    set canvas {0 148 994 437}
+    set packed [::util::place::besidePack $board [list [list 168 182 $canvas] {493 447}] {0 0 996 600} 12]
+    list [llength $packed] [::util::place::besideInside [lindex $packed 0] $canvas] \
+        [::util::place::besideOverlap [lindex $packed 0] [lindex $packed 1]]
+} -result {2 1 0}
 set failed $::tcltest::numTests(Failed)
 tcltest::cleanupTests
 if {$failed} {exit 1}

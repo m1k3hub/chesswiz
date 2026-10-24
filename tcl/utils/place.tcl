@@ -67,8 +67,12 @@ variable BesideBoardBound	{}
 # a free strip besideBoard shrinks instead of reserving board room.
 variable BesideMinimums
 # Strips reserved for dialogs that cannot shrink. Entries are
-# {dialog side pixels previousSide previousPixels}, newest last.
+# {dialog side pixels previousSide previousPixels rootFloor activeFloor
+#  previousKind ?requested?}, newest last. The optional marker protects a
+# requested-size group's strip while the inset lays itself out.
 variable BesideReserves		{}
+# A requested-size reserve is being rebuilt before its owners are committed.
+variable BesideReservePending 0
 # The plan besideBoard last applied to each dialog (evidence and tests).
 variable BesideLastPlan
 # Per-dialog placement record (VAL-DLG-018A/C): a dict with trigger, rect
@@ -1678,7 +1682,7 @@ proc besidePruneReserves {} {
 			# the live reserve for as long as its dialog is open.
 			if {[winfo exists $d]} {
 				lappend kept [list $d $activeSide $activePixels $activeSide \
-					$activePixels $rootFloor $af $::application::board::ReserveKind]
+					$activePixels $rootFloor $af $::application::board::ReserveKind [lindex $entry 8]]
 			}
 			continue
 		}
@@ -1730,7 +1734,7 @@ proc besideReleaseReserve {dlg} {
 	foreach later $BesideReserves {
 		lassign $later d sd px ps pp rf af pk
 		if {$ps eq $side && $pp == $pixels} {
-			set later [list $d $sd $px $previousSide $previousPixels $rootFloor $af $previousKind]
+			set later [list $d $sd $px $previousSide $previousPixels $rootFloor $af $previousKind [lindex $later 8]]
 		}
 		lappend out $later
 	}
@@ -1756,6 +1760,7 @@ proc besideReleaseReserve {dlg} {
 		# Restore the reserve of the top remaining entry.
 		lassign [lindex $BesideReserves end] _ remSide remPixels _ _ _ _ remKind
 		if {$remKind eq ""} { set remKind auto }
+		if {$::application::board::ReserveKind eq "dialog" && $remPixels > 0} { set remKind dialog }
 		catch { ::application::board::setReserve $remSide $remPixels $remKind }
 		# Keep the lowest floor required by the reserves that remain.
 		set floor {}
@@ -1843,10 +1848,11 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 	}
 	if {$targetW + $fw > $ww || $targetH + $fh > $wh} { return {} }
 	set rootFloor $::application::board::MinimumReserveSquare
-	# reserveSquare uses ComputeLayout, which drops a reserve whose squares
-	# fall below the floor. A dialog may legitimately need that much room, so
-	# probe with the floor at 1 and decide the lifetime floor after choosing.
-	if {$rootFloor > 1} { set ::application::board::MinimumReserveSquare 1 }
+	# Reflowable reports explicitly declare their own usable minimum; keep
+	# that existing policy separate from playing dialogs' 32px floor.
+	variable BesideMinimums
+	set reserveFloor [expr {[info exists BesideMinimums($dlg)] ? 1 : max(32,$rootFloor)}]
+	set ::application::board::MinimumReserveSquare [expr {min($rootFloor,$reserveFloor)}]
 	set choices {}
 	set sides {right left below}
 	if {$stacked} {
@@ -1868,7 +1874,7 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 		if {$need > $activePixels && $need < $extent} {
 			set square [::application::board::reserveSquare $activeSide $need \
 				$fullWidth $fullHeight dialog]
-			if {$square >= 1} {
+			if {$square >= $reserveFloor} {
 				lappend choices [list [expr {$activeSide eq "bottom" ? "below" : $activeSide}] $need $square]
 			}
 		}
@@ -1894,7 +1900,7 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 		# dialog kind rather than the strict ordinary video-strip rule.
 		set square [::application::board::reserveSquare $boardSide $need \
 			$fullWidth $fullHeight dialog]
-		if {$square < 1} { continue }
+		if {$square < $reserveFloor} { continue }
 		lappend choices [list $side $need $square]
 	}
 	if {![llength $choices]} {
@@ -1914,10 +1920,7 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 	}
 	lassign $chosen side pixels square
 	set boardSide [expr {$side eq "below" ? "bottom" : $side}]
-	# A dialog may need more room than the video inset's floor allows. Lower
-	# the floor only for the lifetime of this reserve and restore it on close,
-	# so a later board rebuild does not silently drop the reserved strip.
-	set activeFloor [expr {min($rootFloor, max(1, $square))}]
+	set activeFloor [expr {min($rootFloor,$square)}]
 	set ::application::board::MinimumReserveSquare $activeFloor
 	if {[catch { ::application::board::setReserve $boardSide $pixels dialog } rv] || !$rv} {
 		besideReserveRevert $previousSide $previousPixels $rootFloor $previousKind
@@ -1962,6 +1965,248 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 		$::application::board::ReservePixels $previousSide $previousPixels \
 		$rootFloor $activeFloor $previousKind]
 	return $plan
+}
+
+# Requested-size packing against a proposed drawn board. Keep opening order,
+# but allow a pair to share a column (or row) instead of adding their widths.
+# All rectangles are outer frames; this is also used by headless tests.
+proc besidePack {board sizes workarea gap {placed {}}} {
+	if {![llength $sizes]} { return $placed }
+	lassign $workarea wx wy ww wh
+	lassign [lindex $sizes 0] w h bounds
+	set limits $workarea
+	if {[llength $bounds] == 4} {
+		lassign $bounds lx ly lw lh
+		set right [expr {min($wx+$ww,$lx+$lw)}]
+		set bottom [expr {min($wy+$wh,$ly+$lh)}]
+		set wx [expr {max($wx,$lx)}]; set wy [expr {max($wy,$ly)}]
+		set ww [expr {$right-$wx}]; set wh [expr {$bottom-$wy}]
+		set limits [list $wx $wy $ww $wh]
+	}
+	if {$w > $ww || $h > $wh} { return {} }
+	lassign $board bx by bw bh
+	set xs [list [expr {$bx+$bw+$gap}] [expr {$bx-$gap-$w}] $wx [expr {$wx+$ww-$w}]]
+	set ys [list $by $wy [expr {$wy+$wh-$h}] [expr {$by+$bh+$gap}] [expr {$by-$gap-$h}]]
+	foreach rect $placed {
+		lassign $rect x y pw ph
+		lappend xs $x [expr {$x+$pw+$gap}] [expr {$x-$gap-$w}]
+		lappend ys [expr {$y+$ph+$gap}] [expr {$y-$gap-$h}] $y
+	}
+	foreach x [lsort -unique $xs] {
+		foreach y [lsort -unique $ys] {
+			set rect [list $x $y $w $h]
+			if {![besideInside $rect $limits] || [besideOverlap $rect $board]} { continue }
+			set clear 1
+			foreach other $placed {
+				if {[besideOverlap $rect $other]} { set clear 0; break }
+			}
+			if {!$clear} { continue }
+			set result [besidePack $board [lrange $sizes 1 end] $workarea $gap [linsert $placed end $rect]]
+			if {[llength $result]} { return $result }
+		}
+	}
+	return {}
+}
+
+# Only a committed requested-size group (or its atomic rebuild) prevents
+# the inset from replacing a dialog strip. Ordinary legacy reserves still
+# yield to video-start layout, preserving the media shrink/Stop lifecycle.
+proc besideRequestedReserveActive {} {
+	variable BesideReservePending
+	variable BesideReserves
+	if {$BesideReservePending} { return 1 }
+	if {$::application::board::ReserveKind ne "dialog"} { return 0 }
+	foreach entry $BesideReserves {
+		if {[lindex $entry 8] eq "requested" && [winfo exists [lindex $entry 0]]
+			&& [lindex $entry 1] eq $::application::board::ReserveSide
+			&& [lindex $entry 2] == $::application::board::ReservePixels} { return 1 }
+	}
+	return 0
+}
+
+# Keep a joint reserve's already valid video placement during a re-plan.
+# Clearing it would park the inset over the group, release the board strip,
+# and rebuild the same layout twice before every native capture.
+proc besideKeepsRequestedVideo {dlg} {
+	if {![besideRequestedReserveActive]
+		|| ![info exists ::mediainset::DodgeFor]
+		|| $::mediainset::DodgeFor ne $dlg} { return 0 }
+	set video [besideVideoRect]
+	set board [besideBoardRect]
+	if {$video eq {} || $board eq {} || [besideOverlap $video $board]} { return 0 }
+	set frame $::application::board::Vars(widget:frame)
+	return [besideInside $video [besideRect $frame]]
+}
+
+# VAL-DLG-021: before accepting requested-size board overlap, probe a
+# dialog-kind reserve for the whole group. Probe geometry only; commit one
+# accepted reserve, then submit peer moves to the normal capture/guard path
+# so user ownership, native-frame correction and records stay intact.
+proc besideRequestedReserve {dlg peers rw rh workarea extents gap} {
+	variable BesideReserves
+	variable BesideState
+	variable BesideMinimums
+	if {[info exists BesideMinimums($dlg)]} { return {} }
+	if {![llength [info commands ::application::board::reserveBorder]]} { return {} }
+	foreach other $peers {
+		if {[info exists BesideMinimums($other)]} { return {} }
+		if {[info exists BesideState($other,user)] && $BesideState($other,user)} { return {} }
+	}
+	set frame $::application::board::Vars(widget:frame)
+	if {![winfo exists $frame]} { return {} }
+	set width [winfo width $frame]
+	set height [winfo height $frame]
+	set fx [winfo rootx $frame]
+	set fy [winfo rooty $frame]
+	set previousSide $::application::board::ReserveSide
+	set previousPixels $::application::board::ReservePixels
+	set previousKind $::application::board::ReserveKind
+	# An inset owned by a peer keeps its squeeze/dodge (016/017).
+	if {$previousPixels > 0 && $previousKind ni {auto dialog}} { return {} }
+	set group $peers
+	lappend group $dlg
+	foreach entry $BesideReserves {
+		if {[lindex $entry 0] ni $group} { return {} }
+	}
+	set sizes {}
+	foreach other $group {
+		if {$other eq $dlg} {
+			set ex $extents; set w $rw; set h $rh
+		} else {
+			set ex [besideDialogExtents $other]
+			set w [winfo reqwidth $other]; set h [winfo reqheight $other]
+		}
+		lassign $ex l r t b
+		lappend sizes [list [expr {$w+$l+$r}] [expr {$h+$t+$b}]]
+	}
+	# Preserve MED-013 as well: if a minimum video strip can retain the
+	# floor, pack that video inside the canvas along with the dialogs.
+	# Put its bounded rectangle first to prune impossible group placements.
+	set packSizes $sizes
+	set withVideo 0
+	if {[besideVideoRect] ne {} && !$::mediainset::Audio} {
+		set vw [::mediainset::MinimumStrip]
+		set pane [::mediainset::Pane]
+		set vh [expr {int(round(($vw-8)/$::mediainset::Aspect))
+			+ [winfo reqheight $pane.mediainset.controls] + 8}]
+		set videoSquare [expr {max(
+			[::application::board::reserveSquare right $vw $width $height],
+			[::application::board::reserveSquare bottom $vh $width $height])}]
+		if {$videoSquare >= 32} {
+			set withVideo 1
+			set packSizes [linsert $sizes 0 [list $vw $vh [list $fx $fy $width $height]]]
+		}
+	}
+	set best {}
+	foreach side {right left bottom} {
+		# Find the largest accepted strip that retains the 32px square floor.
+		set lo 1
+		set hi [expr {($side eq "bottom" ? $height : $width)-1}]
+		set limit 0
+		while {$lo <= $hi} {
+			set mid [expr {($lo+$hi)/2}]
+			set sq [::application::board::reserveSquare $side $mid $width $height dialog]
+			if {$sq >= 32} { set limit $mid; set lo [expr {$mid+1}] } else { set hi [expr {$mid-1}] }
+		}
+		if {!$limit} { continue }
+		set lo 1; set hi $limit
+		set choice {}
+		while {$lo <= $hi} {
+			set mid [expr {($lo+$hi)/2}]
+			set box [::application::board::reserveBorder $side $mid dialog 0 1]
+			if {[llength $box] != 4} { break }
+			lassign $box x y w h
+			set packed [besidePack [list [expr {$fx+$x}] [expr {$fy+$y}] $w $h] $packSizes $workarea $gap]
+			if {[llength $packed]} {
+				set sq [::application::board::reserveSquare $side $mid $width $height dialog]
+				set choice [list $side $mid $sq $packed]
+				set hi [expr {$mid-1}]
+			} else { set lo [expr {$mid+1}] }
+		}
+		if {[llength $choice] && (![llength $best] || [lindex $choice 2] > [lindex $best 2])} { set best $choice }
+	}
+	if {![llength $best]} {
+		# A resize or video-start can make a formerly valid group impossible.
+		# Let the video recover its feasible strip, then recompute the
+		# dialogs' ordinary no-room fallback against that live drawing.
+		if {$withVideo && [besideRequestedReserveActive]} {
+			foreach entry $BesideReserves {
+				if {[lindex $entry 1] ne [lindex $entry 3]
+					|| [lindex $entry 2] != [lindex $entry 4]} {
+					set ::application::board::MinimumReserveSquare [lindex $entry 5]
+					break
+				}
+			}
+			set BesideReserves {}
+			foreach other $group { ::mediainset::RestoreAfterDialog $other }
+			::application::board::setReserve {} 0
+			update idletasks
+			return [dict create replan 1]
+		}
+		return {}
+	}
+	lassign $best side pixels square packed
+	variable BesideReservePending
+	set BesideReservePending 1
+	try {
+		if {![::application::board::setReserve $side $pixels dialog]} { return {} }
+		update idletasks
+		# Check the actual drawing too: the painted side bars can extend beyond
+		# the border probe. A failed attempt restores the previous reserve.
+		set actual [besideBoardRect]
+		foreach rect $packed {
+			if {[besideOverlap $rect $actual]} {
+				::application::board::setReserve $previousSide $previousPixels $previousKind
+				return {}
+			}
+		}
+		set groupRects $packed
+		if {$withVideo} {
+			if {![::mediainset::DodgeForGroup [lindex $group 0] [lindex $packed 0]]} {
+				::application::board::setReserve $previousSide $previousPixels $previousKind
+				return {}
+			}
+			set groupRects [lrange $packed 1 end]
+		}
+		# Collapse the group's reserve history to one root and shared owners.
+		# Repeated re-plans must not leave duplicate owners or resurrect an
+		# intermediate strip when the last dialog closes.
+		set rootSide $previousSide; set rootPixels $previousPixels; set rootKind $previousKind
+		foreach entry $BesideReserves {
+			lassign $entry d sd px ps pp
+			if {$sd ne $ps || $px != $pp} {
+				set rootSide $ps; set rootPixels $pp; set rootKind [lindex $entry 7]
+				break
+			}
+		}
+		set floor $::application::board::MinimumReserveSquare
+		set BesideReserves {}
+		foreach other $group {
+			lappend BesideReserves [list $other $side $pixels $rootSide $rootPixels $floor $floor $rootKind requested]
+			set rootSide $side; set rootPixels $pixels; set rootKind dialog
+		}
+		foreach other $group rect $groupRects {
+			lassign $rect x y w h
+			if {$other eq $dlg} { continue }
+			lassign [wm minsize $other] mw mh
+			wm minsize $other [expr {min($mw,[winfo reqwidth $other])}] [expr {min($mh,[winfo reqheight $other])}]
+			# Drop any planner cap left by an earlier, smaller work area.
+			wm geometry $other ""
+			wm geometry $other "+$x+$y"
+			set BesideState($other,request) [list $x $y]
+			set BesideState($other,planned) $rect
+			set BesideState($other,last) {}
+			variable BesideLastPlan
+			set BesideLastPlan($other) [dict create geometry [list $x $y [winfo reqwidth $other] [winfo reqheight $other]] rule reserve-requested side $side overlap 0 resized 0 pair 1]
+			after idle [namespace code [list besideCapture $other]]
+		}
+		lassign [lindex $packed end] x y
+		set plan [dict create geometry [list $x $y $rw $rh] rule reserve-requested side $side overlap 0 resized 0]
+		if {[llength $peers]} { dict set plan pair 1 }
+		return $plan
+	} finally {
+		set BesideReservePending 0
+	}
 }
 
 # The completed board drawing is the first point at which a parent resize
@@ -2411,7 +2656,8 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 		# A previous placement may have moved the inset out of this dialog's
 		# way; put it back before planning so the protected area is the
 		# normal one.
-		if {[llength [info commands ::mediainset::RestoreAfterDialog]]} {
+		if {[llength [info commands ::mediainset::RestoreAfterDialog]]
+			&& ![besideKeepsRequestedVideo $dlg]} {
 			catch { ::mediainset::RestoreAfterDialog $dlg }
 		}
 		if {[llength [info commands ::mediainset::ClearSqueeze]]} {
@@ -2540,6 +2786,19 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 			set plan $stacked
 			dict set plan pair 1
 			set pair 1
+		}
+	}
+	lassign [dict get $plan geometry] _ _ pw ph
+	if {([dict get $plan overlap] > 0 || $pw < $rw || $ph < $rh
+			|| ([dict exists $plan peerFree] && ![dict get $plan peerFree]))
+		&& $rw <= $ww-$fw && $rh <= $wh-$fh} {
+		set reserved [besideRequestedReserve $dlg $peers $rw $rh $workarea $extents 12]
+		if {[dict exists $reserved replan]} {
+			return [BesideBoardPlan $dlg $parent [expr {$retry+1}]]
+		}
+		if {[llength $reserved]} {
+			set plan $reserved
+			lassign [dict get $plan geometry] _ _ pw ph
 		}
 	}
 	# The first dialog keeps the plain three-candidate minimum. Only a

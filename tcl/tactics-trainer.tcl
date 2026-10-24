@@ -245,7 +245,8 @@ proc ::tactics::guard {command} {
 }
 proc ::tactics::click {x y} {
     variable selected; variable move
-    set square "[string index abcdefgh [expr {$x / 48}]][expr {8 - $y / 48}]"
+    set cell [expr {[.tactics.board cget -width] / 8}]
+    set square "[string index abcdefgh [expr {$x / $cell}]][expr {8 - $y / $cell}]"
     if {$selected eq ""} { set selected $square; return }
     set move $selected$square; set selected ""
     # Entry remains editable for underpromotion (append q/r/b/n).
@@ -257,6 +258,7 @@ proc ::tactics::render {} {
     if {$session eq ""} { return }
     set c .tactics.board
     $c delete all
+    set cell [expr {[$c cget -width] / 8}]
     set row 0
     set glyphs [dict create K \u2654 Q \u2655 R \u2656 B \u2657 N \u2658 P \u2659 k \u265a q \u265b r \u265c b \u265d n \u265e p \u265f]
     foreach rank [split [lindex [dict get $session fen] 0] /] {
@@ -264,9 +266,9 @@ proc ::tactics::render {} {
         foreach piece [split $rank ""] {
             if {[string is digit -strict $piece]} { set cells $piece; set piece "" } else { set cells 1 }
             for {set i 0} {$i < $cells} {incr i} {
-                set x [expr {$col * 48}]; set y [expr {$row * 48}]
-                $c create rectangle $x $y [expr {$x+48}] [expr {$y+48}] -fill [expr {($row+$col)%2 ? "#b58863" : "#f0d9b5"}] -outline {}
-                if {$piece ne ""} { $c create text [expr {$x+24}] [expr {$y+24}] -text [dict get $glyphs $piece] -font {DejaVu\ Sans 32} -fill black }
+                set x [expr {$col * $cell}]; set y [expr {$row * $cell}]
+                $c create rectangle $x $y [expr {$x+$cell}] [expr {$y+$cell}] -fill [expr {($row+$col)%2 ? "#b58863" : "#f0d9b5"}] -outline {}
+                if {$piece ne ""} { $c create text [expr {$x+$cell/2}] [expr {$y+$cell/2}] -text [dict get $glyphs $piece] -font [list {DejaVu Sans} [expr {$cell*2/3}]] -fill black }
                 incr col
             }
         }
@@ -290,9 +292,9 @@ proc ::tactics::open {{parent .application}} {
     wm protocol .tactics WM_DELETE_WINDOW {::tactics::guard ::tactics::close}
     ttk::button .tactics.open -text "Open puzzle PGN..." -command {::tactics::guard ::tactics::openPGN}
     ttk::button .tactics.build -text "AI: Training Set from Games..." -command [list ::ai::cql::training $parent]
-    canvas .tactics.board -width 384 -height 384 -highlightthickness 0
+    canvas .tactics.board -width 320 -height 320 -highlightthickness 0
     bind .tactics.board <Button-1> {::tactics::click %x %y}
-    ttk::label .tactics.status -textvariable ::tactics::message -wraplength 420
+    ttk::label .tactics.status -textvariable ::tactics::message -wraplength 384
     ttk::entry .tactics.move -textvariable ::tactics::move
     bind .tactics.move <Return> {::tactics::guard ::tactics::submit}
     ttk::button .tactics.play -text "Play move" -command {::tactics::guard ::tactics::submit}
@@ -300,7 +302,18 @@ proc ::tactics::open {{parent .application}} {
     ttk::button .tactics.show -text "Show solution" -command {::tactics::guard ::tactics::showSolution}
     ttk::button .tactics.next -text Next -command {::tactics::guard ::tactics::next}
     ttk::label .tactics.score -text [score]
-    pack .tactics.open .tactics.build .tactics.board .tactics.status .tactics.move .tactics.play .tactics.retry .tactics.show .tactics.next .tactics.score -pady 3
-    # This trainer has its own board, so centre it on its parent.
-    ::util::place .tactics -parent $parent -position center
+    # Share action rows so the puzzle and all controls fit short work areas.
+    # Keep widget paths stable for the puzzle callbacks.
+    grid .tactics.open -row 0 -column 0 -pady 1
+    grid .tactics.build -row 0 -column 1 -columnspan 2 -pady 1
+    grid .tactics.board -row 1 -column 0 -columnspan 3 -pady 1
+    grid .tactics.status -row 2 -column 0 -columnspan 3 -pady 1
+    grid .tactics.move -row 3 -column 0 -columnspan 2 -pady 1
+    grid .tactics.play -row 3 -column 2 -pady 1
+    grid .tactics.retry -row 4 -column 0 -pady 1
+    grid .tactics.show -row 4 -column 1 -pady 1
+    grid .tactics.next -row 4 -column 2 -pady 1
+    grid .tactics.score -row 5 -column 0 -columnspan 3 -pady 1
+    # Keep the main board visible and register for subsequent layout changes.
+    ::util::place::besideBoard .tactics $parent
 }

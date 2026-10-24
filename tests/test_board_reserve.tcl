@@ -153,11 +153,8 @@ tcltest::test board-reserve-pure-3d {visible 3D frame reserves each side and rep
     set result
 } -result {{configure .visible3d -padx {0 300} -pady {0 0}} {configure .visible3d -padx {0 0} -pady {0 300}} {configure .visible3d -padx {300 0} -pady {0 0}} {1200 800} 0 0 1 {configure .visible3d -padx {0 0} -pady {0 0}}}
 
-# VAL-MED-012: compare the reserved square with unreservedSquare whenever a reserve
-# is set or considered (ComputeLayout and FitStrip), not only below MinimumReserveSquare.
-# Validator counterexamples that must keep the square equal to unreserved:
-# 1000x640 (33 vs 38), 1000x700 (33 vs 43), 1100x700 (39 vs 43).
-tcltest::test board-reserve-val-med-012-counterexamples {reserves shrinking board square are rejected} -body {
+# VAL-MED-013: auto reserves may shrink squares down to the 32 px floor.
+tcltest::test board-reserve-val-med-013-counterexamples {reserves shrinking board square above the floor are accepted} -body {
     set results {}
     # Case 1: 1000x640: unreserved 38 vs right reserve (which would be 33)
     set w 497; set h 340
@@ -178,6 +175,13 @@ tcltest::test board-reserve-val-med-012-counterexamples {reserves shrinking boar
     lappend results [list $unreserved $reserved]
 
     set results
-} -result {{38 0} {43 0} {43 0}}
+} -result {{38 33} {43 33} {43 39}}
+
+tcltest::test board-reserve-auto-floor {auto rejects unchanged 31 px, accepts exactly 32; dialog rule remains unchanged} -body {
+    list [::application::board::unreservedSquare 621 288] \
+        [::application::board::reserveSquare right 168 621 288 auto] \
+        [::application::board::reserveSquare right 168 621 296 auto] \
+        [::application::board::reserveSquare right 168 621 288 dialog]
+} -result {31 0 32 31}
 
 tcltest::cleanupTests
