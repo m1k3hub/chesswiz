@@ -50,13 +50,14 @@ variable ShiftLeft	8
 # A dialog the user moved or resized is left alone from then on, even over
 # the board (VAL-DLG-018C); only a display change that leaves it outside the
 # new screen work area re-places it.
-variable BesideDelay		30
+variable BesideDelay		15
 variable BesideTimer		{}
 # A steady stream of events (a playing video's per-frame Configure, a live
 # engine clock) would restart a pure trailing debounce forever; the settle
 # runs at the latest this long after the first deferred event.
-variable BesideMaxWait		250
+variable BesideMaxWait		80
 variable BesideFirst		{}
+variable BesideUnmappedRetries	0
 variable BesideDialogs		{}
 variable BesideState
 variable BesideReplacements	0
@@ -920,12 +921,11 @@ proc besideVideoDetach {dlg dw dh workarea extents gap requested minimum} {
 	while {[llength $sides]} {
 		set sides [lassign $sides side]
 		set derr [catch { ::mediainset::DetachForDialog $dlg $side $needW $needH \
-			$workarea $extents $gap } parked]
-		if {$derr || !$parked} { continue }
+			$workarea $extents $gap 0 } parked]
+		if {$derr} { continue }
 		update idletasks
 		lassign [besideProtectedRect] px py pw ph
 		if {$pw < 2 || $ph < 2} {
-			catch { ::mediainset::ClearDetach $dlg }
 			continue
 		}
 		if {!$tried} {
@@ -944,12 +944,12 @@ proc besideVideoDetach {dlg dw dh workarea extents gap requested minimum} {
 				if {$ok} { lappend fit $s }
 			}
 			if {$side ni $fit} {
-				catch { ::mediainset::ClearDetach $dlg }
 				set sides $fit
 				continue
 			}
 			set sides [lrange $fit 1 end]
 		}
+		if {!$parked} { continue }
 		set plan [besidePlan $px $py $pw $ph $dw $dh $workarea $extents $gap \
 			$requested $minimum]
 		lassign [dict get $plan geometry] _ _ w h
@@ -957,8 +957,10 @@ proc besideVideoDetach {dlg dw dh workarea extents gap requested minimum} {
 			&& $w >= $needW && $h >= $needH} {
 			return $plan
 		}
-		catch { ::mediainset::ClearDetach $dlg }
 	}
+	# All candidates share the unreserved board. Restore only once after
+	# the batch fails, rather than repainting it for each rejected side.
+	catch { ::mediainset::ClearDetach $dlg }
 	return {}
 }
 
@@ -1124,6 +1126,7 @@ proc besideRegistryAdd {dlg parent} {
 	if {[catch { set board $::application::board::board }]} { set board {} }
 	if {$board ne {} && [winfo exists $board] && $BesideBoardBound ne $board} {
 		bind $board <Configure> +[namespace code besideSchedule]
+		bind $board <Map> +[namespace code besideSchedule]
 		set BesideBoardBound $board
 	}
 
@@ -1706,7 +1709,16 @@ proc besideSettle {} {
 	variable BesideReplacements
 
 	set BesideTimer {}
-	if {[besideBoardRect] eq {}} { return }
+	variable BesideUnmappedRetries
+	# The border can be briefly unmapped between a canvas rebuild and the
+	# WM's MapNotify. Do not consume the only resize notification there.
+	# Bound the retry when the board was deliberately hidden; Map handles
+	# its eventual return without polling an inactive pane indefinitely.
+	if {[besideBoardRect] eq {}} {
+		if {[incr BesideUnmappedRetries] <= 3} { besideSchedule 30 }
+		return
+	}
+	set BesideUnmappedRetries 0
 	# A reflow freezes the twm while it loads; placing against an
 	# intermediate rectangle would be visible. Wait for the load to finish.
 	if {[info exists ::application::Vars(loading)] && $::application::Vars(loading)} {
@@ -1723,6 +1735,7 @@ proc besideSettle {} {
 		::application::reflow::cancelPending
 		::application::reflow::onDebounced [winfo width .application] [winfo height .application]
 	}
+	if {[besideBoardRect] eq {}} { besideSchedule 30; return }
 	# One dialog's re-plan can move the inset or the board under another
 	# (a pair's no-room dodge, a peer's reserve). Re-check at once, a few
 	# passes, instead of waiting for the next debounced settle, so a

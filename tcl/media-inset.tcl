@@ -867,7 +867,9 @@ proc ::mediainset::ClearSqueeze {dlg} {
 # reserve and park the inset in a free margin of the pane, shrinking it as
 # needed so it covers neither the drawn board nor the dialog placed on
 # <side>. <targetW>/<targetH> are the dialog's usable client size.
-proc ::mediainset::DetachForDialog {dlg side targetW targetH workarea extents gap} {
+# A placement batch can leave a failed trial released until its next side;
+# it must call ClearDetach if none succeeds. Ordinary callers restore here.
+proc ::mediainset::DetachForDialog {dlg side targetW targetH workarea extents gap {restoreOnFailure 1}} {
 	variable Shown
 	variable Swapped
 	variable Detach
@@ -887,9 +889,11 @@ proc ::mediainset::DetachForDialog {dlg side targetW targetH workarea extents ga
 	set paneRect [WidgetRect $pane]
 	set board [BoardRect]
 	if {[lindex $board 2] < 2 || [lindex $board 3] < 2} {
-		set Detach {}
-		set DetachFor {}
-		Relayout
+		if {$restoreOnFailure} {
+			set Detach {}
+			set DetachFor {}
+			Relayout
+		}
 		return 0
 	}
 	lassign $workarea wx wy ww wh
@@ -939,9 +943,11 @@ proc ::mediainset::DetachForDialog {dlg side targetW targetH workarea extents ga
 		incr iw -8
 	}
 	if {$best eq {}} {
-		set Detach {}
-		set DetachFor {}
-		Relayout
+		if {$restoreOnFailure} {
+			set Detach {}
+			set DetachFor {}
+			Relayout
+		}
 		return 0
 	}
 	lassign $best x y iw ih
