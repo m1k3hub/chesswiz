@@ -1035,6 +1035,7 @@ proc besideSchedule {{delay ""}} {
 # A planning transaction uses one snapshot per window; rectangle arithmetic
 # and peer comparisons must not re-query the WM for every intermediate step.
 variable BesideMeasureDepth 0
+variable BesideBatch 0
 variable BesideAreas {}
 variable BesideFrames {}
 proc besideMeasureBegin {} {
@@ -1201,7 +1202,7 @@ proc besideRegistryAdd {dlg parent} {
 	# A rebuild moves the drawn board inside its canvas without necessarily
 	# configuring the inner board widget (notably during Aqua fullscreen).
 	# Observe the completed drawing, including after a layout replaces it.
-	::application::board::afterRebuild ::util::place::besideSchedule
+	::application::board::afterRebuild ::util::place::besideBoardRebuilt
 
 	if {[catch { set board $::application::board::board }]} { set board {} }
 	if {$board ne {} && [winfo exists $board] && $BesideBoardBound ne $board} {
@@ -1538,7 +1539,7 @@ proc besideRegistryRemove {dlg} {
 	unset -nocomplain BesideLastPlan($dlg)
 	besideReleaseReserve $dlg
 	if {![llength $BesideDialogs]} {
-		::application::board::afterRebuild ::util::place::besideSchedule true
+		::application::board::afterRebuild ::util::place::besideBoardRebuilt true
 	}
 	# Let the inset return to its normal place when the dialog that made it
 	# move/shrink goes away (VAL-DLG-013).
@@ -1868,6 +1869,37 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 	return $plan
 }
 
+# The completed board drawing is the first point at which a parent resize
+# has a final obstacle. Submit all dialog moves here, before returning to
+# timers (notably diagram::resize's deferred setupPieces rasterisation).
+# The old debounce yielded to that work and spent the pair's deadline before
+# either plan started. Never re-enter a placement or an in-progress reflow.
+proc besideBoardRebuilt {} {
+	variable BesideDialogs
+	variable BesideState
+	variable BesideMeasureDepth
+	if {$BesideMeasureDepth > 0 || [besideVideoRect] eq {}} {
+		besideSchedule
+		return
+	}
+	if {[info exists ::application::reflow::S(busy)] && $::application::reflow::S(busy)} {
+		besideSchedule 0
+		return
+	}
+	foreach dlg $BesideDialogs {
+		if {![winfo exists $dlg] || ![winfo ismapped $dlg]} { continue }
+		set parent [besideParentRect $dlg]
+		if {([info exists BesideState($dlg,parentrect)]
+			&& [besideRectDiffers $parent $BesideState($dlg,parentrect)])
+			|| [besideParentZoomed $dlg] ne $BesideState($dlg,zoomed)
+			|| [info exists BesideState($dlg,pendingTrigger)]} {
+			besideSettle
+			return
+		}
+	}
+	besideSchedule
+}
+
 proc besideSettle {} {
 	besideMeasureBegin
 	try {
@@ -1883,6 +1915,7 @@ proc BesideSettle {} {
 	variable BesideState
 	variable BesideReplacements
 
+	if {$BesideTimer ne {}} { after cancel $BesideTimer }
 	set BesideTimer {}
 	variable BesideUnmappedRetries
 	# The border can be briefly unmapped between a canvas rebuild and the
@@ -2044,6 +2077,14 @@ proc BesideSettlePass {first} {
 
 	variable BesideTrigger
 	set done {}
+	# Applying the first move queues idle geometry/capture work. Draining
+	# it inside the second helper allowed a repaint to split the pair by
+	# hundreds of ms. Hold the inset and submit both moves before that drain.
+	variable BesideBatch
+	incr BesideBatch
+	set held [llength [info commands ::mediainset::hold]]
+	if {$held} { ::mediainset::hold }
+	try {
 	foreach dlg $replan {
 		set BesideTrigger $BesideState($dlg,trigger)
 		if {[dict exists $first $dlg] && $BesideTrigger in {content board}} {
@@ -2058,6 +2099,11 @@ proc BesideSettlePass {first} {
 		# parent's current geometry, after the WM has applied it.
 		after idle [namespace code [list besideCapture $dlg]]
 	}
+	} finally {
+		incr BesideBatch -1
+		if {$held} { ::mediainset::release }
+	}
+
 	# A later dialog's plan runs update idletasks and so the earlier one's
 	# idle capture, before it moves the inset (a no-room dodge): the earlier
 	# dialog would remember a protected area that no longer exists and the
@@ -2110,6 +2156,12 @@ proc besideBoard {dlg {parent ""}} {
 
 proc BesideBoardPlan {dlg parent} {
 	variable BesideRequests
+	# A pending Map/Unmap can be delivered by this drain. Check the board
+	# afterwards: testing it first left empty obstacle coordinates on restore.
+	# A settle has already measured the completed board. Its helpers submit
+	# all moves as one batch; their shared idle drain happens after the loop.
+	variable BesideBatch
+	if {!$BesideBatch} { update idletasks }
 	if {$parent eq ""} {
 		set parent [wm transient $dlg]
 		if {$parent eq ""} { set parent .application }
@@ -2124,7 +2176,6 @@ proc BesideBoardPlan {dlg parent} {
 		}
 		return [dict create rule center]
 	}
-	update idletasks
 	# VAL-DLG-017B: with two playing dialogs open, each owns the reserve it
 	# sits beside; the later one is stacked next to the earlier one.
 	set peers [besidePeers $dlg]
@@ -2271,7 +2322,9 @@ proc BesideBoardPlan {dlg parent} {
 		if {[llength [info commands ::mediainset::ClearSqueeze]]} {
 			catch { ::mediainset::ClearSqueeze $dlg }
 		}
-		update idletasks
+		# A foreign inset owner made both operations above no-ops. In a
+		# batch there is no new layout to realise, only our peer's queued move.
+		if {!$BesideBatch || ![besideInsetHeldByPeer $dlg $peers]} { update idletasks }
 		# VAL-DLG-013: with a video playing in the board inset, the protected
 		# area is the union of the drawn board and the visible inset. Strips
 		# inside the pane that the video owns are therefore not free space.

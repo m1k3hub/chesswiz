@@ -117,6 +117,9 @@ proc ::scidb::test::dlgplace::workareaTrace {command op} {
 proc ::scidb::test::dlgplace::setupBoard {} {
     variable calls
     variable workareaCalls
+    # Tcl permits duplicate execution traces. Remove this suite's previous
+    # observers before installing them, including after an interrupted test.
+    stopTrace
     ::application::switchTab board
     wm state .application normal
     wm geometry .application "[winfo screenwidth .]x[winfo screenheight .]+0+0"
@@ -132,10 +135,18 @@ proc ::scidb::test::dlgplace::setupBoard {} {
     trace add execution ::util::place::besideWorkArea enter ::scidb::test::dlgplace::workareaTrace
 }
 proc ::scidb::test::dlgplace::stopTrace {} {
-    trace remove execution ::util::place::besideBoard enter ::scidb::test::dlgplace::placing
-    trace remove execution ::util::place::besideBoard leave ::scidb::test::dlgplace::placed
-    trace remove execution ::util::place::besideWorkArea enter ::scidb::test::dlgplace::workareaTrace
+    foreach {command op callback} {
+        ::util::place::besideBoard enter ::scidb::test::dlgplace::placing
+        ::util::place::besideBoard leave ::scidb::test::dlgplace::placed
+        ::util::place::besideWorkArea enter ::scidb::test::dlgplace::workareaTrace
+    } {
+        # Remove only our own observers; leave any independent probe intact.
+        while {[list $op $callback] in [trace info execution $command]} {
+            trace remove execution $command $op $callback
+        }
+    }
 }
+
 proc ::scidb::test::dlgplace::buttons {w} {
     set result {}
     foreach child [winfo children $w] {
@@ -565,6 +576,7 @@ proc ::scidb::test::dlgplace::followCleanup {dlg closeScript} {
     catch {destroy $dlg}
     ::util::place::besideResetReplaceCount
     set ::application::Vars(loading) 0
+    stopTrace
     waitFor 200
 }
 
@@ -635,6 +647,7 @@ tcltest::test dlg-follow-user-move {user-moved dialog is respected, even over th
     catch {wm attributes .application -fullscreen 0}
     ::util::place::besideResetReplaceCount
     set ::application::Vars(loading) 0
+    ::scidb::test::dlgplace::stopTrace
 } -result 1
 
 # Exercise real widgets with only OS work-area/frame reports substituted.
@@ -1480,6 +1493,91 @@ tcltest::test dlg-w9h-native-deadline {Engine Match native minimum and single se
 } -cleanup {
     catch {::enginematch::Close}
     catch {wm attributes .application -zoomed 0}
+    ::scidb::test::dlgplace::realCleanup
+} -result 1
+
+
+# Observer overhead belongs to this test, not the timed production planner.
+# Repeated setup must not add synchronous WM queries after every helper call.
+tcltest::test dlg-w9i-observer-lifetime {repeated setup installs one copy of each geometry observer} -body {
+    ::scidb::test::dlgplace::setupBoard
+    ::scidb::test::dlgplace::setupBoard
+    set info [trace info execution ::util::place::besideBoard]
+    list [llength [lsearch -all -exact $info {enter ::scidb::test::dlgplace::placing}]] \
+         [llength [lsearch -all -exact $info {leave ::scidb::test::dlgplace::placed}]]
+} -cleanup {
+    ::scidb::test::dlgplace::stopTrace
+} -result {1 1}
+
+# A queued native unmap can arrive inside the helper's initial idle drain.
+# The entry must inspect mapping after that drain, rather than doing arithmetic
+# on an obstacle that disappeared between its guard and its first read.
+tcltest::test dlg-w9i-unmap-during-plan {helper returns a plan when a pending unmap hides the board} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    ::playengine::open .application
+    ::scidb::test::dlgplace::waitFor 800
+} -body {
+    after idle {wm withdraw .application}
+    set code [catch {::util::place::besideBoard .application.playengine .application} plan]
+    puts "W9I unmap code=$code plan=$plan"
+    list $code [dict get $plan rule]
+} -cleanup {
+    wm deiconify .application
+    ::scidb::test::dlgplace::waitFor 500
+    ::scidb::test::dlgplace::realCleanup
+} -result {0 center}
+
+# Exercise the reported pair after both dialogs have measured native frames.
+tcltest::test dlg-w9i-pair-deadline {both playing dialogs record and settle before 500ms} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    catch {wm minsize .application 1 1}
+} -constraints haveWmctrl -body {
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 1920 1080]
+    ::scidb::test::dlgplace::waitFor 900
+    ::scidb::test::dlgplace::zoomBoard 1
+    ::scidb::test::dlgplace::realVideo
+    ::playengine::open .application
+    ::scidb::test::dlgplace::waitFor 800
+    ::enginematch::open .application
+    ::scidb::test::dlgplace::waitFor 900
+    set ds {.application.playengine .application.enginematch}
+    foreach {trigger script} {
+        maximize {wm attributes .application -zoomed 1}
+        restore {wm attributes .application -zoomed 0}
+        resize {wm geometry .application [::scidb::test::dlgplace::fitGeometry 0.93 0.90]}
+    } {
+        set seq $::util::place::BesideRecordSeq
+        set start [clock milliseconds]
+        eval $script
+        ::scidb::test::dlgplace::waitFor 500
+        puts "W9I records $trigger [::util::place::besidePlacementLog $seq]"
+        set stable {}
+        foreach d $ds {
+            dict set stable $d [::scidb::tk::wm frame $d]
+            set found 0
+            foreach r [::util::place::besidePlacementLog $seq] {
+                if {[dict get $r dialog] eq $d && [dict get $r trigger] eq $trigger
+                    && [dict get $r placed_by] eq "planner"} {
+                    set elapsed [expr {[dict get $r time]-$start}]
+                    ::scidb::test::dlgplace::require [expr {$elapsed <= 500}] "$trigger $d first record at $elapsed"
+                    puts "W9I $trigger $d first=$elapsed frame=[dict get $stable $d]"
+                    set found 1
+                    break
+                }
+            }
+            ::scidb::test::dlgplace::require $found "$trigger $d missing record"
+        }
+        for {set i 0} {$i < 15} {incr i} {
+            ::scidb::test::dlgplace::waitFor 100
+            foreach d $ds {
+                ::scidb::test::dlgplace::require [expr {[::scidb::tk::wm frame $d] eq [dict get $stable $d]}] "$trigger $d moved after 500ms"
+                set peer [lindex $ds [expr {$d eq [lindex $ds 0] ? 1 : 0}]]
+                ::scidb::test::dlgplace::pairClearOf w9i-$trigger $d $peer [expr {$d ne [lindex $ds 0]}]
+            }
+        }
+    }
+    return 1
+} -cleanup {
     ::scidb::test::dlgplace::realCleanup
 } -result 1
 
