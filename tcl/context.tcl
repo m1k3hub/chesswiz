@@ -489,6 +489,7 @@ proc ::context::Declare {} {
 	Item c6.add_include		"Add Include"				C6
 	Item c6.insert_comment		"Insert Move as Comment"	C6
 	Item c6.explain_line		"Explain Line"				C6
+	Item c6.pin_repertoire "Pin to Repertoire" C6
 	Item c6.copy_line			"Copy Line"					C6
 	Item c6.copy_fen			"Copy FEN"					C6
 	Item c6.pause_resume		"Pause / Resume"			C6
@@ -523,6 +524,7 @@ proc ::context::Declare {} {
 		c6.add_include
 		c6.insert_comment
 		-
+		c6.pin_repertoire
 		c6.explain_line
 		c6.copy_line
 		c6.copy_fen
@@ -1998,6 +2000,7 @@ proc ::context::Command {id object} {
 			set what [dict get {c6.add_move var c6.add_sequence seq c6.add_line line c6.add_all all c6.add_merge merge c6.add_include incl} $id]
 			return [::application::analysis::InsertMoves [dict get $object tree] $what [EngineLine $object]]
 		}
+		c6.pin_repertoire { return [::application::analysis::PinToRepertoire [dict get $object tree] [EngineLine $object]] }
 		c6.insert_comment { return [::application::analysis::InsertComment [dict get $object tree] [EngineLine $object]] }
 		c6.copy_line { clipboard clear; clipboard append [dict get $object pv] }
 		c6.copy_fen { clipboard clear; clipboard append [::scidb::pos::fen] }

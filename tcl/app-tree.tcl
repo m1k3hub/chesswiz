@@ -2433,10 +2433,32 @@ proc RenderMoveStatistics {txt moveRows totalGames side} {
 		set yrStr  [expr {$lastYr > 0 ? $lastYr : "--"}]
 
 		$txt insert end [format "%-8s %8s %5.1f%% %5.1f%% %5.1f%% %8s %8s\n" \
-				$move [formatInt $freqVal] $freqPct $sc $dr $avgStr $yrStr] tablerow
+				$move [formatInt $freqVal] $freqPct $sc $dr $avgStr $yrStr] [list tablerow analyze$i]
+		$txt tag bind analyze$i <Button-3> [namespace code [list AnalyzeRowMenu $txt $move [currentFen] %X %Y]]
 	}
 	insertSeparator $txt
 }
+
+# The text report also retains its originating position when the board moves.
+proc AnalyzeRowMenu {txt move fen x y} {
+	set menu $txt.analyzeMenu
+	catch { destroy $menu }
+	menu $menu -tearoff 0
+	$menu add command -label "Analyze this line" \
+		-command [namespace code [list AnalyzeRow $txt $move $fen]]
+	tk_popup $menu $x $y
+}
+
+proc AnalyzeRow {txt move fen} {
+	if {$fen ne [::scidb::pos::fen]} {
+		::dialog::info -parent [winfo toplevel $txt] -message "The board position changed. Reopen the opening report first."
+		return
+	}
+	if {$move eq "" || ![::scidb::game::valid? $move]} { return }
+	::move::addMove menu $move
+	::application::analysis::AnalyzeCurrentPosition
+}
+
 
 proc RenderHistoricalDevelopment {txt moveRows totalRow} {
 	insertHeading $txt $mc::SectionHistorical
