@@ -675,6 +675,9 @@ proc WindowResized {w} {
 proc KeepInWorkArea {w} {
 	if {![winfo exists $w]} { return 0 }
 	if {[wm state $w] ne "normal" || [::menu::fullscreen?]} { return 0 }
+	# The WM owns a maximized frame; re-fitting it only bounces Configure
+	# events back every few ms and keeps the dialog settle from running.
+	if {![catch { wm attributes $w -zoomed } zoomed] && $zoomed} { return 0 }
 	set geometry [wm geometry $w]
 	set fitted [::util::place::clampGeometry $geometry [winfo workarea $w] [winfo extents $w]]
 	# clampGeometry returns the input unchanged when the frame (including
@@ -2623,6 +2626,7 @@ proc onConfigure {W w h} {
 proc onDebounced {w h} {
  variable S; set S(afterId) {}
  if {[set t [boardTwm]] ne {}} {::application::focuszoom::windowResized $t}
+ set mode $S(mode)
  evaluate $w $h
  updateCollapse
  # The last settled wide arrangement, put back when a tall excursion
@@ -2631,8 +2635,10 @@ proc onDebounced {w h} {
   set S(wideSashes) [list [winfo width .application] [winfo height .application] [::application::focuszoom::Snapshot $t]]
  }
  # A wide/tall switch moves and resizes the board; open playing dialogs
- # follow its settled rectangle.
- ::util::place::besideSchedule
+ # follow its settled rectangle. Without a switch the resize itself has
+ # already scheduled them; a second schedule would only push the re-plan
+ # past a maximize's 500 ms (VAL-DLG-018A).
+ if {$S(mode) ne $mode} {::util::place::besideSchedule}
 }
 proc cancelPending {} {
  variable S

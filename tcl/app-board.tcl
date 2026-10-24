@@ -1184,11 +1184,11 @@ proc ConfigureWindow {w width height} {
 		}
 		set rebuild [namespace code [list RebuildBoard $w $width $height]]
 		if {[llength $RebuildCallbacks]} {
-			# Reserve owners need the settled board promptly. Coalesce the
-			# Configure burst without adding the startup/drag delay. A zero
-			# timer also stays outside a rebuild's update idletasks, which
-			# may be realising a restored or newly packed board view.
-			set Vars(after) [after 0 $rebuild]
+			# Coalesce the WM's decoration/client Configure burst before
+			# painting: rendering every intermediate large board can consume
+			# the entire dialog settle budget. A timer (rather than idle)
+			# stays outside a rebuild's nested update idletasks.
+			set Vars(after) [after 20 $rebuild]
 		} else {
 			set Vars(after) [after $timeout $rebuild]
 		}
@@ -1581,6 +1581,57 @@ proc reserveSquare {side px width height {kind auto} {maxBoard 0}} {
 	}
 }
 
+# The border rectangle {x y size} (canvas coordinates) the current canvas
+# would draw with this reserve, or {} when ComputeLayout refuses it; {} 0
+# probes the unreserved layout. With decorations=1 returns {x y w h},
+# including the always-visible side-to-move column. With withReserve=1,
+# returns {borderRect reserveRect} so the future inset can be measured too.
+# These probes never render or change the live reserve.
+proc reserveBorder {side px {kind auto} {maxBoard 0} {decorations 0} {withReserve 0}} {
+	variable Dim
+	variable Vars
+	variable ReserveSide
+	variable ReservePixels
+	variable ReserveKind
+	variable ReserveMaxBoard
+	if {![info exists Vars(width)] || ![info exists Vars(height)]} { return {} }
+	if {$side eq {} || $px == 0} { set side {}; set px 0; set kind auto; set maxBoard 0 }
+	set saved [array get Dim]
+	set oldSide $ReserveSide
+	set oldPixels $ReservePixels
+	set oldKind $ReserveKind
+	set oldMaxBoard [expr {[info exists ReserveMaxBoard] ? $ReserveMaxBoard : 0}]
+	try {
+		set ReserveSide $side
+		set ReservePixels $px
+		set ReserveKind $kind
+		set ReserveMaxBoard $maxBoard
+		ComputeLayout $Vars(width) $Vars(height)
+		if {$ReserveSide ne $side} { return {} }
+		if {$decorations} {
+			set extra 0
+			# An enabled side-to-move image is always drawn beside the
+			# border. Its column is part of the protected bounding box.
+			if {$::board::layout(side-to-move)
+				&& (![info exists Vars(3d)] || !$Vars(3d))} {
+				set extra [expr {$Dim(gap:x)+$Dim(stm)}]
+			}
+			set box [list $Dim(border:x1) $Dim(border:y1) \
+				[expr {$Dim(bordersize)+$extra}] $Dim(bordersize)]
+			if {$withReserve} { return [list $box [reserveRect]] }
+			return $box
+		}
+		return [list $Dim(border:x1) $Dim(border:y1) $Dim(bordersize)]
+	} finally {
+		array unset Dim
+		array set Dim $saved
+		set ReserveSide $oldSide
+		set ReservePixels $oldPixels
+		set ReserveKind $oldKind
+		set ReserveMaxBoard $oldMaxBoard
+	}
+}
+
 # The square this layout would draw if the reserve were released. ComputeLayout
 # refuses a reserve that is worse than this, so probe it with the reserve
 # cleared; the caller's dimensions and accepted reserve are restored.
@@ -1715,6 +1766,12 @@ proc RebuildBoard {canv width height {force false}} {
 			variable ReserveSide
 			variable ReservePixels
 			lassign $reserve ReserveSide ReservePixels
+			if {[llength $reserve] == 3} {
+				variable ReserveKind
+				variable ReserveMaxBoard
+				set ReserveKind squeeze
+				set ReserveMaxBoard [lindex $reserve 2]
+			}
 		}
 	}
 	ComputeLayout $width $height $Dim(bordersize)

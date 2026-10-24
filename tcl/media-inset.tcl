@@ -620,7 +620,30 @@ proc ::mediainset::reserveForLayout {width height} {
 	if {!$Shown || $Swapped || $::application::board::Vars(3d)} { return {} }
 	# A dialog asked the inset to move to the other side; the board rebuild
 	# hook must keep that strip instead of re-planning the normal one.
-	if {$Squeeze ne {} && !$Audio} { return $Squeeze }
+	if {$Squeeze ne {} && !$Audio} {
+		variable SqueezeFor
+		lassign $Squeeze side strip oldCap
+		if {$side eq "left" && [winfo exists $SqueezeFor]
+			&& [winfo ismapped $SqueezeFor]} {
+			# Tighten the dialog's cap before painting the new main extent.
+			# Waiting for the placement pass paints the obsolete larger
+			# board first, then immediately paints the tightened cap again.
+			lassign [::util::place::besideMainArea $SqueezeFor] sx sy sw sh
+			lassign [::util::place::besideDialogExtents $SqueezeFor] sl sr st sb
+			lassign [wm minsize $SqueezeFor] mw mh
+			lassign [wm maxsize $SqueezeFor] xw xh
+			set needW [expr {min($xw,max($mw,[winfo reqwidth $SqueezeFor]))}]
+			set needH [expr {min($xh,max($mh,[winfo reqheight $SqueezeFor]))}]
+			set frame $::application::board::Vars(widget:frame)
+			set cap [expr {$sx+$sw-[winfo rootx $frame]-$needW-$sl-$sr-12-$strip}]
+			if {$cap > 0 && ($oldCap <= 0 || $cap < $oldCap)
+				&& [::util::place::besideBorderRoom left $strip squeeze $cap \
+					[list $sx $sy $sw $sh] [expr {$sl+$sr}] [expr {$st+$sb}] 12 $needW $needH]} {
+				set Squeeze [list $side $strip $cap]
+			}
+		}
+		return $Squeeze
+	}
 	if {$Detach ne {} && !$Audio} { return [list {} 0] }
 	set w [Pane].mediainset
 	if {![winfo exists $w.controls]} { return {} }
@@ -867,7 +890,9 @@ proc ::mediainset::ClearSqueeze {dlg} {
 # reserve and park the inset in a free margin of the pane, shrinking it as
 # needed so it covers neither the drawn board nor the dialog placed on
 # <side>. <targetW>/<targetH> are the dialog's usable client size.
-proc ::mediainset::DetachForDialog {dlg side targetW targetH workarea extents gap} {
+# A placement batch can leave a failed trial released until its next side;
+# it must call ClearDetach if none succeeds. Ordinary callers restore here.
+proc ::mediainset::DetachForDialog {dlg side targetW targetH workarea extents gap {restoreOnFailure 1}} {
 	variable Shown
 	variable Swapped
 	variable Detach
@@ -887,9 +912,11 @@ proc ::mediainset::DetachForDialog {dlg side targetW targetH workarea extents ga
 	set paneRect [WidgetRect $pane]
 	set board [BoardRect]
 	if {[lindex $board 2] < 2 || [lindex $board 3] < 2} {
-		set Detach {}
-		set DetachFor {}
-		Relayout
+		if {$restoreOnFailure} {
+			set Detach {}
+			set DetachFor {}
+			Relayout
+		}
 		return 0
 	}
 	lassign $workarea wx wy ww wh
@@ -939,9 +966,11 @@ proc ::mediainset::DetachForDialog {dlg side targetW targetH workarea extents ga
 		incr iw -8
 	}
 	if {$best eq {}} {
-		set Detach {}
-		set DetachFor {}
-		Relayout
+		if {$restoreOnFailure} {
+			set Detach {}
+			set DetachFor {}
+			Relayout
+		}
 		return 0
 	}
 	lassign $best x y iw ih
