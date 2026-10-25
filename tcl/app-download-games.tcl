@@ -19,6 +19,17 @@
 #     A study's PGN, by URL or id, with an optional chapter id:
 #     https://lichess.org/api/study/<id>.pgn (or .../<id>/<chapter>.pgn).
 #     The same Lichess token handling as for player games is used.
+#   Lichess broadcast
+#     A live broadcast: the games of one round or of a whole tournament.
+#     The round URL (lichess.org/broadcast/<slug>/<roundSlug>/<roundId>) or
+#     a tournament id is answered by the API as PGN
+#     (lichess.org/api/broadcast/round/<roundId>.pgn, or
+#     lichess.org/api/broadcast/<tournamentId>.pgn for all the rounds). The
+#     games are imported into the database like the other sources. With
+#     "refresh every N minutes" the round is fetched again and again, and
+#     only the games that are not in the database yet are imported; they
+#     are told apart by the game's own Lichess id (its Site tag) or by
+#     its round and board. Cancel stops the refresh.
 #   Player games
 #     A Chess.com or Lichess player's games of the last months. Chess.com
 #     lists a player's monthly archives (api.chess.com/pub/player/<p>/games/
@@ -43,6 +54,9 @@
 # covered by tests/test_app_download.tcl. Lichess study parsing and
 # URLs live in app-lichess-study and are covered by
 # tests/test_app_lichess_study.tcl.
+# covered by tests/test_app_download.tcl; the broadcast helpers
+# (broadcastSpec, broadcastUrls, broadcastKey) are covered by
+# tests/test_app_lichess_broadcast.tcl.
 # ======================================================================
 
 if {[llength [info commands ::util::source]]} {
@@ -65,6 +79,17 @@ set Lichess					"Lichess games"
 set LichessDetail			"One game link or game id per line:"
 set Study					"Lichess study"
 set StudyDetail				"One study link or study id per line, optionally with a chapter id:"
+set Broadcast				"Lichess broadcast"
+set BroadcastDetail			"A round URL or a tournament id; the games are fetched as PGN and imported."
+set BroadcastUrl			"Round URL or tournament id:"
+set BroadcastRefresh			"Refresh every"
+set BroadcastMinutes			"minutes"
+set BroadcastImport			"Lichess broadcast import"
+set BroadcastImported			"Imported %d new game(s)."
+set BroadcastNoNew			"No new game(s); %d game(s) of the broadcast are already there."
+set BroadcastNext			"%d game(s) imported; the next refresh is in %d minute(s). Cancel stops it."
+set BroadcastFailed			"The broadcast could not be fetched: %s"
+set NoBroadcast				"no Lichess broadcast round or tournament given"
 set Player					"A player's games"
 set PlayerDetail			"All games of a Chess.com or Lichess player in the last months:"
 set Site					"Site:"
@@ -103,6 +128,8 @@ set NeedToken				"Lichess refused the download without a login. Create a persona
 
 array set Options {
 	lichess:token ""
+	lichess:broadcast ""
+	lichess:refresh 0
 }
 
 variable Timeout 120000
@@ -117,6 +144,19 @@ array set Priv {
 	failures			{}
 	title				{}
 	base				{}
+	broadcast			""
+	refresh			0
+	refreshOn			0
+	bcSpec				{}
+	bcUrls				{}
+	bcUrl				0
+	bcKeys				{}
+	bcGames			0
+	bcImported			0
+	bcFile				{}
+	bcTimer			{}
+	bcInterval			0
+	bcActive			0
 }
 
 } ;# namespace download
@@ -126,6 +166,7 @@ array set Priv {
 proc ::application::download::open {parent base} {
 	variable Priv
 	variable mc
+	variable Options
 
 	set dlg $parent.__download__
 	if {[winfo exists $dlg]} {
@@ -143,6 +184,9 @@ proc ::application::download::open {parent base} {
 	set Priv(player) ""
 	set Priv(months) 1
 	set Priv(studies) ""
+	set Priv(broadcast) $Options(lichess:broadcast)
+	set Priv(refresh) $Options(lichess:refresh)
+	set Priv(refreshOn) [expr {$Options(lichess:refresh) > 0}]
 
 	toplevel $dlg -class Scidb
 	wm title $dlg $mc::Title
@@ -210,6 +254,32 @@ proc ::application::download::open {parent base} {
 	pack $study.text -side left -fill both -expand yes -pady [list 0 $::theme::pady]
 	pack $study.vs -side right -fill y -pady [list 0 $::theme::pady]
 	pack $study -fill both -expand yes -pady [list 0 $::theme::pady]
+	set bc [ttk::frame $top.source.broadcast]
+	ttk::radiobutton $bc.choice \
+		-text $mc::Broadcast -value broadcast -variable [namespace current]::Priv(source) \
+		-command [namespace code SourceChanged] \
+		;
+	ttk::label $bc.detail -text $mc::BroadcastDetail -wraplength 360 -justify left
+	ttk::label $bc.urllabel -text $mc::BroadcastUrl
+	ttk::entry $bc.url -textvariable [namespace current]::Priv(broadcast)
+	set rrow [ttk::frame $bc.refresh]
+	ttk::checkbutton $rrow.check -text $mc::BroadcastRefresh \
+		-variable [namespace current]::Priv(refreshOn) \
+		-command [namespace code RefreshChanged] \
+		;
+	ttk::spinbox $rrow.minutes -from 1 -to 240 -width 3 \
+		-textvariable [namespace current]::Priv(refresh) -state disabled
+	set Priv(refreshWidget) $rrow.minutes
+	ttk::label $rrow.unit -text $mc::BroadcastMinutes
+	pack $rrow.check -side left
+	pack $rrow.minutes -side left -padx [list $::theme::padx 0]
+	pack $rrow.unit -side left -padx [list 2 0]
+	pack $bc.choice -anchor w
+	pack $bc.detail -anchor w
+	pack $bc.urllabel -anchor w
+	pack $bc.url -fill x
+	pack $rrow -anchor w -pady [list $::theme::pady 0]
+	pack $bc -fill x -pady [list 0 $::theme::pady]
 
 	set player [ttk::frame $top.source.player]
 	ttk::radiobutton $player.choice \
@@ -270,6 +340,7 @@ proc ::application::download::open {parent base} {
 	set Priv(status) $top.status
 
 	SourceChanged
+	RefreshChanged
 	::util::place $dlg -parent $parent -position center
 	wm deiconify $dlg
 	focus $twic.choice
@@ -301,6 +372,17 @@ proc ::application::download::StudyText {} {
 }
 
 
+# The refresh spinbox is only usable when the refresh is wanted.
+proc ::application::download::RefreshChanged {} {
+	variable Priv
+
+	if {![info exists Priv(refreshWidget)]} { return }
+	if {![winfo exists $Priv(refreshWidget)]} { return }
+	$Priv(refreshWidget) configure -state [expr {$Priv(refreshOn) ? "normal" : "disabled"}]
+	return
+}
+
+
 # The dialog path is only valid while the dialog exists: after Close it
 # is empty, and winfo errors on the empty string.
 proc ::application::download::DialogExists {} {
@@ -313,6 +395,11 @@ proc ::application::download::Close {} {
 	variable Priv
 
 	set Priv(cancel) 1
+	if {$Priv(bcActive)} {
+		set Priv(bcActive) 0
+		set Priv(running) 0
+	}
+	CancelRefresh
 	if {![DialogExists]} { set Priv(dialog) {} ; return }
 	if {$Priv(running)} {
 		# let the queue stop by itself; the running fetch cannot be aborted
@@ -334,6 +421,7 @@ proc ::application::download::Close {} {
 proc ::application::download::Start {} {
 	variable Priv
 	variable mc
+	variable Options
 
 	if {$Priv(running)} { return }
 
@@ -343,6 +431,7 @@ proc ::application::download::Start {} {
 	set Priv(fetched) {}
 	set Priv(failures) {}
 	set queue {}
+	CancelRefresh
 
 	switch -- $Priv(source) {
 		twic {
@@ -379,6 +468,32 @@ proc ::application::download::Start {} {
 					[file join $dir [::application::lichess::study::fileName $id $chapter]] \
 					[::application::lichess::study::label $id $chapter]]
 			}
+		}
+		broadcast {
+			set spec [broadcastSpec $Priv(broadcast)]
+			if {$spec eq ""} {
+				set Priv(bcUrls) {}
+				set Priv(bcUrl) 0
+				Status $mc::NoBroadcast
+				return
+			}
+			set Priv(title) $mc::BroadcastImport
+			set Priv(bcSpec) $spec
+			set Priv(bcUrls) [broadcastUrls $spec]
+			set Priv(bcUrl) 0
+			set Priv(bcImported) 0
+			set Priv(bcInterval) [RefreshSeconds]
+			set Priv(bcActive) 1
+			set Priv(bcFile) [file join $dir "lichess-broadcast-[broadcastFileId $spec].pgn"]
+			# the games that are already in the database are not imported again
+			lassign [broadcastDbKeys $Priv(base) [broadcastSpecRound $spec]] \
+				Priv(bcKeys) Priv(bcGames)
+			set Options(lichess:broadcast) $Priv(broadcast)
+			set Options(lichess:refresh) [RefreshMinutes]
+			if {[DialogExists]} { $Priv(dialog).ok configure -state disabled }
+			set Priv(running) 1
+			BroadcastFetch
+			return
 		}
 		player {
 			set name [playerName $Priv(player)]
@@ -597,6 +712,239 @@ proc ::application::download::Done {result} {
 }
 
 
+# ----------------------------------------------------------------------
+# The Lichess broadcast: one round or a whole tournament. The games are
+# fetched as PGN and imported; with a refresh the round is fetched again
+# and again, and only the games that are not in the database yet are
+# imported.
+# ----------------------------------------------------------------------
+
+# The refresh interval in minutes (0 when there is no refresh).
+proc ::application::download::RefreshMinutes {} {
+	variable Priv
+
+	if {!$Priv(refreshOn)} { return 0 }
+	set minutes $Priv(refresh)
+	if {![string is integer -strict $minutes] || $minutes < 1} { set minutes 1 }
+	if {$minutes > 240} { set minutes 240 }
+	return $minutes
+}
+
+
+# The refresh interval in seconds; the timer waits for it.
+proc ::application::download::RefreshSeconds {} {
+	return [expr {[RefreshMinutes] * 60}]
+}
+
+
+# Whether the broadcast is fetched again and again.
+proc ::application::download::RefreshActive {} {
+	variable Priv
+
+	return [expr {$Priv(bcInterval) > 0}]
+}
+
+
+# The next fetch of the broadcast, in <interval> seconds.
+proc ::application::download::ScheduleRefresh {} {
+	variable Priv
+	variable mc
+
+	if {![RefreshActive]} { return }
+	if {$Priv(cancel)} { return }
+	if {![DialogExists]} { return }
+	set Priv(bcTimer) [after [expr {$Priv(bcInterval) * 1000}] \
+		[namespace code BroadcastRefresh]]
+	Status [format $mc::BroadcastNext $Priv(bcImported) [RefreshMinutes]]
+	return
+}
+
+
+# The pending refresh is dropped: the broadcast is fetched only once.
+proc ::application::download::CancelRefresh {} {
+	variable Priv
+
+	if {[string length $Priv(bcTimer)]} {
+		catch { after cancel $Priv(bcTimer) }
+		set Priv(bcTimer) {}
+	}
+	set Priv(bcInterval) 0
+	return
+}
+
+
+# The timer of the refresh fired: the round is fetched again.
+proc ::application::download::BroadcastRefresh {} {
+	variable Priv
+
+	if {[string length $Priv(bcTimer)]} {
+		catch { after cancel $Priv(bcTimer) }
+		set Priv(bcTimer) {}
+	}
+	if {$Priv(cancel) || !$Priv(bcActive)} { return }
+	set Priv(running) 1
+	BroadcastFetch
+	return
+}
+
+
+# The next candidate URL of the broadcast is fetched.
+proc ::application::download::BroadcastFetch {} {
+	variable Priv
+
+	# a new fetch starts at the first candidate
+	set Priv(bcUrl) 0
+	BroadcastTry
+	return
+}
+
+
+# The candidate URL of the broadcast is fetched; a wrong id answers 404
+# and the next candidate is tried.
+proc ::application::download::BroadcastTry {} {
+	variable Priv
+	variable mc
+
+	set url [lindex $Priv(bcUrls) $Priv(bcUrl)]
+	if {$url eq ""} {
+		BroadcastDone [format $mc::Failed $mc::Broadcast $mc::NoBroadcast] 0
+		return
+	}
+	incr Priv(bcUrl)
+	Status [format $mc::Fetching [broadcastLabel $Priv(bcSpec)]]
+	Get $url [namespace code [list OnBroadcast $url 0]]
+	return
+}
+
+
+# The broadcast was fetched: the new games are imported.
+proc ::application::download::OnBroadcast {url retry result} {
+	variable Priv
+	variable RetryDelay
+	variable mc
+
+	set ok [dict get $result ok]
+	set code [dict get $result code]
+	if {!$ok && $retry == 0 && ($code eq "timeout" || $code eq "eof" || $code >= 500 || $code == 429 || $code == 408)} {
+		set Priv(bcTimer) [after $RetryDelay \
+			[list [namespace current]::Get $url [namespace code [list OnBroadcast $url 1]]]]
+		return
+	}
+	if {!$ok} {
+		# a wrong id answers 404: the same id may be a tournament
+		if {$code == 404 && $Priv(bcUrl) < [llength $Priv(bcUrls)]} {
+			BroadcastTry
+			return
+		}
+		set error [dict get $result error]
+		if {[string match https://lichess.org/* $url] && $code in {303 401 403}} {
+			set error $mc::NeedToken
+		}
+		lappend Priv(failures) [format $mc::Failed [broadcastLabel $Priv(bcSpec)] $error]
+		BroadcastDone [format $mc::BroadcastFailed $error] 0
+		return
+	}
+
+	if {$Priv(cancel)} {
+		BroadcastDone [format $mc::Cancelled 0] 0
+		return
+	}
+
+	# the round as it was fetched is kept in the downloads directory
+	set file $Priv(bcFile)
+	file mkdir [file dirname $file]
+	set chan [::open $file wb]
+	fconfigure $chan -translation binary
+	puts -nonewline $chan [dict get $result data]
+	close $chan
+
+	BroadcastImport [dict get $result data]
+	return
+}
+
+
+# A file name that is not in use yet: name, name-2, name-3, ... Every
+# import keeps its own file, so a refresh does not overwrite the file of
+# the import before it.
+proc ::application::download::freeFile {name} {
+	set stem [file rootname $name]
+	set ext [file extension $name]
+	set n 1
+	set file $name
+	while {[file exists $file]} {
+		incr n
+		set file "$stem-$n$ext"
+	}
+	return $file
+}
+
+
+# The games of the fetched PGN that are not in the database yet are
+# written to a file of their own and imported.
+proc ::application::download::BroadcastImport {data} {
+	variable Priv
+	variable mc
+
+	set round [broadcastSpecRound $Priv(bcSpec)]
+	lassign [broadcastNewGames [encoding convertfrom utf-8 $data] $Priv(bcKeys) $round] text keys count
+	if {!$count} {
+		set Priv(bcImported) 0
+		BroadcastDone [format $mc::BroadcastNoNew $Priv(bcGames)] 1
+		return
+	}
+
+	set file [freeFile [file join [Dir] "[file rootname [file tail $Priv(bcFile)]]-new.pgn"]]
+	file mkdir [file dirname $file]
+	set chan [::open $file wb]
+	fconfigure $chan -translation binary
+	puts -nonewline $chan [encoding convertto utf-8 $text]
+	close $chan
+
+	set parent .
+	if {[DialogExists]} { set parent [winfo parent $Priv(dialog)] }
+	set base $Priv(base)
+	if {[catch { ::import::import $parent $base $file $Priv(title) utf-8 } err]} {
+		catch { ::dialog::error -parent $parent -message $err }
+		BroadcastDone [format $mc::Failed $mc::Broadcast $err] 0
+		return
+	}
+	foreach key $keys { dict set Priv(bcKeys) $key 1 }
+	set Priv(bcImported) $count
+	incr Priv(bcGames) $count
+	if {[catch { ::scidb::db::get name } name] == 0 && $base eq $name} {
+		catch { ::application::database::refreshBase $base }
+	}
+	BroadcastDone [format $mc::BroadcastImported $Priv(bcImported)] 1
+	return
+}
+
+
+# The broadcast is done: the dialog stays open when the refresh goes on.
+proc ::application::download::BroadcastDone {text ok} {
+	variable Priv
+	variable mc
+
+	set Priv(running) 0
+	if {[DialogExists]} {
+		$Priv(dialog).ok configure -state normal
+		Status $text
+	}
+	# the refresh needs the dialog: it goes on until the dialog is closed
+	if {$ok && [RefreshActive] && [DialogExists]} {
+		ScheduleRefresh
+		return
+	}
+	CancelRefresh
+	set Priv(bcActive) 0
+	if {$ok} {
+		Done [dict create ok 1 files $Priv(bcImported) base $Priv(base)]
+	} else {
+		Done [dict create ok 0 error $text]
+	}
+	return
+}
+
+
 # Headless entry: download <spec> into <base>, then call <doneCmd> with
 # {ok 1 files N base B} or {ok 0 error TEXT}. Used by the assistant tool
 # download_games; the dialog uses Start directly.
@@ -617,6 +965,9 @@ proc ::application::download::run {base spec doneCmd} {
 	set Priv(site)    [expr {[dict exists $spec -site]    ? [dict get $spec -site]    : "Chess.com"}]
 	set Priv(player)  [expr {[dict exists $spec -player]  ? [dict get $spec -player]  : ""}]
 	set Priv(months)  [expr {[dict exists $spec -months]  ? [dict get $spec -months]  : 1}]
+	set Priv(broadcast) [expr {[dict exists $spec -broadcast] ? [dict get $spec -broadcast] : ""}]
+	set Priv(refresh)  [expr {[dict exists $spec -refresh]  ? [dict get $spec -refresh]  : 0}]
+	set Priv(refreshOn) [expr {$Priv(refresh) > 0}]
 	set Priv(base)    $base
 	set Priv(dialog)  {}
 	set Priv(doneCmd) $doneCmd
@@ -797,6 +1148,329 @@ proc ::application::download::destName {url} {
 	set tail [regsub -all -- {[^A-Za-z0-9._-]} $tail _]
 	if {![regexp {\.(pgn|zip|gz)$} $tail]} { append tail ".pgn" }
 	return $tail
+}
+
+
+# ----------------------------------------------------------------------
+# The Lichess broadcast helpers (UI-free; covered by
+# tests/test_app_lichess_broadcast.tcl).
+# ----------------------------------------------------------------------
+
+# The broadcast of <text>, as a dict: {kind round|tournament|auto,
+# tournament T, round R, label L}. The kinds are
+#   round       a round of a tournament (the round URL),
+#   tournament  a tournament (all its rounds),
+#   auto        a bare id: it may be a round or a tournament, both are
+#               tried.
+# The round URL is lichess.org/broadcast/<slug>/<roundSlug>/<roundId>; the
+# tournament URL is lichess.org/broadcast/<tournamentId>. A round URL
+# with a game id behind it names the round of the game. "" when <text>
+# is no broadcast at all.
+proc ::application::download::broadcastSpec {text} {
+	set text [string trim $text]
+	if {$text eq ""} { return {} }
+	# a query or a fragment says nothing about the round
+	set text [lindex [split $text "?"] 0]
+	set text [lindex [split $text "#"] 0]
+	set text [string trim $text]
+	if {$text eq ""} { return {} }
+
+	# a bare id: a round or a tournament, both are tried
+	if {![string match "*/*" $text]} {
+		if {![regexp {^[A-Za-z0-9_-]+$} $text]} { return {} }
+		return [dict create kind auto id $text label $text]
+	}
+
+	if {![regexp {^(?:https?://)?(?:www\.)?lichess\.org/(.*)$} $text -> path]} { return {} }
+	set path [string trim $path "/"]
+	set parts [split $path "/"]
+	if {[lindex $parts 0] ne "broadcast"} { return {} }
+	set rest [lrange $parts 1 end]
+	foreach part $rest {
+		if {![regexp {^[A-Za-z0-9_-]+$} $part]} { return {} }
+	}
+	switch -- [llength $rest] {
+		1 {
+			return [dict create kind tournament \
+				tournament [lindex $rest 0] label [lindex $rest 0]]
+		}
+		2 - 3 {
+			return [dict create kind round \
+				tournament [lindex $rest 0] round [lindex $rest end] \
+				label [lindex $rest end]]
+		}
+		4 {
+			# a game of a round: the round is the third part
+			return [dict create kind round \
+				tournament [lindex $rest 0] round [lindex $rest 2] \
+				label [lindex $rest 2]]
+		}
+	}
+	return {}
+}
+
+
+# The PGN URLs of a broadcast: the round of a round URL, all the rounds of
+# a tournament. A bare id is tried as a round first and as a tournament
+# afterwards.
+proc ::application::download::broadcastUrls {spec} {
+	if {$spec eq ""} { return {} }
+	switch -- [dict get $spec kind] {
+		round {
+			return [list "https://lichess.org/api/broadcast/round/[dict get $spec round].pgn"]
+		}
+		tournament {
+			return [list "https://lichess.org/api/broadcast/[dict get $spec tournament].pgn"]
+		}
+		auto {
+			set id [dict get $spec id]
+			return [list "https://lichess.org/api/broadcast/round/$id.pgn" \
+				"https://lichess.org/api/broadcast/$id.pgn"]
+		}
+	}
+	return {}
+}
+
+
+# The name of a broadcast in the status line.
+proc ::application::download::broadcastLabel {spec} {
+	if {$spec eq ""} { return "lichess.org/broadcast" }
+	switch -- [dict get $spec kind] {
+		round { return "lichess.org/broadcast/[dict get $spec round]" }
+		tournament { return "lichess.org/broadcast/[dict get $spec tournament]" }
+		auto { return "lichess.org/broadcast/[dict get $spec id]" }
+	}
+	return "lichess.org/broadcast"
+}
+
+
+# The file name part of a broadcast: its round or its tournament id.
+proc ::application::download::broadcastFileId {spec} {
+	if {$spec eq ""} { return "round" }
+	switch -- [dict get $spec kind] {
+		round { return [dict get $spec round] }
+		tournament { return [dict get $spec tournament] }
+		auto { return [dict get $spec id] }
+	}
+	return "round"
+}
+
+
+# The Lichess game id in a URL, or "". A game URL is
+# lichess.org/<id> or lichess.org/game/export/<id>; in a broadcast the
+# game has its own URL behind the round
+# (lichess.org/broadcast/<slug>/<roundSlug>/<roundId>/<gameId>). The URL
+# of the round itself names the round, not a game: it is no game id.
+proc ::application::download::broadcastGameId {url roundId} {
+	if {![regexp {lichess\.org/(.*)$} $url -> path]} { return "" }
+	set parts [split [string trim $path "/"] "/"]
+	switch -- [llength $parts] {
+		1 {
+			if {[regexp {^[A-Za-z0-9]{8}$} [lindex $parts 0]]} { return [lindex $parts 0] }
+		}
+		3 {
+			if {[lindex $parts 0] eq "game" && [lindex $parts 1] eq "export"} {
+				return [lindex $parts 2]
+			}
+		}
+		5 {
+			if {[lindex $parts 0] eq "broadcast"} {
+				set id [lindex $parts 4]
+				if {[regexp {^[A-Za-z0-9]{8}$} $id] && $id ne $roundId} { return $id }
+			}
+		}
+	}
+	return ""
+}
+
+
+# The round id in a broadcast URL, or "": the last part of a broadcast
+# URL, unless the game of the round stands behind it.
+proc ::application::download::broadcastRoundOf {url} {
+	if {![regexp {lichess\.org/(.*)$} $url -> path]} { return "" }
+	set parts [split [string trim $path "/"] "/"]
+	if {[lindex $parts 0] ne "broadcast"} { return "" }
+	switch -- [llength $parts] {
+		3 { return [lindex $parts 2] }
+		4 - 5 { return [lindex $parts 3] }
+	}
+	return ""
+}
+
+
+# The game of a broadcast game: its Lichess id and its Lichess URL. The
+# id is in the Site tag of a game of a round, but some tournaments put
+# the place of the game in the Site tag and its own URL in the GameURL
+# tag; both are read.
+proc ::application::download::broadcastGame {tags {roundId ""}} {
+	set id ""
+	set url ""
+	foreach name {Site GameURL} {
+		if {![dict exists $tags $name]} { continue }
+		set candidate [dict get $tags $name]
+		if {$id eq ""} {
+			set found [broadcastGameId $candidate $roundId]
+			if {$found ne ""} { set id $found }
+		}
+		if {$url eq "" && [string match *lichess.org* $candidate]} { set url $candidate }
+	}
+	return [list $id $url]
+}
+
+
+# The keys that tell a broadcast game from another one: its own Lichess
+# id (its Site or GameURL tag), its round and its board, its round, its
+# players and its date. The database keeps the round, the players and the
+# date, but not the id of the game: a game is known when one of its keys
+# is known.
+proc ::application::download::broadcastKeys {tags {roundId ""}} {
+	set keys {}
+	lassign [broadcastGame $tags $roundId] id url
+	if {$id ne ""} { lappend keys "lichess:$id" }
+
+	# the round of the game is its Round tag; the round of the broadcast is
+	# only the fallback, for a game without a round of its own
+	set event ""
+	set date ""
+	if {[dict exists $tags Event]} { set event [dict get $tags Event] }
+	if {[dict exists $tags Date]} { set date [dict get $tags Date] }
+	set round ""
+	if {[dict exists $tags Round]} { set round [dict get $tags Round] }
+	if {$round eq "" && $url ne ""} { set round [broadcastRoundOf $url] }
+	if {$round eq ""} { set round $roundId }
+
+	set board ""
+	if {[dict exists $tags Board]} { set board [dict get $tags Board] }
+	if {$board ne ""} { lappend keys [list board $event $date $round $board] }
+
+	set white ""
+	set black ""
+	if {[dict exists $tags White]} { set white [dict get $tags White] }
+	if {[dict exists $tags Black]} { set black [dict get $tags Black] }
+	if {$white ne "" || $black ne ""} {
+		set date ""
+		if {[dict exists $tags Date]} { set date [dict get $tags Date] }
+		lappend keys [list players $event $date $round $white $black]
+	}
+	return $keys
+}
+
+
+# The key of a broadcast game: its first key (see broadcastKeys).
+proc ::application::download::broadcastKey {tags {roundId ""}} {
+	return [lindex [broadcastKeys $tags $roundId] 0]
+}
+
+
+# The round id of a broadcast, or "": a tournament has no round of its own.
+proc ::application::download::broadcastSpecRound {spec} {
+	if {[dict exists $spec round]} { return [dict get $spec round] }
+	return ""
+}
+
+
+# The games of a PGN text: each one a dict with the tags, the order of
+# the tag names and the moves.
+proc ::application::download::broadcastGames {pgn} {
+	set games {}
+	set tags {}
+	set order {}
+	set body {}
+	set haveBody 0
+	set tagDone 0
+
+	foreach line [split $pgn "\n"] {
+		set line [string trimright $line "\r"]
+		if {[regexp {^\[([A-Za-z0-9_]+)\s+"((?:[^"\\]|\\.)*)"\]\s*$} $line -> name value]} {
+			if {$haveBody || $tagDone} {
+				lappend games [dict create tags $tags order $order body [string trim [join $body "\n"]]]
+				set tags {}
+				set order {}
+				set body {}
+				set haveBody 0
+				set tagDone 0
+			}
+			dict set tags $name $value
+			if {$name ni $order} { lappend order $name }
+			continue
+		}
+		if {[string trim $line] eq ""} {
+			if {$haveBody} { lappend body $line }
+			continue
+		}
+		set haveBody 1
+		lappend body $line
+	}
+	if {[llength $tags] || [llength $body]} {
+		lappend games [dict create tags $tags order $order body [string trim [join $body "\n"]]]
+	}
+	return $games
+}
+
+
+# A game as PGN again.
+proc ::application::download::broadcastGameText {game} {
+	set tags [dict get $game tags]
+	set text ""
+	foreach name [dict get $game order] {
+		set value [dict get $tags $name]
+		append text "\[$name \"$value\"]\n"
+	}
+	set body [dict get $game body]
+	if {[string length $body]} {
+		append text "\n$body\n"
+	}
+	return $text
+}
+
+
+# The games of <pgn> that are not in <keys> yet: the PGN of the new games,
+# their keys and their number. A game is known when one of its keys is
+# known; a game without a key is always new.
+proc ::application::download::broadcastNewGames {pgn keys {roundId ""}} {
+	set text ""
+	set newKeys {}
+	set seen {}
+	set count 0
+	foreach game [broadcastGames $pgn] {
+		set gameKeys [broadcastKeys [dict get $game tags] $roundId]
+		set known 0
+		foreach key $gameKeys {
+			if {[dict exists $keys $key] || [dict exists $seen $key]} {
+				set known 1
+				break
+			}
+		}
+		if {$known} { continue }
+		foreach key $gameKeys { dict set seen $key 1 }
+		lappend newKeys {*}$gameKeys
+		incr count
+		append text [broadcastGameText $game]
+	}
+	return [list $text $newKeys $count]
+}
+
+
+# The keys of the broadcast games that are already in <base>, and their
+# number. The games of other sources have no key and are left alone.
+proc ::application::download::broadcastDbKeys {base {roundId ""}} {
+	set keys [dict create]
+	set games 0
+	if {[llength [info commands ::scidb::db::get]] == 0} { return [list $keys $games] }
+	if {[catch { ::scidb::db::get open? $base } open]} { return [list $keys $games] }
+	if {![string is boolean -strict $open] || !$open} { return [list $keys $games] }
+	if {[catch { ::scidb::db::count games $base Normal } count]} { return [list $keys $games] }
+	if {![string is integer -strict $count]} { return [list $keys $games] }
+	for {set index 0} {$index < $count} {incr index} {
+		if {[catch { ::scidb::db::get tags $index $base Normal } pairs]} { continue }
+		set tags {}
+		foreach pair $pairs { dict set tags {*}$pair }
+		set gameKeys [broadcastKeys $tags $roundId]
+		if {![llength $gameKeys]} { continue }
+		incr games
+		foreach key $gameKeys { dict set keys $key 1 }
+	}
+	return [list $keys $games]
 }
 
 
