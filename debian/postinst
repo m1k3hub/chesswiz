@@ -11,8 +11,8 @@ if [ -d /usr/local/share/chesswiz/freedesktop.org ]; then
 		fontdir=/usr/local/share/fonts/truetype/Scidb
 	fi
 fi
-fc-cache -f $fontdir
+fc-cache -f $fontdir || true
 cd $xdgdir
 chmod 0555 update-mimeapps.list.tcl
-make -f Makefile install-mime
-make -f Makefile install-desktop-menu
+make -f Makefile install-mime || true
+make -f Makefile install-desktop-menu || true
