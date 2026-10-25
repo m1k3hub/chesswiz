@@ -202,7 +202,7 @@ proc hide {{slide 1}} {
 	variable Slide
 	variable Vars
 
-	::board::diagram::clearAlternatives $board
+	if {[winfo exists $board]} { ::board::diagram::clearAlternatives $board }
 
 	if {$Vars(state) ne "close" && $Vars(state) ne "hidden"} {
 		after cancel $Vars(afterid)

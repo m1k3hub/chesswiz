@@ -437,6 +437,7 @@ proc build {parent number patternNumber} {
 	]
 	set Vars(widget:button:pause) [::toolbar::add $tbControl button \
 		-image $::icon::toolbarPause \
+		-state disabled \
 		-tooltipvar [namespace current]::mc::Pause \
 		-command [namespace code [list Pause $tree]] \
 	]
@@ -446,6 +447,7 @@ proc build {parent number patternNumber} {
 	set Vars(widget:button:lock) [::toolbar::add $tbControl checkbutton \
 		-image $::icon::toolbarLock \
 		-variable [namespace current]::${tree}::Vars(engine:locked) \
+		-state disabled \
 		-tooltipvar [namespace current]::mc::LockEngine \
 		-command [namespace code [list EngineLock $tree]] \
 	]
@@ -454,6 +456,7 @@ proc build {parent number patternNumber} {
 		-image $::icon::toolbarRotateBoard \
 		-variable [namespace current]::${tree}::Vars(engine:opponent) \
 		-command [namespace code [list restartAnalysis $Vars(number)]] \
+		-state disabled \
 		-tooltipvar [namespace current]::mc::OpponentsView \
 	]
 	lappend Vars(widget:toolbar:childs) $Vars(widget:button:opponent)
@@ -703,6 +706,7 @@ proc stopEngine {number} {
 
 
 proc restartAnalysis {number} {
+	if {![::engine::active? $number]} { return }
 	variable NumberToTree
 	set tree [set NumberToTree($number)]
 	variable ${tree}::Vars
@@ -875,6 +879,7 @@ proc CloseEngine {tree} {
 
 proc Pause {tree} {
 	variable ${tree}::Vars
+	if {![::engine::active? $Vars(number)]} { return }
 
 	set Vars(engine:pause) [expr {!$Vars(engine:pause)}]
 
@@ -1640,8 +1645,10 @@ proc InsertMoves {tree what line} {
 		::scidb::engine::bind $id
 	}
 
-	# Registry dispatch has no preceding mouse popup to take the snapshot.
-	::scidb::engine::snapshot $id
+	# Append requires a line end. In the middle, insert the sequence as a
+	# variation instead, preserving the existing continuation.
+	set where [::scidb::engine::snapshot $id]
+	if {$what eq "seq" && $where ne "atend"} { set what line }
 	if {$what in {all incl}} {
 		::scidb::engine::snapshot $id $what
 	} else {

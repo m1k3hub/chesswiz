@@ -670,6 +670,8 @@ proc update {position cmd data promoted} {
 	variable board
 	variable Vars
 
+	if {![winfo exists $board]} { return }
+
 	switch $cmd {
 		set	{ ::board::diagram::update $board $data $promoted }
 		move	{ ::board::diagram::move $board $data }
@@ -716,6 +718,8 @@ proc update {position cmd data promoted} {
 proc updateMarks {marks} {
 	variable board
 	variable Vars
+
+	if {![winfo exists $board]} { return }
 
 	if {[[namespace parent]::pgn::showMarkers]} {
 		::board::diagram::updateMarks $board $marks
@@ -886,6 +890,9 @@ proc Goto {step} {
 	variable Options
 	variable Vars
 	variable board
+
+	# Navigation still works while its board presentation is closed.
+	if {![winfo exists $board]} { return [goto $step] }
 
 	if {	$step == +1
 		&& !$Vars(select-var-is-pending)

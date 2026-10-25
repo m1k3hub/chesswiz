@@ -646,6 +646,7 @@ proc savedLayout {twm} {
 
 	set id $Vars($twm:id)
 	set layoutVariant $Vars($id:layout:variant)
+	if {![info exists Options($id:layout:saved:$layoutVariant)]} { return [inspectLayout $twm] }
 	return $Options($id:layout:saved:$layoutVariant)
 }
 

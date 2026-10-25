@@ -874,9 +874,12 @@ proc hideMoves {path} {
 
 proc deleteGame {base variant index {view -1}} {
 	::widget::busyCursor on
-	set flag [expr {![::scidb::db::get deleted? $index $view $base $variant]}]
-	::scidb::db::set delete $index $view $base $variant $flag
-	::widget::busyCursor off
+	try {
+		set flag [expr {![::scidb::db::get deleted? $index $view $base $variant]}]
+		::scidb::db::set delete $index $view $base $variant $flag
+	} finally {
+		::widget::busyCursor off
+	}
 }
 
 

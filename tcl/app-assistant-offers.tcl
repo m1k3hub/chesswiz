@@ -365,6 +365,6 @@ proc ::application::assistant::askContext {record} {
 		lappend fields "$key=[dict get $record $key]"
 	}
 	set text "What can I do here? ([join $fields {; }])"
-	askAbout $text
+	::application::assistant::offers::askAbout $text
 	return $text
 }

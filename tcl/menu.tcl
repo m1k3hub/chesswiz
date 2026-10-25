@@ -148,8 +148,9 @@ if {[info exists ::i18n::languages]} {
 	}
 }
 
-set BugTracker					"http://sourceforge.net/p/scidb/bugs/"
-set FeatureRequestTracker	"http://sourceforge.net/p/scidb/feature-requests/"
+# No Chesswiz issue-tracker URL is configured. Keep contact rows hidden.
+set BugTracker ""
+set FeatureRequestTracker ""
 
 variable Fullscreen			0
 variable HideMenu				0
@@ -516,12 +517,14 @@ proc gameNew {parent {variant Normal}} {
 
 
 proc bugReport {parent} {
-	::web::open $parent [set [namespace current]::BugTracker]
+	variable BugTracker
+	if {$BugTracker ne ""} { ::web::open $parent $BugTracker }
 }
 
 
 proc featureRequest {parent} {
-	::web::open $parent [set [namespace current]::FeatureRequestTracker]
+	variable FeatureRequestTracker
+	if {$FeatureRequestTracker ne ""} { ::web::open $parent $FeatureRequestTracker }
 }
 
 

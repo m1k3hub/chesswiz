@@ -1573,6 +1573,32 @@ proc ::context::ObjectEnd {object} {
 # R10: strip/truncate/comment rows follow the move object. Returns
 # {visible enabled} or empty when the id has no object rule.
 proc ::context::ObjectRule {id object} {
+	if {$id eq "c3.delete" || [string match c3.flag.* $id] || $id eq "c3.flags" || $id eq "c4.import.pgn"} {
+		set base [expr {[dict exists $object base] ? [dict get $object base] : [::menu::CurrentBase]}]
+		set writable 0
+		if {$base ne "" && ![catch {::scidb::db::get readonly? $base} ro]} { set writable [expr {!$ro}] }
+		return [list 1 $writable]
+	}
+	if {$id eq "c3.open_url"} {
+		return [list [::web::isWebLink [GameSite $object]] 1]
+	}
+	if {$id in {c9.stay_on_top c9.hide_leaving}} {
+		set floating 0
+		if {[dict exists $object twm] && [dict exists $object paneUid]} {
+			set floating [::menu::PaneFloating [dict get $object paneUid] [dict get $object twm]]
+		}
+		return [list 1 $floating]
+	}
+	if {[string match c6.* $id] && $id ni {c6.copy_fen c6.copy_line c6.setup_engine c6.setup_eval_edges}
+		|| $id in {c9.analysis.best c9.analysis.opponents}} {
+		set running [ObjectEngineRunning $object]
+		return [list 1 $running]
+	}
+	if {$id eq "c12.remove_history"} {
+		set index -1
+		if {[dict exists $object gameSlot]} { set index [::game::historyIndex [dict get $object gameSlot]] }
+		return [list 1 [expr {$index >= 0}]]
+	}
 	switch -- $id {
 		c2.strip.moves {
 			set start [ObjectStart $object]
@@ -1819,6 +1845,9 @@ proc ::context::Invoke {id {object {}}} {
 }
 
 proc ::context::Command {id object} {
+	if {($id eq "c9.stay_on_top" || $id eq "c9.hide_leaving") && ![lindex [ObjectRule $id $object] 1]} { return }
+	if {([string match c6.* $id] && $id ni {c6.copy_fen c6.copy_line c6.setup_engine c6.setup_eval_edges}
+		|| $id in {c9.analysis.best c9.analysis.opponents}) && ![ObjectEngineRunning $object]} { return }
 	if {![dict exists $object parent]} { dict set object parent .application }
 	if {![dict exists $object view]} { dict set object view 0 }
 	if {![dict exists $object variant]} {
@@ -1924,15 +1953,15 @@ proc ::context::Command {id object} {
 			catch { ::gamestable::Open(tourntable) [dict get $object path] [dict get $object index] }
 		}
 		c3.open_url {
-			catch { ::web::open [dict get $object path] [::gamestable::GetSite [dict get $object path] \
-				[dict get $object base] [dict get $object variant] [dict get $object view] [dict get $object index]] }
+			set site [GameSite $object]
+			if {[::web::isWebLink $site]} { ::web::open [dict get $object parent] $site }
 		}
 		c3.merge {
 			catch { gamebar::mergeGame [dict get $object path] [list [dict get $object base] \
 				[dict get $object variant] [dict get $object view] [dict get $object index]] }
 		}
 		c3.delete {
-			catch { ::gamestable::deleteGame [dict get $object base] [dict get $object variant] [dict get $object index] [dict get $object view] }
+			return [::gamestable::deleteGame [dict get $object base] [dict get $object variant] [dict get $object index] [dict get $object view]]
 		}
 		c3.flag.* {
 			return [GameFlag $object $id]
@@ -2043,7 +2072,7 @@ proc ::context::Command {id object} {
 			set name [dict get $object name]
 			set view [::scidb::view::new $base $variant unused unused unused unused master slave]
 			switch $kind {
-				player { set query [list playername white $name]; set other [list playername black $name]; set query [list or $query $other] }
+				player { set query [list playername white $name]; set other [list playername black $name]; set query [list OR $query $other] }
 				event { set query [list eventname $name] }
 				site { set query [list sitename $name] }
 			}
@@ -2245,17 +2274,42 @@ proc ::context::Command {id object} {
 			::game::release $pos
 		}
 		c12.clear_history { ::game::clearHistory }
-		c12.remove_history { ::game::removeHistoryEntry [dict get $object historyIndex] }
+		c12.remove_history {
+			set index [::game::historyIndex [dict get $object gameSlot]]
+			if {$index >= 0} { ::game::removeHistoryEntry $index }
+		}
 		c12.new.standard { ::menu::gameNew [dict get $object parent] }
 		c12.new.chess960 { catch { ::application::pgn::Shuffle Chess960 } }
-		c12.save.replace { ::application::pgn::saveGame replace [dict get $object base] }
-		c12.save.replace_moves { ::application::pgn::saveGame moves [dict get $object base] }
-		c12.save.new { ::application::pgn::saveGame add [dict get $object base] }
+		c12.save.replace {
+			::scidb::game::switch [dict get $object gameSlot]
+			::application::pgn::saveGame replace
+		}
+		c12.save.replace_moves {
+			::scidb::game::switch [dict get $object gameSlot]
+			::application::pgn::saveGame moves
+		}
+		c12.save.new {
+			::scidb::game::switch [dict get $object gameSlot]
+			::application::pgn::saveGame add
+		}
 		c12.paste.variation { ::application::pgn::PasteClipboardVariation }
 		c12.paste.game { ::application::pgn::PasteClipboardGame }
 		c12.merge.game { ::gamebar::mergeGame [dict get $object parent] [dict get $object gameSlot] }
 	}
 	return
+}
+
+# Use the pane's live engine identity, never a stale popup ID or another pane.
+proc ::context::ObjectEngineRunning {object} {
+	if {![dict exists $object number]} { return 0 }
+	set number [dict get $object number]
+	return [::engine::active? $number]
+}
+
+proc ::context::GameSite {object} {
+	if {[catch {::gamestable::GetSite [dict get $object path] [dict get $object base] \
+		[dict get $object variant] [dict get $object view] [dict get $object index]} site]} { return "" }
+	return $site
 }
 
 # Toggle one game flag on the game under the menu (C3).

@@ -568,8 +568,8 @@ proc ::menu::DefineTree {} {
 		[list cascade Help "" [list \
 			[list cmd app-help Help "F1"] \
 			[list sep] \
-			[list cmd menu.help.bug ContactBugReport] \
-			[list cmd menu.help.feature ContactFeatureRequest] \
+			[list cmd menu.help.bug ContactBugReport {} {expr {0}}] \
+			[list cmd menu.help.feature ContactFeatureRequest {} {expr {0}}] \
 			[list sep] \
 			[list cmd menu.help.about MenuAboutChesswiz] \
 		]] \
@@ -1849,8 +1849,8 @@ proc ::menu::Do {id} {
 				-base [CurrentBase] -variant [CurrentVariant] -view 0 -kind game]
 		}
 		menu.game.history.recent {
-			if {[catch { ::game::gameList } games] || ![llength $games]} { return }
-			::scidb::game::switch [lindex [lindex $games 0] 0]
+			if {[::game::historyIsEmpty?]} { return }
+			::game::openGame .application 0
 			return
 		}
 		menu.game.history.clear { return [::application::database::ClearHistory] }
