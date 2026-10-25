@@ -323,6 +323,7 @@
 # Contact
 ::menu::mc::ContactBugReport				"&Reporte de errores"
 ::menu::mc::ContactFeatureRequest		"&Solicitud de característica"
+::menu::mc::SupportChesswiz		"&Apoyar a Chesswiz…"
 
 # Extras
 ::menu::mc::InstallChessBaseFonts		"Instalar fuentes de figuras" 

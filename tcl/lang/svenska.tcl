@@ -322,6 +322,7 @@
 # Contact
 ::menu::mc::ContactBugReport			"&Felrapport"
 ::menu::mc::ContactFeatureRequest	"Ö&nskemål"
+::menu::mc::SupportChesswiz		"&Stöd Chesswiz…"
 
 # Extras
 ::menu::mc::InstallChessBaseFonts	"Installera figurfonter"

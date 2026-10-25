@@ -24,7 +24,7 @@ proc ::scidb::test::r5::extract {script {ns ::}} {
 }
 set r5root [file dirname [file dirname [file normalize [info script]]]]
 if {[info exists ::env(R5_SOURCE_ROOT)]} {set r5root $::env(R5_SOURCE_ROOT)}
-foreach f {actions eventtable app-pgn context game dropdown menu gametable app-analysis app-board app-assistant-offers app-twm app-database-search-nl app-database-openingprep} {
+foreach f {actions eventtable app-pgn context game dropdown menu info gametable app-analysis app-board app-assistant-offers app-twm app-database-search-nl app-database-openingprep} {
     set fd [open [file join $r5root tcl $f.tcl]]
     ::scidb::test::r5::extract [read $fd]
     close $fd
@@ -208,6 +208,40 @@ tcltest::test r5-site-url {a city never opens a browser; an actual URL does} -bo
         list $city $unvisited $::opened
     }
 } -result {{0 1} 1 https://example.org/game}
+tcltest::test r5-support-site {support action is assistant-visible and opens the configured site} -body {
+    ::scidb::test::r5::run {
+        set ::action::Registry {}; set ::action::ConfirmHook {}; set ::action::BulkHook {}
+        set ::menu::DropdownOrder 0
+        proc ::menu::MC {name} {return $name}
+        ::menu::DefineTree
+        ::menu::RegisterTree
+        proc ::web::open {parent url} {set ::opened [list $parent $url]}
+        set ::menu::SupportURL https://chesswizapp.com/support.html
+        ::action::run menu.help.support
+        set first $::opened
+        set ::menu::SupportURL https://example.org/support
+        ::action::run menu.help.support
+        list [dict get [::action::get menu.help.support] ai] $first $::opened
+    }
+} -result {1 {.application https://chesswizapp.com/support.html} {.application https://example.org/support}}
+tcltest::test r5-support-no-url {an empty support setting opens no browser} -body {
+    ::scidb::test::r5::run {
+        set ::menu::SupportURL {}
+        proc ::web::open {args} {error {unexpected browser}}
+        ::menu::Do menu.help.support
+    }
+} -result {}
+tcltest::test r5-about-support {About uses the same setting as the Help action} -body {
+    ::scidb::test::r5::run {
+        set ::menu::SupportURL https://example.org/support
+        proc ::web::open {parent url} {set ::opened [list $parent $url]}
+        proc supportNode {method args} {
+            if {$method eq "attribute"} {return chesswiz:support}
+        }
+        ::info::Mouse1Up .about supportNode
+        set ::opened
+    }
+} -result {.about https://example.org/support}
 tcltest::test r5-contact-no-url {unconfigured contact actions cannot open upstream trackers} -body {
     ::scidb::test::r5::run {
         set ::menu::BugTracker {}; set ::menu::FeatureRequestTracker {}

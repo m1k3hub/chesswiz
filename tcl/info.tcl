@@ -159,6 +159,7 @@ proc DisplayAbout {w} {
 			Copyright &#x00A9; 2008-2018 Gregor Cramer<br/>
 			Copyright &#x00A9; 2026 Michael Thomas<br/><br/>
 			$mc::Distributed<br/><br/>
+			<a href='chesswiz:support'>[string map {& {}} $::menu::mc::SupportChesswiz]</a><br/><br/>
 			<font style='font-size: 10pt;'>$mc::Inspired</font>
 		</font>
 	"
@@ -221,7 +222,11 @@ proc Mouse1Up {w nodes} {
 	foreach node $nodes {
 		set href [$node attribute -default {} href]
 		if {[llength $href]} {
-			::web::open $w $href
+			if {$href eq "chesswiz:support"} {
+				::menu::support $w
+			} else {
+				::web::open $w $href
+			}
 			$node dynamic set visited
 		}
 	}

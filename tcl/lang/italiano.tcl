@@ -322,6 +322,7 @@
 # Contact
 ::menu::mc::ContactBugReport				"&Segnala Bug"
 ::menu::mc::ContactFeatureRequest		"&Richiesta Funzione"
+::menu::mc::SupportChesswiz		"&Sostieni Chesswiz…"
 
 # Extras
 ::menu::mc::InstallChessBaseFonts		"Installa caratteri con figurine"

@@ -246,6 +246,7 @@ namespace eval menu::mc {
 	set MenuShowLog					"Show Log…"
 	set Fullscreen						"Full-Screen"
 	set MenuTipOfTheDay				"Tip of the Day…"
+	set SupportChesswiz				"&Support Chesswiz…"
 	set MenuAboutChesswiz			"About Chesswiz…"
 	set ContactBugReport				"Bug Report"
 	set ContactFeatureRequest		"Feature Request"
@@ -570,6 +571,7 @@ proc ::menu::DefineTree {} {
 			[list sep] \
 			[list cmd menu.help.bug ContactBugReport {} {expr {$::menu::BugTracker ne ""}}] \
 			[list cmd menu.help.feature ContactFeatureRequest {} {expr {$::menu::FeatureRequestTracker ne ""}}] \
+			[list cmd menu.help.support SupportChesswiz] \
 			[list sep] \
 			[list cmd menu.help.about MenuAboutChesswiz] \
 		]] \
@@ -772,6 +774,10 @@ proc ::menu::RegisterTree {} {
 			RegisterNodes $node [format "%02d.%03d" $n $i] $topName
 		}
 	}
+
+	# Offer the support page when the assistant is asked how to donate.
+	dict set ::action::Registry menu.help.support ai 1
+	dict set ::action::Registry menu.help.support doc "Open the Chesswiz support page to donate or support development."
 
 	# The New Game variants are dispatched by ::menu::Invoke but have no
 	# drop-down row, so they are registered here for ::action::run.
@@ -2018,6 +2024,7 @@ proc ::menu::Do {id} {
 		app-help { return [::help::open .application] }
 		menu.help.bug { return [::menu::bugReport .application] }
 		menu.help.feature { return [::menu::featureRequest .application] }
+		menu.help.support { return [::menu::support .application] }
 		menu.help.about {
 			if {[tk windowingsystem] eq "aqua"} { return [::menu::MacAbout] }
 			return [::info::openDialog .application]

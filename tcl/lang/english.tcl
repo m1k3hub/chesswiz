@@ -319,6 +319,7 @@
 # Contact
 ::menu::mc::ContactBugReport				"&Bug Report"
 ::menu::mc::ContactFeatureRequest		"&Feature Request"
+::menu::mc::SupportChesswiz		"&Support Chesswiz\u2026"
 
 # Extras
 ::menu::mc::InstallChessBaseFonts		"Install Figurine Fonts"

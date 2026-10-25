@@ -31,6 +31,7 @@ menu menu::mc::IncreaseFontSize
 menu menu::mc::MaintChangeIcon
 menu menu::mc::MaintCompact
 menu menu::mc::MaintRecode
+menu menu::mc::SupportChesswiz
 menu menu::mc::MenuAboutChesswiz
 menu menu::mc::MenuEngines
 menu menu::mc::MenuShowLog

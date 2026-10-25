@@ -268,6 +268,22 @@ tcltest::test translations-live-dropdown-coverage {at most 5% of the live drop-d
 	return ok
 } -result ok
 
+tcltest::test translations-support-action {support remains translated and assistant-visible after language switches} -body {
+	set saved $::mc::langID
+	set ok 1
+	try {
+		foreach lang {en de es it hu sv} {
+			::menu::SwitchLanguage $lang
+			set rec [::action::get menu.help.support]
+			if {[dict get $rec label] ne $::menu::mc::SupportChesswiz
+				|| [dict get $rec ai] != 1} { set ok 0 }
+		}
+	} finally {
+		::menu::SwitchLanguage $saved
+	}
+	set ok
+} -result 1
+
 # Put the installed share directory back for the test files that follow.
 if {[info exists ::scidb::test::trn::savedShare]} {
 	set ::scidb::dir::share $::scidb::test::trn::savedShare
