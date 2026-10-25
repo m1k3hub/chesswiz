@@ -1028,6 +1028,10 @@ proc focuszoom::disable {twm} {
 		unset baseline($twm)
 	}
 	catch { unset lastPane($twm) }
+ # Content may have changed while the enlargement held the sashes.
+ if {$twm eq [::application::reflow::boardTwm]} {
+  ::application::reflow::onConfigure .application {*}[WindowSize $twm]
+ }
 }
 
 
@@ -1046,6 +1050,9 @@ proc focuszoom::windowResized {twm} {
 	if {[lindex $baseline($twm) 0] eq [WindowSize $twm]} { return }
 	unset baseline($twm)
 	catch { unset lastPane($twm) }
+ # Old animation callbacks must not write sashes into the adapted tree.
+ variable animAfter
+ foreach pw [array names animAfter $twm.*] {after cancel $animAfter($pw); unset animAfter($pw)}
 }
 
 
@@ -2527,8 +2534,9 @@ proc reflowable? {t} {
  # layouts use the same temporary presentation as the unnamed standard.
  if {[llength [$t floats]] || [$t zoomed] ne {}} {return 0}
  if {$::application::Vars(loading) || $::application::Vars(lock:layout)} {return 0}
- # Focus zoom owns its sash snapshot until switched off.
- if {[::application::focuszoom::isEnabled $t]} {return 0}
+ # Only an active enlargement owns the sashes. Merely enabling focus
+ # follows size must not suppress shape adaptation or content collapse.
+ if {[info exists ::application::focuszoom::baseline($t)]} {return 0}
  set shape [shapeOf [::application::twm::inspectLayout $t]]
  return [expr {$shape eq $S(wideShape) || ($S(mode) eq "tall" && $shape eq $S(tallShape))}]
 }

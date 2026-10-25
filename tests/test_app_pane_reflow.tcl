@@ -709,6 +709,7 @@ tcltest::test pane-reflow-020-fixed {named rearranged and floating layouts stay 
    set ::application::Vars(loading) 0
   } else {$t undock [$t leaf editor]}
   set ::application::twm::Options(board:layout:name) fixed-$kind
+  ::application::focuszoom::enable $t
   set ::application::reflow::S(override) {}
   update
   set shape [::application::reflow::liveShape]
@@ -727,5 +728,68 @@ tcltest::test pane-reflow-020-fixed {named rearranged and floating layouts stay 
  ::application::reflow::reset
  wm geometry .application $oldGeometry
 } -result {1 1 1 1 1 1 1 1}
+
+# VAL-LAY-021: real Configure round trips, both before and after focus growth.
+foreach named {0 1} {
+ tcltest::test pane-reflow-021-focus-$named {focus follows size composes with shape adaptation and collapse} -setup {
+  set t [::reflowTest::setup]
+  set oldGeometry [wm geometry .application]
+  set oldName $::application::twm::Options(board:layout:name)
+  set oldDuration $::application::focuszoom::duration
+  set ::application::focuszoom::duration 150
+  if {$named} {set ::application::twm::Options(board:layout:name) focus-standard-021}
+  ::application::openPane editor
+  set ::application::reflow::S(override) {}
+  wm geometry .application 1400x850
+  ::reflowTest::waitMs 650
+  ::application::focuszoom::enable $t
+ } -body {
+  set results {}
+  foreach phase {before after off} {
+   foreach size {700x1000 1400x850} expected {tall wide} {
+    wm geometry .application $size
+    ::reflowTest::waitMs 750
+    set b [$t leaf board]; set e [$t leaf editor]
+    set below [expr {[winfo rooty $e] >= [winfo rooty $b]+[winfo height $b]}]
+    set beside [expr {[winfo rootx $e] >= [winfo rootx $b]+[winfo width $b]}]
+    set collapsed [expr {![winfo ismapped [$t leaf analysis:1]]}]
+    lappend results [expr {[::application::reflow::mode] eq $expected && [::application::reflow::reflowable? $t] && $collapsed && ($expected eq "tall" ? $below : $beside)}]
+    ::reflowTest::say "FOCUS021 named=$named phase=$phase size=[wm geometry .application] mode=[::application::reflow::mode] below=$below beside=$beside collapsed=$collapsed"
+    if {$phase eq "after"} {
+     set target $e
+     if {$expected eq "tall"} {
+      # tallSashes fills all available board height. Move the real sash
+      # first, as a user can, to leave room for a measurable enlargement.
+      set target $b
+      set pw [$t parent $b]
+      $pw sash place 0 0 500
+      ::reflowTest::waitMs 250
+     }
+     set before [::application::focuszoom::Snapshot $t]
+     set area [expr {[winfo width $target]*[winfo height $target]}]
+     ::application::focuszoom::clicked $target
+     ::reflowTest::waitMs 250
+     lappend results [expr {[winfo width $target]*[winfo height $target] > $area}]
+     ::application::focuszoom::disable $t
+     ::reflowTest::waitMs 450
+     lappend results [expr {[::application::focuszoom::Snapshot $t] eq $before}]
+     ::application::focuszoom::enable $t
+     # Resize with a live enlargement: the old animation/snapshot must
+     # release ownership so the next shape can adapt.
+     ::application::focuszoom::clicked $target
+    }
+   }
+   if {$phase eq "off"} {continue}
+   if {$phase eq "after"} {::application::focuszoom::disable $t}
+  }
+  set results
+ } -cleanup {
+  ::application::focuszoom::disable $t
+  set ::application::focuszoom::duration $oldDuration
+  set ::application::twm::Options(board:layout:name) $oldName
+  ::application::reflow::reset
+  wm geometry .application $oldGeometry
+ } -result {1 1 1 1 1 1 1 1 1 1}
+}
 
 tcltest::cleanupTests
