@@ -212,7 +212,7 @@ getProperty(Display* display, Window window, Atom atom, unsigned length, unsigne
 	unsigned long	nitems;
 	unsigned long	bytesAfter;
 	int				actualFormat;
-	unsigned char*	prop;
+	unsigned char*	prop = 0;
 
 	int status = XGetWindowProperty(	display,
 												window,
@@ -227,7 +227,12 @@ getProperty(Display* display, Window window, Atom atom, unsigned length, unsigne
 												&bytesAfter,
 												&prop);
 
-	return status == Success && nitems >= length && actualFormat == 32 ? prop : 0;
+	if (status == Success && actualType == XA_CARDINAL && nitems >= length && actualFormat == 32)
+		return prop; // The caller owns the accepted buffer.
+
+	if (prop)
+		XFree(prop);
+	return 0;
 }
 
 

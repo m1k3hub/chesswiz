@@ -21,6 +21,14 @@ namespace eval ::reflowTest {
 		::application::reflow::cancelPending
 		return $t
 	}
+	# Keep both threshold fixtures inside the live monitor, including room
+	# for decorations/chrome. Physical clamping must not change their aspect.
+	proc aspectSize {aspect} {
+		lassign [winfo workarea .application] x y w h
+		set h [expr {min(1000, $h-100, int(($w-80)/$aspect))}]
+		set w [expr {int($h*$aspect)}]
+		return ${w}x${h}
+	}
 	proc paneW {t uid} { lassign [$t dimension [$t leaf $uid]] w h a b c d; return $w }
 	proc waitMs {ms} { variable done; set done 0; after $ms {set ::reflowTest::done 1}; vwait ::reflowTest::done; update }
 	proc fileSnap {f} { if {[file exists $f]} { set ch [open $f r]; set data [read $ch]; close $ch; return $data }; return {<none>} }
@@ -149,12 +157,16 @@ tcltest::test pane-reflow-002-session-only {reflow never changes board:layout op
 # 3a: named structurally different layout is not reflowed
 tcltest::test pane-reflow-003-custom {a custom saved layout is not reflowed} -setup {
 	set t [::reflowTest::setup]
+	wm geometry .application [::reflowTest::aspectSize 1.6]
+	::reflowTest::waitMs 650
 	# Give the named layout an actually different arrangement.
 	set savedName $::application::twm::Options(board:layout:name)
 	set ::application::twm::Options(board:layout:name) "MyCustom"
 	set ::application::Vars(loading) 1
 	$t load [::application::reflow::substTpl [string map {{-orient horz} {-orient vert}} $::application::BoardLayout]]
 	set ::application::Vars(loading) 0
+	::reflowTest::waitMs 650
+	::application::reflow::cancelPending
 	set before [::application::twm::inspectLayout $t]
 } -body {
 	set beforeMode [::application::reflow::mode]
@@ -340,11 +352,11 @@ tcltest::test pane-reflow-005-real-resize {real window resizes across the thresh
 	::application::reflow::resetLoadCount
 } -body {
 	set c0 [::application::reflow::loadCount]
-	wm geometry .application 900x1200+100+40   ;# tall
+	wm geometry .application [::reflowTest::aspectSize 0.75] ;# tall
 	::reflowTest::waitMs 600
 	set c1 [::application::reflow::loadCount]
 	set m1 [::application::reflow::mode]
-	wm geometry .application 1600x1000+100+40  ;# wide
+	wm geometry .application [::reflowTest::aspectSize 1.6] ;# wide
 	::reflowTest::waitMs 600
 	set c2 [::application::reflow::loadCount]
 	set m2 [::application::reflow::mode]
