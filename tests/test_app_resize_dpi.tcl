@@ -131,9 +131,8 @@ proc ::rsz::setScaling {scale} {
 	::application::scalingChanged
 }
 
-# Change tk scaling behind the application's ::tk setter wrapper, the way an
-# OS-level DPI change would (VAL-RSZ-007). The display watch, not this test,
-# must notice it and run the relayout.
+# Change Tk directly to cover callers bypassing the setter wrapper.
+# OS DPI coverage below changes xrdb instead.
 proc ::rsz::rawScaling {scale} {
 	if {[info commands ::__application_tk_orig] ne ""} {
 		::__application_tk_orig scaling $scale
@@ -161,13 +160,9 @@ proc ::rsz::restoreScaling {} {
 	}
 }
 
-# True when the window is inside the work area by the codebase's own
-# convention (clampGeometry is a no-op).
+# Independent oracle: measure the actual decorated native frame.
 proc ::rsz::inside {w} {
-	set geometry [wm geometry $w]
-	return [expr {
-		[::util::place::clampGeometry $geometry [winfo workarea $w] [winfo extents $w]] eq $geometry
-	}]
+	return [::rsz::insideArea $w [winfo workarea $w]]
 }
 
 proc ::rsz::overlap? {} {
@@ -284,13 +279,12 @@ proc ::rsz::counterSnapshot {} {
 	return [array get ::rsz::Counter]
 }
 
-# The window is inside <area> by the codebase's own rule (clampGeometry is a
-# no-op).
+# Frame coordinates are x/y/width/height, not the default extents.
 proc ::rsz::insideArea {w area} {
-	set geometry [wm geometry $w]
-	return [expr {
-		[::util::place::clampGeometry $geometry $area [winfo extents $w]] eq $geometry
-	}]
+	lassign [::scidb::tk::wm frame $w] x y width height
+	lassign $area ax ay aw ah
+	return [expr {$x >= $ax && $y >= $ay
+		&& $x+$width <= $ax+$aw && $y+$height <= $ay+$ah}]
 }
 
 # A wide (non-reflow) window geometry that fits the current work area, so
@@ -641,12 +635,21 @@ tcltest::test rsz-workarea-change {VAL-RSZ-004 a changed work area re-clamps on 
 		lappend small [wm geometry .application] [::rsz::insideArea .application {0 0 1500 950}] $ms [::rsz::overlap?]
 		lappend small [::rsz::rects] $::application::board::ReserveSide $::application::board::ReservePixels
 	}
-	# A work area left of the primary one uses a negative origin.
+	# A virtual work area spanning a negative origin and the real screen.
+	# A wholly fictitious off-screen monitor cannot contain a native frame:
+	# Openbox correctly moves that frame back onto a physical display.
+	set negativeArea [list -1920 0 [expr {1920 + [winfo screenwidth .application]}] \
+		[winfo screenheight .application]]
 	set negative {}
-	::rsz::withWorkArea {-1920 0 1920 1080} {
-		lassign [::rsz::settle {wm geometry .application 1500x950+-1800+100}] ms
+	set negativeGeometry "[expr {min(1500,[winfo screenwidth .application]-80)}]x[expr {min(950,[winfo screenheight .application]-80)}]+-100+50"
+	::rsz::withWorkArea $negativeArea {
+		lassign [::rsz::settle [list wm geometry .application $negativeGeometry]] ms
 		::rsz::settle {::mediainset::Relayout}
-		lappend negative [wm geometry .application] [::rsz::insideArea .application {-1920 0 1920 1080}] $ms [::rsz::overlap?]
+		# The physically fitting fixture can legitimately reach BRD-004 on
+		# a laptop screen; prove the no-strip corner fallback, as in the
+		# other resize tests, instead of requiring a fictitious wide pane.
+		lappend negative [wm geometry .application] [::rsz::insideArea .application $negativeArea] $ms \
+			[expr {![::rsz::overlapOk? rsz-workarea-negative]}]
 		lappend negative [::rsz::rects] $::application::board::ReserveSide $::application::board::ReservePixels
 	}
 	# Back on the real work area: same size, moved outside -> clamped; a
@@ -674,42 +677,91 @@ tcltest::test rsz-workarea-change {VAL-RSZ-004 a changed work area re-clamps on 
 
 # ---------------------------------------------------------------- VAL-RSZ-007
 
-# Scaling changed behind the ::tk wrapper (an OS-level update): the display
-# watch must see it and relay out once, without any window resize, and the
-# next poll must be a no-op.
-tcltest::test rsz-display-watch-scaling {VAL-RSZ-007 a scaling change bypassing the wrapper is detected by the poll and relays out once} -setup {
+# Drive the operating system resource, never tk scaling, to prove the
+# native-to-Tk path and the automatic one-second watcher.
+tcltest::testConstraint osDpi [expr {[tk windowingsystem] eq "x11"
+	&& [auto_execok xrdb] ne ""}]
+proc ::rsz::osDpi {dpi} { exec xrdb -merge << "Xft.dpi: $dpi\n" }
+proc ::rsz::awaitDpi {dpi} {
+	set deadline [expr {[clock milliseconds] + 3000}]
+	while {[clock milliseconds] < $deadline} {
+		::rsz::wait 50
+		if {$::scidb::startup::calibratedDpi == $dpi
+			&& [llength $::rsz::Ticks] > 0} { return 1 }
+	}
+	return 0
+}
+
+tcltest::test rsz-display-watch-scaling {VAL-WIN-012 xrdb DPI round trip recalibrates and relays out once per OS change} -constraints osDpi -setup {
 	::rsz::saveScaling
+	set resources [exec xrdb -query]
 	::rsz::showBoard
-	::rsz::settle [list ::rsz::setScaling 1.0]
-	::rsz::settle [list wm geometry .application [::rsz::wideGeometry 1.0 1.3 10]]
+	::rsz::settle [list wm geometry .application [::rsz::wideGeometry 0.85 1.3 10]]
+	::rsz::setScaling 1.0
+	::rsz::osDpi 84
+	::application::displayWatch
+	::rsz::osDpi 96
+	::application::displayWatch
+	::rsz::wait 600
+	set ::rsz::Ticks {}
+	::application::addScalingListener {::rsz::noteListener}
+} -body {
+	set baseline [list [::rsz::boardRect] [::rsz::panes] $::application::board::Dim(borderthickness)]
+	set results {}
+	foreach dpi {144 96} {
+		::application::resetDisplayChangeCount
+		set ::rsz::Ticks {}
+		set before [tk scaling]
+		::rsz::osDpi $dpi
+		set detected [::rsz::awaitDpi $dpi]
+		::rsz::wait 600
+		set after [list [::rsz::boardRect] [::rsz::panes] $::application::board::Dim(borderthickness)]
+		set changes [::application::displayChangeCount]
+		set ticks [llength $::rsz::Ticks]
+		set scaling [tk scaling]
+		::rsz::wait 1300
+		set idle [list [expr {[::application::displayChangeCount]-$changes}] \
+			[expr {[llength $::rsz::Ticks]-$ticks}]]
+		puts "EVIDENCE os-dpi requested=$dpi native=[::scidb::tk::wm dpi .application] before=$before scaling=$scaling changes=$changes ticks=$ticks idle=$idle frame=[::scidb::tk::wm frame .application] panes=[::rsz::panes] board=[::rsz::boardRect]"
+		lappend results [list $detected [expr {abs($scaling-$dpi/72.0)<0.01}] \
+			$changes $ticks $idle [::rsz::inside .application]]
+		if {$dpi == 144} { set grew [expr {$after ne $baseline}] }
+	}
+	list $results $grew [::rsz::near $baseline $after 2]
+} -cleanup {
+	::application::removeScalingListener {::rsz::noteListener}
+	exec xrdb -load << $resources
+	::application::displayWatch
+	::rsz::restoreScaling
+} -result {{{1 1 1 1 {0 0} 1} {1 1 1 1 {0 0} 1}} 1 1}
+
+tcltest::test rsz-os-dpi-user-preference {VAL-WIN-012 unchanged OS DPI preserves user scaling; OS changes honour its floor without loops} -constraints osDpi -setup {
+	::rsz::saveScaling
+	set resources [exec xrdb -query]
+	::rsz::osDpi 96
+	::application::displayWatch
+	::rsz::setScaling 2.5
+	::rsz::wait 600
+	set preference [tk scaling]
 	set ::rsz::Ticks {}
 	::application::addScalingListener {::rsz::noteListener}
 	::application::resetDisplayChangeCount
-	set before [list [::rsz::boardRect] [::rsz::panes] $::application::board::Dim(borderthickness)]
 } -body {
-	::rsz::rawScaling 2.0
-	# Tk 8.6 emits no event for this; wait for the one-second display poll.
-	set deadline [expr {[clock milliseconds] + 2500}]
-	while {[clock milliseconds] < $deadline && [::application::displayChangeCount] == 0} {
-		after 50
-		update
-	}
-	set changes [::application::displayChangeCount]
-	update
-	set ticks [llength $::rsz::Ticks]
-	set after [list [::rsz::boardRect] [::rsz::panes] $::application::board::Dim(borderthickness)]
-	# One further poll: unchanged display, so nothing runs.
-	after 1200
-	update
-	set idleChanges [expr {[::application::displayChangeCount] - $changes}]
-	set idleTicks [expr {[llength $::rsz::Ticks] - $ticks}]
-	puts "EVIDENCE rsz-display-scaling changes=$changes ticks=$ticks idle=$idleChanges/$idleTicks border=[lindex $after 2] before=[lindex $before 2]"
-	list $changes $ticks $idleChanges $idleTicks [expr {$after ne $before}] \
-		[expr {[lindex $after 2] > [lindex $before 2]}]
+	::rsz::wait 1300
+	set unchanged [list [expr {[tk scaling] == $preference}] \
+		[::application::displayChangeCount] [llength $::rsz::Ticks]]
+	::rsz::osDpi 144
+	set detected [::rsz::awaitDpi 144]
+	::rsz::wait 1500
+	puts "EVIDENCE os-dpi-preference preference=$preference scaling=[tk scaling] unchanged=$unchanged changes=[::application::displayChangeCount] ticks=[llength $::rsz::Ticks]"
+	list $unchanged $detected [expr {[tk scaling] == $preference}] \
+		[::application::displayChangeCount] [llength $::rsz::Ticks]
 } -cleanup {
 	::application::removeScalingListener {::rsz::noteListener}
+	exec xrdb -load << $resources
+	::application::displayWatch
 	::rsz::restoreScaling
-} -result {1 1 0 0 1 1}
+} -result {{1 0 0} 1 1 1 1}
 
 # A work area shrunk without a window resize: the poll runs the same
 # relayout/re-clamp as the wrapper path and keeps the window inside it.

@@ -5,6 +5,14 @@
 #import <CoreText/CoreText.h>
 #include <stdlib.h>
 
+extern "C" double chesswizAquaDpi(Tk_Window tkwin)
+{
+    Tk_MakeWindowExist(tkwin);
+    TkWindow* win = reinterpret_cast<TkWindow*>(tkwin);
+    NSWindow* window = [win->privatePtr->toplevel->view window];
+    return 72.0 * (window ? window.backingScaleFactor : NSScreen.mainScreen.backingScaleFactor);
+}
+
 extern "C" void chesswizAquaGeometry(Tk_Window tkwin, int workarea, int* values)
 {
     Tk_MakeWindowExist(tkwin);

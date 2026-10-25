@@ -784,7 +784,8 @@ proc NotifyScalingListener {listener} {
 
 
 # RULE (VAL-RSZ-007): an OS scaling, monitor or work-area change can bypass
-# the `tk scaling` setter hook above: exec.tcl calibrates only at startup,
+# the `tk scaling` setter hook above. The native query and shared startup
+# calibration detect OS changes independently of Tk scaling;
 # Tk 8.6 sends no event for either, and a monitor/taskbar change emits no
 # Tcl event at all. Tk 9 offers <<TkScalingChanged>>, so bind it where it
 # exists, and in every case watch the effective scaling and the screen/work
@@ -795,7 +796,8 @@ proc displaySignature {} {
 	return [list [tk scaling] \
 		[winfo screenwidth .application] [winfo screenheight .application] \
 		[winfo workarea .application] \
-		[::scidb::tk::wm monitor .application]]
+		[::scidb::tk::wm monitor .application] \
+		[expr {round([::scidb::tk::wm dpi .application])}]]
 }
 
 
@@ -824,6 +826,10 @@ proc displayWatch {} {
 		set Vars(display:after) {}
 	}
 	if {![winfo exists .application]} { return }
+	# Query native DPI independently of Tk's cached screen millimetres.
+	# Do this before capturing the signature, so the calibrated factor is
+	# consumed by exactly the same notification as the OS change.
+	::scidb::startup::calibrateDpi .application
 	set signature [displaySignature]
 	if {$signature ne $Vars(display:signature)} {
 		set Vars(display:signature) $signature

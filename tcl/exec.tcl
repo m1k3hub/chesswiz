@@ -237,26 +237,55 @@ if {!$::scidb::startup::testing} {
 }
 
 # ----------------------------------------------------------------------
-# Dynamic HiDPI / Retina display scaling calibration:
-# Calculate true monitor DPI and calibrate Tk's font/geometry scaling.
-# ----------------------------------------------------------------------
-if {[llength [info commands tk]] && [tk windowingsystem] ne "aqua"} {
-	catch {
-		set _sWidth [winfo screenwidth .]
-		set _sMmWidth [winfo screenmmwidth .]
-		if {$_sWidth > 0 && $_sMmWidth > 0} {
-			set _calcDpi [expr {round(($_sWidth * 25.4) / $_sMmWidth)}]
-			# Clamp to sensible boundaries (84 to 288 DPI)
-			if {$_calcDpi >= 84 && $_calcDpi <= 288} {
-				set _scale [expr {$_calcDpi / 72.0}]
-				# Do not downscale below standard 1.0 (96 DPI = 1.3333 scaling)
-				if {$_scale > [tk scaling]} {
-					tk scaling $_scale
-				}
-			}
-		}
-		unset _sWidth _sMmWidth _calcDpi _scale
+# Dynamic HiDPI / Retina display scaling calibration, shared with the
+# runtime display watcher. Keep the startup bounds and upward floor rule.
+namespace eval ::scidb::startup {
+	proc dpiScaling {dpi floor {system {}}} {
+		set dpi [expr {round($dpi)}]
+		# Aqua uses 72 logical points per inch; a non-Retina monitor is 1x.
+		if {$system eq "aqua" && $dpi == 72} { return [expr {max($floor, 1.0)}] }
+		if {$dpi < 84 || $dpi > 288} { return $floor }
+		return [expr {max($floor, $dpi / 72.0)}]
 	}
+
+	proc calibrateDpi {w} {
+		variable calibratedDpi
+		variable scalingFloor
+		variable appliedScaling
+		set dpi [expr {round([::scidb::tk::wm dpi $w])}]
+		set current [tk scaling]
+		if {![info exists appliedScaling]} {
+			# Tk may already have adopted a high OS DPI before we start.
+			# That is not a user preference: allow a later monitor move to
+			# lower it, while preserving the original upward-only startup.
+			set standard [expr {[tk windowingsystem] eq "aqua" ? 1.0 : 96.0/72.0}]
+			set scalingFloor [expr {min($current, $standard)}]
+			set initial 1
+		} elseif {abs($current - $appliedScaling) > 0.00001} {
+			# A user preference (including one set behind the setter wrapper)
+			# becomes the new floor. Never feed our own calibrated value back.
+			set scalingFloor $current
+		}
+		set appliedScaling $current
+		if {[info exists calibratedDpi] && $dpi == $calibratedDpi} { return 0 }
+		set calibratedDpi $dpi
+		set system [tk windowingsystem]
+		if {($dpi < 84 || $dpi > 288) && !($system eq "aqua" && $dpi == 72)} { return 0 }
+		set target [dpiScaling $dpi $scalingFloor $system]
+		if {[info exists initial]} { set target [expr {max($current, $target)}] }
+		# Bypass the application's setter hook: the watcher owns this one
+		# relayout, including fullscreen deferral. Tk quantises the value.
+		if {[info commands ::__application_tk_orig] ne ""} {
+			::__application_tk_orig scaling $target
+		} else {
+			tk scaling $target
+		}
+		set appliedScaling [tk scaling]
+		return [expr {abs($appliedScaling - $current) > 0.00001}]
+	}
+}
+if {[llength [info commands tk]]} {
+	catch {::scidb::startup::calibrateDpi .}
 }
 
 
