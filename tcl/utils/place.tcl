@@ -356,15 +356,54 @@ proc clampGeometry {geometry workarea {extents {0 0 0 0}}} {
 	return "${w}x${h}+${x}+${y}"
 }
 
-proc fitWindow {path {geometry ""}} {
+# Translate the native frame into Tk geometry coordinates. Reported extents
+# can omit the WM's outer border; measure both size and position once mapped.
+proc fittedGeometry {path geometry} {
+	set area [winfo workarea $path]
+	set extents [winfo extents $path]
+	if {[winfo ismapped $path] && [wm state $path] eq "normal"
+		&& ![catch {::scidb::tk::wm frame $path} frame] && [llength $frame] == 4
+		&& [regexp {^[0-9]+x[0-9]+\+(-?[0-9]+)\+(-?[0-9]+)$} [wm geometry $path] -> gx gy]} {
+		lassign $frame fx fy fw fh
+		set ew [expr {$fw - [winfo width $path]}]
+		set eh [expr {$fh - [winfo height $path]}]
+		if {$ew >= 0 && $eh >= 0} {
+			set extents [list 0 $ew 0 $eh]
+			lassign $area ax ay aw ah
+			set area [list [expr {$ax - ($fx - $gx)}] [expr {$ay - ($fy - $gy)}] $aw $ah]
+		}
+	}
+	return [clampGeometry $geometry $area $extents]
+}
+
+variable FitTimer
+proc fitWindow {path {geometry ""} {rechecks 4}} {
+	variable FitTimer
+	if {[info exists FitTimer($path)]} {
+		after cancel $FitTimer($path)
+		unset FitTimer($path)
+	}
 	if {$geometry eq ""} { set geometry [wm geometry $path] }
-	set geometry [clampGeometry $geometry [winfo workarea $path] [winfo extents $path]]
+	set geometry [fittedGeometry $path $geometry]
 	# Layout minimum sizes can exceed the laptop's current work area.
 	lassign [wm minsize $path] mw mh
 	regexp {^([0-9]+)x([0-9]+)} $geometry -> w h
 	wm minsize $path [expr {min($mw, $w)}] [expr {min($mh, $h)}]
-	wm geometry $path $geometry
+	if {$geometry ne [wm geometry $path]} { wm geometry $path $geometry }
+	# Mapping and decoration changes are asynchronous. Bound the settle pass
+	# and always use the current request so a newer user move wins.
+	if {$rechecks > 0} {
+		set FitTimer($path) [after 80 [namespace code [list fitWindowSettled $path [expr {$rechecks - 1}]]]]
+	}
 	return $geometry
+}
+proc fitWindowSettled {path rechecks} {
+	variable FitTimer
+	unset -nocomplain FitTimer($path)
+	if {![winfo exists $path] || [wm state $path] ne "normal"} { return }
+	if {![catch {wm attributes $path -zoomed} zoomed] && $zoomed} { return }
+	if {![catch {wm attributes $path -fullscreen} full] && $full} { return }
+	fitWindow $path "" $rechecks
 }
 
 

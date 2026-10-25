@@ -679,7 +679,7 @@ proc KeepInWorkArea {w} {
 	# events back every few ms and keeps the dialog settle from running.
 	if {![catch { wm attributes $w -zoomed } zoomed] && $zoomed} { return 0 }
 	set geometry [wm geometry $w]
-	set fitted [::util::place::clampGeometry $geometry [winfo workarea $w] [winfo extents $w]]
+	set fitted [::util::place::fittedGeometry $w $geometry]
 	# clampGeometry returns the input unchanged when the frame (including
 	# its decorations) already lies inside the current work area, so this
 	# is also the "a pure move inside the work area is not yanked" rule.
