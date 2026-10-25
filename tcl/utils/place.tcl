@@ -466,7 +466,8 @@ proc playingViewport {dlg} {
 	# the allocated width, leaving the toplevel's natural request stale.
 	$c itemconfigure body -width 0 -height 0
 	$c configure -scrollregion [list 0 0 $rw $rh]
-	playingFocus $dlg [focus]
+	# Configure also runs when the embedded body moves during scrolling.
+	# Only a new focus may reveal a control; never undo the user's scroll.
 }
 
 proc playingFocus {dlg widget} {
@@ -477,7 +478,10 @@ proc playingFocus {dlg widget} {
 		set start [expr {[winfo root$axis $widget]-[winfo root$axis $c]}]
 		set end [expr {$start+[winfo $size $widget]}]
 		set visible [winfo $size $c]
-		set delta [expr {$start < 0 ? $start : ($end > $visible ? $end-$visible : 0)}]
+		# An oversized control cannot fit both edges. Start at its leading
+		# edge on focus, then let the user scroll freely to the other edge.
+		set delta [expr {[winfo $size $widget] > $visible ? $start
+			: ($start < 0 ? $start : ($end > $visible ? $end-$visible : 0))}]
 		if {$delta} {
 			set total [winfo $size $c.body]
 			set fraction [lindex [$c ${axis}view] 0]

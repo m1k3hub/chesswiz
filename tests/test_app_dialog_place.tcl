@@ -167,13 +167,41 @@ proc ::scidb::test::dlgplace::controls {w} {
     set result {}
     foreach child [winfo children $w] {
         if {[winfo toplevel $child] ne [winfo toplevel $w]} {continue}
-        if {[winfo ismapped $child]
-            && [winfo class $child] in {Button TButton Checkbutton TCheckbutton Radiobutton TRadiobutton Entry TEntry TCombobox Spinbox TSpinbox Scale TScale Listbox TListbox}} {
+        # The viewport's canvas and outer bars are navigation chrome, not
+        # content controls. Still recurse through the canvas to its body.
+        set shell [winfo toplevel $child].__viewport
+        if {$child ni [list $shell.canvas $shell.x $shell.y]
+            && [winfo ismapped $child]
+            && ([winfo class $child] in {Button TButton Checkbutton TCheckbutton Radiobutton TRadiobutton Entry TEntry TCombobox Spinbox TSpinbox Scale TScale Listbox TListbox Scrollbar TScrollbar Text Treeview TTreeview Menubutton TMenubutton Canvas TNotebook Panedwindow TPanedwindow}
+                || [tk::FocusOK $child])} {
             lappend result $child
         }
         lappend result {*}[controls $child]
     }
     return $result
+}
+# Oversized controls expose their leading edge on focus; both ends must be
+# reachable by explicit scrolling, including after Configure settles.
+proc ::scidb::test::dlgplace::requireReachable {w c} {
+    focus -force $w
+    update
+    require [expr {[focus] eq $w}] "focus failed $w"
+    foreach axis {x y} size {width height} {
+        set start [expr {[winfo root$axis $w]-[winfo root$axis $c]}]
+        set length [winfo $size $w]
+        set visible [winfo $size $c]
+        require [expr {$start >= 0 && $start+min($length,$visible) <= $visible+1}] \
+            "focused control clipped $w axis=$axis start=$start length=$length viewport=$visible"
+        if {$length > $visible} {
+            foreach end {1 0} {
+                $c ${axis}view moveto $end
+                waitFor 60
+                set start [expr {[winfo root$axis $w]-[winfo root$axis $c]}]
+                require [expr {$end ? $start+$length <= $visible : $start >= 0}] \
+                    "explicit scroll cannot expose $w axis=$axis end=$end"
+            }
+        }
+    }
 }
 # The contract requires every control at least its requested width and height.
 proc ::scidb::test::dlgplace::requireControls {target dlg} {
@@ -2151,16 +2179,10 @@ tcltest::test dlg-v22-small-scroll {compact only after reserve exhaustion; all a
             ::scidb::test::dlgplace::require [expr {[winfo width $dlg]>=min(240,[winfo reqwidth $body]) && [winfo height $dlg]>=min(180,[winfo reqheight $body])}] "below usable minimum"
             lassign [wm minsize $dlg] minw minh
             ::scidb::test::dlgplace::require [expr {$minw>=min(240,[winfo reqwidth $body]) && $minh>=min(180,[winfo reqheight $body])}] "native resize minimum not enforced"
-            set pending [winfo children $body]
             set count 0
-            while {[llength $pending]} {
-                set w [lindex $pending 0]; set pending [lrange $pending 1 end]
-                lappend pending {*}[winfo children $w]
-                if {![winfo ismapped $w] || [winfo class $w] ni {TButton TCheckbutton TRadiobutton TCombobox TEntry TSpinbox Button Entry}} {continue}
-                focus -force $w
-                update
-                ::scidb::test::dlgplace::require [expr {[focus] eq $w}] "focus failed $w"
-                ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::widgetRect $w] [::scidb::test::dlgplace::widgetRect $c]] "focused control not visible $w rect=[::scidb::test::dlgplace::widgetRect $w] viewport=[::scidb::test::dlgplace::widgetRect $c] body=[::scidb::test::dlgplace::widgetRect $body] req=[winfo reqwidth $body]x[winfo reqheight $body] views=[$c xview]/[$c yview]"
+            foreach w [::scidb::test::dlgplace::controls $body] {
+                ::scidb::test::dlgplace::requireReachable $w $c
+                puts "DLG022 CONTROL class=[winfo class $w] path=$w"
                 incr count
             }
             puts "DLG022 REACHABLE $dlg controls=$count compact=$compact"
@@ -2247,9 +2269,7 @@ tcltest::test dlg-v22-trainers {trainers use the native scrolling body} -setup {
         puts "DLG022 TRAINER dialog=$dlg frame=$frame board=$board"
         ::scidb::test::dlgplace::require [expr {![::scidb::test::dlgplace::overlapArea $frame $board]}] "trainer covers board"
         foreach w [::scidb::test::dlgplace::controls $dlg.__viewport.canvas.body] {
-            focus -force $w
-            update
-            ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::widgetRect $w] [::scidb::test::dlgplace::widgetRect $dlg.__viewport.canvas]] "trainer focus clipped $w"
+            ::scidb::test::dlgplace::requireReachable $w $dlg.__viewport.canvas
         }
         eval $close
         ::scidb::test::dlgplace::waitFor 700
@@ -2302,5 +2322,102 @@ tcltest::test dlg-v22-minimum-fallback {infeasible minimum uses overlap fallback
 } -cleanup {
     ::scidb::test::dlgplace::realCleanup
 } -result 1
+
+# Exercise the full native interactive class inventory, including classes not
+# currently present in the playing dialogs. No geometry or focus stubs.
+tcltest::test dlg-v22-interactive-classes {all interactive widget classes reveal and scroll without snapping back} -body {
+    set dlg .playingViewportProbe
+    toplevel $dlg
+    set body [::util::place::playingBody $dlg]
+    set c [winfo parent $body]
+    set constructors {
+        {button} {ttk::button} {checkbutton} {ttk::checkbutton}
+        {radiobutton} {ttk::radiobutton} {entry} {ttk::entry}
+        {ttk::combobox} {spinbox -from 0 -to 10} {ttk::spinbox -from 0 -to 10}
+        {scale} {ttk::scale} {listbox -width 80 -height 20}
+        {scrollbar} {ttk::scrollbar} {text -width 80 -height 20}
+        {ttk::treeview -height 20} {menubutton} {ttk::menubutton}
+        {canvas -width 650 -height 400 -takefocus 1}
+        {ttk::notebook} {panedwindow} {ttk::panedwindow}
+    }
+    set row 0
+    foreach constructor $constructors {
+        set w $body.w$row
+        {*}[lrange $constructor 0 0] $w {*}[lrange $constructor 1 end]
+        if {[winfo class $w] in {TNotebook Panedwindow TPanedwindow}} {
+            ttk::frame $w.pane -width 160 -height 60
+            if {[winfo class $w] eq "TNotebook"} {
+                $w add $w.pane -text Tab
+            } else {
+                $w add $w.pane
+            }
+        }
+        grid $w -row $row -column 0 -sticky w
+        incr row
+    }
+    wm geometry $dlg 300x220+0+0
+    ::scidb::test::dlgplace::waitFor 300
+    set controls [::scidb::test::dlgplace::controls $body]
+    ::scidb::test::dlgplace::require [expr {[llength $controls] == [llength $constructors]}] "interactive inventory incomplete"
+    foreach w $controls {
+        ::scidb::test::dlgplace::requireReachable $w $c
+        # A body Configure must preserve the user's view even with focus held.
+        $c xview moveto 1
+        $c yview moveto 1
+        update
+        set views [list [$c xview] [$c yview]]
+        event generate $body <Configure>
+        ::scidb::test::dlgplace::waitFor 80
+        ::scidb::test::dlgplace::require [expr {$views eq [list [$c xview] [$c yview]]}] "Configure overrode explicit scroll for [winfo class $w]"
+        puts "DLG022 CLASS [winfo class $w] scroll-preserved=$views"
+    }
+    return 1
+} -cleanup {
+    catch {destroy .playingViewportProbe}
+} -result 1
+
+tcltest::test dlg-v22-review-native-left {listbox and its scrollbar remain operable in compacted video/review pair} -setup {
+ ::scidb::test::dlgplace::setupBoard
+ wm minsize .application 1 1
+ wm geometry .application [::scidb::test::dlgplace::fitGeometry 800 600]
+ ::scidb::test::dlgplace::waitFor 700
+} -body {
+ ::scidb::test::dlgplace::realVideo
+ ::playengine::open .application
+ ::scidb::test::dlgplace::waitFor 700
+ ::gamereview::ShowWindow .application [::gamereview::classify {{san e4 before 0 after -250 best 0} {san e5 before 0 after -300 best 0}}] {} 0
+ ::scidb::test::dlgplace::waitFor 700
+ set dlg .application.__gamereview
+ set c $dlg.__viewport.canvas
+ set lb $c.body.top.list.list
+ focus -force $lb
+ update
+ exec xdotool key Home
+ ::scidb::test::dlgplace::waitFor 100
+ puts "REVIEW_LIST focus=[focus] selection=[$lb curselection] items=[$lb size] rect=[::scidb::test::dlgplace::widgetRect $lb] viewport=[::scidb::test::dlgplace::widgetRect $c]"
+ ::scidb::test::dlgplace::require [expr {[focus] eq $lb && [$lb curselection] eq "0"}] "review listbox inaccessible to keyboard"
+ ::scidb::test::dlgplace::waitFor 1000
+
+ set bar $dlg.__viewport.x
+ set before [$c xview]
+ exec xdotool mousemove [expr {[winfo rootx $bar]+5}] [expr {[winfo rooty $bar]+[winfo height $bar]/2}] click --repeat 10 --delay 30 1
+ ::scidb::test::dlgplace::waitFor 500
+ lassign [::scidb::test::dlgplace::widgetRect $lb] x y w h
+ lassign [::scidb::test::dlgplace::widgetRect $c] u v a d
+ set leftVisible [expr {$x >= $u && $x < $u+$a && [focus] eq $lb}]
+ puts "REVIEW_NATIVE_LEFT visible=$leftVisible focus=[focus] before=$before after=[$c xview] list=[::scidb::test::dlgplace::widgetRect $lb] viewport=[::scidb::test::dlgplace::widgetRect $c] bar=[::scidb::test::dlgplace::widgetRect $bar]"
+ if {[info exists ::env(DLG022_EVIDENCE)]} {exec import -window root [file join $::env(DLG022_EVIDENCE) review-native-left.png]}
+ ::scidb::test::dlgplace::require $leftVisible "native scrollbar cannot expose focused listbox left edge"
+ set sb $c.body.top.list.vs
+ focus -force $sb
+ update
+ ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::widgetRect $sb] [::scidb::test::dlgplace::widgetRect $c]] "review list scrollbar unreachable"
+ if {[info exists ::env(DLG022_EVIDENCE)]} {exec import -window root [file join $::env(DLG022_EVIDENCE) review-list.png]}
+ destroy $dlg
+ ::playengine::Close
+ ::application::media::Stop
+ return 1
+} -cleanup {::scidb::test::dlgplace::realCleanup} -result 1
+
 
 tcltest::cleanupTests
