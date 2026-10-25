@@ -43,6 +43,38 @@ foreach {name geometry width height} {
 	} -result 1
 }
 
+# Direct Configure path: do not invoke the layout restoration helper here.
+tcltest::test window-geometry-screen-sized-client {screen-sized normal clients include decorations in the clamp} -setup {
+	::windowGeometryTest::settle
+	set saved [wm geometry .application]
+	set minsize [wm minsize .application]
+	wm minsize .application 1 1
+} -body {
+	wm geometry .application [format "%dx%d+0+0" [winfo screenwidth .application] [winfo screenheight .application]]
+	::windowGeometryTest::settle
+	list [wm attributes .application -fullscreen] [::menu::fullscreen?] [::windowGeometryTest::inside]
+} -cleanup {
+	wm minsize .application {*}$minsize
+	wm geometry .application $saved
+	::windowGeometryTest::settle
+} -result {0 0 1}
+
+tcltest::test window-geometry-fullscreen-toggle {menu fullscreen survives Configure and returns to containment} -setup {
+	::windowGeometryTest::settle
+	set saved [wm geometry .application]
+} -body {
+	::menu::viewFullscreen toggle
+	::windowGeometryTest::settle
+	set full [list [wm attributes .application -fullscreen] [::menu::fullscreen?]]
+	::menu::viewFullscreen toggle
+	::windowGeometryTest::settle
+	list $full [wm attributes .application -fullscreen] [::menu::fullscreen?] [::windowGeometryTest::inside]
+} -cleanup {
+	::menu::setFullscreen 0
+	wm geometry .application $saved
+	::windowGeometryTest::settle
+} -result {{1 1} 0 0 1}
+
 tcltest::test window-geometry-keep-size {a fitting restored layout keeps its requested size} -setup {
 	::windowGeometryTest::settle
 	set saved [wm geometry .application]

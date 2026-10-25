@@ -575,10 +575,9 @@ proc CheckFullscreen {app} {
 	variable Fullscreen
 
 	if {$app eq ".application"} {
-		set Fullscreen 0
-		if {[scan [wm geometry $app] "%dx%d" wd ht] == 2} {
-			if {$wd == [winfo screenwidth $app] && $ht == [winfo screenheight $app]} { set Fullscreen 1 }
-		}
+		# A normal decorated client can be as large as the screen. Only the
+		# window manager's fullscreen state exempts it from work-area fitting.
+		set Fullscreen [wm attributes $app -fullscreen]
 	}
 }
 
