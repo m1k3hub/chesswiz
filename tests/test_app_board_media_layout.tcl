@@ -381,8 +381,10 @@ proc ::w1::reserved {target {side {}} {shot 0}} {
 tcltest::test brd-3d-first {BRD-007 first 3D toggle during playback uses the realised frame including its toolbar} -constraints embedded3D -setup {::w1::setup default} -body {
     ::w1::assert {$::application::board::Vars(3dwin) eq "" || ![winfo exists $::application::board::Vars(3dwin)]} "first-toggle test requires an uncreated 3D view"
     set sw [winfo screenwidth .]; set sh [winfo screenheight .]
-    wm geometry .application [expr {min(1800,$sw-30)}]x[expr {min(570,$sh-150)}]+0+0
+    wm geometry .application [expr {min(1250,$sw-30)}]x[expr {min(570,$sh-150)}]+0+0
     ::w1::wait 600
+    set c $::application::board::Vars(widget:frame)
+    set baseline [list [$c bbox board] $::application::board::Dim(squaresize:Normal)]
     set w [::w1::play]
     ::w1::assert {[::application::board::show3D 1]} "Blocked: 3D view unavailable"
     set start [clock milliseconds]
@@ -404,7 +406,7 @@ tcltest::test brd-3d-first {BRD-007 first 3D toggle during playback uses the rea
     set ch [expr {[winfo reqheight $w.controls]+8}]
     set best [expr {max([::w1::squareWithReserve right 168],
         [::w1::squareWithReserve bottom [expr {int(round(160/$::mediainset::Aspect))+$ch}]])}]
-    if {$best >= 32} {
+    if {$best >= min([::w1::unreserved], 32)} {
         ::w1::reserved VAL-BRD-007-first-restored
     } else {
         ::w1::assert {[dict get $restored side] eq ""} "below-floor reserve after 3D"
@@ -412,6 +414,7 @@ tcltest::test brd-3d-first {BRD-007 first 3D toggle during playback uses the rea
     $w.controls.stop invoke
     ::w1::wait
     ::w1::clear VAL-BRD-007-first-stopped
+    ::w1::assert {$baseline eq [list [$c bbox board] $::application::board::Dim(squaresize:Normal)]} "3D return Stop did not restore exact board"
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
@@ -492,7 +495,7 @@ tcltest::test brd-minimum {BRD-004 refusal keeps square size and uses the corner
     ::w1::log VAL-BRD-004 [list before $before after $::application::board::Dim(squaresize:Normal) \
         minimum $::application::board::MinimumReserveSquare \
         rightSquare $rightSquare bottomSquare $bottomSquare]
-    ::w1::assert {$rightSquare < 32 && $bottomSquare < 32} \
+    ::w1::assert {$rightSquare < min($before,32) && $bottomSquare < min($before,32)} \
         "overlay taken although a strip keeps squares at least 32 px"
     return ok
 } -cleanup {::w1::cleanup} -result ok
@@ -517,7 +520,7 @@ tcltest::test brd-height-sweep {VAL-MED-013 reserves the side leaving the larges
         set minHeight [expr {int(round(160/$::mediainset::Aspect))+$ch}]
         set rightSquare [::w1::squareWithReserve right 168]
         set bottomSquare [::w1::squareWithReserve bottom $minHeight]
-        set feasible [expr {max($rightSquare,$bottomSquare) >= 32}]
+        set feasible [expr {max($rightSquare,$bottomSquare) >= min($unreserved,32)}]
         ::w1::log VAL-MED-013 [list height $h square $square unreserved $unreserved \
             side $side reserve [dict get $d reserve] overlap $boardOverlap canvas [dict get $d canvas] \
             rightSquare $rightSquare bottomSquare $bottomSquare feasible $feasible]

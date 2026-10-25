@@ -177,11 +177,17 @@ tcltest::test board-reserve-val-med-013-counterexamples {reserves shrinking boar
     set results
 } -result {{38 33} {43 33} {43 39}}
 
-tcltest::test board-reserve-auto-floor {auto rejects unchanged 31 px, accepts exactly 32; dialog rule remains unchanged} -body {
+tcltest::test board-reserve-auto-floor {auto accepts unchanged 31 px and exactly 32; dialog rule remains unchanged} -body {
     list [::application::board::unreservedSquare 621 288] \
         [::application::board::reserveSquare right 168 621 288 auto] \
         [::application::board::reserveSquare right 168 621 296 auto] \
         [::application::board::reserveSquare right 168 621 288 dialog]
-} -result {31 0 32 31}
+} -result {31 31 32 31}
+
+tcltest::test board-reserve-below-floor-shrink {below-floor reserves must not shrink an already small board} -body {
+    list [::application::board::unreservedSquare 621 288] \
+        [::application::board::reserveSquare bottom 100 621 288 auto] \
+        [::application::board::reserveSquare right 400 621 288 auto]
+} -result {31 0 0}
 
 tcltest::cleanupTests

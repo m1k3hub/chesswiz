@@ -1249,7 +1249,7 @@ tcltest::test dlg-v14-d-video-stop-regrows-board {stopping video replans dialog 
     ::scidb::test::dlgplace::noRoomCleanup
 } -result {1 1 1 1}
 
-tcltest::test dlg-v14-d-video-below-floor-overlay {below-floor video overlays and Stop restores exactly} -setup {
+tcltest::test dlg-v14-d-video-below-floor-reserve {below-floor video takes a non-shrinking strip when available and Stop restores exactly} -setup {
     ::scidb::test::dlgplace::setupBoard
 } -body {
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 1250 570]
@@ -1264,9 +1264,20 @@ tcltest::test dlg-v14-d-video-below-floor-overlay {below-floor video overlays an
         [::application::board::reserveSquare right 168 $width $height],
         [::application::board::reserveSquare bottom [expr {int(round(160/(16.0/9)))+[winfo reqheight [::mediainset::Pane].mediainset.controls]+8}] $width $height])}]
     ::scidb::test::dlgplace::require [expr {$best < $::application::board::MinimumReserveSquare}] "fixture no longer below floor: $best"
+    if {$best > 0} {
+        ::scidb::test::dlgplace::require [expr {$::application::board::Dim(squaresize:Normal) == $squareBefore}] "below-floor video shrank board"
+        set inset [::scidb::test::dlgplace::widgetRect [::mediainset::Pane].mediainset]
+        foreach tag {board stm material} {
+            set bbox [$canvas bbox $tag]
+            if {[llength $bbox] != 4} {continue}
+            lassign $bbox x1 y1 x2 y2
+            set rect [list [expr {[winfo rootx $canvas]+$x1}] [expr {[winfo rooty $canvas]+$y1}] [expr {$x2-$x1}] [expr {$y2-$y1}]]
+            ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::overlapArea $rect $inset] == 0}] "below-floor video overlaps $tag"
+        }
+    }
     ::scidb::test::dlgplace::stopVideo
-    puts "VIDEO-OVERLAY live=[winfo workarea .application] best=$best reserve=$reserve"
-    list [expr {$reserve eq {{} 0}}] [expr {[::scidb::test::dlgplace::boardRect] eq $before}] \
+    puts "VIDEO-BELOW-FLOOR live=[winfo workarea .application] best=$best reserve=$reserve"
+    list [expr {($best > 0) == ([lindex $reserve 0] ne "")}] [expr {[::scidb::test::dlgplace::boardRect] eq $before}] \
         [expr {$::application::board::Dim(squaresize:Normal) == $squareBefore}]
 } -cleanup {
     catch {::scidb::test::dlgplace::stopVideo}

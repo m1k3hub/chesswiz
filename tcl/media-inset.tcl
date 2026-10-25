@@ -433,7 +433,7 @@ proc ::mediainset::BoardView {} {
 # BRD-004 arithmetic at the current tk scaling. A strip is feasible when
 # its minimum extent can carry a video at least 160 px wide (the frame adds
 # 8 px) and the board renderer accepts the reserve. The reserve is accepted
-# when its square stays at least 32 px (VAL-MED-013). reserveSquare
+# when its square stays at least min(unreserved, 32) (VAL-MED-014). reserveSquare
 # returns 0 when the strip is unusable; only then may it overlay.
 proc ::mediainset::Brd004Fallback {width height controlsHeight} {
 	variable Aspect
@@ -703,12 +703,11 @@ proc ::mediainset::FitStrip {width height controlsHeight} {
 	set best {}
 	set bestSquare 0
 	set minimum 168
-	set floor $::application::board::MinimumReserveSquare
 	foreach side {right bottom} {
 		set minimumHeight [expr {int(round(160/$Aspect))+$controlsHeight}]
 		set px [expr {$side eq "right" ? $minimum : $minimumHeight}]
 		set squareAtMinimum [::application::board::reserveSquare $side $px $width $height]
-		if {$squareAtMinimum < $floor} { continue }
+		if {$squareAtMinimum <= 0} { continue }
 		set desired [expr {$side eq "right" ? int($height*$Options(size)*$Aspect)+8 : int($width*0.66)}]
 		set lo $minimum
 		set hi [expr {min(max($minimum,$Options(minWidth)+8,$desired), $width, int(($height-$controlsHeight)*$Aspect)+8)}]

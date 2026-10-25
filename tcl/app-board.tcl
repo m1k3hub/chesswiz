@@ -2085,11 +2085,11 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 	}
 
 	# Video may shrink the board down to the floor (VAL-MED-013).
-	# Preserve the dialog rule: below the floor, only a non-shrinking
-	# dialog reserve can remain. Auto reserves always require the floor.
+	# Below the floor, a reserve may shift the board but never shrink it
+	# (VAL-MED-014). The same rule applies to video and dialog reserves.
 	if {$ReserveSide ne {} && $Dim($sqsize) < $MinimumReserveSquare} {
 		set unreserved [unreservedSquare $fullWidth $fullHeight]
-		if {$ReserveKind eq "auto" || $Dim($sqsize) < $unreserved} {
+		if {$Dim($sqsize) < $unreserved} {
 			set ReserveSide {}
 			set ReservePixels 0
 			set ReserveKind auto
