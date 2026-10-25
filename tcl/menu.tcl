@@ -148,9 +148,10 @@ if {[info exists ::i18n::languages]} {
 	}
 }
 
-# No Chesswiz issue-tracker URL is configured. Keep contact rows hidden.
-set BugTracker ""
-set FeatureRequestTracker ""
+# Contact rows open the feedback page on the Chesswiz website; an empty
+# URL hides the row.
+set BugTracker "https://chesswizapp.com/feedback.html#bug"
+set FeatureRequestTracker "https://chesswizapp.com/feedback.html#feature"
 
 variable Fullscreen			0
 variable HideMenu				0

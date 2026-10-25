@@ -215,6 +215,16 @@ tcltest::test r5-contact-no-url {unconfigured contact actions cannot open upstre
         list [::menu::Do menu.help.bug] [::menu::Do menu.help.feature]
     }
 } -result {{} {}}
+tcltest::test r5-contact-site {contact actions open the Chesswiz feedback page} -body {
+    ::scidb::test::r5::run {
+        set ::menu::BugTracker https://chesswizapp.com/feedback.html#bug
+        set ::menu::FeatureRequestTracker https://chesswizapp.com/feedback.html#feature
+        set ::opened {}
+        proc ::web::open {parent url} {lappend ::opened $url}
+        ::menu::Do menu.help.bug; ::menu::Do menu.help.feature
+        set ::opened
+    }
+} -result {https://chesswizapp.com/feedback.html#bug https://chesswizapp.com/feedback.html#feature}
 tcltest::test r5-eco-no-conversion {ECO statistics reach the report without optional conversion advice} -body {
     ::scidb::test::r5::run {
         proc ::application::database::RecommendSciWorkflow {args} {error {unexpected conversion prompt}}
@@ -495,9 +505,9 @@ if {[llength [info commands winfo]]} {
     } -result {1 1}
 
     foreach id {menu.help.bug menu.help.feature} {
-        tcltest::test r5-hidden-$id {no tracker configured means no contact row} -body {
+        tcltest::test r5-shown-$id {configured tracker shows the contact row} -body {
             dict get [::menu::state $id] visible
-        } -result 0
+        } -result 1
     }
 }
 tcltest::cleanupTests
