@@ -5,7 +5,8 @@ import os
 import sys
 
 PORT = 8899
-BOARD_STATE = "rnbqkbnrpppppppp................................PPPPPPPPRNBQKBNR"
+# a1..h1, a2..h2, ..., h8 (white's home rank first), as the app sends it
+BOARD_STATE = "RNBQKBNRPPPPPPPP................................pppppppprnbqkbnr"
 
 class Chess3DHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -44,5 +45,5 @@ if __name__ == "__main__":
     os.chdir(web_dir)
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("", PORT), Chess3DHandler) as httpd:
-        print(f"Scidb 3D WebGL Server running on port {PORT}...")
+        print(f"Chesswiz 3D WebGL Server running on port {PORT}...")
         httpd.serve_forever()

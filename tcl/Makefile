@@ -523,10 +523,11 @@ install-images:
 			done;                                                        \
 		done;                                                           \
 	done
-	@install -m 755 -d $(SHAREDIR)/img/pieces_3d $(SHAREDIR)/web3d $(SHAREDIR)/web3d/textures
+	@install -m 755 -d $(SHAREDIR)/img/pieces_3d $(SHAREDIR)/web3d $(SHAREDIR)/web3d/textures $(SHAREDIR)/web3d/pieces
 	@install -m 644 -p ../img/pieces_3d/*.png $(SHAREDIR)/img/pieces_3d
 	@install -m 644 -p ../web3d/index.html ../web3d/*.js $(SHAREDIR)/web3d
 	@install -m 644 -p ../web3d/textures/LICENSE ../web3d/textures/*.jpg $(SHAREDIR)/web3d/textures
+	@install -m 644 -p ../web3d/pieces/pieces.bin $(SHAREDIR)/web3d/pieces
 
 uninstall-images:
 	@echo "Uninstall images"

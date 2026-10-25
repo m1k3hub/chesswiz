@@ -4,6 +4,7 @@
 #
 # Options (all optional):
 #   --header PATH     write the GL mesh header (src/tk/gl_piece_data.h)
+#   --web PATH        write the WebGL viewer meshes (web3d/pieces/pieces.bin)
 #   --sprites DIR     render the 12 sprite PNGs (img/pieces_3d)
 #   --preview DIR     render lineup.png and knight-closeup.png
 #   --blend PATH      save the scene as a .blend file
@@ -439,6 +440,44 @@ def write_header(path, models):
         f.write("\n".join(lines) + "\n")
 
 
+def write_web(path, models):
+    """Indexed, quantized meshes for the WebGL viewer (web3d/index.html).
+
+    Little-endian layout: b"CWP1", u32 count, then per piece: u8 code
+    (ASCII p r n b q k), 3 pad bytes, u32 vertex count, u32 index count,
+    int16 positions * 3 (unit = 1/16384, padded to 4 bytes), int8 normals
+    * 3 (unit = 1/127, padded to 4 bytes), u32 indices. Coordinates are the
+    GL ones (Z up, knight muzzle toward -Y); the viewer turns them Y-up.
+    """
+    import struct
+    out = bytearray(b"CWP1" + struct.pack("<I", len(models)))
+    for code, ob in models:
+        keys = {}
+        pos, nor, idx = [], [], []
+        for tri in triangles(ob):
+            for v, n in tri:
+                q = (round(v.x * 16384), round(v.y * 16384), round(v.z * 16384),
+                     round(n.x * 127), round(n.y * 127), round(n.z * 127))
+                i = keys.get(q)
+                if i is None:
+                    i = keys[q] = len(keys)
+                    pos += q[:3]
+                    nor += q[3:]
+                idx.append(i)
+        nv = len(keys)
+        out += struct.pack("<B3xII", ord(code), nv, len(idx))
+        out += struct.pack("<%dh" % len(pos), *pos)
+        out += bytes((-len(out)) % 4)
+        out += struct.pack("<%db" % len(nor), *nor)
+        out += bytes((-len(out)) % 4)
+        out += struct.pack("<%dI" % len(idx), *idx)
+        print("web: %s %d verts %d tris" % (code, nv, len(idx) // 3))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(out)
+    print("web: %s %d bytes" % (path, len(out)))
+
+
 # ------------------------------------------------------------------ render
 
 
@@ -651,6 +690,8 @@ def main():
         print("built %s: %d tris" % (code, sum(len(p.vertices) - 2 for p in ob.data.polygons)))
     if "header" in opts:
         write_header(opts["header"], models)
+    if "web" in opts:
+        write_web(opts["web"], models)
     if "blend" in opts:
         bpy.ops.wm.save_as_mainfile(filepath=opts["blend"])
     if "preview" in opts:

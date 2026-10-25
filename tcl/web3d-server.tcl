@@ -3,7 +3,7 @@ namespace eval ::board3d::webserver {
 	variable listener {}
 	variable port 0
 	variable root {}
-	variable board rnbqkbnrpppppppp................................PPPPPPPPRNBQKBNR
+	variable board RNBQKBNRPPPPPPPP................................pppppppprnbqkbnr
 	variable clients
 	array set clients {}
 }
@@ -208,6 +208,7 @@ proc ::board3d::webserver::ServeFile {sock target} {
 		.jpg - .jpeg { set type image/jpeg }
 		.png { set type image/png }
 		.webp { set type image/webp }
+		.bin { set type application/octet-stream }
 		default { set type application/octet-stream }
 	}
 	Reply $sock 200 $type $body 1

@@ -2016,11 +2016,13 @@ proc ::board3d::openWebGLViewer {} {
 # current board string, taken from the live 2D board when available
 proc ::board3d::CurrentBoard {} {
 	variable StandardBoard
+	# (a [return] inside [catch] yields code 2, which the old test took for
+	# an error, so the viewer always opened on the starting position)
 	if {[llength [info commands ::board::diagram::data]]} {
-		if {[catch {
-			set w $::application::board::board
-			if {$w ne ""} { return [::board::diagram::data $w] }
-		}]} { return $StandardBoard }
+		if {![catch { set data [::board::diagram::data $::application::board::board] }]
+				&& [string length $data] == 64} {
+			return $data
+		}
 	}
 	return $StandardBoard
 }

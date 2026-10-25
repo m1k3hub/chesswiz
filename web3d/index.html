@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Scidb Real 3D Chessboard (Hardware Accelerated WebGL)</title>
+  <title>Chesswiz 3D Chessboard (Hardware Accelerated WebGL)</title>
   <style>
     body { margin: 0; padding: 0; overflow: hidden; background: #0e1117; font-family: sans-serif; }
     #canvas-container { width: 100vw; height: 100vh; display: block; }
@@ -39,7 +39,7 @@
 </head>
 <body>
   <div id="hud">
-    <h1>Scidb Real 3D Chessboard</h1>
+    <h1>Chesswiz 3D Chessboard</h1>
     <p>Hardware-Accelerated WebGL • Physically Based Shaders • Real 3D Meshes & Dynamic Shadows</p>
     <p style="margin-top: 4px; color: #94a3b8;">Left-drag to Orbit • Right-drag to Pan • Scroll to Zoom</p>
   </div>
@@ -186,153 +186,82 @@
       }
     }
 
-    // Procedural Staunton 3D Geometries
-    function createLathePiece(points) {
-      const vPoints = points.map(p => new THREE.Vector2(p[0], p[1]));
-      const geo = new THREE.LatheGeometry(vPoints, 32);
-      geo.computeVertexNormals();
-      return geo;
-    }
+    // Staunton pieces modelled in Blender (tools/blender-pieces), the same
+    // meshes as the native OpenGL board. pieces.bin layout: see write_web()
+    // in tools/blender-pieces/pieces.py. Source coordinates are Z up with
+    // the knight's muzzle toward -Y; here they become Y up (x, z, -y).
+    const pieceGeos = {};
+    let piecesLoaded = false;
+    let pieceLoadError = false;
 
-    const pawnGeo = createLathePiece([
-      [0.34, 0.00], [0.34, 0.05], [0.30, 0.08], [0.26, 0.12], [0.28, 0.15],
-      [0.23, 0.18], [0.15, 0.35], [0.12, 0.48], [0.14, 0.52], [0.19, 0.55],
-      [0.16, 0.58], [0.11, 0.62], [0.13, 0.64], [0.19, 0.72], [0.19, 0.80],
-      [0.14, 0.88], [0.00, 0.92]
-    ]);
-
-    const rookGeo = createLathePiece([
-      [0.36, 0.00], [0.36, 0.06], [0.33, 0.10], [0.29, 0.14], [0.31, 0.17],
-      [0.24, 0.22], [0.21, 0.52], [0.23, 0.65], [0.30, 0.72], [0.31, 0.88],
-      [0.26, 0.88], [0.23, 0.78], [0.00, 0.78]
-    ]);
-
-    const bishopGeo = createLathePiece([
-      [0.35, 0.00], [0.35, 0.06], [0.32, 0.10], [0.27, 0.14], [0.29, 0.17],
-      [0.22, 0.22], [0.14, 0.52], [0.17, 0.62], [0.22, 0.72], [0.21, 0.85],
-      [0.11, 0.94], [0.03, 0.98], [0.00, 0.98]
-    ]);
-
-    const queenGeo = createLathePiece([
-      [0.37, 0.00], [0.37, 0.06], [0.33, 0.10], [0.28, 0.14], [0.30, 0.17],
-      [0.22, 0.22], [0.15, 0.62], [0.18, 0.75], [0.26, 0.92], [0.24, 1.00],
-      [0.16, 1.04], [0.00, 1.04]
-    ]);
-
-    const kingGeo = createLathePiece([
-      [0.38, 0.00], [0.38, 0.06], [0.34, 0.10], [0.29, 0.14], [0.31, 0.17],
-      [0.23, 0.22], [0.16, 0.66], [0.20, 0.80], [0.26, 1.00], [0.20, 1.08],
-      [0.00, 1.08]
-    ]);
-
-    // Knight: Base + horse head group
-    function createKnightMesh(mat) {
-      const knightGroup = new THREE.Group();
-      const baseMesh = new THREE.Mesh(createLathePiece([
-        [0.36, 0.00], [0.36, 0.06], [0.32, 0.10], [0.28, 0.14], [0.30, 0.17],
-        [0.23, 0.22], [0.20, 0.32], [0.00, 0.32]
-      ]), mat);
-      baseMesh.castShadow = true;
-      baseMesh.receiveShadow = true;
-      knightGroup.add(baseMesh);
-
-      const headGeo = new THREE.BoxGeometry(0.24, 0.45, 0.38);
-      const headMesh = new THREE.Mesh(headGeo, mat);
-      headMesh.position.set(0, 0.52, -0.04);
-      headMesh.castShadow = true;
-      knightGroup.add(headMesh);
-
-      const snoutGeo = new THREE.BoxGeometry(0.18, 0.22, 0.28);
-      const snoutMesh = new THREE.Mesh(snoutGeo, mat);
-      snoutMesh.position.set(0, 0.44, -0.22);
-      snoutMesh.castShadow = true;
-      knightGroup.add(snoutMesh);
-
-      return knightGroup;
+    function parsePieces(buf) {
+      const dv = new DataView(buf);
+      const magic = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3));
+      if (magic !== 'CWP1') throw new Error('bad pieces.bin');
+      const count = dv.getUint32(4, true);
+      let off = 8;
+      for (let i = 0; i < count; i++) {
+        const code = String.fromCharCode(dv.getUint8(off));
+        const nv = dv.getUint32(off + 4, true);
+        const ni = dv.getUint32(off + 8, true);
+        off += 12;
+        const qp = new Int16Array(buf, off, nv * 3); off += nv * 6; off += (4 - off % 4) % 4;
+        const qn = new Int8Array(buf, off, nv * 3); off += nv * 3; off += (4 - off % 4) % 4;
+        const idx = new Uint32Array(buf.slice(off, off + ni * 4)); off += ni * 4;
+        const pos = new Float32Array(nv * 3);
+        const nor = new Float32Array(nv * 3);
+        const uv = new Float32Array(nv * 2);
+        for (let v = 0; v < nv; v++) {
+          const x = qp[v * 3] / 16384, y = qp[v * 3 + 1] / 16384, z = qp[v * 3 + 2] / 16384;
+          pos[v * 3] = x; pos[v * 3 + 1] = z; pos[v * 3 + 2] = -y;
+          nor[v * 3] = qn[v * 3] / 127; nor[v * 3 + 1] = qn[v * 3 + 2] / 127; nor[v * 3 + 2] = -qn[v * 3 + 1] / 127;
+          // planar wood-grain mapping, grain running up the piece
+          uv[v * 2] = x * 0.55 - y * 0.35 + 0.5;
+          uv[v * 2 + 1] = z * 0.45;
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+        geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+        geo.setIndex(new THREE.BufferAttribute(idx, 1));
+        geo.computeBoundingSphere();
+        pieceGeos[code] = geo;
+      }
     }
 
     function createPieceMesh(type, isWhite) {
-      const mat = isWhite ? whitePieceMat : blackPieceMat;
-      let mesh;
-      if (type === 'p') {
-        mesh = new THREE.Mesh(pawnGeo, mat);
-      } else if (type === 'r') {
-        mesh = new THREE.Mesh(rookGeo, mat);
-      } else if (type === 'b') {
-        mesh = new THREE.Mesh(bishopGeo, mat);
-        // Add finial ball
-        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), mat);
-        ball.position.y = 1.02;
-        ball.castShadow = true;
-        const g = new THREE.Group();
-        g.add(mesh);
-        g.add(ball);
-        mesh = g;
-      } else if (type === 'n') {
-        mesh = createKnightMesh(mat);
-        mesh.rotation.y = isWhite ? 0 : Math.PI;
-      } else if (type === 'q') {
-        mesh = new THREE.Mesh(queenGeo, mat);
-        const crownBall = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), mat);
-        crownBall.position.y = 1.08;
-        const g = new THREE.Group();
-        g.add(mesh);
-        g.add(crownBall);
-        mesh = g;
-      } else if (type === 'k') {
-        mesh = new THREE.Mesh(kingGeo, mat);
-        const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.05), mat);
-        crossV.position.y = 1.18;
-        const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.05, 0.05), mat);
-        crossH.position.y = 1.20;
-        const g = new THREE.Group();
-        g.add(mesh);
-        g.add(crossV);
-        g.add(crossH);
-        mesh = g;
+      const geo = pieceGeos[type];
+      if (!geo) return null;
+      const mesh = new THREE.Mesh(geo, isWhite ? whitePieceMat : blackPieceMat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      if (type === 'n') {
+        // as on the OpenGL board: knights turn toward the opponent
+        mesh.rotation.y = THREE.MathUtils.degToRad(isWhite ? -105 : 75);
       }
-
-      mesh.traverse(child => {
-        if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-        }
-      });
       return mesh;
     }
 
-    // Standard initial board placement
-    const initialBoard = [
-      "r", "n", "b", "q", "k", "b", "n", "r",
-      "p", "p", "p", "p", "p", "p", "p", "p",
-      ".", ".", ".", ".", ".", ".", ".", ".",
-      ".", ".", ".", ".", ".", ".", ".", ".",
-      ".", ".", ".", ".", ".", ".", ".", ".",
-      ".", ".", ".", ".", ".", ".", ".", ".",
-      "P", "P", "P", "P", "P", "P", "P", "P",
-      "R", "N", "B", "Q", "K", "B", "N", "R"
-    ];
+    // Board strings are a1..h1, a2..h2, ..., h8 (white's home rank first),
+    // as the application and ::board3d use them.
+    const initialBoard = "RNBQKBNRPPPPPPPP................................pppppppprnbqkbnr";
 
     const piecesGroup = new THREE.Group();
     scene.add(piecesGroup);
 
-    function setupPieces() {
-      while (piecesGroup.children.length > 0) {
-        piecesGroup.remove(piecesGroup.children[0]);
-      }
-      for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-          const char = initialBoard[r * 8 + c];
-          if (char === ".") continue;
-          const isWhite = char === char.toUpperCase();
-          const type = char.toLowerCase();
-          const pMesh = createPieceMesh(type, isWhite);
-          pMesh.position.set((c - 3.5) * squareSize, 0.53, (r - 3.5) * squareSize);
-          piecesGroup.add(pMesh);
-        }
-      }
+    function loadPieces() {
+      return fetch('pieces/pieces.bin')
+        .then(res => { if (!res.ok) throw new Error('pieces.bin ' + res.status); return res.arrayBuffer(); })
+        .then(buf => {
+          parsePieces(buf);
+          piecesLoaded = true;
+          const pending = currentBoardStr || initialBoard;
+          currentBoardStr = "";
+          updateBoardFromStr(pending);
+        })
+        .catch(e => { pieceLoadError = true; console.warn('pieces: ' + e); });
     }
-    setupPieces();
+
 
     // Camera Views
     window.setCameraView = function(view) {
@@ -482,6 +411,7 @@
     function updateBoardFromStr(boardStr) {
       if (!boardStr || boardStr.length !== 64 || boardStr === currentBoardStr) return;
       currentBoardStr = boardStr;
+      if (!piecesLoaded) return;
       while (piecesGroup.children.length > 0) {
         piecesGroup.remove(piecesGroup.children[0]);
       }
@@ -492,35 +422,45 @@
           const isWhite = char === char.toUpperCase();
           const type = char.toLowerCase();
           const pMesh = createPieceMesh(type, isWhite);
-          pMesh.position.set((c - 3.5) * squareSize, 0.53, (r - 3.5) * squareSize);
+          if (!pMesh) continue;
+          // rank r: white's home rank nearest the default (white) camera
+          pMesh.position.set((c - 3.5) * squareSize, 0.53, (3.5 - r) * squareSize);
           piecesGroup.add(pMesh);
         }
       }
     }
 
-    // Poll live moves from Scidb (disabled in selftest mode so virtual-time-budget can finish)
+    // Poll live moves from Chesswiz (disabled in selftest mode so virtual-time-budget can finish)
     const urlParams = new URLSearchParams(window.location.search);
     const initialMat = urlParams.get('material');
     if (initialMat && ['classic', 'pbr-wood', 'marble'].includes(initialMat)) {
       window.setBoardMaterial(initialMat);
     }
 
+    // optional camera: ?cam=px,py,pz,tx,ty,tz (screenshots, deep links)
+    const camParam = (urlParams.get('cam') || '').split(',').map(Number);
+    if (camParam.length === 6 && camParam.every(Number.isFinite)) {
+      gsapToCamera(...camParam);
+    }
+
+    // show the application's current position straight away, then the pieces
+    async function fetchBoard() {
+      try {
+        const res = await fetch('/api/board', { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.board) updateBoardFromStr(data.board);
+        }
+      } catch (e) {}
+    }
+    loadPieces().then(fetchBoard);
+
     const isSelfTest = urlParams.get('selftest') === '1';
     if (!isSelfTest) {
-      setInterval(async () => {
-        try {
-          const res = await fetch('/api/board');
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.board) {
-              updateBoardFromStr(data.board);
-            }
-          }
-        } catch (e) {}
-      }, 400);
+      setInterval(fetchBoard, 400);
     } else {
       function checkSelfTest() {
-        if (pbrLoadedCount + pbrErrorCount >= 4) {
+        if (pbrLoadedCount + pbrErrorCount >= 4 && (piecesLoaded || pieceLoadError)) {
           const gl = renderer.getContext();
           const px = new Uint8Array(4);
           // Warm up shader compilation & texture upload
@@ -538,8 +478,8 @@
           const elapsedMs = Math.max(1.0, Date.now() - t0);
           const fps = ((frames * 1000.0) / elapsedMs).toFixed(1);
           const hasClearcoat = (woodLightMat.clearcoat > 0.5 && woodDarkMat.clearcoat > 0.5) ? 1 : 0;
-          console.log(`WOOD3D_SELFTEST:PASS mat=${currentMaterial} tex=${pbrLoadedCount} clearcoat=${hasClearcoat} errors=${pbrErrorCount} fps=${fps}`);
-          document.body.setAttribute('data-selftest', `WOOD3D_SELFTEST:PASS mat=${currentMaterial} tex=${pbrLoadedCount} clearcoat=${hasClearcoat} errors=${pbrErrorCount} fps=${fps}`);
+          console.log(`WOOD3D_SELFTEST:PASS mat=${currentMaterial} tex=${pbrLoadedCount} clearcoat=${hasClearcoat} errors=${pbrErrorCount} fps=${fps} pieces=${piecesGroup.children.length}`);
+          document.body.setAttribute('data-selftest', `WOOD3D_SELFTEST:PASS mat=${currentMaterial} tex=${pbrLoadedCount} clearcoat=${hasClearcoat} errors=${pbrErrorCount} fps=${fps} pieces=${piecesGroup.children.length}`);
         } else {
           setTimeout(checkSelfTest, 30);
         }
