@@ -717,8 +717,8 @@ vinvoke(char const* callee, Tcl_Obj* cmd, va_list args)
 
 		for ( ; arg; ++argc, arg = va_arg(args, Tcl_Obj*))
 		{
-			// simple check whether this is a Tcl object.
-			M_ASSERT(0 <= arg->refCount && arg->refCount <= 10000);
+			// Shared Tcl objects may legitimately have many references.
+			M_ASSERT(arg->refCount >= 0 && arg->refCount < 0x01000000);
 			M_ASSERT(argc < MaxArgs);
 
 			objv[argc] = tcl::incrRef(arg);
