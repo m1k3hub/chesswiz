@@ -794,7 +794,8 @@ proc displaySignature {} {
 	if {![winfo exists .application]} { return {} }
 	return [list [tk scaling] \
 		[winfo screenwidth .application] [winfo screenheight .application] \
-		[winfo workarea .application]]
+		[winfo workarea .application] \
+		[::scidb::tk::wm monitor .application]]
 }
 
 

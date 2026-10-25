@@ -72,6 +72,9 @@ static Tcl_Command tk_cmd = 0;
 # include <X11/Xlib.h>
 # include <X11/Xutil.h>
 # include <X11/Xatom.h>
+# include <X11/extensions/Xrandr.h>
+# include <X11/extensions/Xinerama.h>
+# include "tk_monitor_geometry.h"
 
 
 // MWM decorations values
@@ -527,12 +530,11 @@ setCurrentDesktop(Tk_Window tkwin, int desktop)
 
 
 static bool
-getWorkArea(Display* display, int desktop, Rect& result)
+getDesktopWorkArea(Display* display, Window root, int desktop, Rect& result)
 {
 	if (desktop < 0)
 		return false;
 
-	Window	root = XDefaultRootWindow(display);
 	Atom		prop;
 
 	if (!checkAtom(prop, display, XA_NET_WORKAREA))
@@ -569,6 +571,70 @@ getCurrentDesktop(Display* display)
 	XFree(data);
 
 	return desktop;
+}
+
+
+static monitor_geometry::Rectangle
+getMonitor(Tk_Window tkwin)
+{
+	using namespace monitor_geometry;
+	Display* display = Tk_Display(tkwin);
+	Window root = RootWindowOfScreen(Tk_Screen(tkwin));
+	while (!Tk_IsTopLevel(tkwin) && Tk_Parent(tkwin)) tkwin = Tk_Parent(tkwin);
+	int x, y;
+	Tk_GetRootCoords(tkwin, &x, &y);
+	x += Tk_Width(tkwin)/2;
+	y += Tk_Height(tkwin)/2;
+	Rectangle best(0, 0, WidthOfScreen(Tk_Screen(tkwin)), HeightOfScreen(Tk_Screen(tkwin)));
+	long long nearest = -1;
+	int event, error, major = 1, minor = 5, count = 0;
+	if (XRRQueryExtension(display, &event, &error)
+		&& XRRQueryVersion(display, &major, &minor)
+		&& (major > 1 || (major == 1 && minor >= 5)))
+	{
+		XRRMonitorInfo* monitors = XRRGetMonitors(display, root, True, &count);
+		for (int i = 0; monitors && i < count; ++i)
+		{
+			Rectangle r(monitors[i].x, monitors[i].y, monitors[i].width, monitors[i].height);
+			if (r.width <= 0 || r.height <= 0) continue;
+			long long d = distance(r, x, y);
+			if (nearest < 0 || d < nearest) { nearest = d; best = r; }
+		}
+		if (monitors) XRRFreeMonitors(monitors);
+	}
+	if (nearest < 0 && XineramaIsActive(display))
+	{
+		XineramaScreenInfo* screens = XineramaQueryScreens(display, &count);
+		for (int i = 0; screens && i < count; ++i)
+		{
+			Rectangle r(screens[i].x_org, screens[i].y_org, screens[i].width, screens[i].height);
+			if (r.width <= 0 || r.height <= 0) continue;
+			long long d = distance(r, x, y);
+			if (nearest < 0 || d < nearest) { nearest = d; best = r; }
+		}
+		if (screens) XFree(screens);
+	}
+	return best;
+}
+
+
+static void
+getWorkArea(Tk_Window tkwin, Rect& result)
+{
+	using namespace monitor_geometry;
+	Display* display = Tk_Display(tkwin);
+	Window root = RootWindowOfScreen(Tk_Screen(tkwin));
+	Rect desktop;
+	if (!getDesktopWorkArea(display, root, getDesktop(tkwin), desktop)
+		&& !getDesktopWorkArea(display, root, getCurrentDesktop(display), desktop))
+	{
+		desktop.width = WidthOfScreen(Tk_Screen(tkwin));
+		desktop.height = HeightOfScreen(Tk_Screen(tkwin));
+	}
+	Rectangle r = intersect(getMonitor(tkwin),
+		Rectangle(desktop.left, desktop.right, desktop.width, desktop.height));
+	result.left = r.x; result.right = r.y;
+	result.width = r.width; result.height = r.height;
 }
 
 
@@ -703,7 +769,7 @@ static int
 cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 {
 	char const* Usage =	"Usage: ::scidb::tk::wm (frameless | splash | toolbar | menu | grid "
-								"| setLeader | map | raise | sync | desktop | ondesktop) <window> ...";
+								"| setLeader | map | raise | sync | desktop | ondesktop | workarea | monitor) <window> ...";
 
 	if (objc < 2)
 		return tcl_error(ti, Usage);
@@ -768,7 +834,7 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 		Tcl_SetObjResult(ti, Tcl_NewBooleanObj(result));
 		return TCL_OK;
 	}
-	else if (strcasecmp(subcmd, "workarea") == 0)
+	else if (strcasecmp(subcmd, "workarea") == 0 || strcasecmp(subcmd, "monitor") == 0)
 	{
 		Rect result;
 
@@ -790,10 +856,13 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 		result.left = geometry[0]; result.right = geometry[1];
 		result.width = geometry[2]; result.height = geometry[3];
 #else
-		Display* display = Tk_Display(tkwin);
-
-		if (!getWorkArea(display, getDesktop(tkwin), result))
-			getWorkArea(display, getCurrentDesktop(display), result);
+		if (strcasecmp(subcmd, "monitor") == 0)
+		{
+			monitor_geometry::Rectangle r = getMonitor(tkwin);
+			result.left = r.x; result.right = r.y;
+			result.width = r.width; result.height = r.height;
+		}
+		else getWorkArea(tkwin, result);
 #endif
 
 		if (result.hasSize())
