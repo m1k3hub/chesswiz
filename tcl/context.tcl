@@ -1372,7 +1372,7 @@ proc ::context::AddRow {menu id object} {
 		if {$why ne ""} { append label " ($why)" }
 	}
 	set opts [list -label " $label" -state $state \
-		-command [list ::action::run $id [dict create object $object]]]
+		-command [list ::action::run $id [dict create object $object defer idle]]]
 	if {$accel ne ""} { lappend opts -accelerator $accel }
 	eval [list $menu add command] $opts
 	return
@@ -1990,6 +1990,11 @@ proc ::context::Command {id object} {
 		}
 		c4.search.current { ::application::database::searchCurrent [dict get $object parent] }
 		c4.reports.opening { ::application::database::ShowOpeningReport [dict get $object parent] }
+		c5.event_url {
+			set url [::eventtable::GetSite [dict get $object base] [dict get $object variant] \
+				[dict get $object view] [dict get $object index]]
+			if {[::web::isWebLink $url]} { return [::web::open [dict get $object parent] $url] }
+		}
 		c5.event_table { ::crosstable::open [dict get $object parent] [dict get $object base] [dict get $object variant] [dict get $object index] [dict get $object view] event }
 		c9.not.spacing - c9.not.numbering - c9.not.markers - c9.not.diagrams - c9.not.emoticons {
 			set key [dict get {c9.not.spacing spacing:paragraph c9.not.numbering show:varnumbers c9.not.markers show:markers c9.not.diagrams show:diagram c9.not.emoticons show:emoticon} $id]
@@ -2093,6 +2098,12 @@ proc ::context::Command {id object} {
 		}
 		c6.pin_repertoire { return [::application::analysis::PinToRepertoire [dict get $object tree] [EngineLine $object]] }
 		c6.insert_comment { return [::application::analysis::InsertComment [dict get $object tree] [EngineLine $object]] }
+		c6.explain_line {
+			if {[dict exists $object pv] && [string trim [dict get $object pv]] ne ""} {
+				return [::application::ai::explainLine [dict get $object parent] \
+					[dict get $object pv] [::scidb::pos::fen]]
+			}
+		}
 		c6.copy_line { clipboard clear; clipboard append [dict get $object pv] }
 		c6.copy_fen { clipboard clear; clipboard append [::scidb::pos::fen] }
 		c6.lock_engine - c6.opponents_view - c6.best_first {
@@ -2301,8 +2312,16 @@ proc ::context::Command {id object} {
 
 # Use the pane's live engine identity, never a stale popup ID or another pane.
 proc ::context::ObjectEngineRunning {object} {
-	if {![dict exists $object number]} { return 0 }
-	set number [dict get $object number]
+	# A caller may name the analysis pane by its tree alone; its engine is
+	# the pane's own, never the current one.
+	if {[dict exists $object number]} {
+		set number [dict get $object number]
+	} elseif {[dict exists $object tree]
+		&& [info exists ::application::analysis::[dict get $object tree]::Vars(number)]} {
+		set number [set ::application::analysis::[dict get $object tree]::Vars(number)]
+	} else {
+		return 0
+	}
 	return [::engine::active? $number]
 }
 

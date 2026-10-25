@@ -202,6 +202,11 @@ proc ::scidb::test::askscope::PostedIds {menu {cid ""}} {
 			continue
 		}
 		if {$type ne "command"} { continue }
+		# Ask lists only runnable rows, so a row the menu shows greyed out
+		# (a docked pane's Stay On Top, an idle engine's toggles) is not a gap.
+		set state normal
+		catch { set state [$menu entrycget $i -state] }
+		if {$state eq "disabled"} { continue }
 		set cmd ""
 		catch { set cmd [$menu entrycget $i -command] }
 		if {![regexp {::action::run (\S+)} $cmd -> id]} { continue }

@@ -24,7 +24,7 @@ proc ::scidb::test::r5::extract {script {ns ::}} {
 }
 set r5root [file dirname [file dirname [file normalize [info script]]]]
 if {[info exists ::env(R5_SOURCE_ROOT)]} {set r5root $::env(R5_SOURCE_ROOT)}
-foreach f {app-pgn context game dropdown menu gametable app-analysis app-board app-assistant-offers app-twm app-database-search-nl app-database-openingprep} {
+foreach f {actions eventtable app-pgn context game dropdown menu gametable app-analysis app-board app-assistant-offers app-twm app-database-search-nl app-database-openingprep} {
     set fd [open [file join $r5root tcl $f.tcl]]
     ::scidb::test::r5::extract [read $fd]
     close $fd
@@ -291,6 +291,123 @@ foreach {cid handler} {C2 {::application::pgn::PopupMenu .notation 0} C9 {::appl
         } -result {{1 32} {2 32}}
     }
 }
+
+# Round 7: execute the actual command emitted by AddRow, through the registry.
+tcltest::test r7-c6-menu-object {all C6 leaves validate the wrapped live object} -body {
+    ::scidb::test::r5::run {
+        set ::action::Registry {}; set ::action::ConfirmHook {}; set ::action::BulkHook {}
+        set ::context::Predicates {}
+        ::context::Declare
+        set ::seen {}
+        proc ::context::Invoke {id object} {lappend ::seen [list $id $object]}
+        proc .menu {op type args} {
+            set ::command [dict get $args -command]
+            set ::rowState [dict get $args -state]
+        }
+        set object {number 2 tree .tree engine 42 lineId 0 pv {e4 e5}}
+        set failures {}
+        foreach id [array names ::context::Labels c6.*] {
+            if {$id in {c6.multiple_variations c6.lines_per_variation}} continue
+            ::context::AddRow .menu $id $object
+            if {$::rowState ne "normal"} {lappend failures [list $id disabled]}
+            set result [uplevel #0 $::command]
+            update idletasks
+            if {[string match error:* $result] || [lindex $::seen end] ne [list $id $object]} {
+                lappend failures [list $id $result]
+            }
+        }
+        set failures
+    }
+} -result {}
+tcltest::test r7-explain-line {C6 calls the existing explanation feature with the clicked PV and FEN} -body {
+    ::scidb::test::r5::run {
+        namespace eval ::application::ai {}
+        namespace eval ::scidb::pos {}
+        proc ::scidb::pos::fen {} {return positionFen}
+        proc ::application::ai::explainLine {args} {set ::explained $args}
+        ::context::Command c6.explain_line {number 2 parent .app pv {e4 e5}}
+        set ::explained
+    }
+} -result {.app {e4 e5} positionFen}
+
+foreach id {c5.event_table c5.event_url c6.explain_line} {
+    tcltest::test r7-popup-defer-$id {menu callbacks return before dialog or AI work starts} -body {
+        ::scidb::test::r5::run [list apply {{id} {
+            set ::posted 1; set ::called {}
+            proc ::action::Dispatch {id args approval} {
+                if {$::posted} {error {handler reentered native popup tracking}}
+                set ::called [::list $id [lindex $args 0]]
+            }
+            set object {base test variant Normal view 7 index 3 pv {e4 e5} number 2}
+            ::action::run $id [dict create object $object defer idle]
+            set deferred [expr {$::called eq {}}]
+            set ::posted 0
+            update idletasks
+            list $deferred [expr {$::called eq [list $id [list object $object]]}]
+        }} $id]
+    } -result {1 1}
+}
+tcltest::test r7-event-table {tournament table receives the clicked event and view} -body {
+    ::scidb::test::r5::run {
+        namespace eval ::crosstable {}
+        proc ::crosstable::open {args} {set ::opened $args}
+        ::context::Command c5.event_table {parent .events base db variant Normal index 3 view 7}
+        set ::opened
+    }
+} -result {.events db Normal 3 7 event}
+tcltest::test r7-event-url {event URL reaches the browser only for a real link} -body {
+    ::scidb::test::r5::run {
+        proc ::eventtable::GetSite {args} {set ::siteArgs $args; return $::site}
+        proc ::web::isWebLink {url} {string match https://* $url}
+        proc ::web::open {parent url} {set ::opened [list $parent $url]}
+        set object {parent .events base db variant Normal index 3 view 7}
+        set ::site London
+        ::context::Command c5.event_url $object
+        set city [info exists ::opened]
+        set ::site https://example.org/tournament
+        ::context::Command c5.event_url $object
+        list $city $::siteArgs $::opened
+    }
+} -result {0 {db Normal 7 3} {.events https://example.org/tournament}}
+tcltest::test r7-engine-expired {registry rejects a menu object after its engine stops} -body {
+    ::scidb::test::r5::run {
+        set ::action::Registry {}; set ::action::ConfirmHook {}; set ::action::BulkHook {}
+        set ::context::Predicates {}
+        ::context::Declare
+        proc ::context::Invoke {args} {error {must not run}}
+        ::action::run c6.pause_resume {object {number 1 tree .tree engine 42}}
+    }
+} -result {error: action 'c6.pause_resume' is not available here}
+
+tcltest::test r7-live-engine-handlers {real menu commands change MultiPV and pause/resume the clicked pane} -body {
+    ::scidb::test::r5::run {
+        set ::action::Registry {}; set ::action::ConfirmHook {}; set ::action::BulkHook {}
+        set ::context::Predicates {}; ::context::Declare
+        namespace eval ::application::analysis::.tree {
+            variable Vars
+            array set Vars {number 2 engine:pause 0 engine:stopped 0 after:id {}}
+        }
+        namespace eval ::application::analysis::2 {
+            variable Options
+            array set Options {engine:singlePV 1 engine:multiPV 1 engine:bestFirst 1}
+        }
+        proc ::application::analysis::MultiPV {number} {
+            return $::application::analysis::2::Options(engine:multiPV)
+        }
+        proc ::application::analysis::Layout {tree} {}
+        proc ::scidb::engine::multiPV {id n} {set ::multi [list $id $n]}
+        proc ::engine::pause {number} {lappend ::transitions [list pause $number]}
+        proc ::engine::resume {number} {lappend ::transitions [list resume $number]}
+        proc .menu {op type args} {set ::command [dict get $args -command]}
+        set object {number 2 tree .tree engine 42 lineId 0 pv {e4 e5}}
+        foreach id {c6.multi.3 c6.pause_resume c6.pause_resume} {
+            ::context::AddRow .menu $id $object
+            uplevel #0 $::command
+            update idletasks
+        }
+        list $::multi $::transitions [set ::application::analysis::.tree::Vars(engine:pause)]
+    }
+} -result {{42 3} {{pause 2} {resume 2}} 0}
 
 # UI lifecycle coverage for the orchestrator; no Xvfb is started by this file.
 if {[llength [info commands winfo]]} {
