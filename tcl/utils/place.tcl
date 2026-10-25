@@ -2580,14 +2580,12 @@ proc BesideSettlePass {first} {
 			}
 		}
 		if {$BesideState($dlg,user)} {
-			# VAL-DLG-018C: a user's own move or resize is an explicit choice;
-			# the planner never re-places it, even off the work area (the
-			# user's own edge drag can take it there). Only a display change
-			# (the screen work area itself changed) that leaves the frame
-			# outside the new area brings it back.
+			# Respect a user's position, including over the board. Only work-area
+			# containment may change it; never send it through the board planner.
+			# Use the measured native frame and request-coordinate translation
+			# shared with the main-window guard (decorations can differ from
+			# winfo extents). Configure and parent/display hooks all settle here.
 			set screen [besideWorkArea $dlg]
-			set display [expr {[info exists BesideState($dlg,screen)]
-				&& $BesideState($dlg,screen) ne $screen}]
 			set BesideState($dlg,screen) $screen
 			if {$trigger ne "content"
 				|| [besideRectDiffers $current $BesideState($dlg,last)]} {
@@ -2600,7 +2598,10 @@ proc BesideSettlePass {first} {
 			set BesideState($dlg,obstacle) $obstacle
 			set BesideState($dlg,context) $context
 			unset -nocomplain BesideState($dlg,pendingTrigger)
-			if {!$display || [besideInside [besideOuterRect $dlg] $screen]} { continue }
+			set frame [besideNativeFrame $dlg 1]
+			if {[llength $frame] != 4} { set frame [besideOuterRect $dlg] }
+			if {![besideInside $frame $screen]} { fitWindow $dlg }
+			continue
 		} elseif {$unchanged} {
 			# No placement input changed. A frame the WM left outside the
 			# main window's work area (a restore whose late Configure moved

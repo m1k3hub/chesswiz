@@ -716,6 +716,88 @@ tcltest::test dlg-follow-user-move {user-moved dialog is respected, even over th
     ::scidb::test::dlgplace::stopTrace
 } -result 1
 
+# Actual WM moves, with the native frame as the independent oracle. A user
+# position is constrained by the monitor, never by the application's frame.
+tcltest::testConstraint nativeDialogDrag [expr {[tk windowingsystem] eq "x11" && [auto_execok xdotool] ne {}}]
+foreach edge {right bottom left top oversized} {
+    tcltest::test dlg-user-workarea-$edge {user frame stays in monitor after drag and main resize} -constraints nativeDialogDrag -setup {
+        ::scidb::test::dlgplace::setupBoard
+        ::playengine::open .application
+        ::scidb::test::dlgplace::waitFor 900
+    } -body [format {
+        set dlg .application.playengine
+        lassign [winfo workarea $dlg] ax ay aw ah
+        lassign [::scidb::tk::wm frame $dlg] x y w h
+        set cw [winfo width $dlg]; set ch [winfo height $dlg]
+        set px [expr {$ax+($aw-$w)/2}]
+        set py [expr {$ay+($ah-$h)/2}]
+        switch %s {
+            right {set px [expr {$ax+$aw-40}]}
+            bottom {set py [expr {$ay+$ah-40}]}
+            left {set px [expr {$ax-40}]}
+            top {set py [expr {$ay-40}]}
+            oversized {set cw [expr {$aw+100}]; set ch [expr {$ah+100}]}
+        }
+        if {"%s" eq "oversized"} {
+            wm geometry $dlg "${cw}x${ch}+$px+$py"
+        } else {
+            # Openbox's Alt+Button1 gesture moves the native frame. Start
+            # safely in the centre; moving the pointer to the screen edge
+            # leaves half the dialog beyond it; sample native frames during the drag.
+            wm geometry $dlg "+[expr {$ax+($aw-$w)/2}]+[expr {$ay+($ah-$h)/2}]"
+            ::scidb::test::dlgplace::waitFor 500
+            raise $dlg
+            focus -force $dlg
+            ::scidb::test::dlgplace::waitFor 200
+            set sx [expr {[winfo rootx $dlg]+$cw/2}]
+            set sy [expr {[winfo rooty $dlg]+$ch/2}]
+            set tx $sx; set ty $sy
+            switch %s {
+                right {set tx [expr {$ax+$aw-1}]}
+                bottom {set ty [expr {$ay+$ah-1}]}
+                left {set tx $ax}
+                top {set ty $ay}
+            }
+            exec xdotool mousemove $sx $sy keydown Alt_L sleep 0.1 mousedown 1 sleep 0.1 \
+                mousemove [expr {$sx+10}] [expr {$sy+10}] sleep 0.15 \
+                mousemove $tx $ty sleep 0.15 mouseup 1 keyup Alt_L &
+            set escaped {}
+            for {set sample 0} {$sample < 40} {incr sample} {
+                ::scidb::test::dlgplace::waitFor 20
+                set observed [::scidb::tk::wm frame $dlg]
+                if {![::scidb::test::dlgplace::inside $observed [winfo workarea $dlg]]} {
+                    set escaped $observed
+                }
+            }
+            ::scidb::test::dlgplace::require [expr {$escaped ne {}}] "native drag did not escape"
+            puts "USER_DRAG edge=%s escaped=$escaped"
+        }
+        ::scidb::test::dlgplace::waitFor 1200
+        set frame [::scidb::tk::wm frame $dlg]
+        ::scidb::test::dlgplace::require \
+            [::scidb::test::dlgplace::inside $frame [winfo workarea $dlg]] "escaped after %s: $frame"
+        ::scidb::test::dlgplace::require \
+            [expr {[::util::place::besidePlacedBy $dlg] eq "user"}] "lost user placement"
+        if {"%s" ne "oversized"} {
+            ::scidb::test::dlgplace::require \
+                [expr {[winfo width $dlg] == $cw && [winfo height $dlg] == $ch}] "unnecessary shrink"
+        } else {
+            ::scidb::test::dlgplace::require \
+                [expr {[winfo width $dlg] >= 240 && [winfo height $dlg] >= 180}] "lost viewport minimum"
+        }
+        wm geometry .application [::scidb::test::dlgplace::fitGeometry 900 600]
+        ::scidb::test::dlgplace::waitFor 1400
+        set resized [::scidb::tk::wm frame $dlg]
+        ::scidb::test::dlgplace::require \
+            [::scidb::test::dlgplace::inside $resized [winfo workarea $dlg]] "escaped after main resize: $resized"
+        ::scidb::test::dlgplace::require [expr {$resized eq $frame}] "main resize changed user's safe frame"
+        puts "USER_FRAME edge=%s frame=$frame resized=$resized area=[winfo workarea $dlg]"
+        return 1
+    } $edge $edge $edge $edge $edge $edge $edge] -cleanup {
+        ::scidb::test::dlgplace::followCleanup .application.playengine {::playengine::Close}
+    } -result 1
+}
+
 # Exercise real widgets with only OS work-area/frame reports substituted.
 proc ::scidb::test::dlgplace::areaSetup {} {
  update
