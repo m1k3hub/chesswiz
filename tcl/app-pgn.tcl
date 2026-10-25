@@ -197,7 +197,7 @@ proc build {top width height} {
 		bind $pgn <Button-3> [namespace code [list PopupMenu $edit $i]]
 		bind $pgn <Double-3> {#} ;# catch double clicks
 		bind $pgn <Leave> [namespace code [list HidePosition $pgn]]
-		set evalStrip [tk::canvas $edit.f$i.evalstrip -width 1 -height 22 -highlightthickness 0 -background [::colors::lookup pgn,background]]
+		set evalStrip [tk::canvas $edit.f$i.evalstrip -width 1 -height 22 -highlightthickness 0 -background [expr {[::theme::isDark] ? [::colors::lookup pgn,background] : "white"}]]
 		grid $evalStrip -row 2 -column 1 -columnspan 2 -sticky ew
 		bind $evalStrip <Configure> [namespace code [list DrawEvalStrip $i]]
 		bind $evalStrip <<ThemeChanged>> [namespace code [list DrawEvalStrip $i]]
@@ -3120,7 +3120,7 @@ proc DrawEvalStrip {position} {
 	set w $Vars(evalstrip:$position)
 	if {![winfo exists $w]} { return }
 
-	$w configure -background [::colors::lookup pgn,background]
+	$w configure -background [expr {[::theme::isDark] ? [::colors::lookup pgn,background] : "white"}]
 	$w delete all
 
 	set width [winfo width $w]

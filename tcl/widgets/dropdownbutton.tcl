@@ -362,6 +362,7 @@ proc SetIcon {w height} {
 
 
 proc ThemeChanged {w} {
+	if {![::theme::needsPaletteRefresh $w]} { return }
 	if {![winfo exists $w]} { return }
 	variable ${w}::Priv
 	variable ${w}::Rem

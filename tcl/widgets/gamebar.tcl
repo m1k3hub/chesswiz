@@ -143,6 +143,10 @@ proc gamebar {path} {
 
 
 proc ThemeChanged {gamebar} {
+	if {![::theme::needsPaletteRefresh $gamebar]} {
+		Layout $gamebar
+		return
+	}
 	if {![winfo exists $gamebar]} { return }
 	variable Defaults
 	variable Specs

@@ -4533,9 +4533,8 @@ proc ::application::assistant::ConfigureTags {text} {
 		$text tag configure error -foreground #ff7b72
 		$text tag configure info -foreground #9ca3af
 	} else {
-		$text configure -background white -foreground black
 		$text tag configure user -foreground #1f4e8c -spacing1 6
-		$text tag configure assistant -foreground black -spacing1 2
+		$text tag configure assistant -foreground {} -spacing1 2
 		$text tag configure tool -foreground #707070 -font TkFixedFont
 		$text tag configure error -foreground darkred
 		$text tag configure info -foreground #707070

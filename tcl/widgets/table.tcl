@@ -1412,7 +1412,15 @@ proc UpdateColunnWidths {table} {
 
 
 proc ThemeChanged {table} {
+	if {![winfo exists $table.t]} { return }
 	variable ${table}::Vars
+	if {![::theme::needsPaletteRefresh $table]} {
+		foreach id $Vars(columns) {
+			$table.t column configure $id -background [ttk::style lookup [::theme::currentTheme] -background]
+		}
+		after idle [namespace code [list GenerateTableMinSizeEvent $table]]
+		return
+	}
 	variable IdMap
 	if {![info exists IdMap($table)]} { return }
 	set optId $IdMap($table)

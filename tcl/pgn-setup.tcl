@@ -351,6 +351,7 @@ proc closeText {path context} {
 
 
 proc configureText {path {fontContext ""}} {
+	if {![winfo exists $path.pgn]} { return }
 	variable Context
 	variable [namespace parent]::$Context($path)::Options
 	variable [namespace parent]::$Context($path)::Colors
@@ -395,7 +396,7 @@ proc configureText {path {fontContext ""}} {
 		$w tag configure h:nag     -indentbackground 1 -background [::colors::lookup $Colors(hilite:move)]
 		$w tag configure h:mark    -indentbackground 1 -background [::colors::lookup $Colors(hilite:move)]
 
-		$w tag configure h:next    -foreground [::colors::lookup $Colors(foreground:main)]
+		$w tag configure h:next    -foreground [::colors::lookup black]
 		$w tag configure h:comment -foreground [::colors::lookup $Colors(hilite:comment)]
 		$w tag configure h:info    -foreground [::colors::lookup $Colors(hilite:info)]
 
@@ -412,7 +413,7 @@ proc configureText {path {fontContext ""}} {
 			-background [::colors::lookup $Colors(background:nextmove)] \
 			;
 		$w tag configure h:move \
-			-foreground [::colors::lookup $Colors(foreground:main)] \
+			-foreground [::colors::lookup black] \
 			-background [::colors::lookup $Colors(hilite:move)]
 		$w tag configure h:curr \
 			-foreground [::colors::lookup pgn,foreground:current] \

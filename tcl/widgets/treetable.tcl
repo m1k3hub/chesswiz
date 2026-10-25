@@ -274,6 +274,7 @@ proc WidgetProc {t command args} {
 
 
 proc ThemeChanged {t} {
+	if {![::theme::needsPaletteRefresh $t]} { return }
 	if {![winfo exists $t]} { return }
 	variable ${t}::Vars
 	$t configure -background [::colors::lookup $Vars(background)]

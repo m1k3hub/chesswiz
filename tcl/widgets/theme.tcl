@@ -402,6 +402,7 @@ proc SetupCurrentTheme {} {
 	set disabledfg [::ttk::style lookup [currentTheme] -foreground disabled]
 	if {[string length $disabledfg] == 0} { set disabledfg #808080 }
 
+	if {![isDark]} { RestoreLightOptions }
 	if {[isDark]} {
 		set Settings(tk:background) $background
 		set fieldbg #1b1f27
@@ -410,12 +411,9 @@ proc SetupCurrentTheme {} {
 		set controlbg #2b303b
 		set bordercol #30363d
 	} else {
-		if {![info exists Settings(tk:default_background)]} {
-			set f [tk::frame .__hopefully_unique_widget_id__[clock milliseconds]]
-			set Settings(tk:default_background) [$f cget -background]
-			destroy $f
-		}
-		set Settings(tk:background) $Settings(tk:default_background)
+		set f [tk::frame .__hopefully_unique_widget_id__[clock milliseconds]]
+		set Settings(tk:background) [$f cget -background]
+		destroy $f
 		set fieldbg #ffffff
 		set activebg #ececec
 		set activefg #000000
@@ -435,136 +433,237 @@ proc SetupCurrentTheme {} {
 	ttk::style configure active.Horizontal.TScale -troughcolor [GetActiveTroughColor]
 	ttk::style configure active.Vertical.TScale -troughcolor [GetActiveTroughColor]
 
-	# 4. Set theme options in Tk option database for classic Tk widgets
-	option add *Spinbox.selectBackground $selectbg
-	option add *Spinbox.selectForeground $selectfg
-	option add *Spinbox.disabledBackground $background
-	option add *Spinbox.disabledForeground $disabledfg
-	option add *Spinbox.background $fieldbg
-	option add *Spinbox.foreground $foreground
-	option add *Spinbox.insertBackground $foreground
-	option add *Spinbox.buttonBackground $controlbg
+	if {[isDark]} {
+		variable DarkOptions
+		set DarkOptions {}
+		# 4. Set theme options in Tk option database for classic Tk widgets
+		DarkOption *Spinbox.selectBackground $selectbg
+		DarkOption *Spinbox.selectForeground $selectfg
+		DarkOption *Spinbox.disabledBackground $background
+		DarkOption *Spinbox.disabledForeground $disabledfg
+		DarkOption *Spinbox.background $fieldbg
+		DarkOption *Spinbox.foreground $foreground
+		DarkOption *Spinbox.insertBackground $foreground
+		DarkOption *Spinbox.buttonBackground $controlbg
 
-	option add *Entry.selectBackground $selectbg
-	option add *Entry.selectForeground $selectfg
-	option add *Entry.disabledBackground $background
-	option add *Entry.disabledForeground $disabledfg
-	option add *Entry.readonlyBackground $background
-	option add *Entry.background $fieldbg
-	option add *Entry.foreground $foreground
-	option add *Entry.insertBackground $foreground
+		DarkOption *Entry.selectBackground $selectbg
+		DarkOption *Entry.selectForeground $selectfg
+		DarkOption *Entry.disabledBackground $background
+		DarkOption *Entry.disabledForeground $disabledfg
+		DarkOption *Entry.readonlyBackground $background
+		DarkOption *Entry.background $fieldbg
+		DarkOption *Entry.foreground $foreground
+		DarkOption *Entry.insertBackground $foreground
 
-	option add *Scale.highlightBackground $background
-	option add *Scale.background $background
-	option add *Scale.foreground $foreground
-	option add *Scale.activeBackground $activebg
-	option add *Scale.troughColor [GetTroughColor]
+		DarkOption *Scale.highlightBackground $background
+		DarkOption *Scale.background $background
+		DarkOption *Scale.foreground $foreground
+		DarkOption *Scale.activeBackground $activebg
+		DarkOption *Scale.troughColor [GetTroughColor]
 
-	option add *Listbox.background $fieldbg
-	option add *Listbox.foreground $foreground
-	option add *Listbox.selectBackground $selectbg
-	option add *Listbox.selectForeground $selectfg
-	option add *Listbox.disabledForeground $disabledfg
-	option add *Listbox.highlightBackground $background
+		DarkOption *Listbox.background $fieldbg
+		DarkOption *Listbox.foreground $foreground
+		DarkOption *Listbox.selectBackground $selectbg
+		DarkOption *Listbox.selectForeground $selectfg
+		DarkOption *Listbox.disabledForeground $disabledfg
+		DarkOption *Listbox.highlightBackground $background
 
-	option add *TCombobox*Listbox.background $fieldbg
-	option add *TCombobox*Listbox.foreground $foreground
-	option add *TCombobox*Listbox.selectBackground $selectbg
-	option add *TCombobox*Listbox.selectForeground $selectfg
+		DarkOption *TCombobox*Listbox.background $fieldbg
+		DarkOption *TCombobox*Listbox.foreground $foreground
+		DarkOption *TCombobox*Listbox.selectBackground $selectbg
+		DarkOption *TCombobox*Listbox.selectForeground $selectfg
 
-	option add *Text.background $fieldbg
-	option add *Text.foreground $foreground
-	option add *Text.selectBackground $selectbg
-	option add *Text.selectForeground $selectfg
-	option add *Text.insertBackground $foreground
-	option add *Text.highlightBackground $background
+		DarkOption *Text.background $fieldbg
+		DarkOption *Text.foreground $foreground
+		DarkOption *Text.selectBackground $selectbg
+		DarkOption *Text.selectForeground $selectfg
+		DarkOption *Text.insertBackground $foreground
+		DarkOption *Text.highlightBackground $background
 
-	option add *Menu.background $background
-	option add *Menu.foreground $foreground
-	option add *Menu.activeBackground $selectbg
-	option add *Menu.activeForeground $selectfg
-	option add *Menu.disabledForeground $disabledfg
-	option add *Menu.selectColor $foreground
+		DarkOption *Menu.background $background
+		DarkOption *Menu.foreground $foreground
+		DarkOption *Menu.activeBackground $selectbg
+		DarkOption *Menu.activeForeground $selectfg
+		DarkOption *Menu.disabledForeground $disabledfg
+		DarkOption *Menu.selectColor $foreground
 
-	option add *Menubutton.background $background
-	option add *Menubutton.foreground $foreground
-	option add *Menubutton.activeBackground $activebg
-	option add *Menubutton.activeForeground $activefg
-	option add *Menubutton.disabledForeground $disabledfg
-	option add *Menubutton.highlightBackground $background
+		DarkOption *Menubutton.background $background
+		DarkOption *Menubutton.foreground $foreground
+		DarkOption *Menubutton.activeBackground $activebg
+		DarkOption *Menubutton.activeForeground $activefg
+		DarkOption *Menubutton.disabledForeground $disabledfg
+		DarkOption *Menubutton.highlightBackground $background
 
-	option add *Button.background $controlbg
-	option add *Button.foreground $foreground
-	option add *Button.activeBackground $activebg
-	option add *Button.activeForeground $activefg
-	option add *Button.disabledForeground $disabledfg
-	option add *Button.highlightBackground $background
+		DarkOption *Button.background $controlbg
+		DarkOption *Button.foreground $foreground
+		DarkOption *Button.activeBackground $activebg
+		DarkOption *Button.activeForeground $activefg
+		DarkOption *Button.disabledForeground $disabledfg
+		DarkOption *Button.highlightBackground $background
 
-	option add *Checkbutton.background $background
-	option add *Checkbutton.foreground $foreground
-	option add *Checkbutton.activeBackground $activebg
-	option add *Checkbutton.activeForeground $activefg
-	option add *Checkbutton.disabledForeground $disabledfg
-	option add *Checkbutton.selectColor $fieldbg
-	option add *Checkbutton.highlightBackground $background
+		DarkOption *Checkbutton.background $background
+		DarkOption *Checkbutton.foreground $foreground
+		DarkOption *Checkbutton.activeBackground $activebg
+		DarkOption *Checkbutton.activeForeground $activefg
+		DarkOption *Checkbutton.disabledForeground $disabledfg
+		DarkOption *Checkbutton.selectColor $fieldbg
+		DarkOption *Checkbutton.highlightBackground $background
 
-	option add *Radiobutton.background $background
-	option add *Radiobutton.foreground $foreground
-	option add *Radiobutton.activeBackground $activebg
-	option add *Radiobutton.activeForeground $activefg
-	option add *Radiobutton.disabledForeground $disabledfg
-	option add *Radiobutton.selectColor $fieldbg
-	option add *Radiobutton.highlightBackground $background
+		DarkOption *Radiobutton.background $background
+		DarkOption *Radiobutton.foreground $foreground
+		DarkOption *Radiobutton.activeBackground $activebg
+		DarkOption *Radiobutton.activeForeground $activefg
+		DarkOption *Radiobutton.disabledForeground $disabledfg
+		DarkOption *Radiobutton.selectColor $fieldbg
+		DarkOption *Radiobutton.highlightBackground $background
 
-	option add *Label.background $background
-	option add *Label.foreground $foreground
-	option add *Label.disabledForeground $disabledfg
-	option add *Label.highlightBackground $background
+		DarkOption *Label.background $background
+		DarkOption *Label.foreground $foreground
+		DarkOption *Label.disabledForeground $disabledfg
+		DarkOption *Label.highlightBackground $background
 
-	option add *Message.background $background
-	option add *Message.foreground $foreground
-	option add *Message.highlightBackground $background
+		DarkOption *Message.background $background
+		DarkOption *Message.foreground $foreground
+		DarkOption *Message.highlightBackground $background
 
-	option add *Labelframe.background $background
-	option add *Labelframe.foreground $foreground
-	option add *Labelframe.highlightBackground $background
+		DarkOption *Labelframe.background $background
+		DarkOption *Labelframe.foreground $foreground
+		DarkOption *Labelframe.highlightBackground $background
 
-	option add *Frame.background $Settings(tk:background)
-	option add *Frame.highlightBackground $Settings(tk:background)
-	option add *Toplevel.background $Settings(tk:background)
-	option add *Toplevel.highlightBackground $Settings(tk:background)
-	option add *Dialog.background $Settings(tk:background)
-	option add *Dialog.highlightBackground $Settings(tk:background)
-	if {[info exists ::scidb::app] && [string length $::scidb::app]} {
-		option add *$::scidb::app.background $Settings(tk:background)
-		option add *$::scidb::app.highlightBackground $Settings(tk:background)
-	}
-	option add *Canvas.background $background
-	option add *Canvas.highlightBackground $background
-	option add *Panedwindow.background [GetTroughColor]
-	option add *TreeCtrl.background $fieldbg
-	option add *TreeCtrl.foreground $foreground
-
-	if {$strongTtk} {
-		option add *Frame.background $background
-		option add *Toplevel.background $background
-		option add *Dialog.background $background
+		DarkOption *Frame.background $Settings(tk:background)
+		DarkOption *Frame.highlightBackground $Settings(tk:background)
+		DarkOption *Toplevel.background $Settings(tk:background)
+		DarkOption *Toplevel.highlightBackground $Settings(tk:background)
+		DarkOption *Dialog.background $Settings(tk:background)
+		DarkOption *Dialog.highlightBackground $Settings(tk:background)
 		if {[info exists ::scidb::app] && [string length $::scidb::app]} {
-			option add *$::scidb::app.background $background
+			DarkOption *$::scidb::app.background $Settings(tk:background)
+			DarkOption *$::scidb::app.highlightBackground $Settings(tk:background)
 		}
-		option add *Label.background $background
-		option add *Canvas.background $background
-		option add *Notebook.background $background
+		DarkOption *Canvas.background $background
+		DarkOption *Canvas.highlightBackground $background
+		DarkOption *Panedwindow.background [GetTroughColor]
+		DarkOption *TreeCtrl.background $fieldbg
+		DarkOption *TreeCtrl.foreground $foreground
+
+		foreach {pattern value} $DarkOptions { SaveLightOption $pattern }
+		foreach {pattern value} $DarkOptions { option add $pattern $value }
+
+	} else {
+		RestoreLightOptions
+		# 4. Set theme options
+	#	option add *Frame.background $Settings(tk:background)
+	#	option add *Button.background $background
+		option add *Spinbox.selectBackground [::ttk::style lookup [currentTheme] -selectbackground]
+		option add *Spinbox.disabledBackground $background
+		option add *Entry.selectBackground [::ttk::style lookup [currentTheme] -selectbackground]
+		option add *Scale.highlightBackground $background
+		option add *Scale.background $background
+		option add *Scale.troughColor [GetTroughColor]
+		option add *Listbox.disabledForeground [::ttk::style lookup [currentTheme] -foreground disabled]
+	#	option add *Listbox.selectBackground [::ttk::style lookup [currentTheme] -selectbackground]
+	#	option add *Listbox.selectForeground [::ttk::style lookup [currentTheme] -selectforeground]
+	#	option add *Panedwindow.background [GetTroughColor]
+
+		if {$strongTtk} {
+			option add *Frame.background $background
+			option add *Toplevel.background $background
+			option add *Dialog.background $background
+			option add *Label.background $background
+			option add *Canvas.background $background
+			option add *Notebook.background $background
+		}
 	}
 
 	ApplyThemeToWidgetTree .
 }
 
 
+# Save the effective light defaults before adding any dark resources. Tk has no
+# option-delete operation, so restore the saved values on the return to light.
+proc SaveLightOption {pattern} {
+	variable LightOptions
+	if {![info exists LightOptions($pattern)]} {
+		regexp {\*([^*.]+)\.([^.]*)$} $pattern -> cls resource
+		set command [string tolower $cls]
+		if {$cls eq "TreeCtrl"} { set command treectrl }
+		if {[info commands ::tk::$command] ne ""} { set command ::tk::$command }
+		set probe .__theme_defaults
+		if {[catch {$command $probe}]} { tk::frame $probe -class $cls }
+		set opt -[string tolower $resource]
+		if {[catch {$probe cget $opt} prior]} {
+			set prior [$probe cget -background]
+		}
+		set LightOptions($pattern) $prior
+		destroy $probe
+	}
+}
+
+proc DarkOption {pattern value} {
+	variable DarkOptions
+	lappend DarkOptions $pattern $value
+}
+
+proc RestoreLightOptions {} {
+	variable LightOptions
+	if {[info exists LightOptions]} {
+		foreach {pattern value} [array get LightOptions] { option add $pattern $value }
+		unset LightOptions
+	}
+}
+
+# New refresh handlers have no work on an untouched light widget. Remember
+# dark use per widget, and discard the marker when the widget is destroyed.
+proc needsPaletteRefresh {w} {
+	variable DarkWidgets
+	if {![winfo exists $w]} { return 0 }
+	if {[isDark]} {
+		if {![info exists DarkWidgets($w)]} {
+			bind $w <Destroy> +[list unset -nocomplain [namespace current]::DarkWidgets($w)]
+		}
+		set DarkWidgets($w) 1
+		return 1
+	}
+	if {[info exists DarkWidgets($w)]} {
+		unset DarkWidgets($w)
+		return 1
+	}
+	return 0
+}
+
+proc ForgetLightWidget {w destroyed} {
+	if {$w ne $destroyed} { return }
+	variable LightWidgets
+	variable LightMenuEntries
+	unset -nocomplain LightWidgets($w) LightMenuEntries($w)
+}
+
 proc ApplyThemeToWidgetTree {root} {
 	if {![winfo exists $root]} { return }
 	variable Settings
 
+	variable LightWidgets
+	variable LightMenuEntries
+	if {![isDark]} {
+		if {[info exists LightMenuEntries]} {
+			foreach {w entries} [array get LightMenuEntries] {
+				if {![winfo exists $w]} { continue }
+				foreach {index label options} $entries {
+					catch {
+						if {[$w entrycget $index -label] eq $label} { $w entryconfigure $index {*}$options }
+					}
+				}
+			}
+			unset LightMenuEntries
+		}
+		if {[info exists LightWidgets]} {
+			foreach {w options} [array get LightWidgets] {
+				if {[winfo exists $w]} { catch { $w configure {*}$options } }
+			}
+			unset LightWidgets
+		}
+		return
+	}
 	set background [::ttk::style lookup [currentTheme] -background]
 	set foreground [::ttk::style lookup [currentTheme] -foreground]
 	if {[string length $foreground] == 0} { set foreground #000000 }
@@ -573,19 +672,11 @@ proc ApplyThemeToWidgetTree {root} {
 	set disabledfg [::ttk::style lookup [currentTheme] -foreground disabled]
 	if {[string length $disabledfg] == 0} { set disabledfg #808080 }
 
-	if {[isDark]} {
-		set tkbg $background
-		set fieldbg #1b1f27
-		set activebg #353c4a
-		set activefg $foreground
-		set controlbg #2b303b
-	} else {
-		set tkbg $Settings(tk:background)
-		set fieldbg #ffffff
-		set activebg #ececec
-		set activefg #000000
-		set controlbg $background
-	}
+	set tkbg $background
+	set fieldbg #1b1f27
+	set activebg #353c4a
+	set activefg $foreground
+	set controlbg #2b303b
 
 	set stack [list $root]
 	while {[llength $stack]} {
@@ -597,6 +688,17 @@ proc ApplyThemeToWidgetTree {root} {
 			lappend stack $child
 		}
 
+		set saveWidget [expr {![info exists LightWidgets($w)]}]
+		if {$saveWidget} {
+			set LightWidgets($w) {}
+			if {[catch {$w configure} specs]} { continue }
+			foreach spec $specs {
+				if {[llength $spec] == 5 && [regexp -nocase {color|background|foreground} [lindex $spec 0]]} {
+					lappend LightWidgets($w) [lindex $spec 0] [lindex $spec 4]
+				}
+			}
+			bind $w <Destroy> +[namespace code [list ForgetLightWidget $w %W]]
+		}
 		set cls [winfo class $w]
 		if {[winfo toplevel $w] eq $w && $cls ni {Toplevel Dialog Frame}} {
 			catch {
@@ -661,6 +763,13 @@ proc ApplyThemeToWidgetTree {root} {
 								catch {
 									set ebg [$w entrycget $i -background]
 									if {$ebg ne ""} {
+									if {$saveWidget} {
+										set entryOptions {}
+										foreach opt {-background -foreground -activebackground -activeforeground} {
+											lappend entryOptions $opt [$w entrycget $i $opt]
+										}
+										lappend LightMenuEntries($w) $i [$w entrycget $i -label] $entryOptions
+									}
 										$w entryconfigure $i \
 											-background [::colors::lookup table,menu:headerbackground] \
 											-foreground [::colors::lookup table,menu:headerforeground] \

@@ -1033,7 +1033,7 @@ proc Add {toolbar widgetCommand args} {
 	lappend Specs(children:$toolbar) $w
 
 	set class [winfo class $w]
-	if {$class eq "Label"} {
+	if {$class eq "Label" && [::theme::isDark]} {
 		if {![info exists options(-background)]} {
 			catch { $w configure -background [$toolbar cget -background] }
 		}
@@ -1210,6 +1210,7 @@ proc PrepareToolbarOptions {toolbar frameId} {
 
 
 proc ThemeChanged {toolbar} {
+	if {![::theme::needsPaletteRefresh $toolbar]} { return }
 	if {![winfo exists $toolbar]} { return }
 	variable Specs
 	variable Defaults
@@ -2395,10 +2396,10 @@ proc CreateHandle {toolbar handle {size 0}} {
 	set bg $Defaults(handle:color:gray)
 
 	if {$Specs(orientation:[winfo parent $handle]) eq "horz"} {
-		set decor [tk::canvas $handle.c -width $Defaults(handle:size) -height $size -borderwidth 0 -highlightthickness 0 -background $bg]
+		set decor [tk::canvas $handle.c -width $Defaults(handle:size) -height $size -borderwidth 0 -highlightthickness [expr {[::theme::isDark] ? 0 : 1}] -background $bg]
 		pack $decor -fill y -side left -expand yes
 	} else {
-		set decor [tk::canvas $handle.c -width $size -height $Defaults(handle:size) -borderwidth 0 -highlightthickness 0 -background $bg]
+		set decor [tk::canvas $handle.c -width $size -height $Defaults(handle:size) -borderwidth 0 -highlightthickness [expr {[::theme::isDark] ? 0 : 1}] -background $bg]
 		pack $decor -fill x -side top -expand yes
 	}
 
@@ -2816,8 +2817,12 @@ proc ConfigureHandle {handle w h} {
 
 	set toolbar [winfo parent $handle]
 	set canv $handle.c
-	catch { $canv configure -background $Defaults(handle:color:gray) -highlightbackground $Defaults(handle:color:gray) -highlightthickness 0 }
-	$canv delete all
+	if {[::theme::isDark]} {
+		catch { $canv configure -background $Defaults(handle:color:gray) -highlightbackground $Defaults(handle:color:gray) -highlightthickness 0 }
+		$canv delete all
+	} else {
+		$canv delete rect
+	}
 
 	if {$Specs(orientation:$toolbar) eq "horz"} {
 		set n [expr {$h/3}]

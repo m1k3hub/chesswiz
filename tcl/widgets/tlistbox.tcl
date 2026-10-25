@@ -1720,6 +1720,7 @@ proc Scroll {table dir} {
 
 
 proc ThemeChanged {w} {
+	if {![::theme::needsPaletteRefresh $w]} { return }
 	if {![winfo exists $w]} { return }
 	variable [namespace current]::${w}::Priv
 	set t $w.__tlistbox__

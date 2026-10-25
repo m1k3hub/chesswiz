@@ -384,9 +384,7 @@ proc GetNormalForeground {} {
 	if {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]} {
 		return #e6edf3
 	}
-	set fg [::ttk::style lookup TEntry -foreground]
-	if {[string length $fg] == 0} { set fg black }
-	return $fg
+	return black
 }
 
 

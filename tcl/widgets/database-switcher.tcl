@@ -728,6 +728,7 @@ proc AddBase {w file type readonly {encoding {}}} {
 
 
 proc ThemeChanged {w} {
+	if {![::theme::needsPaletteRefresh $w]} { return }
 	if {![winfo exists $w]} { return }
 	variable ${w}::Vars
 	variable Defaults

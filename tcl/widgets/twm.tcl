@@ -372,17 +372,25 @@ proc SetupTheme {twm} {
 	variable Options
 	variable ${twm}::Vars
 
+	variable LightHeaderOptions
 	if {[::theme::isDark]} {
+		if {![info exists LightHeaderOptions]} {
+			foreach key {header:tab:foreground header:tab:background header:flex:background} {
+				set LightHeaderOptions($key) $Options($key)
+			}
+		}
 		set Options(header:tab:foreground) #b1bac4
 		set Options(header:tab:background) #2c313a
 		set Options(header:flex:background) #2b5b84
-	} else {
-		set Options(header:tab:foreground) #333333
-		set Options(header:tab:background) #4f94cd
-		set Options(header:flex:background) #4f94cd
+	} elseif {[info exists LightHeaderOptions]} {
+		array set Options [array get LightHeaderOptions]
+		unset LightHeaderOptions
 	}
 
-	ttk::style configure twm.TLabel -background [ttk::style lookup TNotebook.Tab -background] -foreground [ttk::style lookup TNotebook.Tab -foreground]
+	ttk::style configure twm.TLabel -background [ttk::style lookup TNotebook.Tab -background]
+	if {[::theme::isDark]} {
+		ttk::style configure twm.TLabel -foreground [ttk::style lookup TNotebook.Tab -foreground]
+	}
 	ttk::style configure twm.TNotebook -borderwidth 0
 #	ttk::style configure twm.TNotebook.Tab -font $Vars(header:font)
 	ttk::style configure twm.TNotebook.Tab -padding {2 2}

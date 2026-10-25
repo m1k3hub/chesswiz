@@ -47,7 +47,7 @@ proc ::darkThemeTest::runPhase {home which theme} {
 }
 
 proc ::darkThemeTest::tempHome {} {
-	set home [file join $::scidb::test::app::testDir tmp-app dark-theme-restart-[pid]]
+	set home [file join $::scidb::test::app::testDir tmp-app roadmap-partial dark dark-theme-restart-[pid]]
 	file delete -force $home
 	file mkdir $home
 	return $home
@@ -240,6 +240,55 @@ tcltest::test dark-theme-apply-and-contrast {dark theme sets dark palette, class
 	::theme::setTheme $prevTheme
 	update
 } -result {}
+
+tcltest::test dark-theme-dialog-pane-roundtrip {light colours survive dialog and pane churn before a runtime round trip} -setup {
+	set previous [::theme::currentTheme]
+	set originalPanes [[::application::twm board] leaves]
+	::theme::setTheme clam
+	update
+	menu .darkRoundtripMenu -tearoff 0
+	entry .darkRoundtripEntry
+	label .darkRoundtripLabel -background linen -foreground darkred
+	set before [list [.darkRoundtripMenu configure] [.darkRoundtripEntry configure] [.darkRoundtripLabel configure]]
+} -body {
+	foreach uid {editor tree games} {
+		set pane [::application::openPane $uid]
+		update
+		if {$pane eq ""} { error "failed to open $uid" }
+		set twm [::application::twm board]
+		$twm close $pane
+		update
+	}
+	foreach unused {1 2 3} {
+		::info::openDialog .application
+		update
+		destroy .application.infoDialog
+		update
+	}
+	::theme::setTheme dark
+	update
+	# Destroy a widget with queued theme events, then reuse its path.
+	label .darkDestroyedProbe
+	destroy .darkDestroyedProbe
+	::theme::setTheme clam
+	update
+	label .darkDestroyedProbe
+	menu .darkFreshMenu -tearoff 0
+	entry .darkFreshEntry
+	set after [list [.darkRoundtripMenu configure] [.darkRoundtripEntry configure] [.darkRoundtripLabel configure]]
+	list [expr {$before eq $after}] \
+		[expr {[.darkFreshMenu cget -activebackground] eq [.darkRoundtripMenu cget -activebackground]}] \
+		[expr {[.darkFreshEntry cget -background] eq [.darkRoundtripEntry cget -background]}]
+} -cleanup {
+	foreach w {.darkRoundtripMenu .darkRoundtripEntry .darkRoundtripLabel .darkDestroyedProbe .darkFreshMenu .darkFreshEntry .application.infoDialog} {
+		catch {destroy $w}
+	}
+	foreach uid {editor tree games} {
+		if {$uid in $originalPanes} { ::application::openPane $uid }
+	}
+	::theme::setTheme $previous
+	update
+} -result {1 1 1}
 
 tcltest::test dark-theme-persist-restart {picking dark in Settings > Theme persists and restores on restart} -setup {
 	set home [::darkThemeTest::tempHome]

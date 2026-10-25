@@ -373,6 +373,7 @@ proc Build {w args} {
 	}
 	set Priv(preamble) $preamble
 	set Priv(has_explicit_bg) $explicitBg
+	set Priv(original_bg) $opts(-background)
 	set Priv(fixedwidth) $opts(-fixedwidth)
 
 	lappend Priv(onmouseover) [namespace code [list ShowTooltip $html]]
@@ -826,11 +827,13 @@ proc WidgetProc {w command args} {
 
 
 proc ThemeChanged {w} {
+	if {![::theme::needsPaletteRefresh $w]} { return }
 	if {![winfo exists $w]} { return }
 	variable ${w}::Priv
 	if {![info exists Priv(script)]} { return }
 	set isDark [expr {[namespace exists ::theme] && [info procs ::theme::isDark] ne "" && [::theme::isDark]}]
 	set bg [expr {$isDark ? "#1b1f27" : "white"}]
+	if {$Priv(has_explicit_bg)} { set bg $Priv(original_bg) }
 	catch { $w.sub configure -background $bg }
 	if {[string length $Priv(script)]} {
 		catch { $w parse $Priv(script) }
