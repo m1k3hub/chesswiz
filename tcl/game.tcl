@@ -881,6 +881,16 @@ proc clearHistory {} {
 }
 
 
+# History entries carry the source key, not the UI tab number.
+proc historyIndex {position} {
+	variable List
+	variable History
+	if {$position < 0 || $position >= [llength $List]} { return -1 }
+	set key [lindex $List $position 4]
+	if {![llength $key]} { return -1 }
+	return [lsearch -exact -index 1 $History $key]
+}
+
 proc removeHistoryEntry {index} {
 	variable History
 

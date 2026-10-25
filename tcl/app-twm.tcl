@@ -646,6 +646,7 @@ proc savedLayout {twm} {
 
 	set id $Vars($twm:id)
 	set layoutVariant $Vars($id:layout:variant)
+	if {![info exists Options($id:layout:saved:$layoutVariant)]} { return [inspectLayout $twm] }
 	return $Options($id:layout:saved:$layoutVariant)
 }
 
@@ -1969,8 +1970,12 @@ proc GetLayout {id} {
 
 proc Menu {twm w x y} {
 	set menu $twm.__menu__
-	# Try to catch accidental double clicks.
-	if {[winfo exists $menu]} { return }
+	# Ignore duplicate clicks only while posted. Native popup dismissal can
+	# leave the widget alive, so rebuild an unmapped menu on the next click.
+	if {[winfo exists $menu]} {
+		if {[winfo ismapped $menu]} { return }
+		destroy $menu
+	}
 	menu $menu
 	catch { wm attributes $menu -type popup_menu }
 

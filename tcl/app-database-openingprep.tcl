@@ -599,10 +599,8 @@ proc OpenOpeningPrepReport {parent file variant} {
 	variable OpeningPrepData
 	variable mc
 
-	if {![RecommendSciWorkflow $parent $file $variant $mc::EcoStats openingprep]} {
-		return
-	}
-
+	# Opening statistics support every working format; conversion is not
+	# a precondition and must not interrupt opening this report.
 	set dlg [OpeningPrepDialogName $file $variant]
 
 	if {![winfo exists $dlg]} {

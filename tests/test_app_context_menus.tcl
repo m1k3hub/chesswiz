@@ -240,7 +240,12 @@ proc ::scidb::test::ctx::Expected {cid {section default}} {
 		}
 	}
 	set parsed {}
-	foreach line $rows { lappend parsed [FixtureRow $line] }
+	foreach line $rows {
+		# Round 5: the synthetic C3 object has no real game/site URL.
+		# URL visibility and dispatch are covered by test_app_menu_round5.
+		if {$cid eq "C3" && [string match {Open URL*} $line]} continue
+		lappend parsed [FixtureRow $line]
+	}
 	set seen 0
 	return [Canon $parsed seen]
 }
@@ -284,6 +289,11 @@ proc ::scidb::test::ctx::CheckFixture {cid object {section default}} {
 	}
 	return 1
 }
+
+# C10 now populates its cascade from the actual registered table columns.
+# The former path-only object never created a table (IdMap(.ctxlist) missing).
+::table::table .ctxlist
+::table::addcol .ctxlist date -text Date
 
 set ::scidb::test::ctx::objects [::scidb::test::ctx::Objects]
 
@@ -674,4 +684,5 @@ tcltest::test context-one-builder {each object menu is built by ::context::Build
 } -result {}
 
 
+destroy .ctxlist
 tcltest::cleanupTests

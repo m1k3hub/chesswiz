@@ -1896,6 +1896,8 @@ proc EmptyClipbase {parent} {
 proc SaveChanges {parent {base ""}} {
 	set parent [winfo toplevel $parent]
 	if {[string length $base] == 0} { set base [scidb::db::get name] }
+	# The clipbase has no backing file to overwrite.
+	if {$base eq "" || $base eq $::scidb::clipbaseName} { return }
 
 	wm withdraw [set dlg [tk::toplevel $parent.save -class Dialog]]
 	pack [set top [ttk::frame $dlg.top]] -fill both
