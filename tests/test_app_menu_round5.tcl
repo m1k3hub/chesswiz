@@ -24,7 +24,7 @@ proc ::scidb::test::r5::extract {script {ns ::}} {
 }
 set r5root [file dirname [file dirname [file normalize [info script]]]]
 if {[info exists ::env(R5_SOURCE_ROOT)]} {set r5root $::env(R5_SOURCE_ROOT)}
-foreach f {context game dropdown menu gametable app-analysis app-board app-assistant-offers app-twm app-database-search-nl app-database-openingprep} {
+foreach f {app-pgn context game dropdown menu gametable app-analysis app-board app-assistant-offers app-twm app-database-search-nl app-database-openingprep} {
     set fd [open [file join $r5root tcl $f.tcl]]
     ::scidb::test::r5::extract [read $fd]
     close $fd
@@ -223,6 +223,74 @@ tcltest::test r5-eco-no-conversion {ECO statistics reach the report without opti
         set result
     }
 } -result report-dialog-reached
+
+# Round 6: exercise the real C2/C9 handlers and context builders without a
+# display. Native modal dismissal leaves an existing, unmapped menu; X11
+# returns while it is still mapped. Neither path may depend on destruction.
+foreach {cid handler} {C2 {::application::pgn::PopupMenu .notation 0} C9 {::application::twm::Menu .pane .frame 10 20}} {
+    foreach modal {0 1} {
+        tcltest::test r6-reopen-$cid-$modal {dismissed popups rebuild; posted popups reject duplicate clicks} -body {
+            ::scidb::test::r5::run [list apply {{handler modal} {
+                namespace eval ::annotation::mc {}
+                namespace eval ::notation {}
+                namespace eval ::context::mc {variable WhatCanIDo Help}
+                set ::context::Counter 0
+                set ::created 0
+                set ::posts {}
+                set ::modal $modal
+                proc ::context::Rows {cid object} {return [lrepeat 32 ask]}
+                proc ::context::HasObject {cid object} {return 1}
+                proc ::scidb::game::link? {position} {return {base Normal 0}}
+                proc ::scidb::game::ply {} {return 1}
+                proc .pane {args} {return board}
+                proc bind {args} {}
+                proc wm {args} {}
+                proc winfo {op w} {
+                    switch $op {
+                        exists {return [info exists ::entries($w)]}
+                        ismapped {return $::mapped($w)}
+                        pointerxy {return {10 20}}
+                        default {error "unexpected winfo $op"}
+                    }
+                }
+                proc menu {w args} {
+                    if {[info exists ::entries($w)]} {error {menu already exists}}
+                    set ::entries($w) 0
+                    set ::mapped($w) 0
+                    incr ::created
+                    interp alias {} $w {} menuOp $w
+                }
+                proc menuOp {w op args} {
+                    switch $op {
+                        add {incr ::entries($w)}
+                        unpost {set ::mapped($w) 0}
+                        default {error "unexpected menu operation $op"}
+                    }
+                }
+                proc destroy {w} {
+                    unset ::entries($w) ::mapped($w)
+                    rename $w {}
+                }
+                proc tk_popup {w args} {
+                    set ::mapped($w) 1
+                    lappend ::posts [list $::created $::entries($w)]
+                    if {$::modal} {$w unpost}
+                }
+                {*}$handler
+                set w [expr {[lindex $handler 0] eq "::application::pgn::PopupMenu" ? ".notation.__menu__" : ".pane.__menu__"}]
+                if {!$modal} {
+                    # The X11-style immediate return must not destroy a live popup.
+                    {*}$handler
+                    if {$::created != 1 || [llength $::posts] != 1} {error {duplicate popup}}
+                    $w unpost
+                }
+                if {![winfo exists $w] || [winfo ismapped $w]} {error {dismissal fixture failed}}
+                {*}$handler
+                set ::posts
+            }} $handler $modal]
+        } -result {{1 32} {2 32}}
+    }
+}
 
 # UI lifecycle coverage for the orchestrator; no Xvfb is started by this file.
 if {[llength [info commands winfo]]} {
