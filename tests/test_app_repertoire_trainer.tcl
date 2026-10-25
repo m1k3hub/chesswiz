@@ -207,7 +207,7 @@ tcltest::test reptrainer-drill {answering right and wrong updates the card} -set
 		::reptrainer::open .application
 		update
 		set dlg .application.__reptrainer__
-		$dlg.setup.start invoke
+		[::util::place::playingBody $dlg].setup.start invoke
 		update
 
 		# the first card is on the board and the hook owns the moves
@@ -243,7 +243,7 @@ tcltest::test reptrainer-drill {answering right and wrong updates the card} -set
 		set c2 [dict get $::reptrainer::Vars(deck) cards $afterKey]
 		set finished [expr {$::reptrainer::Vars(running) == 0 && ![::reptrainer::active]}]
 		set instruction $::reptrainer::Vars(instruction)
-		set counter [$dlg.drill.counter cget -text]
+		set counter [[::util::place::playingBody $dlg].drill.counter cget -text]
 
 		::reptrainer::Close $dlg
 		set saved [::reptrainer::loadDeck [::reptrainer::deckFile current-game]]
@@ -473,7 +473,7 @@ tcltest::test reptrainer-jev-note {reptrainer_note rules, classifier roles, spoi
 			::reptrainer::open .application
 			update
 			set dlg .application.__reptrainer__
-			$dlg.setup.start invoke
+			[::util::place::playingBody $dlg].setup.start invoke
 			update
 			# Wait for the async note decision to fire
 			after 20 { set ::scidb::test::rep::Tick 1 }
@@ -541,7 +541,7 @@ tcltest::test reptrainer-jev-grade {reptrainer_grade suggestions, lapsed-card fi
 			::reptrainer::open .application
 			update
 			set dlg .application.__reptrainer__
-			$dlg.setup.start invoke
+			[::util::place::playingBody $dlg].setup.start invoke
 			update
 
 			set ::scidb::test::rep::StubChoice hard
@@ -552,7 +552,7 @@ tcltest::test reptrainer-jev-grade {reptrainer_grade suggestions, lapsed-card fi
 			set suggestedPrompt $::reptrainer::Vars(instruction)
 			set suggestedVar $::reptrainer::Vars(suggestedGrade)
 			# User clicks Easy (grade 3) despite the Hard suggestion
-			$dlg.drill.grades.easy invoke
+			[::util::place::playingBody $dlg].drill.grades.easy invoke
 			set recordedInterval [dict get $::reptrainer::Vars(deck) cards $startKey interval]
 			::reptrainer::Close $dlg
 

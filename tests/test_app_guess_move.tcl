@@ -49,7 +49,7 @@ tcltest::test guess-right {the right SAN scores one point and advances two plies
 	::move::addMove menu e4
 	list $r1 $::guessmove::Priv(score) $::guessmove::Priv(total) $::guessmove::Priv(last) \
 		[::scidb::game::query stm] [::scidb::game::next move -ascii] \
-		[$::guessmove::Priv(dialog).top.score cget -text]
+		[[::util::place::playingBody $::guessmove::Priv(dialog)].top.score cget -text]
 } -cleanup {
 	::scidb::test::guess::cleanup
 } -result {{1 white 6} 1 1 Correct white Nf3 {Score: 1 of 1}}
@@ -84,7 +84,7 @@ tcltest::test guess-summary {the end of the game shows the summary and releases 
 	::move::addMove menu d4
 	::move::addMove menu Bb5
 	list $::guessmove::active $::guessmove::Priv(summary) \
-		[$::guessmove::Priv(dialog).top.last cget -text]
+		[[::util::place::playingBody $::guessmove::Priv(dialog)].top.last cget -text]
 } -cleanup {
 	::scidb::test::guess::cleanup
 } -result {0 {2 of 3 moves guessed (67%)} {2 of 3 moves guessed (67%)}}
@@ -279,7 +279,7 @@ tcltest::test guess-jev-hint-classifier {Hint asks guess_hint via evaluateAsync,
 		$::guessmove::Priv(hintKind) \
 		$::guessmove::Priv(hintSource) \
 		$::guessmove::Priv(note) \
-		[$::guessmove::Priv(dialog).top.note cget -text] \
+		[[::util::place::playingBody $::guessmove::Priv(dialog)].top.note cget -text] \
 		[dict exists $questions guess_hint] \
 		[string match "*fen=*" $state] \
 		[expr {[string first "e4" $state] < 0}]
@@ -452,8 +452,8 @@ tcltest::test guess-jev-review-classifier {the end of a round asks guess_review 
 		$::guessmove::Priv(review) \
 		$::guessmove::Priv(reviewSource) \
 		$::guessmove::Priv(note) \
-		[$::guessmove::Priv(dialog).top.last cget -text] \
-		[$::guessmove::Priv(dialog).top.note cget -text] \
+		[[::util::place::playingBody $::guessmove::Priv(dialog)].top.last cget -text] \
+		[[::util::place::playingBody $::guessmove::Priv(dialog)].top.note cget -text] \
 		[dict get $questions guess_review type] \
 		[string match "*score=2 total=2*" $state]
 } -cleanup {

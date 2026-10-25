@@ -245,18 +245,18 @@ proc ::tactics::guard {command} {
 }
 proc ::tactics::click {x y} {
     variable selected; variable move
-    set cell [expr {[.tactics.board cget -width] / 8}]
+    set cell [expr {[[Body].board cget -width] / 8}]
     set square "[string index abcdefgh [expr {$x / $cell}]][expr {8 - $y / $cell}]"
     if {$selected eq ""} { set selected $square; return }
     set move $selected$square; set selected ""
     # Entry remains editable for underpromotion (append q/r/b/n).
-    focus .tactics.move
+    focus [Body].move
 }
 proc ::tactics::render {} {
     variable session; variable selected
     set selected ""
     if {$session eq ""} { return }
-    set c .tactics.board
+    set c [Body].board
     $c delete all
     set cell [expr {[$c cget -width] / 8}]
     set row 0
@@ -274,12 +274,17 @@ proc ::tactics::render {} {
         }
         incr row
     }
-    .tactics.score configure -text [score]
+    [Body].score configure -text [score]
 }
 proc ::tactics::close {} {
     variable session
     if {$session ne "" && [dict get $session state] eq "playing"} { finish failed }
     destroy .tactics
+}
+# The fallback also supports the trainer's standalone widget fixture.
+proc ::tactics::Body {} {
+    if {[winfo exists .tactics.__viewport.canvas.body]} { return .tactics.__viewport.canvas.body }
+    return .tactics
 }
 proc ::tactics::open {{parent .application}} {
     variable session
@@ -287,33 +292,34 @@ proc ::tactics::open {{parent .application}} {
     readProgress
     set session {}
     toplevel .tactics
+    ::util::place::playingBody .tactics
     wm title .tactics "Tactics Trainer"
     wm transient .tactics [winfo toplevel $parent]
     wm protocol .tactics WM_DELETE_WINDOW {::tactics::guard ::tactics::close}
-    ttk::button .tactics.open -text "Open puzzle PGN..." -command {::tactics::guard ::tactics::openPGN}
-    ttk::button .tactics.build -text "AI: Training Set from Games..." -command [list ::ai::cql::training $parent]
-    canvas .tactics.board -width 320 -height 320 -highlightthickness 0
-    bind .tactics.board <Button-1> {::tactics::click %x %y}
-    ttk::label .tactics.status -textvariable ::tactics::message -wraplength 384
-    ttk::entry .tactics.move -textvariable ::tactics::move
-    bind .tactics.move <Return> {::tactics::guard ::tactics::submit}
-    ttk::button .tactics.play -text "Play move" -command {::tactics::guard ::tactics::submit}
-    ttk::button .tactics.retry -text Retry -command {::tactics::retry; ::tactics::render}
-    ttk::button .tactics.show -text "Show solution" -command {::tactics::guard ::tactics::showSolution}
-    ttk::button .tactics.next -text Next -command {::tactics::guard ::tactics::next}
-    ttk::label .tactics.score -text [score]
+    ttk::button [Body].open -text "Open puzzle PGN..." -command {::tactics::guard ::tactics::openPGN}
+    ttk::button [Body].build -text "AI: Training Set from Games..." -command [list ::ai::cql::training $parent]
+    canvas [Body].board -width 320 -height 320 -highlightthickness 0
+    bind [Body].board <Button-1> {::tactics::click %x %y}
+    ttk::label [Body].status -textvariable ::tactics::message -wraplength 384
+    ttk::entry [Body].move -textvariable ::tactics::move
+    bind [Body].move <Return> {::tactics::guard ::tactics::submit}
+    ttk::button [Body].play -text "Play move" -command {::tactics::guard ::tactics::submit}
+    ttk::button [Body].retry -text Retry -command {::tactics::retry; ::tactics::render}
+    ttk::button [Body].show -text "Show solution" -command {::tactics::guard ::tactics::showSolution}
+    ttk::button [Body].next -text Next -command {::tactics::guard ::tactics::next}
+    ttk::label [Body].score -text [score]
     # Share action rows so the puzzle and all controls fit short work areas.
-    # Keep widget paths stable for the puzzle callbacks.
-    grid .tactics.open -row 0 -column 0 -pady 1
-    grid .tactics.build -row 0 -column 1 -columnspan 2 -pady 1
-    grid .tactics.board -row 1 -column 0 -columnspan 3 -pady 1
-    grid .tactics.status -row 2 -column 0 -columnspan 3 -pady 1
-    grid .tactics.move -row 3 -column 0 -columnspan 2 -pady 1
-    grid .tactics.play -row 3 -column 2 -pady 1
-    grid .tactics.retry -row 4 -column 0 -pady 1
-    grid .tactics.show -row 4 -column 1 -pady 1
-    grid .tactics.next -row 4 -column 2 -pady 1
-    grid .tactics.score -row 5 -column 0 -columnspan 3 -pady 1
+    # The shared body provides native clipping and keyboard scrolling.
+    grid [Body].open -row 0 -column 0 -pady 1
+    grid [Body].build -row 0 -column 1 -columnspan 2 -pady 1
+    grid [Body].board -row 1 -column 0 -columnspan 3 -pady 1
+    grid [Body].status -row 2 -column 0 -columnspan 3 -pady 1
+    grid [Body].move -row 3 -column 0 -columnspan 2 -pady 1
+    grid [Body].play -row 3 -column 2 -pady 1
+    grid [Body].retry -row 4 -column 0 -pady 1
+    grid [Body].show -row 4 -column 1 -pady 1
+    grid [Body].next -row 4 -column 2 -pady 1
+    grid [Body].score -row 5 -column 0 -columnspan 3 -pady 1
     # Keep the main board visible and register for subsequent layout changes.
     ::util::place::besideBoard .tactics $parent
 }

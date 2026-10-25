@@ -219,7 +219,9 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
     set requested [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]
     # A below-minimum strip (shrink/no-room) must stay usable; a reserved or
     # fitting placement keeps the requested size.
-    if {$rule in {shrink no-room}} {
+    if {$rule eq "scroll"} {
+        require [expr {$w >= min(240,[lindex $requested 0]) && $h >= min(180,[lindex $requested 1])}] "$target: below scrolling minimum"
+    } elseif {$rule in {shrink no-room}} {
         require [expr {$w >= 1 && $h >= 1}] "$target: degenerate ${w}x${h}"
     } else {
         require [expr {$w >= [lindex $requested 0] && $h >= [lindex $requested 1]}] \
@@ -239,7 +241,7 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
         set cy [expr {max($wy,min($cy,$wy+$wh-$fh))}]
         dict set areas $side [overlapArea [list $cx $cy $fw $fh] $board]
     }
-    if {$rule ne "shrink"} {
+    if {$rule ni {shrink scroll}} {
         require [expr {$area == [tcl::mathfunc::min {*}[dict values $areas]]}] "$target: overlap $area is not minimum of $areas"
     }
     if {$rule ne "shrink"} {require [expr {$area == 0}] "$target: $rule overlaps $area"}
@@ -250,6 +252,7 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
     }
     set buttonRects {}
     foreach button [buttons $dlg] {
+        if {[winfo exists $dlg.__viewport]} {focus -force $button; update}
         set r [widgetRect $button]
         require [inside $r $wa] "$target: offscreen button $button $r"
         require [inside $r [widgetRect $dlg]] "$target: clipped button $button $r"
@@ -331,7 +334,7 @@ proc ::scidb::test::dlgplace::reviewMove {args} {
     variable reviewCheck
     set reviewCheck [catch {
         set dlg .application.__gamereview_progress
-        require [expr {[$dlg.top.status cget -text] ne ""}] "review did not populate its status"
+        require [expr {[[::util::place::playingBody $dlg].top.status cget -text] ne ""}] "review did not populate its status"
         check 003A $dlg
         # A later, longer status must grow the same window and update its plan.
         set before [winfo reqwidth $dlg]
@@ -484,7 +487,7 @@ tcltest::test dlg-tactics {Tactics registers beside the drawn board at the live 
         set ::tactics::message $message
         ::scidb::test::dlgplace::waitFor 700
         foreach name {open build board status move play retry show next score} {
-            set w .tactics.$name
+            set w [::util::place::playingBody .tactics].$name
             puts "TACTICS control=$name mapped=[winfo ismapped $w] actual=[winfo width $w]x[winfo height $w] requested=[winfo reqwidth $w]x[winfo reqheight $w]"
             ::scidb::test::dlgplace::require [winfo ismapped $w] "$w is unmapped"
             ::scidb::test::dlgplace::require [expr {[winfo width $w] >= [winfo reqwidth $w] && [winfo height $w] >= [winfo reqheight $w]}] "$w is clipped"
@@ -496,12 +499,12 @@ tcltest::test dlg-tactics {Tactics registers beside the drawn board at the live 
     set fen {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}
     ::tactics::start [::tactics::puzzle $fen {e4}]
     ::tactics::render
-    set cell [expr {[.tactics.board cget -width]/8}]
+    set cell [expr {[[::util::place::playingBody .tactics].board cget -width]/8}]
     ::tactics::click [expr {4*$cell+$cell/2}] [expr {6*$cell+$cell/2}]
     ::tactics::click [expr {4*$cell+$cell/2}] [expr {4*$cell+$cell/2}]
     ::scidb::test::dlgplace::require [expr {$::tactics::move eq "e2e4"}] "compact board hit testing disagrees with rendering"
     set ::tactics::session {}
-    list $overlap [winfo ismapped .tactics.board]
+    list $overlap [winfo ismapped [::util::place::playingBody .tactics].board]
 } -cleanup {
     catch {::tactics::close}
     ::scidb::test::dlgplace::stopTrace
@@ -2018,6 +2021,7 @@ tcltest::test dlg-v21-reserve-before-overlap {playing dialogs reserve down to sq
                                 if {[winfo manager $a] eq ""} {set active 0; break}
                             }
                             if {!$active} {continue}
+                            if {[winfo exists $dlg.__viewport]} {focus -force $w; update}
                             ::scidb::test::dlgplace::require [winfo ismapped $w] "unmapped $w"
                             ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::widgetRect $w] [::scidb::test::dlgplace::widgetRect $dlg]] "clipped $w"
                         }
@@ -2099,6 +2103,203 @@ tcltest::test dlg-v21-video-after-reserve-zoom {video recovers its strip when a 
     return 1
 } -cleanup {
     catch {destroy .application.__gamereview}
+    ::scidb::test::dlgplace::realCleanup
+} -result 1
+
+
+# VAL-DLG-022: native clipping, actual keyboard focus, and independent board
+# intersections. Real video continues advancing even when only its handle fits.
+tcltest::test dlg-v22-small-scroll {compact only after reserve exhaustion; all active controls reachable} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    wm minsize .application 1 1
+} -body {
+    set size 800x600
+    if {[info exists ::env(DLG022_SIZE)]} {set size $::env(DLG022_SIZE)}
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry {*}[split $size x]]
+    ::scidb::test::dlgplace::waitFor 1000
+    foreach scenario {{0 playengine enginematch} {0 enginematch} {1 playengine gamereview} {1 gamereview playengine}} {
+        lassign $scenario video
+        set opening [lrange $scenario 1 end]
+        set before [::scidb::test::dlgplace::boardRect]
+        if {$video} {::scidb::test::dlgplace::realVideo}
+        set dialogs {}
+        foreach kind $opening {
+            switch $kind {
+                playengine {::playengine::open .application; set dlg .application.playengine}
+                enginematch {::enginematch::open .application; set dlg .application.enginematch}
+                gamereview {
+                    ::gamereview::ShowWindow .application [::gamereview::classify {{san e4 before 0 after 0 best 1}}] {} 0
+                    set dlg .application.__gamereview
+                }
+            }
+            lappend dialogs $dlg
+            ::scidb::test::dlgplace::waitFor 900
+        }
+        set board [::scidb::test::dlgplace::boardRect]
+        set frames {}
+        foreach dlg $dialogs {
+            set frame [::scidb::test::dlgplace::outerRect $dlg]
+            puts "DLG022 size=$size scenario=$scenario dlg=$dlg frame=$frame board=$board plan=$::util::place::BesideLastPlan($dlg)"
+            ::scidb::test::dlgplace::require [expr {![::scidb::test::dlgplace::overlapArea $frame $board]}] "dialog covers board"
+            ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside $frame [::scidb::test::dlgplace::windowWorkArea]] "native frame outside main"
+            foreach peer $frames {::scidb::test::dlgplace::require [expr {![::scidb::test::dlgplace::overlapArea $frame $peer]}] "peer overlap"}
+            lappend frames $frame
+            set body [::util::place::playingBody $dlg]
+            set c [winfo parent $body]
+            set compact [expr {[winfo width $dlg] < [winfo reqwidth $body] || [winfo height $dlg] < [winfo reqheight $body]}]
+            if {$size in {1280x720 1920x1080}} {::scidb::test::dlgplace::require [expr {!$compact}] "unnecessary compaction"}
+            ::scidb::test::dlgplace::require [expr {[winfo width $dlg]>=min(240,[winfo reqwidth $body]) && [winfo height $dlg]>=min(180,[winfo reqheight $body])}] "below usable minimum"
+            lassign [wm minsize $dlg] minw minh
+            ::scidb::test::dlgplace::require [expr {$minw>=min(240,[winfo reqwidth $body]) && $minh>=min(180,[winfo reqheight $body])}] "native resize minimum not enforced"
+            set pending [winfo children $body]
+            set count 0
+            while {[llength $pending]} {
+                set w [lindex $pending 0]; set pending [lrange $pending 1 end]
+                lappend pending {*}[winfo children $w]
+                if {![winfo ismapped $w] || [winfo class $w] ni {TButton TCheckbutton TRadiobutton TCombobox TEntry TSpinbox Button Entry}} {continue}
+                focus -force $w
+                update
+                ::scidb::test::dlgplace::require [expr {[focus] eq $w}] "focus failed $w"
+                ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::widgetRect $w] [::scidb::test::dlgplace::widgetRect $c]] "focused control not visible $w rect=[::scidb::test::dlgplace::widgetRect $w] viewport=[::scidb::test::dlgplace::widgetRect $c] body=[::scidb::test::dlgplace::widgetRect $body] req=[winfo reqwidth $body]x[winfo reqheight $body] views=[$c xview]/[$c yview]"
+                incr count
+            }
+            puts "DLG022 REACHABLE $dlg controls=$count compact=$compact"
+            ::scidb::test::dlgplace::require [expr {$count>0}] "no controls checked"
+        }
+        if {$video} {
+            set pane [::mediainset::Pane]
+            set vr [::scidb::test::dlgplace::widgetRect $pane.mediainset]
+            ::scidb::test::dlgplace::require [expr {![::scidb::test::dlgplace::overlapArea $vr $board]}] "native video covers board"
+            if {$::mediainset::Collapsed} {
+                ::scidb::test::dlgplace::require [winfo ismapped .application.videoHandle] "collapsed handle missing"
+                set vr [::scidb::test::dlgplace::widgetRect .application.videoHandle]
+            }
+            puts "DLG022 VIDEO rect=$vr collapsed=$::mediainset::Collapsed"
+            ::scidb::test::dlgplace::require [expr {![::scidb::test::dlgplace::overlapArea $vr $board]}] "video covers board"
+            set pos [::media::mpv::time]
+            ::scidb::test::dlgplace::waitFor 350
+            ::scidb::test::dlgplace::require [expr {[::media::mpv::time]>$pos}] "playback stopped"
+        }
+        if {[info exists ::env(DLG022_EVIDENCE)]} {exec import -window root [file join $::env(DLG022_EVIDENCE) [join $scenario -].png]}
+        foreach dlg [lreverse $dialogs] {catch {destroy $dlg}; ::scidb::test::dlgplace::waitFor 700}
+        if {$video} {
+            ::scidb::test::dlgplace::require [expr {!$::mediainset::Collapsed}] "video did not restore on dialog close"
+            ::application::media::Stop
+            ::scidb::test::dlgplace::waitFor 700
+        }
+        ::scidb::test::dlgplace::require [expr {$before eq [::scidb::test::dlgplace::boardRect]}] "board not restored"
+    }
+    return 1
+} -cleanup {
+    ::scidb::test::dlgplace::realCleanup
+} -result 1
+
+tcltest::test dlg-v22-return-space {compact viewport restores natural size and Tab reveals controls after resize} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    wm minsize .application 1 1
+} -body {
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 800 600]
+    ::scidb::test::dlgplace::waitFor 700
+    ::enginematch::open .application
+    ::scidb::test::dlgplace::waitFor 700
+    set dlg .application.enginematch
+    set body [::util::place::playingBody $dlg]
+    set c [winfo parent $body]
+    ::scidb::test::dlgplace::require [expr {[winfo width $dlg]<[winfo reqwidth $body]}] "fixture did not compact"
+    focus -force $body.ok
+    update
+    for {set i 0} {$i < 25} {incr i} {
+        event generate [focus] <KeyPress-Tab>
+        update
+        set w [focus]
+        if {[string match $body.* $w]} {
+            ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::widgetRect $w] [::scidb::test::dlgplace::widgetRect $c]] "Tab did not reveal $w"
+        }
+    }
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 1280 720]
+    ::scidb::test::dlgplace::waitFor 1000
+    puts "DLG022 RETURN dialog=[wm geometry $dlg] body=[winfo reqwidth $body]x[winfo reqheight $body] bars=[winfo ismapped $dlg.__viewport.x]/[winfo ismapped $dlg.__viewport.y]"
+    ::scidb::test::dlgplace::require [expr {[winfo width $dlg]>=[winfo reqwidth $body] && [winfo height $dlg]>=[winfo reqheight $body]}] "natural size not restored"
+    ::scidb::test::dlgplace::require [expr {![winfo ismapped $dlg.__viewport.x] && ![winfo ismapped $dlg.__viewport.y]}] "scrollbars retained"
+    ::enginematch::Close
+    return 1
+} -cleanup {
+    ::scidb::test::dlgplace::realCleanup
+} -result 1
+
+tcltest::test dlg-v22-trainers {trainers use the native scrolling body} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    wm minsize .application 1 1
+} -body {
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 800 600]
+    ::scidb::test::dlgplace::waitFor 700
+    foreach {open dlg close} {
+        {::tactics::open .application} .tactics {::tactics::close}
+        {::endtrainer::open .application} .application.__endtrainer__ {::endtrainer::Close}
+        {::reptrainer::open .application} .application.__reptrainer__ {::reptrainer::Close .application.__reptrainer__}
+        {::guessmove::start white} .application.__guessmove__ {::guessmove::stop; catch {destroy .application.__guessmove__}}
+    } {
+        eval $open
+        ::scidb::test::dlgplace::waitFor 700
+        ::scidb::test::dlgplace::require [winfo exists $dlg.__viewport.canvas.body] "missing trainer wrapper $dlg"
+        set board [::scidb::test::dlgplace::boardRect]
+        set frame [::scidb::test::dlgplace::outerRect $dlg]
+        puts "DLG022 TRAINER dialog=$dlg frame=$frame board=$board"
+        ::scidb::test::dlgplace::require [expr {![::scidb::test::dlgplace::overlapArea $frame $board]}] "trainer covers board"
+        foreach w [::scidb::test::dlgplace::controls $dlg.__viewport.canvas.body] {
+            focus -force $w
+            update
+            ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::widgetRect $w] [::scidb::test::dlgplace::widgetRect $dlg.__viewport.canvas]] "trainer focus clipped $w"
+        }
+        eval $close
+        ::scidb::test::dlgplace::waitFor 700
+    }
+    return 1
+} -cleanup {
+    catch {::tactics::close}
+    catch {::endtrainer::Close}
+    catch {::reptrainer::Close .application.__reptrainer__}
+    catch {::guessmove::stop}
+    catch {destroy .application.__guessmove__}
+    ::scidb::test::dlgplace::realCleanup
+} -result 1
+
+tcltest::test dlg-v22-minimum-fallback {infeasible minimum uses overlap fallback; default button remains keyboard reachable} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    wm minsize .application 1 1
+} -body {
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 400 380]
+    ::scidb::test::dlgplace::waitFor 700
+    ::enginematch::open .application
+    ::scidb::test::dlgplace::waitFor 700
+    set dlg .application.enginematch
+    set plan $::util::place::BesideLastPlan($dlg)
+    set frame [::scidb::test::dlgplace::outerRect $dlg]
+    set board [::scidb::test::dlgplace::boardRect]
+    puts "DLG022 MINIMUM frame=$frame board=$board plan=$plan"
+    ::scidb::test::dlgplace::require [expr {[dict get $plan rule] eq "no-room" && [winfo width $dlg]>=240 && [winfo height $dlg]>=180}] "unusable fallback"
+    lassign [::scidb::test::dlgplace::windowWorkArea] wx wy ww wh
+    lassign $board bx by bw bh
+    lassign $frame _ _ fw fh
+    set areas {}
+    foreach {x y} [list [expr {$bx+$bw+12}] $by [expr {$bx-12-$fw}] $by $bx [expr {$by+$bh+12}]] {
+        set x [expr {max($wx,min($x,$wx+$ww-$fw))}]
+        set y [expr {max($wy,min($y,$wy+$wh-$fh))}]
+        lappend areas [::scidb::test::dlgplace::overlapArea [list $x $y $fw $fh] $board]
+    }
+    ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::overlapArea $frame $board] == [tcl::mathfunc::min {*}$areas]}] "fallback did not minimise overlap"
+    set body [::util::place::playingBody $dlg]
+    set ::scidb::test::dlgplace::defaultInvoked 0
+    $body.ok configure -command {set ::scidb::test::dlgplace::defaultInvoked 1}
+    focus -force $body.top.setup.mode.match
+    update
+    event generate [focus] <KeyPress-Return>
+    update
+    ::scidb::test::dlgplace::require $::scidb::test::dlgplace::defaultInvoked "Return default binding lost"
+    ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::widgetRect $body.ok] [::scidb::test::dlgplace::widgetRect $dlg.__viewport.canvas]] "default button not revealed"
+    ::enginematch::Close
+    return 1
+} -cleanup {
     ::scidb::test::dlgplace::realCleanup
 } -result 1
 

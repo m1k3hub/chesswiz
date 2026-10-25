@@ -689,8 +689,8 @@ proc ::reptrainer::OnSuggestedGrade {seq san decision} {
 	if {$grade ni {hard good easy}} { return }
 	set Vars(suggestedGrade) $grade
 	Instruction [GradeInstruction $san $grade [PostNote]]
-	if {[winfo exists $Vars(dlg).drill.grades.$grade]} {
-		catch { focus $Vars(dlg).drill.grades.$grade }
+	if {[winfo exists [::util::place::playingBody $Vars(dlg)].drill.grades.$grade]} {
+		catch { focus [::util::place::playingBody $Vars(dlg)].drill.grades.$grade }
 	}
 }
 
@@ -998,8 +998,8 @@ proc ::reptrainer::open {parent {base ""} {variant Normal}} {
 	wm protocol $dlg WM_DELETE_WINDOW [namespace code [list Close $dlg]]
 	bind $dlg <Escape> [namespace code [list Close $dlg]]
 
-	set setup [ttk::frame $dlg.setup]
-	set drill [ttk::frame $dlg.drill]
+	set setup [ttk::frame [::util::place::playingBody $dlg].setup]
+	set drill [ttk::frame [::util::place::playingBody $dlg].drill]
 	pack $setup -side top -fill x -padx $::theme::padx -pady $::theme::pady
 	pack $drill -side top -fill x -padx $::theme::padx -pady [list 0 $::theme::pady]
 
@@ -1192,7 +1192,7 @@ proc ::reptrainer::GradeButtons {state} {
 	set dlg $Vars(dlg)
 	if {![winfo exists $dlg]} { return }
 	foreach b {hard good easy} {
-		catch { $dlg.drill.grades.$b configure -state $state }
+		catch { [::util::place::playingBody $dlg].drill.grades.$b configure -state $state }
 	}
 }
 
@@ -1203,7 +1203,7 @@ proc ::reptrainer::Instruction {text} {
 	set Vars(instruction) $text
 	set dlg $Vars(dlg)
 	if {![winfo exists $dlg]} { return }
-	catch { $dlg.drill.instruction configure -text $text }
+	catch { [::util::place::playingBody $dlg].drill.instruction configure -text $text }
 }
 
 
@@ -1217,7 +1217,7 @@ proc ::reptrainer::UpdateCounter {} {
 	set text [format $mc::Counter $nDue $nNew $nDone]
 	set dlg $Vars(dlg)
 	if {[winfo exists $dlg]} {
-		catch { $dlg.drill.counter configure -text $text }
+		catch { [::util::place::playingBody $dlg].drill.counter configure -text $text }
 	}
 }
 

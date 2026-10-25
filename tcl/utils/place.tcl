@@ -407,6 +407,90 @@ proc fitWindowSettled {path rechecks} {
 }
 
 
+# Playing dialogs keep their natural request, but can expose that same body
+# through a two-axis viewport after requested-size placement is exhausted.
+# Children must be constructed in this body so native clipping works too.
+proc playingBody {dlg} {
+	set shell $dlg.__viewport
+	if {![winfo exists $dlg] || [winfo exists $shell]} { return $shell.canvas.body }
+	ttk::frame $shell
+	canvas $shell.canvas -borderwidth 0 -highlightthickness 0 -width 1 -height 1 \
+		-xscrollcommand [list $shell.x set] -yscrollcommand [list $shell.y set]
+	ttk::frame $shell.canvas.body
+	ttk::scrollbar $shell.x -orient horizontal -command [list $shell.canvas xview]
+	ttk::scrollbar $shell.y -orient vertical -command [list $shell.canvas yview]
+	$shell.canvas create window 0 0 -anchor nw -window $shell.canvas.body -tags body
+	grid $shell.canvas -row 0 -column 0 -sticky nsew
+	grid columnconfigure $shell 0 -weight 1
+	grid rowconfigure $shell 0 -weight 1
+	pack $shell -fill both -expand 1
+	bind $shell.canvas.body <Configure> [namespace code [list playingViewport $dlg]]
+	bind $shell.canvas <Configure> [namespace code [list playingViewport $dlg]]
+	bind $dlg <Configure> +[namespace code [list playingViewport $dlg]]
+	bind $dlg <FocusIn> +[namespace code [list playingFocus $dlg %W]]
+	bind $dlg <MouseWheel> +[namespace code [list playingWheel $dlg %D]]
+	bind $dlg <Button-4> +[namespace code [list playingWheel $dlg 120]]
+	bind $dlg <Button-5> +[namespace code [list playingWheel $dlg -120]]
+	return $shell.canvas.body
+}
+
+# dialogButtons normally binds its toplevel. Its parent here is the body;
+# forward those two dialog-wide bindings to the actual toplevel bind tag.
+proc playingButtons {dlg buttons} {
+	set body [playingBody $dlg]
+	::widget::dialogButtons $body $buttons
+	foreach event {<Return> <Alt-Key>} { bind $dlg $event [bind $body $event] }
+}
+
+proc playingViewport {dlg} {
+	set shell $dlg.__viewport
+	if {![winfo exists $shell]} { return }
+	set c $shell.canvas
+	set body $c.body
+	set rw [winfo reqwidth $body]; set rh [winfo reqheight $body]
+	# Scrollbars don't contribute to the natural toplevel request.
+	$c configure -width $rw -height $rh
+	set compact [expr {[winfo width $dlg] < $rw || [winfo height $dlg] < $rh}]
+	if {$compact} {
+		grid $shell.x -row 1 -column 0 -sticky ew
+		grid $shell.y -row 0 -column 1 -sticky ns
+	} else {
+		grid remove $shell.x $shell.y
+		$c xview moveto 0; $c yview moveto 0
+	}
+	# Hold the shell's request at the content size even with bars mapped.
+	pack propagate $dlg 0
+	$dlg configure -width $rw -height $rh
+	# Let Tk resize the embedded body on every content request. Fixing its
+	# window-item size would suppress Configure when a label grows within
+	# the allocated width, leaving the toplevel's natural request stale.
+	$c itemconfigure body -width 0 -height 0
+	$c configure -scrollregion [list 0 0 $rw $rh]
+	playingFocus $dlg [focus]
+}
+
+proc playingFocus {dlg widget} {
+	set c $dlg.__viewport.canvas
+	if {![winfo exists $c] || ![winfo exists $widget] || [focus] ne $widget
+		|| ![string match $c.body.* $widget]} { return }
+	foreach axis {x y} size {width height} {
+		set start [expr {[winfo root$axis $widget]-[winfo root$axis $c]}]
+		set end [expr {$start+[winfo $size $widget]}]
+		set visible [winfo $size $c]
+		set delta [expr {$start < 0 ? $start : ($end > $visible ? $end-$visible : 0)}]
+		if {$delta} {
+			set total [winfo $size $c.body]
+			set fraction [lindex [$c ${axis}view] 0]
+			$c ${axis}view moveto [expr {$fraction+double($delta)/$total}]
+		}
+	}
+}
+
+proc playingWheel {dlg delta} {
+	set c $dlg.__viewport.canvas
+	if {[winfo exists $c]} { $c yview scroll [expr {$delta > 0 ? -3 : 3}] units }
+}
+
 # The largest dialog that fits in each free strip beside/below the board.
 # Values are {maxClientWidth maxClientHeight} for right/left/below. Frames are
 # included: the client rectangle plus extents must stay inside the work area.
@@ -1049,6 +1133,18 @@ proc besideRectDiffers {a b} {
 	return 0
 }
 
+# A board-clear no-room candidate can still cover a peer. In particular,
+# the first dialog's plain fallback has a candidate record, not peerFree.
+proc besidePlanPeerOverlap {plan peers extents} {
+	lassign [dict get $plan geometry] x y w h
+	lassign $extents l r t b
+	set rect [list $x $y [expr {$w+$l+$r}] [expr {$h+$t+$b}]]
+	foreach peer $peers {
+		if {[besideOverlap $rect [besidePeerRect $peer]]} { return 1 }
+	}
+	return 0
+}
+
 proc besideOverlap {a b} {
 	lassign $a ax ay aw ah
 	lassign $b bx by bw bh
@@ -1676,6 +1772,7 @@ proc besideRegistryRemove {dlg} {
 	variable BesideLastPlan
 	unset -nocomplain BesideLastPlan($dlg)
 	besideReleaseReserve $dlg
+	catch { ::mediainset::Relayout }
 	if {![llength $BesideDialogs]} {
 		::application::board::afterRebuild ::util::place::besideBoardRebuilt true
 	}
@@ -1850,6 +1947,7 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 		foreach entry $BesideReserves { lappend owner [lindex $entry 0] }
 		if {$dlg in $owner} {
 			besideReleaseReserve $dlg
+			catch { ::mediainset::Relayout }
 			update idletasks
 			lassign [besideBoardRect] bx by bw bh
 		}
@@ -2081,7 +2179,7 @@ proc besideKeepsRequestedVideo {dlg} {
 # dialog-kind reserve for the whole group. Probe geometry only; commit one
 # accepted reserve, then submit peer moves to the normal capture/guard path
 # so user ownership, native-frame correction and records stay intact.
-proc besideRequestedReserve {dlg peers rw rh workarea extents gap} {
+proc besideRequestedReserve {dlg peers rw rh workarea extents gap {compact 0}} {
 	variable BesideReserves
 	variable BesideState
 	variable BesideMinimums
@@ -2100,10 +2198,26 @@ proc besideRequestedReserve {dlg peers rw rh workarea extents gap} {
 	set previousSide $::application::board::ReserveSide
 	set previousPixels $::application::board::ReservePixels
 	set previousKind $::application::board::ReserveKind
-	# An inset owned by a peer keeps its squeeze/dodge (016/017).
-	if {$previousPixels > 0 && $previousKind ni {auto dialog}} { return {} }
 	set group $peers
 	lappend group $dlg
+	# Requested-size placement keeps a peer's squeeze. The scrolling pass
+	# may release a squeeze owned by this same group: otherwise its old
+	# board cap can prevent every usable viewport from being considered.
+	if {$previousPixels > 0 && $previousKind ni {auto dialog}} {
+		if {!$compact || $previousKind ne "squeeze"
+			|| $::mediainset::SqueezeFor ni $group} { return {} }
+		::mediainset::ClearSqueeze $::mediainset::SqueezeFor
+		update idletasks
+		# Releasing the obsolete cap may even restore requested-size room.
+		set natural [besideRequestedReserve $dlg $peers $rw $rh $workarea $extents $gap]
+		if {[dict exists $natural geometry]} { return $natural }
+		return [besideRequestedReserve $dlg $peers $rw $rh $workarea $extents $gap 1]
+	}
+	if {$compact} {
+		foreach other $group {
+			if {![winfo exists $other.__viewport]} { return {} }
+		}
+	}
 	foreach entry $BesideReserves {
 		if {[lindex $entry 0] ni $group} { return {} }
 	}
@@ -2115,6 +2229,7 @@ proc besideRequestedReserve {dlg peers rw rh workarea extents gap} {
 			set ex [besideDialogExtents $other]
 			set w [winfo reqwidth $other]; set h [winfo reqheight $other]
 		}
+		if {$compact} { set w [expr {min($w,240)}]; set h [expr {min($h,180)}] }
 		lassign $ex l r t b
 		lappend sizes [list [expr {$w+$l+$r}] [expr {$h+$t+$b}]]
 	}
@@ -2123,7 +2238,7 @@ proc besideRequestedReserve {dlg peers rw rh workarea extents gap} {
 	# Put its bounded rectangle first to prune impossible group placements.
 	set packSizes $sizes
 	set withVideo 0
-	if {[besideVideoRect] ne {} && !$::mediainset::Audio} {
+	if {!$compact && [besideVideoRect] ne {} && !$::mediainset::Audio} {
 		set vw [::mediainset::MinimumStrip]
 		set pane [::mediainset::Pane]
 		set vh [expr {int(round(($vw-8)/$::mediainset::Aspect))
@@ -2137,6 +2252,10 @@ proc besideRequestedReserve {dlg peers rw rh workarea extents gap} {
 		}
 	}
 	set best {}
+	if {$compact} {
+		set packed [besidePack [besideBoardRect] $sizes $workarea $gap]
+		if {[llength $packed]} { set best [list $previousSide $previousPixels 100000 $packed] }
+	}
 	foreach side {right left bottom} {
 		# Find the largest accepted strip that retains the 32px square floor.
 		set lo 1
@@ -2207,6 +2326,29 @@ proc besideRequestedReserve {dlg peers rw rh workarea extents gap} {
 			}
 			set groupRects [lrange $packed 1 end]
 		}
+		if {$compact} {
+			# Grow each viewport toward its natural request, without crossing
+			# the painted board or any peer. Minimum packing is only a seed.
+			for {set i 0} {$i < [llength $group]} {incr i} {
+				set other [lindex $group $i]
+				lassign [besideDialogExtents $other] l r t b
+				set rect [lindex $groupRects $i]
+				foreach axis {2 3} want [list [expr {[winfo reqwidth $other]+$l+$r}] [expr {[winfo reqheight $other]+$t+$b}]] {
+					set lo [lindex $rect $axis]; set hi $want
+					while {$lo < $hi} {
+						set mid [expr {($lo+$hi+1)/2}]
+						set trial [lreplace $rect $axis $axis $mid]
+						set clear [expr {[besideInside $trial $workarea] && ![besideOverlap $trial $actual]}]
+						for {set j 0} {$j < [llength $groupRects]} {incr j} {
+							if {$i != $j && [besideOverlap $trial [lindex $groupRects $j]]} { set clear 0 }
+						}
+						if {$clear} { set lo $mid } else { set hi [expr {$mid-1}] }
+					}
+					lset rect $axis $lo
+				}
+				lset groupRects $i $rect
+			}
+		}
 		# Collapse the group's reserve history to one root and shared owners.
 		# Repeated re-plans must not leave duplicate owners or resurrect an
 		# intermediate strip when the last dialog closes.
@@ -2231,16 +2373,32 @@ proc besideRequestedReserve {dlg peers rw rh workarea extents gap} {
 			wm minsize $other [expr {min($mw,[winfo reqwidth $other])}] [expr {min($mh,[winfo reqheight $other])}]
 			# Drop any planner cap left by an earlier, smaller work area.
 			wm geometry $other ""
-			wm geometry $other "+$x+$y"
+			if {$compact} {
+				lassign [besideDialogExtents $other] l r t b
+				set cw [expr {$w-$l-$r}]; set ch [expr {$h-$t-$b}]
+				wm minsize $other [expr {min(240,$cw)}] [expr {min(180,$ch)}]
+				wm geometry $other "${cw}x${ch}+$x+$y"
+			} else { wm geometry $other "+$x+$y" }
 			set BesideState($other,request) [list $x $y]
+			if {$compact} { lappend BesideState($other,request) $cw $ch }
 			set BesideState($other,planned) $rect
 			set BesideState($other,last) {}
 			variable BesideLastPlan
 			set BesideLastPlan($other) [dict create geometry [list $x $y [winfo reqwidth $other] [winfo reqheight $other]] rule reserve-requested side $side overlap 0 resized 0 pair 1]
+			if {$compact} {
+				dict set BesideLastPlan($other) geometry [list $x $y $cw $ch]
+				dict set BesideLastPlan($other) rule scroll
+				dict set BesideLastPlan($other) resized 1
+			}
 			after idle [namespace code [list besideCapture $other]]
 		}
-		lassign [lindex $packed end] x y
+		lassign [lindex $groupRects end] x y w h
+		if {$compact} {
+			lassign $extents l r t b
+			set rw [expr {$w-$l-$r}]; set rh [expr {$h-$t-$b}]
+		}
 		set plan [dict create geometry [list $x $y $rw $rh] rule reserve-requested side $side overlap 0 resized 0]
+		if {$compact} { dict set plan rule scroll; dict set plan resized 1 }
 		if {[llength $peers]} { dict set plan pair 1 }
 		return $plan
 	} finally {
@@ -2534,6 +2692,7 @@ proc besideBoard {dlg {parent ""}} {
 }
 
 proc BesideBoardPlan {dlg parent {retry 0}} {
+	if {[winfo exists $dlg.__viewport]} { playingViewport $dlg; update idletasks }
 	variable BesideRequests
 	# A pending Map/Unmap can be delivered by this drain. Check the board
 	# afterwards: testing it first left empty obstacle coordinates on restore.
@@ -2829,7 +2988,8 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 	}
 	lassign [dict get $plan geometry] _ _ pw ph
 	if {([dict get $plan overlap] > 0 || $pw < $rw || $ph < $rh
-			|| ([dict exists $plan peerFree] && ![dict get $plan peerFree]))
+			|| ([dict exists $plan peerFree] && ![dict get $plan peerFree])
+			|| [besidePlanPeerOverlap $plan $peers $extents])
 		&& $rw <= $ww-$fw && $rh <= $wh-$fh} {
 		set reserved [besideRequestedReserve $dlg $peers $rw $rh $workarea $extents 12]
 		if {[dict exists $reserved replan]} {
@@ -2869,6 +3029,27 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 			}
 		}
 	}
+	# VAL-DLG-022: only after natural-size placement and floor32 reserve
+	# have failed, expose the body through a usable scrolling viewport.
+	lassign [dict get $plan geometry] _ _ pw ph
+	if {[winfo exists $dlg.__viewport]
+		&& ([dict get $plan overlap] > 0 || $pw < $rw || $ph < $rh
+			|| ([dict exists $plan peerFree] && ![dict get $plan peerFree])
+			|| [besidePlanPeerOverlap $plan $peers $extents])} {
+		set scrolled [besideRequestedReserve $dlg $peers $rw $rh $workarea $extents 12 1]
+		if {[llength $scrolled]} {
+			set plan $scrolled
+		} else {
+			# Even the minimum viewport is infeasible. Retain that usable
+			# size (work-area clamping aside) and minimise board overlap;
+			# never accept a positive but unusable sliver as a scroll plan.
+			lassign [besideBoardRect] ax ay aw ah
+			set plan [besideNoRoomPlan $ax $ay $aw $ah [expr {min(240,$rw)}] \
+				[expr {min(180,$rh)}] $workarea $extents 12 $peers [besideBoardRect]]
+			dict set plan resized 1
+			if {[llength $peers]} { dict set plan pair 1 }
+		}
+	}
 	# Idle geometry work during planning can change the live parent frame.
 	# Recompute candidates against it rather than applying a stale minimum.
 	set liveArea [besideMainArea $dlg 0 $parent]
@@ -2886,7 +3067,12 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 		&& $x < $wx + $el && $x + $w + $fw + $el <= $wx + $ww} {
 		set x [expr {$wx + $el}]
 	}
-	wm minsize $dlg [expr {min($mw, $w)}] [expr {min($mh, $h)}]
+	if {[winfo exists $dlg.__viewport]} {
+		# Native edge drags obey the same usable floor as automatic plans.
+		wm minsize $dlg [expr {min(240,$rw,$w)}] [expr {min(180,$rh,$h)}]
+	} else {
+		wm minsize $dlg [expr {min($mw, $w)}] [expr {min($mh, $h)}]
+	}
 	if {![info exists BesideRequests($dlg)]} {
 		bind $dlg <Configure> +[namespace code [list BesideConfigure $dlg $parent]]
 		bind $dlg <Destroy> +[namespace code [list BesideDestroy $dlg %W]]
@@ -2915,6 +3101,7 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 	# inside the pane first (restored on close/media stop).
 	if {!$foreign} { besideDodgeVideo $dlg $x $y $w $h $extents }
 	besideRegistryAdd $dlg $parent
+	catch { ::mediainset::ProtectPlayingBoard }
 	# VAL-DLG-017B: every beside-board call registers a live reserve owner
 	# at once, the first dialog of a pair included.
 	if {$pair} {

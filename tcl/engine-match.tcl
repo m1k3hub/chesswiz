@@ -209,7 +209,7 @@ proc ::enginematch::open {parent} {
 	wm protocol $dlg WM_DELETE_WINDOW [namespace code Close]
 	bind $dlg <Escape> [namespace code Close]
 
-	set top [ttk::frame $dlg.top]
+	set top [ttk::frame [::util::place::playingBody $dlg].top]
 	pack $top -fill both -expand yes -padx $::theme::padx -pady $::theme::pady
 
 	### setup ##############################################################
@@ -342,11 +342,11 @@ proc ::enginematch::open {parent} {
 	pack $p.elo -anchor w -pady [list $::theme::pady 0]
 	set Priv(widget:elo) $p.elo
 
-	::widget::dialogButtons $dlg {ok cancel}
-	$dlg.ok configure -text $mc::Start -command [namespace code Start]
-	$dlg.cancel configure -text $mc::Cancel -command [namespace code Close]
-	set Priv(widget:ok) $dlg.ok
-	set Priv(widget:cancel) $dlg.cancel
+	::util::place::playingButtons $dlg {ok cancel}
+	[::util::place::playingBody $dlg].ok configure -text $mc::Start -command [namespace code Start]
+	[::util::place::playingBody $dlg].cancel configure -text $mc::Cancel -command [namespace code Close]
+	set Priv(widget:ok) [::util::place::playingBody $dlg].ok
+	set Priv(widget:cancel) [::util::place::playingBody $dlg].cancel
 
 	# persisted defaults
 	set names [EngineNames]
@@ -1375,7 +1375,7 @@ proc ::enginematch::ShowRun {} {
 	variable Priv
 
 	if {![DialogExists]} { return }
-	set top $Priv(dialog).top
+	set top [::util::place::playingBody $Priv(dialog)].top
 	pack forget $top.setup
 	pack $top.run -fill both -expand yes
 	SetupButtons
@@ -1410,7 +1410,7 @@ proc ::enginematch::ShowSetup {} {
 
 	Finish
 	if {![DialogExists]} { return }
-	set top $Priv(dialog).top
+	set top [::util::place::playingBody $Priv(dialog)].top
 	pack forget $top.run
 	pack $top.setup -fill x
 	$Priv(widget:ok) configure -text $mc::Start -command [namespace code Start]

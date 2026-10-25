@@ -962,7 +962,7 @@ proc ::gamereview::ShowProgress {parent} {
 	wm title $dlg $mc::Title
 	wm transient $dlg [winfo toplevel $parent]
 
-	set top [ttk::frame $dlg.top]
+	set top [ttk::frame [::util::place::playingBody $dlg].top]
 	pack $top -fill both -expand yes -padx $::theme::padx -pady $::theme::pady
 	ttk::label $top.label -text $mc::Title
 	pack $top.label -anchor w
@@ -1073,7 +1073,7 @@ proc ::gamereview::ShowWindow {parent review errors cancelled} {
 	wm transient $dlg [winfo toplevel $parent]
 	wm protocol $dlg WM_DELETE_WINDOW [list destroy $dlg]
 
-	set top [ttk::frame $dlg.top]
+	set top [ttk::frame [::util::place::playingBody $dlg].top]
 	pack $top -fill both -expand yes -padx $::theme::padx -pady $::theme::pady
 
 	ttk::label $top.white -text [summaryLine White [dict get $review white]] -anchor w

@@ -1042,7 +1042,7 @@ proc ::endtrainer::open {parent} {
 	wm protocol $dlg WM_DELETE_WINDOW [namespace code Close]
 	bind $dlg <Escape> [namespace code Close]
 
-	set top [ttk::frame $dlg.top]
+	set top [ttk::frame [::util::place::playingBody $dlg].top]
 	pack $top -fill both -expand yes -padx $::theme::padx -pady $::theme::pady
 
 	### the ending list ####################################################
@@ -1073,9 +1073,9 @@ proc ::endtrainer::open {parent} {
 	pack $panel.status -anchor w -pady [list $::theme::pady 0]
 	pack $buttons -anchor w -pady [list 0 $::theme::pady]
 
-	::widget::dialogButtons $dlg {ok cancel}
-	$dlg.ok configure -text $mc::Start -command [namespace code StartSelected]
-	$dlg.cancel configure -text $mc::Close -command [namespace code Close]
+	::util::place::playingButtons $dlg {ok cancel}
+	[::util::place::playingBody $dlg].ok configure -text $mc::Start -command [namespace code StartSelected]
+	[::util::place::playingBody $dlg].cancel configure -text $mc::Close -command [namespace code Close]
 
 	set Priv(widget:setup) $setup
 	set Priv(widget:panel) $panel
@@ -1083,8 +1083,8 @@ proc ::endtrainer::open {parent} {
 	set Priv(widget:goal) $panel.goal
 	set Priv(widget:status) $panel.status
 	set Priv(widget:buttons) $buttons
-	set Priv(widget:ok) $dlg.ok
-	set Priv(widget:cancel) $dlg.cancel
+	set Priv(widget:ok) [::util::place::playingBody $dlg].ok
+	set Priv(widget:cancel) [::util::place::playingBody $dlg].cancel
 	set Priv(treeIds) [dict create]
 
 	RefreshTree

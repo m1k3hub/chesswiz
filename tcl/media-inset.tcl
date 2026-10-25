@@ -80,6 +80,7 @@ variable DetachFor {}
 # swap back so a resize while expanded cannot leave the board pane at its
 # minimum (MED-009: restore returns the prior placement and sizes).
 variable SwapSashes {}
+variable Collapsed 0
 
 } ;# namespace mediainset
 
@@ -197,6 +198,9 @@ proc ::mediainset::Show {} {
 
 
 proc ::mediainset::hide {} {
+	variable Collapsed
+	set Collapsed 0
+	catch {place forget .application.videoHandle}
 	variable Shown
 	variable Swapped
 	variable Dodge
@@ -471,6 +475,9 @@ proc ::mediainset::Layout {} {
 	if {![winfo exists $w]} { return }
 	set LayingOut 1
 	try {
+		variable Collapsed
+		set Collapsed 0
+		catch {place forget .application.videoHandle}
 		Watch
 		RefreshSwapControl
 		set view [BoardView]
@@ -622,6 +629,7 @@ proc ::mediainset::Layout {} {
 				}
 			}
 		}
+		ProtectPlayingBoard
 		if {[winfo exists $pane.mediaButton]} { raise $pane.mediaButton }
 	} finally {
 		set LayingOut 0
@@ -631,6 +639,55 @@ proc ::mediainset::Layout {} {
 	}
 }
 
+
+# Dialogs have priority over video pixels. Keep the backend's canvas alive
+# offscreen when even a minimum video cannot clear the board; audio and the
+# playback clock continue. The handle is independent of that native surface.
+proc ::mediainset::ProtectPlayingBoard {} {
+	variable Shown
+	variable Collapsed
+	variable HeldPlace
+	if {!$Shown || ![llength $::util::place::BesideDialogs]} { return }
+	set pane [Pane]
+	if {$pane eq ""} { return }
+	set w $pane.mediainset
+	set board [::util::place::besideBoardRect]
+	if {![winfo exists $w] || $board eq {}} { return }
+	set current [rect]
+	if {!$Collapsed && ![Area $current $board]} { return }
+	set mw [MinimumStrip]
+	set mh [expr {int(round(($mw-8)/$::mediainset::Aspect))+[winfo reqheight $w.controls]+8}]
+	set sizes [list [list $mw $mh]]
+	set obstacles {}
+	foreach dlg $::util::place::BesideDialogs {
+		if {[winfo exists $dlg] && [winfo ismapped $dlg]} { lappend obstacles [::util::place::besideOuterRect $dlg] }
+	}
+	set packed [::util::place::besidePack $board $sizes [WidgetRect $pane] 0 $obstacles]
+	if {[llength $packed]} {
+		lassign [lindex $packed end] x y width height
+		set Collapsed 0
+		catch {place forget .application.videoHandle}
+		PlaceInset $w $pane [expr {$x-[winfo rootx $pane]}] [expr {$y-[winfo rooty $pane]}] $width $height
+		return
+	}
+	set Collapsed 1
+	set HeldPlace {}
+	place $w -x -10000 -y -10000 -width $mw -height $mh -relx 0 -rely 0 -anchor nw -relwidth {} -relheight {}
+	if {![winfo exists .application.videoHandle]} {
+		ttk::button .application.videoHandle -text video -width 5 -command ::mediainset::Relayout
+	}
+	set handle .application.videoHandle
+	set packed [::util::place::besidePack $board [list {56 26}] [WidgetRect $pane] 0 $obstacles]
+	if {[llength $packed]} {
+		lassign [lindex $packed end] x y
+		place $handle -x [expr {$x-[winfo rootx .application]}] -y [expr {$y-[winfo rooty .application]}] -width 56 -height 26
+	} else {
+		# The main toolbar is outside the painted board even when the
+		# board pane itself has no remaining usable rectangle.
+		place $handle -x 0 -y 0 -width 56 -height 26
+	}
+	raise $handle
+}
 
 # Plan the final 2D reserve before the board paints a resized extent. The
 # afterRebuild hook still places the inset; it need not repaint an obsolete
@@ -914,6 +971,8 @@ proc ::mediainset::PlaceInset {w pane x y width height} {
 
 # The inset's root rectangle {x y width height}, as placed or held.
 proc ::mediainset::rect {} {
+	variable Collapsed
+	if {$Collapsed && [winfo exists .application.videoHandle]} { return [WidgetRect .application.videoHandle] }
 	variable HeldPlace
 	set pane [Pane]
 	if {$pane eq "" || ![winfo exists $pane.mediainset]} { return {} }

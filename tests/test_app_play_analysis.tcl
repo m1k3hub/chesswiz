@@ -46,7 +46,7 @@ foreach route {direct assistant} {
         puts "EVIDENCE play-analysis-$route tickMs=[expr {$::scidb::test::playanalysis::tick-$started}]"
         set dialog [winfo exists .application.playengine]
         set pipe $::playengine::Priv(pipe)
-        .application.playengine.cancel invoke
+        [::util::place::playingBody .application.playengine].cancel invoke
         ::scidb::test::playanalysis::wait 100
         list $count $alive $dialog $pipe [winfo exists .application.playengine] \
             [::application::analysis::active? $number]
@@ -91,7 +91,7 @@ tcltest::test play-analysis-hung {Play closes all analysis engines without waiti
     ::scidb::test::playanalysis::wait 100
     set alive [expr {$::scidb::test::playanalysis::tick-$started < 500 && $::scidb::test::playanalysis::tick > 0}]
     set color $::playengine::Priv(dlg:color)
-    .application.playengine.cancel invoke
+    [::util::place::playingBody .application.playengine].cancel invoke
     puts "EVIDENCE play-analysis-hung tickMs=[expr {$::scidb::test::playanalysis::tick-$started}]"
     list $before $counts $alive $color [::application::analysis::Running] [winfo exists .application.playengine]
 } -cleanup {

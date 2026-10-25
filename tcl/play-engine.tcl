@@ -161,7 +161,7 @@ proc ::playengine::open {parent} {
 	wm protocol $dlg WM_DELETE_WINDOW [namespace code Close]
 	bind $dlg <Escape> [namespace code Close]
 
-	set top [ttk::frame $dlg.top]
+	set top [ttk::frame [::util::place::playingBody $dlg].top]
 	pack $top -fill both -expand yes -padx $::theme::padx -pady $::theme::pady
 
 	### setup ##############################################################
@@ -244,11 +244,11 @@ proc ::playengine::open {parent} {
 	pack $btns.takeback -side left
 	pack $btns -anchor w -pady [list 0 $::theme::pady]
 
-	::widget::dialogButtons $dlg {ok cancel}
-	$dlg.ok configure -text $mc::Start -command [namespace code Start]
-	$dlg.cancel configure -text $mc::Cancel -command [namespace code Close]
-	set Priv(widget:ok) $dlg.ok
-	set Priv(widget:cancel) $dlg.cancel
+	::util::place::playingButtons $dlg {ok cancel}
+	[::util::place::playingBody $dlg].ok configure -text $mc::Start -command [namespace code Start]
+	[::util::place::playingBody $dlg].cancel configure -text $mc::Cancel -command [namespace code Close]
+	set Priv(widget:ok) [::util::place::playingBody $dlg].ok
+	set Priv(widget:cancel) [::util::place::playingBody $dlg].cancel
 
 	# persisted defaults
 	set names [EngineNames]
@@ -290,7 +290,7 @@ proc ::playengine::StrengthRows {} {
 
 	set w $Priv(dialog)
 	if {![winfo exists $w]} { return }
-	set f $w.top.setup.strength
+	set f [::util::place::playingBody $w].top.setup.strength
 	foreach child [winfo children $f] { destroy $child }
 
 	set name $Priv(dlg:engine)
@@ -1096,7 +1096,7 @@ proc ::playengine::ShowPanel {} {
 	variable mc
 
 	if {![DialogExists]} { return }
-	set top $Priv(dialog).top
+	set top [::util::place::playingBody $Priv(dialog)].top
 	pack forget $top.setup
 	pack $Priv(widget:play) -fill x
 	$Priv(widget:ok) configure -text $mc::NewGame -command [namespace code NewGame]
@@ -1116,7 +1116,7 @@ proc ::playengine::NewGame {} {
 
 	Finish
 	if {![DialogExists]} { return }
-	set top $Priv(dialog).top
+	set top [::util::place::playingBody $Priv(dialog)].top
 	pack forget $Priv(widget:play)
 	pack $top.setup -fill x
 	$Priv(widget:ok) configure -text $mc::Start -command [namespace code Start]
