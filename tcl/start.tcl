@@ -49,7 +49,12 @@ namespace eval dir {
 if {[info exists ::env(SCIDB_SHAREDIR)]} {
 	set share $::env(SCIDB_SHAREDIR)
 } elseif {$::tcl_platform(platform) eq "windows"} {
-	set share [file dirname $::nameofexecutable]
+	# The wide Windows entry point can leave the executable probe empty
+	# or pointing at a fallback. The installed script sits beside lang/.
+	set share [file dirname [file normalize [info script]]]
+	if {![file readable [file join $share lang localization.tcl]]} {
+		set share [file dirname $::nameofexecutable]
+	}
 } else {
 	set share "%SHAREDIR%"
 	if {[string match ?SHAREDIR? $share]} {
