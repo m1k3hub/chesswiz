@@ -1033,6 +1033,9 @@ proc ::menu::BuildDropdown {menu} {
 		lassign [AmpText [MC $labelName]] text ul
 		$menu add cascade -label $text -underline $ul -menu $sub -accelerator $accel
 	}
+	# First-run selection and other callers use mc::setLang directly.
+	# Keep cached menus in sync through the common notification, too.
+	bind $menu <<LanguageChanged>> [list ::menu::BuildDropdown $menu]
 	set DropdownWidget $menu
 	return $menu
 }
