@@ -2508,7 +2508,7 @@ proc RenderHistoricalDevelopment {txt moveRows totalRow} {
 	set countYear 0
 
 	foreach row $moveRows {
-		lassign $row _ _ _ _ _ _ _ _ _ _ avgY lastY _ _
+		lassign $row _ _ _ _ _ _ _ _ _ avgY lastY _ _
 		if {$lastY > 0} {
 			if {$lastY > $maxYear} { set maxYear $lastY }
 			if {$lastY < $minYear} { set minYear $lastY }
@@ -2520,7 +2520,7 @@ proc RenderHistoricalDevelopment {txt moveRows totalRow} {
 		}
 	}
 
-	lassign $totalRow _ _ _ _ _ _ _ _ _ _ avgY lastY _ _
+	lassign $totalRow _ _ _ _ _ _ _ _ _ avgY lastY _ _
 	if {$lastY > 0} {
 		if {$lastY > $maxYear} { set maxYear $lastY }
 		if {$lastY < $minYear} { set minYear $lastY }

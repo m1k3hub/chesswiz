@@ -428,6 +428,14 @@ proc SetupCurrentTheme {} {
 	# 2c. Tree rows fit the font (Tk's default is a fixed 20 pixels, which
 	#     clips the rows on a high-resolution screen).
 	ttk::style configure Treeview -rowheight [expr {[font metrics TkDefaultFont -linespace] + 4}]
+	# 2d. Themes that only style tktreectrl (clearlooks) leave the selected
+	#     ttk::treeview row drawn like the others; the copy in the user folder
+	#     is not refreshed, so fill the map here.
+	if {![llength [ttk::style map Treeview -background]]} {
+		ttk::style map Treeview \
+			-background [list selected [ttk::style lookup . -selectbackground]] \
+			-foreground [list selected [ttk::style lookup . -selectforeground]]
+	}
 
 	# 3. Provide a ttk::scale with keyboard focus.
 	ttk::style configure active.Horizontal.TScale -troughcolor [GetActiveTroughColor]
