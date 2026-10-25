@@ -484,4 +484,23 @@ proc tlsInit {} {
 	if {[file isfile $cafile]} { ::tls::init -cafile $cafile -require 1 }
 }
 
+# HTTP invokes this command as ?socket options? host port. Derive SNI for
+# each connection: the protocol registry is global, not specific to a host.
+proc tlsSocket {args} {
+	set host [lindex $args end-1]
+	set port [lindex $args end]
+	set opts [lrange $args 0 end-2]
+	return [::tls::socket -servername $host {*}$opts $host $port]
+}
+
+# Call immediately before each HTTPS request. Other users of the global
+# HTTP registry may replace or remove the handler; no module-local flag
+# can establish that the current registration is still valid.
+proc tlsRegister {} {
+	package require http
+	package require tls
+	tlsInit
+	::http::register https 443 ::platform::sys::tlsSocket
+}
+
 } ;# namespace ::platform::sys

@@ -97,7 +97,7 @@ tcltest::test provider-tls-sni {the https handler passes the host as the SNI ser
 	catch { package require tls }
 	rename ::tls::socket ::scidb::test::s1::realTlsSocket
 	proc ::tls::socket {args} { set ::scidb::test::s1::TlsArgs $args ; return fake-socket }
-	set result [::ai::provider::tlsSocket api.typesafe.ai 443]
+	set result [::platform::sys::tlsSocket api.typesafe.ai 443]
 	set args $::scidb::test::s1::TlsArgs
 	rename ::tls::socket {}
 	rename ::scidb::test::s1::realTlsSocket ::tls::socket

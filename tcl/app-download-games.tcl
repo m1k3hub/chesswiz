@@ -980,19 +980,10 @@ proc ::application::download::run {base spec doneCmd} {
 # HTTP plumbing (UI-free).
 # ----------------------------------------------------------------------
 
-# https needs the tls package, registered with the host in the Server Name
-# Indication; hosts behind a proxy answer 421 without it. One registration
-# is cached per host.
+# Install the shared per-connection SNI handler before every download.
 proc ::application::download::Tls {host} {
-	variable TlsHost
-
-	if {[string match http://* $host]} { return 1 }
-	if {![info exists TlsHost] || $TlsHost ne $host} {
-		if {[catch { package require tls }]} { return 0 }
-		::platform::sys::tlsInit
-		::http::register https 443 [list ::tls::socket -servername $host]
-		set TlsHost $host
-	}
+	if {[string match -nocase http://* $host]} { return 1 }
+	if {[catch { ::platform::sys::tlsRegister }]} { return 0 }
 	return 1
 }
 
