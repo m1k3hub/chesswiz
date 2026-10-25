@@ -46,7 +46,14 @@ proc isWebLink {url} {
 
 
 proc open {parent url} {
-	set url [::scidb::misc::url escape $url]
+	# The escaper encodes '#' too; keep the fragment out of it.
+	set fragment ""
+	set hash [string first # $url]
+	if {$hash >= 0} {
+		set fragment [string range $url $hash end]
+		set url [string range $url 0 [expr {$hash - 1}]]
+	}
+	set url [::scidb::misc::url escape $url]$fragment
 	::widget::busyCursor on
 
 	if {![regexp {^[a-z]+:} $url]} {
