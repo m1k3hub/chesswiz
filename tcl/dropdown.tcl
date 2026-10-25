@@ -568,8 +568,8 @@ proc ::menu::DefineTree {} {
 		[list cascade Help "" [list \
 			[list cmd app-help Help "F1"] \
 			[list sep] \
-			[list cmd menu.help.bug ContactBugReport {} {expr {0}}] \
-			[list cmd menu.help.feature ContactFeatureRequest {} {expr {0}}] \
+			[list cmd menu.help.bug ContactBugReport {} {expr {$::menu::BugTracker ne ""}}] \
+			[list cmd menu.help.feature ContactFeatureRequest {} {expr {$::menu::FeatureRequestTracker ne ""}}] \
 			[list sep] \
 			[list cmd menu.help.about MenuAboutChesswiz] \
 		]] \
