@@ -545,6 +545,24 @@ proc OpeningPrepPlaySelectedMove {dlg} {
 }
 
 
+# Report row numbers belong to the report's captured tree position.
+proc OpeningPrepAnalyzeSelectedMove {dlg} {
+	variable OpeningPrepData
+	set row [OpeningPrepSelectedRow $dlg]
+	if {$row < 0} { return }
+	if {$OpeningPrepData($dlg,positionText) ne [::scidb::pos::fen]} {
+		::dialog::info -parent $dlg -message "The board position changed. Refresh the opening report first."
+		return
+	}
+	# Use the captured move, rather than a row index in a possibly re-sorted tree.
+	set values [$OpeningPrepData($dlg,tv) item row$row -values]
+	set move [lindex $values 2]
+	if {$move eq "" || ![::scidb::game::valid? $move]} { return }
+	::move::addMove menu $move
+	::application::analysis::AnalyzeCurrentPosition
+}
+
+
 proc OpeningPrepLoadSelectedGame {dlg} {
 	variable OpeningPrepData
 
@@ -581,10 +599,8 @@ proc OpenOpeningPrepReport {parent file variant} {
 	variable OpeningPrepData
 	variable mc
 
-	if {![RecommendSciWorkflow $parent $file $variant $mc::EcoStats openingprep]} {
-		return
-	}
-
+	# Opening statistics support every working format; conversion is not
+	# a precondition and must not interrupt opening this report.
 	set dlg [OpeningPrepDialogName $file $variant]
 
 	if {![winfo exists $dlg]} {
@@ -645,6 +661,8 @@ proc OpenOpeningPrepReport {parent file variant} {
 			-command [namespace code [list RefreshOpeningPrepReport $dlg]]
 		ttk::button $controls.play -text $mc::OpeningPrepPlayMove \
 			-command [namespace code [list OpeningPrepPlaySelectedMove $dlg]]
+		ttk::button $controls.analyze -text "Analyze this line" \
+			-command [namespace code [list OpeningPrepAnalyzeSelectedMove $dlg]]
 		ttk::button $controls.load -text $mc::OpeningPrepLoadGame \
 			-command [namespace code [list OpeningPrepLoadSelectedGame $dlg]]
 		ttk::button $controls.eco -text $mc::OpeningPrepOpenEco \
@@ -665,6 +683,7 @@ proc OpenOpeningPrepReport {parent file variant} {
 		grid $controls.rareLimitLabel -row 0 -column 5 -sticky w -padx {4 0}
 		grid $controls.rareLimit -row 0 -column 6 -sticky ew
 		grid $controls.refresh -row 0 -column 7 -sticky ew -padx {8 0}
+		grid $controls.analyze -row 1 -column 8 -columnspan 2 -sticky ew -pady {4 0}
 		grid $controls.play -row 0 -column 8 -sticky ew -padx {4 0}
 		grid $controls.load -row 0 -column 9 -sticky ew -padx {4 0}
 		grid $controls.eco -row 0 -column 10 -sticky ew -padx {4 0}

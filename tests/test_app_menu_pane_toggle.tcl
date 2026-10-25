@@ -363,18 +363,19 @@ tcltest::test dynamic-game-ids-invoke {the five dynamic Game ids dispatch with a
 		}
 	}
 
-	# history.recent switches to the first remembered game.
+	# history.recent reopens the newest game-history entry through the
+	# history loader (round-5 B6: gameList holds slot tuples, not history).
 	set ::scidb::test::pane::switched {}
-	::scidb::test::pane::Capture ::game::gameList { return {{0 fake}} }
-	::scidb::test::pane::Capture ::scidb::game::switch {
+	::scidb::test::pane::Capture ::game::historyIsEmpty? { return 0 }
+	::scidb::test::pane::Capture ::game::openGame {
 		lappend ::scidb::test::pane::switched $args
-		return
+		return 1
 	}
 	set rc [catch { ::action::run menu.game.history.recent } err]
-	::scidb::test::pane::Release ::scidb::game::switch
-	::scidb::test::pane::Release ::game::gameList
-	puts "REG-010 history.recent switched={$::scidb::test::pane::switched} rc={$rc $err}"
-	if {$::scidb::test::pane::switched ne {0}} {
+	::scidb::test::pane::Release ::game::openGame
+	::scidb::test::pane::Release ::game::historyIsEmpty?
+	puts "REG-010 history.recent opened={$::scidb::test::pane::switched} rc={$rc $err}"
+	if {$::scidb::test::pane::switched ne {{.application 0}}} {
 		lappend bad [list history.recent $::scidb::test::pane::switched $err]
 	}
 	list [llength $bad] $bad

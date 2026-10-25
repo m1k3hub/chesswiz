@@ -114,6 +114,7 @@ TK_GUI_LDFLAGS = -ObjC
 else
 PLATFORM_LIBS = -lpthread -lfontconfig -lpng -lm
 OPENGL_LIBS = -lGL -lGLU
+X_MONITOR_LIBS = -lXrandr -lXinerama
 endif
 
 ALL_LIBS = $(LIBS) $(TCL_LIBRARY) $(ZZIPLIB_LIB) $(MINIZIP_LIB) $(ZLIB_LIB) $(EXPAT_LIB) $(FAM_LIB) $(PLATFORM_LIBS)
@@ -128,7 +129,7 @@ ifeq ($(TARGET_MACOS),yes)
 MEDIA_LIBS_avf = -framework AVFoundation -framework CoreMedia -framework QuartzCore -framework AppKit
 endif
 
-ALL_TK_LIBS = $(TCL_LIBS) $(TK_LIBS) $(TK_LIBRARY) $(X_LIBRARY) $(OPENGL_LIBS) $(MEDIA_LIBS_$(MEDIA_BACKEND))
+ALL_TK_LIBS = $(TCL_LIBS) $(TK_LIBS) $(TK_LIBRARY) $(X_LIBRARY) $(X_MONITOR_LIBS) $(OPENGL_LIBS) $(MEDIA_LIBS_$(MEDIA_BACKEND))
 #ALL_TK_LIBS = $(TCL_LIBS) $(TK_LIBS) -L/usr/local/lib -ltk $(X_LIBRARY)
 
 SUBDIRS = db app mstl sys tcl tk/jpeg tk/svg/agg tk/svg tk/treectrl tk/html tk/text tk/tkdnd tk util util/minizip util/libTeXt util/libharu util/universalchardet util/libhyphenate util/gdbm $(LIB_SUBDIRS)

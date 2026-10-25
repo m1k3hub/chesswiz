@@ -2168,6 +2168,22 @@ proc FindActiveTableWindow {w} {
 }
 
 
+# Populate only; never post a second menu from a cascade callback.
+proc MakeShowColumnMenu {table menu} {
+	variable IdMap
+	set optId $IdMap($table)
+	variable ${optId}::Options
+	foreach column [$table.t column list] {
+		set id [$table.t column tag names $column]
+		if {$id eq "tail" || !$Options(-removable:$id)} { continue }
+		$menu add checkbutton -label [$table.t column cget $column -text] \
+			-variable ::table::${optId}::Options(-visible:$id) \
+			-command [namespace code [list ShowColumn $table $id]]
+		configureCheckEntry $menu
+	}
+}
+
+
 proc FitColumns {table action} {
 	variable ${table}::Vars
 	variable IdMap
@@ -2176,7 +2192,7 @@ proc FitColumns {table action} {
 	variable ${optId}::Options
 
 	if {$action eq "squeeze"} {
-		$table.t column squeeze
+		$table.t column squeeze $Vars(visible)
 	} else {
 		set columns {}
 		foreach id $Vars(visible) {

@@ -481,33 +481,33 @@ tcltest::test em-dialog {the dialog lists the engines; the run panel holds the t
 } -body {
 	set dlg [::enginematch::open .application]
 	update
-	set e1 [$dlg.top.setup.picker.e1.engine cget -values]
+	set e1 [[::util::place::playingBody $dlg].top.setup.picker.e1.engine cget -values]
 	set bases [::enginematch::BaseList]
 	# switch to the gauntlet picker and back
 	set ::enginematch::Priv(dlg:mode) gauntlet
 	::enginematch::ModeChanged
 	update
-	set opps [winfo exists $dlg.top.setup.picker.opps.list]
-	set oppList [expr {$opps ? [$dlg.top.setup.picker.opps.list get 0 end] : {}}]
+	set opps [winfo exists [::util::place::playingBody $dlg].top.setup.picker.opps.list]
+	set oppList [expr {$opps ? [[::util::place::playingBody $dlg].top.setup.picker.opps.list get 0 end] : {}}]
 	set ::enginematch::Priv(dlg:mode) match
 	::enginematch::ModeChanged
 	update
 	# start a silent match through the dialog Start, then stop it
-	$dlg.ok invoke
+	[::util::place::playingBody $dlg].ok invoke
 	update
 	set running $::enginematch::Priv(running)
-	set panel [expr {[winfo manager $dlg.top.run] eq "pack"}]
-	set okText [$dlg.ok cget -text]
+	set panel [expr {[winfo manager [::util::place::playingBody $dlg].top.run] eq "pack"}]
+	set okText [[::util::place::playingBody $dlg].ok cget -text]
 	::enginematch::Stop
-	set stopText [$dlg.ok cget -text]
+	set stopText [[::util::place::playingBody $dlg].ok cget -text]
 	::enginematch::Close
 	set hasClipbase [expr {[lsearch -exact $bases $::scidb::clipbaseName] >= 0}]
-	list $e1 $dlg.top.run.table $hasClipbase $opps $oppList \
+	list $e1 [::util::place::playingBody $dlg].top.run.table $hasClipbase $opps $oppList \
 		$running $panel $okText $stopText [winfo exists $dlg]
 } -cleanup {
 	catch { ::enginematch::Close }
 	::scidb::test::em::unstub
-} -result {{StubA StubB} .application.enginematch.top.run.table 1 1 StubB 1 1 Pause {New Match} 0}
+} -result {{StubA StubB} .application.enginematch.__viewport.canvas.body.top.run.table 1 1 StubB 1 1 Pause {New Match} 0}
 
 tcltest::test em-pipe-open {Connect opens the engine pipe with the global open} -body {
 	regexp {\[::open "\|} [info body ::enginematch::Connect]

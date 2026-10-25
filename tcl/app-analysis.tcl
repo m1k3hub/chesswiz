@@ -440,6 +440,7 @@ proc build {parent number patternNumber} {
 	]
 	set Vars(widget:button:pause) [::toolbar::add $tbControl button \
 		-image $::icon::toolbarPause \
+		-state disabled \
 		-tooltipvar [namespace current]::mc::Pause \
 		-command [namespace code [list Pause $tree]] \
 	]
@@ -449,6 +450,7 @@ proc build {parent number patternNumber} {
 	set Vars(widget:button:lock) [::toolbar::add $tbControl checkbutton \
 		-image $::icon::toolbarLock \
 		-variable [namespace current]::${tree}::Vars(engine:locked) \
+		-state disabled \
 		-tooltipvar [namespace current]::mc::LockEngine \
 		-command [namespace code [list EngineLock $tree]] \
 	]
@@ -457,6 +459,7 @@ proc build {parent number patternNumber} {
 		-image $::icon::toolbarRotateBoard \
 		-variable [namespace current]::${tree}::Vars(engine:opponent) \
 		-command [namespace code [list restartAnalysis $Vars(number)]] \
+		-state disabled \
 		-tooltipvar [namespace current]::mc::OpponentsView \
 	]
 	lappend Vars(widget:toolbar:childs) $Vars(widget:button:opponent)
@@ -711,6 +714,7 @@ proc stopEngine {number} {
 
 
 proc restartAnalysis {number} {
+	if {![::engine::active? $number]} { return }
 	variable NumberToTree
 	set tree [set NumberToTree($number)]
 	variable ${tree}::Vars
@@ -883,6 +887,7 @@ proc CloseEngine {tree} {
 
 proc Pause {tree} {
 	variable ${tree}::Vars
+	if {![::engine::active? $Vars(number)]} { return }
 
 	set Vars(engine:pause) [expr {!$Vars(engine:pause)}]
 
@@ -1690,8 +1695,10 @@ proc InsertMoves {tree what line} {
 		::scidb::engine::bind $id
 	}
 
-	# Registry dispatch has no preceding mouse popup to take the snapshot.
-	::scidb::engine::snapshot $id
+	# Append requires a line end. In the middle, insert the sequence as a
+	# variation instead, preserving the existing continuation.
+	set where [::scidb::engine::snapshot $id]
+	if {$what eq "seq" && $where ne "atend"} { set what line }
 	if {$what in {all incl}} {
 		::scidb::engine::snapshot $id $what
 	} else {
@@ -2426,8 +2433,28 @@ proc Running {} {
 
 proc AnalyzePosition {table row} {
 	set move [::scidb::tree::move $row]
-	if {[string length $move]} { ::move::addMove menu $move }
-	if {[llength [Running]]} { return }
+	if {$move eq "" || ![::scidb::game::valid? $move]} { return }
+	::move::addMove menu $move
+	AnalyzeCurrentPosition
+}
+
+
+# Explicit analysis actions follow the board even if the pane was stopped or locked.
+proc AnalyzeCurrentPosition {} {
+	variable NumberToTree
+	set running [Running]
+	if {[llength $running]} {
+		set number [lindex $running 0]
+		set tree $NumberToTree($number)
+		variable ${tree}::Vars
+		set Vars(engine:locked) 0
+		set Vars(engine:opponent) 0
+		if {$Vars(engine:pause) && !$Vars(engine:stopped)} { ::engine::resume $number }
+		set Vars(engine:pause) 0
+		restartAnalysis $number
+		::application::openPane analysis:[::application::mapToTerminalNumber $number] false
+		return
+	}
 
 	set name [defaultEngine]
 	if {$name eq ""} { return [::engine::openSetup .application] }
@@ -2439,7 +2466,7 @@ proc AnalyzePosition {table row} {
 
 # ======================================================================
 # Pin the engine's best line to a repertoire database: the game up to the
-# board position, then the engine's best move with its score as comment.
+# board position, then the candidate PV with its score as comment.
 # ======================================================================
 
 # The best line of the pane: {row line} (see lines), or {} while there is none.
@@ -2478,13 +2505,22 @@ proc FirstMove {pv} {
 }
 
 
-proc PinToRepertoire {tree} {
+proc PinToRepertoire {tree {row ""}} {
 	variable ${tree}::Vars
 
-	set best [BestLine $tree]
+	set id [::engine::id $Vars(number)]
+	if {$id < 0 || $Vars(engine:opponent) || ![::scidb::engine::bound? $id]} { return }
+	if {$row eq ""} {
+		set best [BestLine $tree]
+	} elseif {[info exists Vars(lines:$row)]} {
+		set best [list $row $Vars(lines:$row)]
+	} else {
+		return
+	}
 	if {![llength $best]} { return }
 	lassign [lindex $best 1] score mate depth
-	set move [FirstMove [lindex $best 1 8]]
+	set move [LineMoves [lindex $best 1 8]]
+	if {![llength $move]} { return }
 	set comment "[::engine::engineName $Vars(number)]: [ScoreText $score $mate] (depth $depth)"
 	set parent [winfo toplevel $tree]
 
@@ -2517,10 +2553,21 @@ proc SaveBestLine {parent base move comment} {
 }
 
 
-# Appends <move> to the game on the board, with <comment> after it.
-proc AppendMove {move comment} {
-	::scidb::game::move $move
-	::scidb::game::go 1
+# Convert a displayed PV to letter SAN for the repertoire copy.
+proc LineMoves {pv} {
+	set pv [string map {♔ K ♕ Q ♖ R ♗ B ♘ N ♚ K ♛ Q ♜ R ♝ B ♞ N} $pv]
+	regsub -all {\d+\.+} $pv " " pv
+	return [regexp -all -inline {\S+} $pv]
+}
+
+
+# Append the candidate to the temporary repertoire game, with its evaluation.
+proc AppendMove {moves comment} {
+	foreach move $moves {
+		if {![::scidb::game::valid? $move]} { error "Invalid analysis move: $move" }
+		::scidb::game::move $move
+		::scidb::game::go 1
+	}
 	set xml [::scidb::misc::xml fromList [list [list {} [list [list str $comment]]]]]
 	::scidb::game::update addcomment [::scidb::game::query current] [::scidb::game::current] $xml
 }

@@ -670,6 +670,8 @@ proc update {position cmd data promoted} {
 	variable board
 	variable Vars
 
+	if {![winfo exists $board]} { return }
+
 	switch $cmd {
 		set	{ ::board::diagram::update $board $data $promoted }
 		move	{ ::board::diagram::move $board $data }
@@ -716,6 +718,8 @@ proc update {position cmd data promoted} {
 proc updateMarks {marks} {
 	variable board
 	variable Vars
+
+	if {![winfo exists $board]} { return }
 
 	if {[[namespace parent]::pgn::showMarkers]} {
 		::board::diagram::updateMarks $board $marks
@@ -886,6 +890,9 @@ proc Goto {step} {
 	variable Options
 	variable Vars
 	variable board
+
+	# Navigation still works while its board presentation is closed.
+	if {![winfo exists $board]} { return [goto $step] }
 
 	if {	$step == +1
 		&& !$Vars(select-var-is-pending)
@@ -1184,11 +1191,11 @@ proc ConfigureWindow {w width height} {
 		}
 		set rebuild [namespace code [list RebuildBoard $w $width $height]]
 		if {[llength $RebuildCallbacks]} {
-			# Reserve owners need the settled board promptly. Coalesce the
-			# Configure burst without adding the startup/drag delay. A zero
-			# timer also stays outside a rebuild's update idletasks, which
-			# may be realising a restored or newly packed board view.
-			set Vars(after) [after 0 $rebuild]
+			# Coalesce the WM's decoration/client Configure burst before
+			# painting: rendering every intermediate large board can consume
+			# the entire dialog settle budget. A timer (rather than idle)
+			# stays outside a rebuild's nested update idletasks.
+			set Vars(after) [after 20 $rebuild]
 		} else {
 			set Vars(after) [after $timeout $rebuild]
 		}
@@ -1581,6 +1588,57 @@ proc reserveSquare {side px width height {kind auto} {maxBoard 0}} {
 	}
 }
 
+# The border rectangle {x y size} (canvas coordinates) the current canvas
+# would draw with this reserve, or {} when ComputeLayout refuses it; {} 0
+# probes the unreserved layout. With decorations=1 returns {x y w h},
+# including the always-visible side-to-move column. With withReserve=1,
+# returns {borderRect reserveRect} so the future inset can be measured too.
+# These probes never render or change the live reserve.
+proc reserveBorder {side px {kind auto} {maxBoard 0} {decorations 0} {withReserve 0}} {
+	variable Dim
+	variable Vars
+	variable ReserveSide
+	variable ReservePixels
+	variable ReserveKind
+	variable ReserveMaxBoard
+	if {![info exists Vars(width)] || ![info exists Vars(height)]} { return {} }
+	if {$side eq {} || $px == 0} { set side {}; set px 0; set kind auto; set maxBoard 0 }
+	set saved [array get Dim]
+	set oldSide $ReserveSide
+	set oldPixels $ReservePixels
+	set oldKind $ReserveKind
+	set oldMaxBoard [expr {[info exists ReserveMaxBoard] ? $ReserveMaxBoard : 0}]
+	try {
+		set ReserveSide $side
+		set ReservePixels $px
+		set ReserveKind $kind
+		set ReserveMaxBoard $maxBoard
+		ComputeLayout $Vars(width) $Vars(height)
+		if {$ReserveSide ne $side} { return {} }
+		if {$decorations} {
+			set extra 0
+			# An enabled side-to-move image is always drawn beside the
+			# border. Its column is part of the protected bounding box.
+			if {$::board::layout(side-to-move)
+				&& (![info exists Vars(3d)] || !$Vars(3d))} {
+				set extra [expr {$Dim(gap:x)+$Dim(stm)}]
+			}
+			set box [list $Dim(border:x1) $Dim(border:y1) \
+				[expr {$Dim(bordersize)+$extra}] $Dim(bordersize)]
+			if {$withReserve} { return [list $box [reserveRect]] }
+			return $box
+		}
+		return [list $Dim(border:x1) $Dim(border:y1) $Dim(bordersize)]
+	} finally {
+		array unset Dim
+		array set Dim $saved
+		set ReserveSide $oldSide
+		set ReservePixels $oldPixels
+		set ReserveKind $oldKind
+		set ReserveMaxBoard $oldMaxBoard
+	}
+}
+
 # The square this layout would draw if the reserve were released. ComputeLayout
 # refuses a reserve that is worse than this, so probe it with the reserve
 # cleared; the caller's dimensions and accepted reserve are restored.
@@ -1636,7 +1694,7 @@ proc setReserve {side px {kind auto} {maxBoard 0}} {
 	set ReserveMaxBoard $maxBoard
 	ComputeLayout $Vars(width) $Vars(height)
 	# ComputeLayout is the single arbitrator: an ordinary ("auto") reserve is
-	# kept only when the strip does not shrink the drawn square (see below).
+	# kept only when the reserved square stays at least 32 px (see below).
 	set accepted [expr {$side eq {} || $ReserveSide eq $side}]
 	array unset Dim
 	array set Dim $saved
@@ -1715,6 +1773,12 @@ proc RebuildBoard {canv width height {force false}} {
 			variable ReserveSide
 			variable ReservePixels
 			lassign $reserve ReserveSide ReservePixels
+			if {[llength $reserve] == 3} {
+				variable ReserveKind
+				variable ReserveMaxBoard
+				set ReserveKind squeeze
+				set ReserveMaxBoard [lindex $reserve 2]
+			}
 		}
 	}
 	ComputeLayout $width $height $Dim(bordersize)
@@ -2027,16 +2091,10 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 		set Dim($sqsize)	[expr {($boardsize - 2*$Dim(edgethickness))/8}]
 	}
 
-	# The ordinary video strip may never cost the drawn board a square
-	# (VAL-MED-012): compare the reserved square with the same layout without
-	# the reserve on every rebuild, not only below the fixed 32 px floor. A
-	# small board whose square the strip leaves unchanged (for example 31 px
-	# at 1250x570) is still better shifted than covered, so only a reserve
-	# that really shrinks the drawn square is dropped.
-	# A dialog, or the video yielding a strip to one, explicitly asks to
-	# shrink the board (VAL-DLG-012/013); the floor remains its guard.
-	if {$ReserveSide ne {} && ($ReserveKind eq "auto"
-		|| $Dim($sqsize) < $MinimumReserveSquare)} {
+	# Video may shrink the board down to the floor (VAL-MED-013).
+	# Below the floor, a reserve may shift the board but never shrink it
+	# (VAL-MED-014). The same rule applies to video and dialog reserves.
+	if {$ReserveSide ne {} && $Dim($sqsize) < $MinimumReserveSquare} {
 		set unreserved [unreservedSquare $fullWidth $fullHeight]
 		if {$Dim($sqsize) < $unreserved} {
 			set ReserveSide {}

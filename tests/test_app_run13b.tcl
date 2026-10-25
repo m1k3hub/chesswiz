@@ -59,28 +59,33 @@ namespace eval ::scidb::test::run13b {
 
 # --- 1. window placement ------------------------------------------------
 
-tcltest::test run13b-clamp {the clamp keeps a window inside the screen range} -body {
-	list \
-		[::util::place::clamp +-41 1000 0 1080] \
-		[::util::place::clamp +-300 400 0 1920] \
-		[::util::place::clamp +1700 400 0 1920] \
-		[::util::place::clamp +100 400 0 1920] \
-		[::util::place::clamp -0 2000 0 1920] \
-		[::util::place::clamp -0 400 0 1920] \
-		[::util::place::clamp +10 400 50 1920]
-} -result {+0 +0 +1520 +100 +0 -0 +50}
+tcltest::test run13b-clamp {the clamp keeps a window inside the live work-area range} -body {
+    lassign [winfo workarea .application] x y w h
+    set size [expr {$w/4}]
+    set safe [expr {$x+$w/10}]
+    set inset [expr {$x+$w/20}]
+    list \
+        [expr {[::util::place::clamp +[expr {$y-$h/10}] [expr {$h/2}] $y $h] eq "+$y"}] \
+        [expr {[::util::place::clamp +[expr {$x-$w/10}] $size $x $w] eq "+$x"}] \
+        [expr {[::util::place::clamp +[expr {$x+$w-$size/2}] $size $x $w] eq "+[expr {$x+$w-$size}]"}] \
+        [expr {[::util::place::clamp +$safe $size $x $w] eq "+$safe"}] \
+        [expr {[::util::place::clamp -0 [expr {$w+1}] $x $w] eq "+$x"}] \
+        [expr {[::util::place::clamp -0 $size $x $w] eq "-0"}] \
+        [expr {[::util::place::clamp +$x $size $inset $w] eq "+$inset"}]
+} -result {1 1 1 1 1 1 1}
 
 tcltest::test run13b-win32-center {Windows: a window taller than the screen is not placed above it} -setup {
 	set t [toplevel .run13bTall]
 	wm withdraw $t
-	frame $t.f -width 300 -height [expr {[winfo screenheight .] + 200}]
+	lassign [winfo workarea $t] sx sy sw sh
+	frame $t.f -width [expr {$sw/4}] -height [expr {$sh*2}]
 	pack $t.f
 	::scidb::test::run13b::fakeWin32 1
 } -body {
 	lassign [::util::place::geometry $t -position center] x y
 	scan $y %d y0
 	scan $x %d x0
-	list [expr {$y0 >= [lindex [winfo workarea $t] 1]}] [expr {$x0 >= 0}] [string index $y 0]
+	list [expr {$y0 >= [lindex [winfo workarea $t] 1]}] [expr {$x0 >= $sx}] [string index $y 0]
 } -cleanup {
 	::scidb::test::run13b::fakeWin32 0
 	destroy $t
@@ -89,11 +94,12 @@ tcltest::test run13b-win32-center {Windows: a window taller than the screen is n
 tcltest::test run13b-win32-at {Windows: an "at" position beyond the screen is moved onto it} -setup {
 	set t [toplevel .run13bAt]
 	wm withdraw $t
-	frame $t.f -width 400 -height 300
+	lassign [winfo workarea $t] sx sy sw sh
+	frame $t.f -width [expr {$sw/3}] -height [expr {$sh/3}]
 	pack $t.f
 	::scidb::test::run13b::fakeWin32 1
 } -body {
-	lassign [::util::place::geometry $t -position at -x 5000 -y 5000] x y
+	lassign [::util::place::geometry $t -position at -x [expr {$sx+2*$sw}] -y [expr {$sy+2*$sh}]] x y
 	lassign [winfo extents $t] el er et eb
 	lassign [winfo workarea $t] sx sy sw sh
 	list [expr {$x eq "+[expr {$sx + $sw - [winfo reqwidth $t] - $el - $er}]"}] \
@@ -106,17 +112,18 @@ tcltest::test run13b-win32-at {Windows: an "at" position beyond the screen is mo
 tcltest::test run13b-win32-left {Windows: "left" of a parent at the left edge stays on screen} -setup {
 	set t [toplevel .run13bLeft]
 	wm withdraw $t
-	frame $t.f -width 600 -height 300
+	lassign [winfo workarea $t] sx sy sw sh
+	frame $t.f -width [expr {$sw/2}] -height [expr {$sh/3}]
 	pack $t.f
 	set g [wm geometry .application]
-	wm geometry .application 500x400+0+0
+	wm geometry .application [::scidb::test::app::fitGeometry 500 400]
 	update
 	::scidb::test::run13b::fakeWin32 1
 } -body {
 	lassign [::util::place::geometry $t -parent .application -position left-or-right] x y
 	scan $x %d x0
 	scan $y %d y0
-	list [expr {$x0 >= 0}] [expr {$y0 >= 0}]
+	list [expr {$x0 >= $sx}] [expr {$y0 >= $sy}]
 } -cleanup {
 	::scidb::test::run13b::fakeWin32 0
 	destroy $t
@@ -135,7 +142,8 @@ tcltest::test run13b-overview-win32 {Windows: the Overview window opens with its
 	update
 	lassign [::util::place::geometry $dlg -position center] x y
 	scan $y %d y0
-	list [expr {$y0 >= 0}] [expr {[winfo rooty $dlg] >= 0}]
+	lassign [winfo workarea $dlg] wx wy ww wh
+	list [expr {$y0 >= $wy}] [expr {[winfo rooty $dlg] >= $wy}]
 } -cleanup {
 	::scidb::test::run13b::fakeWin32 0
 	catch { destroy $dlg }

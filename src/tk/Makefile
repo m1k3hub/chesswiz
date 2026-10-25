@@ -516,6 +516,7 @@ tk_twm.o: ../mstl/m_list.h
 tk_twm.o: ../mstl/m_list_node.h
 tk_twm.o: ../mstl/m_list_node.ipp
 tk_twm.o: ../mstl/m_list.ipp
+tk_window_manager.o: tk_monitor_geometry.h
 tk_window_manager.o: tk_init.h
 tk_window_manager.o: ../util/u_base.h
 tk_window_manager.o: ../mstl/m_types.h

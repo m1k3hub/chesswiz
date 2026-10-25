@@ -528,6 +528,14 @@ proc ::action::resolver::resolve {objectType} {
 # Enforces confirm and bulk gates when hooks are configured.
 # ----------------------------------------------------------------------
 proc ::action::run {id args} {
+	# Menu rows pass {... defer idle} so the handler starts after native popup
+	# tracking returns (Windows runs -command inside TrackPopupMenu); a handler
+	# that opens a dialog or a nested event loop there hangs the menu.
+	if {[llength $args] == 1 && ![catch { dict exists [lindex $args 0] defer } has] \
+	 && $has && [dict get [lindex $args 0] defer] eq "idle"} {
+		after idle [::list ::action::run $id [dict remove [lindex $args 0] defer]]
+		return ""
+	}
 	return [Dispatch $id $args {}]
 }
 
@@ -606,7 +614,8 @@ proc ::action::Dispatch {id args approval} {
 	 && [llength [info commands ::menu::state]]} {
 		# A caller that supplies the object (a context menu, the assistant) is
 		# judged by that object's rule; only a bare call uses the current one.
-		set object [lindex $args 0]
+		set object $validatedArgs
+		if {[dict exists $object object]} { set object [dict get $object object] }
 		if {[llength $args] && ![catch { dict size $object } n] && $n > 0 \
 		 && [llength [info commands ::context::ObjectRule]]} {
 			set rule [::context::ObjectRule $id $object]
@@ -660,6 +669,9 @@ proc ::action::Dispatch {id args approval} {
 
 	set code [catch {uplevel #0 [::list {*}$handler $validatedArgs]} result options]
 	if {$code != 0} {
+		if {[llength [info commands ::debuglog::log]]} {
+			::debuglog::log action "$id: $result"
+		}
 		return "error: [string trim $result]"
 	}
 	return $result

@@ -1795,10 +1795,20 @@ proc application::media::MediaPause {} {
 
 proc application::media::MediaDestroy {} {
 	variable Priv
-	::media::mpv::stop
-	set Priv(inprocess) 0
-	set Priv(playBase) {}
-	::mediainset::hide
+	# Release the layout before libmpv's synchronous shutdown. The canvas
+	# is only unmapped, not destroyed, so its native window remains alive
+	# until mpv has removed its child. Dialog frames can settle while that
+	# shutdown blocks the Tcl event loop (VAL-DLG-019).
+	try {
+		::mediainset::hide
+		if {[llength [info commands ::util::place::besideSettle]]} {
+			::util::place::besideSettle
+		}
+	} finally {
+		::media::mpv::stop
+		set Priv(inprocess) 0
+		set Priv(playBase) {}
+	}
 }
 
 # Transport delegate: play/pause the current media.

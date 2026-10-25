@@ -21,9 +21,29 @@ namespace eval ::reflowTest {
 		::application::reflow::cancelPending
 		return $t
 	}
+	# Keep both threshold fixtures inside the live monitor, including room
+	# for decorations/chrome. Physical clamping must not change their aspect.
+	proc aspectSize {aspect} {
+		lassign [winfo workarea .application] x y w h
+		set h [expr {min(1000, $h-100, int(($w-80)/$aspect))}]
+		set w [expr {int($h*$aspect)}]
+		return ${w}x${h}
+	}
 	proc paneW {t uid} { lassign [$t dimension [$t leaf $uid]] w h a b c d; return $w }
 	proc waitMs {ms} { variable done; set done 0; after $ms {set ::reflowTest::done 1}; vwait ::reflowTest::done; update }
 	proc fileSnap {f} { if {[file exists $f]} { set ch [open $f r]; set data [read $ch]; close $ch; return $data }; return {<none>} }
+ # The native engine reaper can consume exec's child after it wrote its
+ # digest. Accept ECHILD only with a complete sha256sum output line.
+ proc fileHash {file} {
+  set rc [catch {exec sha256sum $file} output opts]
+  if {$rc && [lrange [dict get $opts -errorcode] 0 1] ne {POSIX ECHILD}} {
+   return -options $opts $output
+  }
+  if {![regexp {^([0-9a-f]{64})  [^\n]+(?:\n|$)} $output - digest]} {
+   error "Missing complete SHA-256 output: $output"
+  }
+  return $digest
+ }
 	proc dirSnap {d} { if {[file isdirectory $d]} { return [lsort [glob -nocomplain -directory $d *]]} ; return {<none>} }
 	# Headless stand-in for the assistant's ConfirmDialog: approve without a
 	# GUI prompt (mirrors ::scidb::test::engines::confirm), so add_engine can
@@ -134,12 +154,19 @@ tcltest::test pane-reflow-002-session-only {reflow never changes board:layout op
 # ----------------------------------------------------------------------
 # VAL-PANE-003: custom, floating and zoomed layouts are left alone
 # ----------------------------------------------------------------------
-# 3a: custom (named / structurally different) layout is not reflowed
+# 3a: named structurally different layout is not reflowed
 tcltest::test pane-reflow-003-custom {a custom saved layout is not reflowed} -setup {
 	set t [::reflowTest::setup]
-	# Simulate a custom layout: give it a name and a non-default structure.
+	wm geometry .application [::reflowTest::aspectSize 1.6]
+	::reflowTest::waitMs 650
+	# Give the named layout an actually different arrangement.
 	set savedName $::application::twm::Options(board:layout:name)
 	set ::application::twm::Options(board:layout:name) "MyCustom"
+	set ::application::Vars(loading) 1
+	$t load [::application::reflow::substTpl [string map {{-orient horz} {-orient vert}} $::application::BoardLayout]]
+	set ::application::Vars(loading) 0
+	::reflowTest::waitMs 650
+	::application::reflow::cancelPending
 	set before [::application::twm::inspectLayout $t]
 } -body {
 	set beforeMode [::application::reflow::mode]
@@ -181,6 +208,8 @@ tcltest::test pane-reflow-003-nondefault-shape {a structurally non-default layou
 # 3c: a floating (undocked) pane blocks reflow
 tcltest::test pane-reflow-003-float {an undocked pane is not reflowed} -setup {
 	set t [::reflowTest::setup]
+	set savedName $::application::twm::Options(board:layout:name)
+	set ::application::twm::Options(board:layout:name) NamedFloating
 	$t undock [$t leaf editor]
 	update
 	set before [::application::twm::inspectLayout $t]
@@ -191,6 +220,7 @@ tcltest::test pane-reflow-003-float {an undocked pane is not reflowed} -setup {
 	set after [::application::twm::inspectLayout $t]
 	list $haveFloat [expr {$before eq $after}] [::application::reflow::mode]
 } -cleanup {
+	set ::application::twm::Options(board:layout:name) $savedName
 	::application::reflow::reset
 } -result {1 1 wide}
 
@@ -322,11 +352,11 @@ tcltest::test pane-reflow-005-real-resize {real window resizes across the thresh
 	::application::reflow::resetLoadCount
 } -body {
 	set c0 [::application::reflow::loadCount]
-	wm geometry .application 900x1200+100+40   ;# tall
+	wm geometry .application [::reflowTest::aspectSize 0.75] ;# tall
 	::reflowTest::waitMs 600
 	set c1 [::application::reflow::loadCount]
 	set m1 [::application::reflow::mode]
-	wm geometry .application 1600x1000+100+40  ;# wide
+	wm geometry .application [::reflowTest::aspectSize 1.6] ;# wide
 	::reflowTest::waitMs 600
 	set c2 [::application::reflow::loadCount]
 	set m2 [::application::reflow::mode]
@@ -633,5 +663,252 @@ tcltest::test pane-reflow-011-save-collapsed {content collapse permits save with
  ::application::reflow::reset
  wm geometry .application $oldGeometry
 } -result {{{1 1 1 1} {1 1 1 1}} 0}
+
+# VAL-LAY-020: exercise the saved file and actual Configure-driven geometry.
+tcltest::test pane-reflow-020-named-standard {named standard structure adapts temporarily and reloads unchanged} -setup {
+ set t [::reflowTest::setup]
+ set oldGeometry [wm geometry .application]
+ set oldName $::application::twm::Options(board:layout:name)
+ wm geometry .application 1400x850
+ ::reflowTest::waitMs 650
+ set name named-standard-020
+ set file [::application::twm::makeFilename board normal $name]
+ if {![::application::twm::WriteLayout $t board $name normal]} {error "save failed"}
+ set hash [::reflowTest::fileHash $file]
+ ::application::twm::loadLayout $t $name
+ ::application::openPane editor
+ set savedShape [::application::reflow::liveShape]
+ set ::application::reflow::S(override) {}
+} -body {
+ set results {}
+ foreach size {700x1000 1400x850 700x1000 1400x850} expected {tall wide tall wide} {
+  wm geometry .application $size
+  ::reflowTest::waitMs 750
+  set b [$t leaf board]; set e [$t leaf editor]
+  set below [expr {[winfo rooty $e] >= [winfo rooty $b]+[winfo height $b]}]
+  set beside [expr {[winfo rootx $e] >= [winfo rootx $b]+[winfo width $b]}]
+  set collapsed [expr {![winfo ismapped [$t leaf analysis:1]]}]
+  set same [expr {[::reflowTest::fileHash $file] eq $hash}]
+  ::reflowTest::say "NAMED020 size=[wm geometry .application] mode=[::application::reflow::mode] below=$below beside=$beside collapsed=$collapsed hash=[::reflowTest::fileHash $file]"
+  lappend results [expr {[::application::reflow::mode] eq $expected && [::application::reflow::reflowable? $t] && $collapsed && $same && ($expected eq "tall" ? $below : $beside)}]
+ }
+ # Reload while tall: production loader first removes presentation state.
+ wm geometry .application 700x1000
+ ::reflowTest::waitMs 750
+ ::application::twm::loadLayout $t $name
+ lappend results [expr {[::application::reflow::liveShape] eq $savedShape}]
+ lappend results [expr {[::reflowTest::fileHash $file] eq $hash}]
+ set results
+} -cleanup {
+ set ::application::twm::Options(board:layout:name) $oldName
+ ::application::reflow::reset
+ wm geometry .application $oldGeometry
+ file delete -force $file
+} -result {1 1 1 1 1 1}
+
+tcltest::test pane-reflow-020-fixed {named rearranged and floating layouts stay fixed through real resize round trips} -setup {
+ set oldGeometry [wm geometry .application]
+ set oldName $::application::twm::Options(board:layout:name)
+} -body {
+ set results {}
+ foreach kind {rearranged floating} {
+  set t [::reflowTest::setup]
+  wm geometry .application 1400x850
+  ::reflowTest::waitMs 500
+  if {$kind eq "rearranged"} {
+   set ::application::Vars(loading) 1
+   $t load [::application::reflow::substTpl [string map {{-orient horz} {-orient vert}} $::application::BoardLayout]]
+   set ::application::Vars(loading) 0
+  } else {$t undock [$t leaf editor]}
+  set ::application::twm::Options(board:layout:name) fixed-$kind
+  ::application::focuszoom::enable $t
+  set ::application::reflow::S(override) {}
+  update
+  set shape [::application::reflow::liveShape]
+  ::application::reflow::resetLoadCount
+  foreach size {700x1000 1400x850 700x1000 1400x850} {
+   wm geometry .application $size
+   ::reflowTest::waitMs 650
+   set fixed [expr {![::application::reflow::reflowable? $t] && [::application::reflow::liveShape] eq $shape && [::application::reflow::mode] eq "wide" && [::application::reflow::loadCount] == 0 && ![winfo ismapped [$t leaf analysis:1]]}]
+   ::reflowTest::say "FIXED020 kind=$kind size=[wm geometry .application] fixed=$fixed floats=[llength [$t floats]]"
+   lappend results $fixed
+  }
+ }
+ set results
+} -cleanup {
+ set ::application::twm::Options(board:layout:name) $oldName
+ ::application::reflow::reset
+ wm geometry .application $oldGeometry
+} -result {1 1 1 1 1 1 1 1}
+
+# VAL-LAY-021: real Configure round trips, both before and after focus growth.
+foreach named {0 1} {
+ tcltest::test pane-reflow-021-focus-$named {focus follows size composes with shape adaptation and collapse} -setup {
+  set t [::reflowTest::setup]
+  set oldGeometry [wm geometry .application]
+  set oldName $::application::twm::Options(board:layout:name)
+  set oldDuration $::application::focuszoom::duration
+  set ::application::focuszoom::duration 150
+  if {$named} {set ::application::twm::Options(board:layout:name) focus-standard-021}
+  ::application::openPane editor
+  set ::application::reflow::S(override) {}
+  wm geometry .application 1400x850
+  ::reflowTest::waitMs 650
+  ::application::focuszoom::enable $t
+ } -body {
+  set results {}
+  foreach phase {before after off} {
+   foreach size {700x1000 1400x850} expected {tall wide} {
+    wm geometry .application $size
+    ::reflowTest::waitMs 750
+    set b [$t leaf board]; set e [$t leaf editor]
+    set below [expr {[winfo rooty $e] >= [winfo rooty $b]+[winfo height $b]}]
+    set beside [expr {[winfo rootx $e] >= [winfo rootx $b]+[winfo width $b]}]
+    set collapsed [expr {![winfo ismapped [$t leaf analysis:1]]}]
+    lappend results [expr {[::application::reflow::mode] eq $expected && [::application::reflow::reflowable? $t] && $collapsed && ($expected eq "tall" ? $below : $beside)}]
+    ::reflowTest::say "FOCUS021 named=$named phase=$phase size=[wm geometry .application] mode=[::application::reflow::mode] below=$below beside=$beside collapsed=$collapsed"
+    if {$phase eq "after"} {
+     set target $e
+     if {$expected eq "tall"} {
+      # tallSashes fills all available board height. Move the real sash
+      # first, as a user can, to leave room for a measurable enlargement.
+      set target $b
+      set pw [$t parent $b]
+      $pw sash place 0 0 500
+      ::reflowTest::waitMs 250
+     }
+     set before [::application::focuszoom::Snapshot $t]
+     set area [expr {[winfo width $target]*[winfo height $target]}]
+     ::application::focuszoom::clicked $target
+     ::reflowTest::waitMs 250
+     lappend results [expr {[winfo width $target]*[winfo height $target] > $area}]
+     ::application::focuszoom::disable $t
+     ::reflowTest::waitMs 450
+     lappend results [expr {[::application::focuszoom::Snapshot $t] eq $before}]
+     ::application::focuszoom::enable $t
+     # Resize with a live enlargement: the old animation/snapshot must
+     # release ownership so the next shape can adapt.
+     ::application::focuszoom::clicked $target
+    }
+   }
+   if {$phase eq "off"} {continue}
+   if {$phase eq "after"} {::application::focuszoom::disable $t}
+  }
+  set results
+ } -cleanup {
+  ::application::focuszoom::disable $t
+  set ::application::focuszoom::duration $oldDuration
+  set ::application::twm::Options(board:layout:name) $oldName
+  ::application::reflow::reset
+  wm geometry .application $oldGeometry
+ } -result {1 1 1 1 1 1 1 1 1 1}
+}
+
+# VAL-LAY-022: custom trees keep their docking structure while empty docked
+# Analysis yields space. All geometry is from the production widgets and the
+# engine is a real child process, not an active-state stub.
+proc ::reflowTest::rects {t} {
+ set result {}
+ foreach uid [lsort [$t leaves]] {
+  set w [$t leaf $uid]
+  if {[winfo ismapped $w]} {
+   lappend result $uid [list [winfo rootx $w] [winfo rooty $w] [winfo width $w] [winfo height $w]]
+  }
+ }
+ return $result
+}
+foreach kind {rearranged floating} {
+ foreach focus {0 1} {
+  foreach size {1400x850 700x1000} {
+   tcltest::test pane-reflow-022-$kind-$focus-$size {custom docked collapse restores exact arrangement, sashes and saved bytes} -constraints reflowEngine -setup {
+    set t [::reflowTest::setup]
+    set oldGeometry [wm geometry .application]
+    set oldName $::application::twm::Options(board:layout:name)
+    ::application::reflow::restoreCollapsed
+    set ::application::Vars(loading) 1
+    if {$kind eq "rearranged"} {
+     $t load [::application::reflow::substTpl [string map {{-orient horz} {-orient vert}} $::application::BoardLayout]]
+    }
+    set ::application::Vars(loading) 0
+    wm geometry .application [expr {$kind eq "floating" ? "1400x850+0+0" : "$size+0+0"}]
+    ::application::openPane analysis:1
+    ::reflowTest::waitMs 650
+    if {$focus} {::application::focuszoom::enable $t}
+    set name custom-022-$kind-$focus-$size
+    set file [::application::twm::makeFilename board normal $name]
+    if {![::application::twm::WriteLayout $t board $name normal]} {error "save failed"}
+    set hash [::reflowTest::fileHash $file]
+    # The explicit writer intentionally docks floats for safe persistence.
+    # Float only after saving, then verify collapse never invokes the writer.
+    if {$kind eq "floating"} {
+     ::application::openPane editor
+     ::twm::Undock $t [$t leaf editor]
+     ::reflowTest::waitMs 450
+     if {![llength [$t floats]] || ![winfo ismapped [$t leaf editor]]} {error "fixture must have a real floating pane"}
+     wm geometry .application $size+0+0
+     ::reflowTest::waitMs 650
+    }
+    set savedEngines $::engine::Engines
+    set savedFile $::scidb::file::engines
+    set savedConfirm $::application::assistant::Priv(confirm)
+    set ::application::assistant::Priv(confirm) ::reflowTest::yesConfirm
+    set ::engine::Engines {}
+    set ::scidb::file::engines [file normalize tests/tmp-app/custom-022-engines-[pid].dat]
+    ::application::assistant::runTool add_engine [list path $reflowEngine]
+    set engineName [dict get [lindex $::engine::Engines 0] Name]
+    set number {}
+   } -body {
+    set a [$t leaf analysis:1]; set id [winfo id $a]
+    set shape [::application::reflow::liveShape]
+    set before [::reflowTest::rects $t]
+    set sashes [::reflowTest::sashes $t]
+    set tree [$t leaf tree]
+    set area [expr {[winfo width $tree]*[winfo height $tree]}]
+    ::application::reflow::resetLoadCount
+    set ::application::reflow::S(override) {}
+    ::application::reflow::onPaneStateChange
+    ::reflowTest::waitMs 450
+    set collapsed [expr {![winfo ismapped $a]}]
+    set gained [expr {[winfo width $tree]*[winfo height $tree] > $area}]
+    # Only Tree is Analysis's immediate neighbour in these fixtures. The
+    # board, editor and any floating window must retain exact rectangles.
+    set still 1
+    set collapsedRects [::reflowTest::rects $t]
+    foreach {uid rect} $before {
+     if {$uid ni {analysis:1 tree}} {
+      if {![dict exists $collapsedRects $uid] || [dict get $collapsedRects $uid] ne $rect} {set still 0}
+     }
+    }
+    set number [::application::analysis::startEngine $engineName {} {lines 1 threads 1 hash 16}]
+    ::reflowTest::waitMs 700
+    set restored [expr {[winfo ismapped $a] && [::reflowTest::rects $t] eq $before && [::reflowTest::sashes $t] eq $sashes}]
+    ::application::analysis::stopEngine $number
+    set number {}
+    ::reflowTest::waitMs 450
+    set stopped [expr {![winfo ismapped $a]}]
+    set stopSnapshot $::application::reflow::S(snapshot)
+    ::application::openPane analysis:1
+    ::reflowTest::waitMs 450
+    set reopened [expr {[winfo ismapped $a] && [::reflowTest::rects $t] eq $before && [::reflowTest::sashes $t] eq $sashes}]
+    set fixed [expr {![::application::reflow::reflowable? $t] && [::application::reflow::liveShape] eq $shape && [::application::reflow::loadCount] == 0}]
+    set unchanged [expr {[::reflowTest::fileHash $file] eq $hash}]
+    ::reflowTest::say "CUSTOM022 kind=$kind focus=$focus size=[wm geometry .application] collapsed=$collapsed gained=$gained outsideFixed=$still collapsedRects=$collapsedRects restored=$restored stopped=$stopped reopened=$reopened fixed=$fixed savedHash=$hash unchanged=$unchanged stopSnapshot=$stopSnapshot sashes=$sashes after=[::reflowTest::sashes $t] before=$before afterRects=[::reflowTest::rects $t]"
+    list $collapsed $gained $still $restored $stopped $reopened $fixed $unchanged [expr {[winfo id $a] eq $id}]
+   } -cleanup {
+    if {$number ne {}} {catch {::application::analysis::stopEngine $number}}
+    set ::application::assistant::Priv(confirm) $savedConfirm
+    file delete -force $::scidb::file::engines
+    set ::engine::Engines $savedEngines
+    set ::scidb::file::engines $savedFile
+    ::options::hookWriter ::engine::WriteEngineOptions engines
+    ::application::focuszoom::disable $t
+    set ::application::twm::Options(board:layout:name) $oldName
+    ::application::reflow::reset
+    wm geometry .application $oldGeometry
+    file delete -force $file
+   } -result {1 1 1 1 1 1 1 1 1}
+  }
+ }
+}
 
 tcltest::cleanupTests

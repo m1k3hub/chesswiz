@@ -75,6 +75,7 @@ proc ::winfo {cmd w} {
     switch $cmd {
         workarea { return {0 0 1920 1032} }
         extents { return {8 8 31 8} }
+        ismapped { return 0 }
         default { error "unexpected winfo $cmd" }
     }
 }

@@ -148,8 +148,9 @@ if {[info exists ::i18n::languages]} {
 	}
 }
 
-set BugTracker					"http://sourceforge.net/p/scidb/bugs/"
-set FeatureRequestTracker	"http://sourceforge.net/p/scidb/feature-requests/"
+# No Chesswiz issue-tracker URL is configured. Keep contact rows hidden.
+set BugTracker ""
+set FeatureRequestTracker ""
 
 variable Fullscreen			0
 variable HideMenu				0
@@ -285,6 +286,10 @@ proc dbNew {parent variant} {
 	if {$variant in {Normal Undetermined}} {
 		lappend filetypes [list $mc::PGNFilesArchives {.pgn .pgn.gz}]
 	}
+	# CBH (ChessBase) databases are only meaningful for the main variant.
+	if {$variant eq "Normal"} {
+		lappend filetypes [list $mc::ChessBaseBases {.cbh}]
+	}
 	set result [::dialog::saveFile \
 		-parent $parent \
 		-class database \
@@ -297,7 +302,7 @@ proc dbNew {parent variant} {
 		-customicon $::icon::16x16::filetypeArchive \
 		-customtooltip $mc::Archiving \
 		-customcommand [namespace code [list CreateArchive]] \
-		-customfiletypes {.sci .pgn .pgn.gz .bpgn .bpgn.gz} \
+		-customfiletypes {.sci .cbh .pgn .pgn.gz .bpgn .bpgn.gz} \
 	]
 	set FileSelBoxInUse 0
 
@@ -305,6 +310,18 @@ proc dbNew {parent variant} {
 	lassign $result base encoding
 	set ext [::util::fileExtension $base]
 	if {$ext in {.pgn .pgn.gz .bpgn .bpgn.gz}} { set variant Undetermined }
+
+	# A new ChessBase database is always a main-variant database and stores
+	# its text in UTF-8; do not let a stale encoding selection corrupt it.
+	if {$ext eq ".cbh"} {
+		if {$variant ne "Normal"} {
+			::dialog::error -parent $parent \
+				-title [set [namespace current]::mc::NewFile] \
+				-message "A ChessBase (.cbh) database can only be created for the normal variant."
+			return 0
+		}
+		set encoding utf-8
+	}
 
 	# docs/formats/SCI_CORRESPONDENCE_FORMAT.md §3: new databases default to SCI v96
 	# (native correspondence clock storage); offer legacy v95 explicitly.
@@ -500,12 +517,14 @@ proc gameNew {parent {variant Normal}} {
 
 
 proc bugReport {parent} {
-	::web::open $parent [set [namespace current]::BugTracker]
+	variable BugTracker
+	if {$BugTracker ne ""} { ::web::open $parent $BugTracker }
 }
 
 
 proc featureRequest {parent} {
-	::web::open $parent [set [namespace current]::FeatureRequestTracker]
+	variable FeatureRequestTracker
+	if {$FeatureRequestTracker ne ""} { ::web::open $parent $FeatureRequestTracker }
 }
 
 
@@ -559,10 +578,9 @@ proc CheckFullscreen {app} {
 	variable Fullscreen
 
 	if {$app eq ".application"} {
-		set Fullscreen 0
-		if {[scan [wm geometry $app] "%dx%d" wd ht] == 2} {
-			if {$wd == [winfo screenwidth $app] && $ht == [winfo screenheight $app]} { set Fullscreen 1 }
-		}
+		# A normal decorated client can be as large as the screen. Only the
+		# window manager's fullscreen state exempts it from work-area fitting.
+		set Fullscreen [wm attributes $app -fullscreen]
 	}
 }
 

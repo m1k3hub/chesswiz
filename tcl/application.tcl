@@ -675,8 +675,11 @@ proc WindowResized {w} {
 proc KeepInWorkArea {w} {
 	if {![winfo exists $w]} { return 0 }
 	if {[wm state $w] ne "normal" || [::menu::fullscreen?]} { return 0 }
+	# The WM owns a maximized frame; re-fitting it only bounces Configure
+	# events back every few ms and keeps the dialog settle from running.
+	if {![catch { wm attributes $w -zoomed } zoomed] && $zoomed} { return 0 }
 	set geometry [wm geometry $w]
-	set fitted [::util::place::clampGeometry $geometry [winfo workarea $w] [winfo extents $w]]
+	set fitted [::util::place::fittedGeometry $w $geometry]
 	# clampGeometry returns the input unchanged when the frame (including
 	# its decorations) already lies inside the current work area, so this
 	# is also the "a pure move inside the work area is not yanked" rule.
@@ -781,7 +784,8 @@ proc NotifyScalingListener {listener} {
 
 
 # RULE (VAL-RSZ-007): an OS scaling, monitor or work-area change can bypass
-# the `tk scaling` setter hook above: exec.tcl calibrates only at startup,
+# the `tk scaling` setter hook above. The native query and shared startup
+# calibration detect OS changes independently of Tk scaling;
 # Tk 8.6 sends no event for either, and a monitor/taskbar change emits no
 # Tcl event at all. Tk 9 offers <<TkScalingChanged>>, so bind it where it
 # exists, and in every case watch the effective scaling and the screen/work
@@ -791,7 +795,9 @@ proc displaySignature {} {
 	if {![winfo exists .application]} { return {} }
 	return [list [tk scaling] \
 		[winfo screenwidth .application] [winfo screenheight .application] \
-		[winfo workarea .application]]
+		[winfo workarea .application] \
+		[::scidb::tk::wm monitor .application] \
+		[expr {round([::scidb::tk::wm dpi .application])}]]
 }
 
 
@@ -820,6 +826,10 @@ proc displayWatch {} {
 		set Vars(display:after) {}
 	}
 	if {![winfo exists .application]} { return }
+	# Query native DPI independently of Tk's cached screen millimetres.
+	# Do this before capturing the signature, so the calibrated factor is
+	# consumed by exactly the same notification as the OS change.
+	::scidb::startup::calibrateDpi .application
 	set signature [displaySignature]
 	if {$signature ne $Vars(display:signature)} {
 		set Vars(display:signature) $signature
@@ -1025,6 +1035,10 @@ proc focuszoom::disable {twm} {
 		unset baseline($twm)
 	}
 	catch { unset lastPane($twm) }
+ # Content may have changed while the enlargement held the sashes.
+ if {$twm eq [::application::reflow::boardTwm]} {
+  ::application::reflow::onConfigure .application {*}[WindowSize $twm]
+ }
 }
 
 
@@ -1043,6 +1057,9 @@ proc focuszoom::windowResized {twm} {
 	if {[lindex $baseline($twm) 0] eq [WindowSize $twm]} { return }
 	unset baseline($twm)
 	catch { unset lastPane($twm) }
+ # Old animation callbacks must not write sashes into the adapted tree.
+ variable animAfter
+ foreach pw [array names animAfter $twm.*] {after cancel $animAfter($pw); unset animAfter($pw)}
 }
 
 
@@ -2427,7 +2444,7 @@ proc ::tk::PostOverPoint {menu x y {entry {}}} {
 	::tk::_PostOverPoint_application $menu $x $y $entry
 }
 
-# Session presentation of the DEFAULT board layout. No option or layout-file
+# Session presentation of standard-structure board layouts. No option or layout-file
 # writes live here. $t load reuses leaves by uid (verified with a running
 # Stockfish and native widget IDs); only the containers are rebuilt.
 namespace eval ::application::reflow {
@@ -2517,14 +2534,21 @@ proc tallSashes {t} {
  set y [expr {min([winfo height $pw]-$below, int([winfo width $node]*1.35))}]
  if {$y > [winfo height $node]} {$pw sash place 0 0 $y}
 }
+# Content presentation does not rebuild the docking tree. Custom arrangements
+# and docked panes beside floating windows share these lifecycle guards.
+proc collapsible? {t} {
+ variable S
+ if {$t eq {} || $S(busy) || $S(saving)} {return 0}
+ if {[$t zoomed] ne {}} {return 0}
+ if {$::application::Vars(loading) || $::application::Vars(lock:layout)} {return 0}
+ if {[info exists ::application::focuszoom::baseline($t)]} {return 0}
+ return 1
+}
 proc reflowable? {t} {
  variable S
- if {$t eq {} || $S(busy) || $S(saving) || ![info exists S(wideShape)]} {return 0}
- if {$::application::twm::Options(board:layout:name) ne {}} {return 0}
- if {[llength [$t floats]] || [$t zoomed] ne {}} {return 0}
- if {$::application::Vars(loading) || $::application::Vars(lock:layout)} {return 0}
- # Focus zoom owns its sash snapshot until switched off.
- if {[::application::focuszoom::isEnabled $t]} {return 0}
+ if {![collapsible? $t] || ![info exists S(wideShape)]} {return 0}
+ # Only the standard structure may be rearranged for the window shape.
+ if {[llength [$t floats]]} {return 0}
  set shape [shapeOf [::application::twm::inspectLayout $t]]
  return [expr {$shape eq $S(wideShape) || ($S(mode) eq "tall" && $shape eq $S(tallShape))}]
 }
@@ -2623,6 +2647,7 @@ proc onConfigure {W w h} {
 proc onDebounced {w h} {
  variable S; set S(afterId) {}
  if {[set t [boardTwm]] ne {}} {::application::focuszoom::windowResized $t}
+ set mode $S(mode)
  evaluate $w $h
  updateCollapse
  # The last settled wide arrangement, put back when a tall excursion
@@ -2631,8 +2656,10 @@ proc onDebounced {w h} {
   set S(wideSashes) [list [winfo width .application] [winfo height .application] [::application::focuszoom::Snapshot $t]]
  }
  # A wide/tall switch moves and resizes the board; open playing dialogs
- # follow its settled rectangle.
- ::util::place::besideSchedule
+ # follow its settled rectangle. Without a switch the resize itself has
+ # already scheduled them; a second schedule would only push the re-plan
+ # past a maximize's 500 ms (VAL-DLG-018A).
+ if {$S(mode) ne $mode} {::util::place::besideSchedule}
 }
 proc cancelPending {} {
  variable S
@@ -2650,6 +2677,8 @@ proc shouldCollapse {uid} {
 # the Tk panedwindow child keeps both the native twm tree and live widgets.
 proc collapseNode {t uid} {
  set leaf [$t leaf $uid]; set node $leaf
+ # A floating pane owns its window; only docked neighbours can take space.
+ if {[$t isfloat [$t toplevel $leaf]]} {return {}}
  while {1} {
   set pw [$t parent $node]
   if {$pw eq {} || $pw eq $t} {return {}}
@@ -2667,7 +2696,7 @@ proc collapseNode {t uid} {
 proc updateCollapse {} {
  variable S; variable ShortWidth; variable ShortHeight
  set t [boardTwm]
- if {![reflowable? $t] || ![winfo ismapped [$t leaf board]]} {return}
+ if {![collapsible? $t] || ![winfo ismapped [$t leaf board]]} {return}
  set short [expr {[winfo width .application] < $ShortWidth || [winfo height .application] < $ShortHeight}]
  set desired {}
  set deficit [expr {max($ShortWidth-[winfo width .application], $ShortHeight-[winfo height .application])}]
@@ -2701,12 +2730,13 @@ proc updateCollapse {} {
   if {!$short && $desired eq {}} {rememberExpanded $t}
   return
  }
+ set custom [expr {![reflowable? $t]}]
  set S(busy) 1
  restoreCollapsed
  if {$desired ne {}} {
   set S(snapshot) [::application::focuszoom::Snapshot $t]
   set S(snapshotSize) [list [winfo width .application] [winfo height .application]]
-  if {![info exists S(returnSnapshot)] && [info exists S(expandedSnapshot)]} {
+  if {!$custom && ![info exists S(returnSnapshot)] && [info exists S(expandedSnapshot)]} {
    set S(returnSnapshot) $S(expandedSnapshot)
    set S(returnSize) $S(expandedSize)
   }
@@ -2717,7 +2747,17 @@ proc updateCollapse {} {
     lappend touched $pw
     foreach sibling [$pw panes] {
      lappend S(stretch) $pw $sibling [$pw panecget $sibling -stretch]
-     $pw paneconfigure $sibling -stretch always
+     $pw paneconfigure $sibling -stretch [expr {$custom ? "never" : "always"}]
+    }
+    if {$custom} {
+     # Keep the user's other sashes still: only the nearest surviving
+     # neighbour absorbs the hidden pane, rather than stretching every pane.
+     set panes [$pw panes]
+     set index [lsearch -exact $panes $node]
+     set neighbours [concat [lrange $panes [expr {$index+1}] end] [lreverse [lrange $panes 0 [expr {$index-1}]]]]
+     foreach neighbour $neighbours {
+      if {$neighbour ni $desired} {$pw paneconfigure $neighbour -stretch always; break}
+     }
     }
    }
    $pw paneconfigure $node -hide 1
@@ -2725,6 +2765,30 @@ proc updateCollapse {} {
   set S(collapsed) $desired
  }
  update idletasks
+ if {$custom && $desired ne {}} {
+  # Tk reuses requested pane sizes when hiding a child, even for panes
+  # marked non-stretching. Reapply every boundary except the one consumed
+  # by the hidden pane, so only its immediate neighbour changes size.
+  foreach pass {1 2} {
+   foreach {pw coords} $S(snapshot) {
+    if {$pw ni $touched} {continue}
+    set panes [$pw panes]
+    set skip {}
+    foreach {parent node} $desired {
+     if {$parent ne $pw} {continue}
+     set i [lsearch -exact $panes $node]
+     if {$i == [llength $panes]-1} {incr i -1}
+     lappend skip $i
+    }
+    set i 0
+    foreach xy $coords {
+     if {$i ni $skip} {$pw sash place $i {*}$xy}
+     incr i
+    }
+   }
+   update idletasks
+  }
+ }
  set S(busy) 0
  if {!$short && $desired eq {}} {rememberExpanded $t}
 }
@@ -2765,6 +2829,12 @@ proc contentChanged {} {
 # capture its underlying expanded layout instead of blocking the save.
 proc allowSave {t parent} {
  variable S
+ # A save can arrive before the resize debounce fires. Settle that
+ # pending resize before deciding whether the visible layout is temporary.
+ if {$t eq [boardTwm] && $S(afterId) ne {}} {
+  cancelPending
+  onDebounced [winfo width .application] [winfo height .application]
+ }
  if {$t ne [boardTwm] || $S(mode) ne "tall"} {return 1}
  ::dialog::info -parent $parent -message "This layout is temporarily adapted to the window. Enlarge the window to restore its saved shape before saving the layout."
  return 0

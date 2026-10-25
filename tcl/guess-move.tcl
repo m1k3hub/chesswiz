@@ -1114,8 +1114,8 @@ proc ::guessmove::OnReviewDecided {rseq decision} {
 	if {$source eq "classifier"} {
 		set Priv(note) [describeReview $label]
 		set dlg $Priv(dialog)
-		if {[winfo exists $dlg] && [winfo exists $dlg.top.note]} {
-			$dlg.top.note configure -text $Priv(note)
+		if {[winfo exists $dlg] && [winfo exists [::util::place::playingBody $dlg].top.note]} {
+			[::util::place::playingBody $dlg].top.note configure -text $Priv(note)
 		}
 	}
 }
@@ -1211,12 +1211,12 @@ proc ::guessmove::Finish {} {
 
 	set dlg $Priv(dialog)
 	if {[winfo exists $dlg]} {
-		$dlg.top.score configure -text [ScoreText]
-		$dlg.top.last configure -text $Priv(summary)
-		$dlg.top.note configure -text $Priv(note)
-		$dlg.top.buttons.hint configure -state disabled
-		$dlg.top.buttons.show configure -state disabled
-		$dlg.top.buttons.stop configure \
+		[::util::place::playingBody $dlg].top.score configure -text [ScoreText]
+		[::util::place::playingBody $dlg].top.last configure -text $Priv(summary)
+		[::util::place::playingBody $dlg].top.note configure -text $Priv(note)
+		[::util::place::playingBody $dlg].top.buttons.hint configure -state disabled
+		[::util::place::playingBody $dlg].top.buttons.show configure -state disabled
+		[::util::place::playingBody $dlg].top.buttons.stop configure \
 			-text $mc::Close \
 			-command [list destroy $dlg] \
 			;
@@ -1232,10 +1232,10 @@ proc ::guessmove::Refresh {} {
 
 	set dlg $Priv(dialog)
 	if {![winfo exists $dlg]} { return }
-	$dlg.top.score configure -text [ScoreText]
-	$dlg.top.last configure -text $Priv(last)
-	if {[winfo exists $dlg.top.note]} {
-		$dlg.top.note configure -text $Priv(note)
+	[::util::place::playingBody $dlg].top.score configure -text [ScoreText]
+	[::util::place::playingBody $dlg].top.last configure -text $Priv(last)
+	if {[winfo exists [::util::place::playingBody $dlg].top.note]} {
+		[::util::place::playingBody $dlg].top.note configure -text $Priv(note)
 	}
 }
 
@@ -1273,7 +1273,7 @@ proc ::guessmove::BuildWindow {parent} {
 	wm protocol $dlg WM_DELETE_WINDOW [namespace code stop]
 	bind $dlg <Escape> [namespace code stop]
 
-	set top [ttk::frame $dlg.top]
+	set top [ttk::frame [::util::place::playingBody $dlg].top]
 	pack $top -fill both -expand yes -padx $::theme::padx -pady $::theme::pady
 
 	set side $mc::White

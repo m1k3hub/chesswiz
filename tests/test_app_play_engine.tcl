@@ -318,13 +318,13 @@ tcltest::test playengine-dialog {the setup dialog lists engines; Start turns it 
 } -body {
 	set dlg [::playengine::open .application]
 	update
-	set engines [$dlg.top.setup.engine.engine cget -values]
-	set strength [$dlg.top.setup.strength.row.label cget -text]
-	$dlg.ok invoke
+	set engines [[::util::place::playingBody $dlg].top.setup.engine.engine cget -values]
+	set strength [[::util::place::playingBody $dlg].top.setup.strength.row.label cget -text]
+	[::util::place::playingBody $dlg].ok invoke
 	update
-	set status [$dlg.top.play.status cget -text]
+	set status [[::util::place::playingBody $dlg].top.play.status cget -text]
 	set active $::playengine::Priv(active)
-	set panel [expr {[winfo manager $dlg.top.play] eq "pack"}]
+	set panel [expr {[winfo manager [::util::place::playingBody $dlg].top.play] eq "pack"}]
 	::playengine::Close
 	list $engines [string match {*Elo*} $strength] $panel $status $active \
 		$::playengine::Priv(active) [winfo exists $dlg]
@@ -423,7 +423,7 @@ tcltest::test playengine-real-uci {Start survives event dispatch and a real engi
 } -body {
     set dlg [::playengine::open .application]
     update
-    $dlg.ok invoke
+    [::util::place::playingBody $dlg].ok invoke
     update
     if {!$::playengine::Priv(active)} {
         error "Start lost its session: phase=$::playengine::Priv(phase), pipeState=$::playengine::Priv(pipeState); Finish stacks: $::scidb::test::pe::finishes"

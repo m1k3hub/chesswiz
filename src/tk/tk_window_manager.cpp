@@ -59,6 +59,7 @@ struct Rect
 
 #ifdef __APPLE__
 extern "C" void chesswizAquaGeometry(Tk_Window, int, int*);
+extern "C" double chesswizAquaDpi(Tk_Window);
 #endif
 
 static Tcl_Command tk_cmd = 0;
@@ -72,6 +73,10 @@ static Tcl_Command tk_cmd = 0;
 # include <X11/Xlib.h>
 # include <X11/Xutil.h>
 # include <X11/Xatom.h>
+# include <X11/Xresource.h>
+# include <X11/extensions/Xrandr.h>
+# include <X11/extensions/Xinerama.h>
+# include "tk_monitor_geometry.h"
 
 
 // MWM decorations values
@@ -207,7 +212,7 @@ getProperty(Display* display, Window window, Atom atom, unsigned length, unsigne
 	unsigned long	nitems;
 	unsigned long	bytesAfter;
 	int				actualFormat;
-	unsigned char*	prop;
+	unsigned char*	prop = 0;
 
 	int status = XGetWindowProperty(	display,
 												window,
@@ -222,7 +227,12 @@ getProperty(Display* display, Window window, Atom atom, unsigned length, unsigne
 												&bytesAfter,
 												&prop);
 
-	return status == Success && nitems >= length && actualFormat == 32 ? prop : 0;
+	if (status == Success && actualType == XA_CARDINAL && nitems >= length && actualFormat == 32)
+		return prop; // The caller owns the accepted buffer.
+
+	if (prop)
+		XFree(prop);
+	return 0;
 }
 
 
@@ -527,12 +537,11 @@ setCurrentDesktop(Tk_Window tkwin, int desktop)
 
 
 static bool
-getWorkArea(Display* display, int desktop, Rect& result)
+getDesktopWorkArea(Display* display, Window root, int desktop, Rect& result)
 {
 	if (desktop < 0)
 		return false;
 
-	Window	root = XDefaultRootWindow(display);
 	Atom		prop;
 
 	if (!checkAtom(prop, display, XA_NET_WORKAREA))
@@ -569,6 +578,70 @@ getCurrentDesktop(Display* display)
 	XFree(data);
 
 	return desktop;
+}
+
+
+static monitor_geometry::Rectangle
+getMonitor(Tk_Window tkwin)
+{
+	using namespace monitor_geometry;
+	Display* display = Tk_Display(tkwin);
+	Window root = RootWindowOfScreen(Tk_Screen(tkwin));
+	while (!Tk_IsTopLevel(tkwin) && Tk_Parent(tkwin)) tkwin = Tk_Parent(tkwin);
+	int x, y;
+	Tk_GetRootCoords(tkwin, &x, &y);
+	x += Tk_Width(tkwin)/2;
+	y += Tk_Height(tkwin)/2;
+	Rectangle best(0, 0, WidthOfScreen(Tk_Screen(tkwin)), HeightOfScreen(Tk_Screen(tkwin)));
+	long long nearest = -1;
+	int event, error, major = 1, minor = 5, count = 0;
+	if (XRRQueryExtension(display, &event, &error)
+		&& XRRQueryVersion(display, &major, &minor)
+		&& (major > 1 || (major == 1 && minor >= 5)))
+	{
+		XRRMonitorInfo* monitors = XRRGetMonitors(display, root, True, &count);
+		for (int i = 0; monitors && i < count; ++i)
+		{
+			Rectangle r(monitors[i].x, monitors[i].y, monitors[i].width, monitors[i].height);
+			if (r.width <= 0 || r.height <= 0) continue;
+			long long d = distance(r, x, y);
+			if (nearest < 0 || d < nearest) { nearest = d; best = r; }
+		}
+		if (monitors) XRRFreeMonitors(monitors);
+	}
+	if (nearest < 0 && XineramaIsActive(display))
+	{
+		XineramaScreenInfo* screens = XineramaQueryScreens(display, &count);
+		for (int i = 0; screens && i < count; ++i)
+		{
+			Rectangle r(screens[i].x_org, screens[i].y_org, screens[i].width, screens[i].height);
+			if (r.width <= 0 || r.height <= 0) continue;
+			long long d = distance(r, x, y);
+			if (nearest < 0 || d < nearest) { nearest = d; best = r; }
+		}
+		if (screens) XFree(screens);
+	}
+	return best;
+}
+
+
+static void
+getWorkArea(Tk_Window tkwin, Rect& result)
+{
+	using namespace monitor_geometry;
+	Display* display = Tk_Display(tkwin);
+	Window root = RootWindowOfScreen(Tk_Screen(tkwin));
+	Rect desktop;
+	if (!getDesktopWorkArea(display, root, getDesktop(tkwin), desktop)
+		&& !getDesktopWorkArea(display, root, getCurrentDesktop(display), desktop))
+	{
+		desktop.width = WidthOfScreen(Tk_Screen(tkwin));
+		desktop.height = HeightOfScreen(Tk_Screen(tkwin));
+	}
+	Rectangle r = intersect(getMonitor(tkwin),
+		Rectangle(desktop.left, desktop.right, desktop.width, desktop.height));
+	result.left = r.x; result.right = r.y;
+	result.width = r.width; result.height = r.height;
 }
 
 
@@ -703,7 +776,7 @@ static int
 cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 {
 	char const* Usage =	"Usage: ::scidb::tk::wm (frameless | splash | toolbar | menu | grid "
-								"| setLeader | map | raise | sync | desktop | ondesktop) <window> ...";
+								"| setLeader | map | raise | sync | desktop | ondesktop | workarea | monitor | dpi) <window> ...";
 
 	if (objc < 2)
 		return tcl_error(ti, Usage);
@@ -768,7 +841,94 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 		Tcl_SetObjResult(ti, Tcl_NewBooleanObj(result));
 		return TCL_OK;
 	}
-	else if (strcasecmp(subcmd, "workarea") == 0)
+	else if (strcasecmp(subcmd, "dpi") == 0)
+	{
+		double dpi = 0.0;
+#if defined(__WIN32__)
+		Tk_MakeWindowExist(tkwin);
+		HWND hwnd = TkWinGetHWND(Tk_WindowId(tkwin));
+		// Resolve dynamically so older Windows versions still start.
+		typedef UINT (WINAPI *WindowDpi)(HWND);
+		WindowDpi query = reinterpret_cast<WindowDpi>(
+			GetProcAddress(GetModuleHandleA("user32.dll"), "GetDpiForWindow"));
+		if (query) dpi = query(hwnd);
+		if (dpi <= 0.0)
+		{
+			HDC dc = GetDC(hwnd);
+			if (dc) { dpi = GetDeviceCaps(dc, LOGPIXELSX); ReleaseDC(hwnd, dc); }
+		}
+#elif defined(__APPLE__)
+		dpi = chesswizAquaDpi(tkwin);
+#else
+		Display* display = Tk_Display(tkwin);
+		Window root = RootWindowOfScreen(Tk_Screen(tkwin));
+		// XResourceManagerString is cached when XOpenDisplay runs. Read its
+		// server property afresh so xrdb/desktop-settings changes are visible.
+		Atom type; int format; unsigned long count, remaining;
+		unsigned char* data = 0;
+		if (XGetWindowProperty(display, root, XA_RESOURCE_MANAGER, 0, 65536,
+			False, XA_STRING, &type, &format, &count, &remaining, &data) == Success
+			&& type == XA_STRING && format == 8 && data)
+		{
+			XrmInitialize();
+			XrmDatabase db = XrmGetStringDatabase(reinterpret_cast<char*>(data));
+			char* resourceType = 0; XrmValue value;
+			if (db && XrmGetResource(db, "Xft.dpi", "Xft.Dpi", &resourceType, &value))
+			{
+				char* end = 0;
+				double candidate = strtod(value.addr, &end);
+				if (end != value.addr && candidate > 0.0 && candidate < 10000.0) dpi = candidate;
+			}
+			if (db) XrmDestroyDatabase(db);
+		}
+		if (data) XFree(data);
+		if (dpi <= 0.0)
+		{
+			monitor_geometry::Rectangle selected = getMonitor(tkwin);
+			int event, error, major = 1, minor = 5, n = 0;
+			if (XRRQueryExtension(display, &event, &error)
+				&& XRRQueryVersion(display, &major, &minor)
+				&& (major > 1 || (major == 1 && minor >= 5)))
+			{
+				XRRMonitorInfo* monitors = XRRGetMonitors(display, root, True, &n);
+				for (int i = 0; monitors && i < n; ++i)
+				{
+					XRRMonitorInfo const& m = monitors[i];
+					if (m.x == selected.x && m.y == selected.y && m.width == selected.width
+						&& m.height == selected.height && m.mwidth > 0)
+					{
+						dpi = m.width * 25.4 / m.mwidth;
+						break;
+					}
+				}
+				if (monitors) XRRFreeMonitors(monitors);
+			}
+		}
+		if (dpi <= 0.0)
+		{
+			// Older RandR servers expose only whole-screen physical sizes.
+			// Do not use WidthMMOfScreen: Tk's scaling setter mutates that
+			// client-side cache, which would feed user scaling back as OS DPI.
+			int event, error;
+			if (XRRQueryExtension(display, &event, &error))
+			{
+				XRRScreenConfiguration* config = XRRGetScreenInfo(display, root);
+				if (config)
+				{
+					Rotation rotation; int n = 0;
+					SizeID current = XRRConfigCurrentConfiguration(config, &rotation);
+					XRRScreenSize* sizes = XRRConfigSizes(config, &n);
+					if (sizes && current < n && sizes[current].mwidth > 0)
+						dpi = sizes[current].width * 25.4 / sizes[current].mwidth;
+					XRRFreeScreenConfigInfo(config);
+				}
+			}
+		}
+#endif
+		Tcl_SetObjResult(ti, Tcl_NewDoubleObj(dpi));
+		return TCL_OK;
+	}
+	else if (strcasecmp(subcmd, "workarea") == 0 || strcasecmp(subcmd, "monitor") == 0)
 	{
 		Rect result;
 
@@ -790,15 +950,65 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 		result.left = geometry[0]; result.right = geometry[1];
 		result.width = geometry[2]; result.height = geometry[3];
 #else
-		Display* display = Tk_Display(tkwin);
-
-		if (!getWorkArea(display, getDesktop(tkwin), result))
-			getWorkArea(display, getCurrentDesktop(display), result);
+		if (strcasecmp(subcmd, "monitor") == 0)
+		{
+			monitor_geometry::Rectangle r = getMonitor(tkwin);
+			result.left = r.x; result.right = r.y;
+			result.width = r.width; result.height = r.height;
+		}
+		else getWorkArea(tkwin, result);
 #endif
 
 		if (result.hasSize())
 			setResult(ti, result);
 
+		return TCL_OK;
+	}
+	else if (strcasecmp(subcmd, "frame") == 0 || strcasecmp(subcmd, "frameextents") == 0)
+	{
+#if !defined(__WIN32__) && !defined(__APPLE__)
+		// Walk from Tk's client through its wrapper to the WM frame. Unlike
+		// the global default extents, this measures this window's decorations.
+		Display* display = Tk_Display(tkwin);
+		Window current = Tk_WindowId(tkwin);
+		for (int depth = 0; current != None && depth < 8; ++depth)
+		{
+			Window root, parent, *children = 0;
+			unsigned count = 0;
+			if (!XQueryTree(display, current, &root, &parent, &children, &count)) break;
+			if (children) XFree(children);
+			if (parent == root)
+			{
+				XWindowAttributes attrs;
+				Window child;
+				Rect frame;
+				if (XGetWindowAttributes(display, current, &attrs)
+					&& attrs.map_state == IsViewable
+					&& XTranslateCoordinates(display, current, root, 0, 0,
+						&frame.left, &frame.right, &child))
+				{
+					frame.width = attrs.width;
+					frame.height = attrs.height;
+					if (strcasecmp(subcmd, "frameextents") == 0)
+					{
+						XWindowAttributes client;
+						int x, y;
+						if (!XGetWindowAttributes(display, Tk_WindowId(tkwin), &client)
+							|| !XTranslateCoordinates(display, Tk_WindowId(tkwin), root,
+								0, 0, &x, &y, &child)) break;
+						int left = x - frame.left, top = y - frame.right;
+						frame.left = left;
+						frame.right = attrs.width - client.width - left;
+						frame.width = top;
+						frame.height = attrs.height - client.height - top;
+					}
+					setResult(ti, frame);
+				}
+				break;
+			}
+			current = parent;
+		}
+#endif
 		return TCL_OK;
 	}
 	else if (strcasecmp(subcmd, "extents") == 0)

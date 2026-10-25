@@ -35,6 +35,7 @@ set FileOpen							"Open Database"
 set FileOpenRecent					"Open Recent"
 set FileNew								"New Database"
 set FileExport							"Export"
+set FileUploadStudy					"Upload to Lichess study"
 set FileImport(pgn)					"Import PGN files"
 set FileImport(db)					"Import Databases"
 set FileDownload						"Download Games"
@@ -1487,6 +1488,16 @@ proc PopupMenu {parent x y {base ""}} {
 							-view 0] \
 			;
 		$menu add command \
+			-label " $mc::FileUploadStudy..." \
+			-image $::icon::16x16::fileExport \
+			-compound left \
+			-command [list ::application::lichess::study::open $parent \
+							-base $base \
+							-variant $Vars(variant) \
+							-view 0 \
+							-kind database] \
+			;
+		$menu add command \
 			-label " $mc::FileImport(db)..." \
 			-image $::icon::16x16::databaseImport \
 			-compound left \
@@ -1885,6 +1896,8 @@ proc EmptyClipbase {parent} {
 proc SaveChanges {parent {base ""}} {
 	set parent [winfo toplevel $parent]
 	if {[string length $base] == 0} { set base [scidb::db::get name] }
+	# The clipbase has no backing file to overwrite.
+	if {$base eq "" || $base eq $::scidb::clipbaseName} { return }
 
 	wm withdraw [set dlg [tk::toplevel $parent.save -class Dialog]]
 	pack [set top [ttk::frame $dlg.top]] -fill both

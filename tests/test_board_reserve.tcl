@@ -22,7 +22,7 @@ proc tk {args} { return 1.3333333333 }
 set f [open [file join [file dirname [info script]] .. tcl app-board.tcl]]
 set source [read $f]
 close $f
-set wanted {ComputeLayout reserveSquare unreservedSquare setReserve reserveRect afterRebuild ApplyReserve3D ConfigureReserve3D}
+set wanted {ComputeLayout reserveSquare reserveBorder unreservedSquare setReserve reserveRect afterRebuild ApplyReserve3D ConfigureReserve3D}
 set definition {}
 foreach line [split $source \n] {
     if {$definition eq {} && [regexp {^proc ([^ ]+) } $line -> name] && $name in $wanted} {
@@ -73,6 +73,26 @@ tcltest::test board-reserve-probe {candidate measurements preserve the accepted 
         [expr {$count == $::application::board::rebuildCount}] \
         $::application::board::ReserveSide $::application::board::ReservePixels
 } -result {1 1 1 right 300}
+tcltest::test board-reserve-border-probe {border probes preserve dimensions and every live reserve field} -body {
+    ::application::board::setReserve right 300
+    set before [lsort [array get ::application::board::Dim]]
+    set count $::application::board::rebuildCount
+    set state [list $::application::board::ReserveSide $::application::board::ReservePixels \
+        $::application::board::ReserveKind $::application::board::ReserveMaxBoard]
+    set border [::application::board::reserveBorder left 168 squeeze 500]
+    set footprint [::application::board::reserveBorder left 168 squeeze 500 1]
+    set geometry [::application::board::reserveBorder left 168 squeeze 500 1 1]
+    set absent [::application::board::reserveBorder right 1500 auto]
+    list [expr {[llength $border] == 3 && [lindex $border 2] > 0}] \
+        [expr {[llength $footprint] == 4 && [lindex $footprint 2] > [lindex $footprint 3]}] \
+        [expr {[lindex $geometry 0] eq $footprint && [llength [lindex $geometry 1]] == 4
+            && [lindex $geometry 1 2] == 168}] \
+        [expr {$absent eq {}}] \
+        [expr {$before eq [lsort [array get ::application::board::Dim]]}] \
+        [expr {$state eq [list $::application::board::ReserveSide $::application::board::ReservePixels \
+            $::application::board::ReserveKind $::application::board::ReserveMaxBoard]}] \
+        [expr {$count == $::application::board::rebuildCount}]
+} -result {1 1 1 1 1 1 1}
 tcltest::test board-reserve-pure-refusal {refusal leaves dimensions and accepted reserve unchanged} -body {
     ::application::board::setReserve right 300
     set before [lsort [array get ::application::board::Dim]]
@@ -133,11 +153,8 @@ tcltest::test board-reserve-pure-3d {visible 3D frame reserves each side and rep
     set result
 } -result {{configure .visible3d -padx {0 300} -pady {0 0}} {configure .visible3d -padx {0 0} -pady {0 300}} {configure .visible3d -padx {300 0} -pady {0 0}} {1200 800} 0 0 1 {configure .visible3d -padx {0 0} -pady {0 0}}}
 
-# VAL-MED-012: compare the reserved square with unreservedSquare whenever a reserve
-# is set or considered (ComputeLayout and FitStrip), not only below MinimumReserveSquare.
-# Validator counterexamples that must keep the square equal to unreserved:
-# 1000x640 (33 vs 38), 1000x700 (33 vs 43), 1100x700 (39 vs 43).
-tcltest::test board-reserve-val-med-012-counterexamples {reserves shrinking board square are rejected} -body {
+# VAL-MED-013: auto reserves may shrink squares down to the 32 px floor.
+tcltest::test board-reserve-val-med-013-counterexamples {reserves shrinking board square above the floor are accepted} -body {
     set results {}
     # Case 1: 1000x640: unreserved 38 vs right reserve (which would be 33)
     set w 497; set h 340
@@ -158,6 +175,19 @@ tcltest::test board-reserve-val-med-012-counterexamples {reserves shrinking boar
     lappend results [list $unreserved $reserved]
 
     set results
-} -result {{38 0} {43 0} {43 0}}
+} -result {{38 33} {43 33} {43 39}}
+
+tcltest::test board-reserve-auto-floor {auto accepts unchanged 31 px and exactly 32; dialog rule remains unchanged} -body {
+    list [::application::board::unreservedSquare 621 288] \
+        [::application::board::reserveSquare right 168 621 288 auto] \
+        [::application::board::reserveSquare right 168 621 296 auto] \
+        [::application::board::reserveSquare right 168 621 288 dialog]
+} -result {31 31 32 31}
+
+tcltest::test board-reserve-below-floor-shrink {below-floor reserves must not shrink an already small board} -body {
+    list [::application::board::unreservedSquare 621 288] \
+        [::application::board::reserveSquare bottom 100 621 288 auto] \
+        [::application::board::reserveSquare right 400 621 288 auto]
+} -result {31 0 0}
 
 tcltest::cleanupTests

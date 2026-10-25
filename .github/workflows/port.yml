@@ -18,7 +18,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential tcl8.6-dev tk8.6-dev tcllib tcl-tls \
             libfreetype6-dev libsm-dev libglu1-mesa-dev desktop-file-utils libxcursor-dev libfontconfig1-dev libgdbm-dev \
-            libx11-dev libxft-dev libxext-dev zlib1g-dev libexpat1-dev libmpv-dev xvfb xauth
+            libx11-dev libxrandr-dev libxinerama-dev libxft-dev libxext-dev zlib1g-dev libexpat1-dev libmpv-dev xvfb xauth
       - run: ./configure
       # The full build (src, engines, man pages, Tcl bundle), as a user would.
       - run: make -C engines/stockfish/src net   # NNUE is too big for git

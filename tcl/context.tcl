@@ -55,6 +55,11 @@ proc ::context::ResetMC {} {
 	foreach {name value} $::context::DefaultMC {
 		set ::context::mc::$name $value
 	}
+	# The rows are declared after the defaults above were captured, so
+	# restore their English labels from the English text in Labels.
+	foreach id [array names ::context::Labels] {
+		set ::context::mc::[LabelVar $id] $::context::Labels($id)
+	}
 	return
 }
 ::mc::addDefaultReset ::context::ResetMC
@@ -391,6 +396,7 @@ proc ::context::Declare {} {
 	Item c4.import.pgn			"PGN file…"					C4
 	Item c4.export				"Export"					C4
 	Item c4.export.pgn			"PGN file…"					C4
+	Item c4.export.lichess		"Lichess study…"			C4
 	Item c4.download_games		"Download Games…"			C4
 	Item c4.save_changes		"Save Changes"				C4
 	Item c4.readonly			"Read-only"					C4
@@ -416,7 +422,7 @@ proc ::context::Declare {} {
 		{cascade c4.maintenance {c4.maintenance.compact}}
 		{cascade c4.reports {c4.reports.opening}}
 		{cascade c4.import {c4.import.pgn}}
-		{cascade c4.export {c4.export.pgn}}
+		{cascade c4.export {c4.export.pgn c4.export.lichess}}
 		c4.download_games
 		c4.save_changes
 		c4.readonly
@@ -489,6 +495,7 @@ proc ::context::Declare {} {
 	Item c6.add_include		"Add Include"				C6
 	Item c6.insert_comment		"Insert Move as Comment"	C6
 	Item c6.explain_line		"Explain Line"				C6
+	Item c6.pin_repertoire "Pin to Repertoire" C6
 	Item c6.copy_line			"Copy Line"					C6
 	Item c6.copy_fen			"Copy FEN"					C6
 	Item c6.pause_resume		"Pause / Resume"			C6
@@ -523,6 +530,7 @@ proc ::context::Declare {} {
 		c6.add_include
 		c6.insert_comment
 		-
+		c6.pin_repertoire
 		c6.explain_line
 		c6.copy_line
 		c6.copy_fen
@@ -1273,7 +1281,57 @@ proc ::context::BuildRows {cid menu rows object} {
 # itself at the top of Maintenance instead of a cascade that only refuses to
 # open (REPORT.md G23); the fixture compares cascades by label, so the hint
 # stays inside the menu.
+# The comment editor builds its symbol, emoticon and language rows itself.
+# Re-point each row at the cascade's action (VAL-REG-002); the row's
+# ::comment call travels in the object and Command allows only those procs.
+proc ::context::RouteCommentRows {id menu object} {
+	set n [$menu index end]
+	if {$n eq "none"} { return }
+	for {set i 0} {$i <= $n} {incr i} {
+		switch -- [$menu type $i] {
+			cascade { RouteCommentRows $id [$menu entrycget $i -menu] $object }
+			command {
+				set cmd [$menu entrycget $i -command]
+				if {[lrange $cmd 0 1] eq {::namespace inscope} && [lindex $cmd 2] eq "::comment"} {
+					set call [lindex $cmd 3]
+				} elseif {[string match ::comment::* [lindex $cmd 0]]} {
+					set call [list [namespace tail [lindex $cmd 0]] {*}[lrange $cmd 1 end]]
+				} else {
+					continue
+				}
+				$menu entryconfigure $i \
+					-command [list ::action::run $id [dict create object [dict replace $object call $call]]]
+			}
+		}
+	}
+}
+
 proc ::context::CascadePrefix {id menu object} {
+	switch -- $id {
+		c10.show_column {
+			::table::MakeShowColumnMenu [dict get $object table] $menu
+			return [expr {[$menu index end] ne "none"}]
+		}
+		c11.insert_symbol - c11.insert_emoticon {
+			set builder [expr {$id eq "c11.insert_symbol" ? "::comment::MakeSymbolMenu" : "::comment::MakeEmoticonMenu"}]
+			$builder [dict get $object widget] $menu
+			RouteCommentRows $id $menu $object
+			return [expr {[$menu index end] ne "none"}]
+		}
+		c11.add_language {
+			::comment::MakeLanguageMenu $menu
+			RouteCommentRows $id $menu $object
+			return [expr {[$menu index end] ne "none"}]
+		}
+		c11.switch_language {
+			foreach lang [list xx {*}$::comment::Vars(langSet)] {
+				set label [expr {$lang eq "xx" ? $::languagebox::mc::AllLanguages : [::encoding::languageName $lang]}]
+				$menu add command -label $label -state [expr {$lang eq $::comment::Vars(lang) ? "disabled" : "normal"}] \
+					-command [list ::action::run $id [dict create object [dict replace $object call [list SwitchLanguage $lang]]]]
+			}
+			return 1
+		}
+	}
 	if {$id ne "c4.maintenance"} { return 0 }
 
 	set base [expr {[dict exists $object base] ? [dict get $object base] : ""}]
@@ -1314,7 +1372,7 @@ proc ::context::AddRow {menu id object} {
 		if {$why ne ""} { append label " ($why)" }
 	}
 	set opts [list -label " $label" -state $state \
-		-command [list ::action::run $id [dict create object $object]]]
+		-command [list ::action::run $id [dict create object $object defer idle]]]
 	if {$accel ne ""} { lappend opts -accelerator $accel }
 	eval [list $menu add command] $opts
 	return
@@ -1515,6 +1573,32 @@ proc ::context::ObjectEnd {object} {
 # R10: strip/truncate/comment rows follow the move object. Returns
 # {visible enabled} or empty when the id has no object rule.
 proc ::context::ObjectRule {id object} {
+	if {$id eq "c3.delete" || [string match c3.flag.* $id] || $id eq "c3.flags" || $id eq "c4.import.pgn"} {
+		set base [expr {[dict exists $object base] ? [dict get $object base] : [::menu::CurrentBase]}]
+		set writable 0
+		if {$base ne "" && ![catch {::scidb::db::get readonly? $base} ro]} { set writable [expr {!$ro}] }
+		return [list 1 $writable]
+	}
+	if {$id eq "c3.open_url"} {
+		return [list [::web::isWebLink [GameSite $object]] 1]
+	}
+	if {$id in {c9.stay_on_top c9.hide_leaving}} {
+		set floating 0
+		if {[dict exists $object twm] && [dict exists $object paneUid]} {
+			set floating [::menu::PaneFloating [dict get $object paneUid] [dict get $object twm]]
+		}
+		return [list 1 $floating]
+	}
+	if {[string match c6.* $id] && $id ni {c6.copy_fen c6.copy_line c6.setup_engine c6.setup_eval_edges}
+		|| $id in {c9.analysis.best c9.analysis.opponents}} {
+		set running [ObjectEngineRunning $object]
+		return [list 1 $running]
+	}
+	if {$id eq "c12.remove_history"} {
+		set index -1
+		if {[dict exists $object gameSlot]} { set index [::game::historyIndex [dict get $object gameSlot]] }
+		return [list 1 [expr {$index >= 0}]]
+	}
 	switch -- $id {
 		c2.strip.moves {
 			set start [ObjectStart $object]
@@ -1750,7 +1834,8 @@ proc ::context::Deliver {cid record} {
 # ----------------------------------------------------------------------
 proc ::context::Invoke {id {object {}}} {
 	if {[dict size $object] == 0} { set object [dict create] }
-	if {[catch { Command $id $object } result]} {
+	if {[catch { Command $id $object } result options]} {
+		::debuglog::log context "$id: [dict get $options -errorinfo]"
 		if {[llength [info commands ::log::error]]} {
 			catch { ::log::error context "$id: $result" }
 		}
@@ -1760,6 +1845,9 @@ proc ::context::Invoke {id {object {}}} {
 }
 
 proc ::context::Command {id object} {
+	if {($id eq "c9.stay_on_top" || $id eq "c9.hide_leaving") && ![lindex [ObjectRule $id $object] 1]} { return }
+	if {([string match c6.* $id] && $id ni {c6.copy_fen c6.copy_line c6.setup_engine c6.setup_eval_edges}
+		|| $id in {c9.analysis.best c9.analysis.opponents}) && ![ObjectEngineRunning $object]} { return }
 	if {![dict exists $object parent]} { dict set object parent .application }
 	if {![dict exists $object view]} { dict set object view 0 }
 	if {![dict exists $object variant]} {
@@ -1865,15 +1953,15 @@ proc ::context::Command {id object} {
 			catch { ::gamestable::Open(tourntable) [dict get $object path] [dict get $object index] }
 		}
 		c3.open_url {
-			catch { ::web::open [dict get $object path] [::gamestable::GetSite [dict get $object path] \
-				[dict get $object base] [dict get $object variant] [dict get $object view] [dict get $object index]] }
+			set site [GameSite $object]
+			if {[::web::isWebLink $site]} { ::web::open [dict get $object parent] $site }
 		}
 		c3.merge {
 			catch { gamebar::mergeGame [dict get $object path] [list [dict get $object base] \
 				[dict get $object variant] [dict get $object view] [dict get $object index]] }
 		}
 		c3.delete {
-			catch { ::gamestable::deleteGame [dict get $object base] [dict get $object variant] [dict get $object index] [dict get $object view] }
+			return [::gamestable::deleteGame [dict get $object base] [dict get $object variant] [dict get $object index] [dict get $object view]]
 		}
 		c3.flag.* {
 			return [GameFlag $object $id]
@@ -1902,6 +1990,11 @@ proc ::context::Command {id object} {
 		}
 		c4.search.current { ::application::database::searchCurrent [dict get $object parent] }
 		c4.reports.opening { ::application::database::ShowOpeningReport [dict get $object parent] }
+		c5.event_url {
+			set url [::eventtable::GetSite [dict get $object base] [dict get $object variant] \
+				[dict get $object view] [dict get $object index]]
+			if {[::web::isWebLink $url]} { return [::web::open [dict get $object parent] $url] }
+		}
 		c5.event_table { ::crosstable::open [dict get $object parent] [dict get $object base] [dict get $object variant] [dict get $object index] [dict get $object view] event }
 		c9.not.spacing - c9.not.numbering - c9.not.markers - c9.not.diagrams - c9.not.emoticons {
 			set key [dict get {c9.not.spacing spacing:paragraph c9.not.numbering show:varnumbers c9.not.markers show:markers c9.not.diagrams show:diagram c9.not.emoticons show:emoticon} $id]
@@ -1931,6 +2024,11 @@ proc ::context::Command {id object} {
 		}
 		c4.maintenance.compact { ::application::database::Compact [dict get $object parent] [dict get $object base] }
 		c4.export.pgn { ::export::open [dict get $object parent] -base [dict get $object base] -variant [dict get $object variant] -view [dict get $object view] -extension pgn -name [::util::databaseName [dict get $object base]] }
+		c4.export.lichess {
+			::application::lichess::study::open [dict get $object parent] \
+				-base [dict get $object base] -variant [dict get $object variant] \
+				-view [dict get $object view] -kind database
+		}
 		c4.import.pgn { return [::action::run menu.file.import.pgn] }
 		c4.symbol.small - c4.symbol.normal - c4.symbol.large {
 			set ::database::switcher::Options(iconsize) [dict get {c4.symbol.small 24 c4.symbol.normal 32 c4.symbol.large 48} $id]
@@ -1971,7 +2069,7 @@ proc ::context::Command {id object} {
 		c4.help { return [::action::run app-help] }
 		c5.player_card { return [::action::run open_view [list kind player_card name [dict get $object name]]] }
 		c5.prep_report { return [::action::run open_view [list kind prep_report name [dict get $object name]]] }
-		c5.insights { catch { ::insights::show [dict get $object name] } }
+		c5.insights - c5.player.insights { ::insights::show [dict get $object parent] [dict get $object base] [dict get $object variant] [dict get $object index] }
 		c5.open_switcher - c5.save_working_set {
 			set base [dict get $object base]
 			set variant [dict get $object variant]
@@ -1979,7 +2077,7 @@ proc ::context::Command {id object} {
 			set name [dict get $object name]
 			set view [::scidb::view::new $base $variant unused unused unused unused master slave]
 			switch $kind {
-				player { set query [list playername white $name]; set other [list playername black $name]; set query [list or $query $other] }
+				player { set query [list playername white $name]; set other [list playername black $name]; set query [list OR $query $other] }
 				event { set query [list eventname $name] }
 				site { set query [list sitename $name] }
 			}
@@ -1998,7 +2096,14 @@ proc ::context::Command {id object} {
 			set what [dict get {c6.add_move var c6.add_sequence seq c6.add_line line c6.add_all all c6.add_merge merge c6.add_include incl} $id]
 			return [::application::analysis::InsertMoves [dict get $object tree] $what [EngineLine $object]]
 		}
+		c6.pin_repertoire { return [::application::analysis::PinToRepertoire [dict get $object tree] [EngineLine $object]] }
 		c6.insert_comment { return [::application::analysis::InsertComment [dict get $object tree] [EngineLine $object]] }
+		c6.explain_line {
+			if {[dict exists $object pv] && [string trim [dict get $object pv]] ne ""} {
+				return [::application::ai::explainLine [dict get $object parent] \
+					[dict get $object pv] [::scidb::pos::fen]]
+			}
+		}
 		c6.copy_line { clipboard clear; clipboard append [dict get $object pv] }
 		c6.copy_fen { clipboard clear; clipboard append [::scidb::pos::fen] }
 		c6.lock_engine - c6.opponents_view - c6.best_first {
@@ -2069,7 +2174,7 @@ proc ::context::Command {id object} {
 		}
 		c8.analyze { ::application::analysis::AnalyzePosition [dict get $object table] [dict get $object row] }
 		c8.copy_line { clipboard clear; clipboard append [TreeLine $object] }
-		c8.save_line { catch { ::application::tree::SaveLine } }
+		c8.save_line { SaveTreeLine $object }
 		c10.fill_column {
 			set tree [dict get $object table].t
 			$tree column configure tail -visible [expr {![$tree column cget tail -visible]}]
@@ -2142,8 +2247,20 @@ proc ::context::Command {id object} {
 			set ::comment::Options(showEmoticons) [expr {!$::comment::Options(showEmoticons)}]
 			::comment::DisplayEmoticons
 		}
+		c11.insert_symbol - c11.insert_emoticon - c11.add_language - c11.switch_language {
+			set call [dict get $object call]
+			set allowed {
+				c11.insert_symbol {InsertFigurine InsertNag InsertText}
+				c11.insert_emoticon {InsertEmoticon}
+				c11.add_language {NewLanguage}
+				c11.switch_language {SwitchLanguage}
+			}
+			if {[lindex $call 0] ni [dict get $allowed $id]} { error "$id: unexpected row [lindex $call 0]" }
+			return [namespace inscope ::comment $call]
+		}
 		c11.select_all { catch { [dict get $object widget] tag add sel 1.0 end } }
 		c11.clear { ::comment::Clear }
+		c11.classify_comment { ::comment::ClassifyComment [winfo toplevel [dict get $object widget]] }
 		c11.detect_language {
 			set parent [expr {[dict exists $object parent] ? [dict get $object parent] : ".application"}]
 			set w [expr {[dict exists $object widget] ? [dict get $object widget] : ""}]
@@ -2168,17 +2285,50 @@ proc ::context::Command {id object} {
 			::game::release $pos
 		}
 		c12.clear_history { ::game::clearHistory }
-		c12.remove_history { ::game::removeHistoryEntry [dict get $object historyIndex] }
+		c12.remove_history {
+			set index [::game::historyIndex [dict get $object gameSlot]]
+			if {$index >= 0} { ::game::removeHistoryEntry $index }
+		}
 		c12.new.standard { ::menu::gameNew [dict get $object parent] }
 		c12.new.chess960 { catch { ::application::pgn::Shuffle Chess960 } }
-		c12.save.replace { ::application::pgn::saveGame replace [dict get $object base] }
-		c12.save.replace_moves { ::application::pgn::saveGame moves [dict get $object base] }
-		c12.save.new { ::application::pgn::saveGame add [dict get $object base] }
+		c12.save.replace {
+			::scidb::game::switch [dict get $object gameSlot]
+			::application::pgn::saveGame replace
+		}
+		c12.save.replace_moves {
+			::scidb::game::switch [dict get $object gameSlot]
+			::application::pgn::saveGame moves
+		}
+		c12.save.new {
+			::scidb::game::switch [dict get $object gameSlot]
+			::application::pgn::saveGame add
+		}
 		c12.paste.variation { ::application::pgn::PasteClipboardVariation }
 		c12.paste.game { ::application::pgn::PasteClipboardGame }
 		c12.merge.game { ::gamebar::mergeGame [dict get $object parent] [dict get $object gameSlot] }
 	}
 	return
+}
+
+# Use the pane's live engine identity, never a stale popup ID or another pane.
+proc ::context::ObjectEngineRunning {object} {
+	# A caller may name the analysis pane by its tree alone; its engine is
+	# the pane's own, never the current one.
+	if {[dict exists $object number]} {
+		set number [dict get $object number]
+	} elseif {[dict exists $object tree]
+		&& [info exists ::application::analysis::[dict get $object tree]::Vars(number)]} {
+		set number [set ::application::analysis::[dict get $object tree]::Vars(number)]
+	} else {
+		return 0
+	}
+	return [::engine::active? $number]
+}
+
+proc ::context::GameSite {object} {
+	if {[catch {::gamestable::GetSite [dict get $object path] [dict get $object base] \
+		[dict get $object variant] [dict get $object view] [dict get $object index]} site]} { return "" }
+	return $site
 }
 
 # Toggle one game flag on the game under the menu (C3).
@@ -2204,6 +2354,26 @@ proc ::context::GameFlag {object id} {
 # Read the branch on a temporary game. Per-key SAN queries navigate internally
 # and can change the halfmove clock when returning to a variation, so they
 # must not run on the user's board. Release the duplicate even after an error.
+# Save the board line plus the tree row's next move through the existing
+# repertoire save dialog, without changing the user's board position.
+proc ::context::SaveTreeLine {object} {
+	set parent [dict get $object parent]
+	set bases [::application::database::repertoireBases 0 [dict get $object variant]]
+	if {![llength $bases]} { return [::application::database::showNoRepertoireBases $parent] }
+	set moves [list [dict get $object move]]
+	if {[llength $bases] == 1} {
+		return [::application::analysis::SaveBestLine $parent [lindex $bases 0] $moves {}]
+	}
+	set m $parent.treeRepertoireMenu
+	if {[winfo exists $m]} { destroy $m }
+	menu $m -tearoff false
+	foreach base $bases {
+		$m add command -label [::util::databaseName $base] \
+			-command [list ::application::analysis::SaveBestLine $parent $base $moves {}]
+	}
+	tk_popup $m {*}[winfo pointerxy $parent]
+}
+
 proc ::context::TreeLine {object} {
 	set key [::scidb::game::position key]
 	set slot 32
