@@ -13,7 +13,7 @@ Rules-Requires-Root: no
 
 Package: chesswiz
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, tk8.6, fontconfig, xdg-utils, make
+Depends: ${shlibs:Depends}, ${misc:Depends}, tcl8.6, tk8.6, fontconfig, xdg-utils, make
 Provides: scidb-beta
 Replaces: scidb-beta
 Breaks: scidb-beta
