@@ -145,7 +145,10 @@ proc GetURL {parent url args} {
 	set opts(-timeouts) [lrange $opts(-timeouts) 1 end]
    set cmd [list [namespace current]::DownLoadResponse $parent $url [array get opts]] 
 
-   if {[catch { ::http::geturl $url -command $cmd -timeout $timeout }] && [llength $opts(-failedcmd)]} {
+   if {[catch {
+		if {[string match -nocase https://* $url]} { ::platform::sys::tlsRegister }
+		::http::geturl $url -command $cmd -timeout $timeout
+	}] && [llength $opts(-failedcmd)]} {
 		{*}$opts(-failedcmd) $parent $url down
    }
 }

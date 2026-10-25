@@ -172,32 +172,15 @@ proc ::ai::provider::jsonObject {pairs} {
 }
 
 
-# The https handler for ::http: a plain ::tls::socket does not send SNI,
-# and many hosts (including api.typesafe.ai) reject the async handshake
-# without it. The http package calls the registered command as
-# <handler> ?sockopt ...? <host> <port>, so pull the host out and pass it
-# as the server name as well.
-proc ::ai::provider::tlsSocket {args} {
-	set host [lindex $args end-1]
-	set port [lindex $args end]
-	set opts [lrange $args 0 end-2]
-	return [::tls::socket -servername $host {*}$opts $host $port]
-}
-
-
 # Issue a JSON POST.  The http package writes -query as raw bytes (and sizes
 # Content-Length by character count), so the body must be UTF-8 encoded here
 # or any non-ASCII text corrupts the request.  https needs the tls package.
 proc ::ai::provider::request {url body args} {
 	variable Config
-	variable TlsRegistered
 
 	need http
-	if {[string match -nocase https://* $url] && ![info exists TlsRegistered]} {
-		need tls
-		::platform::sys::tlsInit
-		::http::register https 443 ::ai::provider::tlsSocket
-		set TlsRegistered 1
+	if {[string match -nocase https://* $url]} {
+		::platform::sys::tlsRegister
 	}
 
 	return [::http::geturl $url \
@@ -466,6 +449,7 @@ proc ::ai::provider::OllamaThinks {model} {
 	catch {
 		need http
 		need json
+		if {[string match -nocase https://* $base]} { ::platform::sys::tlsRegister }
 		set token [::http::geturl $base/api/show -timeout 3000 -binary 1 \
 			-type application/json -query [encoding convertto utf-8 "\{\"model\":\"[jsonEscape $model]\"\}"]]
 		if {[::http::ncode $token] == 200} {
@@ -1161,18 +1145,14 @@ proc ::ai::provider::openai {prompt system} {
 # image and speech models left out) or {ok 0 error E}.
 proc ::ai::provider::modelsAsync {provider script {timeoutMs 8000}} {
 	variable Endpoint
-	variable TlsRegistered
 
 	if {[catch {
 		need http
 		need json
 		set key [NeedKey $provider]
 		set url [string map {/chat/completions /models} $Endpoint($provider)]
-		if {[string match -nocase https://* $url] && ![info exists TlsRegistered]} {
-			need tls
-			::platform::sys::tlsInit
-			::http::register https 443 ::ai::provider::tlsSocket
-			set TlsRegistered 1
+		if {[string match -nocase https://* $url]} {
+			::platform::sys::tlsRegister
 		}
 		::http::geturl $url -headers [list Authorization "Bearer $key"] -timeout $timeoutMs \
 			-binary 1 -command [namespace code [list OnModelList $provider $script]]
@@ -1478,6 +1458,7 @@ proc ::ai::provider::onOllamaChat {script token} {
 proc ::ai::provider::ollamaModels {{base http://localhost:11434} {timeoutMs 3000}} {
 	need http
 
+	if {[string match -nocase https://* $base]} { ::platform::sys::tlsRegister }
 	set token [::http::geturl $base/api/tags -timeout $timeoutMs -binary 1]
 	set status [::http::status $token]
 	set code [::http::ncode $token]
@@ -1496,6 +1477,7 @@ proc ::ai::provider::ollamaModels {{base http://localhost:11434} {timeoutMs 3000
 proc ::ai::provider::ollamaModelsAsync {script {base http://localhost:11434} {timeoutMs 3000}} {
 	if {[catch {
 		need http
+		if {[string match -nocase https://* $base]} { ::platform::sys::tlsRegister }
 		::http::geturl $base/api/tags -timeout $timeoutMs -binary 1 \
 			-command [namespace code [list OnModels $script]]
 	} error]} {

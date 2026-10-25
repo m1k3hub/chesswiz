@@ -76,8 +76,6 @@ proc initTls {} {
 	variable Config
 	variable mc::TlsNotAvailable
 
-	if {$Config(initialized)} { return 1 }
-
 	# Step 1: Try direct package require (works when auto_path is correct)
 	if {[catch {package require tls} version] == 0} {
 		set tlsOk 1
@@ -123,8 +121,7 @@ proc initTls {} {
 		return 0
 	}
 
-	::platform::sys::tlsInit
-	::http::register https 443 [list ::tls::socket -servername $Config(host)]
+	::platform::sys::tlsRegister
 	set Config(initialized) 1
 	return 1
 }

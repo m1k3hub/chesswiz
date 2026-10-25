@@ -44,7 +44,6 @@ SOURCES = \
 	contrib/tkmenu.tcl \
 	contrib/treectrl.tcl \
 	contrib/filelist-bindings.tcl \
-	contrib/http.tcl \
 	dialogs/messagebox.tcl \
 	dialogs/notice.tcl \
 	dialogs/progressbar.tcl \

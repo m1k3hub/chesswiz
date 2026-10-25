@@ -3864,12 +3864,7 @@ proc ::application::assistant::DoTablebase {fen} {
 	if {[catch {
 		::ai::provider::need http
 		::ai::provider::need json
-		if {![info exists ::ai::provider::TlsRegistered]} {
-			::ai::provider::need tls
-			::platform::sys::tlsInit
-			::http::register https 443 ::ai::provider::tlsSocket
-			set ::ai::provider::TlsRegistered 1
-		}
+		::platform::sys::tlsRegister
 	} err]} { return "error: $err" }
 	set token [Later]
 	set url "$::application::assistant::TablebaseUrl?[::http::formatQuery fen $fen]"
