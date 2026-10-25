@@ -2527,16 +2527,21 @@ proc tallSashes {t} {
  set y [expr {min([winfo height $pw]-$below, int([winfo width $node]*1.35))}]
  if {$y > [winfo height $node]} {$pw sash place 0 0 $y}
 }
+# Content presentation does not rebuild the docking tree. Custom arrangements
+# and docked panes beside floating windows share these lifecycle guards.
+proc collapsible? {t} {
+ variable S
+ if {$t eq {} || $S(busy) || $S(saving)} {return 0}
+ if {[$t zoomed] ne {}} {return 0}
+ if {$::application::Vars(loading) || $::application::Vars(lock:layout)} {return 0}
+ if {[info exists ::application::focuszoom::baseline($t)]} {return 0}
+ return 1
+}
 proc reflowable? {t} {
  variable S
- if {$t eq {} || $S(busy) || $S(saving) || ![info exists S(wideShape)]} {return 0}
- # Names and pane sizes do not change structure. Saved standard-based
- # layouts use the same temporary presentation as the unnamed standard.
- if {[llength [$t floats]] || [$t zoomed] ne {}} {return 0}
- if {$::application::Vars(loading) || $::application::Vars(lock:layout)} {return 0}
- # Only an active enlargement owns the sashes. Merely enabling focus
- # follows size must not suppress shape adaptation or content collapse.
- if {[info exists ::application::focuszoom::baseline($t)]} {return 0}
+ if {![collapsible? $t] || ![info exists S(wideShape)]} {return 0}
+ # Only the standard structure may be rearranged for the window shape.
+ if {[llength [$t floats]]} {return 0}
  set shape [shapeOf [::application::twm::inspectLayout $t]]
  return [expr {$shape eq $S(wideShape) || ($S(mode) eq "tall" && $shape eq $S(tallShape))}]
 }
@@ -2665,6 +2670,8 @@ proc shouldCollapse {uid} {
 # the Tk panedwindow child keeps both the native twm tree and live widgets.
 proc collapseNode {t uid} {
  set leaf [$t leaf $uid]; set node $leaf
+ # A floating pane owns its window; only docked neighbours can take space.
+ if {[$t isfloat [$t toplevel $leaf]]} {return {}}
  while {1} {
   set pw [$t parent $node]
   if {$pw eq {} || $pw eq $t} {return {}}
@@ -2682,7 +2689,7 @@ proc collapseNode {t uid} {
 proc updateCollapse {} {
  variable S; variable ShortWidth; variable ShortHeight
  set t [boardTwm]
- if {![reflowable? $t] || ![winfo ismapped [$t leaf board]]} {return}
+ if {![collapsible? $t] || ![winfo ismapped [$t leaf board]]} {return}
  set short [expr {[winfo width .application] < $ShortWidth || [winfo height .application] < $ShortHeight}]
  set desired {}
  set deficit [expr {max($ShortWidth-[winfo width .application], $ShortHeight-[winfo height .application])}]
@@ -2716,12 +2723,13 @@ proc updateCollapse {} {
   if {!$short && $desired eq {}} {rememberExpanded $t}
   return
  }
+ set custom [expr {![reflowable? $t]}]
  set S(busy) 1
  restoreCollapsed
  if {$desired ne {}} {
   set S(snapshot) [::application::focuszoom::Snapshot $t]
   set S(snapshotSize) [list [winfo width .application] [winfo height .application]]
-  if {![info exists S(returnSnapshot)] && [info exists S(expandedSnapshot)]} {
+  if {!$custom && ![info exists S(returnSnapshot)] && [info exists S(expandedSnapshot)]} {
    set S(returnSnapshot) $S(expandedSnapshot)
    set S(returnSize) $S(expandedSize)
   }
@@ -2732,7 +2740,17 @@ proc updateCollapse {} {
     lappend touched $pw
     foreach sibling [$pw panes] {
      lappend S(stretch) $pw $sibling [$pw panecget $sibling -stretch]
-     $pw paneconfigure $sibling -stretch always
+     $pw paneconfigure $sibling -stretch [expr {$custom ? "never" : "always"}]
+    }
+    if {$custom} {
+     # Keep the user's other sashes still: only the nearest surviving
+     # neighbour absorbs the hidden pane, rather than stretching every pane.
+     set panes [$pw panes]
+     set index [lsearch -exact $panes $node]
+     set neighbours [concat [lrange $panes [expr {$index+1}] end] [lreverse [lrange $panes 0 [expr {$index-1}]]]]
+     foreach neighbour $neighbours {
+      if {$neighbour ni $desired} {$pw paneconfigure $neighbour -stretch always; break}
+     }
     }
    }
    $pw paneconfigure $node -hide 1
@@ -2740,6 +2758,30 @@ proc updateCollapse {} {
   set S(collapsed) $desired
  }
  update idletasks
+ if {$custom && $desired ne {}} {
+  # Tk reuses requested pane sizes when hiding a child, even for panes
+  # marked non-stretching. Reapply every boundary except the one consumed
+  # by the hidden pane, so only its immediate neighbour changes size.
+  foreach pass {1 2} {
+   foreach {pw coords} $S(snapshot) {
+    if {$pw ni $touched} {continue}
+    set panes [$pw panes]
+    set skip {}
+    foreach {parent node} $desired {
+     if {$parent ne $pw} {continue}
+     set i [lsearch -exact $panes $node]
+     if {$i == [llength $panes]-1} {incr i -1}
+     lappend skip $i
+    }
+    set i 0
+    foreach xy $coords {
+     if {$i ni $skip} {$pw sash place $i {*}$xy}
+     incr i
+    }
+   }
+   update idletasks
+  }
+ }
  set S(busy) 0
  if {!$short && $desired eq {}} {rememberExpanded $t}
 }
