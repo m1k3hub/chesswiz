@@ -151,6 +151,7 @@ if {[info exists ::i18n::languages]} {
 # No Chesswiz issue-tracker URL is configured. Keep contact rows hidden.
 set BugTracker ""
 set FeatureRequestTracker ""
+set SupportURL "https://chesswizapp.com/support.html"
 
 variable Fullscreen			0
 variable HideMenu				0
@@ -191,7 +192,7 @@ proc setup {} {
 }
 
 proc ::menu::MacAbout {} {
-	catch { ::tk::mac::standardAboutPanel }
+	::info::openDialog .application
 }
 
 # Preferences and Quit keep one implementation for the system menu and the
@@ -519,6 +520,12 @@ proc gameNew {parent {variant Normal}} {
 proc bugReport {parent} {
 	variable BugTracker
 	if {$BugTracker ne ""} { ::web::open $parent $BugTracker }
+}
+
+
+proc support {parent} {
+	variable SupportURL
+	if {$SupportURL ne ""} { ::web::open $parent $SupportURL }
 }
 
 

@@ -4,8 +4,8 @@
 # The mac VM was not available to this worker, so the Tk-level dumps and
 # the scripted Quit on aqua are listed as not-run in the evidence report.
 # What is provable here: the About/Preferences/Quit handlers route through
-# the ::tk::mac hooks, and nothing installs a second global menu bar on
-# X11. The hooks are stubbed so no dialog opens and no shutdown runs.
+# the shared About dialog and ::tk::mac preferences/quit hooks, and nothing
+# installs a second global menu bar on X11. UI boundaries are stubbed.
 # ======================================================================
 
 package require Tcl 8.5
@@ -19,18 +19,16 @@ proc ::scidb::test::mac::About {} { set ::scidb::test::mac::called about }
 proc ::scidb::test::mac::Prefs {} { set ::scidb::test::mac::called prefs }
 proc ::scidb::test::mac::Quit {} { set ::scidb::test::mac::called quit }
 
-tcltest::test mac-about-uses-standard-panel {About calls the Tk application panel} -body {
-	set ::scidb::test::mac::called ""
-	# on Aqua the real panel exists: set it aside so the test sees the call
-	set had [llength [info commands ::tk::mac::standardAboutPanel]]
-	if {$had} { rename ::tk::mac::standardAboutPanel ::scidb::test::mac::RealAbout }
-	proc ::tk::mac::standardAboutPanel {} { ::scidb::test::mac::About }
+tcltest::test mac-about-has-support {About uses the application dialog with its support link} -setup {
+	rename ::info::openDialog ::scidb::test::mac::RealAbout
+	proc ::info::openDialog {parent} { set ::scidb::test::mac::called [list about $parent] }
+} -body {
 	::menu::MacAbout
-	set got [::scidb::test::mac::Called]
-	rename ::tk::mac::standardAboutPanel {}
-	if {$had} { rename ::scidb::test::mac::RealAbout ::tk::mac::standardAboutPanel }
-	list $got
-} -result {about}
+	::scidb::test::mac::Called
+} -cleanup {
+	rename ::info::openDialog {}
+	rename ::scidb::test::mac::RealAbout ::info::openDialog
+} -result {about .application}
 
 tcltest::test mac-preferences-hook {Preferences routes through ::tk::mac::ShowPreferences} -body {
 	set ::scidb::test::mac::called ""

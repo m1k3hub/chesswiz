@@ -321,6 +321,7 @@
 # Contact
 ::menu::mc::ContactBugReport				"&Fehlerbericht"
 ::menu::mc::ContactFeatureRequest		"Funktions&wunsch"
+::menu::mc::SupportChesswiz		"Chesswiz &unterstützen\u2026"
 
 # Extras
 ::menu::mc::InstallChessBaseFonts		"&Figurinen-Zeichensätze installieren"

@@ -323,6 +323,7 @@
 # Contact
 ::menu::mc::ContactBugReport		"&Hiba jelentés"
 ::menu::mc::ContactFeatureRequest	"&Feature Request" ;# NEW
+::menu::mc::SupportChesswiz		"A Chesswiz &támogatása…"
 
 # Extras
 ::menu::mc::InstallChessBaseFonts	"Figura betűtípusok telepítése" ;#"Install Figurine Fonts"  ;#NEW

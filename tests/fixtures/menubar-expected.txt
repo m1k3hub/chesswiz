@@ -255,5 +255,6 @@ MENU Help
   SEP
   ENTRY Bug Report
   ENTRY Feature Request
+  ENTRY Support Chesswiz…
   SEP
   ENTRY About Chesswiz…
