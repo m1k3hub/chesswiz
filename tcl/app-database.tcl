@@ -602,12 +602,12 @@ proc openBase {parent file byUser args} {
 		set msg [format $mc::LoadMessage $name]
 		if {[llength $opts(-encoding)] == 0} {
 			switch $ext {
-				sci - si3 - si4 - cbh - cbf			{ set opts(-encoding) auto }
+				sci - si3 - si4 - cbh - cbf - 2cbh	{ set opts(-encoding) auto }
 				pgn - pgn.gz - bpgn - bpgn.gz - zip	{ set opts(-encoding) $::encoding::defaultEncoding }
 			}
 		}
 		switch $ext {
-			sci - si3 - si4 - cbh - cbf {
+			sci - si3 - si4 - cbh - cbf - 2cbh {
 				set args {}
 				if {$ext ne "sci"} {
 					set opts(-readonly) 1
