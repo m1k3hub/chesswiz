@@ -18,6 +18,7 @@
 #include "cb2_elo.h"
 #include "cb2_eco.h"
 #include "cb2_index.h"
+#include "cb2_namebase.h"
 
 #include <string>
 #include <vector>
@@ -158,6 +159,31 @@ void loadEvents(unsigned char const* lid, size_t size,
 }
 
 
+// The source and annotator sections of the slot array: each slot carries one
+// two-string record, [total][len1][str1][len2][str2][8 bytes] (see
+// cb2_namebase.h).  The section's ordinal is the slot, and that ordinal is
+// what the game index stores (@0x38 source, @0x30 annotator).
+void loadSlotNames(unsigned char const* lid, size_t size, size_t sectionOffset,
+                   mstl::vector<std::string>& out_titles,
+                   mstl::vector<std::string>& out_names)
+{
+   unsigned const slots = db::cb2::namebaseSlotCount(size);
+   out_titles.clear();
+   out_names.clear();
+
+   for (unsigned slot = 0; slot < slots; ++slot)
+   {
+      out_titles.push_back(std::string());
+      out_names.push_back(std::string());
+
+      db::cb2::SlotName rec;
+      if (!db::cb2::readSlotName(lid, size, sectionOffset, slot, rec))
+         continue;
+      out_titles[slot].assign(rec.title, rec.titleLength);
+      out_names[slot].assign(rec.name, rec.nameLength);
+   }
+}
+
 void loadNames(unsigned char const* lid, size_t size,
                mstl::vector<std::string>& out_names)
 {
@@ -257,14 +283,18 @@ int main(int argc, char* argv[])
    mstl::vector<std::string> eventNames;
    mstl::vector<std::string> siteNames;
    mstl::vector<uint32_t> eventDates;
+   mstl::vector<std::string> sourceTitles, sourceNames;
+   std::string lidData;
    {
-      std::string lidData;
       if (loadFile((prefix + ".2lid").c_str(), lidData))
       {
          loadNames(reinterpret_cast<unsigned char const*>(lidData.c_str()),
                    lidData.size(), names);
          loadEvents(reinterpret_cast<unsigned char const*>(lidData.c_str()),
                     lidData.size(), eventNames, siteNames, eventDates);
+         loadSlotNames(reinterpret_cast<unsigned char const*>(lidData.c_str()),
+                       lidData.size(), db::cb2::namebaseSourceOffset,
+                       sourceTitles, sourceNames);
          unsigned named = 0;
          for (unsigned i = 0; i < names.size(); ++i)
             if (!names[i].empty())
@@ -460,6 +490,32 @@ int main(int argc, char* argv[])
          tags.set(db::tag::WhiteElo, whiteElo);
       if (db::rating::isValid(blackElo))
          tags.set(db::tag::BlackElo, blackElo);
+
+      // Source: index @0x38 selects a record of the .2lid source section
+      // (+0x860 of its slot); the record's second string is the source
+      // ('ChessBase', 'Codekiddy').  `~0` = none.
+      {
+         uint64_t const sourceId = readLE64(cbh + (size_t(k) + 1) * recordSize + 0x38);
+         if (sourceId < sourceNames.size())
+         {
+            std::string const& src = sourceNames[unsigned(sourceId)];
+            if (!src.empty())
+               tags.set(db::tag::Source, mstl::string(src.c_str()));
+            else if (!sourceTitles[unsigned(sourceId)].empty())
+               tags.set(db::tag::Source,
+                        mstl::string(sourceTitles[unsigned(sourceId)].c_str()));
+         }
+      }
+
+      // Annotator: index @0x30 is a *player* id (ChessBase models the
+      // annotator as a person), so it resolves through the player namebase
+      // read above -- the same rule as cb2::Codec::getAnnotator().
+      {
+         uint64_t const annotatorId = readLE64(cbh + (size_t(k) + 1) * recordSize + 0x30);
+         if (annotatorId < names.size() && !names[unsigned(annotatorId)].empty())
+            tags.set(db::tag::Annotator,
+                     mstl::string(names[unsigned(annotatorId)].c_str()));
+      }
 
       db::Board startBoard;
       if (!db::cb2::prepareGame(type, data, dataSize, startBoard, tags))

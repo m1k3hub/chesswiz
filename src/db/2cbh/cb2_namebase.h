@@ -8,7 +8,24 @@
 //   +0x000  player    [u32 total][u32 len][last][u32 len][first]
 //   +0x400  event     [u32 total][u32 siteLen][site][u32 evLen][event]
 //                     [u32 packed event date]
-//   +0x860  source    [u32 total][u32 len][sourceTitle][u32 len][source]
+//   +0x860  source    [u32 total][u32 tLen][sourceTitle][u32 len][source]
+//   +0x93c  annotator [u32 total][u32 tLen][title][u32 len][annotator]
+//   +0xd3c  team      (not decoded)
+//   +0xe76  game title(not decoded)
+//
+// The six record capacities in the file's 0xb8-byte header
+// (1024/1120/220/1024/314/532 = 0x108a bytes) are the sizes of exactly these
+// six records, which is how the offsets above are derived: the .2lid is one
+// fixed-slot array whose slot holds one record of every section.  Each
+// section is a namebase of its own: the game index stores that record's
+// ordinal — which is the slot ordinal — so sources and annotators are two
+// independent id spaces over the shared slot array.
+//
+// Both four-string sections are [total][len1][str1][len2][str2][8 zero bytes]
+// with total = 20 + len1 + len2.  The genuine fixtures store the source pair
+// as [SourceTitle]/[Source]: 'playchess.com'/'ChessBase' in the Grenke
+// database, ''/'Codekiddy' in the Lumbras database, whose source PGN has
+// [Source "Codekiddy"] and no [Annotator].
 //
 // The event record's trailing u32 is the EventDate, packed exactly like
 // the game date at index +0xbc:
@@ -39,6 +56,95 @@ static const size_t namebaseFirstSlot = 0xb8;
 static const size_t namebaseStride = 0x108a;
 /// Offset of the event/site record inside a slot.
 static const size_t namebaseEventOffset = 0x400;
+/// Offset of the source record inside a slot ([SourceTitle]/[Source]).
+static const size_t namebaseSourceOffset = 0x860;
+/// Offset of the annotator record inside a slot (same record grammar).
+static const size_t namebaseAnnotatorOffset = 0x93c;
+
+/// Number of slots whose first byte lies inside a .2lid of @a size bytes.
+/// The file is written sparsely: only the records that were allocated are
+/// present, so a trailing partial slot is normal (the genuine Grenke database
+/// ends 45 bytes into the slot of its last player record).
+inline unsigned
+namebaseSlotCount(size_t size)
+{
+	return size > namebaseFirstSlot
+		  ? unsigned((size - namebaseFirstSlot) / namebaseStride)
+		  : 0;
+}
+
+/// One two-string name record of a slot (source and annotator sections).
+struct SlotName
+{
+	SlotName(): title(0), titleLength(0), name(0), nameLength(0) {}
+
+	char const*	title;			///< first string, e.g. [SourceTitle]
+	unsigned		titleLength;
+	char const*	name;			///< second string, e.g. [Source]/[Annotator]
+	unsigned		nameLength;
+};
+
+/// Read the two-string name record of @a slot at @a sectionOffset of a .2lid
+/// buffer.  Returns false for an out-of-range slot, an unallocated slot (all
+/// zero) or a record whose text is not printable.
+inline bool
+readSlotName(	unsigned char const* lid,
+					size_t size,
+					size_t sectionOffset,
+					unsigned slot,
+					SlotName& result)
+{
+	if (lid == 0)
+		return false;
+
+	size_t const a = namebaseFirstSlot + size_t(slot) * namebaseStride
+					  + sectionOffset;
+
+	if (a + 20 > size)
+		return false;
+
+	uint32_t const total = uint32_t(lid[a])
+							 | (uint32_t(lid[a + 1]) << 8)
+							 | (uint32_t(lid[a + 2]) << 16)
+							 | (uint32_t(lid[a + 3]) << 24);
+	uint32_t const titleLen = uint32_t(lid[a + 4])
+							 | (uint32_t(lid[a + 5]) << 8)
+							 | (uint32_t(lid[a + 6]) << 16)
+							 | (uint32_t(lid[a + 7]) << 24);
+
+	if (total <= 20 || total > 0x200 || titleLen > total - 20)
+		return false;
+
+	size_t const b = a + 8 + titleLen;
+
+	if (b + 4 > size)
+		return false;
+
+	uint32_t const nameLen = uint32_t(lid[b])
+						 | (uint32_t(lid[b + 1]) << 8)
+						 | (uint32_t(lid[b + 2]) << 16)
+						 | (uint32_t(lid[b + 3]) << 24);
+
+	if (20 + titleLen + nameLen != total || b + 4 + nameLen > size)
+		return false;
+
+	char const* const title = reinterpret_cast<char const*>(lid + a + 8);
+	char const* const name = reinterpret_cast<char const*>(lid + b + 4);
+
+	for (uint32_t j = 0; j < titleLen; ++j)
+		if (static_cast<unsigned char>(title[j]) < 32)
+			return false;
+
+	for (uint32_t j = 0; j < nameLen; ++j)
+		if (static_cast<unsigned char>(name[j]) < 32)
+			return false;
+
+	result.title = title;
+	result.titleLength = titleLen;
+	result.name = name;
+	result.nameLength = nameLen;
+	return true;
+}
 
 /// A view of one .2lid event record. All pointers point into the caller's
 /// buffer; no ownership is transferred.

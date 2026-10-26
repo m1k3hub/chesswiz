@@ -12,6 +12,8 @@
 
 #include "cb2_index.h"
 #include "cb2_codec.h"
+#include "cb2_flags.h"
+#include "cb2_namebase.h"
 #include "2cbh_move16.h"
 
 #include "db_board.h"
@@ -35,11 +37,11 @@ uint32_t const RecordSize = 192;
 uint64_t const RecordMagic = 0x1122334455667788ull;
 unsigned const RecordHeaderSize = 26;
 
-unsigned const NamebaseBase = 0xb8;
-unsigned const NamebaseStride = 0x108a;
-unsigned const NamebaseEventOffset = 0x400;
-unsigned const NamebaseSourceOffset = 0x860;
-unsigned const NamebaseAnnotatorOffset = 0x93c;
+unsigned const NamebaseBase = namebaseFirstSlot;
+unsigned const NamebaseStride = namebaseStride;
+unsigned const NamebaseEventOffset = namebaseEventOffset;
+unsigned const NamebaseSourceOffset = namebaseSourceOffset;
+// The six record capacities of a slot; they sum to NamebaseStride.
 unsigned const SectionSize[6] = { 1024, 1120, 220, 1024, 314, 532 };
 
 inline uint16_t
@@ -215,6 +217,33 @@ struct NameList
 	}
 };
 
+/// A namebase whose entries are a two-string pair (the source section's
+/// [SourceTitle]/[Source]).  The entry's ordinal is its namebase id, which is
+/// also the .2lid slot the record is stored in.
+struct NamePairList
+{
+	mstl::vector<mstl::string>	first;
+	mstl::vector<mstl::string>	second;
+
+	unsigned find(mstl::string const& a, mstl::string const& b) const
+	{
+		for (unsigned i = 0; i < first.size(); ++i)
+			if (first[i] == a && second[i] == b)
+				return i;
+		return unsigned(-1);
+	}
+
+	unsigned insert(mstl::string const& a, mstl::string const& b)
+	{
+		unsigned const id = find(a, b);
+		if (id != unsigned(-1))
+			return id;
+		first.push_back(a);
+		second.push_back(b);
+		return first.size() - 1;
+	}
+};
+
 bool
 readFile(mstl::string const& name, mstl::string& data)
 {
@@ -258,7 +287,9 @@ struct Encoded
 {
 	mstl::string	payload;			///< .2cbg record payload (type in `type`)
 	uint16_t			type;
-	mstl::string	white, black, event, site, annotator, source;
+	mstl::string	white, black, event, site, annotator, source, sourceTitle;
+	unsigned			annotatorId;		///< player id of the annotator, ~0 = none
+	unsigned			sourceId;			///< source section id, ~0 = none
 	mstl::string	round, result, eco;
 	unsigned			whiteElo, blackElo;
 	uint32_t			date;
@@ -362,7 +393,8 @@ buildIndexRecord(	unsigned char* rec,
 							uint32_t whiteId,
 							uint32_t blackId,
 							uint32_t eventId,
-							uint32_t annotatorId)
+							uint32_t annotatorId,
+							uint32_t sourceId)
 {
 	::memset(rec, 0, RecordSize);
 
@@ -373,11 +405,19 @@ buildIndexRecord(	unsigned char* rec,
 	storeLE64(rec + 0x18, whiteId);
 	storeLE64(rec + 0x20, blackId);
 	storeLE64(rec + 0x28, eventId);
-	storeLE64(rec + 0x30, 2);						// observed constant
-	storeLE64(rec + 0x38, 0);
-	storeLE64(rec + 0x40, annotatorId == unsigned(-1) ? ~uint64_t(0) : uint64_t(annotatorId));
-	storeLE64(rec + 0x48, ~uint64_t(0));
-	storeLE64(rec + 0x50, 0);
+	// Annotator and source references; ~0 means "no reference".
+	//   +0x30  annotator: a *player* id (ChessBase models the annotator as a
+	//          person, see cb2::Codec::getAnnotator; the +0x93c namebase
+	//          section is a different, unidentified one)
+	//   +0x38  source: id of a record of the .2lid source section (+0x860)
+	//   +0x40/+0x48  white/black team, +0x50 game title (unused here)
+	// CBase26's reference repair walks exactly these fields with these
+	// namebases, and the classic CBH record keeps the same order.
+	storeLE64(rec + 0x30, annotatorId == unsigned(-1) ? ~uint64_t(0) : uint64_t(annotatorId));
+	storeLE64(rec + 0x38, sourceId == unsigned(-1) ? ~uint64_t(0) : uint64_t(sourceId));
+	storeLE64(rec + 0x40, ~uint64_t(0));			// WhiteTeam
+	storeLE64(rec + 0x48, ~uint64_t(0));			// BlackTeam
+	storeLE64(rec + 0x50, ~uint64_t(0));			// game title
 
 	rec[0x58] = uint8_t(resultCode(game.result) & 3);
 
@@ -449,14 +489,32 @@ buildNamebaseHeader(	unsigned char* header,
 	p[0] = 0; p[1] = 0; p[2] = 0; p[3] = 1;
 }
 
+/// Write a two-string name record ([SourceTitle]/[Source], or the annotator
+/// name) into @a q.  @a q points into a zero-filled slot, so the record's
+/// trailing eight bytes are already zero.
+void
+storeNameRecord(unsigned char* q, mstl::string const& first, mstl::string const& second)
+{
+	if (first.empty() && second.empty())
+		return;
+
+	storeLE32(q + 0, uint32_t(20 + first.size() + second.size()));
+	storeLE32(q + 4, uint32_t(first.size()));
+	::memcpy(q + 8, first.data(), first.size());
+
+	unsigned char* r = q + 8 + first.size();
+	storeLE32(r, uint32_t(second.size()));
+	::memcpy(r + 4, second.data(), second.size());
+}
+
 void
 buildSlot(	unsigned char* slot,
 				mstl::string const& player,
 				mstl::string const& site,
 				mstl::string const& event,
 				uint32_t eventDate,
-				mstl::string const& source,
-				mstl::string const& annotator)
+				mstl::string const& sourceTitle,
+				mstl::string const& source)
 {
 	::memset(slot, 0, NamebaseStride);
 
@@ -501,21 +559,12 @@ buildSlot(	unsigned char* slot,
 		storeLE32(r + 4 + event.size(), eventDate);
 	}
 
-	if (!source.empty())
-	{
-		unsigned char* q = slot + NamebaseSourceOffset;
-		storeLE32(q + 0, uint32_t(8 + source.size()));
-		storeLE32(q + 4, uint32_t(source.size()));
-		::memcpy(q + 8, source.data(), source.size());
-	}
-
-	if (!annotator.empty())
-	{
-		unsigned char* q = slot + NamebaseAnnotatorOffset;
-		storeLE32(q + 0, uint32_t(8 + annotator.size()));
-		storeLE32(q + 4, uint32_t(annotator.size()));
-		::memcpy(q + 8, annotator.data(), annotator.size());
-	}
+	// Source section (+0x860), in the record grammar CBase26 writes for it
+	// (validated on the genuine fixtures, see cb2_namebase.h):
+	//   [u32 total = 20 + len1 + len2][u32 len1][str1][u32 len2][str2][8 bytes]
+	// The annotator is not stored here: it is a player record, see
+	// buildIndexRecord().
+	storeNameRecord(slot + NamebaseSourceOffset, sourceTitle, source);
 
 	// sixth section: CBase26 stores a single usage byte in slot 0
 	slot[2902] = 4;
@@ -616,6 +665,37 @@ scanNamebase(	mstl::string const& data,
 	return true;
 }
 
+/// Read a two-string name section (the source section at +0x860) of an
+/// existing .2lid; entry i is the record of slot i.
+void
+scanSlotNames(	mstl::string const& lid,
+					size_t sectionOffset,
+					mstl::vector<mstl::string>& titles,
+					mstl::vector<mstl::string>& names)
+{
+	unsigned char const* data = reinterpret_cast<unsigned char const*>(lid.data());
+	unsigned const slots = namebaseSlotCount(lid.size());
+
+	titles.clear();
+	names.clear();
+
+	for (unsigned slot = 0; slot < slots; ++slot)
+	{
+		SlotName rec;
+
+		if (readSlotName(data, lid.size(), sectionOffset, slot, rec))
+		{
+			titles.push_back(mstl::string(rec.title, rec.titleLength));
+			names.push_back(mstl::string(rec.name, rec.nameLength));
+		}
+		else
+		{
+			titles.push_back(mstl::string());
+			names.push_back(mstl::string());
+		}
+	}
+}
+
 /// Read the game record payloads of an existing .2cbg, in index order.
 bool
 scanGameData(	mstl::string const& index,
@@ -661,7 +741,8 @@ writeDatabaseInt(	mstl::string const& rootname,
 							mstl::string* error)
 {
 	mstl::vector<Encoded> encoded(games.size());
-	NameList players, events, sources, annotators;
+	NameList players, events;
+	NamePairList sources;
 	mstl::vector<mstl::string> eventSite;
 	mstl::vector<uint32_t> eventDate;
 
@@ -680,7 +761,10 @@ writeDatabaseInt(	mstl::string const& rootname,
 		e.whiteElo = g.whiteElo;
 		e.blackElo = g.blackElo;
 		e.date = packDate(g.date);
-		e.medals = 0;
+		e.sourceTitle = g.sourceTitle;
+		e.source = g.source;
+		e.annotator = g.annotator;
+		e.medals = g.medals;
 		e.plies = 0;
 
 		if (!encodePayload(g, e))
@@ -734,10 +818,19 @@ writeDatabaseInt(	mstl::string const& rootname,
 			eventDate[eventId] = e.date;
 		}
 
-		if (!e.source.empty())
-			sources.insert(e.source);
-		if (!e.annotator.empty())
-			annotators.insert(e.annotator);
+		// The source is a namebase of its own (.2lid +0x860); the annotator
+		// is a *player* record (ChessBase models the annotator as a person,
+		// see cb2::Codec::getAnnotator), so it is inserted into the player
+		// list -- after all real players, so ids stay stable.
+		e.sourceId = (e.source.empty() && e.sourceTitle.empty())
+					 ? unsigned(-1)
+					 : sources.insert(e.sourceTitle, e.source);
+	}
+
+	for (unsigned i = 0; i < encoded.size(); ++i)
+	{
+		Encoded& e = encoded[i];
+		e.annotatorId = e.annotator.empty() ? unsigned(-1) : players.insert(e.annotator);
 	}
 
 	// ------------------------------------------------------------------
@@ -804,9 +897,8 @@ writeDatabaseInt(	mstl::string const& rootname,
 								players.find(encoded[i].white),
 								players.find(encoded[i].black),
 								events.find(encoded[i].event),
-								encoded[i].annotator.empty()
-									? unsigned(-1)
-									: annotators.find(encoded[i].annotator));
+								encoded[i].annotatorId,
+								encoded[i].sourceId);
 		index.append(reinterpret_cast<char const*>(rec), RecordSize);
 	}
 
@@ -816,8 +908,7 @@ writeDatabaseInt(	mstl::string const& rootname,
 	unsigned numSlots = players.names.size();
 
 	if (numSlots < events.names.size())	numSlots = events.names.size();
-	if (numSlots < sources.names.size())	numSlots = sources.names.size();
-	if (numSlots < annotators.names.size()) numSlots = annotators.names.size();
+	if (numSlots < sources.first.size())	numSlots = sources.first.size();
 	if (numSlots == 0)						numSlots = 1;
 
 	mstl::string lid;
@@ -828,8 +919,8 @@ writeDatabaseInt(	mstl::string const& rootname,
 		buildNamebaseHeader(	header,
 									players.names.size(),
 									events.names.size(),
-									sources.names.size(),
-									annotators.names.size(),
+									sources.first.size(),
+									0,										// no annotator section
 									1);
 		lid.assign(reinterpret_cast<char const*>(header), NamebaseBase);
 	}
@@ -843,8 +934,8 @@ writeDatabaseInt(	mstl::string const& rootname,
 					 slot < events.names.size() ? eventSite[slot] : mstl::string(),
 					 slot < events.names.size() ? events.names[slot] : mstl::string(),
 					 slot < eventDate.size() ? eventDate[slot] : 0,
-					 slot < sources.names.size() ? sources.names[slot] : mstl::string(),
-					 slot < annotators.names.size() ? annotators.names[slot] : mstl::string());
+					 slot < sources.first.size() ? sources.first[slot] : mstl::string(),
+					 slot < sources.second.size() ? sources.second[slot] : mstl::string());
 		lid.append(s);
 	}
 
@@ -894,6 +985,7 @@ writeDatabaseInt(	mstl::string const& rootname,
 WriteGame::WriteGame()
 	:whiteElo(0)
 	,blackElo(0)
+	,medals(0)
 	,setup(-1)
 	,recordType(0)
 {
@@ -988,8 +1080,10 @@ appendToDatabase(	mstl::string const& rootname,
 	NameList players, events;
 	mstl::vector<mstl::string> eventSite;
 	mstl::vector<uint32_t> eventDate;
+	mstl::vector<mstl::string> sourceTitle, sourceName;
 
 	scanNamebase(lidText, players, events, eventSite, eventDate);
+	scanSlotNames(lidText, namebaseSourceOffset, sourceTitle, sourceName);
 
 	for (unsigned i = 0; i < payloads.size(); ++i)
 	{
@@ -1040,6 +1134,22 @@ appendToDatabase(	mstl::string const& rootname,
 		unsigned const date = uint32_t(rec[0xbc]) | (uint32_t(rec[0xbd]) << 8)
 									| (uint32_t(rec[0xbe]) << 16);
 		g.date = Date((date >> 9) & 0xfff, (date >> 5) & 0xf, date & 0x1f);
+
+		// The per-game source (index +0x38), annotator (index +0x30) and medal
+		// word (+0x82) are carried over so appending does not lose them.
+		uint64_t const sourceId = readLE64(rec + 0x38);
+		uint64_t const annotatorId = readLE64(rec + 0x30);
+
+		if (sourceId < sourceName.size())
+		{
+			g.sourceTitle = sourceTitle[unsigned(sourceId)];
+			g.source = sourceName[unsigned(sourceId)];
+		}
+
+		if (annotatorId < players.names.size())
+			g.annotator = players.names[unsigned(annotatorId)];
+
+		g.medals = readLE16(rec + 0x82);
 
 		unsigned const ecoKey = readLE16(rec + 0x80);
 

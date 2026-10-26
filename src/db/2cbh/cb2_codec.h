@@ -110,9 +110,10 @@ private:
 
 	NamebasePlayer* getPlayer(unsigned id);
 	NamebaseEvent* getEvent(unsigned id);
-	NamebaseEntry* getAnnotator(unsigned id);
+	NamebaseEntry* getAnnotator(uint64_t id);
 
 	void applyEcoTag(TagSet& tags, unsigned gameIndex);
+	void applySourceTag(TagSet& tags, unsigned gameIndex);
 	bool loadAnnotationItems(unsigned gameIndex, mstl::vector<CbaItem>& items);
 
 	typedef mstl::map<uint32_t, NamebaseEntry*> BaseMap;
@@ -120,13 +121,17 @@ private:
 	unsigned			m_numGames;
 	BaseMap				m_playerMap;
 	BaseMap				m_eventMap;
-	BaseMap				m_annotatorMap;	// event slot -> annotator namebase entry
 	NamebasePlayer*	m_illegalPlayer;
 	mstl::fstream		m_gameStream;			// .2cbg
 	mstl::fstream		m_annotationStream;	// .2cba
 	mstl::string			m_encoding;
 	mstl::vector<uint32_t>	m_annotationOffsets;	// .2cba record offset per game
 	mstl::vector<uint16_t>	m_ecoValues;			// raw ECO key, index @0x80 per game
+	// .2lid source section (+0x860): per slot, the [SourceTitle] and
+	// [Source] pair.  Empty strings for slots that carry no source record.
+	mstl::vector<mstl::string>	m_sourceTitle;
+	mstl::vector<mstl::string>	m_sourceName;
+	mstl::vector<uint64_t>	m_sourceIds;			// source id, index @0x38 per game
 };
 
 } // namespace cb2

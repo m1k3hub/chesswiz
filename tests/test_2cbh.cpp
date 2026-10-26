@@ -9,6 +9,8 @@
 #include "2cbh/cb2_writer.h"
 #include "2cbh/2cbh_move16.h"
 #include "2cbh/2cbh_annotations.h"
+#include "2cbh/cb2_flags.h"
+#include "2cbh/cb2_namebase.h"
 #include "db_board.h"
 #include "db_move_list.h"
 #include "db_tag_set.h"
@@ -352,6 +354,11 @@ static void testWriterRoundTrip() {
         g.whiteElo=2500; g.blackElo=2400;
         g.date=db::Date(2026,5,1);
         g.setup=-1;
+        g.sourceTitle="playchess.com"; g.source="ChessBase";
+        g.annotator="Annotator, Ann";
+        g.medals=db::cb2::cb2Medals(db::GameInfo::Flag_Best_Game
+                                   | db::GameInfo::Flag_Tactics
+                                   | db::GameInfo::Flag_End_Game);
 
         std::vector<uint16_t> stream=
         {
@@ -375,6 +382,8 @@ static void testWriterRoundTrip() {
         g.round="1"; g.result="1/2-1/2";
         g.date=db::Date(2026,6,2);
         g.setup=906;
+        g.source="Codekiddy";
+        g.medals=db::cb2::cb2Medals(db::GameInfo::Flag_Sacrifice);
 
         db::Board board; board.setup(906,db::variant::Normal);
         db::Board const start(board);
@@ -458,8 +467,11 @@ static void testWriterRoundTrip() {
             pos=i+12;
         }
     }
-    check(players.size()==6,"three games: six distinct players");
+    // Six players plus the annotator, which is a player record: ChessBase
+    // models the annotator as a person (see cb2::Codec::getAnnotator).
+    check(players.size()==7,"six players and one annotator");
     check(players[0]=="Alpha, Ann" && players[1]=="Beta, Bob","written player names");
+    check(players[6]=="Annotator, Ann","annotator stored as a player record");
 
     auto eventSlot=[&](unsigned slot, std::string& site, std::string& event, std::string& date) {
         size_t a=0xb8+size_t(slot)*0x108a+0x400;
@@ -479,14 +491,22 @@ static void testWriterRoundTrip() {
         char const* white; char const* black; char const* event; char const* site;
         char const* date; char const* round; char const* result; char const* eco;
         unsigned wElo, bElo; char const* fen; unsigned plies;
+        char const* sourceTitle; char const* source; char const* annotator;
+        unsigned medals;
     };
     Expect expect[3] = {
         { "Alpha, Ann","Beta, Bob","Round Trip Open","Testville","2026.05.01","3","1-0","B12",
-          2500,2400,"rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w HAha - 0 2", 2 },
+          2500,2400,"rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w HAha - 0 2", 2,
+          "playchess.com","ChessBase","Annotator, Ann",
+          db::cb2::cb2Medals(db::GameInfo::Flag_Best_Game | db::GameInfo::Flag_Tactics
+                             | db::GameInfo::Flag_End_Game) },
         { "Gamma, Gina","Delta, Dan","Chess960 Cup","Berlin","2026.06.02","1","1/2-1/2","",
-          0,0,"", 5 },
+          0,0,"", 5,
+          "","Codekiddy","",
+          db::cb2::cb2Medals(db::GameInfo::Flag_Sacrifice) },
         { "Epsilon, Eve","Zeta, Zoe","Setup Match","Praha","2026.07.03","4.2","0-1","",
-          0,0,"8/8/8/3k4/8/3K4/8/8 b - - 3 2", 3 },
+          0,0,"8/8/8/3k4/8/3K4/8/8 b - - 3 2", 3,
+          "","","", 0 },
     };
 
     for (unsigned g=0;g<3;++g) {
@@ -573,6 +593,46 @@ static void testWriterRoundTrip() {
         check(std::string(resultTag)==expect[g].result,"result field");
 
         check(items.empty(),"no annotation items written");
+
+        // ---- annotator (index @0x30 -> .2lid +0x93c) and source
+        //      (index @0x38 -> .2lid +0x860) ----------------------------
+        auto slotName=[&](unsigned long id, size_t section,
+                          std::string& title, std::string& name) -> bool {
+            db::cb2::SlotName rec;
+            if (!db::cb2::readSlotName(namebase.data(), namebase.size(),
+                                       section, unsigned(id), rec))
+                return false;
+            title.assign(rec.title, rec.titleLength);
+            name.assign(rec.name, rec.nameLength);
+            return true;
+        };
+
+        std::string title, name;
+        uint64_t const annotatorId=u64at(rec+0x30);
+        if (expect[g].annotator[0]) {
+            check(annotatorId<players.size(),"annotator id is a player id");
+            check(players[unsigned(annotatorId)]==expect[g].annotator,"annotator name");
+        } else {
+            check(annotatorId==~uint64_t(0),"no annotator reference");
+        }
+
+        uint64_t const sourceId=u64at(rec+0x38);
+        if (expect[g].source[0]) {
+            check(sourceId<namebase.size(),"source id in range");
+            check(slotName(sourceId,db::cb2::namebaseSourceOffset,title,name),
+                  "source slot record decodes");
+            check(name==expect[g].source,"source name");
+            check(title==expect[g].sourceTitle,"source title");
+            // the record's total covers both strings plus eight bytes
+            size_t const a=db::cb2::namebaseFirstSlot
+                          +size_t(sourceId)*db::cb2::namebaseStride
+                          +db::cb2::namebaseSourceOffset;
+            check(u32at(&namebase[a])==20+title.size()+name.size(),"source record length");
+        }
+
+        check(u16at(rec+0x82)==expect[g].medals,"medal word");
+        check(db::cb2::cb2GameFlags(u16at(rec+0x82))
+              ==db::cb2::cb2GameFlags(expect[g].medals),"medals decode to game flags");
     }
 
     // ---- append to the written database --------------------------------
@@ -613,10 +673,102 @@ static void testWriterRoundTrip() {
         mstl::vector<db::cb2::CbaItem> items;
         check(db::cb2::walkGameRaw(consumer,q,sz,items,true,plies),"appended game replays");
         check(plies==1,"appended game length");
+
+        // Appending rewrites the namebase: the existing games must keep their
+        // source, annotator and medals.
+        std::vector<unsigned char> lid2=readFile((root+".2lid").c_str());
+        unsigned char const* r0=&index[192*1];
+        db::cb2::SlotName rec0;
+
+        check(db::cb2::readSlotName(lid2.data(),lid2.size(),
+                                    db::cb2::namebaseSourceOffset,
+                                    unsigned(u64at(r0+0x38)),rec0),
+              "appended database keeps the source record");
+        check(std::string(rec0.name,rec0.nameLength)=="ChessBase","appended source name");
+        check(std::string(rec0.title,rec0.titleLength)=="playchess.com","appended source title");
+
+        {
+            // The annotator is a player record: [total][lastLen][last]...
+            unsigned long const annId=unsigned(u64at(r0+0x30));
+            check(annId<db::cb2::namebaseSlotCount(lid2.size()),
+                  "appended annotator reference is a player slot");
+            size_t const slotAt=db::cb2::namebaseFirstSlot
+                               +size_t(annId)*db::cb2::namebaseStride;
+            std::string last((char const*)&lid2[slotAt+8],u32at(&lid2[slotAt+4]));
+            check(last=="Annotator","appended annotator name");
+        }
+        check(u16at(&index[192*1+0x82])
+              ==db::cb2::cb2Medals(db::GameInfo::Flag_Best_Game
+                                   | db::GameInfo::Flag_Tactics
+                                   | db::GameInfo::Flag_End_Game),
+              "appended medal word");
     }
 
     std::string cleanup("rm -rf '"); cleanup += dir; cleanup += "'";
     (void)std::system(cleanup.c_str());
+}
+
+// Every medal bit of the index word maps to exactly one codebase flag and
+// maps back unchanged, so a database written by cb2::writeDatabase reads back
+// with the flags it was given.
+static void testMedalBits() {
+    struct Bit { unsigned bit; unsigned flag; };
+    Bit const bits[] = {
+        {  0, db::GameInfo::Flag_Best_Game },
+        {  1, db::GameInfo::Flag_Decided_Tournament },
+        {  2, db::GameInfo::Flag_Model_Game },
+        {  3, db::GameInfo::Flag_Novelty },
+        {  4, db::GameInfo::Flag_Pawn_Structure },
+        {  5, db::GameInfo::Flag_Strategy },
+        {  6, db::GameInfo::Flag_Tactics },
+        {  7, db::GameInfo::Flag_With_Attack },
+        {  8, db::GameInfo::Flag_Sacrifice },
+        {  9, db::GameInfo::Flag_Defense },
+        { 10, db::GameInfo::Flag_Material },
+        { 11, db::GameInfo::Flag_Piece_Play },
+        { 12, db::GameInfo::Flag_End_Game },
+        { 13, db::GameInfo::Flag_Blunder },          // tactical blunder
+        { 14, db::GameInfo::Flag_Blunder },          // strategical blunder
+        { 15, db::GameInfo::Flag_User },
+    };
+    check(sizeof(bits)/sizeof(bits[0])==16,"all sixteen medal bits mapped");
+
+    for (unsigned i=0;i<16;++i) {
+        uint16_t const word=uint16_t(1u<<bits[i].bit);
+        unsigned const flags=db::cb2::cb2GameFlags(word);
+        if (flags!=bits[i].flag)
+            std::fprintf(stderr,"medal bit %u -> %#x expected %#x\n",
+                         bits[i].bit,flags,bits[i].flag);
+        check(flags==bits[i].flag,"medal bit maps to its game flag");
+        // The 13th/14th bit are the two blunder flavours and share one Scidb
+        // flag, so writing that flag sets both; every other bit is exclusive.
+        uint16_t const expected = bits[i].flag==db::GameInfo::Flag_Blunder
+                                  ? uint16_t((1u<<13)|(1u<<14)) : word;
+        check(db::cb2::cb2Medals(bits[i].flag)==expected,"game flag writes its medal bit");
+    }
+
+    // The two blunder bits share one codebase flag, so the written word keeps
+    // both bits and the readback is that one flag.
+    check(db::cb2::cb2Medals(db::GameInfo::Flag_Blunder)==((1u<<13)|(1u<<14)),
+          "blunder flag writes both blunder bits");
+    check(db::cb2::cb2GameFlags(0)==0,"empty medal word");
+    check(db::cb2::cb2Medals(0)==0,"no flags, no medals");
+    // Every one of the 65,536 words decodes to flags and re-encodes to a
+    // canonical word (the two blunder bits fold into one flag, so a word with
+    // only one of them re-encodes with both; the flags are unchanged).
+    bool roundTrip=true, idempotent=true;
+    for (unsigned word=0;word<0x10000;++word) {
+        unsigned const flags=db::cb2::cb2GameFlags(uint16_t(word));
+        uint16_t const back=db::cb2::cb2Medals(flags);
+        if (db::cb2::cb2GameFlags(back)!=flags) {
+            std::fprintf(stderr,"medal word %#x loses flags\n",word);
+            idempotent=false;
+            break;
+        }
+        if (db::cb2::cb2Medals(db::cb2::cb2GameFlags(back))!=back) roundTrip=false;
+    }
+    check(idempotent,"medal word keeps its flags");
+    check(roundTrip,"canonical medal word round trip");
 }
 
 int main(int argc,char** argv) {
@@ -674,6 +826,7 @@ int main(int argc,char** argv) {
     testMove16Encoding();
     testPlacementCodes();
     testExplicitSetup();
+    testMedalBits();
     testWriterRoundTrip();
 
     // Optional independent python-chess generated expectations, one FEN/id.

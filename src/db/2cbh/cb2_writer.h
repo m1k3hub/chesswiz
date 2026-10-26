@@ -9,8 +9,9 @@
 //   .2cbg  12-byte file header + per-game records (26-byte header + Move16
 //          token stream)
 //   .2lid  namebase: 0xb8-byte structural header, then one 0x108a-byte slot
-//          per player.  Each slot carries the player record at +0x000 and the
-//          event/site/EventDate record at +0x400.
+//          per name.  Each slot carries the player record at +0x000, the
+//          event/site/EventDate record at +0x400, the [SourceTitle]/[Source]
+//          pair at +0x860 and the annotator at +0x93c.
 //
 // The file layouts are documented in docs/formats/2CBH_FORMAT_DESIGN.md; the
 // Ghidra evidence for the record and setup writers is cited there (record
@@ -53,6 +54,20 @@ struct WriteGame
 	unsigned			whiteElo;
 	unsigned			blackElo;
 	Date				date;
+
+	/// The game's source pair, stored in the .2lid source section (+0x860 of
+	/// a slot) and referenced from index +0x38: @a sourceTitle is the first
+	/// string ([SourceTitle], e.g. "playchess.com"), @a source the second
+	/// ([Source], e.g. "ChessBase").  Empty strings leave the reference at
+	/// "none".
+	mstl::string	sourceTitle;
+	mstl::string	source;
+	/// The annotator.  ChessBase models the annotator as a person, so it is
+	/// stored as a *player* record of the .2lid and referenced from index
+	/// +0x30 (see cb2::Codec::getAnnotator).  Empty = no annotator.
+	mstl::string	annotator;
+	/// Medals / game flags word (index +0x82), see cb2_flags.h.
+	unsigned			medals;
 
 	/// -1 = standard start position.  0..959 = compact Chess960 position.
 	/// 1000 = arbitrary setup, described by @a fen (the two-word setup header

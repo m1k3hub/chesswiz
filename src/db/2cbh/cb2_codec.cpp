@@ -18,7 +18,9 @@
 #include "cb2_codec.h"
 #include "cb2_elo.h"
 #include "cb2_eco.h"
+#include "cb2_flags.h"
 #include "cb2_index.h"
+#include "cb2_namebase.h"
 #include "2cbh_move16.h"
 #include "2cbh_annotations.h"
 
@@ -641,6 +643,7 @@ Codec::tagFilter(Section section, TagSet const& tags) const
 		infoTags.set(tag::BlackElo);
 		infoTags.set(tag::EventDate);
 		infoTags.set(tag::Annotator);
+		infoTags.set(tag::Source);
 	}
 
 	return infoTags;
@@ -740,6 +743,10 @@ Codec::doOpen(	mstl::string const& rootname,
 	// here so the ECO tag can carry the full form.
 	m_ecoValues.clear();
 	m_ecoValues.reserve(m_numGames);
+	m_sourceTitle.clear();
+	m_sourceName.clear();
+	m_sourceIds.clear();
+	m_sourceIds.reserve(m_numGames);
 	for (unsigned k = 0; k < m_numGames; ++k)
 	{
 		unsigned char const* rec = cbh + (size_t(k) + 1) * recordSize;
@@ -868,6 +875,39 @@ Codec::doOpen(	mstl::string const& rootname,
 
 				for (size_t slot = 0; slot < nslots; ++slot)
 				{
+					// The source section of the same slot, at +0x860:
+					//   [u32 total = 20 + len1 + len2][u32 len1][str1]
+					//   [u32 len2][str2][8 zero bytes]
+					// Data-verified: the Grenke fixture stores
+					// 'playchess.com'/'ChessBase', the Lumbras fixture
+					// ''/'Codekiddy' -- exactly the [Source] of that
+					// database's source PGN.  The section after it (+0x93c,
+					// the same capacity grammar) is all zero in every genuine
+					// fixture and is NOT the annotator: see getAnnotator().
+					{
+						SlotName source;
+
+						if (readSlotName(lp, lsize, namebaseSourceOffset, slot, source))
+						{
+							mstl::string title(source.title, source.titleLength);
+							mstl::string name(source.name, source.nameLength);
+
+							if (!sys::utf8::validate(title))
+								textCodec.forceValidUtf8(title);
+							if (!sys::utf8::validate(name))
+								textCodec.forceValidUtf8(name);
+
+							while (m_sourceName.size() <= slot)
+							{
+								m_sourceTitle.push_back(mstl::string());
+								m_sourceName.push_back(mstl::string());
+							}
+
+							m_sourceTitle[slot] = title;
+							m_sourceName[slot] = name;
+						}
+					}
+
 					size_t a = 0xb8 + slot * 0x108a + 0x400;
 					if (a + 8 > lsize)
 						break;
@@ -937,55 +977,9 @@ Codec::doOpen(	mstl::string const& rootname,
 					m_eventMap.container().push_back(
 						BaseMap::value_type(unsigned(slot), entry));
 
-					// Source/annotator record of the same slot, at slot+0x860
-					// (player area 0x400 + event area 0x460):
-					//   [u32 total][u32 sourceTitleLen][sourceTitle]
-					//   [u32 annotatorLen][annotator][8 zero bytes]
-					// Verified against the Grenke fixture: 'playchess.com' /
-					// 'ChessBase' -> [SourceTitle]/[Source], and CBase26 emits
-					// the annotator tag from the same record.
-					size_t const sa = 0xb8 + slot * 0x108a + 0x860;
-					if (sa + 12 <= lsize)
-					{
-						uint32_t const total = uint32_t(lp[sa])
-											| (uint32_t(lp[sa + 1]) << 8)
-											| (uint32_t(lp[sa + 2]) << 16)
-											| (uint32_t(lp[sa + 3]) << 24);
-						uint32_t const titleLen = uint32_t(lp[sa + 4])
-											| (uint32_t(lp[sa + 5]) << 8);
-						if (total > 8 && total < 0x200 && titleLen < 0x100
-								&& sa + 8 + titleLen + 4 <= lsize)
-						{
-							size_t const ap = sa + 8 + titleLen;
-							uint32_t const annotatorLen = uint32_t(lp[ap])
-											| (uint32_t(lp[ap + 1]) << 8);
-							if (annotatorLen > 0 && annotatorLen < 0x100
-									&& ap + 4 + annotatorLen <= lsize)
-							{
-								mstl::string annotator(
-									reinterpret_cast<char const*>(lp + ap + 4), annotatorLen);
-								bool ok = true;
-								for (uint32_t j = 0; j < annotatorLen; ++j)
-									if (lp[ap + 4 + j] < 32)
-										ok = false;
-								if (ok)
-								{
-									if (!sys::utf8::validate(annotator))
-										textCodec.forceValidUtf8(annotator);
-									Namebase& annotations = namebase(Namebase::Annotator);
-									NamebaseEntry* aentry = annotations.insert(
-										annotator, unsigned(slot), (1 << 20));
-									aentry->incrRef();
-									m_annotatorMap.container().push_back(
-										BaseMap::value_type(unsigned(slot), aentry));
-								}
-							}
-						}
-					}
 				}
 
 				m_eventMap.qsort();
-				m_annotatorMap.qsort();
 			}
 			m_playerMap.qsort();
 		}
@@ -1010,7 +1004,22 @@ Codec::doOpen(	mstl::string const& rootname,
 		info.m_player[color::White] = getPlayer(unsigned(readLE32(rec + 0x18) & 0xffffffu));
 		info.m_player[color::Black] = getPlayer(unsigned(readLE32(rec + 0x20) & 0xffffffu));
 		info.m_event = getEvent(unsigned(readLE32(rec + 0x28) & 0xffffffu));
-		info.m_annotator = getAnnotator(unsigned(readLE32(rec + 0x28) & 0xffffffu));
+
+		// The annotator and source ids are u64 fields @+0x30 and @+0x38;
+		// `~0` is "no reference".  Evidence: CBase26's reference-repair
+		// function maps the six namebases to record fields as
+		// player -> +0x18/+0x20, tournament -> +0x28, annotator -> +0x30,
+		// source -> +0x38, team -> +0x40/+0x48, game title -> +0x50, and
+		// its sort keys resolve +0x30 through the annotator library and
+		// +0x38 through the source library.  This is also the classic CBH
+		// field order (white, black, tournament, annotator, source).
+		info.m_annotator = getAnnotator(readLE64(rec + 0x30));
+		m_sourceIds.push_back(readLE64(rec + 0x38));
+
+		// Medals / game flags: the u16 word @+0x82, in the slot classic CBH
+		// uses for the same word (right after the ECO key).  See
+		// cb2_flags.h for the bit assignment.
+		info.m_gameFlags |= cb2GameFlags(readLE16(rec + 0x82));
 
 		// round/subround: validated against the source PGN on 352
 		// date-verified games (round 7.5 -> 0x5a = 7, 0x5c = 5; scid-code
@@ -1153,23 +1162,33 @@ Codec::getEvent(unsigned id)
 }
 
 
-/// The per-game annotator: CBase26 keeps it in the source record of the event
-/// slot (slot+0x860 of the .2lid), so it is resolved through the game's event
-/// id.  Falls back to the namebase's empty annotator.
+/// The per-game annotator.  Index @+0x30 is a *player* id: ChessBase models
+/// the annotator as a person, so it is a record of the .2lid player array
+/// (slot+0x000), not of a separate annotator section.  Evidence: the genuine
+/// Grenke database has no annotator record anywhere (its +0x93c section is
+/// all zero and its header counts zero annotators) but index @0x30 = 2, and
+/// CBase26's own game list shows [Annotator] "ChessBase" for it -- the third
+/// player record of that database is exactly 'ChessBase'.  A database written
+/// with a distinct annotator name in the +0x93c section and the id of an
+/// unrelated player at @0x30 shows that player's name in CBase26, not the
+/// +0x93c string.
+/// A `~0` id, an out-of-range id or an unnamed record yields the empty
+/// annotator.
 NamebaseEntry*
-Codec::getAnnotator(unsigned id)
+Codec::getAnnotator(uint64_t id)
 {
-	BaseMap::iterator p = m_annotatorMap.find(id);
-	NamebaseEntry* entry;
+	NamebaseEntry* entry = 0;
 
-	if (p != m_annotatorMap.end())
+	if (id < (uint64_t(1) << 32))
 	{
-		entry = p->second;
+		BaseMap::iterator p = m_playerMap.find(unsigned(id));
+
+		if (p != m_playerMap.end() && !p->second->name().empty())
+			entry = p->second;
 	}
-	else
-	{
+
+	if (entry == 0)
 		entry = namebase(Namebase::Annotator).emptyAnnotator();
-	}
 
 	entry->incrRef();
 	return entry;
@@ -1188,6 +1207,30 @@ Codec::applyEcoTag(TagSet& tags, unsigned gameIndex)
 	{
 		tags.set(tag::Eco, buf);
 	}
+}
+
+
+void
+Codec::applySourceTag(TagSet& tags, unsigned gameIndex)
+{
+	// Source from the .2lid source section (+0x860 of a slot), selected by
+	// the u64 id the index keeps at +0x38.  The record's second string is
+	// the source ('ChessBase', 'Codekiddy'); the first is its title
+	// ('playchess.com'), which scidb has no tag for.
+	if (gameIndex >= m_sourceIds.size())
+		return;
+
+	uint64_t const id = m_sourceIds[gameIndex];
+
+	if (id >= m_sourceName.size())
+		return;
+
+	mstl::string const& name = m_sourceName[unsigned(id)];
+
+	if (!name.empty())
+		tags.set(tag::Source, name);
+	else if (id < m_sourceTitle.size() && !m_sourceTitle[unsigned(id)].empty())
+		tags.set(tag::Source, m_sourceTitle[unsigned(id)]);
 }
 
 
@@ -1241,6 +1284,7 @@ Codec::doDecoding(	db::Consumer& consumer,
 	if (!prepareGame(rec.type, moves, moveSize, startBoard, tags))
 		return save::UnsupportedVariant;
 	applyEcoTag(tags, gameIndex);
+	applySourceTag(tags, gameIndex);
 	if (!consumer.startGame(tags))
 		return save::UnsupportedVariant;
 	consumer.startMoveSection();
@@ -1278,6 +1322,7 @@ Codec::doDecoding(GameData& data, GameInfo& info, unsigned gameIndex, mstl::stri
 	TagSet tags;
 	info.setupTags(tags, variant::Normal);
 	applyEcoTag(tags, gameIndex);
+	applySourceTag(tags, gameIndex);
 	unsigned char const* moves = reinterpret_cast<unsigned char const*>(rec.data.data());
 	uint32_t moveSize = rec.size;
 	Board startBoard;
