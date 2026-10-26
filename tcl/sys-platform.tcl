@@ -501,6 +501,27 @@ proc tlsRegister {} {
 	package require tls
 	tlsInit
 	::http::register https 443 ::platform::sys::tlsSocket
+	if {$::tcl_platform(platform) eq "windows"} { BlockingHttpWrite }
+}
+
+# On Windows, tcltls 1.7 stops raising writable events once a non-blocking
+# write fills its 64 KB buffer, so http 2.9 hangs on request bodies above
+# 64 KB (multi-round assistant turns) until the timeout. Write each body
+# block in blocking mode; the reply is still read asynchronously.
+proc BlockingHttpWrite {} {
+	if {[llength [info commands ::http::Write_nonblocking]]} { return }
+	rename ::http::Write ::http::Write_nonblocking
+	proc ::http::Write {token} {
+		upvar 0 $token state
+		set sock $state(sock)
+		set blocking [fconfigure $sock -blocking]
+		fconfigure $sock -blocking 1
+		try {
+			::http::Write_nonblocking $token
+		} finally {
+			if {$sock in [chan names]} { fconfigure $sock -blocking $blocking }
+		}
+	}
 }
 
 } ;# namespace ::platform::sys

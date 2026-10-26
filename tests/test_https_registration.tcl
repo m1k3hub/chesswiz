@@ -48,6 +48,16 @@ test https-local-post {download then AI POST uses real TLS with correct SNI and 
     set result
 } -result [list ok 200 {"message":"é ♔"} ok 200]
 
+test https-local-large-post {request bodies above 64 KB go through the Windows blocking writer} -constraints localTls -body {
+    ::platform::sys::tlsRegister
+    ::platform::sys::BlockingHttpWrite
+    set body "\"[string repeat x 200000]\""
+    set tok [::ai::provider::request https://localhost:$::env(HTTPS_TEST_PORT)/post $body]
+    set result [list [::http::status $tok] [::http::ncode $tok] [string length [::ai::provider::body $tok]]]
+    ::http::cleanup $tok
+    set result
+} -result {ok 200 200002}
+
 if {[catch {package present tls}]} { package provide tls 1.7.22 }
 namespace eval ::tls {}
 proc ::tls::socket {args} { set ::socketArgs $args; return fakeSocket }

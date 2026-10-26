@@ -72,10 +72,10 @@ def main():
                                     env=env, timeout=30)
             if result.returncode:
                 return result.returncode
-            if received_sni != ["localhost", "localhost"]:
+            if received_sni != ["localhost"] * 3:
                 print(f"FAIL SNI sequence: {received_sni!r}")
                 return 1
-            print("PASS real TLS POST, GET, UTF-8 echo, and per-connection SNI")
+            print("PASS real TLS POST, GET, UTF-8 echo, 200 KB POST, and per-connection SNI")
             return 0
         finally:
             server.shutdown()
