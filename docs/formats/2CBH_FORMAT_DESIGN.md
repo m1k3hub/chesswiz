@@ -1618,11 +1618,27 @@ Subtracting the 10 header bytes would truncate every game.
 - `cb2::Codec` on the Grenke fixture: `[EventDate "2026.04.01"]` and
   `[Annotator "ChessBase"]` from the `.2lid`, plus the ten previously decoded
   fields, all equal to the source PGN.
-- `2cbh2pgn` output for the Grenke game, subset1 and subset300 is
-  byte-identical to the run-5 output (the ECO extension is zero in every
-  Lumbras record, so the `ECO` tag is unchanged there).
-- `src/db/test_2cbh` (synthetic, 59 checks) passes; the optional 960-FEN
-  oracle still matches all 960 positions.
+- `2cbh2pgn` now also emits `[EventDate]` from the same `.2lid` event record
+  (Grenke: `2026.04.01`, subset300 game 1: `2005.??.??`). With that single
+  addition its output is byte-identical to the run-5 output (the ECO extension
+  is zero in every Lumbras record, so the `ECO` tag is unchanged there).
+- `src/db/test_2cbh` (synthetic, over 3,300 checks) passes; the optional
+  960-FEN oracle still matches all 960 positions.
+
+**Open question — source versus annotator.** The second string of the
+`+0x860` record is the *source*: the genuine TWIC fixture
+(`.../History/Year_2026/10-October/2026_10_18_Sunday.2lid`) stores
+`The Week in Chess 1639` / `Mark Crowther` there while its game has no
+`[Annotator]`, and Lumbras slot 0 stores an empty first string and
+`Codekiddy`, the source PGN's `[Source "Codekiddy"]`. The writer therefore
+puts the annotator in a separate slot field at `+0x93c` (§18), but the reader
+still takes the annotator from the `+0x860` record and keys it by the event
+id, so `Codec` reports the source as the annotator and does not read back an
+annotator written at `+0x93c`. The index field that selects the annotator is
+not identified: real Grenke records have `-1` at `+0x40`, so the `+0x40`
+reference written by §18 matches ours but not CBase26's. Treat the annotator
+as unverified until a fixture with distinct `[Source]` and `[Annotator]` tags
+is imported through CBase26 and the slot/index pair is inspected.
 
 ## 18. Writer: `cb2::writeDatabase` / `cb2::appendToDatabase` (2026-10-26, run 6)
 

@@ -97,7 +97,8 @@ bool loadFile(char const* name, std::string& data)
 // stay unnamed).  See docs/formats/2CBH_FORMAT_DESIGN.md section 3.8.7.
 void loadEvents(unsigned char const* lid, size_t size,
                 mstl::vector<std::string>& out_events,
-                mstl::vector<std::string>& out_sites)
+                mstl::vector<std::string>& out_sites,
+                mstl::vector<uint32_t>& out_dates)
 {
    if (size < 0xb8 + 0x108a)
       return;
@@ -106,6 +107,10 @@ void loadEvents(unsigned char const* lid, size_t size,
 
    out_events.resize(nslots);
    out_sites.resize(nslots);
+   out_dates.resize(nslots);
+
+   for (size_t i = 0; i < nslots; ++i)
+      out_dates[i] = 0;
 
    for (size_t slot = 0; slot < nslots; ++slot)
    {
@@ -141,6 +146,14 @@ void loadEvents(unsigned char const* lid, size_t size,
       // e4 b8 ad = CJK); pass through unchanged.
       out_sites[slot] = site;
       out_events[slot] = event;
+
+      // The event record ends with the EventDate, packed exactly like the
+      // game date at index +0xbc: day(5) | month(4) << 5 | year(12) << 9.
+      if (b + 8 + evLen <= size)
+         out_dates[slot] = uint32_t(lid[b + 4 + evLen])
+                         | (uint32_t(lid[b + 5 + evLen]) << 8)
+                         | (uint32_t(lid[b + 6 + evLen]) << 16)
+                         | (uint32_t(lid[b + 7 + evLen]) << 24);
    }
 }
 
@@ -243,6 +256,7 @@ int main(int argc, char* argv[])
    mstl::vector<std::string> names(200000u);
    mstl::vector<std::string> eventNames;
    mstl::vector<std::string> siteNames;
+   mstl::vector<uint32_t> eventDates;
    {
       std::string lidData;
       if (loadFile((prefix + ".2lid").c_str(), lidData))
@@ -250,7 +264,7 @@ int main(int argc, char* argv[])
          loadNames(reinterpret_cast<unsigned char const*>(lidData.c_str()),
                    lidData.size(), names);
          loadEvents(reinterpret_cast<unsigned char const*>(lidData.c_str()),
-                    lidData.size(), eventNames, siteNames);
+                    lidData.size(), eventNames, siteNames, eventDates);
          unsigned named = 0;
          for (unsigned i = 0; i < names.size(); ++i)
             if (!names[i].empty())
@@ -407,6 +421,24 @@ int main(int argc, char* argv[])
                                 ? siteNames[eid] : "?";
       tags.set(db::tag::Event, mstl::string(eventStr.c_str()));
       tags.set(db::tag::Site, mstl::string(siteStr.c_str()));
+      if (eid < eventDates.size() && eventDates[eid] != 0)
+      {
+         uint32_t const packed = eventDates[eid];
+         unsigned const year = (packed >> 9) & 0xfff;
+         unsigned const month = (packed >> 5) & 0xf;
+         unsigned const day = packed & 0x1f;
+         if (year >= 1200 && year <= 2222 && month <= 12 && day <= 31)
+         {
+            char eventDateBuf[16];
+            if (month == 0)
+               ::snprintf(eventDateBuf, sizeof(eventDateBuf), "%04u.??.??", year);
+            else if (day == 0)
+               ::snprintf(eventDateBuf, sizeof(eventDateBuf), "%04u.%02u.??", year, month);
+            else
+               ::snprintf(eventDateBuf, sizeof(eventDateBuf), "%04u.%02u.%02u", year, month, day);
+            tags.set(db::tag::EventDate, mstl::string(eventDateBuf));
+         }
+      }
       tags.set(db::tag::Date, mstl::string(dateBuf));
       if (roundNo > 0)
       {
