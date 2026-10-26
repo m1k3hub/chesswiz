@@ -135,3 +135,7 @@ build/
 src/win/*.res
 src/tcl/.media_backend
 .git-version
+
+# ChessBase sample media and decompiler output: kept locally, never published (removed from history 2026-10-26)
+/media-console/fixture/
+/docs/ghidra_2cbh/
