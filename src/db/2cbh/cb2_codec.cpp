@@ -463,7 +463,26 @@ Codec::encoding() const
 tag::TagSet
 Codec::tagFilter(Section section, TagSet const& tags) const
 {
-	return tag::TagSet();
+	// The tags the .2cbh index supplies (see doOpen). An empty set here made
+	// Database::getInfoTags drop every tag, so the game list and the
+	// assistant saw blank players/event/date although the index has them.
+	static tag::TagSet infoTags;
+
+	if (infoTags.none())
+	{
+		infoTags.set(tag::Event);
+		infoTags.set(tag::Site);
+		infoTags.set(tag::Date);
+		infoTags.set(tag::Round);
+		infoTags.set(tag::White);
+		infoTags.set(tag::Black);
+		infoTags.set(tag::Result);
+		infoTags.set(tag::Eco);
+		infoTags.set(tag::WhiteElo);
+		infoTags.set(tag::BlackElo);
+	}
+
+	return infoTags;
 }
 
 
