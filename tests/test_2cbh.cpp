@@ -75,6 +75,9 @@ static uint16_t pawnCode(char const* from,char const* to,unsigned piece) {
 // helpers for the writer round trip
 // ----------------------------------------------------------------------
 static uint16_t u16at(unsigned char const* p) { return p[0] | (p[1]<<8); }
+static uint32_t be32at(unsigned char const* p) {
+    return (uint32_t(p[0])<<24) | (uint32_t(p[1])<<16) | (uint32_t(p[2])<<8) | uint32_t(p[3]);
+}
 static uint32_t u32at(unsigned char const* p) {
     return uint32_t(p[0]) | (uint32_t(p[1])<<8) | (uint32_t(p[2])<<16) | (uint32_t(p[3])<<24);
 }
@@ -704,8 +707,259 @@ static void testWriterRoundTrip() {
               "appended medal word");
     }
 
-    std::string cleanup("rm -rf '"); cleanup += dir; cleanup += "'";
-    (void)std::system(cleanup.c_str());
+    if (!std::getenv("CB2_WRITER_KEEP")) {
+        std::string cleanup("rm -rf '"); cleanup += dir; cleanup += "'";
+        (void)std::system(cleanup.c_str());
+    } else {
+        std::printf("# kept %s\n",root.c_str());
+    }
+}
+
+// ----------------------------------------------------------------------
+// every header field of a written database, recomputed from its content
+// ----------------------------------------------------------------------
+// The four files plus the <name>.ini description are re-read here with plain
+// little-endian accessors and checked field by field: nothing is compared
+// against what the writer remembers, only against what the bytes hold and
+// against the games that were handed to it.  CBase26's own databases have the
+// same shape (0/1/2-game databases were used to fix the layout), so a field
+// that this test accepts is one CBase26 accepts too.
+static void testWriterHeaders() {
+    char dir[256];    std::snprintf(dir,sizeof(dir),"/tmp/cb2-writer-headers-%ld",(long)::getpid());
+    std::string mk("mkdir -p '"); mk += dir; mk += "'";
+    check(std::system(mk.c_str())==0,"temporary directory");
+    std::string root=std::string(dir)+"/hd";
+
+    struct Spec { char const* white; char const* black; char const* event;
+                  char const* site; char const* round; char const* result;
+                  char const* eco; unsigned whiteElo; unsigned blackElo;
+                  unsigned year, month, day; char const* sourceTitle;
+                  char const* source; char const* annotator; int setup; };
+    Spec const specs[2] = {
+        { "Header, Hanna", "Probe, Paul", "Header Event", "Headerville",
+          "3", "1-0", "C65", 2410, 2305, 2026, 7, 4,
+          "Source Title", "Source Name", "Writer, Wanda", -1 },
+        { "Second, Sam", "Third, Tina", "Second Event", "Elsewhere",
+          "4.2", "0-1", "B12", 2200, 2650, 2025, 12, 31,
+          "Other Title", "Other Name", "", 906 },
+    };
+    unsigned const gameCount=2;
+
+    mstl::vector<db::cb2::WriteGame> games;
+    unsigned plies[gameCount];
+    unsigned medals[gameCount];
+
+    for (unsigned i=0;i<gameCount;++i) {
+        Spec const& s=specs[i];
+        db::cb2::WriteGame g;
+        g.white=s.white; g.black=s.black; g.event=s.event; g.site=s.site;
+        g.round=s.round; g.result=s.result; g.eco=s.eco;
+        g.whiteElo=s.whiteElo; g.blackElo=s.blackElo;
+        g.date=db::Date(s.year,s.month,s.day);
+        g.sourceTitle=s.sourceTitle; g.source=s.source;
+        g.annotator=s.annotator; g.setup=s.setup;
+        g.medals=db::cb2::cb2Medals(i==0
+                    ? db::GameInfo::Flag_Tactics|db::GameInfo::Flag_End_Game
+                    : db::GameInfo::Flag_Sacrifice);
+        db::Board board=db::Board::standardBoard(db::variant::Normal);
+        mstl::vector<db::Move> line; db::MoveList ml;
+        board.generateMoves(db::variant::Normal,ml);
+        board.filterLegalMoves(ml,db::variant::Normal);
+        line.push_back(ml[0]);
+        check(db::cb2::encodeMoveStream(board,line,g.moves),"encode header game");
+        plies[i]=0;
+        for (unsigned k=0;k<g.moves.size();++k)
+            if (g.moves[k]!=db::cb2::Move16_GameStart
+                &&g.moves[k]!=db::cb2::Move16_Marker
+                &&g.moves[k]!=db::cb2::Move16_None
+                &&g.moves[k]!=db::cb2::Move16_Terminator) ++plies[i];
+        medals[i]=g.medals;
+        games.push_back(g);
+    }
+
+    mstl::string err;
+    check(db::cb2::writeDatabase(root.c_str(),games,&err),"writeDatabase headers");
+
+    std::vector<unsigned char> index=readFile((root+".2cbh").c_str());
+    std::vector<unsigned char> gdata=readFile((root+".2cbg").c_str());
+    std::vector<unsigned char> adata=readFile((root+".2cba").c_str());
+    std::vector<unsigned char> namebase=readFile((root+".2lid").c_str());
+    std::vector<unsigned char> ini=readFile((root+".ini").c_str());
+
+    // ---- .2cbh: framing ----------------------------------------------
+    check(index.size()==192*(gameCount+1),"index holds header plus one record per game");
+    check(u16at(&index[0x08])==0x26,"index header record size");
+    check(u16at(&index[0x0a])==192,"index header stride");
+    check(u32at(&index[0x0c])==0x500,"index header page size");
+    check(u64at(&index[0x10])==gameCount+1,"index header record count");
+    for (unsigned i=0;i<0x08;++i) check(index[i]==0,"index header +0 is zero");
+    for (unsigned i=0x12;i<192;++i) check(index[i]==0,"index header tail is zero");
+
+    // ---- .2lid: structural header ------------------------------------
+    unsigned const be32=be32at(&namebase[0]);
+    check(be32==0xb8,"namebase header length");    check(be32at(&namebase[4])==6,"namebase section count");
+    unsigned const capacity[6]={1024,1120,220,1024,314,532};
+    unsigned count[6]={0,0,0,0,0,0};
+    unsigned capacitySum=0;
+    for (unsigned s=0;s<6;++s) {
+        unsigned char const* p=&namebase[8+20*s];
+        unsigned const cap=be32at(p);
+        unsigned const n=be32at(p+8);
+        check(cap==capacity[s],"namebase section capacity");
+        check(p[4]==0&&p[5]==0&&p[6]==0&&p[7]==0,"namebase section spare word");
+        check(p[12]==0xff&&p[13]==0xff&&p[14]==0xff&&p[15]==0xff,"namebase section end marker");
+        check(p[16]==0xff&&p[17]==0xff&&p[18]==0xff&&p[19]==0xff,"namebase section end marker 2");
+        count[s]=n;
+        capacitySum+=cap;
+    }
+    check(capacitySum==0x108a,"namebase capacities fill one slot");
+    check(namebase[0x80]==0xff&&namebase[0x81]==0xff&&namebase[0x82]==0xff&&namebase[0x83]==0xff,
+          "namebase free-list root");
+    for (unsigned s=0;s<6;++s) {
+        unsigned char const* p=&namebase[0x84+8*s];
+        check(be32at(p)==1,"namebase free chunk count");
+        check(be32at(p+4)==s,"namebase free chunk section");
+    }
+    check(be32at(&namebase[0xb4])==1,"namebase free chunk terminator");
+
+    unsigned const slotCount=db::cb2::namebaseSlotCount(namebase.size());
+    check(namebase.size()==0xb8+size_t(slotCount)*0x108a,"namebase holds whole slots");
+
+    // ---- .2lid: section counts recomputed from the slot array --------
+    unsigned seen[6]={0,0,0,0,0,0};
+    for (unsigned s=0;s<slotCount;++s) {
+        unsigned char const* slot=&namebase[0xb8+size_t(s)*0x108a];
+        if (u32at(slot)!=0) ++seen[0];
+        if (u32at(slot+db::cb2::namebaseEventOffset)!=0) ++seen[1];
+        if (u32at(slot+db::cb2::namebaseSourceOffset)!=0) ++seen[2];
+        if (u32at(slot+db::cb2::namebaseAnnotatorOffset)!=0) ++seen[3];
+        if (slot[0xe76]==4) ++seen[5];
+    }
+    for (unsigned s=0;s<6;++s) {
+        if (count[s]!=seen[s]) std::fprintf(stderr,"section %u count %u, slots hold %u\n",s,count[s],seen[s]);
+        check(count[s]==seen[s],"namebase section count matches its slots");
+    }
+    check(count[0]>=gameCount*2,"one player record per named player");
+    check(slotCount>=count[0]&&slotCount>=count[1]&&slotCount>=count[2],"slot array covers every count");
+
+    // ---- .2cbg / .2cba: file headers ---------------------------------
+    check(u64at(&gdata[0])==gdata.size(),"game file length header");
+    check(u16at(&gdata[8])==12,"game file header length");
+    check(u16at(&gdata[10])<=0x500,"game file header word within range");
+    check(u64at(&adata[0])==adata.size(),"annotation file length header");
+    check(u32at(&adata[8])==12,"annotation file header length");
+
+    // ---- per game: index record against the payload it points at -----
+    size_t gpos=u16at(&gdata[8]);
+    size_t apos=u32at(&adata[8]);
+
+    for (unsigned i=0;i<gameCount;++i) {
+        unsigned char const* rec=&index[192+192*size_t(i)];
+
+        check(u16at(rec+0x00)==1,"record present flag");
+        check(u16at(rec+0x02)==0x0101,"record version word");
+
+        // .2cbg record the index points at
+        size_t const goff=size_t(u64at(rec+0x08));
+        check(goff==gpos,"index game offset is the next record");
+        check(goff+34<=gdata.size(),"game record inside the file");
+        check(u64at(&gdata[goff])==0x1122334455667788ull,"game record magic");
+        unsigned const dsz=u32at(&gdata[goff+8]);
+        unsigned const esz=u32at(&gdata[goff+0xc]);
+        check(goff+26+dsz+esz+8<=gdata.size(),"game record inside the file");
+        check(u64at(&gdata[goff+26+dsz+esz])==26+dsz+esz+8,"game record length trailer");
+        gpos=goff+26+dsz+esz+8;
+        unsigned const type=u16at(&gdata[goff+0x18]);
+        check(type==(specs[i].setup>=0&&specs[i].setup!=1000?2u:1u),"game record type follows the setup");
+
+        // .2cba record the index points at
+        size_t const aoff=size_t(u64at(rec+0x10));
+        check(aoff==apos,"index annotation offset is the next record");
+        check(aoff+34<=adata.size(),"annotation record inside the file");
+        check(u64at(&adata[aoff])==0x1122334455667788ull,"annotation record magic");
+        check(u32at(&adata[aoff+8])==4,"annotation record payload size");
+        check(u16at(&adata[aoff+0x18])==0x2000,"annotation record type");
+        check(adata[aoff+26]==0xff&&adata[aoff+27]==0xff
+              &&adata[aoff+28]==0xff&&adata[aoff+29]==0x7f,"no-annotation marker");
+        unsigned const aesz=u32at(&adata[aoff+0xc]);
+        check(aoff+26+4+aesz+8<=adata.size(),"annotation record inside the file");
+        check(u64at(&adata[aoff+26+4+aesz])==26+4+aesz+8,"annotation record length trailer");
+        check(aesz>=196,"no-annotation record carries its trailing block");
+        apos=aoff+26+4+aesz+8;
+
+        // namebase references are ids, so they must be inside their section
+        // A namebase reference is an id inside its section, or ~0 for "none".
+        auto refOk=[](uint64_t id,unsigned n){ return id< n || id==~uint64_t(0); };
+        check(refOk(u64at(rec+0x18),count[0]),"white player id in range");
+        check(refOk(u64at(rec+0x20),count[0]),"black player id in range");
+        check(refOk(u64at(rec+0x28),count[1]),"event id in range");
+        check(refOk(u64at(rec+0x30),count[0]),"annotator id is a player id in range");
+        check(refOk(u64at(rec+0x38),count[2]),"source id in range");
+        check(u64at(rec+0x40)==~uint64_t(0),"white team unset");
+        check(u64at(rec+0x48)==~uint64_t(0),"black team unset");
+        check(u64at(rec+0x50)==~uint64_t(0),"no game title");
+
+        // scalar fields
+        unsigned const result=(specs[i].result[0]=='1')?2u
+                              :(specs[i].result[0]=='0')?0u:1u;
+        check((rec[0x58]&3)==result,"result code");
+        check(u16at(rec+0x5a)==unsigned(specs[i].round[0]-'0'),"round level");
+        check(u16at(rec+0x5c)==(specs[i].round[1]=='.'?unsigned(specs[i].round[2]-'0'):0u),
+              "sub-round level");
+        check(u16at(rec+0x60)==specs[i].whiteElo,"white Elo");
+        check(u16at(rec+0x70)==specs[i].blackElo,"black Elo");
+        unsigned const ecoCode=unsigned(specs[i].eco[0]-'A')*100
+                                +10*unsigned(specs[i].eco[1]-'0')
+                                +unsigned(specs[i].eco[2]-'0');
+        check(u16at(rec+0x80)==128*(ecoCode+1),"ECO key");
+        check(u16at(rec+0x82)==medals[i],"medal word");
+
+        // move count and date recomputed from the game that was written
+        unsigned const packed=unsigned(specs[i].day)
+                              |(unsigned(specs[i].month)<<5)
+                              |(unsigned(specs[i].year)<<9);
+        unsigned const dateField=unsigned(rec[0xbc])|(unsigned(rec[0xbd])<<8)
+                                 |(unsigned(rec[0xbe])<<16);
+        check(dateField==packed,"packed date");
+        check(rec[0xbf]==0,"date padding");
+    }
+
+    check(gpos==gdata.size(),"game file ends after the last record");
+    check(apos==adata.size(),"annotation file ends after the last record");
+
+    // The written move count field is halves of the mainline: recount the
+    // Move16 codes of the stored payload for every game.
+    for (unsigned i=0;i<gameCount;++i) {
+        unsigned char const* rec=&index[192+192*size_t(i)];
+        size_t const goff=size_t(u64at(rec+0x08));
+        unsigned const dsz=u32at(&gdata[goff+8]);
+        unsigned codes=0;
+        for (unsigned k=0;k<dsz/2;++k) {
+            uint16_t const w=u16at(&gdata[goff+26+2*k]);
+            if (w==db::cb2::Move16_Terminator) break;
+            if (w==db::cb2::Move16_GameStart||w==db::cb2::Move16_Marker
+                ||w==db::cb2::Move16_None) continue;
+            ++codes;
+        }
+        check(codes>=plies[i],"the stored mainline holds the moves that were written");
+        check(u16at(rec+0x8a)==plies[i]/2,"move count field is half the mainline length");
+    }
+
+    // ---- .ini: the description CBase26 needs to see a database --------
+    std::string text(ini.begin(),ini.end());
+    std::string const iniHead("[Descr2CBG]\r\nType=1\r\n");
+    check(text.compare(0,iniHead.size(),iniHead)==0,"description starts with the section and type");
+    check(text.find("\r\nTitle=hd\r\n")!=std::string::npos,"description carries the database name");
+    check(text.find("[Environ]\r\n")!=std::string::npos,"description carries the environment section");
+    check(text.size()>400&&text[text.size()-1]=='\n'&&text[text.size()-2]=='\r',
+          "description ends with a CRLF line");
+
+    std::string cleanup; if (!std::getenv("CB2_WRITER_KEEP")) {
+        cleanup="rm -rf '"; cleanup+=dir; cleanup+="'";
+        (void)std::system(cleanup.c_str());
+    } else {
+        std::printf("# kept %s\n",root.c_str());
+    }
 }
 
 // Every medal bit of the index word maps to exactly one codebase flag and
@@ -828,6 +1082,7 @@ int main(int argc,char** argv) {
     testExplicitSetup();
     testMedalBits();
     testWriterRoundTrip();
+    testWriterHeaders();
 
     // Optional independent python-chess generated expectations, one FEN/id.
     if (argc>1) {

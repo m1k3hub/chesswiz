@@ -8,10 +8,17 @@
 //   .2cbh  192-byte header record + one 192-byte record per game
 //   .2cbg  12-byte file header + per-game records (26-byte header + Move16
 //          token stream)
+//   .2cba  12-byte file header + one "no annotations" record per game
 //   .2lid  namebase: 0xb8-byte structural header, then one 0x108a-byte slot
 //          per name.  Each slot carries the player record at +0x000, the
 //          event/site/EventDate record at +0x400, the [SourceTitle]/[Source]
 //          pair at +0x860 and the annotator at +0x93c.
+//   .ini   the [Descr2CBG] description CBase26 needs to accept the directory
+//          as a database (without it, it offers to create a new one instead).
+//
+// Everything is checked field by field by tests/test_2cbh.cpp and accepted by
+// ChessBase 26 itself (open, list, close, re-open) -- see
+// docs/formats/2CBH_FORMAT_DESIGN.md section 18.
 //
 // The file layouts are documented in docs/formats/2CBH_FORMAT_DESIGN.md; the
 // Ghidra evidence for the record and setup writers is cited there (record
@@ -83,9 +90,9 @@ struct WriteGame
 	mstl::vector<uint16_t>	moves;
 };
 
-/// Write all @a games as a new database @a rootname (".2cbh"/".2cbg"/".2lid"
-/// are appended).  Any existing files are replaced.  Returns false and sets
-/// @a error on an I/O or encoding failure.
+/// Write all @a games as a new database @a rootname (".2cbh"/".2cbg"/".2cba"
+/// /".2lid"/".ini" are appended).  Any existing files are replaced.  Returns
+/// false and sets @a error on an I/O or encoding failure.
 bool writeDatabase(	mstl::string const& rootname,
 							mstl::vector<WriteGame> const& games,
 							mstl::string* error = 0);

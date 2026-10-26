@@ -1,10 +1,11 @@
 # 2CBH Format Reverse Engineering — Design for Scidb
 
-**Status (2026-10-26, run 7): read-only small-database and compact Chess960
+**Status (2026-10-26, run 8): read-only small-database and compact Chess960
 support implemented in `cb2::Codec` and `2cbh2pgn`; validation and limits in
 §16; the `.2lid` slot layout, EventDate, source, annotator, ECO key and medal
-word in §17; the first 2CBH writer (`cb2::writeDatabase`/`appendToDatabase`) in
-§18; the real remaining work in §19.**
+word in §17; the 2CBH writer (`cb2::writeDatabase`/`appendToDatabase`) in §18,
+now accepted and re-opened by ChessBase 26 itself; the real remaining work in
+§19.**
 
 - The index contains **one header record**, then games, at every database size.
   The previous 256-record assumption discarded 255 real games and rejected
@@ -26,11 +27,15 @@ word in §17; the first 2CBH writer (`cb2::writeDatabase`/`appendToDatabase`) in
   failure in the execution sandbox. This is not a passed GUI test.
 - A writer exists for new databases and for appending (§18). It writes the
   event date, the `[SourceTitle]`/`[Source]` pair (`.2lid` `+0x860`), the
-  annotator (a *player* record, referenced from index `+0x30`) and the medal
-  word (index `+0x82`, classic CBH bit assignment, §17.6), and reads them all
-  back; the ECO sub-*letter* remains a runtime classification that the index
-  cannot store (§17.1). Original-source PGN tags can differ from stored data;
-  see the mismatch accounting in §16.
+  annotator (a *player* record, referenced from index `+0x30`), the medal
+  word (index `+0x82`, classic CBH bit assignment, §17.6) **and the
+  `<name>.ini` description file** that makes ChessBase 26 treat the directory
+  as a database at all. CBase26 opens a written database, lists it, closes and
+  re-opens it without running its repair pass or showing its error report, and
+  leaves all four database files byte-identical (§18.5). The ECO sub-*letter*
+  remains a runtime classification that the index cannot store (§17.1), and
+  original-source PGN tags can differ from stored data (mismatch accounting in
+  §16).
 
 **Reading historical material:** sections 3–15 preserve the research trail,
 including superseded hypotheses. In particular, claims about encryption,
@@ -1741,17 +1746,18 @@ test.  Two neighbouring fields are *not* part of it:
   (`0x1401e4540`, `0x1401e4470`, `0x1401e4500`), zero everywhere.  Left
   unmapped.
 
-## 18. Writer: `cb2::writeDatabase` / `cb2::appendToDatabase` (2026-10-26, run 6)
+## 18. Writer: `cb2::writeDatabase` / `cb2::appendToDatabase` (2026-10-26, run 8)
 
-`src/db/2cbh/cb2_writer.{h,cpp}` writes the four files from
+`src/db/2cbh/cb2_writer.{h,cpp}` writes the five files from
 `mstl::vector<WriteGame>`:
 
 | File | Content |
 |------|---------|
 | `.2cbh` | one 192-byte header record (`0x26` @+0x08, stride `0xc0` @+0x0a, `0x500` @+0x0c, u64 record count @+0x10) and one 192-byte record per game |
 | `.2cbg` | 12-byte file header (`u64 file size`, `u16 12`, `u16 0x500`), then per game `magic | dataSize | extraSize=100 | 8-byte sub-field | type | payload | 100 zero bytes | u64 record size` |
-| `.2cba` | as `.2cbg` with type `0x2000` and the four-byte `ff ff ff 7f` "no annotations" data |
-| `.2lid` | 184-byte header (six capacities `1024/1120/220/1024/314/532` and their counts) plus one 4234-byte slot per ordinal: player record @+0, event/site/EventDate @+0x400, source @+0x860 (the unknown fourth section @+0x93c stays zero) |
+| `.2cba` | as `.2cbg` with type `0x2000`, the four-byte `ff ff ff 7f` "no annotations" payload and CBase26's 198-byte trailing block (§18.3) |
+| `.2lid` | 184-byte header (six capacities `1024/1120/220/1024/314/532` and their counts, §18.2) plus one 4234-byte slot per ordinal: player record @+0, event/site/EventDate @+0x400, source @+0x860, a single `0x04` usage byte in the game-title record of slot 0 @+0xe76 (the unknown fourth section @+0x93c stays zero) |
+| `.ini` | `[Descr2CBG]`/`Type=1`/`Title=<name>`/`[Environ]` description, CRLF, the same 34 lines CBase26 writes; **without it CBase26 does not treat the directory as a database at all** (§18.1) |
 
 `WriteGame` carries the PGN strings, the source pair (`sourceTitle`/
 `source`), the annotator, the medal word, the Elo pair, a `Date`, a setup
@@ -1818,7 +1824,83 @@ eventLen` — with 0 there, CBase26 shows the wrong tournament name.  The
 be confirmed because the GUI cannot be driven reliably without a window
 manager.
 
-## 19. Open items (2026-10-26, run 7)
+### 18.1 The `<name>.ini` decides whether the directory is a database
+
+A 2CBH database is **five files**, not four: `<name>.2cbh`, `.2cbg`, `.2cba`,
+`.2lid` and `<name>.ini`.  CBase26 identifies a database by the `.ini`
+(`[Descr2CBG]` / `Type=1` / `Title=<display name>` / `[Environ]` session
+state, CRLF line ends, 34 lines).  Without it, opening `<path>.2cbh` is
+answered with "`<path>` is not a database" and opening by base name raises the
+"New Database / Create new" dialog — which then creates a *new* database in
+that directory.  That was the run-7 failure: the writer produced the four
+binary files only, so CBase26 did not recognise the result and ran its repair
+path over it.  `writeDatabase()` now emits the `.ini` (byte for byte the file
+CBase26 writes for a new database, with `Title` = the database name), and both
+the writer test and CBase26 accept the result.
+
+### 18.2 `.2lid` bookkeeping (what the counts mean)
+
+Header word layout (big-endian, `0xb8` bytes, then one `0x108a` slot per name):
+`[0x00 u32 184][0x04 u32 6]`, then six 20-byte section records
+`[capacity][0][count][0xffffffff][0xffffffff]` for players (1024), events
+(1120), sources (220), annotators (1024), teams (314) and game titles (532),
+then `0xffffffff` at `0x80`, six `{1, section}` free-chunk pairs at `0x84` and
+`0x00000001` at `0xb4`.
+
+`count` is the number of records that exist in that section — the highest
+allocated id plus one — and it is **checked against the slot array**: a
+CBase26 database with no games has all six counts 0 and a 184-byte `.2lid`
+with no slots at all, a one-game database has `{3,1,1,0,0,1}` and two full
+slots plus the start of a third.  The writer therefore emits no slot when
+there is no name, and its sixth count is 1 exactly when a slot array exists:
+CBase26 writes a single usage byte `0x04` into the *game-title* record of slot
+0 (slot offset `0xe76`) and nothing in any other slot.  (The run-7 writer put
+a stray byte at `+0xb56`, inside the unused annotator section, and always
+claimed one game-title record.)
+
+### 18.3 `.2cba` record shape
+
+The "no annotations" record is `[magic][4][198][u64][0x2000][ff ff ff 7f]`
+followed by 198 zero bytes and the `u64` record length (236), exactly as
+CBase26 writes it.  The run-7 writer used a 38-byte record with an empty
+trailing block; the reader tolerated it, and so did CBase26's open path, but
+it is not the shape a database it created itself carries.
+
+### 18.4 Fields left at their CBase26 defaults
+
+`+0x84..+0x9e` of an index record (which carry a per-database stamp and a
+timestamp in genuine records), the `.2cbg` record's 8-byte sub-field (a
+per-database constant in CBase26's files) and the `.2lid` source record's
+trailing 8 bytes (a date/flags pair in genuine files) are written as zeros.
+CBase26 opens, lists and re-opens such a database unchanged, so no check
+depends on them; they are noted in §19 as unmapped rather than guessed.
+
+### 18.5 Verification against ChessBase 26 itself
+
+`tests/tmp-app/2cbh-re/run8/verify.sh` writes two databases with the writer
+(one from the header test, one from the round-trip test, the latter with a
+game appended through `appendToDatabase()`), copies them into the Wine drive
+and drives CBase26: open → screenshot → click a game → close → re-open →
+screenshot.  Both databases open with the right titles ("Written Run8: 2
+Games" / ": 4 Games"), names, Elo, results, ECO, event, date, round and
+annotator, survive the close and re-open without an error or integrity page,
+and come through it **byte-identical** (`md5sum -c` before/after), i.e.
+CBase26's repair pass had nothing to fix.  The `.ini` grows because CBase26
+stores its own session state there; the four database files do not change.
+
+Two sidecars CBase26 writes are *not* written by us and not needed to open
+or list a database: `.2lcd` (40960-byte tournament namebase page cache: header
+`[1][10][4096]`, the rest 0xff-padded 4096-byte pages) and `.2lgd` (12-byte
+header `[256][nEntries]` plus 512 bytes per player).
+
+A unit test (`testWriterHeaders()` in `tests/test_2cbh.cpp`) recomputes every
+header field from the written content instead of trusting the writer: the
+index framing and record fields (including the move count, the packed date and
+every namebase reference against the counts found in the slot array), the
+`.2cbg`/`.2cba` file lengths and per-record length trailers, the record types,
+the `.2lid` capacities, counts and free-chunk table, and the `.ini` header.
+
+## 19. Open items (2026-10-26, run 8)
 
 What §16-§18 do **not** cover, i.e. the real remaining work.  Everything else
 in §8/§9 is historical and settled by now.
@@ -1831,28 +1913,55 @@ in §8/§9 is historical and settled by now.
    namebase references (capacities 532 and 314) but are never populated in the
    fixtures and are not written; scidb has no tag for a game title, so only
    `WhiteTeam`/`BlackTeam` could be exposed if a fixture with teams appeared.
-3. **`+0x58` bits 2..7 and `+0xba` bits 0..2** are unmapped (§17.6); both are
-   zero in all 863,793 Lumbras records, so no bit assignment can be derived
-   from data.
-4. **Writer integrity.** CBase26 opened the written databases and listed the
-   games, but re-opening one of them in the same session once made it run its
-   integrity-check/error report page instead of the list.  The trigger was not
-   isolated (the same file had opened normally a few minutes earlier, and a
-   second window of the session was also open on another database).  Related
-   unknowns: the `.2lid` header's per-section counts and the trailing
-   `{1,slot}` table are copied from the genuine fixtures and were never checked
-   against a database CBase26 itself created with more than one namebase entry
-   per slot.  Worth re-checking in a clean session before anyone relies on the
-   writer.
+   The writer leaves all three at `~0` ("none"), which is what genuine records
+   carry for the teams.
+3. **`+0x58` bits 2..7, `+0xba` bits 0..2, `+0x84..+0x9e` and the `.2cbg`/
+   `.2lid` sub-fields** are unmapped (§17.6, §18.4); the index tail carries a
+   per-database stamp and a timestamp in genuine records and is zero in all
+   863,793 Lumbras records.  The writer leaves them zero; CBase26 opens and
+   re-opens such databases unchanged, so no check depends on them.
+4. **Writer integrity — resolved in run 8.**  The cause of the run-7 error
+   report was not a header count or the free-chunk table but the **missing
+   `<name>.ini`**: without it CBase26 does not recognise the directory as a
+   database at all ("… is not a database"), and the base-name open path starts
+   creating a *new* database there.  With the `.ini` emitted (§18.1) CBase26
+   opens, lists, closes and re-opens written databases (also after
+   `appendToDatabase`) with all four database files unchanged (§18.5).
+   For the record, what CBase26's own checker (`Check2CBH.cpp`,
+   `IntgCheckCB17.cpp`; its message table is at `0x141151ba8`-`0x141155b18`)
+   validates on such a database:
+   * `.2cbg`: prolog length ≥ 12, the u64 length word against the physical file
+     length (`0x1401713f0`), the header word at `+0x0a` ≤ `0x500`, every game
+     offset + record length inside the file, each record's own length trailer,
+     the CBG index cache and its sort order;
+   * `.2cba`: annotation index ≥ 0 and inside the file, index + length inside
+     the file, per-record prolog type and length, the game number stored in the
+     record against the index position, and the attribute words the index and
+     the game header share (Big flag, medals, comment bits — `0x14016c300`);
+   * namebases: the six section counts against the records actually present,
+     the per-section id limits, ascending partial lists, and the free-chunk
+     chains (`Free list damaged ( Zirkel gefunden )`);
+   * general: `Counter and list len differs`, `Game list isn't sorted`,
+     `Index and game header differs`, `header file damaged`.
+   The writer and `testWriterHeaders()` now satisfy all of these; the free-chunk
+   table we write (`{1,0}..{1,5}` + terminator) is what CBase26 itself writes
+   for new databases, including the empty one.
 5. **Medal bits come from classic CBH, not from 2CBH data** (§17.6).  Every
-   genuine record has `+0x82 == 0`.  A database imported through CBase26 with
-   medals set (PGN import cannot set them, so this needs the GUI) would settle
-   it.
+   genuine record has `+0x82 == 0`, and CBase26's checker compares the index
+   word against the game header's copy, which we do not write.  A database
+   imported through CBase26 with medals set (PGN import cannot set them, so
+   this needs the GUI) would settle it.
 6. **Merging/`appendToDatabase` id spaces.** The writer keeps one dense id per
    section (id == slot), which is what the reader and CBase26 accept, but
-   CBase26's own files have sparse ids, deleted slots and a free-chunk list; the
-   writer never reuses a slot and always writes the same six free chunks.
+   CBase26's own files have sparse ids, deleted slots and a free-chunk list;
+   the writer never reuses a slot.  Appending rewrites all four files from the
+   payloads it re-reads, so ids stay dense.
 7. **Chess960 `Variant`/castling flags in the setup block** are still
    interpreted by trial (§17.3): both sides to move and both block widths are
    accepted and the interpretation whose mainline replays legally is kept.
    No fixture with an arbitrary setup exists.
+8. **`.2lcd` / `.2lgd` are not written** (§18.5).  CBase26 opens and lists a
+   database without them, but it is unknown whether player/tournament
+   statistics or the tournament namebase degrade in a database that never had
+   them, and the `.2lgd` entry contents (per-player counters) are only partly
+   documented (§6.1).

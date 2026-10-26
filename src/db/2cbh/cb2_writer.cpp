@@ -43,6 +43,16 @@ unsigned const NamebaseEventOffset = namebaseEventOffset;
 unsigned const NamebaseSourceOffset = namebaseSourceOffset;
 // The six record capacities of a slot; they sum to NamebaseStride.
 unsigned const SectionSize[6] = { 1024, 1120, 220, 1024, 314, 532 };
+// Offset of the sixth section's record inside a slot (1024 + 1120 + 220 +
+// 1024 + 314).  CBase26 stores a single usage byte (0x04) in the record of
+// slot 0 only, and that one record is what its header's sixth count refers
+// to (count 1 with a slot array, 0 without).
+unsigned const NamebaseTitleOffset = 0xe76;
+
+// The payload and the trailing block CBase26 writes for a "no annotations"
+// record of a .2cba: the four-byte marker 0x7fffffff and a 198-byte zero
+// block.  Both sizes are taken from databases CBase26 created itself.
+unsigned const AnnotationExtraSize = 198;
 
 inline uint16_t
 readLE16(unsigned char const* p) { return uint16_t(p[0] | (p[1] << 8)); }
@@ -282,6 +292,79 @@ writeFile(mstl::string const& name, mstl::string const& data)
 	return bool(out);
 }
 
+/// The database's `<name>.ini`, byte for byte the description file CBase26
+/// writes for a new database (CRLF line ends, `Title` = the database name).
+/// CBase26 refuses to open a database directory that has no such file
+/// ("<path> is not a database"), so the writer has to emit it.
+mstl::string
+databaseIni(mstl::string const& rootname)
+{
+	static char const* const lines[] =
+	{
+		"[Descr2CBG]",
+		"Type=1",
+		"Title=%s",
+		"[Environ]",
+		"LastUser=",
+		"TournTitle=",
+		"TournPlace=",
+		"LastPlayer=A",
+		"LastTourn=A",
+		"LastTrnYear=2024",
+		"TournDate=0",
+		"GameDate=0",
+		"RecentDate=0",
+		"RecentGame=0",
+		"GameRound=0",
+		"Sources=2",
+		"Annotators=2",
+		"LastListTop=0",
+		"LastSelected=0",
+		"QLstSelected=0",
+		"Usage=1",
+		"PreviousDBType=0",
+		"CommentedGames=0",
+		"Icon=-2",
+		"bLoadedDBText=1",
+		"AlwaysText=1",
+		"AlwaysNewTextWind=1",
+		"StressTrainActive=1",
+		"StressTestLevel=1",
+		"StressPercentNextLevel=0",
+		"StressReached=0",
+		"StressMax=0",
+		"TrainingWithClock=1",
+		"RandomTraining=1",
+		0
+	};
+
+	// The database name is the file name without directory and extension.
+	mstl::string title(rootname);
+
+	{
+		size_t const slash = title.rfind('/');
+		if (slash != mstl::string::npos)
+			title = title.substr(slash + 1);
+		if (title.size() > 4 && title.substr(title.size() - 4) == ".cbh")
+			title = title.substr(0, title.size() - 4);
+	}
+
+	mstl::string ini;
+
+	for (unsigned i = 0; lines[i] != 0; ++i)
+	{
+		mstl::string line(lines[i]);
+
+		if (line == "Title=%s")
+			line = "Title=" + title;
+
+		ini += line;
+		ini += "\r\n";
+	}
+
+	return ini;
+}
+
 /// One game ready to be written.
 struct Encoded
 {
@@ -451,11 +534,12 @@ buildNamebaseHeader(	unsigned char* header,
 								unsigned events,
 								unsigned sources,
 								unsigned annotators,
-								unsigned other)
+								unsigned teams,
+								unsigned titles)
 {
 	::memset(header, 0, NamebaseBase);
 
-	unsigned const count[6] = { players, events, sources, annotators, 0, other };
+	unsigned const count[6] = { players, events, sources, annotators, teams, titles };
 	unsigned char* p = header;
 
 	p[0] = 0; p[1] = 0; p[2] = 0; p[3] = uint8_t(NamebaseBase);
@@ -514,7 +598,8 @@ buildSlot(	unsigned char* slot,
 				mstl::string const& event,
 				uint32_t eventDate,
 				mstl::string const& sourceTitle,
-				mstl::string const& source)
+				mstl::string const& source,
+				bool first)
 {
 	::memset(slot, 0, NamebaseStride);
 
@@ -566,8 +651,10 @@ buildSlot(	unsigned char* slot,
 	// buildIndexRecord().
 	storeNameRecord(slot + NamebaseSourceOffset, sourceTitle, source);
 
-	// sixth section: CBase26 stores a single usage byte in slot 0
-	slot[2902] = 4;
+	// Sixth section (game titles): CBase26 stores a single usage byte in the
+	// record of slot 0 only; that record is the one the header counts.
+	if (first)
+		slot[NamebaseTitleOffset] = 4;
 }
 
 /// Read the player names of an existing .2lid (same signature walk as the
@@ -846,7 +933,7 @@ writeDatabaseInt(	mstl::string const& rootname,
 	for (unsigned i = 0; i < encoded.size(); ++i)
 	{
 		annOffsets[i] = annOffset;
-		annOffset += uint32_t(RecordHeaderSize + 4 + 8);
+		annOffset += uint32_t(RecordHeaderSize + 4 + AnnotationExtraSize + 8);
 	}
 
 	for (unsigned i = 0; i < encoded.size(); ++i)
@@ -909,7 +996,6 @@ writeDatabaseInt(	mstl::string const& rootname,
 
 	if (numSlots < events.names.size())	numSlots = events.names.size();
 	if (numSlots < sources.first.size())	numSlots = sources.first.size();
-	if (numSlots == 0)						numSlots = 1;
 
 	mstl::string lid;
 
@@ -921,7 +1007,8 @@ writeDatabaseInt(	mstl::string const& rootname,
 									events.names.size(),
 									sources.first.size(),
 									0,										// no annotator section
-									1);
+									0,                                          // no team records
+									numSlots ? 1 : 0);   // the slot-0 game-title record
 		lid.assign(reinterpret_cast<char const*>(header), NamebaseBase);
 	}
 
@@ -935,7 +1022,8 @@ writeDatabaseInt(	mstl::string const& rootname,
 					 slot < events.names.size() ? events.names[slot] : mstl::string(),
 					 slot < eventDate.size() ? eventDate[slot] : 0,
 					 slot < sources.first.size() ? sources.first[slot] : mstl::string(),
-					 slot < sources.second.size() ? sources.second[slot] : mstl::string());
+					 slot < sources.second.size() ? sources.second[slot] : mstl::string(),
+					 slot == 0);
 		lid.append(s);
 	}
 
@@ -949,9 +1037,12 @@ writeDatabaseInt(	mstl::string const& rootname,
 	cbg.append(gameData);
 
 	// The annotation stream holds CBase's four-byte "no annotations" marker
-	// per game, so every index record points at a valid record.
+	// per game, so every index record points at a valid record.  The record
+	// has the same shape CBase26 writes: a 198-byte trailing block after the
+	// four-byte payload.
 	mstl::string cba;
-	appendLE64(cba, uint64_t(12 + games.size() * 38));
+	appendLE64(cba, uint64_t(12 + games.size() * (RecordHeaderSize + 4
+													 + AnnotationExtraSize + 8)));
 	appendLE16(cba, 12);
 	appendLE16(cba, 0x0000);
 
@@ -959,18 +1050,22 @@ writeDatabaseInt(	mstl::string const& rootname,
 	{
 		appendLE64(cba, RecordMagic);
 		appendLE32(cba, 4);
-		appendLE32(cba, 0);
+		appendLE32(cba, AnnotationExtraSize);
 		appendLE64(cba, 0);
 		appendLE16(cba, 0x2000);
 		cba += char(0xff); cba += char(0xff);
 		cba += char(0xff); cba += char(0x7f);
-		appendLE64(cba, 26 + 4 + 8);
+		for (unsigned k = 0; k < AnnotationExtraSize; ++k)
+			cba += char(0);
+		appendLE64(cba, uint64_t(RecordHeaderSize + 4
+										 + AnnotationExtraSize + 8));
 	}
 
 	if (!writeFile(rootname + ".2cbg", cbg)
 		 || !writeFile(rootname + ".2cba", cba)
 		 || !writeFile(rootname + ".2lid", lid)
-		 || !writeFile(rootname + ".2cbh", index))
+		 || !writeFile(rootname + ".2cbh", index)
+		 || !writeFile(rootname + ".ini", databaseIni(rootname)))
 	{
 		if (error) *error = "cannot write database files";
 		return false;
