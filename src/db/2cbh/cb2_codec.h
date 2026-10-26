@@ -110,6 +110,7 @@ private:
 
 	NamebasePlayer* getPlayer(unsigned id);
 	NamebaseEvent* getEvent(unsigned id);
+	NamebaseEntry* getAnnotator(unsigned id);
 
 	void applyEcoTag(TagSet& tags, unsigned gameIndex);
 	bool loadAnnotationItems(unsigned gameIndex, mstl::vector<CbaItem>& items);
@@ -119,12 +120,13 @@ private:
 	unsigned			m_numGames;
 	BaseMap				m_playerMap;
 	BaseMap				m_eventMap;
+	BaseMap				m_annotatorMap;	// event slot -> annotator namebase entry
 	NamebasePlayer*	m_illegalPlayer;
 	mstl::fstream		m_gameStream;			// .2cbg
 	mstl::fstream		m_annotationStream;	// .2cba
 	mstl::string			m_encoding;
 	mstl::vector<uint32_t>	m_annotationOffsets;	// .2cba record offset per game
-	mstl::vector<uint16_t>	m_ecoValues;			// index @0x80 per game
+	mstl::vector<uint16_t>	m_ecoValues;			// raw ECO key, index @0x80 per game
 };
 
 } // namespace cb2

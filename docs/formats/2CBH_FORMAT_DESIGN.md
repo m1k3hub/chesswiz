@@ -1,7 +1,9 @@
 # 2CBH Format Reverse Engineering — Design for Scidb
 
 **Status (2026-10-26): read-only small-database and compact Chess960 support
-implemented in `cb2::Codec` and `2cbh2pgn`; validation and limits in §16.**
+implemented in `cb2::Codec` and `2cbh2pgn`; validation and limits in §16;
+EventDate/annotator/ECO-key layout and the arbitrary-setup block in §17; the
+first 2CBH writer (`cb2::writeDatabase`/`appendToDatabase`) in §18.**
 
 - The index contains **one header record**, then games, at every database size.
   The previous 256-record assumption discarded 255 real games and rejected
@@ -13,16 +15,21 @@ implemented in `cb2::Codec` and `2cbh2pgn`; validation and limits in §16.**
 - Type-2 `.2cbg` games with the compact `0xfffb, position` prefix load from
   Scharnagl positions 0–959, using the existing board engine. Castling matches
   both king and rook transitions. The arbitrary-position form (position 1000)
-  remains unsupported and is rejected explicitly.
+  and the type-1 setup block are read by decoding the stored square codes and
+  validating the result against the stored mainline (§17.3).
 - Existing Move16, namebase, result, date, base ECO, Elo, and annotation
   decoding is reused. Multiple root variations now use the actual move count
   at each marker, without subtracting earlier markers twice.
 - The Linux application builds. The public database backend opens and converts
   the bounded fixtures; the interactive Tk check is blocked by Xvfb connection
   failure in the execution sandbox. This is not a passed GUI test.
-- No writer, arbitrary custom setup, or complete medals/annotator/EventDate
-  support is claimed. Original-source PGN tags can differ from stored data;
-  see the mismatch accounting in §16.
+- A writer exists for new databases and for appending (§18). The medals word is
+  written to index `+0x82` (the slot after the ECO key, where classic CBH keeps
+  it), but no fixture with medals has been seen, so neither the read path nor
+  the bit assignment is claimed; the annotator and EventDate come from the
+  `.2lid` (§17.2), and the ECO sub-*letter* remains a runtime classification
+  that the index cannot store (§17.1). Original-source PGN tags can differ from
+  stored data; see the mismatch accounting in §16.
 
 **Reading historical material:** sections 3–15 preserve the research trail,
 including superseded hypotheses. In particular, claims about encryption,
@@ -1497,3 +1504,183 @@ claim is made for unresolved games.
 See the scratch `REPORT.md` for exact commands, backend validation, and
 environment limits. No probabilistic model is used:
 byte parsing and chess facts are determined by code and the board engine.
+
+## 17. ECO key, event date, annotator, arbitrary setups (2026-10-26, run 6)
+
+Offsets below were confirmed against CBase26.exe through the live Ghidra
+session. Addresses are cited as evidence only; no decompiled code is part of
+the source distribution.
+
+### 17.1 The ECO key @0x80 carries a sub-variation number
+
+`0x1401e3ba0` (getter) and `0x1401e4370` (setter) read/write the u16 at
+record `+0x80` and clamp every value above `0xfa7f` to 0 ("no ECO"). The PGN
+formatter `0x140c66e50` (used by the game writer for the `ECO` tag) decodes it
+as
+
+```
+base = (key >> 7) - 1          // 0 = A00 .. 499 = E99
+sub  = key & 0x7f              // 0 = none; rendered as "/01".."/99"
+```
+
+so a key of `B12` with sub-variation 34 renders as **`B12/34`**. The low
+seven bits were "always zero" in the LumbrasGigaBase edition (863,519 keys)
+and are still zero in the subsets, but they are *not* unused: they are the
+sub-variation index Scidb's `Eco` class keeps in its 11-bit sub-code. The
+`ECO` tag now carries the full form; `GameInfo::m_eco` keeps the base code
+(the game list's Eco column has no room for the extension). `0xffca` in the
+Grenke Chess960 fixture is the "no ECO" form, as that game has none.
+
+A sub-letter (`B12a`) is *not* stored: the only textual extension the index
+supports is the numeric `/NN` above (the letter is a runtime classification
+of ChessBase's opening key, §34).
+
+### 17.2 EventDate and Annotator live in the `.2lid` event slot
+
+The event record at `slot*0x108a + 0xb8 + 0x400` is
+
+```
+u32  unknown (observed 118..186)
+u16  siteLen, u16 pad
+char site[siteLen]
+u16  eventLen, u16 pad
+char event[eventLen]
+u32  packed date           // day(5) | month(4) << 5 | year(12) << 9
+```
+
+The packed date after the event text is the **`[EventDate]`** tag: the
+Grenke fixture stores `0x0fd481` = 2026.04.01, exactly the value of its own
+`EventDate` tag (the game itself is dated 2026.04.02). `cb2::Codec` now passes
+it to `NamebaseEvent::insertEvent()`, so `GameInfo::eventDate()` and the
+`EventDate` info tag are filled without a second source.
+
+The record at `slot*0x108a + 0xb8 + 0x860` (player area 0x400 + event area
+0x460) holds the source pair
+
+```
+u32 total, u32 sourceTitleLen, char sourceTitle[]
+u32 annotatorLen, char annotator[], 8 zero bytes
+```
+
+Grenke stores `playchess.com` / `ChessBase`, matching its
+`[SourceTitle "playchess.com"]` and `[Source "ChessBase"]`; CBase26 derives
+`[Annotator]` from the second string, so `cb2::Codec` inserts it into the
+`Annotator` namebase and links it to the games of that event slot
+(`Annotator` is a per-event attribute, not a per-game field of the index).
+The 4-character federation strings at `+0x68`/`+0x74` (`FIDE` in the Grenke
+record) are ChessBase federation names, not Scidb country codes, so they are
+not mapped.
+
+### 17.3 Arbitrary start positions (position 1000, and type 1 with setup)
+
+The record stream of a game with a non-compact start position is
+
+```
+u16 0xfffb
+u16 position                 // type 2 only; 0..959 compact, 1000 = arbitrary
+    setup block              // only for 1000 or for type 1 with 0xfffb
+u16 0xfffc
+    Move16 mainline and variations
+u16 0xffff
+```
+
+Reader `0x1401590d0` skips **four** bytes of setup block after `0xfffb`
+(+ the position word for type 2) and then reads one Move16 code per occupied
+square until a token `>= 0xfffb`: `buildSetupBoard()` mirrors that. Each code
+is a piece placement: the descriptor's `to` square (file-major, as everywhere
+in Move16) receives `piece`. The position writer `0x1401e8310` emits **six**
+block bytes (`u16`, side to move, two bytes, filler) before the square codes,
+so the reader accepts both widths and both sides to move and keeps the
+interpretation whose mainline replays legally — the flags themselves are not
+decoded, and no fixture with an arbitrary setup exists yet.
+
+Castling rights are derived from the placement (king on its home rank with a
+rook on the same rank), which is Scidb's Chess960 convention. The FEN tag is
+emitted in Shredder form. Compact positions 0..959 (Grenke: 906) keep using
+the existing `Board::setup()` path; the FEN of the fixture's start position
+matches its `[FEN]` tag, and its castling descriptor
+(`0xbf55`: king b1→c1, word1 rook a1→d1) resolves to the real castling move.
+
+### 17.4 `dataSize` is the length of the data field at `+0x1a`
+
+`dataSize` at record `+0x08` is the length of the data field, which starts at
+`+0x1a` (right after the 26-byte record header: magic, dataSize, extraSize,
+8-byte sub-field, 2-byte type word). The extra field follows the data. This is
+byte-exact on the fixtures: e.g. subset300 game 0 has `dataSize` 46 and its
+data runs from the `0xfffc` start token through the `0xffff` terminator in
+exactly 46 bytes, with the u64 record-size trailer right after the 100-byte
+extra field (`26 + dataSize + extraSize + 8`). The `.2cba` records behave the
+same way (`dataSize` 4 for the `ff ff ff 7f` "no annotations" marker).
+Subtracting the 10 header bytes would truncate every game.
+
+### 17.5 Verification
+
+- `cb2::Codec` on the Grenke fixture: `[EventDate "2026.04.01"]` and
+  `[Annotator "ChessBase"]` from the `.2lid`, plus the ten previously decoded
+  fields, all equal to the source PGN.
+- `2cbh2pgn` output for the Grenke game, subset1 and subset300 is
+  byte-identical to the run-5 output (the ECO extension is zero in every
+  Lumbras record, so the `ECO` tag is unchanged there).
+- `src/db/test_2cbh` (synthetic, 59 checks) passes; the optional 960-FEN
+  oracle still matches all 960 positions.
+
+## 18. Writer: `cb2::writeDatabase` / `cb2::appendToDatabase` (2026-10-26, run 6)
+
+`src/db/2cbh/cb2_writer.{h,cpp}` writes the four files from
+`mstl::vector<WriteGame>`:
+
+| File | Content |
+|------|---------|
+| `.2cbh` | one 192-byte header record (`0x26` @+0x08, stride `0xc0` @+0x0a, `0x500` @+0x0c, u64 record count @+0x10) and one 192-byte record per game |
+| `.2cbg` | 12-byte file header (`u64 file size`, `u16 12`, `u16 0x500`), then per game `magic | dataSize | extraSize=100 | 8-byte sub-field | type | payload | 100 zero bytes | u64 record size` |
+| `.2cba` | as `.2cbg` with type `0x2000` and the four-byte `ff ff ff 7f` "no annotations" data |
+| `.2lid` | 184-byte header (six capacities `1024/1120/220/1024/314/532` and their counts) plus one 4234-byte slot per ordinal: player record @+0, event/site/EventDate @+0x400, source @+0x860, annotator @+0x93c |
+
+`WriteGame` carries the PGN strings, the Elo pair, a `Date`, a setup selector
+(-1 = standard start, 0..959 = Scharnagl, 1000 + `fen` = arbitrary setup,
+-2 = verbatim payload) and the Move16 token stream (built by
+`encodeMoveStream()`, which encodes a legal line and keeps markers/variations
+when the caller supplies them).
+
+Index record fields written (all confirmed against CBase26's own accessors,
+§17): `+0x00` = 1, `+0x02` = `0x0101`, `+0x08` `.2cbg` offset, `+0x10` `.2cba`
+offset, `+0x18`/`+0x20` player ids, `+0x28` event id, `+0x30` = 2, `+0x40`
+annotator id (`-1` = none), `+0x48` = `-1`, `+0x58` result, `+0x5a`/`+0x5c`/
+`+0x5e` round levels, `+0x60`/`+0x70` Elo, `+0x80` = `128 * (base + 1)`,
+`+0x8a` mainline moves, `+0xbc` packed date. `+0x82` (the u16 a classic CBH
+record uses for medals) is written from `WriteGame::medals`, but no fixture
+with medals exists, so the read side is deliberately not implemented.
+
+Encoding uses the same embedded decode table as the reader: `encodeMove16()`
+looks the candidate codes up by (from, to, moving piece) and verifies each one
+by resolving it against the board's legal move list, so encode → decode → move
+is exact for king moves, castling (both transitions), promotions, en passant
+and double pushes. `findPlacementCode()` returns the `from == to` descriptor
+the arbitrary-setup block needs.
+
+`appendToDatabase()` reads the existing index, namebase and payloads, keeps the
+payloads verbatim (setup prefix included) and rewrites the three files with the
+new games appended, so ids and namebases stay consistent.
+
+Round-trip verification (synthetic, no fixture data) in `tests/test_2cbh.cpp`:
+
+* every legal move of eight positions (standard start, castling both sides,
+  promotion, en passant, two Chess960 starts) survives encode → decode → resolve;
+* every placement code (pieces 1..5/9..13 on all 64 squares, pawns on the 48
+  legal ones) is found and decodes to a `from == to` descriptor;
+* an explicit setup stream is accepted with two-, three- and four-word headers,
+  for both sides to move, and refused when truncated;
+* `writeDatabase()` output is read back through `readIndexLayout`,
+  `prepareGame`, `walkGameRaw` and `parseCbaItems`: three games (standard with a
+  variation, compact Chess960 906, arbitrary setup) round-trip with identical
+  players, event/site/EventDate, date, round, result, base ECO, both Elo values,
+  mainline length and final position; `appendToDatabase()` adds a fourth game.
+
+CBase26 (Wine) opens a database written this way and lists its games with the
+right names, Elo, results, move counts, ECO, event, date and round (scratch
+screenshots `cbase-open-written-db-*.png`). Two layout details were required
+for that: the header record size `0x26` belongs at **+0x08** (not +0x00), and
+the `.2lid` event record's leading word is its length `116 + siteLen +
+eventLen` — with 0 there, CBase26 shows the wrong tournament name. Whether
+CBase26 also *renders the moves* of a written game could not be confirmed
+because the GUI cannot be driven reliably without a window manager.

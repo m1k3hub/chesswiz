@@ -16,6 +16,7 @@
 #include "2cbh_annotations.h"
 #include "cb2_codec.h"
 #include "cb2_elo.h"
+#include "cb2_eco.h"
 #include "cb2_index.h"
 
 #include <string>
@@ -321,6 +322,8 @@ int main(int argc, char* argv[])
       uint16_t type = readLE16(cbg + cbgOff + 0x18);
       unsigned char const* data = cbg + cbgOff + 0x1a;
 
+      // dataSize is the data-field length; the field starts at +0x1a and the
+      // extra field follows it (verified byte-exactly on the fixtures).
       if (dataSize > cbgData.size() - cbgOff - 0x1a)
       {
          ++failed;
@@ -385,20 +388,12 @@ int main(int argc, char* argv[])
          case 2:  resultStr = "1-0"; break;
          default: break;
       }
-      // ECO: index @0x80 = 128 * (base + 1), base = 0-based ECO code
-      // (A00 = 0 .. E99 = 499); low 7 bits unused.  Verified on 57146
-      // identity-matched twin pairs (see docs/formats/2CBH_FORMAT_DESIGN.md section
-      // 2.3).  ChessBase's sub-letter suffix is not stored in the index.
+      // ECO: the index keeps ChessBase's 16-bit key at @0x80; cb2_eco.h
+      // holds the decoding (base code plus an optional sub-variation
+      // number, rendered the way CBase26 renders it: "B12" or "B12/34").
       char ecoBuf[8] = "";
-      {
-         unsigned eco16 = readLE16(cbh + (size_t(k) + 1) * recordSize + 0x80);
-         if (eco16 >= 128u && eco16 <= 64000u && (eco16 & 127u) == 0u)
-         {
-            unsigned base = (eco16 >> 7) - 1u;
-            char const letter = "ABCDE"[base / 100u];
-            ::snprintf(ecoBuf, sizeof(ecoBuf), "%c%02u", letter, base % 100u);
-         }
-      }
+      db::cb2::formatEcoKey(
+         readLE16(cbh + (size_t(k) + 1) * recordSize + 0x80), ecoBuf, sizeof(ecoBuf));
       // Elo: plain u16 LE, White @0x60, Black @0x70 -- offsets, evidence
       // and empirical validation: cb2_elo.h (shared with cb2::Codec).
       unsigned char const* eloRec = cbh + (size_t(k) + 1) * recordSize;

@@ -17,6 +17,7 @@
 
 #include "cb2_codec.h"
 #include "cb2_elo.h"
+#include "cb2_eco.h"
 #include "cb2_index.h"
 #include "2cbh_move16.h"
 #include "2cbh_annotations.h"
@@ -96,6 +97,15 @@ unsigned toScidbPiece(unsigned m16piece)
 
 char const* const ResultTag[4] = { "0-1", "1/2-1/2", "1-0", "*" };
 
+/// ChessBase packs dates as day(5) | month(4) << 5 | year(12) << 9; the same
+/// packing is used by the index (+0xbc) and by the .2lid event record.
+void unpackDate(unsigned packed, unsigned& year, unsigned& month, unsigned& day)
+{
+   day = packed & 0x1fu;
+   month = (packed >> 5) & 0x0fu;
+   year = (packed >> 9) & 0xfffu;
+}
+
 /// One .2cbg game record (header + payload).
 struct GameRecord
 {
@@ -117,77 +127,117 @@ readGameRecord(mstl::fstream& strm, uint32_t offset, GameRecord& rec)
    if (readLE64(header) != 0x1122334455667788ull)
       return false;
 
-   rec.size = readLE32(header + 0x08);
+   // dataSize is the length of the data field that starts at record +0x1a
+   // (the record header ends there); the extra field follows the data.  This
+   // is verified byte-exactly on the fixtures: the data runs from +0x1a to
+   // the mainline terminator and the u64 record size trailer sits right after
+   // the extra field (26 + dataSize + extraSize + 8).
+   uint32_t const dataSize = readLE32(header + 0x08);
    rec.type = readLE16(header + 0x18);
+   rec.size = dataSize;
    rec.data.assign(rec.size, '\0');
 
    return rec.size == 0 || strm.read(rec.data.begin(), rec.size);
 }
 
-/// Resolve one Move16 code into a legal move of `board`.  ChessBase
-/// encodes castling as two transitions; scidb's internal representation
-/// sends the king to the rook square. Match both transitions to avoid
-/// confusing the other rook's square with the king's destination in Chess960.
+/// Apply one code of a "position setup" block.  CBase26 stores an arbitrary
+/// start position as one Move16 code per occupied square (writer
+/// 0x1401e8310 enumerates the squares 0..63 and calls the square/piece code
+/// builder 0x14021a1e0); the reader's bitboard builder treats each code as a
+/// transition `piece` from `from` to `to`, so a lone piece code carries the
+/// square in `to`.
 bool
-resolveMove16(Board const& board, Move16Descriptor const& d, Move& move)
+placeSetupPiece(Board& board, uint16_t code, variant::Type variant)
 {
-   unsigned from = ((d.from & 7) << 3) | (d.from >> 3);
-   unsigned to = ((d.to & 7) << 3) | (d.to >> 3);
-   unsigned rookFrom = 0;
-   unsigned promoType = 0;
-   bool isPromotion = false;
-   bool isCastling = false;
+   Move16Descriptor d;
+   if (!decodeMove16(code, d) || d.piece == 0)
+      return false;
 
-   if (d.hasWord1)
+   unsigned const square = toScidbSquare(d.to);
+   unsigned const type = toScidbPiece(d.piece);
+   color::ID const color = d.piece >= 9 ? db::color::Black : db::color::White;
+
+   if (square >= 64 || type == piece::None)
+      return false;
+   return board.setAt(square, piece::piece(piece::Type(type), color), variant);
+}
+
+/// Build a start position from a 64-square setup block.  `first` is the index
+/// of the first code word; codes are stored until a token >= 0xfffb (the
+/// following 0xfffc game-start token).  Castling rights are derived from the
+/// placement: a king on its home rank with a rook on the same rank allows the
+/// castle towards that rook, which is exactly Scidb's Chess960 convention.
+bool
+buildSetupBoard(uint16_t const* words, uint32_t count, uint32_t first,
+                color::ID toMove, variant::Type variant, Board& board,
+                uint32_t& next)
+{
+   Board b;
+   b.clear();
+
+   uint32_t i = first;
+   for (; i < count && words[i] < Move16_None; ++i)
    {
-      unsigned wf = ((d.word1From & 7) << 3) | (d.word1From >> 3);
+      if (!placeSetupPiece(b, words[i], variant))
+         return false;
+   }
+   if (i >= count)
+      return false;
 
-      if (d.piece == 6 || d.piece == 14)
+   for (unsigned ci = 0; ci < 2; ++ci)
+   {
+      color::ID const c = ci == 0 ? db::color::White : db::color::Black;
+      unsigned const base = (c == db::color::White ? 0 : 56);
+      unsigned king = 64;
+      for (unsigned sq = base; sq < base + 8; ++sq)
       {
-         if (d.word1From == d.to && d.word1To == d.to)
-         {
-            promoType = toScidbPiece(d.word1Piece);
-            isPromotion = true;
-         }
+         if (b.pieceAt(sq) == piece::piece(piece::King, c))
+            king = sq;
       }
-      else if ((d.piece == 1 || d.piece == 9)
-               && (d.word1Piece == 5 || d.word1Piece == 13))
+      if (king == 64)
+         continue;   // castling is impossible without a king on its home rank
+      for (unsigned sq = base; sq < base + 8; ++sq)
       {
-         rookFrom = wf;
-         isCastling = true;
+         if (b.pieceAt(sq) == piece::piece(piece::Rook, c))
+         {
+            if (sq > king)
+               b.setCastleShort(c, sq);
+            else
+               b.setCastleLong(c, sq);
+         }
       }
    }
 
-   db::MoveList legalMoves;
-   board.generateMoves(variant::Normal, legalMoves);
-   board.filterLegalMoves(legalMoves, variant::Normal);
+   b.setToMove(toMove);
+   b.setPlyNumber(1);
+   b.setMoveNumber(1);
+   board = b;
+   next = i;
+   return true;
+}
 
-   for (unsigned mi = 0; mi < legalMoves.size(); ++mi)
+/// Replay a Move16 mainline on `board`; used to pick the interpretation of an
+/// undecoded setup header (flag-word count and side to move) that makes the
+/// stored game legal.  Stops at the first 0xffff (mainline terminator).
+bool
+replayMainline(Board board, uint16_t const* words, uint32_t count,
+                variant::Type variant)
+{
+   for (uint32_t i = 0; i < count; ++i)
    {
-      Move const& m = legalMoves[mi];
-      if (m.isCastling() != isCastling)
+      uint16_t const code = words[i];
+
+      if (code == Move16_Terminator)
+         return true;
+      if (code >= Move16_None)
          continue;
-      if (m.from() != from)
-         continue;
-      if (isCastling)
-      {
-         if (m.to() != rookFrom || m.castlingKingTo() != to
-             || m.castlingRookTo() != toScidbSquare(d.word1To))
-            continue;
-      }
-      else if (m.to() != to)
-         continue;
-      if (isPromotion)
-      {
-         if (!m.isPromotion() || m.promoted() != promoType)
-            continue;
-      }
-      else if (m.isPromotion())
-      {
-         continue;
-      }
-      move = m;
-      return true;
+
+      Move16Descriptor d;
+      Move move;
+      if (!decodeMove16(code, d) || !resolveMove16(board, d, move))
+         return false;
+      board.prepareForPrint(move, variant, Board::ExternalRepresentation);
+      board.doMove(move, variant);
    }
    return false;
 }
@@ -410,23 +460,94 @@ prepareGame(uint16_t type, unsigned char const*& data, uint32_t& size,
             Board& board, TagSet& tags)
 {
     board = Board::standardBoard(variant::Normal);
+
+    if (type != 1 && type != 2)
+        return false;
+
+    // Both record types may carry an explicit start position.  The stream is
+    //   [0xfffb] [compact position (type 2 only)] [setup block] [0xfffc] moves
+    // where the setup block is absent when a compact position (0..959) is
+    // stored and one Move16 code per occupied square is present otherwise
+    // (position 1000 = arbitrary setup; type 1 can also carry the block).
+    if (size < 4 || readLE16(data) != Move16_None)
+        return size >= 4 && (size & 1u) == 0 && readLE16(data) == Move16_GameStart;
+
+    uint32_t const count = size / 2u;
+    uint16_t const* const words = reinterpret_cast<uint16_t const*>(data);
+    unsigned prefix = 1;                        // 0xfffb
+
     if (type == 2)
     {
-        if (size < 8 || readLE16(data) != Move16_None)
+        if (count < 2)
             return false;
-        unsigned const position = readLE16(data + 2);
-        if (position >= 960)
+        unsigned const position = words[1];
+        if (position < 960)
+        {
+            // Scidb reserves idn 0; Scharnagl position 0 lives at idn 960.
+            board.setup(position ? position : 960, variant::Normal);
+            data += 4;
+            size -= 4;
+            tags.set(tag::SetUp, "1");
+            tags.set(tag::Fen, board.toFen(variant::Normal, Board::Shredder));
+            return size >= 4 && (size & 1u) == 0
+                    && readLE16(data) == Move16_GameStart;
+        }
+        if (position != 1000)
             return false;
-        // Scidb reserves idn 0; Scharnagl position 0 lives at idn 960.
-        board.setup(position ? position : 960, variant::Normal);
-        data += 4;
-        size -= 4;
-        tags.set(tag::SetUp, "1");
-        tags.set(tag::Fen, board.toFen(variant::Normal, Board::Shredder));
+        prefix = 2;                             // 0xfffb, 1000
     }
-    else if (type != 1)
-        return false;
-    return size >= 4 && (size & 1u) == 0 && readLE16(data) == Move16_GameStart;
+
+    // Arbitrary setup: the 4-byte header that CBase26's own reader skips
+    // (0x1401590d0) is followed directly by the square codes.  The block
+    // layout in files written by CBase26's position writer (0x1401e8310) is
+    // two bytes longer (a u16 field before the side-to-move byte), so accept
+    // both widths, and also both sides to move, taking the interpretation
+    // that makes the stored mainline replay legally.
+    for (unsigned headerWords = 2; headerWords <= 4; headerWords += 1)
+    {
+        if (prefix + headerWords >= count)
+            break;
+
+        // CBase26's writer stores the side to move in the byte after the
+        // leading u16 of a three-word header; prefer it, then the other side.
+        color::ID first = db::color::White;
+        if (headerWords >= 3)
+        {
+            unsigned char const* p =
+                reinterpret_cast<unsigned char const*>(words + prefix + 1);
+            if (p[0] == 1)
+                first = db::color::Black;
+        }
+
+        for (unsigned k = 0; k < 2; ++k)
+        {
+            color::ID const toMove = k == 0 ? first
+                                    : (first == db::color::White ? db::color::Black
+                                                                 : db::color::White);
+            Board candidate;
+            uint32_t next = 0;
+
+            if (!buildSetupBoard(words, count, prefix + headerWords, toMove,
+                                 variant::Normal, candidate, next))
+                continue;
+            if (next >= count || words[next] != Move16_GameStart)
+                continue;
+            if (!replayMainline(candidate, words + next + 1, count - next - 1,
+                                variant::Normal))
+                continue;
+
+            board = candidate;
+            unsigned const skip = 2u * next;
+            data += skip;
+            size -= skip;
+            tags.set(tag::SetUp, "1");
+            tags.set(tag::Fen, board.toFen(variant::Normal, Board::Shredder));
+            return size >= 4 && (size & 1u) == 0
+                    && readLE16(data) == Move16_GameStart;
+        }
+    }
+
+    return false;
 }
 
 
@@ -518,6 +639,8 @@ Codec::tagFilter(Section section, TagSet const& tags) const
 		infoTags.set(tag::Eco);
 		infoTags.set(tag::WhiteElo);
 		infoTags.set(tag::BlackElo);
+		infoTags.set(tag::EventDate);
+		infoTags.set(tag::Annotator);
 	}
 
 	return infoTags;
@@ -608,18 +731,19 @@ Codec::doOpen(	mstl::string const& rootname,
 	// optional — annotation decode is skipped when the file is absent
 	// ------------------------------------------------------------------
 	m_annotationOffsets.clear();
-	// ECO values come from the index itself (independent of .2cba presence)
-	// ECO values come from the index itself (independent of .2cba
-	// presence): @0x80 = 128 * (base + 1), converted to the 0..500
-	// index (0 = none); the sub-letter low bits are ignored, as in
-	// cbh::Codec's convertEco.
+	// ECO keys come from the index itself (independent of .2cba presence):
+	// @0x80 holds ChessBase's 16-bit ECO key `(base + 1) << 7 | sub`, where
+	// `sub` is a sub-variation number (0 = none) and keys above 0xfa7f mean
+	// "no ECO". CBase26 renders the key as "B12" or, with a sub-variation,
+	// as "B12/34" (formatter at 0x140c66e50; getter/setter 0x1401e3ba0 and
+	// 0x1401e4370 clamp everything above 0xfa7f to 0). The raw key is kept
+	// here so the ECO tag can carry the full form.
 	m_ecoValues.clear();
 	m_ecoValues.reserve(m_numGames);
 	for (unsigned k = 0; k < m_numGames; ++k)
 	{
 		unsigned char const* rec = cbh + (size_t(k) + 1) * recordSize;
-		unsigned eco = (readLE16(rec + 0x80) >> 7) & 0x1ffu;
-		m_ecoValues.push_back(uint16_t(eco <= 500u ? eco : 0u));
+		m_ecoValues.push_back(readLE16(rec + 0x80));
 	}
 
 	{
@@ -787,18 +911,82 @@ Codec::doOpen(	mstl::string const& rootname,
 					NamebaseSite* siteEntry = namebase(Namebase::Site).insertSite(
 						site.empty() ? mstl::string("?") : site,
 						country::Unknown, (1 << 20));
+
+					// The event date follows the event text as the same 3-byte
+					// packed date the index uses at +0xbc (verified against the
+					// Grenke fixture: 2026.04.01 -> 0x0fd481, the game's own
+					// [EventDate] tag).
+					size_t const datePos = b + 4 + evLen;
+					unsigned evYear = 0, evMonth = 0, evDay = 0;
+					if (datePos + 3 <= lsize)
+					{
+						unsigned packed = unsigned(lp[datePos])
+											 | (unsigned(lp[datePos + 1]) << 8)
+											 | (unsigned(lp[datePos + 2]) << 16);
+						unpackDate(packed, evYear, evMonth, evDay);
+						if (!Date::isValid(evYear, evMonth, evDay))
+							evYear = evMonth = evDay = 0;
+					}
+
 					NamebaseEvent* entry = namebase(Namebase::Event).insertEvent(
-						event, (1 << 20), siteEntry);
+						event, unsigned(slot), evYear, evMonth, evDay,
+						event::Unknown, time::Unknown, db::event::Undetermined,
+						(1 << 20), siteEntry);
 					entry->site()->incrRef();
 					entry->incrRef();
 					m_eventMap.container().push_back(
 						BaseMap::value_type(unsigned(slot), entry));
+
+					// Source/annotator record of the same slot, at slot+0x860
+					// (player area 0x400 + event area 0x460):
+					//   [u32 total][u32 sourceTitleLen][sourceTitle]
+					//   [u32 annotatorLen][annotator][8 zero bytes]
+					// Verified against the Grenke fixture: 'playchess.com' /
+					// 'ChessBase' -> [SourceTitle]/[Source], and CBase26 emits
+					// the annotator tag from the same record.
+					size_t const sa = 0xb8 + slot * 0x108a + 0x860;
+					if (sa + 12 <= lsize)
+					{
+						uint32_t const total = uint32_t(lp[sa])
+											| (uint32_t(lp[sa + 1]) << 8)
+											| (uint32_t(lp[sa + 2]) << 16)
+											| (uint32_t(lp[sa + 3]) << 24);
+						uint32_t const titleLen = uint32_t(lp[sa + 4])
+											| (uint32_t(lp[sa + 5]) << 8);
+						if (total > 8 && total < 0x200 && titleLen < 0x100
+								&& sa + 8 + titleLen + 4 <= lsize)
+						{
+							size_t const ap = sa + 8 + titleLen;
+							uint32_t const annotatorLen = uint32_t(lp[ap])
+											| (uint32_t(lp[ap + 1]) << 8);
+							if (annotatorLen > 0 && annotatorLen < 0x100
+									&& ap + 4 + annotatorLen <= lsize)
+							{
+								mstl::string annotator(
+									reinterpret_cast<char const*>(lp + ap + 4), annotatorLen);
+								bool ok = true;
+								for (uint32_t j = 0; j < annotatorLen; ++j)
+									if (lp[ap + 4 + j] < 32)
+										ok = false;
+								if (ok)
+								{
+									if (!sys::utf8::validate(annotator))
+										textCodec.forceValidUtf8(annotator);
+									Namebase& annotations = namebase(Namebase::Annotator);
+									NamebaseEntry* aentry = annotations.insert(
+										annotator, unsigned(slot), (1 << 20));
+									aentry->incrRef();
+									m_annotatorMap.container().push_back(
+										BaseMap::value_type(unsigned(slot), aentry));
+								}
+							}
+						}
+					}
 				}
 
 				m_eventMap.qsort();
+				m_annotatorMap.qsort();
 			}
-			base.update();
-			base.setNextId(1u << 20);
 			m_playerMap.qsort();
 		}
 	}
@@ -818,10 +1006,11 @@ Codec::doOpen(	mstl::string const& rootname,
 		GameInfo& info = infoList.push_back();
 
 		info.m_gameOffset = unsigned(readLE32(rec + 0x08));
-		info.m_eco = m_ecoValues[k];
+		info.m_eco = ecoShortCode(m_ecoValues[k]);
 		info.m_player[color::White] = getPlayer(unsigned(readLE32(rec + 0x18) & 0xffffffu));
 		info.m_player[color::Black] = getPlayer(unsigned(readLE32(rec + 0x20) & 0xffffffu));
 		info.m_event = getEvent(unsigned(readLE32(rec + 0x28) & 0xffffffu));
+		info.m_annotator = getAnnotator(unsigned(readLE32(rec + 0x28) & 0xffffffu));
 
 		// round/subround: validated against the source PGN on 352
 		// date-verified games (round 7.5 -> 0x5a = 7, 0x5c = 5; scid-code
@@ -888,9 +1077,27 @@ Codec::doOpen(	mstl::string const& rootname,
 		}
 	}
 
-	// restore namebase consistency: the lazy event/player insertions above
-	// marked the bases inconsistent; the GUI reads used() right after open
-	namebases().update();
+	// Restore namebase consistency: the lazy player/event/annotator/site
+	// insertions above inserted entries with frequency 0 and the reference
+	// counts are bumped while the index is read.  Update every base
+	// unconditionally: Namebases::update() skips bases still marked
+	// consistent, and an early update (before the index loop) left the player
+	// base consistent with used() == 0, which made the database summary
+	// report "players: 0" for a database whose games were all loaded lazily.
+	// The explicit update is what keeps a Chess960-only database at the right
+	// player count.
+	{
+		Namebase* bases[] =
+		{
+			&namebase(Namebase::Player),  &namebase(Namebase::Site),
+			&namebase(Namebase::Event),   &namebase(Namebase::Annotator),
+		};
+		for (unsigned i = 0; i < sizeof(bases)/sizeof(bases[0]); ++i)
+		{
+			bases[i]->update();
+			bases[i]->setNextId(1u << 20);
+		}
+	}
 }
 
 
@@ -946,18 +1153,41 @@ Codec::getEvent(unsigned id)
 }
 
 
+/// The per-game annotator: CBase26 keeps it in the source record of the event
+/// slot (slot+0x860 of the .2lid), so it is resolved through the game's event
+/// id.  Falls back to the namebase's empty annotator.
+NamebaseEntry*
+Codec::getAnnotator(unsigned id)
+{
+	BaseMap::iterator p = m_annotatorMap.find(id);
+	NamebaseEntry* entry;
+
+	if (p != m_annotatorMap.end())
+	{
+		entry = p->second;
+	}
+	else
+	{
+		entry = namebase(Namebase::Annotator).emptyAnnotator();
+	}
+
+	entry->incrRef();
+	return entry;
+}
+
+
 void
 Codec::applyEcoTag(TagSet& tags, unsigned gameIndex)
 {
-	// ECO from the index key @0x80 (128 * (base + 1), see doOpen);
-	// m_ecoValues already holds the converted 0..500 index.
-	if (gameIndex >= m_ecoValues.size())
-		return;
+	// ECO from the index key @0x80 (see doOpen); the key keeps ChessBase's
+	// sub-variation number in its low seven bits.
+	char buf[16];
 
-	unsigned eco = m_ecoValues[gameIndex];
-
-	if (eco)
-		tags.set(tag::Eco, Eco::fromShort(uint16_t(eco)).asShortString());
+	if (gameIndex < m_ecoValues.size()
+		&& formatEcoKey(m_ecoValues[gameIndex], buf, sizeof(buf)))
+	{
+		tags.set(tag::Eco, buf);
+	}
 }
 
 
@@ -980,7 +1210,12 @@ Codec::loadAnnotationItems(unsigned gameIndex, mstl::vector<CbaItem>& items)
 			|| readLE64(hdr) != 0x1122334455667788ull)
 		return false;
 
-	uint32_t const adSize = readLE32(hdr + 0x08);
+	// As in .2cbg, the data field starts at +0x10 with the 8-byte sub-field
+	// and the 2-byte type word, so the item stream starts at +0x1a.
+	uint32_t const cbaDataSize = readLE32(hdr + 0x08);
+	if (cbaDataSize < 10)
+		return false;
+	uint32_t const adSize = cbaDataSize;
 	mstl::string adata(adSize, '\0');
 
 	if (adSize > 0 && !m_annotationStream.read(adata.begin(), adSize))

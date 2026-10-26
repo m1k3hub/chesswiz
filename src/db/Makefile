@@ -144,6 +144,7 @@ SRC_CXX = \
 	2cbh/2cbh_move16.cpp \
 	2cbh/2cbh_annotations.cpp \
 	2cbh/cb2_codec.cpp \
+	2cbh/cb2_writer.cpp \
 	scm/scm_media.cpp \
 
 SRC	= $(SRC_CXX)
@@ -9233,10 +9234,12 @@ cbh1trace: cbh1trace.o $(LIBS)
 
 # Shared CB2 framing/start-position APIs also affect the converter.
 2cbh/cb2_codec.o 2cbh/2cbh2pgn.o: 2cbh/cb2_index.h 2cbh/cb2_codec.h
+2cbh/cb2_writer.o: 2cbh/cb2_writer.h 2cbh/cb2_index.h 2cbh/2cbh_move16.h 2cbh/2cbh_annotations.h
 db_database_codec.o: 2cbh/cb2_codec.h
 
 # Synthetic CB2 framing and Chess960 regressions (no proprietary fixtures).
-../../tests/test_2cbh.o: ../../tests/test_2cbh.cpp 2cbh/cb2_index.h 2cbh/cb2_codec.h
+../../tests/test_2cbh.o: ../../tests/test_2cbh.cpp 2cbh/cb2_index.h 2cbh/cb2_codec.h 2cbh/cb2_writer.h 2cbh/2cbh_move16.h 2cbh/2cbh_annotations.h
+	@mkdir -p ../../tests
 	$(CXX) -c -o $@ $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(INCLUDE) $<
 
 test_2cbh: ../../tests/test_2cbh.o libdb.a
