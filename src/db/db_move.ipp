@@ -586,7 +586,7 @@ Move::setUndo(	uint32_t halfMoves,
 	u = (halfMoves & Mask_HalfMoveClock)
 	  | epSquare << Shift_EpSquare
 	  | castleRights << Shift_CastleRights
-	  | kingMovedOrGivesCheck << (Mask_KingHasMoved | Mask_GivesCheck)
+	  | kingMovedOrGivesCheck << Shift_KingHasMoved
 	  | capturePromoted << Shift_CapturePromoted
 	  | uint32_t(Bit_Prepared)
 	  ;
