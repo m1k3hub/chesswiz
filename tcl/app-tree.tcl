@@ -558,7 +558,7 @@ proc ThemeChanged {parent} {
 		foreach col $::application::tree::Columns {
 			set cid [lindex $col 0]
 			if {$cid in {number move}} {
-				catch { ::table::setColumnBackground $tb $cid $emph }
+				catch { ::table::setColumnBackground $tb $cid {} $emph }
 			} else {
 				catch { ::table::setColumnBackground $tb $cid $stripes $bg }
 			}

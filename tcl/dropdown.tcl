@@ -730,6 +730,13 @@ proc ::menu::UpdateAccelerators {menu} {
 proc ::menu::Register {id label {accel ""} {visible ""} {enabled ""} {order ""}} {
 	variable DropdownOrder
 
+	# A row hidden because its module is absent on this platform (e.g. file
+	# types without xdg-mime on macOS) must not run from the registry either:
+	# ::action::run enforces only the enabled predicate.
+	if {$enabled eq "" && [string match {::menu::ModulePresent *} $visible]} {
+		set enabled $visible
+	}
+
 	if {[dict exists $::action::Registry $id]} {
 		# Already registered (assistant tool or context action): keep its
 		# handler, but refresh the drop-down placement and the label so a
