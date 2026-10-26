@@ -102,6 +102,7 @@ variable DrawMaxCp 50				;# "near zero" in centipawns
 array set Priv {
 	dialog		{}
 	active		0
+	limited		0
 	phase			idle
 	pos			0
 	engine		{}
@@ -614,6 +615,11 @@ proc ::playengine::DriveMove {} {
 	if {$Priv(noclock)} {
 		set go [goLine "" "" "" $Priv(movetime)]
 		set wait [expr {$Priv(movetime) + $MoveTimeout}]
+	} elseif {$Priv(limited)} {
+		set incMs [expr {$Priv(increment) * 1000}]
+		set movetime [limitedMoveTime $Priv(clock:$Priv(engineSide)) $incMs]
+		set go [goLine "" "" "" $movetime]
+		set wait [expr {$Priv(clock:$Priv(engineSide)) + $MoveTimeout}]
 	} else {
 		set go [goLine $Priv(clock:w) $Priv(clock:b) [expr {$Priv(increment) * 1000}] ""]
 		set wait [expr {$Priv(clock:$Priv(engineSide)) + $MoveTimeout}]
@@ -654,6 +660,7 @@ proc ::playengine::Connect {} {
 	fconfigure $pipe -blocking 0 -buffering line
 	set Priv(pipe) $pipe
 	set Priv(pipeState) starting
+	set Priv(limited) 0
 	set Priv(pending) 1
 	fileevent $pipe readable [namespace code OnReadable]
 	# an engine that never completes the handshake (crashed wrapper,
@@ -689,6 +696,7 @@ proc ::playengine::SendOptions {} {
 	variable Priv
 
 	set features [EngineFeatures $Priv(engine)]
+	set Priv(limited) [expr {[dict exists $features limitStrength] || [dict exists $features skillLevel]}]
 	if {[dict exists $features limitStrength]} {
 		lassign [dict get $features limitStrength] min max
 		Send "setoption name UCI_LimitStrength value true"
@@ -1199,6 +1207,17 @@ proc ::playengine::WriteOptions {chan} {
 proc ::playengine::goLine {wtMs btMs incMs movetimeMs} {
 	if {$movetimeMs ne ""} { return "go movetime $movetimeMs" }
 	return "go wtime $wtMs btime $btMs winc $incMs binc $incMs"
+}
+
+
+# A strength-limited engine's think time for one move. Stockfish searches
+# at full depth and only then picks a weaker move, so with plain clocks it
+# spent ~15% of a 1-minute game on move 1. Budget remaining/40 plus most
+# of the increment, never more than a tenth of the clock, at least 100 ms.
+proc ::playengine::limitedMoveTime {remainingMs incMs} {
+	set budget [expr {$remainingMs / 40 + $incMs * 3 / 4}]
+	set budget [expr {min($budget, $remainingMs / 10)}]
+	return [expr {max(100, $budget)}]
 }
 
 

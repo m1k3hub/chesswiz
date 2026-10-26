@@ -81,6 +81,14 @@ tcltest::test playengine-goline {the go command, with a clock and with movetime}
 		[::playengine::goLine "" "" "" 1000]
 } -result {{go wtime 60000 btime 30000 winc 2000 binc 2000} {go movetime 1000}}
 
+tcltest::test playengine-limited-movetime {a strength-limited engine gets a per-move budget} -body {
+	list \
+		[::playengine::limitedMoveTime 60000 0] \
+		[::playengine::limitedMoveTime 180000 2000] \
+		[::playengine::limitedMoveTime 5000 2000] \
+		[::playengine::limitedMoveTime 500 0]
+} -result {1500 6000 500 100}
+
 tcltest::test playengine-formatclock {m:ss, h:mm:ss, tenths below 10 s, negatives} -body {
 	list \
 		[::playengine::FormatClock 600000] \
