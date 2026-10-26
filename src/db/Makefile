@@ -9227,6 +9227,17 @@ cbh1trace: cbh1trace.o $(LIBS)
 	@echo "Building $@"
 	@$(CXX) -o $@ $^ $(LDFLAGS) $(ALL_LIBS)
 
-2cbh2pgn: 2cbh/2cbh2pgn.o 2cbh/2cbh_move16.o 2cbh/2cbh_annotations.o 2cbh/cb2_move16_table.o
+2cbh2pgn: libdb.a 2cbh/2cbh2pgn.o 2cbh/2cbh_move16.o 2cbh/2cbh_annotations.o 2cbh/cb2_move16_table.o
 	@echo "Building $@"
+	@$(CXX) -o $@ $^ $(LDFLAGS) $(ALL_LIBS) ../db/libdb.a ../mstl/libmstl.a ../util/libutil.a ../sys/libsys.a ../util/libTeXt/libTeXt.a ../util/libharu/libharu.a ../util/universalchardet/libchardet.a ../util/libhyphenate/libhyphenate.a ../util/minizip/libminizip.a ../db/libdb.a ../mstl/libmstl.a -ltcl8.6 -lz -lexpat -lzzip
+
+# Shared CB2 framing/start-position APIs also affect the converter.
+2cbh/cb2_codec.o 2cbh/2cbh2pgn.o: 2cbh/cb2_index.h 2cbh/cb2_codec.h
+db_database_codec.o: 2cbh/cb2_codec.h
+
+# Synthetic CB2 framing and Chess960 regressions (no proprietary fixtures).
+../../tests/test_2cbh.o: ../../tests/test_2cbh.cpp 2cbh/cb2_index.h 2cbh/cb2_codec.h
+	$(CXX) -c -o $@ $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(INCLUDE) $<
+
+test_2cbh: ../../tests/test_2cbh.o libdb.a
 	@$(CXX) -o $@ $^ $(LDFLAGS) $(ALL_LIBS) ../db/libdb.a ../mstl/libmstl.a ../util/libutil.a ../sys/libsys.a ../util/libTeXt/libTeXt.a ../util/libharu/libharu.a ../util/universalchardet/libchardet.a ../util/libhyphenate/libhyphenate.a ../util/minizip/libminizip.a ../db/libdb.a ../mstl/libmstl.a -ltcl8.6 -lz -lexpat -lzzip

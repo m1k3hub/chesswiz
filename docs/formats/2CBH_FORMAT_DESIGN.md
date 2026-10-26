@@ -1,5 +1,41 @@
 # 2CBH Format Reverse Engineering — Design for Scidb
 
+**Status (2026-10-26): read-only small-database and compact Chess960 support
+implemented in `cb2::Codec` and `2cbh2pgn`; validation and limits in §16.**
+
+- The index contains **one header record**, then games, at every database size.
+  The previous 256-record assumption discarded 255 real games and rejected
+  small databases. Lumbras contains **863,793**, not 863,538, indexed games;
+  the full export converts **863,793/863,793 with zero skipped or failed**.
+- The record stride is a little-endian u16 at header +0x0a; the total record
+  count is a little-endian **u64** at +0x10, including the header. Current
+  support is for the verified 192-byte stride.
+- Type-2 `.2cbg` games with the compact `0xfffb, position` prefix load from
+  Scharnagl positions 0–959, using the existing board engine. Castling matches
+  both king and rook transitions. The arbitrary-position form (position 1000)
+  remains unsupported and is rejected explicitly.
+- Existing Move16, namebase, result, date, base ECO, Elo, and annotation
+  decoding is reused. Multiple root variations now use the actual move count
+  at each marker, without subtracting earlier markers twice.
+- The Linux application builds. The public database backend opens and converts
+  the bounded fixtures; the interactive Tk check is blocked by Xvfb connection
+  failure in the execution sandbox. This is not a passed GUI test.
+- No writer, arbitrary custom setup, or complete medals/annotator/EventDate
+  support is claimed. Original-source PGN tags can differ from stored data;
+  see the mismatch accounting in §16.
+
+**Reading historical material:** sections 3–15 preserve the research trail,
+including superseded hypotheses. In particular, claims about encryption,
+256 metadata records, sequential game/index pairing, ASCII-only names, and
+unavailable GUI integration are historical. The current layout here and §16
+take precedence. The plain Move16 model (§3.8), index game pointers (§3.8.7),
+namebase slots (§14), and move-container annotations (§15) are reused.
+
+## Historical status notes (through 2026-10-18)
+
+The following dated notes preserve earlier evidence and failed hypotheses.
+The current status above and §16 supersede their open-item and game-count claims.
+
 **Status (refreshed 2026-09-06): moves, names, results, date, ECO, Elo
 and annotation payload SOLVED; remaining: Chess960 start positions,
 GUI integration.**
@@ -236,8 +272,8 @@ format (which has existed since ChessBase 6.0, 1996). The ChessBase Corr
 Database 2024 (2.2M correspondence games) ships in this format, as do recent
 Mega Database editions and the LumbrasGigaBase.
 
-scidb currently has **zero** 2CBH support — `format::fromString()` only
-recognises `cbh`, `cbf`, `cbv`, `sci`, `si3`, `si4`, `pgn`.
+The read-only `cb2::Codec` is registered with the database factory and used
+by the application and conversion tools.
 
 ### 1.1 Fixture
 
@@ -261,15 +297,16 @@ recognises `cbh`, `cbf`, `cbv`, `sci`, `si3`, `si4`, `pgn`.
 | 0x08 | uint16 LE | 38 (0x26) | Unknown (header record count? version?) |
 | 0x0A | uint16 LE | 192 (0xC0) | **Record size** |
 | 0x0C | uint32 LE | 1280 | Unknown |
-| 0x10 | uint32 LE | 863,794 | **Total record count** (header + games) |
-| 0x14–0xBF | — | 0 | Padding |
+| 0x10 | uint64 LE | 863,794 | **Total record count** (one header + games) |
+| 0x18–0xBF | — | — | Remaining header fields (not all decoded) |
 
 **Verified:** `863794 × 192 = 165,848,448 = file size` (exact).
 
 ### 2.2 Record layout
 
-- **Records 0–255:** Metadata/header records (256 records)
-- **Records 256–863,793:** Game records (863,538 games)
+- **Record 0:** the single header record
+- **Records 1–863,793:** game records (863,793 games)
+- Game index `k` (zero-based) is at `(k + 1) * recordSize`.
 - All records are 192 bytes, little-endian fields.
 
 ### 2.3 Game record layout (192 bytes)
@@ -281,17 +318,17 @@ recognises `cbh`, `cbf`, `cbv`, `sci`, `si3`, `si4`, `pgn`.
 | 0x10 | uint64 LE | **cbaOffset** | Byte offset into `.2cba` file |
 | 0x18 | uint64 LE | **whitePlayerId** | Index into `.2lid` namebase |
 | 0x20 | uint64 LE | **blackPlayerId** | Index into `.2lid` namebase |
-| 0x28 | uint64 LE | **eventId** | Index into `.2lcd` namebase |
+| 0x28 | uint64 LE | **eventId** | Slot ordinal in `.2lid` (§14) |
 | 0x30 | uint64 LE | 2 (constant) | Unknown — possibly database type |
 | 0x38 | uint64 LE | 0 | Reserved |
 | 0x40 | 16 bytes | `0xFF...FF` | Sentinel |
 | 0x50 | uint64 LE | 0 | Reserved |
 | 0x58 | uint64 LE | Flags | Varies per game |
-| 0x60 | uint64 LE | ? (ECO code?) | Varies |
+| 0x60 | uint16 LE | White Elo | 0 if unknown |
 | 0x68 | uint64 LE | 0 | Reserved |
-| 0x70 | uint64 LE | ? | Varies |
+| 0x70 | uint16 LE | Black Elo | 0 if unknown |
 | 0x78 | uint64 LE | 0 | Reserved |
-| 0x80 | uint64 LE | ? | Varies |
+| 0x80 | uint16 LE | Base ECO key | `128 * (base + 1)`; A00 = base 0 |
 | 0x88 | uint64 LE | Date/round packed | Varies |
 | 0x90 | uint64 LE | ? | Varies |
 | 0x98 | uint64 LE | ? | Varies |
@@ -300,10 +337,10 @@ recognises `cbh`, `cbf`, `cbv`, `sci`, `si3`, `si4`, `pgn`.
 | 0xB8 | uint32 LE | 0 | |
 | 0xBC | uint32 LE | ? | Varies |
 
-**Note:** The result code (1-0, 0-1, draw) was NOT found in the .2CBH index
-after exhaustive byte/word/dword scans against PGN-verified results for 20
-games. The result is likely stored in the encoded `.2cbg` game data, not
-the index — unlike classic CBH where it's in the flags word at offset 12.
+Result is stored in the low two bits of byte +0x58: 0 = 0-1,
+1 = draw, 2 = 1-0, 3 = unknown. Round/subround are bytes +0x5a/+0x5c;
+date is packed at +0xbc as `day | month << 5 | year << 9`.
+Unresolved rows in the table are retained as research notes, not field decodes.
 
 ## 3. .2CBG Game Data Format
 
@@ -333,9 +370,11 @@ Each record (variable-length):
 
 ### 3.3 Record mapping
 
-`.2CBH` record N (for N ≥ 1) → `.2CBG` record N-1 (byte offset stored in cbgOffset field).
+`.2CBH` record N (N ≥ 1) points to its `.2CBG` record through the
+64-bit byte offset at +0x08. Deleted records and sorting mean there is no
+reliable positional correspondence between the two files.
 
-- `.2CBH` has 863,794 records (0 = header, 1–255 = metadata, 256+ = games)
+- `.2CBH` has 863,794 records (0 = header, 1 onward = games)
 - `.2CBG` has 863,793 records (0-indexed; no file-header record)
 - Record 0 in `.2CBG` is at byte offset 12 (after file header)
 
@@ -1226,7 +1265,7 @@ This would be a read-only "browse" mode — clicking a game would show
 | Game data | Plain LUT-encoded | Variable-length encoded (~7-13 B/ply) |
 | Magic per record | None | `0x1122334455667788` |
 | Name length limits | Fixed (31 chars) | Unlimited |
-| Result in index | Yes (flags bits 0-1) | No (in encoded game data) |
+| Result in index | Yes (flags bits 0-1) | Yes (+0x58 bits 0-1) |
 | Record count in header | Yes (offset 6) | Yes (offset 0x10) |
 
 ---
@@ -1335,3 +1374,126 @@ evaluations and 3-annotation containers.  The corrected walker parses
 records, 0 failures, 94,116 containers).  Container variant census:
 text 17.06%, nag+text 62.90%, text+time 13.25%, standalone nag 4.35%,
 time-only 1.27%, nag+text+time 0.89%, text+eval 0.18%, eval-only 0.10%.
+
+
+## 16. Small databases and Chess960 (2026-10-26)
+
+### 16.1 Index framing: one header, independent of game count
+
+Direct Ghidra MCP inspection of CBase26.exe confirms the layout independently
+of the fixture-size inference:
+
+- `0x1401aed70` constructs the index file handler with stride 0xc0, reads the
+  header at file offset zero, and initializes a new file's record count to 1.
+- `0x1401af060` reads an index record at `recordNumber * stride`.
+  `0x1401af4d0` writes at the same offset. There is no 256-record adjustment.
+- `0x1401e3ca0` reads the header's u16 stride at +0x0a.
+  `0x1401e3cb0` reads the **u64** count at +0x10;
+  `0x1401e44c0` writes that count. `0x1401af5b0` writes the header at record 0.
+
+These addresses document observed format behavior; no decompiler listing is
+part of the source distribution. Research output stays in ignored scratch.
+
+`cb2_index.h` shares checked geometry between the codec, the converter, the
+attributes probe, and the Elo regression test. Empty databases have one
+192-byte record; one-game databases have two. Truncated files, unsupported
+strides, inconsistent counts, and counts beyond the application's unsigned
+ID space are rejected. The count/file-size check avoids integer overflow.
+The existing Elo sample indices were shifted by +255 to keep testing the
+same physical games and independent expected ratings.
+
+### 16.2 Compact Chess960 setup and castling
+
+For record type 2, the payload starting at record +0x1a is:
+
+```
+u16 LE  0xfffb
+u16 LE  Scharnagl number (0..959)
+u16 LE  0xfffc
+        ordinary Move16 game tree
+u16 LE  0xffff (each line's terminator)
+```
+
+The position writer at `0x1401e8310` emits this prefix and uses 1000 for
+an arbitrary setup. Its caller `0x140211d50` emits 0xfffc after setup.
+The existing reader at `0x1401590d0` confirms that numbers below 960 select
+one of 960 starting boards and consume two words before the game stream.
+It handles arbitrary setup separately; type 1 can also carry an explicit
+setup. Those forms need real fixture coverage before implementation.
+
+`prepareGame` constructs the start board and FEN tags before any consumer
+starts. Scidb reserves ID 0, so Scharnagl 0 maps to internal ID 960.
+The index preload records the start ID for the game list; both tree decoding
+and consumer/export decoding start from the same board.
+
+A castling descriptor must match the engine's king source/destination and
+rook source/destination, and must resolve to a legal castling move. Merely
+accepting either the king destination or rook source can silently select the
+opposite castle: with king b1 and rooks a1/c1, a blocked long-castle descriptor
+must not become the legal short castle. A regression test reproduced this
+failure before the match was tightened. Other cases cover a stationary king,
+a king/rook swap, and a one-square ordinary king move versus castling.
+
+### 16.3 Variation correction and validation scope
+
+Root markers already count **moves**, excluding prior markers. Their replaced
+zero-based ply is `moveCount - 1`; subtracting the marker ordinal again shifts
+the second and subsequent root variations. The synthetic two-root regression
+covers alternatives to both the first white and first black moves. Missing
+terminators and trailing variation data without matching roots are rejected.
+
+Fixture copies and constructed subsets are under `tests/tmp-app/2cbh-re/`.
+The 0/1/2/10/255/256/300 subsets contain the first N real index game records
+from the copied Lumbras database, with a corrected header count and unchanged
+copied sidecars. They are **constructed subsets, not new ChessBase exports**.
+The Grenke database is an existing real one-game ChessBase export. Wine/Xvfb
+startup restrictions prevented generating additional real fixtures.
+
+`tests/test_2cbh.cpp` contains synthetic tests only. Its optional FEN oracle
+checks all 960 positions against independent python-chess output; this proves
+the position-number mapping, not 960 distinct ChessBase exports. The real
+Grenke game independently matches all 55 mainline plies, the complete starting
+FEN, and all ten requested metadata fields (including absent ECO).
+
+Bounded subset move matches are 1/1, 2/2, 10/10, 255/255, 256/256, and 300/300;
+all replay legally with python-chess. The empty subset opens and exports zero
+games. Matching uses complete UCI mainlines plus player names, allowing only
+prefix-compatible shortened names and reporting ambiguous metadata.
+All ten requested fields, with ECO compared at its stored three-character
+base, match for 1/1, 2/2, 10/10, 230/255, 231/256, and 274/300 games.
+For 255 and 256 games the differing-field counts are White 4, Black 3,
+Event 16, Round 3; for 300 they are White 4, Black 3, Event 17, Round 3.
+Categories can overlap. Site, Date, Result, base ECO, and both Elo values
+match throughout these subsets.
+
+These differences must not be hidden by copying tags from the PGN into the
+decoder. Raw records corroborate stored-data differences: zero-based game 35
+stores event/site `Vladimir` while the source Event is `?`; game 54 stores
+`Havana CUB` while the source Event is `?`; game 43 has round/subround bytes
+0/0 while the source Round is `?.3`. Player examples contain already-shortened
+stored names. Full ECO suffix letters are not decoded, as before.
+
+The public `Database::loadGame` path also loads all 825 non-empty bounded
+fixture entries: start boards, mainline lengths, and final piece placements,
+turns, and castling rights match independent PGN replay. This complements
+consumer-path conversion and directly exercises the editor's GameData decoder.
+
+Full-scale export converts **863,793/863,793 games, skipped 0, failed 0**,
+including 16,961 games with annotation items. This includes the 255 recovered
+records and preserves the previous full-database success count.
+
+An independent full-source join against 863,790 PGN games uses both normalized
+player names and complete normalized mainline SAN, retaining all candidates.
+It matches 830,123/863,793 exported games; 778,069 also match all ten fields
+at base ECO, and 164,658 match the literal fields including ECO suffixes.
+Among matched games, differing-field counts are Event 38,436, Round 12,775,
+White 330, Black 308, Site 508, Date 10; Result, base ECO, and both Elo fields
+have zero differences. Categories overlap. Another 33,670 games have no exact
+name/SAN key match and remain unresolved by this join, not proven move errors.
+Shortened names and alternative SAN spelling already explain some bounded
+examples, whose independent UCI comparisons pass. No full-source equality
+claim is made for unresolved games.
+
+See the scratch `REPORT.md` for exact commands, backend validation, and
+environment limits. No probabilistic model is used:
+byte parsing and chess facts are determined by code and the board engine.

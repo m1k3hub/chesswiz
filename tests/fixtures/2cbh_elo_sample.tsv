@@ -1,4 +1,5 @@
 # 2CBH Elo ground truth for tests/2cbh_elo_validation.cpp.
+# Game indexes corrected +255 on 2026-10-26: one header record, not 256.
 # Regenerate: python3 tests/tmp-app/2cbh-elo/gen_elo_sample.py
 # Fixture (read-only): LumbrasGigaBase_OTB_ELO2400.{2cbh,2lid,pgn}
 # Columns: gameIndex, white, black, date, result, round, ecoBase,
@@ -8,581 +9,581 @@
 # source PGN's [WhiteElo]/[BlackElo] and are the asserted ground truth.
 # The 2CBH side is decoded at test time by db::cb2::readIndexElo, so no
 # 2CBH Elo value is stored here.
-0	Bischoff, Klaus	Kotronias, Vasilios	1992.12.01	0-1	1	A85	2510	2550
-1442	Cruz, Cristhian	Cori, Jorge	2016.01.24	1/2-1/2	11.1	A37	2553	2596
-2883	So, Wesley	Karjakin, Sergey	2017.06.23	0-1	9.4	A29	2812	2781
-4325	Salgado Lopez, Ivan	Piorun, Kacper	2009.11.19	1/2-1/2	1	A26	2562	2475
-5767	Atalik, Suat	Cubas, Jose	2006.05.27	1/2-1/2	6	D45	2632	2425
-7208	Iturrizaga Bonelli, Eduardo	Jovanic, Ognjen	2011.02.27	1-0	2.7	D10	2611	2489
-8650	Timofeev, Artyom	Leventic, Ivan	2008.06.07	1-0	4	D20	2664	2509
-10091	Heberla, Bartlomiej	Tazbir, Marcin	2021.09.19	0-1	1.1	D20	2558	2513
-11533	Flumbort, Andras Dr.	Torma, Robert	2014.12.13	1/2-1/2	8.2	D38	2463	2417
-12975	Lysyj, Igor	Ionov, Sergey	2010.04.05	1/2-1/2	5	D26	2615	2548
-14416	Polgar, Susan	Ivkov, Borislav	1987.01.01	1/2-1/2	1	A90	2577	2480
-15858	Ligterink, Gert	Westerinen, Heikki M.J.	1987.01.01	0-1	1	B08	2470	2590
-17300	Kosic, Dragan	Arnason, Jon L	1993.01.01	1/2-1/2	1	A45	2455	2535
-18741	Westerinen, Heikki M.J.	Keene, Raymond D	1976.00.00	1-0	?	E55	2550	2460
-20183	Milov, Vadim	Naiditsch, Arkadij	2005.11.03	1-0	1.1	E48	2652	2641
-21624	Ulko, Jaroslav	Korotylev, Alexey	2009.06.18	1/2-1/2	7	E12	2478	2607
-23066	Golod, Vitali	Florescu, Codrut-Constantin	1994.01.01	1-0	1	E12	2510	2410
-24508	Brynell, Stellan	Timofeev, Artyom	2013.03.02	1/2-1/2	9.11	D71	2485	2613
-25949	Vaganian, Rafael A	Stefansson, Hannes	1985.11.01	1/2-1/2	5	E63	2640	2565
-27391	Sellos, Didier	Renet, Olivier	1997.00.00	0-1	5	E88	2455	2505
-28833	Kovacevic, Vlatko	Rukavina, Josip	1985.01.01	1/2-1/2	1	E95	2466	2470
-30274	Heberla, Bartlomiej	Warakomski, Tomasz	2017.11.26	1/2-1/2	9.4	E12	2558	2533
-31716	Vorotnikov, Vladislav V	Vladimirov, Yevgeniy	1974.00.00	1-0	?	B22	2420	2450
-33158	Mahjoob Zardast, Morteza	Kupreichik, Ilya	2003.12.18	0-1	8	B23	2408	2496
-34599	Mortensen, Erling	Jansa, Vlastimil	1983.01.01	1-0	4	B81	2432	2440
-36041	Poleshchuk, Nikolay N	Baklanov, Valentin Petrovich	2010.01.25	1/2-1/2	?	B93	2424	2455
-37482	Boguslawski, Oleg	Bujisho, Benjamin	2009.02.08	1-0	7.3	B90	2407	2413
-38924	Savchenko, Boris	Dvalishvili, Pavel S.	2018.09.08	0-1	1.2	B61	2562	2408
-40366	Petrushin, Alexander I	Aseev, Konstantin N	1993.01.01	1-0	1	B63	2400	2515
-41807	Balcerak, Jakob	Berkvens, Joost	2002.11.17	1-0	2.1	B67	2411	2453
-43249	Arencibia Rodriguez, Walter	Borges Matos, Juan	1993.01.01	0-1	1	B42	2490	2400
-44691	Kovalenko, Gleb I	Lintchevski, Daniil	2017.08.06	1-0	1	B22	2640	2569
-46132	Meister, Jakob	Nikolic, Nebojsa	1995.00.00	1-0	3	B70	2450	2430
-47574	Ragger, Markus	Shengelia, David	2020.05.02	1-0	5.1	B10	2679	2544
-49015	Bosboom, Manuel	Lobron, Eric	1995.08.03	0-1	1	B14	2450	2595
-50457	Adams, Michael	Beliavsky, Alexander G	1992.10.01	1-0	4	B07	2610	2595
-51899	Solak, Dragan	Ashwin, Jayaram	2013.06.12	1/2-1/2	3.2	C69	2598	2472
-53340	Kuczynski, Robert	Murdzia, Piotr	1997.01.01	1-0	12	C90	2500	2425
-54782	Brunner, Lucas	Granda Zuniga, Julio E	1990.11.20	1-0	4	C92	2475	2485
-56224	Sasikiran, Krishnan	Williamson, Harvey D	2017.03.31	1/2-1/2	?	C92	2674	2531
-57665	Brkic, Ante	Amin	2008.08.14	0-1	12	C54	2610	2561
-59107	Haslinger, Stewart G	Berzinsh, Roland	2007.05.07	1-0	11	C45	2450	2429
-60549	Dzhumaev, Marat	Batchuluun, Tsegmed	2013.05.23	1-0	6	C02	2549	2507
-61990	Milman, Lev	Lenderman, Aleksandr	2014.10.13	1/2-1/2	8.12	C11	2427	2597
-64873	Pogorelov, Ruslan	Barua, Dibyendu	1997.00.00	0-1	8	A04	2465	2535
-66315	Volke, Karsten	Paragua, Mark	2004.11.05	1/2-1/2	5	D15	2483	2534
-67757	Andreikin, Dmitry	Lou, Yiping	2018.11.28	1-0	20.6	D45	2719	2473
-69198	Bu, Xiangzhi	Zeng, Chongsheng	2018.11.27	1-0	19.2	A16	2726	2535
-70640	Mamedyarov, Shakhriyar	Nisipeanu, Liviu-Dieter	2004.06.23	1/2-1/2	3.1	A05	2657	2692
-72082	Shamkovich, Leonid	Fedorowicz, John	1979.03.01	1/2-1/2	3	A34	2495	2405
-73523	Bistric, Faruk	Rogic, Davor	2003.00.00	0-1	2	A28	2509	2496
-74965	Gurevich, Valery M.	Riff, Jean-Noel	2005.05.04	1-0	8	E46	2630	2438
-76406	Dziuba, Marcin	Predojevic, Borki	2007.04.05	0-1	3	D47	2525	2609
-77848	Kovalenko, Igor	Sebenik, Matej	2013.12.27	1-0	1	D15	2672	2496
-79290	Cebalo, Miso	L'Ami, Erwin	2003.01.24	1/2-1/2	7	D22	2527	2438
-80731	Lasker, Emanuel	Rapaka Samuel Paul	1936.08.22	0-1	11	D27	2661	2679
-82173	Khalifman, Alexander	Fridman, Daniel	2013.01.13	1/2-1/2	5.5	D56	2614	2667
-83615	Burmakin, Vladimir	Vysochin, Spartak	2003.10.22	1/2-1/2	5	D11	2590	2584
-85056	Shen, Yang	Huang, Quian	2019.11.21	1/2-1/2	16.2	D23	2410	2427
-86498	Seirawan, Yasser	Short, Nigel D	1990.09.01	1/2-1/2	1	A85	2635	2610
-87939	Dizdar, Goran	Smirin, Ilia	1998.04.29	1/2-1/2	1	B39	2530	2590
-89381	Azmaiparashvili, Zurab	Krivoshey, Sergei	2003.03.15	1-0	7	A58	2678	2503
-90823	Friedel, Joshua	Moiseenko, Alexander	2008.08.04	0-1	8	E48	2524	2632
-92264	Lesiege, Alexandre	Onischuk, Alexander	1999.08.08	1-0	6	E58	2553	2657
-95148	Khlebovich, Alexander	Riazantsev, Alexander	2025.10.17	1/2-1/2	9.6	E16	2423	2612
-98031	Mamedyarov, Shakhriyar	Vidit, Santosh Gujrathi	2015.10.11	1-0	7.10	E61	2736	2697
-99473	San Segundo Carrillo, Pablo	Romero Holmes, Alfonso	2011.11.26	1/2-1/2	7	E91	2509	2488
-100914	Kosic, Dragan	Berkes, Ferenc	2007.02.24	1/2-1/2	1	A46	2504	2591
-102356	Sokolov, Ivan	Bauer, Christian	1996.10.27	1-0	2	E21	2670	2465
-103797	Christiansen, Larry	Polgar, Susan	1993.03.01	1-0	3	B22	2620	2560
-105239	Flores, Diego	Felgaer, Ruben	2003.08.23	0-1	6	B25	2439	2551
-106681	Janev, Evgeni	Grigorov, Grigor	2007.09.15	1/2-1/2	6.4	B50	2488	2460
-108122	Zufic, Miroslav	Perry, Dan	2018.12.31	1/2-1/2	?	B90	2440	2504
-109564	Ljubojevic, Ljubomir	Gheorghiu, Florin	1976.06.01	0-1	14	B67	2620	2540
-111006	Bulmaga, Irina	Sosa, Teo	2019.01.30	1/2-1/2	9.47	B66	2407	2499
-112447	Zagrebelny, Sergey	San Segundo Carrillo, Pablo	1994.12.01	1/2-1/2	1	B33	2485	2491
-113889	Armas, Jules	Illescas Cordoba, Miguel	1991.01.01	0-1	1	B45	2450	2545
-115330	Psakhis, Lev	Boensch, Uwe	1993.01.01	0-1	1	B30	2575	2490
-116772	Marcelin, Cyril	Bacrot, Etienne	2002.08.24	1-0	6	B30	2470	2653
-118214	Rambaldi, Francesco	Krush, Irina	2017.03.16	1/2-1/2	6.1	B10	2559	2444
-119655	Savitskiy, Sergey	Kozak, Adam	2018.10.10	1-0	2.7	B15	2413	2445
-121097	Bischoff, Klaus	Hickl, Joerg	1987.07.01	1/2-1/2	1	B01	2485	2450
-122539	Adhiban, B.	Kramnik, Vladimir	2018.01.28	0-1	13.4	C26	2655	2787
-125422	Tseshkovsky, Vitaly	Smagin, Sergey	1985.00.00	1/2-1/2	8	C92	2470	2405
-126864	Cheparinov, Ivan	Nikolic, Predrag	2007.08.30	0-1	8	C93	2657	2646
-128305	Svidler, Peter	Eljanov, Pavel	2024.09.24	1-0	1.2	C50	2698	2672
-129747	Gabuzyan, Hovhannes	Paravyan, David	2021.05.26	1-0	2.1	C45	2590	2647
-131188	Czebe, Attila	Kosic, Dragan	2017.12.15	1-0	4.5	C00	2469	2454
-132630	Kovalevskaya, Ekaterina	Hou, Yifan	2006.08.17	0-1	7	C11	2463	2488
-134072	Munoz, Miguel	Meister, Peter	2014.07.24	1/2-1/2	3.4	C06	2457	2410
-135513	Martinez Duany, Lelys Stanley	Nogueiras Santiago, Jesus	2008.05.21	1/2-1/2	3	B04	2499	2559
-136955	Dorfman, Iossif	Arkhipov, Sergey	1985.01.01	1/2-1/2	1	D11	2525	2550
-138397	Eingorn, Vereslav S	Krivoshey, Sergei	2001.00.00	1/2-1/2	5	D15	2589	2483
-139838	Nikolaevsky, Yuri V	Zhidkov, Valery S	1968.05.00	1-0	12	A05	2490	2490
-141280	Henriquez Villagra, Cristobal	Garcia Ramos, Daniel	2025.07.26	1/2-1/2	8.5	A05	2599	2438
-142721	Miezis, Normunds	Tikkanen, Hans	2010.09.12	1-0	9	A10	2519	2507
-144163	Mareco, Sandro	Christiansen, Johan-Sebastian	2016.12.26	1-0	3.42	A21	2635	2429
-145605	Cebalo, Miso	Brkic, Ante	2012.03.06	0-1	2.2	A20	2442	2610
-147046	Goldsztejn, Gildas	Maze, Sebastien	2009.12.27	1/2-1/2	4.2	E73	2419	2542
-148488	Ivanisevic, Ivan	Yeletsky, Ivan	2018.10.31	1/2-1/2	5.10	D10	2583	2401
-149930	Knudsen, John C	Sammalvuo, Tapani	2001.06.20	1/2-1/2	?	D44	2485	2420
-152813	Merilo, Jaan	Simon, Wendel	1999.11.02	0-1	?	D58	2510	2420
-154255	Hug, Werner	Zueger, Beat	2005.02.27	1/2-1/2	1.4	A40	2445	2440
-155696	Karlsson, Lars	Yrjola, Jouni	1989.01.01	1/2-1/2	1	A81	2515	2430
-157138	Knaak, Rainer	Kengis, Edvins	2000.01.30	0-1	9	D00	2505	2496
-158579	Bukic, Enver	Velimirovic, Dragoljub	1981.01.01	1/2-1/2	1	A77	2480	2480
-160021	Lin, Ta	Petursson, Margeir	1990.07.01	0-1	1	E25	2435	2550
-161463	Ornstein, Axel	Ligterink, Gert	1969.12.26	1-0	4	E43	2420	2403
-162904	Ftacnik, Lubomir	Asegedech Alemu Huluka	1984.01.01	1/2-1/2	9	A61	2570	2510
-164346	Fedoseev, Vladimir	Smirnov, Alexey	2013.11.28	1-0	1.16	E43	2597	2429
-165788	Sargsyan, Shant	Svane, Rasmus	2022.12.30	1/2-1/2	18.18	D41	2645	2622
-167229	Holm, Kristian Stuvik	Notkevich, Benjamin Arvola	2018.07.10	1/2-1/2	5.5	D38	2453	2471
-168671	Spassky, Boris V.	Kasparov, Garry	1989.00.00	1/2-1/2	?	A39	2580	2775
-170112	Ehlvest, Jaan	Kovalev, Vladislav	2014.07.04	1-0	7.3	E81	2552	2554
-171554	Sarana, Alexey	Gabrielian, Artur	2017.05.02	1/2-1/2	2.2	D85	2472	2525
-172996	Rausis, Igors	Yemelin, Vasily	2008.01.06	1/2-1/2	1	E18	2520	2562
-174437	Tibensky, Robert	Mirumian, Vigen	1998.07.24	1/2-1/2	8	D78	2435	2470
-175879	Sariego Figueredo, Wilfredo	Verduga, David Alfredo	1990.01.01	1/2-1/2	1	B22	2405	2405
-177321	Epishin, Vladimir	Ahlander, Bjorn	1994.01.01	1-0	1	B50	2675	2415
-178762	Kravtsiv, Martyn	Volokitin, Andrei	2016.12.06	1/2-1/2	1.6	B54	2645	2649
-181646	Chukanov, Igor Anatolievich	Lebedev, Valery Ivanovich	2015.09.01	1/2-1/2	?	B92	2439	2479
-184529	aleksander matjasic	Capelan, Guenter	1971.01.01	1/2-1/2	1	B42	2520	2420
-185970	Ebert, Juergen	Beecham, Richard C	2017.01.05	1/2-1/2	?	B30	2449	2470
-187412	Yanofsky, Daniel Abraham	Biyiasas, Peter	1975.01.01	1/2-1/2	1	B34	2415	2450
-188854	Vescovi, Giovanni	Zambrana, Osvaldo	2005.10.23	1-0	1	B33	2646	2409
-190295	Sztupak, Zoltan	Groszpeter, Attila	2005.03.06	1/2-1/2	9	B13	2429	2524
-191737	Laznicka, Viktor	Bauer, Christian	2006.12.28	0-1	6	B07	2596	2585
-193179	Kotronias, Vasilios	Manon, Reja Neer	2024.09.26	1/2-1/2	4.1	C63	2458	2417
-194620	Stripunsky, Alexander	Kamsky, Gata	2004.12.21	1/2-1/2	4	C85	2533	2717
-196062	Shankland, Sam	Ipatov, Alexander	2017.03.17	0-1	7.5	C87	2666	2660
-197503	Hardaway, Brewington	Dominguez Perez, Leinier	2026.03.02	1/2-1/2	2.4	C50	2544	2738
-198945	Drazic, Sinisa	Saric, Ante	2008.01.06	1/2-1/2	5.7	C42	2489	2438
-200387	Motylev, Alexander	Iljin, Artem	2018.05.09	1-0	8.4	C42	2660	2497
-201828	Ter-Sahakyan, Samvel	Stupak, Kirill	2018.06.27	1/2-1/2	7.4	C18	2546	2564
-203270	Acs, Peter	Feher, Gyula	1998.02.24	0-1	1	C06	2450	2445
-204712	Askarov, Marat	Moiseenko, Alexander	2004.04.21	1/2-1/2	2.1	A36	2404	2631
-206153	Assaubayeva, Bibisara	Batsiashvili, Nino	2025.12.18	1/2-1/2	3	A13	2497	2462
-207595	Stangl, Markus	Vogt, Lothar	2003.01.25	0-1	7	E60	2494	2479
-209037	Redolfi, Redolfo Argentino	Zecha, Espen	1991.01.01	1-0	1	E60	2500	2525
-210478	Hausrath, Daniel	Golod, Vitali	2007.07.25	1/2-1/2	3	E92	2494	2589
-211920	Ljubojevic, Ljubomir	Kramnik, Vladimir	1993.02.01	1/2-1/2	1	A11	2605	2685
-213361	King, Daniel J	Speelman, Jon S	1990.12.01	1/2-1/2	1	A28	2560	2605
-214803	Mecking, Henrique	Ornstein, Axel	1975.12.12	1/2-1/2	1	E12	2600	2430
-216245	Nilssen, John Arni	Seres, Lajos	2004.08.13	1/2-1/2	7	D10	2414	2448
-217686	Moiseenko, Alexander	Li, Chao b	2016.03.28	1/2-1/2	8.2	D94	2668	2625
-219128	Garcia Palermo, Carlos Horacio	Rojas Keim, Luis	1998.00.00	1-0	?	D20	2475	2455
-220570	Korley, Kassa	Brown, Michael	2019.01.19	1/2-1/2	4	D51	2450	2524
-222011	Koneru, Humpy	Krush, Irina	2019.05.18	1-0	22.4	D05	2553	2422
-223453	Kazakouski, Valery	Tsydypov, Zhamsaran	2017.02.27	1-0	7.13	B06	2429	2485
-224894	Rakhmangulov, Andrei	Malakhatko, Vadim	1999.00.00	1/2-1/2	?	A45	2417	2496
-226336	Lalit Babu M R	Swapnil, S. Dhopade	2012.10.03	0-1	3.2	A57	2526	2438
-227778	Hort, Vlastimil	Speelman, Jon S	1983.01.01	1-0	1	E45	2585	2570
-229219	Bareev, Evgeny	Lutz, Christopher	2006.05.23	1-0	3	E12	2701	2608
-230661	Ruemmele, Tobias	Chupin, Vladimir Nikolaevic	2003.03.01	1/2-1/2	?	E12	2520	2483
-232103	Guliev, Sarhan	Nadyrkhanov, Sergey	1995.00.00	1-0	7	E68	2470	2470
-233544	Antonsen, Mikkel	Ziska, Helgi Dam	2012.03.31	1/2-1/2	1	E81	2446	2450
-234986	Samadov, Read	Mamedov, Rauf	2026.02.06	1/2-1/2	1	D85	2510	2645
-236427	Hort, Vlastimil	Sosonko, Gennadi	1985.01.01	1/2-1/2	10	E14	2560	2535
-237869	Rapaka Samuel Paul	Vyzmanavin, Alexey	1989.01.01	1/2-1/2	3	E15	2450	2550
-239311	Atalik, Ekaterina	Abdumalik, Zhansaya	2019.12.27	1-0	5.9	A49	2462	2465
-240752	Abdumalik, Zhansaya	Mammadzada, Gulay	2023.04.17	1/2-1/2	2.4	B23	2497	2449
-242194	Short, Nigel D	Conquest, Stuart C	2011.07.28	1-0	4.3	A43	2687	2519
-243636	Balashov, Yuri S	Andersson, Ulf	1975.00.00	1/2-1/2	?	B81	2540	2565
-246519	Nikolov, Sasho	Kolev, Vasil At.	2009.06.12	1-0	5	B90	2416	2573
-247961	Griffith, Kyron	Fernandez, Daniel Howard	2024.11.25	1/2-1/2	8.3	B56	2407	2503
-249402	Lau, Ralf	Kengis, Edvins	1999.03.07	1/2-1/2	7.4	B42	2453	2571
-250844	Ivanovic, Bozidar	Cvitan, Ognjen	1987.09.01	0-1	1	B42	2480	2500
-252285	Cernousek, Lukas	Cvek, Robert	2024.11.03	0-1	2.4	B36	2445	2437
-253727	Sulskis, Sarunas	Kotronias, Vasilios	2003.02.02	0-1	6	B10	2567	2573
-255169	Prokopchuk, Evgeny	Turov, Maxim	1994.02.01	1-0	1	D42	2435	2490
-256610	Luther, Thomas	Markowski, Tomasz	2009.07.30	1/2-1/2	6	B07	2559	2627
-258052	Socko, Bartosz	Ronchetti, Niccolo'	2011.04.29	1/2-1/2	4	C69	2660	2416
-259494	Lagno, Kateryna	Stefanova, Antoaneta	2019.12.30	1/2-1/2	17.1	C84	2547	2476
-262377	Fedorov, Alexei	Gyimesi, Zoltan	2003.09.10	1/2-1/2	4	C54	2595	2553
-263818	Howell, David W L	Sokolov, Ivan	2009.08.14	1-0	7	C45	2624	2657
-265260	Wieczorek, Oskar	Grabarczyk, Miroslaw	2014.04.02	1/2-1/2	9.11	C42	2407	2471
-266702	Thipsay, Praveen M	Gulko, Boris	1990.07.01	1/2-1/2	1	C02	2490	2600
-268143	Martinez Duany, Lelys Stanley	Levchenko, Leonid	2021.05.25	1-0	2.3	C11	2520	2434
-269585	De La Paz Perdomo, Frank	Galego, Luis	2003.05.09	1-0	4	C06	2449	2506
-271027	Halkias, Stelios	Larkin, Vladyslav	2022.03.16	1/2-1/2	6	A41	2527	2401
-272468	Sale, Srdjan	Ushenina, Anna	2006.08.15	1/2-1/2	4	A09	2438	2410
-273910	Beim, Valeri	Lanka, Zigurds	2004.11.20	1/2-1/2	2	E63	2512	2455
-275352	Sokolov, Ivan	Vladimirov, Yevgeniy	1975.01.01	1-0	1	D76	2500	2470
-276793	Golubov, Saveliy	Oganian, Miran	2016.10.04	1/2-1/2	14.18	A00	2481	2450
-278235	Kholmov, Ratmir D	Beliavsky, Alexander G	1972.08.16	1/2-1/2	1	A23	2550	2420
-279676	Vallejo Pons, Francisco	San Segundo Carrillo, Pablo	1999.11.16	1-0	9	D53	2519	2510
-281118	Olafsson, Helgi	Krnan, Tomas	2015.10.11	1/2-1/2	9.62	A28	2549	2440
-282560	Krush, Irina	Kaidanov, Gregory	2007.05.15	1/2-1/2	1	D44	2464	2595
-284001	Khalifman, Alexander	Vidonyak, Roman	1994.00.00	1-0	?	D15	2660	2405
-285443	Braun, Arik	Kunin, Vitaly	2009.10.25	1-0	6.1	D25	2519	2544
-286885	Nihal Sarin	Tabatabaei, M. Amin	2022.09.17	0-1	1.4	E04	2677	2651
-289768	Sokolov, Ivan	Baburin, Alexander	1988.01.01	1-0	1	D36	2450	2455
-291209	Arkell, Keith C	Lepelletier, Benoit	1999.01.01	1-0	10	A40	2438	2456
-292651	Lutz, Christopher	Stangl, Markus	1990.11.01	1-0	6	A42	2445	2435
-294093	Enchev, Ivajlo	Campora, Daniel H.	2012.12.08	1-0	7.7	A50	2411	2493
-295534	Alekseev, Evgeny	Andreikin, Dmitry	2011.10.19	1/2-1/2	11	E08	2662	2705
-296976	Paramos Dominguez, Roberto	Garcia Padron, Jose	1996.10.10	0-1	1	E46	2410	2440
-298418	Galliamova, Alisa	Pashikian, Arman	2017.06.02	0-1	4.67	E48	2456	2603
-299859	Browne, Walter S	Gruenfeld, Yehuda	1979.03.01	1/2-1/2	1	E18	2540	2430
-301301	Novikov, Igor	Csom, Istvan	1991.01.01	1/2-1/2	1	E15	2475	2480
-302743	Dobrov, Vladimir	Schreiner, Peter	2016.02.19	1/2-1/2	9.8	E63	2518	2435
-304184	Rosner, Jonas	Parkhov, Yair	2022.09.18	1-0	5.5	E60	2454	2479
-305626	Diermair, Andreas	Pena Gomez, Manuel	2022.07.20	0-1	8.1	E92	2452	2492
-308509	Rostalski, Walter	Benjamin, Joel	1992.01.01	0-1	1	A48	2450	2471
-311392	Smeets, Jan	L'Ami, Erwin	2012.07.16	0-1	2	B33	2613	2631
-312834	Smith, Bryan	Vovsha, Eli	2007.00.00	1/2-1/2	?	B50	2402	2458
-314276	Romm, Mikhail Yakovlevich	Pijl, Richard	2014.02.23	1-0	?	B90	2445	2429
-315717	Sadowski, Marek	Olivotto, Livio	2010.09.10	1/2-1/2	?	B97	2502	2571
-317159	Andersson, Ulf	Cramling, Pia	1998.06.17	1/2-1/2	9	B22	2635	2535
-318600	Zupe, Miran	Shirov, Alexei	1995.00.00	1/2-1/2	7	B40	2415	2440
-320042	Mortensen, Erling	Jansa, Vlastimil	1982.01.01	1-0	2	B46	2432	2475
-321484	Djukic, Nikola	Rajkovic, Dusan	2007.08.28	1-0	7	B47	2531	2522
-322925	Glek, Igor	Shcherbakov, Ruslan	2001.05.15	1-0	3	B30	2566	2544
-324367	Stankovic, Milos	Perunovic, Milos	2023.09.26	1/2-1/2	9.5	B45	2467	2540
-325809	Pruijssers, Roeland	Admiraal, Miguoel	2019.11.30	1-0	13.5	B10	2557	2510
-327250	Belyakov, Bogdan	Schekachikhin, Maksim	2018.05.03	1/2-1/2	3.1	B18	2479	2400
-328692	Manca, Federico	Sarno, Spartaco	1992.00.00	1-0	3	B09	2415	2405
-330134	Kozak, Adam	Triapishko, Alexandr	2018.10.07	0-1	18.20	C75	2445	2508
-333017	Rausis, Igors	Sokolov, Andrei	1995.00.00	0-1	8	C99	2515	2575
-334458	Maghsoodloo, Parham	Asadli, Vugar	2017.11.21	1/2-1/2	9.4	C54	2556	2464
-335900	Mastrovasilis, Dimitrios	Drazic, Sinisa	2013.09.03	1-0	11.2	C46	2593	2461
-337342	Lindberg, Bengt	Barkhagen, Jonas	2011.02.05	1/2-1/2	7	C10	2405	2443
-338783	Ivanovic, Bozidar	Kalezic, Blazo	2012.07.09	1/2-1/2	3.3	C11	2427	2416
-340225	Anka, Emil	Okhotnik, Vladimir	2002.01.00	0-1	6	B15	2438	2406
-341667	Jonkman, Harmen	Anastasian, Ashot	2000.07.14	1/2-1/2	11	B05	2424	2606
-343108	Quinteros, Miguel A.	Portisch, Lajos	1982.02.01	0-1	1	A04	2505	2630
-344550	Raja Rithvik R	Vaz, Ethan	2024.03.06	1-0	10.4	E06	2532	2409
-345991	Dorfman, Iossif	Romanishin, Oleg M	2000.02.20	1-0	9	A53	2593	2578
-347433	Tal, Mikhail	Westerinen, Heikki M.J.	1988.12.01	1/2-1/2	3	E18	2630	2675
-348875	Harutjunyan, Gevorg	Lafuente, Pablo	2010.06.09	1-0	10	A14	2460	2587
-350316	Amin, Bassem	Larkin, Vladyslav	2026.01.16	1-0	4.2	A05	2625	2469
-351758	Aronian, Levon	So, Wesley	2016.06.11	1/2-1/2	7.1	A35	2792	2770
-353200	Nepomniachtchi, Ian	Svane, Rasmus	2024.12.30	1-0	4.9	A14	2755	2628
-354641	Eingorn, Vereslav S	Faibisovich, Vadim Z	1997.11.04	1/2-1/2	4	D54	2590	2410
-356083	Kantsler, Boris	Baron, Tal	2009.12.23	1/2-1/2	5	A16	2472	2404
-357525	Krivoborodov, Egor	Kunin, Vitaly	2023.01.21	1/2-1/2	7.2	D00	2541	2508
-358966	Gagunashvili, Merab	Willemze, Jeroen	2004.07.23	1-0	7	D11	2580	2422
-360408	Tan, Zhongyi	Bai, Jinshi	2022.08.25	0-1	3.8	D32	2525	2586
-361849	Miles, Anthony J	Kurajica, Bojan	1976.07.01	1-0	4	E07	2510	2525
-363291	Franco Alonso, Alejandro	Roa Alonso, Santiago	2007.03.15	0-1	10	E11	2440	2418
-364733	Kempinski, Robert	Krasenkow, Michal	1997.01.01	1-0	1	D37	2515	2615
-366174	Cebalo, Miso	Zaja, Ivan	1997.01.01	1/2-1/2	1	E12	2540	2440
-367616	Nogerbek, Kazybek	Shimanov, Aleksandr	2023.12.27	0-1	8.39	E94	2483	2578
-370499	Papaioannou, Ioannis	Kengis, Edvins	2015.11.21	1/2-1/2	8.13	A32	2611	2510
-371941	Ponomariov, Ruslan	Zajic, Milan	2024.03.24	1-0	8.8	E49	2646	2436
-373382	Granda Zuniga, Julio E	Khamrakulov, Ibragim S.	2011.12.04	1/2-1/2	3	E38	2636	2518
-374824	Navara, David	Goloshchapov, Alexander	2007.02.25	1-0	11	E15	2719	2555
-376266	Narayanan S L	Vavulin, Maxim	2017.03.01	1-0	9.21	E15	2526	2604
-377707	Jasnikowski, Zbigniew	Lerner, Konstantin Z	1986.01.01	1/2-1/2	1	E15	2405	2530
-379149	Evdokimov, Alexander A.	Cheparinov, Ivan	2007.08.04	0-1	4	E92	2544	2657
-380591	Gukesh D	Theodorou, Nikolas	2023.11.02	1/2-1/2	8.36	E95	2746	2619
-382032	Berczes, David	Manish Anto Cristiano F	2023.05.31	1/2-1/2	8.3	D02	2439	2485
-383474	Grachev, Boris	Vitiugov, Nikita	2021.02.11	1/2-1/2	8.2	A48	2619	2715
-384915	Bortnyk, Mykola	Zeltsan, Joseph	2024.01.07	1-0	4.1	B22	2421	2439
-386357	Klügel, Jens-Uwe	Habermehl, Tobias	2016.06.26	1/2-1/2	?	B33	2507	2476
-387799	Bogut, Zeljko	Smeets, Jan	2011.05.09	1/2-1/2	6.12	B50	2433	2647
-389240	Popov, Ivan	Lu, Shanglei	2015.08.21	1-0	13.6	B90	2653	2607
-390682	Liang, Jason	Kantans, Toms	2022.11.14	1/2-1/2	1.3	B70	2492	2517
-392124	Mamedov, Rauf	Kokarev, Dmitry	2008.04.25	1-0	5	B97	2617	2579
-393565	Jovanovic, Zoran	Lubbe, Nikolas	2024.01.14	1/2-1/2	6.4	B40	2513	2500
-395007	Zhigalko, Andrey	Jurcik, Marian	2013.12.01	1/2-1/2	4.2	B22	2628	2481
-396449	Karjakin, Sergey	Maletin, Pavel	2014.06.20	1/2-1/2	1	B85	2771	2588
-397890	Heberla, Bartlomiej	Wieczorek, Oskar	2017.12.29	1-0	6.4	B85	2555	2463
-399332	Sutovsky, Emil	Kotronias, Vasilios	1997.05.25	1/2-1/2	6	B31	2560	2590
-400773	Bodnaruk, Anastasia	Girya, Olga	2017.02.14	0-1	2.1	B10	2463	2458
-402215	Lindberg, Bengt	Akesson, Ralf	2004.12.05	1/2-1/2	5	B17	2422	2472
-403657	Belozerov, Andrei	Tseshkovsky, Vitaly	2006.06.20	1/2-1/2	8	B09	2538	2572
-405098	Della Morte, German	Villanueva, Mario	2015.10.03	1/2-1/2	6.1	C70	2426	2420
-406540	Efimenko, Zahar	Acs, Peter	2006.08.07	1/2-1/2	10	C77	2632	2520
-407982	Cheparinov, Ivan	Navara, David	2007.11.01	0-1	5	C88	2670	2656
-409423	Niemann, Hans Moke	Caruana, Fabiano	2022.07.08	0-1	12.7	C54	2688	2783
-410865	Savitskiy, Sergey	Lobanov, Sergei	2021.02.25	1/2-1/2	6.5	C48	2427	2516
-412306	Korpa, Bence	Kosic, Dragan	2019.07.09	1/2-1/2	5.3	C00	2523	2482
-413748	Ulybin, Mikhail	Savchenko, Stanislav	1996.00.00	1/2-1/2	5	C10	2535	2585
-415190	Shirov, Alexei	Morozevich, Alexander	2001.05.21	1-0	2	C11	2723	2749
-416631	Short, Nigel D	Agdestein, Simen	1995.00.00	0-1	6	B04	2655	2600
-418073	Santiago, Yago De Moura	Cori Quispe, Kevin Joel	2019.04.11	1-0	5.3	A04	2472	2497
-419515	Kurajica, Bojan	Hertneck, Gerald	2000.04.13	1/2-1/2	3	E06	2530	2571
-420956	Popchev, Milko	Ivanov, Mikhail M	2007.06.30	1/2-1/2	2	D11	2456	2450
-422398	Macieja, Bartlomiej	Benjamin, Joel	2023.04.09	1/2-1/2	8	E12	2513	2498
-423840	Galyas, Miklos	Janik, Igor	2019.06.04	0-1	4.1	A30	2473	2483
-426723	Matlakov, Maxim	Amonatov, Farrukh	2016.12.30	1-0	17.16	A49	2694	2620
-428164	Steingrimsson, Hedinn	Varga, Zoltan	2005.11.09	0-1	4	A30	2435	2525
-429606	Korchnoi, Viktor	Psakhis, Lev	1992.06.01	1/2-1/2	1	A33	2585	2605
-431048	Ivanchuk, Vasyl	Parligras, Mircea-Emilian	2023.11.05	0-1	11.44	D35	2653	2534
-433931	Stryjecki, Marek	Teske, Henrik	2003.07.24	1/2-1/2	7	D41	2422	2527
-435373	Shytaj, Iart Luca	Rogozenco, Dorian	2017.03.18	1-0	9.2	D02	2451	2480
-436814	Lou, Yiping	Sundararajan, Kidambi	2010.04.25	1/2-1/2	5	D12	2429	2520
-438256	Ehlvest, Jaan	Morozevich, Alexander	2003.01.11	0-1	3	D11	2600	2678
-439697	Svetushkin, Dmitry	Libiszewski, Fabien	2004.02.28	1-0	1	D37	2553	2451
-441139	Bosiocic, Marin	Todorovic, Goran M	2010.03.14	0-1	8	D43	2577	2453
-442581	Efimov, Igor	Ortega, Lexy	1996.05.24	0-1	7	D11	2455	2490
-444022	Almasi, Istvan	Vidonyak, Roman	2006.10.22	1/2-1/2	1.4	B07	2400	2400
-445464	Rakhmanov, Aleksandr	Carlsson, Pontus	2010.03.17	1-0	11	E48	2584	2478
-446906	Ivanisevic, Ivan	Tosic, Marko	2003.09.06	1-0	8	A53	2563	2447
-448347	Khismatullin, Denis	Chekhov, Sergei	2016.05.01	1-0	1.3	A62	2609	2465
-449789	Fridman, Daniel	Brodsky, Michail	2014.06.26	1/2-1/2	9.1	E04	2627	2662
-451231	Lalic, Bogdan	Schlosser, Philipp	2012.07.19	1/2-1/2	9.2	E38	2488	2579
-452672	Dvirnyy, Danyyil	Piscopo, Pierluigi	2016.04.28	1-0	3.1	E37	2555	2431
-454114	Vukic, Milan	Sahovic, Rastko	1979.09.02	1-0	7.2	E15	2485	2520
-455555	Simantsev, Mikhail	Drygalov, Sergey	2016.10.08	1/2-1/2	6.1	E11	2465	2409
-456997	Sadorra, Julio Catalino	Nolte, Rolando	2008.07.03	1/2-1/2	3	E94	2470	2522
-458439	Kozul, Zdenko	Kuzmin, Alexey	1989.00.00	0-1	7	E97	2497	2465
-459880	Talla, Vladimir	Swayams, Mishra	2017.06.28	0-1	6.5	E99	2431	2440
-461322	Bosiocic, Marin	Brkic, Ante	2018.04.25	0-1	9.6	E11	2605	2610
-462764	Yegiazarian, Arsen	Khachiyan, Melikset	1995.01.01	1-0	1	D03	2460	2400
-464205	Platonov, Igor V	Anikaev, Yuri N	1977.00.00	1-0	?	B22	2455	2445
-465647	Oll, Lembit	De Boer, Gert-Jan	1992.10.01	1/2-1/2	2	B52	2600	2430
-467088	Iordachescu, Viorel	Zherebukh, Yaroslav	2009.10.23	1-0	8	B51	2607	2544
-468530	Schneider, Dmitry	Navara, David	2000.08.02	0-1	1	B86	2454	2433
-469972	Gonzalez Perez, Arian	Abreu Delgado, Aryam	2010.09.17	1/2-1/2	6.3	B97	2410	2473
-471413	Matjushin, Gennady	Pantsulaia, Levan	2011.02.27	0-1	2.8	B40	2490	2610
-472855	Mamedov, Rauf	Harikrishna, P	2017.12.13	1/2-1/2	22.6	B48	2709	2744
-474297	Pribelszky, Bence	Manolache, Marius	2023.08.17	1/2-1/2	6.2	B85	2413	2432
-475738	Oral, Tomas	Jirovsky, Milos	2014.11.11	1/2-1/2	2.1	B31	2489	2455
-477180	Westerinen, Heikki M.J.	Kotronias, Vasilios	2008.04.29	1-0	8	B31	2565	2611
-478622	Najer, Evgeniy	Khenkin, Igor	2012.12.02	1/2-1/2	4.1	B12	2647	2659
-480063	Bocharov, Ivan	Kozak, Adam	2018.10.07	1-0	5.19	B12	2563	2445
-481505	Huebner, Alan-Ari	Wahls, Matthias	1994.01.01	0-1	1	B01	2610	2520
-482946	Becerra Rivero, Julio	Hoffman, Alejandro	1994.01.01	1/2-1/2	10	C41	2480	2540
-484388	Luther, Thomas	Ivanchuk, Vasyl	1994.09.01	1-0	1	C77	2518	2695
-485830	Van den Doel, Erik	Hebden, Mark L	2002.00.00	1/2-1/2	6.2	C96	2585	2558
-487271	Palakiti Vishnu Nagachaitanya	Fang, Yuxiang	2017.09.02	1/2-1/2	7.3	C54	2538	2485
-488713	Delgado Ramirez, Neuris	So, Wesley	2022.07.30	1/2-1/2	2.2	C49	2614	2773
-490155	Savicevic, Vlatko	Stojanovic, Dalibor	2002.02.23	1-0	9	B30	2411	2433
-491596	Kovalenko, Gleb I	Gorodetzky, David	2019.01.26	0-1	12.2	C10	2663	2447
-493038	Beliavsky, Alexander G	Zilberman, Nathan R	1979.00.00	1-0	?	B08	2595	2455
-494479	Beshukov, Sergei	Vorobiov, Evgeny E.	2006.02.07	1/2-1/2	1	A04	2470	2543
-495921	Vaganian, Rafael A	Dorfman, Iossif	1990.01.01	1/2-1/2	7	A07	2605	2595
-497363	Pelletier, Yannick	Bindrich, Falko	2010.12.29	1/2-1/2	6	A07	2583	2504
-498804	Koustav Chatterjee	Sorokin, Aleksey	2023.09.17	1/2-1/2	3.5	A36	2546	2547
-500246	Spangenberg, Hugo	Malbran, Emilio	1998.08.15	1-0	1	A31	2520	2430
-501688	Afanasiev, Nikita	Turov, Maxim	2023.12.04	0-1	7.2	D77	2540	2552
-503129	Wei, Yi	Le, Quang Liem	2026.06.15	1-0	2	C50	2753	2731
-504571	Arnav Sourabh Puranik	Blomqvist, Erik	2017.02.27	0-1	7.38	A01	2481	2573
-506012	Csom, Istvan	Rogic, Davor	2000.08.22	1/2-1/2	4	A22	2478	2501
-507454	Donchenko, Alexander	Kulaots, Kaido	2022.12.07	1/2-1/2	8.9	D35	2636	2513
-508896	Adla, Diego	Glavina, Pablo	2003.03.29	1/2-1/2	?	E04	2497	2427
-510337	Boensch, Uwe	Mikhalevski, Victor	1996.11.01	1-0	1	A16	2525	2500
-511779	Tran, Thanh Tu	Lazavik, Denis	2025.12.18	0-1	9	D01	2402	2605
-513221	Dizdar, Goran	Kobalia, Mikhail	2008.10.19	1-0	3	D30	2551	2630
-514662	Stohl, Igor	Kiss, Pal	2007.02.18	1/2-1/2	5	D12	2549	2402
-516104	Grooten, Herman	Kuijf, Marinus	1992.00.00	0-1	5	D31	2430	2440
-517546	Timofeev, Artyom	Riazantsev, Alexander	2008.02.06	1/2-1/2	5	D37	2664	2628
-518987	Dronavalli, Harika	Ju, Wenjun	2014.09.04	0-1	9.1	A42	2523	2561
-520429	Mrkvicka, Josef	Alexandre Bisquert, Francisco	2003.01.31	1/2-1/2	?	A80	2482	2451
-521870	Jussupow, Artur	Bauer, Christian	2014.10.01	1/2-1/2	6	A50	2581	2637
-523312	Beliavsky, Alexander G	Almasi, Zoltan	1997.04.30	1/2-1/2	?	E05	2665	2595
-524754	Utegaliyev, Azamat	Fayzullaev, Akmal	2023.01.21	1-0	5.3	E11	2433	2401
-526195	Khegay, Dmitriy	Urazayev, Arystanbek	2018.11.26	1/2-1/2	5.2	E36	2505	2421
-527637	Grigore, George-Gabriel	Nisipeanu, Liviu-Dieter	2007.10.16	1/2-1/2	4	E39	2538	2668
-529079	Inkiov, Ventzislav	Reeh, Oliver	1989.01.01	1-0	1	E11	2470	2440
-530520	Barbosa, Oliver	Zhou, Jianchao	2015.12.29	1/2-1/2	8	E11	2518	2606
-533403	Nyback, Tomi	Shirov, Alexei	2023.02.04	1-0	9.1	D80	2567	2666
-534845	Ogloblin, Nikolay	Amonatov, Farrukh	2006.01.31	0-1	3	D11	2412	2564
-536287	Summerscale, Aaron P	Chandler, Murray G	2000.08.02	1-0	3	D58	2459	2526
-537728	Anton Guijarro, David	Naiditsch, Arkadij	2020.07.25	1/2-1/2	6.4	D03	2703	2626
-539170	Rozentalis, Eduardas	Tunik, Gennady	1989.01.01	1-0	1	B22	2485	2435
-540612	Laznicka, Viktor	Stocek, Jiri	2006.02.14	1-0	8	B51	2525	2580
-542053	Galdunts, Sergey	Benitah, Yohan	2008.11.22	1-0	2.2	B86	2429	2428
-543495	Kabanov, Nikolai	Matlakov, Maxim	2011.09.02	1/2-1/2	3	B40	2513	2630
-544937	Tabatabaei, M. Amin	Vokhidov, Shamsiddin	2024.08.05	1/2-1/2	1.2	B40	2712	2643
-546378	Van der Wiel, John T.H.	Dolmatov, Sergey	1979.07.01	1/2-1/2	8	B33	2465	2495
-547820	Predojevic, Borki	Miljkovic, Miroslav D	2003.02.06	1/2-1/2	14	B31	2437	2403
-549261	Efimenko, Zahar	Brodsky, Michail	2006.04.27	1/2-1/2	8	B63	2648	2561
-550703	Ponomariov, Ruslan	Grischuk, Alexander	2013.12.14	0-1	6.6	B12	2731	2783
-552145	Dominguez Perez, Leinier	Leko, Peter	2009.11.17	1/2-1/2	17	B12	2719	2752
-553586	Dgebuadze, Alexandre	Zhang, Zhong	2012.09.05	1/2-1/2	8.32	B19	2532	2600
-555028	Schneider, Dmitry	Panchanathan, Magesh Chandran	2007.12.11	1/2-1/2	8	C41	2502	2500
-556470	Dronavalli, Harika	Batsiashvili, Nino	2021.11.01	1/2-1/2	6.3	C77	2511	2491
-557911	Dragnev, Valentin	Gledura, Benjamin	2016.09.03	0-1	2.23	C95	2430	2585
-559353	Westerinen, Heikki M.J.	Portisch, Lajos	2008.01.22	1/2-1/2	3	C67	2561	2530
-560794	Adhiban, B.	Grandelius, Nils	2019.03.05	1-0	1.1	C54	2683	2694
-562236	Kovalevskaya, Ekaterina	Lazavik, Denis	2020.02.24	0-1	6.46	C47	2407	2428
-563678	Hickl, Joerg	Johannessen, Leif Erlend	2002.10.27	1-0	2.2	C01	2605	2534
-565119	Kuzmin, Gennadiy	Leonov, Mikhail A	2007.03.06	1-0	3	C04	2479	2446
-566561	Ivanov, Alexander	Zilberman, Nathan R	1983.07.24	1/2-1/2	7	B08	2425	2400
-568003	Damljanovic, Branko	Plachetka, Jan	1984.01.01	1/2-1/2	1	A30	2400	2440
-569444	Ivkov, Borislav	Gulko, Boris	1987.01.01	0-1	1	D40	2480	2525
-570886	Atabayev, Saparmyrat	Aravindh, Chithambaram VR.	2014.07.08	0-1	9.1	A07	2634	2443
-572328	Zhigalko, Andrey	Dessaules, Peter	2016.09.12	1/2-1/2	10.11	A07	2591	2753
-573769	Krivoshey, Sergei	Atabayev, Saparmyrat	2007.07.02	1/2-1/2	9	A30	2500	2472
-575211	Ruck, Robert	Filip, Lucian-Ioan	2019.03.29	1-0	11.72	A17	2521	2438
-576652	Todorcevic Antic, Miodrag	Barlov, Dragan	1992.01.01	1-0	1	E62	2470	2460
-578094	Adewumi, Tanitoluwa	Stearman, Josiah	2026.06.14	1/2-1/2	5.2	B51	2471	2477
-579536	Maghsoodloo, Parham	Gomez, John Paul	2019.06.09	1-0	3.16	A29	2665	2467
-580977	Sunye Neto, Jaime	Pelikian, Jefferson	1998.10.30	1-0	7	A26	2520	2415
-582419	Weinstein, Luc	Jussupow, Artur	1992.07.01	1/2-1/2	1	A14	2515	2537
-583861	Chernyshov, Konstantin	Le, Quang Liem	2010.02.07	1/2-1/2	9	E20	2556	2647
-585302	Prie, Eric	Dambacher, Martijn	2011.02.27	1/2-1/2	7.1	D00	2525	2500
-586744	Inarkiev, Ernesto	Morozevich, Alexander	2014.11.13	0-1	2.6	D11	2688	2724
-588185	Najer, Evgeniy	Chuprikov, Dmitry	2005.04.21	1/2-1/2	3	D15	2615	2416
-589627	Taimanov, Mark E	Chekhov, Valery A	1980.01.01	0-1	1	D45	2510	2410
-591069	Artemiev, Victor	Triapishko, Alexandr	2025.10.17	1-0	9.13	D30	2646	2457
-592510	Epishin, Vladimir	Khismatullin, Denis	2021.10.30	0-1	8.1	C21	2522	2606
-593952	Hesham, Abdelrahman	Saeed, Ishaq	2018.02.04	1-0	7	D02	2406	2434
-595394	Agrest, Evgenij	Ernst, Thomas	1995.01.01	1-0	10	A33	2460	2465
-596835	Murdzia, Piotr	Narayanan, Srinath	2008.06.28	0-1	2	E20	2471	2516
-598277	Rychagov, Andrey	Shalimov, Valery	2005.02.10	1-0	9	E32	2546	2445
-599719	Erdos, Viktor	Medvegy, Zoltan Dr.	2003.09.28	0-1	1	E32	2420	2498
-602602	Baryshpolets, Andrey	Kovalyov, Anton	2018.10.21	1/2-1/2	4.1	D24	2575	2631
-604043	Milov, Vadim	Kazhgaleyev, Murtas	2002.03.31	1/2-1/2	6.2	E70	2595	2561
-605485	Kacheishvili, Giorgi	Cabrera, Alexis	2011.02.03	1-0	10.15	D82	2585	2518
-608368	Jussupow, Artur	Zarnicki, Pablo	2005.05.21	1/2-1/2	7	A47	2601	2523
-609810	Kharitonov, Andrei	Petrushin, Alexander I	1983.12.01	1-0	1	E68	2440	2415
-611252	Movsesian, Sergei	Swiercz, Dariusz	2010.02.25	1-0	3	B20	2708	2474
-612693	Firat, Burak	Kozul, Zdenko	2015.03.06	0-1	10.44	B52	2478	2630
-614135	Lobanov, Sergei	Indjic, Aleksandar	2025.03.25	1/2-1/2	6	B52	2508	2651
-615576	Palac, Mladen	Dydyshko, Viacheslav	1994.00.00	0-1	?	B85	2505	2505
-617018	Beshukov, Sergei	Zakhartsov, Viacheslav V.	1997.00.00	1/2-1/2	9	B30	2435	2430
-618460	Motylev, Alexander	Zhang, Pengxiang	2008.05.20	1-0	8	B45	2666	2640
-619901	Halvax, Georg	Volkmann, Friedrich Karl	2017.11.19	1/2-1/2	1	B40	2419	2402
-621343	Oll, Lembit	Smirin, Ilia	1997.00.00	0-1	5	B85	2625	2575
-622785	Samerdokas, Alfredas	Rydholm, Lennart	2015.03.15	1/2-1/2	?	B12	2405	2524
-624226	Netzer, Jean	Seger, Ruediger	2006.12.10	0-1	4.5	B12	2404	2407
-625668	Bucciardini, Giuliano	Sprenger, Ernst Hendrik Dr	1999.00.00	1/2-1/2	?	B19	2419	2451
-627110	Nataf, Igor-Alexandre	Nijboer, Friso	2000.09.06	1-0	4	B06	2526	2537
-628551	Zvjaginsev, Vadim	Heberla, Bartlomiej	2021.12.27	0-1	8.61	C44	2599	2562
-629993	Khalifman, Alexander	Kaidanov, Gregory	1986.00.00	1/2-1/2	?	C82	2490	2405
-631434	Bruzon Batista, Lazaro	Martinez Alcantara, Jose Eduardo	2023.04.08	1/2-1/2	8.1	C67	2611	2607
-632876	Horvath, Mihaly	Reinhart, Kenneth M	2018.06.19	1/2-1/2	?	C67	2466	2475
-634318	Sjugirov, Sanan	Aditya Mittal	2023.12.27	1/2-1/2	7.41	C55	2703	2595
-635759	Lu, Miaoyi	Nogerbek, Kazybek	2025.01.18	1-0	1.7	C44	2429	2514
-637201	Karavade, Eesha	Huzman, Alexander	2017.02.24	1/2-1/2	4.42	C00	2418	2552
-638643	Balashov, Yuri S	Bareev, Evgeny	1987.01.01	1/2-1/2	1	C18	2525	2535
-640084	Tejedor Fuente, Enrique	Moreno Trujillo, Alejandro	2018.08.19	0-1	4.3	C10	2408	2497
-641526	Siefring, Dr. Carl L.	Makovsk, Petr	2013.08.01	1/2-1/2	?	B06	2499	2476
-642967	Kengis, Edvins	Miezis, Normunds	1995.00.00	1-0	8	A30	2575	2435
-644409	Khodashenas, Mersad	Tran, Tuan Minh	2017.05.08	0-1	7.3	A34	2410	2537
-645851	Rapport, Richard	Kraemer, Martin	2019.11.23	1-0	1.4	A07	2752	2581
-647292	Petrosian, Arshak B	Krivonosov, Oleg	1978.07.01	1-0	1	A11	2475	2415
-648734	Sivuk, Vitaly	Saydaliev, Saidakbar	2024.06.08	1-0	3.4	D37	2569	2448
-650176	Li, Di	Shariyazdanov, Andrey	2020.01.15	1/2-1/2	6.3	E07	2562	2519
-651617	Minasian, Artashes	Ivanchuk, Vasyl	2000.08.03	0-1	7	E60	2595	2719
-653059	Kosic, Dragan	Ivanovic, Bozidar	1990.01.01	1/2-1/2	1	E62	2415	2520
-654500	Korobov, Anton	Injac, Teodora	2024.08.03	1/2-1/2	3.7	A20	2648	2411
-655942	Shvidler, Eliahu	Lau, Ralf	1987.01.01	1-0	14	A13	2450	2535
-657384	Votava, Jan	Jansa, Vlastimil	2003.03.09	1-0	13	A34	2518	2504
-658825	Aguero Jimenez, Luis Lazaro	Otero Acosta, Diasmany	2010.09.15	1-0	9	D08	2403	2417
-660267	Kozul, Zdenko	Grigoriants, Sergey	2024.11.26	0-1	6.2	D15	2511	2531
-661709	Kramnik, Vladimir	Bacrot, Etienne	2006.05.30	1/2-1/2	9	D18	2729	2708
-663150	Malaniuk, Igor	Cyborowski, Lukasz	2016.08.13	1/2-1/2	8.1	D41	2471	2526
-664592	Grooten, Herman	Georgiev, Vladimir	1999.03.28	1-0	?	E60	2405	2508
-666034	Kosic, Dragan	Jovanovic, Zoran	2005.01.05	1/2-1/2	4	A41	2521	2471
-667475	Barbara, Fernando	Malaniuk, Igor	1994.01.01	0-1	1	A81	2480	2595
-668917	Shomoev, Anton	Hovhannisyan, Robert	2012.11.11	1-0	11.11	A31	2564	2628
-670358	Alterman, Boris	Kurajica, Bojan	1998.05.05	1-0	1	E21	2615	2580
-671800	Panno, Oscar	Vescovi, Giovanni	2000.09.14	1/2-1/2	1	E32	2450	2526
-673242	Sadhwani, Raunak	Firouzja, Alireza	2025.12.18	1/2-1/2	10	D51	2638	2762
-674683	Niemann, Hans Moke	Gan-Erdene, Sugar	2023.07.12	1/2-1/2	2.1	E11	2674	2418
-676125	Kempinski, Robert	Cyborowski, Lukasz	2013.03.03	1-0	6.2	D27	2599	2524
-677567	Feller, Sebastien	Cornette, Matthieu	2019.08.25	1/2-1/2	9.1	D39	2577	2555
-679008	Ryskin, Alexander	Iskusnyh, Sergei	1995.01.01	1/2-1/2	1	E91	2440	2425
-680450	Vitiugov, Nikita	Ponomariov, Ruslan	2012.04.12	1/2-1/2	4	D90	2703	2726
-681891	Astaneh Lopez, Alex	Maksimenko, Andrei	2019.01.02	0-1	1.3	D26	2427	2484
-683333	Khalifman, Alexander	Leko, Peter	2000.12.03	1/2-1/2	3.3	D97	2667	2743
-684775	Todorcevic Antic, Miodrag	Plachetka, Jan	1989.01.01	1-0	7	B20	2535	2450
-686216	Zaw Oo	Aung Aung, Aung Myo Hlaing	1999.02.10	1/2-1/2	11	B27	2440	2500
-687658	Howell, David W L	Sutovsky, Emil	2012.01.29	1-0	6.6	B51	2603	2703
-689100	Salgado Lopez, Ivan	Grigoryan, Kamo	2024.10.18	1/2-1/2	7.21	B92	2609	2582
-690541	Mikhalchishin, Adrian	Tolnai, Tibor	1989.01.01	1-0	1	B78	2475	2480
-691983	Fernandez Borrego, Pablo	Iturrizaga Bonelli, Eduardo	2023.08.17	0-1	6.21	B43	2410	2617
-693425	Akopian, Vladimir	Atlas, Valery	2007.10.30	1/2-1/2	3	B80	2713	2482
-694866	Barua, Dibyendu	Panno, Oscar	2007.08.19	1-0	3	B33	2462	2457
-696308	Khatanbaatar, Bazar	Barrientos, Sergio E	2004.10.24	1-0	9	B33	2427	2467
-697749	Tsydypov, Zhamsaran	Murzin, Volodar	2023.04.08	0-1	6.1	B12	2538	2577
-699191	Hector, Jonny	Lauber, Arnd	2009.11.14	1-0	3	B19	2572	2503
-700633	Prasad, Devaki V	Jaracz, Pawel	2003.02.27	0-1	1	B06	2400	2546
-702074	Nunn, John D M	Langeweg, Kick	1982.12.07	1/2-1/2	4.1	C24	2590	2410
-704958	Van der Wiel, John T.H.	Mikhalevski, Victor	1995.00.00	1/2-1/2	9	C82	2570	2525
-706399	Solak, Dragan	Georgiadis, Nico	2014.04.14	1-0	8.12	C65	2635	2421
-707841	Vachier-Lagrave, Maxime	Giri, Anish	2015.12.13	0-1	1.1	C67	2773	2784
-709282	Afanasiev, Nikita	Saydaliev, Saidakbar	2025.11.12	1-0	3.6	C58	2511	2455
-710724	Shirov, Alexei	Bharath Subramaniyam H	2023.12.08	1/2-1/2	9.7	C55	2668	2504
-712166	Horvath, Adam	Kovacs, Gabor	2016.02.28	1-0	5.4	C48	2512	2468
-713607	Diaz Diaz, Joaquin Carlos	Arencibia Rodriguez, Walter	1990.00.00	0-1	?	C17	2410	2425
-715049	Ginsburg, Gennadi	Luther, Thomas	2001.01.07	0-1	4.1	C07	2487	2544
-716491	Rantanen, Yrjo A.	Keene, Raymond D	1979.01.01	0-1	1	B06	2460	2465
-717932	Carlsen, Magnus	Caruana, Fabiano	2016.01.17	1/2-1/2	2.1	A00	2844	2787
-719374	Harsha Bharathakoti	Bauer, Christian	2023.03.04	1/2-1/2	7.2	A31	2608	2596
-720816	Belezky, Alexander	Mirzoev, Azer	2012.12.24	1/2-1/2	4.2	A06	2427	2553
-722257	Votava, Jan	Vykouk, Jan	2018.02.18	1/2-1/2	8.5	D02	2528	2451
-723699	Astaneh Lopez, Alex	Collins, Sam E.	2012.02.19	1/2-1/2	6	D34	2400	2439
-725140	Gao, Rui	Lou, Yiping	2015.09.03	1/2-1/2	3.3	A14	2537	2443
-726582	Shankland, Sam	Bilych, Oleksii	2025.04.24	0-1	5.11	A13	2670	2452
-728024	Volovich, Anatoly	Vaganian, Rafael A	1967.00.00	1-0	?	A12	2440	2640
-729465	Hansen, Sune Berg	Hillarp Persson, Tiger	2018.12.01	0-1	1.2	A36	2583	2546
-730907	Tazbir, Marcin	Plat, Vojtech	2022.08.14	0-1	1.2	A25	2511	2556
-732349	Lputian, Smbat	Dokhoian, Yury	1986.00.00	1-0	?	D18	2545	2450
-733790	Zatonskih, Anna	Stefanova, Antoaneta	2012.02.20	0-1	8.2	D45	2511	2531
-735232	Hoffmann, Michael	Korneev, Oleg	2007.11.14	1/2-1/2	5	D46	2471	2587
-736673	Schussler, Harry	Agrest, Evgenij	1993.01.01	0-1	1	A41	2465	2460
-738115	Vazquez Igarza, Renier	Narciso Dublan, Marc	2015.08.19	1/2-1/2	5.2	A41	2581	2532
-739557	Zhao, Xue	Muzychuk, Anna	2014.09.28	1/2-1/2	2.1	A81	2507	2551
-740998	Zlotnik, Boris A	Pigusov, Evgeny	1988.12.00	1/2-1/2	?	A72	2430	2525
-742440	Chatalbashev, Boris	Blomqvist, Erik	2015.10.17	1-0	7.3	E21	2550	2530
-743882	Romanishin, Oleg M	Milovanovic, Adrian	1990.00.00	1-0	10	D36	2560	2440
-745323	Belous, Vladimir	Guo, Arthur	2022.04.17	1/2-1/2	6.1	D35	2516	2432
-746765	Seemann, Jakub	Bluebaum, Matthias	2025.06.15	0-1	1.1	D37	2450	2663
-748207	Bernasek, Jan	Laznicka, Viktor	2009.06.06	0-1	3	E58	2470	2617
-749648	Sasikiran, Krishnan	Macieja, Bartlomiej	2008.08.09	1/2-1/2	8	D39	2684	2606
-751090	Lukacs, Peter	Sznapik, Aleksander	1978.00.00	1/2-1/2	6	E74	2460	2430
-752531	Milos, Gilberto	Yandemirov, Valeri	2006.00.00	1/2-1/2	?	D93	2554	2520
-753973	Bai, Jinshi	Alekseenko, Kirill	2018.05.27	1/2-1/2	1.5	D71	2579	2625
-755415	Barseghyan, Harutyun	Stephan, Victor	2021.01.09	1-0	5	D02	2471	2430
-756856	Johansen, Darryl K	Nunn, John D M	1983.08.29	0-1	6	E90	2490	2585
-758298	Murariu, Andrei	Jianu, Vlad-Cristian	2010.03.31	1/2-1/2	1	B25	2479	2516
-759740	Nijboer, Friso	Reinderman, Dimitri	2008.01.23	1-0	10	B74	2578	2533
-761181	Alekseenko, Kirill	Kokarev, Dmitry	2018.12.09	1/2-1/2	3.1	B90	2638	2598
-762623	Timoshenko, Georgy	Shabalov, Alexander	1989.01.01	1-0	1	B70	2530	2425
-764064	Agrel, Diane	Alvarez, Roberto Gabriel	1998.00.00	0-1	?	B78	2490	2505
-765506	Becerra Rivero, Julio	Bercys, Salvijus	2008.03.29	1/2-1/2	4	B48	2573	2421
-766948	Hellers, Ferdinand	Yakovich, Yuri	1994.08.01	1/2-1/2	1	B22	2560	2513
-768389	Martí Pericot, Juan Manuel	Martin Clemente, Joel	2010.06.10	1/2-1/2	?	B33	2473	2645
-769831	Sikula, Vaszilij	Banusz, Tamas	2006.11.12	1/2-1/2	1	B33	2515	2450
-771273	Nielsen, Peter Heine	Danielsen, Henrik	1994.00.00	1/2-1/2	8	B12	2475	2480
-772714	Howell, James C	Smagin, Sergey	1990.08.01	1/2-1/2	1	B01	2415	2550
-774156	Ardelean, George-Catalin	Javakhishvili, Lela	2007.08.17	1-0	8	C24	2482	2460
-775598	Topalov, Veselin	Mitkov, Nikola	1995.00.00	0-1	?	C89	2630	2475
-777039	Jakovenko, Dmitry	Korneev, Oleg	2007.02.09	1/2-1/2	1	C67	2691	2606
-778481	Siigur, Jüri	Moiseev, Sergey Borisovich	2016.10.15	1/2-1/2	?	C65	2446	2452
-779922	Smeets, Jan	Heimann, Andreas	2019.04.07	1/2-1/2	15.6	C67	2602	2616
-781364	Vaishali, Rameshbabu	Goryachkina, Aleksandra	2022.09.29	1/2-1/2	11.6	C67	2449	2579
-782806	Anand, Viswanathan	Karpov, Anatoly	1999.06.13	1-0	6	C43	2739	2710
-784247	Kasimdzhanov, Rustam	Meier, Georg	2021.07.15	1/2-1/2	4.4	C01	2662	2628
-785689	Amonatov, Farrukh	Rodriguez Vila, Andres	2010.09.24	1/2-1/2	4	C18	2602	2537
-787131	Fernandez Cardoso, Alexey	Espinosa Veloz, Ermes	2016.11.01	0-1	9.6	C07	2472	2502
-788572	Ivanov, Alexander	Gurevich, Dmitry	1989.00.00	1/2-1/2	4	B06	2470	2480
-790014	Keene, Raymond D	Ljubojevic, Ljubomir	1972.01.01	0-1	14	A25	2435	2550
-791455	Artemiev, Vladislav	Mamedyarov, Shakhriyar	2019.12.30	1-0	13.5	A06	2731	2772
-792897	Obolenskikh, Dmitry Aleksandrovi	Kiselev, Sergey	2008.01.00	1-0	4	A09	2446	2434
-794339	Portisch, Lajos	Kasparov, Garry	1990.02.01	0-1	1	E97	2605	2800
-795780	Georgiev, Kiril	Lobron, Eric	1992.00.00	1-0	4	D33	2605	2565
-797222	Kramnik, Vladimir	Illescas Cordoba, Miguel	1997.04.06	1-0	5	A17	2740	2635
-798664	Cekro, Ekrem	Van der Stricht, Geert	2004.03.13	1/2-1/2	8.3	A11	2438	2447
-800105	Smejkal, Jan	Hernandez Onna, Roman	1977.10.01	1-0	15	A26	2575	2435
-801547	Rakhmanov, Aleksandr	Sychev, Klementy	2016.10.04	1-0	14.10	A36	2662	2445
-802988	Shneider, Aleksandr	Muse, Mladen	1988.01.01	1-0	1	A16	2443	2410
-804430	Bai, Jinshi	Malakhov, Vladimir	2015.07.26	1/2-1/2	10.3	D10	2520	2597
-807313	Jussupow, Artur	Akopian, Vladimir	1997.02.12	1/2-1/2	4	D43	2537	2655
-808755	Robson, Ray	Carlsen, Magnus	2025.12.18	0-1	9	D37	2650	2840
-810197	Kosic, Dragan	Popov, Sinisa S	2002.05.16	1-0	4	E14	2537	2435
-811638	Nguyen, Huynh Minh Huy	Ilincic, Zlatko	2008.09.09	1/2-1/2	4	A81	2477	2519
-813080	Miladinovic, Igor	Bogdanovski, Vlatko	2001.12.29	1/2-1/2	9	A45	2495	2430
-814522	Makarov, Aleksandr Arkadyevi	Grigoriev, A.	2002.00.00	1-0	?	A67	2592	2482
-815963	Stocek, Jiri	Stefansson, Hannes	1999.12.12	1-0	3.1	E13	2532	2584
-817405	Knaak, Rainer	Inkiov, Ventzislav	1987.00.00	1/2-1/2	?	D36	2505	2475
-818846	Pekarek, Ales	Suba, Mihai	1987.02.01	1-0	1	A77	2480	2560
-820288	Grischuk, Alexander	Alekseev, Evgeny	2009.04.26	1-0	10	E58	2748	2716
-821730	Kunin, Vitaly	Admiraal, Miguoel	2018.07.27	0-1	7.2	D45	2538	2479
-823171	Chasin, Nico	Iniyan, Pa	2025.08.22	0-1	11.3	D43	2458	2586
-824613	Iniyan, Pa	Goutham Krishna H	2026.05.18	0-1	7	E92	2587	2433
-826055	Ushenina, Anna	Lagno, Kateryna	2013.12.16	0-1	29.1	D85	2501	2543
-827496	Halkias, Stelios	Eljanov, Pavel	2001.06.11	1-0	10	D85	2494	2558
-828938	Chatalbashev, Boris	Mateo, Ramon	2005.08.11	1-0	4	A46	2499	2434
-830379	Stocek, Jiri	Vokac, Marek	2014.05.04	1-0	9.5	E90	2540	2436
-831821	Petrov, Nikita	Khismatullin, Denis	2018.12.27	1-0	9.41	B23	2555	2621
-833263	Flores Quillas, Diego Saul Rodri	Santiago, Yago De Moura	2025.12.16	1-0	8.7	B29	2409	2505
-834704	Dolmatov, Sergey	Muhutdinov, Marat	1992.01.01	1/2-1/2	1	B92	2595	2440
-836146	Volokitin, Andrei	Dragun, Kamil	2013.11.08	1-0	1.4	B90	2682	2543
-837588	Reschke, Heiko	Rissanen, Heikki	1999.00.00	1-0	?	B78	2469	2448
-839029	Nigmatov, Ortik	Pantsulaia, Levan	2018.07.14	1/2-1/2	3.4	B41	2461	2575
-840471	Vykouk, Jan	Krejci, Jan	2019.04.21	1/2-1/2	11.3	B67	2441	2588
-841913	Efimenko, Zahar	Shomoev, Anton	2004.10.18	1-0	3.2	B33	2594	2486
-843354	Lukin, Andrei M	Timoscenko, Gennadij	1973.00.00	0-1	?	B33	2430	2430
-844796	Hansen, Torbjorn Ringdal	Cuenca Jimenez, Jose Fernando	2011.01.04	1/2-1/2	5	C41	2439	2496
-846237	Ostojic, Aleksa	Haik, Aldo	1978.01.01	1-0	1	C62	2420	2425
-849121	Mainka, Romuald	Romanishin, Oleg M	2013.03.08	1/2-1/2	8.2	C84	2430	2503
-850562	Sevian, Samuel	Nisipeanu, Liviu-Dieter	2017.09.03	1/2-1/2	1.1	C42	2610	2674
-852004	Siigur, Jüri	Romm, Mikhail Yakovlevich	2014.06.20	1/2-1/2	?	C42	2416	2450
-853446	Berg, Emanuel	Korobov, Anton	2011.09.28	0-1	4.6	C19	2575	2671
-854887	Kovalev, Vladislav	Gorovets, Andrey	2013.01.18	1/2-1/2	7.4	C08	2482	2477
-856329	Lukacs, Peter	Pinal Borges, Nelson	1983.00.00	1-0	?	E73	2460	2405
-857770	Schinzel, Wladyslaw	Parma, Bruno	1979.08.01	0-1	1	A37	2400	2445
-859212	Miton, Kamil	Grigoriants, Sergey	1999.11.01	1/2-1/2	1	E06	2401	2413
-860654	Sokolov, Ivan	Kupreichik, Ilya	1972.01.00	1-0	?	D77	2485	2440
-862095	Maghalashvili, Davit	Bagaturov, Giorgi	2017.08.23	1-0	8.4	E69	2500	2408
-863537	Paichadze, Luka	Mchedlishvili, Mikheil	2025.02.07	1-0	5.5	C42	2532	2568
+255	Bischoff, Klaus	Kotronias, Vasilios	1992.12.01	0-1	1	A85	2510	2550
+1697	Cruz, Cristhian	Cori, Jorge	2016.01.24	1/2-1/2	11.1	A37	2553	2596
+3138	So, Wesley	Karjakin, Sergey	2017.06.23	0-1	9.4	A29	2812	2781
+4580	Salgado Lopez, Ivan	Piorun, Kacper	2009.11.19	1/2-1/2	1	A26	2562	2475
+6022	Atalik, Suat	Cubas, Jose	2006.05.27	1/2-1/2	6	D45	2632	2425
+7463	Iturrizaga Bonelli, Eduardo	Jovanic, Ognjen	2011.02.27	1-0	2.7	D10	2611	2489
+8905	Timofeev, Artyom	Leventic, Ivan	2008.06.07	1-0	4	D20	2664	2509
+10346	Heberla, Bartlomiej	Tazbir, Marcin	2021.09.19	0-1	1.1	D20	2558	2513
+11788	Flumbort, Andras Dr.	Torma, Robert	2014.12.13	1/2-1/2	8.2	D38	2463	2417
+13230	Lysyj, Igor	Ionov, Sergey	2010.04.05	1/2-1/2	5	D26	2615	2548
+14671	Polgar, Susan	Ivkov, Borislav	1987.01.01	1/2-1/2	1	A90	2577	2480
+16113	Ligterink, Gert	Westerinen, Heikki M.J.	1987.01.01	0-1	1	B08	2470	2590
+17555	Kosic, Dragan	Arnason, Jon L	1993.01.01	1/2-1/2	1	A45	2455	2535
+18996	Westerinen, Heikki M.J.	Keene, Raymond D	1976.00.00	1-0	?	E55	2550	2460
+20438	Milov, Vadim	Naiditsch, Arkadij	2005.11.03	1-0	1.1	E48	2652	2641
+21879	Ulko, Jaroslav	Korotylev, Alexey	2009.06.18	1/2-1/2	7	E12	2478	2607
+23321	Golod, Vitali	Florescu, Codrut-Constantin	1994.01.01	1-0	1	E12	2510	2410
+24763	Brynell, Stellan	Timofeev, Artyom	2013.03.02	1/2-1/2	9.11	D71	2485	2613
+26204	Vaganian, Rafael A	Stefansson, Hannes	1985.11.01	1/2-1/2	5	E63	2640	2565
+27646	Sellos, Didier	Renet, Olivier	1997.00.00	0-1	5	E88	2455	2505
+29088	Kovacevic, Vlatko	Rukavina, Josip	1985.01.01	1/2-1/2	1	E95	2466	2470
+30529	Heberla, Bartlomiej	Warakomski, Tomasz	2017.11.26	1/2-1/2	9.4	E12	2558	2533
+31971	Vorotnikov, Vladislav V	Vladimirov, Yevgeniy	1974.00.00	1-0	?	B22	2420	2450
+33413	Mahjoob Zardast, Morteza	Kupreichik, Ilya	2003.12.18	0-1	8	B23	2408	2496
+34854	Mortensen, Erling	Jansa, Vlastimil	1983.01.01	1-0	4	B81	2432	2440
+36296	Poleshchuk, Nikolay N	Baklanov, Valentin Petrovich	2010.01.25	1/2-1/2	?	B93	2424	2455
+37737	Boguslawski, Oleg	Bujisho, Benjamin	2009.02.08	1-0	7.3	B90	2407	2413
+39179	Savchenko, Boris	Dvalishvili, Pavel S.	2018.09.08	0-1	1.2	B61	2562	2408
+40621	Petrushin, Alexander I	Aseev, Konstantin N	1993.01.01	1-0	1	B63	2400	2515
+42062	Balcerak, Jakob	Berkvens, Joost	2002.11.17	1-0	2.1	B67	2411	2453
+43504	Arencibia Rodriguez, Walter	Borges Matos, Juan	1993.01.01	0-1	1	B42	2490	2400
+44946	Kovalenko, Gleb I	Lintchevski, Daniil	2017.08.06	1-0	1	B22	2640	2569
+46387	Meister, Jakob	Nikolic, Nebojsa	1995.00.00	1-0	3	B70	2450	2430
+47829	Ragger, Markus	Shengelia, David	2020.05.02	1-0	5.1	B10	2679	2544
+49270	Bosboom, Manuel	Lobron, Eric	1995.08.03	0-1	1	B14	2450	2595
+50712	Adams, Michael	Beliavsky, Alexander G	1992.10.01	1-0	4	B07	2610	2595
+52154	Solak, Dragan	Ashwin, Jayaram	2013.06.12	1/2-1/2	3.2	C69	2598	2472
+53595	Kuczynski, Robert	Murdzia, Piotr	1997.01.01	1-0	12	C90	2500	2425
+55037	Brunner, Lucas	Granda Zuniga, Julio E	1990.11.20	1-0	4	C92	2475	2485
+56479	Sasikiran, Krishnan	Williamson, Harvey D	2017.03.31	1/2-1/2	?	C92	2674	2531
+57920	Brkic, Ante	Amin	2008.08.14	0-1	12	C54	2610	2561
+59362	Haslinger, Stewart G	Berzinsh, Roland	2007.05.07	1-0	11	C45	2450	2429
+60804	Dzhumaev, Marat	Batchuluun, Tsegmed	2013.05.23	1-0	6	C02	2549	2507
+62245	Milman, Lev	Lenderman, Aleksandr	2014.10.13	1/2-1/2	8.12	C11	2427	2597
+65128	Pogorelov, Ruslan	Barua, Dibyendu	1997.00.00	0-1	8	A04	2465	2535
+66570	Volke, Karsten	Paragua, Mark	2004.11.05	1/2-1/2	5	D15	2483	2534
+68012	Andreikin, Dmitry	Lou, Yiping	2018.11.28	1-0	20.6	D45	2719	2473
+69453	Bu, Xiangzhi	Zeng, Chongsheng	2018.11.27	1-0	19.2	A16	2726	2535
+70895	Mamedyarov, Shakhriyar	Nisipeanu, Liviu-Dieter	2004.06.23	1/2-1/2	3.1	A05	2657	2692
+72337	Shamkovich, Leonid	Fedorowicz, John	1979.03.01	1/2-1/2	3	A34	2495	2405
+73778	Bistric, Faruk	Rogic, Davor	2003.00.00	0-1	2	A28	2509	2496
+75220	Gurevich, Valery M.	Riff, Jean-Noel	2005.05.04	1-0	8	E46	2630	2438
+76661	Dziuba, Marcin	Predojevic, Borki	2007.04.05	0-1	3	D47	2525	2609
+78103	Kovalenko, Igor	Sebenik, Matej	2013.12.27	1-0	1	D15	2672	2496
+79545	Cebalo, Miso	L'Ami, Erwin	2003.01.24	1/2-1/2	7	D22	2527	2438
+80986	Lasker, Emanuel	Rapaka Samuel Paul	1936.08.22	0-1	11	D27	2661	2679
+82428	Khalifman, Alexander	Fridman, Daniel	2013.01.13	1/2-1/2	5.5	D56	2614	2667
+83870	Burmakin, Vladimir	Vysochin, Spartak	2003.10.22	1/2-1/2	5	D11	2590	2584
+85311	Shen, Yang	Huang, Quian	2019.11.21	1/2-1/2	16.2	D23	2410	2427
+86753	Seirawan, Yasser	Short, Nigel D	1990.09.01	1/2-1/2	1	A85	2635	2610
+88194	Dizdar, Goran	Smirin, Ilia	1998.04.29	1/2-1/2	1	B39	2530	2590
+89636	Azmaiparashvili, Zurab	Krivoshey, Sergei	2003.03.15	1-0	7	A58	2678	2503
+91078	Friedel, Joshua	Moiseenko, Alexander	2008.08.04	0-1	8	E48	2524	2632
+92519	Lesiege, Alexandre	Onischuk, Alexander	1999.08.08	1-0	6	E58	2553	2657
+95403	Khlebovich, Alexander	Riazantsev, Alexander	2025.10.17	1/2-1/2	9.6	E16	2423	2612
+98286	Mamedyarov, Shakhriyar	Vidit, Santosh Gujrathi	2015.10.11	1-0	7.10	E61	2736	2697
+99728	San Segundo Carrillo, Pablo	Romero Holmes, Alfonso	2011.11.26	1/2-1/2	7	E91	2509	2488
+101169	Kosic, Dragan	Berkes, Ferenc	2007.02.24	1/2-1/2	1	A46	2504	2591
+102611	Sokolov, Ivan	Bauer, Christian	1996.10.27	1-0	2	E21	2670	2465
+104052	Christiansen, Larry	Polgar, Susan	1993.03.01	1-0	3	B22	2620	2560
+105494	Flores, Diego	Felgaer, Ruben	2003.08.23	0-1	6	B25	2439	2551
+106936	Janev, Evgeni	Grigorov, Grigor	2007.09.15	1/2-1/2	6.4	B50	2488	2460
+108377	Zufic, Miroslav	Perry, Dan	2018.12.31	1/2-1/2	?	B90	2440	2504
+109819	Ljubojevic, Ljubomir	Gheorghiu, Florin	1976.06.01	0-1	14	B67	2620	2540
+111261	Bulmaga, Irina	Sosa, Teo	2019.01.30	1/2-1/2	9.47	B66	2407	2499
+112702	Zagrebelny, Sergey	San Segundo Carrillo, Pablo	1994.12.01	1/2-1/2	1	B33	2485	2491
+114144	Armas, Jules	Illescas Cordoba, Miguel	1991.01.01	0-1	1	B45	2450	2545
+115585	Psakhis, Lev	Boensch, Uwe	1993.01.01	0-1	1	B30	2575	2490
+117027	Marcelin, Cyril	Bacrot, Etienne	2002.08.24	1-0	6	B30	2470	2653
+118469	Rambaldi, Francesco	Krush, Irina	2017.03.16	1/2-1/2	6.1	B10	2559	2444
+119910	Savitskiy, Sergey	Kozak, Adam	2018.10.10	1-0	2.7	B15	2413	2445
+121352	Bischoff, Klaus	Hickl, Joerg	1987.07.01	1/2-1/2	1	B01	2485	2450
+122794	Adhiban, B.	Kramnik, Vladimir	2018.01.28	0-1	13.4	C26	2655	2787
+125677	Tseshkovsky, Vitaly	Smagin, Sergey	1985.00.00	1/2-1/2	8	C92	2470	2405
+127119	Cheparinov, Ivan	Nikolic, Predrag	2007.08.30	0-1	8	C93	2657	2646
+128560	Svidler, Peter	Eljanov, Pavel	2024.09.24	1-0	1.2	C50	2698	2672
+130002	Gabuzyan, Hovhannes	Paravyan, David	2021.05.26	1-0	2.1	C45	2590	2647
+131443	Czebe, Attila	Kosic, Dragan	2017.12.15	1-0	4.5	C00	2469	2454
+132885	Kovalevskaya, Ekaterina	Hou, Yifan	2006.08.17	0-1	7	C11	2463	2488
+134327	Munoz, Miguel	Meister, Peter	2014.07.24	1/2-1/2	3.4	C06	2457	2410
+135768	Martinez Duany, Lelys Stanley	Nogueiras Santiago, Jesus	2008.05.21	1/2-1/2	3	B04	2499	2559
+137210	Dorfman, Iossif	Arkhipov, Sergey	1985.01.01	1/2-1/2	1	D11	2525	2550
+138652	Eingorn, Vereslav S	Krivoshey, Sergei	2001.00.00	1/2-1/2	5	D15	2589	2483
+140093	Nikolaevsky, Yuri V	Zhidkov, Valery S	1968.05.00	1-0	12	A05	2490	2490
+141535	Henriquez Villagra, Cristobal	Garcia Ramos, Daniel	2025.07.26	1/2-1/2	8.5	A05	2599	2438
+142976	Miezis, Normunds	Tikkanen, Hans	2010.09.12	1-0	9	A10	2519	2507
+144418	Mareco, Sandro	Christiansen, Johan-Sebastian	2016.12.26	1-0	3.42	A21	2635	2429
+145860	Cebalo, Miso	Brkic, Ante	2012.03.06	0-1	2.2	A20	2442	2610
+147301	Goldsztejn, Gildas	Maze, Sebastien	2009.12.27	1/2-1/2	4.2	E73	2419	2542
+148743	Ivanisevic, Ivan	Yeletsky, Ivan	2018.10.31	1/2-1/2	5.10	D10	2583	2401
+150185	Knudsen, John C	Sammalvuo, Tapani	2001.06.20	1/2-1/2	?	D44	2485	2420
+153068	Merilo, Jaan	Simon, Wendel	1999.11.02	0-1	?	D58	2510	2420
+154510	Hug, Werner	Zueger, Beat	2005.02.27	1/2-1/2	1.4	A40	2445	2440
+155951	Karlsson, Lars	Yrjola, Jouni	1989.01.01	1/2-1/2	1	A81	2515	2430
+157393	Knaak, Rainer	Kengis, Edvins	2000.01.30	0-1	9	D00	2505	2496
+158834	Bukic, Enver	Velimirovic, Dragoljub	1981.01.01	1/2-1/2	1	A77	2480	2480
+160276	Lin, Ta	Petursson, Margeir	1990.07.01	0-1	1	E25	2435	2550
+161718	Ornstein, Axel	Ligterink, Gert	1969.12.26	1-0	4	E43	2420	2403
+163159	Ftacnik, Lubomir	Asegedech Alemu Huluka	1984.01.01	1/2-1/2	9	A61	2570	2510
+164601	Fedoseev, Vladimir	Smirnov, Alexey	2013.11.28	1-0	1.16	E43	2597	2429
+166043	Sargsyan, Shant	Svane, Rasmus	2022.12.30	1/2-1/2	18.18	D41	2645	2622
+167484	Holm, Kristian Stuvik	Notkevich, Benjamin Arvola	2018.07.10	1/2-1/2	5.5	D38	2453	2471
+168926	Spassky, Boris V.	Kasparov, Garry	1989.00.00	1/2-1/2	?	A39	2580	2775
+170367	Ehlvest, Jaan	Kovalev, Vladislav	2014.07.04	1-0	7.3	E81	2552	2554
+171809	Sarana, Alexey	Gabrielian, Artur	2017.05.02	1/2-1/2	2.2	D85	2472	2525
+173251	Rausis, Igors	Yemelin, Vasily	2008.01.06	1/2-1/2	1	E18	2520	2562
+174692	Tibensky, Robert	Mirumian, Vigen	1998.07.24	1/2-1/2	8	D78	2435	2470
+176134	Sariego Figueredo, Wilfredo	Verduga, David Alfredo	1990.01.01	1/2-1/2	1	B22	2405	2405
+177576	Epishin, Vladimir	Ahlander, Bjorn	1994.01.01	1-0	1	B50	2675	2415
+179017	Kravtsiv, Martyn	Volokitin, Andrei	2016.12.06	1/2-1/2	1.6	B54	2645	2649
+181901	Chukanov, Igor Anatolievich	Lebedev, Valery Ivanovich	2015.09.01	1/2-1/2	?	B92	2439	2479
+184784	aleksander matjasic	Capelan, Guenter	1971.01.01	1/2-1/2	1	B42	2520	2420
+186225	Ebert, Juergen	Beecham, Richard C	2017.01.05	1/2-1/2	?	B30	2449	2470
+187667	Yanofsky, Daniel Abraham	Biyiasas, Peter	1975.01.01	1/2-1/2	1	B34	2415	2450
+189109	Vescovi, Giovanni	Zambrana, Osvaldo	2005.10.23	1-0	1	B33	2646	2409
+190550	Sztupak, Zoltan	Groszpeter, Attila	2005.03.06	1/2-1/2	9	B13	2429	2524
+191992	Laznicka, Viktor	Bauer, Christian	2006.12.28	0-1	6	B07	2596	2585
+193434	Kotronias, Vasilios	Manon, Reja Neer	2024.09.26	1/2-1/2	4.1	C63	2458	2417
+194875	Stripunsky, Alexander	Kamsky, Gata	2004.12.21	1/2-1/2	4	C85	2533	2717
+196317	Shankland, Sam	Ipatov, Alexander	2017.03.17	0-1	7.5	C87	2666	2660
+197758	Hardaway, Brewington	Dominguez Perez, Leinier	2026.03.02	1/2-1/2	2.4	C50	2544	2738
+199200	Drazic, Sinisa	Saric, Ante	2008.01.06	1/2-1/2	5.7	C42	2489	2438
+200642	Motylev, Alexander	Iljin, Artem	2018.05.09	1-0	8.4	C42	2660	2497
+202083	Ter-Sahakyan, Samvel	Stupak, Kirill	2018.06.27	1/2-1/2	7.4	C18	2546	2564
+203525	Acs, Peter	Feher, Gyula	1998.02.24	0-1	1	C06	2450	2445
+204967	Askarov, Marat	Moiseenko, Alexander	2004.04.21	1/2-1/2	2.1	A36	2404	2631
+206408	Assaubayeva, Bibisara	Batsiashvili, Nino	2025.12.18	1/2-1/2	3	A13	2497	2462
+207850	Stangl, Markus	Vogt, Lothar	2003.01.25	0-1	7	E60	2494	2479
+209292	Redolfi, Redolfo Argentino	Zecha, Espen	1991.01.01	1-0	1	E60	2500	2525
+210733	Hausrath, Daniel	Golod, Vitali	2007.07.25	1/2-1/2	3	E92	2494	2589
+212175	Ljubojevic, Ljubomir	Kramnik, Vladimir	1993.02.01	1/2-1/2	1	A11	2605	2685
+213616	King, Daniel J	Speelman, Jon S	1990.12.01	1/2-1/2	1	A28	2560	2605
+215058	Mecking, Henrique	Ornstein, Axel	1975.12.12	1/2-1/2	1	E12	2600	2430
+216500	Nilssen, John Arni	Seres, Lajos	2004.08.13	1/2-1/2	7	D10	2414	2448
+217941	Moiseenko, Alexander	Li, Chao b	2016.03.28	1/2-1/2	8.2	D94	2668	2625
+219383	Garcia Palermo, Carlos Horacio	Rojas Keim, Luis	1998.00.00	1-0	?	D20	2475	2455
+220825	Korley, Kassa	Brown, Michael	2019.01.19	1/2-1/2	4	D51	2450	2524
+222266	Koneru, Humpy	Krush, Irina	2019.05.18	1-0	22.4	D05	2553	2422
+223708	Kazakouski, Valery	Tsydypov, Zhamsaran	2017.02.27	1-0	7.13	B06	2429	2485
+225149	Rakhmangulov, Andrei	Malakhatko, Vadim	1999.00.00	1/2-1/2	?	A45	2417	2496
+226591	Lalit Babu M R	Swapnil, S. Dhopade	2012.10.03	0-1	3.2	A57	2526	2438
+228033	Hort, Vlastimil	Speelman, Jon S	1983.01.01	1-0	1	E45	2585	2570
+229474	Bareev, Evgeny	Lutz, Christopher	2006.05.23	1-0	3	E12	2701	2608
+230916	Ruemmele, Tobias	Chupin, Vladimir Nikolaevic	2003.03.01	1/2-1/2	?	E12	2520	2483
+232358	Guliev, Sarhan	Nadyrkhanov, Sergey	1995.00.00	1-0	7	E68	2470	2470
+233799	Antonsen, Mikkel	Ziska, Helgi Dam	2012.03.31	1/2-1/2	1	E81	2446	2450
+235241	Samadov, Read	Mamedov, Rauf	2026.02.06	1/2-1/2	1	D85	2510	2645
+236682	Hort, Vlastimil	Sosonko, Gennadi	1985.01.01	1/2-1/2	10	E14	2560	2535
+238124	Rapaka Samuel Paul	Vyzmanavin, Alexey	1989.01.01	1/2-1/2	3	E15	2450	2550
+239566	Atalik, Ekaterina	Abdumalik, Zhansaya	2019.12.27	1-0	5.9	A49	2462	2465
+241007	Abdumalik, Zhansaya	Mammadzada, Gulay	2023.04.17	1/2-1/2	2.4	B23	2497	2449
+242449	Short, Nigel D	Conquest, Stuart C	2011.07.28	1-0	4.3	A43	2687	2519
+243891	Balashov, Yuri S	Andersson, Ulf	1975.00.00	1/2-1/2	?	B81	2540	2565
+246774	Nikolov, Sasho	Kolev, Vasil At.	2009.06.12	1-0	5	B90	2416	2573
+248216	Griffith, Kyron	Fernandez, Daniel Howard	2024.11.25	1/2-1/2	8.3	B56	2407	2503
+249657	Lau, Ralf	Kengis, Edvins	1999.03.07	1/2-1/2	7.4	B42	2453	2571
+251099	Ivanovic, Bozidar	Cvitan, Ognjen	1987.09.01	0-1	1	B42	2480	2500
+252540	Cernousek, Lukas	Cvek, Robert	2024.11.03	0-1	2.4	B36	2445	2437
+253982	Sulskis, Sarunas	Kotronias, Vasilios	2003.02.02	0-1	6	B10	2567	2573
+255424	Prokopchuk, Evgeny	Turov, Maxim	1994.02.01	1-0	1	D42	2435	2490
+256865	Luther, Thomas	Markowski, Tomasz	2009.07.30	1/2-1/2	6	B07	2559	2627
+258307	Socko, Bartosz	Ronchetti, Niccolo'	2011.04.29	1/2-1/2	4	C69	2660	2416
+259749	Lagno, Kateryna	Stefanova, Antoaneta	2019.12.30	1/2-1/2	17.1	C84	2547	2476
+262632	Fedorov, Alexei	Gyimesi, Zoltan	2003.09.10	1/2-1/2	4	C54	2595	2553
+264073	Howell, David W L	Sokolov, Ivan	2009.08.14	1-0	7	C45	2624	2657
+265515	Wieczorek, Oskar	Grabarczyk, Miroslaw	2014.04.02	1/2-1/2	9.11	C42	2407	2471
+266957	Thipsay, Praveen M	Gulko, Boris	1990.07.01	1/2-1/2	1	C02	2490	2600
+268398	Martinez Duany, Lelys Stanley	Levchenko, Leonid	2021.05.25	1-0	2.3	C11	2520	2434
+269840	De La Paz Perdomo, Frank	Galego, Luis	2003.05.09	1-0	4	C06	2449	2506
+271282	Halkias, Stelios	Larkin, Vladyslav	2022.03.16	1/2-1/2	6	A41	2527	2401
+272723	Sale, Srdjan	Ushenina, Anna	2006.08.15	1/2-1/2	4	A09	2438	2410
+274165	Beim, Valeri	Lanka, Zigurds	2004.11.20	1/2-1/2	2	E63	2512	2455
+275607	Sokolov, Ivan	Vladimirov, Yevgeniy	1975.01.01	1-0	1	D76	2500	2470
+277048	Golubov, Saveliy	Oganian, Miran	2016.10.04	1/2-1/2	14.18	A00	2481	2450
+278490	Kholmov, Ratmir D	Beliavsky, Alexander G	1972.08.16	1/2-1/2	1	A23	2550	2420
+279931	Vallejo Pons, Francisco	San Segundo Carrillo, Pablo	1999.11.16	1-0	9	D53	2519	2510
+281373	Olafsson, Helgi	Krnan, Tomas	2015.10.11	1/2-1/2	9.62	A28	2549	2440
+282815	Krush, Irina	Kaidanov, Gregory	2007.05.15	1/2-1/2	1	D44	2464	2595
+284256	Khalifman, Alexander	Vidonyak, Roman	1994.00.00	1-0	?	D15	2660	2405
+285698	Braun, Arik	Kunin, Vitaly	2009.10.25	1-0	6.1	D25	2519	2544
+287140	Nihal Sarin	Tabatabaei, M. Amin	2022.09.17	0-1	1.4	E04	2677	2651
+290023	Sokolov, Ivan	Baburin, Alexander	1988.01.01	1-0	1	D36	2450	2455
+291464	Arkell, Keith C	Lepelletier, Benoit	1999.01.01	1-0	10	A40	2438	2456
+292906	Lutz, Christopher	Stangl, Markus	1990.11.01	1-0	6	A42	2445	2435
+294348	Enchev, Ivajlo	Campora, Daniel H.	2012.12.08	1-0	7.7	A50	2411	2493
+295789	Alekseev, Evgeny	Andreikin, Dmitry	2011.10.19	1/2-1/2	11	E08	2662	2705
+297231	Paramos Dominguez, Roberto	Garcia Padron, Jose	1996.10.10	0-1	1	E46	2410	2440
+298673	Galliamova, Alisa	Pashikian, Arman	2017.06.02	0-1	4.67	E48	2456	2603
+300114	Browne, Walter S	Gruenfeld, Yehuda	1979.03.01	1/2-1/2	1	E18	2540	2430
+301556	Novikov, Igor	Csom, Istvan	1991.01.01	1/2-1/2	1	E15	2475	2480
+302998	Dobrov, Vladimir	Schreiner, Peter	2016.02.19	1/2-1/2	9.8	E63	2518	2435
+304439	Rosner, Jonas	Parkhov, Yair	2022.09.18	1-0	5.5	E60	2454	2479
+305881	Diermair, Andreas	Pena Gomez, Manuel	2022.07.20	0-1	8.1	E92	2452	2492
+308764	Rostalski, Walter	Benjamin, Joel	1992.01.01	0-1	1	A48	2450	2471
+311647	Smeets, Jan	L'Ami, Erwin	2012.07.16	0-1	2	B33	2613	2631
+313089	Smith, Bryan	Vovsha, Eli	2007.00.00	1/2-1/2	?	B50	2402	2458
+314531	Romm, Mikhail Yakovlevich	Pijl, Richard	2014.02.23	1-0	?	B90	2445	2429
+315972	Sadowski, Marek	Olivotto, Livio	2010.09.10	1/2-1/2	?	B97	2502	2571
+317414	Andersson, Ulf	Cramling, Pia	1998.06.17	1/2-1/2	9	B22	2635	2535
+318855	Zupe, Miran	Shirov, Alexei	1995.00.00	1/2-1/2	7	B40	2415	2440
+320297	Mortensen, Erling	Jansa, Vlastimil	1982.01.01	1-0	2	B46	2432	2475
+321739	Djukic, Nikola	Rajkovic, Dusan	2007.08.28	1-0	7	B47	2531	2522
+323180	Glek, Igor	Shcherbakov, Ruslan	2001.05.15	1-0	3	B30	2566	2544
+324622	Stankovic, Milos	Perunovic, Milos	2023.09.26	1/2-1/2	9.5	B45	2467	2540
+326064	Pruijssers, Roeland	Admiraal, Miguoel	2019.11.30	1-0	13.5	B10	2557	2510
+327505	Belyakov, Bogdan	Schekachikhin, Maksim	2018.05.03	1/2-1/2	3.1	B18	2479	2400
+328947	Manca, Federico	Sarno, Spartaco	1992.00.00	1-0	3	B09	2415	2405
+330389	Kozak, Adam	Triapishko, Alexandr	2018.10.07	0-1	18.20	C75	2445	2508
+333272	Rausis, Igors	Sokolov, Andrei	1995.00.00	0-1	8	C99	2515	2575
+334713	Maghsoodloo, Parham	Asadli, Vugar	2017.11.21	1/2-1/2	9.4	C54	2556	2464
+336155	Mastrovasilis, Dimitrios	Drazic, Sinisa	2013.09.03	1-0	11.2	C46	2593	2461
+337597	Lindberg, Bengt	Barkhagen, Jonas	2011.02.05	1/2-1/2	7	C10	2405	2443
+339038	Ivanovic, Bozidar	Kalezic, Blazo	2012.07.09	1/2-1/2	3.3	C11	2427	2416
+340480	Anka, Emil	Okhotnik, Vladimir	2002.01.00	0-1	6	B15	2438	2406
+341922	Jonkman, Harmen	Anastasian, Ashot	2000.07.14	1/2-1/2	11	B05	2424	2606
+343363	Quinteros, Miguel A.	Portisch, Lajos	1982.02.01	0-1	1	A04	2505	2630
+344805	Raja Rithvik R	Vaz, Ethan	2024.03.06	1-0	10.4	E06	2532	2409
+346246	Dorfman, Iossif	Romanishin, Oleg M	2000.02.20	1-0	9	A53	2593	2578
+347688	Tal, Mikhail	Westerinen, Heikki M.J.	1988.12.01	1/2-1/2	3	E18	2630	2675
+349130	Harutjunyan, Gevorg	Lafuente, Pablo	2010.06.09	1-0	10	A14	2460	2587
+350571	Amin, Bassem	Larkin, Vladyslav	2026.01.16	1-0	4.2	A05	2625	2469
+352013	Aronian, Levon	So, Wesley	2016.06.11	1/2-1/2	7.1	A35	2792	2770
+353455	Nepomniachtchi, Ian	Svane, Rasmus	2024.12.30	1-0	4.9	A14	2755	2628
+354896	Eingorn, Vereslav S	Faibisovich, Vadim Z	1997.11.04	1/2-1/2	4	D54	2590	2410
+356338	Kantsler, Boris	Baron, Tal	2009.12.23	1/2-1/2	5	A16	2472	2404
+357780	Krivoborodov, Egor	Kunin, Vitaly	2023.01.21	1/2-1/2	7.2	D00	2541	2508
+359221	Gagunashvili, Merab	Willemze, Jeroen	2004.07.23	1-0	7	D11	2580	2422
+360663	Tan, Zhongyi	Bai, Jinshi	2022.08.25	0-1	3.8	D32	2525	2586
+362104	Miles, Anthony J	Kurajica, Bojan	1976.07.01	1-0	4	E07	2510	2525
+363546	Franco Alonso, Alejandro	Roa Alonso, Santiago	2007.03.15	0-1	10	E11	2440	2418
+364988	Kempinski, Robert	Krasenkow, Michal	1997.01.01	1-0	1	D37	2515	2615
+366429	Cebalo, Miso	Zaja, Ivan	1997.01.01	1/2-1/2	1	E12	2540	2440
+367871	Nogerbek, Kazybek	Shimanov, Aleksandr	2023.12.27	0-1	8.39	E94	2483	2578
+370754	Papaioannou, Ioannis	Kengis, Edvins	2015.11.21	1/2-1/2	8.13	A32	2611	2510
+372196	Ponomariov, Ruslan	Zajic, Milan	2024.03.24	1-0	8.8	E49	2646	2436
+373637	Granda Zuniga, Julio E	Khamrakulov, Ibragim S.	2011.12.04	1/2-1/2	3	E38	2636	2518
+375079	Navara, David	Goloshchapov, Alexander	2007.02.25	1-0	11	E15	2719	2555
+376521	Narayanan S L	Vavulin, Maxim	2017.03.01	1-0	9.21	E15	2526	2604
+377962	Jasnikowski, Zbigniew	Lerner, Konstantin Z	1986.01.01	1/2-1/2	1	E15	2405	2530
+379404	Evdokimov, Alexander A.	Cheparinov, Ivan	2007.08.04	0-1	4	E92	2544	2657
+380846	Gukesh D	Theodorou, Nikolas	2023.11.02	1/2-1/2	8.36	E95	2746	2619
+382287	Berczes, David	Manish Anto Cristiano F	2023.05.31	1/2-1/2	8.3	D02	2439	2485
+383729	Grachev, Boris	Vitiugov, Nikita	2021.02.11	1/2-1/2	8.2	A48	2619	2715
+385170	Bortnyk, Mykola	Zeltsan, Joseph	2024.01.07	1-0	4.1	B22	2421	2439
+386612	Klügel, Jens-Uwe	Habermehl, Tobias	2016.06.26	1/2-1/2	?	B33	2507	2476
+388054	Bogut, Zeljko	Smeets, Jan	2011.05.09	1/2-1/2	6.12	B50	2433	2647
+389495	Popov, Ivan	Lu, Shanglei	2015.08.21	1-0	13.6	B90	2653	2607
+390937	Liang, Jason	Kantans, Toms	2022.11.14	1/2-1/2	1.3	B70	2492	2517
+392379	Mamedov, Rauf	Kokarev, Dmitry	2008.04.25	1-0	5	B97	2617	2579
+393820	Jovanovic, Zoran	Lubbe, Nikolas	2024.01.14	1/2-1/2	6.4	B40	2513	2500
+395262	Zhigalko, Andrey	Jurcik, Marian	2013.12.01	1/2-1/2	4.2	B22	2628	2481
+396704	Karjakin, Sergey	Maletin, Pavel	2014.06.20	1/2-1/2	1	B85	2771	2588
+398145	Heberla, Bartlomiej	Wieczorek, Oskar	2017.12.29	1-0	6.4	B85	2555	2463
+399587	Sutovsky, Emil	Kotronias, Vasilios	1997.05.25	1/2-1/2	6	B31	2560	2590
+401028	Bodnaruk, Anastasia	Girya, Olga	2017.02.14	0-1	2.1	B10	2463	2458
+402470	Lindberg, Bengt	Akesson, Ralf	2004.12.05	1/2-1/2	5	B17	2422	2472
+403912	Belozerov, Andrei	Tseshkovsky, Vitaly	2006.06.20	1/2-1/2	8	B09	2538	2572
+405353	Della Morte, German	Villanueva, Mario	2015.10.03	1/2-1/2	6.1	C70	2426	2420
+406795	Efimenko, Zahar	Acs, Peter	2006.08.07	1/2-1/2	10	C77	2632	2520
+408237	Cheparinov, Ivan	Navara, David	2007.11.01	0-1	5	C88	2670	2656
+409678	Niemann, Hans Moke	Caruana, Fabiano	2022.07.08	0-1	12.7	C54	2688	2783
+411120	Savitskiy, Sergey	Lobanov, Sergei	2021.02.25	1/2-1/2	6.5	C48	2427	2516
+412561	Korpa, Bence	Kosic, Dragan	2019.07.09	1/2-1/2	5.3	C00	2523	2482
+414003	Ulybin, Mikhail	Savchenko, Stanislav	1996.00.00	1/2-1/2	5	C10	2535	2585
+415445	Shirov, Alexei	Morozevich, Alexander	2001.05.21	1-0	2	C11	2723	2749
+416886	Short, Nigel D	Agdestein, Simen	1995.00.00	0-1	6	B04	2655	2600
+418328	Santiago, Yago De Moura	Cori Quispe, Kevin Joel	2019.04.11	1-0	5.3	A04	2472	2497
+419770	Kurajica, Bojan	Hertneck, Gerald	2000.04.13	1/2-1/2	3	E06	2530	2571
+421211	Popchev, Milko	Ivanov, Mikhail M	2007.06.30	1/2-1/2	2	D11	2456	2450
+422653	Macieja, Bartlomiej	Benjamin, Joel	2023.04.09	1/2-1/2	8	E12	2513	2498
+424095	Galyas, Miklos	Janik, Igor	2019.06.04	0-1	4.1	A30	2473	2483
+426978	Matlakov, Maxim	Amonatov, Farrukh	2016.12.30	1-0	17.16	A49	2694	2620
+428419	Steingrimsson, Hedinn	Varga, Zoltan	2005.11.09	0-1	4	A30	2435	2525
+429861	Korchnoi, Viktor	Psakhis, Lev	1992.06.01	1/2-1/2	1	A33	2585	2605
+431303	Ivanchuk, Vasyl	Parligras, Mircea-Emilian	2023.11.05	0-1	11.44	D35	2653	2534
+434186	Stryjecki, Marek	Teske, Henrik	2003.07.24	1/2-1/2	7	D41	2422	2527
+435628	Shytaj, Iart Luca	Rogozenco, Dorian	2017.03.18	1-0	9.2	D02	2451	2480
+437069	Lou, Yiping	Sundararajan, Kidambi	2010.04.25	1/2-1/2	5	D12	2429	2520
+438511	Ehlvest, Jaan	Morozevich, Alexander	2003.01.11	0-1	3	D11	2600	2678
+439952	Svetushkin, Dmitry	Libiszewski, Fabien	2004.02.28	1-0	1	D37	2553	2451
+441394	Bosiocic, Marin	Todorovic, Goran M	2010.03.14	0-1	8	D43	2577	2453
+442836	Efimov, Igor	Ortega, Lexy	1996.05.24	0-1	7	D11	2455	2490
+444277	Almasi, Istvan	Vidonyak, Roman	2006.10.22	1/2-1/2	1.4	B07	2400	2400
+445719	Rakhmanov, Aleksandr	Carlsson, Pontus	2010.03.17	1-0	11	E48	2584	2478
+447161	Ivanisevic, Ivan	Tosic, Marko	2003.09.06	1-0	8	A53	2563	2447
+448602	Khismatullin, Denis	Chekhov, Sergei	2016.05.01	1-0	1.3	A62	2609	2465
+450044	Fridman, Daniel	Brodsky, Michail	2014.06.26	1/2-1/2	9.1	E04	2627	2662
+451486	Lalic, Bogdan	Schlosser, Philipp	2012.07.19	1/2-1/2	9.2	E38	2488	2579
+452927	Dvirnyy, Danyyil	Piscopo, Pierluigi	2016.04.28	1-0	3.1	E37	2555	2431
+454369	Vukic, Milan	Sahovic, Rastko	1979.09.02	1-0	7.2	E15	2485	2520
+455810	Simantsev, Mikhail	Drygalov, Sergey	2016.10.08	1/2-1/2	6.1	E11	2465	2409
+457252	Sadorra, Julio Catalino	Nolte, Rolando	2008.07.03	1/2-1/2	3	E94	2470	2522
+458694	Kozul, Zdenko	Kuzmin, Alexey	1989.00.00	0-1	7	E97	2497	2465
+460135	Talla, Vladimir	Swayams, Mishra	2017.06.28	0-1	6.5	E99	2431	2440
+461577	Bosiocic, Marin	Brkic, Ante	2018.04.25	0-1	9.6	E11	2605	2610
+463019	Yegiazarian, Arsen	Khachiyan, Melikset	1995.01.01	1-0	1	D03	2460	2400
+464460	Platonov, Igor V	Anikaev, Yuri N	1977.00.00	1-0	?	B22	2455	2445
+465902	Oll, Lembit	De Boer, Gert-Jan	1992.10.01	1/2-1/2	2	B52	2600	2430
+467343	Iordachescu, Viorel	Zherebukh, Yaroslav	2009.10.23	1-0	8	B51	2607	2544
+468785	Schneider, Dmitry	Navara, David	2000.08.02	0-1	1	B86	2454	2433
+470227	Gonzalez Perez, Arian	Abreu Delgado, Aryam	2010.09.17	1/2-1/2	6.3	B97	2410	2473
+471668	Matjushin, Gennady	Pantsulaia, Levan	2011.02.27	0-1	2.8	B40	2490	2610
+473110	Mamedov, Rauf	Harikrishna, P	2017.12.13	1/2-1/2	22.6	B48	2709	2744
+474552	Pribelszky, Bence	Manolache, Marius	2023.08.17	1/2-1/2	6.2	B85	2413	2432
+475993	Oral, Tomas	Jirovsky, Milos	2014.11.11	1/2-1/2	2.1	B31	2489	2455
+477435	Westerinen, Heikki M.J.	Kotronias, Vasilios	2008.04.29	1-0	8	B31	2565	2611
+478877	Najer, Evgeniy	Khenkin, Igor	2012.12.02	1/2-1/2	4.1	B12	2647	2659
+480318	Bocharov, Ivan	Kozak, Adam	2018.10.07	1-0	5.19	B12	2563	2445
+481760	Huebner, Alan-Ari	Wahls, Matthias	1994.01.01	0-1	1	B01	2610	2520
+483201	Becerra Rivero, Julio	Hoffman, Alejandro	1994.01.01	1/2-1/2	10	C41	2480	2540
+484643	Luther, Thomas	Ivanchuk, Vasyl	1994.09.01	1-0	1	C77	2518	2695
+486085	Van den Doel, Erik	Hebden, Mark L	2002.00.00	1/2-1/2	6.2	C96	2585	2558
+487526	Palakiti Vishnu Nagachaitanya	Fang, Yuxiang	2017.09.02	1/2-1/2	7.3	C54	2538	2485
+488968	Delgado Ramirez, Neuris	So, Wesley	2022.07.30	1/2-1/2	2.2	C49	2614	2773
+490410	Savicevic, Vlatko	Stojanovic, Dalibor	2002.02.23	1-0	9	B30	2411	2433
+491851	Kovalenko, Gleb I	Gorodetzky, David	2019.01.26	0-1	12.2	C10	2663	2447
+493293	Beliavsky, Alexander G	Zilberman, Nathan R	1979.00.00	1-0	?	B08	2595	2455
+494734	Beshukov, Sergei	Vorobiov, Evgeny E.	2006.02.07	1/2-1/2	1	A04	2470	2543
+496176	Vaganian, Rafael A	Dorfman, Iossif	1990.01.01	1/2-1/2	7	A07	2605	2595
+497618	Pelletier, Yannick	Bindrich, Falko	2010.12.29	1/2-1/2	6	A07	2583	2504
+499059	Koustav Chatterjee	Sorokin, Aleksey	2023.09.17	1/2-1/2	3.5	A36	2546	2547
+500501	Spangenberg, Hugo	Malbran, Emilio	1998.08.15	1-0	1	A31	2520	2430
+501943	Afanasiev, Nikita	Turov, Maxim	2023.12.04	0-1	7.2	D77	2540	2552
+503384	Wei, Yi	Le, Quang Liem	2026.06.15	1-0	2	C50	2753	2731
+504826	Arnav Sourabh Puranik	Blomqvist, Erik	2017.02.27	0-1	7.38	A01	2481	2573
+506267	Csom, Istvan	Rogic, Davor	2000.08.22	1/2-1/2	4	A22	2478	2501
+507709	Donchenko, Alexander	Kulaots, Kaido	2022.12.07	1/2-1/2	8.9	D35	2636	2513
+509151	Adla, Diego	Glavina, Pablo	2003.03.29	1/2-1/2	?	E04	2497	2427
+510592	Boensch, Uwe	Mikhalevski, Victor	1996.11.01	1-0	1	A16	2525	2500
+512034	Tran, Thanh Tu	Lazavik, Denis	2025.12.18	0-1	9	D01	2402	2605
+513476	Dizdar, Goran	Kobalia, Mikhail	2008.10.19	1-0	3	D30	2551	2630
+514917	Stohl, Igor	Kiss, Pal	2007.02.18	1/2-1/2	5	D12	2549	2402
+516359	Grooten, Herman	Kuijf, Marinus	1992.00.00	0-1	5	D31	2430	2440
+517801	Timofeev, Artyom	Riazantsev, Alexander	2008.02.06	1/2-1/2	5	D37	2664	2628
+519242	Dronavalli, Harika	Ju, Wenjun	2014.09.04	0-1	9.1	A42	2523	2561
+520684	Mrkvicka, Josef	Alexandre Bisquert, Francisco	2003.01.31	1/2-1/2	?	A80	2482	2451
+522125	Jussupow, Artur	Bauer, Christian	2014.10.01	1/2-1/2	6	A50	2581	2637
+523567	Beliavsky, Alexander G	Almasi, Zoltan	1997.04.30	1/2-1/2	?	E05	2665	2595
+525009	Utegaliyev, Azamat	Fayzullaev, Akmal	2023.01.21	1-0	5.3	E11	2433	2401
+526450	Khegay, Dmitriy	Urazayev, Arystanbek	2018.11.26	1/2-1/2	5.2	E36	2505	2421
+527892	Grigore, George-Gabriel	Nisipeanu, Liviu-Dieter	2007.10.16	1/2-1/2	4	E39	2538	2668
+529334	Inkiov, Ventzislav	Reeh, Oliver	1989.01.01	1-0	1	E11	2470	2440
+530775	Barbosa, Oliver	Zhou, Jianchao	2015.12.29	1/2-1/2	8	E11	2518	2606
+533658	Nyback, Tomi	Shirov, Alexei	2023.02.04	1-0	9.1	D80	2567	2666
+535100	Ogloblin, Nikolay	Amonatov, Farrukh	2006.01.31	0-1	3	D11	2412	2564
+536542	Summerscale, Aaron P	Chandler, Murray G	2000.08.02	1-0	3	D58	2459	2526
+537983	Anton Guijarro, David	Naiditsch, Arkadij	2020.07.25	1/2-1/2	6.4	D03	2703	2626
+539425	Rozentalis, Eduardas	Tunik, Gennady	1989.01.01	1-0	1	B22	2485	2435
+540867	Laznicka, Viktor	Stocek, Jiri	2006.02.14	1-0	8	B51	2525	2580
+542308	Galdunts, Sergey	Benitah, Yohan	2008.11.22	1-0	2.2	B86	2429	2428
+543750	Kabanov, Nikolai	Matlakov, Maxim	2011.09.02	1/2-1/2	3	B40	2513	2630
+545192	Tabatabaei, M. Amin	Vokhidov, Shamsiddin	2024.08.05	1/2-1/2	1.2	B40	2712	2643
+546633	Van der Wiel, John T.H.	Dolmatov, Sergey	1979.07.01	1/2-1/2	8	B33	2465	2495
+548075	Predojevic, Borki	Miljkovic, Miroslav D	2003.02.06	1/2-1/2	14	B31	2437	2403
+549516	Efimenko, Zahar	Brodsky, Michail	2006.04.27	1/2-1/2	8	B63	2648	2561
+550958	Ponomariov, Ruslan	Grischuk, Alexander	2013.12.14	0-1	6.6	B12	2731	2783
+552400	Dominguez Perez, Leinier	Leko, Peter	2009.11.17	1/2-1/2	17	B12	2719	2752
+553841	Dgebuadze, Alexandre	Zhang, Zhong	2012.09.05	1/2-1/2	8.32	B19	2532	2600
+555283	Schneider, Dmitry	Panchanathan, Magesh Chandran	2007.12.11	1/2-1/2	8	C41	2502	2500
+556725	Dronavalli, Harika	Batsiashvili, Nino	2021.11.01	1/2-1/2	6.3	C77	2511	2491
+558166	Dragnev, Valentin	Gledura, Benjamin	2016.09.03	0-1	2.23	C95	2430	2585
+559608	Westerinen, Heikki M.J.	Portisch, Lajos	2008.01.22	1/2-1/2	3	C67	2561	2530
+561049	Adhiban, B.	Grandelius, Nils	2019.03.05	1-0	1.1	C54	2683	2694
+562491	Kovalevskaya, Ekaterina	Lazavik, Denis	2020.02.24	0-1	6.46	C47	2407	2428
+563933	Hickl, Joerg	Johannessen, Leif Erlend	2002.10.27	1-0	2.2	C01	2605	2534
+565374	Kuzmin, Gennadiy	Leonov, Mikhail A	2007.03.06	1-0	3	C04	2479	2446
+566816	Ivanov, Alexander	Zilberman, Nathan R	1983.07.24	1/2-1/2	7	B08	2425	2400
+568258	Damljanovic, Branko	Plachetka, Jan	1984.01.01	1/2-1/2	1	A30	2400	2440
+569699	Ivkov, Borislav	Gulko, Boris	1987.01.01	0-1	1	D40	2480	2525
+571141	Atabayev, Saparmyrat	Aravindh, Chithambaram VR.	2014.07.08	0-1	9.1	A07	2634	2443
+572583	Zhigalko, Andrey	Dessaules, Peter	2016.09.12	1/2-1/2	10.11	A07	2591	2753
+574024	Krivoshey, Sergei	Atabayev, Saparmyrat	2007.07.02	1/2-1/2	9	A30	2500	2472
+575466	Ruck, Robert	Filip, Lucian-Ioan	2019.03.29	1-0	11.72	A17	2521	2438
+576907	Todorcevic Antic, Miodrag	Barlov, Dragan	1992.01.01	1-0	1	E62	2470	2460
+578349	Adewumi, Tanitoluwa	Stearman, Josiah	2026.06.14	1/2-1/2	5.2	B51	2471	2477
+579791	Maghsoodloo, Parham	Gomez, John Paul	2019.06.09	1-0	3.16	A29	2665	2467
+581232	Sunye Neto, Jaime	Pelikian, Jefferson	1998.10.30	1-0	7	A26	2520	2415
+582674	Weinstein, Luc	Jussupow, Artur	1992.07.01	1/2-1/2	1	A14	2515	2537
+584116	Chernyshov, Konstantin	Le, Quang Liem	2010.02.07	1/2-1/2	9	E20	2556	2647
+585557	Prie, Eric	Dambacher, Martijn	2011.02.27	1/2-1/2	7.1	D00	2525	2500
+586999	Inarkiev, Ernesto	Morozevich, Alexander	2014.11.13	0-1	2.6	D11	2688	2724
+588440	Najer, Evgeniy	Chuprikov, Dmitry	2005.04.21	1/2-1/2	3	D15	2615	2416
+589882	Taimanov, Mark E	Chekhov, Valery A	1980.01.01	0-1	1	D45	2510	2410
+591324	Artemiev, Victor	Triapishko, Alexandr	2025.10.17	1-0	9.13	D30	2646	2457
+592765	Epishin, Vladimir	Khismatullin, Denis	2021.10.30	0-1	8.1	C21	2522	2606
+594207	Hesham, Abdelrahman	Saeed, Ishaq	2018.02.04	1-0	7	D02	2406	2434
+595649	Agrest, Evgenij	Ernst, Thomas	1995.01.01	1-0	10	A33	2460	2465
+597090	Murdzia, Piotr	Narayanan, Srinath	2008.06.28	0-1	2	E20	2471	2516
+598532	Rychagov, Andrey	Shalimov, Valery	2005.02.10	1-0	9	E32	2546	2445
+599974	Erdos, Viktor	Medvegy, Zoltan Dr.	2003.09.28	0-1	1	E32	2420	2498
+602857	Baryshpolets, Andrey	Kovalyov, Anton	2018.10.21	1/2-1/2	4.1	D24	2575	2631
+604298	Milov, Vadim	Kazhgaleyev, Murtas	2002.03.31	1/2-1/2	6.2	E70	2595	2561
+605740	Kacheishvili, Giorgi	Cabrera, Alexis	2011.02.03	1-0	10.15	D82	2585	2518
+608623	Jussupow, Artur	Zarnicki, Pablo	2005.05.21	1/2-1/2	7	A47	2601	2523
+610065	Kharitonov, Andrei	Petrushin, Alexander I	1983.12.01	1-0	1	E68	2440	2415
+611507	Movsesian, Sergei	Swiercz, Dariusz	2010.02.25	1-0	3	B20	2708	2474
+612948	Firat, Burak	Kozul, Zdenko	2015.03.06	0-1	10.44	B52	2478	2630
+614390	Lobanov, Sergei	Indjic, Aleksandar	2025.03.25	1/2-1/2	6	B52	2508	2651
+615831	Palac, Mladen	Dydyshko, Viacheslav	1994.00.00	0-1	?	B85	2505	2505
+617273	Beshukov, Sergei	Zakhartsov, Viacheslav V.	1997.00.00	1/2-1/2	9	B30	2435	2430
+618715	Motylev, Alexander	Zhang, Pengxiang	2008.05.20	1-0	8	B45	2666	2640
+620156	Halvax, Georg	Volkmann, Friedrich Karl	2017.11.19	1/2-1/2	1	B40	2419	2402
+621598	Oll, Lembit	Smirin, Ilia	1997.00.00	0-1	5	B85	2625	2575
+623040	Samerdokas, Alfredas	Rydholm, Lennart	2015.03.15	1/2-1/2	?	B12	2405	2524
+624481	Netzer, Jean	Seger, Ruediger	2006.12.10	0-1	4.5	B12	2404	2407
+625923	Bucciardini, Giuliano	Sprenger, Ernst Hendrik Dr	1999.00.00	1/2-1/2	?	B19	2419	2451
+627365	Nataf, Igor-Alexandre	Nijboer, Friso	2000.09.06	1-0	4	B06	2526	2537
+628806	Zvjaginsev, Vadim	Heberla, Bartlomiej	2021.12.27	0-1	8.61	C44	2599	2562
+630248	Khalifman, Alexander	Kaidanov, Gregory	1986.00.00	1/2-1/2	?	C82	2490	2405
+631689	Bruzon Batista, Lazaro	Martinez Alcantara, Jose Eduardo	2023.04.08	1/2-1/2	8.1	C67	2611	2607
+633131	Horvath, Mihaly	Reinhart, Kenneth M	2018.06.19	1/2-1/2	?	C67	2466	2475
+634573	Sjugirov, Sanan	Aditya Mittal	2023.12.27	1/2-1/2	7.41	C55	2703	2595
+636014	Lu, Miaoyi	Nogerbek, Kazybek	2025.01.18	1-0	1.7	C44	2429	2514
+637456	Karavade, Eesha	Huzman, Alexander	2017.02.24	1/2-1/2	4.42	C00	2418	2552
+638898	Balashov, Yuri S	Bareev, Evgeny	1987.01.01	1/2-1/2	1	C18	2525	2535
+640339	Tejedor Fuente, Enrique	Moreno Trujillo, Alejandro	2018.08.19	0-1	4.3	C10	2408	2497
+641781	Siefring, Dr. Carl L.	Makovsk, Petr	2013.08.01	1/2-1/2	?	B06	2499	2476
+643222	Kengis, Edvins	Miezis, Normunds	1995.00.00	1-0	8	A30	2575	2435
+644664	Khodashenas, Mersad	Tran, Tuan Minh	2017.05.08	0-1	7.3	A34	2410	2537
+646106	Rapport, Richard	Kraemer, Martin	2019.11.23	1-0	1.4	A07	2752	2581
+647547	Petrosian, Arshak B	Krivonosov, Oleg	1978.07.01	1-0	1	A11	2475	2415
+648989	Sivuk, Vitaly	Saydaliev, Saidakbar	2024.06.08	1-0	3.4	D37	2569	2448
+650431	Li, Di	Shariyazdanov, Andrey	2020.01.15	1/2-1/2	6.3	E07	2562	2519
+651872	Minasian, Artashes	Ivanchuk, Vasyl	2000.08.03	0-1	7	E60	2595	2719
+653314	Kosic, Dragan	Ivanovic, Bozidar	1990.01.01	1/2-1/2	1	E62	2415	2520
+654755	Korobov, Anton	Injac, Teodora	2024.08.03	1/2-1/2	3.7	A20	2648	2411
+656197	Shvidler, Eliahu	Lau, Ralf	1987.01.01	1-0	14	A13	2450	2535
+657639	Votava, Jan	Jansa, Vlastimil	2003.03.09	1-0	13	A34	2518	2504
+659080	Aguero Jimenez, Luis Lazaro	Otero Acosta, Diasmany	2010.09.15	1-0	9	D08	2403	2417
+660522	Kozul, Zdenko	Grigoriants, Sergey	2024.11.26	0-1	6.2	D15	2511	2531
+661964	Kramnik, Vladimir	Bacrot, Etienne	2006.05.30	1/2-1/2	9	D18	2729	2708
+663405	Malaniuk, Igor	Cyborowski, Lukasz	2016.08.13	1/2-1/2	8.1	D41	2471	2526
+664847	Grooten, Herman	Georgiev, Vladimir	1999.03.28	1-0	?	E60	2405	2508
+666289	Kosic, Dragan	Jovanovic, Zoran	2005.01.05	1/2-1/2	4	A41	2521	2471
+667730	Barbara, Fernando	Malaniuk, Igor	1994.01.01	0-1	1	A81	2480	2595
+669172	Shomoev, Anton	Hovhannisyan, Robert	2012.11.11	1-0	11.11	A31	2564	2628
+670613	Alterman, Boris	Kurajica, Bojan	1998.05.05	1-0	1	E21	2615	2580
+672055	Panno, Oscar	Vescovi, Giovanni	2000.09.14	1/2-1/2	1	E32	2450	2526
+673497	Sadhwani, Raunak	Firouzja, Alireza	2025.12.18	1/2-1/2	10	D51	2638	2762
+674938	Niemann, Hans Moke	Gan-Erdene, Sugar	2023.07.12	1/2-1/2	2.1	E11	2674	2418
+676380	Kempinski, Robert	Cyborowski, Lukasz	2013.03.03	1-0	6.2	D27	2599	2524
+677822	Feller, Sebastien	Cornette, Matthieu	2019.08.25	1/2-1/2	9.1	D39	2577	2555
+679263	Ryskin, Alexander	Iskusnyh, Sergei	1995.01.01	1/2-1/2	1	E91	2440	2425
+680705	Vitiugov, Nikita	Ponomariov, Ruslan	2012.04.12	1/2-1/2	4	D90	2703	2726
+682146	Astaneh Lopez, Alex	Maksimenko, Andrei	2019.01.02	0-1	1.3	D26	2427	2484
+683588	Khalifman, Alexander	Leko, Peter	2000.12.03	1/2-1/2	3.3	D97	2667	2743
+685030	Todorcevic Antic, Miodrag	Plachetka, Jan	1989.01.01	1-0	7	B20	2535	2450
+686471	Zaw Oo	Aung Aung, Aung Myo Hlaing	1999.02.10	1/2-1/2	11	B27	2440	2500
+687913	Howell, David W L	Sutovsky, Emil	2012.01.29	1-0	6.6	B51	2603	2703
+689355	Salgado Lopez, Ivan	Grigoryan, Kamo	2024.10.18	1/2-1/2	7.21	B92	2609	2582
+690796	Mikhalchishin, Adrian	Tolnai, Tibor	1989.01.01	1-0	1	B78	2475	2480
+692238	Fernandez Borrego, Pablo	Iturrizaga Bonelli, Eduardo	2023.08.17	0-1	6.21	B43	2410	2617
+693680	Akopian, Vladimir	Atlas, Valery	2007.10.30	1/2-1/2	3	B80	2713	2482
+695121	Barua, Dibyendu	Panno, Oscar	2007.08.19	1-0	3	B33	2462	2457
+696563	Khatanbaatar, Bazar	Barrientos, Sergio E	2004.10.24	1-0	9	B33	2427	2467
+698004	Tsydypov, Zhamsaran	Murzin, Volodar	2023.04.08	0-1	6.1	B12	2538	2577
+699446	Hector, Jonny	Lauber, Arnd	2009.11.14	1-0	3	B19	2572	2503
+700888	Prasad, Devaki V	Jaracz, Pawel	2003.02.27	0-1	1	B06	2400	2546
+702329	Nunn, John D M	Langeweg, Kick	1982.12.07	1/2-1/2	4.1	C24	2590	2410
+705213	Van der Wiel, John T.H.	Mikhalevski, Victor	1995.00.00	1/2-1/2	9	C82	2570	2525
+706654	Solak, Dragan	Georgiadis, Nico	2014.04.14	1-0	8.12	C65	2635	2421
+708096	Vachier-Lagrave, Maxime	Giri, Anish	2015.12.13	0-1	1.1	C67	2773	2784
+709537	Afanasiev, Nikita	Saydaliev, Saidakbar	2025.11.12	1-0	3.6	C58	2511	2455
+710979	Shirov, Alexei	Bharath Subramaniyam H	2023.12.08	1/2-1/2	9.7	C55	2668	2504
+712421	Horvath, Adam	Kovacs, Gabor	2016.02.28	1-0	5.4	C48	2512	2468
+713862	Diaz Diaz, Joaquin Carlos	Arencibia Rodriguez, Walter	1990.00.00	0-1	?	C17	2410	2425
+715304	Ginsburg, Gennadi	Luther, Thomas	2001.01.07	0-1	4.1	C07	2487	2544
+716746	Rantanen, Yrjo A.	Keene, Raymond D	1979.01.01	0-1	1	B06	2460	2465
+718187	Carlsen, Magnus	Caruana, Fabiano	2016.01.17	1/2-1/2	2.1	A00	2844	2787
+719629	Harsha Bharathakoti	Bauer, Christian	2023.03.04	1/2-1/2	7.2	A31	2608	2596
+721071	Belezky, Alexander	Mirzoev, Azer	2012.12.24	1/2-1/2	4.2	A06	2427	2553
+722512	Votava, Jan	Vykouk, Jan	2018.02.18	1/2-1/2	8.5	D02	2528	2451
+723954	Astaneh Lopez, Alex	Collins, Sam E.	2012.02.19	1/2-1/2	6	D34	2400	2439
+725395	Gao, Rui	Lou, Yiping	2015.09.03	1/2-1/2	3.3	A14	2537	2443
+726837	Shankland, Sam	Bilych, Oleksii	2025.04.24	0-1	5.11	A13	2670	2452
+728279	Volovich, Anatoly	Vaganian, Rafael A	1967.00.00	1-0	?	A12	2440	2640
+729720	Hansen, Sune Berg	Hillarp Persson, Tiger	2018.12.01	0-1	1.2	A36	2583	2546
+731162	Tazbir, Marcin	Plat, Vojtech	2022.08.14	0-1	1.2	A25	2511	2556
+732604	Lputian, Smbat	Dokhoian, Yury	1986.00.00	1-0	?	D18	2545	2450
+734045	Zatonskih, Anna	Stefanova, Antoaneta	2012.02.20	0-1	8.2	D45	2511	2531
+735487	Hoffmann, Michael	Korneev, Oleg	2007.11.14	1/2-1/2	5	D46	2471	2587
+736928	Schussler, Harry	Agrest, Evgenij	1993.01.01	0-1	1	A41	2465	2460
+738370	Vazquez Igarza, Renier	Narciso Dublan, Marc	2015.08.19	1/2-1/2	5.2	A41	2581	2532
+739812	Zhao, Xue	Muzychuk, Anna	2014.09.28	1/2-1/2	2.1	A81	2507	2551
+741253	Zlotnik, Boris A	Pigusov, Evgeny	1988.12.00	1/2-1/2	?	A72	2430	2525
+742695	Chatalbashev, Boris	Blomqvist, Erik	2015.10.17	1-0	7.3	E21	2550	2530
+744137	Romanishin, Oleg M	Milovanovic, Adrian	1990.00.00	1-0	10	D36	2560	2440
+745578	Belous, Vladimir	Guo, Arthur	2022.04.17	1/2-1/2	6.1	D35	2516	2432
+747020	Seemann, Jakub	Bluebaum, Matthias	2025.06.15	0-1	1.1	D37	2450	2663
+748462	Bernasek, Jan	Laznicka, Viktor	2009.06.06	0-1	3	E58	2470	2617
+749903	Sasikiran, Krishnan	Macieja, Bartlomiej	2008.08.09	1/2-1/2	8	D39	2684	2606
+751345	Lukacs, Peter	Sznapik, Aleksander	1978.00.00	1/2-1/2	6	E74	2460	2430
+752786	Milos, Gilberto	Yandemirov, Valeri	2006.00.00	1/2-1/2	?	D93	2554	2520
+754228	Bai, Jinshi	Alekseenko, Kirill	2018.05.27	1/2-1/2	1.5	D71	2579	2625
+755670	Barseghyan, Harutyun	Stephan, Victor	2021.01.09	1-0	5	D02	2471	2430
+757111	Johansen, Darryl K	Nunn, John D M	1983.08.29	0-1	6	E90	2490	2585
+758553	Murariu, Andrei	Jianu, Vlad-Cristian	2010.03.31	1/2-1/2	1	B25	2479	2516
+759995	Nijboer, Friso	Reinderman, Dimitri	2008.01.23	1-0	10	B74	2578	2533
+761436	Alekseenko, Kirill	Kokarev, Dmitry	2018.12.09	1/2-1/2	3.1	B90	2638	2598
+762878	Timoshenko, Georgy	Shabalov, Alexander	1989.01.01	1-0	1	B70	2530	2425
+764319	Agrel, Diane	Alvarez, Roberto Gabriel	1998.00.00	0-1	?	B78	2490	2505
+765761	Becerra Rivero, Julio	Bercys, Salvijus	2008.03.29	1/2-1/2	4	B48	2573	2421
+767203	Hellers, Ferdinand	Yakovich, Yuri	1994.08.01	1/2-1/2	1	B22	2560	2513
+768644	Martí Pericot, Juan Manuel	Martin Clemente, Joel	2010.06.10	1/2-1/2	?	B33	2473	2645
+770086	Sikula, Vaszilij	Banusz, Tamas	2006.11.12	1/2-1/2	1	B33	2515	2450
+771528	Nielsen, Peter Heine	Danielsen, Henrik	1994.00.00	1/2-1/2	8	B12	2475	2480
+772969	Howell, James C	Smagin, Sergey	1990.08.01	1/2-1/2	1	B01	2415	2550
+774411	Ardelean, George-Catalin	Javakhishvili, Lela	2007.08.17	1-0	8	C24	2482	2460
+775853	Topalov, Veselin	Mitkov, Nikola	1995.00.00	0-1	?	C89	2630	2475
+777294	Jakovenko, Dmitry	Korneev, Oleg	2007.02.09	1/2-1/2	1	C67	2691	2606
+778736	Siigur, Jüri	Moiseev, Sergey Borisovich	2016.10.15	1/2-1/2	?	C65	2446	2452
+780177	Smeets, Jan	Heimann, Andreas	2019.04.07	1/2-1/2	15.6	C67	2602	2616
+781619	Vaishali, Rameshbabu	Goryachkina, Aleksandra	2022.09.29	1/2-1/2	11.6	C67	2449	2579
+783061	Anand, Viswanathan	Karpov, Anatoly	1999.06.13	1-0	6	C43	2739	2710
+784502	Kasimdzhanov, Rustam	Meier, Georg	2021.07.15	1/2-1/2	4.4	C01	2662	2628
+785944	Amonatov, Farrukh	Rodriguez Vila, Andres	2010.09.24	1/2-1/2	4	C18	2602	2537
+787386	Fernandez Cardoso, Alexey	Espinosa Veloz, Ermes	2016.11.01	0-1	9.6	C07	2472	2502
+788827	Ivanov, Alexander	Gurevich, Dmitry	1989.00.00	1/2-1/2	4	B06	2470	2480
+790269	Keene, Raymond D	Ljubojevic, Ljubomir	1972.01.01	0-1	14	A25	2435	2550
+791710	Artemiev, Vladislav	Mamedyarov, Shakhriyar	2019.12.30	1-0	13.5	A06	2731	2772
+793152	Obolenskikh, Dmitry Aleksandrovi	Kiselev, Sergey	2008.01.00	1-0	4	A09	2446	2434
+794594	Portisch, Lajos	Kasparov, Garry	1990.02.01	0-1	1	E97	2605	2800
+796035	Georgiev, Kiril	Lobron, Eric	1992.00.00	1-0	4	D33	2605	2565
+797477	Kramnik, Vladimir	Illescas Cordoba, Miguel	1997.04.06	1-0	5	A17	2740	2635
+798919	Cekro, Ekrem	Van der Stricht, Geert	2004.03.13	1/2-1/2	8.3	A11	2438	2447
+800360	Smejkal, Jan	Hernandez Onna, Roman	1977.10.01	1-0	15	A26	2575	2435
+801802	Rakhmanov, Aleksandr	Sychev, Klementy	2016.10.04	1-0	14.10	A36	2662	2445
+803243	Shneider, Aleksandr	Muse, Mladen	1988.01.01	1-0	1	A16	2443	2410
+804685	Bai, Jinshi	Malakhov, Vladimir	2015.07.26	1/2-1/2	10.3	D10	2520	2597
+807568	Jussupow, Artur	Akopian, Vladimir	1997.02.12	1/2-1/2	4	D43	2537	2655
+809010	Robson, Ray	Carlsen, Magnus	2025.12.18	0-1	9	D37	2650	2840
+810452	Kosic, Dragan	Popov, Sinisa S	2002.05.16	1-0	4	E14	2537	2435
+811893	Nguyen, Huynh Minh Huy	Ilincic, Zlatko	2008.09.09	1/2-1/2	4	A81	2477	2519
+813335	Miladinovic, Igor	Bogdanovski, Vlatko	2001.12.29	1/2-1/2	9	A45	2495	2430
+814777	Makarov, Aleksandr Arkadyevi	Grigoriev, A.	2002.00.00	1-0	?	A67	2592	2482
+816218	Stocek, Jiri	Stefansson, Hannes	1999.12.12	1-0	3.1	E13	2532	2584
+817660	Knaak, Rainer	Inkiov, Ventzislav	1987.00.00	1/2-1/2	?	D36	2505	2475
+819101	Pekarek, Ales	Suba, Mihai	1987.02.01	1-0	1	A77	2480	2560
+820543	Grischuk, Alexander	Alekseev, Evgeny	2009.04.26	1-0	10	E58	2748	2716
+821985	Kunin, Vitaly	Admiraal, Miguoel	2018.07.27	0-1	7.2	D45	2538	2479
+823426	Chasin, Nico	Iniyan, Pa	2025.08.22	0-1	11.3	D43	2458	2586
+824868	Iniyan, Pa	Goutham Krishna H	2026.05.18	0-1	7	E92	2587	2433
+826310	Ushenina, Anna	Lagno, Kateryna	2013.12.16	0-1	29.1	D85	2501	2543
+827751	Halkias, Stelios	Eljanov, Pavel	2001.06.11	1-0	10	D85	2494	2558
+829193	Chatalbashev, Boris	Mateo, Ramon	2005.08.11	1-0	4	A46	2499	2434
+830634	Stocek, Jiri	Vokac, Marek	2014.05.04	1-0	9.5	E90	2540	2436
+832076	Petrov, Nikita	Khismatullin, Denis	2018.12.27	1-0	9.41	B23	2555	2621
+833518	Flores Quillas, Diego Saul Rodri	Santiago, Yago De Moura	2025.12.16	1-0	8.7	B29	2409	2505
+834959	Dolmatov, Sergey	Muhutdinov, Marat	1992.01.01	1/2-1/2	1	B92	2595	2440
+836401	Volokitin, Andrei	Dragun, Kamil	2013.11.08	1-0	1.4	B90	2682	2543
+837843	Reschke, Heiko	Rissanen, Heikki	1999.00.00	1-0	?	B78	2469	2448
+839284	Nigmatov, Ortik	Pantsulaia, Levan	2018.07.14	1/2-1/2	3.4	B41	2461	2575
+840726	Vykouk, Jan	Krejci, Jan	2019.04.21	1/2-1/2	11.3	B67	2441	2588
+842168	Efimenko, Zahar	Shomoev, Anton	2004.10.18	1-0	3.2	B33	2594	2486
+843609	Lukin, Andrei M	Timoscenko, Gennadij	1973.00.00	0-1	?	B33	2430	2430
+845051	Hansen, Torbjorn Ringdal	Cuenca Jimenez, Jose Fernando	2011.01.04	1/2-1/2	5	C41	2439	2496
+846492	Ostojic, Aleksa	Haik, Aldo	1978.01.01	1-0	1	C62	2420	2425
+849376	Mainka, Romuald	Romanishin, Oleg M	2013.03.08	1/2-1/2	8.2	C84	2430	2503
+850817	Sevian, Samuel	Nisipeanu, Liviu-Dieter	2017.09.03	1/2-1/2	1.1	C42	2610	2674
+852259	Siigur, Jüri	Romm, Mikhail Yakovlevich	2014.06.20	1/2-1/2	?	C42	2416	2450
+853701	Berg, Emanuel	Korobov, Anton	2011.09.28	0-1	4.6	C19	2575	2671
+855142	Kovalev, Vladislav	Gorovets, Andrey	2013.01.18	1/2-1/2	7.4	C08	2482	2477
+856584	Lukacs, Peter	Pinal Borges, Nelson	1983.00.00	1-0	?	E73	2460	2405
+858025	Schinzel, Wladyslaw	Parma, Bruno	1979.08.01	0-1	1	A37	2400	2445
+859467	Miton, Kamil	Grigoriants, Sergey	1999.11.01	1/2-1/2	1	E06	2401	2413
+860909	Sokolov, Ivan	Kupreichik, Ilya	1972.01.00	1-0	?	D77	2485	2440
+862350	Maghalashvili, Davit	Bagaturov, Giorgi	2017.08.23	1-0	8.4	E69	2500	2408
+863792	Paichadze, Luka	Mchedlishvili, Mikheil	2025.02.07	1-0	5.5	C42	2532	2568

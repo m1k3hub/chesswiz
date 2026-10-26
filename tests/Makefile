@@ -272,7 +272,7 @@ cpp: $(TEST_DIR)test_cpp_backend $(TEST_DIR)test_corr_duration tk-rangelist cpp-
 # and exits 0 when CBH_FIXTURE_DIR does not hold it (CI without the fixture).
 CBH_FIXTURE_DIR ?= /media/michael-g-thomas/sas_mirror/chess/pgn
 
-$(TEST_DIR)2cbh_elo_validation: $(TEST_DIR)2cbh_elo_validation.cpp $(SRC_DIR)/db/2cbh/cb2_elo.h
+$(TEST_DIR)2cbh_elo_validation: $(TEST_DIR)2cbh_elo_validation.cpp $(SRC_DIR)/db/2cbh/cb2_elo.h $(SRC_DIR)/db/2cbh/cb2_index.h
 	@echo "Compiling 2CBH Elo validation..."
 	@$(CXX) $(CXXFLAGS) \
 		-I$(SRC_DIR) -I$(SRC_DIR)/db -I$(SRC_DIR)/sys -I$(SRC_DIR)/util -I$(SRC_DIR)/mstl \
@@ -456,3 +456,8 @@ ai-credentials:
 .PHONY: tactics
 tactics:
 	$(TCLSH) $(TEST_DIR)test_tactics_trainer.tcl
+
+.PHONY: 2cbh
+2cbh:
+	$(MAKE) -C $(SRC_DIR)/db test_2cbh
+	$(SRC_DIR)/db/test_2cbh

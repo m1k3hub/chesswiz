@@ -11,9 +11,10 @@
 // Expected values are checked in (tests/fixtures/2cbh_elo_sample.tsv) rather
 // than read from the 763 MB source PGN, which is far too slow to parse at
 // test time.  The sample is 578 identity-matched twin games spread evenly
-// over all 863,538 index records of LumbrasGigaBase_OTB_ELO2400; regenerate
-// it with tests/tmp-app/2cbh-elo/gen_elo_sample.py (see that script's
-// docstring and docs/formats/2CBH_FORMAT_DESIGN.md for the join method).
+// over the formerly visible 863,538 games of LumbrasGigaBase_OTB_ELO2400.
+// Indices now include the first 255 games recovered by the corrected header
+// geometry; the sampled games and expected values are unchanged. See
+// docs/formats/2CBH_FORMAT_DESIGN.md for the original join method.
 //
 // The fixture is read-only and machine-local: when it is absent the test
 // prints SKIP and exits 0, so CI on a machine without it still passes.
@@ -24,6 +25,7 @@
 // ======================================================================
 
 #include "2cbh/cb2_elo.h"
+#include "2cbh/cb2_index.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -42,8 +44,7 @@ namespace
 char const* const kDefaultFixtureDir = "/media/michael-g-thomas/sas_mirror/chess/pgn";
 char const* const kFixtureRoot = "LumbrasGigaBase_OTB_ELO2400";
 
-unsigned const kHeaderRecords = 256;	// .2cbh records 0..255 are the header block
-unsigned const kMinRecordSize = 0xbe;	// same floor cb2::Codec::doOpen enforces
+unsigned const kHeaderRecords = 1;	// one header, followed by game records
 
 // One ground-truth row of tests/fixtures/2cbh_elo_sample.tsv.  The identity
 // columns are index-side values kept for provenance and for diagnostics in a
@@ -170,27 +171,23 @@ main(int argc, char* argv[])
 	}
 
 	// Index geometry: the record size is a u16 LE at header offset 0x0a, and
-	// game k lives at record (256 + k).  Both are cb2::Codec::doOpen's rules.
-	unsigned char header[16];
+	// game k lives at record (1 + k).  Both are cb2::Codec::doOpen's rules.
+	unsigned char header[24];
 	if (!cbh.read(reinterpret_cast<char*>(header), sizeof(header)))
 	{
 		::fprintf(stderr, "FAIL: cannot read the .2cbh header\n");
 		return 2;
 	}
-	unsigned const recordSize = unsigned(header[0x0a]) | (unsigned(header[0x0b]) << 8);
-	if (recordSize < kMinRecordSize)
-	{
-		::fprintf(stderr, "FAIL: implausible .2cbh record size %u\n", recordSize);
-		return 2;
-	}
 	cbh.seekg(0, std::ios_base::end);
 	std::streamoff const fileSize = cbh.tellg();
-	if (fileSize < std::streamoff(kHeaderRecords) * recordSize)
+	db::cb2::IndexLayout layout;
+	if (fileSize < 0 || !db::cb2::readIndexLayout(header, sizeof(header), uint64_t(fileSize), layout))
 	{
-		::fprintf(stderr, "FAIL: .2cbh is truncated (%ld bytes)\n", long(fileSize));
+		::fprintf(stderr, "FAIL: invalid or truncated .2cbh index\n");
 		return 2;
 	}
-	unsigned const numGames = unsigned(fileSize / recordSize) - kHeaderRecords;
+	unsigned const recordSize = layout.recordSize;
+	unsigned const numGames = layout.gameCount;
 
 	::printf("2CBH-ELO: fixture %s\n", cbhPath.c_str());
 	::printf("2CBH-ELO: %u games, record size %u bytes\n", numGames, recordSize);

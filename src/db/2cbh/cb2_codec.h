@@ -25,7 +25,13 @@ namespace db {
 
 namespace cb2 {
 
-/// Feed one raw .2cbg game payload (a type-1 record's data) into a
+/// Read the start-position prefix, set FEN tags, and advance data/size to
+/// the Move16 stream. Type 2 stores 0xfffb followed by a Scharnagl number.
+/// Unsupported types or malformed prefixes return false.
+bool prepareGame(uint16_t type, unsigned char const*& data, uint32_t& size,
+                 Board& board, TagSet& tags);
+
+/// Feed a prepared .2cbg Move16 stream into a
 /// consumer: mainline + RAV variations + .2cba comments, in PGN order.
 /// Thin public wrapper over the codec-internal walkGame so the
 /// standalone 2cbh2pgn tool shares the codec's variation walk instead

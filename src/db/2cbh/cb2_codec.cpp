@@ -6,7 +6,7 @@
 // standard Consumer protocol.
 //
 // Format spec: docs/formats/2CBH_FORMAT_DESIGN.md
-//  - .2cbh: 192-byte index records; games start at record #256;
+//  - .2cbh: 192-byte index records; games start at record #1;
 //    @0x08 = the .2cbg record offset, @0x18/@0x20 = the player IDs,
 //    @0x28 = the event ID, byte 0x58 & 3 = the result.
 //  - .2cbg: game records in insertion order (deleted games leave
@@ -17,6 +17,7 @@
 
 #include "cb2_codec.h"
 #include "cb2_elo.h"
+#include "cb2_index.h"
 #include "2cbh_move16.h"
 #include "2cbh_annotations.h"
 
@@ -124,17 +125,18 @@ readGameRecord(mstl::fstream& strm, uint32_t offset, GameRecord& rec)
 }
 
 /// Resolve one Move16 code into a legal move of `board`.  ChessBase
-/// encodes castling as king e1->g1; scidb's internal representation
-/// sends the king to the rook square, so the rook square from the
-/// second descriptor is accepted as the destination too.
+/// encodes castling as two transitions; scidb's internal representation
+/// sends the king to the rook square. Match both transitions to avoid
+/// confusing the other rook's square with the king's destination in Chess960.
 bool
 resolveMove16(Board const& board, Move16Descriptor const& d, Move& move)
 {
    unsigned from = ((d.from & 7) << 3) | (d.from >> 3);
    unsigned to = ((d.to & 7) << 3) | (d.to >> 3);
-   unsigned toAlt = to;
+   unsigned rookFrom = 0;
    unsigned promoType = 0;
    bool isPromotion = false;
+   bool isCastling = false;
 
    if (d.hasWord1)
    {
@@ -148,9 +150,11 @@ resolveMove16(Board const& board, Move16Descriptor const& d, Move& move)
             isPromotion = true;
          }
       }
-      else if (d.word1Piece == 5 || d.word1Piece == 13)
+      else if ((d.piece == 1 || d.piece == 9)
+               && (d.word1Piece == 5 || d.word1Piece == 13))
       {
-         toAlt = wf;
+         rookFrom = wf;
+         isCastling = true;
       }
    }
 
@@ -161,7 +165,17 @@ resolveMove16(Board const& board, Move16Descriptor const& d, Move& move)
    for (unsigned mi = 0; mi < legalMoves.size(); ++mi)
    {
       Move const& m = legalMoves[mi];
-      if (m.from() != from || (m.to() != to && m.to() != toAlt))
+      if (m.isCastling() != isCastling)
+         continue;
+      if (m.from() != from)
+         continue;
+      if (isCastling)
+      {
+         if (m.to() != rookFrom || m.castlingKingTo() != to
+             || m.castlingRookTo() != toScidbSquare(d.word1To))
+            continue;
+      }
+      else if (m.to() != to)
          continue;
       if (isPromotion)
       {
@@ -282,16 +296,8 @@ feedLine( db::Consumer& consumer,
 /// parse the variation tree (docs/formats/2CBH_FORMAT_DESIGN.md section 4.2) and emit
 /// mainline + variations in PGN order.
 ///
-/// Root marker pairing (reverse-engineered 2026-09-07 against the
-/// LumbrasGigaBase twin PGNs; verified on the Westerinen-Ernst and
-/// Kotronias-Ivanchuk nested games and the single-RAV Suba-Ermenkov
-/// game; count-form since commit 97e1131): a root marker records the
-/// MOVE COUNT (mainline moves so far, not a token index), and the
-/// doc-order root #i replaces mainline ply `count(root marker i) - 1 - i`
-/// (0-based, fed directly after that move).  The count form is immune
-/// to stray special tokens (e.g. 0xfffb) that would shift token -> ply
-/// arithmetic.  parseCbgTree delivers rootInsert = count - 1 - i, the
-/// 0-based replaced ply itself.
+/// Each root marker counts mainline moves before the insertion point.
+/// parseCbgTree returns the zero-based ply replaced by that variation.
 ///
 /// Returns the mainline ply count; false on desync (the caller should
 /// skipGame).
@@ -303,7 +309,10 @@ walkGame( db::Consumer& consumer,
           bool annotationsOk,
           unsigned& plyCount)
 {
+   if (dataSize < 4 || (dataSize & 1u) || readLE16(data) != Move16_GameStart)
+      return false;
    uint32_t const n = dataSize / 2u;
+   bool terminated = false;
    mstl::vector<uint16_t> mainline;
    mstl::vector<uint32_t> rootMarkers;
    uint32_t j = 0;
@@ -321,6 +330,7 @@ walkGame( db::Consumer& consumer,
          continue;
       if (code == db::cb2::Move16_Terminator)
       {
+         terminated = true;
          ++j;
          break;
       }
@@ -333,6 +343,9 @@ walkGame( db::Consumer& consumer,
          continue;
       mainline.push_back(code);
    }
+
+   if (!terminated)
+      return false;
 
    uint16_t const* region = reinterpret_cast<uint16_t const*>(data) + j;
    uint32_t const regionWords = n > j ? n - j : 0u;
@@ -361,7 +374,7 @@ walkGame( db::Consumer& consumer,
    }
 
    unsigned nextItem = 0;
-   Board board(Board::standardBoard(variant::Normal));
+   Board board(consumer.startBoard());
    unsigned feed = 0;
 
    if ( !feedLine( consumer, board, mainline, attach, rootsDoc, pool,
@@ -390,6 +403,31 @@ walkGame( db::Consumer& consumer,
 }
 
 } // anonymous namespace
+
+
+bool
+prepareGame(uint16_t type, unsigned char const*& data, uint32_t& size,
+            Board& board, TagSet& tags)
+{
+    board = Board::standardBoard(variant::Normal);
+    if (type == 2)
+    {
+        if (size < 8 || readLE16(data) != Move16_None)
+            return false;
+        unsigned const position = readLE16(data + 2);
+        if (position >= 960)
+            return false;
+        // Scidb reserves idn 0; Scharnagl position 0 lives at idn 960.
+        board.setup(position ? position : 960, variant::Normal);
+        data += 4;
+        size -= 4;
+        tags.set(tag::SetUp, "1");
+        tags.set(tag::Fen, board.toFen(variant::Normal, Board::Shredder));
+    }
+    else if (type != 1)
+        return false;
+    return size >= 4 && (size & 1u) == 0 && readLE16(data) == Move16_GameStart;
+}
 
 
 /// Public wrapper over walkGame (see above); drives the consumer with
@@ -555,12 +593,11 @@ Codec::doOpen(	mstl::string const& rootname,
 	}
 
 	unsigned char const* cbh = reinterpret_cast<unsigned char const*>(cbhData.data());
-	if (cbhData.size() < 256u * 0x1a)
-		IO_RAISE(Index, Corrupted, "2CBH index is truncated");
-	unsigned const recordSize = readLE16(cbh + 0x0a);
-	if (recordSize < 0xbe || cbhData.size() < 256u * recordSize)
-		IO_RAISE(Index, Corrupted, "invalid 2CBH record size");
-	m_numGames = unsigned(cbhData.size() / recordSize) - 256u;
+	IndexLayout layout;
+	if (!readIndexLayout(cbh, cbhData.size(), cbhData.size(), layout))
+		IO_RAISE(Index, Corrupted, "invalid or truncated 2CBH index");
+	unsigned const recordSize = layout.recordSize;
+	m_numGames = layout.gameCount;
 
 	mstl::string gameName(rootname + ".2cbg");
 	checkPermissions(gameName);
@@ -580,7 +617,7 @@ Codec::doOpen(	mstl::string const& rootname,
 	m_ecoValues.reserve(m_numGames);
 	for (unsigned k = 0; k < m_numGames; ++k)
 	{
-		unsigned char const* rec = cbh + (256u + k) * recordSize;
+		unsigned char const* rec = cbh + (size_t(k) + 1) * recordSize;
 		unsigned eco = (readLE16(rec + 0x80) >> 7) & 0x1ffu;
 		m_ecoValues.push_back(uint16_t(eco <= 500u ? eco : 0u));
 	}
@@ -594,7 +631,7 @@ Codec::doOpen(	mstl::string const& rootname,
 			m_annotationOffsets.reserve(m_numGames);
 			for (unsigned k = 0; k < m_numGames; ++k)
 			{
-				unsigned char const* rec = cbh + (256u + k) * recordSize;
+				unsigned char const* rec = cbh + (size_t(k) + 1) * recordSize;
 				m_annotationOffsets.push_back(uint32_t(readLE32(rec + 0x10)));
 			}
 		}
@@ -661,18 +698,20 @@ Codec::doOpen(	mstl::string const& rootname,
 										 | (uint32_t(lid[fo + 1]) << 8);
 					if (flen >= 80 || fo + 4 + flen != end - 20)
 						continue;
-					bool ascii = true;
+					bool printable = true;
 					for (uint32_t j = 0; j < llen; ++j)
 					{
 						unsigned char ch = lid[start + 8 + j];
-						if (!(32 <= ch && ch < 127))
-							ascii = false;
+						if (ch < 32)
+							printable = false;
 					}
-					if (ascii && llen > 0)
+					if (printable && llen > 0)
 					{
 						mstl::string last(reinterpret_cast<char const*>(&lid[start + 8]), llen);
 						mstl::string first(reinterpret_cast<char const*>(&lid[fo + 4]), flen);
 						mstl::string full = first.empty() ? last : (last + ", " + first);
+						if (!sys::utf8::validate(full))
+							textCodec.forceValidUtf8(full);
 						m_playerMap.container().push_back(
 							BaseMap::value_type(ordinal, base.insertPlayer(full, 0, (1 << 24) - 1)));
 					}
@@ -699,7 +738,7 @@ Codec::doOpen(	mstl::string const& rootname,
 			// ------------------------------------------------------------------
 			unsigned char const* lp = reinterpret_cast<unsigned char const*>(lidData.data());
 
-			if (lsize > 0xb8 + 0x108a)
+			if (lsize >= 0xb8 + 0x108a)
 			{
 				size_t const nslots = (lsize - 0xb8) / 0x108a;
 
@@ -775,7 +814,7 @@ Codec::doOpen(	mstl::string const& rootname,
 
 	for (unsigned k = 0; k < m_numGames; ++k)
 	{
-		unsigned char const* rec = cbh + (256u + k) * recordSize;
+		unsigned char const* rec = cbh + (size_t(k) + 1) * recordSize;
 		GameInfo& info = infoList.push_back();
 
 		info.m_gameOffset = unsigned(readLE32(rec + 0x08));
@@ -836,9 +875,17 @@ Codec::doOpen(	mstl::string const& rootname,
 		// record length: peek the .2cbg record header
 		m_gameStream.clear();
 		m_gameStream.seekg(info.m_gameOffset + 8, mstl::ios_base::beg);
-		unsigned char h[4];
-		if (m_gameStream.read(reinterpret_cast<char*>(h), 4))
+		unsigned char h[22];
+		if (m_gameStream.read(reinterpret_cast<char*>(h), sizeof(h)))
+		{
 			info.setGameRecordLength(readLE32(h));
+			if (readLE16(h + 16) == 2 && readLE16(h + 18) == Move16_None)
+			{
+				unsigned position = readLE16(h + 20);
+				if (position < 960)
+					info.m_positionId = position ? position : 960;
+			}
+		}
 	}
 
 	// restore namebase consistency: the lazy event/player insertions above
@@ -950,29 +997,25 @@ Codec::doDecoding(	db::Consumer& consumer,
 						GameInfo const& info,
 						unsigned gameIndex)
 {
+	GameRecord rec;
+	if (!readGameRecord(m_gameStream, info.gameOffset(), rec))
+		return save::DecodingFailed;
+	unsigned char const* moves = reinterpret_cast<unsigned char const*>(rec.data.data());
+	uint32_t moveSize = rec.size;
+	Board startBoard;
+	if (!prepareGame(rec.type, moves, moveSize, startBoard, tags))
+		return save::UnsupportedVariant;
+	applyEcoTag(tags, gameIndex);
 	if (!consumer.startGame(tags))
 		return save::UnsupportedVariant;
-
-	applyEcoTag(tags, gameIndex);
-
 	consumer.startMoveSection();
-
-	GameRecord rec;
-
-	if (!readGameRecord(m_gameStream, info.gameOffset(), rec) || rec.type != 1)
-	{
-		// unreadable record, or Chess960 (type 2) and other variants
-		// are not supported yet
-		return consumer.skipGame(tags);
-	}
 
 	mstl::vector<CbaItem> items;
 	bool annotationsOk = loadAnnotationItems(gameIndex, items);
 
 	unsigned plyCount = 0;
 
-	if (!walkGame(consumer, reinterpret_cast<unsigned char const*>(rec.data.data()),
-						rec.size, items, annotationsOk, plyCount))
+	if (!walkGame(consumer, moves, moveSize, items, annotationsOk, plyCount))
 		return consumer.skipGame(tags);
 
 	char buf[32];
@@ -992,17 +1035,21 @@ Codec::doDecoding(GameData& data, GameInfo& info, unsigned gameIndex, mstl::stri
 	GameRecord rec;
 
 	if ( !readGameRecord(m_gameStream, info.gameOffset(), rec)
-			|| rec.type != 1
 			|| rec.size == 0)
 	{
 		throw DecodingFailedException("2CBH: cannot decode game %u", gameIndex);
 	}
 
-	VarConsumer consumer(Board::standardBoard(variant::Normal));
-
 	TagSet tags;
 	info.setupTags(tags, variant::Normal);
 	applyEcoTag(tags, gameIndex);
+	unsigned char const* moves = reinterpret_cast<unsigned char const*>(rec.data.data());
+	uint32_t moveSize = rec.size;
+	Board startBoard;
+	if (!prepareGame(rec.type, moves, moveSize, startBoard, tags))
+		throw DecodingFailedException("2CBH: unsupported start position in game %u", gameIndex);
+	VarConsumer consumer(startBoard);
+
 
 	if (!consumer.startGame(tags))
 		throw DecodingFailedException("2CBH: cannot decode game %u", gameIndex);
@@ -1014,8 +1061,7 @@ Codec::doDecoding(GameData& data, GameInfo& info, unsigned gameIndex, mstl::stri
 
 	unsigned plyCount = 0;
 
-	if (!walkGame(consumer, reinterpret_cast<unsigned char const*>(rec.data.data()),
-					rec.size, items, annotationsOk, plyCount))
+	if (!walkGame(consumer, moves, moveSize, items, annotationsOk, plyCount))
 	{
 		throw DecodingFailedException("2CBH: cannot decode game %u", gameIndex);
 	}
@@ -1034,7 +1080,8 @@ Codec::doDecoding(GameData& data, GameInfo& info, unsigned gameIndex, mstl::stri
 	delete data.m_startNode->removeNext();
 	data.m_startNode->setNext(tree->removeNext());
 	delete tree;
-	data.m_startBoard = Board::standardBoard(variant::Normal);
+	data.m_startBoard = startBoard;
+	info.m_positionId = startBoard.computeIdn(variant::Normal);
 	data.m_tags = tags;
 	info.m_plyCount = mstl::min(GameInfo::MaxPlyCount, plyCount);
 }
@@ -1063,9 +1110,15 @@ Codec::getAttributes(	mstl::string const& filename,
 		return false;
 	strm.seekg(0, mstl::ios_base::end);
 	long size = strm.tellg();
-	numGames = int(size / long(192)) - 256;
-	if (numGames < 0)
+	strm.seekg(0, mstl::ios_base::beg);
+	unsigned char header[24];
+	IndexLayout layout;
+	if (size < 0 || !strm.read(reinterpret_cast<char*>(header), sizeof(header))
+			|| !readIndexLayout(header, sizeof(header), uint64_t(size), layout)
+			|| layout.gameCount > 0x7fffffffu)
 		return false;
+	numGames = int(layout.gameCount);
+	type = db::type::Unspecific;
 	if (description)
 	{
 		*description = "";

@@ -7,7 +7,7 @@
 // variations + comments/NAGs in document order, via db::PgnWriter.
 //
 // Limitations (see docs/formats/2CBH_FORMAT_DESIGN.md):
-//   - only standard-chess games (record type 1) are converted
+//   - standard chess (type 1) and Chess960 starts (type 2) are supported
 //
 // Usage: 2cbh2pgn <prefix> <out.pgn> [maxGames]
 // ======================================================================
@@ -16,6 +16,7 @@
 #include "2cbh_annotations.h"
 #include "cb2_codec.h"
 #include "cb2_elo.h"
+#include "cb2_index.h"
 
 #include <string>
 #include <vector>
@@ -181,15 +182,15 @@ void loadNames(unsigned char const* lid, size_t size,
          uint32_t flen = uint32_t(lid[fo]) | (uint32_t(lid[fo+1]) << 8);
          if (flen >= 80 || fo + 4 + flen != end - 20)
              continue;
-         // valid record: read the name if ASCII
-         bool ascii = true;
+         // Names are UTF-8; reject controls, not non-ASCII letters.
+         bool printable = true;
          for (uint32_t j = 0; j < llen; ++j)
          {
             unsigned char ch = lid[start + 8 + j];
-            if (!(32 <= ch && ch < 127))
-               ascii = false;
+            if (ch < 32)
+               printable = false;
          }
-         if (ascii && ordinal < out_names.size())
+         if (printable && ordinal < out_names.size())
          {
             std::string last(reinterpret_cast<char const*>(&lid[start + 8]), llen);
             std::string first(reinterpret_cast<char const*>(&lid[fo + 4]), flen);
@@ -264,15 +265,12 @@ int main(int argc, char* argv[])
 
    unsigned char const* cbh = (unsigned char const*)cbhData.c_str();
    unsigned char const* cbg = (unsigned char const*)cbgData.c_str();
-	if (cbhData.size() < 256u * 0x1a) {
-		::fprintf(stderr, "truncated 2CBH index\n"); return 1;
-	}
-
-   unsigned const recordSize = readLE16(cbh + 0x0a);
-	if (recordSize < 0xbe || cbhData.size() < 256u * recordSize) {
-		::fprintf(stderr, "invalid 2CBH record size\n"); return 1;
-	}
-   unsigned const gameCount = unsigned(cbhData.size() / recordSize) - 256u;
+   db::cb2::IndexLayout layout;
+   if (!db::cb2::readIndexLayout(cbh, cbhData.size(), cbhData.size(), layout)) {
+      ::fprintf(stderr, "invalid or truncated 2CBH index\n"); return 1;
+   }
+   unsigned const recordSize = layout.recordSize;
+   unsigned const gameCount = layout.gameCount;
    if (maxGames == 0 || maxGames > gameCount)
       maxGames = gameCount;
 
@@ -306,9 +304,11 @@ int main(int argc, char* argv[])
    // the index order; deleted games leave unreferenced records).
    for (unsigned k = 0; k < maxGames; ++k)
    {
-      unsigned long cbgOff = (unsigned long) readLE32(cbh + (256u + k) * recordSize + 0x08);
-      if (cbgOff + 0x1a > cbgData.size())
-         break;
+      unsigned long cbgOff = (unsigned long) readLE32(cbh + (size_t(k) + 1) * recordSize + 0x08);
+      if (cbgOff + 0x1a > cbgData.size()) {
+         ++failed;
+         continue;
+      }
       uint64_t magic = 0;
       for (int i = 7; i >= 0; --i)
          magic = (magic << 8) | cbg[cbgOff + i];
@@ -321,9 +321,9 @@ int main(int argc, char* argv[])
       uint16_t type = readLE16(cbg + cbgOff + 0x18);
       unsigned char const* data = cbg + cbgOff + 0x1a;
 
-      if (type != 1)
+      if (dataSize > cbgData.size() - cbgOff - 0x1a)
       {
-         ++skipped;
+         ++failed;
          continue;
       }
 
@@ -331,7 +331,7 @@ int main(int argc, char* argv[])
       // position; db::cb2::walkGameRaw places them, also inside RAVs.
       mstl::vector<db::cb2::CbaItem> items;
       bool annotationsOk = false;
-      unsigned long cbaOff = (unsigned long) readLE32(cbh + (256u + k) * recordSize + 0x10);
+      unsigned long cbaOff = (unsigned long) readLE32(cbh + (size_t(k) + 1) * recordSize + 0x10);
       if (haveCba && cbaOff != 0x7fffffffu && cbaOff + 0x1a < cbaData.size())
       {
          unsigned char const* arec = (unsigned char const*) cbaData.c_str() + cbaOff;
@@ -347,18 +347,18 @@ int main(int argc, char* argv[])
       if (annotationsOk)
          ++annotationGames;
 
-      unsigned long wid = readLE32(cbh + (256u + k) * recordSize + 0x18) & 0xffffffu;
-      unsigned long bid = readLE32(cbh + (256u + k) * recordSize + 0x20) & 0xffffffu;
+      unsigned long wid = readLE32(cbh + (size_t(k) + 1) * recordSize + 0x18) & 0xffffffu;
+      unsigned long bid = readLE32(cbh + (size_t(k) + 1) * recordSize + 0x20) & 0xffffffu;
       // event id: 3 bytes LE @0x28 = .2lid slot ordinal (see loadEvents)
-      unsigned long eid = readLE32(cbh + (256u + k) * recordSize + 0x28) & 0xffffffu;
+      unsigned long eid = readLE32(cbh + (size_t(k) + 1) * recordSize + 0x28) & 0xffffffu;
       // round/subround: u8 @0x5a, u8 @0x5c ('7.5' style; validated on 352
       // date-verified games against the source PGN, scid-code GLM pass)
-      unsigned roundNo = cbh[(256u + k) * recordSize + 0x5a];
-      unsigned subRound = cbh[(256u + k) * recordSize + 0x5c];
+      unsigned roundNo = cbh[(size_t(k) + 1) * recordSize + 0x5a];
+      unsigned subRound = cbh[(size_t(k) + 1) * recordSize + 0x5c];
       // date: 3 bytes at @0xBC packed as day(5) | month(4) << 5 | year(12) << 9
-      unsigned p24 = cbh[(256u + k) * recordSize + 0xBC]
-                   | (cbh[(256u + k) * recordSize + 0xBD] << 8)
-                   | (cbh[(256u + k) * recordSize + 0xBE] << 16);
+      unsigned p24 = cbh[(size_t(k) + 1) * recordSize + 0xBC]
+                   | (cbh[(size_t(k) + 1) * recordSize + 0xBD] << 8)
+                   | (cbh[(size_t(k) + 1) * recordSize + 0xBE] << 16);
       unsigned dday = p24 & 0x1f;
       unsigned dmon = (p24 >> 5) & 0xf;
       unsigned dyear = (p24 >> 9) & 0xfff;
@@ -376,7 +376,7 @@ int main(int argc, char* argv[])
                         ? names[bid]
                         : ("Player " + std::to_string(bid));
       // result: byte 0x58 low 2 bits (0 = 0-1, 1 = 1/2-1/2, 2 = 1-0)
-      unsigned char f58 = cbh[(256u + k) * recordSize + 0x58];
+      unsigned char f58 = cbh[(size_t(k) + 1) * recordSize + 0x58];
       char const* resultStr = "*";
       switch (f58 & 3)
       {
@@ -391,7 +391,7 @@ int main(int argc, char* argv[])
       // 2.3).  ChessBase's sub-letter suffix is not stored in the index.
       char ecoBuf[8] = "";
       {
-         unsigned eco16 = readLE16(cbh + (256u + k) * recordSize + 0x80);
+         unsigned eco16 = readLE16(cbh + (size_t(k) + 1) * recordSize + 0x80);
          if (eco16 >= 128u && eco16 <= 64000u && (eco16 & 127u) == 0u)
          {
             unsigned base = (eco16 >> 7) - 1u;
@@ -401,7 +401,7 @@ int main(int argc, char* argv[])
       }
       // Elo: plain u16 LE, White @0x60, Black @0x70 -- offsets, evidence
       // and empirical validation: cb2_elo.h (shared with cb2::Codec).
-      unsigned char const* eloRec = cbh + (256u + k) * recordSize;
+      unsigned char const* eloRec = cbh + (size_t(k) + 1) * recordSize;
       unsigned whiteElo = db::cb2::readIndexElo(eloRec, db::color::White);
       unsigned blackElo = db::cb2::readIndexElo(eloRec, db::color::Black);
 
@@ -434,11 +434,18 @@ int main(int argc, char* argv[])
       if (db::rating::isValid(blackElo))
          tags.set(db::tag::BlackElo, blackElo);
 
+      db::Board startBoard;
+      if (!db::cb2::prepareGame(type, data, dataSize, startBoard, tags))
+      {
+         ++failed;
+         continue;
+      }
+
       // First pass: validate the walk so a desync cannot produce a
       // truncated PGN game (the old flat converter skipped these too).
       unsigned plyCount = 0;
       {
-         db::VarConsumer validator(db::Board::standardBoard(db::variant::Normal));
+         db::VarConsumer validator(startBoard);
          if (   !validator.startGame(tags)
              || !db::cb2::walkGameRaw( validator, data, dataSize,
                                        items, annotationsOk, plyCount))
