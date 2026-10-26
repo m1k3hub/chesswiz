@@ -425,6 +425,8 @@ proc ValueChanged {value attr} {
 proc ConfigureUpdateButton {} {
 	variable Priv
 
+	# a late option trace can fire after the dialog was closed and Priv reset
+	if {![info exists Priv(games)] || ![winfo exists .mergeDialog]} { return }
 	set mergeState [GetMergeState]
 	if {$mergeState ne $Priv(state)} { set state normal } else { set state disabled }
 	$Priv(update) configure -state $state
@@ -499,6 +501,8 @@ proc Save {dlg mode} {
 proc DoMerge {} {
 	variable Priv
 
+	# the table's <Configure> can still fire while the dialog is torn down
+	if {![info exists Priv(games)]} { return }
 	set mergeState [GetMergeState]
 
 	if {$Priv(state) ne $mergeState} {
