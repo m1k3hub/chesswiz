@@ -825,7 +825,8 @@ scanGameData(	mstl::string const& index,
 bool
 writeDatabaseInt(	mstl::string const& rootname,
 							mstl::vector<WriteGame> const& games,
-							mstl::string* error)
+							mstl::string* error,
+							bool keepDescription)
 {
 	mstl::vector<Encoded> encoded(games.size());
 	NameList players, events;
@@ -1061,11 +1062,18 @@ writeDatabaseInt(	mstl::string const& rootname,
 										 + AnnotationExtraSize + 8));
 	}
 
+	// Appending to a database that already carries a description keeps it
+	// (CBase26 stores its display name and window layout there).
+	mstl::string description;
+	bool const haveDescription =
+		keepDescription && readFile(rootname + ".ini", description);
+
 	if (!writeFile(rootname + ".2cbg", cbg)
 		 || !writeFile(rootname + ".2cba", cba)
 		 || !writeFile(rootname + ".2lid", lid)
 		 || !writeFile(rootname + ".2cbh", index)
-		 || !writeFile(rootname + ".ini", databaseIni(rootname)))
+		 || (!haveDescription
+			 && !writeFile(rootname + ".ini", databaseIni(rootname))))
 	{
 		if (error) *error = "cannot write database files";
 		return false;
@@ -1127,7 +1135,7 @@ writeDatabase(	mstl::string const& rootname,
 		return false;
 	}
 
-	return writeDatabaseInt(rootname, games, error);
+	return writeDatabaseInt(rootname, games, error, false);
 }
 
 
@@ -1263,7 +1271,7 @@ appendToDatabase(	mstl::string const& rootname,
 	for (unsigned i = 0; i < games.size(); ++i)
 		all.push_back(games[i]);
 
-	return writeDatabaseInt(rootname, all, error);
+	return writeDatabaseInt(rootname, all, error, true);
 }
 
 } // namespace cb2
