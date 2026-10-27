@@ -462,8 +462,23 @@ the CBM capability table (CBM_FORMAT_DESIGN.md §7.7).
 ### Overview
 
 The ChessBase 17+ `.2cbg` move encoding (used by Mega Database 2026,
-Corr Database 2024 and LumbrasGigaBase) is fully reverse engineered and
-decoded in scidb.  Full `cb2::Codec` integration is the next step.
+Corr Database 2024 and LumbrasGigaBase) is fully reverse engineered.
+Chesswiz reads 2CBH databases through `cb2::Codec`, and writes and appends
+them (`cb2::writeDatabase`/`appendToDatabase`) so that ChessBase 26 opens and
+re-opens the result without its integrity check.
+
+### Status 2026-10-27 (runs 6-9)
+- Read: all index records (one header record at every size; Lumbras
+  863,793/863,793), ECO sub-code, EventDate, Source, annotator (a player
+  reference), White/Black team, Elo (exact on 1156/1156), set-up and compact
+  Chess960 games (start-position block decoded: side to move and four
+  castling bits, no variant flag).
+- Write/append: the `<name>.ini` ChessBase needs (without it ChessBase does
+  not recognise the folder as a database), the `.2lid`/`.2cba` bookkeeping,
+  teams and set-up/Chess960 games, keeping an existing `.ini` on append.
+- `make -C tests 2cbh`: 3980 checks.
+- Open (no data available to decide): medals, game titles, the `+0x93c`
+  namebase; see `2CBH_FORMAT_DESIGN.md` §19.
 
 ### Details
 - The move data is plaintext 16-bit "Move16" codes (not encrypted)

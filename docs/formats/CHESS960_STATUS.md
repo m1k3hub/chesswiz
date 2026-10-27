@@ -1734,3 +1734,17 @@ codec checks).
 - `/tmp/trace_cbase26.gdb`, `/tmp/trace_hits.log` — live-trace script/capture.
 - `/tmp/ghidra_cb26/CB26` — re-imported Ghidra project;
   `/tmp/ghidra_cb26/decompile_gate.log` — gate-region decompiles.
+
+---
+
+## 2CBH (ChessBase 17+) Chess960 — 2026-10-27
+
+The classic-CBH notes above do not apply to 2CBH. There, a Chess960 game is
+stored like any other set-up game. The six-byte setup block is
+`[u16 1][u8 side to move][u8 castling bits W-a, W-h, B-a, B-h][u16 0]`; there
+is **no Chess960 variant flag**. Compact games carry a Scharnagl position
+(0-959) instead (`0xfffb, position`). Castling rights now come from the
+setup byte rather than from trial replay, and a Chess960 castling rook off the
+a/h files resolves correctly. This was proven with one-right FEN probes that
+ChessBase 26 wrote itself (run 9). Chesswiz also writes these games, and
+ChessBase replays them. See `2CBH_FORMAT_DESIGN.md` §16-§17 (`cb2_setup.h`).

@@ -1233,6 +1233,10 @@ of the file (after a small B-tree header).
 
 ## 7. What scidb CAN do now (index-only support)
 
+*Historical (2026-08), before move decoding: Chesswiz now reads games,
+names, annotations, setups and teams, and writes and appends databases that
+ChessBase 26 accepts — see the status at the top, §16-§18 and §19.*
+
 Even without decoding game data, scidb could:
 
 1. **Open 2CBH databases** and list games in the game list (player names,
@@ -1257,6 +1261,9 @@ work that is actually open now.*
 | Read result code | Stored in the index flags (`0x58`) and/or game data sub-field — needs correlation against a result-labelled ground truth (the PGN edition's game order differs from the index order). |
 
 ## 9. Path forward
+
+*Historical (2026-08): items 1-6 are all done (§3.8, §14-§18); open work is
+in §19.*
 
 1. **DONE (2026-08-27):** Move16 decode table dumped, packed and embedded
    (`src/db/2cbh/`); `.2cbg` mainline decode implemented and validated.
@@ -1987,7 +1994,7 @@ every namebase reference against the counts found in the slot array), the
 `.2cbg`/`.2cba` file lengths and per-record length trailers, the record types,
 the `.2lid` capacities, counts and free-chunk table, and the `.ini` header.
 
-## 19. Open items (2026-10-26, run 8)
+## 19. Open items (2026-10-27, run 9)
 
 What §16-§18 do **not** cover, i.e. the real remaining work.  Everything else
 in §8/§9 is historical and settled by now.

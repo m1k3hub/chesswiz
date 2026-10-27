@@ -15,7 +15,7 @@ conceptual only (what each file is *for*). All byte-level layouts come from
 
 - **Fully documented (unofficial):** CBH, CBG, CBA, CBP, CBT, CBC, CBS, CBE, CBJ, CBV.
 - **Partially documented:** CTG (leaked spec), CBM (Scidb's own RE).
-- **Undocumented:** 2CBH (encrypted moves), CBONE, CBCloud, CBZ, and all
+- **Undocumented by ChessBase:** 2CBH (reverse engineered by Chesswiz: plaintext Move16 moves, read and write — `2CBH_FORMAT_DESIGN.md`), CBONE, CBCloud, CBZ, and all
   search-booster / theme-key files.
 
 ---
@@ -84,7 +84,7 @@ list, version history, and links to the above sources.
 
 | Format | Status |
 |--------|--------|
-| **2CBH / 2CBG** (ChessBase 17+) | No spec. Official help describes it conceptually only. Scidb has partial RE (`2CBH_FORMAT_DESIGN.md`): index decoded, move data **genuinely encrypted** (nonce-keyed). |
+| **2CBH / 2CBG** (ChessBase 17+) | No spec. Official help describes it conceptually only. Chesswiz RE (`2CBH_FORMAT_DESIGN.md`): moves are **plaintext** Move16 codes (the earlier "encrypted" reading was wrong); index, namebases, annotations, setups/Chess960 and teams decoded; Chesswiz writes and appends databases that ChessBase 26 re-opens. |
 | **CBONE** (single-file DB, CB 16+) | No spec anywhere. |
 | **CBCloud** (4-file cloud DB) | No spec. |
 | **CBZ** (encrypted archive) | No spec — password-protected by design. |
