@@ -10,8 +10,9 @@
 //                     [u32 packed event date]
 //   +0x860  source    [u32 total][u32 tLen][sourceTitle][u32 len][source]
 //   +0x93c  annotator [u32 total][u32 tLen][title][u32 len][annotator]
-//   +0xd3c  team      (not decoded)
-//   +0xe76  game title(not decoded)
+//   +0xd3c  team      [u32 total][u32 nameLen][name][u16 zero][u16 year]
+//   +0xe76  game title(not decoded; slot 0 holds CBase26's usage byte 0x04,
+//                     which is what every game's index +0x50 = 0 refers to)
 //
 // The six record capacities in the file's 0xb8-byte header
 // (1024/1120/220/1024/314/532 = 0x108a bytes) are the sizes of exactly these
@@ -60,6 +61,10 @@ static const size_t namebaseEventOffset = 0x400;
 static const size_t namebaseSourceOffset = 0x860;
 /// Offset of the annotator record inside a slot (same record grammar).
 static const size_t namebaseAnnotatorOffset = 0x93c;
+/// Offset of the team record inside a slot (White/Black team of a game).
+static const size_t namebaseTeamOffset = 0xd3c;
+/// Offset of the game-title record inside a slot.
+static const size_t namebaseGameTitleOffset = 0xe76;
 
 /// Number of slots whose first byte lies inside a .2lid of @a size bytes.
 /// The file is written sparsely: only the records that were allocated are
@@ -143,6 +148,71 @@ readSlotName(	unsigned char const* lid,
 	result.titleLength = titleLen;
 	result.name = name;
 	result.nameLength = nameLen;
+	return true;
+}
+
+/// A view of one .2lid team record.  All pointers point into the caller's
+/// buffer; no ownership is transferred.
+///
+/// The record grammar (2026-10-27, run 9, from a database CBase26 wrote for a
+/// PGN whose games carried [WhiteTeam]/[BlackTeam]; slots 0 and 1 hold
+/// "Team White A" and "Team Black B" and index +0x40/+0x48 of those games are
+/// 0 and 1):
+///
+///   u32 total         // 9 + nameLen in the probe
+///   u32 nameLen
+///   char name[nameLen]
+///   u16 zero          // terminator/padding, the first byte counted in `total`
+///   u16 year          // 2026 in the probe, i.e. the game's year (the Teams
+///                     // list of CBase26 has a Year column)
+///
+/// followed by zeros to the end of the 314-byte section.
+struct TeamSlot
+{
+	char const*	name;
+	unsigned		nameLength;
+	unsigned		year;
+};
+
+/// Read the team record of @a slot from a .2lid buffer.  Returns false for an
+/// out-of-range slot, an unallocated slot (all zero) or a record whose text is
+/// not printable.
+inline bool
+readTeamSlot(	unsigned char const* lid,
+					size_t size,
+					unsigned slot,
+					TeamSlot& result)
+{
+	if (lid == 0)
+		return false;
+
+	size_t const a = namebaseFirstSlot + size_t(slot) * namebaseStride
+					  + namebaseTeamOffset;
+
+	if (a + 12 > size)
+		return false;
+
+	uint32_t const nameLen = uint32_t(lid[a + 4])
+								 | (uint32_t(lid[a + 5]) << 8)
+								 | (uint32_t(lid[a + 6]) << 16)
+								 | (uint32_t(lid[a + 7]) << 24);
+
+	if (nameLen == 0 || nameLen > 160 || a + 12 + nameLen > size)
+		return false;
+
+	char const* const name = reinterpret_cast<char const*>(lid + a + 8);
+
+	for (uint32_t j = 0; j < nameLen; ++j)
+		if (static_cast<unsigned char>(name[j]) < 32)
+			return false;
+
+	size_t const y = a + 10 + nameLen;
+
+	result.name = name;
+	result.nameLength = nameLen;
+	result.year = (y + 2 <= size)
+					  ? unsigned(lid[y]) | (unsigned(lid[y + 1]) << 8)
+					  : 0;
 	return true;
 }
 

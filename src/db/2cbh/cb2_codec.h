@@ -114,6 +114,7 @@ private:
 
 	void applyEcoTag(TagSet& tags, unsigned gameIndex);
 	void applySourceTag(TagSet& tags, unsigned gameIndex);
+	void applyTeamTags(TagSet& tags, unsigned gameIndex);
 	bool loadAnnotationItems(unsigned gameIndex, mstl::vector<CbaItem>& items);
 
 	typedef mstl::map<uint32_t, NamebaseEntry*> BaseMap;
@@ -132,6 +133,11 @@ private:
 	mstl::vector<mstl::string>	m_sourceTitle;
 	mstl::vector<mstl::string>	m_sourceName;
 	mstl::vector<uint64_t>	m_sourceIds;			// source id, index @0x38 per game
+	// .2lid team section (+0xd3c): the team name of each slot ordinal, and the
+	// White/Black team ids the index keeps at +0x40/+0x48 (~0 = none).
+	mstl::vector<mstl::string>	m_teamName;
+	mstl::vector<uint64_t>	m_whiteTeam;
+	mstl::vector<uint64_t>	m_blackTeam;
 };
 
 } // namespace cb2

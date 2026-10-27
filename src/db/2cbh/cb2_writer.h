@@ -69,6 +69,11 @@ struct WriteGame
 	/// "none".
 	mstl::string	sourceTitle;
 	mstl::string	source;
+	/// White/Black team.  ChessBase keeps them in a namebase of its own
+	/// (.2lid +0xd3c), referenced from index +0x40/+0x48; CBase26 fills them
+	/// from the [WhiteTeam]/[BlackTeam] PGN tags.  Empty = no team.
+	mstl::string	whiteTeam;
+	mstl::string	blackTeam;
 	/// The annotator.  ChessBase models the annotator as a person, so it is
 	/// stored as a *player* record of the .2lid and referenced from index
 	/// +0x30 (see cb2::Codec::getAnnotator).  Empty = no annotator.
@@ -77,8 +82,9 @@ struct WriteGame
 	unsigned			medals;
 
 	/// -1 = standard start position.  0..959 = compact Chess960 position.
-	/// 1000 = arbitrary setup, described by @a fen (the two-word setup header
-	/// is written as zeros: White to move, no castling, no en-passant).
+	/// 1000 = arbitrary setup, described by @a fen.  The six-byte start
+	/// block CBase26 writes is emitted (see cb2_setup.h): side to move and
+	/// castling rights are taken from the FEN.
 	/// -2 = @a moves is the complete .2cbg payload, including any setup prefix
 	/// (used to copy a stored record verbatim, e.g. when appending).
 	int			setup;

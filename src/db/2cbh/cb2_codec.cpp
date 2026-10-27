@@ -21,6 +21,7 @@
 #include "cb2_flags.h"
 #include "cb2_index.h"
 #include "cb2_namebase.h"
+#include "cb2_setup.h"
 #include "2cbh_move16.h"
 #include "2cbh_annotations.h"
 
@@ -186,30 +187,8 @@ buildSetupBoard(uint16_t const* words, uint32_t count, uint32_t first,
    if (i >= count)
       return false;
 
-   for (unsigned ci = 0; ci < 2; ++ci)
-   {
-      color::ID const c = ci == 0 ? db::color::White : db::color::Black;
-      unsigned const base = (c == db::color::White ? 0 : 56);
-      unsigned king = 64;
-      for (unsigned sq = base; sq < base + 8; ++sq)
-      {
-         if (b.pieceAt(sq) == piece::piece(piece::King, c))
-            king = sq;
-      }
-      if (king == 64)
-         continue;   // castling is impossible without a king on its home rank
-      for (unsigned sq = base; sq < base + 8; ++sq)
-      {
-         if (b.pieceAt(sq) == piece::piece(piece::Rook, c))
-         {
-            if (sq > king)
-               b.setCastleShort(c, sq);
-            else
-               b.setCastleLong(c, sq);
-         }
-      }
-   }
-
+   // Castling rights are NOT derived from the placement: the setup block's
+   // castling byte states them (see cb2_setup.h), and the caller applies it.
    b.setToMove(toMove);
    b.setPlyNumber(1);
    b.setMoveNumber(1);
@@ -499,54 +478,83 @@ prepareGame(uint16_t type, unsigned char const*& data, uint32_t& size,
         prefix = 2;                             // 0xfffb, 1000
     }
 
-    // Arbitrary setup: the 4-byte header that CBase26's own reader skips
-    // (0x1401590d0) is followed directly by the square codes.  The block
-    // layout in files written by CBase26's position writer (0x1401e8310) is
-    // two bytes longer (a u16 field before the side-to-move byte), so accept
-    // both widths, and also both sides to move, taking the interpretation
-    // that makes the stored mainline replay legally.
-    for (unsigned headerWords = 2; headerWords <= 4; headerWords += 1)
+    // Arbitrary setup: a six-byte block written by CBase26's position writer
+    // (0x1401e8310) -- [u16 1][u8 side to move][u8 castling bits][u16 0] --
+    // followed by one placement code per occupied square.  The block layout,
+    // the castling bit assignment and the absence of a Chess960 flag are
+    // decoded from probe databases CBase26 wrote itself (cb2_setup.h).  A
+    // four-byte block (leading word, side, castling; no trailing zero) is
+    // accepted too, because that is what the reader at 0x1401590d0 skips.
     {
-        if (prefix + headerWords >= count)
-            break;
+        SetupHeader header;
 
-        // CBase26's writer stores the side to move in the byte after the
-        // leading u16 of a three-word header; prefer it, then the other side.
-        color::ID first = db::color::White;
-        if (headerWords >= 3)
+        if (!readSetupHeader(words + prefix, count - prefix, header))
+            return false;
+
+        color::ID const toMove = header.side == 1 ? db::color::Black
+                                                  : db::color::White;
+        // CBase26 stores no variant flag: a Chess960 position is recognised by
+        // its placement (king off the e-file, castling rooks off the a/h
+        // files), and the Shredder FEN with the rook squares carries that
+        // downstream.  The board itself is built in the normal variant.
+        variant::Type const variant = variant::Normal;
+        Board candidate;
+        uint32_t next = 0;
+
+        if (!buildSetupBoard(words, count, prefix + header.words, toMove,
+                             variant, candidate, next))
+            return false;
+        if (next >= count || words[next] != Move16_GameStart)
+            return false;
+
+        // Castling rights come from the stored castling byte, not from the
+        // placement: a king and a rook on the home rank are not proof that
+        // ChessBase granted the right (a game may start mid-tournament with
+        // rights already lost).  They must be in place before the mainline is
+        // checked, because a castling move is only legal with the right.
+        candidate.removeCastlingRights();
+        for (unsigned ci = 0; ci < 2; ++ci)
         {
-            unsigned char const* p =
-                reinterpret_cast<unsigned char const*>(words + prefix + 1);
-            if (p[0] == 1)
-                first = db::color::Black;
+            color::ID const c = ci == 0 ? db::color::White : db::color::Black;
+            unsigned const base = c == db::color::White ? 0 : 56;
+            unsigned const longBit = c == db::color::White
+                                     ? SetupCastleWhiteLong : SetupCastleBlackLong;
+            unsigned const shortBit = c == db::color::White
+                                      ? SetupCastleWhiteShort : SetupCastleBlackShort;
+
+            Square const king = candidate.kingSquare(c);
+
+            if (king >= 64)
+                continue;   // no king on its home rank: castling is impossible
+
+            if (header.castling & longBit)
+            {
+                for (unsigned sq = base; sq < base + 8; ++sq)
+                    if (sq < king
+                        && candidate.pieceAt(sq) == piece::piece(piece::Rook, c))
+                        candidate.setCastleLong(c, sq);
+            }
+            if (header.castling & shortBit)
+            {
+                for (unsigned sq = base; sq < base + 8; ++sq)
+                    if (sq > king
+                        && candidate.pieceAt(sq) == piece::piece(piece::Rook, c))
+                        candidate.setCastleShort(c, sq);
+            }
         }
 
-        for (unsigned k = 0; k < 2; ++k)
-        {
-            color::ID const toMove = k == 0 ? first
-                                    : (first == db::color::White ? db::color::Black
-                                                                 : db::color::White);
-            Board candidate;
-            uint32_t next = 0;
+        if (!replayMainline(candidate, words + next + 1, count - next - 1,
+                            variant))
+            return false;
 
-            if (!buildSetupBoard(words, count, prefix + headerWords, toMove,
-                                 variant::Normal, candidate, next))
-                continue;
-            if (next >= count || words[next] != Move16_GameStart)
-                continue;
-            if (!replayMainline(candidate, words + next + 1, count - next - 1,
-                                variant::Normal))
-                continue;
-
-            board = candidate;
-            unsigned const skip = 2u * next;
-            data += skip;
-            size -= skip;
-            tags.set(tag::SetUp, "1");
-            tags.set(tag::Fen, board.toFen(variant::Normal, Board::Shredder));
-            return size >= 4 && (size & 1u) == 0
-                    && readLE16(data) == Move16_GameStart;
-        }
+        board = candidate;
+        unsigned const skip = 2u * next;
+        data += skip;
+        size -= skip;
+        tags.set(tag::SetUp, "1");
+        tags.set(tag::Fen, board.toFen(variant::Normal, Board::Shredder));
+        return size >= 4 && (size & 1u) == 0
+                && readLE16(data) == Move16_GameStart;
     }
 
     return false;
@@ -908,6 +916,29 @@ Codec::doOpen(	mstl::string const& rootname,
 						}
 					}
 
+					// The team section of the same slot (+0xd3c): one name record
+					// per team, [u32 total][u32 len][name][u16 0][u16 year].  The
+					// game's White/Black team are the slot ordinals at index
+					// +0x40/+0x48 (run 9: two [WhiteTeam]/[BlackTeam] PGN games
+					// stored by CBase26 gave ids 0 and 1 and exactly these two
+					// records).  See cb2_namebase.h.
+					{
+						TeamSlot team;
+
+						if (readTeamSlot(lp, lsize, unsigned(slot), team))
+						{
+							mstl::string name(team.name, team.nameLength);
+
+							if (!sys::utf8::validate(name))
+								textCodec.forceValidUtf8(name);
+
+							while (m_teamName.size() <= slot)
+								m_teamName.push_back(mstl::string());
+
+							m_teamName[slot] = name;
+						}
+					}
+
 					size_t a = 0xb8 + slot * 0x108a + 0x400;
 					if (a + 8 > lsize)
 						break;
@@ -1015,6 +1046,10 @@ Codec::doOpen(	mstl::string const& rootname,
 		// field order (white, black, tournament, annotator, source).
 		info.m_annotator = getAnnotator(readLE64(rec + 0x30));
 		m_sourceIds.push_back(readLE64(rec + 0x38));
+		// White/Black team: namebase ids of the .2lid team section (+0xd3c);
+		// `~0` = no team (what every genuine fixture record carries).
+		m_whiteTeam.push_back(readLE64(rec + 0x40));
+		m_blackTeam.push_back(readLE64(rec + 0x48));
 
 		// Medals / game flags: the u16 word @+0x82, in the slot classic CBH
 		// uses for the same word (right after the ECO key).  See
@@ -1234,6 +1269,36 @@ Codec::applySourceTag(TagSet& tags, unsigned gameIndex)
 }
 
 
+void
+Codec::applyTeamTags(TagSet& tags, unsigned gameIndex)
+{
+	// White/Black team: the .2lid team section (+0xd3c) selected by the u64
+	// ids the index keeps at +0x40/+0x48.  Scidb has tags for both, so the
+	// names are exposed; the game title (+0x50, .2lid +0xe76) has no tag in
+	// this codebase and is left unread.
+	struct
+	{
+		mstl::vector<uint64_t> const&	ids;
+		tag::ID								tag;
+	} const fields[] =
+	{
+		{ m_whiteTeam, tag::WhiteTeam },
+		{ m_blackTeam, tag::BlackTeam },
+	};
+
+	for (unsigned f = 0; f < 2; ++f)
+	{
+		if (gameIndex >= fields[f].ids.size())
+			continue;
+
+		uint64_t const id = fields[f].ids[gameIndex];
+
+		if (id < m_teamName.size() && !m_teamName[unsigned(id)].empty())
+			tags.set(fields[f].tag, m_teamName[unsigned(id)]);
+	}
+}
+
+
 bool
 Codec::loadAnnotationItems(unsigned gameIndex, mstl::vector<CbaItem>& items)
 {
@@ -1285,6 +1350,7 @@ Codec::doDecoding(	db::Consumer& consumer,
 		return save::UnsupportedVariant;
 	applyEcoTag(tags, gameIndex);
 	applySourceTag(tags, gameIndex);
+	applyTeamTags(tags, gameIndex);
 	if (!consumer.startGame(tags))
 		return save::UnsupportedVariant;
 	consumer.startMoveSection();
@@ -1323,13 +1389,13 @@ Codec::doDecoding(GameData& data, GameInfo& info, unsigned gameIndex, mstl::stri
 	info.setupTags(tags, variant::Normal);
 	applyEcoTag(tags, gameIndex);
 	applySourceTag(tags, gameIndex);
+	applyTeamTags(tags, gameIndex);
 	unsigned char const* moves = reinterpret_cast<unsigned char const*>(rec.data.data());
 	uint32_t moveSize = rec.size;
 	Board startBoard;
 	if (!prepareGame(rec.type, moves, moveSize, startBoard, tags))
 		throw DecodingFailedException("2CBH: unsupported start position in game %u", gameIndex);
 	VarConsumer consumer(startBoard);
-
 
 	if (!consumer.startGame(tags))
 		throw DecodingFailedException("2CBH: cannot decode game %u", gameIndex);

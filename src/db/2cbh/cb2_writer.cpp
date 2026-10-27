@@ -14,6 +14,7 @@
 #include "cb2_codec.h"
 #include "cb2_flags.h"
 #include "cb2_namebase.h"
+#include "cb2_setup.h"
 #include "2cbh_move16.h"
 
 #include "db_board.h"
@@ -41,6 +42,7 @@ unsigned const NamebaseBase = namebaseFirstSlot;
 unsigned const NamebaseStride = namebaseStride;
 unsigned const NamebaseEventOffset = namebaseEventOffset;
 unsigned const NamebaseSourceOffset = namebaseSourceOffset;
+unsigned const NamebaseTeamOffset = namebaseTeamOffset;
 // The six record capacities of a slot; they sum to NamebaseStride.
 unsigned const SectionSize[6] = { 1024, 1120, 220, 1024, 314, 532 };
 // Offset of the sixth section's record inside a slot (1024 + 1120 + 220 +
@@ -371,8 +373,11 @@ struct Encoded
 	mstl::string	payload;			///< .2cbg record payload (type in `type`)
 	uint16_t			type;
 	mstl::string	white, black, event, site, annotator, source, sourceTitle;
+	mstl::string	whiteTeam, blackTeam;
 	unsigned			annotatorId;		///< player id of the annotator, ~0 = none
 	unsigned			sourceId;			///< source section id, ~0 = none
+	unsigned			whiteTeamId;		///< team section id, ~0 = none
+	unsigned			blackTeamId;		///< team section id, ~0 = none
 	mstl::string	round, result, eco;
 	unsigned			whiteElo, blackElo;
 	uint32_t			date;
@@ -427,10 +432,25 @@ encodePayload(WriteGame const& game, Encoded& out)
 
 		appendLE16(out.payload, Move16_None);
 		appendLE16(out.payload, 1000);
-		appendLE16(out.payload, Move16_GameStart);
-		// two-word setup header: side-to-move flags (0 = White) and castling
-		// rights (0 = none), exactly the layout the reader skips.
-		appendLE16(out.payload, 0);
+		// Six-byte start-position block, exactly the shape CBase26 writes
+		// (cb2_setup.h): [u16 1][u8 side to move][u8 castling bits][u16 0].
+		{
+			unsigned char block[SetupBlockBytes];
+			unsigned castling = 0;
+
+			if (board.canCastleShort(db::color::White))
+				castling |= SetupCastleWhiteShort;
+			if (board.canCastleLong(db::color::White))
+				castling |= SetupCastleWhiteLong;
+			if (board.canCastleShort(db::color::Black))
+				castling |= SetupCastleBlackShort;
+			if (board.canCastleLong(db::color::Black))
+				castling |= SetupCastleBlackLong;
+
+			writeSetupHeader(block, board.blackToMove() ? 1 : 0, castling);
+			for (unsigned k = 0; k < SetupBlockBytes; ++k)
+				out.payload += char(block[k]);
+		}
 
 		for (unsigned sq16 = 0; sq16 < 64; ++sq16)
 		{
@@ -477,7 +497,9 @@ buildIndexRecord(	unsigned char* rec,
 							uint32_t blackId,
 							uint32_t eventId,
 							uint32_t annotatorId,
-							uint32_t sourceId)
+							uint32_t sourceId,
+							uint32_t whiteTeamId,
+							uint32_t blackTeamId)
 {
 	::memset(rec, 0, RecordSize);
 
@@ -498,8 +520,12 @@ buildIndexRecord(	unsigned char* rec,
 	// namebases, and the classic CBH record keeps the same order.
 	storeLE64(rec + 0x30, annotatorId == unsigned(-1) ? ~uint64_t(0) : uint64_t(annotatorId));
 	storeLE64(rec + 0x38, sourceId == unsigned(-1) ? ~uint64_t(0) : uint64_t(sourceId));
-	storeLE64(rec + 0x40, ~uint64_t(0));			// WhiteTeam
-	storeLE64(rec + 0x48, ~uint64_t(0));			// BlackTeam
+	// Team references: ids of the .2lid team section (+0xd3c), exactly what
+	// CBase26 stores for a game whose PGN carried [WhiteTeam]/[BlackTeam]
+	// (run 9; see cb2_namebase.h).  The game title (+0x50) has no scidb tag
+	// and is stored as "none", which is what every genuine record carries.
+	storeLE64(rec + 0x40, whiteTeamId == unsigned(-1) ? ~uint64_t(0) : uint64_t(whiteTeamId));
+	storeLE64(rec + 0x48, blackTeamId == unsigned(-1) ? ~uint64_t(0) : uint64_t(blackTeamId));
 	storeLE64(rec + 0x50, ~uint64_t(0));			// game title
 
 	rec[0x58] = uint8_t(resultCode(game.result) & 3);
@@ -591,6 +617,24 @@ storeNameRecord(unsigned char* q, mstl::string const& first, mstl::string const&
 	::memcpy(r + 4, second.data(), second.size());
 }
 
+/// Write a team record into @a q (slot + 0xd3c).  The grammar is the one
+/// CBase26 wrote for a PGN with [WhiteTeam]/[BlackTeam] (run 9, see
+/// cb2_namebase.h readTeamSlot()):
+///
+///   [u32 total = 9 + nameLen][u32 nameLen][name][u16 0][u16 year]
+void
+storeTeamRecord(unsigned char* q, mstl::string const& team, unsigned year)
+{
+	if (team.empty())
+		return;
+
+	storeLE32(q + 0, uint32_t(9 + team.size()));
+	storeLE32(q + 4, uint32_t(team.size()));
+	::memcpy(q + 8, team.data(), team.size());
+	storeLE16(q + 8 + team.size(), 0);
+	storeLE16(q + 10 + team.size(), uint16_t(year));
+}
+
 void
 buildSlot(	unsigned char* slot,
 				mstl::string const& player,
@@ -599,6 +643,8 @@ buildSlot(	unsigned char* slot,
 				uint32_t eventDate,
 				mstl::string const& sourceTitle,
 				mstl::string const& source,
+				mstl::string const& team,
+				unsigned teamYear,
 				bool first)
 {
 	::memset(slot, 0, NamebaseStride);
@@ -650,6 +696,9 @@ buildSlot(	unsigned char* slot,
 	// The annotator is not stored here: it is a player record, see
 	// buildIndexRecord().
 	storeNameRecord(slot + NamebaseSourceOffset, sourceTitle, source);
+
+	// Team section (+0xd3c), see storeTeamRecord().
+	storeTeamRecord(slot + NamebaseTeamOffset, team, teamYear);
 
 	// Sixth section (game titles): CBase26 stores a single usage byte in the
 	// record of slot 0 only; that record is the one the header counts.
@@ -783,6 +832,27 @@ scanSlotNames(	mstl::string const& lid,
 	}
 }
 
+/// Read the team names of an existing .2lid (section +0xd3c, one record per
+/// slot), so appending keeps the existing team ids stable.
+void
+scanTeamNames(mstl::string const& lid, mstl::vector<mstl::string>& names)
+{
+	unsigned char const* data = reinterpret_cast<unsigned char const*>(lid.data());
+	unsigned const slots = namebaseSlotCount(lid.size());
+
+	names.clear();
+
+	for (unsigned slot = 0; slot < slots; ++slot)
+	{
+		TeamSlot rec;
+
+		if (readTeamSlot(data, lid.size(), slot, rec))
+			names.push_back(mstl::string(rec.name, rec.nameLength));
+		else
+			names.push_back(mstl::string());
+	}
+}
+
 /// Read the game record payloads of an existing .2cbg, in index order.
 bool
 scanGameData(	mstl::string const& index,
@@ -829,10 +899,13 @@ writeDatabaseInt(	mstl::string const& rootname,
 							bool keepDescription)
 {
 	mstl::vector<Encoded> encoded(games.size());
-	NameList players, events;
+	NameList players, events, teams;
 	NamePairList sources;
 	mstl::vector<mstl::string> eventSite;
 	mstl::vector<uint32_t> eventDate;
+	// The year stored with a team record (the Teams list of CBase26 has a
+	// Year column; the probe database carries the game's year).
+	mstl::vector<unsigned> teamYear;
 
 	for (unsigned i = 0; i < games.size(); ++i)
 	{
@@ -851,6 +924,8 @@ writeDatabaseInt(	mstl::string const& rootname,
 		e.date = packDate(g.date);
 		e.sourceTitle = g.sourceTitle;
 		e.source = g.source;
+		e.whiteTeam = g.whiteTeam;
+		e.blackTeam = g.blackTeam;
 		e.annotator = g.annotator;
 		e.medals = g.medals;
 		e.plies = 0;
@@ -919,6 +994,18 @@ writeDatabaseInt(	mstl::string const& rootname,
 	{
 		Encoded& e = encoded[i];
 		e.annotatorId = e.annotator.empty() ? unsigned(-1) : players.insert(e.annotator);
+		// Teams are a namebase of their own (.2lid +0xd3c), referenced from
+		// index +0x40/+0x48 -- exactly what CBase26 writes for a PGN with
+		// [WhiteTeam]/[BlackTeam] (run 9).
+		e.whiteTeamId = e.whiteTeam.empty() ? unsigned(-1) : teams.insert(e.whiteTeam);
+		e.blackTeamId = e.blackTeam.empty() ? unsigned(-1) : teams.insert(e.blackTeam);
+
+		while (teamYear.size() < teams.names.size())
+			teamYear.push_back(0);
+		if (e.whiteTeamId != unsigned(-1) && teamYear[e.whiteTeamId] == 0)
+			teamYear[e.whiteTeamId] = games[i].date.year();
+		if (e.blackTeamId != unsigned(-1) && teamYear[e.blackTeamId] == 0)
+			teamYear[e.blackTeamId] = games[i].date.year();
 	}
 
 	// ------------------------------------------------------------------
@@ -986,7 +1073,9 @@ writeDatabaseInt(	mstl::string const& rootname,
 								players.find(encoded[i].black),
 								events.find(encoded[i].event),
 								encoded[i].annotatorId,
-								encoded[i].sourceId);
+								encoded[i].sourceId,
+								encoded[i].whiteTeamId,
+								encoded[i].blackTeamId);
 		index.append(reinterpret_cast<char const*>(rec), RecordSize);
 	}
 
@@ -997,6 +1086,7 @@ writeDatabaseInt(	mstl::string const& rootname,
 
 	if (numSlots < events.names.size())	numSlots = events.names.size();
 	if (numSlots < sources.first.size())	numSlots = sources.first.size();
+	if (numSlots < teams.names.size())	numSlots = teams.names.size();
 
 	mstl::string lid;
 
@@ -1008,7 +1098,7 @@ writeDatabaseInt(	mstl::string const& rootname,
 									events.names.size(),
 									sources.first.size(),
 									0,										// no annotator section
-									0,                                          // no team records
+									teams.names.size(),
 									numSlots ? 1 : 0);   // the slot-0 game-title record
 		lid.assign(reinterpret_cast<char const*>(header), NamebaseBase);
 	}
@@ -1024,6 +1114,8 @@ writeDatabaseInt(	mstl::string const& rootname,
 					 slot < eventDate.size() ? eventDate[slot] : 0,
 					 slot < sources.first.size() ? sources.first[slot] : mstl::string(),
 					 slot < sources.second.size() ? sources.second[slot] : mstl::string(),
+					 slot < teams.names.size() ? teams.names[slot] : mstl::string(),
+					 slot < teamYear.size() ? teamYear[slot] : 0,
 					 slot == 0);
 		lid.append(s);
 	}
@@ -1183,10 +1275,15 @@ appendToDatabase(	mstl::string const& rootname,
 	NameList players, events;
 	mstl::vector<mstl::string> eventSite;
 	mstl::vector<uint32_t> eventDate;
+	// The year stored with a team record (the Teams list of CBase26 has a
+	// Year column; the probe database carries the game's year).
+	mstl::vector<unsigned> teamYear;
 	mstl::vector<mstl::string> sourceTitle, sourceName;
+	mstl::vector<mstl::string> teamNames;
 
 	scanNamebase(lidText, players, events, eventSite, eventDate);
 	scanSlotNames(lidText, namebaseSourceOffset, sourceTitle, sourceName);
+	scanTeamNames(lidText, teamNames);
 
 	for (unsigned i = 0; i < payloads.size(); ++i)
 	{
@@ -1251,6 +1348,14 @@ appendToDatabase(	mstl::string const& rootname,
 
 		if (annotatorId < players.names.size())
 			g.annotator = players.names[unsigned(annotatorId)];
+
+		uint64_t const whiteTeamId = readLE64(rec + 0x40);
+		uint64_t const blackTeamId = readLE64(rec + 0x48);
+
+		if (whiteTeamId < teamNames.size())
+			g.whiteTeam = teamNames[unsigned(whiteTeamId)];
+		if (blackTeamId < teamNames.size())
+			g.blackTeam = teamNames[unsigned(blackTeamId)];
 
 		g.medals = readLE16(rec + 0x82);
 

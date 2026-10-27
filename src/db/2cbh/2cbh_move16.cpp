@@ -109,8 +109,21 @@ resolveMove16(Board const& board, Move16Descriptor const& d, Move& move)
 
       if (isCastling)
       {
-         if (m.to() != rookFrom || m.castlingKingTo() != to
+         // The descriptor's second transition names the rook's *start* square,
+         // but the Move16 table is a fixed table: its castling codes carry the
+         // standard a-/h-file rook, while ChessBase uses the same code for a
+         // Chess960 position whose castling rook stands elsewhere (a database
+         // CBase26 wrote for FEN "4k3/8/8/8/8/8/8/1R2K1R1 w BG -" stores the
+         // ordinary long-castling code 0xb129 although the rook is on b1).
+         // Enforce the rook's start square only when the descriptor's square
+         // really holds the castling rook; the king and the rook's
+         // *destination* are what identify the move.
+         piece::ID const rook = piece::piece(piece::Rook,
+                                             board.sideToMove());
+         if (m.castlingKingTo() != to
              || m.castlingRookTo() != toScidbSquare(d.word1To))
+            continue;
+         if (board.pieceAt(rookFrom) == rook && m.to() != rookFrom)
             continue;
       }
       else if (m.to() != to)

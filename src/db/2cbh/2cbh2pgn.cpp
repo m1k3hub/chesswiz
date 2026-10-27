@@ -284,6 +284,8 @@ int main(int argc, char* argv[])
    mstl::vector<std::string> siteNames;
    mstl::vector<uint32_t> eventDates;
    mstl::vector<std::string> sourceTitles, sourceNames;
+   // Teams: .2lid section +0xd3c, one name record per slot (index +0x40/+0x48).
+   mstl::vector<std::string> teamNames;
    std::string lidData;
    {
       if (loadFile((prefix + ".2lid").c_str(), lidData))
@@ -295,6 +297,19 @@ int main(int argc, char* argv[])
          loadSlotNames(reinterpret_cast<unsigned char const*>(lidData.c_str()),
                        lidData.size(), db::cb2::namebaseSourceOffset,
                        sourceTitles, sourceNames);
+         {
+            unsigned const slots = db::cb2::namebaseSlotCount(lidData.size());
+            for (unsigned slot = 0; slot < slots; ++slot)
+            {
+               db::cb2::TeamSlot rec;
+               if (db::cb2::readTeamSlot(
+                        reinterpret_cast<unsigned char const*>(lidData.c_str()),
+                        lidData.size(), slot, rec))
+                  teamNames.push_back(std::string(rec.name, rec.nameLength));
+               else
+                  teamNames.push_back(std::string());
+            }
+         }
          unsigned named = 0;
          for (unsigned i = 0; i < names.size(); ++i)
             if (!names[i].empty())
@@ -505,6 +520,18 @@ int main(int argc, char* argv[])
                tags.set(db::tag::Source,
                         mstl::string(sourceTitles[unsigned(sourceId)].c_str()));
          }
+      }
+
+      // Teams: index @0x40/+0x48 select records of the .2lid team section.
+      {
+         uint64_t const whiteTeamId = readLE64(cbh + (size_t(k) + 1) * recordSize + 0x40);
+         uint64_t const blackTeamId = readLE64(cbh + (size_t(k) + 1) * recordSize + 0x48);
+         if (whiteTeamId < teamNames.size() && !teamNames[unsigned(whiteTeamId)].empty())
+            tags.set(db::tag::WhiteTeam,
+                     mstl::string(teamNames[unsigned(whiteTeamId)].c_str()));
+         if (blackTeamId < teamNames.size() && !teamNames[unsigned(blackTeamId)].empty())
+            tags.set(db::tag::BlackTeam,
+                     mstl::string(teamNames[unsigned(blackTeamId)].c_str()));
       }
 
       // Annotator: index @0x30 is a *player* id (ChessBase models the

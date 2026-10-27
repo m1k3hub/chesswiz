@@ -1,11 +1,14 @@
 # 2CBH Format Reverse Engineering — Design for Scidb
 
-**Status (2026-10-26, run 8): read-only small-database and compact Chess960
-support implemented in `cb2::Codec` and `2cbh2pgn`; validation and limits in
-§16; the `.2lid` slot layout, EventDate, source, annotator, ECO key and medal
-word in §17; the 2CBH writer (`cb2::writeDatabase`/`appendToDatabase`) in §18,
-now accepted and re-opened by ChessBase 26 itself; the real remaining work in
-§19.**
+**Status (2026-10-27, run 9): the start-position block is now decoded (side to
+move and the four castling bits, with no Chess960 variant flag), teams are read
+and written as a namebase of their own, and probe databases that ChessBase 26
+itself wrote settle the open items of §19 that needed real data.**
+Read-only small-database and compact Chess960 support implemented in
+`cb2::Codec` and `2cbh2pgn`; validation and limits in §16; the `.2lid` slot
+layout, EventDate, source, annotator, teams, ECO key and medal word in §17;
+the 2CBH writer (`cb2::writeDatabase`/`appendToDatabase`) in §18, now accepted
+and re-opened by ChessBase 26 itself; the real remaining work in §19.
 
 - The index contains **one header record**, then games, at every database size.
   The previous 256-record assumption discarded 255 real games and rejected
@@ -1557,8 +1560,8 @@ file header are the record sizes and sum to exactly the stride:
 | `+0x000` | 1024 | players | `+0x18`/`+0x20` White/Black — and `+0x30`, the annotator (see below) |
 | `+0x400` | 1120 | tournaments (events, with `.2lid` Site and EventDate) | `+0x28` |
 | `+0x860` | 220 | sources | `+0x38` |
-| `+0x93c` | 1024 | *unidentified* — zero in every fixture, not the annotator | — |
-| `+0xd3c` | 314 | teams | `+0x40`/`+0x48` (White/Black team) |
+| `+0x93c` | 1024 | *unidentified* — zero in every fixture and in every probe database CBase26 wrote, not the annotator (§19.1) | — |
+| `+0xd3c` | 314 | teams (§17.2.1) | `+0x40`/`+0x48` (White/Black team) |
 | `+0xe76` | 532 | game titles | `+0x50` |
 
 Each section is a namebase of its own: the index stores the *record ordinal*
@@ -1609,6 +1612,44 @@ tag at all.  `cb2::Codec` sets `tag::Source` from the second string (the first
 one, `[SourceTitle]`, has no tag in this codebase) and `2cbh2pgn` emits it;
 `cb2::WriteGame` writes the same record.
 
+#### §17.2.1 Teams and game titles: index `+0x40`/`+0x48`/`+0x50` (run 9)
+
+`+0x40`/`+0x48` are references into the team namebase at slot `+0xd3c`, and
+`+0x50` into the game-title section at `+0xe76`; `~0` means "none".  Every
+genuine record in every fixture carries `-1` for both teams and `0` for the
+title (863,793 records in the Lumbras database alone), so the sections were
+empty until a database with real data existed.
+
+ChessBase 26 fills the team base from the PGN tags, which is how the probe
+database for this section was made: a PGN with `[WhiteTeam "Team White A"]` and
+`[BlackTeam "Team Black B"]` imported through CBase26's own PGN path stores
+`+0x40 = 0`, `+0x48 = 1`, a team section count of 2, and one record per team in
+slots 0 and 1:
+
+```
+u32  total          // 9 + nameLen in the probe (21 for a 12-character name)
+u32  nameLen
+char name[nameLen]   // "Team White A"
+u16  0               // terminator/padding (its first byte is inside `total`)
+u16  year            // 2026 in the probe, i.e. the game's year (CBase26's
+                     // Teams list has a Year column); zeros to the section end
+```
+
+`cb2::Codec` resolves the two ids into `[WhiteTeam]`/`[BlackTeam]` (scidb has
+those tags, `db_common.h`); `cb2::WriteGame` writes the names into the team
+section and the ids into the index, and `appendToDatabase()` re-reads them, so
+appending keeps existing team ids stable.  CBase26 lists a database written
+this way and leaves its files unchanged (`tests/tmp-app/2cbh-re/run9/
+w9-1-list.png`).
+
+A **game title** has no scidb tag, so it is neither read nor written: the game
+title section stays at the single slot-0 usage record (`u32 4` at `+0xe76` of
+slot 0) that CBase26 writes for every database, and every game's `+0x50 = 0`
+refers to that record.  The GUI entry points that would create a title
+("Create game title..." in the game-list context menu, the "Game Tag" page)
+did not produce a record in the probe database: `+0x50` stayed 0 and the
+section count stayed 1.
+
 #### Annotator: index `+0x30` is a *player* id (`+0x000`)
 
 ChessBase models the annotator as a person, so the per-game annotator
@@ -1633,32 +1674,74 @@ it is neither read nor written.
 
 ### 17.3 Arbitrary start positions (position 1000, and type 1 with setup)
 
-The record stream of a game with a non-compact start position is
+**Decoded in run 9 from probe databases ChessBase 26 wrote itself.**  A game
+with a non-compact start position begins
 
 ```
 u16 0xfffb
 u16 position                 // type 2 only; 0..959 compact, 1000 = arbitrary
-    setup block              // only for 1000 or for type 1 with 0xfffb
+    setup block              // only for 1000, or for type 1 with 0xfffb
+    placement codes          // one Move16 code per occupied square
 u16 0xfffc
     Move16 mainline and variations
 u16 0xffff
 ```
 
-Reader `0x1401590d0` skips **four** bytes of setup block after `0xfffb`
-(+ the position word for type 2) and then reads one Move16 code per occupied
-square until a token `>= 0xfffb`: `buildSetupBoard()` mirrors that. Each code
-is a piece placement: the descriptor's `to` square (file-major, as everywhere
-in Move16) receives `piece`. The position writer `0x1401e8310` emits **six**
-block bytes (`u16`, side to move, two bytes, filler) before the square codes,
-so the reader accepts both widths and both sides to move and keeps the
-interpretation whose mainline replays legally — the flags themselves are not
-decoded, and no fixture with an arbitrary setup exists yet.
+The setup block is **six bytes**, in the same shape for type 1 and type 2:
 
-Castling rights are derived from the placement (king on its home rank with a
-rook on the same rank), which is Scidb's Chess960 convention. The FEN tag is
-emitted in Shredder form. Compact positions 0..959 (Grenke: 906) keep using
-the existing `Board::setup()` path; the FEN of the fixture's start position
-matches its `[FEN]` tag, and its castling descriptor
+```
+u16 leading      = 1 in every block CBase26 writes
+u8  side         = 0 White to move, 1 Black to move
+u8  castling     = bit 0 White towards its a-side rook,  bit 1 White h-side
+                   bit 2 Black a-side,                   bit 3 Black h-side
+u16 trailing     = 0
+```
+
+followed by one Move16 code per occupied square, enumerated in Move16 square
+order (`file*8 + rank`, 0..63), until the `0xfffc` marker.  Each code is a
+descriptor with `from == to`, so its `to` square receives the piece
+(`placeSetupPiece()`).
+
+Evidence — seven setups imported into a database through CBase26's own PGN
+path, each block read back out of the `.2cbg`:
+
+| FEN stored with the game | block |
+|---|---|
+| `4k3/8/8/8/8/8/8/1R2K1R1 w BG -` | `[0001 side=0 cast=03 tail=0000]` |
+| `4k3/8/8/8/8/8/8/R3K3 w Q -` | `[0001 side=0 cast=01 tail=0000]` |
+| `4k3/8/8/8/8/8/8/4K2R w K -` | `[0001 side=0 cast=02 tail=0000]` |
+| `r3k3/8/8/8/8/8/8/4K3 b q -` | `[0001 side=1 cast=04 tail=0000]` |
+| `4k2r/8/8/8/8/8/8/4K3 b k -` | `[0001 side=1 cast=08 tail=0000]` |
+| `r3k2r/8/8/8/8/8/8/R3K2R w KQkq -` | `[0001 side=0 cast=0f tail=0000]` |
+| `1r2k1r1/8/8/8/8/8/8/1R2K1R1 w BGbg -` | `[0001 side=0 cast=0f tail=0000]` |
+
+**There is no Variant flag.**  The last line is a Chess960 position (king e1
+between the b- and g-file rooks); CBase26 titles the game "Chess 960" but
+stores exactly the same block shape, so whether a position is Chess960 is
+derived from the placement — which is also Scidb's convention.  The
+trial-and-replay reading of the earlier runs is therefore gone:
+`cb2::prepareGame()` decodes the header, builds the placement, applies the
+castling bits and only then checks that the stored mainline replays (a
+mismatch is corruption, not an alternative interpretation).
+
+CBase26's reader `0x1401590d0` skips **four** header bytes, which is the same
+block without its trailing zero word.  Since a placement code can never be
+`0x0000` (piece 0), the trailing word is unambiguous: reading accepts 2 and 3
+words (`cb2_setup.h`), writing always emits the six bytes CBase26 emits.
+
+Castling rights come from the **stored byte**, not from the placement: a king
+and a rook on the home rank are not proof that ChessBase granted the right
+(the position may be mid-tournament with rights already lost).  This also
+fixed the 960 case where the castling rook stands off the a/h files: CBase26
+stores the ordinary castling code (`0xb129`: king e1→c1, rook a1→d1) for the
+position `4k3/8/8/8/8/8/8/1R2K1R1` whose rook is on b1, so `resolveMove16()`
+identifies a castling move by the king and the rook's *destination* and
+enforces the descriptor's rook square only when a rook of the moving side
+really stands there.
+
+The FEN tag is emitted in Shredder form.  Compact positions 0..959 (Grenke:
+906) keep using the existing `Board::setup()` path; the FEN of the fixture's
+start position matches its `[FEN]` tag, and its castling descriptor
 (`0xbf55`: king b1→c1, word1 rook a1→d1) resolves to the real castling move.
 
 ### 17.4 `dataSize` is the length of the data field at `+0x1a`
@@ -1760,19 +1843,23 @@ test.  Two neighbouring fields are *not* part of it:
 | `.ini` | `[Descr2CBG]`/`Type=1`/`Title=<name>`/`[Environ]` description, CRLF, the same 34 lines CBase26 writes; **without it CBase26 does not treat the directory as a database at all** (§18.1) |
 
 `WriteGame` carries the PGN strings, the source pair (`sourceTitle`/
-`source`), the annotator, the medal word, the Elo pair, a `Date`, a setup
-selector (-1 = standard start, 0..959 = Scharnagl, 1000 + `fen` = arbitrary
-setup, -2 = verbatim payload) and the Move16 token stream (built by
-`encodeMoveStream()`, which encodes a legal line and keeps markers/variations
-when the caller supplies them).
+`source`), the annotator, the White/Black team, the medal word, the Elo pair,
+a `Date`, a setup selector (-1 = standard start, 0..959 = Scharnagl,
+1000 + `fen` = arbitrary setup, -2 = verbatim payload) and the Move16 token
+stream (built by `encodeMoveStream()`, which encodes a legal line and keeps
+markers/variations when the caller supplies them).  An arbitrary setup is
+written with the six-byte start block of §17.3 (side to move and castling
+rights taken from the FEN), i.e. exactly the bytes CBase26's position writer
+`0x1401e8310` emits.
 
 Index record fields written (all confirmed against CBase26's own accessors,
 §17): `+0x00` = 1, `+0x02` = `0x0101`, `+0x08` `.2cbg` offset, `+0x10` `.2cba`
 offset, `+0x18`/`+0x20` player ids, `+0x28` event id, `+0x30` annotator id
-(`-1` = none), `+0x38` source id (`-1` = none), `+0x40`/`+0x48` = `-1` (teams),
-`+0x50` game title (`-1`, unused), `+0x58` result, `+0x5a`/`+0x5c`/`+0x5e`
-round levels, `+0x60`/`+0x70` Elo, `+0x80` = `128 * (base + 1)`, `+0x82` medals
-(§17.6), `+0x8a` mainline moves, `+0xbc` packed date.
+(`-1` = none), `+0x38` source id (`-1` = none), `+0x40`/`+0x48` White/Black
+team id (`-1` = none, §17.2.1), `+0x50` game title (`-1`, unused: no scidb
+tag), `+0x58` result, `+0x5a`/`+0x5c`/`+0x5e` round levels, `+0x60`/`+0x70`
+Elo, `+0x80` = `128 * (base + 1)`, `+0x82` medals (§17.6), `+0x8a` mainline
+moves, `+0xbc` packed date.
 
 The annotator id is a *player* id: when a game names an annotator whose name is
 not already a player, the writer appends that name to the player list (after
@@ -1905,16 +1992,23 @@ the `.2lid` capacities, counts and free-chunk table, and the `.ini` header.
 What §16-§18 do **not** cover, i.e. the real remaining work.  Everything else
 in §8/§9 is historical and settled by now.
 
-1. **The `+0x93c` namebase section (capacity 1024)** is unidentified.  It is
-   all zero in every fixture, and CBase26 ignores a record written there, so it
-   is neither read nor written.  It is one of the six namebases the file header
-   declares, so it exists — but no data to identify it has been seen.
-2. **Game titles (`+0x50`) and teams (`+0x40`/`+0x48`)** are known to be
-   namebase references (capacities 532 and 314) but are never populated in the
-   fixtures and are not written; scidb has no tag for a game title, so only
-   `WhiteTeam`/`BlackTeam` could be exposed if a fixture with teams appeared.
-   The writer leaves all three at `~0` ("none"), which is what genuine records
-   carry for the teams.
+1. **The `+0x93c` namebase section (capacity 1024)** is still unidentified.
+   It is all zero in every fixture and in every probe database CBase26 wrote
+   in run 9 — including databases with names, teams, sources, annotators and
+   game-title records — so nothing fills it.  What was tried (all through
+   CBase26 and checked by dumping the section): PGN import with
+   `[WhiteTeam]`/`[BlackTeam]` (fills `+0xd3c`, not `+0x93c`), an annotator
+   name, the source pair, "Create game title..." and the "Game Tag" page.
+   It is one of the six namebases the file header declares, so it exists, but
+   no data to identify it has been seen.
+2. **Teams are solved, game titles are not.**  `+0x40`/`+0x48` select records
+   of the team namebase at `.2lid +0xd3c`, filled by CBase26 from the
+   `[WhiteTeam]`/`[BlackTeam]` PGN tags; cb2 reads them as
+   `[WhiteTeam]`/`[BlackTeam]` and writes them (§17.2.1).  Game titles
+   (`+0x50`, section `+0xe76`) have no tag in this codebase and no data could
+   be produced: the GUI entries that should create one ("Create game title..."
+   in the game-list context menu, the "Game Tag" page) left `+0x50` at 0 and
+   the section at its single slot-0 usage record.
 3. **`+0x58` bits 2..7, `+0xba` bits 0..2, `+0x84..+0x9e` and the `.2cbg`/
    `.2lid` sub-fields** are unmapped (§17.6, §18.4); the index tail carries a
    per-database stamp and a timestamp in genuine records and is zero in all
@@ -1946,20 +2040,32 @@ in §8/§9 is historical and settled by now.
    The writer and `testWriterHeaders()` now satisfy all of these; the free-chunk
    table we write (`{1,0}..{1,5}` + terminator) is what CBase26 itself writes
    for new databases, including the empty one.
-5. **Medal bits come from classic CBH, not from 2CBH data** (§17.6).  Every
-   genuine record has `+0x82 == 0`, and CBase26's checker compares the index
-   word against the game header's copy, which we do not write.  A database
-   imported through CBase26 with medals set (PGN import cannot set them, so
-   this needs the GUI) would settle it.
+5. **Medal bits still come from classic CBH, not from 2CBH data** (§17.6).
+   Every genuine record has `+0x82 == 0`; the medal dialog
+   (`CMedalsDia`, caption "Medals", the sixteen classic checkboxes) is not
+   reachable from the database window or the game window menus of this Wine
+   build, and PGN import cannot set medals, so no database with
+   CBase26-written medals exists.  Run 9 also looked for the copy the
+   integrity checker compares the index word against and found no candidate
+   field in CBase26's own records (`.2cbg` sub-field and extra block, `.2cba`
+   payload: all zero / the "no annotations" marker).  A database whose index
+   carries medals CBase26 did not write is accepted without an integrity page
+   and comes through open/close byte-identical, so nothing else has to be
+   updated when medals are written.
 6. **Merging/`appendToDatabase` id spaces.** The writer keeps one dense id per
    section (id == slot), which is what the reader and CBase26 accept, but
    CBase26's own files have sparse ids, deleted slots and a free-chunk list;
    the writer never reuses a slot.  Appending rewrites all four files from the
    payloads it re-reads, so ids stay dense.
-7. **Chess960 `Variant`/castling flags in the setup block** are still
-   interpreted by trial (§17.3): both sides to move and both block widths are
-   accepted and the interpretation whose mainline replays legally is kept.
-   No fixture with an arbitrary setup exists.
+7. **Chess960 `Variant`/castling flags — resolved in run 9.**  The six-byte
+   setup block is decoded (§17.3): leading word 1, side to move, the four
+   castling bits (White/Black × a-side/h-side) and a trailing zero word.
+   There is **no Variant flag** — CBase26 titles a Chess960 game "Chess 960"
+   and stores the same block.  The reader decodes the bits and no longer
+   guesses; the writer emits the same six bytes.  Not representable in Scidb's
+   board is a 960 short castle whose rook starts on the king's destination
+   square (king e1, rook g1): the castling move sends the king to the rook
+   square, so such a game is refused rather than misread.
 8. **`.2lcd` / `.2lgd` are not written** (§18.5).  CBase26 opens and lists a
    database without them, but it is unknown whether player/tournament
    statistics or the tournament namebase degrade in a database that never had

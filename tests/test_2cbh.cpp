@@ -11,6 +11,7 @@
 #include "2cbh/2cbh_annotations.h"
 #include "2cbh/cb2_flags.h"
 #include "2cbh/cb2_namebase.h"
+#include "2cbh/cb2_setup.h"
 #include "db_board.h"
 #include "db_move_list.h"
 #include "db_tag_set.h"
@@ -238,18 +239,20 @@ static std::vector<uint16_t> placementWords(db::Board const& board) {
     return out;
 }
 
-// type: 1 or 2; headerWords: number of words after the [0xfffb] (type 2 also
-// has the 1000 marker) before the placement codes.
+// type: 1 or 2; headerWords: 3 for the six-byte block CBase26 writes
+// ([u16 1][u8 side][u8 castling][u16 0]), 2 for the four-byte form without the
+// trailing zero word.  The layout is the one decoded in cb2_setup.h from
+// databases ChessBase 26 wrote itself (run 9).
 static std::vector<uint16_t> setupStream(uint16_t type, unsigned headerWords,
                                          bool blackToMove, db::Board const& board,
-                                         std::vector<uint16_t> const& moves) {
+                                         std::vector<uint16_t> const& moves,
+                                         unsigned castling=0) {
     std::vector<uint16_t> out;
     out.push_back(0xfffb);
     if (type==2) out.push_back(1000);
-    // The side-to-move flag lives in the first header word, which is at
-    // stream index 3 for type 2 and index 2 for type 1: exactly where the
-    // reader's heuristic looks for it.
-    for (unsigned i=0;i<headerWords;++i) out.push_back(i==0 ? (blackToMove ? 1 : 0) : 0);
+    out.push_back(1);                                     // leading word
+    out.push_back(uint16_t((blackToMove ? 1 : 0) | (castling << 8)));
+    if (headerWords>=3) out.push_back(0);                 // trailing word
     std::vector<uint16_t> placement=placementWords(board);
     out.insert(out.end(),placement.begin(),placement.end());
     out.push_back(0xfffc);
@@ -281,7 +284,7 @@ static void testExplicitSetup() {
         check(db::cb2::encodeMove16(b,m3,code),"encode setup move 3"); moves.push_back(code);
     }
 
-    for (unsigned headerWords : {2u,3u,4u}) {
+    for (unsigned headerWords : {2u,3u}) {
         std::vector<uint16_t> stream=setupStream(2,headerWords,false,board,moves);
         auto raw=bytes(stream); unsigned char const* p=raw.data(); uint32_t size=raw.size();
         db::Board start; db::TagSet tags;
@@ -338,6 +341,221 @@ static void testExplicitSetup() {
 // ----------------------------------------------------------------------
 // writer -> reader round trip
 // ----------------------------------------------------------------------
+
+// ----------------------------------------------------------------------
+// setup block: side to move and the castling byte (run 9)
+// ----------------------------------------------------------------------
+static void testSetupCastling() {
+    // A position whose king has a rook on both sides, so every one of the
+    // sixteen castling words has a rook to attach to.
+    char const* fen="1r2k1r1/8/8/8/8/8/8/1R2K1R1 w BGbg - 0 1";
+    char const* const expect[16]={
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w - - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w B - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w G - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w GB - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w b - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w Bb - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w Gb - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w GBb - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w g - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w Bg - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w Gg - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w GBg - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w gb - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w Bgb - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w Ggb - 0 1",
+        "1r2k1r1/8/8/8/8/8/8/1R2K1R1 w GBgb - 0 1",
+    };
+
+    db::Board board;
+    check(board.setup(fen,db::variant::Normal)!=nullptr,"castling probe FEN accepted");
+    std::vector<uint16_t> moves={0xfffc,0xffff};
+    (void)moves;
+
+    for (unsigned castling=0;castling<16;++castling) {
+        std::vector<uint16_t> stream=setupStream(2,3,false,board,{0xffff},castling);
+        auto raw=bytes(stream); unsigned char const* p=raw.data(); uint32_t size=raw.size();
+        db::Board start; db::TagSet tags;
+        check(db::cb2::prepareGame(2,p,size,start,tags),"castling setup accepted");
+        std::string got=start.toFen(db::variant::Normal,db::Board::Shredder).c_str();
+        if (got!=expect[castling])
+            std::fprintf(stderr,"castling %02x: '%s' expected '%s'\n",castling,
+                         got.c_str(),expect[castling]);
+        check(got==expect[castling],"castling byte maps to rights");
+        check(start.sideToMove()==db::color::White,"setup side to move");
+    }
+
+    // Black to move, and the four-byte block (no trailing zero word).
+    for (unsigned words : {2u,3u}) {
+        std::vector<uint16_t> stream=setupStream(2,words,true,board,{0xffff},
+                                                 db::cb2::SetupCastleAll);
+        auto raw=bytes(stream); unsigned char const* p=raw.data(); uint32_t size=raw.size();
+        db::Board start; db::TagSet tags;
+        check(db::cb2::prepareGame(2,p,size,start,tags),"black-to-move castling setup accepted");
+        check(start.sideToMove()==db::color::Black,"black to move from the block");
+        check(start.toFen(db::variant::Normal,db::Board::Shredder)
+              =="1r2k1r1/8/8/8/8/8/8/1R2K1R1 b GBgb - 0 1","all rights from the block");
+    }
+
+    // Chess960 castling out of a setup block.  CBase26 stores the ordinary
+    // long/short castling codes for these, although the castling rooks stand
+    // on the b- and g-files: the Move16 table's castling codes carry the
+    // standard a/h rook, so the reader must identify the move by the king and
+    // the rook's destination (2cbh_move16.cpp resolveMove16()).
+    {
+        std::vector<uint16_t> stream=setupStream(2,3,false,board,{0xb129},0x03);
+        auto raw=bytes(stream); unsigned char const* p=raw.data(); uint32_t size=raw.size();
+        db::Board start; db::TagSet tags;
+        check(db::cb2::prepareGame(2,p,size,start,tags),"960 castling setup accepted");
+        check(start.toFen(db::variant::Normal,db::Board::Shredder)
+              =="1r2k1r1/8/8/8/8/8/8/1R2K1R1 w GB - 0 1","960 castling FEN");
+        std::vector<uint16_t> rest;
+        for (uint32_t k=0;k<size/2;++k) rest.push_back(uint16_t(p[2*k]|(p[2*k+1]<<8)));
+        check(walk(start,rest,"1r2k1r1/8/8/8/8/8/8/2KR2R1 b - - 1 1"),"960 long castle replays");
+    }
+    // A 960 short castle whose rook starts on the king's destination square
+    // (king e1, rook g1) is not representable in Scidb's board (the castling
+    // move sends the king to the rook square), so only the long-castle case
+    // above is asserted here; the probe database's own games cover the
+    // standard short castle (FEN "4k3/.../4K2R w H").
+
+    // A block whose leading word is not 1, or whose castling byte has bits
+    // outside the four defined ones, is refused rather than guessed.
+    for (uint16_t lead : {0u,2u,0xffffu}) {
+        std::vector<uint16_t> stream={0xfffb,1000,lead,0x0000,0x0000,0xfffc,0xffff};
+        auto raw=bytes(stream); unsigned char const* p=raw.data(); uint32_t size=raw.size();
+        db::Board start; db::TagSet tags;
+        check(!db::cb2::prepareGame(2,p,size,start,tags),"bad setup leading word refused");
+    }
+    for (unsigned bad : {0x10u,0x80u,0x20u}) {
+        std::vector<uint16_t> stream={0xfffb,1000,1,uint16_t(bad<<8),0x0000,0xfffc,0xffff};
+        auto raw=bytes(stream); unsigned char const* p=raw.data(); uint32_t size=raw.size();
+        db::Board start; db::TagSet tags;
+        check(!db::cb2::prepareGame(2,p,size,start,tags),"bad castling byte refused");
+    }
+    for (unsigned side : {2u,3u,0xffu}) {
+        std::vector<uint16_t> stream={0xfffb,1000,1,uint16_t(side),0x0000,0xfffc,0xffff};
+        auto raw=bytes(stream); unsigned char const* p=raw.data(); uint32_t size=raw.size();
+        db::Board start; db::TagSet tags;
+        check(!db::cb2::prepareGame(2,p,size,start,tags),"bad side byte refused");
+    }
+
+    // A position the block does not describe (the stored mainline does not
+    // replay) is corruption, not an alternative reading.
+    {
+        db::Board b;
+        b.setup("8/8/8/4k3/8/8/4K3/8 w - - 0 1",db::variant::Normal);
+        db::Move m=play(b,"e2e3");
+        uint16_t code;
+        db::Board before;
+        before.setup("8/8/8/4k3/8/8/4K3/8 w - - 0 1",db::variant::Normal);
+        check(db::cb2::encodeMove16(before,m,code),"encode setup move");
+        std::vector<uint16_t> stream=setupStream(2,3,true,before,{code});
+        auto raw=bytes(stream); unsigned char const* p=raw.data(); uint32_t size=raw.size();
+        db::Board start; db::TagSet tags;
+        check(!db::cb2::prepareGame(2,p,size,start,tags),"mainline that does not replay is refused");
+    }
+}
+
+// ----------------------------------------------------------------------
+// team namebase (.2lid +0xd3c) and index +0x40/+0x48
+// ----------------------------------------------------------------------
+static void testTeamNamebase() {
+    // A hand-built slot array with the record CBase26 wrote for "Team White A".
+    {
+        std::vector<unsigned char> lid(0xb8+2*0x108a,0);
+        struct Rec { unsigned slot; unsigned char const* raw; unsigned len; };
+        static unsigned char const r0[]={
+            0x15,0,0,0, 0x0c,0,0,0, 'T','e','a','m',' ','W','h','i','t','e',' ','A',
+            0x00,0x00, 0xea,0x07 };
+        static unsigned char const r1[]={
+            0x15,0,0,0, 0x0c,0,0,0, 'T','e','a','m',' ','B','l','a','c','k',' ','B',
+            0x00,0x00, 0xea,0x07 };
+        Rec recs[2]={{0,r0,sizeof(r0)},{1,r1,sizeof(r1)}};
+        for (unsigned i=0;i<2;++i)
+            std::memcpy(&lid[0xb8+recs[i].slot*0x108a+0xd3c],recs[i].raw,recs[i].len);
+
+        db::cb2::TeamSlot team;
+        check(db::cb2::readTeamSlot(lid.data(),lid.size(),0,team),"team slot 0 read");
+        check(std::string(team.name,team.nameLength)=="Team White A","team 0 name");
+        check(team.year==2026,"team 0 year");
+        check(db::cb2::readTeamSlot(lid.data(),lid.size(),1,team),"team slot 1 read");
+        check(std::string(team.name,team.nameLength)=="Team Black B","team 1 name");
+        check(!db::cb2::readTeamSlot(lid.data(),lid.size(),2,team),"unallocated team slot refused");
+    }
+
+    // The writer stores teams, the codec exposes them as WhiteTeam/BlackTeam.
+    char dir[256];
+    std::snprintf(dir,sizeof(dir),"/tmp/cb2-teams-%ld",(long)::getpid());
+    std::string mk("mkdir -p '"); mk += dir; mk += "'";
+    check(std::system(mk.c_str())==0,"temporary directory");
+    std::string root=std::string(dir)+"/db";
+
+    mstl::vector<db::cb2::WriteGame> games;
+    for (unsigned i=0;i<3;++i) {
+        db::cb2::WriteGame g;
+        g.white="Teamprobe, White"; g.black="Teamprobe, Black";
+        g.event="Team Match"; g.site="Leipzig";
+        g.round="1"; g.result="1-0";
+        g.date=db::Date(2026,4,2);
+        g.setup=-1;
+        g.moves.push_back(0xfffc);
+        g.moves.push_back(pawnCode("e2","e4",6));
+        g.moves.push_back(0xffff);
+        if (i==1) { g.whiteTeam="Team White A"; g.blackTeam="Team Black B"; }
+        games.push_back(g);
+    }
+
+    mstl::string err, mroot(root.c_str());
+    check(db::cb2::writeDatabase(mroot,games,&err),"writeDatabase with teams");
+
+    std::vector<unsigned char> index=readFile((root+".2cbh").c_str());
+    std::vector<unsigned char> namebase=readFile((root+".2lid").c_str());
+    check(u64at(&index[192*1+0x40])==~0ull,"game 0 has no WhiteTeam");
+    check(u64at(&index[192*1+0x48])==~0ull,"game 0 has no BlackTeam");
+    check(u64at(&index[192*2+0x40])==0ull,"game 1 WhiteTeam id");
+    check(u64at(&index[192*2+0x48])==1ull,"game 1 BlackTeam id");
+    check(u64at(&index[192*3+0x40])==~0ull,"game 2 has no WhiteTeam");
+
+    db::cb2::TeamSlot team;
+    check(db::cb2::readTeamSlot(namebase.data(),namebase.size(),0,team),"written team 0");
+    check(std::string(team.name,team.nameLength)=="Team White A","written team 0 name");
+    check(team.year==2026,"written team 0 year");
+    check(db::cb2::readTeamSlot(namebase.data(),namebase.size(),1,team),"written team 1");
+    check(std::string(team.name,team.nameLength)=="Team Black B","written team 1 name");
+
+    auto be32=[&](size_t off){ return (unsigned(namebase[off])<<24)|(unsigned(namebase[off+1])<<16)
+                                     |(unsigned(namebase[off+2])<<8)|unsigned(namebase[off+3]); };
+    check(be32(8+4*20+8)==2,"team section count is two");
+
+    // Appending keeps the existing team ids and records.
+    {
+        db::cb2::WriteGame g;
+        g.white="Later, Larry"; g.black="Later, Lisa";
+        g.event="Team Match"; g.site="Leipzig"; g.round="2"; g.result="0-1";
+        g.date=db::Date(2026,4,3); g.setup=-1;
+        g.whiteTeam="Team White A";
+        g.moves.push_back(0xfffc);
+        g.moves.push_back(pawnCode("d2","d4",6));
+        g.moves.push_back(0xffff);
+        mstl::vector<db::cb2::WriteGame> more;
+        more.push_back(g);
+        check(db::cb2::appendToDatabase(mroot,more,&err),"append with a repeated team");
+    }
+    index=readFile((root+".2cbh").c_str());
+    namebase=readFile((root+".2lid").c_str());
+    check(u64at(&index[192*2+0x40])==0ull,"existing team id kept after append");
+    check(u64at(&index[192*2+0x48])==1ull,"existing black team id kept after append");
+    check(u64at(&index[192*4+0x40])==0ull,"new game reuses the team id");
+    check(u64at(&index[192*4+0x48])==~0ull,"new game has no BlackTeam");
+    check(db::cb2::readTeamSlot(namebase.data(),namebase.size(),0,team),"team 0 after append");
+    check(std::string(team.name,team.nameLength)=="Team White A","team 0 name after append");
+
+    std::string rm("rm -rf '"); rm += dir; rm += "'";
+    check(std::system(rm.c_str())==0,"temporary directory removed");
+}
+
 static void testWriterRoundTrip() {
     char dir[256];
     std::snprintf(dir,sizeof(dir),"/tmp/cb2-writer-roundtrip-%ld",(long)::getpid());
@@ -1080,6 +1298,8 @@ int main(int argc,char** argv) {
     testMove16Encoding();
     testPlacementCodes();
     testExplicitSetup();
+    testSetupCastling();
+    testTeamNamebase();
     testMedalBits();
     testWriterRoundTrip();
     testWriterHeaders();
