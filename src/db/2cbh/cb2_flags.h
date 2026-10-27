@@ -7,8 +7,9 @@
 // field with a plain getter/setter pair (0x1401e3d60 / 0x1401e45b0: no
 // clamping, no transformation, i.e. a raw bit word), while its ECO
 // accessors on the neighbouring 0x80 field do clamp.  The bit assignment
-// below is the classic CBH one scidb already implements for the same word
-// (src/db/cbh/cbh_codec.cpp, "Bytes 37-38: Medals/flags").
+// below was measured by toggling all sixteen CBase26 checkboxes and saving
+// each probe (run 10). Defense is bit 8 and Sacrifice bit 9; the dialog
+// displays Sacrifice first, so checkbox order is not bit order.
 //
 // This header is the single definition of that mapping: cb2::Codec reads
 // with cb2GameFlags() and cb2::WriteGame writes with cb2Medals(), so a
@@ -16,16 +17,11 @@
 //
 // Two nearby index fields are *not* part of this mapping:
 //
-//   0x58 bits 2..7  a six-bit value (getter 0x1401e3eb0 -> byte >> 2).  It is
-//                   zero in all 863,793 records of the validated Lumbras
-//                   fixture and in every smaller fixture, so no bit
-//                   assignment can be inferred from data; it is read as a
-//                   sort tie-breaker together with the result and byte 0x59,
-//                   not as a flag word.  Left unmapped.
-//   0xba bits 0..2  three independent single-bit flags (setters
-//                   0x1401e4540/0x1401e4470/0x1401e4500).  Zero everywhere
-//                   in the fixtures and not part of the medal word.  Left
-//                   unmapped.
+//   0x58 bits 2..7  result subtype; subtype 1 is an unplayed score
+//                   (+:-, =:=, -:+, 0-0), measured in run 10.
+//   0xba bit 0     automatic good-game classification (0x14064ac80).
+//   0xba bits 1..2 internal move encoding / cloud state; not medals.
+// Deleted is index +0x00 bit 7, measured with the game-list Delete key.
 // ======================================================================
 
 #ifndef _cb2_flags_included
@@ -53,8 +49,8 @@ cb2GameFlags(uint16_t medals)
 	if (medals & (1 <<  5)) flags |= GameInfo::Flag_Strategy;
 	if (medals & (1 <<  6)) flags |= GameInfo::Flag_Tactics;
 	if (medals & (1 <<  7)) flags |= GameInfo::Flag_With_Attack;
-	if (medals & (1 <<  8)) flags |= GameInfo::Flag_Sacrifice;
-	if (medals & (1 <<  9)) flags |= GameInfo::Flag_Defense;
+	if (medals & (1 <<  9)) flags |= GameInfo::Flag_Sacrifice;
+	if (medals & (1 <<  8)) flags |= GameInfo::Flag_Defense;
 	if (medals & (1 << 10)) flags |= GameInfo::Flag_Material;
 	if (medals & (1 << 11)) flags |= GameInfo::Flag_Piece_Play;
 	if (medals & (1 << 12)) flags |= GameInfo::Flag_End_Game;
@@ -79,8 +75,8 @@ cb2Medals(unsigned gameFlags)
 	if (gameFlags & GameInfo::Flag_Strategy)				medals |= (1 <<  5);
 	if (gameFlags & GameInfo::Flag_Tactics)				medals |= (1 <<  6);
 	if (gameFlags & GameInfo::Flag_With_Attack)		medals |= (1 <<  7);
-	if (gameFlags & GameInfo::Flag_Sacrifice)			medals |= (1 <<  8);
-	if (gameFlags & GameInfo::Flag_Defense)				medals |= (1 <<  9);
+	if (gameFlags & GameInfo::Flag_Sacrifice)			medals |= (1 <<  9);
+	if (gameFlags & GameInfo::Flag_Defense)				medals |= (1 <<  8);
 	if (gameFlags & GameInfo::Flag_Material)				medals |= (1 << 10);
 	if (gameFlags & GameInfo::Flag_Piece_Play)			medals |= (1 << 11);
 	if (gameFlags & GameInfo::Flag_End_Game)				medals |= (1 << 12);

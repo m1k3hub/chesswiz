@@ -33,6 +33,7 @@
 
 #include "m_string.h"
 #include "m_vector.h"
+#include "cb2_title.h"
 
 #include <stdint.h>
 
@@ -81,6 +82,10 @@ struct WriteGame
 	mstl::string	annotator;
 	/// Medals / game flags word (index +0x82), see cb2_flags.h.
 	unsigned			medals;
+	bool deleted; ///< Index +0x00 bit 7, game-list Delete marker.
+	bool goodGame; ///< Index +0xba bit 0, automatic good-game classification.
+	unsigned resultType; ///< Index +0x58 bits 2..7; 1 = unplayed score.
+	GameTitles titles; ///< Multilingual Game Tag, index +0x50 / .2lid +0xe76.
 
 	/// -1 = standard start position.  0..959 = compact Chess960 position.
 	/// 1000 = arbitrary setup, described by @a fen.  The six-byte start
@@ -105,7 +110,10 @@ bool writeDatabase(	mstl::string const& rootname,
 							mstl::string* error = 0);
 
 /// Append @a games to an existing database by reading its index/namebase and
-/// rewriting the three files.  A missing database is created.  The existing
+/// rewriting the database files. This low-level helper preserves only the
+/// fields represented by WriteGame; it is not a lossless editor for arbitrary
+/// CBase databases and is deliberately not exposed as app append. A missing
+/// database is created. The existing
 /// games' Move16 payloads are copied verbatim.
 bool appendToDatabase(	mstl::string const& rootname,
 								mstl::vector<WriteGame> const& games,

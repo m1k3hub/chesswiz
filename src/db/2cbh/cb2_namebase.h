@@ -9,10 +9,9 @@
 //   +0x400  event     [u32 total][u32 siteLen][site][u32 evLen][event]
 //                     [u32 packed event date]
 //   +0x860  source    [u32 total][u32 tLen][sourceTitle][u32 len][source]
-//   +0x93c  annotator [u32 total][u32 tLen][title][u32 len][annotator]
+//   +0x93c  reserved/unidentified (not the active annotator store)
 //   +0xd3c  team      [u32 total][u32 nameLen][name][u16 zero][u16 year]
-//   +0xe76  game title(not decoded; slot 0 holds CBase26's usage byte 0x04,
-//                     which is what every game's index +0x50 = 0 refers to)
+//   +0xe76  multilingual game title (cb2_title.h)
 //
 // The six record capacities in the file's 0xb8-byte header
 // (1024/1120/220/1024/314/532 = 0x108a bytes) are the sizes of exactly these
@@ -22,7 +21,7 @@
 // ordinal — which is the slot ordinal — so sources and annotators are two
 // independent id spaces over the shared slot array.
 //
-// Both four-string sections are [total][len1][str1][len2][str2][8 zero bytes]
+// The source section is [total][len1][str1][len2][str2][8 zero bytes]
 // with total = 20 + len1 + len2.  The genuine fixtures store the source pair
 // as [SourceTitle]/[Source]: 'playchess.com'/'ChessBase' in the Grenke
 // database, ''/'Codekiddy' in the Lumbras database, whose source PGN has

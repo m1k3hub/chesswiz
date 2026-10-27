@@ -22,6 +22,10 @@ namespace eval ::scidb::test::cb2export {
 [Result "*"]
 [WhiteTeam "Team A"]
 [BlackTeam "Team B"]
+[GameTitle "Run10 English title"]
+[GameTitle53 "Run10 Deutsch"]
+[ChessBaseResultType "1"]
+[ChessBaseGoodGame "1"]
 
 1. e4 (1. d4 d5 (1... Nf6)) e5 (1... c5) 2. Nf3 *
 
@@ -76,6 +80,12 @@ tcltest::test cb2-export-dialog-roundtrip {Save as exports three games, variatio
     set dst $::scidb::test::cb2export::dst
     set nop $::scidb::test::cb2export::nop
     ::export::DoExport .application .cb2export $dst
+    if {[info exists ::env(CB2_EXPORT_KEEP)]} {
+        file mkdir $::env(CB2_EXPORT_KEEP)
+        foreach ext {2cbh 2cbg 2cba 2lid ini} {
+            file copy -force [file rootname $dst].$ext [file join $::env(CB2_EXPORT_KEEP) db.$ext]
+        }
+    }
     set companions {}
     foreach ext {2cbh 2cbg 2cba 2lid ini} {
         lappend companions [file exists [file rootname $dst].$ext]
@@ -97,10 +107,14 @@ tcltest::test cb2-export-dialog-roundtrip {Save as exports three games, variatio
         [string match {*Team A*} $text] \
         [string match {*Nf6*} $text] \
         [string match {*c5*} $text] \
-        [string match {*Kd7*} $text]
+        [string match {*Kd7*} $text] \
+        [string match {*GameTitle "Run10 English title"*} $text] \
+        [string match {*GameTitle53 "Run10 Deutsch"*} $text] \
+        [string match {*ChessBaseResultType "1"*} $text] \
+        [string match {*ChessBaseGoodGame "1"*} $text]
 } -cleanup {
     ::scidb::test::cb2export::cleanup
-} -result {{1 1 1 1 1} 3 3 1 1 1 1 1}
+} -result {{1 1 1 1 1} 3 3 1 1 1 1 1 1 1 1 1}
 
 tcltest::test cb2-export-refuses-append {read-only codec offers Save as, never lossy in-place append} -setup {
     ::scidb::test::cb2export::setup

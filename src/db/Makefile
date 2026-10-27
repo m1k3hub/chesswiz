@@ -9244,3 +9244,5 @@ db_database_codec.o: 2cbh/cb2_codec.h
 
 test_2cbh: ../../tests/test_2cbh.o libdb.a
 	@$(CXX) -o $@ $^ $(LDFLAGS) $(ALL_LIBS) ../db/libdb.a ../mstl/libmstl.a ../util/libutil.a ../sys/libsys.a ../util/libTeXt/libTeXt.a ../util/libharu/libharu.a ../util/universalchardet/libchardet.a ../util/libhyphenate/libhyphenate.a ../util/minizip/libminizip.a ../db/libdb.a ../mstl/libmstl.a -ltcl8.6 -lz -lexpat -lzzip
+
+2cbh/cb2_writer.o 2cbh/cb2_codec.o ../../tests/test_2cbh.o: 2cbh/cb2_title.h 2cbh/cb2_flags.h

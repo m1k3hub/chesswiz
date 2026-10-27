@@ -385,6 +385,9 @@ struct Encoded
 	uint32_t			date;
 	unsigned			medals;
 	unsigned			plies;
+	unsigned titleId;
+	bool deleted, goodGame;
+	unsigned resultType;
 };
 
 bool
@@ -517,20 +520,21 @@ buildIndexRecord(	unsigned char* rec,
 	//          person, see cb2::Codec::getAnnotator; the +0x93c namebase
 	//          section is a different, unidentified one)
 	//   +0x38  source: id of a record of the .2lid source section (+0x860)
-	//   +0x40/+0x48  white/black team, +0x50 game title (unused here)
+	//   +0x40/+0x48  white/black team, +0x50 multilingual game title
 	// CBase26's reference repair walks exactly these fields with these
 	// namebases, and the classic CBH record keeps the same order.
 	storeLE64(rec + 0x30, annotatorId == unsigned(-1) ? ~uint64_t(0) : uint64_t(annotatorId));
 	storeLE64(rec + 0x38, sourceId == unsigned(-1) ? ~uint64_t(0) : uint64_t(sourceId));
 	// Team references: ids of the .2lid team section (+0xd3c), exactly what
 	// CBase26 stores for a game whose PGN carried [WhiteTeam]/[BlackTeam]
-	// (run 9; see cb2_namebase.h).  The game title (+0x50) has no scidb tag
-	// and is stored as "none", which is what every genuine record carries.
+	// (run 9; see cb2_namebase.h). Game titles use cb2_title.h.
 	storeLE64(rec + 0x40, whiteTeamId == unsigned(-1) ? ~uint64_t(0) : uint64_t(whiteTeamId));
 	storeLE64(rec + 0x48, blackTeamId == unsigned(-1) ? ~uint64_t(0) : uint64_t(blackTeamId));
-	storeLE64(rec + 0x50, ~uint64_t(0));			// game title
+	storeLE64(rec + 0x50, game.titleId);			// game title
 
-	rec[0x58] = uint8_t(resultCode(game.result) & 3);
+	rec[0] |= game.deleted ? 0x80 : 0;
+	rec[0xba] = game.goodGame ? 1 : 0;
+	rec[0x58] = uint8_t((resultCode(game.result) & 3) | (game.resultType << 2));
 
 	unsigned round = 0, subround = 0, third = 0;
 
@@ -901,7 +905,10 @@ writeDatabaseInt(	mstl::string const& rootname,
 							bool keepDescription)
 {
 	mstl::vector<Encoded> encoded(games.size());
-	NameList players, events, teams;
+	NameList players, events, teams, titles;
+	mstl::string emptyTitles;
+	encodeGameTitles(GameTitles(), emptyTitles);
+	titles.insert(emptyTitles);
 	NamePairList sources;
 	mstl::vector<mstl::string> eventSite;
 	mstl::vector<uint32_t> eventDate;
@@ -930,6 +937,21 @@ writeDatabaseInt(	mstl::string const& rootname,
 		e.blackTeam = g.blackTeam;
 		e.annotator = g.annotator;
 		e.medals = g.medals;
+		e.deleted = g.deleted;
+		e.goodGame = g.goodGame;
+		e.resultType = g.resultType;
+		if (g.resultType > 63)
+		{
+			if (error) *error = "invalid ChessBase result type";
+			return false;
+		}
+		mstl::string titleRecord;
+		if (!encodeGameTitles(g.titles, titleRecord))
+		{
+			if (error) *error = "game title exceeds the 532-byte namebase slot";
+			return false;
+		}
+		e.titleId = titles.insert(titleRecord);
 		e.plies = 0;
 
 		if (!encodePayload(g, e))
@@ -1089,6 +1111,7 @@ writeDatabaseInt(	mstl::string const& rootname,
 	if (numSlots < events.names.size())	numSlots = events.names.size();
 	if (numSlots < sources.first.size())	numSlots = sources.first.size();
 	if (numSlots < teams.names.size())	numSlots = teams.names.size();
+	if (numSlots && numSlots < titles.names.size()) numSlots = titles.names.size();
 
 	mstl::string lid;
 
@@ -1101,7 +1124,7 @@ writeDatabaseInt(	mstl::string const& rootname,
 									sources.first.size(),
 									0,										// no annotator section
 									teams.names.size(),
-									numSlots ? 1 : 0);   // the slot-0 game-title record
+									numSlots ? titles.names.size() : 0);
 		lid.assign(reinterpret_cast<char const*>(header), NamebaseBase);
 	}
 
@@ -1119,6 +1142,8 @@ writeDatabaseInt(	mstl::string const& rootname,
 					 slot < teams.names.size() ? teams.names[slot] : mstl::string(),
 					 slot < teamYear.size() ? teamYear[slot] : 0,
 					 slot == 0);
+		if (slot < titles.names.size())
+			::memcpy(s.begin() + NamebaseTitleOffset, titles.names[slot].data(), titles.names[slot].size());
 		lid.append(s);
 	}
 
@@ -1183,6 +1208,9 @@ WriteGame::WriteGame()
 	:whiteElo(0)
 	,blackElo(0)
 	,medals(0)
+	,deleted(false)
+	,goodGame(false)
+	,resultType(0)
 	,setup(-1)
 	,recordType(0)
 {
@@ -1264,8 +1292,37 @@ encodeGame(Game const& game, WriteGame& result, mstl::string* error)
 	encoded.whiteTeam = tags.value(tag::WhiteTeam);
 	encoded.blackTeam = tags.value(tag::BlackTeam);
 	encoded.medals = cb2Medals(game.gameFlags());
+	encoded.deleted = (game.gameFlags() & GameInfo::Flag_Deleted) != 0;
 	for (unsigned i = 0; i < tags.countExtra(); ++i)
-		if (tags.extra(i).name == "SourceTitle") encoded.sourceTitle = tags.extra(i).value;
+    {
+        TagSet::Tag const& extra = tags.extra(i);
+        if (extra.name == "ChessBaseGoodGame") encoded.goodGame = extra.value == "1";
+        if (extra.name == "ChessBaseResultType")
+        {
+            unsigned type = parseUnsigned(extra.value);
+            char canonical[16]; ::snprintf(canonical, sizeof(canonical), "%u", type);
+            if (type > 63 || extra.value != canonical)
+            {
+                if (error) *error = "invalid ChessBaseResultType";
+                return false;
+            }
+            encoded.resultType = type;
+        }
+        if (extra.name == "SourceTitle") encoded.sourceTitle = extra.value;
+        if (extra.name == "GameTitle") encoded.titles.push_back(GameTitle(42, extra.value));
+        else if (extra.name.size() > 9 && ::strncmp(extra.name.c_str(), "GameTitle", 9) == 0)
+        {
+            unsigned lang = 0;
+            bool valid = true;
+            for (unsigned j = 9; j < extra.name.size(); ++j)
+            {
+                if (extra.name[j] < '0' || extra.name[j] > '9' || lang > 429496729u
+                    || (lang == 429496729u && extra.name[j] > '5')) { valid = false; break; }
+                lang = lang * 10 + unsigned(extra.name[j] - '0');
+            }
+            if (valid) encoded.titles.push_back(GameTitle(lang, extra.value));
+        }
+    }
 
 	if (!game.startBoard().isStandardPosition(variant::Normal))
 	{
@@ -1393,6 +1450,13 @@ appendToDatabase(	mstl::string const& rootname,
 			g.moves.push_back(readLE16(reinterpret_cast<unsigned char const*>
 												(payloads[i].data()) + 2*k));
 
+        uint64_t const titleId = readLE64(rec + 0x50);
+        if (titleId <= uint64_t(unsigned(-1)))
+            readGameTitles(reinterpret_cast<unsigned char const*>(lid.data()), lid.size(),
+                unsigned(titleId), g.titles);
+		g.deleted = (rec[0] & 0x80) != 0;
+		g.goodGame = (rec[0xba] & 1) != 0;
+		g.resultType = rec[0x58] >> 2;
 		g.setup = -2;
 		g.recordType = types[i];
 

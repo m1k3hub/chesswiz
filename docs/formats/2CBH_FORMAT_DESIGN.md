@@ -1808,8 +1808,8 @@ The bit assignment is the classic CBH one, which scidb already implements in
 | 5 | `Flag_Strategy` | strategy |
 | 6 | `Flag_Tactics` | tactics |
 | 7 | `Flag_With_Attack` | attack |
-| 8 | `Flag_Sacrifice` | sacrifice |
-| 9 | `Flag_Defense` | defence |
+| 8 | `Flag_Defense` | defence |
+| 9 | `Flag_Sacrifice` | sacrifice |
 | 10 | `Flag_Material` | material |
 | 11 | `Flag_Piece_Play` | piece play |
 | 12 | `Flag_End_Game` | endgame |
@@ -1875,6 +1875,92 @@ and reopen with three synthetic games, plus append refusal. It could not run
 here because Tk cannot connect to an X server; CBase26 acceptance of the new
 app route also remains unverified. Prior §18 writer acceptance is not a
 substitute for that test.
+
+
+### 17.8 Run-10 second pass: measured medals, titles and status fields
+
+A fresh CBase26 database was populated by clipboard PGN import and Save,
+then edited through notation **quotation mark > Medals > OK > Ctrl+S > OK**.
+All sixteen checkboxes were saved individually. Their words, in UI order,
+were `0001 0002 0004 0008 0010 0020 0040 0080 0200 0100 0400 0800 1000
+2000 4000 8000`. **Sacrifice and Defense are reversed relative to the old
+run-6 assumption**: Defense is bit 8, Sacrifice bit 9. `cb2_flags.h` and
+its sixteen-bit/exhaustive regression now use the measured assignment.
+This supersedes §17.6's previous classic-CBH inference and §19 item 5.
+
+A position medal also writes a `.2cba` sub-item `[u16 0x22][u32 mask]` in
+that move's annotation container. The `.2cbg` move payload is unchanged.
+The decoder consumes this bookmark so following comments/NAGs survive;
+global game flags still come from index `+0x82`. Save as writes global
+medals, without manufacturing a position bookmark that Scidb cannot express.
+
+**Game titles are decoded.** In the loaded game's Save/Replace mask choose
+**Game Tag**, select English or Deutsch, enter text and click OK. Index
+`+0x50` selects a slot in `.2lid +0xe76`:
+
+```
+u32 total       // excludes this length word, max 528
+u32 count
+repeat count:
+    u32 language
+    u32 byteLength
+    char utf8[byteLength]
+```
+
+English is language 42; German is 53. One measured English title of 19 bytes
+has total 31; adding 13 German bytes gives total 52. Slots can be reused:
+the first title was id 1, then the bilingual replacement reused id 0.
+A total-4/count-0 record is the empty title. Free slots are distinguishable
+by an invalid count (`2233445566778899...` free-chain data). `cb2_title.h`
+checks all lengths, counts, the section capacity, and partial final slots.
+The writer deduplicates complete multilingual records. Existing Scidb has
+no built-in game-title tag, so the codec uses extra PGN tags **GameTitle**
+(English) and **GameTitle53** (German), or **GameTitleN** for other stored
+numeric language ids. Save as and the low-level append helper preserve them.
+Oversized titles fail before destination files are written. This supersedes
+§17.2.1's title limitation and §19 item 2.
+
+**Deleted:** game-list Delete toggles record byte `+0x00` bit 7, confirmed
+by the strike-through display and a before/after diff. It maps to
+`GameInfo::Flag_Deleted` in both directions. It is not a `+0xba` bit.
+
+**Result subtype:** Save/Replace's `+:-`, `=:=`, `-:+`, and `0-0` radio
+buttons set `(byte[0x58] >> 2) == 1`; normal results set 0. The low two bits
+still carry White/Draw/Black/Unknown. The measured bytes were `06`, `05`,
+`04`, `07`, respectively. The codec preserves the six-bit subtype through
+extra tag **ChessBaseResultType**; it does not mistake it for six flags.
+
+**Good game:** `+0xba` bit 0 is written by the automatic good-game classifier
+(`0x14064ac80` calls setter `0x1401e4540`). Its setter was also checked in
+Ghidra. There is no equivalent Scidb medal: it is exposed as extra tag
+**ChessBaseGoodGame "1"**. CBase26 displays the written bit as **Top Game**.
+The classifier rejected the two short probe games, so a positive
+CBase-generated example remains unmeasured. Bits 1 and 2 remain unmapped:
+bit 1 is set by move serialization (`0x1401ae720`, `0x1401ae9c0`); bit 2 is
+set in a cloud placeholder path (`0x1400eb430`). Neither is the Delete marker.
+
+**Still open:** `+0x93c` remains empty even with distinct annotators, sources,
+teams and real bilingual game titles. The annotator UI lists the person
+whose record is in the player section; no tested setter fills `+0x93c`.
+The presence of `AnnotatorLib` in Ghidra does not establish the physical
+section's live purpose. No guessed storage mapping is implemented.
+
+The app Tcl regression reads the new title/status tags back through the
+codec after export and reopen. Live CBase probes and screenshots are under
+ignored `run10/`; no proprietary database or decompiler output is committed.
+
+### Run-10B validation limits
+
+The app export opens/reopens without an integrity page and displays its
+unplayed score and Top Game flag. Direct board loading and the written title
+have **not** been verified in CBase26: repeated double-clicks did not open a
+board. Experiments adding copied or empty `.2lcd`/`.2lgd` sidecars exposed the
+namebase tabs but did not establish correct title browsing. These experimental
+sidecars are not part of the writer or its acceptance data. The missing
+namebase indexes in §19 item 8 remain a real compatibility limitation, not
+an established harmless omission. The previous open/list integrity check
+must not be described as full game-editing compatibility.
+
 
 ## 18. Writer: `cb2::writeDatabase` / `cb2::appendToDatabase` (2026-10-26, run 8)
 
@@ -2034,7 +2120,7 @@ every namebase reference against the counts found in the slot array), the
 `.2cbg`/`.2cba` file lengths and per-record length trailers, the record types,
 the `.2lid` capacities, counts and free-chunk table, and the `.ini` header.
 
-## 19. Open items (2026-10-27, run 9; run-10 status below)
+## 19. Open items (run-9 history; see §17.8 for run-10B measurements)
 
 What §16-§18 do **not** cover, i.e. the real remaining work.  Everything else
 in §8/§9 is historical and settled by now.
@@ -2119,7 +2205,7 @@ in §8/§9 is historical and settled by now.
    them, and the `.2lgd` entry contents (per-player counters) are only partly
    documented (§6.1).
 
-### Run-10 status
+### Run-10 first-pass status (historical; superseded by §17.8)
 
 Part A's cached-help map is complete to the available prose; full medal names
 are in an uncached image, so their wording remains code-derived. Part B is

@@ -572,6 +572,7 @@ static void testWriterRoundTrip() {
     {
         db::cb2::WriteGame g;
         g.white="Alpha, Ann"; g.black="Beta, Bob";
+        g.deleted=true; g.goodGame=true; g.resultType=1;
         g.event="Round Trip Open"; g.site="Testville";
         g.round="3"; g.result="1-0"; g.eco="B12a";
         g.whiteElo=2500; g.blackElo=2400;
@@ -579,6 +580,8 @@ static void testWriterRoundTrip() {
         g.setup=-1;
         g.sourceTitle="playchess.com"; g.source="ChessBase";
         g.annotator="Annotator, Ann";
+        g.titles.push_back(db::cb2::GameTitle(42,"Run10 English title"));
+        g.titles.push_back(db::cb2::GameTitle(53,"Run10 Deutsch"));
         g.medals=db::cb2::cb2Medals(db::GameInfo::Flag_Best_Game
                                    | db::GameInfo::Flag_Tactics
                                    | db::GameInfo::Flag_End_Game);
@@ -734,7 +737,7 @@ static void testWriterRoundTrip() {
 
     for (unsigned g=0;g<3;++g) {
         unsigned char const* rec=&index[192*(g+1)];
-        check(u16at(rec+0)==1 && u16at(rec+2)==0x0101,"record version words");
+        check((u16at(rec+0) & 0xff7f)==1 && u16at(rec+2)==0x0101,"record version words including deleted marker");
         uint64_t goff=u64at(rec+0x08);
         check(goff<gdata.size(),"record offset in range");
 
@@ -853,6 +856,13 @@ static void testWriterRoundTrip() {
             check(u32at(&namebase[a])==20+title.size()+name.size(),"source record length");
         }
 
+        if (g == 0) {
+            check((rec[0]&0x80) && (rec[0xba]&1) && (rec[0x58]>>2)==1,"written deleted, good and unplayed fields");
+            db::cb2::GameTitles titles;
+            check(db::cb2::readGameTitles(namebase.data(),namebase.size(),unsigned(u64at(rec+0x50)),titles),"written game title parses");
+            check(titles.size()==2 && titles[0].language==42 && titles[0].text=="Run10 English title"
+                  && titles[1].language==53 && titles[1].text=="Run10 Deutsch","multilingual title values");
+        }
         check(u16at(rec+0x82)==expect[g].medals,"medal word");
         check(db::cb2::cb2GameFlags(u16at(rec+0x82))
               ==db::cb2::cb2GameFlags(expect[g].medals),"medals decode to game flags");
@@ -907,6 +917,11 @@ static void testWriterRoundTrip() {
                                     db::cb2::namebaseSourceOffset,
                                     unsigned(u64at(r0+0x38)),rec0),
               "appended database keeps the source record");
+        check((r0[0]&0x80) && (r0[0xba]&1) && (r0[0x58]>>2)==1,"append keeps index flags");
+        db::cb2::GameTitles titles;
+        check(db::cb2::readGameTitles(lid2.data(),lid2.size(),unsigned(u64at(r0+0x50)),titles),"appended title parses");
+        check(titles.size()==2 && titles[0].text=="Run10 English title"
+              && titles[1].text=="Run10 Deutsch","append keeps multilingual title");
         check(std::string(rec0.name,rec0.nameLength)=="ChessBase","appended source name");
         check(std::string(rec0.title,rec0.titleLength)=="playchess.com","appended source title");
 
@@ -1117,7 +1132,7 @@ static void testWriterHeaders() {
         check(refOk(u64at(rec+0x38),count[2]),"source id in range");
         check(u64at(rec+0x40)==~uint64_t(0),"white team unset");
         check(u64at(rec+0x48)==~uint64_t(0),"black team unset");
-        check(u64at(rec+0x50)==~uint64_t(0),"no game title");
+        check(u64at(rec+0x50)==0,"empty title record");
 
         // scalar fields
         unsigned const result=(specs[i].result[0]=='1')?2u
@@ -1185,6 +1200,40 @@ static void testWriterHeaders() {
 // Every medal bit of the index word maps to exactly one codebase flag and
 // maps back unchanged, so a database written by cb2::writeDatabase reads back
 // with the flags it was given.
+static void testTitleRecords() {
+    db::cb2::GameTitles titles, decoded;
+    titles.push_back(db::cb2::GameTitle(42,"Run10 English title"));
+    titles.push_back(db::cb2::GameTitle(53,"Run10 Deutsch"));
+    mstl::string encoded;
+    check(db::cb2::encodeGameTitles(titles,encoded),"encode multilingual title");
+    check(encoded.size()==56 && (unsigned char)encoded[0]==52,"measured title size excludes length word");
+    size_t off=0xb8+0xe76;
+    std::vector<unsigned char> lid(off+encoded.size());
+    std::memcpy(lid.data()+off,encoded.data(),encoded.size());
+    check(db::cb2::readGameTitles(lid.data(),lid.size(),0,decoded),"title in partial final slot");
+    check(decoded.size()==2 && decoded[1].language==53,"title languages decoded");
+    for (size_t n=0;n<encoded.size();++n)
+        check(!db::cb2::readGameTitles(lid.data(),off+n,0,decoded),"reject every title truncation");
+    le32(lid.data()+off+4,0x55443322);
+    check(!db::cb2::readGameTitles(lid.data(),lid.size(),0,decoded),"reject deleted/free title slot");
+    check(decoded.size()==2,"invalid title leaves output unchanged");
+    titles[0].text.assign(521,'x');
+    check(!db::cb2::encodeGameTitles(titles,encoded),"oversized title refused");
+    check(!db::cb2::readGameTitles(nullptr,0,0,decoded),"null title buffer");
+
+    // A medal bookmark followed by a comment in the same move container.
+    std::vector<unsigned char> ann(8+6+10+3+4);
+    le32(ann.data(),1); le32(ann.data()+4,2);
+    ann[8]=0x22; le32(ann.data()+10,0x200);
+    le32(ann.data()+14,2); le32(ann.data()+20,3);
+    std::memcpy(ann.data()+24,"hey",3); le32(ann.data()+27,0x7fffffff);
+    mstl::vector<db::cb2::CbaItem> items;
+    check(db::cb2::parseCbaItems(ann.data(),ann.size(),items),"medal bookmark does not stop annotation parsing");
+    check(items.size()==1 && items[0].text=="hey","comment after medal survives");
+    items.clear();
+    check(!db::cb2::parseCbaItems(ann.data(),13,items),"truncated medal bookmark refused");
+}
+
 static void testMedalBits() {
     struct Bit { unsigned bit; unsigned flag; };
     Bit const bits[] = {
@@ -1196,8 +1245,8 @@ static void testMedalBits() {
         {  5, db::GameInfo::Flag_Strategy },
         {  6, db::GameInfo::Flag_Tactics },
         {  7, db::GameInfo::Flag_With_Attack },
-        {  8, db::GameInfo::Flag_Sacrifice },
-        {  9, db::GameInfo::Flag_Defense },
+        {  9, db::GameInfo::Flag_Sacrifice },
+        {  8, db::GameInfo::Flag_Defense },
         { 10, db::GameInfo::Flag_Material },
         { 11, db::GameInfo::Flag_Piece_Play },
         { 12, db::GameInfo::Flag_End_Game },
@@ -1366,6 +1415,7 @@ int main(int argc,char** argv) {
     testExplicitSetup();
     testSetupCastling();
     testTeamNamebase();
+    testTitleRecords();
     testMedalBits();
     testWriterRoundTrip();
     testWriterHeaders();

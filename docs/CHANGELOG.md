@@ -9,9 +9,14 @@
 - Export refuses comments, NAGs, marks, move information and database text
   entries before writing, because the current 2CBH annotation writer cannot
   preserve them. Use PGN for annotated games.
-- Added synthetic adapter tests and a Tcl export/reopen regression. Backend
-  tests pass; GUI/CBase26 verification is pending because this run cannot
-  access X or the Ghidra HTTP server. Unknown format fields remain unknown.
+- Verified app exports open and reopen in CBase26 without an integrity page;
+  all three Tcl export tests pass under xvfb.
+- Measured all sixteen medals in CBase26 and corrected Defense/Sacrifice
+  bits. Medal bookmarks no longer stop annotation parsing.
+- Read/write multilingual Game Tags, deleted markers, unplayed result
+  subtypes and the good-game classification. Titles and status values without
+  built-in Scidb tags use documented extra PGN tags. The unknown +0x93c
+  section and full CBase26 namebase/board compatibility remain open.
 
 ## Unreleased — main drop-down shortcuts
 

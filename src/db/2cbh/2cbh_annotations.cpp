@@ -83,7 +83,7 @@ parseCbaItems(unsigned char const* data, uint32_t size, mstl::vector<CbaItem>& i
 
 		for (uint32_t k = 0; k < count; ++k)
 		{
-			if (p >= size)
+			if (size - p < 4)
 				return false;
 
 			uint32_t const type32 = readLE32(data + p);
@@ -119,6 +119,14 @@ parseCbaItems(unsigned char const* data, uint32_t size, mstl::vector<CbaItem>& i
 					return false;
 				p += 6;
 			}
+            else if (type16 == 0x22)
+            {
+                // Position bookmark medal: [u16 0x22][u32 medal mask].
+                // Global GameInfo flags come from index +0x82. Consume the
+                // bookmark so following comments and NAGs remain readable.
+                if (size - p < 6) return false;
+                p += 6;
+            }
 			else if (type16 == 0x21)
 			{
 				// engine evaluation: [u16 0x21][i16 cp][u32 depth]

@@ -11,6 +11,7 @@
 #include "db_consumer.h"
 #include "2cbh_annotations.h"
 #include "db_date.h"
+#include "cb2_title.h"
 
 #include "m_fstream.h"
 #include "m_map.h"
@@ -114,6 +115,7 @@ private:
 
 	void applyEcoTag(TagSet& tags, unsigned gameIndex);
 	void applySourceTag(TagSet& tags, unsigned gameIndex);
+	void applyExtraIndexTags(TagSet& tags, unsigned gameIndex);
 	void applyTeamTags(TagSet& tags, unsigned gameIndex);
 	bool loadAnnotationItems(unsigned gameIndex, mstl::vector<CbaItem>& items);
 
@@ -138,6 +140,10 @@ private:
 	mstl::vector<mstl::string>	m_teamName;
 	mstl::vector<uint64_t>	m_whiteTeam;
 	mstl::vector<uint64_t>	m_blackTeam;
+	mstl::vector<GameTitles> m_titleSlots;
+	mstl::vector<uint64_t> m_titleIds;
+	mstl::vector<unsigned> m_resultTypes;
+	mstl::vector<bool> m_goodGames;
 };
 
 } // namespace cb2

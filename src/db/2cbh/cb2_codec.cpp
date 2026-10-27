@@ -751,6 +751,10 @@ Codec::doOpen(	mstl::string const& rootname,
 	// here so the ECO tag can carry the full form.
 	m_ecoValues.clear();
 	m_ecoValues.reserve(m_numGames);
+	m_titleSlots.clear();
+	m_titleIds.clear();
+	m_resultTypes.clear();
+	m_goodGames.clear();
 	m_sourceTitle.clear();
 	m_sourceName.clear();
 	m_sourceIds.clear();
@@ -876,6 +880,17 @@ Codec::doOpen(	mstl::string const& rootname,
 			// 2024'/'New York USA'; 99.5% of games resolve.
 			// ------------------------------------------------------------------
 			unsigned char const* lp = reinterpret_cast<unsigned char const*>(lidData.data());
+
+            if (lsize > namebaseFirstSlot)
+            {
+                size_t slots = (lsize - namebaseFirstSlot + namebaseStride - 1) / namebaseStride;
+                for (size_t slot = 0; slot < slots; ++slot)
+                {
+                    GameTitles titles;
+                    readGameTitles(lp, lsize, unsigned(slot), titles);
+                    m_titleSlots.push_back(titles);
+                }
+            }
 
 			if (lsize >= 0xb8 + 0x108a)
 			{
@@ -1050,6 +1065,10 @@ Codec::doOpen(	mstl::string const& rootname,
 		// `~0` = no team (what every genuine fixture record carries).
 		m_whiteTeam.push_back(readLE64(rec + 0x40));
 		m_blackTeam.push_back(readLE64(rec + 0x48));
+		m_titleIds.push_back(readLE64(rec + 0x50));
+		m_resultTypes.push_back(rec[0x58] >> 2);
+		m_goodGames.push_back((rec[0xba] & 1) != 0);
+		if (rec[0] & 0x80) info.m_gameFlags |= GameInfo::Flag_Deleted;
 
 		// Medals / game flags: the u16 word @+0x82, in the slot classic CBH
 		// uses for the same word (right after the ECO key).  See
@@ -1274,8 +1293,7 @@ Codec::applyTeamTags(TagSet& tags, unsigned gameIndex)
 {
 	// White/Black team: the .2lid team section (+0xd3c) selected by the u64
 	// ids the index keeps at +0x40/+0x48.  Scidb has tags for both, so the
-	// names are exposed; the game title (+0x50, .2lid +0xe76) has no tag in
-	// this codebase and is left unread.
+	// names are exposed. Multilingual titles use applyExtraIndexTags().
 	struct
 	{
 		mstl::vector<uint64_t> const&	ids;
@@ -1296,6 +1314,34 @@ Codec::applyTeamTags(TagSet& tags, unsigned gameIndex)
 		if (id < m_teamName.size() && !m_teamName[unsigned(id)].empty())
 			tags.set(fields[f].tag, m_teamName[unsigned(id)]);
 	}
+}
+
+
+void
+Codec::applyExtraIndexTags(TagSet& tags, unsigned gameIndex)
+{
+    if (gameIndex < m_resultTypes.size() && m_resultTypes[gameIndex])
+    {
+        char value[16]; ::snprintf(value, sizeof(value), "%u", m_resultTypes[gameIndex]);
+        tags.setExtra("ChessBaseResultType", value);
+    }
+    if (gameIndex < m_goodGames.size() && m_goodGames[gameIndex])
+        tags.setExtra("ChessBaseGoodGame", "1");
+    if (gameIndex >= m_titleIds.size() || m_titleIds[gameIndex] >= m_titleSlots.size()) return;
+    GameTitles const& titles = m_titleSlots[unsigned(m_titleIds[gameIndex])];
+    for (unsigned i = 0; i < titles.size(); ++i)
+    {
+        char name[32];
+        if (titles[i].language == 42) ::snprintf(name, sizeof(name), "GameTitle");
+        else ::snprintf(name, sizeof(name), "GameTitle%u", unsigned(titles[i].language));
+        mstl::string text(titles[i].text);
+        if (!sys::utf8::validate(text))
+        {
+            sys::utf8::Codec codec(sys::utf8::Codec::utf8());
+            codec.forceValidUtf8(text);
+        }
+        tags.setExtra(name, text);
+    }
 }
 
 
@@ -1351,6 +1397,7 @@ Codec::doDecoding(	db::Consumer& consumer,
 	applyEcoTag(tags, gameIndex);
 	applySourceTag(tags, gameIndex);
 	applyTeamTags(tags, gameIndex);
+	applyExtraIndexTags(tags, gameIndex);
 	if (!consumer.startGame(tags))
 		return save::UnsupportedVariant;
 	consumer.startMoveSection();
@@ -1390,6 +1437,7 @@ Codec::doDecoding(GameData& data, GameInfo& info, unsigned gameIndex, mstl::stri
 	applyEcoTag(tags, gameIndex);
 	applySourceTag(tags, gameIndex);
 	applyTeamTags(tags, gameIndex);
+	applyExtraIndexTags(tags, gameIndex);
 	unsigned char const* moves = reinterpret_cast<unsigned char const*>(rec.data.data());
 	uint32_t moveSize = rec.size;
 	Board startBoard;
