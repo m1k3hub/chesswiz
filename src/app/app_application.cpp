@@ -486,7 +486,12 @@ Application::insertScratchGame(unsigned position, variant::Type variant)
 	mstl::string	fen;
 
 	if (m_fallbackPosition != InvalidPosition)
-		m_gameMap.find(m_fallbackPosition)->second->data.game->printFen(fen);
+	{
+		// The fallback game is gone once its pane was closed.
+		GameMap::const_iterator f = m_gameMap.find(m_fallbackPosition);
+		if (f != m_gameMap.end())
+			f->second->data.game->printFen(fen);
+	}
 
 	unsigned index;
 
@@ -1585,6 +1590,9 @@ Application::releaseGame(unsigned position)
 
 	m_gameMap.erase(position);
 	m_indexMap.erase(position);
+
+	if (m_fallbackPosition == position)
+		m_fallbackPosition = InvalidPosition;
 
 	if (m_currentPosition == position)
 	{
