@@ -13,6 +13,8 @@
 #include "2cbh/cb2_namebase.h"
 #include "2cbh/cb2_setup.h"
 #include "db_board.h"
+#include "db_game.h"
+#include "m_exception.h"
 #include "db_move_list.h"
 #include "db_tag_set.h"
 #include "db_var_consumer.h"
@@ -1243,6 +1245,68 @@ static void testMedalBits() {
     check(roundTrip,"canonical medal word round trip");
 }
 
+static void testGameExport() {
+    db::Game game;
+    game.moveToMainlineStart();
+    db::TagSet tags;
+    tags.set(db::tag::White, "Réti, Richard");
+    tags.set(db::tag::Black, "Black");
+    tags.set(db::tag::Event, "App export");
+    tags.set(db::tag::Date, "2026.10.27");
+    tags.set(db::tag::Result, "*");
+    tags.set(db::tag::WhiteTeam, "Team A");
+    game.setTags(tags);
+    game.setGameFlags(db::GameInfo::Flag_User);
+    game.addMove("e4"); check(game.forward(), "export fixture first move");
+    game.addVariation("d4", db::move::Ante);
+    game.addMove("e5"); check(game.forward(), "export fixture second move");
+    game.addVariation("c5", db::move::Ante);
+    unsigned const ply = game.currentBoard().plyNumber();
+    db::cb2::WriteGame encoded;
+    mstl::string error;
+    check(db::cb2::encodeGame(game, encoded, &error), "encode app game with variations");
+    check(game.currentBoard().plyNumber() == ply, "export leaves editor position intact");
+    check(encoded.white == "Réti, Richard" && encoded.whiteTeam == "Team A"
+          && encoded.date == db::Date(2026,10,27) && encoded.medals == 0x8000,
+          "export maps game tags and medal flags");
+    std::vector<uint16_t> words;
+    for (auto code : encoded.moves) words.push_back(code);
+    check(words == std::vector<uint16_t>({0xfffc,pawnCode("e2","e4",6),0xfffd,
+                       pawnCode("e7","e5",14),0xfffd,0xffff,
+                       pawnCode("c7","c5",14),0xffff,
+                       pawnCode("d2","d4",6),0xffff}), "export variation storage order");
+    check(walk(game.startBoard(), words), "exported tree decodes legally");
+    game.enterVariation(0);
+    check(game.forward(), "enter exported root variation");
+    game.addMove("Nf3"); check(game.forward(), "nested export fixture move");
+    game.addVariation("Nc3", db::move::Ante);
+    game.exitToMainline();
+    check(db::cb2::encodeGame(game, encoded, &error), "encode nested export variation");
+    words.clear();
+    for (auto code : encoded.moves) words.push_back(code);
+    auto raw = bytes(words);
+    db::VarConsumer consumer(game.startBoard());
+    check(consumer.startGame(tags), "start nested export reader");
+    consumer.startMoveSection();
+    mstl::vector<db::cb2::CbaItem> items;
+    unsigned plies = 0;
+    check(db::cb2::walkGameRaw(consumer, raw.data(), raw.size(), items, true, plies)
+          && plies == 2 && consumer.countVariations() == 3,
+          "nested export tree round trip retains all variations");
+    consumer.finalizeGame();
+    auto previous = encoded.moves;
+    game.setComment("Keep this annotation", db::move::Post);
+    check(!db::cb2::encodeGame(game, encoded, &error) && !error.empty(),
+          "export refuses annotation loss");
+    check(encoded.moves == previous, "failed encoding leaves result intact");
+    db::Game text;
+    check(db::cb2::encodeGame(text, encoded, &error) && encoded.moves.size() == 2,
+          "empty game export");
+    text.setStartPosition("4k3/8/8/8/8/8/8/R3K2R b KQ - 0 1");
+    check(db::cb2::encodeGame(text, encoded, &error) && encoded.setup == 1000
+          && !encoded.fen.empty(), "export keeps arbitrary setup");
+}
+
 int main(int argc,char** argv) {
     tcl::bits::interp=Tcl_CreateInterp(); db::Board::initialize();
     unsigned char header[192]={};header[10]=192;
@@ -1295,6 +1359,8 @@ int main(int argc,char** argv) {
                       pawnCode("c7","c5",14),0xffff,
                       pawnCode("d2","d4",6),0xffff}),"two root variations");
 
+    try { testGameExport(); }
+    catch (mstl::exception const& e) { std::fprintf(stderr, "export test: %s\n%s\n", e.what(), e.report().c_str()); return 1; }
     testMove16Encoding();
     testPlacementCodes();
     testExplicitSetup();

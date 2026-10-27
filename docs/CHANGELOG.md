@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — Save as ChessBase 2CBH
+
+- Database Export offers **ChessBase 2CBH (Save as)** for legal standard and
+  Chess960 games, including nested variations, setup positions, basic headers,
+  ratings, teams, annotator, source and existing medal flags. The codec stays
+  read-only; export to a separate database instead of appending in place.
+- Export refuses comments, NAGs, marks, move information and database text
+  entries before writing, because the current 2CBH annotation writer cannot
+  preserve them. Use PGN for annotated games.
+- Added synthetic adapter tests and a Tcl export/reopen regression. Backend
+  tests pass; GUI/CBase26 verification is pending because this run cannot
+  access X or the Ghidra HTTP server. Unknown format fields remain unknown.
+
 ## Unreleased — main drop-down shortcuts
 
 - The reorganised drop-down advertises the keys that are really bound:

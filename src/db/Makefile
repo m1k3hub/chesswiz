@@ -9234,7 +9234,7 @@ cbh1trace: cbh1trace.o $(LIBS)
 
 # Shared CB2 framing/start-position APIs also affect the converter.
 2cbh/cb2_codec.o 2cbh/2cbh2pgn.o: 2cbh/cb2_index.h 2cbh/cb2_codec.h
-2cbh/cb2_writer.o: 2cbh/cb2_writer.h 2cbh/cb2_index.h 2cbh/2cbh_move16.h 2cbh/2cbh_annotations.h
+2cbh/cb2_writer.o: db_game.h db_move_node.h 2cbh/cb2_writer.h 2cbh/cb2_index.h 2cbh/2cbh_move16.h 2cbh/2cbh_annotations.h
 db_database_codec.o: 2cbh/cb2_codec.h
 
 # Synthetic CB2 framing and Chess960 regressions (no proprietary fixtures).

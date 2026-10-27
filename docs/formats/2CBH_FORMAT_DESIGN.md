@@ -1836,6 +1836,46 @@ test.  Two neighbouring fields are *not* part of it:
   (`0x1401e4540`, `0x1401e4470`, `0x1401e4500`), zero everywhere.  Left
   unmapped.
 
+### 17.7 Run-10 help map and app Save as path (2026-10-27)
+
+The cached ChessBase 18 help supplies a more precise medal setter than the
+run-9 database menus: **right-click a move > Special annotation > Set Medal**,
+or the **quotation-mark key** in notation. **+** in a game list sets the User
+medal. Save/Replace is needed to persist a loaded game's edits. Game titles
+are language-dependent text in the save mask; source publication/version
+dates are distinct from game dates and database creation dates. The complete
+paraphrased map, source URLs and unresolved distinctions are in
+`tests/tmp-app/2cbh-re/run10/HELP-NOTES.md`.
+
+These are help-derived probe instructions, not a newly measured bit mapping.
+This run's sandbox forbids socket creation: neither Ghidra HTTP on
+`127.0.0.1:8089` nor Wine's X server on `:901` was reachable. The unknown
+namebase and flag assignments in §19 therefore remain open.
+
+The app's database Export dialog now offers **ChessBase 2CBH (Save as)**.
+`app::View::exportGames` loads the selected view in its displayed order,
+prepares every game through `cb2::encodeGame`, then calls `writeDatabase`.
+The adapter retains standard/Chess960 setup positions, legal move trees
+(including nested variations), basic headers, Elo, teams, annotator, source
+and the existing medal mapping. It traverses the game without changing the
+editor position. A depth bound of 256 rejects excessive variation nesting.
+
+The database codec remains read-only: use Export to save as another 2CBH
+database rather than adding to an open one. App-level append is refused,
+because the low-level append API cannot retain all unknown existing fields.
+The current annotation writer only emits unannotated records, so this path
+**refuses comments, NAGs, marks, move information and database text entries**
+before writing any output. It does not silently strip them; use PGN for
+annotated games. Other optional tags remain subject to the writer's existing
+field coverage. The lower-level writer APIs are otherwise unchanged.
+
+Synthetic backend tests cover the adapter and nested variation replay. The
+new `tests/test_app_2cbh_export.tcl` exercises the export dialog, codec decode
+and reopen with three synthetic games, plus append refusal. It could not run
+here because Tk cannot connect to an X server; CBase26 acceptance of the new
+app route also remains unverified. Prior §18 writer acceptance is not a
+substitute for that test.
+
 ## 18. Writer: `cb2::writeDatabase` / `cb2::appendToDatabase` (2026-10-26, run 8)
 
 `src/db/2cbh/cb2_writer.{h,cpp}` writes the five files from
@@ -1994,7 +2034,7 @@ every namebase reference against the counts found in the slot array), the
 `.2cbg`/`.2cba` file lengths and per-record length trailers, the record types,
 the `.2lid` capacities, counts and free-chunk table, and the `.ini` header.
 
-## 19. Open items (2026-10-27, run 9)
+## 19. Open items (2026-10-27, run 9; run-10 status below)
 
 What §16-§18 do **not** cover, i.e. the real remaining work.  Everything else
 in §8/§9 is historical and settled by now.
@@ -2078,3 +2118,20 @@ in §8/§9 is historical and settled by now.
    statistics or the tournament namebase degrade in a database that never had
    them, and the `.2lgd` entry contents (per-player counters) are only partly
    documented (§6.1).
+
+### Run-10 status
+
+Part A's cached-help map is complete to the available prose; full medal names
+are in an uncached image, so their wording remains code-derived. Part B is
+blocked by the execution environment's socket restrictions, not by another
+failed menu attempt. In particular, item 5's claim that the dialog was
+unreachable should be retested using the notation shortcut above. No item
+1–3 or 5 has been newly decoded. Item 4's prior writer-integrity result
+stands, but the new app Export route still needs a CBase26 open/reopen check.
+No new ChessBase database, help page or decompiler output is committed.
+
+The app write path requested in run 10 is implemented as Save as (§17.7),
+with explicit refusal of annotations that the current writer cannot store.
+The backend and Elo regressions pass; the Tcl app test awaits X access.
+Git commits are also blocked here: creating the worktree's `index.lock`
+returns `Read-only file system`, even though source edits are writable.

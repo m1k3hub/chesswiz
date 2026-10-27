@@ -21,6 +21,8 @@
 #include "db_eco.h"
 #include "db_tag_set.h"
 #include "db_move.h"
+#include "db_game.h"
+#include "db_move_node.h"
 
 #include "m_fstream.h"
 #include "m_ifstream.h"
@@ -1184,6 +1186,101 @@ WriteGame::WriteGame()
 	,setup(-1)
 	,recordType(0)
 {
+}
+
+
+namespace {
+
+// Each line is followed by its child subtrees in reverse document order.
+// A marker follows the move that the corresponding variation replaces.
+bool encodeLine(MoveNode const* start, Board board,
+                mstl::vector<uint16_t>& stream, unsigned depth)
+{
+	if (depth > 256) return false;
+	mstl::vector<mstl::vector<uint16_t> > children;
+	for (MoveNode const* node = start->next(); !node->atLineEnd(); node = node->next())
+	{
+		uint16_t code;
+		if (!encodeMove16(board, node->move(), code)) return false;
+		stream.push_back(code);
+		for (unsigned i = 0; i < node->variationCount(); ++i)
+		{
+			stream.push_back(Move16_Marker);
+			mstl::vector<uint16_t> child;
+			if (!encodeLine(node->variation(i), board, child, depth + 1)) return false;
+			children.push_back(child);
+		}
+		Move move(node->move());
+		board.prepareForPrint(move, variant::Normal, Board::ExternalRepresentation);
+		board.doMove(move, variant::Normal);
+	}
+	stream.push_back(Move16_Terminator);
+	for (unsigned i = children.size(); i > 0; --i)
+		for (unsigned j = 0; j < children[i - 1].size(); ++j)
+			stream.push_back(children[i - 1][j]);
+	return true;
+}
+
+} // anonymous namespace
+
+
+bool
+encodeGame(Game const& game, WriteGame& result, mstl::string* error)
+{
+	// The current writer only emits the no-annotations record. Refuse rather
+	// than turn an annotated study into a superficially successful export.
+	if (game.variant() != variant::Normal)
+	{
+		if (error) *error = "Save as 2CBH supports standard chess and Chess960 only";
+		return false;
+	}
+	if (game.countComments() || game.countAnnotations()
+		|| game.countMarks() || game.countMoveInfo())
+	{
+		if (error) *error = "Save as 2CBH currently requires games without annotations; use PGN to preserve annotations";
+		return false;
+	}
+
+	if (!game.data().m_guidingText.empty())
+	{
+		if (error) *error = "Save as 2CBH cannot export database text entries";
+		return false;
+	}
+
+	WriteGame encoded;
+	TagSet const& tags = game.tags();
+	encoded.white = tags.value(tag::White);
+	encoded.black = tags.value(tag::Black);
+	encoded.event = tags.value(tag::Event);
+	encoded.site = tags.value(tag::Site);
+	encoded.date = Date(tags.value(tag::Date));
+	encoded.round = tags.value(tag::Round);
+	encoded.result = tags.value(tag::Result);
+	encoded.eco = tags.value(tag::Eco);
+	encoded.whiteElo = tags.contains(tag::WhiteElo) ? tags.asInt(tag::WhiteElo) : 0;
+	encoded.blackElo = tags.contains(tag::BlackElo) ? tags.asInt(tag::BlackElo) : 0;
+	encoded.annotator = tags.value(tag::Annotator);
+	encoded.source = tags.value(tag::Source);
+	encoded.whiteTeam = tags.value(tag::WhiteTeam);
+	encoded.blackTeam = tags.value(tag::BlackTeam);
+	encoded.medals = cb2Medals(game.gameFlags());
+	for (unsigned i = 0; i < tags.countExtra(); ++i)
+		if (tags.extra(i).name == "SourceTitle") encoded.sourceTitle = tags.extra(i).value;
+
+	if (!game.startBoard().isStandardPosition(variant::Normal))
+	{
+		encoded.setup = 1000;
+		encoded.fen = game.startBoard().toFen(variant::Normal);
+	}
+
+	encoded.moves.push_back(Move16_GameStart);
+	if (!encodeLine(game.data().m_startNode, game.startBoard(), encoded.moves, 0))
+	{
+		if (error) *error = "Save as 2CBH cannot encode an illegal, unsupported or excessively nested move tree";
+		return false;
+	}
+	result = encoded;
+	return true;
 }
 
 

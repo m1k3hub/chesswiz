@@ -12,7 +12,7 @@
 //   .2lid  namebase: 0xb8-byte structural header, then one 0x108a-byte slot
 //          per name.  Each slot carries the player record at +0x000, the
 //          event/site/EventDate record at +0x400, the [SourceTitle]/[Source]
-//          pair at +0x860 and the annotator at +0x93c.
+//          pair at +0x860. Annotators reference player records; +0x93c is unknown.
 //   .ini   the [Descr2CBG] description CBase26 needs to accept the directory
 //          as a database (without it, it offers to create a new one instead).
 //
@@ -40,6 +40,7 @@ namespace db {
 
 class Board;
 class Move;
+class Game;
 
 namespace cb2 {
 
@@ -109,6 +110,11 @@ bool writeDatabase(	mstl::string const& rootname,
 bool appendToDatabase(	mstl::string const& rootname,
 								mstl::vector<WriteGame> const& games,
 								mstl::string* error = 0);
+
+/// Prepare an unannotated game (including variations) for Save as 2CBH.
+/// Refuses unsupported content before any files are written; does not change
+/// the caller's game.
+bool encodeGame(Game const& game, WriteGame& result, mstl::string* error = 0);
 
 /// Encode a legal move sequence starting at @a board into a Move16 stream
 /// (leading 0xfffc and trailing 0xffff included).  Used by callers that hold

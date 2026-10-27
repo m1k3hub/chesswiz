@@ -43,6 +43,8 @@
 #include "sci_consumer.h"
 #include "sci_encoder.h"
 
+#include "2cbh/cb2_writer.h"
+
 #include "si3_codec.h"
 #include "si3_consumer.h"
 
@@ -894,7 +896,36 @@ View::exportGames(mstl::string const& filename,
 	format::Type	format	= format::fromString(ext);
 	unsigned			count		= 0;
 
-	if (format == format::Scidb)
+	if (format == format::ChessBase2)
+	{
+		// The codec remains read-only. Export is an explicit Save as operation,
+		// never an in-place append that could discard unknown existing fields.
+		if (fmode == Append)
+			M_RAISE("2CBH is read-only; use Export to save as a new 2CBH database");
+		mstl::vector<cb2::WriteGame> games;
+		unsigned const total = this->count(table::Games);
+		progress.start(total);
+		progress.message("write-game");
+		for (unsigned i = 0; i < total; ++i)
+		{
+			if (progress.interrupted()) return unsigned(-2);
+			Game game;
+			if (m_cursor.m_db->loadGame(index(table::Games, i), game) != load::Ok)
+				M_RAISE("Cannot load game %u for 2CBH export", i + 1);
+			cb2::WriteGame encoded;
+			mstl::string error;
+			if (!cb2::encodeGame(game, encoded, &error))
+				M_RAISE("2CBH export, game %u: %s", i + 1, error.c_str());
+			games.push_back(encoded);
+			progress.update(i + 1);
+		}
+		if (progress.interrupted()) return unsigned(-2);
+		mstl::string error;
+		if (!cb2::writeDatabase(util::misc::file::rootname(filename), games, &error))
+			M_RAISE("2CBH export: %s", error.c_str());
+		return games.size();
+	}
+	else if (format == format::Scidb)
 	{
 		mstl::string outputName(filename);
 		bool useTemporaryTarget = fmode != Append;

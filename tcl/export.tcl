@@ -144,6 +144,7 @@ set Book							"Book"
 set FormatName(scidb)		"Scidb"
 set FormatName(scid)			"Scid"
 set FormatName(cbh)			"ChessBase"
+set FormatName(cb2)			"ChessBase 2CBH (Save as)"
 set FormatName(pgn)			"PGN"
 set FormatName(pdf)			"PDF"
 set FormatName(html)			"HTML"
@@ -710,6 +711,7 @@ proc open {parent args} {
 		scidb	$::icon::32x32::logo  \
 		scid	$::icon::32x32::scid3 \
 		cbh	$::icon::32x32::scid3 \
+		cb2	$::icon::32x32::scid3 \
 		pgn	$IconPGN              \
 		tex	$IconTeX              \
 		html	$IconHtml             \
@@ -736,12 +738,12 @@ proc open {parent args} {
 		}
 	} else {
 		set Values(Type) scidb
-		set Values(Types) {scidb scid pgn pdf html tex}
+		set Values(Types) {cb2 scidb scid pgn pdf html tex}
 		# A .cbh destination only accepts a raw copy from another ChessBase
 		# database, so offer it exactly in that case.
 		if {![catch { ::scidb::db::get codec $Info(base) $Info(variant) } codec]
 			&& $codec eq "cbh"} {
-			set Values(Types) {cbh scidb scid pgn pdf html tex}
+			set Values(Types) {cbh cb2 scidb scid pgn pdf html tex}
 		}
 		set tabs {	options OptionsSetup
 						tags_si3 TagsSetup
@@ -3116,7 +3118,8 @@ proc Select {nb index} {
 			set ext {.si4 .si3}
 		}
 
-		cbh {
+		cb2 - cbh {
+			HideTab $nb $nb.comment
 			HideTab $nb $nb.options
 			HideTab $nb $nb.tags_si3
 			HideTab $nb $nb.tags_sci
@@ -3128,7 +3131,7 @@ proc Select {nb index} {
 			HideTab $nb $nb.annotation
 			HideTab $nb $nb.encoding
 			set var $::menu::mc::ChessBaseBases
-			set ext .cbh
+			set ext [expr {$Values(Type) eq "cb2" ? ".2cbh" : ".cbh"}]
 		}
 
 		pgn {
@@ -3300,7 +3303,9 @@ proc DoExport {parent dlg file} {
 	set script {}
 	set preamble {}
 
-	if {[info exists Info(languages)]} {
+	if {$Values(Type) in {cb2 cbh}} {
+		set languages {}
+	} elseif {[info exists Info(languages)]} {
 		set languages {}
 		foreach lang $Info(languages) { lappend languages [list $lang yes] }
 	} elseif {[lindex $Values($Values(Type),comments,languages) 0] eq "all"} {
@@ -3346,7 +3351,7 @@ proc DoExport {parent dlg file} {
 				set encoding $Values($Values(Type),encoding)
 			}
 		}
-		scidb - cbh - tex - html {
+		scidb - cbh - cb2 - tex - html {
 			set encoding "utf-8"
 		}
 		default {
@@ -3574,6 +3579,14 @@ proc DoExport {parent dlg file} {
 						$languages \
 					]
 				}
+			}
+
+			cb2 {
+				# Save as: cb2's database codec remains read-only. The backend
+				# checks every game before writing any destination files.
+				set cmd [list ::scidb::view::export \
+					$Info(base) $Info(variant) $Info(view) $file \
+					0 0 utf-8 0 {} {}]
 			}
 
 			cbh {

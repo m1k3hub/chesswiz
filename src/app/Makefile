@@ -1939,3 +1939,6 @@ app_winboard_engine.o: ../sys/sys_signal.h
 app_winboard_engine.o: ../sys/sys_timer.h
 app_winboard_engine.o: ../sys/sys_time.h
 app_winboard_engine.o: ../mstl/m_stdio.h
+
+# Save as 2CBH adapter used by database export.
+app_view.o: ../db/2cbh/cb2_writer.h
