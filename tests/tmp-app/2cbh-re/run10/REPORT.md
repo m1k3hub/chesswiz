@@ -1,95 +1,84 @@
-# Run 10 report — 2026-10-27
+# Run 10B report — 2026-10-27
 
-**Status: partial; live reverse engineering, GUI validation and commits are blocked.**
+Status: implemented and tested the measured fields; the entire brief is not
+fully resolved. Ghidra HTTP and Wine/X were available in this pass.
 
-## Delivered
+## App acceptance
 
-- Read BRIEF.md including its handover, format-design §19, and required Jev
-  guidance. Used the cached help, without fetching it again or scanning big
-  fixtures. HELP-NOTES.md records attributes, setter paths, URLs, storage
-  hypotheses and distinctions that the help does not settle.
-- The important missed medal path is notation right-click > Special annotation
-  > Set Medal, or the quotation-mark key. List `+` sets User medal. This is
-  help evidence, not a newly measured medal mapping.
-- Added database Export > ChessBase 2CBH (Save as), routed through
-  app::View::exportGames to cb2::writeDatabase. The codec remains read-only;
-  use Save as instead of appending into an open database.
-- Added cb2::encodeGame: basic tags, ratings, source, annotator, teams, the
-  existing medal flags, setup/Chess960 positions, and legal move trees with
-  nested variations. Encoding leaves the editor position unchanged. The
-  reverse document order of subtree storage is covered by tests.
-- Unsupported annotations (comments, NAGs, marks, move information) and
-  database text are refused before any destination file is written. The
-  current low-level writer has no annotation encoder. Other optional tags
-  remain limited to the existing writer's coverage. No silent annotation
-  stripping or app-level lossy append was added.
-- Added tests/test_app_2cbh_export.tcl with three synthetic games, UTF-8,
-  nested variations, teams, a setup, codec decode/reopen, append refusal and
-  all-games preflight when a later game has a comment. Added backend adapter
-  tests and incremental-build dependencies. Corrected the writer header's
-  obsolete claim that annotators live at +0x93c.
-- Updated format-design §17/§19 and docs/CHANGELOG.md. All changed source,
-  test, documentation and Makefiles have mode 644.
+- All 3 Tcl app export tests pass under xvfb (test-app-final2.log). They now
+  check multilingual titles, result subtype and good-game tags through the
+  codec, in addition to UTF-8 players, variations, teams, setup and reopen.
+- Preserved the app-generated three-game export in ignored dbs/app-final.
+  CBase26 opens/reopens it without an integrity page. The four binary files
+  stay SHA-256-identical (final-before.sha256). Result subtype 1 displays as
+  0-0 for an unknown result; the good-game bit displays as Top Game.
+- Screenshots: shots/app-first-clean.png, app-reopened.png,
+  app-final-game.png, and final-open/reopen captures when present.
+- Direct board loading and the writer's title display in CBase26 are NOT
+  established. Double-clicks did not open a board. Adding copied or empty
+  .2lcd/.2lgd sidecars enabled namebase tabs, but the empty caches had no
+  Game Tag entries. These experiments are excluded from the writer and final
+  acceptance files. Missing namebase indexes remain a compatibility issue.
 
-## Validation
+## Measured fields and changes
 
-- `make -C tests 2cbh`: **PASS: 3996 checks** (test-2cbh.log).
-- `make -C tests 2cbh-elo`: **PASS: 1156/1156 Elo values**, 578 games
-  (test-elo.log).
-- `make -C src -j2 tkchesswiz`: **PASS**, application shell linked
-  (build-shell.log). The app library also built (build-app.log).
-- `git diff --check`: pass. Tcl script completeness checks pass for export.tcl
-  and test_app_2cbh_export.tcl; these do not substitute for runtime tests.
-- Attempted `PULSE_SINK=cwtests timeout 45 xvfb-run -a src/tkchesswiz
-  tests/run_app_tests.tcl -file test_app_2cbh_export.tcl`: **blocked** at Tk
-  startup, `couldn't connect to display ":646"` (test-app.log). Test bodies
-  did not run and are not claimed to pass.
-- The first new backend test failed because a freshly constructed Game's edit
-  key needed moveToMainlineStart() before adding moves. Fixed the fixture;
-  the final run above passes. No production preconditions were weakened.
+- Medals: quotation-mark shortcut in notation opens the actual dialog.
+  Saved each of its 16 checkboxes separately into a fresh CBase database.
+  UI-order masks: 0001 0002 0004 0008 0010 0020 0040 0080 0200 0100 0400
+  0800 1000 2000 4000 8000. Defense=bit 8, Sacrifice=bit 9: corrected the
+  old reversed mapping and its exhaustive test. medal-results.log records
+  the measurements after Best game; shots/medal-best-checked.png shows it.
+- The position bookmark copy is .2cba sub-item [u16 0x22][u32 mask]. The
+  .2cbg move payload does not change. The parser consumes this item so later
+  comments survive. Global medals are still written in the index; no fake
+  position bookmark is generated for a global Scidb flag.
+- Actual Game Tag text was created through loaded-game Ctrl+S > Game Tag.
+  Index +0x50 references the title slot at +0xe76. Its record is [u32 total
+  excluding this word][u32 count], then [u32 language][u32 byte length][UTF-8]
+  for each language. English=42, German=53. Measured totals: 31 for a
+  19-byte English title; 52 after adding 13 German bytes. Slot reuse was
+  observed. See shots/gametag-mask.png and dbs/title-en.
+- Added bounded title reader/encoder, full multilingual write/dedup and
+  low-level append preservation. Extra PGN tags: GameTitle (English),
+  GameTitleN (other numeric language ids). Oversize/malformed/truncated/free
+  records are checked; no proprietary fixture is needed by the tests.
+- Delete toggles record +0x00 bit 7, confirmed by a two-game diff and the
+  struck-out row (shots/delete2.png). Read/write maps Flag_Deleted.
+- The six high bits of +0x58 are a result subtype, not six markers. +:-,
+  =:=, -:+, 0-0 give 06/05/04/07 (subtype 1); ordinary scores use subtype
+  0. Read/write preserves this as ChessBaseResultType. result-results.log.
+- +0xba bit 0 is the automatic good-game flag: Ghidra classifier 0x14064ac80
+  calls setter 0x1401e4540. Read/write via ChessBaseGoodGame. The two short
+  genuine probe games were rejected by the classifier; no positive genuine
+  sample is claimed. CBase shows a written positive bit as Top Game.
 
-## Execution blockers and remaining work
+## Remaining items and append decision
 
-1. Ghidra: `curl --max-time 5 http://127.0.0.1:8089/` fails with `failed to
-   open socket: Operation not permitted`. X: `DISPLAY=:901 xdpyinfo` fails
-   despite the X901 socket being present. This session forbids socket use.
-   No CBase26 setters, database probes, new screenshots or reopen checks
-   could be performed. The prior attempt's shots/ files are not new evidence.
-   The inherited run10/dbs/ directory contains no files.
-2. The unknown +0x93c namebase, game titles +0x50/+0xe76, genuine medal bit
-   assignment/copies, unmapped flags and tail timestamps remain open. No
-   guessed field mapping was added. Retry the documented UI paths with small
-   2–3 game probes when Wine/Ghidra are accessible; use bounded reads.
-3. Re-run the Tcl app suite above with X access, then open and reopen its
-   exported database in CBase26 and check for integrity warnings. Existing
-   run-8 writer validation does not establish this new app route's acceptance.
-4. Git cannot create
-   `.git/worktrees/wt-2cbh-re/index.lock`: **Read-only file system**.
-   `git add` and the requested first small commit both failed; no commits
-   were created. Source edits remain in this worktree on re/2cbh-next.
-   HELP-NOTES.md and this report are under the ignored scratch tree and
-   require explicit staging when Git writes are available. No proprietary
-   databases, cached help pages, images from help, or decompiler output were
-   staged or committed. The pre-existing untracked src/db/test_2cbh binary
-   was retained.
-5. Graph discovery was attempted first, but its MCP tool returned “requires
-   approval” under an approval-never policy. Local searches were used after
-   that failure. No model was used for parsing, legal move decisions or
-   format checks. Jev is unnecessary for these deterministic operations;
-   no local or cloud Jev backend was started or called.
+- +0x93c stayed empty with annotators, sources, teams and real bilingual
+  titles. An annotator is still stored as a player. AnnotatorLib's existence
+  in Ghidra does not identify the unused physical section. No guessed field
+  or invented user/key mapping was added.
+- +0xba bits 1 and 2 remain unmapped. Their setters were traced to move
+  serialization (0x1401ae720/0x1401ae9c0) and a cloud placeholder path
+  (0x1400eb430). They are not the Delete marker. Tail timestamps and beauty
+  metadata are not encoded; the beauty action changed other tail bytes.
+- App append was evaluated and left disabled deliberately: appendToDatabase
+  reconstructs files, omits existing .2cba annotations and cannot preserve
+  all unknown libraries/index fields. An open codec also has stale name/id
+  maps after rewriting. The existing explicit Save as path satisfies the
+  brief's read-only-codec alternative. Merely calling appendToDatabase would
+  silently lose data. Its header now states the low-level preservation limit.
 
-Suggested commit separation once Git is writable: cached-help map; Save as
-implementation and tests; format/changelog/report update. The work is not
-fully complete until the blocked live probes and acceptance checks are done.
+## Verification and hygiene
 
-RUN10-DONE
+- make -C tests 2cbh: PASS, 4069 checks (test-backend-final.log).
+- make -C tests 2cbh-elo: PASS, 1156/1156 values (test-elo-final.log).
+- make -C src -j2 tkchesswiz: linked (build-shell-final.log).
+- Tcl app export: 3/3 pass (test-app-final2.log); git diff --check passes.
+- Only small scratch probes were read; no whole-file scans of big fixtures.
+  Cached help was reused without refetching. No ChessBase database, cached
+  help page or decompiler output is committed. Changed files have mode 644.
+- Jev was not used: byte parsing, exact bit mapping and codec validation are
+  deterministic operations. No local/cloud model was invoked for them.
 
-
-## Second pass — live acceptance
-
-- X :901 and Ghidra HTTP are available. All three app Tcl export tests pass.
-- Preserved the app test's three-game Export output in ignored dbs/app-export.
-  CBase26 opened and reopened it with no integrity page; all four binary
-  files retain their SHA-256 values. Screenshots: shots/app-first-clean.png,
-  shots/app-reopened.png. No writer fix was needed for this acceptance check.
-- Live field probes and append feasibility are in progress.
+RUN10B-DONE
