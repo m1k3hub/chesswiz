@@ -2135,3 +2135,12 @@ with explicit refusal of annotations that the current writer cannot store.
 The backend and Elo regressions pass; the Tcl app test awaits X access.
 Git commits are also blocked here: creating the worktree's `index.lock`
 returns `Read-only file system`, even though source edits are writable.
+
+### Run-10 second pass: app export acceptance
+
+The three Tcl app export tests pass under xvfb (2026-10-27). A preserved
+three-game output of `export::DoExport` opens in CBase26 on Wine `:901`,
+closes and reopens as **export: 3 Games**, without an integrity page.
+SHA-256 checks of `.2cbh`, `.2cbg`, `.2cba`, and `.2lid` all remain unchanged.
+Captures: `run10/shots/app-first-clean.png` and `app-reopened.png`.
+This supersedes the first pass's socket/X validation blocker.
