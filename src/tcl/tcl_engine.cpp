@@ -677,8 +677,13 @@ close(void* cookie)
 static ssize_t
 write(void* cookie, char const* buf, size_t len)
 {
+	// Called from stdio, also when the process exits and flushes this stream
+	// after the interpreter has gone; an exception must not escape into C.
 	if (m_log)
-		m_log->write(buf, len);
+	{
+		try { m_log->write(buf, len); }
+		catch (...) {}
+	}
 
 	return len;
 }
