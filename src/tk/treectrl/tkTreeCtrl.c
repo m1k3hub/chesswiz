@@ -4215,6 +4215,7 @@ LoupeCmd(
 	{
 	__block CGImageRef image = NULL;
 	__block BOOL finished = NO, cancelled = NO;
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 140000
 	if (@available(macOS 14.0, *)) {
 	    [SCShareableContent getShareableContentExcludingDesktopWindows:NO onScreenWindowsOnly:YES
 	      completionHandler:^(SCShareableContent *content, NSError *error) {
@@ -4246,6 +4247,12 @@ LoupeCmd(
 	            beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
 	    cancelled = !finished;
 	}
+#else
+	/* Pre-14 SDK (e.g. Monterey command-line tools): no SCScreenshotManager. */
+	image = CGWindowListCreateImage(CGRectMake(grabX, grabY, grabW, grabH),
+	    kCGWindowListOptionOnScreenOnly, kCGNullWindowID, kCGWindowImageDefault);
+	(void) finished; (void) cancelled;
+#endif
 	CGContextRef context;
 	CGColorSpaceRef colors;
 	if (!image) {

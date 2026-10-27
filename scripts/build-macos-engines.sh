@@ -4,6 +4,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${1:-$ROOT/build/engines-macos}"
+mkdir -p "$OUT" && OUT="$(cd "$OUT" && pwd)"
 export MACOSX_DEPLOYMENT_TARGET=11.0
 grep -q '^#define EvalFileDefaultName "nn-1a298aa575a0.nnue"' "$ROOT/engines/stockfish/src/evaluate.h" || {
     echo 'Stockfish network changed: update the pinned network before building.' >&2; exit 1;
