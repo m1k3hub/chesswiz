@@ -610,9 +610,11 @@ proc ::application::database::discover::_progress {dirs found} {
 	set Priv(statusBase) [format $mc::Scanning $dirs $found]
 	# Refilling a list of thousands of rows takes 100+ ms; doing it on every
 	# 50 ms tick starves the event loop and the Stop button stops reacting.
-	# Refill again only after ten times the last refill's duration.
+	# Above 1000 rows, refill again only after ten times the last refill's
+	# duration.
 	set now [clock milliseconds]
-	if {![info exists Priv(populated)] || $now - $Priv(populated) >= 10 * $Priv(populateMs)} {
+	if {[llength $Priv(results)] < 1000 || ![info exists Priv(populated)]
+			|| $now - $Priv(populated) >= 10 * $Priv(populateMs)} {
 		_populate $Priv(results)
 		set Priv(populated) [clock milliseconds]
 		set Priv(populateMs) [expr {$Priv(populated) - $now}]

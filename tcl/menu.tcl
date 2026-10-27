@@ -510,6 +510,11 @@ proc dbClose {parent} {
 
 
 proc gameNew {parent {variant Normal}} {
+	# The game bar lives in the notation pane; reopen it when it was closed.
+	if {[info exists ::application::pgn::Vars(gamebar)]
+			&& ![winfo exists $::application::pgn::Vars(gamebar)]} {
+		::menu::TogglePaneId editor
+	}
 	if {[::game::new $parent -variant $variant] >= 0} {
 		set fen [::scidb::game::query 9 fen]
 		::scidb::game::clear $fen
