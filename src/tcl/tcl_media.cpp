@@ -301,6 +301,17 @@ cmdOpen(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	// stream links (YouTube, Twitch, ...) through yt-dlp, when installed
 	mpv_set_option_string(Player, "ytdl", "yes");
 	mpv_set_option_string(Player, "ytdl-format", "bestvideo[height<=?1080]+bestaudio/best");
+#ifndef _WIN32
+	// mpv's native PipeWire output ignores PULSE_SINK; honour it through the
+	// pulse output, so test runs on a null sink stay silent.
+	char const* sink = getenv("PULSE_SINK");
+	if (sink && *sink)
+	{
+		std::string audioDevice("pulse/");
+		audioDevice += sink;
+		mpv_set_option_string(Player, "audio-device", audioDevice.c_str());
+	}
+#endif
 	mpv_set_option_string(Player, "keep-open", "always");
 	mpv_set_option_string(Player, "osd-level", "0");
 	mpv_set_option_string(Player, "osc", "no");
