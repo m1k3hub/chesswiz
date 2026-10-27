@@ -480,6 +480,8 @@ proc Destroy {dlg} {
 proc Save {dlg mode} {
 	variable Priv
 
+	# a late Save after the dialog was torn down has nothing to save
+	if {![info exists Priv(games)]} { return }
 	::widget::busyCursor on
 
 	DoMerge
