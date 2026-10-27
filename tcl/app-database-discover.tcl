@@ -236,6 +236,7 @@ proc ::application::database::discover::_begin {roots maxdepth includePgn} {
 	set Priv(includePgn) $includePgn
 	set Priv(cancel) 0
 	set Priv(scanning) 1
+	set Priv(populateMs) 0
 }
 
 # Pick up the next queued directory: apply the denylist and the
@@ -293,6 +294,8 @@ proc ::application::database::discover::_step {budget {ms 0}} {
 		if {![llength $Priv(visit)]} {
 			if {$Priv(qhead) >= [llength $Priv(queue)]} { return 0 }
 			if {$budget <= 0} { return 1 }
+			# opening folders is slow on large or network trees, too
+			if {$deadline && [clock milliseconds] >= $deadline} { return 1 }
 			lassign [lindex $Priv(queue) $Priv(qhead)] dir depth
 			incr Priv(qhead)
 			incr budget -1
@@ -605,7 +608,15 @@ proc ::application::database::discover::_progress {dirs found} {
 
 	if {![winfo exists $Priv(dialog)]} { return }
 	set Priv(statusBase) [format $mc::Scanning $dirs $found]
-	_populate $Priv(results)
+	# Refilling a list of thousands of rows takes 100+ ms; doing it on every
+	# 50 ms tick starves the event loop and the Stop button stops reacting.
+	# Refill again only after ten times the last refill's duration.
+	set now [clock milliseconds]
+	if {![info exists Priv(populated)] || $now - $Priv(populated) >= 10 * $Priv(populateMs)} {
+		_populate $Priv(results)
+		set Priv(populated) [clock milliseconds]
+		set Priv(populateMs) [expr {$Priv(populated) - $now}]
+	}
 	# The exact total is unknown; nudge the bar so it visibly moves.
 	set value [expr {[$Priv(progress) cget -value] + 2}]
 	if {$value > 95} { set value 95 }
