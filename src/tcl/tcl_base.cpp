@@ -1035,8 +1035,11 @@ GetErrorInfo(Tcl_Interp* ti)
 	}
 #endif
 
+	// The dictionary owns errCode. Retain it before releasing the options,
+	// otherwise a newly created error code can be freed here.
+	errCode = errCode ? tcl::incrRef(errCode) : tcl::incrRef(tcl::newObj("NONE"));
 	tcl::decrRef(errOpts);
-	return tcl::incrRef(errCode);
+	return errCode;
 }
 
 
@@ -1078,7 +1081,8 @@ safeCall(void* clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			savedCode = GetErrorInfo(ti);
 			mstl::exception::setDisabled();
 			// Optimised builds have no report (see m_exception.cpp): fall back to the message.
-			tcl::setGlobalVar(m_errMessage, tcl::newObj(exc.report().empty() ? mstl::string(exc.what()) : exc.report()));
+			char const* message = exc.what();
+			tcl::setGlobalVar(m_errMessage, tcl::newObj(exc.report().empty() ? mstl::string(message ? message : "") : exc.report()));
 			tcl::setGlobalVar(m_errResult, tcl::result());
 		}
 		rc = TCL_ERROR;
@@ -1104,8 +1108,10 @@ safeCall(void* clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		if (mstl::exception::isEnabled())
 		{
 			// Optimised builds have no report (see m_exception.cpp): fall back to the message.
-			tcl::setGlobalVar(m_errMessage, tcl::newObj(exc.report().empty() ? mstl::string(exc.what()) : exc.report()));
-			tcl::setGlobalVar(m_errResult, tcl::newObj(exc.what()));
+			char const* message = exc.what();
+			if (!message) message = "";
+			tcl::setGlobalVar(m_errMessage, tcl::newObj(exc.report().empty() ? mstl::string(message) : exc.report()));
+			tcl::setGlobalVar(m_errResult, tcl::newObj(message));
 			savedCode = GetErrorInfo(ti);
 			mstl::exception::setDisabled();
 		}
