@@ -1337,13 +1337,25 @@ public static class ChesswizDictation {
 '@
 [ChesswizDictation]::Start();
 }
-	set hint $::application::speech::mc::InstallWin
-	if {[catch { exec powershell -NoProfile -NonInteractive -WindowStyle Hidden -Command $script }]} {
-		SetHint $hint
-	} else {
-		SetHint $hint
+	# Run the helper in the background. Win+H asks the focused window for its
+	# text-input context; a blocking exec would stall the Tk event loop at that
+	# moment, so Windows sees no input context and shows no overlay.
+	SetHint $::application::speech::mc::InstallWin
+	if {[catch {
+		set chan [open |[list powershell -NoProfile -NonInteractive -WindowStyle Hidden -Command $script] r]
+	}]} {
+		return
 	}
+	fconfigure $chan -blocking 0
+	fileevent $chan readable [list ::application::speech::DictationDone $chan]
 	return
+}
+
+proc ::application::speech::DictationDone {chan} {
+	read $chan
+	if {![eof $chan]} { return }
+	fconfigure $chan -blocking 1
+	catch { close $chan }
 }
 
 # ======================================================================
