@@ -260,6 +260,15 @@ proc SetTitle {} {
 }
 
 
+# Aqua can report zero physical screen dimensions during startup. Convert to
+# pixels and keep strictly increasing distances so the log can always open.
+proc TabStops {window} {
+	set first [expr {max(1, [winfo pixels $window 2c])}]
+	set second [expr {max($first + 1, [winfo pixels $window 15c])}]
+	return [list $first $second]
+}
+
+
 proc Open {} {
 	variable Priv
 	variable Log
@@ -279,7 +288,7 @@ proc Open {} {
 		-setgrid 1 \
 		-yscrollcommand [list $top.ybar set] \
 		-xscrollcommand [list $top.xbar set] \
-		-tabs {2c 15c} \
+		-tabs [TabStops $top] \
 	]
 	bind $log <Visibility> [namespace code { Visibility %s }]
 	ttk::scrollbar $top.ybar -command [list $log yview] -takefocus 0 -orient vertical
